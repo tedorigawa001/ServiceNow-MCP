@@ -1,0 +1,71 @@
+{
+  "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
+  "name": "io.github.tedorigawa001/servicenow-mcp",
+  "title": "ServiceNow MCP Server",
+  "description": "400+ ServiceNow tools across all modules — ITSM, CMDB, HRSD, CSM, SecOps, and more.",
+  "version": "1.0.2",
+  "websiteUrl": "https://github.com/tedorigawa001/ServiceNow-MCP",
+  "repository": {
+    "url": "https://github.com/tedorigawa001/ServiceNow-MCP",
+    "source": "github"
+  },
+  "packages": [
+    {
+      "registryType": "github",
+      "identifier": "https://github.com/tedorigawa001/ServiceNow-MCP",
+      "version": "1.0.2",
+      "transport": {
+        "type": "stdio"
+      },
+      "environmentVariables": [
+        {
+          "name": "SERVICENOW_INSTANCE_URL",
+          "description": "Your ServiceNow instance URL (e.g. https://yourinstance.service-now.com)",
+          "required": true
+        },
+        {
+          "name": "SERVICENOW_OAUTH_CLIENT_ID",
+          "description": "OAuth client ID from ServiceNow Application Registry",
+          "required": true
+        },
+        {
+          "name": "SERVICENOW_OAUTH_CLIENT_SECRET",
+          "description": "OAuth client secret from ServiceNow Application Registry",
+          "required": true
+        },
+        {
+          "name": "SERVICENOW_OAUTH_USERNAME",
+          "description": "ServiceNow username — only for password grant (omit to use client_credentials grant)"
+        },
+        {
+          "name": "SERVICENOW_OAUTH_PASSWORD",
+          "description": "ServiceNow password — only for password grant (omit to use client_credentials grant)"
+        },
+        {
+          "name": "WRITE_ENABLED",
+          "description": "Enable write operations (true/false, default: false)"
+        },
+        {
+          "name": "SCRIPTING_ENABLED",
+          "description": "Enable scripting operations (true/false, default: false)"
+        },
+        {
+          "name": "CMDB_WRITE_ENABLED",
+          "description": "Enable CMDB write operations (true/false, default: false)"
+        },
+        {
+          "name": "NOW_ASSIST_ENABLED",
+          "description": "Enable Now Assist AI features (true/false, default: false)"
+        },
+        {
+          "name": "ATF_ENABLED",
+          "description": "Enable ATF test execution (true/false, default: false)"
+        },
+        {
+          "name": "MCP_TOOL_PACKAGE",
+          "description": "Role-based tool package: full, service_desk, platform_developer, etc."
+        }
+      ]
+    }
+  ]
+}

@@ -1,0 +1,69 @@
+{
+  "_comment": [
+    "Copy this file to instances.json and fill in your credentials.",
+    "Set SN_INSTANCES_CONFIG=./instances.json in your environment or .env file.",
+    "IMPORTANT: Add instances.json to .gitignore — it contains secrets.",
+    "",
+    "Authentication: OAuth 2.0 only.",
+    "  client_credentials grant: provide client_id + client_secret only (recommended)",
+    "  password grant:           also provide username + password",
+    "",
+    "For client_credentials grant, set 'Default Grant user' in the ServiceNow",
+    "Application Registry to the service account that will execute API calls.",
+    "",
+    "Supports three use cases:",
+    "  1. Single organisation: dev / staging / prod environments",
+    "  2. Multi-customer / MSP: one entry per customer tenant",
+    "  3. Mixed: both your own environments and customer instances",
+    "",
+    "Query a specific instance by passing instance=<name> to any tool,",
+    "or use switch_instance to change the active instance for the session.",
+    "Example (AI prompt): 'Get all P1 incidents from prod instance'",
+    "Example (AI prompt): 'Switch to customer_acme and list open changes'"
+  ],
+
+  "default_instance": "dev",
+
+  "instances": {
+
+    "dev": {
+      "instance_url": "https://your-company-dev.service-now.com",
+      "client_id": "YOUR_DEV_CLIENT_ID",
+      "client_secret": "YOUR_DEV_CLIENT_SECRET",
+      "_comment": "client_credentials grant — Default Grant user set in Application Registry"
+    },
+
+    "staging": {
+      "instance_url": "https://your-company-stg.service-now.com",
+      "client_id": "YOUR_STAGING_CLIENT_ID",
+      "client_secret": "YOUR_STAGING_CLIENT_SECRET",
+      "_comment": "client_credentials grant"
+    },
+
+    "prod": {
+      "instance_url": "https://your-company.service-now.com",
+      "client_id": "YOUR_PROD_CLIENT_ID",
+      "client_secret": "YOUR_PROD_CLIENT_SECRET",
+      "_comment": "Production — dedicated service account; enable WRITE_ENABLED only when needed"
+    },
+
+    "customer_acme": {
+      "instance_url": "https://acmecorp.service-now.com",
+      "client_id": "ACME_CLIENT_ID",
+      "client_secret": "ACME_CLIENT_SECRET",
+      "username": "svc_consultant",
+      "password": "ACME_SVC_PASSWORD",
+      "_comment": "password grant — consultant account with specific ACL"
+    },
+
+    "customer_globex": {
+      "instance_url": "https://globex.service-now.com",
+      "client_id": "GLOBEX_CLIENT_ID",
+      "client_secret": "GLOBEX_CLIENT_SECRET",
+      "username": "svc_consultant",
+      "password": "GLOBEX_SVC_PASSWORD",
+      "_comment": "password grant"
+    }
+
+  }
+}

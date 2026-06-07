@@ -1,0 +1,15 @@
+{
+  "mcpServers": {
+    "servicenow": {
+      "command": "node",
+      "args": ["./dist/server.js"],
+      "env": {
+        "SERVICENOW_INSTANCE_URL": "https://YOUR_INSTANCE.service-now.com",
+        "SERVICENOW_OAUTH_CLIENT_ID": "YOUR_CLIENT_ID",
+        "SERVICENOW_OAUTH_CLIENT_SECRET": "YOUR_CLIENT_SECRET",
+        "WRITE_ENABLED": "false",
+        "MCP_TOOL_PACKAGE": "full"
+      }
+    }
+  }
+}
