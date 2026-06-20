@@ -183,6 +183,14 @@ describe('ServiceNowClient — error mapping & retry', () => {
     expect(apiCalls).toHaveLength(3); // initial + 2 retries
   });
 
+  it('honors maxRetries: 0 (no retry on server error)', async () => {
+    routeFetch(mockResponse({ ok: false, status: 500, statusText: 'Server Error', text: '' }));
+    const client = new ServiceNowClient(baseConfig({ maxRetries: 0 }));
+    await expect(client.queryRecords({ table: 'incident' })).rejects.toBeTruthy();
+    const apiCalls = fetchMock.mock.calls.filter(c => String(c[0]).includes('/api/now/'));
+    expect(apiCalls).toHaveLength(1); // single attempt, no retries
+  });
+
   it('extracts the ServiceNow error message from a JSON error body', async () => {
     routeFetch(mockResponse({ ok: false, status: 400, statusText: 'Bad Request', text: JSON.stringify({ error: { message: 'Invalid field xyz' } }) }));
     const client = new ServiceNowClient(baseConfig());

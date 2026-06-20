@@ -90,9 +90,11 @@ export class ServiceNowClient {
     this.baseUrl = config.instanceUrl.replace(/\/$/, '');
     this.authMode = config.authMode || 'service-account';
     this.oauthConfig = config.oauth;
-    this.maxRetries = config.maxRetries || 3;
-    this.retryDelayMs = config.retryDelayMs || 1000;
-    this.requestTimeoutMs = config.requestTimeoutMs || 30000;
+    // Use ?? so an explicit 0 is honored (e.g. maxRetries: 0 disables retries,
+    // retryDelayMs: 0 retries immediately) rather than falling back to defaults.
+    this.maxRetries = config.maxRetries ?? 3;
+    this.retryDelayMs = config.retryDelayMs ?? 1000;
+    this.requestTimeoutMs = config.requestTimeoutMs ?? 30000;
     this.impersonateUserSysId = config.impersonateUserSysId;
     this.perUserBearerToken = config.perUserBearerToken;
   }
