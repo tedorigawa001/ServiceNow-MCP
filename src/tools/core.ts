@@ -260,6 +260,26 @@ export function getCoreToolDefinitions() {
         required: ['table'],
       },
     },
+    {
+      name: 'check_table_access',
+      description:
+        'Diagnose the connected service account\'s effective access to one or more tables BEFORE attempting operations. Returns per-table readable/writable flags plus the account\'s current user and assigned roles. Read is probed with a sysparm_limit=1 GET (200=readable, 403=denied); write is probed non-destructively with an empty PATCH to a reserved all-zero sys_id (404=writable, 403=denied) — no record is ever created or modified. Useful to avoid "User Not Authorized" retries.',
+      inputSchema: {
+        type: 'object',
+        properties: {
+          tables: {
+            type: 'array',
+            items: { type: 'string' },
+            description: 'Table names to check (max 20), e.g. ["incident", "sn_vul_vulnerable_item"]',
+          },
+          check_write: {
+            type: 'boolean',
+            description: 'Also probe write access via a non-destructive empty PATCH (default: true)',
+          },
+        },
+        required: ['tables'],
+      },
+    },
   ];
 }
 
@@ -487,6 +507,113 @@ export async function executeCoreToolCall(
         field_count: allFields.length,
         fields: allFields,
         summary: `Table "${tableName}" has ${allFields.length} field(s)${includeInherited && parentTable ? ` (includes inherited from "${parentTable}")` : ''}`,
+      };
+    }
+
+    case 'check_table_access': {
+      const tables: unknown = args.tables;
+      if (!Array.isArray(tables) || tables.length === 0) {
+        throw new ServiceNowError('tables must be a non-empty array of table names', 'INVALID_REQUEST');
+      }
+      if (tables.length > 20) {
+        throw new ServiceNowError('tables is limited to 20 entries per call', 'INVALID_REQUEST');
+      }
+      const checkWrite: boolean = args.check_write !== false;
+      const ZERO_SYS_ID = '0'.repeat(32);
+
+      const strVal = (v: unknown): string =>
+        v && typeof v === 'object' ? ((v as any).value ?? '') : ((v as string) ?? '');
+      const codeOf = (e: unknown): string =>
+        e instanceof ServiceNowError ? e.code : 'UNKNOWN';
+
+      // ── Current user + assigned roles (best-effort) ──
+      let currentUser: string | undefined;
+      let currentRoles: string[] = [];
+      let rolesError: string | undefined;
+      try {
+        const me = await client.queryRecords({
+          table: 'sys_user',
+          query: 'sys_id=javascript:gs.getUserID()',
+          fields: 'user_name,name',
+          limit: 1,
+        });
+        currentUser = strVal(me.records[0]?.user_name) || strVal(me.records[0]?.name) || undefined;
+
+        const roleResp = await client.queryRecords({
+          table: 'sys_user_has_role',
+          query: 'user=javascript:gs.getUserID()',
+          fields: 'role.name',
+          limit: 500,
+        });
+        currentRoles = [
+          ...new Set(roleResp.records.map(r => strVal(r['role.name'])).filter(Boolean)),
+        ].sort();
+      } catch (e) {
+        rolesError = e instanceof Error ? e.message : 'Failed to resolve current roles';
+      }
+
+      // ── Per-table read/write probes ──
+      const results = [];
+      for (const raw of tables) {
+        const table = String(raw);
+        const entry: {
+          table: string;
+          readable: boolean;
+          writable: boolean | null;
+          error?: string;
+        } = { table, readable: false, writable: checkWrite ? false : null };
+
+        // Read probe
+        try {
+          await client.queryRecords({ table, fields: 'sys_id', limit: 1 });
+          entry.readable = true;
+        } catch (e) {
+          const code = codeOf(e);
+          if (code === 'INSUFFICIENT_PRIVILEGES') {
+            entry.readable = false;
+          } else {
+            // Invalid/unknown table or validation failure — no point probing write
+            entry.error = e instanceof Error ? e.message : 'Read probe failed';
+            entry.writable = null;
+            results.push(entry);
+            continue;
+          }
+        }
+
+        // Write probe (non-destructive empty PATCH to a reserved sys_id)
+        if (checkWrite) {
+          try {
+            await client.updateRecord(table, ZERO_SYS_ID, {});
+            entry.writable = true; // 2xx (not expected for a missing record, but counts as access)
+          } catch (e) {
+            const code = codeOf(e);
+            if (code === 'NOT_FOUND') {
+              entry.writable = true; // passed the write gate; record simply does not exist
+            } else if (code === 'INSUFFICIENT_PRIVILEGES') {
+              entry.writable = false;
+            } else {
+              entry.writable = null;
+              entry.error = (entry.error ? entry.error + '; ' : '') +
+                `write probe inconclusive (${code})`;
+            }
+          }
+        }
+
+        results.push(entry);
+      }
+
+      const readableCount = results.filter(r => r.readable).length;
+      const writableCount = results.filter(r => r.writable === true).length;
+
+      return {
+        current_user: currentUser,
+        current_roles: currentRoles,
+        ...(rolesError ? { roles_error: rolesError } : {}),
+        results,
+        summary:
+          `${results.length} table(s) checked: ${readableCount} readable` +
+          (checkWrite ? `, ${writableCount} writable` : '') +
+          (currentUser ? ` (as ${currentUser}, ${currentRoles.length} role(s))` : ''),
       };
     }
 

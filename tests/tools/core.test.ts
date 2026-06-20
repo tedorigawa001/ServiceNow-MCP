@@ -1,6 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { executeCoreToolCall, getCoreToolDefinitions } from '../../src/tools/core.js';
 import type { ServiceNowClient } from '../../src/servicenow/client.js';
+import { ServiceNowError } from '../../src/utils/errors.js';
 
 const mockClient = {
   queryRecords: vi.fn(),
@@ -19,12 +20,13 @@ const mockClient = {
   createChangeRequest: vi.fn(),
   naturalLanguageSearch: vi.fn(),
   naturalLanguageUpdate: vi.fn(),
+  updateRecord: vi.fn(),
 } as unknown as ServiceNowClient;
 
 describe('getCoreToolDefinitions', () => {
-  it('returns 22 core tool definitions', () => {
+  it('returns 23 core tool definitions', () => {
     const tools = getCoreToolDefinitions();
-    expect(tools.length).toBe(22);
+    expect(tools.length).toBe(23);
   });
 
   it('all tools have name, description and inputSchema', () => {
@@ -196,6 +198,87 @@ describe('executeCoreToolCall – describe_table', () => {
 
     // queryRecords called 2 times only: sys_db_object + incident dict (no parent resolution)
     expect(mockClient.queryRecords).toHaveBeenCalledTimes(2);
+  });
+});
+
+describe('executeCoreToolCall – check_table_access', () => {
+  beforeEach(() => vi.clearAllMocks());
+
+  // Helper: route queryRecords by table — sys_user / sys_user_has_role for the
+  // identity lookup, everything else is a per-table read probe.
+  function routeIdentity(readResult: (table: string) => any) {
+    (mockClient.queryRecords as any).mockImplementation(async (p: any) => {
+      if (p.table === 'sys_user') return { count: 1, records: [{ user_name: 'svc.account' }] };
+      if (p.table === 'sys_user_has_role') {
+        return { count: 2, records: [{ 'role.name': 'itil' }, { 'role.name': 'sn_vul.read' }] };
+      }
+      return readResult(p.table);
+    });
+  }
+
+  it('reports readable + writable for an accessible table', async () => {
+    routeIdentity(() => ({ count: 1, records: [{ sys_id: 'x' }] }));
+    (mockClient.updateRecord as any).mockRejectedValue(new ServiceNowError('No Record found', 'NOT_FOUND'));
+
+    const r = await executeCoreToolCall(mockClient, 'check_table_access', { tables: ['incident'] });
+    expect(r.current_user).toBe('svc.account');
+    expect(r.current_roles).toEqual(['itil', 'sn_vul.read']);
+    expect(r.results[0]).toMatchObject({ table: 'incident', readable: true, writable: true });
+    expect(r.summary).toContain('1 readable');
+  });
+
+  it('marks a table writable=false when the write probe is denied (403)', async () => {
+    routeIdentity(() => ({ count: 1, records: [{ sys_id: 'x' }] }));
+    (mockClient.updateRecord as any).mockRejectedValue(new ServiceNowError('not authorized', 'INSUFFICIENT_PRIVILEGES'));
+
+    const r = await executeCoreToolCall(mockClient, 'check_table_access', { tables: ['sys_audit'] });
+    expect(r.results[0]).toMatchObject({ readable: true, writable: false });
+  });
+
+  it('marks readable=false when the read probe is denied (403)', async () => {
+    routeIdentity(() => { throw new ServiceNowError('not authorized', 'INSUFFICIENT_PRIVILEGES'); });
+    (mockClient.updateRecord as any).mockRejectedValue(new ServiceNowError('not authorized', 'INSUFFICIENT_PRIVILEGES'));
+
+    const r = await executeCoreToolCall(mockClient, 'check_table_access', { tables: ['sys_user_password'] });
+    expect(r.results[0]).toMatchObject({ readable: false, writable: false });
+  });
+
+  it('flags an invalid table and skips the write probe', async () => {
+    routeIdentity(() => { throw new ServiceNowError('Invalid table nope', 'INVALID_REQUEST'); });
+
+    const r = await executeCoreToolCall(mockClient, 'check_table_access', { tables: ['nope'] });
+    expect(r.results[0].readable).toBe(false);
+    expect(r.results[0].writable).toBeNull();
+    expect(r.results[0].error).toContain('Invalid table');
+    expect(mockClient.updateRecord).not.toHaveBeenCalled();
+  });
+
+  it('skips write probing entirely when check_write is false', async () => {
+    routeIdentity(() => ({ count: 1, records: [{ sys_id: 'x' }] }));
+
+    const r = await executeCoreToolCall(mockClient, 'check_table_access', { tables: ['incident'], check_write: false });
+    expect(r.results[0].writable).toBeNull();
+    expect(mockClient.updateRecord).not.toHaveBeenCalled();
+  });
+
+  it('still returns results when role resolution fails', async () => {
+    (mockClient.queryRecords as any).mockImplementation(async (p: any) => {
+      if (p.table === 'sys_user') throw new ServiceNowError('denied', 'INSUFFICIENT_PRIVILEGES');
+      return { count: 1, records: [{ sys_id: 'x' }] };
+    });
+    (mockClient.updateRecord as any).mockRejectedValue(new ServiceNowError('No Record found', 'NOT_FOUND'));
+
+    const r = await executeCoreToolCall(mockClient, 'check_table_access', { tables: ['incident'] });
+    expect(r.roles_error).toBeTruthy();
+    expect(r.current_roles).toEqual([]);
+    expect(r.results[0].readable).toBe(true);
+  });
+
+  it('rejects an empty or oversized tables list', async () => {
+    await expect(executeCoreToolCall(mockClient, 'check_table_access', { tables: [] }))
+      .rejects.toMatchObject({ code: 'INVALID_REQUEST' });
+    await expect(executeCoreToolCall(mockClient, 'check_table_access', { tables: Array(21).fill('incident') }))
+      .rejects.toMatchObject({ code: 'INVALID_REQUEST' });
   });
 });
 

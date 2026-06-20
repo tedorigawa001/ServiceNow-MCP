@@ -12,7 +12,7 @@
 |---|---|---|---|---|---|
 | 1 | `describe_table` ツール | 全員 | ⭐⭐⭐ 高 | 低 | ✅ 完了 |
 | 2 | Streamable HTTP 対応 | 全員 | ⭐⭐⭐ 高 | 高 | 未着手 |
-| 3 | サービスアカウント権限チェックツール | 全員 | ⭐⭐⭐ 高 | 低 | 未着手 |
+| 3 | サービスアカウント権限チェックツール | 全員 | ⭐⭐⭐ 高 | 低 | ✅ 完了 |
 | 4 | Integration ヘルスチェックツール | Integration 利用者 | ⭐⭐ 中 | 低 | 未着手 |
 | 5 | 自然言語クエリ強化（テーブル名自動解決） | 全員 | ⭐⭐ 中 | 高 | 未着手 |
 | 6 | USEM 専用ツールセット | SecOps 担当者 | ⭐ 低 | 中 | 未着手 |
@@ -155,7 +155,7 @@ NVD 統合が 503/429 エラーで静かに失敗し続け、CVE データが更
 
 ---
 
-## 4. サービスアカウント権限チェックツール
+## 4. サービスアカウント権限チェックツール ✅ 完了
 
 ### 背景
 
@@ -163,25 +163,36 @@ NVD 統合が 503/429 エラーで静かに失敗し続け、CVE データが更
 
 ### 実装概要
 
-**追加ツール:** `check_table_access`（`src/tools/core.ts` に追加）
+**追加ツール:** `check_table_access`（`src/tools/core.ts`）
 
 ```typescript
 // 入力
 {
-  tables: string[];  // 確認したいテーブル名のリスト（最大 20）
+  tables: string[];      // 確認したいテーブル名のリスト（最大 20）
+  check_write?: boolean; // 書き込み判定も行うか（デフォルト true）
 }
 
 // 出力
 {
+  current_user?: string;       // 接続中アカウントのユーザー名
+  current_roles: string[];     // 直接付与されたロール
+  roles_error?: string;        // ロール解決に失敗した場合のみ
   results: Array<{
     table: string;
     readable: boolean;
-    writable: boolean;
+    writable: boolean | null;  // check_write=false / 判定不能時は null
     error?: string;
   }>;
-  current_roles: string[];  // サービスアカウントの保有ロール
+  summary: string;
 }
 ```
+
+**判定方法:**
+- **read**: `sysparm_limit=1` の GET で 200=readable / 403=denied
+- **write**: 予約済みの全ゼロ sys_id への空 PATCH（**非破壊**）で 404=writable / 403=denied
+- **roles**: `gs.getUserID()`（クエリ allowlist 済み）で現ユーザーを解決し `sys_user_has_role` を取得
+
+**Tier:** Tier 0（read アノテーション。write 判定もレコードを生成・変更しない）
 
 **実装方法:** 対象テーブルに `sysparm_limit=1` でリクエストを投げ、200/403/404 で判定。
 
