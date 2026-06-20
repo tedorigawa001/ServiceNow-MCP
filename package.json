@@ -23,6 +23,7 @@
     "setup": "node dist/cli/index.js setup",
     "test": "vitest run",
     "test:watch": "vitest",
+    "test:coverage": "vitest run --coverage",
     "lint": "eslint src tests",
     "lint:fix": "eslint src tests --fix",
     "type-check": "tsc --noEmit"
@@ -100,6 +101,7 @@
     "@types/node": "^22.0.0",
     "@typescript-eslint/eslint-plugin": "^8.60.1",
     "@typescript-eslint/parser": "^8.60.1",
+    "@vitest/coverage-v8": "^2.1.9",
     "eslint": "^9.39.4",
     "globals": "^17.6.0",
     "tsx": "^4.22.4",
