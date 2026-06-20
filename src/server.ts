@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+import { fileURLToPath } from 'url';
 import { Server } from '@modelcontextprotocol/sdk/server/index.js';
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
 import {
@@ -11,7 +12,7 @@ import {
 } from '@modelcontextprotocol/sdk/types.js';
 import dotenv from 'dotenv';
 import { instanceManager } from './servicenow/instances.js';
-import { getTools } from './tools/index.js';
+import { getTools, executeTool } from './tools/index.js';
 import { getResources, readResource } from './resources/index.js';
 import { getPrompts, resolvePrompt } from './prompts/index.js';
 import { logger } from './utils/logging.js';
@@ -19,53 +20,39 @@ import { ServiceNowError } from './utils/errors.js';
 
 dotenv.config();
 
-// Require at least one instance to be configured
-const hasLegacy = !!process.env.SERVICENOW_INSTANCE_URL;
-const hasMulti = Object.keys(process.env).some(k => /^SN_INSTANCE_[A-Z0-9_]+_URL$/.test(k));
-const hasConfig = !!process.env.SN_INSTANCES_CONFIG;
-if (!hasLegacy && !hasMulti && !hasConfig) {
-  logger.error('No ServiceNow instance configured. Set SERVICENOW_INSTANCE_URL or SN_INSTANCES_CONFIG.');
-  process.exit(1);
+export const SERVER_NAME = 'servicenow-mcp';
+export const SERVER_VERSION = '1.0.2';
+
+/** True if at least one ServiceNow instance is configured via any supported method. */
+export function isInstanceConfigured(): boolean {
+  const hasLegacy = !!process.env.SERVICENOW_INSTANCE_URL;
+  const hasMulti = Object.keys(process.env).some(k => /^SN_INSTANCE_[A-Z0-9_]+_URL$/.test(k));
+  const hasConfig = !!process.env.SN_INSTANCES_CONFIG;
+  return hasLegacy || hasMulti || hasConfig;
 }
 
-const server = new Server(
-  {
-    name: 'servicenow-mcp',
-    version: '1.0.0',
-  },
-  {
-    capabilities: {
-      tools: {},
-      resources: {},
-      prompts: {},
-    },
-  }
-);
+// ─── Request handlers (exported for unit testing) ─────────────────────────────
 
-const tools = getTools();
+export async function handleListTools() {
+  return { tools: getTools() };
+}
 
-// ─── Tools ────────────────────────────────────────────────────────────────────
-
-server.setRequestHandler(ListToolsRequestSchema, async () => {
-  return { tools };
-});
-
-server.setRequestHandler(CallToolRequestSchema, async (request) => {
+export async function handleCallTool(request: {
+  params: { name: string; arguments?: Record<string, unknown> };
+}) {
   const { name, arguments: args } = request.params;
 
   logger.info(`Tool called: ${name}`);
 
   try {
-    const tool = tools.find(t => t.name === name);
-    if (!tool) {
+    const known = getTools().some(t => t.name === name);
+    if (!known) {
       throw new ServiceNowError(`Unknown tool: ${name}`, 'UNKNOWN_TOOL');
     }
 
-    // Resolve client: use named instance if specified, otherwise current active instance
     const instanceName = (args as Record<string, unknown>)?.['instance'] as string | undefined;
     const client = instanceManager.getClient(instanceName);
 
-    const { executeTool } = await import('./tools/index.js');
     const result = await executeTool(client, name, args || {});
 
     return {
@@ -101,15 +88,13 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
       isError: true,
     };
   }
-});
+}
 
-// ─── Resources (@ mentions) ───────────────────────────────────────────────────
-
-server.setRequestHandler(ListResourcesRequestSchema, async () => {
+export async function handleListResources() {
   return { resources: getResources() };
-});
+}
 
-server.setRequestHandler(ReadResourceRequestSchema, async (request) => {
+export async function handleReadResource(request: { params: { uri: string } }) {
   const { uri } = request.params;
 
   try {
@@ -128,35 +113,70 @@ server.setRequestHandler(ReadResourceRequestSchema, async (request) => {
     logger.error(`Resource read error: ${uri}`, error);
     throw error;
   }
-});
+}
 
-// ─── Prompts (/ slash commands) ───────────────────────────────────────────────
-
-server.setRequestHandler(ListPromptsRequestSchema, async () => {
+export async function handleListPrompts() {
   return { prompts: getPrompts() };
-});
+}
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-server.setRequestHandler(GetPromptRequestSchema, async (request): Promise<any> => {
+export async function handleGetPrompt(request: {
+  params: { name: string; arguments?: Record<string, string> };
+}): Promise<any> {
   const { name, arguments: args } = request.params;
 
-  const result = resolvePrompt(name, args as Record<string, string> | undefined);
+  const result = resolvePrompt(name, args);
   if (!result) {
     throw new Error(`Unknown prompt: ${name}`);
   }
 
   return result;
-});
-
-// ─── Start ────────────────────────────────────────────────────────────────────
-
-async function main() {
-  const transport = new StdioServerTransport();
-  await server.connect(transport);
-  logger.info(`servicenow-mcp server running on stdio [${tools.length} tools]`);
 }
 
-main().catch((error) => {
-  logger.error('Server startup failed', error);
-  process.exit(1);
-});
+// ─── Server wiring ────────────────────────────────────────────────────────────
+
+/** Build the MCP server with all request handlers registered. */
+export function createServer(): Server {
+  const server = new Server(
+    {
+      name: SERVER_NAME,
+      version: SERVER_VERSION,
+    },
+    {
+      capabilities: {
+        tools: {},
+        resources: {},
+        prompts: {},
+      },
+    }
+  );
+
+  server.setRequestHandler(ListToolsRequestSchema, handleListTools);
+  server.setRequestHandler(CallToolRequestSchema, handleCallTool);
+  server.setRequestHandler(ListResourcesRequestSchema, handleListResources);
+  server.setRequestHandler(ReadResourceRequestSchema, handleReadResource);
+  server.setRequestHandler(ListPromptsRequestSchema, handleListPrompts);
+  server.setRequestHandler(GetPromptRequestSchema, handleGetPrompt);
+
+  return server;
+}
+
+export async function main() {
+  if (!isInstanceConfigured()) {
+    logger.error('No ServiceNow instance configured. Set SERVICENOW_INSTANCE_URL or SN_INSTANCES_CONFIG.');
+    process.exit(1);
+  }
+
+  const server = createServer();
+  const transport = new StdioServerTransport();
+  await server.connect(transport);
+  logger.info(`${SERVER_NAME} server running on stdio [${getTools().length} tools]`);
+}
+
+// Run only when executed directly (not when imported by tests).
+const isDirectRun = !!process.argv[1] && fileURLToPath(import.meta.url) === process.argv[1];
+if (isDirectRun) {
+  main().catch((error) => {
+    logger.error('Server startup failed', error);
+    process.exit(1);
+  });
+}
