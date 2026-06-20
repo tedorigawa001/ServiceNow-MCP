@@ -424,10 +424,22 @@ export async function executeCoreToolCall(
         throw new ServiceNowError(`Table "${tableName}" not found in sys_db_object`, 'NOT_FOUND');
       }
       const dbObj = dbObjResp.records[0];
-      const parentTable: string | undefined =
+
+      // super_class returns {value: sys_id, link: ...} — resolve to table name via a second query
+      let parentTable: string | undefined;
+      const superClassSysId =
         dbObj.super_class && typeof dbObj.super_class === 'object'
-          ? (dbObj.super_class as any).display_value || undefined
+          ? (dbObj.super_class as any).value || undefined
           : undefined;
+      if (includeInherited && superClassSysId) {
+        const parentResp = await client.queryRecords({
+          table: 'sys_db_object',
+          query: `sys_id=${superClassSysId}`,
+          fields: 'name',
+          limit: 1,
+        });
+        parentTable = parentResp.records[0]?.name as string | undefined;
+      }
 
       // Determine which tables to fetch fields for
       const tables = [tableName];
