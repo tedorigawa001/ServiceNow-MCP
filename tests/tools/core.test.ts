@@ -79,7 +79,8 @@ describe('executeCoreToolCall – describe_table', () => {
     (mockClient.queryRecords as ReturnType<typeof vi.fn>)
       .mockResolvedValueOnce({
         count: 1,
-        records: [{ name: 'incident', label: 'Incident', super_class: { display_value: 'task' } }],
+        // super_class is {value: sys_id, link: ...} in real API; parent_table is not resolved without include_inherited
+        records: [{ name: 'incident', label: 'Incident', super_class: { value: 'abc123', link: 'https://example.service-now.com/api/now/table/sys_db_object/abc123' } }],
       })
       .mockResolvedValueOnce({
         count: 2,
@@ -93,7 +94,8 @@ describe('executeCoreToolCall – describe_table', () => {
 
     expect(result.table).toBe('incident');
     expect(result.label).toBe('Incident');
-    expect(result.parent_table).toBe('task');
+    // parent_table is NOT resolved when include_inherited is omitted (defaults false)
+    expect(result.parent_table).toBeUndefined();
     expect(result.field_count).toBe(2);
     expect(result.fields).toHaveLength(2);
     expect(result.summary).toContain('2 field');
@@ -156,12 +158,15 @@ describe('executeCoreToolCall – describe_table', () => {
     expect('reference' in result.fields[0]).toBe(false);
   });
 
-  it('fetches parent table fields when include_inherited is true', async () => {
+  it('resolves parent table name from super_class sys_id when include_inherited is true', async () => {
+    // Bug fix regression test: real API returns {value: sys_id, link: ...}, NOT display_value
     (mockClient.queryRecords as ReturnType<typeof vi.fn>)
       .mockResolvedValueOnce({
         count: 1,
-        records: [{ name: 'incident', label: 'Incident', super_class: { display_value: 'task' } }],
+        records: [{ name: 'incident', label: 'Incident', super_class: { value: 'task-sys-id-001', link: 'https://example.service-now.com/api/now/table/sys_db_object/task-sys-id-001' } }],
       })
+      // Second call: resolve sys_id → parent table name
+      .mockResolvedValueOnce({ count: 1, records: [{ name: 'task' }] })
       .mockResolvedValueOnce({
         count: 1,
         records: [{ element: 'state', column_label: 'State', internal_type: 'integer', reference: '', mandatory: 'false', unique: 'false', name: 'incident' }],
@@ -173,22 +178,23 @@ describe('executeCoreToolCall – describe_table', () => {
 
     const result = await executeCoreToolCall(mockClient, 'describe_table', { table: 'incident', include_inherited: true });
 
+    expect(result.parent_table).toBe('task');
     expect(result.fields).toHaveLength(2);
     expect(result.fields.some((f: any) => f.defined_in === 'task')).toBe(true);
     expect(result.fields.some((f: any) => f.defined_in === 'incident')).toBe(true);
     expect(result.summary).toContain('task');
-    // queryRecords called 3 times: sys_db_object + incident dict + task dict
-    expect(mockClient.queryRecords).toHaveBeenCalledTimes(3);
+    // queryRecords called 4 times: sys_db_object(incident) + sys_db_object(parent resolve) + incident dict + task dict
+    expect(mockClient.queryRecords).toHaveBeenCalledTimes(4);
   });
 
   it('does not fetch parent table when include_inherited is false (default)', async () => {
     (mockClient.queryRecords as ReturnType<typeof vi.fn>)
-      .mockResolvedValueOnce({ count: 1, records: [{ name: 'incident', label: 'Incident', super_class: { display_value: 'task' } }] })
+      .mockResolvedValueOnce({ count: 1, records: [{ name: 'incident', label: 'Incident', super_class: { value: 'task-sys-id-001', link: 'https://example.service-now.com/api/now/table/sys_db_object/task-sys-id-001' } }] })
       .mockResolvedValueOnce({ count: 0, records: [] });
 
     await executeCoreToolCall(mockClient, 'describe_table', { table: 'incident' });
 
-    // queryRecords called 2 times only: sys_db_object + incident dict
+    // queryRecords called 2 times only: sys_db_object + incident dict (no parent resolution)
     expect(mockClient.queryRecords).toHaveBeenCalledTimes(2);
   });
 });
