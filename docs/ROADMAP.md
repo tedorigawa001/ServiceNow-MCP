@@ -10,12 +10,13 @@
 
 | # | 機能 | 汎用性 | 優先度 | 難易度 | ステータス |
 |---|---|---|---|---|---|
-| 1 | `describe_table` ツール | 全員 | ⭐⭐⭐ 高 | 低 | 未着手 |
+| 1 | `describe_table` ツール | 全員 | ⭐⭐⭐ 高 | 低 | ✅ 完了 |
 | 2 | Streamable HTTP 対応 | 全員 | ⭐⭐⭐ 高 | 高 | 未着手 |
 | 3 | サービスアカウント権限チェックツール | 全員 | ⭐⭐⭐ 高 | 低 | 未着手 |
 | 4 | Integration ヘルスチェックツール | Integration 利用者 | ⭐⭐ 中 | 低 | 未着手 |
 | 5 | 自然言語クエリ強化（テーブル名自動解決） | 全員 | ⭐⭐ 中 | 高 | 未着手 |
 | 6 | USEM 専用ツールセット | SecOps 担当者 | ⭐ 低 | 中 | 未着手 |
+| 7 | `queryRecords` に `sysparm_display_value` 対応 | 全員 | ⭐⭐ 中 | 低 | 未着手 |
 
 ---
 
@@ -256,13 +257,46 @@ MCP_HTTP_HOST=0.0.0.0
 
 ---
 
+## 7. `queryRecords` に `sysparm_display_value` 対応
+
+### 背景
+
+`describe_table` の `include_inherited` 実装で、親テーブル名を解決するために `sys_db_object` を2回クエリしている。`sysparm_display_value=true` を付ければ `super_class.display_value` に親テーブル名が返るため、1回のクエリで解決できる。また他のツールでも reference フィールドの表示名取得に活用できる。
+
+### 実装概要
+
+**変更ファイル:** `src/servicenow/types.ts`、`src/servicenow/client.ts`
+
+```typescript
+// QueryRecordsParams に追加
+interface QueryRecordsParams {
+  // ...既存フィールド...
+  display_value?: boolean | 'all'; // sysparm_display_value
+}
+```
+
+```typescript
+// client.ts queryRecords 内に追加
+if (params.display_value !== undefined) {
+  queryParams.set('sysparm_display_value', String(params.display_value));
+}
+```
+
+**`describe_table` への適用:**
+`sys_db_object` クエリに `display_value: true` を追加し、`super_class.display_value` から直接親テーブル名を取得。2回目の `sys_db_object` クエリを廃止。
+
+**注意点:** `display_value=true` は全 reference フィールドのレスポンス形式を `{value, display_value, link}` に変える。既存ツールへの影響を `opt-in`（呼び出し側が明示的に指定）にすることで回避。
+
+---
+
 ## 実装フェーズ
 
 ```
 フェーズ 1（短期・1〜2週間）： 汎用・低難易度
-  #1 describe_table
+  #1 describe_table ✅
   #3 check_table_access
   #4 get_integration_health
+  #7 queryRecords display_value 対応
 
 フェーズ 2（中期・1ヶ月）： 汎用・高難易度
   #2 Streamable HTTP 対応
