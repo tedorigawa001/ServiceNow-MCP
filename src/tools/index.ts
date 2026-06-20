@@ -273,39 +273,71 @@ function annotate(tool: Record<string, any>): Record<string, any> {
 
 // ─── All Tool Definitions ─────────────────────────────────────────────────────
 
-const ALL_TOOLS = [
-  ...getCoreToolDefinitions(),
-  ...getIncidentToolDefinitions(),
-  ...getProblemToolDefinitions(),
-  ...getChangeToolDefinitions(),
-  ...getTaskToolDefinitions(),
-  ...getKnowledgeToolDefinitions(),
-  ...getCatalogToolDefinitions(),
-  ...getUserToolDefinitions(),
-  ...getReportingToolDefinitions(),
-  ...getAtfToolDefinitions(),
-  ...getNowAssistToolDefinitions(),
-  ...getScriptToolDefinitions(),
-  ...getAgileToolDefinitions(),
-  ...getHrsdToolDefinitions(),
-  ...getCsmToolDefinitions(),
-  ...getSecurityToolDefinitions(),
-  ...getFlowToolDefinitions(),
-  ...getPortalToolDefinitions(),
-  ...getIntegrationToolDefinitions(),
-  ...getNotificationToolDefinitions(),
-  ...getPerformanceToolDefinitions(),
-  ...getSysPropertiesToolDefinitions(),
-  ...getUpdateSetToolDefinitions(),
-  ...getVaToolDefinitions(),
-  ...getItamToolDefinitions(),
-  ...getDevopsToolDefinitions(),
-  ...getAppStudioToolDefinitions(),
-  ...getMlToolDefinitions(),
-  ...getWorkspaceToolDefinitions(),
-  ...getMobileToolDefinitions(),
-  ...getDeploymentToolDefinitions(),
-].map(annotate);
+/**
+ * Single source of truth for every domain module. Each entry pairs the module's
+ * tool-definition getter with its execute handler, so {@link ALL_TOOLS} and the
+ * name→executor map below can never drift out of sync.
+ */
+type ToolExecutor = (
+  client: ServiceNowClient,
+  name: string,
+  args: Record<string, any>
+) => Promise<any>;
+
+interface ToolModule {
+  defs: () => Record<string, any>[];
+  exec: ToolExecutor;
+}
+
+const MODULES: ToolModule[] = [
+  { defs: getCoreToolDefinitions, exec: executeCoreToolCall },
+  { defs: getIncidentToolDefinitions, exec: executeIncidentToolCall },
+  { defs: getProblemToolDefinitions, exec: executeProblemToolCall },
+  { defs: getChangeToolDefinitions, exec: executeChangeToolCall },
+  { defs: getTaskToolDefinitions, exec: executeTaskToolCall },
+  { defs: getKnowledgeToolDefinitions, exec: executeKnowledgeToolCall },
+  { defs: getCatalogToolDefinitions, exec: executeCatalogToolCall },
+  { defs: getUserToolDefinitions, exec: executeUserToolCall },
+  { defs: getReportingToolDefinitions, exec: executeReportingToolCall },
+  { defs: getAtfToolDefinitions, exec: executeAtfToolCall },
+  { defs: getNowAssistToolDefinitions, exec: executeNowAssistToolCall },
+  { defs: getScriptToolDefinitions, exec: executeScriptToolCall },
+  { defs: getAgileToolDefinitions, exec: executeAgileToolCall },
+  { defs: getHrsdToolDefinitions, exec: executeHrsdToolCall },
+  { defs: getCsmToolDefinitions, exec: executeCsmToolCall },
+  { defs: getSecurityToolDefinitions, exec: executeSecurityToolCall },
+  { defs: getFlowToolDefinitions, exec: executeFlowToolCall },
+  { defs: getPortalToolDefinitions, exec: executePortalToolCall },
+  { defs: getIntegrationToolDefinitions, exec: executeIntegrationToolCall },
+  { defs: getNotificationToolDefinitions, exec: executeNotificationToolCall },
+  { defs: getPerformanceToolDefinitions, exec: executePerformanceToolCall },
+  { defs: getSysPropertiesToolDefinitions, exec: executeSysPropertiesToolCall },
+  { defs: getUpdateSetToolDefinitions, exec: executeUpdateSetToolCall },
+  { defs: getVaToolDefinitions, exec: executeVaToolCall },
+  { defs: getItamToolDefinitions, exec: executeItamToolCall },
+  { defs: getDevopsToolDefinitions, exec: executeDevopsToolCall },
+  { defs: getAppStudioToolDefinitions, exec: executeAppStudioToolCall },
+  { defs: getMlToolDefinitions, exec: executeMlToolCall },
+  { defs: getWorkspaceToolDefinitions, exec: executeWorkspaceToolCall },
+  { defs: getMobileToolDefinitions, exec: executeMobileToolCall },
+  { defs: getDeploymentToolDefinitions, exec: executeDeploymentToolCall },
+];
+
+// Name → executor map, built once at module load. Detects duplicate tool names
+// across modules (which would otherwise be silently shadowed by the old
+// first-non-null-wins linear scan).
+const TOOL_EXECUTORS = new Map<string, ToolExecutor>();
+const ALL_TOOLS = MODULES.flatMap(module => {
+  const defs = module.defs();
+  for (const def of defs) {
+    if (TOOL_EXECUTORS.has(def.name)) {
+      console.error(`[WARN] Duplicate tool name "${def.name}" — later definition ignored.`);
+      continue;
+    }
+    TOOL_EXECUTORS.set(def.name, module.exec);
+  }
+  return defs;
+}).map(annotate);
 
 // ─── Public API ───────────────────────────────────────────────────────────────
 
@@ -331,45 +363,16 @@ export async function executeTool(
   name: string,
   args: Record<string, any>
 ): Promise<any> {
-  // Try each domain handler in order; first non-null result wins
-  const handlers = [
-    () => executeCoreToolCall(client, name, args),
-    () => executeIncidentToolCall(client, name, args),
-    () => executeProblemToolCall(client, name, args),
-    () => executeChangeToolCall(client, name, args),
-    () => executeTaskToolCall(client, name, args),
-    () => executeKnowledgeToolCall(client, name, args),
-    () => executeCatalogToolCall(client, name, args),
-    () => executeUserToolCall(client, name, args),
-    () => executeReportingToolCall(client, name, args),
-    () => executeAtfToolCall(client, name, args),
-    () => executeNowAssistToolCall(client, name, args),
-    () => executeScriptToolCall(client, name, args),
-    () => executeAgileToolCall(client, name, args),
-    () => executeHrsdToolCall(client, name, args),
-    () => executeCsmToolCall(client, name, args),
-    () => executeSecurityToolCall(client, name, args),
-    () => executeFlowToolCall(client, name, args),
-    () => executePortalToolCall(client, name, args),
-    () => executeIntegrationToolCall(client, name, args),
-    () => executeNotificationToolCall(client, name, args),
-    () => executePerformanceToolCall(client, name, args),
-    () => executeSysPropertiesToolCall(client, name, args),
-    () => executeUpdateSetToolCall(client, name, args),
-    () => executeVaToolCall(client, name, args),
-    () => executeItamToolCall(client, name, args),
-    () => executeDevopsToolCall(client, name, args),
-    () => executeAppStudioToolCall(client, name, args),
-    () => executeMlToolCall(client, name, args),
-    () => executeWorkspaceToolCall(client, name, args),
-    () => executeMobileToolCall(client, name, args),
-    () => executeDeploymentToolCall(client, name, args),
-  ];
-
-  for (const handler of handlers) {
-    const result = await handler();
-    if (result !== null) return result;
+  // O(1) dispatch: look up the owning module's executor by tool name.
+  const exec = TOOL_EXECUTORS.get(name);
+  if (!exec) {
+    throw new ServiceNowError(`Unknown tool: ${name}`, 'UNKNOWN_TOOL');
   }
 
-  throw new ServiceNowError(`Unknown tool: ${name}`, 'UNKNOWN_TOOL');
+  const result = await exec(client, name, args);
+  if (result === null) {
+    // The owning module returned null — name is registered but unhandled.
+    throw new ServiceNowError(`Unknown tool: ${name}`, 'UNKNOWN_TOOL');
+  }
+  return result;
 }
