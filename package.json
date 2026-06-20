@@ -90,7 +90,6 @@
   "dependencies": {
     "@inquirer/prompts": "^8.2.1",
     "@modelcontextprotocol/sdk": "^1.29.0",
-    "@rolldown/binding-darwin-x64": "^1.1.2",
     "chalk": "^5.6.2",
     "commander": "^14.0.3",
     "dotenv": "^17.4.2",
