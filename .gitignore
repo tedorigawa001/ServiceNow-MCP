@@ -1,5 +1,6 @@
 /dist
 /node_modules
 /coverage
+/research
 .DS_Store
 /qiita
