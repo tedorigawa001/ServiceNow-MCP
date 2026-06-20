@@ -248,6 +248,18 @@ export function getCoreToolDefinitions() {
         required: ['schedule_id'],
       },
     },
+    {
+      name: 'describe_table',
+      description: 'Return full field schema for a ServiceNow table using sys_dictionary — includes field types, reference targets, mandatory/unique flags, and parent table. More accurate than get_table_schema for empty tables or custom tables.',
+      inputSchema: {
+        type: 'object',
+        properties: {
+          table: { type: 'string', description: 'Table name to inspect (e.g. "incident", "sn_vul_vulnerable_item")' },
+          include_inherited: { type: 'boolean', description: 'Include fields inherited from parent tables (default: false)' },
+        },
+        required: ['table'],
+      },
+    },
   ];
 }
 
@@ -394,6 +406,76 @@ export async function executeCoreToolCall(
       if (args.mid_server) data.mid_server = args.mid_server;
       const result = await client.createRecord('discovery_status', data);
       return { ...result, summary: `Triggered discovery scan for schedule ${args.schedule_id}` };
+    }
+
+    case 'describe_table': {
+      if (!args.table) throw new ServiceNowError('table is required', 'INVALID_REQUEST');
+      const tableName: string = args.table;
+      const includeInherited: boolean = args.include_inherited === true;
+
+      // Fetch table metadata from sys_db_object
+      const dbObjResp = await client.queryRecords({
+        table: 'sys_db_object',
+        query: `name=${tableName}`,
+        fields: 'name,label,super_class',
+        limit: 1,
+      });
+      if (dbObjResp.count === 0) {
+        throw new ServiceNowError(`Table "${tableName}" not found in sys_db_object`, 'NOT_FOUND');
+      }
+      const dbObj = dbObjResp.records[0];
+      const parentTable: string | undefined =
+        dbObj.super_class && typeof dbObj.super_class === 'object'
+          ? (dbObj.super_class as any).display_value || undefined
+          : undefined;
+
+      // Determine which tables to fetch fields for
+      const tables = [tableName];
+      if (includeInherited && parentTable) {
+        tables.push(parentTable);
+      }
+
+      const allFields: any[] = [];
+      for (const t of tables) {
+        const dictResp = await client.queryRecords({
+          table: 'sys_dictionary',
+          query: `name=${t}^internal_type!=collection^element!=NULL`,
+          fields: 'element,column_label,internal_type,reference,mandatory,unique,name',
+          limit: 500,
+        });
+        for (const row of dictResp.records) {
+          // ServiceNow Table API returns reference/choice fields as {value, link} objects
+          const strVal = (v: unknown): string =>
+            v && typeof v === 'object' ? ((v as any).value ?? '') : (v as string) ?? '';
+
+          const refValue = strVal(row.reference) || undefined;
+          const internalType = strVal(row.internal_type);
+          const element = strVal(row.element);
+          const columnLabel = strVal(row.column_label) || element;
+          const definedIn = strVal(row.name) || t;
+
+          allFields.push({
+            element,
+            column_label: columnLabel,
+            type: internalType,
+            ...(refValue ? { reference: refValue } : {}),
+            mandatory: row.mandatory === 'true' || row.mandatory === true,
+            unique: row.unique === 'true' || row.unique === true,
+            ...(includeInherited ? { defined_in: definedIn } : {}),
+          });
+        }
+      }
+
+      allFields.sort((a, b) => a.element.localeCompare(b.element));
+
+      return {
+        table: tableName,
+        label: dbObj.label || tableName,
+        ...(parentTable ? { parent_table: parentTable } : {}),
+        field_count: allFields.length,
+        fields: allFields,
+        summary: `Table "${tableName}" has ${allFields.length} field(s)${includeInherited && parentTable ? ` (includes inherited from "${parentTable}")` : ''}`,
+      };
     }
 
     default:

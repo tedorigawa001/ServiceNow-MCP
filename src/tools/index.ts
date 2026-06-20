@@ -215,7 +215,7 @@ const PACKAGE_TOOL_NAMES: Record<string, string[]> = {
  */
 const READ_ONLY_PREFIXES = [
   'get_', 'list_', 'search_', 'export_', 'preview_', 'query_',
-  'check_', 'find_', 'compare_', 'analyze_',
+  'check_', 'find_', 'compare_', 'analyze_', 'describe_',
 ];
 const READ_ONLY_EXACT = new Set([
   'nlq_query', 'natural_language_search', 'trend_query', 'run_aggregate_query',
