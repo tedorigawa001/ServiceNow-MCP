@@ -284,6 +284,18 @@ export function getCoreToolDefinitions() {
         required: ['tables'],
       },
     },
+    {
+      name: 'get_integration_health',
+      description:
+        'Report the health of Vulnerability Response data integration runs (sn_vul_integration_run) over a recent window. Surfaces failed runs and — critically — silent stalls where no runs occurred at all (e.g. an NVD/Qualys feed quietly failing with 503/429). Returns success/failure counts, the most recent success and failure timestamps, recent run details, and actionable alerts.',
+      inputSchema: {
+        type: 'object',
+        properties: {
+          days: { type: 'number', description: 'Look back this many days (default: 7, max: 365)' },
+          source: { type: 'string', description: 'Filter to a single integration source, e.g. "NVD", "Qualys", "Tenable" (default: all)' },
+        },
+      },
+    },
   ];
 }
 
@@ -618,6 +630,98 @@ export async function executeCoreToolCall(
           `${results.length} table(s) checked: ${readableCount} readable` +
           (checkWrite ? `, ${writableCount} writable` : '') +
           (currentUser ? ` (as ${currentUser}, ${currentRoles.length} role(s))` : ''),
+      };
+    }
+
+    case 'get_integration_health': {
+      // Clamp the window to a sane integer; the value is interpolated into a
+      // gs.daysAgo() expression so it must be a plain number.
+      const rawDays = Number(args.days);
+      const days = Number.isFinite(rawDays) ? Math.min(Math.max(Math.trunc(rawDays), 1), 365) : 7;
+
+      // Sanitize the optional source filter (exact match, no encoded-query operators).
+      const source: string | undefined =
+        typeof args.source === 'string' && args.source.trim()
+          ? args.source.replace(/[^a-zA-Z0-9 _.-]/g, '').trim()
+          : undefined;
+
+      let query = `start_datetime>=javascript:gs.daysAgo(${days})`;
+      if (source) query += `^source=${source}`;
+
+      let records: any[];
+      try {
+        const resp = await client.queryRecords({
+          table: 'sn_vul_integration_run',
+          query,
+          fields:
+            'number,source,substate,state,start_datetime,end_datetime,vi_created,vi_updated,vi_new_findings,notes,fatal_error_message',
+          orderBy: '-start_datetime',
+          limit: 200,
+        });
+        records = resp.records;
+      } catch (e) {
+        if (e instanceof ServiceNowError && (e.code === 'INVALID_REQUEST' || e.code === 'NOT_FOUND')) {
+          throw new ServiceNowError(
+            'Table sn_vul_integration_run is not available — Vulnerability Response may not be installed on this instance.',
+            'NOT_FOUND'
+          );
+        }
+        throw e;
+      }
+
+      const num = (v: unknown): number => {
+        const n = parseInt(String(v ?? ''), 10);
+        return Number.isFinite(n) ? n : 0;
+      };
+      const isFailed = (r: any): boolean =>
+        String(r.substate).toLowerCase() === 'failed' || !!String(r.fatal_error_message ?? '').trim();
+      const isSuccess = (r: any): boolean => String(r.substate).toLowerCase() === 'success';
+
+      const failedRuns = records.filter(isFailed);
+      const successRuns = records.filter(isSuccess);
+      // records are ordered most-recent-first
+      const lastSuccess = successRuns[0]?.start_datetime as string | undefined;
+      const lastFailure = failedRuns[0]?.start_datetime as string | undefined;
+
+      const recent_runs = records.slice(0, 25).map(r => ({
+        source: r.source || '',
+        substate: r.substate || '',
+        start_datetime: r.start_datetime || '',
+        end_datetime: r.end_datetime || '',
+        vi_created: num(r.vi_created),
+        vi_updated: num(r.vi_updated),
+        notes: String(r.fatal_error_message || r.notes || '').trim(),
+      }));
+
+      // ── Alerts ──
+      const alerts: string[] = [];
+      const scope = source ? `source "${source}"` : 'any integration';
+      if (records.length === 0) {
+        alerts.push(`No integration runs for ${scope} in the last ${days} day(s) — the feed may be stalled (e.g. silent 503/429 failures).`);
+      }
+      if (failedRuns.length > 0) {
+        alerts.push(`${failedRuns.length} failed run(s) in the last ${days} day(s).`);
+      }
+      if (records.length > 0 && isFailed(records[0])) {
+        const top = records[0];
+        alerts.push(`Most recent run failed: ${top.source || 'unknown'} at ${top.start_datetime || 'unknown'} — ${String(top.fatal_error_message || top.notes || 'no detail').trim()}`);
+      }
+      if (successRuns.length > 0 && !lastSuccess) {
+        alerts.push('Recent successes found but without timestamps.');
+      }
+
+      return {
+        window_days: days,
+        ...(source ? { source } : {}),
+        summary: {
+          total_runs: records.length,
+          success: successRuns.length,
+          failed: failedRuns.length,
+          ...(lastSuccess ? { last_success: lastSuccess } : {}),
+          ...(lastFailure ? { last_failure: lastFailure } : {}),
+        },
+        recent_runs,
+        alerts,
       };
     }
 

@@ -13,7 +13,7 @@
 | 1 | `describe_table` ツール | 全員 | ⭐⭐⭐ 高 | 低 | ✅ 完了 |
 | 2 | Streamable HTTP 対応 | 全員 | ⭐⭐⭐ 高 | 高 | 未着手 |
 | 3 | サービスアカウント権限チェックツール | 全員 | ⭐⭐⭐ 高 | 低 | ✅ 完了 |
-| 4 | Integration ヘルスチェックツール | Integration 利用者 | ⭐⭐ 中 | 低 | 未着手 |
+| 4 | Integration ヘルスチェックツール | Integration 利用者 | ⭐⭐ 中 | 低 | ✅ 完了 |
 | 5 | 自然言語クエリ強化（テーブル名自動解決） | 全員 | ⭐⭐ 中 | 高 | 未着手 |
 | 6 | USEM 専用ツールセット | SecOps 担当者 | ⭐ 低 | 中 | 未着手 |
 | 7 | `queryRecords` に `sysparm_display_value` 対応 | 全員 | ⭐⭐ 中 | 低 | ✅ 完了 |
@@ -112,7 +112,14 @@ add_vi_to_remediation_task   // VI を既存 RT に追加（sn_vul_m2m_vul_group
 
 ---
 
-## 3. Integration ヘルスチェックツール
+## 3. Integration ヘルスチェックツール ✅ 完了
+
+> 実装メモ: `get_integration_health`（`src/tools/core.ts`）。`sn_vul_integration_run` を
+> `start_datetime>=gs.daysAgo(N)`（allowlist 済み）で照会し、success/failed 件数・
+> 最終成功/失敗時刻・直近ラン・アラートを返す。**ランが0件の「サイレント停止」も検知**
+> （NVD 等の 503/429 無音失敗の早期発見が主目的）。Vulnerability Response 未導入の
+> インスタンスでは friendly な NOT_FOUND を返す。実 PDI(dev400464) で NVD 9成功/2失敗・
+> Qualys 0件の3挙動を確認。
 
 ### 背景
 

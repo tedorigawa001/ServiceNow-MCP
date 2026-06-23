@@ -24,9 +24,9 @@ const mockClient = {
 } as unknown as ServiceNowClient;
 
 describe('getCoreToolDefinitions', () => {
-  it('returns 23 core tool definitions', () => {
+  it('returns 24 core tool definitions', () => {
     const tools = getCoreToolDefinitions();
-    expect(tools.length).toBe(23);
+    expect(tools.length).toBe(24);
   });
 
   it('all tools have name, description and inputSchema', () => {
@@ -279,6 +279,80 @@ describe('executeCoreToolCall – check_table_access', () => {
       .rejects.toMatchObject({ code: 'INVALID_REQUEST' });
     await expect(executeCoreToolCall(mockClient, 'check_table_access', { tables: Array(21).fill('incident') }))
       .rejects.toMatchObject({ code: 'INVALID_REQUEST' });
+  });
+});
+
+describe('executeCoreToolCall – get_integration_health', () => {
+  beforeEach(() => vi.clearAllMocks());
+
+  const run = (over: Record<string, unknown> = {}) => ({
+    number: 'VINTRUN1', source: 'NVD', substate: 'success', state: 'complete',
+    start_datetime: '2026-06-22 13:46:00', end_datetime: '2026-06-22 13:47:42',
+    vi_created: '77', vi_updated: '76', notes: 'ok', fatal_error_message: '', ...over,
+  });
+
+  it('summarizes success/failure counts and last timestamps', async () => {
+    (mockClient.queryRecords as any).mockResolvedValue({
+      count: 3,
+      records: [
+        run({ start_datetime: '2026-06-22 10:00:00' }),
+        run({ substate: 'failed', fatal_error_message: 'HTTP 503', start_datetime: '2026-06-21 10:00:00' }),
+        run({ start_datetime: '2026-06-20 10:00:00' }),
+      ],
+    });
+    const r = await executeCoreToolCall(mockClient, 'get_integration_health', { days: 30 });
+    expect(r.summary).toMatchObject({ total_runs: 3, success: 2, failed: 1 });
+    expect(r.summary.last_success).toBe('2026-06-22 10:00:00');
+    expect(r.summary.last_failure).toBe('2026-06-21 10:00:00');
+    expect(r.alerts.some((a: string) => a.includes('1 failed run'))).toBe(true);
+    expect(r.recent_runs[0].vi_created).toBe(77); // coerced to number
+  });
+
+  it('alerts when the most recent run failed', async () => {
+    (mockClient.queryRecords as any).mockResolvedValue({
+      count: 1,
+      records: [run({ substate: 'failed', fatal_error_message: 'HTTP 429 Too Many Requests' })],
+    });
+    const r = await executeCoreToolCall(mockClient, 'get_integration_health', {});
+    expect(r.alerts.some((a: string) => a.includes('Most recent run failed') && a.includes('429'))).toBe(true);
+  });
+
+  it('raises a silent-stall alert when there are no runs in the window', async () => {
+    (mockClient.queryRecords as any).mockResolvedValue({ count: 0, records: [] });
+    const r = await executeCoreToolCall(mockClient, 'get_integration_health', { days: 14, source: 'Qualys' });
+    expect(r.summary.total_runs).toBe(0);
+    expect(r.source).toBe('Qualys');
+    expect(r.alerts[0]).toMatch(/stalled/);
+  });
+
+  it('clamps days to 1..365 and interpolates into the gs.daysAgo() query', async () => {
+    (mockClient.queryRecords as any).mockResolvedValue({ count: 0, records: [] });
+    await executeCoreToolCall(mockClient, 'get_integration_health', { days: 1000 });
+    expect(mockClient.queryRecords).toHaveBeenCalledWith(
+      expect.objectContaining({ query: expect.stringContaining('gs.daysAgo(365)') })
+    );
+
+    (mockClient.queryRecords as any).mockClear();
+    await executeCoreToolCall(mockClient, 'get_integration_health', {});
+    expect(mockClient.queryRecords).toHaveBeenCalledWith(
+      expect.objectContaining({ query: expect.stringContaining('gs.daysAgo(7)') })
+    );
+  });
+
+  it('sanitizes the source filter against encoded-query injection', async () => {
+    (mockClient.queryRecords as any).mockResolvedValue({ count: 0, records: [] });
+    await executeCoreToolCall(mockClient, 'get_integration_health', { source: 'NVD^ORsource=x' });
+    const call = (mockClient.queryRecords as any).mock.calls[0][0];
+    expect(call.query).toContain('source=NVDORsourcex'); // ^ and = stripped from the value
+    expect(call.query).not.toContain('source=NVD^OR');
+  });
+
+  it('returns a friendly error when the table is unavailable', async () => {
+    (mockClient.queryRecords as any).mockRejectedValue(
+      new ServiceNowError('Invalid table sn_vul_integration_run', 'INVALID_REQUEST')
+    );
+    await expect(executeCoreToolCall(mockClient, 'get_integration_health', {}))
+      .rejects.toMatchObject({ code: 'NOT_FOUND' });
   });
 });
 
