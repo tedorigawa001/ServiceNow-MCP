@@ -345,6 +345,12 @@ export class ServiceNowClient {
       queryParams.set('sysparm_fields', params.fields);
     }
 
+    // Opt-in human-readable reference/choice values. Constrain to the two valid
+    // modes so the value can never be used for query-param injection.
+    if (params.display_value !== undefined && params.display_value !== false) {
+      queryParams.set('sysparm_display_value', params.display_value === 'all' ? 'all' : 'true');
+    }
+
     if (params.limit !== undefined) {
       queryParams.set('sysparm_limit', Math.min(params.limit, 1000).toString());
     } else {

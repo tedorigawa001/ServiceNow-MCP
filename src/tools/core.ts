@@ -31,6 +31,10 @@ export function getCoreToolDefinitions() {
           fields: { type: 'string', description: 'Comma-separated fields to return' },
           limit: { type: 'number', description: 'Max records (default: 10, max: 1000)' },
           orderBy: { type: 'string', description: 'Field to sort by. Prefix with "-" for descending' },
+          display_value: {
+            description: 'Return human-readable values for reference/choice fields. true = display values only ({display_value, link}); "all" = both raw and display ({value, display_value, link}). Omit for raw sys_id/values.',
+            oneOf: [{ type: 'boolean' }, { type: 'string', enum: ['all'] }],
+          },
         },
         required: ['table'],
       },

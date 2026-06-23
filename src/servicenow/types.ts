@@ -35,6 +35,14 @@ export interface QueryRecordsParams {
   limit?: number;
   orderBy?: string;
   offset?: number;
+  /**
+   * Controls sysparm_display_value. When `true`, reference/choice fields are
+   * returned as `{ display_value, link }` (human-readable). When `'all'`, both
+   * the raw value and display value are returned as `{ value, display_value, link }`.
+   * Default (omitted/false) returns raw sys_id/values. Opt-in so the response
+   * shape is unchanged for existing callers.
+   */
+  display_value?: boolean | 'all';
 }
 
 export interface QueryRecordsResponse {

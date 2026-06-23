@@ -248,6 +248,32 @@ describe('ServiceNowClient — query building', () => {
     const apiUrl = decodeURIComponent(String(fetchMock.mock.calls.find(c => String(c[0]).includes('/api/now/'))![0]));
     expect(apiUrl).toContain('ORDERBYDESCsys_created_on');
   });
+
+  it('sets sysparm_display_value=true when display_value is true', async () => {
+    routeFetch(mockResponse({ json: { result: [] } }));
+    const client = new ServiceNowClient(baseConfig());
+    await client.queryRecords({ table: 'incident', display_value: true });
+    expect(String(apiCall()[0])).toContain('sysparm_display_value=true');
+  });
+
+  it('sets sysparm_display_value=all when display_value is "all"', async () => {
+    routeFetch(mockResponse({ json: { result: [] } }));
+    const client = new ServiceNowClient(baseConfig());
+    await client.queryRecords({ table: 'incident', display_value: 'all' });
+    expect(String(apiCall()[0])).toContain('sysparm_display_value=all');
+  });
+
+  it('omits sysparm_display_value when unset or false', async () => {
+    routeFetch(mockResponse({ json: { result: [] } }));
+    const client = new ServiceNowClient(baseConfig());
+    await client.queryRecords({ table: 'incident' });
+    expect(String(apiCall()[0])).not.toContain('sysparm_display_value');
+
+    fetchMock.mockClear();
+    routeFetch(mockResponse({ json: { result: [] } }));
+    await client.queryRecords({ table: 'incident', display_value: false });
+    expect(String(apiCall()[0])).not.toContain('sysparm_display_value');
+  });
 });
 
 // ── auth modes (impersonation / per-user) ─────────────────────────────────────

@@ -16,7 +16,7 @@
 | 4 | Integration ヘルスチェックツール | Integration 利用者 | ⭐⭐ 中 | 低 | 未着手 |
 | 5 | 自然言語クエリ強化（テーブル名自動解決） | 全員 | ⭐⭐ 中 | 高 | 未着手 |
 | 6 | USEM 専用ツールセット | SecOps 担当者 | ⭐ 低 | 中 | 未着手 |
-| 7 | `queryRecords` に `sysparm_display_value` 対応 | 全員 | ⭐⭐ 中 | 低 | 未着手 |
+| 7 | `queryRecords` に `sysparm_display_value` 対応 | 全員 | ⭐⭐ 中 | 低 | ✅ 完了 |
 
 ---
 
@@ -293,10 +293,13 @@ if (params.display_value !== undefined) {
 }
 ```
 
-**`describe_table` への適用:**
-`sys_db_object` クエリに `display_value: true` を追加し、`super_class.display_value` から直接親テーブル名を取得。2回目の `sys_db_object` クエリを廃止。
+**注意点:** `display_value=true` は全 reference フィールドのレスポンス形式を `{display_value, link}` に変える。既存ツールへの影響を `opt-in`（呼び出し側が明示的に指定）にすることで回避。`'all'` 指定時は `{value, display_value, link}`。
 
-**注意点:** `display_value=true` は全 reference フィールドのレスポンス形式を `{value, display_value, link}` に変える。既存ツールへの影響を `opt-in`（呼び出し側が明示的に指定）にすることで回避。
+**実装メモ:** `query_records` ツールにも `display_value` を公開。値は `'true' | 'all'` の2モードのみに制約（クエリパラメータ・インジェクション防止）。実 PDI(dev400464) で raw / true / all の3挙動を確認済み。
+
+**`describe_table` 最適化は見送り（ROADMAP の前提が誤り）:**
+当初は「`super_class.display_value` から親テーブル名を取得し2回目のクエリを廃止」と想定していたが、実機検証の結果 `super_class.display_value` は親テーブルの**ラベル**（例: `"Task"`）を返し、`sys_dictionary` クエリに必要な**テーブル名**（例: `"task"`）ではないことが判明。`describe_table` の2クエリ方式は維持。
+（一括取得したい場合は `sysparm_fields=super_class.name` のドットウォークが代替案。display_value とは別件のため未対応。）
 
 ---
 
