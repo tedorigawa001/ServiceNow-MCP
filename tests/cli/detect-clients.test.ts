@@ -3,7 +3,6 @@ import { detectClients } from '../../src/cli/detect-clients.js';
 import * as fs from 'fs';
 import * as os from 'os';
 import * as child_process from 'child_process';
-import * as path from 'path';
 
 vi.mock('fs');
 vi.mock('os');
