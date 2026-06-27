@@ -139,6 +139,12 @@ describe('list_remediation_tasks', () => {
 describe('get_remediation_task', () => {
   beforeEach(() => vi.clearAllMocks());
 
+  it('fetches by sys_id when a 32-char hex id is given', async () => {
+    getRec().mockResolvedValue({ sys_id: 'a'.repeat(32) });
+    await executeUsemToolCall(mockClient, 'get_remediation_task', { number_or_sysid: 'a'.repeat(32) });
+    expect(getRec()).toHaveBeenCalledWith('sn_vul_remediation_task', 'a'.repeat(32));
+  });
+
   it('resolves by task_number when not a sys_id', async () => {
     qr().mockResolvedValue({ count: 1, records: [{ task_number: 'RTASK0001' }] });
     await executeUsemToolCall(mockClient, 'get_remediation_task', { number_or_sysid: 'RTASK0001' });
@@ -405,6 +411,12 @@ describe('write tools – with WRITE_ENABLED', () => {
     await expect(
       executeUsemToolCall(mockClient, 'update_vulnerability_group', { sys_id: 'a'.repeat(32) })
     ).rejects.toThrow('At least one field to update is required');
+  });
+
+  it('update_vulnerability_group requires sys_id', async () => {
+    await expect(
+      executeUsemToolCall(mockClient, 'update_vulnerability_group', { state: '2' })
+    ).rejects.toThrow('sys_id is required');
   });
 });
 

@@ -115,6 +115,19 @@ describe('list_vr_exception_requests', () => {
     await executeUsemApprovalToolCall(mockClient, 'list_vr_exception_requests', { latest_only: false });
     expect(qr().mock.calls[0][0].query).toBe('');
   });
+
+  it('maps a plain-string approval_state and falls back for unknown codes', async () => {
+    qr().mockResolvedValue({
+      count: 2,
+      records: [
+        { number: 'CA1', approval_state: '1' }, // raw string value
+        { number: 'CA2', approval_state: '9' }, // unknown code -> falls back to the raw value
+      ],
+    });
+    const result = await executeUsemApprovalToolCall(mockClient, 'list_vr_exception_requests', {});
+    expect(result.records[0].approval_state_label).toBe('Approved');
+    expect(result.records[1].approval_state_label).toBe('9');
+  });
 });
 
 describe('act_on_vr_approval', () => {

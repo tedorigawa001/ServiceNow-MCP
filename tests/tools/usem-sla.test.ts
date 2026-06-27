@@ -62,6 +62,15 @@ describe('list_remediation_sla', () => {
     expect(qr().mock.calls[0][0].query).toBe('ttr_status=past_due');
   });
 
+  it('uses ttr_status= for a single status', async () => {
+    qr().mockResolvedValue({ count: 0, records: [] });
+    await executeUsemSlaToolCall(mockClient, 'list_remediation_sla', {
+      record_type: 'vi',
+      ttr_status: 'approaching',
+    });
+    expect(qr().mock.calls[0][0].query).toBe('ttr_status=approaching');
+  });
+
   it('uses ttr_statusIN for multiple statuses', async () => {
     qr().mockResolvedValue({ count: 0, records: [] });
     await executeUsemSlaToolCall(mockClient, 'list_remediation_sla', {
@@ -262,6 +271,16 @@ describe('set_remediation_commitment', () => {
         commitment_date: 'x',
       })
     ).rejects.toThrow('sys_id must be a 32-character hex string');
+  });
+
+  it('requires commitment_date', async () => {
+    process.env.WRITE_ENABLED = 'true';
+    await expect(
+      executeUsemSlaToolCall(mockClient, 'set_remediation_commitment', {
+        record_type: 'vi',
+        sys_id: 'a'.repeat(32),
+      })
+    ).rejects.toThrow('commitment_date is required');
   });
 });
 
