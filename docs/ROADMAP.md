@@ -81,6 +81,17 @@ sys_dictionary WHERE name = '{table}' AND internal_type != 'collection'
 > - ダッシュボードは Aggregate(stats) API で state 別件数を厳密集計（`queryRecords` の
 >   `count` はページ長のため不可）。read 系をライブ確認（VI 4件/全 Closed・NVD フィルタ・
 >   display_value 解決）。テストは `tests/tools/usem.test.ts`（39 ケース）。
+>
+> 追加実装（環境設定ルール操作）: `src/tools/usem-config.ts`（5 ツール）。`rule_type`
+> レジストリ方式で 6 種のルールテーブルを単一ツール群で操作:
+>   - assignment → `sn_vul_vgr_assignment_rule`（name/active なし）
+>   - remediation_task → `sn_sec_rem_task_rule`（修復タスクルール / key: rule_name）
+>   - remediation_target → `sn_sec_wf_ttr_rule`（TTR 期日 / key: name）
+>   - approval → `sn_vul_cmn_approval_rule`、auto_close → `sn_vul_cmn_auto_close_rule`、
+>     exclusion → `sn_vul_cmn_auto_exclusion_rule`
+>   ツール: `list/get_usem_rule`, `create/update_usem_rule`, `set_usem_rule_active`
+>   （write 系は WRITE_ENABLED 必須 = 管理者操作）。read をライブ確認（TTR 3件・
+>   auto_close 3件を order 順取得）。テストは `tests/tools/usem-config.test.ts`（24 ケース）。
 
 ### 背景
 

@@ -76,6 +76,8 @@ import { getMobileToolDefinitions, executeMobileToolCall } from './mobile.js';
 import { getDeploymentToolDefinitions, executeDeploymentToolCall } from './deployment.js';
 // USEM (Unified Security Exposure Management)
 import { getUsemToolDefinitions, executeUsemToolCall } from './usem.js';
+// USEM / VR configuration rules
+import { getUsemConfigToolDefinitions, executeUsemConfigToolCall } from './usem-config.js';
 
 // ─── Package Definitions ──────────────────────────────────────────────────────
 
@@ -104,6 +106,8 @@ const PACKAGE_TOOL_NAMES: Record<string, string[]> = {
     'list_vulnerable_items', 'get_vulnerable_item', 'list_remediation_tasks', 'get_remediation_task',
     'list_nvd_entries', 'get_nvd_entry_by_cve', 'get_usem_dashboard',
     'create_remediation_task', 'update_remediation_task', 'add_vi_to_remediation_task',
+    // USEM / VR configuration rules
+    'list_usem_rules', 'get_usem_rule', 'create_usem_rule', 'update_usem_rule', 'set_usem_rule_active',
     // Integration health
     'get_integration_health',
   ],
@@ -337,6 +341,7 @@ const MODULES: ToolModule[] = [
   { defs: getMobileToolDefinitions, exec: executeMobileToolCall },
   { defs: getDeploymentToolDefinitions, exec: executeDeploymentToolCall },
   { defs: getUsemToolDefinitions, exec: executeUsemToolCall },
+  { defs: getUsemConfigToolDefinitions, exec: executeUsemConfigToolCall },
 ];
 
 // Name → executor map, built once at module load. Detects duplicate tool names
