@@ -18,13 +18,13 @@ const VR_IN =
   'sn_vul_remediation_task,sn_vul_app_vulnerability,sn_vul_app_vulnerable_item';
 
 describe('getUsemApprovalToolDefinitions', () => {
-  it('returns 2 tool definitions', () => {
-    expect(getUsemApprovalToolDefinitions().length).toBe(2);
+  it('returns 3 tool definitions', () => {
+    expect(getUsemApprovalToolDefinitions().length).toBe(3);
   });
 
   it('exposes the expected tool names', () => {
     const names = getUsemApprovalToolDefinitions().map(t => t.name).sort();
-    expect(names).toEqual(['act_on_vr_approval', 'list_vr_approvals']);
+    expect(names).toEqual(['act_on_vr_approval', 'list_vr_approvals', 'list_vr_exception_requests']);
   });
 });
 
@@ -65,6 +65,55 @@ describe('list_vr_approvals', () => {
     await expect(
       executeUsemApprovalToolCall(mockClient, 'list_vr_approvals', { source_table: 'incident' })
     ).rejects.toThrow('source_table must be one of');
+  });
+
+  it('filters by approval_source (e.g. False Positive on a VI)', async () => {
+    qr().mockResolvedValue({ count: 3, records: [] });
+    await executeUsemApprovalToolCall(mockClient, 'list_vr_approvals', {
+      approval_source: 'sn_vul_vulnerable_item',
+    });
+    expect(qr().mock.calls[0][0].query).toBe(`${VR_IN}^state=requested^approval_source=sn_vul_vulnerable_item`);
+  });
+
+  it('rejects a non-VR approval_source', async () => {
+    await expect(
+      executeUsemApprovalToolCall(mockClient, 'list_vr_approvals', { approval_source: 'incident' })
+    ).rejects.toThrow('approval_source must be one of');
+  });
+});
+
+describe('list_vr_exception_requests', () => {
+  beforeEach(() => vi.clearAllMocks());
+
+  it('defaults to latest revisions and maps approval_state labels', async () => {
+    qr().mockResolvedValue({
+      count: 1,
+      records: [{ number: { value: 'CA0010002' }, request_type: { value: 'False positive' }, approval_state: { value: '0' } }],
+    });
+    const result = await executeUsemApprovalToolCall(mockClient, 'list_vr_exception_requests', {});
+    const call = qr().mock.calls[0][0];
+    expect(call.table).toBe('sn_sec_exception_change_approval');
+    expect(call.query).toBe('is_latest=true');
+    expect(call.orderBy).toBe('-sys_created_on');
+    expect(result.records[0].approval_state_label).toBe('In Review');
+  });
+
+  it('filters by request_type, approval_state and target table', async () => {
+    qr().mockResolvedValue({ count: 0, records: [] });
+    await executeUsemApprovalToolCall(mockClient, 'list_vr_exception_requests', {
+      request_type: 'False positive',
+      approval_state: '1',
+      table: 'sn_vul_vulnerable_item',
+    });
+    expect(qr().mock.calls[0][0].query).toBe(
+      'is_latest=true^request_type=False positive^approval_state=1^table=sn_vul_vulnerable_item'
+    );
+  });
+
+  it('omits is_latest when latest_only=false', async () => {
+    qr().mockResolvedValue({ count: 0, records: [] });
+    await executeUsemApprovalToolCall(mockClient, 'list_vr_exception_requests', { latest_only: false });
+    expect(qr().mock.calls[0][0].query).toBe('');
   });
 });
 

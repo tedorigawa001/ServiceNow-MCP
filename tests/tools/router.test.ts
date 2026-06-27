@@ -58,6 +58,7 @@ describe('getTools – package system', () => {
     expect(names).toContain('set_remediation_commitment');
     expect(names).toContain('list_vr_notifications');
     expect(names).toContain('list_vr_approvals');
+    expect(names).toContain('list_vr_exception_requests');
     expect(names).toContain('act_on_vr_approval');
     expect(names).toContain('get_integration_health');
     expect(names).toContain('list_security_incidents');

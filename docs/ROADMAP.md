@@ -148,7 +148,19 @@ sys_dictionary WHERE name = '{table}' AND internal_type != 'collection'
 >   Exception Request 起票後にフル・ラウンドトリップをライブ検証:
 >   `list_vr_approvals`（requested 50 件・CA0010005・approval_source=sn_vul_vulnerability）
 >   → `act_on_vr_approval` approve（state→approved）→ requested へ復元（残留なし）。
->   テストは `tests/tools/usem-approval.test.ts`（13 ケース）。
+>
+> 追加実装（例外申請の可視化）: False Positive 申請の実機調査で、**例外申請の本体テーブルは
+> `sn_sec_exception_change_approval`** と判明（以前見つからなかった申請エンティティ）。
+> request_type（"False positive" / "Exception" / "Risk Acceptance"）・`record`+`table`（対象 VR
+> レコード）・`desired_state`/`desired_substate`（承認時の遷移先）・`approval_state`
+> （0=In Review…5=Draft）・`desired_reason`・`requested_by` を保持。
+>   - `list_vr_exception_requests`（request_type / approval_state / table / latest_only で絞り込み、
+>     approval_state ラベル付与）を追加
+>   - `list_vr_approvals` に `approval_source` フィルタ追加（FP=sn_vul_vulnerable_item と
+>     グループ例外=sn_vul_vulnerability を区別）
+>   ライブ確認: 例外申請 5 件（FP 3 / Exception 2、CA0010002=VIT0011335 の FP・desired
+>   substate "False Positive"）、approval_source 別に FP 3 / グループ 10 を取得。
+>   テストは `tests/tools/usem-approval.test.ts`（19 ケース）。
 >   - `list_remediation_sla`（record_type=vi|rt、ttr_status/breached_only/due_within_days
 >     /assignment_group で絞り込み、target_date 昇順）
 >   - `get_remediation_sla`（番号 or sys_id、breach 判定・残日数を算出）

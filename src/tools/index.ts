@@ -123,7 +123,7 @@ const PACKAGE_TOOL_NAMES: Record<string, string[]> = {
     'list_remediation_sla', 'get_remediation_sla', 'get_group_sla', 'set_remediation_commitment', 'list_vr_notifications',
     'list_notifications', 'get_notification', 'update_notification',
     // USEM / VR approval (workflow state transitions)
-    'list_vr_approvals', 'act_on_vr_approval',
+    'list_vr_approvals', 'list_vr_exception_requests', 'act_on_vr_approval',
     'get_my_approvals', 'approve_request', 'reject_request',
     // Integration health
     'get_integration_health',
