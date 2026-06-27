@@ -82,6 +82,8 @@ import { getUsemConfigToolDefinitions, executeUsemConfigToolCall } from './usem-
 import { getUsemIntegrationToolDefinitions, executeUsemIntegrationToolCall } from './usem-integration.js';
 // USEM / VR SLA (TTR) + notifications
 import { getUsemSlaToolDefinitions, executeUsemSlaToolCall } from './usem-sla.js';
+// USEM / VR approval (workflow state transitions)
+import { getUsemApprovalToolDefinitions, executeUsemApprovalToolCall } from './usem-approval.js';
 
 // ─── Package Definitions ──────────────────────────────────────────────────────
 
@@ -120,6 +122,9 @@ const PACKAGE_TOOL_NAMES: Record<string, string[]> = {
     // USEM / VR SLA (TTR) + notifications
     'list_remediation_sla', 'get_remediation_sla', 'get_group_sla', 'set_remediation_commitment', 'list_vr_notifications',
     'list_notifications', 'get_notification', 'update_notification',
+    // USEM / VR approval (workflow state transitions)
+    'list_vr_approvals', 'act_on_vr_approval',
+    'get_my_approvals', 'approve_request', 'reject_request',
     // Integration health
     'get_integration_health',
   ],
@@ -356,6 +361,7 @@ const MODULES: ToolModule[] = [
   { defs: getUsemConfigToolDefinitions, exec: executeUsemConfigToolCall },
   { defs: getUsemIntegrationToolDefinitions, exec: executeUsemIntegrationToolCall },
   { defs: getUsemSlaToolDefinitions, exec: executeUsemSlaToolCall },
+  { defs: getUsemApprovalToolDefinitions, exec: executeUsemApprovalToolCall },
 ];
 
 // Name → executor map, built once at module load. Detects duplicate tool names

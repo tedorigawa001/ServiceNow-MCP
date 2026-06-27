@@ -130,6 +130,20 @@ sys_dictionary WHERE name = '{table}' AND internal_type != 'collection'
 >   - **重要挙動**: 作成/更新後に VR 業務ルール（グルーピング/アサインメント/TTR）が
 >     short_description・assignment_group・ttr_target_date を非同期で再計算する（入力値が
 >     上書きされうる）。ツールは正常で、これはプラットフォーム仕様。`delete` ✅。
+>
+> 追加実装（state 遷移 = 承認ワークフロー）: `src/tools/usem-approval.ts`（2 ツール）。
+> 実機検証で **Table API の直接フィールド書き込みでは state を動かせない**ことを確定
+> （`state` は ACL 拒否、VI の `ignore_reason`/`ignore_date` は受理されるが業務ルールで
+> 即時リバート）。Table API で確実に state 遷移を駆動できるのは **承認
+> （`sysapproval_approver`）** のみ。
+>   - `list_vr_approvals`（VR 由来クラスの承認を IN フィルタで抽出。既定 state=requested、
+>     source_table で 1 クラス限定可）
+>   - `act_on_vr_approval`（approve/reject で `sysapproval_approver.state` を更新し
+>     ワークフローを進行 → 対象 VR レコードを遷移。reject はコメント必須 / WRITE_ENABLED 必須）
+>   承認アクション自体は既存の `approve_request`/`reject_request`/`get_my_approvals` でも可。
+>   read をライブ確認（VR 承認は現状0件・dot-walk/IN クエリ成立・不正 source_table はエラー）。
+>   write は VR 承認レコード未発生のためユニットテストで担保（検証済み汎用 approve と同一の
+>   updateRecord パターン）。テストは `tests/tools/usem-approval.test.ts`（13 ケース）。
 >   - `list_remediation_sla`（record_type=vi|rt、ttr_status/breached_only/due_within_days
 >     /assignment_group で絞り込み、target_date 昇順）
 >   - `get_remediation_sla`（番号 or sys_id、breach 判定・残日数を算出）
