@@ -50,6 +50,7 @@ describe('getTools – package system', () => {
     expect(names).toContain('list_vulnerable_items');
     expect(names).toContain('get_usem_dashboard');
     expect(names).toContain('create_remediation_task');
+    expect(names).toContain('list_vulnerability_groups');
     expect(names).toContain('list_usem_rules');
     expect(names).toContain('list_integration_runs');
     expect(names).toContain('set_integration_active');

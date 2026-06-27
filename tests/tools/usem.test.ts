@@ -17,8 +17,8 @@ const updateRec = () => mockClient.updateRecord as ReturnType<typeof vi.fn>;
 const agg = () => mockClient.runAggregateQuery as ReturnType<typeof vi.fn>;
 
 describe('getUsemToolDefinitions', () => {
-  it('returns 10 tool definitions', () => {
-    expect(getUsemToolDefinitions().length).toBe(10);
+  it('returns 12 tool definitions', () => {
+    expect(getUsemToolDefinitions().length).toBe(12);
   });
 
   it('all tools have name, description and inputSchema', () => {
@@ -38,9 +38,11 @@ describe('getUsemToolDefinitions', () => {
         'get_nvd_entry_by_cve',
         'get_remediation_task',
         'get_usem_dashboard',
+        'get_vulnerability_group',
         'get_vulnerable_item',
         'list_nvd_entries',
         'list_remediation_tasks',
+        'list_vulnerability_groups',
         'list_vulnerable_items',
         'update_remediation_task',
       ].sort()
@@ -146,6 +148,48 @@ describe('get_remediation_task', () => {
     await expect(
       executeUsemToolCall(mockClient, 'get_remediation_task', { number_or_sysid: 'RTASKxxx' })
     ).rejects.toThrow('Remediation Task not found');
+  });
+});
+
+describe('list_vulnerability_groups', () => {
+  beforeEach(() => vi.clearAllMocks());
+
+  it('queries sn_vul_vulnerability with state + risk filter, ordered by -risk_score', async () => {
+    qr().mockResolvedValue({ count: 2, records: [{ number: 'VUL1' }, { number: 'VUL2' }] });
+    const result = await executeUsemToolCall(mockClient, 'list_vulnerability_groups', {
+      state: '1',
+      risk_score_min: 80,
+      assignment_group: 'grp1',
+    });
+    const call = qr().mock.calls[0][0];
+    expect(call.table).toBe('sn_vul_vulnerability');
+    expect(call.orderBy).toBe('-risk_score');
+    expect(call.query).toBe('state=1^risk_score>=80^assignment_group=grp1');
+    expect(result.summary).toContain('2 vulnerability group');
+  });
+});
+
+describe('get_vulnerability_group', () => {
+  beforeEach(() => vi.clearAllMocks());
+
+  it('fetches by sys_id when a 32-char hex id is given', async () => {
+    getRec().mockResolvedValue({ sys_id: 'a'.repeat(32) });
+    await executeUsemToolCall(mockClient, 'get_vulnerability_group', { number_or_sysid: 'a'.repeat(32) });
+    expect(getRec()).toHaveBeenCalledWith('sn_vul_vulnerability', 'a'.repeat(32));
+  });
+
+  it('resolves by VUL number otherwise', async () => {
+    qr().mockResolvedValue({ count: 1, records: [{ number: 'VUL0000103' }] });
+    const result = await executeUsemToolCall(mockClient, 'get_vulnerability_group', { number_or_sysid: 'VUL0000103' });
+    expect(qr().mock.calls[0][0].query).toBe('number=VUL0000103');
+    expect(result.number).toBe('VUL0000103');
+  });
+
+  it('throws NOT_FOUND when number does not resolve', async () => {
+    qr().mockResolvedValue({ count: 0, records: [] });
+    await expect(
+      executeUsemToolCall(mockClient, 'get_vulnerability_group', { number_or_sysid: 'VULxxxx' })
+    ).rejects.toThrow('Vulnerability Group not found');
   });
 });
 

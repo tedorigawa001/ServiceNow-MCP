@@ -51,6 +51,10 @@ const NVD_FIELDS =
   'id,summary,v3_base_score,v3_base_severity,v2_base_severity,epss_score,' +
   'exploit,patch_available,date_published,last_modified,sys_id';
 
+const VG_FIELDS =
+  'number,short_description,state,assignment_group,assigned_to,risk_score,risk_rating,' +
+  'ttr_status,ttr_target_date,total_vulnerabilities,sys_id';
+
 export function getUsemToolDefinitions() {
   return [
     {
@@ -114,6 +118,40 @@ export function getUsemToolDefinitions() {
         type: 'object',
         properties: {
           number_or_sysid: { type: 'string', description: 'RT task_number or 32-char sys_id' },
+        },
+        required: ['number_or_sysid'],
+      },
+    },
+    {
+      name: 'list_vulnerability_groups',
+      description:
+        'List Vulnerability Groups (sn_vul_vulnerability) — the task-based remediation entity ' +
+        '(sys_class label "Remediation Task", number prefix VUL). Filter by state, minimum risk score, ' +
+        'or assignment group. Ordered by descending risk score. Use add_vi_to_remediation_task to add ' +
+        'members and the SLA tools (record_type=vg) for TTR status.',
+      inputSchema: {
+        type: 'object',
+        properties: {
+          state: VUL_STATE_SCHEMA,
+          risk_score_min: { type: 'number', description: 'Only return groups with risk_score >= this value' },
+          assignment_group: { type: 'string', description: 'Filter by assignment group sys_id' },
+          query: { type: 'string', description: 'Additional raw encoded query appended with ^' },
+          limit: { type: 'number', description: 'Max records (default: 25, max: 1000)' },
+          display_value: {
+            description: 'Return human-readable reference/choice values (true) or both raw and display ("all")',
+            oneOf: [{ type: 'boolean' }, { type: 'string', enum: ['all'] }],
+          },
+        },
+      },
+    },
+    {
+      name: 'get_vulnerability_group',
+      description:
+        'Get full details of a single Vulnerability Group by sys_id or VUL number (e.g. "VUL0000103").',
+      inputSchema: {
+        type: 'object',
+        properties: {
+          number_or_sysid: { type: 'string', description: 'Group number (VULxxxxxxx) or 32-char sys_id' },
         },
         required: ['number_or_sysid'],
       },
@@ -309,6 +347,38 @@ export async function executeUsemToolCall(
         limit: 1,
       });
       if (resp.count === 0) throw new ServiceNowError(`Remediation Task not found: ${args.number_or_sysid}`, 'NOT_FOUND');
+      return resp.records[0];
+    }
+
+    case 'list_vulnerability_groups': {
+      const parts: string[] = [];
+      const sc = stateClause(args.state);
+      if (sc) parts.push(sc);
+      if (args.risk_score_min !== undefined) parts.push(`risk_score>=${Number(args.risk_score_min)}`);
+      if (args.assignment_group) parts.push(`assignment_group=${args.assignment_group}`);
+      if (args.query) parts.push(args.query);
+      const resp = await client.queryRecords({
+        table: 'sn_vul_vulnerability',
+        query: parts.join('^'),
+        fields: VG_FIELDS,
+        orderBy: '-risk_score',
+        limit: args.limit ?? 25,
+        display_value: args.display_value,
+      });
+      return { count: resp.count, records: resp.records, summary: `Found ${resp.count} vulnerability group(s)` };
+    }
+
+    case 'get_vulnerability_group': {
+      if (!args.number_or_sysid) throw new ServiceNowError('number_or_sysid is required', 'INVALID_REQUEST');
+      if (SYS_ID_RE.test(args.number_or_sysid)) {
+        return await client.getRecord('sn_vul_vulnerability', args.number_or_sysid);
+      }
+      const resp = await client.queryRecords({
+        table: 'sn_vul_vulnerability',
+        query: `number=${args.number_or_sysid}`,
+        limit: 1,
+      });
+      if (resp.count === 0) throw new ServiceNowError(`Vulnerability Group not found: ${args.number_or_sysid}`, 'NOT_FOUND');
       return resp.records[0];
     }
 

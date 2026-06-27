@@ -83,10 +83,19 @@ describe('list_remediation_sla', () => {
     );
   });
 
+  it('maps vg to the task-based Vulnerability Group table', async () => {
+    qr().mockResolvedValue({ count: 0, records: [] });
+    await executeUsemSlaToolCall(mockClient, 'list_remediation_sla', { record_type: 'vg', breached_only: true });
+    const call = qr().mock.calls[0][0];
+    expect(call.table).toBe('sn_vul_vulnerability');
+    expect(call.fields).toContain('number');
+    expect(call.query).toBe('ttr_status=past_due');
+  });
+
   it('rejects an unknown record_type', async () => {
     await expect(
       executeUsemSlaToolCall(mockClient, 'list_remediation_sla', { record_type: 'foo' })
-    ).rejects.toThrow('record_type must be one of: vi, rt');
+    ).rejects.toThrow('record_type must be one of: vi, rt, vg');
   });
 });
 
@@ -135,6 +144,21 @@ describe('get_remediation_sla', () => {
       number_or_sysid: 'RTASK1',
     });
     expect(qr().mock.calls[0][0].query).toBe('task_number=RTASK1');
+  });
+
+  it('resolves a vg group by VUL number and flags an overdue breach', async () => {
+    qr().mockResolvedValue({
+      count: 1,
+      records: [{ sys_id: 's3', number: 'VUL0000103', ttr_status: 'past_due', ttr_target_date: '2021-03-25 08:00:00' }],
+    });
+    const result = await executeUsemSlaToolCall(mockClient, 'get_remediation_sla', {
+      record_type: 'vg',
+      number_or_sysid: 'VUL0000103',
+    });
+    expect(qr().mock.calls[0][0].table).toBe('sn_vul_vulnerability');
+    expect(qr().mock.calls[0][0].query).toBe('number=VUL0000103');
+    expect(result.breached).toBe(true);
+    expect(result.days_to_target).toBeLessThan(0);
   });
 
   it('throws NOT_FOUND when number does not resolve', async () => {

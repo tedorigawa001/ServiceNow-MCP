@@ -107,8 +107,15 @@ sys_dictionary WHERE name = '{table}' AND internal_type != 'collection'
 >   テストは `tests/tools/usem-integration.test.ts`（30 ケース）。
 >
 > 追加実装（VI/RT の SLA(TTR) + 通知）: `src/tools/usem-sla.ts`（4 ツール）。
-> 実機知見: **VI/RT は `task` を拡張していない**ため `task_sla`/`get_sla_details` は不適用。
-> SLA は VI/RT 自身の TTR フィールド（`ttr_status`/`ttr_target_date`/`ttr_applied_rule`）。
+> 実機知見（重要・継承の訂正）: `sn_vul_vulnerable_item` と `sn_vul_remediation_task`
+> は `task` を**拡張していない**が、**`sn_vul_vulnerability`（Vulnerability Group /
+> sys_class ラベル "Remediation Task"・番号 VUL）は `task` を拡張している**。よって
+> グループは `task_sla`（`get_sla_details`）が適用可能。一方 VI/RT/VG いずれも TTR
+> フィールド（`ttr_status`/`ttr_target_date`/`ttr_applied_rule`）を持つので SLA 表示は TTR で統一。
+> `record_type` は **vi / rt / vg** の 3 種対応。VG はデモデータ 20 件で
+> past_due・残日数算出をライブ検証（VUL0000103 = breached, days_to_target -1920）。
+> 関連して `usem.ts` に `list_vulnerability_groups` / `get_vulnerability_group` を追加
+> （計 12 ツール）。
 >   - `list_remediation_sla`（record_type=vi|rt、ttr_status/breached_only/due_within_days
 >     /assignment_group で絞り込み、target_date 昇順）
 >   - `get_remediation_sla`（番号 or sys_id、breach 判定・残日数を算出）

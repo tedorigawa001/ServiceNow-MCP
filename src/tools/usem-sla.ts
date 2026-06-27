@@ -52,19 +52,30 @@ const RECORD_TYPES: Record<string, RecordType> = {
     numberField: 'task_number',
     commitmentField: 'ttr_target_date',
   },
+  // The task-based Vulnerability Group (sys_class label "Remediation Task",
+  // number prefix VUL). Being a task it also supports task_sla — see
+  // get_sla_details — but its TTR fields are handled the same way as VI/RT here.
+  vg: {
+    table: 'sn_vul_vulnerability',
+    label: 'Vulnerability Group',
+    numberField: 'number',
+    commitmentField: 'remediation_commitment_dt_tm',
+  },
 };
 
 const RECORD_TYPE_SCHEMA = {
   type: 'string',
-  enum: ['vi', 'rt'],
-  description: 'Record family: vi (Vulnerable Item) or rt (Remediation Task)',
+  enum: ['vi', 'rt', 'vg'],
+  description:
+    'Record family: vi (Vulnerable Item), rt (Remediation Task, sn_vul_remediation_task), ' +
+    'or vg (Vulnerability Group / task-based Remediation Task, sn_vul_vulnerability)',
 };
 
 const SLA_FIELDS = 'ttr_status,ttr_target_date,ttr_applied_rule,assignment_group,assigned_to,risk_score,state';
 
 function resolveRecordType(rt: unknown): RecordType {
   if (typeof rt !== 'string' || !RECORD_TYPES[rt]) {
-    throw new ServiceNowError('record_type must be one of: vi, rt', 'INVALID_REQUEST');
+    throw new ServiceNowError('record_type must be one of: vi, rt, vg', 'INVALID_REQUEST');
   }
   return RECORD_TYPES[rt];
 }
@@ -100,9 +111,10 @@ export function getUsemSlaToolDefinitions() {
     {
       name: 'list_remediation_sla',
       description:
-        'List the SLA (Time-To-Remediate) status of Vulnerable Items or Remediation Tasks. ' +
-        'Filter by ttr_status (no_target/in_flight/approaching/past_due/target_met), breaches only, ' +
-        'an upcoming-due window, or assignment group. Ordered by soonest target date.',
+        'List the SLA (Time-To-Remediate) status of Vulnerable Items, Remediation Tasks, or ' +
+        'Vulnerability Groups. Filter by ttr_status (no_target/in_flight/approaching/past_due/' +
+        'target_met), breaches only, an upcoming-due window, or assignment group. Ordered by ' +
+        'soonest target date.',
       inputSchema: {
         type: 'object',
         properties: {
@@ -127,8 +139,10 @@ export function getUsemSlaToolDefinitions() {
     {
       name: 'get_remediation_sla',
       description:
-        'Get the SLA (TTR) detail for a single Vulnerable Item or Remediation Task by number or sys_id: ' +
-        'status, target date, applied rule, breach flag and days remaining/overdue.',
+        'Get the SLA (TTR) detail for a single Vulnerable Item, Remediation Task, or Vulnerability ' +
+        'Group by number or sys_id: status, target date, applied rule, breach flag and days ' +
+        'remaining/overdue. For task-based Vulnerability Groups, task_sla instances are also ' +
+        'available via get_sla_details.',
       inputSchema: {
         type: 'object',
         properties: {
