@@ -74,6 +74,8 @@ import { getWorkspaceToolDefinitions, executeWorkspaceToolCall } from './workspa
 import { getMobileToolDefinitions, executeMobileToolCall } from './mobile.js';
 // Deployment & Artifacts
 import { getDeploymentToolDefinitions, executeDeploymentToolCall } from './deployment.js';
+// USEM (Unified Security Exposure Management)
+import { getUsemToolDefinitions, executeUsemToolCall } from './usem.js';
 
 // ─── Package Definitions ──────────────────────────────────────────────────────
 
@@ -91,6 +93,19 @@ const PACKAGE_TOOL_NAMES: Record<string, string[]> = {
     'list_assets', 'get_asset', 'create_asset', 'update_asset', 'retire_asset',
     'list_software_licenses', 'get_license_compliance', 'list_asset_contracts',
     'track_asset_lifecycle', 'get_license_optimization',
+  ],
+  secops_analyst: [
+    'query_records', 'get_record', 'get_table_schema', 'describe_table', 'check_table_access',
+    // Security Operations & GRC
+    'list_security_incidents', 'get_security_incident', 'create_security_incident', 'update_security_incident',
+    'list_vulnerabilities', 'get_vulnerability', 'update_vulnerability', 'get_security_dashboard',
+    'get_threat_intelligence', 'list_grc_risks', 'get_grc_risk',
+    // USEM
+    'list_vulnerable_items', 'get_vulnerable_item', 'list_remediation_tasks', 'get_remediation_task',
+    'list_nvd_entries', 'get_nvd_entry_by_cve', 'get_usem_dashboard',
+    'create_remediation_task', 'update_remediation_task', 'add_vi_to_remediation_task',
+    // Integration health
+    'get_integration_health',
   ],
   portal_developer: [
     'query_records', 'get_record', 'get_table_schema',
@@ -321,6 +336,7 @@ const MODULES: ToolModule[] = [
   { defs: getWorkspaceToolDefinitions, exec: executeWorkspaceToolCall },
   { defs: getMobileToolDefinitions, exec: executeMobileToolCall },
   { defs: getDeploymentToolDefinitions, exec: executeDeploymentToolCall },
+  { defs: getUsemToolDefinitions, exec: executeUsemToolCall },
 ];
 
 // Name → executor map, built once at module load. Detects duplicate tool names

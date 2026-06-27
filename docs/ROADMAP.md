@@ -15,7 +15,7 @@
 | 3 | サービスアカウント権限チェックツール | 全員 | ⭐⭐⭐ 高 | 低 | ✅ 完了 |
 | 4 | Integration ヘルスチェックツール | Integration 利用者 | ⭐⭐ 中 | 低 | ✅ 完了 |
 | 5 | 自然言語クエリ強化（テーブル名自動解決） | 全員 | ⭐⭐ 中 | 高 | 未着手 |
-| 6 | USEM 専用ツールセット | SecOps 担当者 | ⭐ 低 | 中 | 未着手 |
+| 6 | USEM 専用ツールセット | SecOps 担当者 | ⭐ 低 | 中 | ✅ 完了 |
 | 7 | `queryRecords` に `sysparm_display_value` 対応 | 全員 | ⭐⭐ 中 | 低 | ✅ 完了 |
 
 ---
@@ -66,7 +66,21 @@ sys_dictionary WHERE name = '{table}' AND internal_type != 'collection'
 
 ---
 
-## 2. USEM 専用ツールセット
+## 2. USEM 専用ツールセット ✅ 完了
+
+> 実装メモ: 新規 `src/tools/usem.ts`（10 ツール）。読み取り 7 / 書き込み 3。
+> ルーターへ登録し、`secops_analyst` パッケージ（security + USEM + integration health）も追加。
+> 全テーブル・フィールドを実 PDI(dev400464) で検証済み。重要な実機知見:
+> - RT の人間可読キーは `number` ではなく **`task_number`**、NVD の CVE キーは **`id`**。
+> - VI/RT の state 選択肢は共通: 1=Open, 2=Under Investigation, 10=Awaiting Implementation,
+>   11=In Review, 12=Deferred, 101=Resolved, 3=Closed。
+> - VI↔RT の m2m は `sn_vul_m2m_vul_group_item`（ラベル "Remediation Task Item"）で、
+>   列は `sn_vul_vulnerability`（グループ）/`sn_vul_vulnerable_item`。ROADMAP 当初想定の
+>   「VI↔RT 直接 m2m」ではなく、グループ(`sn_vul_vulnerability`)経由だったため
+>   `add_vi_to_remediation_task` の引数を `remediation_group`/`vulnerable_item` に調整。
+> - ダッシュボードは Aggregate(stats) API で state 別件数を厳密集計（`queryRecords` の
+>   `count` はページ長のため不可）。read 系をライブ確認（VI 4件/全 Closed・NVD フィルタ・
+>   display_value 解決）。テストは `tests/tools/usem.test.ts`（39 ケース）。
 
 ### 背景
 

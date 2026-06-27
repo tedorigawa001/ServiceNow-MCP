@@ -43,6 +43,19 @@ describe('getTools – package system', () => {
     expect(names).toContain('get_ms_copilot_topics');
   });
 
+  it('secops_analyst package includes security + USEM tools', () => {
+    process.env.MCP_TOOL_PACKAGE = 'secops_analyst';
+    const tools = getTools();
+    const names = tools.map(t => t.name);
+    expect(names).toContain('list_vulnerable_items');
+    expect(names).toContain('get_usem_dashboard');
+    expect(names).toContain('create_remediation_task');
+    expect(names).toContain('get_integration_health');
+    expect(names).toContain('list_security_incidents');
+    // a non-secops tool should be excluded
+    expect(names).not.toContain('create_incident');
+  });
+
   it('returns full set for unknown package name', () => {
     process.env.MCP_TOOL_PACKAGE = 'nonexistent_package';
     const tools = getTools();
