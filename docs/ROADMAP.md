@@ -121,9 +121,15 @@ sys_dictionary WHERE name = '{table}' AND internal_type != 'collection'
 > `usem-sla.ts` に `get_group_sla`（VUL番号 or sys_id から **TTR と task_sla の両ビュー**を返す。
 > グループは task ベースのため task_sla 連携可）を追加（計 5 ツール）。
 > 実機検証: `get_group_sla`(VUL0000103 = TTR Target Missed/breached/days -5、task_sla 0件・
-> 当インスタンスは contract_sla 未設定)をライブ確認。**write は当 OAuth アカウントが
-> `sn_vul_vulnerability` への作成権限を持たず INSUFFICIENT_PRIVILEGES**(コードは他 write
-> ツールと同一でユニットテスト担保。実運用には `sn_vul.write` 相当 ACL が必要)。
+> 当インスタンスは contract_sla 未設定)をライブ確認。
+> write 権限付与後にラウンドトリップをライブ検証(create→update→get_group_sla→delete、残留0件):
+>   - `create_vulnerability_group` ✅(VUL0010005/0010006 を作成）
+>   - `update_vulnerability_group` ✅ 非 state フィールド（short_description / ttr_target_date /
+>     assignment_group）。**ただし `state` フィールドは ACL で書込不可（INSUFFICIENT_PRIVILEGES）**
+>     ＝グループの state は VR 修復ワークフローが制御し直接 PATCH を許さない仕様。
+>   - **重要挙動**: 作成/更新後に VR 業務ルール（グルーピング/アサインメント/TTR）が
+>     short_description・assignment_group・ttr_target_date を非同期で再計算する（入力値が
+>     上書きされうる）。ツールは正常で、これはプラットフォーム仕様。`delete` ✅。
 >   - `list_remediation_sla`（record_type=vi|rt、ttr_status/breached_only/due_within_days
 >     /assignment_group で絞り込み、target_date 昇順）
 >   - `get_remediation_sla`（番号 or sys_id、breach 判定・残日数を算出）
