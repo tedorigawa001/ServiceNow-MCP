@@ -13,6 +13,12 @@
  * workflow (e.g. an exception / risk-acceptance / false-positive request),
  * which in turn transitions the underlying VR record.
  *
+ * Linkage (verified live): VR exception approvals do NOT populate `sysapproval`.
+ * They are linked via `source_table` (e.g. sn_sec_exception_change_approval) and
+ * `document_id` (the Change Approval record), with `approval_source` naming the
+ * ultimate VR record class (e.g. sn_vul_vulnerability). Filtering is therefore
+ * done on `source_table`.
+ *
  * Read tools: Tier 0. Write tools: Tier 1 (WRITE_ENABLED=true).
  */
 import type { ServiceNowClient } from '../servicenow/client.js';
@@ -21,14 +27,18 @@ import { requireWrite } from '../utils/permissions.js';
 
 const SYS_ID_RE = /^[0-9a-f]{32}$/i;
 
-/** Source record classes whose approvals represent VR state transitions. */
+/**
+ * Approval `source_table` values that represent VR state transitions. Exception
+ * approvals come through sn_sec_exception_change_approval; group/item approvals
+ * may come directly from the VR record classes.
+ */
 const VR_APPROVAL_CLASSES = [
+  'sn_sec_exception_change_approval',
   'sn_vul_vulnerability',
   'sn_vul_vulnerable_item',
   'sn_vul_remediation_task',
   'sn_vul_app_vulnerability',
   'sn_vul_app_vulnerable_item',
-  'sn_sec_exception_change_approval',
 ];
 
 export function getUsemApprovalToolDefinitions() {
@@ -48,7 +58,7 @@ export function getUsemApprovalToolDefinitions() {
           },
           source_table: {
             type: 'string',
-            description: 'Restrict to one source class (e.g. "sn_vul_vulnerability"); default = all VR classes',
+            description: 'Restrict to one source_table (e.g. "sn_sec_exception_change_approval"); default = all VR classes',
           },
           limit: { type: 'number', description: 'Max records (default: 25, max: 1000)' },
         },
@@ -89,9 +99,9 @@ export async function executeUsemApprovalToolCall(
             'INVALID_REQUEST'
           );
         }
-        parts.push(`sysapproval.sys_class_name=${source}`);
+        parts.push(`source_table=${source}`);
       } else {
-        parts.push(`sysapproval.sys_class_nameIN${VR_APPROVAL_CLASSES.join(',')}`);
+        parts.push(`source_tableIN${VR_APPROVAL_CLASSES.join(',')}`);
       }
       const state = typeof args.state === 'string' && args.state.trim() ? args.state.trim() : 'requested';
       if (state !== 'any') parts.push(`state=${state}`);
@@ -99,7 +109,7 @@ export async function executeUsemApprovalToolCall(
       const resp = await client.queryRecords({
         table: 'sysapproval_approver',
         query: parts.join('^'),
-        fields: 'state,approver,sysapproval,sysapproval.sys_class_name,sysapproval.number,sys_created_on,sys_id',
+        fields: 'state,approver,document_id,source_table,approval_source,group,due_date,sys_created_on,sys_id',
         orderBy: '-sys_created_on',
         limit: args.limit ?? 25,
         display_value: 'all',

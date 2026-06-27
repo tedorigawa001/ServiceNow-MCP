@@ -141,9 +141,14 @@ sys_dictionary WHERE name = '{table}' AND internal_type != 'collection'
 >   - `act_on_vr_approval`（approve/reject で `sysapproval_approver.state` を更新し
 >     ワークフローを進行 → 対象 VR レコードを遷移。reject はコメント必須 / WRITE_ENABLED 必須）
 >   承認アクション自体は既存の `approve_request`/`reject_request`/`get_my_approvals` でも可。
->   read をライブ確認（VR 承認は現状0件・dot-walk/IN クエリ成立・不正 source_table はエラー）。
->   write は VR 承認レコード未発生のためユニットテストで担保（検証済み汎用 approve と同一の
->   updateRecord パターン）。テストは `tests/tools/usem-approval.test.ts`（13 ケース）。
+>   **リンク構造の実機知見**: VR 例外承認は `sysapproval` を埋めず、`source_table`
+>   （= `sn_sec_exception_change_approval`）+ `document_id`（Change Approval）で紐づき、
+>   `approval_source` に最終 VR クラス（`sn_vul_vulnerability`）が入る。よってフィルタは
+>   `source_table` ベース（当初の `sysapproval.sys_class_name` では 0 件になる不具合を修正）。
+>   Exception Request 起票後にフル・ラウンドトリップをライブ検証:
+>   `list_vr_approvals`（requested 50 件・CA0010005・approval_source=sn_vul_vulnerability）
+>   → `act_on_vr_approval` approve（state→approved）→ requested へ復元（残留なし）。
+>   テストは `tests/tools/usem-approval.test.ts`（13 ケース）。
 >   - `list_remediation_sla`（record_type=vi|rt、ttr_status/breached_only/due_within_days
 >     /assignment_group で絞り込み、target_date 昇順）
 >   - `get_remediation_sla`（番号 or sys_id、breach 判定・残日数を算出）

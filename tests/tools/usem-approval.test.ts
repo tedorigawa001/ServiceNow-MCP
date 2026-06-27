@@ -14,8 +14,8 @@ const qr = () => mockClient.queryRecords as ReturnType<typeof vi.fn>;
 const updateRec = () => mockClient.updateRecord as ReturnType<typeof vi.fn>;
 
 const VR_IN =
-  'sysapproval.sys_class_nameINsn_vul_vulnerability,sn_vul_vulnerable_item,sn_vul_remediation_task,' +
-  'sn_vul_app_vulnerability,sn_vul_app_vulnerable_item,sn_sec_exception_change_approval';
+  'source_tableINsn_sec_exception_change_approval,sn_vul_vulnerability,sn_vul_vulnerable_item,' +
+  'sn_vul_remediation_task,sn_vul_app_vulnerability,sn_vul_app_vulnerable_item';
 
 describe('getUsemApprovalToolDefinitions', () => {
   it('returns 2 tool definitions', () => {
@@ -58,7 +58,7 @@ describe('list_vr_approvals', () => {
       source_table: 'sn_vul_vulnerability',
       state: 'approved',
     });
-    expect(qr().mock.calls[0][0].query).toBe('sysapproval.sys_class_name=sn_vul_vulnerability^state=approved');
+    expect(qr().mock.calls[0][0].query).toBe('source_table=sn_vul_vulnerability^state=approved');
   });
 
   it('rejects a non-VR source_table', async () => {
