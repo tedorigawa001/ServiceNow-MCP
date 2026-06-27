@@ -92,6 +92,19 @@ sys_dictionary WHERE name = '{table}' AND internal_type != 'collection'
 >   ツール: `list/get_usem_rule`, `create/update_usem_rule`, `set_usem_rule_active`
 >   （write 系は WRITE_ENABLED 必須 = 管理者操作）。read をライブ確認（TTR 3件・
 >   auto_close 3件を order 順取得）。テストは `tests/tools/usem-config.test.ts`（24 ケース）。
+>
+> 追加実装（integration 操作）: `src/tools/usem-integration.ts`（6 ツール）。
+> `get_integration_health`（サマリ）を詳細一覧・ドリルダウン・ログ診断・有効化操作で補完:
+>   - `list_integrations` → `sn_sec_int_integration`（フィードカタログ NVD/CSAF 等）
+>   - `list_integration_implementations` → `sn_sec_int_impl`（active/既定/検証状態を持つ運用単位）
+>   - `list_integration_runs` → `sn_vul_integration_run`（source/state/substate/days フィルタ）
+>   - `get_integration_run`（VINTRUN番号 or sys_id で perf メトリクス含む 1件）
+>   - `list_integration_logs` → `sn_vul_integration_log`（run 紐付け・type/category で障害診断）
+>   - `set_integration_active`（`sn_sec_int_impl` の active トグル / WRITE_ENABLED 必須）
+>   実機知見: active フラグは catalog ではなく **impl(`sn_sec_int_impl`)** 側。run の source は
+>   "NVD" 等の文字列、番号は VINTRUNxxxx。days は gs.daysAgo allowlist で安全注入。
+>   read をライブ確認（NVD/CSAF カタログ・active 実装・NVD ラン・1件詳細）。
+>   テストは `tests/tools/usem-integration.test.ts`（30 ケース）。
 
 ### 背景
 
