@@ -53,6 +53,9 @@ describe('getTools – package system', () => {
     expect(names).toContain('list_usem_rules');
     expect(names).toContain('list_integration_runs');
     expect(names).toContain('set_integration_active');
+    expect(names).toContain('list_remediation_sla');
+    expect(names).toContain('set_remediation_commitment');
+    expect(names).toContain('list_vr_notifications');
     expect(names).toContain('get_integration_health');
     expect(names).toContain('list_security_incidents');
     // a non-secops tool should be excluded

@@ -105,6 +105,21 @@ sys_dictionary WHERE name = '{table}' AND internal_type != 'collection'
 >   "NVD" 等の文字列、番号は VINTRUNxxxx。days は gs.daysAgo allowlist で安全注入。
 >   read をライブ確認（NVD/CSAF カタログ・active 実装・NVD ラン・1件詳細）。
 >   テストは `tests/tools/usem-integration.test.ts`（30 ケース）。
+>
+> 追加実装（VI/RT の SLA(TTR) + 通知）: `src/tools/usem-sla.ts`（4 ツール）。
+> 実機知見: **VI/RT は `task` を拡張していない**ため `task_sla`/`get_sla_details` は不適用。
+> SLA は VI/RT 自身の TTR フィールド（`ttr_status`/`ttr_target_date`/`ttr_applied_rule`）。
+>   - `list_remediation_sla`（record_type=vi|rt、ttr_status/breached_only/due_within_days
+>     /assignment_group で絞り込み、target_date 昇順）
+>   - `get_remediation_sla`（番号 or sys_id、breach 判定・残日数を算出）
+>   - `set_remediation_commitment`（vi→`remediation_commitment_dt_tm` / rt→`ttr_target_date`
+>     を設定 / WRITE_ENABLED 必須）
+>   - `list_vr_notifications`（`sysevent_email_action` を VR テーブル群 sn_vul_*/sn_sec_*
+>     にスコープした発見補助。定義の作成/更新は既存 create/update_notification を使用）
+>   TTR 状態値: no_target/in_flight/approaching/past_due(=違反)/target_met。未来日付は
+>   `gs.daysAgo(-N)`（allowlist 済み）で安全注入。read をライブ確認（VI TTR 一覧・
+>   no_target フィルタ・SLA 判定・VR 通知30件）。テストは `tests/tools/usem-sla.test.ts`
+>   （29 ケース）。
 
 ### 背景
 

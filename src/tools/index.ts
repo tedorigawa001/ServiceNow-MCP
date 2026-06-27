@@ -80,6 +80,8 @@ import { getUsemToolDefinitions, executeUsemToolCall } from './usem.js';
 import { getUsemConfigToolDefinitions, executeUsemConfigToolCall } from './usem-config.js';
 // USEM / VR integration operations
 import { getUsemIntegrationToolDefinitions, executeUsemIntegrationToolCall } from './usem-integration.js';
+// USEM / VR SLA (TTR) + notifications
+import { getUsemSlaToolDefinitions, executeUsemSlaToolCall } from './usem-sla.js';
 
 // ─── Package Definitions ──────────────────────────────────────────────────────
 
@@ -113,6 +115,9 @@ const PACKAGE_TOOL_NAMES: Record<string, string[]> = {
     // USEM / VR integration operations
     'list_integrations', 'list_integration_implementations', 'list_integration_runs',
     'get_integration_run', 'list_integration_logs', 'set_integration_active',
+    // USEM / VR SLA (TTR) + notifications
+    'list_remediation_sla', 'get_remediation_sla', 'set_remediation_commitment', 'list_vr_notifications',
+    'list_notifications', 'get_notification', 'update_notification',
     // Integration health
     'get_integration_health',
   ],
@@ -348,6 +353,7 @@ const MODULES: ToolModule[] = [
   { defs: getUsemToolDefinitions, exec: executeUsemToolCall },
   { defs: getUsemConfigToolDefinitions, exec: executeUsemConfigToolCall },
   { defs: getUsemIntegrationToolDefinitions, exec: executeUsemIntegrationToolCall },
+  { defs: getUsemSlaToolDefinitions, exec: executeUsemSlaToolCall },
 ];
 
 // Name → executor map, built once at module load. Detects duplicate tool names
