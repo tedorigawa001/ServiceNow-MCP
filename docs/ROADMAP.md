@@ -114,8 +114,16 @@ sys_dictionary WHERE name = '{table}' AND internal_type != 'collection'
 > フィールド（`ttr_status`/`ttr_target_date`/`ttr_applied_rule`）を持つので SLA 表示は TTR で統一。
 > `record_type` は **vi / rt / vg** の 3 種対応。VG はデモデータ 20 件で
 > past_due・残日数算出をライブ検証（VUL0000103 = breached, days_to_target -1920）。
-> 関連して `usem.ts` に `list_vulnerability_groups` / `get_vulnerability_group` を追加
-> （計 12 ツール）。
+> 関連して `usem.ts` に `list_vulnerability_groups` / `get_vulnerability_group` を追加。
+>
+> グループ操作の拡充: `usem.ts` に `create_vulnerability_group` /
+> `update_vulnerability_group`（state 遷移・再割当、WRITE_ENABLED 必須）を追加（計 14 ツール）。
+> `usem-sla.ts` に `get_group_sla`（VUL番号 or sys_id から **TTR と task_sla の両ビュー**を返す。
+> グループは task ベースのため task_sla 連携可）を追加（計 5 ツール）。
+> 実機検証: `get_group_sla`(VUL0000103 = TTR Target Missed/breached/days -5、task_sla 0件・
+> 当インスタンスは contract_sla 未設定)をライブ確認。**write は当 OAuth アカウントが
+> `sn_vul_vulnerability` への作成権限を持たず INSUFFICIENT_PRIVILEGES**(コードは他 write
+> ツールと同一でユニットテスト担保。実運用には `sn_vul.write` 相当 ACL が必要)。
 >   - `list_remediation_sla`（record_type=vi|rt、ttr_status/breached_only/due_within_days
 >     /assignment_group で絞り込み、target_date 昇順）
 >   - `get_remediation_sla`（番号 or sys_id、breach 判定・残日数を算出）

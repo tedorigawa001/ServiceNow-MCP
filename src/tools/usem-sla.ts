@@ -153,6 +153,21 @@ export function getUsemSlaToolDefinitions() {
       },
     },
     {
+      name: 'get_group_sla',
+      description:
+        'Get both SLA views for a task-based Vulnerability Group (sn_vul_vulnerability) by VUL number ' +
+        'or sys_id: the built-in TTR status (target date, breach, days remaining) AND any attached ' +
+        'task_sla instances (definition, stage, breached, percentage, time left). Use this for groups; ' +
+        'VI/RT (which are not task-based) use get_remediation_sla.',
+      inputSchema: {
+        type: 'object',
+        properties: {
+          number_or_sysid: { type: 'string', description: 'Group number (VULxxxxxxx) or 32-char sys_id' },
+        },
+        required: ['number_or_sysid'],
+      },
+    },
+    {
       name: 'set_remediation_commitment',
       description:
         'Set the remediation commitment / target date on a Vulnerable Item (remediation_commitment_dt_tm) ' +
@@ -258,6 +273,52 @@ export async function executeUsemSlaToolCall(
         breached: a.breached,
         days_to_target: a.days_to_target,
         assessment: a.assessment,
+      };
+    }
+
+    case 'get_group_sla': {
+      if (!args.number_or_sysid) throw new ServiceNowError('number_or_sysid is required', 'INVALID_REQUEST');
+      let record: any;
+      if (SYS_ID_RE.test(args.number_or_sysid)) {
+        record = await client.getRecord('sn_vul_vulnerability', args.number_or_sysid);
+      } else {
+        const resp = await client.queryRecords({
+          table: 'sn_vul_vulnerability',
+          query: `number=${args.number_or_sysid}`,
+          limit: 1,
+        });
+        if (resp.count === 0) throw new ServiceNowError(`Vulnerability Group not found: ${args.number_or_sysid}`, 'NOT_FOUND');
+        record = resp.records[0];
+      }
+      const sysId = strVal(record.sys_id);
+      const ttrStatus = strVal(record.ttr_status);
+      const targetDate = strVal(record.ttr_target_date);
+      const a = assess(ttrStatus, targetDate);
+
+      const slaResp = await client.queryRecords({
+        table: 'task_sla',
+        query: `task=${sysId}`,
+        fields: 'sla,stage,has_breached,percentage,business_time_left,start_time,end_time,sys_id',
+        orderBy: '-sys_updated_on',
+        limit: 50,
+        display_value: 'all',
+      });
+
+      return {
+        number: strVal(record.number),
+        sys_id: sysId,
+        ttr: {
+          ttr_status: ttrStatus,
+          ttr_status_label: TTR_STATUS_LABELS[ttrStatus] ?? ttrStatus,
+          ttr_target_date: targetDate,
+          breached: a.breached,
+          days_to_target: a.days_to_target,
+          assessment: a.assessment,
+        },
+        task_sla: { count: slaResp.count, records: slaResp.records },
+        summary:
+          `Group ${strVal(record.number)}: TTR ${TTR_STATUS_LABELS[ttrStatus] ?? ttrStatus}` +
+          `${a.breached ? ' (breached)' : ''}, ${slaResp.count} task_sla instance(s)`,
       };
     }
 

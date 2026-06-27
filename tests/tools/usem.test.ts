@@ -17,8 +17,8 @@ const updateRec = () => mockClient.updateRecord as ReturnType<typeof vi.fn>;
 const agg = () => mockClient.runAggregateQuery as ReturnType<typeof vi.fn>;
 
 describe('getUsemToolDefinitions', () => {
-  it('returns 12 tool definitions', () => {
-    expect(getUsemToolDefinitions().length).toBe(12);
+  it('returns 14 tool definitions', () => {
+    expect(getUsemToolDefinitions().length).toBe(14);
   });
 
   it('all tools have name, description and inputSchema', () => {
@@ -35,6 +35,7 @@ describe('getUsemToolDefinitions', () => {
       [
         'add_vi_to_remediation_task',
         'create_remediation_task',
+        'create_vulnerability_group',
         'get_nvd_entry_by_cve',
         'get_remediation_task',
         'get_usem_dashboard',
@@ -45,6 +46,7 @@ describe('getUsemToolDefinitions', () => {
         'list_vulnerability_groups',
         'list_vulnerable_items',
         'update_remediation_task',
+        'update_vulnerability_group',
       ].sort()
     );
   });
@@ -363,5 +365,69 @@ describe('write tools – with WRITE_ENABLED', () => {
     await expect(
       executeUsemToolCall(mockClient, 'add_vi_to_remediation_task', { remediation_group: 'g' })
     ).rejects.toThrow('remediation_group and vulnerable_item are required');
+  });
+
+  it('create_vulnerability_group sends only provided fields', async () => {
+    createRec().mockResolvedValue({ sys_id: 'vg1', number: 'VUL0001' });
+    const result = await executeUsemToolCall(mockClient, 'create_vulnerability_group', {
+      short_description: 'Critical overdue',
+      assignment_group: 'g1',
+      state: '1',
+    });
+    expect(createRec()).toHaveBeenCalledWith('sn_vul_vulnerability', {
+      short_description: 'Critical overdue',
+      assignment_group: 'g1',
+      state: '1',
+    });
+    expect(result.summary).toContain('Critical overdue');
+  });
+
+  it('create_vulnerability_group requires short_description', async () => {
+    await expect(
+      executeUsemToolCall(mockClient, 'create_vulnerability_group', {})
+    ).rejects.toThrow('short_description is required');
+  });
+
+  it('update_vulnerability_group patches a state transition', async () => {
+    updateRec().mockResolvedValue({ sys_id: 'a'.repeat(32) });
+    await executeUsemToolCall(mockClient, 'update_vulnerability_group', {
+      sys_id: 'a'.repeat(32),
+      state: '2',
+      assigned_to: 'u1',
+    });
+    expect(updateRec()).toHaveBeenCalledWith('sn_vul_vulnerability', 'a'.repeat(32), {
+      state: '2',
+      assigned_to: 'u1',
+    });
+  });
+
+  it('update_vulnerability_group requires at least one field', async () => {
+    await expect(
+      executeUsemToolCall(mockClient, 'update_vulnerability_group', { sys_id: 'a'.repeat(32) })
+    ).rejects.toThrow('At least one field to update is required');
+  });
+});
+
+describe('group write tools – permission gating', () => {
+  const ORIGINAL = process.env.WRITE_ENABLED;
+  beforeEach(() => {
+    vi.clearAllMocks();
+    delete process.env.WRITE_ENABLED;
+  });
+  afterEach(() => {
+    if (ORIGINAL === undefined) delete process.env.WRITE_ENABLED;
+    else process.env.WRITE_ENABLED = ORIGINAL;
+  });
+
+  it('create_vulnerability_group is blocked without WRITE_ENABLED', async () => {
+    await expect(
+      executeUsemToolCall(mockClient, 'create_vulnerability_group', { short_description: 'x' })
+    ).rejects.toThrow('Write operations are disabled');
+  });
+
+  it('update_vulnerability_group is blocked without WRITE_ENABLED', async () => {
+    await expect(
+      executeUsemToolCall(mockClient, 'update_vulnerability_group', { sys_id: 'a'.repeat(32), state: '2' })
+    ).rejects.toThrow('Write operations are disabled');
   });
 });

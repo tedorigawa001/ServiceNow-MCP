@@ -13,14 +13,14 @@ const getRec = () => mockClient.getRecord as ReturnType<typeof vi.fn>;
 const updateRec = () => mockClient.updateRecord as ReturnType<typeof vi.fn>;
 
 describe('getUsemSlaToolDefinitions', () => {
-  it('returns 4 tool definitions', () => {
-    expect(getUsemSlaToolDefinitions().length).toBe(4);
+  it('returns 5 tool definitions', () => {
+    expect(getUsemSlaToolDefinitions().length).toBe(5);
   });
 
   it('exposes the expected tool names', () => {
     const names = getUsemSlaToolDefinitions().map(t => t.name).sort();
     expect(names).toEqual(
-      ['get_remediation_sla', 'list_remediation_sla', 'list_vr_notifications', 'set_remediation_commitment'].sort()
+      ['get_group_sla', 'get_remediation_sla', 'list_remediation_sla', 'list_vr_notifications', 'set_remediation_commitment'].sort()
     );
   });
 });
@@ -166,6 +166,45 @@ describe('get_remediation_sla', () => {
     await expect(
       executeUsemSlaToolCall(mockClient, 'get_remediation_sla', { record_type: 'vi', number_or_sysid: 'VITxxx' })
     ).rejects.toThrow('Vulnerable Item not found');
+  });
+});
+
+describe('get_group_sla', () => {
+  beforeEach(() => vi.clearAllMocks());
+
+  it('returns both TTR and task_sla views for a group', async () => {
+    qr()
+      .mockResolvedValueOnce({
+        count: 1,
+        records: [{ sys_id: 's1', number: 'VUL0000103', ttr_status: 'past_due', ttr_target_date: '2021-03-25 08:00:00' }],
+      })
+      .mockResolvedValueOnce({ count: 1, records: [{ sla: 'Critical 30d', stage: 'in_progress', has_breached: 'true' }] });
+
+    const result = await executeUsemSlaToolCall(mockClient, 'get_group_sla', { number_or_sysid: 'VUL0000103' });
+
+    // first query resolves the group, second pulls task_sla keyed by the resolved sys_id
+    expect(qr().mock.calls[0][0].table).toBe('sn_vul_vulnerability');
+    expect(qr().mock.calls[0][0].query).toBe('number=VUL0000103');
+    expect(qr().mock.calls[1][0].table).toBe('task_sla');
+    expect(qr().mock.calls[1][0].query).toBe('task=s1');
+    expect(result.ttr.breached).toBe(true);
+    expect(result.task_sla.count).toBe(1);
+    expect(result.summary).toContain('task_sla instance');
+  });
+
+  it('fetches by sys_id directly', async () => {
+    getRec().mockResolvedValue({ sys_id: 'a'.repeat(32), number: 'VUL1', ttr_status: 'in_flight' });
+    qr().mockResolvedValue({ count: 0, records: [] });
+    await executeUsemSlaToolCall(mockClient, 'get_group_sla', { number_or_sysid: 'a'.repeat(32) });
+    expect(getRec()).toHaveBeenCalledWith('sn_vul_vulnerability', 'a'.repeat(32));
+    expect(qr().mock.calls[0][0].query).toBe(`task=${'a'.repeat(32)}`);
+  });
+
+  it('throws NOT_FOUND when the group number does not resolve', async () => {
+    qr().mockResolvedValue({ count: 0, records: [] });
+    await expect(
+      executeUsemSlaToolCall(mockClient, 'get_group_sla', { number_or_sysid: 'VULxxxx' })
+    ).rejects.toThrow('Vulnerability Group not found');
   });
 });
 

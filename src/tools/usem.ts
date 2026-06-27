@@ -157,6 +157,42 @@ export function getUsemToolDefinitions() {
       },
     },
     {
+      name: 'create_vulnerability_group',
+      description:
+        'Create a Vulnerability Group / Remediation Task (sn_vul_vulnerability). Being task-based it ' +
+        'accepts assignment_group, assigned_to and state. **[Write — requires WRITE_ENABLED=true]**',
+      inputSchema: {
+        type: 'object',
+        properties: {
+          short_description: { type: 'string', description: 'Short description / title' },
+          description: { type: 'string', description: 'Detailed description' },
+          assignment_group: { type: 'string', description: 'Assignment group sys_id' },
+          assigned_to: { type: 'string', description: 'Assignee sys_id' },
+          state: VUL_STATE_SCHEMA,
+          ttr_target_date: { type: 'string', description: 'Remediation target date (YYYY-MM-DD HH:MM:SS)' },
+        },
+        required: ['short_description'],
+      },
+    },
+    {
+      name: 'update_vulnerability_group',
+      description:
+        'Update a Vulnerability Group by sys_id — state transitions, (re)assignment, target date, etc. ' +
+        '**[Write — requires WRITE_ENABLED=true]**',
+      inputSchema: {
+        type: 'object',
+        properties: {
+          sys_id: { type: 'string', description: '32-char sys_id of the Vulnerability Group' },
+          state: VUL_STATE_SCHEMA,
+          assignment_group: { type: 'string', description: 'Assignment group sys_id' },
+          assigned_to: { type: 'string', description: 'Assignee sys_id' },
+          short_description: { type: 'string', description: 'Updated short description' },
+          ttr_target_date: { type: 'string', description: 'Remediation target date (YYYY-MM-DD HH:MM:SS)' },
+        },
+        required: ['sys_id'],
+      },
+    },
+    {
       name: 'list_nvd_entries',
       description:
         'List NVD entries (sn_vul_nvd_entry). Filter by CVE id substring or minimum CVSS v3 base score.',
@@ -380,6 +416,31 @@ export async function executeUsemToolCall(
       });
       if (resp.count === 0) throw new ServiceNowError(`Vulnerability Group not found: ${args.number_or_sysid}`, 'NOT_FOUND');
       return resp.records[0];
+    }
+
+    case 'create_vulnerability_group': {
+      requireWrite();
+      if (!args.short_description) throw new ServiceNowError('short_description is required', 'INVALID_REQUEST');
+      const data: Record<string, any> = { short_description: args.short_description };
+      for (const f of ['description', 'assignment_group', 'assigned_to', 'state', 'ttr_target_date']) {
+        if (args[f] !== undefined) data[f] = args[f];
+      }
+      const result = await client.createRecord('sn_vul_vulnerability', data);
+      return { ...result, summary: `Created Vulnerability Group: ${args.short_description}` };
+    }
+
+    case 'update_vulnerability_group': {
+      requireWrite();
+      if (!args.sys_id) throw new ServiceNowError('sys_id is required', 'INVALID_REQUEST');
+      const data: Record<string, any> = {};
+      for (const f of ['state', 'assignment_group', 'assigned_to', 'short_description', 'ttr_target_date']) {
+        if (args[f] !== undefined) data[f] = args[f];
+      }
+      if (Object.keys(data).length === 0) {
+        throw new ServiceNowError('At least one field to update is required', 'INVALID_REQUEST');
+      }
+      const result = await client.updateRecord('sn_vul_vulnerability', args.sys_id, data);
+      return { ...result, summary: `Updated Vulnerability Group ${args.sys_id}` };
     }
 
     case 'list_nvd_entries': {
