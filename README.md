@@ -517,6 +517,10 @@ mindmap
       Now Assist
       NLQ
       Agentic Playbooks
+    secops_analyst
+      脆弱性 VI/RT
+      USEM/統合ヘルス
+      SLA/例外承認
 ```
 
 | パッケージ名 | 対象ロール | 主なツール |
@@ -534,6 +538,7 @@ mindmap
 | `agile_manager` | スクラムマスター | ストーリー・エピック |
 | `ai_developer` | AI 開発者 | Now Assist・NLQ・Playbook |
 | `itam_analyst` | 資産管理者 | 資産・ライセンス・契約 |
+| `secops_analyst` | SecOps アナリスト | 脆弱性(VI/RT)・USEM・統合ヘルス・SLA・例外承認 |
 | `devops_engineer` | DevOps | パイプライン・デプロイ |
 
 詳細 → [docs/TOOL_PACKAGES.md](docs/TOOL_PACKAGES.md)
@@ -695,7 +700,7 @@ servicenow-mcp/
 │   │   ├── client.ts               # REST API クライアント (OAuth)
 │   │   ├── instances.ts            # マルチインスタンスマネージャー
 │   │   └── types.ts                # TypeScript 型定義
-│   ├── tools/                      # 31 ドメインモジュール (400+ ツール)
+│   ├── tools/                      # 36 ドメインモジュール (400+ ツール)
 │   │   ├── index.ts                # ツールルーター & パッケージ定義
 │   │   ├── incident.ts
 │   │   ├── change.ts
@@ -707,7 +712,7 @@ servicenow-mcp/
 │   └── utils/
 │       ├── permissions.ts          # 5 段階権限ゲート
 │       └── errors.ts
-├── tests/                          # ユニットテスト (Vitest · 165 件)
+├── tests/                          # ユニットテスト (Vitest · 457 件)
 ├── docs/                           # ドキュメント
 └── instances.example.json
 ```
@@ -719,7 +724,7 @@ servicenow-mcp/
 ```bash
 npm install          # 依存パッケージのインストール
 npm run build        # TypeScript → dist/ にコンパイル
-npm test             # ユニットテストを実行 (165 件)
+npm test             # ユニットテストを実行 (457 件)
 npm run dev          # ウォッチモード
 npm run type-check   # 型チェックのみ
 npm run lint         # ESLint
@@ -785,7 +790,7 @@ Model Context Protocol の略で、AI クライアントが外部ツールを呼
 
 <div align="center">
 
-**400+ ツール · 31 モジュール · ローカル PC で動作 · 永久オープンソース**
+**400+ ツール · 36 モジュール · ローカル PC で動作 · 永久オープンソース**
 
 役に立ったら ⭐ スターをお願いします — 他の人が見つけやすくなります。
 
