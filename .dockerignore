@@ -1,0 +1,34 @@
+# Dependencies & build output (reinstalled/recompiled in the image)
+node_modules
+dist
+coverage
+
+# Version control & CI
+.git
+.github
+.gitignore
+
+# Secrets & local config — must never enter the build context
+.env
+.env.*
+*.pem
+*.key
+instances.json
+.config
+
+# Tests & dev tooling (not needed at runtime)
+tests
+.vscode
+.idea
+eslint.config.*
+vitest.config.*
+
+# Local-only / gitignored working dirs
+research
+qiita
+venv_312
+
+# Editor / OS noise
+*.log
+.DS_Store
+npm-debug.log*
