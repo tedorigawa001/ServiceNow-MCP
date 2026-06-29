@@ -218,6 +218,10 @@ Client Credentials を使う場合は `SERVICENOW_OAUTH_USERNAME` と `SERVICENO
 
 > **注意**: `-i` フラグは必須です。MCP は stdio（標準入出力）で通信するため、インタラクティブモードが必要です。
 
+> **HTTP モードで起動する場合**: コンテナ内の既定バインドは `127.0.0.1` のため公開ポートからは到達できません。
+> `-e MCP_TRANSPORT=http -e MCP_HTTP_HOST=0.0.0.0 -p 3000:3000` を付与してください。
+> イメージは非 root(`node` ユーザー)で動作し、`EXPOSE 3000` 済みです。
+
 ---
 
 ## 認証方式（OAuth 2.0 のみ）
@@ -446,6 +450,47 @@ claude mcp add servicenow node /path/to/servicenow-mcp/dist/server.js \
 | Ollama (ローカル LLM) | ローカル | [Setup](docs/CLIENT_SETUP.md) |
 
 全クライアントのセットアップ詳細 → [docs/CLIENT_SETUP.md](docs/CLIENT_SETUP.md)
+
+---
+
+## トランスポート（stdio / HTTP）
+
+デフォルトは **stdio**（標準入出力）で、ポート開放やネットワーク設定は不要です。
+ブラウザ経由の接続（Claude.ai Web UI）、Docker コンテナ公開、複数クライアントでのサーバー共有、
+CI/CD からの呼び出しが必要な場合は **Streamable HTTP** トランスポートに切り替えられます。
+
+```bash
+# HTTP トランスポートで起動
+MCP_TRANSPORT=http node dist/server.js
+# → http://127.0.0.1:3000/mcp で待ち受け、GET /health でヘルスチェック
+```
+
+| 環境変数 | デフォルト | 説明 |
+|---|---|---|
+| `MCP_TRANSPORT` | `stdio` | `http` で Streamable HTTP に切り替え |
+| `MCP_HTTP_PORT` | `3000` | 待ち受けポート |
+| `MCP_HTTP_HOST` | `127.0.0.1` | バインドアドレス（外部公開時は `0.0.0.0`）|
+| `MCP_HTTP_PATH` | `/mcp` | MCP エンドポイントのパス |
+| `MCP_HTTP_CORS_ORIGIN` | `*` | CORS 許可オリジン |
+| `MCP_HTTP_ALLOWED_HOSTS` | (なし) | カンマ区切り。指定すると DNS リバインディング保護を有効化 |
+| `MCP_HTTP_ALLOWED_ORIGINS` | (なし) | カンマ区切り。Origin ヘッダの許可リスト |
+
+セッションは MCP 仕様に従い、`initialize` 応答の `Mcp-Session-Id` ヘッダで払い出され、
+以降のリクエストで再利用します（`DELETE /mcp` でセッション終了）。HTTP 接続するクライアント設定例:
+
+```json
+{
+  "mcpServers": {
+    "servicenow": {
+      "url": "http://localhost:3000/mcp"
+    }
+  }
+}
+```
+
+> **セキュリティ注意**: デフォルトは loopback（`127.0.0.1`）バインドです。`MCP_HTTP_HOST=0.0.0.0`
+> で外部公開する場合は、リバースプロキシでの TLS 終端・認証、および `MCP_HTTP_ALLOWED_HOSTS` /
+> `MCP_HTTP_ALLOWED_ORIGINS` による保護を推奨します。
 
 ---
 
@@ -712,7 +757,7 @@ servicenow-mcp/
 │   └── utils/
 │       ├── permissions.ts          # 5 段階権限ゲート
 │       └── errors.ts
-├── tests/                          # ユニットテスト (Vitest · 457 件)
+├── tests/                          # ユニットテスト (Vitest · 475 件)
 ├── docs/                           # ドキュメント
 └── instances.example.json
 ```
@@ -724,7 +769,7 @@ servicenow-mcp/
 ```bash
 npm install          # 依存パッケージのインストール
 npm run build        # TypeScript → dist/ にコンパイル
-npm test             # ユニットテストを実行 (457 件)
+npm test             # ユニットテストを実行 (475 件)
 npm run dev          # ウォッチモード
 npm run type-check   # 型チェックのみ
 npm run lint         # ESLint

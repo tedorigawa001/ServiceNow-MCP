@@ -161,6 +161,13 @@ export function createServer(): Server {
 }
 
 export async function main() {
+  // MCP_TRANSPORT=http switches to the Streamable HTTP transport (see server-http.ts).
+  if ((process.env.MCP_TRANSPORT || 'stdio').toLowerCase() === 'http') {
+    const { startHttpServer } = await import('./server-http.js');
+    await startHttpServer();
+    return;
+  }
+
   if (!isInstanceConfigured()) {
     logger.error('No ServiceNow instance configured. Set SERVICENOW_INSTANCE_URL or SN_INSTANCES_CONFIG.');
     process.exit(1);

@@ -11,7 +11,7 @@
 | # | 機能 | 汎用性 | 優先度 | 難易度 | ステータス |
 |---|---|---|---|---|---|
 | 1 | `describe_table` ツール | 全員 | ⭐⭐⭐ 高 | 低 | ✅ 完了 |
-| 2 | Streamable HTTP 対応 | 全員 | ⭐⭐⭐ 高 | 高 | 未着手 |
+| 2 | Streamable HTTP 対応 | 全員 | ⭐⭐⭐ 高 | 高 | ✅ 完了 |
 | 3 | サービスアカウント権限チェックツール | 全員 | ⭐⭐⭐ 高 | 低 | ✅ 完了 |
 | 4 | Integration ヘルスチェックツール | Integration 利用者 | ⭐⭐ 中 | 低 | ✅ 完了 |
 | 5 | 自然言語クエリ強化（テーブル名自動解決） | 全員 | ⭐⭐ 中 | 高 | 未着手 |
@@ -312,7 +312,24 @@ NVD 統合が 503/429 エラーで静かに失敗し続け、CVE データが更
 
 ---
 
-## 5. Streamable HTTP 対応
+## 5. Streamable HTTP 対応 ✅ 完了
+
+> 実装メモ: 新規 `src/server-http.ts`。`server.ts` の `main()` を `MCP_TRANSPORT=http`
+> で分岐し、stdio を維持したまま HTTP を追加。**express は不採用**（SDK の
+> `StreamableHTTPServerTransport` は `@hono/node-server` 経由で Node の `http` と直接
+> 連携できるため、追加依存ゼロ）。`createServer()` を再利用してロジック重複なし。
+> - **ステートフル・セッション方式**: `initialize` で `Mcp-Session-Id` を払い出し、
+>   `transports` Map にセッション毎の transport を保持。GET=SSE 通知ストリーム、
+>   DELETE=セッション終了、`/health`=ヘルスチェック、OPTIONS=CORS プリフライト。
+> - **環境変数**: `MCP_TRANSPORT`（stdio|http）/ `MCP_HTTP_PORT`(3000) /
+>   `MCP_HTTP_HOST`(既定 `127.0.0.1` = loopback 安全側) / `MCP_HTTP_PATH`(/mcp) /
+>   `MCP_HTTP_CORS_ORIGIN`(*) / `MCP_HTTP_ALLOWED_HOSTS` / `MCP_HTTP_ALLOWED_ORIGINS`
+>   （後2者を指定すると DNS リバインディング保護を有効化）。
+> - **CORS**: ブラウザが session id を読めるよう `Mcp-Session-Id` を Expose。
+> - 実機スモーク検証: initialize→セッション払い出し→tools/list で 412 ツール返却→
+>   DELETE 200→削除後の再利用 400、`/health` で tools/sessions 件数を確認。
+> - テストは `tests/server-http.test.ts`（18 ケース、transport/SDK をモック化して
+>   ルーティング・セッション再利用・エラー経路を網羅）。
 
 ### 背景
 
@@ -333,7 +350,7 @@ NVD 統合が 503/429 エラーで静かに失敗し続け、CVE データが更
 ```
 MCP_TRANSPORT=http   # 'stdio'（デフォルト）または 'http'
 MCP_HTTP_PORT=3000
-MCP_HTTP_HOST=0.0.0.0
+MCP_HTTP_HOST=127.0.0.1   # 外部公開時は 0.0.0.0
 ```
 
 **Claude Desktop 設定例（HTTP 接続時）:**
@@ -347,7 +364,7 @@ MCP_HTTP_HOST=0.0.0.0
 }
 ```
 
-**依存パッケージ追加:** `express`、`@types/express`
+**依存パッケージ追加:** なし（SDK 同梱の `@hono/node-server` を transport が内部利用）
 
 ---
 
