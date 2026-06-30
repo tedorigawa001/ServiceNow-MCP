@@ -14,7 +14,7 @@
 | 2 | Streamable HTTP 対応 | 全員 | ⭐⭐⭐ 高 | 高 | ✅ 完了 |
 | 3 | サービスアカウント権限チェックツール | 全員 | ⭐⭐⭐ 高 | 低 | ✅ 完了 |
 | 4 | Integration ヘルスチェックツール | Integration 利用者 | ⭐⭐ 中 | 低 | ✅ 完了 |
-| 5 | 自然言語クエリ強化（テーブル名自動解決） | 全員 | ⭐⭐ 中 | 高 | 未着手 |
+| 5 | 自然言語クエリ強化（テーブル名自動解決） | 全員 | ⭐⭐ 中 | 高 | ✅ 完了 |
 | 6 | USEM 専用ツールセット | SecOps 担当者 | ⭐ 低 | 中 | ✅ 完了 |
 | 7 | `queryRecords` に `sysparm_display_value` 対応 | 全員 | ⭐⭐ 中 | 低 | ✅ 完了 |
 
@@ -381,7 +381,35 @@ MCP_HTTP_HOST=127.0.0.1   # 外部公開時は 0.0.0.0
 
 ---
 
-## 6. 自然言語クエリ強化（テーブル名自動解決）
+## 6. 自然言語クエリ強化（テーブル名自動解決）✅ 完了
+
+> 実装メモ: 新規 `src/tools/smart-query.ts`（1 ツール `smart_query`・読み取り専用 Tier 0）。
+> 純粋関数 `resolveTableByKeyword` / `buildSmartQueryPlan` を分離してユニットテスト可能に。
+> - **テーブル解決**: ①`table` ヒント → ②キーワード synonym マップ（incident /
+>   change_request / problem / sc_request / sc_req_item / sn_vul_vulnerable_item /
+>   sn_vul_remediation_task / cmdb_ci / sys_user(_group) / kb_knowledge 等。**最長一致**で
+>   "change request" を "request" より優先）→ ③`sys_db_object` の label/name LIKE 検索
+>   （ノイズ回避のためトークンは 5 文字以上）。解決手段は `table_resolution` で返す。
+> - **フィールド集合**: `super_class` チェーンを最大 6 段たどり（incident→task 等）、
+>   `sys_dictionary` の `nameIN<chain>` で継承フィールドも 1 クエリで取得。
+> - **条件推論**: priority（P1〜5 / 優先度N / critical=1・high=2・moderate=3・low=4）、
+>   open↔closed（active フラグ）、assigned to me / unassigned、時間窓（today / yesterday /
+>   this・last month / this・last week / last N days）。**フィールド存在チェックで自己補正**
+>   — 解決テーブルに無いフィールドの条件は drop し `unmatched_intents` に列挙。
+> - **インジェクション安全**: 出力する `javascript:gs.*` は固定テンプレートのみ。client の
+>   `SAFE_GS_PATTERN` 許可リストに合わせ、週境界関数（非許可）は使わず **週は daysAgo による
+>   7日近似**、N日は検証済み整数で `daysAgo(N)`。
+> - `execute=false` でクエリを実行せずプレビュー（解決結果と encoded_query のみ）可能。
+> - 実機検証（dev400464）: "critical vulnerable items"→`priority=1` で VI 3件、
+>   "先月の P1 インシデント"→`priority=1^sys_created_on BETWEEN 先月`、"過去7日…未解決"→
+>   `active=true^sys_created_on>=daysAgo(7)`、ガベージ入力は NOT_FOUND を確認。
+> - フォールバックのトークン抽出は **日本語対応**: `split(/[^A-Za-z0-9_]+/)` だと
+>   かな/漢字が全て区切り扱いで消滅するため、`extractSearchTokens` で「マッチ抽出」に変更
+>   （ASCII≥5 / カタカナ≥3 / 漢字≥2、ひらがなは助詞・活用なので除外）。
+>   "勤怠管理の申請"→`["勤怠管理","申請"]` のように熟語を保持。英語ラベル PDI で
+>   "approval records"→`sysapproval_group` をラベル検索で解決することをライブ確認。
+> - 既存の `natural_language_search`（incident 固定スタブ）とは別ツールとして併存。
+>   service_desk パッケージにも追加。テストは `tests/tools/smart-query.test.ts`（27 ケース）。
 
 ### 背景
 

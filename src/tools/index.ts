@@ -84,6 +84,8 @@ import { getUsemIntegrationToolDefinitions, executeUsemIntegrationToolCall } fro
 import { getUsemSlaToolDefinitions, executeUsemSlaToolCall } from './usem-sla.js';
 // USEM / VR approval (workflow state transitions)
 import { getUsemApprovalToolDefinitions, executeUsemApprovalToolCall } from './usem-approval.js';
+// Natural-language query resolver
+import { getSmartQueryToolDefinitions, executeSmartQueryToolCall } from './smart-query.js';
 
 // ─── Package Definitions ──────────────────────────────────────────────────────
 
@@ -166,7 +168,7 @@ const PACKAGE_TOOL_NAMES: Record<string, string[]> = {
     // Tasks
     'get_task', 'list_my_tasks', 'complete_task',
     // Natural language
-    'natural_language_search',
+    'natural_language_search', 'smart_query',
   ],
   change_coordinator: [
     'query_records', 'get_record', 'get_user', 'get_group',
@@ -254,7 +256,7 @@ const READ_ONLY_PREFIXES = [
   'check_', 'find_', 'compare_', 'analyze_', 'describe_',
 ];
 const READ_ONLY_EXACT = new Set([
-  'nlq_query', 'natural_language_search', 'trend_query', 'run_aggregate_query',
+  'nlq_query', 'natural_language_search', 'smart_query', 'trend_query', 'run_aggregate_query',
   'ai_search', 'generate_summary', 'suggest_resolution', 'categorize_incident',
   'cmdb_health_dashboard', 'service_mapping_summary', 'get_devops_insights',
   'ml_detect_anomalies', 'ml_evaluate_model', 'ml_forecast_incidents',
@@ -362,6 +364,7 @@ const MODULES: ToolModule[] = [
   { defs: getUsemIntegrationToolDefinitions, exec: executeUsemIntegrationToolCall },
   { defs: getUsemSlaToolDefinitions, exec: executeUsemSlaToolCall },
   { defs: getUsemApprovalToolDefinitions, exec: executeUsemApprovalToolCall },
+  { defs: getSmartQueryToolDefinitions, exec: executeSmartQueryToolCall },
 ];
 
 // Name → executor map, built once at module load. Detects duplicate tool names

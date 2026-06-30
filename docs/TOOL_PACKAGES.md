@@ -7,7 +7,7 @@ Set `MCP_TOOL_PACKAGE` in your environment to load a role-specific subset of too
 | Package | Target Role | Tool Count |
 |---------|-------------|------------|
 | `full` | All roles (default) | 400+ |
-| `service_desk` | IT help desk agent | 23 |
+| `service_desk` | IT help desk agent | 28 |
 | `change_coordinator` | Change manager | 18 |
 | `knowledge_author` | KB content creator | 12 |
 | `catalog_builder` | Catalog administrator | 11 |
@@ -51,6 +51,7 @@ Includes:
 - Catalog browse and order
 - SLA tracking
 - Task management
+- Natural-language search (`natural_language_search`, `smart_query`)
 - Core read tools
 
 ### change_coordinator

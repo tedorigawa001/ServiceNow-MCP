@@ -745,7 +745,7 @@ servicenow-mcp/
 │   │   ├── client.ts               # REST API クライアント (OAuth)
 │   │   ├── instances.ts            # マルチインスタンスマネージャー
 │   │   └── types.ts                # TypeScript 型定義
-│   ├── tools/                      # 36 ドメインモジュール (400+ ツール)
+│   ├── tools/                      # 37 ドメインモジュール (400+ ツール)
 │   │   ├── index.ts                # ツールルーター & パッケージ定義
 │   │   ├── incident.ts
 │   │   ├── change.ts
@@ -757,7 +757,7 @@ servicenow-mcp/
 │   └── utils/
 │       ├── permissions.ts          # 5 段階権限ゲート
 │       └── errors.ts
-├── tests/                          # ユニットテスト (Vitest · 483 件)
+├── tests/                          # ユニットテスト (Vitest · 510 件)
 ├── docs/                           # ドキュメント
 └── instances.example.json
 ```
@@ -769,7 +769,7 @@ servicenow-mcp/
 ```bash
 npm install          # 依存パッケージのインストール
 npm run build        # TypeScript → dist/ にコンパイル
-npm test             # ユニットテストを実行 (483 件)
+npm test             # ユニットテストを実行 (510 件)
 npm run dev          # ウォッチモード
 npm run type-check   # 型チェックのみ
 npm run lint         # ESLint
@@ -835,7 +835,7 @@ Model Context Protocol の略で、AI クライアントが外部ツールを呼
 
 <div align="center">
 
-**400+ ツール · 36 モジュール · ローカル PC で動作 · 永久オープンソース**
+**400+ ツール · 37 モジュール · ローカル PC で動作 · 永久オープンソース**
 
 役に立ったら ⭐ スターをお願いします — 他の人が見つけやすくなります。
 
