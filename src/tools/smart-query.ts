@@ -30,6 +30,9 @@ const TABLE_SYNONYMS: Array<{ table: string; terms: string[] }> = [
   { table: 'problem', terms: ['problem', '問題', 'prb'] },
   { table: 'sn_vul_vulnerable_item', terms: ['vulnerable item', '脆弱性アイテム', 'vulnerable items'] },
   { table: 'sn_vul_remediation_task', terms: ['remediation task', '修復タスク'] },
+  // The approval *queue* people act on lives in sysapproval_approver — not the
+  // sysapproval_group join table the sys_db_object label search would pick first.
+  { table: 'sysapproval_approver', terms: ['approval', 'approvals', '承認待ち', '承認'] },
   { table: 'cmdb_ci', terms: ['configuration item', '構成アイテム', 'cmdb', ' ci '] },
   { table: 'sys_user_group', terms: ['user group', 'グループ', 'チーム'] },
   { table: 'sys_user', terms: ['user', 'ユーザー', '利用者', '社員'] },

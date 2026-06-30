@@ -409,7 +409,9 @@ MCP_HTTP_HOST=127.0.0.1   # 外部公開時は 0.0.0.0
 >   "勤怠管理の申請"→`["勤怠管理","申請"]` のように熟語を保持。英語ラベル PDI で
 >   "approval records"→`sysapproval_group` をラベル検索で解決することをライブ確認。
 > - 既存の `natural_language_search`（incident 固定スタブ）とは別ツールとして併存。
->   service_desk パッケージにも追加。テストは `tests/tools/smart-query.test.ts`（27 ケース）。
+>   service_desk パッケージにも追加。テストは `tests/tools/smart-query.test.ts`（28 ケース）。
+> - 追補: 曖昧語 "approval"/"承認(待ち)" は sys_db_object フォールバックだと `sysapproval_group`
+>   (中間テーブル) を拾うため、synonym に **`sysapproval_approver`(承認キュー)** を明示追加。
 
 ### 背景
 

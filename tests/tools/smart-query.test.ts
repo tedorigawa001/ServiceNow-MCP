@@ -62,6 +62,11 @@ describe('resolveTableByKeyword', () => {
     expect(resolveTableByKeyword('list active users').table).toBe('sys_user');
   });
 
+  it('maps approval keywords to the sysapproval_approver queue (not the group join)', () => {
+    expect(resolveTableByKeyword('approval records').table).toBe('sysapproval_approver');
+    expect(resolveTableByKeyword('承認待ちの一覧').table).toBe('sysapproval_approver');
+  });
+
   it('returns no table when nothing matches', () => {
     const r = resolveTableByKeyword('something completely unrelated zzz');
     expect(r.table).toBeUndefined();
