@@ -11,12 +11,23 @@
  * platform automation config, so treat them as admin-level changes.
  *
  * Tables, key fields and schemas verified against a live PDI (dev400464):
- *   assignment         → sn_vul_vgr_assignment_rule   (no name/active fields)
+ *   assignment         → sn_sec_wf_assign_rule        (USEM; key: name, has active)
  *   remediation_task   → sn_sec_rem_task_rule         (key: rule_name)
  *   remediation_target → sn_sec_wf_ttr_rule           (key: name; TTR max/remind)
+ *   risk_calculator    → sn_sec_calculator_group      (key: name; no order field)
+ *   calculator_rule    → sn_sec_calculator_rule       (key: name; per-calculator rule)
+ *   classification     → sn_sec_wf_classification_group (extends calculator_group; no order)
+ *   classification_rule→ sn_sec_wf_classification_rule  (extends calculator_rule)
+ *   exception_rule     → sn_sec_exception_rule        (key: name; state via rule_state/stage, no active)
  *   approval           → sn_vul_cmn_approval_rule     (key: name)
  *   auto_close         → sn_vul_cmn_auto_close_rule   (key: name)
  *   exclusion          → sn_vul_cmn_auto_exclusion_rule (key: name)
+ *
+ * Migration note (KB2556844): USEM moved assignment/calculator/classification/
+ * exception config from the deprecated sn_vul_ and sn_vulc_ tables to sn_sec_.
+ * The legacy sn_vul_assignment_rule table no longer exists post-migration, and
+ * sn_vul_vgr_assignment_rule holds no records — the live assignment rules are in
+ * sn_sec_wf_assign_rule, which is what `assignment` now targets.
  */
 import type { ServiceNowClient } from '../servicenow/client.js';
 import { ServiceNowError } from '../utils/errors.js';
@@ -30,16 +41,19 @@ interface RuleType {
   nameField?: string;
   /** Whether the table has an `active` boolean (controls filtering + set_active). */
   hasActive: boolean;
+  /** Field to order list results by (default 'order'; some tables lack it). */
+  orderField?: string;
   /** Curated comma-separated fields returned by list_usem_rules. */
   listFields: string;
 }
 
 const RULE_REGISTRY: Record<string, RuleType> = {
   assignment: {
-    table: 'sn_vul_vgr_assignment_rule',
+    table: 'sn_sec_wf_assign_rule',
     label: 'Assignment Rule',
-    hasActive: false,
-    listFields: 'assignment_group,filter_vi,order,table_name,vgr,sys_id',
+    nameField: 'name',
+    hasActive: true,
+    listFields: 'name,active,order,table,assignment_group,condition,type,sys_id',
   },
   remediation_task: {
     table: 'sn_sec_rem_task_rule',
@@ -54,6 +68,43 @@ const RULE_REGISTRY: Record<string, RuleType> = {
     nameField: 'name',
     hasActive: true,
     listFields: 'name,active,order,table,ttr_max,ttr_remind,target_from,sys_id',
+  },
+  risk_calculator: {
+    table: 'sn_sec_calculator_group',
+    label: 'Risk Calculator',
+    nameField: 'name',
+    hasActive: true,
+    orderField: 'name', // no order column on this table
+    listFields: 'name,active,table,target_field,description,sys_id',
+  },
+  calculator_rule: {
+    table: 'sn_sec_calculator_rule',
+    label: 'Risk Calculator Rule',
+    nameField: 'name',
+    hasActive: true,
+    listFields: 'name,active,order,calculator_group,table,condition,value_type,sys_id',
+  },
+  classification: {
+    table: 'sn_sec_wf_classification_group',
+    label: 'Classification Group',
+    nameField: 'name',
+    hasActive: true,
+    orderField: 'name', // extends sn_sec_calculator_group, which has no order column
+    listFields: 'name,active,table,target_field,sys_id',
+  },
+  classification_rule: {
+    table: 'sn_sec_wf_classification_rule',
+    label: 'Classification Rule',
+    nameField: 'name',
+    hasActive: true,
+    listFields: 'name,active,order,classification,classification_type,table,condition,sys_id',
+  },
+  exception_rule: {
+    table: 'sn_sec_exception_rule',
+    label: 'Exception Rule',
+    nameField: 'name',
+    hasActive: false, // lifecycle is rule_state/stage, not an active flag
+    listFields: 'name,order,table,rule_state,stage,condition,applies_to,sys_id',
   },
   approval: {
     table: 'sn_vul_cmn_approval_rule',
@@ -86,8 +137,9 @@ const RULE_TYPE_SCHEMA = {
   enum: RULE_TYPES,
   description:
     'Which rule family to operate on: ' +
-    'assignment (VR group assignment), remediation_task (sn_sec_rem_task_rule), ' +
-    'remediation_target (TTR/SLA targets), approval, auto_close, exclusion',
+    'assignment (sn_sec_wf_assign_rule), remediation_task, remediation_target (TTR/SLA targets), ' +
+    'risk_calculator + calculator_rule (risk scoring), classification + classification_rule, ' +
+    'exception_rule (sn_sec_exception_rule), approval, auto_close, exclusion',
 };
 
 function resolveType(ruleType: unknown): RuleType {
@@ -106,7 +158,8 @@ export function getUsemConfigToolDefinitions() {
       name: 'list_usem_rules',
       description:
         'List USEM/Vulnerability Response automation rules of a given type (assignment, ' +
-        'remediation_task, remediation_target, approval, auto_close, exclusion). Ordered by ' +
+        'remediation_task, remediation_target, risk_calculator, calculator_rule, classification, ' +
+        'classification_rule, exception_rule, approval, auto_close, exclusion). Ordered by ' +
         'execution order. Optionally filter by active state or an extra encoded query.',
       inputSchema: {
         type: 'object',
@@ -199,7 +252,7 @@ export async function executeUsemConfigToolCall(
         table: rt.table,
         query: parts.join('^'),
         fields: rt.listFields,
-        orderBy: 'order',
+        orderBy: rt.orderField ?? 'order',
         limit: args.limit ?? 50,
         display_value: args.display_value,
       });

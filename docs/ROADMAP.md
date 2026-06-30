@@ -93,6 +93,19 @@ sys_dictionary WHERE name = '{table}' AND internal_type != 'collection'
 >   （write 系は WRITE_ENABLED 必須 = 管理者操作）。read をライブ確認（TTR 3件・
 >   auto_close 3件を order 順取得）。テストは `tests/tools/usem-config.test.ts`（24 ケース）。
 >
+> 追補（KB2556844 突合・2026-06-30）: 移行 KB の旧→新テーブル対応表を実機（dev400464）と
+> 突合し、レジストリを補正・拡張（6→11 rule_type）。
+>   - **修正**: `assignment` の参照を旧/空の `sn_vul_vgr_assignment_rule`（0件）から USEM の
+>     `sn_sec_wf_assign_rule`（実データあり・name/active あり）へ切替。旧 `sn_vul_assignment_rule`
+>     は移行後 Invalid（削除済み）。
+>   - **追加**: `risk_calculator`（sn_sec_calculator_group）/ `calculator_rule`
+>     （sn_sec_calculator_rule）/ `classification`（sn_sec_wf_classification_group）/
+>     `classification_rule`（sn_sec_wf_classification_rule）/ `exception_rule`
+>     （sn_sec_exception_rule）。group 系は order 列が無いため `orderField` を導入し name 順。
+>     exception_rule は active を持たず rule_state/stage 管理（set_active 非対応）。
+>   - 全 rule_type をライブ確認（assignment 1件・calculator 3・classification 3・exception 3 等）。
+>     テストは 23 ケースへ更新。tool 数は不変（汎用5ツールのまま）。
+>
 > 追加実装（integration 操作）: `src/tools/usem-integration.ts`（6 ツール）。
 > `get_integration_health`（サマリ）を詳細一覧・ドリルダウン・ログ診断・有効化操作で補完:
 >   - `list_integrations` → `sn_sec_int_integration`（フィードカタログ NVD/CSAF 等）

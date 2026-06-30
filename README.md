@@ -757,7 +757,7 @@ servicenow-mcp/
 │   └── utils/
 │       ├── permissions.ts          # 5 段階権限ゲート
 │       └── errors.ts
-├── tests/                          # ユニットテスト (Vitest · 475 件)
+├── tests/                          # ユニットテスト (Vitest · 483 件)
 ├── docs/                           # ドキュメント
 └── instances.example.json
 ```
@@ -769,7 +769,7 @@ servicenow-mcp/
 ```bash
 npm install          # 依存パッケージのインストール
 npm run build        # TypeScript → dist/ にコンパイル
-npm test             # ユニットテストを実行 (475 件)
+npm test             # ユニットテストを実行 (483 件)
 npm run dev          # ウォッチモード
 npm run type-check   # 型チェックのみ
 npm run lint         # ESLint

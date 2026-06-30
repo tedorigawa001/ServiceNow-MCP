@@ -19,7 +19,7 @@ describe('getUsemConfigToolDefinitions', () => {
     expect(getUsemConfigToolDefinitions().length).toBe(5);
   });
 
-  it('all tools require rule_type and expose the 6 rule types', () => {
+  it('all tools require rule_type and expose the full rule-type set', () => {
     const defs = getUsemConfigToolDefinitions();
     defs.forEach(t => {
       expect(t.name).toBeTruthy();
@@ -29,6 +29,11 @@ describe('getUsemConfigToolDefinitions', () => {
         'assignment',
         'remediation_task',
         'remediation_target',
+        'risk_calculator',
+        'calculator_rule',
+        'classification',
+        'classification_rule',
+        'exception_rule',
         'approval',
         'auto_close',
         'exclusion',
@@ -66,11 +71,45 @@ describe('list_usem_rules', () => {
     expect(qr().mock.calls[0][0].table).toBe('sn_sec_rem_task_rule');
   });
 
-  it('ignores active filter for assignment (no active field)', async () => {
+  it('maps assignment to the USEM sn_sec_wf_assign_rule table with active filtering', async () => {
     qr().mockResolvedValue({ count: 0, records: [] });
     await executeUsemConfigToolCall(mockClient, 'list_usem_rules', { rule_type: 'assignment', active: true });
-    expect(qr().mock.calls[0][0].table).toBe('sn_vul_vgr_assignment_rule');
+    expect(qr().mock.calls[0][0].table).toBe('sn_sec_wf_assign_rule');
+    expect(qr().mock.calls[0][0].query).toBe('active=true');
+    expect(qr().mock.calls[0][0].orderBy).toBe('order');
+  });
+
+  it('orders no-order tables (risk_calculator, classification) by name', async () => {
+    qr().mockResolvedValue({ count: 0, records: [] });
+    await executeUsemConfigToolCall(mockClient, 'list_usem_rules', { rule_type: 'risk_calculator' });
+    expect(qr().mock.calls[0][0].table).toBe('sn_sec_calculator_group');
+    expect(qr().mock.calls[0][0].orderBy).toBe('name');
+
+    qr().mockClear();
+    await executeUsemConfigToolCall(mockClient, 'list_usem_rules', { rule_type: 'classification' });
+    expect(qr().mock.calls[0][0].table).toBe('sn_sec_wf_classification_group');
+    expect(qr().mock.calls[0][0].orderBy).toBe('name');
+  });
+
+  it('maps the new USEM rule families to their sn_sec_* tables', async () => {
+    qr().mockResolvedValue({ count: 0, records: [] });
+    for (const [rt, table] of [
+      ['calculator_rule', 'sn_sec_calculator_rule'],
+      ['classification_rule', 'sn_sec_wf_classification_rule'],
+      ['exception_rule', 'sn_sec_exception_rule'],
+    ] as const) {
+      qr().mockClear();
+      await executeUsemConfigToolCall(mockClient, 'list_usem_rules', { rule_type: rt });
+      expect(qr().mock.calls[0][0].table).toBe(table);
+    }
+  });
+
+  it('ignores active filter for exception_rule (state-driven, no active field)', async () => {
+    qr().mockResolvedValue({ count: 0, records: [] });
+    await executeUsemConfigToolCall(mockClient, 'list_usem_rules', { rule_type: 'exception_rule', active: true });
+    expect(qr().mock.calls[0][0].table).toBe('sn_sec_exception_rule');
     expect(qr().mock.calls[0][0].query).toBe('');
+    expect(qr().mock.calls[0][0].orderBy).toBe('order');
   });
 
   it('appends an extra query', async () => {
@@ -199,14 +238,25 @@ describe('write tools – with WRITE_ENABLED', () => {
     expect(result.summary).toContain('Disabled');
   });
 
-  it('set_usem_rule_active is rejected for assignment (no active field)', async () => {
+  it('set_usem_rule_active is rejected for exception_rule (state-driven, no active field)', async () => {
     await expect(
       executeUsemConfigToolCall(mockClient, 'set_usem_rule_active', {
-        rule_type: 'assignment',
+        rule_type: 'exception_rule',
         sys_id: 'a'.repeat(32),
         active: true,
       })
     ).rejects.toThrow('has no active field');
+  });
+
+  it('set_usem_rule_active works for the USEM assignment rule (now has active)', async () => {
+    updateRec().mockResolvedValue({ sys_id: 'a'.repeat(32) });
+    const result = await executeUsemConfigToolCall(mockClient, 'set_usem_rule_active', {
+      rule_type: 'assignment',
+      sys_id: 'a'.repeat(32),
+      active: true,
+    });
+    expect(updateRec()).toHaveBeenCalledWith('sn_sec_wf_assign_rule', 'a'.repeat(32), { active: true });
+    expect(result.summary).toContain('Enabled');
   });
 
   it('set_usem_rule_active requires a boolean active', async () => {
