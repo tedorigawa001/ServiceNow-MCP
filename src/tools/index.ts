@@ -108,6 +108,8 @@ const PACKAGE_TOOL_NAMES: Record<string, string[]> = {
     // Software Asset Management (SAM Pro)
     'list_software_installs', 'get_software_install', 'list_software_products',
     'list_license_positions', 'get_license_position_summary', 'list_software_discovery_models',
+    'list_software_models', 'get_software_model',
+    'list_software_lifecycle_reports', 'get_software_lifecycle_report', 'list_software_lifecycle_entries',
   ],
   secops_analyst: [
     'query_records', 'get_record', 'get_table_schema', 'describe_table', 'check_table_access',
