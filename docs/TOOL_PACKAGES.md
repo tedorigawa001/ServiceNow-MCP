@@ -19,7 +19,7 @@ Set `MCP_TOOL_PACKAGE` in your environment to load a role-specific subset of too
 | `portal_developer` | Portal/UI Builder developer | 32 |
 | `integration_engineer` | Integration specialist | 26 |
 | `devops_engineer` | DevOps/pipeline engineer | 21 |
-| `itam_analyst` | IT Asset Management analyst | 10 |
+| `itam_analyst` | IT Asset Management analyst | 18 |
 
 ## Usage
 
@@ -195,4 +195,5 @@ Includes:
 - Asset lifecycle tools (list, get, create, update, retire)
 - Software license compliance tools
 - Asset contract management
+- SAM Pro tools (software installs, product catalog, license-position compliance dashboard)
 - Core read tools

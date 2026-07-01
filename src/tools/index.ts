@@ -62,6 +62,8 @@ import { getUpdateSetToolDefinitions, executeUpdateSetToolCall } from './updates
 import { getVaToolDefinitions, executeVaToolCall } from './va.js';
 // IT Asset Management
 import { getItamToolDefinitions, executeItamToolCall } from './itam.js';
+// Software Asset Management (SAM Pro)
+import { getSamToolDefinitions, executeSamToolCall } from './sam.js';
 // DevOps & pipeline tracking
 import { getDevopsToolDefinitions, executeDevopsToolCall } from './devops.js';
 // Scoped Application (App Studio)
@@ -103,6 +105,9 @@ const PACKAGE_TOOL_NAMES: Record<string, string[]> = {
     'list_assets', 'get_asset', 'create_asset', 'update_asset', 'retire_asset',
     'list_software_licenses', 'get_license_compliance', 'list_asset_contracts',
     'track_asset_lifecycle', 'get_license_optimization',
+    // Software Asset Management (SAM Pro)
+    'list_software_installs', 'get_software_install', 'list_software_products',
+    'list_license_positions', 'get_license_position_summary', 'list_software_discovery_models',
   ],
   secops_analyst: [
     'query_records', 'get_record', 'get_table_schema', 'describe_table', 'check_table_access',
@@ -353,6 +358,7 @@ const MODULES: ToolModule[] = [
   { defs: getUpdateSetToolDefinitions, exec: executeUpdateSetToolCall },
   { defs: getVaToolDefinitions, exec: executeVaToolCall },
   { defs: getItamToolDefinitions, exec: executeItamToolCall },
+  { defs: getSamToolDefinitions, exec: executeSamToolCall },
   { defs: getDevopsToolDefinitions, exec: executeDevopsToolCall },
   { defs: getAppStudioToolDefinitions, exec: executeAppStudioToolCall },
   { defs: getMlToolDefinitions, exec: executeMlToolCall },

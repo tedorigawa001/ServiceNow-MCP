@@ -17,6 +17,7 @@
 | 5 | 自然言語クエリ強化（テーブル名自動解決） | 全員 | ⭐⭐ 中 | 高 | ✅ 完了 |
 | 6 | USEM 専用ツールセット | SecOps 担当者 | ⭐ 低 | 中 | ✅ 完了 |
 | 7 | `queryRecords` に `sysparm_display_value` 対応 | 全員 | ⭐⭐ 中 | 低 | ✅ 完了 |
+| 8 | SAM Pro（ソフトウェア資産管理）ツールセット | ITAM/SAM 担当者 | ⭐ 低 | 低 | ✅ 完了 |
 
 ---
 
@@ -472,6 +473,38 @@ if (params.display_value !== undefined) {
 **`describe_table` 最適化は見送り（ROADMAP の前提が誤り）:**
 当初は「`super_class.display_value` から親テーブル名を取得し2回目のクエリを廃止」と想定していたが、実機検証の結果 `super_class.display_value` は親テーブルの**ラベル**（例: `"Task"`）を返し、`sys_dictionary` クエリに必要な**テーブル名**（例: `"task"`）ではないことが判明。`describe_table` の2クエリ方式は維持。
 （一括取得したい場合は `sysparm_fields=super_class.name` のドットウォークが代替案。display_value とは別件のため未対応。）
+
+---
+
+## 8. SAM Pro（ソフトウェア資産管理）ツールセット ✅ 完了
+
+### 背景
+
+ITAM ツール（`itam.ts`）は `alm_license`（汎用ライセンステーブル）ベースの簡易ライセンス管理のみで、SAM Pro の正規化されたソフトウェア発見・エンタイトルメント突合(ELP: Effective License Position)は未カバーだった。「SAMのツールは具備されてますか」という質問を機に、実機(dev400464)で `sys_db_object`/`sys_dictionary` を確認し、実在するテーブル・フィールドのみを使って専用ツールセットを実装した。
+
+### 主要テーブル（PDI 確認済み）
+
+| テーブル | 用途 |
+|---|---|
+| `cmdb_sam_sw_install` | 発見されたソフトウェアインストール（正規化済みパブリッシャー/製品、ライセンス状態） |
+| `samp_sw_product` | 正規化ソフトウェア製品カタログ |
+| `samp_license_position_report` | SAM Pro の Effective License Position（所有権利数 vs 使用数、過剰/不足） |
+| `cmdb_sam_sw_discovery_model` | 正規化前後のソフトウェア発見結果 |
+
+### 実装概要
+
+**新規ファイル:** `src/tools/sam.ts`（Tier 0 読み取り専用、6 ツール）
+
+- `list_software_installs` / `get_software_install` — 発見済みインストール一覧・詳細（`unlicensed_only` フィルタ対応）
+- `list_software_products` — 正規化製品カタログ
+- `list_license_positions` / `get_license_position_summary` — ELP レコード一覧・集計ダッシュボード（過剰/不足ライセンス件数、節約可能額、true-up コスト）
+- `list_software_discovery_models` — 発見結果の正規化ステータス確認
+
+**設計判断:** ELP の数値は SAM Pro の突合バッチが計算するものでユーザー編集対象ではないため、書き込みツールは実装せず読み取り専用に限定。
+
+**実機で発見・修正したバグ:** `get_license_position_summary` の集計で `display_value: true` を付けたところ、`over_licensed_amount` 等の通貨フィールドが `"$3,855,035.2455"` のような整形済み文字列で返り、`Number()` が `NaN` になって集計が常に 0 件になっていた。集計用クエリのみ `display_value` を外し、生の数値文字列を取得するよう修正。実機で 141 製品中「過剰ライセンス 78 件・要追加購入 28 件・節約可能額 $480,899」という妥当な集計を確認済み。
+
+**登録:** `itam_analyst` パッケージに追加(12 → 18 ツール)。README/TOOL_PACKAGES.md のモジュール数・テスト件数も更新。
 
 ---
 
