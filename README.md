@@ -579,7 +579,7 @@ mindmap
 | `platform_developer` | 開発者 | スクリプト・ATF・Update Set |
 | `portal_developer` | ポータル開発者 | ポータル・ウィジェット・UX |
 | `integration_engineer` | 統合エンジニア | REST・Transform・イベント |
-| `itom_engineer` | ITOM エンジニア | CMDB・Discovery・MID |
+| `itom_engineer` | ITOM エンジニア | CMDB・Discovery(実行履歴/エラー調査)・MID ヘルス・ACC |
 | `agile_manager` | スクラムマスター | ストーリー・エピック |
 | `ai_developer` | AI 開発者 | Now Assist・NLQ・Playbook |
 | `itam_analyst` | 資産管理者 | 資産・ライセンス・契約・SAM Pro(ソフトウェア資産管理) |
@@ -745,7 +745,7 @@ servicenow-mcp/
 │   │   ├── client.ts               # REST API クライアント (OAuth)
 │   │   ├── instances.ts            # マルチインスタンスマネージャー
 │   │   └── types.ts                # TypeScript 型定義
-│   ├── tools/                      # 38 ドメインモジュール (400+ ツール)
+│   ├── tools/                      # 39 ドメインモジュール (400+ ツール)
 │   │   ├── index.ts                # ツールルーター & パッケージ定義
 │   │   ├── incident.ts
 │   │   ├── change.ts
@@ -757,7 +757,7 @@ servicenow-mcp/
 │   └── utils/
 │       ├── permissions.ts          # 5 段階権限ゲート
 │       └── errors.ts
-├── tests/                          # ユニットテスト (Vitest · 530 件)
+├── tests/                          # ユニットテスト (Vitest · 546 件)
 ├── docs/                           # ドキュメント
 └── instances.example.json
 ```
@@ -769,7 +769,7 @@ servicenow-mcp/
 ```bash
 npm install          # 依存パッケージのインストール
 npm run build        # TypeScript → dist/ にコンパイル
-npm test             # ユニットテストを実行 (530 件)
+npm test             # ユニットテストを実行 (546 件)
 npm run dev          # ウォッチモード
 npm run type-check   # 型チェックのみ
 npm run lint         # ESLint
@@ -835,7 +835,7 @@ Model Context Protocol の略で、AI クライアントが外部ツールを呼
 
 <div align="center">
 
-**400+ ツール · 38 モジュール · ローカル PC で動作 · 永久オープンソース**
+**400+ ツール · 39 モジュール · ローカル PC で動作 · 永久オープンソース**
 
 役に立ったら ⭐ スターをお願いします — 他の人が見つけやすくなります。
 

@@ -64,6 +64,8 @@ import { getVaToolDefinitions, executeVaToolCall } from './va.js';
 import { getItamToolDefinitions, executeItamToolCall } from './itam.js';
 // Software Asset Management (SAM Pro)
 import { getSamToolDefinitions, executeSamToolCall } from './sam.js';
+// Discovery & ACC (Agent Client Collector)
+import { getDiscoveryToolDefinitions, executeDiscoveryToolCall } from './discovery.js';
 // DevOps & pipeline tracking
 import { getDevopsToolDefinitions, executeDevopsToolCall } from './devops.js';
 // Scoped Application (App Studio)
@@ -236,6 +238,12 @@ const PACKAGE_TOOL_NAMES: Record<string, string[]> = {
     'list_discovery_schedules', 'list_mid_servers', 'list_active_events',
     'run_aggregate_query', 'trend_query',
     'create_ci_relationship', 'cmdb_impact_analysis', 'run_discovery_scan',
+    // Discovery run results & infrastructure health
+    'list_discovery_runs', 'get_discovery_run', 'list_discovered_devices', 'list_discovery_logs',
+    'list_discovery_ranges', 'list_discovery_credentials',
+    'list_mid_server_issues', 'get_mid_server_health',
+    // ACC (Agent Client Collector)
+    'list_acc_agents', 'list_acc_policies', 'list_acc_checks',
   ],
   agile_manager: [
     'query_records', 'get_record', 'get_user',
@@ -361,6 +369,7 @@ const MODULES: ToolModule[] = [
   { defs: getVaToolDefinitions, exec: executeVaToolCall },
   { defs: getItamToolDefinitions, exec: executeItamToolCall },
   { defs: getSamToolDefinitions, exec: executeSamToolCall },
+  { defs: getDiscoveryToolDefinitions, exec: executeDiscoveryToolCall },
   { defs: getDevopsToolDefinitions, exec: executeDevopsToolCall },
   { defs: getAppStudioToolDefinitions, exec: executeAppStudioToolCall },
   { defs: getMlToolDefinitions, exec: executeMlToolCall },
