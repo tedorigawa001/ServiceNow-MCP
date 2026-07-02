@@ -555,7 +555,13 @@ Discovery 関連は core.ts の3ツール(`list_discovery_schedules` / `list_mid
 
 **実機検証:** 全読み取りツールが 400 エラーなしでクエリ受理されることを確認。実データがあるもの(IP レンジ 3 件・認証情報メタデータ 4 件)は取得内容も確認し、認証情報レスポンスにシークレット列が含まれないことを検証。NOT_FOUND(存在しない DIS 番号 / MID 名)と PLUGIN_NOT_INSTALLED(ACC 未導入)のエラー経路も実機確認済み。
 
-**登録:** `itom_engineer` パッケージに追加(16 → 27 ツール)。テスト 530 → 546 件。
+**エンドツーエンド実機検証(Docker MID ラボ):** Docker Desktop 上に MID Server(公式インストーラ ZIP から構築、Rosetta で x86-64 動作)+ SSH スキャン対象2台(正しい認証情報あり/なし)を建て、実スキャンを完走させて全ツールを実データで検証した。DIS0010002(4分で完走)で:デバイス4台検出、target1 は「Linux Server」に分類され CMDB に CI 生成、`with_issues_only` が認証失敗の2デバイスを正しく抽出、`list_discovery_logs` で「Could not find any valid credentials to authenticate the target for types [SSH Password,...]」という原因ログまで追跡できることを確認。
+
+**この過程で発見・修正した実機バグ(core.ts `run_discovery_scan`):**
+1. **旧実装はスキャンを一切起動しない。** `discovery_status` レコードを直接 insert していたが、レコードは state=Active のまま放置され、MID には Shazzam ジョブが一切届かない(しかも `dsc_schedule` という**実在しないフィールド**に書いており、参照は silently drop されていた)。Discovery エンジンはスケジューラ経由(または Discover Now UI アクション)で作られた run しか開始しない。REST 安全な起動方法として、スケジュール自体を `run_type=once` + `run_start=now+10s` に PATCH する方式へ修正。
+2. **レンジ未リンクだとサイレント中断。** `Discovery.isValidDiscoverySchedule()` は有効なレンジが無いと discovery_status を作らず警告ログだけで黙って中断する。しかもレンジ(`discovery_range_item`)とスケジュールのリンクは **`schedule` フィールド**であり、`parent`(レンジセット用)に入れても無視される。ツール側でトリガー後に `schedule=<id>^active=true` を確認し、0 件なら warning を返すようにした。
+
+**登録:** `itom_engineer` パッケージに追加(16 → 27 ツール)。テスト 530 → 550 件。
 
 ---
 

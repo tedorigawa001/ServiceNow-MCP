@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { executeCoreToolCall, getCoreToolDefinitions } from '../../src/tools/core.js';
 import type { ServiceNowClient } from '../../src/servicenow/client.js';
 import { ServiceNowError } from '../../src/utils/errors.js';
@@ -353,6 +353,63 @@ describe('executeCoreToolCall – get_integration_health', () => {
     );
     await expect(executeCoreToolCall(mockClient, 'get_integration_health', {}))
       .rejects.toMatchObject({ code: 'NOT_FOUND' });
+  });
+});
+
+describe('executeCoreToolCall – run_discovery_scan', () => {
+  const ORIGINAL = process.env.WRITE_ENABLED;
+  beforeEach(() => {
+    vi.clearAllMocks();
+    process.env.WRITE_ENABLED = 'true';
+  });
+  afterEach(() => {
+    if (ORIGINAL === undefined) delete process.env.WRITE_ENABLED;
+    else process.env.WRITE_ENABLED = ORIGINAL;
+  });
+
+  it('triggers by flipping the schedule to run once (never inserts discovery_status)', async () => {
+    const ur = mockClient.updateRecord as ReturnType<typeof vi.fn>;
+    const qr = mockClient.queryRecords as ReturnType<typeof vi.fn>;
+    ur.mockResolvedValue({ sys_id: 'sched1' });
+    qr.mockResolvedValue({ count: 1, records: [{ sys_id: 'r1' }] });
+    const result = await executeCoreToolCall(mockClient, 'run_discovery_scan', {
+      schedule_id: 'sched1',
+      mid_server: 'mid1',
+    });
+    expect(ur).toHaveBeenCalledWith('discovery_schedule', 'sched1', expect.objectContaining({
+      run_type: 'once',
+      run_start: expect.stringMatching(/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$/),
+      mid_select_method: 'specific_mid',
+      mid_server: 'mid1',
+    }));
+    expect(result.action).toBe('triggered');
+    expect(result.run_start_utc).toBeTruthy();
+    expect(result.active_range_count).toBe(1);
+    expect(result.warning).toBeUndefined();
+  });
+
+  it('warns when the schedule has no active range linked via the schedule field', async () => {
+    const ur = mockClient.updateRecord as ReturnType<typeof vi.fn>;
+    const qr = mockClient.queryRecords as ReturnType<typeof vi.fn>;
+    ur.mockResolvedValue({ sys_id: 'sched1' });
+    qr.mockResolvedValue({ count: 0, records: [] });
+    const result = await executeCoreToolCall(mockClient, 'run_discovery_scan', { schedule_id: 'sched1' });
+    expect(qr).toHaveBeenCalledWith(expect.objectContaining({
+      table: 'discovery_range_item',
+      query: 'schedule=sched1^active=true',
+    }));
+    expect(result.warning).toContain('abort silently');
+  });
+
+  it('requires schedule_id', async () => {
+    await expect(executeCoreToolCall(mockClient, 'run_discovery_scan', {})).rejects.toThrow('schedule_id');
+  });
+
+  it('is blocked without WRITE_ENABLED', async () => {
+    delete process.env.WRITE_ENABLED;
+    await expect(
+      executeCoreToolCall(mockClient, 'run_discovery_scan', { schedule_id: 's1' })
+    ).rejects.toThrow('Write operations are disabled');
   });
 });
 

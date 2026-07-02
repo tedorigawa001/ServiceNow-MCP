@@ -247,7 +247,7 @@ export function getCoreToolDefinitions() {
         type: 'object',
         properties: {
           schedule_id: { type: 'string', description: 'Discovery schedule sys_id to run' },
-          mid_server: { type: 'string', description: 'Optional MID server name' },
+          mid_server: { type: 'string', description: 'Optional MID server sys_id — pins the schedule to this specific MID' },
         },
         required: ['schedule_id'],
       },
@@ -435,13 +435,43 @@ export async function executeCoreToolCall(
     case 'run_discovery_scan': {
       requireWrite();
       if (!args.schedule_id) throw new ServiceNowError('schedule_id is required', 'INVALID_REQUEST');
-      const data: Record<string, any> = {
-        dsc_schedule: args.schedule_id,
-        state: 'active',
+      // Inserting a discovery_status record directly does NOT launch any probes
+      // (verified live: the record sits at state=Active with zero probes and the
+      // MID never receives a Shazzam job). The Discovery engine only starts runs
+      // created by the scheduler or the Discover Now UI action, so the REST-safe
+      // trigger is to flip the schedule itself to run once, a few seconds from now.
+      const runStart = new Date(Date.now() + 10_000).toISOString().replace('T', ' ').slice(0, 19);
+      const payload: Record<string, any> = { run_type: 'once', run_start: runStart };
+      if (args.mid_server) {
+        payload.mid_select_method = 'specific_mid';
+        payload.mid_server = args.mid_server;
+      }
+      await client.updateRecord('discovery_schedule', args.schedule_id, payload);
+      // Discovery.isValidDiscoverySchedule aborts SILENTLY (no status record, no error)
+      // when an IP-based schedule has no active range linked via the `schedule` field
+      // on discovery_range_item (NOT `parent`, which links range sets). Surface that
+      // trap here instead of leaving the caller waiting for a run that never starts.
+      const ranges = await client.queryRecords({
+        table: 'discovery_range_item',
+        query: `schedule=${args.schedule_id}^active=true`,
+        limit: 1,
+        fields: 'sys_id',
+      });
+      const rangeWarning =
+        ranges.count === 0
+          ? 'Warning: no active discovery_range_item is linked to this schedule via the "schedule" field. ' +
+            'IP-based schedules (discover=CIs/IPs) abort silently without one.'
+          : undefined;
+      return {
+        action: 'triggered',
+        schedule_id: args.schedule_id,
+        run_start_utc: runStart,
+        active_range_count: ranges.count,
+        ...(rangeWarning ? { warning: rangeWarning } : {}),
+        summary:
+          `Discovery schedule ${args.schedule_id} set to run once at ${runStart} UTC. ` +
+          'The run appears in discovery_status shortly after; note the schedule run_type is now "once".',
       };
-      if (args.mid_server) data.mid_server = args.mid_server;
-      const result = await client.createRecord('discovery_status', data);
-      return { ...result, summary: `Triggered discovery scan for schedule ${args.schedule_id}` };
     }
 
     case 'describe_table': {
