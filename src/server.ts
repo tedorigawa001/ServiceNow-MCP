@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'url';
 import { Server } from '@modelcontextprotocol/sdk/server/index.js';
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
@@ -21,7 +22,10 @@ import { ServiceNowError } from './utils/errors.js';
 dotenv.config();
 
 export const SERVER_NAME = 'servicenow-mcp';
-export const SERVER_VERSION = '1.0.2';
+// Version comes from package.json (one level up from dist/server.js)
+export const SERVER_VERSION = (JSON.parse(
+  readFileSync(fileURLToPath(new URL('../package.json', import.meta.url)), 'utf8'),
+) as { version: string }).version;
 
 /** True if at least one ServiceNow instance is configured via any supported method. */
 export function isInstanceConfigured(): boolean {

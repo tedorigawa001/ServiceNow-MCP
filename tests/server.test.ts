@@ -1,3 +1,4 @@
+import { readFileSync } from 'node:fs';
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 
 // Mock the heavy dependencies so handler tests stay hermetic (no network, no
@@ -163,6 +164,9 @@ describe('handleGetPrompt', () => {
 describe('createServer', () => {
   it('builds a server advertising the package version', () => {
     expect(createServer()).toBeTruthy();
-    expect(SERVER_VERSION).toBe('1.0.2');
+    const pkg = JSON.parse(readFileSync(new URL('../package.json', import.meta.url), 'utf8')) as {
+      version: string;
+    };
+    expect(SERVER_VERSION).toBe(pkg.version);
   });
 });
