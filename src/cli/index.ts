@@ -10,6 +10,8 @@
  *   servicenow-mcp instances list  — list configured instances
  *   servicenow-mcp instances remove <name>  — remove an instance
  */
+import { readFileSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
 import { Command } from 'commander';
 import chalk from 'chalk';
 import { runSetup } from './setup.js';
@@ -43,12 +45,17 @@ function cliBanner(): void {
   console.log('');
 }
 
+// Version comes from package.json (two levels up from dist/cli/index.js)
+const pkgVersion = (JSON.parse(
+  readFileSync(fileURLToPath(new URL('../../package.json', import.meta.url)), 'utf8'),
+) as { version: string }).version;
+
 const program = new Command();
 
 program
   .name('servicenow-mcp')
   .description('The most comprehensive ServiceNow MCP server')
-  .version('1.0.0')
+  .version(pkgVersion)
   .addHelpText('before', '')
   .addHelpText('beforeAll', () => {
     cliBanner();
