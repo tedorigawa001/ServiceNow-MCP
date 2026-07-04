@@ -13,6 +13,7 @@
 
 [![AI-Powered](https://img.shields.io/badge/AI--Powered-Claude%20%7C%20ChatGPT%20%7C%20Gemini%20%7C%20Cursor%20%7C%20Copilot-00D4AA?style=flat-square)](https://github.com/tedorigawa001/ServiceNow-MCP)
 [![Tools](https://img.shields.io/badge/400%2B%20Tools-31%20Modules-0F4C81?style=flat-square)](docs/TOOLS.md)
+[![npm](https://img.shields.io/npm/v/%40tedorigawa001%2Fservicenow-mcp?style=flat-square&logo=npm&color=CB3837)](https://www.npmjs.com/package/@tedorigawa001/servicenow-mcp)
 [![TypeScript](https://img.shields.io/badge/TypeScript-5.x-3178C6?style=flat-square&logo=typescript&logoColor=white)](https://www.typescriptlang.org/)
 [![License: MIT](https://img.shields.io/badge/license-MIT-f59e0b?style=flat-square)](LICENSE)
 [![Node.js](https://img.shields.io/badge/Node.js-20.19%2B-339933?style=flat-square&logo=node.js&logoColor=white)](https://nodejs.org)
@@ -106,8 +107,8 @@ flowchart TD
     E --> F
     D -->|あり| F[ターミナルでコマンド実行]
 
-    F --> G["git clone https://github.com/tedorigawa001/ServiceNow-MCP.git\ncd servicenow-mcp\nnpm install\nnpm run build"]
-    G --> H["npm run setup"]
+    F --> G["npm install -g @tedorigawa001/servicenow-mcp"]
+    G --> H["servicenow-mcp setup"]
     H --> I{セットアップ\nウィザード}
     I --> J[インスタンス URL を入力\n例: https://dev12345.service-now.com]
     J --> K[OAuth グラントタイプを選択\nclient_credentials または password]
@@ -120,28 +121,37 @@ flowchart TD
     P --> Q([完了！\nAI から ServiceNow に繋がります])
 ```
 
-### ステップ 1 — ソースからビルド
+### ステップ 1 — インストール
+
+**方法 A: npm からインストール（推奨・最速）**
 
 ```bash
 # Node.js のバージョン確認 (20.19 以上が必要)
 node --version
 
+# グローバルインストール
+npm install -g @tedorigawa001/servicenow-mcp
+
+# セットアップウィザードを起動
+servicenow-mcp setup
+```
+
+**方法 B: ソースからビルド（開発・カスタマイズしたい方向け）**
+
+```bash
 # リポジトリをクローン
 git clone https://github.com/tedorigawa001/ServiceNow-MCP.git
-cd servicenow-mcp
+cd ServiceNow-MCP
 
-# 依存パッケージのインストール
+# 依存パッケージのインストール & コンパイル
 npm install
-
-# TypeScript をコンパイル
 npm run build
 
 # セットアップウィザードを起動
 npm run setup
 ```
 
-ウィザードが Claude Desktop・Cursor・VS Code などを自動検出し、設定ファイルを書き込みます。  
-AI クライアントの設定には `dist/server.js` の絶対パスが必要です（例: `/Users/yourname/servicenow-mcp/dist/server.js`）。
+どちらの方法でも、ウィザードが Claude Desktop・Cursor・VS Code などを自動検出し、`dist/server.js` の絶対パスを含む設定ファイルを自動で書き込みます。
 
 ### ステップ 2 — AI クライアントを再起動
 
