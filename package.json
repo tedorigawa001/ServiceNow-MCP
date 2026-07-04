@@ -5,10 +5,11 @@
   "description": "The most comprehensive ServiceNow MCP server — 400+ tools across all modules. Integrates with Claude, ChatGPT, Gemini, Cursor, GitHub Copilot and any LLM.",
   "main": "dist/server.js",
   "bin": {
-    "servicenow-mcp": "dist/cli/index.js"
+    "servicenow-mcp": "bin/servicenow-mcp.cjs"
   },
   "type": "module",
   "files": [
+    "bin/",
     "dist/",
     "instances.example.json"
   ],
