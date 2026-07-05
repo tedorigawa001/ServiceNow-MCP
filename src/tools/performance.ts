@@ -257,6 +257,24 @@ export function getPerformanceToolDefinitions() {
         required: [],
       },
     },
+    {
+      name: 'get_performance_history',
+      description:
+        'Get historical transaction performance as a time series (transaction count, avg/max response time, SQL time, business rule time per bucket) from the transaction log — chartable data for instance performance trends, replacing the legacy Performance dashboard graphs',
+      inputSchema: {
+        type: 'object',
+        properties: {
+          hours: { type: 'number', description: 'Look-back window in hours (default 24, max 168)' },
+          buckets: { type: 'number', description: 'Number of time buckets (default 24, max 48)' },
+          query: {
+            type: 'string',
+            description:
+              'Extra encoded query to filter transactions, e.g. "urlLIKE/api/" for REST only or "sys_created_by=admin"',
+          },
+        },
+        required: [],
+      },
+    },
   ];
 }
 
@@ -537,6 +555,59 @@ export async function executePerformanceToolCall(
         memory_mb: memory,
         semaphores,
         cluster_nodes: clusterNodes,
+      };
+    }
+    case 'get_performance_history': {
+      const hours = Math.min(Math.max(Number(args.hours) || 24, 1), 168);
+      const buckets = Math.min(Math.max(Number(args.buckets) || 24, 2), 48);
+      const spanMs = hours * 3600 * 1000;
+      const bucketMs = spanMs / buckets;
+      const startMs = Date.now() - spanMs;
+      // syslog_transaction stores sys_created_on in UTC; literal datetimes in
+      // encoded queries are compared as UTC (verified against gs.minutesAgoStart)
+      const fmt = (ms: number) => new Date(ms).toISOString().slice(0, 19).replace('T', ' ');
+
+      const fetchBucket = async (i: number) => {
+        const from = fmt(startMs + i * bucketMs);
+        const to = fmt(startMs + (i + 1) * bucketMs);
+        let q = `sys_created_on>=${from}^sys_created_on<${to}`;
+        if (args.query) q += `^${args.query}`;
+        const endpoint =
+          `/api/now/stats/syslog_transaction?sysparm_query=${encodeURIComponent(q)}` +
+          `&sysparm_count=true` +
+          `&sysparm_avg_fields=${encodeURIComponent('response_time,sql_time,business_rule_time')}` +
+          `&sysparm_max_fields=response_time`;
+        const resp = await client.callApiGet(endpoint);
+        const stats = resp?.result?.stats ?? {};
+        return {
+          start_utc: from,
+          end_utc: to,
+          count: Number(stats.count ?? 0),
+          avg_response_ms: stats.avg?.response_time != null ? Math.round(Number(stats.avg.response_time)) : null,
+          max_response_ms: stats.max?.response_time != null ? Math.round(Number(stats.max.response_time)) : null,
+          avg_sql_ms: stats.avg?.sql_time != null ? Math.round(Number(stats.avg.sql_time)) : null,
+          avg_business_rule_ms:
+            stats.avg?.business_rule_time != null ? Math.round(Number(stats.avg.business_rule_time)) : null,
+        };
+      };
+
+      // Limited concurrency so 48 buckets don't hammer the instance
+      const series: Awaited<ReturnType<typeof fetchBucket>>[] = [];
+      const concurrency = 6;
+      for (let i = 0; i < buckets; i += concurrency) {
+        const chunk = await Promise.all(
+          Array.from({ length: Math.min(concurrency, buckets - i) }, (_, j) => fetchBucket(i + j))
+        );
+        series.push(...chunk);
+      }
+
+      return {
+        table: 'syslog_transaction',
+        from_utc: fmt(startMs),
+        to_utc: fmt(startMs + spanMs),
+        bucket_minutes: Math.round(bucketMs / 60000),
+        filter: args.query || null,
+        series,
       };
     }
     default:

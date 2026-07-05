@@ -6,6 +6,7 @@ const mockClient = {
   queryRecords: vi.fn(),
   getRecord: vi.fn(),
   getXmlStats: vi.fn(),
+  callApiGet: vi.fn(),
 } as unknown as ServiceNowClient;
 
 const SAMPLE_XML =
@@ -82,5 +83,69 @@ describe('executePerformanceToolCall – get_instance_diagnostics', () => {
   it('passes custom include sections through to the client', async () => {
     await executePerformanceToolCall(mockClient, 'get_instance_diagnostics', { include: ['transactions'] });
     expect(mockClient.getXmlStats).toHaveBeenCalledWith(['transactions']);
+  });
+});
+
+describe('executePerformanceToolCall – get_performance_history', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    (mockClient.callApiGet as ReturnType<typeof vi.fn>).mockResolvedValue({
+      result: {
+        stats: {
+          count: '42',
+          avg: { response_time: '2518.3636', sql_time: '213.5', business_rule_time: '103.09' },
+          max: { response_time: '9000.1' },
+        },
+      },
+    });
+  });
+
+  it('fetches one stats query per bucket with UTC range filters', async () => {
+    const result = await executePerformanceToolCall(mockClient, 'get_performance_history', {
+      hours: 6,
+      buckets: 12,
+    });
+    expect(mockClient.callApiGet).toHaveBeenCalledTimes(12);
+    expect(result.series).toHaveLength(12);
+    expect(result.bucket_minutes).toBe(30);
+    const firstUrl = (mockClient.callApiGet as ReturnType<typeof vi.fn>).mock.calls[0][0];
+    expect(firstUrl).toContain('/api/now/stats/syslog_transaction');
+    expect(decodeURIComponent(firstUrl)).toContain('sys_created_on>=');
+  });
+
+  it('parses and rounds aggregate values', async () => {
+    const result = await executePerformanceToolCall(mockClient, 'get_performance_history', { buckets: 2 });
+    expect(result.series[0].count).toBe(42);
+    expect(result.series[0].avg_response_ms).toBe(2518);
+    expect(result.series[0].max_response_ms).toBe(9000);
+    expect(result.series[0].avg_sql_ms).toBe(214);
+  });
+
+  it('returns null metrics for empty buckets', async () => {
+    (mockClient.callApiGet as ReturnType<typeof vi.fn>).mockResolvedValue({
+      result: { stats: { count: '0' } },
+    });
+    const result = await executePerformanceToolCall(mockClient, 'get_performance_history', { buckets: 2 });
+    expect(result.series[0].count).toBe(0);
+    expect(result.series[0].avg_response_ms).toBeNull();
+  });
+
+  it('appends the extra query filter to every bucket', async () => {
+    await executePerformanceToolCall(mockClient, 'get_performance_history', {
+      buckets: 2,
+      query: 'urlLIKE/api/',
+    });
+    for (const call of (mockClient.callApiGet as ReturnType<typeof vi.fn>).mock.calls) {
+      expect(decodeURIComponent(call[0])).toContain('^urlLIKE/api/');
+    }
+  });
+
+  it('clamps hours and buckets to their limits', async () => {
+    const result = await executePerformanceToolCall(mockClient, 'get_performance_history', {
+      hours: 10000,
+      buckets: 500,
+    });
+    expect(mockClient.callApiGet).toHaveBeenCalledTimes(48);
+    expect(result.bucket_minutes).toBe(Math.round((168 * 60) / 48));
   });
 });
