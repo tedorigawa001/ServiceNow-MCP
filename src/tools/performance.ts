@@ -235,6 +235,28 @@ export function getPerformanceToolDefinitions() {
         required: ['tables'],
       },
     },
+    // ── Instance Diagnostics ─────────────────────────────────────────────────
+    {
+      name: 'get_instance_diagnostics',
+      description:
+        'Get live instance performance diagnostics: JVM memory, semaphore pools (concurrency/queue depth), and cluster node status — the data behind the Performance homepage (/stats.do)',
+      inputSchema: {
+        type: 'object',
+        properties: {
+          include: {
+            type: 'array',
+            items: { type: 'string' },
+            description:
+              "xmlstats.do sections to fetch (default ['memory','semaphores']). Other useful values: 'transactions', 'connections', 'dbpool', 'servlet'",
+          },
+          raw_xml: {
+            type: 'boolean',
+            description: 'Return the raw xmlstats.do XML instead of the parsed summary (default false)',
+          },
+        },
+        required: [],
+      },
+    },
   ];
 }
 
@@ -463,6 +485,59 @@ export async function executePerformanceToolCall(
         }
       }
       return { query: args.query || 'all records', table_counts: results };
+    }
+    case 'get_instance_diagnostics': {
+      const include: string[] =
+        Array.isArray(args.include) && args.include.length > 0
+          ? args.include
+          : ['memory', 'semaphores'];
+      const xml = await client.getXmlStats(include);
+      if (args.raw_xml) return { include, raw_xml: xml };
+
+      // Leaf numeric tags: <system.memory.max>1820.0</system.memory.max> etc.
+      const memory: Record<string, number> = {};
+      for (const m of xml.matchAll(/<(system\.[\w.]+)>([\d.]+)<\/\1>/g)) {
+        memory[m[1]] = parseFloat(m[2]);
+      }
+
+      const semaphores: Array<Record<string, unknown>> = [];
+      for (const m of xml.matchAll(/<semaphores\b([^>]*?)(?:\/>|>([\s\S]*?)<\/semaphores>)/g)) {
+        const attrs: Record<string, string> = {};
+        for (const a of m[1].matchAll(/([\w-]+)="([^"]*)"/g)) attrs[a[1]] = a[2];
+        const executing = m[2] ? (m[2].match(/<semaphore\b/g) ?? []).length : 0;
+        semaphores.push({
+          name: attrs.name,
+          max_concurrency: Number(attrs.maximum_concurrency),
+          available: Number(attrs.available),
+          in_use: executing,
+          queue_depth: Number(attrs.queue_depth),
+          max_queue_depth: Number(attrs.max_queue_depth),
+          queue_age_ms: Number(attrs.queue_age),
+          queue_depth_limit: Number(attrs.queue_depth_limit),
+          rejected_executions: Number(attrs.rejected_executions),
+        });
+      }
+
+      let clusterNodes: unknown[] = [];
+      try {
+        const nodes = await client.queryRecords({
+          table: 'sys_cluster_state',
+          query: '',
+          limit: 20,
+          fields: 'system_id,status,participation,most_recent_message,sys_updated_on',
+        });
+        clusterNodes = nodes.records;
+      } catch {
+        // sys_cluster_state may be ACL-restricted; diagnostics from xmlstats are still useful alone
+      }
+
+      return {
+        created: /created="([^"]*)"/.exec(xml)?.[1],
+        include,
+        memory_mb: memory,
+        semaphores,
+        cluster_nodes: clusterNodes,
+      };
     }
     default:
       return null;

@@ -1038,6 +1038,50 @@ export class ServiceNowClient {
   }
 
   /**
+   * Fetch live instance diagnostics from /xmlstats.do (JVM memory, semaphores, etc.).
+   * This is the data source behind the Performance homepage. The endpoint is a UI
+   * processor, not a REST API — it returns XML and accepts the same OAuth bearer token.
+   */
+  async getXmlStats(include?: string[]): Promise<string> {
+    await this.authenticate();
+
+    const params = include && include.length > 0
+      ? `?include=${encodeURIComponent(include.join(','))}`
+      : '';
+    const url = `${this.baseUrl}/xmlstats.do${params}`;
+
+    const statsController = new AbortController();
+    const statsTimeout = setTimeout(() => statsController.abort(), this.requestTimeoutMs);
+    try {
+      const response = await fetch(url, {
+        signal: statsController.signal,
+        headers: {
+          'Authorization': this.getAuthHeader(),
+          'Accept': 'text/xml',
+        },
+      });
+
+      if (!response.ok) {
+        throw new ServiceNowError(
+          `HTTP ${response.status}: ${response.statusText}`,
+          response.status === 401 ? 'AUTHENTICATION_FAILED'
+            : response.status === 403 ? 'INSUFFICIENT_PRIVILEGES'
+            : 'API_ERROR'
+        );
+      }
+      return await response.text();
+    } catch (error) {
+      if (error instanceof ServiceNowError) throw error;
+      throw new ServiceNowError(
+        `Failed to fetch xmlstats: ${error instanceof Error ? error.message : 'Unknown error'}`,
+        'NETWORK_ERROR'
+      );
+    } finally {
+      clearTimeout(statsTimeout);
+    }
+  }
+
+  /**
    * Natural language update (simplified implementation)
    */
   async naturalLanguageUpdate(_instruction: string, _table: string): Promise<any> {
