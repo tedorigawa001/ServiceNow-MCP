@@ -84,6 +84,41 @@ describe('executePerformanceToolCall – get_instance_diagnostics', () => {
     await executePerformanceToolCall(mockClient, 'get_instance_diagnostics', { include: ['transactions'] });
     expect(mockClient.getXmlStats).toHaveBeenCalledWith(['transactions']);
   });
+
+  it('all_nodes=true parses per-node stats from sys_cluster_node_stats', async () => {
+    (mockClient.queryRecords as ReturnType<typeof vi.fn>).mockImplementation(({ table }: any) => {
+      if (table === 'sys_cluster_node_stats') {
+        return Promise.resolve({
+          count: 2,
+          records: [
+            {
+              sys_updated_on: new Date().toISOString().slice(0, 19).replace('T', ' '),
+              stats:
+                '<xmlstats created="a"><scheduler.system_id>app1:node1</scheduler.system_id>' +
+                '<system.memory.max>2048.0</system.memory.max>' +
+                '<semaphores available="16" maximum_concurrency="16" name="Default" queue_depth="0" max_queue_depth="1" queue_age="0" queue_depth_limit="150" rejected_executions="0"/></xmlstats>',
+            },
+            {
+              sys_updated_on: '2026-02-02 21:34:51',
+              stats:
+                '<xmlstats created="b"><scheduler.system_id>app2:node2</scheduler.system_id>' +
+                '<system.memory.max>2048.0</system.memory.max>' +
+                '<semaphores available="10" maximum_concurrency="16" name="Default" queue_depth="3" max_queue_depth="9" queue_age="120" queue_depth_limit="150" rejected_executions="1"/></xmlstats>',
+            },
+          ],
+        });
+      }
+      return Promise.resolve({ count: 2, records: [{ system_id: 'app1:node1', status: 'online' }] });
+    });
+    const result = await executePerformanceToolCall(mockClient, 'get_instance_diagnostics', { all_nodes: true });
+    expect(mockClient.getXmlStats).not.toHaveBeenCalled();
+    expect(result.nodes).toHaveLength(2);
+    expect(result.nodes[0].system_id).toBe('app1:node1');
+    expect(result.nodes[0].stale).toBe(false);
+    expect(result.nodes[1].stale).toBe(true);
+    expect(result.nodes[1].semaphores[0].queue_depth).toBe(3);
+    expect(result.nodes[1].semaphores[0].rejected_executions).toBe(1);
+  });
 });
 
 describe('executePerformanceToolCall – get_performance_history', () => {
@@ -138,6 +173,30 @@ describe('executePerformanceToolCall – get_performance_history', () => {
     for (const call of (mockClient.callApiGet as ReturnType<typeof vi.fn>).mock.calls) {
       expect(decodeURIComponent(call[0])).toContain('^urlLIKE/api/');
     }
+  });
+
+  it('group_by_node=true returns per-node metrics for each bucket', async () => {
+    (mockClient.callApiGet as ReturnType<typeof vi.fn>).mockResolvedValue({
+      result: [
+        {
+          stats: { count: '100', avg: { response_time: '1500' } },
+          groupby_fields: [{ field: 'system_id', value: 'app1:node1' }],
+        },
+        {
+          stats: { count: '90', avg: { response_time: '8200' } },
+          groupby_fields: [{ field: 'system_id', value: 'app2:node2' }],
+        },
+      ],
+    });
+    const result = await executePerformanceToolCall(mockClient, 'get_performance_history', {
+      buckets: 2,
+      group_by_node: true,
+    });
+    const firstUrl = (mockClient.callApiGet as ReturnType<typeof vi.fn>).mock.calls[0][0];
+    expect(firstUrl).toContain('sysparm_group_by=system_id');
+    expect(result.series[0].nodes).toHaveLength(2);
+    expect(result.series[0].nodes[1].node).toBe('app2:node2');
+    expect(result.series[0].nodes[1].avg_response_ms).toBe(8200);
   });
 
   it('clamps hours and buckets to their limits', async () => {

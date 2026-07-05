@@ -253,6 +253,11 @@ export function getPerformanceToolDefinitions() {
             type: 'boolean',
             description: 'Return the raw xmlstats.do XML instead of the parsed summary (default false)',
           },
+          all_nodes: {
+            type: 'boolean',
+            description:
+              'Fetch diagnostics for every cluster node via sys_cluster_node_stats instead of only the node serving this request — use on multi-node production instances (default false)',
+          },
         },
         required: [],
       },
@@ -271,11 +276,58 @@ export function getPerformanceToolDefinitions() {
             description:
               'Extra encoded query to filter transactions, e.g. "urlLIKE/api/" for REST only or "sys_created_by=admin"',
           },
+          group_by_node: {
+            type: 'boolean',
+            description:
+              'Break each bucket down per cluster node (system_id) — use to spot a slow node on multi-node production instances (default false)',
+          },
         },
         required: [],
       },
     },
   ];
+}
+
+/** Parse the memory scalars and semaphore pools out of an xmlstats payload */
+function parseXmlStatsPayload(xml: string): {
+  created?: string;
+  memory_mb: Record<string, number>;
+  semaphores: Array<Record<string, unknown>>;
+} {
+  const memory: Record<string, number> = {};
+  for (const m of xml.matchAll(/<(system\.[\w.]+)>([\d.]+)<\/\1>/g)) {
+    memory[m[1]] = parseFloat(m[2]);
+  }
+  const semaphores: Array<Record<string, unknown>> = [];
+  for (const m of xml.matchAll(/<semaphores\b([^>]*?)(?:\/>|>([\s\S]*?)<\/semaphores>)/g)) {
+    const attrs: Record<string, string> = {};
+    for (const a of m[1].matchAll(/([\w-]+)="([^"]*)"/g)) attrs[a[1]] = a[2];
+    const executing = m[2] ? (m[2].match(/<semaphore\b/g) ?? []).length : 0;
+    semaphores.push({
+      name: attrs.name,
+      max_concurrency: Number(attrs.maximum_concurrency),
+      available: Number(attrs.available),
+      in_use: executing,
+      queue_depth: Number(attrs.queue_depth),
+      max_queue_depth: Number(attrs.max_queue_depth),
+      queue_age_ms: Number(attrs.queue_age),
+      queue_depth_limit: Number(attrs.queue_depth_limit),
+      rejected_executions: Number(attrs.rejected_executions),
+    });
+  }
+  return { created: /created="([^"]*)"/.exec(xml)?.[1], memory_mb: memory, semaphores };
+}
+
+/** Extract count/avg/max transaction metrics from an Aggregate API stats object */
+function extractTransactionStats(stats: any): Record<string, number | null> {
+  return {
+    count: Number(stats?.count ?? 0),
+    avg_response_ms: stats?.avg?.response_time != null ? Math.round(Number(stats.avg.response_time)) : null,
+    max_response_ms: stats?.max?.response_time != null ? Math.round(Number(stats.max.response_time)) : null,
+    avg_sql_ms: stats?.avg?.sql_time != null ? Math.round(Number(stats.avg.sql_time)) : null,
+    avg_business_rule_ms:
+      stats?.avg?.business_rule_time != null ? Math.round(Number(stats.avg.business_rule_time)) : null,
+  };
 }
 
 export async function executePerformanceToolCall(
@@ -505,6 +557,46 @@ export async function executePerformanceToolCall(
       return { query: args.query || 'all records', table_counts: results };
     }
     case 'get_instance_diagnostics': {
+      let clusterNodes: Record<string, any>[] = [];
+      try {
+        const nodes = await client.queryRecords({
+          table: 'sys_cluster_state',
+          query: '',
+          limit: 50,
+          fields: 'system_id,status,participation,most_recent_message,sys_updated_on',
+        });
+        clusterNodes = nodes.records as Record<string, any>[];
+      } catch {
+        // sys_cluster_state may be ACL-restricted; diagnostics from xmlstats are still useful alone
+      }
+
+      if (args.all_nodes) {
+        // Each node periodically writes its full xmlstats payload to
+        // sys_cluster_node_stats — the only way to see nodes other than the
+        // one the load balancer routed this request to
+        const statsRecords = await client.queryRecords({
+          table: 'sys_cluster_node_stats',
+          query: '',
+          limit: 50,
+          fields: 'stats,sys_updated_on',
+        });
+        const nodes = statsRecords.records.map((rec: Record<string, any>) => {
+          const xml = String(rec.stats ?? '');
+          const parsed = parseXmlStatsPayload(xml);
+          // Records from decommissioned nodes linger in this table; flag
+          // anything not refreshed recently so consumers don't read a ghost
+          const updatedMs = Date.parse(`${String(rec.sys_updated_on).replace(' ', 'T')}Z`);
+          const stale = !Number.isFinite(updatedMs) || Date.now() - updatedMs > 30 * 60 * 1000;
+          return {
+            system_id: /<scheduler\.system_id>([^<]*)<\/scheduler\.system_id>/.exec(xml)?.[1] ?? null,
+            stats_updated_on: rec.sys_updated_on,
+            stale,
+            ...parsed,
+          };
+        });
+        return { all_nodes: true, nodes, cluster_nodes: clusterNodes };
+      }
+
       const include: string[] =
         Array.isArray(args.include) && args.include.length > 0
           ? args.include
@@ -512,48 +604,9 @@ export async function executePerformanceToolCall(
       const xml = await client.getXmlStats(include);
       if (args.raw_xml) return { include, raw_xml: xml };
 
-      // Leaf numeric tags: <system.memory.max>1820.0</system.memory.max> etc.
-      const memory: Record<string, number> = {};
-      for (const m of xml.matchAll(/<(system\.[\w.]+)>([\d.]+)<\/\1>/g)) {
-        memory[m[1]] = parseFloat(m[2]);
-      }
-
-      const semaphores: Array<Record<string, unknown>> = [];
-      for (const m of xml.matchAll(/<semaphores\b([^>]*?)(?:\/>|>([\s\S]*?)<\/semaphores>)/g)) {
-        const attrs: Record<string, string> = {};
-        for (const a of m[1].matchAll(/([\w-]+)="([^"]*)"/g)) attrs[a[1]] = a[2];
-        const executing = m[2] ? (m[2].match(/<semaphore\b/g) ?? []).length : 0;
-        semaphores.push({
-          name: attrs.name,
-          max_concurrency: Number(attrs.maximum_concurrency),
-          available: Number(attrs.available),
-          in_use: executing,
-          queue_depth: Number(attrs.queue_depth),
-          max_queue_depth: Number(attrs.max_queue_depth),
-          queue_age_ms: Number(attrs.queue_age),
-          queue_depth_limit: Number(attrs.queue_depth_limit),
-          rejected_executions: Number(attrs.rejected_executions),
-        });
-      }
-
-      let clusterNodes: unknown[] = [];
-      try {
-        const nodes = await client.queryRecords({
-          table: 'sys_cluster_state',
-          query: '',
-          limit: 20,
-          fields: 'system_id,status,participation,most_recent_message,sys_updated_on',
-        });
-        clusterNodes = nodes.records;
-      } catch {
-        // sys_cluster_state may be ACL-restricted; diagnostics from xmlstats are still useful alone
-      }
-
       return {
-        created: /created="([^"]*)"/.exec(xml)?.[1],
         include,
-        memory_mb: memory,
-        semaphores,
+        ...parseXmlStatsPayload(xml),
         cluster_nodes: clusterNodes,
       };
     }
@@ -576,18 +629,25 @@ export async function executePerformanceToolCall(
           `/api/now/stats/syslog_transaction?sysparm_query=${encodeURIComponent(q)}` +
           `&sysparm_count=true` +
           `&sysparm_avg_fields=${encodeURIComponent('response_time,sql_time,business_rule_time')}` +
-          `&sysparm_max_fields=response_time`;
+          `&sysparm_max_fields=response_time` +
+          (args.group_by_node ? '&sysparm_group_by=system_id' : '');
         const resp = await client.callApiGet(endpoint);
-        const stats = resp?.result?.stats ?? {};
+        if (args.group_by_node) {
+          // Grouped responses return one stats object per system_id
+          const groups: any[] = Array.isArray(resp?.result) ? resp.result : [];
+          return {
+            start_utc: from,
+            end_utc: to,
+            nodes: groups.map((g) => ({
+              node: g.groupby_fields?.find((f: any) => f.field === 'system_id')?.value ?? null,
+              ...extractTransactionStats(g.stats),
+            })),
+          };
+        }
         return {
           start_utc: from,
           end_utc: to,
-          count: Number(stats.count ?? 0),
-          avg_response_ms: stats.avg?.response_time != null ? Math.round(Number(stats.avg.response_time)) : null,
-          max_response_ms: stats.max?.response_time != null ? Math.round(Number(stats.max.response_time)) : null,
-          avg_sql_ms: stats.avg?.sql_time != null ? Math.round(Number(stats.avg.sql_time)) : null,
-          avg_business_rule_ms:
-            stats.avg?.business_rule_time != null ? Math.round(Number(stats.avg.business_rule_time)) : null,
+          ...extractTransactionStats(resp?.result?.stats),
         };
       };
 
