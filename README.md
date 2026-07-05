@@ -723,6 +723,7 @@ graph TB
         O4[通知 / 添付]
         O5[システムプロパティ]
         O6[DevOps パイプライン]
+        O7[インスタンス診断 / 性能履歴]
     end
 
     subgraph EXTENDED["拡張モジュール"]
