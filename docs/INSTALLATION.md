@@ -10,8 +10,7 @@ Complete setup instructions for connecting servicenow-mcp to ServiceNow and any 
 ## Table of Contents
 
 - [Option A: Interactive Setup Wizard (Recommended)](#option-a-interactive-setup-wizard)
-- [Option B: Desktop App](#option-b-desktop-app)
-- [Option C: Manual Setup](#option-c-manual-setup)
+- [Option B: Manual Setup](#option-b-manual-setup)
 - [System Prerequisites](#system-prerequisites)
 - [ServiceNow OAuth 2.0 Setup](#servicenow-oauth-20-setup)
 - [Enterprise Configuration](#enterprise-configuration)
@@ -74,31 +73,15 @@ Step 5/5 — Install into AI client
 
 ```bash
 npm run setup -- --add             # Add a second instance
-node dist/cli.js instances list    # List configured instances
-node dist/cli.js instances remove dev # Remove an instance
-node dist/cli.js auth login        # Per-user OAuth login
-node dist/cli.js auth whoami       # Show active ServiceNow user
+node dist/cli/index.js instances list    # List configured instances
+node dist/cli/index.js instances remove dev # Remove an instance
+node dist/cli/index.js auth login        # Per-user OAuth login
+node dist/cli/index.js auth whoami       # Show active ServiceNow user
 ```
 
 ---
 
-## Option B: Desktop App
-
-Download the **servicenow-mcp Desktop** app — includes an 8-step visual wizard, instance manager, tool browser, and audit log viewer. The bundled server starts automatically.
-
-| Platform | Download |
-|----------|----------|
-| **macOS** | [servicenow-mcp.dmg](https://github.com/tedorigawa001/ServiceNow-MCP/releases/latest) |
-| **Windows** | [servicenow-mcp-Setup.exe](https://github.com/tedorigawa001/ServiceNow-MCP/releases/latest) |
-| **Linux** | [servicenow-mcp.AppImage](https://github.com/tedorigawa001/ServiceNow-MCP/releases/latest) · [servicenow-mcp.deb](https://github.com/tedorigawa001/ServiceNow-MCP/releases/latest) |
-
-The app auto-updates when new releases are published.
-
-For building from source, see [desktop/BUILDING.md](../desktop/BUILDING.md).
-
----
-
-## Option C: Manual Setup
+## Option B: Manual Setup
 
 ### Step 1: Clone and build
 
@@ -416,7 +399,6 @@ Type `@my-incidents` in a message to pull your open incidents into context.
 - Browse 120+ examples: [EXAMPLES.md](../EXAMPLES.md)
 - Full client setup for every AI tool: [CLIENT_SETUP.md](CLIENT_SETUP.md)
 - App builder (Lovable/Bolt/v0): [../clients/lovable/SETUP.md](../clients/lovable/SETUP.md)
-- Desktop app build guide: [../desktop/BUILDING.md](../desktop/BUILDING.md)
 - Issues: https://github.com/tedorigawa001/ServiceNow-MCP/issues
 
 ---

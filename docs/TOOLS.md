@@ -1,4 +1,4 @@
-# Tool Reference — servicenow-mcp v2.4 (Latest Release)
+# Tool Reference — servicenow-mcp
 
 Complete reference for all tools across all ServiceNow modules. All tools accept a `table` parameter override where applicable.
 
@@ -1787,7 +1787,7 @@ List notification subscription records.
 
 ---
 
-## Performance Analytics & Data Quality (13 tools)
+## Performance Analytics & Data Quality (15 tools)
 
 ### list_pa_indicators
 List Performance Analytics indicators.
@@ -1876,6 +1876,23 @@ Compare record counts across two tables or two filtered views.
 - `table2` (required)
 - `query1` — Optional filter for table1
 - `query2` — Optional filter for table2
+
+### get_instance_diagnostics
+Get live instance performance diagnostics: JVM memory, semaphore pools (concurrency/queue depth/rejected executions), and cluster node status — the data behind the Performance homepage (`/stats.do`). History for memory/semaphores is not available via API (JRobin data is ACL-restricted); this tool returns current values only.
+
+**Parameters**:
+- `include` — xmlstats.do sections to fetch (default `['memory','semaphores']`; also: `transactions`, `connections`, `dbpool`, `servlet`)
+- `raw_xml` — Return the raw xmlstats.do XML instead of the parsed summary (default false)
+- `all_nodes` — Fetch diagnostics for every cluster node via `sys_cluster_node_stats` instead of only the node serving this request — use on multi-node production instances (default false). Records not updated within 30 minutes are flagged `stale`
+
+### get_performance_history
+Get historical transaction performance as a time series (transaction count, avg/max response time, SQL time, business rule time per bucket) aggregated from `syslog_transaction` — chartable data replacing the legacy Performance dashboard graphs. Bucket boundaries are computed in UTC.
+
+**Parameters**:
+- `hours` — Look-back window in hours (default 24, max 168)
+- `buckets` — Number of time buckets (default 24, max 48)
+- `query` — Extra encoded query to filter transactions, e.g. `urlLIKE/api/` for REST only
+- `group_by_node` — Break each bucket down per cluster node (`system_id`) — use to spot a slow node on multi-node production instances (default false)
 
 ---
 
