@@ -86,7 +86,7 @@ export function detectClients(): DetectedClient[] {
       configKey: 'servers',
       writeMethod: 'json-servers',
       requiresRestart: false,
-      note: 'VS Code reads .vscode/mcp.json from the workspace root. Open the workspace folder in VS Code.',
+      note: 'VS Code reads .vscode/mcp.json from the workspace root. Secrets are NOT stored in the file — VS Code prompts for them on first start (inputs). Open the workspace folder in VS Code.',
     },
     {
       id: 'windsurf',

@@ -47,6 +47,18 @@ function serverPath(): string {
   return join(pkgDir, 'dist', 'server.js');
 }
 
+/** Package name for npx-based entries. Read from package.json, with a hardcoded fallback. */
+const FALLBACK_PACKAGE_NAME = '@tedorigawa001/servicenow-mcp';
+function packageName(): string {
+  try {
+    const pkgDir = fileURLToPath(new URL('../../../', import.meta.url)).replace(/[\\/]$/, '');
+    const parsed = JSON.parse(readFileSync(join(pkgDir, 'package.json'), 'utf8')) as { name?: string };
+    return parsed.name || FALLBACK_PACKAGE_NAME;
+  } catch {
+    return FALLBACK_PACKAGE_NAME;
+  }
+}
+
 /** Read + merge JSON config, creating it if needed. */
 function mergeJsonConfig(path: string, key: string, entry: Record<string, unknown>): void {
   const dir = dirname(path);
@@ -83,16 +95,74 @@ function writeMcpServersJson(client: DetectedClient, instance: InstanceConfig): 
   }
 }
 
-/** Write to VS Code (.vscode/mcp.json) which uses `servers` key + `type: stdio`. */
+/**
+ * Write to VS Code (.vscode/mcp.json) which uses `servers` key + `type: stdio`.
+ *
+ * Two deliberate differences from the other JSON writers:
+ * - Secrets are NOT stored in the file. `.vscode/` is commonly committed, so the
+ *   client secret (and OAuth password, if any) are replaced with VS Code
+ *   `inputs` placeholders — VS Code prompts once and stores them encrypted.
+ * - The server is launched via `npx <pkg> server` instead of an absolute
+ *   dist/server.js path. When setup runs under npx, that path points into the
+ *   npx cache and breaks as soon as the cache is pruned.
+ */
 function writeVsCodeJson(client: DetectedClient, instance: InstanceConfig): WriteResult {
+  const env = buildEnvBlock(instance);
+  const inputs: Array<{ type: string; id: string; description: string; password: boolean }> = [
+    {
+      type: 'promptString',
+      id: 'servicenow-client-secret',
+      description: `ServiceNow OAuth client secret (${instance.instanceUrl})`,
+      password: true,
+    },
+  ];
+  env['SERVICENOW_OAUTH_CLIENT_SECRET'] = '${input:servicenow-client-secret}';
+  if (instance.oauthPassword) {
+    inputs.push({
+      type: 'promptString',
+      id: 'servicenow-oauth-password',
+      description: `ServiceNow OAuth password (${instance.oauthUsername || instance.instanceUrl})`,
+      password: true,
+    });
+    env['SERVICENOW_OAUTH_PASSWORD'] = '${input:servicenow-oauth-password}';
+  }
+
   const entry = {
     type: 'stdio',
-    command: 'node',
-    args: [serverPath()],
-    env: buildEnvBlock(instance),
+    command: 'npx',
+    args: ['-y', packageName(), 'server'],
+    env,
   };
+
   try {
-    mergeJsonConfig(client.configPath, 'servers', entry);
+    const dir = dirname(client.configPath);
+    if (!existsSync(dir)) mkdirSync(dir, { recursive: true });
+
+    let existing: Record<string, unknown> = {};
+    if (existsSync(client.configPath)) {
+      try {
+        existing = JSON.parse(readFileSync(client.configPath, 'utf8')) as Record<string, unknown>;
+      } catch {
+        existing = {};
+      }
+    }
+
+    if (!existing['servers'] || typeof existing['servers'] !== 'object') {
+      existing['servers'] = {};
+    }
+    (existing['servers'] as Record<string, unknown>)['servicenow-mcp'] = entry;
+
+    const existingInputs = Array.isArray(existing['inputs'])
+      ? (existing['inputs'] as Array<Record<string, unknown>>)
+      : [];
+    for (const input of inputs) {
+      if (!existingInputs.some((i) => i && i['id'] === input.id)) {
+        existingInputs.push(input);
+      }
+    }
+    existing['inputs'] = existingInputs;
+
+    writeFileSync(client.configPath, JSON.stringify(existing, null, 2), 'utf8');
     return { success: true, message: `Written to ${client.configPath}` };
   } catch (err) {
     return { success: false, message: `Failed to write ${client.configPath}: ${err}` };

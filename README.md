@@ -151,7 +151,7 @@ npm run build
 npm run setup
 ```
 
-どちらの方法でも、ウィザードが Claude Desktop・Cursor・VS Code などを自動検出し、`dist/server.js` の絶対パスを含む設定ファイルを自動で書き込みます。
+どちらの方法でも、ウィザードが Claude Desktop・Cursor・VS Code などを自動検出し、設定ファイルを自動で書き込みます(VS Code は `npx ... server` 起動 + シークレットは `inputs` 化、それ以外は `dist/server.js` の絶対パス)。
 
 ### ステップ 2 — AI クライアントを再起動
 
@@ -422,19 +422,29 @@ claude mcp add servicenow node /path/to/servicenow-mcp/dist/server.js \
 
 ### VS Code (1.99+)
 
-設定ファイル: `.vscode/mcp.json`
+設定ファイル: `.vscode/mcp.json`(ワークスペースルート)
+
+`.vscode/` はコミットされがちなので、シークレットは平文で書かず VS Code の `inputs`(初回起動時にプロンプト表示・暗号化保存)に逃がします。セットアップウィザードもこの形式で書き込みます。
 
 ```json
 {
+  "inputs": [
+    {
+      "type": "promptString",
+      "id": "servicenow-client-secret",
+      "description": "ServiceNow OAuth client secret",
+      "password": true
+    }
+  ],
   "servers": {
-    "servicenow": {
+    "servicenow-mcp": {
       "type": "stdio",
-      "command": "node",
-      "args": ["/path/to/servicenow-mcp/dist/server.js"],
+      "command": "npx",
+      "args": ["-y", "@tedorigawa001/servicenow-mcp", "server"],
       "env": {
         "SERVICENOW_INSTANCE_URL": "https://dev12345.service-now.com",
         "SERVICENOW_OAUTH_CLIENT_ID": "your_client_id",
-        "SERVICENOW_OAUTH_CLIENT_SECRET": "your_client_secret"
+        "SERVICENOW_OAUTH_CLIENT_SECRET": "${input:servicenow-client-secret}"
       }
     }
   }

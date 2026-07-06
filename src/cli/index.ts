@@ -102,6 +102,15 @@ auth
     await authTest(instanceName);
   });
 
+// ─── server ───────────────────────────────────────────────────────────────────
+program
+  .command('server')
+  .description('Start the MCP server (stdio) — used by AI client configs, e.g. `npx servicenow-mcp server`')
+  .action(async () => {
+    const { main } = await import('../server.js');
+    await main();
+  });
+
 // ─── instances ────────────────────────────────────────────────────────────────
 const instances = program.command('instances').description('Manage configured ServiceNow instances');
 

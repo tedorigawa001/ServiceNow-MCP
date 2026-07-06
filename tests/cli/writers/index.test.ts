@@ -84,19 +84,155 @@ describe('writers', () => {
   });
 
   describe('writeVsCodeJson', () => {
-    it('writes vscode-specific config format', () => {
+    const lastWrittenJson = () => {
+      const calls = vi.mocked(fs.writeFileSync).mock.calls;
+      return JSON.parse(calls[calls.length - 1][1] as string);
+    };
+
+    it('writes vscode-specific config format under the servers key', () => {
       vi.mocked(fs.existsSync).mockReturnValue(false);
-      
+
       const client = createClient('json-servers');
       const result = writeClientConfig(client, mockInstance);
-      
+
       expect(result.success).toBe(true);
-      
+      const server = lastWrittenJson().servers['servicenow-mcp'];
+      expect(server.type).toBe('stdio');
+      expect(server.env.SERVICENOW_INSTANCE_URL).toBe('https://test.service-now.com');
+    });
+
+    it('launches via npx server subcommand instead of an absolute dist path', () => {
+      vi.mocked(fs.existsSync).mockReturnValue(false);
+
+      writeClientConfig(createClient('json-servers'), mockInstance);
+
+      const server = lastWrittenJson().servers['servicenow-mcp'];
+      expect(server.command).toBe('npx');
+      expect(server.args).toEqual(['-y', '@tedorigawa001/servicenow-mcp', 'server']);
+      expect(JSON.stringify(server.args)).not.toContain('dist/server.js');
+    });
+
+    it('replaces the client secret with a VS Code input placeholder (no plaintext secret)', () => {
+      vi.mocked(fs.existsSync).mockReturnValue(false);
+
+      writeClientConfig(createClient('json-servers'), mockInstance);
+
       const writeCall = vi.mocked(fs.writeFileSync).mock.calls[0];
-      const writtenJson = JSON.parse(writeCall[1] as string);
-      
-      expect(writtenJson.servers['servicenow-mcp'].type).toBe('stdio');
-      expect(writtenJson.servers['servicenow-mcp'].env.SERVICENOW_INSTANCE_URL).toBe('https://test.service-now.com');
+      const raw = writeCall[1] as string;
+      const written = JSON.parse(raw);
+
+      expect(written.servers['servicenow-mcp'].env.SERVICENOW_OAUTH_CLIENT_SECRET).toBe(
+        '${input:servicenow-client-secret}'
+      );
+      expect(raw).not.toContain('test-secret');
+
+      expect(written.inputs).toEqual([
+        {
+          type: 'promptString',
+          id: 'servicenow-client-secret',
+          description: expect.stringContaining('https://test.service-now.com'),
+          password: true,
+        },
+      ]);
+    });
+
+    it('also moves the OAuth password to an input when the instance has one', () => {
+      vi.mocked(fs.existsSync).mockReturnValue(false);
+
+      writeClientConfig(createClient('json-servers'), {
+        ...mockInstance,
+        oauthUsername: 'integration.user',
+        oauthPassword: 'super-secret-pass',
+      });
+
+      const writeCall = vi.mocked(fs.writeFileSync).mock.calls[0];
+      const raw = writeCall[1] as string;
+      const written = JSON.parse(raw);
+
+      expect(written.servers['servicenow-mcp'].env.SERVICENOW_OAUTH_PASSWORD).toBe(
+        '${input:servicenow-oauth-password}'
+      );
+      expect(raw).not.toContain('super-secret-pass');
+      expect(written.inputs.map((i: { id: string }) => i.id)).toEqual([
+        'servicenow-client-secret',
+        'servicenow-oauth-password',
+      ]);
+      expect(written.inputs[1].password).toBe(true);
+      expect(written.inputs[1].description).toContain('integration.user');
+    });
+
+    it('omits the password env and input when the instance has no OAuth password', () => {
+      vi.mocked(fs.existsSync).mockReturnValue(false);
+
+      writeClientConfig(createClient('json-servers'), mockInstance);
+
+      const written = lastWrittenJson();
+      expect(written.servers['servicenow-mcp'].env.SERVICENOW_OAUTH_PASSWORD).toBeUndefined();
+      expect(written.inputs).toHaveLength(1);
+    });
+
+    it('merges into an existing mcp.json, preserving other servers and inputs', () => {
+      vi.mocked(fs.existsSync).mockReturnValue(true);
+      vi.mocked(fs.readFileSync).mockReturnValue(
+        JSON.stringify({
+          servers: { otherServer: { type: 'stdio', command: 'other' } },
+          inputs: [{ type: 'promptString', id: 'other-secret', password: true }],
+        })
+      );
+
+      const result = writeClientConfig(createClient('json-servers'), mockInstance);
+
+      expect(result.success).toBe(true);
+      const written = lastWrittenJson();
+      expect(written.servers.otherServer).toEqual({ type: 'stdio', command: 'other' });
+      expect(written.servers['servicenow-mcp']).toBeDefined();
+      expect(written.inputs.map((i: { id: string }) => i.id)).toEqual([
+        'other-secret',
+        'servicenow-client-secret',
+      ]);
+    });
+
+    it('does not duplicate inputs when run twice over the same config', () => {
+      vi.mocked(fs.existsSync).mockReturnValue(true);
+      vi.mocked(fs.readFileSync).mockReturnValue(
+        JSON.stringify({
+          servers: { 'servicenow-mcp': { type: 'stdio', command: 'node', args: ['old'] } },
+          inputs: [
+            { type: 'promptString', id: 'servicenow-client-secret', description: 'old', password: true },
+          ],
+        })
+      );
+
+      writeClientConfig(createClient('json-servers'), mockInstance);
+
+      const written = lastWrittenJson();
+      expect(written.inputs).toHaveLength(1);
+      // entry itself is overwritten with the current launch config
+      expect(written.servers['servicenow-mcp'].command).toBe('npx');
+    });
+
+    it('recovers from a corrupt existing mcp.json by rewriting a fresh structure', () => {
+      vi.mocked(fs.existsSync).mockReturnValue(true);
+      vi.mocked(fs.readFileSync).mockReturnValue('{ not json');
+
+      const result = writeClientConfig(createClient('json-servers'), mockInstance);
+
+      expect(result.success).toBe(true);
+      const written = lastWrittenJson();
+      expect(written.servers['servicenow-mcp'].command).toBe('npx');
+      expect(written.inputs).toHaveLength(1);
+    });
+
+    it('returns false when the directory cannot be created', () => {
+      vi.mocked(fs.existsSync).mockReturnValue(false);
+      vi.mocked(fs.mkdirSync).mockImplementation(() => {
+        throw new Error('Permission denied');
+      });
+
+      const result = writeClientConfig(createClient('json-servers'), mockInstance);
+
+      expect(result.success).toBe(false);
+      expect(result.message).toContain('Failed to write');
     });
   });
 
