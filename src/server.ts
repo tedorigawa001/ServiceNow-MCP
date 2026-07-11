@@ -29,10 +29,11 @@ export const SERVER_VERSION = (JSON.parse(
 
 /** True if at least one ServiceNow instance is configured via any supported method. */
 export function isInstanceConfigured(): boolean {
-  const hasLegacy = !!process.env.SERVICENOW_INSTANCE_URL;
-  const hasMulti = Object.keys(process.env).some(k => /^SN_INSTANCE_[A-Z0-9_]+_URL$/.test(k));
-  const hasConfig = !!process.env.SN_INSTANCES_CONFIG;
-  return hasLegacy || hasMulti || hasConfig;
+  // InstanceManager owns all supported configuration sources, including the
+  // setup wizard's ~/.config/servicenow-mcp/instances.json store. Keeping the
+  // startup check on that same source of truth prevents valid wizard setups
+  // from being rejected when no environment variables are present.
+  return instanceManager.listNames().length > 0;
 }
 
 // ─── Request handlers (exported for unit testing) ─────────────────────────────

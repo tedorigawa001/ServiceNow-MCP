@@ -4,14 +4,15 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 // Mock the heavy dependencies so handler tests stay hermetic (no network, no
 // real instance config). vi.hoisted lets the mock fns exist before the hoisted
 // vi.mock factories reference them.
-const { mockGetClient, mockExecuteTool, mockReadResource } = vi.hoisted(() => ({
+const { mockGetClient, mockListNames, mockExecuteTool, mockReadResource } = vi.hoisted(() => ({
   mockGetClient: vi.fn(() => ({}) as any),
+  mockListNames: vi.fn(() => [] as string[]),
   mockExecuteTool: vi.fn(),
   mockReadResource: vi.fn(),
 }));
 
 vi.mock('../src/servicenow/instances.js', () => ({
-  instanceManager: { getClient: mockGetClient },
+  instanceManager: { getClient: mockGetClient, listNames: mockListNames },
 }));
 vi.mock('../src/tools/index.js', () => ({
   getTools: () => [
@@ -44,6 +45,7 @@ import {
 
 beforeEach(() => {
   mockGetClient.mockReset().mockReturnValue({} as any);
+  mockListNames.mockReset().mockReturnValue([]);
   mockExecuteTool.mockReset();
   mockReadResource.mockReset();
 });
@@ -62,16 +64,8 @@ describe('isInstanceConfigured', () => {
   it('returns false when nothing is configured', () => {
     expect(isInstanceConfigured()).toBe(false);
   });
-  it('returns true for legacy SERVICENOW_INSTANCE_URL', () => {
-    process.env.SERVICENOW_INSTANCE_URL = 'https://x.service-now.com';
-    expect(isInstanceConfigured()).toBe(true);
-  });
-  it('returns true for an SN_INSTANCE_<NAME>_URL group', () => {
-    process.env.SN_INSTANCE_DEV_URL = 'https://x.service-now.com';
-    expect(isInstanceConfigured()).toBe(true);
-  });
-  it('returns true for SN_INSTANCES_CONFIG', () => {
-    process.env.SN_INSTANCES_CONFIG = '/tmp/instances.json';
+  it('returns true when InstanceManager loaded an instance from the wizard config', () => {
+    mockListNames.mockReturnValue(['dev']);
     expect(isInstanceConfigured()).toBe(true);
   });
 });
