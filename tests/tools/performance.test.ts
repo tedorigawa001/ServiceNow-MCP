@@ -7,6 +7,7 @@ const mockClient = {
   getRecord: vi.fn(),
   getXmlStats: vi.fn(),
   callApiGet: vi.fn(),
+  updateRecord: vi.fn(),
 } as unknown as ServiceNowClient;
 
 const SAMPLE_XML =
@@ -206,5 +207,39 @@ describe('executePerformanceToolCall – get_performance_history', () => {
     });
     expect(mockClient.callApiGet).toHaveBeenCalledTimes(48);
     expect(result.bucket_minutes).toBe(Math.round((168 * 60) / 48));
+  });
+});
+
+describe('executePerformanceToolCall – scoped filters and dashboard updates', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    process.env.WRITE_ENABLED = 'true';
+  });
+
+  it('does not allow indicator filters to append encoded-query clauses', async () => {
+    (mockClient.queryRecords as ReturnType<typeof vi.fn>).mockResolvedValue({ count: 0, records: [] });
+    await executePerformanceToolCall(mockClient, 'list_pa_indicators', {
+      category: 'Operations^ORactive=false', query: 'Availability^ORsys_idISNOTEMPTY',
+    });
+    expect(mockClient.queryRecords).toHaveBeenCalledWith(expect.objectContaining({
+      query: 'active=true^category=OperationsORactive=false^nameCONTAINSAvailabilityORsys_idISNOTEMPTY^ORdescriptionCONTAINSAvailabilityORsys_idISNOTEMPTY',
+    }));
+  });
+
+  it('allows documented dashboard fields', async () => {
+    (mockClient.updateRecord as ReturnType<typeof vi.fn>).mockResolvedValue({ sys_id: 'dash1' });
+    await executePerformanceToolCall(mockClient, 'update_dashboard', {
+      sys_id: 'dash1', fields: { name: 'Operations', active: false },
+    });
+    expect(mockClient.updateRecord).toHaveBeenCalledWith('pa_dashboards', 'dash1', {
+      name: 'Operations', active: false,
+    });
+  });
+
+  it('rejects undeclared dashboard fields before they reach the Table API', async () => {
+    await expect(executePerformanceToolCall(mockClient, 'update_dashboard', {
+      sys_id: 'dash1', fields: { sys_domain: 'global', u_unlisted: 'yes' },
+    })).rejects.toThrow('Dashboard fields cannot be updated: sys_domain, u_unlisted');
+    expect(mockClient.updateRecord).not.toHaveBeenCalled();
   });
 });
