@@ -3,7 +3,7 @@
  * All tools are Tier 0 (read-only) unless noted.
  * ServiceNow API: GET /api/now/reporting, /api/now/stats/{table}, /api/now/pa/widget/{sys_id}
  */
-import type { ServiceNowClient } from '../servicenow/client.js';
+import { sanitizeLikeValue, type ServiceNowClient } from '../servicenow/client.js';
 import { ServiceNowError } from '../utils/errors.js';
 import { requireScripting, requireWrite } from '../utils/permissions.js';
 
@@ -273,8 +273,8 @@ export async function executeReportingToolCall(
     case 'list_reports': {
       // Latest release: /api/now/reporting supports sysparm_contains for name search
       let query = '';
-      if (args.search) query = `nameLIKE${args.search}`;
-      if (args.category) query = query ? `${query}^categoryLIKE${args.category}` : `categoryLIKE${args.category}`;
+      if (args.search) query = `nameLIKE${sanitizeLikeValue(args.search)}`;
+      if (args.category) query = query ? `${query}^categoryLIKE${sanitizeLikeValue(args.category)}` : `categoryLIKE${sanitizeLikeValue(args.category)}`;
       const resp = await client.queryRecords({ table: 'sys_report', query: query || undefined, limit: args.limit || 20, fields: 'sys_id,title,table,type,category,sys_updated_on,user' });
       return { count: resp.count, reports: resp.records };
     }
@@ -283,7 +283,8 @@ export async function executeReportingToolCall(
       if (/^[0-9a-f]{32}$/i.test(args.sys_id_or_name)) {
         return await client.getRecord('sys_report', args.sys_id_or_name);
       }
-      const resp = await client.queryRecords({ table: 'sys_report', query: `title=${args.sys_id_or_name}^ORname=${args.sys_id_or_name}^ORsys_id=${args.sys_id_or_name}`, limit: 1 });
+      const value = sanitizeLikeValue(args.sys_id_or_name);
+      const resp = await client.queryRecords({ table: 'sys_report', query: `title=${value}^ORname=${value}^ORsys_id=${value}`, limit: 1 });
       if (resp.count === 0) throw new ServiceNowError(`Report not found: ${args.sys_id_or_name}`, 'NOT_FOUND');
       return resp.records[0];
     }
@@ -339,7 +340,7 @@ export async function executeReportingToolCall(
       if (/^[0-9a-f]{32}$/i.test(args.sys_id_or_name)) {
         return await client.getRecord('sysauto', args.sys_id_or_name);
       }
-      const resp = await client.queryRecords({ table: 'sysauto', query: `name=${args.sys_id_or_name}`, limit: 1 });
+      const resp = await client.queryRecords({ table: 'sysauto', query: `name=${sanitizeLikeValue(args.sys_id_or_name)}`, limit: 1 });
       if (resp.count === 0) throw new ServiceNowError(`Scheduled job not found: ${args.sys_id_or_name}`, 'NOT_FOUND');
       return resp.records[0];
     }
@@ -398,8 +399,8 @@ export async function executeReportingToolCall(
     }
     case 'list_job_run_history': {
       const parts: string[] = [];
-      if (args.job_sys_id) parts.push(`sysauto=${args.job_sys_id}`);
-      if (args.status) parts.push(`status=${args.status}`);
+      if (args.job_sys_id) parts.push(`sysauto=${sanitizeLikeValue(args.job_sys_id)}`);
+      if (args.status) parts.push(`status=${sanitizeLikeValue(args.status)}`);
       const resp = await client.queryRecords({
         table: 'sysauto_trigger_log',
         query: parts.join('^') || undefined,

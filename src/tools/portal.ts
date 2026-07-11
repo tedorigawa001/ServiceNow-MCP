@@ -3,7 +3,7 @@
  * Read tools: Tier 0. Write/deploy tools: Tier 1 (WRITE_ENABLED=true).
  * Inspired by snow-flow's "Deployment" category tools.
  */
-import type { ServiceNowClient } from '../servicenow/client.js';
+import { sanitizeLikeValue, type ServiceNowClient } from '../servicenow/client.js';
 import { ServiceNowError } from '../utils/errors.js';
 import { requireWrite } from '../utils/permissions.js';
 
@@ -262,7 +262,7 @@ export async function executePortalToolCall(
     }
     case 'list_portals': {
       const parts: string[] = [];
-      if (args.query) parts.push(`titleCONTAINS${args.query}^ORurl_suffixCONTAINS${args.query}`);
+      if (args.query) { const value = sanitizeLikeValue(args.query); parts.push(`titleCONTAINS${value}^ORurl_suffixCONTAINS${value}`); }
       return await client.queryRecords({
         table: 'sp_portal',
         query: parts.join('^') || undefined,
@@ -277,7 +277,7 @@ export async function executePortalToolCall(
       }
       const resp = await client.queryRecords({
         table: 'sp_portal',
-        query: `url_suffix=${args.id}^ORtitle=${args.id}`,
+        query: `url_suffix=${sanitizeLikeValue(args.id)}^ORtitle=${sanitizeLikeValue(args.id)}`,
         limit: 1,
       });
       if (resp.count === 0) throw new ServiceNowError(`Portal not found: ${args.id}`, 'NOT_FOUND');
@@ -285,8 +285,8 @@ export async function executePortalToolCall(
     }
     case 'list_portal_pages': {
       if (!args.portal_sys_id) throw new ServiceNowError('portal_sys_id is required', 'INVALID_REQUEST');
-      const parts = [`sp_portal=${args.portal_sys_id}`];
-      if (args.query) parts.push(`titleCONTAINS${args.query}^ORidCONTAINS${args.query}`);
+      const parts = [`sp_portal=${sanitizeLikeValue(args.portal_sys_id)}`];
+      if (args.query) { const value = sanitizeLikeValue(args.query); parts.push(`titleCONTAINS${value}^ORidCONTAINS${value}`); }
       return await client.queryRecords({
         table: 'sp_page',
         query: parts.join('^'),
@@ -301,7 +301,7 @@ export async function executePortalToolCall(
     // ── Widgets ──────────────────────────────────────────────────────────────
     case 'list_portal_widgets': {
       const parts: string[] = [];
-      if (args.query) parts.push(`nameCONTAINS${args.query}^ORdescriptionCONTAINS${args.query}`);
+      if (args.query) { const value = sanitizeLikeValue(args.query); parts.push(`nameCONTAINS${value}^ORdescriptionCONTAINS${value}`); }
       return await client.queryRecords({
         table: 'sp_widget',
         query: parts.join('^') || undefined,
@@ -316,7 +316,7 @@ export async function executePortalToolCall(
       }
       const resp = await client.queryRecords({
         table: 'sp_widget',
-        query: `id=${args.id_or_sysid}^ORname=${args.id_or_sysid}`,
+        query: `id=${sanitizeLikeValue(args.id_or_sysid)}^ORname=${sanitizeLikeValue(args.id_or_sysid)}`,
         limit: 1,
       });
       if (resp.count === 0) throw new ServiceNowError(`Widget not found: ${args.id_or_sysid}`, 'NOT_FOUND');
@@ -353,7 +353,7 @@ export async function executePortalToolCall(
       if (!args.widget_sys_id) throw new ServiceNowError('widget_sys_id is required', 'INVALID_REQUEST');
       return await client.queryRecords({
         table: 'sp_instance',
-        query: `sp_widget=${args.widget_sys_id}`,
+        query: `sp_widget=${sanitizeLikeValue(args.widget_sys_id)}`,
         limit: args.limit ?? 25,
         fields: 'sys_id,sp_widget,sp_container,sp_page,sys_updated_on',
       });
@@ -361,7 +361,7 @@ export async function executePortalToolCall(
     // ── UI Builder ──────────────────────────────────────────────────────────
     case 'list_ux_apps': {
       const parts: string[] = [];
-      if (args.query) parts.push(`nameCONTAINS${args.query}`);
+      if (args.query) parts.push(`nameCONTAINS${sanitizeLikeValue(args.query)}`);
       return await client.queryRecords({
         table: 'sys_ux_app_config',
         query: parts.join('^') || undefined,
@@ -376,7 +376,7 @@ export async function executePortalToolCall(
       }
       const resp = await client.queryRecords({
         table: 'sys_ux_app_config',
-        query: `name=${args.sys_id_or_name}`,
+        query: `name=${sanitizeLikeValue(args.sys_id_or_name)}`,
         limit: 1,
       });
       if (resp.count === 0) throw new ServiceNowError(`UX App not found: ${args.sys_id_or_name}`, 'NOT_FOUND');
@@ -384,8 +384,8 @@ export async function executePortalToolCall(
     }
     case 'list_ux_pages': {
       if (!args.app_sys_id) throw new ServiceNowError('app_sys_id is required', 'INVALID_REQUEST');
-      const parts = [`ux_app_config=${args.app_sys_id}`];
-      if (args.query) parts.push(`nameCONTAINS${args.query}`);
+      const parts = [`ux_app_config=${sanitizeLikeValue(args.app_sys_id)}`];
+      if (args.query) parts.push(`nameCONTAINS${sanitizeLikeValue(args.query)}`);
       return await client.queryRecords({
         table: 'sys_ux_page',
         query: parts.join('^'),
