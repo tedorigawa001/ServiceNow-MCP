@@ -43,7 +43,7 @@ function validateOrderByField(field: string): string {
 }
 
 /** Strip ServiceNow encoded-query operators from free-text search values */
-function sanitizeLikeValue(value: string): string {
+export function sanitizeLikeValue(value: string): string {
   // Remove ^ (clause separator) and NUL bytes to prevent encoded-query injection
   return value.replace(/[\^]/g, '').replace(/\0/g, '');
 }

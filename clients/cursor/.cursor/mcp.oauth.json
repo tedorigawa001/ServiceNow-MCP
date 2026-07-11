@@ -2,7 +2,7 @@
   "mcpServers": {
     "servicenow": {
       "command": "node",
-      "args": ["./dist/server.js"],
+      "args": ["/absolute/path/to/servicenow-mcp/dist/server.js"],
       "env": {
         "SERVICENOW_INSTANCE_URL": "https://YOUR_INSTANCE.service-now.com",
         "SERVICENOW_OAUTH_CLIENT_ID": "YOUR_CLIENT_ID",
