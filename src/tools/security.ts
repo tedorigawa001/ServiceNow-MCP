@@ -11,6 +11,9 @@ const SECURITY_INCIDENT_FIELDS = new Set([
   'short_description', 'category', 'subcategory', 'severity', 'description', 'affected_cis',
   'assignment_group', 'state', 'containment_status',
 ]);
+const VULNERABILITY_UPDATE_FIELDS = new Set([
+  'state', 'risk_acceptance_notes', 'remediation_date',
+]);
 
 export function getSecurityToolDefinitions() {
   return [
@@ -107,7 +110,12 @@ export function getSecurityToolDefinitions() {
         type: 'object',
         properties: {
           sys_id: { type: 'string', description: 'System ID of the vulnerability entry' },
-          fields: { type: 'object', description: 'Fields to update (state, risk_acceptance_notes, remediation_date, etc.)' },
+          fields: {
+            type: 'object',
+            description: 'Fields to update (state, risk_acceptance_notes, remediation_date)',
+            properties: Object.fromEntries([...VULNERABILITY_UPDATE_FIELDS].map(field => [field, {}])),
+            additionalProperties: false,
+          },
         },
         required: ['sys_id', 'fields'],
       },
@@ -334,6 +342,10 @@ export async function executeSecurityToolCall(
     case 'update_vulnerability': {
       requireWrite();
       if (!args.sys_id || !args.fields) throw new ServiceNowError('sys_id and fields are required', 'INVALID_REQUEST');
+      const unsafeFields = Object.keys(args.fields).filter(field => !VULNERABILITY_UPDATE_FIELDS.has(field));
+      if (unsafeFields.length) {
+        throw new ServiceNowError(`Vulnerability fields cannot be updated: ${unsafeFields.join(', ')}`, 'VALIDATION_ERROR');
+      }
       const result = await client.updateRecord('sn_vul_entry', args.sys_id, args.fields);
       return { ...result, summary: `Updated vulnerability ${args.sys_id}` };
     }

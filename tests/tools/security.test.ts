@@ -97,6 +97,28 @@ describe('Security Operations tools', () => {
     });
   });
 
+  describe('update_vulnerability', () => {
+    beforeEach(() => { process.env.WRITE_ENABLED = 'true'; });
+
+    it('allows documented vulnerability remediation fields', async () => {
+      mockClient.updateRecord.mockResolvedValue({ sys_id: 'vuln001' });
+      await executeSecurityToolCall(mockClient, 'update_vulnerability', {
+        sys_id: 'vuln001',
+        fields: { state: 'risk_accepted', risk_acceptance_notes: 'Approved by CISO', remediation_date: '2026-08-01' },
+      });
+      expect(mockClient.updateRecord).toHaveBeenCalledWith('sn_vul_entry', 'vuln001', {
+        state: 'risk_accepted', risk_acceptance_notes: 'Approved by CISO', remediation_date: '2026-08-01',
+      });
+    });
+
+    it('rejects undeclared vulnerability fields before they reach the Table API', async () => {
+      await expect(executeSecurityToolCall(mockClient, 'update_vulnerability', {
+        sys_id: 'vuln001', fields: { sys_domain: 'global', u_unlisted: 'yes' },
+      })).rejects.toThrow('Vulnerability fields cannot be updated: sys_domain, u_unlisted');
+      expect(mockClient.updateRecord).not.toHaveBeenCalled();
+    });
+  });
+
   describe('get_threat_intelligence', () => {
     it('throws when query is missing', async () => {
       await expect(
