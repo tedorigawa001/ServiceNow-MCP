@@ -37,6 +37,35 @@ describe('Security Operations tools', () => {
         category: 'Malware',
       }));
     });
+
+    it('rejects undeclared fields before they reach the Table API', async () => {
+      process.env.WRITE_ENABLED = 'true';
+      await expect(executeSecurityToolCall(mockClient, 'create_security_incident', {
+        short_description: 'Ransomware detected', category: 'Malware', sys_domain: 'global', u_unlisted: 'yes',
+      })).rejects.toThrow('Security incident fields cannot be set: sys_domain, u_unlisted');
+      expect(mockClient.createRecord).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('update_security_incident', () => {
+    beforeEach(() => { process.env.WRITE_ENABLED = 'true'; });
+
+    it('allows documented incident lifecycle fields', async () => {
+      mockClient.updateRecord.mockResolvedValue({ sys_id: 'sec001' });
+      await executeSecurityToolCall(mockClient, 'update_security_incident', {
+        sys_id: 'sec001', fields: { state: 'contain', containment_status: 'isolated', severity: 1 },
+      });
+      expect(mockClient.updateRecord).toHaveBeenCalledWith('sn_si_incident', 'sec001', {
+        state: 'contain', containment_status: 'isolated', severity: 1,
+      });
+    });
+
+    it('rejects undeclared update fields before they reach the Table API', async () => {
+      await expect(executeSecurityToolCall(mockClient, 'update_security_incident', {
+        sys_id: 'sec001', fields: { sys_domain: 'global', u_unlisted: 'yes' },
+      })).rejects.toThrow('Security incident fields cannot be updated: sys_domain, u_unlisted');
+      expect(mockClient.updateRecord).not.toHaveBeenCalled();
+    });
   });
 
   describe('list_security_incidents', () => {
