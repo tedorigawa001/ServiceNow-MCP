@@ -13,14 +13,21 @@ describe('executeCsmToolCall – write field allowlist', () => {
     process.env.WRITE_ENABLED = 'true';
   });
 
-  it('does not forward undeclared fields while preserving documented create fields', async () => {
+  it('preserves documented create fields', async () => {
     (mockClient.createRecord as ReturnType<typeof vi.fn>).mockResolvedValue({ sys_id: 'case1' });
     await executeCsmToolCall(mockClient, 'create_csm_case', {
-      short_description: 'Customer cannot sign in', priority: '1', sys_domain: 'global', u_unlisted: 'yes',
+      short_description: 'Customer cannot sign in', priority: '1',
     });
     expect(mockClient.createRecord).toHaveBeenCalledWith('sn_customerservice_case', {
       short_description: 'Customer cannot sign in', priority: '1',
     });
+  });
+
+  it('rejects undeclared create fields before they reach the Table API', async () => {
+    await expect(executeCsmToolCall(mockClient, 'create_csm_case', {
+      short_description: 'Customer cannot sign in', sys_domain: 'global', u_unlisted: 'yes',
+    })).rejects.toThrow('CSM case fields cannot be set: sys_domain, u_unlisted');
+    expect(mockClient.createRecord).not.toHaveBeenCalled();
   });
 
   it('allows documented update fields', async () => {

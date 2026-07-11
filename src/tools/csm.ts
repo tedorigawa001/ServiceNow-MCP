@@ -174,8 +174,11 @@ export async function executeCsmToolCall(
     case 'create_csm_case': {
       requireWrite();
       if (!args.short_description) throw new ServiceNowError('short_description is required', 'INVALID_REQUEST');
-      const data = Object.fromEntries(Object.entries(args).filter(([field]) => CSM_CASE_FIELDS.has(field)));
-      const result = await client.createRecord('sn_customerservice_case', data);
+      const unsafeFields = Object.keys(args).filter(field => !CSM_CASE_FIELDS.has(field));
+      if (unsafeFields.length) {
+        throw new ServiceNowError(`CSM case fields cannot be set: ${unsafeFields.join(', ')}`, 'VALIDATION_ERROR');
+      }
+      const result = await client.createRecord('sn_customerservice_case', args);
       return { ...result, summary: `Created CSM case ${result.number || result.sys_id}` };
     }
     case 'get_csm_case': {
