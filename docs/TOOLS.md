@@ -1224,14 +1224,14 @@ Get HR service details.
 Get HR profile for a user.
 
 **Parameters**:
-- `user_sys_id` (required)
+- `user_identifier` (required) — Username, email, or sys_id
 
 ### update_hr_profile
 Update an HR profile record. **[Write]**
 
 **Parameters**:
-- `sys_id` (required)
-- `fields` (required)
+- `user_sys_id` (required) — 32-character user sys_id
+- `fields` (required) — `department`, `manager`, `location`, `job_title`
 
 ### list_hr_tasks
 List HR tasks associated with a case.

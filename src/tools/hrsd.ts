@@ -11,6 +11,8 @@ const HR_CASE_FIELDS = new Set([
   'short_description', 'hr_service', 'subject_person', 'description', 'assignment_group',
   'priority', 'state', 'close_notes', 'close_code', 'assigned_to', 'work_notes',
 ]);
+const HR_PROFILE_UPDATE_FIELDS = new Set(['department', 'manager', 'location', 'job_title']);
+const SYS_ID_PATTERN = /^[0-9a-f]{32}$/i;
 
 export function getHrsdToolDefinitions() {
   return [
@@ -128,7 +130,12 @@ export function getHrsdToolDefinitions() {
         type: 'object',
         properties: {
           user_sys_id: { type: 'string', description: 'sys_id of the user whose profile to update' },
-          fields: { type: 'object', description: 'HR profile fields to update (e.g., {"department": "Engineering"})' },
+          fields: {
+            type: 'object',
+            description: 'HR profile fields to update: department, manager, location, job_title',
+            properties: Object.fromEntries([...HR_PROFILE_UPDATE_FIELDS].map(field => [field, {}])),
+            additionalProperties: false,
+          },
         },
         required: ['user_sys_id', 'fields'],
       },
@@ -312,6 +319,13 @@ export async function executeHrsdToolCall(
     case 'update_hr_profile': {
       requireWrite();
       if (!args.user_sys_id || !args.fields) throw new ServiceNowError('user_sys_id and fields are required', 'INVALID_REQUEST');
+      if (!SYS_ID_PATTERN.test(args.user_sys_id)) {
+        throw new ServiceNowError('user_sys_id must be a 32-character sys_id', 'INVALID_REQUEST');
+      }
+      const unsafeFields = Object.keys(args.fields).filter(field => !HR_PROFILE_UPDATE_FIELDS.has(field));
+      if (unsafeFields.length) {
+        throw new ServiceNowError(`HR profile fields cannot be updated: ${unsafeFields.join(', ')}`, 'VALIDATION_ERROR');
+      }
       const profileResp = await client.queryRecords({ table: 'sn_hr_core_profile', query: `user=${args.user_sys_id}`, limit: 1 });
       if (profileResp.count === 0) throw new ServiceNowError(`No HR profile found for user ${args.user_sys_id}`, 'NOT_FOUND');
       const profileSysId = String(profileResp.records[0].sys_id);

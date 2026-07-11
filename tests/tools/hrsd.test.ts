@@ -72,6 +72,40 @@ describe('HRSD tools', () => {
     });
   });
 
+  describe('update_hr_profile', () => {
+    const userSysId = 'a'.repeat(32);
+
+    beforeEach(() => {
+      process.env.WRITE_ENABLED = 'true';
+      mockClient.queryRecords.mockResolvedValue({ count: 1, records: [{ sys_id: 'profile1' }] });
+    });
+
+    it('allows the approved organizational profile fields', async () => {
+      mockClient.updateRecord.mockResolvedValue({ sys_id: 'profile1' });
+      await executeHrsdToolCall(mockClient, 'update_hr_profile', {
+        user_sys_id: userSysId,
+        fields: { department: 'Engineering', manager: 'manager1', location: 'Tokyo', job_title: 'Engineer' },
+      });
+      expect(mockClient.updateRecord).toHaveBeenCalledWith('sn_hr_core_profile', 'profile1', {
+        department: 'Engineering', manager: 'manager1', location: 'Tokyo', job_title: 'Engineer',
+      });
+    });
+
+    it('rejects non-sys_id lookups before querying the HR profile table', async () => {
+      await expect(executeHrsdToolCall(mockClient, 'update_hr_profile', {
+        user_sys_id: 'user^ORsys_idISNOTEMPTY', fields: { department: 'Engineering' },
+      })).rejects.toThrow('user_sys_id must be a 32-character sys_id');
+      expect(mockClient.queryRecords).not.toHaveBeenCalled();
+    });
+
+    it('rejects undeclared profile fields before the profile is updated', async () => {
+      await expect(executeHrsdToolCall(mockClient, 'update_hr_profile', {
+        user_sys_id: userSysId, fields: { salary: '100000', u_unlisted: 'yes' },
+      })).rejects.toThrow('HR profile fields cannot be updated: salary, u_unlisted');
+      expect(mockClient.updateRecord).not.toHaveBeenCalled();
+    });
+  });
+
   describe('get_hr_case', () => {
     it('throws when number_or_sysid is missing', async () => {
       await expect(
