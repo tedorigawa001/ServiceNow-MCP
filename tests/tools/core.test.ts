@@ -358,13 +358,17 @@ describe('executeCoreToolCall – get_integration_health', () => {
 
 describe('executeCoreToolCall – run_discovery_scan', () => {
   const ORIGINAL = process.env.WRITE_ENABLED;
+  const ORIGINAL_CMDB = process.env.CMDB_WRITE_ENABLED;
   beforeEach(() => {
     vi.clearAllMocks();
     process.env.WRITE_ENABLED = 'true';
+    process.env.CMDB_WRITE_ENABLED = 'true';
   });
   afterEach(() => {
     if (ORIGINAL === undefined) delete process.env.WRITE_ENABLED;
     else process.env.WRITE_ENABLED = ORIGINAL;
+    if (ORIGINAL_CMDB === undefined) delete process.env.CMDB_WRITE_ENABLED;
+    else process.env.CMDB_WRITE_ENABLED = ORIGINAL_CMDB;
   });
 
   it('triggers by flipping the schedule to run once (never inserts discovery_status)', async () => {

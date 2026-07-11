@@ -104,6 +104,9 @@ const CFG: HttpConfig = {
   path: '/mcp',
   corsOrigin: '*',
   authToken: 'test-token',
+  maxBodyBytes: 1_048_576,
+  maxSessions: 100,
+  sessionIdleTimeoutMs: 1_800_000,
 };
 
 beforeEach(() => {
@@ -127,6 +130,7 @@ describe('getHttpConfig', () => {
     expect(cfg).toMatchObject({ port: 3000, host: '127.0.0.1', path: '/mcp', corsOrigin: '*' });
     expect(cfg.allowedHosts).toBeUndefined();
     expect(cfg.allowedOrigins).toBeUndefined();
+    expect(cfg).toMatchObject({ maxBodyBytes: 1_048_576, maxSessions: 100, sessionIdleTimeoutMs: 1_800_000 });
   });
 
   it('reads overrides from the environment', () => {

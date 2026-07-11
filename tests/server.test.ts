@@ -4,15 +4,27 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 // Mock the heavy dependencies so handler tests stay hermetic (no network, no
 // real instance config). vi.hoisted lets the mock fns exist before the hoisted
 // vi.mock factories reference them.
-const { mockGetClient, mockListNames, mockExecuteTool, mockReadResource } = vi.hoisted(() => ({
-  mockGetClient: vi.fn(() => ({}) as any),
-  mockListNames: vi.fn(() => [] as string[]),
-  mockExecuteTool: vi.fn(),
-  mockReadResource: vi.fn(),
-}));
+const { mockGetClient, mockListNames, mockExecuteTool, mockReadResource, mockCreateContext } = vi.hoisted(() => {
+  const mockGetClient = vi.fn(() => ({}) as any);
+  const mockListNames = vi.fn(() => [] as string[]);
+  return {
+    mockGetClient,
+    mockListNames,
+    mockExecuteTool: vi.fn(),
+    mockReadResource: vi.fn(),
+    mockCreateContext: vi.fn(() => ({
+      getClient: mockGetClient,
+      getCurrentName: () => 'default',
+      getCurrentUrl: () => '',
+      listNames: mockListNames,
+      listAll: () => [],
+      switch: vi.fn(),
+    })),
+  };
+});
 
 vi.mock('../src/servicenow/instances.js', () => ({
-  instanceManager: { getClient: mockGetClient, listNames: mockListNames },
+  instanceManager: { createContext: mockCreateContext, listNames: mockListNames },
 }));
 vi.mock('../src/tools/index.js', () => ({
   getTools: () => [
@@ -46,6 +58,14 @@ import {
 beforeEach(() => {
   mockGetClient.mockReset().mockReturnValue({} as any);
   mockListNames.mockReset().mockReturnValue([]);
+  mockCreateContext.mockReset().mockImplementation(() => ({
+    getClient: mockGetClient,
+    getCurrentName: () => 'default',
+    getCurrentUrl: () => '',
+    listNames: mockListNames,
+    listAll: () => [],
+    switch: vi.fn(),
+  }));
   mockExecuteTool.mockReset();
   mockReadResource.mockReset();
 });
@@ -92,7 +112,7 @@ describe('handleCallTool', () => {
     expect(res.isError).toBeUndefined();
     expect(res.content[0].type).toBe('text');
     expect(res.content[0].text).toContain('INC0001');
-    expect(mockExecuteTool).toHaveBeenCalledWith({}, 'get_incident', { number_or_sysid: 'INC0001' });
+    expect(mockExecuteTool).toHaveBeenCalledWith({}, 'get_incident', { number_or_sysid: 'INC0001' }, expect.anything());
   });
 
   it('returns a string result verbatim (not JSON-stringified)', async () => {

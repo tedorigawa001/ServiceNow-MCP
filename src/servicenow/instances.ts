@@ -30,6 +30,31 @@ interface InstanceEntry {
   client: ServiceNowClient;
 }
 
+/** Per-connection instance selection. Never share this mutable state between HTTP sessions. */
+export class InstanceContext {
+  private currentName: string;
+
+  constructor(private readonly manager: InstanceManager) {
+    this.currentName = manager.getDefaultName();
+  }
+
+  getClient(name?: string): ServiceNowClient {
+    return this.manager.getClient(name || this.currentName);
+  }
+
+  switch(name: string): void {
+    this.manager.assertKnown(name);
+    this.currentName = name.toLowerCase();
+  }
+
+  getCurrentName(): string { return this.currentName; }
+  getCurrentUrl(): string { return this.manager.getUrl(this.currentName); }
+  listNames(): string[] { return this.manager.listNames(); }
+  listAll(): Array<{ name: string; url: string; active: boolean; group: string; environment: string }> {
+    return this.manager.listAll(this.currentName);
+  }
+}
+
 class InstanceManager {
   private instances: Map<string, InstanceEntry> = new Map();
   private currentName: string = 'default';
@@ -179,6 +204,21 @@ class InstanceManager {
     return entry.client;
   }
 
+  /** Create an isolated selection context for an MCP connection. */
+  createContext(): InstanceContext {
+    return new InstanceContext(this);
+  }
+
+  getDefaultName(): string { return this.currentName; }
+
+  assertKnown(name: string): void {
+    if (!this.instances.has(name.toLowerCase())) {
+      throw new Error(`Unknown instance "${name}". Available: ${this.listNames().join(', ')}`);
+    }
+  }
+
+  getUrl(name: string): string { return this.instances.get(name)?.url || ''; }
+
   /** Reload instances from config files (call after config is updated). */
   reload(): void {
     this.instances.clear();
@@ -207,11 +247,11 @@ class InstanceManager {
     return Array.from(this.instances.keys());
   }
 
-  listAll(): Array<{ name: string; url: string; active: boolean; group: string; environment: string }> {
+  listAll(activeName = this.currentName): Array<{ name: string; url: string; active: boolean; group: string; environment: string }> {
     return Array.from(this.instances.values()).map(e => ({
       name: e.name,
       url: e.url,
-      active: e.name === this.currentName,
+      active: e.name === activeName,
       group: e.group,
       environment: e.environment,
     }));

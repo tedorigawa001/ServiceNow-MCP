@@ -12,7 +12,7 @@ import {
   ReadResourceRequestSchema,
 } from '@modelcontextprotocol/sdk/types.js';
 import dotenv from 'dotenv';
-import { instanceManager } from './servicenow/instances.js';
+import { instanceManager, type InstanceContext } from './servicenow/instances.js';
 import { getTools, executeTool } from './tools/index.js';
 import { getResources, readResource } from './resources/index.js';
 import { getPrompts, resolvePrompt } from './prompts/index.js';
@@ -42,9 +42,11 @@ export async function handleListTools() {
   return { tools: getTools() };
 }
 
+const defaultInstanceContext = instanceManager.createContext();
+
 export async function handleCallTool(request: {
   params: { name: string; arguments?: Record<string, unknown> };
-}) {
+}, instanceContext: InstanceContext = defaultInstanceContext) {
   const { name, arguments: args } = request.params;
 
   logger.info(`Tool called: ${name}`);
@@ -56,9 +58,9 @@ export async function handleCallTool(request: {
     }
 
     const instanceName = (args as Record<string, unknown>)?.['instance'] as string | undefined;
-    const client = instanceManager.getClient(instanceName);
-
-    const result = await executeTool(client, name, args || {});
+    const instanceTools = new Set(['switch_instance', 'list_instances', 'get_current_instance']);
+    const client = instanceTools.has(name) ? undefined : instanceContext.getClient(instanceName);
+    const result = await executeTool(client, name, args || {}, instanceContext);
 
     return {
       content: [
@@ -99,11 +101,11 @@ export async function handleListResources() {
   return { resources: getResources() };
 }
 
-export async function handleReadResource(request: { params: { uri: string } }) {
+export async function handleReadResource(request: { params: { uri: string } }, instanceContext: InstanceContext = defaultInstanceContext) {
   const { uri } = request.params;
 
   try {
-    const client = instanceManager.getClient();
+    const client = instanceContext.getClient();
     const content = await readResource(client, uri);
     return {
       contents: [
@@ -141,6 +143,7 @@ export async function handleGetPrompt(request: {
 
 /** Build the MCP server with all request handlers registered. */
 export function createServer(): Server {
+  const instanceContext = instanceManager.createContext();
   const server = new Server(
     {
       name: SERVER_NAME,
@@ -156,9 +159,9 @@ export function createServer(): Server {
   );
 
   server.setRequestHandler(ListToolsRequestSchema, handleListTools);
-  server.setRequestHandler(CallToolRequestSchema, handleCallTool);
+  server.setRequestHandler(CallToolRequestSchema, (request) => handleCallTool(request, instanceContext));
   server.setRequestHandler(ListResourcesRequestSchema, handleListResources);
-  server.setRequestHandler(ReadResourceRequestSchema, handleReadResource);
+  server.setRequestHandler(ReadResourceRequestSchema, (request) => handleReadResource(request, instanceContext));
   server.setRequestHandler(ListPromptsRequestSchema, handleListPrompts);
   server.setRequestHandler(GetPromptRequestSchema, handleGetPrompt);
 

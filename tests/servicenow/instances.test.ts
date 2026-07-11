@@ -103,6 +103,7 @@ describe('InstanceManager — env var groups', () => {
     process.env.SN_INSTANCE_PROD_URL = 'https://prod.service-now.com';
     process.env.SN_INSTANCE_PROD_CLIENT_ID = 'c';
     process.env.SN_INSTANCE_PROD_CLIENT_SECRET = 's';
+    process.env.SN_DEFAULT_INSTANCE = 'dev';
   });
 
   it('registers each SN_INSTANCE_<NAME>_URL group (lowercased)', () => {
@@ -114,6 +115,26 @@ describe('InstanceManager — env var groups', () => {
     process.env.SN_DEFAULT_INSTANCE = 'prod';
     instanceManager.reload();
     expect(instanceManager.getCurrentName()).toBe('prod');
+  });
+});
+
+describe('InstanceManager — isolated contexts', () => {
+  it('keeps selected instances independent across MCP connections', () => {
+    process.env.SN_INSTANCE_DEV_URL = 'https://dev.service-now.com';
+    process.env.SN_INSTANCE_DEV_CLIENT_ID = 'c';
+    process.env.SN_INSTANCE_DEV_CLIENT_SECRET = 's';
+    process.env.SN_INSTANCE_PROD_URL = 'https://prod.service-now.com';
+    process.env.SN_INSTANCE_PROD_CLIENT_ID = 'c';
+    process.env.SN_INSTANCE_PROD_CLIENT_SECRET = 's';
+    process.env.SN_DEFAULT_INSTANCE = 'dev';
+    instanceManager.reload();
+
+    const first = instanceManager.createContext();
+    const second = instanceManager.createContext();
+    first.switch('prod');
+
+    expect(first.getCurrentName()).toBe('prod');
+    expect(second.getCurrentName()).toBe('dev');
   });
 });
 

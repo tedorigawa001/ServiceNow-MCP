@@ -8,6 +8,7 @@
  *   agile_manager, ai_developer, portal_developer, integration_engineer
  */
 import type { ServiceNowClient } from '../servicenow/client.js';
+import type { InstanceContext } from '../servicenow/instances.js';
 import { ServiceNowError } from '../utils/errors.js';
 import {
   ANNOTATIONS_READ,
@@ -424,14 +425,35 @@ export function getTools() {
 }
 
 export async function executeTool(
-  client: ServiceNowClient,
+  client: ServiceNowClient | undefined,
   name: string,
-  args: Record<string, any>
+  args: Record<string, any>,
+  instanceContext?: InstanceContext,
 ): Promise<any> {
+  // Instance selection belongs to the MCP connection, not the process-wide
+  // InstanceManager. These tools therefore bypass domain-module dispatch.
+  if (name === 'switch_instance' || name === 'list_instances' || name === 'get_current_instance') {
+    if (!instanceContext) {
+      throw new ServiceNowError('Instance selection requires an MCP session context.', 'INVALID_REQUEST');
+    }
+    if (name === 'switch_instance') {
+      if (!args.name) throw new ServiceNowError('name is required', 'INVALID_REQUEST');
+      instanceContext.switch(args.name);
+      return { action: 'switched', active_instance: instanceContext.getCurrentName(), url: instanceContext.getCurrentUrl() };
+    }
+    if (name === 'list_instances') {
+      return { current: instanceContext.getCurrentName(), instances: instanceContext.listAll(), total: instanceContext.listNames().length };
+    }
+    return { name: instanceContext.getCurrentName(), url: instanceContext.getCurrentUrl(), all_instances: instanceContext.listNames() };
+  }
+
   // O(1) dispatch: look up the owning module's executor by tool name.
   const exec = TOOL_EXECUTORS.get(name);
   if (!exec) {
     throw new ServiceNowError(`Unknown tool: ${name}`, 'UNKNOWN_TOOL');
+  }
+  if (!client) {
+    throw new ServiceNowError(`Tool ${name} requires a ServiceNow client.`, 'INVALID_REQUEST');
   }
 
   const result = await exec(client, name, args);

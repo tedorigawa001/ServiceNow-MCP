@@ -576,7 +576,9 @@ export async function executeScriptToolCall(
       return await client.getRecord('sys_security_acl', args.sys_id);
     }
     case 'create_acl': {
-      if (!args.name || !args.operation) throw new ServiceNowError('name and operation are required', 'INVALID_REQUEST');
+      if (!args.name || !args.operation || !args.roles?.trim()) {
+        throw new ServiceNowError('name, operation, and at least one role are required', 'INVALID_REQUEST');
+      }
       const data: Record<string, any> = {
         name: args.name,
         operation: args.operation,
@@ -586,11 +588,40 @@ export async function executeScriptToolCall(
       };
       if (args.script) data.script = args.script;
       if (args.description) data.description = args.description;
+      const roleNames = args.roles.split(',').map((role: string) => role.trim()).filter(Boolean);
+      const roleIds: string[] = [];
+      for (const roleName of roleNames) {
+        if (!/^[A-Za-z0-9_]+$/.test(roleName)) {
+          throw new ServiceNowError(`Invalid ACL role name: ${roleName}`, 'VALIDATION_ERROR');
+        }
+        const roles = await client.queryRecords({
+          table: 'sys_user_role', query: `name=${roleName}`, limit: 2, fields: 'sys_id,name',
+        });
+        if (roles.count !== 1) {
+          throw new ServiceNowError(`ACL role not found or ambiguous: ${roleName}`, 'VALIDATION_ERROR');
+        }
+        const roleId = roles.records[0]?.sys_id;
+        if (typeof roleId !== 'string') {
+          throw new ServiceNowError(`ACL role has no valid sys_id: ${roleName}`, 'VALIDATION_ERROR');
+        }
+        roleIds.push(roleId);
+      }
       const result = await client.createRecord('sys_security_acl', data);
+      for (const roleId of roleIds) {
+        await client.createRecord('sys_security_acl_role', {
+          sys_security_acl: result.sys_id,
+          sys_user_role: roleId,
+        });
+      }
       return { ...result, summary: `Created ACL "${args.name}" for operation "${args.operation}"` };
     }
     case 'update_acl': {
       if (!args.sys_id || !args.fields) throw new ServiceNowError('sys_id and fields are required', 'INVALID_REQUEST');
+      const allowedFields = new Set(['description']);
+      const unsafeFields = Object.keys(args.fields).filter(field => !allowedFields.has(field));
+      if (unsafeFields.length) {
+        throw new ServiceNowError(`ACL fields are protected and cannot be updated: ${unsafeFields.join(', ')}`, 'VALIDATION_ERROR');
+      }
       const result = await client.updateRecord('sys_security_acl', args.sys_id, args.fields);
       return { ...result, summary: `Updated ACL ${args.sys_id}` };
     }

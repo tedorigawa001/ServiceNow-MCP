@@ -1,6 +1,6 @@
 # Tool Reference — servicenow-mcp
 
-Complete reference for all tools across all ServiceNow modules. All tools accept a `table` parameter override where applicable.
+Complete reference for all tools across all ServiceNow modules. A `table` parameter is available only where shown below.
 
 ## Permission Tiers
 
@@ -13,9 +13,11 @@ Complete reference for all tools across all ServiceNow modules. All tools accept
 | Now Assist | `NOW_ASSIST_ENABLED=true` | AI summaries, NLQ, agentic playbooks |
 | ATF | `ATF_ENABLED=true` | Run test suites and individual tests |
 
+`import_cmdb_data`, `create_ci_relationship`, and `run_discovery_scan` use the CMDB Write tier. `create_import_set_row` must include the owning `import_set_sys_id`; ServiceNow system fields cannot be supplied.
+
 ---
 
-## Core & CMDB (17 tools)
+## Core & CMDB (25 tools)
 
 ### query_records
 Query records from any ServiceNow table with filtering, sorting and pagination.
@@ -44,20 +46,19 @@ Get field definitions and metadata for a table.
 Look up a ServiceNow user by username, email, or sys_id.
 
 **Parameters**:
-- `identifier` (required) — Username, email, or sys_id
+- `user_identifier` (required) — Username, email, or sys_id
 
 ### get_group
 Look up a ServiceNow group by name or sys_id.
 
 **Parameters**:
-- `identifier` (required) — Group name or sys_id
+- `group_identifier` (required) — Group name or sys_id
 
 ### search_cmdb_ci
 Search CMDB configuration items by name or class.
 
 **Parameters**:
-- `query` (required) — CI name or search query
-- `ci_class` — Filter by CI class (e.g. `cmdb_ci_server`)
+- `query` — CI name or encoded search query
 - `limit` — Max records (default: 25)
 
 ### get_cmdb_ci
@@ -104,38 +105,90 @@ Get Service Mapping application service summaries.
 **Parameters**:
 - `limit` — Max services to return
 
-### create_change_request
-Create a new change request record. **[Write]**
-
-**Parameters**:
-- `short_description` (required)
-- `description`
-- `type` — `normal`, `standard`, `emergency`
-- `assignment_group`
-- `risk` — `1` (High) to `4` (Low)
-
 ### natural_language_search
 Search records using a plain English question.
 
 **Parameters**:
 - `query` (required) — Natural language question
 
-### smart_query
-Resolve a natural-language request into a ServiceNow table + encoded query and (optionally) run it. Maps keywords to common tables (incident, change_request, problem, sc_request, sn_vul_vulnerable_item, cmdb_ci, sys_user, …), then infers conditions for priority (P1/critical/high), open vs closed state, "assigned to me"/unassigned, and time windows (today, this/last week, last N days). Unmatched conditions are dropped and reported in `unmatched_intents`. Japanese input is supported (e.g. 「先月の未解決 P1 インシデント」).
-
-**Parameters**:
-- `description` (required) — Natural-language request, e.g. "P1 incidents still open from last month"
-- `table` — Force this table instead of auto-resolving from keywords
-- `limit` — Max records when executed (default 10, max 1000)
-- `execute` — Run the resolved query (default true); `false` = preview the interpretation only
-
 ### natural_language_update
 Update a record using natural language instructions. **[Write]**
 
 **Parameters**:
 - `table` (required)
-- `sys_id` (required)
 - `instruction` (required) — Plain English update instruction
+
+### list_instances
+List configured ServiceNow instances.
+
+**Parameters**: None
+
+### switch_instance
+Switch the active instance for this MCP connection.
+
+**Parameters**:
+- `name` (required) — Configured instance name
+
+### get_current_instance
+Get the active instance name and URL for this MCP connection.
+
+**Parameters**: None
+
+### create_ci_relationship
+Create a relationship between two CIs. **[CMDB Write]**
+
+**Parameters**:
+- `parent` (required) — Parent CI sys_id
+- `child` (required) — Child CI sys_id
+- `type` (required) — Relationship type, e.g. `Runs on::Runs`
+
+### cmdb_impact_analysis
+Trace downstream impact through CI relationships.
+
+**Parameters**:
+- `ci_sys_id` (required)
+- `depth` — Traversal depth (default 2)
+
+### run_discovery_scan
+Schedule a one-time Discovery scan. **[CMDB Write]**
+
+**Parameters**:
+- `schedule_id` (required) — Discovery schedule sys_id
+- `mid_server` — Optional MID server sys_id
+
+### describe_table
+Return a full `sys_dictionary` schema, including inherited fields when requested.
+
+**Parameters**:
+- `table` (required)
+- `include_inherited` — Include parent-table fields (default false)
+
+### check_table_access
+Safely probe the configured account's read and write access for up to 20 tables.
+
+**Parameters**:
+- `tables` (required) — Table names
+- `check_write` — Perform the non-destructive write probe (default true)
+
+### get_integration_health
+Report Vulnerability Response integration-run health and silent stalls.
+
+**Parameters**:
+- `days` — Look-back window (default 7, max 365)
+- `source` — Integration source filter
+
+---
+
+## Natural-language Query (1 tool)
+
+### smart_query
+Resolve natural-language requests into a ServiceNow table and encoded query, then optionally execute it. Japanese input is supported; unmatched conditions are returned in `unmatched_intents`.
+
+**Parameters**:
+- `description` (required) — Natural-language request
+- `table` — Override the resolved table
+- `limit` — Result limit when executing (default 10, max 1000)
+- `execute` — Set `false` to preview only (default true)
 
 ---
 
@@ -229,7 +282,17 @@ Mark a problem as resolved with fix notes. **[Write]**
 
 ---
 
-## Change Management (5 tools)
+## Change Management (6 tools)
+
+### create_change_request
+Create a new change request record. **[Write]**
+
+**Parameters**:
+- `short_description` (required)
+- `description`
+- `type` — `normal`, `standard`, `emergency`
+- `assignment_group`
+- `risk` — `1` (High) to `4` (Low)
 
 ### get_change_request
 Get change request details by number or sys_id.

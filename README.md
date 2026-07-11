@@ -495,6 +495,9 @@ MCP_TRANSPORT=http MCP_HTTP_AUTH_TOKEN=replace-with-a-random-secret node dist/se
 | `MCP_HTTP_CORS_ORIGIN` | `*` | CORS 許可オリジン |
 | `MCP_HTTP_ALLOWED_HOSTS` | (なし) | カンマ区切り。指定すると DNS リバインディング保護を有効化 |
 | `MCP_HTTP_ALLOWED_ORIGINS` | (なし) | カンマ区切り。Origin ヘッダの許可リスト |
+| `MCP_HTTP_MAX_BODY_BYTES` | `1048576` | JSON-RPC 要求本文の最大バイト数 |
+| `MCP_HTTP_MAX_SESSIONS` | `100` | 同時 HTTP MCP セッションの上限 |
+| `MCP_HTTP_SESSION_IDLE_TIMEOUT_MS` | `1800000` | 未使用セッションを閉じるまでのミリ秒 |
 
 セッションは MCP 仕様に従い、`initialize` 応答の `Mcp-Session-Id` ヘッダで払い出され、
 以降のリクエストで再利用します（`DELETE /mcp` でセッション終了）。HTTP 接続するクライアント設定例:

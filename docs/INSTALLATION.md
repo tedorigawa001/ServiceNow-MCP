@@ -288,6 +288,8 @@ node dist/server.js
 
 HTTP clients must send `Authorization: Bearer <MCP_HTTP_AUTH_TOKEN>` on each `/mcp` request. For externally exposed deployments, also set explicit `MCP_HTTP_CORS_ORIGIN`, `MCP_HTTP_ALLOWED_HOSTS`, and `MCP_HTTP_ALLOWED_ORIGINS` values.
 
+The transport limits each JSON-RPC request to 1 MiB, permits at most 100 active sessions, and expires idle sessions after 30 minutes by default. Tune `MCP_HTTP_MAX_BODY_BYTES`, `MCP_HTTP_MAX_SESSIONS`, and `MCP_HTTP_SESSION_IDLE_TIMEOUT_MS` only for a known workload.
+
 ---
 
 ## Verification and Testing

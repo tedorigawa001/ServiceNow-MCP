@@ -26,6 +26,9 @@ export interface HttpConfig {
   allowedHosts?: string[];
   allowedOrigins?: string[];
   authToken?: string;
+  maxBodyBytes: number;
+  maxSessions: number;
+  sessionIdleTimeoutMs: number;
 }
 
 /** Resolve HTTP transport configuration from environment variables. */
@@ -44,11 +47,15 @@ export function getHttpConfig(): HttpConfig {
     allowedHosts: splitList(process.env.MCP_HTTP_ALLOWED_HOSTS),
     allowedOrigins: splitList(process.env.MCP_HTTP_ALLOWED_ORIGINS),
     authToken: process.env.MCP_HTTP_AUTH_TOKEN,
+    maxBodyBytes: Number(process.env.MCP_HTTP_MAX_BODY_BYTES) || 1_048_576,
+    maxSessions: Number(process.env.MCP_HTTP_MAX_SESSIONS) || 100,
+    sessionIdleTimeoutMs: Number(process.env.MCP_HTTP_SESSION_IDLE_TIMEOUT_MS) || 1_800_000,
   };
 }
 
 /** Active transports keyed by session id (stateful mode). */
 const transports = new Map<string, StreamableHTTPServerTransport>();
+const sessionTimers = new Map<string, NodeJS.Timeout>();
 
 /** Number of live sessions — exported for observability/tests. */
 export function activeSessionCount(): number {
@@ -61,6 +68,8 @@ export function closeAllSessions(): void {
     void transport.close();
   }
   transports.clear();
+  for (const timer of sessionTimers.values()) clearTimeout(timer);
+  sessionTimers.clear();
 }
 
 /** Build a minimal JSON-RPC error payload. */
@@ -91,10 +100,16 @@ function isAuthorized(req: http.IncomingMessage, cfg: HttpConfig): boolean {
 }
 
 /** Read and JSON-parse the request body. Returns undefined for an empty body. */
-export async function readJsonBody(req: http.IncomingMessage): Promise<unknown> {
+export class RequestBodyTooLargeError extends Error {}
+
+export async function readJsonBody(req: http.IncomingMessage, maxBodyBytes = 1_048_576): Promise<unknown> {
   const chunks: Buffer[] = [];
+  let size = 0;
   for await (const chunk of req) {
-    chunks.push(chunk as Buffer);
+    const buffer = Buffer.from(chunk);
+    size += buffer.length;
+    if (size > maxBodyBytes) throw new RequestBodyTooLargeError(`Request body exceeds ${maxBodyBytes} bytes.`);
+    chunks.push(buffer);
   }
   const raw = Buffer.concat(chunks).toString('utf8');
   if (!raw.trim()) return undefined;
@@ -107,6 +122,7 @@ async function createSessionTransport(cfg: HttpConfig): Promise<StreamableHTTPSe
     sessionIdGenerator: () => randomUUID(),
     onsessioninitialized: (sessionId) => {
       transports.set(sessionId, transport);
+      refreshSessionExpiry(sessionId, transport, cfg);
       logger.info(`HTTP session opened: ${sessionId} [${transports.size} active]`);
     },
     ...(cfg.allowedHosts || cfg.allowedOrigins
@@ -123,11 +139,27 @@ async function createSessionTransport(cfg: HttpConfig): Promise<StreamableHTTPSe
     if (sid && transports.delete(sid)) {
       logger.info(`HTTP session closed: ${sid} [${transports.size} active]`);
     }
+    if (sid) {
+      const timer = sessionTimers.get(sid);
+      if (timer) clearTimeout(timer);
+      sessionTimers.delete(sid);
+    }
   };
 
   const server = createServer();
   await server.connect(transport);
   return transport;
+}
+
+function refreshSessionExpiry(sessionId: string, transport: StreamableHTTPServerTransport, cfg: HttpConfig): void {
+  const existing = sessionTimers.get(sessionId);
+  if (existing) clearTimeout(existing);
+  const timer = setTimeout(() => {
+    logger.info(`HTTP session expired: ${sessionId}`);
+    void transport.close();
+  }, cfg.sessionIdleTimeoutMs);
+  timer.unref();
+  sessionTimers.set(sessionId, timer);
 }
 
 /**
@@ -174,12 +206,18 @@ export async function handleHttpRequest(
 
   try {
     if (req.method === 'POST') {
-      const body = await readJsonBody(req);
+      const body = await readJsonBody(req, cfg.maxBodyBytes);
       let transport: StreamableHTTPServerTransport | undefined;
 
       if (sessionId && transports.has(sessionId)) {
         transport = transports.get(sessionId);
+        refreshSessionExpiry(sessionId, transport!, cfg);
       } else if (!sessionId && isInitializeRequest(body)) {
+        if (transports.size >= cfg.maxSessions) {
+          res.writeHead(429, { 'Content-Type': 'application/json' });
+          res.end(jsonRpcError(-32002, 'Too many active sessions'));
+          return;
+        }
         transport = await createSessionTransport(cfg);
       } else {
         res.writeHead(400, { 'Content-Type': 'application/json' });
@@ -197,6 +235,7 @@ export async function handleHttpRequest(
         res.end(jsonRpcError(-32000, 'Bad Request: unknown or missing session id'));
         return;
       }
+      refreshSessionExpiry(sessionId, transports.get(sessionId)!, cfg);
       await transports.get(sessionId)!.handleRequest(req, res);
       return;
     }
@@ -205,7 +244,10 @@ export async function handleHttpRequest(
     res.end(jsonRpcError(-32601, `Method not allowed: ${req.method}`));
   } catch (error) {
     logger.error('HTTP request handling failed', error);
-    if (!res.headersSent) {
+    if (error instanceof RequestBodyTooLargeError && !res.headersSent) {
+      res.writeHead(413, { 'Content-Type': 'application/json' });
+      res.end(jsonRpcError(-32003, error.message));
+    } else if (!res.headersSent) {
       res.writeHead(500, { 'Content-Type': 'application/json' });
       res.end(jsonRpcError(-32603, 'Internal server error'));
     }

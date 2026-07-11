@@ -147,9 +147,10 @@ export function getIntegrationToolDefinitions() {
             type: 'string',
             description: 'Staging table name (e.g. "u_import_incident"). Must already exist.',
           },
+          import_set_sys_id: { type: 'string', description: 'sys_id of the Import Set that owns this staging table' },
           data: { type: 'object', description: 'Key-value pairs for the staging table row' },
         },
-        required: ['staging_table', 'data'],
+        required: ['staging_table', 'import_set_sys_id', 'data'],
       },
     },
     {
@@ -456,8 +457,16 @@ export async function executeIntegrationToolCall(
     }
     case 'create_import_set_row': {
       requireWrite();
-      if (!args.staging_table || !args.data) {
-        throw new ServiceNowError('staging_table and data are required', 'INVALID_REQUEST');
+      if (!args.staging_table || !args.import_set_sys_id || !args.data) {
+        throw new ServiceNowError('staging_table, import_set_sys_id, and data are required', 'INVALID_REQUEST');
+      }
+      const importSet = await client.getRecord('sys_import_set', args.import_set_sys_id);
+      if (importSet.table_name !== args.staging_table) {
+        throw new ServiceNowError('staging_table does not match the specified import set.', 'VALIDATION_ERROR');
+      }
+      const unsafeFields = Object.keys(args.data).filter(field => field.startsWith('sys_'));
+      if (unsafeFields.length) {
+        throw new ServiceNowError(`System fields are not permitted in import rows: ${unsafeFields.join(', ')}`, 'VALIDATION_ERROR');
       }
       const result = await client.createRecord(args.staging_table, args.data);
       return { ...result, summary: `Inserted row into staging table "${args.staging_table}"` };

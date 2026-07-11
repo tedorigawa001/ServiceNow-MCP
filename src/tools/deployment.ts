@@ -11,7 +11,7 @@
  */
 import type { ServiceNowClient } from '../servicenow/client.js';
 import { ServiceNowError } from '../utils/errors.js';
-import { requireWrite, requireScripting } from '../utils/permissions.js';
+import { requireCmdbWrite, requireWrite, requireScripting } from '../utils/permissions.js';
 
 export function getDeploymentToolDefinitions() {
   return [
@@ -57,7 +57,7 @@ export function getDeploymentToolDefinitions() {
     },
     {
       name: 'import_cmdb_data',
-      description: 'Import CI data into CMDB via import set. **[Write]**',
+      description: 'Import CI data into CMDB CI classes using a safe field allowlist. **[CMDB Write]**',
       inputSchema: { type: 'object', properties: { table: { type: 'string', description: 'Target CMDB table (e.g. cmdb_ci_server)' }, data: { type: 'array', items: { type: 'object' }, description: 'Array of records to import' } }, required: ['table', 'data'] },
     },
     {
@@ -152,11 +152,23 @@ export async function executeDeploymentToolCall(
     }
 
     case 'import_cmdb_data': {
-      requireWrite();
+      requireCmdbWrite();
       if (!args.table || !args.data?.length) throw new ServiceNowError('table and data are required', 'INVALID_REQUEST');
+      if (!/^cmdb_ci(?:_[a-z0-9_]+)?$/i.test(args.table)) {
+        throw new ServiceNowError('table must be a CMDB CI class (cmdb_ci or cmdb_ci_*).', 'VALIDATION_ERROR');
+      }
+      const allowedFields = new Set([
+        'name', 'short_description', 'serial_number', 'asset_tag', 'manufacturer',
+        'model_id', 'location', 'install_status', 'operational_status', 'environment',
+        'ip_address', 'mac_address', 'fqdn',
+      ]);
       const results = [];
       for (const record of args.data.slice(0, 50)) {
         try {
+          const unsupported = Object.keys(record).filter(field => !allowedFields.has(field));
+          if (unsupported.length) {
+            throw new ServiceNowError(`Unsupported CMDB import field(s): ${unsupported.join(', ')}`, 'VALIDATION_ERROR');
+          }
           const result = await client.createRecord(args.table, record);
           results.push({ status: 'created', ...result });
         } catch (err) {

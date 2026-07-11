@@ -15,8 +15,7 @@ import type {
   ServiceMappingSummaryParams,
 } from '../servicenow/types.js';
 import { ServiceNowError } from '../utils/errors.js';
-import { requireWrite } from '../utils/permissions.js';
-import { instanceManager } from '../servicenow/instances.js';
+import { requireCmdbWrite, requireWrite } from '../utils/permissions.js';
 
 export function getCoreToolDefinitions() {
   return [
@@ -217,7 +216,7 @@ export function getCoreToolDefinitions() {
     },
     {
       name: 'create_ci_relationship',
-      description: '[Write] Create a relationship between two CMDB Configuration Items',
+      description: '[CMDB Write] Create a relationship between two CMDB Configuration Items',
       inputSchema: {
         type: 'object',
         properties: {
@@ -242,7 +241,7 @@ export function getCoreToolDefinitions() {
     },
     {
       name: 'run_discovery_scan',
-      description: '[Write] Trigger a ServiceNow Discovery scan for network/infrastructure',
+      description: '[CMDB Write] Trigger a ServiceNow Discovery scan for network/infrastructure',
       inputSchema: {
         type: 'object',
         properties: {
@@ -365,31 +364,8 @@ export async function executeCoreToolCall(
       requireWrite();
       return await client.naturalLanguageUpdate(args.instruction, args.table);
 
-    case 'list_instances':
-      return {
-        current: instanceManager.getCurrentName(),
-        instances: instanceManager.listAll(),
-        total: instanceManager.listNames().length,
-      };
-
-    case 'switch_instance':
-      if (!args.name) throw new ServiceNowError('name is required', 'INVALID_REQUEST');
-      instanceManager.switch(args.name);
-      return {
-        action: 'switched',
-        active_instance: instanceManager.getCurrentName(),
-        url: instanceManager.getCurrentUrl(),
-      };
-
-    case 'get_current_instance':
-      return {
-        name: instanceManager.getCurrentName(),
-        url: instanceManager.getCurrentUrl(),
-        all_instances: instanceManager.listNames(),
-      };
-
     case 'create_ci_relationship': {
-      requireWrite();
+      requireCmdbWrite();
       if (!args.parent || !args.child || !args.type)
         throw new ServiceNowError('parent, child, and type are required', 'INVALID_REQUEST');
       const result = await client.createRecord('cmdb_rel_ci', {
@@ -433,8 +409,8 @@ export async function executeCoreToolCall(
     }
 
     case 'run_discovery_scan': {
-      requireWrite();
       if (!args.schedule_id) throw new ServiceNowError('schedule_id is required', 'INVALID_REQUEST');
+      requireCmdbWrite();
       // Inserting a discovery_status record directly does NOT launch any probes
       // (verified live: the record sits at state=Active with zero probes and the
       // MID never receives a Shazzam job). The Discovery engine only starts runs
