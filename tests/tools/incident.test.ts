@@ -59,6 +59,30 @@ describe('executeIncidentToolCall – get_incident', () => {
   });
 });
 
+describe('executeIncidentToolCall – update_incident', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    process.env.WRITE_ENABLED = 'true';
+  });
+
+  it('allows documented operational incident fields', async () => {
+    (mockClient.updateRecord as ReturnType<typeof vi.fn>).mockResolvedValue({ sys_id: 'inc1' });
+    await executeIncidentToolCall(mockClient, 'update_incident', {
+      sys_id: 'inc1', fields: { state: '2', urgency: '1', work_notes: 'Investigating' },
+    });
+    expect(mockClient.updateRecord).toHaveBeenCalledWith('incident', 'inc1', {
+      state: '2', urgency: '1', work_notes: 'Investigating',
+    });
+  });
+
+  it('rejects undeclared fields before they reach the Table API', async () => {
+    await expect(executeIncidentToolCall(mockClient, 'update_incident', {
+      sys_id: 'inc1', fields: { sys_domain: 'global', u_unlisted: 'yes' },
+    })).rejects.toThrow('Incident fields cannot be updated: sys_domain, u_unlisted');
+    expect(mockClient.updateRecord).not.toHaveBeenCalled();
+  });
+});
+
 describe('executeIncidentToolCall – resolve_incident', () => {
   beforeEach(() => {
     vi.clearAllMocks();
