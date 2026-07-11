@@ -11,6 +11,13 @@ import type { ServiceNowClient } from '../servicenow/client.js';
 import { ServiceNowError } from '../utils/errors.js';
 import { requireWrite } from '../utils/permissions.js';
 
+const ASSET_TABLES = new Set(['alm_asset', 'alm_hardware', 'alm_license', 'alm_consumable']);
+const ASSET_UPDATE_FIELDS = new Set([
+  'display_name', 'asset_tag', 'model_category', 'model', 'serial_number', 'assigned_to',
+  'location', 'cost', 'cost_center', 'purchase_date', 'install_status', 'disposal_reason',
+  'disposal_date', 'work_notes', 'comments',
+]);
+
 export function getItamToolDefinitions() {
   return [
     {
@@ -19,7 +26,11 @@ export function getItamToolDefinitions() {
       inputSchema: {
         type: 'object',
         properties: {
-          asset_class: { type: 'string', description: 'Asset class: "alm_hardware", "alm_license", "alm_consumable"' },
+          asset_class: {
+            type: 'string',
+            enum: [...ASSET_TABLES],
+            description: 'Asset class table',
+          },
           state: { type: 'string', description: 'Asset state: "in_use", "in_stock", "retired", "missing"' },
           assigned_to: { type: 'string', description: 'User sys_id to filter by assignee' },
           location: { type: 'string', description: 'Location name or sys_id' },
@@ -67,7 +78,12 @@ export function getItamToolDefinitions() {
         type: 'object',
         properties: {
           sys_id: { type: 'string', description: 'Asset sys_id' },
-          fields: { type: 'object', description: 'Fields to update' },
+          fields: {
+            type: 'object',
+            description: 'Fields to update',
+            properties: Object.fromEntries([...ASSET_UPDATE_FIELDS].map(field => [field, {}])),
+            additionalProperties: false,
+          },
         },
         required: ['sys_id', 'fields'],
       },
@@ -162,6 +178,9 @@ export async function executeItamToolCall(
       if (args.location) query = query ? `${query}^locationLIKE${args.location}` : `locationLIKE${args.location}`;
       if (args.query) query = query ? `${query}^${args.query}` : args.query;
       const table = args.asset_class || 'alm_asset';
+      if (!ASSET_TABLES.has(table)) {
+        throw new ServiceNowError(`Unsupported asset class: ${table}`, 'INVALID_REQUEST');
+      }
       const resp = await client.queryRecords({
         table,
         query: query || undefined,
@@ -190,6 +209,10 @@ export async function executeItamToolCall(
     case 'update_asset': {
       if (!args.sys_id || !args.fields) throw new ServiceNowError('sys_id and fields are required', 'INVALID_REQUEST');
       requireWrite();
+      const unsafeFields = Object.keys(args.fields).filter(field => !ASSET_UPDATE_FIELDS.has(field));
+      if (unsafeFields.length) {
+        throw new ServiceNowError(`Asset fields cannot be updated: ${unsafeFields.join(', ')}`, 'VALIDATION_ERROR');
+      }
       const result = await client.updateRecord('alm_asset', args.sys_id, args.fields);
       return { action: 'updated', sys_id: args.sys_id, ...result };
     }
