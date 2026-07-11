@@ -4,7 +4,7 @@
 import { readFileSync, writeFileSync, mkdirSync, existsSync } from 'fs';
 import { dirname, join } from 'path';
 import { fileURLToPath } from 'url';
-import { execSync } from 'child_process';
+import { execFileSync } from 'child_process';
 import type { InstanceConfig } from '../config-store.js';
 import type { DetectedClient } from '../detect-clients.js';
 
@@ -172,12 +172,13 @@ function writeVsCodeJson(client: DetectedClient, instance: InstanceConfig): Writ
 /** Run `claude mcp add` for Claude Code. */
 function writeClaudeCode(_client: DetectedClient, instance: InstanceConfig): WriteResult {
   const env = buildEnvBlock(instance);
-  const envFlags = Object.entries(env)
-    .map(([k, v]) => `--env ${k}=${v}`)
-    .join(' ');
-  const cmd = `claude mcp add servicenow-mcp node ${serverPath()} ${envFlags}`;
+  const args = [
+    'mcp', 'add', 'servicenow-mcp', 'node', serverPath(),
+    ...Object.entries(env).flatMap(([key, value]) => ['--env', `${key}=${value}`]),
+  ];
   try {
-    execSync(cmd, { stdio: 'pipe' });
+    const command = process.platform === 'win32' ? 'claude.cmd' : 'claude';
+    execFileSync(command, args, { stdio: 'pipe' });
     return { success: true, message: 'Added via `claude mcp add servicenow-mcp`' };
   } catch (err) {
     return { success: false, message: `claude mcp add failed: ${err}` };

@@ -70,7 +70,7 @@ function mockReq(opts: { method: string; url?: string; headers?: Record<string, 
   const req = Readable.from(json ? [Buffer.from(json)] : []) as any;
   req.method = opts.method;
   req.url = opts.url ?? '/mcp';
-  req.headers = { host: 'localhost', ...(opts.headers ?? {}) };
+  req.headers = { host: 'localhost', authorization: 'Bearer test-token', ...(opts.headers ?? {}) };
   return req;
 }
 
@@ -103,6 +103,7 @@ const CFG: HttpConfig = {
   host: '127.0.0.1',
   path: '/mcp',
   corsOrigin: '*',
+  authToken: 'test-token',
 };
 
 beforeEach(() => {
@@ -170,6 +171,17 @@ describe('readJsonBody', () => {
 
 // ── handleHttpRequest ─────────────────────────────────────────────────────────
 describe('handleHttpRequest', () => {
+  it('rejects MCP requests without the configured bearer token', async () => {
+    const res = mockRes();
+    await handleHttpRequest(
+      mockReq({ method: 'POST', headers: { authorization: '' }, body: { jsonrpc: '2.0', method: 'initialize', id: 1 } }),
+      res,
+      CFG
+    );
+    expect(res.statusCode).toBe(401);
+    expect(mockCreateServer).not.toHaveBeenCalled();
+  });
+
   it('answers CORS preflight with 204', async () => {
     const res = mockRes();
     await handleHttpRequest(mockReq({ method: 'OPTIONS' }), res, CFG);
@@ -335,7 +347,7 @@ describe('closeAllSessions', () => {
     const req = Readable.from([Buffer.from('{ not json')]) as any;
     req.method = 'POST';
     req.url = '/mcp';
-    req.headers = { host: 'localhost' };
+    req.headers = { host: 'localhost', authorization: 'Bearer test-token' };
     const res = mockRes();
     await handleHttpRequest(req, res, CFG);
     expect(res.statusCode).toBe(500);

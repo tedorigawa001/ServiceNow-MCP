@@ -127,6 +127,15 @@ describe('InstanceManager — legacy single-instance env', () => {
     expect(instanceManager.listNames()).toContain('default');
     expect(instanceManager.getCurrentName()).toBe('default');
   });
+
+  it('loads a per-user instance without a token so use-time validation can identify it', () => {
+    process.env.SERVICENOW_INSTANCE_URL = 'https://legacy.service-now.com';
+    process.env.SERVICENOW_CLIENT_ID = 'c';
+    process.env.SERVICENOW_CLIENT_SECRET = 's';
+    process.env.SERVICENOW_AUTH_MODE = 'per-user';
+    instanceManager.reload();
+    expect(instanceManager.listNames()).toContain('default');
+  });
 });
 
 describe('InstanceManager — getClient / switch', () => {

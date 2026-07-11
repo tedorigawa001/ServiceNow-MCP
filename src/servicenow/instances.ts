@@ -78,6 +78,8 @@ class InstanceManager {
               username: c['oauthUsername'] as string | undefined,
               password: c['oauthPassword'] as string | undefined,
             },
+            authMode: c['authMode'] as ServiceNowConfig['authMode'],
+            perUserBearerToken: process.env.SERVICENOW_PER_USER_BEARER_TOKEN,
           }, (c['group'] as string) || 'Default', (c['environment'] as string) || '');
         }
         if (this.instances.has(defaultName)) this.currentName = defaultName;
@@ -107,6 +109,8 @@ class InstanceManager {
           username: process.env[`SN_INSTANCE_${upper}_USERNAME`],
           password: process.env[`SN_INSTANCE_${upper}_PASSWORD`],
         },
+        authMode: process.env.SERVICENOW_AUTH_MODE as ServiceNowConfig['authMode'],
+        perUserBearerToken: process.env.SERVICENOW_PER_USER_BEARER_TOKEN,
       });
     }
 
@@ -128,6 +132,8 @@ class InstanceManager {
           username: process.env.SERVICENOW_OAUTH_USERNAME || process.env.SERVICENOW_USERNAME,
           password: process.env.SERVICENOW_OAUTH_PASSWORD || process.env.SERVICENOW_PASSWORD,
         },
+        authMode: process.env.SERVICENOW_AUTH_MODE as ServiceNowConfig['authMode'],
+        perUserBearerToken: process.env.SERVICENOW_PER_USER_BEARER_TOKEN,
         maxRetries: parseInt(process.env.MAX_RETRIES || '3', 10),
         retryDelayMs: parseInt(process.env.RETRY_DELAY_MS || '1000', 10),
         requestTimeoutMs: parseInt(process.env.REQUEST_TIMEOUT_MS || '30000', 10),
@@ -145,6 +151,8 @@ class InstanceManager {
         username: c.username,
         password: c.password,
       },
+      authMode: c.auth_mode || c.authMode || process.env.SERVICENOW_AUTH_MODE,
+      perUserBearerToken: c.per_user_bearer_token || c.perUserBearerToken || process.env.SERVICENOW_PER_USER_BEARER_TOKEN,
       maxRetries: c.max_retries || parseInt(process.env.MAX_RETRIES || '3', 10),
       retryDelayMs: c.retry_delay_ms || parseInt(process.env.RETRY_DELAY_MS || '1000', 10),
       requestTimeoutMs: c.request_timeout_ms || parseInt(process.env.REQUEST_TIMEOUT_MS || '30000', 10),

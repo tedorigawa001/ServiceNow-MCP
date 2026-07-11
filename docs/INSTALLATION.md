@@ -276,6 +276,18 @@ Open `http://localhost:3100` for the web dashboard.
 
 Full app builder guide → [../clients/lovable/SETUP.md](../clients/lovable/SETUP.md)
 
+### Streamable HTTP MCP transport
+
+The MCP transport is separate from the REST API server above. Set a random, high-entropy `MCP_HTTP_AUTH_TOKEN`; without it, every request to `/mcp` is rejected with HTTP 401.
+
+```bash
+MCP_TRANSPORT=http \
+MCP_HTTP_AUTH_TOKEN=replace-with-a-random-secret \
+node dist/server.js
+```
+
+HTTP clients must send `Authorization: Bearer <MCP_HTTP_AUTH_TOKEN>` on each `/mcp` request. For externally exposed deployments, also set explicit `MCP_HTTP_CORS_ORIGIN`, `MCP_HTTP_ALLOWED_HOSTS`, and `MCP_HTTP_ALLOWED_ORIGINS` values.
+
 ---
 
 ## Verification and Testing

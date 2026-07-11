@@ -11,7 +11,7 @@
  * requests reuse. GET opens the SSE notification stream; DELETE terminates a session.
  */
 import http from 'node:http';
-import { randomUUID } from 'node:crypto';
+import { randomUUID, timingSafeEqual } from 'node:crypto';
 import { StreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/streamableHttp.js';
 import { isInitializeRequest } from '@modelcontextprotocol/sdk/types.js';
 import { createServer, isInstanceConfigured, SERVER_NAME } from './server.js';
@@ -25,6 +25,7 @@ export interface HttpConfig {
   corsOrigin: string;
   allowedHosts?: string[];
   allowedOrigins?: string[];
+  authToken?: string;
 }
 
 /** Resolve HTTP transport configuration from environment variables. */
@@ -42,6 +43,7 @@ export function getHttpConfig(): HttpConfig {
     corsOrigin: process.env.MCP_HTTP_CORS_ORIGIN || '*',
     allowedHosts: splitList(process.env.MCP_HTTP_ALLOWED_HOSTS),
     allowedOrigins: splitList(process.env.MCP_HTTP_ALLOWED_ORIGINS),
+    authToken: process.env.MCP_HTTP_AUTH_TOKEN,
   };
 }
 
@@ -76,6 +78,16 @@ function applyCors(res: http.ServerResponse, cfg: HttpConfig): void {
   );
   // Browsers cannot read the session id unless it is explicitly exposed.
   res.setHeader('Access-Control-Expose-Headers', 'Mcp-Session-Id');
+}
+
+/** Require an explicit bearer token before accepting an MCP HTTP request. */
+function isAuthorized(req: http.IncomingMessage, cfg: HttpConfig): boolean {
+  if (!cfg.authToken) return false;
+  const authorization = req.headers.authorization;
+  if (!authorization?.startsWith('Bearer ')) return false;
+  const supplied = Buffer.from(authorization.slice('Bearer '.length));
+  const expected = Buffer.from(cfg.authToken);
+  return supplied.length === expected.length && timingSafeEqual(supplied, expected);
 }
 
 /** Read and JSON-parse the request body. Returns undefined for an empty body. */
@@ -146,6 +158,15 @@ export async function handleHttpRequest(
   if (url.pathname !== cfg.path) {
     res.writeHead(404, { 'Content-Type': 'application/json' });
     res.end(jsonRpcError(-32601, `Not found: ${url.pathname}`));
+    return;
+  }
+
+  if (!isAuthorized(req, cfg)) {
+    res.writeHead(401, {
+      'Content-Type': 'application/json',
+      'WWW-Authenticate': 'Bearer',
+    });
+    res.end(jsonRpcError(-32001, 'Unauthorized'));
     return;
   }
 

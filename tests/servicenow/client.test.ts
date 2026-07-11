@@ -279,6 +279,15 @@ describe('ServiceNowClient — query building', () => {
 // ── auth modes (impersonation / per-user) ─────────────────────────────────────
 
 describe('ServiceNowClient — auth modes', () => {
+  it('rejects per-user mode without a bound user token when used', async () => {
+    const client = new ServiceNowClient({ ...baseConfig(), authMode: 'per-user' });
+    await expect(client.queryRecords({ table: 'incident' })).rejects.toMatchObject({
+      code: 'AUTHENTICATION_FAILED',
+      message: expect.stringContaining(BASE_URL),
+    });
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
   it('per-user mode sends the user bearer token on API requests', async () => {
     routeFetch(mockResponse({ json: { result: [] } }));
     const client = new ServiceNowClient(baseConfig()).withUser({ bearerToken: 'user-token-xyz' });
@@ -351,6 +360,11 @@ describe('ServiceNowClient — user & group lookups', () => {
 });
 
 describe('ServiceNowClient — CMDB helpers', () => {
+  it('rejects unsafe JavaScript in CMDB queries before the request', async () => {
+    const client = new ServiceNowClient(baseConfig());
+    await expect(client.searchCmdbCi('javascript:new GlideRecord()')).rejects.toMatchObject({ code: 'VALIDATION_ERROR' });
+  });
+
   it('searchCmdbCi clamps the limit to 100 and returns count', async () => {
     routeFetch(mockResponse({ json: { result: [{ sys_id: '1' }] } }));
     const client = new ServiceNowClient(baseConfig());

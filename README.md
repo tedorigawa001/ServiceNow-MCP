@@ -480,8 +480,8 @@ claude mcp add servicenow node /path/to/servicenow-mcp/dist/server.js \
 CI/CD からの呼び出しが必要な場合は **Streamable HTTP** トランスポートに切り替えられます。
 
 ```bash
-# HTTP トランスポートで起動
-MCP_TRANSPORT=http node dist/server.js
+# HTTP トランスポートで起動（トークンはランダムな十分長い値を使用）
+MCP_TRANSPORT=http MCP_HTTP_AUTH_TOKEN=replace-with-a-random-secret node dist/server.js
 # → http://127.0.0.1:3000/mcp で待ち受け、GET /health でヘルスチェック
 ```
 
@@ -491,6 +491,7 @@ MCP_TRANSPORT=http node dist/server.js
 | `MCP_HTTP_PORT` | `3000` | 待ち受けポート |
 | `MCP_HTTP_HOST` | `127.0.0.1` | バインドアドレス（外部公開時は `0.0.0.0`）|
 | `MCP_HTTP_PATH` | `/mcp` | MCP エンドポイントのパス |
+| `MCP_HTTP_AUTH_TOKEN` | (必須) | MCP エンドポイント用 Bearer トークン。未設定時は `/mcp` への要求をすべて401で拒否 |
 | `MCP_HTTP_CORS_ORIGIN` | `*` | CORS 許可オリジン |
 | `MCP_HTTP_ALLOWED_HOSTS` | (なし) | カンマ区切り。指定すると DNS リバインディング保護を有効化 |
 | `MCP_HTTP_ALLOWED_ORIGINS` | (なし) | カンマ区切り。Origin ヘッダの許可リスト |
@@ -502,13 +503,14 @@ MCP_TRANSPORT=http node dist/server.js
 {
   "mcpServers": {
     "servicenow": {
-      "url": "http://localhost:3000/mcp"
+    "url": "http://localhost:3000/mcp",
+    "headers": { "Authorization": "Bearer replace-with-a-random-secret" }
     }
   }
 }
 ```
 
-> **セキュリティ注意**: デフォルトは loopback（`127.0.0.1`）バインドです。`MCP_HTTP_HOST=0.0.0.0`
+> **セキュリティ注意**: HTTP MCP は `MCP_HTTP_AUTH_TOKEN` を必須とします。デフォルトは loopback（`127.0.0.1`）バインドです。`MCP_HTTP_HOST=0.0.0.0`
 > で外部公開する場合は、リバースプロキシでの TLS 終端・認証、および `MCP_HTTP_ALLOWED_HOSTS` /
 > `MCP_HTTP_ALLOWED_ORIGINS` による保護を推奨します。
 

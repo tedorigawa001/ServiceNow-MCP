@@ -124,6 +124,19 @@ export class ServiceNowClient {
    *   - password:           when username + password are also provided
    */
   private async authenticate(): Promise<void> {
+    // Per-user requests must never silently obtain a service-account token.
+    // Validate at use time so configured instances can still be discovered and
+    // callers receive an error that identifies the unusable instance.
+    if (this.authMode === 'per-user') {
+      if (!this.perUserBearerToken) {
+        throw new ServiceNowError(
+          `Per-user mode for ${this.baseUrl} requires a bound bearer token for the current user.`,
+          'AUTHENTICATION_FAILED'
+        );
+      }
+      return;
+    }
+
     // Check if we have a valid token
     if (this.accessToken && this.tokenExpiry && Date.now() < this.tokenExpiry) {
       return;
@@ -195,7 +208,13 @@ export class ServiceNowClient {
    */
   private getAuthHeader(): string {
     // Per-user: use the individual user's token (highest precedence)
-    if (this.authMode === 'per-user' && this.perUserBearerToken) {
+    if (this.authMode === 'per-user') {
+      if (!this.perUserBearerToken) {
+        throw new ServiceNowError(
+          `Per-user mode for ${this.baseUrl} requires a bound bearer token for the current user.`,
+          'AUTHENTICATION_FAILED'
+        );
+      }
       return `Bearer ${this.perUserBearerToken}`;
     }
 
@@ -550,6 +569,7 @@ export class ServiceNowClient {
    * Search CMDB configuration items
    */
   async searchCmdbCi(query?: string, limit: number = 10): Promise<QueryRecordsResponse> {
+    if (query) validateQuery(query);
     await this.authenticate();
 
     const queryParams = new URLSearchParams();
@@ -679,6 +699,7 @@ export class ServiceNowClient {
    * List active events
    */
   async listActiveEvents(query?: string, limit: number = 10): Promise<QueryRecordsResponse> {
+    if (query) validateQuery(query);
     await this.authenticate();
 
     const queryParams = new URLSearchParams();
@@ -943,6 +964,7 @@ export class ServiceNowClient {
     await this.authenticate();
     validateTableName(table);
     validateOrderByField(groupBy);
+    if (query) validateQuery(query);
     const params = new URLSearchParams();
     params.set('sysparm_group_by', groupBy);
     if (query) params.set('sysparm_query', query);

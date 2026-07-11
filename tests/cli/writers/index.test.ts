@@ -238,21 +238,40 @@ describe('writers', () => {
 
   describe('writeClaudeCode', () => {
     it('executes claude mcp add command', () => {
-      vi.mocked(child_process.execSync).mockReturnValue(Buffer.from(''));
+      vi.mocked(child_process.execFileSync).mockReturnValue(Buffer.from(''));
       
       const client = createClient('command');
       const result = writeClientConfig(client, mockInstance);
       
       expect(result.success).toBe(true);
-      expect(child_process.execSync).toHaveBeenCalled();
+      expect(child_process.execFileSync).toHaveBeenCalled();
       
-      const execCall = vi.mocked(child_process.execSync).mock.calls[0][0] as string;
-      expect(execCall).toContain('claude mcp add servicenow-mcp');
-      expect(execCall).toContain('--env SERVICENOW_INSTANCE_URL=https://test.service-now.com');
+      const [command, args] = vi.mocked(child_process.execFileSync).mock.calls[0];
+      expect(command).toBe('claude');
+      expect(args).toEqual(expect.arrayContaining(['mcp', 'add', 'servicenow-mcp']));
+      expect(args).toEqual(expect.arrayContaining(['--env', 'SERVICENOW_INSTANCE_URL=https://test.service-now.com']));
+    });
+
+    it('passes shell metacharacters as a single argument', () => {
+      vi.mocked(child_process.execFileSync).mockReturnValue(Buffer.from(''));
+      writeClientConfig(createClient('command'), { ...mockInstance, group: 'team; touch /tmp/pwned' });
+      const [, args] = vi.mocked(child_process.execFileSync).mock.calls[0];
+      expect(args).toContain('SN_INSTANCE_GROUP=team; touch /tmp/pwned');
+    });
+
+    it('uses the Windows command shim without enabling a shell', () => {
+      vi.spyOn(process, 'platform', 'get').mockReturnValue('win32');
+      vi.mocked(child_process.execFileSync).mockReturnValue(Buffer.from(''));
+      writeClientConfig(createClient('command'), mockInstance);
+      expect(child_process.execFileSync).toHaveBeenCalledWith(
+        'claude.cmd',
+        expect.any(Array),
+        { stdio: 'pipe' }
+      );
     });
 
     it('returns false on execution failure', () => {
-      vi.mocked(child_process.execSync).mockImplementation(() => { throw new Error('Command failed'); });
+      vi.mocked(child_process.execFileSync).mockImplementation(() => { throw new Error('Command failed'); });
       
       const client = createClient('command');
       const result = writeClientConfig(client, mockInstance);
