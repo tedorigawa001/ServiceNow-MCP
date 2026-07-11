@@ -15,7 +15,7 @@ Complete reference for all tools across all ServiceNow modules. All tools accept
 
 ---
 
-## Core & CMDB (16 tools)
+## Core & CMDB (17 tools)
 
 ### query_records
 Query records from any ServiceNow table with filtering, sorting and pagination.
@@ -119,6 +119,15 @@ Search records using a plain English question.
 
 **Parameters**:
 - `query` (required) — Natural language question
+
+### smart_query
+Resolve a natural-language request into a ServiceNow table + encoded query and (optionally) run it. Maps keywords to common tables (incident, change_request, problem, sc_request, sn_vul_vulnerable_item, cmdb_ci, sys_user, …), then infers conditions for priority (P1/critical/high), open vs closed state, "assigned to me"/unassigned, and time windows (today, this/last week, last N days). Unmatched conditions are dropped and reported in `unmatched_intents`. Japanese input is supported (e.g. 「先月の未解決 P1 インシデント」).
+
+**Parameters**:
+- `description` (required) — Natural-language request, e.g. "P1 incidents still open from last month"
+- `table` — Force this table instead of auto-resolving from keywords
+- `limit` — Max records when executed (default 10, max 1000)
+- `execute` — Run the resolved query (default true); `false` = preview the interpretation only
 
 ### natural_language_update
 Update a record using natural language instructions. **[Write]**
@@ -1343,6 +1352,237 @@ Get threat intelligence entries from the ServiceNow threat feed.
 **Parameters**:
 - `type` — Indicator type (e.g. `IP`, `URL`)
 - `limit`
+
+---
+
+## USEM / Vulnerability Response (33 tools)
+
+USEM (Unified Security Exposure Management) — the modern successor to Vulnerability Response. Covers Vulnerable Items (VI), Remediation Tasks (RT), Vulnerability Groups, NVD entries, automation rules, integrations, remediation SLA (TTR), and approval workflows. Configuration rules and integrations use the new `sn_sec_*` tables (post-USEM-migration).
+
+### list_vulnerable_items
+List USEM Vulnerable Items (`sn_vul_vulnerable_item`), ordered by descending risk score.
+
+**Parameters**:
+- `state` — Single value or comma list (1=Open, 2=Under Investigation, 10=Awaiting Implementation, …)
+- `risk_score_min` — Only VIs with `risk_score` >= this value
+- `cmdb_ci` — Affected CI sys_id
+- `assignment_group` — Assignment group sys_id
+- `query` — Additional raw encoded query appended with `^`
+- `limit` (default 25, max 1000)
+- `display_value` — Human-readable reference/choice values (`true`) or both (`"all"`)
+
+### get_vulnerable_item
+Get a single Vulnerable Item by VI number (`VITxxxxxxx`) or sys_id.
+
+**Parameters**:
+- `number_or_sysid` (required)
+
+### list_remediation_tasks
+List USEM Remediation Tasks (`sn_vul_remediation_task`), ordered by descending risk score.
+
+**Parameters**:
+- `state`, `assignment_group`, `assigned_to`, `query`, `limit`, `display_value`
+
+### get_remediation_task
+Get a single Remediation Task by task number or sys_id.
+
+**Parameters**:
+- `number_or_sysid` (required)
+
+### list_vulnerability_groups
+List Vulnerability Groups (`sn_vul_vulnerability`) — the task-based remediation entity (number prefix VUL).
+
+**Parameters**:
+- `state`, `risk_score_min`, `assignment_group`, `query`, `limit`, `display_value`
+
+### get_vulnerability_group
+Get a single Vulnerability Group by VUL number or sys_id.
+
+**Parameters**:
+- `number_or_sysid` (required)
+
+### create_vulnerability_group
+Create a Vulnerability Group / Remediation Task (`sn_vul_vulnerability`). **[Write]**
+
+**Parameters**:
+- `short_description` (required), `description`, `assignment_group`, `assigned_to`, `state`, `ttr_target_date`
+
+### update_vulnerability_group
+Update a Vulnerability Group — state transitions, (re)assignment, target date. **[Write]**
+
+**Parameters**:
+- `sys_id` (required), `state`, `assignment_group`, `assigned_to`, `short_description`, `ttr_target_date`
+
+### create_remediation_task
+Create a Remediation Task (`sn_vul_remediation_task`). **[Write]**
+
+**Parameters**:
+- `short_description` (required), `description`, `assignment_group`, `assigned_to`, `cmdb_ci`, `sn_vul_entry`, `state`, `ttr_target_date`
+
+### update_remediation_task
+Update a Remediation Task by sys_id. **[Write]**
+
+**Parameters**:
+- `sys_id` (required), `state`, `assignment_group`, `assigned_to`, `short_description`, `ttr_target_date`
+
+### add_vi_to_remediation_task
+Associate a Vulnerable Item with a remediation group via the `sn_vul_m2m_vul_group_item` m2m. **[Write]**
+
+**Parameters**:
+- `remediation_group` (required) — sys_id of the backing `sn_vul_vulnerability` group
+- `vulnerable_item` (required) — sys_id of the VI
+
+### list_nvd_entries
+List NVD entries (`sn_vul_nvd_entry`). Filter by CVE id substring or minimum CVSS v3 base score.
+
+**Parameters**:
+- `cve` — CVE id or substring (LIKE match), e.g. `"CVE-2018"`
+- `score_min` — Only entries with `v3_base_score` >= this value
+- `query`, `limit`
+
+### get_nvd_entry_by_cve
+Look up a single NVD entry by exact CVE id.
+
+**Parameters**:
+- `cve` (required) — e.g. `"CVE-2018-1002203"`
+
+### get_usem_dashboard
+Summarize the USEM posture: VI counts by state, RT counts by state, and the highest-risk open VIs (exact counts via the aggregate API).
+
+**Parameters**:
+- `top` — Top-risk VIs to include (default 5, max 50)
+
+### list_usem_rules
+List USEM/VR automation rules of a given family. Rule types map to the post-migration `sn_sec_*` tables (e.g. assignment → `sn_sec_wf_assign_rule`).
+
+**Parameters**:
+- `rule_type` (required) — `assignment`, `remediation_task`, `remediation_target` (TTR), `risk_calculator`, `calculator_rule`, `classification`, `classification_rule`, `exception_rule`, `approval`, `auto_close`
+- `active`, `query`, `limit`, `display_value`
+
+### get_usem_rule
+Get the full definition of a single USEM/VR rule.
+
+**Parameters**:
+- `rule_type` (required), `sys_id` (required)
+
+### create_usem_rule
+Create a USEM/VR automation rule. **[Write — admin-level config change]**
+
+**Parameters**:
+- `rule_type` (required), `fields` (required) — column/value map for the new rule
+
+### update_usem_rule
+Update a USEM/VR automation rule. **[Write — admin-level config change]**
+
+**Parameters**:
+- `rule_type` (required), `sys_id` (required), `fields` (required)
+
+### set_usem_rule_active
+Enable/disable a USEM/VR rule (toggle of `active`; not supported for the assignment rule type). **[Write — admin-level config change]**
+
+**Parameters**:
+- `rule_type` (required), `sys_id` (required), `active` (required)
+
+### list_integrations
+List the USEM/VR integration catalog (`sn_sec_int_integration`) — available security data feeds such as NVD, Qualys, Tenable.
+
+**Parameters**:
+- `query`, `limit`
+
+### list_integration_implementations
+List configured integration implementations (`sn_sec_int_impl`) — the operational units carrying the active/default flags. Use this to see which feeds are actually enabled.
+
+**Parameters**:
+- `active`, `query`, `limit`, `display_value`
+
+### list_integration_runs
+List Vulnerability Integration Runs (`sn_vul_integration_run`), newest first.
+
+**Parameters**:
+- `source` — e.g. `"NVD"`, `"Qualys"`
+- `state`, `substate` — e.g. `"complete"` / `"success"` or `"failed"`
+- `days` — Only runs started within the last N days (1-365)
+- `query`, `limit`, `display_value`
+
+### get_integration_run
+Get full detail of a single integration run by run number (`VINTRUNxxxx`) or sys_id, including performance metrics and any `fatal_error_message`.
+
+**Parameters**:
+- `number_or_sysid` (required)
+
+### list_integration_logs
+List integration log entries (`sn_vul_integration_log`) for troubleshooting, newest first.
+
+**Parameters**:
+- `integration_run` — Scope to a single run (sys_id)
+- `type` — e.g. `"error"`, `"warning"`, `"info"`
+- `category`, `query`, `limit`
+
+### set_integration_active
+Enable/disable an integration implementation (`sn_sec_int_impl`) — turns a security data feed on or off. **[Write — admin-level change]**
+
+**Parameters**:
+- `sys_id` (required), `active` (required)
+
+### list_remediation_sla
+List the SLA (Time-To-Remediate) status of VIs, RTs, or Vulnerability Groups.
+
+**Parameters**:
+- `record_type` (required) — `vi`, `rt`, or `vg`
+- `ttr_status` — Single value or comma list: `no_target`, `in_flight`, `approaching`, `past_due`, `target_met`
+- `breached_only` — Shortcut for `ttr_status=past_due`
+- `due_within_days` — Target date within the next N days (1-365)
+- `assignment_group`, `query`, `limit`, `display_value`
+
+### get_remediation_sla
+Get the SLA (TTR) detail for a single VI/RT/VG: status, target date, applied rule, breach flag, days remaining/overdue.
+
+**Parameters**:
+- `record_type` (required), `number_or_sysid` (required)
+
+### get_group_sla
+Get both SLA views for a task-based Vulnerability Group: built-in TTR status AND attached `task_sla` instances.
+
+**Parameters**:
+- `number_or_sysid` (required)
+
+### set_remediation_commitment
+Set the remediation commitment / target date on a VI (`remediation_commitment_dt_tm`) or RT (`ttr_target_date`). **[Write]**
+
+**Parameters**:
+- `record_type` (required), `sys_id` (required), `commitment_date` (required) — `YYYY-MM-DD HH:MM:SS`
+
+### list_vr_notifications
+List VR notification definitions (`sysevent_email_action`) scoped to the `sn_vul_*` / `sn_sec_*` table family. Modify them with the generic `create_notification` / `update_notification` tools.
+
+**Parameters**:
+- `active`, `table`, `name_contains`, `limit`
+
+### list_vr_approvals
+List approval records (`sysapproval_approver`) for VR items — exception, risk-acceptance, and false-positive requests whose approval drives a VR state transition. Defaults to pending.
+
+**Parameters**:
+- `state` — Default `"requested"`; use `"any"` for all
+- `source_table` — e.g. `"sn_sec_exception_change_approval"`
+- `approval_source` — Ultimate VR record class (`sn_vul_vulnerable_item` / `sn_vul_vulnerability`)
+- `limit`
+
+### list_vr_exception_requests
+List VR exception requests (`sn_sec_exception_change_approval`) — False Positive, Risk Acceptance, Exception/Deferral.
+
+**Parameters**:
+- `request_type` — e.g. `"False positive"`, `"Exception"`, `"Risk Acceptance"`
+- `approval_state` — 0=In Review, 1=Approved, 2=Rejected, 3=No Longer Required, 4=Expired, 5=Draft
+- `table` — Target record class
+- `latest_only` — Only the latest revision of each request (default true)
+- `query`, `limit`
+
+### act_on_vr_approval
+Approve or reject a VR approval (`sysapproval_approver`), advancing the attached workflow. Rejection requires a comment. **[Write]**
+
+**Parameters**:
+- `sys_id` (required), `action` (required) — `approve` / `reject`
+- `comments` — Required when `action=reject`
 
 ---
 

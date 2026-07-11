@@ -8,16 +8,17 @@ Set `MCP_TOOL_PACKAGE` in your environment to load a role-specific subset of too
 |---------|-------------|------------|
 | `full` | All roles (default) | 400+ |
 | `service_desk` | IT help desk agent | 28 |
-| `change_coordinator` | Change manager | 18 |
-| `knowledge_author` | KB content creator | 12 |
-| `catalog_builder` | Catalog administrator | 11 |
-| `system_administrator` | SysAdmin | 52 |
-| `platform_developer` | Platform developer | 38 |
-| `itom_engineer` | ITOM/CMDB engineer | 27 |
-| `agile_manager` | Agile team lead | 12 |
+| `change_coordinator` | Change manager | 19 |
+| `knowledge_author` | KB content creator | 13 |
+| `catalog_builder` | Catalog administrator | 20 |
+| `system_administrator` | SysAdmin | 72 |
+| `platform_developer` | Platform developer | 43 |
+| `itom_engineer` | ITOM/CMDB engineer | 29 |
+| `secops_analyst` | Security Operations / Vulnerability Response analyst | 56 |
+| `agile_manager` | Agile team lead | 13 |
 | `ai_developer` | Now Assist/AI developer | 15 |
-| `portal_developer` | Portal/UI Builder developer | 32 |
-| `integration_engineer` | Integration specialist | 26 |
+| `portal_developer` | Portal/UI Builder developer | 34 |
+| `integration_engineer` | Integration specialist | 31 |
 | `devops_engineer` | DevOps/pipeline engineer | 21 |
 | `itam_analyst` | IT Asset Management analyst | 23 |
 
@@ -90,6 +91,7 @@ Includes:
 - Attachment management (upload, list, delete)
 - ACL management
 - Performance Analytics and data quality checks
+- Instance performance diagnostics (`get_instance_diagnostics`, `get_performance_history`)
 - OAuth applications and credential aliases
 - System log
 - Core read tools
@@ -143,6 +145,21 @@ Includes:
 - ACC (Agent Client Collector) agents, policies, and checks — requires the ACC plugin
 - Event management tools
 - Service Mapping
+- Instance performance diagnostics (`get_instance_diagnostics`, `get_performance_history`) — JVM memory, semaphores, per-node stats, transaction time series
+- Core read tools
+
+### secops_analyst
+Tools for Security Operations and USEM/Vulnerability Response analysts.
+
+Includes:
+- Security Incident Response (create, get, update, list)
+- Legacy Vulnerability Response and GRC risk read tools
+- USEM core: Vulnerable Items, Remediation Tasks, Vulnerability Groups (read + create/update), NVD entries, posture dashboard (`get_usem_dashboard`)
+- USEM/VR configuration rules (`list_usem_rules`, `create_usem_rule`, `update_usem_rule`, `set_usem_rule_active`)
+- USEM/VR integrations (catalog, implementations, runs, logs, enable/disable)
+- Remediation SLA / TTR tracking (`list_remediation_sla`, `get_group_sla`, `set_remediation_commitment`) and VR notifications
+- VR approvals and exception requests (`list_vr_approvals`, `list_vr_exception_requests`, `act_on_vr_approval`)
+- Threat intelligence and integration health
 - Core read tools
 
 ### agile_manager
@@ -163,6 +180,25 @@ Includes:
 - Core read tools
 - Requires: `NOW_ASSIST_ENABLED=true`
 
+### devops_engineer
+Tools for DevOps engineers managing CI/CD pipelines and deployment tracking.
+
+Includes:
+- DevOps pipeline and deployment tools (list, get, create, track, insights)
+- Update Set management (create, switch, complete, preview, export)
+- Change request tools (create, get, list)
+- Core read tools
+
+### itam_analyst
+Tools for IT Asset Management analysts tracking hardware and software assets.
+
+Includes:
+- Asset lifecycle tools (list, get, create, update, retire)
+- Software license compliance tools
+- Asset contract management
+- SAM Pro tools (software installs, product catalog, license-position compliance dashboard, software models, EOL/EOS lifecycle reports and master data)
+- Core read tools
+
 ## Permission Requirements by Package
 
 | Package | WRITE_ENABLED | Additional Flags |
@@ -179,24 +215,6 @@ Includes:
 | `ai_developer` | false | `NOW_ASSIST_ENABLED=true` |
 | `portal_developer` | true | `SCRIPTING_ENABLED=true` |
 | `integration_engineer` | true | `SCRIPTING_ENABLED=true` (for register_event) |
+| `secops_analyst` | true (for VR writes/approvals) | — |
 | `devops_engineer` | true | — |
 | `itam_analyst` | true | — |
-
-## devops_engineer
-Tools for DevOps engineers managing CI/CD pipelines and deployment tracking.
-
-Includes:
-- DevOps pipeline and deployment tools (list, get, create, track, insights)
-- Update Set management (create, switch, complete, preview, export)
-- Change request tools (create, get, list)
-- Core read tools
-
-## itam_analyst
-Tools for IT Asset Management analysts tracking hardware and software assets.
-
-Includes:
-- Asset lifecycle tools (list, get, create, update, retire)
-- Software license compliance tools
-- Asset contract management
-- SAM Pro tools (software installs, product catalog, license-position compliance dashboard, software models, EOL/EOS lifecycle reports and master data)
-- Core read tools

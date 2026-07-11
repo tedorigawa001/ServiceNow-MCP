@@ -219,6 +219,8 @@ const PACKAGE_TOOL_NAMES: Record<string, string[]> = {
     'get_current_update_set', 'list_update_sets',
     'create_update_set', 'switch_update_set', 'complete_update_set', 'preview_update_set', 'ensure_active_update_set',
     'create_scheduled_report', 'create_kpi',
+    // Instance performance diagnostics
+    'get_instance_diagnostics', 'get_performance_history',
   ],
   platform_developer: [
     'query_records', 'get_record', 'get_table_schema',
@@ -244,6 +246,8 @@ const PACKAGE_TOOL_NAMES: Record<string, string[]> = {
     'list_mid_server_issues', 'get_mid_server_health',
     // ACC (Agent Client Collector)
     'list_acc_agents', 'list_acc_policies', 'list_acc_checks',
+    // Instance performance diagnostics
+    'get_instance_diagnostics', 'get_performance_history',
   ],
   agile_manager: [
     'query_records', 'get_record', 'get_user',

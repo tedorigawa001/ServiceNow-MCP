@@ -19,10 +19,13 @@
 | 7 | `queryRecords` に `sysparm_display_value` 対応 | 全員 | ⭐⭐ 中 | 低 | ✅ 完了 |
 | 8 | SAM Pro（ソフトウェア資産管理）ツールセット | ITAM/SAM 担当者 | ⭐ 低 | 低 | ✅ 完了 |
 | 9 | Discovery 運用可視化 + ACC ツールセット | ITOM 担当者 | ⭐ 低 | 低 | ✅ 完了 |
+| 10 | インスタンス性能診断（メモリ/セマフォ/トランザクション履歴） | SysAdmin/ITOM 担当者 | ⭐⭐ 中 | 中 | ✅ 完了 |
+
+> #10 はロードマップ外で追加実装した機能(v1.0.5〜1.0.6)。`get_instance_diagnostics`(xmlstats.do の現在値 + `all_nodes` によるマルチノード対応)と `get_performance_history`(syslog_transaction の Aggregate API 時系列 + `group_by_node`)。メモリ・セマフォの履歴は JRobin が ACL 不可視のため対象外(現在値のみ)。詳細は [TOOLS.md](TOOLS.md) の Performance Analytics & Data Quality 節を参照。
 
 ---
 
-## 1. `describe_table` ツール
+## 1. `describe_table` ツール ✅ 完了
 
 ### 背景
 
@@ -442,7 +445,7 @@ MCP_HTTP_HOST=127.0.0.1   # 外部公開時は 0.0.0.0
 
 ---
 
-## 7. `queryRecords` に `sysparm_display_value` 対応
+## 7. `queryRecords` に `sysparm_display_value` 対応 ✅ 完了
 
 ### 背景
 
@@ -570,14 +573,16 @@ Discovery 関連は core.ts の3ツール(`list_discovery_schedules` / `list_mid
 ```
 フェーズ 1（短期・1〜2週間）： 汎用・低難易度
   #1 describe_table ✅
-  #3 check_table_access
-  #4 get_integration_health
-  #7 queryRecords display_value 対応
+  #3 check_table_access ✅
+  #4 get_integration_health ✅
+  #7 queryRecords display_value 対応 ✅
 
 フェーズ 2（中期・1ヶ月）： 汎用・高難易度
-  #2 Streamable HTTP 対応
-  #5 自然言語クエリ強化
+  #2 Streamable HTTP 対応 ✅
+  #5 自然言語クエリ強化 ✅
 
 フェーズ 3（長期）： 特定ユーザー向け
-  #6 USEM ツールセット
+  #6 USEM ツールセット ✅
+
+（全フェーズ完了。以降の追加実装: #8 SAM Pro ✅ / #9 Discovery+ACC ✅ / #10 インスタンス性能診断 ✅）
 ```
