@@ -95,6 +95,16 @@ describe('Security Operations tools', () => {
         query: 'state=open^severity=critical',
       }));
     });
+
+    it('does not allow filter values to append encoded-query clauses', async () => {
+      mockClient.queryRecords.mockResolvedValue({ count: 0, records: [] });
+      await executeSecurityToolCall(mockClient, 'list_vulnerabilities', {
+        state: 'open^ORseverity=critical', ci_sysid: 'ci1^ORsys_idISNOTEMPTY',
+      });
+      expect(mockClient.queryRecords).toHaveBeenCalledWith(expect.objectContaining({
+        query: 'state=openORseverity=critical^cmdb_ci=ci1ORsys_idISNOTEMPTY',
+      }));
+    });
   });
 
   describe('update_vulnerability', () => {
@@ -140,6 +150,16 @@ describe('Security Operations tools', () => {
       await executeSecurityToolCall(mockClient, 'get_threat_intelligence', { query: '1.2.3.4', type: 'ip_address' });
       expect(mockClient.queryRecords).toHaveBeenCalledWith(expect.objectContaining({
         query: 'type=ip_address^valueCONTAINS1.2.3.4',
+      }));
+    });
+
+    it('does not allow IOC terms or types to append encoded-query clauses', async () => {
+      mockClient.queryRecords.mockResolvedValue({ count: 0, records: [] });
+      await executeSecurityToolCall(mockClient, 'get_threat_intelligence', {
+        type: 'ip_address^ORtype=domain', query: '1.2.3.4^ORsys_idISNOTEMPTY',
+      });
+      expect(mockClient.queryRecords).toHaveBeenCalledWith(expect.objectContaining({
+        query: 'type=ip_addressORtype=domain^valueCONTAINS1.2.3.4ORsys_idISNOTEMPTY',
       }));
     });
   });
