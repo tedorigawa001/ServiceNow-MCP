@@ -15,12 +15,13 @@ const createRec = () => mockClient.createRecord as ReturnType<typeof vi.fn>;
 const updateRec = () => mockClient.updateRecord as ReturnType<typeof vi.fn>;
 
 describe('getUsemConfigToolDefinitions', () => {
-  it('returns 5 tool definitions', () => {
-    expect(getUsemConfigToolDefinitions().length).toBe(5);
+  it('returns 6 tool definitions', () => {
+    expect(getUsemConfigToolDefinitions().length).toBe(6);
   });
 
-  it('all tools require rule_type and expose the full rule-type set', () => {
-    const defs = getUsemConfigToolDefinitions();
+  it('rule tools require rule_type and expose the full rule-type set', () => {
+    const defs = getUsemConfigToolDefinitions().filter(t => t.name !== 'get_risk_calculator_details');
+    expect(defs.length).toBe(5);
     defs.forEach(t => {
       expect(t.name).toBeTruthy();
       expect(t.inputSchema.required).toContain('rule_type');
@@ -34,11 +35,21 @@ describe('getUsemConfigToolDefinitions', () => {
         'classification',
         'classification_rule',
         'exception_rule',
+        'rollup',
+        'exception_config',
+        'calculator_config',
+        'risk_field',
+        'risk_score_weight',
         'approval',
         'auto_close',
         'exclusion',
       ]);
     });
+  });
+
+  it('get_risk_calculator_details requires only calculator', () => {
+    const def = getUsemConfigToolDefinitions().find(t => t.name === 'get_risk_calculator_details')!;
+    expect(def.inputSchema.required).toEqual(['calculator']);
   });
 });
 
@@ -104,6 +115,34 @@ describe('list_usem_rules', () => {
     }
   });
 
+  it('maps the calculator/config rule families added for full sn_sec_* coverage', async () => {
+    qr().mockResolvedValue({ count: 0, records: [] });
+    for (const [rt, table, orderBy] of [
+      ['rollup', 'sn_sec_wf_rollup_config', 'order'],
+      ['exception_config', 'sn_sec_exception_config', 'table'],
+      ['calculator_config', 'sn_sec_calculator_config', 'key'],
+      ['risk_field', 'sn_sec_calculator_risk_field', 'field_label'],
+      ['risk_score_weight', 'sn_sec_calculator_risk_score_weight', 'value'],
+    ] as const) {
+      qr().mockClear();
+      await executeUsemConfigToolCall(mockClient, 'list_usem_rules', { rule_type: rt });
+      expect(qr().mock.calls[0][0].table).toBe(table);
+      expect(qr().mock.calls[0][0].orderBy).toBe(orderBy);
+    }
+  });
+
+  it('ignores active filter for config tables without an active flag (exception_config)', async () => {
+    qr().mockResolvedValue({ count: 0, records: [] });
+    await executeUsemConfigToolCall(mockClient, 'list_usem_rules', { rule_type: 'exception_config', active: true });
+    expect(qr().mock.calls[0][0].query).toBe('');
+  });
+
+  it('honors active filter for rollup (has active flag)', async () => {
+    qr().mockResolvedValue({ count: 0, records: [] });
+    await executeUsemConfigToolCall(mockClient, 'list_usem_rules', { rule_type: 'rollup', active: true });
+    expect(qr().mock.calls[0][0].query).toBe('active=true');
+  });
+
   it('ignores active filter for exception_rule (state-driven, no active field)', async () => {
     qr().mockResolvedValue({ count: 0, records: [] });
     await executeUsemConfigToolCall(mockClient, 'list_usem_rules', { rule_type: 'exception_rule', active: true });
@@ -145,6 +184,74 @@ describe('get_usem_rule', () => {
     await expect(
       executeUsemConfigToolCall(mockClient, 'get_usem_rule', { rule_type: 'approval', sys_id: 'short' })
     ).rejects.toThrow('sys_id must be a 32-character hex string');
+  });
+});
+
+describe('get_risk_calculator_details', () => {
+  beforeEach(() => vi.clearAllMocks());
+
+  const GROUP_ID = 'a'.repeat(32);
+  const group = { sys_id: GROUP_ID, name: 'VIT Calculator', table: 'sn_vul_vulnerable_item' };
+
+  it('resolves by sys_id and aggregates rules, risk fields (via rule ids) and score weights', async () => {
+    getRec().mockResolvedValue(group);
+    qr()
+      .mockResolvedValueOnce({ count: 2, records: [{ sys_id: 'r1' }, { sys_id: 'r2' }] }) // rules
+      .mockResolvedValueOnce({ count: 3, records: [{ field: 'cvss' }, {}, {}] }) // risk fields
+      .mockResolvedValueOnce({ count: 1, records: [{ value: '4', weight: '39' }] }); // weights
+    const result = await executeUsemConfigToolCall(mockClient, 'get_risk_calculator_details', {
+      calculator: GROUP_ID,
+    });
+    expect(getRec()).toHaveBeenCalledWith('sn_sec_calculator_group', GROUP_ID);
+    expect(qr().mock.calls[0][0].table).toBe('sn_sec_calculator_rule');
+    expect(qr().mock.calls[0][0].query).toBe(`calculator_group=${GROUP_ID}`);
+    // risk_field parent reference is the calculator RULE, not the group
+    expect(qr().mock.calls[1][0].table).toBe('sn_sec_calculator_risk_field');
+    expect(qr().mock.calls[1][0].query).toBe('risk_calculatorINr1,r2');
+    expect(qr().mock.calls[2][0].table).toBe('sn_sec_calculator_risk_score_weight');
+    expect(qr().mock.calls[2][0].query).toBe('table=sn_vul_vulnerable_item');
+    expect(result.rules.length).toBe(2);
+    expect(result.risk_fields.length).toBe(3);
+    expect(result.score_weights.length).toBe(1);
+    expect(result.summary).toContain('VIT Calculator');
+  });
+
+  it('resolves by exact name, stripping encoded-query operators', async () => {
+    qr()
+      .mockResolvedValueOnce({ count: 1, records: [group] }) // group lookup
+      .mockResolvedValueOnce({ count: 0, records: [] }) // rules
+      .mockResolvedValueOnce({ count: 0, records: [] }); // weights (no risk-field query without rules)
+    await executeUsemConfigToolCall(mockClient, 'get_risk_calculator_details', {
+      calculator: 'VIT^Calculator',
+    });
+    expect(qr().mock.calls[0][0].table).toBe('sn_sec_calculator_group');
+    expect(qr().mock.calls[0][0].query).toBe('name=VITCalculator');
+  });
+
+  it('skips the risk-field query when the calculator has no rules', async () => {
+    getRec().mockResolvedValue(group);
+    qr()
+      .mockResolvedValueOnce({ count: 0, records: [] }) // rules
+      .mockResolvedValueOnce({ count: 1, records: [{}] }); // weights
+    const result = await executeUsemConfigToolCall(mockClient, 'get_risk_calculator_details', {
+      calculator: GROUP_ID,
+    });
+    expect(result.risk_fields).toEqual([]);
+    const tables = qr().mock.calls.map(c => c[0].table);
+    expect(tables).not.toContain('sn_sec_calculator_risk_field');
+  });
+
+  it('throws NOT_FOUND for an unknown name', async () => {
+    qr().mockResolvedValueOnce({ count: 0, records: [] });
+    await expect(
+      executeUsemConfigToolCall(mockClient, 'get_risk_calculator_details', { calculator: 'Nope' })
+    ).rejects.toThrow('Risk calculator not found');
+  });
+
+  it('requires the calculator argument', async () => {
+    await expect(
+      executeUsemConfigToolCall(mockClient, 'get_risk_calculator_details', {})
+    ).rejects.toThrow('calculator (sys_id or exact name) is required');
   });
 });
 

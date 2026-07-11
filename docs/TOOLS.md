@@ -1418,7 +1418,7 @@ Get threat intelligence entries from the ServiceNow threat feed.
 
 ---
 
-## USEM / Vulnerability Response (33 tools)
+## USEM / Vulnerability Response (35 tools)
 
 USEM (Unified Security Exposure Management) — the modern successor to Vulnerability Response. Covers Vulnerable Items (VI), Remediation Tasks (RT), Vulnerability Groups, NVD entries, automation rules, integrations, remediation SLA (TTR), and approval workflows. Configuration rules and integrations use the new `sn_sec_*` tables (post-USEM-migration).
 
@@ -1516,10 +1516,10 @@ Summarize the USEM posture: VI counts by state, RT counts by state, and the high
 - `top` — Top-risk VIs to include (default 5, max 50)
 
 ### list_usem_rules
-List USEM/VR automation rules of a given family. Rule types map to the post-migration `sn_sec_*` tables (e.g. assignment → `sn_sec_wf_assign_rule`).
+List USEM/VR automation rules and configs of a given family. Rule types map to the post-migration `sn_sec_*` tables (e.g. assignment → `sn_sec_wf_assign_rule`, rollup → `sn_sec_wf_rollup_config`).
 
 **Parameters**:
-- `rule_type` (required) — `assignment`, `remediation_task`, `remediation_target` (TTR), `risk_calculator`, `calculator_rule`, `classification`, `classification_rule`, `exception_rule`, `approval`, `auto_close`
+- `rule_type` (required) — `assignment`, `remediation_task`, `remediation_target` (TTR), `risk_calculator`, `calculator_rule`, `risk_field`, `risk_score_weight`, `calculator_config`, `classification`, `classification_rule`, `exception_rule`, `exception_config`, `rollup`, `approval`, `auto_close`, `exclusion`
 - `active`, `query`, `limit`, `display_value`
 
 ### get_usem_rule
@@ -1541,10 +1541,16 @@ Update a USEM/VR automation rule. **[Write — admin-level config change]**
 - `rule_type` (required), `sys_id` (required), `fields` (required)
 
 ### set_usem_rule_active
-Enable/disable a USEM/VR rule (toggle of `active`; not supported for the assignment rule type). **[Write — admin-level config change]**
+Enable/disable a USEM/VR rule (toggle of `active`; not supported for rule types without an active flag, e.g. `exception_rule`, `exception_config`, `calculator_config`, `risk_field`, `risk_score_weight`). **[Write — admin-level config change]**
 
 **Parameters**:
 - `rule_type` (required), `sys_id` (required), `active` (required)
+
+### get_risk_calculator_details
+Explain how a USEM Risk Calculator computes its score: returns the calculator group (`sn_sec_calculator_group`), its calculator rules, each rule's weighted risk fields (`sn_sec_calculator_risk_field` — parented by the rule, not the group), and the score→weight bands for the target table (`sn_sec_calculator_risk_score_weight`) in one call. Use this to answer "why is the risk score N?".
+
+**Parameters**:
+- `calculator` (required) — sys_id or exact name of the risk calculator
 
 ### list_integrations
 List the USEM/VR integration catalog (`sn_sec_int_integration`) — available security data feeds such as NVD, Qualys, Tenable.
@@ -1580,6 +1586,15 @@ List integration log entries (`sn_vul_integration_log`) for troubleshooting, new
 - `integration_run` — Scope to a single run (sys_id)
 - `type` — e.g. `"error"`, `"warning"`, `"info"`
 - `category`, `query`, `limit`
+
+### list_integration_parameters
+List USEM/VR integration parameters. `scope="definition"` returns the parameter catalog (`sn_sec_int_config`: label, type, mandatory, default); `scope="instance"` returns the configured values per implementation (`sn_sec_int_impl_config`). Secret-like values (passwords, tokens, API keys) are masked and encrypted `password_value` columns are never returned.
+
+**Parameters**:
+- `scope` (required) — `definition` or `instance`
+- `integration` — Filter definitions by integration sys_id (scope=definition)
+- `implementation` — Filter values by implementation sys_id (scope=instance)
+- `query`, `limit`
 
 ### set_integration_active
 Enable/disable an integration implementation (`sn_sec_int_impl`) — turns a security data feed on or off. **[Write — admin-level change]**

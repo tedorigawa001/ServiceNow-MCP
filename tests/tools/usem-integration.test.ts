@@ -16,8 +16,8 @@ const getRec = () => mockClient.getRecord as ReturnType<typeof vi.fn>;
 const updateRec = () => mockClient.updateRecord as ReturnType<typeof vi.fn>;
 
 describe('getUsemIntegrationToolDefinitions', () => {
-  it('returns 6 tool definitions', () => {
-    expect(getUsemIntegrationToolDefinitions().length).toBe(6);
+  it('returns 7 tool definitions', () => {
+    expect(getUsemIntegrationToolDefinitions().length).toBe(7);
   });
 
   it('exposes the expected tool names', () => {
@@ -27,6 +27,7 @@ describe('getUsemIntegrationToolDefinitions', () => {
         'get_integration_run',
         'list_integration_implementations',
         'list_integration_logs',
+        'list_integration_parameters',
         'list_integration_runs',
         'list_integrations',
         'set_integration_active',
@@ -161,6 +162,79 @@ describe('list_integration_logs', () => {
     await expect(
       executeUsemIntegrationToolCall(mockClient, 'list_integration_logs', { integration_run: 'short' })
     ).rejects.toThrow('integration_run must be a 32-character sys_id');
+  });
+});
+
+describe('list_integration_parameters', () => {
+  beforeEach(() => vi.clearAllMocks());
+
+  it('definition scope queries sn_sec_int_config, optionally filtered by integration', async () => {
+    qr().mockResolvedValue({ count: 1, records: [{ name: 'csaf_import_type', elem_type: 'string', default_value: 'x' }] });
+    const result = await executeUsemIntegrationToolCall(mockClient, 'list_integration_parameters', {
+      scope: 'definition',
+      integration: 'b'.repeat(32),
+    });
+    const call = qr().mock.calls[0][0];
+    expect(call.table).toBe('sn_sec_int_config');
+    expect(call.query).toBe(`integration=${'b'.repeat(32)}`);
+    expect(call.fields).not.toContain('password_value');
+    expect(result.records[0].default_value).toBe('x');
+    expect(result.summary).toContain('parameter definition');
+  });
+
+  it('instance scope queries sn_sec_int_impl_config with dot-walked definition fields', async () => {
+    qr().mockResolvedValue({ count: 1, records: [{ 'configuration.name': 'proxy_host', value: 'proxy.local' }] });
+    const result = await executeUsemIntegrationToolCall(mockClient, 'list_integration_parameters', {
+      scope: 'instance',
+      implementation: 'c'.repeat(32),
+    });
+    const call = qr().mock.calls[0][0];
+    expect(call.table).toBe('sn_sec_int_impl_config');
+    expect(call.query).toBe(`implementation=${'c'.repeat(32)}`);
+    expect(call.fields).toContain('configuration.elem_type');
+    expect(call.fields).not.toContain('password_value');
+    expect(result.records[0].value).toBe('proxy.local');
+  });
+
+  it('masks values of password-typed parameters', async () => {
+    qr().mockResolvedValue({
+      count: 2,
+      records: [
+        { 'configuration.name': 'client_id', 'configuration.elem_type': 'string', value: 'abc' },
+        { 'configuration.name': 'client_secret_field', 'configuration.elem_type': 'password2', value: 's3cr3t' },
+      ],
+    });
+    const result = await executeUsemIntegrationToolCall(mockClient, 'list_integration_parameters', { scope: 'instance' });
+    expect(result.records[0].value).toBe('abc');
+    expect(result.records[1].value).toBe('***MASKED***');
+  });
+
+  it('masks by secret-looking name/label even when elem_type is plain string', async () => {
+    qr().mockResolvedValue({
+      count: 2,
+      records: [
+        { name: 'api_key', label: 'API Key', elem_type: 'string', default_value: 'k-123' },
+        { name: 'import_type', label: 'Import Type', elem_type: 'string', default_value: 'full' },
+      ],
+    });
+    const result = await executeUsemIntegrationToolCall(mockClient, 'list_integration_parameters', { scope: 'definition' });
+    expect(result.records[0].default_value).toBe('***MASKED***');
+    expect(result.records[1].default_value).toBe('full');
+  });
+
+  it('rejects an invalid scope', async () => {
+    await expect(
+      executeUsemIntegrationToolCall(mockClient, 'list_integration_parameters', { scope: 'both' })
+    ).rejects.toThrow('scope must be "definition" or "instance"');
+  });
+
+  it('rejects malformed integration/implementation sys_ids', async () => {
+    await expect(
+      executeUsemIntegrationToolCall(mockClient, 'list_integration_parameters', { scope: 'definition', integration: 'short' })
+    ).rejects.toThrow('integration must be a 32-character sys_id');
+    await expect(
+      executeUsemIntegrationToolCall(mockClient, 'list_integration_parameters', { scope: 'instance', implementation: 'short' })
+    ).rejects.toThrow('implementation must be a 32-character sys_id');
   });
 });
 

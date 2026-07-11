@@ -19,6 +19,12 @@
  *   classification     → sn_sec_wf_classification_group (extends calculator_group; no order)
  *   classification_rule→ sn_sec_wf_classification_rule  (extends calculator_rule)
  *   exception_rule     → sn_sec_exception_rule        (key: name; state via rule_state/stage, no active)
+ *   rollup             → sn_sec_wf_rollup_config      (key: name; score rollup weights)
+ *   exception_config   → sn_sec_exception_config      (per-app exception mgmt settings, no active/order)
+ *   calculator_config  → sn_sec_calculator_config     (key/value calculator settings, no active/order)
+ *   risk_field         → sn_sec_calculator_risk_field (weighted score inputs; parent ref
+ *                        `risk_calculator` points at sn_sec_calculator_rule, NOT the group)
+ *   risk_score_weight  → sn_sec_calculator_risk_score_weight (score→weight bands per table)
  *   approval           → sn_vul_cmn_approval_rule     (key: name)
  *   auto_close         → sn_vul_cmn_auto_close_rule   (key: name)
  *   exclusion          → sn_vul_cmn_auto_exclusion_rule (key: name)
@@ -106,6 +112,46 @@ const RULE_REGISTRY: Record<string, RuleType> = {
     hasActive: false, // lifecycle is rule_state/stage, not an active flag
     listFields: 'name,order,table,rule_state,stage,condition,applies_to,sys_id',
   },
+  rollup: {
+    table: 'sn_sec_wf_rollup_config',
+    label: 'Rollup Config',
+    nameField: 'name',
+    hasActive: true,
+    listFields:
+      'name,active,order,table,target_field,applies_to,item_condition,' +
+      'average_score_weight,max_score_weight,item_count_weight,description,sys_id',
+  },
+  exception_config: {
+    table: 'sn_sec_exception_config',
+    label: 'Exception Management Configuration',
+    nameField: 'exception_config',
+    hasActive: false,
+    orderField: 'table', // no order column; one config per application/table
+    listFields: 'exception_config,select_exception,table,request_exception_beyond,role,policy_installed,sys_id',
+  },
+  calculator_config: {
+    table: 'sn_sec_calculator_config',
+    label: 'Calculator Configuration',
+    nameField: 'key',
+    hasActive: false,
+    orderField: 'key', // key/value settings, no order column
+    listFields: 'key,value,table,description,sys_id',
+  },
+  risk_field: {
+    table: 'sn_sec_calculator_risk_field',
+    label: 'Risk Rule Field',
+    nameField: 'field_label',
+    hasActive: false,
+    orderField: 'field_label', // no order column
+    listFields: 'field_label,field,table,weight,aggregation,computed_weight,risk_calculator,sys_id',
+  },
+  risk_score_weight: {
+    table: 'sn_sec_calculator_risk_score_weight',
+    label: 'Risk Score Weight',
+    hasActive: false,
+    orderField: 'value', // bands keyed by score value, no name/order columns
+    listFields: 'table,value,weight,sys_id',
+  },
   approval: {
     table: 'sn_vul_cmn_approval_rule',
     label: 'Approval Rule',
@@ -138,8 +184,9 @@ const RULE_TYPE_SCHEMA = {
   description:
     'Which rule family to operate on: ' +
     'assignment (sn_sec_wf_assign_rule), remediation_task, remediation_target (TTR/SLA targets), ' +
-    'risk_calculator + calculator_rule (risk scoring), classification + classification_rule, ' +
-    'exception_rule (sn_sec_exception_rule), approval, auto_close, exclusion',
+    'risk_calculator + calculator_rule + risk_field + risk_score_weight + calculator_config (risk scoring), ' +
+    'classification + classification_rule, exception_rule + exception_config, rollup (score rollup), ' +
+    'approval, auto_close, exclusion',
 };
 
 function resolveType(ruleType: unknown): RuleType {
@@ -157,10 +204,11 @@ export function getUsemConfigToolDefinitions() {
     {
       name: 'list_usem_rules',
       description:
-        'List USEM/Vulnerability Response automation rules of a given type (assignment, ' +
-        'remediation_task, remediation_target, risk_calculator, calculator_rule, classification, ' +
-        'classification_rule, exception_rule, approval, auto_close, exclusion). Ordered by ' +
-        'execution order. Optionally filter by active state or an extra encoded query.',
+        'List USEM/Vulnerability Response automation rules and configs of a given type (assignment, ' +
+        'remediation_task, remediation_target, risk_calculator, calculator_rule, risk_field, ' +
+        'risk_score_weight, calculator_config, classification, classification_rule, exception_rule, ' +
+        'exception_config, rollup, approval, auto_close, exclusion). Ordered by execution order. ' +
+        'Optionally filter by active state or an extra encoded query.',
       inputSchema: {
         type: 'object',
         properties: {
@@ -234,7 +282,32 @@ export function getUsemConfigToolDefinitions() {
         required: ['rule_type', 'sys_id', 'active'],
       },
     },
+    {
+      name: 'get_risk_calculator_details',
+      description:
+        'Explain how a USEM Risk Calculator computes its score: returns the calculator group ' +
+        '(sn_sec_calculator_group), its calculator rules, each rule’s weighted risk fields ' +
+        '(sn_sec_calculator_risk_field), and the score→weight bands for the target table ' +
+        '(sn_sec_calculator_risk_score_weight) in one call. Use this to answer "why is the risk ' +
+        'score N?". Accepts a sys_id or exact calculator name.',
+      inputSchema: {
+        type: 'object',
+        properties: {
+          calculator: {
+            type: 'string',
+            description: 'sys_id or exact name of the risk calculator (sn_sec_calculator_group)',
+          },
+        },
+        required: ['calculator'],
+      },
+    },
   ];
+}
+
+/** Table API records may be raw strings or {value, display_value} objects. */
+function fieldValue(v: unknown): string {
+  if (v && typeof v === 'object') return String((v as { value?: unknown }).value ?? '');
+  return v == null ? '' : String(v);
 }
 
 export async function executeUsemConfigToolCall(
@@ -311,6 +384,68 @@ export async function executeUsemConfigToolCall(
         ...result,
         rule_type: args.rule_type,
         summary: `${args.active ? 'Enabled' : 'Disabled'} ${rt.label} ${args.sys_id}`,
+      };
+    }
+
+    case 'get_risk_calculator_details': {
+      const key = args.calculator;
+      if (!key || typeof key !== 'string') {
+        throw new ServiceNowError('calculator (sys_id or exact name) is required', 'INVALID_REQUEST');
+      }
+      let group: Record<string, any>;
+      if (SYS_ID_RE.test(key)) {
+        group = await client.getRecord('sn_sec_calculator_group', key);
+      } else {
+        const resp = await client.queryRecords({
+          table: 'sn_sec_calculator_group',
+          query: `name=${key.replace(/[\^]/g, '')}`,
+          limit: 1,
+        });
+        if (resp.count === 0) {
+          throw new ServiceNowError(`Risk calculator not found: ${key}`, 'NOT_FOUND');
+        }
+        group = resp.records[0];
+      }
+      const groupId = fieldValue(group.sys_id);
+      const targetTable = fieldValue(group.table);
+      const rulesResp = await client.queryRecords({
+        table: 'sn_sec_calculator_rule',
+        query: `calculator_group=${groupId}`,
+        fields: RULE_REGISTRY.calculator_rule.listFields,
+        orderBy: 'order',
+        limit: 200,
+      });
+      // risk_field.risk_calculator references sn_sec_calculator_rule (the rule, not the group)
+      const ruleIds = rulesResp.records.map((r: Record<string, any>) => fieldValue(r.sys_id)).filter(Boolean);
+      const [fieldsResp, weightsResp] = await Promise.all([
+        ruleIds.length > 0
+          ? client.queryRecords({
+              table: 'sn_sec_calculator_risk_field',
+              query: `risk_calculatorIN${ruleIds.join(',')}`,
+              fields: RULE_REGISTRY.risk_field.listFields + ',weight_breakdown',
+              orderBy: 'field_label',
+              limit: 400,
+            })
+          : Promise.resolve({ count: 0, records: [] as Record<string, any>[] }),
+        targetTable
+          ? client.queryRecords({
+              table: 'sn_sec_calculator_risk_score_weight',
+              query: `table=${targetTable}`,
+              fields: RULE_REGISTRY.risk_score_weight.listFields,
+              orderBy: 'value',
+              limit: 200,
+            })
+          : Promise.resolve({ count: 0, records: [] as Record<string, any>[] }),
+      ]);
+      return {
+        calculator: group,
+        rules: rulesResp.records,
+        risk_fields: fieldsResp.records,
+        score_weights: weightsResp.records,
+        summary:
+          `Risk calculator "${fieldValue(group.name) || groupId}" (table: ${targetTable || 'n/a'}) has ` +
+          `${rulesResp.count} rule(s), ${fieldsResp.count} weighted risk field(s), and ` +
+          `${weightsResp.count} score weight band(s)`,
       };
     }
 

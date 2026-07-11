@@ -14,6 +14,9 @@
  *   sn_vul_integration_run  — run history (number VINTRUNxxxx, perf metrics,
  *                             fatal_error_message; source e.g. "NVD")
  *   sn_vul_integration_log  — logs linked to a run (type, message_value)
+ *   sn_sec_int_config       — parameter definitions per integration (label, elem_type,
+ *                             mandatory, default_value; encrypted password_value never returned)
+ *   sn_sec_int_impl_config  — parameter values per implementation (configuration → sn_sec_int_config)
  */
 import type { ServiceNowClient } from '../servicenow/client.js';
 import { ServiceNowError } from '../utils/errors.js';
@@ -38,6 +41,27 @@ const RUN_FIELDS =
 
 const LOG_FIELDS =
   'type,category,message_value,suggested_recommendations,integration_run,sys_created_on,sys_id';
+
+/** Parameter names/labels that indicate a secret; their values are masked in output. */
+const SECRET_PARAM_RE = /secret|password|token|api_?key|credential|private/i;
+
+/**
+ * Mask secret-like parameter values. The encrypted password_value column is never
+ * requested; this additionally masks plain `value`/`default_value` when the parameter
+ * is a password type or its name/label looks secret-bearing.
+ */
+function maskParameterRecord(rec: Record<string, any>): Record<string, any> {
+  const name = String(rec.name ?? rec['configuration.name'] ?? '');
+  const label = String(rec.label ?? rec['configuration.label'] ?? '');
+  const elemType = String(rec.elem_type ?? rec['configuration.elem_type'] ?? '');
+  const isSecret = elemType === 'password' || elemType === 'password2' || SECRET_PARAM_RE.test(`${name} ${label}`);
+  if (!isSecret) return rec;
+  const masked = { ...rec };
+  for (const field of ['value', 'default_value']) {
+    if (typeof masked[field] === 'string' && masked[field] !== '') masked[field] = '***MASKED***';
+  }
+  return masked;
+}
 
 export function getUsemIntegrationToolDefinitions() {
   return [
@@ -122,6 +146,30 @@ export function getUsemIntegrationToolDefinitions() {
           query: { type: 'string', description: 'Additional raw encoded query appended with ^' },
           limit: { type: 'number', description: 'Max records (default: 50, max: 1000)' },
         },
+      },
+    },
+    {
+      name: 'list_integration_parameters',
+      description:
+        'List USEM/VR integration parameters. scope="definition" returns the parameter catalog ' +
+        '(sn_sec_int_config: label, type, mandatory, default) optionally filtered by integration; ' +
+        'scope="instance" returns the configured values per implementation (sn_sec_int_impl_config). ' +
+        'Secret-like values (passwords, tokens, API keys) are masked and encrypted password_value ' +
+        'columns are never returned.',
+      inputSchema: {
+        type: 'object',
+        properties: {
+          scope: {
+            type: 'string',
+            enum: ['definition', 'instance'],
+            description: 'definition = parameter catalog per integration; instance = configured values per implementation',
+          },
+          integration: { type: 'string', description: 'Filter definitions by integration sys_id (scope=definition)' },
+          implementation: { type: 'string', description: 'Filter values by implementation sys_id (scope=instance)' },
+          query: { type: 'string', description: 'Additional raw encoded query appended with ^' },
+          limit: { type: 'number', description: 'Max records (default: 100, max: 1000)' },
+        },
+        required: ['scope'],
       },
     },
     {
@@ -230,6 +278,56 @@ export async function executeUsemIntegrationToolCall(
         limit: args.limit ?? 50,
       });
       return { count: resp.count, records: resp.records, summary: `Found ${resp.count} integration log entry/entries` };
+    }
+
+    case 'list_integration_parameters': {
+      const scope = args.scope;
+      if (scope !== 'definition' && scope !== 'instance') {
+        throw new ServiceNowError('scope must be "definition" or "instance"', 'INVALID_REQUEST');
+      }
+      const parts: string[] = [];
+      if (scope === 'definition') {
+        if (args.integration) {
+          if (!SYS_ID_RE.test(args.integration)) {
+            throw new ServiceNowError('integration must be a 32-character sys_id', 'INVALID_REQUEST');
+          }
+          parts.push(`integration=${args.integration}`);
+        }
+        if (args.query) parts.push(args.query);
+        const resp = await client.queryRecords({
+          table: 'sn_sec_int_config',
+          query: parts.join('^'),
+          fields: 'name,label,display_name,elem_type,mandatory,default_value,order,integration,sys_id',
+          orderBy: 'order',
+          limit: args.limit ?? 100,
+        });
+        return {
+          scope,
+          count: resp.count,
+          records: resp.records.map(maskParameterRecord),
+          summary: `Found ${resp.count} parameter definition(s)`,
+        };
+      }
+      if (args.implementation) {
+        if (!SYS_ID_RE.test(args.implementation)) {
+          throw new ServiceNowError('implementation must be a 32-character sys_id', 'INVALID_REQUEST');
+        }
+        parts.push(`implementation=${args.implementation}`);
+      }
+      if (args.query) parts.push(args.query);
+      const resp = await client.queryRecords({
+        table: 'sn_sec_int_impl_config',
+        query: parts.join('^'),
+        fields: 'configuration.name,configuration.label,configuration.elem_type,implementation,value,sys_id',
+        orderBy: 'configuration.name',
+        limit: args.limit ?? 100,
+      });
+      return {
+        scope,
+        count: resp.count,
+        records: resp.records.map(maskParameterRecord),
+        summary: `Found ${resp.count} configured parameter value(s)`,
+      };
     }
 
     case 'set_integration_active': {

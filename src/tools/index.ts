@@ -128,9 +128,11 @@ const PACKAGE_TOOL_NAMES: Record<string, string[]> = {
     'create_remediation_task', 'update_remediation_task', 'add_vi_to_remediation_task',
     // USEM / VR configuration rules
     'list_usem_rules', 'get_usem_rule', 'create_usem_rule', 'update_usem_rule', 'set_usem_rule_active',
+    'get_risk_calculator_details',
     // USEM / VR integration operations
     'list_integrations', 'list_integration_implementations', 'list_integration_runs',
     'get_integration_run', 'list_integration_logs', 'set_integration_active',
+    'list_integration_parameters',
     // USEM / VR SLA (TTR) + notifications
     'list_remediation_sla', 'get_remediation_sla', 'get_group_sla', 'set_remediation_commitment', 'list_vr_notifications',
     'list_notifications', 'get_notification', 'update_notification',

@@ -14,7 +14,7 @@ Set `MCP_TOOL_PACKAGE` in your environment to load a role-specific subset of too
 | `system_administrator` | SysAdmin | 72 |
 | `platform_developer` | Platform developer | 43 |
 | `itom_engineer` | ITOM/CMDB engineer | 29 |
-| `secops_analyst` | Security Operations / Vulnerability Response analyst | 56 |
+| `secops_analyst` | Security Operations / Vulnerability Response analyst | 58 |
 | `agile_manager` | Agile team lead | 13 |
 | `ai_developer` | Now Assist/AI developer | 15 |
 | `portal_developer` | Portal/UI Builder developer | 34 |
@@ -155,8 +155,8 @@ Includes:
 - Security Incident Response (create, get, update, list)
 - Legacy Vulnerability Response and GRC risk read tools
 - USEM core: Vulnerable Items, Remediation Tasks, Vulnerability Groups (read + create/update), NVD entries, posture dashboard (`get_usem_dashboard`)
-- USEM/VR configuration rules (`list_usem_rules`, `create_usem_rule`, `update_usem_rule`, `set_usem_rule_active`)
-- USEM/VR integrations (catalog, implementations, runs, logs, enable/disable)
+- USEM/VR configuration rules (`list_usem_rules`, `create_usem_rule`, `update_usem_rule`, `set_usem_rule_active`) and risk-score explanation (`get_risk_calculator_details`)
+- USEM/VR integrations (catalog, implementations, runs, logs, parameters with secret masking, enable/disable)
 - Remediation SLA / TTR tracking (`list_remediation_sla`, `get_group_sla`, `set_remediation_commitment`) and VR notifications
 - VR approvals and exception requests (`list_vr_approvals`, `list_vr_exception_requests`, `act_on_vr_approval`)
 - Threat intelligence and integration health
