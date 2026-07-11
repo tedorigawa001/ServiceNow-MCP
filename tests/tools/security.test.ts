@@ -37,6 +37,35 @@ describe('Security Operations tools', () => {
         category: 'Malware',
       }));
     });
+
+    it('rejects undeclared fields before they reach the Table API', async () => {
+      process.env.WRITE_ENABLED = 'true';
+      await expect(executeSecurityToolCall(mockClient, 'create_security_incident', {
+        short_description: 'Ransomware detected', category: 'Malware', sys_domain: 'global', u_unlisted: 'yes',
+      })).rejects.toThrow('Security incident fields cannot be set: sys_domain, u_unlisted');
+      expect(mockClient.createRecord).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('update_security_incident', () => {
+    beforeEach(() => { process.env.WRITE_ENABLED = 'true'; });
+
+    it('allows documented incident lifecycle fields', async () => {
+      mockClient.updateRecord.mockResolvedValue({ sys_id: 'sec001' });
+      await executeSecurityToolCall(mockClient, 'update_security_incident', {
+        sys_id: 'sec001', fields: { state: 'contain', containment_status: 'isolated', severity: 1 },
+      });
+      expect(mockClient.updateRecord).toHaveBeenCalledWith('sn_si_incident', 'sec001', {
+        state: 'contain', containment_status: 'isolated', severity: 1,
+      });
+    });
+
+    it('rejects undeclared update fields before they reach the Table API', async () => {
+      await expect(executeSecurityToolCall(mockClient, 'update_security_incident', {
+        sys_id: 'sec001', fields: { sys_domain: 'global', u_unlisted: 'yes' },
+      })).rejects.toThrow('Security incident fields cannot be updated: sys_domain, u_unlisted');
+      expect(mockClient.updateRecord).not.toHaveBeenCalled();
+    });
   });
 
   describe('list_security_incidents', () => {
@@ -66,6 +95,38 @@ describe('Security Operations tools', () => {
         query: 'state=open^severity=critical',
       }));
     });
+
+    it('does not allow filter values to append encoded-query clauses', async () => {
+      mockClient.queryRecords.mockResolvedValue({ count: 0, records: [] });
+      await executeSecurityToolCall(mockClient, 'list_vulnerabilities', {
+        state: 'open^ORseverity=critical', ci_sysid: 'ci1^ORsys_idISNOTEMPTY',
+      });
+      expect(mockClient.queryRecords).toHaveBeenCalledWith(expect.objectContaining({
+        query: 'state=openORseverity=critical^cmdb_ci=ci1ORsys_idISNOTEMPTY',
+      }));
+    });
+  });
+
+  describe('update_vulnerability', () => {
+    beforeEach(() => { process.env.WRITE_ENABLED = 'true'; });
+
+    it('allows documented vulnerability remediation fields', async () => {
+      mockClient.updateRecord.mockResolvedValue({ sys_id: 'vuln001' });
+      await executeSecurityToolCall(mockClient, 'update_vulnerability', {
+        sys_id: 'vuln001',
+        fields: { state: 'risk_accepted', risk_acceptance_notes: 'Approved by CISO', remediation_date: '2026-08-01' },
+      });
+      expect(mockClient.updateRecord).toHaveBeenCalledWith('sn_vul_entry', 'vuln001', {
+        state: 'risk_accepted', risk_acceptance_notes: 'Approved by CISO', remediation_date: '2026-08-01',
+      });
+    });
+
+    it('rejects undeclared vulnerability fields before they reach the Table API', async () => {
+      await expect(executeSecurityToolCall(mockClient, 'update_vulnerability', {
+        sys_id: 'vuln001', fields: { sys_domain: 'global', u_unlisted: 'yes' },
+      })).rejects.toThrow('Vulnerability fields cannot be updated: sys_domain, u_unlisted');
+      expect(mockClient.updateRecord).not.toHaveBeenCalled();
+    });
   });
 
   describe('get_threat_intelligence', () => {
@@ -89,6 +150,16 @@ describe('Security Operations tools', () => {
       await executeSecurityToolCall(mockClient, 'get_threat_intelligence', { query: '1.2.3.4', type: 'ip_address' });
       expect(mockClient.queryRecords).toHaveBeenCalledWith(expect.objectContaining({
         query: 'type=ip_address^valueCONTAINS1.2.3.4',
+      }));
+    });
+
+    it('does not allow IOC terms or types to append encoded-query clauses', async () => {
+      mockClient.queryRecords.mockResolvedValue({ count: 0, records: [] });
+      await executeSecurityToolCall(mockClient, 'get_threat_intelligence', {
+        type: 'ip_address^ORtype=domain', query: '1.2.3.4^ORsys_idISNOTEMPTY',
+      });
+      expect(mockClient.queryRecords).toHaveBeenCalledWith(expect.objectContaining({
+        query: 'type=ip_addressORtype=domain^valueCONTAINS1.2.3.4ORsys_idISNOTEMPTY',
       }));
     });
   });

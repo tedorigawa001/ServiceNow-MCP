@@ -43,7 +43,7 @@ function validateOrderByField(field: string): string {
 }
 
 /** Strip ServiceNow encoded-query operators from free-text search values */
-function sanitizeLikeValue(value: string): string {
+export function sanitizeLikeValue(value: string): string {
   // Remove ^ (clause separator) and NUL bytes to prevent encoded-query injection
   return value.replace(/[\^]/g, '').replace(/\0/g, '');
 }
@@ -940,9 +940,14 @@ export class ServiceNowClient {
   }
 
   async callApiGet(endpoint: string): Promise<any> {
-    if (!endpoint.startsWith('/api/')) {
+    // Keep raw path validation separate from URL parsing: URL normalizes ../,
+    // which would otherwise hide an attempt to escape a fixed API sub-path.
+    if (!endpoint.startsWith('/api/') || /(?:^|\/)(?:\.{1,2}|%2e(?:%2e)?)(?:\/|$)/i.test(endpoint)) {
       throw new ServiceNowError(`Invalid endpoint: "${endpoint}". Must start with /api/.`, 'VALIDATION_ERROR');
     }
+    const parsed = new URL(endpoint, 'https://servicenow.invalid');
+    const encodedQuery = parsed.searchParams.get('sysparm_query');
+    if (encodedQuery) validateQuery(encodedQuery);
     await this.authenticate();
     logger.info(`GET ${endpoint}`);
     const url = `${this.baseUrl}${endpoint}`;

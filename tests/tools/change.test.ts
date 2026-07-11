@@ -112,6 +112,30 @@ describe('executeChangeToolCall – list_change_requests', () => {
   });
 });
 
+describe('executeChangeToolCall – update_change_request', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    process.env.WRITE_ENABLED = 'true';
+  });
+
+  it('allows documented change fields', async () => {
+    (mockClient.updateRecord as ReturnType<typeof vi.fn>).mockResolvedValue({ sys_id: 'chg1' });
+    await executeChangeToolCall(mockClient, 'update_change_request', {
+      sys_id: 'chg1', fields: { short_description: 'Updated', state: '-5' },
+    });
+    expect(mockClient.updateRecord).toHaveBeenCalledWith('change_request', 'chg1', {
+      short_description: 'Updated', state: '-5',
+    });
+  });
+
+  it('rejects undeclared fields before they reach the Table API', async () => {
+    await expect(executeChangeToolCall(mockClient, 'update_change_request', {
+      sys_id: 'chg1', fields: { roles: 'admin', u_unlisted: 'yes' },
+    })).rejects.toThrow('Change request fields cannot be updated: roles, u_unlisted');
+    expect(mockClient.updateRecord).not.toHaveBeenCalled();
+  });
+});
+
 describe('executeChangeToolCall – submit_change_for_approval', () => {
   beforeEach(() => {
     vi.clearAllMocks();

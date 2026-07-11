@@ -2,10 +2,19 @@
  * Security Operations (SecOps) tools — security incidents, vulnerabilities, and GRC.
  * Read tools: Tier 0. Write tools: Tier 1 (WRITE_ENABLED=true).
  */
-import type { ServiceNowClient } from '../servicenow/client.js';
+import { sanitizeLikeValue, type ServiceNowClient } from '../servicenow/client.js';
 import { ServiceNowError } from '../utils/errors.js';
 import { requireWrite } from '../utils/permissions.js';
 import { SEVERITY } from './schema-helpers.js';
+
+const SECURITY_INCIDENT_FIELDS = new Set([
+  'short_description', 'category', 'subcategory', 'severity', 'description', 'affected_cis',
+  'assignment_group', 'state', 'containment_status',
+]);
+const VULNERABILITY_UPDATE_FIELDS = new Set([
+  'state', 'risk_acceptance_notes', 'remediation_date',
+]);
+const queryValue = (value: unknown) => sanitizeLikeValue(String(value));
 
 export function getSecurityToolDefinitions() {
   return [
@@ -44,7 +53,12 @@ export function getSecurityToolDefinitions() {
         type: 'object',
         properties: {
           sys_id: { type: 'string', description: 'System ID of the security incident' },
-          fields: { type: 'object', description: 'Fields to update (state, severity, containment_status, etc.)' },
+          fields: {
+            type: 'object',
+            description: 'Fields to update (state, severity, containment_status, etc.)',
+            properties: Object.fromEntries([...SECURITY_INCIDENT_FIELDS].map(field => [field, {}])),
+            additionalProperties: false,
+          },
         },
         required: ['sys_id', 'fields'],
       },
@@ -97,7 +111,12 @@ export function getSecurityToolDefinitions() {
         type: 'object',
         properties: {
           sys_id: { type: 'string', description: 'System ID of the vulnerability entry' },
-          fields: { type: 'object', description: 'Fields to update (state, risk_acceptance_notes, remediation_date, etc.)' },
+          fields: {
+            type: 'object',
+            description: 'Fields to update (state, risk_acceptance_notes, remediation_date)',
+            properties: Object.fromEntries([...VULNERABILITY_UPDATE_FIELDS].map(field => [field, {}])),
+            additionalProperties: false,
+          },
         },
         required: ['sys_id', 'fields'],
       },
@@ -270,6 +289,15 @@ export async function executeSecurityToolCall(
     case 'create_security_incident': {
       requireWrite();
       if (!args.short_description || !args.category) throw new ServiceNowError('short_description and category are required', 'INVALID_REQUEST');
+      // args is the record payload itself here (unlike update, which nests fields
+      // under args.fields) — every key is checked against the allowlist below.
+      const unsafeFields = Object.keys(args).filter(field => !SECURITY_INCIDENT_FIELDS.has(field));
+      if (unsafeFields.length) {
+        throw new ServiceNowError(
+          `Security incident fields cannot be set: ${unsafeFields.join(', ')}. Allowed fields: ${[...SECURITY_INCIDENT_FIELDS].join(', ')}`,
+          'VALIDATION_ERROR'
+        );
+      }
       const result = await client.createRecord('sn_si_incident', args);
       return { ...result, summary: `Created security incident ${result.number || result.sys_id}` };
     }
@@ -278,29 +306,36 @@ export async function executeSecurityToolCall(
       if (/^[0-9a-f]{32}$/i.test(args.number_or_sysid)) {
         return await client.getRecord('sn_si_incident', args.number_or_sysid);
       }
-      const resp = await client.queryRecords({ table: 'sn_si_incident', query: `number=${args.number_or_sysid}`, limit: 1 });
+      const resp = await client.queryRecords({ table: 'sn_si_incident', query: `number=${queryValue(args.number_or_sysid)}`, limit: 1 });
       if (resp.count === 0) throw new ServiceNowError(`Security incident not found: ${args.number_or_sysid}`, 'NOT_FOUND');
       return resp.records[0];
     }
     case 'update_security_incident': {
       requireWrite();
       if (!args.sys_id || !args.fields) throw new ServiceNowError('sys_id and fields are required', 'INVALID_REQUEST');
+      const unsafeFields = Object.keys(args.fields).filter(field => !SECURITY_INCIDENT_FIELDS.has(field));
+      if (unsafeFields.length) {
+        throw new ServiceNowError(
+          `Security incident fields cannot be updated: ${unsafeFields.join(', ')}. Allowed fields: ${[...SECURITY_INCIDENT_FIELDS].join(', ')}`,
+          'VALIDATION_ERROR'
+        );
+      }
       const result = await client.updateRecord('sn_si_incident', args.sys_id, args.fields);
       return { ...result, summary: `Updated security incident ${args.sys_id}` };
     }
     case 'list_security_incidents': {
       const parts: string[] = [];
-      if (args.state) parts.push(`state=${args.state}`);
-      if (args.severity) parts.push(`severity=${args.severity}`);
-      if (args.category) parts.push(`category=${args.category}`);
+      if (args.state) parts.push(`state=${queryValue(args.state)}`);
+      if (args.severity) parts.push(`severity=${queryValue(args.severity)}`);
+      if (args.category) parts.push(`category=${queryValue(args.category)}`);
       if (args.query) parts.push(args.query);
       return await client.queryRecords({ table: 'sn_si_incident', query: parts.join('^') || '', limit: args.limit ?? 25 });
     }
     case 'list_vulnerabilities': {
       const parts: string[] = [];
-      if (args.state) parts.push(`state=${args.state}`);
-      if (args.severity) parts.push(`severity=${args.severity}`);
-      if (args.ci_sysid) parts.push(`cmdb_ci=${args.ci_sysid}`);
+      if (args.state) parts.push(`state=${queryValue(args.state)}`);
+      if (args.severity) parts.push(`severity=${queryValue(args.severity)}`);
+      if (args.ci_sysid) parts.push(`cmdb_ci=${queryValue(args.ci_sysid)}`);
       if (args.query) parts.push(args.query);
       return await client.queryRecords({ table: 'sn_vul_entry', query: parts.join('^') || '', limit: args.limit ?? 25 });
     }
@@ -309,20 +344,27 @@ export async function executeSecurityToolCall(
       if (/^[0-9a-f]{32}$/i.test(args.number_or_sysid)) {
         return await client.getRecord('sn_vul_entry', args.number_or_sysid);
       }
-      const resp = await client.queryRecords({ table: 'sn_vul_entry', query: `number=${args.number_or_sysid}`, limit: 1 });
+      const resp = await client.queryRecords({ table: 'sn_vul_entry', query: `number=${queryValue(args.number_or_sysid)}`, limit: 1 });
       if (resp.count === 0) throw new ServiceNowError(`Vulnerability not found: ${args.number_or_sysid}`, 'NOT_FOUND');
       return resp.records[0];
     }
     case 'update_vulnerability': {
       requireWrite();
       if (!args.sys_id || !args.fields) throw new ServiceNowError('sys_id and fields are required', 'INVALID_REQUEST');
+      const unsafeFields = Object.keys(args.fields).filter(field => !VULNERABILITY_UPDATE_FIELDS.has(field));
+      if (unsafeFields.length) {
+        throw new ServiceNowError(
+          `Vulnerability fields cannot be updated: ${unsafeFields.join(', ')}. Allowed fields: ${[...VULNERABILITY_UPDATE_FIELDS].join(', ')}`,
+          'VALIDATION_ERROR'
+        );
+      }
       const result = await client.updateRecord('sn_vul_entry', args.sys_id, args.fields);
       return { ...result, summary: `Updated vulnerability ${args.sys_id}` };
     }
     case 'list_grc_risks': {
       const parts: string[] = [];
-      if (args.state) parts.push(`state=${args.state}`);
-      if (args.category) parts.push(`category=${args.category}`);
+      if (args.state) parts.push(`state=${queryValue(args.state)}`);
+      if (args.category) parts.push(`category=${queryValue(args.category)}`);
       return await client.queryRecords({ table: 'sn_risk_risk', query: parts.join('^') || '', limit: args.limit ?? 25 });
     }
     case 'get_grc_risk': {
@@ -330,27 +372,27 @@ export async function executeSecurityToolCall(
       if (/^[0-9a-f]{32}$/i.test(args.number_or_sysid)) {
         return await client.getRecord('sn_risk_risk', args.number_or_sysid);
       }
-      const resp = await client.queryRecords({ table: 'sn_risk_risk', query: `number=${args.number_or_sysid}`, limit: 1 });
+      const resp = await client.queryRecords({ table: 'sn_risk_risk', query: `number=${queryValue(args.number_or_sysid)}`, limit: 1 });
       if (resp.count === 0) throw new ServiceNowError(`GRC risk not found: ${args.number_or_sysid}`, 'NOT_FOUND');
       return resp.records[0];
     }
     case 'list_grc_controls': {
       const parts: string[] = [];
-      if (args.risk_sysid) parts.push(`risks=${args.risk_sysid}`);
-      if (args.state) parts.push(`state=${args.state}`);
+      if (args.risk_sysid) parts.push(`risks=${queryValue(args.risk_sysid)}`);
+      if (args.state) parts.push(`state=${queryValue(args.state)}`);
       return await client.queryRecords({ table: 'sn_compliance_control', query: parts.join('^') || '', limit: args.limit ?? 25 });
     }
     case 'get_threat_intelligence': {
       if (!args.query) throw new ServiceNowError('query is required', 'INVALID_REQUEST');
       const q = args.type
-        ? `type=${args.type}^valueCONTAINS${args.query}`
-        : `valueCONTAINS${args.query}`;
+        ? `type=${queryValue(args.type)}^valueCONTAINS${queryValue(args.query)}`
+        : `valueCONTAINS${queryValue(args.query)}`;
       return await client.queryRecords({ table: 'sn_ti_observable', query: q, limit: args.limit ?? 25 });
     }
     case 'list_security_playbooks': {
       const parts: string[] = [];
       if (args.active !== false) parts.push('active=true');
-      if (args.category) parts.push(`category=${args.category}`);
+      if (args.category) parts.push(`category=${queryValue(args.category)}`);
       return await client.queryRecords({ table: 'sn_si_playbook', query: parts.join('^') || '', limit: args.limit ?? 25 });
     }
     case 'run_security_playbook': {
@@ -385,18 +427,20 @@ export async function executeSecurityToolCall(
     }
     case 'list_compliance_policies': {
       const parts: string[] = [];
-      if (args.state) parts.push(`state=${args.state}`);
+      if (args.state) parts.push(`state=${queryValue(args.state)}`);
       return await client.queryRecords({ table: 'sn_compliance_policy', query: parts.join('^') || '', limit: args.limit ?? 25 });
     }
     case 'get_compliance_assessment': {
       if (!args.policy_sys_id && !args.control_sys_id) throw new ServiceNowError('policy_sys_id or control_sys_id is required', 'INVALID_REQUEST');
-      const query = args.policy_sys_id ? `policy=${args.policy_sys_id}` : `control=${args.control_sys_id}`;
+      const query = args.policy_sys_id
+        ? `policy=${queryValue(args.policy_sys_id)}`
+        : `control=${queryValue(args.control_sys_id)}`;
       return await client.queryRecords({ table: 'sn_compliance_assessment', query, limit: 50 });
     }
     case 'list_audit_results': {
       const parts: string[] = [];
-      if (args.state) parts.push(`state=${args.state}`);
-      if (args.severity) parts.push(`severity=${args.severity}`);
+      if (args.state) parts.push(`state=${queryValue(args.state)}`);
+      if (args.severity) parts.push(`severity=${queryValue(args.severity)}`);
       return await client.queryRecords({ table: 'sn_audit_result', query: parts.join('^') || '', limit: args.limit ?? 25 });
     }
     default:

@@ -3,9 +3,14 @@
  * Read tools: Tier 0. Write tools: Tier 1 (WRITE_ENABLED=true).
  * Inspired by servicenow-helper's direct script deployment and snow-flow's artifact management.
  */
-import type { ServiceNowClient } from '../servicenow/client.js';
+import { sanitizeLikeValue, type ServiceNowClient } from '../servicenow/client.js';
 import { ServiceNowError } from '../utils/errors.js';
 import { requireWrite } from '../utils/permissions.js';
+
+const NOTIFICATION_UPDATE_FIELDS = new Set([
+  'name', 'collection', 'event_name', 'subject', 'message_html', 'recipient_fields',
+  'active', 'condition', 'schedule',
+]);
 
 export function getNotificationToolDefinitions() {
   return [
@@ -67,6 +72,8 @@ export function getNotificationToolDefinitions() {
           fields: {
             type: 'object',
             description: 'Fields to update: name, subject, message_html, active, condition, etc.',
+            properties: Object.fromEntries([...NOTIFICATION_UPDATE_FIELDS].map(field => [field, {}])),
+            additionalProperties: false,
           },
         },
         required: ['sys_id', 'fields'],
@@ -225,9 +232,9 @@ export async function executeNotificationToolCall(
     case 'list_notifications': {
       const parts: string[] = [];
       if (args.active !== undefined) parts.push(`active=${args.active}`);
-      if (args.table) parts.push(`collection=${args.table}`);
-      if (args.event) parts.push(`event_name=${args.event}`);
-      if (args.query) parts.push(`nameCONTAINS${args.query}`);
+      if (args.table) parts.push(`collection=${sanitizeLikeValue(args.table)}`);
+      if (args.event) parts.push(`event_name=${sanitizeLikeValue(args.event)}`);
+      if (args.query) parts.push(`nameCONTAINS${sanitizeLikeValue(args.query)}`);
       return await client.queryRecords({
         table: 'sysevent_email_action',
         query: parts.join('^') || undefined,
@@ -242,7 +249,7 @@ export async function executeNotificationToolCall(
       }
       const resp = await client.queryRecords({
         table: 'sysevent_email_action',
-        query: `name=${args.sys_id_or_name}`,
+        query: `name=${sanitizeLikeValue(args.sys_id_or_name)}`,
         limit: 1,
       });
       if (resp.count === 0) throw new ServiceNowError(`Notification not found: ${args.sys_id_or_name}`, 'NOT_FOUND');
@@ -267,15 +274,22 @@ export async function executeNotificationToolCall(
     case 'update_notification': {
       requireWrite();
       if (!args.sys_id || !args.fields) throw new ServiceNowError('sys_id and fields are required', 'INVALID_REQUEST');
+      const unsafeFields = Object.keys(args.fields).filter(field => !NOTIFICATION_UPDATE_FIELDS.has(field));
+      if (unsafeFields.length) {
+        throw new ServiceNowError(
+          `Notification fields cannot be updated: ${unsafeFields.join(', ')}. Allowed fields: ${[...NOTIFICATION_UPDATE_FIELDS].join(', ')}`,
+          'VALIDATION_ERROR'
+        );
+      }
       const result = await client.updateRecord('sysevent_email_action', args.sys_id, args.fields);
       return { ...result, summary: `Updated notification ${args.sys_id}` };
     }
     // ── Email Log ────────────────────────────────────────────────────────────
     case 'list_email_logs': {
       const parts: string[] = [];
-      if (args.state) parts.push(`state=${args.state}`);
-      if (args.recipient) parts.push(`receiverCONTAINS${args.recipient}`);
-      if (args.subject) parts.push(`subjectCONTAINS${args.subject}`);
+      if (args.state) parts.push(`state=${sanitizeLikeValue(args.state)}`);
+      if (args.recipient) parts.push(`receiverCONTAINS${sanitizeLikeValue(args.recipient)}`);
+      if (args.subject) parts.push(`subjectCONTAINS${sanitizeLikeValue(args.subject)}`);
       return await client.queryRecords({
         table: 'sys_email',
         query: parts.join('^') || undefined,
@@ -295,7 +309,7 @@ export async function executeNotificationToolCall(
       }
       return await client.queryRecords({
         table: 'sys_attachment',
-        query: `table_name=${args.table}^table_sys_id=${args.record_sys_id}`,
+        query: `table_name=${sanitizeLikeValue(args.table)}^table_sys_id=${sanitizeLikeValue(args.record_sys_id)}`,
         limit: args.limit ?? 25,
         fields: 'sys_id,file_name,content_type,size_bytes,table_name,table_sys_id,sys_created_on',
       });
@@ -333,7 +347,7 @@ export async function executeNotificationToolCall(
     // ── Templates ────────────────────────────────────────────────────────────
     case 'list_email_templates': {
       const parts: string[] = [];
-      if (args.query) parts.push(`nameCONTAINS${args.query}`);
+      if (args.query) parts.push(`nameCONTAINS${sanitizeLikeValue(args.query)}`);
       return await client.queryRecords({
         table: 'sysevent_email_template',
         query: parts.join('^') || undefined,
@@ -344,8 +358,8 @@ export async function executeNotificationToolCall(
     // ── Subscriptions ────────────────────────────────────────────────────────
     case 'list_notification_subscriptions': {
       const parts: string[] = [];
-      if (args.user_sys_id) parts.push(`user=${args.user_sys_id}`);
-      if (args.notification_sys_id) parts.push(`notification=${args.notification_sys_id}`);
+      if (args.user_sys_id) parts.push(`user=${sanitizeLikeValue(args.user_sys_id)}`);
+      if (args.notification_sys_id) parts.push(`notification=${sanitizeLikeValue(args.notification_sys_id)}`);
       return await client.queryRecords({
         table: 'sys_notif_subscription',
         query: parts.join('^') || undefined,

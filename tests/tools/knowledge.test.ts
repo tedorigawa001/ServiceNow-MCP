@@ -125,6 +125,30 @@ describe('executeKnowledgeToolCall – create_knowledge_article', () => {
   });
 });
 
+describe('executeKnowledgeToolCall – update_knowledge_article', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    process.env.WRITE_ENABLED = 'true';
+  });
+
+  it('allows documented article editing fields', async () => {
+    (mockClient.updateRecord as ReturnType<typeof vi.fn>).mockResolvedValue({ sys_id: 'kb1' });
+    await executeKnowledgeToolCall(mockClient, 'update_knowledge_article', {
+      sys_id: 'kb1', fields: { short_description: 'Updated title', text: '<p>Updated content</p>' },
+    });
+    expect(mockClient.updateRecord).toHaveBeenCalledWith('kb_knowledge', 'kb1', {
+      short_description: 'Updated title', text: '<p>Updated content</p>',
+    });
+  });
+
+  it('rejects state and undeclared fields before they reach the Table API', async () => {
+    await expect(executeKnowledgeToolCall(mockClient, 'update_knowledge_article', {
+      sys_id: 'kb1', fields: { workflow_state: 'published', sys_domain: 'global' },
+    })).rejects.toThrow('Knowledge article fields cannot be updated: workflow_state, sys_domain');
+    expect(mockClient.updateRecord).not.toHaveBeenCalled();
+  });
+});
+
 describe('executeKnowledgeToolCall – publish_knowledge_article', () => {
   beforeEach(() => {
     vi.clearAllMocks();

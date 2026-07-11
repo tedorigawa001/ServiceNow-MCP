@@ -66,6 +66,13 @@ describe('readResource — parameterized URIs', () => {
     }));
   });
 
+  it('does not allow a resource URI to add encoded-query clauses', async () => {
+    await readResource(mockClient, 'servicenow://ci:web%5EORsys_idISNOTEMPTY');
+    expect(queryRecords).toHaveBeenCalledWith(expect.objectContaining({
+      query: 'nameLIKEwebORsys_idISNOTEMPTY',
+    }));
+  });
+
   it('returns an error object for an unknown URI', async () => {
     const res = await readResource(mockClient, 'servicenow://totally-unknown') as any;
     expect(res.error).toContain('Unknown resource URI');

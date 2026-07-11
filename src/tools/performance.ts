@@ -3,9 +3,11 @@
  * All read-only tools: Tier 0.
  * Inspired by snow-flow's "Analysis" category: KPI management, Performance Analytics, dashboards.
  */
-import type { ServiceNowClient } from '../servicenow/client.js';
+import { sanitizeLikeValue, type ServiceNowClient } from '../servicenow/client.js';
 import { ServiceNowError } from '../utils/errors.js';
 import { requireWrite } from '../utils/permissions.js';
+
+const DASHBOARD_UPDATE_FIELDS = new Set(['name', 'description', 'roles', 'active']);
 
 export function getPerformanceToolDefinitions() {
   return [
@@ -175,6 +177,8 @@ export function getPerformanceToolDefinitions() {
           fields: {
             type: 'object',
             description: 'Fields to update (name, description, roles, active, etc.)',
+            properties: Object.fromEntries([...DASHBOARD_UPDATE_FIELDS].map(field => [field, {}])),
+            additionalProperties: false,
           },
         },
         required: ['sys_id', 'fields'],
@@ -340,8 +344,11 @@ export async function executePerformanceToolCall(
     case 'list_pa_indicators': {
       const parts: string[] = [];
       if (args.active !== false) parts.push('active=true');
-      if (args.category) parts.push(`category=${args.category}`);
-      if (args.query) parts.push(`nameCONTAINS${args.query}^ORdescriptionCONTAINS${args.query}`);
+      if (args.category) parts.push(`category=${sanitizeLikeValue(args.category)}`);
+      if (args.query) {
+        const query = sanitizeLikeValue(args.query);
+        parts.push(`nameCONTAINS${query}^ORdescriptionCONTAINS${query}`);
+      }
       return await client.queryRecords({
         table: 'pa_indicators',
         query: parts.join('^') || '',
@@ -356,7 +363,7 @@ export async function executePerformanceToolCall(
       }
       const resp = await client.queryRecords({
         table: 'pa_indicators',
-        query: `nameCONTAINS${args.sys_id_or_name}`,
+        query: `nameCONTAINS${sanitizeLikeValue(args.sys_id_or_name)}`,
         limit: 1,
       });
       if (resp.count === 0) throw new ServiceNowError(`PA indicator not found: ${args.sys_id_or_name}`, 'NOT_FOUND');
@@ -365,8 +372,8 @@ export async function executePerformanceToolCall(
     case 'get_pa_scorecard': {
       if (!args.indicator_sys_id) throw new ServiceNowError('indicator_sys_id is required', 'INVALID_REQUEST');
       // Query pa_scores for the indicator's latest data
-      const scoreParts = [`indicator=${args.indicator_sys_id}`];
-      if (args.breakdown_sys_id) scoreParts.push(`breakdown_element=${args.breakdown_sys_id}`);
+      const scoreParts = [`indicator=${sanitizeLikeValue(args.indicator_sys_id)}`];
+      if (args.breakdown_sys_id) scoreParts.push(`breakdown_element=${sanitizeLikeValue(args.breakdown_sys_id)}`);
       const scores = await client.queryRecords({
         table: 'pa_scores',
         query: scoreParts.join('^'),
@@ -400,9 +407,9 @@ export async function executePerformanceToolCall(
     }
     case 'get_pa_time_series': {
       if (!args.indicator_sys_id) throw new ServiceNowError('indicator_sys_id is required', 'INVALID_REQUEST');
-      const parts = [`indicator=${args.indicator_sys_id}`];
-      if (args.start_date) parts.push(`date>=${args.start_date}`);
-      if (args.end_date) parts.push(`date<=${args.end_date}`);
+      const parts = [`indicator=${sanitizeLikeValue(args.indicator_sys_id)}`];
+      if (args.start_date) parts.push(`date>=${sanitizeLikeValue(args.start_date)}`);
+      if (args.end_date) parts.push(`date<=${sanitizeLikeValue(args.end_date)}`);
       return await client.queryRecords({
         table: 'pa_scores',
         query: parts.join('^'),
@@ -413,7 +420,7 @@ export async function executePerformanceToolCall(
     }
     case 'list_pa_breakdowns': {
       const parts: string[] = [];
-      if (args.query) parts.push(`nameCONTAINS${args.query}`);
+      if (args.query) parts.push(`nameCONTAINS${sanitizeLikeValue(args.query)}`);
       return await client.queryRecords({
         table: 'pa_breakdowns',
         query: parts.join('^') || undefined,
@@ -424,7 +431,7 @@ export async function executePerformanceToolCall(
     // ── Dashboards ───────────────────────────────────────────────────────────
     case 'list_pa_dashboards': {
       const parts: string[] = [];
-      if (args.query) parts.push(`nameCONTAINS${args.query}`);
+      if (args.query) parts.push(`nameCONTAINS${sanitizeLikeValue(args.query)}`);
       return await client.queryRecords({
         table: 'pa_dashboards',
         query: parts.join('^') || undefined,
@@ -439,7 +446,7 @@ export async function executePerformanceToolCall(
       }
       const resp = await client.queryRecords({
         table: 'pa_dashboards',
-        query: `nameCONTAINS${args.sys_id_or_name}`,
+        query: `nameCONTAINS${sanitizeLikeValue(args.sys_id_or_name)}`,
         limit: 1,
       });
       if (resp.count === 0) throw new ServiceNowError(`PA dashboard not found: ${args.sys_id_or_name}`, 'NOT_FOUND');
@@ -447,7 +454,7 @@ export async function executePerformanceToolCall(
     }
     case 'list_homepages': {
       const parts: string[] = [];
-      if (args.query) parts.push(`titleCONTAINS${args.query}`);
+      if (args.query) parts.push(`titleCONTAINS${sanitizeLikeValue(args.query)}`);
       return await client.queryRecords({
         table: 'sys_ui_hp',
         query: parts.join('^') || undefined,
@@ -459,7 +466,7 @@ export async function executePerformanceToolCall(
     case 'list_pa_jobs': {
       const parts: string[] = [];
       if (args.active !== false) parts.push('active=true');
-      if (args.query) parts.push(`nameCONTAINS${args.query}`);
+      if (args.query) parts.push(`nameCONTAINS${sanitizeLikeValue(args.query)}`);
       return await client.queryRecords({
         table: 'pa_job',
         query: parts.join('^') || '',
@@ -538,6 +545,13 @@ export async function executePerformanceToolCall(
       requireWrite();
       if (!args.sys_id || !args.fields)
         throw new ServiceNowError('sys_id and fields are required', 'INVALID_REQUEST');
+      const unsafeFields = Object.keys(args.fields).filter(field => !DASHBOARD_UPDATE_FIELDS.has(field));
+      if (unsafeFields.length) {
+        throw new ServiceNowError(
+          `Dashboard fields cannot be updated: ${unsafeFields.join(', ')}. Allowed fields: ${[...DASHBOARD_UPDATE_FIELDS].join(', ')}`,
+          'VALIDATION_ERROR'
+        );
+      }
       const result = await client.updateRecord('pa_dashboards', args.sys_id, args.fields);
       return { ...result, summary: `Updated dashboard ${args.sys_id}` };
     }

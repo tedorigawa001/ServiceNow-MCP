@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { afterEach, describe, it, expect, vi, beforeEach } from 'vitest';
 import { executeReportingToolCall, getReportingToolDefinitions } from '../../src/tools/reporting.js';
 import type { ServiceNowClient } from '../../src/servicenow/client.js';
 
@@ -158,6 +158,20 @@ describe('executeReportingToolCall – list_scheduled_jobs', () => {
     const call = (mockClient.queryRecords as ReturnType<typeof vi.fn>).mock.calls[0][0];
     expect(call.table).toBe('sysauto');
     expect(call.query).toContain('active=true');
+  });
+});
+
+describe('executeReportingToolCall – scheduled script writes', () => {
+  afterEach(() => {
+    delete process.env.WRITE_ENABLED;
+    delete process.env.SCRIPTING_ENABLED;
+  });
+
+  it('requires SCRIPTING_ENABLED for scheduled script creation', async () => {
+    process.env.WRITE_ENABLED = 'true';
+    await expect(executeReportingToolCall(mockClient, 'create_scheduled_job', {
+      name: 'job', script: 'gs.info(\"x\")', run_type: 'daily',
+    })).rejects.toMatchObject({ code: 'SCRIPTING_NOT_ENABLED' });
   });
 });
 

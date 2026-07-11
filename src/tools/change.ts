@@ -7,6 +7,12 @@ import { ServiceNowError } from '../utils/errors.js';
 import { requireWrite } from '../utils/permissions.js';
 import { CHANGE_STATE } from './schema-helpers.js';
 
+const CHANGE_UPDATE_FIELDS = new Set([
+  'short_description', 'description', 'type', 'category', 'risk', 'impact', 'priority',
+  'assignment_group', 'assigned_to', 'start_date', 'end_date', 'implementation_plan',
+  'backout_plan', 'test_plan', 'cmdb_ci', 'state', 'close_code', 'close_notes',
+]);
+
 export function getChangeToolDefinitions() {
   return [
     {
@@ -52,7 +58,12 @@ export function getChangeToolDefinitions() {
         type: 'object',
         properties: {
           sys_id: { type: 'string', description: 'System ID of the change request' },
-          fields: { type: 'object', description: 'Key-value pairs to update' },
+          fields: {
+            type: 'object',
+            description: 'Key-value pairs to update',
+            properties: Object.fromEntries([...CHANGE_UPDATE_FIELDS].map(field => [field, {}])),
+            additionalProperties: false,
+          },
         },
         required: ['sys_id', 'fields'],
       },
@@ -153,6 +164,13 @@ export async function executeChangeToolCall(
     case 'update_change_request': {
       requireWrite();
       if (!args.sys_id || !args.fields) throw new ServiceNowError('sys_id and fields are required', 'INVALID_REQUEST');
+      const unsafeFields = Object.keys(args.fields).filter(field => !CHANGE_UPDATE_FIELDS.has(field));
+      if (unsafeFields.length) {
+        throw new ServiceNowError(
+          `Change request fields cannot be updated: ${unsafeFields.join(', ')}. Allowed fields: ${[...CHANGE_UPDATE_FIELDS].join(', ')}`,
+          'VALIDATION_ERROR'
+        );
+      }
       const result = await client.updateRecord('change_request', args.sys_id, args.fields);
       return { ...result, summary: `Updated change request ${args.sys_id}` };
     }

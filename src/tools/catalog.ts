@@ -15,6 +15,9 @@ const VALID_RITM_NUMBER = /^RITM\d{1,12}$/i;
 const VALID_USERNAME = /^[a-zA-Z0-9._@\-]{1,100}$/;
 const VALID_STAGES = new Set(['request', 'approval', 'fulfillment', 'delivery', 'closed']);
 const VALID_RITM_STATES = new Set(['1', '2', '3', '4']);
+const CATALOG_ITEM_FIELDS = new Set([
+  'name', 'short_description', 'description', 'category', 'price', 'delivery_time', 'active', 'roles',
+]);
 
 
 export function getCatalogToolDefinitions() {
@@ -85,6 +88,8 @@ export function getCatalogToolDefinitions() {
           fields: {
             type: 'object',
             description: 'Fields to update (name, short_description, price, active, category, etc.)',
+            properties: Object.fromEntries([...CATALOG_ITEM_FIELDS].map(field => [field, {}])),
+            additionalProperties: false,
           },
         },
         required: ['sys_id', 'fields'],
@@ -366,6 +371,13 @@ export async function executeCatalogToolCall(
       requireWrite();
       if (!args.sys_id || !args.fields)
         throw new ServiceNowError('sys_id and fields are required', 'INVALID_REQUEST');
+      const unsafeFields = Object.keys(args.fields).filter(field => !CATALOG_ITEM_FIELDS.has(field));
+      if (unsafeFields.length) {
+        throw new ServiceNowError(
+          `Catalog item fields cannot be updated: ${unsafeFields.join(', ')}. Allowed fields: ${[...CATALOG_ITEM_FIELDS].join(', ')}`,
+          'VALIDATION_ERROR'
+        );
+      }
       const result = await client.updateRecord('sc_cat_item', args.sys_id, args.fields);
       return { ...result, summary: `Updated catalog item ${args.sys_id}` };
     }

@@ -59,6 +59,14 @@ describe('executeSamToolCall', () => {
     }));
   });
 
+  it('does not allow a publisher filter to inject encoded-query clauses', async () => {
+    qr().mockResolvedValue({ count: 0, records: [] });
+    await executeSamToolCall(mockClient, 'list_software_installs', { publisher: 'Microsoft^ORactive=true' });
+    expect(qr()).toHaveBeenCalledWith(expect.objectContaining({
+      query: 'norm_publisherLIKEMicrosoftORactive=true',
+    }));
+  });
+
   it('requires sys_id for get_software_install', async () => {
     await expect(executeSamToolCall(mockClient, 'get_software_install', {})).rejects.toThrow('sys_id');
   });

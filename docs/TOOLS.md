@@ -714,7 +714,7 @@ Get details of a specific scheduled job. **[Read]**
 - `sys_id` (required)
 
 ### create_scheduled_job
-Create a new scheduled script job. **[Write]**
+Create a new scheduled script job. **[Scripting]**
 
 **Parameters**:
 - `name` (required)
@@ -724,7 +724,7 @@ Create a new scheduled script job. **[Write]**
 - `active`
 
 ### update_scheduled_job
-Update a scheduled job's script or schedule. **[Write]**
+Update a scheduled job's script or schedule. **[Scripting]**
 
 **Parameters**:
 - `sys_id` (required)
@@ -1224,14 +1224,14 @@ Get HR service details.
 Get HR profile for a user.
 
 **Parameters**:
-- `user_sys_id` (required)
+- `user_identifier` (required) — Username, email, or sys_id
 
 ### update_hr_profile
 Update an HR profile record. **[Write]**
 
 **Parameters**:
-- `sys_id` (required)
-- `fields` (required)
+- `user_sys_id` (required) — 32-character user sys_id
+- `fields` (required) — `department`, `manager`, `location`, `job_title`
 
 ### list_hr_tasks
 List HR tasks associated with a case.

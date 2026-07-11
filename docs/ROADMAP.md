@@ -20,6 +20,7 @@
 | 8 | SAM Pro（ソフトウェア資産管理）ツールセット | ITAM/SAM 担当者 | ⭐ 低 | 低 | ✅ 完了 |
 | 9 | Discovery 運用可視化 + ACC ツールセット | ITOM 担当者 | ⭐ 低 | 低 | ✅ 完了 |
 | 10 | インスタンス性能診断（メモリ/セマフォ/トランザクション履歴） | SysAdmin/ITOM 担当者 | ⭐⭐ 中 | 中 | ✅ 完了 |
+| 11 | USEM 修復ワークフロー補完（VI 作成 / RT⇔VI リンク / RT テーブル是正） | SecOps 担当者 | ⭐⭐ 中 | 低 | 📋 未着手 |
 
 > #10 はロードマップ外で追加実装した機能(v1.0.5〜1.0.6)。`get_instance_diagnostics`(xmlstats.do の現在値 + `all_nodes` によるマルチノード対応)と `get_performance_history`(syslog_transaction の Aggregate API 時系列 + `group_by_node`)。メモリ・セマフォの履歴は JRobin が ACL 不可視のため対象外(現在値のみ)。詳細は [TOOLS.md](TOOLS.md) の Performance Analytics & Data Quality 節を参照。
 
@@ -565,6 +566,40 @@ Discovery 関連は core.ts の3ツール(`list_discovery_schedules` / `list_mid
 2. **レンジ未リンクだとサイレント中断。** `Discovery.isValidDiscoverySchedule()` は有効なレンジが無いと discovery_status を作らず警告ログだけで黙って中断する。しかもレンジ(`discovery_range_item`)とスケジュールのリンクは **`schedule` フィールド**であり、`parent`(レンジセット用)に入れても無視される。ツール側でトリガー後に `schedule=<id>^active=true` を確認し、0 件なら warning を返すようにした。
 
 **登録:** `itom_engineer` パッケージに追加(16 → 27 ツール)。テスト 530 → 550 件。
+
+---
+
+## 11. USEM 修復ワークフロー補完 📋 未着手
+
+### 背景
+
+2026-07-11 に dev400464 で実施した E2E テスト(修復タスクルール作成 → VI 作成 → RT 自動作成の確認。詳細: `research/usem_e2e_rt_test.xlsx`)で、素の REST を書かざるを得なかった箇所と、既存ツールが実態とズレている箇所が判明した。テストでは最終的に RT(VUL0010007)作成と VI の m2m リンクまで確認できたが、途中で以下の落とし穴をすべて踏んだ。
+
+### E2E テストで確認した事実(実装の前提)
+
+1. **RT の実体テーブルは `sn_vul_vulnerability`**(ラベル「Remediation Task」、Task 継承)。ルールエンジン(`sn_sec_rem.RemediationTaskRule`)が RT を作成するのはこのテーブルであり、`sn_vul_remediation_task` ではない。
+2. **VI に RT への参照フィールドは存在しない**。リンクは m2m `sn_vul_m2m_vul_group_item`(カラム: `sn_vul_vulnerability` / `sn_vul_vulnerable_item`)+ VI 側の `is_in_group` boolean。
+3. **REST で VI を挿入すると `vulnerability` 参照が before BR にクリアされる**(挿入応答の時点で空)。PATCH による再設定は保持される。BR「Link to Remediation Tasks」の filter_condition は `cmdb_ciISNOTEMPTY^vulnerabilityISNOTEMPTY` が前提のため、これが空だと自動化が一切動かない。
+4. **既存 RT への VI 合流は `auto_vi_refresh=true` の RT のみ対象**(エンジンの検索条件は `group_key` + `auto_vi_refresh=true`)。
+5. RT の group_key は「ルール sys_id : field_1 の値(例: CVE sys_id)」形式。
+
+### タスク一覧
+
+| # | 内容 | 種別 | 優先度 |
+|---|---|---|---|
+| 11-1 | `create_vulnerable_item` — VI 作成ツール。`vulnerability` + `cmdb_ci` 必須。挿入後に `vulnerability` の保持を検証し、クリアされていたら PATCH で再設定 → 再検証まで内蔵(上記事実 3 の回避策) | 新規ツール | 高 |
+| 11-2 | `list_remediation_task_findings` — RT⇔VI リンク照会。`sn_vul_m2m_vul_group_item` を正しいカラム名で照会し、「RT の VI 一覧」「VI の所属 RT」の双方向に対応。REST での ACL 403 の再現条件を実装時に要確認(E2E 時の 403 はフィールド名誤り `vul_item` の可能性あり) | 新規ツール | 高 |
+| 11-3 | `list_remediation_tasks` / `get_remediation_task` の是正 — 現状 `sn_vul_remediation_task` のみ参照しており、ルールエンジンが作る RT(`sn_vul_vulnerability`)が見えない。両テーブル横断にするか、説明文で `list_vulnerability_groups` へ誘導 | 既存修正 | 中 |
+| 11-4 | `get_finding_grouping_status` — VI の `is_in_group` / 所属 RT / マッチするルール / RT の `auto_vi_refresh` を 1 コールで返す診断ツール。「なぜグルーピングされない?」の一次切り分け用(vulnerability 空 → ルール不一致 → auto_vi_refresh の順に検査) | 新規ツール | 中 |
+
+### 見送り(実装しない)
+
+- **ルールの遡及適用(re-apply)ツール**: 正攻法はプラットフォームのフロー実行で REST からの安全な入口がない。CI トグル等のハックをツール化しない。
+- **サーバースクリプト実行ツール**: RCE そのものであり、P1 セキュリティ強化の思想(書き込み境界・最小権限)と矛盾するため恒久ツール化しない。E2E ではユーザー明示許可のもと一時 Scheduled Script(実行後削除)で代替した。
+
+### 未解決の調査項目
+
+- REST 起点の insert/update で after BR「Link to Remediation Tasks」による自動グルーピングが観測できなかった(エンジンをサーバー側で直接実行すると成功)。UI 起点の VI 保存での挙動確認が未実施。11-4 の実装時に再調査する。
 
 ---
 

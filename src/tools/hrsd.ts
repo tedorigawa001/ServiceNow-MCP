@@ -2,10 +2,18 @@
  * HR Service Delivery (HRSD) tools — full lifecycle for HR cases, services, and profiles.
  * Read tools: Tier 0. Write tools: Tier 1 (WRITE_ENABLED=true).
  */
-import type { ServiceNowClient } from '../servicenow/client.js';
+import { sanitizeLikeValue, type ServiceNowClient } from '../servicenow/client.js';
 import { ServiceNowError } from '../utils/errors.js';
 import { requireWrite } from '../utils/permissions.js';
 import { PRIORITY } from './schema-helpers.js';
+
+const HR_CASE_FIELDS = new Set([
+  'short_description', 'hr_service', 'subject_person', 'description', 'assignment_group',
+  'priority', 'state', 'close_notes', 'close_code', 'assigned_to', 'work_notes',
+]);
+const HR_PROFILE_UPDATE_FIELDS = new Set(['department', 'manager', 'location', 'job_title']);
+const SYS_ID_PATTERN = /^[0-9a-f]{32}$/i;
+const queryValue = (value: unknown) => sanitizeLikeValue(String(value));
 
 export function getHrsdToolDefinitions() {
   return [
@@ -43,7 +51,12 @@ export function getHrsdToolDefinitions() {
         type: 'object',
         properties: {
           sys_id: { type: 'string', description: 'System ID of the HR case' },
-          fields: { type: 'object', description: 'Key-value pairs to update' },
+          fields: {
+            type: 'object',
+            description: 'Key-value pairs to update',
+            properties: Object.fromEntries([...HR_CASE_FIELDS].map(field => [field, {}])),
+            additionalProperties: false,
+          },
         },
         required: ['sys_id', 'fields'],
       },
@@ -118,7 +131,12 @@ export function getHrsdToolDefinitions() {
         type: 'object',
         properties: {
           user_sys_id: { type: 'string', description: 'sys_id of the user whose profile to update' },
-          fields: { type: 'object', description: 'HR profile fields to update (e.g., {"department": "Engineering"})' },
+          fields: {
+            type: 'object',
+            description: 'HR profile fields to update: department, manager, location, job_title',
+            properties: Object.fromEntries([...HR_PROFILE_UPDATE_FIELDS].map(field => [field, {}])),
+            additionalProperties: false,
+          },
         },
         required: ['user_sys_id', 'fields'],
       },
@@ -230,8 +248,16 @@ export async function executeHrsdToolCall(
       requireWrite();
       if (!args.short_description || !args.hr_service)
         throw new ServiceNowError('short_description and hr_service are required', 'INVALID_REQUEST');
-      const payload: Record<string, any> = { ...args };
-      const result = await client.createRecord('sn_hr_core_case', payload);
+      // args is the record payload itself here (unlike update, which nests fields
+      // under args.fields) — every key is checked against the allowlist below.
+      const unsafeFields = Object.keys(args).filter(field => !HR_CASE_FIELDS.has(field));
+      if (unsafeFields.length) {
+        throw new ServiceNowError(
+          `HR case fields cannot be set: ${unsafeFields.join(', ')}. Allowed fields: ${[...HR_CASE_FIELDS].join(', ')}`,
+          'VALIDATION_ERROR'
+        );
+      }
+      const result = await client.createRecord('sn_hr_core_case', args);
       return { ...result, summary: `Created HR case ${result.number || result.sys_id}` };
     }
     case 'get_hr_case': {
@@ -239,21 +265,28 @@ export async function executeHrsdToolCall(
       if (/^[0-9a-f]{32}$/i.test(args.number_or_sysid)) {
         return await client.getRecord('sn_hr_core_case', args.number_or_sysid);
       }
-      const resp = await client.queryRecords({ table: 'sn_hr_core_case', query: `number=${args.number_or_sysid}`, limit: 1 });
+      const resp = await client.queryRecords({ table: 'sn_hr_core_case', query: `number=${queryValue(args.number_or_sysid)}`, limit: 1 });
       if (resp.count === 0) throw new ServiceNowError(`HR case not found: ${args.number_or_sysid}`, 'NOT_FOUND');
       return resp.records[0];
     }
     case 'update_hr_case': {
       requireWrite();
       if (!args.sys_id || !args.fields) throw new ServiceNowError('sys_id and fields are required', 'INVALID_REQUEST');
+      const unsafeFields = Object.keys(args.fields).filter(field => !HR_CASE_FIELDS.has(field));
+      if (unsafeFields.length) {
+        throw new ServiceNowError(
+          `HR case fields cannot be updated: ${unsafeFields.join(', ')}. Allowed fields: ${[...HR_CASE_FIELDS].join(', ')}`,
+          'VALIDATION_ERROR'
+        );
+      }
       const result = await client.updateRecord('sn_hr_core_case', args.sys_id, args.fields);
       return { ...result, summary: `Updated HR case ${args.sys_id}` };
     }
     case 'list_hr_cases': {
       const parts: string[] = [];
-      if (args.state) parts.push(`state=${args.state}`);
-      if (args.subject_person) parts.push(`subject_person.user_name=${args.subject_person}`);
-      if (args.hr_service) parts.push(`hr_service.name=${args.hr_service}`);
+      if (args.state) parts.push(`state=${queryValue(args.state)}`);
+      if (args.subject_person) parts.push(`subject_person.user_name=${queryValue(args.subject_person)}`);
+      if (args.hr_service) parts.push(`hr_service.name=${queryValue(args.hr_service)}`);
       if (args.query) parts.push(args.query);
       const resp = await client.queryRecords({ table: 'sn_hr_core_case', query: parts.join('^') || '', limit: args.limit ?? 25 });
       return resp;
@@ -269,7 +302,8 @@ export async function executeHrsdToolCall(
       return { ...result, summary: `Closed HR case ${args.sys_id}` };
     }
     case 'list_hr_services': {
-      const q = args.query ? `nameCONTAINS${args.query}^ORdescriptionCONTAINS${args.query}` : '';
+      const search = args.query ? queryValue(args.query) : '';
+      const q = search ? `nameCONTAINS${search}^ORdescriptionCONTAINS${search}` : '';
       const active = args.active !== false ? 'active=true^' : '';
       const resp = await client.queryRecords({ table: 'sn_hr_core_service', query: `${active}${q}`, limit: args.limit ?? 50 });
       return resp;
@@ -279,7 +313,7 @@ export async function executeHrsdToolCall(
       if (/^[0-9a-f]{32}$/i.test(args.sys_id_or_name)) {
         return await client.getRecord('sn_hr_core_service', args.sys_id_or_name);
       }
-      const resp = await client.queryRecords({ table: 'sn_hr_core_service', query: `name=${args.sys_id_or_name}`, limit: 1 });
+      const resp = await client.queryRecords({ table: 'sn_hr_core_service', query: `name=${queryValue(args.sys_id_or_name)}`, limit: 1 });
       if (resp.count === 0) throw new ServiceNowError(`HR service not found: ${args.sys_id_or_name}`, 'NOT_FOUND');
       return resp.records[0];
     }
@@ -287,7 +321,7 @@ export async function executeHrsdToolCall(
       if (!args.user_identifier) throw new ServiceNowError('user_identifier is required', 'INVALID_REQUEST');
       const userQ = /^[0-9a-f]{32}$/i.test(args.user_identifier)
         ? `user=${args.user_identifier}`
-        : `user.user_name=${args.user_identifier}`;
+        : `user.user_name=${queryValue(args.user_identifier)}`;
       const resp = await client.queryRecords({ table: 'sn_hr_core_profile', query: userQ, limit: 1 });
       if (resp.count === 0) throw new ServiceNowError(`HR profile not found for: ${args.user_identifier}`, 'NOT_FOUND');
       return resp.records[0];
@@ -295,6 +329,16 @@ export async function executeHrsdToolCall(
     case 'update_hr_profile': {
       requireWrite();
       if (!args.user_sys_id || !args.fields) throw new ServiceNowError('user_sys_id and fields are required', 'INVALID_REQUEST');
+      if (!SYS_ID_PATTERN.test(args.user_sys_id)) {
+        throw new ServiceNowError('user_sys_id must be a 32-character sys_id', 'INVALID_REQUEST');
+      }
+      const unsafeFields = Object.keys(args.fields).filter(field => !HR_PROFILE_UPDATE_FIELDS.has(field));
+      if (unsafeFields.length) {
+        throw new ServiceNowError(
+          `HR profile fields cannot be updated: ${unsafeFields.join(', ')}. Allowed fields: ${[...HR_PROFILE_UPDATE_FIELDS].join(', ')}`,
+          'VALIDATION_ERROR'
+        );
+      }
       const profileResp = await client.queryRecords({ table: 'sn_hr_core_profile', query: `user=${args.user_sys_id}`, limit: 1 });
       if (profileResp.count === 0) throw new ServiceNowError(`No HR profile found for user ${args.user_sys_id}`, 'NOT_FOUND');
       const profileSysId = String(profileResp.records[0].sys_id);
@@ -303,7 +347,7 @@ export async function executeHrsdToolCall(
     }
     case 'list_hr_tasks': {
       if (!args.hr_case_sysid) throw new ServiceNowError('hr_case_sysid is required', 'INVALID_REQUEST');
-      const q = `parent=${args.hr_case_sysid}${args.state ? `^state=${args.state}` : ''}`;
+      const q = `parent=${queryValue(args.hr_case_sysid)}${args.state ? `^state=${queryValue(args.state)}` : ''}`;
       return await client.queryRecords({ table: 'sn_hr_core_task', query: q, limit: 50 });
     }
     case 'create_hr_task': {
@@ -318,7 +362,7 @@ export async function executeHrsdToolCall(
     }
     case 'get_hr_case_activity': {
       if (!args.hr_case_sysid) throw new ServiceNowError('hr_case_sysid is required', 'INVALID_REQUEST');
-      return await client.queryRecords({ table: 'sys_journal_field', query: `element_id=${args.hr_case_sysid}`, limit: 100 });
+      return await client.queryRecords({ table: 'sys_journal_field', query: `element_id=${queryValue(args.hr_case_sysid)}`, limit: 100 });
     }
     case 'create_onboarding_case': {
       requireWrite();
@@ -348,14 +392,14 @@ export async function executeHrsdToolCall(
     }
     case 'get_hr_lifecycle_events': {
       if (!args.employee_sys_id) throw new ServiceNowError('employee_sys_id is required', 'INVALID_REQUEST');
-      let query = `employee=${args.employee_sys_id}`;
-      if (args.event_type) query += `^type=${args.event_type}`;
+      let query = `employee=${queryValue(args.employee_sys_id)}`;
+      if (args.event_type) query += `^type=${queryValue(args.event_type)}`;
       return await client.queryRecords({ table: 'sn_hr_le_lifecycle_event', query, limit: args.limit ?? 25 });
     }
     case 'list_hr_document_templates': {
       const parts: string[] = [];
       if (args.active !== false) parts.push('active=true');
-      if (args.category) parts.push(`category=${args.category}`);
+      if (args.category) parts.push(`category=${queryValue(args.category)}`);
       return await client.queryRecords({ table: 'sn_hr_core_document_template', query: parts.join('^') || '', limit: args.limit ?? 25 });
     }
     default:

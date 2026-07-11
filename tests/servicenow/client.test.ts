@@ -517,6 +517,12 @@ describe('ServiceNowClient — raw API & AI helpers', () => {
     expect(r.result).toEqual([1]);
   });
 
+  it('callApiGet rejects path traversal and unsafe encoded query parameters', async () => {
+    const client = new ServiceNowClient(baseConfig());
+    await expect(client.callApiGet('/api/now/pa/widget/../../table/sys_user')).rejects.toMatchObject({ code: 'VALIDATION_ERROR' });
+    await expect(client.callApiGet('/api/now/stats/syslog_transaction?sysparm_query=active=true%5Ejavascript%3Ags.getSession%28%29')).rejects.toMatchObject({ code: 'VALIDATION_ERROR' });
+  });
+
   it('runAggregateQuery validates inputs and hits the stats API', async () => {
     routeFetch(mockResponse({ json: { result: {} } })); // validates after authenticate()
     const client = new ServiceNowClient(baseConfig());

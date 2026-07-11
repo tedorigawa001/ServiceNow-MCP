@@ -6,6 +6,10 @@ import type { ServiceNowClient } from '../servicenow/client.js';
 import { ServiceNowError } from '../utils/errors.js';
 import { requireWrite } from '../utils/permissions.js';
 
+const KNOWLEDGE_ARTICLE_UPDATE_FIELDS = new Set([
+  'short_description', 'text', 'kb_knowledge_base', 'category',
+]);
+
 export function getKnowledgeToolDefinitions() {
   return [
     {
@@ -64,7 +68,12 @@ export function getKnowledgeToolDefinitions() {
         type: 'object',
         properties: {
           sys_id: { type: 'string', description: 'System ID of the article' },
-          fields: { type: 'object', description: 'Key-value pairs to update (e.g., {"text": "...updated content..."})' },
+          fields: {
+            type: 'object',
+            description: 'Key-value pairs to update (e.g., {"text": "...updated content..."})',
+            properties: Object.fromEntries([...KNOWLEDGE_ARTICLE_UPDATE_FIELDS].map(field => [field, {}])),
+            additionalProperties: false,
+          },
         },
         required: ['sys_id', 'fields'],
       },
@@ -136,6 +145,13 @@ export async function executeKnowledgeToolCall(
     case 'update_knowledge_article': {
       requireWrite();
       if (!args.sys_id || !args.fields) throw new ServiceNowError('sys_id and fields are required', 'INVALID_REQUEST');
+      const unsafeFields = Object.keys(args.fields).filter(field => !KNOWLEDGE_ARTICLE_UPDATE_FIELDS.has(field));
+      if (unsafeFields.length) {
+        throw new ServiceNowError(
+          `Knowledge article fields cannot be updated: ${unsafeFields.join(', ')}. Allowed fields: ${[...KNOWLEDGE_ARTICLE_UPDATE_FIELDS].join(', ')}`,
+          'VALIDATION_ERROR'
+        );
+      }
       const result = await client.updateRecord('kb_knowledge', args.sys_id, args.fields);
       return { ...result, summary: `Updated knowledge article ${args.sys_id}` };
     }

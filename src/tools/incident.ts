@@ -7,6 +7,13 @@ import { ServiceNowError } from '../utils/errors.js';
 import { requireWrite } from '../utils/permissions.js';
 import { URGENCY, IMPACT, PRIORITY } from './schema-helpers.js';
 
+const INCIDENT_UPDATE_FIELDS = new Set([
+  'short_description', 'description', 'urgency', 'impact', 'priority', 'category', 'subcategory',
+  'assignment_group', 'assigned_to', 'caller_id', 'cmdb_ci', 'location', 'contact_type',
+  'watch_list', 'state', 'hold_reason', 'close_code', 'close_notes', 'resolved_at',
+  'resolved_by', 'work_notes', 'comments',
+]);
+
 export function getIncidentToolDefinitions() {
   return [
     {
@@ -46,7 +53,12 @@ export function getIncidentToolDefinitions() {
         type: 'object',
         properties: {
           sys_id: { type: 'string', description: 'System ID of the incident' },
-          fields: { type: 'object', description: 'Key-value pairs to update (e.g., {"state": "2", "urgency": "1"})' },
+          fields: {
+            type: 'object',
+            description: 'Key-value pairs to update (e.g., {"state": "2", "urgency": "1"})',
+            properties: Object.fromEntries([...INCIDENT_UPDATE_FIELDS].map(field => [field, {}])),
+            additionalProperties: false,
+          },
         },
         required: ['sys_id', 'fields'],
       },
@@ -137,6 +149,13 @@ export async function executeIncidentToolCall(
     case 'update_incident': {
       requireWrite();
       if (!args.sys_id || !args.fields) throw new ServiceNowError('sys_id and fields are required', 'INVALID_REQUEST');
+      const unsafeFields = Object.keys(args.fields).filter(field => !INCIDENT_UPDATE_FIELDS.has(field));
+      if (unsafeFields.length) {
+        throw new ServiceNowError(
+          `Incident fields cannot be updated: ${unsafeFields.join(', ')}. Allowed fields: ${[...INCIDENT_UPDATE_FIELDS].join(', ')}`,
+          'VALIDATION_ERROR'
+        );
+      }
       const result = await client.updateRecord('incident', args.sys_id, args.fields);
       return { ...result, summary: `Updated incident ${args.sys_id}` };
     }

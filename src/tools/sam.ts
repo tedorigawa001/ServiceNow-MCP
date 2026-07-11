@@ -15,7 +15,7 @@
  * Note: license-position and lifecycle-report figures are computed by the SAM Pro
  * reconciliation job, not user-editable — this module is read-only by design.
  */
-import type { ServiceNowClient } from '../servicenow/client.js';
+import { sanitizeLikeValue, type ServiceNowClient } from '../servicenow/client.js';
 import { ServiceNowError } from '../utils/errors.js';
 
 /**
@@ -207,8 +207,8 @@ export async function executeSamToolCall(
   switch (name) {
     case 'list_software_installs': {
       let query = '';
-      if (args.publisher) query = `norm_publisherLIKE${args.publisher}`;
-      if (args.product) query = query ? `${query}^norm_productLIKE${args.product}` : `norm_productLIKE${args.product}`;
+      if (args.publisher) query = `norm_publisherLIKE${sanitizeLikeValue(args.publisher)}`;
+      if (args.product) query = query ? `${query}^norm_productLIKE${sanitizeLikeValue(args.product)}` : `norm_productLIKE${sanitizeLikeValue(args.product)}`;
       if (args.unlicensed_only) query = query ? `${query}^unlicensed_install=true` : 'unlicensed_install=true';
       if (args.query) query = query ? `${query}^${args.query}` : args.query;
       const resp = await client.queryRecords({
@@ -228,8 +228,8 @@ export async function executeSamToolCall(
 
     case 'list_software_products': {
       let query = '';
-      if (args.publisher) query = `publisherLIKE${args.publisher}`;
-      if (args.name) query = query ? `${query}^prod_nameLIKE${args.name}` : `prod_nameLIKE${args.name}`;
+      if (args.publisher) query = `publisherLIKE${sanitizeLikeValue(args.publisher)}`;
+      if (args.name) query = query ? `${query}^prod_nameLIKE${sanitizeLikeValue(args.name)}` : `prod_nameLIKE${sanitizeLikeValue(args.name)}`;
       const resp = await client.queryRecords({
         table: 'samp_sw_product',
         query: query || undefined,
@@ -242,8 +242,8 @@ export async function executeSamToolCall(
 
     case 'list_license_positions': {
       let query = '';
-      if (args.publisher) query = `publisherLIKE${args.publisher}`;
-      if (args.product) query = query ? `${query}^productLIKE${args.product}` : `productLIKE${args.product}`;
+      if (args.publisher) query = `publisherLIKE${sanitizeLikeValue(args.publisher)}`;
+      if (args.product) query = query ? `${query}^productLIKE${sanitizeLikeValue(args.product)}` : `productLIKE${sanitizeLikeValue(args.product)}`;
       if (args.over_licensed_only) query = query ? `${query}^over_licensed_amount>0` : 'over_licensed_amount>0';
       const resp = await client.queryRecords({
         table: 'samp_license_position_report',
@@ -256,7 +256,7 @@ export async function executeSamToolCall(
     }
 
     case 'get_license_position_summary': {
-      const query = args.publisher ? `publisherLIKE${args.publisher}` : undefined;
+      const query = args.publisher ? `publisherLIKE${sanitizeLikeValue(args.publisher)}` : undefined;
       // display_value is omitted here: currency fields (over_licensed_amount,
       // potential_savings, true_up_cost) come back as formatted strings like
       // "$3,855,035.2455" under display_value, which breaks Number() parsing below.
@@ -290,7 +290,7 @@ export async function executeSamToolCall(
 
     case 'list_software_discovery_models': {
       let query = '';
-      if (args.publisher) query = `norm_publisherLIKE${args.publisher}`;
+      if (args.publisher) query = `norm_publisherLIKE${sanitizeLikeValue(args.publisher)}`;
       if (args.approved !== undefined) query = query ? `${query}^approved=${args.approved}` : `approved=${args.approved}`;
       const resp = await client.queryRecords({
         table: 'cmdb_sam_sw_discovery_model',
@@ -304,8 +304,8 @@ export async function executeSamToolCall(
 
     case 'list_software_models': {
       let query = '';
-      if (args.publisher) query = `manufacturer.nameLIKE${args.publisher}`;
-      if (args.product) query = query ? `${query}^product.prod_nameLIKE${args.product}` : `product.prod_nameLIKE${args.product}`;
+      if (args.publisher) query = `manufacturer.nameLIKE${sanitizeLikeValue(args.publisher)}`;
+      if (args.product) query = query ? `${query}^product.prod_nameLIKE${sanitizeLikeValue(args.product)}` : `product.prod_nameLIKE${sanitizeLikeValue(args.product)}`;
       if (args.query) query = query ? `${query}^${args.query}` : args.query;
       const resp = await client.queryRecords({
         table: 'cmdb_software_product_model',
@@ -324,10 +324,10 @@ export async function executeSamToolCall(
 
     case 'list_software_lifecycle_reports': {
       let query = '';
-      if (args.publisher) query = `manufacturerLIKE${args.publisher}`;
-      if (args.product) query = query ? `${query}^norm_productLIKE${args.product}` : `norm_productLIKE${args.product}`;
+      if (args.publisher) query = `manufacturerLIKE${sanitizeLikeValue(args.publisher)}`;
+      if (args.product) query = query ? `${query}^norm_productLIKE${sanitizeLikeValue(args.product)}` : `norm_productLIKE${sanitizeLikeValue(args.product)}`;
       if (args.current_phase) {
-        const phase = normalizeChoice(args.current_phase, LIFECYCLE_PHASE_CHOICES);
+        const phase = sanitizeLikeValue(normalizeChoice(args.current_phase, LIFECYCLE_PHASE_CHOICES));
         query = query ? `${query}^current_lifecycle_phase=${phase}` : `current_lifecycle_phase=${phase}`;
       }
       const resp = await client.queryRecords({
@@ -347,14 +347,14 @@ export async function executeSamToolCall(
 
     case 'list_software_lifecycle_entries': {
       let query = args.active !== false ? 'active=true' : '';
-      if (args.publisher) query = query ? `${query}^publisherLIKE${args.publisher}` : `publisherLIKE${args.publisher}`;
-      if (args.product) query = query ? `${query}^norm_productLIKE${args.product}` : `norm_productLIKE${args.product}`;
+      if (args.publisher) query = query ? `${query}^publisherLIKE${sanitizeLikeValue(args.publisher)}` : `publisherLIKE${sanitizeLikeValue(args.publisher)}`;
+      if (args.product) query = query ? `${query}^norm_productLIKE${sanitizeLikeValue(args.product)}` : `norm_productLIKE${sanitizeLikeValue(args.product)}`;
       if (args.lifecycle_phase) {
-        const phase = normalizeChoice(args.lifecycle_phase, LIFECYCLE_PHASE_CHOICES);
+        const phase = sanitizeLikeValue(normalizeChoice(args.lifecycle_phase, LIFECYCLE_PHASE_CHOICES));
         query = query ? `${query}^lifecycle_phase=${phase}` : `lifecycle_phase=${phase}`;
       }
       if (args.risk) {
-        const risk = normalizeChoice(args.risk, RISK_CHOICES);
+        const risk = sanitizeLikeValue(normalizeChoice(args.risk, RISK_CHOICES));
         query = query ? `${query}^risk=${risk}` : `risk=${risk}`;
       }
       const resp = await client.queryRecords({

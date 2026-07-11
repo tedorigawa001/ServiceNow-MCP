@@ -12,7 +12,7 @@
  *   @ci:<name>       — CMDB CI by name
  *   @kb:<title>      — Knowledge article by title
  */
-import type { ServiceNowClient } from '../servicenow/client.js';
+import { sanitizeLikeValue, type ServiceNowClient } from '../servicenow/client.js';
 
 export interface McpResource {
   uri: string;
@@ -104,7 +104,7 @@ export async function readResource(client: ServiceNowClient, uri: string): Promi
 
   const ciMatch = uri.match(/^servicenow:\/\/ci:(.+)$/);
   if (ciMatch) {
-    const ciName = decodeURIComponent(ciMatch[1]!);
+    const ciName = sanitizeLikeValue(decodeURIComponent(ciMatch[1]!));
     return client.queryRecords({
       table: 'cmdb_ci',
       query: `nameLIKE${ciName}`,
@@ -115,7 +115,7 @@ export async function readResource(client: ServiceNowClient, uri: string): Promi
 
   const kbMatch = uri.match(/^servicenow:\/\/kb:(.+)$/);
   if (kbMatch) {
-    const kbTitle = decodeURIComponent(kbMatch[1]!);
+    const kbTitle = sanitizeLikeValue(decodeURIComponent(kbMatch[1]!));
     return client.queryRecords({
       table: 'kb_knowledge',
       query: `short_descriptionLIKE${kbTitle}^ORtextLIKE${kbTitle}`,
