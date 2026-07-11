@@ -207,7 +207,8 @@ export function getUsemConfigToolDefinitions() {
         'List USEM/Vulnerability Response automation rules and configs of a given type (assignment, ' +
         'remediation_task, remediation_target, risk_calculator, calculator_rule, risk_field, ' +
         'risk_score_weight, calculator_config, classification, classification_rule, exception_rule, ' +
-        'exception_config, rollup, approval, auto_close, exclusion). Ordered by execution order. ' +
+        'exception_config, rollup, approval, auto_close, exclusion). Ordered by execution order ' +
+        'where the table has one, otherwise by a natural key. ' +
         'Optionally filter by active state or an extra encoded query.',
       inputSchema: {
         type: 'object',
@@ -270,7 +271,8 @@ export function getUsemConfigToolDefinitions() {
       name: 'set_usem_rule_active',
       description:
         'Enable or disable a USEM/VR rule (convenience toggle of the active flag). ' +
-        'Not supported for the assignment rule type, which has no active field. ' +
+        'Not supported for rule types without an active flag (exception_rule, exception_config, ' +
+        'calculator_config, risk_field, risk_score_weight) — use update_usem_rule for those. ' +
         '**[Write — requires WRITE_ENABLED=true; admin-level config change]**',
       inputSchema: {
         type: 'object',
