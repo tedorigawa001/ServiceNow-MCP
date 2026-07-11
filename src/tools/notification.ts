@@ -276,7 +276,10 @@ export async function executeNotificationToolCall(
       if (!args.sys_id || !args.fields) throw new ServiceNowError('sys_id and fields are required', 'INVALID_REQUEST');
       const unsafeFields = Object.keys(args.fields).filter(field => !NOTIFICATION_UPDATE_FIELDS.has(field));
       if (unsafeFields.length) {
-        throw new ServiceNowError(`Notification fields cannot be updated: ${unsafeFields.join(', ')}`, 'VALIDATION_ERROR');
+        throw new ServiceNowError(
+          `Notification fields cannot be updated: ${unsafeFields.join(', ')}. Allowed fields: ${[...NOTIFICATION_UPDATE_FIELDS].join(', ')}`,
+          'VALIDATION_ERROR'
+        );
       }
       const result = await client.updateRecord('sysevent_email_action', args.sys_id, args.fields);
       return { ...result, summary: `Updated notification ${args.sys_id}` };

@@ -82,9 +82,14 @@ export async function executeProblemToolCall(
     case 'create_problem': {
       requireWrite();
       if (!args.short_description) throw new ServiceNowError('short_description is required', 'INVALID_REQUEST');
+      // args is the record payload itself here (unlike update, which nests fields
+      // under args.fields) — every key is checked against the allowlist below.
       const unsafeFields = Object.keys(args).filter(field => !PROBLEM_FIELDS.has(field));
       if (unsafeFields.length) {
-        throw new ServiceNowError(`Problem fields cannot be set: ${unsafeFields.join(', ')}`, 'VALIDATION_ERROR');
+        throw new ServiceNowError(
+          `Problem fields cannot be set: ${unsafeFields.join(', ')}. Allowed fields: ${[...PROBLEM_FIELDS].join(', ')}`,
+          'VALIDATION_ERROR'
+        );
       }
       const result = await client.createRecord('problem', args);
       return { ...result, summary: `Created problem ${result.number || result.sys_id}` };
@@ -103,7 +108,10 @@ export async function executeProblemToolCall(
       if (!args.sys_id || !args.fields) throw new ServiceNowError('sys_id and fields are required', 'INVALID_REQUEST');
       const unsafeFields = Object.keys(args.fields).filter(field => !PROBLEM_FIELDS.has(field));
       if (unsafeFields.length) {
-        throw new ServiceNowError(`Problem fields cannot be updated: ${unsafeFields.join(', ')}`, 'VALIDATION_ERROR');
+        throw new ServiceNowError(
+          `Problem fields cannot be updated: ${unsafeFields.join(', ')}. Allowed fields: ${[...PROBLEM_FIELDS].join(', ')}`,
+          'VALIDATION_ERROR'
+        );
       }
       const result = await client.updateRecord('problem', args.sys_id, args.fields);
       return { ...result, summary: `Updated problem ${args.sys_id}` };

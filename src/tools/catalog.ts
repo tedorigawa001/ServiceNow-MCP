@@ -373,7 +373,10 @@ export async function executeCatalogToolCall(
         throw new ServiceNowError('sys_id and fields are required', 'INVALID_REQUEST');
       const unsafeFields = Object.keys(args.fields).filter(field => !CATALOG_ITEM_FIELDS.has(field));
       if (unsafeFields.length) {
-        throw new ServiceNowError(`Catalog item fields cannot be updated: ${unsafeFields.join(', ')}`, 'VALIDATION_ERROR');
+        throw new ServiceNowError(
+          `Catalog item fields cannot be updated: ${unsafeFields.join(', ')}. Allowed fields: ${[...CATALOG_ITEM_FIELDS].join(', ')}`,
+          'VALIDATION_ERROR'
+        );
       }
       const result = await client.updateRecord('sc_cat_item', args.sys_id, args.fields);
       return { ...result, summary: `Updated catalog item ${args.sys_id}` };

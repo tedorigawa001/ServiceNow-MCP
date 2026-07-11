@@ -151,7 +151,10 @@ export async function executeIncidentToolCall(
       if (!args.sys_id || !args.fields) throw new ServiceNowError('sys_id and fields are required', 'INVALID_REQUEST');
       const unsafeFields = Object.keys(args.fields).filter(field => !INCIDENT_UPDATE_FIELDS.has(field));
       if (unsafeFields.length) {
-        throw new ServiceNowError(`Incident fields cannot be updated: ${unsafeFields.join(', ')}`, 'VALIDATION_ERROR');
+        throw new ServiceNowError(
+          `Incident fields cannot be updated: ${unsafeFields.join(', ')}. Allowed fields: ${[...INCIDENT_UPDATE_FIELDS].join(', ')}`,
+          'VALIDATION_ERROR'
+        );
       }
       const result = await client.updateRecord('incident', args.sys_id, args.fields);
       return { ...result, summary: `Updated incident ${args.sys_id}` };

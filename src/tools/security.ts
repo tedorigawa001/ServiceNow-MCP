@@ -289,9 +289,14 @@ export async function executeSecurityToolCall(
     case 'create_security_incident': {
       requireWrite();
       if (!args.short_description || !args.category) throw new ServiceNowError('short_description and category are required', 'INVALID_REQUEST');
+      // args is the record payload itself here (unlike update, which nests fields
+      // under args.fields) — every key is checked against the allowlist below.
       const unsafeFields = Object.keys(args).filter(field => !SECURITY_INCIDENT_FIELDS.has(field));
       if (unsafeFields.length) {
-        throw new ServiceNowError(`Security incident fields cannot be set: ${unsafeFields.join(', ')}`, 'VALIDATION_ERROR');
+        throw new ServiceNowError(
+          `Security incident fields cannot be set: ${unsafeFields.join(', ')}. Allowed fields: ${[...SECURITY_INCIDENT_FIELDS].join(', ')}`,
+          'VALIDATION_ERROR'
+        );
       }
       const result = await client.createRecord('sn_si_incident', args);
       return { ...result, summary: `Created security incident ${result.number || result.sys_id}` };
@@ -310,7 +315,10 @@ export async function executeSecurityToolCall(
       if (!args.sys_id || !args.fields) throw new ServiceNowError('sys_id and fields are required', 'INVALID_REQUEST');
       const unsafeFields = Object.keys(args.fields).filter(field => !SECURITY_INCIDENT_FIELDS.has(field));
       if (unsafeFields.length) {
-        throw new ServiceNowError(`Security incident fields cannot be updated: ${unsafeFields.join(', ')}`, 'VALIDATION_ERROR');
+        throw new ServiceNowError(
+          `Security incident fields cannot be updated: ${unsafeFields.join(', ')}. Allowed fields: ${[...SECURITY_INCIDENT_FIELDS].join(', ')}`,
+          'VALIDATION_ERROR'
+        );
       }
       const result = await client.updateRecord('sn_si_incident', args.sys_id, args.fields);
       return { ...result, summary: `Updated security incident ${args.sys_id}` };
@@ -345,7 +353,10 @@ export async function executeSecurityToolCall(
       if (!args.sys_id || !args.fields) throw new ServiceNowError('sys_id and fields are required', 'INVALID_REQUEST');
       const unsafeFields = Object.keys(args.fields).filter(field => !VULNERABILITY_UPDATE_FIELDS.has(field));
       if (unsafeFields.length) {
-        throw new ServiceNowError(`Vulnerability fields cannot be updated: ${unsafeFields.join(', ')}`, 'VALIDATION_ERROR');
+        throw new ServiceNowError(
+          `Vulnerability fields cannot be updated: ${unsafeFields.join(', ')}. Allowed fields: ${[...VULNERABILITY_UPDATE_FIELDS].join(', ')}`,
+          'VALIDATION_ERROR'
+        );
       }
       const result = await client.updateRecord('sn_vul_entry', args.sys_id, args.fields);
       return { ...result, summary: `Updated vulnerability ${args.sys_id}` };

@@ -147,7 +147,10 @@ export async function executeKnowledgeToolCall(
       if (!args.sys_id || !args.fields) throw new ServiceNowError('sys_id and fields are required', 'INVALID_REQUEST');
       const unsafeFields = Object.keys(args.fields).filter(field => !KNOWLEDGE_ARTICLE_UPDATE_FIELDS.has(field));
       if (unsafeFields.length) {
-        throw new ServiceNowError(`Knowledge article fields cannot be updated: ${unsafeFields.join(', ')}`, 'VALIDATION_ERROR');
+        throw new ServiceNowError(
+          `Knowledge article fields cannot be updated: ${unsafeFields.join(', ')}. Allowed fields: ${[...KNOWLEDGE_ARTICLE_UPDATE_FIELDS].join(', ')}`,
+          'VALIDATION_ERROR'
+        );
       }
       const result = await client.updateRecord('kb_knowledge', args.sys_id, args.fields);
       return { ...result, summary: `Updated knowledge article ${args.sys_id}` };

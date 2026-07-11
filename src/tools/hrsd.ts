@@ -248,9 +248,14 @@ export async function executeHrsdToolCall(
       requireWrite();
       if (!args.short_description || !args.hr_service)
         throw new ServiceNowError('short_description and hr_service are required', 'INVALID_REQUEST');
+      // args is the record payload itself here (unlike update, which nests fields
+      // under args.fields) — every key is checked against the allowlist below.
       const unsafeFields = Object.keys(args).filter(field => !HR_CASE_FIELDS.has(field));
       if (unsafeFields.length) {
-        throw new ServiceNowError(`HR case fields cannot be set: ${unsafeFields.join(', ')}`, 'VALIDATION_ERROR');
+        throw new ServiceNowError(
+          `HR case fields cannot be set: ${unsafeFields.join(', ')}. Allowed fields: ${[...HR_CASE_FIELDS].join(', ')}`,
+          'VALIDATION_ERROR'
+        );
       }
       const result = await client.createRecord('sn_hr_core_case', args);
       return { ...result, summary: `Created HR case ${result.number || result.sys_id}` };
@@ -269,7 +274,10 @@ export async function executeHrsdToolCall(
       if (!args.sys_id || !args.fields) throw new ServiceNowError('sys_id and fields are required', 'INVALID_REQUEST');
       const unsafeFields = Object.keys(args.fields).filter(field => !HR_CASE_FIELDS.has(field));
       if (unsafeFields.length) {
-        throw new ServiceNowError(`HR case fields cannot be updated: ${unsafeFields.join(', ')}`, 'VALIDATION_ERROR');
+        throw new ServiceNowError(
+          `HR case fields cannot be updated: ${unsafeFields.join(', ')}. Allowed fields: ${[...HR_CASE_FIELDS].join(', ')}`,
+          'VALIDATION_ERROR'
+        );
       }
       const result = await client.updateRecord('sn_hr_core_case', args.sys_id, args.fields);
       return { ...result, summary: `Updated HR case ${args.sys_id}` };
@@ -326,7 +334,10 @@ export async function executeHrsdToolCall(
       }
       const unsafeFields = Object.keys(args.fields).filter(field => !HR_PROFILE_UPDATE_FIELDS.has(field));
       if (unsafeFields.length) {
-        throw new ServiceNowError(`HR profile fields cannot be updated: ${unsafeFields.join(', ')}`, 'VALIDATION_ERROR');
+        throw new ServiceNowError(
+          `HR profile fields cannot be updated: ${unsafeFields.join(', ')}. Allowed fields: ${[...HR_PROFILE_UPDATE_FIELDS].join(', ')}`,
+          'VALIDATION_ERROR'
+        );
       }
       const profileResp = await client.queryRecords({ table: 'sn_hr_core_profile', query: `user=${args.user_sys_id}`, limit: 1 });
       if (profileResp.count === 0) throw new ServiceNowError(`No HR profile found for user ${args.user_sys_id}`, 'NOT_FOUND');

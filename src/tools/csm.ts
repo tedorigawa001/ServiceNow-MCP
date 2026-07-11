@@ -174,9 +174,14 @@ export async function executeCsmToolCall(
     case 'create_csm_case': {
       requireWrite();
       if (!args.short_description) throw new ServiceNowError('short_description is required', 'INVALID_REQUEST');
+      // args is the record payload itself here (unlike update, which nests fields
+      // under args.fields) — every key is checked against the allowlist below.
       const unsafeFields = Object.keys(args).filter(field => !CSM_CASE_FIELDS.has(field));
       if (unsafeFields.length) {
-        throw new ServiceNowError(`CSM case fields cannot be set: ${unsafeFields.join(', ')}`, 'VALIDATION_ERROR');
+        throw new ServiceNowError(
+          `CSM case fields cannot be set: ${unsafeFields.join(', ')}. Allowed fields: ${[...CSM_CASE_FIELDS].join(', ')}`,
+          'VALIDATION_ERROR'
+        );
       }
       const result = await client.createRecord('sn_customerservice_case', args);
       return { ...result, summary: `Created CSM case ${result.number || result.sys_id}` };
@@ -195,7 +200,10 @@ export async function executeCsmToolCall(
       if (!args.sys_id || !args.fields) throw new ServiceNowError('sys_id and fields are required', 'INVALID_REQUEST');
       const unsafeFields = Object.keys(args.fields).filter(field => !CSM_CASE_FIELDS.has(field));
       if (unsafeFields.length) {
-        throw new ServiceNowError(`CSM case fields cannot be updated: ${unsafeFields.join(', ')}`, 'VALIDATION_ERROR');
+        throw new ServiceNowError(
+          `CSM case fields cannot be updated: ${unsafeFields.join(', ')}. Allowed fields: ${[...CSM_CASE_FIELDS].join(', ')}`,
+          'VALIDATION_ERROR'
+        );
       }
       const result = await client.updateRecord('sn_customerservice_case', args.sys_id, args.fields);
       return { ...result, summary: `Updated CSM case ${args.sys_id}` };

@@ -211,7 +211,10 @@ export async function executeItamToolCall(
       requireWrite();
       const unsafeFields = Object.keys(args.fields).filter(field => !ASSET_UPDATE_FIELDS.has(field));
       if (unsafeFields.length) {
-        throw new ServiceNowError(`Asset fields cannot be updated: ${unsafeFields.join(', ')}`, 'VALIDATION_ERROR');
+        throw new ServiceNowError(
+          `Asset fields cannot be updated: ${unsafeFields.join(', ')}. Allowed fields: ${[...ASSET_UPDATE_FIELDS].join(', ')}`,
+          'VALIDATION_ERROR'
+        );
       }
       const result = await client.updateRecord('alm_asset', args.sys_id, args.fields);
       return { action: 'updated', sys_id: args.sys_id, ...result };

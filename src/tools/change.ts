@@ -166,7 +166,10 @@ export async function executeChangeToolCall(
       if (!args.sys_id || !args.fields) throw new ServiceNowError('sys_id and fields are required', 'INVALID_REQUEST');
       const unsafeFields = Object.keys(args.fields).filter(field => !CHANGE_UPDATE_FIELDS.has(field));
       if (unsafeFields.length) {
-        throw new ServiceNowError(`Change request fields cannot be updated: ${unsafeFields.join(', ')}`, 'VALIDATION_ERROR');
+        throw new ServiceNowError(
+          `Change request fields cannot be updated: ${unsafeFields.join(', ')}. Allowed fields: ${[...CHANGE_UPDATE_FIELDS].join(', ')}`,
+          'VALIDATION_ERROR'
+        );
       }
       const result = await client.updateRecord('change_request', args.sys_id, args.fields);
       return { ...result, summary: `Updated change request ${args.sys_id}` };

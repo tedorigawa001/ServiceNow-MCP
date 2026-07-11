@@ -547,7 +547,10 @@ export async function executePerformanceToolCall(
         throw new ServiceNowError('sys_id and fields are required', 'INVALID_REQUEST');
       const unsafeFields = Object.keys(args.fields).filter(field => !DASHBOARD_UPDATE_FIELDS.has(field));
       if (unsafeFields.length) {
-        throw new ServiceNowError(`Dashboard fields cannot be updated: ${unsafeFields.join(', ')}`, 'VALIDATION_ERROR');
+        throw new ServiceNowError(
+          `Dashboard fields cannot be updated: ${unsafeFields.join(', ')}. Allowed fields: ${[...DASHBOARD_UPDATE_FIELDS].join(', ')}`,
+          'VALIDATION_ERROR'
+        );
       }
       const result = await client.updateRecord('pa_dashboards', args.sys_id, args.fields);
       return { ...result, summary: `Updated dashboard ${args.sys_id}` };

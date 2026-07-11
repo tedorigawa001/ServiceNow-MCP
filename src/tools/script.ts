@@ -620,7 +620,10 @@ export async function executeScriptToolCall(
       const allowedFields = new Set(['description']);
       const unsafeFields = Object.keys(args.fields).filter(field => !allowedFields.has(field));
       if (unsafeFields.length) {
-        throw new ServiceNowError(`ACL fields are protected and cannot be updated: ${unsafeFields.join(', ')}`, 'VALIDATION_ERROR');
+        throw new ServiceNowError(
+          `ACL fields are protected and cannot be updated: ${unsafeFields.join(', ')}. Allowed fields: ${[...allowedFields].join(', ')}`,
+          'VALIDATION_ERROR'
+        );
       }
       const result = await client.updateRecord('sys_security_acl', args.sys_id, args.fields);
       return { ...result, summary: `Updated ACL ${args.sys_id}` };
