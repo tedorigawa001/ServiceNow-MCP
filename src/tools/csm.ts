@@ -7,6 +7,12 @@ import { ServiceNowError } from '../utils/errors.js';
 import { requireWrite } from '../utils/permissions.js';
 import { PRIORITY } from './schema-helpers.js';
 
+const CSM_CASE_FIELDS = new Set([
+  'short_description', 'account', 'contact', 'category', 'subcategory', 'priority',
+  'description', 'product', 'assignment_group', 'assigned_to', 'state', 'work_notes',
+  'close_code', 'close_notes',
+]);
+
 export function getCsmToolDefinitions() {
   return [
     {
@@ -46,7 +52,12 @@ export function getCsmToolDefinitions() {
         type: 'object',
         properties: {
           sys_id: { type: 'string', description: 'System ID of the CSM case' },
-          fields: { type: 'object', description: 'Key-value pairs of fields to update' },
+          fields: {
+            type: 'object',
+            description: 'Key-value pairs of fields to update',
+            properties: Object.fromEntries([...CSM_CASE_FIELDS].map(field => [field, {}])),
+            additionalProperties: false,
+          },
         },
         required: ['sys_id', 'fields'],
       },
@@ -163,7 +174,8 @@ export async function executeCsmToolCall(
     case 'create_csm_case': {
       requireWrite();
       if (!args.short_description) throw new ServiceNowError('short_description is required', 'INVALID_REQUEST');
-      const result = await client.createRecord('sn_customerservice_case', args);
+      const data = Object.fromEntries(Object.entries(args).filter(([field]) => CSM_CASE_FIELDS.has(field)));
+      const result = await client.createRecord('sn_customerservice_case', data);
       return { ...result, summary: `Created CSM case ${result.number || result.sys_id}` };
     }
     case 'get_csm_case': {
@@ -178,6 +190,10 @@ export async function executeCsmToolCall(
     case 'update_csm_case': {
       requireWrite();
       if (!args.sys_id || !args.fields) throw new ServiceNowError('sys_id and fields are required', 'INVALID_REQUEST');
+      const unsafeFields = Object.keys(args.fields).filter(field => !CSM_CASE_FIELDS.has(field));
+      if (unsafeFields.length) {
+        throw new ServiceNowError(`CSM case fields cannot be updated: ${unsafeFields.join(', ')}`, 'VALIDATION_ERROR');
+      }
       const result = await client.updateRecord('sn_customerservice_case', args.sys_id, args.fields);
       return { ...result, summary: `Updated CSM case ${args.sys_id}` };
     }
