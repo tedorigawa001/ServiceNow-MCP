@@ -5,7 +5,7 @@
  */
 import type { ServiceNowClient } from '../servicenow/client.js';
 import { ServiceNowError } from '../utils/errors.js';
-import { requireWrite } from '../utils/permissions.js';
+import { requireScripting, requireWrite } from '../utils/permissions.js';
 
 export function getReportingToolDefinitions() {
   return [
@@ -344,7 +344,7 @@ export async function executeReportingToolCall(
       return resp.records[0];
     }
     case 'create_scheduled_job': {
-      requireWrite();
+      requireScripting();
       if (!args.name || !args.script || !args.run_type)
         throw new ServiceNowError('name, script, and run_type are required', 'INVALID_REQUEST');
       const data: Record<string, any> = {
@@ -359,7 +359,7 @@ export async function executeReportingToolCall(
       return { ...result, summary: `Created scheduled job "${args.name}" (${args.run_type})` };
     }
     case 'update_scheduled_job': {
-      requireWrite();
+      requireScripting();
       if (!args.sys_id || !args.fields) throw new ServiceNowError('sys_id and fields are required', 'INVALID_REQUEST');
       const result = await client.updateRecord('sysauto', args.sys_id, args.fields);
       return { ...result, summary: `Updated scheduled job ${args.sys_id}` };

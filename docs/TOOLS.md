@@ -714,7 +714,7 @@ Get details of a specific scheduled job. **[Read]**
 - `sys_id` (required)
 
 ### create_scheduled_job
-Create a new scheduled script job. **[Write]**
+Create a new scheduled script job. **[Scripting]**
 
 **Parameters**:
 - `name` (required)
@@ -724,7 +724,7 @@ Create a new scheduled script job. **[Write]**
 - `active`
 
 ### update_scheduled_job
-Update a scheduled job's script or schedule. **[Write]**
+Update a scheduled job's script or schedule. **[Scripting]**
 
 **Parameters**:
 - `sys_id` (required)
