@@ -41,6 +41,35 @@ describe('HRSD tools', () => {
         short_description: 'New employee onboarding',
       }));
     });
+
+    it('rejects undeclared fields before they reach the sensitive HR table', async () => {
+      process.env.WRITE_ENABLED = 'true';
+      await expect(executeHrsdToolCall(mockClient, 'create_hr_case', {
+        short_description: 'Onboarding', hr_service: 'Onboarding', sys_domain: 'global', u_unlisted: 'yes',
+      })).rejects.toThrow('HR case fields cannot be set: sys_domain, u_unlisted');
+      expect(mockClient.createRecord).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('update_hr_case', () => {
+    beforeEach(() => { process.env.WRITE_ENABLED = 'true'; });
+
+    it('allows documented HR case lifecycle fields', async () => {
+      mockClient.updateRecord.mockResolvedValue({ sys_id: 'hrcase1' });
+      await executeHrsdToolCall(mockClient, 'update_hr_case', {
+        sys_id: 'hrcase1', fields: { state: 'work_in_progress', assigned_to: 'hr-agent', work_notes: 'Reviewed' },
+      });
+      expect(mockClient.updateRecord).toHaveBeenCalledWith('sn_hr_core_case', 'hrcase1', {
+        state: 'work_in_progress', assigned_to: 'hr-agent', work_notes: 'Reviewed',
+      });
+    });
+
+    it('rejects undeclared fields before they reach the sensitive HR table', async () => {
+      await expect(executeHrsdToolCall(mockClient, 'update_hr_case', {
+        sys_id: 'hrcase1', fields: { sys_domain: 'global', u_unlisted: 'yes' },
+      })).rejects.toThrow('HR case fields cannot be updated: sys_domain, u_unlisted');
+      expect(mockClient.updateRecord).not.toHaveBeenCalled();
+    });
   });
 
   describe('get_hr_case', () => {

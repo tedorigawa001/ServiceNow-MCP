@@ -7,6 +7,11 @@ import { ServiceNowError } from '../utils/errors.js';
 import { requireWrite } from '../utils/permissions.js';
 import { PRIORITY } from './schema-helpers.js';
 
+const HR_CASE_FIELDS = new Set([
+  'short_description', 'hr_service', 'subject_person', 'description', 'assignment_group',
+  'priority', 'state', 'close_notes', 'close_code', 'assigned_to', 'work_notes',
+]);
+
 export function getHrsdToolDefinitions() {
   return [
     {
@@ -43,7 +48,12 @@ export function getHrsdToolDefinitions() {
         type: 'object',
         properties: {
           sys_id: { type: 'string', description: 'System ID of the HR case' },
-          fields: { type: 'object', description: 'Key-value pairs to update' },
+          fields: {
+            type: 'object',
+            description: 'Key-value pairs to update',
+            properties: Object.fromEntries([...HR_CASE_FIELDS].map(field => [field, {}])),
+            additionalProperties: false,
+          },
         },
         required: ['sys_id', 'fields'],
       },
@@ -230,8 +240,11 @@ export async function executeHrsdToolCall(
       requireWrite();
       if (!args.short_description || !args.hr_service)
         throw new ServiceNowError('short_description and hr_service are required', 'INVALID_REQUEST');
-      const payload: Record<string, any> = { ...args };
-      const result = await client.createRecord('sn_hr_core_case', payload);
+      const unsafeFields = Object.keys(args).filter(field => !HR_CASE_FIELDS.has(field));
+      if (unsafeFields.length) {
+        throw new ServiceNowError(`HR case fields cannot be set: ${unsafeFields.join(', ')}`, 'VALIDATION_ERROR');
+      }
+      const result = await client.createRecord('sn_hr_core_case', args);
       return { ...result, summary: `Created HR case ${result.number || result.sys_id}` };
     }
     case 'get_hr_case': {
@@ -246,6 +259,10 @@ export async function executeHrsdToolCall(
     case 'update_hr_case': {
       requireWrite();
       if (!args.sys_id || !args.fields) throw new ServiceNowError('sys_id and fields are required', 'INVALID_REQUEST');
+      const unsafeFields = Object.keys(args.fields).filter(field => !HR_CASE_FIELDS.has(field));
+      if (unsafeFields.length) {
+        throw new ServiceNowError(`HR case fields cannot be updated: ${unsafeFields.join(', ')}`, 'VALIDATION_ERROR');
+      }
       const result = await client.updateRecord('sn_hr_core_case', args.sys_id, args.fields);
       return { ...result, summary: `Updated HR case ${args.sys_id}` };
     }
