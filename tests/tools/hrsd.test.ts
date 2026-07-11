@@ -148,6 +148,16 @@ describe('HRSD tools', () => {
       await executeHrsdToolCall(mockClient, 'list_hr_cases', { state: 'open' });
       expect(mockClient.queryRecords).toHaveBeenCalledWith(expect.objectContaining({ query: 'state=open' }));
     });
+
+    it('does not allow HR case filters to append encoded-query clauses', async () => {
+      mockClient.queryRecords.mockResolvedValue({ count: 0, records: [] });
+      await executeHrsdToolCall(mockClient, 'list_hr_cases', {
+        state: 'open^ORactive=true', subject_person: 'jdoe^ORsys_idISNOTEMPTY',
+      });
+      expect(mockClient.queryRecords).toHaveBeenCalledWith(expect.objectContaining({
+        query: 'state=openORactive=true^subject_person.user_name=jdoeORsys_idISNOTEMPTY',
+      }));
+    });
   });
 
   describe('list_hr_services', () => {
@@ -157,6 +167,14 @@ describe('HRSD tools', () => {
       expect(mockClient.queryRecords).toHaveBeenCalledWith(expect.objectContaining({
         table: 'sn_hr_core_service',
         query: expect.stringContaining('active=true'),
+      }));
+    });
+
+    it('does not allow HR service search text to append encoded-query clauses', async () => {
+      mockClient.queryRecords.mockResolvedValue({ count: 0, records: [] });
+      await executeHrsdToolCall(mockClient, 'list_hr_services', { query: 'Onboarding^ORactive=false' });
+      expect(mockClient.queryRecords).toHaveBeenCalledWith(expect.objectContaining({
+        query: 'active=true^nameCONTAINSOnboardingORactive=false^ORdescriptionCONTAINSOnboardingORactive=false',
       }));
     });
   });
