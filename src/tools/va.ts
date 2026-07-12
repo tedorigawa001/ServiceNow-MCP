@@ -14,6 +14,27 @@ import type { ServiceNowClient } from '../servicenow/client.js';
 import { ServiceNowError } from '../utils/errors.js';
 import { requireWrite } from '../utils/permissions.js';
 
+const VA_TOPIC_UPDATE_FIELDS = new Set(['name', 'description', 'category', 'active', 'fulfillment_type']);
+
+function allowedFieldsSchema(allowedFields: Set<string>, description: string): Record<string, any> {
+  return {
+    type: 'object',
+    description,
+    properties: Object.fromEntries([...allowedFields].map(field => [field, {}])),
+    additionalProperties: false,
+  };
+}
+
+function assertAllowedFields(label: string, fields: Record<string, any>, allowedFields: Set<string>): void {
+  const unsafeFields = Object.keys(fields).filter(field => !allowedFields.has(field));
+  if (unsafeFields.length) {
+    throw new ServiceNowError(
+      `${label} fields cannot be updated: ${unsafeFields.join(', ')}. Allowed fields: ${[...allowedFields].join(', ')}`,
+      'VALIDATION_ERROR'
+    );
+  }
+}
+
 export function getVaToolDefinitions() {
   return [
     {
@@ -38,7 +59,10 @@ export function getVaToolDefinitions() {
         type: 'object',
         properties: {
           sys_id: { type: 'string', description: 'Topic sys_id' },
-          fields: { type: 'object', description: 'Fields to update (name, description, active, etc.)' },
+          fields: allowedFieldsSchema(
+            VA_TOPIC_UPDATE_FIELDS,
+            'Allowed fields: name, description, category, active, fulfillment_type'
+          ),
         },
         required: ['sys_id', 'fields'],
       },
@@ -130,6 +154,7 @@ export async function executeVaToolCall(
     case 'update_va_topic': {
       if (!args.sys_id || !args.fields) throw new ServiceNowError('sys_id and fields are required', 'INVALID_REQUEST');
       requireWrite();
+      assertAllowedFields('VA topic', args.fields, VA_TOPIC_UPDATE_FIELDS);
       const result = await client.updateRecord('sys_cs_topic', args.sys_id, args.fields);
       return { action: 'updated', sys_id: args.sys_id, ...result };
     }

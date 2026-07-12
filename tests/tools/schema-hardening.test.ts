@@ -7,6 +7,7 @@ import { getScriptToolDefinitions } from '../../src/tools/script.js';
 import { getTaskToolDefinitions } from '../../src/tools/task.js';
 import { getUsemConfigToolDefinitions } from '../../src/tools/usem-config.js';
 import { getUserToolDefinitions } from '../../src/tools/user.js';
+import { getVaToolDefinitions } from '../../src/tools/va.js';
 
 type ToolDefinition = {
   name: string;
@@ -109,6 +110,11 @@ describe('write fields schemas', () => {
       defs: getAppStudioToolDefinitions(),
       name: 'update_scoped_app',
       allowed: ['active', 'description', 'logo', 'name', 'short_description', 'vendor', 'version'],
+    },
+    {
+      defs: getVaToolDefinitions(),
+      name: 'update_va_topic',
+      allowed: ['active', 'category', 'description', 'fulfillment_type', 'name'],
     },
   ])('$name rejects undeclared fields at schema level', ({ defs, name, allowed }) => {
     const fields = tool(defs, name).inputSchema.properties?.fields;

@@ -2405,7 +2405,7 @@ Update Virtual Agent topic properties. **[Write]**
 
 **Parameters**:
 - `sys_id` (required)
-- `fields` (required) — Fields to update
+- `fields` (required) — allowed fields only: `name`, `description`, `category`, `active`, `fulfillment_type`
 
 ### get_va_topic
 Get Virtual Agent topic details including intent and trigger phrases.
