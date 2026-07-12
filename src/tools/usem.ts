@@ -94,8 +94,10 @@ export function getUsemToolDefinitions() {
     {
       name: 'list_remediation_tasks',
       description:
-        'List USEM Remediation Tasks (sn_vul_remediation_task). Filter by state or assignment group. ' +
-        'Returns curated fields ordered by descending risk score.',
+        'List USEM Remediation Tasks across BOTH backing tables: sn_vul_remediation_task and ' +
+        'sn_vul_vulnerability (the task-based group the rule engine actually creates RTs in — ' +
+        'sys_class label "Remediation Task", number prefix VUL). Each record carries a ' +
+        '`source_table` marker. Filter by state or assignment group; ordered by descending risk score.',
       inputSchema: {
         type: 'object',
         properties: {
@@ -114,11 +116,17 @@ export function getUsemToolDefinitions() {
     {
       name: 'get_remediation_task',
       description:
-        'Get full details of a single Remediation Task by sys_id or task number.',
+        'Get full details of a single Remediation Task by sys_id or number. Looks in both backing ' +
+        'tables: a VUL-prefixed number targets sn_vul_vulnerability (the rule-engine RT), anything ' +
+        'else is tried as task_number on sn_vul_remediation_task first, then as number on ' +
+        'sn_vul_vulnerability. The result includes a `source_table` marker.',
       inputSchema: {
         type: 'object',
         properties: {
-          number_or_sysid: { type: 'string', description: 'RT task_number or 32-char sys_id' },
+          number_or_sysid: {
+            type: 'string',
+            description: 'RT task_number, VUL number (VULxxxxxxx), or 32-char sys_id',
+          },
         },
         required: ['number_or_sysid'],
       },
@@ -317,6 +325,25 @@ export function getUsemToolDefinitions() {
       },
     },
     {
+      name: 'get_finding_grouping_status',
+      description:
+        'Diagnose why a Vulnerable Item is (not) grouped into a Remediation Task. Returns the VI\'s ' +
+        'grouping preconditions (`vulnerability` and `cmdb_ci` references, `is_in_group`), its m2m ' +
+        'links with each task\'s auto_vi_refresh, the active remediation task rules ' +
+        '(sn_sec_rem_task_rule), and an ordered diagnosis: empty vulnerability → no active rule → ' +
+        'rule/condition mismatch or auto_vi_refresh=false on the existing task.',
+      inputSchema: {
+        type: 'object',
+        properties: {
+          vulnerable_item: {
+            type: 'string',
+            description: 'Vulnerable Item: VIT number (VITxxxxxxx) or 32-char sys_id',
+          },
+        },
+        required: ['vulnerable_item'],
+      },
+    },
+    {
       name: 'add_vi_to_remediation_task',
       description:
         'Associate a Vulnerable Item with a remediation group via the "Remediation Task Item" m2m ' +
@@ -436,29 +463,69 @@ export async function executeUsemToolCall(
       if (args.assignment_group) parts.push(`assignment_group=${args.assignment_group}`);
       if (args.assigned_to) parts.push(`assigned_to=${args.assigned_to}`);
       if (args.query) parts.push(args.query);
-      const resp = await client.queryRecords({
-        table: 'sn_vul_remediation_task',
-        query: parts.join('^'),
-        fields: RT_FIELDS,
-        orderBy: '-risk_score',
-        limit: args.limit ?? 25,
-        display_value: args.display_value,
-      });
-      return { count: resp.count, records: resp.records, summary: `Found ${resp.count} remediation task(s)` };
+      const query = parts.join('^');
+      const limit = args.limit ?? 25;
+      // The rule engine creates RTs in sn_vul_vulnerability, not sn_vul_remediation_task,
+      // so a single-table listing silently hides engine-created tasks — query both.
+      const [legacy, groups] = await Promise.all([
+        client.queryRecords({
+          table: 'sn_vul_remediation_task',
+          query,
+          fields: RT_FIELDS,
+          orderBy: '-risk_score',
+          limit,
+          display_value: args.display_value,
+        }),
+        client.queryRecords({
+          table: 'sn_vul_vulnerability',
+          query,
+          fields: VG_FIELDS,
+          orderBy: '-risk_score',
+          limit,
+          display_value: args.display_value,
+        }),
+      ]);
+      const records = [
+        ...legacy.records.map(r => ({ ...r, source_table: 'sn_vul_remediation_task' })),
+        ...groups.records.map(r => ({ ...r, source_table: 'sn_vul_vulnerability' })),
+      ];
+      return {
+        count: records.length,
+        by_table: {
+          sn_vul_remediation_task: legacy.count,
+          sn_vul_vulnerability: groups.count,
+        },
+        records,
+        summary:
+          `Found ${records.length} remediation task(s): ${legacy.count} in sn_vul_remediation_task, ` +
+          `${groups.count} in sn_vul_vulnerability (rule-engine created)`,
+      };
     }
 
     case 'get_remediation_task': {
       if (!args.number_or_sysid) throw new ServiceNowError('number_or_sysid is required', 'INVALID_REQUEST');
-      if (SYS_ID_RE.test(args.number_or_sysid)) {
-        return await client.getRecord('sn_vul_remediation_task', args.number_or_sysid);
+      const id = String(args.number_or_sysid);
+      if (SYS_ID_RE.test(id)) {
+        try {
+          const rec = await client.getRecord('sn_vul_remediation_task', id);
+          return { ...rec, source_table: 'sn_vul_remediation_task' };
+        } catch {
+          const rec = await client.getRecord('sn_vul_vulnerability', id);
+          return { ...rec, source_table: 'sn_vul_vulnerability' };
+        }
       }
-      const resp = await client.queryRecords({
-        table: 'sn_vul_remediation_task',
-        query: `task_number=${args.number_or_sysid}`,
-        limit: 1,
-      });
-      if (resp.count === 0) throw new ServiceNowError(`Remediation Task not found: ${args.number_or_sysid}`, 'NOT_FOUND');
-      return resp.records[0];
+      const safeId = sanitizeLikeValue(id);
+      const lookups: Array<{ table: string; query: string }> = /^VUL/i.test(id)
+        ? [{ table: 'sn_vul_vulnerability', query: `number=${safeId}` }]
+        : [
+            { table: 'sn_vul_remediation_task', query: `task_number=${safeId}` },
+            { table: 'sn_vul_vulnerability', query: `number=${safeId}` },
+          ];
+      for (const lookup of lookups) {
+        const resp = await client.queryRecords({ table: lookup.table, query: lookup.query, limit: 1 });
+        if (resp.count > 0) return { ...resp.records[0], source_table: lookup.table };
+      }
+      throw new ServiceNowError(`Remediation Task not found: ${args.number_or_sysid}`, 'NOT_FOUND');
     }
 
     case 'list_vulnerability_groups': {
@@ -692,6 +759,96 @@ export async function executeUsemToolCall(
         count: resp.count,
         records: resp.records,
         summary: `Vulnerable Item ${args.vulnerable_item} belongs to ${resp.count} remediation task(s)`,
+      };
+    }
+
+    case 'get_finding_grouping_status': {
+      if (!args.vulnerable_item) throw new ServiceNowError('vulnerable_item is required', 'INVALID_REQUEST');
+      const viId = await resolveSysId(client, 'sn_vul_vulnerable_item', args.vulnerable_item, 'Vulnerable Item');
+
+      const [viResp, linksResp, rulesResp] = await Promise.all([
+        client.queryRecords({
+          table: 'sn_vul_vulnerable_item',
+          query: `sys_id=${viId}`,
+          fields: 'number,state,substate,vulnerability,cmdb_ci,is_in_group,risk_score,source,sys_id',
+          limit: 1,
+          display_value: 'all',
+        }),
+        client.queryRecords({
+          table: 'sn_vul_m2m_vul_group_item',
+          query: `sn_vul_vulnerable_item=${viId}`,
+          fields:
+            'sys_id,sn_vul_vulnerability,sn_vul_vulnerability.number,sn_vul_vulnerability.state,' +
+            'sn_vul_vulnerability.auto_vi_refresh,sn_vul_vulnerability.short_description',
+          limit: 100,
+          display_value: 'all',
+        }),
+        client.queryRecords({
+          table: 'sn_sec_rem_task_rule',
+          query: 'active=true',
+          fields: 'rule_name,active,order,table,condition,field_1,sys_id',
+          orderBy: 'order',
+          limit: 100,
+        }),
+      ]);
+      if (viResp.count === 0) throw new ServiceNowError(`Vulnerable Item not found: ${args.vulnerable_item}`, 'NOT_FOUND');
+      const vi = viResp.records[0];
+
+      const vulnerabilitySet = refValue(vi.vulnerability) !== '';
+      const cmdbCiSet = refValue(vi.cmdb_ci) !== '';
+      const isInGroup = refValue(vi.is_in_group) === 'true';
+      const links = linksResp.records;
+      const staleRefreshTasks = links.filter(l => refValue((l as any)['sn_vul_vulnerability.auto_vi_refresh']) !== 'true');
+
+      // Ordered first-failure diagnosis, mirroring how the grouping engine short-circuits.
+      const diagnosis: string[] = [];
+      let status: string;
+      if (links.length > 0) {
+        status = 'grouped';
+        diagnosis.push(`Grouped: member of ${links.length} remediation task(s).`);
+        if (!isInGroup) diagnosis.push('Note: is_in_group=false despite m2m links — the flag may lag or the link was created manually.');
+      } else if (!vulnerabilitySet) {
+        status = 'blocked_no_vulnerability';
+        diagnosis.push(
+          'The `vulnerability` reference is empty, so the "Link to Remediation Tasks" automation can never fire ' +
+          '(its condition requires both cmdb_ci and vulnerability). REST inserts get this reference cleared by a ' +
+          'before business rule — re-apply it with a PATCH or recreate the VI via create_vulnerable_item.'
+        );
+      } else if (!cmdbCiSet) {
+        status = 'blocked_no_cmdb_ci';
+        diagnosis.push('The `cmdb_ci` reference is empty; the grouping automation requires both cmdb_ci and vulnerability.');
+      } else if (rulesResp.count === 0) {
+        status = 'blocked_no_active_rules';
+        diagnosis.push('No active remediation task rules (sn_sec_rem_task_rule) exist, so nothing can group this VI.');
+      } else {
+        status = 'not_grouped_rule_mismatch_or_not_triggered';
+        diagnosis.push(
+          `Preconditions look fine (vulnerability + cmdb_ci set, ${rulesResp.count} active rule(s)) but the VI is not ` +
+          'in any remediation task. Check: (1) whether an active rule\'s condition actually matches this VI, ' +
+          '(2) the automation only evaluates on insert/update — REST-origin inserts have not been observed to ' +
+          'trigger it on this instance, and (3) joining an EXISTING task additionally requires that task to have ' +
+          'auto_vi_refresh=true. A UI-side update of the VI can re-trigger evaluation.'
+        );
+      }
+      if (staleRefreshTasks.length > 0 && links.length > 0) {
+        diagnosis.push(
+          `${staleRefreshTasks.length} linked task(s) have auto_vi_refresh=false — new VIs with the same group key ` +
+          'will NOT auto-join them.'
+        );
+      }
+
+      return {
+        status,
+        vulnerable_item: vi,
+        checks: {
+          vulnerability_set: vulnerabilitySet,
+          cmdb_ci_set: cmdbCiSet,
+          is_in_group: isInGroup,
+        },
+        linked_remediation_tasks: links,
+        active_remediation_task_rules: rulesResp.records,
+        diagnosis,
+        summary: `VI ${refValue(vi.number) || args.vulnerable_item}: ${status} — ${diagnosis[0]}`,
       };
     }
 

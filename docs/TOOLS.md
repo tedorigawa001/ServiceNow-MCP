@@ -1418,7 +1418,7 @@ Get threat intelligence entries from the ServiceNow threat feed.
 
 ---
 
-## USEM / Vulnerability Response (37 tools)
+## USEM / Vulnerability Response (38 tools)
 
 USEM (Unified Security Exposure Management) — the modern successor to Vulnerability Response. Covers Vulnerable Items (VI), Remediation Tasks (RT), Vulnerability Groups, NVD entries, automation rules, integrations, remediation SLA (TTR), and approval workflows. Configuration rules and integrations use the new `sn_sec_*` tables (post-USEM-migration).
 
@@ -1441,13 +1441,13 @@ Get a single Vulnerable Item by VI number (`VITxxxxxxx`) or sys_id.
 - `number_or_sysid` (required)
 
 ### list_remediation_tasks
-List USEM Remediation Tasks (`sn_vul_remediation_task`), ordered by descending risk score.
+List USEM Remediation Tasks across **both** backing tables — `sn_vul_remediation_task` and `sn_vul_vulnerability` (where the rule engine actually creates RTs; number prefix VUL). Each record carries a `source_table` marker; `by_table` gives per-table counts. Ordered by descending risk score.
 
 **Parameters**:
 - `state`, `assignment_group`, `assigned_to`, `query`, `limit`, `display_value`
 
 ### get_remediation_task
-Get a single Remediation Task by task number or sys_id.
+Get a single Remediation Task by number or sys_id, looking in both backing tables: VUL-prefixed numbers target `sn_vul_vulnerability`; other identifiers try `task_number` on `sn_vul_remediation_task` first, then `number` on `sn_vul_vulnerability`. The result includes `source_table`.
 
 **Parameters**:
 - `number_or_sysid` (required)
@@ -1510,6 +1510,12 @@ List VI ↔ Remediation Task links in the `sn_vul_m2m_vul_group_item` m2m, in ei
 - `remediation_task` — VUL number or sys_id of the `sn_vul_vulnerability` group
 - `vulnerable_item` — VIT number or sys_id
 - `limit`
+
+### get_finding_grouping_status
+Diagnose why a Vulnerable Item is (not) grouped into a Remediation Task. Returns the VI's grouping preconditions (`vulnerability` / `cmdb_ci` references, `is_in_group`), its m2m links with each task's `auto_vi_refresh`, the active remediation task rules (`sn_sec_rem_task_rule`), and an ordered `diagnosis` (empty vulnerability → no active rules → rule mismatch / not triggered / `auto_vi_refresh=false`).
+
+**Parameters**:
+- `vulnerable_item` (required) — VIT number or sys_id
 
 ### list_nvd_entries
 List NVD entries (`sn_vul_nvd_entry`). Filter by CVE id substring or minimum CVSS v3 base score.

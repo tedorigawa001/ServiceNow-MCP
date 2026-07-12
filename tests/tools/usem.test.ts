@@ -17,8 +17,8 @@ const updateRec = () => mockClient.updateRecord as ReturnType<typeof vi.fn>;
 const agg = () => mockClient.runAggregateQuery as ReturnType<typeof vi.fn>;
 
 describe('getUsemToolDefinitions', () => {
-  it('returns 16 tool definitions', () => {
-    expect(getUsemToolDefinitions().length).toBe(16);
+  it('returns 17 tool definitions', () => {
+    expect(getUsemToolDefinitions().length).toBe(17);
   });
 
   it('all tools have name, description and inputSchema', () => {
@@ -37,6 +37,7 @@ describe('getUsemToolDefinitions', () => {
         'create_remediation_task',
         'create_vulnerability_group',
         'create_vulnerable_item',
+        'get_finding_grouping_status',
         'list_remediation_task_findings',
         'get_nvd_entry_by_cve',
         'get_remediation_task',
@@ -125,16 +126,29 @@ describe('get_vulnerable_item', () => {
 describe('list_remediation_tasks', () => {
   beforeEach(() => vi.clearAllMocks());
 
-  it('filters by state, group, assignee', async () => {
-    qr().mockResolvedValue({ count: 1, records: [{ task_number: 'RTASK1' }] });
-    await executeUsemToolCall(mockClient, 'list_remediation_tasks', {
+  it('queries BOTH backing tables with the same filters and merges with source_table', async () => {
+    qr().mockImplementation(async (params: any) =>
+      params.table === 'sn_vul_remediation_task'
+        ? { count: 1, records: [{ task_number: 'RTASK1' }] }
+        : { count: 2, records: [{ number: 'VUL1' }, { number: 'VUL2' }] }
+    );
+    const result = await executeUsemToolCall(mockClient, 'list_remediation_tasks', {
       state: '10',
       assignment_group: 'g1',
       assigned_to: 'u1',
     });
-    const call = qr().mock.calls[0][0];
-    expect(call.table).toBe('sn_vul_remediation_task');
-    expect(call.query).toBe('state=10^assignment_group=g1^assigned_to=u1');
+    const tables = qr().mock.calls.map((c: any) => c[0].table).sort();
+    expect(tables).toEqual(['sn_vul_remediation_task', 'sn_vul_vulnerability']);
+    for (const call of qr().mock.calls) {
+      expect(call[0].query).toBe('state=10^assignment_group=g1^assigned_to=u1');
+    }
+    expect(result.count).toBe(3);
+    expect(result.by_table).toEqual({ sn_vul_remediation_task: 1, sn_vul_vulnerability: 2 });
+    expect(result.records.map((r: any) => r.source_table)).toEqual([
+      'sn_vul_remediation_task',
+      'sn_vul_vulnerability',
+      'sn_vul_vulnerability',
+    ]);
   });
 });
 
@@ -147,13 +161,45 @@ describe('get_remediation_task', () => {
     expect(getRec()).toHaveBeenCalledWith('sn_vul_remediation_task', 'a'.repeat(32));
   });
 
-  it('resolves by task_number when not a sys_id', async () => {
-    qr().mockResolvedValue({ count: 1, records: [{ task_number: 'RTASK0001' }] });
-    await executeUsemToolCall(mockClient, 'get_remediation_task', { number_or_sysid: 'RTASK0001' });
-    expect(qr().mock.calls[0][0].query).toBe('task_number=RTASK0001');
+  it('falls back to sn_vul_vulnerability when the sys_id is not a legacy RT', async () => {
+    getRec()
+      .mockRejectedValueOnce(new Error('not found'))
+      .mockResolvedValueOnce({ sys_id: 'a'.repeat(32), number: 'VUL0010007' });
+    const result = await executeUsemToolCall(mockClient, 'get_remediation_task', {
+      number_or_sysid: 'a'.repeat(32),
+    });
+    expect(getRec()).toHaveBeenNthCalledWith(1, 'sn_vul_remediation_task', 'a'.repeat(32));
+    expect(getRec()).toHaveBeenNthCalledWith(2, 'sn_vul_vulnerability', 'a'.repeat(32));
+    expect(result.source_table).toBe('sn_vul_vulnerability');
   });
 
-  it('throws NOT_FOUND when not found', async () => {
+  it('resolves by task_number when not a sys_id', async () => {
+    qr().mockResolvedValue({ count: 1, records: [{ task_number: 'RTASK0001' }] });
+    const result = await executeUsemToolCall(mockClient, 'get_remediation_task', { number_or_sysid: 'RTASK0001' });
+    expect(qr().mock.calls[0][0].table).toBe('sn_vul_remediation_task');
+    expect(qr().mock.calls[0][0].query).toBe('task_number=RTASK0001');
+    expect(result.source_table).toBe('sn_vul_remediation_task');
+  });
+
+  it('targets sn_vul_vulnerability directly for VUL-prefixed numbers', async () => {
+    qr().mockResolvedValue({ count: 1, records: [{ number: 'VUL0010007' }] });
+    const result = await executeUsemToolCall(mockClient, 'get_remediation_task', { number_or_sysid: 'VUL0010007' });
+    expect(qr()).toHaveBeenCalledTimes(1);
+    expect(qr().mock.calls[0][0].table).toBe('sn_vul_vulnerability');
+    expect(qr().mock.calls[0][0].query).toBe('number=VUL0010007');
+    expect(result.source_table).toBe('sn_vul_vulnerability');
+  });
+
+  it('tries sn_vul_vulnerability second for non-VUL numbers', async () => {
+    qr()
+      .mockResolvedValueOnce({ count: 0, records: [] })
+      .mockResolvedValueOnce({ count: 1, records: [{ number: 'XYZ1' }] });
+    const result = await executeUsemToolCall(mockClient, 'get_remediation_task', { number_or_sysid: 'XYZ1' });
+    expect(qr().mock.calls[1][0].table).toBe('sn_vul_vulnerability');
+    expect(result.source_table).toBe('sn_vul_vulnerability');
+  });
+
+  it('throws NOT_FOUND when neither table matches', async () => {
     qr().mockResolvedValue({ count: 0, records: [] });
     await expect(
       executeUsemToolCall(mockClient, 'get_remediation_task', { number_or_sysid: 'RTASKxxx' })
@@ -576,6 +622,119 @@ describe('list_remediation_task_findings', () => {
       })
     ).rejects.toThrow('not found');
     expect(qr().mock.calls[0][0].query).not.toContain('^');
+  });
+});
+
+describe('get_finding_grouping_status', () => {
+  const VI_ID = '9'.repeat(32);
+
+  const mockStatusQueries = (opts: {
+    vi: Record<string, any>;
+    links?: any[];
+    rules?: any[];
+  }) => {
+    qr().mockImplementation(async (params: any) => {
+      if (params.table === 'sn_vul_vulnerable_item') {
+        return { count: 1, records: [opts.vi] };
+      }
+      if (params.table === 'sn_vul_m2m_vul_group_item') {
+        return { count: (opts.links ?? []).length, records: opts.links ?? [] };
+      }
+      if (params.table === 'sn_sec_rem_task_rule') {
+        return { count: (opts.rules ?? []).length, records: opts.rules ?? [] };
+      }
+      throw new Error(`unexpected table ${params.table}`);
+    });
+  };
+
+  beforeEach(() => vi.clearAllMocks());
+
+  it('requires vulnerable_item', async () => {
+    await expect(
+      executeUsemToolCall(mockClient, 'get_finding_grouping_status', {})
+    ).rejects.toThrow('vulnerable_item is required');
+  });
+
+  it('reports grouped when m2m links exist', async () => {
+    mockStatusQueries({
+      vi: {
+        number: { value: 'VIT0005765' },
+        vulnerability: { value: 'vul1' },
+        cmdb_ci: { value: 'ci1' },
+        is_in_group: { value: 'true' },
+      },
+      links: [
+        { 'sn_vul_vulnerability.number': { value: 'VUL0010007' }, 'sn_vul_vulnerability.auto_vi_refresh': { value: 'true' } },
+      ],
+      rules: [{ rule_name: 'r1' }],
+    });
+    const result = await executeUsemToolCall(mockClient, 'get_finding_grouping_status', { vulnerable_item: VI_ID });
+    expect(result.status).toBe('grouped');
+    expect(result.checks).toEqual({ vulnerability_set: true, cmdb_ci_set: true, is_in_group: true });
+    expect(result.linked_remediation_tasks).toHaveLength(1);
+  });
+
+  it('flags the cleared vulnerability reference first', async () => {
+    mockStatusQueries({
+      vi: {
+        number: { value: 'VIT0010009' },
+        vulnerability: { value: '' },
+        cmdb_ci: { value: 'ci1' },
+        is_in_group: { value: 'false' },
+      },
+      rules: [{ rule_name: 'r1' }],
+    });
+    const result = await executeUsemToolCall(mockClient, 'get_finding_grouping_status', { vulnerable_item: VI_ID });
+    expect(result.status).toBe('blocked_no_vulnerability');
+    expect(result.diagnosis[0]).toContain('vulnerability');
+    expect(result.diagnosis[0]).toContain('create_vulnerable_item');
+  });
+
+  it('reports missing active rules', async () => {
+    mockStatusQueries({
+      vi: {
+        number: { value: 'VIT1' },
+        vulnerability: { value: 'vul1' },
+        cmdb_ci: { value: 'ci1' },
+        is_in_group: { value: 'false' },
+      },
+      rules: [],
+    });
+    const result = await executeUsemToolCall(mockClient, 'get_finding_grouping_status', { vulnerable_item: VI_ID });
+    expect(result.status).toBe('blocked_no_active_rules');
+  });
+
+  it('falls through to rule-mismatch/not-triggered with auto_vi_refresh guidance', async () => {
+    mockStatusQueries({
+      vi: {
+        number: { value: 'VIT1' },
+        vulnerability: { value: 'vul1' },
+        cmdb_ci: { value: 'ci1' },
+        is_in_group: { value: 'false' },
+      },
+      rules: [{ rule_name: 'r1', condition: 'x' }],
+    });
+    const result = await executeUsemToolCall(mockClient, 'get_finding_grouping_status', { vulnerable_item: VI_ID });
+    expect(result.status).toBe('not_grouped_rule_mismatch_or_not_triggered');
+    expect(result.diagnosis[0]).toContain('auto_vi_refresh');
+  });
+
+  it('resolves a VIT number before diagnosing', async () => {
+    qr().mockImplementation(async (params: any) => {
+      if (params.table === 'sn_vul_vulnerable_item' && params.query === 'number=VIT0005765') {
+        return { count: 1, records: [{ sys_id: VI_ID }] };
+      }
+      if (params.table === 'sn_vul_vulnerable_item') {
+        return {
+          count: 1,
+          records: [{ number: { value: 'VIT0005765' }, vulnerability: { value: 'v' }, cmdb_ci: { value: 'c' }, is_in_group: { value: 'true' } }],
+        };
+      }
+      return { count: 0, records: [] };
+    });
+    const result = await executeUsemToolCall(mockClient, 'get_finding_grouping_status', { vulnerable_item: 'VIT0005765' });
+    // resolver hit first, then the diagnosis ran with no links and no active rules
+    expect(result.status).toBe('blocked_no_active_rules');
   });
 });
 
