@@ -93,6 +93,19 @@ describe('list_vulnerable_items', () => {
     expect(qr().mock.calls[0][0].query).toBe('');
     expect(qr().mock.calls[0][0].limit).toBe(25);
   });
+
+  it('sanitizes literal filter values without changing raw encoded query opt-in', async () => {
+    qr().mockResolvedValue({ count: 0, records: [] });
+    await executeUsemToolCall(mockClient, 'list_vulnerable_items', {
+      state: '1^ORactive=false',
+      cmdb_ci: 'ci123^ORsys_idISNOTEMPTY',
+      assignment_group: 'grp1^ORactive=false',
+      query: 'active=true',
+    });
+    expect(qr().mock.calls[0][0].query).toBe(
+      'state=1ORactive=false^cmdb_ci=ci123ORsys_idISNOTEMPTY^assignment_group=grp1ORactive=false^active=true'
+    );
+  });
 });
 
 describe('get_vulnerable_item', () => {
@@ -109,6 +122,16 @@ describe('get_vulnerable_item', () => {
     const result = await executeUsemToolCall(mockClient, 'get_vulnerable_item', { number_or_sysid: 'VIT0010003' });
     expect(qr().mock.calls[0][0].query).toBe('number=VIT0010003');
     expect(result.number).toBe('VIT0010003');
+  });
+
+  it('sanitizes query-breaking characters in VI number lookups', async () => {
+    qr().mockResolvedValue({ count: 0, records: [] });
+    await expect(
+      executeUsemToolCall(mockClient, 'get_vulnerable_item', {
+        number_or_sysid: 'VIT0010003^ORsys_idISNOTEMPTY',
+      })
+    ).rejects.toThrow('Vulnerable Item not found');
+    expect(qr().mock.calls[0][0].query).not.toContain('^');
   });
 
   it('throws NOT_FOUND when number does not resolve', async () => {
@@ -173,6 +196,18 @@ describe('list_remediation_tasks', () => {
     );
     const result = await executeUsemToolCall(mockClient, 'list_remediation_tasks', { display_value: 'all' });
     expect(result.records[0].number).toBe('VUL1');
+  });
+
+  it('sanitizes literal filters before querying both remediation-task tables', async () => {
+    qr().mockResolvedValue({ count: 0, records: [] });
+    await executeUsemToolCall(mockClient, 'list_remediation_tasks', {
+      state: '10^ORactive=false',
+      assignment_group: 'g1^ORsys_idISNOTEMPTY',
+      assigned_to: 'u1^ORactive=false',
+    });
+    for (const call of qr().mock.calls) {
+      expect(call[0].query).toBe('state=10ORactive=false^assignment_group=g1ORsys_idISNOTEMPTY^assigned_to=u1ORactive=false');
+    }
   });
 });
 
@@ -281,6 +316,16 @@ describe('get_vulnerability_group', () => {
       executeUsemToolCall(mockClient, 'get_vulnerability_group', { number_or_sysid: 'VULxxxx' })
     ).rejects.toThrow('Vulnerability Group not found');
   });
+
+  it('sanitizes query-breaking characters in group number lookups', async () => {
+    qr().mockResolvedValue({ count: 0, records: [] });
+    await expect(
+      executeUsemToolCall(mockClient, 'get_vulnerability_group', {
+        number_or_sysid: 'VUL0000103^ORsys_idISNOTEMPTY',
+      })
+    ).rejects.toThrow('Vulnerability Group not found');
+    expect(qr().mock.calls[0][0].query).not.toContain('^');
+  });
 });
 
 describe('list_nvd_entries / get_nvd_entry_by_cve', () => {
@@ -311,6 +356,22 @@ describe('list_nvd_entries / get_nvd_entry_by_cve', () => {
 
   it('throws when cve missing', async () => {
     await expect(executeUsemToolCall(mockClient, 'get_nvd_entry_by_cve', {})).rejects.toThrow('cve is required');
+  });
+
+  it('sanitizes query-breaking characters in CVE filters and exact lookup', async () => {
+    qr().mockResolvedValue({ count: 0, records: [] });
+    await executeUsemToolCall(mockClient, 'list_nvd_entries', {
+      cve: 'CVE-2018^ORidISNOTEMPTY',
+      score_min: 7,
+    });
+    expect(qr().mock.calls[0][0].query).toBe('idLIKECVE-2018ORidISNOTEMPTY^v3_base_score>=7');
+
+    await expect(
+      executeUsemToolCall(mockClient, 'get_nvd_entry_by_cve', {
+        cve: 'CVE-2018-1002203^ORidISNOTEMPTY',
+      })
+    ).rejects.toThrow('NVD entry not found');
+    expect(qr().mock.calls[1][0].query).toBe('id=CVE-2018-1002203ORidISNOTEMPTY');
   });
 });
 
