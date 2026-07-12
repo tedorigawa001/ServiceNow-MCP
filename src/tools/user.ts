@@ -9,6 +9,15 @@ import { requireWrite } from '../utils/permissions.js';
 const USER_FIELDS = new Set(['user_name', 'email', 'first_name', 'last_name', 'title', 'department']);
 const GROUP_FIELDS = new Set(['name', 'description', 'manager']);
 
+function allowedFieldsSchema(allowedFields: Set<string>, description: string): Record<string, any> {
+  return {
+    type: 'object',
+    description,
+    properties: Object.fromEntries([...allowedFields].map(field => [field, {}])),
+    additionalProperties: false,
+  };
+}
+
 function assertAllowedFields(
   label: string,
   action: 'set' | 'updated',
@@ -61,10 +70,7 @@ export function getUserToolDefinitions() {
         type: 'object',
         properties: {
           sys_id: { type: 'string', description: 'System ID of the user' },
-          fields: {
-            type: 'object',
-            description: 'Allowed fields: user_name, email, first_name, last_name, title, department',
-          },
+          fields: allowedFieldsSchema(USER_FIELDS, 'Allowed fields: user_name, email, first_name, last_name, title, department'),
         },
         required: ['sys_id', 'fields'],
       },
@@ -101,10 +107,7 @@ export function getUserToolDefinitions() {
         type: 'object',
         properties: {
           sys_id: { type: 'string', description: 'System ID of the group' },
-          fields: {
-            type: 'object',
-            description: 'Allowed fields: name, description, manager',
-          },
+          fields: allowedFieldsSchema(GROUP_FIELDS, 'Allowed fields: name, description, manager'),
         },
         required: ['sys_id', 'fields'],
       },

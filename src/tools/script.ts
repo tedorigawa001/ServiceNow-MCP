@@ -23,6 +23,15 @@ const UI_ACTION_UPDATE_FIELDS = new Set([
   'list_button',
 ]);
 
+function allowedFieldsSchema(allowedFields: Set<string>, description: string): Record<string, any> {
+  return {
+    type: 'object',
+    description,
+    properties: Object.fromEntries([...allowedFields].map(field => [field, {}])),
+    additionalProperties: false,
+  };
+}
+
 function assertAllowedFields(
   label: string,
   fields: Record<string, any>,
@@ -87,10 +96,7 @@ export function getScriptToolDefinitions() {
         type: 'object',
         properties: {
           sys_id: { type: 'string', description: 'System ID of the rule' },
-          fields: {
-            type: 'object',
-            description: 'Allowed fields: name, collection, when, script, condition, active, order',
-          },
+          fields: allowedFieldsSchema(BUSINESS_RULE_UPDATE_FIELDS, 'Allowed fields: name, collection, when, script, condition, active, order'),
         },
         required: ['sys_id', 'fields'],
       },
@@ -141,10 +147,7 @@ export function getScriptToolDefinitions() {
         type: 'object',
         properties: {
           sys_id: { type: 'string', description: 'System ID of the script include' },
-          fields: {
-            type: 'object',
-            description: 'Allowed fields: name, script, api_name, access, active',
-          },
+          fields: allowedFieldsSchema(SCRIPT_INCLUDE_UPDATE_FIELDS, 'Allowed fields: name, script, api_name, access, active'),
         },
         required: ['sys_id', 'fields'],
       },
@@ -244,10 +247,7 @@ export function getScriptToolDefinitions() {
         type: 'object',
         properties: {
           sys_id: { type: 'string', description: 'Client script sys_id' },
-          fields: {
-            type: 'object',
-            description: 'Allowed fields: name, table, type, script, field_name, active, global',
-          },
+          fields: allowedFieldsSchema(CLIENT_SCRIPT_UPDATE_FIELDS, 'Allowed fields: name, table, type, script, field_name, active, global'),
         },
         required: ['sys_id', 'fields'],
       },
@@ -345,10 +345,10 @@ export function getScriptToolDefinitions() {
         type: 'object',
         properties: {
           sys_id: { type: 'string', description: 'UI Action sys_id' },
-          fields: {
-            type: 'object',
-            description: 'Allowed fields: name, table, action_name, script, condition, action_type, active, form_button, list_button',
-          },
+          fields: allowedFieldsSchema(
+            UI_ACTION_UPDATE_FIELDS,
+            'Allowed fields: name, table, action_name, script, condition, action_type, active, form_button, list_button'
+          ),
         },
         required: ['sys_id', 'fields'],
       },

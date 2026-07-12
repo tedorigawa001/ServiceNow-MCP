@@ -210,6 +210,24 @@ function writableFields(rt: RuleType): Set<string> {
   );
 }
 
+function allowedFieldsSchema(allowedFields: string[], description: string): Record<string, any> {
+  return {
+    type: 'object',
+    description,
+    properties: Object.fromEntries(allowedFields.map(field => [field, {}])),
+    additionalProperties: false,
+  };
+}
+
+const RULE_FIELD_SCHEMA = allowedFieldsSchema(
+  [
+    ...new Set(
+      Object.values(RULE_REGISTRY).flatMap(rt => [...writableFields(rt)])
+    ),
+  ].sort(),
+  'Column/value map for the rule record. Schema allows the union of all USEM rule fields; runtime also restricts fields to the selected rule_type.'
+);
+
 function assertAllowedRuleFields(rt: RuleType, action: 'set' | 'updated', fields: Record<string, any>): void {
   const allowedFields = writableFields(rt);
   const unsafeFields = Object.keys(fields).filter(field => !allowedFields.has(field));
@@ -269,7 +287,7 @@ export function getUsemConfigToolDefinitions() {
         type: 'object',
         properties: {
           rule_type: RULE_TYPE_SCHEMA,
-          fields: { type: 'object', description: 'Column/value map for the new rule record' },
+          fields: RULE_FIELD_SCHEMA,
         },
         required: ['rule_type', 'fields'],
       },
@@ -284,7 +302,7 @@ export function getUsemConfigToolDefinitions() {
         properties: {
           rule_type: RULE_TYPE_SCHEMA,
           sys_id: { type: 'string', description: '32-char sys_id of the rule' },
-          fields: { type: 'object', description: 'Column/value map of changes' },
+          fields: RULE_FIELD_SCHEMA,
         },
         required: ['rule_type', 'sys_id', 'fields'],
       },

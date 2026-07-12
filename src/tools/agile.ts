@@ -12,6 +12,15 @@ const STORY_FIELDS = new Set(['short_description', 'story_points', 'sprint', 'ep
 const EPIC_FIELDS = new Set(['short_description', 'description', 'project']);
 const SCRUM_TASK_FIELDS = new Set(['short_description', 'story', 'assigned_to']);
 
+function allowedFieldsSchema(allowedFields: Set<string>, description: string): Record<string, any> {
+  return {
+    type: 'object',
+    description,
+    properties: Object.fromEntries([...allowedFields].map(field => [field, {}])),
+    additionalProperties: false,
+  };
+}
+
 function assertAllowedFields(
   label: string,
   action: 'set' | 'updated',
@@ -52,10 +61,7 @@ export function getAgileToolDefinitions() {
         type: 'object',
         properties: {
           sys_id: { type: 'string', description: 'System ID of the story' },
-          fields: {
-            type: 'object',
-            description: 'Allowed fields: short_description, story_points, sprint, epic, description, assigned_to',
-          },
+          fields: allowedFieldsSchema(STORY_FIELDS, 'Allowed fields: short_description, story_points, sprint, epic, description, assigned_to'),
         },
         required: ['sys_id', 'fields'],
       },
@@ -93,10 +99,7 @@ export function getAgileToolDefinitions() {
         type: 'object',
         properties: {
           sys_id: { type: 'string', description: 'System ID of the epic' },
-          fields: {
-            type: 'object',
-            description: 'Allowed fields: short_description, description, project',
-          },
+          fields: allowedFieldsSchema(EPIC_FIELDS, 'Allowed fields: short_description, description, project'),
         },
         required: ['sys_id', 'fields'],
       },
@@ -134,10 +137,7 @@ export function getAgileToolDefinitions() {
         type: 'object',
         properties: {
           sys_id: { type: 'string', description: 'System ID of the scrum task' },
-          fields: {
-            type: 'object',
-            description: 'Allowed fields: short_description, story, assigned_to',
-          },
+          fields: allowedFieldsSchema(SCRUM_TASK_FIELDS, 'Allowed fields: short_description, story, assigned_to'),
         },
         required: ['sys_id', 'fields'],
       },
