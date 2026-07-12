@@ -27,6 +27,12 @@
 
 Claude・Cursor・VS Code などの AI ツールから、ServiceNow のインシデント・変更・CMDB・スクリプトなどをすべて自然言語で操作できます。
 
+### v1.3.0 ハイライト
+
+- USEM / Vulnerability Response の修復ワークフローを補完: VI 作成、VI ↔ RT リンク照会、グルーピング診断を追加
+- Remediation Task は `sn_vul_remediation_task` と rule-engine 側の `sn_vul_vulnerability` を横断検索
+- `secops_analyst` パッケージに新しい USEM 修復支援ツールを追加
+
 </div>
 
 ---
@@ -588,8 +594,8 @@ mindmap
       NLQ
       Agentic Playbooks
     secops_analyst
-      脆弱性 VI/RT
-      USEM/統合ヘルス
+      VI作成/RT横断検索
+      グルーピング診断
       SLA/例外承認
 ```
 
@@ -608,7 +614,7 @@ mindmap
 | `agile_manager` | スクラムマスター | ストーリー・エピック |
 | `ai_developer` | AI 開発者 | Now Assist・NLQ・Playbook |
 | `itam_analyst` | 資産管理者 | 資産・ライセンス・契約・SAM Pro(ソフトウェア資産管理) |
-| `secops_analyst` | SecOps アナリスト | 脆弱性(VI/RT)・USEM・統合ヘルス・SLA・例外承認 |
+| `secops_analyst` | SecOps アナリスト | 脆弱性(VI/RT)・RT横断検索・グルーピング診断・USEM・SLA・例外承認 |
 | `devops_engineer` | DevOps | パイプライン・デプロイ |
 
 詳細 → [docs/TOOL_PACKAGES.md](docs/TOOL_PACKAGES.md)
