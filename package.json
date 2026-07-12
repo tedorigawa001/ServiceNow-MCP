@@ -1,8 +1,8 @@
 {
   "name": "@tedorigawa001/servicenow-mcp",
   "mcpName": "io.github.tedorigawa001/servicenow-mcp",
-  "version": "1.4.0",
-  "description": "The most comprehensive ServiceNow MCP server — 400+ tools across all modules. Integrates with Claude, ChatGPT, Gemini, Cursor, GitHub Copilot and any LLM.",
+  "version": "1.5.0",
+  "description": "The most comprehensive ServiceNow MCP server — 450+ tools across all modules. Integrates with Claude, ChatGPT, Gemini, Cursor, GitHub Copilot and any LLM.",
   "main": "dist/server.js",
   "bin": {
     "servicenow-mcp": "bin/servicenow-mcp.cjs"
