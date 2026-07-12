@@ -1,10 +1,11 @@
 # GRC Tooling — Design Document
 
-Status: **Phase 1 (Audit + Compliance + Risk) implemented and live-verified,
-2026-07-12** — see `src/tools/grc-audit.ts`, `grc-compliance.ts`, `grc-risk.ts`.
-Investigated against dev400464. This document records what was actually found on
-a live instance before committing to a tool design, following the same practice
-used for the USEM buildout (see `ROADMAP.md` #11).
+Status: **Phase 1 (Audit + Compliance + Risk) and Phase 2 (Indicator/KRI)
+implemented and live-verified, 2026-07-12** — see `src/tools/grc-audit.ts`,
+`grc-compliance.ts`, `grc-risk.ts`, `grc-indicator.ts`. Investigated against
+dev400464. This document records what was actually found on a live instance
+before committing to a tool design, following the same practice used for the
+USEM buildout (see `ROADMAP.md` #11).
 
 ---
 
@@ -171,8 +172,8 @@ Following the USEM precedent (`usem.ts` + `usem-config.ts` + `usem-approval.ts` 
 | 1 | **Audit**: `list/get_audit_engagement`, `list/get_control_test` (+ activity/interview/walkthrough subclasses), dashboard | Richest seeded chain (353 test plans / 85 control tests / 23 engagements) — testable today, no master-data dependency. Note: query the `sn_audit_task` subclasses directly (`sn_audit_control_test` etc.), not the 0-record base table. |
 | 1 | **Compliance**: `list/get/create/update` for Policy, Control, Control Objective (Policy Statement), Policy Exception, Entity (Profile), Issue | Promoted from Phase 3 — the 2026-07-12 demo-data import removed the `sn_grc_profile_class` blocker and seeded 171 Entities / 1111 Controls / 1203 Control Objectives / 122 Issues / 29 Exceptions. Equally verifiable now, and the more commonly requested "GRC" surface. |
 | 1 | **Risk**: `list/get/create/update_risk`, `list_risk_statements` (read the library) | Promoted from Phase 2 — `sn_risk_risk` confirmed to have 419 real records (number prefix `RK`) as of 2026-07-12, so full round-trip verification is possible immediately. Needs the workflow-state and display-vs-raw-score handling noted above (different from USEM's `VUL_STATE_LABELS` pattern). Response-task tools (mitigate/accept/avoid/transfer) can follow once the core Risk CRUD is verified. |
-| 2 | **Indicator (KRI)**: `sn_grc_indicator` + results | Still 0 records — lowest priority until seeded or synthetic test data is created |
-| — | Retire `get_compliance_assessment`, `list_audit_results` from `security.ts`; rewrite `create_grc_risk` with a correct allowlist as part of the Risk phase | Cleanup, not new scope |
+| 2 ✅ | **Indicator (KRI)**: `sn_grc_indicator` + results, dashboard | Demo data arrived after Phase 1 (119 `sn_grc_indicator` rows, 18 templates) — no longer blocked. **2026-07-12 implemented and live-verified** in `grc-indicator.ts`. CONFIRMED live: `item` looked like a separate table reference but `sn_grc_item` is an abstract base that `sn_compliance_control`/`sn_risk_risk` themselves extend (their own sys_id works as `item`); a "Verify entity change" business rule rejects (HTTP 403) any `entity` that isn't the specific one already associated with `item` (e.g. the Control/Risk's own `profile`) — an arbitrary pairing fails, the pairing from an existing indicator succeeds. `sn_grc_indicator_result` remained empty at verification time; list/get tools are included but unverified against real result data. |
+| — | Retire `get_compliance_assessment`, `list_audit_results` from `security.ts`; rewrite `create_grc_risk` with a correct allowlist as part of the Risk phase | Cleanup, not new scope — done as part of Phase 1 |
 
 Each phase to include: write-field allowlists + `additionalProperties: false` schema
 (per the now-standard pattern), `sanitizeLikeValue` on filter values, `requireWrite()`
@@ -200,4 +201,5 @@ All remaining open questions are deferred — see Backlog below.
 |---|---|---|
 | Vendor Risk Management scope | Is VRM explicitly out of scope, or a later phase if that app gets subscribed? | `com.snc.grc_vrm_dep` dependency plugin is active but no VRM feature tables exist yet. Revisit if/when a VRM app subscription is added. |
 | Tool package for GRC | New `grc_analyst` package, or fold GRC tools into `secops_analyst`? | Defer until Phase 1 tool set is implemented and its size is known. |
-| `sn_grc_indicator` seeding | Seed before Indicator (Phase 2) work starts, or treat as blocked until real data exists? | Does not block Phase 1 (Audit/Compliance/Risk). Revisit when the Indicator phase is scheduled. (`sn_grc_issue_source` is a non-issue — `sn_grc_issue.issue_source` references the already-populated `sn_grc_choice` table instead, per the correction in §2/§3.) |
+| ~~`sn_grc_indicator` seeding~~ | ~~Seed before Indicator (Phase 2) work starts?~~ | **Resolved** — demo data arrived on its own (119 rows) and Phase 2 shipped 2026-07-12. (`sn_grc_issue_source` is a non-issue — `sn_grc_issue.issue_source` references the already-populated `sn_grc_choice` table instead, per the correction in §2/§3.) |
+| `sn_grc_indicator_result` seeding | The result/collection-history table remained empty even after Indicator demo data arrived. Seed it, or leave `list_indicator_results`/`get_indicator_result` unverified? | Does not block anything currently planned. Revisit if a future phase needs verified result-history behavior. |

@@ -14,7 +14,7 @@ Set `MCP_TOOL_PACKAGE` in your environment to load a role-specific subset of too
 | `system_administrator` | SysAdmin | 72 |
 | `platform_developer` | Platform developer | 43 |
 | `itom_engineer` | ITOM/CMDB engineer | 29 |
-| `secops_analyst` | Security Operations / Vulnerability Response analyst | 93 |
+| `secops_analyst` | Security Operations / Vulnerability Response analyst | 100 |
 | `agile_manager` | Agile team lead | 13 |
 | `ai_developer` | Now Assist/AI developer | 15 |
 | `portal_developer` | Portal/UI Builder developer | 34 |
@@ -157,6 +157,7 @@ Includes:
 - GRC — Audit Management: Engagements, Control Tests, dashboard (`sn_audit_*`)
 - GRC — Policy and Compliance Management: Entities, Policies, Controls, Control Objectives, Policy Exceptions (read-only), Issues, dashboard (`sn_grc_*`/`sn_compliance_*`)
 - GRC — Risk Management: Risks, Risk Statement library, Risk Criteria scale, dashboard (`sn_risk_*`) — note `impact`/`likelihood`/`score` are read-only, confirmed not settable via API on this instance (see [GRC_DESIGN.md](GRC_DESIGN.md))
+- GRC — Indicator/KRI: Indicators measuring a Control or Risk, Indicator Results, dashboard (`sn_grc_indicator*`) — `create_grc_indicator`'s `item` is a Control/Risk sys_id directly (they extend the same base table); `entity` must match that item's own `profile`
 - USEM core: Vulnerable Items (read + `create_vulnerable_item` with vulnerability-reference workaround), Remediation Tasks (cross-table read + create/update), Vulnerability Groups (read + create/update), VI↔RT link lookup (`list_remediation_task_findings`), grouping diagnosis (`get_finding_grouping_status`), NVD entries, posture dashboard (`get_usem_dashboard`)
 - USEM/VR configuration rules (`list_usem_rules`, `create_usem_rule`, `update_usem_rule`, `set_usem_rule_active`) and risk-score explanation (`get_risk_calculator_details`)
 - USEM/VR integrations (catalog, implementations, runs, logs, parameters with secret masking, enable/disable)

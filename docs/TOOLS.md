@@ -1555,6 +1555,41 @@ Summarize Risk posture: Risk counts by state, and the highest-scored open risks.
 
 ---
 
+## GRC — Indicator / KRI (7 tools)
+
+Covers Indicators (KRI/KPI) measuring a Control or Risk for a given Entity (`sn_grc_indicator`, number prefix `IND`). Verified against a live PDI — see [GRC_DESIGN.md](GRC_DESIGN.md).
+
+> **Important**: `item` on `create_grc_indicator` looks like it should reference a separate "item" table, but `sn_grc_item` turned out to be an abstract base that `sn_compliance_control` and `sn_risk_risk` themselves extend — pass the Control's or Risk's own sys_id directly. `entity` must be the specific Entity already associated with that item (e.g. the Control/Risk's own `profile` field) — confirmed live that a validation business rule rejects (HTTP 403) any other pairing.
+
+### list_grc_indicators / get_grc_indicator
+List/get GRC Indicators.
+
+**Parameters** (list): `entity`, `item`, `category`, `last_result_passed`, `active`, `query`, `limit`, `display_value`
+**Parameters** (get): `number_or_sysid` (required)
+
+### create_grc_indicator
+Create a GRC Indicator. **[Write]** `item` = sys_id of an existing `sn_compliance_control` or `sn_risk_risk` record; `entity` must match that item's own `profile`.
+
+**Parameters**: `entity` (required), `item` (required), `short_description`, `category`, `collection_frequency`, `owner`, `owning_group`
+
+### update_grc_indicator
+Update a GRC Indicator by sys_id. **[Write]** `entity`/`item` are intentionally not updatable — recreate the Indicator if it needs to measure a different Control/Risk or Entity.
+
+**Parameters**: `sys_id` (required), `fields` — allowed: `short_description`, `category`, `collection_frequency`, `active`, `owner`, `owning_group`, `instructions`
+
+### list_indicator_results / get_indicator_result
+List/get Indicator Results (`sn_grc_indicator_result`) — individual pass/fail collection events. Empty on dev400464 at verification time; included for instances where collection has run.
+
+**Parameters** (list): `indicator`, `passed`, `query`, `limit`, `display_value`
+**Parameters** (get): `sys_id` (required)
+
+### get_grc_indicator_dashboard
+Summarize Indicator posture: counts by category and by last-result pass/fail.
+
+**Parameters**: None
+
+---
+
 ## USEM / Vulnerability Response (38 tools)
 
 USEM (Unified Security Exposure Management) — the modern successor to Vulnerability Response. Covers Vulnerable Items (VI), Remediation Tasks (RT), Vulnerability Groups, NVD entries, automation rules, integrations, remediation SLA (TTR), and approval workflows. Configuration rules and integrations use the new `sn_sec_*` tables (post-USEM-migration).

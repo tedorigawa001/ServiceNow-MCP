@@ -95,6 +95,8 @@ import { getGrcAuditToolDefinitions, executeGrcAuditToolCall } from './grc-audit
 import { getGrcComplianceToolDefinitions, executeGrcComplianceToolCall } from './grc-compliance.js';
 // GRC — Risk Management
 import { getGrcRiskToolDefinitions, executeGrcRiskToolCall } from './grc-risk.js';
+// GRC — Indicator (KRI/KPI)
+import { getGrcIndicatorToolDefinitions, executeGrcIndicatorToolCall } from './grc-indicator.js';
 // Natural-language query resolver
 import { getSmartQueryToolDefinitions, executeSmartQueryToolCall } from './smart-query.js';
 
@@ -140,6 +142,9 @@ const PACKAGE_TOOL_NAMES: Record<string, string[]> = {
     // GRC — Risk Management
     'list_risks', 'get_risk', 'create_risk', 'update_risk',
     'list_risk_statements', 'get_risk_statement', 'list_risk_criteria', 'get_grc_risk_dashboard',
+    // GRC — Indicator (KRI/KPI)
+    'list_grc_indicators', 'get_grc_indicator', 'create_grc_indicator', 'update_grc_indicator',
+    'list_indicator_results', 'get_indicator_result', 'get_grc_indicator_dashboard',
     // USEM
     'list_vulnerable_items', 'get_vulnerable_item', 'list_remediation_tasks', 'get_remediation_task',
     'list_nvd_entries', 'get_nvd_entry_by_cve', 'get_usem_dashboard',
@@ -412,6 +417,7 @@ const MODULES: ToolModule[] = [
   { defs: getGrcAuditToolDefinitions, exec: executeGrcAuditToolCall },
   { defs: getGrcComplianceToolDefinitions, exec: executeGrcComplianceToolCall },
   { defs: getGrcRiskToolDefinitions, exec: executeGrcRiskToolCall },
+  { defs: getGrcIndicatorToolDefinitions, exec: executeGrcIndicatorToolCall },
   { defs: getSmartQueryToolDefinitions, exec: executeSmartQueryToolCall },
 ];
 
