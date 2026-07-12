@@ -20,7 +20,7 @@
 | 8 | SAM Pro（ソフトウェア資産管理）ツールセット | ITAM/SAM 担当者 | ⭐ 低 | 低 | ✅ 完了 |
 | 9 | Discovery 運用可視化 + ACC ツールセット | ITOM 担当者 | ⭐ 低 | 低 | ✅ 完了 |
 | 10 | インスタンス性能診断（メモリ/セマフォ/トランザクション履歴） | SysAdmin/ITOM 担当者 | ⭐⭐ 中 | 中 | ✅ 完了 |
-| 11 | USEM 修復ワークフロー補完（VI 作成 / RT⇔VI リンク / RT テーブル是正） | SecOps 担当者 | ⭐⭐ 中 | 低 | 📋 未着手 |
+| 11 | USEM 修復ワークフロー補完（VI 作成 / RT⇔VI リンク / RT テーブル是正） — 11-1/11-2 完了 | SecOps 担当者 | ⭐⭐ 中 | 低 | 📋 未着手 |
 
 > #10 はロードマップ外で追加実装した機能(v1.0.5〜1.0.6)。`get_instance_diagnostics`(xmlstats.do の現在値 + `all_nodes` によるマルチノード対応)と `get_performance_history`(syslog_transaction の Aggregate API 時系列 + `group_by_node`)。メモリ・セマフォの履歴は JRobin が ACL 不可視のため対象外(現在値のみ)。詳細は [TOOLS.md](TOOLS.md) の Performance Analytics & Data Quality 節を参照。
 
@@ -569,7 +569,7 @@ Discovery 関連は core.ts の3ツール(`list_discovery_schedules` / `list_mid
 
 ---
 
-## 11. USEM 修復ワークフロー補完 📋 未着手
+## 11. USEM 修復ワークフロー補完 🚧 一部完了(11-1/11-2 ✅ · 11-3/11-4 未着手)
 
 ### 背景
 
@@ -587,8 +587,8 @@ Discovery 関連は core.ts の3ツール(`list_discovery_schedules` / `list_mid
 
 | # | 内容 | 種別 | 優先度 |
 |---|---|---|---|
-| 11-1 | `create_vulnerable_item` — VI 作成ツール。`vulnerability` + `cmdb_ci` 必須。挿入後に `vulnerability` の保持を検証し、クリアされていたら PATCH で再設定 → 再検証まで内蔵(上記事実 3 の回避策) | 新規ツール | 高 |
-| 11-2 | `list_remediation_task_findings` — RT⇔VI リンク照会。`sn_vul_m2m_vul_group_item` を正しいカラム名で照会し、「RT の VI 一覧」「VI の所属 RT」の双方向に対応。REST での ACL 403 の再現条件を実装時に要確認(E2E 時の 403 はフィールド名誤り `vul_item` の可能性あり) | 新規ツール | 高 |
+| 11-1 ✅ | `create_vulnerable_item` — VI 作成ツール。`vulnerability` + `cmdb_ci` 必須。挿入後に `vulnerability` の保持を検証し、クリアされていたら PATCH で再設定 → 再検証まで内蔵(上記事実 3 の回避策)。**2026-07-12 実装・実機検証済み**(VIT0010009 で insert→クリア→PATCH 復元を確認、検証後クローズ) | 新規ツール | 高 |
+| 11-2 ✅ | `list_remediation_task_findings` — RT⇔VI リンク照会。`sn_vul_m2m_vul_group_item` を正しいカラム名で照会し、「RT の VI 一覧」「VI の所属 RT」の双方向に対応。**2026-07-12 実装・実機検証済み**: 双方向とも HTTP 200・dot-walk フィールド取得可。E2E 時の 403 はカラム名誤り(`vul_item`)が原因と確定、ACL 問題なし | 新規ツール | 高 |
 | 11-3 | `list_remediation_tasks` / `get_remediation_task` の是正 — 現状 `sn_vul_remediation_task` のみ参照しており、ルールエンジンが作る RT(`sn_vul_vulnerability`)が見えない。両テーブル横断にするか、説明文で `list_vulnerability_groups` へ誘導 | 既存修正 | 中 |
 | 11-4 | `get_finding_grouping_status` — VI の `is_in_group` / 所属 RT / マッチするルール / RT の `auto_vi_refresh` を 1 コールで返す診断ツール。「なぜグルーピングされない?」の一次切り分け用(vulnerability 空 → ルール不一致 → auto_vi_refresh の順に検査) | 新規ツール | 中 |
 

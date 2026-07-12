@@ -126,6 +126,7 @@ const PACKAGE_TOOL_NAMES: Record<string, string[]> = {
     'list_vulnerability_groups', 'get_vulnerability_group',
     'create_vulnerability_group', 'update_vulnerability_group',
     'create_remediation_task', 'update_remediation_task', 'add_vi_to_remediation_task',
+    'create_vulnerable_item', 'list_remediation_task_findings',
     // USEM / VR configuration rules
     'list_usem_rules', 'get_usem_rule', 'create_usem_rule', 'update_usem_rule', 'set_usem_rule_active',
     'get_risk_calculator_details',

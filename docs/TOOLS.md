@@ -1418,7 +1418,7 @@ Get threat intelligence entries from the ServiceNow threat feed.
 
 ---
 
-## USEM / Vulnerability Response (35 tools)
+## USEM / Vulnerability Response (37 tools)
 
 USEM (Unified Security Exposure Management) — the modern successor to Vulnerability Response. Covers Vulnerable Items (VI), Remediation Tasks (RT), Vulnerability Groups, NVD entries, automation rules, integrations, remediation SLA (TTR), and approval workflows. Configuration rules and integrations use the new `sn_sec_*` tables (post-USEM-migration).
 
@@ -1494,6 +1494,22 @@ Associate a Vulnerable Item with a remediation group via the `sn_vul_m2m_vul_gro
 **Parameters**:
 - `remediation_group` (required) — sys_id of the backing `sn_vul_vulnerability` group
 - `vulnerable_item` (required) — sys_id of the VI
+
+### create_vulnerable_item
+Create a Vulnerable Item (`sn_vul_vulnerable_item`) with the `vulnerability` reference intact. A before business rule clears the reference on REST inserts (which silently disables the "Link to Remediation Tasks" automation); the tool re-applies it via PATCH after insert and verifies it stuck (`vulnerability_set` / `vulnerability_restored_via_patch` in the result). **[Write]**
+
+**Parameters**:
+- `vulnerability` (required) — sys_id of the vulnerability entry (`sn_vul_entry`, e.g. an NVD entry)
+- `cmdb_ci` (required) — sys_id of the affected CI
+- `short_description`, `description`, `assignment_group`, `assigned_to`, `state`, `source`
+
+### list_remediation_task_findings
+List VI ↔ Remediation Task links in the `sn_vul_m2m_vul_group_item` m2m, in either direction: give `remediation_task` to list its member VIs, or `vulnerable_item` to list the Remediation Tasks it belongs to (including each task's `auto_vi_refresh`).
+
+**Parameters** (exactly one of the first two):
+- `remediation_task` — VUL number or sys_id of the `sn_vul_vulnerability` group
+- `vulnerable_item` — VIT number or sys_id
+- `limit`
 
 ### list_nvd_entries
 List NVD entries (`sn_vul_nvd_entry`). Filter by CVE id substring or minimum CVSS v3 base score.

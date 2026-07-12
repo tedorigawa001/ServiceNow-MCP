@@ -14,6 +14,7 @@
  *       columns: `sn_vul_vulnerability` (group), `sn_vul_vulnerable_item` (VI)
  */
 import type { ServiceNowClient } from '../servicenow/client.js';
+import { sanitizeLikeValue } from '../servicenow/client.js';
 import { ServiceNowError } from '../utils/errors.js';
 import { requireWrite } from '../utils/permissions.js';
 
@@ -268,6 +269,54 @@ export function getUsemToolDefinitions() {
       },
     },
     {
+      name: 'create_vulnerable_item',
+      description:
+        'Create a Vulnerable Item (sn_vul_vulnerable_item) with the vulnerability reference intact. ' +
+        'A before business rule clears the `vulnerability` reference on REST inserts, which silently ' +
+        'disables the "Link to Remediation Tasks" automation; this tool re-applies the reference via ' +
+        'PATCH after insert and verifies it stuck. Requires both `vulnerability` and `cmdb_ci` so the ' +
+        'remediation-task rule engine can group the item. **[Write — requires WRITE_ENABLED=true]**',
+      inputSchema: {
+        type: 'object',
+        properties: {
+          vulnerability: {
+            type: 'string',
+            description: '32-char sys_id of the vulnerability entry (sn_vul_entry, e.g. an NVD entry)',
+          },
+          cmdb_ci: { type: 'string', description: '32-char sys_id of the affected CI' },
+          short_description: { type: 'string', description: 'Short description (defaults to a generated one server-side)' },
+          description: { type: 'string', description: 'Detailed description' },
+          assignment_group: { type: 'string', description: 'Assignment group sys_id' },
+          assigned_to: { type: 'string', description: 'Assignee sys_id' },
+          state: VUL_STATE_SCHEMA,
+          source: { type: 'string', description: 'Detection source label (e.g. scanner name)' },
+        },
+        required: ['vulnerability', 'cmdb_ci'],
+      },
+    },
+    {
+      name: 'list_remediation_task_findings',
+      description:
+        'List the VI ↔ Remediation Task links in the "Remediation Task Item" m2m ' +
+        '(sn_vul_m2m_vul_group_item). Give `remediation_task` (VUL number or sys_id of the ' +
+        'sn_vul_vulnerability group) to list its member Vulnerable Items, or `vulnerable_item` ' +
+        '(VIT number or sys_id) to list the Remediation Tasks it belongs to. Exactly one of the two.',
+      inputSchema: {
+        type: 'object',
+        properties: {
+          remediation_task: {
+            type: 'string',
+            description: 'Remediation Task / group: VUL number (VULxxxxxxx) or 32-char sys_id (sn_vul_vulnerability)',
+          },
+          vulnerable_item: {
+            type: 'string',
+            description: 'Vulnerable Item: VIT number (VITxxxxxxx) or 32-char sys_id',
+          },
+          limit: { type: 'number', description: 'Max records (default: 25, max: 1000)' },
+        },
+      },
+    },
+    {
       name: 'add_vi_to_remediation_task',
       description:
         'Associate a Vulnerable Item with a remediation group via the "Remediation Task Item" m2m ' +
@@ -313,6 +362,32 @@ function summarizeByState(stats: any): Array<{ state: string; label: string; cou
       };
     })
     .sort((a, b) => b.count - a.count);
+}
+
+/** Unwrap a Table API field value ({ value, link } object or plain string) to its raw value. */
+function refValue(value: unknown): string {
+  if (value && typeof value === 'object' && 'value' in (value as any)) {
+    return String((value as any).value ?? '');
+  }
+  return value === undefined || value === null ? '' : String(value);
+}
+
+/** Resolve a human-readable number (VUL/VIT…) to a sys_id, passing 32-char hex ids through. */
+async function resolveSysId(
+  client: ServiceNowClient,
+  table: string,
+  identifier: string,
+  label: string
+): Promise<string> {
+  if (SYS_ID_RE.test(identifier)) return identifier;
+  const resp = await client.queryRecords({
+    table,
+    query: `number=${sanitizeLikeValue(identifier)}`,
+    fields: 'sys_id',
+    limit: 1,
+  });
+  if (resp.count === 0) throw new ServiceNowError(`${label} not found: ${identifier}`, 'NOT_FOUND');
+  return refValue(resp.records[0].sys_id);
 }
 
 export async function executeUsemToolCall(
@@ -525,6 +600,99 @@ export async function executeUsemToolCall(
       }
       const result = await client.updateRecord('sn_vul_remediation_task', args.sys_id, data);
       return { ...result, summary: `Updated Remediation Task ${args.sys_id}` };
+    }
+
+    case 'create_vulnerable_item': {
+      requireWrite();
+      if (!args.vulnerability || !args.cmdb_ci) {
+        throw new ServiceNowError('vulnerability and cmdb_ci are required', 'INVALID_REQUEST');
+      }
+      if (!SYS_ID_RE.test(args.vulnerability) || !SYS_ID_RE.test(args.cmdb_ci)) {
+        throw new ServiceNowError('vulnerability and cmdb_ci must be 32-char sys_ids', 'INVALID_REQUEST');
+      }
+      const data: Record<string, any> = { vulnerability: args.vulnerability, cmdb_ci: args.cmdb_ci };
+      for (const f of ['short_description', 'description', 'assignment_group', 'assigned_to', 'state', 'source']) {
+        if (args[f] !== undefined) data[f] = args[f];
+      }
+      const created = await client.createRecord('sn_vul_vulnerable_item', data);
+      const sysId = refValue(created.sys_id);
+
+      // A before BR clears `vulnerability` on REST inserts (verified on PDI); without it the
+      // "Link to Remediation Tasks" BR never fires. Re-apply via PATCH — PATCHed values persist.
+      let record = created;
+      let restored = false;
+      if (refValue(created.vulnerability) !== args.vulnerability) {
+        record = await client.updateRecord('sn_vul_vulnerable_item', sysId, { vulnerability: args.vulnerability });
+        restored = refValue(record.vulnerability) === args.vulnerability;
+        if (!restored) {
+          return {
+            ...record,
+            vulnerability_set: false,
+            warning:
+              `VI ${refValue(record.number) || sysId} was created but the vulnerability reference ` +
+              'could not be re-applied (cleared again after PATCH). Remediation-task grouping will not ' +
+              'trigger for this item — check business rules on sn_vul_vulnerable_item.',
+            summary: `Created VI ${refValue(record.number) || sysId} (vulnerability reference NOT set)`,
+          };
+        }
+      }
+      return {
+        ...record,
+        vulnerability_set: true,
+        vulnerability_restored_via_patch: restored,
+        summary:
+          `Created VI ${refValue(record.number) || sysId} with vulnerability reference intact` +
+          (restored ? ' (re-applied via PATCH after the insert BR cleared it)' : ''),
+      };
+    }
+
+    case 'list_remediation_task_findings': {
+      const hasRt = !!args.remediation_task;
+      const hasVi = !!args.vulnerable_item;
+      if (hasRt === hasVi) {
+        throw new ServiceNowError(
+          'Provide exactly one of remediation_task or vulnerable_item',
+          'INVALID_REQUEST'
+        );
+      }
+      if (hasRt) {
+        const rtId = await resolveSysId(client, 'sn_vul_vulnerability', args.remediation_task, 'Remediation Task');
+        const resp = await client.queryRecords({
+          table: 'sn_vul_m2m_vul_group_item',
+          query: `sn_vul_vulnerability=${rtId}`,
+          fields:
+            'sys_id,sn_vul_vulnerable_item,sn_vul_vulnerable_item.number,' +
+            'sn_vul_vulnerable_item.short_description,sn_vul_vulnerable_item.state,' +
+            'sn_vul_vulnerable_item.risk_score,sn_vul_vulnerable_item.cmdb_ci',
+          limit: args.limit ?? 25,
+          display_value: 'all',
+        });
+        return {
+          direction: 'remediation_task_to_vulnerable_items',
+          remediation_task: rtId,
+          count: resp.count,
+          records: resp.records,
+          summary: `Remediation Task ${args.remediation_task} has ${resp.count} linked vulnerable item(s)`,
+        };
+      }
+      const viId = await resolveSysId(client, 'sn_vul_vulnerable_item', args.vulnerable_item, 'Vulnerable Item');
+      const resp = await client.queryRecords({
+        table: 'sn_vul_m2m_vul_group_item',
+        query: `sn_vul_vulnerable_item=${viId}`,
+        fields:
+          'sys_id,sn_vul_vulnerability,sn_vul_vulnerability.number,' +
+          'sn_vul_vulnerability.short_description,sn_vul_vulnerability.state,' +
+          'sn_vul_vulnerability.risk_score,sn_vul_vulnerability.auto_vi_refresh',
+        limit: args.limit ?? 25,
+        display_value: 'all',
+      });
+      return {
+        direction: 'vulnerable_item_to_remediation_tasks',
+        vulnerable_item: viId,
+        count: resp.count,
+        records: resp.records,
+        summary: `Vulnerable Item ${args.vulnerable_item} belongs to ${resp.count} remediation task(s)`,
+      };
     }
 
     case 'add_vi_to_remediation_task': {

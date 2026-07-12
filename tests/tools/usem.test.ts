@@ -17,8 +17,8 @@ const updateRec = () => mockClient.updateRecord as ReturnType<typeof vi.fn>;
 const agg = () => mockClient.runAggregateQuery as ReturnType<typeof vi.fn>;
 
 describe('getUsemToolDefinitions', () => {
-  it('returns 14 tool definitions', () => {
-    expect(getUsemToolDefinitions().length).toBe(14);
+  it('returns 16 tool definitions', () => {
+    expect(getUsemToolDefinitions().length).toBe(16);
   });
 
   it('all tools have name, description and inputSchema', () => {
@@ -36,6 +36,8 @@ describe('getUsemToolDefinitions', () => {
         'add_vi_to_remediation_task',
         'create_remediation_task',
         'create_vulnerability_group',
+        'create_vulnerable_item',
+        'list_remediation_task_findings',
         'get_nvd_entry_by_cve',
         'get_remediation_task',
         'get_usem_dashboard',
@@ -417,6 +419,163 @@ describe('write tools – with WRITE_ENABLED', () => {
     await expect(
       executeUsemToolCall(mockClient, 'update_vulnerability_group', { state: '2' })
     ).rejects.toThrow('sys_id is required');
+  });
+});
+
+describe('create_vulnerable_item', () => {
+  const ORIGINAL = process.env.WRITE_ENABLED;
+  const VUL_ID = 'b'.repeat(32);
+  const CI_ID = 'c'.repeat(32);
+  beforeEach(() => {
+    vi.clearAllMocks();
+    process.env.WRITE_ENABLED = 'true';
+  });
+  afterEach(() => {
+    if (ORIGINAL === undefined) delete process.env.WRITE_ENABLED;
+    else process.env.WRITE_ENABLED = ORIGINAL;
+  });
+
+  it('is blocked without WRITE_ENABLED', async () => {
+    delete process.env.WRITE_ENABLED;
+    await expect(
+      executeUsemToolCall(mockClient, 'create_vulnerable_item', { vulnerability: VUL_ID, cmdb_ci: CI_ID })
+    ).rejects.toThrow('Write operations are disabled');
+  });
+
+  it('requires vulnerability and cmdb_ci', async () => {
+    await expect(
+      executeUsemToolCall(mockClient, 'create_vulnerable_item', { vulnerability: VUL_ID })
+    ).rejects.toThrow('vulnerability and cmdb_ci are required');
+  });
+
+  it('rejects non-sys_id references', async () => {
+    await expect(
+      executeUsemToolCall(mockClient, 'create_vulnerable_item', { vulnerability: 'CVE-2018-1', cmdb_ci: CI_ID })
+    ).rejects.toThrow('must be 32-char sys_ids');
+  });
+
+  it('returns without PATCH when the insert keeps the vulnerability reference', async () => {
+    createRec().mockResolvedValue({
+      sys_id: 'vi1'.padEnd(32, '0'),
+      number: 'VIT0010042',
+      vulnerability: { value: VUL_ID, link: 'x' },
+    });
+    const result = await executeUsemToolCall(mockClient, 'create_vulnerable_item', {
+      vulnerability: VUL_ID,
+      cmdb_ci: CI_ID,
+      short_description: 'test VI',
+    });
+    expect(createRec()).toHaveBeenCalledWith('sn_vul_vulnerable_item', {
+      vulnerability: VUL_ID,
+      cmdb_ci: CI_ID,
+      short_description: 'test VI',
+    });
+    expect(updateRec()).not.toHaveBeenCalled();
+    expect(result.vulnerability_set).toBe(true);
+    expect(result.vulnerability_restored_via_patch).toBe(false);
+  });
+
+  it('re-applies the vulnerability via PATCH when the insert BR clears it', async () => {
+    const sysId = 'd'.repeat(32);
+    createRec().mockResolvedValue({ sys_id: sysId, number: 'VIT0010043', vulnerability: '' });
+    updateRec().mockResolvedValue({
+      sys_id: sysId,
+      number: 'VIT0010043',
+      vulnerability: { value: VUL_ID, link: 'x' },
+    });
+    const result = await executeUsemToolCall(mockClient, 'create_vulnerable_item', {
+      vulnerability: VUL_ID,
+      cmdb_ci: CI_ID,
+    });
+    expect(updateRec()).toHaveBeenCalledWith('sn_vul_vulnerable_item', sysId, { vulnerability: VUL_ID });
+    expect(result.vulnerability_set).toBe(true);
+    expect(result.vulnerability_restored_via_patch).toBe(true);
+    expect(result.summary).toContain('re-applied via PATCH');
+  });
+
+  it('warns when the reference is cleared again after the PATCH', async () => {
+    const sysId = 'e'.repeat(32);
+    createRec().mockResolvedValue({ sys_id: sysId, number: 'VIT0010044', vulnerability: '' });
+    updateRec().mockResolvedValue({ sys_id: sysId, number: 'VIT0010044', vulnerability: '' });
+    const result = await executeUsemToolCall(mockClient, 'create_vulnerable_item', {
+      vulnerability: VUL_ID,
+      cmdb_ci: CI_ID,
+    });
+    expect(result.vulnerability_set).toBe(false);
+    expect(result.warning).toContain('could not be re-applied');
+  });
+});
+
+describe('list_remediation_task_findings', () => {
+  beforeEach(() => vi.clearAllMocks());
+
+  it('requires exactly one of remediation_task / vulnerable_item', async () => {
+    await expect(
+      executeUsemToolCall(mockClient, 'list_remediation_task_findings', {})
+    ).rejects.toThrow('exactly one');
+    await expect(
+      executeUsemToolCall(mockClient, 'list_remediation_task_findings', {
+        remediation_task: 'a'.repeat(32),
+        vulnerable_item: 'b'.repeat(32),
+      })
+    ).rejects.toThrow('exactly one');
+  });
+
+  it('lists VIs of a remediation task by sys_id', async () => {
+    const rtId = 'a'.repeat(32);
+    qr().mockResolvedValue({ count: 2, records: [{}, {}] });
+    const result = await executeUsemToolCall(mockClient, 'list_remediation_task_findings', {
+      remediation_task: rtId,
+    });
+    const call = qr().mock.calls[0][0];
+    expect(call.table).toBe('sn_vul_m2m_vul_group_item');
+    expect(call.query).toBe(`sn_vul_vulnerability=${rtId}`);
+    expect(result.direction).toBe('remediation_task_to_vulnerable_items');
+    expect(result.count).toBe(2);
+  });
+
+  it('resolves a VUL number before querying the m2m', async () => {
+    const rtId = 'f'.repeat(32);
+    qr()
+      .mockResolvedValueOnce({ count: 1, records: [{ sys_id: rtId }] })
+      .mockResolvedValueOnce({ count: 1, records: [{}] });
+    await executeUsemToolCall(mockClient, 'list_remediation_task_findings', {
+      remediation_task: 'VUL0010007',
+    });
+    expect(qr().mock.calls[0][0].table).toBe('sn_vul_vulnerability');
+    expect(qr().mock.calls[0][0].query).toBe('number=VUL0010007');
+    expect(qr().mock.calls[1][0].query).toBe(`sn_vul_vulnerability=${rtId}`);
+  });
+
+  it('lists remediation tasks of a VI, resolving the VIT number', async () => {
+    const viId = '1'.repeat(32);
+    qr()
+      .mockResolvedValueOnce({ count: 1, records: [{ sys_id: viId }] })
+      .mockResolvedValueOnce({ count: 1, records: [{}] });
+    const result = await executeUsemToolCall(mockClient, 'list_remediation_task_findings', {
+      vulnerable_item: 'VIT0010003',
+    });
+    expect(qr().mock.calls[0][0].table).toBe('sn_vul_vulnerable_item');
+    expect(qr().mock.calls[1][0].table).toBe('sn_vul_m2m_vul_group_item');
+    expect(qr().mock.calls[1][0].query).toBe(`sn_vul_vulnerable_item=${viId}`);
+    expect(result.direction).toBe('vulnerable_item_to_remediation_tasks');
+  });
+
+  it('throws NOT_FOUND when the number does not resolve', async () => {
+    qr().mockResolvedValue({ count: 0, records: [] });
+    await expect(
+      executeUsemToolCall(mockClient, 'list_remediation_task_findings', { remediation_task: 'VUL9999999' })
+    ).rejects.toThrow('Remediation Task not found');
+  });
+
+  it('sanitizes query-breaking characters in number lookups', async () => {
+    qr().mockResolvedValue({ count: 0, records: [] });
+    await expect(
+      executeUsemToolCall(mockClient, 'list_remediation_task_findings', {
+        remediation_task: 'VUL1^sys_idISNOTEMPTY',
+      })
+    ).rejects.toThrow('not found');
+    expect(qr().mock.calls[0][0].query).not.toContain('^');
   });
 });
 
