@@ -51,6 +51,8 @@ interface RuleType {
   orderField?: string;
   /** Curated comma-separated fields returned by list_usem_rules. */
   listFields: string;
+  /** Curated fields accepted by create/update; defaults to listFields minus sys_id. */
+  writeFields?: Set<string>;
 }
 
 const RULE_REGISTRY: Record<string, RuleType> = {
@@ -199,6 +201,26 @@ function resolveType(ruleType: unknown): RuleType {
   return RULE_REGISTRY[ruleType];
 }
 
+function writableFields(rt: RuleType): Set<string> {
+  return rt.writeFields ?? new Set(
+    rt.listFields
+      .split(',')
+      .map(field => field.trim())
+      .filter(field => field && field !== 'sys_id')
+  );
+}
+
+function assertAllowedRuleFields(rt: RuleType, action: 'set' | 'updated', fields: Record<string, any>): void {
+  const allowedFields = writableFields(rt);
+  const unsafeFields = Object.keys(fields).filter(field => !allowedFields.has(field));
+  if (unsafeFields.length > 0) {
+    throw new ServiceNowError(
+      `${rt.label} fields cannot be ${action}: ${unsafeFields.join(', ')}. Allowed fields: ${[...allowedFields].join(', ')}`,
+      'VALIDATION_ERROR'
+    );
+  }
+}
+
 export function getUsemConfigToolDefinitions() {
   return [
     {
@@ -241,7 +263,7 @@ export function getUsemConfigToolDefinitions() {
       name: 'create_usem_rule',
       description:
         'Create a USEM/VR automation rule. Provide the rule_type and a fields object matching ' +
-        'that table (e.g. name/rule_name, active, order, condition, assignment_group, ttr_max). ' +
+        'that table allowlist (e.g. name/rule_name, active, order, condition, assignment_group, ttr_max). ' +
         '**[Write — requires WRITE_ENABLED=true; admin-level config change]**',
       inputSchema: {
         type: 'object',
@@ -255,7 +277,7 @@ export function getUsemConfigToolDefinitions() {
     {
       name: 'update_usem_rule',
       description:
-        'Update a USEM/VR automation rule by sys_id with a fields object. ' +
+        'Update a USEM/VR automation rule by sys_id with a fields object restricted to that table allowlist. ' +
         '**[Write — requires WRITE_ENABLED=true; admin-level config change]**',
       inputSchema: {
         type: 'object',
@@ -354,6 +376,7 @@ export async function executeUsemConfigToolCall(
       if (!args.fields || typeof args.fields !== 'object' || Object.keys(args.fields).length === 0) {
         throw new ServiceNowError('fields object with at least one column is required', 'INVALID_REQUEST');
       }
+      assertAllowedRuleFields(rt, 'set', args.fields);
       const result = await client.createRecord(rt.table, args.fields);
       const label = rt.nameField ? args.fields[rt.nameField] ?? result.sys_id : result.sys_id;
       return { ...result, rule_type: args.rule_type, summary: `Created ${rt.label}: ${label}` };
@@ -366,6 +389,7 @@ export async function executeUsemConfigToolCall(
       if (!args.fields || typeof args.fields !== 'object' || Object.keys(args.fields).length === 0) {
         throw new ServiceNowError('fields object with at least one column is required', 'INVALID_REQUEST');
       }
+      assertAllowedRuleFields(rt, 'updated', args.fields);
       const result = await client.updateRecord(rt.table, args.sys_id, args.fields);
       return { ...result, rule_type: args.rule_type, summary: `Updated ${rt.label} ${args.sys_id}` };
     }

@@ -1554,13 +1554,13 @@ Get the full definition of a single USEM/VR rule.
 Create a USEM/VR automation rule. **[Write — admin-level config change]**
 
 **Parameters**:
-- `rule_type` (required), `fields` (required) — column/value map for the new rule
+- `rule_type` (required), `fields` (required) — allowlisted column/value map for the selected rule type
 
 ### update_usem_rule
 Update a USEM/VR automation rule. **[Write — admin-level config change]**
 
 **Parameters**:
-- `rule_type` (required), `sys_id` (required), `fields` (required)
+- `rule_type` (required), `sys_id` (required), `fields` (required) — allowlisted column/value map for the selected rule type
 
 ### set_usem_rule_active
 Enable/disable a USEM/VR rule (toggle of `active`; not supported for rule types without an active flag, e.g. `exception_rule`, `exception_config`, `calculator_config`, `risk_field`, `risk_score_weight`). **[Write — admin-level config change]**
