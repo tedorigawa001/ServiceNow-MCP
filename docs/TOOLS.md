@@ -351,7 +351,7 @@ Update a task record. **[Write]**
 
 **Parameters**:
 - `sys_id` (required)
-- `fields` (required)
+- `fields` (required) — allowed fields only: `short_description`, `description`, `state`, `priority`, `assigned_to`, `assignment_group`, `work_notes`, `comments`, `close_notes`, `due_date`, `active`
 
 ### complete_task
 Mark a task as complete. **[Write]**
@@ -1104,13 +1104,14 @@ Create an agile user story. **[Write]**
 - `story_points`
 - `sprint`
 - `epic`
+- `assigned_to`
 
 ### update_story
 Update a user story. **[Write]**
 
 **Parameters**:
 - `sys_id` (required)
-- `fields` (required)
+- `fields` (required) — allowed fields only: `short_description`, `story_points`, `sprint`, `epic`, `description`, `assigned_to`
 
 ### list_stories
 List user stories with optional filters.
@@ -1127,18 +1128,20 @@ Create an epic. **[Write]**
 **Parameters**:
 - `short_description` (required)
 - `description`
+- `project`
 
 ### update_epic
 Update an epic. **[Write]**
 
 **Parameters**:
 - `sys_id` (required)
-- `fields` (required)
+- `fields` (required) — allowed fields only: `short_description`, `description`, `project`
 
 ### list_epics
 List epics.
 
 **Parameters**:
+- `project`
 - `state`
 - `limit`
 
@@ -1149,14 +1152,13 @@ Create a scrum task. **[Write]**
 - `short_description` (required)
 - `story_sys_id`
 - `assigned_to`
-- `hours_remaining`
 
 ### update_scrum_task
 Update a scrum task. **[Write]**
 
 **Parameters**:
 - `sys_id` (required)
-- `fields` (required)
+- `fields` (required) — allowed fields only: `short_description`, `story`, `assigned_to`
 
 ### list_scrum_tasks
 List scrum tasks.
