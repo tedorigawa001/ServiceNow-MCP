@@ -602,7 +602,7 @@ Update user record fields. **[Write]**
 
 **Parameters**:
 - `sys_id` (required)
-- `fields` (required)
+- `fields` (required) — allowed: `user_name`, `email`, `first_name`, `last_name`, `title`, `department`
 
 ### list_groups
 List user groups.
@@ -624,7 +624,7 @@ Update a user group. **[Write]**
 
 **Parameters**:
 - `sys_id` (required)
-- `fields` (required)
+- `fields` (required) — allowed: `name`, `description`, `manager`
 
 ### add_user_to_group
 Add a user to a group. **[Write]**

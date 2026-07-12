@@ -59,6 +59,20 @@ describe('executeUserToolCall – create_user', () => {
     expect(result.summary).toContain('jsmith');
   });
 
+  it('rejects undeclared create fields', async () => {
+    await expect(
+      executeUserToolCall(mockClient, 'create_user', {
+        user_name: 'jsmith',
+        email: 'j.smith@company.com',
+        first_name: 'John',
+        last_name: 'Smith',
+        roles: 'admin',
+        sys_domain: 'global',
+      })
+    ).rejects.toThrow('User fields cannot be set: roles, sys_domain');
+    expect(mockClient.createRecord).not.toHaveBeenCalled();
+  });
+
   it('blocks create when WRITE_ENABLED=false', async () => {
     process.env.WRITE_ENABLED = 'false';
     await expect(
@@ -89,6 +103,16 @@ describe('executeUserToolCall – update_user', () => {
     });
     expect(result.summary).toContain('usr1');
     expect(mockClient.updateRecord).toHaveBeenCalledWith('sys_user', 'usr1', { title: 'Senior Engineer' });
+  });
+
+  it('rejects undeclared update fields', async () => {
+    await expect(
+      executeUserToolCall(mockClient, 'update_user', {
+        sys_id: 'usr1',
+        fields: { title: 'Senior Engineer', roles: 'admin', sys_domain: 'global' },
+      })
+    ).rejects.toThrow('User fields cannot be updated: roles, sys_domain');
+    expect(mockClient.updateRecord).not.toHaveBeenCalled();
   });
 });
 
@@ -121,6 +145,44 @@ describe('executeUserToolCall – create_group', () => {
     (mockClient.createRecord as ReturnType<typeof vi.fn>).mockResolvedValue({ sys_id: 'grp1', name: 'Network Ops' });
     const result = await executeUserToolCall(mockClient, 'create_group', { name: 'Network Ops' });
     expect(result.summary).toContain('Network Ops');
+  });
+
+  it('rejects undeclared group create fields', async () => {
+    await expect(
+      executeUserToolCall(mockClient, 'create_group', {
+        name: 'Network Ops',
+        roles: 'admin',
+        sys_domain: 'global',
+      })
+    ).rejects.toThrow('Group fields cannot be set: roles, sys_domain');
+    expect(mockClient.createRecord).not.toHaveBeenCalled();
+  });
+});
+
+describe('executeUserToolCall – update_group', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    process.env.WRITE_ENABLED = 'true';
+  });
+
+  it('updates group fields', async () => {
+    (mockClient.updateRecord as ReturnType<typeof vi.fn>).mockResolvedValue({ sys_id: 'grp1' });
+    const result = await executeUserToolCall(mockClient, 'update_group', {
+      sys_id: 'grp1',
+      fields: { description: 'Network operations' },
+    });
+    expect(result.summary).toContain('grp1');
+    expect(mockClient.updateRecord).toHaveBeenCalledWith('sys_user_group', 'grp1', { description: 'Network operations' });
+  });
+
+  it('rejects undeclared group update fields', async () => {
+    await expect(
+      executeUserToolCall(mockClient, 'update_group', {
+        sys_id: 'grp1',
+        fields: { description: 'Network operations', roles: 'admin', sys_domain: 'global' },
+      })
+    ).rejects.toThrow('Group fields cannot be updated: roles, sys_domain');
+    expect(mockClient.updateRecord).not.toHaveBeenCalled();
   });
 });
 
