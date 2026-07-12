@@ -271,7 +271,7 @@ Update an existing problem. **[Write]**
 
 **Parameters**:
 - `sys_id` (required)
-- `fields` (required)
+- `fields` (required) — allowed fields only: `name`, `script`, `run_type`, `run_time`, `run_period`, `active`
 
 ### resolve_problem
 Mark a problem as resolved with fix notes. **[Write]**
@@ -313,7 +313,7 @@ Update an existing change request. **[Write]**
 
 **Parameters**:
 - `sys_id` (required)
-- `fields` (required)
+- `fields` (required) — allowed fields only: `name`, `id`, `template`, `css`, `client_script`, `script`, `server_script`, `option_schema`, `demo_data`
 
 ### submit_change_for_approval
 Move a change request to the approval state. **[Write]**
@@ -351,7 +351,7 @@ Update a task record. **[Write]**
 
 **Parameters**:
 - `sys_id` (required)
-- `fields` (required)
+- `fields` (required) — allowed fields only: `short_description`, `description`, `state`, `priority`, `assigned_to`, `assignment_group`, `work_notes`, `comments`, `close_notes`, `due_date`, `active`
 
 ### complete_task
 Mark a task as complete. **[Write]**
@@ -602,7 +602,7 @@ Update user record fields. **[Write]**
 
 **Parameters**:
 - `sys_id` (required)
-- `fields` (required)
+- `fields` (required) — allowed: `user_name`, `email`, `first_name`, `last_name`, `title`, `department`
 
 ### list_groups
 List user groups.
@@ -624,7 +624,7 @@ Update a user group. **[Write]**
 
 **Parameters**:
 - `sys_id` (required)
-- `fields` (required)
+- `fields` (required) — allowed: `name`, `description`, `manager`
 
 ### add_user_to_group
 Add a user to a group. **[Write]**
@@ -908,13 +908,14 @@ Create a new business rule. **[Scripting]**
 - `script` (required)
 - `condition`
 - `active`
+- `order`
 
 ### update_business_rule
 Update a business rule. **[Scripting]**
 
 **Parameters**:
 - `sys_id` (required)
-- `fields` (required)
+- `fields` (required) — allowed fields only: `name`, `collection`, `when`, `script`, `condition`, `active`, `order`
 
 ### list_script_includes
 List script includes.
@@ -938,13 +939,14 @@ Create a new script include. **[Scripting]**
 - `script` (required)
 - `api_name`
 - `access` — `public` or `package_private`
+- `active`
 
 ### update_script_include
 Update a script include. **[Scripting]**
 
 **Parameters**:
 - `sys_id` (required)
-- `fields` (required)
+- `fields` (required) — allowed fields only: `name`, `script`, `api_name`, `access`, `active`
 
 ### list_client_scripts
 List client scripts.
@@ -969,14 +971,16 @@ Create a new client script. **[Scripting]**
 - `table` (required)
 - `type` (required)
 - `script` (required)
-- `condition`
+- `field_name`
+- `active`
+- `global`
 
 ### update_client_script
 Update a client script. **[Scripting]**
 
 **Parameters**:
 - `sys_id` (required)
-- `fields` (required)
+- `fields` (required) — allowed fields only: `name`, `table`, `type`, `script`, `field_name`, `active`, `global`
 
 ### list_changesets
 List update sets (changesets).
@@ -1046,16 +1050,20 @@ Create a new UI action. **[Scripting]**
 **Parameters**:
 - `name` (required)
 - `table` (required)
-- `script` (required)
-- `action_name`
+- `action_name` (required)
+- `script`
+- `type`
+- `condition`
 - `active`
+- `form_button`
+- `list_button`
 
 ### update_ui_action
 Update a UI action script or properties. **[Scripting]**
 
 **Parameters**:
 - `sys_id` (required)
-- `fields` (required)
+- `fields` (required) — allowed fields only: `name`, `table`, `action_name`, `script`, `condition`, `action_type`, `active`, `form_button`, `list_button`
 
 ### list_acls
 List Access Control List rules. **[Scripting]**
@@ -1104,13 +1112,14 @@ Create an agile user story. **[Write]**
 - `story_points`
 - `sprint`
 - `epic`
+- `assigned_to`
 
 ### update_story
 Update a user story. **[Write]**
 
 **Parameters**:
 - `sys_id` (required)
-- `fields` (required)
+- `fields` (required) — allowed fields only: `short_description`, `story_points`, `sprint`, `epic`, `description`, `assigned_to`
 
 ### list_stories
 List user stories with optional filters.
@@ -1127,18 +1136,20 @@ Create an epic. **[Write]**
 **Parameters**:
 - `short_description` (required)
 - `description`
+- `project`
 
 ### update_epic
 Update an epic. **[Write]**
 
 **Parameters**:
 - `sys_id` (required)
-- `fields` (required)
+- `fields` (required) — allowed fields only: `short_description`, `description`, `project`
 
 ### list_epics
 List epics.
 
 **Parameters**:
+- `project`
 - `state`
 - `limit`
 
@@ -1149,14 +1160,13 @@ Create a scrum task. **[Write]**
 - `short_description` (required)
 - `story_sys_id`
 - `assigned_to`
-- `hours_remaining`
 
 ### update_scrum_task
 Update a scrum task. **[Write]**
 
 **Parameters**:
 - `sys_id` (required)
-- `fields` (required)
+- `fields` (required) — allowed fields only: `short_description`, `story`, `assigned_to`
 
 ### list_scrum_tasks
 List scrum tasks.
@@ -1554,13 +1564,13 @@ Get the full definition of a single USEM/VR rule.
 Create a USEM/VR automation rule. **[Write — admin-level config change]**
 
 **Parameters**:
-- `rule_type` (required), `fields` (required) — column/value map for the new rule
+- `rule_type` (required), `fields` (required) — allowlisted column/value map for the selected rule type
 
 ### update_usem_rule
 Update a USEM/VR automation rule. **[Write — admin-level config change]**
 
 **Parameters**:
-- `rule_type` (required), `sys_id` (required), `fields` (required)
+- `rule_type` (required), `sys_id` (required), `fields` (required) — allowlisted column/value map for the selected rule type
 
 ### set_usem_rule_active
 Enable/disable a USEM/VR rule (toggle of `active`; not supported for rule types without an active flag, e.g. `exception_rule`, `exception_config`, `calculator_config`, `risk_field`, `risk_score_weight`). **[Write — admin-level config change]**
@@ -2395,7 +2405,7 @@ Update Virtual Agent topic properties. **[Write]**
 
 **Parameters**:
 - `sys_id` (required)
-- `fields` (required) — Fields to update
+- `fields` (required) — allowed fields only: `name`, `description`, `category`, `active`, `fulfillment_type`
 
 ### get_va_topic
 Get Virtual Agent topic details including intent and trigger phrases.

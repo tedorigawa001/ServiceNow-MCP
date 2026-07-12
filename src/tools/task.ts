@@ -6,6 +6,39 @@ import type { ServiceNowClient } from '../servicenow/client.js';
 import { ServiceNowError } from '../utils/errors.js';
 import { requireWrite } from '../utils/permissions.js';
 
+const TASK_UPDATE_FIELDS = new Set([
+  'short_description',
+  'description',
+  'state',
+  'priority',
+  'assigned_to',
+  'assignment_group',
+  'work_notes',
+  'comments',
+  'close_notes',
+  'due_date',
+  'active',
+]);
+
+function allowedFieldsSchema(allowedFields: Set<string>, description: string): Record<string, any> {
+  return {
+    type: 'object',
+    description,
+    properties: Object.fromEntries([...allowedFields].map(field => [field, {}])),
+    additionalProperties: false,
+  };
+}
+
+function assertAllowedTaskFields(fields: Record<string, any>): void {
+  const unsafeFields = Object.keys(fields).filter(field => !TASK_UPDATE_FIELDS.has(field));
+  if (unsafeFields.length) {
+    throw new ServiceNowError(
+      `Task fields cannot be updated: ${unsafeFields.join(', ')}. Allowed fields: ${[...TASK_UPDATE_FIELDS].join(', ')}`,
+      'VALIDATION_ERROR'
+    );
+  }
+}
+
 export function getTaskToolDefinitions() {
   return [
     {
@@ -26,7 +59,10 @@ export function getTaskToolDefinitions() {
         type: 'object',
         properties: {
           sys_id: { type: 'string', description: 'System ID of the task' },
-          fields: { type: 'object', description: 'Key-value pairs to update' },
+          fields: allowedFieldsSchema(
+            TASK_UPDATE_FIELDS,
+            'Allowed fields: short_description, description, state, priority, assigned_to, assignment_group, work_notes, comments, close_notes, due_date, active'
+          ),
         },
         required: ['sys_id', 'fields'],
       },
@@ -75,6 +111,7 @@ export async function executeTaskToolCall(
     case 'update_task': {
       requireWrite();
       if (!args.sys_id || !args.fields) throw new ServiceNowError('sys_id and fields are required', 'INVALID_REQUEST');
+      assertAllowedTaskFields(args.fields);
       const result = await client.updateRecord('task', args.sys_id, args.fields);
       return { ...result, summary: `Updated task ${args.sys_id}` };
     }

@@ -8,6 +8,33 @@ import { ServiceNowError } from '../utils/errors.js';
 import { requireWrite } from '../utils/permissions.js';
 
 const TABLE_PREFIX = process.env.AGILE_TABLE_PREFIX || 'rm_';
+const STORY_FIELDS = new Set(['short_description', 'story_points', 'sprint', 'epic', 'description', 'assigned_to']);
+const EPIC_FIELDS = new Set(['short_description', 'description', 'project']);
+const SCRUM_TASK_FIELDS = new Set(['short_description', 'story', 'assigned_to']);
+
+function allowedFieldsSchema(allowedFields: Set<string>, description: string): Record<string, any> {
+  return {
+    type: 'object',
+    description,
+    properties: Object.fromEntries([...allowedFields].map(field => [field, {}])),
+    additionalProperties: false,
+  };
+}
+
+function assertAllowedFields(
+  label: string,
+  action: 'set' | 'updated',
+  fields: Record<string, any>,
+  allowedFields: Set<string>
+): void {
+  const unsafeFields = Object.keys(fields).filter(field => !allowedFields.has(field));
+  if (unsafeFields.length) {
+    throw new ServiceNowError(
+      `${label} fields cannot be ${action}: ${unsafeFields.join(', ')}. Allowed fields: ${[...allowedFields].join(', ')}`,
+      'VALIDATION_ERROR'
+    );
+  }
+}
 
 export function getAgileToolDefinitions() {
   return [
@@ -34,7 +61,7 @@ export function getAgileToolDefinitions() {
         type: 'object',
         properties: {
           sys_id: { type: 'string', description: 'System ID of the story' },
-          fields: { type: 'object', description: 'Key-value pairs to update' },
+          fields: allowedFieldsSchema(STORY_FIELDS, 'Allowed fields: short_description, story_points, sprint, epic, description, assigned_to'),
         },
         required: ['sys_id', 'fields'],
       },
@@ -72,7 +99,7 @@ export function getAgileToolDefinitions() {
         type: 'object',
         properties: {
           sys_id: { type: 'string', description: 'System ID of the epic' },
-          fields: { type: 'object', description: 'Key-value pairs to update' },
+          fields: allowedFieldsSchema(EPIC_FIELDS, 'Allowed fields: short_description, description, project'),
         },
         required: ['sys_id', 'fields'],
       },
@@ -110,7 +137,7 @@ export function getAgileToolDefinitions() {
         type: 'object',
         properties: {
           sys_id: { type: 'string', description: 'System ID of the scrum task' },
-          fields: { type: 'object', description: 'Key-value pairs to update' },
+          fields: allowedFieldsSchema(SCRUM_TASK_FIELDS, 'Allowed fields: short_description, story, assigned_to'),
         },
         required: ['sys_id', 'fields'],
       },
@@ -144,12 +171,14 @@ export async function executeAgileToolCall(
     case 'create_story': {
       requireWrite();
       if (!args.short_description) throw new ServiceNowError('short_description is required', 'INVALID_REQUEST');
+      assertAllowedFields('Story', 'set', args, STORY_FIELDS);
       const result = await client.createRecord(storyTable, args);
       return { ...result, summary: `Created story ${result.number || result.sys_id}` };
     }
     case 'update_story': {
       requireWrite();
       if (!args.sys_id || !args.fields) throw new ServiceNowError('sys_id and fields are required', 'INVALID_REQUEST');
+      assertAllowedFields('Story', 'updated', args.fields, STORY_FIELDS);
       return await client.updateRecord(storyTable, args.sys_id, args.fields);
     }
     case 'list_stories': {
@@ -162,12 +191,14 @@ export async function executeAgileToolCall(
     case 'create_epic': {
       requireWrite();
       if (!args.short_description) throw new ServiceNowError('short_description is required', 'INVALID_REQUEST');
+      assertAllowedFields('Epic', 'set', args, EPIC_FIELDS);
       const result = await client.createRecord(epicTable, args);
       return { ...result, summary: `Created epic ${result.number || result.sys_id}` };
     }
     case 'update_epic': {
       requireWrite();
       if (!args.sys_id || !args.fields) throw new ServiceNowError('sys_id and fields are required', 'INVALID_REQUEST');
+      assertAllowedFields('Epic', 'updated', args.fields, EPIC_FIELDS);
       return await client.updateRecord(epicTable, args.sys_id, args.fields);
     }
     case 'list_epics': {
@@ -189,6 +220,7 @@ export async function executeAgileToolCall(
     case 'update_scrum_task': {
       requireWrite();
       if (!args.sys_id || !args.fields) throw new ServiceNowError('sys_id and fields are required', 'INVALID_REQUEST');
+      assertAllowedFields('Scrum task', 'updated', args.fields, SCRUM_TASK_FIELDS);
       return await client.updateRecord(scrumTaskTable, args.sys_id, args.fields);
     }
     case 'list_scrum_tasks': {

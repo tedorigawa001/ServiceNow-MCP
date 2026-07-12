@@ -308,6 +308,21 @@ describe('write tools – with WRITE_ENABLED', () => {
     expect(result.summary).toContain('Critical to SecOps');
   });
 
+  it('create_usem_rule rejects fields outside the rule type allowlist', async () => {
+    await expect(
+      executeUsemConfigToolCall(mockClient, 'create_usem_rule', {
+        rule_type: 'remediation_task',
+        fields: {
+          rule_name: 'Critical to SecOps',
+          active: true,
+          sys_domain: 'global',
+          u_unlisted: 'x',
+        },
+      })
+    ).rejects.toThrow('Remediation Task Rule fields cannot be set: sys_domain, u_unlisted');
+    expect(createRec()).not.toHaveBeenCalled();
+  });
+
   it('create_usem_rule requires a non-empty fields object', async () => {
     await expect(
       executeUsemConfigToolCall(mockClient, 'create_usem_rule', { rule_type: 'approval', fields: {} })
@@ -322,6 +337,17 @@ describe('write tools – with WRITE_ENABLED', () => {
       fields: { ttr_max: 7 },
     });
     expect(updateRec()).toHaveBeenCalledWith('sn_sec_wf_ttr_rule', 'a'.repeat(32), { ttr_max: 7 });
+  });
+
+  it('update_usem_rule rejects fields outside the rule type allowlist', async () => {
+    await expect(
+      executeUsemConfigToolCall(mockClient, 'update_usem_rule', {
+        rule_type: 'remediation_target',
+        sys_id: 'a'.repeat(32),
+        fields: { ttr_max: 7, sys_id: 'b'.repeat(32), sys_domain: 'global' },
+      })
+    ).rejects.toThrow('Remediation Target Rule fields cannot be updated: sys_id, sys_domain');
+    expect(updateRec()).not.toHaveBeenCalled();
   });
 
   it('update_usem_rule requires fields', async () => {

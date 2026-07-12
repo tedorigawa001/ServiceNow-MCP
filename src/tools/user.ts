@@ -6,6 +6,33 @@ import type { ServiceNowClient } from '../servicenow/client.js';
 import { ServiceNowError } from '../utils/errors.js';
 import { requireWrite } from '../utils/permissions.js';
 
+const USER_FIELDS = new Set(['user_name', 'email', 'first_name', 'last_name', 'title', 'department']);
+const GROUP_FIELDS = new Set(['name', 'description', 'manager']);
+
+function allowedFieldsSchema(allowedFields: Set<string>, description: string): Record<string, any> {
+  return {
+    type: 'object',
+    description,
+    properties: Object.fromEntries([...allowedFields].map(field => [field, {}])),
+    additionalProperties: false,
+  };
+}
+
+function assertAllowedFields(
+  label: string,
+  action: 'set' | 'updated',
+  fields: Record<string, any>,
+  allowedFields: Set<string>
+): void {
+  const unsafeFields = Object.keys(fields).filter(field => !allowedFields.has(field));
+  if (unsafeFields.length) {
+    throw new ServiceNowError(
+      `${label} fields cannot be ${action}: ${unsafeFields.join(', ')}. Allowed fields: ${[...allowedFields].join(', ')}`,
+      'VALIDATION_ERROR'
+    );
+  }
+}
+
 export function getUserToolDefinitions() {
   return [
     {
@@ -43,7 +70,7 @@ export function getUserToolDefinitions() {
         type: 'object',
         properties: {
           sys_id: { type: 'string', description: 'System ID of the user' },
-          fields: { type: 'object', description: 'Key-value pairs to update' },
+          fields: allowedFieldsSchema(USER_FIELDS, 'Allowed fields: user_name, email, first_name, last_name, title, department'),
         },
         required: ['sys_id', 'fields'],
       },
@@ -80,7 +107,7 @@ export function getUserToolDefinitions() {
         type: 'object',
         properties: {
           sys_id: { type: 'string', description: 'System ID of the group' },
-          fields: { type: 'object', description: 'Key-value pairs to update' },
+          fields: allowedFieldsSchema(GROUP_FIELDS, 'Allowed fields: name, description, manager'),
         },
         required: ['sys_id', 'fields'],
       },
@@ -125,12 +152,14 @@ export async function executeUserToolCall(
       requireWrite();
       if (!args.user_name || !args.email || !args.first_name || !args.last_name)
         throw new ServiceNowError('user_name, email, first_name, and last_name are required', 'INVALID_REQUEST');
+      assertAllowedFields('User', 'set', args, USER_FIELDS);
       const result = await client.createRecord('sys_user', args);
       return { ...result, summary: `Created user ${args.user_name}` };
     }
     case 'update_user': {
       requireWrite();
       if (!args.sys_id || !args.fields) throw new ServiceNowError('sys_id and fields are required', 'INVALID_REQUEST');
+      assertAllowedFields('User', 'updated', args.fields, USER_FIELDS);
       const result = await client.updateRecord('sys_user', args.sys_id, args.fields);
       return { ...result, summary: `Updated user ${args.sys_id}` };
     }
@@ -141,12 +170,14 @@ export async function executeUserToolCall(
     case 'create_group': {
       requireWrite();
       if (!args.name) throw new ServiceNowError('name is required', 'INVALID_REQUEST');
+      assertAllowedFields('Group', 'set', args, GROUP_FIELDS);
       const result = await client.createRecord('sys_user_group', args);
       return { ...result, summary: `Created group ${args.name}` };
     }
     case 'update_group': {
       requireWrite();
       if (!args.sys_id || !args.fields) throw new ServiceNowError('sys_id and fields are required', 'INVALID_REQUEST');
+      assertAllowedFields('Group', 'updated', args.fields, GROUP_FIELDS);
       const result = await client.updateRecord('sys_user_group', args.sys_id, args.fields);
       return { ...result, summary: `Updated group ${args.sys_id}` };
     }

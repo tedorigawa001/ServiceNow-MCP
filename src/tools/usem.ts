@@ -56,6 +56,8 @@ const VG_FIELDS =
   'number,short_description,state,assignment_group,assigned_to,risk_score,risk_rating,' +
   'ttr_status,ttr_target_date,total_vulnerabilities,sys_id';
 
+const queryValue = (value: unknown): string => sanitizeLikeValue(String(value));
+
 export function getUsemToolDefinitions() {
   return [
     {
@@ -370,6 +372,7 @@ function stateClause(state: unknown): string | undefined {
   const values = String(state)
     .split(',')
     .map(s => s.trim())
+    .map(queryValue)
     .filter(Boolean);
   if (values.length === 0) return undefined;
   return values.length === 1 ? `state=${values[0]}` : `stateIN${values.join(',')}`;
@@ -428,8 +431,8 @@ export async function executeUsemToolCall(
       const sc = stateClause(args.state);
       if (sc) parts.push(sc);
       if (args.risk_score_min !== undefined) parts.push(`risk_score>=${Number(args.risk_score_min)}`);
-      if (args.cmdb_ci) parts.push(`cmdb_ci=${args.cmdb_ci}`);
-      if (args.assignment_group) parts.push(`assignment_group=${args.assignment_group}`);
+      if (args.cmdb_ci) parts.push(`cmdb_ci=${queryValue(args.cmdb_ci)}`);
+      if (args.assignment_group) parts.push(`assignment_group=${queryValue(args.assignment_group)}`);
       if (args.query) parts.push(args.query);
       const resp = await client.queryRecords({
         table: 'sn_vul_vulnerable_item',
@@ -449,7 +452,7 @@ export async function executeUsemToolCall(
       }
       const resp = await client.queryRecords({
         table: 'sn_vul_vulnerable_item',
-        query: `number=${args.number_or_sysid}`,
+        query: `number=${queryValue(args.number_or_sysid)}`,
         limit: 1,
       });
       if (resp.count === 0) throw new ServiceNowError(`Vulnerable Item not found: ${args.number_or_sysid}`, 'NOT_FOUND');
@@ -460,8 +463,8 @@ export async function executeUsemToolCall(
       const parts: string[] = [];
       const sc = stateClause(args.state);
       if (sc) parts.push(sc);
-      if (args.assignment_group) parts.push(`assignment_group=${args.assignment_group}`);
-      if (args.assigned_to) parts.push(`assigned_to=${args.assigned_to}`);
+      if (args.assignment_group) parts.push(`assignment_group=${queryValue(args.assignment_group)}`);
+      if (args.assigned_to) parts.push(`assigned_to=${queryValue(args.assigned_to)}`);
       if (args.query) parts.push(args.query);
       const query = parts.join('^');
       const limit = args.limit ?? 25;
@@ -545,7 +548,7 @@ export async function executeUsemToolCall(
       const sc = stateClause(args.state);
       if (sc) parts.push(sc);
       if (args.risk_score_min !== undefined) parts.push(`risk_score>=${Number(args.risk_score_min)}`);
-      if (args.assignment_group) parts.push(`assignment_group=${args.assignment_group}`);
+      if (args.assignment_group) parts.push(`assignment_group=${queryValue(args.assignment_group)}`);
       if (args.query) parts.push(args.query);
       const resp = await client.queryRecords({
         table: 'sn_vul_vulnerability',
@@ -565,7 +568,7 @@ export async function executeUsemToolCall(
       }
       const resp = await client.queryRecords({
         table: 'sn_vul_vulnerability',
-        query: `number=${args.number_or_sysid}`,
+        query: `number=${queryValue(args.number_or_sysid)}`,
         limit: 1,
       });
       if (resp.count === 0) throw new ServiceNowError(`Vulnerability Group not found: ${args.number_or_sysid}`, 'NOT_FOUND');
@@ -599,7 +602,7 @@ export async function executeUsemToolCall(
 
     case 'list_nvd_entries': {
       const parts: string[] = [];
-      if (args.cve) parts.push(`idLIKE${args.cve}`);
+      if (args.cve) parts.push(`idLIKE${queryValue(args.cve)}`);
       if (args.score_min !== undefined) parts.push(`v3_base_score>=${Number(args.score_min)}`);
       if (args.query) parts.push(args.query);
       const resp = await client.queryRecords({
@@ -616,7 +619,7 @@ export async function executeUsemToolCall(
       if (!args.cve) throw new ServiceNowError('cve is required', 'INVALID_REQUEST');
       const resp = await client.queryRecords({
         table: 'sn_vul_nvd_entry',
-        query: `id=${args.cve}`,
+        query: `id=${queryValue(args.cve)}`,
         limit: 1,
       });
       if (resp.count === 0) throw new ServiceNowError(`NVD entry not found for CVE: ${args.cve}`, 'NOT_FOUND');
@@ -738,7 +741,7 @@ export async function executeUsemToolCall(
         const rtId = await resolveSysId(client, 'sn_vul_vulnerability', args.remediation_task, 'Remediation Task');
         const resp = await client.queryRecords({
           table: 'sn_vul_m2m_vul_group_item',
-          query: `sn_vul_vulnerability=${rtId}`,
+          query: `sn_vul_vulnerability=${queryValue(rtId)}`,
           fields:
             'sys_id,sn_vul_vulnerable_item,sn_vul_vulnerable_item.number,' +
             'sn_vul_vulnerable_item.short_description,sn_vul_vulnerable_item.state,' +
@@ -757,7 +760,7 @@ export async function executeUsemToolCall(
       const viId = await resolveSysId(client, 'sn_vul_vulnerable_item', args.vulnerable_item, 'Vulnerable Item');
       const resp = await client.queryRecords({
         table: 'sn_vul_m2m_vul_group_item',
-        query: `sn_vul_vulnerable_item=${viId}`,
+        query: `sn_vul_vulnerable_item=${queryValue(viId)}`,
         fields:
           'sys_id,sn_vul_vulnerability,sn_vul_vulnerability.number,' +
           'sn_vul_vulnerability.short_description,sn_vul_vulnerability.state,' +
@@ -781,14 +784,14 @@ export async function executeUsemToolCall(
       const [viResp, linksResp, rulesResp] = await Promise.all([
         client.queryRecords({
           table: 'sn_vul_vulnerable_item',
-          query: `sys_id=${viId}`,
+          query: `sys_id=${queryValue(viId)}`,
           fields: 'number,state,substate,vulnerability,cmdb_ci,is_in_group,risk_score,source,sys_id',
           limit: 1,
           display_value: 'all',
         }),
         client.queryRecords({
           table: 'sn_vul_m2m_vul_group_item',
-          query: `sn_vul_vulnerable_item=${viId}`,
+          query: `sn_vul_vulnerable_item=${queryValue(viId)}`,
           fields:
             'sys_id,sn_vul_vulnerability,sn_vul_vulnerability.number,sn_vul_vulnerability.state,' +
             'sn_vul_vulnerability.auto_vi_refresh,sn_vul_vulnerability.short_description',

@@ -7,6 +7,37 @@ import { sanitizeLikeValue, type ServiceNowClient } from '../servicenow/client.j
 import { ServiceNowError } from '../utils/errors.js';
 import { requireWrite } from '../utils/permissions.js';
 
+const PORTAL_WIDGET_UPDATE_FIELDS = new Set([
+  'name',
+  'id',
+  'template',
+  'css',
+  'client_script',
+  'script',
+  'server_script',
+  'option_schema',
+  'demo_data',
+]);
+
+function allowedFieldsSchema(allowedFields: Set<string>, description: string): Record<string, any> {
+  return {
+    type: 'object',
+    description,
+    properties: Object.fromEntries([...allowedFields].map(field => [field, {}])),
+    additionalProperties: false,
+  };
+}
+
+function assertAllowedFields(label: string, fields: Record<string, any>, allowedFields: Set<string>): void {
+  const unsafeFields = Object.keys(fields).filter(field => !allowedFields.has(field));
+  if (unsafeFields.length) {
+    throw new ServiceNowError(
+      `${label} fields cannot be updated: ${unsafeFields.join(', ')}. Allowed fields: ${[...allowedFields].join(', ')}`,
+      'VALIDATION_ERROR'
+    );
+  }
+}
+
 export function getPortalToolDefinitions() {
   return [
     // ── Service Portal ──────────────────────────────────────────────────────
@@ -142,10 +173,10 @@ export function getPortalToolDefinitions() {
         type: 'object',
         properties: {
           sys_id: { type: 'string', description: 'Widget sys_id' },
-          fields: {
-            type: 'object',
-            description: 'Fields to update: template, css, client_script, server_script, name, etc.',
-          },
+          fields: allowedFieldsSchema(
+            PORTAL_WIDGET_UPDATE_FIELDS,
+            'Allowed fields: name, id, template, css, client_script, script, server_script, option_schema, demo_data'
+          ),
         },
         required: ['sys_id', 'fields'],
       },
@@ -341,12 +372,14 @@ export async function executePortalToolCall(
     case 'update_portal_widget': {
       requireWrite();
       if (!args.sys_id || !args.fields) throw new ServiceNowError('sys_id and fields are required', 'INVALID_REQUEST');
+      assertAllowedFields('Portal widget', args.fields, PORTAL_WIDGET_UPDATE_FIELDS);
       // Map friendly field name
-      if (args.fields.server_script !== undefined) {
-        args.fields.script = args.fields.server_script;
-        delete args.fields.server_script;
+      const fields = { ...args.fields };
+      if (fields.server_script !== undefined) {
+        fields.script = fields.server_script;
+        delete fields.server_script;
       }
-      const result = await client.updateRecord('sp_widget', args.sys_id, args.fields);
+      const result = await client.updateRecord('sp_widget', args.sys_id, fields);
       return { ...result, summary: `Updated widget ${args.sys_id}` };
     }
     case 'list_widget_instances': {

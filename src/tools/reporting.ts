@@ -7,6 +7,38 @@ import { sanitizeLikeValue, type ServiceNowClient } from '../servicenow/client.j
 import { ServiceNowError } from '../utils/errors.js';
 import { requireScripting, requireWrite } from '../utils/permissions.js';
 
+const SCHEDULED_JOB_UPDATE_FIELDS = new Set(['name', 'script', 'run_type', 'run_time', 'run_period', 'active']);
+const REPORT_UPDATE_FIELDS = new Set([
+  'title',
+  'table',
+  'type',
+  'field',
+  'filter_fields',
+  'query',
+  'aggregate',
+  'group_by',
+  'roles',
+]);
+
+function allowedFieldsSchema(allowedFields: Set<string>, description: string): Record<string, any> {
+  return {
+    type: 'object',
+    description,
+    properties: Object.fromEntries([...allowedFields].map(field => [field, {}])),
+    additionalProperties: false,
+  };
+}
+
+function assertAllowedFields(label: string, fields: Record<string, any>, allowedFields: Set<string>): void {
+  const unsafeFields = Object.keys(fields).filter(field => !allowedFields.has(field));
+  if (unsafeFields.length) {
+    throw new ServiceNowError(
+      `${label} fields cannot be updated: ${unsafeFields.join(', ')}. Allowed fields: ${[...allowedFields].join(', ')}`,
+      'VALIDATION_ERROR'
+    );
+  }
+}
+
 export function getReportingToolDefinitions() {
   return [
     {
@@ -157,10 +189,10 @@ export function getReportingToolDefinitions() {
         type: 'object',
         properties: {
           sys_id: { type: 'string', description: 'Scheduled job sys_id' },
-          fields: {
-            type: 'object',
-            description: 'Fields to update (name, script, active, run_type, run_time, etc.)',
-          },
+          fields: allowedFieldsSchema(
+            SCHEDULED_JOB_UPDATE_FIELDS,
+            'Allowed fields: name, script, run_type, run_time, run_period, active'
+          ),
         },
         required: ['sys_id', 'fields'],
       },
@@ -208,10 +240,10 @@ export function getReportingToolDefinitions() {
         type: 'object',
         properties: {
           sys_id: { type: 'string', description: 'Report sys_id' },
-          fields: {
-            type: 'object',
-            description: 'Fields to update (title, type, query, field, aggregate, etc.)',
-          },
+          fields: allowedFieldsSchema(
+            REPORT_UPDATE_FIELDS,
+            'Allowed fields: title, table, type, field, filter_fields, query, aggregate, group_by, roles'
+          ),
         },
         required: ['sys_id', 'fields'],
       },
@@ -362,6 +394,7 @@ export async function executeReportingToolCall(
     case 'update_scheduled_job': {
       requireScripting();
       if (!args.sys_id || !args.fields) throw new ServiceNowError('sys_id and fields are required', 'INVALID_REQUEST');
+      assertAllowedFields('Scheduled job', args.fields, SCHEDULED_JOB_UPDATE_FIELDS);
       const result = await client.updateRecord('sysauto', args.sys_id, args.fields);
       return { ...result, summary: `Updated scheduled job ${args.sys_id}` };
     }
@@ -394,7 +427,13 @@ export async function executeReportingToolCall(
       requireWrite();
       if (!args.sys_id || !args.fields)
         throw new ServiceNowError('sys_id and fields are required', 'INVALID_REQUEST');
-      const result = await client.updateRecord('sys_report', args.sys_id, args.fields);
+      assertAllowedFields('Report', args.fields, REPORT_UPDATE_FIELDS);
+      const fields = { ...args.fields };
+      if (fields.query !== undefined) {
+        fields.filter_fields = fields.query;
+        delete fields.query;
+      }
+      const result = await client.updateRecord('sys_report', args.sys_id, fields);
       return { ...result, summary: `Updated report ${args.sys_id}` };
     }
     case 'list_job_run_history': {

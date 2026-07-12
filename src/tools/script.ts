@@ -8,6 +8,44 @@ import type { ServiceNowClient } from '../servicenow/client.js';
 import { ServiceNowError } from '../utils/errors.js';
 import { requireScripting } from '../utils/permissions.js';
 
+const BUSINESS_RULE_UPDATE_FIELDS = new Set(['name', 'collection', 'when', 'script', 'condition', 'active', 'order']);
+const SCRIPT_INCLUDE_UPDATE_FIELDS = new Set(['name', 'script', 'api_name', 'access', 'active']);
+const CLIENT_SCRIPT_UPDATE_FIELDS = new Set(['name', 'table', 'type', 'script', 'field_name', 'active', 'global']);
+const UI_ACTION_UPDATE_FIELDS = new Set([
+  'name',
+  'table',
+  'action_name',
+  'script',
+  'condition',
+  'action_type',
+  'active',
+  'form_button',
+  'list_button',
+]);
+
+function allowedFieldsSchema(allowedFields: Set<string>, description: string): Record<string, any> {
+  return {
+    type: 'object',
+    description,
+    properties: Object.fromEntries([...allowedFields].map(field => [field, {}])),
+    additionalProperties: false,
+  };
+}
+
+function assertAllowedFields(
+  label: string,
+  fields: Record<string, any>,
+  allowedFields: Set<string>
+): void {
+  const unsafeFields = Object.keys(fields).filter(field => !allowedFields.has(field));
+  if (unsafeFields.length) {
+    throw new ServiceNowError(
+      `${label} fields cannot be updated: ${unsafeFields.join(', ')}. Allowed fields: ${[...allowedFields].join(', ')}`,
+      'VALIDATION_ERROR'
+    );
+  }
+}
+
 export function getScriptToolDefinitions() {
   return [
     {
@@ -58,7 +96,7 @@ export function getScriptToolDefinitions() {
         type: 'object',
         properties: {
           sys_id: { type: 'string', description: 'System ID of the rule' },
-          fields: { type: 'object', description: 'Key-value pairs to update (name, script, active, condition, etc.)' },
+          fields: allowedFieldsSchema(BUSINESS_RULE_UPDATE_FIELDS, 'Allowed fields: name, collection, when, script, condition, active, order'),
         },
         required: ['sys_id', 'fields'],
       },
@@ -109,7 +147,7 @@ export function getScriptToolDefinitions() {
         type: 'object',
         properties: {
           sys_id: { type: 'string', description: 'System ID of the script include' },
-          fields: { type: 'object', description: 'Key-value pairs to update' },
+          fields: allowedFieldsSchema(SCRIPT_INCLUDE_UPDATE_FIELDS, 'Allowed fields: name, script, api_name, access, active'),
         },
         required: ['sys_id', 'fields'],
       },
@@ -209,7 +247,7 @@ export function getScriptToolDefinitions() {
         type: 'object',
         properties: {
           sys_id: { type: 'string', description: 'Client script sys_id' },
-          fields: { type: 'object', description: 'Fields to update (script, active, name, type, etc.)' },
+          fields: allowedFieldsSchema(CLIENT_SCRIPT_UPDATE_FIELDS, 'Allowed fields: name, table, type, script, field_name, active, global'),
         },
         required: ['sys_id', 'fields'],
       },
@@ -307,7 +345,10 @@ export function getScriptToolDefinitions() {
         type: 'object',
         properties: {
           sys_id: { type: 'string', description: 'UI Action sys_id' },
-          fields: { type: 'object', description: 'Fields to update (name, script, active, condition, etc.)' },
+          fields: allowedFieldsSchema(
+            UI_ACTION_UPDATE_FIELDS,
+            'Allowed fields: name, table, action_name, script, condition, action_type, active, form_button, list_button'
+          ),
         },
         required: ['sys_id', 'fields'],
       },
@@ -399,6 +440,7 @@ export async function executeScriptToolCall(
     }
     case 'update_business_rule': {
       if (!args.sys_id || !args.fields) throw new ServiceNowError('sys_id and fields are required', 'INVALID_REQUEST');
+      assertAllowedFields('Business rule', args.fields, BUSINESS_RULE_UPDATE_FIELDS);
       const result = await client.updateRecord('sys_script', args.sys_id, args.fields);
       return { ...result, summary: `Updated business rule ${args.sys_id}` };
     }
@@ -426,6 +468,7 @@ export async function executeScriptToolCall(
     }
     case 'update_script_include': {
       if (!args.sys_id || !args.fields) throw new ServiceNowError('sys_id and fields are required', 'INVALID_REQUEST');
+      assertAllowedFields('Script include', args.fields, SCRIPT_INCLUDE_UPDATE_FIELDS);
       return await client.updateRecord('sys_script_include', args.sys_id, args.fields);
     }
     case 'list_client_scripts': {
@@ -483,6 +526,7 @@ export async function executeScriptToolCall(
     }
     case 'update_client_script': {
       if (!args.sys_id || !args.fields) throw new ServiceNowError('sys_id and fields are required', 'INVALID_REQUEST');
+      assertAllowedFields('Client script', args.fields, CLIENT_SCRIPT_UPDATE_FIELDS);
       const result = await client.updateRecord('sys_script_client', args.sys_id, args.fields);
       return { ...result, summary: `Updated client script ${args.sys_id}` };
     }
@@ -554,6 +598,7 @@ export async function executeScriptToolCall(
     }
     case 'update_ui_action': {
       if (!args.sys_id || !args.fields) throw new ServiceNowError('sys_id and fields are required', 'INVALID_REQUEST');
+      assertAllowedFields('UI action', args.fields, UI_ACTION_UPDATE_FIELDS);
       const result = await client.updateRecord('sys_ui_action', args.sys_id, args.fields);
       return { ...result, summary: `Updated UI action ${args.sys_id}` };
     }
