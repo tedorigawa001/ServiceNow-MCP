@@ -7,6 +7,35 @@ import type { ServiceNowClient } from '../servicenow/client.js';
 import { ServiceNowError } from '../utils/errors.js';
 import { requireWrite } from '../utils/permissions.js';
 
+const SCOPED_APP_UPDATE_FIELDS = new Set([
+  'name',
+  'version',
+  'short_description',
+  'description',
+  'vendor',
+  'active',
+  'logo',
+]);
+
+function allowedFieldsSchema(allowedFields: Set<string>, description: string): Record<string, any> {
+  return {
+    type: 'object',
+    description,
+    properties: Object.fromEntries([...allowedFields].map(field => [field, {}])),
+    additionalProperties: false,
+  };
+}
+
+function assertAllowedFields(label: string, fields: Record<string, any>, allowedFields: Set<string>): void {
+  const unsafeFields = Object.keys(fields).filter(field => !allowedFields.has(field));
+  if (unsafeFields.length) {
+    throw new ServiceNowError(
+      `${label} fields cannot be updated: ${unsafeFields.join(', ')}. Allowed fields: ${[...allowedFields].join(', ')}`,
+      'VALIDATION_ERROR'
+    );
+  }
+}
+
 export function getAppStudioToolDefinitions() {
   return [
     // ── Scoped Applications ─────────────────────────────────────────────────
@@ -67,11 +96,10 @@ export function getAppStudioToolDefinitions() {
         type: 'object',
         properties: {
           sys_id: { type: 'string', description: 'App sys_id' },
-          fields: {
-            type: 'object',
-            description:
-              'Fields to update (name, version, short_description, description, active, vendor, etc.)',
-          },
+          fields: allowedFieldsSchema(
+            SCOPED_APP_UPDATE_FIELDS,
+            'Allowed fields: name, version, short_description, description, vendor, active, logo'
+          ),
         },
         required: ['sys_id', 'fields'],
       },
@@ -138,6 +166,7 @@ export async function executeAppStudioToolCall(
       requireWrite();
       if (!args.sys_id || !args.fields)
         throw new ServiceNowError('sys_id and fields are required', 'INVALID_REQUEST');
+      assertAllowedFields('Scoped app', args.fields, SCOPED_APP_UPDATE_FIELDS);
       const result = await client.updateRecord('sys_app', args.sys_id, args.fields);
       return { ...result, summary: `Updated scoped app ${args.sys_id}` };
     }

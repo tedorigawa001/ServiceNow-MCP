@@ -1,5 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import { getAgileToolDefinitions } from '../../src/tools/agile.js';
+import { getAppStudioToolDefinitions } from '../../src/tools/app-studio.js';
+import { getPortalToolDefinitions } from '../../src/tools/portal.js';
+import { getReportingToolDefinitions } from '../../src/tools/reporting.js';
 import { getScriptToolDefinitions } from '../../src/tools/script.js';
 import { getTaskToolDefinitions } from '../../src/tools/task.js';
 import { getUsemConfigToolDefinitions } from '../../src/tools/usem-config.js';
@@ -86,6 +89,26 @@ describe('write fields schemas', () => {
       defs: getScriptToolDefinitions(),
       name: 'update_ui_action',
       allowed: ['action_name', 'action_type', 'active', 'condition', 'form_button', 'list_button', 'name', 'script', 'table'],
+    },
+    {
+      defs: getPortalToolDefinitions(),
+      name: 'update_portal_widget',
+      allowed: ['client_script', 'css', 'demo_data', 'id', 'name', 'option_schema', 'script', 'server_script', 'template'],
+    },
+    {
+      defs: getReportingToolDefinitions(),
+      name: 'update_scheduled_job',
+      allowed: ['active', 'name', 'run_period', 'run_time', 'run_type', 'script'],
+    },
+    {
+      defs: getReportingToolDefinitions(),
+      name: 'update_report',
+      allowed: ['aggregate', 'field', 'filter_fields', 'group_by', 'query', 'roles', 'table', 'title', 'type'],
+    },
+    {
+      defs: getAppStudioToolDefinitions(),
+      name: 'update_scoped_app',
+      allowed: ['active', 'description', 'logo', 'name', 'short_description', 'vendor', 'version'],
     },
   ])('$name rejects undeclared fields at schema level', ({ defs, name, allowed }) => {
     const fields = tool(defs, name).inputSchema.properties?.fields;

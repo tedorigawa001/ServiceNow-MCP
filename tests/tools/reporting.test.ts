@@ -162,6 +162,8 @@ describe('executeReportingToolCall – list_scheduled_jobs', () => {
 });
 
 describe('executeReportingToolCall – scheduled script writes', () => {
+  beforeEach(() => vi.clearAllMocks());
+
   afterEach(() => {
     delete process.env.WRITE_ENABLED;
     delete process.env.SCRIPTING_ENABLED;
@@ -172,6 +174,37 @@ describe('executeReportingToolCall – scheduled script writes', () => {
     await expect(executeReportingToolCall(mockClient, 'create_scheduled_job', {
       name: 'job', script: 'gs.info(\"x\")', run_type: 'daily',
     })).rejects.toMatchObject({ code: 'SCRIPTING_NOT_ENABLED' });
+  });
+
+  it('updates scheduled job fields from the allowlist', async () => {
+    process.env.WRITE_ENABLED = 'true';
+    process.env.SCRIPTING_ENABLED = 'true';
+    (mockClient.updateRecord as ReturnType<typeof vi.fn>).mockResolvedValue({ sys_id: 'job1' });
+
+    const result = await executeReportingToolCall(mockClient, 'update_scheduled_job', {
+      sys_id: 'job1',
+      fields: { name: 'Daily cleanup', script: 'gs.info("cleanup")', active: true },
+    });
+
+    expect(result.summary).toContain('job1');
+    expect(mockClient.updateRecord).toHaveBeenCalledWith('sysauto', 'job1', {
+      name: 'Daily cleanup',
+      script: 'gs.info("cleanup")',
+      active: true,
+    });
+  });
+
+  it('rejects undeclared scheduled job update fields', async () => {
+    process.env.WRITE_ENABLED = 'true';
+    process.env.SCRIPTING_ENABLED = 'true';
+
+    await expect(
+      executeReportingToolCall(mockClient, 'update_scheduled_job', {
+        sys_id: 'job1',
+        fields: { name: 'Daily cleanup', sys_scope: 'global', sys_domain: 'global' },
+      })
+    ).rejects.toThrow('Scheduled job fields cannot be updated: sys_scope, sys_domain');
+    expect(mockClient.updateRecord).not.toHaveBeenCalled();
   });
 });
 
@@ -195,6 +228,32 @@ describe('executeReportingToolCall – create_report', () => {
       type: 'bar',
     });
     expect(result.summary).toContain('Open P1 Incidents');
+  });
+
+  it('maps query and updates report fields from the allowlist', async () => {
+    (mockClient.updateRecord as ReturnType<typeof vi.fn>).mockResolvedValue({ sys_id: 'rpt1' });
+
+    const result = await executeReportingToolCall(mockClient, 'update_report', {
+      sys_id: 'rpt1',
+      fields: { title: 'Open P1 Incidents', query: 'priority=1', type: 'bar' },
+    });
+
+    expect(result.summary).toContain('rpt1');
+    expect(mockClient.updateRecord).toHaveBeenCalledWith('sys_report', 'rpt1', {
+      title: 'Open P1 Incidents',
+      filter_fields: 'priority=1',
+      type: 'bar',
+    });
+  });
+
+  it('rejects undeclared report update fields', async () => {
+    await expect(
+      executeReportingToolCall(mockClient, 'update_report', {
+        sys_id: 'rpt1',
+        fields: { title: 'Open P1 Incidents', sys_scope: 'global', sys_domain: 'global' },
+      })
+    ).rejects.toThrow('Report fields cannot be updated: sys_scope, sys_domain');
+    expect(mockClient.updateRecord).not.toHaveBeenCalled();
   });
 });
 

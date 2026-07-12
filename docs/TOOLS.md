@@ -271,7 +271,7 @@ Update an existing problem. **[Write]**
 
 **Parameters**:
 - `sys_id` (required)
-- `fields` (required)
+- `fields` (required) — allowed fields only: `name`, `script`, `run_type`, `run_time`, `run_period`, `active`
 
 ### resolve_problem
 Mark a problem as resolved with fix notes. **[Write]**
@@ -313,7 +313,7 @@ Update an existing change request. **[Write]**
 
 **Parameters**:
 - `sys_id` (required)
-- `fields` (required)
+- `fields` (required) — allowed fields only: `name`, `id`, `template`, `css`, `client_script`, `script`, `server_script`, `option_schema`, `demo_data`
 
 ### submit_change_for_approval
 Move a change request to the approval state. **[Write]**
