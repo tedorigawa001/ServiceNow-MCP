@@ -45,7 +45,7 @@ const POLICY_STATE_SCHEMA = {
   type: 'string',
   description: 'State filter: draft, review, awaiting_approval, published, retired',
 };
-const POLICY_FIELDS = new Set(['name', 'description', 'state', 'policy_category', 'category', 'classification', 'owner', 'owning_group', 'kb_knowledge_base', 'approval_method', 'audience', 'valid_from', 'valid_to']);
+const POLICY_FIELDS = new Set(['name', 'description', 'state', 'policy_category', 'category', 'classification', 'owner', 'owning_group', 'kb_knowledge_base', 'approval_method', 'article_template', 'audience', 'valid_from', 'valid_to']);
 const POLICY_LIST_FIELDS = 'number,name,description,state,policy_category,owner,compliance_score,sys_id';
 
 // ── Control (sn_compliance_control) ─────────────────────────────────────
@@ -157,14 +157,15 @@ export function getGrcComplianceToolDefinitions() {
       description:
         'Create a GRC Entity (sn_grc_profile). `profile_class` must be a valid sys_id from ' +
         'sn_grc_profile_class (e.g. Business Unit, Vendor, Application — use list_grc_entities with no ' +
-        'filter or query_records on sn_grc_profile_class to discover valid classes). ' +
-        '**[Write — requires WRITE_ENABLED=true]**',
+        'filter or query_records on sn_grc_profile_class to discover valid classes). `owned_by` is ' +
+        'dictionary-mandatory but not enforced by the REST API (the Entity is created with no owner if ' +
+        'omitted) — set it to avoid an unowned Entity. **[Write — requires WRITE_ENABLED=true]**',
       inputSchema: {
         type: 'object',
         properties: {
           name: { type: 'string', description: 'Entity name' },
           profile_class: { type: 'string', description: '32-char sys_id of the Entity class (sn_grc_profile_class)' },
-          owned_by: { type: 'string', description: 'sys_id of the owning user' },
+          owned_by: { type: 'string', description: 'sys_id of the owning user (dictionary-mandatory; recommended)' },
           description: { type: 'string' },
           cmdb_ci: { type: 'string', description: 'sys_id of the linked CMDB CI, if any' },
           framework: { type: 'string' },
@@ -212,7 +213,12 @@ export function getGrcComplianceToolDefinitions() {
     },
     {
       name: 'create_compliance_policy',
-      description: 'Create a Compliance Policy (sn_compliance_policy). **[Write — requires WRITE_ENABLED=true]**',
+      description:
+        'Create a Compliance Policy (sn_compliance_policy). `kb_knowledge_base`, `approval_method`, and ' +
+        '`article_template` are dictionary-mandatory on this table; the platform silently defaults them ' +
+        '(to the standard policy KB / "manual" approval / the standard article template) if omitted, so ' +
+        'omitting them will NOT fail the create — but pass them explicitly if you need a specific ' +
+        'knowledge base, approval method, or template. **[Write — requires WRITE_ENABLED=true]**',
       inputSchema: {
         type: 'object',
         properties: {
@@ -222,6 +228,9 @@ export function getGrcComplianceToolDefinitions() {
           category: { type: 'string' },
           owner: { type: 'string', description: 'sys_id of the policy owner' },
           owning_group: { type: 'string', description: 'sys_id of the owning group' },
+          kb_knowledge_base: { type: 'string', description: 'sys_id of the target knowledge base (defaults to the standard policy KB if omitted)' },
+          approval_method: { type: 'string', description: 'e.g. "manual" (the platform default if omitted)' },
+          article_template: { type: 'string', description: 'sys_id of the policy article template (defaults to the standard template if omitted)' },
         },
         required: ['name'],
       },
@@ -267,7 +276,11 @@ export function getGrcComplianceToolDefinitions() {
     },
     {
       name: 'create_compliance_control',
-      description: 'Create a Compliance Control (sn_compliance_control). **[Write — requires WRITE_ENABLED=true]**',
+      description:
+        'Create a Compliance Control (sn_compliance_control). `implementation_statement` is ' +
+        'dictionary-mandatory on this table but not enforced by the REST API (it is left blank if ' +
+        'omitted) — pass it to describe how the control is actually implemented. ' +
+        '**[Write — requires WRITE_ENABLED=true]**',
       inputSchema: {
         type: 'object',
         properties: {
@@ -278,6 +291,7 @@ export function getGrcComplianceToolDefinitions() {
           frequency: { type: 'string' },
           profile: { type: 'string', description: 'sys_id of the Entity this control protects' },
           owner: { type: 'string' },
+          implementation_statement: { type: 'string', description: 'How this control is implemented (dictionary-mandatory; left blank by the platform if omitted)' },
         },
         required: ['name'],
       },
@@ -491,7 +505,7 @@ export async function executeGrcComplianceToolCall(
       requireWrite();
       if (!args.name) throw new ServiceNowError('name is required', 'INVALID_REQUEST');
       const data: Record<string, any> = { name: args.name };
-      for (const f of ['description', 'policy_category', 'category', 'owner', 'owning_group']) {
+      for (const f of ['description', 'policy_category', 'category', 'owner', 'owning_group', 'kb_knowledge_base', 'approval_method', 'article_template']) {
         if (args[f] !== undefined) data[f] = args[f];
       }
       const result = await client.createRecord('sn_compliance_policy', data);
@@ -534,7 +548,7 @@ export async function executeGrcComplianceToolCall(
       requireWrite();
       if (!args.name) throw new ServiceNowError('name is required', 'INVALID_REQUEST');
       const data: Record<string, any> = { name: args.name };
-      for (const f of ['description', 'category', 'key_control', 'frequency', 'profile', 'owner']) {
+      for (const f of ['description', 'category', 'key_control', 'frequency', 'profile', 'owner', 'implementation_statement']) {
         if (args[f] !== undefined) data[f] = args[f];
       }
       const result = await client.createRecord('sn_compliance_control', data);

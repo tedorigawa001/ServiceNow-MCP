@@ -1456,9 +1456,9 @@ List/get GRC Entities (`sn_grc_profile`) — the "thing being assessed". No numb
 **Parameters** (get): `sys_id` (required)
 
 ### create_grc_entity / update_grc_entity
-Create/update a GRC Entity. **[Write]** `profile_class` must be a valid `sn_grc_profile_class` sys_id (NOT `sn_grc_profile_type`, a separate unrelated table).
+Create/update a GRC Entity. **[Write]** `profile_class` must be a valid `sn_grc_profile_class` sys_id (NOT `sn_grc_profile_type`, a separate unrelated table). `owned_by` is dictionary-mandatory but not enforced by the REST API (the Entity is created with no owner if omitted) — set it to avoid an unowned Entity.
 
-**Parameters** (create): `name` (required), `profile_class` (required), `owned_by`, `description`, `cmdb_ci`, `framework`, `functional_domain`
+**Parameters** (create): `name` (required), `profile_class` (required), `owned_by` (dictionary-mandatory; recommended), `description`, `cmdb_ci`, `framework`, `functional_domain`
 **Parameters** (update): `sys_id` (required), `fields` — allowed: `name`, `description`, `profile_class`, `owned_by`, `cmdb_ci`, `framework`, `functional_domain`
 
 ### list_compliance_policies / get_compliance_policy
@@ -1468,10 +1468,10 @@ List/get Compliance Policies (`sn_compliance_policy`, number prefix `POL`).
 **Parameters** (get): `number_or_sysid` (required)
 
 ### create_compliance_policy / update_compliance_policy
-Create/update a Compliance Policy. **[Write]**
+Create/update a Compliance Policy. **[Write]** `kb_knowledge_base`, `approval_method`, and `article_template` are dictionary-mandatory on this table; the platform silently defaults them if omitted (does not fail), but pass them explicitly for a specific KB/approval method/template.
 
-**Parameters** (create): `name` (required), `description`, `policy_category`, `category`, `owner`, `owning_group`
-**Parameters** (update): `sys_id` (required), `fields` — allowed: `name`, `description`, `state`, `policy_category`, `category`, `classification`, `owner`, `owning_group`, `kb_knowledge_base`, `approval_method`, `audience`, `valid_from`, `valid_to`
+**Parameters** (create): `name` (required), `description`, `policy_category`, `category`, `owner`, `owning_group`, `kb_knowledge_base`, `approval_method`, `article_template`
+**Parameters** (update): `sys_id` (required), `fields` — allowed: `name`, `description`, `state`, `policy_category`, `category`, `classification`, `owner`, `owning_group`, `kb_knowledge_base`, `approval_method`, `article_template`, `audience`, `valid_from`, `valid_to`
 
 ### list_compliance_controls / get_compliance_control
 List/get Compliance Controls (`sn_compliance_control`, number prefix `CTRL`).
@@ -1480,9 +1480,9 @@ List/get Compliance Controls (`sn_compliance_control`, number prefix `CTRL`).
 **Parameters** (get): `number_or_sysid` (required)
 
 ### create_compliance_control / update_compliance_control
-Create/update a Compliance Control. **[Write]**
+Create/update a Compliance Control. **[Write]** `implementation_statement` is dictionary-mandatory on this table but not enforced by the REST API (left blank if omitted).
 
-**Parameters** (create): `name` (required), `description`, `category`, `key_control`, `frequency`, `profile`, `owner`
+**Parameters** (create): `name` (required), `description`, `category`, `key_control`, `frequency`, `profile`, `owner`, `implementation_statement`
 **Parameters** (update): `sys_id` (required), `fields` — allowed: `name`, `description`, `state`, `category`, `classification`, `key_control`, `frequency`, `assessment_method`, `enforcement`, `owner`, `owning_group`, `profile`, `supplemental_guidance`, `discussion`, `implementation_statement`
 
 ### list_control_objectives / get_control_objective

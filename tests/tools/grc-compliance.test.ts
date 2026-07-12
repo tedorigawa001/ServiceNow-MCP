@@ -142,6 +142,47 @@ describe('Policy (sn_compliance_policy)', () => {
       executeGrcComplianceToolCall(mockClient, 'get_compliance_policy', { number_or_sysid: 'POLxxxx' })
     ).rejects.toThrow('Compliance Policy not found');
   });
+
+  describe('create_compliance_policy', () => {
+    const ORIGINAL = process.env.WRITE_ENABLED;
+    beforeEach(() => {
+      vi.clearAllMocks();
+      process.env.WRITE_ENABLED = 'true';
+    });
+    afterEach(() => {
+      if (ORIGINAL === undefined) delete process.env.WRITE_ENABLED;
+      else process.env.WRITE_ENABLED = ORIGINAL;
+    });
+
+    it('requires name', async () => {
+      await expect(executeGrcComplianceToolCall(mockClient, 'create_compliance_policy', {})).rejects.toThrow('name is required');
+    });
+
+    // sn_compliance_policy dictionary-marks kb_knowledge_base/approval_method/article_template as
+    // mandatory; the REST API silently defaults them if omitted, but the tool must still pass them
+    // through when the caller explicitly supplies a specific value.
+    it('passes through kb_knowledge_base/approval_method/article_template when provided', async () => {
+      createRec().mockResolvedValue({ sys_id: 'p1' });
+      await executeGrcComplianceToolCall(mockClient, 'create_compliance_policy', {
+        name: 'Data Retention Policy',
+        kb_knowledge_base: 'kb1',
+        approval_method: 'manual',
+        article_template: 'tmpl1',
+      });
+      expect(createRec()).toHaveBeenCalledWith('sn_compliance_policy', {
+        name: 'Data Retention Policy',
+        kb_knowledge_base: 'kb1',
+        approval_method: 'manual',
+        article_template: 'tmpl1',
+      });
+    });
+
+    it('omits mandatory-but-defaulted fields when not provided', async () => {
+      createRec().mockResolvedValue({ sys_id: 'p1' });
+      await executeGrcComplianceToolCall(mockClient, 'create_compliance_policy', { name: 'x' });
+      expect(createRec()).toHaveBeenCalledWith('sn_compliance_policy', { name: 'x' });
+    });
+  });
 });
 
 describe('Control (sn_compliance_control)', () => {
@@ -151,6 +192,32 @@ describe('Control (sn_compliance_control)', () => {
     qr().mockResolvedValue({ count: 0, records: [] });
     await executeGrcComplianceToolCall(mockClient, 'list_compliance_controls', { profile: 'p1', key_control: true });
     expect(qr().mock.calls[0][0].query).toBe('profile=p1^key_control=true');
+  });
+
+  describe('create_compliance_control', () => {
+    const ORIGINAL = process.env.WRITE_ENABLED;
+    beforeEach(() => {
+      vi.clearAllMocks();
+      process.env.WRITE_ENABLED = 'true';
+    });
+    afterEach(() => {
+      if (ORIGINAL === undefined) delete process.env.WRITE_ENABLED;
+      else process.env.WRITE_ENABLED = ORIGINAL;
+    });
+
+    // sn_compliance_control dictionary-marks implementation_statement as mandatory; the REST API
+    // leaves it blank (does not default it) if omitted, unlike Policy's mandatory fields.
+    it('passes through implementation_statement when provided', async () => {
+      createRec().mockResolvedValue({ sys_id: 'c1' });
+      await executeGrcComplianceToolCall(mockClient, 'create_compliance_control', {
+        name: 'Access Review',
+        implementation_statement: 'Reviewed quarterly by IT.',
+      });
+      expect(createRec()).toHaveBeenCalledWith('sn_compliance_control', {
+        name: 'Access Review',
+        implementation_statement: 'Reviewed quarterly by IT.',
+      });
+    });
   });
 });
 

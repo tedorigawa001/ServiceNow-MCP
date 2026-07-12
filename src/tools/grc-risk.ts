@@ -163,7 +163,9 @@ export function getGrcRiskToolDefinitions() {
       name: 'list_risk_criteria',
       description:
         'List the Impact/Likelihood/Score scale (sn_risk_criteria) used by Risk records — 5 rows per ' +
-        'type, ordered. Use this to find valid labels for create_risk/update_risk impact and likelihood.',
+        'type, ordered. Reference only: impact/likelihood/score are NOT settable via create_risk/' +
+        'update_risk (confirmed to be recalculated by a business rule regardless of client input) — use ' +
+        'this tool to understand the scale a Risk\'s calculated values fall on, not to prepare a write.',
       inputSchema: {
         type: 'object',
         properties: {
