@@ -908,13 +908,14 @@ Create a new business rule. **[Scripting]**
 - `script` (required)
 - `condition`
 - `active`
+- `order`
 
 ### update_business_rule
 Update a business rule. **[Scripting]**
 
 **Parameters**:
 - `sys_id` (required)
-- `fields` (required)
+- `fields` (required) — allowed fields only: `name`, `collection`, `when`, `script`, `condition`, `active`, `order`
 
 ### list_script_includes
 List script includes.
@@ -938,13 +939,14 @@ Create a new script include. **[Scripting]**
 - `script` (required)
 - `api_name`
 - `access` — `public` or `package_private`
+- `active`
 
 ### update_script_include
 Update a script include. **[Scripting]**
 
 **Parameters**:
 - `sys_id` (required)
-- `fields` (required)
+- `fields` (required) — allowed fields only: `name`, `script`, `api_name`, `access`, `active`
 
 ### list_client_scripts
 List client scripts.
@@ -969,14 +971,16 @@ Create a new client script. **[Scripting]**
 - `table` (required)
 - `type` (required)
 - `script` (required)
-- `condition`
+- `field_name`
+- `active`
+- `global`
 
 ### update_client_script
 Update a client script. **[Scripting]**
 
 **Parameters**:
 - `sys_id` (required)
-- `fields` (required)
+- `fields` (required) — allowed fields only: `name`, `table`, `type`, `script`, `field_name`, `active`, `global`
 
 ### list_changesets
 List update sets (changesets).
@@ -1046,16 +1050,20 @@ Create a new UI action. **[Scripting]**
 **Parameters**:
 - `name` (required)
 - `table` (required)
-- `script` (required)
-- `action_name`
+- `action_name` (required)
+- `script`
+- `type`
+- `condition`
 - `active`
+- `form_button`
+- `list_button`
 
 ### update_ui_action
 Update a UI action script or properties. **[Scripting]**
 
 **Parameters**:
 - `sys_id` (required)
-- `fields` (required)
+- `fields` (required) — allowed fields only: `name`, `table`, `action_name`, `script`, `condition`, `action_type`, `active`, `form_button`, `list_button`
 
 ### list_acls
 List Access Control List rules. **[Scripting]**
