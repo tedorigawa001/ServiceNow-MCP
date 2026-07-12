@@ -1,9 +1,10 @@
-# GRC Tooling — Design Document (Draft)
+# GRC Tooling — Design Document
 
-Status: **Draft — under discussion, not yet approved for implementation.**
-Investigated against dev400464 on 2026-07-12. This document exists to record what
-was actually found on a live instance before committing to a tool design, following
-the same practice used for the USEM buildout (see `ROADMAP.md` #11).
+Status: **Phase 1 (Audit + Compliance + Risk) implemented and live-verified,
+2026-07-12** — see `src/tools/grc-audit.ts`, `grc-compliance.ts`, `grc-risk.ts`.
+Investigated against dev400464. This document records what was actually found on
+a live instance before committing to a tool design, following the same practice
+used for the USEM buildout (see `ROADMAP.md` #11).
 
 ---
 
@@ -128,9 +129,25 @@ Counts re-verified 2026-07-12 (higher than the first pass — instance data grew
   actual backing table (`sn_grc_choice`) has real data.
 - **`sn_risk_risk` is a quantitative model**, not a simple severity score — `impact`/
   `likelihood` are references into a criteria/scale table, and there are parallel
-  inherent/residual/original variants for ALE/SLE/ARO. A `create_risk` tool needs a
-  helper to resolve criteria labels to sys_ids (similar to `resolveSysId` in
-  `usem.ts`), not raw string fields like the current broken `create_grc_risk`.
+  inherent/residual/original variants for ALE/SLE/ARO.
+- **CONFIRMED (2026-07-12, live create/PATCH round trips on dev400464): most
+  `sn_risk_risk` fields cannot be set via the REST Table API at all.**
+  `impact`/`likelihood`/`residual_impact`/`residual_likelihood`/`score`/
+  `residual_score` are unconditionally overwritten by a business rule on every
+  insert *and* update — explicitly POSTing/PATCHing a specific `sn_risk_criteria`
+  sys_id was silently reset to the lowest-order value on the next read, both with
+  and without a `statement` set. Separately, `justification`, `response`, and
+  `classification` return HTTP 200 on write but the value never persists (re-read
+  shows the old/empty value). `owner` is auto-synced from the related Entity's
+  owner (see the `sync_with_entity_owner` field) rather than settable directly.
+  Only `statement`, `profile`, `category` (auto-resolves a plain string into a
+  `sn_grc_choice` reference), and `owning_group` were confirmed to actually
+  persist. `grc-risk.ts`'s `RISK_FIELDS` allowlist reflects only the confirmed-safe
+  set — see the file's header comment for the full test log. This is a materially
+  bigger platform-enforced read-only surface than USEM's VI/vulnerability-clearing
+  quirk; a future phase would need to find the platform's actual risk-assessment
+  workflow (likely via `calculated_risk_factor`/`indicator_failure_factor`/
+  `control_failure_factor`) rather than assume direct field writes work.
 - **Audit has the most real data already** (Engagement → Task → Control Test →
   Test Plan chain, all populated). This is the best-understood, most testable module
   and a reasonable Phase 1 candidate specifically *because* it's verifiable end-to-end

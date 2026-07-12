@@ -89,6 +89,12 @@ import { getUsemIntegrationToolDefinitions, executeUsemIntegrationToolCall } fro
 import { getUsemSlaToolDefinitions, executeUsemSlaToolCall } from './usem-sla.js';
 // USEM / VR approval (workflow state transitions)
 import { getUsemApprovalToolDefinitions, executeUsemApprovalToolCall } from './usem-approval.js';
+// GRC — Audit Management
+import { getGrcAuditToolDefinitions, executeGrcAuditToolCall } from './grc-audit.js';
+// GRC — Policy and Compliance Management
+import { getGrcComplianceToolDefinitions, executeGrcComplianceToolCall } from './grc-compliance.js';
+// GRC — Risk Management
+import { getGrcRiskToolDefinitions, executeGrcRiskToolCall } from './grc-risk.js';
 // Natural-language query resolver
 import { getSmartQueryToolDefinitions, executeSmartQueryToolCall } from './smart-query.js';
 
@@ -119,7 +125,21 @@ const PACKAGE_TOOL_NAMES: Record<string, string[]> = {
     // Security Operations & GRC
     'list_security_incidents', 'get_security_incident', 'create_security_incident', 'update_security_incident',
     'list_vulnerabilities', 'get_vulnerability', 'update_vulnerability', 'get_security_dashboard',
-    'get_threat_intelligence', 'list_grc_risks', 'get_grc_risk',
+    'get_threat_intelligence',
+    // GRC — Audit Management
+    'list_audit_engagements', 'get_audit_engagement', 'list_audit_control_tests', 'get_audit_control_test',
+    'get_grc_audit_dashboard',
+    // GRC — Policy and Compliance Management
+    'list_grc_entities', 'get_grc_entity', 'create_grc_entity', 'update_grc_entity',
+    'list_compliance_policies', 'get_compliance_policy', 'create_compliance_policy', 'update_compliance_policy',
+    'list_compliance_controls', 'get_compliance_control', 'create_compliance_control', 'update_compliance_control',
+    'list_control_objectives', 'get_control_objective',
+    'list_policy_exceptions', 'get_policy_exception',
+    'list_grc_issues', 'get_grc_issue', 'create_grc_issue', 'update_grc_issue',
+    'get_grc_compliance_dashboard',
+    // GRC — Risk Management
+    'list_risks', 'get_risk', 'create_risk', 'update_risk',
+    'list_risk_statements', 'get_risk_statement', 'list_risk_criteria', 'get_grc_risk_dashboard',
     // USEM
     'list_vulnerable_items', 'get_vulnerable_item', 'list_remediation_tasks', 'get_remediation_task',
     'list_nvd_entries', 'get_nvd_entry_by_cve', 'get_usem_dashboard',
@@ -389,6 +409,9 @@ const MODULES: ToolModule[] = [
   { defs: getUsemIntegrationToolDefinitions, exec: executeUsemIntegrationToolCall },
   { defs: getUsemSlaToolDefinitions, exec: executeUsemSlaToolCall },
   { defs: getUsemApprovalToolDefinitions, exec: executeUsemApprovalToolCall },
+  { defs: getGrcAuditToolDefinitions, exec: executeGrcAuditToolCall },
+  { defs: getGrcComplianceToolDefinitions, exec: executeGrcComplianceToolCall },
+  { defs: getGrcRiskToolDefinitions, exec: executeGrcRiskToolCall },
   { defs: getSmartQueryToolDefinitions, exec: executeSmartQueryToolCall },
 ];
 
