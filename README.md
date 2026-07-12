@@ -12,7 +12,7 @@
 <br/>
 
 [![AI-Powered](https://img.shields.io/badge/AI--Powered-Claude%20%7C%20ChatGPT%20%7C%20Gemini%20%7C%20Cursor%20%7C%20Copilot-00D4AA?style=flat-square)](https://github.com/tedorigawa001/ServiceNow-MCP)
-[![Tools](https://img.shields.io/badge/400%2B%20Tools-31%20Modules-0F4C81?style=flat-square)](docs/TOOLS.md)
+[![Tools](https://img.shields.io/badge/450%2B%20Tools-44%20Modules-0F4C81?style=flat-square)](docs/TOOLS.md)
 [![npm](https://img.shields.io/npm/v/%40tedorigawa001%2Fservicenow-mcp?style=flat-square&logo=npm&color=CB3837)](https://www.npmjs.com/package/@tedorigawa001/servicenow-mcp)
 [![TypeScript](https://img.shields.io/badge/TypeScript-5.x-3178C6?style=flat-square&logo=typescript&logoColor=white)](https://www.typescriptlang.org/)
 [![License: MIT](https://img.shields.io/badge/license-MIT-f59e0b?style=flat-square)](LICENSE)
@@ -23,15 +23,15 @@
 
 ## AI から ServiceNow を自然言語で操作する MCP サーバー
 
-> **ローカル PC で動作 · 400+ ツール · 5 分セットアップ · MIT ライセンス**
+> **ローカル PC で動作 · 450+ ツール · 5 分セットアップ · MIT ライセンス**
 
 Claude・Cursor・VS Code などの AI ツールから、ServiceNow のインシデント・変更・CMDB・スクリプトなどをすべて自然言語で操作できます。
 
-### v1.3.0 ハイライト
+### v1.4.0 ハイライト
 
-- USEM / Vulnerability Response の修復ワークフローを補完: VI 作成、VI ↔ RT リンク照会、グルーピング診断を追加
-- Remediation Task は `sn_vul_remediation_task` と rule-engine 側の `sn_vul_vulnerability` を横断検索
-- `secops_analyst` パッケージに新しい USEM 修復支援ツールを追加
+- 書き込みフィールド許可リストを残りのツール群(user/group・USEM/VRルール・agile・task・scripting・app-studio・portal・reporting・VA topic)に拡張し、mass assignment の穴を解消
+- 許可リストは実行時チェックに加え JSON Schema 側でも `additionalProperties: false` により二重防御
+- USEM のクエリフィルタ値に `sanitizeLikeValue` を適用(生の `query` パラメータは既存の意図通り非サニタイズのまま)
 
 </div>
 
@@ -566,7 +566,7 @@ SCRIPTING_ENABLED=false      # 本番では原則 false のまま
 mindmap
   root((ツールパッケージ))
     full
-      全400+ツール
+      全450+ツール
     service_desk
       インシデント管理
       タスク/承認
@@ -601,7 +601,7 @@ mindmap
 
 | パッケージ名 | 対象ロール | 主なツール |
 |------------|----------|-----------|
-| `full` | 管理者 | 全ツール (400+) |
+| `full` | 管理者 | 全ツール (450+) |
 | `service_desk` | L1/L2 エージェント | インシデント・タスク・KB・SLA |
 | `change_coordinator` | 変更管理者 | 変更リクエスト・CAB・CMDB |
 | `knowledge_author` | KB 著者 | KB 作成・公開 |
@@ -777,7 +777,7 @@ servicenow-mcp/
 │   │   ├── client.ts               # REST API クライアント (OAuth)
 │   │   ├── instances.ts            # マルチインスタンスマネージャー
 │   │   └── types.ts                # TypeScript 型定義
-│   ├── tools/                      # 39 ドメインモジュール (400+ ツール)
+│   ├── tools/                      # 44 ドメインモジュール (450+ ツール)
 │   │   ├── index.ts                # ツールルーター & パッケージ定義
 │   │   ├── incident.ts
 │   │   ├── change.ts
@@ -867,7 +867,7 @@ Model Context Protocol の略で、AI クライアントが外部ツールを呼
 
 <div align="center">
 
-**400+ ツール · 39 モジュール · ローカル PC で動作 · 永久オープンソース**
+**450+ ツール · 44 モジュール · ローカル PC で動作 · 永久オープンソース**
 
 役に立ったら ⭐ スターをお願いします — 他の人が見つけやすくなります。
 
