@@ -485,10 +485,19 @@ export async function executeUsemToolCall(
           display_value: args.display_value,
         }),
       ]);
+      // Re-sort globally and re-apply the limit: each table was capped and sorted
+      // independently, so plain concatenation would exceed `limit` and interleave
+      // low-risk legacy rows ahead of high-risk engine rows.
+      const riskOf = (r: Record<string, any>): number => {
+        const n = Number(refValue(r.risk_score));
+        return Number.isFinite(n) ? n : -1;
+      };
       const records = [
         ...legacy.records.map(r => ({ ...r, source_table: 'sn_vul_remediation_task' })),
         ...groups.records.map(r => ({ ...r, source_table: 'sn_vul_vulnerability' })),
-      ];
+      ]
+        .sort((a, b) => riskOf(b) - riskOf(a))
+        .slice(0, limit);
       return {
         count: records.length,
         by_table: {
@@ -497,8 +506,8 @@ export async function executeUsemToolCall(
         },
         records,
         summary:
-          `Found ${records.length} remediation task(s): ${legacy.count} in sn_vul_remediation_task, ` +
-          `${groups.count} in sn_vul_vulnerability (rule-engine created)`,
+          `Returning ${records.length} remediation task(s) (limit ${limit}) — matched ` +
+          `${legacy.count} in sn_vul_remediation_task, ${groups.count} in sn_vul_vulnerability (rule-engine created)`,
       };
     }
 
@@ -509,7 +518,10 @@ export async function executeUsemToolCall(
         try {
           const rec = await client.getRecord('sn_vul_remediation_task', id);
           return { ...rec, source_table: 'sn_vul_remediation_task' };
-        } catch {
+        } catch (error) {
+          // Only a genuine miss falls through to the engine table — ACL/auth/network
+          // failures must surface as-is instead of masquerading as "not found there".
+          if (!(error instanceof ServiceNowError) || error.code !== 'NOT_FOUND') throw error;
           const rec = await client.getRecord('sn_vul_vulnerability', id);
           return { ...rec, source_table: 'sn_vul_vulnerability' };
         }

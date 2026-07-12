@@ -129,8 +129,8 @@ describe('list_remediation_tasks', () => {
   it('queries BOTH backing tables with the same filters and merges with source_table', async () => {
     qr().mockImplementation(async (params: any) =>
       params.table === 'sn_vul_remediation_task'
-        ? { count: 1, records: [{ task_number: 'RTASK1' }] }
-        : { count: 2, records: [{ number: 'VUL1' }, { number: 'VUL2' }] }
+        ? { count: 1, records: [{ task_number: 'RTASK1', risk_score: '50' }] }
+        : { count: 2, records: [{ number: 'VUL1', risk_score: '90' }, { number: 'VUL2', risk_score: '10' }] }
     );
     const result = await executeUsemToolCall(mockClient, 'list_remediation_tasks', {
       state: '10',
@@ -144,11 +144,35 @@ describe('list_remediation_tasks', () => {
     }
     expect(result.count).toBe(3);
     expect(result.by_table).toEqual({ sn_vul_remediation_task: 1, sn_vul_vulnerability: 2 });
+    // globally re-sorted by risk_score desc, not concatenated per table
     expect(result.records.map((r: any) => r.source_table)).toEqual([
+      'sn_vul_vulnerability',
       'sn_vul_remediation_task',
       'sn_vul_vulnerability',
-      'sn_vul_vulnerability',
     ]);
+  });
+
+  it('re-applies the limit after merging and sorts across tables', async () => {
+    qr().mockImplementation(async (params: any) =>
+      params.table === 'sn_vul_remediation_task'
+        ? { count: 2, records: [{ task_number: 'RT1', risk_score: '40' }, { task_number: 'RT2', risk_score: '20' }] }
+        : { count: 2, records: [{ number: 'VUL1', risk_score: '95' }, { number: 'VUL2', risk_score: '60' }] }
+    );
+    const result = await executeUsemToolCall(mockClient, 'list_remediation_tasks', { limit: 2 });
+    expect(result.count).toBe(2);
+    expect(result.records.map((r: any) => r.number ?? r.task_number)).toEqual(['VUL1', 'VUL2']);
+    // per-table match counts still report the full picture
+    expect(result.by_table).toEqual({ sn_vul_remediation_task: 2, sn_vul_vulnerability: 2 });
+  });
+
+  it('sorts display_value:"all" risk scores ({value} objects) correctly', async () => {
+    qr().mockImplementation(async (params: any) =>
+      params.table === 'sn_vul_remediation_task'
+        ? { count: 1, records: [{ task_number: 'RT1', risk_score: { value: '30' } }] }
+        : { count: 1, records: [{ number: 'VUL1', risk_score: { value: '80' } }] }
+    );
+    const result = await executeUsemToolCall(mockClient, 'list_remediation_tasks', { display_value: 'all' });
+    expect(result.records[0].number).toBe('VUL1');
   });
 });
 
@@ -161,9 +185,10 @@ describe('get_remediation_task', () => {
     expect(getRec()).toHaveBeenCalledWith('sn_vul_remediation_task', 'a'.repeat(32));
   });
 
-  it('falls back to sn_vul_vulnerability when the sys_id is not a legacy RT', async () => {
+  it('falls back to sn_vul_vulnerability only on NOT_FOUND', async () => {
+    const { ServiceNowError } = await import('../../src/utils/errors.js');
     getRec()
-      .mockRejectedValueOnce(new Error('not found'))
+      .mockRejectedValueOnce(new ServiceNowError('Record not found', 'NOT_FOUND'))
       .mockResolvedValueOnce({ sys_id: 'a'.repeat(32), number: 'VUL0010007' });
     const result = await executeUsemToolCall(mockClient, 'get_remediation_task', {
       number_or_sysid: 'a'.repeat(32),
@@ -171,6 +196,15 @@ describe('get_remediation_task', () => {
     expect(getRec()).toHaveBeenNthCalledWith(1, 'sn_vul_remediation_task', 'a'.repeat(32));
     expect(getRec()).toHaveBeenNthCalledWith(2, 'sn_vul_vulnerability', 'a'.repeat(32));
     expect(result.source_table).toBe('sn_vul_vulnerability');
+  });
+
+  it('rethrows non-NOT_FOUND errors from the first table instead of falling back', async () => {
+    const { ServiceNowError } = await import('../../src/utils/errors.js');
+    getRec().mockRejectedValueOnce(new ServiceNowError('Access denied', 'AUTHENTICATION_FAILED'));
+    await expect(
+      executeUsemToolCall(mockClient, 'get_remediation_task', { number_or_sysid: 'a'.repeat(32) })
+    ).rejects.toThrow('Access denied');
+    expect(getRec()).toHaveBeenCalledTimes(1);
   });
 
   it('resolves by task_number when not a sys_id', async () => {
