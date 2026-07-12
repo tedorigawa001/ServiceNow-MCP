@@ -1346,7 +1346,7 @@ List products associated with CSM cases.
 
 ---
 
-## Security Operations & GRC (11 tools)
+## Security Operations (9 tools)
 
 ### create_security_incident
 Create a security incident. **[Write]**
@@ -1399,32 +1399,194 @@ Update a vulnerability record. **[Write]**
 - `sys_id` (required)
 - `fields` (required)
 
-### list_grc_risks
-List GRC risk records.
-
-**Parameters**:
-- `state`
-- `limit`
-
-### get_grc_risk
-Get GRC risk details.
-
-**Parameters**:
-- `sys_id` (required)
-
-### list_grc_controls
-List GRC control records.
-
-**Parameters**:
-- `risk_sys_id` — Filter by related risk
-- `limit`
-
 ### get_threat_intelligence
 Get threat intelligence entries from the ServiceNow threat feed.
 
 **Parameters**:
 - `type` — Indicator type (e.g. `IP`, `URL`)
 - `limit`
+
+---
+
+## GRC — Audit Management (5 tools)
+
+Covers the ServiceNow Audit Management app (`sn_audit_*`). Verified against a live PDI — see [GRC_DESIGN.md](GRC_DESIGN.md). Note: `sn_audit_task` itself has 0 direct records; real data lives in its subclasses (`sn_audit_control_test`, `sn_audit_activity`, `sn_audit_interview`, `sn_audit_walkthrough`).
+
+### list_audit_engagements
+List Audit Engagements (`sn_audit_engagement`) — the top-level audit project record.
+
+**Parameters**:
+- `state` — -5=Scope, 1=Validate, 2=Fieldwork, 3=Closed Complete, 4=Closed Incomplete, 5=Follow Up, 6=Awaiting Approval
+- `engagement_type`, `query`, `limit`, `display_value`
+
+### get_audit_engagement
+Get a single Audit Engagement by sys_id or number (e.g. `ENG0000104`).
+
+**Parameters**:
+- `number_or_sysid` (required)
+
+### list_audit_control_tests
+List Control Tests (`sn_audit_control_test`) — the real "audit result" record (there is no `sn_audit_result` table).
+
+**Parameters**:
+- `state`, `control`, `test_plan`, `design_effectiveness`, `operation_effectiveness` (`none`/`effective`/`ineffective`), `query`, `limit`, `display_value`
+
+### get_audit_control_test
+Get a single Control Test by sys_id or number (e.g. `CTR0000153`).
+
+**Parameters**:
+- `number_or_sysid` (required)
+
+### get_grc_audit_dashboard
+Summarize Audit posture: Engagement counts by state, Control Test counts by effectiveness, and the top open engagements by high-priority issues.
+
+**Parameters**:
+- `top` — default 5, max 50
+
+---
+
+## GRC — Policy and Compliance Management (21 tools)
+
+Covers Entities, Policies, Controls, Control Objectives, Policy Exceptions, and Issues (`sn_grc_*` / `sn_compliance_*`). Verified against a live PDI — see [GRC_DESIGN.md](GRC_DESIGN.md).
+
+### list_grc_entities / get_grc_entity
+List/get GRC Entities (`sn_grc_profile`) — the "thing being assessed". No number/state field on this table.
+
+**Parameters** (list): `profile_class`, `cmdb_ci`, `name`, `query`, `limit`, `display_value`
+**Parameters** (get): `sys_id` (required)
+
+### create_grc_entity / update_grc_entity
+Create/update a GRC Entity. **[Write]** `profile_class` must be a valid `sn_grc_profile_class` sys_id (NOT `sn_grc_profile_type`, a separate unrelated table). `owned_by` is dictionary-mandatory but not enforced by the REST API (the Entity is created with no owner if omitted) — set it to avoid an unowned Entity.
+
+**Parameters** (create): `name` (required), `profile_class` (required), `owned_by` (dictionary-mandatory; recommended), `description`, `cmdb_ci`, `framework`, `functional_domain`
+**Parameters** (update): `sys_id` (required), `fields` — allowed: `name`, `description`, `profile_class`, `owned_by`, `cmdb_ci`, `framework`, `functional_domain`
+
+### list_compliance_policies / get_compliance_policy
+List/get Compliance Policies (`sn_compliance_policy`, number prefix `POL`).
+
+**Parameters** (list): `state` (draft/review/awaiting_approval/published/retired), `category`, `query`, `limit`, `display_value`
+**Parameters** (get): `number_or_sysid` (required)
+
+### create_compliance_policy / update_compliance_policy
+Create/update a Compliance Policy. **[Write]** `kb_knowledge_base`, `approval_method`, and `article_template` are dictionary-mandatory on this table; the platform silently defaults them if omitted (does not fail), but pass them explicitly for a specific KB/approval method/template.
+
+**Parameters** (create): `name` (required), `description`, `policy_category`, `category`, `owner`, `owning_group`, `kb_knowledge_base`, `approval_method`, `article_template`
+**Parameters** (update): `sys_id` (required), `fields` — allowed: `name`, `description`, `state`, `policy_category`, `category`, `classification`, `owner`, `owning_group`, `kb_knowledge_base`, `approval_method`, `article_template`, `audience`, `valid_from`, `valid_to`
+
+### list_compliance_controls / get_compliance_control
+List/get Compliance Controls (`sn_compliance_control`, number prefix `CTRL`).
+
+**Parameters** (list): `state` (draft/attest/review/monitor/retired), `category`, `profile` (Entity sys_id), `key_control`, `query`, `limit`, `display_value`
+**Parameters** (get): `number_or_sysid` (required)
+
+### create_compliance_control / update_compliance_control
+Create/update a Compliance Control. **[Write]** `implementation_statement` is dictionary-mandatory on this table but not enforced by the REST API (left blank if omitted).
+
+**Parameters** (create): `name` (required), `description`, `category`, `key_control`, `frequency`, `profile`, `owner`, `implementation_statement`
+**Parameters** (update): `sys_id` (required), `fields` — allowed: `name`, `description`, `state`, `category`, `classification`, `key_control`, `frequency`, `assessment_method`, `enforcement`, `owner`, `owning_group`, `profile`, `supplemental_guidance`, `discussion`, `implementation_statement`
+
+### list_control_objectives / get_control_objective
+List/get Control Objectives (`sn_compliance_policy_statement`) — sits between Policy and Control. Read-only. No number field.
+
+**Parameters** (list): `state` (draft/review/approved/published/retired), `category`, `query`, `limit`, `display_value`
+**Parameters** (get): `sys_id` (required)
+
+### list_policy_exceptions / get_policy_exception
+List/get Policy Exceptions (`sn_compliance_policy_exception`, number prefix `PER`). Read-only.
+
+**Parameters** (list): `state` — numeric: 1=New, 2=Analyze, 10=Risk Assessment, 12=Review, 6=Awaiting Approval, 8=Approved, 7=Rejected, 3=Closed
+**Parameters** (get): `number_or_sysid` (required)
+
+### list_grc_issues / get_grc_issue
+List/get GRC Issues (`sn_grc_issue`, number prefix `IPT`) — the generic finding/gap record for compliance gaps and audit findings.
+
+**Parameters** (list): `state` — numeric: 0=Review, 1=New, 2=Analyze, 5=Respond, 3=Closed Complete, 4=Closed Incomplete
+**Parameters** (get): `number_or_sysid` (required)
+
+### create_grc_issue / update_grc_issue
+Create/update a GRC Issue. **[Write]**
+
+**Parameters** (create): `short_description` (required), `description`, `profile`, `issue_type`, `classification`, `impact`, `urgency`, `assignment_group`
+**Parameters** (update): `sys_id` (required), `fields` — allowed: `short_description`, `description`, `state`, `profile`, `issue_type`, `issue_source`, `classification`, `impact`, `urgency`, `assignment_group`, `assigned_to`, `due_date`, `action_plan`, `recommendation`, `close_notes`
+
+### get_grc_compliance_dashboard
+Summarize Compliance posture: Policy/Control/Issue counts by state, and the highest-risk open Policy Exceptions.
+
+**Parameters**:
+- `top` — default 5, max 50
+
+---
+
+## GRC — Risk Management (8 tools)
+
+Covers Risks and the Risk Statement library (`sn_risk_*`). Verified against a live PDI — see [GRC_DESIGN.md](GRC_DESIGN.md).
+
+> **Important**: `impact`/`likelihood`/`residual_impact`/`residual_likelihood`/`score`/`residual_score` are NOT writable via these tools. Confirmed live (2026-07-12) that a business rule unconditionally overwrites them on every insert/update regardless of client input. `justification`, `response`, and `classification` return HTTP 200 on write but silently fail to persist. `owner` is auto-synced from the related Entity. Use `list_risk_criteria` to inspect the impact/likelihood/score scale for reference only.
+
+### list_risks / get_risk
+List/get Risks (`sn_risk_risk`, number prefix `RK`).
+
+**Parameters** (list): `state` (draft/assess/review/respond/monitor/retired), `profile`, `category`, `query`, `limit`, `display_value`
+**Parameters** (get): `number_or_sysid` (required)
+
+### create_risk / update_risk
+Create/update a Risk. **[Write]** Only fields confirmed to persist on this instance are exposed.
+
+**Parameters** (create): `statement` (required, sys_id of `sn_risk_definition`), `profile`, `category`, `owning_group`
+**Parameters** (update): `sys_id` (required), `fields` — allowed: `statement`, `profile`, `category`, `owning_group`, `apply_reason`
+
+### list_risk_statements / get_risk_statement
+List/get the Risk Statement library (`sn_risk_definition`) — 63 seeded rows, reusable risk descriptions referenced by Risk records.
+
+**Parameters** (list): `name`, `limit`
+**Parameters** (get): `sys_id` (required)
+
+### list_risk_criteria
+List the Impact/Likelihood/Score scale (`sn_risk_criteria`) — 5 rows per type. Reference only.
+
+**Parameters**:
+- `type` — `impact`, `likelihood`, or `score`
+
+### get_grc_risk_dashboard
+Summarize Risk posture: Risk counts by state, and the highest-scored open risks.
+
+**Parameters**:
+- `top` — default 5, max 50
+
+---
+
+## GRC — Indicator / KRI (7 tools)
+
+Covers Indicators (KRI/KPI) measuring a Control or Risk for a given Entity (`sn_grc_indicator`, number prefix `IND`). Verified against a live PDI — see [GRC_DESIGN.md](GRC_DESIGN.md).
+
+> **Important**: `item` on `create_grc_indicator` looks like it should reference a separate "item" table, but `sn_grc_item` turned out to be an abstract base that `sn_compliance_control` and `sn_risk_risk` themselves extend — pass the Control's or Risk's own sys_id directly. `entity` must be the specific Entity already associated with that item (e.g. the Control/Risk's own `profile` field) — confirmed live that a validation business rule rejects (HTTP 403) any other pairing.
+
+### list_grc_indicators / get_grc_indicator
+List/get GRC Indicators.
+
+**Parameters** (list): `entity`, `item`, `category`, `last_result_passed`, `active`, `query`, `limit`, `display_value`
+**Parameters** (get): `number_or_sysid` (required)
+
+### create_grc_indicator
+Create a GRC Indicator. **[Write]** `item` = sys_id of an existing `sn_compliance_control` or `sn_risk_risk` record; `entity` must match that item's own `profile`.
+
+**Parameters**: `entity` (required), `item` (required), `short_description`, `category`, `collection_frequency`, `owner`, `owning_group`
+
+### update_grc_indicator
+Update a GRC Indicator by sys_id. **[Write]** `entity`/`item` are intentionally not updatable — recreate the Indicator if it needs to measure a different Control/Risk or Entity.
+
+**Parameters**: `sys_id` (required), `fields` — allowed: `short_description`, `category`, `collection_frequency`, `active`, `owner`, `owning_group`, `instructions`
+
+### list_indicator_results / get_indicator_result
+List/get Indicator Results (`sn_grc_indicator_result`) — individual pass/fail collection events. Empty on dev400464 at verification time; included for instances where collection has run.
+
+**Parameters** (list): `indicator`, `passed`, `query`, `limit`, `display_value`
+**Parameters** (get): `sys_id` (required)
+
+### get_grc_indicator_dashboard
+Summarize Indicator posture: counts by category and by last-result pass/fail.
+
+**Parameters**: None
 
 ---
 

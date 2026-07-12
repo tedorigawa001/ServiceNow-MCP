@@ -1,5 +1,9 @@
 /**
- * Security Operations (SecOps) tools — security incidents, vulnerabilities, and GRC.
+ * Security Operations (SecOps) tools — security incidents, vulnerabilities, threat
+ * intelligence, and playbooks. GRC tools live in grc-audit.ts / grc-compliance.ts /
+ * grc-risk.ts (see docs/GRC_DESIGN.md) — the GRC tools formerly here pointed at
+ * tables that don't exist (`sn_compliance_assessment`, `sn_audit_result`) or used
+ * a field set that didn't match the real schema (`create_grc_risk`).
  * Read tools: Tier 0. Write tools: Tier 1 (WRITE_ENABLED=true).
  */
 import { sanitizeLikeValue, type ServiceNowClient } from '../servicenow/client.js';
@@ -122,43 +126,6 @@ export function getSecurityToolDefinitions() {
       },
     },
     {
-      name: 'list_grc_risks',
-      description: 'List GRC (Governance, Risk, Compliance) risk entries',
-      inputSchema: {
-        type: 'object',
-        properties: {
-          state: { type: 'string', description: 'Filter by risk state (draft, assess, review, accepted, closed)' },
-          category: { type: 'string', description: 'Filter by risk category' },
-          limit: { type: 'number', description: 'Max records to return (default 25)' },
-        },
-        required: [],
-      },
-    },
-    {
-      name: 'get_grc_risk',
-      description: 'Get details of a GRC risk including impact, likelihood, and controls',
-      inputSchema: {
-        type: 'object',
-        properties: {
-          number_or_sysid: { type: 'string', description: 'Risk number or sys_id' },
-        },
-        required: ['number_or_sysid'],
-      },
-    },
-    {
-      name: 'list_grc_controls',
-      description: 'List GRC controls with optional filter by risk or policy',
-      inputSchema: {
-        type: 'object',
-        properties: {
-          risk_sysid: { type: 'string', description: 'Filter controls by related risk sys_id' },
-          state: { type: 'string', description: 'Filter by control state (draft, attest, review, exception, compliant, non_compliant)' },
-          limit: { type: 'number', description: 'Max records to return (default 25)' },
-        },
-        required: [],
-      },
-    },
-    {
       name: 'get_threat_intelligence',
       description: 'Query threat intelligence data — IOCs, threat actors, and campaigns',
       inputSchema: {
@@ -219,60 +186,6 @@ export function getSecurityToolDefinitions() {
           ci_sys_ids: { type: 'array', items: { type: 'string' }, description: 'CI sys_ids to scan' },
           group: { type: 'string', description: 'CI group to scan (alternative to ci_sys_ids)' },
           scan_type: { type: 'string', description: 'Scan type: full, quick, compliance (default full)' },
-        },
-        required: [],
-      },
-    },
-    // ─── GRC Compliance ───────────────────────────────────────────────
-    {
-      name: 'create_grc_risk',
-      description: 'Create a new GRC risk entry. **[Write]**',
-      inputSchema: {
-        type: 'object',
-        properties: {
-          name: { type: 'string', description: 'Risk name' },
-          category: { type: 'string', description: 'Risk category' },
-          description: { type: 'string', description: 'Risk description' },
-          impact: { type: 'number', description: 'Impact score (1-5)' },
-          likelihood: { type: 'number', description: 'Likelihood score (1-5)' },
-          owner: { type: 'string', description: 'Risk owner user sys_id' },
-        },
-        required: ['name', 'category'],
-      },
-    },
-    {
-      name: 'list_compliance_policies',
-      description: 'List GRC compliance policies and their current status',
-      inputSchema: {
-        type: 'object',
-        properties: {
-          state: { type: 'string', description: 'Filter by state (draft, published, retired)' },
-          limit: { type: 'number', description: 'Max records (default 25)' },
-        },
-        required: [],
-      },
-    },
-    {
-      name: 'get_compliance_assessment',
-      description: 'Get compliance assessment results for a policy or control',
-      inputSchema: {
-        type: 'object',
-        properties: {
-          policy_sys_id: { type: 'string', description: 'Policy sys_id' },
-          control_sys_id: { type: 'string', description: 'Control sys_id (alternative to policy)' },
-        },
-        required: [],
-      },
-    },
-    {
-      name: 'list_audit_results',
-      description: 'List audit results and findings',
-      inputSchema: {
-        type: 'object',
-        properties: {
-          state: { type: 'string', description: 'Filter by state (open, in_progress, closed)' },
-          severity: { type: 'string', description: 'Filter by severity (critical, high, medium, low)' },
-          limit: { type: 'number', description: 'Max records (default 25)' },
         },
         required: [],
       },
@@ -361,27 +274,6 @@ export async function executeSecurityToolCall(
       const result = await client.updateRecord('sn_vul_entry', args.sys_id, args.fields);
       return { ...result, summary: `Updated vulnerability ${args.sys_id}` };
     }
-    case 'list_grc_risks': {
-      const parts: string[] = [];
-      if (args.state) parts.push(`state=${queryValue(args.state)}`);
-      if (args.category) parts.push(`category=${queryValue(args.category)}`);
-      return await client.queryRecords({ table: 'sn_risk_risk', query: parts.join('^') || '', limit: args.limit ?? 25 });
-    }
-    case 'get_grc_risk': {
-      if (!args.number_or_sysid) throw new ServiceNowError('number_or_sysid is required', 'INVALID_REQUEST');
-      if (/^[0-9a-f]{32}$/i.test(args.number_or_sysid)) {
-        return await client.getRecord('sn_risk_risk', args.number_or_sysid);
-      }
-      const resp = await client.queryRecords({ table: 'sn_risk_risk', query: `number=${queryValue(args.number_or_sysid)}`, limit: 1 });
-      if (resp.count === 0) throw new ServiceNowError(`GRC risk not found: ${args.number_or_sysid}`, 'NOT_FOUND');
-      return resp.records[0];
-    }
-    case 'list_grc_controls': {
-      const parts: string[] = [];
-      if (args.risk_sysid) parts.push(`risks=${queryValue(args.risk_sysid)}`);
-      if (args.state) parts.push(`state=${queryValue(args.state)}`);
-      return await client.queryRecords({ table: 'sn_compliance_control', query: parts.join('^') || '', limit: args.limit ?? 25 });
-    }
     case 'get_threat_intelligence': {
       if (!args.query) throw new ServiceNowError('query is required', 'INVALID_REQUEST');
       const q = args.type
@@ -418,30 +310,6 @@ export async function executeSecurityToolCall(
       if (!args.ci_sys_ids?.length && !args.group) throw new ServiceNowError('ci_sys_ids or group is required', 'INVALID_REQUEST');
       const result = await client.createRecord('sn_vul_scan_request', { ci_list: args.ci_sys_ids?.join(',') || '', group: args.group || '', scan_type: args.scan_type || 'full' });
       return { action: 'scan_requested', ...result };
-    }
-    case 'create_grc_risk': {
-      requireWrite();
-      if (!args.name || !args.category) throw new ServiceNowError('name and category are required', 'INVALID_REQUEST');
-      const result = await client.createRecord('sn_risk_risk', { name: args.name, category: args.category, ...(args.description ? { description: args.description } : {}), ...(args.impact ? { impact: String(args.impact) } : {}), ...(args.likelihood ? { likelihood: String(args.likelihood) } : {}), ...(args.owner ? { owner: args.owner } : {}) });
-      return { action: 'created', ...result };
-    }
-    case 'list_compliance_policies': {
-      const parts: string[] = [];
-      if (args.state) parts.push(`state=${queryValue(args.state)}`);
-      return await client.queryRecords({ table: 'sn_compliance_policy', query: parts.join('^') || '', limit: args.limit ?? 25 });
-    }
-    case 'get_compliance_assessment': {
-      if (!args.policy_sys_id && !args.control_sys_id) throw new ServiceNowError('policy_sys_id or control_sys_id is required', 'INVALID_REQUEST');
-      const query = args.policy_sys_id
-        ? `policy=${queryValue(args.policy_sys_id)}`
-        : `control=${queryValue(args.control_sys_id)}`;
-      return await client.queryRecords({ table: 'sn_compliance_assessment', query, limit: 50 });
-    }
-    case 'list_audit_results': {
-      const parts: string[] = [];
-      if (args.state) parts.push(`state=${queryValue(args.state)}`);
-      if (args.severity) parts.push(`severity=${queryValue(args.severity)}`);
-      return await client.queryRecords({ table: 'sn_audit_result', query: parts.join('^') || '', limit: args.limit ?? 25 });
     }
     default:
       return null;
