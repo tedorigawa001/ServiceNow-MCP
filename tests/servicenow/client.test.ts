@@ -535,6 +535,21 @@ describe('ServiceNowClient — raw API & AI helpers', () => {
     expect(decodeURIComponent(String(apiCall()[0]))).toContain('sysparm_group_by=priority');
   });
 
+  // Regression test: groupBy used to be a required `string` param, and callers that
+  // wanted an ungrouped total count passed '' — which always failed validation (empty
+  // string is falsy) instead of requesting a total. groupBy is now optional; omitting
+  // it entirely must skip validation and omit sysparm_group_by, matching how the real
+  // stats API returns a single ungrouped { stats: { count } } object in that mode.
+  it('runAggregateQuery omits sysparm_group_by and skips validation when groupBy is not provided', async () => {
+    routeFetch(mockResponse({ json: { result: { stats: { count: '42' } } } }));
+    const client = new ServiceNowClient(baseConfig());
+    const r = await client.runAggregateQuery('incident', undefined, 'COUNT');
+    expect(r.stats.count).toBe('42');
+    const url = decodeURIComponent(String(apiCall()[0]));
+    expect(url).toContain('/api/now/stats/incident');
+    expect(url).not.toContain('sysparm_group_by');
+  });
+
   it('naturalLanguageSearch builds a LIKE query against incident', async () => {
     routeFetch(mockResponse({ json: { result: [{ number: 'INC9' }] } }));
     const client = new ServiceNowClient(baseConfig());

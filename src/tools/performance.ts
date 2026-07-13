@@ -518,9 +518,13 @@ export async function executePerformanceToolCall(
     }
     case 'get_table_record_count': {
       if (!args.table) throw new ServiceNowError('table is required', 'INVALID_REQUEST');
-      // Use aggregate query for accurate count
+      // Ungrouped aggregate query for an exact total. NOTE: this previously called
+      // runAggregateQuery(table, '', ...) — an empty groupBy string always failed
+      // client-side validation, so this always threw and silently fell through to
+      // the queryRecords(limit:1) fallback below, which can only ever report 0 or 1
+      // regardless of the real count. Omitting groupBy (not passing '') is the fix.
       try {
-        const resp = await client.runAggregateQuery(args.table, '', 'COUNT', args.query);
+        const resp = await client.runAggregateQuery(args.table, undefined, 'COUNT', args.query);
         const count = resp?.stats?.count ?? resp?.count ?? 'unknown';
         return { table: args.table, query: args.query || 'all records', record_count: count };
       } catch {
@@ -562,8 +566,11 @@ export async function executePerformanceToolCall(
       const results: Record<string, any> = {};
       for (const table of args.tables) {
         try {
-          const resp = await client.queryRecords({ table, query: args.query, limit: 1 });
-          results[table] = { accessible: true, record_count: resp.count };
+          // Ungrouped aggregate query for an exact total — queryRecords(limit:1).count
+          // is the page length (0 or 1), never the real record count.
+          const resp = await client.runAggregateQuery(table, undefined, 'COUNT', args.query);
+          const count = resp?.stats?.count ?? resp?.count ?? 'unknown';
+          results[table] = { accessible: true, record_count: count };
         } catch (err) {
           results[table] = { accessible: false, error: err instanceof Error ? err.message : 'Unknown error' };
         }

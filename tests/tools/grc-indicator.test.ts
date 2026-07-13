@@ -178,8 +178,11 @@ describe('list_indicator_results / get_indicator_result', () => {
 describe('get_grc_indicator_dashboard', () => {
   beforeEach(() => vi.clearAllMocks());
 
-  it('aggregates by category and last_result_passed', async () => {
+  it('aggregates by active, category, and last_result_passed', async () => {
     agg()
+      .mockResolvedValueOnce([
+        { stats: { count: '119' }, groupby_fields: [{ field: 'active', value: 'true' }] },
+      ])
       .mockResolvedValueOnce([
         { stats: { count: '100' }, groupby_fields: [{ field: 'category', value: 'Compliance Indicator' }] },
         { stats: { count: '19' }, groupby_fields: [{ field: 'category', value: 'Risk Indicator' }] },
@@ -191,9 +194,28 @@ describe('get_grc_indicator_dashboard', () => {
 
     const result = await executeGrcIndicatorToolCall(mockClient, 'get_grc_indicator_dashboard', {});
 
+    expect(agg()).toHaveBeenCalledWith('sn_grc_indicator', 'active', 'COUNT');
     expect(agg()).toHaveBeenCalledWith('sn_grc_indicator', 'category', 'COUNT');
     expect(agg()).toHaveBeenCalledWith('sn_grc_indicator', 'last_result_passed', 'COUNT');
     expect(result.total).toBe(119);
     expect(result.failed_last_result).toBe(9);
+  });
+
+  // Regression test for the bug this fix addresses: total must NOT undercount when
+  // some Indicators have no `category` set (category is a free-text, non-mandatory
+  // field), unlike `active` which always has a value.
+  it('total reflects active count even when category coverage is incomplete', async () => {
+    agg()
+      .mockResolvedValueOnce([
+        { stats: { count: '119' }, groupby_fields: [{ field: 'active', value: 'true' }] },
+      ])
+      .mockResolvedValueOnce([
+        // only 100 of 119 have a category set — total must still be 119, not 100
+        { stats: { count: '100' }, groupby_fields: [{ field: 'category', value: 'Compliance Indicator' }] },
+      ])
+      .mockResolvedValueOnce([]);
+
+    const result = await executeGrcIndicatorToolCall(mockClient, 'get_grc_indicator_dashboard', {});
+    expect(result.total).toBe(119);
   });
 });

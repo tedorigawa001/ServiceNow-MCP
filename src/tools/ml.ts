@@ -238,9 +238,16 @@ export async function executeMlToolCall(
       const since = new Date(Date.now() - days * 86400000).toISOString().slice(0, 19).replace('T', ' ');
       let query = `sys_created_on>=${since}`;
       if (args.topic_sys_id) query += `^topic=${args.topic_sys_id}`;
-      const conversations = await client.queryRecords({ table: 'sys_cs_conversation', query, limit: 500, fields: 'state,topic,sys_created_on' });
-      const total = conversations.count;
-      const completed = conversations.records.filter((r: any) => r.state === 'completed' || r.state === 'resolved').length;
+      // Use ungrouped aggregate queries for the counts instead of a capped
+      // queryRecords(limit:500) fetch — records.length silently truncates at the
+      // page size, undercounting total_conversations/completed for any period with
+      // more than 500 matching conversations.
+      const [totalResp, completedResp] = await Promise.all([
+        client.runAggregateQuery('sys_cs_conversation', undefined, 'COUNT', query),
+        client.runAggregateQuery('sys_cs_conversation', undefined, 'COUNT', `${query}^stateINcompleted,resolved`),
+      ]);
+      const total = parseInt(String(totalResp?.stats?.count ?? '0'), 10) || 0;
+      const completed = parseInt(String(completedResp?.stats?.count ?? '0'), 10) || 0;
       return { period_days: days, total_conversations: total, completed, completion_rate: total > 0 ? `${Math.round((completed / total) * 100)}%` : 'N/A' };
     }
 
@@ -248,11 +255,30 @@ export async function executeMlToolCall(
       if (!args.table) throw new ServiceNowError('table is required', 'INVALID_REQUEST');
       const days = args.days || 90;
       const since = new Date(Date.now() - days * 86400000).toISOString().slice(0, 19).replace('T', ' ');
-      const resp = await client.queryRecords({ table: args.table, query: `sys_created_on>=${since}^stateIN6,7`, limit: 1000, fields: 'reassignment_count,sys_created_on,resolved_at,assignment_group,priority' });
+      const matchQuery = `sys_created_on>=${since}^stateIN6,7`;
+      // The averages below need actual record data, so a capped fetch (limit:1000)
+      // is a reasonable sampling tradeoff — but the *reported* `resolved_records`
+      // count must reflect the real total, not the sample size, so it's sourced
+      // from an ungrouped aggregate query instead of `resp.count` (which is just
+      // records.length, capped at 1000).
+      const [resp, totalResp] = await Promise.all([
+        client.queryRecords({ table: args.table, query: matchQuery, limit: 1000, fields: 'reassignment_count,sys_created_on,resolved_at,assignment_group,priority' }),
+        client.runAggregateQuery(args.table, undefined, 'COUNT', matchQuery),
+      ]);
+      const totalMatched = parseInt(String(totalResp?.stats?.count ?? '0'), 10) || 0;
       const durations = resp.records.map((r: any) => { const c = new Date(r.sys_created_on).getTime(); const re = new Date(r.resolved_at).getTime(); return (re - c) / 3600000; }).filter((d: number) => d > 0);
       const avgDuration = durations.length > 0 ? durations.reduce((a: number, b: number) => a + b, 0) / durations.length : 0;
       const avgReassign = resp.records.reduce((sum: number, r: any) => sum + (parseInt(r.reassignment_count) || 0), 0) / (resp.count || 1);
-      return { table: args.table, period_days: days, resolved_records: resp.count, avg_resolution_hours: Math.round(avgDuration * 10) / 10, avg_reassignments: Math.round(avgReassign * 10) / 10, bottleneck_indicator: avgReassign > 2 ? 'HIGH' : avgReassign > 1 ? 'MODERATE' : 'LOW' };
+      return {
+        table: args.table,
+        period_days: days,
+        resolved_records: totalMatched,
+        sampled_records: resp.count,
+        note: totalMatched > resp.count ? `Averages computed from a sample of ${resp.count} of ${totalMatched} matching records.` : undefined,
+        avg_resolution_hours: Math.round(avgDuration * 10) / 10,
+        avg_reassignments: Math.round(avgReassign * 10) / 10,
+        bottleneck_indicator: avgReassign > 2 ? 'HIGH' : avgReassign > 1 ? 'MODERATE' : 'LOW',
+      };
     }
 
     default:

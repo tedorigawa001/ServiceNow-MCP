@@ -8,6 +8,7 @@ const mockClient = {
   getXmlStats: vi.fn(),
   callApiGet: vi.fn(),
   updateRecord: vi.fn(),
+  runAggregateQuery: vi.fn(),
 } as unknown as ServiceNowClient;
 
 const SAMPLE_XML =
@@ -241,5 +242,66 @@ describe('executePerformanceToolCall – scoped filters and dashboard updates', 
       sys_id: 'dash1', fields: { sys_domain: 'global', u_unlisted: 'yes' },
     })).rejects.toThrow('Dashboard fields cannot be updated: sys_domain, u_unlisted');
     expect(mockClient.updateRecord).not.toHaveBeenCalled();
+  });
+});
+
+describe('get_table_record_count', () => {
+  beforeEach(() => vi.clearAllMocks());
+
+  // Regression test: this previously called runAggregateQuery(table, '', ...) with an
+  // empty groupBy string, which always failed client-side validation and silently fell
+  // through to a queryRecords(limit:1) fallback that can only ever report 0 or 1 --
+  // never the real count. Fixed by omitting groupBy (undefined) instead of passing ''.
+  it('requests an ungrouped aggregate count (groupBy omitted, not empty string)', async () => {
+    (mockClient.runAggregateQuery as ReturnType<typeof vi.fn>).mockResolvedValue({ stats: { count: '119' } });
+    const result = await executePerformanceToolCall(mockClient, 'get_table_record_count', { table: 'sn_grc_indicator' });
+    expect(mockClient.runAggregateQuery).toHaveBeenCalledWith('sn_grc_indicator', undefined, 'COUNT', undefined);
+    expect(result.record_count).toBe('119');
+  });
+
+  it('passes the query filter through to the aggregate call', async () => {
+    (mockClient.runAggregateQuery as ReturnType<typeof vi.fn>).mockResolvedValue({ stats: { count: '5' } });
+    await executePerformanceToolCall(mockClient, 'get_table_record_count', { table: 'incident', query: 'active=true' });
+    expect(mockClient.runAggregateQuery).toHaveBeenCalledWith('incident', undefined, 'COUNT', 'active=true');
+  });
+
+  it('falls back to queryRecords with a note when the aggregate call fails', async () => {
+    (mockClient.runAggregateQuery as ReturnType<typeof vi.fn>).mockRejectedValue(new Error('boom'));
+    (mockClient.queryRecords as ReturnType<typeof vi.fn>).mockResolvedValue({ count: 1, records: [{}] });
+    const result = await executePerformanceToolCall(mockClient, 'get_table_record_count', { table: 'incident' });
+    expect(result.note).toContain('approximate');
+    expect(result.record_count).toBe(1);
+  });
+
+  it('requires table', async () => {
+    await expect(executePerformanceToolCall(mockClient, 'get_table_record_count', {})).rejects.toThrow('table is required');
+  });
+});
+
+describe('compare_record_counts', () => {
+  beforeEach(() => vi.clearAllMocks());
+
+  // Regression test: this previously reported queryRecords({limit:1}).count as the
+  // record_count for every table -- always 0 or 1, never the real total.
+  it('reports the real aggregate count per table, not a limit:1 page length', async () => {
+    (mockClient.runAggregateQuery as ReturnType<typeof vi.fn>)
+      .mockResolvedValueOnce({ stats: { count: '1111' } })
+      .mockResolvedValueOnce({ stats: { count: '58' } });
+    const result = await executePerformanceToolCall(mockClient, 'compare_record_counts', {
+      tables: ['sn_compliance_control', 'incident'],
+    });
+    expect(mockClient.runAggregateQuery).toHaveBeenNthCalledWith(1, 'sn_compliance_control', undefined, 'COUNT', undefined);
+    expect(result.table_counts['sn_compliance_control']).toEqual({ accessible: true, record_count: '1111' });
+    expect(result.table_counts['incident']).toEqual({ accessible: true, record_count: '58' });
+  });
+
+  it('marks a table inaccessible when the aggregate query throws', async () => {
+    (mockClient.runAggregateQuery as ReturnType<typeof vi.fn>).mockRejectedValue(new Error('no access'));
+    const result = await executePerformanceToolCall(mockClient, 'compare_record_counts', { tables: ['restricted_table'] });
+    expect(result.table_counts['restricted_table']).toEqual({ accessible: false, error: 'no access' });
+  });
+
+  it('requires a non-empty tables array', async () => {
+    await expect(executePerformanceToolCall(mockClient, 'compare_record_counts', { tables: [] })).rejects.toThrow('tables must be a non-empty array');
   });
 });

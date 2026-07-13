@@ -180,19 +180,28 @@ export async function executeDeploymentToolCall(
 
     case 'analyze_data_quality': {
       if (!args.table) throw new ServiceNowError('table is required', 'INVALID_REQUEST');
-      const totalResp = await client.queryRecords({ table: args.table, limit: 1, fields: 'sys_id' });
-      const total = totalResp.count;
+      // Ungrouped aggregate queries for exact counts — queryRecords(limit:1).count is
+      // always 0 or 1 (records.length capped at the page size), never the real total,
+      // which previously made total_records/stale_records/quality_score meaningless
+      // for any table with more than 1 matching record.
       const daysStale = args.days_stale || 180;
       const staleSince = new Date(Date.now() - daysStale * 86400000).toISOString().slice(0, 19).replace('T', ' ');
-      const staleResp = await client.queryRecords({ table: args.table, query: `sys_updated_on<${staleSince}`, limit: 1, fields: 'sys_id' });
+      const aggCount = async (query?: string): Promise<number> => {
+        const resp = await client.runAggregateQuery(args.table, undefined, 'COUNT', query);
+        return parseInt(String(resp?.stats?.count ?? '0'), 10) || 0;
+      };
+      const [total, staleCount] = await Promise.all([
+        aggCount(),
+        aggCount(`sys_updated_on<${staleSince}`),
+      ]);
       const issues: string[] = [];
       if (args.required_fields) {
         for (const field of args.required_fields.split(',').map((f: string) => f.trim())) {
-          const emptyResp = await client.queryRecords({ table: args.table, query: `${field}ISEMPTY`, limit: 1, fields: 'sys_id' });
-          if (emptyResp.count > 0) issues.push(`${field}: ${emptyResp.count} empty records`);
+          const emptyCount = await aggCount(`${field}ISEMPTY`);
+          if (emptyCount > 0) issues.push(`${field}: ${emptyCount} empty records`);
         }
       }
-      return { table: args.table, total_records: total, stale_records: staleResp.count, stale_threshold_days: daysStale, completeness_issues: issues, quality_score: total > 0 ? `${Math.round(((total - staleResp.count) / total) * 100)}%` : 'N/A' };
+      return { table: args.table, total_records: total, stale_records: staleCount, stale_threshold_days: daysStale, completeness_issues: issues, quality_score: total > 0 ? `${Math.round(((total - staleCount) / total) * 100)}%` : 'N/A' };
     }
 
     default:
