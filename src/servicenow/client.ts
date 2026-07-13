@@ -963,15 +963,20 @@ export class ServiceNowClient {
   }
 
   /**
-   * Run aggregate/stats query on a table (ServiceNow Reporting API)
+   * Run aggregate/stats query on a table (ServiceNow Reporting API). Omit
+   * `groupBy` for an ungrouped total count — the API returns a single
+   * `{ stats: { count } }` object in that case, rather than an array of
+   * per-group results.
    */
-  async runAggregateQuery(table: string, groupBy: string, _aggregate: string = 'COUNT', query?: string): Promise<any> {
+  async runAggregateQuery(table: string, groupBy?: string, _aggregate: string = 'COUNT', query?: string): Promise<any> {
     await this.authenticate();
     validateTableName(table);
-    validateOrderByField(groupBy);
     if (query) validateQuery(query);
     const params = new URLSearchParams();
-    params.set('sysparm_group_by', groupBy);
+    if (groupBy) {
+      validateOrderByField(groupBy);
+      params.set('sysparm_group_by', groupBy);
+    }
     if (query) params.set('sysparm_query', query);
     params.set('sysparm_count', 'true');
     const url = `${this.baseUrl}/api/now/stats/${table}?${params.toString()}`;

@@ -233,7 +233,14 @@ export async function executeGrcIndicatorToolCall(
     }
 
     case 'get_grc_indicator_dashboard': {
-      const [byCategory, byResult] = await Promise.all([
+      // `total` is derived from an `active` groupby, not `category` — `category` is a
+      // free-text, non-mandatory field, so any Indicator without one set would silently
+      // drop out of a category-based sum (0 such rows on dev400464 today, but that's a
+      // data fact, not a schema guarantee). `active` is a boolean with a platform
+      // default, matching the "always-populated field" pattern used for totals in the
+      // other GRC dashboards (which key off `state`).
+      const [byActive, byCategory, byResult] = await Promise.all([
+        client.runAggregateQuery('sn_grc_indicator', 'active', 'COUNT'),
         client.runAggregateQuery('sn_grc_indicator', 'category', 'COUNT'),
         client.runAggregateQuery('sn_grc_indicator', 'last_result_passed', 'COUNT'),
       ]);
@@ -248,9 +255,10 @@ export async function executeGrcIndicatorToolCall(
           .sort((a, b) => b.count - a.count);
       };
 
+      const activeCounts = summarize(byActive);
       const categoryCounts = summarize(byCategory);
       const resultCounts = summarize(byResult);
-      const total = categoryCounts.reduce((s, r) => s + r.count, 0);
+      const total = activeCounts.reduce((s, r) => s + r.count, 0);
       const failed = resultCounts.filter(r => r.value === 'false').reduce((s, r) => s + r.count, 0);
 
       return {
