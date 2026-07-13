@@ -195,6 +195,70 @@ All remaining open questions are deferred — see Backlog below.
 
 ---
 
+## 5a. Assessment issuance — investigation (2026-07-12/13)
+
+Not part of Phase 1/2 scope, but investigated on request ("Entity 設定が必要だと思いますが、
+アセスメントを発行することは可能ですか"). No new tool was implemented — findings only,
+and `state` was removed from `update_compliance_control`'s allowlist as a direct
+consequence (see below).
+
+**What generates an `asmt_assessment_instance` for a Control:**
+
+1. `sn_compliance_control` needs `attestation` (an `asmt_metric_type` ref, e.g. "GRC
+   Classic Attestation") and `attestation_frequency` (e.g. `annually`) set. Both are
+   already supported via `update_compliance_control`'s existing allowlist.
+2. Something must move the Control's `state` to `attest`. Two paths exist on this
+   instance:
+   - **The OOTB "Control attestation nightly run" scheduled job** (`sysauto_script`,
+     weekly on Monday), which calls `ControlAttestationUtils.checkAndMoveControlsToAttestByFrequency()`.
+     Read the script (read-only) and found it **only handles renewals**: it queries
+     `sn_compliance_control` for `state IN (review, monitor)` and, for each, looks up
+     the most recent prior `asmt_assessment_instance` for that control. If none
+     exists (`gs.nil(lastAttested)`), the whole per-control branch is skipped — **a
+     Control that has never been attested before is never touched by this job**,
+     regardless of `attestation_frequency`. It also does not directly create the
+     assessment instance; it only sets `state = 'attest'` and lets a separate
+     Business Rule react to that state change.
+   - **The in-app "Attest" UI Action** on `sn_compliance_control`, whose script is
+     literally `current.state = 'attest'; current.update();` (plus a "retired
+     control requirement" guard). Clicking it on a fresh Draft-state Control
+     (`CTRL0020029`) **did** produce a fully-formed `asmt_assessment_instance`
+     (`AINST0010006`) with `assessment_group`, `user` (assignee), and `due_date` all
+     correctly populated.
+3. **CONFIRMED live: REST Table API writes to `sn_compliance_control.state` are
+   silently no-ops**, regardless of target value. Tested both `PATCH .../state ->
+   "attest"` and `-> "review"` on a fresh Control (`CTRL0020007`, no prior
+   assessment): both returned HTTP 200, `sys_mod_count` stayed `0`, and a re-fetch
+   showed `state` unchanged at `draft`. This is the exact same `current.state =
+   'attest'; current.update()` line the working UI Action runs — the difference is
+   purely the execution context (interactive session vs. REST Table API), which is
+   evaluated against a stricter field ACL that blocks the web-service path without
+   returning an error.
+4. Separately, attempting to create an `asmt_assessment_instance` directly via raw
+   REST POST (with `assessment_group`, `sn_grc_profile`, `sn_grc_item` all set)
+   "succeeds" (HTTP 200/201) but produces an **orphaned record**: `assessment_group`
+   does not persist (empty on re-read, no reverse link from the group either), and
+   `user`/`due_date` stay empty. Confirmed via full create→verify→delete round trip.
+5. A one-shot `sysauto_script` (`run_type: once`) created via REST to manually fire
+   the nightly job's script did not fire — `sys_trigger` (the actual scheduler
+   registration) was never created for it, and PATCHing `run_start` again didn't fix
+   it either. This appears to be a broader gap in the REST Table API's ability to
+   register scheduler triggers, not specific to this job. (Created with explicit
+   user authorization per the project's script-execution policy; deleted after the
+   test — see the standing constraint on temporary Scheduled Scripts.)
+
+**Consequence for the tool design:** `state` was removed from
+`CONTROL_FIELDS`/`update_compliance_control`'s allowlist (previously present but
+silently non-functional) — see `src/tools/grc-compliance.ts`'s file header and the
+`update_compliance_control` tool description for the user-facing note. Properly
+issuing a Control's *first* attestation therefore remains a **UI-only operation**
+("Attest" button) on this instance; subsequent renewals are handled automatically by
+the nightly job once a first attestation history exists. No REST-safe path to trigger
+either was found, and none is planned to be added given the project's stance against
+exposing server-side job/script execution as a tool.
+
+---
+
 ## 6. Backlog (deferred, not blocking Phase 1/2)
 
 | Item | Question | Notes |

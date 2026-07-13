@@ -16,7 +16,19 @@
  *       choices (draft/review/awaiting_approval/published/retired).
  *   - sn_compliance_control           — number prefix CTRL, string state
  *       choices (draft/attest/review/monitor/retired). `profile` ref links
- *       a control to the Entity it protects.
+ *       a control to the Entity it protects. CONFIRMED (2026-07-13, live
+ *       PATCH test): `state` cannot be written via the REST Table API at
+ *       all — PATCHing to "attest" AND "review" both returned HTTP 200
+ *       with `sys_mod_count` unchanged and the field silently still
+ *       "draft" on re-read. The in-app "Attest" UI Action runs the exact
+ *       same `current.state = 'attest'; current.update();` from an
+ *       interactive session and DOES work (confirmed: it produces a
+ *       correctly-linked asmt_assessment_instance, via a state-change
+ *       Business Rule) — the REST Table API write path is blocked at a
+ *       layer interactive GlideRecord scripts don't go through (most
+ *       likely a field ACL scoped to the web service context). This is
+ *       why `state` is intentionally excluded from `CONTROL_FIELDS`
+ *       below; exposing it as writable would be misleading.
  *   - sn_compliance_policy_statement  (Control Objective) — NO number field,
  *       string state choices (draft/review/approved/published/retired).
  *   - sn_compliance_policy_exception  — number prefix PER, NUMERIC state
@@ -53,7 +65,11 @@ const CONTROL_STATE_SCHEMA = {
   type: 'string',
   description: 'State filter: draft, attest, review, monitor, retired',
 };
-const CONTROL_FIELDS = new Set(['name', 'description', 'state', 'category', 'classification', 'key_control', 'frequency', 'assessment_method', 'enforcement', 'owner', 'owning_group', 'profile', 'supplemental_guidance', 'discussion', 'implementation_statement']);
+// `state` is intentionally excluded — confirmed live that REST Table API writes to it
+// are silently ignored (HTTP 200, sys_mod_count unchanged); only the in-app "Attest" UI
+// Action (an interactive-session GlideRecord update) can actually change it. See the
+// file header for the full investigation.
+const CONTROL_FIELDS = new Set(['name', 'description', 'category', 'classification', 'key_control', 'frequency', 'assessment_method', 'enforcement', 'owner', 'owning_group', 'profile', 'supplemental_guidance', 'discussion', 'implementation_statement']);
 const CONTROL_LIST_FIELDS = 'number,name,description,state,category,key_control,profile,owner,failed_indicators,passed_indicators,sys_id';
 
 // ── Control Objective (sn_compliance_policy_statement) — read-only for now ──
@@ -298,7 +314,11 @@ export function getGrcComplianceToolDefinitions() {
     },
     {
       name: 'update_compliance_control',
-      description: 'Update a Compliance Control by sys_id. **[Write — requires WRITE_ENABLED=true]**',
+      description:
+        'Update a Compliance Control by sys_id. NOTE: `state` is not in the allowed field set — ' +
+        'confirmed live that REST writes to it are silently ignored (HTTP 200 but the value never ' +
+        'persists); only the "Attest" button in the ServiceNow UI can actually move a Control into the ' +
+        '`attest` state and trigger assessment generation. **[Write — requires WRITE_ENABLED=true]**',
       inputSchema: {
         type: 'object',
         properties: {
