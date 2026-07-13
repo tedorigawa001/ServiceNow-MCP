@@ -194,6 +194,23 @@ describe('Control (sn_compliance_control)', () => {
     expect(qr().mock.calls[0][0].query).toBe('profile=p1^key_control=true');
   });
 
+  // Confirmed live (2026-07-13): REST writes to `state` are silently ignored on this
+  // table (HTTP 200, value never persists) — only the in-app "Attest" UI Action works.
+  // `state` must never appear in the update_compliance_control allowlist.
+  it('update_compliance_control does not allow writing state', () => {
+    const tool = getGrcComplianceToolDefinitions().find(t => t.name === 'update_compliance_control')!;
+    const fields = (tool.inputSchema.properties as any).fields;
+    expect(fields.properties).not.toHaveProperty('state');
+  });
+
+  it('update_compliance_control rejects an explicit state field', async () => {
+    process.env.WRITE_ENABLED = 'true';
+    await expect(
+      executeGrcComplianceToolCall(mockClient, 'update_compliance_control', { sys_id: 'a'.repeat(32), fields: { state: 'attest' } })
+    ).rejects.toThrow('cannot be set');
+    delete process.env.WRITE_ENABLED;
+  });
+
   describe('create_compliance_control', () => {
     const ORIGINAL = process.env.WRITE_ENABLED;
     beforeEach(() => {

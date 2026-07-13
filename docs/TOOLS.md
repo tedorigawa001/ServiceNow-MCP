@@ -1480,10 +1480,10 @@ List/get Compliance Controls (`sn_compliance_control`, number prefix `CTRL`).
 **Parameters** (get): `number_or_sysid` (required)
 
 ### create_compliance_control / update_compliance_control
-Create/update a Compliance Control. **[Write]** `implementation_statement` is dictionary-mandatory on this table but not enforced by the REST API (left blank if omitted).
+Create/update a Compliance Control. **[Write]** `implementation_statement` is dictionary-mandatory on this table but not enforced by the REST API (left blank if omitted). **`state` is not writable via REST** — confirmed live (2026-07-13) that PATCHing `state` (e.g. to `attest`) returns HTTP 200 but the value never persists; only the in-app "Attest" UI Action can move a Control into the `attest` state, which is what actually triggers assessment generation (see `list_grc_indicators`-adjacent note in [GRC_DESIGN.md](GRC_DESIGN.md) and the "issuing an assessment" investigation).
 
 **Parameters** (create): `name` (required), `description`, `category`, `key_control`, `frequency`, `profile`, `owner`, `implementation_statement`
-**Parameters** (update): `sys_id` (required), `fields` — allowed: `name`, `description`, `state`, `category`, `classification`, `key_control`, `frequency`, `assessment_method`, `enforcement`, `owner`, `owning_group`, `profile`, `supplemental_guidance`, `discussion`, `implementation_statement`
+**Parameters** (update): `sys_id` (required), `fields` — allowed: `name`, `description`, `category`, `classification`, `key_control`, `frequency`, `assessment_method`, `enforcement`, `owner`, `owning_group`, `profile`, `supplemental_guidance`, `discussion`, `implementation_statement`
 
 ### list_control_objectives / get_control_objective
 List/get Control Objectives (`sn_compliance_policy_statement`) — sits between Policy and Control. Read-only. No number field.
