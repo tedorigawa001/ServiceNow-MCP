@@ -9,7 +9,7 @@
  * ServiceNow tables: sys_update_xml, sys_remote_update_set, sys_app,
  *   sys_store_app, sn_devops_artifact
  */
-import type { ServiceNowClient } from '../servicenow/client.js';
+import { sanitizeLikeValue, type ServiceNowClient } from '../servicenow/client.js';
 import { ServiceNowError } from '../utils/errors.js';
 import { requireCmdbWrite, requireWrite, requireScripting } from '../utils/permissions.js';
 
@@ -78,8 +78,8 @@ export async function executeDeploymentToolCall(
       if (!args.name) throw new ServiceNowError('name is required', 'INVALID_REQUEST');
       const tableMap: Record<string, string> = { business_rule: 'sys_script', script_include: 'sys_script_include', client_script: 'sys_script_client', ui_policy: 'sys_ui_policy', ui_action: 'sys_ui_action', widget: 'sp_widget', flow: 'sys_hub_flow', sys_properties: 'sys_properties' };
       const table = args.type ? (tableMap[args.type] || args.type) : 'sys_metadata';
-      let query = `nameLIKE${args.name}`;
-      if (args.scope) query += `^sys_scope.name=${args.scope}`;
+      let query = `nameLIKE${sanitizeLikeValue(args.name)}`;
+      if (args.scope) query += `^sys_scope.name=${sanitizeLikeValue(args.scope)}`;
       const resp = await client.queryRecords({ table, query, limit: args.limit || 25, fields: 'sys_id,name,sys_class_name,sys_scope,active,sys_updated_on' });
       return { count: resp.count, artifacts: resp.records };
     }
