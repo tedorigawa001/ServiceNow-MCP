@@ -6,6 +6,18 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 ---
 
+## [1.5.6] — 2026-07-14
+
+### Fixed
+
+- **`flow.ts` had the same unsanitized query-injection gap fixed in `integration.ts` (1.5.5)** — `args.category`/`args.query`/`args.status`/`args.name_or_sysid` were interpolated directly into encoded queries across `list_flows`, `get_flow`, `list_flow_executions`, `list_subflows`, `get_subflow`, `list_action_instances`, `get_process_automation`, and `list_process_automations`. Fixed by applying `sanitizeLikeValue()` at every affected site.
+
+### Added
+
+- **Test coverage for 47 more previously-untested tools**, continuing the coverage pass from 1.5.4/1.5.5: `flow.ts` (16 tools, new `tests/tools/flow.test.ts`, including regression tests for the sanitization fix above), `workspace.ts` (16 tools, new `tests/tools/workspace.test.ts` — no sanitization gap here since every filterable field is a sys_id reference, not free text), and `portal.ts` (15 tools — confirmed its existing `sanitizeLikeValue()` usage was already correct).
+
+---
+
 ## [1.5.5] — 2026-07-14
 
 ### Fixed
