@@ -6,6 +6,20 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 ---
 
+## [1.5.11] — 2026-07-15
+
+### Fixed
+
+Three unsanitized free-text/identifier-injection sites remained in `ml.ts` after the 1.5.10 audit, found in a follow-up review and fixed with the codebase-wide `sanitizeLikeValue()` convention:
+
+- **`ml_predict_change_risk`**: `type`/`category`.
+- **`ml_forecast_incidents`**: `category`/`priority`.
+- **`ml_virtual_agent_nlu`**: `topic_sys_id`.
+
+Added regression tests confirming `^` is stripped from each so it cannot inject extra encoded-query clauses. 1473 tests pass, `tsc` clean.
+
+---
+
 ## [1.5.10] — 2026-07-14
 
 ### Fixed
