@@ -13,6 +13,12 @@ const gr = () => mockClient.getRecord as ReturnType<typeof vi.fn>;
 const cr = () => mockClient.createRecord as ReturnType<typeof vi.fn>;
 
 describe('getIntegrationToolDefinitions', () => {
+  it('returns exactly 24 integration tool definitions', () => {
+    // Pinning the count catches accidental deletions/duplicate registrations
+    // that `length > 0` would silently miss.
+    expect(getIntegrationToolDefinitions().length).toBe(24);
+  });
+
   it('all tools have name, description and inputSchema', () => {
     getIntegrationToolDefinitions().forEach(t => {
       expect(t.name).toBeTruthy();
@@ -57,6 +63,12 @@ describe('REST Messages', () => {
       .rejects.toMatchObject({ code: 'NOT_FOUND' });
   });
 
+  it('get_rest_message strips ^ from the name so it cannot inject extra encoded-query clauses', async () => {
+    qr().mockResolvedValue({ count: 1, records: [{ sys_id: 'rm1', name: 'Jira' }] });
+    await executeIntegrationToolCall(mockClient, 'get_rest_message', { sys_id_or_name: 'Jira^ORactive=true' });
+    expect(qr()).toHaveBeenCalledWith(expect.objectContaining({ query: 'name=JiraORactive=true' }));
+  });
+
   it('list_rest_message_functions requires rest_message_sys_id', async () => {
     await expect(executeIntegrationToolCall(mockClient, 'list_rest_message_functions', {})).rejects.toThrow('rest_message_sys_id is required');
   });
@@ -69,6 +81,7 @@ describe('REST Messages', () => {
 
   describe('create_rest_message', () => {
     beforeEach(() => { process.env.WRITE_ENABLED = 'true'; });
+    afterEach(() => { delete process.env.WRITE_ENABLED; });
 
     it('is blocked without WRITE_ENABLED', async () => {
       delete process.env.WRITE_ENABLED;
@@ -111,8 +124,15 @@ describe('Transform Maps', () => {
       .rejects.toMatchObject({ code: 'NOT_FOUND' });
   });
 
+  it('get_transform_map strips ^ from the name so it cannot inject extra encoded-query clauses', async () => {
+    qr().mockResolvedValue({ count: 1, records: [{ sys_id: 'tm1', name: 'Incident Map' }] });
+    await executeIntegrationToolCall(mockClient, 'get_transform_map', { sys_id_or_name: 'Incident Map^ORactive=true' });
+    expect(qr()).toHaveBeenCalledWith(expect.objectContaining({ query: 'name=Incident MapORactive=true' }));
+  });
+
   describe('run_transform_map', () => {
     beforeEach(() => { process.env.WRITE_ENABLED = 'true'; });
+    afterEach(() => { delete process.env.WRITE_ENABLED; });
 
     it('is blocked without WRITE_ENABLED', async () => {
       delete process.env.WRITE_ENABLED;
@@ -154,6 +174,12 @@ describe('Import Sets & Data Sources', () => {
     expect(qr()).toHaveBeenCalledWith(expect.objectContaining({ table: 'sys_import_set', query: 'state=loaded^table_name=u_x' }));
   });
 
+  it('list_import_sets strips ^ from state (an exact-match value, not a free-form query)', async () => {
+    qr().mockResolvedValue({ count: 0, records: [] });
+    await executeIntegrationToolCall(mockClient, 'list_import_sets', { state: 'loaded^active=true' });
+    expect(qr()).toHaveBeenCalledWith(expect.objectContaining({ query: 'state=loadedactive=true' }));
+  });
+
   it('get_import_set requires sys_id', async () => {
     await expect(executeIntegrationToolCall(mockClient, 'get_import_set', {})).rejects.toThrow('sys_id is required');
   });
@@ -169,6 +195,57 @@ describe('Import Sets & Data Sources', () => {
     qr().mockResolvedValue({ count: 0, records: [] });
     await executeIntegrationToolCall(mockClient, 'list_data_sources', { type: 'jdbc', query: 'sap' });
     expect(qr()).toHaveBeenCalledWith(expect.objectContaining({ table: 'sys_data_source', query: 'type=jdbc^nameCONTAINSsap' }));
+  });
+
+  it('list_data_sources strips ^ and NUL from the free-text query before building the CONTAINS clause', async () => {
+    qr().mockResolvedValue({ count: 0, records: [] });
+    await executeIntegrationToolCall(mockClient, 'list_data_sources', { query: 'sap^ORtype=jdbc' });
+    expect(qr()).toHaveBeenCalledWith(expect.objectContaining({ query: 'nameCONTAINSsapORtype=jdbc' }));
+  });
+
+  describe('create_import_set_row', () => {
+    beforeEach(() => { process.env.WRITE_ENABLED = 'true'; });
+    afterEach(() => { delete process.env.WRITE_ENABLED; });
+
+    it('is blocked without WRITE_ENABLED', async () => {
+      delete process.env.WRITE_ENABLED;
+      await expect(executeIntegrationToolCall(mockClient, 'create_import_set_row', {
+        staging_table: 'u_import_ci', import_set_sys_id: 'is1', data: { hostname: 'server-1' },
+      })).rejects.toThrow('Write operations are disabled');
+    });
+
+    it('requires staging_table, import_set_sys_id, and data', async () => {
+      await expect(executeIntegrationToolCall(mockClient, 'create_import_set_row', {})).rejects.toThrow(
+        'staging_table, import_set_sys_id, and data are required'
+      );
+    });
+
+    it('rejects when staging_table does not match the import set\'s table_name', async () => {
+      gr().mockResolvedValue({ sys_id: 'is1', table_name: 'u_import_other' });
+      await expect(executeIntegrationToolCall(mockClient, 'create_import_set_row', {
+        staging_table: 'u_import_ci', import_set_sys_id: 'is1', data: { hostname: 'server-1' },
+      })).rejects.toMatchObject({ code: 'VALIDATION_ERROR' });
+      expect(cr()).not.toHaveBeenCalled();
+    });
+
+    it('rejects sys_* fields in the row data', async () => {
+      gr().mockResolvedValue({ sys_id: 'is1', table_name: 'u_import_ci' });
+      await expect(executeIntegrationToolCall(mockClient, 'create_import_set_row', {
+        staging_table: 'u_import_ci', import_set_sys_id: 'is1', data: { hostname: 'server-1', sys_id: 'x', sys_domain: 'global' },
+      })).rejects.toThrow('System fields are not permitted in import rows: sys_id, sys_domain');
+      expect(cr()).not.toHaveBeenCalled();
+    });
+
+    it('inserts the row into the staging table when validation passes', async () => {
+      gr().mockResolvedValue({ sys_id: 'is1', table_name: 'u_import_ci' });
+      cr().mockResolvedValue({ sys_id: 'row1' });
+      const result = await executeIntegrationToolCall(mockClient, 'create_import_set_row', {
+        staging_table: 'u_import_ci', import_set_sys_id: 'is1', data: { hostname: 'server-1' },
+      });
+      expect(gr()).toHaveBeenCalledWith('sys_import_set', 'is1');
+      expect(cr()).toHaveBeenCalledWith('u_import_ci', { hostname: 'server-1' });
+      expect(result.summary).toContain('u_import_ci');
+    });
   });
 });
 
@@ -189,6 +266,12 @@ describe('Event Registry & Management', () => {
     qr().mockResolvedValue({ count: 0, records: [] });
     await expect(executeIntegrationToolCall(mockClient, 'get_event_registry_entry', { name_or_sysid: 'nope' }))
       .rejects.toMatchObject({ code: 'NOT_FOUND' });
+  });
+
+  it('get_event_registry_entry strips ^ from the name so it cannot inject extra encoded-query clauses', async () => {
+    qr().mockResolvedValue({ count: 1, records: [{ sys_id: 'ev1', name: 'incident.created' }] });
+    await executeIntegrationToolCall(mockClient, 'get_event_registry_entry', { name_or_sysid: 'incident.created^ORactive=true' });
+    expect(qr()).toHaveBeenCalledWith(expect.objectContaining({ query: 'name=incident.createdORactive=true' }));
   });
 
   describe('register_event', () => {
@@ -221,6 +304,7 @@ describe('Event Registry & Management', () => {
 
   describe('fire_event', () => {
     beforeEach(() => { process.env.WRITE_ENABLED = 'true'; });
+    afterEach(() => { delete process.env.WRITE_ENABLED; });
 
     it('is blocked without WRITE_ENABLED', async () => {
       delete process.env.WRITE_ENABLED;
@@ -311,6 +395,7 @@ describe('SOAP Messages', () => {
 
   describe('create_soap_message', () => {
     beforeEach(() => { process.env.WRITE_ENABLED = 'true'; });
+    afterEach(() => { delete process.env.WRITE_ENABLED; });
 
     it('is blocked without WRITE_ENABLED', async () => {
       delete process.env.WRITE_ENABLED;
@@ -332,6 +417,7 @@ describe('SOAP Messages', () => {
 
   describe('create_soap_message_function', () => {
     beforeEach(() => { process.env.WRITE_ENABLED = 'true'; });
+    afterEach(() => { delete process.env.WRITE_ENABLED; });
 
     it('is blocked without WRITE_ENABLED', async () => {
       delete process.env.WRITE_ENABLED;

@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { executeCatalogToolCall, getCatalogToolDefinitions } from '../../src/tools/catalog.js';
 import type { ServiceNowClient } from '../../src/servicenow/client.js';
 
@@ -87,6 +87,7 @@ describe('create_catalog_item', () => {
     vi.clearAllMocks();
     process.env.WRITE_ENABLED = 'true';
   });
+  afterEach(() => { delete process.env.WRITE_ENABLED; });
 
   it('is blocked without WRITE_ENABLED', async () => {
     delete process.env.WRITE_ENABLED;
@@ -111,6 +112,7 @@ describe('order_catalog_item', () => {
     vi.clearAllMocks();
     process.env.WRITE_ENABLED = 'true';
   });
+  afterEach(() => { delete process.env.WRITE_ENABLED; });
 
   it('is blocked without WRITE_ENABLED', async () => {
     delete process.env.WRITE_ENABLED;
@@ -136,6 +138,7 @@ describe('create_approval_rule', () => {
     vi.clearAllMocks();
     process.env.WRITE_ENABLED = 'true';
   });
+  afterEach(() => { delete process.env.WRITE_ENABLED; });
 
   it('is blocked without WRITE_ENABLED', async () => {
     delete process.env.WRITE_ENABLED;
@@ -192,6 +195,7 @@ describe('approve_request', () => {
     vi.clearAllMocks();
     process.env.WRITE_ENABLED = 'true';
   });
+  afterEach(() => { delete process.env.WRITE_ENABLED; });
 
   it('requires sys_id', async () => {
     await expect(executeCatalogToolCall(mockClient, 'approve_request', {})).rejects.toThrow('sys_id is required');
@@ -209,6 +213,7 @@ describe('reject_request', () => {
     vi.clearAllMocks();
     process.env.WRITE_ENABLED = 'true';
   });
+  afterEach(() => { delete process.env.WRITE_ENABLED; });
 
   it('requires sys_id and comments', async () => {
     await expect(executeCatalogToolCall(mockClient, 'reject_request', { sys_id: 'ap1' })).rejects.toThrow('sys_id and comments are required');
@@ -250,6 +255,7 @@ describe('create_catalog_variable', () => {
     vi.clearAllMocks();
     process.env.WRITE_ENABLED = 'true';
   });
+  afterEach(() => { delete process.env.WRITE_ENABLED; });
 
   it('requires cat_item_id, name, question_text, and type', async () => {
     await expect(executeCatalogToolCall(mockClient, 'create_catalog_variable', {})).rejects.toThrow(
@@ -271,6 +277,7 @@ describe('create_catalog_ui_policy', () => {
     vi.clearAllMocks();
     process.env.WRITE_ENABLED = 'true';
   });
+  afterEach(() => { delete process.env.WRITE_ENABLED; });
 
   it('requires cat_item_id and short_description', async () => {
     await expect(executeCatalogToolCall(mockClient, 'create_catalog_ui_policy', {})).rejects.toThrow(
@@ -377,6 +384,7 @@ describe('cancel_request', () => {
     vi.clearAllMocks();
     process.env.WRITE_ENABLED = 'true';
   });
+  afterEach(() => { delete process.env.WRITE_ENABLED; });
 
   it('requires sys_id', async () => {
     await expect(executeCatalogToolCall(mockClient, 'cancel_request', {})).rejects.toThrow('sys_id is required');
@@ -394,6 +402,7 @@ describe('update_request_item', () => {
     vi.clearAllMocks();
     process.env.WRITE_ENABLED = 'true';
   });
+  afterEach(() => { delete process.env.WRITE_ENABLED; });
 
   it('requires sys_id', async () => {
     await expect(executeCatalogToolCall(mockClient, 'update_request_item', {})).rejects.toThrow('sys_id is required');
@@ -425,6 +434,7 @@ describe('executeCatalogToolCall – update_catalog_item', () => {
     vi.clearAllMocks();
     process.env.WRITE_ENABLED = 'true';
   });
+  afterEach(() => { delete process.env.WRITE_ENABLED; });
 
   it('allows documented catalog item fields', async () => {
     (mockClient.updateRecord as ReturnType<typeof vi.fn>).mockResolvedValue({ sys_id: 'item1' });

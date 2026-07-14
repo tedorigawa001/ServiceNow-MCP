@@ -3,7 +3,7 @@
  * Read tools: Tier 0. Write tools: Tier 1 (WRITE_ENABLED=true).
  * Inspired by snow-flow's "Automation/Integration" category.
  */
-import type { ServiceNowClient } from '../servicenow/client.js';
+import { sanitizeLikeValue, type ServiceNowClient } from '../servicenow/client.js';
 import { ServiceNowError } from '../utils/errors.js';
 import { requireWrite, requireScripting } from '../utils/permissions.js';
 
@@ -346,7 +346,10 @@ export async function executeIntegrationToolCall(
     // ── Outbound REST Messages ───────────────────────────────────────────────
     case 'list_rest_messages': {
       const parts: string[] = [];
-      if (args.query) parts.push(`nameCONTAINS${args.query}^ORdescriptionCONTAINS${args.query}`);
+      if (args.query) {
+        const value = sanitizeLikeValue(args.query);
+        parts.push(`nameCONTAINS${value}^ORdescriptionCONTAINS${value}`);
+      }
       return await client.queryRecords({
         table: 'sys_rest_message',
         query: parts.join('^') || undefined,
@@ -361,7 +364,7 @@ export async function executeIntegrationToolCall(
       }
       const resp = await client.queryRecords({
         table: 'sys_rest_message',
-        query: `name=${args.sys_id_or_name}`,
+        query: `name=${sanitizeLikeValue(args.sys_id_or_name)}`,
         limit: 1,
       });
       if (resp.count === 0) throw new ServiceNowError(`REST Message not found: ${args.sys_id_or_name}`, 'NOT_FOUND');
@@ -392,8 +395,11 @@ export async function executeIntegrationToolCall(
     // ── Transform Maps ──────────────────────────────────────────────────────
     case 'list_transform_maps': {
       const parts: string[] = [];
-      if (args.target_table) parts.push(`target_table=${args.target_table}`);
-      if (args.query) parts.push(`nameCONTAINS${args.query}^ORtarget_tableCONTAINS${args.query}`);
+      if (args.target_table) parts.push(`target_table=${sanitizeLikeValue(args.target_table)}`);
+      if (args.query) {
+        const value = sanitizeLikeValue(args.query);
+        parts.push(`nameCONTAINS${value}^ORtarget_tableCONTAINS${value}`);
+      }
       return await client.queryRecords({
         table: 'sys_transform_map',
         query: parts.join('^') || undefined,
@@ -408,7 +414,7 @@ export async function executeIntegrationToolCall(
       }
       const resp = await client.queryRecords({
         table: 'sys_transform_map',
-        query: `name=${args.sys_id_or_name}`,
+        query: `name=${sanitizeLikeValue(args.sys_id_or_name)}`,
         limit: 1,
       });
       if (resp.count === 0) throw new ServiceNowError(`Transform Map not found: ${args.sys_id_or_name}`, 'NOT_FOUND');
@@ -442,7 +448,9 @@ export async function executeIntegrationToolCall(
     // ── Import Sets ─────────────────────────────────────────────────────────
     case 'list_import_sets': {
       const parts: string[] = [];
-      if (args.state) parts.push(`state=${args.state}`);
+      if (args.state) parts.push(`state=${sanitizeLikeValue(args.state)}`);
+      // args.query is documented as a full encoded query filter (not a free-text
+      // search term), so it is passed through as-is rather than sanitized.
       if (args.query) parts.push(args.query);
       return await client.queryRecords({
         table: 'sys_import_set',
@@ -473,8 +481,8 @@ export async function executeIntegrationToolCall(
     }
     case 'list_data_sources': {
       const parts: string[] = [];
-      if (args.type) parts.push(`type=${args.type}`);
-      if (args.query) parts.push(`nameCONTAINS${args.query}`);
+      if (args.type) parts.push(`type=${sanitizeLikeValue(args.type)}`);
+      if (args.query) parts.push(`nameCONTAINS${sanitizeLikeValue(args.query)}`);
       return await client.queryRecords({
         table: 'sys_data_source',
         query: parts.join('^') || undefined,
@@ -485,7 +493,10 @@ export async function executeIntegrationToolCall(
     // ── Event Registry ──────────────────────────────────────────────────────
     case 'list_event_registry': {
       const parts: string[] = [];
-      if (args.query) parts.push(`nameCONTAINS${args.query}^ORdescriptionCONTAINS${args.query}`);
+      if (args.query) {
+        const value = sanitizeLikeValue(args.query);
+        parts.push(`nameCONTAINS${value}^ORdescriptionCONTAINS${value}`);
+      }
       return await client.queryRecords({
         table: 'sysevent_register',
         query: parts.join('^') || undefined,
@@ -500,7 +511,7 @@ export async function executeIntegrationToolCall(
       }
       const resp = await client.queryRecords({
         table: 'sysevent_register',
-        query: `name=${args.name_or_sysid}`,
+        query: `name=${sanitizeLikeValue(args.name_or_sysid)}`,
         limit: 1,
       });
       if (resp.count === 0) {
@@ -540,8 +551,8 @@ export async function executeIntegrationToolCall(
     }
     case 'list_event_log': {
       const parts: string[] = [];
-      if (args.event_name) parts.push(`nameCONTAINS${args.event_name}`);
-      if (args.state) parts.push(`state=${args.state}`);
+      if (args.event_name) parts.push(`nameCONTAINS${sanitizeLikeValue(args.event_name)}`);
+      if (args.state) parts.push(`state=${sanitizeLikeValue(args.state)}`);
       return await client.queryRecords({
         table: 'sysevent',
         query: parts.join('^') || undefined,
@@ -640,7 +651,10 @@ export async function executeIntegrationToolCall(
     // ── OAuth ────────────────────────────────────────────────────────────────
     case 'list_oauth_applications': {
       const parts: string[] = [];
-      if (args.query) parts.push(`nameCONTAINS${args.query}^ORclient_idCONTAINS${args.query}`);
+      if (args.query) {
+        const value = sanitizeLikeValue(args.query);
+        parts.push(`nameCONTAINS${value}^ORclient_idCONTAINS${value}`);
+      }
       return await client.queryRecords({
         table: 'oauth_entity',
         query: parts.join('^') || undefined,
@@ -650,8 +664,8 @@ export async function executeIntegrationToolCall(
     }
     case 'list_credential_aliases': {
       const parts: string[] = [];
-      if (args.type) parts.push(`type=${args.type}`);
-      if (args.query) parts.push(`nameCONTAINS${args.query}`);
+      if (args.type) parts.push(`type=${sanitizeLikeValue(args.type)}`);
+      if (args.query) parts.push(`nameCONTAINS${sanitizeLikeValue(args.query)}`);
       return await client.queryRecords({
         table: 'sys_alias',
         query: parts.join('^') || undefined,
