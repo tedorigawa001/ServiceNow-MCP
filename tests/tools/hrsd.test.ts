@@ -179,6 +179,178 @@ describe('HRSD tools', () => {
     });
   });
 
+  describe('close_hr_case', () => {
+    it('throws when WRITE_ENABLED is not set', async () => {
+      await expect(executeHrsdToolCall(mockClient, 'close_hr_case', { sys_id: 'c1', close_notes: 'done' }))
+        .rejects.toThrow('Write operations are disabled');
+    });
+
+    it('requires sys_id and close_notes', async () => {
+      process.env.WRITE_ENABLED = 'true';
+      await expect(executeHrsdToolCall(mockClient, 'close_hr_case', {})).rejects.toThrow('sys_id and close_notes are required');
+    });
+
+    it('closes the case with state closed_complete', async () => {
+      process.env.WRITE_ENABLED = 'true';
+      mockClient.updateRecord.mockResolvedValue({ sys_id: 'c1' });
+      const result = await executeHrsdToolCall(mockClient, 'close_hr_case', { sys_id: 'c1', close_notes: 'Resolved', close_code: 'Resolved' });
+      expect(mockClient.updateRecord).toHaveBeenCalledWith('sn_hr_core_case', 'c1', { state: 'closed_complete', close_notes: 'Resolved', close_code: 'Resolved' });
+      expect(result.summary).toContain('c1');
+    });
+  });
+
+  describe('get_hr_service', () => {
+    it('requires sys_id_or_name', async () => {
+      await expect(executeHrsdToolCall(mockClient, 'get_hr_service', {})).rejects.toThrow('sys_id_or_name is required');
+    });
+
+    it('fetches directly by sys_id when hex', async () => {
+      mockClient.getRecord.mockResolvedValue({ sys_id: 'a'.repeat(32), name: 'Onboarding' });
+      const result = await executeHrsdToolCall(mockClient, 'get_hr_service', { sys_id_or_name: 'a'.repeat(32) });
+      expect(mockClient.getRecord).toHaveBeenCalledWith('sn_hr_core_service', 'a'.repeat(32));
+      expect(result.name).toBe('Onboarding');
+    });
+
+    it('resolves by name and throws NOT_FOUND when missing', async () => {
+      mockClient.queryRecords.mockResolvedValue({ count: 0, records: [] });
+      await expect(executeHrsdToolCall(mockClient, 'get_hr_service', { sys_id_or_name: 'Nope' }))
+        .rejects.toMatchObject({ code: 'NOT_FOUND' });
+    });
+
+    it('strips ^ from the name so it cannot inject extra encoded-query clauses', async () => {
+      mockClient.queryRecords.mockResolvedValue({ count: 1, records: [{ sys_id: 's1', name: 'Onboarding' }] });
+      await executeHrsdToolCall(mockClient, 'get_hr_service', { sys_id_or_name: 'Onboarding^ORactive=true' });
+      expect(mockClient.queryRecords).toHaveBeenCalledWith(expect.objectContaining({ query: 'name=OnboardingORactive=true' }));
+    });
+  });
+
+  describe('get_hr_profile', () => {
+    it('requires user_identifier', async () => {
+      await expect(executeHrsdToolCall(mockClient, 'get_hr_profile', {})).rejects.toThrow('user_identifier is required');
+    });
+
+    it('queries by user sys_id when hex', async () => {
+      mockClient.queryRecords.mockResolvedValue({ count: 1, records: [{ sys_id: 'p1' }] });
+      await executeHrsdToolCall(mockClient, 'get_hr_profile', { user_identifier: 'a'.repeat(32) });
+      expect(mockClient.queryRecords).toHaveBeenCalledWith(expect.objectContaining({ query: `user=${'a'.repeat(32)}` }));
+    });
+
+    it('queries by username otherwise and throws NOT_FOUND when missing', async () => {
+      mockClient.queryRecords.mockResolvedValue({ count: 0, records: [] });
+      await expect(executeHrsdToolCall(mockClient, 'get_hr_profile', { user_identifier: 'jdoe' }))
+        .rejects.toMatchObject({ code: 'NOT_FOUND' });
+    });
+  });
+
+  describe('list_hr_tasks', () => {
+    it('requires hr_case_sysid', async () => {
+      await expect(executeHrsdToolCall(mockClient, 'list_hr_tasks', {})).rejects.toThrow('hr_case_sysid is required');
+    });
+
+    it('filters by parent and optional state', async () => {
+      mockClient.queryRecords.mockResolvedValue({ count: 0, records: [] });
+      await executeHrsdToolCall(mockClient, 'list_hr_tasks', { hr_case_sysid: 'c1', state: 'open' });
+      expect(mockClient.queryRecords).toHaveBeenCalledWith(expect.objectContaining({ table: 'sn_hr_core_task', query: 'parent=c1^state=open' }));
+    });
+  });
+
+  describe('create_hr_task', () => {
+    it('throws when WRITE_ENABLED is not set', async () => {
+      await expect(executeHrsdToolCall(mockClient, 'create_hr_task', { hr_case_sysid: 'c1', short_description: 'X' }))
+        .rejects.toThrow('Write operations are disabled');
+    });
+
+    it('requires hr_case_sysid and short_description', async () => {
+      process.env.WRITE_ENABLED = 'true';
+      await expect(executeHrsdToolCall(mockClient, 'create_hr_task', {})).rejects.toThrow('hr_case_sysid and short_description are required');
+    });
+
+    it('creates the task', async () => {
+      process.env.WRITE_ENABLED = 'true';
+      mockClient.createRecord.mockResolvedValue({ sys_id: 't1', number: 'HRTASK001' });
+      const result = await executeHrsdToolCall(mockClient, 'create_hr_task', { hr_case_sysid: 'c1', short_description: 'Verify docs', assigned_to: 'u1' });
+      expect(mockClient.createRecord).toHaveBeenCalledWith('sn_hr_core_task', { parent: 'c1', short_description: 'Verify docs', assigned_to: 'u1' });
+      expect(result.summary).toContain('HRTASK001');
+    });
+  });
+
+  describe('get_hr_case_activity', () => {
+    it('requires hr_case_sysid', async () => {
+      await expect(executeHrsdToolCall(mockClient, 'get_hr_case_activity', {})).rejects.toThrow('hr_case_sysid is required');
+    });
+
+    it('queries the journal by element_id', async () => {
+      mockClient.queryRecords.mockResolvedValue({ count: 0, records: [] });
+      await executeHrsdToolCall(mockClient, 'get_hr_case_activity', { hr_case_sysid: 'c1' });
+      expect(mockClient.queryRecords).toHaveBeenCalledWith(expect.objectContaining({ table: 'sys_journal_field', query: 'element_id=c1' }));
+    });
+  });
+
+  describe('create_onboarding_case', () => {
+    it('throws when WRITE_ENABLED is not set', async () => {
+      await expect(executeHrsdToolCall(mockClient, 'create_onboarding_case', { employee_sys_id: 'e1', start_date: '2026-08-01' }))
+        .rejects.toThrow('Write operations are disabled');
+    });
+
+    it('requires employee_sys_id and start_date', async () => {
+      process.env.WRITE_ENABLED = 'true';
+      await expect(executeHrsdToolCall(mockClient, 'create_onboarding_case', {})).rejects.toThrow('employee_sys_id and start_date are required');
+    });
+
+    it('creates an onboarding case', async () => {
+      process.env.WRITE_ENABLED = 'true';
+      mockClient.createRecord.mockResolvedValue({ sys_id: 'c1', number: 'HRCS001' });
+      const result = await executeHrsdToolCall(mockClient, 'create_onboarding_case', { employee_sys_id: 'e1', start_date: '2026-08-01', department: 'Eng' });
+      expect(mockClient.createRecord).toHaveBeenCalledWith('sn_hr_core_case', expect.objectContaining({
+        hr_service: 'Onboarding', subject_person: 'e1', department: 'Eng',
+      }));
+      expect(result.type).toBe('onboarding');
+    });
+  });
+
+  describe('create_offboarding_case', () => {
+    it('requires employee_sys_id and last_day', async () => {
+      process.env.WRITE_ENABLED = 'true';
+      await expect(executeHrsdToolCall(mockClient, 'create_offboarding_case', {})).rejects.toThrow('employee_sys_id and last_day are required');
+    });
+
+    it('creates an offboarding case', async () => {
+      process.env.WRITE_ENABLED = 'true';
+      mockClient.createRecord.mockResolvedValue({ sys_id: 'c1', number: 'HRCS002' });
+      const result = await executeHrsdToolCall(mockClient, 'create_offboarding_case', { employee_sys_id: 'e1', last_day: '2026-08-15', reason: 'resignation' });
+      expect(mockClient.createRecord).toHaveBeenCalledWith('sn_hr_core_case', expect.objectContaining({
+        hr_service: 'Offboarding', subject_person: 'e1', u_offboarding_reason: 'resignation',
+      }));
+      expect(result.type).toBe('offboarding');
+    });
+  });
+
+  describe('get_hr_lifecycle_events', () => {
+    it('requires employee_sys_id', async () => {
+      await expect(executeHrsdToolCall(mockClient, 'get_hr_lifecycle_events', {})).rejects.toThrow('employee_sys_id is required');
+    });
+
+    it('filters by employee and optional event_type', async () => {
+      mockClient.queryRecords.mockResolvedValue({ count: 0, records: [] });
+      await executeHrsdToolCall(mockClient, 'get_hr_lifecycle_events', { employee_sys_id: 'e1', event_type: 'promotion' });
+      expect(mockClient.queryRecords).toHaveBeenCalledWith(expect.objectContaining({
+        table: 'sn_hr_le_lifecycle_event',
+        query: 'employee=e1^type=promotion',
+      }));
+    });
+  });
+
+  describe('list_hr_document_templates', () => {
+    it('defaults to active=true and filters by category', async () => {
+      mockClient.queryRecords.mockResolvedValue({ count: 0, records: [] });
+      await executeHrsdToolCall(mockClient, 'list_hr_document_templates', { category: 'onboarding' });
+      expect(mockClient.queryRecords).toHaveBeenCalledWith(expect.objectContaining({
+        table: 'sn_hr_core_document_template',
+        query: 'active=true^category=onboarding',
+      }));
+    });
+  });
+
   describe('returns null for unknown tool', () => {
     it('returns null for unrecognised tool name', async () => {
       const result = await executeHrsdToolCall(mockClient, 'nonexistent_hrsd_tool', {});
