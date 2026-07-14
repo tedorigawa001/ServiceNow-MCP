@@ -2,7 +2,7 @@
  * Flow Designer tools — list, inspect, trigger, and monitor flows and subflows.
  * Read tools: Tier 0. Trigger/create tools: Tier 1 (WRITE_ENABLED=true).
  */
-import type { ServiceNowClient } from '../servicenow/client.js';
+import { sanitizeLikeValue, type ServiceNowClient } from '../servicenow/client.js';
 import { ServiceNowError } from '../utils/errors.js';
 import { requireWrite, requireScripting } from '../utils/permissions.js';
 
@@ -224,8 +224,11 @@ export async function executeFlowToolCall(
     case 'list_flows': {
       const parts: string[] = [];
       if (args.active !== false) parts.push('active=true');
-      if (args.category) parts.push(`category=${args.category}`);
-      if (args.query) parts.push(`nameCONTAINS${args.query}^ORdescriptionCONTAINS${args.query}`);
+      if (args.category) parts.push(`category=${sanitizeLikeValue(args.category)}`);
+      if (args.query) {
+        const value = sanitizeLikeValue(args.query);
+        parts.push(`nameCONTAINS${value}^ORdescriptionCONTAINS${value}`);
+      }
       return await client.queryRecords({ table: 'sys_hub_flow', query: parts.join('^') || '', limit: args.limit ?? 50 });
     }
     case 'get_flow': {
@@ -233,7 +236,7 @@ export async function executeFlowToolCall(
       if (/^[0-9a-f]{32}$/i.test(args.name_or_sysid)) {
         return await client.getRecord('sys_hub_flow', args.name_or_sysid);
       }
-      const resp = await client.queryRecords({ table: 'sys_hub_flow', query: `nameCONTAINS${args.name_or_sysid}`, limit: 1 });
+      const resp = await client.queryRecords({ table: 'sys_hub_flow', query: `nameCONTAINS${sanitizeLikeValue(args.name_or_sysid)}`, limit: 1 });
       if (resp.count === 0) throw new ServiceNowError(`Flow not found: ${args.name_or_sysid}`, 'NOT_FOUND');
       return resp.records[0];
     }
@@ -251,13 +254,13 @@ export async function executeFlowToolCall(
     case 'list_flow_executions': {
       if (!args.flow_sys_id) throw new ServiceNowError('flow_sys_id is required', 'INVALID_REQUEST');
       const parts = [`flow=${args.flow_sys_id}`];
-      if (args.status) parts.push(`status=${args.status}`);
+      if (args.status) parts.push(`status=${sanitizeLikeValue(args.status)}`);
       return await client.queryRecords({ table: 'sys_flow_context', query: parts.join('^'), limit: args.limit ?? 25 });
     }
     case 'list_subflows': {
       const parts: string[] = [];
       if (args.active !== false) parts.push('active=true');
-      if (args.query) parts.push(`nameCONTAINS${args.query}`);
+      if (args.query) parts.push(`nameCONTAINS${sanitizeLikeValue(args.query)}`);
       return await client.queryRecords({ table: 'sys_hub_subflow', query: parts.join('^') || '', limit: args.limit ?? 50 });
     }
     case 'get_subflow': {
@@ -265,14 +268,14 @@ export async function executeFlowToolCall(
       if (/^[0-9a-f]{32}$/i.test(args.name_or_sysid)) {
         return await client.getRecord('sys_hub_subflow', args.name_or_sysid);
       }
-      const resp = await client.queryRecords({ table: 'sys_hub_subflow', query: `nameCONTAINS${args.name_or_sysid}`, limit: 1 });
+      const resp = await client.queryRecords({ table: 'sys_hub_subflow', query: `nameCONTAINS${sanitizeLikeValue(args.name_or_sysid)}`, limit: 1 });
       if (resp.count === 0) throw new ServiceNowError(`Subflow not found: ${args.name_or_sysid}`, 'NOT_FOUND');
       return resp.records[0];
     }
     case 'list_action_instances': {
       const parts: string[] = [];
-      if (args.category) parts.push(`category=${args.category}`);
-      if (args.query) parts.push(`nameCONTAINS${args.query}`);
+      if (args.category) parts.push(`category=${sanitizeLikeValue(args.category)}`);
+      if (args.query) parts.push(`nameCONTAINS${sanitizeLikeValue(args.query)}`);
       return await client.queryRecords({ table: 'sys_hub_action_instance', query: parts.join('^') || '', limit: args.limit ?? 50 });
     }
     case 'get_process_automation': {
@@ -280,14 +283,17 @@ export async function executeFlowToolCall(
       if (/^[0-9a-f]{32}$/i.test(args.name_or_sysid)) {
         return await client.getRecord('pa_process', args.name_or_sysid);
       }
-      const resp = await client.queryRecords({ table: 'pa_process', query: `nameCONTAINS${args.name_or_sysid}`, limit: 1 });
+      const resp = await client.queryRecords({ table: 'pa_process', query: `nameCONTAINS${sanitizeLikeValue(args.name_or_sysid)}`, limit: 1 });
       if (resp.count === 0) throw new ServiceNowError(`Process automation not found: ${args.name_or_sysid}`, 'NOT_FOUND');
       return resp.records[0];
     }
     case 'list_process_automations': {
       const parts: string[] = [];
       if (args.active !== false) parts.push('active=true');
-      if (args.query) parts.push(`nameCONTAINS${args.query}^ORdescriptionCONTAINS${args.query}`);
+      if (args.query) {
+        const value = sanitizeLikeValue(args.query);
+        parts.push(`nameCONTAINS${value}^ORdescriptionCONTAINS${value}`);
+      }
       return await client.queryRecords({ table: 'pa_process', query: parts.join('^') || '', limit: args.limit ?? 50 });
     }
     case 'create_flow': {
