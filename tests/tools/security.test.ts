@@ -195,4 +195,99 @@ describe('Security Operations tools', () => {
       expect(result).toBeNull();
     });
   });
+
+  describe('get_security_incident', () => {
+    it('requires number_or_sysid', async () => {
+      await expect(executeSecurityToolCall(mockClient, 'get_security_incident', {})).rejects.toThrow('number_or_sysid is required');
+    });
+
+    it('fetches directly by sys_id when hex', async () => {
+      mockClient.getRecord.mockResolvedValue({ sys_id: 'a'.repeat(32), number: 'SIR0001' });
+      const result = await executeSecurityToolCall(mockClient, 'get_security_incident', { number_or_sysid: 'a'.repeat(32) });
+      expect(mockClient.getRecord).toHaveBeenCalledWith('sn_si_incident', 'a'.repeat(32));
+      expect(result.number).toBe('SIR0001');
+    });
+
+    it('resolves by number and throws NOT_FOUND when missing', async () => {
+      mockClient.queryRecords.mockResolvedValue({ count: 0, records: [] });
+      await expect(executeSecurityToolCall(mockClient, 'get_security_incident', { number_or_sysid: 'SIR0001' }))
+        .rejects.toMatchObject({ code: 'NOT_FOUND' });
+    });
+
+    it('strips ^ from the number so it cannot inject extra encoded-query clauses', async () => {
+      mockClient.queryRecords.mockResolvedValue({ count: 1, records: [{ sys_id: 's1', number: 'SIR0001' }] });
+      await executeSecurityToolCall(mockClient, 'get_security_incident', { number_or_sysid: 'SIR0001^ORstate=closed' });
+      expect(mockClient.queryRecords).toHaveBeenCalledWith(expect.objectContaining({ query: 'number=SIR0001ORstate=closed' }));
+    });
+  });
+
+  describe('get_vulnerability', () => {
+    it('requires number_or_sysid', async () => {
+      await expect(executeSecurityToolCall(mockClient, 'get_vulnerability', {})).rejects.toThrow('number_or_sysid is required');
+    });
+
+    it('fetches directly by sys_id when hex', async () => {
+      mockClient.getRecord.mockResolvedValue({ sys_id: 'a'.repeat(32), number: 'VUL0001' });
+      const result = await executeSecurityToolCall(mockClient, 'get_vulnerability', { number_or_sysid: 'a'.repeat(32) });
+      expect(mockClient.getRecord).toHaveBeenCalledWith('sn_vul_entry', 'a'.repeat(32));
+      expect(result.number).toBe('VUL0001');
+    });
+
+    it('throws NOT_FOUND when name lookup misses', async () => {
+      mockClient.queryRecords.mockResolvedValue({ count: 0, records: [] });
+      await expect(executeSecurityToolCall(mockClient, 'get_vulnerability', { number_or_sysid: 'VUL9999' }))
+        .rejects.toMatchObject({ code: 'NOT_FOUND' });
+    });
+  });
+
+  describe('list_security_playbooks', () => {
+    it('defaults to active=true and filters by category', async () => {
+      mockClient.queryRecords.mockResolvedValue({ count: 0, records: [] });
+      await executeSecurityToolCall(mockClient, 'list_security_playbooks', { category: 'phishing' });
+      expect(mockClient.queryRecords).toHaveBeenCalledWith(expect.objectContaining({ table: 'sn_si_playbook', query: 'active=true^category=phishing' }));
+    });
+  });
+
+  describe('run_security_playbook', () => {
+    it('is blocked without WRITE_ENABLED', async () => {
+      await expect(executeSecurityToolCall(mockClient, 'run_security_playbook', { playbook_sys_id: 'p1', incident_sys_id: 'i1' }))
+        .rejects.toThrow('Write operations are disabled');
+    });
+
+    it('requires playbook_sys_id and incident_sys_id', async () => {
+      process.env.WRITE_ENABLED = 'true';
+      await expect(executeSecurityToolCall(mockClient, 'run_security_playbook', {})).rejects.toThrow(
+        'playbook_sys_id and incident_sys_id are required'
+      );
+    });
+
+    it('executes the playbook with extra parameters', async () => {
+      process.env.WRITE_ENABLED = 'true';
+      mockClient.createRecord.mockResolvedValue({ sys_id: 'exec1' });
+      const result = await executeSecurityToolCall(mockClient, 'run_security_playbook', {
+        playbook_sys_id: 'p1', incident_sys_id: 'i1', parameters: { notify: 'true' },
+      });
+      expect(mockClient.createRecord).toHaveBeenCalledWith('sn_si_playbook_execution', { playbook: 'p1', incident: 'i1', notify: 'true' });
+      expect(result.action).toBe('executed');
+    });
+  });
+
+  describe('scan_vulnerabilities', () => {
+    it('is blocked without WRITE_ENABLED', async () => {
+      await expect(executeSecurityToolCall(mockClient, 'scan_vulnerabilities', { group: 'g1' })).rejects.toThrow('Write operations are disabled');
+    });
+
+    it('requires ci_sys_ids or group', async () => {
+      process.env.WRITE_ENABLED = 'true';
+      await expect(executeSecurityToolCall(mockClient, 'scan_vulnerabilities', {})).rejects.toThrow('ci_sys_ids or group is required');
+    });
+
+    it('requests a full scan by default', async () => {
+      process.env.WRITE_ENABLED = 'true';
+      mockClient.createRecord.mockResolvedValue({ sys_id: 'scan1' });
+      const result = await executeSecurityToolCall(mockClient, 'scan_vulnerabilities', { ci_sys_ids: ['ci1', 'ci2'] });
+      expect(mockClient.createRecord).toHaveBeenCalledWith('sn_vul_scan_request', { ci_list: 'ci1,ci2', group: '', scan_type: 'full' });
+      expect(result.action).toBe('scan_requested');
+    });
+  });
 });

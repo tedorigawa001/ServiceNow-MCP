@@ -263,3 +263,146 @@ describe('executeReportingToolCall – unknown tool', () => {
     expect(result).toBeNull();
   });
 });
+
+describe('trend_query', () => {
+  beforeEach(() => vi.clearAllMocks());
+
+  it('requires table, date_field, and group_by', async () => {
+    await expect(executeReportingToolCall(mockClient, 'trend_query', {})).rejects.toThrow(
+      'table, date_field, and group_by are required'
+    );
+  });
+
+  it('runs one aggregate query per period', async () => {
+    (mockClient.runAggregateQuery as ReturnType<typeof vi.fn>).mockResolvedValue([{ groupby_fields: [], stats: { count: '5' } }]);
+    const result = await executeReportingToolCall(mockClient, 'trend_query', {
+      table: 'incident', date_field: 'sys_created_on', group_by: 'priority', periods: 3,
+    });
+    expect(mockClient.runAggregateQuery).toHaveBeenCalledTimes(3);
+    expect(result.periods).toHaveLength(3);
+  });
+
+  it('reports an empty period instead of throwing when the aggregate query fails', async () => {
+    (mockClient.runAggregateQuery as ReturnType<typeof vi.fn>).mockRejectedValue(new Error('boom'));
+    const result = await executeReportingToolCall(mockClient, 'trend_query', {
+      table: 'incident', date_field: 'sys_created_on', group_by: 'priority', periods: 1,
+    });
+    expect(result.periods[0].data).toEqual([]);
+  });
+});
+
+describe('get_scheduled_job', () => {
+  beforeEach(() => vi.clearAllMocks());
+
+  it('requires sys_id_or_name', async () => {
+    await expect(executeReportingToolCall(mockClient, 'get_scheduled_job', {})).rejects.toThrow('sys_id_or_name is required');
+  });
+
+  it('fetches directly by sys_id when hex', async () => {
+    (mockClient.getRecord as ReturnType<typeof vi.fn>).mockResolvedValue({ sys_id: 'a'.repeat(32), name: 'Nightly Job' });
+    const result = await executeReportingToolCall(mockClient, 'get_scheduled_job', { sys_id_or_name: 'a'.repeat(32) });
+    expect(mockClient.getRecord).toHaveBeenCalledWith('sysauto', 'a'.repeat(32));
+    expect(result.name).toBe('Nightly Job');
+  });
+
+  it('resolves by name and throws NOT_FOUND when missing', async () => {
+    (mockClient.queryRecords as ReturnType<typeof vi.fn>).mockResolvedValue({ count: 0, records: [] });
+    await expect(executeReportingToolCall(mockClient, 'get_scheduled_job', { sys_id_or_name: 'Nope' }))
+      .rejects.toMatchObject({ code: 'NOT_FOUND' });
+  });
+
+  it('strips ^ from the name so it cannot inject extra encoded-query clauses', async () => {
+    (mockClient.queryRecords as ReturnType<typeof vi.fn>).mockResolvedValue({ count: 1, records: [{ sys_id: 'j1', name: 'Nightly Job' }] });
+    await executeReportingToolCall(mockClient, 'get_scheduled_job', { sys_id_or_name: 'Nightly Job^ORactive=true' });
+    expect(mockClient.queryRecords).toHaveBeenCalledWith(expect.objectContaining({ query: 'name=Nightly JobORactive=true' }));
+  });
+});
+
+describe('trigger_scheduled_job', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    process.env.WRITE_ENABLED = 'true';
+  });
+  afterEach(() => { delete process.env.WRITE_ENABLED; });
+
+  it('is blocked without WRITE_ENABLED', async () => {
+    delete process.env.WRITE_ENABLED;
+    await expect(executeReportingToolCall(mockClient, 'trigger_scheduled_job', { sys_id: 'j1' })).rejects.toThrow('Write operations are disabled');
+  });
+
+  it('requires sys_id', async () => {
+    await expect(executeReportingToolCall(mockClient, 'trigger_scheduled_job', {})).rejects.toThrow('sys_id is required');
+  });
+
+  it('sets next_action to now and activates the job', async () => {
+    (mockClient.updateRecord as ReturnType<typeof vi.fn>).mockResolvedValue({ sys_id: 'j1' });
+    const result = await executeReportingToolCall(mockClient, 'trigger_scheduled_job', { sys_id: 'j1' });
+    expect(mockClient.updateRecord).toHaveBeenCalledWith('sysauto', 'j1', expect.objectContaining({ active: true }));
+    expect(result.summary).toContain('j1');
+  });
+});
+
+describe('list_job_run_history', () => {
+  beforeEach(() => vi.clearAllMocks());
+
+  it('combines job_sys_id and status filters', async () => {
+    (mockClient.queryRecords as ReturnType<typeof vi.fn>).mockResolvedValue({ count: 0, records: [] });
+    await executeReportingToolCall(mockClient, 'list_job_run_history', { job_sys_id: 'j1', status: 'error' });
+    expect(mockClient.queryRecords).toHaveBeenCalledWith(expect.objectContaining({
+      table: 'sysauto_trigger_log',
+      query: 'sysauto=j1^status=error',
+    }));
+  });
+});
+
+describe('create_scheduled_report', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    process.env.WRITE_ENABLED = 'true';
+  });
+  afterEach(() => { delete process.env.WRITE_ENABLED; });
+
+  it('is blocked without WRITE_ENABLED', async () => {
+    delete process.env.WRITE_ENABLED;
+    await expect(executeReportingToolCall(mockClient, 'create_scheduled_report', { report_id: 'r1', frequency: 'daily', recipients: 'a@b.com' }))
+      .rejects.toThrow('Write operations are disabled');
+  });
+
+  it('requires report_id, frequency, and recipients', async () => {
+    await expect(executeReportingToolCall(mockClient, 'create_scheduled_report', {})).rejects.toThrow(
+      'report_id, frequency, and recipients are required'
+    );
+  });
+
+  it('creates the schedule with a default pdf format', async () => {
+    (mockClient.createRecord as ReturnType<typeof vi.fn>).mockResolvedValue({ sys_id: 's1' });
+    const result = await executeReportingToolCall(mockClient, 'create_scheduled_report', { report_id: 'r1', frequency: 'daily', recipients: 'a@b.com' });
+    expect(mockClient.createRecord).toHaveBeenCalledWith('sys_report_schedule', expect.objectContaining({ report: 'r1', frequency: 'daily', email: 'a@b.com', format: 'pdf' }));
+    expect(result.summary).toContain('r1');
+  });
+});
+
+describe('create_kpi', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    process.env.WRITE_ENABLED = 'true';
+  });
+  afterEach(() => { delete process.env.WRITE_ENABLED; });
+
+  it('is blocked without WRITE_ENABLED', async () => {
+    delete process.env.WRITE_ENABLED;
+    await expect(executeReportingToolCall(mockClient, 'create_kpi', { name: 'X', table: 'incident', aggregate: 'COUNT' }))
+      .rejects.toThrow('Write operations are disabled');
+  });
+
+  it('requires name, table, and aggregate', async () => {
+    await expect(executeReportingToolCall(mockClient, 'create_kpi', {})).rejects.toThrow('name, table, and aggregate are required');
+  });
+
+  it('creates the KPI indicator', async () => {
+    (mockClient.createRecord as ReturnType<typeof vi.fn>).mockResolvedValue({ sys_id: 'k1' });
+    const result = await executeReportingToolCall(mockClient, 'create_kpi', { name: 'Open Incidents', table: 'incident', aggregate: 'COUNT' });
+    expect(mockClient.createRecord).toHaveBeenCalledWith('pa_indicators', expect.objectContaining({ name: 'Open Incidents', cube: 'incident', aggregate: 'COUNT' }));
+    expect(result.summary).toContain('Open Incidents');
+  });
+});

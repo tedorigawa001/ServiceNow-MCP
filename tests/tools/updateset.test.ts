@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { executeUpdateSetToolCall, getUpdateSetToolDefinitions } from '../../src/tools/updateset.js';
 import type { ServiceNowClient } from '../../src/servicenow/client.js';
 
@@ -179,6 +179,56 @@ describe('executeUpdateSetToolCall – ensure_active_update_set', () => {
     expect(result.action).toBe('auto_created');
     expect(result.name).toBe('Auto AI Session');
     expect(mockClient.createRecord).toHaveBeenCalledWith('sys_update_set', expect.objectContaining({ name: 'Auto AI Session' }));
+  });
+});
+
+describe('executeUpdateSetToolCall – export_update_set', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    process.env.WRITE_ENABLED = 'true';
+    process.env.SCRIPTING_ENABLED = 'true';
+  });
+
+  afterEach(() => {
+    delete process.env.WRITE_ENABLED;
+    delete process.env.SCRIPTING_ENABLED;
+  });
+
+  it('is blocked without SCRIPTING_ENABLED', async () => {
+    delete process.env.SCRIPTING_ENABLED;
+    await expect(executeUpdateSetToolCall(mockClient, 'export_update_set', { sys_id: 'us1' })).rejects.toThrow(
+      'Scripting operations are disabled'
+    );
+  });
+
+  it('requires sys_id', async () => {
+    await expect(executeUpdateSetToolCall(mockClient, 'export_update_set', {})).rejects.toThrow('sys_id is required');
+  });
+
+  it('builds an unload XML from the update set header and its change payloads', async () => {
+    (mockClient.getRecord as ReturnType<typeof vi.fn>).mockResolvedValue({ sys_id: 'us1', name: 'My Update Set', state: 'complete' });
+    (mockClient.queryRecords as ReturnType<typeof vi.fn>).mockResolvedValue({
+      count: 1,
+      records: [{ sys_id: 'x1', name: 'Change 1', type: 'Table', action: 'INSERT_OR_UPDATE', payload: '<sys_script>...</sys_script>' }],
+    });
+
+    const result = await executeUpdateSetToolCall(mockClient, 'export_update_set', { sys_id: 'us1' });
+
+    expect(mockClient.getRecord).toHaveBeenCalledWith('sys_update_set', 'us1');
+    expect(result.update_set_name).toBe('My Update Set');
+    expect(result.change_count).toBe(1);
+    expect(result.xml).toContain('<unload');
+    expect(result.xml).toContain('<sys_script>...</sys_script>');
+  });
+
+  it('throws RESULT_TOO_LARGE when the update set exceeds 2000 changes', async () => {
+    (mockClient.getRecord as ReturnType<typeof vi.fn>).mockResolvedValue({ sys_id: 'us1', name: 'Huge Set' });
+    (mockClient.queryRecords as ReturnType<typeof vi.fn>).mockResolvedValue({
+      count: 500,
+      records: Array.from({ length: 500 }, (_, i) => ({ sys_id: `x${i}`, payload: '<x/>' })),
+    });
+    await expect(executeUpdateSetToolCall(mockClient, 'export_update_set', { sys_id: 'us1' }))
+      .rejects.toMatchObject({ code: 'RESULT_TOO_LARGE' });
   });
 });
 

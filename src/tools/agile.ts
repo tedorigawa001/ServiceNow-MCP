@@ -3,7 +3,7 @@
  * Read tools: Tier 0. Write tools: Tier 1 (WRITE_ENABLED=true).
  * Tables: rm_story, rm_epic, rm_scrum_task
  */
-import type { ServiceNowClient } from '../servicenow/client.js';
+import { sanitizeLikeValue, type ServiceNowClient } from '../servicenow/client.js';
 import { ServiceNowError } from '../utils/errors.js';
 import { requireWrite } from '../utils/permissions.js';
 
@@ -183,8 +183,8 @@ export async function executeAgileToolCall(
     }
     case 'list_stories': {
       let query = '';
-      if (args.sprint) query = `sprint=${args.sprint}`;
-      if (args.state) query = query ? `${query}^state=${args.state}` : `state=${args.state}`;
+      if (args.sprint) query = `sprint=${sanitizeLikeValue(args.sprint)}`;
+      if (args.state) query = query ? `${query}^state=${sanitizeLikeValue(args.state)}` : `state=${sanitizeLikeValue(args.state)}`;
       const resp = await client.queryRecords({ table: storyTable, query: query || undefined, limit: args.limit || 20, fields: 'sys_id,number,short_description,state,story_points,sprint,epic,assigned_to' });
       return { count: resp.count, stories: resp.records };
     }
@@ -203,8 +203,8 @@ export async function executeAgileToolCall(
     }
     case 'list_epics': {
       let query = '';
-      if (args.project) query = `project=${args.project}`;
-      if (args.state) query = query ? `${query}^state=${args.state}` : `state=${args.state}`;
+      if (args.project) query = `project=${sanitizeLikeValue(args.project)}`;
+      if (args.state) query = query ? `${query}^state=${sanitizeLikeValue(args.state)}` : `state=${sanitizeLikeValue(args.state)}`;
       const resp = await client.queryRecords({ table: epicTable, query: query || undefined, limit: args.limit || 20 });
       return { count: resp.count, epics: resp.records };
     }
@@ -225,8 +225,11 @@ export async function executeAgileToolCall(
     }
     case 'list_scrum_tasks': {
       let query = '';
-      if (args.story_sys_id) query = `story=${args.story_sys_id}`;
-      if (args.assigned_to) query = query ? `${query}^assigned_to.user_name=${args.assigned_to}` : `assigned_to.user_name=${args.assigned_to}`;
+      if (args.story_sys_id) query = `story=${sanitizeLikeValue(args.story_sys_id)}`;
+      if (args.assigned_to) {
+        const value = sanitizeLikeValue(args.assigned_to);
+        query = query ? `${query}^assigned_to.user_name=${value}` : `assigned_to.user_name=${value}`;
+      }
       const resp = await client.queryRecords({ table: scrumTaskTable, query: query || undefined, limit: args.limit || 20 });
       return { count: resp.count, scrum_tasks: resp.records };
     }

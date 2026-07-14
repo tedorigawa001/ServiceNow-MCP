@@ -8,7 +8,7 @@
  * ServiceNow tables: sn_devops_pipeline, sn_devops_artifact, sn_devops_deploy_task,
  *                    sn_devops_change_request
  */
-import type { ServiceNowClient } from '../servicenow/client.js';
+import { sanitizeLikeValue, type ServiceNowClient } from '../servicenow/client.js';
 import { ServiceNowError } from '../utils/errors.js';
 import { requireWrite } from '../utils/permissions.js';
 
@@ -135,9 +135,9 @@ export async function executeDevopsToolCall(
 
     case 'list_deployments': {
       let query = '';
-      if (args.pipeline_sys_id) query = `pipeline=${args.pipeline_sys_id}`;
-      if (args.environment) query = query ? `${query}^stage=${args.environment}` : `stage=${args.environment}`;
-      if (args.state) query = query ? `${query}^status=${args.state}` : `status=${args.state}`;
+      if (args.pipeline_sys_id) query = `pipeline=${sanitizeLikeValue(args.pipeline_sys_id)}`;
+      if (args.environment) { const value = sanitizeLikeValue(args.environment); query = query ? `${query}^stage=${value}` : `stage=${value}`; }
+      if (args.state) { const value = sanitizeLikeValue(args.state); query = query ? `${query}^status=${value}` : `status=${value}`; }
       const resp = await client.queryRecords({
         table: 'sn_devops_deploy_task',
         query: query || undefined,

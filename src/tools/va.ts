@@ -10,7 +10,7 @@
  * ServiceNow tables: sys_cs_topic, sys_cs_conversation, sys_cs_topic_block
  * API: /api/sn_cs/topic, /api/sn_cs/bot/integration
  */
-import type { ServiceNowClient } from '../servicenow/client.js';
+import { sanitizeLikeValue, type ServiceNowClient } from '../servicenow/client.js';
 import { ServiceNowError } from '../utils/errors.js';
 import { requireWrite } from '../utils/permissions.js';
 
@@ -167,7 +167,7 @@ export async function executeVaToolCall(
 
     case 'list_va_topics_full': {
       let query = args.active !== false ? 'active=true' : '';
-      if (args.category) query = query ? `${query}^category.title=${args.category}` : `category.title=${args.category}`;
+      if (args.category) query = query ? `${query}^category.title=${sanitizeLikeValue(args.category)}` : `category.title=${sanitizeLikeValue(args.category)}`;
       if (args.query) query = query ? `${query}^${args.query}` : args.query;
       const resp = await client.queryRecords({
         table: 'sys_cs_topic',
@@ -182,7 +182,7 @@ export async function executeVaToolCall(
       if (!args.conversation_id) throw new ServiceNowError('conversation_id is required', 'INVALID_REQUEST');
       const resp = await client.queryRecords({
         table: 'sys_cs_conversation_message',
-        query: `conversation=${args.conversation_id}`,
+        query: `conversation=${sanitizeLikeValue(args.conversation_id)}`,
         limit: args.limit || 50,
         fields: 'sys_id,message,speaker,sys_created_on',
       });
@@ -191,8 +191,8 @@ export async function executeVaToolCall(
 
     case 'list_va_conversations': {
       let query = '';
-      if (args.topic_sys_id) query = `topic=${args.topic_sys_id}`;
-      if (args.user_sys_id) query = query ? `${query}^user=${args.user_sys_id}` : `user=${args.user_sys_id}`;
+      if (args.topic_sys_id) query = `topic=${sanitizeLikeValue(args.topic_sys_id)}`;
+      if (args.user_sys_id) query = query ? `${query}^user=${sanitizeLikeValue(args.user_sys_id)}` : `user=${sanitizeLikeValue(args.user_sys_id)}`;
       const resp = await client.queryRecords({
         table: 'sys_cs_conversation',
         query: query || undefined,

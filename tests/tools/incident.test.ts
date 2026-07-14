@@ -115,3 +115,49 @@ describe('executeIncidentToolCall – add_work_note', () => {
     expect(call[2]).toEqual({ work_notes: 'Working on it' });
   });
 });
+
+describe('executeIncidentToolCall – close_incident', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    process.env.WRITE_ENABLED = 'true';
+  });
+
+  it('is blocked without WRITE_ENABLED', async () => {
+    process.env.WRITE_ENABLED = 'false';
+    await expect(executeIncidentToolCall(mockClient, 'close_incident', { sys_id: 'inc1' })).rejects.toThrow('Write operations are disabled');
+  });
+
+  it('requires sys_id', async () => {
+    await expect(executeIncidentToolCall(mockClient, 'close_incident', {})).rejects.toThrow('sys_id is required');
+  });
+
+  it('sets state to 7', async () => {
+    (mockClient.updateRecord as ReturnType<typeof vi.fn>).mockResolvedValue({ sys_id: 'inc1' });
+    const result = await executeIncidentToolCall(mockClient, 'close_incident', { sys_id: 'inc1' });
+    expect(mockClient.updateRecord).toHaveBeenCalledWith('incident', 'inc1', { state: '7' });
+    expect(result.summary).toContain('Closed incident');
+  });
+});
+
+describe('executeIncidentToolCall – add_comment', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    process.env.WRITE_ENABLED = 'true';
+  });
+
+  it('is blocked without WRITE_ENABLED', async () => {
+    process.env.WRITE_ENABLED = 'false';
+    await expect(executeIncidentToolCall(mockClient, 'add_comment', { table: 'incident', sys_id: 'inc1', comment: 'x' }))
+      .rejects.toThrow('Write operations are disabled');
+  });
+
+  it('requires table, sys_id, and comment', async () => {
+    await expect(executeIncidentToolCall(mockClient, 'add_comment', {})).rejects.toThrow('table, sys_id, and comment are required');
+  });
+
+  it('updates the comments field', async () => {
+    (mockClient.updateRecord as ReturnType<typeof vi.fn>).mockResolvedValue({ sys_id: 'inc1' });
+    await executeIncidentToolCall(mockClient, 'add_comment', { table: 'incident', sys_id: 'inc1', comment: 'Customer update' });
+    expect(mockClient.updateRecord).toHaveBeenCalledWith('incident', 'inc1', { comments: 'Customer update' });
+  });
+});

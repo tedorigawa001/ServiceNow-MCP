@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { executeNowAssistToolCall, getNowAssistToolDefinitions } from '../../src/tools/now-assist.js';
 import type { ServiceNowClient } from '../../src/servicenow/client.js';
 
@@ -203,5 +203,26 @@ describe('executeNowAssistToolCall – get_pi_models', () => {
     const result = await executeNowAssistToolCall(mockClient, 'get_pi_models', {});
     expect(result.count).toBe(2);
     expect(mockClient.queryRecords).toHaveBeenCalledWith(expect.objectContaining({ table: 'ml_solution' }));
+  });
+});
+
+describe('executeNowAssistToolCall – generate_work_notes', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    process.env.NOW_ASSIST_ENABLED = 'true';
+  });
+  afterEach(() => { delete process.env.NOW_ASSIST_ENABLED; });
+
+  it('requires table and sys_id', async () => {
+    await expect(executeNowAssistToolCall(mockClient, 'generate_work_notes', {})).rejects.toThrow('table and sys_id are required');
+  });
+
+  it('invokes the work_notes_draft skill and returns the draft text', async () => {
+    (mockClient.callNowAssist as ReturnType<typeof vi.fn>).mockResolvedValue({ output: { text: 'Drafted note' } });
+    const result = await executeNowAssistToolCall(mockClient, 'generate_work_notes', { table: 'incident', sys_id: 'i1' });
+    expect(mockClient.callNowAssist).toHaveBeenCalledWith('/api/sn_assist/skill/invoke', {
+      skill: 'work_notes_draft', input: { table: 'incident', sys_id: 'i1', context: undefined },
+    });
+    expect(result.draft).toBe('Drafted note');
   });
 });
