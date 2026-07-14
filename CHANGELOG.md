@@ -6,6 +6,26 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 ---
 
+## [1.5.10] — 2026-07-14
+
+### Fixed
+
+Same unsanitized free-text/identifier-injection pattern fixed progressively since 1.5.5, found in six more modules and fixed by applying the codebase-wide `sanitizeLikeValue()` convention:
+
+- **`ml.ts`**: `ml_train_incident_classifier`/`ml_train_change_risk`'s `solution_name`, `ml_model_training_history`'s `model_sys_id`.
+- **`agile.ts`**: the whole module had zero sanitization — fixed across `list_stories` (`sprint`/`state`), `list_epics` (`project`/`state`), and `list_scrum_tasks` (`story_sys_id`/`assigned_to`).
+- **`devops.ts`**: `list_deployments`'s `pipeline_sys_id`/`environment`/`state`.
+- **`app-studio.ts`**: `list_scoped_apps`'s `query`, `get_scoped_app`'s `id`.
+- **`problem.ts`**: `get_problem`'s `number_or_sysid`.
+- **`task.ts`**: `get_task`'s `number_or_sysid`.
+- **`va.ts`**: the whole module had zero sanitization — fixed across `list_va_topics_full`'s `category`, `get_va_conversation`'s `conversation_id`, and `list_va_conversations`'s `topic_sys_id`/`user_sys_id`.
+
+### Added
+
+**Complete test coverage for all 476 tools in the project** — this closes out the coverage audit that started this session at 261/476 (55%) tools with zero test references. Final batch: `reporting.ts` (6 tools), `va.ts` (6 tools), `ml.ts` (5 tools), `security.ts` (5 tools, already correctly sanitized), `agile.ts` (4 tools), `devops.ts` (4 tools), `app-studio.ts` (3 tools), `incident.ts` (2 tools), `problem.ts` (2 tools), `task.ts` (2 tools), `now-assist.ts` (1 tool), and `updateset.ts` (1 tool, including a `RESULT_TOO_LARGE` regression test for `export_update_set`'s 2000-change cap). 1470 tests pass, `tsc` clean.
+
+---
+
 ## [1.5.9] — 2026-07-14
 
 ### Fixed
