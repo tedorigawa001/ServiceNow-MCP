@@ -6,6 +6,22 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 ---
 
+## [1.5.9] — 2026-07-14
+
+### Fixed
+
+- **`atf.ts`**: `get_atf_suite`'s name lookup was unsanitized.
+- **`deployment.ts`**: `find_artifact`'s `name`/`scope` were unsanitized.
+- **`itam.ts`**: the whole module had zero query sanitization — fixed across `list_assets` (`state`/`assigned_to`/`location`), `list_asset_contracts` (`asset_sys_id`), `track_asset_lifecycle` (`asset_id`, used in a two-clause OR query), and `get_license_optimization` (`software_name`).
+
+All three match the same unsanitized free-text/identifier-injection pattern fixed progressively since 1.5.5 (`integration.ts`) — fixed by applying the codebase-wide `sanitizeLikeValue()` convention.
+
+### Added
+
+- **Test coverage for 30 more previously-untested tools**: `atf.ts` (9 tools, new `tests/tools/atf.test.ts`), `deployment.ts` (7 tools), `itam.ts` (7 tools), and `mobile.ts` (7 tools, already safe — every filterable field is a sys_id reference, not free text).
+
+---
+
 ## [1.5.8] — 2026-07-14
 
 ### Fixed
