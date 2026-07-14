@@ -2,7 +2,7 @@
  * Customer Service Management (CSM) tools — cases, consumers, accounts, and contacts.
  * Read tools: Tier 0. Write tools: Tier 1 (WRITE_ENABLED=true).
  */
-import type { ServiceNowClient } from '../servicenow/client.js';
+import { sanitizeLikeValue, type ServiceNowClient } from '../servicenow/client.js';
 import { ServiceNowError } from '../utils/errors.js';
 import { requireWrite } from '../utils/permissions.js';
 import { PRIORITY } from './schema-helpers.js';
@@ -191,7 +191,7 @@ export async function executeCsmToolCall(
       if (/^[0-9a-f]{32}$/i.test(args.number_or_sysid)) {
         return await client.getRecord('sn_customerservice_case', args.number_or_sysid);
       }
-      const resp = await client.queryRecords({ table: 'sn_customerservice_case', query: `number=${args.number_or_sysid}`, limit: 1 });
+      const resp = await client.queryRecords({ table: 'sn_customerservice_case', query: `number=${sanitizeLikeValue(args.number_or_sysid)}`, limit: 1 });
       if (resp.count === 0) throw new ServiceNowError(`CSM case not found: ${args.number_or_sysid}`, 'NOT_FOUND');
       return resp.records[0];
     }
@@ -210,10 +210,10 @@ export async function executeCsmToolCall(
     }
     case 'list_csm_cases': {
       const parts: string[] = [];
-      if (args.account) parts.push(`account.name=${args.account}`);
-      if (args.contact) parts.push(`contact.name=${args.contact}`);
-      if (args.state) parts.push(`state=${args.state}`);
-      if (args.priority) parts.push(`priority=${args.priority}`);
+      if (args.account) parts.push(`account.name=${sanitizeLikeValue(args.account)}`);
+      if (args.contact) parts.push(`contact.name=${sanitizeLikeValue(args.contact)}`);
+      if (args.state) parts.push(`state=${sanitizeLikeValue(args.state)}`);
+      if (args.priority) parts.push(`priority=${sanitizeLikeValue(args.priority)}`);
       if (args.query) parts.push(args.query);
       const resp = await client.queryRecords({ table: 'sn_customerservice_case', query: parts.join('^') || '', limit: args.limit ?? 25 });
       return resp;
@@ -233,13 +233,13 @@ export async function executeCsmToolCall(
       if (/^[0-9a-f]{32}$/i.test(args.name_or_sysid)) {
         return await client.getRecord('customer_account', args.name_or_sysid);
       }
-      const resp = await client.queryRecords({ table: 'customer_account', query: `name=${args.name_or_sysid}`, limit: 1 });
+      const resp = await client.queryRecords({ table: 'customer_account', query: `name=${sanitizeLikeValue(args.name_or_sysid)}`, limit: 1 });
       if (resp.count === 0) throw new ServiceNowError(`Account not found: ${args.name_or_sysid}`, 'NOT_FOUND');
       return resp.records[0];
     }
     case 'list_csm_accounts': {
       const active = args.active !== false ? 'active=true' : '';
-      const q = args.query ? `nameCONTAINS${args.query}` : '';
+      const q = args.query ? `nameCONTAINS${sanitizeLikeValue(args.query)}` : '';
       const query = [active, q].filter(Boolean).join('^');
       return await client.queryRecords({ table: 'customer_account', query, limit: args.limit ?? 50 });
     }
@@ -248,9 +248,10 @@ export async function executeCsmToolCall(
       if (/^[0-9a-f]{32}$/i.test(args.name_or_sysid)) {
         return await client.getRecord('customer_contact', args.name_or_sysid);
       }
+      const safeName = sanitizeLikeValue(args.name_or_sysid);
       const resp = await client.queryRecords({
         table: 'customer_contact',
-        query: `nameCONTAINS${args.name_or_sysid}^ORemail=${args.name_or_sysid}`,
+        query: `nameCONTAINS${safeName}^ORemail=${safeName}`,
         limit: 1,
       });
       if (resp.count === 0) throw new ServiceNowError(`Contact not found: ${args.name_or_sysid}`, 'NOT_FOUND');
@@ -258,16 +259,16 @@ export async function executeCsmToolCall(
     }
     case 'list_csm_contacts': {
       const parts: string[] = [];
-      if (args.account_sysid) parts.push(`account=${args.account_sysid}`);
-      if (args.query) parts.push(`nameCONTAINS${args.query}^ORemail=${args.query}`);
+      if (args.account_sysid) parts.push(`account=${sanitizeLikeValue(args.account_sysid)}`);
+      if (args.query) { const value = sanitizeLikeValue(args.query); parts.push(`nameCONTAINS${value}^ORemail=${value}`); }
       return await client.queryRecords({ table: 'customer_contact', query: parts.join('^') || '', limit: args.limit ?? 25 });
     }
     case 'get_csm_case_sla': {
       if (!args.case_sysid) throw new ServiceNowError('case_sysid is required', 'INVALID_REQUEST');
-      return await client.queryRecords({ table: 'task_sla', query: `task=${args.case_sysid}`, limit: 10 });
+      return await client.queryRecords({ table: 'task_sla', query: `task=${sanitizeLikeValue(args.case_sysid)}`, limit: 10 });
     }
     case 'list_csm_products': {
-      const q = args.query ? `nameCONTAINS${args.query}` : '';
+      const q = args.query ? `nameCONTAINS${sanitizeLikeValue(args.query)}` : '';
       return await client.queryRecords({ table: 'cmdb_ci_service', query: q, limit: args.limit ?? 50 });
     }
     default:
