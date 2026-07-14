@@ -417,6 +417,221 @@ describe('executeCoreToolCall – run_discovery_scan', () => {
   });
 });
 
+describe('executeCoreToolCall – get_table_schema', () => {
+  beforeEach(() => vi.clearAllMocks());
+
+  it('requires table', async () => {
+    await expect(executeCoreToolCall(mockClient, 'get_table_schema', {})).rejects.toThrow('Table name is required');
+  });
+
+  it('delegates to client.getTableSchema', async () => {
+    (mockClient.getTableSchema as ReturnType<typeof vi.fn>).mockResolvedValue({ fields: [] });
+    const result = await executeCoreToolCall(mockClient, 'get_table_schema', { table: 'incident' });
+    expect(mockClient.getTableSchema).toHaveBeenCalledWith('incident');
+    expect(result).toEqual({ fields: [] });
+  });
+});
+
+describe('executeCoreToolCall – get_user', () => {
+  beforeEach(() => vi.clearAllMocks());
+
+  it('requires user_identifier', async () => {
+    await expect(executeCoreToolCall(mockClient, 'get_user', {})).rejects.toThrow('user_identifier is required');
+  });
+
+  it('delegates to client.getUser', async () => {
+    (mockClient.getUser as ReturnType<typeof vi.fn>).mockResolvedValue({ user_name: 'jdoe' });
+    const result = await executeCoreToolCall(mockClient, 'get_user', { user_identifier: 'jdoe@example.com' });
+    expect(mockClient.getUser).toHaveBeenCalledWith('jdoe@example.com');
+    expect(result.user_name).toBe('jdoe');
+  });
+});
+
+describe('executeCoreToolCall – get_group', () => {
+  beforeEach(() => vi.clearAllMocks());
+
+  it('requires group_identifier', async () => {
+    await expect(executeCoreToolCall(mockClient, 'get_group', {})).rejects.toThrow('group_identifier is required');
+  });
+
+  it('delegates to client.getGroup', async () => {
+    (mockClient.getGroup as ReturnType<typeof vi.fn>).mockResolvedValue({ name: 'IT Ops' });
+    const result = await executeCoreToolCall(mockClient, 'get_group', { group_identifier: 'IT Ops' });
+    expect(mockClient.getGroup).toHaveBeenCalledWith('IT Ops');
+    expect(result.name).toBe('IT Ops');
+  });
+});
+
+describe('executeCoreToolCall – search_cmdb_ci', () => {
+  beforeEach(() => vi.clearAllMocks());
+
+  it('delegates to client.searchCmdbCi with query and limit', async () => {
+    (mockClient.searchCmdbCi as ReturnType<typeof vi.fn>).mockResolvedValue({ count: 1, records: [] });
+    await executeCoreToolCall(mockClient, 'search_cmdb_ci', { query: 'sys_class_name=cmdb_ci_server', limit: 5 });
+    expect(mockClient.searchCmdbCi).toHaveBeenCalledWith('sys_class_name=cmdb_ci_server', 5);
+  });
+});
+
+describe('executeCoreToolCall – get_cmdb_ci', () => {
+  beforeEach(() => vi.clearAllMocks());
+
+  it('requires ci_sys_id', async () => {
+    await expect(executeCoreToolCall(mockClient, 'get_cmdb_ci', {})).rejects.toThrow('ci_sys_id is required');
+  });
+
+  it('delegates to client.getCmdbCi', async () => {
+    (mockClient.getCmdbCi as ReturnType<typeof vi.fn>).mockResolvedValue({ sys_id: 'ci1', name: 'srv01' });
+    const result = await executeCoreToolCall(mockClient, 'get_cmdb_ci', { ci_sys_id: 'ci1' });
+    expect(mockClient.getCmdbCi).toHaveBeenCalledWith('ci1', undefined);
+    expect(result.name).toBe('srv01');
+  });
+});
+
+describe('executeCoreToolCall – list_relationships', () => {
+  beforeEach(() => vi.clearAllMocks());
+
+  it('requires ci_sys_id', async () => {
+    await expect(executeCoreToolCall(mockClient, 'list_relationships', {})).rejects.toThrow('ci_sys_id is required');
+  });
+
+  it('delegates to client.listRelationships', async () => {
+    (mockClient.listRelationships as ReturnType<typeof vi.fn>).mockResolvedValue({ parents: [], children: [] });
+    const result = await executeCoreToolCall(mockClient, 'list_relationships', { ci_sys_id: 'ci1' });
+    expect(mockClient.listRelationships).toHaveBeenCalledWith('ci1');
+    expect(result).toEqual({ parents: [], children: [] });
+  });
+});
+
+describe('executeCoreToolCall – list_discovery_schedules', () => {
+  beforeEach(() => vi.clearAllMocks());
+
+  it('delegates to client.listDiscoverySchedules with active_only', async () => {
+    (mockClient.listDiscoverySchedules as ReturnType<typeof vi.fn>).mockResolvedValue([]);
+    await executeCoreToolCall(mockClient, 'list_discovery_schedules', { active_only: true });
+    expect(mockClient.listDiscoverySchedules).toHaveBeenCalledWith(true);
+  });
+});
+
+describe('executeCoreToolCall – list_mid_servers', () => {
+  beforeEach(() => vi.clearAllMocks());
+
+  it('delegates to client.listMidServers with active_only', async () => {
+    (mockClient.listMidServers as ReturnType<typeof vi.fn>).mockResolvedValue([]);
+    await executeCoreToolCall(mockClient, 'list_mid_servers', { active_only: false });
+    expect(mockClient.listMidServers).toHaveBeenCalledWith(false);
+  });
+});
+
+describe('executeCoreToolCall – list_active_events', () => {
+  beforeEach(() => vi.clearAllMocks());
+
+  it('delegates to client.listActiveEvents with query and limit', async () => {
+    (mockClient.listActiveEvents as ReturnType<typeof vi.fn>).mockResolvedValue([]);
+    await executeCoreToolCall(mockClient, 'list_active_events', { query: 'severity=1', limit: 20 });
+    expect(mockClient.listActiveEvents).toHaveBeenCalledWith('severity=1', 20);
+  });
+});
+
+describe('executeCoreToolCall – cmdb_health_dashboard', () => {
+  beforeEach(() => vi.clearAllMocks());
+
+  it('delegates to client.cmdbHealthDashboard', async () => {
+    (mockClient.cmdbHealthDashboard as ReturnType<typeof vi.fn>).mockResolvedValue({ completeness_pct: 87 });
+    const result = await executeCoreToolCall(mockClient, 'cmdb_health_dashboard', {});
+    expect(result.completeness_pct).toBe(87);
+  });
+});
+
+describe('executeCoreToolCall – service_mapping_summary', () => {
+  beforeEach(() => vi.clearAllMocks());
+
+  it('requires service_sys_id', async () => {
+    await expect(executeCoreToolCall(mockClient, 'service_mapping_summary', {})).rejects.toThrow('service_sys_id is required');
+  });
+
+  it('delegates to client.serviceMappingSummary', async () => {
+    (mockClient.serviceMappingSummary as ReturnType<typeof vi.fn>).mockResolvedValue({ dependencies: [] });
+    const result = await executeCoreToolCall(mockClient, 'service_mapping_summary', { service_sys_id: 'svc1' });
+    expect(mockClient.serviceMappingSummary).toHaveBeenCalledWith('svc1');
+    expect(result).toEqual({ dependencies: [] });
+  });
+});
+
+describe('executeCoreToolCall – natural_language_search', () => {
+  beforeEach(() => vi.clearAllMocks());
+
+  it('delegates to client.naturalLanguageSearch', async () => {
+    (mockClient.naturalLanguageSearch as ReturnType<typeof vi.fn>).mockResolvedValue({ results: [] });
+    await executeCoreToolCall(mockClient, 'natural_language_search', { query: 'open incidents assigned to me', limit: 10 });
+    expect(mockClient.naturalLanguageSearch).toHaveBeenCalledWith('open incidents assigned to me', 10);
+  });
+});
+
+describe('executeCoreToolCall – natural_language_update', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    process.env.WRITE_ENABLED = 'true';
+  });
+  afterEach(() => { delete process.env.WRITE_ENABLED; });
+
+  it('is blocked without WRITE_ENABLED', async () => {
+    delete process.env.WRITE_ENABLED;
+    await expect(
+      executeCoreToolCall(mockClient, 'natural_language_update', { instruction: 'close it', table: 'incident' })
+    ).rejects.toThrow('Write operations are disabled');
+  });
+
+  it('delegates to client.naturalLanguageUpdate when write is enabled', async () => {
+    (mockClient.naturalLanguageUpdate as ReturnType<typeof vi.fn>).mockResolvedValue({ action: 'updated' });
+    const result = await executeCoreToolCall(mockClient, 'natural_language_update', { instruction: 'close it', table: 'incident' });
+    expect(mockClient.naturalLanguageUpdate).toHaveBeenCalledWith('close it', 'incident');
+    expect(result.action).toBe('updated');
+  });
+});
+
+describe('executeCoreToolCall – cmdb_impact_analysis', () => {
+  beforeEach(() => vi.clearAllMocks());
+
+  it('requires ci_sys_id', async () => {
+    await expect(executeCoreToolCall(mockClient, 'cmdb_impact_analysis', {})).rejects.toThrow('ci_sys_id is required');
+  });
+
+  it('rejects a ci_sys_id that is not a 32-character hex string', async () => {
+    await expect(
+      executeCoreToolCall(mockClient, 'cmdb_impact_analysis', { ci_sys_id: 'not-a-real-sys-id' })
+    ).rejects.toThrow('must be a 32-character hex string');
+  });
+
+  it('traverses downstream relationships up to the given depth', async () => {
+    const rootId = 'a'.repeat(32);
+    const childId = 'b'.repeat(32);
+    const qr = mockClient.queryRecords as ReturnType<typeof vi.fn>;
+    qr.mockImplementation(async ({ query }: { query: string }) => {
+      if (query === `parent=${rootId}`) {
+        return { count: 1, records: [{ sys_id: 'rel1', child: childId, type: 'Runs on::Runs', parent: rootId }] };
+      }
+      return { count: 0, records: [] };
+    });
+
+    const result = await executeCoreToolCall(mockClient, 'cmdb_impact_analysis', { ci_sys_id: rootId, depth: 2 });
+
+    expect(result.total_impacted).toBe(1);
+    expect(result.impact_analysis[0].ci_sys_id).toBe(rootId);
+    expect(result.impact_analysis[0].downstream).toHaveLength(1);
+  });
+
+  it('does not revisit an already-visited CI (cycle guard)', async () => {
+    const rootId = 'a'.repeat(32);
+    const qr = mockClient.queryRecords as ReturnType<typeof vi.fn>;
+    // root points back to itself
+    qr.mockResolvedValue({ count: 1, records: [{ sys_id: 'rel1', child: rootId, type: 'Runs on::Runs', parent: rootId }] });
+
+    const result = await executeCoreToolCall(mockClient, 'cmdb_impact_analysis', { ci_sys_id: rootId, depth: 3 });
+
+    expect(result.total_impacted).toBe(0);
+  });
+});
+
 describe('executeCoreToolCall – unknown tool', () => {
   it('returns null for unknown tool names', async () => {
     const result = await executeCoreToolCall(mockClient, 'nonexistent_tool', {});
