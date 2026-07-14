@@ -56,6 +56,12 @@ describe('ml_virtual_agent_nlu', () => {
     expect(agg().mock.calls[0][3]).toContain('topic=t1');
   });
 
+  it('strips ^ from topic_sys_id so it cannot inject extra encoded-query clauses', async () => {
+    agg().mockResolvedValue({ stats: { count: '0' } });
+    await executeMlToolCall(mockClient, 'ml_virtual_agent_nlu', { topic_sys_id: 't1^ORactive=true' });
+    expect(agg().mock.calls[0][3]).toContain('topic=t1ORactive=true');
+  });
+
   it('reports N/A completion_rate when total is 0', async () => {
     agg().mockResolvedValue({ stats: { count: '0' } });
     const result = await executeMlToolCall(mockClient, 'ml_virtual_agent_nlu', {});
@@ -117,6 +123,12 @@ describe('ml_forecast_incidents', () => {
     expect(result.avg_daily_rate).toBe(100);
     expect(result.forecast_total).toBe(700);
   });
+
+  it('strips ^ from category and priority so they cannot inject extra encoded-query clauses', async () => {
+    agg().mockResolvedValue({ stats: { count: '0' } });
+    await executeMlToolCall(mockClient, 'ml_forecast_incidents', { category: 'hardware^ORactive=true', priority: '1^ORstate=1' });
+    expect(agg()).toHaveBeenCalledWith('incident', undefined, 'COUNT', expect.stringContaining('category=hardwareORactive=true^priority=1ORstate=1'));
+  });
 });
 
 describe('ml_predict_change_risk', () => {
@@ -140,6 +152,13 @@ describe('ml_predict_change_risk', () => {
     expect(result.sampled_changes).toBe(2);
     expect(result.note).toContain('sample of 2 of 400');
     expect(result.high_risk_rate).toBe('50%');
+  });
+
+  it('strips ^ from type and category so they cannot inject extra encoded-query clauses', async () => {
+    qr().mockResolvedValue({ count: 0, records: [] });
+    agg().mockResolvedValue({ stats: { count: '0' } });
+    await executeMlToolCall(mockClient, 'ml_predict_change_risk', { type: 'normal^ORactive=true', category: 'hardware^ORstate=1' });
+    expect(qr()).toHaveBeenCalledWith(expect.objectContaining({ query: 'type=normalORactive=true^category=hardwareORstate=1^stateNOT INcancelled' }));
   });
 
   it('returns the change record directly when change_sys_id is given', async () => {

@@ -149,7 +149,7 @@ export async function executeMlToolCall(
         const change = await client.getRecord('change_request', args.change_sys_id);
         return { change: args.change_sys_id, risk: change.risk || 'unknown', risk_value: change.risk_value, impact: change.impact, conflict_status: change.conflict_status };
       }
-      const changeQuery = `type=${args.type || 'normal'}^category=${args.category || ''}^stateNOT INcancelled`;
+      const changeQuery = `type=${sanitizeLikeValue(args.type || 'normal')}^category=${sanitizeLikeValue(args.category || '')}^stateNOT INcancelled`;
       // The rate calculation genuinely needs per-record `risk` values, so a bounded
       // sample (limit:100) is a reasonable tradeoff — but the field name must be
       // honest about that, and the *real* total match count comes from an aggregate
@@ -208,8 +208,8 @@ export async function executeMlToolCall(
       const daysAhead = args.days_ahead || 7;
       const since = new Date(Date.now() - lookback * 86400000).toISOString().slice(0, 19).replace('T', ' ');
       let query = `sys_created_on>=${since}`;
-      if (args.category) query += `^category=${args.category}`;
-      if (args.priority) query += `^priority=${args.priority}`;
+      if (args.category) query += `^category=${sanitizeLikeValue(args.category)}`;
+      if (args.priority) query += `^priority=${sanitizeLikeValue(args.priority)}`;
       // Only the count is used (no per-record analysis), so an ungrouped aggregate
       // query gives the exact total instead of a queryRecords(limit:5000) fetch that
       // silently undercounts (and wastes bandwidth) for any period with more than
@@ -266,7 +266,7 @@ export async function executeMlToolCall(
       const days = args.days || 30;
       const since = new Date(Date.now() - days * 86400000).toISOString().slice(0, 19).replace('T', ' ');
       let query = `sys_created_on>=${since}`;
-      if (args.topic_sys_id) query += `^topic=${args.topic_sys_id}`;
+      if (args.topic_sys_id) query += `^topic=${sanitizeLikeValue(args.topic_sys_id)}`;
       // Use ungrouped aggregate queries for the counts instead of a capped
       // queryRecords(limit:500) fetch — records.length silently truncates at the
       // page size, undercounting total_conversations/completed for any period with
