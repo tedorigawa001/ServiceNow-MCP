@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { executePerformanceToolCall, getPerformanceToolDefinitions } from '../../src/tools/performance.js';
 import type { ServiceNowClient } from '../../src/servicenow/client.js';
 
@@ -7,9 +7,14 @@ const mockClient = {
   getRecord: vi.fn(),
   getXmlStats: vi.fn(),
   callApiGet: vi.fn(),
+  createRecord: vi.fn(),
   updateRecord: vi.fn(),
   runAggregateQuery: vi.fn(),
 } as unknown as ServiceNowClient;
+
+const qr = () => mockClient.queryRecords as ReturnType<typeof vi.fn>;
+const gr = () => mockClient.getRecord as ReturnType<typeof vi.fn>;
+const cr = () => mockClient.createRecord as ReturnType<typeof vi.fn>;
 
 const SAMPLE_XML =
   '<?xml version="1.0" encoding="UTF-8"?>' +
@@ -303,5 +308,237 @@ describe('compare_record_counts', () => {
 
   it('requires a non-empty tables array', async () => {
     await expect(executePerformanceToolCall(mockClient, 'compare_record_counts', { tables: [] })).rejects.toThrow('tables must be a non-empty array');
+  });
+});
+
+describe('getPerformanceToolDefinitions', () => {
+  it('returns exactly 17 performance tool definitions', () => {
+    expect(getPerformanceToolDefinitions().length).toBe(17);
+  });
+
+  it('all tools have name, description and inputSchema', () => {
+    getPerformanceToolDefinitions().forEach(t => {
+      expect(t.name).toBeTruthy();
+      expect(t.description).toBeTruthy();
+      expect(t.inputSchema).toBeTruthy();
+    });
+  });
+});
+
+describe('executePerformanceToolCall – unknown tool', () => {
+  it('returns null', async () => {
+    expect(await executePerformanceToolCall(mockClient, 'not_a_tool', {})).toBeNull();
+  });
+});
+
+describe('get_pa_indicator', () => {
+  beforeEach(() => vi.clearAllMocks());
+
+  it('requires sys_id_or_name', async () => {
+    await expect(executePerformanceToolCall(mockClient, 'get_pa_indicator', {})).rejects.toThrow('sys_id_or_name is required');
+  });
+
+  it('fetches directly by sys_id when hex', async () => {
+    gr().mockResolvedValue({ sys_id: 'a'.repeat(32), name: 'Open Incidents' });
+    const result = await executePerformanceToolCall(mockClient, 'get_pa_indicator', { sys_id_or_name: 'a'.repeat(32) });
+    expect(gr()).toHaveBeenCalledWith('pa_indicators', 'a'.repeat(32));
+    expect(result.name).toBe('Open Incidents');
+  });
+
+  it('resolves by name and throws NOT_FOUND when missing', async () => {
+    qr().mockResolvedValue({ count: 0, records: [] });
+    await expect(executePerformanceToolCall(mockClient, 'get_pa_indicator', { sys_id_or_name: 'Nope' }))
+      .rejects.toMatchObject({ code: 'NOT_FOUND' });
+  });
+
+  it('strips ^ from the name so it cannot inject extra encoded-query clauses', async () => {
+    qr().mockResolvedValue({ count: 1, records: [{ sys_id: 'i1', name: 'Open Incidents' }] });
+    await executePerformanceToolCall(mockClient, 'get_pa_indicator', { sys_id_or_name: 'Open Incidents^ORactive=true' });
+    expect(qr()).toHaveBeenCalledWith(expect.objectContaining({ query: 'nameCONTAINSOpen IncidentsORactive=true' }));
+  });
+});
+
+describe('get_pa_scorecard', () => {
+  beforeEach(() => vi.clearAllMocks());
+
+  it('requires indicator_sys_id', async () => {
+    await expect(executePerformanceToolCall(mockClient, 'get_pa_scorecard', {})).rejects.toThrow('indicator_sys_id is required');
+  });
+
+  it('derives trend from the two most recent scores', async () => {
+    qr().mockResolvedValue({
+      count: 2,
+      records: [
+        { value: '10', date: '2026-07-14' },
+        { value: '5', date: '2026-07-13' },
+      ],
+    });
+    gr().mockResolvedValue({ sys_id: 'i1', name: 'Open Incidents', unit: 'count', direction: 'minimize' });
+    const result = await executePerformanceToolCall(mockClient, 'get_pa_scorecard', { indicator_sys_id: 'i1' });
+    expect(result.current_value).toBe('10');
+    expect(result.previous_value).toBe('5');
+    expect(result.trend).toBe('up');
+    expect(result.scores).toBeUndefined();
+  });
+
+  it('reports stable trend and N/A values with no score history', async () => {
+    qr().mockResolvedValue({ count: 0, records: [] });
+    gr().mockResolvedValue({ sys_id: 'i1', name: 'Open Incidents' });
+    const result = await executePerformanceToolCall(mockClient, 'get_pa_scorecard', { indicator_sys_id: 'i1' });
+    expect(result.trend).toBe('stable');
+    expect(result.current_value).toBe('N/A');
+  });
+
+  it('includes the raw score records when include_scores is true', async () => {
+    qr().mockResolvedValue({ count: 1, records: [{ value: '10', date: '2026-07-14' }] });
+    gr().mockResolvedValue({ sys_id: 'i1', name: 'Open Incidents' });
+    const result = await executePerformanceToolCall(mockClient, 'get_pa_scorecard', { indicator_sys_id: 'i1', include_scores: true });
+    expect(result.scores).toHaveLength(1);
+  });
+});
+
+describe('get_pa_time_series', () => {
+  beforeEach(() => vi.clearAllMocks());
+
+  it('requires indicator_sys_id', async () => {
+    await expect(executePerformanceToolCall(mockClient, 'get_pa_time_series', {})).rejects.toThrow('indicator_sys_id is required');
+  });
+
+  it('filters by date range', async () => {
+    qr().mockResolvedValue({ count: 0, records: [] });
+    await executePerformanceToolCall(mockClient, 'get_pa_time_series', { indicator_sys_id: 'i1', start_date: '2026-06-01', end_date: '2026-07-01' });
+    expect(qr()).toHaveBeenCalledWith(expect.objectContaining({
+      table: 'pa_scores',
+      query: 'indicator=i1^date>=2026-06-01^date<=2026-07-01',
+    }));
+  });
+});
+
+describe('list_pa_breakdowns', () => {
+  beforeEach(() => vi.clearAllMocks());
+
+  it('searches by name', async () => {
+    qr().mockResolvedValue({ count: 0, records: [] });
+    await executePerformanceToolCall(mockClient, 'list_pa_breakdowns', { query: 'group' });
+    expect(qr()).toHaveBeenCalledWith(expect.objectContaining({ table: 'pa_breakdowns', query: 'nameCONTAINSgroup' }));
+  });
+});
+
+describe('list_pa_dashboards', () => {
+  beforeEach(() => vi.clearAllMocks());
+
+  it('searches by name', async () => {
+    qr().mockResolvedValue({ count: 0, records: [] });
+    await executePerformanceToolCall(mockClient, 'list_pa_dashboards', { query: 'ops' });
+    expect(qr()).toHaveBeenCalledWith(expect.objectContaining({ table: 'pa_dashboards', query: 'nameCONTAINSops' }));
+  });
+});
+
+describe('get_pa_dashboard', () => {
+  beforeEach(() => vi.clearAllMocks());
+
+  it('requires sys_id_or_name', async () => {
+    await expect(executePerformanceToolCall(mockClient, 'get_pa_dashboard', {})).rejects.toThrow('sys_id_or_name is required');
+  });
+
+  it('fetches directly by sys_id when hex', async () => {
+    gr().mockResolvedValue({ sys_id: 'a'.repeat(32), name: 'Ops Dashboard' });
+    const result = await executePerformanceToolCall(mockClient, 'get_pa_dashboard', { sys_id_or_name: 'a'.repeat(32) });
+    expect(gr()).toHaveBeenCalledWith('pa_dashboards', 'a'.repeat(32));
+    expect(result.name).toBe('Ops Dashboard');
+  });
+
+  it('throws NOT_FOUND when name lookup misses', async () => {
+    qr().mockResolvedValue({ count: 0, records: [] });
+    await expect(executePerformanceToolCall(mockClient, 'get_pa_dashboard', { sys_id_or_name: 'Nope' }))
+      .rejects.toMatchObject({ code: 'NOT_FOUND' });
+  });
+});
+
+describe('list_homepages', () => {
+  beforeEach(() => vi.clearAllMocks());
+
+  it('searches by title', async () => {
+    qr().mockResolvedValue({ count: 0, records: [] });
+    await executePerformanceToolCall(mockClient, 'list_homepages', { query: 'agent' });
+    expect(qr()).toHaveBeenCalledWith(expect.objectContaining({ table: 'sys_ui_hp', query: 'titleCONTAINSagent' }));
+  });
+});
+
+describe('list_pa_jobs', () => {
+  beforeEach(() => vi.clearAllMocks());
+
+  it('defaults to active=true and applies query filter', async () => {
+    qr().mockResolvedValue({ count: 0, records: [] });
+    await executePerformanceToolCall(mockClient, 'list_pa_jobs', { query: 'nightly' });
+    expect(qr()).toHaveBeenCalledWith(expect.objectContaining({ table: 'pa_job', query: 'active=true^nameCONTAINSnightly' }));
+  });
+});
+
+describe('get_pa_job', () => {
+  beforeEach(() => vi.clearAllMocks());
+
+  it('requires sys_id', async () => {
+    await expect(executePerformanceToolCall(mockClient, 'get_pa_job', {})).rejects.toThrow('sys_id is required');
+  });
+
+  it('delegates to getRecord', async () => {
+    gr().mockResolvedValue({ sys_id: 'j1', name: 'Nightly Collection' });
+    const result = await executePerformanceToolCall(mockClient, 'get_pa_job', { sys_id: 'j1' });
+    expect(gr()).toHaveBeenCalledWith('pa_job', 'j1');
+    expect(result.name).toBe('Nightly Collection');
+  });
+});
+
+describe('create_dashboard', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    process.env.WRITE_ENABLED = 'true';
+  });
+  afterEach(() => { delete process.env.WRITE_ENABLED; });
+
+  it('is blocked without WRITE_ENABLED', async () => {
+    delete process.env.WRITE_ENABLED;
+    await expect(executePerformanceToolCall(mockClient, 'create_dashboard', { name: 'X' })).rejects.toThrow('Write operations are disabled');
+  });
+
+  it('requires name', async () => {
+    await expect(executePerformanceToolCall(mockClient, 'create_dashboard', {})).rejects.toThrow('name is required');
+  });
+
+  it('creates the dashboard active by default', async () => {
+    cr().mockResolvedValue({ sys_id: 'd1' });
+    const result = await executePerformanceToolCall(mockClient, 'create_dashboard', { name: 'Ops Dashboard', roles: 'itil' });
+    expect(cr()).toHaveBeenCalledWith('pa_dashboards', expect.objectContaining({ name: 'Ops Dashboard', active: true, roles: 'itil' }));
+    expect(result.summary).toContain('Ops Dashboard');
+  });
+});
+
+describe('check_table_completeness', () => {
+  beforeEach(() => vi.clearAllMocks());
+
+  it('requires table and fields', async () => {
+    await expect(executePerformanceToolCall(mockClient, 'check_table_completeness', {})).rejects.toThrow('table and fields are required');
+  });
+
+  it('computes per-field completeness percentages from the sample', async () => {
+    qr().mockResolvedValue({
+      count: 4,
+      records: [
+        { priority: '1', assigned_to: 'u1' },
+        { priority: '2', assigned_to: '' },
+        { priority: '', assigned_to: 'u2' },
+        { priority: '3', assigned_to: null },
+      ],
+    });
+    const result = await executePerformanceToolCall(mockClient, 'check_table_completeness', { table: 'incident', fields: 'priority,assigned_to' });
+    expect(result.field_completeness.priority).toEqual({ non_empty: 3, total: 4, completeness_pct: '75.0%' });
+    expect(result.field_completeness.assigned_to).toEqual({ non_empty: 2, total: 4, completeness_pct: '50.0%' });
+  });
+
+  it('notes when the sample is smaller than requested', async () => {
+    qr().mockResolvedValue({ count: 2, records: [{ priority: '1' }, { priority: '2' }] });
+    const result = await executePerformanceToolCall(mockClient, 'check_table_completeness', { table: 'incident', fields: 'priority', sample_size: 50 });
+    expect(result.note).toContain('Only 2 records found');
   });
 });

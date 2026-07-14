@@ -246,8 +246,8 @@ export async function executeSysPropertiesToolCall(
 
     case 'list_system_properties': {
       let query = '';
-      if (args.category) query = `category=${args.category}`;
-      if (args.type) query = query ? `${query}^type=${args.type}` : `type=${args.type}`;
+      if (args.category) query = `category=${sanitizePropertyName(args.category)}`;
+      if (args.type) query = query ? `${query}^type=${sanitizePropertyName(args.type)}` : `type=${sanitizePropertyName(args.type)}`;
       if (args.query) query = query ? `${query}^${args.query}` : args.query;
       const resp = await client.queryRecords({
         table: 'sys_properties',
@@ -327,7 +327,7 @@ export async function executeSysPropertiesToolCall(
 
     case 'export_properties': {
       let query = '';
-      if (args.category) query = `category=${args.category}`;
+      if (args.category) query = `category=${sanitizePropertyName(args.category)}`;
       if (args.query) query = query ? `${query}^${args.query}` : args.query;
       const resp = await client.queryRecords({
         table: 'sys_properties',
