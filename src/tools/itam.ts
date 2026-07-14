@@ -7,7 +7,7 @@
  *
  * ServiceNow tables: alm_asset, alm_hardware, alm_license, ast_contract
  */
-import type { ServiceNowClient } from '../servicenow/client.js';
+import { sanitizeLikeValue, type ServiceNowClient } from '../servicenow/client.js';
 import { ServiceNowError } from '../utils/errors.js';
 import { requireWrite } from '../utils/permissions.js';
 
@@ -173,9 +173,9 @@ export async function executeItamToolCall(
   switch (name) {
     case 'list_assets': {
       let query = '';
-      if (args.state) query = `install_status=${args.state}`;
-      if (args.assigned_to) query = query ? `${query}^assigned_to=${args.assigned_to}` : `assigned_to=${args.assigned_to}`;
-      if (args.location) query = query ? `${query}^locationLIKE${args.location}` : `locationLIKE${args.location}`;
+      if (args.state) query = `install_status=${sanitizeLikeValue(args.state)}`;
+      if (args.assigned_to) query = query ? `${query}^assigned_to=${sanitizeLikeValue(args.assigned_to)}` : `assigned_to=${sanitizeLikeValue(args.assigned_to)}`;
+      if (args.location) query = query ? `${query}^locationLIKE${sanitizeLikeValue(args.location)}` : `locationLIKE${sanitizeLikeValue(args.location)}`;
       if (args.query) query = query ? `${query}^${args.query}` : args.query;
       const table = args.asset_class || 'alm_asset';
       if (!ASSET_TABLES.has(table)) {
@@ -262,7 +262,7 @@ export async function executeItamToolCall(
 
     case 'list_asset_contracts': {
       let query = args.active !== false ? 'active=true' : '';
-      if (args.asset_sys_id) query = query ? `${query}^asset=${args.asset_sys_id}` : `asset=${args.asset_sys_id}`;
+      if (args.asset_sys_id) query = query ? `${query}^asset=${sanitizeLikeValue(args.asset_sys_id)}` : `asset=${sanitizeLikeValue(args.asset_sys_id)}`;
       const resp = await client.queryRecords({
         table: 'ast_contract',
         query: query || undefined,
@@ -281,7 +281,8 @@ export async function executeItamToolCall(
       };
       let sysId = args.asset_id;
       if (!/^[0-9a-f]{32}$/i.test(args.asset_id)) {
-        const resp = await client.queryRecords({ table: 'alm_asset', query: `asset_tag=${args.asset_id}^ORsys_id=${args.asset_id}`, limit: 1 });
+        const safeId = sanitizeLikeValue(args.asset_id);
+        const resp = await client.queryRecords({ table: 'alm_asset', query: `asset_tag=${safeId}^ORsys_id=${safeId}`, limit: 1 });
         if (resp.count === 0) throw new ServiceNowError(`Asset not found: ${args.asset_id}`, 'NOT_FOUND');
         sysId = resp.records[0].sys_id;
       }
@@ -295,7 +296,7 @@ export async function executeItamToolCall(
     case 'get_license_optimization': {
       const threshold = args.threshold_pct || 80;
       let query = '';
-      if (args.software_name) query = `display_nameLIKE${args.software_name}`;
+      if (args.software_name) query = `display_nameLIKE${sanitizeLikeValue(args.software_name)}`;
       const [resp, totalResp] = await Promise.all([
         client.queryRecords({
           table: 'alm_license',

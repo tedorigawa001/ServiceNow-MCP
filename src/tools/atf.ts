@@ -3,7 +3,7 @@
  * Read tools: Tier 0. Execution tools require ATF_ENABLED=true.
  * Latest release added: Failure Insight (get_atf_failure_insight) showing metadata diffs.
  */
-import type { ServiceNowClient } from '../servicenow/client.js';
+import { sanitizeLikeValue, type ServiceNowClient } from '../servicenow/client.js';
 import { ServiceNowError } from '../utils/errors.js';
 import { requireAtf } from '../utils/permissions.js';
 
@@ -133,7 +133,7 @@ export async function executeAtfToolCall(
       if (/^[0-9a-f]{32}$/i.test(args.sys_id_or_name)) {
         return await client.getRecord('sys_atf_test_suite', args.sys_id_or_name);
       }
-      const resp = await client.queryRecords({ table: 'sys_atf_test_suite', query: `name=${args.sys_id_or_name}`, limit: 1 });
+      const resp = await client.queryRecords({ table: 'sys_atf_test_suite', query: `name=${sanitizeLikeValue(args.sys_id_or_name)}`, limit: 1 });
       if (resp.count === 0) throw new ServiceNowError(`Test suite not found: ${args.sys_id_or_name}`, 'NOT_FOUND');
       return resp.records[0];
     }
