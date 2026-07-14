@@ -15,8 +15,18 @@ const gr = () => mockClient.getRecord as ReturnType<typeof vi.fn>;
 const cr = () => mockClient.createRecord as ReturnType<typeof vi.fn>;
 
 describe('getScriptToolDefinitions', () => {
-  it('returns scripting tool definitions', () => {
-    expect(getScriptToolDefinitions().length).toBeGreaterThan(0);
+  it('returns exactly 27 scripting tool definitions', () => {
+    // Pinning the count catches accidental deletions/duplicate registrations
+    // that `length > 0` would silently miss.
+    expect(getScriptToolDefinitions().length).toBe(27);
+  });
+
+  it('all tools have name, description and inputSchema', () => {
+    getScriptToolDefinitions().forEach(t => {
+      expect(t.name).toBeTruthy();
+      expect(t.description).toBeTruthy();
+      expect(t.inputSchema).toBeTruthy();
+    });
   });
 });
 
