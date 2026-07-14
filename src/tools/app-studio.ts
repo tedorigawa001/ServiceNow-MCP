@@ -3,7 +3,7 @@
  * Read tools: Tier 0. Write/create tools: Tier 1 (WRITE_ENABLED=true).
  * ServiceNow table: sys_app (scoped applications), sys_scope (application scopes).
  */
-import type { ServiceNowClient } from '../servicenow/client.js';
+import { sanitizeLikeValue, type ServiceNowClient } from '../servicenow/client.js';
 import { ServiceNowError } from '../utils/errors.js';
 import { requireWrite } from '../utils/permissions.js';
 
@@ -116,7 +116,7 @@ export async function executeAppStudioToolCall(
     case 'list_scoped_apps': {
       const parts: string[] = [];
       if (args.active !== undefined) parts.push(`active=${args.active}`);
-      if (args.query) parts.push(`nameCONTAINS${args.query}^ORscopeCONTAINS${args.query}`);
+      if (args.query) { const value = sanitizeLikeValue(args.query); parts.push(`nameCONTAINS${value}^ORscopeCONTAINS${value}`); }
       return await client.queryRecords({
         table: 'sys_app',
         query: parts.join('^') || undefined,
@@ -130,9 +130,10 @@ export async function executeAppStudioToolCall(
       if (/^[0-9a-f]{32}$/i.test(args.id)) {
         return await client.getRecord('sys_app', args.id);
       }
+      const safeId = sanitizeLikeValue(args.id);
       const resp = await client.queryRecords({
         table: 'sys_app',
-        query: `scope=${args.id}^ORname=${args.id}`,
+        query: `scope=${safeId}^ORname=${safeId}`,
         limit: 1,
       });
       if (resp.count === 0) throw new ServiceNowError(`Scoped app not found: ${args.id}`, 'NOT_FOUND');

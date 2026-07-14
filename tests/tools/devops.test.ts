@@ -100,3 +100,76 @@ describe('track_deployment', () => {
     }));
   });
 });
+
+describe('get_devops_pipeline', () => {
+  beforeEach(() => vi.clearAllMocks());
+
+  it('requires sys_id', async () => {
+    await expect(executeDevopsToolCall(mockClient, 'get_devops_pipeline', {})).rejects.toThrow('sys_id is required');
+  });
+
+  it('delegates to getRecord', async () => {
+    (mockClient.getRecord as ReturnType<typeof vi.fn>).mockResolvedValue({ sys_id: 'p1', name: 'Build Pipeline' });
+    const result = await executeDevopsToolCall(mockClient, 'get_devops_pipeline', { sys_id: 'p1' });
+    expect(mockClient.getRecord).toHaveBeenCalledWith('sn_devops_pipeline', 'p1');
+    expect(result.name).toBe('Build Pipeline');
+  });
+});
+
+describe('list_deployments', () => {
+  beforeEach(() => vi.clearAllMocks());
+
+  it('combines pipeline_sys_id, environment, and state filters', async () => {
+    qr().mockResolvedValue({ count: 0, records: [] });
+    await executeDevopsToolCall(mockClient, 'list_deployments', { pipeline_sys_id: 'p1', environment: 'prod', state: 'success' });
+    expect(qr()).toHaveBeenCalledWith(expect.objectContaining({
+      table: 'sn_devops_deploy_task',
+      query: 'pipeline=p1^stage=prod^status=success',
+    }));
+  });
+
+  it('strips ^ from environment and state so they cannot inject extra encoded-query clauses', async () => {
+    qr().mockResolvedValue({ count: 0, records: [] });
+    await executeDevopsToolCall(mockClient, 'list_deployments', { environment: 'prod^ORstage=dev', state: 'success^ORstatus=failed' });
+    expect(qr()).toHaveBeenCalledWith(expect.objectContaining({ query: 'stage=prodORstage=dev^status=successORstatus=failed' }));
+  });
+});
+
+describe('get_deployment', () => {
+  beforeEach(() => vi.clearAllMocks());
+
+  it('delegates to getRecord', async () => {
+    (mockClient.getRecord as ReturnType<typeof vi.fn>).mockResolvedValue({ sys_id: 'd1', status: 'success' });
+    const result = await executeDevopsToolCall(mockClient, 'get_deployment', { sys_id: 'd1' });
+    expect(mockClient.getRecord).toHaveBeenCalledWith('sn_devops_deploy_task', 'd1');
+    expect(result.status).toBe('success');
+  });
+});
+
+describe('create_devops_change', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    process.env.WRITE_ENABLED = 'true';
+  });
+
+  it('is blocked without WRITE_ENABLED', async () => {
+    delete process.env.WRITE_ENABLED;
+    await expect(executeDevopsToolCall(mockClient, 'create_devops_change', { short_description: 'X', environment: 'prod' }))
+      .rejects.toThrow('Write operations are disabled');
+  });
+
+  it('requires short_description and environment', async () => {
+    await expect(executeDevopsToolCall(mockClient, 'create_devops_change', {})).rejects.toThrow(
+      'short_description and environment are required'
+    );
+  });
+
+  it('creates a standard change linked to the deployment', async () => {
+    (mockClient.createRecord as ReturnType<typeof vi.fn>).mockResolvedValue({ sys_id: 'c1' });
+    const result = await executeDevopsToolCall(mockClient, 'create_devops_change', { short_description: 'Deploy v2', environment: 'prod', artifact: 'v2.0' });
+    expect(mockClient.createRecord).toHaveBeenCalledWith('change_request', expect.objectContaining({
+      short_description: 'Deploy v2', type: 'standard', description: expect.stringContaining('prod'),
+    }));
+    expect(result.action).toBe('created');
+  });
+});

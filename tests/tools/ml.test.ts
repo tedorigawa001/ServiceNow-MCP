@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { executeMlToolCall, getMlToolDefinitions } from '../../src/tools/ml.js';
 import type { ServiceNowClient } from '../../src/servicenow/client.js';
 
@@ -6,10 +6,13 @@ const mockClient = {
   queryRecords: vi.fn(),
   getRecord: vi.fn(),
   runAggregateQuery: vi.fn(),
+  callNowAssist: vi.fn(),
 } as unknown as ServiceNowClient;
 
 const qr = () => mockClient.queryRecords as ReturnType<typeof vi.fn>;
+const gr = () => mockClient.getRecord as ReturnType<typeof vi.fn>;
 const agg = () => mockClient.runAggregateQuery as ReturnType<typeof vi.fn>;
+const cna = () => mockClient.callNowAssist as ReturnType<typeof vi.fn>;
 
 describe('getMlToolDefinitions', () => {
   it('all tools have name, description and inputSchema', () => {
@@ -174,5 +177,132 @@ describe('ml_detect_anomalies', () => {
     expect(result.total_records).toBe(5000);
     expect(result.sampled_records).toBe(2);
     expect(result.note).toContain('sample of 2 of 5000');
+  });
+});
+
+describe('ml_train_incident_classifier', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    process.env.WRITE_ENABLED = 'true';
+  });
+  afterEach(() => { delete process.env.WRITE_ENABLED; });
+
+  it('is blocked without WRITE_ENABLED', async () => {
+    delete process.env.WRITE_ENABLED;
+    await expect(executeMlToolCall(mockClient, 'ml_train_incident_classifier', {})).rejects.toThrow('Write operations are disabled');
+  });
+
+  it('reports an error when no classification solution is found', async () => {
+    qr().mockResolvedValue({ count: 0, records: [] });
+    const result = await executeMlToolCall(mockClient, 'ml_train_incident_classifier', {});
+    expect(result.error).toContain('No classification ML solution found');
+  });
+
+  it('triggers training for the found solution', async () => {
+    qr().mockResolvedValue({ count: 1, records: [{ sys_id: 's1', name: 'Incident Classifier' }] });
+    cna().mockResolvedValue({});
+    const result = await executeMlToolCall(mockClient, 'ml_train_incident_classifier', {});
+    expect(cna()).toHaveBeenCalledWith('/api/now/ml/solution/s1/train', {});
+    expect(result.action).toBe('training_triggered');
+  });
+
+  it('resolves by solution_name and strips ^ so it cannot inject extra encoded-query clauses', async () => {
+    qr().mockResolvedValue({ count: 1, records: [{ sys_id: 's1', name: 'Custom Classifier' }] });
+    cna().mockResolvedValue({});
+    await executeMlToolCall(mockClient, 'ml_train_incident_classifier', { solution_name: 'Custom^ORactive=true' });
+    expect(qr()).toHaveBeenCalledWith(expect.objectContaining({ query: 'name=CustomORactive=true' }));
+  });
+
+  it('reports training_failed instead of throwing when the API call rejects', async () => {
+    qr().mockResolvedValue({ count: 1, records: [{ sys_id: 's1', name: 'Incident Classifier' }] });
+    cna().mockRejectedValue(new Error('train error'));
+    const result = await executeMlToolCall(mockClient, 'ml_train_incident_classifier', {});
+    expect(result.action).toBe('training_failed');
+    expect(result.error).toBe('train error');
+  });
+});
+
+describe('ml_train_change_risk', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    process.env.WRITE_ENABLED = 'true';
+  });
+  afterEach(() => { delete process.env.WRITE_ENABLED; });
+
+  it('reports an error when no change risk solution is found', async () => {
+    qr().mockResolvedValue({ count: 0, records: [] });
+    const result = await executeMlToolCall(mockClient, 'ml_train_change_risk', {});
+    expect(result.error).toContain('No change risk ML solution found');
+  });
+
+  it('triggers training for the found solution', async () => {
+    qr().mockResolvedValue({ count: 1, records: [{ sys_id: 's2', name: 'Change Risk Model' }] });
+    cna().mockResolvedValue({});
+    const result = await executeMlToolCall(mockClient, 'ml_train_change_risk', {});
+    expect(cna()).toHaveBeenCalledWith('/api/now/ml/solution/s2/train', {});
+    expect(result.action).toBe('training_triggered');
+  });
+});
+
+describe('ml_train_anomaly_detector', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    process.env.WRITE_ENABLED = 'true';
+  });
+  afterEach(() => { delete process.env.WRITE_ENABLED; });
+
+  it('is blocked without WRITE_ENABLED', async () => {
+    delete process.env.WRITE_ENABLED;
+    await expect(executeMlToolCall(mockClient, 'ml_train_anomaly_detector', { table: 'incident', field: 'priority' }))
+      .rejects.toThrow('Write operations are disabled');
+  });
+
+  it('requires table and field', async () => {
+    await expect(executeMlToolCall(mockClient, 'ml_train_anomaly_detector', {})).rejects.toThrow('table and field are required');
+  });
+
+  it('queues anomaly training', async () => {
+    const result = await executeMlToolCall(mockClient, 'ml_train_anomaly_detector', { table: 'incident', field: 'priority' });
+    expect(result.action).toBe('anomaly_training_queued');
+    expect(result.table).toBe('incident');
+  });
+});
+
+describe('ml_evaluate_model', () => {
+  beforeEach(() => vi.clearAllMocks());
+
+  it('requires model_sys_id', async () => {
+    await expect(executeMlToolCall(mockClient, 'ml_evaluate_model', {})).rejects.toThrow('model_sys_id is required');
+  });
+
+  it('returns model evaluation metadata', async () => {
+    gr().mockResolvedValue({ name: 'Incident Classifier', solution_type: 'classification', training_status: 'complete', accuracy: '0.92', last_trained: '2026-07-01', training_record_count: '5000', active: true });
+    const result = await executeMlToolCall(mockClient, 'ml_evaluate_model', { model_sys_id: 'm1' });
+    expect(gr()).toHaveBeenCalledWith('ml_solution', 'm1');
+    expect(result.accuracy).toBe('0.92');
+    expect(result.total_records_trained).toBe('5000');
+  });
+});
+
+describe('ml_model_training_history', () => {
+  beforeEach(() => vi.clearAllMocks());
+
+  it('requires model_sys_id', async () => {
+    await expect(executeMlToolCall(mockClient, 'ml_model_training_history', {})).rejects.toThrow('model_sys_id is required');
+  });
+
+  it('queries training runs within the look-back window', async () => {
+    qr().mockResolvedValue({ count: 0, records: [] });
+    await executeMlToolCall(mockClient, 'ml_model_training_history', { model_sys_id: 'm1', days: 30 });
+    expect(qr()).toHaveBeenCalledWith(expect.objectContaining({
+      table: 'ml_solution_version',
+      query: expect.stringMatching(/^solution=m1\^sys_created_on>=/),
+    }));
+  });
+
+  it('strips ^ from model_sys_id so it cannot inject extra encoded-query clauses', async () => {
+    qr().mockResolvedValue({ count: 0, records: [] });
+    await executeMlToolCall(mockClient, 'ml_model_training_history', { model_sys_id: 'm1^ORactive=true' });
+    expect(qr()).toHaveBeenCalledWith(expect.objectContaining({ query: expect.stringMatching(/^solution=m1ORactive=true\^sys_created_on>=/) }));
   });
 });

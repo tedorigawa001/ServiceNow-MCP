@@ -2,7 +2,7 @@
  * Task Management tools.
  * Read tools: Tier 0. Write tools: Tier 1 (WRITE_ENABLED=true).
  */
-import type { ServiceNowClient } from '../servicenow/client.js';
+import { sanitizeLikeValue, type ServiceNowClient } from '../servicenow/client.js';
 import { ServiceNowError } from '../utils/errors.js';
 import { requireWrite } from '../utils/permissions.js';
 
@@ -104,7 +104,8 @@ export async function executeTaskToolCall(
       if (/^[0-9a-f]{32}$/i.test(args.number_or_sysid)) {
         return await client.getRecord('task', args.number_or_sysid);
       }
-      const resp = await client.queryRecords({ table: 'task', query: `number=${args.number_or_sysid}^ORsys_id=${args.number_or_sysid}`, limit: 1 });
+      const safeId = sanitizeLikeValue(args.number_or_sysid);
+      const resp = await client.queryRecords({ table: 'task', query: `number=${safeId}^ORsys_id=${safeId}`, limit: 1 });
       if (resp.count === 0) throw new ServiceNowError(`Task not found: ${args.number_or_sysid}`, 'NOT_FOUND');
       return resp.records[0];
     }

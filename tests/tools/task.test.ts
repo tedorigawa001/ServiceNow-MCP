@@ -79,3 +79,43 @@ describe('executeTaskToolCall – complete_task', () => {
     });
   });
 });
+
+describe('get_task', () => {
+  beforeEach(() => vi.clearAllMocks());
+
+  it('requires number_or_sysid', async () => {
+    await expect(executeTaskToolCall(mockClient, 'get_task', {})).rejects.toThrow('number_or_sysid is required');
+  });
+
+  it('fetches directly by sys_id when hex', async () => {
+    (mockClient.getRecord as ReturnType<typeof vi.fn>).mockResolvedValue({ sys_id: 'a'.repeat(32), number: 'TASK0001' });
+    const result = await executeTaskToolCall(mockClient, 'get_task', { number_or_sysid: 'a'.repeat(32) });
+    expect(mockClient.getRecord).toHaveBeenCalledWith('task', 'a'.repeat(32));
+    expect(result.number).toBe('TASK0001');
+  });
+
+  it('resolves by number and throws NOT_FOUND when missing', async () => {
+    (mockClient.queryRecords as ReturnType<typeof vi.fn>).mockResolvedValue({ count: 0, records: [] });
+    await expect(executeTaskToolCall(mockClient, 'get_task', { number_or_sysid: 'TASK0001' }))
+      .rejects.toMatchObject({ code: 'NOT_FOUND' });
+  });
+
+  it('strips ^ from the number so it cannot inject extra encoded-query clauses', async () => {
+    (mockClient.queryRecords as ReturnType<typeof vi.fn>).mockResolvedValue({ count: 1, records: [{ sys_id: 't1', number: 'TASK0001' }] });
+    await executeTaskToolCall(mockClient, 'get_task', { number_or_sysid: 'TASK0001^ORstate=closed' });
+    expect(mockClient.queryRecords).toHaveBeenCalledWith(expect.objectContaining({ query: 'number=TASK0001ORstate=closed^ORsys_id=TASK0001ORstate=closed' }));
+  });
+});
+
+describe('list_my_tasks', () => {
+  beforeEach(() => vi.clearAllMocks());
+
+  it('filters to active, non-closed tasks', async () => {
+    (mockClient.queryRecords as ReturnType<typeof vi.fn>).mockResolvedValue({ count: 0, records: [] });
+    await executeTaskToolCall(mockClient, 'list_my_tasks', {});
+    expect(mockClient.queryRecords).toHaveBeenCalledWith(expect.objectContaining({
+      table: 'task',
+      query: expect.stringContaining('active=true^state!=3'),
+    }));
+  });
+});

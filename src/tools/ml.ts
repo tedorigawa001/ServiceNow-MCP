@@ -8,7 +8,7 @@
  *
  * ServiceNow tables: ml_solution, ml_solution_version, sys_cs_conversation
  */
-import type { ServiceNowClient } from '../servicenow/client.js';
+import { sanitizeLikeValue, type ServiceNowClient } from '../servicenow/client.js';
 import { ServiceNowError } from '../utils/errors.js';
 import { requireWrite } from '../utils/permissions.js';
 
@@ -222,7 +222,7 @@ export async function executeMlToolCall(
 
     case 'ml_train_incident_classifier': {
       requireWrite();
-      const solutions = await client.queryRecords({ table: 'ml_solution', query: args.solution_name ? `name=${args.solution_name}` : 'solution_typeLIKEclassif^active=true', limit: 1, fields: 'sys_id,name,training_status' });
+      const solutions = await client.queryRecords({ table: 'ml_solution', query: args.solution_name ? `name=${sanitizeLikeValue(args.solution_name)}` : 'solution_typeLIKEclassif^active=true', limit: 1, fields: 'sys_id,name,training_status' });
       if (solutions.count === 0) return { error: 'No classification ML solution found. Enable Predictive Intelligence.' };
       const sol = solutions.records[0];
       try {
@@ -233,7 +233,7 @@ export async function executeMlToolCall(
 
     case 'ml_train_change_risk': {
       requireWrite();
-      const solutions = await client.queryRecords({ table: 'ml_solution', query: args.solution_name ? `name=${args.solution_name}` : 'nameLIKEchange^active=true', limit: 1, fields: 'sys_id,name' });
+      const solutions = await client.queryRecords({ table: 'ml_solution', query: args.solution_name ? `name=${sanitizeLikeValue(args.solution_name)}` : 'nameLIKEchange^active=true', limit: 1, fields: 'sys_id,name' });
       if (solutions.count === 0) return { error: 'No change risk ML solution found.' };
       const sol = solutions.records[0];
       try {
@@ -258,7 +258,7 @@ export async function executeMlToolCall(
       if (!args.model_sys_id) throw new ServiceNowError('model_sys_id is required', 'INVALID_REQUEST');
       const days = args.days || 90;
       const since = new Date(Date.now() - days * 86400000).toISOString().slice(0, 19).replace('T', ' ');
-      const runs = await client.queryRecords({ table: 'ml_solution_version', query: `solution=${args.model_sys_id}^sys_created_on>=${since}`, limit: 50, fields: 'sys_id,version,accuracy,training_status,sys_created_on' });
+      const runs = await client.queryRecords({ table: 'ml_solution_version', query: `solution=${sanitizeLikeValue(args.model_sys_id)}^sys_created_on>=${since}`, limit: 50, fields: 'sys_id,version,accuracy,training_status,sys_created_on' });
       return { model_sys_id: args.model_sys_id, period_days: days, training_runs: runs.records };
     }
 

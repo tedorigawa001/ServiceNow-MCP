@@ -153,3 +153,71 @@ describe('executeAgileToolCall – update_scrum_task', () => {
     expect(mockClient.updateRecord).not.toHaveBeenCalled();
   });
 });
+
+describe('list_stories', () => {
+  beforeEach(() => vi.clearAllMocks());
+
+  it('combines sprint and state filters', async () => {
+    (mockClient.queryRecords as ReturnType<typeof vi.fn>).mockResolvedValue({ count: 0, records: [] });
+    await executeAgileToolCall(mockClient, 'list_stories', { sprint: 's1', state: '1' });
+    expect(mockClient.queryRecords).toHaveBeenCalledWith(expect.objectContaining({ table: 'rm_story', query: 'sprint=s1^state=1' }));
+  });
+
+  it('strips ^ from sprint and state so they cannot inject extra encoded-query clauses', async () => {
+    (mockClient.queryRecords as ReturnType<typeof vi.fn>).mockResolvedValue({ count: 0, records: [] });
+    await executeAgileToolCall(mockClient, 'list_stories', { sprint: 's1^ORstate=3', state: '1^ORactive=false' });
+    expect(mockClient.queryRecords).toHaveBeenCalledWith(expect.objectContaining({ query: 'sprint=s1ORstate=3^state=1ORactive=false' }));
+  });
+});
+
+describe('list_epics', () => {
+  beforeEach(() => vi.clearAllMocks());
+
+  it('combines project and state filters', async () => {
+    (mockClient.queryRecords as ReturnType<typeof vi.fn>).mockResolvedValue({ count: 0, records: [] });
+    await executeAgileToolCall(mockClient, 'list_epics', { project: 'p1', state: 'open' });
+    expect(mockClient.queryRecords).toHaveBeenCalledWith(expect.objectContaining({ table: 'rm_epic', query: 'project=p1^state=open' }));
+  });
+});
+
+describe('create_scrum_task', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    process.env.WRITE_ENABLED = 'true';
+  });
+
+  it('is blocked without WRITE_ENABLED', async () => {
+    delete process.env.WRITE_ENABLED;
+    await expect(executeAgileToolCall(mockClient, 'create_scrum_task', { short_description: 'X' })).rejects.toThrow('Write operations are disabled');
+  });
+
+  it('requires short_description', async () => {
+    await expect(executeAgileToolCall(mockClient, 'create_scrum_task', {})).rejects.toThrow('short_description is required');
+  });
+
+  it('creates the task with story and assignee', async () => {
+    (mockClient.createRecord as ReturnType<typeof vi.fn>).mockResolvedValue({ sys_id: 't1', number: 'STSK001' });
+    const result = await executeAgileToolCall(mockClient, 'create_scrum_task', { short_description: 'Write tests', story_sys_id: 's1', assigned_to: 'u1' });
+    expect(mockClient.createRecord).toHaveBeenCalledWith('rm_scrum_task', { short_description: 'Write tests', story: 's1', assigned_to: 'u1' });
+    expect(result.summary).toContain('STSK001');
+  });
+});
+
+describe('list_scrum_tasks', () => {
+  beforeEach(() => vi.clearAllMocks());
+
+  it('combines story_sys_id and assigned_to filters', async () => {
+    (mockClient.queryRecords as ReturnType<typeof vi.fn>).mockResolvedValue({ count: 0, records: [] });
+    await executeAgileToolCall(mockClient, 'list_scrum_tasks', { story_sys_id: 's1', assigned_to: 'jdoe' });
+    expect(mockClient.queryRecords).toHaveBeenCalledWith(expect.objectContaining({
+      table: 'rm_scrum_task',
+      query: 'story=s1^assigned_to.user_name=jdoe',
+    }));
+  });
+
+  it('strips ^ from assigned_to so it cannot inject extra encoded-query clauses', async () => {
+    (mockClient.queryRecords as ReturnType<typeof vi.fn>).mockResolvedValue({ count: 0, records: [] });
+    await executeAgileToolCall(mockClient, 'list_scrum_tasks', { assigned_to: 'jdoe^ORactive=true' });
+    expect(mockClient.queryRecords).toHaveBeenCalledWith(expect.objectContaining({ query: 'assigned_to.user_name=jdoeORactive=true' }));
+  });
+});
