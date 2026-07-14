@@ -6,6 +6,18 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 ---
 
+## [1.5.7] — 2026-07-14
+
+### Fixed
+
+- **`sys-properties.ts`'s `category`/`type` filters were not sanitized** — `list_system_properties`'s `category`/`type` and `export_properties`'s `category` were interpolated directly into encoded queries, unlike the rest of the module (`get_system_property`, `set_system_property`, `delete_system_property`, `bulk_set_properties`, `import_properties`, `validate_property`, `get_property_history` already sanitize the property name via `sanitizePropertyName()`). Fixed by applying the same helper to `category`/`type`.
+
+### Added
+
+- **Test coverage for 34 more previously-untested tools**, continuing the coverage pass: `sys-properties.ts` (12 tools, new `tests/tools/sys-properties.test.ts`, including regression tests for the sanitization fix above and sensitive-value masking across get/list/search/export/history), `notification.ts` (11 tools, already correctly sanitized), and `performance.ts` (11 tools, already correctly sanitized).
+
+---
+
 ## [1.5.6] — 2026-07-14
 
 ### Fixed
