@@ -149,19 +149,25 @@ export async function executeMlToolCall(
         const change = await client.getRecord('change_request', args.change_sys_id);
         return { change: args.change_sys_id, risk: change.risk || 'unknown', risk_value: change.risk_value, impact: change.impact, conflict_status: change.conflict_status };
       }
-      const resp = await client.queryRecords({
-        table: 'change_request',
-        query: `type=${args.type || 'normal'}^category=${args.category || ''}^stateNOT INcancelled`,
-        limit: 100,
-        fields: 'risk,state',
-      });
-      const total = resp.count;
+      const changeQuery = `type=${args.type || 'normal'}^category=${args.category || ''}^stateNOT INcancelled`;
+      // The rate calculation genuinely needs per-record `risk` values, so a bounded
+      // sample (limit:100) is a reasonable tradeoff — but the field name must be
+      // honest about that, and the *real* total match count comes from an aggregate
+      // query rather than the sample's records.length.
+      const [resp, totalResp] = await Promise.all([
+        client.queryRecords({ table: 'change_request', query: changeQuery, limit: 100, fields: 'risk,state' }),
+        client.runAggregateQuery('change_request', undefined, 'COUNT', changeQuery),
+      ]);
+      const totalMatching = parseInt(String(totalResp?.stats?.count ?? '0'), 10) || 0;
       const highRisk = resp.records.filter((r: any) => r.risk === 'high' || r.risk === '1').length;
+      const sampleSize = resp.count || 1;
       return {
         prediction_method: 'historical_analysis',
-        total_similar_changes: total,
-        high_risk_rate: total > 0 ? `${Math.round((highRisk / total) * 100)}%` : 'N/A',
-        predicted_risk: highRisk / total > 0.3 ? 'high' : highRisk / total > 0.1 ? 'moderate' : 'low',
+        total_similar_changes: totalMatching,
+        sampled_changes: resp.count,
+        note: totalMatching > resp.count ? `Rate computed from a sample of ${resp.count} of ${totalMatching} matching changes.` : undefined,
+        high_risk_rate: resp.count > 0 ? `${Math.round((highRisk / sampleSize) * 100)}%` : 'N/A',
+        predicted_risk: highRisk / sampleSize > 0.3 ? 'high' : highRisk / sampleSize > 0.1 ? 'moderate' : 'low',
       };
     }
 
@@ -169,14 +175,32 @@ export async function executeMlToolCall(
       if (!args.table || !args.field) throw new ServiceNowError('table and field are required', 'INVALID_REQUEST');
       const days = args.days || 30;
       const since = new Date(Date.now() - days * 86400000).toISOString().slice(0, 19).replace('T', ' ');
-      const resp = await client.queryRecords({ table: args.table, query: `sys_created_on>=${since}`, limit: 1000, fields: `${args.field},sys_created_on` });
+      const anomalyQuery = `sys_created_on>=${since}`;
+      // mean/std_dev genuinely need per-record field values, so a bounded sample
+      // (limit:1000) is a reasonable tradeoff — but total_records must reflect the
+      // real match count (via an aggregate query), not the sample size.
+      const [resp, totalResp] = await Promise.all([
+        client.queryRecords({ table: args.table, query: anomalyQuery, limit: 1000, fields: `${args.field},sys_created_on` }),
+        client.runAggregateQuery(args.table, undefined, 'COUNT', anomalyQuery),
+      ]);
+      const totalRecords = parseInt(String(totalResp?.stats?.count ?? '0'), 10) || 0;
       const values = resp.records.map((r: any) => parseFloat(r[args.field]) || 0);
       const mean = values.reduce((a: number, b: number) => a + b, 0) / (values.length || 1);
       const variance = values.reduce((sum: number, v: number) => sum + Math.pow(v - mean, 2), 0) / (values.length || 1);
       const stdDev = Math.sqrt(variance);
       const threshold = args.threshold || 2;
       const anomalies = resp.records.filter((r: any) => Math.abs((parseFloat(r[args.field]) || 0) - mean) > threshold * stdDev);
-      return { period_days: days, total_records: resp.count, mean: Math.round(mean * 100) / 100, std_dev: Math.round(stdDev * 100) / 100, threshold_sigma: threshold, anomaly_count: anomalies.length, anomalies: anomalies.slice(0, 20) };
+      return {
+        period_days: days,
+        total_records: totalRecords,
+        sampled_records: resp.count,
+        note: totalRecords > resp.count ? `Statistics computed from a sample of ${resp.count} of ${totalRecords} matching records.` : undefined,
+        mean: Math.round(mean * 100) / 100,
+        std_dev: Math.round(stdDev * 100) / 100,
+        threshold_sigma: threshold,
+        anomaly_count: anomalies.length,
+        anomalies: anomalies.slice(0, 20),
+      };
     }
 
     case 'ml_forecast_incidents': {
@@ -186,9 +210,14 @@ export async function executeMlToolCall(
       let query = `sys_created_on>=${since}`;
       if (args.category) query += `^category=${args.category}`;
       if (args.priority) query += `^priority=${args.priority}`;
-      const resp = await client.queryRecords({ table: 'incident', query, limit: 5000, fields: 'sys_created_on' });
-      const dailyRate = resp.count / lookback;
-      return { historical_period_days: lookback, total_incidents: resp.count, avg_daily_rate: Math.round(dailyRate * 10) / 10, forecast_days: daysAhead, forecast_total: Math.round(dailyRate * daysAhead), forecast_range: { low: Math.round(dailyRate * daysAhead * 0.7), high: Math.round(dailyRate * daysAhead * 1.3) } };
+      // Only the count is used (no per-record analysis), so an ungrouped aggregate
+      // query gives the exact total instead of a queryRecords(limit:5000) fetch that
+      // silently undercounts (and wastes bandwidth) for any period with more than
+      // 5000 matching incidents.
+      const resp = await client.runAggregateQuery('incident', undefined, 'COUNT', query);
+      const totalIncidents = parseInt(String(resp?.stats?.count ?? '0'), 10) || 0;
+      const dailyRate = totalIncidents / lookback;
+      return { historical_period_days: lookback, total_incidents: totalIncidents, avg_daily_rate: Math.round(dailyRate * 10) / 10, forecast_days: daysAhead, forecast_total: Math.round(dailyRate * daysAhead), forecast_range: { low: Math.round(dailyRate * daysAhead * 0.7), high: Math.round(dailyRate * daysAhead * 1.3) } };
     }
 
     case 'ml_train_incident_classifier': {

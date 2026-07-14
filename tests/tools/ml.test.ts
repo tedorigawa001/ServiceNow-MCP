@@ -98,3 +98,81 @@ describe('ml_process_optimization', () => {
     expect(result.resolved_records).toBe(1);
   });
 });
+
+describe('ml_forecast_incidents', () => {
+  beforeEach(() => vi.clearAllMocks());
+
+  // Regression test: previously fetched queryRecords(limit:5000) and used only
+  // .count, silently undercounting for any lookback period with more than 5000
+  // matching incidents. Fixed to use an ungrouped aggregate query directly.
+  it('derives total_incidents from an aggregate query, not a capped record fetch', async () => {
+    agg().mockResolvedValue({ stats: { count: '6000' } });
+    const result = await executeMlToolCall(mockClient, 'ml_forecast_incidents', { days_ahead: 7 });
+    expect(qr()).not.toHaveBeenCalled();
+    expect(agg()).toHaveBeenCalledWith('incident', undefined, 'COUNT', expect.stringContaining('sys_created_on>='));
+    expect(result.total_incidents).toBe(6000);
+    expect(result.avg_daily_rate).toBe(100);
+    expect(result.forecast_total).toBe(700);
+  });
+});
+
+describe('ml_predict_change_risk', () => {
+  beforeEach(() => vi.clearAllMocks());
+
+  // Regression test: total_similar_changes previously wasn't reported at all and
+  // the rate denominator used resp.count (the capped sample), silently wrong for
+  // any period with more than 100 matching changes. Fixed to report the true
+  // total via aggregate while keeping the bounded sample for the per-record rate.
+  it('reports total_similar_changes from aggregate and labels the sampled rate', async () => {
+    qr().mockResolvedValue({
+      count: 2,
+      records: [{ risk: 'high' }, { risk: 'low' }],
+    });
+    agg().mockResolvedValue({ stats: { count: '400' } });
+
+    const result = await executeMlToolCall(mockClient, 'ml_predict_change_risk', { type: 'normal' });
+
+    expect(agg()).toHaveBeenCalledWith('change_request', undefined, 'COUNT', expect.stringContaining('type=normal'));
+    expect(result.total_similar_changes).toBe(400);
+    expect(result.sampled_changes).toBe(2);
+    expect(result.note).toContain('sample of 2 of 400');
+    expect(result.high_risk_rate).toBe('50%');
+  });
+
+  it('returns the change record directly when change_sys_id is given', async () => {
+    (mockClient.getRecord as ReturnType<typeof vi.fn>).mockResolvedValue({ risk: 'high', risk_value: 80, impact: '1', conflict_status: 'none' });
+    const result = await executeMlToolCall(mockClient, 'ml_predict_change_risk', { change_sys_id: 'c1' });
+    expect(agg()).not.toHaveBeenCalled();
+    expect(result.risk).toBe('high');
+  });
+});
+
+describe('ml_detect_anomalies', () => {
+  beforeEach(() => vi.clearAllMocks());
+
+  it('requires table and field', async () => {
+    await expect(executeMlToolCall(mockClient, 'ml_detect_anomalies', {})).rejects.toThrow('table and field are required');
+  });
+
+  // Regression test: total_records previously came from the capped
+  // queryRecords(limit:1000) sample's records.length, silently wrong for any
+  // period with more than 1000 matching records. Fixed to report the true total
+  // via aggregate while keeping the bounded sample for mean/std_dev.
+  it('reports total_records from aggregate, not the capped sample size', async () => {
+    qr().mockResolvedValue({
+      count: 2,
+      records: [
+        { value: '10', sys_created_on: '2026-01-01' },
+        { value: '12', sys_created_on: '2026-01-02' },
+      ],
+    });
+    agg().mockResolvedValue({ stats: { count: '5000' } });
+
+    const result = await executeMlToolCall(mockClient, 'ml_detect_anomalies', { table: 'incident', field: 'value' });
+
+    expect(agg()).toHaveBeenCalledWith('incident', undefined, 'COUNT', expect.stringContaining('sys_created_on>='));
+    expect(result.total_records).toBe(5000);
+    expect(result.sampled_records).toBe(2);
+    expect(result.note).toContain('sample of 2 of 5000');
+  });
+});

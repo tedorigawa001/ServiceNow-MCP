@@ -85,3 +85,26 @@ describe('analyze_data_quality', () => {
     expect(result.completeness_issues).toEqual([]);
   });
 });
+
+describe('validate_deployment', () => {
+  beforeEach(() => vi.clearAllMocks());
+
+  // Regression test: total_changes previously came from queryRecords(limit:500).count,
+  // undercounting any Update Set with more than 500 changes. Fixed to use an
+  // ungrouped aggregate query while still sampling records for changes_summary.
+  it('reports total_changes from the aggregate query, not the capped sample size', async () => {
+    (mockClient.getRecord as ReturnType<typeof vi.fn>).mockResolvedValue({ name: 'US1', state: 'complete' });
+    (mockClient.queryRecords as ReturnType<typeof vi.fn>).mockResolvedValue({
+      count: 500,
+      records: [{ sys_id: 'x1', name: 'Change 1', type: 'Table', action: 'INSERT_OR_UPDATE' }],
+    });
+    agg().mockResolvedValue({ stats: { count: '812' } });
+
+    const result = await executeDeploymentToolCall(mockClient, 'validate_deployment', { update_set_sys_id: 'us1' });
+
+    expect(agg()).toHaveBeenCalledWith('sys_update_xml', undefined, 'COUNT', 'update_set=us1');
+    expect(result.total_changes).toBe(812);
+    expect(result.changes_summary).toHaveLength(1);
+    expect(result.validation).toBe('READY');
+  });
+});
