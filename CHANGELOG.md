@@ -6,6 +6,14 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 ---
 
+## [1.5.3] — 2026-07-14
+
+### Fixed
+
+- **Record-count logic corrected across 8 more tools** — second pattern-search pass for the same bug class fixed in 1.5.2. `get_security_dashboard`, `get_mobile_analytics`, `ml_forecast_incidents`, `get_devops_insights`, `validate_deployment`, `get_license_optimization`, `ml_predict_change_risk`, and `ml_detect_anomalies` all previously reported totals derived from a capped `queryRecords(limit:N)` fetch's `.count`/`.records.length` instead of the true match count, silently wrong once a query matched more than `N` records (in `get_security_dashboard`'s case, `limit:1`, meaning every field was always 0 or 1). Fixed by sourcing totals from ungrouped `runAggregateQuery` calls; `get_devops_insights` now uses a status-grouped aggregate query for an exact per-status breakdown instead of any capped fetch. Tools whose calculations genuinely need per-record data (`ml_predict_change_risk`, `ml_detect_anomalies`) keep a bounded sample but now report the sample size and an honest `note` alongside the accurate total. None of the eight had prior test coverage for this logic — added for all, including new `tests/tools/mobile.test.ts` and `tests/tools/devops.test.ts` (neither test file previously existed).
+
+---
+
 ## [1.5.2] — 2026-07-13
 
 ### Fixed
