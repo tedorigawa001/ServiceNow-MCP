@@ -296,12 +296,16 @@ export async function executeItamToolCall(
       const threshold = args.threshold_pct || 80;
       let query = '';
       if (args.software_name) query = `display_nameLIKE${args.software_name}`;
-      const resp = await client.queryRecords({
-        table: 'alm_license',
-        query: query || undefined,
-        limit: 100,
-        fields: 'sys_id,display_name,product,license_count,license_available,license_inuse,cost,expiry_date',
-      });
+      const [resp, totalResp] = await Promise.all([
+        client.queryRecords({
+          table: 'alm_license',
+          query: query || undefined,
+          limit: 100,
+          fields: 'sys_id,display_name,product,license_count,license_available,license_inuse,cost,expiry_date',
+        }),
+        client.runAggregateQuery('alm_license', undefined, 'COUNT', query || undefined),
+      ]);
+      const totalLicenses = parseInt(String(totalResp?.stats?.count ?? '0'), 10) || 0;
       const recommendations = resp.records.map((r: any) => {
         const total = Number(r.license_count) || 0;
         const inUse = Number(r.license_inuse) || 0;
@@ -325,7 +329,9 @@ export async function executeItamToolCall(
       const underutilized = recommendations.filter((r: any) => r.recommendation.startsWith('underutilized'));
       const overAllocated = recommendations.filter((r: any) => r.recommendation.startsWith('over-allocated'));
       return {
-        total_licenses: resp.count,
+        total_licenses: totalLicenses,
+        analyzed_licenses: resp.count,
+        note: totalLicenses > resp.count ? `Recommendations computed from a sample of ${resp.count} of ${totalLicenses} matching licenses.` : undefined,
         threshold_pct: threshold,
         underutilized_count: underutilized.length,
         over_allocated_count: overAllocated.length,

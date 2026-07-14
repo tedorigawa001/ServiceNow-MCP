@@ -6,6 +6,7 @@ const mockClient: any = {
   getRecord: vi.fn(),
   updateRecord: vi.fn(),
   queryRecords: vi.fn(),
+  runAggregateQuery: vi.fn(),
 };
 
 beforeEach(() => {
@@ -161,6 +162,30 @@ describe('Security Operations tools', () => {
       expect(mockClient.queryRecords).toHaveBeenCalledWith(expect.objectContaining({
         query: 'type=ip_addressORtype=domain^valueCONTAINS1.2.3.4ORsys_idISNOTEMPTY',
       }));
+    });
+  });
+
+  describe('get_security_dashboard', () => {
+    // Regression test: this previously queried each metric with
+    // queryRecords(limit:1) and reported .count -- always 0 or 1 regardless of the
+    // real number of open incidents/vulnerabilities, making every field in this
+    // dashboard meaningless. Fixed to use ungrouped aggregate queries.
+    it('reports real counts from aggregate queries, not a limit:1 page length', async () => {
+      mockClient.runAggregateQuery
+        .mockResolvedValueOnce({ stats: { count: '7' } })   // open high
+        .mockResolvedValueOnce({ stats: { count: '23' } })  // open medium
+        .mockResolvedValueOnce({ stats: { count: '5' } })   // open low
+        .mockResolvedValueOnce({ stats: { count: '41' } })  // open vulns
+        .mockResolvedValueOnce({ stats: { count: '12' } }); // resolved
+
+      const result = await executeSecurityToolCall(mockClient, 'get_security_dashboard', { days: 30 });
+
+      expect(mockClient.queryRecords).not.toHaveBeenCalled();
+      expect(mockClient.runAggregateQuery).toHaveBeenNthCalledWith(1, 'sn_si_incident', undefined, 'COUNT', 'state!=closed^severity=1');
+      expect(mockClient.runAggregateQuery).toHaveBeenNthCalledWith(4, 'sn_vul_entry', undefined, 'COUNT', 'state=open');
+      expect(result.open_incidents).toEqual({ high: 7, medium: 23, low: 5 });
+      expect(result.open_vulnerabilities).toBe(41);
+      expect(result.resolved_incidents_period).toBe(12);
     });
   });
 

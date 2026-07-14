@@ -5,6 +5,7 @@ import type { ServiceNowClient } from '../../src/servicenow/client.js';
 const mockClient = {
   queryRecords: vi.fn(),
   updateRecord: vi.fn(),
+  runAggregateQuery: vi.fn(),
 } as unknown as ServiceNowClient;
 
 describe('executeItamToolCall – asset scope and update fields', () => {
@@ -40,5 +41,29 @@ describe('executeItamToolCall – asset scope and update fields', () => {
       sys_id: 'asset1', fields: { sys_domain: 'global', u_unlisted: 'yes' },
     })).rejects.toThrow('Asset fields cannot be updated: sys_domain, u_unlisted');
     expect(mockClient.updateRecord).not.toHaveBeenCalled();
+  });
+
+  describe('get_license_optimization', () => {
+    // Regression test: total_licenses previously came from the capped
+    // queryRecords(limit:100) page, so any table with more than 100 licenses
+    // reported a total that was silently stuck at 100. Fixed to source the
+    // true total from an ungrouped aggregate query while still sampling
+    // records for the per-license recommendations.
+    it('reports a true total from the aggregate query, not the capped sample size', async () => {
+      (mockClient.queryRecords as ReturnType<typeof vi.fn>).mockResolvedValue({
+        count: 100,
+        records: [
+          { sys_id: 'l1', display_name: 'Adobe', product: 'Acrobat', license_count: 50, license_inuse: 10, license_available: 40 },
+        ],
+      });
+      (mockClient.runAggregateQuery as ReturnType<typeof vi.fn>).mockResolvedValue({ stats: { count: '350' } });
+
+      const result = await executeItamToolCall(mockClient, 'get_license_optimization', {});
+
+      expect(mockClient.runAggregateQuery).toHaveBeenCalledWith('alm_license', undefined, 'COUNT', undefined);
+      expect(result.total_licenses).toBe(350);
+      expect(result.analyzed_licenses).toBe(100);
+      expect(result.note).toContain('sample of 100 of 350');
+    });
   });
 });

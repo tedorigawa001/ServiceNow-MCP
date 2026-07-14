@@ -119,9 +119,17 @@ export async function executeMobileToolCall(
     case 'get_mobile_analytics': {
       const days = args.days || 30;
       const since = new Date(Date.now() - days * 86400000).toISOString().slice(0, 19).replace('T', ' ');
-      const sessions = await client.queryRecords({ table: 'sys_sg_mobile_session', query: `sys_created_on>=${since}`, limit: 1, fields: 'sys_id' });
-      const configs = await client.queryRecords({ table: 'sys_sg_mobile_app_config', query: 'active=true', limit: 100, fields: 'sys_id,name' });
-      return { period_days: days, total_sessions: sessions.count, active_apps: configs.count, apps: configs.records };
+      // Ungrouped aggregate queries for exact counts — queryRecords(limit:1).count is
+      // always 0 or 1 (records.length capped at the page size), never the real total,
+      // which previously made total_sessions always 0 or 1.
+      const [sessionsResp, activeAppsResp, configs] = await Promise.all([
+        client.runAggregateQuery('sys_sg_mobile_session', undefined, 'COUNT', `sys_created_on>=${since}`),
+        client.runAggregateQuery('sys_sg_mobile_app_config', undefined, 'COUNT', 'active=true'),
+        client.queryRecords({ table: 'sys_sg_mobile_app_config', query: 'active=true', limit: 100, fields: 'sys_id,name' }),
+      ]);
+      const totalSessions = parseInt(String(sessionsResp?.stats?.count ?? '0'), 10) || 0;
+      const activeApps = parseInt(String(activeAppsResp?.stats?.count ?? '0'), 10) || 0;
+      return { period_days: days, total_sessions: totalSessions, active_apps: activeApps, apps: configs.records };
     }
     default:
       return null;

@@ -296,14 +296,21 @@ export async function executeSecurityToolCall(
     case 'get_security_dashboard': {
       const days = args.days || 30;
       const since = new Date(Date.now() - days * 86400000).toISOString().slice(0, 19).replace('T', ' ');
+      // Ungrouped aggregate queries for exact counts — queryRecords(limit:1).count is
+      // always 0 or 1 (records.length capped at the page size), never the real count.
+      // This previously made every field in this dashboard always 0 or 1.
+      const aggCount = async (table: string, query: string): Promise<number> => {
+        const resp = await client.runAggregateQuery(table, undefined, 'COUNT', query);
+        return parseInt(String(resp?.stats?.count ?? '0'), 10) || 0;
+      };
       const [openHigh, openMed, openLow, vulns, resolved] = await Promise.all([
-        client.queryRecords({ table: 'sn_si_incident', query: `state!=closed^severity=1`, limit: 1, fields: 'sys_id' }),
-        client.queryRecords({ table: 'sn_si_incident', query: `state!=closed^severity=2`, limit: 1, fields: 'sys_id' }),
-        client.queryRecords({ table: 'sn_si_incident', query: `state!=closed^severity=3`, limit: 1, fields: 'sys_id' }),
-        client.queryRecords({ table: 'sn_vul_entry', query: `state=open`, limit: 1, fields: 'sys_id' }),
-        client.queryRecords({ table: 'sn_si_incident', query: `state=closed^sys_updated_on>=${since}`, limit: 1, fields: 'sys_id' }),
+        aggCount('sn_si_incident', `state!=closed^severity=1`),
+        aggCount('sn_si_incident', `state!=closed^severity=2`),
+        aggCount('sn_si_incident', `state!=closed^severity=3`),
+        aggCount('sn_vul_entry', `state=open`),
+        aggCount('sn_si_incident', `state=closed^sys_updated_on>=${since}`),
       ]);
-      return { period_days: days, open_incidents: { high: openHigh.count, medium: openMed.count, low: openLow.count }, open_vulnerabilities: vulns.count, resolved_incidents_period: resolved.count };
+      return { period_days: days, open_incidents: { high: openHigh, medium: openMed, low: openLow }, open_vulnerabilities: vulns, resolved_incidents_period: resolved };
     }
     case 'scan_vulnerabilities': {
       requireWrite();

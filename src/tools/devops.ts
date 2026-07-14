@@ -192,15 +192,18 @@ export async function executeDevopsToolCall(
       const since = new Date(Date.now() - days * 86400000).toISOString().slice(0, 19).replace('T', ' ');
       let query = `sys_created_on>=${since}`;
       if (args.pipeline_sys_id) query += `^pipeline=${args.pipeline_sys_id}`;
-      const resp = await client.queryRecords({
-        table: 'sn_devops_deploy_task',
-        query,
-        limit: 1000,
-        fields: 'status,sys_created_on',
-      });
-      const total = resp.count;
-      const success = resp.records.filter((r: any) => r.status === 'success').length;
-      const failed = resp.records.filter((r: any) => r.status === 'failed').length;
+      // Grouped aggregate query for exact per-status counts — a queryRecords(limit:1000)
+      // fetch with client-side .filter() silently undercounted total/success/failed for
+      // any period with more than 1000 matching deploy tasks.
+      const statusStats = await client.runAggregateQuery('sn_devops_deploy_task', 'status', 'COUNT', query);
+      const statusRows = Array.isArray(statusStats) ? statusStats : [];
+      const countFor = (status: string) =>
+        statusRows
+          .filter((row: any) => String(row?.groupby_fields?.[0]?.value ?? '') === status)
+          .reduce((sum: number, row: any) => sum + (parseInt(String(row?.stats?.count ?? '0'), 10) || 0), 0);
+      const total = statusRows.reduce((sum: number, row: any) => sum + (parseInt(String(row?.stats?.count ?? '0'), 10) || 0), 0);
+      const success = countFor('success');
+      const failed = countFor('failed');
       return {
         period_days: days,
         total_deployments: total,

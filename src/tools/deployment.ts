@@ -113,8 +113,17 @@ export async function executeDeploymentToolCall(
       if (!args.update_set_sys_id && !args.app_sys_id) throw new ServiceNowError('update_set_sys_id or app_sys_id required', 'INVALID_REQUEST');
       if (args.update_set_sys_id) {
         const us = await client.getRecord('sys_update_set', args.update_set_sys_id);
-        const changes = await client.queryRecords({ table: 'sys_update_xml', query: `update_set=${args.update_set_sys_id}`, limit: 500, fields: 'sys_id,name,type,action' });
-        return { update_set: us.name, state: us.state, total_changes: changes.count, changes_summary: changes.records.slice(0, 20), validation: us.state === 'complete' ? 'READY' : 'NOT_COMPLETE' };
+        const changeQuery = `update_set=${args.update_set_sys_id}`;
+        // total_changes previously came from queryRecords(limit:500).count, which
+        // silently undercounted for any Update Set with more than 500 changes. The
+        // capped fetch is still needed for changes_summary's sample, but the reported
+        // total now comes from an ungrouped aggregate query.
+        const [changes, totalResp] = await Promise.all([
+          client.queryRecords({ table: 'sys_update_xml', query: changeQuery, limit: 500, fields: 'sys_id,name,type,action' }),
+          client.runAggregateQuery('sys_update_xml', undefined, 'COUNT', changeQuery),
+        ]);
+        const totalChanges = parseInt(String(totalResp?.stats?.count ?? '0'), 10) || 0;
+        return { update_set: us.name, state: us.state, total_changes: totalChanges, changes_summary: changes.records.slice(0, 20), validation: us.state === 'complete' ? 'READY' : 'NOT_COMPLETE' };
       }
       const app = await client.getRecord('sys_app', args.app_sys_id);
       return { app: app.name, version: app.version, scope: app.scope, validation: 'OK' };
