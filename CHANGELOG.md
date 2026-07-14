@@ -6,6 +6,18 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 ---
 
+## [1.5.8] — 2026-07-14
+
+### Fixed
+
+- **`csm.ts` had zero query sanitization anywhere in the module** — the same class of gap already fixed in `integration.ts`/`flow.ts`/`sys-properties.ts`, but this time affecting every free-text/identifier value in the file: `account`/`contact`/`state`/`priority` filters on `list_csm_cases`, `name_or_sysid` lookups on `get_csm_account`/`get_csm_contact`, `number_or_sysid` on `get_csm_case`, `case_sysid` on `get_csm_case_sla`, and `account_sysid`/`query` on `list_csm_contacts`/`list_csm_accounts`/`list_csm_products`. Fixed by applying `sanitizeLikeValue()` throughout.
+
+### Added
+
+- **Test coverage for 19 more previously-untested tools**: `hrsd.ts` (10 tools, already correctly sanitized) and `csm.ts` (9 tools, including regression tests for the sanitization fix above). `csm.ts` previously only had write-field-allowlist tests.
+
+---
+
 ## [1.5.7] — 2026-07-14
 
 ### Fixed
