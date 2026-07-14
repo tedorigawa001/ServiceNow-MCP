@@ -6,6 +6,16 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 ---
 
+## [1.5.4] — 2026-07-14
+
+### Added
+
+- **Test coverage for 76 previously-untested tools**, first batch of a broader test-coverage pass (an audit found 261 of 476 tools with zero test references). Prioritized by impact: `core.ts` (14 foundational/CMDB read tools) plus `list_instances`/`switch_instance`/`get_current_instance` (multi-instance routing, tested in `router.test.ts` since that's where the logic actually lives), `integration.ts` (23 tools: REST/SOAP Messages, Transform Maps, Import Sets, Event Registry, OAuth/credential listing — new `tests/tools/integration.test.ts`), `catalog.ts` (19 tools: catalog item CRUD/search/order, approval rules and lifecycle, SLA lookup, full request/RITM lifecycle), and `script.ts` (18 tools: Business Rules, Script Includes, Client Scripts, Changesets, UI Policies, UI Actions, ACLs — including a regression test confirming `requireScripting()` gates every tool in the module, not just writes).
+
+No production code changed in this release; test-only.
+
+---
+
 ## [1.5.3] — 2026-07-14
 
 ### Fixed
