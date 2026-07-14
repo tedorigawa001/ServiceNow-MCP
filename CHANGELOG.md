@@ -6,6 +6,24 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 ---
 
+## [1.5.5] — 2026-07-14
+
+### Fixed
+
+- **`integration.ts` free-text/identifier values were not sanitized before being interpolated into encoded queries** — the only tools module not following the codebase-wide `sanitizeLikeValue()` convention (already used in `notification.ts`, `portal.ts`, `security.ts`, `performance.ts`, `sam.ts`, `reporting.ts`, and the `grc-*.ts` modules). A caller could pass e.g. `sys_id_or_name: "Jira^ORactive=true"` and inject an extra encoded-query clause into `get_rest_message`/`get_transform_map`/`get_event_registry_entry`, or similarly via the `query`/`type`/`state` params on `list_rest_messages`, `list_transform_maps`, `list_data_sources`, `list_event_registry`, `list_event_log`, `list_oauth_applications`, `list_credential_aliases`, and `list_import_sets`'s `state` field. Fixed by applying `sanitizeLikeValue()` at every affected site; `list_import_sets`'s `query` param is intentionally left as pass-through since it's documented as a full encoded-query filter (same by-design pattern as `catalog.ts`'s `list_requests`/`list_approvals`).
+
+### Added
+
+- Regression tests for `create_import_set_row` (WRITE_ENABLED gate, required-fields check, staging-table/import-set mismatch, `sys_*` field rejection, successful insert) — previously only partially covered by a combined test elsewhere.
+- Tests confirming the new query sanitization for the 8 affected tools above.
+
+### Changed
+
+- Fixed inconsistent `WRITE_ENABLED` env-var cleanup in `catalog.test.ts`/`integration.test.ts` — every `describe` block that sets it in `beforeEach` now restores it in `afterEach`, preventing state from leaking into later tests when vitest reuses a worker.
+- Replaced `length > 0` tool-count assertions in `integration.test.ts`/`script.test.ts` with pinned counts (24 and 27), matching the existing pattern in `core.test.ts`.
+
+---
+
 ## [1.5.4] — 2026-07-14
 
 ### Added
