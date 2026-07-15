@@ -15,6 +15,18 @@ export function isE2EConfigured(): boolean {
 
 export const e2eDescribe = describe.skipIf(!isE2EConfigured());
 
+/**
+ * Write-tool E2E tests create/update real records on the configured
+ * instance (cleaned up via client.deleteRecord in each test), so they need
+ * WRITE_ENABLED=true in addition to the read-only gate. Use a PDI, never
+ * a shared/prod instance, for these.
+ */
+export function isWriteE2EConfigured(): boolean {
+  return isE2EConfigured() && process.env.WRITE_ENABLED === 'true';
+}
+
+export const writeE2eDescribe = describe.skipIf(!isWriteE2EConfigured());
+
 export function getE2EClient(): ServiceNowClient {
   return instanceManager.getClient();
 }

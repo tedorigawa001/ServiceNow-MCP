@@ -26,6 +26,7 @@
     "test:watch": "vitest",
     "test:coverage": "vitest run --coverage",
     "test:e2e": "RUN_E2E=true vitest run -c vitest.e2e.config.ts",
+    "test:e2e:write": "RUN_E2E=true WRITE_ENABLED=true vitest run -c vitest.e2e.config.ts",
     "lint": "eslint src tests",
     "lint:fix": "eslint src tests --fix",
     "type-check": "tsc --noEmit"

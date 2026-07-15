@@ -38,6 +38,18 @@ Read-only coverage of the major ITSM/CMDB tables (`incident`, `change_request`,
 Without `RUN_E2E=true` and a configured instance, the whole suite is skipped —
 so it never runs by accident in CI or a plain `npm test`.
 
+### Write-tool tests (create/update)
+
+`tests/e2e/write-operations.e2e.test.ts` exercises create/update on incident,
+problem, change_request, sys_user_group, and kb_knowledge. Each test deletes
+what it created in a `finally` block, so a failing assertion never leaves
+data behind — but only point this at a disposable PDI, never a shared or
+production instance.
+
+Run: `npm run test:e2e:write` (sets `WRITE_ENABLED=true` in addition to
+`RUN_E2E=true`; without it this file's tests are skipped even if the rest of
+the E2E suite runs).
+
 ## Pull Request Process
 
 1. Update documentation
