@@ -4,3 +4,6 @@
 /research
 .DS_Store
 /qiita
+.env
+.env.*
+instances.json
