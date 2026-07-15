@@ -14,6 +14,9 @@ import { executeProblemToolCall } from '../../src/tools/problem.js';
 import { executeUserToolCall } from '../../src/tools/user.js';
 import { executeKnowledgeToolCall } from '../../src/tools/knowledge.js';
 import { executeCoreToolCall } from '../../src/tools/core.js';
+import { executeUsemToolCall } from '../../src/tools/usem.js';
+import { executeGrcRiskToolCall } from '../../src/tools/grc-risk.js';
+import { executeGrcComplianceToolCall } from '../../src/tools/grc-compliance.js';
 import type { ServiceNowClient } from '../../src/servicenow/client.js';
 
 const MARK = `[E2E ${Date.now()}]`;
@@ -142,6 +145,82 @@ writeE2eDescribe('E2E – write operations (create/update, self-cleaning)', () =
         expect(fetched.short_description).toBe(`${MARK} article updated`);
       } finally {
         await client.deleteRecord('kb_knowledge', created.sys_id as string);
+      }
+    });
+  });
+
+  describe('sn_vul_vulnerability (Vulnerability Group)', () => {
+    it('creates then updates a vulnerability group', async () => {
+      const created = await executeUsemToolCall(client, 'create_vulnerability_group', {
+        short_description: `${MARK} vulnerability group create/update test`,
+      });
+      expect(created.sys_id).toBeTruthy();
+
+      try {
+        const updated = await executeUsemToolCall(client, 'update_vulnerability_group', {
+          sys_id: created.sys_id,
+          short_description: `${MARK} vulnerability group updated`,
+        });
+        expect(updated.summary).toContain(created.sys_id);
+
+        const fetched = await executeUsemToolCall(client, 'get_vulnerability_group', { number_or_sysid: created.sys_id });
+        expect(fetched.short_description).toBe(`${MARK} vulnerability group updated`);
+      } finally {
+        await client.deleteRecord('sn_vul_vulnerability', created.sys_id as string);
+      }
+    });
+  });
+
+  // create_remediation_task (sn_vul_remediation_task) is intentionally not
+  // covered here: on a real instance the table's ACL rejected a bare insert
+  // with only short_description (VR remediation tasks are normally produced
+  // by the rule engine from a Vulnerability Group, not created directly via
+  // the API). Read coverage for this table lives in vr-tables.e2e.test.ts.
+
+  describe('sn_risk_risk', () => {
+    it('creates then updates a risk', async () => {
+      const created = await executeGrcRiskToolCall(client, 'create_risk', {
+        statement: `${MARK} risk create/update test`,
+      });
+      expect(created.sys_id).toBeTruthy();
+
+      try {
+        const updated = await executeGrcRiskToolCall(client, 'update_risk', {
+          sys_id: created.sys_id,
+          fields: { apply_reason: `${MARK} updated apply_reason` },
+        });
+        expect(updated.summary).toContain(created.sys_id);
+
+        const fetched = await executeGrcRiskToolCall(client, 'get_risk', { number_or_sysid: created.sys_id });
+        expect(fetched.apply_reason).toBe(`${MARK} updated apply_reason`);
+      } finally {
+        await client.deleteRecord('sn_risk_risk', created.sys_id as string);
+      }
+    });
+  });
+
+  describe('sn_grc_profile (GRC Entity)', () => {
+    it('creates then updates a GRC entity when a profile class exists', async () => {
+      const classes = await executeCoreToolCall(client, 'query_records', { table: 'sn_grc_profile_class', limit: 1 });
+      if (classes.count === 0) return; // PDI has no seeded Entity class to attach an entity to
+
+      const created = await executeGrcComplianceToolCall(client, 'create_grc_entity', {
+        name: `${MARK} entity create/update test`,
+        profile_class: classes.records[0].sys_id,
+      });
+      expect(created.sys_id).toBeTruthy();
+
+      try {
+        const updated = await executeGrcComplianceToolCall(client, 'update_grc_entity', {
+          sys_id: created.sys_id,
+          fields: { description: `${MARK} updated description` },
+        });
+        expect(updated.summary).toContain(created.sys_id);
+
+        const fetched = await executeGrcComplianceToolCall(client, 'get_grc_entity', { sys_id: created.sys_id });
+        expect(fetched.description).toBe(`${MARK} updated description`);
+      } finally {
+        await client.deleteRecord('sn_grc_profile', created.sys_id as string);
       }
     });
   });
