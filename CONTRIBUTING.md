@@ -25,8 +25,9 @@ instance (a free [Personal Developer Instance](https://developer.servicenow.com)
 works well) — useful for confirming query-building/sanitization logic actually
 produces valid encoded queries, not just what the mocks accept.
 
-Read-only coverage of the major tables: `incident`, `change_request`,
-`problem`, `sys_user`, `cmdb_ci`.
+Read-only coverage of the major ITSM/CMDB tables (`incident`, `change_request`,
+`problem`, `sys_user`, `cmdb_ci`) plus tables shared across modules
+(`sys_user_group`, generic `task`, `kb_knowledge`, `sc_cat_item`).
 
 1. Copy `instances.example.json` to `instances.json` (gitignored) and fill in
    your PDI's OAuth credentials, or set `SERVICENOW_INSTANCE_URL` +
