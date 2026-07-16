@@ -192,6 +192,27 @@ Resolve natural-language requests into a ServiceNow table and encoded query, the
 
 ---
 
+## ServiceNow Store (2 tools)
+
+These call store.servicenow.com's public catalog API — no instance authentication involved. Per-version release notes are not stored in any instance table (App Manager also fetches them remotely), so this is the only programmatic source.
+
+### search_store_apps
+Search the public ServiceNow Store catalog by keyword.
+
+**Parameters**:
+- `query` (required) — Search keywords, e.g. `vulnerability response`
+- `limit` — Max results (default 10, max 50)
+
+### get_store_app_versions
+Get version history with release notes (new features / bug fixes) for a Store app. Useful for upgrade planning: compare against the installed version from `sys_app_version` / `sys_scope`.
+
+**Parameters**:
+- `listing_id` (required) — 32-char Store listing sys_id (from `search_store_apps`)
+- `limit` — Max versions, newest first (default 5, max 20)
+- `include_notes` — Include release-notes text (default true)
+
+---
+
 ## Incident Management (7 tools)
 
 ### create_incident

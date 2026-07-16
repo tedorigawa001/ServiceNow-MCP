@@ -100,6 +100,9 @@ import { getGrcIndicatorToolDefinitions, executeGrcIndicatorToolCall } from './g
 // Natural-language query resolver
 import { getSmartQueryToolDefinitions, executeSmartQueryToolCall } from './smart-query.js';
 
+// ServiceNow Store (public catalog — release notes, version history)
+import { getStoreToolDefinitions, executeStoreToolCall } from './store.js';
+
 // ─── Package Definitions ──────────────────────────────────────────────────────
 
 const PACKAGE_TOOL_NAMES: Record<string, string[]> = {
@@ -167,6 +170,8 @@ const PACKAGE_TOOL_NAMES: Record<string, string[]> = {
     'get_my_approvals', 'approve_request', 'reject_request',
     // Integration health
     'get_integration_health',
+    // Store release notes (upgrade planning)
+    'search_store_apps', 'get_store_app_versions',
   ],
   portal_developer: [
     'query_records', 'get_record', 'get_table_schema',
@@ -419,6 +424,7 @@ const MODULES: ToolModule[] = [
   { defs: getGrcRiskToolDefinitions, exec: executeGrcRiskToolCall },
   { defs: getGrcIndicatorToolDefinitions, exec: executeGrcIndicatorToolCall },
   { defs: getSmartQueryToolDefinitions, exec: executeSmartQueryToolCall },
+  { defs: getStoreToolDefinitions, exec: executeStoreToolCall },
 ];
 
 // Name → executor map, built once at module load. Detects duplicate tool names

@@ -14,7 +14,7 @@ Set `MCP_TOOL_PACKAGE` in your environment to load a role-specific subset of too
 | `system_administrator` | SysAdmin | 72 |
 | `platform_developer` | Platform developer | 43 |
 | `itom_engineer` | ITOM/CMDB engineer | 29 |
-| `secops_analyst` | Security Operations / Vulnerability Response analyst | 100 |
+| `secops_analyst` | Security Operations / Vulnerability Response analyst | 102 |
 | `agile_manager` | Agile team lead | 13 |
 | `ai_developer` | Now Assist/AI developer | 15 |
 | `portal_developer` | Portal/UI Builder developer | 34 |
@@ -164,6 +164,7 @@ Includes:
 - Remediation SLA / TTR tracking (`list_remediation_sla`, `get_group_sla`, `set_remediation_commitment`) and VR notifications
 - VR approvals and exception requests (`list_vr_approvals`, `list_vr_exception_requests`, `act_on_vr_approval`)
 - Threat intelligence and integration health
+- ServiceNow Store release notes for upgrade planning (`search_store_apps`, `get_store_app_versions` — public Store API, no instance auth)
 - Core read tools
 
 ### agile_manager
