@@ -6,6 +6,19 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 ---
 
+## [1.6.0] — 2026-07-16
+
+### Added
+
+**ServiceNow Store tools (2)** — `store.ts`, a new module that calls store.servicenow.com's public catalog API (no instance authentication):
+
+- **`search_store_apps`**: keyword search of the public Store catalog, returning `listing_id` values.
+- **`get_store_app_versions`**: per-version release notes (new features / bug fixes), publish dates, and release types for a Store app, with HTML notes converted to readable text.
+
+Release notes are not stored in any instance table — `sys_app_version`/`sys_store_app`/`sys_remote_app` have no notes column and App Manager fetches them remotely — so this public API is the only programmatic source. Verified live against the Store: Vulnerability Response returns 20 versions (24.0.10 through 30.7.2). Both tools are included in the `secops_analyst` package (now 102 tools) for upgrade planning alongside `sys_app_version` queries. `listing_id` is validated as a 32-char sys_id to prevent URL injection; 14 unit tests added (1487 total).
+
+---
+
 ## [1.5.11] — 2026-07-15
 
 ### Fixed
