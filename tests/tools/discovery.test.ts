@@ -13,7 +13,7 @@ const gr = () => mockClient.getRecord as ReturnType<typeof vi.fn>;
 const SYS_ID = 'a'.repeat(32);
 
 describe('getDiscoveryToolDefinitions', () => {
-  it('returns all eleven Discovery/ACC read tools', () => {
+  it('returns all twelve Discovery/ACC read tools', () => {
     const defs = getDiscoveryToolDefinitions();
     expect(defs.map(d => d.name)).toEqual([
       'list_discovery_runs',
@@ -23,6 +23,7 @@ describe('getDiscoveryToolDefinitions', () => {
       'list_discovery_ranges',
       'list_discovery_credentials',
       'list_mid_server_issues',
+      'list_mid_extension_contexts',
       'get_mid_server_health',
       'list_acc_agents',
       'list_acc_policies',
@@ -119,6 +120,32 @@ describe('executeDiscoveryToolCall', () => {
     expect(qr()).toHaveBeenCalledWith(expect.objectContaining({
       table: 'ecc_agent_issue',
       query: 'mid_server.name=mid01^ORDERBYDESClast_detected',
+    }));
+  });
+
+  it('lists MID extension contexts filtered by MID name, extension, and status', async () => {
+    qr().mockResolvedValue({ count: 1, records: [{ name: 'mid_websocket_mid01', status: 'Started' }] });
+    const result = await executeDiscoveryToolCall(mockClient, 'list_mid_extension_contexts', {
+      mid_server: 'mid01',
+      extension: 'Websocket',
+      status: 'Started',
+    });
+    expect(qr()).toHaveBeenCalledWith(expect.objectContaining({
+      table: 'ecc_agent_ext_context',
+      query: 'mid_server.name=mid01^extension.nameLIKEWebsocket^status=Started^ORDERBYDESCsys_updated_on',
+    }));
+    expect(qr().mock.calls[0][0].fields).toContain('error_message');
+    expect(result.count).toBe(1);
+  });
+
+  it('filters extension contexts by MID sys_id directly and strips ^ from inputs', async () => {
+    qr().mockResolvedValue({ count: 0, records: [] });
+    await executeDiscoveryToolCall(mockClient, 'list_mid_extension_contexts', {
+      mid_server: SYS_ID,
+      status: 'Started^ORinjected=1',
+    });
+    expect(qr()).toHaveBeenCalledWith(expect.objectContaining({
+      query: `mid_server=${SYS_ID}^status=StartedORinjected=1^ORDERBYDESCsys_updated_on`,
     }));
   });
 

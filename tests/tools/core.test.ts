@@ -223,8 +223,17 @@ describe('executeCoreToolCall – check_table_access', () => {
     const r = await executeCoreToolCall(mockClient, 'check_table_access', { tables: ['incident'] });
     expect(r.current_user).toBe('svc.account');
     expect(r.current_roles).toEqual(['itil', 'sn_vul.read']);
-    expect(r.results[0]).toMatchObject({ table: 'incident', readable: true, writable: true });
+    expect(r.results[0]).toMatchObject({ table: 'incident', readable: true, writable: true, status: 'accessible' });
     expect(r.summary).toContain('1 readable');
+  });
+
+  it('reports status=empty with a row-filtering hint when readable but zero rows', async () => {
+    routeIdentity(() => ({ count: 0, records: [] }));
+    (mockClient.updateRecord as any).mockRejectedValue(new ServiceNowError('No Record found', 'NOT_FOUND'));
+
+    const r = await executeCoreToolCall(mockClient, 'check_table_access', { tables: ['sys_scope'] });
+    expect(r.results[0]).toMatchObject({ readable: true, status: 'empty' });
+    expect(r.results[0].hint).toMatch(/ACL row filtering/);
   });
 
   it('marks a table writable=false when the write probe is denied (403)', async () => {
@@ -240,16 +249,29 @@ describe('executeCoreToolCall – check_table_access', () => {
     (mockClient.updateRecord as any).mockRejectedValue(new ServiceNowError('not authorized', 'INSUFFICIENT_PRIVILEGES'));
 
     const r = await executeCoreToolCall(mockClient, 'check_table_access', { tables: ['sys_user_password'] });
-    expect(r.results[0]).toMatchObject({ readable: false, writable: false });
+    expect(r.results[0]).toMatchObject({ readable: false, writable: false, status: 'no_access' });
+    expect(r.results[0].hint).toMatch(/plugin\/app is installed/);
+    expect(r.summary).toContain('ACL-denied');
   });
 
-  it('flags an invalid table and skips the write probe', async () => {
+  it('flags an invalid table as not_installed and skips the write probe', async () => {
     routeIdentity(() => { throw new ServiceNowError('Invalid table nope', 'INVALID_REQUEST'); });
 
     const r = await executeCoreToolCall(mockClient, 'check_table_access', { tables: ['nope'] });
     expect(r.results[0].readable).toBe(false);
     expect(r.results[0].writable).toBeNull();
+    expect(r.results[0].status).toBe('not_installed');
+    expect(r.results[0].hint).toMatch(/not installed/);
     expect(r.results[0].error).toContain('Invalid table');
+    expect(r.summary).toContain('1 not installed');
+    expect(mockClient.updateRecord).not.toHaveBeenCalled();
+  });
+
+  it('keeps status=unknown for a non-table validation failure', async () => {
+    routeIdentity(() => { throw new ServiceNowError('Bad request', 'INVALID_REQUEST'); });
+
+    const r = await executeCoreToolCall(mockClient, 'check_table_access', { tables: ['weird'] });
+    expect(r.results[0].status).toBe('unknown');
     expect(mockClient.updateRecord).not.toHaveBeenCalled();
   });
 

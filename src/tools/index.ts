@@ -277,7 +277,7 @@ const PACKAGE_TOOL_NAMES: Record<string, string[]> = {
     // Discovery run results & infrastructure health
     'list_discovery_runs', 'get_discovery_run', 'list_discovered_devices', 'list_discovery_logs',
     'list_discovery_ranges', 'list_discovery_credentials',
-    'list_mid_server_issues', 'get_mid_server_health',
+    'list_mid_server_issues', 'list_mid_extension_contexts', 'get_mid_server_health',
     // ACC (Agent Client Collector)
     'list_acc_agents', 'list_acc_policies', 'list_acc_checks',
     // Instance performance diagnostics

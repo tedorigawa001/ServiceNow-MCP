@@ -5,12 +5,12 @@
  *
  * Tier 0 (Read): list_discovery_runs, get_discovery_run, list_discovered_devices,
  *                 list_discovery_logs, list_discovery_ranges, list_discovery_credentials,
- *                 list_mid_server_issues, get_mid_server_health,
+ *                 list_mid_server_issues, list_mid_extension_contexts, get_mid_server_health,
  *                 list_acc_agents, list_acc_policies, list_acc_checks
  *
  * ServiceNow tables: discovery_status, discovery_device_history, discovery_log,
  *                     discovery_range_item, discovery_credentials,
- *                     ecc_agent, ecc_agent_issue, ecc_queue,
+ *                     ecc_agent, ecc_agent_issue, ecc_agent_ext_context, ecc_queue,
  *                     sn_agent_cmdb_ci_agent, sn_agent_policy, sn_agent_check (ACC plugin)
  *
  * Complements core.ts (list_discovery_schedules, list_mid_servers, run_discovery_scan):
@@ -23,6 +23,7 @@
  * clear PLUGIN_NOT_INSTALLED error instead of a generic 400.
  */
 import type { ServiceNowClient } from '../servicenow/client.js';
+import { sanitizeLikeValue } from '../servicenow/client.js';
 import { ServiceNowError } from '../utils/errors.js';
 
 const SYS_ID_RE = /^[0-9a-f]{32}$/i;
@@ -134,6 +135,21 @@ export function getDiscoveryToolDefinitions() {
         properties: {
           mid_server: { type: 'string', description: 'Filter by MID Server name or sys_id' },
           state: { type: 'string', description: 'Filter by issue state (e.g. "New", "Resolved")' },
+          limit: { type: 'number', description: 'Max records (default 25)' },
+        },
+        required: [],
+      },
+    },
+    {
+      name: 'list_mid_extension_contexts',
+      description:
+        'List MID Server extension contexts (ecc_agent_ext_context) — e.g. MID Web Server, ACC Websocket Endpoint — with status and error_message. Key for troubleshooting ACC listener setup: a missing "ACC Websocket Endpoint" context means agents get handshake 404s.',
+      inputSchema: {
+        type: 'object',
+        properties: {
+          mid_server: { type: 'string', description: 'Filter by MID Server name or sys_id' },
+          extension: { type: 'string', description: 'Filter by extension name (contains match, e.g. "Websocket", "Web Server")' },
+          status: { type: 'string', description: 'Filter by status (e.g. "Started", "Stopped", "Error")' },
           limit: { type: 'number', description: 'Max records (default 25)' },
         },
         required: [],
@@ -306,6 +322,30 @@ export async function executeDiscoveryToolCall(
         fields: 'sys_id,mid_server,message,source,state,count,last_detected,sys_created_on',
       });
       return { count: resp.count, issues: resp.records };
+    }
+
+    case 'list_mid_extension_contexts': {
+      let query = '';
+      if (args.mid_server) {
+        query = SYS_ID_RE.test(args.mid_server)
+          ? `mid_server=${args.mid_server}`
+          : `mid_server.name=${sanitizeLikeValue(String(args.mid_server))}`;
+      }
+      if (args.extension) {
+        query = (query ? `${query}^` : '') + `extension.nameLIKE${sanitizeLikeValue(String(args.extension))}`;
+      }
+      if (args.status) {
+        query = (query ? `${query}^` : '') + `status=${sanitizeLikeValue(String(args.status))}`;
+      }
+      query = (query ? `${query}^` : '') + 'ORDERBYDESCsys_updated_on';
+      const resp = await client.queryRecords({
+        table: 'ecc_agent_ext_context',
+        query,
+        limit: args.limit || 25,
+        display_value: true,
+        fields: 'sys_id,name,short_description,extension,mid_server,executing_on,execute_on,status,error_message,sys_updated_on',
+      });
+      return { count: resp.count, extension_contexts: resp.records };
     }
 
     case 'get_mid_server_health': {

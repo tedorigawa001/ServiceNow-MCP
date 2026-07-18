@@ -21,6 +21,7 @@
 | 9 | Discovery 運用可視化 + ACC ツールセット | ITOM 担当者 | ⭐ 低 | 低 | ✅ 完了 |
 | 10 | インスタンス性能診断（メモリ/セマフォ/トランザクション履歴） | SysAdmin/ITOM 担当者 | ⭐⭐ 中 | 中 | ✅ 完了 |
 | 11 | USEM 修復ワークフロー補完（VI 作成 / RT⇔VI リンク / RT テーブル是正 / グルーピング診断） | SecOps 担当者 | ⭐⭐ 中 | 低 | ✅ 完了 |
+| 12 | MID/ACC 運用診断ツール（拡張コンテキスト / テーブルアクセス診断 / ECC Queue / アップグレード突合） | SysAdmin/ITOM 担当者 | ⭐⭐ 中 | 低 | 🔨 12-1/12-2 完了(v1.7.0)、12-3〜12-5 バックログ |
 
 > #10 はロードマップ外で追加実装した機能(v1.0.5〜1.0.6)。`get_instance_diagnostics`(xmlstats.do の現在値 + `all_nodes` によるマルチノード対応)と `get_performance_history`(syslog_transaction の Aggregate API 時系列 + `group_by_node`)。メモリ・セマフォの履歴は JRobin が ACL 不可視のため対象外(現在値のみ)。詳細は [TOOLS.md](TOOLS.md) の Performance Analytics & Data Quality 節を参照。
 
@@ -600,6 +601,35 @@ Discovery 関連は core.ts の3ツール(`list_discovery_schedules` / `list_mid
 ### 未解決の調査項目
 
 - REST 起点の insert/update で after BR「Link to Remediation Tasks」による自動グルーピングが観測できなかった(エンジンをサーバー側で直接実行すると成功)。UI 起点の VI 保存での挙動確認が未実施。11-4 の実装時に再調査する。
+
+---
+
+## 12. MID/ACC 運用診断ツール 📋 バックログ
+
+### 背景
+
+2026-07-18 の ACC 実機検証(Docker ラボの MID Server に ACC 6.6.1 を接続、認証失敗/成功の両ケースを確認)で、既存ツール(`list_mid_servers` / `get_mid_server_health` / `list_acc_agents` 等)ではカバーできず**生 REST に頼らざるを得なかった操作**が明確になった。その5操作をツール化する。
+
+判明した運用上の事実(検証で確認済み):
+
+- ACC の API キー認証は MID の Jetty(ApiKeyAuthenticator)で完結し、**認証失敗はインスタンスのどのログにも出ない** → SN 側で追える材料は「拡張コンテキストの状態」「ECC Queue の稼働統計」「Agents の不在/Down」に限られる
+- テーブル照会のエラー種別でプラグイン導入状態を判別できる: `Invalid table`=未導入 / `User Not Authorized`=導入済みだが ACL 不足 / 空配列=ACL フィルタまたは 0 件
+- MID はインスタンスに自動追従するが、**ACC エージェントは独立ライフサイクル**(Store アプリ更新→選択アップグレードは同時 20 台制限 KB1157949)のため、インストール版と Store 最新版の突合が運用タスクになる
+
+### タスク一覧
+
+| # | 内容 | 種別 | 優先度 |
+|---|---|---|---|
+| 12-1 ✅ | `list_mid_extension_contexts` — `ecc_agent_ext_context` の照会(MID 名/拡張種別/status/error_message)。ACC リスナー・MID Web Server のトラブルシュート用。**2026-07-18 実装・実機検証済み**(v1.7.0、dev400464 で ACC Websocket Endpoint コンテキストの取得を確認) | 新規ツール | ⭐⭐⭐ 高 |
+| 12-2 ✅ | 4状態テーブルアクセス診断 — 新規ツールではなく**既存 `check_table_access` の強化**として実装(重複回避)。各結果に **not_installed / no_access / empty / accessible** の `status` と `hint` を追加。**2026-07-18 実装・実機検証済み**(v1.7.0、sn_agent_api_key=not_installed / sn_agent_policy=empty 等を確認) | 既存強化 | ⭐⭐⭐ 高 |
+| 12-3 | `list_ecc_queue` — `ecc_queue` の照会(topic/name/queue/state/期間フィルタ、payload は要求時のみ)。MID・統合デバッグの定番テーブル | 新規ツール | ⭐⭐ 中 |
+| 12-4 | `get_mid_server_health` 強化 — version 文字列・status(Up/Down/**Upgrading**)・拡張コンテキスト要約・直近 Issues を統合し、アップグレードループ検知(status と version の齟齬)を1コールで可能に | 既存強化 | ⭐⭐ 中 |
+| 12-5 | `check_app_upgrade` — インストール版(`sys_scope`/`sys_app_version`)× Store `/versions`(v1.6.0 の Store API)を突合し、差分リリースノート要約を返す。ACC-F/VR 等の Store アプリのアップグレード計画用 | 新規ツール | ⭐ 低 |
+
+### 備考
+
+- 12-2 の4状態判定は PDI(dev400464)実測に基づく。scoped テーブルでも `Invalid table` は sys_db_object 不在を意味することを確認済み
+- 12-5 は `search_store_apps` / `get_store_app_versions`(v1.6.0)の合成であり、外部 API(store.servicenow.com)依存はそれらと同一
 
 ---
 

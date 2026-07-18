@@ -266,7 +266,7 @@ export function getCoreToolDefinitions() {
     {
       name: 'check_table_access',
       description:
-        'Diagnose the connected service account\'s effective access to one or more tables BEFORE attempting operations. Returns per-table readable/writable flags plus the account\'s current user and assigned roles. Read is probed with a sysparm_limit=1 GET (200=readable, 403=denied); write is probed non-destructively with an empty PATCH to a reserved all-zero sys_id (404=writable, 403=denied) — no record is ever created or modified. Useful to avoid "User Not Authorized" retries.',
+        'Diagnose the connected service account\'s effective access to one or more tables BEFORE attempting operations. Returns per-table readable/writable flags plus a status that distinguishes WHY access failed: "not_installed" (Invalid table — the table does not exist, e.g. plugin/app not installed), "no_access" (403 — table exists but ACL denies this account), "empty" (readable but zero rows — truly empty or ACL row filtering), or "accessible". Also returns the account\'s current user and assigned roles. Read is probed with a sysparm_limit=1 GET; write is probed non-destructively with an empty PATCH to a reserved all-zero sys_id (404=writable, 403=denied) — no record is ever created or modified. Useful to check whether a plugin is installed and to avoid "User Not Authorized" retries.',
       inputSchema: {
         type: 'object',
         properties: {
@@ -582,20 +582,39 @@ export async function executeCoreToolCall(
           table: string;
           readable: boolean;
           writable: boolean | null;
+          status: 'accessible' | 'empty' | 'no_access' | 'not_installed' | 'unknown';
+          hint?: string;
           error?: string;
-        } = { table, readable: false, writable: checkWrite ? false : null };
+        } = { table, readable: false, writable: checkWrite ? false : null, status: 'unknown' };
 
         // Read probe
         try {
-          await client.queryRecords({ table, fields: 'sys_id', limit: 1 });
+          const probe = await client.queryRecords({ table, fields: 'sys_id', limit: 1 });
           entry.readable = true;
+          if (probe.records.length > 0) {
+            entry.status = 'accessible';
+          } else {
+            entry.status = 'empty';
+            entry.hint = 'Table exists and is readable but returned no rows — either truly empty or ACL row filtering hides all rows from this account.';
+          }
         } catch (e) {
           const code = codeOf(e);
+          const msg = e instanceof Error ? e.message : 'Read probe failed';
           if (code === 'INSUFFICIENT_PRIVILEGES') {
             entry.readable = false;
+            entry.status = 'no_access';
+            entry.hint = 'Table exists (so its plugin/app is installed) but ACL denies read for this account.';
+          } else if (code === 'INVALID_REQUEST' && /invalid table/i.test(msg)) {
+            // Invalid table — it does not exist at all; no point probing write
+            entry.status = 'not_installed';
+            entry.hint = 'Table does not exist on this instance — the providing plugin/app is likely not installed.';
+            entry.error = msg;
+            entry.writable = null;
+            results.push(entry);
+            continue;
           } else {
-            // Invalid/unknown table or validation failure — no point probing write
-            entry.error = e instanceof Error ? e.message : 'Read probe failed';
+            // Unknown validation failure — no point probing write
+            entry.error = msg;
             entry.writable = null;
             results.push(entry);
             continue;
@@ -626,6 +645,8 @@ export async function executeCoreToolCall(
 
       const readableCount = results.filter(r => r.readable).length;
       const writableCount = results.filter(r => r.writable === true).length;
+      const notInstalledCount = results.filter(r => r.status === 'not_installed').length;
+      const noAccessCount = results.filter(r => r.status === 'no_access').length;
 
       return {
         current_user: currentUser,
@@ -635,6 +656,8 @@ export async function executeCoreToolCall(
         summary:
           `${results.length} table(s) checked: ${readableCount} readable` +
           (checkWrite ? `, ${writableCount} writable` : '') +
+          (notInstalledCount ? `, ${notInstalledCount} not installed` : '') +
+          (noAccessCount ? `, ${noAccessCount} ACL-denied` : '') +
           (currentUser ? ` (as ${currentUser}, ${currentRoles.length} role(s))` : ''),
       };
     }

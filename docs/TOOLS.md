@@ -164,7 +164,7 @@ Return a full `sys_dictionary` schema, including inherited fields when requested
 - `include_inherited` — Include parent-table fields (default false)
 
 ### check_table_access
-Safely probe the configured account's read and write access for up to 20 tables.
+Safely probe the configured account's read and write access for up to 20 tables. Each result carries a `status` that explains *why* access failed: `not_installed` (Invalid table — the providing plugin/app is absent), `no_access` (table exists but ACL denies this account), `empty` (readable but zero rows — truly empty or ACL row filtering), or `accessible`. Doubles as a plugin-installation check.
 
 **Parameters**:
 - `tables` (required) — Table names
@@ -2692,6 +2692,54 @@ List asset contracts (maintenance, support).
 **Parameters**:
 - `active` — Default true
 - `limit`
+
+---
+
+## Discovery & MID/ACC Diagnostics (12 tools)
+
+Read-only visibility into Discovery runs and MID Server / Agent Client Collector infrastructure. ACC tools require the ACC plugin (`sn_agent`) and raise `PLUGIN_NOT_INSTALLED` instead of a generic 400 when it is absent.
+
+### list_discovery_runs
+List Discovery runs (`discovery_status`) newest-first, with optional `state` filter and `limit`.
+
+### get_discovery_run
+Fetch one Discovery run by sys_id or DIS number. **Parameters**: `run_id` (required).
+
+### list_discovered_devices
+Per-device results (`discovery_device_history`) for a run; `with_issues_only` narrows to problem devices.
+
+### list_discovery_logs
+Discovery log entries, scoped by `device_history_id` and/or `level`.
+
+### list_discovery_ranges
+IP range items (`discovery_range_item`). Note: ranges attach to a schedule via the `schedule` field.
+
+### list_discovery_credentials
+Credential metadata (name/type/order/scope) — secret fields are never requested.
+
+### list_mid_server_issues
+MID Server issues (`ecc_agent_issue`) with source, occurrence count, and last-detected time.
+
+### list_mid_extension_contexts
+MID Server extension contexts (`ecc_agent_ext_context`) — e.g. MID Web Server, ACC Websocket Endpoint — with status and error_message. Key for ACC listener troubleshooting: if no "ACC Websocket Endpoint" context exists, agents fail with handshake 404 (run "Setup ACC Listener" on the MID Server record).
+
+**Parameters**:
+- `mid_server` — MID Server name or sys_id
+- `extension` — Extension name contains-match (e.g. "Websocket")
+- `status` — e.g. "Started", "Stopped", "Error"
+- `limit` — Max records (default 25)
+
+### get_mid_server_health
+One-call MID health summary: status/version/last refresh, open issues, and output-queue backlog sample.
+
+### list_acc_agents
+ACC agents (`sn_agent_cmdb_ci_agent`) and their up/down status.
+
+### list_acc_policies
+ACC monitoring/check policies.
+
+### list_acc_checks
+ACC check definitions.
 
 ---
 

@@ -6,6 +6,20 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 ---
 
+## [1.7.0] — 2026-07-18
+
+### Added
+
+- **`list_mid_extension_contexts`** (`discovery.ts`): list MID Server extension contexts (`ecc_agent_ext_context`) — MID Web Server, ACC Websocket Endpoint, etc. — with status and error_message. Born from a live ACC verification session: agents get `handshake failed with status 404` until the "ACC Websocket Endpoint" context exists (created by "Setup ACC Listener" on the MID Server record), and this table is where that shows. Filters sanitize `^` to prevent encoded-query injection. Added to the `itom_engineer` package (now 30 tools).
+
+### Changed
+
+- **`check_table_access`** (`core.ts`): each result now carries a `status` explaining *why* access failed — `not_installed` (Invalid table: the providing plugin/app is absent), `no_access` (403: table exists but ACL denies the account), `empty` (readable but zero rows — truly empty or ACL row filtering), or `accessible` — plus a human-readable `hint`. The summary counts not-installed and ACL-denied tables. This turns the tool into a plugin-installation check as well (verified live: `sn_agent_policy=empty`, `sn_agent_api_key=not_installed`, `sys_scope=accessible` on a Zurich PDI with ACC Framework installed).
+
+Docs: added the previously missing "Discovery & MID/ACC Diagnostics" section to TOOLS.md covering all 12 tools of `discovery.ts`. 7 unit tests added.
+
+---
+
 ## [1.6.0] — 2026-07-16
 
 ### Added

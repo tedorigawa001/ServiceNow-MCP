@@ -13,7 +13,7 @@ Set `MCP_TOOL_PACKAGE` in your environment to load a role-specific subset of too
 | `catalog_builder` | Catalog administrator | 20 |
 | `system_administrator` | SysAdmin | 72 |
 | `platform_developer` | Platform developer | 43 |
-| `itom_engineer` | ITOM/CMDB engineer | 29 |
+| `itom_engineer` | ITOM/CMDB engineer | 30 |
 | `secops_analyst` | Security Operations / Vulnerability Response analyst | 102 |
 | `agile_manager` | Agile team lead | 13 |
 | `ai_developer` | Now Assist/AI developer | 15 |
@@ -141,7 +141,7 @@ Includes:
 - Full CMDB tools (read + create/update with CMDB_WRITE_ENABLED)
 - Discovery and MID server tools
 - Discovery run results (run history, per-device results, logs, IP ranges, credential metadata)
-- MID Server health (issues, health summary with queue backlog)
+- MID Server health (issues, extension contexts, health summary with queue backlog)
 - ACC (Agent Client Collector) agents, policies, and checks — requires the ACC plugin
 - Event management tools
 - Service Mapping
