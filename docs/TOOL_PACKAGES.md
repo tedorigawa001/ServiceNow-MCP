@@ -13,8 +13,8 @@ Set `MCP_TOOL_PACKAGE` in your environment to load a role-specific subset of too
 | `catalog_builder` | Catalog administrator | 20 |
 | `system_administrator` | SysAdmin | 72 |
 | `platform_developer` | Platform developer | 43 |
-| `itom_engineer` | ITOM/CMDB engineer | 30 |
-| `secops_analyst` | Security Operations / Vulnerability Response analyst | 102 |
+| `itom_engineer` | ITOM/CMDB engineer | 34 |
+| `secops_analyst` | Security Operations / Vulnerability Response analyst | 103 |
 | `agile_manager` | Agile team lead | 13 |
 | `ai_developer` | Now Assist/AI developer | 15 |
 | `portal_developer` | Portal/UI Builder developer | 34 |
@@ -141,7 +141,8 @@ Includes:
 - Full CMDB tools (read + create/update with CMDB_WRITE_ENABLED)
 - Discovery and MID server tools
 - Discovery run results (run history, per-device results, logs, IP ranges, credential metadata)
-- MID Server health (issues, extension contexts, health summary with queue backlog)
+- MID Server health (issues, extension contexts, ECC Queue inspection, health summary with queue backlog and upgrade detection)
+- Store app upgrade planning (`search_store_apps` / `get_store_app_versions` / `check_app_upgrade`)
 - ACC (Agent Client Collector) agents, policies, and checks — requires the ACC plugin
 - Event management tools
 - Service Mapping
@@ -164,7 +165,7 @@ Includes:
 - Remediation SLA / TTR tracking (`list_remediation_sla`, `get_group_sla`, `set_remediation_commitment`) and VR notifications
 - VR approvals and exception requests (`list_vr_approvals`, `list_vr_exception_requests`, `act_on_vr_approval`)
 - Threat intelligence and integration health
-- ServiceNow Store release notes for upgrade planning (`search_store_apps`, `get_store_app_versions` — public Store API, no instance auth)
+- ServiceNow Store release notes for upgrade planning (`search_store_apps`, `get_store_app_versions` — public Store API, no instance auth; `check_app_upgrade` — installed sys_scope version vs Store history)
 - Core read tools
 
 ### agile_manager

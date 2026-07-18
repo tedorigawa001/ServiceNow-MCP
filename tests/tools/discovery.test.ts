@@ -13,7 +13,7 @@ const gr = () => mockClient.getRecord as ReturnType<typeof vi.fn>;
 const SYS_ID = 'a'.repeat(32);
 
 describe('getDiscoveryToolDefinitions', () => {
-  it('returns all twelve Discovery/ACC read tools', () => {
+  it('returns all thirteen Discovery/ACC read tools', () => {
     const defs = getDiscoveryToolDefinitions();
     expect(defs.map(d => d.name)).toEqual([
       'list_discovery_runs',
@@ -24,6 +24,7 @@ describe('getDiscoveryToolDefinitions', () => {
       'list_discovery_credentials',
       'list_mid_server_issues',
       'list_mid_extension_contexts',
+      'list_ecc_queue',
       'get_mid_server_health',
       'list_acc_agents',
       'list_acc_policies',
@@ -149,13 +150,44 @@ describe('executeDiscoveryToolCall', () => {
     }));
   });
 
-  it('builds a MID health summary from agent + issues + queue backlog', async () => {
+  it('lists ECC queue entries with agent prefixing, filters, and no payload by default', async () => {
+    qr().mockResolvedValue({ count: 0, records: [] });
+    await executeDiscoveryToolCall(mockClient, 'list_ecc_queue', {
+      agent: 'mid01',
+      queue: 'output',
+      state: 'ready',
+      name_contains: 'ACC',
+      since_hours: 24,
+    });
+    const call = qr().mock.calls[0][0];
+    expect(call.table).toBe('ecc_queue');
+    expect(call.query).toBe(
+      'agent=mid.server.mid01^nameLIKEACC^queue=output^state=ready^sys_created_on>=javascript:gs.hoursAgo(24)^ORDERBYDESCsys_created_on'
+    );
+    expect(call.fields).not.toContain('payload');
+  });
+
+  it('keeps a full agent string as-is and includes payload on request', async () => {
+    qr().mockResolvedValue({ count: 0, records: [] });
+    await executeDiscoveryToolCall(mockClient, 'list_ecc_queue', {
+      agent: 'mid.server.mid01',
+      include_payload: true,
+    });
+    const call = qr().mock.calls[0][0];
+    expect(call.query).toBe('agent=mid.server.mid01^ORDERBYDESCsys_created_on');
+    expect(call.fields).toContain('payload');
+  });
+
+  it('builds a MID health summary from agent + issues + extension contexts + queue backlog', async () => {
     qr().mockImplementation(async (params: any) => {
       if (params.table === 'ecc_agent') {
         return { count: 1, records: [{ sys_id: SYS_ID, name: 'mid01', status: 'Up' }] };
       }
       if (params.table === 'ecc_agent_issue') {
         return { count: 2, records: [{ message: 'x' }, { message: 'y' }] };
+      }
+      if (params.table === 'ecc_agent_ext_context') {
+        return { count: 1, records: [{ name: 'mid_websocket_mid01', status: 'Started' }] };
       }
       if (params.table === 'ecc_queue') {
         return { count: 5, records: [] };
@@ -165,10 +197,24 @@ describe('executeDiscoveryToolCall', () => {
     const result = await executeDiscoveryToolCall(mockClient, 'get_mid_server_health', { mid_server: 'mid01' });
     expect(result.mid_server.name).toBe('mid01');
     expect(result.open_issue_count).toBe(2);
+    expect(result.extension_context_count).toBe(1);
+    expect(result.extension_contexts[0].name).toBe('mid_websocket_mid01');
+    expect(result.upgrade_note).toBeUndefined();
     expect(result.output_queue_backlog_sample).toBe(5);
     // Backlog query targets this MID's output queue.
     const backlogCall = qr().mock.calls.find(c => c[0].table === 'ecc_queue');
     expect(backlogCall[0].query).toBe('agent=mid.server.mid01^queue=output^state=ready');
+  });
+
+  it('adds an upgrade_note when the MID reports Upgrading', async () => {
+    qr().mockImplementation(async (params: any) => {
+      if (params.table === 'ecc_agent') {
+        return { count: 1, records: [{ sys_id: SYS_ID, name: 'mid01', status: 'Upgrading' }] };
+      }
+      return { count: 0, records: [] };
+    });
+    const result = await executeDiscoveryToolCall(mockClient, 'get_mid_server_health', { mid_server: 'mid01' });
+    expect(result.upgrade_note).toMatch(/upgrading/i);
   });
 
   it('throws NOT_FOUND when the MID server does not exist', async () => {

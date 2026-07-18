@@ -5,8 +5,8 @@
  *
  * Tier 0 (Read): list_discovery_runs, get_discovery_run, list_discovered_devices,
  *                 list_discovery_logs, list_discovery_ranges, list_discovery_credentials,
- *                 list_mid_server_issues, list_mid_extension_contexts, get_mid_server_health,
- *                 list_acc_agents, list_acc_policies, list_acc_checks
+ *                 list_mid_server_issues, list_mid_extension_contexts, list_ecc_queue,
+ *                 get_mid_server_health, list_acc_agents, list_acc_policies, list_acc_checks
  *
  * ServiceNow tables: discovery_status, discovery_device_history, discovery_log,
  *                     discovery_range_item, discovery_credentials,
@@ -156,8 +156,27 @@ export function getDiscoveryToolDefinitions() {
       },
     },
     {
+      name: 'list_ecc_queue',
+      description:
+        'Inspect the ECC Queue (ecc_queue) — the job/result bus between the instance and MID Servers. Useful for debugging Discovery, integrations, and ACC data flow. Payload is excluded by default (can be very large); set include_payload to fetch it.',
+      inputSchema: {
+        type: 'object',
+        properties: {
+          agent: { type: 'string', description: 'MID Server name (e.g. "mid01") or full agent string ("mid.server.mid01")' },
+          topic: { type: 'string', description: 'Exact topic filter (e.g. "SSHCommand", "MIDExtension:MonitoringExtension")' },
+          name_contains: { type: 'string', description: 'Contains-match on the name field (e.g. "ACC")' },
+          queue: { type: 'string', description: '"input" (MID→instance) or "output" (instance→MID)' },
+          state: { type: 'string', description: 'Filter by state (e.g. "ready", "processing", "processed", "error")' },
+          since_hours: { type: 'number', description: 'Only records created in the last N hours' },
+          include_payload: { type: 'boolean', description: 'Include the payload field (default false — payloads can be huge)' },
+          limit: { type: 'number', description: 'Max records (default 25)' },
+        },
+        required: [],
+      },
+    },
+    {
       name: 'get_mid_server_health',
-      description: 'MID Server health summary — status, version, last refresh, open issues, and output-queue backlog sample',
+      description: 'MID Server health summary — status, version, last refresh, open issues, extension contexts (web server / ACC listener), and output-queue backlog sample',
       inputSchema: {
         type: 'object',
         properties: {
@@ -348,6 +367,31 @@ export async function executeDiscoveryToolCall(
       return { count: resp.count, extension_contexts: resp.records };
     }
 
+    case 'list_ecc_queue': {
+      const clauses: string[] = [];
+      if (args.agent) {
+        const a = sanitizeLikeValue(String(args.agent));
+        clauses.push(`agent=${a.startsWith('mid.server.') ? a : `mid.server.${a}`}`);
+      }
+      if (args.topic) clauses.push(`topic=${sanitizeLikeValue(String(args.topic))}`);
+      if (args.name_contains) clauses.push(`nameLIKE${sanitizeLikeValue(String(args.name_contains))}`);
+      if (args.queue) clauses.push(`queue=${sanitizeLikeValue(String(args.queue))}`);
+      if (args.state) clauses.push(`state=${sanitizeLikeValue(String(args.state))}`);
+      const rawHours = Number(args.since_hours);
+      if (Number.isFinite(rawHours) && rawHours > 0) {
+        clauses.push(`sys_created_on>=javascript:gs.hoursAgo(${Math.min(Math.trunc(rawHours), 8760)})`);
+      }
+      clauses.push('ORDERBYDESCsys_created_on');
+      const baseFields = 'sys_id,agent,topic,name,source,queue,state,processed,sequence,error_string,sys_created_on';
+      const resp = await client.queryRecords({
+        table: 'ecc_queue',
+        query: clauses.join('^'),
+        limit: args.limit || 25,
+        fields: args.include_payload ? `${baseFields},payload` : baseFields,
+      });
+      return { count: resp.count, entries: resp.records };
+    }
+
     case 'get_mid_server_health': {
       if (!args.mid_server) throw new ServiceNowError('mid_server is required', 'INVALID_REQUEST');
       const midQuery = SYS_ID_RE.test(args.mid_server)
@@ -371,6 +415,16 @@ export async function executeDiscoveryToolCall(
         fields: 'sys_id,message,source,state,count,last_detected',
       });
 
+      // Extension contexts (MID Web Server, ACC Websocket Endpoint, ...) — a
+      // context in Error/Stopped state explains agent-side connection failures.
+      const extResp = await client.queryRecords({
+        table: 'ecc_agent_ext_context',
+        query: `mid_server=${mid.sys_id}^ORDERBYDESCsys_updated_on`,
+        limit: 20,
+        display_value: true,
+        fields: 'sys_id,name,extension,status,error_message,sys_updated_on',
+      });
+
       // Output-queue backlog: jobs handed to this MID that it has not picked up yet.
       // Sampled (capped at 100) — queryRecords count is page size, not a table count.
       const backlogResp = await client.queryRecords({
@@ -380,12 +434,19 @@ export async function executeDiscoveryToolCall(
         fields: 'sys_id',
       });
 
+      const status = String(mid.status ?? '');
       return {
         mid_server: mid,
         open_issue_count: issuesResp.count,
         open_issues: issuesResp.records,
+        extension_context_count: extResp.count,
+        extension_contexts: extResp.records,
         output_queue_backlog_sample: backlogResp.count,
         output_queue_backlog_note: backlogResp.count >= 100 ? '100+ (sample capped at 100)' : String(backlogResp.count),
+        ...(status === 'Upgrading' ? {
+          upgrade_note:
+            'MID is upgrading — status and version are transient. If the version is still the old build after repeated restarts, the upgrade may be failing; check dist_upgrade.log on the MID host (Docker hosts: overlayfs cannot rename image-layer directories — keep the install dir on a volume).',
+        } : {}),
       };
     }
 

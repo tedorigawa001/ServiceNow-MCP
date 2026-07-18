@@ -171,7 +171,7 @@ const PACKAGE_TOOL_NAMES: Record<string, string[]> = {
     // Integration health
     'get_integration_health',
     // Store release notes (upgrade planning)
-    'search_store_apps', 'get_store_app_versions',
+    'search_store_apps', 'get_store_app_versions', 'check_app_upgrade',
   ],
   portal_developer: [
     'query_records', 'get_record', 'get_table_schema',
@@ -277,9 +277,11 @@ const PACKAGE_TOOL_NAMES: Record<string, string[]> = {
     // Discovery run results & infrastructure health
     'list_discovery_runs', 'get_discovery_run', 'list_discovered_devices', 'list_discovery_logs',
     'list_discovery_ranges', 'list_discovery_credentials',
-    'list_mid_server_issues', 'list_mid_extension_contexts', 'get_mid_server_health',
+    'list_mid_server_issues', 'list_mid_extension_contexts', 'list_ecc_queue', 'get_mid_server_health',
     // ACC (Agent Client Collector)
     'list_acc_agents', 'list_acc_policies', 'list_acc_checks',
+    // Store app upgrade planning (ACC-F / Store apps have a lifecycle independent of platform upgrades)
+    'search_store_apps', 'get_store_app_versions', 'check_app_upgrade',
     // Instance performance diagnostics
     'get_instance_diagnostics', 'get_performance_history',
   ],

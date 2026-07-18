@@ -21,7 +21,7 @@
 | 9 | Discovery 運用可視化 + ACC ツールセット | ITOM 担当者 | ⭐ 低 | 低 | ✅ 完了 |
 | 10 | インスタンス性能診断（メモリ/セマフォ/トランザクション履歴） | SysAdmin/ITOM 担当者 | ⭐⭐ 中 | 中 | ✅ 完了 |
 | 11 | USEM 修復ワークフロー補完（VI 作成 / RT⇔VI リンク / RT テーブル是正 / グルーピング診断） | SecOps 担当者 | ⭐⭐ 中 | 低 | ✅ 完了 |
-| 12 | MID/ACC 運用診断ツール（拡張コンテキスト / テーブルアクセス診断 / ECC Queue / アップグレード突合） | SysAdmin/ITOM 担当者 | ⭐⭐ 中 | 低 | 🔨 12-1/12-2 完了(v1.7.0)、12-3〜12-5 バックログ |
+| 12 | MID/ACC 運用診断ツール（拡張コンテキスト / テーブルアクセス診断 / ECC Queue / アップグレード突合） | SysAdmin/ITOM 担当者 | ⭐⭐ 中 | 低 | ✅ 完了(12-1/12-2: v1.7.0、12-3〜12-5: v1.8.0) |
 
 > #10 はロードマップ外で追加実装した機能(v1.0.5〜1.0.6)。`get_instance_diagnostics`(xmlstats.do の現在値 + `all_nodes` によるマルチノード対応)と `get_performance_history`(syslog_transaction の Aggregate API 時系列 + `group_by_node`)。メモリ・セマフォの履歴は JRobin が ACL 不可視のため対象外(現在値のみ)。詳細は [TOOLS.md](TOOLS.md) の Performance Analytics & Data Quality 節を参照。
 
@@ -622,9 +622,9 @@ Discovery 関連は core.ts の3ツール(`list_discovery_schedules` / `list_mid
 |---|---|---|---|
 | 12-1 ✅ | `list_mid_extension_contexts` — `ecc_agent_ext_context` の照会(MID 名/拡張種別/status/error_message)。ACC リスナー・MID Web Server のトラブルシュート用。**2026-07-18 実装・実機検証済み**(v1.7.0、dev400464 で ACC Websocket Endpoint コンテキストの取得を確認) | 新規ツール | ⭐⭐⭐ 高 |
 | 12-2 ✅ | 4状態テーブルアクセス診断 — 新規ツールではなく**既存 `check_table_access` の強化**として実装(重複回避)。各結果に **not_installed / no_access / empty / accessible** の `status` と `hint` を追加。**2026-07-18 実装・実機検証済み**(v1.7.0、sn_agent_api_key=not_installed / sn_agent_policy=empty 等を確認) | 既存強化 | ⭐⭐⭐ 高 |
-| 12-3 | `list_ecc_queue` — `ecc_queue` の照会(topic/name/queue/state/期間フィルタ、payload は要求時のみ)。MID・統合デバッグの定番テーブル | 新規ツール | ⭐⭐ 中 |
-| 12-4 | `get_mid_server_health` 強化 — version 文字列・status(Up/Down/**Upgrading**)・拡張コンテキスト要約・直近 Issues を統合し、アップグレードループ検知(status と version の齟齬)を1コールで可能に | 既存強化 | ⭐⭐ 中 |
-| 12-5 | `check_app_upgrade` — インストール版(`sys_scope`/`sys_app_version`)× Store `/versions`(v1.6.0 の Store API)を突合し、差分リリースノート要約を返す。ACC-F/VR 等の Store アプリのアップグレード計画用 | 新規ツール | ⭐ 低 |
+| 12-3 ✅ | `list_ecc_queue` — `ecc_queue` の照会(agent/topic/name/queue/state/期間フィルタ、payload は要求時のみ)。**2026-07-18 実装・実機検証済み**(v1.8.0、ACC Websocket Endpoint の稼働統計エントリ取得を確認) | 新規ツール | ⭐⭐ 中 |
+| 12-4 ✅ | `get_mid_server_health` 強化 — 拡張コンテキスト要約(Web Server/ACC リスナーの status・error_message)と Upgrading 時の `upgrade_note`(Docker overlayfs 注意書き含む)を追加。**2026-07-18 実装・実機検証済み**(v1.8.0、mid-docker-01 で ext 2件 Started を確認) | 既存強化 | ⭐⭐ 中 |
+| 12-5 ✅ | `check_app_upgrade` — インストール版(`sys_scope`)× Store `/versions` を突合し、差分リリースノートを返す。listing 解決は listing_id 指定/タイトル完全一致/先頭候補(要確認フラグ付き)の3段。**2026-07-18 実装・実機検証済み**(v1.8.0、sn_vul 30.3.5→30.7.2 差分3件を exact_title で取得) | 新規ツール | ⭐ 低 |
 
 ### 備考
 

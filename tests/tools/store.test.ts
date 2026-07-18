@@ -1,8 +1,10 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { executeStoreToolCall, getStoreToolDefinitions, stripReleaseNotesHtml } from '../../src/tools/store.js';
+import { executeStoreToolCall, getStoreToolDefinitions, stripReleaseNotesHtml, compareVersions } from '../../src/tools/store.js';
 import type { ServiceNowClient } from '../../src/servicenow/client.js';
 
-const mockClient = {} as unknown as ServiceNowClient;
+const mockClient = {
+  queryRecords: vi.fn(),
+} as unknown as ServiceNowClient;
 
 const LISTING_ID = '21d8a32e1be06a50a85b16db234bcb7e';
 
@@ -15,8 +17,8 @@ function mockFetchOnce(body: any, status = 200) {
 }
 
 describe('getStoreToolDefinitions', () => {
-  it('returns exactly 2 store tool definitions', () => {
-    expect(getStoreToolDefinitions().length).toBe(2);
+  it('returns exactly 3 store tool definitions', () => {
+    expect(getStoreToolDefinitions().length).toBe(3);
   });
 
   it('all tools have name, description and inputSchema', () => {
@@ -156,5 +158,103 @@ describe('get_store_app_versions', () => {
     });
     const result = await executeStoreToolCall(mockClient, 'get_store_app_versions', { listing_id: LISTING_ID, include_notes: false });
     expect(result.versions[0]).not.toHaveProperty('release_notes');
+  });
+});
+
+describe('compareVersions', () => {
+  it('orders dotted numeric versions correctly', () => {
+    expect(compareVersions('30.3.5', '30.7.2')).toBe(-1);
+    expect(compareVersions('30.7.2', '30.3.5')).toBe(1);
+    expect(compareVersions('30.7.2', '30.7.2')).toBe(0);
+    expect(compareVersions('6.6.1', '6.6')).toBe(1);
+    expect(compareVersions('10.0.0', '9.9.9')).toBe(1);
+  });
+});
+
+describe('check_app_upgrade', () => {
+  beforeEach(() => vi.restoreAllMocks());
+  afterEach(() => vi.restoreAllMocks());
+
+  const qr = () => mockClient.queryRecords as ReturnType<typeof vi.fn>;
+
+  function mockFetchSequence(bodies: any[]) {
+    const spy = vi.spyOn(globalThis, 'fetch');
+    for (const body of bodies) {
+      spy.mockResolvedValueOnce({ ok: true, status: 200, json: async () => body } as unknown as Response);
+    }
+    return spy;
+  }
+
+  it('requires a plain scope name', async () => {
+    await expect(executeStoreToolCall(mockClient, 'check_app_upgrade', {})).rejects.toThrow('scope is required');
+    await expect(executeStoreToolCall(mockClient, 'check_app_upgrade', { scope: 'sn_vul^ORDERBY' }))
+      .rejects.toThrow('plain scope name');
+  });
+
+  it('throws NOT_FOUND when the scope is not installed', async () => {
+    qr().mockResolvedValue({ count: 0, records: [] });
+    await expect(executeStoreToolCall(mockClient, 'check_app_upgrade', { scope: 'sn_nope' }))
+      .rejects.toMatchObject({ code: 'NOT_FOUND' });
+  });
+
+  it('reports newer versions via an exact-title Store match', async () => {
+    qr().mockResolvedValue({ count: 1, records: [{ name: 'Vulnerability Response', scope: 'sn_vul', version: '30.3.5' }] });
+    mockFetchSequence([
+      { result: { listings: [
+        { id: 'f'.repeat(32), title: 'Vulnerability Response Extra' },
+        { id: LISTING_ID, title: 'Vulnerability Response' },
+      ] } },
+      { result: { data: [
+        { version: '30.7.2', publish_date: '2026-07-01', release_type: 'Minor', release_notes: '<li>Fix Z</li>' },
+        { version: '30.6.0', publish_date: '2026-05-01', release_type: 'Minor', release_notes: '<li>Fix Y</li>' },
+        { version: '30.3.5', publish_date: '2026-02-01', release_type: 'Patch', release_notes: '<li>Fix X</li>' },
+      ] } },
+    ]);
+
+    const r = await executeStoreToolCall(mockClient, 'check_app_upgrade', { scope: 'sn_vul' });
+    expect(qr()).toHaveBeenCalledWith(expect.objectContaining({ table: 'sys_scope', query: 'scope=sn_vul' }));
+    expect(r.matched_by).toBe('exact_title');
+    expect(r.listing_id).toBe(LISTING_ID);
+    expect(r.installed_version).toBe('30.3.5');
+    expect(r.latest_version).toBe('30.7.2');
+    expect(r.up_to_date).toBe(false);
+    expect(r.behind_count).toBe(2);
+    expect(r.newer_versions.map((v: any) => v.version)).toEqual(['30.7.2', '30.6.0']);
+    expect(r.newer_versions[0].release_notes).toContain('- Fix Z');
+  });
+
+  it('reports up_to_date and skips the search when listing_id is given', async () => {
+    qr().mockResolvedValue({ count: 1, records: [{ name: 'VR', scope: 'sn_vul', version: '30.7.2' }] });
+    const spy = mockFetchSequence([
+      { result: { data: [{ version: '30.7.2', publish_date: '2026-07-01', release_type: 'Minor', release_notes: '' }] } },
+    ]);
+
+    const r = await executeStoreToolCall(mockClient, 'check_app_upgrade', { scope: 'sn_vul', listing_id: LISTING_ID });
+    expect(spy).toHaveBeenCalledTimes(1);
+    expect(String(spy.mock.calls[0][0])).toContain(`/listings/${LISTING_ID}/versions`);
+    expect(r.matched_by).toBe('listing_id');
+    expect(r.up_to_date).toBe(true);
+    expect(r.behind_count).toBe(0);
+    expect(r.newer_versions).toEqual([]);
+  });
+
+  it('falls back to the first search result with a warning in the summary', async () => {
+    qr().mockResolvedValue({ count: 1, records: [{ name: 'Agent Client Collector Framework', scope: 'sn_agent', version: '6.5.0' }] });
+    mockFetchSequence([
+      { result: { listings: [{ id: LISTING_ID, title: 'ACC Framework (different title)' }] } },
+      { result: { data: [{ version: '6.6.1', publish_date: '2026-07-09', release_type: 'Minor', release_notes: '' }] } },
+    ]);
+
+    const r = await executeStoreToolCall(mockClient, 'check_app_upgrade', { scope: 'sn_agent' });
+    expect(r.matched_by).toBe('first_result');
+    expect(r.matched_title).toBe('ACC Framework (different title)');
+    expect(r.summary).toContain('verify matched_title');
+  });
+
+  it('rejects a malformed listing_id', async () => {
+    qr().mockResolvedValue({ count: 1, records: [{ name: 'VR', scope: 'sn_vul', version: '1.0.0' }] });
+    await expect(
+      executeStoreToolCall(mockClient, 'check_app_upgrade', { scope: 'sn_vul', listing_id: '../evil' })
+    ).rejects.toThrow('32-char sys_id');
   });
 });

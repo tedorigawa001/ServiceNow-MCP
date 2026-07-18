@@ -192,9 +192,9 @@ Resolve natural-language requests into a ServiceNow table and encoded query, the
 
 ---
 
-## ServiceNow Store (2 tools)
+## ServiceNow Store (3 tools)
 
-These call store.servicenow.com's public catalog API — no instance authentication involved. Per-version release notes are not stored in any instance table (App Manager also fetches them remotely), so this is the only programmatic source.
+These call store.servicenow.com's public catalog API. Per-version release notes are not stored in any instance table (App Manager also fetches them remotely), so this is the only programmatic source. `search_store_apps` / `get_store_app_versions` never touch the instance; `check_app_upgrade` also reads `sys_scope` on the configured instance.
 
 ### search_store_apps
 Search the public ServiceNow Store catalog by keyword.
@@ -210,6 +210,16 @@ Get version history with release notes (new features / bug fixes) for a Store ap
 - `listing_id` (required) — 32-char Store listing sys_id (from `search_store_apps`)
 - `limit` — Max versions, newest first (default 5, max 20)
 - `include_notes` — Include release-notes text (default true)
+
+### check_app_upgrade
+Compare the installed version of a scoped app (`sys_scope`) against the public Store version history and return release notes for every newer version. Store apps (VR, ACC Framework, ...) upgrade independently of platform releases, so this is the upgrade-planning primitive. When resolved via search, `matched_by`/`matched_title` show how the listing was chosen — verify on `first_result` matches.
+
+**Parameters**:
+- `scope` (required) — App scope on the instance (e.g. "sn_vul", "sn_agent")
+- `listing_id` — Skip the catalog search
+- `store_query` — Override the search keywords (default: app name from sys_scope)
+- `include_notes` — Release notes for newer versions (default true)
+- `max_newer` — Max newer versions returned (default 10, max 20)
 
 ---
 
@@ -2695,7 +2705,7 @@ List asset contracts (maintenance, support).
 
 ---
 
-## Discovery & MID/ACC Diagnostics (12 tools)
+## Discovery & MID/ACC Diagnostics (13 tools)
 
 Read-only visibility into Discovery runs and MID Server / Agent Client Collector infrastructure. ACC tools require the ACC plugin (`sn_agent`) and raise `PLUGIN_NOT_INSTALLED` instead of a generic 400 when it is absent.
 
@@ -2729,8 +2739,21 @@ MID Server extension contexts (`ecc_agent_ext_context`) — e.g. MID Web Server,
 - `status` — e.g. "Started", "Stopped", "Error"
 - `limit` — Max records (default 25)
 
+### list_ecc_queue
+Inspect the ECC Queue (`ecc_queue`) — the job/result bus between the instance and MID Servers. Payload excluded by default (can be huge).
+
+**Parameters**:
+- `agent` — MID Server name (auto-prefixed to `mid.server.<name>`) or full agent string
+- `topic` — Exact topic (e.g. "SSHCommand")
+- `name_contains` — Contains-match on name (e.g. "ACC")
+- `queue` — `input` or `output`
+- `state` — e.g. "ready", "processing", "processed", "error"
+- `since_hours` — Only records from the last N hours
+- `include_payload` — Fetch the payload field (default false)
+- `limit` — Max records (default 25)
+
 ### get_mid_server_health
-One-call MID health summary: status/version/last refresh, open issues, and output-queue backlog sample.
+One-call MID health summary: status/version/last refresh, open issues, extension contexts (MID Web Server / ACC listener state), and output-queue backlog sample. Adds an `upgrade_note` when the MID reports Upgrading (transient status; persistent old version = failing upgrade).
 
 ### list_acc_agents
 ACC agents (`sn_agent_cmdb_ci_agent`) and their up/down status.

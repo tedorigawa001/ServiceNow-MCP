@@ -6,6 +6,21 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 ---
 
+## [1.8.0] — 2026-07-18
+
+### Added
+
+- **`list_ecc_queue`** (`discovery.ts`): inspect the ECC Queue — the instance⇄MID job/result bus — with agent/topic/name/queue/state/time filters. Payload excluded by default (huge); `include_payload` opts in. MID names are auto-prefixed to `mid.server.<name>`.
+- **`check_app_upgrade`** (`store.ts`): compare a scoped app's installed version (`sys_scope`) against the public Store version history and return release notes for every newer version. Store apps upgrade independently of platform releases (ACC-F, VR, ...), so this is the upgrade-planning primitive. Listing resolution: explicit `listing_id`, exact-title search match, or first result (flagged for verification). Verified live: sn_vul 30.3.5 → latest 30.7.2, 3 newer releases, exact-title match.
+
+### Changed
+
+- **`get_mid_server_health`** (`discovery.ts`): now includes extension contexts (MID Web Server / ACC Websocket Endpoint with status and error_message) and an `upgrade_note` when the MID reports Upgrading — a persistent old version across restarts indicates a failing upgrade (on Docker hosts, overlayfs cannot rename image-layer directories; keep the install dir on a volume).
+
+Packages: `itom_engineer` 30 → 34 (adds `list_ecc_queue` + the 3 Store tools), `secops_analyst` 102 → 103 (adds `check_app_upgrade`). 10 unit tests added (1501 total). Completes ROADMAP #12 (12-3/12-4/12-5).
+
+---
+
 ## [1.7.0] — 2026-07-18
 
 ### Added
