@@ -17,7 +17,9 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 - **`get_mid_server_health`** (`discovery.ts`): now includes extension contexts (MID Web Server / ACC Websocket Endpoint with status and error_message) and an `upgrade_note` when the MID reports Upgrading — a persistent old version across restarts indicates a failing upgrade (on Docker hosts, overlayfs cannot rename image-layer directories; keep the install dir on a volume).
 
-Packages: `itom_engineer` 30 → 34 (adds `list_ecc_queue` + the 3 Store tools), `secops_analyst` 102 → 103 (adds `check_app_upgrade`). 10 unit tests added (1501 total). Completes ROADMAP #12 (12-3/12-4/12-5).
+Hardening: `check_app_upgrade` re-validates search-derived listing ids as 32-char sys_ids before building the versions URL (never trusts the external API's response shape), and `list_ecc_queue` documents that payloads can contain sensitive data (command output, host details, credential references).
+
+Packages: `itom_engineer` 30 → 34 (adds `list_ecc_queue` + the 3 Store tools), `secops_analyst` 102 → 103 (adds `check_app_upgrade`). 11 unit tests added (1502 total). Completes ROADMAP #12 (12-3/12-4/12-5).
 
 ---
 

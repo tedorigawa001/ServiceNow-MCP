@@ -158,7 +158,7 @@ export function getDiscoveryToolDefinitions() {
     {
       name: 'list_ecc_queue',
       description:
-        'Inspect the ECC Queue (ecc_queue) — the job/result bus between the instance and MID Servers. Useful for debugging Discovery, integrations, and ACC data flow. Payload is excluded by default (can be very large); set include_payload to fetch it.',
+        'Inspect the ECC Queue (ecc_queue) — the job/result bus between the instance and MID Servers. Useful for debugging Discovery, integrations, and ACC data flow. Payload is excluded by default (can be very large); set include_payload to fetch it. CAUTION: payloads can contain sensitive data (command output, host details, credential references) — request them only when needed and handle the output accordingly.',
       inputSchema: {
         type: 'object',
         properties: {

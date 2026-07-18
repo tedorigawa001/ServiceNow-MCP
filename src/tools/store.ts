@@ -222,9 +222,17 @@ export async function executeStoreToolCall(
         }
         const exact = listings.find((l: any) => String(l.title).toLowerCase() === q.toLowerCase());
         const chosen = exact || listings[0];
-        listingId = chosen.id;
+        listingId = String(chosen.id ?? '');
         matchedTitle = chosen.title;
         matchedBy = exact ? 'exact_title' : 'first_result';
+      }
+      // Re-validate regardless of origin: even a search-derived id goes into a
+      // URL path, so never trust the external API's response shape blindly.
+      if (!SYS_ID_RE.test(listingId)) {
+        throw new ServiceNowError(
+          `Store search returned a malformed listing id ("${listingId.slice(0, 40)}") — pass listing_id explicitly`,
+          'EXTERNAL_API_ERROR'
+        );
       }
 
       // 3. Version history from the Store, newest first

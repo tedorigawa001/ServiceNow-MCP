@@ -258,3 +258,20 @@ describe('check_app_upgrade', () => {
     ).rejects.toThrow('32-char sys_id');
   });
 });
+
+describe('check_app_upgrade – search-derived id hardening', () => {
+  beforeEach(() => vi.restoreAllMocks());
+  afterEach(() => vi.restoreAllMocks());
+
+  it('rejects a malformed listing id coming back from the Store search', async () => {
+    (mockClient.queryRecords as ReturnType<typeof vi.fn>)
+      .mockResolvedValue({ count: 1, records: [{ name: 'VR', scope: 'sn_vul', version: '1.0.0' }] });
+    vi.spyOn(globalThis, 'fetch').mockResolvedValueOnce({
+      ok: true, status: 200,
+      json: async () => ({ result: { listings: [{ id: '../oops', title: 'VR' }] } }),
+    } as unknown as Response);
+
+    await expect(executeStoreToolCall(mockClient, 'check_app_upgrade', { scope: 'sn_vul' }))
+      .rejects.toMatchObject({ code: 'EXTERNAL_API_ERROR' });
+  });
+});

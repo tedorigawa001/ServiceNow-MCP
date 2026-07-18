@@ -2740,7 +2740,7 @@ MID Server extension contexts (`ecc_agent_ext_context`) — e.g. MID Web Server,
 - `limit` — Max records (default 25)
 
 ### list_ecc_queue
-Inspect the ECC Queue (`ecc_queue`) — the job/result bus between the instance and MID Servers. Payload excluded by default (can be huge).
+Inspect the ECC Queue (`ecc_queue`) — the job/result bus between the instance and MID Servers. Payload excluded by default (can be huge). **Caution**: payloads can contain sensitive data (command output, host details, credential references) — request them only when needed and handle the output accordingly.
 
 **Parameters**:
 - `agent` — MID Server name (auto-prefixed to `mid.server.<name>`) or full agent string
