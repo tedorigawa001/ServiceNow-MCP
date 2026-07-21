@@ -208,6 +208,17 @@ describe('executeChangeToolCall – schedule_cab_meeting', () => {
       executeChangeToolCall(mockClient, 'schedule_cab_meeting', { change_id: 'CHG9999', date: '2025-09-15' })
     ).rejects.toThrow('Change request not found');
   });
+
+  it('strips ^ from change_id before building the lookup query (encoded-query injection)', async () => {
+    (mockClient.queryRecords as ReturnType<typeof vi.fn>).mockResolvedValue({ count: 1, records: [{ sys_id: 'chg-sys1' }] });
+    (mockClient.updateRecord as ReturnType<typeof vi.fn>).mockResolvedValue({ sys_id: 'chg-sys1' });
+    await executeChangeToolCall(mockClient, 'schedule_cab_meeting', {
+      change_id: 'CHG0001^ORDERBYDESCsys_created_on',
+      date: '2025-09-15',
+    });
+    const call = (mockClient.queryRecords as ReturnType<typeof vi.fn>).mock.calls[0][0];
+    expect(call.query).toBe('number=CHG0001ORDERBYDESCsys_created_on^ORsys_id=CHG0001ORDERBYDESCsys_created_on');
+  });
 });
 
 describe('executeChangeToolCall – unknown tool', () => {

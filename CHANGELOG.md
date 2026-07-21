@@ -6,6 +6,14 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 ---
 
+## [Unreleased]
+
+### Security
+
+- **Fixed encoded-query injection in two write tools**: `schedule_cab_meeting` (`change.ts`) and `retire_knowledge_article` (`knowledge.ts`) resolved a human-friendly id (`change_id` / `article_id`) to a sys_id via `number=X^ORsys_id=X`, then wrote to the resolved record — without stripping `^` from X first. An id like `CHG0001^ORDERBYDESCsys_created_on` could select a different record than intended, silently misdirecting the write (CAB scheduling / KB article retirement) to the wrong change request or article. Both now sanitize with `sanitizeLikeValue()` before building the lookup query, matching the existing pattern in `itam.ts`'s `track_asset_lifecycle`. Found during a general security check of the MCP server; regression tests added.
+
+---
+
 ## [1.8.0] — 2026-07-18
 
 ### Added

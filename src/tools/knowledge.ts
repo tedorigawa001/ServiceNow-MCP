@@ -3,6 +3,7 @@
  * Read tools: Tier 0. Write tools: Tier 1 (WRITE_ENABLED=true).
  */
 import type { ServiceNowClient } from '../servicenow/client.js';
+import { sanitizeLikeValue } from '../servicenow/client.js';
 import { ServiceNowError } from '../utils/errors.js';
 import { requireWrite } from '../utils/permissions.js';
 
@@ -166,7 +167,8 @@ export async function executeKnowledgeToolCall(
       if (!args.article_id) throw new ServiceNowError('article_id is required', 'INVALID_REQUEST');
       let sysId = args.article_id;
       if (!/^[0-9a-f]{32}$/i.test(args.article_id)) {
-        const resp = await client.queryRecords({ table: 'kb_knowledge', query: `number=${args.article_id}^ORsys_id=${args.article_id}`, limit: 1 });
+        const safeId = sanitizeLikeValue(args.article_id);
+        const resp = await client.queryRecords({ table: 'kb_knowledge', query: `number=${safeId}^ORsys_id=${safeId}`, limit: 1 });
         if (resp.count === 0) throw new ServiceNowError(`Article not found: ${args.article_id}`, 'NOT_FOUND');
         sysId = resp.records[0].sys_id;
       }

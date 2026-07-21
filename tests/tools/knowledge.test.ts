@@ -188,6 +188,16 @@ describe('executeKnowledgeToolCall – retire_knowledge_article', () => {
     await executeKnowledgeToolCall(mockClient, 'retire_knowledge_article', { article_id: 'KB0001' });
     expect(mockClient.updateRecord).toHaveBeenCalledWith('kb_knowledge', 'kb-sys1', { workflow_state: 'retired' });
   });
+
+  it('strips ^ from article_id before building the lookup query (encoded-query injection)', async () => {
+    (mockClient.queryRecords as ReturnType<typeof vi.fn>).mockResolvedValue({ count: 1, records: [{ sys_id: 'kb-sys1' }] });
+    (mockClient.updateRecord as ReturnType<typeof vi.fn>).mockResolvedValue({ sys_id: 'kb-sys1' });
+    await executeKnowledgeToolCall(mockClient, 'retire_knowledge_article', {
+      article_id: 'KB0001^ORactive=true',
+    });
+    const call = (mockClient.queryRecords as ReturnType<typeof vi.fn>).mock.calls[0][0];
+    expect(call.query).toBe('number=KB0001ORactive=true^ORsys_id=KB0001ORactive=true');
+  });
 });
 
 describe('executeKnowledgeToolCall – unknown tool', () => {

@@ -3,6 +3,7 @@
  * Read tools: Tier 0. Write tools: Tier 1 (WRITE_ENABLED=true).
  */
 import type { ServiceNowClient } from '../servicenow/client.js';
+import { sanitizeLikeValue } from '../servicenow/client.js';
 import { ServiceNowError } from '../utils/errors.js';
 import { requireWrite } from '../utils/permissions.js';
 import { CHANGE_STATE } from './schema-helpers.js';
@@ -203,7 +204,8 @@ export async function executeChangeToolCall(
         throw new ServiceNowError('change_id and date are required', 'INVALID_REQUEST');
       let sysId = args.change_id;
       if (!/^[0-9a-f]{32}$/i.test(args.change_id)) {
-        const resp = await client.queryRecords({ table: 'change_request', query: `number=${args.change_id}^ORsys_id=${args.change_id}`, limit: 1 });
+        const safeId = sanitizeLikeValue(args.change_id);
+        const resp = await client.queryRecords({ table: 'change_request', query: `number=${safeId}^ORsys_id=${safeId}`, limit: 1 });
         if (resp.count === 0) throw new ServiceNowError(`Change request not found: ${args.change_id}`, 'NOT_FOUND');
         sysId = resp.records[0].sys_id;
       }
