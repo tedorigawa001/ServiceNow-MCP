@@ -176,6 +176,15 @@ describe('get_remediation_sla', () => {
       executeUsemSlaToolCall(mockClient, 'get_remediation_sla', { record_type: 'vi', number_or_sysid: 'VITxxx' })
     ).rejects.toThrow('Vulnerable Item not found');
   });
+
+  it('strips ^ from number_or_sysid before building the lookup query (encoded-query injection)', async () => {
+    qr().mockResolvedValue({ count: 1, records: [{ sys_id: 's1', number: 'VIT0010003^ORactive=true', ttr_status: 'no_target', ttr_target_date: '' }] });
+    await executeUsemSlaToolCall(mockClient, 'get_remediation_sla', {
+      record_type: 'vi',
+      number_or_sysid: 'VIT0010003^ORactive=true',
+    });
+    expect(qr().mock.calls[0][0].query).toBe('number=VIT0010003ORactive=true');
+  });
 });
 
 describe('get_group_sla', () => {
@@ -214,6 +223,12 @@ describe('get_group_sla', () => {
     await expect(
       executeUsemSlaToolCall(mockClient, 'get_group_sla', { number_or_sysid: 'VULxxxx' })
     ).rejects.toThrow('Vulnerability Group not found');
+  });
+
+  it('strips ^ from number_or_sysid before building the lookup query (encoded-query injection)', async () => {
+    qr().mockResolvedValue({ count: 1, records: [{ sys_id: 's3', number: 'VUL0000103', ttr_status: 'in_flight' }] });
+    await executeUsemSlaToolCall(mockClient, 'get_group_sla', { number_or_sysid: 'VUL0000103^ORactive=true' });
+    expect(qr().mock.calls[0][0].query).toBe('number=VUL0000103ORactive=true');
   });
 });
 

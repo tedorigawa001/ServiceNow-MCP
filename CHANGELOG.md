@@ -11,6 +11,7 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 ### Security
 
 - **Fixed encoded-query injection in two write tools**: `schedule_cab_meeting` (`change.ts`) and `retire_knowledge_article` (`knowledge.ts`) resolved a human-friendly id (`change_id` / `article_id`) to a sys_id via `number=X^ORsys_id=X`, then wrote to the resolved record — without stripping `^` from X first. An id like `CHG0001^ORDERBYDESCsys_created_on` could select a different record than intended, silently misdirecting the write (CAB scheduling / KB article retirement) to the wrong change request or article. Both now sanitize with `sanitizeLikeValue()` before building the lookup query, matching the existing pattern in `itam.ts`'s `track_asset_lifecycle`. Found during a general security check of the MCP server; regression tests added.
+- **Fixed the same class of issue in four read tools** (second, impact-ranked batch): `get_incident` (`incident.ts`), `get_change_request` (`change.ts`), `get_knowledge_article` (`knowledge.ts`), and `get_remediation_sla`/`get_group_sla` (`usem-sla.ts`) all resolved `number_or_sysid` the same unsanitized way. Read-only, so the impact is a wrong record being returned rather than a wrong write — but `get_remediation_sla`/`get_group_sla` touch VR/security data, and `get_incident`/`get_change_request` are high-traffic tools. Same `sanitizeLikeValue()` fix; 6 regression tests added.
 
 ---
 

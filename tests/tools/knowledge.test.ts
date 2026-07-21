@@ -87,6 +87,13 @@ describe('executeKnowledgeToolCall – get_knowledge_article', () => {
       executeKnowledgeToolCall(mockClient, 'get_knowledge_article', { number_or_sysid: 'KB9999' })
     ).rejects.toThrow('Article not found: KB9999');
   });
+
+  it('strips ^ from number_or_sysid before building the lookup query (encoded-query injection)', async () => {
+    (mockClient.queryRecords as ReturnType<typeof vi.fn>).mockResolvedValue({ count: 1, records: [{ number: 'KB0042' }] });
+    await executeKnowledgeToolCall(mockClient, 'get_knowledge_article', { number_or_sysid: 'KB0042^ORactive=true' });
+    const call = (mockClient.queryRecords as ReturnType<typeof vi.fn>).mock.calls[0][0];
+    expect(call.query).toBe('number=KB0042ORactive=true^ORsys_id=KB0042ORactive=true');
+  });
 });
 
 describe('executeKnowledgeToolCall – create_knowledge_article', () => {

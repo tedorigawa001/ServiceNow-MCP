@@ -88,6 +88,13 @@ describe('executeChangeToolCall – get_change_request', () => {
     ).rejects.toThrow('Change request not found: CHG9999');
   });
 
+  it('strips ^ from number_or_sysid before building the lookup query (encoded-query injection)', async () => {
+    (mockClient.queryRecords as ReturnType<typeof vi.fn>).mockResolvedValue({ count: 1, records: [{ number: 'CHG0001' }] });
+    await executeChangeToolCall(mockClient, 'get_change_request', { number_or_sysid: 'CHG0001^ORactive=true' });
+    const call = (mockClient.queryRecords as ReturnType<typeof vi.fn>).mock.calls[0][0];
+    expect(call.query).toBe('number=CHG0001ORactive=true^ORsys_id=CHG0001ORactive=true');
+  });
+
   it('throws when number_or_sysid is missing', async () => {
     await expect(
       executeChangeToolCall(mockClient, 'get_change_request', {})

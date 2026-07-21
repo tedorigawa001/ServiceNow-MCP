@@ -18,6 +18,7 @@
  * Verified against a live PDI (dev400464).
  */
 import type { ServiceNowClient } from '../servicenow/client.js';
+import { sanitizeLikeValue } from '../servicenow/client.js';
 import { ServiceNowError } from '../utils/errors.js';
 import { requireWrite } from '../utils/permissions.js';
 
@@ -253,7 +254,7 @@ export async function executeUsemSlaToolCall(
       } else {
         const resp = await client.queryRecords({
           table: rt.table,
-          query: `${rt.numberField}=${args.number_or_sysid}`,
+          query: `${rt.numberField}=${sanitizeLikeValue(args.number_or_sysid)}`,
           limit: 1,
         });
         if (resp.count === 0) throw new ServiceNowError(`${rt.label} not found: ${args.number_or_sysid}`, 'NOT_FOUND');
@@ -284,7 +285,7 @@ export async function executeUsemSlaToolCall(
       } else {
         const resp = await client.queryRecords({
           table: 'sn_vul_vulnerability',
-          query: `number=${args.number_or_sysid}`,
+          query: `number=${sanitizeLikeValue(args.number_or_sysid)}`,
           limit: 1,
         });
         if (resp.count === 0) throw new ServiceNowError(`Vulnerability Group not found: ${args.number_or_sysid}`, 'NOT_FOUND');
