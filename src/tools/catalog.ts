@@ -3,6 +3,7 @@
  * Read tools: Tier 0. Write tools: Tier 1 (WRITE_ENABLED=true).
  */
 import type { ServiceNowClient } from '../servicenow/client.js';
+import { sanitizeLikeValue } from '../servicenow/client.js';
 import { ServiceNowError } from '../utils/errors.js';
 import { requireWrite } from '../utils/permissions.js';
 import { REQUEST_STATE, RITM_STAGE, RITM_STATE, APPROVAL_STATE } from './schema-helpers.js';
@@ -346,7 +347,8 @@ export async function executeCatalogToolCall(
       if (/^[0-9a-f]{32}$/i.test(args.sys_id_or_name)) {
         return await client.getRecord('sc_cat_item', args.sys_id_or_name);
       }
-      const resp = await client.queryRecords({ table: 'sc_cat_item', query: `name=${args.sys_id_or_name}^ORsys_id=${args.sys_id_or_name}`, limit: 1 });
+      const safeCatItemId = sanitizeLikeValue(args.sys_id_or_name);
+      const resp = await client.queryRecords({ table: 'sc_cat_item', query: `name=${safeCatItemId}^ORsys_id=${safeCatItemId}`, limit: 1 });
       if (resp.count === 0) throw new ServiceNowError(`Catalog item not found: ${args.sys_id_or_name}`, 'NOT_FOUND');
       return resp.records[0];
     }

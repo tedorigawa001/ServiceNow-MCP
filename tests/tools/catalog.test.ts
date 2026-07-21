@@ -80,6 +80,12 @@ describe('get_catalog_item', () => {
     await expect(executeCatalogToolCall(mockClient, 'get_catalog_item', { sys_id_or_name: 'Nope' }))
       .rejects.toMatchObject({ code: 'NOT_FOUND' });
   });
+
+  it('strips ^ from sys_id_or_name before building the lookup query (encoded-query injection)', async () => {
+    qr().mockResolvedValue({ count: 1, records: [{ name: 'Laptop' }] });
+    await executeCatalogToolCall(mockClient, 'get_catalog_item', { sys_id_or_name: 'Laptop^ORactive=true' });
+    expect(qr().mock.calls[0][0].query).toBe('name=LaptopORactive=true^ORsys_id=LaptopORactive=true');
+  });
 });
 
 describe('create_catalog_item', () => {

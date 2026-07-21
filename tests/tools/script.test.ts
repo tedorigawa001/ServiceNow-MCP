@@ -161,6 +161,12 @@ describe('executeScriptToolCall – Business Rules / Script Includes / Client Sc
         .rejects.toMatchObject({ code: 'NOT_FOUND' });
     });
 
+    it('get_script_include strips ^ from sys_id_or_name (encoded-query injection)', async () => {
+      qr().mockResolvedValue({ count: 1, records: [{ name: 'Util' }] });
+      await executeScriptToolCall(mockClient, 'get_script_include', { sys_id_or_name: 'Util^ORactive=true' });
+      expect(qr().mock.calls[0][0].query).toBe('api_name=UtilORactive=true^ORname=UtilORactive=true');
+    });
+
     it('create_script_include requires name and script', async () => {
       await expect(executeScriptToolCall(mockClient, 'create_script_include', {})).rejects.toThrow('name and script are required');
     });
@@ -214,6 +220,12 @@ describe('executeScriptToolCall – Business Rules / Script Includes / Client Sc
       qr().mockResolvedValue({ count: 0, records: [] });
       await expect(executeScriptToolCall(mockClient, 'get_changeset', { sys_id_or_name: 'Nope' }))
         .rejects.toMatchObject({ code: 'NOT_FOUND' });
+    });
+
+    it('get_changeset strips ^ from sys_id_or_name (encoded-query injection)', async () => {
+      qr().mockResolvedValue({ count: 1, records: [{ name: 'Set1' }] });
+      await executeScriptToolCall(mockClient, 'get_changeset', { sys_id_or_name: 'Set1^ORactive=true' });
+      expect(qr().mock.calls[0][0].query).toBe('name=Set1ORactive=true^ORsys_id=Set1ORactive=true');
     });
 
     it('commit_changeset requires sys_id and sets state to complete', async () => {

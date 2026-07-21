@@ -5,6 +5,7 @@
  * GlideEncrypter is deprecated in recent releases.
  */
 import type { ServiceNowClient } from '../servicenow/client.js';
+import { sanitizeLikeValue } from '../servicenow/client.js';
 import { ServiceNowError } from '../utils/errors.js';
 import { requireScripting } from '../utils/permissions.js';
 
@@ -456,7 +457,8 @@ export async function executeScriptToolCall(
       if (/^[0-9a-f]{32}$/i.test(args.sys_id_or_name)) {
         return await client.getRecord('sys_script_include', args.sys_id_or_name);
       }
-      const resp = await client.queryRecords({ table: 'sys_script_include', query: `api_name=${args.sys_id_or_name}^ORname=${args.sys_id_or_name}`, limit: 1 });
+      const safeIncludeId = sanitizeLikeValue(args.sys_id_or_name);
+      const resp = await client.queryRecords({ table: 'sys_script_include', query: `api_name=${safeIncludeId}^ORname=${safeIncludeId}`, limit: 1 });
       if (resp.count === 0) throw new ServiceNowError(`Script include not found: ${args.sys_id_or_name}`, 'NOT_FOUND');
       return resp.records[0];
     }
@@ -494,7 +496,8 @@ export async function executeScriptToolCall(
       if (/^[0-9a-f]{32}$/i.test(args.sys_id_or_name)) {
         return await client.getRecord('sys_update_set', args.sys_id_or_name);
       }
-      const resp = await client.queryRecords({ table: 'sys_update_set', query: `name=${args.sys_id_or_name}^ORsys_id=${args.sys_id_or_name}`, limit: 1 });
+      const safeUpdateSetId = sanitizeLikeValue(args.sys_id_or_name);
+      const resp = await client.queryRecords({ table: 'sys_update_set', query: `name=${safeUpdateSetId}^ORsys_id=${safeUpdateSetId}`, limit: 1 });
       if (resp.count === 0) throw new ServiceNowError(`Changeset not found: ${args.sys_id_or_name}`, 'NOT_FOUND');
       return resp.records[0];
     }
