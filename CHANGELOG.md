@@ -6,6 +6,14 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 ---
 
+## [1.8.2] — 2026-07-22
+
+### Security
+
+- **Eliminated all `dependencies` (production) vulnerabilities via `npm overrides`**: `@modelcontextprotocol/sdk@1.29.0` transitively pulled in vulnerable `@hono/node-server` (<2.0.5, Windows-only path traversal in `serve-static`), `hono` (4.0.0-4.12.26, JSX XSS / cross-request context leak / header dedup issue), and `fast-uri` (3.0.0-3.1.3, host-confusion via IDN/backslash parsing, reached via `ajv-formats`). None of these were actually exploitable through this server's code paths — `src/server-http.ts` uses Node's built-in `http.createServer` and only imports `getRequestListener` (a plain HTTP↔Web-Request adapter) from `@hono/node-server`, never hono's routing/JSX/serve-static; no tool inputSchema in this codebase declares `format: "uri"`, so the `fast-uri` code path is never exercised by our own tools. Overridden anyway to close the gap: `@hono/node-server` → `^2.0.11`, `hono` → `^4.12.31`, `fast-uri` → `^3.1.4`. Verified the override doesn't break the HTTP transport: built and ran the Streamable HTTP server (`MCP_TRANSPORT=http`) against `getRequestListener@2.0.11` and confirmed it correctly handles a live JSON-RPC request end-to-end. `npm audit` now reports zero findings in `dependencies` — the remaining 9 are all `devDependencies` (vitest/vite/esbuild toolchain), never shipped.
+
+---
+
 ## [1.8.1] — 2026-07-21
 
 ### Security
