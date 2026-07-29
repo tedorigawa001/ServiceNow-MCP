@@ -2061,7 +2061,7 @@ Get portal theme CSS variables and settings.
 
 ---
 
-## Integration & Middleware (24 tools)
+## Integration & Middleware (25 tools)
 
 ### list_rest_messages
 List REST Message configurations.
@@ -2179,7 +2179,22 @@ Create a row in a staging import set table. **[Write]**
 
 **Parameters**:
 - `staging_table` (required) — Import set staging table name
+- `import_set_sys_id` (required) — Owning Import Set; added to every staging row automatically
 - `data` (required) — Key/value field data
+
+### import_excel_to_import_set
+Upload and parse a single `.xlsx` worksheet, create its Import Set, attach the original workbook for auditability, insert all staging rows, and optionally trigger a Transform Map. **[Write]**
+
+The first row is the header. Headers either match staging-table column names or are mapped through `column_mapping`. Files are limited to 10 MiB, 500 data rows, and 50 columns. Formula cells and `sys_*` columns are rejected.
+
+**Parameters**:
+- `file_name` (required) — `.xlsx` file name
+- `content_base64` (required) — Base64-encoded workbook
+- `staging_table` (required) — Existing staging table
+- `transform_map_sys_id` — Optional Transform Map to run after row insertion
+- `sheet_name` — Optional worksheet name (first worksheet by default)
+- `import_set_label` — Optional Import Set label
+- `column_mapping` — Optional Excel-header → staging-column mapping
 
 ### list_data_sources
 List configured data sources for imports.

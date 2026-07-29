@@ -6,6 +6,22 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 ---
 
+## [1.9.0] — 2026-07-30
+
+### Added
+
+- **`import_excel_to_import_set`** (`integration.ts`): securely upload a Base64 `.xlsx` workbook, parse one selected worksheet, create and attach the workbook to a ServiceNow Import Set, insert parsed rows into its staging table, and optionally start a Transform Map. This provides an auditable Excel→Import Set workflow for MCP clients.
+  - Staging rows are now always bound to their Import Set through `sys_import_set`; `create_import_set_row` gained the required `import_set_sys_id` parameter and applies the same binding.
+  - Defensive limits: `.xlsx` only, 10 MiB input, 500 data rows, 50 columns, strict Base64/ZIP validation, formula-cell rejection, and rejection of `sys_*` / prototype-pollution field names. Write operations remain gated by `WRITE_ENABLED=true`.
+  - Supports optional worksheet selection, import-set labels, Excel-header→staging-column mapping, and Transform Map execution.
+
+### Verification
+
+- Added unit coverage for workbook parsing, column mapping, formula/system-field rejection, attachment upload, staging-row binding, and optional Transform Map execution.
+- Added a self-cleaning PDI E2E test that creates an Import Set from an in-memory workbook, verifies its attachment and staging row, then deletes all created artifacts.
+
+---
+
 ## [1.8.2] — 2026-07-22
 
 ### Security

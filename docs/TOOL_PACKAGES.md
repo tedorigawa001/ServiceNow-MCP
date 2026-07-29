@@ -18,7 +18,7 @@ Set `MCP_TOOL_PACKAGE` in your environment to load a role-specific subset of too
 | `agile_manager` | Agile team lead | 13 |
 | `ai_developer` | Now Assist/AI developer | 15 |
 | `portal_developer` | Portal/UI Builder developer | 34 |
-| `integration_engineer` | Integration specialist | 31 |
+| `integration_engineer` | Integration specialist | 32 |
 | `devops_engineer` | DevOps/pipeline engineer | 21 |
 | `itam_analyst` | IT Asset Management analyst | 23 |
 
@@ -128,6 +128,7 @@ Includes:
 - REST Message configuration (create/list)
 - Transform Map execution and field mapping
 - Import Set management
+- Excel workbook upload, parsing, Import Set creation, and optional Transform Map execution
 - Event registry and event firing
 - OAuth and credential alias read tools
 - Changeset management

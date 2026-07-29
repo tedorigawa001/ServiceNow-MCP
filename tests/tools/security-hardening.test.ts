@@ -34,7 +34,10 @@ describe('P2 write boundaries', () => {
     (client.getRecord as ReturnType<typeof vi.fn>).mockResolvedValue({ table_name: 'u_import_ci' });
     await expect(executeIntegrationToolCall(client, 'create_import_set_row', { staging_table: 'u_import_ci', import_set_sys_id: 'a'.repeat(32), data: { sys_id: 'x' } })).rejects.toMatchObject({ code: 'VALIDATION_ERROR' });
     await executeIntegrationToolCall(client, 'create_import_set_row', { staging_table: 'u_import_ci', import_set_sys_id: 'a'.repeat(32), data: { hostname: 'server-1' } });
-    expect(client.createRecord).toHaveBeenCalledWith('u_import_ci', { hostname: 'server-1' });
+    expect(client.createRecord).toHaveBeenCalledWith('u_import_ci', {
+      hostname: 'server-1',
+      sys_import_set: 'a'.repeat(32),
+    });
   });
 
   it('creates ACL role relations and blocks mass assignment on updates', async () => {

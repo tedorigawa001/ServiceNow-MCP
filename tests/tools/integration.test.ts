@@ -1,22 +1,33 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { executeIntegrationToolCall, getIntegrationToolDefinitions } from '../../src/tools/integration.js';
+import ExcelJS from 'exceljs';
+import { executeIntegrationToolCall, getIntegrationToolDefinitions, parseExcelImportRows } from '../../src/tools/integration.js';
 import type { ServiceNowClient } from '../../src/servicenow/client.js';
 
 const mockClient = {
   queryRecords: vi.fn(),
   getRecord: vi.fn(),
   createRecord: vi.fn(),
+  uploadAttachment: vi.fn(),
 } as unknown as ServiceNowClient;
 
 const qr = () => mockClient.queryRecords as ReturnType<typeof vi.fn>;
 const gr = () => mockClient.getRecord as ReturnType<typeof vi.fn>;
 const cr = () => mockClient.createRecord as ReturnType<typeof vi.fn>;
+const ua = () => mockClient.uploadAttachment as ReturnType<typeof vi.fn>;
+
+async function xlsxBase64(rows: unknown[][]): Promise<string> {
+  const workbook = new ExcelJS.Workbook();
+  const sheet = workbook.addWorksheet('VI Import');
+  rows.forEach(row => sheet.addRow(row));
+  const content = await workbook.xlsx.writeBuffer();
+  return Buffer.from(content).toString('base64');
+}
 
 describe('getIntegrationToolDefinitions', () => {
-  it('returns exactly 24 integration tool definitions', () => {
+  it('returns exactly 25 integration tool definitions', () => {
     // Pinning the count catches accidental deletions/duplicate registrations
     // that `length > 0` would silently miss.
-    expect(getIntegrationToolDefinitions().length).toBe(24);
+    expect(getIntegrationToolDefinitions().length).toBe(25);
   });
 
   it('all tools have name, description and inputSchema', () => {
@@ -243,8 +254,77 @@ describe('Import Sets & Data Sources', () => {
         staging_table: 'u_import_ci', import_set_sys_id: 'is1', data: { hostname: 'server-1' },
       });
       expect(gr()).toHaveBeenCalledWith('sys_import_set', 'is1');
-      expect(cr()).toHaveBeenCalledWith('u_import_ci', { hostname: 'server-1' });
+      expect(cr()).toHaveBeenCalledWith('u_import_ci', { hostname: 'server-1', sys_import_set: 'is1' });
       expect(result.summary).toContain('u_import_ci');
+    });
+  });
+
+  describe('import_excel_to_import_set', () => {
+    beforeEach(() => { process.env.WRITE_ENABLED = 'true'; });
+    afterEach(() => { delete process.env.WRITE_ENABLED; });
+
+    it('parses header-mapped workbook rows without evaluating formulas', async () => {
+      const base64 = await xlsxBase64([
+        ['CVE', 'CI', 'Assignment Group'],
+        ['CVE-2014-6271', 'linux-01', 'Endpoint Security'],
+      ]);
+      const parsed = await parseExcelImportRows(base64, 'VI Import', {
+        CVE: 'u_cve', CI: 'u_cmdb_ci', 'Assignment Group': 'u_assignment_group',
+      });
+      expect(parsed.headers).toEqual(['u_cve', 'u_cmdb_ci', 'u_assignment_group']);
+      expect(parsed.rows).toEqual([{
+        u_cve: 'CVE-2014-6271', u_cmdb_ci: 'linux-01', u_assignment_group: 'Endpoint Security',
+      }]);
+    });
+
+    it('rejects formula cells and system destination columns', async () => {
+      const workbook = new ExcelJS.Workbook();
+      const sheet = workbook.addWorksheet('Sheet1');
+      sheet.addRow(['hostname']);
+      sheet.getCell('A2').value = { formula: 'CONCAT("server", "-1")', result: 'server-1' };
+      const formulaBase64 = Buffer.from(await workbook.xlsx.writeBuffer()).toString('base64');
+      await expect(parseExcelImportRows(formulaBase64)).rejects.toThrow('Formula cells are not permitted');
+
+      const systemBase64 = await xlsxBase64([['sys_id'], ['x']]);
+      await expect(parseExcelImportRows(systemBase64)).rejects.toThrow('Invalid import field');
+    });
+
+    it('creates an Import Set, attaches the workbook, links rows, and starts an optional transform', async () => {
+      const base64 = await xlsxBase64([['hostname'], ['server-1'], ['server-2']]);
+      const importSetId = 'a'.repeat(32);
+      cr()
+        .mockResolvedValueOnce({ sys_id: importSetId, table_name: 'u_import_ci' })
+        .mockResolvedValueOnce({ sys_id: 'row1' })
+        .mockResolvedValueOnce({ sys_id: 'row2' })
+        .mockResolvedValueOnce({ sys_id: 'run1' });
+      ua().mockResolvedValue({ sys_id: 'attachment1' });
+
+      const result = await executeIntegrationToolCall(mockClient, 'import_excel_to_import_set', {
+        file_name: 'vi-import.xlsx',
+        content_base64: base64,
+        staging_table: 'u_import_ci',
+        transform_map_sys_id: 'b'.repeat(32),
+      });
+
+      expect(cr()).toHaveBeenNthCalledWith(1, 'sys_import_set', expect.objectContaining({ table_name: 'u_import_ci' }));
+      expect(ua()).toHaveBeenCalledWith(
+        'sys_import_set', importSetId, 'vi-import.xlsx',
+        'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', base64
+      );
+      expect(cr()).toHaveBeenNthCalledWith(2, 'u_import_ci', { hostname: 'server-1', sys_import_set: importSetId });
+      expect(cr()).toHaveBeenNthCalledWith(3, 'u_import_ci', { hostname: 'server-2', sys_import_set: importSetId });
+      expect(cr()).toHaveBeenNthCalledWith(4, 'sys_import_set_run', {
+        import_set: importSetId, transform_map: 'b'.repeat(32),
+      });
+      expect(result.rows_inserted).toBe(2);
+      expect(result.transform_run.sys_id).toBe('run1');
+    });
+
+    it('rejects non-xlsx files before creating records', async () => {
+      await expect(executeIntegrationToolCall(mockClient, 'import_excel_to_import_set', {
+        file_name: 'vi-import.csv', content_base64: 'eA==', staging_table: 'u_import_ci',
+      })).rejects.toThrow('file_name must end in .xlsx');
+      expect(cr()).not.toHaveBeenCalled();
     });
   });
 });

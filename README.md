@@ -27,11 +27,11 @@
 
 Claude・Cursor・VS Code などの AI ツールから、ServiceNow のインシデント・変更・CMDB・スクリプトなどをすべて自然言語で操作できます。
 
-### v1.4.0 ハイライト
+### v1.9.0 ハイライト
 
-- 書き込みフィールド許可リストを残りのツール群(user/group・USEM/VRルール・agile・task・scripting・app-studio・portal・reporting・VA topic)に拡張し、mass assignment の穴を解消
-- 許可リストは実行時チェックに加え JSON Schema 側でも `additionalProperties: false` により二重防御
-- USEM のクエリフィルタ値に `sanitizeLikeValue` を適用(生の `query` パラメータは既存の意図通り非サニタイズのまま)
+- Excelワークブックを直接アップロード・解析し、ServiceNow Import Setの作成、原本添付、ステージング行登録、任意のTransform Map実行までを一括で行う `import_excel_to_import_set` を追加
+- `.xlsx` 専用・10 MiB・500行・50列の上限、数式／`sys_*`列の拒否、`WRITE_ENABLED=true` による書込み保護を実装
+- 解析済みExcelの全ステージング行を `sys_import_set` に確実に紐付け、PDIで添付・行登録・クリーンアップまでE2E検証
 
 </div>
 

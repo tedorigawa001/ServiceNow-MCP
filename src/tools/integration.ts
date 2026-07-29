@@ -6,6 +6,116 @@
 import { sanitizeLikeValue, type ServiceNowClient } from '../servicenow/client.js';
 import { ServiceNowError } from '../utils/errors.js';
 import { requireWrite, requireScripting } from '../utils/permissions.js';
+import ExcelJS from 'exceljs';
+
+const MAX_EXCEL_BYTES = 10 * 1024 * 1024;
+const MAX_EXCEL_ROWS = 500;
+const MAX_EXCEL_COLUMNS = 50;
+const STAGING_FIELD_RE = /^[a-zA-Z][a-zA-Z0-9_]*$/;
+const RESERVED_FIELD_NAMES = new Set(['__proto__', 'constructor', 'prototype']);
+
+type ImportCellValue = string | number | boolean;
+
+function validateStagingField(field: string): void {
+  if (!STAGING_FIELD_RE.test(field) || field.toLowerCase().startsWith('sys_') || RESERVED_FIELD_NAMES.has(field)) {
+    throw new ServiceNowError(
+      `Invalid import field "${field}". Use a non-system ServiceNow column name.`,
+      'VALIDATION_ERROR'
+    );
+  }
+}
+
+function decodeXlsxBase64(contentBase64: unknown): Buffer {
+  if (typeof contentBase64 !== 'string' || !contentBase64) {
+    throw new ServiceNowError('content_base64 is required', 'INVALID_REQUEST');
+  }
+  if (contentBase64.length > Math.ceil(MAX_EXCEL_BYTES * 4 / 3) ||
+      contentBase64.length % 4 !== 0 ||
+      !/^[A-Za-z0-9+/]*={0,2}$/.test(contentBase64)) {
+    throw new ServiceNowError('content_base64 is not a valid or permitted-size base64 payload', 'VALIDATION_ERROR');
+  }
+  const buffer = Buffer.from(contentBase64, 'base64');
+  if (buffer.length === 0 || buffer.length > MAX_EXCEL_BYTES || buffer.subarray(0, 2).toString() !== 'PK') {
+    throw new ServiceNowError('Only non-empty .xlsx files up to 10 MiB are supported', 'VALIDATION_ERROR');
+  }
+  return buffer;
+}
+
+/** Parse a single worksheet without evaluating formulas or trusting workbook metadata. */
+export async function parseExcelImportRows(
+  contentBase64: unknown,
+  sheetName?: unknown,
+  columnMapping?: unknown
+): Promise<{ sheetName: string; headers: string[]; rows: Record<string, ImportCellValue>[] }> {
+  const buffer = decodeXlsxBase64(contentBase64);
+  const workbook = new ExcelJS.Workbook();
+  try {
+    // exceljs declares the pre-Node-20 Buffer generic here; the binary is a
+    // standard Node Buffer decoded above.
+    await workbook.xlsx.load(buffer as any);
+  } catch (error) {
+    throw new ServiceNowError(
+      `Could not parse .xlsx file: ${error instanceof Error ? error.message : 'invalid workbook'}`,
+      'VALIDATION_ERROR'
+    );
+  }
+
+  const worksheet = typeof sheetName === 'string' && sheetName
+    ? workbook.getWorksheet(sheetName)
+    : workbook.worksheets[0];
+  if (!worksheet) throw new ServiceNowError('Requested worksheet was not found', 'VALIDATION_ERROR');
+  if (worksheet.actualColumnCount === 0 || worksheet.actualColumnCount > MAX_EXCEL_COLUMNS ||
+      worksheet.actualRowCount < 2 || worksheet.actualRowCount > MAX_EXCEL_ROWS + 1) {
+    throw new ServiceNowError(
+      `Worksheet must contain a header plus 1–${MAX_EXCEL_ROWS} rows and at most ${MAX_EXCEL_COLUMNS} columns`,
+      'VALIDATION_ERROR'
+    );
+  }
+
+  const mapping = columnMapping && typeof columnMapping === 'object' && !Array.isArray(columnMapping)
+    ? columnMapping as Record<string, unknown>
+    : {};
+  if (columnMapping !== undefined && (typeof columnMapping !== 'object' || columnMapping === null || Array.isArray(columnMapping))) {
+    throw new ServiceNowError('column_mapping must be an object of Excel header to staging column names', 'VALIDATION_ERROR');
+  }
+  const headers: string[] = [];
+  for (let column = 1; column <= worksheet.actualColumnCount; column++) {
+    const header = worksheet.getCell(1, column).text.trim();
+    if (!header) throw new ServiceNowError(`Header row has an empty column at position ${column}`, 'VALIDATION_ERROR');
+    const mapped = mapping[header] === undefined ? header : mapping[header];
+    if (typeof mapped !== 'string') {
+      throw new ServiceNowError(`column_mapping value for "${header}" must be a string`, 'VALIDATION_ERROR');
+    }
+    validateStagingField(mapped);
+    if (headers.includes(mapped)) throw new ServiceNowError(`Duplicate destination column "${mapped}"`, 'VALIDATION_ERROR');
+    headers.push(mapped);
+  }
+
+  const rows: Record<string, ImportCellValue>[] = [];
+  for (let rowNumber = 2; rowNumber <= worksheet.actualRowCount; rowNumber++) {
+    const row: Record<string, ImportCellValue> = Object.create(null) as Record<string, ImportCellValue>;
+    let hasValue = false;
+    for (let column = 1; column <= headers.length; column++) {
+      const cell = worksheet.getCell(rowNumber, column);
+      const value = cell.value as unknown;
+      if (value && typeof value === 'object' && 'formula' in value) {
+        throw new ServiceNowError(`Formula cells are not permitted (row ${rowNumber}, column ${column})`, 'VALIDATION_ERROR');
+      }
+      if (value === null || value === undefined || cell.text === '') continue;
+      hasValue = true;
+      if (value instanceof Date) {
+        row[headers[column - 1]] = value.toISOString().replace('T', ' ').slice(0, 19);
+      } else if (typeof value === 'string' || typeof value === 'number' || typeof value === 'boolean') {
+        row[headers[column - 1]] = value;
+      } else {
+        row[headers[column - 1]] = cell.text;
+      }
+    }
+    if (hasValue) rows.push(row);
+  }
+  if (rows.length === 0) throw new ServiceNowError('Worksheet has no data rows', 'VALIDATION_ERROR');
+  return { sheetName: worksheet.name, headers, rows };
+}
 
 export function getIntegrationToolDefinitions() {
   return [
@@ -151,6 +261,29 @@ export function getIntegrationToolDefinitions() {
           data: { type: 'object', description: 'Key-value pairs for the staging table row' },
         },
         required: ['staging_table', 'import_set_sys_id', 'data'],
+      },
+    },
+    {
+      name: 'import_excel_to_import_set',
+      description:
+        'Upload and parse one .xlsx worksheet, create an Import Set, insert its staging rows, and optionally run a Transform Map. ' +
+        'Requires WRITE_ENABLED=true. The original workbook is attached to the Import Set for auditability; formulas and sys_* columns are rejected.',
+      inputSchema: {
+        type: 'object',
+        properties: {
+          file_name: { type: 'string', description: 'Original .xlsx file name' },
+          content_base64: { type: 'string', description: 'Base64-encoded .xlsx content (maximum 10 MiB)' },
+          staging_table: { type: 'string', description: 'Existing Import Set staging table to receive parsed rows' },
+          transform_map_sys_id: { type: 'string', description: 'Optional Transform Map sys_id to run after rows are inserted' },
+          sheet_name: { type: 'string', description: 'Optional worksheet name (default: first worksheet)' },
+          import_set_label: { type: 'string', description: 'Optional Import Set label' },
+          column_mapping: {
+            type: 'object',
+            additionalProperties: { type: 'string' },
+            description: 'Optional mapping of Excel header to staging-table column, e.g. { "CVE": "u_cve" }',
+          },
+        },
+        required: ['file_name', 'content_base64', 'staging_table'],
       },
     },
     {
@@ -465,19 +598,88 @@ export async function executeIntegrationToolCall(
     }
     case 'create_import_set_row': {
       requireWrite();
-      if (!args.staging_table || !args.import_set_sys_id || !args.data) {
+      if (!args.staging_table || !args.import_set_sys_id || !args.data ||
+          typeof args.data !== 'object' || Array.isArray(args.data)) {
         throw new ServiceNowError('staging_table, import_set_sys_id, and data are required', 'INVALID_REQUEST');
       }
       const importSet = await client.getRecord('sys_import_set', args.import_set_sys_id);
       if (importSet.table_name !== args.staging_table) {
         throw new ServiceNowError('staging_table does not match the specified import set.', 'VALIDATION_ERROR');
       }
-      const unsafeFields = Object.keys(args.data).filter(field => field.startsWith('sys_'));
+      const unsafeFields = Object.keys(args.data).filter(field =>
+        field.toLowerCase().startsWith('sys_') || RESERVED_FIELD_NAMES.has(field)
+      );
       if (unsafeFields.length) {
         throw new ServiceNowError(`System fields are not permitted in import rows: ${unsafeFields.join(', ')}`, 'VALIDATION_ERROR');
       }
-      const result = await client.createRecord(args.staging_table, args.data);
+      const result = await client.createRecord(args.staging_table, {
+        ...args.data,
+        sys_import_set: args.import_set_sys_id,
+      });
       return { ...result, summary: `Inserted row into staging table "${args.staging_table}"` };
+    }
+    case 'import_excel_to_import_set': {
+      requireWrite();
+      if (!args.file_name || !args.content_base64 || !args.staging_table) {
+        throw new ServiceNowError('file_name, content_base64, and staging_table are required', 'INVALID_REQUEST');
+      }
+      const fileName = String(args.file_name);
+      if (!/\.xlsx$/i.test(fileName)) {
+        throw new ServiceNowError('file_name must end in .xlsx', 'VALIDATION_ERROR');
+      }
+      const stagingTable = String(args.staging_table);
+      if (!STAGING_FIELD_RE.test(stagingTable)) {
+        throw new ServiceNowError('staging_table must contain only letters, numbers, and underscores', 'VALIDATION_ERROR');
+      }
+      if (args.sheet_name !== undefined && typeof args.sheet_name !== 'string') {
+        throw new ServiceNowError('sheet_name must be a string', 'VALIDATION_ERROR');
+      }
+      if (args.transform_map_sys_id !== undefined &&
+          !/^[0-9a-f]{32}$/i.test(String(args.transform_map_sys_id))) {
+        throw new ServiceNowError('transform_map_sys_id must be a 32-char sys_id', 'VALIDATION_ERROR');
+      }
+
+      const parsed = await parseExcelImportRows(args.content_base64, args.sheet_name, args.column_mapping);
+      const importSet = await client.createRecord('sys_import_set', {
+        table_name: stagingTable,
+        label: typeof args.import_set_label === 'string' && args.import_set_label.trim()
+          ? args.import_set_label.trim()
+          : `MCP Excel import: ${fileName}`,
+      });
+      const importSetSysId = String(importSet.sys_id ?? '');
+      if (!/^[0-9a-f]{32}$/i.test(importSetSysId)) {
+        throw new ServiceNowError('ServiceNow did not return a valid Import Set sys_id', 'API_ERROR');
+      }
+
+      await client.uploadAttachment(
+        'sys_import_set',
+        importSetSysId,
+        fileName,
+        'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+        String(args.content_base64)
+      );
+      for (const row of parsed.rows) {
+        await client.createRecord(stagingTable, { ...row, sys_import_set: importSetSysId });
+      }
+
+      let transformRun: any;
+      if (args.transform_map_sys_id) {
+        transformRun = await client.createRecord('sys_import_set_run', {
+          import_set: importSetSysId,
+          transform_map: String(args.transform_map_sys_id),
+        });
+      }
+      return {
+        import_set: importSet,
+        import_set_sys_id: importSetSysId,
+        attachment_uploaded: true,
+        sheet_name: parsed.sheetName,
+        columns: parsed.headers,
+        rows_inserted: parsed.rows.length,
+        ...(transformRun ? { transform_run: transformRun } : {}),
+        summary: `Created Import Set ${importSetSysId} from ${fileName}; inserted ${parsed.rows.length} row(s)` +
+          (transformRun ? ' and started the Transform Map' : ''),
+      };
     }
     case 'list_data_sources': {
       const parts: string[] = [];

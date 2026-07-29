@@ -190,7 +190,7 @@ const PACKAGE_TOOL_NAMES: Record<string, string[]> = {
     'list_rest_messages', 'get_rest_message', 'list_rest_message_functions', 'create_rest_message',
     'list_soap_messages', 'get_soap_message', 'list_soap_message_functions', 'create_soap_message', 'create_soap_message_function',
     'list_transform_maps', 'get_transform_map', 'run_transform_map', 'list_transform_field_maps',
-    'list_import_sets', 'get_import_set', 'create_import_set_row', 'list_data_sources',
+    'list_import_sets', 'get_import_set', 'create_import_set_row', 'import_excel_to_import_set', 'list_data_sources',
     'list_event_registry', 'get_event_registry_entry', 'register_event', 'fire_event', 'list_event_log',
     'list_oauth_applications', 'list_credential_aliases',
     'list_changesets', 'get_changeset', 'commit_changeset', 'publish_changeset',

@@ -59,6 +59,11 @@ Run: `npm run test:e2e:write` (sets `WRITE_ENABLED=true` in addition to
 `RUN_E2E=true`; without it this file's tests are skipped even if the rest of
 the E2E suite runs).
 
+The write suite also includes `excel-import-set.e2e.test.ts`: it uploads an
+in-memory `.xlsx` file to a new Import Set, verifies the attachment and the
+`sys_import_set` binding on its staging row, then explicitly deletes all three
+artifacts. It uses the PDI's seeded `imp_notification` staging table.
+
 ## Pull Request Process
 
 1. Update documentation
