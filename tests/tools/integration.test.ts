@@ -289,6 +289,21 @@ describe('Import Sets & Data Sources', () => {
       await expect(parseExcelImportRows(systemBase64)).rejects.toThrow('Invalid import field');
     });
 
+    it('neutralizes plain string values that look like formulas (CSV/Excel injection)', async () => {
+      const base64 = await xlsxBase64([
+        ['hostname', 'note'],
+        ['=cmd|\'/c calc\'!A1', '+1+1'],
+        ['-2+3', '@SUM(1)'],
+        ['server-3', 'plain text with - inside'],
+      ]);
+      const parsed = await parseExcelImportRows(base64);
+      expect(parsed.rows).toEqual([
+        { hostname: "'=cmd|'/c calc'!A1", note: "'+1+1" },
+        { hostname: "'-2+3", note: "'@SUM(1)" },
+        { hostname: 'server-3', note: 'plain text with - inside' },
+      ]);
+    });
+
     it('creates an Import Set, attaches the workbook, links rows, and starts an optional transform', async () => {
       const base64 = await xlsxBase64([['hostname'], ['server-1'], ['server-2']]);
       const importSetId = 'a'.repeat(32);

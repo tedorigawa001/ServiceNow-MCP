@@ -6,6 +6,14 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 ---
 
+## [Unreleased]
+
+### Security
+
+- **Fixed CSV/Excel formula injection (CWE-1236) in `import_excel_to_import_set`**: the formula-cell rejection added in 1.9.0 only caught genuine Excel formula cells; a plain string cell whose text merely starts with `=`, `+`, `-`, or `@` (e.g. typed literally, not entered as a formula) passed through unmodified into the staging table. If that data is later exported via ServiceNow's own Export to Excel/CSV and reopened, such values are interpreted as live formulas by the spreadsheet application. Now neutralized per the OWASP CSV Injection mitigation: string cell values matching that pattern are prefixed with a single quote before insertion, so they round-trip as literal text. Verified live against a PDI (`=cmd|'/c calc'!A1` → `'=cmd|'/c calc'!A1`, `-Confidential` → `'-Confidential`). Found during a security check of the 1.9.0 Excel feature; the `exceljs`→`archiver`/`glob`/`uuid` dependency chain flagged by `npm audit` was also investigated and confirmed unreachable (this server only calls `workbook.xlsx.load()`, never the writer path that pulls in `archiver`; `uuid` is called without the vulnerable `buf` argument) — no dependency change needed. 1 regression test added.
+
+---
+
 ## [1.9.0] — 2026-07-30
 
 ### Added

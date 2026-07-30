@@ -16,6 +16,19 @@ const RESERVED_FIELD_NAMES = new Set(['__proto__', 'constructor', 'prototype']);
 
 type ImportCellValue = string | number | boolean;
 
+// CWE-1236 (CSV/Excel formula injection): a plain string cell — not an Excel
+// formula cell, just literal text — starting with =, +, -, or @ (optionally
+// after whitespace/tab) is interpreted as a live formula by Excel/Sheets if
+// this data is later exported and reopened. The formula-cell check above only
+// catches genuine formula cells; this catches the string-typed variant per
+// the OWASP CSV Injection mitigation (prefix with a single quote so the
+// value round-trips as literal text).
+const FORMULA_LIKE_PREFIX_RE = /^[\s\t\r]*[=+\-@]/;
+
+function neutralizeFormulaLikeString(value: string): string {
+  return FORMULA_LIKE_PREFIX_RE.test(value) ? `'${value}` : value;
+}
+
 function validateStagingField(field: string): void {
   if (!STAGING_FIELD_RE.test(field) || field.toLowerCase().startsWith('sys_') || RESERVED_FIELD_NAMES.has(field)) {
     throw new ServiceNowError(
@@ -105,10 +118,12 @@ export async function parseExcelImportRows(
       hasValue = true;
       if (value instanceof Date) {
         row[headers[column - 1]] = value.toISOString().replace('T', ' ').slice(0, 19);
-      } else if (typeof value === 'string' || typeof value === 'number' || typeof value === 'boolean') {
+      } else if (typeof value === 'string') {
+        row[headers[column - 1]] = neutralizeFormulaLikeString(value);
+      } else if (typeof value === 'number' || typeof value === 'boolean') {
         row[headers[column - 1]] = value;
       } else {
-        row[headers[column - 1]] = cell.text;
+        row[headers[column - 1]] = neutralizeFormulaLikeString(cell.text);
       }
     }
     if (hasValue) rows.push(row);
