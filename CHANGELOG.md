@@ -6,6 +6,18 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 ---
 
+## [1.9.2] — 2026-08-02
+
+### Security
+
+- **Refreshed transitive dependency overrides**: new advisories were published against the `fast-uri`/`hono` versions pinned in 1.8.2's overrides (`fast-uri` host-confusion via backslash authority introducer, `hono` ReDoS in CORS middleware). Bumped overrides to `fast-uri` `^3.1.5` and `hono` `^4.12.34` (resolves to 4.13.0). Verified live: built and ran the Streamable HTTP transport and confirmed a JSON-RPC request round-trips correctly against the updated dependency tree.
+- **Investigated a new transitive chain** (`@modelcontextprotocol/sdk` → `express-rate-limit` → `ip-address`, 3 high-severity SSRF/trust-boundary advisories): confirmed unreachable — `express-rate-limit`/`ip-address` are used exclusively inside the SDK's built-in OAuth Authorization Server route handlers (`server/auth/handlers/*`), which this project never imports (`src/server.ts`/`src/server-http.ts` only import `server/index.js`, `server/stdio.js`, `server/streamableHttp.js`, and `types.js`). No dependency change needed.
+- `exceljs`'s `uuid` finding (unreachable, documented in 1.9.1) and the devDependency-only findings (vitest/vite/esbuild/postcss toolchain, now also flagging `postcss` via `vite`) remain unchanged — none are shipped in the published package.
+
+1517 tests pass, tsc clean.
+
+---
+
 ## [1.9.1] — 2026-07-31
 
 ### Security
