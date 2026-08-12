@@ -6,6 +6,22 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 ---
 
+## [1.10.0] — 2026-08-12
+
+### Added
+
+- **Data Management (13 tools)** (`data-management.ts`): manage ServiceNow Data Management Policies, archive rules, destroy rules, Table Cleanup Rules (Auto Flush), and archive restores.
+  - `list_data_management_policies` / `get_data_management_policy` / `create_data_management_policy`
+  - `list_archive_rules` / `create_archive_rule` / `set_archive_rule_active`
+  - `create_destroy_rule` / `set_destroy_rule_active`
+  - `list_cleanup_rules` / `create_cleanup_rule` / `set_cleanup_rule_active`
+  - `get_archive_restore_status` / `restore_archived_record`
+  - Safety design: every rule-creation tool always creates the rule **inactive** — nothing is archived, destroyed, or cleaned up until a separate, explicit activation call. Activating an archive, destroy, or cleanup rule requires `confirmation: "I_UNDERSTAND"`; activating an archive or destroy rule additionally requires an **active Data Management Policy** to already exist for the target table. `set_destroy_rule_active` and `set_cleanup_rule_active` are marked destructive (they permanently delete data); `restore_archived_record` requires both `WRITE_ENABLED=true` and `SCRIPTING_ENABLED=true` since it schedules a one-time script (`GlideArchiveRestore`) — the `archive_log_sys_id` is strictly validated as a sys_id before being interpolated into that script, so no injection is possible through it.
+  - Added to the `system_administrator` package (72 → 85 tools).
+  - Verified live against a PDI: inactive policy/archive/destroy rule creation, `retain_references`, confirmation-gate rejection, and the active-policy-gate rejection all behave as designed. 11 unit tests added.
+
+---
+
 ## [1.9.2] — 2026-08-02
 
 ### Security

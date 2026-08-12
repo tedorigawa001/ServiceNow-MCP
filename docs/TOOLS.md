@@ -2454,6 +2454,28 @@ Get historical transaction performance as a time series (transaction count, avg/
 
 ---
 
+## Data Management (13 tools)
+
+### list_data_management_policies / get_data_management_policy
+List or inspect Data Management Policies and their table-scoped archive rules.
+
+### create_data_management_policy
+Create an inactive Data Management Policy. Duplicate policies for the same table are rejected.
+
+### list_archive_rules / create_archive_rule / set_archive_rule_active
+Manage archive rules. New rules always start inactive. `retain_references` is accepted only at creation because ServiceNow makes it immutable afterwards. Activation requires `confirmation: "I_UNDERSTAND"`.
+
+### create_destroy_rule / set_destroy_rule_active
+Configure the retention period and eventual permanent deletion of already archived data. New destroy rules are inactive and require a retention period of at least one day. Activation requires explicit confirmation.
+
+### list_cleanup_rules / create_cleanup_rule / set_cleanup_rule_active
+Manage Table Cleanup Rules (`sys_auto_flush`), which permanently delete matching records from the live table. New rules are inactive; activation requires explicit confirmation.
+
+### get_archive_restore_status / restore_archived_record
+Inspect a restore or schedule one standard ServiceNow restore for a single archive-log entry. Restores require `WRITE_ENABLED=true`, `SCRIPTING_ENABLED=true`, and `confirmation: "I_UNDERSTAND"`.
+
+---
+
 ## System Properties (12 tools)
 
 ### get_system_property

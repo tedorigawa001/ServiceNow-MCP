@@ -11,7 +11,7 @@ Set `MCP_TOOL_PACKAGE` in your environment to load a role-specific subset of too
 | `change_coordinator` | Change manager | 19 |
 | `knowledge_author` | KB content creator | 13 |
 | `catalog_builder` | Catalog administrator | 20 |
-| `system_administrator` | SysAdmin | 72 |
+| `system_administrator` | SysAdmin | 85 |
 | `platform_developer` | Platform developer | 43 |
 | `itom_engineer` | ITOM/CMDB engineer | 34 |
 | `secops_analyst` | Security Operations / Vulnerability Response analyst | 103 |
@@ -94,6 +94,7 @@ Includes:
 - Instance performance diagnostics (`get_instance_diagnostics`, `get_performance_history`)
 - OAuth applications and credential aliases
 - System log
+- Data Management Policies, archive rules, archive restore, archive destroy rules, and Table Cleanup Rules
 - Core read tools
 
 ### platform_developer
@@ -215,7 +216,7 @@ Includes:
 | `change_coordinator` | true (for updates) | — |
 | `knowledge_author` | true (for create/publish) | — |
 | `catalog_builder` | true | — |
-| `system_administrator` | true | — |
+| `system_administrator` | true | `SCRIPTING_ENABLED=true` (restore only) |
 | `platform_developer` | true | `SCRIPTING_ENABLED=true`, `ATF_ENABLED=true` |
 | `itom_engineer` | true | `CMDB_WRITE_ENABLED=true` |
 | `agile_manager` | true | — |

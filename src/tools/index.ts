@@ -102,6 +102,8 @@ import { getSmartQueryToolDefinitions, executeSmartQueryToolCall } from './smart
 
 // ServiceNow Store (public catalog — release notes, version history)
 import { getStoreToolDefinitions, executeStoreToolCall } from './store.js';
+// Data Management Policies, archive rules, destroy rules, and restores
+import { getDataManagementToolDefinitions, executeDataManagementToolCall } from './data-management.js';
 
 // ─── Package Definitions ──────────────────────────────────────────────────────
 
@@ -252,6 +254,11 @@ const PACKAGE_TOOL_NAMES: Record<string, string[]> = {
     'bulk_get_properties', 'bulk_set_properties', 'list_property_categories',
     'get_current_update_set', 'list_update_sets',
     'create_update_set', 'switch_update_set', 'complete_update_set', 'preview_update_set', 'ensure_active_update_set',
+    // Data Management: archive, archived-data destruction, and live-table cleanup
+    'list_data_management_policies', 'get_data_management_policy', 'create_data_management_policy',
+    'list_archive_rules', 'create_archive_rule', 'create_destroy_rule', 'set_archive_rule_active', 'set_destroy_rule_active',
+    'list_cleanup_rules', 'create_cleanup_rule', 'set_cleanup_rule_active',
+    'get_archive_restore_status', 'restore_archived_record',
     'create_scheduled_report', 'create_kpi',
     // Instance performance diagnostics
     'get_instance_diagnostics', 'get_performance_history',
@@ -335,6 +342,7 @@ const DESTRUCTIVE_EXACT = new Set([
   // Code deployment / execution
   'execute_background_script',
   'commit_changeset', 'publish_changeset',
+  'set_destroy_rule_active', 'set_cleanup_rule_active', 'restore_archived_record',
 ]);
 
 /**
@@ -427,6 +435,7 @@ const MODULES: ToolModule[] = [
   { defs: getGrcIndicatorToolDefinitions, exec: executeGrcIndicatorToolCall },
   { defs: getSmartQueryToolDefinitions, exec: executeSmartQueryToolCall },
   { defs: getStoreToolDefinitions, exec: executeStoreToolCall },
+  { defs: getDataManagementToolDefinitions, exec: executeDataManagementToolCall },
 ];
 
 // Name → executor map, built once at module load. Detects duplicate tool names
