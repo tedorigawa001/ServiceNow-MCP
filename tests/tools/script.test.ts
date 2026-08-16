@@ -65,6 +65,52 @@ describe('executeScriptToolCall – update boundaries', () => {
     expect(updateRec()).not.toHaveBeenCalled();
   });
 
+  it('allows updating action_insert/action_update/action_delete on a business rule', async () => {
+    updateRec().mockResolvedValue({ sys_id: 'br1' });
+    await executeScriptToolCall(mockClient, 'update_business_rule', {
+      sys_id: 'br1',
+      fields: { action_insert: false, action_update: true, action_delete: true },
+    });
+    expect(updateRec()).toHaveBeenCalledWith('sys_script', 'br1', {
+      action_insert: false,
+      action_update: true,
+      action_delete: true,
+    });
+  });
+
+  it('create_business_rule defaults action_insert/action_update to true and action_delete to false', async () => {
+    cr().mockResolvedValue({ sys_id: 'br2' });
+    await executeScriptToolCall(mockClient, 'create_business_rule', {
+      name: 'Test rule',
+      table: 'incident',
+      when: 'async',
+      script: 'gs.log("hi");',
+    });
+    expect(cr()).toHaveBeenCalledWith('sys_script', expect.objectContaining({
+      action_insert: true,
+      action_update: true,
+      action_delete: false,
+    }));
+  });
+
+  it('create_business_rule respects explicit action_insert/action_update/action_delete overrides', async () => {
+    cr().mockResolvedValue({ sys_id: 'br3' });
+    await executeScriptToolCall(mockClient, 'create_business_rule', {
+      name: 'Delete-only rule',
+      table: 'incident',
+      when: 'before',
+      script: 'gs.log("bye");',
+      action_insert: false,
+      action_update: false,
+      action_delete: true,
+    });
+    expect(cr()).toHaveBeenCalledWith('sys_script', expect.objectContaining({
+      action_insert: false,
+      action_update: false,
+      action_delete: true,
+    }));
+  });
+
   it('rejects undeclared script include update fields', async () => {
     await expect(
       executeScriptToolCall(mockClient, 'update_script_include', {

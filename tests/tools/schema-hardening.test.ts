@@ -74,7 +74,7 @@ describe('write fields schemas', () => {
     {
       defs: getScriptToolDefinitions(),
       name: 'update_business_rule',
-      allowed: ['active', 'collection', 'condition', 'name', 'order', 'script', 'when'],
+      allowed: ['action_delete', 'action_insert', 'action_update', 'active', 'collection', 'condition', 'name', 'order', 'script', 'when'],
     },
     {
       defs: getScriptToolDefinitions(),

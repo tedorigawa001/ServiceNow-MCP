@@ -9,7 +9,7 @@ import { sanitizeLikeValue } from '../servicenow/client.js';
 import { ServiceNowError } from '../utils/errors.js';
 import { requireScripting } from '../utils/permissions.js';
 
-const BUSINESS_RULE_UPDATE_FIELDS = new Set(['name', 'collection', 'when', 'script', 'condition', 'active', 'order']);
+const BUSINESS_RULE_UPDATE_FIELDS = new Set(['name', 'collection', 'when', 'script', 'condition', 'active', 'order', 'action_insert', 'action_update', 'action_delete']);
 const SCRIPT_INCLUDE_UPDATE_FIELDS = new Set(['name', 'script', 'api_name', 'access', 'active']);
 const CLIENT_SCRIPT_UPDATE_FIELDS = new Set(['name', 'table', 'type', 'script', 'field_name', 'active', 'global']);
 const UI_ACTION_UPDATE_FIELDS = new Set([
@@ -86,6 +86,9 @@ export function getScriptToolDefinitions() {
           condition: { type: 'string', description: 'Optional condition script' },
           active: { type: 'boolean', description: 'Whether to activate the rule (default: true)' },
           order: { type: 'number', description: 'Execution order (default: 100)' },
+          action_insert: { type: 'boolean', description: 'Fire on record insert (default: true). Irrelevant for when="display"/"query". A rule with when="before"/"after"/"async" and action_insert/action_update/action_delete all false will never fire.' },
+          action_update: { type: 'boolean', description: 'Fire on record update (default: true). See action_insert note.' },
+          action_delete: { type: 'boolean', description: 'Fire on record delete (default: false, matching ServiceNow UI default). See action_insert note.' },
         },
         required: ['name', 'table', 'when', 'script'],
       },
@@ -97,7 +100,7 @@ export function getScriptToolDefinitions() {
         type: 'object',
         properties: {
           sys_id: { type: 'string', description: 'System ID of the rule' },
-          fields: allowedFieldsSchema(BUSINESS_RULE_UPDATE_FIELDS, 'Allowed fields: name, collection, when, script, condition, active, order'),
+          fields: allowedFieldsSchema(BUSINESS_RULE_UPDATE_FIELDS, 'Allowed fields: name, collection, when, script, condition, active, order, action_insert, action_update, action_delete'),
         },
         required: ['sys_id', 'fields'],
       },
@@ -435,9 +438,24 @@ export async function executeScriptToolCall(
     case 'create_business_rule': {
       if (!args.name || !args.table || !args.when || !args.script)
         throw new ServiceNowError('name, table, when, and script are required', 'INVALID_REQUEST');
-      const data = { name: args.name, collection: args.table, when: args.when, script: args.script, condition: args.condition, active: args.active !== false, order: args.order || 100 };
+      const data = {
+        name: args.name,
+        collection: args.table,
+        when: args.when,
+        script: args.script,
+        condition: args.condition,
+        active: args.active !== false,
+        order: args.order || 100,
+        action_insert: args.action_insert !== false,
+        action_update: args.action_update !== false,
+        action_delete: args.action_delete === true,
+      };
       const result = await client.createRecord('sys_script', data);
-      return { ...result, summary: `Created business rule ${args.name}`, note: 'GlideEncrypter is deprecated in recent releases; use new sn_si.Vault or keystore APIs instead' };
+      return {
+        ...result,
+        summary: `Created business rule ${args.name}`,
+        note: 'GlideEncrypter is deprecated in recent releases; use new sn_si.Vault or keystore APIs instead. For when="before"/"after"/"async", the rule only fires on operations where the matching action_insert/action_update/action_delete flag is true.',
+      };
     }
     case 'update_business_rule': {
       if (!args.sys_id || !args.fields) throw new ServiceNowError('sys_id and fields are required', 'INVALID_REQUEST');

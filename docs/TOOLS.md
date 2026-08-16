@@ -940,13 +940,18 @@ Create a new business rule. **[Scripting]**
 - `condition`
 - `active`
 - `order`
+- `action_insert` — fire on insert (default: `true`)
+- `action_update` — fire on update (default: `true`)
+- `action_delete` — fire on delete (default: `false`, matching the ServiceNow UI default)
+
+For `when` of `before`/`after`/`async`, the rule only fires on operations where the matching `action_*` flag is `true`. A rule with all three false never fires regardless of `when`/`condition`.
 
 ### update_business_rule
 Update a business rule. **[Scripting]**
 
 **Parameters**:
 - `sys_id` (required)
-- `fields` (required) — allowed fields only: `name`, `collection`, `when`, `script`, `condition`, `active`, `order`
+- `fields` (required) — allowed fields only: `name`, `collection`, `when`, `script`, `condition`, `active`, `order`, `action_insert`, `action_update`, `action_delete`
 
 ### list_script_includes
 List script includes.

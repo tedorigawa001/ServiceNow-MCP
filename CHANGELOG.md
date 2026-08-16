@@ -6,6 +6,17 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 ---
 
+## [1.10.1] — 2026-08-16
+
+### Fixed
+
+- **`create_business_rule` silently created rules that could never fire.** The tool only ever set `name`/`collection`/`when`/`script`/`condition`/`active`/`order` on `sys_script`, leaving `action_insert`/`action_update`/`action_delete` at ServiceNow's row default of `false`. A business rule with `when: "before"`/`"after"`/`"async"` needs at least one of those three flags `true` to ever execute — so every rule created through this tool silently never ran, regardless of `when` or `condition`, unless the caller separately edited it in the ServiceNow UI afterward.
+  - Found via live testing on a PDI while investigating async business rule execution: an `async` rule created through the tool never fired on insert, with no error at creation time or execution time.
+  - `create_business_rule` now sets `action_insert`/`action_update` to `true` and `action_delete` to `false` by default (matching the ServiceNow "New Business Rule" form defaults), and accepts optional `action_insert`/`action_update`/`action_delete` booleans to override.
+  - `update_business_rule` now allows updating `action_insert`/`action_update`/`action_delete` on existing rules.
+
+---
+
 ## [1.10.0] — 2026-08-12
 
 ### Added
