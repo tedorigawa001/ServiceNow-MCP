@@ -23,6 +23,27 @@ async function xlsxBase64(rows: unknown[][]): Promise<string> {
   return Buffer.from(content).toString('base64');
 }
 
+/** Build a minimal ZIP central directory entry without a payload for preflight tests. */
+function zipWithDeclaredEntrySizes(compressedBytes: number, uncompressedBytes: number): string {
+  const name = Buffer.from('xl/worksheets/sheet1.xml');
+  const centralDirectory = Buffer.alloc(46 + name.length);
+  centralDirectory.writeUInt32LE(0x02014b50, 0);
+  centralDirectory.writeUInt16LE(20, 4);
+  centralDirectory.writeUInt16LE(20, 6);
+  centralDirectory.writeUInt32LE(compressedBytes, 20);
+  centralDirectory.writeUInt32LE(uncompressedBytes, 24);
+  centralDirectory.writeUInt16LE(name.length, 28);
+  name.copy(centralDirectory, 46);
+
+  const endOfCentralDirectory = Buffer.alloc(22);
+  endOfCentralDirectory.writeUInt32LE(0x06054b50, 0);
+  endOfCentralDirectory.writeUInt16LE(1, 8);
+  endOfCentralDirectory.writeUInt16LE(1, 10);
+  endOfCentralDirectory.writeUInt32LE(centralDirectory.length, 12);
+  endOfCentralDirectory.writeUInt32LE(0, 16);
+  return Buffer.concat([centralDirectory, endOfCentralDirectory]).toString('base64');
+}
+
 describe('getIntegrationToolDefinitions', () => {
   it('returns exactly 25 integration tool definitions', () => {
     // Pinning the count catches accidental deletions/duplicate registrations
@@ -287,6 +308,24 @@ describe('Import Sets & Data Sources', () => {
 
       const systemBase64 = await xlsxBase64([['sys_id'], ['x']]);
       await expect(parseExcelImportRows(systemBase64)).rejects.toThrow('Invalid import field');
+    });
+
+    it('rejects a ZIP entry whose declared expansion ratio exceeds the limit before ExcelJS loads it', async () => {
+      const zipBomb = zipWithDeclaredEntrySizes(1, 25 * 1024 * 1024);
+
+      await expect(parseExcelImportRows(zipBomb)).rejects.toMatchObject({
+        code: 'VALIDATION_ERROR',
+        message: expect.stringContaining('compression ratio'),
+      });
+    });
+
+    it('rejects a ZIP entry whose declared uncompressed size exceeds the per-entry limit', async () => {
+      const oversizedEntry = zipWithDeclaredEntrySizes(1_000_000, 25 * 1024 * 1024 + 1);
+
+      await expect(parseExcelImportRows(oversizedEntry)).rejects.toMatchObject({
+        code: 'VALIDATION_ERROR',
+        message: expect.stringContaining('25 MiB'),
+      });
     });
 
     it('neutralizes plain string values that look like formulas (CSV/Excel injection)', async () => {

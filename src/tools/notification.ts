@@ -159,7 +159,8 @@ export function getNotificationToolDefinitions() {
           },
           content_base64: {
             type: 'string',
-            description: 'Base64-encoded file content (use standard base64 encoding)',
+            maxLength: 13_981_016,
+            description: 'Base64-encoded file content (standard base64; maximum decoded size: 10 MiB)',
           },
         },
         required: ['table', 'record_sys_id', 'file_name', 'content_type', 'content_base64'],

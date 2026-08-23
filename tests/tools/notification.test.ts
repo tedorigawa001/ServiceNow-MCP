@@ -172,6 +172,13 @@ describe('Attachments', () => {
       expect(ua()).toHaveBeenCalledWith('incident', 'r1', 'screenshot.png', 'image/png', 'YQ==');
       expect(result.summary).toContain('screenshot.png');
     });
+
+    it('advertises the 10 MiB decoded attachment limit in the MCP schema', () => {
+      const tool = getNotificationToolDefinitions().find(definition => definition.name === 'upload_attachment')!;
+      const content = tool.inputSchema.properties.content_base64;
+      expect(content.maxLength).toBe(13_981_016);
+      expect(content.description).toContain('10 MiB');
+    });
   });
 });
 

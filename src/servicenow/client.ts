@@ -12,6 +12,33 @@ import { logger } from '../utils/logging.js';
 
 // ─── Input validation helpers ────────────────────────────────────────────────
 
+/** Maximum decoded attachment size accepted by the Attachment API client. */
+const MAX_ATTACHMENT_BYTES = 10 * 1024 * 1024;
+const MAX_ATTACHMENT_BASE64_CHARS = 4 * Math.ceil(MAX_ATTACHMENT_BYTES / 3);
+
+/** Decode a bounded, standard-base64 attachment payload before any network I/O. */
+function decodeAttachmentBase64(contentBase64: string): Buffer {
+  if (
+    contentBase64.length > MAX_ATTACHMENT_BASE64_CHARS ||
+    contentBase64.length % 4 !== 0 ||
+    !/^[A-Za-z0-9+/]*={0,2}$/.test(contentBase64)
+  ) {
+    throw new ServiceNowError(
+      'Attachment content must be valid standard base64 and no larger than 10 MiB after decoding.',
+      'VALIDATION_ERROR'
+    );
+  }
+
+  const binary = Buffer.from(contentBase64, 'base64');
+  if (binary.length > MAX_ATTACHMENT_BYTES) {
+    throw new ServiceNowError(
+      'Attachment content must be no larger than 10 MiB after decoding.',
+      'VALIDATION_ERROR'
+    );
+  }
+  return binary;
+}
+
 /** Validate and sanitize ServiceNow table names (alphanumeric + underscores only) */
 function validateTableName(table: string): string {
   if (!table || !/^[a-zA-Z][a-zA-Z0-9_]*$/.test(table)) {
@@ -239,6 +266,19 @@ export class ServiceNowClient {
   }
 
   /**
+   * Build the authorization headers required for every authenticated request.
+   * Keep impersonation coupled to the service-account bearer token so that a
+   * direct endpoint call cannot accidentally run with service-account rights.
+   */
+  private getAuthenticatedHeaders(): Record<string, string> {
+    const impersonateHeader = this.getImpersonateHeader();
+    return {
+      'Authorization': this.getAuthHeader(),
+      ...(impersonateHeader ? { 'X-Sn-Impersonate': impersonateHeader } : {}),
+    };
+  }
+
+  /**
    * Make HTTP request with retry logic
    */
   private async request<T>(
@@ -251,20 +291,13 @@ export class ServiceNowClient {
       const controller = new AbortController();
       const timeout = setTimeout(() => controller.abort(), this.requestTimeoutMs);
       try {
-        const extraHeaders: Record<string, string> = {};
-        const impersonateHeader = this.getImpersonateHeader();
-        if (impersonateHeader) {
-          extraHeaders['X-Sn-Impersonate'] = impersonateHeader;
-        }
-
         const response = await fetch(url, {
           ...options,
           signal: controller.signal,
           headers: {
             'Accept': 'application/json',
             'Content-Type': 'application/json',
-            'Authorization': this.getAuthHeader(),
-            ...extraHeaders,
+            ...this.getAuthenticatedHeaders(),
             ...options.headers,
           },
         });
@@ -1021,6 +1054,9 @@ export class ServiceNowClient {
     contentType: string,
     contentBase64: string
   ): Promise<any> {
+    // Validate and bound the decoded payload before acquiring a token or making
+    // a request. Buffer.from() otherwise accepts arbitrarily large base64 input.
+    const binary = decodeAttachmentBase64(contentBase64);
     await this.authenticate();
 
     const url = `${this.baseUrl}/api/now/attachment/file?table_name=${encodeURIComponent(table)}&table_sys_id=${encodeURIComponent(recordSysId)}&file_name=${encodeURIComponent(fileName)}`;
@@ -1030,18 +1066,17 @@ export class ServiceNowClient {
     const attachController = new AbortController();
     const attachTimeout = setTimeout(() => attachController.abort(), this.requestTimeoutMs);
     try {
-      // Decode base64 to binary
-      const binary = Buffer.from(contentBase64, 'base64');
-
       const response = await fetch(url, {
         method: 'POST',
         signal: attachController.signal,
         headers: {
           'Content-Type': contentType,
-          'Authorization': this.getAuthHeader(),
+          ...this.getAuthenticatedHeaders(),
           'Accept': 'application/json',
         },
-        body: binary,
+        // Node's fetch accepts Buffer at runtime; its DOM BodyInit type does
+        // not model Buffer's generic backing ArrayBuffer precisely.
+        body: binary as unknown as BodyInit,
       });
 
       if (!response.ok) {
@@ -1088,7 +1123,7 @@ export class ServiceNowClient {
       const response = await fetch(url, {
         signal: statsController.signal,
         headers: {
-          'Authorization': this.getAuthHeader(),
+          ...this.getAuthenticatedHeaders(),
           'Accept': 'text/xml',
         },
       });

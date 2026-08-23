@@ -578,6 +578,40 @@ describe('ServiceNowClient — attachment upload', () => {
     expect(String(call[0])).toContain('/api/now/attachment/file');
     expect(String(call[0])).toContain('file_name=a.txt');
     expect(call[1].method).toBe('POST');
+    expect(call[1].headers).not.toHaveProperty('X-Sn-Impersonate');
+  });
+
+  it('sends X-Sn-Impersonate when uploading an attachment as an impersonated user', async () => {
+    routeFetch(mockResponse({ json: { result: { sys_id: 'att1' } } }));
+    const client = new ServiceNowClient(baseConfig()).withUser({ sysId: VALID_SYS_ID });
+
+    await client.uploadAttachment('incident', VALID_SYS_ID, 'a.txt', 'text/plain', 'AA==');
+
+    expect(apiCall()[1].headers).toMatchObject({
+      Authorization: 'Bearer tok-123',
+      'X-Sn-Impersonate': VALID_SYS_ID,
+    });
+  });
+
+  it('rejects an attachment larger than 10 MiB before authenticating or decoding it', async () => {
+    const client = new ServiceNowClient(baseConfig());
+    // This base64 text is over the maximum encoded length; the client must
+    // reject it before Buffer.from() allocates its decoded representation.
+    const oversizedBase64 = 'A'.repeat(13_981_020);
+
+    await expect(
+      client.uploadAttachment('incident', VALID_SYS_ID, 'large.bin', 'application/octet-stream', oversizedBase64)
+    ).rejects.toMatchObject({ code: 'VALIDATION_ERROR' });
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it('rejects non-standard base64 before authenticating or uploading', async () => {
+    const client = new ServiceNowClient(baseConfig());
+
+    await expect(
+      client.uploadAttachment('incident', VALID_SYS_ID, 'bad.bin', 'application/octet-stream', 'not base64!')
+    ).rejects.toMatchObject({ code: 'VALIDATION_ERROR' });
+    expect(fetchMock).not.toHaveBeenCalled();
   });
 
   it('maps an upload failure to ATTACHMENT_UPLOAD_FAILED', async () => {
@@ -586,5 +620,33 @@ describe('ServiceNowClient — attachment upload', () => {
     await expect(
       client.uploadAttachment('incident', VALID_SYS_ID, 'a.txt', 'text/plain', 'AA==')
     ).rejects.toMatchObject({ code: 'ATTACHMENT_UPLOAD_FAILED' });
+  });
+});
+
+describe('ServiceNowClient — xmlstats', () => {
+  it('does not send an impersonation header for a service-account xmlstats request', async () => {
+    routeFetch(mockResponse({ text: '<stats />' }));
+    const client = new ServiceNowClient(baseConfig());
+
+    await expect(client.getXmlStats()).resolves.toBe('<stats />');
+
+    expect(apiCall()[1].headers).toMatchObject({
+      Authorization: 'Bearer tok-123',
+      Accept: 'text/xml',
+    });
+    expect(apiCall()[1].headers).not.toHaveProperty('X-Sn-Impersonate');
+  });
+
+  it('sends X-Sn-Impersonate when fetching xmlstats as an impersonated user', async () => {
+    routeFetch(mockResponse({ text: '<stats />' }));
+    const client = new ServiceNowClient(baseConfig()).withUser({ sysId: VALID_SYS_ID });
+
+    await expect(client.getXmlStats()).resolves.toBe('<stats />');
+
+    expect(apiCall()[1].headers).toMatchObject({
+      Authorization: 'Bearer tok-123',
+      'X-Sn-Impersonate': VALID_SYS_ID,
+      Accept: 'text/xml',
+    });
   });
 });

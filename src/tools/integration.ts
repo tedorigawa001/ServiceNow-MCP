@@ -9,6 +9,10 @@ import { requireWrite, requireScripting } from '../utils/permissions.js';
 import ExcelJS from 'exceljs';
 
 const MAX_EXCEL_BYTES = 10 * 1024 * 1024;
+const MAX_EXCEL_ZIP_ENTRIES = 200;
+const MAX_EXCEL_ENTRY_UNCOMPRESSED_BYTES = 25 * 1024 * 1024;
+const MAX_EXCEL_TOTAL_UNCOMPRESSED_BYTES = 50 * 1024 * 1024;
+const MAX_EXCEL_COMPRESSION_RATIO = 100;
 const MAX_EXCEL_ROWS = 500;
 const MAX_EXCEL_COLUMNS = 50;
 const STAGING_FIELD_RE = /^[a-zA-Z][a-zA-Z0-9_]*$/;
@@ -54,6 +58,93 @@ function decodeXlsxBase64(contentBase64: unknown): Buffer {
   return buffer;
 }
 
+/**
+ * Validate ZIP metadata without inflating any entry. XLSX files are ZIP
+ * archives, so compressed-size limits alone do not prevent zip bombs.
+ * ZIP64 archives are deliberately rejected: their 64-bit size metadata is
+ * outside the bounded parser used here and is unnecessary for supported XLSX.
+ */
+function assertSafeXlsxArchive(buffer: Buffer): void {
+  const eocdSignature = 0x06054b50;
+  const centralDirectorySignature = 0x02014b50;
+  const eocdMinSize = 22;
+  const maxCommentBytes = 0xffff;
+  const searchStart = Math.max(0, buffer.length - eocdMinSize - maxCommentBytes);
+  let eocdOffset = -1;
+
+  for (let offset = buffer.length - eocdMinSize; offset >= searchStart; offset--) {
+    if (buffer.readUInt32LE(offset) === eocdSignature) {
+      eocdOffset = offset;
+      break;
+    }
+  }
+  if (eocdOffset < 0) {
+    throw new ServiceNowError('Invalid XLSX ZIP archive: end-of-central-directory record is missing', 'VALIDATION_ERROR');
+  }
+
+  const diskNumber = buffer.readUInt16LE(eocdOffset + 4);
+  const centralDirectoryDisk = buffer.readUInt16LE(eocdOffset + 6);
+  const entryCount = buffer.readUInt16LE(eocdOffset + 10);
+  const centralDirectorySize = buffer.readUInt32LE(eocdOffset + 12);
+  const centralDirectoryOffset = buffer.readUInt32LE(eocdOffset + 16);
+  if (
+    diskNumber !== 0 || centralDirectoryDisk !== 0 ||
+    entryCount === 0xffff || centralDirectorySize === 0xffffffff || centralDirectoryOffset === 0xffffffff
+  ) {
+    throw new ServiceNowError('ZIP64 and multi-disk XLSX archives are not supported', 'VALIDATION_ERROR');
+  }
+  if (entryCount > MAX_EXCEL_ZIP_ENTRIES) {
+    throw new ServiceNowError(`XLSX archive contains too many entries (maximum ${MAX_EXCEL_ZIP_ENTRIES})`, 'VALIDATION_ERROR');
+  }
+
+  const centralDirectoryEnd = centralDirectoryOffset + centralDirectorySize;
+  if (
+    centralDirectoryOffset > buffer.length ||
+    centralDirectoryEnd > buffer.length ||
+    centralDirectoryEnd < centralDirectoryOffset
+  ) {
+    throw new ServiceNowError('Invalid XLSX ZIP archive: central directory is out of bounds', 'VALIDATION_ERROR');
+  }
+
+  let offset = centralDirectoryOffset;
+  let totalUncompressedBytes = 0;
+  for (let entry = 0; entry < entryCount; entry++) {
+    if (offset + 46 > centralDirectoryEnd || buffer.readUInt32LE(offset) !== centralDirectorySignature) {
+      throw new ServiceNowError('Invalid XLSX ZIP archive: malformed central directory entry', 'VALIDATION_ERROR');
+    }
+    const compressedBytes = buffer.readUInt32LE(offset + 20);
+    const uncompressedBytes = buffer.readUInt32LE(offset + 24);
+    const fileNameBytes = buffer.readUInt16LE(offset + 28);
+    const extraFieldBytes = buffer.readUInt16LE(offset + 30);
+    const commentBytes = buffer.readUInt16LE(offset + 32);
+    const entrySize = 46 + fileNameBytes + extraFieldBytes + commentBytes;
+
+    if (compressedBytes === 0xffffffff || uncompressedBytes === 0xffffffff) {
+      throw new ServiceNowError('ZIP64 XLSX archive entries are not supported', 'VALIDATION_ERROR');
+    }
+    if (entrySize > centralDirectoryEnd - offset) {
+      throw new ServiceNowError('Invalid XLSX ZIP archive: entry extends beyond central directory', 'VALIDATION_ERROR');
+    }
+    if (uncompressedBytes > MAX_EXCEL_ENTRY_UNCOMPRESSED_BYTES) {
+      throw new ServiceNowError('XLSX archive entry exceeds the 25 MiB uncompressed limit', 'VALIDATION_ERROR');
+    }
+    if (
+      (compressedBytes === 0 && uncompressedBytes > 0) ||
+      (compressedBytes > 0 && uncompressedBytes > compressedBytes * MAX_EXCEL_COMPRESSION_RATIO)
+    ) {
+      throw new ServiceNowError('XLSX archive compression ratio exceeds the permitted limit', 'VALIDATION_ERROR');
+    }
+    totalUncompressedBytes += uncompressedBytes;
+    if (totalUncompressedBytes > MAX_EXCEL_TOTAL_UNCOMPRESSED_BYTES) {
+      throw new ServiceNowError('XLSX archive exceeds the 50 MiB total uncompressed limit', 'VALIDATION_ERROR');
+    }
+    offset += entrySize;
+  }
+  if (offset !== centralDirectoryEnd) {
+    throw new ServiceNowError('Invalid XLSX ZIP archive: central directory size mismatch', 'VALIDATION_ERROR');
+  }
+}
+
 /** Parse a single worksheet without evaluating formulas or trusting workbook metadata. */
 export async function parseExcelImportRows(
   contentBase64: unknown,
@@ -61,6 +152,7 @@ export async function parseExcelImportRows(
   columnMapping?: unknown
 ): Promise<{ sheetName: string; headers: string[]; rows: Record<string, ImportCellValue>[] }> {
   const buffer = decodeXlsxBase64(contentBase64);
+  assertSafeXlsxArchive(buffer);
   const workbook = new ExcelJS.Workbook();
   try {
     // exceljs declares the pre-Node-20 Buffer generic here; the binary is a
@@ -287,7 +379,10 @@ export function getIntegrationToolDefinitions() {
         type: 'object',
         properties: {
           file_name: { type: 'string', description: 'Original .xlsx file name' },
-          content_base64: { type: 'string', description: 'Base64-encoded .xlsx content (maximum 10 MiB)' },
+          content_base64: {
+            type: 'string',
+            description: 'Base64-encoded .xlsx content (maximum 10 MiB compressed; ZIP expansion limits apply)',
+          },
           staging_table: { type: 'string', description: 'Existing Import Set staging table to receive parsed rows' },
           transform_map_sys_id: { type: 'string', description: 'Optional Transform Map sys_id to run after rows are inserted' },
           sheet_name: { type: 'string', description: 'Optional worksheet name (default: first worksheet)' },

@@ -6,6 +6,21 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 ---
 
+## [1.10.2] — 2026-08-23
+
+### Security
+
+- **Preserved impersonation on direct authenticated endpoints.** `uploadAttachment()` and `getXmlStats()` now use the same authenticated-header builder as ordinary Table API requests, so `X-Sn-Impersonate` is included in impersonation mode and those calls cannot silently execute with service-account privileges.
+- **Bounded attachment decoding.** Attachment uploads now accept only standard Base64 and reject payloads larger than 10 MiB after decoding before obtaining OAuth credentials or allocating the decoded buffer. The MCP schema and tool documentation expose the limit.
+- **Blocked XLSX ZIP expansion attacks before parsing.** `import_excel_to_import_set` now reads ZIP central-directory metadata before passing a workbook to ExcelJS. It rejects ZIP64/multi-disk archives, more than 200 entries, entries over 25 MiB uncompressed, more than 50 MiB total expansion, and compression ratios over 100:1.
+
+### Verification
+
+- Added regression coverage for direct-endpoint impersonation, bounded Base64 attachment uploads, and XLSX ZIP expansion limits.
+- Verified the self-cleaning Excel Import Set write E2E against the PDI: Import Set creation, workbook attachment, staging-row creation and linking, then deletion of all test artifacts.
+
+---
+
 ## [1.10.1] — 2026-08-16
 
 ### Fixed

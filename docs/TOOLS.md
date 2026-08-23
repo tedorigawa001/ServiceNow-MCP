@@ -2190,11 +2190,11 @@ Create a row in a staging import set table. **[Write]**
 ### import_excel_to_import_set
 Upload and parse a single `.xlsx` worksheet, create its Import Set, attach the original workbook for auditability, insert all staging rows, and optionally trigger a Transform Map. **[Write]**
 
-The first row is the header. Headers either match staging-table column names or are mapped through `column_mapping`. Files are limited to 10 MiB, 500 data rows, and 50 columns. Formula cells and `sys_*` columns are rejected.
+The first row is the header. Headers either match staging-table column names or are mapped through `column_mapping`. Files are limited to 10 MiB, 500 data rows, and 50 columns. ZIP archives are also limited to 200 entries, 25 MiB per entry, 50 MiB total uncompressed data, and a 100:1 maximum compression ratio. Formula cells and `sys_*` columns are rejected.
 
 **Parameters**:
 - `file_name` (required) — `.xlsx` file name
-- `content_base64` (required) — Base64-encoded workbook
+- `content_base64` (required) — Base64-encoded workbook (subject to the ZIP expansion limits above)
 - `staging_table` (required) — Existing staging table
 - `transform_map_sys_id` — Optional Transform Map to run after row insertion
 - `sheet_name` — Optional worksheet name (first worksheet by default)
@@ -2332,7 +2332,7 @@ Upload a file attachment to a record. **[Write]**
 - `record_sys_id` (required)
 - `file_name` (required)
 - `content_type` (required) — MIME type (e.g. `application/pdf`)
-- `content_base64` (required) — Base64-encoded file content
+- `content_base64` (required) — Standard Base64-encoded file content; maximum decoded size: 10 MiB
 
 ### list_email_templates
 List email notification templates.
