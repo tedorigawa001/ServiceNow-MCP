@@ -22,7 +22,7 @@
 | 10 | インスタンス性能診断（メモリ/セマフォ/トランザクション履歴） | SysAdmin/ITOM 担当者 | ⭐⭐ 中 | 中 | ✅ 完了 |
 | 11 | USEM 修復ワークフロー補完（VI 作成 / RT⇔VI リンク / RT テーブル是正 / グルーピング診断） | SecOps 担当者 | ⭐⭐ 中 | 低 | ✅ 完了 |
 | 12 | MID/ACC 運用診断ツール（拡張コンテキスト / テーブルアクセス診断 / ECC Queue / アップグレード突合） | SysAdmin/ITOM 担当者 | ⭐⭐ 中 | 低 | ✅ 完了(12-1/12-2: v1.7.0、12-3〜12-5: v1.8.0) |
-| 13 | Update Set SCA（カスタム資産の第三者コンポーネント・CVE 照合） | Platform Developer / SecOps | ⭐⭐ 中 | 中 | 🚧 進行中(13-0〜13-4完了、v1.11.0) |
+| 13 | Update Set SCA（カスタム資産の第三者コンポーネント・CVE 照合） | Platform Developer / SecOps | ⭐⭐ 中 | 中 | ✅ 完了(13-0〜13-10、v1.11.0) |
 
 > #10 はロードマップ外で追加実装した機能(v1.0.5〜1.0.6)。`get_instance_diagnostics`(xmlstats.do の現在値 + `all_nodes` によるマルチノード対応)と `get_performance_history`(syslog_transaction の Aggregate API 時系列 + `group_by_node`)。メモリ・セマフォの履歴は JRobin が ACL 不可視のため対象外(現在値のみ)。詳細は [TOOLS.md](TOOLS.md) の Performance Analytics & Data Quality 節を参照。
 
@@ -634,7 +634,7 @@ Discovery 関連は core.ts の3ツール(`list_discovery_schedules` / `list_mid
 
 ---
 
-## 13. Update Set SCA（Software Composition Analysis）🚧 進行中(13-0〜13-4完了、v1.11.0)
+## 13. Update Set SCA（Software Composition Analysis）✅ 完了(13-0〜13-10、v1.11.0)
 
 ### 目的とスコープ
 
@@ -676,8 +676,8 @@ ServiceNow の Script Include / Business Rule 等は通常 npm の依存関係�
 | 13-6 ✅ | **JSON 契約と AI 向け要約** — `update_set` / `scope` / `components` / `findings` / `summary` / `limitations` / `errors` を固定 | `schema_version: 1.0`、severity 集計、照会カバレッジ、assessment、トップレベル errors を固定。`no findings != no vulnerabilities` を結果内へ明記 | ⭐⭐⭐ 高 |
 | 13-7 ✅ | **誤検知・安全性ガード** — バージョン不明、CDN alias (`latest` 等)、ハッシュ不一致、ライブラリ名だけの文字列を区別 | 範囲/alias・unversioned CDN・bare module specifier は `unresolved_references` へ隔離し OSV 非照会。任意文字列は候補化せず、外部 artifact hash は未検証と明示 | ⭐⭐ 中 |
 | 13-8 ✅ | **ユニット・境界テスト** — manifest、lockfile、CDN、重複、未知バージョン、巨大 / 不正 payload、外部照合失敗を網羅 | 35 テストで検出・統合・未解決分類・秘密情報非露出・OSV 失敗/応答上限/ページ継続/50件 cap を検証。component cap も `truncated` に反映 | ⭐⭐⭐ 高 |
-| 13-9 ✅ | **PDI E2E（読み取り専用）** — 実在 Update Set をスキャンし、収集件数と種別が UI / `preview_update_set` と整合することを確認 | `tests/e2e/updateset-sca.e2e.test.ts` を追加。PDI で preview の先頭10件と scanner の件数・種別内訳・本文非返却・安全注記を照合（1/1 passed、書込みなし） | ⭐⭐ 中 |
-| 13-10 | **ドキュメント・AI 利用例** — TOOLS / README に入力、JSON、制約、AI 報告プロンプト例を追加 | 「検出されない = 脆弱性なしではない」「SCA はサーバー側スクリプトの SAST を代替しない」を明記 | ⭐ 中 |
+| 13-9 ✅ | **PDI E2E（読み取り専用）** — 実在 Update Set をスキャンし、収集件数と種別が UI / `preview_update_set` と整合することを確認 | `tests/e2e/updateset-sca.e2e.test.ts` を追加。PDI で preview の先頭10件と scanner の件数・種別内訳・本文非返却・安全注記を照合（1/1 passed、書込みなし）。さらに UI 経由で取り込んだ無効な UI Script / Incident Business Rule の 2 件を実機スキャンし、`dayjs@1.11.13` / `lodash@4.17.21` の検出を確認 | ⭐⭐ 中 |
+| 13-10 ✅ | **ドキュメント・AI 利用例** — TOOLS / README に入力、JSON、制約、AI 報告プロンプト例を追加 | `docs/TOOLS.md` に入力・解釈・カバレッジ制約、README にローカル収集例と AI 報告プロンプトを追加。「検出されない = 脆弱性なしではない」「SCA はサーバー側スクリプトの SAST を代替しない」を明記 | ⭐ 中 |
 
 **13-0 PDI 調査結果（dev400464、読み取り専用）:**
 

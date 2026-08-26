@@ -105,6 +105,7 @@ Includes:
 - UI Policies and UI Actions (create/update)
 - ACL rule management
 - Changeset management
+- Read-only Update Set SCA (`scan_update_set_sca`)
 - ATF testing tools
 - Core read tools
 - Requires: `SCRIPTING_ENABLED=true`, `ATF_ENABLED=true`

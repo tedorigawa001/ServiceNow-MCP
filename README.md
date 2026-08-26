@@ -661,6 +661,38 @@ sequenceDiagram
     AI-->>U: 「SAP-PROD-DB01 は 8 つの CI に依存しています」
 ```
 
+### Update Set の第三者コンポーネントを SCA する
+
+`scan_update_set_sca` は **読み取り専用**で Update Set 内のスクリプト系 Customer Update を収集し、固定バージョンが確認できる npm コンポーネントを検出します。既定では [OSV](https://osv.dev) に照会して advisory を JSON で返します。コード本文・payload・一致箇所の文字列は返しません。
+
+```
+「Release 1.12 Update Set を SCA スキャンして。検出したコンポーネント、
+脆弱性、照会できなかった項目、次の対応を JSON の根拠だけで報告して」
+```
+
+ローカル収集だけを先に確認したい場合は、AI に `lookup_vulnerabilities: false` を指定します。
+
+```json
+{
+  "update_set": "46f0...",
+  "max_records": 50,
+  "lookup_vulnerabilities": false
+}
+```
+
+AI への報告依頼例:
+
+```
+scan_update_set_sca の JSON だけを根拠に報告してください。
+critical / high を最優先にし、各 finding は component、installed_version、
+advisory_id、fixed_versions、evidence の asset_type と asset_name を示してください。
+summary.assessment、lookup.status、errors、unresolved_references、truncated を必ず確認し、
+対象外・未照会・失敗を「脆弱性なし」と表現しないでください。
+修正は自動実行せず、Update Set の変更案と確認手順を提案してください。
+```
+
+> **制約**: `findings` が空でも安全性は証明されません。バージョン範囲、`latest` のような CDN alias、バージョンなしのモジュール参照は CVE 照合できず `unresolved_references` として返ります。また SCA は依存コンポーネントを対象にするものであり、ServiceNow のカスタムスクリプトに対する SAST、権限設計、クエリ安全性のレビューを代替しません。
+
 ### スラッシュコマンド & @メンション
 
 ```

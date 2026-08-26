@@ -2623,7 +2623,12 @@ Read-only Software Composition Analysis (SCA) scan for an Update Set. Resolves t
 - `max_records` — 1–100, default 50. The result reports `truncated: true` when more records exist than were inspected.
 - `lookup_vulnerabilities` — query OSV for each exact-version npm component (default `true`). Set `false` for a local-only scan with no outbound network call.
 
-OSV lookups are capped at 50 components per scan, time out after 5 seconds per component, and are cached in-memory for 1 hour by PURL. A lookup failure or a component skipped past the cap is reported in `lookup.errors`/`lookup.status` and never silently treated as "no vulnerabilities found." Third phase of the Update Set SCA roadmap (see `docs/ROADMAP.md` #13); it does not yet apply misdetection/safety guards for CDN aliases like `latest` (13-7) or cover non-npm ecosystems.
+OSV lookups are capped at 50 components per scan, time out after 5 seconds per component, and are cached in-memory for 1 hour by PURL. A lookup failure or a component skipped past the cap is reported in `lookup.errors`/`lookup.status` and never silently treated as "no vulnerabilities found." CDN aliases such as `latest`, version ranges, and bare module specifiers are returned only as `unresolved_references` and are not sent to OSV. The current detector supports npm components; other ecosystems are not yet covered.
+
+**Result interpretation**:
+- `summary.assessment` and `lookup.status` describe coverage. Treat `partial_failure`, `incomplete_coverage`, `truncated: true`, or non-empty `errors` as a follow-up task, not a clean result.
+- `findings: []` means no matched advisory was returned for the exact versions successfully queried. It does **not** prove that the Update Set or its dependencies are free of vulnerabilities.
+- This tool is SCA, not SAST: it does not assess unsafe ServiceNow API usage, authorization logic, injected queries, or the security behavior of custom scripts.
 
 ### ensure_active_update_set
 Ensure an active Update Set exists; auto-creates one if none is in progress. **[Scripting]**
