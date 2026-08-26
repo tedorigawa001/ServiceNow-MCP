@@ -19,6 +19,7 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
   - Defines a versioned SCA JSON contract with severity summary, assessment, coverage counters, limitations, and top-level errors so an AI can report findings without interpreting raw script content. A no-findings response is explicitly not a clean-security verdict.
   - Separates unversioned or alias-based references into `unresolved_references` and never sends them to OSV. Arbitrary string literals are not considered library references, and external-artifact hash verification is explicitly reported as not performed.
   - Adds boundary coverage for payload secret non-disclosure, oversized OSV responses, pagination, and the 50-component lookup cap. Component caps now correctly set `lookup.truncated` so partial coverage cannot be presented as complete.
+  - Adds an opt-in, read-only PDI E2E test that compares bounded SCA inventory metadata with `preview_update_set` and verifies source non-disclosure.
   - Source code, payload contents, and the surrounding script text around a detected component are never returned — only metadata, byte counts, and SHA-256 hashes of the payload and of the specific matched token.
   - Added to the `platform_developer` tool package.
 
