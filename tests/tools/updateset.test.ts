@@ -365,6 +365,80 @@ describe('executeUpdateSetToolCall – scan_update_set_sca', () => {
     expect(result.unresolved_references).toEqual([]);
   });
 
+  it('never returns payload secrets even when component detection and local-only scanning succeed', async () => {
+    (mockClient.getRecord as ReturnType<typeof vi.fn>).mockImplementation(async (table: string, sysId: string) => {
+      if (table === 'sys_update_set') return { sys_id: sysId, name: 'Secret-bearing SCA candidate' };
+      return { sys_id: sysId, payload: '<record_update><sys_script><script><![CDATA[const token = "SUPER_SECRET_DO_NOT_RETURN"; require("axios@1.2.3");]]></script></sys_script></record_update>' };
+    });
+    (mockClient.queryRecords as ReturnType<typeof vi.fn>).mockResolvedValue({
+      count: 1,
+      records: [{ sys_id: businessRuleXmlId, name: 'Secret BR', type: 'Business Rule', action: 'INSERT_OR_UPDATE' }],
+    });
+
+    const result = await executeUpdateSetToolCall(mockClient, 'scan_update_set_sca', {
+      update_set: updateSetId, lookup_vulnerabilities: false,
+    });
+    expect(result.components).toEqual([expect.objectContaining({ name: 'axios', version: '1.2.3' })]);
+    expect(JSON.stringify(result)).not.toContain('SUPER_SECRET_DO_NOT_RETURN');
+    expect(JSON.stringify(result)).not.toContain('const token');
+  });
+
+  it('reports an oversized OSV response as incomplete coverage without parsing it', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(new Response('', {
+      status: 200,
+      headers: { 'content-length': String(2 * 1024 * 1024 + 1) },
+    }));
+    vi.stubGlobal('fetch', fetchMock);
+    (mockClient.getRecord as ReturnType<typeof vi.fn>).mockImplementation(async (table: string, sysId: string) => {
+      if (table === 'sys_update_set') return { sys_id: sysId, name: 'Large OSV response' };
+      return { sys_id: sysId, payload: '<record_update><sys_script><script><![CDATA[require("oversized-response@1.0.0")]]></script></sys_script></record_update>' };
+    });
+    (mockClient.queryRecords as ReturnType<typeof vi.fn>).mockResolvedValue({
+      count: 1,
+      records: [{ sys_id: businessRuleXmlId, name: 'Large response BR', type: 'Business Rule', action: 'INSERT_OR_UPDATE' }],
+    });
+
+    const result = await executeUpdateSetToolCall(mockClient, 'scan_update_set_sca', { update_set: updateSetId });
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(result.findings).toEqual([]);
+    expect(result.lookup).toMatchObject({ status: 'partial_failure', errors: [{ purl: 'pkg:npm/oversized-response@1.0.0', code: 'OSV_REQUEST_FAILED' }] });
+  });
+
+  it('marks component lookup caps as truncated instead of presenting partial coverage as complete', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(new Response(JSON.stringify({ vulns: [] }), { status: 200 }));
+    vi.stubGlobal('fetch', fetchMock);
+    const dependencies = Array.from({ length: 51 }, (_, index) => `require("pkg${index}@1.0.0")`).join(';');
+    (mockClient.getRecord as ReturnType<typeof vi.fn>).mockImplementation(async (table: string, sysId: string) => {
+      if (table === 'sys_update_set') return { sys_id: sysId, name: 'Lookup cap' };
+      return { sys_id: sysId, payload: `<record_update><sys_script><script><![CDATA[${dependencies}]]></script></sys_script></record_update>` };
+    });
+    (mockClient.queryRecords as ReturnType<typeof vi.fn>).mockResolvedValue({
+      count: 1,
+      records: [{ sys_id: businessRuleXmlId, name: 'Many packages', type: 'Business Rule', action: 'INSERT_OR_UPDATE' }],
+    });
+
+    const result = await executeUpdateSetToolCall(mockClient, 'scan_update_set_sca', { update_set: updateSetId });
+    expect(fetchMock).toHaveBeenCalledTimes(50);
+    expect(result.lookup).toMatchObject({ queried_components: 50, skipped_components: 1, truncated: true });
+    expect(result.summary).toMatchObject({ assessment: 'incomplete_coverage', coverage: { unqueried_components: 1, lookup_truncated: true } });
+  });
+
+  it('marks OSV pagination as truncated even when the first page has no findings', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response(JSON.stringify({ vulns: [], next_page_token: 'more' }), { status: 200 })));
+    (mockClient.getRecord as ReturnType<typeof vi.fn>).mockImplementation(async (table: string, sysId: string) => {
+      if (table === 'sys_update_set') return { sys_id: sysId, name: 'OSV pagination' };
+      return { sys_id: sysId, payload: '<record_update><sys_script><script><![CDATA[require("pagination-test@1.0.0")]]></script></sys_script></record_update>' };
+    });
+    (mockClient.queryRecords as ReturnType<typeof vi.fn>).mockResolvedValue({
+      count: 1,
+      records: [{ sys_id: businessRuleXmlId, name: 'Paginated OSV BR', type: 'Business Rule', action: 'INSERT_OR_UPDATE' }],
+    });
+
+    const result = await executeUpdateSetToolCall(mockClient, 'scan_update_set_sca', { update_set: updateSetId });
+    expect(result.lookup).toMatchObject({ status: 'completed', truncated: true });
+    expect(result.summary).toMatchObject({ assessment: 'incomplete_coverage', coverage: { lookup_truncated: true } });
+  });
+
   it('queries OSV for exact versions, normalizes advisory fields, and caches successful lookups', async () => {
     const fetchMock = vi.fn().mockResolvedValue(new Response(JSON.stringify({
       vulns: [{

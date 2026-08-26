@@ -757,7 +757,8 @@ export async function executeUpdateSetToolCall(
       const findings: ScaFinding[] = [];
       const lookupErrors: Array<{ purl: string; code: 'OSV_REQUEST_FAILED' }> = [];
       let cacheHits = 0;
-      let lookupTruncated = false;
+      // Component caps are coverage truncation just like OSV's paginated result caps.
+      let lookupTruncated = lookupVulnerabilities && normalizedComponents.length > MAX_OSV_LOOKUPS;
       const componentsToLookup = lookupVulnerabilities ? normalizedComponents.slice(0, MAX_OSV_LOOKUPS) : [];
       for (const component of componentsToLookup) {
         try {
