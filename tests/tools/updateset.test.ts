@@ -312,6 +312,59 @@ describe('executeUpdateSetToolCall – scan_update_set_sca', () => {
     expect(result.scope).toMatchObject({ detected_component_evidence: 2, normalized_components: 1 });
   });
 
+  it('separates unversioned syntactic references from SCA components and never treats arbitrary strings as libraries', async () => {
+    (mockClient.getRecord as ReturnType<typeof vi.fn>).mockImplementation(async (table: string, sysId: string) => {
+      if (table === 'sys_update_set') return { sys_id: sysId, name: 'Unresolved references' };
+      return {
+        sys_id: sysId,
+        payload: '<record_update><sys_script><script><![CDATA[{"dependencies":{"lodash":"^4.17.0"}}]]></script><condition><![CDATA[require("axios"); const cdn = "https://unpkg.com/dayjs@latest/dayjs.min.js"; const arbitrary = "jquery";]]></condition></sys_script></record_update>',
+      };
+    });
+    (mockClient.queryRecords as ReturnType<typeof vi.fn>).mockResolvedValue({
+      count: 1,
+      records: [{ sys_id: businessRuleXmlId, name: 'Unresolved BR', type: 'Business Rule', action: 'INSERT_OR_UPDATE' }],
+    });
+
+    const result = await executeUpdateSetToolCall(mockClient, 'scan_update_set_sca', { update_set: updateSetId });
+    expect(result.components).toEqual([]);
+    expect(result.unresolved_references).toEqual(expect.arrayContaining([
+      expect.objectContaining({ name: 'lodash', reason: 'version_range_or_alias' }),
+      expect.objectContaining({ name: 'axios', reason: 'unversioned_module_specifier' }),
+      expect.objectContaining({ name: 'dayjs', reason: 'unversioned_cdn_reference' }),
+    ]));
+    expect(result.scope.unresolved_references).toBe(3);
+    expect(result.lookup).toMatchObject({ queried_components: 0, status: 'completed' });
+    expect(JSON.stringify(result)).not.toContain('jquery');
+    expect(JSON.stringify(result)).not.toContain('require(');
+    expect(result.summary).toMatchObject({
+      coverage: { unresolved_references: 3 },
+      integrity_verification: 'not_performed_for_external_artifacts',
+    });
+  });
+
+  it('does not report an exact-versioned CDN reference as an unresolved reference', async () => {
+    (mockClient.getRecord as ReturnType<typeof vi.fn>).mockImplementation(async (table: string, sysId: string) => {
+      if (table === 'sys_update_set') return { sys_id: sysId, name: 'Versioned CDN only' };
+      return {
+        sys_id: sysId,
+        payload: '<record_update><sys_script><script><![CDATA[const url = "https://cdn.jsdelivr.net/npm/dayjs@1.11.13/dayjs.min.js";]]></script></sys_script></record_update>',
+      };
+    });
+    (mockClient.queryRecords as ReturnType<typeof vi.fn>).mockResolvedValue({
+      count: 1,
+      records: [{ sys_id: businessRuleXmlId, name: 'Versioned CDN BR', type: 'Business Rule', action: 'INSERT_OR_UPDATE' }],
+    });
+
+    const result = await executeUpdateSetToolCall(mockClient, 'scan_update_set_sca', {
+      update_set: updateSetId,
+      lookup_vulnerabilities: false,
+    });
+    expect(result.components).toEqual([
+      expect.objectContaining({ name: 'dayjs', version: '1.11.13' }),
+    ]);
+    expect(result.unresolved_references).toEqual([]);
+  });
+
   it('queries OSV for exact versions, normalizes advisory fields, and caches successful lookups', async () => {
     const fetchMock = vi.fn().mockResolvedValue(new Response(JSON.stringify({
       vulns: [{

@@ -674,7 +674,7 @@ ServiceNow の Script Include / Business Rule 等は通常 npm の依存関係�
 | 13-4 ✅ | **SBOM 正規化・重複排除** — npm / Maven / PyPI / Composer / CycloneDX / SPDX を共通コンポーネントモデルへ正規化 | 現段階の npm 候補を ecosystem / package / exact version で統合し、PURL・direct/transitive/unknown・全 evidence を返却。Maven 等は対応検出器追加時に同モデルへ拡張 | ⭐⭐ 中 |
 | 13-5 ✅ | **脆弱性照合アダプタ** — OSV を基本に、NVD は CVE 詳細補完として利用。結果のキャッシュとタイムアウトを設ける | npm の厳密バージョンを OSV `/v1/query` へ照会し、advisory id / aliases / severity / CVSS / fixed versions / source を返却。1時間キャッシュ、5秒 timeout、最大50コンポーネント、失敗は `partial_failure` で明示 | ⭐⭐⭐ 高 |
 | 13-6 ✅ | **JSON 契約と AI 向け要約** — `update_set` / `scope` / `components` / `findings` / `summary` / `limitations` / `errors` を固定 | `schema_version: 1.0`、severity 集計、照会カバレッジ、assessment、トップレベル errors を固定。`no findings != no vulnerabilities` を結果内へ明記 | ⭐⭐⭐ 高 |
-| 13-7 | **誤検知・安全性ガード** — バージョン不明、CDN alias (`latest` 等)、ハッシュ不一致、ライブラリ名だけの文字列を区別 | `unknown_version` は CVE を断定しない。`not_sca_applicable` を安全判定に数えない | ⭐⭐ 中 |
+| 13-7 ✅ | **誤検知・安全性ガード** — バージョン不明、CDN alias (`latest` 等)、ハッシュ不一致、ライブラリ名だけの文字列を区別 | 範囲/alias・unversioned CDN・bare module specifier は `unresolved_references` へ隔離し OSV 非照会。任意文字列は候補化せず、外部 artifact hash は未検証と明示 | ⭐⭐ 中 |
 | 13-8 | **ユニット・境界テスト** — manifest、lockfile、CDN、重複、未知バージョン、巨大 / 不正 payload、外部照合失敗を網羅 | コンポーネント検出・照合・秘密情報非露出・上限拒否を自動検証 | ⭐⭐⭐ 高 |
 | 13-9 | **PDI E2E（読み取り専用）** — 実在 Update Set をスキャンし、収集件数と種別が UI / `preview_update_set` と整合することを確認 | 書込みなしで実行。検出 0 件の場合も「安全」ではなく coverage / limitations が正しく返ることを確認 | ⭐⭐ 中 |
 | 13-10 | **ドキュメント・AI 利用例** — TOOLS / README に入力、JSON、制約、AI 報告プロンプト例を追加 | 「検出されない = 脆弱性なしではない」「SCA はサーバー側スクリプトの SAST を代替しない」を明記 | ⭐ 中 |
@@ -721,7 +721,8 @@ ServiceNow の Script Include / Business Rule 等は通常 npm の依存関係�
     "affected_components": 1,
     "coverage": { "exact_version_components": 1, "queried_components": 1, "unqueried_components": 0, "lookup_errors": 0, "lookup_truncated": false },
     "assessment": "completed_with_bounded_coverage",
-    "safety_note": "No findings does not prove the Update Set or its dependencies are free of vulnerabilities."
+    "safety_note": "No findings does not prove the Update Set or its dependencies are free of vulnerabilities.",
+    "integrity_verification": "not_performed_for_external_artifacts"
   },
   "lookup": { "source": "OSV", "status": "completed", "queried_components": 1, "errors": [] },
   "limitations": [],

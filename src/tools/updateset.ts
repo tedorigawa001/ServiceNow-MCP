@@ -62,6 +62,19 @@ type NormalizedComponent = Omit<DetectedComponent, 'evidence' | 'dependency_type
   evidence: DetectedComponent['evidence'][];
 };
 
+type UnresolvedReference = {
+  name: string;
+  ecosystem: 'npm';
+  reason: 'version_range_or_alias' | 'unversioned_cdn_reference' | 'unversioned_module_specifier';
+  confidence: 'medium';
+  evidence: DetectedComponent['evidence'][];
+};
+
+type DetectedReferences = {
+  components: DetectedComponent[];
+  unresolved: Array<Omit<UnresolvedReference, 'evidence'> & { evidence: DetectedComponent['evidence'] }>;
+};
+
 type ScaFinding = {
   component: string;
   installed_version: string;
@@ -129,8 +142,9 @@ function isSafeVersion(value: string): boolean {
 function detectComponents(
   text: string,
   context: Omit<DetectedComponent['evidence'], 'extractor' | 'match_sha256'>,
-): DetectedComponent[] {
+): DetectedReferences {
   const components: DetectedComponent[] = [];
+  const unresolved: DetectedReferences['unresolved'] = [];
   const add = (
     name: string,
     version: string,
@@ -146,6 +160,21 @@ function detectComponents(
       ecosystem: 'npm',
       confidence,
       dependency_type: dependencyType,
+      evidence: { ...context, extractor, match_sha256: sha256(matchedToken) },
+    });
+  };
+  const addUnresolved = (
+    name: string,
+    reason: UnresolvedReference['reason'],
+    extractor: DetectedComponent['evidence']['extractor'],
+    matchedToken: string,
+  ) => {
+    if (!isSafePackageName(name)) return;
+    unresolved.push({
+      name: name.toLowerCase(),
+      ecosystem: 'npm',
+      reason,
+      confidence: 'medium',
       evidence: { ...context, extractor, match_sha256: sha256(matchedToken) },
     });
   };
@@ -168,7 +197,11 @@ function detectComponents(
       if (!dependencies || typeof dependencies !== 'object' || Array.isArray(dependencies)) continue;
       for (const [name, version] of Object.entries(dependencies as Record<string, unknown>)) {
         if (typeof version === 'string') {
-          add(name, version, 'package_manifest', 'high', 'direct', `${name}@${version}`);
+          if (isSafeVersion(version)) {
+            add(name, version, 'package_manifest', 'high', 'direct', `${name}@${version}`);
+          } else {
+            addUnresolved(name, 'version_range_or_alias', 'package_manifest', `${name}@${version}`);
+          }
         } else if (version && typeof version === 'object' && typeof (version as Record<string, unknown>).version === 'string') {
           // npm lockfile v1 stores package entries in a nested dependencies object.
           const exactVersion = (version as Record<string, unknown>).version as string;
@@ -184,6 +217,12 @@ function detectComponents(
   const npmCdnPattern = /https?:\/\/(?:cdn\.jsdelivr\.net\/npm|unpkg\.com)\/((?:@[a-z0-9][a-z0-9._-]*\/)?[a-z0-9][a-z0-9._-]*)@([0-9][0-9a-z.+-]*)\b/gi;
   for (const match of text.matchAll(npmCdnPattern)) add(match[1], match[2], 'versioned_cdn_url', 'high', 'unknown', match[0]);
 
+  // Alias and unversioned CDN paths are evidence of a library reference, but not an installed version.
+  const unversionedNpmCdnPattern = /https?:\/\/(?:cdn\.jsdelivr\.net\/npm|unpkg\.com)\/((?:@[a-z0-9][a-z0-9._-]*\/)?[a-z0-9][a-z0-9._-]*)(?!@[0-9])(?:@(latest|next|beta|canary|dev))?(?=\/|\b)/gi;
+  for (const match of text.matchAll(unversionedNpmCdnPattern)) {
+    addUnresolved(match[1], 'unversioned_cdn_reference', 'versioned_cdn_url', match[0]);
+  }
+
   // cdnjs uses a different, but likewise versioned, path layout.
   const cdnjsPattern = /https?:\/\/cdnjs\.cloudflare\.com\/ajax\/libs\/([a-z0-9][a-z0-9._-]*)\/([0-9][0-9a-z.+-]*)\b/gi;
   for (const match of text.matchAll(cdnjsPattern)) add(match[1], match[2], 'versioned_cdn_url', 'high', 'unknown', match[0]);
@@ -192,7 +231,10 @@ function detectComponents(
   const specifierPattern = /(?:require\s*\(\s*|from\s*|import\s*\(\s*)['"]((?:@[a-z0-9][a-z0-9._-]*\/)?[a-z0-9][a-z0-9._-]*)@([0-9][0-9a-z.+-]*)['"]/gi;
   for (const match of text.matchAll(specifierPattern)) add(match[1], match[2], 'versioned_module_specifier', 'medium', 'unknown', match[0]);
 
-  return components;
+  const bareSpecifierPattern = /(?:require\s*\(\s*|from\s*|import\s*\(\s*)['"]((?:@[a-z0-9][a-z0-9._-]*\/)?[a-z0-9][a-z0-9._-]*)['"]/gi;
+  for (const match of text.matchAll(bareSpecifierPattern)) addUnresolved(match[1], 'unversioned_module_specifier', 'versioned_module_specifier', match[0]);
+
+  return { components, unresolved };
 }
 
 function toNpmPurl(name: string, version: string): string {
@@ -230,6 +272,23 @@ function normalizeComponents(candidates: DetectedComponent[]): NormalizedCompone
   return [...grouped.values()].sort((a, b) =>
     a.ecosystem.localeCompare(b.ecosystem) || a.name.localeCompare(b.name) || a.version.localeCompare(b.version)
   );
+}
+
+function normalizeUnresolvedReferences(candidates: DetectedReferences['unresolved']): UnresolvedReference[] {
+  const grouped = new Map<string, UnresolvedReference>();
+  for (const candidate of candidates) {
+    const key = `${candidate.ecosystem}\0${candidate.name}\0${candidate.reason}`;
+    const existing = grouped.get(key);
+    if (!existing) {
+      grouped.set(key, { ...candidate, evidence: [candidate.evidence] });
+      continue;
+    }
+    const evidenceKey = JSON.stringify(candidate.evidence);
+    if (!existing.evidence.some(evidence => JSON.stringify(evidence) === evidenceKey)) {
+      existing.evidence.push(candidate.evidence);
+    }
+  }
+  return [...grouped.values()].sort((a, b) => a.name.localeCompare(b.name) || a.reason.localeCompare(b.reason));
 }
 
 function boundedText(value: unknown, maximumLength: number): string {
@@ -342,6 +401,7 @@ async function readBoundedResponse(response: Response): Promise<string> {
 
 function buildScaSummary(
   components: NormalizedComponent[],
+  unresolvedReferences: UnresolvedReference[],
   findings: ScaFinding[],
   lookup: { status: string; queriedComponents: number; skippedComponents: number; errors: number; truncated: boolean },
 ): Record<string, unknown> {
@@ -359,6 +419,7 @@ function buildScaSummary(
     affected_components: affectedComponents.size,
     coverage: {
       exact_version_components: components.length,
+      unresolved_references: unresolvedReferences.length,
       queried_components: lookup.queriedComponents,
       unqueried_components: lookup.skippedComponents,
       lookup_errors: lookup.errors,
@@ -368,6 +429,7 @@ function buildScaSummary(
       ? 'completed_with_bounded_coverage'
       : 'incomplete_coverage',
     safety_note: 'No findings does not prove the Update Set or its dependencies are free of vulnerabilities.',
+    integrity_verification: 'not_performed_for_external_artifacts',
   };
 }
 
@@ -625,6 +687,7 @@ export async function executeUpdateSetToolCall(
       };
       const assets: Array<Record<string, unknown>> = [];
       const components: DetectedComponent[] = [];
+      const unresolvedReferences: DetectedReferences['unresolved'] = [];
 
       for (const record of recordsToInspect) {
         const type = fieldValue(record.type) || '(unknown)';
@@ -660,12 +723,14 @@ export async function executeUpdateSetToolCall(
           const payloadHash = sha256(payload);
           const assetName = fieldValue(record.name);
           for (const entry of extracted) {
-            components.push(...detectComponents(entry.text, {
+            const detected = detectComponents(entry.text, {
               update_xml_sys_id: xmlId,
               asset_type: assetDefinition.asset_type,
               asset_name: assetName,
               payload_sha256: payloadHash,
-            }));
+            });
+            components.push(...detected.components);
+            unresolvedReferences.push(...detected.unresolved);
           }
           assets.push({
             update_xml_sys_id: xmlId,
@@ -688,6 +753,7 @@ export async function executeUpdateSetToolCall(
       }
 
       const normalizedComponents = normalizeComponents(components);
+      const normalizedUnresolvedReferences = normalizeUnresolvedReferences(unresolvedReferences);
       const findings: ScaFinding[] = [];
       const lookupErrors: Array<{ purl: string; code: 'OSV_REQUEST_FAILED' }> = [];
       let cacheHits = 0;
@@ -734,13 +800,15 @@ export async function executeUpdateSetToolCall(
           collected_assets: assets.length,
           detected_component_evidence: components.length,
           normalized_components: normalizedComponents.length,
+          unresolved_references: normalizedUnresolvedReferences.length,
           skipped,
           truncated,
         },
         assets,
         components: normalizedComponents,
+        unresolved_references: normalizedUnresolvedReferences,
         findings,
-        summary: buildScaSummary(normalizedComponents, findings, {
+        summary: buildScaSummary(normalizedComponents, normalizedUnresolvedReferences, findings, {
           status: lookup.status,
           queriedComponents: lookup.queried_components,
           skippedComponents: lookup.skipped_components,
@@ -751,6 +819,8 @@ export async function executeUpdateSetToolCall(
         errors: lookupErrors,
         limitations: [
           'Only exact versions found in supported package manifests, versioned CDN URLs, or versioned module specifiers are reported. Bare package names and version ranges are not treated as installed versions.',
+          'Unversioned CDN references, manifest version ranges or aliases, and bare module specifiers are reported separately as unresolved references and are never sent to OSV.',
+          'Remote artifact integrity is not verified; local hashes identify the scanned Update Set payload and evidence only, so no hash mismatch conclusion is made.',
           `OSV lookups are limited to ${MAX_OSV_LOOKUPS} exact-version npm components per scan and time out after ${OSV_TIMEOUT_MS / 1000} seconds per component. Lookup failures or skipped components do not mean no vulnerabilities.`,
           'Source code and payload contents are intentionally not returned; only metadata, field names, byte counts, and hashes are included.',
           `Payloads larger than ${MAX_SCA_PAYLOAD_BYTES} bytes are skipped without returning their content.`,
