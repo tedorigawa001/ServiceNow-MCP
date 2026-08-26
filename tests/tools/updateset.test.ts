@@ -335,12 +335,20 @@ describe('executeUpdateSetToolCall – scan_update_set_sca', () => {
     const second = await executeUpdateSetToolCall(mockClient, 'scan_update_set_sca', { update_set: updateSetId });
     expect(fetchMock).toHaveBeenCalledTimes(1);
     expect(fetchMock).toHaveBeenCalledWith('https://api.osv.dev/v1/query', expect.objectContaining({ method: 'POST' }));
+    expect(first.schema_version).toBe('1.0');
     expect(first.lookup).toMatchObject({ source: 'OSV', status: 'completed', queried_components: 1, cache_hits: 0 });
     expect(second.lookup).toMatchObject({ cache_hits: 1 });
     expect(first.findings).toEqual([expect.objectContaining({
       component: 'axios', installed_version: '1.2.3', advisory_id: 'GHSA-test-1234',
       aliases: ['CVE-2026-12345'], severity: 'high', fixed_versions: ['1.2.4'], source: 'OSV',
     })]);
+    expect(first.summary).toMatchObject({
+      total_findings: 1,
+      affected_components: 1,
+      findings_by_severity: { critical: 0, high: 1, medium: 0, low: 0, unknown: 0 },
+      coverage: { exact_version_components: 1, queried_components: 1, unqueried_components: 0, lookup_errors: 0 },
+      assessment: 'completed_with_bounded_coverage',
+    });
     expect(JSON.stringify(first)).not.toContain('require(');
   });
 
@@ -358,6 +366,8 @@ describe('executeUpdateSetToolCall – scan_update_set_sca', () => {
     const result = await executeUpdateSetToolCall(mockClient, 'scan_update_set_sca', { update_set: updateSetId });
     expect(result.findings).toEqual([]);
     expect(result.lookup).toMatchObject({ status: 'partial_failure', errors: [{ purl: 'pkg:npm/ky@9.9.9', code: 'OSV_REQUEST_FAILED' }] });
+    expect(result.summary).toMatchObject({ assessment: 'incomplete_coverage', coverage: { lookup_errors: 1 } });
+    expect(result.errors).toEqual([{ purl: 'pkg:npm/ky@9.9.9', code: 'OSV_REQUEST_FAILED' }]);
   });
 });
 

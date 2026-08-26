@@ -75,6 +75,8 @@ type ScaFinding = {
   source: 'OSV';
 };
 
+type FindingSeverity = 'critical' | 'high' | 'medium' | 'low' | 'unknown';
+
 type OsvLookupResult = { findings: ScaFinding[]; truncated: boolean };
 
 const osvCache = new Map<string, { expiresAt: number; result: OsvLookupResult }>();
@@ -234,6 +236,15 @@ function boundedText(value: unknown, maximumLength: number): string {
   return typeof value === 'string' ? value.slice(0, maximumLength) : '';
 }
 
+function normalizeSeverity(value: string): FindingSeverity {
+  const normalized = value.trim().toLowerCase();
+  if (normalized === 'critical') return 'critical';
+  if (normalized === 'high') return 'high';
+  if (normalized === 'medium' || normalized === 'moderate') return 'medium';
+  if (normalized === 'low') return 'low';
+  return 'unknown';
+}
+
 function extractOsvFindings(component: NormalizedComponent, response: unknown): OsvLookupResult {
   const rawVulnerabilities = (response && typeof response === 'object' && Array.isArray((response as Record<string, unknown>).vulns))
     ? (response as { vulns: unknown[] }).vulns
@@ -265,7 +276,7 @@ function extractOsvFindings(component: NormalizedComponent, response: unknown): 
       .slice(0, 5);
     const databaseSpecific = record.database_specific && typeof record.database_specific === 'object'
       ? record.database_specific as Record<string, unknown> : {};
-    const severity = boundedText(databaseSpecific.severity, 32).toLowerCase() || 'unknown';
+    const severity = normalizeSeverity(boundedText(databaseSpecific.severity, 32));
     const aliases = Array.isArray(record.aliases)
       ? record.aliases.filter((alias): alias is string => typeof alias === 'string').slice(0, 20) : [];
     const advisoryId = boundedText(record.id, 128);
@@ -327,6 +338,37 @@ async function readBoundedResponse(response: Response): Promise<string> {
     chunks.push(value);
   }
   return Buffer.concat(chunks).toString('utf8');
+}
+
+function buildScaSummary(
+  components: NormalizedComponent[],
+  findings: ScaFinding[],
+  lookup: { status: string; queriedComponents: number; skippedComponents: number; errors: number; truncated: boolean },
+): Record<string, unknown> {
+  const findingsBySeverity: Record<FindingSeverity, number> = {
+    critical: 0, high: 0, medium: 0, low: 0, unknown: 0,
+  };
+  const affectedComponents = new Set<string>();
+  for (const finding of findings) {
+    findingsBySeverity[normalizeSeverity(finding.severity)]++;
+    affectedComponents.add(finding.purl);
+  }
+  return {
+    findings_by_severity: findingsBySeverity,
+    total_findings: findings.length,
+    affected_components: affectedComponents.size,
+    coverage: {
+      exact_version_components: components.length,
+      queried_components: lookup.queriedComponents,
+      unqueried_components: lookup.skippedComponents,
+      lookup_errors: lookup.errors,
+      lookup_truncated: lookup.truncated,
+    },
+    assessment: lookup.status === 'completed' && lookup.skippedComponents === 0 && !lookup.truncated
+      ? 'completed_with_bounded_coverage'
+      : 'incomplete_coverage',
+    safety_note: 'No findings does not prove the Update Set or its dependencies are free of vulnerabilities.',
+  };
 }
 
 export function getUpdateSetToolDefinitions() {
@@ -665,7 +707,17 @@ export async function executeUpdateSetToolCall(
       const lookupStatus = !lookupVulnerabilities ? 'disabled'
         : lookupErrors.length > 0 ? 'partial_failure'
           : 'completed';
+      const lookup = {
+        source: 'OSV' as const,
+        status: lookupStatus,
+        queried_components: componentsToLookup.length,
+        skipped_components: lookupVulnerabilities ? normalizedComponents.length - componentsToLookup.length : normalizedComponents.length,
+        cache_hits: cacheHits,
+        truncated: lookupTruncated,
+        errors: lookupErrors,
+      };
       return {
+        schema_version: '1.0',
         scan_status: 'collection_complete',
         update_set: {
           sys_id: updateSetId,
@@ -688,15 +740,15 @@ export async function executeUpdateSetToolCall(
         assets,
         components: normalizedComponents,
         findings,
-        lookup: {
-          source: 'OSV',
-          status: lookupStatus,
-          queried_components: componentsToLookup.length,
-          skipped_components: lookupVulnerabilities ? normalizedComponents.length - componentsToLookup.length : normalizedComponents.length,
-          cache_hits: cacheHits,
-          truncated: lookupTruncated,
-          errors: lookupErrors,
-        },
+        summary: buildScaSummary(normalizedComponents, findings, {
+          status: lookup.status,
+          queriedComponents: lookup.queried_components,
+          skippedComponents: lookup.skipped_components,
+          errors: lookup.errors.length,
+          truncated: lookup.truncated,
+        }),
+        lookup,
+        errors: lookupErrors,
         limitations: [
           'Only exact versions found in supported package manifests, versioned CDN URLs, or versioned module specifiers are reported. Bare package names and version ranges are not treated as installed versions.',
           `OSV lookups are limited to ${MAX_OSV_LOOKUPS} exact-version npm components per scan and time out after ${OSV_TIMEOUT_MS / 1000} seconds per component. Lookup failures or skipped components do not mean no vulnerabilities.`,

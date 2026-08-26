@@ -16,6 +16,7 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
   - Detects components only where an exact version is present: npm lockfile v1/v3 structures and `package.json`-style manifests embedded in a script field, versioned CDN URLs (jsDelivr, unpkg, cdnjs), and `require`/`import` module specifiers pinned to an exact version (`package@1.2.3`). Version ranges, `latest`/aliases, and bare package names are never reported as an installed version.
   - Normalizes npm components by ecosystem, package name, and exact version; emits a PURL and direct/transitive/unknown dependency classification while retaining all distinct hashed evidence.
   - Queries OSV for exact-version npm components by default (optional local-only mode). Results include advisory IDs, aliases, severity, CVSS vectors, fixed versions, and source. Lookups have a five-second per-component timeout, a 50-component cap, and a one-hour in-memory cache; failures are explicitly reported as incomplete coverage.
+  - Defines a versioned SCA JSON contract with severity summary, assessment, coverage counters, limitations, and top-level errors so an AI can report findings without interpreting raw script content. A no-findings response is explicitly not a clean-security verdict.
   - Source code, payload contents, and the surrounding script text around a detected component are never returned — only metadata, byte counts, and SHA-256 hashes of the payload and of the specific matched token.
   - Added to the `platform_developer` tool package.
 
