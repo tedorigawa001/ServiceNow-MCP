@@ -22,6 +22,7 @@
 | 10 | インスタンス性能診断（メモリ/セマフォ/トランザクション履歴） | SysAdmin/ITOM 担当者 | ⭐⭐ 中 | 中 | ✅ 完了 |
 | 11 | USEM 修復ワークフロー補完（VI 作成 / RT⇔VI リンク / RT テーブル是正 / グルーピング診断） | SecOps 担当者 | ⭐⭐ 中 | 低 | ✅ 完了 |
 | 12 | MID/ACC 運用診断ツール（拡張コンテキスト / テーブルアクセス診断 / ECC Queue / アップグレード突合） | SysAdmin/ITOM 担当者 | ⭐⭐ 中 | 低 | ✅ 完了(12-1/12-2: v1.7.0、12-3〜12-5: v1.8.0) |
+| 13 | Update Set SCA（カスタム資産の第三者コンポーネント・CVE 照合） | Platform Developer / SecOps | ⭐⭐ 中 | 中 | 🚧 進行中(13-0〜13-4完了、v1.11.0) |
 
 > #10 はロードマップ外で追加実装した機能(v1.0.5〜1.0.6)。`get_instance_diagnostics`(xmlstats.do の現在値 + `all_nodes` によるマルチノード対応)と `get_performance_history`(syslog_transaction の Aggregate API 時系列 + `group_by_node`)。メモリ・セマフォの履歴は JRobin が ACL 不可視のため対象外(現在値のみ)。詳細は [TOOLS.md](TOOLS.md) の Performance Analytics & Data Quality 節を参照。
 
@@ -630,6 +631,101 @@ Discovery 関連は core.ts の3ツール(`list_discovery_schedules` / `list_mid
 
 - 12-2 の4状態判定は PDI(dev400464)実測に基づく。scoped テーブルでも `Invalid table` は sys_db_object 不在を意味することを確認済み
 - 12-5 は `search_store_apps` / `get_store_app_versions`(v1.6.0)の合成であり、外部 API(store.servicenow.com)依存はそれらと同一
+
+---
+
+## 13. Update Set SCA（Software Composition Analysis）🚧 進行中(13-0〜13-4完了、v1.11.0)
+
+### 目的とスコープ
+
+カスタム資産を含む Update Set を読み取り専用で分析し、**証拠付きのコンポーネント一覧と脆弱性照合結果を JSON で返す**。返却 JSON を AI が受け取り、優先順位・影響・是正案を自然言語レポート化する構成とする。
+
+ServiceNow の Script Include / Business Rule 等は通常 npm の依存関係を持たない。そのため「コードがある」ことを SCA の検出結果と混同しない。バージョンまで特定できた第三者コンポーネントだけを CVE 照合対象とし、根拠不足は `unknown_version` または `not_sca_applicable` として明示する。
+
+**初期ツール案:** `scan_update_set_sca`（Tier 0、読み取り専用）
+
+```ts
+{
+  update_set: string;             // sys_id または名前。名前の曖昧一致はしない
+  max_records?: number;          // 1〜100、デフォルト 50
+}
+```
+
+### チェック対象（優先順）
+
+| 区分 | Update Set 内の候補資産 | 抽出するもの | SCA 対象条件 | 優先度 |
+|---|---|---|---|---|
+| サーバースクリプト | Script Include、Business Rule、Scheduled Script Execution、Script Action、Scripted REST API / Resource | ライブラリ名・バージョン・URL・`require` / `import` / CDN 参照 | パッケージ名とバージョン、または固定 URL の両方を取得できた場合 | 高 |
+| クライアントスクリプト | Client Script、UI Script、UI Action、Service Portal Widget、Catalog Client Script | npm / CDN / 静的 JS ライブラリの参照、`package.json` 相当の埋込みマニフェスト | 同上。特に CDN のバージョン付き URL | 高 |
+| ローコード／設定 | Flow Designer 定義、Action 定義、IntegrationHub REST Message、Connection / Credential の**メタデータ** | 外部 SDK・ライブラリ参照、外部 URL、バージョン文字列 | 第三者ソフトウェアが明示される場合のみ | 中 |
+| 添付・配布物 | Update Set が参照する添付ファイル、Scoped App / ソース管理関連のマニフェスト | `package-lock.json`、`package.json`、`pom.xml`、`requirements.txt`、`composer.lock`、CycloneDX / SPDX | マニフェストを完全に取得・解析できた場合 | 高 |
+| 非 SCA 資産 | Dictionary、Choice、ACL、Form、View、通常のレコード設定 | 件数・種別のみ | 依存関係を含まないため CVE 照合しない | 低 |
+
+> Credential、OAuth secret、REST Message の認証ヘッダー、添付のバイナリ本体はスキャン結果へ出力しない。SCA のために秘密情報を収集しない。
+
+### 実装バックログ
+
+| # | 内容 | 完了条件 | 優先度 |
+|---|---|---|---|
+| 13-0 ✅ | **PDI スキーマ・カバレッジ調査** — `sys_update_set` / `sys_update_xml` の実在フィールド、payload の形式・最大サイズ、名前解決、添付／Scoped App 参照可否を確認 | **2026-08-26 実施。** 実在フィールド・サンプル Update Set の内訳を記録。添付／Scoped App の Update Set 参照関係は 13-2 で継続確認 | ⭐⭐⭐ 高 |
+| 13-1 ✅ | **Update Set 収集器** — sys_id を厳格検証し、名前は完全一致で sys_id に解決。`sys_update_xml` をページングして種別・件数・payload hash を収集 | `max_records` は 1〜100、1件先読みで `truncated` を明示。コード本文を結果・ログに出力しない | ⭐⭐⭐ 高 |
+| 13-2 ✅ | **資産分類・安全なテキスト抽出** — 13-0 の実機結果に基づく種別 allowlist と、payload の XML / script 本文抽出 | XML をパーサに渡さず既知要素だけを抽出。本文は hash・サイズ・要素名に変換し、512 KiB 超の payload はスキップ。添付マニフェストは 13-3 以降で扱う | ⭐⭐⭐ 高 |
+| 13-3 ✅ | **コンポーネント検出器** — lockfile / manifest を最優先に解析し、次にバージョン付き CDN URL、最後にコード上の明示参照を候補化 | npm lockfile v1/v3・package manifest・jsDelivr/unpkg/cdnjs・`package@version` を検出。根拠は hash のみで、推測やバージョン範囲は返さない | ⭐⭐⭐ 高 |
+| 13-4 ✅ | **SBOM 正規化・重複排除** — npm / Maven / PyPI / Composer / CycloneDX / SPDX を共通コンポーネントモデルへ正規化 | 現段階の npm 候補を ecosystem / package / exact version で統合し、PURL・direct/transitive/unknown・全 evidence を返却。Maven 等は対応検出器追加時に同モデルへ拡張 | ⭐⭐ 中 |
+| 13-5 | **脆弱性照合アダプタ** — OSV を基本に、NVD は CVE 詳細補完として利用。結果のキャッシュとタイムアウトを設ける | advisory id、severity、CVSS、fixed versions、source、照合時刻を返す。ネットワーク失敗は `lookup_status` で明示 | ⭐⭐⭐ 高 |
+| 13-6 | **JSON 契約と AI 向け要約** — `update_set` / `scope` / `components` / `findings` / `summary` / `limitations` / `errors` を固定 | 結果だけで AI が「対象・根拠・未確認範囲・優先度」を説明できる。コード全量や秘密情報を含めない | ⭐⭐⭐ 高 |
+| 13-7 | **誤検知・安全性ガード** — バージョン不明、CDN alias (`latest` 等)、ハッシュ不一致、ライブラリ名だけの文字列を区別 | `unknown_version` は CVE を断定しない。`not_sca_applicable` を安全判定に数えない | ⭐⭐ 中 |
+| 13-8 | **ユニット・境界テスト** — manifest、lockfile、CDN、重複、未知バージョン、巨大 / 不正 payload、外部照合失敗を網羅 | コンポーネント検出・照合・秘密情報非露出・上限拒否を自動検証 | ⭐⭐⭐ 高 |
+| 13-9 | **PDI E2E（読み取り専用）** — 実在 Update Set をスキャンし、収集件数と種別が UI / `preview_update_set` と整合することを確認 | 書込みなしで実行。検出 0 件の場合も「安全」ではなく coverage / limitations が正しく返ることを確認 | ⭐⭐ 中 |
+| 13-10 | **ドキュメント・AI 利用例** — TOOLS / README に入力、JSON、制約、AI 報告プロンプト例を追加 | 「検出されない = 脆弱性なしではない」「SCA はサーバー側スクリプトの SAST を代替しない」を明記 | ⭐ 中 |
+
+**13-0 PDI 調査結果（dev400464、読み取り専用）:**
+
+- `sys_update_xml` には `update_set`（`sys_update_set` 参照）、`name`、`type`、`action`、`payload`、`sys_updated_on` が存在する。`payload` は string、最大長 **4,096,000**。
+- 直近の Global `Default` Update Set には Data Source、REST Integration、System Property、Business Rule、Archive Rule 等が混在した。したがって、SCA 対象外の設定レコードを種別 allowlist で除外する必要がある。
+- Business Rule は `type="Business Rule"`、payload の `record_update table="sys_script"`、本文候補は `<script>` 要素で確認した。payload 本文は調査ログ・ツール出力のいずれにも保存しない。
+- `sys_update_xml` は多数件になり得るため、13-1 は metadata をページング収集し、本文は SCA 対象種別に限って個別・サイズ上限付きで取得する。
+
+### JSON 出力契約（初版）
+
+```json
+{
+  "update_set": { "sys_id": "...", "name": "...", "state": "complete" },
+  "scope": {
+    "update_xml_count": 42,
+    "scanned_records": 18,
+    "by_asset_type": { "script_include": 4, "ui_script": 2 },
+    "truncated": false
+  },
+  "components": [{
+    "name": "example-library",
+    "version": "1.2.3",
+    "ecosystem": "npm",
+    "purl": "pkg:npm/example-library@1.2.3",
+    "confidence": "high",
+    "evidence": [{ "asset_type": "ui_script", "asset_name": "Example", "payload_hash": "..." }]
+  }],
+  "findings": [{
+    "component": "example-library",
+    "installed_version": "1.2.3",
+    "advisory_id": "CVE-...",
+    "severity": "high",
+    "fixed_versions": ["1.2.4"],
+    "source": "OSV",
+    "lookup_status": "matched"
+  }],
+  "summary": { "critical": 0, "high": 1, "medium": 0, "low": 0, "unknown_version": 0 },
+  "limitations": [],
+  "errors": []
+}
+```
+
+### 非目標（初版）
+
+- Update Set の内容を書き換えること、CVE を自動修復すること
+- バージョンを伴わない文字列一致だけで「脆弱」と断定すること
+- ServiceNow ネイティブ API の危険な使用を SCA として判定すること（これは別途 SAST / security review の対象）
+- Credential、トークン、認証ヘッダー、コード全文を返却・外部送信すること
 
 ---
 

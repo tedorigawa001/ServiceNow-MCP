@@ -152,6 +152,162 @@ describe('executeUpdateSetToolCall – preview_update_set', () => {
   });
 });
 
+describe('executeUpdateSetToolCall – scan_update_set_sca', () => {
+  const updateSetId = 'a'.repeat(32);
+  const businessRuleXmlId = 'b'.repeat(32);
+
+  beforeEach(() => vi.clearAllMocks());
+
+  it('collects allowlisted script assets without returning their source', async () => {
+    (mockClient.getRecord as ReturnType<typeof vi.fn>).mockImplementation(async (table: string, sysId: string) => {
+      if (table === 'sys_update_set') {
+        return { sys_id: sysId, name: 'SCA candidate', state: 'in progress', application: 'global' };
+      }
+      return {
+        sys_id: sysId,
+        payload: '<record_update><sys_script><script><![CDATA[var component = "lodash@4.17.20";]]></script></sys_script></record_update>',
+      };
+    });
+    (mockClient.queryRecords as ReturnType<typeof vi.fn>).mockResolvedValue({
+      count: 2,
+      records: [
+        { sys_id: businessRuleXmlId, name: 'Example BR', type: 'Business Rule', action: 'INSERT_OR_UPDATE', sys_updated_on: '2026-08-26' },
+        { sys_id: 'c'.repeat(32), name: 'Dictionary field', type: 'Dictionary', action: 'INSERT_OR_UPDATE' },
+      ],
+    });
+
+    const result = await executeUpdateSetToolCall(mockClient, 'scan_update_set_sca', {
+      update_set: updateSetId,
+      max_records: 2,
+    });
+
+    expect(result.scan_status).toBe('collection_complete');
+    expect(result.scope).toMatchObject({ metadata_records: 2, collected_assets: 1, truncated: false });
+    expect(result.scope.skipped.non_sca_asset_type).toBe(1);
+    expect(result.components).toEqual([]);
+    expect(result.assets[0]).toMatchObject({
+      update_xml_sys_id: businessRuleXmlId,
+      asset_type: 'business_rule',
+      extracted_text: { fields: ['script'] },
+    });
+    expect(result.assets[0].payload.sha256).toMatch(/^[a-f0-9]{64}$/);
+    expect(JSON.stringify(result)).not.toContain('lodash@4.17.20');
+    expect(mockClient.queryRecords).toHaveBeenCalledWith(expect.objectContaining({
+      table: 'sys_update_xml',
+      query: `update_set=${updateSetId}`,
+      fields: 'sys_id,name,type,action,sys_updated_on',
+    }));
+  });
+
+  it('resolves an exact Update Set name and rejects encoded-query separators', async () => {
+    (mockClient.queryRecords as ReturnType<typeof vi.fn>).mockResolvedValue({
+      count: 1,
+      records: [{ sys_id: updateSetId, name: 'Release 1.11', state: 'complete' }],
+    });
+    const result = await executeUpdateSetToolCall(mockClient, 'scan_update_set_sca', { update_set: 'Release 1.11' });
+    expect(result.update_set.sys_id).toBe(updateSetId);
+    expect(mockClient.queryRecords).toHaveBeenNthCalledWith(1, expect.objectContaining({
+      table: 'sys_update_set', query: 'name=Release 1.11', limit: 3,
+    }));
+
+    vi.clearAllMocks();
+    await expect(executeUpdateSetToolCall(mockClient, 'scan_update_set_sca', {
+      update_set: 'Release^ORstate=complete',
+    })).rejects.toThrow('encoded-query operators');
+    expect(mockClient.queryRecords).not.toHaveBeenCalled();
+  });
+
+  it('reports oversized payloads without returning their contents', async () => {
+    (mockClient.getRecord as ReturnType<typeof vi.fn>).mockImplementation(async (table: string, sysId: string) => {
+      if (table === 'sys_update_set') return { sys_id: sysId, name: 'Large candidate' };
+      return { sys_id: sysId, payload: 'x'.repeat(512 * 1024 + 1) };
+    });
+    (mockClient.queryRecords as ReturnType<typeof vi.fn>).mockResolvedValue({
+      count: 1,
+      records: [{ sys_id: businessRuleXmlId, name: 'Large BR', type: 'Business Rule', action: 'INSERT_OR_UPDATE' }],
+    });
+
+    const result = await executeUpdateSetToolCall(mockClient, 'scan_update_set_sca', { update_set: updateSetId });
+    expect(result.assets).toEqual([]);
+    expect(result.scope.skipped.payload_too_large).toBe(1);
+  });
+
+  it('fetches one extra metadata row and reports a bounded scan as truncated', async () => {
+    (mockClient.getRecord as ReturnType<typeof vi.fn>).mockResolvedValue({ sys_id: updateSetId, name: 'Bounded scan' });
+    (mockClient.queryRecords as ReturnType<typeof vi.fn>).mockResolvedValue({
+      count: 2,
+      records: [
+        { sys_id: 'd'.repeat(32), name: 'Dictionary one', type: 'Dictionary', action: 'INSERT_OR_UPDATE' },
+        { sys_id: 'e'.repeat(32), name: 'Dictionary two', type: 'Dictionary', action: 'INSERT_OR_UPDATE' },
+      ],
+    });
+
+    const result = await executeUpdateSetToolCall(mockClient, 'scan_update_set_sca', {
+      update_set: updateSetId,
+      max_records: 1,
+    });
+    expect(result.scope).toMatchObject({ metadata_records: 1, truncated: true });
+    expect(mockClient.queryRecords).toHaveBeenCalledWith(expect.objectContaining({ limit: 2, offset: 0 }));
+  });
+
+  it('detects exact versions from manifests, versioned CDN URLs, and module specifiers without source evidence', async () => {
+    (mockClient.getRecord as ReturnType<typeof vi.fn>).mockImplementation(async (table: string, sysId: string) => {
+      if (table === 'sys_update_set') return { sys_id: sysId, name: 'Component candidate' };
+      return {
+        sys_id: sysId,
+        payload: '<record_update><sys_script><script><![CDATA[{"lockfileVersion":3,"packages":{"node_modules/lodash":{"version":"4.17.21"}}}]]></script><condition><![CDATA[const x = require("axios@1.7.9"); const y = "https://cdn.jsdelivr.net/npm/dayjs@1.11.13/dayjs.min.js";]]></condition></sys_script></record_update>',
+      };
+    });
+    (mockClient.queryRecords as ReturnType<typeof vi.fn>).mockResolvedValue({
+      count: 1,
+      records: [{ sys_id: businessRuleXmlId, name: 'Component BR', type: 'Business Rule', action: 'INSERT_OR_UPDATE' }],
+    });
+
+    const result = await executeUpdateSetToolCall(mockClient, 'scan_update_set_sca', { update_set: updateSetId });
+    expect(result.components).toEqual(expect.arrayContaining([
+      expect.objectContaining({ name: 'lodash', version: '4.17.21', ecosystem: 'npm', confidence: 'high' }),
+      expect.objectContaining({ name: 'axios', version: '1.7.9', ecosystem: 'npm', confidence: 'medium' }),
+      expect.objectContaining({ name: 'dayjs', version: '1.11.13', ecosystem: 'npm', confidence: 'high' }),
+    ]));
+    expect(result.scope).toMatchObject({ detected_component_evidence: 3, normalized_components: 3 });
+    expect(result.components.find((component: { name: string }) => component.name === 'lodash')?.evidence).toEqual([
+      expect.objectContaining({ extractor: 'package_lockfile', match_sha256: expect.stringMatching(/^[a-f0-9]{64}$/) }),
+    ]);
+    expect(JSON.stringify(result)).not.toContain('cdn.jsdelivr.net');
+    expect(JSON.stringify(result)).not.toContain('require(');
+  });
+
+  it('normalizes identical package versions and retains evidence from every asset', async () => {
+    const secondXmlId = 'f'.repeat(32);
+    (mockClient.getRecord as ReturnType<typeof vi.fn>).mockImplementation(async (table: string, sysId: string) => {
+      if (table === 'sys_update_set') return { sys_id: sysId, name: 'Duplicate components' };
+      return {
+        sys_id: sysId,
+        payload: '<record_update><sys_script><script><![CDATA[const url = "https://unpkg.com/lodash@4.17.21/lodash.js";]]></script></sys_script></record_update>',
+      };
+    });
+    (mockClient.queryRecords as ReturnType<typeof vi.fn>).mockResolvedValue({
+      count: 2,
+      records: [
+        { sys_id: businessRuleXmlId, name: 'First reference', type: 'Business Rule', action: 'INSERT_OR_UPDATE' },
+        { sys_id: secondXmlId, name: 'Second reference', type: 'Script Include', action: 'INSERT_OR_UPDATE' },
+      ],
+    });
+
+    const result = await executeUpdateSetToolCall(mockClient, 'scan_update_set_sca', {
+      update_set: updateSetId,
+      max_records: 2,
+    });
+    expect(result.components).toHaveLength(1);
+    expect(result.components[0]).toMatchObject({
+      name: 'lodash', version: '4.17.21', purl: 'pkg:npm/lodash@4.17.21',
+      dependency_types: ['unknown'],
+    });
+    expect(result.components[0].evidence).toHaveLength(2);
+    expect(result.scope).toMatchObject({ detected_component_evidence: 2, normalized_components: 1 });
+  });
+});
+
 describe('executeUpdateSetToolCall – ensure_active_update_set', () => {
   beforeEach(() => {
     vi.clearAllMocks();

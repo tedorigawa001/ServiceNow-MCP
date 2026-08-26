@@ -12,7 +12,7 @@ Set `MCP_TOOL_PACKAGE` in your environment to load a role-specific subset of too
 | `knowledge_author` | KB content creator | 13 |
 | `catalog_builder` | Catalog administrator | 20 |
 | `system_administrator` | SysAdmin | 85 |
-| `platform_developer` | Platform developer | 43 |
+| `platform_developer` | Platform developer | 44 |
 | `itom_engineer` | ITOM/CMDB engineer | 34 |
 | `secops_analyst` | Security Operations / Vulnerability Response analyst | 103 |
 | `agile_manager` | Agile team lead | 13 |

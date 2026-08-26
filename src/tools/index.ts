@@ -273,6 +273,7 @@ const PACKAGE_TOOL_NAMES: Record<string, string[]> = {
     'list_ui_actions', 'get_ui_action', 'create_ui_action', 'update_ui_action',
     'list_acls', 'get_acl', 'create_acl', 'update_acl',
     'list_changesets', 'get_changeset', 'commit_changeset', 'publish_changeset',
+    'scan_update_set_sca',
     'list_atf_suites', 'get_atf_suite', 'run_atf_suite', 'list_atf_tests', 'get_atf_test', 'run_atf_test', 'get_atf_suite_result', 'list_atf_test_results', 'get_atf_failure_insight',
   ],
   itom_engineer: [

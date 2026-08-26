@@ -2568,7 +2568,7 @@ Get audit history for a system property (changes over time).
 
 ---
 
-## Update Set Management (8 tools)
+## Update Set Management (9 tools)
 
 ### get_current_update_set
 Get all currently active (in-progress) Update Sets.
@@ -2614,6 +2614,15 @@ Get the XML export payload for an Update Set. **[Scripting]**
 
 **Parameters**:
 - `sys_id` (required)
+
+### scan_update_set_sca
+Read-only Software Composition Analysis (SCA) collection for an Update Set. Resolves the Update Set, inventories its script-bearing changes (Business Rule, Script Include, Client Script, UI Script, UI Action, Script Action, Scheduled Script Execution, Scripted REST Resource, Service Portal Widget), and detects third-party components that carry an exact version (npm lockfiles/manifests embedded in a script, versioned CDN URLs, `require`/`import` specifiers pinned to a version). Source code, payload contents, and the text around a match are never returned — only metadata, byte counts, and SHA-256 hashes.
+
+**Parameters**:
+- `update_set` (required) — sys_id (32 hex chars) or exact Update Set name; ambiguous names are rejected
+- `max_records` — 1–100, default 50. The result reports `truncated: true` when more records exist than were inspected.
+
+First phase of the Update Set SCA roadmap (see `docs/ROADMAP.md` #13); it does not yet normalize/dedupe components, query vulnerability databases, or return `findings`.
 
 ### ensure_active_update_set
 Ensure an active Update Set exists; auto-creates one if none is in progress. **[Scripting]**
