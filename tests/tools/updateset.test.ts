@@ -157,6 +157,7 @@ describe('executeUpdateSetToolCall – scan_update_set_sca', () => {
   const businessRuleXmlId = 'b'.repeat(32);
 
   beforeEach(() => vi.clearAllMocks());
+  afterEach(() => vi.unstubAllGlobals());
 
   it('collects allowlisted script assets without returning their source', async () => {
     (mockClient.getRecord as ReturnType<typeof vi.fn>).mockImplementation(async (table: string, sysId: string) => {
@@ -227,7 +228,7 @@ describe('executeUpdateSetToolCall – scan_update_set_sca', () => {
       records: [{ sys_id: businessRuleXmlId, name: 'Large BR', type: 'Business Rule', action: 'INSERT_OR_UPDATE' }],
     });
 
-    const result = await executeUpdateSetToolCall(mockClient, 'scan_update_set_sca', { update_set: updateSetId });
+    const result = await executeUpdateSetToolCall(mockClient, 'scan_update_set_sca', { update_set: updateSetId, lookup_vulnerabilities: false });
     expect(result.assets).toEqual([]);
     expect(result.scope.skipped.payload_too_large).toBe(1);
   });
@@ -263,7 +264,10 @@ describe('executeUpdateSetToolCall – scan_update_set_sca', () => {
       records: [{ sys_id: businessRuleXmlId, name: 'Component BR', type: 'Business Rule', action: 'INSERT_OR_UPDATE' }],
     });
 
-    const result = await executeUpdateSetToolCall(mockClient, 'scan_update_set_sca', { update_set: updateSetId });
+    const result = await executeUpdateSetToolCall(mockClient, 'scan_update_set_sca', {
+      update_set: updateSetId,
+      lookup_vulnerabilities: false,
+    });
     expect(result.components).toEqual(expect.arrayContaining([
       expect.objectContaining({ name: 'lodash', version: '4.17.21', ecosystem: 'npm', confidence: 'high' }),
       expect.objectContaining({ name: 'axios', version: '1.7.9', ecosystem: 'npm', confidence: 'medium' }),
@@ -297,6 +301,7 @@ describe('executeUpdateSetToolCall – scan_update_set_sca', () => {
     const result = await executeUpdateSetToolCall(mockClient, 'scan_update_set_sca', {
       update_set: updateSetId,
       max_records: 2,
+      lookup_vulnerabilities: false,
     });
     expect(result.components).toHaveLength(1);
     expect(result.components[0]).toMatchObject({
@@ -305,6 +310,54 @@ describe('executeUpdateSetToolCall – scan_update_set_sca', () => {
     });
     expect(result.components[0].evidence).toHaveLength(2);
     expect(result.scope).toMatchObject({ detected_component_evidence: 2, normalized_components: 1 });
+  });
+
+  it('queries OSV for exact versions, normalizes advisory fields, and caches successful lookups', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(new Response(JSON.stringify({
+      vulns: [{
+        id: 'GHSA-test-1234', aliases: ['CVE-2026-12345'], summary: 'Test advisory',
+        database_specific: { severity: 'HIGH' },
+        severity: [{ type: 'CVSS_V3', score: 'CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:H/I:H/A:H' }],
+        affected: [{ ranges: [{ type: 'ECOSYSTEM', events: [{ introduced: '0' }, { fixed: '1.2.4' }] }] }],
+      }],
+    }), { status: 200 }));
+    vi.stubGlobal('fetch', fetchMock);
+    (mockClient.getRecord as ReturnType<typeof vi.fn>).mockImplementation(async (table: string, sysId: string) => {
+      if (table === 'sys_update_set') return { sys_id: sysId, name: 'OSV candidate' };
+      return { sys_id: sysId, payload: '<record_update><sys_script><script><![CDATA[require("axios@1.2.3")]]></script></sys_script></record_update>' };
+    });
+    (mockClient.queryRecords as ReturnType<typeof vi.fn>).mockResolvedValue({
+      count: 1,
+      records: [{ sys_id: businessRuleXmlId, name: 'OSV BR', type: 'Business Rule', action: 'INSERT_OR_UPDATE' }],
+    });
+
+    const first = await executeUpdateSetToolCall(mockClient, 'scan_update_set_sca', { update_set: updateSetId });
+    const second = await executeUpdateSetToolCall(mockClient, 'scan_update_set_sca', { update_set: updateSetId });
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(fetchMock).toHaveBeenCalledWith('https://api.osv.dev/v1/query', expect.objectContaining({ method: 'POST' }));
+    expect(first.lookup).toMatchObject({ source: 'OSV', status: 'completed', queried_components: 1, cache_hits: 0 });
+    expect(second.lookup).toMatchObject({ cache_hits: 1 });
+    expect(first.findings).toEqual([expect.objectContaining({
+      component: 'axios', installed_version: '1.2.3', advisory_id: 'GHSA-test-1234',
+      aliases: ['CVE-2026-12345'], severity: 'high', fixed_versions: ['1.2.4'], source: 'OSV',
+    })]);
+    expect(JSON.stringify(first)).not.toContain('require(');
+  });
+
+  it('reports OSV failures as incomplete lookup rather than a clean result', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockRejectedValue(new Error('network unavailable')));
+    (mockClient.getRecord as ReturnType<typeof vi.fn>).mockImplementation(async (table: string, sysId: string) => {
+      if (table === 'sys_update_set') return { sys_id: sysId, name: 'OSV failure' };
+      return { sys_id: sysId, payload: '<record_update><sys_script><script><![CDATA[require("ky@9.9.9")]]></script></sys_script></record_update>' };
+    });
+    (mockClient.queryRecords as ReturnType<typeof vi.fn>).mockResolvedValue({
+      count: 1,
+      records: [{ sys_id: businessRuleXmlId, name: 'Failure BR', type: 'Business Rule', action: 'INSERT_OR_UPDATE' }],
+    });
+
+    const result = await executeUpdateSetToolCall(mockClient, 'scan_update_set_sca', { update_set: updateSetId });
+    expect(result.findings).toEqual([]);
+    expect(result.lookup).toMatchObject({ status: 'partial_failure', errors: [{ purl: 'pkg:npm/ky@9.9.9', code: 'OSV_REQUEST_FAILED' }] });
   });
 });
 

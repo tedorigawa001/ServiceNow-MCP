@@ -20,6 +20,12 @@ import { requireScripting } from '../utils/permissions.js';
 const SYS_ID_PATTERN = /^[0-9a-f]{32}$/i;
 const MAX_SCA_RECORDS = 100;
 const MAX_SCA_PAYLOAD_BYTES = 512 * 1024;
+const MAX_OSV_LOOKUPS = 50;
+const MAX_OSV_FINDINGS_PER_COMPONENT = 50;
+const OSV_TIMEOUT_MS = 5_000;
+const OSV_CACHE_TTL_MS = 60 * 60 * 1000;
+const OSV_API_URL = 'https://api.osv.dev/v1/query';
+const MAX_OSV_RESPONSE_BYTES = 2 * 1024 * 1024;
 
 /** Update XML types whose payload can contain executable or dependency-bearing text. */
 const SCA_ASSET_TYPES: Record<string, { asset_type: string; text_fields: readonly string[] }> = {
@@ -55,6 +61,23 @@ type NormalizedComponent = Omit<DetectedComponent, 'evidence' | 'dependency_type
   dependency_types: Array<DetectedComponent['dependency_type']>;
   evidence: DetectedComponent['evidence'][];
 };
+
+type ScaFinding = {
+  component: string;
+  installed_version: string;
+  purl: string;
+  advisory_id: string;
+  aliases: string[];
+  summary: string;
+  severity: string;
+  cvss: string[];
+  fixed_versions: string[];
+  source: 'OSV';
+};
+
+type OsvLookupResult = { findings: ScaFinding[]; truncated: boolean };
+
+const osvCache = new Map<string, { expiresAt: number; result: OsvLookupResult }>();
 
 function fieldValue(value: unknown): string {
   if (value === null || value === undefined) return '';
@@ -207,6 +230,105 @@ function normalizeComponents(candidates: DetectedComponent[]): NormalizedCompone
   );
 }
 
+function boundedText(value: unknown, maximumLength: number): string {
+  return typeof value === 'string' ? value.slice(0, maximumLength) : '';
+}
+
+function extractOsvFindings(component: NormalizedComponent, response: unknown): OsvLookupResult {
+  const rawVulnerabilities = (response && typeof response === 'object' && Array.isArray((response as Record<string, unknown>).vulns))
+    ? (response as { vulns: unknown[] }).vulns
+    : [];
+  const vulnerabilities = rawVulnerabilities.slice(0, MAX_OSV_FINDINGS_PER_COMPONENT);
+  const findings: ScaFinding[] = [];
+  for (const vulnerability of vulnerabilities) {
+    if (!vulnerability || typeof vulnerability !== 'object') continue;
+    const record = vulnerability as Record<string, unknown>;
+    const fixedVersions = new Set<string>();
+    const affected = Array.isArray(record.affected) ? record.affected : [];
+    for (const entry of affected) {
+      if (!entry || typeof entry !== 'object') continue;
+      const ranges = Array.isArray((entry as Record<string, unknown>).ranges) ? (entry as Record<string, unknown>).ranges as unknown[] : [];
+      for (const range of ranges) {
+        if (!range || typeof range !== 'object') continue;
+        const events = Array.isArray((range as Record<string, unknown>).events) ? (range as Record<string, unknown>).events as unknown[] : [];
+        for (const event of events) {
+          const fixed = event && typeof event === 'object' ? (event as Record<string, unknown>).fixed : undefined;
+          if (typeof fixed === 'string' && isSafeVersion(fixed)) fixedVersions.add(fixed.replace(/^v/i, ''));
+        }
+      }
+    }
+    const severityValues = Array.isArray(record.severity) ? record.severity : [];
+    const cvss = severityValues
+      .filter((item): item is Record<string, unknown> => Boolean(item) && typeof item === 'object')
+      .map(item => boundedText(item.score, 512))
+      .filter(Boolean)
+      .slice(0, 5);
+    const databaseSpecific = record.database_specific && typeof record.database_specific === 'object'
+      ? record.database_specific as Record<string, unknown> : {};
+    const severity = boundedText(databaseSpecific.severity, 32).toLowerCase() || 'unknown';
+    const aliases = Array.isArray(record.aliases)
+      ? record.aliases.filter((alias): alias is string => typeof alias === 'string').slice(0, 20) : [];
+    const advisoryId = boundedText(record.id, 128);
+    if (!advisoryId) continue;
+    findings.push({
+      component: component.name,
+      installed_version: component.version,
+      purl: component.purl,
+      advisory_id: advisoryId,
+      aliases,
+      summary: boundedText(record.summary, 500),
+      severity,
+      cvss,
+      fixed_versions: [...fixedVersions].sort(),
+      source: 'OSV',
+    });
+  }
+  const hasNextPage = Boolean(response && typeof response === 'object' && (response as Record<string, unknown>).next_page_token);
+  return { findings, truncated: rawVulnerabilities.length > MAX_OSV_FINDINGS_PER_COMPONENT || hasNextPage };
+}
+
+async function lookupOsv(component: NormalizedComponent): Promise<{ result: OsvLookupResult; cached: boolean }> {
+  const cached = osvCache.get(component.purl);
+  if (cached && cached.expiresAt > Date.now()) return { result: cached.result, cached: true };
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), OSV_TIMEOUT_MS);
+  try {
+    const response = await fetch(OSV_API_URL, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json', accept: 'application/json' },
+      body: JSON.stringify({ package: { name: component.name, ecosystem: 'npm' }, version: component.version }),
+      signal: controller.signal,
+    });
+    if (!response.ok) throw new Error(`OSV returned HTTP ${response.status}`);
+    const contentLength = Number(response.headers.get('content-length') || '0');
+    if (contentLength > MAX_OSV_RESPONSE_BYTES) throw new Error('OSV response exceeds size limit');
+    const result = extractOsvFindings(component, JSON.parse(await readBoundedResponse(response)));
+    if (osvCache.size >= 500) osvCache.delete(osvCache.keys().next().value as string);
+    osvCache.set(component.purl, { expiresAt: Date.now() + OSV_CACHE_TTL_MS, result });
+    return { result, cached: false };
+  } finally {
+    clearTimeout(timeout);
+  }
+}
+
+async function readBoundedResponse(response: Response): Promise<string> {
+  if (!response.body) return '';
+  const reader = response.body.getReader();
+  const chunks: Uint8Array[] = [];
+  let totalBytes = 0;
+  while (true) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    totalBytes += value.byteLength;
+    if (totalBytes > MAX_OSV_RESPONSE_BYTES) {
+      await reader.cancel();
+      throw new Error('OSV response exceeds size limit');
+    }
+    chunks.push(value);
+  }
+  return Buffer.concat(chunks).toString('utf8');
+}
+
 export function getUpdateSetToolDefinitions() {
   return [
     {
@@ -283,6 +405,7 @@ export function getUpdateSetToolDefinitions() {
         properties: {
           update_set: { type: 'string', description: 'Update Set sys_id (32 hexadecimal characters) or an exact Update Set name' },
           max_records: { type: 'integer', minimum: 1, maximum: 100, description: 'Maximum update XML records to inspect (1-100; default 50). The result says when it is truncated.' },
+          lookup_vulnerabilities: { type: 'boolean', description: 'Query OSV for each exact-version npm component (default true). Set false to perform local collection only.' },
         },
         required: ['update_set'],
         additionalProperties: false,
@@ -401,6 +524,7 @@ export async function executeUpdateSetToolCall(
         throw new ServiceNowError('update_set must be a sys_id or an exact name without encoded-query operators', 'VALIDATION_ERROR');
       }
       const maxRecords = validateScaRecordLimit(args.max_records);
+      const lookupVulnerabilities = args.lookup_vulnerabilities !== false;
 
       let updateSet: Record<string, any>;
       if (SYS_ID_PATTERN.test(updateSetInput)) {
@@ -522,6 +646,25 @@ export async function executeUpdateSetToolCall(
       }
 
       const normalizedComponents = normalizeComponents(components);
+      const findings: ScaFinding[] = [];
+      const lookupErrors: Array<{ purl: string; code: 'OSV_REQUEST_FAILED' }> = [];
+      let cacheHits = 0;
+      let lookupTruncated = false;
+      const componentsToLookup = lookupVulnerabilities ? normalizedComponents.slice(0, MAX_OSV_LOOKUPS) : [];
+      for (const component of componentsToLookup) {
+        try {
+          const lookup = await lookupOsv(component);
+          findings.push(...lookup.result.findings);
+          cacheHits += lookup.cached ? 1 : 0;
+          lookupTruncated ||= lookup.result.truncated;
+        } catch {
+          // An unavailable advisory source is an incomplete scan, never evidence of no vulnerabilities.
+          lookupErrors.push({ purl: component.purl, code: 'OSV_REQUEST_FAILED' });
+        }
+      }
+      const lookupStatus = !lookupVulnerabilities ? 'disabled'
+        : lookupErrors.length > 0 ? 'partial_failure'
+          : 'completed';
       return {
         scan_status: 'collection_complete',
         update_set: {
@@ -544,10 +687,19 @@ export async function executeUpdateSetToolCall(
         },
         assets,
         components: normalizedComponents,
-        findings: [],
+        findings,
+        lookup: {
+          source: 'OSV',
+          status: lookupStatus,
+          queried_components: componentsToLookup.length,
+          skipped_components: lookupVulnerabilities ? normalizedComponents.length - componentsToLookup.length : normalizedComponents.length,
+          cache_hits: cacheHits,
+          truncated: lookupTruncated,
+          errors: lookupErrors,
+        },
         limitations: [
           'Only exact versions found in supported package manifests, versioned CDN URLs, or versioned module specifiers are reported. Bare package names and version ranges are not treated as installed versions.',
-          'Component candidates are normalized and deduplicated by ecosystem, package name, and exact version; all distinct evidence is retained. This phase does not query vulnerability databases.',
+          `OSV lookups are limited to ${MAX_OSV_LOOKUPS} exact-version npm components per scan and time out after ${OSV_TIMEOUT_MS / 1000} seconds per component. Lookup failures or skipped components do not mean no vulnerabilities.`,
           'Source code and payload contents are intentionally not returned; only metadata, field names, byte counts, and hashes are included.',
           `Payloads larger than ${MAX_SCA_PAYLOAD_BYTES} bytes are skipped without returning their content.`,
         ],

@@ -672,7 +672,7 @@ ServiceNow の Script Include / Business Rule 等は通常 npm の依存関係�
 | 13-2 ✅ | **資産分類・安全なテキスト抽出** — 13-0 の実機結果に基づく種別 allowlist と、payload の XML / script 本文抽出 | XML をパーサに渡さず既知要素だけを抽出。本文は hash・サイズ・要素名に変換し、512 KiB 超の payload はスキップ。添付マニフェストは 13-3 以降で扱う | ⭐⭐⭐ 高 |
 | 13-3 ✅ | **コンポーネント検出器** — lockfile / manifest を最優先に解析し、次にバージョン付き CDN URL、最後にコード上の明示参照を候補化 | npm lockfile v1/v3・package manifest・jsDelivr/unpkg/cdnjs・`package@version` を検出。根拠は hash のみで、推測やバージョン範囲は返さない | ⭐⭐⭐ 高 |
 | 13-4 ✅ | **SBOM 正規化・重複排除** — npm / Maven / PyPI / Composer / CycloneDX / SPDX を共通コンポーネントモデルへ正規化 | 現段階の npm 候補を ecosystem / package / exact version で統合し、PURL・direct/transitive/unknown・全 evidence を返却。Maven 等は対応検出器追加時に同モデルへ拡張 | ⭐⭐ 中 |
-| 13-5 | **脆弱性照合アダプタ** — OSV を基本に、NVD は CVE 詳細補完として利用。結果のキャッシュとタイムアウトを設ける | advisory id、severity、CVSS、fixed versions、source、照合時刻を返す。ネットワーク失敗は `lookup_status` で明示 | ⭐⭐⭐ 高 |
+| 13-5 ✅ | **脆弱性照合アダプタ** — OSV を基本に、NVD は CVE 詳細補完として利用。結果のキャッシュとタイムアウトを設ける | npm の厳密バージョンを OSV `/v1/query` へ照会し、advisory id / aliases / severity / CVSS / fixed versions / source を返却。1時間キャッシュ、5秒 timeout、最大50コンポーネント、失敗は `partial_failure` で明示 | ⭐⭐⭐ 高 |
 | 13-6 | **JSON 契約と AI 向け要約** — `update_set` / `scope` / `components` / `findings` / `summary` / `limitations` / `errors` を固定 | 結果だけで AI が「対象・根拠・未確認範囲・優先度」を説明できる。コード全量や秘密情報を含めない | ⭐⭐⭐ 高 |
 | 13-7 | **誤検知・安全性ガード** — バージョン不明、CDN alias (`latest` 等)、ハッシュ不一致、ライブラリ名だけの文字列を区別 | `unknown_version` は CVE を断定しない。`not_sca_applicable` を安全判定に数えない | ⭐⭐ 中 |
 | 13-8 | **ユニット・境界テスト** — manifest、lockfile、CDN、重複、未知バージョン、巨大 / 不正 payload、外部照合失敗を網羅 | コンポーネント検出・照合・秘密情報非露出・上限拒否を自動検証 | ⭐⭐⭐ 高 |
