@@ -89,8 +89,20 @@
   "license": "MIT",
   "overrides": {
     "@hono/node-server": "^2.0.11",
-    "fast-uri": "^3.1.5",
-    "hono": "^4.12.34"
+    "body-parser": "^2.3.0",
+    "fast-uri": "^3.1.7",
+    "hono": "^4.12.34",
+    "ip-address": "^10.7.0",
+    "qs": "^6.16.0",
+    "minimatch@3": {
+      "brace-expansion": "^1.1.18"
+    },
+    "minimatch@9": {
+      "brace-expansion": "^2.1.4"
+    },
+    "minimatch@10": {
+      "brace-expansion": "^5.0.9"
+    }
   },
   "dependencies": {
     "@inquirer/prompts": "^8.2.1",

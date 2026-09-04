@@ -23,6 +23,17 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
   - Source code, payload contents, and the surrounding script text around a detected component are never returned — only metadata, byte counts, and SHA-256 hashes of the payload and of the specific matched token.
   - Added to the `platform_developer` tool package.
 
+### Security
+
+- **Cleared every advisory reachable from the published package.** New advisories were filed against the exact versions this project's overrides had pinned, so the previously "fixed" transitive chains had drifted back into a vulnerable range.
+  - `fast-uri` `^3.1.5` → `^3.1.7` — 1.9.2 pinned 3.1.5, and three new advisories (repeated hostname percent-decoding SSRF, malformed IPv6 normalization SSRF, host confusion via skipped IDN canonicalization) cover `3.0.0 - 3.1.5`. This chain (`@modelcontextprotocol/sdk` → `ajv` → `fast-uri`) is genuinely reachable: the SDK uses ajv for request schema validation. `ajv@8.20.0` requires `^3.0.1`, so 3.1.7 is a non-breaking bump.
+  - `ip-address` → `^10.7.0`, `qs` → `^6.16.0`, `body-parser` → `^2.3.0` — all reached only through `@modelcontextprotocol/sdk`'s Express-based OAuth Authorization Server handlers, which this project never imports (`server-http.ts` builds directly on `node:http`). Unreachable in practice, but every fix was within the parents' own semver ranges, so they were taken rather than documented as accepted risk.
+  - `brace-expansion` pinned per minimatch major (`minimatch@3` → `^1.1.18`, `minimatch@9` → `^2.1.4`, `minimatch@10` → `^5.0.9`) — the production instance arrives via `exceljs` → `archiver`/`unzipper` → `glob` → `minimatch`. A flat override would have forced one major across trees that require different ones; scoping by parent keeps each within range. Nested `exceljs`-scoped overrides were tried first and did not reach the deeper `archiver-utils`/`rimraf` copies.
+  - Verified: `npm audit` production findings 16 → 0 reachable, `tsc` clean, 1553 tests pass, and the Streamable HTTP transport was booted end-to-end (496 tools) with a real `initialize` + `tools/list` JSON-RPC round trip, which exercises the ajv/`fast-uri` path directly.
+- **Remaining audit findings are not shipped or not reachable**, consistent with the 1.9.1/1.9.2 analysis. The published package contains only `bin/` and `dist/` plus `dependencies`.
+  - devDependency-only (never installed by consumers): `vitest`/`@vitest/coverage-v8` (2 critical), `vite`, `@vitest/mocker`, `vite-node`, `esbuild`, `postcss`, `nanoid`, `js-yaml`. Clearing these requires a `vitest` 2 → 5 major upgrade, tracked separately from this security pass.
+  - `exceljs` → `uuid@8.3.2`: the advisory only affects v3/v5/v6 when a `buf` argument is supplied; exceljs uses v4. The only npm-offered fix is a breaking downgrade to `exceljs@3.4.0`.
+
 ### Fixed
 
 - Fixed a regex-literal syntax error in the SCA CDATA-unwrapping helper (introduced during this feature's development, never released) that broke `tsc`/module loading entirely.
