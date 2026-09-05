@@ -6,6 +6,25 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 ---
 
+## [1.11.1] — 2026-09-05
+
+### Security
+
+Dependency-only release: no tool, API, or behaviour changes.
+
+- **Refreshed the transitive overrides that had drifted back into vulnerable ranges.** As in 1.9.2, new advisories were published against the exact versions the previous overrides pinned — pinning a "fixed" version is not a one-time fix.
+  - `fast-uri` `^3.1.5` → `^3.1.7` — 1.9.2 pinned 3.1.5, and three new advisories (repeated hostname percent-decoding SSRF, malformed IPv6 normalization SSRF, host confusion via skipped IDN canonicalization) cover `3.0.0 - 3.1.5`. This chain (`@modelcontextprotocol/sdk` → `ajv` → `fast-uri`) is genuinely exercised, since the SDK validates request schemas with ajv. `ajv@8.20.0` asks for `^3.0.1`, so 3.1.7 is a non-breaking bump.
+  - `js-yaml` → `^4.3.2` — via `eslint` → `@eslint/eslintrc`; the quadratic-CPU advisories cover `4.0.0 - 4.3.0` and `@eslint/eslintrc` asks for `^4.1.1`.
+  - `ip-address` → `^10.7.0`, `qs` → `^6.16.0`, `body-parser` → `^2.3.0` — reached only through `@modelcontextprotocol/sdk`'s Express-based OAuth Authorization Server handlers, which this project never imports (`server-http.ts` builds directly on `node:http`). Unreachable in practice, but each fix sits inside the parents' own semver ranges, so they were taken rather than recorded as accepted risk.
+  - `brace-expansion` pinned per minimatch major (`minimatch@3` → `^1.1.18`, `minimatch@9` → `^2.1.4`, `minimatch@10` → `^5.0.9`) — the production copy arrives via `exceljs` → `archiver`/`unzipper` → `glob` → `minimatch`. A flat override would have forced one major onto trees that require different ones; scoping by parent keeps each inside its range. `exceljs`-scoped nested overrides were tried first and did not reach the deeper `archiver-utils`/`rimraf` copies.
+- **Upgraded the test toolchain to clear the two critical advisories**: `vitest` and `@vitest/coverage-v8` `^2.1.9` → `^3.2.7`. The advisories cover `<=3.2.5` (arbitrary file read/execute through the Vitest UI server, plus the `vite`/`esbuild`/`postcss`/`nanoid` chain beneath it), and 3.2.7 sits outside that range.
+  - **Deliberately not `vitest` 5**, which is what npm proposes as the fix: it requires Node `^22.12.0 || ^24.0.0 || >=26.0.0`, while this project supports `>=20.0.0`. Taking it would quietly raise the floor for anyone cloning the repo to run the suite. `vitest` 4 keeps `^20.0.0` but needs a newer npm than the 10.5.0 bundled with Node 20.12, which cannot resolve that tree at all (`Cannot read properties of null (reading 'edgesOut')`).
+- **Scope of these overrides.** npm honours an `overrides` block only at the install root, so this release pins the tree for this repository, its CI, and anyone installing from source. Consumers of the published package resolve `dependencies` themselves — for these particular advisories a fresh install already lands on the patched versions, because every affected package is reached through a caret range that resolves to the fixed release.
+- **`npm audit`: 16 findings → 2.** Both remaining are `exceljs` → `uuid@8.3.2` (counted twice) and are unchanged from the 1.9.1 analysis: the advisory only affects uuid v3/v5/v6 when a `buf` argument is supplied and exceljs uses v4, while the only npm-offered fix is a breaking downgrade to `exceljs@3.4.0`.
+- Verified: `tsc` clean, ESLint 0 errors, 59 test files / 1553 tests pass on the new vitest, `--coverage` runs clean under the upgraded provider, the opt-in E2E config still skips correctly without `RUN_E2E`, the read-only PDI E2E passes against a live instance, and the Streamable HTTP transport boots end-to-end (496 tools) completing a real `initialize` + `tools/list` JSON-RPC round trip — which exercises the ajv/`fast-uri` path directly.
+
+---
+
 ## [1.11.0] — 2026-08-26
 
 ### Added
@@ -22,19 +41,6 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
   - Adds an opt-in, read-only PDI E2E test that compares bounded SCA inventory metadata with `preview_update_set` and verifies source non-disclosure.
   - Source code, payload contents, and the surrounding script text around a detected component are never returned — only metadata, byte counts, and SHA-256 hashes of the payload and of the specific matched token.
   - Added to the `platform_developer` tool package.
-
-### Security
-
-- **Cleared every advisory reachable from the published package.** New advisories were filed against the exact versions this project's overrides had pinned, so the previously "fixed" transitive chains had drifted back into a vulnerable range.
-  - `fast-uri` `^3.1.5` → `^3.1.7` — 1.9.2 pinned 3.1.5, and three new advisories (repeated hostname percent-decoding SSRF, malformed IPv6 normalization SSRF, host confusion via skipped IDN canonicalization) cover `3.0.0 - 3.1.5`. This chain (`@modelcontextprotocol/sdk` → `ajv` → `fast-uri`) is genuinely reachable: the SDK uses ajv for request schema validation. `ajv@8.20.0` requires `^3.0.1`, so 3.1.7 is a non-breaking bump.
-  - `ip-address` → `^10.7.0`, `qs` → `^6.16.0`, `body-parser` → `^2.3.0` — all reached only through `@modelcontextprotocol/sdk`'s Express-based OAuth Authorization Server handlers, which this project never imports (`server-http.ts` builds directly on `node:http`). Unreachable in practice, but every fix was within the parents' own semver ranges, so they were taken rather than documented as accepted risk.
-  - `brace-expansion` pinned per minimatch major (`minimatch@3` → `^1.1.18`, `minimatch@9` → `^2.1.4`, `minimatch@10` → `^5.0.9`) — the production instance arrives via `exceljs` → `archiver`/`unzipper` → `glob` → `minimatch`. A flat override would have forced one major across trees that require different ones; scoping by parent keeps each within range. Nested `exceljs`-scoped overrides were tried first and did not reach the deeper `archiver-utils`/`rimraf` copies.
-  - `js-yaml` → `^4.3.2` — reached through `eslint` → `@eslint/eslintrc`; the quadratic-CPU advisories cover `4.0.0 - 4.3.0` and `@eslint/eslintrc` requires `^4.1.1`.
-  - Verified: `tsc` clean, 1553 tests pass, ESLint reports 0 errors, and the Streamable HTTP transport was booted end-to-end (496 tools) with a real `initialize` + `tools/list` JSON-RPC round trip, which exercises the ajv/`fast-uri` path directly.
-- **Upgraded the test toolchain to clear the two critical advisories**: `vitest` and `@vitest/coverage-v8` `^2.1.9` → `^3.2.7`. The advisories cover `<=3.2.5` (arbitrary file read/execute through the Vitest UI server, plus the `vite`/`esbuild`/`postcss`/`nanoid` chain underneath), and 3.2.7 is outside that range.
-  - **Deliberately not `vitest` 5**, which npm offers as the "fix": vitest 5 requires Node `^22.12.0 || ^24.0.0 || >=26.0.0`, while this project supports Node `>=20.0.0`. Adopting it would have silently raised the floor for anyone cloning and running the suite. vitest 4 also drops below the supported floor less severely but still needs `^20.0.0` with a newer npm than Node 20.12's bundled 10.5.0, which cannot resolve that tree (`Cannot read properties of null (reading 'edgesOut')`). 3.2.7 clears every advisory while keeping Node 20 support.
-  - Verified after the upgrade: 59 test files / 1553 tests pass, `--coverage` runs clean under the new `@vitest/coverage-v8`, the opt-in E2E config still skips correctly without `RUN_E2E`, and the read-only PDI E2E passes against a live instance.
-- **`npm audit` findings: 16 → 2.** Both remaining are `exceljs` → `uuid@8.3.2` (counted twice), unchanged from the 1.9.1 analysis: the advisory only affects uuid v3/v5/v6 when a `buf` argument is supplied and exceljs uses v4, while the only npm-offered fix is a breaking downgrade to `exceljs@3.4.0`. The published package contains only `bin/` and `dist/` plus `dependencies`.
 
 ### Fixed
 
