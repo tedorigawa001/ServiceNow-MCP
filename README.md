@@ -12,26 +12,26 @@
 <br/>
 
 [![AI-Powered](https://img.shields.io/badge/AI--Powered-Claude%20%7C%20ChatGPT%20%7C%20Gemini%20%7C%20Cursor%20%7C%20Copilot-00D4AA?style=flat-square)](https://github.com/tedorigawa001/ServiceNow-MCP)
-[![Tools](https://img.shields.io/badge/450%2B%20Tools-44%20Modules-0F4C81?style=flat-square)](docs/TOOLS.md)
+[![Tools](https://img.shields.io/badge/496%20Tools-45%20Modules-0F4C81?style=flat-square)](docs/TOOLS.md)
 [![npm](https://img.shields.io/npm/v/%40tedorigawa001%2Fservicenow-mcp?style=flat-square&logo=npm&color=CB3837)](https://www.npmjs.com/package/@tedorigawa001/servicenow-mcp)
 [![TypeScript](https://img.shields.io/badge/TypeScript-5.x-3178C6?style=flat-square&logo=typescript&logoColor=white)](https://www.typescriptlang.org/)
 [![License: MIT](https://img.shields.io/badge/license-MIT-f59e0b?style=flat-square)](LICENSE)
-[![Node.js](https://img.shields.io/badge/Node.js-20.19%2B-339933?style=flat-square&logo=node.js&logoColor=white)](https://nodejs.org)
+[![Node.js](https://img.shields.io/badge/Node.js-20%2B-339933?style=flat-square&logo=node.js&logoColor=white)](https://nodejs.org)
 [![MCP](https://img.shields.io/badge/MCP-Model%20Context%20Protocol-0F4C81?style=flat-square)](https://modelcontextprotocol.io)
 
 <br/>
 
 ## AI から ServiceNow を自然言語で操作する MCP サーバー
 
-> **ローカル PC で動作 · 450+ ツール · 5 分セットアップ · MIT ライセンス**
+> **ローカル PC で動作 · 496 ツール · 5 分セットアップ · MIT ライセンス**
 
 Claude・Cursor・VS Code などの AI ツールから、ServiceNow のインシデント・変更・CMDB・スクリプトなどをすべて自然言語で操作できます。
 
-### v1.9.0 ハイライト
+### v1.11.1 ハイライト
 
-- Excelワークブックを直接アップロード・解析し、ServiceNow Import Setの作成、原本添付、ステージング行登録、任意のTransform Map実行までを一括で行う `import_excel_to_import_set` を追加
-- `.xlsx` 専用・10 MiB・500行・50列の上限、数式／`sys_*`列の拒否、`WRITE_ENABLED=true` による書込み保護を実装
-- 解析済みExcelの全ステージング行を `sys_import_set` に確実に紐付け、PDIで添付・行登録・クリーンアップまでE2E検証
+- Update Set 内のスクリプト系 Customer Update から、固定バージョンの npm コンポーネントを検出し、OSV の advisory と照合する読み取り専用 SCA ツール `scan_update_set_sca` を追加
+- SCA は本文・payload・一致箇所を返さず、メタデータ・ハッシュ・PURL・証跡のみを返却。未解決参照や照会失敗を「脆弱性なし」と誤認しない JSON 契約を提供
+- 依存関係を更新して既知の到達可能な脆弱性を解消。最新の検証では 496 ツール、59 テストファイル、1,553 テストを確認
 
 </div>
 
@@ -59,7 +59,7 @@ flowchart TD
 ```
 
 **ポイント:**
-- サーバーは **あなたの PC 上で動く** Node.js プロセスです。ServiceNow 以外の第三者サービスには接触しません
+- サーバーは **あなたの PC 上で動く** Node.js プロセスです。通常のツールは ServiceNow とだけ通信します。SCA の OSV 脆弱性照会など、外部連携を行うツールは個別に明示します
 - AI クライアントと stdio（標準入出力）で通信するため、ポート開放やネットワーク設定は不要
 - ServiceNow へは HTTPS で接続します。既存のブラウザアクセスと同じ経路です
 
@@ -108,7 +108,7 @@ flowchart TD
     A([はじめる]) --> B{ServiceNow\nインスタンスはある?}
     B -->|ない| C[developer.servicenow.com\nで無料 PDI を取得\n約 10 分]
     B -->|ある| D
-    C --> D{Node.js 20.19+\nインストール済み?}
+    C --> D{Node.js 20+\nインストール済み?}
     D -->|ない| E[nodejs.org から\nLTS 版をインストール]
     E --> F
     D -->|あり| F[ターミナルでコマンド実行]
@@ -132,7 +132,7 @@ flowchart TD
 **方法 A: npm からインストール（推奨・最速）**
 
 ```bash
-# Node.js のバージョン確認 (20.19 以上が必要)
+# Node.js のバージョン確認 (20.0 以上が必要)
 node --version
 
 # グローバルインストール
@@ -182,7 +182,7 @@ AI に話しかけてみましょう:
 |---------|--------------------------------------|----------------------|
 | **起動速度** | ✅ 即時 | ⚠️ コンテナ起動分のオーバーヘッドあり |
 | **設定のシンプルさ** | ⚠️ 絶対パスが必要 | ✅ `docker` コマンドのみ |
-| **環境依存** | Node.js 20.19+ が必要 | Docker が必要 |
+| **環境依存** | Node.js 20+ が必要 | Docker が必要 |
 | **環境の統一** | ⚠️ ホスト環境に依存 | ✅ どの PC でも同一環境 |
 | **チーム配布・CI/CD** | ⚠️ 各自でビルドが必要 | ✅ イメージを共有するだけ |
 | **推奨シーン** | 個人利用・開発 | チーム配布・本番運用 |
@@ -566,7 +566,7 @@ SCRIPTING_ENABLED=false      # 本番では原則 false のまま
 mindmap
   root((ツールパッケージ))
     full
-      全450+ツール
+      全496ツール
     service_desk
       インシデント管理
       タスク/承認
@@ -601,7 +601,7 @@ mindmap
 
 | パッケージ名 | 対象ロール | 主なツール |
 |------------|----------|-----------|
-| `full` | 管理者 | 全ツール (450+) |
+| `full` | 管理者 | 全ツール (496) |
 | `service_desk` | L1/L2 エージェント | インシデント・タスク・KB・SLA |
 | `change_coordinator` | 変更管理者 | 変更リクエスト・CAB・CMDB |
 | `knowledge_author` | KB 著者 | KB 作成・公開 |
@@ -691,7 +691,7 @@ summary.assessment、lookup.status、errors、unresolved_references、truncated 
 修正は自動実行せず、Update Set の変更案と確認手順を提案してください。
 ```
 
-> **制約**: `findings` が空でも安全性は証明されません。バージョン範囲、`latest` のような CDN alias、バージョンなしのモジュール参照は CVE 照合できず `unresolved_references` として返ります。また SCA は依存コンポーネントを対象にするものであり、ServiceNow のカスタムスクリプトに対する SAST、権限設計、クエリ安全性のレビューを代替しません。
+> **制約**: `findings` が空でも安全性は証明されません。バージョン範囲、`latest` のような CDN alias、バージョンなしのモジュール参照は CVE 照合できず `unresolved_references` として返ります。CDN URL を検出しても、そのライブラリが実際にロード・実行されたことまでは示しません。また SCA は依存コンポーネントを対象にするものであり、ServiceNow のカスタムスクリプトに対する SAST、権限設計、クエリ安全性のレビューを代替しません。
 
 ### スラッシュコマンド & @メンション
 
@@ -809,7 +809,7 @@ servicenow-mcp/
 │   │   ├── client.ts               # REST API クライアント (OAuth)
 │   │   ├── instances.ts            # マルチインスタンスマネージャー
 │   │   └── types.ts                # TypeScript 型定義
-│   ├── tools/                      # 44 ドメインモジュール (450+ ツール)
+│   ├── tools/                      # 45 ドメインモジュール (496 ツール)
 │   │   ├── index.ts                # ツールルーター & パッケージ定義
 │   │   ├── incident.ts
 │   │   ├── change.ts
@@ -821,7 +821,7 @@ servicenow-mcp/
 │   └── utils/
 │       ├── permissions.ts          # 5 段階権限ゲート
 │       └── errors.ts
-├── tests/                          # ユニットテスト (Vitest · 550 件)
+├── tests/                          # テスト (Vitest · 1,553 件)
 ├── docs/                           # ドキュメント
 └── instances.example.json
 ```
@@ -833,7 +833,7 @@ servicenow-mcp/
 ```bash
 npm install          # 依存パッケージのインストール
 npm run build        # TypeScript → dist/ にコンパイル
-npm test             # ユニットテストを実行 (550 件)
+npm test             # テストを実行 (1,553 件)
 npm run dev          # ウォッチモード
 npm run type-check   # 型チェックのみ
 npm run lint         # ESLint
@@ -899,7 +899,7 @@ Model Context Protocol の略で、AI クライアントが外部ツールを呼
 
 <div align="center">
 
-**450+ ツール · 44 モジュール · ローカル PC で動作 · 永久オープンソース**
+**496 ツール · 45 モジュール · ローカル PC で動作 · 永久オープンソース**
 
 役に立ったら ⭐ スターをお願いします — 他の人が見つけやすくなります。
 

@@ -4,7 +4,7 @@ Configure the ServiceNow MCP server with Claude Desktop.
 
 ## Prerequisites
 
-- Node.js 20.19+ (`node --version`)
+- Node.js 20+ (`node --version`)
 - Claude Desktop installed ([download here](https://claude.ai/download))
 - ServiceNow OAuth credentials (Client ID + Client Secret)
 
