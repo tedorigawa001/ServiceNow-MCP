@@ -6,7 +6,7 @@ Step-by-step setup for connecting servicenow-mcp to each supported AI client.
 
 All clients require:
 
-1. **Node.js 20+** installed
+1. **Node.js 20.19+** installed
 2. The server built: `npm install && npm run build`
 3. A ServiceNow instance URL and OAuth credentials (Client ID + Client Secret)
 

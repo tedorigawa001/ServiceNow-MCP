@@ -4,7 +4,7 @@ Set up the ServiceNow MCP server with Claude Code (the CLI).
 
 ## Prerequisites
 
-- Node.js 20+ (`node --version`)
+- Node.js 20.19+ (`node --version`)
 - Claude Code installed (`npm install -g @anthropic-ai/claude-code` or via package manager)
 - ServiceNow OAuth credentials (Client ID + Client Secret)
 

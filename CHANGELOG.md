@@ -6,6 +6,21 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 ---
 
+## [1.11.2] — 2026-09-14
+
+### Changed
+
+- **Node.js floor raised to `>=20.19.0`** (was `>=20.0.0`). The test toolchain below now depends on `vite` 8 / `rolldown`, which require `^20.19.0 || >=22.12.0`, and the docs had stated 20.19+ as the intended floor since before 1.11.1 — the `engines` field was the part that lagged. README, `docs/INSTALLATION.md`, `docs/CLIENT_SETUP.md`, and every `clients/*/SETUP.md` now agree with `engines`. The runtime itself (`dist/` + `dependencies`) does not need 20.19; this tightening matters for anyone building or testing from source, and consumers on 20.0–20.18 will see an `EBADENGINE` warning at install.
+
+### Security
+
+- **Test toolchain: `vitest` / `@vitest/coverage-v8` `^3.2.7` → `4.1.11`.** 1.11.1 stopped at 3.2.7 because Node 20.12's bundled npm 10.5.0 could not resolve the vitest 4 tree (`Cannot read properties of null (reading 'edgesOut')`). With Node 20.19 / npm 10.8.2 that resolves cleanly. Full suite runs about 4× faster under vite 8 / rolldown (≈11 s → ≈2.5 s).
+- **`hono` override `^4.12.34` → `4.13.5`** (exact pin).
+- `npm audit`: 2 findings, unchanged — both the known-unreachable `exceljs` → `uuid@8.3.2` (see 1.11.1 / 1.9.1).
+- Verified: `tsc` clean, ESLint 0 errors, 59 test files / 1553 tests pass, `--coverage` runs clean on the new provider, the opt-in E2E config still skips without `RUN_E2E`, the read-only PDI E2E passes live, and the Streamable HTTP transport boots (496 tools) and completes a real `initialize` + `tools/list` JSON-RPC round trip on the pinned hono.
+
+---
+
 ## [1.11.1] — 2026-09-05
 
 ### Security

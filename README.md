@@ -16,7 +16,7 @@
 [![npm](https://img.shields.io/npm/v/%40tedorigawa001%2Fservicenow-mcp?style=flat-square&logo=npm&color=CB3837)](https://www.npmjs.com/package/@tedorigawa001/servicenow-mcp)
 [![TypeScript](https://img.shields.io/badge/TypeScript-5.x-3178C6?style=flat-square&logo=typescript&logoColor=white)](https://www.typescriptlang.org/)
 [![License: MIT](https://img.shields.io/badge/license-MIT-f59e0b?style=flat-square)](LICENSE)
-[![Node.js](https://img.shields.io/badge/Node.js-20%2B-339933?style=flat-square&logo=node.js&logoColor=white)](https://nodejs.org)
+[![Node.js](https://img.shields.io/badge/Node.js-20.19%2B-339933?style=flat-square&logo=node.js&logoColor=white)](https://nodejs.org)
 [![MCP](https://img.shields.io/badge/MCP-Model%20Context%20Protocol-0F4C81?style=flat-square)](https://modelcontextprotocol.io)
 
 <br/>
@@ -108,7 +108,7 @@ flowchart TD
     A([はじめる]) --> B{ServiceNow\nインスタンスはある?}
     B -->|ない| C[developer.servicenow.com\nで無料 PDI を取得\n約 10 分]
     B -->|ある| D
-    C --> D{Node.js 20+\nインストール済み?}
+    C --> D{Node.js 20.19+\nインストール済み?}
     D -->|ない| E[nodejs.org から\nLTS 版をインストール]
     E --> F
     D -->|あり| F[ターミナルでコマンド実行]
@@ -132,7 +132,7 @@ flowchart TD
 **方法 A: npm からインストール（推奨・最速）**
 
 ```bash
-# Node.js のバージョン確認 (20.0 以上が必要)
+# Node.js のバージョン確認 (20.19 以上が必要)
 node --version
 
 # グローバルインストール
@@ -182,7 +182,7 @@ AI に話しかけてみましょう:
 |---------|--------------------------------------|----------------------|
 | **起動速度** | ✅ 即時 | ⚠️ コンテナ起動分のオーバーヘッドあり |
 | **設定のシンプルさ** | ⚠️ 絶対パスが必要 | ✅ `docker` コマンドのみ |
-| **環境依存** | Node.js 20+ が必要 | Docker が必要 |
+| **環境依存** | Node.js 20.19+ が必要 | Docker が必要 |
 | **環境の統一** | ⚠️ ホスト環境に依存 | ✅ どの PC でも同一環境 |
 | **チーム配布・CI/CD** | ⚠️ 各自でビルドが必要 | ✅ イメージを共有するだけ |
 | **推奨シーン** | 個人利用・開発 | チーム配布・本番運用 |

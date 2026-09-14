@@ -4,7 +4,7 @@ Configure the ServiceNow MCP server with Cursor IDE.
 
 ## Prerequisites
 
-- Node.js 20+ and the server built (`npm install && npm run build` from repo root)
+- Node.js 20.19+ and the server built (`npm install && npm run build` from repo root)
 - Cursor IDE installed ([cursor.sh](https://cursor.sh))
 - ServiceNow OAuth credentials (Client ID + Client Secret)
 

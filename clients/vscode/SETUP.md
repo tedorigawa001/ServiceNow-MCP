@@ -4,7 +4,7 @@ Configure the ServiceNow MCP server with VS Code using GitHub Copilot or Claude 
 
 ## Prerequisites
 
-- Node.js 20+
+- Node.js 20.19+
 - VS Code 1.99+ with one of:
   - [GitHub Copilot](https://marketplace.visualstudio.com/items?itemName=GitHub.copilot) extension
   - [Claude for VS Code](https://marketplace.visualstudio.com/items?itemName=Anthropic.claude-vscode) extension (if available)

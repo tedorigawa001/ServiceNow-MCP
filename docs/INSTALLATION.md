@@ -30,7 +30,7 @@ Complete setup instructions for connecting servicenow-mcp to ServiceNow and any 
 The fastest way to get started — no config file editing required.
 
 ```bash
-# Clone and build (Node.js 20+ required)
+# Clone and build (Node.js 20.19+ required)
 git clone https://github.com/tedorigawa001/ServiceNow-MCP.git
 cd servicenow-mcp
 npm install
@@ -144,7 +144,7 @@ Full per-client guides → [docs/CLIENT_SETUP.md](CLIENT_SETUP.md)
 
 ## System Prerequisites
 
-- **Node.js 20.0.0 or higher** — [nodejs.org](https://nodejs.org/)
+- **Node.js 20.19.0 or higher** — [nodejs.org](https://nodejs.org/)
 - A ServiceNow instance (admin access for OAuth setup)
 - macOS: Homebrew `brew install node`; Linux: use your package manager
 
