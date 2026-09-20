@@ -7,7 +7,7 @@
  * assertion outcome, so a failing assertion never leaves test data behind.
  */
 import { describe, it, expect, beforeAll } from 'vitest';
-import { writeE2eDescribe, getE2EClient } from './helpers.js';
+import { writeE2eDescribe, getE2EClient, skipUnlessTables } from './helpers.js';
 import { executeIncidentToolCall } from '../../src/tools/incident.js';
 import { executeChangeToolCall } from '../../src/tools/change.js';
 import { executeProblemToolCall } from '../../src/tools/problem.js';
@@ -178,7 +178,8 @@ writeE2eDescribe('E2E – write operations (create/update, self-cleaning)', () =
   // the API). Read coverage for this table lives in vr-tables.e2e.test.ts.
 
   describe('sn_risk_risk', () => {
-    it('creates then updates a risk', async () => {
+    it('creates then updates a risk', async (ctx) => {
+      await skipUnlessTables(ctx, client, 'sn_risk_risk');
       const created = await executeGrcRiskToolCall(client, 'create_risk', {
         statement: `${MARK} risk create/update test`,
       });
@@ -200,7 +201,8 @@ writeE2eDescribe('E2E – write operations (create/update, self-cleaning)', () =
   });
 
   describe('sn_grc_profile (GRC Entity)', () => {
-    it('creates then updates a GRC entity when a profile class exists', async () => {
+    it('creates then updates a GRC entity when a profile class exists', async (ctx) => {
+      await skipUnlessTables(ctx, client, 'sn_grc_profile', 'sn_grc_profile_class');
       const classes = await executeCoreToolCall(client, 'query_records', { table: 'sn_grc_profile_class', limit: 1 });
       if (classes.count === 0) return; // PDI has no seeded Entity class to attach an entity to
 

@@ -6,6 +6,27 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 ---
 
+## [1.11.3] — 2026-09-20
+
+### Fixed
+
+- **All five outbound SOAP Message tools targeted the wrong tables and could not work.** `list_soap_messages`, `get_soap_message`, `list_soap_message_functions`, `create_soap_message`, and `create_soap_message_function` read from and wrote to `sys_web_service` / `sys_web_service_function`. `sys_web_service` is the *inbound* Scripted Web Service table (it has `script` and `wsdl_compliance`, no endpoint or authentication columns), and `sys_web_service_function` does not exist at all. The outbound tables are `sys_soap_message` and `sys_soap_message_function`, linked by `soap_message`.
+  - `list_soap_messages` silently returned inbound scripted web services; `get_soap_message` and `list_soap_message_functions` threw `Invalid table`; `create_soap_message` wrote `endpoint`/`namespace`/`active` into a table that has none of those columns, so ServiceNow discarded them and created an unrelated inbound record; `create_soap_message_function` threw.
+  - Now targets the correct tables and only the columns that exist on them. This corrects the input schemas of the two write tools: `create_soap_message` requires only `name` (the endpoint URL belongs to each function, not the message), and `create_soap_message_function` takes `function_name`, `soap_endpoint`, `soap_action`, and `envelope` — the previous `name`, `active`, and `soap_message_template` had no backing column. Nothing could have depended on the old contract, since none of it ever reached a real SOAP Message record.
+  - Caught by the new live E2E coverage, not by the unit tests: the mocks had been written to the same wrong table names, so they agreed with the bug. Their expectations now assert the real tables and columns.
+
+### Added
+
+- **Live E2E coverage 50 → 206 tools (10.1% → 41.5%); modules with no E2E 30 → 7.** Six new read-only suites — `platform-config`, `integration-tables`, `itom-tables`, `catalog-portal`, `optional-plugins`, `script-tables` — exercise every read tool that can run without an id and chain into the matching `get_*` where a record exists. The remaining uncovered modules are the USEM family (deferred on purpose), `now-assist` (needs `NOW_ASSIST_ENABLED` and the plugin), `store` (external API), and `smart-query`.
+- **`skipUnlessTables` / `tableExists` helpers** in `tests/e2e/helpers.ts`. Modules backed by optional plugins (GRC, HRSD, CSM, DevOps, Mobile, SecOps, Agile, Event Management, …) now gate each test on the table's presence in `sys_db_object`: an absent plugin reports "skipped — table not on this instance", while a present table that the tool still cannot read is a real failure. The existing GRC read and write suites are retrofitted onto the gate — they had been hard-failing with `Invalid table` since the PDI was re-provisioned without GRC.
+- **`scriptingE2eDescribe`** for the scripting-tier list/get tools, which sit behind `SCRIPTING_ENABLED` even though they never write.
+
+### Changed
+
+- E2E files now run sequentially (`fileParallelism: false` in `vitest.e2e.config.ts`). Thirteen suites hitting one PDI in parallel produced spurious 30 s timeouts on the incident/group write tests that pass every time in isolation.
+
+---
+
 ## [1.11.2] — 2026-09-14
 
 ### Changed

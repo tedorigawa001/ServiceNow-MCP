@@ -486,12 +486,12 @@ describe('OAuth & Credentials', () => {
 describe('SOAP Messages', () => {
   beforeEach(() => vi.clearAllMocks());
 
-  it('list_soap_messages sanitizes query and applies active filter', async () => {
+  it('list_soap_messages targets sys_soap_message and sanitizes the search value', async () => {
     qr().mockResolvedValue({ count: 0, records: [] });
-    await executeIntegrationToolCall(mockClient, 'list_soap_messages', { active: true, query: 'billing^ORactive=false' });
+    await executeIntegrationToolCall(mockClient, 'list_soap_messages', { query: 'billing^ORactive=false' });
     expect(qr()).toHaveBeenCalledWith(expect.objectContaining({
-      table: 'sys_web_service',
-      query: 'active=true^nameCONTAINSbillingORactive=false^ORendpointCONTAINSbillingORactive=false',
+      table: 'sys_soap_message',
+      query: 'nameCONTAINSbillingORactive=false^ORdescriptionCONTAINSbillingORactive=false',
     }));
   });
 
@@ -499,12 +499,13 @@ describe('SOAP Messages', () => {
     await expect(executeIntegrationToolCall(mockClient, 'get_soap_message', {})).rejects.toThrow('sys_id_or_name is required');
   });
 
-  it('get_soap_message fetches by sys_id and includes functions', async () => {
+  it('get_soap_message fetches from sys_soap_message and lists functions by soap_message', async () => {
     const id = 'a'.repeat(32);
     gr().mockResolvedValue({ sys_id: id, name: 'Billing' });
-    qr().mockResolvedValue({ count: 1, records: [{ sys_id: 'fn1', name: 'charge' }] });
+    qr().mockResolvedValue({ count: 1, records: [{ sys_id: 'fn1', function_name: 'charge' }] });
     const result = await executeIntegrationToolCall(mockClient, 'get_soap_message', { sys_id_or_name: id });
-    expect(gr()).toHaveBeenCalledWith('sys_web_service', id);
+    expect(gr()).toHaveBeenCalledWith('sys_soap_message', id);
+    expect(qr()).toHaveBeenCalledWith(expect.objectContaining({ table: 'sys_soap_message_function', query: `soap_message=${id}` }));
     expect(result.soap_message.name).toBe('Billing');
     expect(result.function_count).toBe(1);
   });
@@ -520,11 +521,11 @@ describe('SOAP Messages', () => {
       .rejects.toThrow('32-char hex sys_id');
   });
 
-  it('list_soap_message_functions queries by web_service', async () => {
+  it('list_soap_message_functions queries sys_soap_message_function by soap_message', async () => {
     const id = 'b'.repeat(32);
     qr().mockResolvedValue({ count: 0, records: [] });
     await executeIntegrationToolCall(mockClient, 'list_soap_message_functions', { soap_message_sys_id: id });
-    expect(qr()).toHaveBeenCalledWith(expect.objectContaining({ table: 'sys_web_service_function', query: `web_service=${id}` }));
+    expect(qr()).toHaveBeenCalledWith(expect.objectContaining({ table: 'sys_soap_message_function', query: `soap_message=${id}` }));
   });
 
   describe('create_soap_message', () => {
@@ -533,18 +534,22 @@ describe('SOAP Messages', () => {
 
     it('is blocked without WRITE_ENABLED', async () => {
       delete process.env.WRITE_ENABLED;
-      await expect(executeIntegrationToolCall(mockClient, 'create_soap_message', { name: 'X', endpoint: 'https://x' }))
+      await expect(executeIntegrationToolCall(mockClient, 'create_soap_message', { name: 'X' }))
         .rejects.toThrow('Write operations are disabled');
     });
 
-    it('requires name and endpoint', async () => {
-      await expect(executeIntegrationToolCall(mockClient, 'create_soap_message', {})).rejects.toThrow('name and endpoint are required');
+    it('requires name', async () => {
+      await expect(executeIntegrationToolCall(mockClient, 'create_soap_message', {})).rejects.toThrow('name is required');
     });
 
-    it('creates a SOAP message', async () => {
+    it('creates a SOAP message in sys_soap_message with only columns that exist there', async () => {
       cr().mockResolvedValue({ sys_id: 'sm1' });
-      const result = await executeIntegrationToolCall(mockClient, 'create_soap_message', { name: 'Billing', endpoint: 'https://billing.example.com' });
-      expect(cr()).toHaveBeenCalledWith('sys_web_service', expect.objectContaining({ name: 'Billing', endpoint: 'https://billing.example.com', active: true }));
+      const result = await executeIntegrationToolCall(mockClient, 'create_soap_message', {
+        name: 'Billing', wsdl: 'https://billing.example.com/wsdl', description: 'Billing SOAP',
+      });
+      expect(cr()).toHaveBeenCalledWith('sys_soap_message', {
+        name: 'Billing', authentication_type: 'no_authentication', wsdl: 'https://billing.example.com/wsdl', description: 'Billing SOAP',
+      });
       expect(result.summary).toContain('Billing');
     });
   });
@@ -556,30 +561,34 @@ describe('SOAP Messages', () => {
     it('is blocked without WRITE_ENABLED', async () => {
       delete process.env.WRITE_ENABLED;
       await expect(executeIntegrationToolCall(mockClient, 'create_soap_message_function', {
-        soap_message_sys_id: 'a'.repeat(32), name: 'charge', function_name: 'Charge',
+        soap_message_sys_id: 'a'.repeat(32), function_name: 'Charge',
       })).rejects.toThrow('Write operations are disabled');
     });
 
-    it('requires soap_message_sys_id, name, and function_name', async () => {
+    it('requires soap_message_sys_id and function_name', async () => {
       await expect(executeIntegrationToolCall(mockClient, 'create_soap_message_function', {})).rejects.toThrow(
-        'soap_message_sys_id, name, and function_name are required'
+        'soap_message_sys_id and function_name are required'
       );
     });
 
     it('requires a 32-char hex soap_message_sys_id', async () => {
       await expect(executeIntegrationToolCall(mockClient, 'create_soap_message_function', {
-        soap_message_sys_id: 'not-hex', name: 'charge', function_name: 'Charge',
+        soap_message_sys_id: 'not-hex', function_name: 'Charge',
       })).rejects.toThrow('32-char hex sys_id');
     });
 
-    it('creates a SOAP function', async () => {
+    it('creates a SOAP function in sys_soap_message_function linked via soap_message', async () => {
       const id = 'a'.repeat(32);
       cr().mockResolvedValue({ sys_id: 'fn1' });
       const result = await executeIntegrationToolCall(mockClient, 'create_soap_message_function', {
-        soap_message_sys_id: id, name: 'charge', function_name: 'Charge',
+        soap_message_sys_id: id, function_name: 'Charge', soap_endpoint: 'https://billing.example.com/soap',
+        soap_action: 'urn:Charge', envelope: '<soap:Envelope/>',
       });
-      expect(cr()).toHaveBeenCalledWith('sys_web_service_function', expect.objectContaining({ web_service: id, name: 'charge', function_name: 'Charge' }));
-      expect(result.summary).toContain('charge');
+      expect(cr()).toHaveBeenCalledWith('sys_soap_message_function', {
+        soap_message: id, function_name: 'Charge', soap_endpoint: 'https://billing.example.com/soap',
+        soap_action: 'urn:Charge', envelope: '<soap:Envelope/>',
+      });
+      expect(result.summary).toContain('Charge');
     });
   });
 });

@@ -506,12 +506,11 @@ export function getIntegrationToolDefinitions() {
     // ── Outbound SOAP Messages ───────────────────────────────────────────────
     {
       name: 'list_soap_messages',
-      description: 'List outbound SOAP Message configurations (sys_web_service)',
+      description: 'List outbound SOAP Message configurations (sys_soap_message). Endpoints live on each function, not the message.',
       inputSchema: {
         type: 'object',
         properties: {
-          query: { type: 'string', description: 'Search by name or endpoint' },
-          active: { type: 'boolean', description: 'Filter by active status' },
+          query: { type: 'string', description: 'Search by name or description' },
           limit: { type: 'number', description: 'Max records to return (default 25)' },
         },
         required: [],
@@ -542,39 +541,34 @@ export function getIntegrationToolDefinitions() {
     },
     {
       name: 'create_soap_message',
-      description: 'Create a new outbound SOAP Message definition (requires WRITE_ENABLED=true)',
+      description: 'Create a new outbound SOAP Message definition in sys_soap_message (requires WRITE_ENABLED=true). The endpoint URL is set per function via create_soap_message_function.',
       inputSchema: {
         type: 'object',
         properties: {
           name: { type: 'string', description: 'Unique SOAP Message name' },
-          endpoint: { type: 'string', description: 'SOAP service endpoint URL' },
           wsdl: { type: 'string', description: 'WSDL URL for the service (used for schema introspection)' },
-          namespace: { type: 'string', description: 'XML namespace for SOAP body elements' },
-          soap_action_prefix: { type: 'string', description: 'Prefix prepended to all SOAP action headers' },
           authentication_type: {
             type: 'string',
             description: 'Auth type: "no_authentication" (default), "basic", "mutual_authentication"',
           },
           description: { type: 'string', description: 'Purpose/description of this integration' },
-          active: { type: 'boolean', description: 'Make active immediately (default: true)' },
         },
-        required: ['name', 'endpoint'],
+        required: ['name'],
       },
     },
     {
       name: 'create_soap_message_function',
-      description: 'Add a SOAP function (operation) to an existing SOAP Message (requires WRITE_ENABLED=true)',
+      description: 'Add a SOAP function (operation) to an existing SOAP Message in sys_soap_message_function (requires WRITE_ENABLED=true)',
       inputSchema: {
         type: 'object',
         properties: {
           soap_message_sys_id: { type: 'string', description: 'Parent SOAP Message sys_id' },
-          name: { type: 'string', description: 'Function name (used in scripts to call this operation)' },
-          function_name: { type: 'string', description: 'WSDL operation name (matches the SOAP operation)' },
+          function_name: { type: 'string', description: 'WSDL operation name (matches the SOAP operation; used in scripts to call it)' },
+          soap_endpoint: { type: 'string', description: 'SOAP service endpoint URL for this operation' },
           soap_action: { type: 'string', description: 'Full SOAP Action header value' },
-          soap_message_template: { type: 'string', description: 'SOAP XML request body template with ${variable} placeholders' },
-          active: { type: 'boolean', description: 'Make active immediately (default: true)' },
+          envelope: { type: 'string', description: 'SOAP XML request envelope template with ${variable} placeholders' },
         },
-        required: ['soap_message_sys_id', 'name', 'function_name'],
+        required: ['soap_message_sys_id', 'function_name'],
       },
     },
   ];
@@ -874,32 +868,35 @@ export async function executeIntegrationToolCall(
       });
     }
     // ── Outbound SOAP Messages ───────────────────────────────────────────────
+    // Outbound SOAP Messages live in sys_soap_message / sys_soap_message_function.
+    // sys_web_service is the *inbound* Scripted Web Service table and shares
+    // neither the endpoint nor the authentication columns, so it must not be
+    // used here.
     case 'list_soap_messages': {
-      const parts: string[] = [];
-      if (args.active !== undefined) parts.push(`active=${args.active}`);
+      let query: string | undefined;
       if (args.query) {
         // Strip encoded-query control characters from free-text search value
         const safe = args.query.replace(/[\^]/g, '').replace(/\0/g, '');
-        parts.push(`nameCONTAINS${safe}^ORendpointCONTAINS${safe}`);
+        query = `nameCONTAINS${safe}^ORdescriptionCONTAINS${safe}`;
       }
       return await client.queryRecords({
-        table: 'sys_web_service',
-        query: parts.join('^') || undefined,
+        table: 'sys_soap_message',
+        query,
         limit: args.limit ?? 25,
-        fields: 'sys_id,name,endpoint,wsdl,namespace,authentication_type,active,description,sys_updated_on',
+        fields: 'sys_id,name,wsdl,authentication_type,description,sys_updated_on',
       });
     }
     case 'get_soap_message': {
       if (!args.sys_id_or_name) throw new ServiceNowError('sys_id_or_name is required', 'INVALID_REQUEST');
       let msg: any;
       if (/^[0-9a-f]{32}$/i.test(args.sys_id_or_name)) {
-        msg = await client.getRecord('sys_web_service', args.sys_id_or_name);
+        msg = await client.getRecord('sys_soap_message', args.sys_id_or_name);
       } else {
         // Sanitize name: strip encoded-query control chars before using in CONTAINS clause
         const safeName = args.sys_id_or_name.replace(/[\^=]/g, '').replace(/\0/g, '');
         if (!safeName) throw new ServiceNowError('sys_id_or_name must not be empty after sanitization', 'INVALID_REQUEST');
         const resp = await client.queryRecords({
-          table: 'sys_web_service',
+          table: 'sys_soap_message',
           query: `nameCONTAINS${safeName}`,
           limit: 1,
         });
@@ -909,10 +906,10 @@ export async function executeIntegrationToolCall(
       const msgId = (msg as any).sys_id?.value ?? (msg as any).sys_id;
       if (!/^[0-9a-f]{32}$/i.test(String(msgId))) throw new ServiceNowError('Unexpected sys_id format in response', 'API_ERROR');
       const fns = await client.queryRecords({
-        table: 'sys_web_service_function',
-        query: `web_service=${msgId}`,
+        table: 'sys_soap_message_function',
+        query: `soap_message=${msgId}`,
         limit: 50,
-        fields: 'sys_id,name,function_name,soap_action,active',
+        fields: 'sys_id,function_name,soap_action,soap_endpoint',
       });
       return { soap_message: msg, functions: fns.records, function_count: fns.count };
     }
@@ -921,44 +918,39 @@ export async function executeIntegrationToolCall(
       if (!/^[0-9a-f]{32}$/i.test(args.soap_message_sys_id))
         throw new ServiceNowError('soap_message_sys_id must be a 32-char hex sys_id', 'INVALID_REQUEST');
       return await client.queryRecords({
-        table: 'sys_web_service_function',
-        query: `web_service=${args.soap_message_sys_id}`,
+        table: 'sys_soap_message_function',
+        query: `soap_message=${args.soap_message_sys_id}`,
         limit: args.limit ?? 25,
-        fields: 'sys_id,name,function_name,soap_action,active,sys_updated_on',
+        fields: 'sys_id,function_name,soap_action,soap_endpoint,sys_updated_on',
       });
     }
     case 'create_soap_message': {
       requireWrite();
-      if (!args.name || !args.endpoint) throw new ServiceNowError('name and endpoint are required', 'INVALID_REQUEST');
+      if (!args.name) throw new ServiceNowError('name is required', 'INVALID_REQUEST');
       const data: Record<string, any> = {
         name: args.name,
-        endpoint: args.endpoint,
         authentication_type: args.authentication_type || 'no_authentication',
-        active: args.active !== false,
       };
       if (args.wsdl) data.wsdl = args.wsdl;
-      if (args.namespace) data.namespace = args.namespace;
-      if (args.soap_action_prefix) data.soap_action_prefix = args.soap_action_prefix;
       if (args.description) data.description = args.description;
-      const result = await client.createRecord('sys_web_service', data);
-      return { ...result, summary: `Created SOAP Message "${args.name}" at ${args.endpoint}` };
+      const result = await client.createRecord('sys_soap_message', data);
+      return { ...result, summary: `Created SOAP Message "${args.name}"` };
     }
     case 'create_soap_message_function': {
       requireWrite();
-      if (!args.soap_message_sys_id || !args.name || !args.function_name)
-        throw new ServiceNowError('soap_message_sys_id, name, and function_name are required', 'INVALID_REQUEST');
+      if (!args.soap_message_sys_id || !args.function_name)
+        throw new ServiceNowError('soap_message_sys_id and function_name are required', 'INVALID_REQUEST');
       if (!/^[0-9a-f]{32}$/i.test(args.soap_message_sys_id))
         throw new ServiceNowError('soap_message_sys_id must be a 32-char hex sys_id', 'INVALID_REQUEST');
       const data: Record<string, any> = {
-        web_service: args.soap_message_sys_id,
-        name: args.name,
+        soap_message: args.soap_message_sys_id,
         function_name: args.function_name,
-        active: args.active !== false,
       };
+      if (args.soap_endpoint) data.soap_endpoint = args.soap_endpoint;
       if (args.soap_action) data.soap_action = args.soap_action;
-      if (args.soap_message_template) data.soap_message = args.soap_message_template;
-      const result = await client.createRecord('sys_web_service_function', data);
-      return { ...result, summary: `Created SOAP function "${args.name}" on message ${args.soap_message_sys_id}` };
+      if (args.envelope) data.envelope = args.envelope;
+      const result = await client.createRecord('sys_soap_message_function', data);
+      return { ...result, summary: `Created SOAP function "${args.function_name}" on message ${args.soap_message_sys_id}` };
     }
     // ── OAuth ────────────────────────────────────────────────────────────────
     case 'list_oauth_applications': {
