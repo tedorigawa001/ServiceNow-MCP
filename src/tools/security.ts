@@ -8,7 +8,7 @@
  */
 import { sanitizeLikeValue, type ServiceNowClient } from '../servicenow/client.js';
 import { ServiceNowError } from '../utils/errors.js';
-import { requireWrite } from '../utils/permissions.js';
+import { requireScripting, requireWrite } from '../utils/permissions.js';
 import { SEVERITY } from './schema-helpers.js';
 
 const SECURITY_INCIDENT_FIELDS = new Set([
@@ -19,6 +19,7 @@ const VULNERABILITY_UPDATE_FIELDS = new Set([
   'state', 'risk_acceptance_notes', 'remediation_date',
 ]);
 const queryValue = (value: unknown) => sanitizeLikeValue(String(value));
+const SYS_ID_RE = /^[0-9a-f]{32}$/i;
 
 export function getSecurityToolDefinitions() {
   return [
@@ -154,15 +155,16 @@ export function getSecurityToolDefinitions() {
     },
     {
       name: 'run_security_playbook',
-      description: 'Execute a security response playbook against an incident. **[Write]**',
+      description: 'Start a Security Incident Response playbook (a Process Automation Designer definition in the sn_si_aw scope) against a security incident, the same way the SIR Analyst Workspace does: sn_playbook.PlaybookExperience.triggerPlaybook(). Schedules a one-time server script, so it requires SCRIPTING_ENABLED=true. Skips if that playbook is already queued or in progress on the incident. Set wait_seconds to poll for the resulting execution (sys_pd_context). **[Scripting]**',
       inputSchema: {
         type: 'object',
         properties: {
-          playbook_sys_id: { type: 'string', description: 'Playbook sys_id to execute' },
-          incident_sys_id: { type: 'string', description: 'Security incident sys_id to run against' },
-          parameters: { type: 'object', description: 'Optional playbook input parameters' },
+          playbook: { type: 'string', description: 'Playbook sys_id or scoped name (sys_pd_process_definition.name, e.g. "security_incident_malware_manual_template_v1"). See list_security_playbooks.' },
+          playbook_sys_id: { type: 'string', description: 'Alias of playbook (accepted for compatibility).' },
+          incident_sys_id: { type: 'string', description: 'Security incident (sn_si_incident) sys_id to run against' },
+          wait_seconds: { type: 'number', description: 'Poll sys_pd_context for the new execution for up to this many seconds (0-180, default 0 = return right after scheduling).' },
         },
-        required: ['playbook_sys_id', 'incident_sys_id'],
+        required: ['incident_sys_id'],
       },
     },
     // ─── Security Dashboard & Posture ─────────────────────────────────
@@ -299,10 +301,100 @@ export async function executeSecurityToolCall(
       });
     }
     case 'run_security_playbook': {
+      // There is no sn_si_playbook_execution table. SIR playbooks are PAD
+      // definitions and the product starts them from server script via
+      // sn_playbook.PlaybookExperience.triggerPlaybook(scopedName, parentGr),
+      // guarding against a duplicate active execution on the same record
+      // (mirrors sn_si_aw.AnalystWorkspaceSIRUtil.startPlaybooks).
       requireWrite();
-      if (!args.playbook_sys_id || !args.incident_sys_id) throw new ServiceNowError('playbook_sys_id and incident_sys_id are required', 'INVALID_REQUEST');
-      const result = await client.createRecord('sn_si_playbook_execution', { playbook: args.playbook_sys_id, incident: args.incident_sys_id, ...(args.parameters || {}) });
-      return { action: 'executed', ...result };
+      requireScripting();
+      const playbookRef = String(args.playbook ?? args.playbook_sys_id ?? '').trim();
+      if (!playbookRef) throw new ServiceNowError('playbook (sys_id or scoped name) is required', 'INVALID_REQUEST');
+      const incidentSysId = String(args.incident_sys_id ?? '').trim();
+      if (!SYS_ID_RE.test(incidentSysId)) throw new ServiceNowError('incident_sys_id must be a 32-char hex sys_id', 'INVALID_REQUEST');
+      const waitSeconds = args.wait_seconds === undefined ? 0 : Number(args.wait_seconds);
+      if (!Number.isFinite(waitSeconds) || waitSeconds < 0 || waitSeconds > 180) {
+        throw new ServiceNowError('wait_seconds must be between 0 and 180', 'VALIDATION_ERROR');
+      }
+
+      // The scoped name is interpolated into a server script below, so it is
+      // resolved from the instance and shape-checked; free text never reaches it.
+      const playbookQuery = SYS_ID_RE.test(playbookRef)
+        ? `sys_id=${playbookRef}`
+        : `name=${playbookRef.replace(/[\^\0]/g, '')}`;
+      const definitions = await client.queryRecords({
+        table: 'sys_pd_process_definition',
+        query: `${playbookQuery}^sys_scope.scope=sn_si_aw`,
+        fields: 'sys_id,name,label,active,status,sys_package.source',
+        limit: 1,
+      });
+      const definition = definitions.records[0] as Record<string, unknown> | undefined;
+      if (!definition) throw new ServiceNowError(`No Security Incident Response playbook matches "${playbookRef}" (looked for a sys_pd_process_definition in the sn_si_aw scope)`, 'NOT_FOUND');
+      // triggerPlaybook() and sys_pd_context.name both use the fully qualified
+      // "<package source>.<name>" form, e.g. sn_si_aw.security_incident_malware_manual_template_v1
+      // (the bare name is rejected as "missing or inactive").
+      const packageSource = String(definition['sys_package.source'] ?? '');
+      const scopedName = `${packageSource}.${String(definition.name)}`;
+      if (!/^[a-z0-9_]+\.[a-z0-9_]+$/i.test(scopedName)) throw new ServiceNowError('Unexpected playbook scoped name format', 'API_ERROR');
+      const label = String(definition.label ?? definition.name);
+      if (String(definition.active) !== 'true' || String(definition.status ?? '') === 'draft') {
+        throw new ServiceNowError(`Playbook "${label}" is inactive or still a draft`, 'CONFLICT');
+      }
+
+      await client.getRecord('sn_si_incident', incidentSysId); // NOT_FOUND if the incident does not exist
+
+      // Mirrors the product's own duplicate guard: an execution on this record
+      // for this playbook that is not finished blocks a second start.
+      const activeContextQuery = `input_table=sn_si_incident^input_record=${incidentSysId}^name=${scopedName}^stateNOT INCANCELLED,COMPLETE,ERROR`;
+      const contextFields = 'sys_id,name,state,process_definition,input_table,input_record,sys_created_on';
+      const existing = await client.queryRecords({ table: 'sys_pd_context', query: activeContextQuery, fields: contextFields, limit: 1 });
+      if (existing.records.length) {
+        return {
+          action: 'already_running',
+          playbook: { sys_id: definition.sys_id, name: scopedName, label },
+          incident_sys_id: incidentSysId,
+          execution: existing.records[0],
+          note: 'This playbook already has a queued or in-progress execution on the incident; nothing was started.',
+        };
+      }
+
+      const runStart = new Date(Date.now() + 70_000).toISOString().slice(0, 19).replace('T', ' ');
+      const script = [
+        `var parent = new GlideRecord('sn_si_incident');`,
+        `if (parent.get('${incidentSysId}')) { sn_playbook.PlaybookExperience.triggerPlaybook('${scopedName}', parent); }`,
+      ].join('\n');
+      const job = await client.createRecord('sysauto_script', {
+        name: `[MCP playbook ${scopedName} on ${incidentSysId}]`,
+        active: true,
+        run_type: 'once',
+        run_start: runStart,
+        script,
+      });
+
+      // No active execution existed before scheduling (checked above), so any
+      // active match that appears now is the one this call started. Not
+      // filtering on sys_created_on keeps this independent of the instance's
+      // time zone handling of encoded-query date literals.
+      let execution: Record<string, unknown> | null = null;
+      if (waitSeconds > 0) {
+        const deadline = Date.now() + waitSeconds * 1000;
+        while (Date.now() < deadline) {
+          const found = await client.queryRecords({ table: 'sys_pd_context', query: activeContextQuery, fields: contextFields, limit: 1 });
+          if (found.records.length) { execution = found.records[0] as Record<string, unknown>; break; }
+          await new Promise(resolve => setTimeout(resolve, 5000));
+        }
+      }
+
+      return {
+        action: execution ? 'playbook_started' : 'playbook_scheduled',
+        playbook: { sys_id: definition.sys_id, name: scopedName, label },
+        incident_sys_id: incidentSysId,
+        scheduled_job: { sys_id: (job as any).sys_id, run_start_utc: runStart },
+        execution,
+        note: execution
+          ? 'Execution found in sys_pd_context.'
+          : 'The scheduler starts the playbook at run_start_utc. Query sys_pd_context (input_record = incident, name = playbook scoped name) to confirm, or call again with wait_seconds.',
+      };
     }
     case 'get_security_dashboard': {
       const days = args.days || 30;

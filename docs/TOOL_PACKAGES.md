@@ -156,7 +156,7 @@ Includes:
 Tools for Security Operations and USEM/Vulnerability Response analysts.
 
 Includes:
-- Security Incident Response (create, get, update, list)
+- Security Incident Response (create, get, update, list, playbooks — `run_security_playbook` schedules a server script and needs `SCRIPTING_ENABLED=true`)
 - Legacy Vulnerability Response read/update tools
 - GRC — Audit Management: Engagements, Control Tests, dashboard (`sn_audit_*`)
 - GRC — Policy and Compliance Management: Entities, Policies, Controls, Control Objectives, Policy Exceptions (read-only), Issues, dashboard (`sn_grc_*`/`sn_compliance_*`)
@@ -224,6 +224,6 @@ Includes:
 | `ai_developer` | false | `NOW_ASSIST_ENABLED=true` |
 | `portal_developer` | true | `SCRIPTING_ENABLED=true` |
 | `integration_engineer` | true | `SCRIPTING_ENABLED=true` (for register_event) |
-| `secops_analyst` | true (for VR writes/approvals) | — |
+| `secops_analyst` | true (for VR writes/approvals) | `SCRIPTING_ENABLED=true` (run_security_playbook only) |
 | `devops_engineer` | true | — |
 | `itam_analyst` | true | — |

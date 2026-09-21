@@ -17,6 +17,7 @@ import { executeCoreToolCall } from '../../src/tools/core.js';
 import { executeUsemToolCall } from '../../src/tools/usem.js';
 import { executeGrcRiskToolCall } from '../../src/tools/grc-risk.js';
 import { executeGrcComplianceToolCall } from '../../src/tools/grc-compliance.js';
+import { executeSecurityToolCall } from '../../src/tools/security.js';
 import type { ServiceNowClient } from '../../src/servicenow/client.js';
 
 const MARK = `[E2E ${Date.now()}]`;
@@ -230,6 +231,74 @@ writeE2eDescribe('E2E – write operations (create/update, self-cleaning)', () =
         expect(fetched.description).toBe(`${MARK} updated description`);
       } finally {
         await client.deleteRecord('sn_grc_profile', created.sys_id as string);
+      }
+    });
+  });
+  describe('sn_si_incident + sys_pd_process_definition (run_security_playbook)', () => {
+    const scripting = process.env.SCRIPTING_ENABLED === 'true';
+
+    it('refuses to start a draft template before scheduling anything', async (ctx) => {
+      ctx.skip(!scripting, 'SCRIPTING_ENABLED=true required');
+      await skipUnlessTables(ctx, client, 'sn_si_incident', 'sys_pd_process_definition');
+      const drafts = await client.queryRecords({
+        table: 'sys_pd_process_definition', query: 'sys_scope.scope=sn_si_aw^status=draft', fields: 'sys_id,name', limit: 1,
+      });
+      ctx.skip(drafts.records.length === 0, 'no draft SIR playbook template on this instance');
+
+      const created = await executeSecurityToolCall(client, 'create_security_incident', {
+        short_description: `${MARK} playbook draft-guard test`, category: 'malware',
+      });
+      expect(created.sys_id).toBeTruthy();
+      try {
+        await expect(executeSecurityToolCall(client, 'run_security_playbook', {
+          playbook: drafts.records[0].sys_id, incident_sys_id: created.sys_id,
+        })).rejects.toMatchObject({ code: 'CONFLICT' });
+        // Nothing was scheduled for this incident.
+        const jobs = await client.queryRecords({ table: 'sysauto_script', query: `nameLIKE${created.sys_id}`, fields: 'sys_id', limit: 1 });
+        expect(jobs.records).toHaveLength(0);
+      } finally {
+        await client.deleteRecord('sn_si_incident', created.sys_id as string);
+      }
+    });
+
+    it('starts a published SIR playbook, sees its execution, and refuses a duplicate', async (ctx) => {
+      ctx.skip(!scripting, 'SCRIPTING_ENABLED=true required');
+      await skipUnlessTables(ctx, client, 'sn_si_incident', 'sys_pd_process_definition', 'sys_pd_context');
+      // The stock SIR playbooks ship as drafts (templates). A runnable one has
+      // to be published in Process Automation Designer first.
+      const published = await client.queryRecords({
+        table: 'sys_pd_process_definition', query: 'sys_scope.scope=sn_si_aw^status=published^active=true', fields: 'sys_id,name,label', limit: 1,
+      });
+      ctx.skip(published.records.length === 0, 'no published SIR playbook on this instance (publish a template in PAD to enable this test)');
+      const playbook = published.records[0] as { sys_id: string; label: string };
+
+      const created = await executeSecurityToolCall(client, 'create_security_incident', {
+        short_description: `${MARK} playbook run test`, category: 'malware',
+      });
+      expect(created.sys_id).toBeTruthy();
+      let contextSysId: string | undefined;
+      let jobSysId: string | undefined;
+      try {
+        const run = await executeSecurityToolCall(client, 'run_security_playbook', {
+          playbook: playbook.sys_id, incident_sys_id: created.sys_id, wait_seconds: 150,
+        });
+        jobSysId = run.scheduled_job?.sys_id;
+        expect(run.playbook.label).toBe(playbook.label);
+        expect(run.playbook.name).toMatch(/^sn_si_aw\./);
+        expect(run.action).toBe('playbook_started');
+        expect(run.execution).toBeTruthy();
+        expect(['QUEUED', 'IN_PROGRESS']).toContain(run.execution.state);
+        contextSysId = run.execution.sys_id;
+
+        const again = await executeSecurityToolCall(client, 'run_security_playbook', {
+          playbook: playbook.sys_id, incident_sys_id: created.sys_id,
+        });
+        expect(again.action).toBe('already_running');
+        expect(again.execution.sys_id).toBe(contextSysId);
+      } finally {
+        if (contextSysId) await client.deleteRecord('sys_pd_context', contextSysId).catch(() => undefined);
+        if (jobSysId) await client.deleteRecord('sysauto_script', jobSysId).catch(() => undefined);
+        await client.deleteRecord('sn_si_incident', created.sys_id as string);
       }
     });
   });

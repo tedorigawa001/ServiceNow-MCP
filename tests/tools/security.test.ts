@@ -262,26 +262,103 @@ describe('Security Operations tools', () => {
   });
 
   describe('run_security_playbook', () => {
+    const INC = 'a'.repeat(32);
+    const PB = 'b'.repeat(32);
+    const definition = { sys_id: PB, name: 'security_incident_malware_manual_template_v1', label: 'Manual Malware Playbook Template V1', active: 'true', status: 'published', 'sys_package.source': 'sn_si_aw' };
+    const QUALIFIED = 'sn_si_aw.security_incident_malware_manual_template_v1';
+    const scriptingOn = () => { process.env.WRITE_ENABLED = 'true'; process.env.SCRIPTING_ENABLED = 'true'; };
+
     it('is blocked without WRITE_ENABLED', async () => {
-      await expect(executeSecurityToolCall(mockClient, 'run_security_playbook', { playbook_sys_id: 'p1', incident_sys_id: 'i1' }))
+      await expect(executeSecurityToolCall(mockClient, 'run_security_playbook', { playbook: PB, incident_sys_id: INC }))
         .rejects.toThrow('Write operations are disabled');
     });
 
-    it('requires playbook_sys_id and incident_sys_id', async () => {
+    it('is blocked without SCRIPTING_ENABLED because it schedules a server script', async () => {
       process.env.WRITE_ENABLED = 'true';
-      await expect(executeSecurityToolCall(mockClient, 'run_security_playbook', {})).rejects.toThrow(
-        'playbook_sys_id and incident_sys_id are required'
-      );
+      delete process.env.SCRIPTING_ENABLED;
+      await expect(executeSecurityToolCall(mockClient, 'run_security_playbook', { playbook: PB, incident_sys_id: INC }))
+        .rejects.toThrow('Scripting operations are disabled');
     });
 
-    it('executes the playbook with extra parameters', async () => {
-      process.env.WRITE_ENABLED = 'true';
-      mockClient.createRecord.mockResolvedValue({ sys_id: 'exec1' });
-      const result = await executeSecurityToolCall(mockClient, 'run_security_playbook', {
-        playbook_sys_id: 'p1', incident_sys_id: 'i1', parameters: { notify: 'true' },
-      });
-      expect(mockClient.createRecord).toHaveBeenCalledWith('sn_si_playbook_execution', { playbook: 'p1', incident: 'i1', notify: 'true' });
-      expect(result.action).toBe('executed');
+    it('requires a playbook reference and a 32-char hex incident sys_id', async () => {
+      scriptingOn();
+      await expect(executeSecurityToolCall(mockClient, 'run_security_playbook', { incident_sys_id: INC })).rejects.toThrow('playbook (sys_id or scoped name) is required');
+      await expect(executeSecurityToolCall(mockClient, 'run_security_playbook', { playbook: PB, incident_sys_id: 'nope' })).rejects.toThrow('32-char hex sys_id');
+      await expect(executeSecurityToolCall(mockClient, 'run_security_playbook', { playbook: PB, incident_sys_id: INC, wait_seconds: 999 })).rejects.toThrow('wait_seconds must be between 0 and 180');
+      expect(mockClient.createRecord).not.toHaveBeenCalled();
+    });
+
+    it('resolves the playbook only within the sn_si_aw scope and rejects unknown ones', async () => {
+      scriptingOn();
+      mockClient.queryRecords.mockResolvedValueOnce({ count: 0, records: [] });
+      await expect(executeSecurityToolCall(mockClient, 'run_security_playbook', { playbook: 'not_a_sir_playbook', incident_sys_id: INC }))
+        .rejects.toMatchObject({ code: 'NOT_FOUND' });
+      expect(mockClient.queryRecords).toHaveBeenCalledWith(expect.objectContaining({
+        table: 'sys_pd_process_definition', query: 'name=not_a_sir_playbook^sys_scope.scope=sn_si_aw',
+      }));
+      expect(mockClient.createRecord).not.toHaveBeenCalled();
+    });
+
+    it('rejects a playbook that is still a draft', async () => {
+      scriptingOn();
+      mockClient.queryRecords.mockResolvedValueOnce({ count: 1, records: [{ ...definition, status: 'draft' }] });
+      await expect(executeSecurityToolCall(mockClient, 'run_security_playbook', { playbook: PB, incident_sys_id: INC }))
+        .rejects.toMatchObject({ code: 'CONFLICT' });
+      expect(mockClient.createRecord).not.toHaveBeenCalled();
+    });
+
+    it('does not start a second execution when one is already queued or in progress', async () => {
+      scriptingOn();
+      mockClient.queryRecords
+        .mockResolvedValueOnce({ count: 1, records: [definition] })
+        .mockResolvedValueOnce({ count: 1, records: [{ sys_id: 'ctx1', state: 'IN_PROGRESS', name: QUALIFIED }] });
+      mockClient.getRecord.mockResolvedValue({ sys_id: INC });
+      const result = await executeSecurityToolCall(mockClient, 'run_security_playbook', { playbook: PB, incident_sys_id: INC });
+      expect(result.action).toBe('already_running');
+      expect(result.execution.sys_id).toBe('ctx1');
+      expect(mockClient.queryRecords).toHaveBeenNthCalledWith(2, expect.objectContaining({
+        table: 'sys_pd_context',
+        query: `input_table=sn_si_incident^input_record=${INC}^name=${QUALIFIED}^stateNOT INCANCELLED,COMPLETE,ERROR`,
+      }));
+      expect(mockClient.createRecord).not.toHaveBeenCalled();
+    });
+
+    it('schedules a one-time script that calls sn_playbook.PlaybookExperience.triggerPlaybook', async () => {
+      scriptingOn();
+      mockClient.queryRecords
+        .mockResolvedValueOnce({ count: 1, records: [definition] })
+        .mockResolvedValueOnce({ count: 0, records: [] });
+      mockClient.getRecord.mockResolvedValue({ sys_id: INC });
+      mockClient.createRecord.mockResolvedValue({ sys_id: 'job1' });
+      const result = await executeSecurityToolCall(mockClient, 'run_security_playbook', { playbook: definition.name, incident_sys_id: INC });
+      expect(mockClient.getRecord).toHaveBeenCalledWith('sn_si_incident', INC);
+      expect(mockClient.createRecord).toHaveBeenCalledWith('sysauto_script', expect.objectContaining({
+        run_type: 'once',
+        active: true,
+        script: `var parent = new GlideRecord('sn_si_incident');\nif (parent.get('${INC}')) { sn_playbook.PlaybookExperience.triggerPlaybook('${QUALIFIED}', parent); }`,
+      }));
+      expect(result.action).toBe('playbook_scheduled');
+      expect(result.playbook).toEqual({ sys_id: PB, name: QUALIFIED, label: definition.label });
+      expect(result.scheduled_job.sys_id).toBe('job1');
+      expect(result.execution).toBeNull();
+    });
+
+    it('polls sys_pd_context and reports playbook_started when wait_seconds is set', async () => {
+      scriptingOn();
+      vi.useFakeTimers();
+      try {
+        mockClient.queryRecords
+          .mockResolvedValueOnce({ count: 1, records: [definition] })
+          .mockResolvedValueOnce({ count: 0, records: [] })
+          .mockResolvedValueOnce({ count: 1, records: [{ sys_id: 'ctx2', state: 'QUEUED', name: QUALIFIED }] });
+        mockClient.getRecord.mockResolvedValue({ sys_id: INC });
+        mockClient.createRecord.mockResolvedValue({ sys_id: 'job2' });
+        const result = await executeSecurityToolCall(mockClient, 'run_security_playbook', { playbook: PB, incident_sys_id: INC, wait_seconds: 30 });
+        expect(result.action).toBe('playbook_started');
+        expect(result.execution.sys_id).toBe('ctx2');
+      } finally {
+        vi.useRealTimers();
+      }
     });
   });
 
