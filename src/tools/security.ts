@@ -358,13 +358,34 @@ export async function executeSecurityToolCall(
         };
       }
 
+      // The context only appears once the scheduler has run the job. Until then
+      // a second call would queue a second job, so also treat a pending job for
+      // this incident + playbook as "already scheduled".
+      // sysauto_script.name is capped at 100 characters, so key the job on the
+      // two sys_ids (80 chars) rather than the scoped name; the readable
+      // playbook/incident pair lives in the description.
+      const jobName = `[MCP playbook ${definition.sys_id}:${incidentSysId}]`;
+      const pendingJobs = await client.queryRecords({ table: 'sysauto_script', query: `name=${jobName}`, fields: 'sys_id,run_start', limit: 1 });
+      if (pendingJobs.records.length) {
+        const pending = pendingJobs.records[0] as { sys_id: string; run_start: string };
+        return {
+          action: 'already_scheduled',
+          playbook: { sys_id: definition.sys_id, name: scopedName, label },
+          incident_sys_id: incidentSysId,
+          scheduled_job: { sys_id: pending.sys_id, run_start_utc: pending.run_start },
+          execution: null,
+          note: 'A start for this playbook on this incident is already scheduled and has not run yet; nothing new was queued.',
+        };
+      }
+
       const runStart = new Date(Date.now() + 70_000).toISOString().slice(0, 19).replace('T', ' ');
       const script = [
         `var parent = new GlideRecord('sn_si_incident');`,
         `if (parent.get('${incidentSysId}')) { sn_playbook.PlaybookExperience.triggerPlaybook('${scopedName}', parent); }`,
       ].join('\n');
       const job = await client.createRecord('sysauto_script', {
-        name: `[MCP playbook ${scopedName} on ${incidentSysId}]`,
+        name: jobName,
+        description: `Start SIR playbook ${scopedName} (${label}) on security incident ${incidentSysId}`,
         active: true,
         run_type: 'once',
         run_start: runStart,
@@ -380,7 +401,13 @@ export async function executeSecurityToolCall(
         const deadline = Date.now() + waitSeconds * 1000;
         while (Date.now() < deadline) {
           const found = await client.queryRecords({ table: 'sys_pd_context', query: activeContextQuery, fields: contextFields, limit: 1 });
-          if (found.records.length) { execution = found.records[0] as Record<string, unknown>; break; }
+          if (found.records.length) {
+            execution = found.records[0] as Record<string, unknown>;
+            // The one-time job has done its work; remove it so a later call is
+            // judged on sys_pd_context alone rather than a stale pending job.
+            await client.deleteRecord('sysauto_script', String((job as any).sys_id)).catch(() => undefined);
+            break;
+          }
           await new Promise(resolve => setTimeout(resolve, 5000));
         }
       }

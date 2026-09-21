@@ -323,10 +323,27 @@ describe('Security Operations tools', () => {
       expect(mockClient.createRecord).not.toHaveBeenCalled();
     });
 
+    it('returns already_scheduled when a pending job exists for the same incident and playbook', async () => {
+      scriptingOn();
+      mockClient.queryRecords
+        .mockResolvedValueOnce({ count: 1, records: [definition] })
+        .mockResolvedValueOnce({ count: 0, records: [] })
+        .mockResolvedValueOnce({ count: 1, records: [{ sys_id: 'job0', run_start: '2026-09-21 10:00:00' }] });
+      mockClient.getRecord.mockResolvedValue({ sys_id: INC });
+      const result = await executeSecurityToolCall(mockClient, 'run_security_playbook', { playbook: PB, incident_sys_id: INC });
+      expect(result.action).toBe('already_scheduled');
+      expect(result.scheduled_job.sys_id).toBe('job0');
+      expect(mockClient.queryRecords).toHaveBeenNthCalledWith(3, expect.objectContaining({
+        table: 'sysauto_script', query: `name=[MCP playbook ${PB}:${INC}]`,
+      }));
+      expect(mockClient.createRecord).not.toHaveBeenCalled();
+    });
+
     it('schedules a one-time script that calls sn_playbook.PlaybookExperience.triggerPlaybook', async () => {
       scriptingOn();
       mockClient.queryRecords
         .mockResolvedValueOnce({ count: 1, records: [definition] })
+        .mockResolvedValueOnce({ count: 0, records: [] })
         .mockResolvedValueOnce({ count: 0, records: [] });
       mockClient.getRecord.mockResolvedValue({ sys_id: INC });
       mockClient.createRecord.mockResolvedValue({ sys_id: 'job1' });
@@ -350,12 +367,15 @@ describe('Security Operations tools', () => {
         mockClient.queryRecords
           .mockResolvedValueOnce({ count: 1, records: [definition] })
           .mockResolvedValueOnce({ count: 0, records: [] })
+          .mockResolvedValueOnce({ count: 0, records: [] })
           .mockResolvedValueOnce({ count: 1, records: [{ sys_id: 'ctx2', state: 'QUEUED', name: QUALIFIED }] });
         mockClient.getRecord.mockResolvedValue({ sys_id: INC });
         mockClient.createRecord.mockResolvedValue({ sys_id: 'job2' });
+        mockClient.deleteRecord = vi.fn().mockResolvedValue(undefined);
         const result = await executeSecurityToolCall(mockClient, 'run_security_playbook', { playbook: PB, incident_sys_id: INC, wait_seconds: 30 });
         expect(result.action).toBe('playbook_started');
         expect(result.execution.sys_id).toBe('ctx2');
+        expect(mockClient.deleteRecord).toHaveBeenCalledWith('sysauto_script', 'job2');
       } finally {
         vi.useRealTimers();
       }
