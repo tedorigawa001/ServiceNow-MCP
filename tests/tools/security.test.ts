@@ -241,10 +241,23 @@ describe('Security Operations tools', () => {
   });
 
   describe('list_security_playbooks', () => {
-    it('defaults to active=true and filters by category', async () => {
+    it('queries PAD definitions in the sn_si_aw scope, active by default', async () => {
       mockClient.queryRecords.mockResolvedValue({ count: 0, records: [] });
-      await executeSecurityToolCall(mockClient, 'list_security_playbooks', { category: 'phishing' });
-      expect(mockClient.queryRecords).toHaveBeenCalledWith(expect.objectContaining({ table: 'sn_si_playbook', query: 'active=true^category=phishing' }));
+      await executeSecurityToolCall(mockClient, 'list_security_playbooks', {});
+      expect(mockClient.queryRecords).toHaveBeenCalledWith(expect.objectContaining({
+        table: 'sys_pd_process_definition', query: 'sys_scope.scope=sn_si_aw^active=true',
+      }));
+    });
+
+    it('adds a sanitized label/name search and honours active=false', async () => {
+      mockClient.queryRecords.mockResolvedValue({ count: 0, records: [] });
+      await executeSecurityToolCall(mockClient, 'list_security_playbooks', { active: false, query: 'Phish^ORactive=true' });
+      const call = mockClient.queryRecords.mock.calls[0][0];
+      expect(call.table).toBe('sys_pd_process_definition');
+      // The ^ in the input is stripped, so the injected clause becomes inert
+      // text inside the LIKE value instead of a separate active=true clause.
+      expect(call.query).toBe('sys_scope.scope=sn_si_aw^labelLIKEPhishORactive=true^ORnameLIKEPhishORactive=true');
+      expect(call.query.split('^')).not.toContain('active=true');
     });
   });
 

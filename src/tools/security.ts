@@ -141,12 +141,12 @@ export function getSecurityToolDefinitions() {
     // ─── Security Playbooks ───────────────────────────────────────────
     {
       name: 'list_security_playbooks',
-      description: 'List available security response playbooks',
+      description: 'List Security Incident Response playbooks. These are Process Automation Designer definitions (sys_pd_process_definition) shipped in the sn_si_aw scope, e.g. the Malware / Phishing / Failed Login templates.',
       inputSchema: {
         type: 'object',
         properties: {
           active: { type: 'boolean', description: 'Filter active only (default true)' },
-          category: { type: 'string', description: 'Filter by category (incident_response, threat_hunting, compliance)' },
+          query: { type: 'string', description: 'Search by playbook label or name' },
           limit: { type: 'number', description: 'Max records (default 25)' },
         },
         required: [],
@@ -282,10 +282,21 @@ export async function executeSecurityToolCall(
       return await client.queryRecords({ table: 'sn_ti_observable', query: q, limit: args.limit ?? 25 });
     }
     case 'list_security_playbooks': {
-      const parts: string[] = [];
+      // SIR playbooks are Process Automation Designer definitions in the
+      // sn_si_aw (Security Incident Analyst Workspace) scope. There is no
+      // sn_si_playbook table.
+      const parts: string[] = ['sys_scope.scope=sn_si_aw'];
       if (args.active !== false) parts.push('active=true');
-      if (args.category) parts.push(`category=${queryValue(args.category)}`);
-      return await client.queryRecords({ table: 'sn_si_playbook', query: parts.join('^') || '', limit: args.limit ?? 25 });
+      if (args.query) {
+        const value = queryValue(args.query);
+        parts.push(`labelLIKE${value}^ORnameLIKE${value}`);
+      }
+      return await client.queryRecords({
+        table: 'sys_pd_process_definition',
+        query: parts.join('^'),
+        limit: args.limit ?? 25,
+        fields: 'sys_id,label,name,description,active,process_type,sys_updated_on',
+      });
     }
     case 'run_security_playbook': {
       requireWrite();

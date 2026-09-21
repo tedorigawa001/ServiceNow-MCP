@@ -86,21 +86,38 @@ e2eDescribe('E2E – optional plugins (read-only, gated on plugin tables)', () =
     });
   });
 
-  describe('sn_si_incident / sn_si_playbook (Security Incident Response)', () => {
+  describe('sn_si_incident / sys_pd_process_definition (Security Incident Response)', () => {
     it('lists legacy vulnerabilities (sn_vul, always present with VR)', async (ctx) => {
       await skipUnlessTables(ctx, client, 'sn_vul_vulnerability');
       const result = await executeSecurityToolCall(client, 'list_vulnerabilities', { limit: 5 });
       expect(result.count).toBeGreaterThanOrEqual(0);
     });
 
-    it('lists security incidents and playbooks, and builds the dashboard', async (ctx) => {
-      await skipUnlessTables(ctx, client, 'sn_si_incident', 'sn_si_playbook');
+    it('lists security incidents and builds the dashboard', async (ctx) => {
+      await skipUnlessTables(ctx, client, 'sn_si_incident');
       const incidents = await executeSecurityToolCall(client, 'list_security_incidents', { limit: 5 });
       expect(incidents.count).toBeGreaterThanOrEqual(0);
-      const playbooks = await executeSecurityToolCall(client, 'list_security_playbooks', { limit: 5 });
-      expect(playbooks.count).toBeGreaterThanOrEqual(0);
       const dashboard = await executeSecurityToolCall(client, 'get_security_dashboard', { days: 30 });
       expect(dashboard).toBeTruthy();
+      expect(dashboard.open_incidents).toBeTruthy();
+    });
+
+    it('lists the SIR playbooks shipped as PAD definitions in the sn_si_aw scope', async (ctx) => {
+      // The playbooks are Process Automation Designer definitions, not an
+      // sn_si_* table; sn_si_aw is the Security Incident Analyst Workspace scope.
+      await skipUnlessTables(ctx, client, 'sys_pd_process_definition');
+      const playbooks = await executeSecurityToolCall(client, 'list_security_playbooks', { limit: 25 });
+      expect(Array.isArray(playbooks.records)).toBe(true);
+      // Every returned definition must be from the SIR scope; when SIR is
+      // installed the stock Malware/Phishing templates are present.
+      const labels = playbooks.records.map((r: { label?: string; name?: string }) => r.label ?? r.name ?? '');
+      if (playbooks.count > 0) {
+        expect(labels.some((l: string) => /malware|phishing|failed login/i.test(l))).toBe(true);
+      }
+      const search = await executeSecurityToolCall(client, 'list_security_playbooks', { query: 'Malware', limit: 5 });
+      for (const r of search.records as Array<{ label?: string; name?: string }>) {
+        expect(`${r.label ?? ''} ${r.name ?? ''}`).toMatch(/malware/i);
+      }
     });
 
     it('fetches a single security incident when one exists', async (ctx) => {
