@@ -6,7 +6,7 @@
  * Every record created here is deleted in a `finally` block regardless of
  * assertion outcome, so a failing assertion never leaves test data behind.
  */
-import { describe, it, expect, beforeAll } from 'vitest';
+import { describe, it, expect, beforeAll, vi } from 'vitest';
 import { writeE2eDescribe, getE2EClient, skipUnlessTables } from './helpers.js';
 import { executeIncidentToolCall } from '../../src/tools/incident.js';
 import { executeChangeToolCall } from '../../src/tools/change.js';
@@ -20,6 +20,13 @@ import { executeGrcComplianceToolCall } from '../../src/tools/grc-compliance.js'
 import type { ServiceNowClient } from '../../src/servicenow/client.js';
 
 const MARK = `[E2E ${Date.now()}]`;
+
+// Each test creates, updates, re-reads and then deletes a record. The delete
+// is the expensive step: ServiceNow cascades through every table that
+// references the record (a sys_user_group delete was measured at 21 s on a
+// PDI still digesting a plugin install), so the shared 30 s budget is too
+// tight for this file even though the assertions themselves finish quickly.
+vi.setConfig({ testTimeout: 120_000 });
 
 writeE2eDescribe('E2E – write operations (create/update, self-cleaning)', () => {
   let client: ServiceNowClient;

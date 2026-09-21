@@ -24,6 +24,7 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 ### Changed
 
 - E2E files now run sequentially (`fileParallelism: false` in `vitest.e2e.config.ts`). Thirteen suites hitting one PDI in parallel produced spurious 30 s timeouts on the incident/group write tests that pass every time in isolation.
+- Live tests get a longer request budget. `tests/e2e/setup.ts` defaults `REQUEST_TIMEOUT_MS` to 120 s (an explicit value in the environment still wins), and the write suite raises its own test timeout to match. The production default stays 30 s. The write tests delete every record they create, and ServiceNow cascades a delete through every table that references it — a `sys_user_group` delete measured 21–23 s on a PDI still digesting a plugin install, which exceeded the client's 30 s abort and failed the test after its assertions had already passed.
 
 ---
 
