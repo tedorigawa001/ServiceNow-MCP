@@ -157,7 +157,7 @@ Tools for Security Operations and USEM/Vulnerability Response analysts.
 
 Includes:
 - Security Incident Response (create, get, update, list, playbooks — `run_security_playbook` schedules a server script and needs `SCRIPTING_ENABLED=true`)
-- Legacy Vulnerability Response read/update tools
+- Legacy Vulnerability Response read/update tools; `scan_vulnerabilities` creates an `sn_vul_scan` for CIs or Vulnerable Items through a server script (needs `SCRIPTING_ENABLED=true` and an active scanner integration to initiate)
 - GRC — Audit Management: Engagements, Control Tests, dashboard (`sn_audit_*`)
 - GRC — Policy and Compliance Management: Entities, Policies, Controls, Control Objectives, Policy Exceptions (read-only), Issues, dashboard (`sn_grc_*`/`sn_compliance_*`)
 - GRC — Risk Management: Risks, Risk Statement library, Risk Criteria scale, dashboard (`sn_risk_*`) — note `impact`/`likelihood`/`score` are read-only, confirmed not settable via API on this instance (see [GRC_DESIGN.md](GRC_DESIGN.md))
@@ -224,6 +224,6 @@ Includes:
 | `ai_developer` | false | `NOW_ASSIST_ENABLED=true` |
 | `portal_developer` | true | `SCRIPTING_ENABLED=true` |
 | `integration_engineer` | true | `SCRIPTING_ENABLED=true` (for register_event) |
-| `secops_analyst` | true (for VR writes/approvals) | `SCRIPTING_ENABLED=true` (run_security_playbook only) |
+| `secops_analyst` | true (for VR writes/approvals) | `SCRIPTING_ENABLED=true` (run_security_playbook, scan_vulnerabilities) |
 | `devops_engineer` | true | — |
 | `itam_analyst` | true | — |

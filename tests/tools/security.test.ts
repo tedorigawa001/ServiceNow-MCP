@@ -383,21 +383,144 @@ describe('Security Operations tools', () => {
   });
 
   describe('scan_vulnerabilities', () => {
+    const CI1 = 'c'.repeat(32);
+    const CI2 = 'd'.repeat(32);
+    const VI1 = 'e'.repeat(32);
+    const SCANNER = 'f'.repeat(32);
+    const SCAN = '1'.repeat(32);
+    const scanner = { sys_id: SCANNER, name: 'Qualys', active: 'true', default: 'true', integration: 'int1', 'integration.name': 'Qualys Vulnerability Integration' };
+    const scriptingOn = () => { process.env.WRITE_ENABLED = 'true'; process.env.SCRIPTING_ENABLED = 'true'; };
+    /** Queue answers in call order: scanner lookup, target existence, running guard, then syslog polls. */
+    const queue = (...responses: Array<Record<string, unknown>[]>) => {
+      for (const records of responses) mockClient.queryRecords.mockResolvedValueOnce({ count: records.length, records });
+    };
+    const jobResult = (out: Record<string, unknown>) => [{ message: `mcp-scan-x RESULT:${JSON.stringify(out)}` }];
+
     it('is blocked without WRITE_ENABLED', async () => {
-      await expect(executeSecurityToolCall(mockClient, 'scan_vulnerabilities', { group: 'g1' })).rejects.toThrow('Write operations are disabled');
+      await expect(executeSecurityToolCall(mockClient, 'scan_vulnerabilities', { ci_sys_ids: [CI1] })).rejects.toThrow('Write operations are disabled');
     });
 
-    it('requires ci_sys_ids or group', async () => {
+    it('is blocked without SCRIPTING_ENABLED because the scan is created by a server script', async () => {
       process.env.WRITE_ENABLED = 'true';
-      await expect(executeSecurityToolCall(mockClient, 'scan_vulnerabilities', {})).rejects.toThrow('ci_sys_ids or group is required');
+      delete process.env.SCRIPTING_ENABLED;
+      await expect(executeSecurityToolCall(mockClient, 'scan_vulnerabilities', { ci_sys_ids: [CI1] })).rejects.toThrow('Scripting operations are disabled');
     });
 
-    it('requests a full scan by default', async () => {
-      process.env.WRITE_ENABLED = 'true';
-      mockClient.createRecord.mockResolvedValue({ sys_id: 'scan1' });
-      const result = await executeSecurityToolCall(mockClient, 'scan_vulnerabilities', { ci_sys_ids: ['ci1', 'ci2'] });
-      expect(mockClient.createRecord).toHaveBeenCalledWith('sn_vul_scan_request', { ci_list: 'ci1,ci2', group: '', scan_type: 'full' });
-      expect(result.action).toBe('scan_requested');
+    it('validates the target lists and wait budget before touching the instance', async () => {
+      scriptingOn();
+      await expect(executeSecurityToolCall(mockClient, 'scan_vulnerabilities', {})).rejects.toThrow('ci_sys_ids or vulnerable_item_sys_ids is required');
+      await expect(executeSecurityToolCall(mockClient, 'scan_vulnerabilities', { ci_sys_ids: [CI1], vulnerable_item_sys_ids: [VI1] })).rejects.toThrow('not both');
+      await expect(executeSecurityToolCall(mockClient, 'scan_vulnerabilities', { ci_sys_ids: ['nope'] })).rejects.toThrow('32-char hex sys_ids');
+      await expect(executeSecurityToolCall(mockClient, 'scan_vulnerabilities', { ci_sys_ids: 'not-an-array' })).rejects.toThrow('must be an array');
+      await expect(executeSecurityToolCall(mockClient, 'scan_vulnerabilities', { ci_sys_ids: Array.from({ length: 201 }, (_, i) => i.toString(16).padStart(32, '0')) })).rejects.toThrow('limited to 200');
+      await expect(executeSecurityToolCall(mockClient, 'scan_vulnerabilities', { ci_sys_ids: [CI1], wait_seconds: 500 })).rejects.toThrow('wait_seconds must be between 0 and 120');
+      expect(mockClient.queryRecords).not.toHaveBeenCalled();
+      expect(mockClient.createRecord).not.toHaveBeenCalled();
+    });
+
+    it('refuses to initiate when no active default scanner exists, but allows a draft', async () => {
+      scriptingOn();
+      queue([]);
+      await expect(executeSecurityToolCall(mockClient, 'scan_vulnerabilities', { ci_sys_ids: [CI1] })).rejects.toMatchObject({ code: 'CONFLICT', message: expect.stringContaining('No active default scanner') });
+      expect(mockClient.queryRecords).toHaveBeenCalledWith(expect.objectContaining({ table: 'sn_vul_scanner', query: 'active=true^default=true' }));
+      expect(mockClient.createRecord).not.toHaveBeenCalled();
+
+      vi.clearAllMocks();
+      queue([], [{ sys_id: CI1 }], [], jobResult({ scan_sys_id: SCAN, number: 'VSCAN0001003', state: 'draft', linked: 1 }));
+      mockClient.createRecord.mockResolvedValue({ sys_id: 'job1' });
+      mockClient.deleteRecord = vi.fn().mockResolvedValue(undefined);
+      mockClient.getRecord.mockResolvedValue({ sys_id: SCAN, number: 'VSCAN0001003', state: 'draft', status_message: '' });
+      const result = await executeSecurityToolCall(mockClient, 'scan_vulnerabilities', { ci_sys_ids: [CI1], initiate: false, wait_seconds: 5 });
+      expect(result.action).toBe('scan_drafted');
+      expect(result.scanner).toBeNull();
+      const script = mockClient.createRecord.mock.calls[0][1].script as string;
+      expect(script).toContain("scan.setValue('state', 'draft')");
+      expect(script).not.toContain("'processing'");
+      expect(script).not.toContain("setValue('scanner'");
+    });
+
+    it('validates an explicit scanner_sys_id and rejects inactive scanners', async () => {
+      scriptingOn();
+      await expect(executeSecurityToolCall(mockClient, 'scan_vulnerabilities', { ci_sys_ids: [CI1], scanner_sys_id: 'bad' })).rejects.toThrow('scanner_sys_id must be a 32-char hex sys_id');
+      queue([]);
+      await expect(executeSecurityToolCall(mockClient, 'scan_vulnerabilities', { ci_sys_ids: [CI1], scanner_sys_id: SCANNER })).rejects.toMatchObject({ code: 'NOT_FOUND' });
+      queue([{ ...scanner, active: 'false' }]);
+      await expect(executeSecurityToolCall(mockClient, 'scan_vulnerabilities', { ci_sys_ids: [CI1], scanner_sys_id: SCANNER })).rejects.toMatchObject({ code: 'CONFLICT', message: expect.stringContaining('inactive') });
+      expect(mockClient.createRecord).not.toHaveBeenCalled();
+    });
+
+    it('rejects target sys_ids that do not exist instead of scanning fewer than asked', async () => {
+      scriptingOn();
+      queue([scanner], [{ sys_id: CI1 }]);
+      await expect(executeSecurityToolCall(mockClient, 'scan_vulnerabilities', { ci_sys_ids: [CI1, CI2] })).rejects.toMatchObject({ code: 'NOT_FOUND', message: expect.stringContaining(CI2) });
+      expect(mockClient.queryRecords).toHaveBeenCalledWith(expect.objectContaining({ table: 'cmdb_ci', query: `sys_idIN${CI1},${CI2}` }));
+      expect(mockClient.createRecord).not.toHaveBeenCalled();
+    });
+
+    it('reports already_running when a target is in a queued/processing/scanning scan (product guard)', async () => {
+      scriptingOn();
+      queue([scanner], [{ sys_id: VI1 }], [{ sn_vul_scan: { value: SCAN }, 'sn_vul_scan.number': 'VSCAN0001004', 'sn_vul_scan.state': 'scanning', source: VI1 }]);
+      const result = await executeSecurityToolCall(mockClient, 'scan_vulnerabilities', { vulnerable_item_sys_ids: [VI1] });
+      expect(result.action).toBe('already_running');
+      expect(result.scan).toEqual({ sys_id: SCAN, number: 'VSCAN0001004', state: 'scanning' });
+      // Vulnerable Items link through sn_vul_m2m_scan_source.source, not the CI table.
+      expect(mockClient.queryRecords).toHaveBeenCalledWith(expect.objectContaining({ table: 'sn_vul_m2m_scan_source', query: `sourceIN${VI1}^sn_vul_scan.stateINprocessing,scanning,queued` }));
+      expect(mockClient.createRecord).not.toHaveBeenCalled();
+    });
+
+    it('creates the scan through a run-once server script, reads the syslog result and removes the job', async () => {
+      scriptingOn();
+      queue([scanner], [{ sys_id: CI1 }, { sys_id: CI2 }], [], [], jobResult({ scan_sys_id: SCAN, number: 'VSCAN0001004', state: 'processing', linked: 2 }));
+      mockClient.createRecord.mockResolvedValue({ sys_id: 'job1' });
+      mockClient.deleteRecord = vi.fn().mockResolvedValue(undefined);
+      mockClient.getRecord.mockResolvedValue({ sys_id: SCAN, number: 'VSCAN0001004', state: 'scanning', status_message: 'accepted' });
+      const result = await executeSecurityToolCall(mockClient, 'scan_vulnerabilities', { ci_sys_ids: [CI1, CI2], wait_seconds: 10 });
+
+      expect(result.action).toBe('scan_initiated');
+      expect(result.linked_targets).toBe(2);
+      expect(result.scan.state).toBe('scanning');
+      expect(result.scanner).toEqual({ sys_id: SCANNER, name: 'Qualys', integration: 'Qualys Vulnerability Integration' });
+
+      const [table, job] = mockClient.createRecord.mock.calls[0];
+      expect(table).toBe('sysauto_script');
+      expect(job.run_type).toBe('once');
+      expect(job.name).toMatch(/^\[MCP scan mcp-scan-[0-9a-f]{32}\]$/);
+      expect(job.name.length).toBeLessThanOrEqual(100);
+      expect(job).not.toHaveProperty('description'); // sysauto_script has no such column
+      const script = job.script as string;
+      expect(script).toContain("new GlideRecord('sn_vul_scan')");
+      expect(script).toContain("scan.setValue('source_table', 'cmdb_ci')");
+      expect(script).toContain(`scan.setValue('scanner', '${SCANNER}')`);
+      expect(script).toContain(`var ids = '${CI1},${CI2}'.split(',')`);
+      expect(script).toContain("new GlideRecord('sn_vul_m2m_scan_configuration_item')");
+      expect(script).toContain("link.setValue('cmdb_ci', ids[i])");
+      expect(script).toContain("scan.setValue('state', 'processing')");
+      expect(script).toContain("gs.info(token + ' RESULT:' + JSON.stringify(out))");
+
+      expect(mockClient.queryRecords).toHaveBeenCalledWith(expect.objectContaining({ table: 'syslog', query: expect.stringMatching(/^messageSTARTSWITHmcp-scan-[0-9a-f]{32} RESULT:$/) }));
+      expect(mockClient.deleteRecord).toHaveBeenCalledWith('sysauto_script', 'job1');
+    });
+
+    it('returns scan_scheduled with the job when the scheduler has not run it within wait_seconds', async () => {
+      scriptingOn();
+      queue([scanner], [{ sys_id: CI1 }], []);
+      mockClient.queryRecords.mockResolvedValue({ count: 0, records: [] }); // every syslog poll: nothing yet
+      mockClient.createRecord.mockResolvedValue({ sys_id: 'job1' });
+      mockClient.deleteRecord = vi.fn();
+      const result = await executeSecurityToolCall(mockClient, 'scan_vulnerabilities', { ci_sys_ids: [CI1], wait_seconds: 0 });
+      expect(result.action).toBe('scan_scheduled');
+      expect(result.scheduled_job.sys_id).toBe('job1');
+      expect(result.scan).toBeNull();
+      expect(mockClient.deleteRecord).not.toHaveBeenCalled();
+    });
+
+    it('surfaces a failure reported by the script as an API error and still removes the job', async () => {
+      scriptingOn();
+      queue([scanner], [{ sys_id: CI1 }], [], jobResult({ error: 'sn_vul_scan insert was rejected' }));
+      mockClient.createRecord.mockResolvedValue({ sys_id: 'job1' });
+      mockClient.deleteRecord = vi.fn().mockResolvedValue(undefined);
+      await expect(executeSecurityToolCall(mockClient, 'scan_vulnerabilities', { ci_sys_ids: [CI1], wait_seconds: 5 })).rejects.toMatchObject({ code: 'API_ERROR', message: expect.stringContaining('insert was rejected') });
+      expect(mockClient.deleteRecord).toHaveBeenCalledWith('sysauto_script', 'job1');
     });
   });
 });

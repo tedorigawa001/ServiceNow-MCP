@@ -6,6 +6,7 @@
  * a field set that didn't match the real schema (`create_grc_risk`).
  * Read tools: Tier 0. Write tools: Tier 1 (WRITE_ENABLED=true).
  */
+import { randomBytes } from 'node:crypto';
 import { sanitizeLikeValue, type ServiceNowClient } from '../servicenow/client.js';
 import { ServiceNowError } from '../utils/errors.js';
 import { requireScripting, requireWrite } from '../utils/permissions.js';
@@ -181,13 +182,15 @@ export function getSecurityToolDefinitions() {
     },
     {
       name: 'scan_vulnerabilities',
-      description: 'Trigger a vulnerability scan for specified CIs or groups. **[Write]**',
+      description: 'Create a Vulnerability Response scan (sn_vul_scan) for a set of CIs or Vulnerable Items and hand it to the active scanner integration, the same way the "Initiate Scan" / "Rescan" actions do. Needs an active scanner (sn_vul_scanner, e.g. Qualys/Tenable/Rapid7) unless initiate=false, which leaves a Draft scan to launch from the UI. Runs as a server script in a run-once job (SCRIPTING_ENABLED) because the scan state and target links are not writable through the Table API. **[Write]**',
       inputSchema: {
         type: 'object',
         properties: {
-          ci_sys_ids: { type: 'array', items: { type: 'string' }, description: 'CI sys_ids to scan' },
-          group: { type: 'string', description: 'CI group to scan (alternative to ci_sys_ids)' },
-          scan_type: { type: 'string', description: 'Scan type: full, quick, compliance (default full)' },
+          ci_sys_ids: { type: 'array', items: { type: 'string' }, description: 'cmdb_ci sys_ids to scan (max 200). Use this or vulnerable_item_sys_ids, not both.' },
+          vulnerable_item_sys_ids: { type: 'array', items: { type: 'string' }, description: 'sn_vul_vulnerable_item sys_ids to rescan (max 200)' },
+          scanner_sys_id: { type: 'string', description: 'sn_vul_scanner sys_id. Defaults to the active scanner flagged as default.' },
+          initiate: { type: 'boolean', description: 'true (default): set the scan to Processing so the scanner integration picks it up. false: leave it in Draft.' },
+          wait_seconds: { type: 'number', description: 'How long to wait for the run-once job that creates the scan (0-120, default 30). If it has not run by then the job is left scheduled and scan_scheduled is returned.' },
         },
         required: [],
       },
@@ -361,9 +364,10 @@ export async function executeSecurityToolCall(
       // The context only appears once the scheduler has run the job. Until then
       // a second call would queue a second job, so also treat a pending job for
       // this incident + playbook as "already scheduled".
-      // sysauto_script.name is capped at 100 characters, so key the job on the
-      // two sys_ids (80 chars) rather than the scoped name; the readable
-      // playbook/incident pair lives in the description.
+      // sysauto_script.name is capped at 100 characters (and the table has no
+      // free-text column besides the script), so key the job on the two
+      // sys_ids (80 chars) rather than the scoped name; the script itself names
+      // the playbook and incident.
       const jobName = `[MCP playbook ${definition.sys_id}:${incidentSysId}]`;
       const pendingJobs = await client.queryRecords({ table: 'sysauto_script', query: `name=${jobName}`, fields: 'sys_id,run_start', limit: 1 });
       if (pendingJobs.records.length) {
@@ -385,7 +389,6 @@ export async function executeSecurityToolCall(
       ].join('\n');
       const job = await client.createRecord('sysauto_script', {
         name: jobName,
-        description: `Start SIR playbook ${scopedName} (${label}) on security incident ${incidentSysId}`,
         active: true,
         run_type: 'once',
         run_start: runStart,
@@ -443,10 +446,163 @@ export async function executeSecurityToolCall(
       return { period_days: days, open_incidents: { high: openHigh, medium: openMed, low: openLow }, open_vulnerabilities: vulns, resolved_incidents_period: resolved };
     }
     case 'scan_vulnerabilities': {
+      // An on-demand VR scan is not one row: the product (sn_vul.VulnerabilityScanUtil
+      // .createScanFromTask) inserts an sn_vul_scan, links its targets through an
+      // m2m table (sn_vul_m2m_scan_configuration_item for CIs, sn_vul_m2m_scan_source
+      // for Vulnerable Items) and then moves the scan to "processing", which the
+      // async "Process scan request" rule hands to the scanner's integration.
+      // None of that is reachable through the Table API: sn_sec_cmn_scan.state is
+      // dictionary read-only (REST silently keeps "draft") and the m2m write ACL
+      // needs sn_vul_scan.state=new, so REST inserts land with blank references.
+      // So, like run_security_playbook, the work runs as a server script in a
+      // run-once job and reports back through syslog.
       requireWrite();
-      if (!args.ci_sys_ids?.length && !args.group) throw new ServiceNowError('ci_sys_ids or group is required', 'INVALID_REQUEST');
-      const result = await client.createRecord('sn_vul_scan_request', { ci_list: args.ci_sys_ids?.join(',') || '', group: args.group || '', scan_type: args.scan_type || 'full' });
-      return { action: 'scan_requested', ...result };
+      requireScripting();
+      const parseIds = (value: unknown, label: string): string[] => {
+        if (value === undefined || value === null) return [];
+        if (!Array.isArray(value)) throw new ServiceNowError(`${label} must be an array of sys_ids`, 'INVALID_REQUEST');
+        const ids = [...new Set(value.map((v) => String(v).trim()))];
+        if (ids.some((id) => !SYS_ID_RE.test(id))) throw new ServiceNowError(`${label} must contain 32-char hex sys_ids`, 'INVALID_REQUEST');
+        if (ids.length > 200) throw new ServiceNowError(`${label} is limited to 200 sys_ids per scan`, 'VALIDATION_ERROR');
+        return ids;
+      };
+      const ciIds = parseIds(args.ci_sys_ids, 'ci_sys_ids');
+      const viIds = parseIds(args.vulnerable_item_sys_ids, 'vulnerable_item_sys_ids');
+      if (!ciIds.length && !viIds.length) throw new ServiceNowError('ci_sys_ids or vulnerable_item_sys_ids is required', 'INVALID_REQUEST');
+      if (ciIds.length && viIds.length) throw new ServiceNowError('Pass either ci_sys_ids or vulnerable_item_sys_ids, not both (a scan has one source table)', 'INVALID_REQUEST');
+      const initiate = args.initiate !== false;
+      const waitSeconds = args.wait_seconds === undefined ? 30 : Number(args.wait_seconds);
+      if (!Number.isFinite(waitSeconds) || waitSeconds < 0 || waitSeconds > 120) {
+        throw new ServiceNowError('wait_seconds must be between 0 and 120', 'VALIDATION_ERROR');
+      }
+
+      // Target shape, mirroring the product's per-source-table m2m choice.
+      const target = ciIds.length
+        ? { table: 'cmdb_ci', ids: ciIds, m2mTable: 'sn_vul_m2m_scan_configuration_item', m2mField: 'cmdb_ci', label: 'CI' }
+        : { table: 'sn_vul_vulnerable_item', ids: viIds, m2mTable: 'sn_vul_m2m_scan_source', m2mField: 'source', label: 'Vulnerable Item' };
+
+      // Scanner: explicit sys_id, else the active default. processScanRequest()
+      // errors the scan out without one, so refuse to initiate rather than
+      // create a scan that immediately lands in "error".
+      let scanner: Record<string, unknown> | undefined;
+      const scannerFields = 'sys_id,name,active,default,integration,integration.name';
+      if (args.scanner_sys_id !== undefined) {
+        const scannerSysId = String(args.scanner_sys_id).trim();
+        if (!SYS_ID_RE.test(scannerSysId)) throw new ServiceNowError('scanner_sys_id must be a 32-char hex sys_id', 'INVALID_REQUEST');
+        const found = await client.queryRecords({ table: 'sn_vul_scanner', query: `sys_id=${scannerSysId}`, fields: scannerFields, limit: 1 });
+        scanner = found.records[0] as Record<string, unknown> | undefined;
+        if (!scanner) throw new ServiceNowError(`No sn_vul_scanner record with sys_id ${scannerSysId}`, 'NOT_FOUND');
+        if (String(scanner.active) !== 'true') throw new ServiceNowError(`Scanner "${String(scanner.name)}" is inactive`, 'CONFLICT');
+      } else {
+        const found = await client.queryRecords({ table: 'sn_vul_scanner', query: 'active=true^default=true', fields: scannerFields, limit: 1 });
+        scanner = found.records[0] as Record<string, unknown> | undefined;
+        if (!scanner && initiate) {
+          throw new ServiceNowError('No active default scanner is configured (sn_vul_scanner). Vulnerability Response can only launch scans through a scanner integration such as Qualys, Tenable or Rapid7; pass scanner_sys_id, or initiate=false to create a Draft scan.', 'CONFLICT');
+        }
+      }
+      const scannerSysId = scanner ? String(scanner.sys_id) : '';
+
+      // Every target must exist; a silently dropped sys_id would scan less than asked.
+      const existing = await client.queryRecords({ table: target.table, query: `sys_idIN${target.ids.join(',')}`, fields: 'sys_id', limit: target.ids.length });
+      const existingIds = new Set((existing.records as Array<{ sys_id: string }>).map((r) => r.sys_id));
+      const missing = target.ids.filter((id) => !existingIds.has(id));
+      if (missing.length) throw new ServiceNowError(`${missing.length} ${target.label} sys_id(s) do not exist on ${target.table}: ${missing.join(', ')}`, 'NOT_FOUND');
+
+      // Product guard (getRunningScanId): a target already in a scan that is
+      // queued, processing or scanning is not scanned twice.
+      const running = await client.queryRecords({
+        table: target.m2mTable,
+        query: `${target.m2mField}IN${target.ids.join(',')}^sn_vul_scan.stateINprocessing,scanning,queued`,
+        fields: `sn_vul_scan,sn_vul_scan.number,sn_vul_scan.state,${target.m2mField}`,
+        limit: 1,
+      });
+      if (running.records.length) {
+        const hit = running.records[0] as Record<string, unknown>;
+        const scanRef = hit.sn_vul_scan as { value?: string } | string;
+        return {
+          action: 'already_running',
+          scan: { sys_id: typeof scanRef === 'object' ? scanRef?.value : scanRef, number: hit['sn_vul_scan.number'], state: hit['sn_vul_scan.state'] },
+          blocking_target: hit[target.m2mField],
+          note: `At least one ${target.label} is already in a scan that has not finished; nothing was created.`,
+        };
+      }
+
+      // Everything interpolated below is shape-checked: hex sys_ids, a hex
+      // token and fixed table/field names. The script reports through syslog
+      // because sysauto_script has no free-text column to write back into.
+      const token = `mcp-scan-${randomBytes(16).toString('hex')}`;
+      const script = [
+        `var token = '${token}';`,
+        `var out = {};`,
+        `try {`,
+        `  var scan = new GlideRecord('sn_vul_scan');`,
+        `  scan.initialize();`,
+        `  scan.setValue('source_table', '${target.table}');`,
+        `  scan.setValue('state', 'draft');`,
+        scannerSysId ? `  scan.setValue('scanner', '${scannerSysId}');` : `  // no scanner: draft only`,
+        `  var scanId = scan.insert();`,
+        `  if (!scanId) throw new Error('sn_vul_scan insert was rejected');`,
+        `  var ids = '${target.ids.join(',')}'.split(',');`,
+        `  var linked = 0;`,
+        `  for (var i = 0; i < ids.length; i++) {`,
+        `    var link = new GlideRecord('${target.m2mTable}');`,
+        `    link.initialize();`,
+        `    link.setValue('sn_vul_scan', scanId);`,
+        `    link.setValue('${target.m2mField}', ids[i]);`,
+        `    if (link.insert()) linked++;`,
+        `  }`,
+        initiate ? `  scan.setValue('state', 'processing');\n  scan.update();` : `  // initiate=false: leave the scan in draft`,
+        `  out = { scan_sys_id: scanId, number: scan.getValue('number'), state: scan.getValue('state'), linked: linked };`,
+        `} catch (e) { out = { error: String(e && e.message ? e.message : e) }; }`,
+        `gs.info(token + ' RESULT:' + JSON.stringify(out));`,
+      ].join('\n');
+      const runStart = new Date(Date.now() - 60_000).toISOString().slice(0, 19).replace('T', ' ');
+      const job = await client.createRecord('sysauto_script', {
+        name: `[MCP scan ${token}]`,
+        active: true,
+        run_type: 'once',
+        run_start: runStart,
+        script,
+      }) as Record<string, unknown>;
+      const jobSysId = String(job.sys_id);
+
+      const scanSummary = { source_table: target.table, target_count: target.ids.length, scanner: scanner ? { sys_id: scanner.sys_id, name: scanner.name, integration: scanner['integration.name'] ?? scanner.integration } : null };
+      const deadline = Date.now() + waitSeconds * 1000;
+      let result: Record<string, unknown> | undefined;
+      for (;;) {
+        const logs = await client.queryRecords({ table: 'syslog', query: `messageSTARTSWITH${token} RESULT:`, fields: 'message', limit: 1 });
+        const message = String((logs.records[0] as { message?: string } | undefined)?.message ?? '');
+        if (message) {
+          try { result = JSON.parse(message.slice(message.indexOf('RESULT:') + 'RESULT:'.length)) as Record<string, unknown>; } catch { result = { error: `Unparseable job output: ${message}` }; }
+          break;
+        }
+        if (Date.now() >= deadline) break;
+        await new Promise((resolve) => setTimeout(resolve, Math.min(3000, Math.max(250, deadline - Date.now()))));
+      }
+      if (!result) {
+        return {
+          action: 'scan_scheduled',
+          ...scanSummary,
+          scheduled_job: { sys_id: jobSysId, name: `[MCP scan ${token}]`, run_start_utc: runStart },
+          scan: null,
+          note: `The job that creates the scan had not run within ${waitSeconds}s (the instance scheduler decides when). Its result will appear in syslog as "${token} RESULT:{...}"; the sn_vul_scan will carry these targets in ${target.m2mTable}.`,
+        };
+      }
+      await client.deleteRecord('sysauto_script', jobSysId).catch(() => undefined);
+      if (result.error) throw new ServiceNowError(`The scan job failed on the instance: ${String(result.error)}`, 'API_ERROR');
+      const scanSysId = String(result.scan_sys_id ?? '');
+      const scan = SYS_ID_RE.test(scanSysId)
+        ? await client.getRecord('sn_vul_scan', scanSysId, 'sys_id,number,state,status_message,source_table,scanner').catch(() => undefined)
+        : undefined;
+      return {
+        action: initiate ? 'scan_initiated' : 'scan_drafted',
+        ...scanSummary,
+        linked_targets: Number(result.linked ?? 0),
+        scan: scan ?? { sys_id: scanSysId, number: result.number, state: result.state },
+        note: initiate
+          ? 'The scan is handed to the scanner integration by the async "Process scan request" rule. Poll sn_vul_scan.state: queued/scanning → complete, or error with status_message.'
+          : 'Draft scan created with its targets linked. Launch it with "Initiate Scan" on the record, or call again with initiate=true once a scanner is configured.',
+      };
     }
     default:
       return null;

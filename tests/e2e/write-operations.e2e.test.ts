@@ -345,4 +345,62 @@ writeE2eDescribe('E2E – write operations (create/update, self-cleaning)', () =
       }
     });
   });
+
+  describe('sn_vul_scan + sn_vul_m2m_scan_configuration_item (scan_vulnerabilities)', () => {
+    const scripting = process.env.SCRIPTING_ENABLED === 'true';
+    // The scan is created by a run-once server script (state and target links
+    // are not REST-writable), so this needs the scheduler to run the job.
+    // Only the Draft path is exercised: initiating would hand real CIs to a
+    // real scanner integration when one is configured.
+    it('drafts a VR scan for two CIs with both targets linked, then cancels it', { timeout: 240_000 }, async (ctx) => {
+      ctx.skip(!scripting, 'SCRIPTING_ENABLED=true required');
+      await skipUnlessTables(ctx, client, 'sn_vul_scan', 'sn_vul_m2m_scan_configuration_item', 'sn_vul_scanner');
+      const cis = await client.queryRecords({ table: 'cmdb_ci', query: 'ORDERBYsys_created_on', fields: 'sys_id,name', limit: 2 });
+      ctx.skip(cis.records.length < 2, 'needs two cmdb_ci records');
+      const ciIds = cis.records.map((r) => r.sys_id as string);
+
+      const result = await executeSecurityToolCall(client, 'scan_vulnerabilities', { ci_sys_ids: ciIds, initiate: false, wait_seconds: 120 });
+      ctx.skip(result.action === 'scan_scheduled', 'scheduler did not run the scan job within the wait budget');
+      expect(result.action).toBe('scan_drafted');
+      expect(result.linked_targets).toBe(2);
+      expect(result.scan.state).toBe('draft');
+      const scanSysId = result.scan.sys_id as string;
+      try {
+        const links = await client.queryRecords({ table: 'sn_vul_m2m_scan_configuration_item', query: `sn_vul_scan=${scanSysId}`, fields: 'cmdb_ci', limit: 5 });
+        const linked = links.records.map((r) => (r.cmdb_ci as { value?: string } | string));
+        expect(linked.map((v) => (typeof v === 'object' ? v?.value : v)).sort()).toEqual([...ciIds].sort());
+        // The job that created the scan is gone once its result was read.
+        const jobs = await client.queryRecords({ table: 'sysauto_script', query: 'nameSTARTSWITH[MCP scan', fields: 'sys_id', limit: 1 });
+        expect(jobs.records).toHaveLength(0);
+      } finally {
+        // Vulnerability Response tables refuse cross-scope deletes ("Can delete"
+        // is off) and the state is not REST-writable, so cancel from a script.
+        const token = `mcp-e2e-cancel-${Date.now()}`;
+        const cleanup = await client.createRecord('sysauto_script', {
+          name: `[MCP E2E cancel scan ${scanSysId}]`, active: true, run_type: 'once',
+          run_start: new Date(Date.now() - 60_000).toISOString().slice(0, 19).replace('T', ' '),
+          script: `var s = new GlideRecord('sn_vul_scan'); if (s.get('${scanSysId}')) { s.setValue('state', 'canceled'); s.update(); } gs.info('${token} done');`,
+        });
+        for (let i = 0; i < 24; i++) {
+          const logs = await client.queryRecords({ table: 'syslog', query: `messageSTARTSWITH${token}`, fields: 'sys_id', limit: 1 });
+          if (logs.records.length) break;
+          await new Promise((resolve) => setTimeout(resolve, 5000));
+        }
+        await client.deleteRecord('sysauto_script', cleanup.sys_id as string).catch(() => undefined);
+      }
+    });
+
+    it('refuses to initiate a scan when the instance has no active default scanner', async (ctx) => {
+      ctx.skip(!scripting, 'SCRIPTING_ENABLED=true required');
+      await skipUnlessTables(ctx, client, 'sn_vul_scan', 'sn_vul_scanner');
+      const scanners = await client.queryRecords({ table: 'sn_vul_scanner', query: 'active=true^default=true', fields: 'sys_id', limit: 1 });
+      ctx.skip(scanners.records.length > 0, 'a default scanner is configured; not launching a real scan from E2E');
+      const ci = await client.queryRecords({ table: 'cmdb_ci', query: '', fields: 'sys_id', limit: 1 });
+      ctx.skip(ci.records.length === 0, 'needs a cmdb_ci record');
+      await expect(executeSecurityToolCall(client, 'scan_vulnerabilities', { ci_sys_ids: [ci.records[0].sys_id as string] }))
+        .rejects.toMatchObject({ code: 'CONFLICT' });
+      const jobs = await client.queryRecords({ table: 'sysauto_script', query: 'nameSTARTSWITH[MCP scan', fields: 'sys_id', limit: 1 });
+      expect(jobs.records).toHaveLength(0);
+    });
+  });
 });
