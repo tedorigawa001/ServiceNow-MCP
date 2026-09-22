@@ -12,6 +12,7 @@
 import { sanitizeLikeValue, type ServiceNowClient } from '../servicenow/client.js';
 import { ServiceNowError } from '../utils/errors.js';
 import { requireCmdbWrite, requireWrite, requireScripting } from '../utils/permissions.js';
+import { awaitScriptJobResult, newJobToken, scheduleScriptJob } from '../utils/script-job.js';
 
 export function getDeploymentToolDefinitions() {
   return [
@@ -52,8 +53,15 @@ export function getDeploymentToolDefinitions() {
     },
     {
       name: 'execute_background_script',
-      description: 'Execute a background script on the instance (server-side JavaScript). **[Scripting]**',
-      inputSchema: { type: 'object', properties: { script: { type: 'string', description: 'JavaScript code to execute' }, scope: { type: 'string', description: 'Application scope (default global)' } }, required: ['script'] },
+      description: 'Run server-side JavaScript on the instance and return what it returns. The script runs in the global scope inside a run-once Scheduled Script Execution (ServiceNow has no REST endpoint that runs scripts synchronously), so it executes when the instance scheduler picks the job up, normally within seconds. End the script with `return <value>;` to get a value back (JSON-serialisable; max ~3.5 KB). **[Scripting]**',
+      inputSchema: {
+        type: 'object',
+        properties: {
+          script: { type: 'string', description: 'JavaScript to execute (max 6000 chars). It is wrapped in a function, so `return` works.' },
+          wait_seconds: { type: 'number', description: 'How long to wait for the job to run (0-120, default 30). If the scheduler has not run it by then, script_scheduled is returned with the job.' },
+        },
+        required: ['script'],
+      },
     },
     {
       name: 'import_cmdb_data',
@@ -150,14 +158,52 @@ export async function executeDeploymentToolCall(
     }
 
     case 'execute_background_script': {
+      // The previous implementation POSTed to /api/now/sp/background_script,
+      // which does not exist on any instance. Run the script the way the
+      // platform allows from the Table API: a run-once sysauto_script that
+      // reports its return value (or exception) back through syslog.
       requireScripting();
       if (!args.script) throw new ServiceNowError('script is required', 'INVALID_REQUEST');
-      try {
-        const resp = await client.callNowAssist('/api/now/sp/background_script', { script: args.script, scope: args.scope || 'global' });
-        return { action: 'executed', output: resp };
-      } catch (err) {
-        return { action: 'failed', error: err instanceof Error ? err.message : String(err) };
+      const userScript = String(args.script);
+      if (userScript.length > 6000) throw new ServiceNowError('script is limited to 6000 characters (sysauto_script.script holds 8000 including the wrapper)', 'VALIDATION_ERROR');
+      const waitSeconds = args.wait_seconds === undefined ? 30 : Number(args.wait_seconds);
+      if (!Number.isFinite(waitSeconds) || waitSeconds < 0 || waitSeconds > 120) {
+        throw new ServiceNowError('wait_seconds must be between 0 and 120', 'VALIDATION_ERROR');
       }
+
+      const token = newJobToken('mcp-bg');
+      const script = [
+        `var __token = '${token}';`,
+        `var __t0 = new Date().getTime();`,
+        `var __out;`,
+        `try {`,
+        `  var __result = (function() {`,
+        userScript,
+        `  })();`,
+        `  __out = { ok: true, result: __result === undefined ? null : __result };`,
+        `} catch (__e) {`,
+        `  __out = { ok: false, error: String(__e && __e.message ? __e.message : __e), stack: __e && __e.stack ? String(__e.stack).slice(0, 800) : null };`,
+        `}`,
+        `__out.duration_ms = new Date().getTime() - __t0;`,
+        `var __json;`,
+        `try { __json = JSON.stringify(__out); } catch (__e2) { __json = JSON.stringify({ ok: __out.ok, error: __out.error, result: String(__out.result), duration_ms: __out.duration_ms }); }`,
+        `if (__json.length > 3500) __json = JSON.stringify({ ok: __out.ok, truncated: true, result: __json.slice(0, 3300), duration_ms: __out.duration_ms });`,
+        `gs.info(__token + ' RESULT:' + __json);`,
+      ].join('\n');
+      const job = await scheduleScriptJob(client, `[MCP background script ${token}]`, script);
+      const result = await awaitScriptJobResult(client, token, waitSeconds);
+      if (!result) {
+        return {
+          action: 'script_scheduled',
+          scheduled_job: job,
+          note: `The job had not run within ${waitSeconds}s (the instance scheduler decides when). Its result will appear in syslog as "${token} RESULT:{...}"; delete the sysauto_script afterwards.`,
+        };
+      }
+      await client.deleteRecord('sysauto_script', job.sys_id).catch(() => undefined);
+      if (result.ok === true) {
+        return { action: 'executed', result: result.result ?? null, truncated: result.truncated === true, duration_ms: result.duration_ms ?? null };
+      }
+      return { action: 'failed', error: String(result.error ?? 'Unknown script failure'), stack: result.stack ?? null, duration_ms: result.duration_ms ?? null };
     }
 
     case 'import_cmdb_data': {

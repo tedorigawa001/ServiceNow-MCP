@@ -18,6 +18,7 @@ import { executeUsemToolCall } from '../../src/tools/usem.js';
 import { executeGrcRiskToolCall } from '../../src/tools/grc-risk.js';
 import { executeGrcComplianceToolCall } from '../../src/tools/grc-compliance.js';
 import { executeSecurityToolCall } from '../../src/tools/security.js';
+import { executeDeploymentToolCall } from '../../src/tools/deployment.js';
 import type { ServiceNowClient } from '../../src/servicenow/client.js';
 
 const MARK = `[E2E ${Date.now()}]`;
@@ -343,6 +344,32 @@ writeE2eDescribe('E2E – write operations (create/update, self-cleaning)', () =
         if (jobSysId) await client.deleteRecord('sysauto_script', jobSysId).catch(() => undefined);
         await client.deleteRecord('sn_si_incident', created.sys_id as string);
       }
+    });
+  });
+
+  describe('sysauto_script + syslog (execute_background_script)', () => {
+    const scripting = process.env.SCRIPTING_ENABLED === 'true';
+
+    it('runs a script through a run-once job and returns its value, then removes the job', { timeout: 240_000 }, async (ctx) => {
+      ctx.skip(!scripting, 'SCRIPTING_ENABLED=true required');
+      const result = await executeDeploymentToolCall(client, 'execute_background_script', {
+        script: "var gr = new GlideRecord('sys_user'); gr.setLimit(1); gr.query(); return { found: gr.next(), sum: 40 + 2, user: gs.getUserName() };",
+        wait_seconds: 120,
+      });
+      ctx.skip(result.action === 'script_scheduled', 'scheduler did not run the job within the wait budget');
+      expect(result.action).toBe('executed');
+      expect(result.result).toMatchObject({ found: true, sum: 42 });
+      expect(typeof result.result.user).toBe('string');
+      const jobs = await client.queryRecords({ table: 'sysauto_script', query: 'nameSTARTSWITH[MCP background script', fields: 'sys_id', limit: 1 });
+      expect(jobs.records).toHaveLength(0);
+    });
+
+    it('reports a server-side exception as failed instead of throwing', { timeout: 240_000 }, async (ctx) => {
+      ctx.skip(!scripting, 'SCRIPTING_ENABLED=true required');
+      const result = await executeDeploymentToolCall(client, 'execute_background_script', { script: 'var x = null; return x.foo;', wait_seconds: 120 });
+      ctx.skip(result.action === 'script_scheduled', 'scheduler did not run the job within the wait budget');
+      expect(result.action).toBe('failed');
+      expect(result.error).toMatch(/foo/);
     });
   });
 

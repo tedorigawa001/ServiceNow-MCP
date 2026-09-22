@@ -8,6 +8,7 @@ const mockClient = {
   createRecord: vi.fn(),
   runAggregateQuery: vi.fn(),
   callNowAssist: vi.fn(),
+  deleteRecord: vi.fn(),
 } as unknown as ServiceNowClient;
 
 const agg = () => mockClient.runAggregateQuery as ReturnType<typeof vi.fn>;
@@ -258,10 +259,15 @@ describe('create_solution_package', () => {
 });
 
 describe('execute_background_script', () => {
+  const dr = () => (mockClient as unknown as { deleteRecord: ReturnType<typeof vi.fn> }).deleteRecord;
+  const jobResult = (out: Record<string, unknown>) => ({ count: 1, records: [{ message: `mcp-bg-x RESULT:${JSON.stringify(out)}` }] });
+
   beforeEach(() => {
     vi.clearAllMocks();
     process.env.WRITE_ENABLED = 'true';
     process.env.SCRIPTING_ENABLED = 'true';
+    cr().mockResolvedValue({ sys_id: 'job1' });
+    dr().mockResolvedValue(undefined);
   });
   afterEach(() => {
     delete process.env.WRITE_ENABLED;
@@ -274,21 +280,45 @@ describe('execute_background_script', () => {
       .rejects.toThrow('Scripting operations are disabled');
   });
 
-  it('requires script', async () => {
+  it('requires script and bounds its size and the wait budget', async () => {
     await expect(executeDeploymentToolCall(mockClient, 'execute_background_script', {})).rejects.toThrow('script is required');
+    await expect(executeDeploymentToolCall(mockClient, 'execute_background_script', { script: 'x'.repeat(6001) })).rejects.toThrow('limited to 6000 characters');
+    await expect(executeDeploymentToolCall(mockClient, 'execute_background_script', { script: 'return 1;', wait_seconds: 999 })).rejects.toThrow('wait_seconds must be between 0 and 120');
+    expect(cr()).not.toHaveBeenCalled();
   });
 
-  it('executes the script and returns the output', async () => {
-    cna().mockResolvedValue({ log: 'hi' });
-    const result = await executeDeploymentToolCall(mockClient, 'execute_background_script', { script: 'gs.info("hi");' });
-    expect(cna()).toHaveBeenCalledWith('/api/now/sp/background_script', { script: 'gs.info("hi");', scope: 'global' });
-    expect(result.action).toBe('executed');
+  it('runs the script in a run-once job, returns its return value and removes the job', async () => {
+    qr().mockResolvedValueOnce(jobResult({ ok: true, result: { number: 'INC0000060' }, duration_ms: 16 }));
+    const result = await executeDeploymentToolCall(mockClient, 'execute_background_script', { script: "var gr = new GlideRecord('incident'); gr.query(); gr.next(); return { number: gr.getValue('number') };", wait_seconds: 10 });
+
+    expect(result).toEqual({ action: 'executed', result: { number: 'INC0000060' }, truncated: false, duration_ms: 16 });
+    // No phantom endpoint any more.
+    expect(cna()).not.toHaveBeenCalled();
+    const [table, job] = cr().mock.calls[0];
+    expect(table).toBe('sysauto_script');
+    expect(job.run_type).toBe('once');
+    expect(job.name).toMatch(/^\[MCP background script mcp-bg-[0-9a-f]{32}\]$/);
+    expect(job.name.length).toBeLessThanOrEqual(100);
+    // The user script is wrapped so `return` works, and the outcome goes to syslog.
+    expect(job.script).toContain("var __result = (function() {\nvar gr = new GlideRecord('incident');");
+    expect(job.script).toContain("gs.info(__token + ' RESULT:' + __json)");
+    expect(qr()).toHaveBeenCalledWith(expect.objectContaining({ table: 'syslog', query: expect.stringMatching(/^messageSTARTSWITHmcp-bg-[0-9a-f]{32} RESULT:$/) }));
+    expect(dr()).toHaveBeenCalledWith('sysauto_script', 'job1');
   });
 
-  it('reports failed instead of throwing when the API call rejects', async () => {
-    cna().mockRejectedValue(new Error('script error'));
-    const result = await executeDeploymentToolCall(mockClient, 'execute_background_script', { script: 'bad script' });
+  it('reports failed (not thrown) when the script raised, with the server-side message', async () => {
+    qr().mockResolvedValueOnce(jobResult({ ok: false, error: 'Cannot read property "foo" from null', stack: '\tat <refname>:6', duration_ms: 2 }));
+    const result = await executeDeploymentToolCall(mockClient, 'execute_background_script', { script: 'var x = null; return x.foo;', wait_seconds: 10 });
     expect(result.action).toBe('failed');
-    expect(result.error).toBe('script error');
+    expect(result.error).toBe('Cannot read property "foo" from null');
+    expect(dr()).toHaveBeenCalledWith('sysauto_script', 'job1');
+  });
+
+  it('returns script_scheduled with the job when the scheduler has not run it within wait_seconds', async () => {
+    qr().mockResolvedValue({ count: 0, records: [] });
+    const result = await executeDeploymentToolCall(mockClient, 'execute_background_script', { script: 'return 1;', wait_seconds: 0 });
+    expect(result.action).toBe('script_scheduled');
+    expect(result.scheduled_job.sys_id).toBe('job1');
+    expect(dr()).not.toHaveBeenCalled();
   });
 });

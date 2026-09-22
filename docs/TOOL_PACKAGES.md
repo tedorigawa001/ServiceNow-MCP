@@ -101,7 +101,7 @@ Includes:
 Tools for platform developers managing scripts, automations, and security rules.
 
 Includes:
-- Full scripting tools (business rules, script includes, client scripts)
+- Full scripting tools (business rules, script includes, client scripts; `execute_background_script` runs the script in a run-once Scheduled Script Execution and returns its `return` value)
 - UI Policies and UI Actions (create/update)
 - ACL rule management
 - Changeset management

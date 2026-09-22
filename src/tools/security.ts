@@ -6,10 +6,10 @@
  * a field set that didn't match the real schema (`create_grc_risk`).
  * Read tools: Tier 0. Write tools: Tier 1 (WRITE_ENABLED=true).
  */
-import { randomBytes } from 'node:crypto';
 import { sanitizeLikeValue, type ServiceNowClient } from '../servicenow/client.js';
 import { ServiceNowError } from '../utils/errors.js';
 import { requireScripting, requireWrite } from '../utils/permissions.js';
+import { awaitScriptJobResult, newJobToken, scheduleScriptJob } from '../utils/script-job.js';
 import { SEVERITY } from './schema-helpers.js';
 
 const SECURITY_INCIDENT_FIELDS = new Set([
@@ -530,7 +530,7 @@ export async function executeSecurityToolCall(
       // Everything interpolated below is shape-checked: hex sys_ids, a hex
       // token and fixed table/field names. The script reports through syslog
       // because sysauto_script has no free-text column to write back into.
-      const token = `mcp-scan-${randomBytes(16).toString('hex')}`;
+      const token = newJobToken('mcp-scan');
       const script = [
         `var token = '${token}';`,
         `var out = {};`,
@@ -556,39 +556,20 @@ export async function executeSecurityToolCall(
         `} catch (e) { out = { error: String(e && e.message ? e.message : e) }; }`,
         `gs.info(token + ' RESULT:' + JSON.stringify(out));`,
       ].join('\n');
-      const runStart = new Date(Date.now() - 60_000).toISOString().slice(0, 19).replace('T', ' ');
-      const job = await client.createRecord('sysauto_script', {
-        name: `[MCP scan ${token}]`,
-        active: true,
-        run_type: 'once',
-        run_start: runStart,
-        script,
-      }) as Record<string, unknown>;
-      const jobSysId = String(job.sys_id);
+      const job = await scheduleScriptJob(client, `[MCP scan ${token}]`, script);
 
       const scanSummary = { source_table: target.table, target_count: target.ids.length, scanner: scanner ? { sys_id: scanner.sys_id, name: scanner.name, integration: scanner['integration.name'] ?? scanner.integration } : null };
-      const deadline = Date.now() + waitSeconds * 1000;
-      let result: Record<string, unknown> | undefined;
-      for (;;) {
-        const logs = await client.queryRecords({ table: 'syslog', query: `messageSTARTSWITH${token} RESULT:`, fields: 'message', limit: 1 });
-        const message = String((logs.records[0] as { message?: string } | undefined)?.message ?? '');
-        if (message) {
-          try { result = JSON.parse(message.slice(message.indexOf('RESULT:') + 'RESULT:'.length)) as Record<string, unknown>; } catch { result = { error: `Unparseable job output: ${message}` }; }
-          break;
-        }
-        if (Date.now() >= deadline) break;
-        await new Promise((resolve) => setTimeout(resolve, Math.min(3000, Math.max(250, deadline - Date.now()))));
-      }
+      const result = await awaitScriptJobResult(client, token, waitSeconds);
       if (!result) {
         return {
           action: 'scan_scheduled',
           ...scanSummary,
-          scheduled_job: { sys_id: jobSysId, name: `[MCP scan ${token}]`, run_start_utc: runStart },
+          scheduled_job: job,
           scan: null,
           note: `The job that creates the scan had not run within ${waitSeconds}s (the instance scheduler decides when). Its result will appear in syslog as "${token} RESULT:{...}"; the sn_vul_scan will carry these targets in ${target.m2mTable}.`,
         };
       }
-      await client.deleteRecord('sysauto_script', jobSysId).catch(() => undefined);
+      await client.deleteRecord('sysauto_script', job.sys_id).catch(() => undefined);
       if (result.error) throw new ServiceNowError(`The scan job failed on the instance: ${String(result.error)}`, 'API_ERROR');
       const scanSysId = String(result.scan_sys_id ?? '');
       const scan = SYS_ID_RE.test(scanSysId)

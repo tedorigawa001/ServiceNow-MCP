@@ -6,6 +6,17 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 ---
 
+## [1.11.4] — 2026-09-22
+
+### Fixed
+
+- **`execute_background_script` POSTed to an endpoint that does not exist** (`/api/now/sp/background_script`) and always returned `failed: Requested URI does not represent any resource`. ServiceNow has no REST endpoint that runs server script synchronously (`sys.scripts.do` is a UI page behind a session and CSRF token), so the tool now uses the one path the Table API offers: the script is wrapped in a function inside a run-once `sysauto_script`, the scheduler runs it (normally within seconds), and its return value or exception comes back through `syslog`. `return <value>;` is the way to get data out; results are JSON, capped at ~3.5 KB (`truncated: true` beyond that). Runtime exceptions are still reported as `action: 'failed'` with the server-side message and stack rather than thrown, as before. `wait_seconds` (0–120, default 30) bounds the wait; if the scheduler has not run the job in time the tool returns `script_scheduled` with the job instead of guessing. The job is deleted once its result is read.
+  - The `scope` parameter is gone: the Table API cannot set `sys_scope` on a `sysauto_script` (the record is created in global regardless), so it never did anything. Scripts run in the global scope as the integration user; scoped tables and APIs are reachable subject to their application access.
+  - Verified live: a GlideRecord read returned as an object, a thrown `TypeError` reported with message and stack, a scoped `sn_vul_*` aggregate, and a script with no return (`result: null`) — 10–18 s round trips, no jobs left behind. Two E2E tests cover the value and exception paths.
+- The run-once-job-plus-syslog mechanism now lives in `src/utils/script-job.ts`, shared by `execute_background_script` and `scan_vulnerabilities` (`run_security_playbook` keeps its own `sys_pd_context` polling).
+
+---
+
 ## [1.11.3] — 2026-09-20
 
 ### Fixed
