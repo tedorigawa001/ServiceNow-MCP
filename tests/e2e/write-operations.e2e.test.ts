@@ -19,9 +19,11 @@ import { executeGrcRiskToolCall } from '../../src/tools/grc-risk.js';
 import { executeGrcComplianceToolCall } from '../../src/tools/grc-compliance.js';
 import { executeSecurityToolCall } from '../../src/tools/security.js';
 import { executeDeploymentToolCall } from '../../src/tools/deployment.js';
+import { executeAgileToolCall } from '../../src/tools/agile.js';
 import type { ServiceNowClient } from '../../src/servicenow/client.js';
 
 const MARK = `[E2E ${Date.now()}]`;
+const refValue = (v: unknown): string => (typeof v === 'object' && v ? String((v as { value?: string }).value ?? '') : String(v ?? ''));
 
 // Each test creates, updates, re-reads and then deletes a record. The delete
 // is the expensive step: ServiceNow cascades through every table that
@@ -343,6 +345,44 @@ writeE2eDescribe('E2E – write operations (create/update, self-cleaning)', () =
         if (contextSysId) await client.deleteRecord('sys_pd_context', contextSysId).catch(() => undefined);
         if (jobSysId) await client.deleteRecord('sysauto_script', jobSysId).catch(() => undefined);
         await client.deleteRecord('sn_si_incident', created.sys_id as string);
+      }
+    });
+  });
+
+  describe('rm_epic / rm_story / rm_scrum_task (Agile Development)', () => {
+    it('creates an epic → story → scrum task chain, updates each, lists by story, and deletes all', async (ctx) => {
+      await skipUnlessTables(ctx, client, 'rm_epic', 'rm_story', 'rm_scrum_task');
+      const created: Array<[string, string]> = [];
+      try {
+        const epic = await executeAgileToolCall(client, 'create_epic', { short_description: `${MARK} epic`, description: 'e2e' });
+        created.push(['rm_epic', epic.sys_id]);
+        expect(epic.number).toMatch(/^EPIC/);
+
+        const story = await executeAgileToolCall(client, 'create_story', { short_description: `${MARK} story`, epic: epic.sys_id, story_points: 3 });
+        created.push(['rm_story', story.sys_id]);
+        expect(story.number).toMatch(/^STRY/);
+        expect(refValue(story.epic)).toBe(epic.sys_id);
+        expect(String(story.story_points)).toBe('3');
+
+        const task = await executeAgileToolCall(client, 'create_scrum_task', { short_description: `${MARK} task`, story_sys_id: story.sys_id });
+        created.push(['rm_scrum_task', task.sys_id]);
+        expect(task.number).toMatch(/^STSK/);
+        expect(refValue(task.story)).toBe(story.sys_id);
+
+        const updatedStory = await executeAgileToolCall(client, 'update_story', { sys_id: story.sys_id, fields: { story_points: 5 } });
+        expect(String(updatedStory.story_points)).toBe('5');
+        const updatedEpic = await executeAgileToolCall(client, 'update_epic', { sys_id: epic.sys_id, fields: { description: 'e2e updated' } });
+        expect(updatedEpic.description).toBe('e2e updated');
+        const updatedTask = await executeAgileToolCall(client, 'update_scrum_task', { sys_id: task.sys_id, fields: { short_description: `${MARK} task updated` } });
+        expect(updatedTask.short_description).toBe(`${MARK} task updated`);
+
+        const tasks = await executeAgileToolCall(client, 'list_scrum_tasks', { story_sys_id: story.sys_id });
+        expect(tasks.scrum_tasks.map((t: { sys_id: string }) => t.sys_id)).toEqual([task.sys_id]);
+        // A new story is Draft (-6) on Agile Development 2.0.
+        const drafts = await executeAgileToolCall(client, 'list_stories', { state: '-6', limit: 50 });
+        expect(drafts.stories.some((r: { sys_id: string }) => r.sys_id === story.sys_id)).toBe(true);
+      } finally {
+        for (const [table, sysId] of created.reverse()) await client.deleteRecord(table, sysId).catch(() => undefined);
       }
     });
   });

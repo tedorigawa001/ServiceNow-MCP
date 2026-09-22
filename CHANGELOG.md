@@ -6,6 +6,18 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 ---
 
+## [Unreleased]
+
+### Fixed
+
+- **`create_epic` / `update_epic` / `list_epics` used a `project` column that `rm_epic` does not have.** A `project` value was silently dropped on create/update, and `list_epics` with `project` matched nothing. Epics on Agile Development 2.0 group by `product` (cmdb_model), `theme` (scrum_theme) and `parent_epic`; the tools now take and filter on those, and reject `project` loudly like any other undeclared field. Found when Agile Development was installed on the PDI: the other eight Agile tools passed their live round trip unchanged.
+
+### Added
+
+- Live E2E for the six Agile write tools (epic → story → scrum task chain, updates, list-by-story, cleanup), gated on the `rm_*` tables.
+
+---
+
 ## [1.11.4] — 2026-09-22
 
 ### Fixed

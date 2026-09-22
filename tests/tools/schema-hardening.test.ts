@@ -47,7 +47,7 @@ describe('write fields schemas', () => {
     {
       defs: getAgileToolDefinitions(),
       name: 'update_epic',
-      allowed: ['description', 'project', 'short_description'],
+      allowed: ['description', 'parent_epic', 'product', 'short_description', 'theme'],
     },
     {
       defs: getAgileToolDefinitions(),

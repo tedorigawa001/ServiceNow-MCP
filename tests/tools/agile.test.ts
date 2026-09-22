@@ -98,7 +98,7 @@ describe('executeAgileToolCall – create_epic', () => {
     await expect(
       executeAgileToolCall(mockClient, 'create_epic', {
         short_description: 'Program increment',
-        project: 'project1',
+        product: 'product1',
         sys_domain: 'global',
       })
     ).rejects.toThrow('Epic fields cannot be set: sys_domain');
@@ -173,10 +173,14 @@ describe('list_stories', () => {
 describe('list_epics', () => {
   beforeEach(() => vi.clearAllMocks());
 
-  it('combines project and state filters', async () => {
+  it('rejects the old project field, which rm_epic does not have', async () => {
+    await expect(executeAgileToolCall(mockClient, 'create_epic', { short_description: 'x', project: 'p1' })).rejects.toThrow('Epic fields cannot be set: project');
+  });
+
+  it('combines product, theme and state filters', async () => {
     (mockClient.queryRecords as ReturnType<typeof vi.fn>).mockResolvedValue({ count: 0, records: [] });
-    await executeAgileToolCall(mockClient, 'list_epics', { project: 'p1', state: 'open' });
-    expect(mockClient.queryRecords).toHaveBeenCalledWith(expect.objectContaining({ table: 'rm_epic', query: 'project=p1^state=open' }));
+    await executeAgileToolCall(mockClient, 'list_epics', { product: 'p1', theme: 't1', state: 'open' });
+    expect(mockClient.queryRecords).toHaveBeenCalledWith(expect.objectContaining({ table: 'rm_epic', query: 'product=p1^theme=t1^state=open' }));
   });
 });
 

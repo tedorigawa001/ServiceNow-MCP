@@ -9,7 +9,10 @@ import { requireWrite } from '../utils/permissions.js';
 
 const TABLE_PREFIX = process.env.AGILE_TABLE_PREFIX || 'rm_';
 const STORY_FIELDS = new Set(['short_description', 'story_points', 'sprint', 'epic', 'description', 'assigned_to']);
-const EPIC_FIELDS = new Set(['short_description', 'description', 'project']);
+// rm_epic has no `project` column; epics group by product (cmdb_model),
+// theme (scrum_theme) and parent_epic. A `project` value was silently dropped
+// on create and matched nothing on list.
+const EPIC_FIELDS = new Set(['short_description', 'description', 'product', 'theme', 'parent_epic']);
 const SCRUM_TASK_FIELDS = new Set(['short_description', 'story', 'assigned_to']);
 
 function allowedFieldsSchema(allowedFields: Set<string>, description: string): Record<string, any> {
@@ -87,7 +90,9 @@ export function getAgileToolDefinitions() {
         properties: {
           short_description: { type: 'string', description: 'Epic title' },
           description: { type: 'string', description: 'Epic description and goals' },
-          project: { type: 'string', description: 'Project sys_id' },
+          product: { type: 'string', description: 'Product sys_id (cmdb_model)' },
+          theme: { type: 'string', description: 'Theme sys_id (scrum_theme)' },
+          parent_epic: { type: 'string', description: 'Parent epic sys_id' },
         },
         required: ['short_description'],
       },
@@ -99,18 +104,19 @@ export function getAgileToolDefinitions() {
         type: 'object',
         properties: {
           sys_id: { type: 'string', description: 'System ID of the epic' },
-          fields: allowedFieldsSchema(EPIC_FIELDS, 'Allowed fields: short_description, description, project'),
+          fields: allowedFieldsSchema(EPIC_FIELDS, 'Allowed fields: short_description, description, product, theme, parent_epic'),
         },
         required: ['sys_id', 'fields'],
       },
     },
     {
       name: 'list_epics',
-      description: 'List epics with optional project or state filter',
+      description: 'List epics with optional product, theme or state filter',
       inputSchema: {
         type: 'object',
         properties: {
-          project: { type: 'string', description: 'Filter by project sys_id' },
+          product: { type: 'string', description: 'Filter by product sys_id (cmdb_model)' },
+          theme: { type: 'string', description: 'Filter by theme sys_id (scrum_theme)' },
           state: { type: 'string', description: 'Filter by state' },
           limit: { type: 'number', description: 'Max results (default: 20)' },
         },
@@ -202,9 +208,11 @@ export async function executeAgileToolCall(
       return await client.updateRecord(epicTable, args.sys_id, args.fields);
     }
     case 'list_epics': {
-      let query = '';
-      if (args.project) query = `project=${sanitizeLikeValue(args.project)}`;
-      if (args.state) query = query ? `${query}^state=${sanitizeLikeValue(args.state)}` : `state=${sanitizeLikeValue(args.state)}`;
+      const clauses: string[] = [];
+      if (args.product) clauses.push(`product=${sanitizeLikeValue(args.product)}`);
+      if (args.theme) clauses.push(`theme=${sanitizeLikeValue(args.theme)}`);
+      if (args.state) clauses.push(`state=${sanitizeLikeValue(args.state)}`);
+      const query = clauses.join('^');
       const resp = await client.queryRecords({ table: epicTable, query: query || undefined, limit: args.limit || 20 });
       return { count: resp.count, epics: resp.records };
     }
