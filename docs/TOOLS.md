@@ -88,11 +88,11 @@ List MID server status and version information.
 - `status` — Filter by status (`up`, `down`)
 
 ### list_active_events
-List active Event Management events and alerts.
+List Event Management **events** (`em_event`). Despite the name it does not filter by state: pass `query: "stateINReady,Error"` for unprocessed events (states: `Ready`, `Processed`, `Error`, `Ignored`). For the alerts operators act on, see [Event Management — Alerts](#event-management--alerts-6-tools). Requires the Event Management plugin.
 
 **Parameters**:
-- `severity` — Filter by severity level
-- `limit` — Max records
+- `query` — Encoded query (e.g. `severity=1`, `stateINReady,Error`)
+- `limit` — Max records (default 10)
 
 ### cmdb_health_dashboard
 Get CMDB health metrics and stale CI counts.
@@ -1169,23 +1169,28 @@ List user stories with optional filters.
 ### create_epic
 Create an epic. **[Write]**
 
+`rm_epic` has no `project` column (there is no `rm_project` table); epics group by product, theme and parent epic.
+
 **Parameters**:
 - `short_description` (required)
 - `description`
-- `project`
+- `product` — `cmdb_model` sys_id
+- `theme` — `scrum_theme` sys_id
+- `parent_epic` — `rm_epic` sys_id
 
 ### update_epic
 Update an epic. **[Write]**
 
 **Parameters**:
 - `sys_id` (required)
-- `fields` (required) — allowed fields only: `short_description`, `description`, `project`
+- `fields` (required) — allowed fields only: `short_description`, `description`, `product`, `theme`, `parent_epic`
 
 ### list_epics
 List epics.
 
 **Parameters**:
-- `project`
+- `product` — `cmdb_model` sys_id
+- `theme` — `scrum_theme` sys_id
 - `state`
 - `limit`
 
@@ -1382,7 +1387,7 @@ List products associated with CSM cases.
 
 ---
 
-## Security Operations (9 tools)
+## Security Operations (12 tools)
 
 ### create_security_incident
 Create a security incident. **[Write]**
@@ -1441,6 +1446,42 @@ Get threat intelligence entries from the ServiceNow threat feed.
 **Parameters**:
 - `type` — Indicator type (e.g. `IP`, `URL`)
 - `limit`
+
+### get_security_dashboard
+Security posture summary: open security incidents by severity, open vulnerability entries, incidents resolved in the period.
+
+**Parameters**:
+- `days` — Look-back period (default 30)
+
+### list_security_playbooks
+List Security Incident Response playbooks. These are Process Automation Designer definitions (`sys_pd_process_definition`) shipped in the `sn_si_aw` (SIR Analyst Workspace) scope — the stock Malware / Phishing / Failed Login templates. Requires the SIR plugin.
+
+**Parameters**:
+- `active` — Default true
+- `query` — Match on playbook label or name
+- `limit` — Default 25
+
+### run_security_playbook
+Start a SIR playbook on a security incident the way the Analyst Workspace does (`sn_playbook.PlaybookExperience.triggerPlaybook('<package>.<name>', incident)`). The call is made from a run-once Scheduled Script Execution, so the tool needs `SCRIPTING_ENABLED=true`. **[Scripting]**
+
+Guards: drafts and inactive definitions are refused (`CONFLICT`) — the stock templates ship as `status=draft` and must be published (or copied and published) first; a playbook that is already queued or in progress on the incident returns `already_running`; a start that is scheduled but not yet executed returns `already_scheduled`.
+
+**Parameters**:
+- `playbook` (required) — sys_id or scoped name (`sys_pd_process_definition.name`); `playbook_sys_id` is accepted as an alias
+- `incident_sys_id` (required) — `sn_si_incident` sys_id
+- `wait_seconds` — 0–180 (default 0). Polls for the execution (`sys_pd_context`) and returns `playbook_started` with it, otherwise `playbook_scheduled` with the job
+
+### scan_vulnerabilities
+Create a Vulnerability Response scan (`sn_vul_scan`) for a set of CIs or Vulnerable Items and hand it to the scanner integration, like the "Initiate Scan" / "Rescan" actions. The scan record, its target links (`sn_vul_m2m_scan_configuration_item` / `sn_vul_m2m_scan_source`) and the move to `processing` are written by a run-once server script, because neither the state (dictionary read-only) nor the links (write ACL) can be set through the Table API — so `SCRIPTING_ENABLED=true` is required. **[Scripting]**
+
+Guards: every target must exist; a target already in a queued/processing/scanning scan returns `already_running`; initiating with no active scanner (`sn_vul_scanner` — Qualys, Tenable, Rapid7, …) is refused (`CONFLICT`) rather than creating a scan that errors out.
+
+**Parameters**:
+- `ci_sys_ids` — `cmdb_ci` sys_ids (max 200) — **or**
+- `vulnerable_item_sys_ids` — `sn_vul_vulnerable_item` sys_ids (max 200); one source table per scan
+- `scanner_sys_id` — Defaults to the active default scanner
+- `initiate` — Default true. `false` leaves a Draft scan to launch from the UI (no scanner needed)
+- `wait_seconds` — 0–120 (default 30). Returns `scan_initiated` / `scan_drafted` with the scan, or `scan_scheduled` with the job if the scheduler has not run it yet
 
 ---
 
@@ -2096,15 +2137,15 @@ Create a new REST Message configuration. **[Write]**
 - `description`
 
 ### list_soap_messages
-List outbound SOAP Message configurations.
+List outbound SOAP Messages (`sys_soap_message`).
 
 **Parameters**:
-- `query` — Search by name or endpoint
+- `query` — Search by name or description
 - `active`
 - `limit`
 
 ### get_soap_message
-Get a SOAP Message by sys_id or name, including its functions/operations.
+Get a SOAP Message by sys_id or name, with its functions (`sys_soap_message_function`). Returns `{ soap_message, functions }`.
 
 **Parameters**:
 - `sys_id_or_name` (required)
@@ -2117,28 +2158,23 @@ List SOAP Message functions for a SOAP Message.
 - `limit`
 
 ### create_soap_message
-Create a new outbound SOAP Message definition. **[Write]**
+Create an outbound SOAP Message (`sys_soap_message`). The endpoint belongs to each function, not the message. **[Write]**
 
 **Parameters**:
 - `name` (required)
-- `endpoint` (required)
-- `wsdl`
-- `namespace`
-- `soap_action_prefix`
-- `authentication_type`
+- `wsdl` — WSDL URL
+- `authentication_type` — `no_authentication` (default), `basic`, `mutual_authentication`
 - `description`
-- `active`
 
 ### create_soap_message_function
-Add a SOAP function/operation to an existing SOAP Message. **[Write]**
+Add a function to a SOAP Message (`sys_soap_message_function`). **[Write]**
 
 **Parameters**:
 - `soap_message_sys_id` (required)
-- `name` (required)
 - `function_name` (required)
-- `soap_action`
-- `soap_message_template`
-- `active`
+- `soap_endpoint` (required) — Endpoint URL for this operation
+- `soap_action` — SOAPAction header value
+- `envelope` — SOAP envelope XML (may contain `${variable}` placeholders)
 
 ### list_transform_maps
 List Transform Maps.
@@ -2820,6 +2856,142 @@ ACC monitoring/check policies.
 
 ### list_acc_checks
 ACC check definitions.
+
+---
+
+## Event Management — Alerts (6 tools)
+
+Operator tools for ITOM Event Management alerts (`em_alert`). Requires the Event Management plugin. Severity values: `1` Critical, `2` Major, `3` Minor, `4` Warning, `5` OK, `0` Clear. States: `Open`, `Reopen`, `Flapping`, `Closed`. The write tools do what the product's list actions do — "Acknowledge" sets `acknowledged=true`; "Close" sets `state=Closed` (and acknowledges as well when `evt_mgmt.alert_ack_on_close` is true). For raw events see `list_active_events`.
+
+### list_alerts
+List alerts, not-Closed by default, most severe first, then most recent.
+
+**Parameters**:
+- `severity` — Value or comma-separated list (`1,2`)
+- `state` — One state, or `all` for no state filter
+- `acknowledged` — `true` / `false`
+- `cmdb_ci` — CI sys_id
+- `source` — Exact event source
+- `assignment_group` — Group sys_id
+- `unassigned` — Only alerts with no group and no assignee
+- `without_incident` — Only alerts not linked to an incident
+- `query` — Extra encoded query appended with `^`
+- `limit` — Default 25, max 200
+
+### get_alert
+One alert by number or sys_id, with recent `em_alert_history`, `em_alert_related_task` links (incident / change / problem) and child alerts of a group alert.
+
+**Parameters**:
+- `number_or_sysid` (required)
+- `history_limit` — Default 10, max 50
+
+### get_alert_summary
+Counts of open alerts by severity, by state, acknowledged vs unacknowledged, and the top sources (aggregate queries).
+
+**Parameters**:
+- `include_closed` — Default false
+- `top_sources` — Default 5, max 20
+
+### acknowledge_alert
+Acknowledge an alert. Already-acknowledged alerts return `already_acknowledged` without a write. **[Write]**
+
+**Parameters**:
+- `number_or_sysid` (required)
+- `work_notes`
+
+### close_alert
+Close an alert. Refuses one that is already Closed (`CONFLICT`). **[Write]**
+
+**Parameters**:
+- `number_or_sysid` (required)
+- `work_notes`
+
+### update_alert
+Assign or annotate an alert. State changes are refused here — use `acknowledge_alert` / `close_alert`. **[Write]**
+
+**Parameters**:
+- `number_or_sysid` (required)
+- `fields` (required) — allowed: `assigned_to`, `assignment_group`, `work_notes`, `maintenance`, `short_description`, `description`, `kb`
+
+---
+
+## Deployment, Artifacts & Data Quality (10 tools)
+
+### find_artifact
+Search platform artifacts by name, type or scope.
+
+**Parameters**:
+- `name` (required) — Name or pattern
+- `type` — `business_rule`, `script_include`, `client_script`, `ui_policy`, `ui_action`, `widget`, `flow`, `sys_properties`
+- `scope` — Application scope name
+- `limit`
+
+### validate_artifact
+Check an artifact for best-practice, security and performance concerns.
+
+**Parameters**:
+- `table` (required) — e.g. `sys_script`, `sys_script_include`
+- `sys_id` (required)
+
+### clone_artifact
+Clone an artifact to a new name / scope. **[Scripting]**
+
+**Parameters**:
+- `table` (required), `sys_id` (required), `new_name` (required)
+- `target_scope`
+
+### validate_deployment
+Pre-validate an update set or scoped app — conflicts and missing dependencies.
+
+**Parameters**:
+- `update_set_sys_id` — or
+- `app_sys_id`
+
+### rollback_deployment
+Roll back a deployment by reverting a committed update set. **[Write]**
+
+**Parameters**:
+- `update_set_sys_id` (required)
+- `reason`
+
+### list_deployment_history
+Committed update sets and app installs over time.
+
+**Parameters**:
+- `days` — Default 30
+- `limit`
+
+### create_solution_package
+Bundle update sets into a solution package. **[Write]**
+
+**Parameters**:
+- `name` (required)
+- `update_sets` (required) — Array of update set sys_ids
+- `description`
+
+### execute_background_script
+Run server-side JavaScript and get its `return` value back. ServiceNow has no REST endpoint that runs script synchronously, so the script is wrapped in a function inside a run-once Scheduled Script Execution; the scheduler runs it (normally within seconds) and the result or exception is read back from `syslog`. Runs in the global scope as the integration user. **[Scripting]**
+
+Returns `executed` with `result` (JSON, ~3.5 KB cap, `truncated: true` beyond), `failed` with the server-side `error` and `stack`, or `script_scheduled` with the job when the scheduler has not run it within `wait_seconds`.
+
+**Parameters**:
+- `script` (required) — Max 6000 characters; end with `return <value>;`
+- `wait_seconds` — 0–120 (default 30)
+
+### import_cmdb_data
+Import CI records into a CMDB class through a field allowlist. **[CMDB Write]**
+
+**Parameters**:
+- `table` (required) — `cmdb_ci` or `cmdb_ci_*`
+- `data` (required) — Array of records (max 50 per call); allowed fields: `name`, `short_description`, `serial_number`, `asset_tag`, `manufacturer`, `model_id`, `location`, `install_status`, `operational_status`, `environment`, `ip_address`, `mac_address`, `fqdn`
+
+### analyze_data_quality
+Completeness, duplicates and stale-record metrics for a table.
+
+**Parameters**:
+- `table` (required)
+- `required_fields` — Comma-separated fields that should be populated
+- `days_stale` — Default 180
 
 ---
 
