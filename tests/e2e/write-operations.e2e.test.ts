@@ -20,6 +20,7 @@ import { executeGrcComplianceToolCall } from '../../src/tools/grc-compliance.js'
 import { executeSecurityToolCall } from '../../src/tools/security.js';
 import { executeDeploymentToolCall } from '../../src/tools/deployment.js';
 import { executeAgileToolCall } from '../../src/tools/agile.js';
+import { executeEventManagementToolCall } from '../../src/tools/event-management.js';
 import type { ServiceNowClient } from '../../src/servicenow/client.js';
 
 const MARK = `[E2E ${Date.now()}]`;
@@ -383,6 +384,36 @@ writeE2eDescribe('E2E – write operations (create/update, self-cleaning)', () =
         expect(drafts.stories.some((r: { sys_id: string }) => r.sys_id === story.sys_id)).toBe(true);
       } finally {
         for (const [table, sysId] of created.reverse()) await client.deleteRecord(table, sysId).catch(() => undefined);
+      }
+    });
+  });
+
+  describe('em_alert (Event Management)', () => {
+    it('updates, acknowledges and closes an alert it created, refusing the repeat transitions', async (ctx) => {
+      await skipUnlessTables(ctx, client, 'em_alert');
+      const created = await client.createRecord('em_alert', {
+        source: 'MCP E2E', node: 'mcp-e2e', resource: 'probe', metric_name: 'probe', severity: '4',
+        short_description: `${MARK} alert`, message_key: `${MARK}-${Date.now()}`,
+      });
+      const ref = created.number as string;
+      try {
+        const updated = await executeEventManagementToolCall(client, 'update_alert', { number_or_sysid: ref, fields: { maintenance: true, work_notes: 'e2e' } });
+        expect(updated).toMatchObject({ action: 'updated', maintenance: 'true' });
+        await expect(executeEventManagementToolCall(client, 'update_alert', { number_or_sysid: ref, fields: { state: 'Closed' } })).rejects.toThrow('cannot be updated here');
+
+        const ack = await executeEventManagementToolCall(client, 'acknowledge_alert', { number_or_sysid: ref, work_notes: 'ack' });
+        expect(ack).toMatchObject({ action: 'acknowledged', acknowledged: 'true' });
+        const again = await executeEventManagementToolCall(client, 'acknowledge_alert', { number_or_sysid: created.sys_id as string });
+        expect(again.action).toBe('already_acknowledged');
+
+        const closed = await executeEventManagementToolCall(client, 'close_alert', { number_or_sysid: ref, work_notes: 'done' });
+        expect(closed).toMatchObject({ action: 'closed', state: 'Closed' });
+        await expect(executeEventManagementToolCall(client, 'close_alert', { number_or_sysid: ref })).rejects.toMatchObject({ code: 'CONFLICT' });
+
+        const final = await executeEventManagementToolCall(client, 'get_alert', { number_or_sysid: created.sys_id as string });
+        expect(final).toMatchObject({ state: 'Closed', acknowledged: 'true', maintenance: 'true' });
+      } finally {
+        await client.deleteRecord('em_alert', created.sys_id as string).catch(() => undefined);
       }
     });
   });

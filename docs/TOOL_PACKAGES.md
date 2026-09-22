@@ -13,7 +13,7 @@ Set `MCP_TOOL_PACKAGE` in your environment to load a role-specific subset of too
 | `catalog_builder` | Catalog administrator | 20 |
 | `system_administrator` | SysAdmin | 85 |
 | `platform_developer` | Platform developer | 44 |
-| `itom_engineer` | ITOM/CMDB engineer | 34 |
+| `itom_engineer` | ITOM/CMDB engineer | 40 |
 | `secops_analyst` | Security Operations / Vulnerability Response analyst | 103 |
 | `agile_manager` | Agile team lead | 13 |
 | `ai_developer` | Now Assist/AI developer | 15 |
@@ -147,7 +147,7 @@ Includes:
 - MID Server health (issues, extension contexts, ECC Queue inspection, health summary with queue backlog and upgrade detection)
 - Store app upgrade planning (`search_store_apps` / `get_store_app_versions` / `check_app_upgrade`)
 - ACC (Agent Client Collector) agents, policies, and checks — requires the ACC plugin
-- Event management tools
+- Event Management: `list_active_events` (em_event) and the alert operator set — `list_alerts`, `get_alert` (with history, related tasks, child alerts), `get_alert_summary`, `acknowledge_alert`, `close_alert`, `update_alert` (assignment / work notes / maintenance) — requires the Event Management plugin
 - Service Mapping
 - Instance performance diagnostics (`get_instance_diagnostics`, `get_performance_history`) — JVM memory, semaphores, per-node stats, transaction time series
 - Core read tools

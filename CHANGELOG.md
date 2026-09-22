@@ -14,6 +14,7 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 ### Added
 
+- **Event Management alert tools** (`src/tools/event-management.ts`, in the `itom_engineer` package). Until now the only Event Management tool read `em_event`; operators work on alerts. `list_alerts` (not-Closed by default, most severe first; filters on severity, state, acknowledged, CI, source, assignment group, unassigned, without incident, plus a free encoded query), `get_alert` (by number or sys_id, with `em_alert_history`, `em_alert_related_task` links and child alerts), `get_alert_summary` (counts by severity/state/acknowledgement and top sources via aggregates), `acknowledge_alert` (sets `acknowledged=true`, exactly what the product's "Acknowledge" action does; already-acknowledged alerts are reported, not re-written), `close_alert` (`state=Closed`, which the product also acknowledges when `evt_mgmt.alert_ack_on_close` is on; refuses Closed alerts), and `update_alert` (assignment, work notes, maintenance, description, KB — state changes are routed to the two dedicated tools). Column names, state/severity choices and the action semantics were taken from the installed plugin's dictionary and UI actions and verified live, including on a throwaway alert; E2E covers the read set and the update → acknowledge → close cycle.
 - Live E2E for the six Agile write tools (epic → story → scrum task chain, updates, list-by-story, cleanup), gated on the `rm_*` tables.
 
 ---

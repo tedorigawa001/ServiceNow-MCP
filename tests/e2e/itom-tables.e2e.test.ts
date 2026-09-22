@@ -12,6 +12,7 @@ import { executeCoreToolCall } from '../../src/tools/core.js';
 import { executePerformanceToolCall } from '../../src/tools/performance.js';
 import { executeSamToolCall } from '../../src/tools/sam.js';
 import { executeItamToolCall } from '../../src/tools/itam.js';
+import { executeEventManagementToolCall } from '../../src/tools/event-management.js';
 import type { ServiceNowClient } from '../../src/servicenow/client.js';
 
 e2eDescribe('E2E – ITOM and asset tables (read-only)', () => {
@@ -71,6 +72,34 @@ e2eDescribe('E2E – ITOM and asset tables (read-only)', () => {
       if (servers.count === 0) return;
       const health = await executeDiscoveryToolCall(client, 'get_mid_server_health', { mid_server: servers.records[0].sys_id });
       expect(health).toBeTruthy();
+    });
+  });
+
+  describe('em_alert (Event Management, optional plugin)', () => {
+    it('summarises open alerts and lists them most severe first', async (ctx) => {
+      await skipUnlessTables(ctx, client, 'em_alert');
+      const summary = await executeEventManagementToolCall(client, 'get_alert_summary', {});
+      expect(summary.scope).toBe('alerts not Closed');
+      expect(summary.total).toBe(summary.acknowledged + summary.unacknowledged);
+      const list = await executeEventManagementToolCall(client, 'list_alerts', { limit: 10 });
+      expect(list.count).toBeGreaterThanOrEqual(0);
+      const severities = list.alerts.map((a: { severity: string }) => Number(a.severity));
+      expect([...severities].sort((a, b) => a - b)).toEqual(severities);
+      for (const a of list.alerts as Array<{ state: string; severity_label: string }>) {
+        expect(a.state).not.toBe('Closed');
+        expect(a.severity_label).toBeTruthy();
+      }
+    });
+
+    it('fetches one alert with history, related tasks and children when one exists', async (ctx) => {
+      await skipUnlessTables(ctx, client, 'em_alert', 'em_alert_history');
+      const list = await executeEventManagementToolCall(client, 'list_alerts', { state: 'all', limit: 1 });
+      if (list.count === 0) return;
+      const alert = await executeEventManagementToolCall(client, 'get_alert', { number_or_sysid: list.alerts[0].number });
+      expect(alert.sys_id).toBe(list.alerts[0].sys_id);
+      expect(Array.isArray(alert.history)).toBe(true);
+      expect(Array.isArray(alert.related_tasks)).toBe(true);
+      expect(Array.isArray(alert.child_alerts)).toBe(true);
     });
   });
 

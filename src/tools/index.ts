@@ -67,6 +67,8 @@ import { getItamToolDefinitions, executeItamToolCall } from './itam.js';
 import { getSamToolDefinitions, executeSamToolCall } from './sam.js';
 // Discovery & ACC (Agent Client Collector)
 import { getDiscoveryToolDefinitions, executeDiscoveryToolCall } from './discovery.js';
+// ITOM Event Management alerts
+import { getEventManagementToolDefinitions, executeEventManagementToolCall } from './event-management.js';
 // DevOps & pipeline tracking
 import { getDevopsToolDefinitions, executeDevopsToolCall } from './devops.js';
 // Scoped Application (App Studio)
@@ -280,6 +282,8 @@ const PACKAGE_TOOL_NAMES: Record<string, string[]> = {
     'query_records', 'get_record', 'get_table_schema',
     'search_cmdb_ci', 'get_cmdb_ci', 'list_relationships', 'cmdb_health_dashboard', 'service_mapping_summary',
     'list_discovery_schedules', 'list_mid_servers', 'list_active_events',
+    // Event Management alerts
+    'list_alerts', 'get_alert', 'get_alert_summary', 'acknowledge_alert', 'close_alert', 'update_alert',
     'run_aggregate_query', 'trend_query',
     'create_ci_relationship', 'cmdb_impact_analysis', 'run_discovery_scan',
     // Discovery run results & infrastructure health
@@ -334,7 +338,7 @@ const DESTRUCTIVE_EXACT = new Set([
   // Deletes
   'delete_attachment', 'delete_system_property', 'delete_uib_page',
   // Irreversible state changes
-  'close_incident', 'close_change_request', 'close_csm_case', 'close_hr_case',
+  'close_incident', 'close_change_request', 'close_csm_case', 'close_hr_case', 'close_alert',
   'cancel_request',
   'resolve_incident', 'resolve_problem',
   'retire_asset', 'retire_knowledge_article',
@@ -354,7 +358,7 @@ const WRITE_IDEMPOTENT_EXACT = new Set([
   'submit_change_for_approval', 'approve_request', 'reject_request',
   'publish_flow', 'publish_knowledge_article',
   'ensure_active_update_set', 'switch_instance', 'switch_update_set',
-  'natural_language_update', 'bulk_set_properties',
+  'natural_language_update', 'bulk_set_properties', 'acknowledge_alert',
   'validate_deployment', 'validate_property', 'validate_artifact',
 ]);
 
@@ -419,6 +423,7 @@ const MODULES: ToolModule[] = [
   { defs: getItamToolDefinitions, exec: executeItamToolCall },
   { defs: getSamToolDefinitions, exec: executeSamToolCall },
   { defs: getDiscoveryToolDefinitions, exec: executeDiscoveryToolCall },
+  { defs: getEventManagementToolDefinitions, exec: executeEventManagementToolCall },
   { defs: getDevopsToolDefinitions, exec: executeDevopsToolCall },
   { defs: getAppStudioToolDefinitions, exec: executeAppStudioToolCall },
   { defs: getMlToolDefinitions, exec: executeMlToolCall },
