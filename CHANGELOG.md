@@ -6,6 +6,14 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 ---
 
+## [Unreleased]
+
+### Security
+
+- **`uuid` pinned to `^11.1.1` under `exceljs`** ([GHSA-w5hq-g745-h8pq](https://github.com/advisories/GHSA-w5hq-g745-h8pq), moderate: missing buffer bounds check in `v3`/`v5`/`v6` when `buf` is passed). `exceljs@4.4.0` (latest) still declares `uuid@^8.3.0`, and `npm audit fix --force` would have downgraded `exceljs` to 3.4.0. The override is scoped to `exceljs` and stays on 11.x because `uuid` 12+ is ESM-only while `exceljs` loads it with `require('uuid')`. `exceljs` only calls `v4()` (conditional-formatting extensions), so the vulnerable code path was not reachable here; the pin removes the advisory regardless. Verified by writing and re-reading a workbook that exercises that path. `npm audit`: 0 vulnerabilities.
+
+---
+
 ## [1.11.5] — 2026-09-22
 
 ### Fixed
