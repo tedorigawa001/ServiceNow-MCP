@@ -88,10 +88,11 @@ List MID server status and version information.
 - `status` — Filter by status (`up`, `down`)
 
 ### list_active_events
-List Event Management **events** (`em_event`). Despite the name it does not filter by state: pass `query: "stateINReady,Error"` for unprocessed events (states: `Ready`, `Processed`, `Error`, `Ignored`). For the alerts operators act on, see [Event Management — Alerts](#event-management--alerts-6-tools). Requires the Event Management plugin.
+List Event Management **events** (`em_event`), newest first. By default only **unprocessed** events are returned — state `Ready` (not yet turned into an alert) or `Error` (processing failed). For the alerts operators act on, see [Event Management — Alerts](#event-management--alerts-6-tools). Requires the Event Management plugin.
 
 **Parameters**:
-- `query` — Encoded query (e.g. `severity=1`, `stateINReady,Error`)
+- `state` — `unprocessed` (default), `Ready`, `Processed`, `Error`, `Ignored`, or `all`
+- `query` — Additional encoded query (e.g. `severity=1`); a state clause here overrides the `state` default
 - `limit` — Max records (default 10)
 
 ### cmdb_health_dashboard

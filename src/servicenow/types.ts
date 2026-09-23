@@ -139,6 +139,7 @@ export interface ListMidServersParams {
 }
 
 export interface ListActiveEventsParams {
+  state?: string;
   query?: string;
   limit?: number;
 }

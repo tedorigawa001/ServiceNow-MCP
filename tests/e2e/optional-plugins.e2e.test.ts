@@ -158,8 +158,13 @@ e2eDescribe('E2E – optional plugins (read-only, gated on plugin tables)', () =
   describe('em_event (Event Management)', () => {
     it('lists active events when the event table exists', async (ctx) => {
       await skipUnlessTables(ctx, client, 'em_event');
-      const result = await executeCoreToolCall(client, 'list_active_events', { limit: 5 });
-      expect(result.count).toBeGreaterThanOrEqual(0);
+      // Default: unprocessed only (Ready / Error).
+      const result = await executeCoreToolCall(client, 'list_active_events', { limit: 20 });
+      for (const e of result.records as Array<{ state: string }>) expect(['Ready', 'Error']).toContain(e.state);
+      const all = await executeCoreToolCall(client, 'list_active_events', { state: 'all', limit: 20 });
+      expect(all.count).toBeGreaterThanOrEqual(result.count);
+      const created = (all.records as Array<{ sys_created_on: string }>).map((e) => e.sys_created_on);
+      expect([...created].sort().reverse()).toEqual(created);
     });
   });
 

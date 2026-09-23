@@ -547,10 +547,25 @@ describe('executeCoreToolCall – list_mid_servers', () => {
 describe('executeCoreToolCall – list_active_events', () => {
   beforeEach(() => vi.clearAllMocks());
 
-  it('delegates to client.listActiveEvents with query and limit', async () => {
+  it('defaults to unprocessed events (Ready + Error), newest first', async () => {
     (mockClient.listActiveEvents as ReturnType<typeof vi.fn>).mockResolvedValue([]);
     await executeCoreToolCall(mockClient, 'list_active_events', { query: 'severity=1', limit: 20 });
-    expect(mockClient.listActiveEvents).toHaveBeenCalledWith('severity=1', 20);
+    expect(mockClient.listActiveEvents).toHaveBeenCalledWith('stateINReady,Error^severity=1^ORDERBYDESCsys_created_on', 20);
+  });
+
+  it('honours an explicit state, "all", and a state clause inside query', async () => {
+    const fn = mockClient.listActiveEvents as ReturnType<typeof vi.fn>;
+    fn.mockResolvedValue([]);
+    await executeCoreToolCall(mockClient, 'list_active_events', { state: 'Processed' });
+    expect(fn).toHaveBeenLastCalledWith('state=Processed^ORDERBYDESCsys_created_on', undefined);
+    await executeCoreToolCall(mockClient, 'list_active_events', { state: 'all', limit: 5 });
+    expect(fn).toHaveBeenLastCalledWith('ORDERBYDESCsys_created_on', 5);
+    await executeCoreToolCall(mockClient, 'list_active_events', { query: 'state=Ignored^severity=2' });
+    expect(fn).toHaveBeenLastCalledWith('state=Ignored^severity=2^ORDERBYDESCsys_created_on', undefined);
+  });
+
+  it('rejects an unknown state', async () => {
+    await expect(executeCoreToolCall(mockClient, 'list_active_events', { state: 'Open' })).rejects.toThrow('state must be one of');
   });
 });
 

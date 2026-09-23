@@ -6,6 +6,14 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 ---
 
+## [Unreleased]
+
+### Changed
+
+- **`list_active_events` now returns only unprocessed events by default** (`em_event.state` Ready or Error), newest first. It used to return the oldest rows of the whole `em_event` table with no state filter, so the "active" in its name was not true: on the PDI all 31 events were `Processed`, i.e. already turned into alerts. A new `state` parameter takes `unprocessed` (default), `Ready`, `Processed`, `Error`, `Ignored` or `all`; a state clause inside `query` still wins over the default. Callers that relied on the old behaviour pass `state: "all"`. For the alerts operators act on, use `list_alerts`.
+
+---
+
 ## [1.11.6] — 2026-09-24
 
 ### Security

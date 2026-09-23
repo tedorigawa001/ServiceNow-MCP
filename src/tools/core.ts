@@ -143,11 +143,12 @@ export function getCoreToolDefinitions() {
     },
     {
       name: 'list_active_events',
-      description: 'Monitor critical infrastructure events',
+      description: 'List Event Management events (em_event), newest first. Defaults to unprocessed events (state Ready or Error); pass state "all" for every event. For the alerts operators act on, use list_alerts.',
       inputSchema: {
         type: 'object',
         properties: {
-          query: { type: 'string', description: 'Filter events (e.g., "severity=1")' },
+          state: { type: 'string', description: 'unprocessed (default: Ready + Error) | Ready | Processed | Error | Ignored | all' },
+          query: { type: 'string', description: 'Additional encoded query (e.g., "severity=1"). A state clause here overrides the state default.' },
           limit: { type: 'number', description: 'Max events (default: 10)' },
         },
         required: [],
@@ -346,8 +347,24 @@ export async function executeCoreToolCall(
     case 'list_mid_servers':
       return await client.listMidServers((args as ListMidServersParams).active_only);
 
-    case 'list_active_events':
-      return await client.listActiveEvents((args as ListActiveEventsParams).query, (args as ListActiveEventsParams).limit);
+    case 'list_active_events': {
+      // em_event keeps every event ever received; "active" means not yet
+      // processed into an alert (Ready) or failed processing (Error).
+      const p = args as ListActiveEventsParams;
+      const state = p.state === undefined ? 'unprocessed' : String(p.state);
+      const stateClauses: Record<string, string | undefined> = {
+        unprocessed: 'stateINReady,Error', Ready: 'state=Ready', Processed: 'state=Processed',
+        Error: 'state=Error', Ignored: 'state=Ignored', all: undefined,
+      };
+      if (!(state in stateClauses)) {
+        throw new ServiceNowError(`state must be one of ${Object.keys(stateClauses).join(', ')}`, 'VALIDATION_ERROR');
+      }
+      const extra = p.query ? String(p.query) : '';
+      // An explicit state filter in the free query wins over the default.
+      const stateClause = /(^|\^)state(=|!=|IN|NOT IN)/.test(extra) ? undefined : stateClauses[state];
+      const query = [stateClause, extra || undefined, 'ORDERBYDESCsys_created_on'].filter(Boolean).join('^');
+      return await client.listActiveEvents(query, p.limit);
+    }
 
     case 'cmdb_health_dashboard':
       return await client.cmdbHealthDashboard();
