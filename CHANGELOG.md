@@ -8,6 +8,10 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 ## [Unreleased]
 
+---
+
+## [1.11.7] — 2026-09-26
+
 ### Added
 
 - Read-only E2E suites for Smart Query, USEM SLA/approval/integration/configuration,

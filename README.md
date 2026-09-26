@@ -27,11 +27,11 @@
 
 Claude・Cursor・VS Code などの AI ツールから、ServiceNow のインシデント・変更・CMDB・スクリプトなどをすべて自然言語で操作できます。
 
-### 次回リリースのハイライト（準備中）
+### v1.11.7 ハイライト
 
 - `list_active_events` は未処理イベント（`Ready` / `Error`）を新しい順に取得するよう改善。処理済みを含む全状態を検索する場合は `state: "all"` を指定
 - Smart Query・USEM・Now Assist メタデータ・ServiceNow Store の読み取り専用 E2E を追加。2026-09-26 の追加分は **21 件成功・4 件スキップ**（対象データ不足）。AI 起動やレコード更新は実施していません
-- 詳細は [CHANGELOG](CHANGELOG.md) と [E2E 検証記録](docs/E2E_READ_COVERAGE_2026-09-26.md) を参照。これらは公開前の変更です
+- 詳細は [CHANGELOG](CHANGELOG.md) と [E2E 検証記録](docs/E2E_READ_COVERAGE_2026-09-26.md) を参照
 
 ### v1.11.6 までの主な変更
 
