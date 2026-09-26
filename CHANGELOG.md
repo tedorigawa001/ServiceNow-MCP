@@ -8,6 +8,13 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 ## [Unreleased]
 
+### Added
+
+- Read-only E2E suites for Smart Query, USEM SLA/approval/integration/configuration,
+  Now Assist metadata, and the public Store catalog. PDI validation: 21 passed,
+  4 explicitly skipped for absent VI/RT/group fixtures; no write or AI invocation.
+  See `docs/E2E_READ_COVERAGE_2026-09-26.md` for the tested behaviors and limitations.
+
 ### Changed
 
 - **`list_active_events` now returns only unprocessed events by default** (`em_event.state` Ready or Error), newest first. It used to return the oldest rows of the whole `em_event` table with no state filter, so the "active" in its name was not true: on the PDI all 31 events were `Processed`, i.e. already turned into alerts. A new `state` parameter takes `unprocessed` (default), `Ready`, `Processed`, `Error`, `Ignored` or `all`; a state clause inside `query` still wins over the default. Callers that relied on the old behaviour pass `state: "all"`. For the alerts operators act on, use `list_alerts`.
