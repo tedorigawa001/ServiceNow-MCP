@@ -12,7 +12,7 @@
 <br/>
 
 [![AI-Powered](https://img.shields.io/badge/AI--Powered-Claude%20%7C%20ChatGPT%20%7C%20Gemini%20%7C%20Cursor%20%7C%20Copilot-00D4AA?style=flat-square)](https://github.com/tedorigawa001/ServiceNow-MCP)
-[![Tools](https://img.shields.io/badge/496%20Tools-45%20Modules-0F4C81?style=flat-square)](docs/TOOLS.md)
+[![Tools](https://img.shields.io/badge/502%20Tools-46%20Modules-0F4C81?style=flat-square)](docs/TOOLS.md)
 [![npm](https://img.shields.io/npm/v/%40tedorigawa001%2Fservicenow-mcp?style=flat-square&logo=npm&color=CB3837)](https://www.npmjs.com/package/@tedorigawa001/servicenow-mcp)
 [![TypeScript](https://img.shields.io/badge/TypeScript-5.x-3178C6?style=flat-square&logo=typescript&logoColor=white)](https://www.typescriptlang.org/)
 [![License: MIT](https://img.shields.io/badge/license-MIT-f59e0b?style=flat-square)](LICENSE)
@@ -23,15 +23,23 @@
 
 ## AI から ServiceNow を自然言語で操作する MCP サーバー
 
-> **ローカル PC で動作 · 496 ツール · 5 分セットアップ · MIT ライセンス**
+> **ローカル PC で動作 · 502 ツール · 5 分セットアップ · MIT ライセンス**
 
 Claude・Cursor・VS Code などの AI ツールから、ServiceNow のインシデント・変更・CMDB・スクリプトなどをすべて自然言語で操作できます。
 
-### v1.11.1 ハイライト
+### 次回リリースのハイライト（準備中）
+
+- `list_active_events` は未処理イベント（`Ready` / `Error`）を新しい順に取得するよう改善。処理済みを含む全状態を検索する場合は `state: "all"` を指定
+- Smart Query・USEM・Now Assist メタデータ・ServiceNow Store の読み取り専用 E2E を追加。2026-09-26 の追加分は **21 件成功・4 件スキップ**（対象データ不足）。AI 起動やレコード更新は実施していません
+- 詳細は [CHANGELOG](CHANGELOG.md) と [E2E 検証記録](docs/E2E_READ_COVERAGE_2026-09-26.md) を参照。これらは公開前の変更です
+
+### v1.11.6 までの主な変更
 
 - Update Set 内のスクリプト系 Customer Update から、固定バージョンの npm コンポーネントを検出し、OSV の advisory と照合する読み取り専用 SCA ツール `scan_update_set_sca` を追加
 - SCA は本文・payload・一致箇所を返さず、メタデータ・ハッシュ・PURL・証跡のみを返却。未解決参照や照会失敗を「脆弱性なし」と誤認しない JSON 契約を提供
-- 依存関係を更新して既知の到達可能な脆弱性を解消。最新の検証では 496 ツール、59 テストファイル、1,553 テストを確認
+- Event Management のアラート一覧・詳細・集計・確認・クローズ・更新の 6 ツールを追加（`itom_engineer` パッケージ）
+- SOAP、Security Incident Response、脆弱性スキャン、バックグラウンドスクリプト実行、Agile Epic の実機で判明した不整合を修正
+- v1.11.6 では ExcelJS 配下の `uuid` を更新し、依存関係の脆弱性に対応
 
 </div>
 
@@ -566,7 +574,7 @@ SCRIPTING_ENABLED=false      # 本番では原則 false のまま
 mindmap
   root((ツールパッケージ))
     full
-      全496ツール
+      全502ツール
     service_desk
       インシデント管理
       タスク/承認
@@ -601,7 +609,7 @@ mindmap
 
 | パッケージ名 | 対象ロール | 主なツール |
 |------------|----------|-----------|
-| `full` | 管理者 | 全ツール (496) |
+| `full` | 管理者 | 全ツール (502) |
 | `service_desk` | L1/L2 エージェント | インシデント・タスク・KB・SLA |
 | `change_coordinator` | 変更管理者 | 変更リクエスト・CAB・CMDB |
 | `knowledge_author` | KB 著者 | KB 作成・公開 |
@@ -610,7 +618,7 @@ mindmap
 | `platform_developer` | 開発者 | スクリプト・ATF・Update Set |
 | `portal_developer` | ポータル開発者 | ポータル・ウィジェット・UX |
 | `integration_engineer` | 統合エンジニア | REST・Transform・イベント |
-| `itom_engineer` | ITOM エンジニア | CMDB・Discovery(実行履歴/エラー調査)・MID ヘルス・ACC |
+| `itom_engineer` | ITOM エンジニア | CMDB・Discovery(実行履歴/エラー調査)・MID ヘルス・ACC・Event Management アラート管理 |
 | `agile_manager` | スクラムマスター | ストーリー・エピック |
 | `ai_developer` | AI 開発者 | Now Assist・NLQ・Playbook |
 | `itam_analyst` | 資産管理者 | 資産・ライセンス・契約・SAM Pro(ソフトウェア資産管理) |
@@ -809,7 +817,7 @@ servicenow-mcp/
 │   │   ├── client.ts               # REST API クライアント (OAuth)
 │   │   ├── instances.ts            # マルチインスタンスマネージャー
 │   │   └── types.ts                # TypeScript 型定義
-│   ├── tools/                      # 45 ドメインモジュール (496 ツール)
+│   ├── tools/                      # 46 ドメインモジュール (502 ツール)
 │   │   ├── index.ts                # ツールルーター & パッケージ定義
 │   │   ├── incident.ts
 │   │   ├── change.ts
@@ -821,7 +829,7 @@ servicenow-mcp/
 │   └── utils/
 │       ├── permissions.ts          # 5 段階権限ゲート
 │       └── errors.ts
-├── tests/                          # テスト (Vitest · 1,553 件)
+├── tests/                          # 通常テスト・実機 E2E (Vitest)
 ├── docs/                           # ドキュメント
 └── instances.example.json
 ```
@@ -833,11 +841,36 @@ servicenow-mcp/
 ```bash
 npm install          # 依存パッケージのインストール
 npm run build        # TypeScript → dist/ にコンパイル
-npm test             # テストを実行 (1,553 件)
+npm test             # 通常テストを実行（実機 E2E は別途 opt-in）
 npm run dev          # ウォッチモード
 npm run type-check   # 型チェックのみ
 npm run lint         # ESLint
 ```
+
+### 実機 E2E の検証範囲
+
+追加の読み取り専用 E2E（2026-09-26）は、4 スイート・25 ケース中 **21 件成功、4 件スキップ**です。
+スキップは VI／RT／グループの対象レコード不足による詳細取得テストで、成功件数には含めていません。
+Now Assist はメタデータ取得のみで、AI 推論・生成・プレイブック起動は未検証です。
+
+E2E コード内のツール名を静的集計した対象範囲は **241／502 ツール（約48.0%）**です。
+これはコード行・分岐のカバレッジや、全241ツールの実機成功率を示す数値ではありません。
+テスト件数は変更されるため、通常テストの最新件数は `npm test` の実行結果を参照してください。
+
+PDI と OAuth を設定したうえで、今回の読み取り専用スイートだけを実行する例:
+
+```bash
+RUN_E2E=true WRITE_ENABLED=false SCRIPTING_ENABLED=false \
+  npx vitest run -c vitest.e2e.config.ts \
+  tests/e2e/smart-query.e2e.test.ts \
+  tests/e2e/usem-read.e2e.test.ts \
+  tests/e2e/now-assist-read.e2e.test.ts \
+  tests/e2e/store-read.e2e.test.ts
+```
+
+Now Assist メタデータのテストは `NOW_ASSIST_ENABLED=true` の場合のみ実行します。
+不足するプラグイン・テストデータは理由付きでスキップし、API／ACL エラーは失敗として扱います。
+詳細は [E2E 検証記録](docs/E2E_READ_COVERAGE_2026-09-26.md) と [CONTRIBUTING.md](CONTRIBUTING.md) を参照してください。
 
 ---
 
@@ -899,7 +932,7 @@ Model Context Protocol の略で、AI クライアントが外部ツールを呼
 
 <div align="center">
 
-**496 ツール · 45 モジュール · ローカル PC で動作 · 永久オープンソース**
+**502 ツール · 46 モジュール · ローカル PC で動作 · 永久オープンソース**
 
 役に立ったら ⭐ スターをお願いします — 他の人が見つけやすくなります。
 
