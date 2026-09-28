@@ -19,7 +19,9 @@ import { getPrompts, resolvePrompt } from './prompts/index.js';
 import { logger } from './utils/logging.js';
 import { ServiceNowError } from './utils/errors.js';
 
-dotenv.config();
+// quiet: dotenv 17 prints "injected env (N) from .env" to stdout, and stdout is
+// the MCP stdio transport — the banner arrives at the client as a non-JSON line.
+dotenv.config({ quiet: true });
 
 export const SERVER_NAME = 'servicenow-mcp';
 // Version comes from package.json (one level up from dist/server.js)

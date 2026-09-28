@@ -8,6 +8,10 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 ## [Unreleased]
 
+### Fixed
+
+- **The stdio server wrote a non-JSON line to stdout whenever a `.env` file was present.** `dotenv` 17 prints `◇ injected env (N) from .env // tip: …` to **stdout** by default, and stdout is the MCP stdio transport, so a client started from a directory with a `.env` received that banner as its first frame (strict clients reject it as a protocol error). `src/server.ts` now calls `dotenv.config({ quiet: true })`, as the E2E setup already did. A new test spawns the real entry point from a directory with a `.env` and asserts the first stdout line is the JSON-RPC `initialize` response; it fails on the previous code. Found while evaluating the `dotenv` 18 upgrade, whose release notes move that banner to stderr.
+
 ---
 
 ## [1.11.7] — 2026-09-26
