@@ -12,6 +12,11 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 - **The stdio server wrote a non-JSON line to stdout whenever a `.env` file was present.** `dotenv` 17 prints `◇ injected env (N) from .env // tip: …` to **stdout** by default, and stdout is the MCP stdio transport, so a client started from a directory with a `.env` received that banner as its first frame (strict clients reject it as a protocol error). `src/server.ts` now calls `dotenv.config({ quiet: true })`, as the E2E setup already did. A new test spawns the real entry point from a directory with a `.env` and asserts the first stdout line is the JSON-RPC `initialize` response; it fails on the previous code. Found while evaluating the `dotenv` 18 upgrade, whose release notes move that banner to stderr.
 
+### Changed
+
+- Dependencies: `zod` 3 → 4 (only the MCP SDK uses it; the SDK accepts `^3.25 || ^4.0`), `dotenv` 17 → 18, `@modelcontextprotocol/sdk` 1.29 → 1.31, `@inquirer/prompts` 8.7, `ora` 9.4.1; dev: `eslint` 9 → 10 (flat config unchanged), `typescript-eslint` 8.71, `tsx` 4.23, `globals` 17.12, `@types/node` 22.20. Verified with type-check, lint, the unit suite and a live stdio session (initialize, `tools/list` = 502, `tools/call`, `prompts/list`, unknown tool and unknown method). `npm audit`: 0.
+- Held back on purpose: **TypeScript 7** — `typescript-eslint` 8.71 declares `typescript >=4.8.4 <6.1.0`, so lint would run on an unsupported compiler; **vitest 5 / `@vitest/coverage-v8` 5** — they require Node `^22.12 || ^24 || >=26`, while `engines` is `>=20.19` and CI still tests Node 20; `@types/node` stays on 22 to match the supported floor.
+
 ---
 
 ## [1.11.7] — 2026-09-26
