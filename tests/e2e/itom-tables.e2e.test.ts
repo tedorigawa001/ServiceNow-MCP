@@ -68,10 +68,13 @@ e2eDescribe('E2E – ITOM and asset tables (read-only)', () => {
     });
 
     it('reports MID server health for the first server when one exists', async () => {
-      const servers = await executeCoreToolCall(client, 'list_mid_servers', { limit: 1 });
+      // list_mid_servers returns its rows as `mid_servers` (and takes no limit).
+      const servers = await executeCoreToolCall(client, 'list_mid_servers', {});
       if (servers.count === 0) return;
-      const health = await executeDiscoveryToolCall(client, 'get_mid_server_health', { mid_server: servers.records[0].sys_id });
+      const first = servers.mid_servers[0];
+      const health = await executeDiscoveryToolCall(client, 'get_mid_server_health', { mid_server: first.sys_id });
       expect(health).toBeTruthy();
+      expect(JSON.stringify(health)).toContain(first.sys_id);
     });
   });
 

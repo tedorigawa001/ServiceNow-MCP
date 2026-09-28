@@ -14,7 +14,7 @@
     "instances.example.json"
   ],
   "engines": {
-    "node": ">=20.19.0"
+    "node": ">=22.12.0"
   },
   "scripts": {
     "build": "tsc",
@@ -122,11 +122,11 @@
     "@types/node": "^22.20.4",
     "@typescript-eslint/eslint-plugin": "^8.71.0",
     "@typescript-eslint/parser": "^8.71.0",
-    "@vitest/coverage-v8": "4.1.11",
+    "@vitest/coverage-v8": "^5.0.2",
     "eslint": "^10.11.0",
     "globals": "^17.12.0",
     "tsx": "^4.23.15",
     "typescript": "^5.9.3",
-    "vitest": "4.1.11"
+    "vitest": "^5.0.2"
   }
 }

@@ -4,7 +4,7 @@ Configure the ServiceNow MCP server with VS Code using GitHub Copilot or Claude 
 
 ## Prerequisites
 
-- Node.js 20.19+
+- Node.js 22.12+
 - VS Code 1.99+ with one of:
   - [GitHub Copilot](https://marketplace.visualstudio.com/items?itemName=GitHub.copilot) extension
   - [Claude for VS Code](https://marketplace.visualstudio.com/items?itemName=Anthropic.claude-vscode) extension (if available)
@@ -115,7 +115,7 @@ export SN_CLIENT_SECRET=your_client_secret
 
 | Problem | Solution |
 |---------|----------|
-| MCP server not found | Ensure `npx` is on PATH (Node 20+); for source builds, check the absolute path to `dist/server.js` |
+| MCP server not found | Ensure `npx` is on PATH (Node 22.12+); for source builds, check the absolute path to `dist/server.js` |
 | Secret prompt not shown | Command Palette → `MCP: Reset Cached Inputs`, then restart the server |
 | Auth errors | Verify instance URL has no trailing slash |
 | Tools not available | Restart VS Code after editing `.vscode/mcp.json` |

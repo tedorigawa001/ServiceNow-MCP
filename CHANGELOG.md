@@ -6,6 +6,19 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 ---
 
+## [Unreleased]
+
+### Changed
+
+- **Node.js 20 is no longer supported; the minimum is now 22.12.** Node 20 reached end-of-life in April 2026. `engines.node` is `>=22.12.0`, the `servicenow-mcp` launcher refuses older runtimes with a bilingual message (it previously checked for 20), CI tests Node 22 and 24 (was 20 and 22), and the README, `docs/INSTALLATION.md`, `docs/CLIENT_SETUP.md` and every `clients/*/SETUP.md` say 22.12+. MCP client configs need no change — only the Node binary they launch.
+- Dev: **vitest 4 → 5** and `@vitest/coverage-v8` 5, which require Node `^22.12 || ^24 || >=26` and were held back in 1.11.8 for that reason. No test or config changes were needed: 1592 unit tests, type-check, lint, build and coverage pass on Node 24, and all read-only live E2E files pass against the PDI.
+
+### Fixed
+
+- The E2E test for `get_mid_server_health` read `servers.records[0]`, but `list_mid_servers` returns its rows as `mid_servers`; it crashed as soon as the PDI had a MID server (until then it returned early). It now uses `mid_servers` and checks the health result refers to that server.
+
+---
+
 ## [1.11.8] — 2026-09-29
 
 ### Fixed
