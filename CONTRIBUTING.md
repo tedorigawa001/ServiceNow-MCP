@@ -6,8 +6,9 @@ Thank you for considering contributing!
 
 1. Fork the repository
 2. Clone your fork
-3. Install dependencies: `npm install`
-4. Create a branch: `git checkout -b feature/your-feature-name`
+3. Use Node.js 22.12 or newer. The repository pins the development version in `.node-version` (read by nodenv, fnm, asdf and similar; for nvm: `nvm use $(cat .node-version)`). vitest 5 does not run on Node 20.
+4. Install dependencies: `npm install`
+5. Create a branch: `git checkout -b feature/your-feature-name`
 
 ## Development
 
