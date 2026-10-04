@@ -6,6 +6,19 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 ---
 
+## [Unreleased]
+
+### Security
+
+- **Four advisories in transitive dependencies, fixed by raising the `overrides` floors** (`npm audit`: 4 → 0). None is in code this project calls directly.
+  - `brace-expansion` (high) — [GHSA-6j4f-fj2g-mc7p](https://github.com/advisories/GHSA-6j4f-fj2g-mc7p) and related DoS advisories via uncontrolled recursion. Reached through `exceljs` (`archiver` / `unzipper` → `glob` → `minimatch` 3 and 5). Floors: `minimatch@3` → `^1.1.21`, `minimatch@9` → `^2.1.7`, and a new `minimatch@5` → `^2.1.7` entry — `minimatch` 5 had no override, so its `brace-expansion` 2.x line was never pinned.
+  - `hono` → `^4.13.13` ([GHSA-hxh3-vqpv-xpqv](https://github.com/advisories/GHSA-hxh3-vqpv-xpqv), `hono/jsx` XSS; the MCP SDK's HTTP transport uses `hono`, not `hono/jsx`).
+  - `ip-address` → `^10.7.3` ([GHSA-j6r3-76f7-8jcv](https://github.com/advisories/GHSA-j6r3-76f7-8jcv) cross-family subnet match, [GHSA-h3mg-xc3c-68pw](https://github.com/advisories/GHSA-h3mg-xc3c-68pw) unbounded diagnostic; via the SDK's `express-rate-limit`).
+  - `fast-uri` → `^3.1.8` ([GHSA-hrr3-gc8f-f4qj](https://github.com/advisories/GHSA-hrr3-gc8f-f4qj) host case normalization; via `ajv`). Kept on 3.x, the line `ajv` declares.
+  - Verified: type-check, lint, build, 1592 unit tests, an `exceljs` zip write/read, and the Streamable HTTP transport run for real on localhost (401 without or with a wrong bearer token, `initialize` and a session `tools/list` of 502 tools with the right one). `npm audit signatures`: all verified.
+
+---
+
 ## [1.12.0] — 2026-09-29
 
 ### Changed
