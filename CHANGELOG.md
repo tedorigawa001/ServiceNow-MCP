@@ -6,6 +6,22 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 ---
 
+## [Unreleased]
+
+### Security
+
+- **`exceljs` is no longer a runtime dependency, which removes the `uuid` advisory from installs of the package** ([GHSA-w5hq-g745-h8pq](https://github.com/advisories/GHSA-w5hq-g745-h8pq)). The `overrides` added in 1.11.6 only apply inside this repository — npm ignores a dependency's `overrides` — so every install since then still resolved `exceljs`'s `uuid@^8.3.0` and `npm audit` reported it to users; the 1.11.6 note claiming 0 vulnerabilities was true only for the repository. `import_excel_to_import_set` now reads workbooks with `src/utils/xlsx.ts`, a read-only parser with no third-party code: the ZIP central directory is validated before anything is inflated (same limits as before), only the parts the workbook references are inflated with `node:zlib`, each bounded by its declared size and checked against the stored length and CRC-32; encrypted entries, duplicate entry names and relationship targets that leave the package are rejected; XML is read by a small tokenizer that refuses any DTD, so entity expansion and external entities are impossible.
+  - Installing the package: 231 → 137 packages, `node_modules` 65 MB → 31 MB, `npm audit` clean (measured from `npm pack` output in an empty project). `exceljs` stays as a devDependency because the tests build their fixtures with it, which also cross-checks that workbooks written by exceljs read back identically.
+
+### Changed
+
+- **Rows after a blank row are now imported.** The exceljs-based parser counted the populated rows and then read that many rows from row 2, so a blank row in the middle silently dropped the same number of rows from the end. Every row after the header is now read.
+- **A formula in the header row is rejected**, like formulas in data rows already were. Previously the formula's cached result silently became the column name.
+- Cells using the CJK built-in date formats (numFmt ids 27–36 and 50–58, e.g. ja-JP 31 `yyyy"年"m"月"d"日"` and 57/58 Japanese era dates) are imported as dates; exceljs had no format codes for these ids and returned the raw serial number (e.g. `45000`). Phonetic guide text (furigana, `<rPh>`) in shared strings is excluded, and `_xHHHH_` escapes (Excel writes a carriage return as `_x000D_`) are decoded.
+- Everything else is unchanged: a 29-workbook comparison suite (dates incl. the 1904 system, custom and Japanese-era formats, rich text, hyperlinks, error values, Japanese text, empty cells, multiple sheets, every validation error) produced byte-identical output from the old and new parser apart from the two changes above. The live Excel → Import Set E2E passes against the PDI.
+
+---
+
 ## [1.12.1] — 2026-10-04
 
 ### Security
@@ -64,7 +80,7 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 ### Security
 
-- **`uuid` pinned to `^11.1.1` under `exceljs`** ([GHSA-w5hq-g745-h8pq](https://github.com/advisories/GHSA-w5hq-g745-h8pq), moderate: missing buffer bounds check in `v3`/`v5`/`v6` when `buf` is passed). `exceljs@4.4.0` (latest) still declares `uuid@^8.3.0`, and `npm audit fix --force` would have downgraded `exceljs` to 3.4.0. The override is scoped to `exceljs` and stays on 11.x because `uuid` 12+ is ESM-only while `exceljs` loads it with `require('uuid')`. `exceljs` only calls `v4()` (conditional-formatting extensions), so the vulnerable code path was not reachable here; the pin removes the advisory regardless. Verified by writing and re-reading a workbook that exercises that path. `npm audit`: 0 vulnerabilities.
+- **`uuid` pinned to `^11.1.1` under `exceljs`** ([GHSA-w5hq-g745-h8pq](https://github.com/advisories/GHSA-w5hq-g745-h8pq), moderate: missing buffer bounds check in `v3`/`v5`/`v6` when `buf` is passed). `exceljs@4.4.0` (latest) still declares `uuid@^8.3.0`, and `npm audit fix --force` would have downgraded `exceljs` to 3.4.0. The override is scoped to `exceljs` and stays on 11.x because `uuid` 12+ is ESM-only while `exceljs` loads it with `require('uuid')`. `exceljs` only calls `v4()` (conditional-formatting extensions), so the vulnerable code path was not reachable here; the pin removes the advisory regardless. Verified by writing and re-reading a workbook that exercises that path. `npm audit`: 0 vulnerabilities. *(Correction, see Unreleased: that count was for the repository only — npm does not apply a dependency's `overrides`, so installs of the package still reported the advisory until `exceljs` was removed.)*
 
 ---
 

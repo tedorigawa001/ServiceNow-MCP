@@ -310,7 +310,7 @@ describe('Import Sets & Data Sources', () => {
       await expect(parseExcelImportRows(systemBase64)).rejects.toThrow('Invalid import field');
     });
 
-    it('rejects a ZIP entry whose declared expansion ratio exceeds the limit before ExcelJS loads it', async () => {
+    it('rejects a ZIP entry whose declared expansion ratio exceeds the limit before anything is inflated', async () => {
       const zipBomb = zipWithDeclaredEntrySizes(1, 25 * 1024 * 1024);
 
       await expect(parseExcelImportRows(zipBomb)).rejects.toMatchObject({
@@ -326,6 +326,31 @@ describe('Import Sets & Data Sources', () => {
         code: 'VALIDATION_ERROR',
         message: expect.stringContaining('25 MiB'),
       });
+    });
+
+    it('keeps rows that come after a blank row (exceljs-era parser dropped them)', async () => {
+      const base64 = await xlsxBase64([['a', 'b'], ['x', 'y'], [], [null, 'after-gap']]);
+      const parsed = await parseExcelImportRows(base64);
+      expect(parsed.rows).toEqual([{ a: 'x', b: 'y' }, { b: 'after-gap' }]);
+    });
+
+    it('rejects a formula in the header row instead of naming a column after its cached result', async () => {
+      const workbook = new ExcelJS.Workbook();
+      const sheet = workbook.addWorksheet('Sheet1');
+      sheet.getCell('A1').value = { formula: '"host"&"name"', result: 'hostname' };
+      sheet.getCell('A2').value = 'srv-1';
+      const base64 = Buffer.from(await workbook.xlsx.writeBuffer()).toString('base64');
+      await expect(parseExcelImportRows(base64)).rejects.toThrow('Formula cells are not permitted (row 1, column 1)');
+    });
+
+    it('converts dates, numbers and booleans the way the exceljs-based parser did', async () => {
+      const workbook = new ExcelJS.Workbook();
+      const sheet = workbook.addWorksheet('Types');
+      sheet.addRow(['when', 'count', 'ok', 'name']);
+      sheet.addRow([new Date(Date.UTC(2026, 9, 4, 9, 30, 0)), 3.5, true, '東京']);
+      sheet.getColumn(1).numFmt = 'yyyy/mm/dd hh:mm';
+      const parsed = await parseExcelImportRows(Buffer.from(await workbook.xlsx.writeBuffer()).toString('base64'));
+      expect(parsed.rows).toEqual([{ when: '2026-10-04 09:30:00', count: 3.5, ok: true, name: '東京' }]);
     });
 
     it('neutralizes plain string values that look like formulas (CSV/Excel injection)', async () => {

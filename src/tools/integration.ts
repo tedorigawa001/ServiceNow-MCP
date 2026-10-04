@@ -6,13 +6,9 @@
 import { sanitizeLikeValue, type ServiceNowClient } from '../servicenow/client.js';
 import { ServiceNowError } from '../utils/errors.js';
 import { requireWrite, requireScripting } from '../utils/permissions.js';
-import ExcelJS from 'exceljs';
+import { readXlsxSheet, type XlsxCell } from '../utils/xlsx.js';
 
 const MAX_EXCEL_BYTES = 10 * 1024 * 1024;
-const MAX_EXCEL_ZIP_ENTRIES = 200;
-const MAX_EXCEL_ENTRY_UNCOMPRESSED_BYTES = 25 * 1024 * 1024;
-const MAX_EXCEL_TOTAL_UNCOMPRESSED_BYTES = 50 * 1024 * 1024;
-const MAX_EXCEL_COMPRESSION_RATIO = 100;
 const MAX_EXCEL_ROWS = 500;
 const MAX_EXCEL_COLUMNS = 50;
 const STAGING_FIELD_RE = /^[a-zA-Z][a-zA-Z0-9_]*$/;
@@ -58,119 +54,49 @@ function decodeXlsxBase64(contentBase64: unknown): Buffer {
   return buffer;
 }
 
-/**
- * Validate ZIP metadata without inflating any entry. XLSX files are ZIP
- * archives, so compressed-size limits alone do not prevent zip bombs.
- * ZIP64 archives are deliberately rejected: their 64-bit size metadata is
- * outside the bounded parser used here and is unnecessary for supported XLSX.
- */
-function assertSafeXlsxArchive(buffer: Buffer): void {
-  const eocdSignature = 0x06054b50;
-  const centralDirectorySignature = 0x02014b50;
-  const eocdMinSize = 22;
-  const maxCommentBytes = 0xffff;
-  const searchStart = Math.max(0, buffer.length - eocdMinSize - maxCommentBytes);
-  let eocdOffset = -1;
+const formatDate = (value: Date) => value.toISOString().replace('T', ' ').slice(0, 19);
 
-  for (let offset = buffer.length - eocdMinSize; offset >= searchStart; offset--) {
-    if (buffer.readUInt32LE(offset) === eocdSignature) {
-      eocdOffset = offset;
-      break;
-    }
-  }
-  if (eocdOffset < 0) {
-    throw new ServiceNowError('Invalid XLSX ZIP archive: end-of-central-directory record is missing', 'VALIDATION_ERROR');
-  }
-
-  const diskNumber = buffer.readUInt16LE(eocdOffset + 4);
-  const centralDirectoryDisk = buffer.readUInt16LE(eocdOffset + 6);
-  const entryCount = buffer.readUInt16LE(eocdOffset + 10);
-  const centralDirectorySize = buffer.readUInt32LE(eocdOffset + 12);
-  const centralDirectoryOffset = buffer.readUInt32LE(eocdOffset + 16);
-  if (
-    diskNumber !== 0 || centralDirectoryDisk !== 0 ||
-    entryCount === 0xffff || centralDirectorySize === 0xffffffff || centralDirectoryOffset === 0xffffffff
-  ) {
-    throw new ServiceNowError('ZIP64 and multi-disk XLSX archives are not supported', 'VALIDATION_ERROR');
-  }
-  if (entryCount > MAX_EXCEL_ZIP_ENTRIES) {
-    throw new ServiceNowError(`XLSX archive contains too many entries (maximum ${MAX_EXCEL_ZIP_ENTRIES})`, 'VALIDATION_ERROR');
-  }
-
-  const centralDirectoryEnd = centralDirectoryOffset + centralDirectorySize;
-  if (
-    centralDirectoryOffset > buffer.length ||
-    centralDirectoryEnd > buffer.length ||
-    centralDirectoryEnd < centralDirectoryOffset
-  ) {
-    throw new ServiceNowError('Invalid XLSX ZIP archive: central directory is out of bounds', 'VALIDATION_ERROR');
-  }
-
-  let offset = centralDirectoryOffset;
-  let totalUncompressedBytes = 0;
-  for (let entry = 0; entry < entryCount; entry++) {
-    if (offset + 46 > centralDirectoryEnd || buffer.readUInt32LE(offset) !== centralDirectorySignature) {
-      throw new ServiceNowError('Invalid XLSX ZIP archive: malformed central directory entry', 'VALIDATION_ERROR');
-    }
-    const compressedBytes = buffer.readUInt32LE(offset + 20);
-    const uncompressedBytes = buffer.readUInt32LE(offset + 24);
-    const fileNameBytes = buffer.readUInt16LE(offset + 28);
-    const extraFieldBytes = buffer.readUInt16LE(offset + 30);
-    const commentBytes = buffer.readUInt16LE(offset + 32);
-    const entrySize = 46 + fileNameBytes + extraFieldBytes + commentBytes;
-
-    if (compressedBytes === 0xffffffff || uncompressedBytes === 0xffffffff) {
-      throw new ServiceNowError('ZIP64 XLSX archive entries are not supported', 'VALIDATION_ERROR');
-    }
-    if (entrySize > centralDirectoryEnd - offset) {
-      throw new ServiceNowError('Invalid XLSX ZIP archive: entry extends beyond central directory', 'VALIDATION_ERROR');
-    }
-    if (uncompressedBytes > MAX_EXCEL_ENTRY_UNCOMPRESSED_BYTES) {
-      throw new ServiceNowError('XLSX archive entry exceeds the 25 MiB uncompressed limit', 'VALIDATION_ERROR');
-    }
-    if (
-      (compressedBytes === 0 && uncompressedBytes > 0) ||
-      (compressedBytes > 0 && uncompressedBytes > compressedBytes * MAX_EXCEL_COMPRESSION_RATIO)
-    ) {
-      throw new ServiceNowError('XLSX archive compression ratio exceeds the permitted limit', 'VALIDATION_ERROR');
-    }
-    totalUncompressedBytes += uncompressedBytes;
-    if (totalUncompressedBytes > MAX_EXCEL_TOTAL_UNCOMPRESSED_BYTES) {
-      throw new ServiceNowError('XLSX archive exceeds the 50 MiB total uncompressed limit', 'VALIDATION_ERROR');
-    }
-    offset += entrySize;
-  }
-  if (offset !== centralDirectoryEnd) {
-    throw new ServiceNowError('Invalid XLSX ZIP archive: central directory size mismatch', 'VALIDATION_ERROR');
+/** Text form of a cell, used for header names. */
+function cellText(cell: XlsxCell): string {
+  switch (cell.kind) {
+    case 'date': return formatDate(cell.value);
+    case 'formula': return '';
+    default: return String(cell.value);
   }
 }
 
-/** Parse a single worksheet without evaluating formulas or trusting workbook metadata. */
+/**
+ * Parse a single worksheet without evaluating formulas or trusting workbook
+ * metadata. The archive is validated before anything is inflated (see
+ * src/utils/xlsx.ts); formula cells anywhere in the sheet are rejected.
+ */
 export async function parseExcelImportRows(
   contentBase64: unknown,
   sheetName?: unknown,
   columnMapping?: unknown
 ): Promise<{ sheetName: string; headers: string[]; rows: Record<string, ImportCellValue>[] }> {
   const buffer = decodeXlsxBase64(contentBase64);
-  assertSafeXlsxArchive(buffer);
-  const workbook = new ExcelJS.Workbook();
+  let sheet;
   try {
-    // exceljs declares the pre-Node-20 Buffer generic here; the binary is a
-    // standard Node Buffer decoded above.
-    await workbook.xlsx.load(buffer as any);
+    sheet = readXlsxSheet(buffer, typeof sheetName === 'string' && sheetName ? sheetName : undefined);
   } catch (error) {
+    if (error instanceof ServiceNowError) throw error;
     throw new ServiceNowError(
       `Could not parse .xlsx file: ${error instanceof Error ? error.message : 'invalid workbook'}`,
       'VALIDATION_ERROR'
     );
   }
+  if (!sheet) throw new ServiceNowError('Requested worksheet was not found', 'VALIDATION_ERROR');
 
-  const worksheet = typeof sheetName === 'string' && sheetName
-    ? workbook.getWorksheet(sheetName)
-    : workbook.worksheets[0];
-  if (!worksheet) throw new ServiceNowError('Requested worksheet was not found', 'VALIDATION_ERROR');
-  if (worksheet.actualColumnCount === 0 || worksheet.actualColumnCount > MAX_EXCEL_COLUMNS ||
-      worksheet.actualRowCount < 2 || worksheet.actualRowCount > MAX_EXCEL_ROWS + 1) {
+  // Shape: the widest populated column and the number of populated rows.
+  let maxColumn = 0;
+  let maxRow = 0;
+  for (const [rowNumber, cells] of sheet.rows) {
+    maxRow = Math.max(maxRow, rowNumber);
+    for (const column of cells.keys()) maxColumn = Math.max(maxColumn, column);
+  }
+  const populatedRows = sheet.rows.size;
+  if (maxColumn === 0 || maxColumn > MAX_EXCEL_COLUMNS || populatedRows < 2 || populatedRows > MAX_EXCEL_ROWS + 1) {
     throw new ServiceNowError(
       `Worksheet must contain a header plus 1–${MAX_EXCEL_ROWS} rows and at most ${MAX_EXCEL_COLUMNS} columns`,
       'VALIDATION_ERROR'
@@ -183,9 +109,14 @@ export async function parseExcelImportRows(
   if (columnMapping !== undefined && (typeof columnMapping !== 'object' || columnMapping === null || Array.isArray(columnMapping))) {
     throw new ServiceNowError('column_mapping must be an object of Excel header to staging column names', 'VALIDATION_ERROR');
   }
+  const headerRow = sheet.rows.get(1) ?? new Map<number, XlsxCell>();
   const headers: string[] = [];
-  for (let column = 1; column <= worksheet.actualColumnCount; column++) {
-    const header = worksheet.getCell(1, column).text.trim();
+  for (let column = 1; column <= maxColumn; column++) {
+    const cell = headerRow.get(column);
+    if (cell?.kind === 'formula') {
+      throw new ServiceNowError(`Formula cells are not permitted (row 1, column ${column})`, 'VALIDATION_ERROR');
+    }
+    const header = cell ? cellText(cell).trim() : '';
     if (!header) throw new ServiceNowError(`Header row has an empty column at position ${column}`, 'VALIDATION_ERROR');
     const mapped = mapping[header] === undefined ? header : mapping[header];
     if (typeof mapped !== 'string') {
@@ -196,32 +127,34 @@ export async function parseExcelImportRows(
     headers.push(mapped);
   }
 
+  // Every row after the header, including those after a blank row.
   const rows: Record<string, ImportCellValue>[] = [];
-  for (let rowNumber = 2; rowNumber <= worksheet.actualRowCount; rowNumber++) {
+  for (let rowNumber = 2; rowNumber <= maxRow; rowNumber++) {
+    const cells = sheet.rows.get(rowNumber);
+    if (!cells) continue;
     const row: Record<string, ImportCellValue> = Object.create(null) as Record<string, ImportCellValue>;
     let hasValue = false;
     for (let column = 1; column <= headers.length; column++) {
-      const cell = worksheet.getCell(rowNumber, column);
-      const value = cell.value as unknown;
-      if (value && typeof value === 'object' && 'formula' in value) {
+      const cell = cells.get(column);
+      if (!cell) continue;
+      if (cell.kind === 'formula') {
         throw new ServiceNowError(`Formula cells are not permitted (row ${rowNumber}, column ${column})`, 'VALIDATION_ERROR');
       }
-      if (value === null || value === undefined || cell.text === '') continue;
-      hasValue = true;
-      if (value instanceof Date) {
-        row[headers[column - 1]] = value.toISOString().replace('T', ' ').slice(0, 19);
-      } else if (typeof value === 'string') {
-        row[headers[column - 1]] = neutralizeFormulaLikeString(value);
-      } else if (typeof value === 'number' || typeof value === 'boolean') {
-        row[headers[column - 1]] = value;
+      const key = headers[column - 1];
+      if (cell.kind === 'date') {
+        row[key] = formatDate(cell.value);
+      } else if (cell.kind === 'number' || cell.kind === 'boolean') {
+        row[key] = cell.value;
       } else {
-        row[headers[column - 1]] = neutralizeFormulaLikeString(cell.text);
+        if (cell.value === '') continue;
+        row[key] = neutralizeFormulaLikeString(cell.value);
       }
+      hasValue = true;
     }
     if (hasValue) rows.push(row);
   }
   if (rows.length === 0) throw new ServiceNowError('Worksheet has no data rows', 'VALIDATION_ERROR');
-  return { sheetName: worksheet.name, headers, rows };
+  return { sheetName: sheet.name, headers, rows };
 }
 
 export function getIntegrationToolDefinitions() {
