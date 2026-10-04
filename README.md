@@ -27,6 +27,13 @@
 
 Claude・Cursor・VS Code などの AI ツールから、ServiceNow のインシデント・変更・CMDB・スクリプトなどをすべて自然言語で操作できます。
 
+### v1.13 ハイライト
+
+- **Node.js 22.12 以上が必要です**（v1.12.0〜）。Node 20 は 2026 年 4 月に EOL を迎えました。MCP クライアント設定の `command` が Node 22.12 以上を起動することを確認してください
+- Excel 取り込み（`import_excel_to_import_set`）を、外部ライブラリを使わない読み取り専用パーサに置き換え。インストール時の依存が 231 → 137 パッケージ・65 MB → 31 MB になり、`npm audit` は 0 件
+- Excel 取り込みの改善: 空行より後の行も取り込む（従来は欠落）、ヘッダー行の数式は拒否、和暦など日本語の組み込み日付書式を日付として取り込む
+- stdio で起動したとき、`.env` の読み込みメッセージが stdout に混ざってプロトコルを壊す問題を修正（v1.11.8）
+
 ### v1.11.7 ハイライト
 
 - `list_active_events` は未処理イベント（`Ready` / `Error`）を新しい順に取得するよう改善。処理済みを含む全状態を検索する場合は `state: "all"` を指定
@@ -39,7 +46,7 @@ Claude・Cursor・VS Code などの AI ツールから、ServiceNow のインシ
 - SCA は本文・payload・一致箇所を返さず、メタデータ・ハッシュ・PURL・証跡のみを返却。未解決参照や照会失敗を「脆弱性なし」と誤認しない JSON 契約を提供
 - Event Management のアラート一覧・詳細・集計・確認・クローズ・更新の 6 ツールを追加（`itom_engineer` パッケージ）
 - SOAP、Security Incident Response、脆弱性スキャン、バックグラウンドスクリプト実行、Agile Epic の実機で判明した不整合を修正
-- v1.11.6 では ExcelJS 配下の `uuid` を更新し、依存関係の脆弱性に対応
+- v1.11.6 で ExcelJS 配下の `uuid` を固定しましたが、npm の `overrides` はインストール先には適用されないため、利用者環境の `npm audit` 警告は v1.13.0 で ExcelJS を依存から外すまで残っていました
 
 </div>
 
