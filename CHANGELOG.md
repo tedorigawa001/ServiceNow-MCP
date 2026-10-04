@@ -6,6 +6,16 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 ---
 
+## [Unreleased]
+
+### Changed
+
+- Dependencies: `chalk` 5 → 6 and `commander` 14 → 15. Their breaking changes are already met here — both now require Node 22 (this package requires 22.12 since 1.12.0) and `commander` 15 is ESM-only (this package is ESM). `commander` 15 also changes how a default is derived when both `--foo` and `--no-foo` are defined; the CLI defines no `--no-*` options. In range: `@modelcontextprotocol/sdk` 1.32, `dotenv` 18.0.5; dev: `vitest` / `@vitest/coverage-v8` 5.0.3, `eslint` 10.12, `globals` 17.13, `@types/node` 22.20.5.
+  - Verified: type-check, lint, build, 1611 unit tests; the CLI by hand (`--version`, `--help`, `auth --help`, `instances list`, an unknown command and a missing argument both exit 1 with commander's message, `FORCE_COLOR` output is coloured); and stdio sessions both on `dist/server.js` and through the launcher's `server` subcommand (initialize, `tools/list` = 502, `prompts/list` = 11, `resources/list` = 6, tool calls). `npm audit`: 0.
+- Still held back: TypeScript 7 — `typescript-eslint` 8.71 still declares `typescript <6.1.0`.
+
+---
+
 ## [1.13.0] — 2026-10-04
 
 ### Security
