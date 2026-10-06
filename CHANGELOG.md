@@ -16,6 +16,15 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
   - Users of the published package were not exposed: both fixes fall inside the ranges the parents declare (`express` asks for `proxy-addr@^2.0.7`), so a fresh install of 1.13.1 already resolves `proxy-addr@2.0.8` and `npm audit` reports 0. The floors make the repository's lockfile match.
   - Verified: type-check, lint, build, 1611 unit tests and coverage.
 
+### Fixed
+
+- **A create that timed out could create the record several times.** The client retried every request the same way — on a timeout, a dropped connection or a 5xx — including `POST` and `PATCH`. When ServiceNow had already applied the first attempt and only the response was late, each retry created another record (or appended another work note). Reproduced live with a 300 ms budget on `createRecord('incident', …)`: the previous client created **4 incidents** for one call and reported it as failed; the fixed client creates 1. Found through a stray `[E2E …] incident create/update test` incident left on the PDI by a passing E2E run — the test deleted the record it was handed, not the duplicate.
+  - Only repeatable methods (`GET`, `HEAD`, `OPTIONS`, `DELETE`) are retried after an ambiguous failure. `POST` / `PATCH` / `PUT` are retried only when the server certainly did not process the request — HTTP 429 (now error code `RATE_LIMITED`) or a connection that was never established (`ECONNREFUSED`, `ENOTFOUND`, `EAI_AGAIN`). Otherwise they fail with the new code **`OUTCOME_UNKNOWN`**, whose message says the change may already have been applied and should be checked before it is sent again — so an AI client does not blindly repeat the create.
+  - `403` is no longer retried for any method.
+  - A `DELETE` that is retried after a timeout and then gets `404` resolves as success: the first attempt deleted the record.
+  - Token requests and attachment uploads have their own fetch calls and were never retried; unchanged.
+  - Nine unit tests cover the policy; five of them fail on the previous client. 1620 unit tests pass, and the write and Excel E2E suites pass against the PDI with nothing left behind.
+
 ---
 
 ## [1.13.1] — 2026-10-04

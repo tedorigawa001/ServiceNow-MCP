@@ -207,6 +207,104 @@ describe('ServiceNowClient — error mapping & retry', () => {
     expect(apiCalls).toHaveLength(1); // single attempt, no retries
   });
 
+  // ── retry safety: never repeat a write that may already have been applied ──
+  const apiCalls = () => fetchMock.mock.calls.filter(c => String(c[0]).includes('/api/now/'));
+  const timeoutError = () => Object.assign(new Error('This operation was aborted'), { name: 'AbortError' });
+  const connRefused = () => Object.assign(new TypeError('fetch failed'), { cause: Object.assign(new Error('connect ECONNREFUSED'), { code: 'ECONNREFUSED' }) });
+
+  it('does not retry a POST after a 5xx and says the outcome is unknown', async () => {
+    routeFetch(mockResponse({ ok: false, status: 502, statusText: 'Bad Gateway', text: '' }));
+    const client = new ServiceNowClient(baseConfig({ maxRetries: 3 }));
+    await expect(client.createRecord('incident', { short_description: 'x' })).rejects.toMatchObject({
+      code: 'OUTCOME_UNKNOWN',
+      message: expect.stringContaining('may already have applied it'),
+    });
+    expect(apiCalls()).toHaveLength(1);
+  });
+
+  it('does not retry a POST that timed out (the record may have been created)', async () => {
+    routeFetch(timeoutError());
+    const client = new ServiceNowClient(baseConfig({ maxRetries: 3 }));
+    await expect(client.createRecord('incident', { short_description: 'x' })).rejects.toMatchObject({
+      code: 'OUTCOME_UNKNOWN',
+      message: expect.stringContaining('POST /api/now/table/incident failed (no response within'),
+    });
+    expect(apiCalls()).toHaveLength(1);
+  });
+
+  it('does not retry a PATCH after a 5xx (a work note would be added twice)', async () => {
+    routeFetch(mockResponse({ ok: false, status: 500, statusText: 'Server Error', text: '' }));
+    const client = new ServiceNowClient(baseConfig({ maxRetries: 3 }));
+    await expect(client.updateRecord('incident', VALID_SYS_ID, { work_notes: 'n' })).rejects.toMatchObject({ code: 'OUTCOME_UNKNOWN' });
+    expect(apiCalls()).toHaveLength(1);
+  });
+
+  it('retries a POST on 429, which the server did not process', async () => {
+    let n = 0;
+    fetchMock.mockImplementation(async (url: string) => {
+      if (url.includes('/oauth_token.do')) return TOKEN_OK;
+      n++;
+      return n < 3
+        ? mockResponse({ ok: false, status: 429, statusText: 'Too Many Requests', text: '' })
+        : mockResponse({ status: 201, json: { result: { sys_id: 's1' } } });
+    });
+    const client = new ServiceNowClient(baseConfig({ maxRetries: 3 }));
+    await expect(client.createRecord('incident', { short_description: 'x' })).resolves.toMatchObject({ sys_id: 's1' });
+    expect(apiCalls()).toHaveLength(3);
+  });
+
+  it('retries a POST when the connection was refused before anything was sent', async () => {
+    let n = 0;
+    fetchMock.mockImplementation(async (url: string) => {
+      if (url.includes('/oauth_token.do')) return TOKEN_OK;
+      n++;
+      if (n === 1) throw connRefused();
+      return mockResponse({ status: 201, json: { result: { sys_id: 's2' } } });
+    });
+    const client = new ServiceNowClient(baseConfig({ maxRetries: 2 }));
+    await expect(client.createRecord('incident', { short_description: 'x' })).resolves.toMatchObject({ sys_id: 's2' });
+    expect(apiCalls()).toHaveLength(2);
+  });
+
+  it('still retries a GET after a timeout', async () => {
+    let n = 0;
+    fetchMock.mockImplementation(async (url: string) => {
+      if (url.includes('/oauth_token.do')) return TOKEN_OK;
+      n++;
+      if (n === 1) throw timeoutError();
+      return mockResponse({ json: { result: [] } });
+    });
+    const client = new ServiceNowClient(baseConfig({ maxRetries: 2 }));
+    await expect(client.queryRecords({ table: 'incident' })).resolves.toMatchObject({ count: 0 });
+    expect(apiCalls()).toHaveLength(2);
+  });
+
+  it('does not retry 403 for any method', async () => {
+    routeFetch(mockResponse({ ok: false, status: 403, statusText: 'Forbidden', text: '' }));
+    const client = new ServiceNowClient(baseConfig({ maxRetries: 3 }));
+    await expect(client.queryRecords({ table: 'incident' })).rejects.toMatchObject({ code: 'INSUFFICIENT_PRIVILEGES' });
+    expect(apiCalls()).toHaveLength(1);
+  });
+
+  it('treats 404 on a retried DELETE as success (the first attempt deleted it)', async () => {
+    let n = 0;
+    fetchMock.mockImplementation(async (url: string) => {
+      if (url.includes('/oauth_token.do')) return TOKEN_OK;
+      n++;
+      if (n === 1) throw timeoutError();
+      return mockResponse({ ok: false, status: 404, statusText: 'Not Found', text: '' });
+    });
+    const client = new ServiceNowClient(baseConfig({ maxRetries: 2 }));
+    await expect(client.deleteRecord('incident', VALID_SYS_ID)).resolves.toBeUndefined();
+    expect(apiCalls()).toHaveLength(2);
+  });
+
+  it('still reports 404 on a first-attempt DELETE', async () => {
+    routeFetch(mockResponse({ ok: false, status: 404, statusText: 'Not Found', text: '' }));
+    const client = new ServiceNowClient(baseConfig({ maxRetries: 2 }));
+    await expect(client.deleteRecord('incident', VALID_SYS_ID)).rejects.toMatchObject({ code: 'NOT_FOUND' });
+  });
+
   it('extracts the ServiceNow error message from a JSON error body', async () => {
     routeFetch(mockResponse({ ok: false, status: 400, statusText: 'Bad Request', text: JSON.stringify({ error: { message: 'Invalid field xyz' } }) }));
     const client = new ServiceNowClient(baseConfig());

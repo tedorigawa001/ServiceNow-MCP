@@ -286,6 +286,13 @@ export class ServiceNowClient {
     options: RequestInit = {}
   ): Promise<T> {
     let lastError: Error | undefined;
+    // Only methods that are safe to repeat are retried after an ambiguous
+    // failure (timeout, dropped connection, 5xx): the first attempt may have
+    // been applied server-side, and repeating a POST creates a second record,
+    // a PATCH/PUT can append a second journal entry (work_notes). Those are
+    // retried only when the server certainly did not process the request.
+    const method = (options.method ?? 'GET').toUpperCase();
+    const repeatable = method === 'GET' || method === 'HEAD' || method === 'OPTIONS' || method === 'DELETE';
 
     for (let attempt = 0; attempt <= this.maxRetries; attempt++) {
       const controller = new AbortController();
@@ -302,6 +309,12 @@ export class ServiceNowClient {
           },
         });
 
+
+        // A DELETE retried after an ambiguous failure finds the record gone:
+        // the earlier attempt deleted it.
+        if (response.status === 404 && method === 'DELETE' && attempt > 0) {
+          return undefined as T;
+        }
 
         // Handle HTTP errors
         if (!response.ok) {
@@ -327,6 +340,8 @@ export class ServiceNowClient {
             errorCode = 'NOT_FOUND';
           } else if (response.status === 400) {
             errorCode = 'INVALID_REQUEST';
+          } else if (response.status === 429) {
+            errorCode = 'RATE_LIMITED';
           }
 
           throw new ServiceNowError(errorMessage, errorCode);
@@ -342,14 +357,31 @@ export class ServiceNowClient {
       } catch (error) {
         lastError = error instanceof Error ? error : new Error('Unknown error');
 
-        // Don't retry on auth errors or invalid requests
+        // Never retry errors that a repeat cannot fix.
         if (error instanceof ServiceNowError) {
-          if (['AUTHENTICATION_FAILED', 'INVALID_REQUEST', 'NOT_FOUND', 'VALIDATION_ERROR'].includes(error.code)) {
+          if (['AUTHENTICATION_FAILED', 'INSUFFICIENT_PRIVILEGES', 'INVALID_REQUEST', 'NOT_FOUND', 'VALIDATION_ERROR'].includes(error.code)) {
             throw error;
           }
         }
 
-        // Retry on network errors or server errors
+        // 429 and a connection that was never established mean the server did
+        // not process the request, so any method may retry. Anything else
+        // (timeout, reset, 5xx) is ambiguous and only repeatable methods retry.
+        const causeCode = (lastError as Error & { cause?: { code?: string } }).cause?.code;
+        const notProcessed =
+          (error instanceof ServiceNowError && error.code === 'RATE_LIMITED') ||
+          causeCode === 'ECONNREFUSED' || causeCode === 'ENOTFOUND' || causeCode === 'EAI_AGAIN';
+        if (!repeatable && !notProcessed) {
+          const reason = lastError.name === 'AbortError'
+            ? `no response within ${this.requestTimeoutMs < 1000 ? `${this.requestTimeoutMs} ms` : `${Math.round(this.requestTimeoutMs / 1000)} s`}`
+            : lastError.message;
+          throw new ServiceNowError(
+            `${method} ${new URL(url).pathname} failed (${reason}) and was not retried: ServiceNow may already have applied it. ` +
+            'Check whether the record was created or changed before sending it again.',
+            'OUTCOME_UNKNOWN'
+          );
+        }
+
         if (attempt < this.maxRetries) {
           const delay = this.retryDelayMs * Math.pow(2, attempt); // Exponential backoff
           logger.warn(`Request failed, retrying in ${delay}ms (attempt ${attempt + 1}/${this.maxRetries})`);
