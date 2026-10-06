@@ -94,7 +94,9 @@
     "hono": "^4.13.13",
     "ip-address": "^10.7.3",
     "js-yaml": "^4.3.2",
+    "proxy-addr": "^2.0.8",
     "qs": "^6.16.0",
+    "source-map-js": "^1.2.2",
     "minimatch@3": {
       "brace-expansion": "^1.1.21"
     },

@@ -6,6 +6,18 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 ---
 
+## [Unreleased]
+
+### Security
+
+- **Two new advisories in transitive dependencies; `overrides` floors raised** (repository `npm audit`: 2 → 0).
+  - `proxy-addr` → `^2.0.8` (critical, [GHSA-jqcg-44mw-7w3h](https://github.com/advisories/GHSA-jqcg-44mw-7w3h): IP spoofing through an IPv4-mapped IPv6 address matching a trusted subnet). Reached through the MCP SDK's `express`. This server does not use `express` — the HTTP transport is built on `node:http` and never consults `trust proxy` — so the vulnerable path was not reachable here.
+  - `source-map-js` → `^1.2.2` (high, [GHSA-68fv-2mgg-jv7q](https://github.com/advisories/GHSA-68fv-2mgg-jv7q): event-loop DoS via indexed source-map sections). Dev-only, through `vitest` / `vite` / `postcss` and `@vitest/coverage-v8`.
+  - Users of the published package were not exposed: both fixes fall inside the ranges the parents declare (`express` asks for `proxy-addr@^2.0.7`), so a fresh install of 1.13.1 already resolves `proxy-addr@2.0.8` and `npm audit` reports 0. The floors make the repository's lockfile match.
+  - Verified: type-check, lint, build, 1611 unit tests and coverage.
+
+---
+
 ## [1.13.1] — 2026-10-04
 
 ### Changed
