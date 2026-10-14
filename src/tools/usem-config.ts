@@ -318,8 +318,9 @@ function comparable(field: string, value: unknown): string {
   text = text.trim();
   // Encoded queries come back with a trailing ^EQ terminator.
   if (field === 'condition' || field.endsWith('condition')) text = text.replace(/\^EQ$/, '');
-  // glide_list values may come back in another order.
-  if (text.includes(',') && !text.includes(' ')) text = text.split(',').sort().join(',');
+  // Only the known glide_list column is unordered. Text/encoded queries must
+  // retain comma order so a different stored value cannot pass verification.
+  if (field === 'applies_to') text = text.split(',').sort().join(',');
   return text;
 }
 
@@ -591,9 +592,11 @@ export async function executeUsemConfigToolCall(
       if (!args.sys_id) throw new ServiceNowError('sys_id is required', 'INVALID_REQUEST');
       if (typeof args.active !== 'boolean') throw new ServiceNowError('active (boolean) is required', 'INVALID_REQUEST');
       const result = await client.updateRecord(rt.table, args.sys_id, { active: args.active });
+      const stored = await verifyRuleFields(client, rt, String(args.sys_id), { active: args.active });
       return {
-        ...result,
+        ...result, ...stored,
         rule_type: args.rule_type,
+        verified_fields: ['active'],
         summary: `${args.active ? 'Enabled' : 'Disabled'} ${rt.label} ${args.sys_id}`,
       };
     }

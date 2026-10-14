@@ -1,5 +1,10 @@
 # Read-only E2E expansion — 2026-09-26
 
+Follow-up: [2026-10-14 USEM verification](E2E_USEM_READ_2026-10-14.md)
+adds calculator/parameter/rule-family coverage and verifies the four previously
+skipped SLA detail cases. The wizard JSON configuration warning below was
+resolved and confirmed in the 2026-09-29 rerun (21 passed, 4 skipped).
+
 Target: dev441827 PDI and the public ServiceNow Store catalog. Tests invoke the
 same tool executors as server dispatch with the real client; they do not test the
 MCP transport handshake or client-side JSON Schema validation.

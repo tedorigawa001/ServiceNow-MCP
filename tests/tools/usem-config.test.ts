@@ -470,6 +470,22 @@ describe('write tools – with WRITE_ENABLED', () => {
     })).resolves.toMatchObject({ verified_fields: ['active', 'order', 'condition', 'applies_to', 'assignment_group'] });
   });
 
+  it('does not treat reordered comma-separated description text as a saved value', async () => {
+    fakeInstance();
+    getRec().mockResolvedValue({ sys_id: 'c'.repeat(32), description: 'b,a' });
+    await expect(executeUsemConfigToolCall(mockClient, 'update_usem_rule', {
+      rule_type: 'remediation_task', sys_id: 'c'.repeat(32), fields: { description: 'a,b' },
+    })).rejects.toMatchObject({ code: 'FIELDS_NOT_SAVED' });
+  });
+
+  it.each([true, false])('detects an active toggle that was not stored (%s)', async active => {
+    fakeInstance({ dropOnRest: ['active'] });
+    getRec().mockResolvedValue({ sys_id: 'c'.repeat(32), active: String(!active) });
+    await expect(executeUsemConfigToolCall(mockClient, 'set_usem_rule_active', {
+      rule_type: 'remediation_task', sys_id: 'c'.repeat(32), active,
+    })).rejects.toMatchObject({ code: 'FIELDS_NOT_SAVED' });
+  });
+
   it.each(['create_usem_rule', 'update_usem_rule'])('%s keeps remediation-only fields out of other rule types', async tool => {
     await expect(executeUsemConfigToolCall(mockClient, tool, {
       rule_type: 'assignment', sys_id: 'a'.repeat(32), fields: { field_1: 'assignment_group' },
@@ -553,7 +569,6 @@ describe('write tools – with WRITE_ENABLED', () => {
   });
 
   it('set_usem_rule_active toggles the active flag', async () => {
-    updateRec().mockResolvedValue({ sys_id: 'a'.repeat(32) });
     const result = await executeUsemConfigToolCall(mockClient, 'set_usem_rule_active', {
       rule_type: 'auto_close',
       sys_id: 'a'.repeat(32),
@@ -561,6 +576,7 @@ describe('write tools – with WRITE_ENABLED', () => {
     });
     expect(updateRec()).toHaveBeenCalledWith('sn_vul_cmn_auto_close_rule', 'a'.repeat(32), { active: false });
     expect(result.summary).toContain('Disabled');
+    expect(result.verified_fields).toEqual(['active']);
   });
 
   it('set_usem_rule_active is rejected for exception_rule (state-driven, no active field)', async () => {
@@ -574,7 +590,6 @@ describe('write tools – with WRITE_ENABLED', () => {
   });
 
   it('set_usem_rule_active works for the USEM assignment rule (now has active)', async () => {
-    updateRec().mockResolvedValue({ sys_id: 'a'.repeat(32) });
     const result = await executeUsemConfigToolCall(mockClient, 'set_usem_rule_active', {
       rule_type: 'assignment',
       sys_id: 'a'.repeat(32),

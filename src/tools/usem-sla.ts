@@ -72,7 +72,7 @@ const RECORD_TYPE_SCHEMA = {
     'or vg (Vulnerability Group / task-based Remediation Task, sn_vul_vulnerability)',
 };
 
-const SLA_FIELDS = 'ttr_status,ttr_target_date,ttr_applied_rule,assignment_group,assigned_to,risk_score,state';
+const SLA_FIELDS = 'sys_id,ttr_status,ttr_target_date,ttr_applied_rule,assignment_group,assigned_to,risk_score,state';
 
 function resolveRecordType(rt: unknown): RecordType {
   if (typeof rt !== 'string' || !RECORD_TYPES[rt]) {

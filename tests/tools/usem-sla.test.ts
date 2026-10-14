@@ -41,6 +41,7 @@ describe('list_remediation_sla', () => {
     expect(call.table).toBe('sn_vul_vulnerable_item');
     expect(call.orderBy).toBe('ttr_target_date');
     expect(call.fields).toContain('number');
+    expect(call.fields.split(',')).toContain('sys_id');
     expect(result.record_type).toBe('vi');
   });
 
@@ -50,6 +51,7 @@ describe('list_remediation_sla', () => {
     const call = qr().mock.calls[0][0];
     expect(call.table).toBe('sn_vul_remediation_task');
     expect(call.fields).toContain('task_number');
+    expect(call.fields.split(',')).toContain('sys_id');
   });
 
   it('breached_only overrides ttr_status', async () => {
