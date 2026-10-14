@@ -20,6 +20,7 @@
  */
 import type { ServiceNowClient } from '../servicenow/client.js';
 import { ServiceNowError } from '../utils/errors.js';
+import { findOneByNumber } from '../utils/record-lookup.js';
 import { requireWrite } from '../utils/permissions.js';
 
 const SYS_ID_RE = /^[0-9a-f]{32}$/i;
@@ -248,13 +249,9 @@ export async function executeUsemIntegrationToolCall(
       if (SYS_ID_RE.test(args.number_or_sysid)) {
         return await client.getRecord('sn_vul_integration_run', args.number_or_sysid);
       }
-      const resp = await client.queryRecords({
-        table: 'sn_vul_integration_run',
-        query: `number=${sanitize(args.number_or_sysid)}`,
-        limit: 1,
-      });
-      if (resp.count === 0) throw new ServiceNowError(`Integration run not found: ${args.number_or_sysid}`, 'NOT_FOUND');
-      return resp.records[0];
+      const record = await findOneByNumber(client, { table: 'sn_vul_integration_run', value: String(args.number_or_sysid), label: 'Integration run' });
+      if (!record) throw new ServiceNowError(`Integration run not found: ${args.number_or_sysid}`, 'NOT_FOUND');
+      return record;
     }
 
     case 'list_integration_logs': {

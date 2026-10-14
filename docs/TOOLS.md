@@ -1672,6 +1672,8 @@ Summarize Indicator posture: counts by category and by last-result pass/fail.
 
 USEM (Unified Security Exposure Management) — the modern successor to Vulnerability Response. Covers Vulnerable Items (VI), Remediation Tasks (RT), Vulnerability Groups, NVD entries, automation rules, integrations, remediation SLA (TTR), and approval workflows. Configuration rules and integrations use the new `sn_sec_*` tables (post-USEM-migration).
 
+**Looking up by number.** Tools that accept a VIT / VUL / run number also accept a sys_id. Record numbers are not guaranteed unique — after a number counter reset or a demo-data load, new records can be issued numbers that already exist (seen on a PDI: three Vulnerable Items numbered VIT0010001). When a number matches more than one record, these tools fail with **`AMBIGUOUS_NUMBER`** and list the candidates (sys_id, created date, short description, newest first) instead of silently returning the first match; pass the sys_id. The same applies to `get_security_incident` and `get_vulnerability`.
+
 ### list_vulnerable_items
 List USEM Vulnerable Items (`sn_vul_vulnerable_item`), ordered by descending risk score.
 
@@ -1752,6 +1754,8 @@ Create a Vulnerable Item (`sn_vul_vulnerable_item`) with the `vulnerability` ref
 - `vulnerability` (required) — sys_id of the vulnerability entry (`sn_vul_entry`, e.g. an NVD entry)
 - `cmdb_ci` (required) — sys_id of the affected CI
 - `short_description`, `description`, `assignment_group`, `assigned_to`, `state`, `source`
+
+**`short_description` does not stick.** The "Update short description" business rule (sn_vul, before insert) regenerates it as `<vulnerability> detected on <CI>`, so it cannot be used to tag items or to select them in a remediation task rule condition. Use **`source`**, which is stored as sent. Fields that a business rule rewrote are reported in the result as `overwritten_fields` with a `warning`.
 
 ### list_remediation_task_findings
 List VI ↔ Remediation Task links in the `sn_vul_m2m_vul_group_item` m2m, in either direction: give `remediation_task` to list its member VIs, or `vulnerable_item` to list the Remediation Tasks it belongs to (including each task's `auto_vi_refresh`).
@@ -1840,7 +1844,7 @@ Example (replace the placeholder with the resolved finding-table sys_id):
     "order": 1000,
     "table": "sn_vul_vulnerable_item",
     "applies_to": "<finding-table-sys-id>",
-    "condition": "short_descriptionSTARTSWITHMCP-UI-E2E-",
+    "condition": "source=MCP E2E",
     "field_1": "assignment_group",
     "table_1": "sn_vul_vulnerable_item",
     "assignment_type": 5,
@@ -1852,6 +1856,19 @@ Example (replace the placeholder with the resolved finding-table sys_id):
 Create inactive, read back with `get_usem_rule`, then enable with
 `set_usem_rule_active` after verifying the scope and grouping configuration.
 Successful rule creation alone does not prove automatic VI → RT grouping.
+
+**Choose a `condition` on a field the platform keeps.** A Vulnerable Item's
+`short_description` is regenerated on insert (`<vulnerability> detected on <CI>`), so a
+condition such as `short_descriptionSTARTSWITH…` never matches — this is exactly why the
+2026-09-15 test rule grouped nothing. The example selects test items by `source`, which
+`create_vulnerable_item` stores as sent.
+
+PDI verification (2026-10-14): with this rule active and three Vulnerable Items for the same
+CVE created with `source` "MCP E2E" — two assigned to Network, one to Database — the
+"Link to Remediation Tasks" business rule grouped the two Network items into one remediation
+task and the Database item into a second, each task assigned to its group. The evaluation is
+triggered by the VI insert or by an update that changes the CI, state, vulnerability or number,
+including updates made through REST.
 
 **`assignment_group_fields` is written by a server-side script, so it also requires
 `SCRIPTING_ENABLED=true`.** It is a choice field ("Group by field") with no `sys_choice`

@@ -15,6 +15,7 @@
  */
 import type { ServiceNowClient } from '../servicenow/client.js';
 import { sanitizeLikeValue } from '../servicenow/client.js';
+import { findOneByNumber } from '../utils/record-lookup.js';
 import { ServiceNowError } from '../utils/errors.js';
 import { requireWrite } from '../utils/permissions.js';
 
@@ -285,7 +286,10 @@ export function getUsemToolDefinitions() {
         'A before business rule clears the `vulnerability` reference on REST inserts, which silently ' +
         'disables the "Link to Remediation Tasks" automation; this tool re-applies the reference via ' +
         'PATCH after insert and verifies it stuck. Requires both `vulnerability` and `cmdb_ci` so the ' +
-        'remediation-task rule engine can group the item. **[Write — requires WRITE_ENABLED=true]**',
+        'remediation-task rule engine can group the item. ServiceNow regenerates short_description as ' +
+        '"<vulnerability> detected on <CI>" on insert, so do not use it to tag or select items (e.g. in a ' +
+        'remediation task rule condition) — use `source` instead; the result reports overwritten fields. ' +
+        '**[Write — requires WRITE_ENABLED=true]**',
       inputSchema: {
         type: 'object',
         properties: {
@@ -294,7 +298,7 @@ export function getUsemToolDefinitions() {
             description: '32-char sys_id of the vulnerability entry (sn_vul_entry, e.g. an NVD entry)',
           },
           cmdb_ci: { type: 'string', description: '32-char sys_id of the affected CI' },
-          short_description: { type: 'string', description: 'Short description (defaults to a generated one server-side)' },
+          short_description: { type: 'string', description: 'Usually overwritten: the "Update short description" business rule sets it to "<vulnerability> detected on <CI>" on insert. Use `source` to tag test or imported items.' },
           description: { type: 'string', description: 'Detailed description' },
           assignment_group: { type: 'string', description: 'Assignment group sys_id' },
           assigned_to: { type: 'string', description: 'Assignee sys_id' },
@@ -410,14 +414,9 @@ async function resolveSysId(
   label: string
 ): Promise<string> {
   if (SYS_ID_RE.test(identifier)) return identifier;
-  const resp = await client.queryRecords({
-    table,
-    query: `number=${sanitizeLikeValue(identifier)}`,
-    fields: 'sys_id',
-    limit: 1,
-  });
-  if (resp.count === 0) throw new ServiceNowError(`${label} not found: ${identifier}`, 'NOT_FOUND');
-  return refValue(resp.records[0].sys_id);
+  const record = await findOneByNumber(client, { table, value: identifier, label, fields: 'sys_id' });
+  if (!record) throw new ServiceNowError(`${label} not found: ${identifier}`, 'NOT_FOUND');
+  return refValue(record.sys_id);
 }
 
 export async function executeUsemToolCall(
@@ -450,13 +449,9 @@ export async function executeUsemToolCall(
       if (SYS_ID_RE.test(args.number_or_sysid)) {
         return await client.getRecord('sn_vul_vulnerable_item', args.number_or_sysid);
       }
-      const resp = await client.queryRecords({
-        table: 'sn_vul_vulnerable_item',
-        query: `number=${queryValue(args.number_or_sysid)}`,
-        limit: 1,
-      });
-      if (resp.count === 0) throw new ServiceNowError(`Vulnerable Item not found: ${args.number_or_sysid}`, 'NOT_FOUND');
-      return resp.records[0];
+      const record = await findOneByNumber(client, { table: 'sn_vul_vulnerable_item', value: String(args.number_or_sysid), label: 'Vulnerable Item' });
+      if (!record) throw new ServiceNowError(`Vulnerable Item not found: ${args.number_or_sysid}`, 'NOT_FOUND');
+      return record;
     }
 
     case 'list_remediation_tasks': {
@@ -529,16 +524,15 @@ export async function executeUsemToolCall(
           return { ...rec, source_table: 'sn_vul_vulnerability' };
         }
       }
-      const safeId = sanitizeLikeValue(id);
-      const lookups: Array<{ table: string; query: string }> = /^VUL/i.test(id)
-        ? [{ table: 'sn_vul_vulnerability', query: `number=${safeId}` }]
+      const lookups: Array<{ table: string; numberField: string }> = /^VUL/i.test(id)
+        ? [{ table: 'sn_vul_vulnerability', numberField: 'number' }]
         : [
-            { table: 'sn_vul_remediation_task', query: `task_number=${safeId}` },
-            { table: 'sn_vul_vulnerability', query: `number=${safeId}` },
+            { table: 'sn_vul_remediation_task', numberField: 'task_number' },
+            { table: 'sn_vul_vulnerability', numberField: 'number' },
           ];
       for (const lookup of lookups) {
-        const resp = await client.queryRecords({ table: lookup.table, query: lookup.query, limit: 1 });
-        if (resp.count > 0) return { ...resp.records[0], source_table: lookup.table };
+        const record = await findOneByNumber(client, { table: lookup.table, numberField: lookup.numberField, value: id, label: 'Remediation Task' });
+        if (record) return { ...record, source_table: lookup.table };
       }
       throw new ServiceNowError(`Remediation Task not found: ${args.number_or_sysid}`, 'NOT_FOUND');
     }
@@ -566,13 +560,9 @@ export async function executeUsemToolCall(
       if (SYS_ID_RE.test(args.number_or_sysid)) {
         return await client.getRecord('sn_vul_vulnerability', args.number_or_sysid);
       }
-      const resp = await client.queryRecords({
-        table: 'sn_vul_vulnerability',
-        query: `number=${queryValue(args.number_or_sysid)}`,
-        limit: 1,
-      });
-      if (resp.count === 0) throw new ServiceNowError(`Vulnerability Group not found: ${args.number_or_sysid}`, 'NOT_FOUND');
-      return resp.records[0];
+      const record = await findOneByNumber(client, { table: 'sn_vul_vulnerability', value: String(args.number_or_sysid), label: 'Vulnerability Group' });
+      if (!record) throw new ServiceNowError(`Vulnerability Group not found: ${args.number_or_sysid}`, 'NOT_FOUND');
+      return record;
     }
 
     case 'create_vulnerability_group': {
@@ -718,10 +708,22 @@ export async function executeUsemToolCall(
           };
         }
       }
+      // Business rules may rewrite fields we sent (short_description is regenerated
+      // as "<CVE> detected on <CI>"); report that instead of letting it pass silently.
+      const overwritten = (['short_description', 'description', 'assignment_group', 'assigned_to', 'state', 'source'] as const)
+        .filter((f) => data[f] !== undefined && refValue(record[f]) !== String(data[f]))
+        .map((f) => ({ field: f, sent: String(data[f]), stored: refValue(record[f]) }));
       return {
         ...record,
         vulnerability_set: true,
         vulnerability_restored_via_patch: restored,
+        ...(overwritten.length ? {
+          overwritten_fields: overwritten,
+          warning: `ServiceNow did not keep ${overwritten.map((o) => o.field).join(', ')} as sent` +
+            (overwritten.some((o) => o.field === 'short_description')
+              ? ' — short_description is regenerated as "<vulnerability> detected on <CI>"; use `source` to tag or select items.'
+              : '.'),
+        } : {}),
         summary:
           `Created VI ${refValue(record.number) || sysId} with vulnerability reference intact` +
           (restored ? ' (re-applied via PATCH after the insert BR cleared it)' : ''),
@@ -839,10 +841,11 @@ export async function executeUsemToolCall(
         status = 'not_grouped_rule_mismatch_or_not_triggered';
         diagnosis.push(
           `Preconditions look fine (vulnerability + cmdb_ci set, ${rulesResp.count} active rule(s)) but the VI is not ` +
-          'in any remediation task. Check: (1) whether an active rule\'s condition actually matches this VI, ' +
-          '(2) the automation only evaluates on insert/update — REST-origin inserts have not been observed to ' +
-          'trigger it on this instance, and (3) joining an EXISTING task additionally requires that task to have ' +
-          'auto_vi_refresh=true. A UI-side update of the VI can re-trigger evaluation.'
+          'in any remediation task. Check: (1) whether an active rule\'s condition actually matches this VI — ' +
+          'a condition on short_description never does, because it is regenerated as "<vulnerability> detected on <CI>" ' +
+          'on insert; (2) the "Link to Remediation Tasks" rule evaluates only on insert and on updates that change the CI, ' +
+          'state, vulnerability or number (REST updates included), so a rule activated after the VI was created needs ' +
+          'such an update to re-run; (3) joining an EXISTING task additionally requires that task to have auto_vi_refresh=true.'
         );
       }
       if (staleRefreshTasks.length > 0 && links.length > 0) {

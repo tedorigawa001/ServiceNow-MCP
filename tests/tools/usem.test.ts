@@ -563,6 +563,44 @@ describe('write tools – with WRITE_ENABLED', () => {
   });
 });
 
+describe('number lookups refuse ambiguous numbers', () => {
+  beforeEach(() => vi.clearAllMocks());
+  const dup = () => {
+    qr().mockResolvedValueOnce({ count: 2, records: [{ sys_id: '1' }, { sys_id: '2' }] })
+      .mockResolvedValueOnce({ count: 2, records: [
+        { sys_id: 'a'.repeat(32), sys_created_on: '2026-10-14 11:44:42' },
+        { sys_id: 'b'.repeat(32), sys_created_on: '2022-06-19 06:05:47' },
+      ] });
+  };
+
+  it('get_vulnerable_item', async () => {
+    dup();
+    await expect(executeUsemToolCall(mockClient, 'get_vulnerable_item', { number_or_sysid: 'VIT0010001' }))
+      .rejects.toMatchObject({ code: 'AMBIGUOUS_NUMBER', message: expect.stringContaining('a'.repeat(32)) });
+  });
+
+  it('get_finding_grouping_status (it used to diagnose a different, closed item)', async () => {
+    dup();
+    await expect(executeUsemToolCall(mockClient, 'get_finding_grouping_status', { vulnerable_item: 'VIT0010001' }))
+      .rejects.toMatchObject({ code: 'AMBIGUOUS_NUMBER' });
+  });
+
+  it('get_vulnerability_group and get_remediation_task', async () => {
+    dup();
+    await expect(executeUsemToolCall(mockClient, 'get_vulnerability_group', { number_or_sysid: 'VUL0010015' }))
+      .rejects.toMatchObject({ code: 'AMBIGUOUS_NUMBER' });
+    dup();
+    await expect(executeUsemToolCall(mockClient, 'get_remediation_task', { number_or_sysid: 'VUL0010015' }))
+      .rejects.toMatchObject({ code: 'AMBIGUOUS_NUMBER' });
+  });
+
+  it('a sys_id bypasses the number lookup entirely', async () => {
+    getRec().mockResolvedValue({ sys_id: 'a'.repeat(32) });
+    await executeUsemToolCall(mockClient, 'get_vulnerable_item', { number_or_sysid: 'a'.repeat(32) });
+    expect(qr()).not.toHaveBeenCalled();
+  });
+});
+
 describe('create_vulnerable_item', () => {
   const ORIGINAL = process.env.WRITE_ENABLED;
   const VUL_ID = 'b'.repeat(32);
@@ -593,6 +631,27 @@ describe('create_vulnerable_item', () => {
     await expect(
       executeUsemToolCall(mockClient, 'create_vulnerable_item', { vulnerability: 'CVE-2018-1', cmdb_ci: CI_ID })
     ).rejects.toThrow('must be 32-char sys_ids');
+  });
+
+  it('reports fields that a business rule overwrote, such as the regenerated short_description', async () => {
+    createRec().mockResolvedValue({
+      sys_id: 'vi9'.padEnd(32, '0'), number: 'VIT0010009', vulnerability: { value: VUL_ID },
+      short_description: 'CVE-2019-1113 detected on ApplicationServerHelpdesk', source: 'MCP E2E',
+    });
+    const result = await executeUsemToolCall(mockClient, 'create_vulnerable_item', {
+      vulnerability: VUL_ID, cmdb_ci: CI_ID, short_description: 'MCP-UI-E2E test A', source: 'MCP E2E',
+    });
+    expect(result.overwritten_fields).toEqual([
+      { field: 'short_description', sent: 'MCP-UI-E2E test A', stored: 'CVE-2019-1113 detected on ApplicationServerHelpdesk' },
+    ]);
+    expect(result.warning).toContain('use `source` to tag or select items');
+  });
+
+  it('adds no warning when every sent field was kept', async () => {
+    createRec().mockResolvedValue({ sys_id: 'vi8'.padEnd(32, '0'), vulnerability: { value: VUL_ID }, source: 'MCP E2E' });
+    const result = await executeUsemToolCall(mockClient, 'create_vulnerable_item', { vulnerability: VUL_ID, cmdb_ci: CI_ID, source: 'MCP E2E' });
+    expect(result).not.toHaveProperty('overwritten_fields');
+    expect(result).not.toHaveProperty('warning');
   });
 
   it('returns without PATCH when the insert keeps the vulnerability reference', async () => {

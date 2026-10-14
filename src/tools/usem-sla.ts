@@ -19,6 +19,7 @@
  */
 import type { ServiceNowClient } from '../servicenow/client.js';
 import { sanitizeLikeValue } from '../servicenow/client.js';
+import { findOneByNumber } from '../utils/record-lookup.js';
 import { ServiceNowError } from '../utils/errors.js';
 import { requireWrite } from '../utils/permissions.js';
 
@@ -283,13 +284,8 @@ export async function executeUsemSlaToolCall(
       if (SYS_ID_RE.test(args.number_or_sysid)) {
         record = await client.getRecord('sn_vul_vulnerability', args.number_or_sysid);
       } else {
-        const resp = await client.queryRecords({
-          table: 'sn_vul_vulnerability',
-          query: `number=${sanitizeLikeValue(args.number_or_sysid)}`,
-          limit: 1,
-        });
-        if (resp.count === 0) throw new ServiceNowError(`Vulnerability Group not found: ${args.number_or_sysid}`, 'NOT_FOUND');
-        record = resp.records[0];
+        record = await findOneByNumber(client, { table: 'sn_vul_vulnerability', value: String(args.number_or_sysid), label: 'Vulnerability Group' });
+        if (!record) throw new ServiceNowError(`Vulnerability Group not found: ${args.number_or_sysid}`, 'NOT_FOUND');
       }
       const sysId = strVal(record.sys_id);
       const ttrStatus = strVal(record.ttr_status);

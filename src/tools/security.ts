@@ -7,6 +7,7 @@
  * Read tools: Tier 0. Write tools: Tier 1 (WRITE_ENABLED=true).
  */
 import { sanitizeLikeValue, type ServiceNowClient } from '../servicenow/client.js';
+import { findOneByNumber } from '../utils/record-lookup.js';
 import { ServiceNowError } from '../utils/errors.js';
 import { requireScripting, requireWrite } from '../utils/permissions.js';
 import { awaitScriptJobResult, newJobToken, scheduleScriptJob } from '../utils/script-job.js';
@@ -224,9 +225,9 @@ export async function executeSecurityToolCall(
       if (/^[0-9a-f]{32}$/i.test(args.number_or_sysid)) {
         return await client.getRecord('sn_si_incident', args.number_or_sysid);
       }
-      const resp = await client.queryRecords({ table: 'sn_si_incident', query: `number=${queryValue(args.number_or_sysid)}`, limit: 1 });
-      if (resp.count === 0) throw new ServiceNowError(`Security incident not found: ${args.number_or_sysid}`, 'NOT_FOUND');
-      return resp.records[0];
+      const record = await findOneByNumber(client, { table: 'sn_si_incident', value: String(args.number_or_sysid), label: 'Security incident' });
+      if (!record) throw new ServiceNowError(`Security incident not found: ${args.number_or_sysid}`, 'NOT_FOUND');
+      return record;
     }
     case 'update_security_incident': {
       requireWrite();
@@ -262,9 +263,9 @@ export async function executeSecurityToolCall(
       if (/^[0-9a-f]{32}$/i.test(args.number_or_sysid)) {
         return await client.getRecord('sn_vul_entry', args.number_or_sysid);
       }
-      const resp = await client.queryRecords({ table: 'sn_vul_entry', query: `number=${queryValue(args.number_or_sysid)}`, limit: 1 });
-      if (resp.count === 0) throw new ServiceNowError(`Vulnerability not found: ${args.number_or_sysid}`, 'NOT_FOUND');
-      return resp.records[0];
+      const record = await findOneByNumber(client, { table: 'sn_vul_entry', value: String(args.number_or_sysid), label: 'Vulnerability' });
+      if (!record) throw new ServiceNowError(`Vulnerability not found: ${args.number_or_sysid}`, 'NOT_FOUND');
+      return record;
     }
     case 'update_vulnerability': {
       requireWrite();
