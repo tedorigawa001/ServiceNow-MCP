@@ -287,7 +287,7 @@ export function getUsemToolDefinitions() {
         'disables the "Link to Remediation Tasks" automation; this tool re-applies the reference via ' +
         'PATCH after insert and verifies it stuck. Requires both `vulnerability` and `cmdb_ci` so the ' +
         'remediation-task rule engine can group the item. ServiceNow regenerates short_description as ' +
-        '"<vulnerability> detected on <CI>" on insert, so do not use it to tag or select items (e.g. in a ' +
+        '"<vulnerability> detected on <CI>" on insert, so a value passed here cannot be used to tag items or to select them later (e.g. in a ' +
         'remediation task rule condition) — use `source` instead; the result reports overwritten fields. ' +
         '**[Write — requires WRITE_ENABLED=true]**',
       inputSchema: {
@@ -842,8 +842,8 @@ export async function executeUsemToolCall(
         diagnosis.push(
           `Preconditions look fine (vulnerability + cmdb_ci set, ${rulesResp.count} active rule(s)) but the VI is not ` +
           'in any remediation task. Check: (1) whether an active rule\'s condition actually matches this VI — ' +
-          'a condition on short_description never does, because it is regenerated as "<vulnerability> detected on <CI>" ' +
-          'on insert; (2) the "Link to Remediation Tasks" rule evaluates only on insert and on updates that change the CI, ' +
+          'short_description is regenerated as "<vulnerability> detected on <CI>" on insert, so a condition on a test string ' +
+          'passed in short_description at creation never matches (one on the generated text, such as the CVE id, can); (2) the "Link to Remediation Tasks" rule evaluates only on insert and on updates that change the CI, ' +
           'state, vulnerability or number (REST updates included), so a rule activated after the VI was created needs ' +
           'such an update to re-run; (3) joining an EXISTING task additionally requires that task to have auto_vi_refresh=true.'
         );

@@ -1755,7 +1755,7 @@ Create a Vulnerable Item (`sn_vul_vulnerable_item`) with the `vulnerability` ref
 - `cmdb_ci` (required) — sys_id of the affected CI
 - `short_description`, `description`, `assignment_group`, `assigned_to`, `state`, `source`
 
-**`short_description` does not stick.** The "Update short description" business rule (sn_vul, before insert) regenerates it as `<vulnerability> detected on <CI>`, so it cannot be used to tag items or to select them in a remediation task rule condition. Use **`source`**, which is stored as sent. Fields that a business rule rewrote are reported in the result as `overwritten_fields` with a `warning`.
+**`short_description` does not stick.** The "Update short description" business rule (sn_vul, before insert) regenerates it as `<vulnerability> detected on <CI>`, so a value passed here cannot be used to tag items or to select them later in a remediation task rule condition (a condition on the generated text — for example the CVE id — still matches). Use **`source`**, which is stored as sent. Fields that a business rule rewrote are reported in the result as `overwritten_fields` with a `warning`.
 
 ### list_remediation_task_findings
 List VI ↔ Remediation Task links in the `sn_vul_m2m_vul_group_item` m2m, in either direction: give `remediation_task` to list its member VIs, or `vulnerable_item` to list the Remediation Tasks it belongs to (including each task's `auto_vi_refresh`).
@@ -1859,8 +1859,9 @@ Successful rule creation alone does not prove automatic VI → RT grouping.
 
 **Choose a `condition` on a field the platform keeps.** A Vulnerable Item's
 `short_description` is regenerated on insert (`<vulnerability> detected on <CI>`), so a
-condition such as `short_descriptionSTARTSWITH…` never matches — this is exactly why the
-2026-09-15 test rule grouped nothing. The example selects test items by `source`, which
+condition on a test string supplied at creation, such as `short_descriptionSTARTSWITHMCP-UI-E2E-`,
+never matches — this is exactly why the 2026-09-15 test rule grouped nothing. (A condition on the
+generated text, such as the CVE id, does match.) The example selects test items by `source`, which
 `create_vulnerable_item` stores as sent.
 
 PDI verification (2026-10-14): with this rule active and three Vulnerable Items for the same

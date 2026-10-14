@@ -18,7 +18,6 @@
  * Verified against a live PDI (dev400464).
  */
 import type { ServiceNowClient } from '../servicenow/client.js';
-import { sanitizeLikeValue } from '../servicenow/client.js';
 import { findOneByNumber } from '../utils/record-lookup.js';
 import { ServiceNowError } from '../utils/errors.js';
 import { requireWrite } from '../utils/permissions.js';
@@ -253,13 +252,10 @@ export async function executeUsemSlaToolCall(
       if (SYS_ID_RE.test(args.number_or_sysid)) {
         record = await client.getRecord(rt.table, args.number_or_sysid);
       } else {
-        const resp = await client.queryRecords({
-          table: rt.table,
-          query: `${rt.numberField}=${sanitizeLikeValue(args.number_or_sysid)}`,
-          limit: 1,
+        record = await findOneByNumber(client, {
+          table: rt.table, numberField: rt.numberField, value: String(args.number_or_sysid), label: rt.label,
         });
-        if (resp.count === 0) throw new ServiceNowError(`${rt.label} not found: ${args.number_or_sysid}`, 'NOT_FOUND');
-        record = resp.records[0];
+        if (!record) throw new ServiceNowError(`${rt.label} not found: ${args.number_or_sysid}`, 'NOT_FOUND');
       }
       const ttrStatus = strVal(record.ttr_status);
       const targetDate = strVal(record.ttr_target_date);

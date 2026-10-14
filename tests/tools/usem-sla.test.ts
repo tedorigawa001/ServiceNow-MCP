@@ -113,6 +113,33 @@ describe('list_remediation_sla', () => {
 describe('get_remediation_sla', () => {
   beforeEach(() => vi.clearAllMocks());
 
+  // Record numbers can be reused (a reset counter issued VIT0010001 to three
+  // items on the PDI). Taking the first match returned another record's SLA.
+  it.each([
+    ['vi', 'sn_vul_vulnerable_item', 'number', 'VIT0010001', 'Vulnerable Item'],
+    ['rt', 'sn_vul_remediation_task', 'task_number', 'RT0001001', 'Remediation Task'],
+    ['vg', 'sn_vul_vulnerability', 'number', 'VUL0010015', 'Vulnerability Group'],
+  ])('refuses an ambiguous %s number on %s instead of returning another record\'s SLA', async (recordType, table, numberField, number, label) => {
+    qr()
+      .mockResolvedValueOnce({ count: 2, records: [{ sys_id: 'a'.repeat(32), ttr_status: 'past_due' }, { sys_id: 'b'.repeat(32), ttr_status: 'on_track' }] })
+      .mockResolvedValueOnce({ count: 2, records: [
+        { sys_id: 'a'.repeat(32), sys_created_on: '2026-10-14 11:44:42' },
+        { sys_id: 'b'.repeat(32), sys_created_on: '2022-06-19 06:05:47' },
+      ] });
+    const error = await executeUsemSlaToolCall(mockClient, 'get_remediation_sla', { record_type: recordType, number_or_sysid: number }).catch(e => e);
+    expect(error).toMatchObject({ code: 'AMBIGUOUS_NUMBER' });
+    expect(error.message).toContain(`${label} number ${number} is not unique`);
+    expect(error.message).toContain('a'.repeat(32));
+    expect(error.message).toContain('b'.repeat(32));
+    expect(qr().mock.calls[0][0]).toMatchObject({ table, query: `${numberField}=${number}`, limit: 2 });
+  });
+
+  it('still returns the SLA when the number is unique', async () => {
+    qr().mockResolvedValueOnce({ count: 1, records: [{ sys_id: 'c'.repeat(32), number: 'VIT0003777', ttr_status: 'on_track', ttr_target_date: '2099-01-01 00:00:00' }] });
+    const result = await executeUsemSlaToolCall(mockClient, 'get_remediation_sla', { record_type: 'vi', number_or_sysid: 'VIT0003777' });
+    expect(result).toMatchObject({ number: 'VIT0003777', sys_id: 'c'.repeat(32), ttr_status: 'on_track' });
+  });
+
   it('computes a breached assessment for past_due with an overdue date', async () => {
     const past = '2000-01-01 00:00:00';
     getRec().mockResolvedValue({
