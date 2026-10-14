@@ -6,6 +6,16 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 ---
 
+## [Unreleased]
+
+### Fixed
+
+- **Remediation task rules that assign by field ("Group by field") can now be created and updated.** `create_usem_rule` / `update_usem_rule` sent `assignment_group_fields` through the Table API, which never stored it: the field is a choice field with no `sys_choice` rows (the workspace builds its options from `field_1`–`field_6` at runtime), and the Table API ignores any value outside a choice list while still answering 200. The rule was saved with `assignment_type` 5 and an empty group-by field, so it could not assign anything. Re-investigated live after a USEM upgrade (`sn_vul` 30.8.7; `sn_sec_rem` 31.0.12, which owns the table, unchanged): not read-only, no field ACLs, business rules or data policies, and both `GlideRecord` and `GlideRecordSecure` persist the value — the drop is the Table API's choice validation, reproduced on an out-of-list `incident.category`. The tools now send every other field over REST, set `assignment_group_fields` from a run-once server script (requires `SCRIPTING_ENABLED=true`; the value must be a field path), and read the rule back. Verified on the PDI: create, change and restore the group-by field on an inactive rule.
+- **Every USEM rule write is now read back** and fails with the new code `FIELDS_NOT_SAVED` — naming the field, the value sent and the value stored — when ServiceNow dropped something. Readback normalises the forms ServiceNow returns (booleans and numbers as strings, a trailing `^EQ` on conditions, list order, reference objects). It immediately caught a second silent drop: `remediation_target` allowed and listed `order`, but `sn_sec_wf_ttr_rule` has no such column, so `order` was always discarded and lists were sorted by a column that does not exist. `order` is removed for that rule type and its lists are sorted by `name`. A sweep of all 16 rule types against the PDI's dictionary found no other allowlisted field without a column.
+- `create_usem_rule` / `update_usem_rule` accept the remediation grouping configuration (`applies_to`, `description`, `assignment_type`, `assignment_group_fields`, `field_1`–`6`, `table_1`–`6`, `extended_table_1`–`6`) through an explicit allowlist that keeps system and lifecycle columns such as `marked_for_deletion` out.
+
+---
+
 ## [1.13.2] — 2026-10-07
 
 ### Security

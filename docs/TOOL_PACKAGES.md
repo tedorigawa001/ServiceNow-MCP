@@ -163,7 +163,7 @@ Includes:
 - GRC — Risk Management: Risks, Risk Statement library, Risk Criteria scale, dashboard (`sn_risk_*`) — note `impact`/`likelihood`/`score` are read-only, confirmed not settable via API on this instance (see [GRC_DESIGN.md](GRC_DESIGN.md))
 - GRC — Indicator/KRI: Indicators measuring a Control or Risk, Indicator Results, dashboard (`sn_grc_indicator*`) — `create_grc_indicator`'s `item` is a Control/Risk sys_id directly (they extend the same base table); `entity` must match that item's own `profile`
 - USEM core: Vulnerable Items (read + `create_vulnerable_item` with vulnerability-reference workaround), Remediation Tasks (cross-table read + create/update), Vulnerability Groups (read + create/update), VI↔RT link lookup (`list_remediation_task_findings`), grouping diagnosis (`get_finding_grouping_status`), NVD entries, posture dashboard (`get_usem_dashboard`)
-- USEM/VR configuration rules (`list_usem_rules`, `create_usem_rule`, `update_usem_rule`, `set_usem_rule_active`) and risk-score explanation (`get_risk_calculator_details`)
+- USEM/VR configuration rules (`list_usem_rules`, `create_usem_rule`, `update_usem_rule`, `set_usem_rule_active`) and risk-score explanation (`get_risk_calculator_details`). Writes are read back and fail with `FIELDS_NOT_SAVED` if ServiceNow dropped a value; a remediation task rule's "Group by field" (`assignment_group_fields`) is set by a server-side script and needs `SCRIPTING_ENABLED=true`
 - USEM/VR integrations (catalog, implementations, runs, logs, parameters with secret masking, enable/disable)
 - Remediation SLA / TTR tracking (`list_remediation_sla`, `get_group_sla`, `set_remediation_commitment`) and VR notifications
 - VR approvals and exception requests (`list_vr_approvals`, `list_vr_exception_requests`, `act_on_vr_approval`)
@@ -224,6 +224,6 @@ Includes:
 | `ai_developer` | false | `NOW_ASSIST_ENABLED=true` |
 | `portal_developer` | true | `SCRIPTING_ENABLED=true` |
 | `integration_engineer` | true | `SCRIPTING_ENABLED=true` (for register_event) |
-| `secops_analyst` | true (for VR writes/approvals) | `SCRIPTING_ENABLED=true` (run_security_playbook, scan_vulnerabilities) |
+| `secops_analyst` | true (for VR writes/approvals) | `SCRIPTING_ENABLED=true` (run_security_playbook, scan_vulnerabilities, and remediation task rules that group by field) |
 | `devops_engineer` | true | — |
 | `itam_analyst` | true | — |

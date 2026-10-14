@@ -7,7 +7,52 @@ const mockClient = {
   getRecord: vi.fn(),
   createRecord: vi.fn(),
   updateRecord: vi.fn(),
+  deleteRecord: vi.fn(),
 } as unknown as ServiceNowClient;
+const deleteRec = () => (mockClient as unknown as { deleteRecord: ReturnType<typeof vi.fn> }).deleteRecord;
+
+/**
+ * A tiny in-memory ServiceNow for the write tests: records written through the
+ * mock are returned on readback, and a run-once sysauto_script is "executed"
+ * when the tool polls syslog for its result — its setValue lines are applied
+ * to the target record. `dropOnRest` lists fields the fake Table API ignores,
+ * like the real one does for assignment_group_fields.
+ */
+function fakeInstance(opts: { dropOnRest?: string[]; jobRuns?: boolean; jobError?: string } = {}) {
+  const store = new Map<string, Record<string, any>>();
+  const jobs = new Map<string, string>();
+  let seq = 0;
+  const id = () => (++seq).toString(16).padStart(32, 'a');
+  const restWrite = (data: Record<string, any>) =>
+    Object.fromEntries(Object.entries(data).filter(([k]) => !(opts.dropOnRest ?? []).includes(k)).map(([k, v]) => [k, String(v)]));
+  createRec().mockImplementation(async (table: string, data: Record<string, any>) => {
+    const sysId = id();
+    if (table === 'sysauto_script') { jobs.set(sysId, String(data.script)); return { sys_id: sysId }; }
+    const rec = { sys_id: sysId, ...restWrite(data) };
+    store.set(sysId, rec);
+    return { ...rec };
+  });
+  updateRec().mockImplementation(async (_table: string, sysId: string, data: Record<string, any>) => {
+    const rec = { ...(store.get(sysId) ?? { sys_id: sysId }), ...restWrite(data) };
+    store.set(sysId, rec);
+    return { ...rec };
+  });
+  getRec().mockImplementation(async (_table: string, sysId: string) => ({ ...(store.get(sysId) ?? {}) }));
+  deleteRec().mockResolvedValue(undefined);
+  qr().mockImplementation(async ({ table, query }: { table: string; query: string }) => {
+    if (table !== 'syslog' || opts.jobRuns === false) return { count: 0, records: [] };
+    const token = /messageSTARTSWITH(\S+) RESULT:/.exec(query)?.[1];
+    const script = [...jobs.values()].find(js => token && js.includes(token));
+    if (!script) return { count: 0, records: [] };
+    if (opts.jobError) return { count: 1, records: [{ message: `${token} RESULT:${JSON.stringify({ error: opts.jobError })}` }] };
+    const target = /gr\.get\('([0-9a-f]{32})'\)/.exec(script)![1];
+    for (const [, field, value] of script.matchAll(/gr\.setValue\('([a-z_0-9]+)', '([^']*)'\)/g)) {
+      store.set(target, { ...(store.get(target) ?? { sys_id: target }), [field]: value });
+    }
+    return { count: 1, records: [{ message: `${token} RESULT:${JSON.stringify({ ok: true })}` }] };
+  });
+  return { store, jobs };
+}
 
 const qr = () => mockClient.queryRecords as ReturnType<typeof vi.fn>;
 const getRec = () => mockClient.getRecord as ReturnType<typeof vi.fn>;
@@ -51,6 +96,21 @@ describe('getUsemConfigToolDefinitions', () => {
     const def = getUsemConfigToolDefinitions().find(t => t.name === 'get_risk_calculator_details')!;
     expect(def.inputSchema.required).toEqual(['calculator']);
   });
+
+  it('exposes remediation grouping fields in both write schemas without allowing arbitrary columns', () => {
+    for (const name of ['create_usem_rule', 'update_usem_rule']) {
+      const def = getUsemConfigToolDefinitions().find(t => t.name === name)!;
+      const schema = (def.inputSchema.properties as any).fields;
+      expect(schema.additionalProperties).toBe(false);
+      for (const field of ['applies_to', 'description', 'assignment_type', 'assignment_group_fields',
+        ...Array.from({ length: 6 }, (_, i) => [`field_${i + 1}`, `table_${i + 1}`, `extended_table_${i + 1}`]).flat()]) {
+        expect(schema.properties).toHaveProperty(field);
+      }
+      for (const field of ['sys_id', 'sys_domain', 'marked_for_deletion', 'u_unlisted']) {
+        expect(schema.properties).not.toHaveProperty(field);
+      }
+    }
+  });
 });
 
 describe('executeUsemConfigToolCall – unknown tool', () => {
@@ -62,7 +122,7 @@ describe('executeUsemConfigToolCall – unknown tool', () => {
 describe('list_usem_rules', () => {
   beforeEach(() => vi.clearAllMocks());
 
-  it('maps rule_type to the right table and orders by order', async () => {
+  it('maps rule_type to the right table and orders by name (sn_sec_wf_ttr_rule has no order column)', async () => {
     qr().mockResolvedValue({ count: 2, records: [{ name: 'a' }, { name: 'b' }] });
     const result = await executeUsemConfigToolCall(mockClient, 'list_usem_rules', {
       rule_type: 'remediation_target',
@@ -70,10 +130,25 @@ describe('list_usem_rules', () => {
     });
     const call = qr().mock.calls[0][0];
     expect(call.table).toBe('sn_sec_wf_ttr_rule');
-    expect(call.orderBy).toBe('order');
+    expect(call.orderBy).toBe('name');
+    expect(call.fields).not.toContain('order');
     expect(call.query).toBe('active=true');
     expect(result.table).toBe('sn_sec_wf_ttr_rule');
     expect(result.summary).toContain('Remediation Target Rule');
+  });
+
+  it('orders by the order column where the table has one', async () => {
+    qr().mockResolvedValue({ count: 0, records: [] });
+    await executeUsemConfigToolCall(mockClient, 'list_usem_rules', { rule_type: 'assignment' });
+    expect(qr().mock.calls[0][0].orderBy).toBe('order');
+  });
+
+  it('rejects order for remediation_target, which has no such column', async () => {
+    process.env.WRITE_ENABLED = 'true';
+    try {
+      await expect(executeUsemConfigToolCall(mockClient, 'create_usem_rule', { rule_type: 'remediation_target', fields: { name: 'x', order: 1 } }))
+        .rejects.toThrow('cannot be set: order');
+    } finally { delete process.env.WRITE_ENABLED; }
   });
 
   it('maps remediation_task to sn_sec_rem_task_rule', async () => {
@@ -285,17 +360,135 @@ describe('write tools – permission gating', () => {
 
 describe('write tools – with WRITE_ENABLED', () => {
   const ORIGINAL = process.env.WRITE_ENABLED;
+  const ORIGINAL_SCRIPTING = process.env.SCRIPTING_ENABLED;
   beforeEach(() => {
     vi.clearAllMocks();
     process.env.WRITE_ENABLED = 'true';
+    delete process.env.SCRIPTING_ENABLED;
+    fakeInstance();
   });
   afterEach(() => {
     if (ORIGINAL === undefined) delete process.env.WRITE_ENABLED;
     else process.env.WRITE_ENABLED = ORIGINAL;
+    if (ORIGINAL_SCRIPTING === undefined) delete process.env.SCRIPTING_ENABLED;
+    else process.env.SCRIPTING_ENABLED = ORIGINAL_SCRIPTING;
+  });
+
+  const groupingFields = () => ({
+    rule_name: 'UI E2E', applies_to: 'b'.repeat(32), table: 'sn_vul_vulnerable_item',
+    description: 'Test only', active: false, order: 1000,
+    condition: 'short_descriptionSTARTSWITHMCP-UI-E2E-',
+    assignment_type: 5, assignment_group_fields: 'assignment_group',
+    ...Object.fromEntries(Array.from({ length: 6 }, (_, i) => [
+      [`field_${i + 1}`, 'assignment_group'],
+      [`table_${i + 1}`, 'sn_vul_vulnerable_item'],
+      [`extended_table_${i + 1}`, ''],
+    ]).flat()),
+  });
+
+  it.each(['create_usem_rule', 'update_usem_rule'])('%s writes grouping config over REST and assignment_group_fields through a run-once script', async tool => {
+    process.env.SCRIPTING_ENABLED = 'true';
+    const { store, jobs } = fakeInstance({ dropOnRest: ['assignment_group_fields'] });
+    const existing = 'c'.repeat(32);
+    store.set(existing, { sys_id: existing });
+    const fields = groupingFields();
+    const restFields: Record<string, unknown> = { ...fields };
+    delete restFields.assignment_group_fields;
+    const result = await executeUsemConfigToolCall(mockClient, tool, { rule_type: 'remediation_task', sys_id: existing, fields });
+
+    if (tool === 'create_usem_rule') expect(createRec()).toHaveBeenCalledWith('sn_sec_rem_task_rule', restFields);
+    else expect(updateRec()).toHaveBeenCalledWith('sn_sec_rem_task_rule', existing, restFields);
+    const [script] = [...jobs.values()];
+    expect(script).toContain("var gr = new GlideRecord('sn_sec_rem_task_rule');");
+    expect(script).toContain("gr.setValue('assignment_group_fields', 'assignment_group');");
+    expect(result.assignment_group_fields).toBe('assignment_group');
+    expect(result.script_written_fields).toEqual(['assignment_group_fields']);
+    expect(result.verified_fields).toEqual(Object.keys(fields));
+    expect(deleteRec()).toHaveBeenCalledWith('sysauto_script', expect.any(String)); // job removed once its result was read
+  });
+
+  it('requires SCRIPTING_ENABLED before writing anything when assignment_group_fields is set', async () => {
+    await expect(executeUsemConfigToolCall(mockClient, 'create_usem_rule', { rule_type: 'remediation_task', fields: groupingFields() }))
+      .rejects.toThrow('Scripting operations are disabled');
+    expect(createRec()).not.toHaveBeenCalled();
+  });
+
+  it('rejects an assignment_group_fields value that is not a field path, before writing', async () => {
+    process.env.SCRIPTING_ENABLED = 'true';
+    for (const bad of ["x'); gs.info('pwned", 'assignment group', 'a..b']) {
+      await expect(executeUsemConfigToolCall(mockClient, 'create_usem_rule', {
+        rule_type: 'remediation_task', fields: { ...groupingFields(), assignment_group_fields: bad },
+      })).rejects.toMatchObject({ code: 'VALIDATION_ERROR' });
+    }
+    expect(createRec()).not.toHaveBeenCalled();
+  });
+
+  it('update with only assignment_group_fields skips the REST PATCH', async () => {
+    process.env.SCRIPTING_ENABLED = 'true';
+    const { store } = fakeInstance({ dropOnRest: ['assignment_group_fields'] });
+    store.set('c'.repeat(32), { sys_id: 'c'.repeat(32) });
+    const result = await executeUsemConfigToolCall(mockClient, 'update_usem_rule', {
+      rule_type: 'remediation_task', sys_id: 'c'.repeat(32), fields: { assignment_group_fields: 'cmdb_ci.support_group' },
+    });
+    expect(updateRec()).not.toHaveBeenCalled();
+    expect(result.assignment_group_fields).toBe('cmdb_ci.support_group');
+  });
+
+  it('reports which rule was created when the script part fails, so it can be fixed or removed', async () => {
+    process.env.SCRIPTING_ENABLED = 'true';
+    fakeInstance({ dropOnRest: ['assignment_group_fields'], jobError: 'update was rejected' });
+    await expect(executeUsemConfigToolCall(mockClient, 'create_usem_rule', { rule_type: 'remediation_task', fields: groupingFields() }))
+      .rejects.toThrow(/Remediation Task Rule [0-9a-f]{32} was created, but assignment_group_fields could not be set: .*update was rejected/);
+  });
+
+  it('reports SCRIPT_SCHEDULED when the scheduler does not run the job in time', async () => {
+    process.env.SCRIPTING_ENABLED = 'true';
+    fakeInstance({ dropOnRest: ['assignment_group_fields'], jobRuns: false });
+    await expect(executeUsemConfigToolCall(mockClient, 'update_usem_rule', {
+      rule_type: 'remediation_task', sys_id: 'c'.repeat(32), fields: { assignment_group_fields: 'assignment_group' }, wait_seconds: 0,
+    })).rejects.toMatchObject({ code: 'SCRIPT_SCHEDULED' });
+  });
+
+  it('fails with FIELDS_NOT_SAVED when the Table API drops a value without an error', async () => {
+    fakeInstance({ dropOnRest: ['assignment_group'] });
+    await expect(executeUsemConfigToolCall(mockClient, 'create_usem_rule', {
+      rule_type: 'remediation_task', fields: { rule_name: 'R', assignment_group: 'd'.repeat(32), order: 10 },
+    })).rejects.toMatchObject({ code: 'FIELDS_NOT_SAVED', message: expect.stringContaining('did not store assignment_group') });
+  });
+
+  it('accepts the forms ServiceNow normalises on readback (booleans, numbers, ^EQ, list order, references)', async () => {
+    const { store } = fakeInstance();
+    store.set('c'.repeat(32), { sys_id: 'c'.repeat(32) });
+    updateRec().mockImplementation(async (_t: string, sysId: string) => {
+      const rec = { sys_id: sysId, active: 'false', order: '1000', condition: 'priority=1^EQ', applies_to: 'b,a', assignment_group: { value: 'd'.repeat(32), link: 'x' } };
+      store.set(sysId, rec);
+      return rec;
+    });
+    await expect(executeUsemConfigToolCall(mockClient, 'update_usem_rule', {
+      rule_type: 'remediation_task', sys_id: 'c'.repeat(32),
+      fields: { active: false, order: 1000, condition: 'priority=1', applies_to: 'a,b', assignment_group: 'd'.repeat(32) },
+    })).resolves.toMatchObject({ verified_fields: ['active', 'order', 'condition', 'applies_to', 'assignment_group'] });
+  });
+
+  it.each(['create_usem_rule', 'update_usem_rule'])('%s keeps remediation-only fields out of other rule types', async tool => {
+    await expect(executeUsemConfigToolCall(mockClient, tool, {
+      rule_type: 'assignment', sys_id: 'a'.repeat(32), fields: { field_1: 'assignment_group' },
+    })).rejects.toThrow('field_1');
+    expect(createRec()).not.toHaveBeenCalled();
+    expect(updateRec()).not.toHaveBeenCalled();
+  });
+
+  it.each(['create_usem_rule', 'update_usem_rule'])('%s still rejects remediation system and lifecycle columns', async tool => {
+    for (const field of ['sys_id', 'sys_domain', 'sys_created_by', 'marked_for_deletion', 'u_unlisted']) {
+      await expect(executeUsemConfigToolCall(mockClient, tool, {
+        rule_type: 'remediation_task', sys_id: 'a'.repeat(32), fields: { [field]: 'x' },
+      })).rejects.toThrow(field);
+    }
+    expect(createRec()).not.toHaveBeenCalled();
+    expect(updateRec()).not.toHaveBeenCalled();
   });
 
   it('create_usem_rule creates a record and labels it via nameField', async () => {
-    createRec().mockResolvedValue({ sys_id: 'new1' });
     const result = await executeUsemConfigToolCall(mockClient, 'create_usem_rule', {
       rule_type: 'remediation_task',
       fields: { rule_name: 'Critical to SecOps', active: true, order: 100 },
@@ -330,7 +523,6 @@ describe('write tools – with WRITE_ENABLED', () => {
   });
 
   it('update_usem_rule patches the mapped table', async () => {
-    updateRec().mockResolvedValue({ sys_id: 'a'.repeat(32) });
     await executeUsemConfigToolCall(mockClient, 'update_usem_rule', {
       rule_type: 'remediation_target',
       sys_id: 'a'.repeat(32),

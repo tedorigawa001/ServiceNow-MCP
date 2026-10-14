@@ -1804,13 +1804,86 @@ Get the full definition of a single USEM/VR rule.
 Create a USEM/VR automation rule. **[Write — admin-level config change]**
 
 **Parameters**:
+
 - `rule_type` (required), `fields` (required) — allowlisted column/value map for the selected rule type
+- `wait_seconds` — Only for script-written fields (`assignment_group_fields`): how long to wait for the run-once job (0–120, default 60)
+
+Every field in `fields` is read back after the write. If ServiceNow did not store one of them,
+the tool fails with **`FIELDS_NOT_SAVED`** and names the field, the value sent and the value
+stored — the Table API answers 200 even when it drops a value (a read-only option, a field
+ACL, or a value outside a choice list), so a successful HTTP response alone is not proof.
+
+For `remediation_task`, writable fields are `rule_name`, `active`, `order`, `table`,
+`condition`, `description`, `applies_to`, `assignment_group`, `assignment_type`,
+`assignment_group_fields`, and grouping slots `field_1`–`field_6`, `table_1`–`table_6`,
+`extended_table_1`–`extended_table_6`. System metadata and lifecycle fields such as
+`sys_id`, `sys_domain`, and `marked_for_deletion` are not writable through this tool.
+Both write-tool schemas retain `additionalProperties: false`; runtime validation
+additionally enforces the selected rule type's allowlist.
+
+`applies_to` is a comma-separated list of **sys_ids from `sn_vul_cmn_finding_table`**,
+not a table name. Resolve the record with `table=sn_vul_vulnerable_item` on the target
+instance; do not reuse an ID from another instance. The PDI dictionary requires
+`rule_name`, `table`, and `applies_to`. For Group by field assignment, the verified
+`assignment_type` is `5`, and `assignment_group_fields` contains the finding field
+path (for example, `assignment_group`). Choice values may vary by platform version;
+verify them on the target instance.
+
+Example (replace the placeholder with the resolved finding-table sys_id):
+
+```json
+{
+  "rule_type": "remediation_task",
+  "fields": {
+    "rule_name": "MCP UI E2E - VI to RT",
+    "active": false,
+    "order": 1000,
+    "table": "sn_vul_vulnerable_item",
+    "applies_to": "<finding-table-sys-id>",
+    "condition": "short_descriptionSTARTSWITHMCP-UI-E2E-",
+    "field_1": "assignment_group",
+    "table_1": "sn_vul_vulnerable_item",
+    "assignment_type": 5,
+    "assignment_group_fields": "assignment_group"
+  }
+}
+```
+
+Create inactive, read back with `get_usem_rule`, then enable with
+`set_usem_rule_active` after verifying the scope and grouping configuration.
+Successful rule creation alone does not prove automatic VI → RT grouping.
+
+**`assignment_group_fields` is written by a server-side script, so it also requires
+`SCRIPTING_ENABLED=true`.** It is a choice field ("Group by field") with no `sys_choice`
+rows — the workspace builds its options from `field_1`–`field_6` at runtime — and the
+Table API ignores any value that is not in a field's choice list while still answering 200.
+The tool therefore sends every other field over REST and sets `assignment_group_fields`
+from a run-once Scheduled Script Execution with a plain `GlideRecord` (the same mechanism
+`execute_background_script` uses), then reads the rule back. That part takes as long as the
+scheduler needs to pick the job up (about 30 s on the PDI). The value must be a field path
+(letters, digits, underscores and dots); per `sn_sec_rem.RemediationTaskRule` it is read on
+the finding and should match one of the `field_N` grouping keys. If the scheduler does not
+run the job within `wait_seconds`, the tool returns `SCRIPT_SCHEDULED` with the job's sys_id;
+if the script part of a create fails, the error names the rule that was created so it can be
+fixed with `update_usem_rule` or deleted.
+
+PDI history: on 2026-09-15 `assignment_group_fields` came back empty after both POST and
+PATCH on dev441827 and the cause was open. Re-investigated on 2026-10-14 after the USEM
+upgrade (`sn_vul` 30.8.7; `sn_sec_rem` 31.0.12 unchanged): the dictionary entry is not
+read-only, there are no field ACLs, business rules or data policies on the table, and both
+`GlideRecord` and `GlideRecordSecure` persist the value — only the Table API drops it,
+which reproduces on any choice field (e.g. an out-of-list `incident.category`). Creating,
+updating and reading back a Group by field rule through this tool was then verified live.
 
 ### update_usem_rule
-Update a USEM/VR automation rule. **[Write — admin-level config change]**
+Update a USEM/VR automation rule. **[Write — admin-level config change]** Fields are read back
+after the write (`FIELDS_NOT_SAVED` on a mismatch); setting `remediation_task`
+`assignment_group_fields` runs a server-side script and requires `SCRIPTING_ENABLED=true`
+(see `create_usem_rule`). An update that only changes that field makes no REST PATCH.
 
 **Parameters**:
 - `rule_type` (required), `sys_id` (required), `fields` (required) — allowlisted column/value map for the selected rule type
+- `wait_seconds` — Only for script-written fields (0–120, default 60)
 
 ### set_usem_rule_active
 Enable/disable a USEM/VR rule (toggle of `active`; not supported for rule types without an active flag, e.g. `exception_rule`, `exception_config`, `calculator_config`, `risk_field`, `risk_score_weight`). **[Write — admin-level config change]**

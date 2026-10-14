@@ -37,7 +37,8 @@
  */
 import type { ServiceNowClient } from '../servicenow/client.js';
 import { ServiceNowError } from '../utils/errors.js';
-import { requireWrite } from '../utils/permissions.js';
+import { requireScripting, requireWrite } from '../utils/permissions.js';
+import { awaitScriptJobResult, newJobToken, scheduleScriptJob } from '../utils/script-job.js';
 
 interface RuleType {
   table: string;
@@ -53,6 +54,12 @@ interface RuleType {
   listFields: string;
   /** Curated fields accepted by create/update; defaults to listFields minus sys_id. */
   writeFields?: Set<string>;
+  /**
+   * Writable fields the Table API silently drops, so they are written by a
+   * server-side script instead (requires SCRIPTING_ENABLED). Values must be
+   * field paths (letters, digits, underscores and dots).
+   */
+  scriptOnlyFields?: Set<string>;
 }
 
 const RULE_REGISTRY: Record<string, RuleType> = {
@@ -68,14 +75,31 @@ const RULE_REGISTRY: Record<string, RuleType> = {
     label: 'Remediation Task Rule',
     nameField: 'rule_name',
     hasActive: true,
-    listFields: 'rule_name,active,order,assignment_group,table,condition,sys_id',
+    listFields: 'rule_name,active,order,applies_to,assignment_group,assignment_type,assignment_group_fields,table,condition,field_1,table_1,sys_id',
+    // Explicit configuration allowlist: listFields alone omits required applies_to
+    // and grouping settings. Verified via dev441827 sys_dictionary (2026-09-15).
+    // Do not include system metadata or lifecycle controls such as marked_for_deletion.
+    writeFields: new Set([
+      'rule_name', 'active', 'order', 'assignment_group', 'table', 'condition',
+      'applies_to', 'description', 'assignment_type', 'assignment_group_fields',
+      ...Array.from({ length: 6 }, (_, i) => [
+        `field_${i + 1}`, `table_${i + 1}`, `extended_table_${i + 1}`,
+      ]).flat(),
+    ]),
+    // assignment_group_fields ("Group by field") is a choice field with no
+    // sys_choice rows — the workspace builds the options from field_1..6 at
+    // runtime. The Table API ignores any value not in the choice list and still
+    // answers 200, so a REST write never sticks (verified on dev441827,
+    // 2026-10-14; server-side GlideRecord and GlideRecordSecure both persist it).
+    scriptOnlyFields: new Set(['assignment_group_fields']),
   },
   remediation_target: {
     table: 'sn_sec_wf_ttr_rule',
     label: 'Remediation Target Rule',
     nameField: 'name',
     hasActive: true,
-    listFields: 'name,active,order,table,ttr_max,ttr_remind,target_from,sys_id',
+    orderField: 'name', // no order column (verified on dev441827, 2026-10-14) — an `order` write was silently dropped
+    listFields: 'name,active,table,ttr_max,ttr_remind,target_from,sys_id',
   },
   risk_calculator: {
     table: 'sn_sec_calculator_group',
@@ -228,6 +252,106 @@ const RULE_FIELD_SCHEMA = allowedFieldsSchema(
   'Column/value map for the rule record. Schema allows the union of all USEM rule fields; runtime also restricts fields to the selected rule_type.'
 );
 
+const FIELD_PATH_RE = /^[A-Za-z0-9_]+(\.[A-Za-z0-9_]+)*$/;
+
+/** Split a fields object into the part the Table API can write and the part a script must write. */
+function splitScriptOnlyFields(rt: RuleType, fields: Record<string, any>) {
+  const rest: Record<string, any> = {};
+  const scripted: Record<string, string> = {};
+  for (const [field, value] of Object.entries(fields)) {
+    if (!rt.scriptOnlyFields?.has(field)) { rest[field] = value; continue; }
+    const text = value === null || value === undefined ? '' : String(value);
+    if (text !== '' && (!FIELD_PATH_RE.test(text) || text.length > 255)) {
+      throw new ServiceNowError(
+        `${field} must be a field path such as "assignment_group" or "cmdb_ci.support_group"`,
+        'VALIDATION_ERROR'
+      );
+    }
+    scripted[field] = text;
+  }
+  return { rest, scripted };
+}
+
+/**
+ * Write fields the Table API drops with a server-side GlideRecord in a run-once
+ * job. Only the table name (from the registry), a hex sys_id, allowlisted field
+ * names and field-path values are interpolated into the script.
+ */
+async function writeScriptOnlyFields(
+  client: ServiceNowClient,
+  rt: RuleType,
+  sysId: string,
+  fields: Record<string, string>,
+  waitSeconds: number,
+): Promise<void> {
+  if (!SYS_ID_RE.test(sysId)) throw new ServiceNowError(`Unexpected sys_id "${sysId}"`, 'API_ERROR');
+  const token = newJobToken('mcp-rule');
+  const script = [
+    `var out = {};`,
+    `var gr = new GlideRecord('${rt.table}');`,
+    `if (!gr.get('${sysId}')) { out = { error: 'record not found' }; } else {`,
+    ...Object.entries(fields).map(([field, value]) => `  gr.setValue('${field}', '${value}');`),
+    `  if (!gr.update()) out = { error: 'update was rejected' }; else out = { ok: true };`,
+    `}`,
+    `gs.info('${token} RESULT:' + JSON.stringify(out));`,
+  ].join('\n');
+  const job = await scheduleScriptJob(client, `[MCP rule field ${token}]`, script);
+  const result = await awaitScriptJobResult(client, token, waitSeconds);
+  if (!result) {
+    throw new ServiceNowError(
+      `${Object.keys(fields).join(', ')} on ${rt.label} ${sysId} was queued as run-once job ${job.sys_id} but the scheduler had not run it within ${waitSeconds}s. ` +
+      'Read the rule back later to check the value; delete the job if it never runs.',
+      'SCRIPT_SCHEDULED'
+    );
+  }
+  await client.deleteRecord('sysauto_script', job.sys_id).catch(() => undefined);
+  if (result.error) {
+    throw new ServiceNowError(`Could not set ${Object.keys(fields).join(', ')} on ${rt.label} ${sysId}: ${String(result.error)}`, 'API_ERROR');
+  }
+}
+
+/** Normalise a stored or requested value for comparison. */
+function comparable(field: string, value: unknown): string {
+  let text = value && typeof value === 'object' && 'value' in (value as Record<string, unknown>)
+    ? String((value as { value: unknown }).value ?? '')
+    : value === null || value === undefined ? '' : String(value);
+  text = text.trim();
+  // Encoded queries come back with a trailing ^EQ terminator.
+  if (field === 'condition' || field.endsWith('condition')) text = text.replace(/\^EQ$/, '');
+  // glide_list values may come back in another order.
+  if (text.includes(',') && !text.includes(' ')) text = text.split(',').sort().join(',');
+  return text;
+}
+
+/**
+ * Read the record back and fail if any requested field was not stored. The
+ * Table API answers 200 even when it drops a value (read-only option, field
+ * ACL, a value outside a choice list), so a successful response alone proves
+ * nothing.
+ */
+async function verifyRuleFields(client: ServiceNowClient, rt: RuleType, sysId: string, fields: Record<string, any>): Promise<Record<string, any>> {
+  const names = Object.keys(fields);
+  const stored = await client.getRecord(rt.table, sysId, ['sys_id', ...names].join(',')) as Record<string, any>;
+  const unsaved = names.filter(field => comparable(field, fields[field]) !== comparable(field, stored?.[field]));
+  if (unsaved.length > 0) {
+    const detail = unsaved.map(f => `${f}: sent ${JSON.stringify(fields[f])}, stored ${JSON.stringify(comparable(f, stored?.[f]))}`).join('; ');
+    throw new ServiceNowError(
+      `${rt.label} ${sysId} was written but ServiceNow did not store ${unsaved.join(', ')} (${detail}). ` +
+      'The Table API drops such values without an error (read-only option, field ACL, or a value outside the choice list).',
+      'FIELDS_NOT_SAVED'
+    );
+  }
+  return stored;
+}
+
+function waitSecondsArg(value: unknown): number {
+  const seconds = value === undefined ? 60 : Number(value);
+  if (!Number.isFinite(seconds) || seconds < 0 || seconds > 120) {
+    throw new ServiceNowError('wait_seconds must be between 0 and 120', 'VALIDATION_ERROR');
+  }
+  return seconds;
+}
+
 function assertAllowedRuleFields(rt: RuleType, action: 'set' | 'updated', fields: Record<string, any>): void {
   const allowedFields = writableFields(rt);
   const unsafeFields = Object.keys(fields).filter(field => !allowedFields.has(field));
@@ -282,12 +406,18 @@ export function getUsemConfigToolDefinitions() {
       description:
         'Create a USEM/VR automation rule. Provide the rule_type and a fields object matching ' +
         'that table allowlist (e.g. name/rule_name, active, order, condition, assignment_group, ttr_max). ' +
+        'Every field is read back after the write; a value ServiceNow did not store fails with FIELDS_NOT_SAVED. ' +
+        'remediation_task with assignment_type 5 (Group by field) also needs assignment_group_fields — a field path on the ' +
+        'finding that matches one of field_1..6 (e.g. "assignment_group"). The Table API cannot write that field, so it is set ' +
+        'by a run-once server script and additionally requires SCRIPTING_ENABLED=true. Create rules inactive and enable them ' +
+        'with set_usem_rule_active after checking them. ' +
         '**[Write — requires WRITE_ENABLED=true; admin-level config change]**',
       inputSchema: {
         type: 'object',
         properties: {
           rule_type: RULE_TYPE_SCHEMA,
           fields: RULE_FIELD_SCHEMA,
+          wait_seconds: { type: 'number', description: 'Only used for script-written fields (assignment_group_fields): how long to wait for the run-once job (0-120, default 60).' },
         },
         required: ['rule_type', 'fields'],
       },
@@ -296,6 +426,8 @@ export function getUsemConfigToolDefinitions() {
       name: 'update_usem_rule',
       description:
         'Update a USEM/VR automation rule by sys_id with a fields object restricted to that table allowlist. ' +
+        'Every field is read back after the write; a value ServiceNow did not store fails with FIELDS_NOT_SAVED. ' +
+        'Setting remediation_task assignment_group_fields runs a run-once server script and requires SCRIPTING_ENABLED=true. ' +
         '**[Write — requires WRITE_ENABLED=true; admin-level config change]**',
       inputSchema: {
         type: 'object',
@@ -303,6 +435,7 @@ export function getUsemConfigToolDefinitions() {
           rule_type: RULE_TYPE_SCHEMA,
           sys_id: { type: 'string', description: '32-char sys_id of the rule' },
           fields: RULE_FIELD_SCHEMA,
+          wait_seconds: { type: 'number', description: 'Only used for script-written fields (assignment_group_fields): how long to wait for the run-once job (0-120, default 60).' },
         },
         required: ['rule_type', 'sys_id', 'fields'],
       },
@@ -395,9 +528,32 @@ export async function executeUsemConfigToolCall(
         throw new ServiceNowError('fields object with at least one column is required', 'INVALID_REQUEST');
       }
       assertAllowedRuleFields(rt, 'set', args.fields);
-      const result = await client.createRecord(rt.table, args.fields);
-      const label = rt.nameField ? args.fields[rt.nameField] ?? result.sys_id : result.sys_id;
-      return { ...result, rule_type: args.rule_type, summary: `Created ${rt.label}: ${label}` };
+      const { rest, scripted } = splitScriptOnlyFields(rt, args.fields);
+      const scriptedNames = Object.keys(scripted);
+      if (scriptedNames.length) requireScripting();
+      const waitSeconds = waitSecondsArg(args.wait_seconds);
+      const result = await client.createRecord(rt.table, rest);
+      const sysId = String(result.sys_id);
+      if (scriptedNames.length) {
+        try {
+          await writeScriptOnlyFields(client, rt, sysId, scripted, waitSeconds);
+        } catch (error) {
+          const message = error instanceof Error ? error.message : String(error);
+          throw new ServiceNowError(
+            `${rt.label} ${sysId} was created, but ${scriptedNames.join(', ')} could not be set: ${message} ` +
+            `Retry with update_usem_rule on that sys_id, or delete the rule.`,
+            error instanceof ServiceNowError ? error.code : 'API_ERROR'
+          );
+        }
+      }
+      const stored = await verifyRuleFields(client, rt, sysId, args.fields);
+      const label = rt.nameField ? args.fields[rt.nameField] ?? sysId : sysId;
+      return {
+        ...result, ...stored, rule_type: args.rule_type,
+        verified_fields: Object.keys(args.fields),
+        ...(scriptedNames.length ? { script_written_fields: scriptedNames } : {}),
+        summary: `Created ${rt.label}: ${label}`,
+      };
     }
 
     case 'update_usem_rule': {
@@ -408,8 +564,19 @@ export async function executeUsemConfigToolCall(
         throw new ServiceNowError('fields object with at least one column is required', 'INVALID_REQUEST');
       }
       assertAllowedRuleFields(rt, 'updated', args.fields);
-      const result = await client.updateRecord(rt.table, args.sys_id, args.fields);
-      return { ...result, rule_type: args.rule_type, summary: `Updated ${rt.label} ${args.sys_id}` };
+      const { rest, scripted } = splitScriptOnlyFields(rt, args.fields);
+      const scriptedNames = Object.keys(scripted);
+      if (scriptedNames.length) requireScripting();
+      const waitSeconds = waitSecondsArg(args.wait_seconds);
+      const result = Object.keys(rest).length ? await client.updateRecord(rt.table, args.sys_id, rest) : {};
+      if (scriptedNames.length) await writeScriptOnlyFields(client, rt, String(args.sys_id), scripted, waitSeconds);
+      const stored = await verifyRuleFields(client, rt, String(args.sys_id), args.fields);
+      return {
+        ...result, ...stored, rule_type: args.rule_type,
+        verified_fields: Object.keys(args.fields),
+        ...(scriptedNames.length ? { script_written_fields: scriptedNames } : {}),
+        summary: `Updated ${rt.label} ${args.sys_id}`,
+      };
     }
 
     case 'set_usem_rule_active': {
