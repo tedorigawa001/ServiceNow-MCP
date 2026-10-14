@@ -103,7 +103,7 @@ describe('get_task', () => {
   it('strips ^ from the number so it cannot inject extra encoded-query clauses', async () => {
     (mockClient.queryRecords as ReturnType<typeof vi.fn>).mockResolvedValue({ count: 1, records: [{ sys_id: 't1', number: 'TASK0001' }] });
     await executeTaskToolCall(mockClient, 'get_task', { number_or_sysid: 'TASK0001^ORstate=closed' });
-    expect(mockClient.queryRecords).toHaveBeenCalledWith(expect.objectContaining({ query: 'number=TASK0001ORstate=closed^ORsys_id=TASK0001ORstate=closed' }));
+    expect(mockClient.queryRecords).toHaveBeenCalledWith(expect.objectContaining({ query: 'number=TASK0001ORstate=closed' }));
   });
 });
 

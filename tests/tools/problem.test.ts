@@ -73,7 +73,7 @@ describe('get_problem', () => {
   it('strips ^ from the number so it cannot inject extra encoded-query clauses', async () => {
     (mockClient.queryRecords as ReturnType<typeof vi.fn>).mockResolvedValue({ count: 1, records: [{ sys_id: 'p1', number: 'PRB0001' }] });
     await executeProblemToolCall(mockClient, 'get_problem', { number_or_sysid: 'PRB0001^ORstate=closed' });
-    expect(mockClient.queryRecords).toHaveBeenCalledWith(expect.objectContaining({ query: 'number=PRB0001ORstate=closed^ORsys_id=PRB0001ORstate=closed' }));
+    expect(mockClient.queryRecords).toHaveBeenCalledWith(expect.objectContaining({ query: 'number=PRB0001ORstate=closed' }));
   });
 });
 

@@ -12,6 +12,7 @@ import type { ServiceNowClient } from '../servicenow/client.js';
 import { sanitizeLikeValue } from '../servicenow/client.js';
 import { ServiceNowError } from '../utils/errors.js';
 import { requireWrite } from '../utils/permissions.js';
+import { findOneByNumber } from '../utils/record-lookup.js';
 
 const SYS_ID_RE = /^[0-9a-f]{32}$/i;
 
@@ -123,9 +124,9 @@ export function getEventManagementToolDefinitions() {
 async function resolveAlert(client: ServiceNowClient, ref: unknown, fields: string): Promise<Record<string, unknown>> {
   const value = String(ref ?? '').trim();
   if (!value) throw new ServiceNowError('number_or_sysid is required', 'INVALID_REQUEST');
-  const query = SYS_ID_RE.test(value) ? `sys_id=${value}` : `number=${sanitizeLikeValue(value)}`;
-  const resp = await client.queryRecords({ table: 'em_alert', query, fields, limit: 1 });
-  const alert = resp.records[0] as Record<string, unknown> | undefined;
+  const alert = SYS_ID_RE.test(value)
+    ? (await client.queryRecords({ table: 'em_alert', query: `sys_id=${value}`, fields, limit: 1 })).records[0] as Record<string, unknown> | undefined
+    : await findOneByNumber(client, { table: 'em_alert', value, label: 'Alert', fields });
   if (!alert) throw new ServiceNowError(`Alert "${value}" not found`, 'NOT_FOUND');
   return alert;
 }

@@ -3,9 +3,9 @@
  * Read tools: Tier 0. Write tools: Tier 1 (WRITE_ENABLED=true).
  */
 import type { ServiceNowClient } from '../servicenow/client.js';
-import { sanitizeLikeValue } from '../servicenow/client.js';
 import { ServiceNowError } from '../utils/errors.js';
 import { requireWrite } from '../utils/permissions.js';
+import { findOneByNumber } from '../utils/record-lookup.js';
 
 const KNOWLEDGE_ARTICLE_UPDATE_FIELDS = new Set([
   'short_description', 'text', 'kb_knowledge_base', 'category',
@@ -126,10 +126,9 @@ export async function executeKnowledgeToolCall(
       if (/^[0-9a-f]{32}$/i.test(args.number_or_sysid)) {
         return await client.getRecord('kb_knowledge', args.number_or_sysid);
       }
-      const safeArticleId = sanitizeLikeValue(args.number_or_sysid);
-      const resp = await client.queryRecords({ table: 'kb_knowledge', query: `number=${safeArticleId}^ORsys_id=${safeArticleId}`, limit: 1 });
-      if (resp.count === 0) throw new ServiceNowError(`Article not found: ${args.number_or_sysid}`, 'NOT_FOUND');
-      return resp.records[0];
+      const record = await findOneByNumber(client, { table: 'kb_knowledge', value: String(args.number_or_sysid), label: 'Knowledge article' });
+      if (!record) throw new ServiceNowError(`Article not found: ${args.number_or_sysid}`, 'NOT_FOUND');
+      return record;
     }
     case 'create_knowledge_article': {
       requireWrite();
@@ -168,10 +167,9 @@ export async function executeKnowledgeToolCall(
       if (!args.article_id) throw new ServiceNowError('article_id is required', 'INVALID_REQUEST');
       let sysId = args.article_id;
       if (!/^[0-9a-f]{32}$/i.test(args.article_id)) {
-        const safeId = sanitizeLikeValue(args.article_id);
-        const resp = await client.queryRecords({ table: 'kb_knowledge', query: `number=${safeId}^ORsys_id=${safeId}`, limit: 1 });
-        if (resp.count === 0) throw new ServiceNowError(`Article not found: ${args.article_id}`, 'NOT_FOUND');
-        sysId = resp.records[0].sys_id;
+        const record = await findOneByNumber(client, { table: 'kb_knowledge', value: String(args.article_id), label: 'Knowledge article', fields: 'sys_id' });
+        if (!record) throw new ServiceNowError(`Article not found: ${args.article_id}`, 'NOT_FOUND');
+        sysId = record.sys_id;
       }
       const result = await client.updateRecord('kb_knowledge', sysId, { workflow_state: 'retired' });
       return { ...result, summary: `Retired knowledge article ${args.article_id}` };

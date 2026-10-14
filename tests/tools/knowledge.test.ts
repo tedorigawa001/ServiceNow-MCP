@@ -92,7 +92,7 @@ describe('executeKnowledgeToolCall – get_knowledge_article', () => {
     (mockClient.queryRecords as ReturnType<typeof vi.fn>).mockResolvedValue({ count: 1, records: [{ number: 'KB0042' }] });
     await executeKnowledgeToolCall(mockClient, 'get_knowledge_article', { number_or_sysid: 'KB0042^ORactive=true' });
     const call = (mockClient.queryRecords as ReturnType<typeof vi.fn>).mock.calls[0][0];
-    expect(call.query).toBe('number=KB0042ORactive=true^ORsys_id=KB0042ORactive=true');
+    expect(call.query).toBe('number=KB0042ORactive=true');
   });
 });
 
@@ -203,7 +203,7 @@ describe('executeKnowledgeToolCall – retire_knowledge_article', () => {
       article_id: 'KB0001^ORactive=true',
     });
     const call = (mockClient.queryRecords as ReturnType<typeof vi.fn>).mock.calls[0][0];
-    expect(call.query).toBe('number=KB0001ORactive=true^ORsys_id=KB0001ORactive=true');
+    expect(call.query).toBe('number=KB0001ORactive=true');
   });
 });
 

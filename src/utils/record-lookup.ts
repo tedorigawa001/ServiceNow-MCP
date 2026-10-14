@@ -15,11 +15,11 @@ import { ServiceNowError } from './errors.js';
  */
 export async function findOneByNumber(
   client: ServiceNowClient,
-  params: { table: string; value: string; label: string; numberField?: string; fields?: string },
+  params: { table: string; value: string; label: string; numberField?: string; fields?: string; display_value?: boolean | 'all' },
 ): Promise<Record<string, any> | null> {
   const numberField = params.numberField ?? 'number';
   const query = `${numberField}=${sanitizeLikeValue(String(params.value))}`;
-  const resp = await client.queryRecords({ table: params.table, query, fields: params.fields, limit: 2 });
+  const resp = await client.queryRecords({ table: params.table, query, fields: params.fields, display_value: params.display_value, limit: 2 });
   if (resp.records.length === 0) return null;
   if (resp.records.length === 1) return resp.records[0] as Record<string, any>;
 

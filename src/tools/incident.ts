@@ -3,10 +3,10 @@
  * Read tools: Tier 0. Write tools: Tier 1 (WRITE_ENABLED=true).
  */
 import type { ServiceNowClient } from '../servicenow/client.js';
-import { sanitizeLikeValue } from '../servicenow/client.js';
 import { ServiceNowError } from '../utils/errors.js';
 import { requireWrite } from '../utils/permissions.js';
 import { URGENCY, IMPACT, PRIORITY } from './schema-helpers.js';
+import { findOneByNumber } from '../utils/record-lookup.js';
 
 const INCIDENT_UPDATE_FIELDS = new Set([
   'short_description', 'description', 'urgency', 'impact', 'priority', 'category', 'subcategory',
@@ -143,10 +143,9 @@ export async function executeIncidentToolCall(
       if (/^[0-9a-f]{32}$/i.test(args.number_or_sysid)) {
         return await client.getRecord('incident', args.number_or_sysid);
       }
-      const safeId = sanitizeLikeValue(args.number_or_sysid);
-      const resp = await client.queryRecords({ table: 'incident', query: `number=${safeId}^ORsys_id=${safeId}`, limit: 1 });
-      if (resp.count === 0) throw new ServiceNowError(`Incident not found: ${args.number_or_sysid}`, 'NOT_FOUND');
-      return resp.records[0];
+      const record = await findOneByNumber(client, { table: 'incident', value: String(args.number_or_sysid), label: 'Incident' });
+      if (!record) throw new ServiceNowError(`Incident not found: ${args.number_or_sysid}`, 'NOT_FOUND');
+      return record;
     }
     case 'update_incident': {
       requireWrite();

@@ -62,7 +62,7 @@ describe('executeIncidentToolCall – get_incident', () => {
     (mockClient.queryRecords as ReturnType<typeof vi.fn>).mockResolvedValue({ count: 1, records: [{ sys_id: 'inc1' }] });
     await executeIncidentToolCall(mockClient, 'get_incident', { number_or_sysid: 'INC0001^ORactive=true' });
     const call = (mockClient.queryRecords as ReturnType<typeof vi.fn>).mock.calls[0][0];
-    expect(call.query).toBe('number=INC0001ORactive=true^ORsys_id=INC0001ORactive=true');
+    expect(call.query).toBe('number=INC0001ORactive=true');
   });
 });
 

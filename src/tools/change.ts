@@ -3,10 +3,10 @@
  * Read tools: Tier 0. Write tools: Tier 1 (WRITE_ENABLED=true).
  */
 import type { ServiceNowClient } from '../servicenow/client.js';
-import { sanitizeLikeValue } from '../servicenow/client.js';
 import { ServiceNowError } from '../utils/errors.js';
 import { requireWrite } from '../utils/permissions.js';
 import { CHANGE_STATE } from './schema-helpers.js';
+import { findOneByNumber } from '../utils/record-lookup.js';
 
 const CHANGE_UPDATE_FIELDS = new Set([
   'short_description', 'description', 'type', 'category', 'risk', 'impact', 'priority',
@@ -158,10 +158,9 @@ export async function executeChangeToolCall(
       if (/^[0-9a-f]{32}$/i.test(args.number_or_sysid)) {
         return await client.getRecord('change_request', args.number_or_sysid);
       }
-      const safeChangeId = sanitizeLikeValue(args.number_or_sysid);
-      const resp = await client.queryRecords({ table: 'change_request', query: `number=${safeChangeId}^ORsys_id=${safeChangeId}`, limit: 1 });
-      if (resp.count === 0) throw new ServiceNowError(`Change request not found: ${args.number_or_sysid}`, 'NOT_FOUND');
-      return resp.records[0];
+      const record = await findOneByNumber(client, { table: 'change_request', value: String(args.number_or_sysid), label: 'Change request' });
+      if (!record) throw new ServiceNowError(`Change request not found: ${args.number_or_sysid}`, 'NOT_FOUND');
+      return record;
     }
     case 'update_change_request': {
       requireWrite();
@@ -205,10 +204,9 @@ export async function executeChangeToolCall(
         throw new ServiceNowError('change_id and date are required', 'INVALID_REQUEST');
       let sysId = args.change_id;
       if (!/^[0-9a-f]{32}$/i.test(args.change_id)) {
-        const safeId = sanitizeLikeValue(args.change_id);
-        const resp = await client.queryRecords({ table: 'change_request', query: `number=${safeId}^ORsys_id=${safeId}`, limit: 1 });
-        if (resp.count === 0) throw new ServiceNowError(`Change request not found: ${args.change_id}`, 'NOT_FOUND');
-        sysId = resp.records[0].sys_id;
+        const record = await findOneByNumber(client, { table: 'change_request', value: String(args.change_id), label: 'Change request', fields: 'sys_id' });
+        if (!record) throw new ServiceNowError(`Change request not found: ${args.change_id}`, 'NOT_FOUND');
+        sysId = record.sys_id;
       }
       const workNote = 'CAB meeting scheduled for ' + args.date
         + (args.duration_minutes ? ', duration: ' + args.duration_minutes + ' minutes' : '')

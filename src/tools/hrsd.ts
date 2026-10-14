@@ -6,6 +6,7 @@ import { sanitizeLikeValue, type ServiceNowClient } from '../servicenow/client.j
 import { ServiceNowError } from '../utils/errors.js';
 import { requireWrite } from '../utils/permissions.js';
 import { PRIORITY } from './schema-helpers.js';
+import { findOneByNumber } from '../utils/record-lookup.js';
 
 const HR_CASE_FIELDS = new Set([
   'short_description', 'hr_service', 'subject_person', 'description', 'assignment_group',
@@ -265,9 +266,9 @@ export async function executeHrsdToolCall(
       if (/^[0-9a-f]{32}$/i.test(args.number_or_sysid)) {
         return await client.getRecord('sn_hr_core_case', args.number_or_sysid);
       }
-      const resp = await client.queryRecords({ table: 'sn_hr_core_case', query: `number=${queryValue(args.number_or_sysid)}`, limit: 1 });
-      if (resp.count === 0) throw new ServiceNowError(`HR case not found: ${args.number_or_sysid}`, 'NOT_FOUND');
-      return resp.records[0];
+      const record = await findOneByNumber(client, { table: 'sn_hr_core_case', value: String(args.number_or_sysid), label: 'HR case' });
+      if (!record) throw new ServiceNowError(`HR case not found: ${args.number_or_sysid}`, 'NOT_FOUND');
+      return record;
     }
     case 'update_hr_case': {
       requireWrite();

@@ -15,6 +15,7 @@
 import type { ServiceNowClient } from '../servicenow/client.js';
 import { sanitizeLikeValue } from '../servicenow/client.js';
 import { ServiceNowError } from '../utils/errors.js';
+import { findOneByNumber } from '../utils/record-lookup.js';
 
 const SYS_ID_RE = /^[0-9a-f]{32}$/i;
 const queryValue = (value: unknown): string => sanitizeLikeValue(String(value));
@@ -176,13 +177,9 @@ export async function executeGrcAuditToolCall(
       if (SYS_ID_RE.test(args.number_or_sysid)) {
         return await client.getRecord('sn_audit_engagement', args.number_or_sysid);
       }
-      const resp = await client.queryRecords({
-        table: 'sn_audit_engagement',
-        query: `number=${queryValue(args.number_or_sysid)}`,
-        limit: 1,
-      });
-      if (resp.count === 0) throw new ServiceNowError(`Audit Engagement not found: ${args.number_or_sysid}`, 'NOT_FOUND');
-      return resp.records[0];
+      const record = await findOneByNumber(client, { table: 'sn_audit_engagement', value: String(args.number_or_sysid), label: 'Audit Engagement' });
+      if (!record) throw new ServiceNowError(`Audit Engagement not found: ${args.number_or_sysid}`, 'NOT_FOUND');
+      return record;
     }
 
     case 'list_audit_control_tests': {
@@ -210,13 +207,9 @@ export async function executeGrcAuditToolCall(
       if (SYS_ID_RE.test(args.number_or_sysid)) {
         return await client.getRecord('sn_audit_control_test', args.number_or_sysid);
       }
-      const resp = await client.queryRecords({
-        table: 'sn_audit_control_test',
-        query: `number=${queryValue(args.number_or_sysid)}`,
-        limit: 1,
-      });
-      if (resp.count === 0) throw new ServiceNowError(`Control Test not found: ${args.number_or_sysid}`, 'NOT_FOUND');
-      return resp.records[0];
+      const record = await findOneByNumber(client, { table: 'sn_audit_control_test', value: String(args.number_or_sysid), label: 'Control Test' });
+      if (!record) throw new ServiceNowError(`Control Test not found: ${args.number_or_sysid}`, 'NOT_FOUND');
+      return record;
     }
 
     case 'get_grc_audit_dashboard': {

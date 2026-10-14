@@ -7,6 +7,7 @@ import { sanitizeLikeValue } from '../servicenow/client.js';
 import { ServiceNowError } from '../utils/errors.js';
 import { requireWrite } from '../utils/permissions.js';
 import { REQUEST_STATE, RITM_STAGE, RITM_STATE, APPROVAL_STATE } from './schema-helpers.js';
+import { findOneByNumber } from '../utils/record-lookup.js';
 
 // ─── Input validation helpers ────────────────────────────────────────────────
 
@@ -523,9 +524,8 @@ export async function executeCatalogToolCall(
       if (VALID_SYS_ID.test(args.number_or_sysid)) {
         request = await client.getRecord('sc_request', args.number_or_sysid);
       } else if (VALID_REQUEST_NUMBER.test(args.number_or_sysid)) {
-        const resp = await client.queryRecords({ table: 'sc_request', query: `number=${args.number_or_sysid.toUpperCase()}`, limit: 1 });
-        if (resp.count === 0) throw new ServiceNowError(`Request not found: ${args.number_or_sysid}`, 'NOT_FOUND');
-        request = resp.records[0];
+        request = await findOneByNumber(client, { table: 'sc_request', value: args.number_or_sysid.toUpperCase(), label: 'Request' });
+        if (!request) throw new ServiceNowError(`Request not found: ${args.number_or_sysid}`, 'NOT_FOUND');
       } else {
         throw new ServiceNowError('number_or_sysid must be a 32-char sys_id or REQ number (e.g. REQ0001234)', 'INVALID_REQUEST');
       }
@@ -571,9 +571,8 @@ export async function executeCatalogToolCall(
       if (VALID_SYS_ID.test(args.number_or_sysid)) {
         item = await client.getRecord('sc_req_item', args.number_or_sysid);
       } else if (VALID_RITM_NUMBER.test(args.number_or_sysid)) {
-        const resp = await client.queryRecords({ table: 'sc_req_item', query: `number=${args.number_or_sysid.toUpperCase()}`, limit: 1 });
-        if (resp.count === 0) throw new ServiceNowError(`Request item not found: ${args.number_or_sysid}`, 'NOT_FOUND');
-        item = resp.records[0];
+        item = await findOneByNumber(client, { table: 'sc_req_item', value: args.number_or_sysid.toUpperCase(), label: 'Request item' });
+        if (!item) throw new ServiceNowError(`Request item not found: ${args.number_or_sysid}`, 'NOT_FOUND');
       } else {
         throw new ServiceNowError('number_or_sysid must be a 32-char sys_id or RITM number (e.g. RITM0001234)', 'INVALID_REQUEST');
       }

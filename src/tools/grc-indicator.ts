@@ -32,6 +32,7 @@ import type { ServiceNowClient } from '../servicenow/client.js';
 import { sanitizeLikeValue } from '../servicenow/client.js';
 import { ServiceNowError } from '../utils/errors.js';
 import { requireWrite } from '../utils/permissions.js';
+import { findOneByNumber } from '../utils/record-lookup.js';
 
 const SYS_ID_RE = /^[0-9a-f]{32}$/i;
 const queryValue = (value: unknown): string => sanitizeLikeValue(String(value));
@@ -181,9 +182,9 @@ export async function executeGrcIndicatorToolCall(
     case 'get_grc_indicator': {
       if (!args.number_or_sysid) throw new ServiceNowError('number_or_sysid is required', 'INVALID_REQUEST');
       if (SYS_ID_RE.test(args.number_or_sysid)) return await client.getRecord('sn_grc_indicator', args.number_or_sysid);
-      const resp = await client.queryRecords({ table: 'sn_grc_indicator', query: `number=${queryValue(args.number_or_sysid)}`, limit: 1 });
-      if (resp.count === 0) throw new ServiceNowError(`GRC Indicator not found: ${args.number_or_sysid}`, 'NOT_FOUND');
-      return resp.records[0];
+      const record = await findOneByNumber(client, { table: 'sn_grc_indicator', value: String(args.number_or_sysid), label: 'GRC Indicator' });
+      if (!record) throw new ServiceNowError(`GRC Indicator not found: ${args.number_or_sysid}`, 'NOT_FOUND');
+      return record;
     }
 
     case 'create_grc_indicator': {

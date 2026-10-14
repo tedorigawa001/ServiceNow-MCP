@@ -2,9 +2,10 @@
  * Task Management tools.
  * Read tools: Tier 0. Write tools: Tier 1 (WRITE_ENABLED=true).
  */
-import { sanitizeLikeValue, type ServiceNowClient } from '../servicenow/client.js';
+import { type ServiceNowClient } from '../servicenow/client.js';
 import { ServiceNowError } from '../utils/errors.js';
 import { requireWrite } from '../utils/permissions.js';
+import { findOneByNumber } from '../utils/record-lookup.js';
 
 const TASK_UPDATE_FIELDS = new Set([
   'short_description',
@@ -104,10 +105,9 @@ export async function executeTaskToolCall(
       if (/^[0-9a-f]{32}$/i.test(args.number_or_sysid)) {
         return await client.getRecord('task', args.number_or_sysid);
       }
-      const safeId = sanitizeLikeValue(args.number_or_sysid);
-      const resp = await client.queryRecords({ table: 'task', query: `number=${safeId}^ORsys_id=${safeId}`, limit: 1 });
-      if (resp.count === 0) throw new ServiceNowError(`Task not found: ${args.number_or_sysid}`, 'NOT_FOUND');
-      return resp.records[0];
+      const record = await findOneByNumber(client, { table: 'task', value: String(args.number_or_sysid), label: 'Task' });
+      if (!record) throw new ServiceNowError(`Task not found: ${args.number_or_sysid}`, 'NOT_FOUND');
+      return record;
     }
     case 'update_task': {
       requireWrite();

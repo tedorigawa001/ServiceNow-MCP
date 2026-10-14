@@ -25,6 +25,7 @@
 import type { ServiceNowClient } from '../servicenow/client.js';
 import { sanitizeLikeValue } from '../servicenow/client.js';
 import { ServiceNowError } from '../utils/errors.js';
+import { findOneByNumber } from '../utils/record-lookup.js';
 
 const SYS_ID_RE = /^[0-9a-f]{32}$/i;
 
@@ -251,14 +252,10 @@ export async function executeDiscoveryToolCall(
       if (SYS_ID_RE.test(args.run_id)) {
         return await client.getRecord('discovery_status', args.run_id);
       }
-      const resp = await client.queryRecords({
-        table: 'discovery_status',
-        query: `number=${args.run_id}`,
-        limit: 1,
-        display_value: true,
-      });
-      if (resp.count === 0) throw new ServiceNowError(`Discovery run not found: ${args.run_id}`, 'NOT_FOUND');
-      return resp.records[0];
+      // Previously interpolated run_id unsanitised into the encoded query.
+      const record = await findOneByNumber(client, { table: 'discovery_status', value: String(args.run_id), label: 'Discovery run', display_value: true });
+      if (!record) throw new ServiceNowError(`Discovery run not found: ${args.run_id}`, 'NOT_FOUND');
+      return record;
     }
 
     case 'list_discovered_devices': {

@@ -44,6 +44,7 @@ import type { ServiceNowClient } from '../servicenow/client.js';
 import { sanitizeLikeValue } from '../servicenow/client.js';
 import { ServiceNowError } from '../utils/errors.js';
 import { requireWrite } from '../utils/permissions.js';
+import { findOneByNumber } from '../utils/record-lookup.js';
 
 const SYS_ID_RE = /^[0-9a-f]{32}$/i;
 const queryValue = (value: unknown): string => sanitizeLikeValue(String(value));
@@ -517,9 +518,9 @@ export async function executeGrcComplianceToolCall(
     case 'get_compliance_policy': {
       if (!args.number_or_sysid) throw new ServiceNowError('number_or_sysid is required', 'INVALID_REQUEST');
       if (SYS_ID_RE.test(args.number_or_sysid)) return await client.getRecord('sn_compliance_policy', args.number_or_sysid);
-      const resp = await client.queryRecords({ table: 'sn_compliance_policy', query: `number=${queryValue(args.number_or_sysid)}`, limit: 1 });
-      if (resp.count === 0) throw new ServiceNowError(`Compliance Policy not found: ${args.number_or_sysid}`, 'NOT_FOUND');
-      return resp.records[0];
+      const record = await findOneByNumber(client, { table: 'sn_compliance_policy', value: String(args.number_or_sysid), label: 'Compliance Policy' });
+      if (!record) throw new ServiceNowError(`Compliance Policy not found: ${args.number_or_sysid}`, 'NOT_FOUND');
+      return record;
     }
     case 'create_compliance_policy': {
       requireWrite();
@@ -560,9 +561,9 @@ export async function executeGrcComplianceToolCall(
     case 'get_compliance_control': {
       if (!args.number_or_sysid) throw new ServiceNowError('number_or_sysid is required', 'INVALID_REQUEST');
       if (SYS_ID_RE.test(args.number_or_sysid)) return await client.getRecord('sn_compliance_control', args.number_or_sysid);
-      const resp = await client.queryRecords({ table: 'sn_compliance_control', query: `number=${queryValue(args.number_or_sysid)}`, limit: 1 });
-      if (resp.count === 0) throw new ServiceNowError(`Compliance Control not found: ${args.number_or_sysid}`, 'NOT_FOUND');
-      return resp.records[0];
+      const record = await findOneByNumber(client, { table: 'sn_compliance_control', value: String(args.number_or_sysid), label: 'Compliance Control' });
+      if (!record) throw new ServiceNowError(`Compliance Control not found: ${args.number_or_sysid}`, 'NOT_FOUND');
+      return record;
     }
     case 'create_compliance_control': {
       requireWrite();
@@ -622,9 +623,9 @@ export async function executeGrcComplianceToolCall(
     case 'get_policy_exception': {
       if (!args.number_or_sysid) throw new ServiceNowError('number_or_sysid is required', 'INVALID_REQUEST');
       if (SYS_ID_RE.test(args.number_or_sysid)) return await client.getRecord('sn_compliance_policy_exception', args.number_or_sysid);
-      const resp = await client.queryRecords({ table: 'sn_compliance_policy_exception', query: `number=${queryValue(args.number_or_sysid)}`, limit: 1 });
-      if (resp.count === 0) throw new ServiceNowError(`Policy Exception not found: ${args.number_or_sysid}`, 'NOT_FOUND');
-      return resp.records[0];
+      const record = await findOneByNumber(client, { table: 'sn_compliance_policy_exception', value: String(args.number_or_sysid), label: 'Policy Exception' });
+      if (!record) throw new ServiceNowError(`Policy Exception not found: ${args.number_or_sysid}`, 'NOT_FOUND');
+      return record;
     }
 
     // ── Issue ─────────────────────────────────────────────────────────
@@ -648,9 +649,9 @@ export async function executeGrcComplianceToolCall(
     case 'get_grc_issue': {
       if (!args.number_or_sysid) throw new ServiceNowError('number_or_sysid is required', 'INVALID_REQUEST');
       if (SYS_ID_RE.test(args.number_or_sysid)) return await client.getRecord('sn_grc_issue', args.number_or_sysid);
-      const resp = await client.queryRecords({ table: 'sn_grc_issue', query: `number=${queryValue(args.number_or_sysid)}`, limit: 1 });
-      if (resp.count === 0) throw new ServiceNowError(`GRC Issue not found: ${args.number_or_sysid}`, 'NOT_FOUND');
-      return resp.records[0];
+      const record = await findOneByNumber(client, { table: 'sn_grc_issue', value: String(args.number_or_sysid), label: 'GRC Issue' });
+      if (!record) throw new ServiceNowError(`GRC Issue not found: ${args.number_or_sysid}`, 'NOT_FOUND');
+      return record;
     }
     case 'create_grc_issue': {
       requireWrite();

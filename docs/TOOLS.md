@@ -2,6 +2,8 @@
 
 Complete reference for all tools across all ServiceNow modules. A `table` parameter is available only where shown below.
 
+**Records looked up by number.** Every tool that accepts a record number (INC, CHG, PRB, TASK, KB, REQ, RITM, HR and CSM cases, Discovery runs, alerts, GRC risks / indicators / policies / controls / exceptions / issues / audit engagements and control tests, and the USEM / VR / security records) also accepts a sys_id. Record numbers are not guaranteed unique — a reset number counter or loaded demo data can issue numbers that already exist — so when a number matches more than one record the tool fails with **`AMBIGUOUS_NUMBER`** and lists the candidates (sys_id, created date, short description, newest first) instead of acting on the first match. Pass the sys_id. Write tools that take a number (`schedule_cab_meeting`, `retire_knowledge_article`, `acknowledge_alert` and the other alert actions) change nothing in that case.
+
 ## Permission Tiers
 
 | Tier | Requirement | Applies To |
