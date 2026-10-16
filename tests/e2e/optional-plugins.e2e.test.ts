@@ -7,9 +7,11 @@
  * instance without the plugin reports "skipped" with the table named, while
  * an instance that has the plugin exercises the tool for real. Read-only.
  * See tests/e2e/helpers.ts and CONTRIBUTING.md for setup.
+ * E2E_READ_FIXTURES=true optionally creates a disposable Security Incident.
  */
 import { describe, it, expect, beforeAll } from 'vitest';
 import { e2eDescribe, getE2EClient, skipUnlessTables } from './helpers.js';
+import { withReadFixture } from './read-fixtures.js';
 import { executeAgileToolCall } from '../../src/tools/agile.js';
 import { executeHrsdToolCall } from '../../src/tools/hrsd.js';
 import { executeCsmToolCall } from '../../src/tools/csm.js';
@@ -119,12 +121,17 @@ e2eDescribe('E2E – optional plugins (read-only, gated on plugin tables)', () =
       }
     });
 
-    it('fetches a single security incident when one exists', async (ctx) => {
+    it('fetches a single security incident when one exists', { timeout: 120_000 }, async (ctx) => {
       await skipUnlessTables(ctx, client, 'sn_si_incident');
-      const list = await executeSecurityToolCall(client, 'list_security_incidents', { limit: 1 });
-      ctx.skip(list.count === 0, 'data missing: list_security_incidents returned no records');
-      const incident = await executeSecurityToolCall(client, 'get_security_incident', { number_or_sysid: list.records[0].sys_id });
-      expect(incident.sys_id).toBe(list.records[0].sys_id);
+      await withReadFixture(client, 'security_incident', async fixture => {
+        const list = await executeSecurityToolCall(client, 'list_security_incidents', { limit: 1, query: fixture?.query });
+        ctx.skip(!fixture && list.count === 0, 'data missing: list_security_incidents returned no records');
+        expect(list.count).toBe(1);
+        if (fixture) expect(list.records[0].sys_id).toBe(fixture.sysId);
+        const incident = await executeSecurityToolCall(client, 'get_security_incident', { number_or_sysid: list.records[0].sys_id });
+        expect(incident.sys_id).toBe(list.records[0].sys_id);
+        if (fixture) expect(incident.short_description).toBe(fixture.mark);
+      });
     });
   });
 

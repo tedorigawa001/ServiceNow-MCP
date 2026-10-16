@@ -4,9 +4,11 @@
  * Read-only. ACC (Agent Client Collector) is an optional plugin whose tools
  * already return a typed PLUGIN_NOT_INSTALLED error when absent, so that
  * behaviour is asserted rather than skipped. See tests/e2e/helpers.ts.
+ * E2E_READ_FIXTURES=true optionally creates a completed Discovery history fixture.
  */
 import { describe, it, expect, beforeAll } from 'vitest';
 import { e2eDescribe, getE2EClient, skipUnlessTables, tableExists } from './helpers.js';
+import { withReadFixture } from './read-fixtures.js';
 import { executeDiscoveryToolCall } from '../../src/tools/discovery.js';
 import { executeCoreToolCall } from '../../src/tools/core.js';
 import { executePerformanceToolCall } from '../../src/tools/performance.js';
@@ -33,11 +35,16 @@ e2eDescribe('E2E – ITOM and asset tables (read-only)', () => {
       expect(logs.count).toBeGreaterThanOrEqual(0);
     });
 
-    it('fetches a single discovery run when one exists', async (ctx) => {
-      const list = await executeDiscoveryToolCall(client, 'list_discovery_runs', { limit: 1 });
-      ctx.skip(list.count === 0, 'data missing: list_discovery_runs returned no records');
-      const run = await executeDiscoveryToolCall(client, 'get_discovery_run', { run_id: list.runs[0].sys_id });
-      expect(run).toBeTruthy();
+    it('fetches a single discovery run when one exists', { timeout: 120_000 }, async (ctx) => {
+      await withReadFixture(client, 'discovery', async fixture => {
+        const list = await executeDiscoveryToolCall(client, 'list_discovery_runs', { limit: 1, query: fixture?.query });
+        ctx.skip(!fixture && list.count === 0, 'data missing: list_discovery_runs returned no records');
+        expect(list.count).toBe(1);
+        if (fixture) expect(list.runs[0].sys_id).toBe(fixture.sysId);
+        const run = await executeDiscoveryToolCall(client, 'get_discovery_run', { run_id: list.runs[0].sys_id });
+        expect(run.sys_id).toBe(list.runs[0].sys_id);
+        if (fixture) expect(run).toMatchObject({ description: fixture.mark, state: 'Completed' });
+      });
     });
 
     it('lists discovery ranges, credentials and schedules', async () => {

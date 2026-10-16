@@ -5,9 +5,11 @@
  *
  * GRC is an optional plugin. Every test gates on its table via
  * skipUnlessTables so a PDI without GRC reports "skipped", not "failed".
+ * E2E_READ_FIXTURES=true optionally creates disposable data for three detail reads.
  */
 import { describe, it, expect, beforeAll } from 'vitest';
 import { e2eDescribe, getE2EClient, skipUnlessTables } from './helpers.js';
+import { withReadFixture } from './read-fixtures.js';
 import { executeGrcAuditToolCall } from '../../src/tools/grc-audit.js';
 import { executeGrcRiskToolCall } from '../../src/tools/grc-risk.js';
 import { executeGrcComplianceToolCall } from '../../src/tools/grc-compliance.js';
@@ -29,12 +31,17 @@ e2eDescribe('E2E – GRC tables (read-only)', () => {
       expect(Array.isArray(result.records)).toBe(true);
     });
 
-    it('fetches a single engagement when one exists', async (ctx) => {
+    it('fetches a single engagement when one exists', { timeout: 120_000 }, async (ctx) => {
       await skipUnlessTables(ctx, client, 'sn_audit_engagement');
-      const list = await executeGrcAuditToolCall(client, 'list_audit_engagements', { limit: 1 });
-      ctx.skip(list.count === 0, 'data missing: list_audit_engagements returned no records');
-      const engagement = await executeGrcAuditToolCall(client, 'get_audit_engagement', { number_or_sysid: list.records[0].sys_id });
-      expect(engagement.sys_id).toBe(list.records[0].sys_id);
+      await withReadFixture(client, 'engagement', async fixture => {
+        const list = await executeGrcAuditToolCall(client, 'list_audit_engagements', { limit: 1, query: fixture?.query });
+        ctx.skip(!fixture && list.count === 0, 'data missing: list_audit_engagements returned no records');
+        expect(list.count).toBe(1);
+        if (fixture) expect(list.records[0].sys_id).toBe(fixture.sysId);
+        const engagement = await executeGrcAuditToolCall(client, 'get_audit_engagement', { number_or_sysid: list.records[0].sys_id });
+        expect(engagement.sys_id).toBe(list.records[0].sys_id);
+        if (fixture) expect(engagement).toMatchObject({ name: fixture.mark, active: 'false', state: '3' });
+      });
     });
   });
 
@@ -46,12 +53,17 @@ e2eDescribe('E2E – GRC tables (read-only)', () => {
       expect(Array.isArray(result.records)).toBe(true);
     });
 
-    it('fetches a single risk when one exists', async (ctx) => {
+    it('fetches a single risk when one exists', { timeout: 120_000 }, async (ctx) => {
       await skipUnlessTables(ctx, client, 'sn_risk_risk');
-      const list = await executeGrcRiskToolCall(client, 'list_risks', { limit: 1 });
-      ctx.skip(list.count === 0, 'data missing: list_risks returned no records');
-      const risk = await executeGrcRiskToolCall(client, 'get_risk', { number_or_sysid: list.records[0].sys_id });
-      expect(risk.sys_id).toBe(list.records[0].sys_id);
+      await withReadFixture(client, 'risk', async fixture => {
+        const list = await executeGrcRiskToolCall(client, 'list_risks', { limit: 1, query: fixture?.query });
+        ctx.skip(!fixture && list.count === 0, 'data missing: list_risks returned no records');
+        expect(list.count).toBe(1);
+        if (fixture) expect(list.records[0].sys_id).toBe(fixture.sysId);
+        const risk = await executeGrcRiskToolCall(client, 'get_risk', { number_or_sysid: list.records[0].sys_id });
+        expect(risk.sys_id).toBe(list.records[0].sys_id);
+        if (fixture) expect(risk.name).toBe(fixture.mark);
+      });
     });
   });
 
@@ -80,12 +92,17 @@ e2eDescribe('E2E – GRC tables (read-only)', () => {
       expect(Array.isArray(result.records)).toBe(true);
     });
 
-    it('fetches a single indicator when one exists', async (ctx) => {
+    it('fetches a single indicator when one exists', { timeout: 120_000 }, async (ctx) => {
       await skipUnlessTables(ctx, client, 'sn_grc_indicator');
-      const list = await executeGrcIndicatorToolCall(client, 'list_grc_indicators', { limit: 1 });
-      ctx.skip(list.count === 0, 'data missing: list_grc_indicators returned no records');
-      const indicator = await executeGrcIndicatorToolCall(client, 'get_grc_indicator', { number_or_sysid: list.records[0].sys_id });
-      expect(indicator.sys_id).toBe(list.records[0].sys_id);
+      await withReadFixture(client, 'indicator', async fixture => {
+        const list = await executeGrcIndicatorToolCall(client, 'list_grc_indicators', { limit: 1, query: fixture?.query });
+        ctx.skip(!fixture && list.count === 0, 'data missing: list_grc_indicators returned no records');
+        expect(list.count).toBe(1);
+        if (fixture) expect(list.records[0].sys_id).toBe(fixture.sysId);
+        const indicator = await executeGrcIndicatorToolCall(client, 'get_grc_indicator', { number_or_sysid: list.records[0].sys_id });
+        expect(indicator.sys_id).toBe(list.records[0].sys_id);
+        if (fixture) expect(indicator).toMatchObject({ name: fixture.mark, active: 'false', type: 'manual' });
+      });
     });
   });
 });

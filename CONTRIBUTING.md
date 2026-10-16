@@ -53,6 +53,25 @@ tests so a missing record does not hide another lookup's result. Use
 An empty collection remains a valid success for a test of the list operation
 itself; API errors and malformed responses must still fail, not become skips.
 
+### Disposable data for read-path tests
+
+`E2E_READ_FIXTURES=true` plus `WRITE_ENABLED=true` enables disposable data for
+five detail reads: Discovery run, Security Incident, Audit Engagement, Risk,
+and GRC Indicator. This is opt-in and restricted to HTTPS
+`dev<number>.service-now.com` PDIs. Without the flag these tests remain
+read-only and report missing data as skips.
+
+Fixture mode writes even in the normally read-only suites. It creates owned
+reference records instead of modifying existing business data, filters reads
+by the created sys_id, and deletes in reverse dependency order with a subsequent
+absence check. Cleanup errors fail the test. Audit data must settle in a completed,
+inactive state. The indicator is manual, briefly active for the Table API's
+write ACL, and immediately deactivated before verification; failure to deactivate
+also fails and triggers cleanup. No Discovery launch, indicator collection,
+evaluation, or scripted-indicator execution is requested. Standard ServiceNow
+Business Rules still run on these writes; do not use this on shared or production
+instances. See `docs/E2E_READ_FIXTURES_2026-10-17.md` for the PDI-specific constraints.
+
 ### Write-tool tests (create/update)
 
 `tests/e2e/write-operations.e2e.test.ts` exercises create/update on incident,
