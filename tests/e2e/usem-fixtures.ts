@@ -57,6 +57,10 @@ export async function createUsemFixtures(client: ServiceNowClient) {
       { name: 'endpoint_hint', label: 'API Key', elem_type: 'string', secret: true },
       { name: 'opaque_value', label: 'Opaque value', elem_type: 'password', secret: true },
       { name: 'ordinary_value', label: 'Ordinary value', elem_type: 'string', secret: false },
+      // "_" separated PIN with a neutral label: \bpin\b missed this one.
+      { name: 'user_pin', label: 'Ordinary label', elem_type: 'string', secret: true },
+      // Must stay visible: contains "pin" but is not a PIN.
+      { name: 'pinned_version', label: 'Pinned version', elem_type: 'string', secret: false },
     ];
     const expected: Record<string, string> = {};
     for (const sample of samples) {

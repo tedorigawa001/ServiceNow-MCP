@@ -238,6 +238,35 @@ describe('list_integration_parameters', () => {
     expect(isSecretParameter('neutral_name', label, 'string')).toBe(false);
   });
 
+  // \bpin\b missed user_pin / pin_code because \b treats "_" as part of the word.
+  it.each([
+    ['user_pin', 'Ordinary value'], ['pin_code', 'Ordinary value'], ['admin-pin', 'Ordinary value'],
+    ['userPin', 'Ordinary value'], ['pinCode', 'Ordinary value'], ['PINCode', 'Ordinary value'],
+    ['pin', 'Ordinary value'], ['neutral_name', 'User PIN'], ['neutral_name', 'pin'],
+  ])('treats the PIN-bearing name/label "%s" / "%s" as secret', (name, label) => {
+    expect(isSecretParameter(name, label, 'string')).toBe(true);
+  });
+
+  it.each([
+    ['pinned_version', 'Pinned version'], ['spinner_delay', 'Spinner delay'], ['pinpoint_region', 'Pinpoint region'],
+    ['shipping_option', 'Shipping option'], ['opinion_score', 'Opinion score'], ['pinned', 'Pinned'],
+    ['mapping_rule', 'Mapping rule'], ['pingInterval', 'Ping interval'],
+  ])('keeps the ordinary setting "%s" / "%s" visible', (name, label) => {
+    expect(isSecretParameter(name, label, 'string')).toBe(false);
+  });
+
+  it.each(['definition', 'instance'])('masks a user_pin value in %s scope even when the label has no PIN', async scope => {
+    const prefix = scope === 'instance' ? 'configuration.' : '';
+    const field = scope === 'instance' ? 'value' : 'default_value';
+    qr().mockResolvedValue({ count: 2, records: [
+      { [`${prefix}name`]: 'user_pin', [`${prefix}label`]: 'Ordinary value', [`${prefix}elem_type`]: 'string', [field]: 'DUMMY-NOT-A-CREDENTIAL' },
+      { [`${prefix}name`]: 'pinned_version', [`${prefix}label`]: 'Pinned version', [`${prefix}elem_type`]: 'string', [field]: '2.4.0' },
+    ] });
+    const result = await executeUsemIntegrationToolCall(mockClient, 'list_integration_parameters', { scope });
+    expect(result.records[0][field]).toBe('***MASKED***');
+    expect(result.records[1][field]).toBe('2.4.0');
+  });
+
   it('always masks password-typed parameters, whatever their label', () => {
     expect(isSecretParameter('x', 'Ordinary value', 'password')).toBe(true);
     expect(isSecretParameter('x', 'Ordinary value', 'password2')).toBe(true);

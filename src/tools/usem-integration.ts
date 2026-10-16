@@ -55,12 +55,22 @@ const SECRET_PARAM_RE = new RegExp([
   'secret', 'passw(?:or)?d', 'passphrase', 'pass[\\s_-]*code', 'token', 'credential', 'private',
   'bearer', 'cookie', 'authorization', 'auth[\\s_-]*(?:key|token|code|header|string)',
   '(?:api|access|client|signing|encryption|license|subscription|shared|master|account|app|host)[\\s_-]*key',
-  'key[\\s_-]*(?:secret|file|pair|value)', '\\bpin\\b', 'certificate[\\s_-]*key',
+  'key[\\s_-]*(?:secret|file|pair|value)', 'certificate[\\s_-]*key',
+  // "pin" only as a whole word. \b treats "_" as a word character, so user_pin and
+  // pin_code slipped through; any non-alphanumeric (or the ends) is a boundary here,
+  // while "Pinned version" and "Spinner delay" stay ordinary.
+  '(?:^|[^a-z0-9])pin(?:[^a-z0-9]|$)',
 ].join('|'), 'i');
 
 /** True when a parameter's value must not be returned: a password type, or a secret-looking name/label. */
 export function isSecretParameter(name: string, label: string, elemType: string): boolean {
-  return elemType === 'password' || elemType === 'password2' || SECRET_PARAM_RE.test(`${name} ${label}`);
+  if (elemType === 'password' || elemType === 'password2') return true;
+  const text = `${name} ${label}`;
+  // Also test a word-split form so camelCase and acronym names (userPin, pinCode,
+  // PINCode, accessKey) are judged word by word. Testing both forms keeps every
+  // match the raw text already had.
+  const split = text.replace(/([a-z0-9])([A-Z])/g, '$1 $2').replace(/([A-Z]+)([A-Z][a-z])/g, '$1 $2');
+  return SECRET_PARAM_RE.test(text) || SECRET_PARAM_RE.test(split);
 }
 
 const VALUE_FIELDS = new Set(['value', 'default_value', 'password_value']);
