@@ -6,6 +6,28 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 ---
 
+## [Unreleased]
+
+### Fixed
+
+- `list_integration_parameters` now masks labels such as `API Key` and `API-Key`
+  even when the parameter name is neutral and its type is string. Previously
+  only `apikey` / `api_key` matched, so these plain-text values could be returned
+  in definition and instance scope. Found with disposable dummy values on the PDI.
+
+### Added
+
+- `USEM_E2E_FIXTURES=true` opt-in for the USEM configuration read suite creates
+  inactive classification/exclusion rules and a dedicated integration with an
+  inactive implementation and dummy parameter values. Requires WRITE_ENABLED
+  and a PDI URL; created records are deleted and absence verified on completion.
+  Covers the four previously skipped detail/masking cases.
+  Live PDI: 37 passed, 0 skipped, 0 failed; all 12 disposable records removed and
+  verified absent. Normal suite: 1,690 passed. Details in
+  `docs/E2E_USEM_READ_2026-10-14.md` (2026-10-17 follow-up).
+
+---
+
 ## [1.14.1] — 2026-10-14
 
 ### Fixed

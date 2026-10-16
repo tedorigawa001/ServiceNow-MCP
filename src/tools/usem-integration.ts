@@ -44,7 +44,7 @@ const LOG_FIELDS =
   'type,category,message_value,suggested_recommendations,integration_run,sys_created_on,sys_id';
 
 /** Parameter names/labels that indicate a secret; their values are masked in output. */
-const SECRET_PARAM_RE = /secret|password|token|api_?key|credential|private/i;
+const SECRET_PARAM_RE = /secret|password|token|api[\s_-]*key|credential|private/i;
 
 /**
  * Mask secret-like parameter values. The encrypted password_value column is never

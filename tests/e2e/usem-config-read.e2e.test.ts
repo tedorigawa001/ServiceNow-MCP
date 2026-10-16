@@ -1,7 +1,8 @@
-import { it, expect } from 'vitest';
+import { it, expect, beforeAll, afterAll } from 'vitest';
 import { e2eDescribe, getE2EClient, skipUnlessTables } from './helpers.js';
 import { executeUsemConfigToolCall } from '../../src/tools/usem-config.js';
 import { executeUsemIntegrationToolCall } from '../../src/tools/usem-integration.js';
+import { createUsemFixtures } from './usem-fixtures.js';
 
 type Row = Record<string, unknown>;
 const raw = (v: unknown): string => String(v && typeof v === 'object' && 'value' in v ? v.value : v ?? '');
@@ -18,6 +19,12 @@ const RULE_TABLES = [
 ] as const;
 
 e2eDescribe('E2E – USEM configuration and parameter reads', () => {
+  let fixtures: Awaited<ReturnType<typeof createUsemFixtures>> | undefined;
+  beforeAll(async () => {
+    if (process.env.USEM_E2E_FIXTURES === 'true') fixtures = await createUsemFixtures(getE2EClient());
+  }, 120_000);
+  afterAll(async () => { await fixtures?.cleanup(); }, 120_000);
+
   for (const [rule_type, table] of RULE_TABLES) {
     it(`lists ${rule_type} with bounded results from the correct table`, async ctx => {
       const client = getE2EClient();
@@ -33,7 +40,11 @@ e2eDescribe('E2E – USEM configuration and parameter reads', () => {
     it(`resolves a listed ${rule_type} by id and an exact id filter`, async ctx => {
       const client = getE2EClient();
       await skipUnlessTables(ctx, client, table);
-      const list = await executeUsemConfigToolCall(client, 'list_usem_rules', { rule_type, limit: 1 });
+      const fixtureId = fixtures?.rules[rule_type];
+      const list = await executeUsemConfigToolCall(client, 'list_usem_rules', {
+        rule_type, limit: 1, ...(fixtureId ? { query: `sys_id=${fixtureId}` } : {}),
+      });
+      if (fixtureId) expect(list.records.length).toBe(1);
       ctx.skip(list.records.length === 0, `no visible ${rule_type} record for detail verification`);
       const row: Row = list.records[0];
       const sys_id = raw(row.sys_id);
@@ -97,11 +108,18 @@ e2eDescribe('E2E – USEM configuration and parameter reads', () => {
     it(`masks nonempty secret-like ${scope} parameter values`, async ctx => {
       const client = getE2EClient();
       await skipUnlessTables(ctx, client, table);
-      const result = await executeUsemIntegrationToolCall(client, 'list_integration_parameters', { scope, limit: 100 });
+      const fixtureIds = fixtures && (scope === 'definition' ? fixtures.definitions : fixtures.values);
+      const result = await executeUsemIntegrationToolCall(client, 'list_integration_parameters', {
+        scope, limit: 100, ...(fixtureIds ? { query: `sys_idIN${fixtureIds.join(',')}` } : {}),
+      });
       const valueField = scope === 'definition' ? 'default_value' : 'value';
+      if (fixtures && fixtureIds) {
+        expect(ids(result.records)).toEqual([...fixtureIds].sort());
+        expect(result.records.every((r: Row) => raw(r[valueField]) === fixtures!.expected[raw(r.sys_id)])).toBe(true);
+      }
       const secrets = (result.records as Row[]).filter(r =>
         ['password', 'password2'].includes(raw(r[`${metadata}elem_type`])) ||
-        /secret|password|token|api_?key|credential|private/i.test(`${raw(r[`${metadata}name`])} ${raw(r[`${metadata}label`])}`));
+        /secret|password|token|api[\s_-]*key|credential|private/i.test(`${raw(r[`${metadata}name`])} ${raw(r[`${metadata}label`])}`));
       const nonempty = secrets.filter(r => raw(r[valueField]) !== '');
       // Never pass a record/value to expect: a broken mask must not leak a secret in the test log.
       expect(nonempty.every(r => raw(r[valueField]) === '***MASKED***')).toBe(true);

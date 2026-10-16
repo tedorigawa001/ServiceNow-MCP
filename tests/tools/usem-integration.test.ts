@@ -222,6 +222,17 @@ describe('list_integration_parameters', () => {
     expect(result.records[1].default_value).toBe('full');
   });
 
+  it.each(['definition', 'instance'])('masks a label-only API Key in %s scope', async scope => {
+    const prefix = scope === 'instance' ? 'configuration.' : '';
+    const field = scope === 'instance' ? 'value' : 'default_value';
+    qr().mockResolvedValue({ count: 1, records: [{
+      [`${prefix}name`]: 'endpoint_hint', [`${prefix}label`]: 'API Key',
+      [`${prefix}elem_type`]: 'string', [field]: 'DUMMY-NOT-A-CREDENTIAL',
+    }] });
+    const result = await executeUsemIntegrationToolCall(mockClient, 'list_integration_parameters', { scope });
+    expect(result.records[0][field]).toBe('***MASKED***');
+  });
+
   it('rejects an invalid scope', async () => {
     await expect(
       executeUsemIntegrationToolCall(mockClient, 'list_integration_parameters', { scope: 'both' })
