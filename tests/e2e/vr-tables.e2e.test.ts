@@ -23,9 +23,9 @@ e2eDescribe('E2E – Vulnerability Response tables (read-only)', () => {
       expect(Array.isArray(result.records)).toBe(true);
     });
 
-    it('fetches a single vulnerable item when one exists', async () => {
+    it('fetches a single vulnerable item when one exists', async (ctx) => {
       const list = await executeUsemToolCall(client, 'list_vulnerable_items', { limit: 1 });
-      if (list.count === 0) return;
+      ctx.skip(list.count === 0, 'data missing: list_vulnerable_items returned no records');
       const item = await executeUsemToolCall(client, 'get_vulnerable_item', { number_or_sysid: list.records[0].sys_id });
       expect(item.sys_id).toBe(list.records[0].sys_id);
     });
@@ -40,9 +40,9 @@ e2eDescribe('E2E – Vulnerability Response tables (read-only)', () => {
       expect(result.by_table).toHaveProperty('sn_vul_vulnerability');
     });
 
-    it('fetches a single remediation task when one exists', async () => {
+    it('fetches a single remediation task when one exists', async (ctx) => {
       const list = await executeUsemToolCall(client, 'list_remediation_tasks', { limit: 1 });
-      if (list.count === 0) return;
+      ctx.skip(list.count === 0, 'data missing: list_remediation_tasks returned no records');
       const task = await executeUsemToolCall(client, 'get_remediation_task', { number_or_sysid: list.records[0].sys_id });
       expect(task.sys_id).toBe(list.records[0].sys_id);
     });
@@ -55,9 +55,9 @@ e2eDescribe('E2E – Vulnerability Response tables (read-only)', () => {
       expect(Array.isArray(result.records)).toBe(true);
     });
 
-    it('fetches a single vulnerability group when one exists', async () => {
+    it('fetches a single vulnerability group when one exists', async (ctx) => {
       const list = await executeUsemToolCall(client, 'list_vulnerability_groups', { limit: 1 });
-      if (list.count === 0) return;
+      ctx.skip(list.count === 0, 'data missing: list_vulnerability_groups returned no records');
       const group = await executeUsemToolCall(client, 'get_vulnerability_group', { number_or_sysid: list.records[0].sys_id });
       expect(group.sys_id).toBe(list.records[0].sys_id);
     });

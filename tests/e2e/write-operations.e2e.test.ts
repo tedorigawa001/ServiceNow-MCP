@@ -135,9 +135,9 @@ writeE2eDescribe('E2E – write operations (create/update, self-cleaning)', () =
   });
 
   describe('kb_knowledge', () => {
-    it('creates then updates a knowledge article', async () => {
+    it('creates then updates a knowledge article', async (ctx) => {
       const kbs = await executeKnowledgeToolCall(client, 'list_knowledge_bases', { limit: 1 });
-      if (kbs.count === 0) return; // PDI has no knowledge base to attach an article to
+      ctx.skip(kbs.count === 0, 'data missing: list_knowledge_bases returned no records');
 
       const created = await executeKnowledgeToolCall(client, 'create_knowledge_article', {
         short_description: `${MARK} article create/update test`,
@@ -216,7 +216,7 @@ writeE2eDescribe('E2E – write operations (create/update, self-cleaning)', () =
     it('creates then updates a GRC entity when a profile class exists', async (ctx) => {
       await skipUnlessTables(ctx, client, 'sn_grc_profile', 'sn_grc_profile_class');
       const classes = await executeCoreToolCall(client, 'query_records', { table: 'sn_grc_profile_class', limit: 1 });
-      if (classes.count === 0) return; // PDI has no seeded Entity class to attach an entity to
+      ctx.skip(classes.count === 0, 'data missing: no GRC entity profile class to attach an entity to');
 
       const created = await executeGrcComplianceToolCall(client, 'create_grc_entity', {
         name: `${MARK} entity create/update test`,

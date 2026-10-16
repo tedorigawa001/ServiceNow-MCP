@@ -27,9 +27,9 @@ e2eDescribe('E2E – common/shared tables (read-only)', () => {
       expect(Array.isArray(result.groups)).toBe(true);
     });
 
-    it('fetches a single group by name when one exists', async () => {
+    it('fetches a single group by name when one exists', async (ctx) => {
       const list = await executeUserToolCall(client, 'list_groups', { limit: 1 });
-      if (list.count === 0) return;
+      ctx.skip(list.count === 0, 'data missing: list_groups returned no records');
       const group = await executeCoreToolCall(client, 'get_group', { group_identifier: list.groups[0].name });
       expect(group.sys_id).toBe(list.groups[0].sys_id);
     });
@@ -50,9 +50,9 @@ e2eDescribe('E2E – common/shared tables (read-only)', () => {
       expect(Array.isArray(result.records)).toBe(true);
     });
 
-    it('fetches a single task by number when one exists', async () => {
+    it('fetches a single task by number when one exists', async (ctx) => {
       const list = await executeCoreToolCall(client, 'query_records', { table: 'task', limit: 1, fields: 'number,sys_id' });
-      if (list.count === 0) return;
+      ctx.skip(list.count === 0, 'data missing: query_records returned no records');
       const task = await executeTaskToolCall(client, 'get_task', { number_or_sysid: list.records[0].number });
       expect(task.sys_id).toBe(list.records[0].sys_id);
     });
@@ -65,9 +65,9 @@ e2eDescribe('E2E – common/shared tables (read-only)', () => {
       expect(Array.isArray(result.knowledge_bases)).toBe(true);
     });
 
-    it('fetches a single article by number when one exists', async () => {
+    it('fetches a single article by number when one exists', async (ctx) => {
       const list = await executeCoreToolCall(client, 'query_records', { table: 'kb_knowledge', limit: 1, fields: 'number,sys_id' });
-      if (list.count === 0) return;
+      ctx.skip(list.count === 0, 'data missing: query_records returned no records');
       const article = await executeKnowledgeToolCall(client, 'get_knowledge_article', { number_or_sysid: list.records[0].number });
       expect(article.sys_id).toBe(list.records[0].sys_id);
     });
@@ -80,9 +80,9 @@ e2eDescribe('E2E – common/shared tables (read-only)', () => {
       expect(Array.isArray(result.catalog_items)).toBe(true);
     });
 
-    it('fetches a single catalog item when one exists', async () => {
+    it('fetches a single catalog item when one exists', async (ctx) => {
       const list = await executeCatalogToolCall(client, 'list_catalog_items', { limit: 1 });
-      if (list.count === 0) return;
+      ctx.skip(list.count === 0, 'data missing: list_catalog_items returned no records');
       const item = await executeCatalogToolCall(client, 'get_catalog_item', { sys_id_or_name: list.catalog_items[0].sys_id });
       expect(item.sys_id).toBe(list.catalog_items[0].sys_id);
     });

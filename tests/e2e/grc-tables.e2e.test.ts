@@ -32,7 +32,7 @@ e2eDescribe('E2E – GRC tables (read-only)', () => {
     it('fetches a single engagement when one exists', async (ctx) => {
       await skipUnlessTables(ctx, client, 'sn_audit_engagement');
       const list = await executeGrcAuditToolCall(client, 'list_audit_engagements', { limit: 1 });
-      if (list.count === 0) return;
+      ctx.skip(list.count === 0, 'data missing: list_audit_engagements returned no records');
       const engagement = await executeGrcAuditToolCall(client, 'get_audit_engagement', { number_or_sysid: list.records[0].sys_id });
       expect(engagement.sys_id).toBe(list.records[0].sys_id);
     });
@@ -49,7 +49,7 @@ e2eDescribe('E2E – GRC tables (read-only)', () => {
     it('fetches a single risk when one exists', async (ctx) => {
       await skipUnlessTables(ctx, client, 'sn_risk_risk');
       const list = await executeGrcRiskToolCall(client, 'list_risks', { limit: 1 });
-      if (list.count === 0) return;
+      ctx.skip(list.count === 0, 'data missing: list_risks returned no records');
       const risk = await executeGrcRiskToolCall(client, 'get_risk', { number_or_sysid: list.records[0].sys_id });
       expect(risk.sys_id).toBe(list.records[0].sys_id);
     });
@@ -66,7 +66,7 @@ e2eDescribe('E2E – GRC tables (read-only)', () => {
     it('fetches a single entity when one exists', async (ctx) => {
       await skipUnlessTables(ctx, client, 'sn_grc_profile');
       const list = await executeGrcComplianceToolCall(client, 'list_grc_entities', { limit: 1 });
-      if (list.count === 0) return;
+      ctx.skip(list.count === 0, 'data missing: list_grc_entities returned no records');
       const entity = await executeGrcComplianceToolCall(client, 'get_grc_entity', { sys_id: list.records[0].sys_id });
       expect(entity.sys_id).toBe(list.records[0].sys_id);
     });
@@ -83,7 +83,7 @@ e2eDescribe('E2E – GRC tables (read-only)', () => {
     it('fetches a single indicator when one exists', async (ctx) => {
       await skipUnlessTables(ctx, client, 'sn_grc_indicator');
       const list = await executeGrcIndicatorToolCall(client, 'list_grc_indicators', { limit: 1 });
-      if (list.count === 0) return;
+      ctx.skip(list.count === 0, 'data missing: list_grc_indicators returned no records');
       const indicator = await executeGrcIndicatorToolCall(client, 'get_grc_indicator', { number_or_sysid: list.records[0].sys_id });
       expect(indicator.sys_id).toBe(list.records[0].sys_id);
     });

@@ -30,9 +30,9 @@ e2eDescribe('E2E – core tables (read-only)', () => {
       expect(Array.isArray(result.records)).toBe(true);
     });
 
-    it('fetches a single incident by number or sys_id when one exists', async () => {
+    it('fetches a single incident by number or sys_id when one exists', async (ctx) => {
       const list = await executeCoreToolCall(client, 'query_records', { table: 'incident', limit: 1, fields: 'number,sys_id' });
-      if (list.count === 0) return; // PDI has no incidents yet — nothing to fetch
+      ctx.skip(list.count === 0, 'data missing: query_records returned no records');
       const incident = await executeIncidentToolCall(client, 'get_incident', { number_or_sysid: list.records[0].number });
       expect(incident.sys_id).toBe(list.records[0].sys_id);
     });
@@ -45,9 +45,9 @@ e2eDescribe('E2E – core tables (read-only)', () => {
       expect(Array.isArray(result.records)).toBe(true);
     });
 
-    it('fetches a single change request when one exists', async () => {
+    it('fetches a single change request when one exists', async (ctx) => {
       const list = await executeChangeToolCall(client, 'list_change_requests', { limit: 1 });
-      if (list.count === 0) return;
+      ctx.skip(list.count === 0, 'data missing: list_change_requests returned no records');
       const change = await executeChangeToolCall(client, 'get_change_request', { number_or_sysid: list.records[0].number });
       expect(change.sys_id).toBe(list.records[0].sys_id);
     });
@@ -60,18 +60,18 @@ e2eDescribe('E2E – core tables (read-only)', () => {
       expect(Array.isArray(result.records)).toBe(true);
     });
 
-    it('fetches a single problem when one exists', async () => {
+    it('fetches a single problem when one exists', async (ctx) => {
       const list = await executeCoreToolCall(client, 'query_records', { table: 'problem', limit: 1, fields: 'number,sys_id' });
-      if (list.count === 0) return;
+      ctx.skip(list.count === 0, 'data missing: query_records returned no records');
       const problem = await executeProblemToolCall(client, 'get_problem', { number_or_sysid: list.records[0].number });
       expect(problem.sys_id).toBe(list.records[0].sys_id);
     });
   });
 
   describe('sys_user', () => {
-    it('resolves a known user by identifier when one exists', async () => {
+    it('resolves a known user by identifier when one exists', async (ctx) => {
       const list = await executeCoreToolCall(client, 'query_records', { table: 'sys_user', limit: 1, fields: 'user_name,sys_id' });
-      if (list.count === 0) return;
+      ctx.skip(list.count === 0, 'data missing: query_records returned no records');
       const user = await executeCoreToolCall(client, 'get_user', { user_identifier: list.records[0].user_name });
       expect(user.sys_id).toBe(list.records[0].sys_id);
     });
@@ -84,9 +84,9 @@ e2eDescribe('E2E – core tables (read-only)', () => {
       expect(Array.isArray(result.records)).toBe(true);
     });
 
-    it('fetches a single CI when one exists', async () => {
+    it('fetches a single CI when one exists', async (ctx) => {
       const list = await executeCoreToolCall(client, 'search_cmdb_ci', { limit: 1 });
-      if (list.count === 0) return;
+      ctx.skip(list.count === 0, 'data missing: search_cmdb_ci returned no records');
       const ci = await executeCoreToolCall(client, 'get_cmdb_ci', { ci_sys_id: list.records[0].sys_id });
       expect(ci.sys_id).toBe(list.records[0].sys_id);
     });

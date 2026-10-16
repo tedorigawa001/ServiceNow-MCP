@@ -17,14 +17,14 @@ e2eDescribe('E2E – Update Set SCA (read-only)', () => {
     client = getE2EClient();
   });
 
-  it('matches preview metadata for a bounded Update Set scan without returning source', async () => {
+  it('matches preview metadata for a bounded Update Set scan without returning source', async (ctx) => {
     const updateSets = await client.queryRecords({
       table: 'sys_update_set',
       query: 'state=in progress',
       limit: 1,
       fields: 'sys_id,name',
     });
-    if (updateSets.records.length === 0) return;
+    ctx.skip(updateSets.records.length === 0, 'data missing: no in-progress sys_update_set records');
     const updateSet = updateSets.records[0] as Record<string, unknown>;
     const sysId = String(updateSet.sys_id);
 

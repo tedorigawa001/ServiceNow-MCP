@@ -33,9 +33,9 @@ e2eDescribe('E2E – ITOM and asset tables (read-only)', () => {
       expect(logs.count).toBeGreaterThanOrEqual(0);
     });
 
-    it('fetches a single discovery run when one exists', async () => {
+    it('fetches a single discovery run when one exists', async (ctx) => {
       const list = await executeDiscoveryToolCall(client, 'list_discovery_runs', { limit: 1 });
-      if (list.count === 0) return;
+      ctx.skip(list.count === 0, 'data missing: list_discovery_runs returned no records');
       const run = await executeDiscoveryToolCall(client, 'get_discovery_run', { run_id: list.runs[0].sys_id });
       expect(run).toBeTruthy();
     });
@@ -67,10 +67,10 @@ e2eDescribe('E2E – ITOM and asset tables (read-only)', () => {
       expect(Array.isArray(result.entries)).toBe(true);
     });
 
-    it('reports MID server health for the first server when one exists', async () => {
+    it('reports MID server health for the first server when one exists', async (ctx) => {
       // list_mid_servers returns its rows as `mid_servers` (and takes no limit).
       const servers = await executeCoreToolCall(client, 'list_mid_servers', {});
-      if (servers.count === 0) return;
+      ctx.skip(servers.count === 0, 'data missing: list_mid_servers returned no records');
       const first = servers.mid_servers[0];
       const health = await executeDiscoveryToolCall(client, 'get_mid_server_health', { mid_server: first.sys_id });
       expect(health).toBeTruthy();
@@ -97,7 +97,7 @@ e2eDescribe('E2E – ITOM and asset tables (read-only)', () => {
     it('fetches one alert with history, related tasks and children when one exists', async (ctx) => {
       await skipUnlessTables(ctx, client, 'em_alert', 'em_alert_history');
       const list = await executeEventManagementToolCall(client, 'list_alerts', { state: 'all', limit: 1 });
-      if (list.count === 0) return;
+      ctx.skip(list.count === 0, 'data missing: list_alerts returned no records');
       const alert = await executeEventManagementToolCall(client, 'get_alert', { number_or_sysid: list.alerts[0].number });
       expect(alert.sys_id).toBe(list.alerts[0].sys_id);
       expect(Array.isArray(alert.history)).toBe(true);
@@ -149,17 +149,18 @@ e2eDescribe('E2E – ITOM and asset tables (read-only)', () => {
       expect(dashboards.count).toBeGreaterThanOrEqual(0);
     });
 
-    it('fetches a single PA indicator and dashboard when they exist', async () => {
+    it('fetches get_pa_indicator details when data exists', async (ctx) => {
       const indicators = await executePerformanceToolCall(client, 'list_pa_indicators', { limit: 1 });
-      if (indicators.count > 0) {
-        const indicator = await executePerformanceToolCall(client, 'get_pa_indicator', { sys_id_or_name: indicators.records[0].sys_id });
-        expect(indicator.sys_id).toBe(indicators.records[0].sys_id);
-      }
+      ctx.skip(indicators.count === 0, 'data missing: list_pa_indicators returned no records');
+      const indicator = await executePerformanceToolCall(client, 'get_pa_indicator', { sys_id_or_name: indicators.records[0].sys_id });
+      expect(indicator.sys_id).toBe(indicators.records[0].sys_id);
+    });
+
+    it('fetches get_pa_dashboard details when data exists', async (ctx) => {
       const dashboards = await executePerformanceToolCall(client, 'list_pa_dashboards', { limit: 1 });
-      if (dashboards.count > 0) {
-        const dashboard = await executePerformanceToolCall(client, 'get_pa_dashboard', { sys_id_or_name: dashboards.records[0].sys_id });
-        expect(dashboard.sys_id).toBe(dashboards.records[0].sys_id);
-      }
+      ctx.skip(dashboards.count === 0, 'data missing: list_pa_dashboards returned no records');
+      const dashboard = await executePerformanceToolCall(client, 'get_pa_dashboard', { sys_id_or_name: dashboards.records[0].sys_id });
+      expect(dashboard.sys_id).toBe(dashboards.records[0].sys_id);
     });
 
     it('lists PA jobs when the job table exists', async (ctx) => {
@@ -182,17 +183,18 @@ e2eDescribe('E2E – ITOM and asset tables (read-only)', () => {
       expect(discoveryModels.count).toBeGreaterThanOrEqual(0);
     });
 
-    it('fetches a single software install and model when they exist', async () => {
+    it('fetches get_software_install details when data exists', async (ctx) => {
       const installs = await executeSamToolCall(client, 'list_software_installs', { limit: 1 });
-      if (installs.count > 0) {
-        const install = await executeSamToolCall(client, 'get_software_install', { sys_id: installs.installs[0].sys_id });
-        expect(install.sys_id).toBe(installs.installs[0].sys_id);
-      }
+      ctx.skip(installs.count === 0, 'data missing: list_software_installs returned no records');
+      const install = await executeSamToolCall(client, 'get_software_install', { sys_id: installs.installs[0].sys_id });
+      expect(install.sys_id).toBe(installs.installs[0].sys_id);
+    });
+
+    it('fetches get_software_model details when data exists', async (ctx) => {
       const models = await executeSamToolCall(client, 'list_software_models', { limit: 1 });
-      if (models.count > 0) {
-        const model = await executeSamToolCall(client, 'get_software_model', { sys_id: models.models[0].sys_id });
-        expect(model.sys_id).toBe(models.models[0].sys_id);
-      }
+      ctx.skip(models.count === 0, 'data missing: list_software_models returned no records');
+      const model = await executeSamToolCall(client, 'get_software_model', { sys_id: models.models[0].sys_id });
+      expect(model.sys_id).toBe(models.models[0].sys_id);
     });
 
     it('lists license positions and the position summary', async () => {
@@ -221,9 +223,9 @@ e2eDescribe('E2E – ITOM and asset tables (read-only)', () => {
       expect(contracts.count).toBeGreaterThanOrEqual(0);
     });
 
-    it('fetches a single asset when one exists', async () => {
+    it('fetches a single asset when one exists', async (ctx) => {
       const list = await executeItamToolCall(client, 'list_assets', { limit: 1 });
-      if (list.count === 0) return;
+      ctx.skip(list.count === 0, 'data missing: list_assets returned no records');
       const asset = await executeItamToolCall(client, 'get_asset', { sys_id: list.assets[0].sys_id });
       expect(asset.sys_id).toBe(list.assets[0].sys_id);
     });

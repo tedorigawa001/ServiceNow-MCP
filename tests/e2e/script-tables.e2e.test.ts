@@ -26,9 +26,9 @@ scriptingE2eDescribe('E2E – scripting tables (read-only, scripting tier)', () 
       expect(Array.isArray(result.business_rules)).toBe(true);
     });
 
-    it('fetches a single business rule when one exists', async () => {
+    it('fetches a single business rule when one exists', async (ctx) => {
       const list = await executeScriptToolCall(client, 'list_business_rules', { limit: 1 });
-      if (list.count === 0) return;
+      ctx.skip(list.count === 0, 'data missing: list_business_rules returned no records');
       const rule = await executeScriptToolCall(client, 'get_business_rule', { sys_id: list.business_rules[0].sys_id });
       expect(rule.sys_id).toBe(list.business_rules[0].sys_id);
     });
@@ -41,9 +41,9 @@ scriptingE2eDescribe('E2E – scripting tables (read-only, scripting tier)', () 
       expect(Array.isArray(result.script_includes)).toBe(true);
     });
 
-    it('fetches a single script include when one exists', async () => {
+    it('fetches a single script include when one exists', async (ctx) => {
       const list = await executeScriptToolCall(client, 'list_script_includes', { limit: 1 });
-      if (list.count === 0) return;
+      ctx.skip(list.count === 0, 'data missing: list_script_includes returned no records');
       const include = await executeScriptToolCall(client, 'get_script_include', { sys_id_or_name: list.script_includes[0].sys_id });
       expect(include.sys_id).toBe(list.script_includes[0].sys_id);
     });
@@ -56,9 +56,9 @@ scriptingE2eDescribe('E2E – scripting tables (read-only, scripting tier)', () 
       expect(Array.isArray(result.client_scripts)).toBe(true);
     });
 
-    it('fetches a single client script when one exists', async () => {
+    it('fetches a single client script when one exists', async (ctx) => {
       const list = await executeScriptToolCall(client, 'list_client_scripts', { limit: 1 });
-      if (list.count === 0) return;
+      ctx.skip(list.count === 0, 'data missing: list_client_scripts returned no records');
       const script = await executeScriptToolCall(client, 'get_client_script', { sys_id: list.client_scripts[0].sys_id });
       expect(script.sys_id).toBe(list.client_scripts[0].sys_id);
     });
@@ -74,17 +74,18 @@ scriptingE2eDescribe('E2E – scripting tables (read-only, scripting tier)', () 
       expect(Array.isArray(actions.ui_actions)).toBe(true);
     });
 
-    it('fetches a single UI policy and UI action when they exist', async () => {
+    it('fetches get_ui_policy details when data exists', async (ctx) => {
       const policies = await executeScriptToolCall(client, 'list_ui_policies', { limit: 1 });
-      if (policies.count > 0) {
-        const policy = await executeScriptToolCall(client, 'get_ui_policy', { sys_id: policies.ui_policies[0].sys_id });
-        expect(policy.sys_id).toBe(policies.ui_policies[0].sys_id);
-      }
+      ctx.skip(policies.count === 0, 'data missing: list_ui_policies returned no records');
+      const policy = await executeScriptToolCall(client, 'get_ui_policy', { sys_id: policies.ui_policies[0].sys_id });
+      expect(policy.sys_id).toBe(policies.ui_policies[0].sys_id);
+    });
+
+    it('fetches get_ui_action details when data exists', async (ctx) => {
       const actions = await executeScriptToolCall(client, 'list_ui_actions', { limit: 1 });
-      if (actions.count > 0) {
-        const action = await executeScriptToolCall(client, 'get_ui_action', { sys_id: actions.ui_actions[0].sys_id });
-        expect(action.sys_id).toBe(actions.ui_actions[0].sys_id);
-      }
+      ctx.skip(actions.count === 0, 'data missing: list_ui_actions returned no records');
+      const action = await executeScriptToolCall(client, 'get_ui_action', { sys_id: actions.ui_actions[0].sys_id });
+      expect(action.sys_id).toBe(actions.ui_actions[0].sys_id);
     });
   });
 
@@ -95,9 +96,9 @@ scriptingE2eDescribe('E2E – scripting tables (read-only, scripting tier)', () 
       expect(Array.isArray(result.acls)).toBe(true);
     });
 
-    it('fetches a single ACL when one exists', async () => {
+    it('fetches a single ACL when one exists', async (ctx) => {
       const list = await executeScriptToolCall(client, 'list_acls', { limit: 1 });
-      if (list.count === 0) return;
+      ctx.skip(list.count === 0, 'data missing: list_acls returned no records');
       const acl = await executeScriptToolCall(client, 'get_acl', { sys_id: list.acls[0].sys_id });
       expect(acl.sys_id).toBe(list.acls[0].sys_id);
     });
@@ -110,9 +111,9 @@ scriptingE2eDescribe('E2E – scripting tables (read-only, scripting tier)', () 
       expect(Array.isArray(result.changesets)).toBe(true);
     });
 
-    it('fetches a single changeset when one exists', async () => {
+    it('fetches a single changeset when one exists', async (ctx) => {
       const list = await executeScriptToolCall(client, 'list_changesets', { limit: 1 });
-      if (list.count === 0) return;
+      ctx.skip(list.count === 0, 'data missing: list_changesets returned no records');
       const changeset = await executeScriptToolCall(client, 'get_changeset', { sys_id_or_name: list.changesets[0].sys_id });
       expect(changeset.sys_id).toBe(list.changesets[0].sys_id);
     });

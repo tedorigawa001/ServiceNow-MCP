@@ -35,9 +35,9 @@ e2eDescribe('E2E – platform configuration (read-only)', () => {
       expect(result).toBeTruthy();
     });
 
-    it('fetches a single property by name when one exists', async () => {
+    it('fetches a single property by name when one exists', async (ctx) => {
       const list = await executeSysPropertiesToolCall(client, 'list_system_properties', { limit: 1 });
-      if (list.count === 0) return;
+      ctx.skip(list.count === 0, 'data missing: list_system_properties returned no records');
       const property = await executeSysPropertiesToolCall(client, 'get_system_property', { name: list.properties[0].name });
       expect(property.name).toBe(list.properties[0].name);
     });
@@ -50,9 +50,9 @@ e2eDescribe('E2E – platform configuration (read-only)', () => {
       expect(Array.isArray(result.records)).toBe(true);
     });
 
-    it('fetches a single notification when one exists', async () => {
+    it('fetches a single notification when one exists', async (ctx) => {
       const list = await executeNotificationToolCall(client, 'list_notifications', { limit: 1 });
-      if (list.count === 0) return;
+      ctx.skip(list.count === 0, 'data missing: list_notifications returned no records');
       const notification = await executeNotificationToolCall(client, 'get_notification', { sys_id_or_name: list.records[0].sys_id });
       expect(notification.sys_id).toBe(list.records[0].sys_id);
     });
@@ -64,9 +64,9 @@ e2eDescribe('E2E – platform configuration (read-only)', () => {
       expect(templates.count).toBeGreaterThanOrEqual(0);
     });
 
-    it('fetches a single email log entry when one exists', async () => {
+    it('fetches a single email log entry when one exists', async (ctx) => {
       const list = await executeNotificationToolCall(client, 'list_email_logs', { limit: 1 });
-      if (list.count === 0) return;
+      ctx.skip(list.count === 0, 'data missing: list_email_logs returned no records');
       const entry = await executeNotificationToolCall(client, 'get_email_log', { sys_id: list.records[0].sys_id });
       expect(entry.sys_id).toBe(list.records[0].sys_id);
     });
@@ -84,9 +84,9 @@ e2eDescribe('E2E – platform configuration (read-only)', () => {
       expect(Array.isArray(result.reports)).toBe(true);
     });
 
-    it('fetches a single report when one exists', async () => {
+    it('fetches a single report when one exists', async (ctx) => {
       const list = await executeReportingToolCall(client, 'list_reports', { limit: 1 });
-      if (list.count === 0) return;
+      ctx.skip(list.count === 0, 'data missing: list_reports returned no records');
       const report = await executeReportingToolCall(client, 'get_report', { sys_id_or_name: list.reports[0].sys_id });
       expect(report.sys_id).toBe(list.reports[0].sys_id);
     });
@@ -97,9 +97,9 @@ e2eDescribe('E2E – platform configuration (read-only)', () => {
       expect(Array.isArray(result.jobs)).toBe(true);
     });
 
-    it('fetches a single scheduled job when one exists', async () => {
+    it('fetches a single scheduled job when one exists', async (ctx) => {
       const list = await executeReportingToolCall(client, 'list_scheduled_jobs', { limit: 1 });
-      if (list.count === 0) return;
+      ctx.skip(list.count === 0, 'data missing: list_scheduled_jobs returned no records');
       const job = await executeReportingToolCall(client, 'get_scheduled_job', { sys_id_or_name: list.jobs[0].sys_id });
       expect(job.sys_id).toBe(list.jobs[0].sys_id);
     });
@@ -136,10 +136,10 @@ e2eDescribe('E2E – platform configuration (read-only)', () => {
       expect(result.count).toBeGreaterThanOrEqual(0);
     });
 
-    it('fetches a single policy when one exists', async () => {
+    it('fetches a single policy when one exists', async (ctx) => {
       const list = await executeDataManagementToolCall(client, 'list_data_management_policies', { limit: 1 });
       const first = list.records?.[0] ?? list.policies?.[0];
-      if (!first) return;
+      ctx.skip(!first, 'data missing: list_data_management_policies returned no records');
       const policy = await executeDataManagementToolCall(client, 'get_data_management_policy', { sys_id: first.sys_id });
       expect(policy.sys_id ?? policy.policy?.sys_id).toBe(first.sys_id);
     });
@@ -160,17 +160,18 @@ e2eDescribe('E2E – platform configuration (read-only)', () => {
       expect(tests.count).toBeGreaterThanOrEqual(0);
     });
 
-    it('fetches a single ATF suite and test when they exist', async () => {
+    it('fetches get_atf_suite details when data exists', async (ctx) => {
       const suites = await executeAtfToolCall(client, 'list_atf_suites', { limit: 1 });
-      if (suites.count > 0) {
-        const suite = await executeAtfToolCall(client, 'get_atf_suite', { sys_id_or_name: suites.suites[0].sys_id });
-        expect(suite.sys_id).toBe(suites.suites[0].sys_id);
-      }
+      ctx.skip(suites.count === 0, 'data missing: list_atf_suites returned no records');
+      const suite = await executeAtfToolCall(client, 'get_atf_suite', { sys_id_or_name: suites.suites[0].sys_id });
+      expect(suite.sys_id).toBe(suites.suites[0].sys_id);
+    });
+
+    it('fetches get_atf_test details when data exists', async (ctx) => {
       const tests = await executeAtfToolCall(client, 'list_atf_tests', { limit: 1 });
-      if (tests.count > 0) {
-        const test = await executeAtfToolCall(client, 'get_atf_test', { sys_id: tests.tests[0].sys_id });
-        expect(test.sys_id).toBe(tests.tests[0].sys_id);
-      }
+      ctx.skip(tests.count === 0, 'data missing: list_atf_tests returned no records');
+      const test = await executeAtfToolCall(client, 'get_atf_test', { sys_id: tests.tests[0].sys_id });
+      expect(test.sys_id).toBe(tests.tests[0].sys_id);
     });
 
     it('lists ATF results when the result table exists', async (ctx) => {
@@ -188,9 +189,9 @@ e2eDescribe('E2E – platform configuration (read-only)', () => {
       expect(actions.count).toBeGreaterThanOrEqual(0);
     });
 
-    it('fetches a single flow when one exists', async () => {
+    it('fetches a single flow when one exists', async (ctx) => {
       const list = await executeFlowToolCall(client, 'list_flows', { limit: 1 });
-      if (list.count === 0) return;
+      ctx.skip(list.count === 0, 'data missing: list_flows returned no records');
       const flow = await executeFlowToolCall(client, 'get_flow', { name_or_sysid: list.records[0].sys_id });
       expect(flow.sys_id).toBe(list.records[0].sys_id);
     });
@@ -202,9 +203,9 @@ e2eDescribe('E2E – platform configuration (read-only)', () => {
       expect(result.count).toBeGreaterThanOrEqual(0);
     });
 
-    it('fetches a single scoped app when one exists', async () => {
+    it('fetches a single scoped app when one exists', async (ctx) => {
       const list = await executeAppStudioToolCall(client, 'list_scoped_apps', { limit: 1 });
-      if (list.count === 0) return;
+      ctx.skip(list.count === 0, 'data missing: list_scoped_apps returned no records');
       const app = await executeAppStudioToolCall(client, 'get_scoped_app', { id: list.records[0].sys_id });
       expect(app.sys_id).toBe(list.records[0].sys_id);
     });

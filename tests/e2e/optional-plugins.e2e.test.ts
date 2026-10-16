@@ -55,7 +55,7 @@ e2eDescribe('E2E – optional plugins (read-only, gated on plugin tables)', () =
     it('fetches a single HR case when one exists', async (ctx) => {
       await skipUnlessTables(ctx, client, 'sn_hr_core_case');
       const list = await executeHrsdToolCall(client, 'list_hr_cases', { limit: 1 });
-      if (list.count === 0) return;
+      ctx.skip(list.count === 0, 'data missing: list_hr_cases returned no records');
       const hrCase = await executeHrsdToolCall(client, 'get_hr_case', { number_or_sysid: list.records[0].sys_id });
       expect(hrCase.sys_id).toBe(list.records[0].sys_id);
     });
@@ -80,7 +80,7 @@ e2eDescribe('E2E – optional plugins (read-only, gated on plugin tables)', () =
     it('fetches a single CSM case when one exists', async (ctx) => {
       await skipUnlessTables(ctx, client, 'sn_customerservice_case');
       const list = await executeCsmToolCall(client, 'list_csm_cases', { limit: 1 });
-      if (list.count === 0) return;
+      ctx.skip(list.count === 0, 'data missing: list_csm_cases returned no records');
       const csmCase = await executeCsmToolCall(client, 'get_csm_case', { number_or_sysid: list.records[0].sys_id });
       expect(csmCase.sys_id).toBe(list.records[0].sys_id);
     });
@@ -111,9 +111,8 @@ e2eDescribe('E2E – optional plugins (read-only, gated on plugin tables)', () =
       // Every returned definition must be from the SIR scope; when SIR is
       // installed the stock Malware/Phishing templates are present.
       const labels = playbooks.records.map((r: { label?: string; name?: string }) => r.label ?? r.name ?? '');
-      if (playbooks.count > 0) {
-        expect(labels.some((l: string) => /malware|phishing|failed login/i.test(l))).toBe(true);
-      }
+      ctx.skip(playbooks.count === 0, 'data missing: list_security_playbooks returned no SIR playbooks');
+      expect(labels.some((l: string) => /malware|phishing|failed login/i.test(l))).toBe(true);
       const search = await executeSecurityToolCall(client, 'list_security_playbooks', { query: 'Malware', limit: 5 });
       for (const r of search.records as Array<{ label?: string; name?: string }>) {
         expect(`${r.label ?? ''} ${r.name ?? ''}`).toMatch(/malware/i);
@@ -123,7 +122,7 @@ e2eDescribe('E2E – optional plugins (read-only, gated on plugin tables)', () =
     it('fetches a single security incident when one exists', async (ctx) => {
       await skipUnlessTables(ctx, client, 'sn_si_incident');
       const list = await executeSecurityToolCall(client, 'list_security_incidents', { limit: 1 });
-      if (list.count === 0) return;
+      ctx.skip(list.count === 0, 'data missing: list_security_incidents returned no records');
       const incident = await executeSecurityToolCall(client, 'get_security_incident', { number_or_sysid: list.records[0].sys_id });
       expect(incident.sys_id).toBe(list.records[0].sys_id);
     });

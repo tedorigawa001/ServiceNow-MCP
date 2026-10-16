@@ -42,6 +42,17 @@ Response (`sn_vul_vulnerable_item`, `sn_vul_remediation_task` /
 Without `RUN_E2E=true` and a configured instance, the whole suite is skipped —
 so it never runs by accident in CI or a plain `npm test`.
 
+### Reporting missing prerequisites
+
+Use `ctx.skip(condition, 'data missing: <tool/table and prerequisite>')` when
+missing records prevent a test from exercising its intended operation. Do not
+return early or wrap detail assertions in `if (list.count > 0)`: that reports
+untested operations as passing. Split independent detail lookups into separate
+tests so a missing record does not hide another lookup's result. Use
+`skipUnlessTables` for unavailable tables, and distinguish that from empty data.
+An empty collection remains a valid success for a test of the list operation
+itself; API errors and malformed responses must still fail, not become skips.
+
 ### Write-tool tests (create/update)
 
 `tests/e2e/write-operations.e2e.test.ts` exercises create/update on incident,

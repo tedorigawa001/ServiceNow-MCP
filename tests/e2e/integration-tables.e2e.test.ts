@@ -24,9 +24,9 @@ e2eDescribe('E2E – integration tables (read-only)', () => {
       expect(Array.isArray(result.records)).toBe(true);
     });
 
-    it('fetches a single REST message when one exists', async () => {
+    it('fetches a single REST message when one exists', async (ctx) => {
       const list = await executeIntegrationToolCall(client, 'list_rest_messages', { limit: 1 });
-      if (list.count === 0) return;
+      ctx.skip(list.count === 0, 'data missing: list_rest_messages returned no records');
       const message = await executeIntegrationToolCall(client, 'get_rest_message', { sys_id_or_name: list.records[0].sys_id });
       expect(message.sys_id).toBe(list.records[0].sys_id);
     });
@@ -36,9 +36,9 @@ e2eDescribe('E2E – integration tables (read-only)', () => {
       expect(result.count).toBeGreaterThanOrEqual(0);
     });
 
-    it('fetches a single SOAP message when one exists', async () => {
+    it('fetches a single SOAP message when one exists', async (ctx) => {
       const list = await executeIntegrationToolCall(client, 'list_soap_messages', { limit: 1 });
-      if (list.count === 0) return;
+      ctx.skip(list.count === 0, 'data missing: list_soap_messages returned no records');
       const message = await executeIntegrationToolCall(client, 'get_soap_message', { sys_id_or_name: list.records[0].sys_id });
       expect(message.soap_message.sys_id).toBe(list.records[0].sys_id);
       expect(Array.isArray(message.functions)).toBe(true);
@@ -51,9 +51,9 @@ e2eDescribe('E2E – integration tables (read-only)', () => {
       expect(result.count).toBeGreaterThanOrEqual(0);
     });
 
-    it('fetches a single transform map when one exists', async () => {
+    it('fetches a single transform map when one exists', async (ctx) => {
       const list = await executeIntegrationToolCall(client, 'list_transform_maps', { limit: 1 });
-      if (list.count === 0) return;
+      ctx.skip(list.count === 0, 'data missing: list_transform_maps returned no records');
       const map = await executeIntegrationToolCall(client, 'get_transform_map', { sys_id_or_name: list.records[0].sys_id });
       expect(map.sys_id).toBe(list.records[0].sys_id);
     });
@@ -63,9 +63,9 @@ e2eDescribe('E2E – integration tables (read-only)', () => {
       expect(result.count).toBeGreaterThanOrEqual(0);
     });
 
-    it('fetches a single import set when one exists', async () => {
+    it('fetches a single import set when one exists', async (ctx) => {
       const list = await executeIntegrationToolCall(client, 'list_import_sets', { limit: 1 });
-      if (list.count === 0) return;
+      ctx.skip(list.count === 0, 'data missing: list_import_sets returned no records');
       const importSet = await executeIntegrationToolCall(client, 'get_import_set', { sys_id: list.records[0].sys_id });
       expect(importSet.sys_id).toBe(list.records[0].sys_id);
     });
@@ -84,9 +84,9 @@ e2eDescribe('E2E – integration tables (read-only)', () => {
       expect(log.count).toBeGreaterThanOrEqual(0);
     });
 
-    it('fetches a single event registry entry when one exists', async () => {
+    it('fetches a single event registry entry when one exists', async (ctx) => {
       const list = await executeIntegrationToolCall(client, 'list_event_registry', { limit: 1 });
-      if (list.count === 0) return;
+      ctx.skip(list.count === 0, 'data missing: list_event_registry returned no records');
       const entry = await executeIntegrationToolCall(client, 'get_event_registry_entry', { name_or_sysid: list.records[0].sys_id });
       expect(entry.sys_id).toBe(list.records[0].sys_id);
     });

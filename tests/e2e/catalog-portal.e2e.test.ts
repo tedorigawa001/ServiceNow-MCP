@@ -30,17 +30,18 @@ e2eDescribe('E2E – catalog, portal and UI surfaces (read-only)', () => {
       expect(Array.isArray(items.request_items)).toBe(true);
     });
 
-    it('fetches a single request and request item when they exist', async () => {
+    it('fetches get_request details when data exists', async (ctx) => {
       const requests = await executeCatalogToolCall(client, 'list_requests', { limit: 1 });
-      if (requests.count > 0) {
-        const request = await executeCatalogToolCall(client, 'get_request', { number_or_sysid: requests.requests[0].sys_id });
-        expect(request.request.sys_id).toBe(requests.requests[0].sys_id);
-      }
+      ctx.skip(requests.count === 0, 'data missing: list_requests returned no records');
+      const request = await executeCatalogToolCall(client, 'get_request', { number_or_sysid: requests.requests[0].sys_id });
+      expect(request.request.sys_id).toBe(requests.requests[0].sys_id);
+    });
+
+    it('fetches get_request_item details when data exists', async (ctx) => {
       const items = await executeCatalogToolCall(client, 'list_request_items', { limit: 1 });
-      if (items.count > 0) {
-        const item = await executeCatalogToolCall(client, 'get_request_item', { number_or_sysid: items.request_items[0].sys_id });
-        expect(item.request_item.sys_id).toBe(items.request_items[0].sys_id);
-      }
+      ctx.skip(items.count === 0, 'data missing: list_request_items returned no records');
+      const item = await executeCatalogToolCall(client, 'get_request_item', { number_or_sysid: items.request_items[0].sys_id });
+      expect(item.request_item.sys_id).toBe(items.request_items[0].sys_id);
     });
   });
 
@@ -59,11 +60,11 @@ e2eDescribe('E2E – catalog, portal and UI surfaces (read-only)', () => {
       expect(Array.isArray(result.slas)).toBe(true);
     });
 
-    it('reads SLA details for a task that has one when any exist', async () => {
+    it('reads SLA details for a task that has one when any exist', async (ctx) => {
       const slas = await executeCatalogToolCall(client, 'list_active_slas', { limit: 1 });
-      if (slas.count === 0) return;
+      ctx.skip(slas.count === 0, 'data missing: list_active_slas returned no records');
       const taskSysId = slas.slas[0].task?.value ?? slas.slas[0].task;
-      if (!taskSysId) return;
+      ctx.skip(!taskSysId, 'data missing: first active SLA has no task reference');
       const details = await executeCatalogToolCall(client, 'get_sla_details', { task_sys_id: taskSysId });
       expect(details).toBeTruthy();
     });
@@ -87,22 +88,25 @@ e2eDescribe('E2E – catalog, portal and UI surfaces (read-only)', () => {
       expect(themes.count).toBeGreaterThanOrEqual(0);
     });
 
-    it('fetches a single portal, widget and theme when they exist', async () => {
+    it('fetches get_portal details when data exists', async (ctx) => {
       const portals = await executePortalToolCall(client, 'list_portals', { limit: 1 });
-      if (portals.count > 0) {
-        const portal = await executePortalToolCall(client, 'get_portal', { id: portals.records[0].sys_id });
-        expect(portal.sys_id).toBe(portals.records[0].sys_id);
-      }
+      ctx.skip(portals.count === 0, 'data missing: list_portals returned no records');
+      const portal = await executePortalToolCall(client, 'get_portal', { id: portals.records[0].sys_id });
+      expect(portal.sys_id).toBe(portals.records[0].sys_id);
+    });
+
+    it('fetches get_portal_widget details when data exists', async (ctx) => {
       const widgets = await executePortalToolCall(client, 'list_portal_widgets', { limit: 1 });
-      if (widgets.count > 0) {
-        const widget = await executePortalToolCall(client, 'get_portal_widget', { id_or_sysid: widgets.records[0].sys_id });
-        expect(widget.sys_id).toBe(widgets.records[0].sys_id);
-      }
+      ctx.skip(widgets.count === 0, 'data missing: list_portal_widgets returned no records');
+      const widget = await executePortalToolCall(client, 'get_portal_widget', { id_or_sysid: widgets.records[0].sys_id });
+      expect(widget.sys_id).toBe(widgets.records[0].sys_id);
+    });
+
+    it('fetches get_portal_theme details when data exists', async (ctx) => {
       const themes = await executePortalToolCall(client, 'list_portal_themes', { limit: 1 });
-      if (themes.count > 0) {
-        const theme = await executePortalToolCall(client, 'get_portal_theme', { sys_id: themes.records[0].sys_id });
-        expect(theme.sys_id).toBe(themes.records[0].sys_id);
-      }
+      ctx.skip(themes.count === 0, 'data missing: list_portal_themes returned no records');
+      const theme = await executePortalToolCall(client, 'get_portal_theme', { sys_id: themes.records[0].sys_id });
+      expect(theme.sys_id).toBe(themes.records[0].sys_id);
     });
   });
 
@@ -112,9 +116,9 @@ e2eDescribe('E2E – catalog, portal and UI surfaces (read-only)', () => {
       expect(result.count).toBeGreaterThanOrEqual(0);
     });
 
-    it('fetches a single UX app when one exists', async () => {
+    it('fetches a single UX app when one exists', async (ctx) => {
       const list = await executePortalToolCall(client, 'list_ux_apps', { limit: 1 });
-      if (list.count === 0) return;
+      ctx.skip(list.count === 0, 'data missing: list_ux_apps returned no records');
       const app = await executePortalToolCall(client, 'get_ux_app', { sys_id_or_name: list.records[0].sys_id });
       expect(app.sys_id).toBe(list.records[0].sys_id);
     });
@@ -131,9 +135,9 @@ e2eDescribe('E2E – catalog, portal and UI surfaces (read-only)', () => {
       expect(brokers.count).toBeGreaterThanOrEqual(0);
     });
 
-    it('fetches a single UI Builder page when one exists', async () => {
+    it('fetches a single UI Builder page when one exists', async (ctx) => {
       const list = await executeWorkspaceToolCall(client, 'list_uib_pages', { limit: 1 });
-      if (list.count === 0) return;
+      ctx.skip(list.count === 0, 'data missing: list_uib_pages returned no records');
       const page = await executeWorkspaceToolCall(client, 'get_uib_page', { sys_id: list.pages[0].sys_id });
       expect(page.sys_id).toBe(list.pages[0].sys_id);
     });
@@ -154,9 +158,9 @@ e2eDescribe('E2E – catalog, portal and UI surfaces (read-only)', () => {
       expect(conversations.count).toBeGreaterThanOrEqual(0);
     });
 
-    it('fetches a single VA topic when one exists', async () => {
+    it('fetches a single VA topic when one exists', async (ctx) => {
       const list = await executeVaToolCall(client, 'list_va_topics_full', { limit: 1 });
-      if (list.count === 0) return;
+      ctx.skip(list.count === 0, 'data missing: list_va_topics_full returned no records');
       const topic = await executeVaToolCall(client, 'get_va_topic', { sys_id: list.topics[0].sys_id });
       expect(topic.sys_id).toBe(list.topics[0].sys_id);
     });
