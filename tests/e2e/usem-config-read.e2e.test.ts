@@ -1,7 +1,7 @@
 import { it, expect, beforeAll, afterAll } from 'vitest';
 import { e2eDescribe, getE2EClient, skipUnlessTables } from './helpers.js';
 import { executeUsemConfigToolCall } from '../../src/tools/usem-config.js';
-import { executeUsemIntegrationToolCall } from '../../src/tools/usem-integration.js';
+import { executeUsemIntegrationToolCall, isSecretParameter } from '../../src/tools/usem-integration.js';
 import { createUsemFixtures } from './usem-fixtures.js';
 
 type Row = Record<string, unknown>;
@@ -117,9 +117,9 @@ e2eDescribe('E2E – USEM configuration and parameter reads', () => {
         expect(ids(result.records)).toEqual([...fixtureIds].sort());
         expect(result.records.every((r: Row) => raw(r[valueField]) === fixtures!.expected[raw(r.sys_id)])).toBe(true);
       }
+      // Same decision the tool makes, so the E2E cannot drift from the implementation.
       const secrets = (result.records as Row[]).filter(r =>
-        ['password', 'password2'].includes(raw(r[`${metadata}elem_type`])) ||
-        /secret|password|token|api[\s_-]*key|credential|private/i.test(`${raw(r[`${metadata}name`])} ${raw(r[`${metadata}label`])}`));
+        isSecretParameter(raw(r[`${metadata}name`]), raw(r[`${metadata}label`]), raw(r[`${metadata}elem_type`])));
       const nonempty = secrets.filter(r => raw(r[valueField]) !== '');
       // Never pass a record/value to expect: a broken mask must not leak a secret in the test log.
       expect(nonempty.every(r => raw(r[valueField]) === '***MASKED***')).toBe(true);

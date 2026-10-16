@@ -6,7 +6,7 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 ---
 
-## [Unreleased]
+## [1.14.2] — 2026-10-17
 
 ### Fixed
 
@@ -14,6 +14,8 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
   even when the parameter name is neutral and its type is string. Previously
   only `apikey` / `api_key` matched, so these plain-text values could be returned
   in definition and instance scope. Found with disposable dummy values on the PDI.
+- **Secret masking now covers the other common credential labels.** Scanner integrations name credentials in many ways; `Access Key`, `Client Key`, `Signing Key`, `Subscription Key`, `Shared Key`, `Passphrase`, `Pass code`, `Auth Token`, `Authorization`, `Bearer`, `Key Secret`, `Certificate Key`, `PIN` and cookie-style labels are now masked as well. A bare `key` or `auth` is deliberately not matched, so ordinary settings such as `Primary key field` and `Authentication type` stay visible. The decision lives in one exported function, `isSecretParameter`, which the live E2E now imports instead of keeping its own copy of the pattern. On the PDI's real parameters exactly the two `API Key` credentials are treated as secret and none of the 21 ordinary settings are hidden.
+- **`list_integration_parameters` no longer lets a query reveal a masked value.** Its free-form `query` was passed through, so a caller could filter or sort on the value column (`valueSTARTSWITHa`, `ORDERBYvalue`) and recover a masked secret one character at a time from which rows came back. Any query term on `value`, `default_value` or `password_value` — including dot-walks such as `configuration.default_value` and `OR` / `NQ` / `ORDERBY` terms — is now rejected with `VALIDATION_ERROR`; queries on metadata columns are unaffected. Verified live.
 
 ### Added
 

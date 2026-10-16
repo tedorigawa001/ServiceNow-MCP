@@ -43,8 +43,49 @@ const RUN_FIELDS =
 const LOG_FIELDS =
   'type,category,message_value,suggested_recommendations,integration_run,sys_created_on,sys_id';
 
-/** Parameter names/labels that indicate a secret; their values are masked in output. */
-const SECRET_PARAM_RE = /secret|password|token|api[\s_-]*key|credential|private/i;
+/**
+ * Parameter names/labels that indicate a secret; their values are masked in output.
+ * Scanner integrations (Qualys, Tenable, Rapid7, cloud feeds) label credentials in
+ * many ways — "API Key", "Access Key", "Client Key", "Passphrase", "Auth Token",
+ * "Authorization", "Signing Key" — so match those combinations, but not a bare
+ * "key" or "auth" (e.g. "Primary key field", "Authentication type"), which would
+ * hide ordinary settings.
+ */
+const SECRET_PARAM_RE = new RegExp([
+  'secret', 'passw(?:or)?d', 'passphrase', 'pass[\\s_-]*code', 'token', 'credential', 'private',
+  'bearer', 'cookie', 'authorization', 'auth[\\s_-]*(?:key|token|code|header|string)',
+  '(?:api|access|client|signing|encryption|license|subscription|shared|master|account|app|host)[\\s_-]*key',
+  'key[\\s_-]*(?:secret|file|pair|value)', '\\bpin\\b', 'certificate[\\s_-]*key',
+].join('|'), 'i');
+
+/** True when a parameter's value must not be returned: a password type, or a secret-looking name/label. */
+export function isSecretParameter(name: string, label: string, elemType: string): boolean {
+  return elemType === 'password' || elemType === 'password2' || SECRET_PARAM_RE.test(`${name} ${label}`);
+}
+
+const VALUE_FIELDS = new Set(['value', 'default_value', 'password_value']);
+
+/**
+ * Masking a value is pointless if the caller can filter or sort on it: a query such
+ * as `valueSTARTSWITHa` reveals a secret one character at a time from which rows
+ * come back. Reject any encoded-query term on a value column, including dot-walks
+ * (`configuration.default_value`) and ORDERBY.
+ */
+function assertQueryAvoidsValueFields(query: unknown): void {
+  if (query === undefined || query === null || query === '') return;
+  for (const term of String(query).split('^')) {
+    // Longest prefixes first: "OR" would otherwise consume the start of "ORDERBY".
+    const stripped = term.replace(/^(?:ORDERBYDESC|ORDERBY|GROUPBY|NQ|OR)/, '');
+    const field = /^[a-z0-9_.]+/.exec(stripped)?.[0] ?? '';
+    const last = field.split('.').pop() ?? '';
+    if (VALUE_FIELDS.has(last)) {
+      throw new ServiceNowError(
+        `query must not filter or sort on ${field}: parameter values are masked, and a condition on them would reveal the value`,
+        'VALIDATION_ERROR',
+      );
+    }
+  }
+}
 
 /**
  * Mask secret-like parameter values. The encrypted password_value column is never
@@ -55,8 +96,7 @@ function maskParameterRecord(rec: Record<string, any>): Record<string, any> {
   const name = String(rec.name ?? rec['configuration.name'] ?? '');
   const label = String(rec.label ?? rec['configuration.label'] ?? '');
   const elemType = String(rec.elem_type ?? rec['configuration.elem_type'] ?? '');
-  const isSecret = elemType === 'password' || elemType === 'password2' || SECRET_PARAM_RE.test(`${name} ${label}`);
-  if (!isSecret) return rec;
+  if (!isSecretParameter(name, label, elemType)) return rec;
   const masked = { ...rec };
   for (const field of ['value', 'default_value']) {
     if (typeof masked[field] === 'string' && masked[field] !== '') masked[field] = '***MASKED***';
@@ -282,6 +322,7 @@ export async function executeUsemIntegrationToolCall(
       if (scope !== 'definition' && scope !== 'instance') {
         throw new ServiceNowError('scope must be "definition" or "instance"', 'INVALID_REQUEST');
       }
+      assertQueryAvoidsValueFields(args.query);
       const parts: string[] = [];
       if (scope === 'definition') {
         if (args.integration) {

@@ -1,6 +1,7 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import {
   executeUsemIntegrationToolCall,
+  isSecretParameter,
   getUsemIntegrationToolDefinitions,
 } from '../../src/tools/usem-integration.js';
 import type { ServiceNowClient } from '../../src/servicenow/client.js';
@@ -220,6 +221,42 @@ describe('list_integration_parameters', () => {
     const result = await executeUsemIntegrationToolCall(mockClient, 'list_integration_parameters', { scope: 'definition' });
     expect(result.records[0].default_value).toBe('***MASKED***');
     expect(result.records[1].default_value).toBe('full');
+  });
+
+  it.each([
+    'Access Key', 'Secret Access Key', 'Client Key', 'client_key', 'Passphrase', 'Pass code', 'Auth Token',
+    'Authorization', 'Bearer', 'Signing Key', 'Subscription Key', 'Shared Key', 'Private key',
+    'Key Secret', 'PIN', 'Certificate Key', 'Session cookie', 'APIKey', 'API-Key', 'passwd',
+  ])('treats "%s" as a secret label', label => {
+    expect(isSecretParameter('neutral_name', label, 'string')).toBe(true);
+  });
+
+  it.each([
+    'Authentication type', 'Primary key field', 'Key', 'Page size for only CVEs', 'URL', 'Import Starttime Buffer',
+    'Pinned version', 'Spinner delay', 'Keyword filter', 'days_chunk',
+  ])('does not hide the ordinary setting "%s"', label => {
+    expect(isSecretParameter('neutral_name', label, 'string')).toBe(false);
+  });
+
+  it('always masks password-typed parameters, whatever their label', () => {
+    expect(isSecretParameter('x', 'Ordinary value', 'password')).toBe(true);
+    expect(isSecretParameter('x', 'Ordinary value', 'password2')).toBe(true);
+  });
+
+  it.each([
+    'valueSTARTSWITHa', 'default_valueLIKEabc', 'nameLIKEkey^ORvalue=secret', 'configuration.default_valueSTARTSWITHx',
+    'ORDERBYvalue', 'ORDERBYDESCdefault_value', 'password_valueISNOTEMPTY', 'nameLIKEa^NQvalueLIKEb',
+  ])('rejects a query that filters or sorts on a value column: %s', async query => {
+    for (const scope of ['definition', 'instance']) {
+      await expect(executeUsemIntegrationToolCall(mockClient, 'list_integration_parameters', { scope, query }))
+        .rejects.toMatchObject({ code: 'VALIDATION_ERROR', message: expect.stringContaining('would reveal the value') });
+    }
+    expect(qr()).not.toHaveBeenCalled();
+  });
+
+  it.each(['nameLIKEkey', 'elem_type=password', 'labelSTARTSWITHAPI^ORDERBYname', 'mandatory=true'])('allows a query on metadata columns: %s', async query => {
+    qr().mockResolvedValue({ count: 0, records: [] });
+    await expect(executeUsemIntegrationToolCall(mockClient, 'list_integration_parameters', { scope: 'definition', query })).resolves.toBeTruthy();
   });
 
   it.each(['definition', 'instance'])('masks a label-only API Key in %s scope', async scope => {
