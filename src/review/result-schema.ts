@@ -1,5 +1,7 @@
 import { z } from 'zod';
 import { CATALOG_VERSION, RULES, SOURCES, matchCatalogRelease } from './catalog.js';
+// Typed codes for new consumers; bp-review-0.1 keeps its legacy free-text wire contract.
+export { followUpCodeSchema, type FollowUpCode } from './follow-up-catalog.js';
 
 const ruleId = z.enum(RULES.map(rule => rule.rule_id) as [string, ...string[]]);
 const sourceId = z.enum(Object.keys(SOURCES) as [string, ...string[]]);

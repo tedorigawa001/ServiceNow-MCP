@@ -3,16 +3,16 @@ import { z } from 'zod';
 import { reviewUpdateSetPayload } from './payload-review.js';
 import { reviewResultSchema } from './result-schema.js';
 import { sha256 } from './update-xml.js';
+import { RULE_SPECIFIC_FOLLOW_UP } from './follow-up-catalog.js';
 
 const rules = ['AU-BR-001', 'AU-BR-002', 'AU-CL-004'] as const;
-const specificFollowup = { 'AU-BR-001': 'workflow_suppression_review', 'AU-BR-002': 'async_dependency_review',
-  'AU-CL-004': 'synchronous_ajax_review' } as const;
+const specificFollowup = RULE_SPECIFIC_FOLLOW_UP;
 const expectationSchema = z.discriminatedUnion('mode', [
   z.strictObject({ mode: z.literal('abstain'), reason: z.enum(['release_unknown', 'release_mismatch', 'missing_context',
     'javascript_parse_failed', 'missing_script', 'duplicate_field', 'identity_mismatch']) }),
   z.strictObject({ mode: z.literal('decision'), outcome: z.enum(['candidate', 'clear', 'candidate_with_followup']),
-    required_follow_up: z.array(z.enum(['workflow_suppression_review', 'async_dependency_review', 'synchronous_ajax_review',
-      'binding_and_reachability'])).max(4).default([]),
+    // Preserve the frozen v0.2 subset and semantics; vocabulary ownership is shared.
+    required_follow_up: z.array(z.enum([...Object.values(RULE_SPECIFIC_FOLLOW_UP), 'binding_and_reachability'])).max(4).default([]),
     required_limitations: z.array(z.literal('inactive_asset')).max(1).default([]),
   }).superRefine((e, ctx) => {
     if (e.outcome === 'candidate_with_followup') {
