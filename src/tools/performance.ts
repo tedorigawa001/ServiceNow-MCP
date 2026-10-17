@@ -468,15 +468,15 @@ export async function executePerformanceToolCall(
       if (args.active !== false) parts.push('active=true');
       if (args.query) parts.push(`nameCONTAINS${sanitizeLikeValue(args.query)}`);
       return await client.queryRecords({
-        table: 'pa_job',
+        table: 'sysauto_pa',
         query: parts.join('^') || '',
         limit: args.limit ?? 25,
-        fields: 'sys_id,name,active,schedule,sys_updated_on',
+        fields: 'sys_id,name,active,run_type,run_time,run_period,sys_updated_on',
       });
     }
     case 'get_pa_job': {
       if (!args.sys_id) throw new ServiceNowError('sys_id is required', 'INVALID_REQUEST');
-      return await client.getRecord('pa_job', args.sys_id);
+      return await client.getRecord('sysauto_pa', args.sys_id);
     }
     // ── Data Quality ─────────────────────────────────────────────────────────
     case 'check_table_completeness': {

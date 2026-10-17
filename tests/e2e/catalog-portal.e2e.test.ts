@@ -166,9 +166,15 @@ e2eDescribe('E2E – catalog, portal and UI surfaces (read-only)', () => {
     });
 
     it('lists VA categories when the category table exists', async (ctx) => {
-      await skipUnlessTables(ctx, client, 'sys_cs_category');
+      await skipUnlessTables(ctx, client, 'sys_cb_topic_category');
       const result = await executeVaToolCall(client, 'list_va_categories', { limit: 5 });
       expect(result.count).toBeGreaterThanOrEqual(0);
+      expect(Array.isArray(result.categories)).toBe(true);
+      for (const category of result.categories) {
+        expect(category.sys_id).toMatch(/^[0-9a-f]{32}$/);
+        expect(category).toHaveProperty('name');
+        expect(category).toHaveProperty('visible');
+      }
     });
   });
 });

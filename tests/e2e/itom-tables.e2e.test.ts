@@ -171,9 +171,26 @@ e2eDescribe('E2E – ITOM and asset tables (read-only)', () => {
     });
 
     it('lists PA jobs when the job table exists', async (ctx) => {
-      await skipUnlessTables(ctx, client, 'pa_job');
+      await skipUnlessTables(ctx, client, 'sysauto_pa');
       const result = await executePerformanceToolCall(client, 'list_pa_jobs', { limit: 5 });
       expect(result.count).toBeGreaterThanOrEqual(0);
+      expect(Array.isArray(result.records)).toBe(true);
+      for (const job of result.records) {
+        expect(job.sys_id).toMatch(/^[0-9a-f]{32}$/);
+        expect(job).toHaveProperty('name');
+        expect(job).toHaveProperty('run_type');
+        expect(job).toHaveProperty('run_time');
+        expect(job).toHaveProperty('run_period');
+      }
+    });
+
+    it('fetches a scheduled PA collection job when data exists', async (ctx) => {
+      await skipUnlessTables(ctx, client, 'sysauto_pa');
+      const list = await executePerformanceToolCall(client, 'list_pa_jobs', { active: false, limit: 1 });
+      ctx.skip(list.records.length === 0, 'data missing: list_pa_jobs returned no records');
+      const job = await executePerformanceToolCall(client, 'get_pa_job', { sys_id: list.records[0].sys_id });
+      expect(job.sys_id).toBe(list.records[0].sys_id);
+      expect(job.name).toBe(list.records[0].name);
     });
   });
 

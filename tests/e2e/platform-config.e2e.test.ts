@@ -175,9 +175,36 @@ e2eDescribe('E2E – platform configuration (read-only)', () => {
     });
 
     it('lists ATF results when the result table exists', async (ctx) => {
-      await skipUnlessTables(ctx, client, 'sys_atf_result');
+      await skipUnlessTables(ctx, client, 'sys_atf_test_result');
       const result = await executeAtfToolCall(client, 'list_atf_test_results', { limit: 5 });
       expect(result.count).toBeGreaterThanOrEqual(0);
+      expect(Array.isArray(result.results)).toBe(true);
+      for (const record of result.results) {
+        expect(record.sys_id).toMatch(/^[0-9a-f]{32}$/);
+        expect(record).toHaveProperty('test');
+        expect(record).toHaveProperty('parent');
+        expect(record).toHaveProperty('output');
+      }
+    });
+
+    it('filters ATF results through the suite-result parent reference', async (ctx) => {
+      await skipUnlessTables(ctx, client, 'sys_atf_test_result');
+      // Results may legitimately be empty. Check the real dictionary as well,
+      // because ServiceNow can silently ignore filters on unknown columns.
+      const dictionary = await client.queryRecords({
+        table: 'sys_dictionary',
+        query: 'name=sys_atf_test_result^elementINparent,test,status,output,message_reference',
+        fields: 'element,reference', limit: 10,
+      });
+      expect(dictionary.records.map(record => record.element).sort())
+        .toEqual(['message_reference', 'output', 'parent', 'status', 'test']);
+      const parentReference = dictionary.records.find(record => record.element === 'parent')?.reference;
+      expect(typeof parentReference === 'object' ? parentReference?.value : parentReference)
+        .toBe('sys_atf_test_suite_result');
+      const result = await executeAtfToolCall(client, 'list_atf_test_results', {
+        suite_result_sys_id: '00000000000000000000000000000000', limit: 5,
+      });
+      expect(result).toEqual({ count: 0, results: [] });
     });
   });
 

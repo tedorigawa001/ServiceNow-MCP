@@ -166,8 +166,8 @@ export async function executeAtfToolCall(
     }
     case 'list_atf_test_results': {
       let query = '';
-      if (args.suite_result_sys_id) query = `test_suite_result=${args.suite_result_sys_id}`;
-      const resp = await client.queryRecords({ table: 'sys_atf_result', query: query || undefined, limit: args.limit || 50, fields: 'sys_id,test,status,message,test_suite_result,sys_updated_on' });
+      if (args.suite_result_sys_id) query = `parent=${sanitizeLikeValue(args.suite_result_sys_id)}`;
+      const resp = await client.queryRecords({ table: 'sys_atf_test_result', query: query || undefined, limit: args.limit || 50, fields: 'sys_id,test,status,output,message_reference,parent,sys_updated_on' });
       return { count: resp.count, results: resp.records };
     }
     case 'get_atf_failure_insight': {

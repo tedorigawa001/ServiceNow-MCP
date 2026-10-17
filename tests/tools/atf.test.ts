@@ -160,10 +160,28 @@ describe('get_atf_suite_result', () => {
 describe('list_atf_test_results', () => {
   beforeEach(() => vi.clearAllMocks());
 
-  it('filters by suite_result_sys_id', async () => {
+  it('does not turn a suite result literal into extra query clauses', async () => {
     qr().mockResolvedValue({ count: 0, records: [] });
-    await executeAtfToolCall(mockClient, 'list_atf_test_results', { suite_result_sys_id: 'r1' });
-    expect(qr()).toHaveBeenCalledWith(expect.objectContaining({ table: 'sys_atf_result', query: 'test_suite_result=r1' }));
+    await executeAtfToolCall(mockClient, 'list_atf_test_results', { suite_result_sys_id: 'r1^ORstatus=success' });
+    expect(qr()).toHaveBeenCalledWith(expect.objectContaining({ query: 'parent=r1ORstatus=success' }));
+  });
+
+  it('lists results without a suite filter and preserves an empty result', async () => {
+    qr().mockResolvedValue({ count: 0, records: [] });
+    expect(await executeAtfToolCall(mockClient, 'list_atf_test_results', { limit: 3 }))
+      .toEqual({ count: 0, results: [] });
+    expect(qr()).toHaveBeenCalledWith(expect.objectContaining({ table: 'sys_atf_test_result', query: undefined, limit: 3 }));
+  });
+
+  it('filters by suite_result_sys_id', async () => {
+    const results = [{ sys_id: 'r2', test: 't1', parent: 'r1', status: 'failure', output: 'Assertion failed' }];
+    qr().mockResolvedValue({ count: 1, records: results });
+    const result = await executeAtfToolCall(mockClient, 'list_atf_test_results', { suite_result_sys_id: 'r1' });
+    expect(qr()).toHaveBeenCalledWith({
+      table: 'sys_atf_test_result', query: 'parent=r1', limit: 50,
+      fields: 'sys_id,test,status,output,message_reference,parent,sys_updated_on',
+    });
+    expect(result).toEqual({ count: 1, results });
   });
 });
 

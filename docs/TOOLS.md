@@ -830,6 +830,11 @@ Get results of an ATF suite run.
 ### list_atf_test_results
 List individual test results within a suite run.
 
+Reads `sys_atf_test_result`; `suite_result_sys_id` filters its `parent` reference.
+Returns `{ count, results }` with native `test`, `status`, `output`,
+`message_reference`, and `parent` fields (not the former invalid `message` /
+`test_suite_result` column names). Empty results are valid; this tool does not run tests.
+
 **Parameters**:
 - `suite_result_sys_id`
 - `limit`
@@ -2536,8 +2541,14 @@ List ServiceNow homepage layouts.
 ### list_pa_jobs
 List Performance Analytics collection jobs.
 
+Reads scheduled data collections from `sysauto_pa`. Returns `{ count, records }`
+including `run_type`, `run_time`, and `run_period` rather than an unsupported
+`schedule` column. `active: false` disables the active-only filter; it does not
+select only inactive jobs.
+
 **Parameters**:
 - `active`
+- `query` — Search by job name
 - `limit`
 
 ### get_pa_job
@@ -2819,6 +2830,10 @@ List recent Virtual Agent conversations.
 
 ### list_va_categories
 List Virtual Agent topic categories.
+
+Reads `sys_cb_topic_category`. Returns `{ count, categories }` with native
+`sys_id`, `name`, `description`, and `visible` fields; `title`, `active`, and
+`order` are not columns of this category model.
 
 **Parameters**:
 - `limit`

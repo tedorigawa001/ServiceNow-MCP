@@ -204,9 +204,9 @@ export async function executeVaToolCall(
 
     case 'list_va_categories': {
       const resp = await client.queryRecords({
-        table: 'sys_cs_category',
+        table: 'sys_cb_topic_category',
         limit: args.limit || 25,
-        fields: 'sys_id,title,active,description,order',
+        fields: 'sys_id,name,description,visible',
       });
       return { count: resp.count, categories: resp.records };
     }

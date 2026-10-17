@@ -123,10 +123,15 @@ describe('list_va_conversations', () => {
 describe('list_va_categories', () => {
   beforeEach(() => vi.clearAllMocks());
 
-  it('queries sys_cs_category', async () => {
-    qr().mockResolvedValue({ count: 0, records: [] });
-    await executeVaToolCall(mockClient, 'list_va_categories', {});
-    expect(qr()).toHaveBeenCalledWith(expect.objectContaining({ table: 'sys_cs_category' }));
+  it('returns topic categories with their native name and visibility', async () => {
+    const categories = [{ sys_id: 'c1', name: 'IT Support', description: 'Help', visible: 'true' }];
+    qr().mockResolvedValue({ count: 1, records: categories });
+    const result = await executeVaToolCall(mockClient, 'list_va_categories', { limit: 7 });
+    expect(qr()).toHaveBeenCalledWith({
+      table: 'sys_cb_topic_category', limit: 7,
+      fields: 'sys_id,name,description,visible',
+    });
+    expect(result).toEqual({ count: 1, categories });
   });
 });
 

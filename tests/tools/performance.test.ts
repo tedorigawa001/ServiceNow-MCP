@@ -468,10 +468,25 @@ describe('list_homepages', () => {
 describe('list_pa_jobs', () => {
   beforeEach(() => vi.clearAllMocks());
 
+  it('includes inactive jobs on request and sanitizes a name literal', async () => {
+    const records = [{ sys_id: 'j1', name: 'Nightly', active: 'false', run_type: 'daily' }];
+    qr().mockResolvedValue({ count: 1, records });
+    const result = await executePerformanceToolCall(mockClient, 'list_pa_jobs', {
+      active: false, query: 'Nightly^ORactive=true', limit: 4,
+    });
+    expect(qr()).toHaveBeenCalledWith(expect.objectContaining({
+      table: 'sysauto_pa', query: 'nameCONTAINSNightlyORactive=true', limit: 4,
+    }));
+    expect(result).toEqual({ count: 1, records });
+  });
+
   it('defaults to active=true and applies query filter', async () => {
     qr().mockResolvedValue({ count: 0, records: [] });
     await executePerformanceToolCall(mockClient, 'list_pa_jobs', { query: 'nightly' });
-    expect(qr()).toHaveBeenCalledWith(expect.objectContaining({ table: 'pa_job', query: 'active=true^nameCONTAINSnightly' }));
+    expect(qr()).toHaveBeenCalledWith(expect.objectContaining({
+      table: 'sysauto_pa', query: 'active=true^nameCONTAINSnightly',
+      fields: 'sys_id,name,active,run_type,run_time,run_period,sys_updated_on',
+    }));
   });
 });
 
@@ -485,7 +500,7 @@ describe('get_pa_job', () => {
   it('delegates to getRecord', async () => {
     gr().mockResolvedValue({ sys_id: 'j1', name: 'Nightly Collection' });
     const result = await executePerformanceToolCall(mockClient, 'get_pa_job', { sys_id: 'j1' });
-    expect(gr()).toHaveBeenCalledWith('pa_job', 'j1');
+    expect(gr()).toHaveBeenCalledWith('sysauto_pa', 'j1');
     expect(result.name).toBe('Nightly Collection');
   });
 });
