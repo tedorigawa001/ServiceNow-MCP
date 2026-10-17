@@ -10,6 +10,8 @@ export class ExtractionError extends Error {
 const reject = (reason: string): never => { throw new ExtractionError(reason); };
 export const sha256 = (text: string) => createHash('sha256').update(text, 'utf8').digest('hex');
 const tables = new Set(['sys_script', 'sys_script_client', 'sys_script_include', 'sys_ws_operation', 'sysauto_script']);
+// These fields are metadata trees, never alternate sources of code or identity.
+const structuredFields = new Set(['filter_condition']);
 
 export function extractReviewXml(payload: string, expectedName: string) {
   if (Buffer.byteLength(payload, 'utf8') > XML_LIMITS.payload_bytes) reject('payload_limit');
@@ -30,18 +32,28 @@ export function extractReviewXml(payload: string, expectedName: string) {
       if (tag.name !== 'record_update' || !tables.has(String(tag.attributes.table))) reject('unsupported_envelope');
       table = String(tag.attributes.table);
     } else if (stack.length === 2) {
-      if (++records !== 1 || tag.name !== table) reject('ambiguous_record');
+      if (tag.name !== table) {
+        if (tag.name === 'sys_translated_text' && tag.attributes.action === 'delete_multiple') return;
+        if (tag.name === 'sys_es_latest_script') return;
+        reject('ambiguous_record');
+      }
+      if (++records !== 1) reject('ambiguous_record');
       const action = tag.attributes.action;
       if (action === 'DELETE') reject('deleted_asset');
       if (action !== 'INSERT_OR_UPDATE') reject('unsupported_action');
+    } else if (stack[1] !== table) {
+      // Auxiliary trees remain subject to XML, namespace, depth, element and text limits.
+      return;
     } else if (stack.length === 3) {
       if (fields.has(tag.name)) reject('duplicate_field');
       fields.set(tag.name, '');
-    } else reject('nested_field');
+    } else if (!structuredFields.has(stack[2])) reject('nested_field');
   });
   const append = (text: string) => {
     textBytes += Buffer.byteLength(text, 'utf8');
     if (textBytes > XML_LIMITS.text_bytes) reject('text_limit');
+    if (stack.length >= 2 && stack[1] !== table) return;
+    if (stack.length >= 3 && structuredFields.has(stack[2])) return;
     if (stack.length === 3) {
       const name = stack[2];
       fields.set(name, fields.get(name)! + text);

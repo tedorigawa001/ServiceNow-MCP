@@ -28,6 +28,72 @@ function reviewed(value: unknown) {
 }
 
 describe('safe Update Set XML extraction', () => {
+  it.each([
+    '<incident action="INSERT_OR_UPDATE"/>',
+    '<sys_translated_text/>',
+    '<sys_translated_text action="INSERT_OR_UPDATE"/>',
+    '<sys_translated_text action="DELETE_MULTIPLE"/>',
+    '<sys_script action="INSERT_OR_UPDATE"/>',
+  ])('still rejects unknown/wrong-action siblings and duplicate main records %#', sibling => {
+    const xml = payload('safe').replace('</record_update>', sibling + '</record_update>');
+    expect(() => extractReviewXml(xml, `sys_script_${sysId}`)).toThrow('ambiguous_record');
+  });
+  it('does not use an auxiliary nested record as a substitute for the main record', () => {
+    const xml = `<record_update table="sys_script"><sys_es_latest_script><sys_script action="INSERT_OR_UPDATE"><sys_id>${sysId}</sys_id><script>safe</script></sys_script></sys_es_latest_script></record_update>`;
+    expect(() => extractReviewXml(xml, `sys_script_${sysId}`)).toThrow('missing_script');
+  });
+  it.each([
+    '<filter_condition/><filter_condition><item/></filter_condition>',
+    '<description><item/></description>',
+    '<when><item/></when>',
+    '<sys_id><item/></sys_id>',
+  ])('allows nesting only under explicitly structured fields, without duplicate fields %#', extra => {
+    expect(() => extractReviewXml(payload('safe', { extra }), `sys_script_${sysId}`)).toThrow();
+  });
+  it('still rejects nested script elements even when condition trees and auxiliaries are allowed', () => {
+    const xml = payload('<item/>', { extra: '<filter_condition><item/></filter_condition>' })
+      .replace('</record_update>', '<sys_translated_text action="delete_multiple"/></record_update>');
+    expect(() => extractReviewXml(xml, `sys_script_${sysId}`)).toThrow('nested_field');
+  });
+  it.each(['condition', 'auxiliary'])('enforces parser and resource limits inside ignored %s trees', kind => {
+    const wrap = (contents: string) => kind === 'condition'
+      ? payload('safe', { extra: `<filter_condition>${contents}</filter_condition>` })
+      : payload('safe').replace('</record_update>', `<sys_es_latest_script>${contents}</sys_es_latest_script></record_update>`);
+    for (const [contents, reason] of [
+      ['<x>'.repeat(10) + '</x>'.repeat(10), 'depth_limit'],
+      ['<x/>'.repeat(XML_LIMITS.elements), 'element_limit'],
+      ['x'.repeat(XML_LIMITS.text_bytes + 1), 'text_limit'],
+      ['<x xmlns="urn:evil"/>', 'forbidden_namespace'],
+      ['&undeclared;', 'invalid_xml'],
+      ['<?fetch file="/etc/passwd"?>', 'forbidden_instruction'],
+      ['<x></y>', 'invalid_xml'],
+    ]) expect(() => extractReviewXml(wrap(contents), `sys_script_${sysId}`)).toThrow(reason);
+  });
+  it('extracts exactly one main record alongside allowlisted auxiliary records in either order', () => {
+    const auxiliaries = '<sys_translated_text action="delete_multiple"><item><script>ignored_SENTINEL</script><sys_id>wrong</sys_id></item></sys_translated_text>'
+      + '<sys_es_latest_script><script>ignored_SENTINEL</script><when>async</when></sys_es_latest_script>';
+    const base = payload('<![CDATA[current.update();]]>', { when: 'after', extra: '<filter_condition><item field="state" value="1"/></filter_condition>' });
+    for (const xml of [base.replace('</record_update>', auxiliaries + '</record_update>'),
+      base.replace('<sys_script action=', auxiliaries + '<sys_script action=')]) {
+      const asset = extractReviewXml(xml, `sys_script_${sysId}`);
+      expect(asset.code).toBe('current.update();');
+      expect(asset.sys_id).toBe(sysId);
+      expect(asset.when).toBe('after');
+      const result = reviewed(input(xml));
+      expect(result.findings).toHaveLength(1);
+      expect(JSON.stringify(result)).not.toContain('ignored_SENTINEL');
+    }
+  });
+  it('ignores structured filter conditions without treating their contents as code or metadata', () => {
+    const xml = payload('<![CDATA[current.update();]]>', { when: 'after', extra:
+      '<filter_condition table="incident"><item field="active" operator="=" value="true"/><item><script>ignored_SENTINEL</script><when>async</when><sys_scope>wrong</sys_scope></item></filter_condition>' });
+    const asset = extractReviewXml(xml, `sys_script_${sysId}`);
+    expect(asset.code).toBe('current.update();');
+    expect(asset.when).toBe('after');
+    expect(asset.sys_scope).toBe('global');
+    expect(reviewed(input(xml)).findings).toHaveLength(1);
+    expect(JSON.stringify(reviewed(input(xml)))).not.toContain('ignored_SENTINEL');
+  });
   it('decodes normal text once and preserves CDATA, whitespace and exact payload/code hashes', () => {
     const code = '\nvar x = a && b < 2;\n';
     const plain = payload('\nvar x = a &amp;&amp; b &lt; 2;\n');
