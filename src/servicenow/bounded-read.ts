@@ -1,19 +1,21 @@
 /** Isolated, read-only transport. Never uses the legacy client's retries, logging or body readers. */
 import { createHash } from 'node:crypto';
 import type { ServiceNowConfig } from './types.js';
+import { pinReviewReleaseConfig } from './review-release-config.js';
 
 export const BOUNDED_LIMITS = Object.freeze({ responseBytes: 4 * 1024 * 1024, totalBytes: 16 * 1024 * 1024,
   payloadBytes: 2 * 1024 * 1024, totalPayloadBytes: 8 * 1024 * 1024,
   deadlineMs: 60000, requestTimeoutMs: 10000, requests: 210, retryDelayMs: 250 });
 export type ReadFailureCode = 'invalid_input' | 'authentication_failed' | 'access_denied' | 'not_found_or_not_visible'
   | 'upstream_unavailable' | 'deadline_exceeded' | 'receive_budget_exceeded' | 'request_budget_exceeded'
-  | 'payload_budget_exceeded' | 'payload_limit' | 'invalid_response' | 'review_busy' | 'cancelled' | 'closed' | 'changed_during_review' | 'release_not_admitted';
+  | 'payload_budget_exceeded' | 'payload_limit' | 'invalid_response' | 'review_busy' | 'cancelled' | 'closed' | 'changed_during_review' | 'release_not_admitted' | 'config_invalid';
 export class BoundedReadError extends Error {
   constructor(readonly code: ReadFailureCode) { super(code); this.name = 'BoundedReadError'; }
 }
 export interface ReadSnapshot {
   instanceUrl: string; authMode: ServiceNowConfig['authMode']; perUserBearerToken?: string;
   oauth: ServiceNowConfig['oauth']; accessToken?: string; tokenExpiry?: number;
+  reviewReleaseConfig?: unknown;
 }
 /** Trusted dependency injection only; callers may lower, never raise production ceilings. */
 export interface BoundedReadOptions {
@@ -42,6 +44,7 @@ export class BoundedReadSession {
   private receivedBytes = 0;
   private payloadBytes = 0;
   private readonly removeExternal: () => void;
+  readonly releasePolicy: ReturnType<typeof pinReviewReleaseConfig>;
 
   constructor(snapshot: ReadSnapshot, options: BoundedReadOptions = {}) {
     this.snapshot = { ...snapshot, oauth: { ...snapshot.oauth } };
@@ -58,6 +61,8 @@ export class BoundedReadSession {
       throw new BoundedReadError('invalid_input');
     }
     this.baseUrl = url.origin;
+    try { this.releasePolicy = pinReviewReleaseConfig(snapshot.reviewReleaseConfig, this.baseUrl, this.startedAt, this.limits.deadlineMs); }
+    catch { throw new BoundedReadError('config_invalid'); }
     if (snapshot.authMode === 'impersonation') throw new BoundedReadError('authentication_failed');
     this.authMode = snapshot.authMode === 'per-user' ? 'per-user' : 'service-account';
     if (this.authMode === 'per-user' && !snapshot.perUserBearerToken) throw new BoundedReadError('authentication_failed');

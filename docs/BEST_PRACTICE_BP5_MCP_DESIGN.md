@@ -1,10 +1,11 @@
 # BP-5：Update SetベストプラクティスレビューのMCP統合設計案
 
 Version: bp5-mcp-design-0.2 / Date: 2026-10-17。
-Status: **1件/集約JSON契約、bounded取得・認証固定・実測リリースゲートと合成テストを実装。MCP登録・C方式の設定経路・解析/集約アダプター・同期解析の強制中断は未実装**。
+Status: **1件/集約JSON契約、bounded取得・認証固定・C方式ゲート（内部設定からのフォールバック）と合成テストを実装。実ファイル/設定権限検査・MCP登録・解析/集約アダプター・同期解析の強制中断は未実装**。
 製品採用・根拠/判定境界・人手品質の承認は未実施。実装や公開を承認する文書ではない。
 契約の実装範囲・使い方・未実装境界は[第1段階の契約記録](BEST_PRACTICE_BP5_CONTRACTS.md)を参照。PDI照会/書き込み・本試行ケース作成は行っていない。
 取得プリミティブの実装範囲・制限・検証は[bounded取得記録](BEST_PRACTICE_BP5_BOUNDED_ACQUISITION.md)を参照。
+運用者設定の受け口・binding・期限・競合の実装は[C方式フォールバック記録](BEST_PRACTICE_BP5_OPERATOR_FALLBACK.md)を参照。
 
 ## 1. 初版の範囲
 
@@ -80,7 +81,7 @@ raw payload、コード、query、fields、table、URL、release、actor/imperso
 収集済み候補が残る場合も「観測時点の暫定結果」と明示する。current_recordへ差し替えない。
 再照会予算は先に確保し、予算切れを「変更なし」としない。
 
-### 4.1. リリース証拠：C方式（結果契約・実測取得/判定は実装。設定経路は未実装）
+### 4.1. リリース証拠：C方式（結果契約・実測/内部設定判定は実装。実ファイル経路は未実装）
 
 sys_cluster_stateを読めることを全利用者の必須条件にしない。cluster_node_admin等のロールを
 このツールのためだけに要求/付与するA方式ではなく、実測優先＋運用者設定のC方式を採用する。
@@ -89,6 +90,7 @@ sys_update_xmlはupdate_set_previewer等）。最小権限アカウントでの�
 
 **運用者設定の境界**：instances.json等のサーバー側インスタンス設定へ、提案キー
 `review_release_assertion`を追加する案。現時点では未対応で、既存設定へ追加する作業は行わない。
+内部APIではServiceNowConfig.reviewReleaseConfigとして受け取るが、InstanceManagerの読込にはまだ接続しない。
 設定者は接続先と導入/アップグレード履歴を確認できる運用者。MCP呼び出しの引数・ヘッダー・
 会話中の申告・payloadの値で設定を上書き/更新できるAPIは提供しない。
 
@@ -109,7 +111,7 @@ sys_update_xmlはupdate_set_previewer等）。最小権限アカウントでの�
 config_validity_insufficientを記録しrelease_unknownで全要求規則をスキップする。
 集約は開始時の設定証拠を検証し、終了時刻で再採用/失効判定しない。
 1件結果はreviewed_at基準を維持し、集約では0 ≤ ended_at − started_at ≤ deadline_msも検証する。
-これらの結果契約上の制約は実装済みだが、取得アダプターの開始判定・実時間の中断は後工程。
+これらの結果契約と取得側の設定開始判定・HTTP/非同期待機の中断は実装済み。同期解析の強制中断は後工程。
 
 | 実測の観測 | 設定の状態 | 採用証拠・処理 |
 |---|---|---|

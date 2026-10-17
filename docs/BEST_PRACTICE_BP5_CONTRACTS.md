@@ -1,7 +1,7 @@
 # BP-5 第1段階：リリース証拠と結果契約
 
 Version: bp5-contracts-0.1 / Date: 2026-10-17。
-本書はローカルJSON契約・合成テストの記録。取得プリミティブと実測リリースゲートは後続の[bounded取得記録](BEST_PRACTICE_BP5_BOUNDED_ACQUISITION.md)を参照。MCP登録、解析/集約アダプター、C方式の設定経路、設定読み取り、実機操作は未実装。
+本書はローカルJSON契約・合成テストの記録。取得プリミティブは[bounded取得記録](BEST_PRACTICE_BP5_BOUNDED_ACQUISITION.md)、C方式の内部設定ゲートは[設定フォールバック記録](BEST_PRACTICE_BP5_OPERATOR_FALLBACK.md)を参照。MCP登録、解析/集約アダプター、実設定ファイルの読込/権限検査、実機操作は未実装。
 根拠・規則カードの人による承認、独立品質評価は未実施。
 
 ## 1. 互換性と入口
@@ -36,7 +36,7 @@ binding/config_versionは64桁の小文字hex識別子。生成方式と信頼�
 expires_at > started_at + limits.deadline_msを必須とする。終了時刻で期限を再判定しない。
 有効でも残り期間が60秒以下なら開始不可（ちょうど60秒も不可）。将来の取得アダプターも同じ条件で
 開始を見送り、source=none/unknown、reason=config_validity_insufficient、release_unknownの全規則スキップとして返す。
-この開始可否判定の実行処理は未実装。実測証拠は呼出し中に取得するため、observed_atはended_at以下を確認する。
+この開始可否判定は後続の取得プリミティブで実装済み（C方式記録参照）。実測証拠は呼出し中に取得するため、observed_atはended_at以下を確認する。
 最大有効期間や更新運用のポリシーは未実装。family列挙の拡張も明示的な契約更新が必要。
 
 ## 3. 1件結果

@@ -1,4 +1,4 @@
-/** Fixed BP-5 acquisition primitives with observed-release admission; no analysis or MCP registration. */
+/** Fixed BP-5 acquisition with C-mode release admission; no analysis or MCP registration. */
 import { z } from 'zod';
 import type { ServiceNowClient } from '../servicenow/client.js';
 import { BoundedReadError, type BoundedReadOptions, type BoundedReadSession } from '../servicenow/bounded-read.js';
@@ -31,6 +31,7 @@ export class BoundedUpdateSetSource {
   constructor(private readonly session: BoundedReadSession, private readonly input: z.infer<typeof inputSchema>) {}
   get startedAt() { return this.session.startedAt; }
   get authMode() { return this.session.authMode; }
+  get instanceBinding() { return this.session.releasePolicy.instanceBinding; }
   stats() { return this.session.stats(); }
   #requirePermit(permit: ReleasePermit) {
     this.session.assertActive();
@@ -66,7 +67,8 @@ export class BoundedUpdateSetSource {
     const rows = await this.rows(this.path('sys_cluster_state', 'build_name', undefined, 21), 21);
     // Never retain unexpected internal addresses/certificates, even if a server ignores fields.
     return rows.map(row => {
-      const value = row && typeof row === 'object' && 'build_name' in row ? row.build_name : null;
+      if (!row || typeof row !== 'object' || Array.isArray(row)) throw new BoundedReadError('invalid_response');
+      const value = 'build_name' in row ? row.build_name : null;
       if (value !== null && (typeof value !== 'string' || value.length > 40)) throw new BoundedReadError('invalid_response');
       return { build_name: value };
     });
@@ -83,18 +85,26 @@ export class BoundedUpdateSetSource {
       release_match: 'unknown', instance_release: { source: 'none', resolution_status: 'unknown', family: null,
         visibility_scope: 'unavailable', reason }, limitations: Object.freeze([reason, 'release_unknown']),
     });
+    const policy = this.session.releasePolicy;
+    if (policy.issue === 'config_binding_mismatch') return unknown(policy.issue);
+    const fallback = (): ReleaseDecision => {
+      if (policy.issue) return unknown(policy.issue);
+      if (!policy.assertion) return unknown('observation_unavailable');
+      return this.#completeRelease(policy.assertion, ['release_operator_asserted', 'release_not_observed',
+        'release_config_may_be_stale', 'release_observation_unavailable']);
+    };
     let rows: { build_name: string | null }[];
     try { rows = await this.#readReleaseRows(); }
     catch (error) {
       if (error instanceof BoundedReadError) {
-        if (['access_denied', 'not_found_or_not_visible', 'upstream_unavailable'].includes(error.code)) return unknown('observation_unavailable');
+        if (['access_denied', 'not_found_or_not_visible', 'upstream_unavailable'].includes(error.code)) return fallback();
         if (error.code === 'invalid_response') return unknown('observation_incomplete');
       }
       throw error;
     }
     this.session.assertActive();
     if (rows.length > 20) return unknown('observation_limit');
-    if (!rows.length || rows.every(row => !row.build_name?.trim())) return unknown('observation_unavailable');
+    if (!rows.length || rows.every(row => !row.build_name?.trim())) return fallback();
     if (rows.some(row => !row.build_name?.trim())) return unknown('observation_incomplete');
     const known = releaseEvidenceStructure.options[1].shape.family.options;
     const values = rows.map(row => known.find(f => f.toLowerCase() === row.build_name!.trim().toLowerCase()));
@@ -102,16 +112,24 @@ export class BoundedUpdateSetSource {
     const families = [...new Set(values.filter(f => f !== undefined))];
     if (families.length > 1) return Object.freeze<ReleaseDecision>({ release_match: 'unknown', instance_release: {
       source: 'conflict', resolution_status: 'unknown', family: null, visibility_scope: 'caller_acl',
-      observed_families: families, configured_family: null, observed_at: new Date().toISOString(),
+      observed_families: families, configured_family: policy.assertion?.family ?? null, observed_at: new Date().toISOString(),
     }, limitations: Object.freeze(['release_evidence_conflict', 'release_unknown']) });
+    if (policy.assertion && policy.assertion.family !== families[0]) return Object.freeze<ReleaseDecision>({
+      release_match: 'unknown', instance_release: { source: 'conflict', resolution_status: 'unknown', family: null,
+        visibility_scope: 'caller_acl', observed_families: families, configured_family: policy.assertion.family,
+        observed_at: new Date().toISOString() }, limitations: Object.freeze(['release_evidence_conflict', 'release_unknown']),
+    });
     const evidence: ReleaseEvidence = { source: 'sys_cluster_state.build_name', resolution_status: 'resolved',
       family: families[0], raw_buildname: rows[0].build_name!.trim(), visibility_scope: 'caller_acl', observed_at: new Date().toISOString() };
+    return this.#completeRelease(evidence, ['release_visible_nodes_only', ...(policy.issue ? [policy.issue] : [])]);
+  }
+  #completeRelease(evidence: ReleaseEvidence, limitations: string[]): ReleaseDecision {
     const match = releaseMatchForEvidence(evidence);
     if (match !== 'matched') return Object.freeze({ release_match: match, instance_release: evidence,
-      limitations: Object.freeze(['release_visible_nodes_only', 'release_mismatch']) });
+      limitations: Object.freeze([...limitations, match === 'unknown' ? 'release_unknown' : 'release_mismatch']) });
     this.#permit = Object.freeze(Object.create(null)) as ReleasePermit;
     return Object.freeze({ release_match: 'matched', instance_release: evidence,
-      limitations: Object.freeze(['release_visible_nodes_only']), permit: this.#permit });
+      limitations: Object.freeze(limitations), permit: this.#permit });
   }
   async #fetchMetadata(final = false) {
     if (!this.parent) throw new BoundedReadError('invalid_input');

@@ -26,6 +26,8 @@ export interface ServiceNowConfig {
   maxRetries?: number;
   retryDelayMs?: number;
   requestTimeoutMs?: number;
+  /** Trusted server-side BP-5 settings. Validated/pinned only at bounded review admission; never a tool argument. */
+  reviewReleaseConfig?: unknown;
 }
 
 export interface QueryRecordsParams {

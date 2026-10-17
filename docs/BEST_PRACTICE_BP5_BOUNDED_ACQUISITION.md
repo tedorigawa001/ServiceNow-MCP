@@ -7,7 +7,7 @@ MCP未登録。実機操作・設定変更・公開は行わない。ローカ�
 
 - `ServiceNowClient.createBoundedReadSession()`：選択済みclientから接続先、認証モード、ユーザートークン、OAuth設定、キャッシュトークン/期限を、await前にコピーする。
 - `withBoundedUpdateSetSource(client, input, callback, options?)`：入力を検証し、1回の取得セッションを開始する。正常終了・例外・キャンセル時に必ずcloseする。閉じたsourceから再取得できない。
-- `BoundedUpdateSetSource`：readParent → resolveRelease → matched時のpermitを使うlistMetadata → 選択行のreadPayload → verifyの**内部プリミティブ**。実測だけのリリース解決は実装済み。C方式の設定経路と解析を行う完成したレビュー処理ではない。
+- `BoundedUpdateSetSource`：readParent → resolveRelease → matched時のpermitを使うlistMetadata → 選択行のreadPayload → verifyの**内部プリミティブ**。C方式の実測/内部設定フォールバックは実装済み。実ファイル設定と解析を行う完成したレビュー処理ではない。
 
 `input`はupdate_set_sys_idとmax_records（既定20、1〜100）のみ。URL、query、fields、release、actor、資格情報を受け付けない。
 optionsのfetch/signal/小さいテスト用上限は信頼された内部依存注入専用で、MCP入力には公開しない。
@@ -51,7 +51,7 @@ HTTP/readerがsignalを無視する合成ケースでもPromise.raceで待機を
 
 受信/全体payload/認証/全体権限/全体期限の失敗は以後の取得も停止する。
 単一payload超過、不可視、不正レコードは当該取得の固定理由で拒否する。
-sys_cluster_stateの403だけは、後でC方式の設定経路を判定できるようセッション全体を停止しない。ただし現在はunknownでpermitを発行せず、metadata/payloadも取得できない。
+sys_cluster_stateの403だけはセッション全体を停止せず、C方式の有効な内部設定があればフォールバックを判定する。設定なし/不正ならpermitなしでmetadata/payloadを取得できない。
 他の段階の403と全段階の401は停止する。原HTTP例外・URL・本文・資格情報をエラーメッセージ/cause/logへ転送しない。
 
 ## 整合性照合
@@ -65,7 +65,7 @@ sys_cluster_stateの403だけは、後でC方式の設定経路を判定でき�
 
 ## source内のリリースゲート
 
-`resolveRelease()`にfamily/evidence/matchedを渡す引数はない。親取得後、このsourceの固定認証・予算でbuild_nameを1回だけ取得してカタログと照合する。
+`resolveRelease()`にfamily/evidence/matchedを渡す引数はない。親取得後、このsourceの固定認証・予算でbuild_nameを1回だけ取得してカタログと照合する。内部設定フォールバックの採用/拒否も同じsource内で行う（[C方式記録](BEST_PRACTICE_BP5_OPERATOR_FALLBACK.md)）。
 全可視値が単一の既知familyで一致した場合だけ実測resolvedとなり、カタログ一致時にだけ`ReleasePermit`を発行する。
 大文字小文字と前後空白は正規化する。非対応familyはmismatched、空/全欠落はobservation_unavailable、部分欠落/不正構造はobservation_incomplete、未知名はobservation_inconsistent、21行目はobservation_limitとする。
 既知familyの混在はconflict/unknown。401・受信量/期限等の致命的失敗は通常どおり停止し、403/404/取得不能はunknownとする。
@@ -79,7 +79,7 @@ permitはsourceの非公開フィールドに保持するインメモリの能�
 
 ## 未実装・次段階
 
-- C方式の設定フォールバック、信頼された設定の読み取り、binding生成、設定の期限余裕を判定する開始ゲート。設定経路も同じsource内の判定を通してのみpermitを発行する設計を維持し、呼出し側が任意のasserted証拠を渡して解除する入口は追加しない。
+- 信頼された設定ファイルの読込/所有者・書込権限検査。C方式の内部設定、binding生成、期限ゲートは実装済みだが、実ファイルからの導入は未接続。呼出し側が任意のasserted証拠を渡して解除する入口は追加しない。
 - 1件解析アダプターと集約、固定理由から集約契約への写像、partial/failedの組立て。
 - 同期XML/AST解析を強制終了するworker境界。現在の全体タイマーはイベントループ上の非同期取得/待機を中断し、同期処理が戻った後にも期限超過を検出するが、同期CPU処理そのものを途中で止められない。
 - MCP登録/dispatch/annotations、公開範囲の承認、梱包・読み取り実機E2E。
