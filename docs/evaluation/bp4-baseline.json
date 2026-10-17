@@ -1,0 +1,590 @@
+{
+  "evaluation_version": "bp4-synthetic-0.1",
+  "poc_only": true,
+  "dataset_hash": "89beecc4d161443a7f99132ed31398d7a38fab9c1603d5dda0b4670ce64de13f",
+  "evaluation_unit": "case_x_requested_rule",
+  "finding_threshold": "candidate_or_higher",
+  "total_cases": 48,
+  "overall": {
+    "tp": 6,
+    "fp": 12,
+    "tn": 12,
+    "fn": 6,
+    "negative_abstentions": 0,
+    "assessed": 36,
+    "total": 36,
+    "precision": 0.333333,
+    "recall": 0.5,
+    "assessment_coverage": 1
+  },
+  "by_rule": {
+    "AU-BR-001": {
+      "tp": 2,
+      "fp": 5,
+      "tn": 3,
+      "fn": 2,
+      "negative_abstentions": 0,
+      "assessed": 12,
+      "total": 12,
+      "precision": 0.285714,
+      "recall": 0.5,
+      "assessment_coverage": 1
+    },
+    "AU-BR-002": {
+      "tp": 2,
+      "fp": 2,
+      "tn": 6,
+      "fn": 2,
+      "negative_abstentions": 0,
+      "assessed": 12,
+      "total": 12,
+      "precision": 0.5,
+      "recall": 0.5,
+      "assessment_coverage": 1
+    },
+    "AU-CL-004": {
+      "tp": 2,
+      "fp": 5,
+      "tn": 3,
+      "fn": 2,
+      "negative_abstentions": 0,
+      "assessed": 12,
+      "total": 12,
+      "precision": 0.285714,
+      "recall": 0.5,
+      "assessment_coverage": 1
+    }
+  },
+  "by_label": {
+    "problem": {
+      "tp": 6,
+      "fp": 0,
+      "tn": 0,
+      "fn": 6,
+      "negative_abstentions": 0,
+      "assessed": 12,
+      "total": 12,
+      "precision": 1,
+      "recall": 0.5,
+      "assessment_coverage": 1
+    },
+    "no_problem": {
+      "tp": 0,
+      "fp": 4,
+      "tn": 8,
+      "fn": 0,
+      "negative_abstentions": 0,
+      "assessed": 12,
+      "total": 12,
+      "precision": 0,
+      "recall": null,
+      "assessment_coverage": 1
+    },
+    "exception": {
+      "tp": 0,
+      "fp": 8,
+      "tn": 4,
+      "fn": 0,
+      "negative_abstentions": 0,
+      "assessed": 12,
+      "total": 12,
+      "precision": 0,
+      "recall": null,
+      "assessment_coverage": 1
+    }
+  },
+  "insufficient": {
+    "total": 12,
+    "correct": 12,
+    "accuracy": 1
+  },
+  "confirmed_findings": 0,
+  "targets": {
+    "precision": 0.8,
+    "recall": 0.9,
+    "assessment_coverage": 1,
+    "abstention_accuracy": 1,
+    "confirmed_findings": 0
+  },
+  "quality_gate_passed": false,
+  "limitations": [
+    "synthetic_only",
+    "author_not_blind",
+    "human_adjudication_pending",
+    "related_cases_not_independent_samples",
+    "candidate_noise_not_confirmed_vulnerability_false_positives",
+    "exception_context_not_available_to_engine",
+    "three_rules_only"
+  ],
+  "cases": [
+    {
+      "case_id": "P01",
+      "label": "problem",
+      "rule_id": "AU-BR-001",
+      "actual": "candidate",
+      "classification": "tp",
+      "finding_count": 1,
+      "reasons": []
+    },
+    {
+      "case_id": "P02",
+      "label": "problem",
+      "rule_id": "AU-BR-001",
+      "actual": "candidate",
+      "classification": "tp",
+      "finding_count": 1,
+      "reasons": []
+    },
+    {
+      "case_id": "P03",
+      "label": "problem",
+      "rule_id": "AU-BR-001",
+      "actual": "clear",
+      "classification": "fn",
+      "finding_count": 0,
+      "reasons": []
+    },
+    {
+      "case_id": "P04",
+      "label": "problem",
+      "rule_id": "AU-BR-001",
+      "actual": "clear",
+      "classification": "fn",
+      "finding_count": 0,
+      "reasons": []
+    },
+    {
+      "case_id": "P05",
+      "label": "problem",
+      "rule_id": "AU-BR-002",
+      "actual": "candidate",
+      "classification": "tp",
+      "finding_count": 1,
+      "reasons": []
+    },
+    {
+      "case_id": "P06",
+      "label": "problem",
+      "rule_id": "AU-BR-002",
+      "actual": "candidate",
+      "classification": "tp",
+      "finding_count": 1,
+      "reasons": []
+    },
+    {
+      "case_id": "P07",
+      "label": "problem",
+      "rule_id": "AU-BR-002",
+      "actual": "clear",
+      "classification": "fn",
+      "finding_count": 0,
+      "reasons": []
+    },
+    {
+      "case_id": "P08",
+      "label": "problem",
+      "rule_id": "AU-BR-002",
+      "actual": "clear",
+      "classification": "fn",
+      "finding_count": 0,
+      "reasons": []
+    },
+    {
+      "case_id": "P09",
+      "label": "problem",
+      "rule_id": "AU-CL-004",
+      "actual": "candidate",
+      "classification": "tp",
+      "finding_count": 1,
+      "reasons": []
+    },
+    {
+      "case_id": "P10",
+      "label": "problem",
+      "rule_id": "AU-CL-004",
+      "actual": "candidate",
+      "classification": "tp",
+      "finding_count": 1,
+      "reasons": []
+    },
+    {
+      "case_id": "P11",
+      "label": "problem",
+      "rule_id": "AU-CL-004",
+      "actual": "clear",
+      "classification": "fn",
+      "finding_count": 0,
+      "reasons": []
+    },
+    {
+      "case_id": "P12",
+      "label": "problem",
+      "rule_id": "AU-CL-004",
+      "actual": "clear",
+      "classification": "fn",
+      "finding_count": 0,
+      "reasons": []
+    },
+    {
+      "case_id": "N01",
+      "label": "no_problem",
+      "rule_id": "AU-BR-001",
+      "actual": "clear",
+      "classification": "tn",
+      "finding_count": 0,
+      "reasons": []
+    },
+    {
+      "case_id": "N02",
+      "label": "no_problem",
+      "rule_id": "AU-BR-001",
+      "actual": "clear",
+      "classification": "tn",
+      "finding_count": 0,
+      "reasons": []
+    },
+    {
+      "case_id": "N03",
+      "label": "no_problem",
+      "rule_id": "AU-BR-001",
+      "actual": "clear",
+      "classification": "tn",
+      "finding_count": 0,
+      "reasons": []
+    },
+    {
+      "case_id": "N04",
+      "label": "no_problem",
+      "rule_id": "AU-BR-001",
+      "actual": "candidate",
+      "classification": "fp",
+      "finding_count": 1,
+      "reasons": []
+    },
+    {
+      "case_id": "N05",
+      "label": "no_problem",
+      "rule_id": "AU-BR-002",
+      "actual": "clear",
+      "classification": "tn",
+      "finding_count": 0,
+      "reasons": []
+    },
+    {
+      "case_id": "N06",
+      "label": "no_problem",
+      "rule_id": "AU-BR-002",
+      "actual": "clear",
+      "classification": "tn",
+      "finding_count": 0,
+      "reasons": []
+    },
+    {
+      "case_id": "N07",
+      "label": "no_problem",
+      "rule_id": "AU-BR-002",
+      "actual": "candidate",
+      "classification": "fp",
+      "finding_count": 1,
+      "reasons": []
+    },
+    {
+      "case_id": "N08",
+      "label": "no_problem",
+      "rule_id": "AU-BR-002",
+      "actual": "candidate",
+      "classification": "fp",
+      "finding_count": 1,
+      "reasons": []
+    },
+    {
+      "case_id": "N09",
+      "label": "no_problem",
+      "rule_id": "AU-CL-004",
+      "actual": "clear",
+      "classification": "tn",
+      "finding_count": 0,
+      "reasons": []
+    },
+    {
+      "case_id": "N10",
+      "label": "no_problem",
+      "rule_id": "AU-CL-004",
+      "actual": "clear",
+      "classification": "tn",
+      "finding_count": 0,
+      "reasons": []
+    },
+    {
+      "case_id": "N11",
+      "label": "no_problem",
+      "rule_id": "AU-CL-004",
+      "actual": "candidate",
+      "classification": "fp",
+      "finding_count": 1,
+      "reasons": []
+    },
+    {
+      "case_id": "N12",
+      "label": "no_problem",
+      "rule_id": "AU-CL-004",
+      "actual": "clear",
+      "classification": "tn",
+      "finding_count": 0,
+      "reasons": []
+    },
+    {
+      "case_id": "E01",
+      "label": "exception",
+      "rule_id": "AU-BR-001",
+      "actual": "candidate",
+      "classification": "fp",
+      "finding_count": 1,
+      "reasons": []
+    },
+    {
+      "case_id": "E02",
+      "label": "exception",
+      "rule_id": "AU-BR-001",
+      "actual": "candidate",
+      "classification": "fp",
+      "finding_count": 1,
+      "reasons": []
+    },
+    {
+      "case_id": "E03",
+      "label": "exception",
+      "rule_id": "AU-BR-001",
+      "actual": "candidate",
+      "classification": "fp",
+      "finding_count": 1,
+      "reasons": []
+    },
+    {
+      "case_id": "E04",
+      "label": "exception",
+      "rule_id": "AU-BR-001",
+      "actual": "candidate",
+      "classification": "fp",
+      "finding_count": 1,
+      "reasons": []
+    },
+    {
+      "case_id": "E05",
+      "label": "exception",
+      "rule_id": "AU-BR-002",
+      "actual": "clear",
+      "classification": "tn",
+      "finding_count": 0,
+      "reasons": []
+    },
+    {
+      "case_id": "E06",
+      "label": "exception",
+      "rule_id": "AU-BR-002",
+      "actual": "clear",
+      "classification": "tn",
+      "finding_count": 0,
+      "reasons": []
+    },
+    {
+      "case_id": "E07",
+      "label": "exception",
+      "rule_id": "AU-BR-002",
+      "actual": "clear",
+      "classification": "tn",
+      "finding_count": 0,
+      "reasons": []
+    },
+    {
+      "case_id": "E08",
+      "label": "exception",
+      "rule_id": "AU-BR-002",
+      "actual": "clear",
+      "classification": "tn",
+      "finding_count": 0,
+      "reasons": []
+    },
+    {
+      "case_id": "E09",
+      "label": "exception",
+      "rule_id": "AU-CL-004",
+      "actual": "candidate",
+      "classification": "fp",
+      "finding_count": 1,
+      "reasons": []
+    },
+    {
+      "case_id": "E10",
+      "label": "exception",
+      "rule_id": "AU-CL-004",
+      "actual": "candidate",
+      "classification": "fp",
+      "finding_count": 1,
+      "reasons": []
+    },
+    {
+      "case_id": "E11",
+      "label": "exception",
+      "rule_id": "AU-CL-004",
+      "actual": "candidate",
+      "classification": "fp",
+      "finding_count": 1,
+      "reasons": []
+    },
+    {
+      "case_id": "E12",
+      "label": "exception",
+      "rule_id": "AU-CL-004",
+      "actual": "candidate",
+      "classification": "fp",
+      "finding_count": 1,
+      "reasons": []
+    },
+    {
+      "case_id": "I01",
+      "label": "insufficient",
+      "rule_id": "AU-BR-001",
+      "actual": "abstain",
+      "classification": "abstain_check",
+      "finding_count": 0,
+      "reasons": [
+        "release_unknown"
+      ],
+      "abstention_correct": true
+    },
+    {
+      "case_id": "I02",
+      "label": "insufficient",
+      "rule_id": "AU-BR-001",
+      "actual": "abstain",
+      "classification": "abstain_check",
+      "finding_count": 0,
+      "reasons": [
+        "release_mismatch"
+      ],
+      "abstention_correct": true
+    },
+    {
+      "case_id": "I03",
+      "label": "insufficient",
+      "rule_id": "AU-BR-001",
+      "actual": "abstain",
+      "classification": "abstain_check",
+      "finding_count": 0,
+      "reasons": [
+        "javascript_parse_failed"
+      ],
+      "abstention_correct": true
+    },
+    {
+      "case_id": "I04",
+      "label": "insufficient",
+      "rule_id": "AU-BR-001",
+      "actual": "abstain",
+      "classification": "abstain_check",
+      "finding_count": 0,
+      "reasons": [
+        "missing_script"
+      ],
+      "abstention_correct": true
+    },
+    {
+      "case_id": "I05",
+      "label": "insufficient",
+      "rule_id": "AU-BR-002",
+      "actual": "abstain",
+      "classification": "abstain_check",
+      "finding_count": 0,
+      "reasons": [
+        "missing_context"
+      ],
+      "abstention_correct": true
+    },
+    {
+      "case_id": "I06",
+      "label": "insufficient",
+      "rule_id": "AU-BR-002",
+      "actual": "abstain",
+      "classification": "abstain_check",
+      "finding_count": 0,
+      "reasons": [
+        "missing_context"
+      ],
+      "abstention_correct": true
+    },
+    {
+      "case_id": "I07",
+      "label": "insufficient",
+      "rule_id": "AU-BR-002",
+      "actual": "abstain",
+      "classification": "abstain_check",
+      "finding_count": 0,
+      "reasons": [
+        "release_unknown"
+      ],
+      "abstention_correct": true
+    },
+    {
+      "case_id": "I08",
+      "label": "insufficient",
+      "rule_id": "AU-BR-002",
+      "actual": "abstain",
+      "classification": "abstain_check",
+      "finding_count": 0,
+      "reasons": [
+        "release_mismatch"
+      ],
+      "abstention_correct": true
+    },
+    {
+      "case_id": "I09",
+      "label": "insufficient",
+      "rule_id": "AU-CL-004",
+      "actual": "abstain",
+      "classification": "abstain_check",
+      "finding_count": 0,
+      "reasons": [
+        "release_unknown"
+      ],
+      "abstention_correct": true
+    },
+    {
+      "case_id": "I10",
+      "label": "insufficient",
+      "rule_id": "AU-CL-004",
+      "actual": "abstain",
+      "classification": "abstain_check",
+      "finding_count": 0,
+      "reasons": [
+        "release_mismatch"
+      ],
+      "abstention_correct": true
+    },
+    {
+      "case_id": "I11",
+      "label": "insufficient",
+      "rule_id": "AU-CL-004",
+      "actual": "abstain",
+      "classification": "abstain_check",
+      "finding_count": 0,
+      "reasons": [
+        "javascript_parse_failed"
+      ],
+      "abstention_correct": true
+    },
+    {
+      "case_id": "I12",
+      "label": "insufficient",
+      "rule_id": "AU-CL-004",
+      "actual": "abstain",
+      "classification": "abstain_check",
+      "finding_count": 0,
+      "reasons": [
+        "missing_script"
+      ],
+      "abstention_correct": true
+    }
+  ],
+  "fixture_file_sha256": "ca0aee13e9ccb66a353d14493e7074c41976f67ef8b9222679f81a0cf00451ad"
+}
