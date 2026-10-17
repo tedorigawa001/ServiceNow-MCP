@@ -147,18 +147,90 @@ e2eDescribe('E2E – optional plugins (read-only, gated on plugin tables)', () =
     });
   });
 
-  describe('sys_sg_mobile_* (Mobile)', () => {
-    it('lists mobile app configs, applets and layouts, and reads analytics', async (ctx) => {
-      await skipUnlessTables(ctx, client, 'sys_sg_mobile_app_config', 'sys_sg_mobile_applet', 'sys_sg_mobile_layout');
+  describe('Mobile native metadata', () => {
+    it('lists mobile application definitions without a fictitious active filter', async (ctx) => {
+      await skipUnlessTables(ctx, client, 'sys_sg_mobile_application');
       const configs = await executeMobileToolCall(client, 'list_mobile_app_configs', { limit: 5 });
       expect(configs.count).toBeGreaterThanOrEqual(0);
+      expect(Array.isArray(configs.configs)).toBe(true);
+      for (const record of configs.configs) {
+        expect(record.sys_id).toMatch(/^[0-9a-f]{32}$/);
+        expect(record).toHaveProperty('name');
+        expect(record).toHaveProperty('ios_bundle_id');
+        expect(record).not.toHaveProperty('active');
+      }
+    });
+
+    it('gets a mobile application definition by sys_id', async (ctx) => {
+      await skipUnlessTables(ctx, client, 'sys_sg_mobile_application');
+      const list = await executeMobileToolCall(client, 'list_mobile_app_configs', { limit: 1 });
+      ctx.skip(list.count === 0, 'data missing: list_mobile_app_configs returned no records');
+      const result = await executeMobileToolCall(client, 'get_mobile_app_config', { sys_id: list.configs[0].sys_id });
+      expect(result.sys_id).toBe(list.configs[0].sys_id);
+      expect(result.name).toBe(list.configs[0].name);
+    });
+
+    it('lists native mobile screen metadata', async (ctx) => {
+      await skipUnlessTables(ctx, client, 'sys_sg_screen');
       const applets = await executeMobileToolCall(client, 'list_mobile_applets', { limit: 5 });
       expect(applets.count).toBeGreaterThanOrEqual(0);
+      expect(applets.source_table).toBe('sys_sg_screen');
+      expect(applets.data_kind).toBe('screen_metadata');
+      for (const record of applets.applets) {
+        expect(record).toHaveProperty('name');
+        expect(record).toHaveProperty('available_offline');
+      }
+    });
+
+    it('filters native screens by application scope', async (ctx) => {
+      await skipUnlessTables(ctx, client, 'sys_sg_screen');
+      const list = await executeMobileToolCall(client, 'list_mobile_applets', { limit: 1 });
+      ctx.skip(list.count === 0, 'data missing: list_mobile_applets returned no screens');
+      const scope = list.applets[0].sys_scope?.value ?? list.applets[0].sys_scope;
+      ctx.skip(!scope, 'data missing: mobile screen has no application scope');
+      const result = await executeMobileToolCall(client, 'list_mobile_applets', { scope, limit: 5 });
+      expect(result.count).toBeGreaterThan(0);
+      for (const record of result.applets) expect(record.sys_scope?.value ?? record.sys_scope).toBe(scope);
+    });
+
+    it('lists screen to UI element mappings rather than full layouts', async (ctx) => {
+      await skipUnlessTables(ctx, client, 'sys_sg_screen_m2m_ui_element');
       const layouts = await executeMobileToolCall(client, 'list_mobile_layouts', { limit: 5 });
       expect(layouts.count).toBeGreaterThanOrEqual(0);
-      const analytics = await executeMobileToolCall(client, 'get_mobile_analytics', {});
-      expect(analytics).toBeTruthy();
+      expect(layouts.data_kind).toBe('screen_ui_element_mappings');
+      expect(layouts.source_table).toBe('sys_sg_screen_m2m_ui_element');
+      for (const record of layouts.layouts) {
+        expect(record.screen?.value ?? record.screen).toMatch(/^[0-9a-f]{32}$/);
+        expect(record.ui_element?.value ?? record.ui_element).toMatch(/^[0-9a-f]{32}$/);
+      }
     });
+
+    it('filters screen element mappings by screen reference', async (ctx) => {
+      await skipUnlessTables(ctx, client, 'sys_sg_screen_m2m_ui_element');
+      const list = await executeMobileToolCall(client, 'list_mobile_layouts', { limit: 1 });
+      ctx.skip(list.count === 0, 'data missing: list_mobile_layouts returned no mappings');
+      const screen = list.layouts[0].screen?.value ?? list.layouts[0].screen;
+      const result = await executeMobileToolCall(client, 'list_mobile_layouts', { screen_sys_id: screen, limit: 5 });
+      expect(result.count).toBeGreaterThan(0);
+      for (const record of result.layouts) expect(record.screen?.value ?? record.screen).toBe(screen);
+    });
+
+    it('verifies native mapping references in the real dictionary', async (ctx) => {
+      await skipUnlessTables(ctx, client, 'sys_sg_screen_m2m_ui_element');
+      const result = await client.queryRecords({
+        table: 'sys_dictionary', query: 'name=sys_sg_screen_m2m_ui_element^elementINscreen,ui_element',
+        fields: 'element,reference', limit: 5,
+      });
+      expect(result.records).toHaveLength(2);
+      const refs = Object.fromEntries(result.records.map(record => [record.element, record.reference?.value ?? record.reference]));
+      expect(refs).toEqual({ screen: 'sys_sg_screen', ui_element: 'sys_sg_ui_element' });
+    });
+
+    it('reports usage analytics as unsupported, not zero usage', async () => {
+      await expect(executeMobileToolCall(client, 'get_mobile_analytics', {}))
+        .rejects.toMatchObject({ code: 'UNSUPPORTED_OPERATION' });
+    });
+
   });
 
   describe('em_event (Event Management)', () => {

@@ -2142,6 +2142,37 @@ the PDI in this read-only E2E run.
 
 ---
 
+## Mobile native metadata (10 tool names; 3 explicitly unavailable)
+
+Historical names are retained, but these tools expose **metadata**, not a complete
+Mobile App Builder authoring, provisioning, deployment, or usage-analytics API.
+Native models are `sys_sg_mobile_application`, `sys_sg_screen`, and
+`sys_sg_screen_m2m_ui_element`; there are no separate generic app-config/applet/layout
+tables with the former names. Supported inputs use strict schemas and runtime
+allowlists. `limit` is an integer from 1 to 1000 (default 25).
+
+| Tool | Supported contract |
+| --- | --- |
+| `list_mobile_app_configs` | `limit`; returns `{ count, configs }` from application definitions. No `active` filter: this model has no active column. |
+| `get_mobile_app_config` | Required `sys_id` in `sys_sg_mobile_application`; native record. |
+| `create_mobile_app_config` | **[Write]** Required `name` only. Creates name-only metadata, not an installable app or branding/navigation/screens. |
+| `list_mobile_applets` | Optional `scope` (application-scope sys_id, not mobile application ID), `limit`. Returns `{ count, applets, source_table, data_kind }` with `data_kind=screen_metadata`. |
+| `create_mobile_applet` | **[Write]** Required `name`, optional `description`. Creates base screen metadata, not a complete screen subtype, data binding, or app association. |
+| `list_mobile_layouts` | Optional `screen_sys_id`, `limit`. Returns `{ count, layouts, source_table, data_kind }` with `data_kind=screen_ui_element_mappings`. These are screen/UI-element links, not complete layouts. |
+| `create_mobile_layout` | **[Write]** Required `screen_sys_id`, `ui_element_sys_id`. Confirms both referenced records and creates only an M2M link. |
+| `configure_offline_sync` | **Unavailable.** After the write gate, throws `UNSUPPORTED_OPERATION`; does not insert configuration into a synchronization-state table. |
+| `send_push_notification` | **Unavailable.** After the write gate, throws `UNSUPPORTED_OPERATION`; does not insert an invalid queue payload or claim delivery. |
+| `get_mobile_analytics` | **Unavailable.** Throws `UNSUPPORTED_OPERATION`; no validated session telemetry is configured. Does not return invented zero usage or equate definitions with active users. |
+
+Compatibility changes: old `active`, `app_config`, `branding_color`, app-level
+`description`, and applet/layout `table`/`type`/`icon` inputs are rejected where not
+part of the contracts above. `scope` is not a replacement mobile-app foreign key.
+`available_offline` is a real screen field, but toggling it alone is not a complete
+offline synchronization workflow. Configuration-state and queue records must not
+be treated as supported configuration or delivery APIs.
+
+---
+
 ## Legacy Agent Workspace metadata (4 tools)
 
 These four tools target `sys_aw_master_config` and `sys_aw_list`, **not**
