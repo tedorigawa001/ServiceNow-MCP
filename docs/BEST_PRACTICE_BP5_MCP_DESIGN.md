@@ -81,7 +81,8 @@ raw payload、コード、query、fields、table、URL、release、actor/imperso
 
 sys_cluster_stateを読めることを全利用者の必須条件にしない。cluster_node_admin等のロールを
 このツールのためだけに要求/付与するA方式ではなく、実測優先＋運用者設定のC方式を採用する。
-このロール名と実際のテーブル/列ACLの必要条件は今回実機検証しておらず、環境ごとの確認事項。
+PDI（Australia）のACL定義は読み取りで照会済み（sys_cluster_stateはcluster_node_admin等、
+sys_update_xmlはupdate_set_previewer等）。最小権限アカウントでの実効アクセスと他環境の条件は未検証。
 
 **運用者設定の境界**：instances.json等のサーバー側インスタンス設定へ、提案キー
 `review_release_assertion`を追加する案。現時点では未対応で、既存設定へ追加する作業は行わない。
