@@ -23,7 +23,7 @@ export const releaseEvidenceStructure = z.discriminatedUnion('source', [
     observed_at: z.iso.datetime(), visibility_scope: z.literal('caller_acl') }),
   z.strictObject({ source: z.literal('none'), resolution_status: z.literal('unknown'), family: z.null(),
     visibility_scope: z.literal('unavailable'), reason: z.enum(['not_configured', 'observation_unavailable',
-      'config_expired', 'config_binding_mismatch', 'observation_incomplete', 'observation_inconsistent', 'observation_limit']) }),
+      'config_expired', 'config_validity_insufficient', 'config_binding_mismatch', 'observation_incomplete', 'observation_inconsistent', 'observation_limit']) }),
 ]);
 export type ReleaseEvidence = z.infer<typeof releaseEvidenceStructure>;
 

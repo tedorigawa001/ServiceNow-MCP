@@ -8,6 +8,20 @@ describe('BP-5 aggregate result contract', () => {
     expect(parsed.instance_release.resolution_status).toBe('asserted');
     expect(parsed.assets).toHaveLength(1);
   });
+  it.each([
+    ['less than the full deadline', '2026-10-17T04:59:30Z', false],
+    ['exactly the deadline', '2026-10-17T05:00:00Z', false],
+    ['one millisecond beyond the deadline', '2026-10-17T05:00:00.001Z', true],
+  ])('requires an assertion valid beyond the entire run budget: %s', (_name, expiresAt, valid) => {
+    const r = aggregate();
+    // Finish early: checking ended_at alone would incorrectly accept the first two cases.
+    r.ended_at = '2026-10-17T04:59:20Z';
+    r.assets[0].result.reviewed_at = r.ended_at;
+    r.assets[0].result.target.retrieved_at = '2026-10-17T04:59:10Z';
+    r.instance_release.expires_at = expiresAt;
+    r.assets[0].result.instance_release.expires_at = expiresAt;
+    expect(aggregateReviewSchema.safeParse(r).success).toBe(valid);
+  });
   it.each(['unknown', 'mismatched'] as const)('stops before collection for %s releases', match => {
     const r = aggregate();
     const reason = match === 'unknown' ? 'release_unknown' : 'release_mismatch';
@@ -21,6 +35,35 @@ describe('BP-5 aggregate result contract', () => {
     expect(aggregateReviewSchema.safeParse(stopped).success).toBe(true);
     expect(aggregateReviewSchema.safeParse({ ...stopped, assets: r.assets }).success).toBe(false);
     expect(aggregateReviewSchema.safeParse({ ...stopped, coverage: { ...stopped.coverage, skipped_rules: [] } }).success).toBe(false);
+  });
+  it.each([
+    ['2026-10-17T04:59:59.999Z', true],
+    ['2026-10-17T05:00:00Z', true],
+    ['2026-10-17T05:00:00.001Z', false],
+  ])('checks the recorded run duration at %s', (endedAt, valid) => {
+    const r = aggregate();
+    r.ended_at = endedAt;
+    r.assets[0].result.reviewed_at = '2026-10-17T04:59:20Z';
+    r.assets[0].result.target.retrieved_at = '2026-10-17T04:59:10Z';
+    expect(aggregateReviewSchema.safeParse(r).success).toBe(valid);
+  });
+  it('requires operator evidence to exist at admission, not merely before review completion', () => {
+    const r = aggregate();
+    r.instance_release.asserted_at = '2026-10-17T04:59:10Z';
+    r.assets[0].result.instance_release.asserted_at = r.instance_release.asserted_at;
+    expect(aggregateReviewSchema.safeParse(r).success).toBe(false);
+  });
+  it('can report insufficient assertion lifetime without collecting or discarding results later', () => {
+    const r = aggregate();
+    const stopped = { ...r,
+      instance_release: { source: 'none', resolution_status: 'unknown', family: null,
+        visibility_scope: 'unavailable', reason: 'config_validity_insufficient' }, release_match: 'unknown',
+      collection: { ...r.collection, status: 'not_started', metadata_seen: 0, selected: 0 }, consistency: 'unverified',
+      assets: [], counts: { ...r.counts, reviewed: 0, findings: 0 },
+      coverage: { ...r.coverage, analysis_complete: false,
+        skipped_rules: [{ rule_id: 'AU-BR-001', reason: 'release_unknown' }] },
+      limitations: ['source_approval_pending', 'release_unknown', 'config_validity_insufficient'] };
+    expect(aggregateReviewSchema.safeParse(stopped).success).toBe(true);
   });
   it('allows a genuinely empty visible set, but rejects raw errors and oversized JSON', () => {
     const r = aggregate();

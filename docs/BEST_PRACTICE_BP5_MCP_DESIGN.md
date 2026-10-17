@@ -101,6 +101,13 @@ sys_update_xmlはupdate_set_previewer等）。最小権限アカウントでの�
 設定の正しさを保証しない。アップグレード時は期限前でも失効/再確認し、設定再読込は版を検証して
 呼び出し開始時に固定する。原設定パス・運用者の実名・証跡本文を返さない。
 
+設定申告で開始するには、asserted_at ≤ started_atかつexpires_at > started_at + deadline_msを要求する。
+残り有効期間が60秒以下（同値を含む）ならpayload取得を始めず、none/unknown、
+config_validity_insufficientを記録しrelease_unknownで全要求規則をスキップする。
+集約は開始時の設定証拠を検証し、終了時刻で再採用/失効判定しない。
+1件結果はreviewed_at基準を維持し、集約では0 ≤ ended_at − started_at ≤ deadline_msも検証する。
+これらの結果契約上の制約は実装済みだが、取得アダプターの開始判定・実時間の中断は後工程。
+
 | 実測の観測 | 設定の状態 | 採用証拠・処理 |
 |---|---|---|
 | 可視範囲で値が1ファミリーに一致、20行以内 | 未設定または同じfamily | source=sys_cluster_state.build_name、resolution_status=resolved。設定が期限切れ等ならその警告は残すが、正当な実測は利用できる |

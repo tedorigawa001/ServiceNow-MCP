@@ -54,11 +54,20 @@ export const aggregateReviewStructure = z.strictObject({
 export const aggregateReviewSchema = aggregateReviewStructure.superRefine((r, ctx) => {
   const fail = (message: string) => ctx.addIssue({ code: 'custom', message });
   const equalIds = (a: string[], b: string[]) => a.length === b.length && new Set(a).size === a.length && a.every(x => b.includes(x));
-  checkReleaseEvidence(r.instance_release, r.ended_at, r.target.instance_binding, r.limitations).forEach(fail);
+  const startedAt = Date.parse(r.started_at);
+  const endedAt = Date.parse(r.ended_at);
+  const release = r.instance_release;
+  // Freeze operator evidence at admission, with enough validity for the entire run budget.
+  // Observations may be collected during the run, so validate those against ended_at.
+  checkReleaseEvidence(release, release.source === 'operator_config' ? r.started_at : r.ended_at,
+    r.target.instance_binding, r.limitations).forEach(fail);
+  if (release.source === 'operator_config' && Date.parse(release.expires_at) <= startedAt + r.limits.deadline_ms) {
+    fail('Operator assertion must remain valid beyond the full run deadline');
+  }
   const releaseMatch = releaseMatchForEvidence(r.instance_release);
   if (r.release_match !== releaseMatch) fail('Release match contradicts evidence');
   if (!r.limitations.includes('source_approval_pending') || r.status === 'completed') fail('Current PoC is source-unapproved and cannot complete');
-  if (Date.parse(r.started_at) > Date.parse(r.ended_at)) fail('Invalid run time interval');
+  if (startedAt > endedAt || endedAt - startedAt > r.limits.deadline_ms) fail('Invalid run time interval or deadline exceeded');
   if (new Set(r.coverage.requested_rule_ids).size !== r.coverage.requested_rule_ids.length) fail('Duplicate requested rules');
   if (r.collection.selected !== r.assets.length || new Set(r.assets.map(a => a.update_xml_sys_id)).size !== r.assets.length) fail('Selected rows must be accounted for exactly once');
   if (r.collection.status === 'complete') {
