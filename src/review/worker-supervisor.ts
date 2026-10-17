@@ -2,7 +2,7 @@ import { Worker, type WorkerOptions } from 'node:worker_threads';
 import type { AggregateReview } from './aggregate-schema.js';
 
 export type ReviewWorkerFactory = (url: URL, options: WorkerOptions) => Worker;
-type Failure = 'deadline_exceeded' | 'cancelled' | 'internal_review_error';
+type Failure = 'deadline_exceeded' | 'cancelled' | 'internal_review_error' | 'worker_unavailable';
 export class ReviewWorkerError extends Error {
   constructor(readonly code: Failure) { super(code); }
 }
@@ -22,23 +22,38 @@ export class ReviewWorker {
     if (this.closed || this.failed) throw new ReviewWorkerError('internal_review_error');
   }
   private startWorker(): Worker {
-    const worker = (this.options.factory ?? ((url, options) => new Worker(url, options)))(
-      new URL('./review-worker.js', import.meta.url), { env: {}, argv: [], execArgv: [], stdout: true, stderr: true,
-        resourceLimits: { maxOldGenerationSizeMb: 128, maxYoungGenerationSizeMb: 16, stackSizeMb: 4 } });
+    // Select by this module's execution format, never by a missing .js file,
+    // NODE_ENV or caller input. Production must not fall back to source/tsx.
+    const entry = new URL(import.meta.url).pathname.endsWith('.ts')
+      ? './dev-worker-bootstrap.mjs' : './review-worker.js';
+    let worker: Worker;
+    try {
+      worker = (this.options.factory ?? ((url, options) => new Worker(url, options)))(
+        new URL(entry, import.meta.url), { env: {}, argv: [], execArgv: [], stdout: true, stderr: true,
+          resourceLimits: { maxOldGenerationSizeMb: 128, maxYoungGenerationSizeMb: 16, stackSizeMb: 4 } });
+    } catch { throw new ReviewWorkerError('worker_unavailable'); }
     worker.on('error', this.onFailure); worker.on('exit', this.onFailure);
     worker.stdout.resume(); worker.stderr.resume();
     return worker;
   }
-  private exchange<T>(worker: Worker, kind: 'analyze' | 'finish', input: unknown): Promise<T> {
+  private exchange<T>(worker: Worker, kind: 'ready' | 'analyze' | 'finish', input?: unknown): Promise<T> {
     const id = ++this.sequence;
+    const failure = kind === 'ready' ? 'worker_unavailable' : 'internal_review_error';
     return new Promise<T>((resolve, reject) => {
       let settled = false;
       const timer = setTimeout(() => done(new ReviewWorkerError('deadline_exceeded')), Math.max(0, Math.ceil(this.options.remainingMs())));
       const abort = () => done(new ReviewWorkerError('cancelled'));
-      const exit = () => done(new ReviewWorkerError('internal_review_error'));
+      const exit = () => done(new ReviewWorkerError(failure));
       const message = (value: unknown) => {
         try {
           this.check();
+          if (kind === 'ready') {
+            if (!value || typeof value !== 'object' || Array.isArray(value)
+              || !('type' in value) || value.type !== 'review_worker_ready' || Object.keys(value).length !== 1) {
+              throw new ReviewWorkerError('worker_unavailable');
+            }
+            done(undefined, true as T); return;
+          }
           const r = value as { id?: unknown; ok?: unknown; json?: unknown } | null;
           if (!r || r.id !== id || r.ok !== true || typeof r.json !== 'string' || Buffer.byteLength(r.json) > 262144) {
             throw new ReviewWorkerError('internal_review_error');
@@ -68,7 +83,7 @@ export class ReviewWorker {
       worker.on('message', message); worker.once('messageerror', exit);
       worker.once('error', exit); worker.once('exit', exit);
       this.options.signal?.addEventListener('abort', abort, { once: true });
-      try { this.check(); worker.postMessage({ id, kind, input }); }
+      try { this.check(); if (kind !== 'ready') worker.postMessage({ id, kind, input }); }
       catch (error) { done(error instanceof ReviewWorkerError ? error : new ReviewWorkerError('internal_review_error')); }
     });
   }
@@ -77,7 +92,11 @@ export class ReviewWorker {
     this.busy = true;
     try {
       this.check();
-      this.worker ??= this.startWorker();
+      if (!this.worker) {
+        this.worker = this.startWorker();
+        // Includes module/loader startup in the original remaining-time budget.
+        await this.exchange<boolean>(this.worker, 'ready');
+      }
       return await this.exchange<T>(this.worker, kind, input);
     } catch (error) {
       const fixed = error instanceof ReviewWorkerError ? error : new ReviewWorkerError('internal_review_error');

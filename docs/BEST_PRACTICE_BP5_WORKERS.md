@@ -1,6 +1,6 @@
 # BP-5：同期解析・集約のworker化と強制中断
 
-Version: bp5-workers-0.1 / Date: 2026-10-18。
+Version: bp5-workers-0.2 / Date: 2026-10-18。
 内部アダプターと合成テストの記録。MCP登録・npm梱包変更・実機操作は対象外。
 規則/根拠の承認、独立人手評価、製品公開の承認は引き続き未実施。
 
@@ -54,7 +54,8 @@ OSのスケジューリングやterminateの完了待ちを含め、返答が厳
 | 正常 | RPCのtimer/abort/message listenerを外し、次の仕事で同じworkerを再利用。最後に終了をawait |
 | 期限切れ | deadline_exceeded、workerをterminate/await、指摘を返さない |
 | 外部キャンセル | cancelled、abortのreasonは表示/worker転送しない。終了をawait |
-| 起動失敗・error・予期しないexit・messageerror | internal_review_error。親で再解析/別workerへ自動再試行しない |
+| 起動不能・ready前のerror/予期しないexit/messageerror | worker_unavailable。固定理由のみ返し、親で再解析/別workerへ自動再試行しない |
+| ready後のerror・予期しないexit・messageerror | internal_review_error。原診断を返さない |
 | 不正なRPC/JSON・worker側契約不整合 | internal_review_error。本文/stack/パーサー原文を返さない |
 | HTTP失敗後の暫定集約中に期限切れ | 暫定指摘を捨て、output段階の固定期限エラーのみ |
 
@@ -64,7 +65,7 @@ workerが入力のコードを実行したり、入力由来のファイル/URL�
 
 ## 4. 情報・容量境界
 
-- 実行ファイルは固定のreview-worker.js。通常はビルド済みdist/review内の入口を使う。
+- ビルド済みsupervisorは固定のreview-worker.jsを使う。ソース/tsxへのフォールバックはしない。
 - workerへ渡すのは解析用payload/識別子/証拠、または本文を含まない集約データのみ。
   client、URL、OAuth/per-userトークン、運用者の私有証跡参照は渡さない。
 - env={}、argv/execArgv=[]で起動し、親の資格情報付き環境やデバッグ/loader引数を継承しない。
@@ -77,8 +78,29 @@ workerが入力のコードを実行したり、入力由来のファイル/URL�
   完全な契約検証は固定の信頼されたworker側で実行する。任意workerの結果を信頼するAPIではない。
 
 ReviewAdapterOptions.workerFactoryはOS境界のテスト注入専用で、MCP入力/設定には接続しない。
-ソースのテストはdev依存tsxを登録するテスト専用bootstrapを用いる。本番のworkerへtsx依存や
-テスト用の停止動作を持ち込まない。dist/reviewのnpm除外・依存の梱包方針は今回変更していない。
+ソース実行は次節の開発用bootstrapを使う。停止動作の注入には別のテスト専用bootstrapを用いる。
+本番のworkerへtsx依存やテスト用の停止動作を持ち込まない。
+dist/reviewのnpm除外・依存の梱包方針は今回変更していない。
+
+### 4.1 開発モードと起動確認
+
+supervisor自身のimport.meta.urlのpathnameが`.ts`のときだけ、固定の
+`dev-worker-bootstrap.mjs`を起動する。bootstrapはdev依存`tsx/esm/api`を明示登録し、
+tsconfigを読み込まず固定の`review-worker.ts`をimportする。`npm run dev`と同じtsxソース実行で
+利用できる。開発にはdev依存を含む`npm ci`が必要となる。
+
+ビルド済みモジュールは、NODE_ENV・呼出し引数・ファイルの有無によらず固定の`.js`を選ぶ。
+本番入口が欠けていても隣の`.ts`や開発bootstrapを探さない。bootstrapはtscでコピーされないが、
+ビルド済み入口からは参照しない。npm公開に必要なworker/依存の同梱は別工程で扱う。
+
+workerは依存のimportと受信listenerの登録が終わってから、固定のready通知を1回送る。
+親はこの通知まで解析入力を送らず、起動の同期例外、入口欠落、import失敗、ready前の異常終了を
+`worker_unavailable`へ統一する。原例外・パス・stack・標準出力/エラーは返さない。
+ready後の解析/RPC失敗は従来どおり`internal_review_error`となる。
+ready待ちも元の残り時間・cancel監視に含め、期限/cancelはそれぞれ既存の固定コードを優先する。
+起動不能時もworkerの終了をawaitしてから認証枠を解放する。同期解析への代替実行はしない。
+
+変更は内部アダプターの固定エラー列挙の追加であり、1件/集約の結果JSON契約、固定評価セットは変更しない。
 
 ## 5. 合成検証
 
@@ -113,5 +135,25 @@ ReviewAdapterOptions.workerFactoryはOS境界のテスト注入専用で、MCP�
 
 新規19件はライフサイクルの機能回帰テストであり、非公開の人手本試行48件や独立した検出性能評価ではない。
 MCP登録、実機操作、公開処理は実施していない。
+
+### 2026-10-18 開発モード起動対応の検証記録
+
+- ソース標準入口の失敗、起動例外/入口欠落/ready前throw・exitの固定エラーについて、失敗→修正→成功を確認した。
+- 起動関連7件を追加。関連3ファイル計26件で、標準ソース入口、Nodeの`--import tsx`による
+  合成アダプターの解析/集約、ビルド済み形式で`.js`欠落時にソースへ代替しないこと、
+  起動失敗後のworker/listener/認証枠解放を確認した。
+- 全体初回は2,366成功/2失敗。既存の短縮期限テストが、残り500msで必ず処理まで到達すると
+  仮定していた。全体実行のCPU競合で起動中に期限へ達したため、起動中/処理到達後を区別する
+  検証へ変更した。期限や上限は延長していない。処理到達必須の中断検証は別の既存テストで維持する。
+- `bdo npm test`：95ファイル、2,368件成功。
+- `bdo npm run build` / `bdo npm run type-check`：成功。
+- `bdo node tests/review/fixtures/compiled-worker-smoke.mjs`：本番標準`.js`入口で解析/集約成功。
+- 変更対象10実装/テスト/fixtureのESLint：エラー/警告0。全体lint：エラー0、既存警告374。
+- `git diff --check`：成功。結果JSON契約、固定評価セット、MCP登録、package/lockは変更なし。
+- macOS/Node v24.18.0で確認。Node 22.12、Linux/Windowsは未検証。
+
+合成fetchだけを使用し、実機/実設定へは接続していない。開発サーバー自体の起動やMCP登録、
+npm梱包変更は対象外。soft cutoff/partial救済は未実装で、hard deadline時の固定エラー方針は維持する。
+本検証は機能回帰であり、人による規則承認/独立評価の代替ではない。
 
 残課題：MCP登録/梱包、許可済み読み取りE2E、運用上の上限/権限の承認、独立評価と品質/公開審査。

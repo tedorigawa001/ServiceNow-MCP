@@ -75,6 +75,7 @@ PoCのstatusはcompletedにせず、通常はpartialとする。
 | 最終照合の変化/失敗 | changed/unverified、analysis_complete=false、provisional_results。既存候補は暫定として保持 |
 | 全体deadline/キャンセル | isError=true、固定理由だけ。部分結果の救済はしない |
 | 想定外例外/1件・集約の契約不整合 | isError=true/internal_review_error、その呼出しの指摘を返さない |
+| worker起動不能（ready前） | isError=true/worker_unavailable。開発/本番の入口と終了処理は[worker記録§4.1](BEST_PRACTICE_BP5_WORKERS.md)参照 |
 
 全体期限後の集約は、既存のended_at − started_at ≤ 60秒に反する。
 終了時刻の切詰めや証拠時刻の書換えで結果を救済しないため、deadline時は固定エラーのみとした。

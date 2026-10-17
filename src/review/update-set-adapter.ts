@@ -14,7 +14,7 @@ const inputSchema = z.strictObject({ update_set_sys_id: z.string().regex(/^[a-f0
     .default(['AU-BR-001', 'AU-BR-002', 'AU-CL-004']),
 });
 type Stage = AggregateReview['errors'][number]['stage'];
-type ErrorCode = AggregateReview['errors'][number]['code'] | 'review_busy' | 'cancelled';
+type ErrorCode = AggregateReview['errors'][number]['code'] | 'review_busy' | 'cancelled' | 'worker_unavailable';
 type Asset = AggregateReview['assets'][number];
 export type BoundedReviewOutcome = { isError: false; result: AggregateReview }
   | { isError: true; error: { stage: Stage; code: ErrorCode }; result?: AggregateReview };

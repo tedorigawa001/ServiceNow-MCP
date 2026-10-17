@@ -1,4 +1,6 @@
 import { parentPort, workerData } from 'node:worker_threads';
+if (workerData.mode === 'boot_throw') throw new Error('SYNTHETIC_PRIVATE_BOOT_ERROR');
+if (workerData.mode === 'boot_exit') process.exit(0);
 parentPort.on('message', message => {
   if (workerData.mode === 'throw') {
     console.log('SYNTHETIC_PRIVATE_STDOUT');
@@ -11,3 +13,4 @@ parentPort.on('message', message => {
     setTimeout(() => parentPort.postMessage({ id: message.id, ok: true, json: '{}' }), 100);
   }
 });
+parentPort.postMessage({ type: 'review_worker_ready' });

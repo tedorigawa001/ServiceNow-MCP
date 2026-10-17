@@ -9,6 +9,8 @@ Status: **1件/集約JSON契約、bounded取得・認証固定・C方式ゲー�
 運用者によるファイル設定・所有者/権限検査・補助コマンドは[設定導入記録](BEST_PRACTICE_BP5_OPERATOR_SETUP.md)を参照。
 bounded取得と既存解析器/結果契約の接続、失敗・省略の扱いは[解析/集約アダプター記録](BEST_PRACTICE_BP5_ADAPTERS.md)を参照。
 同じ60秒予算の伝播、worker終了待ちと資源解放、実時間保証の限界は[worker記録](BEST_PRACTICE_BP5_WORKERS.md)を参照。
+開発のtsxソース実行では専用bootstrap、本番では固定の`review-worker.js`を使う。
+起動不能は固定`worker_unavailable`とし、本番からソースへの代替実行はしない（同記録§4.1）。
 
 ## 1. 初版の範囲
 
@@ -226,6 +228,7 @@ source_approval_pendingや未承認のカード境界を隠さず、原解析res
 | 429/5xx/timeout | 規定の再試行だけ。予算内なら独立資産は続行可能、期限/全体障害なら残り未処理 |
 | 変更検出・最終照合不能・件数/容量/出力打切り | partial（解析前の認証/全体取得停止はfailed）。暫定結果と未完了を区別し、打切り後の行はnot_processed/result_omitted |
 | 全体deadline/キャンセル | isError=true、固定理由のみ。workerの終了を待ち、期限超過の集約や時刻の切詰めで部分結果を救済しない |
+| worker起動不能（ready前） | isError=true、固定worker_unavailable。原診断や指摘は返さず、終了確認後に枠を解放する |
 | 集約/内部resultのスキーマ不整合・想定外例外 | isError=true、failed、当該呼出しの指摘を返さず固定internal_review_error。原例外を一般serverの応答/ログへ流さない |
 
 一覧の短い正常応答は「可視範囲の収集完了」になり得るが、正常0件・全対象外・全拒否・全指摘0を

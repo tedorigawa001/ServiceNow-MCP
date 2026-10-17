@@ -4,3 +4,4 @@ parentPort.on('message', () => {
   Atomics.store(new Int32Array(workerData.started), 0, 1);
   for (;;) { /* CPU ignores all further messages and cancellation. */ }
 });
+parentPort.postMessage({ type: 'review_worker_ready' });

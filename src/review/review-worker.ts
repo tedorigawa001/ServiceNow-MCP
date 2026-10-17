@@ -27,3 +27,5 @@ parentPort.on('message', (message: { id: number; kind: string; input: unknown })
     parentPort!.postMessage({ id: message.id, ok: false });
   }
 });
+// Only signal readiness after imports have succeeded and the task listener exists.
+parentPort.postMessage({ type: 'review_worker_ready' });

@@ -7,6 +7,17 @@ import { getEventListeners } from 'node:events';
 
 describe('BP-5 supervised CPU worker', () => {
   afterEach(() => vi.restoreAllMocks());
+  it('starts the default development worker directly from source without a test factory', async () => {
+    const cpu = new ReviewWorker({ remainingMs: () => 5000 });
+    const input = aggregate();
+    input.started_at = new Date(Date.now() - 1000).toISOString();
+    input.assets[0].result.reviewed_at = new Date(Date.now() - 500).toISOString();
+    try {
+      const result = await cpu.finish(input);
+      expect(result.counts.findings).toBe(1);
+      expect(result.code_return_mode).toBe('none');
+    } finally { await cpu.close(); }
+  });
   it('closes an in-flight request explicitly and waits for termination', async () => {
     let worker: Worker | undefined;
     const cpu = new ReviewWorker({ remainingMs: () => 1000, factory: (_url, options) => {
@@ -33,9 +44,23 @@ describe('BP-5 supervised CPU worker', () => {
   it('sanitizes worker startup failure without creating a fallback execution path', async () => {
     const factory = vi.fn(() => { throw new Error('SYNTHETIC_PRIVATE_STARTUP_ERROR'); });
     const cpu = new ReviewWorker({ remainingMs: () => 1000, factory });
-    await expect(cpu.finish(aggregate())).rejects.toMatchObject({ code: 'internal_review_error', message: 'internal_review_error' });
+    await expect(cpu.finish(aggregate())).rejects.toMatchObject({ code: 'worker_unavailable', message: 'worker_unavailable' });
     await cpu.close();
     expect(factory).toHaveBeenCalledTimes(1);
+  });
+  it.each(['missing_entry', 'boot_throw', 'boot_exit'] as const)('returns worker_unavailable for %s before readiness and releases resources', async mode => {
+    let worker: Worker | undefined;
+    const controller = new AbortController();
+    const cpu = new ReviewWorker({ remainingMs: () => 1000, signal: controller.signal, factory: (_url, options) => {
+      worker = new Worker(new URL(mode === 'missing_entry' ? './fixtures/no-such-worker.mjs' : './fixtures/failing-review-worker.mjs', import.meta.url),
+        { ...options, workerData: { mode } });
+      return worker;
+    } });
+    try {
+      await expect(cpu.finish(aggregate())).rejects.toMatchObject({ code: 'worker_unavailable', message: 'worker_unavailable' });
+      expect(worker?.threadId).toBe(-1);
+      expect(getEventListeners(controller.signal, 'abort')).toHaveLength(0);
+    } finally { await cpu.close(); }
   });
   it('reuses one worker for successive jobs and removes per-job abort listeners', async () => {
     const factory = vi.fn(sourceWorkerFactory);
