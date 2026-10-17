@@ -1,7 +1,7 @@
 # BP-5：Update SetベストプラクティスレビューのMCP統合設計案
 
 Version: bp5-mcp-design-0.2 / Date: 2026-10-17。
-Status: **1件/集約JSON契約、bounded取得プリミティブ・認証固定と合成テストを実装。MCP登録・リリース解決器・解析/集約アダプター・同期解析の強制中断は未実装**。
+Status: **1件/集約JSON契約、bounded取得・認証固定・実測リリースゲートと合成テストを実装。MCP登録・C方式の設定経路・解析/集約アダプター・同期解析の強制中断は未実装**。
 製品採用・根拠/判定境界・人手品質の承認は未実施。実装や公開を承認する文書ではない。
 契約の実装範囲・使い方・未実装境界は[第1段階の契約記録](BEST_PRACTICE_BP5_CONTRACTS.md)を参照。PDI照会/書き込み・本試行ケース作成は行っていない。
 取得プリミティブの実装範囲・制限・検証は[bounded取得記録](BEST_PRACTICE_BP5_BOUNDED_ACQUISITION.md)を参照。
@@ -58,6 +58,8 @@ raw payload、コード、query、fields、table、URL、release、actor/imperso
    内部アドレス・証明書等は要求/返却しない。権限昇格やロールの自動付与は行わない。
 4. リリース不一致/不明ならpayloadを取得せずpartialで終了。mismatched/unknownを明示し、
    評価済み規則・指摘を0件とする。metadata自体も未収集と記録する。
+   実測経路ではsource.resolveRelease()がmatchedのときだけsource固有のpermitを発行し、
+   metadata/payload/最終照合はそのpermitを必須とする。呼出し側による照合省略やmatched自己申告では解除できない。
 5. sys_update_xmlを固定クエリupdate_set=<検証済みID>、sys_id昇順、limit=max_records+1で一覧取得。
    fields=sys_id,update_set,name,type,action,sys_updated_on,sys_mod_count。最大101行なので初版は1ページ。
    metadataでも必須値/所属/IDの重複を検証する。上限超過なら先頭max_recordsだけを対象にする。
@@ -78,7 +80,7 @@ raw payload、コード、query、fields、table、URL、release、actor/imperso
 収集済み候補が残る場合も「観測時点の暫定結果」と明示する。current_recordへ差し替えない。
 再照会予算は先に確保し、予算切れを「変更なし」としない。
 
-### 4.1. リリース証拠：C方式（結果契約のみ実装、取得/解決は未実装）
+### 4.1. リリース証拠：C方式（結果契約・実測取得/判定は実装。設定経路は未実装）
 
 sys_cluster_stateを読めることを全利用者の必須条件にしない。cluster_node_admin等のロールを
 このツールのためだけに要求/付与するA方式ではなく、実測優先＋運用者設定のC方式を採用する。
@@ -174,7 +176,7 @@ annotationsはreadOnlyHint=true、destructiveHint=falseとするが、これは�
 | 指摘/出力 | 既存1件100指摘、集約100指摘、JSON全体256KiB | 不完全な1件結果を切り貼りせず結果単位で省略し、response_truncatedと省略件数/IDを記録 |
 | 実行時間 | 呼び出し全体60秒、1HTTPは残り期限以下かつ最大10秒、各HTTPの再試行は最大1回で総予算内 | deadline_exceeded。再試行も受信/回数予算へ加算 |
 | HTTP試行回数 | 全体最大210試行。最終親/一覧照合用を予約 | request_budget_exceeded、照合未完了ならunverified |
-| 同時呼び出し | MCPセッション/実効主体あたり1、プロセス全体2 | review_busy。別主体の状態/IDを返さない |
+| 同時呼び出し | 計画はMCPセッション/実効主体あたり1、プロセス全体2。現実装は認証キーあたり1/全体2 | review_busy。別主体の状態/IDを返さない。per-userのトークン更新や別設定の同一主体は同一人と識別できない |
 
 60秒には認証・バックオフ・解析・整形を含める。既存requestのtimeout/retryをそのまま併用して
 期限を延ばさない。fetchの中断だけでは同期AST解析を停止できないため、解析worker等の停止可能な

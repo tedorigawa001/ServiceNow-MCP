@@ -7,7 +7,7 @@ export const BOUNDED_LIMITS = Object.freeze({ responseBytes: 4 * 1024 * 1024, to
   deadlineMs: 60000, requestTimeoutMs: 10000, requests: 210, retryDelayMs: 250 });
 export type ReadFailureCode = 'invalid_input' | 'authentication_failed' | 'access_denied' | 'not_found_or_not_visible'
   | 'upstream_unavailable' | 'deadline_exceeded' | 'receive_budget_exceeded' | 'request_budget_exceeded'
-  | 'payload_budget_exceeded' | 'payload_limit' | 'invalid_response' | 'review_busy' | 'cancelled' | 'closed' | 'changed_during_review';
+  | 'payload_budget_exceeded' | 'payload_limit' | 'invalid_response' | 'review_busy' | 'cancelled' | 'closed' | 'changed_during_review' | 'release_not_admitted';
 export class BoundedReadError extends Error {
   constructor(readonly code: ReadFailureCode) { super(code); this.name = 'BoundedReadError'; }
 }
@@ -61,6 +61,7 @@ export class BoundedReadSession {
     if (snapshot.authMode === 'impersonation') throw new BoundedReadError('authentication_failed');
     this.authMode = snapshot.authMode === 'per-user' ? 'per-user' : 'service-account';
     if (this.authMode === 'per-user' && !snapshot.perUserBearerToken) throw new BoundedReadError('authentication_failed');
+    // Credential-key admission, not a stable user ID: rotated per-user tokens count as distinct keys.
     this.principalKey = createHash('sha256').update(JSON.stringify([this.baseUrl, this.authMode,
       this.authMode === 'per-user' ? snapshot.perUserBearerToken : [snapshot.oauth.clientId, snapshot.oauth.username ?? '']])).digest('hex');
     if (active >= 2 || principals.has(this.principalKey)) throw new BoundedReadError('review_busy');
@@ -75,6 +76,7 @@ export class BoundedReadSession {
   }
 
   stats() { return { requests: this.requests, received_bytes: this.receivedBytes, payload_bytes: this.payloadBytes }; }
+  assertActive() { this.check(); }
   private stop(code: ReadFailureCode) {
     this.stopCode ??= code;
     this.controller.abort();

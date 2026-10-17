@@ -1,7 +1,7 @@
 # BP-5 第1段階：リリース証拠と結果契約
 
 Version: bp5-contracts-0.1 / Date: 2026-10-17。
-本書はローカルJSON契約・合成テストの記録。取得プリミティブは後続の[bounded取得記録](BEST_PRACTICE_BP5_BOUNDED_ACQUISITION.md)を参照。MCP登録、解析/集約アダプター、リリース解決器、設定読み取り、実機操作は未実装。
+本書はローカルJSON契約・合成テストの記録。取得プリミティブと実測リリースゲートは後続の[bounded取得記録](BEST_PRACTICE_BP5_BOUNDED_ACQUISITION.md)を参照。MCP登録、解析/集約アダプター、C方式の設定経路、設定読み取り、実機操作は未実装。
 根拠・規則カードの人による承認、独立品質評価は未実施。
 
 ## 1. 互換性と入口
