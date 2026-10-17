@@ -10,7 +10,7 @@ const timestamp = z.iso.datetime();
 const field = z.string().regex(/^[a-z][a-z0-9_]*$/).max(80);
 const assetType = z.enum(['business_rule', 'client_script', 'script_include', 'scripted_rest_resource', 'server_script']);
 const targetFields = {
-  asset_type: assetType, asset_table: field, asset_sys_id: sysId, sys_scope: sysId.nullable(), field,
+  asset_type: assetType, asset_table: field, asset_sys_id: sysId, sys_scope: z.union([sysId, z.literal('global')]).nullable(), field,
   code_hash: hash, retrieved_at: timestamp, record_updated_at: timestamp.nullable(),
 };
 const target = z.discriminatedUnion('target_version', [
@@ -48,7 +48,7 @@ const structuralSchema = z.strictObject({
     issue: text, impact: text, applicability: text, recommendation: text,
     required_follow_up: z.array(text).max(20),
     sources: z.array(z.strictObject({ source_id: sourceId, url: z.url().max(2048), section: text,
-      title: text, release: z.literal('Australia'), verified_on: z.literal('2026-10-17'),
+      title: text, release: z.string().min(1).max(40), verified_on: z.iso.date(),
       retrieved_at: z.null(), content_hash: z.null(), snapshot_id: z.null(),
       catalog_version: z.literal(CATALOG_VERSION), summary: text })).min(1).max(5),
     verification_evidence: z.array(z.strictObject({
@@ -81,6 +81,13 @@ export const reviewResultSchema = structuralSchema.superRefine((result, ctx) => 
   if (!result.limitations.includes('source_approval_pending')) fail('Candidate sources require approval warning', ['limitations']);
 
   const { requested_rule_ids: requested, evaluated_rule_ids: evaluated, skipped_rules: skipped } = result.coverage;
+  if (expectedRelease !== 'matched') {
+    const reason = expectedRelease === 'unknown' ? 'release_unknown' : 'release_mismatch';
+    if (evaluated.length || result.findings.length || skipped.length !== requested.length
+      || skipped.some(skip => skip.reason !== reason)) fail('Unmatched release must skip every requested rule with the release reason and no findings', ['coverage']);
+    if (result.review_status === 'completed') fail('Unmatched release cannot complete a review', ['review_status']);
+    if (!result.limitations.includes(reason)) fail('Unmatched release needs an explicit limitation', ['limitations']);
+  }
   const accounted = [...evaluated, ...skipped.map(skip => skip.rule_id)];
   if (new Set(requested).size !== requested.length || new Set(accounted).size !== accounted.length
     || requested.length !== accounted.length || requested.some(id => !accounted.includes(id))) fail('Coverage must account for each requested rule exactly once', ['coverage']);
@@ -100,7 +107,9 @@ export const reviewResultSchema = structuralSchema.superRefine((result, ctx) => 
     if (finding.field !== result.target.field || finding.line_end < finding.line_start) fail('Invalid code location', path);
     if (finding.sources.length !== 1 || finding.sources.some(source => source.source_id !== rule.source_id
       || source.section !== rule.section || source.url !== SOURCES[rule.source_id as keyof typeof SOURCES].url
-      || source.title !== SOURCES[rule.source_id as keyof typeof SOURCES].title)) fail('Finding source must match registered URL, title and section', path);
+      || source.title !== SOURCES[rule.source_id as keyof typeof SOURCES].title
+      || source.release !== SOURCES[rule.source_id as keyof typeof SOURCES].release
+      || source.verified_on !== SOURCES[rule.source_id as keyof typeof SOURCES].verified_on)) fail('Finding source must match registered URL, title, section, release and date', path);
     const depth = stages.indexOf(finding.verification_status) + 1;
     if (depth > 0 && result.release_match !== 'matched') fail('Unmatched release cannot support confirmed finding', path);
     if (finding.verification_evidence.length !== depth) fail('Verification requires evidence for every preceding stage', path);

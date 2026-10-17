@@ -4,6 +4,13 @@ import { readFileSync } from 'node:fs';
 import { RULES, SOURCES } from '../../src/review/catalog.js';
 
 describe('local best-practice lookup', () => {
+  it.each(["addQuery('123TEXTQUERY321', 'x')", "addEncodedQuery('123TEXTQUERY321=x')"])(
+    'weights the full-text query marker as an exact API/marker match in %s', query => {
+      const hit = searchBestPractices({ query, asset_type: 'server_script', release: 'Australia' })
+        .hits.find(hit => hit.rule.rule_id === 'AU-QRY-002');
+      expect(hit?.score).toBe(100);
+      expect(hit?.matched_terms).toContain('123TEXTQUERY321');
+    });
   it.each([
     ['再帰', 'business_rule', 'AU-BR-001'],
     ['previous', 'business_rule', 'AU-BR-002'],
@@ -57,6 +64,8 @@ describe('local best-practice lookup', () => {
   it('keeps all 27 registered rules, sections and applicability/exception text linked to their source', () => {
     const register = readFileSync(new URL('../../docs/BEST_PRACTICE_REGISTER_AUSTRALIA.md', import.meta.url), 'utf8');
     const rows = register.split('\n').filter(row => /^\| AU-(BR|CL|SI|REST|QRY)-\d{3} \|/.test(row));
+    expect(rows).toHaveLength(27);
+    expect(new Set(rows.map(row => row.split('|')[1].trim())).size).toBe(27);
     expect(RULES).toHaveLength(27);
     expect(new Set(RULES.map(rule => rule.rule_id)).size).toBe(27);
     for (const row of rows) {

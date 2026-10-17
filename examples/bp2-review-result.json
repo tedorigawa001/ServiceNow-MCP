@@ -11,7 +11,7 @@
     "asset_type": "business_rule",
     "asset_table": "sys_script",
     "asset_sys_id": "11111111111111111111111111111111",
-    "sys_scope": null,
+    "sys_scope": "global",
     "field": "script",
     "code_hash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
     "retrieved_at": "2026-10-17T04:59:00Z",

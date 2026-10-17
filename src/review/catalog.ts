@@ -539,9 +539,10 @@ export const RULES: BestPracticeRule[] = [
       "scripted_rest_resource",
       "server_script"
     ],
-    "api_terms": [],
+    "api_terms": [
+      "123TEXTQUERY321"
+    ],
     "keywords": [
-      "123TEXTQUERY321",
       "全文",
       "索引",
       "index"

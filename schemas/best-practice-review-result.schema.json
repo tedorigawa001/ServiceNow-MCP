@@ -62,8 +62,16 @@
             "sys_scope": {
               "anyOf": [
                 {
-                  "type": "string",
-                  "pattern": "^[a-f0-9]{32}$"
+                  "anyOf": [
+                    {
+                      "type": "string",
+                      "pattern": "^[a-f0-9]{32}$"
+                    },
+                    {
+                      "type": "string",
+                      "const": "global"
+                    }
+                  ]
                 },
                 {
                   "type": "null"
@@ -154,8 +162,16 @@
             "sys_scope": {
               "anyOf": [
                 {
-                  "type": "string",
-                  "pattern": "^[a-f0-9]{32}$"
+                  "anyOf": [
+                    {
+                      "type": "string",
+                      "pattern": "^[a-f0-9]{32}$"
+                    },
+                    {
+                      "type": "string",
+                      "const": "global"
+                    }
+                  ]
                 },
                 {
                   "type": "null"
@@ -583,11 +599,13 @@
                 },
                 "release": {
                   "type": "string",
-                  "const": "Australia"
+                  "minLength": 1,
+                  "maxLength": 40
                 },
                 "verified_on": {
                   "type": "string",
-                  "const": "2026-10-17"
+                  "format": "date",
+                  "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))$"
                 },
                 "retrieved_at": {
                   "type": "null"

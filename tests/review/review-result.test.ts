@@ -9,7 +9,7 @@ export function candidateResult() {
     knowledge_base_version: 'au-register-0.1', ruleset_version: 'bp2-0.1',
     reviewed_at: '2026-10-17T05:00:00Z', review_status: 'completed', code_return_mode: 'none',
     target: { target_version: 'update_set_payload', asset_type: 'business_rule', asset_table: 'sys_script',
-      asset_sys_id: '1'.repeat(32), sys_scope: null, field: 'script', code_hash: hash,
+      asset_sys_id: '1'.repeat(32), sys_scope: 'global', field: 'script', code_hash: hash,
       retrieved_at: '2026-10-17T04:59:00Z', record_updated_at: null,
       update_set_id: '2'.repeat(32), update_xml_sys_id: '3'.repeat(32), payload_hash: 'b'.repeat(64) },
     instance_release: { family: 'Australia', raw_buildname: 'Australia', source: 'sys_cluster_state.build_name',
@@ -29,6 +29,47 @@ export function candidateResult() {
 }
 
 describe('best-practice review result contract', () => {
+  it('keeps source date/release out of structural constants and checks them against the catalog', () => {
+    const schema = JSON.stringify(reviewResultJsonSchema);
+    expect(schema).not.toContain('"const":"2026-10-17"');
+    expect(schema).not.toContain('"const":"Australia"');
+    const result = candidateResult();
+    for (const source of [
+      { ...result.findings[0].sources[0], verified_on: '2026-10-18' },
+      { ...result.findings[0].sources[0], release: 'Zurich' },
+      { ...result.findings[0].sources[0], verified_on: 'not-a-date' },
+    ]) {
+      expect(reviewResultSchema.safeParse({ ...result, findings: [{ ...result.findings[0], sources: [source] }] }).success).toBe(false);
+    }
+  });
+  it.each(['mismatched', 'unknown'] as const)('requires %s releases to skip every rule with no findings', (releaseMatch) => {
+    const result = candidateResult();
+    const instance_release = releaseMatch === 'unknown'
+      ? { ...result.instance_release, family: null, raw_buildname: null, resolution_status: 'unknown' }
+      : { ...result.instance_release, family: 'Zurich', raw_buildname: 'Zurich' };
+    const limits = [...result.limitations, releaseMatch === 'unknown' ? 'release_unknown' : 'release_mismatch'];
+    const input = { ...result, release_match: releaseMatch, instance_release, limitations: limits };
+    expect(reviewResultSchema.safeParse(input).success).toBe(false);
+    const reason = releaseMatch === 'unknown' ? 'release_unknown' : 'release_mismatch';
+    const skipped = { ...input, findings: [], review_status: 'partial', coverage: {
+      requested_rule_ids: ['AU-BR-001', 'AU-BR-002'], evaluated_rule_ids: [],
+      skipped_rules: ['AU-BR-001', 'AU-BR-002'].map(rule_id => ({ rule_id, reason })),
+    } };
+    expect(reviewResultSchema.safeParse(skipped).success).toBe(true);
+    expect(reviewResultSchema.safeParse({ ...skipped, review_status: 'completed' }).success).toBe(false);
+    expect(reviewResultSchema.safeParse({ ...skipped, coverage: { ...skipped.coverage,
+      skipped_rules: skipped.coverage.skipped_rules.map(skip => ({ ...skip, reason: 'missing_context' })) } }).success).toBe(false);
+    expect(reviewResultSchema.safeParse({ ...skipped, findings: result.findings }).success).toBe(false);
+  });
+  it('accepts Global, scoped and unknown scope values but rejects malformed scope identifiers', () => {
+    const result = candidateResult();
+    for (const sys_scope of ['global', 'a'.repeat(32), null]) {
+      expect(reviewResultSchema.safeParse({ ...result, target: { ...result.target, sys_scope } }).success).toBe(true);
+    }
+    for (const sys_scope of ['Global', '', 'x_my_app', 'a'.repeat(31)]) {
+      expect(reviewResultSchema.safeParse({ ...result, target: { ...result.target, sys_scope } }).success).toBe(false);
+    }
+  });
   it('keeps the portable JSON artifact and synthetic example synchronized with the validator', () => {
     const schema = JSON.parse(readFileSync(new URL('../../schemas/best-practice-review-result.schema.json', import.meta.url), 'utf8'));
     expect(schema).toEqual(reviewResultJsonSchema);

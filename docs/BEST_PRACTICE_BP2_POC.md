@@ -21,6 +21,8 @@ AIレビュー、外部検索、埋め込み、Security Centerの再開は行っ
 資料は引き続き採用承認待ち。検索結果は常に `poc_only=true` と
 `source_approval_pending` を返し、本番用承認済み知識ベースとして扱わない。
 MCPのツール一覧・サーバー起動経路・既存SCAの本文非返却方針は変更していない。
+未統合のPoCはローカルではビルドするが、npmのfiles設定で `dist/review/**` を除外する。
+MCPツール化して配布する段階で、この除外と必要な配布物を改めて判断する。
 
 ## 2. 検索契約
 
@@ -46,12 +48,16 @@ MCPのツール一覧・サーバー起動経路・既存SCAの本文非返却�
 
 処理はNFKC/小文字正規化、資産種別・リリースによる絞り込み、固定語の照合。
 API名の末尾違い（例: current.updateとcurrent.updateMultiple）を同一と扱わない。
-API完全一致100点、キーワード一致10点、rule_id指定1000点で順位付けし、同点はID順。
+API名・予約語の完全一致100点、キーワード一致10点、rule_id指定1000点で順位付けし、同点はID順。
+`123TEXTQUERY321` は予約語として100点。addQueryとaddEncodedQueryのどちらでも照合する。
 スコアは関連候補の順位だけで、違反確度や重大度ではない。
 
 リリースはAustraliaだけがmatched。認識対象のBrazil/Zurich/Yokohama/Xanaduは
 mismatchedとして候補を返さない。null・未認識名はunknownとして候補と警告を返す。
 これは入力されたファミリーの比較であり、実機からリリースを取得したことは意味しない。
+unknownの候補は参考用の根拠候補に限る。結果JSONに移す際は、unknownでもmismatchedでも
+要求された全規則をそれぞれrelease_unknown/release_mismatchでスキップし、指摘は0件にする。
+その場合のreview_statusはpartialまたはfailedで、completedは拒否する。
 先頭件数だけを返した場合は `truncated=true` と `total_candidates` を付ける。
 
 本文解析ではないため、検索語中のAPI名がコメントか実行コードかは判定しない。
@@ -66,10 +72,15 @@ Update Set全体の集約結果はこの版では提供しない。
 - `target` は `update_set_payload` / `current_record` の排他的な構造。
   payload版はUpdate Set ID・XML ID・payloadハッシュを必須とし、現行版ではこれらを拒否する。
 - 資産はテーブル＋sys_idで特定する。名前からの先頭1件検索は利用しない。
+  `target.sys_scope` は32桁sys_id、文字列 `global`、不明時のnullを許容する。
+  スコープ名や大文字のGlobal、参照オブジェクトをそのまま渡す形式は許容しない。
 - `code_return_mode` はPoCでは **noneのみ**。script/code等の本文キーを拒否する。
   excerpts/fullは今後の開示ポリシー・承認契約確定後に別途追加する。
 - 根拠にはSource IDだけでなく、正式URL、資料名、該当節、Australia、確認日、
   台帳版、独自要約を必須とする。未保存の取得時刻・原文ハッシュ・snapshotはnull。
+  根拠のreleaseとverified_onは構造では文字列/日付形式とし、意味的検証でSOURCESの
+  値と照合する。再確認日の変更だけを理由にschema_versionを変える必要はない。
+  カタログ・入力例・必要な版情報は再確認内容に合わせて更新する。
 - JSONで返す本文以外の説明文にも機密情報を含めない運用が必要。
   スキーマだけで自由記述中の秘密情報をすべて検出できるとはしない。
 
@@ -97,7 +108,8 @@ findingsがevaluated規則に属すること、skippedありでcompletedを主�
 検証段階を進める場合は、前段階から順に `verification_evidence` が必要。
 各段階はstatic_analysis / path_analysis / pdi_testと対応し、同一code_hashと
 確認日時・参照先を要求する。版が違う検証や段階の飛び越しは拒否する。
-不一致・不明リリースでcandidateを超える状態も拒否する。
+不一致・不明リリースではcandidateを含むすべての指摘を拒否し、全規則の理由付き
+スキップを必須とする。適合するリリースが分かるまで評価済みには数えない。
 ただし、参照先の実在や証拠内容の真実性まで自動検証するものではない。
 形式が正しいだけで実行経路や実機確認が実施されたとは判断しない。
 
@@ -127,7 +139,7 @@ bdo npm test -- tests/review
 結果契約のテストは出典不一致、検証段階、ハッシュ、カバレッジ、本文キー拒否、
 JSON Schema・例の同期等を確認する。
 
-2026-10-17の作業ツリーでの実行結果:
+2026-10-17のBP-2初回実装時の実行結果（以下のレビュー指摘修正前）:
 
 | 検証 | 結果 |
 |---|---|
@@ -145,6 +157,28 @@ JSON Schema・例の同期等を確認する。
 TDDでは、取得API未実装、台帳未反映、リリース判定、表引き・名前境界、
 結果契約未実装・項目間整合性・根拠メタデータについて、失敗から成功への遷移を確認した。
 ここでの「取得API」はローカル検索関数の呼び出しであり、ServiceNow APIではない。
+
+### レビュー指摘修正後の再検証（2026-10-17）
+
+Globalスコープの受け入れ、リリース不一致・不明時の全件スキップ、台帳27行の
+存在確認、AU-QRY-002の予約語の100点扱い、根拠メタデータのカタログ照合を追加した。
+Globalの値は報告されたPDIの実値に基づく回帰テストであり、この再検証でPDIへの
+アクセスや書き込みは行っていない。
+
+| 検証 | 結果 |
+|---|---|
+| `bdo npm test -- tests/review` | 2ファイル・36件成功 |
+| `bdo npm test` | 67ファイル・1,860件成功、失敗なし |
+| `bdo npm run build` | 成功 |
+| src/review・tests/reviewのESLint | エラー・警告なし |
+| CLIの単独TypeScriptチェック | 成功 |
+| CLIでGlobalを含む架空のJSON入力例を検証 | valid=true |
+| JSON Schemaと生成元の同期 | テスト成功 |
+| ビルド後の`npm pack --dry-run --ignore-scripts --json` | 全281ファイル、dist/reviewは0件、サーバーとCLIは含まれる |
+
+未接続のPoCはローカルでビルドするが、npmには含めない方針とした。
+変更前に含まれていたdist/reviewの12ファイルが除外されることをdry-runで確認した。
+公開操作は実施していない。
 
 次に必要な作業:
 
