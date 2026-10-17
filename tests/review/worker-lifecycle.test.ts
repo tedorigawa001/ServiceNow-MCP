@@ -75,7 +75,7 @@ describe('BP-5 worker and acquisition lifecycle', () => {
     expect(JSON.stringify(sent)).not.toMatch(/synthetic-worker-user|https:\/\/example.service-now.com/);
     expect(JSON.stringify(outcome)).not.toContain('SYNTHETIC_PRIVATE_BODY');
   });
-  it.each(['analyze', 'finish'] as const)('propagates the original deadline through blocked %s and cleanup', async blockKind => {
+  it.each(['release', 'finish'] as const)('propagates the original budget through %s and cleanup', async boundary => {
     const started = new SharedArrayBuffer(4);
     const controller = new AbortController();
     const base = fixture();
@@ -84,26 +84,23 @@ describe('BP-5 worker and acquisition lifecycle', () => {
     vi.spyOn(performance, 'now').mockImplementation(() => realNow() + consumed);
     const workers: Worker[] = [];
     const fetcher: typeof fetch = async (url, init) => {
-      // Account for 2.5 seconds already spent in acquisition, without a long test sleep.
-      if (new URL(String(url)).pathname.endsWith('/sys_cluster_state')) consumed = 2500;
+      // Release cannot consume the finalization reserve. A blocked finalizer
+      // must still stop at the original hard deadline, never a fresh budget.
+      if (new URL(String(url)).pathname.endsWith('/sys_cluster_state')) consumed = boundary === 'release' ? 2700 : 2000;
       return base(url, init);
     };
     const before = realNow();
     const outcome = await reviewBoundedUpdateSet(client(), input, { fetch: fetcher, signal: controller.signal,
       limits: { deadlineMs: 3000 }, workerFactory: (_url, workerOptions) => {
         const worker = new Worker(new URL('./fixtures/review-worker-bootstrap.mjs', import.meta.url),
-          { ...workerOptions, workerData: { started, blockKind } });
+          { ...workerOptions, workerData: { started, blockKind: 'finish' } });
         workers.push(worker); return worker;
       } });
-    // The shared budget includes startup. Under suite-wide CPU contention it
-    // may expire before the blocking target is reached; that is not an output
-    // stage failure. Dedicated cancellation tests below require target entry.
-    const reachedTarget = Atomics.load(new Int32Array(started), 0) === 1;
     expect(outcome).toEqual({ isError: true, error: {
-      stage: blockKind === 'analyze' ? 'analysis' : reachedTarget ? 'output'
-        : expect.stringMatching(/^(analysis|output)$/), code: 'deadline_exceeded' } });
+      stage: boundary === 'release' ? 'release' : 'output', code: 'deadline_exceeded' } });
     expect(realNow() - before).toBeLessThan(1500);
-    expect(workers[0].threadId).toBe(-1);
+    expect(workers.every(worker => worker.threadId === -1)).toBe(true);
+    if (boundary === 'release') expect(workers).toHaveLength(0);
     expect(getEventListeners(controller.signal, 'abort')).toHaveLength(0);
     vi.restoreAllMocks();
     expect((await reviewBoundedUpdateSet(client(), input, { fetch: fixture(), workerFactory: sourceWorkerFactory })).isError).toBe(false);

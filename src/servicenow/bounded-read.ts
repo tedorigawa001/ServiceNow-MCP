@@ -8,7 +8,7 @@ export const BOUNDED_LIMITS = Object.freeze({ responseBytes: 4 * 1024 * 1024, to
   deadlineMs: 60000, requestTimeoutMs: 10000, requests: 210, retryDelayMs: 250 });
 export type ReadFailureCode = 'invalid_input' | 'authentication_failed' | 'access_denied' | 'not_found_or_not_visible'
   | 'upstream_unavailable' | 'deadline_exceeded' | 'receive_budget_exceeded' | 'request_budget_exceeded'
-  | 'payload_budget_exceeded' | 'payload_limit' | 'invalid_response' | 'review_busy' | 'cancelled' | 'closed' | 'changed_during_review' | 'release_not_admitted' | 'config_invalid';
+  | 'payload_budget_exceeded' | 'payload_limit' | 'invalid_response' | 'review_busy' | 'cancelled' | 'closed' | 'changed_during_review' | 'release_not_admitted' | 'config_invalid' | 'phase_deadline_exceeded';
 export class BoundedReadError extends Error {
   constructor(readonly code: ReadFailureCode) { super(code); this.name = 'BoundedReadError'; }
 }
@@ -27,6 +27,9 @@ const principals = new Set<string>();
 
 export class BoundedReadSession {
   private readonly controller = new AbortController();
+  private phase = new AbortController();
+  private phaseTimer?: ReturnType<typeof setTimeout>;
+  private reserveMs = 0;
   private readonly limits: Record<keyof typeof BOUNDED_LIMITS, number>;
   private readonly baseUrl: string;
   private readonly principalKey: string;
@@ -85,6 +88,17 @@ export class BoundedReadSession {
   stats() { return { requests: this.requests, received_bytes: this.receivedBytes, payload_bytes: this.payloadBytes }; }
   /** Monotonic run budget, also usable for safe CPU finalization after an HTTP stop. */
   remainingMs() { return Math.max(0, this.limits.deadlineMs - (performance.now() - this.started)); }
+  get deadlineMs() { return this.limits.deadlineMs; }
+  phaseRemainingMs() { return Math.max(0, this.remainingMs() - this.reserveMs); }
+  /** Internal phase boundary only. Never extends the original hard deadline. */
+  setPhaseReserve(reserveMs: number) {
+    if (!Number.isFinite(reserveMs) || reserveMs < 0 || reserveMs >= this.limits.deadlineMs || this.busy || this.disposed) {
+      throw new BoundedReadError('invalid_input');
+    }
+    clearTimeout(this.phaseTimer);
+    this.phase = new AbortController(); this.reserveMs = reserveMs;
+    if (reserveMs > 0) this.phaseTimer = setTimeout(() => this.phase.abort(), this.phaseRemainingMs());
+  }
   assertActive() { this.check(); }
   private stop(code: ReadFailureCode) {
     this.stopCode ??= code;
@@ -94,13 +108,15 @@ export class BoundedReadSession {
     if (performance.now() - this.started >= this.limits.deadlineMs) this.stop('deadline_exceeded');
     if (this.stopCode) throw new BoundedReadError(this.stopCode);
     if (this.disposed) throw new BoundedReadError('closed');
+    if (this.phaseRemainingMs() <= 0 || this.phase.signal.aborted) throw new BoundedReadError('phase_deadline_exceeded');
   }
   /** Race even non-cooperative fetch/body implementations; late responses are cancelled by attempt(). */
   private async guarded<T>(work: Promise<T>, signal: AbortSignal): Promise<T> {
-    if (signal.aborted) throw new BoundedReadError(this.stopCode ?? 'upstream_unavailable');
+    const failure = () => this.stopCode ?? (this.phase.signal.aborted || this.phaseRemainingMs() <= 0 ? 'phase_deadline_exceeded' : 'upstream_unavailable');
+    if (signal.aborted) throw new BoundedReadError(failure());
     let abort!: () => void;
     const cancelled = new Promise<never>((_, reject) => {
-      abort = () => reject(new BoundedReadError(this.stopCode ?? 'upstream_unavailable'));
+      abort = () => reject(new BoundedReadError(failure()));
       signal.addEventListener('abort', abort, { once: true });
     });
     try { return await Promise.race([work, cancelled]); } finally { signal.removeEventListener('abort', abort); }
@@ -116,7 +132,8 @@ export class BoundedReadSession {
   }
   close() {
     if (this.disposed) return;
-    this.disposed = true; clearTimeout(this.timer); this.removeExternal();
+    this.disposed = true; clearTimeout(this.timer); clearTimeout(this.phaseTimer); this.removeExternal();
+    this.phase.abort();
     this.controller.abort(); active--; principals.delete(this.principalKey);
     this.token = undefined;
   }
@@ -129,8 +146,10 @@ export class BoundedReadSession {
     const controller = new AbortController();
     const onStop = () => controller.abort();
     this.controller.signal.addEventListener('abort', onStop, { once: true });
+    const phaseSignal = this.phase.signal;
+    phaseSignal.addEventListener('abort', onStop, { once: true });
     const timer = setTimeout(() => controller.abort(), Math.min(this.limits.requestTimeoutMs,
-      this.limits.deadlineMs - (performance.now() - this.started)));
+      this.phaseRemainingMs()));
     let response: Response | undefined;
     let reader: ReadableStreamDefaultReader<Uint8Array> | undefined;
     try {
@@ -163,9 +182,10 @@ export class BoundedReadSession {
       return { status: response.status, value };
     } catch (error) {
       if (error instanceof BoundedReadError) throw error;
-      throw new BoundedReadError(this.stopCode ?? 'upstream_unavailable');
+      throw new BoundedReadError(this.stopCode ?? (phaseSignal.aborted || this.phaseRemainingMs() <= 0 ? 'phase_deadline_exceeded' : 'upstream_unavailable'));
     } finally {
       clearTimeout(timer); this.controller.signal.removeEventListener('abort', onStop);
+      phaseSignal.removeEventListener('abort', onStop);
       controller.abort();
       if (reader) void reader.cancel().catch(() => {});
       else if (response) void response.body?.cancel().catch(() => {});
@@ -188,8 +208,14 @@ export class BoundedReadSession {
       } catch (error) {
         if (!(error instanceof BoundedReadError) || error.code !== 'upstream_unavailable' || n === 1) throw error;
         let timer: ReturnType<typeof setTimeout> | undefined;
-        try { await this.guarded(new Promise(resolve => { timer = setTimeout(resolve, this.limits.retryDelayMs); }), this.controller.signal); }
-        finally { clearTimeout(timer); }
+        const controller = new AbortController();
+        const abort = () => controller.abort();
+        this.controller.signal.addEventListener('abort', abort, { once: true });
+        const phaseSignal = this.phase.signal;
+        phaseSignal.addEventListener('abort', abort, { once: true });
+        if (this.controller.signal.aborted || phaseSignal.aborted) controller.abort();
+        try { await this.guarded(new Promise(resolve => { timer = setTimeout(resolve, this.limits.retryDelayMs); }), controller.signal); }
+        finally { clearTimeout(timer); this.controller.signal.removeEventListener('abort', abort); phaseSignal.removeEventListener('abort', abort); }
       }
     }
     throw new BoundedReadError('upstream_unavailable');

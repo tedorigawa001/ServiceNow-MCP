@@ -68,12 +68,17 @@ async function executeReview(client: ServiceNowClient, raw: unknown, execution: 
   let stage: Stage = 'input';
   const getStage = (): Stage => stage;
   execution.stage = getStage;
-  const cpu = () => execution.cpu ??= new ReviewWorker({ remainingMs: () => execution.session!.remainingMs(),
+  let reserveMs = 0;
+  const cpu = () => execution.cpu ??= new ReviewWorker({ remainingMs: () => execution.session!.phaseRemainingMs(),
     signal: options?.signal, factory: options?.workerFactory });
-  const finish = (run: AggregateReview) => { stage = 'output'; return cpu().finish(run); };
-  let progress: { run: AggregateReview; rows: ReviewMetadata[] } | undefined;
+  const finish = (run: AggregateReview) => {
+    stage = 'output'; execution.session!.setPhaseReserve(0); return cpu().finish(run);
+  };
+  let progress: { run: AggregateReview; rows: ReviewMetadata[]; verify?: () => Promise<{ consistency: 'stable_observation' | 'changed' }> } | undefined;
   try {
     execution.session = client.createBoundedReadSession(options);
+    reserveMs = Math.min(10000, execution.session.deadlineMs / 6);
+    execution.session.setPhaseReserve(reserveMs);
     const source = new BoundedUpdateSetSource(execution.session,
       { update_set_sys_id: input.update_set_sys_id, max_records: input.max_records });
     const result = await (async () => {
@@ -99,10 +104,13 @@ async function executeReview(client: ServiceNowClient, raw: unknown, execution: 
         }
         stage = 'metadata'; const metadata = await source.listMetadata(decision.permit);
         progress.rows = metadata.rows;
+        progress.verify = () => source.verify(decision.permit);
         run.collection = { ...run.collection, status: 'complete', metadata_seen: metadata.metadata_seen,
           selected: metadata.rows.length, truncated: metadata.truncated };
         if (metadata.truncated) run.limitations.push('metadata_truncated');
         for (const row of metadata.rows) {
+          stage = 'payload';
+          execution.session!.assertActive();
           const classified = classify(row, input.requested_rule_ids);
           if (classified) { run.assets.push(classified); continue; }
           stage = 'payload';
@@ -162,6 +170,7 @@ async function executeReview(client: ServiceNowClient, raw: unknown, execution: 
             }
           }
         }
+        execution.session!.setPhaseReserve(reserveMs / 2);
         stage = 'consistency'; run.consistency = (await source.verify(decision.permit)).consistency;
         if (run.consistency === 'changed') {
           run.limitations.push('provisional_results', 'changed_during_review');
@@ -171,7 +180,55 @@ async function executeReview(client: ServiceNowClient, raw: unknown, execution: 
       })();
     return { isError: false, result };
   } catch (error) {
-    const stage = getStage();
+    const failureStage = getStage();
+    // TypeScript does not track assignments inside the awaited orchestration.
+    stage = failureStage;
+    const soft = error instanceof BoundedReadError && error.code === 'phase_deadline_exceeded'
+      || error instanceof ReviewWorkerError && error.code === 'deadline_exceeded' && stage === 'analysis'
+        && execution.session!.remainingMs() > 0;
+    if (soft) {
+      if (!progress || execution.session!.remainingMs() <= 0) return fail(stage, 'deadline_exceeded');
+      if (options?.signal?.aborted) return fail(stage, 'cancelled');
+      // A timed-out CPU has already been terminated/awaited by the supervisor.
+      // Never reuse it and never overlap analysis and finalization workers.
+      if (error instanceof ReviewWorkerError) { await execution.cpu?.close(); execution.cpu = undefined; }
+      const { run, rows, verify } = progress;
+      run.limitations.push('soft_deadline_reached', 'deadline_exceeded');
+      addError(run, { stage, code: 'deadline_exceeded' });
+      const done = new Set(run.assets.map(a => a.update_xml_sys_id));
+      for (const row of rows.filter(r => !done.has(r.sys_id))) {
+        run.assets.push({ state: 'not_processed', update_xml_sys_id: row.sys_id, reason: 'deadline_exceeded' });
+      }
+      if (stage !== 'consistency' && verify) {
+        stage = 'consistency';
+        execution.session!.setPhaseReserve(reserveMs / 2);
+        try { run.consistency = (await verify()).consistency; }
+        catch (failure) {
+          if (!(failure instanceof BoundedReadError)) return fail('consistency', 'internal_review_error');
+          if (failure.code === 'cancelled' || execution.session!.remainingMs() <= 0) {
+            return fail('consistency', failure.code === 'cancelled' ? 'cancelled' : 'deadline_exceeded');
+          }
+          const reasons = { phase_deadline_exceeded: 'deadline_exceeded', invalid_response: 'metadata_unavailable',
+            not_found_or_not_visible: 'not_found_or_not_visible', authentication_failed: 'authentication_failed',
+            access_denied: 'access_denied', upstream_unavailable: 'upstream_unavailable',
+            request_budget_exceeded: 'request_budget_exceeded', receive_budget_exceeded: 'receive_budget_exceeded',
+            payload_budget_exceeded: 'payload_budget_exceeded' } as const;
+          if (!(failure.code in reasons)) return fail('consistency', 'internal_review_error');
+          run.consistency = 'unverified';
+          addError(run, { stage: 'consistency', code: reasons[failure.code as keyof typeof reasons] });
+        }
+      }
+      if (run.consistency !== 'stable_observation') {
+        run.limitations.push('provisional_results', run.consistency === 'changed' ? 'changed_during_review' : 'consistency_unverified');
+      }
+      if (run.consistency === 'changed') addError(run, { stage: 'consistency', code: 'changed_during_review' });
+      if (stage === 'metadata') { run.collection.status = 'failed'; run.status = 'failed'; }
+      try {
+        const result = await finish(run);
+        return result.status === 'failed' ? { isError: true, error: { stage: failureStage, code: 'deadline_exceeded' }, result }
+          : { isError: false, result };
+      } catch (failure) { return fail('output', failure instanceof ReviewWorkerError ? failure.code : 'internal_review_error'); }
+    }
     if (error instanceof ReviewWorkerError) return fail(stage, error.code);
     if (error instanceof BoundedReadError) {
       const allowed: ErrorCode[] = ['invalid_input', 'config_invalid', 'authentication_failed', 'access_denied',
@@ -202,7 +259,7 @@ async function executeReview(client: ServiceNowClient, raw: unknown, execution: 
         run.status = run.assets.some(a => a.state === 'reviewed') ? 'partial' : 'failed';
         try {
           const result = await finish(run);
-          return result.status === 'failed' ? { isError: true, error: { stage, code }, result } : { isError: false, result };
+          return result.status === 'failed' ? { isError: true, error: { stage: failureStage, code }, result } : { isError: false, result };
         } catch (failure) { return fail('output', failure instanceof ReviewWorkerError ? failure.code : 'internal_review_error'); }
       }
       return fail(stage, code);

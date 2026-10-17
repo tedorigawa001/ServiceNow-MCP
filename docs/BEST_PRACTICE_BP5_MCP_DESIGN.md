@@ -228,6 +228,7 @@ source_approval_pendingや未承認のカード境界を隠さず、原解析res
 | 429/5xx/timeout | 規定の再試行だけ。予算内なら独立資産は続行可能、期限/全体障害なら残り未処理 |
 | 変更検出・最終照合不能・件数/容量/出力打切り | partial（解析前の認証/全体取得停止はfailed）。暫定結果と未完了を区別し、打切り後の行はnot_processed/result_omitted |
 | 全体deadline/キャンセル | isError=true、固定理由のみ。workerの終了を待ち、期限超過の集約や時刻の切詰めで部分結果を救済しない |
+| 全体期限前の内部打切り | 50秒で取得/解析を停止、55秒で照合を打切り、60秒までに集約を試す。解析済み保持・未処理理由・暫定状態は[内部期限記録](BEST_PRACTICE_BP5_SOFT_DEADLINE.md)参照 |
 | worker起動不能（ready前） | isError=true、固定worker_unavailable。原診断や指摘は返さず、終了確認後に枠を解放する |
 | 集約/内部resultのスキーマ不整合・想定外例外 | isError=true、failed、当該呼出しの指摘を返さず固定internal_review_error。原例外を一般serverの応答/ログへ流さない |
 

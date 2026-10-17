@@ -1,6 +1,6 @@
 # BP-5：1件解析・集約アダプター
 
-Version: bp5-adapters-0.2 / Date: 2026-10-18。
+Version: bp5-adapters-0.3 / Date: 2026-10-18。
 内部アダプターと合成HTTPテストの記録。MCP登録・梱包変更・実機操作は対象外。
 規則/根拠の人による承認、独立品質評価は未実施。同期解析/集約の強制中断は後続の[worker記録](BEST_PRACTICE_BP5_WORKERS.md)を参照。
 
@@ -74,12 +74,13 @@ PoCのstatusはcompletedにせず、通常はpartialとする。
 | 途中の401/403、累計受信/payload上限 | 取得を停止。既存の解析結果があればpartial、なければfailed。残り行を未処理、一貫性はunverified |
 | 最終照合の変化/失敗 | changed/unverified、analysis_complete=false、provisional_results。既存候補は暫定として保持 |
 | 全体deadline/キャンセル | isError=true、固定理由だけ。部分結果の救済はしない |
+| 内部期限（通常は取得/解析50秒、照合55秒） | 解析済みを保持し、選択済み未処理行はnot_processed/deadline_exceeded。照合不能は暫定partial。詳細は[内部期限記録](BEST_PRACTICE_BP5_SOFT_DEADLINE.md) |
 | 想定外例外/1件・集約の契約不整合 | isError=true/internal_review_error、その呼出しの指摘を返さない |
 | worker起動不能（ready前） | isError=true/worker_unavailable。開発/本番の入口と終了処理は[worker記録§4.1](BEST_PRACTICE_BP5_WORKERS.md)参照 |
 
 全体期限後の集約は、既存のended_at − started_at ≤ 60秒に反する。
 終了時刻の切詰めや証拠時刻の書換えで結果を救済しないため、deadline時は固定エラーのみとした。
-設計案の一般的な「打切り時はpartial」より、この期限境界の扱いを優先する。
+この全体期限の扱いは維持し、期限前の内部打切りだけでpartialを返す。
 エラー本文、コード/コメント、資産/Update Setの名称、接続先、資格情報、運用者の証跡参照は出力しない。
 固定カタログのAPI名や公式根拠URLは返るので、本文非露出テストには本文だけの合成マーカーを使う。
 
@@ -137,7 +138,11 @@ PoCのstatusはcompletedにせず、通常はpartialとする。
 Dictionary/Choiceの2件は修正前の失敗→修正後の成功を確認した。
 workerのdeadline/cancel動作、JSON契約、固定評価セット、MCP登録、package/lockは変更していない。
 
-## 7. 早期打切り案（判断待ち・未実装）
+## 7. 早期打切り（実装済み）
+
+50秒/55秒の内部期限と60秒の全体期限、HTTP/worker停止、同じ枠での集約、合成検証は
+[内部期限記録](BEST_PRACTICE_BP5_SOFT_DEADLINE.md)を参照。以下は実装前の検討記録であり、
+具体的な時間配分と現行動作は同記録を正とする。
 
 全体期限で固定エラーのみを返す現行契約は変更しない。候補は、hard deadlineより前に取得/解析を打ち切り、
 既存結果の照合/集約用時間を確保してpartialを返す方式。残り5〜10秒という値は未承認の例であり、保証値ではない。

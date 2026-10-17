@@ -76,4 +76,5 @@ Vitestの2,368件とは別の梱包結合テストである。`prepublishOnly`�
 - 内部期限で取得を早期停止して`partial`を返す処理は未対応。今回もhard deadlineの動作は変更していない。
 
 残課題：MCP登録/dispatch/文書、許可済み読み取りE2E、権限/上限の承認、独立評価と品質/公開審査。
-hard deadline時の固定エラー・soft cutoff未実装という方針は変えていない。
+上記は梱包段階の検証記録。後続の[内部期限対応](BEST_PRACTICE_BP5_SOFT_DEADLINE.md)でsoft cutoffを実装し、
+hard deadline時の固定エラー方針は維持する。

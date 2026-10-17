@@ -18,7 +18,8 @@ BP-5のreviewBoundedUpdateSetは、HTTP取得を親スレッド、XML/AST解析�
 | review-worker.ts | 既存V2解析器、1件結果検証、CPU側集約の呼出し。本文を実行しない |
 | aggregate-finalize.ts | 従来の集計・結果単位省略・coverage/由来/容量検証をCPU側へ移設 |
 
-workerは遅延起動し、1レビューで最大1個を再利用する。解析も集約も同時に複数RPCを送らない。
+workerは遅延起動し、通常は1個を再利用する。[内部期限](BEST_PRACTICE_BP5_SOFT_DEADLINE.md)で
+解析を中断した場合は終了確認後に集約用を起動する。同時生存は最大1個で、複数RPCも同時に送らない。
 release不明で解析しない場合も、集約が必要なら同じ停止可能なworker境界で組み立てる。
 正常終了時もworkerを終了させ、共有poolや結果キャッシュを残さない。
 
@@ -52,7 +53,8 @@ OSのスケジューリングやterminateの完了待ちを含め、返答が厳
 | 状態 | 処理 |
 |---|---|
 | 正常 | RPCのtimer/abort/message listenerを外し、次の仕事で同じworkerを再利用。最後に終了をawait |
-| 期限切れ | deadline_exceeded、workerをterminate/await、指摘を返さない |
+| 全体期限切れ | deadline_exceeded、workerをterminate/await、指摘を返さない |
+| 解析の内部期限 | workerをterminate/await。受領済みの結果を保持して同じ全体予算内で照合/集約する。[内部期限記録](BEST_PRACTICE_BP5_SOFT_DEADLINE.md)参照 |
 | 外部キャンセル | cancelled、abortのreasonは表示/worker転送しない。終了をawait |
 | 起動不能・ready前のerror/予期しないexit/messageerror | worker_unavailable。固定理由のみ返し、親で再解析/別workerへ自動再試行しない |
 | ready後のerror・予期しないexit・messageerror | internal_review_error。原診断を返さない |
@@ -157,6 +159,7 @@ npm梱包変更は対象外。soft cutoff/partial救済は未実装で、hard de
 本検証は機能回帰であり、人による規則承認/独立評価の代替ではない。
 
 後続のworker同梱・本番依存の隔離検証は[梱包記録](BEST_PRACTICE_BP5_PACKAGING.md)参照。
+後続の早期打切り・partial返却は[内部期限記録](BEST_PRACTICE_BP5_SOFT_DEADLINE.md)参照。
 上記の「梱包変更は対象外」「package/lock変更なし」は各段階の検証記録であり、現在の梱包状態は同記録に従う。
 
 残課題：MCP登録、許可済み読み取りE2E、運用上の上限/権限の承認、独立評価と品質/公開審査。
