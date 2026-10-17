@@ -1,8 +1,11 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { ServiceNowClient } from '../../src/servicenow/client.js';
-import { reviewBoundedUpdateSet } from '../../src/review/update-set-adapter.js';
+import { reviewBoundedUpdateSet as reviewWithWorker } from '../../src/review/update-set-adapter.js';
 import { aggregateReviewSchema } from '../../src/review/aggregate-schema.js';
 import { createReviewInstanceBinding } from '../../src/servicenow/review-release-config.js';
+import { sourceWorkerFactory } from './fixtures/worker-factory.js';
+const reviewBoundedUpdateSet: typeof reviewWithWorker = (client, input, options) =>
+  reviewWithWorker(client, input, { ...options, workerFactory: sourceWorkerFactory });
 
 const parent = 'a'.repeat(32);
 const id = (n: number) => n.toString(16).padStart(32, '0');
@@ -101,6 +104,7 @@ describe('BP-5 bounded update-set adapter', () => {
   it('discards all candidates if final result validation fails after a wall-clock rollback', async () => {
     vi.useFakeTimers({ toFake: ['Date'] });
     const now = Date.now();
+    vi.setSystemTime(now + 60000);
     const base = fixture([row(1)]);
     let parents = 0;
     const fetcher: typeof fetch = async (url, init) => {

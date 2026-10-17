@@ -95,7 +95,8 @@ tests/review/operator-release-fallback.test.tsで、bindingの正規化/接続�
 null行の不正構造は「全行値なし」と区別し、フォールバックを認めない。
 
 1件解析/集約は[アダプター記録](BEST_PRACTICE_BP5_ADAPTERS.md)のとおり後続で接続済み。
-未実装：同期解析worker、MCP登録/梱包、実機E2Eと公開/品質承認。
+同期解析/集約workerは[worker記録](BEST_PRACTICE_BP5_WORKERS.md)のとおり後続で実装済み。
+未実装：MCP登録/梱包、実機E2Eと公開/品質承認。
 本記録の合成テストは設定の真正性や本番利用可能性を証明しない。
 
 検証記録（2026-10-17）：

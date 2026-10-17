@@ -1,12 +1,12 @@
 /** Internal BP-5 orchestration only. No MCP registration, logging, persistence or live-record fallback. */
 import { z } from 'zod';
 import type { ServiceNowClient } from '../servicenow/client.js';
-import { BoundedReadError, type BoundedReadOptions } from '../servicenow/bounded-read.js';
-import { withBoundedUpdateSetSource, type ReviewMetadata } from './bounded-source.js';
-import { aggregateReviewSchema, assetOutcomeStructure, type AggregateReview } from './aggregate-schema.js';
+import { BoundedReadError, type BoundedReadOptions, type BoundedReadSession } from '../servicenow/bounded-read.js';
+import { BoundedUpdateSetSource, type ReviewMetadata } from './bounded-source.js';
+import type { AggregateReview } from './aggregate-schema.js';
 import { bp5RuleIdsSchema } from './result-schema-v2.js';
 import { CATALOG_VERSION, RULES } from './catalog.js';
-import { reviewUpdateSetPayloadV2 } from './payload-review.js';
+import { ReviewWorker, ReviewWorkerError, type ReviewWorkerFactory } from './worker-supervisor.js';
 
 const inputSchema = z.strictObject({ update_set_sys_id: z.string().regex(/^[a-f0-9]{32}$/),
   max_records: z.number().int().min(1).max(100).default(20),
@@ -24,44 +24,6 @@ function addError(run: AggregateReview, error: AggregateReview['errors'][number]
   else if (!run.limitations.includes('error_details_truncated')) run.limitations.push('error_details_truncated');
 }
 
-function finish(run: AggregateReview): AggregateReview {
-  run.ended_at = new Date().toISOString();
-  const states = ['reviewed', 'not_applicable', 'skipped_deleted', 'rejected', 'retrieval_failed', 'not_processed', 'result_omitted'] as const;
-  const recount = () => {
-    for (const state of states) run.counts[state] = run.assets.filter(a => a.state === state).length;
-    run.counts.findings = run.assets.reduce((n, a) => n + (a.state === 'reviewed' ? a.result.findings.length : 0), 0);
-  };
-  const omit = (i: number) => {
-    run.assets[i] = { state: 'result_omitted', update_xml_sys_id: run.assets[i].update_xml_sys_id, reason: 'response_limit' };
-    if (!run.limitations.includes('response_truncated')) {
-      run.limitations.push('response_truncated'); addError(run, { stage: 'output', code: 'response_limit' });
-    }
-    run.coverage.analysis_complete = false; recount();
-  };
-  let retained = 0;
-  for (let i = 0; i < run.assets.length; i++) {
-    const asset = run.assets[i];
-    if (asset.state !== 'reviewed') continue;
-    if (retained + asset.result.findings.length > run.limits.max_findings) {
-      if (!run.limitations.includes('finding_budget_exceeded')) run.limitations.push('finding_budget_exceeded');
-      omit(i);
-    } else retained += asset.result.findings.length;
-  }
-  recount();
-  run.coverage.analysis_complete = run.collection.status === 'complete' && !run.collection.truncated
-    && run.consistency === 'stable_observation' && run.release_match === 'matched' && !run.errors.length
-    && run.assets.every(a => a.state === 'not_applicable' || a.state === 'skipped_deleted'
-      || a.state === 'reviewed' && !a.result.coverage.skipped_rules.length);
-  // Reserve envelope space too; the schema's own limit covers the aggregate alone.
-  while (Buffer.byteLength(JSON.stringify(run), 'utf8') > run.limits.max_response_bytes - 256) {
-    let i = run.assets.length - 1;
-    while (i >= 0 && run.assets[i].state !== 'reviewed') i--;
-    if (i < 0) throw new Error('internal_review_error');
-    omit(i);
-  }
-  run.limitations = [...new Set(run.limitations)];
-  return aggregateReviewSchema.parse(run);
-}
 function classify(row: ReviewMetadata, rules: AggregateReview['coverage']['requested_rule_ids']): Asset | undefined {
   const base = { update_xml_sys_id: row.sys_id };
   if (row.action === 'DELETE') return { ...base, state: 'skipped_deleted', reason: 'deleted_asset' };
@@ -76,18 +38,40 @@ function classify(row: ReviewMetadata, rules: AggregateReview['coverage']['reque
   return undefined;
 }
 
-/** Options are trusted transport test injection, never MCP/tool input. */
+/** Trusted OS/transport boundary injection only; never tool input. */
+export interface ReviewAdapterOptions extends BoundedReadOptions { workerFactory?: ReviewWorkerFactory }
+interface Execution { session?: BoundedReadSession; cpu?: ReviewWorker; stage: () => Stage }
 export async function reviewBoundedUpdateSet(client: ServiceNowClient, raw: unknown,
-  options?: BoundedReadOptions): Promise<BoundedReviewOutcome> {
+  options?: ReviewAdapterOptions): Promise<BoundedReviewOutcome> {
+  const execution: Execution = { stage: () => 'input' };
+  let outcome: BoundedReviewOutcome;
+  try { outcome = await executeReview(client, raw, execution, options); }
+  catch { outcome = fail(execution.stage(), 'internal_review_error'); }
+  try { await execution.cpu?.close(); }
+  catch { outcome = fail('output', 'internal_review_error'); }
+  finally { execution.session?.close(); }
+  // Include worker termination/cleanup in the same admission and run budget.
+  if (execution.session && execution.session.remainingMs() <= 0) return fail(execution.stage(), 'deadline_exceeded');
+  if (execution.session && options?.signal?.aborted) return fail(execution.stage(), 'cancelled');
+  return outcome;
+}
+async function executeReview(client: ServiceNowClient, raw: unknown, execution: Execution,
+  options?: ReviewAdapterOptions): Promise<BoundedReviewOutcome> {
   const parsed = inputSchema.safeParse(raw);
   if (!parsed.success) return fail('input', 'invalid_input');
   const input = parsed.data;
   let stage: Stage = 'input';
   const getStage = (): Stage => stage;
+  execution.stage = getStage;
+  const cpu = () => execution.cpu ??= new ReviewWorker({ remainingMs: () => execution.session!.remainingMs(),
+    signal: options?.signal, factory: options?.workerFactory });
+  const finish = (run: AggregateReview) => { stage = 'output'; return cpu().finish(run); };
   let progress: { run: AggregateReview; rows: ReviewMetadata[] } | undefined;
   try {
-    const result = await withBoundedUpdateSetSource(client,
-      { update_set_sys_id: input.update_set_sys_id, max_records: input.max_records }, async source => {
+    execution.session = client.createBoundedReadSession(options);
+    const source = new BoundedUpdateSetSource(execution.session,
+      { update_set_sys_id: input.update_set_sys_id, max_records: input.max_records });
+    const result = await (async () => {
         stage = 'parent'; await source.readParent();
         stage = 'release'; const decision = await source.resolveRelease();
         const run: AggregateReview = {
@@ -155,14 +139,10 @@ export async function reviewBoundedUpdateSet(client: ServiceNowClient, raw: unkn
             run.assets.push({ state: 'retrieval_failed', update_xml_sys_id: row.sys_id, reason: 'missing_required_field' }); continue;
           }
           stage = 'analysis';
-          const outcome = reviewUpdateSetPayloadV2({ update_set_id: input.update_set_sys_id, update_xml_sys_id: row.sys_id,
+          const validated = await cpu().analyze({ update_set_id: input.update_set_sys_id, update_xml_sys_id: row.sys_id,
             name: row.name, payload: detail.payload, retrieved_at: new Date().toISOString(),
             record_updated_at: timestamp, instance_binding: source.instanceBinding,
             instance_release: decision.instance_release, release_limitations: decision.limitations, requested_rule_ids: rules });
-          const asset = outcome.status === 'reviewed'
-            ? { state: 'reviewed', update_xml_sys_id: row.sys_id, applicable_rule_ids: rules, result: outcome.result }
-            : { state: 'rejected', update_xml_sys_id: row.sys_id, reason: outcome.reason };
-          const validated = assetOutcomeStructure.parse(asset);
           const findings = run.assets.reduce((n, a) => n + (a.state === 'reviewed' ? a.result.findings.length : 0), 0);
           if (validated.state === 'reviewed' && findings + validated.result.findings.length > run.limits.max_findings) {
             run.assets.push({ state: 'result_omitted', update_xml_sys_id: row.sys_id, reason: 'response_limit' });
@@ -170,7 +150,12 @@ export async function reviewBoundedUpdateSet(client: ServiceNowClient, raw: unkn
               run.limitations.push('response_truncated', 'finding_budget_exceeded');
               addError(run, { stage: 'output', code: 'response_limit' });
             }
-          } else run.assets.push(validated);
+          } else {
+            run.assets.push(validated);
+            if (validated.state === 'result_omitted' && !run.limitations.includes('response_truncated')) {
+              run.limitations.push('response_truncated'); addError(run, { stage: 'output', code: 'response_limit' });
+            }
+          }
         }
         stage = 'consistency'; run.consistency = (await source.verify(decision.permit)).consistency;
         if (run.consistency === 'changed') {
@@ -178,10 +163,11 @@ export async function reviewBoundedUpdateSet(client: ServiceNowClient, raw: unkn
           addError(run, { stage, code: 'changed_during_review' });
         }
         stage = 'output'; return finish(run);
-      }, options);
+      })();
     return { isError: false, result };
   } catch (error) {
     const stage = getStage();
+    if (error instanceof ReviewWorkerError) return fail(stage, error.code);
     if (error instanceof BoundedReadError) {
       const allowed: ErrorCode[] = ['invalid_input', 'config_invalid', 'authentication_failed', 'access_denied',
         'not_found_or_not_visible', 'upstream_unavailable', 'deadline_exceeded', 'receive_budget_exceeded',
@@ -191,8 +177,8 @@ export async function reviewBoundedUpdateSet(client: ServiceNowClient, raw: unkn
       if (progress && stage === 'metadata' && !['deadline_exceeded', 'cancelled', 'internal_review_error'].includes(code)) {
         const { run } = progress;
         run.status = 'failed'; run.collection.status = 'failed'; addError(run, { stage, code: code as AggregateReview['errors'][number]['code'] });
-        try { return { isError: true, error: { stage, code }, result: finish(run) }; }
-        catch { return fail('output', 'internal_review_error'); }
+        try { return { isError: true, error: { stage, code }, result: await finish(run) }; }
+        catch (failure) { return fail('output', failure instanceof ReviewWorkerError ? failure.code : 'internal_review_error'); }
       }
       const stopReasons = ['authentication_failed', 'access_denied', 'request_budget_exceeded',
         'receive_budget_exceeded', 'payload_budget_exceeded', 'upstream_unavailable'] as const;
@@ -210,9 +196,9 @@ export async function reviewBoundedUpdateSet(client: ServiceNowClient, raw: unkn
         addError(run, { stage, code: code as AggregateReview['errors'][number]['code'] });
         run.status = run.assets.some(a => a.state === 'reviewed') ? 'partial' : 'failed';
         try {
-          const result = finish(run);
+          const result = await finish(run);
           return result.status === 'failed' ? { isError: true, error: { stage, code }, result } : { isError: false, result };
-        } catch { return fail('output', 'internal_review_error'); }
+        } catch (failure) { return fail('output', failure instanceof ReviewWorkerError ? failure.code : 'internal_review_error'); }
       }
       return fail(stage, code);
     }

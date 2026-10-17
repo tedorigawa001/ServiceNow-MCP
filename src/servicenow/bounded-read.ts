@@ -83,6 +83,8 @@ export class BoundedReadSession {
   }
 
   stats() { return { requests: this.requests, received_bytes: this.receivedBytes, payload_bytes: this.payloadBytes }; }
+  /** Monotonic run budget, also usable for safe CPU finalization after an HTTP stop. */
+  remainingMs() { return Math.max(0, this.limits.deadlineMs - (performance.now() - this.started)); }
   assertActive() { this.check(); }
   private stop(code: ReadFailureCode) {
     this.stopCode ??= code;

@@ -98,7 +98,8 @@ boundedレビュー開始時にconfig_invalidとなり、「assertionなしで�
 
 権限を変えるテストは作成/削除する合成fixtureだけを対象にする。利用者の設定ファイルは書き換えない。
 1件解析/集約は[アダプター記録](BEST_PRACTICE_BP5_ADAPTERS.md)のとおり後続で接続済み。
-残課題は同期解析worker、MCP登録/梱包、許可済み読み取りE2Eと品質/公開審査。
+同期解析/集約workerは[worker記録](BEST_PRACTICE_BP5_WORKERS.md)のとおり後続で実装済み。
+残課題はMCP登録/梱包、許可済み読み取りE2Eと品質/公開審査。
 
 ### 2026-10-18 検証記録
 
