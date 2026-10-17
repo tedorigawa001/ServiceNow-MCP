@@ -250,15 +250,15 @@ export function getReportingToolDefinitions() {
     },
     {
       name: 'list_job_run_history',
-      description: 'List recent run history for scheduled jobs (success/failure log)',
+      description: 'Read scheduler history aggregates by job classification and time window (sys_scheduler_job_history), not individual job success/failure logs. job_sys_id and status filters are unsupported.',
       inputSchema: {
         type: 'object',
         properties: {
-          job_sys_id: { type: 'string', description: 'Filter by specific job sys_id' },
-          status: { type: 'string', description: 'Filter by run status: success, error, canceled' },
-          limit: { type: 'number', description: 'Max results (default: 25)' },
+          job_classification: { type: 'string', minLength: 1, description: 'Exact scheduler classification (not a sysauto sys_id). Omit to list all classifications.' },
+          limit: { type: 'integer', minimum: 1, maximum: 1000, description: 'Max aggregate rows (default: 25), not execution count' },
         },
         required: [],
+        additionalProperties: false,
       },
     },
     {
@@ -437,17 +437,29 @@ export async function executeReportingToolCall(
       return { ...result, summary: `Updated report ${args.sys_id}` };
     }
     case 'list_job_run_history': {
+      const unsupported = Object.keys(args).filter(key => key !== 'job_classification' && key !== 'limit');
+      if (unsupported.length) throw new ServiceNowError(`Unsupported scheduler aggregate filters: ${unsupported.join(', ')}. Individual job_sys_id/status logs are unavailable; use job_classification instead.`, 'INVALID_REQUEST');
+      const limit = args.limit ?? 25;
+      if (args.limit === null || !Number.isInteger(limit) || limit < 1 || limit > 1000) throw new ServiceNowError('limit must be an integer between 1 and 1000', 'INVALID_REQUEST');
       const parts: string[] = [];
-      if (args.job_sys_id) parts.push(`sysauto=${sanitizeLikeValue(args.job_sys_id)}`);
-      if (args.status) parts.push(`status=${sanitizeLikeValue(args.status)}`);
+      if (args.job_classification !== undefined) {
+        if (typeof args.job_classification !== 'string') throw new ServiceNowError('job_classification must be a non-empty string', 'INVALID_REQUEST');
+        const classification = sanitizeLikeValue(args.job_classification);
+        if (!classification.trim()) throw new ServiceNowError('job_classification must be a non-empty string', 'INVALID_REQUEST');
+        parts.push(`job_classification=${classification}`);
+      }
       const resp = await client.queryRecords({
-        table: 'sysauto_trigger_log',
+        table: 'sys_scheduler_job_history',
         query: parts.join('^') || undefined,
-        limit: args.limit || 25,
-        orderBy: '-sys_created_on',
-        fields: 'sys_id,sysauto,status,run_time,error_message,sys_created_on',
+        limit,
+        orderBy: '-time_range_end',
+        fields: 'sys_id,job_classification,time_range_start,time_range_end,count,average,total,max_duration,priority,sys_created_on',
       });
-      return { count: resp.count, history: resp.records };
+      return {
+        count: resp.count, history: resp.records,
+        source_table: 'sys_scheduler_job_history', data_kind: 'scheduler_aggregate',
+        note: 'Aggregated scheduler history by classification and time window, not individual job success/failure logs. count is the number of returned aggregate rows, not executions; history[].count is the execution count for each aggregate.',
+      };
     }
     case 'create_scheduled_report': {
       requireWrite();

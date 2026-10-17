@@ -1,6 +1,6 @@
 # 残存E2Eスキップ13件の実機切り分け（2026-10-17）
 
-後続対応: **VAカテゴリー・PAジョブ・ATF結果の対象実機E2E5件、サブフロー・Process Automationの9件、Legacy Workspaceの5件が成功**。元の13件中6件が解消、未対応7件。全体E2Eは未再実行。詳細は [VA・PA・ATF記録](E2E_VA_PA_ATF_2026-10-17.md)、[Flow・PAD記録](E2E_FLOW_PAD_2026-10-17.md)、[Workspace記録](E2E_WORKSPACE_2026-10-17.md) を参照。以下は修正前の診断記録。
+後続対応: **VAカテゴリー・PAジョブ・ATF結果の対象実機E2E5件、サブフロー・Process Automationの9件、Legacy Workspaceの5件、ジョブ集計履歴の6件が成功**。元の13件中7件を対応、未対応6件。ジョブ履歴は集計契約への変更であり、個別成功／失敗ログ取得は未対応。全体E2Eは未再実行。詳細は [VA・PA・ATF記録](E2E_VA_PA_ATF_2026-10-17.md)、[Flow・PAD記録](E2E_FLOW_PAD_2026-10-17.md)、[Workspace記録](E2E_WORKSPACE_2026-10-17.md)、[ジョブ集計記録](E2E_JOB_HISTORY_2026-10-17.md) を参照。以下は修正前の診断記録。
 
 ## 結論
 

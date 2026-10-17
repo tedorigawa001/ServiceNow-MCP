@@ -771,11 +771,28 @@ Trigger a scheduled job to run immediately. **[Write]**
 - `sys_id` (required) — Scheduled job sys_id
 
 ### list_job_run_history
-List execution history for a scheduled job.
+Read **scheduler aggregate history**, not individual job success/failure logs.
+The retained tool name is for compatibility; its corrected data contract is
+`sys_scheduler_job_history`, grouped by classification and time window.
 
 **Parameters**:
-- `job_sys_id` — Filter by job sys_id
-- `limit`
+
+- `job_classification` — Exact classification value, e.g. `Recurring.<job name>`;
+  omit to include all classifications. This is not a `sysauto` sys_id.
+- `limit` — Integer 1–1000, default 25 aggregate rows.
+
+Compatibility change: `job_sys_id`, `status`, and other unknown arguments are
+rejected with `INVALID_REQUEST`, not silently ignored. Those columns do not exist
+on this aggregate model. Individual execution outcomes remain unsupported.
+
+Returns `{ count, history, source_table, data_kind, note }`, with
+`source_table: "sys_scheduler_job_history"` and `data_kind: "scheduler_aggregate"`.
+Outer `count` is the returned **row count**; `history[].count` is each aggregate's
+execution count. Rows expose native `job_classification`, `time_range_start`,
+`time_range_end`, `average`, `total`, `max_duration`, and `priority` fields, sorted
+by `time_range_end` descending. Values are returned in native API form without
+unit conversion. Do not infer success/failure or treat overlapping aggregates as
+independent execution logs. An empty result does not prove a job never ran.
 
 ---
 

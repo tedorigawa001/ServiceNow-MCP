@@ -345,13 +345,58 @@ describe('trigger_scheduled_job', () => {
 describe('list_job_run_history', () => {
   beforeEach(() => vi.clearAllMocks());
 
-  it('combines job_sys_id and status filters', async () => {
+  it('rejects unrecognised filters instead of silently ignoring them', async () => {
+    await expect(executeReportingToolCall(mockClient, 'list_job_run_history', { query: 'count>0' }))
+      .rejects.toMatchObject({ code: 'INVALID_REQUEST' });
+    expect(mockClient.queryRecords).not.toHaveBeenCalled();
+  });
+
+  it('propagates API errors rather than returning empty history', async () => {
+    (mockClient.queryRecords as ReturnType<typeof vi.fn>).mockRejectedValueOnce(new Error('Access denied'));
+    await expect(executeReportingToolCall(mockClient, 'list_job_run_history', {})).rejects.toThrow('Access denied');
+  });
+
+  it.each([0, -1, 1.5, 1001, '5', null])('rejects invalid aggregate row limit %j', async (limit) => {
+    await expect(executeReportingToolCall(mockClient, 'list_job_run_history', { limit }))
+      .rejects.toMatchObject({ code: 'INVALID_REQUEST' });
+    expect(mockClient.queryRecords).not.toHaveBeenCalled();
+  });
+
+  it.each(['', '^', null, 42])('rejects invalid classification literal %j', async (job_classification) => {
+    await expect(executeReportingToolCall(mockClient, 'list_job_run_history', { job_classification }))
+      .rejects.toMatchObject({ code: 'INVALID_REQUEST' });
+    expect(mockClient.queryRecords).not.toHaveBeenCalled();
+  });
+
+  it.each([{ job_sys_id: 'j1' }, { status: 'error' }, { status: '' }])('rejects unsupported per-run filters %j', async (args) => {
+    await expect(executeReportingToolCall(mockClient, 'list_job_run_history', args))
+      .rejects.toMatchObject({ code: 'INVALID_REQUEST' });
+    expect(mockClient.queryRecords).not.toHaveBeenCalled();
+  });
+
+  it('filters by a sanitized classification literal', async () => {
     (mockClient.queryRecords as ReturnType<typeof vi.fn>).mockResolvedValue({ count: 0, records: [] });
-    await executeReportingToolCall(mockClient, 'list_job_run_history', { job_sys_id: 'j1', status: 'error' });
+    const result = await executeReportingToolCall(mockClient, 'list_job_run_history', {
+      job_classification: 'Recurring.Test^ORcount>0', limit: 3,
+    });
     expect(mockClient.queryRecords).toHaveBeenCalledWith(expect.objectContaining({
-      table: 'sysauto_trigger_log',
-      query: 'sysauto=j1^status=error',
+      table: 'sys_scheduler_job_history', query: 'job_classification=Recurring.TestORcount>0', limit: 3,
     }));
+    expect(result).toMatchObject({ count: 0, history: [], data_kind: 'scheduler_aggregate' });
+  });
+
+  it('returns explicitly labelled scheduler aggregates rather than per-run outcomes', async () => {
+    const records = [{ sys_id: 'h1', job_classification: 'Recurring.Test', count: '5', average: '2' }];
+    (mockClient.queryRecords as ReturnType<typeof vi.fn>).mockResolvedValue({ count: 1, records });
+    const result = await executeReportingToolCall(mockClient, 'list_job_run_history', {});
+    expect(mockClient.queryRecords).toHaveBeenCalledWith({
+      table: 'sys_scheduler_job_history', query: undefined, limit: 25, orderBy: '-time_range_end',
+      fields: 'sys_id,job_classification,time_range_start,time_range_end,count,average,total,max_duration,priority,sys_created_on',
+    });
+    expect(result).toMatchObject({
+      count: 1, history: records, source_table: 'sys_scheduler_job_history', data_kind: 'scheduler_aggregate',
+    });
+    expect(result.note).toContain('not individual');
   });
 });
 

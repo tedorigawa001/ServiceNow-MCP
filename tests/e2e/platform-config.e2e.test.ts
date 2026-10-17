@@ -109,10 +109,65 @@ e2eDescribe('E2E – platform configuration (read-only)', () => {
       expect(result.count).toBeGreaterThanOrEqual(0);
     });
 
-    it('lists scheduled job run history when the log table exists', async (ctx) => {
-      await skipUnlessTables(ctx, client, 'sysauto_trigger_log');
+  });
+
+  describe('Scheduler aggregate history', () => {
+    it('lists scheduler history as aggregate rows, not individual run outcomes', async (ctx) => {
+      await skipUnlessTables(ctx, client, 'sys_scheduler_job_history');
       const result = await executeReportingToolCall(client, 'list_job_run_history', { limit: 5 });
-      expect(result.count).toBeGreaterThanOrEqual(0);
+      expect(result.source_table).toBe('sys_scheduler_job_history');
+      expect(result.data_kind).toBe('scheduler_aggregate');
+      expect(Array.isArray(result.history)).toBe(true);
+      expect(result.count).toBe(result.history.length);
+      expect(result.count).toBeLessThanOrEqual(5);
+      const ends: string[] = [];
+      for (const record of result.history) {
+        expect(record).toHaveProperty('job_classification');
+        expect(record).toHaveProperty('time_range_start');
+        expect(record).toHaveProperty('time_range_end');
+        expect(record).toHaveProperty('average');
+        expect(record).toHaveProperty('total');
+        expect(record).toHaveProperty('max_duration');
+        expect(record.count).toMatch(/^\d+$/);
+        expect(record).not.toHaveProperty('status');
+        ends.push(record.time_range_end);
+      }
+      expect(ends).toEqual([...ends].sort().reverse());
+    });
+
+    it('filters existing aggregate history by exact job classification', async (ctx) => {
+      await skipUnlessTables(ctx, client, 'sys_scheduler_job_history');
+      const list = await executeReportingToolCall(client, 'list_job_run_history', { limit: 1 });
+      ctx.skip(list.count === 0, 'data missing: list_job_run_history returned no aggregate rows');
+      const classification = list.history[0].job_classification;
+      const result = await executeReportingToolCall(client, 'list_job_run_history', { job_classification: classification, limit: 3 });
+      expect(result.count).toBeGreaterThan(0);
+      for (const record of result.history) expect(record.job_classification).toBe(classification);
+    });
+
+    it('does not expand a classification literal into additional query clauses', async (ctx) => {
+      await skipUnlessTables(ctx, client, 'sys_scheduler_job_history');
+      const result = await executeReportingToolCall(client, 'list_job_run_history', {
+        job_classification: 'MCP_E2E_NO_MATCH_20261017^ORcount>0', limit: 3,
+      });
+      expect(result.count).toBe(0);
+      expect(result.history).toEqual([]);
+      expect(result.data_kind).toBe('scheduler_aggregate');
+    });
+
+    it.each([{ job_sys_id: '00000000000000000000000000000000' }, { status: 'error' }])('rejects unsupported individual-run filters %j', async (args) => {
+      await expect(executeReportingToolCall(client, 'list_job_run_history', args))
+        .rejects.toMatchObject({ code: 'INVALID_REQUEST' });
+    });
+
+    it('verifies the real aggregate schema rather than relying on an empty response', async (ctx) => {
+      await skipUnlessTables(ctx, client, 'sys_scheduler_job_history');
+      const fields = ['average', 'count', 'job_classification', 'max_duration', 'priority', 'time_range_end', 'time_range_start', 'total'];
+      const result = await client.queryRecords({
+        table: 'sys_dictionary', query: `name=sys_scheduler_job_history^elementIN${fields.join(',')}`,
+        fields: 'element', limit: 20,
+      });
+      expect(result.records.map(record => record.element).sort()).toEqual(fields);
     });
   });
 
