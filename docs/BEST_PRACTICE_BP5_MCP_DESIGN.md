@@ -34,7 +34,7 @@ sys_id指定で同名/別scopeの取り違えを避け、現行コードへの�
 | [update-xml.ts](../src/review/update-xml.ts) | 拒否型XML抽出、識別照合、既存容量/深さ制限 | 抽出前のHTTP受信/全体処理の上限は別途必要 |
 | [result-schema.ts](../src/review/result-schema.ts) | bp-review-0.1と由来/coverageの項目間検証 | 1件用。外側契約に加え、operator_config/assertedを保持する1件契約の別版が必要（§4.1） |
 | [server.ts](../src/server.ts)、[tools/index.ts](../src/tools/index.ts) | セッション別InstanceContext、定義登録/dispatch/annotations | ツール未登録。serverの一般エラー出力/ログへ原エラーを通さないアダプターが必要 |
-| [package.json](../package.json) | 現在はdist/reviewをnpmから除外 | 統合後は依存する実行コードを梱包する必要あり。除外を消すだけで公開せずpackテストで確認 |
+| [package.json](../package.json) | review実行コードを同梱し、評価ハーネスは除外 | 本番依存のみの隔離梱包テストを実装。[梱包記録](BEST_PRACTICE_BP5_PACKAGING.md)参照。MCP登録/公開は別工程 |
 
 ## 3. 提案入力契約
 
@@ -252,5 +252,5 @@ source_approval_pendingや未承認のカード境界を隠さず、原解析res
 - 実機確認は別途許可を得た読み取り専用の経路から開始し、ACL不足を修正するための設定変更は自動実施しない。
 
 実装順案：外側契約/合成テスト → bounded取得/認証固定 → 1件解析アダプター/集約 → MCP登録/梱包 →
-許可済み読み取りE2E → 品質/公開審査。現段階では外側/1件契約、bounded取得・認証固定・C方式、設定導入、1件解析/集約アダプター、worker中断と合成テストを実装した。MCP登録/梱包は未実装。
+許可済み読み取りE2E → 品質/公開審査。現段階では外側/1件契約、bounded取得・認証固定・C方式、設定導入、1件解析/集約アダプター、worker中断と合成テスト、[worker梱包/本番依存の隔離検証](BEST_PRACTICE_BP5_PACKAGING.md)を実装した。MCP登録は未実装。
 人手運用48件の設計・保管先選定も別課題であり、MCP統合で完了したとは扱わない。

@@ -11,7 +11,7 @@
   "files": [
     "bin/",
     "dist/",
-    "!dist/review/**",
+    "!dist/review/evaluation*",
     "instances.example.json"
   ],
   "engines": {
@@ -19,13 +19,14 @@
   },
   "scripts": {
     "build": "tsc",
-    "prepublishOnly": "npm run build && npm test",
+    "prepublishOnly": "npm run build && npm test && node tests/review/package-worker.mjs",
     "dev": "tsx watch src/server.ts",
     "start": "node dist/server.js",
     "setup": "node dist/cli/index.js setup",
     "test": "vitest run",
     "test:watch": "vitest",
     "test:coverage": "vitest run --coverage",
+    "test:pack": "npm run build && node tests/review/package-worker.mjs",
     "test:e2e": "RUN_E2E=true vitest run -c vitest.e2e.config.ts",
     "test:e2e:write": "RUN_E2E=true WRITE_ENABLED=true vitest run -c vitest.e2e.config.ts",
     "lint": "eslint src tests",
@@ -117,10 +118,12 @@
   "dependencies": {
     "@inquirer/prompts": "^8.7.2",
     "@modelcontextprotocol/sdk": "^1.32.0",
+    "acorn": "8.18.0",
     "chalk": "^6.0.1",
     "commander": "^15.0.0",
     "dotenv": "^18.0.5",
     "ora": "^9.4.1",
+    "saxes": "5.0.1",
     "zod": "^4.6.5"
   },
   "devDependencies": {
@@ -128,11 +131,9 @@
     "@typescript-eslint/eslint-plugin": "^8.71.0",
     "@typescript-eslint/parser": "^8.71.0",
     "@vitest/coverage-v8": "^5.0.3",
-    "acorn": "8.18.0",
     "eslint": "^10.12.0",
     "exceljs": "^4.4.0",
     "globals": "^17.13.0",
-    "saxes": "5.0.1",
     "tsx": "^4.23.15",
     "typescript": "^5.9.3",
     "vitest": "^5.0.3"

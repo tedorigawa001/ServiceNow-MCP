@@ -80,7 +80,7 @@ workerが入力のコードを実行したり、入力由来のファイル/URL�
 ReviewAdapterOptions.workerFactoryはOS境界のテスト注入専用で、MCP入力/設定には接続しない。
 ソース実行は次節の開発用bootstrapを使う。停止動作の注入には別のテスト専用bootstrapを用いる。
 本番のworkerへtsx依存やテスト用の停止動作を持ち込まない。
-dist/reviewのnpm除外・依存の梱包方針は今回変更していない。
+dist/reviewの同梱対象・本番依存の現行方針は後続の[梱包記録](BEST_PRACTICE_BP5_PACKAGING.md)を参照。
 
 ### 4.1 開発モードと起動確認
 
@@ -91,7 +91,7 @@ tsconfigを読み込まず固定の`review-worker.ts`をimportする。`npm run 
 
 ビルド済みモジュールは、NODE_ENV・呼出し引数・ファイルの有無によらず固定の`.js`を選ぶ。
 本番入口が欠けていても隣の`.ts`や開発bootstrapを探さない。bootstrapはtscでコピーされないが、
-ビルド済み入口からは参照しない。npm公開に必要なworker/依存の同梱は別工程で扱う。
+ビルド済み入口からは参照しない。worker/依存の同梱と隔離検証は[梱包記録](BEST_PRACTICE_BP5_PACKAGING.md)を参照。
 
 workerは依存のimportと受信listenerの登録が終わってから、固定のready通知を1回送る。
 親はこの通知まで解析入力を送らず、起動の同期例外、入口欠落、import失敗、ready前の異常終了を
@@ -156,4 +156,7 @@ MCP登録、実機操作、公開処理は実施していない。
 npm梱包変更は対象外。soft cutoff/partial救済は未実装で、hard deadline時の固定エラー方針は維持する。
 本検証は機能回帰であり、人による規則承認/独立評価の代替ではない。
 
-残課題：MCP登録/梱包、許可済み読み取りE2E、運用上の上限/権限の承認、独立評価と品質/公開審査。
+後続のworker同梱・本番依存の隔離検証は[梱包記録](BEST_PRACTICE_BP5_PACKAGING.md)参照。
+上記の「梱包変更は対象外」「package/lock変更なし」は各段階の検証記録であり、現在の梱包状態は同記録に従う。
+
+残課題：MCP登録、許可済み読み取りE2E、運用上の上限/権限の承認、独立評価と品質/公開審査。
