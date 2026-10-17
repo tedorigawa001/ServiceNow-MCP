@@ -1,0 +1,88 @@
+{
+  "schema_version": "bp-review-0.2",
+  "poc_only": true,
+  "knowledge_base_version": "au-register-0.1",
+  "ruleset_version": "bp3-0.4",
+  "reviewed_at": "2026-10-17T05:00:00Z",
+  "review_status": "partial",
+  "code_return_mode": "none",
+  "target": {
+    "target_version": "update_set_payload",
+    "asset_type": "business_rule",
+    "asset_table": "sys_script",
+    "asset_sys_id": "11111111111111111111111111111111",
+    "sys_scope": "global",
+    "field": "script",
+    "code_hash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "retrieved_at": "2026-10-17T04:59:00Z",
+    "record_updated_at": null,
+    "update_set_id": "22222222222222222222222222222222",
+    "update_xml_sys_id": "33333333333333333333333333333333",
+    "payload_hash": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+  },
+  "instance_release": {
+    "source": "operator_config",
+    "resolution_status": "asserted",
+    "family": "Australia",
+    "visibility_scope": "operator_configured",
+    "instance_binding": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+    "config_version": "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
+    "asserted_at": "2026-10-16T00:00:00Z",
+    "expires_at": "2026-10-20T00:00:00Z"
+  },
+  "release_match": "matched",
+  "coverage": {
+    "requested_rule_ids": [
+      "AU-BR-001"
+    ],
+    "evaluated_rule_ids": [
+      "AU-BR-001"
+    ],
+    "skipped_rules": []
+  },
+  "limitations": [
+    "source_approval_pending",
+    "release_operator_asserted",
+    "release_not_observed",
+    "release_config_may_be_stale",
+    "release_observation_unavailable"
+  ],
+  "findings": [
+    {
+      "rule_id": "AU-BR-001",
+      "category": "performance",
+      "severity": "info",
+      "confidence": "low",
+      "verification_status": "candidate",
+      "field": "script",
+      "line_start": 1,
+      "line_end": 1,
+      "issue": "再帰更新の候補",
+      "impact": "要確認",
+      "applicability": "BRの実行条件を確認する",
+      "recommendation": "再更新が必要か確認",
+      "required_follow_up": [
+        "source_approval",
+        "binding_and_reachability",
+        "exceptions_and_business_intent"
+      ],
+      "sources": [
+        {
+          "source_id": "AU-SRC-001",
+          "url": "https://www.servicenow.com/docs/r/australia/api-reference/business-rules-classic/c_BusinessRules.html",
+          "section": "How business rules work → Prevent recursive business rules",
+          "title": "Classic Business rules",
+          "release": "Australia",
+          "verified_on": "2026-10-17",
+          "retrieved_at": null,
+          "content_hash": null,
+          "snapshot_id": null,
+          "catalog_version": "au-register-0.1",
+          "summary": "BRの現在レコード再更新についての推奨と例外"
+        }
+      ],
+      "verification_evidence": []
+    }
+  ],
+  "instance_binding": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"
+}

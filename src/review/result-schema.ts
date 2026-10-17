@@ -22,7 +22,7 @@ const target = z.discriminatedUnion('target_version', [
 ]);
 const evidenceStage = z.enum(['evidence_matched', 'path_confirmed', 'runtime_confirmed']);
 
-const structuralSchema = z.strictObject({
+export const reviewResultStructure = z.strictObject({
   schema_version: z.literal('bp-review-0.1'), poc_only: z.literal(true),
   knowledge_base_version: z.literal(CATALOG_VERSION), ruleset_version: z.enum(['bp2-0.1', 'bp3-0.1', 'bp3-0.2', 'bp3-0.3', 'bp3-0.4']),
   reviewed_at: timestamp,
@@ -62,11 +62,11 @@ const structuralSchema = z.strictObject({
 
 /** Portable structural contract. Cross-field checks must also run via reviewResultSchema. */
 export const reviewResultJsonSchema = {
-  ...z.toJSONSchema(structuralSchema, { target: 'draft-7' }),
+  ...z.toJSONSchema(reviewResultStructure, { target: 'draft-7' }),
   $id: 'urn:servicenow-mcp:best-practice-review-result:0.1',
   $comment: 'PoC only. Also validate cross-field provenance, release and coverage using reviewResultSchema; JSON Schema alone does not verify truth of findings.',
 };
-export const reviewResultSchema = structuralSchema.superRefine((result, ctx) => {
+export const reviewResultSchema = reviewResultStructure.superRefine((result, ctx) => {
   const fail = (message: string, path: (string | number)[] = []) => ctx.addIssue({ code: 'custom', message, path });
   const tableByAsset = { business_rule: 'sys_script', client_script: 'sys_script_client', script_include: 'sys_script_include',
     scripted_rest_resource: 'sys_ws_operation', server_script: 'sysauto_script' };
