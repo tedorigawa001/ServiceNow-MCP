@@ -6,6 +6,16 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 ---
 
+## [Unreleased]
+
+### Changed
+
+- Package the internal best-practice review worker and its runtime modules. `acorn` and `saxes` are now production dependencies, with `xmlchars` installed transitively; all installations gain these dependencies and the package size increases. The review feature is not yet registered as an MCP tool, so existing tool behavior is unchanged. Development-only evaluation harnesses and the BP-2 search PoC are excluded.
+
+### Tests
+
+- Verify the actual npm tarball in an isolated production-only installation: the fixed JavaScript worker must parse and aggregate synthetic input without tsx, TypeScript or Vitest. Run with `npm run test:pack`; the same check runs before publication.
+
 ## [1.15.0] — 2026-10-17
 
 ### Changed

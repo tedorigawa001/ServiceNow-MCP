@@ -12,6 +12,7 @@
     "bin/",
     "dist/",
     "!dist/review/evaluation*",
+    "!dist/review/search*",
     "instances.example.json"
   ],
   "engines": {

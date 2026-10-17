@@ -21,6 +21,8 @@ try {
   assert(![...files].some(path => /^(src|tests)\//.test(path) || path.includes('dev-worker-bootstrap')));
   assert(![...files].some(path => path.startsWith('dist/review/evaluation')),
     'evaluation harness must remain development-only');
+  assert(![...files].some(path => path.startsWith('dist/review/search')),
+    'search PoC must remain development-only');
   run('tar', ['-xzf', join(temporary, packed.filename), '-C', temporary]);
   const installed = join(temporary, 'package');
   const manifest = JSON.parse(readFileSync(join(installed, 'package.json'), 'utf8'));
