@@ -10,16 +10,18 @@ AIによる作成であり、独立した人手作問・採点・承認の実績
 ## 1. 根拠と承認の状態
 
 根拠URL・節は[Australia台帳](BEST_PRACTICE_REGISTER_AUSTRALIA.md)に基づく。
-初回Web取得では下記2ページの本文は取得できず、これらの公式本文の再照合は未完了。
+AIによる読み取りは行ったが、人による原文の再照合は未完了。
+下表のAI読み取り結果は、利用者から提示された2026-10-17の前回照合記録に基づく更新であり、
+本訂正時に再取得したという意味ではない。
 draft-0.3では別資料のAustralia公式GlideAjax API・Service Portal資料を公式GitHubから確認した（§5.1）。
-下記AU-SRC-001/002の再照合・人の承認が済んだという意味ではない。
+下記AU-SRC-001/002の人による再照合・採用承認が済んだという意味ではない。
 以下の判定境界・コード語彙は本プロジェクトの**提案する出力契約**であり、公式資料の逐語的な要件ではない。
 採用前に人が原文・対象リリース・節・解釈を再確認する。未確認の日時・署名を補完しない。
 
 | source_id | 公式根拠URL | 台帳上のリリース | 本カードの根拠再確認 |
 |---|---|---|---|
-| AU-SRC-001 | [Classic Business rules](https://www.servicenow.com/docs/r/australia/api-reference/business-rules-classic/c_BusinessRules.html) | Australia | 未完了：今回本文取得不可 |
-| AU-SRC-002 | [Client-side scripting design and processing](https://www.servicenow.com/docs/r/australia/api-reference/scripts/client-script-best-practices.html) | Australia | 未完了：今回本文取得不可 |
+| AU-SRC-001 | [Classic Business rules](https://www.servicenow.com/docs/r/australia/api-reference/business-rules-classic/c_BusinessRules.html) | Australia | 人による確認：未完了。AIによる読み取り（2026-10-17、Australia、2026-03-12更新と表示）：再帰、setWorkflow、asyncとprevious／changes系の記述が、カード§3と§4の前提と一致 |
+| AU-SRC-002 | [Client-side scripting design and processing](https://www.servicenow.com/docs/r/australia/api-reference/scripts/client-script-best-practices.html) | Australia | 人による確認：未完了。AIによる読み取り（2026-10-17、Australia、2026-10-08更新と表示）：getXMLWaitへの言及は例のコード中のコメントだけ。UIへの影響や例外への言及はない |
 
 承認記録は規則ごとに残す。一括で「公式なので承認済み」としない。
 
