@@ -29,7 +29,12 @@ function classify(row: ReviewMetadata, rules: AggregateReview['coverage']['reque
   if (row.action === 'DELETE') return { ...base, state: 'skipped_deleted', reason: 'deleted_asset' };
   if (row.action !== 'INSERT_OR_UPDATE') return { ...base, state: 'rejected', reason: 'unsupported_action' };
   const table = /^([a-z][a-z0-9_]*)_[a-f0-9]{32}$/.exec(row.name)?.[1];
-  if (!table) return { ...base, state: 'rejected', reason: 'identity_mismatch' };
+  // Dictionary/Choice updates use composite names, not table_sys_id. Validate
+  // identity syntax only for target-like names; retain known non-target table IDs
+  // (including sys_script_include, which overlaps the BR prefix) as unsupported.
+  if (!table && (row.name.startsWith('sys_script_') || row.name.startsWith('sys_script_client_'))) {
+    return { ...base, state: 'rejected', reason: 'identity_mismatch' };
+  }
   const type = table === 'sys_script' ? 'business_rule' : table === 'sys_script_client' ? 'client_script' : 'other';
   if (type === 'other') return { ...base, state: 'not_applicable', asset_type: type, reason: 'asset_type_unsupported' };
   if (!rules.some(id => RULES.find(r => r.rule_id === id)!.asset_types.includes(type))) {

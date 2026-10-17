@@ -38,6 +38,51 @@ function fixture(rows: Row[]) {
 }
 afterEach(() => { vi.restoreAllMocks(); vi.useRealTimers(); });
 describe('BP-5 bounded update-set adapter', () => {
+  it.each(['sys_script_', 'sys_script_bad_id', 'sys_script_client_', 'sys_script_client_bad_id',
+    `sys_script_${'a'.repeat(31)}`, `sys_script_client_${'A'.repeat(32)}`])('still rejects malformed target name %s without fetching its payload', async name => {
+    const { fetcher } = fixture([{ ...row(1), name }]);
+    const outcome = await reviewBoundedUpdateSet(client(), input, { fetch: fetcher });
+    expect(outcome.isError).toBe(false);
+    if (outcome.isError) throw Error('Expected rejected target');
+    expect(outcome.result.assets[0]).toMatchObject({ state: 'rejected', reason: 'identity_mismatch' });
+    expect(outcome.result.coverage.analysis_complete).toBe(false);
+    expect(fetcher).toHaveBeenCalledTimes(5);
+  });
+  it.each([`sys_script_include_${id(101)}`, 'sys_scripted_custom_composite', 'other_composite_update'])('does not confuse unsupported name %s with a malformed BR', async name => {
+    const { fetcher } = fixture([{ ...row(1), name }]);
+    const outcome = await reviewBoundedUpdateSet(client(), input, { fetch: fetcher });
+    expect(outcome.isError).toBe(false);
+    if (outcome.isError) throw Error('Expected non-target');
+    expect(outcome.result.assets[0]).toMatchObject({ state: 'not_applicable', asset_type: 'other', reason: 'asset_type_unsupported' });
+    expect(outcome.result.coverage.analysis_complete).toBe(true);
+    expect(fetcher).toHaveBeenCalledTimes(5);
+  });
+  it('completes visible analysis of a BR mixed with normal Dictionary and Choice updates', async () => {
+    const rows = [row(1), { ...row(2), name: 'sys_dictionary_incident_u_review_demo' },
+      { ...row(3), name: 'sys_choice_incident_u_review_demo' }];
+    const { fetcher } = fixture(rows);
+    const outcome = await reviewBoundedUpdateSet(client(), input, { fetch: fetcher });
+    expect(outcome.isError).toBe(false);
+    if (outcome.isError) throw Error('Expected mixed aggregate');
+    expect(outcome.result).toMatchObject({ counts: { reviewed: 1, findings: 1, not_applicable: 2, rejected: 0 },
+      consistency: 'stable_observation', coverage: { analysis_complete: true } });
+    expect(aggregateReviewSchema.safeParse(outcome.result).success).toBe(true);
+    expect(fetcher.mock.calls.filter(([url]) => new URL(String(url)).searchParams.get('sysparm_fields')?.includes('payload'))).toHaveLength(1);
+  });
+  it.each(['sys_dictionary_incident_u_review_demo', 'sys_choice_incident_u_review_demo'])('treats normal non-sys_id update name %s as unsupported, not rejected', async name => {
+    const r = { ...row(1), name };
+    const { fetcher } = fixture([r]);
+    const outcome = await reviewBoundedUpdateSet(client(), input, { fetch: fetcher });
+    expect(outcome.isError).toBe(false);
+    if (outcome.isError) throw Error('Expected aggregate');
+    expect(outcome.result.assets).toEqual([{ state: 'not_applicable', update_xml_sys_id: r.sys_id,
+      asset_type: 'other', reason: 'asset_type_unsupported' }]);
+    expect(outcome.result).toMatchObject({ counts: { rejected: 0, not_applicable: 1 },
+      consistency: 'stable_observation', coverage: { analysis_complete: true } });
+    expect(aggregateReviewSchema.safeParse(outcome.result).success).toBe(true);
+    expect(fetcher).toHaveBeenCalledTimes(5);
+    for (const [url] of fetcher.mock.calls) expect(new URL(String(url)).searchParams.get('sysparm_fields')).not.toContain('payload');
+  });
   it('distinguishes all-rejected records from successful clear analysis', async () => {
     const { fetcher, details } = fixture([row(1)]);
     details.set(id(1), { ...(details.get(id(1)) as object), payload: '<broken>' });

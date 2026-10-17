@@ -1,6 +1,6 @@
 # BP-5：1件解析・集約アダプター
 
-Version: bp5-adapters-0.1 / Date: 2026-10-18。
+Version: bp5-adapters-0.2 / Date: 2026-10-18。
 内部アダプターと合成HTTPテストの記録。MCP登録・梱包変更・実機操作は対象外。
 規則/根拠の人による承認、独立品質評価は未実施。同期解析/集約の強制中断は後続の[worker記録](BEST_PRACTICE_BP5_WORKERS.md)を参照。
 
@@ -30,7 +30,10 @@ asserted/resolvedの証拠と制限は、集約と入れ子で一致させる。
 
 ## 2. 資産の識別・集計
 
-表示用typeを信用せず、nameのテーブル接頭辞でBR/Client Scriptの適用規則を選ぶ。
+表示用typeを信用せず、nameが`sys_script_<32桁小文字hex>`または`sys_script_client_<32桁小文字hex>`と完全一致するときだけ、BR/Client Scriptの適用規則を選ぶ。
+Dictionary/Choiceなどの複合キー名はsys_id形式を要求せず、asset_type_unsupportedでnot_applicableにする。
+対象を示す接頭辞で識別子の形が不正な場合はidentity_mismatchにする。ただし`sys_script_include_<sys_id>`など、
+別テーブルとして識別できる既存の更新名をBRの接頭辞と取り違えない。DELETE/未知actionの先行判定は従来どおり。
 詳細の所属・ID・版・name/actionはbounded sourceが照合し、XML本体のtable/sys_idは抽出器が照合する。
 Global scope、Australiaのasync_always、条件ビルダーの入れ子、許可済み補助レコードも既存解析経路を通る。
 
@@ -116,3 +119,40 @@ PoCのstatusはcompletedにせず、通常はpartialとする。
 新規の非露出テストは、カタログにも含まれるAPI名で判定すると誤って失敗するため、
 本文/資格情報/上流エラー/運用者証跡だけの合成マーカーで照合した。
 実装の検出精度や人手承認の成績は、この接続テストから主張しない。
+
+## 6. 2026-10-18：対象外の複合キー名への互換修正
+
+従来のclassifyは対象外判定より前に全nameへ`<table>_<sys_id>`形式を要求していた。
+そのためsys_dictionary_incident_u_review_demo / sys_choice_incident_u_review_demoのような
+正常な対象外更新もidentity_mismatchになり、analysis_completeを不当にfalseにしていた。
+上記§2の分類へ変更した。非対象のpayloadは取得せず、metadataの行予算/最終照合には引き続き含める。
+機械的なanalysis_complete=trueは対象範囲内の処理完了であり、Dictionary/Choiceのレビューや安全確認ではない。
+
+合成回帰テストを12件追加：Dictionary/Choice 2件、不正なBR/Client Script名6件、
+接頭辞の衝突/その他の対象外名3件、BRとの混合1件。実データの名前形式を模した合成名だけを使用する。
+検証結果：新規12件を含む`bdo npm test`は94ファイル・2,361テスト成功。
+`bdo npm run build` / `bdo npm run type-check`、対象実装/テストのESLint（エラー/警告0）、
+`bdo node tests/review/fixtures/compiled-worker-smoke.mjs`、`git diff --check`も成功。
+Dictionary/Choiceの2件は修正前の失敗→修正後の成功を確認した。
+workerのdeadline/cancel動作、JSON契約、固定評価セット、MCP登録、package/lockは変更していない。
+
+## 7. 早期打切り案（判断待ち・未実装）
+
+全体期限で固定エラーのみを返す現行契約は変更しない。候補は、hard deadlineより前に取得/解析を打ち切り、
+既存結果の照合/集約用時間を確保してpartialを返す方式。残り5〜10秒という値は未承認の例であり、保証値ではない。
+
+現行の最終照合は親/metadataの2照会、それぞれ最大10秒・最大2試行のため、
+最悪40秒（バックオフ等を除く、かつ全体残時間内）を使う。末尾10秒で新規payloadを止めるだけでは、
+実行中のHTTP/解析が残時間を使い切る場合もあり、部分結果を返せるとは限らない。
+
+採用するなら、次を別工程で設計/承認してから実装する。
+
+- 取得/解析のsoft cutoffと、最終照合・集約それぞれの上限。hard deadlineの60秒は延ばさない。
+- cutoff前に開始したHTTPのtimeout/再試行も取得工程の期限内に制限する。照合側は専用の短い予算を持つ。
+- 進行中の解析をsoft cutoffで止めた場合、終了済みworkerを再利用できないため、
+  集約用workerへ切り替える寿命管理を決める。同時生存数・認証枠・hard deadlineは維持する。
+- 残り行は未処理、analysis_complete=false。照合失敗はunverified/provisional_resultsとし、安定と偽装しない。
+- 工程の打切りと全体期限超過を、固定理由・stage・limitationsで区別する。
+  hard deadline/cancel/契約不整合まで救済せず、これらは引き続き固定エラーのみとする。
+
+早期打切りは部分結果を返す機会を増やすための提案であり、OSの遅延や停止を含めた返却保証ではない。
