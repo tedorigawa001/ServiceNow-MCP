@@ -9,6 +9,7 @@ import type {
 } from './types.js';
 import { ServiceNowError } from '../utils/errors.js';
 import { logger } from '../utils/logging.js';
+import { BoundedReadSession, type BoundedReadOptions } from './bounded-read.js';
 
 // ─── Input validation helpers ────────────────────────────────────────────────
 
@@ -142,6 +143,13 @@ export class ServiceNowClient {
       copy.perUserBearerToken = options.bearerToken;
     }
     return copy;
+  }
+
+  /** BP-5 internal transport: snapshot before any await; no legacy auth/retry/fallback path. */
+  createBoundedReadSession(options?: BoundedReadOptions): BoundedReadSession {
+    return new BoundedReadSession({ instanceUrl: this.baseUrl, authMode: this.authMode,
+      oauth: { ...this.oauthConfig! }, perUserBearerToken: this.perUserBearerToken,
+      accessToken: this.accessToken, tokenExpiry: this.tokenExpiry }, options);
   }
 
   /**
