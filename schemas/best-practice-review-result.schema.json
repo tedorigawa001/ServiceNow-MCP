@@ -1,0 +1,714 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "type": "object",
+  "properties": {
+    "schema_version": {
+      "type": "string",
+      "const": "bp-review-0.1"
+    },
+    "poc_only": {
+      "type": "boolean",
+      "const": true
+    },
+    "knowledge_base_version": {
+      "type": "string",
+      "const": "au-register-0.1"
+    },
+    "ruleset_version": {
+      "type": "string",
+      "const": "bp2-0.1"
+    },
+    "reviewed_at": {
+      "type": "string",
+      "format": "date-time",
+      "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+    },
+    "review_status": {
+      "type": "string",
+      "enum": [
+        "completed",
+        "partial",
+        "failed"
+      ]
+    },
+    "code_return_mode": {
+      "type": "string",
+      "const": "none"
+    },
+    "target": {
+      "oneOf": [
+        {
+          "type": "object",
+          "properties": {
+            "asset_type": {
+              "type": "string",
+              "enum": [
+                "business_rule",
+                "client_script",
+                "script_include",
+                "scripted_rest_resource",
+                "server_script"
+              ]
+            },
+            "asset_table": {
+              "type": "string",
+              "maxLength": 80,
+              "pattern": "^[a-z][a-z0-9_]*$"
+            },
+            "asset_sys_id": {
+              "type": "string",
+              "pattern": "^[a-f0-9]{32}$"
+            },
+            "sys_scope": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "pattern": "^[a-f0-9]{32}$"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "field": {
+              "type": "string",
+              "maxLength": 80,
+              "pattern": "^[a-z][a-z0-9_]*$"
+            },
+            "code_hash": {
+              "type": "string",
+              "pattern": "^[a-f0-9]{64}$"
+            },
+            "retrieved_at": {
+              "type": "string",
+              "format": "date-time",
+              "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+            },
+            "record_updated_at": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "format": "date-time",
+                  "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "target_version": {
+              "type": "string",
+              "const": "update_set_payload"
+            },
+            "update_set_id": {
+              "type": "string",
+              "pattern": "^[a-f0-9]{32}$"
+            },
+            "update_xml_sys_id": {
+              "type": "string",
+              "pattern": "^[a-f0-9]{32}$"
+            },
+            "payload_hash": {
+              "type": "string",
+              "pattern": "^[a-f0-9]{64}$"
+            }
+          },
+          "required": [
+            "asset_type",
+            "asset_table",
+            "asset_sys_id",
+            "sys_scope",
+            "field",
+            "code_hash",
+            "retrieved_at",
+            "record_updated_at",
+            "target_version",
+            "update_set_id",
+            "update_xml_sys_id",
+            "payload_hash"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "asset_type": {
+              "type": "string",
+              "enum": [
+                "business_rule",
+                "client_script",
+                "script_include",
+                "scripted_rest_resource",
+                "server_script"
+              ]
+            },
+            "asset_table": {
+              "type": "string",
+              "maxLength": 80,
+              "pattern": "^[a-z][a-z0-9_]*$"
+            },
+            "asset_sys_id": {
+              "type": "string",
+              "pattern": "^[a-f0-9]{32}$"
+            },
+            "sys_scope": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "pattern": "^[a-f0-9]{32}$"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "field": {
+              "type": "string",
+              "maxLength": 80,
+              "pattern": "^[a-z][a-z0-9_]*$"
+            },
+            "code_hash": {
+              "type": "string",
+              "pattern": "^[a-f0-9]{64}$"
+            },
+            "retrieved_at": {
+              "type": "string",
+              "format": "date-time",
+              "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+            },
+            "record_updated_at": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "format": "date-time",
+                  "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "target_version": {
+              "type": "string",
+              "const": "current_record"
+            }
+          },
+          "required": [
+            "asset_type",
+            "asset_table",
+            "asset_sys_id",
+            "sys_scope",
+            "field",
+            "code_hash",
+            "retrieved_at",
+            "record_updated_at",
+            "target_version"
+          ],
+          "additionalProperties": false
+        }
+      ]
+    },
+    "instance_release": {
+      "type": "object",
+      "properties": {
+        "family": {
+          "anyOf": [
+            {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 40
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "raw_buildname": {
+          "anyOf": [
+            {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 40
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "source": {
+          "type": "string",
+          "const": "sys_cluster_state.build_name"
+        },
+        "retrieved_at": {
+          "anyOf": [
+            {
+              "type": "string",
+              "format": "date-time",
+              "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "resolution_status": {
+          "type": "string",
+          "enum": [
+            "resolved",
+            "unknown"
+          ]
+        },
+        "visibility_scope": {
+          "type": "string",
+          "const": "caller_acl"
+        }
+      },
+      "required": [
+        "family",
+        "raw_buildname",
+        "source",
+        "retrieved_at",
+        "resolution_status",
+        "visibility_scope"
+      ],
+      "additionalProperties": false
+    },
+    "release_match": {
+      "type": "string",
+      "enum": [
+        "matched",
+        "mismatched",
+        "unknown"
+      ]
+    },
+    "coverage": {
+      "type": "object",
+      "properties": {
+        "requested_rule_ids": {
+          "minItems": 1,
+          "maxItems": 27,
+          "type": "array",
+          "items": {
+            "type": "string",
+            "enum": [
+              "AU-BR-001",
+              "AU-BR-002",
+              "AU-BR-003",
+              "AU-BR-004",
+              "AU-BR-005",
+              "AU-BR-006",
+              "AU-BR-007",
+              "AU-CL-001",
+              "AU-CL-002",
+              "AU-CL-003",
+              "AU-CL-004",
+              "AU-CL-005",
+              "AU-CL-006",
+              "AU-CL-007",
+              "AU-CL-008",
+              "AU-SI-001",
+              "AU-SI-002",
+              "AU-SI-003",
+              "AU-SI-004",
+              "AU-REST-001",
+              "AU-REST-002",
+              "AU-REST-003",
+              "AU-REST-004",
+              "AU-REST-005",
+              "AU-REST-006",
+              "AU-QRY-001",
+              "AU-QRY-002"
+            ]
+          }
+        },
+        "evaluated_rule_ids": {
+          "maxItems": 27,
+          "type": "array",
+          "items": {
+            "type": "string",
+            "enum": [
+              "AU-BR-001",
+              "AU-BR-002",
+              "AU-BR-003",
+              "AU-BR-004",
+              "AU-BR-005",
+              "AU-BR-006",
+              "AU-BR-007",
+              "AU-CL-001",
+              "AU-CL-002",
+              "AU-CL-003",
+              "AU-CL-004",
+              "AU-CL-005",
+              "AU-CL-006",
+              "AU-CL-007",
+              "AU-CL-008",
+              "AU-SI-001",
+              "AU-SI-002",
+              "AU-SI-003",
+              "AU-SI-004",
+              "AU-REST-001",
+              "AU-REST-002",
+              "AU-REST-003",
+              "AU-REST-004",
+              "AU-REST-005",
+              "AU-REST-006",
+              "AU-QRY-001",
+              "AU-QRY-002"
+            ]
+          }
+        },
+        "skipped_rules": {
+          "maxItems": 27,
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "rule_id": {
+                "type": "string",
+                "enum": [
+                  "AU-BR-001",
+                  "AU-BR-002",
+                  "AU-BR-003",
+                  "AU-BR-004",
+                  "AU-BR-005",
+                  "AU-BR-006",
+                  "AU-BR-007",
+                  "AU-CL-001",
+                  "AU-CL-002",
+                  "AU-CL-003",
+                  "AU-CL-004",
+                  "AU-CL-005",
+                  "AU-CL-006",
+                  "AU-CL-007",
+                  "AU-CL-008",
+                  "AU-SI-001",
+                  "AU-SI-002",
+                  "AU-SI-003",
+                  "AU-SI-004",
+                  "AU-REST-001",
+                  "AU-REST-002",
+                  "AU-REST-003",
+                  "AU-REST-004",
+                  "AU-REST-005",
+                  "AU-REST-006",
+                  "AU-QRY-001",
+                  "AU-QRY-002"
+                ]
+              },
+              "reason": {
+                "type": "string",
+                "enum": [
+                  "missing_context",
+                  "release_mismatch",
+                  "release_unknown",
+                  "source_unapproved",
+                  "unsupported",
+                  "retrieval_failed"
+                ]
+              }
+            },
+            "required": [
+              "rule_id",
+              "reason"
+            ],
+            "additionalProperties": false
+          }
+        }
+      },
+      "required": [
+        "requested_rule_ids",
+        "evaluated_rule_ids",
+        "skipped_rules"
+      ],
+      "additionalProperties": false
+    },
+    "limitations": {
+      "maxItems": 100,
+      "type": "array",
+      "items": {
+        "type": "string",
+        "minLength": 1,
+        "maxLength": 2000
+      }
+    },
+    "findings": {
+      "maxItems": 100,
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "rule_id": {
+            "type": "string",
+            "enum": [
+              "AU-BR-001",
+              "AU-BR-002",
+              "AU-BR-003",
+              "AU-BR-004",
+              "AU-BR-005",
+              "AU-BR-006",
+              "AU-BR-007",
+              "AU-CL-001",
+              "AU-CL-002",
+              "AU-CL-003",
+              "AU-CL-004",
+              "AU-CL-005",
+              "AU-CL-006",
+              "AU-CL-007",
+              "AU-CL-008",
+              "AU-SI-001",
+              "AU-SI-002",
+              "AU-SI-003",
+              "AU-SI-004",
+              "AU-REST-001",
+              "AU-REST-002",
+              "AU-REST-003",
+              "AU-REST-004",
+              "AU-REST-005",
+              "AU-REST-006",
+              "AU-QRY-001",
+              "AU-QRY-002"
+            ]
+          },
+          "category": {
+            "type": "string",
+            "enum": [
+              "security",
+              "performance",
+              "maintainability",
+              "correctness"
+            ]
+          },
+          "severity": {
+            "type": "string",
+            "enum": [
+              "critical",
+              "high",
+              "medium",
+              "low",
+              "info"
+            ]
+          },
+          "confidence": {
+            "type": "string",
+            "enum": [
+              "high",
+              "medium",
+              "low"
+            ]
+          },
+          "verification_status": {
+            "type": "string",
+            "enum": [
+              "candidate",
+              "evidence_matched",
+              "path_confirmed",
+              "runtime_confirmed"
+            ]
+          },
+          "field": {
+            "type": "string",
+            "maxLength": 80,
+            "pattern": "^[a-z][a-z0-9_]*$"
+          },
+          "line_start": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 9007199254740991
+          },
+          "line_end": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 9007199254740991
+          },
+          "issue": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 2000
+          },
+          "impact": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 2000
+          },
+          "applicability": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 2000
+          },
+          "recommendation": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 2000
+          },
+          "required_follow_up": {
+            "maxItems": 20,
+            "type": "array",
+            "items": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 2000
+            }
+          },
+          "sources": {
+            "minItems": 1,
+            "maxItems": 5,
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "source_id": {
+                  "type": "string",
+                  "enum": [
+                    "AU-SRC-001",
+                    "AU-SRC-002",
+                    "AU-SRC-003",
+                    "AU-SRC-004",
+                    "AU-SRC-005"
+                  ]
+                },
+                "url": {
+                  "type": "string",
+                  "maxLength": 2048,
+                  "format": "uri"
+                },
+                "section": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 2000
+                },
+                "title": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 2000
+                },
+                "release": {
+                  "type": "string",
+                  "const": "Australia"
+                },
+                "verified_on": {
+                  "type": "string",
+                  "const": "2026-10-17"
+                },
+                "retrieved_at": {
+                  "type": "null"
+                },
+                "content_hash": {
+                  "type": "null"
+                },
+                "snapshot_id": {
+                  "type": "null"
+                },
+                "catalog_version": {
+                  "type": "string",
+                  "const": "au-register-0.1"
+                },
+                "summary": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 2000
+                }
+              },
+              "required": [
+                "source_id",
+                "url",
+                "section",
+                "title",
+                "release",
+                "verified_on",
+                "retrieved_at",
+                "content_hash",
+                "snapshot_id",
+                "catalog_version",
+                "summary"
+              ],
+              "additionalProperties": false
+            }
+          },
+          "verification_evidence": {
+            "maxItems": 3,
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "stage": {
+                  "type": "string",
+                  "enum": [
+                    "evidence_matched",
+                    "path_confirmed",
+                    "runtime_confirmed"
+                  ]
+                },
+                "method": {
+                  "type": "string",
+                  "enum": [
+                    "static_analysis",
+                    "path_analysis",
+                    "pdi_test"
+                  ]
+                },
+                "code_hash": {
+                  "type": "string",
+                  "pattern": "^[a-f0-9]{64}$"
+                },
+                "reference": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 2000
+                },
+                "verified_at": {
+                  "type": "string",
+                  "format": "date-time",
+                  "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+                }
+              },
+              "required": [
+                "stage",
+                "method",
+                "code_hash",
+                "reference",
+                "verified_at"
+              ],
+              "additionalProperties": false
+            }
+          }
+        },
+        "required": [
+          "rule_id",
+          "category",
+          "severity",
+          "confidence",
+          "verification_status",
+          "field",
+          "line_start",
+          "line_end",
+          "issue",
+          "impact",
+          "applicability",
+          "recommendation",
+          "required_follow_up",
+          "sources",
+          "verification_evidence"
+        ],
+        "additionalProperties": false
+      }
+    }
+  },
+  "required": [
+    "schema_version",
+    "poc_only",
+    "knowledge_base_version",
+    "ruleset_version",
+    "reviewed_at",
+    "review_status",
+    "code_return_mode",
+    "target",
+    "instance_release",
+    "release_match",
+    "coverage",
+    "limitations",
+    "findings"
+  ],
+  "additionalProperties": false,
+  "$id": "urn:servicenow-mcp:best-practice-review-result:0.1",
+  "$comment": "PoC only. Also validate cross-field provenance, release and coverage using reviewResultSchema; JSON Schema alone does not verify truth of findings."
+}
