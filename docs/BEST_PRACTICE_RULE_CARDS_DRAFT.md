@@ -1,6 +1,6 @@
 # 人手評価用 規則カード案：先行3規則
 
-Version: human-rule-cards-draft-0.2 / Date: 2026-10-17。
+Version: human-rule-cards-draft-0.3 / Date: 2026-10-17。
 Status: **案。人による根拠採用・候補境界・確認項目の承認は未実施。採点用配布不可**。
 
 [人手評価プロトコル](BEST_PRACTICE_HUMAN_EVALUATION_PROTOCOL.md) §3.1で承認するための案。
@@ -10,7 +10,9 @@ AIによる作成であり、独立した人手作問・採点・承認の実績
 ## 1. 根拠と承認の状態
 
 根拠URL・節は[Australia台帳](BEST_PRACTICE_REGISTER_AUSTRALIA.md)に基づく。
-今回Web取得を試みたが下記2ページの本文は取得できず、公式本文の再照合は未完了。
+初回Web取得では下記2ページの本文は取得できず、これらの公式本文の再照合は未完了。
+draft-0.3では別資料のAustralia公式GlideAjax API・Service Portal資料を公式GitHubから確認した（§5.1）。
+下記AU-SRC-001/002の再照合・人の承認が済んだという意味ではない。
 以下の判定境界・コード語彙は本プロジェクトの**提案する出力契約**であり、公式資料の逐語的な要件ではない。
 採用前に人が原文・対象リリース・節・解釈を再確認する。未確認の日時・署名を補完しない。
 
@@ -23,9 +25,9 @@ AIによる作成であり、独立した人手作問・採点・承認の実績
 
 | rule_id | カード版 | 原文確認者/確認日 | 境界承認者/承認日/承認ID | 判定 |
 |---|---|---|---|---|
-| AU-BR-001 | draft-0.2 | 未記入 | 未記入 | 未承認 |
-| AU-BR-002 | draft-0.2 | 未記入 | 未記入 | 未承認 |
-| AU-CL-004 | draft-0.2 | 未記入 | 未記入 | 未承認 |
+| AU-BR-001 | draft-0.3 | 未記入 | 未記入 | 未承認 |
+| AU-BR-002 | draft-0.3 | 未記入 | 未記入 | 未承認 |
+| AU-CL-004 | draft-0.3 | 未記入 | 未記入 | 未承認 |
 
 ## 2. 共通の判定契約案
 
@@ -154,20 +156,27 @@ onSubmit等で送信前の結果が必要な場面について、AU-SRC-002の�
 資料に記述がないことを「適用外」や「承認された例外」の証拠にせず、処理順序・代替設計・業務要件を
 人が判断する論点として記録する。必要性の申告だけで候補を抑制しない。
 
-### 5.1. 環境別のAPI利用可否：承認前の追加確認
+### 5.1. 環境別のAPI利用可否：公式資料の追加確認（人の採用承認前）
 
-ScopedアプリやService PortalでgetXMLWaitを利用できないという情報は、Australiaの公式API根拠で
-確認するまで本カードの確定条件へ採用しない。Community投稿は根拠に採用しない。
-今回の追加探索で[Zurichの公式GlideAjax API](https://www.servicenow.com/docs/r/zurich/api-reference/c_GlideAjaxAPI.html)は
-見つかったが、別リリースなのでAustraliaの適用承認には代用しない。
-リリース非固定URLは表示版が変わるため、検索結果のAustralia表記だけで確認済みとしない。
+2026-10-17にServiceNow公式GitHubのAustraliaブランチの本文・releaseメタデータを確認した。
+[調査記録](BEST_PRACTICE_GLIDEAJAX_AUSTRALIA_EVIDENCE.md)に公式取得URL、canonical_url、
+該当節/Note、scope/UI別の状態と未確認事項を記録した。CommunityやZurich版は根拠に代用していない。
 
-承認者はAustraliaの公式GlideAjax APIリファレンスについて、実在URL、表示リリース、getXMLWaitの節、
-scope別の利用可否、UI別（特にService Portal）の制限、適用条件、確認日を記録する。
-公式で確認できなければunknownを維持する。
-利用不可が確認された場合は「非同期推奨」と「API非対応による互換性上の問題」を区別し、
-対象のscope/UI・受信側・到達可能性を照合する。別の指摘種別や本規則の範囲変更は人が承認してから
-別版に反映し、呼び出し名だけで「実際に動かなかった」と断定したり、黙って対象外にしたりしない。
+| 軸 | 公式文献から確認した内容 | 未確認/制限 |
+|---|---|---|
+| scope | Australia GlideAjax APIのgetXMLWait節と使用手順NoteでScopedアプリでは利用不可と説明 | 対象コードの実行scope照合と実機動作は別途必要 |
+| UI | Australia Service PortalのSupported client-side APIs → GlideAjax行NoteでgetXMLWaitは動作しないと説明 | Workspace/Classic/個別Mobile製品の包括的な対応は未確認 |
+| 実行場所 | 同じPortal資料でwidget client controllerではGlideAjax自体が利用不可 | 非同期APIへの置換も自動的に解決策とはならない |
+
+GlobalであることやUI Type=Allだけで利用可能とはしない。scopeとUIは別々に記録する。
+追加API資料は応答性への影響も本文で説明しているが、これはAU-SRC-002の例コードコメントとは別根拠。
+人の採用承認後にのみ公式API由来の説明として扱い、プロジェクトの解釈と出典を混ぜない。
+
+非同期推奨とAPI非対応の互換性懸念を区別し、対象のscope/UI・受信側・到達可能性を照合する。
+onSubmitも非対応制約を解除する根拠にはしない。具体的な代替設計は未確認で人の検討事項とする。
+別の指摘種別や本規則の範囲変更は人が承認してから別版に反映し、呼び出し名だけで
+「実際に動かなかった」と断定したり、黙って対象外にしたりしない。
+公式文書の読み取りは完了した範囲があるが、人の採用・境界承認と実機確認は未実施のまま。
 
 ## 6. 汎用確認項目と採点票への転記
 
