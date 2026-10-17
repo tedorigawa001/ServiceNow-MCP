@@ -106,6 +106,7 @@ export class ServiceNowClient {
   private retryDelayMs: number;
   private requestTimeoutMs: number;
   private reviewReleaseConfig?: unknown;
+  private reviewReleaseConfigProvider?: () => unknown;
 
   /** For impersonation mode: user sys_id to pass in X-Sn-Impersonate */
   private impersonateUserSysId?: string;
@@ -127,6 +128,7 @@ export class ServiceNowClient {
     this.impersonateUserSysId = config.impersonateUserSysId;
     this.perUserBearerToken = config.perUserBearerToken;
     this.reviewReleaseConfig = config.reviewReleaseConfig;
+    this.reviewReleaseConfigProvider = config.reviewReleaseConfigProvider;
   }
 
   /**
@@ -151,7 +153,8 @@ export class ServiceNowClient {
   createBoundedReadSession(options?: BoundedReadOptions): BoundedReadSession {
     return new BoundedReadSession({ instanceUrl: this.baseUrl, authMode: this.authMode,
       oauth: { ...this.oauthConfig! }, perUserBearerToken: this.perUserBearerToken,
-      accessToken: this.accessToken, tokenExpiry: this.tokenExpiry, reviewReleaseConfig: this.reviewReleaseConfig }, options);
+      accessToken: this.accessToken, tokenExpiry: this.tokenExpiry, reviewReleaseConfig: this.reviewReleaseConfig,
+      reviewReleaseConfigProvider: this.reviewReleaseConfigProvider }, options);
   }
 
   /**

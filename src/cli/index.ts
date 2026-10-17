@@ -17,6 +17,7 @@ import chalk from 'chalk';
 import { runSetup } from './setup.js';
 import { authLogin, authLogout, authWhoami, authTest } from './auth.js';
 import { listInstances, removeInstance } from './config-store.js';
+import { createReviewInstanceBinding } from '../servicenow/review-release-config.js';
 
 // Brand colors (teal/navy palette)
 // Terminal-adaptive: white/subtle/dim use chalk built-ins so text stays visible
@@ -158,6 +159,16 @@ instances
     } else {
       console.log(`  ${err('✗')} ${white(`Instance "${name}" not found`)}`);
     }
+  });
+
+// Offline only: no instance/config/token discovery, writes or network calls.
+program.command('review').description('Offline best-practice review configuration helpers')
+  .command('binding')
+  .description('Print the BP-5 binding for an instance configuration slot and HTTPS URL')
+  .requiredOption('--instance-id <id>', 'Instance configuration key (for example dev)')
+  .requiredOption('--url <url>', 'ServiceNow HTTPS origin')
+  .action((opts: { instanceId: string; url: string }) => {
+    console.log(createReviewInstanceBinding(opts.instanceId, opts.url));
   });
 
 program.parseAsync(process.argv).catch((e: unknown) => {

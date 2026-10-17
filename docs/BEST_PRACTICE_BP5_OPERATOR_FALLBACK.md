@@ -1,7 +1,7 @@
 # BP-5：C方式の運用者設定フォールバック
 
 Date: 2026-10-17 / Stage: operator-fallback-0.1。
-内部サーバー設定からの判定と合成テストを実装。MCP登録・実機操作・実ファイル読込/変更は行わない。
+内部サーバー設定からの判定と合成テストを実装。後続の[設定ファイル/CLI記録](BEST_PRACTICE_BP5_OPERATOR_SETUP.md)で安全なファイル読込を接続。MCP登録・実機操作・利用者の実設定の変更は行わない。
 
 ## 1. 信頼境界と設定の受け口
 
@@ -26,13 +26,12 @@ const reviewReleaseConfig = {
 // new ServiceNowClient({ ...serverOwnedConnectionConfig, reviewReleaseConfig })
 ```
 
-これはプログラム上の設定例であり、現行instances.jsonに追加すれば読み込まれるという意味ではない。
+これはプログラム上の設定例。instances.jsonでのキー名・信頼検査・binding CLIは後続記録を参照。
 assertion省略は実測のみ。reviewReleaseConfig自体を省略した場合の設定IDは`default`。
 null、未知family、必須列の欠落、余分なキー、不正日時/ハッシュを黙って無視しない。
 familyは既存契約と同じ正規形（Australia/Brazil/Zurich/Yokohama/Xanadu）で指定する。
 
-ファイルの所有者・書込権限・親ディレクトリ・symlink・再読込の検証は未実装。
-既存InstanceManagerやセットアップウィザードの読込処理には接続していない。
+ファイルの所有者・書込権限・親ディレクトリ・symlink・再読込の検証は後続で実装し、InstanceManagerの手動/ウィザード両形式の読込へ接続した。ウィザードのassertion自動作成は行わない。
 本機能はサーバーが渡した設定を信頼する内部APIであり、設定者の承認や元の運用情報の真実性を立証しない。
 
 ## 2. bindingと版の定義
@@ -95,7 +94,7 @@ assertedのmatchedは設定とカタログの一致であり、実測・実行�
 tests/review/operator-release-fallback.test.tsで、bindingの正規化/接続先・ID差、設定期限の境界、構造不正、実測優先、期限切れを含む競合、欠落/混在/上限、HTTP失敗、設定コピー固定、版・私有参照非返却、呼出し入力/optionsからの注入拒否を検証する。
 null行の不正構造は「全行値なし」と区別し、フォールバックを認めない。
 
-未実装：設定ファイル/ACL検査との接続、1件解析/集約アダプター、同期解析worker、MCP登録/梱包、実機E2Eと公開/品質承認。
+未実装：1件解析/集約アダプター、同期解析worker、MCP登録/梱包、実機E2Eと公開/品質承認。
 本記録の合成テストは設定の真正性や本番利用可能性を証明しない。
 
 検証記録（2026-10-17）：

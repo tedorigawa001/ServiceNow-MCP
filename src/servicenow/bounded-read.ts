@@ -16,6 +16,7 @@ export interface ReadSnapshot {
   instanceUrl: string; authMode: ServiceNowConfig['authMode']; perUserBearerToken?: string;
   oauth: ServiceNowConfig['oauth']; accessToken?: string; tokenExpiry?: number;
   reviewReleaseConfig?: unknown;
+  reviewReleaseConfigProvider?: () => unknown;
 }
 /** Trusted dependency injection only; callers may lower, never raise production ceilings. */
 export interface BoundedReadOptions {
@@ -61,7 +62,8 @@ export class BoundedReadSession {
       throw new BoundedReadError('invalid_input');
     }
     this.baseUrl = url.origin;
-    try { this.releasePolicy = pinReviewReleaseConfig(snapshot.reviewReleaseConfig, this.baseUrl, this.startedAt, this.limits.deadlineMs); }
+    try { this.releasePolicy = pinReviewReleaseConfig(snapshot.reviewReleaseConfigProvider
+      ? snapshot.reviewReleaseConfigProvider() : snapshot.reviewReleaseConfig, this.baseUrl, this.startedAt, this.limits.deadlineMs); }
     catch { throw new BoundedReadError('config_invalid'); }
     if (snapshot.authMode === 'impersonation') throw new BoundedReadError('authentication_failed');
     this.authMode = snapshot.authMode === 'per-user' ? 'per-user' : 'service-account';
@@ -72,7 +74,7 @@ export class BoundedReadSession {
     if (active >= 2 || principals.has(this.principalKey)) throw new BoundedReadError('review_busy');
     active++; principals.add(this.principalKey);
     this.fetcher = options.fetch ?? ((...args) => globalThis.fetch(...args));
-    this.timer = setTimeout(() => this.stop('deadline_exceeded'), this.limits.deadlineMs);
+    this.timer = setTimeout(() => this.stop('deadline_exceeded'), Math.max(0, this.limits.deadlineMs - (performance.now() - this.started)));
     const cancel = () => this.stop('cancelled');
     const external = options.signal;
     external?.addEventListener('abort', cancel, { once: true });

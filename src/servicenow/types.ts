@@ -28,6 +28,8 @@ export interface ServiceNowConfig {
   requestTimeoutMs?: number;
   /** Trusted server-side BP-5 settings. Validated/pinned only at bounded review admission; never a tool argument. */
   reviewReleaseConfig?: unknown;
+  /** Internal verified-file provider; never populated from JSON/tool arguments. */
+  reviewReleaseConfigProvider?: () => unknown;
 }
 
 export interface QueryRecordsParams {

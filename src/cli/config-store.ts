@@ -21,6 +21,8 @@ export interface InstanceConfig {
   group?: string;
   environment?: string;
   addedAt: string;
+  /** Manually maintained operator assertion. Loaded through a separate trust check for BP-5. */
+  reviewReleaseConfig?: unknown;
 }
 
 export interface ServicenowMcpConfig {

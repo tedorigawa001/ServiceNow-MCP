@@ -15,12 +15,13 @@
  *   const client = instanceManager.getClient('prod');    // specific instance
  *   instanceManager.switch('prod');                      // switch active instance
  */
-import { readFileSync, existsSync } from 'fs';
+import { existsSync } from 'fs';
 import { homedir } from 'os';
 import { join } from 'path';
 import { ServiceNowClient } from './client.js';
 import type { ServiceNowConfig } from './types.js';
 import { logger } from '../utils/logging.js';
+import { loadInstanceDocument } from './instance-review-settings.js';
 
 interface InstanceEntry {
   name: string;
@@ -58,6 +59,7 @@ export class InstanceContext {
 class InstanceManager {
   private instances: Map<string, InstanceEntry> = new Map();
   private currentName: string = 'default';
+  private reviewConfigFailure = false;
 
   constructor() {
     this.loadInstances();
@@ -66,21 +68,24 @@ class InstanceManager {
   private loadInstances(): void {
     // 1. Try instances.json config file
     const configPath = process.env.SN_INSTANCES_CONFIG;
+    if (configPath && !existsSync(configPath)) this.reviewConfigFailure = true;
     if (configPath && existsSync(configPath)) {
       try {
-        const raw = JSON.parse(readFileSync(configPath, 'utf8'));
-        const defaultName: string = raw.default_instance || raw.default || 'default';
+        const loaded = loadInstanceDocument(configPath);
+        const raw = loaded.document;
+        const defaultName = String(raw.default_instance || raw.default || 'default');
         for (const [name, cfg] of Object.entries(raw.instances || {})) {
           const c = cfg as any;
           this.register(name, this.buildConfig(
             c.instance_url || c.url,
-            c
+            c, () => loaded.reviewConfig(name)
           ), c.group || 'Default', c.environment || '');
         }
         if (this.instances.has(defaultName)) this.currentName = defaultName;
         return;
-      } catch (e) {
-        logger.warn(`Failed to parse instances config at ${configPath}: ${e instanceof Error ? e.message : String(e)}`);
+      } catch {
+        this.reviewConfigFailure = true;
+        logger.warn('Failed to load instances config: config_invalid');
         // fall through to env vars
       }
     }
@@ -91,8 +96,9 @@ class InstanceManager {
     const wizardConfigPath = join(homedir(), '.config', 'servicenow-mcp', 'instances.json');
     if (existsSync(wizardConfigPath)) {
       try {
-        const raw = JSON.parse(readFileSync(wizardConfigPath, 'utf8'));
-        const defaultName: string = raw.defaultInstance || 'default';
+        const loaded = loadInstanceDocument(wizardConfigPath);
+        const raw = loaded.document;
+        const defaultName = String(raw.defaultInstance || 'default');
         for (const [name, cfg] of Object.entries(raw.instances || {})) {
           const c = cfg as Record<string, unknown>;
           this.register(name, {
@@ -105,12 +111,14 @@ class InstanceManager {
             },
             authMode: c['authMode'] as ServiceNowConfig['authMode'],
             perUserBearerToken: process.env.SERVICENOW_PER_USER_BEARER_TOKEN,
+            reviewReleaseConfigProvider: () => loaded.reviewConfig(name),
           }, (c['group'] as string) || 'Default', (c['environment'] as string) || '');
         }
         if (this.instances.has(defaultName)) this.currentName = defaultName;
         return;
-      } catch (e) {
-        logger.warn(`Failed to parse wizard config at ${wizardConfigPath}: ${e instanceof Error ? e.message : String(e)}`);
+      } catch {
+        this.reviewConfigFailure = true;
+        logger.warn('Failed to load wizard config: config_invalid');
         // fall through to env vars
       }
     }
@@ -167,7 +175,7 @@ class InstanceManager {
     }
   }
 
-  private buildConfig(url: string, c: any): ServiceNowConfig {
+  private buildConfig(url: string, c: any, reviewReleaseConfigProvider?: () => unknown): ServiceNowConfig {
     return {
       instanceUrl: url,
       oauth: {
@@ -181,6 +189,7 @@ class InstanceManager {
       maxRetries: c.max_retries || parseInt(process.env.MAX_RETRIES || '3', 10),
       retryDelayMs: c.retry_delay_ms || parseInt(process.env.RETRY_DELAY_MS || '1000', 10),
       requestTimeoutMs: c.request_timeout_ms || parseInt(process.env.REQUEST_TIMEOUT_MS || '30000', 10),
+      reviewReleaseConfigProvider,
     };
   }
 
@@ -190,7 +199,8 @@ class InstanceManager {
       url: config.instanceUrl,
       group,
       environment,
-      client: new ServiceNowClient(config),
+      client: new ServiceNowClient(this.reviewConfigFailure
+        ? { ...config, reviewReleaseConfig: null, reviewReleaseConfigProvider: undefined } : config),
     });
   }
 
@@ -222,6 +232,7 @@ class InstanceManager {
   /** Reload instances from config files (call after config is updated). */
   reload(): void {
     this.instances.clear();
+    this.reviewConfigFailure = false;
     this.currentName = 'default';
     this.loadInstances();
   }
