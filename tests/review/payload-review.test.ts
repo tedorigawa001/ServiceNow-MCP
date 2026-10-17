@@ -169,7 +169,7 @@ describe('BP-3 offline candidate validation', () => {
   it('returns source-linked AST candidates, not code or claimed violations', () => {
     const result = reviewed(input(payload('<![CDATA[// secret_SENTINEL\ncurrent.update();]]>')));
     expect(result.target.sys_scope).toBe('global');
-    expect(result.ruleset_version).toBe('bp3-0.1');
+    expect(result.ruleset_version).toBe('bp3-0.2');
     expect(result.findings).toHaveLength(1);
     expect(result.findings[0]).toMatchObject({ rule_id: 'AU-BR-001', line_start: 2, line_end: 2,
       verification_status: 'candidate', confidence: 'low', severity: 'info', verification_evidence: [] });
@@ -188,8 +188,8 @@ describe('BP-3 offline candidate validation', () => {
     const result = reviewed(input(payload('&#10;current&#10;.update();&#10;current[&quot;update&quot;]();')));
     expect(result.findings.map(f => [f.line_start, f.line_end])).toEqual([[2, 3], [4, 4]]);
   });
-  it('keeps shadowing, unreachable calls and workflow exceptions as unconfirmed candidates', () => {
-    const code = 'function f(current) { if (false) { current.setWorkflow(false); current.update(); } }';
+  it('keeps unreachable platform calls and workflow exceptions as unconfirmed candidates', () => {
+    const code = 'function f() { if (false) { current.setWorkflow(false); current.update(); } }';
     const result = reviewed(input(payload(`<![CDATA[${code}]]>`)));
     expect(result.findings[0].verification_status).toBe('candidate');
     expect(result.findings[0].required_follow_up).toContain('binding_and_reachability');

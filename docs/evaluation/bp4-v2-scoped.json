@@ -1,0 +1,1171 @@
+{
+  "evaluation_version": "bp4-synthetic-0.2",
+  "poc_only": true,
+  "dataset_hash": "ae39e4177484f63419b28cbcc88c2c1098c30ae25dc86d29dfd7b8ca56c314bc",
+  "evaluation_unit": "case_x_requested_rule",
+  "finding_threshold": "candidate_or_higher",
+  "total_cases": 72,
+  "overall": {
+    "tp": 30,
+    "fp": 0,
+    "tn": 18,
+    "fn": 6,
+    "negative_abstentions": 0,
+    "assessed": 54,
+    "total": 54,
+    "precision": {
+      "successes": 30,
+      "total": 30,
+      "rate": 1,
+      "wilson_95": {
+        "lower": 0.8864866068260312,
+        "upper": 0.9999999999999999
+      }
+    },
+    "recall": {
+      "successes": 30,
+      "total": 36,
+      "rate": 0.8333333333333334,
+      "wilson_95": {
+        "lower": 0.6810920568872054,
+        "upper": 0.9212955240498188
+      }
+    },
+    "assessment_coverage": {
+      "successes": 54,
+      "total": 54,
+      "rate": 1,
+      "wilson_95": {
+        "lower": 0.9335864119091037,
+        "upper": 1
+      }
+    }
+  },
+  "by_rule": {
+    "AU-BR-001": {
+      "tp": 10,
+      "fp": 0,
+      "tn": 6,
+      "fn": 2,
+      "negative_abstentions": 0,
+      "assessed": 18,
+      "total": 18,
+      "precision": {
+        "successes": 10,
+        "total": 10,
+        "rate": 1,
+        "wilson_95": {
+          "lower": 0.7224672001371107,
+          "upper": 0.9999999999999999
+        }
+      },
+      "recall": {
+        "successes": 10,
+        "total": 12,
+        "rate": 0.8333333333333334,
+        "wilson_95": {
+          "lower": 0.5519691377470266,
+          "upper": 0.9530348578161463
+        }
+      },
+      "assessment_coverage": {
+        "successes": 18,
+        "total": 18,
+        "rate": 1,
+        "wilson_95": {
+          "lower": 0.8241207763533425,
+          "upper": 1
+        }
+      }
+    },
+    "AU-BR-002": {
+      "tp": 10,
+      "fp": 0,
+      "tn": 6,
+      "fn": 2,
+      "negative_abstentions": 0,
+      "assessed": 18,
+      "total": 18,
+      "precision": {
+        "successes": 10,
+        "total": 10,
+        "rate": 1,
+        "wilson_95": {
+          "lower": 0.7224672001371107,
+          "upper": 0.9999999999999999
+        }
+      },
+      "recall": {
+        "successes": 10,
+        "total": 12,
+        "rate": 0.8333333333333334,
+        "wilson_95": {
+          "lower": 0.5519691377470266,
+          "upper": 0.9530348578161463
+        }
+      },
+      "assessment_coverage": {
+        "successes": 18,
+        "total": 18,
+        "rate": 1,
+        "wilson_95": {
+          "lower": 0.8241207763533425,
+          "upper": 1
+        }
+      }
+    },
+    "AU-CL-004": {
+      "tp": 10,
+      "fp": 0,
+      "tn": 6,
+      "fn": 2,
+      "negative_abstentions": 0,
+      "assessed": 18,
+      "total": 18,
+      "precision": {
+        "successes": 10,
+        "total": 10,
+        "rate": 1,
+        "wilson_95": {
+          "lower": 0.7224672001371107,
+          "upper": 0.9999999999999999
+        }
+      },
+      "recall": {
+        "successes": 10,
+        "total": 12,
+        "rate": 0.8333333333333334,
+        "wilson_95": {
+          "lower": 0.5519691377470266,
+          "upper": 0.9530348578161463
+        }
+      },
+      "assessment_coverage": {
+        "successes": 18,
+        "total": 18,
+        "rate": 1,
+        "wilson_95": {
+          "lower": 0.8241207763533425,
+          "upper": 1
+        }
+      }
+    }
+  },
+  "decision_contract": {
+    "successes": 36,
+    "total": 54,
+    "rate": 0.6666666666666666,
+    "wilson_95": {
+      "lower": 0.5336096360112935,
+      "upper": 0.7775858346250742
+    }
+  },
+  "exact_three_way_match": {
+    "successes": 36,
+    "total": 54,
+    "rate": 0.6666666666666666,
+    "wilson_95": {
+      "lower": 0.5336096360112935,
+      "upper": 0.7775858346250742
+    }
+  },
+  "confusion_matrix": {
+    "candidate": {
+      "candidate": 12,
+      "clear": 6,
+      "candidate_with_followup": 0,
+      "abstain": 0
+    },
+    "clear": {
+      "candidate": 0,
+      "clear": 18,
+      "candidate_with_followup": 0,
+      "abstain": 0
+    },
+    "candidate_with_followup": {
+      "candidate": 9,
+      "clear": 0,
+      "candidate_with_followup": 9,
+      "abstain": 0
+    }
+  },
+  "followup": {
+    "all_expected": {
+      "successes": 6,
+      "total": 18,
+      "rate": 0.3333333333333333,
+      "wilson_95": {
+        "lower": 0.1627877475083369,
+        "upper": 0.5625053270405489
+      }
+    },
+    "detected_only": {
+      "successes": 6,
+      "total": 18,
+      "rate": 0.3333333333333333,
+      "wilson_95": {
+        "lower": 0.1627877475083369,
+        "upper": 0.5625053270405489
+      }
+    }
+  },
+  "insufficient": {
+    "successes": 18,
+    "total": 18,
+    "rate": 1,
+    "wilson_95": {
+      "lower": 0.8241207763533425,
+      "upper": 1
+    }
+  },
+  "safety": {
+    "invalid_outputs": 0,
+    "confirmed_findings": 0,
+    "passed": true
+  },
+  "contract_suite_passed": false,
+  "release_quality_gate": {
+    "status": "not_assessed",
+    "approved": false,
+    "reason": "exploratory_synthetic_unadjudicated_sample"
+  },
+  "limitations": [
+    "synthetic_only",
+    "author_not_blind",
+    "related_cases_not_iid",
+    "human_adjudication_pending",
+    "wilson_intervals_descriptive_only",
+    "three_rules_only",
+    "no_engine_tuning"
+  ],
+  "cases": [
+    {
+      "case_id": "V2-P01",
+      "category": "problem",
+      "rule_id": "AU-BR-001",
+      "expected": "candidate",
+      "actual": "candidate",
+      "contract_satisfied": true,
+      "finding_count": 1,
+      "reasons": [],
+      "missing_follow_up": [],
+      "missing_limitations": []
+    },
+    {
+      "case_id": "V2-P02",
+      "category": "problem",
+      "rule_id": "AU-BR-001",
+      "expected": "candidate",
+      "actual": "candidate",
+      "contract_satisfied": true,
+      "finding_count": 1,
+      "reasons": [],
+      "missing_follow_up": [],
+      "missing_limitations": []
+    },
+    {
+      "case_id": "V2-P03",
+      "category": "problem",
+      "rule_id": "AU-BR-001",
+      "expected": "candidate",
+      "actual": "clear",
+      "contract_satisfied": false,
+      "finding_count": 0,
+      "reasons": [],
+      "missing_follow_up": [],
+      "missing_limitations": []
+    },
+    {
+      "case_id": "V2-P04",
+      "category": "problem",
+      "rule_id": "AU-BR-001",
+      "expected": "candidate",
+      "actual": "candidate",
+      "contract_satisfied": true,
+      "finding_count": 1,
+      "reasons": [],
+      "missing_follow_up": [],
+      "missing_limitations": []
+    },
+    {
+      "case_id": "V2-P05",
+      "category": "problem",
+      "rule_id": "AU-BR-001",
+      "expected": "candidate",
+      "actual": "candidate",
+      "contract_satisfied": true,
+      "finding_count": 1,
+      "reasons": [],
+      "missing_follow_up": [],
+      "missing_limitations": []
+    },
+    {
+      "case_id": "V2-P06",
+      "category": "problem",
+      "rule_id": "AU-BR-001",
+      "expected": "candidate",
+      "actual": "clear",
+      "contract_satisfied": false,
+      "finding_count": 0,
+      "reasons": [],
+      "missing_follow_up": [],
+      "missing_limitations": []
+    },
+    {
+      "case_id": "V2-P07",
+      "category": "problem",
+      "rule_id": "AU-BR-002",
+      "expected": "candidate",
+      "actual": "candidate",
+      "contract_satisfied": true,
+      "finding_count": 1,
+      "reasons": [],
+      "missing_follow_up": [],
+      "missing_limitations": []
+    },
+    {
+      "case_id": "V2-P08",
+      "category": "problem",
+      "rule_id": "AU-BR-002",
+      "expected": "candidate",
+      "actual": "candidate",
+      "contract_satisfied": true,
+      "finding_count": 1,
+      "reasons": [],
+      "missing_follow_up": [],
+      "missing_limitations": []
+    },
+    {
+      "case_id": "V2-P09",
+      "category": "problem",
+      "rule_id": "AU-BR-002",
+      "expected": "candidate",
+      "actual": "candidate",
+      "contract_satisfied": true,
+      "finding_count": 1,
+      "reasons": [],
+      "missing_follow_up": [],
+      "missing_limitations": []
+    },
+    {
+      "case_id": "V2-P10",
+      "category": "problem",
+      "rule_id": "AU-BR-002",
+      "expected": "candidate",
+      "actual": "clear",
+      "contract_satisfied": false,
+      "finding_count": 0,
+      "reasons": [],
+      "missing_follow_up": [],
+      "missing_limitations": []
+    },
+    {
+      "case_id": "V2-P11",
+      "category": "problem",
+      "rule_id": "AU-BR-002",
+      "expected": "candidate",
+      "actual": "candidate",
+      "contract_satisfied": true,
+      "finding_count": 1,
+      "reasons": [],
+      "missing_follow_up": [],
+      "missing_limitations": []
+    },
+    {
+      "case_id": "V2-P12",
+      "category": "problem",
+      "rule_id": "AU-BR-002",
+      "expected": "candidate",
+      "actual": "clear",
+      "contract_satisfied": false,
+      "finding_count": 0,
+      "reasons": [],
+      "missing_follow_up": [],
+      "missing_limitations": []
+    },
+    {
+      "case_id": "V2-P13",
+      "category": "problem",
+      "rule_id": "AU-CL-004",
+      "expected": "candidate",
+      "actual": "candidate",
+      "contract_satisfied": true,
+      "finding_count": 1,
+      "reasons": [],
+      "missing_follow_up": [],
+      "missing_limitations": []
+    },
+    {
+      "case_id": "V2-P14",
+      "category": "problem",
+      "rule_id": "AU-CL-004",
+      "expected": "candidate",
+      "actual": "candidate",
+      "contract_satisfied": true,
+      "finding_count": 1,
+      "reasons": [],
+      "missing_follow_up": [],
+      "missing_limitations": []
+    },
+    {
+      "case_id": "V2-P15",
+      "category": "problem",
+      "rule_id": "AU-CL-004",
+      "expected": "candidate",
+      "actual": "candidate",
+      "contract_satisfied": true,
+      "finding_count": 1,
+      "reasons": [],
+      "missing_follow_up": [],
+      "missing_limitations": []
+    },
+    {
+      "case_id": "V2-P16",
+      "category": "problem",
+      "rule_id": "AU-CL-004",
+      "expected": "candidate",
+      "actual": "candidate",
+      "contract_satisfied": true,
+      "finding_count": 1,
+      "reasons": [],
+      "missing_follow_up": [],
+      "missing_limitations": []
+    },
+    {
+      "case_id": "V2-P17",
+      "category": "problem",
+      "rule_id": "AU-CL-004",
+      "expected": "candidate",
+      "actual": "clear",
+      "contract_satisfied": false,
+      "finding_count": 0,
+      "reasons": [],
+      "missing_follow_up": [],
+      "missing_limitations": []
+    },
+    {
+      "case_id": "V2-P18",
+      "category": "problem",
+      "rule_id": "AU-CL-004",
+      "expected": "candidate",
+      "actual": "clear",
+      "contract_satisfied": false,
+      "finding_count": 0,
+      "reasons": [],
+      "missing_follow_up": [],
+      "missing_limitations": []
+    },
+    {
+      "case_id": "V2-C01",
+      "category": "no_problem",
+      "rule_id": "AU-BR-001",
+      "expected": "clear",
+      "actual": "clear",
+      "contract_satisfied": true,
+      "finding_count": 0,
+      "reasons": [],
+      "missing_follow_up": [],
+      "missing_limitations": []
+    },
+    {
+      "case_id": "V2-C02",
+      "category": "no_problem",
+      "rule_id": "AU-BR-001",
+      "expected": "clear",
+      "actual": "clear",
+      "contract_satisfied": true,
+      "finding_count": 0,
+      "reasons": [],
+      "missing_follow_up": [],
+      "missing_limitations": []
+    },
+    {
+      "case_id": "V2-C03",
+      "category": "no_problem",
+      "rule_id": "AU-BR-001",
+      "expected": "clear",
+      "actual": "clear",
+      "contract_satisfied": true,
+      "finding_count": 0,
+      "reasons": [],
+      "missing_follow_up": [],
+      "missing_limitations": []
+    },
+    {
+      "case_id": "V2-C04",
+      "category": "no_problem",
+      "rule_id": "AU-BR-001",
+      "expected": "clear",
+      "actual": "clear",
+      "contract_satisfied": true,
+      "finding_count": 0,
+      "reasons": [],
+      "missing_follow_up": [],
+      "missing_limitations": []
+    },
+    {
+      "case_id": "V2-C05",
+      "category": "no_problem",
+      "rule_id": "AU-BR-001",
+      "expected": "clear",
+      "actual": "clear",
+      "contract_satisfied": true,
+      "finding_count": 0,
+      "reasons": [],
+      "missing_follow_up": [],
+      "missing_limitations": []
+    },
+    {
+      "case_id": "V2-C06",
+      "category": "no_problem",
+      "rule_id": "AU-BR-001",
+      "expected": "clear",
+      "actual": "clear",
+      "contract_satisfied": true,
+      "finding_count": 0,
+      "reasons": [],
+      "missing_follow_up": [],
+      "missing_limitations": []
+    },
+    {
+      "case_id": "V2-C07",
+      "category": "no_problem",
+      "rule_id": "AU-BR-002",
+      "expected": "clear",
+      "actual": "clear",
+      "contract_satisfied": true,
+      "finding_count": 0,
+      "reasons": [],
+      "missing_follow_up": [],
+      "missing_limitations": []
+    },
+    {
+      "case_id": "V2-C08",
+      "category": "no_problem",
+      "rule_id": "AU-BR-002",
+      "expected": "clear",
+      "actual": "clear",
+      "contract_satisfied": true,
+      "finding_count": 0,
+      "reasons": [],
+      "missing_follow_up": [],
+      "missing_limitations": []
+    },
+    {
+      "case_id": "V2-C09",
+      "category": "no_problem",
+      "rule_id": "AU-BR-002",
+      "expected": "clear",
+      "actual": "clear",
+      "contract_satisfied": true,
+      "finding_count": 0,
+      "reasons": [],
+      "missing_follow_up": [],
+      "missing_limitations": []
+    },
+    {
+      "case_id": "V2-C10",
+      "category": "no_problem",
+      "rule_id": "AU-BR-002",
+      "expected": "clear",
+      "actual": "clear",
+      "contract_satisfied": true,
+      "finding_count": 0,
+      "reasons": [],
+      "missing_follow_up": [],
+      "missing_limitations": []
+    },
+    {
+      "case_id": "V2-C11",
+      "category": "no_problem",
+      "rule_id": "AU-BR-002",
+      "expected": "clear",
+      "actual": "clear",
+      "contract_satisfied": true,
+      "finding_count": 0,
+      "reasons": [],
+      "missing_follow_up": [],
+      "missing_limitations": []
+    },
+    {
+      "case_id": "V2-C12",
+      "category": "no_problem",
+      "rule_id": "AU-BR-002",
+      "expected": "clear",
+      "actual": "clear",
+      "contract_satisfied": true,
+      "finding_count": 0,
+      "reasons": [],
+      "missing_follow_up": [],
+      "missing_limitations": []
+    },
+    {
+      "case_id": "V2-C13",
+      "category": "no_problem",
+      "rule_id": "AU-CL-004",
+      "expected": "clear",
+      "actual": "clear",
+      "contract_satisfied": true,
+      "finding_count": 0,
+      "reasons": [],
+      "missing_follow_up": [],
+      "missing_limitations": []
+    },
+    {
+      "case_id": "V2-C14",
+      "category": "no_problem",
+      "rule_id": "AU-CL-004",
+      "expected": "clear",
+      "actual": "clear",
+      "contract_satisfied": true,
+      "finding_count": 0,
+      "reasons": [],
+      "missing_follow_up": [],
+      "missing_limitations": []
+    },
+    {
+      "case_id": "V2-C15",
+      "category": "no_problem",
+      "rule_id": "AU-CL-004",
+      "expected": "clear",
+      "actual": "clear",
+      "contract_satisfied": true,
+      "finding_count": 0,
+      "reasons": [],
+      "missing_follow_up": [],
+      "missing_limitations": []
+    },
+    {
+      "case_id": "V2-C16",
+      "category": "no_problem",
+      "rule_id": "AU-CL-004",
+      "expected": "clear",
+      "actual": "clear",
+      "contract_satisfied": true,
+      "finding_count": 0,
+      "reasons": [],
+      "missing_follow_up": [],
+      "missing_limitations": []
+    },
+    {
+      "case_id": "V2-C17",
+      "category": "no_problem",
+      "rule_id": "AU-CL-004",
+      "expected": "clear",
+      "actual": "clear",
+      "contract_satisfied": true,
+      "finding_count": 0,
+      "reasons": [],
+      "missing_follow_up": [],
+      "missing_limitations": []
+    },
+    {
+      "case_id": "V2-C18",
+      "category": "no_problem",
+      "rule_id": "AU-CL-004",
+      "expected": "clear",
+      "actual": "clear",
+      "contract_satisfied": true,
+      "finding_count": 0,
+      "reasons": [],
+      "missing_follow_up": [],
+      "missing_limitations": []
+    },
+    {
+      "case_id": "V2-F01",
+      "category": "exception",
+      "rule_id": "AU-BR-001",
+      "expected": "candidate_with_followup",
+      "actual": "candidate",
+      "contract_satisfied": false,
+      "finding_count": 1,
+      "reasons": [],
+      "missing_follow_up": [
+        "workflow_suppression_review"
+      ],
+      "missing_limitations": []
+    },
+    {
+      "case_id": "V2-F02",
+      "category": "exception",
+      "rule_id": "AU-BR-001",
+      "expected": "candidate_with_followup",
+      "actual": "candidate",
+      "contract_satisfied": false,
+      "finding_count": 1,
+      "reasons": [],
+      "missing_follow_up": [
+        "workflow_suppression_review"
+      ],
+      "missing_limitations": []
+    },
+    {
+      "case_id": "V2-F03",
+      "category": "exception",
+      "rule_id": "AU-BR-001",
+      "expected": "candidate_with_followup",
+      "actual": "candidate",
+      "contract_satisfied": false,
+      "finding_count": 1,
+      "reasons": [],
+      "missing_follow_up": [
+        "workflow_suppression_review"
+      ],
+      "missing_limitations": []
+    },
+    {
+      "case_id": "V2-F04",
+      "category": "exception",
+      "rule_id": "AU-BR-001",
+      "expected": "candidate_with_followup",
+      "actual": "candidate_with_followup",
+      "contract_satisfied": true,
+      "finding_count": 1,
+      "reasons": [],
+      "missing_follow_up": [],
+      "missing_limitations": []
+    },
+    {
+      "case_id": "V2-F05",
+      "category": "exception",
+      "rule_id": "AU-BR-001",
+      "expected": "candidate_with_followup",
+      "actual": "candidate_with_followup",
+      "contract_satisfied": true,
+      "finding_count": 1,
+      "reasons": [],
+      "missing_follow_up": [],
+      "missing_limitations": []
+    },
+    {
+      "case_id": "V2-F06",
+      "category": "exception",
+      "rule_id": "AU-BR-001",
+      "expected": "candidate_with_followup",
+      "actual": "candidate_with_followup",
+      "contract_satisfied": false,
+      "finding_count": 1,
+      "reasons": [],
+      "missing_follow_up": [
+        "workflow_suppression_review"
+      ],
+      "missing_limitations": []
+    },
+    {
+      "case_id": "V2-F07",
+      "category": "exception",
+      "rule_id": "AU-BR-002",
+      "expected": "candidate_with_followup",
+      "actual": "candidate",
+      "contract_satisfied": false,
+      "finding_count": 1,
+      "reasons": [],
+      "missing_follow_up": [
+        "async_dependency_review"
+      ],
+      "missing_limitations": []
+    },
+    {
+      "case_id": "V2-F08",
+      "category": "exception",
+      "rule_id": "AU-BR-002",
+      "expected": "candidate_with_followup",
+      "actual": "candidate",
+      "contract_satisfied": false,
+      "finding_count": 1,
+      "reasons": [],
+      "missing_follow_up": [
+        "async_dependency_review"
+      ],
+      "missing_limitations": []
+    },
+    {
+      "case_id": "V2-F09",
+      "category": "exception",
+      "rule_id": "AU-BR-002",
+      "expected": "candidate_with_followup",
+      "actual": "candidate",
+      "contract_satisfied": false,
+      "finding_count": 1,
+      "reasons": [],
+      "missing_follow_up": [
+        "async_dependency_review"
+      ],
+      "missing_limitations": []
+    },
+    {
+      "case_id": "V2-F10",
+      "category": "exception",
+      "rule_id": "AU-BR-002",
+      "expected": "candidate_with_followup",
+      "actual": "candidate_with_followup",
+      "contract_satisfied": true,
+      "finding_count": 1,
+      "reasons": [],
+      "missing_follow_up": [],
+      "missing_limitations": []
+    },
+    {
+      "case_id": "V2-F11",
+      "category": "exception",
+      "rule_id": "AU-BR-002",
+      "expected": "candidate_with_followup",
+      "actual": "candidate_with_followup",
+      "contract_satisfied": true,
+      "finding_count": 1,
+      "reasons": [],
+      "missing_follow_up": [],
+      "missing_limitations": []
+    },
+    {
+      "case_id": "V2-F12",
+      "category": "exception",
+      "rule_id": "AU-BR-002",
+      "expected": "candidate_with_followup",
+      "actual": "candidate_with_followup",
+      "contract_satisfied": false,
+      "finding_count": 1,
+      "reasons": [],
+      "missing_follow_up": [
+        "async_dependency_review"
+      ],
+      "missing_limitations": []
+    },
+    {
+      "case_id": "V2-F13",
+      "category": "exception",
+      "rule_id": "AU-CL-004",
+      "expected": "candidate_with_followup",
+      "actual": "candidate",
+      "contract_satisfied": false,
+      "finding_count": 1,
+      "reasons": [],
+      "missing_follow_up": [
+        "synchronous_ajax_review"
+      ],
+      "missing_limitations": []
+    },
+    {
+      "case_id": "V2-F14",
+      "category": "exception",
+      "rule_id": "AU-CL-004",
+      "expected": "candidate_with_followup",
+      "actual": "candidate",
+      "contract_satisfied": false,
+      "finding_count": 1,
+      "reasons": [],
+      "missing_follow_up": [
+        "synchronous_ajax_review"
+      ],
+      "missing_limitations": []
+    },
+    {
+      "case_id": "V2-F15",
+      "category": "exception",
+      "rule_id": "AU-CL-004",
+      "expected": "candidate_with_followup",
+      "actual": "candidate",
+      "contract_satisfied": false,
+      "finding_count": 1,
+      "reasons": [],
+      "missing_follow_up": [
+        "synchronous_ajax_review"
+      ],
+      "missing_limitations": []
+    },
+    {
+      "case_id": "V2-F16",
+      "category": "exception",
+      "rule_id": "AU-CL-004",
+      "expected": "candidate_with_followup",
+      "actual": "candidate_with_followup",
+      "contract_satisfied": true,
+      "finding_count": 1,
+      "reasons": [],
+      "missing_follow_up": [],
+      "missing_limitations": []
+    },
+    {
+      "case_id": "V2-F17",
+      "category": "exception",
+      "rule_id": "AU-CL-004",
+      "expected": "candidate_with_followup",
+      "actual": "candidate_with_followup",
+      "contract_satisfied": true,
+      "finding_count": 1,
+      "reasons": [],
+      "missing_follow_up": [],
+      "missing_limitations": []
+    },
+    {
+      "case_id": "V2-F18",
+      "category": "exception",
+      "rule_id": "AU-CL-004",
+      "expected": "candidate_with_followup",
+      "actual": "candidate_with_followup",
+      "contract_satisfied": false,
+      "finding_count": 1,
+      "reasons": [],
+      "missing_follow_up": [
+        "synchronous_ajax_review"
+      ],
+      "missing_limitations": []
+    },
+    {
+      "case_id": "V2-I01",
+      "category": "insufficient",
+      "rule_id": "AU-BR-001",
+      "expected": "abstain",
+      "actual": "abstain",
+      "contract_satisfied": true,
+      "finding_count": 0,
+      "reasons": [
+        "release_unknown"
+      ],
+      "missing_follow_up": [],
+      "missing_limitations": []
+    },
+    {
+      "case_id": "V2-I02",
+      "category": "insufficient",
+      "rule_id": "AU-BR-001",
+      "expected": "abstain",
+      "actual": "abstain",
+      "contract_satisfied": true,
+      "finding_count": 0,
+      "reasons": [
+        "release_mismatch"
+      ],
+      "missing_follow_up": [],
+      "missing_limitations": []
+    },
+    {
+      "case_id": "V2-I03",
+      "category": "insufficient",
+      "rule_id": "AU-BR-001",
+      "expected": "abstain",
+      "actual": "abstain",
+      "contract_satisfied": true,
+      "finding_count": 0,
+      "reasons": [
+        "javascript_parse_failed"
+      ],
+      "missing_follow_up": [],
+      "missing_limitations": []
+    },
+    {
+      "case_id": "V2-I04",
+      "category": "insufficient",
+      "rule_id": "AU-BR-001",
+      "expected": "abstain",
+      "actual": "abstain",
+      "contract_satisfied": true,
+      "finding_count": 0,
+      "reasons": [
+        "missing_script"
+      ],
+      "missing_follow_up": [],
+      "missing_limitations": []
+    },
+    {
+      "case_id": "V2-I05",
+      "category": "insufficient",
+      "rule_id": "AU-BR-001",
+      "expected": "abstain",
+      "actual": "abstain",
+      "contract_satisfied": true,
+      "finding_count": 0,
+      "reasons": [
+        "duplicate_field"
+      ],
+      "missing_follow_up": [],
+      "missing_limitations": []
+    },
+    {
+      "case_id": "V2-I06",
+      "category": "insufficient",
+      "rule_id": "AU-BR-001",
+      "expected": "abstain",
+      "actual": "abstain",
+      "contract_satisfied": true,
+      "finding_count": 0,
+      "reasons": [
+        "identity_mismatch"
+      ],
+      "missing_follow_up": [],
+      "missing_limitations": []
+    },
+    {
+      "case_id": "V2-I07",
+      "category": "insufficient",
+      "rule_id": "AU-BR-002",
+      "expected": "abstain",
+      "actual": "abstain",
+      "contract_satisfied": true,
+      "finding_count": 0,
+      "reasons": [
+        "missing_context"
+      ],
+      "missing_follow_up": [],
+      "missing_limitations": []
+    },
+    {
+      "case_id": "V2-I08",
+      "category": "insufficient",
+      "rule_id": "AU-BR-002",
+      "expected": "abstain",
+      "actual": "abstain",
+      "contract_satisfied": true,
+      "finding_count": 0,
+      "reasons": [
+        "missing_context"
+      ],
+      "missing_follow_up": [],
+      "missing_limitations": []
+    },
+    {
+      "case_id": "V2-I09",
+      "category": "insufficient",
+      "rule_id": "AU-BR-002",
+      "expected": "abstain",
+      "actual": "abstain",
+      "contract_satisfied": true,
+      "finding_count": 0,
+      "reasons": [
+        "release_unknown"
+      ],
+      "missing_follow_up": [],
+      "missing_limitations": []
+    },
+    {
+      "case_id": "V2-I10",
+      "category": "insufficient",
+      "rule_id": "AU-BR-002",
+      "expected": "abstain",
+      "actual": "abstain",
+      "contract_satisfied": true,
+      "finding_count": 0,
+      "reasons": [
+        "release_mismatch"
+      ],
+      "missing_follow_up": [],
+      "missing_limitations": []
+    },
+    {
+      "case_id": "V2-I11",
+      "category": "insufficient",
+      "rule_id": "AU-BR-002",
+      "expected": "abstain",
+      "actual": "abstain",
+      "contract_satisfied": true,
+      "finding_count": 0,
+      "reasons": [
+        "javascript_parse_failed"
+      ],
+      "missing_follow_up": [],
+      "missing_limitations": []
+    },
+    {
+      "case_id": "V2-I12",
+      "category": "insufficient",
+      "rule_id": "AU-BR-002",
+      "expected": "abstain",
+      "actual": "abstain",
+      "contract_satisfied": true,
+      "finding_count": 0,
+      "reasons": [
+        "duplicate_field"
+      ],
+      "missing_follow_up": [],
+      "missing_limitations": []
+    },
+    {
+      "case_id": "V2-I13",
+      "category": "insufficient",
+      "rule_id": "AU-CL-004",
+      "expected": "abstain",
+      "actual": "abstain",
+      "contract_satisfied": true,
+      "finding_count": 0,
+      "reasons": [
+        "release_unknown"
+      ],
+      "missing_follow_up": [],
+      "missing_limitations": []
+    },
+    {
+      "case_id": "V2-I14",
+      "category": "insufficient",
+      "rule_id": "AU-CL-004",
+      "expected": "abstain",
+      "actual": "abstain",
+      "contract_satisfied": true,
+      "finding_count": 0,
+      "reasons": [
+        "release_mismatch"
+      ],
+      "missing_follow_up": [],
+      "missing_limitations": []
+    },
+    {
+      "case_id": "V2-I15",
+      "category": "insufficient",
+      "rule_id": "AU-CL-004",
+      "expected": "abstain",
+      "actual": "abstain",
+      "contract_satisfied": true,
+      "finding_count": 0,
+      "reasons": [
+        "javascript_parse_failed"
+      ],
+      "missing_follow_up": [],
+      "missing_limitations": []
+    },
+    {
+      "case_id": "V2-I16",
+      "category": "insufficient",
+      "rule_id": "AU-CL-004",
+      "expected": "abstain",
+      "actual": "abstain",
+      "contract_satisfied": true,
+      "finding_count": 0,
+      "reasons": [
+        "missing_script"
+      ],
+      "missing_follow_up": [],
+      "missing_limitations": []
+    },
+    {
+      "case_id": "V2-I17",
+      "category": "insufficient",
+      "rule_id": "AU-CL-004",
+      "expected": "abstain",
+      "actual": "abstain",
+      "contract_satisfied": true,
+      "finding_count": 0,
+      "reasons": [
+        "duplicate_field"
+      ],
+      "missing_follow_up": [],
+      "missing_limitations": []
+    },
+    {
+      "case_id": "V2-I18",
+      "category": "insufficient",
+      "rule_id": "AU-CL-004",
+      "expected": "abstain",
+      "actual": "abstain",
+      "contract_satisfied": true,
+      "finding_count": 0,
+      "reasons": [
+        "identity_mismatch"
+      ],
+      "missing_follow_up": [],
+      "missing_limitations": []
+    }
+  ],
+  "engine_ruleset_versions": [
+    "bp3-0.2"
+  ],
+  "fixture_file_sha256": "9edbe42d8546f898640c55f86c219ed71d1159a540aa06870090a7f327d988df"
+}

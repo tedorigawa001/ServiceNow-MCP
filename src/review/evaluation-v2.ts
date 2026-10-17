@@ -69,7 +69,7 @@ const outputSchema = z.discriminatedUnion('status', [
     'invalid_input', 'invalid_xml', 'forbidden_dtd', 'forbidden_instruction', 'unsupported_xml_version', 'element_limit',
     'depth_limit', 'forbidden_namespace', 'unsupported_envelope', 'ambiguous_record', 'deleted_asset', 'unsupported_action',
     'duplicate_field', 'nested_field', 'text_limit', 'code_limit', 'unexpected_text', 'payload_limit', 'missing_script',
-    'identity_mismatch', 'invalid_scope', 'rule_asset_mismatch', 'javascript_parse_failed', 'analysis_limit', 'finding_limit', 'invalid_result_context',
+    'identity_mismatch', 'invalid_scope', 'rule_asset_mismatch', 'javascript_parse_failed', 'analysis_limit', 'analysis_failed', 'finding_limit', 'invalid_result_context',
   ]) }),
 ]);
 type Counts = { tp: number; fp: number; tn: number; fn: number; negative_abstentions: number; assessed: number; total: number };

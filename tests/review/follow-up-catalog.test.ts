@@ -4,7 +4,7 @@ import { FOLLOW_UP_CODES, FOLLOW_UP_DEFINITIONS, COMMON_FOLLOW_UP_CODES, RULE_SP
 import { followUpCodeSchema as publicCodeSchema } from '../../src/review/result-schema.js';
 import { RULES } from '../../src/review/catalog.js';
 import { evaluateBestPracticeV2 } from '../../src/review/evaluation-v2.js';
-import { reviewUpdateSetPayload } from '../../src/review/payload-review.js';
+import { reviewUpdateSetPayloadLegacy } from '../../src/review/payload-review.js';
 import { readFileSync } from 'node:fs';
 
 describe('shared followup vocabulary', () => {
@@ -35,7 +35,7 @@ describe('shared followup vocabulary', () => {
     const fixture = JSON.parse(readFileSync(new URL('./evaluation/bp4-v2-cases.json', import.meta.url), 'utf8'));
     const baseline = JSON.parse(readFileSync(new URL('../../docs/evaluation/bp4-v2-baseline.json', import.meta.url), 'utf8'));
     const report = evaluateBestPracticeV2(fixture, input => {
-      const output = reviewUpdateSetPayload(input);
+      const output = reviewUpdateSetPayloadLegacy(input);
       if (output.status === 'reviewed') for (const f of output.result.findings) for (const code of f.required_follow_up) {
         const parsed = followUpCodeSchema.parse(code);
         expect(FOLLOW_UP_DEFINITIONS[parsed].kind).toBe('generic');

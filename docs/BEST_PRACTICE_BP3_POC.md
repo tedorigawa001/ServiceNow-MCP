@@ -2,6 +2,9 @@
 
 Status: ローカルPoC／製品MCP未統合。PDIへの接続・変更なし。
 
+本書の初回検証はbp3-0.1の記録。現在の既定は[限定的スコープ解析bp3-0.2](BEST_PRACTICE_SCOPE_REEVALUATION.md)。
+旧解析は明示的legacy経路で残し、既存の抽出・PDI検証結果を新解析の実機確認には流用しない。
+
 ## 1. 範囲と合格基準
 
 BP-2の[結果契約](BEST_PRACTICE_BP2_POC.md)を利用し、本文を返さずに

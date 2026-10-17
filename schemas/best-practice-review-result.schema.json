@@ -18,7 +18,8 @@
       "type": "string",
       "enum": [
         "bp2-0.1",
-        "bp3-0.1"
+        "bp3-0.1",
+        "bp3-0.2"
       ]
     },
     "reviewed_at": {

@@ -3,13 +3,14 @@ import { readFileSync } from 'node:fs';
 import { createHash } from 'node:crypto';
 import { spawnSync } from 'node:child_process';
 import { evaluateBestPracticeV2, evaluationV2SetSchema, wilsonSummary } from '../../src/review/evaluation-v2.js';
-import { reviewUpdateSetPayload } from '../../src/review/payload-review.js';
+import { reviewUpdateSetPayload, reviewUpdateSetPayloadLegacy } from '../../src/review/payload-review.js';
 import type { ReviewResult } from '../../src/review/result-schema.js';
 
 const bytes = readFileSync(new URL('./evaluation/bp4-v2-cases.json', import.meta.url));
 const fixture = JSON.parse(bytes.toString('utf8'));
 const parsed = evaluationV2SetSchema.parse(fixture);
 const baseline = JSON.parse(readFileSync(new URL('../../docs/evaluation/bp4-v2-baseline.json', import.meta.url), 'utf8'));
+const scopedReport = JSON.parse(readFileSync(new URL('../../docs/evaluation/bp4-v2-scoped.json', import.meta.url), 'utf8'));
 const specific = { 'AU-BR-001': 'workflow_suppression_review', 'AU-BR-002': 'async_dependency_review', 'AU-CL-004': 'synchronous_ajax_review' };
 type Output = ReturnType<typeof reviewUpdateSetPayload>;
 
@@ -61,7 +62,7 @@ describe('BP-4 v0.2 evaluation contract', () => {
     }
   });
   it('reproduces the frozen baseline, including missing followup despite a detected candidate', () => {
-    const report = evaluateBestPracticeV2(fixture);
+    const report = evaluateBestPracticeV2(fixture, reviewUpdateSetPayloadLegacy);
     expect({ ...report, fixture_file_sha256: createHash('sha256').update(bytes).digest('hex') }).toEqual(baseline);
     expect(report.overall).toMatchObject({ tp: 26, fp: 8, tn: 10, fn: 10 });
     expect(report.followup.all_expected).toMatchObject({ successes: 6, total: 18 });
@@ -169,6 +170,12 @@ describe('BP-4 v0.2 evaluation contract', () => {
     for (const args of [[], ['--strict']]) {
       const run = spawnSync(process.execPath, ['--import', 'tsx', 'scripts/bp4-evaluate-v2.ts', ...args], { encoding: 'utf8' });
       expect(run.status).toBe(args.length ? 2 : 0); expect(run.stderr).toBe('');
+      expect(JSON.parse(run.stdout)).toEqual(scopedReport);
+    }
+    for (const args of [['--legacy'], ['--legacy', '--strict']]) {
+      const run = spawnSync(process.execPath, ['--import', 'tsx', 'scripts/bp4-evaluate-v2.ts', ...args], { encoding: 'utf8' });
+      expect(run.status).toBe(args.includes('--strict') ? 2 : 0);
+      expect(run.stderr).toBe('');
       expect(JSON.parse(run.stdout)).toEqual(baseline);
     }
     const invalid = spawnSync(process.execPath, ['--import', 'tsx', 'scripts/bp4-evaluate-v2.ts', '--unknown'], { encoding: 'utf8' });

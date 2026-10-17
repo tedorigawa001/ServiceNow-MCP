@@ -1,7 +1,7 @@
 /** Offline, case-level evaluation. Gold labels never modify the review engine. */
 import { z } from 'zod';
 import { createHash } from 'node:crypto';
-import { reviewUpdateSetPayload } from './payload-review.js';
+import { reviewUpdateSetPayloadLegacy as reviewUpdateSetPayload } from './payload-review.js';
 
 const caseSchema = z.strictObject({
   id: z.string().regex(/^[PNEI]\d{2}$/),
