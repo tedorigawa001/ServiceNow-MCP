@@ -2,7 +2,7 @@
 import { readFileSync } from 'node:fs';
 import { createHash } from 'node:crypto';
 import { evaluateBestPracticeV2 } from '../src/review/evaluation-v2.js';
-import { reviewUpdateSetPayload, reviewUpdateSetPayloadLegacy, reviewUpdateSetPayloadScoped } from '../src/review/payload-review.js';
+import { reviewUpdateSetPayloadContextual as reviewUpdateSetPayload, reviewUpdateSetPayloadLegacy, reviewUpdateSetPayloadScoped } from '../src/review/payload-review.js';
 
 try {
   const args = process.argv.slice(2);

@@ -1,8 +1,8 @@
 /** Policy v0.2: contextual discrimination and intrinsic completeness are separate axes. */
 import { z } from 'zod';
-import { followupCaseSchema, measureFollowupCases } from './evaluation-followups.js';
-import { reviewUpdateSetPayload } from './payload-review.js';
-import { FOLLOW_UP_CATALOG_VERSION, FOLLOW_UP_DEFINITIONS, RULE_SPECIFIC_FOLLOW_UP } from './follow-up-catalog.js';
+import { followupCaseSchema, measureFollowupCases, type Case } from './evaluation-followups.js';
+import { reviewUpdateSetPayloadContextual as reviewUpdateSetPayload } from './payload-review.js';
+import { FOLLOW_UP_DEFINITIONS, RULE_SPECIFIC_FOLLOW_UP } from './follow-up-catalog.js';
 import { wilsonSummary } from './evaluation-v2.js';
 
 const rules = ['AU-BR-001', 'AU-BR-002', 'AU-CL-004'] as const;
@@ -24,9 +24,15 @@ export const followupPolicySetSchema = z.strictObject({ version: z.literal('foll
 
 export function evaluateFollowupPolicy(raw: unknown, review: (input: unknown) => unknown = reviewUpdateSetPayload) {
   const set = followupPolicySetSchema.parse(raw);
-  const base = measureFollowupCases(set, review, FOLLOW_UP_CATALOG_VERSION);
+  return measureFollowupPolicy(set, review, 'bp-followups-0.3');
+}
+
+/** Shared measurement only; each entry point first validates its own frozen dataset. */
+export function measureFollowupPolicy(set: { version: string; provenance: string; cases: Array<Case & { variant?: string }> },
+  review: (input: unknown) => unknown, catalogVersion: string) {
+  const base = measureFollowupCases(set, review, catalogVersion);
   const variants = new Map(set.cases.map(c => [c.id, c.variant]));
-  const rows = base.cases.map(c => ({ ...c, variant: variants.get(c.case_id)!,
+  const rows = base.cases.map(c => ({ ...c, variant: variants.get(c.case_id) ?? 'unspecified',
     followup_kind: FOLLOW_UP_DEFINITIONS[RULE_SPECIFIC_FOLLOW_UP[c.rule_id]].kind }));
   type Row = typeof rows[number];
   const sum = (xs: Row[], key: 'followup_tp' | 'followup_fp' | 'followup_fn' | 'followup_tn' | 'negative_unassessed'
@@ -53,7 +59,8 @@ export function evaluateFollowupPolicy(raw: unknown, review: (input: unknown) =>
     const xs = rows.filter(c => c.followup_kind === kind);
     return { all: summarize(xs), declared_scope: summarize(xs.filter(c => c.basis === 'catalog_contract')),
       semantic_boundary: summarize(xs.filter(c => c.basis === 'semantic_boundary')),
-      by_variant: Object.fromEntries(['ordinary', 'defensive', 'control', 'boundary'].map(v => [v, summarize(xs.filter(c => c.variant === v))])) };
+      by_variant: Object.fromEntries([...new Set([...['ordinary', 'defensive', 'control', 'boundary'], ...rows.map(r => r.variant)])]
+        .map(v => [v, summarize(xs.filter(c => c.variant === v))])) };
   };
   // Do not expose the old mixed followup aggregate as a headline metric in this policy report.
   const { overall, by_basis: _byBasis, cases: _cases, ...metadata } = base;

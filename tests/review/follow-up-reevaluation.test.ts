@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { createHash } from 'node:crypto';
 import { evaluateBestPracticeV2 } from '../../src/review/evaluation-v2.js';
-import { reviewUpdateSetPayload, reviewUpdateSetPayloadScoped } from '../../src/review/payload-review.js';
+import { reviewUpdateSetPayloadContextual as reviewUpdateSetPayload, reviewUpdateSetPayloadScoped } from '../../src/review/payload-review.js';
 
 const bytes = readFileSync(new URL('./evaluation/bp4-v2-cases.json', import.meta.url));
 const fixture = JSON.parse(bytes.toString('utf8'));

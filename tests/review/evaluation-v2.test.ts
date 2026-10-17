@@ -3,7 +3,7 @@ import { readFileSync } from 'node:fs';
 import { createHash } from 'node:crypto';
 import { spawnSync } from 'node:child_process';
 import { evaluateBestPracticeV2, evaluationV2SetSchema, wilsonSummary } from '../../src/review/evaluation-v2.js';
-import { reviewUpdateSetPayload, reviewUpdateSetPayloadLegacy } from '../../src/review/payload-review.js';
+import { reviewUpdateSetPayloadContextual as reviewUpdateSetPayload, reviewUpdateSetPayloadLegacy } from '../../src/review/payload-review.js';
 import type { ReviewResult } from '../../src/review/result-schema.js';
 
 const bytes = readFileSync(new URL('./evaluation/bp4-v2-cases.json', import.meta.url));
@@ -169,27 +169,20 @@ describe('BP-4 v0.2 evaluation contract', () => {
     expect(JSON.stringify(report)).not.toContain('"code":'); expect(JSON.stringify(report)).not.toContain('"payload":');
     for (const c of parsed.cases) expect(JSON.stringify(report)).not.toContain(JSON.stringify(c.code));
   });
-  it('keeps report generation, strict case-contract failure and CLI errors separate', () => {
-    for (const args of [[], ['--strict']]) {
-      const run = spawnSync(process.execPath, ['--import', 'tsx', 'scripts/bp4-evaluate-v2.ts', ...args], { encoding: 'utf8' });
-      expect(run.status).toBe(args.length ? 2 : 0); expect(run.stderr).toBe('');
-      expect(JSON.parse(run.stdout)).toEqual(contextualReport);
-    }
-    for (const args of [['--scoped'], ['--scoped', '--strict']]) {
-      const run = spawnSync(process.execPath, ['--import', 'tsx', 'scripts/bp4-evaluate-v2.ts', ...args], { encoding: 'utf8' });
-      expect(run.status).toBe(args.includes('--strict') ? 2 : 0);
-      expect(run.stderr).toBe('');
-      expect(JSON.parse(run.stdout)).toEqual(scopedReport);
-    }
-    for (const args of [['--legacy'], ['--legacy', '--strict']]) {
-      const run = spawnSync(process.execPath, ['--import', 'tsx', 'scripts/bp4-evaluate-v2.ts', ...args], { encoding: 'utf8' });
-      expect(run.status).toBe(args.includes('--strict') ? 2 : 0);
-      expect(run.stderr).toBe('');
-      expect(JSON.parse(run.stdout)).toEqual(baseline);
-    }
-    const invalid = spawnSync(process.execPath, ['--import', 'tsx', 'scripts/bp4-evaluate-v2.ts', '--unknown'], { encoding: 'utf8' });
-    expect(invalid.status).toBe(1); expect(invalid.stdout).toBe('');
-    const conflict = spawnSync(process.execPath, ['--import', 'tsx', 'scripts/bp4-evaluate-v2.ts', '--legacy', '--scoped'], { encoding: 'utf8' });
-    expect(conflict.status).toBe(1); expect(conflict.stdout).toBe('');
+  // Give each CLI invocation its own test budget; eight sequential child startups can exceed 5s under load.
+  it.each([
+    { name: 'current', args: [], expected: contextualReport, status: 0 },
+    { name: 'current strict', args: ['--strict'], expected: contextualReport, status: 2 },
+    { name: 'scoped', args: ['--scoped'], expected: scopedReport, status: 0 },
+    { name: 'scoped strict', args: ['--scoped', '--strict'], expected: scopedReport, status: 2 },
+    { name: 'legacy', args: ['--legacy'], expected: baseline, status: 0 },
+    { name: 'legacy strict', args: ['--legacy', '--strict'], expected: baseline, status: 2 },
+    { name: 'invalid', args: ['--unknown'], expected: null, status: 1 },
+    { name: 'conflicting flags', args: ['--legacy', '--scoped'], expected: null, status: 1 },
+  ])('keeps CLI report/error semantics for $name', ({ args, expected, status }) => {
+    const run = spawnSync(process.execPath, ['--import', 'tsx', 'scripts/bp4-evaluate-v2.ts', ...args], { encoding: 'utf8' });
+    expect(run.status).toBe(status);
+    if (expected) { expect(run.stderr).toBe(''); expect(JSON.parse(run.stdout)).toEqual(expected); }
+    else { expect(run.stdout).toBe(''); expect(run.stderr).toContain('Usage:'); }
   });
 });

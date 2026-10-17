@@ -29,6 +29,10 @@ function memberName(value: unknown): string | null {
 const isIdentifier = (value: unknown, name: string) => node(value) && value.type === 'Identifier' && value.name === name;
 
 export function reviewUpdateSetPayload(raw: unknown):
+  ReturnType<typeof reviewPayload> { return reviewPayload(raw, 'constant'); }
+
+/** Historical bp3-0.3 profile: no constant evaluation. */
+export function reviewUpdateSetPayloadContextual(raw: unknown):
   ReturnType<typeof reviewPayload> { return reviewPayload(raw, 'contextual'); }
 
 /** Scoped output profile for fixed v0.2 artifact reproduction; shares current extraction/detection. */
@@ -39,7 +43,7 @@ export function reviewUpdateSetPayloadScoped(raw: unknown):
 export function reviewUpdateSetPayloadLegacy(raw: unknown):
   ReturnType<typeof reviewPayload> { return reviewPayload(raw, 'legacy'); }
 
-function reviewPayload(raw: unknown, mode: 'legacy' | 'scoped' | 'contextual'):
+function reviewPayload(raw: unknown, mode: 'legacy' | 'scoped' | 'contextual' | 'constant'):
   { poc_only: true; status: 'rejected'; reason: string } | { poc_only: true; status: 'reviewed'; result: ReviewResult } {
   const reject = (reason: string) => ({ poc_only: true as const, status: 'rejected' as const, reason });
   const parsed = inputSchema.safeParse(raw);
@@ -55,7 +59,7 @@ function reviewPayload(raw: unknown, mode: 'legacy' | 'scoped' | 'contextual'):
   const releaseMatch = input.instance_release.resolution_status === 'unknown' ? 'unknown' : matchCatalogRelease(input.instance_release.family);
   const result: ReviewResult = {
     schema_version: 'bp-review-0.1', poc_only: true, knowledge_base_version: CATALOG_VERSION,
-    ruleset_version: mode === 'legacy' ? 'bp3-0.1' : mode === 'scoped' ? 'bp3-0.2' : 'bp3-0.3', reviewed_at: input.retrieved_at, review_status: 'partial', code_return_mode: 'none',
+    ruleset_version: mode === 'legacy' ? 'bp3-0.1' : mode === 'scoped' ? 'bp3-0.2' : mode === 'contextual' ? 'bp3-0.3' : 'bp3-0.4', reviewed_at: input.retrieved_at, review_status: 'partial', code_return_mode: 'none',
     target: { target_version: 'update_set_payload', asset_type: assetType, asset_table: asset.table,
       asset_sys_id: asset.sys_id, sys_scope: asset.sys_scope, field: 'script', code_hash: asset.code_hash,
       retrieved_at: input.retrieved_at, record_updated_at: input.record_updated_at,
@@ -65,6 +69,10 @@ function reviewPayload(raw: unknown, mode: 'legacy' | 'scoped' | 'contextual'):
     limitations: ['source_approval_pending', 'candidate_detection_only', 'execution_path_not_verified', 'release_evidence_caller_supplied'], findings: [],
   };
   if (mode !== 'legacy') result.limitations.push('bounded_intra_function_analysis', 'interprocedural_analysis_not_performed', 'dynamic_member_analysis_not_performed');
+  if (mode === 'constant') {
+    result.limitations = result.limitations.filter(l => l !== 'dynamic_member_analysis_not_performed');
+    result.limitations.push('bounded_constant_evaluation', 'dynamic_member_analysis_partial');
+  }
   if (asset.active === 'false') result.limitations.push('inactive_asset');
   const supported = new Set(['AU-BR-001', 'AU-BR-002', 'AU-CL-004']);
   // Normalize persisted BR choice values only on the current engine path.
@@ -87,9 +95,9 @@ function reviewPayload(raw: unknown, mode: 'legacy' | 'scoped' | 'contextual'):
     catch { return reject('javascript_parse_failed'); }
     const appendFinding = (entry: Ast, ruleId: string, context?: FollowUpContext) => {
       if (!result.coverage.evaluated_rule_ids.includes(ruleId)) return;
-      if (mode === 'contextual' && context?.kind === 'workflow_suppression'
+      if ((mode === 'contextual' || mode === 'constant') && context?.kind === 'workflow_suppression'
         && !result.limitations.includes('workflow_suppression_relation_not_verified')) result.limitations.push('workflow_suppression_relation_not_verified');
-      if (mode === 'contextual' && context?.kind === 'synchronous_ajax' && context.receiver_unresolved
+      if ((mode === 'contextual' || mode === 'constant') && context?.kind === 'synchronous_ajax' && context.receiver_unresolved
         && !result.limitations.includes('synchronous_ajax_receiver_unresolved')) result.limitations.push('synchronous_ajax_receiver_unresolved');
       const rule = RULES.find(rule => rule.rule_id === ruleId)!;
       const source = SOURCES[rule.source_id as keyof typeof SOURCES];
@@ -97,7 +105,7 @@ function reviewPayload(raw: unknown, mode: 'legacy' | 'scoped' | 'contextual'):
         verification_status: 'candidate', field: 'script', line_start: entry.loc.start.line, line_end: entry.loc.end.line,
         issue: rule.title, impact: '構文上の候補。業務影響・到達可能性は未確認。', applicability: rule.applicability,
         recommendation: '根拠節の適用条件・例外と、実行経路・受信オブジェクト・変数の束縛を確認する。',
-        required_follow_up: mode === 'contextual' ? requiredFollowUp(ruleId, context) : [...COMMON_FOLLOW_UP_CODES],
+        required_follow_up: mode === 'contextual' || mode === 'constant' ? requiredFollowUp(ruleId, context) : [...COMMON_FOLLOW_UP_CODES],
         sources: [{ source_id: rule.source_id, title: source.title, url: source.url, section: rule.section,
           release: source.release, verified_on: source.verified_on, retrieved_at: null, content_hash: null,
           snapshot_id: null, catalog_version: CATALOG_VERSION, summary: rule.title }], verification_evidence: [] });
@@ -107,7 +115,7 @@ function reviewPayload(raw: unknown, mode: 'legacy' | 'scoped' | 'contextual'):
         analyzeScopedCandidates(ast, when, (entry, ruleId, context) => {
           appendFinding(entry, ruleId, context);
           if (result.findings.length > 100) throw new ExtractionError('finding_limit');
-        }, { allowDeclaredEntry: assetType === 'business_rule' });
+        }, { allowDeclaredEntry: assetType === 'business_rule', constants: mode === 'constant' });
       } catch (error) {
         return reject(error instanceof ExtractionError ? error.reason : error instanceof AnalysisLimitError ? 'analysis_limit' : 'analysis_failed');
       }

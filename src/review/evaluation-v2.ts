@@ -1,6 +1,6 @@
 /** BP-4 v0.2: frozen gold expectations never become engine input or alter predictions. */
 import { z } from 'zod';
-import { reviewUpdateSetPayload } from './payload-review.js';
+import { reviewUpdateSetPayloadContextual as reviewUpdateSetPayload } from './payload-review.js';
 import { reviewResultSchema } from './result-schema.js';
 import { sha256 } from './update-xml.js';
 import { RULE_SPECIFIC_FOLLOW_UP } from './follow-up-catalog.js';

@@ -1,5 +1,6 @@
 /** Bounded syntactic analysis, NOT an interpreter, call graph or general JavaScript dataflow engine. */
 import type { FollowUpContext } from './follow-up-catalog.js';
+import { constantValue, UNKNOWN_CONSTANT, type ConstantValue } from './constant-value.js';
 export type AstNode = { type: string; start: number; end: number; loc: { start: { line: number }; end: { line: number } }; [key: string]: unknown };
 export const isAstNode = (v: unknown): v is AstNode => !!v && typeof v === 'object' && 'type' in v;
 export function staticMemberName(value: unknown): string | null {
@@ -10,8 +11,8 @@ export function staticMemberName(value: unknown): string | null {
 }
 export class AnalysisLimitError extends Error {}
 const C = 1, P = 2, CF = 4, PF = 8, AJAX = 16, LOCAL = 32, UNKNOWN = 64, AJAX_CTOR = 128;
-type Origin = { flags: number; properties?: Map<string, Origin> };
-type Binding = { origin: Origin; functionId: number; entryFlags?: number };
+type Origin = { flags: number; properties?: Map<string, Origin>; unknownProperties?: boolean };
+type Binding = { origin: Origin; functionId: number; entryFlags?: number; isConst?: boolean; constantWritten?: boolean; constant?: ConstantValue };
 type Scope = { parent?: Scope; functionId: number; functionScope: boolean; bindings: Map<string, Binding> };
 const origin = (flags: number): Origin => ({ flags });
 const local = () => origin(LOCAL);
@@ -24,15 +25,32 @@ const blocks = new Set(['BlockStatement', 'CatchClause', 'ForStatement', 'ForInS
 const recordMethods = new Set(['update', 'getValue', 'getDisplayValue', 'setValue', 'setWorkflow', 'getUniqueValue', 'isValidRecord']);
 
 export function analyzeScopedCandidates(ast: AstNode, when: string | null, emit: (entry: AstNode, rule: string, context?: FollowUpContext) => void,
-  options = { allowDeclaredEntry: false }): void {
+  options = { allowDeclaredEntry: false, constants: false }): void {
   const root: Scope = { functionId: 0, functionScope: true, bindings: new Map() };
   const scopes = new WeakMap<AstNode, Scope>();
   const functionScopes = new WeakMap<AstNode, Scope>();
   let functionId = 0, visits = 0;
   const reboundNames = new Set<string>();
   const workflowSuppression = new Map<number, number>();
+  const constantWrites: Array<{ pattern: unknown; scope: Scope }> = [];
+  const unsafeConstantFunctions = new Set<number>();
   function budget(depth: number) {
     if (++visits > 100000 || depth > 256) throw new AnalysisLimitError('analysis_limit');
+  }
+  function primitive(value: unknown) {
+    return options.constants ? constantValue(value, entry => {
+      const scope = scopes.get(entry)!;
+      const b = find(scope, String(entry.name));
+      return b?.isConst && !b.constantWritten && b.functionId === scope.functionId && !unsafeConstantFunctions.has(scope.functionId)
+        ? b.constant ?? UNKNOWN_CONSTANT : UNKNOWN_CONSTANT;
+    }, budget) : UNKNOWN_CONSTANT;
+  }
+  function memberKey(value: unknown): string | null {
+    if (options.constants && isAstNode(value) && value.type === 'MemberExpression' && value.computed) {
+      const key = primitive(value.property);
+      if (typeof key === 'string') return key;
+    }
+    return staticMemberName(value);
   }
   function join(a: Origin, b: Origin, depth = 0, pairs = new WeakMap<Origin, WeakMap<Origin, Origin>>()): Origin {
     budget(depth);
@@ -40,6 +58,7 @@ export function analyzeScopedCandidates(ast: AstNode, when: string | null, emit:
     const cached = pairs.get(a)?.get(b);
     if (cached) return cached;
     const result: Origin = { flags: a.flags | b.flags };
+    if (a.unknownProperties || b.unknownProperties) result.unknownProperties = true;
     let inner = pairs.get(a);
     if (!inner) { inner = new WeakMap(); pairs.set(a, inner); }
     inner.set(b, result); // Memoize before traversing possibly cyclic local containers.
@@ -91,15 +110,35 @@ export function analyzeScopedCandidates(ast: AstNode, when: string | null, emit:
       if (entry.type === 'ClassExpression' || entry.type === 'ClassDeclaration') declare(entry.id, scope);
     }
     scopes.set(entry, scope);
+    if (options.constants) {
+      if (entry.type === 'WithStatement' || (entry.type === 'CallExpression' && identifier(entry.callee, 'eval')))
+        unsafeConstantFunctions.add(scope.functionId);
+      if (entry.type === 'AssignmentExpression') constantWrites.push({ pattern: entry.left, scope });
+      if (entry.type === 'UpdateExpression') constantWrites.push({ pattern: entry.argument, scope });
+      if (entry.type === 'ForInStatement' || entry.type === 'ForOfStatement') constantWrites.push({ pattern: entry.left, scope });
+    }
     if (entry.type === 'AssignmentExpression') noteWrite(entry.left);
     if (entry.type === 'UpdateExpression') noteWrite(entry.argument);
     if (entry.type === 'VariableDeclarator') noteWrite(entry.id);
     if (entry.type === 'ForInStatement' || entry.type === 'ForOfStatement') noteWrite(entry.left);
-    if (entry.type === 'VariableDeclaration') for (const d of entry.declarations as AstNode[])
+    if (entry.type === 'VariableDeclaration') for (const d of entry.declarations as AstNode[]) {
       declare(d.id, entry.kind === 'var' ? nearestFunction(scope) : scope);
+      if (options.constants && entry.kind === 'const' && identifier(d.id)) scope.bindings.get(String(d.id.name))!.isConst = true;
+    }
     for (const child of children(entry)) prepare(child, entry.type === 'SwitchStatement' && child === entry.discriminant ? parent : scope, depth + 1);
   }
   prepare(ast, root);
+  function invalidateConstant(pattern: unknown, scope: Scope, depth = 0): void {
+    if (!isAstNode(pattern)) return;
+    budget(depth);
+    if (pattern.type === 'Identifier') { const b = find(scope, String(pattern.name)); if (b) b.constantWritten = true; }
+    else if (pattern.type === 'AssignmentPattern') invalidateConstant(pattern.left, scope, depth + 1);
+    else if (pattern.type === 'RestElement') invalidateConstant(pattern.argument, scope, depth + 1);
+    else if (pattern.type === 'ObjectPattern') for (const p of pattern.properties as AstNode[])
+      invalidateConstant(p.type === 'RestElement' ? p.argument : p.value, scope, depth + 1);
+    else if (pattern.type === 'ArrayPattern') for (const p of pattern.elements as unknown[]) invalidateConstant(p, scope, depth + 1);
+  }
+  for (const write of constantWrites) invalidateConstant(write.pattern, write.scope);
   // Syntactic ServiceNow entry binding only: a sole top-level (function(current, previous){...})(current, previous).
   // No general argument/return propagation or IIFE analysis.
   const statements = ast.body as AstNode[];
@@ -165,8 +204,9 @@ export function analyzeScopedCandidates(ast: AstNode, when: string | null, emit:
     } else if (pattern.type === 'MemberExpression') {
       const receiver = receivers.get(pattern);
       if (!receiver?.properties) return;
-      const key = staticMemberName(pattern);
+      const key = memberKey(pattern);
       if (key === null) {
+        if (options.constants) receiver.unknownProperties = true;
         for (const [k, v] of receiver.properties) receiver.properties.set(k, join(v, unknown()));
       } else receiver.properties.set(key, conditional ? join(receiver.properties.get(key) ?? unknown(), value) : value);
     }
@@ -182,6 +222,10 @@ export function analyzeScopedCandidates(ast: AstNode, when: string | null, emit:
       case 'VariableDeclarator': {
         const value = isAstNode(entry.init) ? visit(entry.init) : unknown();
         if (entry.init) assign(entry.id, value, scope, conditional);
+        if (options.constants && identifier(entry.id)) {
+          const b = find(scope, String(entry.id.name));
+          if (b?.isConst && !b.constantWritten) b.constant = primitive(entry.init);
+        }
         return value;
       }
       case 'FunctionDeclaration': case 'FunctionExpression': case 'ArrowFunctionExpression': {
@@ -202,43 +246,47 @@ export function analyzeScopedCandidates(ast: AstNode, when: string | null, emit:
       }
       case 'ObjectExpression': {
         const properties = new Map<string, Origin>();
+        let unknownProperties = false;
         for (const p of entry.properties as AstNode[]) {
-          if (p.type === 'SpreadElement') { visit(p.argument); continue; }
+          if (p.type === 'SpreadElement') { visit(p.argument); unknownProperties ||= options.constants; continue; }
           if (p.computed) visit(p.key);
-          const key = !p.computed && identifier(p.key) ? String(p.key.name)
+          const evaluatedKey = p.computed ? primitive(p.key) : UNKNOWN_CONSTANT;
+          const key = typeof evaluatedKey === 'string' ? evaluatedKey : !p.computed && identifier(p.key) ? String(p.key.name)
             : isAstNode(p.key) && p.key.type === 'Literal' && ['string', 'number'].includes(typeof p.key.value) ? String(p.key.value) : null;
           const value = visit(p.value);
           if (key !== null) properties.set(key, p.kind === 'init' ? value : unknown());
+          else unknownProperties ||= options.constants;
         }
-        return { flags: LOCAL, properties };
+        return { flags: LOCAL, properties, ...(unknownProperties ? { unknownProperties: true } : {}) };
       }
       case 'ArrayExpression': {
         const properties = new Map<string, Origin>();
         (entry.elements as unknown[]).forEach((e, i) => { if (isAstNode(e)) properties.set(String(i), visit(e)); });
-        return { flags: LOCAL, properties };
+        return { flags: LOCAL, properties, ...(options.constants && (entry.elements as AstNode[]).some(e => e?.type === 'SpreadElement') ? { unknownProperties: true } : {}) };
       }
       case 'MemberExpression': {
         const receiver = visit(entry.object);
         if (entry.computed) visit(entry.property);
         receivers.set(entry, receiver);
-        const key = staticMemberName(entry);
+        const key = memberKey(entry);
         if (when === 'async' && (receiver.flags & P)) emit(entry, 'AU-BR-002', { kind: 'async_dependency' });
         if (key === null) return unknown();
-        if (receiver.properties?.has(key)) return receiver.properties.get(key)!;
-        if (receiver.flags & C) return origin(recordMethods.has(key) ? LOCAL : CF);
-        if (receiver.flags & P) return origin(recordMethods.has(key) ? LOCAL : PF);
-        if (receiver.flags & (CF | PF)) return local();
-        return origin(receiver.flags & UNKNOWN ? UNKNOWN : LOCAL);
+        const uncertain = receiver.unknownProperties ? UNKNOWN : 0;
+        if (receiver.properties?.has(key)) return uncertain ? join(receiver.properties.get(key)!, unknown()) : receiver.properties.get(key)!;
+        if (receiver.flags & C) return origin((recordMethods.has(key) ? LOCAL : CF) | uncertain);
+        if (receiver.flags & P) return origin((recordMethods.has(key) ? LOCAL : PF) | uncertain);
+        if (receiver.flags & (CF | PF)) return origin(LOCAL | uncertain);
+        return origin(receiver.flags & UNKNOWN || uncertain ? UNKNOWN : LOCAL);
       }
       case 'CallExpression': case 'NewExpression': {
         const calleeValue = visit(entry.callee);
         for (const argument of entry.arguments as unknown[]) visit(argument);
         if (entry.type === 'NewExpression') return origin(calleeValue.flags & AJAX_CTOR ? AJAX : calleeValue.flags & UNKNOWN ? UNKNOWN : LOCAL);
         if (isAstNode(entry.callee) && entry.callee.type === 'MemberExpression') {
-          const receiver = receivers.get(entry.callee) ?? unknown(), key = staticMemberName(entry.callee);
+          const receiver = receivers.get(entry.callee) ?? unknown(), key = memberKey(entry.callee);
           if (key === 'setWorkflow' && (receiver.flags & C) && (entry.arguments as unknown[]).length === 1) {
             const argument = (entry.arguments as unknown[])[0];
-            if (isAstNode(argument) && argument.type === 'Literal' && argument.value === false)
+            if ((isAstNode(argument) && argument.type === 'Literal' && argument.value === false) || primitive(argument) === false)
               workflowSuppression.set(scope.functionId, Math.min(workflowSuppression.get(scope.functionId) ?? Infinity, entry.end));
           }
           if (key === 'update' && (receiver.flags & C)) emit(entry, 'AU-BR-001',

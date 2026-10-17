@@ -100,7 +100,7 @@ describe('context-specific followup output', () => {
       for (const token of result.findings[0].required_follow_up) expect(isFollowUpApplicable(followUpCodeSchema.parse(token), rule)).toBe(true);
       expect(JSON.stringify(result)).not.toContain(code);
       expect(result.code_return_mode).toBe('none');
-      expect(result.ruleset_version).toBe('bp3-0.3');
+      expect(result.ruleset_version).toBe('bp3-0.4');
     }
   });
 });

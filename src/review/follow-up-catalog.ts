@@ -2,7 +2,7 @@
 import { z } from 'zod';
 import { RULES } from './catalog.js';
 
-export const FOLLOW_UP_CATALOG_VERSION = 'bp-followups-0.3';
+export const FOLLOW_UP_CATALOG_VERSION = 'bp-followups-0.4';
 export const COMMON_FOLLOW_UP_CODES = ['source_approval', 'binding_and_reachability', 'exceptions_and_business_intent'] as const;
 export const RULE_SPECIFIC_FOLLOW_UP = {
   'AU-BR-001': 'workflow_suppression_review',
@@ -43,7 +43,7 @@ export const FOLLOW_UP_DEFINITIONS = {
   },
   workflow_suppression_review: {
     kind: 'context_specific', applicable_rules: ['AU-BR-001'], meaning: 'workflow抑止の理由・承認範囲・必要性と副作用を確認する。',
-    attach_when: '同じ関数内で、current由来の受信側への1引数setWorkflow(false)が更新候補よりソース上で先行する場合。falseは真偽値リテラルのみ。順序・分岐・更新時の抑止効果は未確認として制約を明記する。',
+    attach_when: '同じ関数内で、current由来の1引数setWorkflow呼び出しが更新候補よりソース上で先行し、引数が限定定数評価でfalseと確定する場合。文字列/真偽値リテラル、初期化済みで書込なしの同一関数const、文字列結合、!・&&・||・===・!==・既知真偽値条件式だけ。順序・分岐・抑止効果は未確認として制約を明記する。',
     does_not_prove: '抑止が更新時に効いていることや、再更新の自動許可。setWorkflowという語の存在だけで付けない。',
   },
   async_dependency_review: {

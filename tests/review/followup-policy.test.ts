@@ -3,8 +3,7 @@ import { readFileSync } from 'node:fs';
 import { createHash } from 'node:crypto';
 import { spawnSync } from 'node:child_process';
 import { evaluateFollowupPolicy, followupPolicySetSchema } from '../../src/review/evaluation-followups-policy.js';
-import { reviewUpdateSetPayload } from '../../src/review/payload-review.js';
-import { FOLLOW_UP_CATALOG_VERSION } from '../../src/review/follow-up-catalog.js';
+import { reviewUpdateSetPayloadContextual as reviewUpdateSetPayload } from '../../src/review/payload-review.js';
 
 const bytes = readFileSync(new URL('./evaluation/followups-policy-0.2.json', import.meta.url));
 const fixture = JSON.parse(bytes.toString('utf8'));
@@ -38,7 +37,7 @@ describe('accepted rule-intrinsic policy and separate evaluation tracks', () => 
   it('records policy and measures contextual discrimination only for workflow', () => {
     const report = evaluateFollowupPolicy(fixture);
     expect({ ...report, fixture_file_sha256: hash }).toEqual(saved);
-    expect(report.follow_up_catalog_version).toBe(FOLLOW_UP_CATALOG_VERSION);
+    expect(report.follow_up_catalog_version).toBe('bp-followups-0.3');
     expect(report.rule_policy).toEqual({ 'AU-BR-001': 'context_specific', 'AU-BR-002': 'rule_intrinsic', 'AU-CL-004': 'rule_intrinsic' });
     expect(report.context_discrimination.all).toMatchObject({ cases: 8, tp: 2, fp: 0, fn: 2, tn: 3 });
     expect(report.context_discrimination.declared_scope).toMatchObject({ cases: 6, tp: 2, fp: 0, fn: 0, tn: 3 });

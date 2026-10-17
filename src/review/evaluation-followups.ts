@@ -1,6 +1,6 @@
 /** New, frozen followup evaluation. No engine tuning, execution or network access. */
 import { z } from 'zod';
-import { reviewUpdateSetPayload } from './payload-review.js';
+import { reviewUpdateSetPayloadContextual as reviewUpdateSetPayload } from './payload-review.js';
 import { reviewResultSchema } from './result-schema.js';
 import { COMMON_FOLLOW_UP_CODES, RULE_SPECIFIC_FOLLOW_UP, CONTEXT_LIMITATIONS,
   followUpCodeSchema, isFollowUpApplicable } from './follow-up-catalog.js';
@@ -8,7 +8,7 @@ import { sha256 } from './update-xml.js';
 import { wilsonSummary } from './evaluation-v2.js';
 
 const rules = ['AU-BR-001', 'AU-BR-002', 'AU-CL-004'] as const;
-export function followupCaseSchema(prefix: 'NEW' | 'NEXT') { return z.strictObject({
+export function followupCaseSchema(prefix: 'NEW' | 'NEXT' | 'CONST') { return z.strictObject({
   id: z.string().regex(new RegExp(`^${prefix}-[WAJ]\\d{2}$`)), rule_id: z.enum(rules),
   basis: z.enum(['catalog_contract', 'semantic_boundary']), scenario: z.string().min(1).max(80),
   code: z.string().min(1).max(8000), when: z.string().max(40).optional(), condition: z.string().max(1000).optional(),
@@ -31,7 +31,7 @@ export const followupEvaluationSetSchema = z.strictObject({ version: z.literal('
     if (set.cases.filter(c => c.rule_id === rule && c.basis === basis).length !== count)
       ctx.addIssue({ code: 'custom', message: 'Unbalanced evaluation cells' });
 });
-type Case = z.infer<typeof caseSchema>;
+export type Case = z.infer<typeof caseSchema>;
 const escape = (s: string) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
 function buildInput(c: Case) {
   const table = c.rule_id === 'AU-CL-004' ? 'sys_script_client' : 'sys_script', id = sha256(c.id).slice(0, 32);

@@ -1,6 +1,6 @@
 # レビュー確認項目の共通語彙（PoC実装版）
 
-Version: bp-followups-0.3。2026-10-17に方針1（文脈依存と規則固有の分離）を採用。
+Version: bp-followups-0.4。2026-10-17。方針1を維持し、限定的な定数評価を付与条件に追加。
 人による採点・根拠資料の採用承認・本番品質の承認は別途必要。
 
 正本は[src/review/follow-up-catalog.ts](../src/review/follow-up-catalog.ts)。
@@ -28,7 +28,7 @@ bp-review-0.1のrequired_follow_upは、過去の自然文を含む結果との�
 | source_approval | 全規則・汎用 | 根拠がcandidate/未承認の場合に、適用範囲と採用可否の人による確認を求める |
 | binding_and_reachability | 全規則・汎用 | 構文候補の変数束縛・受信側・実行経路を解決できていない場合の確認 |
 | exceptions_and_business_intent | 全規則・汎用 | 業務意図や例外条件・承認の有無が未確認の場合の確認 |
-| workflow_suppression_review | AU-BR-001・文脈固有 | 同一関数内でcurrent由来の受信側への1引数setWorkflow(false)が更新候補よりソース上で先行する場合に、抑止理由・必要性・承認範囲・副作用を確認。falseは真偽値リテラルのみ |
+| workflow_suppression_review | AU-BR-001・文脈固有 | 同一関数内でcurrent由来の1引数setWorkflowが更新候補より先行し、引数が限定的定数評価でfalseと確定した場合に、抑止理由・必要性・承認範囲・副作用を確認 |
 | async_dependency_review | AU-BR-002・rule_intrinsic | AU-BR-002候補の全件で、依存・フォールバック・互換処理を確認。ガードや例外処理の有無に依存しない |
 | synchronous_ajax_review | AU-CL-004・rule_intrinsic | AU-CL-004候補の全件で、受信側・UI制約・同期の必要性・非同期代替を確認。互換分岐やtry/catchの有無に依存しない |
 
@@ -86,7 +86,7 @@ asyncはガード/try/catchの有無にかかわらず、実際の依存候補�
 検出器には期待値を渡さず、[別保存した再評価記録](BEST_PRACTICE_FOLLOW_UP_REEVALUATION.md)で
 12契約改善・契約退行0件を確認する。PDI操作・外部送信は実施しない。
 
-## 0.3の方針と評価の分離
+## 0.3の方針と評価の分離（継続する方針）
 
 AU-BR-001はworkflow抑止との関連を識別する文脈依存項目。
 AU-BR-002/CL-004は通常の問題候補にも防御的処理のある候補にも必須の規則固有項目とする。
@@ -110,3 +110,19 @@ candidate_with_followupという旧採点ラベルも、人による例外承認
 固定v0.2と36ケース・既存JSONは変更せず、[次版24ケースの検証](BEST_PRACTICE_FOLLOW_UP_POLICY_EVALUATION.md)で
 通常候補にも固有項目を要求する。既存CLIは履歴メタデータ0.2を再現し、新CLIだけが現在の
 カタログ版0.3と分離指標を記録する。過去の結果JSONを現在の意味に書き換えない。
+
+## 0.4の限定的定数評価
+
+新ruleset bp3-0.4では、文字列/真偽値リテラル、初期化済みで書込のない同一関数内のconst、
+文字列同士の`+`、真偽値の`!`/`&&`/`||`、既知プリミティブの`===`/`!==`、既知真偽値条件の
+三項式だけを評価する。API名・固定コンテナのキーとworkflowのfalse判定に使う。
+constの初期化順・シャドーイング・代入先の束縛を確認し、未知値は推測しない。
+
+let/var、関数呼び出し、プロパティからの値取得、暗黙の型変換、数値演算、テンプレート文字列、
+分割代入や関数をまたぐ定数伝播は対象外。キー不明のコンテナ・spreadの不確実性を残し、
+解決したキーを理由に未解決のAjax受信側をローカルと断定しない。
+workflowの関連未確認という制約、rule_intrinsicの分類は変えない。
+
+旧カタログ0.3までのリテラル限定条件による結果を上書きせず、
+[固定再評価と新規18ケースの記録](BEST_PRACTICE_CONSTANT_EVALUATION.md)を別保存する。
+カタログ・rulesetの改版で対応範囲を明示するが、既存の固定ケースのbasisラベルは移動しない。

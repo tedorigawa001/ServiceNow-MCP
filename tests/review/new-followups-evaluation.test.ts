@@ -3,7 +3,7 @@ import { readFileSync } from 'node:fs';
 import { createHash } from 'node:crypto';
 import { spawnSync } from 'node:child_process';
 import { evaluateNewFollowups, followupEvaluationSetSchema } from '../../src/review/evaluation-followups.js';
-import { reviewUpdateSetPayload } from '../../src/review/payload-review.js';
+import { reviewUpdateSetPayloadContextual as reviewUpdateSetPayload } from '../../src/review/payload-review.js';
 import { RULE_SPECIFIC_FOLLOW_UP } from '../../src/review/follow-up-catalog.js';
 
 const bytes = readFileSync(new URL('./evaluation/followups-new-0.1.json', import.meta.url));

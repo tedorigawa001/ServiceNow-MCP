@@ -169,7 +169,7 @@ describe('BP-3 offline candidate validation', () => {
   it('returns source-linked AST candidates, not code or claimed violations', () => {
     const result = reviewed(input(payload('<![CDATA[// secret_SENTINEL\ncurrent.update();]]>')));
     expect(result.target.sys_scope).toBe('global');
-    expect(result.ruleset_version).toBe('bp3-0.3');
+    expect(result.ruleset_version).toBe('bp3-0.4');
     expect(result.findings).toHaveLength(1);
     expect(result.findings[0]).toMatchObject({ rule_id: 'AU-BR-001', line_start: 2, line_end: 2,
       verification_status: 'candidate', confidence: 'low', severity: 'info', verification_evidence: [] });

@@ -24,7 +24,7 @@ const evidenceStage = z.enum(['evidence_matched', 'path_confirmed', 'runtime_con
 
 const structuralSchema = z.strictObject({
   schema_version: z.literal('bp-review-0.1'), poc_only: z.literal(true),
-  knowledge_base_version: z.literal(CATALOG_VERSION), ruleset_version: z.enum(['bp2-0.1', 'bp3-0.1', 'bp3-0.2', 'bp3-0.3']),
+  knowledge_base_version: z.literal(CATALOG_VERSION), ruleset_version: z.enum(['bp2-0.1', 'bp3-0.1', 'bp3-0.2', 'bp3-0.3', 'bp3-0.4']),
   reviewed_at: timestamp,
   review_status: z.enum(['completed', 'partial', 'failed']),
   // Excerpts/full need a separately approved disclosure contract; not enabled in BP-2.
