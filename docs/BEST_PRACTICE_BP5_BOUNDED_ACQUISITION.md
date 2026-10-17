@@ -80,11 +80,11 @@ permitはsourceの非公開フィールドに保持するインメモリの能�
 ## 未実装・次段階
 
 - 設定ファイルの読込/所有者・書込権限検査とbinding CLIは[後続記録](BEST_PRACTICE_BP5_OPERATOR_SETUP.md)で実装済み。Windows ACLの検証は未対応で拒否する。呼出し側が任意のasserted証拠を渡して解除する入口は追加しない。
-- 1件解析アダプターと集約、固定理由から集約契約への写像、partial/failedの組立て。
+- 1件解析/集約、固定理由の写像、partial/failedの組立ては[アダプター記録](BEST_PRACTICE_BP5_ADAPTERS.md)のとおり後続で実装済み。
 - 同期XML/AST解析を強制終了するworker境界。現在の全体タイマーはイベントループ上の非同期取得/待機を中断し、同期処理が戻った後にも期限超過を検出するが、同期CPU処理そのものを途中で止められない。
 - MCP登録/dispatch/annotations、公開範囲の承認、梱包・読み取り実機E2E。
 
-sourceは内部でpayloadを扱うため、callbackの戻り値をそのままMCP結果として公開してはいけない。後続アダプターで本文非返却の集約契約を構築・検証する。
+sourceは内部でpayloadを扱うため、callbackの戻り値をそのままMCP結果として公開してはいけない。本文非返却の集約契約を構築・検証するアダプターを経由する（上記記録参照）。
 既存bp-review-0.1、固定評価セット、MCPツール一覧、通常clientの既存取得経路は変更しない。
 
 ## 合成検証

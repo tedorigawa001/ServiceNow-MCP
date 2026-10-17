@@ -97,7 +97,8 @@ boundedレビュー開始時にconfig_invalidとなり、「assertionなしで�
 - review-binding.test.ts：実CLI入口からのhash出力と、資格情報入りURLの非露出拒否。通信・実設定読込は行わない。
 
 権限を変えるテストは作成/削除する合成fixtureだけを対象にする。利用者の設定ファイルは書き換えない。
-残課題は1件解析/集約アダプター、同期解析worker、MCP登録/梱包、許可済み読み取りE2Eと品質/公開審査。
+1件解析/集約は[アダプター記録](BEST_PRACTICE_BP5_ADAPTERS.md)のとおり後続で接続済み。
+残課題は同期解析worker、MCP登録/梱包、許可済み読み取りE2Eと品質/公開審査。
 
 ### 2026-10-18 検証記録
 

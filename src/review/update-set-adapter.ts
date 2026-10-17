@@ -1,0 +1,221 @@
+/** Internal BP-5 orchestration only. No MCP registration, logging, persistence or live-record fallback. */
+import { z } from 'zod';
+import type { ServiceNowClient } from '../servicenow/client.js';
+import { BoundedReadError, type BoundedReadOptions } from '../servicenow/bounded-read.js';
+import { withBoundedUpdateSetSource, type ReviewMetadata } from './bounded-source.js';
+import { aggregateReviewSchema, assetOutcomeStructure, type AggregateReview } from './aggregate-schema.js';
+import { bp5RuleIdsSchema } from './result-schema-v2.js';
+import { CATALOG_VERSION, RULES } from './catalog.js';
+import { reviewUpdateSetPayloadV2 } from './payload-review.js';
+
+const inputSchema = z.strictObject({ update_set_sys_id: z.string().regex(/^[a-f0-9]{32}$/),
+  max_records: z.number().int().min(1).max(100).default(20),
+  requested_rule_ids: bp5RuleIdsSchema.refine(ids => new Set(ids).size === ids.length)
+    .default(['AU-BR-001', 'AU-BR-002', 'AU-CL-004']),
+});
+type Stage = AggregateReview['errors'][number]['stage'];
+type ErrorCode = AggregateReview['errors'][number]['code'] | 'review_busy' | 'cancelled';
+type Asset = AggregateReview['assets'][number];
+export type BoundedReviewOutcome = { isError: false; result: AggregateReview }
+  | { isError: true; error: { stage: Stage; code: ErrorCode }; result?: AggregateReview };
+const fail = (stage: Stage, code: ErrorCode): BoundedReviewOutcome => ({ isError: true, error: { stage, code } });
+function addError(run: AggregateReview, error: AggregateReview['errors'][number]) {
+  if (run.errors.length < 100) run.errors.push(error);
+  else if (!run.limitations.includes('error_details_truncated')) run.limitations.push('error_details_truncated');
+}
+
+function finish(run: AggregateReview): AggregateReview {
+  run.ended_at = new Date().toISOString();
+  const states = ['reviewed', 'not_applicable', 'skipped_deleted', 'rejected', 'retrieval_failed', 'not_processed', 'result_omitted'] as const;
+  const recount = () => {
+    for (const state of states) run.counts[state] = run.assets.filter(a => a.state === state).length;
+    run.counts.findings = run.assets.reduce((n, a) => n + (a.state === 'reviewed' ? a.result.findings.length : 0), 0);
+  };
+  const omit = (i: number) => {
+    run.assets[i] = { state: 'result_omitted', update_xml_sys_id: run.assets[i].update_xml_sys_id, reason: 'response_limit' };
+    if (!run.limitations.includes('response_truncated')) {
+      run.limitations.push('response_truncated'); addError(run, { stage: 'output', code: 'response_limit' });
+    }
+    run.coverage.analysis_complete = false; recount();
+  };
+  let retained = 0;
+  for (let i = 0; i < run.assets.length; i++) {
+    const asset = run.assets[i];
+    if (asset.state !== 'reviewed') continue;
+    if (retained + asset.result.findings.length > run.limits.max_findings) {
+      if (!run.limitations.includes('finding_budget_exceeded')) run.limitations.push('finding_budget_exceeded');
+      omit(i);
+    } else retained += asset.result.findings.length;
+  }
+  recount();
+  run.coverage.analysis_complete = run.collection.status === 'complete' && !run.collection.truncated
+    && run.consistency === 'stable_observation' && run.release_match === 'matched' && !run.errors.length
+    && run.assets.every(a => a.state === 'not_applicable' || a.state === 'skipped_deleted'
+      || a.state === 'reviewed' && !a.result.coverage.skipped_rules.length);
+  // Reserve envelope space too; the schema's own limit covers the aggregate alone.
+  while (Buffer.byteLength(JSON.stringify(run), 'utf8') > run.limits.max_response_bytes - 256) {
+    let i = run.assets.length - 1;
+    while (i >= 0 && run.assets[i].state !== 'reviewed') i--;
+    if (i < 0) throw new Error('internal_review_error');
+    omit(i);
+  }
+  run.limitations = [...new Set(run.limitations)];
+  return aggregateReviewSchema.parse(run);
+}
+function classify(row: ReviewMetadata, rules: AggregateReview['coverage']['requested_rule_ids']): Asset | undefined {
+  const base = { update_xml_sys_id: row.sys_id };
+  if (row.action === 'DELETE') return { ...base, state: 'skipped_deleted', reason: 'deleted_asset' };
+  if (row.action !== 'INSERT_OR_UPDATE') return { ...base, state: 'rejected', reason: 'unsupported_action' };
+  const table = /^([a-z][a-z0-9_]*)_[a-f0-9]{32}$/.exec(row.name)?.[1];
+  if (!table) return { ...base, state: 'rejected', reason: 'identity_mismatch' };
+  const type = table === 'sys_script' ? 'business_rule' : table === 'sys_script_client' ? 'client_script' : 'other';
+  if (type === 'other') return { ...base, state: 'not_applicable', asset_type: type, reason: 'asset_type_unsupported' };
+  if (!rules.some(id => RULES.find(r => r.rule_id === id)!.asset_types.includes(type))) {
+    return { ...base, state: 'not_applicable', asset_type: type, reason: 'no_requested_rules' };
+  }
+  return undefined;
+}
+
+/** Options are trusted transport test injection, never MCP/tool input. */
+export async function reviewBoundedUpdateSet(client: ServiceNowClient, raw: unknown,
+  options?: BoundedReadOptions): Promise<BoundedReviewOutcome> {
+  const parsed = inputSchema.safeParse(raw);
+  if (!parsed.success) return fail('input', 'invalid_input');
+  const input = parsed.data;
+  let stage: Stage = 'input';
+  const getStage = (): Stage => stage;
+  let progress: { run: AggregateReview; rows: ReviewMetadata[] } | undefined;
+  try {
+    const result = await withBoundedUpdateSetSource(client,
+      { update_set_sys_id: input.update_set_sys_id, max_records: input.max_records }, async source => {
+        stage = 'parent'; await source.readParent();
+        stage = 'release'; const decision = await source.resolveRelease();
+        const run: AggregateReview = {
+          schema_version: 'bp-mcp-review-0.2', poc_only: true, code_return_mode: 'none', status: 'partial',
+          target: { update_set_sys_id: input.update_set_sys_id, target_version: 'update_set_payload', instance_binding: source.instanceBinding },
+          versions: { knowledge_base: CATALOG_VERSION, ruleset: 'bp3-0.4', asset_schema: 'bp-review-0.2' },
+          started_at: source.startedAt, ended_at: source.startedAt, instance_release: decision.instance_release,
+          release_match: decision.release_match, principal: { auth_mode: source.authMode },
+          collection: { scope: 'caller_acl_visible', status: 'not_started', metadata_seen: 0, selected: 0, truncated: false },
+          consistency: 'unverified', coverage: { requested_rule_ids: input.requested_rule_ids, skipped_rules: [], analysis_complete: false },
+          assets: [], counts: { reviewed: 0, not_applicable: 0, skipped_deleted: 0, rejected: 0, retrieval_failed: 0, not_processed: 0, result_omitted: 0, findings: 0 },
+          limits: { max_records: input.max_records, max_findings: 100, max_response_bytes: 262144, deadline_ms: 60000 },
+          limitations: ['source_approval_pending', 'caller_acl_visible_only', ...decision.limitations], errors: [],
+        };
+        progress = { run, rows: [] };
+        if (decision.release_match !== 'matched') {
+          const reason = decision.release_match === 'unknown' ? 'release_unknown' : 'release_mismatch';
+          run.coverage.skipped_rules = input.requested_rule_ids.map(rule_id => ({ rule_id, reason }));
+          return finish(run);
+        }
+        stage = 'metadata'; const metadata = await source.listMetadata(decision.permit);
+        progress.rows = metadata.rows;
+        run.collection = { ...run.collection, status: 'complete', metadata_seen: metadata.metadata_seen,
+          selected: metadata.rows.length, truncated: metadata.truncated };
+        if (metadata.truncated) run.limitations.push('metadata_truncated');
+        for (const row of metadata.rows) {
+          const classified = classify(row, input.requested_rule_ids);
+          if (classified) { run.assets.push(classified); continue; }
+          stage = 'payload';
+          let detail: Awaited<ReturnType<typeof source.readPayload>>;
+          try { detail = await source.readPayload(row.sys_id, decision.permit); }
+          catch (error) {
+            if (!(error instanceof BoundedReadError)) throw error;
+            if (error.code === 'upstream_unavailable') {
+              run.limitations.push(error.code);
+              run.assets.push({ state: 'not_processed', update_xml_sys_id: row.sys_id, reason: error.code });
+              addError(run, { stage: 'payload', code: error.code, update_xml_sys_id: row.sys_id });
+              continue;
+            }
+            if (error.code === 'request_budget_exceeded') {
+              run.limitations.push(error.code);
+              addError(run, { stage: 'payload', code: error.code, update_xml_sys_id: row.sys_id });
+              const done = new Set(run.assets.map(a => a.update_xml_sys_id));
+              for (const pending of metadata.rows.filter(r => !done.has(r.sys_id))) {
+                run.assets.push({ state: 'not_processed', update_xml_sys_id: pending.sys_id, reason: error.code });
+              }
+              break;
+            }
+            const reasons = { not_found_or_not_visible: 'payload_unavailable', invalid_response: 'missing_required_field',
+              changed_during_review: 'changed_during_review' } as const;
+            if (error.code === 'payload_limit') {
+              run.assets.push({ state: 'rejected', update_xml_sys_id: row.sys_id, reason: 'payload_limit' }); continue;
+            }
+            if (error.code in reasons) {
+              run.assets.push({ state: 'retrieval_failed', update_xml_sys_id: row.sys_id,
+                reason: reasons[error.code as keyof typeof reasons] }); continue;
+            }
+            throw error;
+          }
+          const type = row.name.startsWith('sys_script_client_') ? 'client_script' : 'business_rule';
+          const rules = input.requested_rule_ids.filter(id => RULES.find(r => r.rule_id === id)!.asset_types.includes(type));
+          const timestamp = /^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$/.test(detail.sys_updated_on)
+            ? detail.sys_updated_on.replace(' ', 'T') + 'Z' : detail.sys_updated_on;
+          if (!z.iso.datetime().safeParse(timestamp).success) {
+            run.assets.push({ state: 'retrieval_failed', update_xml_sys_id: row.sys_id, reason: 'missing_required_field' }); continue;
+          }
+          stage = 'analysis';
+          const outcome = reviewUpdateSetPayloadV2({ update_set_id: input.update_set_sys_id, update_xml_sys_id: row.sys_id,
+            name: row.name, payload: detail.payload, retrieved_at: new Date().toISOString(),
+            record_updated_at: timestamp, instance_binding: source.instanceBinding,
+            instance_release: decision.instance_release, release_limitations: decision.limitations, requested_rule_ids: rules });
+          const asset = outcome.status === 'reviewed'
+            ? { state: 'reviewed', update_xml_sys_id: row.sys_id, applicable_rule_ids: rules, result: outcome.result }
+            : { state: 'rejected', update_xml_sys_id: row.sys_id, reason: outcome.reason };
+          const validated = assetOutcomeStructure.parse(asset);
+          const findings = run.assets.reduce((n, a) => n + (a.state === 'reviewed' ? a.result.findings.length : 0), 0);
+          if (validated.state === 'reviewed' && findings + validated.result.findings.length > run.limits.max_findings) {
+            run.assets.push({ state: 'result_omitted', update_xml_sys_id: row.sys_id, reason: 'response_limit' });
+            if (!run.limitations.includes('response_truncated')) {
+              run.limitations.push('response_truncated', 'finding_budget_exceeded');
+              addError(run, { stage: 'output', code: 'response_limit' });
+            }
+          } else run.assets.push(validated);
+        }
+        stage = 'consistency'; run.consistency = (await source.verify(decision.permit)).consistency;
+        if (run.consistency === 'changed') {
+          run.limitations.push('provisional_results', 'changed_during_review');
+          addError(run, { stage, code: 'changed_during_review' });
+        }
+        stage = 'output'; return finish(run);
+      }, options);
+    return { isError: false, result };
+  } catch (error) {
+    const stage = getStage();
+    if (error instanceof BoundedReadError) {
+      const allowed: ErrorCode[] = ['invalid_input', 'config_invalid', 'authentication_failed', 'access_denied',
+        'not_found_or_not_visible', 'upstream_unavailable', 'deadline_exceeded', 'receive_budget_exceeded',
+        'request_budget_exceeded', 'payload_budget_exceeded', 'review_busy', 'cancelled'];
+      const code: ErrorCode = error.code === 'invalid_response' && (stage === 'metadata' || stage === 'consistency') ? 'metadata_unavailable'
+        : allowed.includes(error.code as ErrorCode) ? error.code as ErrorCode : 'internal_review_error';
+      if (progress && stage === 'metadata' && !['deadline_exceeded', 'cancelled', 'internal_review_error'].includes(code)) {
+        const { run } = progress;
+        run.status = 'failed'; run.collection.status = 'failed'; addError(run, { stage, code: code as AggregateReview['errors'][number]['code'] });
+        try { return { isError: true, error: { stage, code }, result: finish(run) }; }
+        catch { return fail('output', 'internal_review_error'); }
+      }
+      const stopReasons = ['authentication_failed', 'access_denied', 'request_budget_exceeded',
+        'receive_budget_exceeded', 'payload_budget_exceeded', 'upstream_unavailable'] as const;
+      if (progress && (stage === 'payload' || stage === 'consistency')
+        && (stopReasons.some(reason => reason === code) || stage === 'consistency' && ['not_found_or_not_visible', 'metadata_unavailable'].includes(code))) {
+        const { run, rows } = progress;
+        const done = new Set(run.assets.map(a => a.update_xml_sys_id));
+        const reason = stopReasons.find(reason => reason === code);
+        if (reason) {
+          run.limitations.push(reason);
+          for (const row of rows.filter(r => !done.has(r.sys_id))) run.assets.push({ state: 'not_processed', update_xml_sys_id: row.sys_id, reason });
+        }
+        run.limitations.push('provisional_results', 'consistency_unverified');
+        run.consistency = 'unverified';
+        addError(run, { stage, code: code as AggregateReview['errors'][number]['code'] });
+        run.status = run.assets.some(a => a.state === 'reviewed') ? 'partial' : 'failed';
+        try {
+          const result = finish(run);
+          return result.status === 'failed' ? { isError: true, error: { stage, code }, result } : { isError: false, result };
+        } catch { return fail('output', 'internal_review_error'); }
+      }
+      return fail(stage, code);
+    }
+    return fail(stage, 'internal_review_error');
+  }
+}

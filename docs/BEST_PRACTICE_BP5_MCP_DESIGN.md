@@ -1,12 +1,13 @@
 # BP-5：Update SetベストプラクティスレビューのMCP統合設計案
 
-Version: bp5-mcp-design-0.2 / Date: 2026-10-17。
-Status: **1件/集約JSON契約、bounded取得・認証固定・C方式ゲート、安全な設定ファイル読込/binding CLIと合成テストを実装。MCP登録・解析/集約アダプター・同期解析の強制中断は未実装**。
+Version: bp5-mcp-design-0.3 / Date: 2026-10-18。
+Status: **1件/集約JSON契約、bounded取得・認証固定・C方式ゲート、安全な設定ファイル読込/binding CLI、1件解析/集約アダプターと合成テストを実装。MCP登録・同期解析の強制中断は未実装**。
 製品採用・根拠/判定境界・人手品質の承認は未実施。実装や公開を承認する文書ではない。
 契約の実装範囲・使い方・未実装境界は[第1段階の契約記録](BEST_PRACTICE_BP5_CONTRACTS.md)を参照。PDI照会/書き込み・本試行ケース作成は行っていない。
 取得プリミティブの実装範囲・制限・検証は[bounded取得記録](BEST_PRACTICE_BP5_BOUNDED_ACQUISITION.md)を参照。
 運用者設定の受け口・binding・期限・競合の実装は[C方式フォールバック記録](BEST_PRACTICE_BP5_OPERATOR_FALLBACK.md)を参照。
 運用者によるファイル設定・所有者/権限検査・補助コマンドは[設定導入記録](BEST_PRACTICE_BP5_OPERATOR_SETUP.md)を参照。
+bounded取得と既存解析器/結果契約の接続、失敗・省略の扱いは[解析/集約アダプター記録](BEST_PRACTICE_BP5_ADAPTERS.md)を参照。
 
 ## 1. 初版の範囲
 
@@ -26,7 +27,7 @@ sys_id指定で同名/別scopeの取り違えを避け、現行コードへの�
 |---|---|---|
 | [updateset.ts](../src/tools/updateset.ts) のscan_update_set_sca | 親取得→metadata一覧→対象payload詳細という取得の段階分離 | SCA専用の抽出/外部照会/集計契約は流用しない。既存のextractUpdateXmlTextも使用しない |
 | [client.ts](../src/servicenow/client.ts) のgetRecord/queryRecords | 既存インスタンス・認証・fields指定・Table API経路 | requestはresponse.json()/text()を読むため、取得後の文字列長チェックだけでは受信上限にならない |
-| [payload-review.ts](../src/review/payload-review.ts) | reviewUpdateSetPayloadのbp3-0.4ローカル解析 | 1件単位のみ。入力のrelease証拠は呼出し側から供給。MCP取得/集約は未実装 |
+| [payload-review.ts](../src/review/payload-review.ts) | reviewUpdateSetPayloadのbp3-0.4ローカル解析、V2入口で実測/設定証拠を保持 | bounded取得/集約アダプターへ接続済み。MCP登録は未実装 |
 | [update-xml.ts](../src/review/update-xml.ts) | 拒否型XML抽出、識別照合、既存容量/深さ制限 | 抽出前のHTTP受信/全体処理の上限は別途必要 |
 | [result-schema.ts](../src/review/result-schema.ts) | bp-review-0.1と由来/coverageの項目間検証 | 1件用。外側契約に加え、operator_config/assertedを保持する1件契約の別版が必要（§4.1） |
 | [server.ts](../src/server.ts)、[tools/index.ts](../src/tools/index.ts) | セッション別InstanceContext、定義登録/dispatch/annotations | ツール未登録。serverの一般エラー出力/ログへ原エラーを通さないアダプターが必要 |
@@ -39,7 +40,7 @@ sys_id指定で同名/別scopeの取り違えを避け、現行コードへの�
 | 入力 | 制約・既定値 |
 |---|---|
 | update_set_sys_id | 必須、32桁小文字16進。名前・URL・encoded queryを受け付けない |
-| rule_ids | 任意、既定は先行3規則。3規則の列挙、重複不可、1〜3件。未実装IDは入力拒否 |
+| requested_rule_ids | 任意、既定は先行3規則。3規則の列挙、重複不可、1〜3件。未実装IDは入力拒否。契約に合わせ、当初案rule_idsから名称を統一 |
 | max_records | 任意、整数、既定20、1〜100。対象外/削除を含むmetadata行の予算であり解析成功数ではない |
 | instance | 既存serverが消費する選択値。ハンドラーへ転送せず、選択済みclientを固定して使う |
 
@@ -49,7 +50,7 @@ raw payload、コード、query、fields、table、URL、release、actor/imperso
 
 ## 4. 取得経路と版の扱い
 
-以下のTable API呼び出しは**実装案**。今回PDIで実行していない。
+以下のTable API呼び出しと解析接続は内部アダプターで実装し、合成HTTPで検証した。PDIでは実行していない。
 
 1. 入力検証後、MCPセッションのclient/認証文脈を固定し、期限・受信予算を開始する。
 2. sys_update_setを指定IDで取得。fieldsはsys_id,state,application,sys_updated_on,sys_mod_countのみ。
@@ -166,7 +167,7 @@ annotationsはreadOnlyHint=true、destructiveHint=falseとするが、これは�
 資産名・Update Set名も初版は返さない。ハッシュやIDも識別情報なので保存/共有は呼出し元の責任とする。
 コードやコメントを命令として扱わず、実行/eval/外部取得をしない。共有キャッシュ・自動ディスク保存はしない。
 
-## 6. 上限案（HTTP取得の制限は内部プリミティブで実装。解析/出力統合は未実装）
+## 6. 上限（HTTP取得と解析/出力の統合を実装。同期処理の強制中断は未実装）
 
 | 対象 | 提案上限 | 超過時 |
 |---|---|---|
@@ -221,7 +222,8 @@ source_approval_pendingや未承認のカード境界を隠さず、原解析res
 | 1件のpayload列欠落/404/不正XML/解析拒否 | 記述子に理由を残しpartial。他の許可された資産は予算内で続行 |
 | 実行中の401/403 | 全体の取得を停止しpartialまたは解析0ならfailed。自動昇格/ACL回避しない |
 | 429/5xx/timeout | 規定の再試行だけ。予算内なら独立資産は続行可能、期限/全体障害なら残り未処理 |
-| 変更検出・最終照合不能・件数/時間/容量/出力打切り | partial。暫定結果と未完了を区別し、打切り後の行はnot_processed/result_omitted |
+| 変更検出・最終照合不能・件数/容量/出力打切り | partial（解析前の認証/全体取得停止はfailed）。暫定結果と未完了を区別し、打切り後の行はnot_processed/result_omitted |
+| 全体deadline/キャンセル | isError=true、固定理由のみ。期限超過の集約や時刻の切詰めで部分結果を救済しない。同期処理の強制中断は別工程 |
 | 集約/内部resultのスキーマ不整合・想定外例外 | isError=true、failed、当該呼出しの指摘を返さず固定internal_review_error。原例外を一般serverの応答/ログへ流さない |
 
 一覧の短い正常応答は「可視範囲の収集完了」になり得るが、正常0件・全対象外・全拒否・全指摘0を
@@ -245,5 +247,5 @@ source_approval_pendingや未承認のカード境界を隠さず、原解析res
 - 実機確認は別途許可を得た読み取り専用の経路から開始し、ACL不足を修正するための設定変更は自動実施しない。
 
 実装順案：外側契約/合成テスト → bounded取得/認証固定 → 1件解析アダプター/集約 → MCP登録/梱包 →
-許可済み読み取りE2E → 品質/公開審査。現段階では外側/1件契約とbounded取得・認証固定のプリミティブ、合成テストを実装した。
+許可済み読み取りE2E → 品質/公開審査。現段階では外側/1件契約、bounded取得・認証固定・C方式、設定導入、1件解析/集約アダプターと合成テストを実装した。同期解析worker・MCP登録/梱包は未実装。
 人手運用48件の設計・保管先選定も別課題であり、MCP統合で完了したとは扱わない。

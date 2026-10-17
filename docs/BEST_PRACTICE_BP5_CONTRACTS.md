@@ -1,7 +1,7 @@
 # BP-5 第1段階：リリース証拠と結果契約
 
 Version: bp5-contracts-0.1 / Date: 2026-10-17。
-本書はローカルJSON契約・合成テストの記録。取得プリミティブは[bounded取得記録](BEST_PRACTICE_BP5_BOUNDED_ACQUISITION.md)、C方式は[設定フォールバック記録](BEST_PRACTICE_BP5_OPERATOR_FALLBACK.md)、ファイル読込/権限検査とCLIは[設定導入記録](BEST_PRACTICE_BP5_OPERATOR_SETUP.md)を参照。MCP登録、解析/集約アダプター、実機操作は未実装。
+本書はローカルJSON契約・合成テストの記録。取得プリミティブは[bounded取得記録](BEST_PRACTICE_BP5_BOUNDED_ACQUISITION.md)、C方式は[設定フォールバック記録](BEST_PRACTICE_BP5_OPERATOR_FALLBACK.md)、ファイル読込/権限検査とCLIは[設定導入記録](BEST_PRACTICE_BP5_OPERATOR_SETUP.md)、解析接続は[1件/集約アダプター記録](BEST_PRACTICE_BP5_ADAPTERS.md)を参照。MCP登録・実機操作は未実施。
 根拠・規則カードの人による承認、独立品質評価は未実施。
 
 ## 1. 互換性と入口
@@ -18,7 +18,7 @@ Version: bp5-contracts-0.1 / Date: 2026-10-17。
 JSON Schemaは構造検証用。時刻・照合・coverage・件数・由来・バイト数などの項目間制約には、必ず対応するランタイム検証器も使う。
 `.parse`/`.safeParse`が入力を検証するだけであり、取得・解析・送信は行わない。
 追加キーは全オブジェクトで拒否する。エラーは列挙コードだけとし、原エラー・コード本文・URL・資格情報用の項目は設けない。
-ただし自由記述欄の内容が本文や秘密を含まないことまでスキーマで保証できないため、将来のアダプターで生成値を制御する必要がある。
+ただし自由記述欄の内容が本文や秘密を含まないことまでスキーマで保証できないため、アダプターでも固定カタログ/固定理由に生成値を制限する（上記記録参照）。
 
 ## 2. C方式の証拠
 
@@ -30,7 +30,7 @@ JSON Schemaは構造検証用。時刻・照合・coverage・件数・由来・�
 | none / unknown | reason | 未設定・実測不可・設定期限切れ・binding不一致・観測不完全/不整合/上限超過を区別。同じ理由をlimitationsにも必須 |
 
 証拠の真実性・設定者の信頼性・実接続先とbindingの一致は、この検証器では立証しない。
-binding/config_versionは64桁の小文字hex識別子。生成方式と信頼された設定の読み込みは次段階。
+binding/config_versionは64桁の小文字hex識別子。生成方式と信頼された設定の読み込みは後続で実装済み（設定導入記録参照）。
 1件の期限は記録内のreviewed_atと比較し、保存済み結果を後から検証できるよう現在時刻に依存しない。
 集約は運用者設定をstarted_atで固定し、asserted_at ≤ started_atかつ
 expires_at > started_at + limits.deadline_msを必須とする。終了時刻で期限を再判定しない。
