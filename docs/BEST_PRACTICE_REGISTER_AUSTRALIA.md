@@ -93,7 +93,7 @@ Source IDは既存のZurich/Yokohama資料とは別に割り当て、そちら�
 |---|---|---|---|
 | AU-SI-001 | 非公開のGlideAjax enabled資産はACLで保護する | AU-SRC-003 / Glide AJAX enabled script includes → Security on Glide AJAX enabled script includes | client_callableと関連ACL、ロール・条件を照合。公開資産はAU-SI-002でも評価 |
 | AU-SI-002 | 匿名公開で機密情報を返さない。個別isPublic設定の優先を考慮 | AU-SRC-003 / Privacy settings on Glide AJAX enabled script includes → Public privacy-setting、Change privacy on a single Glide AJAX enabled script include | `isPublic()`、返却経路、機密列、実効設定を確認。公開というだけでは脆弱性にしない |
-| AU-SI-003 | DB照会するGlideAjax enabled資産ではGlideRecordSecureを優先 | AU-SRC-003 / Security on Glide AJAX enabled script includes | `client_callable=true`＋GlideRecord。到達経路と既存認可を調べ、単独のAPI名だけで漏えいを断定しない |
+| AU-SI-003 | DB照会するGlideAjax enabled資産ではGlideRecordSecureを優先（区分: 公式推奨。製品の必須条件ではない） | AU-SRC-003 / Security on Glide AJAX enabled script includes | `client_callable=true`＋GlideRecord。到達経路と既存認可を調べ、単独のAPI名だけで漏えいを断定しない。本文ではGlide AJAX有効化時のシステム推奨メッセージとして記載され、`glide.script.ccsi.customer_scoped.security_msgs_enabled` で表示を止められる。表示の有無を規則の適用条件にしない |
 | AU-SI-004 | Nameとクラス/prototype/type、またはオンデマンド関数名を一致させる | AU-SRC-003 / Script include form（Name/Script行）、Use script includes | メタデータと定義を比較。外部呼出し用API NameとNameは混同しない |
 
 ### 3.4 Scripted REST API — 6項目
@@ -117,7 +117,7 @@ Source IDは既存のZurich/Yokohama資料とは別に割り当て、そちら�
 | rule_id | 規則・適用条件・例外 | 根拠元／該当節 | 検出候補・追加確認 |
 |---|---|---|---|
 | AU-QRY-001 | addQueryの文字列包含演算子はCONTAINSを使う | AU-SRC-005 / Available JavaScript operators（CONTAINS行） | `addQuery(field, 'LIKE', value)`のみ候補化。encoded queryの`LIKE`はこの規則で禁止しない |
-| AU-QRY-002 | 全文検索の利用前提となる索引設定を確認 | AU-SRC-005 / Return records from a table that include a string（Note） | `123TEXTQUERY321`。対象テーブルの索引設定が見えなければ未確認。通常の包含検索とは別 |
+| AU-QRY-002 | 全文検索の利用前提となる索引設定を確認 | AU-SRC-005 / Return records from a table that include a string（Note） | `addQuery('123TEXTQUERY321', …)` と encoded query（`addEncodedQuery('123TEXTQUERY321=…')` 等）の両方。対象テーブルの索引設定が見えなければ未確認。通常の包含検索とは別 |
 
 ## 4. 根拠と実装を結び付ける運用
 
