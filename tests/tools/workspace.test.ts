@@ -193,16 +193,39 @@ describe('UIB Data Brokers', () => {
   });
 });
 
-describe('Configurable Workspaces', () => {
+describe('Legacy Agent Workspaces', () => {
   beforeEach(() => vi.clearAllMocks());
+
+  it('can include inactive definitions without adding fictitious columns', async () => {
+    const workspaces = [{ sys_id: 'w1', name: 'Agent', workspace_url: 'agent', active: 'false' }];
+    qr().mockResolvedValue({ count: 1, records: workspaces });
+    expect(await executeWorkspaceToolCall(mockClient, 'list_workspaces', { active: false, limit: 3 }))
+      .toEqual({ count: 1, workspaces });
+    expect(qr()).toHaveBeenCalledWith(expect.objectContaining({ table: 'sys_aw_master_config', query: undefined, limit: 3 }));
+  });
 
   it('list_workspaces defaults to active=true', async () => {
     qr().mockResolvedValue({ count: 0, records: [] });
     await executeWorkspaceToolCall(mockClient, 'list_workspaces', {});
-    expect(qr()).toHaveBeenCalledWith(expect.objectContaining({ table: 'sys_aw_workspace', query: 'active=true' }));
+    expect(qr()).toHaveBeenCalledWith(expect.objectContaining({
+      table: 'sys_aw_master_config', query: 'active=true',
+      fields: 'sys_id,name,description,workspace_url,active,sys_updated_on',
+    }));
   });
 
   describe('get_workspace', () => {
+    it('sanitizes the parent reference literal used for list lookup', async () => {
+      gr().mockResolvedValue({ sys_id: 'w1' });
+      qr().mockResolvedValue({ count: 0, records: [] });
+      await executeWorkspaceToolCall(mockClient, 'get_workspace', { sys_id: 'w1^ORactive=true' });
+      expect(qr()).toHaveBeenCalledWith(expect.objectContaining({ query: 'workspace=w1ORactive=true' }));
+    });
+
+    it('propagates list-read errors instead of pretending the workspace has no lists', async () => {
+      gr().mockResolvedValue({ sys_id: 'w1' });
+      qr().mockRejectedValueOnce(new Error('Access denied'));
+      await expect(executeWorkspaceToolCall(mockClient, 'get_workspace', { sys_id: 'w1' })).rejects.toThrow('Access denied');
+    });
     it('requires sys_id', async () => {
       await expect(executeWorkspaceToolCall(mockClient, 'get_workspace', {})).rejects.toThrow('sys_id is required');
     });
@@ -211,8 +234,11 @@ describe('Configurable Workspaces', () => {
       gr().mockResolvedValue({ sys_id: 'w1', name: 'Agent Workspace' });
       qr().mockResolvedValue({ count: 1, records: [{ sys_id: 'l1', title: 'My Incidents' }] });
       const result = await executeWorkspaceToolCall(mockClient, 'get_workspace', { sys_id: 'w1' });
-      expect(gr()).toHaveBeenCalledWith('sys_aw_workspace', 'w1');
-      expect(qr()).toHaveBeenCalledWith(expect.objectContaining({ table: 'sys_aw_list', query: 'workspace=w1' }));
+      expect(gr()).toHaveBeenCalledWith('sys_aw_master_config', 'w1');
+      expect(qr()).toHaveBeenCalledWith(expect.objectContaining({
+        table: 'sys_aw_list', query: 'workspace=w1',
+        fields: 'sys_id,title,table,condition,columns,workspace,active',
+      }));
       expect(result.lists).toHaveLength(1);
     });
   });
@@ -221,21 +247,44 @@ describe('Configurable Workspaces', () => {
     beforeEach(() => { process.env.WRITE_ENABLED = 'true'; });
     afterEach(() => { delete process.env.WRITE_ENABLED; });
 
-    it('requires name and table', async () => {
-      await expect(executeWorkspaceToolCall(mockClient, 'create_workspace', {})).rejects.toThrow('name and table are required');
+    it('requires WRITE_ENABLED before creating metadata', async () => {
+      delete process.env.WRITE_ENABLED;
+      await expect(executeWorkspaceToolCall(mockClient, 'create_workspace', { name: 'Agent', workspace_url: 'agent' }))
+        .rejects.toThrow('Write operations are disabled');
+      expect(cr()).not.toHaveBeenCalled();
     });
 
-    it('creates the workspace active by default', async () => {
+    it('requires name and workspace_url', async () => {
+      await expect(executeWorkspaceToolCall(mockClient, 'create_workspace', {})).rejects.toThrow('name and workspace_url are required');
+    });
+
+    it('creates inactive legacy metadata without inventing a primary table', async () => {
       cr().mockResolvedValue({ sys_id: 'w1' });
-      const result = await executeWorkspaceToolCall(mockClient, 'create_workspace', { name: 'Agent Workspace', table: 'incident' });
-      expect(cr()).toHaveBeenCalledWith('sys_aw_workspace', expect.objectContaining({ name: 'Agent Workspace', table: 'incident', active: 'true' }));
+      const result = await executeWorkspaceToolCall(mockClient, 'create_workspace', { name: 'Agent Workspace', workspace_url: 'agent', description: 'Test' });
+      expect(cr()).toHaveBeenCalledWith('sys_aw_master_config', { name: 'Agent Workspace', workspace_url: 'agent', description: 'Test', active: 'false' });
       expect(result.action).toBe('created');
+    });
+
+    it('rejects obsolete table and icon arguments instead of silently dropping them', async () => {
+      await expect(executeWorkspaceToolCall(mockClient, 'create_workspace', {
+        name: 'Agent', workspace_url: 'agent', table: 'incident', icon: 'list',
+      })).rejects.toMatchObject({ code: 'INVALID_REQUEST' });
+      expect(cr()).not.toHaveBeenCalled();
     });
   });
 
   describe('configure_workspace_list', () => {
     beforeEach(() => { process.env.WRITE_ENABLED = 'true'; });
     afterEach(() => { delete process.env.WRITE_ENABLED; });
+
+    it('requires WRITE_ENABLED before even looking up the parent', async () => {
+      delete process.env.WRITE_ENABLED;
+      await expect(executeWorkspaceToolCall(mockClient, 'configure_workspace_list', {
+        workspace_sys_id: 'w1', table: 'incident', title: 'Incidents',
+      })).rejects.toThrow('Write operations are disabled');
+      expect(gr()).not.toHaveBeenCalled();
+      expect(cr()).not.toHaveBeenCalled();
+    });
 
     it('requires workspace_sys_id, table, and title', async () => {
       await expect(executeWorkspaceToolCall(mockClient, 'configure_workspace_list', {})).rejects.toThrow(
@@ -244,12 +293,22 @@ describe('Configurable Workspaces', () => {
     });
 
     it('creates the list', async () => {
+      gr().mockResolvedValue({ sys_id: 'w1', name: 'Agent' });
       cr().mockResolvedValue({ sys_id: 'l1' });
       const result = await executeWorkspaceToolCall(mockClient, 'configure_workspace_list', {
         workspace_sys_id: 'w1', table: 'incident', title: 'My Incidents', query: 'active=true',
       });
-      expect(cr()).toHaveBeenCalledWith('sys_aw_list', expect.objectContaining({ workspace: 'w1', table: 'incident', title: 'My Incidents', query: 'active=true' }));
+      expect(gr()).toHaveBeenCalledWith('sys_aw_master_config', 'w1');
+      expect(cr()).toHaveBeenCalledWith('sys_aw_list', { workspace: 'w1', table: 'incident', title: 'My Incidents', condition: 'active=true' });
       expect(result.action).toBe('created');
+    });
+
+    it('does not create a list when the legacy parent lookup fails', async () => {
+      gr().mockRejectedValueOnce(new Error('Record not found'));
+      await expect(executeWorkspaceToolCall(mockClient, 'configure_workspace_list', {
+        workspace_sys_id: 'ux1', table: 'incident', title: 'Incidents',
+      })).rejects.toThrow('Record not found');
+      expect(cr()).not.toHaveBeenCalled();
     });
   });
 });

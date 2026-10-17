@@ -2125,6 +2125,62 @@ the PDI in this read-only E2E run.
 
 ---
 
+## Legacy Agent Workspace metadata (4 tools)
+
+These four tools target `sys_aw_master_config` and `sys_aw_list`, **not**
+Configurable Workspace provisioning. Configurable Workspaces use a separate UX
+model; arbitrary `sys_ux_page_registry` records are not automatically workspaces.
+The other UI Builder/UX tools have their own contracts and are not covered by
+this legacy Workspace fix.
+
+### list_workspaces
+
+List legacy definitions. Returns `{ count, workspaces }` with native `sys_id`,
+`name`, `description`, `workspace_url`, `active`, and `sys_updated_on` fields.
+
+**Parameters**:
+
+- `active` — Active-only by default; false removes the active filter.
+- `limit` — Default 25.
+
+### get_workspace
+
+Read a legacy definition and up to 50 linked `sys_aw_list` configurations.
+Returns native metadata plus `lists`; list filters are in `condition`, not `query`.
+An empty list response is valid; API errors are not converted into empty lists.
+
+**Parameters**:
+
+- `sys_id` (required) — A `sys_aw_master_config` sys_id, not a UX application ID.
+
+### create_workspace
+
+Create **inactive legacy metadata only**. Does not provision a complete usable
+workspace, Configurable Workspace shell, pages, navigation, or lists. **[Write]**
+
+**Parameters**:
+
+- `name` (required)
+- `workspace_url` (required) — Legacy URL segment, e.g. `agent`.
+- `description`
+
+Compatibility change: the former `table` and `icon` arguments are rejected because
+they are not columns of this model. The default is now inactive. Configure list
+tables separately rather than setting a fictitious primary table on the workspace.
+
+### configure_workspace_list
+
+Create (not update) a legacy `sys_aw_list` after confirming the parent definition
+exists in `sys_aw_master_config`. Does not configure Configurable Workspace UX lists. **[Write]**
+
+**Parameters**:
+
+- `workspace_sys_id`, `table`, `title` (required)
+- `query` — Encoded query stored in the native `condition` column.
+- `columns` — Comma-separated field names.
+
+---
+
 ## Service Portal & UI Builder (14 tools)
 
 ### list_portals

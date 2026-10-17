@@ -142,10 +142,65 @@ e2eDescribe('E2E – catalog, portal and UI surfaces (read-only)', () => {
       expect(page.sys_id).toBe(list.pages[0].sys_id);
     });
 
-    it('lists workspaces when the workspace table exists', async (ctx) => {
-      await skipUnlessTables(ctx, client, 'sys_aw_workspace');
+  });
+
+  describe('Legacy Workspace metadata', () => {
+    it('lists workspaces when the legacy table exists', async (ctx) => {
+      await skipUnlessTables(ctx, client, 'sys_aw_master_config');
       const result = await executeWorkspaceToolCall(client, 'list_workspaces', { limit: 5 });
       expect(result.count).toBeGreaterThanOrEqual(0);
+      expect(Array.isArray(result.workspaces)).toBe(true);
+      for (const workspace of result.workspaces) {
+        expect(workspace.active).toBe('true');
+        expect(workspace).toHaveProperty('name');
+        expect(workspace).toHaveProperty('workspace_url');
+      }
+    });
+
+    it('includes inactive legacy workspaces on request', async (ctx) => {
+      await skipUnlessTables(ctx, client, 'sys_aw_master_config');
+      const result = await executeWorkspaceToolCall(client, 'list_workspaces', { active: false, limit: 5 });
+      expect(Array.isArray(result.workspaces)).toBe(true);
+      expect(result.count).toBe(result.workspaces.length);
+      for (const workspace of result.workspaces) {
+        expect(workspace.sys_id).toMatch(/^[0-9a-f]{32}$/);
+        expect(workspace).toHaveProperty('workspace_url');
+      }
+    });
+
+    it('gets a legacy workspace and its correctly linked list configurations', async (ctx) => {
+      await skipUnlessTables(ctx, client, 'sys_aw_master_config', 'sys_aw_list');
+      const list = await executeWorkspaceToolCall(client, 'list_workspaces', { active: false, limit: 1 });
+      ctx.skip(list.count === 0, 'data missing: list_workspaces returned no records');
+      const result = await executeWorkspaceToolCall(client, 'get_workspace', { sys_id: list.workspaces[0].sys_id });
+      expect(result.sys_id).toBe(list.workspaces[0].sys_id);
+      expect(result.name).toBe(list.workspaces[0].name);
+      expect(Array.isArray(result.lists)).toBe(true);
+      for (const record of result.lists) {
+        expect(record.workspace?.value ?? record.workspace).toBe(result.sys_id);
+        expect(record).toHaveProperty('condition');
+        expect(record).toHaveProperty('columns');
+      }
+    });
+
+    it('verifies the legacy list condition and workspace-reference schema', async (ctx) => {
+      await skipUnlessTables(ctx, client, 'sys_aw_master_config', 'sys_aw_list');
+      const dictionary = await client.queryRecords({
+        table: 'sys_dictionary', query: 'name=sys_aw_list^elementINworkspace,condition,columns,title,table,active',
+        fields: 'element,reference', limit: 10,
+      });
+      expect(dictionary.records.map(record => record.element).sort())
+        .toEqual(['active', 'columns', 'condition', 'table', 'title', 'workspace']);
+      const reference = dictionary.records.find(record => record.element === 'workspace')?.reference;
+      expect(reference?.value ?? reference).toBe('sys_aw_master_config');
+    });
+
+    it('does not treat an arbitrary UX application as a legacy workspace', async (ctx) => {
+      await skipUnlessTables(ctx, client, 'sys_aw_master_config', 'sys_ux_page_registry');
+      const apps = await client.queryRecords({ table: 'sys_ux_page_registry', fields: 'sys_id', limit: 1 });
+      ctx.skip(apps.count === 0, 'data missing: sys_ux_page_registry returned no records');
+      await expect(executeWorkspaceToolCall(client, 'get_workspace', { sys_id: apps.records[0].sys_id }))
+        .rejects.toMatchObject({ code: 'NOT_FOUND' });
     });
   });
 

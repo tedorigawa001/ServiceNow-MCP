@@ -4,13 +4,14 @@
  *
  * NOTE: Does NOT duplicate existing portal.ts tools (list_portals, create_portal,
  * list_portal_widgets, etc.). These tools focus on the newer UI Builder (UIB) and
- * Configurable Workspace frameworks.
+ * Configurable Workspace frameworks. The four workspace/list management tools
+ * target legacy Agent Workspace metadata, not Configurable Workspace provisioning.
  *
  * ServiceNow tables: sys_ux_page, sys_ux_page_registry, sys_ux_macroponent,
  *   sys_ux_data_broker, sys_ux_client_script, sys_ux_client_state_parameter,
- *   sys_aw_workspace, sys_aw_list, sys_aw_form, aw_agent_workspace
+ *   sys_aw_master_config, sys_aw_list
  */
-import type { ServiceNowClient } from '../servicenow/client.js';
+import { sanitizeLikeValue, type ServiceNowClient } from '../servicenow/client.js';
 import { ServiceNowError } from '../utils/errors.js';
 import { requireWrite, requireScripting } from '../utils/permissions.js';
 
@@ -69,25 +70,25 @@ export function getWorkspaceToolDefinitions() {
       description: 'Create a UI Builder data broker to feed data to a page. **[Scripting]**',
       inputSchema: { type: 'object', properties: { name: { type: 'string', description: 'Broker name' }, table: { type: 'string', description: 'Source table' }, query: { type: 'string', description: 'Encoded query filter' }, page: { type: 'string', description: 'Target page sys_id' } }, required: ['name', 'table'] },
     },
-    // ─── Configurable Workspaces ───────────────────────────────────
+    // ─── Legacy Agent Workspaces ───────────────────────────────────
     {
       name: 'list_workspaces',
-      description: 'List all configurable agent workspaces',
+      description: 'List legacy Agent Workspace definitions (sys_aw_master_config), not Configurable Workspace UX applications',
       inputSchema: { type: 'object', properties: { active: { type: 'boolean', description: 'Filter active (default true)' }, limit: { type: 'number' } }, required: [] },
     },
     {
       name: 'get_workspace',
-      description: 'Get details of a configurable agent workspace including tabs and lists',
+      description: 'Get a legacy Agent Workspace definition and up to 50 of its sys_aw_list configurations',
       inputSchema: { type: 'object', properties: { sys_id: { type: 'string', description: 'Workspace sys_id' } }, required: ['sys_id'] },
     },
     {
       name: 'create_workspace',
-      description: 'Create a new configurable agent workspace. **[Write]**',
-      inputSchema: { type: 'object', properties: { name: { type: 'string', description: 'Workspace name' }, description: { type: 'string' }, table: { type: 'string', description: 'Primary table (e.g. incident)' }, icon: { type: 'string', description: 'Workspace icon name' } }, required: ['name', 'table'] },
+      description: 'Create inactive legacy Agent Workspace metadata only. Does not provision a Configurable Workspace or its pages. Configure lists separately. **[Write]**',
+      inputSchema: { type: 'object', properties: { name: { type: 'string', description: 'Workspace name' }, description: { type: 'string' }, workspace_url: { type: 'string', description: 'Legacy workspace URL segment (e.g. agent)' } }, required: ['name', 'workspace_url'], additionalProperties: false },
     },
     {
       name: 'configure_workspace_list',
-      description: 'Add or update a list view in an agent workspace. **[Write]**',
+      description: 'Create a legacy sys_aw_list configuration under an existing Agent Workspace. query maps to the condition column. Does not update existing lists or configure UX lists. **[Write]**',
       inputSchema: { type: 'object', properties: { workspace_sys_id: { type: 'string', description: 'Workspace sys_id' }, table: { type: 'string', description: 'List table' }, title: { type: 'string', description: 'List title' }, query: { type: 'string', description: 'Encoded query filter' }, columns: { type: 'string', description: 'Comma-separated field names' } }, required: ['workspace_sys_id', 'table', 'title'] },
     },
     // ─── UX App Configuration ──────────────────────────────────────
@@ -167,25 +168,27 @@ export async function executeWorkspaceToolCall(
       return { action: 'created', ...result };
     }
     case 'list_workspaces': {
-      const resp = await client.queryRecords({ table: 'sys_aw_workspace', query: args.active !== false ? 'active=true' : undefined, limit: args.limit || 25, fields: 'sys_id,name,description,table,active,icon,sys_updated_on' });
+      const resp = await client.queryRecords({ table: 'sys_aw_master_config', query: args.active !== false ? 'active=true' : undefined, limit: args.limit || 25, fields: 'sys_id,name,description,workspace_url,active,sys_updated_on' });
       return { count: resp.count, workspaces: resp.records };
     }
     case 'get_workspace': {
       if (!args.sys_id) throw new ServiceNowError('sys_id is required', 'INVALID_REQUEST');
-      const ws = await client.getRecord('sys_aw_workspace', args.sys_id);
-      const lists = await client.queryRecords({ table: 'sys_aw_list', query: `workspace=${args.sys_id}`, limit: 50, fields: 'sys_id,title,table,query,columns' });
+      const ws = await client.getRecord('sys_aw_master_config', args.sys_id);
+      const lists = await client.queryRecords({ table: 'sys_aw_list', query: `workspace=${sanitizeLikeValue(args.sys_id)}`, limit: 50, fields: 'sys_id,title,table,condition,columns,workspace,active' });
       return { ...ws, lists: lists.records };
     }
     case 'create_workspace': {
       requireWrite();
-      if (!args.name || !args.table) throw new ServiceNowError('name and table are required', 'INVALID_REQUEST');
-      const result = await client.createRecord('sys_aw_workspace', { name: args.name, table: args.table, active: 'true', ...(args.description ? { description: args.description } : {}), ...(args.icon ? { icon: args.icon } : {}) });
+      if ('table' in args || 'icon' in args) throw new ServiceNowError('table and icon are not legacy Workspace columns; use workspace_url and configure_workspace_list for list tables', 'INVALID_REQUEST');
+      if (!args.name || !args.workspace_url) throw new ServiceNowError('name and workspace_url are required', 'INVALID_REQUEST');
+      const result = await client.createRecord('sys_aw_master_config', { name: args.name, workspace_url: args.workspace_url, active: 'false', ...(args.description ? { description: args.description } : {}) });
       return { action: 'created', ...result };
     }
     case 'configure_workspace_list': {
       requireWrite();
       if (!args.workspace_sys_id || !args.table || !args.title) throw new ServiceNowError('workspace_sys_id, table, and title are required', 'INVALID_REQUEST');
-      const result = await client.createRecord('sys_aw_list', { workspace: args.workspace_sys_id, table: args.table, title: args.title, ...(args.query ? { query: args.query } : {}), ...(args.columns ? { columns: args.columns } : {}) });
+      await client.getRecord('sys_aw_master_config', args.workspace_sys_id);
+      const result = await client.createRecord('sys_aw_list', { workspace: args.workspace_sys_id, table: args.table, title: args.title, ...(args.query ? { condition: args.query } : {}), ...(args.columns ? { columns: args.columns } : {}) });
       return { action: 'created', ...result };
     }
     case 'create_ux_app_route': {
