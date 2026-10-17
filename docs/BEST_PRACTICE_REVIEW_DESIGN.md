@@ -6,6 +6,11 @@ Status: **計画・未実装（2026-10-17）**
 知識ベース、収集ジョブ、RAG検索、レビュー用MCPツールはまだ実装していない。
 既存のSecurity Center対応は保留のままであり、本計画によって再開しない。
 
+BP-1の公式本文調査は初版を作成済み。
+[Australiaベストプラクティス台帳](BEST_PRACTICE_REGISTER_AUSTRALIA.md)に
+公式資料5件・27規則の根拠URL、該当節、適用条件、例外と残作業を記録した。
+人による採用承認と索引化・保存方式の確認は未完了。
+
 ## 1. 目的と対象
 
 ServiceNow公式のベストプラクティスを検索し、対象コードと設定に適用できるかを
@@ -54,15 +59,19 @@ BP-1で、採用する規則ごとにAustralia版の同じ節または同等の�
 リリース・取得日・内容ハッシュ）を記録する。他リリースの資料IDをAustraliaに
 上書きせず、版ごとのSource ID/スナップショットを追加して規則から参照する。
 
-追加調査では、以下の資料が検索結果ではAustraliaと表示されたが、本文へのアクセスは
-Brazil表示または取得失敗となった。**Australia版の本文照合は未完了**であり、
-以下の候補をAustralia適用確認済みの根拠には採用しない。
+初回の追加調査では、検索結果ではAustraliaと表示されても本文はBrazil表示または
+取得失敗となった。その後BP-1で公式Docsのリリース選択からAustraliaへ移動し、
+固定版URL・リリース表示・本文をブラウザで確認した。対応は次のとおり。
 
-| 候補ID（未承認） | 確認対象の公式資料 | BP-1で確認する節 |
+| 元資料の観点 | Australia本文の照合先（台帳Source ID） | 確認範囲 |
 |---|---|---|
-| SN-CAND-AU-001 | [Technical Best PracticesのAustralia版候補](https://developer.servicenow.com/print_page.do?category=now-platform&identifier=business_rules_technical_best_practices&module=guide&release=australia) | 採用規則に対応するBR/Client Script等の節。今回の取得は失敗 |
-| SN-CAND-AU-002 | [Scripted REST APIs good practices](https://www.servicenow.com/docs/r/api-reference/rest-api-explorer/scripted-rest-good-practices.html) | Enforce and test access controls等。今回取得した本文はBrazil |
-| SN-CAND-AU-003 | [Classic Business rules](https://www.servicenow.com/docs/r/api-reference/business-rules-classic/c_BusinessRules.html) | Prevent recursive business rules等。Australia版本文の照合が必要 |
+| SN-SRC-001のBR/Client Script観点 | AU-SRC-001 / AU-SRC-002 | 台帳のBR・Client Script規則に対応する節。Zurichガイド全体の適用認定ではない |
+| SN-SRC-002のREST観点 | AU-SRC-004 | 同名のAustralia版でREST規則に対応する節 |
+| SN-SRC-003のアクセス制御観点 | AU-SRC-003 | Australia版Script includesのGlideAjaxセキュリティ節等。ブログ全体の適用認定ではない |
+| 追加したクエリ仕様 | AU-SRC-005 | Australia版の該当演算子・全文検索の前提条件 |
+
+直接URL・節・更新日・確認状態は台帳を参照。DeveloperガイドのAustralia版自体は
+今回も根拠に使用せず、確認できた公式製品文書の該当節を規則ごとに結び付けた。
 
 URLのreleaseパラメータや検索結果の表示だけでファミリーを認定しない。
 少なくともBP-3で評価する規則群についてAustralia適用確認を終えることを開始条件とする。
@@ -323,4 +332,5 @@ ACLを取得できない、対象が一部しか読めない、検索に失敗�
 識別できない場合は失敗・スキップとし、名前検索へ黙ってフォールバックしない。
 既存ツール側のスコープ指定・重複検出は別課題として追跡し、本書更新ではコードを変更しない。
 
-次の着手候補はBP-1。本書の作成は大量収集・RAG実装・外部送信・定期実行の開始を意味しない。
+次の着手候補はBP-1台帳の採用・保存方針の確認とBP-2の契約・検索PoC。
+本書・台帳の作成は大量収集・RAG実装・外部送信・定期実行の開始を意味しない。
