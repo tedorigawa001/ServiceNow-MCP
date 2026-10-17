@@ -100,6 +100,10 @@ whenはpayloadからのみ取得する。condition/filter_conditionを本文と�
 AU-BR-002のwhenが不足・未知ならmissing_context。before/after/displayはこのasync候補に
 該当しない。active=falseでも静的な候補は残し、inactive_assetを付ける。
 
+上記は初期bp3-0.1の記録。現行経路は[BR互換修正](BEST_PRACTICE_BR_COMPATIBILITY.md)により
+`async_always`と旧`async`をasync、`before_display`をdisplayとして扱う。
+保存値`display`は現行経路では未知としてmissing_contextにする。旧エンジンは履歴再現専用。
+
 APIを別名に代入した間接呼び出し・変数でのブラケット指定は追跡しない。
 影響・脆弱性・実行パスの確認は未実施。すべてcandidate / low / infoで、
 verification_evidenceは空。候補がないことを安全性の保証にしない。

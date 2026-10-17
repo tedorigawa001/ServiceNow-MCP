@@ -62,10 +62,16 @@ function reviewPayload(raw: unknown, mode: 'legacy' | 'scoped'):
   if (mode === 'scoped') result.limitations.push('bounded_intra_function_analysis', 'interprocedural_analysis_not_performed', 'dynamic_member_analysis_not_performed');
   if (asset.active === 'false') result.limitations.push('inactive_asset');
   const supported = new Set(['AU-BR-001', 'AU-BR-002', 'AU-CL-004']);
+  // Normalize persisted BR choice values only on the current engine path.
+  // Keep the historical engine's context contract unchanged for frozen baselines.
+  const when = mode === 'legacy' ? asset.when
+    : asset.when === 'async_always' || asset.when === 'async' ? 'async'
+      : asset.when === 'before_display' ? 'display'
+        : asset.when === 'before' || asset.when === 'after' ? asset.when : null;
   for (const rule_id of input.requested_rule_ids) {
     const reason = releaseMatch !== 'matched' ? releaseMatch === 'unknown' ? 'release_unknown' : 'release_mismatch'
       : !supported.has(rule_id) ? 'unsupported'
-        : rule_id === 'AU-BR-002' && !['before', 'after', 'async', 'display'].includes(asset.when ?? '') ? 'missing_context' : null;
+        : rule_id === 'AU-BR-002' && !['before', 'after', 'async', 'display'].includes(when ?? '') ? 'missing_context' : null;
     if (reason) result.coverage.skipped_rules.push({ rule_id, reason });
     else result.coverage.evaluated_rule_ids.push(rule_id);
   }
@@ -89,10 +95,10 @@ function reviewPayload(raw: unknown, mode: 'legacy' | 'scoped'):
     };
     if (mode === 'scoped') {
       try {
-        analyzeScopedCandidates(ast, asset.when, (entry, ruleId) => {
+        analyzeScopedCandidates(ast, when, (entry, ruleId) => {
           appendFinding(entry, ruleId);
           if (result.findings.length > 100) throw new ExtractionError('finding_limit');
-        });
+        }, { allowDeclaredEntry: assetType === 'business_rule' });
       } catch (error) {
         return reject(error instanceof ExtractionError ? error.reason : error instanceof AnalysisLimitError ? 'analysis_limit' : 'analysis_failed');
       }

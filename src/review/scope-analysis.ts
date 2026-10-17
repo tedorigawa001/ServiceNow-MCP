@@ -22,11 +22,13 @@ const functions = new Set(['FunctionDeclaration', 'FunctionExpression', 'ArrowFu
 const blocks = new Set(['BlockStatement', 'CatchClause', 'ForStatement', 'ForInStatement', 'ForOfStatement', 'SwitchStatement']);
 const recordMethods = new Set(['update', 'getValue', 'getDisplayValue', 'setValue', 'setWorkflow', 'getUniqueValue', 'isValidRecord']);
 
-export function analyzeScopedCandidates(ast: AstNode, when: string | null, emit: (entry: AstNode, rule: string) => void): void {
+export function analyzeScopedCandidates(ast: AstNode, when: string | null, emit: (entry: AstNode, rule: string) => void,
+  options = { allowDeclaredEntry: false }): void {
   const root: Scope = { functionId: 0, functionScope: true, bindings: new Map() };
   const scopes = new WeakMap<AstNode, Scope>();
   const functionScopes = new WeakMap<AstNode, Scope>();
   let functionId = 0, visits = 0;
+  const reboundNames = new Set<string>();
   function budget(depth: number) {
     if (++visits > 100000 || depth > 256) throw new AnalysisLimitError('analysis_limit');
   }
@@ -57,6 +59,16 @@ export function analyzeScopedCandidates(ast: AstNode, when: string | null, emit:
     } else if (pattern.type === 'ArrayPattern') for (const element of pattern.elements as unknown[]) declare(element, scope, depth + 1);
   }
   function nearestFunction(scope: Scope) { while (!scope.functionScope && scope.parent) scope = scope.parent; return scope; }
+  function noteWrite(pattern: unknown, depth = 0): void {
+    if (!isAstNode(pattern)) return;
+    budget(depth);
+    if (pattern.type === 'Identifier') reboundNames.add(String(pattern.name));
+    else if (pattern.type === 'AssignmentPattern') noteWrite(pattern.left, depth + 1);
+    else if (pattern.type === 'RestElement') noteWrite(pattern.argument, depth + 1);
+    else if (pattern.type === 'ObjectPattern') for (const p of pattern.properties as AstNode[])
+      noteWrite(p.type === 'RestElement' ? p.argument : p.value, depth + 1);
+    else if (pattern.type === 'ArrayPattern') for (const p of pattern.elements as unknown[]) noteWrite(p, depth + 1);
+  }
   function prepare(entry: AstNode, parent: Scope, depth = 0): void {
     budget(depth);
     let scope = parent;
@@ -77,26 +89,48 @@ export function analyzeScopedCandidates(ast: AstNode, when: string | null, emit:
       if (entry.type === 'ClassExpression' || entry.type === 'ClassDeclaration') declare(entry.id, scope);
     }
     scopes.set(entry, scope);
+    if (entry.type === 'AssignmentExpression') noteWrite(entry.left);
+    if (entry.type === 'UpdateExpression') noteWrite(entry.argument);
+    if (entry.type === 'VariableDeclarator') noteWrite(entry.id);
+    if (entry.type === 'ForInStatement' || entry.type === 'ForOfStatement') noteWrite(entry.left);
     if (entry.type === 'VariableDeclaration') for (const d of entry.declarations as AstNode[])
       declare(d.id, entry.kind === 'var' ? nearestFunction(scope) : scope);
     for (const child of children(entry)) prepare(child, entry.type === 'SwitchStatement' && child === entry.discriminant ? parent : scope, depth + 1);
   }
   prepare(ast, root);
   // Syntactic ServiceNow entry binding only: a sole top-level (function(current, previous){...})(current, previous).
-  // No function name lookup, argument propagation, return propagation or general IIFE analysis.
+  // No general argument/return propagation or IIFE analysis.
   const statements = ast.body as AstNode[];
+  function bindEntry(fn: AstNode, args: AstNode[]): void {
+    const params = fn.params as AstNode[];
+    if (params.length !== 2 || args.length !== 2 || !identifier(params[0], 'current') || !identifier(params[1], 'previous')
+      || !identifier(args[0], 'current') || !identifier(args[1], 'previous') || root.bindings.has('current') || root.bindings.has('previous')) return;
+    const scope = functionScopes.get(fn)!;
+    scope.bindings.get('current')!.origin = origin(C);
+    scope.bindings.get('current')!.entryFlags = C;
+    scope.bindings.get('previous')!.origin = origin(P);
+    scope.bindings.get('previous')!.entryFlags = P;
+  }
   if (statements.length === 1 && statements[0].type === 'ExpressionStatement') {
     const call = statements[0].expression;
     if (isAstNode(call) && call.type === 'CallExpression' && isAstNode(call.callee) && call.callee.type === 'FunctionExpression') {
-      const fn = call.callee, params = fn.params as AstNode[], args = call.arguments as AstNode[];
-      if (params.length === 2 && args.length === 2 && identifier(params[0], 'current') && identifier(params[1], 'previous')
-        && identifier(args[0], 'current') && identifier(args[1], 'previous') && !root.bindings.has('current') && !root.bindings.has('previous')) {
-        const scope = functionScopes.get(fn)!;
-        scope.bindings.get('current')!.origin = origin(C);
-        scope.bindings.get('current')!.entryFlags = C;
-        scope.bindings.get('previous')!.origin = origin(P);
-        scope.bindings.get('previous')!.entryFlags = P;
-      }
+      bindEntry(call.callee, call.arguments as AstNode[]);
+    }
+  }
+  if (options.allowDeclaredEntry && !reboundNames.has('current') && !reboundNames.has('previous')) {
+    // Old BR template only: top-level X(current, previous) + one top-level declaration X.
+    // Conservatively reject any same-name write/declarator, even in a nested scope.
+    const declarations = new Map<string, AstNode | null>();
+    for (const statement of statements) if (statement.type === 'FunctionDeclaration' && identifier(statement.id)) {
+      const name = String(statement.id.name);
+      declarations.set(name, declarations.has(name) ? null : statement);
+    }
+    for (const statement of statements) {
+      const call = statement.type === 'ExpressionStatement' ? statement.expression : null;
+      if (!isAstNode(call) || call.type !== 'CallExpression' || call.optional || !identifier(call.callee)) continue;
+      const name = String(call.callee.name), declaration = declarations.get(name);
+      if (declaration && !declaration.async && !declaration.generator && !reboundNames.has(name))
+        bindEntry(declaration, call.arguments as AstNode[]);
     }
   }
   function find(scope: Scope, name: string): Binding | undefined {

@@ -1,11 +1,11 @@
 import { describe, expect, it } from 'vitest';
 import { reviewUpdateSetPayload } from '../../src/review/payload-review.js';
 
-function review(code: string, rule = 'AU-BR-001') {
+function review(code: string, rule = 'AU-BR-001', when = 'async') {
   const table = rule === 'AU-CL-004' ? 'sys_script_client' : 'sys_script';
   const xml = code.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
   const output = reviewUpdateSetPayload({ name: `${table}_${'1'.repeat(32)}`, update_set_id: '2'.repeat(32), update_xml_sys_id: '3'.repeat(32),
-    payload: `<record_update table="${table}"><${table} action="INSERT_OR_UPDATE"><sys_id>${'1'.repeat(32)}</sys_id><sys_scope>global</sys_scope><when>async</when><script>${xml}</script></${table}></record_update>`,
+    payload: `<record_update table="${table}"><${table} action="INSERT_OR_UPDATE"><sys_id>${'1'.repeat(32)}</sys_id><sys_scope>global</sys_scope><when>${when}</when><script>${xml}</script></${table}></record_update>`,
     retrieved_at: '2026-10-17T05:00:00Z', record_updated_at: null,
     instance_release: { family: 'Australia', raw_buildname: 'Australia', source: 'sys_cluster_state.build_name',
       retrieved_at: '2026-10-17T04:59:00Z', resolution_status: 'resolved', visibility_scope: 'caller_acl' }, requested_rule_ids: [rule] });
@@ -14,6 +14,25 @@ function review(code: string, rule = 'AU-BR-001') {
 }
 
 describe('bounded lexical and receiver analysis', () => {
+  it('evaluates Australia async_always as async rather than skipping for missing context', () => {
+    const result = review('previous.state; current.priority.changes();', 'AU-BR-002', 'async_always');
+    expect(result.coverage.skipped_rules).toEqual([]);
+    expect(result.findings.map(f => f.rule_id)).toEqual(['AU-BR-002', 'AU-BR-002']);
+  });
+  it.each(['before', 'after', 'before_display'])('evaluates known non-async persisted context %s without async findings', when => {
+    const result = review('previous.state; current.priority.changes();', 'AU-BR-002', when);
+    expect(result.coverage.evaluated_rule_ids).toEqual(['AU-BR-002']);
+    expect(result.findings).toEqual([]);
+  });
+  it.each(['', 'display', 'future_choice', 'ASYNC_ALWAYS'])('skips unknown or non-persisted context %s explicitly', when => {
+    const result = review('previous.state;', 'AU-BR-002', when);
+    expect(result.coverage.skipped_rules).toEqual([{ rule_id: 'AU-BR-002', reason: 'missing_context' }]);
+    expect(result.findings).toEqual([]);
+  });
+  it('recognizes the old top-level declaration entry template', () => {
+    expect(review('onBefore(current, previous); function onBefore(current, previous) { current.update(); }').findings).toHaveLength(1);
+    expect(review('onAfter(current, previous); function onAfter(current, previous) { previous.state; }', 'AU-BR-002', 'async_always').findings).toHaveLength(1);
+  });
   it('does not confuse a block-local current object with the platform record', () => {
     const result = review('{ let current = { update() { return 1; } }; current.update(); }');
     expect(result.findings).toHaveLength(0);
