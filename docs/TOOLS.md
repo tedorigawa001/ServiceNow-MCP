@@ -2039,6 +2039,9 @@ Approve or reject a VR approval (`sysapproval_approver`), advancing the attached
 ### list_flows
 List Flow Designer flows.
 
+Reads `sys_hub_flow` with `type=flow`, excluding subflows. `active: false`
+removes the active-only filter; it does not select only inactive definitions.
+
 **Parameters**:
 - `active`
 - `category`
@@ -2048,7 +2051,7 @@ List Flow Designer flows.
 Get flow details and trigger configuration.
 
 **Parameters**:
-- `sys_id` (required)
+- `name_or_sysid` (required) — Flow name or sys_id. A subflow sys_id is rejected.
 
 ### trigger_flow
 Trigger a flow execution. **[Write]**
@@ -2074,15 +2077,19 @@ List flow execution history.
 ### list_subflows
 List subflows.
 
+Reads the shared `sys_hub_flow` table with `type=subflow`; there is no separate
+`sys_hub_subflow` table. Returns `{ count, records }` with native definition fields.
+
 **Parameters**:
 - `active`
+- `query` — Search by subflow name
 - `limit`
 
 ### get_subflow
 Get subflow details.
 
 **Parameters**:
-- `sys_id` (required)
+- `name_or_sysid` (required) — Subflow name or sys_id. A normal Flow sys_id is rejected.
 
 ### list_action_instances
 List action instances in a flow execution.
@@ -2093,15 +2100,28 @@ List action instances in a flow execution.
 ### get_process_automation
 Get a Process Automation Designer process.
 
+Reads `sys_pd_process_definition` and returns its native metadata, including
+the internal `name`, display `label`, `description`, `active`, and `status`.
+
 **Parameters**:
-- `sys_id` (required)
+- `name_or_sysid` (required) — Internal name, display label, or sys_id
 
 ### list_process_automations
 List Process Automation Designer processes.
 
+Reads `sys_pd_process_definition` (not `pa_process`). Returns `{ count, records }`.
+
 **Parameters**:
 - `active`
+- `query` — Search internal name, display label, or description
 - `limit`
+
+Related authoring tools use the same flow table: `create_subflow` sets
+`type=subflow` and `active=false`; `create_flow` sets `type=flow`. The existing
+`publish_flow` tool verifies `type` (`flow` or `subflow`) before updating
+`active=true`. That metadata update is **not** the full Flow Designer compile/
+publish lifecycle. Authoring and activation were unit-tested, not written to
+the PDI in this read-only E2E run.
 
 ---
 

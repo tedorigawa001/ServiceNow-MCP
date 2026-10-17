@@ -174,17 +174,95 @@ e2eDescribe('E2E – optional plugins (read-only, gated on plugin tables)', () =
     });
   });
 
-  describe('sys_hub_subflow / pa_process (Flow Designer extras)', () => {
+  describe('sys_hub_flow / sys_pd_process_definition (Flow Designer extras)', () => {
     it('lists subflows when the subflow table exists', async (ctx) => {
-      await skipUnlessTables(ctx, client, 'sys_hub_subflow');
+      await skipUnlessTables(ctx, client, 'sys_hub_flow');
       const result = await executeFlowToolCall(client, 'list_subflows', { limit: 5 });
       expect(result.count).toBeGreaterThanOrEqual(0);
+      expect(Array.isArray(result.records)).toBe(true);
+      for (const record of result.records) {
+        expect(record.type).toBe('subflow');
+        expect(record.active).toBe('true');
+      }
     });
 
-    it('lists process automations when the pa_process table exists', async (ctx) => {
-      await skipUnlessTables(ctx, client, 'pa_process');
+    it('gets a subflow by sys_id', async (ctx) => {
+      await skipUnlessTables(ctx, client, 'sys_hub_flow');
+      const list = await executeFlowToolCall(client, 'list_subflows', { active: false, limit: 1 });
+      ctx.skip(list.records.length === 0, 'data missing: list_subflows returned no records');
+      const result = await executeFlowToolCall(client, 'get_subflow', { name_or_sysid: list.records[0].sys_id });
+      expect(result.sys_id).toBe(list.records[0].sys_id);
+      expect(result.type).toBe('subflow');
+    });
+
+    it('gets a subflow by name with the subflow discriminator', async (ctx) => {
+      await skipUnlessTables(ctx, client, 'sys_hub_flow');
+      const list = await executeFlowToolCall(client, 'list_subflows', { active: false, limit: 1 });
+      ctx.skip(list.records.length === 0, 'data missing: list_subflows returned no records');
+      const result = await executeFlowToolCall(client, 'get_subflow', { name_or_sysid: list.records[0].name });
+      expect(result.type).toBe('subflow');
+      expect(result.name).toContain(list.records[0].name);
+    });
+
+    it('rejects an ordinary flow passed to get_subflow', async (ctx) => {
+      await skipUnlessTables(ctx, client, 'sys_hub_flow');
+      const list = await executeFlowToolCall(client, 'list_flows', { active: false, limit: 1 });
+      ctx.skip(list.records.length === 0, 'data missing: list_flows returned no records');
+      expect(list.records[0].type).toBe('flow');
+      const result = await executeFlowToolCall(client, 'get_flow', { name_or_sysid: list.records[0].sys_id });
+      expect(result.type).toBe('flow');
+      await expect(executeFlowToolCall(client, 'get_subflow', { name_or_sysid: result.sys_id }))
+        .rejects.toMatchObject({ code: 'NOT_FOUND' });
+    });
+
+    it('rejects a subflow passed to get_flow', async (ctx) => {
+      await skipUnlessTables(ctx, client, 'sys_hub_flow');
+      const list = await executeFlowToolCall(client, 'list_subflows', { active: false, limit: 1 });
+      ctx.skip(list.records.length === 0, 'data missing: list_subflows returned no records');
+      await expect(executeFlowToolCall(client, 'get_flow', { name_or_sysid: list.records[0].sys_id }))
+        .rejects.toMatchObject({ code: 'NOT_FOUND' });
+    });
+
+    it('lists process automations when the definition table exists', async (ctx) => {
+      await skipUnlessTables(ctx, client, 'sys_pd_process_definition');
       const result = await executeFlowToolCall(client, 'list_process_automations', { limit: 5 });
       expect(result.count).toBeGreaterThanOrEqual(0);
+      expect(Array.isArray(result.records)).toBe(true);
+      for (const record of result.records) {
+        expect(record).toHaveProperty('label');
+        expect(record).toHaveProperty('name');
+        expect(record.active).toBe('true');
+      }
+    });
+
+    it('gets a process automation definition by sys_id', async (ctx) => {
+      await skipUnlessTables(ctx, client, 'sys_pd_process_definition');
+      const list = await executeFlowToolCall(client, 'list_process_automations', { active: false, limit: 1 });
+      ctx.skip(list.records.length === 0, 'data missing: list_process_automations returned no records');
+      const result = await executeFlowToolCall(client, 'get_process_automation', { name_or_sysid: list.records[0].sys_id });
+      expect(result.sys_id).toBe(list.records[0].sys_id);
+      expect(result.label).toBe(list.records[0].label);
+    });
+
+    it('gets a process automation definition by internal name', async (ctx) => {
+      await skipUnlessTables(ctx, client, 'sys_pd_process_definition');
+      const list = await executeFlowToolCall(client, 'list_process_automations', { active: false, limit: 1 });
+      ctx.skip(list.records.length === 0, 'data missing: list_process_automations returned no records');
+      const result = await executeFlowToolCall(client, 'get_process_automation', { name_or_sysid: list.records[0].name });
+      expect(result.name).toContain(list.records[0].name);
+    });
+
+    it('searches process automation definitions by display label', async (ctx) => {
+      await skipUnlessTables(ctx, client, 'sys_pd_process_definition');
+      const list = await executeFlowToolCall(client, 'list_process_automations', { active: false, limit: 1 });
+      ctx.skip(list.records.length === 0, 'data missing: list_process_automations returned no records');
+      const label = list.records[0].label;
+      ctx.skip(!label, 'data missing: process automation definition has no label');
+      const result = await executeFlowToolCall(client, 'get_process_automation', { name_or_sysid: label });
+      expect(result.label).toContain(label);
+      const matches = await executeFlowToolCall(client, 'list_process_automations', { active: false, query: label, limit: 5 });
+      expect(matches.records.length).toBeGreaterThan(0);
+      expect(matches.records.some((record: { label: string }) => record.label.includes(label))).toBe(true);
     });
   });
 

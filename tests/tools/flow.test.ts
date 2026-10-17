@@ -42,7 +42,7 @@ describe('list_flows', () => {
     await executeFlowToolCall(mockClient, 'list_flows', { category: 'ITSM', query: 'approval' });
     expect(qr()).toHaveBeenCalledWith(expect.objectContaining({
       table: 'sys_hub_flow',
-      query: 'active=true^category=ITSM^nameCONTAINSapproval^ORdescriptionCONTAINSapproval',
+      query: 'type=flow^active=true^category=ITSM^nameCONTAINSapproval^ORdescriptionCONTAINSapproval',
     }));
   });
 
@@ -50,14 +50,14 @@ describe('list_flows', () => {
     qr().mockResolvedValue({ count: 0, records: [] });
     await executeFlowToolCall(mockClient, 'list_flows', { category: 'ITSM^active=false', query: 'x^ORactive=false' });
     expect(qr()).toHaveBeenCalledWith(expect.objectContaining({
-      query: 'active=true^category=ITSMactive=false^nameCONTAINSxORactive=false^ORdescriptionCONTAINSxORactive=false',
+      query: 'type=flow^active=true^category=ITSMactive=false^nameCONTAINSxORactive=false^ORdescriptionCONTAINSxORactive=false',
     }));
   });
 
   it('omits active=true when active is explicitly false', async () => {
     qr().mockResolvedValue({ count: 0, records: [] });
     await executeFlowToolCall(mockClient, 'list_flows', { active: false });
-    expect(qr()).toHaveBeenCalledWith(expect.objectContaining({ query: '' }));
+    expect(qr()).toHaveBeenCalledWith(expect.objectContaining({ query: 'type=flow' }));
   });
 });
 
@@ -69,7 +69,7 @@ describe('get_flow', () => {
   });
 
   it('fetches directly by sys_id when hex', async () => {
-    gr().mockResolvedValue({ sys_id: 'a'.repeat(32), name: 'Approve Change' });
+    gr().mockResolvedValue({ sys_id: 'a'.repeat(32), type: 'flow', name: 'Approve Change' });
     const result = await executeFlowToolCall(mockClient, 'get_flow', { name_or_sysid: 'a'.repeat(32) });
     expect(gr()).toHaveBeenCalledWith('sys_hub_flow', 'a'.repeat(32));
     expect(result.name).toBe('Approve Change');
@@ -84,7 +84,13 @@ describe('get_flow', () => {
   it('strips ^ from the name so it cannot inject extra encoded-query clauses', async () => {
     qr().mockResolvedValue({ count: 1, records: [{ sys_id: 'f1', name: 'Approve Change' }] });
     await executeFlowToolCall(mockClient, 'get_flow', { name_or_sysid: 'Approve Change^ORactive=true' });
-    expect(qr()).toHaveBeenCalledWith(expect.objectContaining({ query: 'nameCONTAINSApprove ChangeORactive=true' }));
+    expect(qr()).toHaveBeenCalledWith(expect.objectContaining({ query: 'type=flow^nameCONTAINSApprove ChangeORactive=true' }));
+  });
+
+  it('rejects a subflow passed to get_flow', async () => {
+    gr().mockResolvedValue({ sys_id: 'a'.repeat(32), type: 'subflow' });
+    await expect(executeFlowToolCall(mockClient, 'get_flow', { name_or_sysid: 'a'.repeat(32) }))
+      .rejects.toMatchObject({ code: 'NOT_FOUND' });
   });
 });
 
@@ -144,15 +150,44 @@ describe('list_flow_executions', () => {
 describe('list_subflows', () => {
   beforeEach(() => vi.clearAllMocks());
 
+  it('retains the type filter when including inactive subflows and sanitizes names', async () => {
+    const records = [{ sys_id: 's1', type: 'subflow', active: 'false' }];
+    qr().mockResolvedValue({ count: 1, records });
+    expect(await executeFlowToolCall(mockClient, 'list_subflows', { active: false, query: 'Notify^ORtype=flow', limit: 3 }))
+      .toEqual({ count: 1, records });
+    expect(qr()).toHaveBeenCalledWith({ table: 'sys_hub_flow', query: 'type=subflow^nameCONTAINSNotifyORtype=flow', limit: 3 });
+  });
+
   it('defaults to active=true and applies query filter', async () => {
     qr().mockResolvedValue({ count: 0, records: [] });
     await executeFlowToolCall(mockClient, 'list_subflows', { query: 'notify' });
-    expect(qr()).toHaveBeenCalledWith(expect.objectContaining({ table: 'sys_hub_subflow', query: 'active=true^nameCONTAINSnotify' }));
+    expect(qr()).toHaveBeenCalledWith(expect.objectContaining({ table: 'sys_hub_flow', query: 'type=subflow^active=true^nameCONTAINSnotify' }));
   });
 });
 
 describe('get_subflow', () => {
   beforeEach(() => vi.clearAllMocks());
+
+  it('fetches a subflow from the shared flow table by sys_id', async () => {
+    const record = { sys_id: 'a'.repeat(32), type: 'subflow', name: 'Notify' };
+    gr().mockResolvedValue(record);
+    expect(await executeFlowToolCall(mockClient, 'get_subflow', { name_or_sysid: record.sys_id })).toEqual(record);
+    expect(gr()).toHaveBeenCalledWith('sys_hub_flow', record.sys_id);
+  });
+
+  it.each(['flow', undefined])('does not return a non-subflow type %s by sys_id', async (type) => {
+    gr().mockResolvedValue({ sys_id: 'a'.repeat(32), type });
+    await expect(executeFlowToolCall(mockClient, 'get_subflow', { name_or_sysid: 'a'.repeat(32) }))
+      .rejects.toMatchObject({ code: 'NOT_FOUND' });
+  });
+
+  it('keeps the subflow discriminator when searching by a sanitized name', async () => {
+    qr().mockResolvedValue({ count: 1, records: [{ sys_id: 's1', type: 'subflow' }] });
+    await executeFlowToolCall(mockClient, 'get_subflow', { name_or_sysid: 'Notify^ORtype=flow' });
+    expect(qr()).toHaveBeenCalledWith(expect.objectContaining({
+      table: 'sys_hub_flow', query: 'type=subflow^nameCONTAINSNotifyORtype=flow',
+    }));
+  });
 
   it('requires name_or_sysid', async () => {
     await expect(executeFlowToolCall(mockClient, 'get_subflow', {})).rejects.toThrow('name_or_sysid is required');
@@ -181,6 +216,17 @@ describe('list_action_instances', () => {
 describe('get_process_automation', () => {
   beforeEach(() => vi.clearAllMocks());
 
+  it('finds processes by internal name or display label without accepting query clauses', async () => {
+    const record = { sys_id: 'p1', name: 'onboarding_v1', label: 'Onboarding' };
+    qr().mockResolvedValue({ count: 1, records: [record] });
+    expect(await executeFlowToolCall(mockClient, 'get_process_automation', { name_or_sysid: 'Onboarding^ORactive=false' }))
+      .toEqual(record);
+    expect(qr()).toHaveBeenCalledWith(expect.objectContaining({
+      table: 'sys_pd_process_definition',
+      query: 'nameCONTAINSOnboardingORactive=false^ORlabelCONTAINSOnboardingORactive=false',
+    }));
+  });
+
   it('requires name_or_sysid', async () => {
     await expect(executeFlowToolCall(mockClient, 'get_process_automation', {})).rejects.toThrow('name_or_sysid is required');
   });
@@ -188,7 +234,7 @@ describe('get_process_automation', () => {
   it('fetches directly by sys_id when hex', async () => {
     gr().mockResolvedValue({ sys_id: 'a'.repeat(32), name: 'Onboarding' });
     const result = await executeFlowToolCall(mockClient, 'get_process_automation', { name_or_sysid: 'a'.repeat(32) });
-    expect(gr()).toHaveBeenCalledWith('pa_process', 'a'.repeat(32));
+    expect(gr()).toHaveBeenCalledWith('sys_pd_process_definition', 'a'.repeat(32));
     expect(result.name).toBe('Onboarding');
   });
 
@@ -202,12 +248,22 @@ describe('get_process_automation', () => {
 describe('list_process_automations', () => {
   beforeEach(() => vi.clearAllMocks());
 
+  it('sanitizes all search alternatives while allowing inactive definitions', async () => {
+    qr().mockResolvedValue({ count: 0, records: [] });
+    expect(await executeFlowToolCall(mockClient, 'list_process_automations', { active: false, query: 'Task^ORactive=true', limit: 3 }))
+      .toEqual({ count: 0, records: [] });
+    expect(qr()).toHaveBeenCalledWith({
+      table: 'sys_pd_process_definition', limit: 3,
+      query: 'nameCONTAINSTaskORactive=true^ORlabelCONTAINSTaskORactive=true^ORdescriptionCONTAINSTaskORactive=true',
+    });
+  });
+
   it('defaults to active=true and applies query filter', async () => {
     qr().mockResolvedValue({ count: 0, records: [] });
     await executeFlowToolCall(mockClient, 'list_process_automations', { query: 'onboarding' });
     expect(qr()).toHaveBeenCalledWith(expect.objectContaining({
-      table: 'pa_process',
-      query: 'active=true^nameCONTAINSonboarding^ORdescriptionCONTAINSonboarding',
+      table: 'sys_pd_process_definition',
+      query: 'active=true^nameCONTAINSonboarding^ORlabelCONTAINSonboarding^ORdescriptionCONTAINSonboarding',
     }));
   });
 });
@@ -231,7 +287,7 @@ describe('create_flow', () => {
   it('creates the flow inactive by default', async () => {
     cr().mockResolvedValue({ sys_id: 'f1' });
     const result = await executeFlowToolCall(mockClient, 'create_flow', { name: 'New Flow', trigger_type: 'record', trigger_table: 'incident' });
-    expect(cr()).toHaveBeenCalledWith('sys_hub_flow', expect.objectContaining({ name: 'New Flow', active: 'false', trigger_type: 'record', trigger_table: 'incident' }));
+    expect(cr()).toHaveBeenCalledWith('sys_hub_flow', expect.objectContaining({ name: 'New Flow', type: 'flow', active: 'false', trigger_type: 'record', trigger_table: 'incident' }));
     expect(result.action).toBe('created');
   });
 });
@@ -243,6 +299,12 @@ describe('create_subflow', () => {
   });
   afterEach(() => { delete process.env.WRITE_ENABLED; });
 
+  it('does not create metadata without WRITE_ENABLED', async () => {
+    delete process.env.WRITE_ENABLED;
+    await expect(executeFlowToolCall(mockClient, 'create_subflow', { name: 'Notify' })).rejects.toThrow('Write operations are disabled');
+    expect(cr()).not.toHaveBeenCalled();
+  });
+
   it('requires name', async () => {
     await expect(executeFlowToolCall(mockClient, 'create_subflow', {})).rejects.toThrow('name is required');
   });
@@ -250,7 +312,7 @@ describe('create_subflow', () => {
   it('creates the subflow inactive by default', async () => {
     cr().mockResolvedValue({ sys_id: 'sf1' });
     const result = await executeFlowToolCall(mockClient, 'create_subflow', { name: 'Reusable Notify' });
-    expect(cr()).toHaveBeenCalledWith('sys_hub_subflow', expect.objectContaining({ name: 'Reusable Notify', active: 'false' }));
+    expect(cr()).toHaveBeenCalledWith('sys_hub_flow', expect.objectContaining({ name: 'Reusable Notify', active: 'false', type: 'subflow' }));
     expect(result.action).toBe('created');
   });
 });
@@ -290,11 +352,20 @@ describe('publish_flow', () => {
   });
   afterEach(() => { delete process.env.WRITE_ENABLED; });
 
+  it('does not read or update a definition without WRITE_ENABLED', async () => {
+    delete process.env.WRITE_ENABLED;
+    await expect(executeFlowToolCall(mockClient, 'publish_flow', { flow_sys_id: 's1', type: 'subflow' }))
+      .rejects.toThrow('Write operations are disabled');
+    expect(gr()).not.toHaveBeenCalled();
+    expect(ur()).not.toHaveBeenCalled();
+  });
+
   it('requires flow_sys_id', async () => {
     await expect(executeFlowToolCall(mockClient, 'publish_flow', {})).rejects.toThrow('flow_sys_id is required');
   });
 
   it('publishes a flow by default', async () => {
+    gr().mockResolvedValue({ sys_id: 'f1', type: 'flow' });
     ur().mockResolvedValue({ sys_id: 'f1' });
     const result = await executeFlowToolCall(mockClient, 'publish_flow', { flow_sys_id: 'f1' });
     expect(ur()).toHaveBeenCalledWith('sys_hub_flow', 'f1', { active: 'true' });
@@ -302,9 +373,25 @@ describe('publish_flow', () => {
   });
 
   it('publishes a subflow when type=subflow', async () => {
+    gr().mockResolvedValue({ sys_id: 'sf1', type: 'subflow' });
     ur().mockResolvedValue({ sys_id: 'sf1' });
     await executeFlowToolCall(mockClient, 'publish_flow', { flow_sys_id: 'sf1', type: 'subflow' });
-    expect(ur()).toHaveBeenCalledWith('sys_hub_subflow', 'sf1', { active: 'true' });
+    expect(ur()).toHaveBeenCalledWith('sys_hub_flow', 'sf1', { active: 'true' });
+    expect(gr()).toHaveBeenCalledWith('sys_hub_flow', 'sf1');
+  });
+
+  it('rejects a mismatched type before writing', async () => {
+    gr().mockResolvedValue({ sys_id: 'f1', type: 'flow' });
+    await expect(executeFlowToolCall(mockClient, 'publish_flow', { flow_sys_id: 'f1', type: 'subflow' }))
+      .rejects.toMatchObject({ code: 'NOT_FOUND' });
+    expect(ur()).not.toHaveBeenCalled();
+  });
+
+  it('rejects unsupported types before reading or writing', async () => {
+    await expect(executeFlowToolCall(mockClient, 'publish_flow', { flow_sys_id: 'f1', type: 'action' }))
+      .rejects.toMatchObject({ code: 'INVALID_REQUEST' });
+    expect(gr()).not.toHaveBeenCalled();
+    expect(ur()).not.toHaveBeenCalled();
   });
 });
 
