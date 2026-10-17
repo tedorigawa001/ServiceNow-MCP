@@ -6,6 +6,28 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 ---
 
+## [Unreleased]
+
+### Changed
+
+- **`list_job_run_history` now reads scheduler aggregates** from `sys_scheduler_job_history` (count / average / max duration per classification and time window). The previous table did not exist. `job_sys_id` and status filters are rejected with `INVALID_REQUEST`; filter by `job_classification` instead. `limit` must be an integer from 1 to 1000.
+- **Mobile tools aligned with the instance schema.** Configs, applets and layouts read `sys_sg_mobile_application`, `sys_sg_screen` and `sys_sg_screen_m2m_ui_element`. `configure_offline_sync`, `send_push_notification` and `get_mobile_analytics` now fail with `UNSUPPORTED_OPERATION` instead of writing state tables or returning invented usage counts.
+
+### Fixed
+
+- **The per-call `instance` argument was passed through to the tool.** docs/MULTI_INSTANCE.md says `instance` can be passed to any tool, but the server forwarded it with the tool's own arguments. Tools with strict argument checks (`list_job_run_history`, `list_mobile_applets`, `create_problem`, `create_csm_case`, `create_security_incident`) rejected the call, and tools that forward their arguments as record fields could send `instance` to ServiceNow. The server now consumes `instance` to choose the client and removes it before the tool runs.
+- **Tools that read tables missing from the instance** now use the real tables:
+  - ATF results: `sys_atf_test_result` (by `parent`).
+  - PA jobs: `sysauto_pa`.
+  - VA categories: `sys_cb_topic_category`.
+  - Subflows: `sys_hub_flow` with `type=subflow`.
+  - Process automation: `sys_pd_process_definition`.
+  - Workspaces: `sys_aw_master_config`.
+
+### Tests
+
+- E2E reads with no data on the instance are now reported as explicit skips. With `E2E_READ_FIXTURES=true` (plus `WRITE_ENABLED=true`, PDI only), disposable fixtures are created for five reads that had no data, and their deletion is verified.
+
 ## [1.14.2] — 2026-10-17
 
 ### Fixed

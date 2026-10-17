@@ -59,10 +59,15 @@ export async function handleCallTool(request: {
       throw new ServiceNowError(`Unknown tool: ${name}`, 'UNKNOWN_TOOL');
     }
 
-    const instanceName = (args as Record<string, unknown>)?.['instance'] as string | undefined;
+    // `instance` (docs/MULTI_INSTANCE.md: "pass `instance` to any tool") selects the
+    // target instance and is consumed here. Tools never see it: strict tools reject
+    // unknown keys, and tools that forward their arguments as record fields would
+    // otherwise send it to ServiceNow.
+    const { instance: instanceArg, ...toolArgs } = (args ?? {}) as Record<string, unknown>;
+    const instanceName = typeof instanceArg === 'string' && instanceArg ? instanceArg : undefined;
     const instanceTools = new Set(['switch_instance', 'list_instances', 'get_current_instance']);
     const client = instanceTools.has(name) ? undefined : instanceContext.getClient(instanceName);
-    const result = await executeTool(client, name, args || {}, instanceContext);
+    const result = await executeTool(client, name, toolArgs, instanceContext);
 
     return {
       content: [

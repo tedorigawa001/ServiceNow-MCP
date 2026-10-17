@@ -121,6 +121,20 @@ describe('handleCallTool', () => {
     expect(res.content[0].text).toBe('plain summary');
   });
 
+  it('consumes "instance" so the tool never receives it (strict tools reject unknown keys)', async () => {
+    mockExecuteTool.mockResolvedValue({ ok: true });
+    await handleCallTool({ params: { name: 'get_incident', arguments: { number_or_sysid: 'INC0001', instance: 'prod' } } });
+    expect(mockGetClient).toHaveBeenCalledWith('prod');
+    expect(mockExecuteTool).toHaveBeenCalledWith({}, 'get_incident', { number_or_sysid: 'INC0001' }, expect.anything());
+  });
+
+  it('passes no instance to getClient when the argument is absent or not a string', async () => {
+    mockExecuteTool.mockResolvedValue({ ok: true });
+    await handleCallTool({ params: { name: 'get_incident', arguments: { number_or_sysid: 'INC0001', instance: 42 } } });
+    expect(mockGetClient).toHaveBeenLastCalledWith(undefined);
+    expect(mockExecuteTool).toHaveBeenLastCalledWith({}, 'get_incident', { number_or_sysid: 'INC0001' }, expect.anything());
+  });
+
   it('routes the "instance" argument to getClient', async () => {
     mockExecuteTool.mockResolvedValue({ ok: true });
     await handleCallTool({ params: { name: 'get_incident', arguments: { instance: 'prod' } } });
