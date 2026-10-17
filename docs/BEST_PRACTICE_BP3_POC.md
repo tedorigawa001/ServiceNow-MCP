@@ -1,0 +1,152 @@
+# BP-3: Update Set版の安全なXML抽出・構文候補検証PoC
+
+Status: ローカルPoC／製品MCP未統合。PDIへの接続・変更なし。
+
+## 1. 範囲と合格基準
+
+BP-2の[結果契約](BEST_PRACTICE_BP2_POC.md)を利用し、本文を返さずに
+Update Setのpayload版を固定する。少数規則を先行し、他規則は黙って除外せず
+`unsupported`で記録する。これは自動の違反確定や、実機での挙動確認ではない。
+
+この段階の合格基準は、以下の固定した合成ケースをすべて満たし、全体回帰テスト・
+ビルド・対象Lintが成功すること。独立評価による適合率・再現率はBP-4で別途測定する。
+
+- CDATAと通常テキストの等価コードが同じcode_hashを持つ。
+- 標準実体・数値参照を一度だけ復号し、コード位置は復号後の行番号になる。
+- DTD・外部実体・不正XML・重複や曖昧な構造・上限超過は失敗する。
+- コメント・文字列・正規表現リテラル内のAPI名を呼び出しと誤認しない。
+- 適用メタデータ不足・未対応規則・不一致/不明リリースを明示する。
+- 出力・エラーに本文を含めず、スクリプトを実行せず、外部参照もしない。
+
+## 2. 入力と版の固定
+
+`reviewUpdateSetPayload()`に、認可された経路で取得済みの1件の`sys_update_xml`を渡す。
+このPoC自身は認証設定・ServiceNowクライアント・ネットワークを使わない。
+取得時の既存ガード・ACLを省略するための経路として使わない。
+
+必須メタデータはupdate_set_id、update_xml_sys_id、name、payload、取得日時、
+レコード更新日時（不明ならnull）、instance_release、requested_rule_ids。
+リリース情報は入力側が提供した証拠であり、PoCが実測したとは主張しない。
+`release_evidence_caller_supplied`を常に記録し、矛盾したリリース情報は拒否する。
+
+`record_update@table`、その直下の1件のレコード要素、sys_idを照合し、
+`name=table_sys_id`との一致も必須とする。名前検索・先頭1件取得は行わない。
+入力のUpdate Set所属情報そのものは外部取得経路の責任であり、この関数だけでは
+特定インスタンスでの所属やACLを証明できない。
+
+対応テーブルはsys_script、sys_script_client、sys_script_include、sys_ws_operation、
+sysauto_script。今回抽出するコードフィールドはscriptのみ。許可する操作は
+INSERT_OR_UPDATEで、DELETEや他の操作、script不在は理由付き拒否とする。
+sys_scopeは32桁sys_id、global、未設定ならnullに正規化する。
+
+payloadのUTF-8バイト列からpayload_hash、抽出コードからcode_hashをSHA-256で計算する。
+現在の資産を追加取得・混合しない。取得時刻・レビュー時刻は入力のretrieved_atを使い、
+記録時点のオフライン解析として扱う。payloadの不変性や現行版との一致は仮定しない。
+
+## 3. XMLの安全性と上限
+
+正規表現の既存SCA抽出器は流用せず、`saxes@5.0.1`のイベントパーサーを使用する。
+DTDイベント・処理命令を即時拒否し、ENTITIESの追加や外部リゾルバーは実装しない。
+名前空間付き要素/属性とxmlns宣言も拒否するため、XIncludeは使用できない。
+外部スキーマの取得機能も有効にしない。XML宣言は1.0のみ許可する。
+
+| 制約 | 上限 |
+|---|---|
+| payload | 2 MiB（UTF-8） |
+| 深さ | 8。ただし許可構造はroot→record→fieldの3階層だけで、フィールド内要素は先に拒否 |
+| 要素数 | 2,048 |
+| 全テキスト | 1 MiB（UTF-8） |
+| script | 256 KiB（UTF-8） |
+| AST走査 | 100,000ノード |
+| 指摘候補 | 100件。超過は打ち切り成功でなく拒否 |
+| ローカルCLI入力JSON | 3 MiB。通常ファイル・UTF-8のみ |
+
+全入力上限はパーサーの属性・コメント等のバッファにも総量として作用する。
+パースは4,096文字単位で行う。外部参照の試行・スクリプト実行は行わない。
+レコードは1件のみ、フィールドは単純テキスト/CDATAのみ。全フィールド名の重複を
+拒否する。未知のフィールドは解析・返却せず、構造と全体上限の検査のみ行う。
+
+通常テキストはXML標準の5実体と有効な数値文字参照をパーサーが一度復号する。
+CDATA内は文字どおりで、抽出後の再復号・trimをしない。
+XML 1.0のCRLF/CRはLFになるが、数値参照`&#13;`はCRとして残る。
+行番号はAcornの復号後コード上のJavaScript行番号で、XML全体の行番号ではない。
+元XML位置への逆対応は未実装であり、コードのハッシュとフィールド位置を基準にする。
+
+## 4. 構文候補の検証
+
+`acorn@8.18.0`でECMAScript 2022のscriptとして解析する。実行・eval・動的importはしない。
+ServiceNow固有の非標準構文や非対応構文は`javascript_parse_failed`で拒否し、
+文字列検索だけの結果に黙ってフォールバックしない。
+
+| 規則 | 今回確認する構文・設定 | 未確認事項 |
+|---|---|---|
+| AU-BR-001 | current.update()の呼び出し。空白や文字列リテラルのブラケット記法も対応 | currentの束縛、到達可能性、BR連鎖、setWorkflow等の例外、業務上の必要性 |
+| AU-BR-002 | payloadのwhen=asyncで、本文のpreviousへのメンバーアクセスまたはchanges/changesTo/changesFrom呼び出し | previousの別名・単独受け渡し、動的プロパティ、呼出し元の束縛・実行経路 |
+| AU-CL-004 | Client Script本文でgetXMLWaitの呼び出し | 受信側がGlideAjaxであること、UI制約・代替非同期処理の妥当性 |
+
+whenはpayloadからのみ取得する。condition/filter_conditionを本文と混同しない。
+AU-BR-002のwhenが不足・未知ならmissing_context。before/after/displayはこのasync候補に
+該当しない。active=falseでも静的な候補は残し、inactive_assetを付ける。
+
+APIを別名に代入した間接呼び出し・変数でのブラケット指定は追跡しない。
+影響・脆弱性・実行パスの確認は未実施。すべてcandidate / low / infoで、
+verification_evidenceは空。候補がないことを安全性の保証にしない。
+根拠資料もcandidateのままであり、source_approval_pendingを外さない。
+
+requested規則はすべてevaluatedまたはskippedに一度だけ記録する。
+evaluatedは今回の構文候補検出の処理完了で、規則全体の適用検証完了ではない。
+completedもこの宣言した候補検出範囲の完了のみを意味する。
+不一致・不明リリースは全規則をrelease_mismatch/release_unknownでスキップし、指摘0件。
+不正入力・抽出/構文解析失敗は`status=rejected`と固定のreasonだけを返し、
+targetを捏造したレビューJSONを作らない。
+
+## 5. 実行方法と返却ポリシー
+
+```bash
+bdo node --import tsx scripts/bp3-poc.ts --review examples/bp3-review-input.json
+bdo npm test -- tests/review
+```
+
+[入力例](../examples/bp3-review-input.json)はすべて架空のID・コード・時刻。
+PDIの取得証拠や実機検証結果ではない。
+成功時は`{poc_only:true,status:"reviewed",result:...}`、拒否時は
+`{poc_only:true,status:"rejected",reason:...}`。CLIの拒否はexit 1。
+resultはBP-2構造契約と項目間検証を通し、ruleset_versionはbp3-0.1を使う。
+BP-2のbp2-0.1結果は引き続き受け入れる。
+
+本文は内部の抽出→AST解析にだけ使い、JSON出力・エラー・ログには含めない。
+抜粋/full、AIへの送信、埋め込み・外部検索は未実装。
+CLIも入力例もnpmパッケージには含めず、dist/review除外方針も維持する。
+既存Update Set SCA・製品MCP・PDI設定には変更を加えない。
+
+## 6. 検証記録（2026-10-17）
+
+| 検証 | 結果 |
+|---|---|
+| `bdo npm test -- tests/review` | 3ファイル・77件成功 |
+| `bdo npm test` | 68ファイル・1,901件成功、失敗なし |
+| `bdo npm run build` | 成功 |
+| src/review・tests/reviewのESLint | エラー・警告なし |
+| BP-3 CLIの単独TypeScriptチェック | 成功 |
+| CLI合成入力例→結果契約検証 | 成功。2候補と1件のunsupportedを記録 |
+| 不正/サイズ超過/不正UTF-8のCLI入力 | exit 1、入力内容とパスを非返却 |
+| 配布JSON Schemaと生成元の同期 | テスト成功、BP-2例も互換性維持 |
+| `npm ls acorn saxes` | 既存の間接依存を固定版の直接開発依存として認識 |
+| ビルド後のnpm pack dry-run | 281ファイル、dist/reviewおよびbp3ファイルは0件 |
+| `git diff --check` | 問題なし |
+
+合成テストであるため、実PDIのpayload形式全体への互換性や違反確認済み件数を
+示す結果ではない。ネットワーク照会・PDI操作・npm公開は実施していない。
+検証コードには、コード文字列中のthrowやファイル書き込みが実行されないケースも含めた。
+
+## 7. 残課題
+
+- 根拠台帳の人による採用承認。自動で承認済みにはしない。
+- 変数束縛・受信型・実行経路・例外条件を踏まえた候補検証と段階昇格。
+- 独立評価セット（問題あり/なし/例外/情報不足）によるBP-4の品質測定。
+- 他規則・他コードフィールド・実際の取得済みpayloadによる互換性確認。
+- sys_cluster_stateの最小列取得、ACL/取得上限・失敗を維持したBP-5のMCP統合。
+- current_recordの明示モードとversion_drift、本文開示の別途承認契約。
+
+今回のPoCは上記の安全抽出と3規則の構文候補検証まで。
+PDI E2E、違反の実機確認、規則全体の検証を完了したとはしない。

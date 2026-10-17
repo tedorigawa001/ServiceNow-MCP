@@ -16,7 +16,10 @@
     },
     "ruleset_version": {
       "type": "string",
-      "const": "bp2-0.1"
+      "enum": [
+        "bp2-0.1",
+        "bp3-0.1"
+      ]
     },
     "reviewed_at": {
       "type": "string",

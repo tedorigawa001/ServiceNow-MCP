@@ -1,0 +1,17 @@
+{
+  "update_set_id": "22222222222222222222222222222222",
+  "update_xml_sys_id": "33333333333333333333333333333333",
+  "name": "sys_script_11111111111111111111111111111111",
+  "payload": "<record_update table=\"sys_script\"><sys_script action=\"INSERT_OR_UPDATE\"><sys_id>11111111111111111111111111111111</sys_id><sys_scope display_value=\"Global\">global</sys_scope><active>true</active><when>async</when><script><![CDATA[(function executeRule(current, previous) {\n  if (previous.state != current.state) {\n    current.update();\n  }\n})(current, previous);]]></script></sys_script></record_update>",
+  "retrieved_at": "2026-10-17T05:00:00Z",
+  "record_updated_at": null,
+  "instance_release": {
+    "family": "Australia",
+    "raw_buildname": "Australia",
+    "source": "sys_cluster_state.build_name",
+    "retrieved_at": "2026-10-17T04:59:00Z",
+    "resolution_status": "resolved",
+    "visibility_scope": "caller_acl"
+  },
+  "requested_rule_ids": ["AU-BR-001", "AU-BR-002", "AU-BR-004"]
+}
