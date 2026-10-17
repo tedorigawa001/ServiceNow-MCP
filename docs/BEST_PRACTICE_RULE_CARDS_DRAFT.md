@@ -6,7 +6,7 @@ Status: **案。人による根拠採用・候補境界・確認項目の承認�
 [人手評価プロトコル](BEST_PRACTICE_HUMAN_EVALUATION_PROTOCOL.md) §3.1で承認するための案。
 AIによる作成であり、独立した人手作問・採点・承認の実績ではない。
 既存実装・固定評価セット・出力契約は変更しない。この文書の例を未使用の評価ケースとは数えない。
-[校正用18ケース案](BEST_PRACTICE_CALIBRATION_CASES_DRAFT.md)を別紙として用意した。
+[校正用22ケース案](BEST_PRACTICE_CALIBRATION_CASES_DRAFT.md)を別紙として用意した。
 人の承認前の議論用で、本試行48件へ流用せず、正解・独立した評価実績とは扱わない。
 
 ## 1. 根拠と承認の状態

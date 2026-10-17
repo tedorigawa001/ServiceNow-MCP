@@ -1,6 +1,6 @@
 # 先行3規則：判定境界の校正用ケース案
 
-Version: human-calibration-draft-0.1 / Date: 2026-10-17。
+Version: human-calibration-draft-0.2 / Date: 2026-10-17。
 Status: **案。人の承認・校正の実施・採点は未実施。正解ラベルは未確定**。
 参照：[規則カードdraft-0.3](BEST_PRACTICE_RULE_CARDS_DRAFT.md)、
 [人手評価プロトコルv0.2](BEST_PRACTICE_HUMAN_EVALUATION_PROTOCOL.md)、
@@ -8,10 +8,10 @@ Status: **案。人の承認・校正の実施・採点は未実施。正解ラ�
 
 ## 1. 用途・独立性・入力前提
 
-18件（BR-001: 5、BR-002: 7、CL-004: 6）を、規則カードの用語・証拠の閾値・不一致処理の
+22件（BR-001: 8、BR-002: 8、CL-004: 6）を、規則カードの用語・証拠の閾値・不一致処理の
 確認に使う案。本書は議論用であり、承認済み採点カードや期待値ファイルではない。
 実装を参照済みのAIが作成した合成例で、独立した人手作問・未使用の検証集合とは呼ばない。
-既存の固定評価セットも本書も変更せず、本試行48件は別の新規ケースとして準備する。
+既存の固定評価セットは変更しない。本校正案は版管理して改訂し、本試行48件は別の新規ケースとして準備する。
 本書のケース、名前/値/書式だけを変えた派生例、同じシナリオ家族を48件へ流用しない。
 家族IDは再利用防止の管理用で、想定正解を採点者へ示すためのものではない。
 
@@ -22,16 +22,19 @@ Status: **案。人の承認・校正の実施・採点は未実施。正解ラ�
 
 | 群 | 資産種別/対象版 | release/scope/active | 実行種別/条件/UI |
 |---|---|---|---|
-| B1 | sys_script / 合成payload版 | Australia / global / true | when=after、condition空、filter_condition空、UI非該当 |
-| B2 | sys_script / 合成payload版 | Australia / global / true | when=async_always、condition空、filter_condition空、UI非該当 |
+| B1 | sys_script / 合成payload版 / collection=incident | Australia / global / true | when=after、condition空、filter_condition空、UI非該当 |
+| B2 | sys_script / 合成payload版 / collection=incident | Australia / global / true | when=async_always、condition空、filter_condition空、UI非該当 |
 | C1 | sys_script_client / 合成payload版 | Australia / global / true | UI Type=Desktop、意図するUI=Classic、onLoad。ClassicのAPI対応保証は前提にしない |
 
 個別記載が共通値に優先する。「本文完全」はケース内の対象本文が提示されている意味で、
 インスタンス全体の依存解決済みを意味しない。呼出し元未提示・本文欠落等は各例で明示する。
+scope=global（アプリのスコープ）とcollection=global（BR対象テーブル）は別で、共通前提は後者ではない。
+抜粋では省略部分に宣言・呼び出しがないと推測しない。本文完全なら宣言されない値を、
+根拠なく「外部から供給される未知値」として扱わない。
 各ケースのコードブロック内を1行目から数えて位置を記録する。初回票で操作単位・位置を決め、
 エンジン出力に合わせて後から動かさない。
 
-## 2. AU-BR-001：現在レコード・同名・抑止（5件）
+## 2. AU-BR-001：現在レコード・同名・抑止（8件）
 
 ### CAL-B1-01 / family CAL-F01：現在レコードへの更新
 
@@ -61,7 +64,8 @@ current/updateという名前だけで候補にしない。固有確認項目は
 
 ### CAL-B1-03 / family CAL-F03：受信側不明のupdate
 
-B1、以下は本文完全だがpersistの呼出し元・引数の由来は未提示。
+B1（collection=incident）。以下はscript全体ではなく、関数宣言部分だけの抜粋。
+省略部分の呼び出し・引数の由来は未提示。collection=globalのGlobal Business Ruleを想定した例ではない。
 
 ```javascript
 function persist(record) {
@@ -69,7 +73,7 @@ function persist(record) {
 }
 ```
 
-議論案：insufficient。現在レコード由来の証拠を追加できるかを問う。
+議論案：insufficient。省略部分と現在レコード由来の証拠を追加できるかを問う。
 呼出し元不明を「到達しない」「current由来」のいずれの証拠にもしない。
 CL-004の受信側不明方針をこの規則へ自動的に流用しない。
 
@@ -90,10 +94,12 @@ B1、本文完全。currentはBR提供値、承認資料は未提示。
 
 ### CAL-B1-05 / family CAL-F04：抑止値が不明
 
-B1、本文完全。currentはBR提供値、flagの由来/値は未提示。
+B1、本文完全。currentとgsはプラットフォーム提供値でローカル再定義なし。
+flagは宣言・初期化されるが、架空プロパティの値は未提示。プロパティ取得の実機実行はしない。
 
 ```javascript
 (function executeRule(current, previous) {
+  var flag = gs.getProperty('u_calibration_flag') === 'true';
   current.setWorkflow(flag);
   current.update();
 })(current, previous);
@@ -102,7 +108,48 @@ B1、本文完全。currentはBR提供値、flagの由来/値は未提示。
 議論案：更新候補はcandidateのまま、workflow項目はundetermined。
 falseと推測してrequiredにしない。抑止値の不明を更新候補全体のinsufficientと混同しない。
 
-## 3. AU-BR-002：存在確認・ガード・値参照（7件）
+### CAL-B1-06 / family CAL-F04：抑止は更新の後
+
+B1、本文完全。currentはBR提供値、他の呼び出しはない。
+
+```javascript
+(function executeRule(current, previous) {
+  current.update();
+  current.setWorkflow(false);
+})(current, previous);
+```
+
+議論案：candidate、workflow_suppression_review=not_required。
+この更新より後の抑止を、この更新の抑止の証拠にしない。setWorkflowという語だけでrequiredにしない。
+後続処理全体の安全性・最終的なworkflow状態を保証する判定ではない。
+
+### CAL-B1-07 / family CAL-F04：別レコードだけの抑止
+
+B1、本文完全。currentはincidentのBR提供値、GlideRecordはプラットフォーム提供値。
+架空の別テーブルu_calibration_recordのレコードはcurrentと同一ではないという合成前提。
+
+```javascript
+(function executeRule(current, previous) {
+  var other = new GlideRecord('u_calibration_record');
+  other.initialize();
+  other.setWorkflow(false);
+  current.update();
+})(current, previous);
+```
+
+議論案：candidate、workflow_suppression_review=not_required。
+抑止の受信側otherと更新の受信側currentの違いを証拠にする。他レコードでの呼び出し自体の
+妥当性をこの規則で承認したことにはならない。架空テーブルを実機に作らない。
+
+### CAL-B1-08 / family CAL-F01：非アクティブ資産
+
+CAL-B1-01と同じ本文・前提。ただし対象payload版のactive=falseと明示する。
+
+議論案：candidateを維持し、limitationsにinactive_assetを付ける。workflow項目はnot_required。
+現在有効なBRとして実行されたとはしない。非アクティブをclear/not_applicableへ変換せず、
+activeが不明な場合や現行版だけfalseの場合との違いも確認する。
+
+## 3. AU-BR-002：存在確認・ガード・値参照（8件）
 
 ### CAL-B2-01 / family CAL-F05：ガードのないプロパティ参照
 
@@ -198,6 +245,14 @@ B2、本文完全。currentはBR提供値で再代入なし。
 議論案：candidate＋async_dependency_review=required。
 CAL-B2-05と比較し、scriptとconditionの配置の証拠を記録する。
 
+### CAL-B2-08 / family CAL-F05：非同期ではないことが確認済み
+
+CAL-B2-01と同じ本文・前提。ただし対象payload版のwhen=afterと明示する。
+
+議論案：AU-BR-002についてnot_applicable。非同期限定という適用条件を満たさないためで、
+本文を読んで依存がないとしたclearではない。TNに数えず、async_dependency_reviewはN/A。
+CAL-B2-06のwhen不明によるinsufficientとも区別する。他規則への適合は評価しない。
+
 ## 4. AU-CL-004：受信側・同名・文脈欠落（6件）
 
 ### CAL-C1-01 / family CAL-F10：GlideAjax由来が確認できる
@@ -218,7 +273,8 @@ function onLoad() {
 
 ### CAL-C1-02 / family CAL-F11：引数で渡された受信側が不明
 
-C1のClient Script。以下が提示本文の全体で、helperの呼出し元/引数は未提示。
+C1のClient Script。以下はscript全体ではなくhelper部分だけの抜粋で、呼出し元/引数は省略されている。
+名前だけの関数が完全な本文にあり、呼び出しも存在しないという例ではない。
 
 ```javascript
 function lookup(request) {
@@ -252,7 +308,7 @@ C1のメタデータだけがあり、scriptは未提供。資産名にgetXMLWai
 コードブロックはなし。
 
 議論案：insufficient。名前だけは呼び出し式の証拠にならない。
-本文が完全なCAL-C1-02の受信側不明とは不足の種類を分ける。
+呼び出し式自体は完全に示したCAL-C1-02の受信側不明とは不足の種類を分ける。
 
 ### CAL-C1-05 / family CAL-F10：Scoped＋Service Portal＋onSubmit
 
