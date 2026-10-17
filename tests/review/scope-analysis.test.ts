@@ -121,7 +121,7 @@ describe('bounded lexical and receiver analysis', () => {
     const result = review('function unused() { if (false) { current.setWorkflow(false); current.update(); } }');
     expect(result.findings).toHaveLength(1);
     expect(result.findings[0]).toMatchObject({ verification_status: 'candidate', confidence: 'low', severity: 'info', verification_evidence: [] });
-    expect(result.findings[0].required_follow_up).toEqual(['source_approval', 'binding_and_reachability', 'exceptions_and_business_intent']);
+    expect(result.findings[0].required_follow_up).toEqual(['source_approval', 'binding_and_reachability', 'exceptions_and_business_intent', 'workflow_suppression_review']);
     expect(result.limitations).toContain('interprocedural_analysis_not_performed');
   });
   it('rejects an excessive analysis depth without silently falling back to name matching', () => {

@@ -4,6 +4,8 @@ Date: 2026-10-17。ローカルPoC、MCP未統合、リリース品質は未評�
 
 本書は最初のスコープ解析再評価の記録。後続の保存値対応と旧宣言型BR入口の例外は
 [互換修正記録](BEST_PRACTICE_BR_COMPATIBILITY.md)を参照。下記の固定評価結果は変更しない。
+確認項目を文脈別に出力するbp3-0.3は[追跡確認再評価](BEST_PRACTICE_FOLLOW_UP_REEVALUATION.md)。
+本書のbp3-0.2結果を再現するCLIオプションは現在`--scoped`。
 
 ## 1. 固定した評価条件
 
@@ -99,13 +101,13 @@ release_quality_gateはnot_assessed / approved=falseのまま。
 ## 5. 再現と履歴の維持
 
 ```bash
-bdo node --import tsx scripts/bp4-evaluate-v2.ts
-bdo node --import tsx scripts/bp4-evaluate-v2.ts --strict
+bdo node --import tsx scripts/bp4-evaluate-v2.ts --scoped
+bdo node --import tsx scripts/bp4-evaluate-v2.ts --scoped --strict
 bdo node --import tsx scripts/bp4-evaluate-v2.ts --legacy
 bdo npm test -- tests/review
 ```
 
-既定は新解析。--legacyは明示的な旧bp3-0.1を使い、v0.2初回JSONを再現する。
+本書作成時の既定はbp3-0.2（現在は--scoped）。--legacyは明示的な旧bp3-0.1を使い、v0.2初回JSONを再現する。
 --strictとの併用も可能で、契約未充足ならexit 2。
 v0.1の旧採点器は履歴再現のためlegacyを既定とし、旧評価ケース・採点条件は変更しない。
 初回ベースラインのテストもlegacyを明示して残し、新解析は別の再評価スナップショットと比較する。

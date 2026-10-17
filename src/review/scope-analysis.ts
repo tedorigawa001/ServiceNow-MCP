@@ -1,4 +1,5 @@
 /** Bounded syntactic analysis, NOT an interpreter, call graph or general JavaScript dataflow engine. */
+import type { FollowUpContext } from './follow-up-catalog.js';
 export type AstNode = { type: string; start: number; end: number; loc: { start: { line: number }; end: { line: number } }; [key: string]: unknown };
 export const isAstNode = (v: unknown): v is AstNode => !!v && typeof v === 'object' && 'type' in v;
 export function staticMemberName(value: unknown): string | null {
@@ -22,13 +23,14 @@ const functions = new Set(['FunctionDeclaration', 'FunctionExpression', 'ArrowFu
 const blocks = new Set(['BlockStatement', 'CatchClause', 'ForStatement', 'ForInStatement', 'ForOfStatement', 'SwitchStatement']);
 const recordMethods = new Set(['update', 'getValue', 'getDisplayValue', 'setValue', 'setWorkflow', 'getUniqueValue', 'isValidRecord']);
 
-export function analyzeScopedCandidates(ast: AstNode, when: string | null, emit: (entry: AstNode, rule: string) => void,
+export function analyzeScopedCandidates(ast: AstNode, when: string | null, emit: (entry: AstNode, rule: string, context?: FollowUpContext) => void,
   options = { allowDeclaredEntry: false }): void {
   const root: Scope = { functionId: 0, functionScope: true, bindings: new Map() };
   const scopes = new WeakMap<AstNode, Scope>();
   const functionScopes = new WeakMap<AstNode, Scope>();
   let functionId = 0, visits = 0;
   const reboundNames = new Set<string>();
+  const workflowSuppression = new Map<number, number>();
   function budget(depth: number) {
     if (++visits > 100000 || depth > 256) throw new AnalysisLimitError('analysis_limit');
   }
@@ -220,7 +222,7 @@ export function analyzeScopedCandidates(ast: AstNode, when: string | null, emit:
         if (entry.computed) visit(entry.property);
         receivers.set(entry, receiver);
         const key = staticMemberName(entry);
-        if (when === 'async' && (receiver.flags & P)) emit(entry, 'AU-BR-002');
+        if (when === 'async' && (receiver.flags & P)) emit(entry, 'AU-BR-002', { kind: 'async_dependency' });
         if (key === null) return unknown();
         if (receiver.properties?.has(key)) return receiver.properties.get(key)!;
         if (receiver.flags & C) return origin(recordMethods.has(key) ? LOCAL : CF);
@@ -234,9 +236,16 @@ export function analyzeScopedCandidates(ast: AstNode, when: string | null, emit:
         if (entry.type === 'NewExpression') return origin(calleeValue.flags & AJAX_CTOR ? AJAX : calleeValue.flags & UNKNOWN ? UNKNOWN : LOCAL);
         if (isAstNode(entry.callee) && entry.callee.type === 'MemberExpression') {
           const receiver = receivers.get(entry.callee) ?? unknown(), key = staticMemberName(entry.callee);
-          if (key === 'update' && (receiver.flags & C)) emit(entry, 'AU-BR-001');
-          if (when === 'async' && ['changes', 'changesTo', 'changesFrom'].includes(key ?? '') && (receiver.flags & (CF | PF))) emit(entry, 'AU-BR-002');
-          if (key === 'getXMLWait' && (receiver.flags & (AJAX | UNKNOWN))) emit(entry, 'AU-CL-004');
+          if (key === 'setWorkflow' && (receiver.flags & C) && (entry.arguments as unknown[]).length === 1) {
+            const argument = (entry.arguments as unknown[])[0];
+            if (isAstNode(argument) && argument.type === 'Literal' && argument.value === false)
+              workflowSuppression.set(scope.functionId, Math.min(workflowSuppression.get(scope.functionId) ?? Infinity, entry.end));
+          }
+          if (key === 'update' && (receiver.flags & C)) emit(entry, 'AU-BR-001',
+            (workflowSuppression.get(scope.functionId) ?? Infinity) <= entry.start ? { kind: 'workflow_suppression' } : undefined);
+          if (when === 'async' && ['changes', 'changesTo', 'changesFrom'].includes(key ?? '') && (receiver.flags & (CF | PF))) emit(entry, 'AU-BR-002', { kind: 'async_dependency' });
+          if (key === 'getXMLWait' && (receiver.flags & (AJAX | UNKNOWN))) emit(entry, 'AU-CL-004',
+            { kind: 'synchronous_ajax', receiver_unresolved: !!(receiver.flags & UNKNOWN) });
         }
         return unknown(); // No return-value or callable-alias propagation.
       }

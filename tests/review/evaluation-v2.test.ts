@@ -11,6 +11,7 @@ const fixture = JSON.parse(bytes.toString('utf8'));
 const parsed = evaluationV2SetSchema.parse(fixture);
 const baseline = JSON.parse(readFileSync(new URL('../../docs/evaluation/bp4-v2-baseline.json', import.meta.url), 'utf8'));
 const scopedReport = JSON.parse(readFileSync(new URL('../../docs/evaluation/bp4-v2-scoped.json', import.meta.url), 'utf8'));
+const contextualReport = JSON.parse(readFileSync(new URL('../../docs/evaluation/bp4-v2-followups.json', import.meta.url), 'utf8'));
 const specific = { 'AU-BR-001': 'workflow_suppression_review', 'AU-BR-002': 'async_dependency_review', 'AU-CL-004': 'synchronous_ajax_review' };
 type Output = ReturnType<typeof reviewUpdateSetPayload>;
 
@@ -24,6 +25,8 @@ function oracle(mutate?: (result: ReviewResult, index: number) => void) {
     if (output.status !== 'reviewed' || c.expectation.mode === 'abstain') return output;
     if (output.result.findings.length && !templates.has(c.rule_id)) templates.set(c.rule_id, structuredClone(output.result.findings[0]));
     output.result.findings = c.expectation.outcome === 'clear' ? [] : [structuredClone(templates.get(c.rule_id)!)];
+    // The scorer oracle owns its synthetic output; do not inherit a detector's followup decisions.
+    for (const f of output.result.findings) f.required_follow_up = ['source_approval', 'binding_and_reachability', 'exceptions_and_business_intent'];
     if (c.expectation.outcome === 'candidate_with_followup') {
       for (const finding of output.result.findings) finding.required_follow_up.push(...c.expectation.required_follow_up);
       for (const limit of c.expectation.required_limitations) if (!output.result.limitations.includes(limit)) output.result.limitations.push(limit);
@@ -170,6 +173,12 @@ describe('BP-4 v0.2 evaluation contract', () => {
     for (const args of [[], ['--strict']]) {
       const run = spawnSync(process.execPath, ['--import', 'tsx', 'scripts/bp4-evaluate-v2.ts', ...args], { encoding: 'utf8' });
       expect(run.status).toBe(args.length ? 2 : 0); expect(run.stderr).toBe('');
+      expect(JSON.parse(run.stdout)).toEqual(contextualReport);
+    }
+    for (const args of [['--scoped'], ['--scoped', '--strict']]) {
+      const run = spawnSync(process.execPath, ['--import', 'tsx', 'scripts/bp4-evaluate-v2.ts', ...args], { encoding: 'utf8' });
+      expect(run.status).toBe(args.includes('--strict') ? 2 : 0);
+      expect(run.stderr).toBe('');
       expect(JSON.parse(run.stdout)).toEqual(scopedReport);
     }
     for (const args of [['--legacy'], ['--legacy', '--strict']]) {
@@ -180,5 +189,7 @@ describe('BP-4 v0.2 evaluation contract', () => {
     }
     const invalid = spawnSync(process.execPath, ['--import', 'tsx', 'scripts/bp4-evaluate-v2.ts', '--unknown'], { encoding: 'utf8' });
     expect(invalid.status).toBe(1); expect(invalid.stdout).toBe('');
+    const conflict = spawnSync(process.execPath, ['--import', 'tsx', 'scripts/bp4-evaluate-v2.ts', '--legacy', '--scoped'], { encoding: 'utf8' });
+    expect(conflict.status).toBe(1); expect(conflict.stdout).toBe('');
   });
 });

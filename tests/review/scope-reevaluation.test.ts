@@ -2,12 +2,13 @@ import { describe, expect, it } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { createHash } from 'node:crypto';
 import { evaluateBestPracticeV2 } from '../../src/review/evaluation-v2.js';
+import { reviewUpdateSetPayloadScoped } from '../../src/review/payload-review.js';
 
 const bytes = readFileSync(new URL('./evaluation/bp4-v2-cases.json', import.meta.url));
 const fixture = JSON.parse(bytes.toString('utf8'));
 const original = JSON.parse(readFileSync(new URL('../../docs/evaluation/bp4-v2-baseline.json', import.meta.url), 'utf8'));
 const saved = JSON.parse(readFileSync(new URL('../../docs/evaluation/bp4-v2-scoped.json', import.meta.url), 'utf8'));
-const current = evaluateBestPracticeV2(fixture);
+const current = evaluateBestPracticeV2(fixture, reviewUpdateSetPayloadScoped);
 type CaseRow = typeof current.cases[number];
 const before = new Map<string, CaseRow>(original.cases.map((row: CaseRow) => [row.case_id, row]));
 const after = new Map(current.cases.map(row => [row.case_id, row]));
