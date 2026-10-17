@@ -5,7 +5,7 @@ import { CATALOG_VERSION, RULES, SOURCES, matchCatalogRelease, type AssetType } 
 import { reviewResultSchema, type ReviewResult } from './result-schema.js';
 import { extractReviewXml, ExtractionError, XML_LIMITS } from './update-xml.js';
 import { analyzeScopedCandidates, AnalysisLimitError } from './scope-analysis.js';
-import { requiredFollowUp, type FollowUpContext } from './follow-up-catalog.js';
+import { requiredFollowUp, COMMON_FOLLOW_UP_CODES, type FollowUpContext } from './follow-up-catalog.js';
 
 const id = z.string().regex(/^[a-f0-9]{32}$/);
 const inputSchema = z.strictObject({
@@ -97,7 +97,7 @@ function reviewPayload(raw: unknown, mode: 'legacy' | 'scoped' | 'contextual'):
         verification_status: 'candidate', field: 'script', line_start: entry.loc.start.line, line_end: entry.loc.end.line,
         issue: rule.title, impact: '構文上の候補。業務影響・到達可能性は未確認。', applicability: rule.applicability,
         recommendation: '根拠節の適用条件・例外と、実行経路・受信オブジェクト・変数の束縛を確認する。',
-        required_follow_up: requiredFollowUp(ruleId, mode === 'contextual' ? context : undefined),
+        required_follow_up: mode === 'contextual' ? requiredFollowUp(ruleId, context) : [...COMMON_FOLLOW_UP_CODES],
         sources: [{ source_id: rule.source_id, title: source.title, url: source.url, section: rule.section,
           release: source.release, verified_on: source.verified_on, retrieved_at: null, content_hash: null,
           snapshot_id: null, catalog_version: CATALOG_VERSION, summary: rule.title }], verification_evidence: [] });

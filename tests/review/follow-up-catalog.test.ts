@@ -27,14 +27,16 @@ describe('shared followup vocabulary', () => {
     expect(isFollowUpApplicable('source_approval', 'unknown_rule')).toBe(false);
     for (const code of COMMON_FOLLOW_UP_CODES) for (const rule of RULES) expect(isFollowUpApplicable(code, rule.rule_id)).toBe(true);
     for (const [ruleId, code] of Object.entries(RULE_SPECIFIC_FOLLOW_UP)) {
-      expect(FOLLOW_UP_DEFINITIONS[code].kind).toBe('context_specific');
+      expect(FOLLOW_UP_DEFINITIONS[code].kind).toBe(ruleId === 'AU-BR-001' ? 'context_specific' : 'rule_intrinsic');
       for (const other of Object.keys(RULE_SPECIFIC_FOLLOW_UP)) expect(isFollowUpApplicable(code, other)).toBe(other === ruleId);
     }
   });
   it('does not attach another rule\'s context or manufacture codes for unknown rules', () => {
     expect(requiredFollowUp('AU-BR-001', { kind: 'async_dependency' })).toEqual([...COMMON_FOLLOW_UP_CODES]);
-    expect(requiredFollowUp('AU-BR-002', { kind: 'workflow_suppression' })).toEqual([...COMMON_FOLLOW_UP_CODES]);
-    expect(requiredFollowUp('AU-CL-004', { kind: 'workflow_suppression' })).toEqual([...COMMON_FOLLOW_UP_CODES]);
+    expect(requiredFollowUp('AU-BR-002')).toEqual([...COMMON_FOLLOW_UP_CODES, 'async_dependency_review']);
+    expect(requiredFollowUp('AU-CL-004')).toEqual([...COMMON_FOLLOW_UP_CODES, 'synchronous_ajax_review']);
+    expect(requiredFollowUp('AU-BR-002', { kind: 'workflow_suppression' })).toEqual([...COMMON_FOLLOW_UP_CODES, 'async_dependency_review']);
+    expect(requiredFollowUp('AU-CL-004', { kind: 'workflow_suppression' })).toEqual([...COMMON_FOLLOW_UP_CODES, 'synchronous_ajax_review']);
     expect(requiredFollowUp('unknown_rule', { kind: 'workflow_suppression' })).toEqual([]);
     expect(Object.keys(CONTEXT_LIMITATIONS)).toHaveLength(3);
     for (const definition of Object.values(CONTEXT_LIMITATIONS))

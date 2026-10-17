@@ -3,7 +3,6 @@ import { readFileSync } from 'node:fs';
 import { createHash } from 'node:crypto';
 import { evaluateBestPracticeV2 } from '../../src/review/evaluation-v2.js';
 import { reviewUpdateSetPayload, reviewUpdateSetPayloadScoped } from '../../src/review/payload-review.js';
-import { FOLLOW_UP_CATALOG_VERSION } from '../../src/review/follow-up-catalog.js';
 
 const bytes = readFileSync(new URL('./evaluation/bp4-v2-cases.json', import.meta.url));
 const fixture = JSON.parse(bytes.toString('utf8'));
@@ -15,7 +14,7 @@ describe('context followup reevaluation on unchanged v0.2', () => {
   it('matches a separately saved report and keeps the frozen data hash', () => {
     expect(createHash('sha256').update(bytes).digest('hex')).toBe(before.fixture_file_sha256);
     expect(current.dataset_hash).toBe(before.dataset_hash);
-    expect({ ...current, engine_ruleset_versions: ['bp3-0.3'], follow_up_catalog_version: FOLLOW_UP_CATALOG_VERSION,
+    expect({ ...current, engine_ruleset_versions: ['bp3-0.3'], follow_up_catalog_version: 'bp-followups-0.2',
       limitations: current.limitations.map(l => l === 'no_engine_tuning' ? 'engine_updated_after_dataset_review' : l),
       fixture_file_sha256: before.fixture_file_sha256 }).toEqual(saved);
     expect(saved.limitations).not.toContain('no_engine_tuning');

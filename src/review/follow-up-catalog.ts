@@ -1,8 +1,8 @@
-/** Shared, proposed output vocabulary. Registration alone never triggers or approves a finding. */
+/** Shared PoC vocabulary. Registration alone never triggers or approves a finding. */
 import { z } from 'zod';
 import { RULES } from './catalog.js';
 
-export const FOLLOW_UP_CATALOG_VERSION = 'bp-followups-0.2';
+export const FOLLOW_UP_CATALOG_VERSION = 'bp-followups-0.3';
 export const COMMON_FOLLOW_UP_CODES = ['source_approval', 'binding_and_reachability', 'exceptions_and_business_intent'] as const;
 export const RULE_SPECIFIC_FOLLOW_UP = {
   'AU-BR-001': 'workflow_suppression_review',
@@ -12,21 +12,22 @@ export const RULE_SPECIFIC_FOLLOW_UP = {
 export const FOLLOW_UP_CODES = [...COMMON_FOLLOW_UP_CODES, ...Object.values(RULE_SPECIFIC_FOLLOW_UP)] as const;
 export const followUpCodeSchema = z.enum(FOLLOW_UP_CODES);
 export type FollowUpCode = z.infer<typeof followUpCodeSchema>;
-/** Only observed syntactic context, never an approval or execution-path proof. */
+/** Detection signals, never exception classification, approval or execution-path proof. */
 export type FollowUpContext = { kind: 'workflow_suppression' } | { kind: 'async_dependency' }
   | { kind: 'synchronous_ajax'; receiver_unresolved: boolean };
 
 export function requiredFollowUp(ruleId: string, context?: FollowUpContext): FollowUpCode[] {
   const result: FollowUpCode[] = [...COMMON_FOLLOW_UP_CODES];
   if (ruleId === 'AU-BR-001' && context?.kind === 'workflow_suppression') result.push(RULE_SPECIFIC_FOLLOW_UP[ruleId]);
-  if (ruleId === 'AU-BR-002' && context?.kind === 'async_dependency') result.push(RULE_SPECIFIC_FOLLOW_UP[ruleId]);
-  if (ruleId === 'AU-CL-004' && context?.kind === 'synchronous_ajax') result.push(RULE_SPECIFIC_FOLLOW_UP[ruleId]);
+  // Called only after a finding is detected: these checks are intrinsic, not exception classifiers.
+  if (ruleId === 'AU-BR-002') result.push(RULE_SPECIFIC_FOLLOW_UP[ruleId]);
+  if (ruleId === 'AU-CL-004') result.push(RULE_SPECIFIC_FOLLOW_UP[ruleId]);
   return result.filter(code => isFollowUpApplicable(code, ruleId));
 }
 
-type Definition = { kind: 'generic' | 'context_specific'; applicable_rules: 'all' | readonly string[];
+type Definition = { kind: 'generic' | 'context_specific' | 'rule_intrinsic'; applicable_rules: 'all' | readonly string[];
   meaning: string; attach_when: string; does_not_prove: string };
-/** Meanings/attachment contexts are owned here, not by an evaluation dataset. Human approval pending. */
+/** Policy is owned here, not by a dataset. Source adoption and expert adjudication remain pending. */
 export const FOLLOW_UP_DEFINITIONS = {
   source_approval: {
     kind: 'generic', applicable_rules: 'all', meaning: '根拠資料の適用範囲・採用可否を人が確認する。',
@@ -46,14 +47,14 @@ export const FOLLOW_UP_DEFINITIONS = {
     does_not_prove: '抑止が更新時に効いていることや、再更新の自動許可。setWorkflowという語の存在だけで付けない。',
   },
   async_dependency_review: {
-    kind: 'context_specific', applicable_rules: ['AU-BR-002'], meaning: 'async本文のprevious/変更判定への依存とフォールバック・互換処理の妥当性を確認する。',
-    attach_when: '保存値async_always/旧asyncを非同期と確認し、本文のprevious/changes系の依存候補を検出して適用条件や防御的処理の意図を確認できていない場合。条件欄は本文と分ける。',
-    does_not_prove: 'previousが使用可能であることや、try/catch・nullガードがあるだけで処理が適切であること。',
+    kind: 'rule_intrinsic', applicable_rules: ['AU-BR-002'], meaning: 'async本文のprevious/変更判定への依存とフォールバック・互換処理の妥当性を確認する。',
+    attach_when: '保存値async_always/旧asyncでAU-BR-002候補を検出した全件に付与する。ガード・例外処理・互換分岐の有無を付与条件にしない。条件欄は本文と分ける。',
+    does_not_prove: '問題ありと例外の識別、例外承認、previousの使用可能性、防御的処理の適切さ。',
   },
   synchronous_ajax_review: {
-    kind: 'context_specific', applicable_rules: ['AU-CL-004'], meaning: '同期AjaxのUI制約・必要性・非同期代替と互換要件を確認する。',
-    attach_when: 'Client Scriptで同期GlideAjax候補を検出し、UI・受信側または同期使用の理由を確認できていない場合。受信側未解決ならそれも併記する。',
-    does_not_prove: '同名メソッドが必ずGlideAjaxであることや、互換性という説明だけで承認されること。',
+    kind: 'rule_intrinsic', applicable_rules: ['AU-CL-004'], meaning: '同期AjaxのUI制約・必要性・非同期代替と互換要件を確認する。',
+    attach_when: 'Client ScriptでAU-CL-004候補を検出した全件に付与する。互換性・try/catch等の有無を付与条件にしない。受信側未解決ならそれも併記する。',
+    does_not_prove: '問題ありと例外の識別、例外承認、同名メソッドがGlideAjaxであること、互換性の説明の妥当性。',
   },
 } as const satisfies Record<FollowUpCode, Definition>;
 

@@ -1,0 +1,1301 @@
+{
+  "evaluation_version": "followups-policy-0.2",
+  "dataset_hash": "d318da096838465cd5001ad2ea88bb150eead116282dce469d4441b7d24295fd",
+  "poc_only": true,
+  "follow_up_catalog_version": "bp-followups-0.3",
+  "engine_ruleset_versions": [
+    "bp3-0.3"
+  ],
+  "total_cases": 24,
+  "evaluation_unit": "separate_context_discrimination_and_intrinsic_completeness",
+  "case_expectation": {
+    "successes": 18,
+    "total": 24,
+    "rate": 0.75,
+    "wilson_95": {
+      "lower": 0.55100555994846,
+      "upper": 0.8800063377140499
+    }
+  },
+  "by_rule": {
+    "AU-BR-001": {
+      "kind": "context_specific",
+      "cases": 8,
+      "expectation_satisfied": 6,
+      "metrics": {
+        "cases": 8,
+        "tp": 2,
+        "fp": 0,
+        "fn": 2,
+        "tn": 3,
+        "negative_unassessed": 0,
+        "precision": {
+          "successes": 2,
+          "total": 2,
+          "rate": 1,
+          "wilson_95": {
+            "lower": 0.34238022750665303,
+            "upper": 1
+          }
+        },
+        "recall": {
+          "successes": 2,
+          "total": 4,
+          "rate": 0.5,
+          "wilson_95": {
+            "lower": 0.15003898915214947,
+            "upper": 0.8499610108478506
+          }
+        },
+        "attached_item_misses": 2,
+        "candidate_misses": 0
+      }
+    },
+    "AU-BR-002": {
+      "kind": "rule_intrinsic",
+      "cases": 8,
+      "expectation_satisfied": 6,
+      "metrics": {
+        "cases": 8,
+        "required_item_on_detected": {
+          "successes": 4,
+          "total": 4,
+          "rate": 1,
+          "wilson_95": {
+            "lower": 0.5101091635454027,
+            "upper": 1
+          }
+        },
+        "missing_on_detected": 0,
+        "wrong_rule_items": 0,
+        "end_to_end_required_item_recall": {
+          "successes": 4,
+          "total": 6,
+          "rate": 0.6666666666666666,
+          "wilson_95": {
+            "lower": 0.299993315138392,
+            "upper": 0.9032285888942195
+          }
+        },
+        "candidate_fp": 0,
+        "candidate_fn": 2,
+        "candidate_misses_with_required_item": 2,
+        "note": "Completeness on detected candidates is not exception discrimination or candidate accuracy."
+      }
+    },
+    "AU-CL-004": {
+      "kind": "rule_intrinsic",
+      "cases": 8,
+      "expectation_satisfied": 6,
+      "metrics": {
+        "cases": 8,
+        "required_item_on_detected": {
+          "successes": 5,
+          "total": 5,
+          "rate": 1,
+          "wilson_95": {
+            "lower": 0.5655175352168251,
+            "upper": 1
+          }
+        },
+        "missing_on_detected": 0,
+        "wrong_rule_items": 0,
+        "end_to_end_required_item_recall": {
+          "successes": 4,
+          "total": 5,
+          "rate": 0.8,
+          "wilson_95": {
+            "lower": 0.37553462976252533,
+            "upper": 0.9637758913675698
+          }
+        },
+        "candidate_fp": 1,
+        "candidate_fn": 1,
+        "candidate_misses_with_required_item": 1,
+        "note": "Completeness on detected candidates is not exception discrimination or candidate accuracy."
+      }
+    }
+  },
+  "safety": {
+    "invalid_outputs": 0,
+    "review_rejections": 0,
+    "confirmed_findings": 0,
+    "passed": true
+  },
+  "suite_passed": false,
+  "release_quality_gate": {
+    "approved": false,
+    "status": "not_assessed"
+  },
+  "limitations": [
+    "new_synthetic_cases_only",
+    "author_has_seen_engine",
+    "not_blind_or_iid",
+    "human_adjudication_pending",
+    "no_detector_changes_during_measurement",
+    "semantic_boundaries_exceed_declared_contract",
+    "wilson_intervals_descriptive_only"
+  ],
+  "rule_policy": {
+    "AU-BR-001": "context_specific",
+    "AU-BR-002": "rule_intrinsic",
+    "AU-CL-004": "rule_intrinsic"
+  },
+  "candidate_detection": {
+    "tp": 15,
+    "fp": 1,
+    "fn": 3
+  },
+  "context_discrimination": {
+    "all": {
+      "cases": 8,
+      "tp": 2,
+      "fp": 0,
+      "fn": 2,
+      "tn": 3,
+      "negative_unassessed": 0,
+      "precision": {
+        "successes": 2,
+        "total": 2,
+        "rate": 1,
+        "wilson_95": {
+          "lower": 0.34238022750665303,
+          "upper": 1
+        }
+      },
+      "recall": {
+        "successes": 2,
+        "total": 4,
+        "rate": 0.5,
+        "wilson_95": {
+          "lower": 0.15003898915214947,
+          "upper": 0.8499610108478506
+        }
+      },
+      "attached_item_misses": 2,
+      "candidate_misses": 0
+    },
+    "declared_scope": {
+      "cases": 6,
+      "tp": 2,
+      "fp": 0,
+      "fn": 0,
+      "tn": 3,
+      "negative_unassessed": 0,
+      "precision": {
+        "successes": 2,
+        "total": 2,
+        "rate": 1,
+        "wilson_95": {
+          "lower": 0.34238022750665303,
+          "upper": 1
+        }
+      },
+      "recall": {
+        "successes": 2,
+        "total": 2,
+        "rate": 1,
+        "wilson_95": {
+          "lower": 0.34238022750665303,
+          "upper": 1
+        }
+      },
+      "attached_item_misses": 0,
+      "candidate_misses": 0
+    },
+    "semantic_boundary": {
+      "cases": 2,
+      "tp": 0,
+      "fp": 0,
+      "fn": 2,
+      "tn": 0,
+      "negative_unassessed": 0,
+      "precision": {
+        "successes": 0,
+        "total": 0,
+        "rate": null,
+        "wilson_95": null
+      },
+      "recall": {
+        "successes": 0,
+        "total": 2,
+        "rate": 0,
+        "wilson_95": {
+          "lower": 0,
+          "upper": 0.6576197724933469
+        }
+      },
+      "attached_item_misses": 2,
+      "candidate_misses": 0
+    },
+    "by_variant": {
+      "ordinary": {
+        "cases": 2,
+        "tp": 0,
+        "fp": 0,
+        "fn": 0,
+        "tn": 2,
+        "negative_unassessed": 0,
+        "precision": {
+          "successes": 0,
+          "total": 0,
+          "rate": null,
+          "wilson_95": null
+        },
+        "recall": {
+          "successes": 0,
+          "total": 0,
+          "rate": null,
+          "wilson_95": null
+        },
+        "attached_item_misses": 0,
+        "candidate_misses": 0
+      },
+      "defensive": {
+        "cases": 2,
+        "tp": 2,
+        "fp": 0,
+        "fn": 0,
+        "tn": 0,
+        "negative_unassessed": 0,
+        "precision": {
+          "successes": 2,
+          "total": 2,
+          "rate": 1,
+          "wilson_95": {
+            "lower": 0.34238022750665303,
+            "upper": 1
+          }
+        },
+        "recall": {
+          "successes": 2,
+          "total": 2,
+          "rate": 1,
+          "wilson_95": {
+            "lower": 0.34238022750665303,
+            "upper": 1
+          }
+        },
+        "attached_item_misses": 0,
+        "candidate_misses": 0
+      },
+      "control": {
+        "cases": 2,
+        "tp": 0,
+        "fp": 0,
+        "fn": 0,
+        "tn": 1,
+        "negative_unassessed": 0,
+        "precision": {
+          "successes": 0,
+          "total": 0,
+          "rate": null,
+          "wilson_95": null
+        },
+        "recall": {
+          "successes": 0,
+          "total": 0,
+          "rate": null,
+          "wilson_95": null
+        },
+        "attached_item_misses": 0,
+        "candidate_misses": 0
+      },
+      "boundary": {
+        "cases": 2,
+        "tp": 0,
+        "fp": 0,
+        "fn": 2,
+        "tn": 0,
+        "negative_unassessed": 0,
+        "precision": {
+          "successes": 0,
+          "total": 0,
+          "rate": null,
+          "wilson_95": null
+        },
+        "recall": {
+          "successes": 0,
+          "total": 2,
+          "rate": 0,
+          "wilson_95": {
+            "lower": 0,
+            "upper": 0.6576197724933469
+          }
+        },
+        "attached_item_misses": 2,
+        "candidate_misses": 0
+      }
+    }
+  },
+  "intrinsic_completeness": {
+    "all": {
+      "cases": 16,
+      "required_item_on_detected": {
+        "successes": 9,
+        "total": 9,
+        "rate": 1,
+        "wilson_95": {
+          "lower": 0.7008549515804559,
+          "upper": 1
+        }
+      },
+      "missing_on_detected": 0,
+      "wrong_rule_items": 0,
+      "end_to_end_required_item_recall": {
+        "successes": 8,
+        "total": 11,
+        "rate": 0.7272727272727273,
+        "wilson_95": {
+          "lower": 0.43435469882387084,
+          "upper": 0.902539407099751
+        }
+      },
+      "candidate_fp": 1,
+      "candidate_fn": 3,
+      "candidate_misses_with_required_item": 3,
+      "note": "Completeness on detected candidates is not exception discrimination or candidate accuracy."
+    },
+    "declared_scope": {
+      "cases": 12,
+      "required_item_on_detected": {
+        "successes": 8,
+        "total": 8,
+        "rate": 1,
+        "wilson_95": {
+          "lower": 0.6755924351161198,
+          "upper": 1
+        }
+      },
+      "missing_on_detected": 0,
+      "wrong_rule_items": 0,
+      "end_to_end_required_item_recall": {
+        "successes": 8,
+        "total": 8,
+        "rate": 1,
+        "wilson_95": {
+          "lower": 0.6755924351161198,
+          "upper": 1
+        }
+      },
+      "candidate_fp": 0,
+      "candidate_fn": 0,
+      "candidate_misses_with_required_item": 0,
+      "note": "Completeness on detected candidates is not exception discrimination or candidate accuracy."
+    },
+    "semantic_boundary": {
+      "cases": 4,
+      "required_item_on_detected": {
+        "successes": 1,
+        "total": 1,
+        "rate": 1,
+        "wilson_95": {
+          "lower": 0.20654931437723745,
+          "upper": 1
+        }
+      },
+      "missing_on_detected": 0,
+      "wrong_rule_items": 0,
+      "end_to_end_required_item_recall": {
+        "successes": 0,
+        "total": 3,
+        "rate": 0,
+        "wilson_95": {
+          "lower": 5.551115123125783e-17,
+          "upper": 0.5614970317550454
+        }
+      },
+      "candidate_fp": 1,
+      "candidate_fn": 3,
+      "candidate_misses_with_required_item": 3,
+      "note": "Completeness on detected candidates is not exception discrimination or candidate accuracy."
+    },
+    "by_variant": {
+      "ordinary": {
+        "cases": 4,
+        "required_item_on_detected": {
+          "successes": 4,
+          "total": 4,
+          "rate": 1,
+          "wilson_95": {
+            "lower": 0.5101091635454027,
+            "upper": 1
+          }
+        },
+        "missing_on_detected": 0,
+        "wrong_rule_items": 0,
+        "end_to_end_required_item_recall": {
+          "successes": 4,
+          "total": 4,
+          "rate": 1,
+          "wilson_95": {
+            "lower": 0.5101091635454027,
+            "upper": 1
+          }
+        },
+        "candidate_fp": 0,
+        "candidate_fn": 0,
+        "candidate_misses_with_required_item": 0,
+        "note": "Completeness on detected candidates is not exception discrimination or candidate accuracy."
+      },
+      "defensive": {
+        "cases": 4,
+        "required_item_on_detected": {
+          "successes": 4,
+          "total": 4,
+          "rate": 1,
+          "wilson_95": {
+            "lower": 0.5101091635454027,
+            "upper": 1
+          }
+        },
+        "missing_on_detected": 0,
+        "wrong_rule_items": 0,
+        "end_to_end_required_item_recall": {
+          "successes": 4,
+          "total": 4,
+          "rate": 1,
+          "wilson_95": {
+            "lower": 0.5101091635454027,
+            "upper": 1
+          }
+        },
+        "candidate_fp": 0,
+        "candidate_fn": 0,
+        "candidate_misses_with_required_item": 0,
+        "note": "Completeness on detected candidates is not exception discrimination or candidate accuracy."
+      },
+      "control": {
+        "cases": 4,
+        "required_item_on_detected": {
+          "successes": 0,
+          "total": 0,
+          "rate": null,
+          "wilson_95": null
+        },
+        "missing_on_detected": 0,
+        "wrong_rule_items": 0,
+        "end_to_end_required_item_recall": {
+          "successes": 0,
+          "total": 0,
+          "rate": null,
+          "wilson_95": null
+        },
+        "candidate_fp": 0,
+        "candidate_fn": 0,
+        "candidate_misses_with_required_item": 0,
+        "note": "Completeness on detected candidates is not exception discrimination or candidate accuracy."
+      },
+      "boundary": {
+        "cases": 4,
+        "required_item_on_detected": {
+          "successes": 1,
+          "total": 1,
+          "rate": 1,
+          "wilson_95": {
+            "lower": 0.20654931437723745,
+            "upper": 1
+          }
+        },
+        "missing_on_detected": 0,
+        "wrong_rule_items": 0,
+        "end_to_end_required_item_recall": {
+          "successes": 0,
+          "total": 3,
+          "rate": 0,
+          "wilson_95": {
+            "lower": 5.551115123125783e-17,
+            "upper": 0.5614970317550454
+          }
+        },
+        "candidate_fp": 1,
+        "candidate_fn": 3,
+        "candidate_misses_with_required_item": 3,
+        "note": "Completeness on detected candidates is not exception discrimination or candidate accuracy."
+      }
+    }
+  },
+  "cases": [
+    {
+      "case_id": "NEXT-W01",
+      "rule_id": "AU-BR-001",
+      "basis": "catalog_contract",
+      "scenario": "ordinary_branch_update",
+      "expectation_satisfied": true,
+      "invalid_output": false,
+      "rejection_reason": null,
+      "assessed": true,
+      "detection_tp": 1,
+      "detection_fp": 0,
+      "detection_fn": 0,
+      "followup_tp": 0,
+      "followup_fp": 0,
+      "followup_fn": 0,
+      "followup_tn": 1,
+      "negative_unassessed": 0,
+      "missed_candidate_followups": 0,
+      "missing_attached_followups": 0,
+      "units": [
+        {
+          "line": 2,
+          "expected_followup": false,
+          "candidate_detected": true,
+          "actual_followup": false
+        }
+      ],
+      "extra_candidate_lines": [],
+      "wrong_rule_codes": [],
+      "missing_limitations": [],
+      "extra_limitations": [],
+      "variant": "ordinary",
+      "followup_kind": "context_specific"
+    },
+    {
+      "case_id": "NEXT-W02",
+      "rule_id": "AU-BR-001",
+      "basis": "catalog_contract",
+      "scenario": "ordinary_array_update",
+      "expectation_satisfied": true,
+      "invalid_output": false,
+      "rejection_reason": null,
+      "assessed": true,
+      "detection_tp": 1,
+      "detection_fp": 0,
+      "detection_fn": 0,
+      "followup_tp": 0,
+      "followup_fp": 0,
+      "followup_fn": 0,
+      "followup_tn": 1,
+      "negative_unassessed": 0,
+      "missed_candidate_followups": 0,
+      "missing_attached_followups": 0,
+      "units": [
+        {
+          "line": 2,
+          "expected_followup": false,
+          "candidate_detected": true,
+          "actual_followup": false
+        }
+      ],
+      "extra_candidate_lines": [],
+      "wrong_rule_codes": [],
+      "missing_limitations": [],
+      "extra_limitations": [],
+      "variant": "ordinary",
+      "followup_kind": "context_specific"
+    },
+    {
+      "case_id": "NEXT-W03",
+      "rule_id": "AU-BR-001",
+      "basis": "catalog_contract",
+      "scenario": "suppression_in_old_entry",
+      "expectation_satisfied": true,
+      "invalid_output": false,
+      "rejection_reason": null,
+      "assessed": true,
+      "detection_tp": 1,
+      "detection_fp": 0,
+      "detection_fn": 0,
+      "followup_tp": 1,
+      "followup_fp": 0,
+      "followup_fn": 0,
+      "followup_tn": 0,
+      "negative_unassessed": 0,
+      "missed_candidate_followups": 0,
+      "missing_attached_followups": 0,
+      "units": [
+        {
+          "line": 4,
+          "expected_followup": true,
+          "candidate_detected": true,
+          "actual_followup": true
+        }
+      ],
+      "extra_candidate_lines": [],
+      "wrong_rule_codes": [],
+      "missing_limitations": [],
+      "extra_limitations": [],
+      "variant": "defensive",
+      "followup_kind": "context_specific"
+    },
+    {
+      "case_id": "NEXT-W04",
+      "rule_id": "AU-BR-001",
+      "basis": "catalog_contract",
+      "scenario": "suppression_reenabled",
+      "expectation_satisfied": true,
+      "invalid_output": false,
+      "rejection_reason": null,
+      "assessed": true,
+      "detection_tp": 1,
+      "detection_fp": 0,
+      "detection_fn": 0,
+      "followup_tp": 1,
+      "followup_fp": 0,
+      "followup_fn": 0,
+      "followup_tn": 0,
+      "negative_unassessed": 0,
+      "missed_candidate_followups": 0,
+      "missing_attached_followups": 0,
+      "units": [
+        {
+          "line": 4,
+          "expected_followup": true,
+          "candidate_detected": true,
+          "actual_followup": true
+        }
+      ],
+      "extra_candidate_lines": [],
+      "wrong_rule_codes": [],
+      "missing_limitations": [],
+      "extra_limitations": [],
+      "variant": "defensive",
+      "followup_kind": "context_specific"
+    },
+    {
+      "case_id": "NEXT-W05",
+      "rule_id": "AU-BR-001",
+      "basis": "catalog_contract",
+      "scenario": "foreign_workflow_call",
+      "expectation_satisfied": true,
+      "invalid_output": false,
+      "rejection_reason": null,
+      "assessed": true,
+      "detection_tp": 1,
+      "detection_fp": 0,
+      "detection_fn": 0,
+      "followup_tp": 0,
+      "followup_fp": 0,
+      "followup_fn": 0,
+      "followup_tn": 1,
+      "negative_unassessed": 0,
+      "missed_candidate_followups": 0,
+      "missing_attached_followups": 0,
+      "units": [
+        {
+          "line": 3,
+          "expected_followup": false,
+          "candidate_detected": true,
+          "actual_followup": false
+        }
+      ],
+      "extra_candidate_lines": [],
+      "wrong_rule_codes": [],
+      "missing_limitations": [],
+      "extra_limitations": [],
+      "variant": "control",
+      "followup_kind": "context_specific"
+    },
+    {
+      "case_id": "NEXT-W06",
+      "rule_id": "AU-BR-001",
+      "basis": "catalog_contract",
+      "scenario": "shadowed_local_update",
+      "expectation_satisfied": true,
+      "invalid_output": false,
+      "rejection_reason": null,
+      "assessed": true,
+      "detection_tp": 0,
+      "detection_fp": 0,
+      "detection_fn": 0,
+      "followup_tp": 0,
+      "followup_fp": 0,
+      "followup_fn": 0,
+      "followup_tn": 0,
+      "negative_unassessed": 0,
+      "missed_candidate_followups": 0,
+      "missing_attached_followups": 0,
+      "units": [],
+      "extra_candidate_lines": [],
+      "wrong_rule_codes": [],
+      "missing_limitations": [],
+      "extra_limitations": [],
+      "variant": "control",
+      "followup_kind": "context_specific"
+    },
+    {
+      "case_id": "NEXT-W07",
+      "rule_id": "AU-BR-001",
+      "basis": "semantic_boundary",
+      "scenario": "constant_ternary_false",
+      "expectation_satisfied": false,
+      "invalid_output": false,
+      "rejection_reason": null,
+      "assessed": true,
+      "detection_tp": 1,
+      "detection_fp": 0,
+      "detection_fn": 0,
+      "followup_tp": 0,
+      "followup_fp": 0,
+      "followup_fn": 1,
+      "followup_tn": 0,
+      "negative_unassessed": 0,
+      "missed_candidate_followups": 0,
+      "missing_attached_followups": 1,
+      "units": [
+        {
+          "line": 2,
+          "expected_followup": true,
+          "candidate_detected": true,
+          "actual_followup": false
+        }
+      ],
+      "extra_candidate_lines": [],
+      "wrong_rule_codes": [],
+      "missing_limitations": [
+        "workflow_suppression_relation_not_verified"
+      ],
+      "extra_limitations": [],
+      "variant": "boundary",
+      "followup_kind": "context_specific"
+    },
+    {
+      "case_id": "NEXT-W08",
+      "rule_id": "AU-BR-001",
+      "basis": "semantic_boundary",
+      "scenario": "helper_effect",
+      "expectation_satisfied": false,
+      "invalid_output": false,
+      "rejection_reason": null,
+      "assessed": true,
+      "detection_tp": 1,
+      "detection_fp": 0,
+      "detection_fn": 0,
+      "followup_tp": 0,
+      "followup_fp": 0,
+      "followup_fn": 1,
+      "followup_tn": 0,
+      "negative_unassessed": 0,
+      "missed_candidate_followups": 0,
+      "missing_attached_followups": 1,
+      "units": [
+        {
+          "line": 3,
+          "expected_followup": true,
+          "candidate_detected": true,
+          "actual_followup": false
+        }
+      ],
+      "extra_candidate_lines": [],
+      "wrong_rule_codes": [],
+      "missing_limitations": [],
+      "extra_limitations": [],
+      "variant": "boundary",
+      "followup_kind": "context_specific"
+    },
+    {
+      "case_id": "NEXT-A01",
+      "rule_id": "AU-BR-002",
+      "basis": "catalog_contract",
+      "scenario": "unguarded_previous_field",
+      "expectation_satisfied": true,
+      "invalid_output": false,
+      "rejection_reason": null,
+      "assessed": true,
+      "detection_tp": 1,
+      "detection_fp": 0,
+      "detection_fn": 0,
+      "followup_tp": 1,
+      "followup_fp": 0,
+      "followup_fn": 0,
+      "followup_tn": 0,
+      "negative_unassessed": 0,
+      "missed_candidate_followups": 0,
+      "missing_attached_followups": 0,
+      "units": [
+        {
+          "line": 1,
+          "expected_followup": true,
+          "candidate_detected": true,
+          "actual_followup": true
+        }
+      ],
+      "extra_candidate_lines": [],
+      "wrong_rule_codes": [],
+      "missing_limitations": [],
+      "extra_limitations": [],
+      "variant": "ordinary",
+      "followup_kind": "rule_intrinsic"
+    },
+    {
+      "case_id": "NEXT-A02",
+      "rule_id": "AU-BR-002",
+      "basis": "catalog_contract",
+      "scenario": "unguarded_field_alias",
+      "expectation_satisfied": true,
+      "invalid_output": false,
+      "rejection_reason": null,
+      "assessed": true,
+      "detection_tp": 1,
+      "detection_fp": 0,
+      "detection_fn": 0,
+      "followup_tp": 1,
+      "followup_fp": 0,
+      "followup_fn": 0,
+      "followup_tn": 0,
+      "negative_unassessed": 0,
+      "missed_candidate_followups": 0,
+      "missing_attached_followups": 0,
+      "units": [
+        {
+          "line": 2,
+          "expected_followup": true,
+          "candidate_detected": true,
+          "actual_followup": true
+        }
+      ],
+      "extra_candidate_lines": [],
+      "wrong_rule_codes": [],
+      "missing_limitations": [],
+      "extra_limitations": [],
+      "variant": "ordinary",
+      "followup_kind": "rule_intrinsic"
+    },
+    {
+      "case_id": "NEXT-A03",
+      "rule_id": "AU-BR-002",
+      "basis": "catalog_contract",
+      "scenario": "previous_fallback",
+      "expectation_satisfied": true,
+      "invalid_output": false,
+      "rejection_reason": null,
+      "assessed": true,
+      "detection_tp": 1,
+      "detection_fp": 0,
+      "detection_fn": 0,
+      "followup_tp": 1,
+      "followup_fp": 0,
+      "followup_fn": 0,
+      "followup_tn": 0,
+      "negative_unassessed": 0,
+      "missed_candidate_followups": 0,
+      "missing_attached_followups": 0,
+      "units": [
+        {
+          "line": 1,
+          "expected_followup": true,
+          "candidate_detected": true,
+          "actual_followup": true
+        }
+      ],
+      "extra_candidate_lines": [],
+      "wrong_rule_codes": [],
+      "missing_limitations": [],
+      "extra_limitations": [],
+      "variant": "defensive",
+      "followup_kind": "rule_intrinsic"
+    },
+    {
+      "case_id": "NEXT-A04",
+      "rule_id": "AU-BR-002",
+      "basis": "catalog_contract",
+      "scenario": "changes_try_catch",
+      "expectation_satisfied": true,
+      "invalid_output": false,
+      "rejection_reason": null,
+      "assessed": true,
+      "detection_tp": 1,
+      "detection_fp": 0,
+      "detection_fn": 0,
+      "followup_tp": 1,
+      "followup_fp": 0,
+      "followup_fn": 0,
+      "followup_tn": 0,
+      "negative_unassessed": 0,
+      "missed_candidate_followups": 0,
+      "missing_attached_followups": 0,
+      "units": [
+        {
+          "line": 2,
+          "expected_followup": true,
+          "candidate_detected": true,
+          "actual_followup": true
+        }
+      ],
+      "extra_candidate_lines": [],
+      "wrong_rule_codes": [],
+      "missing_limitations": [],
+      "extra_limitations": [],
+      "variant": "defensive",
+      "followup_kind": "rule_intrinsic"
+    },
+    {
+      "case_id": "NEXT-A05",
+      "rule_id": "AU-BR-002",
+      "basis": "catalog_contract",
+      "scenario": "display_not_async",
+      "expectation_satisfied": true,
+      "invalid_output": false,
+      "rejection_reason": null,
+      "assessed": true,
+      "detection_tp": 0,
+      "detection_fp": 0,
+      "detection_fn": 0,
+      "followup_tp": 0,
+      "followup_fp": 0,
+      "followup_fn": 0,
+      "followup_tn": 0,
+      "negative_unassessed": 0,
+      "missed_candidate_followups": 0,
+      "missing_attached_followups": 0,
+      "units": [],
+      "extra_candidate_lines": [],
+      "wrong_rule_codes": [],
+      "missing_limitations": [],
+      "extra_limitations": [],
+      "variant": "control",
+      "followup_kind": "rule_intrinsic"
+    },
+    {
+      "case_id": "NEXT-A06",
+      "rule_id": "AU-BR-002",
+      "basis": "catalog_contract",
+      "scenario": "local_field_method",
+      "expectation_satisfied": true,
+      "invalid_output": false,
+      "rejection_reason": null,
+      "assessed": true,
+      "detection_tp": 0,
+      "detection_fp": 0,
+      "detection_fn": 0,
+      "followup_tp": 0,
+      "followup_fp": 0,
+      "followup_fn": 0,
+      "followup_tn": 0,
+      "negative_unassessed": 0,
+      "missed_candidate_followups": 0,
+      "missing_attached_followups": 0,
+      "units": [],
+      "extra_candidate_lines": [],
+      "wrong_rule_codes": [],
+      "missing_limitations": [],
+      "extra_limitations": [],
+      "variant": "control",
+      "followup_kind": "rule_intrinsic"
+    },
+    {
+      "case_id": "NEXT-A07",
+      "rule_id": "AU-BR-002",
+      "basis": "semantic_boundary",
+      "scenario": "dynamic_field_method",
+      "expectation_satisfied": false,
+      "invalid_output": false,
+      "rejection_reason": null,
+      "assessed": true,
+      "detection_tp": 0,
+      "detection_fp": 0,
+      "detection_fn": 1,
+      "followup_tp": 0,
+      "followup_fp": 0,
+      "followup_fn": 1,
+      "followup_tn": 0,
+      "negative_unassessed": 0,
+      "missed_candidate_followups": 1,
+      "missing_attached_followups": 0,
+      "units": [
+        {
+          "line": 2,
+          "expected_followup": true,
+          "candidate_detected": false,
+          "actual_followup": false
+        }
+      ],
+      "extra_candidate_lines": [],
+      "wrong_rule_codes": [],
+      "missing_limitations": [],
+      "extra_limitations": [],
+      "variant": "boundary",
+      "followup_kind": "rule_intrinsic"
+    },
+    {
+      "case_id": "NEXT-A08",
+      "rule_id": "AU-BR-002",
+      "basis": "semantic_boundary",
+      "scenario": "previous_returned",
+      "expectation_satisfied": false,
+      "invalid_output": false,
+      "rejection_reason": null,
+      "assessed": true,
+      "detection_tp": 0,
+      "detection_fp": 0,
+      "detection_fn": 1,
+      "followup_tp": 0,
+      "followup_fp": 0,
+      "followup_fn": 1,
+      "followup_tn": 0,
+      "negative_unassessed": 0,
+      "missed_candidate_followups": 1,
+      "missing_attached_followups": 0,
+      "units": [
+        {
+          "line": 2,
+          "expected_followup": true,
+          "candidate_detected": false,
+          "actual_followup": false
+        }
+      ],
+      "extra_candidate_lines": [],
+      "wrong_rule_codes": [],
+      "missing_limitations": [],
+      "extra_limitations": [],
+      "variant": "boundary",
+      "followup_kind": "rule_intrinsic"
+    },
+    {
+      "case_id": "NEXT-J01",
+      "rule_id": "AU-CL-004",
+      "basis": "catalog_contract",
+      "scenario": "unguarded_sync",
+      "expectation_satisfied": true,
+      "invalid_output": false,
+      "rejection_reason": null,
+      "assessed": true,
+      "detection_tp": 1,
+      "detection_fp": 0,
+      "detection_fn": 0,
+      "followup_tp": 1,
+      "followup_fp": 0,
+      "followup_fn": 0,
+      "followup_tn": 0,
+      "negative_unassessed": 0,
+      "missed_candidate_followups": 0,
+      "missing_attached_followups": 0,
+      "units": [
+        {
+          "line": 3,
+          "expected_followup": true,
+          "candidate_detected": true,
+          "actual_followup": true
+        }
+      ],
+      "extra_candidate_lines": [],
+      "wrong_rule_codes": [],
+      "missing_limitations": [],
+      "extra_limitations": [],
+      "variant": "ordinary",
+      "followup_kind": "rule_intrinsic"
+    },
+    {
+      "case_id": "NEXT-J02",
+      "rule_id": "AU-CL-004",
+      "basis": "catalog_contract",
+      "scenario": "ordinary_sync_alias",
+      "expectation_satisfied": true,
+      "invalid_output": false,
+      "rejection_reason": null,
+      "assessed": true,
+      "detection_tp": 1,
+      "detection_fp": 0,
+      "detection_fn": 0,
+      "followup_tp": 1,
+      "followup_fp": 0,
+      "followup_fn": 0,
+      "followup_tn": 0,
+      "negative_unassessed": 0,
+      "missed_candidate_followups": 0,
+      "missing_attached_followups": 0,
+      "units": [
+        {
+          "line": 3,
+          "expected_followup": true,
+          "candidate_detected": true,
+          "actual_followup": true
+        }
+      ],
+      "extra_candidate_lines": [],
+      "wrong_rule_codes": [],
+      "missing_limitations": [],
+      "extra_limitations": [],
+      "variant": "ordinary",
+      "followup_kind": "rule_intrinsic"
+    },
+    {
+      "case_id": "NEXT-J03",
+      "rule_id": "AU-CL-004",
+      "basis": "catalog_contract",
+      "scenario": "compatibility_branch",
+      "expectation_satisfied": true,
+      "invalid_output": false,
+      "rejection_reason": null,
+      "assessed": true,
+      "detection_tp": 1,
+      "detection_fp": 0,
+      "detection_fn": 0,
+      "followup_tp": 1,
+      "followup_fp": 0,
+      "followup_fn": 0,
+      "followup_tn": 0,
+      "negative_unassessed": 0,
+      "missed_candidate_followups": 0,
+      "missing_attached_followups": 0,
+      "units": [
+        {
+          "line": 2,
+          "expected_followup": true,
+          "candidate_detected": true,
+          "actual_followup": true
+        }
+      ],
+      "extra_candidate_lines": [],
+      "wrong_rule_codes": [],
+      "missing_limitations": [],
+      "extra_limitations": [],
+      "variant": "defensive",
+      "followup_kind": "rule_intrinsic"
+    },
+    {
+      "case_id": "NEXT-J04",
+      "rule_id": "AU-CL-004",
+      "basis": "catalog_contract",
+      "scenario": "sync_try_catch",
+      "expectation_satisfied": true,
+      "invalid_output": false,
+      "rejection_reason": null,
+      "assessed": true,
+      "detection_tp": 1,
+      "detection_fp": 0,
+      "detection_fn": 0,
+      "followup_tp": 1,
+      "followup_fp": 0,
+      "followup_fn": 0,
+      "followup_tn": 0,
+      "negative_unassessed": 0,
+      "missed_candidate_followups": 0,
+      "missing_attached_followups": 0,
+      "units": [
+        {
+          "line": 2,
+          "expected_followup": true,
+          "candidate_detected": true,
+          "actual_followup": true
+        }
+      ],
+      "extra_candidate_lines": [],
+      "wrong_rule_codes": [],
+      "missing_limitations": [],
+      "extra_limitations": [],
+      "variant": "defensive",
+      "followup_kind": "rule_intrinsic"
+    },
+    {
+      "case_id": "NEXT-J05",
+      "rule_id": "AU-CL-004",
+      "basis": "catalog_contract",
+      "scenario": "asynchronous_request",
+      "expectation_satisfied": true,
+      "invalid_output": false,
+      "rejection_reason": null,
+      "assessed": true,
+      "detection_tp": 0,
+      "detection_fp": 0,
+      "detection_fn": 0,
+      "followup_tp": 0,
+      "followup_fp": 0,
+      "followup_fn": 0,
+      "followup_tn": 0,
+      "negative_unassessed": 0,
+      "missed_candidate_followups": 0,
+      "missing_attached_followups": 0,
+      "units": [],
+      "extra_candidate_lines": [],
+      "wrong_rule_codes": [],
+      "missing_limitations": [],
+      "extra_limitations": [],
+      "variant": "control",
+      "followup_kind": "rule_intrinsic"
+    },
+    {
+      "case_id": "NEXT-J06",
+      "rule_id": "AU-CL-004",
+      "basis": "catalog_contract",
+      "scenario": "known_local_receiver",
+      "expectation_satisfied": true,
+      "invalid_output": false,
+      "rejection_reason": null,
+      "assessed": true,
+      "detection_tp": 0,
+      "detection_fp": 0,
+      "detection_fn": 0,
+      "followup_tp": 0,
+      "followup_fp": 0,
+      "followup_fn": 0,
+      "followup_tn": 0,
+      "negative_unassessed": 0,
+      "missed_candidate_followups": 0,
+      "missing_attached_followups": 0,
+      "units": [],
+      "extra_candidate_lines": [],
+      "wrong_rule_codes": [],
+      "missing_limitations": [],
+      "extra_limitations": [],
+      "variant": "control",
+      "followup_kind": "rule_intrinsic"
+    },
+    {
+      "case_id": "NEXT-J07",
+      "rule_id": "AU-CL-004",
+      "basis": "semantic_boundary",
+      "scenario": "computed_sync_method",
+      "expectation_satisfied": false,
+      "invalid_output": false,
+      "rejection_reason": null,
+      "assessed": true,
+      "detection_tp": 0,
+      "detection_fp": 0,
+      "detection_fn": 1,
+      "followup_tp": 0,
+      "followup_fp": 0,
+      "followup_fn": 1,
+      "followup_tn": 0,
+      "negative_unassessed": 0,
+      "missed_candidate_followups": 1,
+      "missing_attached_followups": 0,
+      "units": [
+        {
+          "line": 2,
+          "expected_followup": true,
+          "candidate_detected": false,
+          "actual_followup": false
+        }
+      ],
+      "extra_candidate_lines": [],
+      "wrong_rule_codes": [],
+      "missing_limitations": [],
+      "extra_limitations": [],
+      "variant": "boundary",
+      "followup_kind": "rule_intrinsic"
+    },
+    {
+      "case_id": "NEXT-J08",
+      "rule_id": "AU-CL-004",
+      "basis": "semantic_boundary",
+      "scenario": "local_factory_result",
+      "expectation_satisfied": false,
+      "invalid_output": false,
+      "rejection_reason": null,
+      "assessed": true,
+      "detection_tp": 0,
+      "detection_fp": 1,
+      "detection_fn": 0,
+      "followup_tp": 0,
+      "followup_fp": 1,
+      "followup_fn": 0,
+      "followup_tn": 0,
+      "negative_unassessed": 0,
+      "missed_candidate_followups": 0,
+      "missing_attached_followups": 0,
+      "units": [],
+      "extra_candidate_lines": [
+        2
+      ],
+      "wrong_rule_codes": [],
+      "missing_limitations": [],
+      "extra_limitations": [
+        "synchronous_ajax_receiver_unresolved"
+      ],
+      "variant": "boundary",
+      "followup_kind": "rule_intrinsic"
+    }
+  ],
+  "fixture_file_sha256": "3e5049ec39b1e87a194e38b3a8c5c8dded7a6cfdce7dfdd616ea93d0d9f5e760"
+}

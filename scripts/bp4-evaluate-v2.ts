@@ -3,7 +3,6 @@ import { readFileSync } from 'node:fs';
 import { createHash } from 'node:crypto';
 import { evaluateBestPracticeV2 } from '../src/review/evaluation-v2.js';
 import { reviewUpdateSetPayload, reviewUpdateSetPayloadLegacy, reviewUpdateSetPayloadScoped } from '../src/review/payload-review.js';
-import { FOLLOW_UP_CATALOG_VERSION } from '../src/review/follow-up-catalog.js';
 
 try {
   const args = process.argv.slice(2);
@@ -19,7 +18,8 @@ try {
   });
   const historical = args.includes('--legacy') || args.includes('--scoped');
   const report = { ...measured, ...(args.includes('--legacy') ? {} : { engine_ruleset_versions: [...versions].sort() }),
-    ...(!historical ? { follow_up_catalog_version: FOLLOW_UP_CATALOG_VERSION,
+    // Reproduce this historical report's metadata; the next-set CLI records the current catalog.
+    ...(!historical ? { follow_up_catalog_version: 'bp-followups-0.2',
       limitations: measured.limitations.map(l => l === 'no_engine_tuning' ? 'engine_updated_after_dataset_review' : l) } : {}),
     fixture_file_sha256: createHash('sha256').update(bytes).digest('hex') };
   console.log(JSON.stringify(report, null, 2));
