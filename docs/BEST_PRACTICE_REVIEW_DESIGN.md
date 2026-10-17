@@ -9,6 +9,9 @@ Status: **BP-1〜3 PoC・BP-4初回合成評価済み（品質目標未達）／
 [BP-3の安全抽出・先行3規則・未確認事項](BEST_PRACTICE_BP3_POC.md)も参照。
 [BP-4の評価プロトコル・独立性の制約・初回結果](BEST_PRACTICE_BP4_EVALUATION.md)も参照。
 [BP-4 v0.2の3分類契約・集計器・72ケース評価](BEST_PRACTICE_BP4_V2.md)も参照。
+[独立した人手評価のプロトコル](BEST_PRACTICE_HUMAN_EVALUATION_PROTOCOL.md)と
+[空の採点票](BEST_PRACTICE_HUMAN_EVALUATION_SCORECARD.md)を整備した。
+作問・採点・裁定の実装非参照、匿名化、事前登録を定めるもので、人手評価自体は未実施。
 [限定的なスコープ/受信側/別名追跡の実装と固定v0.2再評価](BEST_PRACTICE_SCOPE_REEVALUATION.md)では
 FP8→0、FN10→6、改善12件・退行0件。関数間/動的呼び出し・追跡確認不足は範囲外のまま。
 [確認項目の型付き共通語彙・付与条件（提案版）](BEST_PRACTICE_FOLLOW_UP_CATALOG.md)を先にレビューし、
