@@ -1,7 +1,7 @@
 import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 import { reviewResultV2JsonSchema, reviewResultV2Schema } from '../../src/review/result-schema-v2.js';
-import { aggregateReviewJsonSchema, aggregateReviewSchema } from '../../src/review/aggregate-schema.js';
+import { aggregateReviewJsonSchema, aggregateReviewSchema, aggregateReviewV3JsonSchema } from '../../src/review/aggregate-schema.js';
 import { reviewResultSchema } from '../../src/review/result-schema.js';
 
 const json = (path: string) => JSON.parse(readFileSync(new URL(`../../${path}`, import.meta.url), 'utf8'));
@@ -10,6 +10,7 @@ describe('BP-5 portable artifacts and legacy compatibility', () => {
     for (const [path, schema] of [
       ['schemas/best-practice-review-result-v2.schema.json', reviewResultV2JsonSchema],
       ['schemas/best-practice-mcp-review-result.schema.json', aggregateReviewJsonSchema],
+      ['schemas/best-practice-mcp-review-result-v3.schema.json', aggregateReviewV3JsonSchema],
     ] as const) {
       expect(json(path)).toEqual(schema);
       const visit = (value: unknown) => {

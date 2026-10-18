@@ -14,6 +14,7 @@ Version: bp5-contracts-0.1 / Date: 2026-10-17。
 |---|---|---|---|
 | 1件：bp-review-0.2 | `reviewResultV2Schema`（src/review/result-schema-v2.ts） | [1件スキーマ](../schemas/best-practice-review-result-v2.schema.json) | [1件例](../examples/bp5-review-result.json) |
 | 集約：bp-mcp-review-0.2 | `aggregateReviewSchema`（src/review/aggregate-schema.ts） | [集約スキーマ](../schemas/best-practice-mcp-review-result.schema.json) | [集約例](../examples/bp5-aggregate-result.json) |
+| 集約：bp-mcp-review-0.3（`selection_mode: "review_targets"`） | `aggregateReviewV3Schema`（同上） | [集約0.3スキーマ](../schemas/best-practice-mcp-review-result-v3.schema.json) | 合成テスト内（tests/review/target-selection.test.ts）。単独の例ファイルは未作成 |
 
 JSON Schemaは構造検証用。時刻・照合・coverage・件数・由来・バイト数などの項目間制約には、必ず対応するランタイム検証器も使う。
 `.parse`/`.safeParse`が入力を検証するだけであり、取得・解析・送信は行わない。
