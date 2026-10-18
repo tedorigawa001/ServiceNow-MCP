@@ -1,7 +1,8 @@
-import { afterEach, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import { ServiceNowClient } from '../../src/servicenow/client.js';
-import { reviewBoundedUpdateSet } from '../../src/review/update-set-adapter.js';
+import { reviewBoundedUpdateSet as unscopedReview } from '../../src/review/update-set-adapter.js';
 import { sourceWorkerFactory } from './fixtures/worker-factory.js';
+import { ReviewTestScope } from './fixtures/review-test-scope.js';
 import { aggregateReviewSchema, aggregateReviewV3Schema, aggregateReviewV3JsonSchema,
   anyAggregateReviewSchema, type AggregateReviewV3 } from '../../src/review/aggregate-schema.js';
 import { AjvJsonSchemaValidator } from '@modelcontextprotocol/sdk/validation/ajv';
@@ -43,7 +44,18 @@ function fixture(rows: Row[]) {
   });
   return fetcher;
 }
-afterEach(() => { vi.restoreAllMocks(); vi.unstubAllGlobals(); vi.unstubAllEnvs(); });
+let reviewScope: ReviewTestScope;
+beforeEach(context => {
+  const owned = new ReviewTestScope(context.signal); reviewScope = owned;
+  context.onTestFinished(() => { Object.assign(context.task.meta, { bp5_review_lifecycle: owned.diagnostics() }); });
+  context.onTestFailed(() => { console.error('BP5_REVIEW_TEST_LIFECYCLE', JSON.stringify(owned.diagnostics())); });
+});
+const reviewBoundedUpdateSet: typeof unscopedReview = (client, raw, options) => reviewScope.review(client, raw, options);
+afterEach(async () => {
+  // Do not restore fetch/clock mocks while an expired test still owns a review.
+  try { await reviewScope.close(); }
+  finally { vi.restoreAllMocks(); vi.unstubAllGlobals(); vi.unstubAllEnvs(); }
+});
 const run = (rows: Row[], extra: Record<string, unknown> = {}, fetcher = fixture(rows)) => reviewBoundedUpdateSet(client(),
   { update_set_sys_id: parent, selection_mode: 'review_targets', ...extra }, { fetch: fetcher, workerFactory: sourceWorkerFactory });
 it('opt-in reaches an update behind 100 unsupported/deleted rows without expanding the candidate window', async () => {
@@ -154,13 +166,15 @@ it.each(['Zurich', 'Unknown release'])('stops before candidate metadata on relea
   expect(aggregateReviewV3Schema.safeParse(outcome.result).success).toBe(true);
   expect(fetcher.mock.calls.some(([url]) => new URL(String(url)).pathname.endsWith('/sys_update_xml'))).toBe(false);
 });
-it('rejects missing fields, duplicates and out-of-order rows without fetching payloads', async () => {
-  for (const rows of [[row(1), row(1)], [row(2), row(1)], [{ ...row(1), type: undefined }]]) {
-    const base = fixture([]);
-    const fetcher: typeof fetch = async (url, init) => new URL(String(url)).pathname.endsWith('/sys_update_xml') ? json(rows) : base(url, init);
-    const outcome = await run([], {}, fetcher);
-    expect(outcome).toMatchObject({ isError: true, error: { code: 'metadata_unavailable' }, result: { assets: [] } });
-  }
+it.each([
+  { kind: 'duplicate', rows: [row(1), row(1)] },
+  { kind: 'out-of-order', rows: [row(2), row(1)] },
+  { kind: 'missing-type', rows: [{ ...row(1), type: undefined }] },
+])('rejects $kind metadata without fetching payloads', async ({ rows }) => {
+  const base = fixture([]);
+  const fetcher: typeof fetch = async (url, init) => new URL(String(url)).pathname.endsWith('/sys_update_xml') ? json(rows) : base(url, init);
+  const outcome = await run([], {}, fetcher);
+  expect(outcome).toMatchObject({ isError: true, error: { code: 'metadata_unavailable' }, result: { assets: [] } });
 });
 it('detects a valid candidate membership change in final observation', async () => {
   const base = fixture([row(1)]); let lists = 0;
@@ -184,7 +198,8 @@ it('advertises and dispatches opt-in through MCP while rejecting non-enumerated 
   expect(validate({ update_set_sys_id: parent, selection_mode: 'review_targets' }).valid).toBe(true);
   vi.stubEnv('MCP_TOOL_PACKAGE', 'full');
   vi.stubGlobal('fetch', fixture([row(1)]));
-  const outcome = await executeTool(client(), 'review_update_set_best_practices', { update_set_sys_id: parent, selection_mode: 'review_targets' });
+  const outcome = await reviewScope.track(signal => executeTool(client(), 'review_update_set_best_practices',
+    { update_set_sys_id: parent, selection_mode: 'review_targets' }, undefined, { signal }));
   expect(outcome).toMatchObject({ isError: false, result: { schema_version: 'bp-mcp-review-0.3', counts: { reviewed: 1 } } });
   expect(getTools().filter(t => t.name === 'review_update_set_best_practices')).toHaveLength(1);
 });
