@@ -4,6 +4,8 @@ import { dirname, parse, resolve } from 'node:path';
 import { execFileSync } from 'node:child_process';
 
 export const MAX_TRUSTED_CONFIG_BYTES = 1024 * 1024;
+/** Additional opt-in restrictions for bounded approval documents; legacy defaults are unchanged. */
+export interface TrustedConfigReadOptions { maxBytes?: number; singleLink?: boolean; uniqueKeys?: boolean }
 export class UntrustedConfigError extends Error {
   readonly code = 'config_untrusted';
   constructor() { super('config_untrusted'); this.name = 'UntrustedConfigError'; }
@@ -41,16 +43,37 @@ function checkAcls(paths: string[]): void {
     for (const path of paths) if (!validateNoGrantingAcl('linux', execFileSync('/usr/bin/getfacl', ['-c', '-n', '-p', '--', path], options))) throw new UntrustedConfigError();
   } else throw new UntrustedConfigError();
 }
-const readJson = (fd: number): unknown => {
-  const buffer = Buffer.alloc(MAX_TRUSTED_CONFIG_BYTES + 1);
+function requireUniqueKeys(text: string) {
+  const stack: Array<{ keys?: Set<string>; nextKey: boolean }> = [];
+  // JSON.parse has already validated syntax. Tokenize strings atomically so punctuation
+  // inside string values cannot be mistaken for object structure.
+  for (const match of text.matchAll(/"(?:[^"\\]|\\.)*"|[{}\[\]:,]/g)) {
+    const token = match[0], frame = stack.at(-1);
+    if (token === '{' || token === '[') {
+      if (stack.length >= 64) throw new UntrustedConfigError();
+      stack.push({ keys: token === '{' ? new Set<string>() : undefined, nextKey: token === '{' });
+    } else if (token === '}' || token === ']') stack.pop();
+    else if (token === ',' && frame?.keys) frame.nextKey = true;
+    else if (token.startsWith('"') && frame?.keys && frame.nextKey) {
+      const key = JSON.parse(token) as string;
+      if (frame.keys.has(key)) throw new UntrustedConfigError();
+      frame.keys.add(key); frame.nextKey = false;
+    }
+  }
+}
+const readJson = (fd: number, maximum = MAX_TRUSTED_CONFIG_BYTES, uniqueKeys = false): unknown => {
+  const buffer = Buffer.alloc(maximum + 1);
   let size = 0;
   while (size < buffer.length) {
     const n = readSync(fd, buffer, size, buffer.length - size, size);
     if (!n) break;
     size += n;
   }
-  if (size > MAX_TRUSTED_CONFIG_BYTES) throw new UntrustedConfigError();
-  return JSON.parse(new TextDecoder('utf-8', { fatal: true }).decode(buffer.subarray(0, size)));
+  if (size > maximum) throw new UntrustedConfigError();
+  const text = new TextDecoder('utf-8', { fatal: true }).decode(buffer.subarray(0, size));
+  const result: unknown = JSON.parse(text);
+  if (uniqueKeys) requireUniqueKeys(text);
+  return result;
 };
 
 /** Legacy connection discovery only: bounded data, explicitly NOT trusted as release evidence. */
@@ -67,16 +90,18 @@ export function readBoundedConfigJson(input: string): unknown {
   finally { if (fd !== undefined) closeSync(fd); }
 }
 
-export function readTrustedConfigJson(input: string): unknown {
+export function readTrustedConfigJson(input: string, options: TrustedConfigReadOptions = {}): unknown {
   let fd: number | undefined;
   try {
     if (process.platform === 'win32' || !process.getuid || !constants.O_NOFOLLOW) throw new UntrustedConfigError();
     const uid = process.getuid();
+    const maximum = options.maxBytes ?? MAX_TRUSTED_CONFIG_BYTES;
+    if (!Number.isInteger(maximum) || maximum < 1 || maximum > MAX_TRUSTED_CONFIG_BYTES) throw new UntrustedConfigError();
     const path = resolve(input);
     const file = lstatSync(path);
     const validate = (s: Stats) => {
       if (!s.isFile() || s.isSymbolicLink() || s.uid !== uid || (s.mode & 0o777) !== 0o600
-        || s.size > MAX_TRUSTED_CONFIG_BYTES) throw new UntrustedConfigError();
+        || s.size > maximum || (options.singleLink && (s.nlink !== 1 || (s.mode & 0o7000) !== 0))) throw new UntrustedConfigError();
     };
     validate(file);
     const parents: Array<{ path: string; stat: Stats }> = [];
@@ -92,7 +117,7 @@ export function readTrustedConfigJson(input: string): unknown {
     fd = openSync(path, constants.O_RDONLY | constants.O_NOFOLLOW | constants.O_NONBLOCK);
     const before = fstatSync(fd); validate(before);
     if (identity(file) !== identity(before)) throw new UntrustedConfigError();
-    const data = readJson(fd);
+    const data = readJson(fd, maximum, options.uniqueKeys);
     const after = fstatSync(fd); validate(after);
     if (identity(before) !== identity(after) || identity(after) !== identity(lstatSync(path))) throw new UntrustedConfigError();
     for (const p of parents) {

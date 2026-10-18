@@ -9,6 +9,21 @@ const supported = process.platform === 'darwin' || (process.platform === 'linux'
 beforeEach(() => { dir = mkdtempSync(join(realpathSync(process.platform === 'linux' ? process.cwd() : tmpdir()), 'sn-trust-')); chmodSync(dir, 0o700); });
 afterEach(() => { vi.restoreAllMocks(); rmSync(dir, { recursive: true, force: true }); });
 describe('trusted operator configuration read', () => {
+  it('keeps the legacy size/duplicate policy unless stricter options are selected', () => {
+    const path = join(dir, 'instances.json');
+    writeFileSync(path, '{"value":1,"value":2}' + ' '.repeat(65536), { mode: 0o600 });
+    if (!supported) { expect(() => readTrustedConfigJson(path)).toThrow('config_untrusted'); return; }
+    expect(readTrustedConfigJson(path)).toEqual({ value: 2 });
+    expect(() => readTrustedConfigJson(path, { maxBytes: 65536 })).toThrow('config_untrusted');
+    expect(() => readTrustedConfigJson(path, { uniqueKeys: true })).toThrow('config_untrusted');
+  });
+  it('does not interpret JSON punctuation in string values as duplicate keys', () => {
+    const path = join(dir, 'instances.json');
+    const value = { text: '{"x":1,"x":2}', nested: [{ x: 1 }, { x: 2 }], escaped: '\\"[,]}' };
+    writeFileSync(path, JSON.stringify(value), { mode: 0o600 });
+    if (supported) expect(readTrustedConfigJson(path, { uniqueKeys: true })).toEqual(value);
+    else expect(() => readTrustedConfigJson(path, { uniqueKeys: true })).toThrow('config_untrusted');
+  });
   it('reads an owner-only regular JSON file without modifying it', () => {
     const path = join(dir, 'instances.json');
     writeFileSync(path, '{"instances":{}}', { mode: 0o600 });

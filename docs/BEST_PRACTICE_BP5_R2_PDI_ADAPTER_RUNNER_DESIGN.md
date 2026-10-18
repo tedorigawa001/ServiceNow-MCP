@@ -1,6 +1,6 @@
 # BP-5 R-2：実PDI OAuthアダプター・runner接続設計
 
-Version: draft-0.4 / Date: 2026-10-18 / Status: 固定HTTP待受・一度限りの開始ページまで内部PoC実装・合成検証。runner未実装、実機/運用は未承認・未検証。
+Version: draft-0.5 / Date: 2026-10-18 / Status: 承認manifestのオフライン読込まで内部PoC実装・合成検証。runner未実装、実機/運用は未承認・未検証。
 
 ## 1. 範囲と現状
 
@@ -37,9 +37,9 @@ runnerは独立した専用Nodeプロセスとして開始し、そのプロセ�
 認可後にtokenを持つ子runnerを起動する構成ではない。解析workerには従来どおりtokenを渡さない。
 
 承認済みの非秘密計画から、origin、専用client識別子、期待利用者sys_id、Update Set ID、許可規則/上限、
-要求scope集合、callback、C方式設定の参照、実行承認の参照を一度だけ読み、検証済みコピーを固定する。
+要求scope集合、callback、C方式設定、実行承認の参照を読み、検証済みコピーを固定する。
 計画の作成/配置も別承認。所有者・書込み権限・サイズ・symlink等は既存の信頼済み設定読込方針を適用し、
-新規manifestの具体的なスキーマ/読込器は後続の合成試験で確定する。任意JS/module参照は許さない。
+具体的なスキーマ/読込器と消費直前の再検証は§13に定義した。任意JS/module参照は許さない。
 client識別子や利用者sys_idは認証秘密でなくても公開ログへ出さない。tokenは計画に含めない。
 
 提案する起動契約：既定のcheck-planはオフラインで形/期限/対象だけを検査し、bindやブラウザー操作もしない。
@@ -246,7 +246,7 @@ ServiceNowで受理/動作したという記録ではない。実機・発行・
   Abortしない。非協調consumerが既にコピーした文字列/参照やOSメモリの完全消去は保証しない。
   session生成・本人確認を経ずにレビューへ進ませない接続試験は§11と接続検証記録を参照。
 - HTTP待受/HTMLは独立したlistener（§12）に実装し、単体adapterには含めない。
-  ブラウザー起動、承認manifest、SIGINT/SIGTERM、R-2/MCP連携、終了票、サーバー側失効は未実装。
+  ブラウザー起動、manifestからのrunner接続、SIGINT/SIGTERM、R-2/MCP連携、終了票、サーバー側失効は未実装。
   特に§4の同一端末code注入対策は、単体交換の成功だけでは成立しない。
 
 ## 11. メモリ内session接続（2026-10-18）
@@ -299,5 +299,61 @@ startはローカルbindだけで、ページ取得も単に認可リンクを�
 
 `completion`は認可/本人確認の完了通知で、レビュー/runner全体の最終結果ではない。
 成功後もsessionを内部保持するため、呼出し元はfinallyで必ずcloseする。tokenのローカル破棄は失効ではない。
-本PoCはHTTPから本人確認までで、listenerからreview/SDKへ進むrunnerの接続、承認manifest、OS signal、
+本PoCはHTTPから本人確認までで、listenerからreview/SDKへ進むrunnerとmanifestの接続、OS signal、
 385秒の全体監督と終了票は未実装。実機の登録/発行/ブラウザー操作を許可するものではない。
+
+## 13. 承認manifestのオフライン契約（2026-10-18）
+
+`src/review/r2-approval-manifest.ts`にstrict Zod schemaとdraft-7 JSON Schema、
+`loadR2ApprovalManifest`を実装した。[合成検証記録](E2E_BEST_PRACTICE_R2_APPROVAL_MANIFEST_SYNTHETIC_2026-10-18.md)を参照。
+これは内部の非秘密入力であり、署名付き承認証明・実行許可・CLIではない。実manifestの作成/配置はしていない。
+
+### 13.1 必須field
+
+すべてのobjectは未知field拒否、既定値なし。sys_idは小文字32桁hex、bindingは小文字64桁hex。
+
+| field | 契約 |
+|---|---|
+| `schema_version` | `bp5-r2-approval-0.1`固定 |
+| `approval` | `reference`（英数字開始・英数字/`._:-`・200文字以内）、ISO UTCの`approved_at/expires_at`。参照だけで人の承認内容は証明しない |
+| `instance_id/instance_binding` | 専用接続IDと`createReviewInstanceBinding(ID, canonical HTTPS origin)`。IDは英小文字開始・小文字/数字/`_-`・64文字以内 |
+| `callback_uri` | `http://127.0.0.1:18765/bp5/oauth/callback`固定 |
+| `plan` | `instanceUrl/clientId/scopes/expectedUserSysId/updateSetSysId/reviewReleaseConfig`。HTTPS originのみ（path/query/userinfo/末尾slashなし）。client IDは印字ASCII 256文字以内 |
+| `plan.scopes` | RFC scope文字集合、各256文字以内、1〜16件、重複なし、空白区切り合計1024文字以内。実PDIでscopeが有効であることは別確認 |
+| `plan.reviewReleaseConfig` | C方式の非秘密snapshotを同じmanifestに埋め込む。別ファイル参照やenv探索はしない。`instance_id`必須、`assertion`は既存契約の任意値 |
+| `review` | `update_set_sys_id/selection_mode/max_records/requested_rule_ids`必須。対象IDはplanと一致。selectionは`bounded_all/review_targets`、件数1〜100、規則は実装済み3件の空でない重複なし集合 |
+
+token・client secret・パスワード・任意query・module/コード・任意endpointは受け付けない。
+JSON Schema単独ではファイル信頼性、cross-field整合性、期限、bindingは検証できず、必ず読込器を通す。
+
+### 13.2 信頼済み読込と期限
+
+- 呼出し元が指定した正規化済み絶対pathのみ。path上限4096文字、NULなし。既定path探索/環境変数/自動作成/権限修復なし。
+- 既存`readTrustedConfigJson`のPOSIX方針を利用する。通常ファイル、実行UID所有、mode 0600、特殊permission bitsなし、
+  hardlink数1、leaf/祖先のsymlink拒否。祖先はrootまたは実行UID所有、group/other書込み不可。
+  ACLは既存の固定コマンドで検査し、付与ACLや検証不能を拒否。Windows/ACL検査不能もfail-closed。
+- `O_NOFOLLOW`で開き、FD/パス/祖先のidentity・stat・ACLを前後照合、finallyでFDを閉じる。
+  UTF-8・64KiB以内の実読取量、JSON構文、全objectの重複キー（Unicode escape同名含む）、構造深度64以内を検査する。
+  既存設定の1MiB上限/重複キー動作は変更せず、この厳格化はmanifest用opt-in。
+- 承認日時は読込時刻以前、有効期限は日時より後。承認期限と、存在するC方式assertionの期限は
+  **検査時刻+385秒より厳密に後**を必須とする。等値も拒否。C方式の将来日時・bindingも既存検証器で確認する。
+- manifestのslot、C設定のslot、接続先bindingを照合する。`assertion`なしは実測のみを要求する入力として許可するが、
+  読込成功をリリース`matched`と扱わない。実測との競合/不明/不一致は従来のrelease gateで停止する。
+
+### 13.3 一度限りの消費・失敗時停止
+
+読込handleはraw getterを持たず、状態/JSON/inspectは`state/hasSnapshot`だけを返す。
+`consume`は内部の信頼済みconsumerにdeep-freezeした計画・review・承認参照・bindingを1回だけ渡す非同期API。
+消費を先に確定してから、同じファイルを再度安全に読み、期限・bindingと読込時以降の時計を検証する。
+正規化したschema結果のSHA-256が初回と違えば`manifest_changed`で停止する（署名ではない）。
+空白だけの変更は許容するが意味の変更を黙って採用しない。ファイル/期限/時計/consumer失敗は固定codeのみ。
+path、値、Zod issue、ファイル例外、consumer例外や戻り値を結果に出さず、失敗後の再消費やfallbackなし。
+
+消費開始時/closeで保有snapshotへの参照を除去し、consumerへ渡す直前にpath/hashも除去する。
+consumerは同期例外・非同期rejectとも固定`manifest_consumer_failed`に変換する。消費後のsnapshotは固定し、
+稼働中にファイル変更を追従する設計ではない。consumer自身の取消/期限/cleanupは後続runnerの責任。
+同一UID/管理者侵害、信頼時計の改変、検査後の全OS競合を完全防止するものではなく、人の承認の真偽も検査しない。
+信頼済みconsumerのコピーやJS/OSメモリの完全消去も保証しない。
+
+runner/listener/SDKへの接続、実行時の個別承認、385秒の全体監督・OS signal・終了票は未実装。
+この読込成功だけではbind・認可・発行・実機操作を始めない。telemetry調査は保留を維持する。

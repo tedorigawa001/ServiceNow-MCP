@@ -133,6 +133,10 @@ runner/OS終了処理はまだ検証していない。G2/G4の実機完了には
 Host/method/body・開始ページ再取得・port競合・中断時の解放を実TCPで確認した。
 外部交換は合成fetchのみ。実ブラウザーの認可やPDI token発行はしておらず、G2/G4の実機完了には数えない。
 
+[承認manifestの合成検証](E2E_BEST_PRACTICE_R2_APPROVAL_MANIFEST_SYNTHETIC_2026-10-18.md)は、
+一時fixtureだけでstrict契約・信頼済み読込・期限/binding・再消費拒否を確認する。
+人の承認照合・実manifest配置・runner接続は未実施。読込成功でG2/G4を完了/実行許可にしない。
+
 各ケースは検証利用者の正常token（P01=L01で得たもの、または承認済みの追加発行）を使う。
 BP-5製品の取得経路（固定GET・3テーブル・bounded上限）を通し、本文・payload・原応答は出力しない。
 

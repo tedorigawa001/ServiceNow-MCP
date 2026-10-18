@@ -239,6 +239,10 @@ dev441827（Australia）の`sys_security_acl`/`sys_security_acl_role`/`sys_user_
 [固定HTTP待受・一度限りの開始ページ](E2E_BEST_PRACTICE_R2_LOOPBACK_SYNTHETIC_2026-10-18.md)は
 外部PDI通信を合成に置換して検証した。実ブラウザーでの認可、登録・token発行の実行許可は別途必要。
 
+[承認manifestの合成検証](E2E_BEST_PRACTICE_R2_APPROVAL_MANIFEST_SYNTHETIC_2026-10-18.md)では、
+非秘密のstrict契約・所有者/権限/symlink・期限/bindingと消費直前の再検証を確認した。
+詳細はrunner設計§13。読込成功は人の承認の証明でも実行許可でもなく、runner接続/実機は未実施。
+
 - 取得後、同じtokenで実行ユーザーのsys_idを読み取り、検証利用者のIDとの一致だけを記録する。
   sys_user一覧の先頭、指定した検証利用者レコードが読めること、UIの表示名では本人性を証明しない。
   固定の現在ユーザー照会または承認済みの本人確認APIを実機で確認する。拒否/不明なら停止。

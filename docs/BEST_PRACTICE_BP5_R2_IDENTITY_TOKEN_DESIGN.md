@@ -11,6 +11,9 @@ Version: draft-0.3 / Date: 2026-10-18 / Status: 内部PoCを実装・合成検�
 同設計のアダプター単体は[合成検証](E2E_BEST_PRACTICE_R2_PDI_OAUTH_SYNTHETIC_2026-10-18.md)済み。
 [session接続と本人確認失敗/別アカウントcode/中断の合成検証](E2E_BEST_PRACTICE_R2_OAUTH_HANDOFF_SYNTHETIC_2026-10-18.md)を追加。
 [固定HTTP待受・開始ページの合成検証](E2E_BEST_PRACTICE_R2_LOOPBACK_SYNTHETIC_2026-10-18.md)も追加した。
+[承認manifestのオフライン読込の合成検証](E2E_BEST_PRACTICE_R2_APPROVAL_MANIFEST_SYNTHETIC_2026-10-18.md)を追加。
+strict契約・ファイル信頼性・385秒の有効余裕・bindingを検査するが、人の承認や本人性を証明せず、
+listener/sessionへまだ接続しない。具体的な契約は上記runner設計§13を参照。
 runner/SDK接続・OS終了処理は未実装で、実機操作やtoken発行を許可しない。
 
 ## 1. 範囲と不変条件
