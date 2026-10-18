@@ -330,7 +330,12 @@ report自体は保存/表示せず呼出し元へ返す。専用entryは固定ex
 
 人向けのready案内・承認・限定終了summaryへの接続案は
 [専用入口の接続設計](BEST_PRACTICE_BP5_R2_LAUNCHER_CONNECTION_DESIGN.md)を参照。
-監督がmanifest本文を読まない境界を維持し、preparedと承認済みsnapshotのdigest結合は未実装の契約変更として扱う。
+監督がmanifest本文を読まない境界を維持し、preparedと承認済みsnapshotのdigest結合は次の追補範囲だけを実装済みとする。
+
+追補：承認付きprepared_v2/run_grant_v2とrunner消費直前のdigest照合を、
+[専用入口設計§10](BEST_PRACTICE_BP5_R2_LAUNCHER_CONNECTION_DESIGN.md)へ内部実装/合成検証した。
+旧prepared/run_grantは従来の内部controller向けだけに維持し、承認付き経路は旧形式へfallbackしない。
+hostの非秘密固定起動flagで版を選び、digestは制御IPCだけに渡す。監督はmanifest本文を読まない。
 
 | field | 値/条件 |
 |---|---|

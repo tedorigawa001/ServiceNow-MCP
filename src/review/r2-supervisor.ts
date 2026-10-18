@@ -22,6 +22,8 @@ export interface R2SupervisorReport {
 }
 
 export interface R2SupervisorOptions {
+  /** Trusted digest from this attempt's offline check + explicit approval, not a tool argument. */
+  approvedDigest?: string;
   /** Trusted OS boundary only. Never accepted via manifest, IPC, argv or environment. */
   spawnHost?: (command: string, args: readonly string[], options: SpawnOptions) => ChildProcess;
   totalTimeoutMs?: number; cleanupTimeoutMs?: number; preflightTimeoutMs?: number; observationTimeoutMs?: number;
@@ -39,13 +41,15 @@ export async function superviseR2Host(path: string, options: R2SupervisorOptions
   const valid = (n: number, max: number) => Number.isInteger(n) && n > 0 && n <= max;
   if (!valid(total, R2_SUPERVISOR_TOTAL_MS) || !valid(cleanup, R2_SUPERVISOR_CLEANUP_MS) || total <= cleanup ||
       !valid(preflight, 5000) || !valid(observation, 1000) || typeof path !== 'string' || !isAbsolute(path) ||
-      path.length > 4096 || path.includes('\0')) { report.terminal_reason = 'invalid_options'; return report; }
+      path.length > 4096 || path.includes('\0') || options.approvedDigest !== undefined &&
+      (typeof options.approvedDigest !== 'string' || !/^[a-f0-9]{64}$/.test(options.approvedDigest))) { report.terminal_reason = 'invalid_options'; return report; }
   if (process.platform === 'win32') { report.terminal_reason = 'unsupported_platform'; return report; }
   if (options.signal?.aborted) { report.terminal_reason = 'cancelled'; return report; }
   const source = import.meta.url.endsWith('.ts');
   const entry = fileURLToPath(new URL(source ? './r2-host-entry.ts' : './r2-host-entry.js', import.meta.url));
   let args: string[];
-  try { args = [...(source ? ['--import', fileURLToPath(import.meta.resolve('tsx'))] : []), entry, path]; }
+  try { args = [...(source ? ['--import', fileURLToPath(import.meta.resolve('tsx'))] : []), entry, path,
+    ...(options.approvedDigest !== undefined ? ['--approval-bound'] : [])]; }
   catch { report.terminal_reason = 'spawn_failed'; return report; }
   const preflightEnd = performance.now() + preflight;
   let child: ChildProcess;
@@ -140,14 +144,18 @@ export async function superviseR2Host(path: string, options: R2SupervisorOptions
         if (performance.now() >= Math.min(end, drainEnd)) { force('deadline_exceeded'); return; }
         phase = 'finished'; send({ type: 'finished_ack' }, () => { ackSent = true; }); return;
       }
-      if (Object.keys(value).join(',') !== 'type') { force('protocol_error'); return; }
-      if (value.type === 'prepared' && phase === 'preflight') {
+      const bound = options.approvedDigest !== undefined;
+      const prepared = bound ? value.type === 'prepared_v2' && Object.keys(value).sort().join(',') === 'digest,type'
+        && value.digest === options.approvedDigest : value.type === 'prepared' && Object.keys(value).join(',') === 'type';
+      if (prepared && phase === 'preflight') {
         end = performance.now() + total; phase = 'running';
         // Arm both independent timers BEFORE authorizing host work.
         clearTimeout(hardTimer); hardTimer = setTimeout(() => force('deadline_exceeded'), total);
         workTimer = setTimeout(() => stop('deadline_exceeded', false), total - cleanup);
-        send({ type: 'run_grant', remaining_ms: Math.max(0, Math.floor(end - performance.now())) });
-      } else if (value.type === 'ready' && phase === 'running' && !ready) {
+        const remaining_ms = Math.max(0, Math.floor(end - performance.now()));
+        send(bound ? { type: 'run_grant_v2', digest: options.approvedDigest, remaining_ms } : { type: 'run_grant', remaining_ms });
+      } else if (Object.keys(value).join(',') !== 'type') { force('protocol_error'); return; }
+      else if (value.type === 'ready' && phase === 'running' && !ready) {
         ready = true;
         try {
           const returned: unknown = options.onReady?.();

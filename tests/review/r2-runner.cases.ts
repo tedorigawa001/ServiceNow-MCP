@@ -11,6 +11,7 @@ import { createReviewInstanceBinding } from '../../src/servicenow/review-release
 import { aggregateReviewSchema, aggregateReviewV3Schema } from '../../src/review/aggregate-schema.js';
 import { runR2ApprovalManifest, R2_RUNNER_TOTAL_MS, R2_RUNNER_CLEANUP_MS, type R2RunnerOptions } from '../../src/review/r2-runner.js';
 import { superviseR2Host } from '../../src/review/r2-supervisor.js';
+import { checkR2PlanOffline } from '../../src/review/r2-plan-check.js';
 
 // Imported by r2-loopback.test.ts: all tests using the fixed port share one sequential file.
 describe('manifest runner integration', () => {
@@ -79,6 +80,24 @@ it('rejects an untrusted manifest offline without binding or contacting an issue
   expect(result).toMatchObject({ ok: false, code: 'manifest_untrusted', cleanup: 'complete',
     tokenMayHaveBeenIssued: false, otherAccountTokenPossible: false });
   expect(fetcher).not.toHaveBeenCalled(); expect(ready).not.toHaveBeenCalled();
+});
+
+it('rejects a snapshot that differs from the approved digest before bind or issuer contact', async () => {
+  const fetcher = vi.fn<typeof fetch>(), ready = vi.fn();
+  const result = await runR2ApprovalManifest(file, { expectedManifestDigest: 'f'.repeat(64), fetch: fetcher, onReady: ready });
+  expect(result).toMatchObject({ ok: false, code: 'manifest_changed', cleanup: 'complete', tokenMayHaveBeenIssued: false });
+  expect(fetcher).not.toHaveBeenCalled(); expect(ready).not.toHaveBeenCalled();
+});
+
+it('binds a matching approved snapshot through the actual fixed bound host and cancels before any authorization', async () => {
+  const checked = await checkR2PlanOffline(file);
+  if (checked.status !== 'offline_valid') throw Error('SYNTHETIC_CHECK_FAILED');
+  const root = new AbortController(); let ready = 0;
+  const result = await superviseR2Host(file, { approvedDigest: checked.digest, signal: root.signal,
+    onReady: () => { ready++; root.abort(); } });
+  expect(ready).toBe(1);
+  expect(result).toMatchObject({ terminal_reason: 'cancelled', process_termination: 'confirmed', cleanup: 'complete',
+    token_issuance: 'not_attempted', runner_receipt: { ok: false, code: 'cancelled', tokenMayHaveBeenIssued: false } });
 });
 
 it('leaves process signal handlers exclusively owned by the host while obeying its AbortSignal', async () => {

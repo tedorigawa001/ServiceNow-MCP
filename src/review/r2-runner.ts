@@ -9,6 +9,8 @@ export type R2CleanupReason = 'completed' | 'cancelled' | 'interrupted' | 'deadl
 export interface R2CleanupNotice { readonly reason: R2CleanupReason; readonly remainingMs: number }
 /** Trusted test/host boundaries only. Not CLI, manifest or MCP arguments. */
 export interface R2RunnerOptions extends R2OAuthConnectionOptions {
+  /** Trusted approval binding; checked against the consumed immutable snapshot before bind. */
+  expectedManifestDigest?: string;
   onReady?: (url: string) => void | Promise<void>;
   totalTimeoutMs?: number; cleanupTimeoutMs?: number;
   signalOwner?: 'runner' | 'host';
@@ -109,6 +111,8 @@ export async function runR2ApprovalManifest(path: string, options: R2RunnerOptio
     if ((options.hostRemainingMs !== undefined && typeof options.hostRemainingMs !== 'function')
       || (options.onCleanupStart !== undefined && typeof options.onCleanupStart !== 'function')) throw new Stopped();
     if (total <= cleanupMs) { code = 'invalid_runner_options'; throw new Stopped(); }
+    if (options.expectedManifestDigest !== undefined && (typeof options.expectedManifestDigest !== 'string'
+      || !/^[a-f0-9]{64}$/.test(options.expectedManifestDigest))) throw new Stopped();
     if (options.signal?.aborted) { stop('cancelled'); throw new Stopped(); }
     const hostObservedAt = observeHostBudget();
     if (hostEnd - hostObservedAt <= cleanupMs) { stop('deadline_exceeded'); throw new Stopped(); }
@@ -116,7 +120,8 @@ export async function runR2ApprovalManifest(path: string, options: R2RunnerOptio
     options.signal?.addEventListener('abort', external, { once: true });
     if (options.signal?.aborted) external();
     if (options.signalOwner !== 'host') { process.on('SIGINT', interrupted); process.on('SIGTERM', interrupted); }
-    const consumed = await manifest.consume(async context => {
+    const consumed = await manifest.consume(async (context, digest) => {
+      if (options.expectedManifestDigest !== undefined && digest !== options.expectedManifestDigest) { code = 'manifest_changed'; return; }
       try {
         const started = observeHostBudget();
         end = Math.min(started + total, hostEnd); workEnd = end - cleanupMs;

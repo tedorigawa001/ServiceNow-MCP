@@ -4,9 +4,14 @@ import { loadR2ApprovalManifest } from './r2-approval-manifest.js';
 import { runR2ApprovalManifest, R2_RUNNER_TOTAL_MS, R2_RUNNER_CLEANUP_MS, type R2RunnerOptions } from './r2-runner.js';
 
 /** Trusted in-process test boundaries, not IPC/manifest/CLI options. */
-export async function startR2Host(path: string, options: R2RunnerOptions = {}): Promise<void> {
+export interface R2HostOptions extends R2RunnerOptions { requireApprovedDigest?: boolean }
+export async function startR2Host(path: string, options: R2HostOptions = {}): Promise<void> {
   options = { ...options };
   if (!isMainThread || process.platform === 'win32' || !process.send || !process.connected) process.exit(10);
+  if (options.requireApprovedDigest !== undefined && typeof options.requireApprovedDigest !== 'boolean') process.exit(10);
+  const bound = options.requireApprovedDigest === true;
+  let prepared = false, preparedDigest: string | undefined;
+  let grantedDigest: string | undefined;
   const total = options.totalTimeoutMs ?? R2_RUNNER_TOTAL_MS;
   const cleanup = options.cleanupTimeoutMs ?? R2_RUNNER_CLEANUP_MS;
   if (!Number.isInteger(total) || total > R2_RUNNER_TOTAL_MS || total <= cleanup ||
@@ -56,9 +61,12 @@ export async function startR2Host(path: string, options: R2RunnerOptions = {}): 
     const size = Buffer.byteLength(JSON.stringify(value)); inboundBytes += size;
     if (size > 1024 || inboundBytes > 512 * 1024) force(10);
     const keys = Object.keys(value).sort().join(',');
-    if (value.type === 'run_grant' && phase === 'prepared' && keys === 'remaining_ms,type' &&
+    const grant = bound ? value.type === 'run_grant_v2' && keys === 'digest,remaining_ms,type' && value.digest === preparedDigest
+      : value.type === 'run_grant' && keys === 'remaining_ms,type';
+    if (grant && prepared && phase === 'prepared' &&
         typeof value.remaining_ms === 'number' && Number.isInteger(value.remaining_ms) &&
         value.remaining_ms > cleanup && value.remaining_ms <= total) {
+      grantedDigest = bound ? preparedDigest : undefined;
       end = performance.now() + value.remaining_ms; phase = 'running'; arm(end); resolveGrant();
     } else if (value.type === 'finished_ack' && phase === 'finished' && keys === 'type') {
       phase = 'closing'; resolveAck();
@@ -70,12 +78,19 @@ export async function startR2Host(path: string, options: R2RunnerOptions = {}): 
   process.on('disconnect', disconnect); process.on('message', message);
   // Only offline preflight before grant; no runner, bind or network. Not a human approval proof.
   timer = setTimeout(() => force(10), 5000);
-  try { loadR2ApprovalManifest(path).close(); } catch { force(10); }
+  let preflight: ReturnType<typeof loadR2ApprovalManifest> | undefined;
+  try {
+    preflight = loadR2ApprovalManifest(path);
+    const checked = await preflight.consume((_context, digest) => { preparedDigest = digest; });
+    if (!checked.ok) force(10);
+  } catch { force(10); }
+  finally { preflight?.close(); }
   if (performance.now() >= preflightEnd) force(10);
-  send({ type: 'prepared' });
+  prepared = true;
+  send(bound ? { type: 'prepared_v2', digest: preparedDigest } : { type: 'prepared' });
   try {
     await granted;
-    const outcome = await runR2ApprovalManifest(path, { ...options, signal: root.signal, signalOwner: 'host',
+    const outcome = await runR2ApprovalManifest(path, { ...options, expectedManifestDigest: grantedDigest, signal: root.signal, signalOwner: 'host',
       hostRemainingMs: () => Math.max(0, Math.min(end, cleanupEnd) - performance.now()),
       onCleanupStart: notice => draining(notice.remainingMs),
       onReady: () => { send({ type: 'ready' }); },

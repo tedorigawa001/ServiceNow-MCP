@@ -27,6 +27,23 @@ function osChild() {
 afterEach(() => { vi.useRealTimers(); vi.restoreAllMocks(); });
 
 describe('secret-free dedicated host supervisor', () => {
+  it('requires a matching versioned prepared digest before granting an approved run', async () => {
+    const child = osChild();
+    const task = superviseR2Host('/nonexistent/synthetic-manifest', { approvedDigest: 'a'.repeat(64), spawnHost: () => child });
+    child.emit('message', { type: 'prepared_v2', digest: 'a'.repeat(64) });
+    expect(child.send).toHaveBeenCalledWith({ type: 'run_grant_v2', digest: 'a'.repeat(64), remaining_ms: expect.any(Number) }, expect.any(Function));
+    child.emit('exit', 10, null); child.emit('close', 10, null); await task;
+  });
+  it.each(['legacy', 'wrong-digest', 'extra'] as const)('never downgrades an approved run for %s prepared messages', async mode => {
+    const child = osChild();
+    const task = superviseR2Host('/nonexistent/synthetic-manifest', { approvedDigest: 'a'.repeat(64), spawnHost: () => child });
+    child.emit('message', mode === 'legacy' ? { type: 'prepared' }
+      : mode === 'wrong-digest' ? { type: 'prepared_v2', digest: 'b'.repeat(64) }
+        : { type: 'prepared_v2', digest: 'a'.repeat(64), extra: 'PRIVATE_VALUE' });
+    expect(child.send).not.toHaveBeenCalled(); expect(child.kill).toHaveBeenCalledExactlyOnceWith('SIGKILL');
+    child.emit('exit', null, 'SIGKILL'); child.emit('close', null, 'SIGKILL');
+    expect(await task).toMatchObject({ terminal_reason: 'protocol_error', token_issuance: 'unknown' });
+  });
   it('observes actual fixed-host exit and close without reading an invalid manifest', async () => {
     const result = await superviseR2Host('/nonexistent/synthetic-manifest');
     expect(result).toMatchObject({ schema_version: 'bp5-r2-host-exit-0.1',
