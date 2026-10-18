@@ -1,6 +1,6 @@
 # BP-5 R-2：専用hostの終了・強制停止設計
 
-Version: draft-0.2 / Date: 2026-10-18 / Status: 設計案。未実装・未試験・実機未承認。
+Version: draft-0.3 / Date: 2026-10-18 / Status: runner接続初段のみ内部実装・合成検証。専用host/監督は未実装・未試験・実機未承認。
 
 ## 1. 範囲と前提
 
@@ -8,7 +8,8 @@ Version: draft-0.2 / Date: 2026-10-18 / Status: 設計案。未実装・未試�
 `runR2ApprovalManifest`はcleanup不成立を報告するが、プロセスを終了しない。
 ここではその外側の**専用Node main process**の責任を定義する。workerや共有MCP serverへexitを追加しない。
 
-telemetry調査・maint担当者への依頼は保留。実装・プロセス起動/kill試験・実機接続・登録作成・token発行・
+telemetry調査・maint担当者への依頼は保留。runner接続初段は§11の範囲だけ実装した。
+専用host/監督の実装・強制kill試験・実機接続・登録作成・token発行・
 アカウント/ロール/ACL/設定変更は行っていない。実manifestも配置していない。
 本設計の記載は、実行・導入・公開CLI追加の承認ではない。
 
@@ -88,8 +89,8 @@ worker terminate Promiseを待たない。main threadが止まっていれば外
 同じOS signalと、それから作ったIPCを2回として数えない。親子へのTTY同時配送を避ける構成を前提にする。
 hostをPID指定で直接停止した場合はhost側で数え、対応する通知を監督が再度の利用者要求と数えない。
 
-現runnerは自身でSIGINT/SIGTERM handlerを登録するため、host handlerをただ重ねる実装はしない。
-後続実装で信頼済み内部optionとしてsignal所有者を選べるようにする案：
+runnerの既定は自身でSIGINT/SIGTERM handlerを登録するため、host handlerをただ重ねる実装はしない。
+信頼済み内部optionによるsignal所有者切替・cleanup通知・残予算は§11に実装した。専用host本体は未接続：
 
 - 既存の直接呼出しはrunner所有を既定のまま維持し、既存テストを変えない。
 - 専用host経由だけhost所有にし、runnerはprocess handlerを追加せず、外部root signalに従う。
@@ -173,7 +174,8 @@ SIGKILL時の実OS終了signalはそのまま別fieldで保持し、hostが71等
 
 ## 9. 後続の合成検証・実装前ゲート
 
-全ケース未実施。実PDIや本物の資格情報は使わず、専用子・合成値・実Worker/loopbackで試験する。
+専用host/監督としてのHSケースは全件未実施。§11のrunner接続初段はその準備の合成検証であり、HS完了とはしない。
+実PDIや本物の資格情報は使わず、専用子・合成値・実Worker/loopbackで試験する。
 
 | ID | 確認する境界 |
 |---|---|
@@ -208,3 +210,41 @@ hostを外部監督へ接続するまで実機認可は開始しない。公開C
 
 本文の実装案は、これらの仕様から行った設計判断であり、実装済み/安全性実証済みという意味ではない。
 OS全体の停止、監督ごとの侵害/停止、core dump/メモリの完全消去、プロセス終了後のServiceNow token失効は保証しない。
+
+## 11. runner接続初段の実装境界（2026-10-18）
+
+[合成検証記録](E2E_BEST_PRACTICE_R2_HOST_CONNECTION_SYNTHETIC_2026-10-18.md)を参照。
+`R2RunnerOptions`に次の信頼済み同一プロセスAPIだけを追加した。CLI/MCP/manifest/envから指定する口はない。
+optionsの値/関数参照は呼出し時にshallow-copyし、外側のoptions書換えで所有者・signal・callbackを替えない。
+
+| option | 契約 |
+|---|---|
+| `signalOwner` | 省略/`runner`は従来どおり自身のSIGINT/TERM handlerを管理。`host`はprocess handlerを一切追加/削除せず、外部AbortSignal必須。不明値はbind前に拒否 |
+| `onCleanupStart` | 同期・一度限りの通知。freezeした`{reason, remainingMs}`だけを渡す。reasonはcompleted/cancelled/interrupted/deadline_exceeded/failed。remainingMsは通知時点の残予算上限（非負整数、最大3,000）で、予約時間の保証ではない |
+| `hostRemainingMs` | hostとrunnerが同じ単調時計を使う同期reader。有限numberを返す。0/負数は予算切れ、NaN/Infinity/非数値/throwは不正。Promiseは待たず拒否し、rejectも処理して秘密を含む未処理例外にしない |
+
+通知は最初の取消し/期限/signalでroot Abortを伝播する前に行う。通常完了/通常失敗はrunnerのfinallyの入口で行う。
+preflight失敗にも1回通知する。これはrunner全体のdraining開始であり、session内の段階ごとの通常cleanup完了通知ではない。
+再入/重複Abort/finallyで再通知しない。通知は資格情報・例外・結果・path/本人IDを渡さず、runner結果にも追加しない。
+callbackはundefinedを返す同期処理に限る。throwやundefined以外の戻り値（Promise含む）は
+`cleanup_notification_failed`とし、成功結果を捨てる。ただしcleanupは続行する。
+不正なPromiseのrejectは捕捉し、未解決Promiseを待たない。生の例外/戻り値を出力しない。
+
+host予算はmanifest読込前から観測し、観測時刻+clamp(remaining, 0, 385,000)の最小値を期限として保持する。
+bind開始時に、runnerの全体期限とこのhost期限の小さい方からcleanup枠を差し引いて作業期限をarmする。
+各await後などの観測で短くなればtimerも短縮し、大きな値が後で返っても期限を延長しない。
+作業開始前にcleanup枠を超える残りがなければbindしない。既存の385秒/3秒の上限を広げず、
+manifest/C方式設定の有効余裕も引き続き385秒超を要求する。
+
+最初のdraining時刻でcleanup期限をmin(全体期限, host期限, 現在時刻+cleanup上限)に固定する。
+通知callback自身が同期的に使った時間、finally到達までの時間もこの枠から消費する。
+finallyでhost予算を再観測してさらに短縮し、起動待ち/closeは残りだけを共有する。新しい3秒を付けない。
+通知が失敗しても資源解放は試み、cleanup不成立の場合は`cleanup_incomplete`を優先して結果を捨てる。
+予算readerが途中で不正になれば`host_budget_invalid`で停止し、cleanup予算も確認不能ならincompleteとする。
+
+readerはpolling監督ではない。await中にhostが**絶対期限をさらに短縮**した場合は、host側で外部signalもAbortする必要がある。
+通常の残秒減少は同じ期限を表す。通知/readerが同期的にevent loopを停止させる場合は中断できず、
+別プロセスの独立監督が必要という留保は変わらない。runnerは終了/kill/fatal handler/IPCを追加していない。
+
+専用bootstrap/host・監督・signal再入力時のforce・終了票IPC/ack・process.exit・fatal処理は未実装。
+§9のHS試験・Node 22.12系での確認・実機承認も未完了で、今回の合成結果から完了を推定しない。

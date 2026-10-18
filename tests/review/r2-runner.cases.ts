@@ -9,7 +9,7 @@ import { createServer } from 'node:net';
 import { getEventListeners } from 'node:events';
 import { createReviewInstanceBinding } from '../../src/servicenow/review-release-config.js';
 import { aggregateReviewSchema, aggregateReviewV3Schema } from '../../src/review/aggregate-schema.js';
-import { runR2ApprovalManifest, R2_RUNNER_TOTAL_MS, R2_RUNNER_CLEANUP_MS } from '../../src/review/r2-runner.js';
+import { runR2ApprovalManifest, R2_RUNNER_TOTAL_MS, R2_RUNNER_CLEANUP_MS, type R2RunnerOptions } from '../../src/review/r2-runner.js';
 
 // Imported by r2-loopback.test.ts: all tests using the fixed port share one sequential file.
 describe('manifest runner integration', () => {
@@ -80,6 +80,184 @@ it('rejects an untrusted manifest offline without binding or contacting an issue
   expect(fetcher).not.toHaveBeenCalled(); expect(ready).not.toHaveBeenCalled();
 });
 
+it('leaves process signal handlers exclusively owned by the host while obeying its AbortSignal', async () => {
+  const root = new AbortController(), fetcher = vi.fn<typeof fetch>();
+  const hostHandler = () => { root.abort(); };
+  process.on('SIGINT', hostHandler); process.on('SIGTERM', hostHandler);
+  const beforeInt = process.listeners('SIGINT'), beforeTerm = process.listeners('SIGTERM');
+  let unchanged = false;
+  try {
+    const result = await runR2ApprovalManifest(file, { signalOwner: 'host', signal: root.signal, fetch: fetcher,
+      onReady: () => {
+        unchanged = process.listeners('SIGINT').length === beforeInt.length && process.listeners('SIGTERM').length === beforeTerm.length;
+        hostHandler();
+      } });
+    expect(unchanged).toBe(true);
+    expect(result).toMatchObject({ ok: false, code: 'cancelled', cleanup: 'complete' });
+    expect(process.listeners('SIGINT')).toEqual(beforeInt); expect(process.listeners('SIGTERM')).toEqual(beforeTerm);
+    expect(fetcher).not.toHaveBeenCalled(); expect(getEventListeners(root.signal, 'abort')).toHaveLength(0);
+  } finally { process.removeListener('SIGINT', hostHandler); process.removeListener('SIGTERM', hostHandler); }
+});
+
+it('notifies cleanup synchronously once at the first cancellation without exposing execution context', async () => {
+  const root = new AbortController(), fetcher = vi.fn<typeof fetch>();
+  const notices: Array<{ reason: string; remainingMs: number }> = [];
+  const task = runR2ApprovalManifest(file, { signalOwner: 'host', signal: root.signal, fetch: fetcher,
+    onCleanupStart: notice => {
+      expect(Object.isFrozen(notice)).toBe(true); expect(Object.keys(notice).sort()).toEqual(['reason', 'remainingMs']);
+      notices.push(notice);
+    } });
+  root.abort(Error('RUNNER_PRIVATE_STOP')); root.abort();
+  expect(notices).toHaveLength(1);
+  expect(notices[0]).toMatchObject({ reason: 'cancelled' });
+  expect(notices[0].remainingMs).toBeGreaterThan(0); expect(notices[0].remainingMs).toBeLessThanOrEqual(3000);
+  expect(await task).toMatchObject({ ok: false, code: 'cancelled', cleanup: 'complete' });
+  expect(notices).toHaveLength(1); expect(JSON.stringify(notices).includes('RUNNER_PRIVATE')).toBe(false);
+  expect(fetcher).not.toHaveBeenCalled();
+});
+
+it('pins the host remaining budget before bind and reserves cleanup inside that same budget', async () => {
+  const root = new AbortController(), fetcher = vi.fn<typeof fetch>();
+  let clock = 100, ready!: () => void, settled = false;
+  const notices: Array<{ reason: string; remainingMs: number }> = [];
+  const began = new Promise<void>(r => { ready = r; });
+  const task = runR2ApprovalManifest(file, { signalOwner: 'host', signal: root.signal, fetch: fetcher,
+    now: () => clock, hostRemainingMs: () => 1300 - clock, cleanupTimeoutMs: 40,
+    onCleanupStart: notice => { notices.push(notice); }, onReady: () => { clock = 1260; ready(); } });
+  void task.then(() => { settled = true; });
+  try {
+    await began; await new Promise<void>(r => setImmediate(r));
+    expect(settled).toBe(true);
+    expect(await task).toMatchObject({ ok: false, code: 'deadline_exceeded', cleanup: 'complete' });
+    expect(notices).toEqual([{ reason: 'deadline_exceeded', remainingMs: 40 }]);
+    expect(fetcher).not.toHaveBeenCalled();
+  } finally { root.abort(); await task; }
+});
+
+it('does not extend a previously observed host deadline when later observations increase', async () => {
+  const root = new AbortController(); let clock = 100, reads = 0;
+  const result = await runR2ApprovalManifest(file, { signalOwner: 'host', signal: root.signal, now: () => clock,
+    hostRemainingMs: () => ++reads === 1 ? 1200 : 999999, cleanupTimeoutMs: 40, fetch: vi.fn<typeof fetch>(),
+    onReady: () => { clock = 1260; } });
+  expect(result).toMatchObject({ ok: false, code: 'deadline_exceeded', cleanup: 'complete' });
+});
+
+it('arms the waiting timer from the host budget rather than the runner default', async () => {
+  vi.useFakeTimers(); const root = new AbortController();
+  let ready!: () => void, settled = false;
+  const began = new Promise<void>(r => { ready = r; });
+  const task = runR2ApprovalManifest(file, { signalOwner: 'host', signal: root.signal, fetch: vi.fn<typeof fetch>(),
+    hostRemainingMs: () => 1200, cleanupTimeoutMs: 40,
+    onReady: () => { ready(); return new Promise<void>(() => {}); } });
+  void task.then(() => { settled = true; });
+  try {
+    await began; await vi.advanceTimersByTimeAsync(1159); expect(settled).toBe(false);
+    await vi.advanceTimersByTimeAsync(1);
+    expect(await task).toMatchObject({ ok: false, code: 'deadline_exceeded', cleanup: 'complete' });
+    expect(vi.getTimerCount()).toBe(0);
+  } finally { root.abort(); await task; }
+});
+
+it('propagates the shrinking host budget and charges synchronous notification time to the same cleanup deadline', async () => {
+  vi.useFakeTimers();
+  const root = new AbortController(); let clock = 100, hostEnd = 10100, settled = false;
+  let release!: () => void, closing!: () => void;
+  const gate = new Promise<void>(r => { release = r; }), began = new Promise<void>(r => { closing = r; });
+  const notices: Array<{ reason: string; remainingMs: number }> = [];
+  const nativeClose = HttpServer.prototype.close;
+  vi.spyOn(HttpServer.prototype, 'close').mockImplementation(function (this: HttpServer, callback?: (error?: Error) => void) {
+    nativeClose.call(this, error => { closing(); void gate.then(() => callback?.(error)); }); return this;
+  });
+  const task = runR2ApprovalManifest(file, { signalOwner: 'host', signal: root.signal, now: () => clock,
+    hostRemainingMs: () => hostEnd - clock, cleanupTimeoutMs: 40, fetch: vi.fn<typeof fetch>(),
+    onCleanupStart: notice => { notices.push(notice); clock += 20; } });
+  void task.then(() => { settled = true; });
+  hostEnd = 130; root.abort();
+  try {
+    expect(notices).toEqual([{ reason: 'cancelled', remainingMs: 30 }]);
+    await began; clock = 129; await vi.advanceTimersByTimeAsync(9); expect(settled).toBe(false);
+    clock = 130; await vi.advanceTimersByTimeAsync(1);
+    expect(await task).toMatchObject({ ok: false, code: 'cleanup_incomplete', cleanup: 'incomplete' });
+    expect(notices).toHaveLength(1); expect(vi.getTimerCount()).toBe(0);
+  } finally { release(); await vi.advanceTimersByTimeAsync(0); await task; }
+});
+
+it.each(['throw', 'promise_reject', 'promise_pending'] as const)('keeps cleanup bounded and diagnostics fixed when the notification returns %s', async kind => {
+  const root = new AbortController(), fetcher = vi.fn<typeof fetch>(); let notified = 0;
+  const result = await runR2ApprovalManifest(file, { signalOwner: 'host', signal: root.signal, fetch: fetcher,
+    onReady: () => { root.abort(); }, onCleanupStart: () => {
+      notified++;
+      if (kind === 'throw') throw Error('RUNNER_PRIVATE_NOTIFICATION');
+      if (kind === 'promise_reject') return Promise.reject(Error('RUNNER_PRIVATE_REJECTION'));
+      return new Promise<void>(() => {});
+    } });
+  expect(result).toMatchObject({ ok: false, code: 'cleanup_notification_failed', cleanup: 'complete' });
+  expect(result).not.toHaveProperty('result'); expect(JSON.stringify(result).includes('RUNNER_PRIVATE')).toBe(false);
+  expect(notified).toBe(1); expect(fetcher).not.toHaveBeenCalled();
+});
+
+it('rejects an asynchronous host budget reader without an unhandled rejection or raw diagnostics', async () => {
+  const fetcher = vi.fn<typeof fetch>();
+  const reader = (() => Promise.reject(Error('RUNNER_PRIVATE_BUDGET'))) as unknown as () => number;
+  expect(await runR2ApprovalManifest(file, { hostRemainingMs: reader, fetch: fetcher }))
+    .toMatchObject({ ok: false, code: 'invalid_runner_options', cleanup: 'complete' });
+  await new Promise<void>(r => setImmediate(r));
+  expect(fetcher).not.toHaveBeenCalled();
+});
+
+it.each([NaN, Infinity, -Infinity])('rejects invalid initial host remaining %s before binding', async remaining => {
+  const ready = vi.fn(), fetcher = vi.fn<typeof fetch>();
+  expect(await runR2ApprovalManifest(file, { hostRemainingMs: () => remaining, onReady: ready, fetch: fetcher }))
+    .toMatchObject({ ok: false, code: 'invalid_runner_options', cleanup: 'complete' });
+  expect(ready).not.toHaveBeenCalled(); expect(fetcher).not.toHaveBeenCalled();
+});
+
+it.each([0, -100, 3000])('rejects exhausted host budget %s including the cleanup reserve before binding', async remaining => {
+  const ready = vi.fn(), fetcher = vi.fn<typeof fetch>();
+  expect(await runR2ApprovalManifest(file, { hostRemainingMs: () => remaining, onReady: ready, fetch: fetcher }))
+    .toMatchObject({ ok: false, code: 'deadline_exceeded', cleanup: 'complete' });
+  expect(ready).not.toHaveBeenCalled(); expect(fetcher).not.toHaveBeenCalled();
+});
+
+it('requires an external signal in host mode and rejects unknown ownership before binding', async () => {
+  for (const signalOwner of ['host', 'other'] as const) {
+    const ready = vi.fn(), fetcher = vi.fn<typeof fetch>();
+    expect(await runR2ApprovalManifest(file, { signalOwner: signalOwner as R2RunnerOptions['signalOwner'], onReady: ready, fetch: fetcher }))
+      .toMatchObject({ ok: false, code: 'invalid_runner_options', cleanup: 'complete' });
+    expect(ready).not.toHaveBeenCalled(); expect(fetcher).not.toHaveBeenCalled();
+  }
+});
+
+it('pins host ownership, signal and notification against caller mutation of the options object', async () => {
+  const root = new AbortController(), other = new AbortController();
+  const beforeInt = process.listeners('SIGINT'), beforeTerm = process.listeners('SIGTERM');
+  const original = vi.fn(), replacement = vi.fn();
+  const options: R2RunnerOptions = { signalOwner: 'host', signal: root.signal, fetch: vi.fn<typeof fetch>(), onCleanupStart: original,
+    onReady: () => { options.signalOwner = 'runner'; options.signal = other.signal; options.onCleanupStart = replacement; root.abort(); } };
+  expect(await runR2ApprovalManifest(file, options)).toMatchObject({ ok: false, code: 'cancelled', cleanup: 'complete' });
+  expect(original).toHaveBeenCalledTimes(1); expect(replacement).not.toHaveBeenCalled();
+  expect(getEventListeners(root.signal, 'abort')).toHaveLength(0); expect(getEventListeners(other.signal, 'abort')).toHaveLength(0);
+  expect(process.listeners('SIGINT')).toEqual(beforeInt); expect(process.listeners('SIGTERM')).toEqual(beforeTerm);
+});
+
+it('stops on a host budget observation failure without exposing the error or contacting the issuer', async () => {
+  let fail = false;
+  const fetcher = vi.fn<typeof fetch>(); const notices: Array<{ reason: string; remainingMs: number }> = [];
+  const result = await runR2ApprovalManifest(file, { hostRemainingMs: () => {
+    if (fail) { fail = false; throw Error('RUNNER_PRIVATE_BUDGET'); } return 10000;
+  }, fetch: fetcher, onReady: () => { fail = true; }, onCleanupStart: notice => { notices.push(notice); } });
+  expect(result).toMatchObject({ ok: false, code: 'host_budget_invalid', cleanup: 'complete' });
+  expect(notices).toHaveLength(1); expect(notices[0].reason).toBe('failed');
+  expect(fetcher).not.toHaveBeenCalled(); expect(JSON.stringify(result).includes('RUNNER_PRIVATE')).toBe(false);
+});
+
+it('discards a completed MCP result if the cleanup notification fails', async () => {
+  const result = await runR2ApprovalManifest(file, { fetch: boundary().fetcher, onReady: authorize,
+    onCleanupStart: () => { throw Error('RUNNER_PRIVATE_NOTIFICATION'); } });
+  expect(result).toMatchObject({ ok: false, code: 'cleanup_notification_failed', cleanup: 'complete', mcpListed: true });
+  expect(result).not.toHaveProperty('result'); expect(JSON.stringify(result).includes('RUNNER_PRIVATE')).toBe(false);
+});
+
 it('waits for cancelled startup and its delayed OS close confirmation before reporting cleanup complete', async () => {
   const root = new AbortController(), fetcher = vi.fn<typeof fetch>(), ready = vi.fn();
   let release!: () => void, closing!: () => void, settled = false;
@@ -126,10 +304,13 @@ it('reports cleanup_incomplete when cancelled startup cannot finish inside the s
     await new Promise<void>(r => port.close(() => r()));
   } finally { release(); await task; }
 });
-it('connects the trusted manifest through callback, identity, SDK list/call and real worker once', async () => {
+it.each(['runner', 'host'] as const)('connects manifest, callback, identity, SDK and worker once with %s signal ownership', async signalOwner => {
   const stdout = vi.spyOn(process.stdout, 'write').mockReturnValue(true), stderr = vi.spyOn(process.stderr, 'write').mockReturnValue(true);
+  const root = new AbortController(); const notices: Array<{ reason: string; remainingMs: number }> = [];
   const { fetcher, paths } = boundary();
-  const result = await runR2ApprovalManifest(file, { fetch: fetcher, onReady: async url => {
+  const started = performance.now();
+  const result = await runR2ApprovalManifest(file, { signalOwner, signal: root.signal, fetch: fetcher,
+    hostRemainingMs: () => 385000 - (performance.now() - started), onCleanupStart: notice => { notices.push(notice); }, onReady: async url => {
     expect(url).toBe('http://127.0.0.1:18765/bp5/start'); await authorize();
   } });
   expect(result.ok).toBe(true); if (!result.ok) throw Error('RUNNER_EXPECTED_SUCCESS');
@@ -142,6 +323,9 @@ it('connects the trusted manifest through callback, identity, SDK list/call and 
   expect(JSON.stringify(result).includes('RUNNER_PRIVATE')).toBe(false);
   for (const needle of secretNeedles) expect(JSON.stringify(result).includes(needle)).toBe(false);
   expect(stdout).not.toHaveBeenCalled(); expect(stderr).not.toHaveBeenCalled();
+  expect(notices).toHaveLength(1); expect(notices[0].reason).toBe('completed');
+  expect(notices[0].remainingMs).toBeGreaterThan(0); expect(notices[0].remainingMs).toBeLessThanOrEqual(3000);
+  expect(getEventListeners(root.signal, 'abort')).toHaveLength(0);
 }, 15000);
 
 it('preserves bounded_all 0.2 results through the same fixed SDK path', async () => {

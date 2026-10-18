@@ -1,6 +1,6 @@
 # BP-5 R-2：実PDI OAuthアダプター・runner接続設計
 
-Version: draft-0.8 / Date: 2026-10-18 / Status: 内部runner接続・起動取消競合を合成検証。専用host終了設計は未実装。公開CLI・実機/運用は未承認・未検証。
+Version: draft-0.9 / Date: 2026-10-18 / Status: 内部runner接続・起動取消競合・host接続初段を合成検証。専用host/監督・公開CLI・実機/運用は未実装または未承認・未検証。
 
 ## 1. 範囲と現状
 
@@ -186,8 +186,8 @@ BP-5開始前は既存sessionの厳密な残り60秒超・C方式の全体期限
 ## 8. 終了signal・破棄・発行済みtokenの扱い
 
 専用hostのcleanup不成立時の強制停止・signal再入力・未捕捉例外と外部監督は、
-[専用host終了設計draft-0.1](BEST_PRACTICE_BP5_R2_HOST_SHUTDOWN_DESIGN.md)へ具体化した。
-設計のみで未実装・未試験。以下のrunner単独の現行動作を変更したものではない。
+[専用host終了設計](BEST_PRACTICE_BP5_R2_HOST_SHUTDOWN_DESIGN.md)へ具体化した。
+host本体/監督は未実装・未試験。signal所有者切替・通知・残予算の接続初段だけは同設計§11に実装・合成検証した。
 
 runner開始時にSIGINT/SIGTERM・予期しない例外を1つのroot停止経路へ集約する設計とする。
 raw例外/stackを標準出力しない。対象はこの専用runnerプロセスだけで、共有アプリへ終了handlerを追加しない。
@@ -427,5 +427,7 @@ runner・worker・MCPへ検査用の秘密を渡さず、getter/logにも出さ�
 
 実機/実token・人の承認照合・公開CLI/非同期uncaught例外の最終exit・失効は未実施/未接続。
 G2/G4・最小権限・実PDI本人性が成立したとは扱わず、telemetry調査も保留を維持する。
-後続のhost/監督への接続で必要なsignal所有者・cleanup開始通知・残予算の伝播は、
-[専用host終了設計§5](BEST_PRACTICE_BP5_R2_HOST_SHUTDOWN_DESIGN.md#5-sigint再入力とhandlerの所有権)の未実装案を参照する。
+host/監督への接続初段としてsignal所有者・cleanup開始通知・残予算の伝播を内部APIへ追加した。
+既定のsignal処理と0.2/0.3/runner終了票は維持する。具体的な契約・未実装部分は
+[専用host終了設計§11](BEST_PRACTICE_BP5_R2_HOST_SHUTDOWN_DESIGN.md#11-runner接続初段の実装境界2026-10-18)、
+[合成検証記録](E2E_BEST_PRACTICE_R2_HOST_CONNECTION_SYNTHETIC_2026-10-18.md)を参照する。
