@@ -328,6 +328,10 @@ spawn失敗のcloseのみはnot_started、通常のcloseのみは終了未確認
 `schema_version='bp5-r2-host-exit-0.1'`。次の小さな固定metadataと、採用条件を満たしたrunner_receiptだけを返す。
 report自体は保存/表示せず呼出し元へ返す。専用entryは固定exit codeだけで終了し、stdoutへJSONを出さない。
 
+人向けのready案内・承認・限定終了summaryへの接続案は
+[専用入口の接続設計](BEST_PRACTICE_BP5_R2_LAUNCHER_CONNECTION_DESIGN.md)を参照。
+監督がmanifest本文を読まない境界を維持し、preparedと承認済みsnapshotのdigest結合は未実装の契約変更として扱う。
+
 | field | 値/条件 |
 |---|---|
 | terminal_reason | completed / review_failed / cancelled / deadline_exceeded / forced_stop / host_failed / cleanup_incomplete / fatal / protocol_error / spawn_failed / preflight_timeout / invalid_options / unsupported_platform / termination_unconfirmed |
