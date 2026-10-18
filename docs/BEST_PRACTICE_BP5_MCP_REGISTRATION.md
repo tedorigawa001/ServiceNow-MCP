@@ -7,6 +7,8 @@ Version: bp5-mcp-registration-0.1 / Date: 2026-10-18。
 以下の登録時点の合成検証結果は履歴として維持する。
 最新の[対象選択PDI E2E](E2E_BEST_PRACTICE_TARGET_SELECTION_2026-10-18.md)は5成功・0スキップ。
 opt-inで既存BR10件へ到達し、省略時の0.2互換性も確認した。Client Scriptの実機正例は未確認。
+後続の[Client Script探索記録](E2E_BEST_PRACTICE_CLIENT_SCRIPT_2026-10-18.md)は候補0件・1理由付きスキップで、
+AU-CL-004の実機評価成功とは扱わない。
 
 ## 1. 公開する範囲
 
