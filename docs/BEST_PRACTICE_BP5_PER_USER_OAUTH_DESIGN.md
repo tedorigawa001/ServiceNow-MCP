@@ -227,11 +227,15 @@ dev441827（Australia）の`sys_security_acl`/`sys_security_acl_role`/`sys_user_
 固定GET候補・安全側停止・同一プロセスの不透明capabilityによる引渡し・終了時の参照破棄は
 [方式R-2本人確認/token引渡し設計](BEST_PRACTICE_BP5_R2_IDENTITY_TOKEN_DESIGN.md)に具体化した。
 内部sessionと同一プロセスMCPは[合成検証済み](E2E_BEST_PRACTICE_R2_IDENTITY_SYNTHETIC_2026-10-18.md)。
-実OAuth交換/runnerとの接続は未実装で、固定GETの対象版/R-2での成立と実機操作の承認は別途必要。
+実認可からrunner/SDKまでの一連の接続は未実装で、固定GETの対象版/R-2での成立と実機操作の承認は別途必要。
 
 実OAuth交換・開始ページ/callback・sessionへの所有権移譲・runnerの終了signal接続は
 [実PDIアダプター/runner設計](BEST_PRACTICE_BP5_R2_PDI_ADAPTER_RUNNER_DESIGN.md)を参照する。
 初期アダプター単体はscope省略を拒否する形で合成検証済み。受理を広げる場合は別途根拠確認/承認が必要。
+
+[adapter→session接続の合成検証](E2E_BEST_PRACTICE_R2_OAUTH_HANDOFF_SYNTHETIC_2026-10-18.md)では
+メモリ内の一度限りの供給と本人確認前のレビュー拒否、別アカウントcodeの交換後停止、期限/中断時の破棄を確認した。
+実認可・HTTP待受・runner/SDK一連の接続は未実装/未実施で、実PDIの権限やscopeを実証したものではない。
 
 - 取得後、同じtokenで実行ユーザーのsys_idを読み取り、検証利用者のIDとの一致だけを記録する。
   sys_user一覧の先頭、指定した検証利用者レコードが読めること、UIの表示名では本人性を証明しない。

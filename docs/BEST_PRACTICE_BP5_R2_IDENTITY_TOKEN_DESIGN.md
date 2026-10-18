@@ -1,14 +1,16 @@
 # BP-5 方式R-2：固定GET本人確認・メモリ内token引渡し
 
-Version: draft-0.2 / Date: 2026-10-18 / Status: 内部PoCを実装・合成検証。実機/運用は未承認・未検証。
+Version: draft-0.3 / Date: 2026-10-18 / Status: 内部PoCを実装・合成検証。実機/運用は未承認・未検証。
 
 [実装・合成検証記録](E2E_BEST_PRACTICE_R2_IDENTITY_SYNTHETIC_2026-10-18.md)を参照。
-交換後の内部session/同一プロセスMCPまでの部分実装で、実OAuth交換・runner/OS終了処理は未接続。
+交換後の内部session/同一プロセスMCPに加え、OAuthアダプターからsessionへの内部接続を合成検証済み。
+実認可・runner/OS終了処理・実PDIは未接続/未検証。
 
 未接続部分の責任分離・交換応答・所有権移譲・開始ページ・OS終了処理は
 [実PDI OAuthアダプター/runner接続設計](BEST_PRACTICE_BP5_R2_PDI_ADAPTER_RUNNER_DESIGN.md)に具体化した。
 同設計のアダプター単体は[合成検証](E2E_BEST_PRACTICE_R2_PDI_OAUTH_SYNTHETIC_2026-10-18.md)済み。
-sessionへの接続・runner/HTTP待受は未実装で、実機操作やtoken発行を許可しない。
+[session接続と本人確認失敗/別アカウントcode/中断の合成検証](E2E_BEST_PRACTICE_R2_OAUTH_HANDOFF_SYNTHETIC_2026-10-18.md)を追加。
+runner/HTTP待受は未実装で、実機操作やtoken発行を許可しない。
 
 ## 1. 範囲と不変条件
 

@@ -1,16 +1,19 @@
 # BP-5 R-2：実PDI OAuthアダプター・runner接続設計
 
-Version: draft-0.2 / Date: 2026-10-18 / Status: アダプター単体を内部PoC実装・合成検証。runner未実装、実機/運用は未承認・未検証。
+Version: draft-0.3 / Date: 2026-10-18 / Status: アダプター→session接続を内部PoC実装・合成検証。runner未実装、実機/運用は未承認・未検証。
 
 ## 1. 範囲と現状
 
 [R-2本人確認/token引渡し設計](BEST_PRACTICE_BP5_R2_IDENTITY_TOKEN_DESIGN.md)の前後を接続する設計案。
 実装済みの`R2ReviewSession`と`createR2ReviewBridge`は交換後のtokenを内部で受け取るが、
-実PDI用OAuth交換の単体境界は`src/review/r2-pdi-oauth.ts`へ実装したが、HTTP callback待受・
-session/runnerとの接続・OS終了signalの処理はまだない。
+実PDI用OAuth交換の単体境界は`src/review/r2-pdi-oauth.ts`へ実装し、
+`src/review/r2-oauth-session.ts`でsessionの生成・本人確認・固定レビューまで接続した。
+HTTP callback待受・runner/SDKとの一連の接続・OS終了signalの処理はまだない。
 [40件の合成検証](E2E_BEST_PRACTICE_R2_IDENTITY_SYNTHETIC_2026-10-18.md)を実認証の証拠にはしない。
 
 単体実装の範囲と結果は[合成検証記録](E2E_BEST_PRACTICE_R2_PDI_OAUTH_SYNTHETIC_2026-10-18.md)を参照。
+[session接続の合成検証](E2E_BEST_PRACTICE_R2_OAUTH_HANDOFF_SYNTHETIC_2026-10-18.md)では
+別アカウントcodeの交換後も本人確認で停止することを確認。実本人性の検証ではない。
 runner/設定ファイルを作らず、PDI接続・認可・実token発行・
 アカウント/ロール/ACL/登録/設定変更はしていない。telemetry調査・maint担当者への依頼は保留を維持する。
 共有REST API Auth Scope/API Access Policyを変更せず、既存service-accountや旧CLIへ代替しない。
@@ -199,8 +202,8 @@ runnerは本人IDや対象を出力・自動操作しない）。
 
 ## 9. 実装前に確定する契約と合成試験
 
-アダプター単体だけを実装・合成検証済み。以下のうち開始ページ/HTTP待受/manifest読込、
-sessionへの所有権移譲・runner/SDK接続・終了プロセス試験は未実施のまま。
+アダプター単体とsessionへの所有権移譲・本人確認を実装・合成検証済み。
+以下のうち開始ページ/HTTP待受/manifest読込、runner/SDK接続・終了プロセス試験は未実施のまま。
 
 - 信頼済みmanifestスキーマ、開始ページ/callbackの制約、追加OAuthフィールドallowlist、scopeの字句検査。
 - 開始ページの2回目以降の取得が固定エラーで、認可リンクを再表示しない。1回目を先取りされた場合に停止する。
@@ -238,6 +241,29 @@ ServiceNowで受理/動作したという記録ではない。実機・発行・
   callbackの戻り値は公開しない。成功/失敗/取消/期限で参照とtimer/購読を除去し、公開結果は固定理由のみ。
 - adapter内部のAbortSignalをsessionへ渡さない。所有権移譲成功時のadapter cleanupでrunnerのroot signalを
   Abortしない。非協調consumerが既にコピーした文字列/参照やOSメモリの完全消去は保証しない。
-  session生成・本人確認を経ずにレビューへ進ませない接続試験は次工程。
+  session生成・本人確認を経ずにレビューへ進ませない接続試験は§11と接続検証記録を参照。
 - HTTP待受、HTML、ブラウザー起動、承認manifest、SIGINT/SIGTERM、R-2/MCP連携、終了票、
   サーバー側失効は未実装。特に§4の同一端末code注入対策は、単体交換の成功だけでは成立しない。
+
+## 11. メモリ内session接続（2026-10-18）
+
+内部の`R2OAuthSessionConnection`がadapter/session/permitを所有する。開始時に計画をコピーし、
+同じ固定origin・client・期待利用者・Update Set・C方式設定を使う。入力でtokenやsessionを供給する口はない。
+tokenの一度限りのconsumerではsession生成だけを行い、adapterの成功cleanup後に固定GET本人確認を実施。
+adapterの内部AbortSignalはsessionへ渡さず、接続層の独立したroot signalを共有する。
+
+`exchangeAndVerify`の成功は`{ok:true}`だけで、token/session/permitを返さない。
+本人確認成功後だけ内部permitを保存し、`review`が1回消費する。取得・解析・0.2/0.3契約は既存sessionを使う。
+接続層のreviewは内部executorへの直接接続で、SDK list/callやOS runnerの実装ではない。
+本人確認失敗・認可失敗・期限・取消は安全側停止し、token・permit・timer・外部Abort購読を破棄する。
+認可待ちは最大300秒、交換/本人確認/レビューは既存の段階上限を維持する。385秒のrunner監督は未実装。
+
+状態/JSON/inspectにはphase・hasCredentialと次のboolだけを出す。終了票/公開JSONへの追加ではない。
+
+- `tokenMayHaveBeenIssued`：token POSTを開始した時点でtrue。通信結果不明/取消/不正応答を「未発行」としない保守的な記録。
+- `otherAccountTokenPossible`：固定GETが期待IDと不一致だったときtrue。別アカウントのtokenの可能性を残し、
+  自動失効・新規認可・別資格情報への切替はしない。
+
+この接続試験は正しいstate/S256を持つ別アカウントcodeの交換成立を模し、本人確認で止める。
+開始ページの一度限り表示・同一端末の先取り・HTTP Host検査は未実装であり、防御全体の完了とは扱わない。
+JS/HTTP実装のコピーやOSメモリの完全消去、サーバーtoken失効は保証しない。

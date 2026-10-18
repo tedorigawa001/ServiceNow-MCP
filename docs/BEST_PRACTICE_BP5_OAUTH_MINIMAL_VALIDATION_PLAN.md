@@ -125,6 +125,10 @@ R01の固定GET候補と、失敗時停止・メモリ内token引渡し・秘密
 固定HTTPS交換・S256・応答検証のみで、実際の待受/認可/token発行/本人確認/runner接続は未実施。
 この結果からG2/G4や実機ケースの完了・実行許可を推定しない。
 
+[adapter→session接続の合成検証](E2E_BEST_PRACTICE_R2_OAUTH_HANDOFF_SYNTHETIC_2026-10-18.md)も追加した。
+本人不一致の停止後にtoken発行済みの可能性を残すことを含むが、本人の実token・実ACL・HTTP待受・
+runner/OS終了処理はまだ検証していない。G2/G4の実機完了には数えない。
+
 各ケースは検証利用者の正常token（P01=L01で得たもの、または承認済みの追加発行）を使う。
 BP-5製品の取得経路（固定GET・3テーブル・bounded上限）を通し、本文・payload・原応答は出力しない。
 
