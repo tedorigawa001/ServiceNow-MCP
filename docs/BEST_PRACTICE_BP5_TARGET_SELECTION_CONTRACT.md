@@ -1,10 +1,12 @@
 # BP-5：opt-in候補選択の公式仕様照合と次版JSON契約案
 
 Version: bp5-target-contract-0.2 / Date: 2026-10-18。
-Status: **案A・opt-in方式と次版契約を実装。新モードの実機E2Eは未実施**。
+Status: **案A・opt-in方式と次版契約を実装。PDIのBR解析・0.3 JSON・省略時0.2を確認**。
 [対象選択設計](BEST_PRACTICE_BP5_TARGET_SELECTION_DESIGN.md)の契約を定義し、実行結果は実装記録へ分離する。
 公式資料の照合後、[実装・合成検証](BEST_PRACTICE_BP5_TARGET_SELECTION_IMPLEMENTATION.md)へ接続した。
 §6.1の既存metadata照会は新モードのE2Eとは区別する。規則カード・人手品質の承認状態は変更しない。
+後続の[対象選択E2E記録](E2E_BEST_PRACTICE_TARGET_SELECTION_2026-10-18.md)は5成功・0スキップ。
+Client Scriptの実機正例と拒否/容量/期限の実機境界は未確認。
 
 ## 1. 公式資料と確認範囲
 

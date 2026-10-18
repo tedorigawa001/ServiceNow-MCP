@@ -14,8 +14,8 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 ### Added
 
-- Opt-in `selection_mode=review_targets` for best-practice review: fixed update/name candidate selection and a versioned 0.3 aggregate with explicit incomplete-inventory warnings. Omitted/`bounded_all` retains 0.2 behavior; record, receive and 60-second budgets are unchanged. New-mode validation is synthetic only, not PDI E2E.
-- Read-only PoC MCP tool `review_update_set_best_practices` in `full` and `platform_developer` (503 tools total). Strict sys_id/rule/record-budget inputs, session-pinned credentials, bounded payload-only analysis, source-free JSON, fixed errors and MCP cancellation propagation. Australia and three rules only; rules and independent human quality evaluation are unapproved, and live payload-analysis E2E remains pending. Existing tools retain their behavior.
+- Opt-in `selection_mode=review_targets` for best-practice review: fixed update/name candidate selection and a versioned 0.3 aggregate with explicit incomplete-inventory warnings. Omitted/`bounded_all` retains 0.2 behavior; record, receive and 60-second budgets are unchanged. Synthetic tests and read-only PDI E2E confirm BR payload-analysis reachability; Client Script live cases remain pending.
+- Read-only PoC MCP tool `review_update_set_best_practices` in `full` and `platform_developer` (503 tools total). Strict sys_id/rule/record-budget inputs, session-pinned credentials, bounded payload-only analysis, source-free JSON, fixed errors and MCP cancellation propagation. Australia and three rules only; rules and independent human quality evaluation are unapproved. Existing tools retain their behavior.
 - Internal 50/55-second acquisition/verification cutoffs retain analyzed results and label unprocessed rows before the unchanged 60-second hard deadline. Hard deadline, cancellation and internal contract failures still return fixed errors without partial results.
 
 ### Tests
@@ -23,6 +23,7 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 - Verify the actual npm tarball in an isolated production-only installation: the fixed JavaScript worker must parse and aggregate synthetic input without tsx, TypeScript or Vitest. Run with `npm run test:pack`; the same check runs before publication.
 - Synthetic server/router tests and in-memory MCP SDK calls cover registration, strict JSON/runtime input validation, client/credential separation, fixed diagnostics, partial/error flags and cancellation. The packaged tool is also called through the compiled server handlers using synthetic settings/HTTP only.
 - Read-only PDI review E2E: two bounded collection/aggregation cases passed; one payload-analysis case explicitly skipped because eligible BR updates were outside the first 100 metadata rows. Results remain partial with truncation and incomplete-analysis warnings; no code or record writes. See `docs/E2E_BEST_PRACTICE_REVIEW_2026-10-18.md`.
+- Follow-up target-selection PDI E2E: all five checks passed without skips. Opt-in 0.3 reviewed ten existing BRs; omitted-mode 0.2 behavior remained compatible. Code was not displayed, and no records were written. See `docs/E2E_BEST_PRACTICE_TARGET_SELECTION_2026-10-18.md` for limitations and untested cases.
 
 ## [1.15.0] — 2026-10-17
 

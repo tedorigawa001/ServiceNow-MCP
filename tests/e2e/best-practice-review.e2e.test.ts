@@ -4,7 +4,7 @@ import { z } from 'zod';
 import { e2eDescribe, getE2EClient } from './helpers.js';
 import { instanceManager } from '../../src/servicenow/instances.js';
 import { handleCallTool, handleListTools } from '../../src/server.js';
-import { aggregateReviewSchema, type AggregateReview } from '../../src/review/aggregate-schema.js';
+import { anyAggregateReviewSchema, type AnyAggregateReview } from '../../src/review/aggregate-schema.js';
 
 const name = 'review_update_set_best_practices';
 const id = z.string().regex(/^[a-f0-9]{32}$/);
@@ -16,10 +16,11 @@ e2eDescribe('E2E – Best-practice MCP review (PDI read-only, no source output)'
   const requests: Record<string, number> = {};
   let selected: string | undefined, blocked = 0, host: string;
   const context = instanceManager.createContext();
-  const results: AggregateReview[] = [];
+  const results: AnyAggregateReview[] = [];
   beforeAll(async () => {
     host = new URL(context.getCurrentUrl()).host;
     if (!/^dev\d+\.service-now\.com$/.test(host)) throw Error('PDI_REQUIRED');
+    if (process.env.BP5_E2E_EXPECTED_HOST && host !== process.env.BP5_E2E_EXPECTED_HOST) throw Error('PDI_HOST_MISMATCH');
     globalThis.fetch = async (url, init = {}) => {
       const u = new URL(String(url)), method = init.method ?? 'GET';
       const table = u.pathname.split('/')[4];
@@ -52,11 +53,14 @@ e2eDescribe('E2E – Best-practice MCP review (PDI read-only, no source output)'
     globalThis.fetch = originalFetch;
     console.log('BP5_E2E_REQUESTS ' + JSON.stringify({ host, requests, blocked, source_printed: false, writes_performed: false }));
   });
-  for (const mode of ['default20', 'max100'] as const) it(`checks bounded collection of an existing Update Set with ${mode} and returns source-free validated JSON`, async ctx => {
+  for (const mode of ['default20', 'max100', 'targets20', 'targets100'] as const) it(`checks bounded collection of an existing Update Set with ${mode} and returns source-free validated JSON`, async ctx => {
     ctx.skip(!selected, 'data missing: no existing Update Set with visible BR/Client Script updates in the bounded sample');
+    const optIn = mode.startsWith('targets');
+    const maxRecords = mode.endsWith('100') ? 100 : 20;
     expect((await handleListTools()).tools.filter(tool => tool.name === name)).toHaveLength(1);
     const response = await handleCallTool({ params: { name, arguments: {
-      update_set_sys_id: selected!, ...(mode === 'max100' ? { max_records: 100 } : {}),
+      update_set_sys_id: selected!, ...(maxRecords === 100 ? { max_records: 100 } : {}),
+      ...(optIn ? { selection_mode: 'review_targets' } : {}),
     } } }, context);
     const parsed: unknown = JSON.parse(response.content[0].text);
     if (response.isError) {
@@ -65,15 +69,21 @@ e2eDescribe('E2E – Best-practice MCP review (PDI read-only, no source output)'
       console.log('BP5_E2E_FAILURE ' + JSON.stringify({ mode, error: error.success ? error.data.error : { code: 'INVALID_TOOL_FAILURE' } }));
       throw Error('READ_ONLY_REVIEW_FAILED');
     }
-    const validated = aggregateReviewSchema.safeParse(parsed);
+    const validated = anyAggregateReviewSchema.safeParse(parsed);
     expect(validated.success, 'aggregate JSON contract must pass without displaying the response').toBe(true);
     if (!validated.success) throw Error('INVALID_REVIEW_CONTRACT');
     const result = validated.data;
     const findings = result.assets.flatMap(asset => asset.state === 'reviewed' ? asset.result.findings : []);
-    console.log('BP5_E2E_SUMMARY ' + JSON.stringify({ mode, update_set_sys_id: selected, status: result.status,
+    const reviewed = result.assets.flatMap(asset => asset.state === 'reviewed' ? [asset.result] : []);
+    console.log('BP5_E2E_SUMMARY ' + JSON.stringify({ mode, schema_version: result.schema_version, update_set_sys_id: selected, status: result.status,
+      ...(result.schema_version === 'bp-mcp-review-0.3' ? { selection: result.selection } : {}),
       release: { source: result.instance_release.source, resolution_status: result.instance_release.resolution_status, family: result.instance_release.family },
       release_match: result.release_match, principal: result.principal, collection: result.collection, counts: result.counts,
       consistency: result.consistency, coverage: result.coverage,
+      duration_ms: Date.parse(result.ended_at) - Date.parse(result.started_at), mcp_response_bytes: Buffer.byteLength(JSON.stringify(response)),
+      reviewed_by_asset_type: tally(reviewed.map(r => r.target.asset_type)),
+      evaluated_rules_by_asset: tally(reviewed.flatMap(r => r.coverage.evaluated_rule_ids)),
+      skipped_rules_by_reason: tally(reviewed.flatMap(r => r.coverage.skipped_rules.map(s => `${s.rule_id}:${s.reason}`))),
       findings_by_rule: tally(findings.map(finding => finding.rule_id)),
       not_applicable_by_reason: tally(result.assets.filter(asset => asset.state === 'not_applicable').map(asset => asset.reason)),
       skipped_deleted_by_reason: tally(result.assets.filter(asset => asset.state === 'skipped_deleted').map(asset => asset.reason)),
@@ -81,21 +91,37 @@ e2eDescribe('E2E – Best-practice MCP review (PDI read-only, no source output)'
       unprocessed_by_reason: tally(result.assets.filter(asset => asset.state === 'not_processed').map(asset => asset.reason)),
       limitations: result.limitations, errors: result.errors.map(error => ({ stage: error.stage, code: error.code })) }));
     expect(result.code_return_mode).toBe('none'); expect(result.poc_only).toBe(true);
+    expect(result.schema_version).toBe(optIn ? 'bp-mcp-review-0.3' : 'bp-mcp-review-0.2');
     expect(result.status).toBe('partial'); expect(result.release_match, 'this PDI should have supported release evidence').toBe('matched');
     expect(result.limitations).toContain('source_approval_pending');
     expect(result.collection.selected, 'this collection check requires existing visible metadata, not an empty success').toBeGreaterThan(0);
     expect(Buffer.byteLength(JSON.stringify(response))).toBeLessThanOrEqual(262144);
+    expect(result.collection.selected).toBeLessThanOrEqual(maxRecords);
+    expect(result.collection.metadata_seen).toBeLessThanOrEqual(maxRecords + 1);
+    expect(Date.parse(result.ended_at) - Date.parse(result.started_at)).toBeLessThanOrEqual(60000);
     expect(blocked).toBe(0);
+    if (optIn) {
+      expect(result.counts.reviewed, 'existing target updates must reach payload analysis in opt-in mode').toBeGreaterThan(0);
+      expect(result.counts.skipped_deleted).toBe(0);
+      if (result.schema_version !== 'bp-mcp-review-0.3') throw Error('EXPECTED_V3');
+      expect(result.coverage.candidate_inventory_complete).toBe(false);
+      expect(result.coverage.update_set_inventory_complete).toBe(false);
+      expect(result.selection.filter_version).toBe('target-prefix-0.1');
+      expect(result.selection.excluded_counts.deleted_assets).toBeNull();
+    } else expect('selection' in result).toBe(false);
     if (results.length) {
       expect(result.target.instance_binding).toBe(results[0].target.instance_binding);
-      expect(result.collection.selected).toBeGreaterThanOrEqual(results[0].collection.selected);
+      expect(result.instance_release.family).toBe(results[0].instance_release.family);
+      const sameVersion = results.find(r => r.schema_version === result.schema_version);
+      if (sameVersion) expect(result.collection.selected).toBeGreaterThanOrEqual(sameVersion.collection.selected);
     }
     results.push(result);
   }, 75000);
-  it('exercises payload analysis only if the bounded selected slice contains eligible existing assets', ctx => {
+  it('reaches real payload analysis through opt-in without treating the legacy empty slice as reviewed', ctx => {
     ctx.skip(!selected, 'data missing: no candidate Update Set in the bounded discovery');
-    ctx.skip(!requests['GET sys_update_xml_payload'],
-      'data outside bounded selection: no payload-eligible BR/Client Script in the first 100 metadata rows; payload analysis not exercised');
-    expect(results.some(result => result.counts.reviewed > 0), 'attempted payloads must not all fail unnoticed').toBe(true);
+    expect(requests['GET sys_update_xml_payload'] ?? 0, 'opt-in must retrieve existing target payloads').toBeGreaterThan(0);
+    expect(results.filter(result => result.schema_version === 'bp-mcp-review-0.3').some(result => result.counts.reviewed > 0),
+      'opt-in payloads must not all fail unnoticed').toBe(true);
+    expect(results.filter(result => result.schema_version === 'bp-mcp-review-0.2')).toHaveLength(2);
   });
 });

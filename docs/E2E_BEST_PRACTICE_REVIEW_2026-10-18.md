@@ -1,5 +1,9 @@
 # BP-5：PDI読み取り専用E2E（2026-10-18）
 
+本書はopt-in実装前の履歴。[後続の対象選択E2E](E2E_BEST_PRACTICE_TARGET_SELECTION_2026-10-18.md)では
+省略時の0.2互換性とopt-inによる0.3解析到達を5成功・0スキップで確認した。
+以下の当時の未到達・スキップ記録はそのまま残す。
+
 ## 結論
 
 `dev441827.service-now.com`（Australia）の既存Update Setに対し、登録済み

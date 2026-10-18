@@ -29,7 +29,7 @@ Claude・Cursor・VS Code などの AI ツールから、ServiceNow のインシ
 
 ### 開発版（未リリース）
 
-- 読み取り専用PoC `review_update_set_best_practices` を登録。AustraliaのUpdate Set payloadを対象に、3規則の候補と公式根拠を本文なしのJSONで返します。人による規則承認・独立品質評価は未完了です。[PDIでは取得/集約2件成功、payload解析1件スキップ](docs/E2E_BEST_PRACTICE_REVIEW_2026-10-18.md)（対象が先頭100行の外）。後続で[opt-in候補選択](docs/BEST_PRACTICE_BP5_TARGET_SELECTION_IMPLEMENTATION.md)を追加。BR/Client Scriptの規則を評価するときは`selection_mode=review_targets`を明示し、0.3 JSONの制限・取得範囲を確認してください。省略時は0.2互換、件数・受信量・全体60秒の上限は不変です（新モードは合成検証のみ）。「安全」「違反確定」を意味しません。詳細は[利用例・制限](docs/BEST_PRACTICE_BP5_MCP_REGISTRATION.md)。
+- 読み取り専用PoC `review_update_set_best_practices` を登録。AustraliaのUpdate Set payloadを対象に、3規則の候補と公式根拠を本文なしのJSONで返します。BR/Client Scriptの規則を評価するときは`selection_mode=review_targets`を明示し、0.3 JSONの制限・取得範囲を確認してください。[PDI対象選択E2Eは5成功・0スキップ](docs/E2E_BEST_PRACTICE_TARGET_SELECTION_2026-10-18.md)：既存BR10件への解析到達と省略時の0.2互換性を確認しました。件数・受信量・全体60秒の上限は不変です。Client Scriptの実機正例、人による規則承認・独立品質評価は未確認で、「安全」「違反確定」を意味しません。詳細は[利用例・制限](docs/BEST_PRACTICE_BP5_MCP_REGISTRATION.md)。
 
 ### v1.13 ハイライト
 
