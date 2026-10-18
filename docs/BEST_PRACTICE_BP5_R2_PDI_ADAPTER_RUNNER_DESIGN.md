@@ -1,16 +1,18 @@
 # BP-5 R-2：実PDI OAuthアダプター・runner接続設計
 
-Version: draft-0.1 / Date: 2026-10-18 / Status: 未承認・未実装・実機未検証。
+Version: draft-0.2 / Date: 2026-10-18 / Status: アダプター単体を内部PoC実装・合成検証。runner未実装、実機/運用は未承認・未検証。
 
 ## 1. 範囲と現状
 
 [R-2本人確認/token引渡し設計](BEST_PRACTICE_BP5_R2_IDENTITY_TOKEN_DESIGN.md)の前後を接続する設計案。
 実装済みの`R2ReviewSession`と`createR2ReviewBridge`は交換後のtokenを内部で受け取るが、
-実PDI用OAuth交換・callbackとの接続・OS終了signalの処理はまだない。
+実PDI用OAuth交換の単体境界は`src/review/r2-pdi-oauth.ts`へ実装したが、HTTP callback待受・
+session/runnerとの接続・OS終了signalの処理はまだない。
 [40件の合成検証](E2E_BEST_PRACTICE_R2_IDENTITY_SYNTHETIC_2026-10-18.md)を実認証の証拠にはしない。
 
-本書はMD上の設計のみ。コード/runner/設定ファイルを作らず、PDI接続・認可・token発行・
-アカウント/ロール/ACL/登録/設定変更はしない。telemetry調査・maint担当者への依頼は保留を維持する。
+単体実装の範囲と結果は[合成検証記録](E2E_BEST_PRACTICE_R2_PDI_OAUTH_SYNTHETIC_2026-10-18.md)を参照。
+runner/設定ファイルを作らず、PDI接続・認可・実token発行・
+アカウント/ロール/ACL/登録/設定変更はしていない。telemetry調査・maint担当者への依頼は保留を維持する。
 共有REST API Auth Scope/API Access Policyを変更せず、既存service-accountや旧CLIへ代替しない。
 
 R-2コードは現在npm梱包から除外されている。runnerも初期段階はリポジトリ内の未公開PoCとし、
@@ -197,7 +199,8 @@ runnerは本人IDや対象を出力・自動操作しない）。
 
 ## 9. 実装前に確定する契約と合成試験
 
-未実施。実装する順序は、アダプター単体→所有権移譲→runner/SDK接続→終了プロセス試験とする。
+アダプター単体だけを実装・合成検証済み。以下のうち開始ページ/HTTP待受/manifest読込、
+sessionへの所有権移譲・runner/SDK接続・終了プロセス試験は未実施のまま。
 
 - 信頼済みmanifestスキーマ、開始ページ/callbackの制約、追加OAuthフィールドallowlist、scopeの字句検査。
 - 開始ページの2回目以降の取得が固定エラーで、認可リンクを再表示しない。1回目を先取りされた場合に停止する。
@@ -215,3 +218,26 @@ runnerは本人IDや対象を出力・自動操作しない）。
 根拠・実機留保は[専用OAuth設計§9](BEST_PRACTICE_BP5_PER_USER_OAUTH_DESIGN.md)に従う。
 scope省略、G0との互換性、R-2の本人確認GET、開始ページ、385秒/3秒の上限は本PoCの設計判断であり、
 ServiceNowで受理/動作したという記録ではない。実機・発行・設定作成は本計画の実装承認とも分けて扱う。
+
+## 10. 単体実装の具体的な境界（2026-10-18）
+
+- `R2PdiOAuthAdapter`は信頼済み計画由来のcanonical HTTPS origin・client ID・scope集合をコピーして固定。
+  呼出し単位でendpoint/redirect URIを変更できず、生成時はネットワーク/待受/ファイルアクセスなし。
+- `withAuthorizationRequest`は信頼済み内部consumerへ認可URLを1回だけ渡す。公開getterなし。
+  state/verifierはそれぞれ32 random bytes、S256固定。未実装の開始ページやHTTPアクセス制御を代替しない。
+- `exchangeCallback`は固定pathのGET request-targetを検証する単体境界で、Host/method/body/raw headerの
+  検査は将来のHTTP listenerの責任。URL文字列を受け取れることを手動code入力や実認可の許可と扱わない。
+- 交換は固定POST 1回、redirect拒否、cookie/secretなし。10秒・解凍後64KiB、Abort競合による非協調処理の停止。
+  Content-Lengthだけに頼らず実chunkを数える。失敗/中断後の再交換・遅延成功からの復活なし。
+- JSONは重複キー（エスケープ同名も含む）・不正UTF-8を拒否。許可fieldは
+  `access_token/token_type/expires_in/scope/refresh_token`だけで、値は所定のscalar型/上限に限定する。
+  refreshは存在する場合だけtoken文字集合/8192文字上限を確認して捨て、利用/引渡し/更新しない。
+  scope省略は拒否、明示値は順序に依存しない厳密な集合一致。未知fieldやerror混在も拒否する。
+- `consumeToken`は信頼済み内部consumerに`bearerToken/expiresInSeconds/issuedAt`だけを1回渡す。
+  issuedAtは交換開始の単調時刻、寿命は5秒の余裕を差し引く。残り寿命のreview開始ゲートは既存sessionの責任。
+  callbackの戻り値は公開しない。成功/失敗/取消/期限で参照とtimer/購読を除去し、公開結果は固定理由のみ。
+- adapter内部のAbortSignalをsessionへ渡さない。所有権移譲成功時のadapter cleanupでrunnerのroot signalを
+  Abortしない。非協調consumerが既にコピーした文字列/参照やOSメモリの完全消去は保証しない。
+  session生成・本人確認を経ずにレビューへ進ませない接続試験は次工程。
+- HTTP待受、HTML、ブラウザー起動、承認manifest、SIGINT/SIGTERM、R-2/MCP連携、終了票、
+  サーバー側失効は未実装。特に§4の同一端末code注入対策は、単体交換の成功だけでは成立しない。

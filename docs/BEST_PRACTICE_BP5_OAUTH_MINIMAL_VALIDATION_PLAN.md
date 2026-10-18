@@ -121,6 +121,10 @@ R01の固定GET候補と、失敗時停止・メモリ内token引渡し・秘密
 [実PDI OAuthアダプター/runner接続設計](BEST_PRACTICE_BP5_R2_PDI_ADAPTER_RUNNER_DESIGN.md)を参照。
 設計の追加だけでG2/G4やP/L/R実機ケースを完了扱いにせず、telemetry調査も再開しない。
 
+[実PDIアダプター単体の合成検証](E2E_BEST_PRACTICE_R2_PDI_OAUTH_SYNTHETIC_2026-10-18.md)を追加した。
+固定HTTPS交換・S256・応答検証のみで、実際の待受/認可/token発行/本人確認/runner接続は未実施。
+この結果からG2/G4や実機ケースの完了・実行許可を推定しない。
+
 各ケースは検証利用者の正常token（P01=L01で得たもの、または承認済みの追加発行）を使う。
 BP-5製品の取得経路（固定GET・3テーブル・bounded上限）を通し、本文・payload・原応答は出力しない。
 
