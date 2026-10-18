@@ -1,6 +1,6 @@
 # BP-5 R-2：オフライン事前確認・明示承認・ready案内・終了報告の接続設計
 
-Version: draft-0.1 / Date: 2026-10-18 / Status: 未承認・未実装の接続案。
+Version: draft-0.2 / Date: 2026-10-18 / Status: 未承認・未実装の接続案。
 
 ## 1. 範囲と現状
 
@@ -43,6 +43,9 @@ launcher自身も秘密を注入しない専用起動環境を前提とし、共
   listener/host/SDK/browser/workerの起動、DNS/HTTPS、PDIの照会を一切しない。
 - checker実行の観測上限は5秒。所有checkerだけを停止し、exit/closeを確認する。確認不能は失敗とし実行へ進まない。
 - 確認時の承認期限とC方式assertionは、従来どおり現在+385秒より厳密に後が必要。実行直前も再検証する。
+  ただし人の確認待ち60秒・host preflight 5秒の後にも満たせなければ、承認後に予測可能な期限不足で停止する。
+  checkerは385+60+5秒（450秒）を満たさない場合、合格とせず固定の`validity_insufficient_for_approval`で停止する案とする。
+  これはchecker側の要求を厳しくするだけで、実行時の385秒の再検証を置き換えない。
 - 成功は`offline_valid`であって、承認の真正性、Public Client/S256の実効性、ACL、リリースmatched、PDI到達を証明しない。
   `approval.reference`の存在は人の承認証明ではない。assertionなしは実測が必要、という既存扱いも維持する。
 
@@ -65,10 +68,13 @@ digestは既存スキーマで正規化した文書のJSONをSHA-256にした値
    digestの一致だけでその照合を代替しない。
 4. 実TTYから固定文言の入力で今回1回だけ承認する。`--yes`、env、stdin pipe、既定yes、承認ファイルの自動採用は認めない。
    60秒以内の承認待ちを上限案とし、EOF・時間切れ・非TTY・否認・SIGINTでhost起動前に停止する。
+   入力はcooked modeで1行だけ読む案とし、Ctrl-CをOSのSIGINTとして受ける。raw modeを使う場合は
+   `\x03`とEOF（`\x04`）を明示的に否認として扱い、端末モードを必ず元に戻してから次へ進む。
    これは新しい人向け待ち上限で、製品の385秒/60秒/cleanup枠を延長するものではない。
 5. 承認後に所有checkerの終了確認を済ませ、専用hostを起動する。host preflightの5秒上限は維持する。
    hostが再検証した正規化digestと確認票のdigestを照合し、一致時だけ監督がgrantを送る。
-6. 意味の変更・期限不足・検査失敗はgrant前に停止する。空白等だけの変更は正規化digestが同じなら許容する。
+6. 意味の変更・期限不足・検査失敗はgrant前に停止する。意味が同じ表記揺れ（空白・改行・オブジェクトkeyの順序）は
+   スキーマ正規化後のdigestが同じため許容する。重複keyは既存読込器が拒否するため、この許容に含まれない。
    不一致後の自動再確認/再承認/再起動はしない。新しい明示実行から始める。
 
 **必要な未実装契約変更**：現行preparedは固定識別子だけなので、digest照合を現実装が保証するとは扱わない。
@@ -93,6 +99,10 @@ grant準備時のT0から382秒で作業停止、385秒で所有hostの強制停
   表示が完了するまで認可期限を止める・再取得する・再起動する処理は作らない。
 - 18765競合なら他portへ代替せず、他listenerを終了しない。開始ページの再取得/先取りも再認可で救済しない。
 - SIGINT/TERMは既存監督の停止経路へ接続する。再入力はforce、共有process group/他の子へsignalを送らない。
+- 現行`superviseR2Host`は実行中に自身のSIGINT/SIGTERM handlerを登録する。launcherがTTY承認用のhandlerを
+  残したまま監督を起動すると、1回のCtrl-Cを双方が受けて監督の「2回目=force」と重なり得る。
+  runnerの`signalOwner`と同様に監督にもsignal所有者を選ぶ信頼済み内部optionを設けるか、
+  監督起動前にlauncher自身のhandlerを解除することを契約として固定し、二重計数しない合成試験を必須とする。
 
 ブラウザーの履歴/query・OS dump・端末の外部記録は完全削除を保証できない。
 履歴同期・HAR/スクリーンショット・診断採取・core dump等の既存運用が秘密管理要件を満たすか、人が実行前に確認する。
