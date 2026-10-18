@@ -29,7 +29,7 @@ Claude・Cursor・VS Code などの AI ツールから、ServiceNow のインシ
 
 ### 開発版（未リリース）
 
-- 読み取り専用PoC `review_update_set_best_practices` を登録。AustraliaのUpdate Set payloadを対象に、3規則の候補と公式根拠を本文なしのJSONで返します。人による規則承認・独立品質評価・実機E2Eは未完了で、「安全」「違反確定」を意味しません。詳細は[利用例・制限](docs/BEST_PRACTICE_BP5_MCP_REGISTRATION.md)。
+- 読み取り専用PoC `review_update_set_best_practices` を登録。AustraliaのUpdate Set payloadを対象に、3規則の候補と公式根拠を本文なしのJSONで返します。人による規則承認・独立品質評価は未完了です。[PDIでは取得/集約2件成功、payload解析1件スキップ](docs/E2E_BEST_PRACTICE_REVIEW_2026-10-18.md)（対象が先頭100行の外）。「安全」「違反確定」を意味しません。詳細は[利用例・制限](docs/BEST_PRACTICE_BP5_MCP_REGISTRATION.md)。
 
 ### v1.13 ハイライト
 
@@ -864,8 +864,8 @@ npm run lint         # ESLint
 スキップは VI／RT／グループの対象レコード不足による詳細取得テストで、成功件数には含めていません。
 Now Assist はメタデータ取得のみで、AI 推論・生成・プレイブック起動は未検証です。
 
-E2E コード内のツール名を静的集計した対象範囲は **241／503 ツール（約47.9%）**です。
-追加したベストプラクティスレビューの実機E2Eは未実施で、対象数の241件は増やしていません。
+MCP登録時点のE2Eコード静的集計記録は **241／503 ツール（約47.9%）**です（今回追加した試験を含む全体対象数の再集計ではありません）。
+ベストプラクティスレビューは今回、実機の取得/集約2件成功・payload解析1件スキップで、詳細は[検証記録](docs/E2E_BEST_PRACTICE_REVIEW_2026-10-18.md)を参照してください。
 これはコード行・分岐のカバレッジや、全241ツールの実機成功率を示す数値ではありません。
 テスト件数は変更されるため、通常テストの最新件数は `npm test` の実行結果を参照してください。
 

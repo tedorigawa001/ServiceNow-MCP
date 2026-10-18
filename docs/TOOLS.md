@@ -2846,7 +2846,7 @@ Read-only **PoC** review of a local Update Set's stored `sys_update_xml.payload`
 
 Unknown keys are rejected by JSON Schema and runtime validation. Code, payload, release assertions, arbitrary queries, actors and limits cannot be supplied.
 Returns compact JSON text: successful calls contain a `bp-mcp-review-0.2` aggregate; fixed failures set MCP `isError=true` and return `{status:"failed",error:{stage,code}}`, optionally with a validated failed aggregate in `result`. Partial analysis is not a failed MCP call and must not be interpreted as safe/clear. Code and raw server diagnostics are never returned. If the full escaped MCP envelope exceeds 256KiB, returns fixed `response_limit` without a fragment.
-The original 60-second budget includes acquisition, analysis, verification, aggregation and shutdown; internal 50/55-second cutoffs retain completed results and label remaining rows. Cancellation/hard deadline discard partial output. Rules and quality remain unapproved; live E2E is pending. See [usage, release evidence and verification record](BEST_PRACTICE_BP5_MCP_REGISTRATION.md).
+The original 60-second budget includes acquisition, analysis, verification, aggregation and shutdown; internal 50/55-second cutoffs retain completed results and label remaining rows. Cancellation/hard deadline discard partial output. Rules and quality remain unapproved. [PDI E2E](E2E_BEST_PRACTICE_REVIEW_2026-10-18.md) passed two collection/aggregation cases; payload analysis was explicitly skipped because eligible updates were outside the first 100 rows. See [usage, release evidence and verification record](BEST_PRACTICE_BP5_MCP_REGISTRATION.md).
 
 ### get_current_update_set
 Get all currently active (in-progress) Update Sets.

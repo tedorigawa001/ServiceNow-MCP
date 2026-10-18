@@ -14,13 +14,14 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 ### Added
 
-- Read-only PoC MCP tool `review_update_set_best_practices` in `full` and `platform_developer` (503 tools total). Strict sys_id/rule/record-budget inputs, session-pinned credentials, bounded payload-only analysis, source-free JSON, fixed errors and MCP cancellation propagation. Australia and three rules only; rules and independent human quality evaluation are unapproved, and live E2E is pending. Existing tools retain their behavior.
+- Read-only PoC MCP tool `review_update_set_best_practices` in `full` and `platform_developer` (503 tools total). Strict sys_id/rule/record-budget inputs, session-pinned credentials, bounded payload-only analysis, source-free JSON, fixed errors and MCP cancellation propagation. Australia and three rules only; rules and independent human quality evaluation are unapproved, and live payload-analysis E2E remains pending. Existing tools retain their behavior.
 - Internal 50/55-second acquisition/verification cutoffs retain analyzed results and label unprocessed rows before the unchanged 60-second hard deadline. Hard deadline, cancellation and internal contract failures still return fixed errors without partial results.
 
 ### Tests
 
 - Verify the actual npm tarball in an isolated production-only installation: the fixed JavaScript worker must parse and aggregate synthetic input without tsx, TypeScript or Vitest. Run with `npm run test:pack`; the same check runs before publication.
 - Synthetic server/router tests and in-memory MCP SDK calls cover registration, strict JSON/runtime input validation, client/credential separation, fixed diagnostics, partial/error flags and cancellation. The packaged tool is also called through the compiled server handlers using synthetic settings/HTTP only.
+- Read-only PDI review E2E: two bounded collection/aggregation cases passed; one payload-analysis case explicitly skipped because eligible BR updates were outside the first 100 metadata rows. Results remain partial with truncation and incomplete-analysis warnings; no code or record writes. See `docs/E2E_BEST_PRACTICE_REVIEW_2026-10-18.md`.
 
 ## [1.15.0] — 2026-10-17
 

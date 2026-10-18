@@ -1,9 +1,9 @@
 # BP-5：Update SetベストプラクティスレビューのMCP統合設計案
 
 Version: bp5-mcp-design-0.5 / Date: 2026-10-18。
-Status: **1件/集約JSON契約、bounded取得・認証固定・C方式、設定導入、worker中断・内部期限・npm梱包、読み取り専用MCP登録/dispatchと合成テストを実装。実機E2E・規則/独立品質の承認は未実施**。
+Status: **1件/集約JSON契約、bounded取得・認証固定・C方式、設定導入、worker中断・内部期限・npm梱包、読み取り専用MCP登録/dispatchと合成テストを実装。PDIの取得/集約E2Eは2成功、解析は対象が先頭100行の外で1スキップ。規則/独立品質の承認は未実施**。
 製品採用・根拠/判定境界・人手品質の承認は未実施。実装や公開を承認する文書ではない。
-契約の実装範囲・使い方・未実装境界は[第1段階の契約記録](BEST_PRACTICE_BP5_CONTRACTS.md)を参照。PDI照会/書き込み・本試行ケース作成は行っていない。
+契約の実装範囲・使い方・未実装境界は[第1段階の契約記録](BEST_PRACTICE_BP5_CONTRACTS.md)を参照。PDIへの書き込み・本試行ケース作成は行っていない。
 取得プリミティブの実装範囲・制限・検証は[bounded取得記録](BEST_PRACTICE_BP5_BOUNDED_ACQUISITION.md)を参照。
 運用者設定の受け口・binding・期限・競合の実装は[C方式フォールバック記録](BEST_PRACTICE_BP5_OPERATOR_FALLBACK.md)を参照。
 運用者によるファイル設定・所有者/権限検査・補助コマンドは[設定導入記録](BEST_PRACTICE_BP5_OPERATOR_SETUP.md)を参照。
@@ -12,6 +12,7 @@ bounded取得と既存解析器/結果契約の接続、失敗・省略の扱い
 開発のtsxソース実行では専用bootstrap、本番では固定の`review-worker.js`を使う。
 起動不能は固定`worker_unavailable`とし、本番からソースへの代替実行はしない（同記録§4.1）。
 MCP入力/応答境界、パッケージ別公開、SDKキャンセル、利用例と最新検証は[登録記録](BEST_PRACTICE_BP5_MCP_REGISTRATION.md)参照。
+[PDI読み取り記録](E2E_BEST_PRACTICE_REVIEW_2026-10-18.md)では、payload解析の未到達を取得/集約の成功と区別する。
 
 ## 1. 初版の範囲
 
@@ -54,7 +55,8 @@ raw payload、コード、query、fields、table、URL、release、actor/imperso
 
 ## 4. 取得経路と版の扱い
 
-以下のTable API呼び出しと解析接続は内部アダプターで実装し、合成HTTPで検証した。PDIでは実行していない。
+以下のTable API呼び出しと解析接続は内部アダプターで実装し、合成HTTPで検証した。
+後続の[PDI読み取り](E2E_BEST_PRACTICE_REVIEW_2026-10-18.md)では取得/分類/集約を確認し、payload取得/解析は選択範囲外で未到達となった。
 
 1. 入力検証後、MCPセッションのclient/認証文脈を固定し、期限・受信予算を開始する。
 2. sys_update_setを指定IDで取得。fieldsはsys_id,state,application,sys_updated_on,sys_mod_countのみ。
@@ -254,5 +256,5 @@ source_approval_pendingや未承認のカード境界を隠さず、原解析res
 - 実機確認は別途許可を得た読み取り専用の経路から開始し、ACL不足を修正するための設定変更は自動実施しない。
 
 実装順案：外側契約/合成テスト → bounded取得/認証固定 → 1件解析アダプター/集約 → MCP登録/梱包 →
-許可済み読み取りE2E → 品質/公開審査。現段階では外側/1件契約、bounded取得・認証固定・C方式、設定導入、1件解析/集約アダプター、worker中断と合成テスト、[worker梱包/本番依存の隔離検証](BEST_PRACTICE_BP5_PACKAGING.md)、[MCP登録/dispatch](BEST_PRACTICE_BP5_MCP_REGISTRATION.md)を実装した。実機E2Eは未実施。
+許可済み読み取りE2E → 品質/公開審査。現段階では外側/1件契約、bounded取得・認証固定・C方式、設定導入、1件解析/集約アダプター、worker中断と合成テスト、[worker梱包/本番依存の隔離検証](BEST_PRACTICE_BP5_PACKAGING.md)、[MCP登録/dispatch](BEST_PRACTICE_BP5_MCP_REGISTRATION.md)を実装した。[PDI取得/集約の2ケースは成功](E2E_BEST_PRACTICE_REVIEW_2026-10-18.md)したが、payload解析は選択範囲外のため未到達。
 人手運用48件の設計・保管先選定も別課題であり、MCP統合で完了したとは扱わない。
