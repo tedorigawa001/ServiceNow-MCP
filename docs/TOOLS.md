@@ -2841,11 +2841,13 @@ Read-only **PoC** review of a local Update Set's stored `sys_update_xml.payload`
 
 - `update_set_sys_id` (required): exactly 32 lowercase hexadecimal characters; no name/URL/query lookup.
 - `requested_rule_ids`: unique subset of the three IDs above, 1–3 values; defaults to all three.
-- `max_records`: integer 1–100, default 20; includes unsupported/deleted metadata rows.
+- `max_records`: integer 1–100, default 20; metadata row budget, not successful analysis count. One additional lookahead row is never analyzed.
+- `selection_mode`: optional `bounded_all` (also the omitted behavior) preserves the all-type window and 0.2 result; opt-in `review_targets` uses fixed name/action candidate filters and returns 0.3. Candidate contamination still consumes the same budget; there is no refill or extra paging.
 - `instance`: optional existing connection selector, consumed by the server rather than sent to the adapter.
 
 Unknown keys are rejected by JSON Schema and runtime validation. Code, payload, release assertions, arbitrary queries, actors and limits cannot be supplied.
-Returns compact JSON text: successful calls contain a `bp-mcp-review-0.2` aggregate; fixed failures set MCP `isError=true` and return `{status:"failed",error:{stage,code}}`, optionally with a validated failed aggregate in `result`. Partial analysis is not a failed MCP call and must not be interpreted as safe/clear. Code and raw server diagnostics are never returned. If the full escaped MCP envelope exceeds 256KiB, returns fixed `response_limit` without a fragment.
+Returns compact JSON text: successful calls contain a `bp-mcp-review-0.2` or opt-in `bp-mcp-review-0.3` aggregate; fixed failures set MCP `isError=true` and return `{status:"failed",error:{stage,code}}`, optionally with a validated failed aggregate in `result`. Partial analysis is not a failed MCP call and must not be interpreted as safe/clear. Code and raw server diagnostics are never returned. If the full escaped MCP envelope exceeds 256KiB, returns fixed `response_limit` without a fragment.
+In 0.3, excluded counts are unknown (`null`), inventory completeness is always false, and an empty candidate window cannot assert analysis completion. Table API applies limit before ACL evaluation: even `truncated=false` does not prove all visible candidates were retrieved. See [opt-in contract and synthetic verification](BEST_PRACTICE_BP5_TARGET_SELECTION_IMPLEMENTATION.md).
 The original 60-second budget includes acquisition, analysis, verification, aggregation and shutdown; internal 50/55-second cutoffs retain completed results and label remaining rows. Cancellation/hard deadline discard partial output. Rules and quality remain unapproved. [PDI E2E](E2E_BEST_PRACTICE_REVIEW_2026-10-18.md) passed two collection/aggregation cases; payload analysis was explicitly skipped because eligible updates were outside the first 100 rows. See [usage, release evidence and verification record](BEST_PRACTICE_BP5_MCP_REGISTRATION.md).
 
 ### get_current_update_set

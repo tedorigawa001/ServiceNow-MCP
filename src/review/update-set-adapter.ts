@@ -3,12 +3,14 @@ import { z } from 'zod';
 import type { ServiceNowClient } from '../servicenow/client.js';
 import { BoundedReadError, type BoundedReadOptions, type BoundedReadSession } from '../servicenow/bounded-read.js';
 import { BoundedUpdateSetSource, type ReviewMetadata } from './bounded-source.js';
-import type { AggregateReview } from './aggregate-schema.js';
+import type { AnyAggregateReview as AggregateReview } from './aggregate-schema.js';
+import { selectionModeSchema, targetSelection, TARGET_LIMITATIONS } from './target-selection.js';
 import { bp5RuleIdsSchema } from './result-schema-v2.js';
 import { CATALOG_VERSION, RULES } from './catalog.js';
 import { ReviewWorker, ReviewWorkerError, type ReviewWorkerFactory } from './worker-supervisor.js';
 
 export const reviewUpdateSetInputSchema = z.strictObject({ update_set_sys_id: z.string().regex(/^[a-f0-9]{32}$/),
+  selection_mode: selectionModeSchema.optional(),
   max_records: z.number().int().min(1).max(100).default(20),
   requested_rule_ids: bp5RuleIdsSchema.refine(ids => new Set(ids).size === ids.length)
     .default(['AU-BR-001', 'AU-BR-002', 'AU-CL-004']),
@@ -20,7 +22,12 @@ export type BoundedReviewOutcome = { isError: false; result: AggregateReview }
   | { isError: true; error: { stage: Stage; code: ErrorCode }; result?: AggregateReview };
 const fail = (stage: Stage, code: ErrorCode): BoundedReviewOutcome => ({ isError: true, error: { stage, code } });
 function addError(run: AggregateReview, error: AggregateReview['errors'][number]) {
-  if (run.errors.length < 100) run.errors.push(error);
+  if (run.errors.length < 100) {
+    if (error.code === 'candidate_filter_violation') {
+      if (run.schema_version !== 'bp-mcp-review-0.3') throw new Error('internal_review_error');
+      run.errors.push(error);
+    } else run.errors.push({ ...error, code: error.code });
+  }
   else if (!run.limitations.includes('error_details_truncated')) run.limitations.push('error_details_truncated');
 }
 
@@ -80,11 +87,12 @@ async function executeReview(client: ServiceNowClient, raw: unknown, execution: 
     reserveMs = Math.min(10000, execution.session.deadlineMs / 6);
     execution.session.setPhaseReserve(reserveMs);
     const source = new BoundedUpdateSetSource(execution.session,
-      { update_set_sys_id: input.update_set_sys_id, max_records: input.max_records });
+      { update_set_sys_id: input.update_set_sys_id, max_records: input.max_records,
+        selection_mode: input.selection_mode, requested_rule_ids: input.requested_rule_ids });
     const result = await (async () => {
         stage = 'parent'; await source.readParent();
         stage = 'release'; const decision = await source.resolveRelease();
-        const run: AggregateReview = {
+        const legacy: Extract<AggregateReview, { schema_version: 'bp-mcp-review-0.2' }> = {
           schema_version: 'bp-mcp-review-0.2', poc_only: true, code_return_mode: 'none', status: 'partial',
           target: { update_set_sys_id: input.update_set_sys_id, target_version: 'update_set_payload', instance_binding: source.instanceBinding },
           versions: { knowledge_base: CATALOG_VERSION, ruleset: 'bp3-0.4', asset_schema: 'bp-review-0.2' },
@@ -96,6 +104,12 @@ async function executeReview(client: ServiceNowClient, raw: unknown, execution: 
           limits: { max_records: input.max_records, max_findings: 100, max_response_bytes: 262144, deadline_ms: 60000 },
           limitations: ['source_approval_pending', 'caller_acl_visible_only', ...decision.limitations], errors: [],
         };
+        const run: AggregateReview = input.selection_mode === 'review_targets' ? { ...legacy,
+          schema_version: 'bp-mcp-review-0.3', selection: targetSelection(input.requested_rule_ids),
+          coverage: { ...legacy.coverage, analysis_scope: 'selected_candidate_window',
+            candidate_inventory_complete: false, update_set_inventory_complete: false },
+          limitations: [...legacy.limitations, ...TARGET_LIMITATIONS],
+        } : legacy;
         progress = { run, rows: [] };
         if (decision.release_match !== 'matched') {
           const reason = decision.release_match === 'unknown' ? 'release_unknown' : 'release_mismatch';
@@ -212,7 +226,7 @@ async function executeReview(client: ServiceNowClient, raw: unknown, execution: 
             not_found_or_not_visible: 'not_found_or_not_visible', authentication_failed: 'authentication_failed',
             access_denied: 'access_denied', upstream_unavailable: 'upstream_unavailable',
             request_budget_exceeded: 'request_budget_exceeded', receive_budget_exceeded: 'receive_budget_exceeded',
-            payload_budget_exceeded: 'payload_budget_exceeded' } as const;
+            payload_budget_exceeded: 'payload_budget_exceeded', candidate_filter_violation: 'candidate_filter_violation' } as const;
           if (!(failure.code in reasons)) return fail('consistency', 'internal_review_error');
           run.consistency = 'unverified';
           addError(run, { stage: 'consistency', code: reasons[failure.code as keyof typeof reasons] });
@@ -233,7 +247,7 @@ async function executeReview(client: ServiceNowClient, raw: unknown, execution: 
     if (error instanceof BoundedReadError) {
       const allowed: ErrorCode[] = ['invalid_input', 'config_invalid', 'authentication_failed', 'access_denied',
         'not_found_or_not_visible', 'upstream_unavailable', 'deadline_exceeded', 'receive_budget_exceeded',
-        'request_budget_exceeded', 'payload_budget_exceeded', 'review_busy', 'cancelled'];
+        'request_budget_exceeded', 'payload_budget_exceeded', 'review_busy', 'cancelled', 'candidate_filter_violation'];
       const code: ErrorCode = error.code === 'invalid_response' && (stage === 'metadata' || stage === 'consistency') ? 'metadata_unavailable'
         : allowed.includes(error.code as ErrorCode) ? error.code as ErrorCode : 'internal_review_error';
       if (progress && stage === 'metadata' && !['deadline_exceeded', 'cancelled', 'internal_review_error'].includes(code)) {
@@ -245,7 +259,7 @@ async function executeReview(client: ServiceNowClient, raw: unknown, execution: 
       const stopReasons = ['authentication_failed', 'access_denied', 'request_budget_exceeded',
         'receive_budget_exceeded', 'payload_budget_exceeded', 'upstream_unavailable'] as const;
       if (progress && (stage === 'payload' || stage === 'consistency')
-        && (stopReasons.some(reason => reason === code) || stage === 'consistency' && ['not_found_or_not_visible', 'metadata_unavailable'].includes(code))) {
+        && (stopReasons.some(reason => reason === code) || stage === 'consistency' && ['not_found_or_not_visible', 'metadata_unavailable', 'candidate_filter_violation'].includes(code))) {
         const { run, rows } = progress;
         const done = new Set(run.assets.map(a => a.update_xml_sys_id));
         const reason = stopReasons.find(reason => reason === code);
@@ -256,7 +270,7 @@ async function executeReview(client: ServiceNowClient, raw: unknown, execution: 
         run.limitations.push('provisional_results', 'consistency_unverified');
         run.consistency = 'unverified';
         addError(run, { stage, code: code as AggregateReview['errors'][number]['code'] });
-        run.status = run.assets.some(a => a.state === 'reviewed') ? 'partial' : 'failed';
+        run.status = code === 'candidate_filter_violation' || run.assets.some(a => a.state === 'reviewed') ? 'partial' : 'failed';
         try {
           const result = await finish(run);
           return result.status === 'failed' ? { isError: true, error: { stage: failureStage, code }, result } : { isError: false, result };

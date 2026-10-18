@@ -1,6 +1,6 @@
 # BP-5：Update SetベストプラクティスレビューのMCP統合設計案
 
-Version: bp5-mcp-design-0.5 / Date: 2026-10-18。
+Version: bp5-mcp-design-0.6 / Date: 2026-10-18。
 Status: **1件/集約JSON契約、bounded取得・認証固定・C方式、設定導入、worker中断・内部期限・npm梱包、読み取り専用MCP登録/dispatchと合成テストを実装。PDIの取得/集約E2Eは2成功、解析は対象が先頭100行の外で1スキップ。規則/独立品質の承認は未実施**。
 製品採用・根拠/判定境界・人手品質の承認は未実施。実装や公開を承認する文書ではない。
 契約の実装範囲・使い方・未実装境界は[第1段階の契約記録](BEST_PRACTICE_BP5_CONTRACTS.md)を参照。PDIへの書き込み・本試行ケース作成は行っていない。
@@ -15,7 +15,7 @@ MCP入力/応答境界、パッケージ別公開、SDKキャンセル、利用�
 [PDI読み取り記録](E2E_BEST_PRACTICE_REVIEW_2026-10-18.md)では、payload解析の未到達を取得/集約の成功と区別する。
 先頭100行の外にある解析対象への到達改善は[対象選択の設計案](BEST_PRACTICE_BP5_TARGET_SELECTION_DESIGN.md)を参照。
 案A・opt-in方式を採用する方針で、[公式仕様照合・次版JSON契約案](BEST_PRACTICE_BP5_TARGET_SELECTION_CONTRACT.md)へ具体化した。
-対象選択の改善は未実装であり、以下の現行取得順序・入力/結果契約はまだ変更していない。
+対象選択の改善は[合成検証付きで実装](BEST_PRACTICE_BP5_TARGET_SELECTION_IMPLEMENTATION.md)。省略/bounded_all時は以下の従来経路を維持し、review_targets時だけ固定候補選択・0.3契約を使う。新モードの実機E2Eは未実施。
 
 ## 1. 初版の範囲
 
@@ -50,6 +50,7 @@ sys_id指定で同名/別scopeの取り違えを避け、現行コードへの�
 | update_set_sys_id | 必須、32桁小文字16進。名前・URL・encoded queryを受け付けない |
 | requested_rule_ids | 任意、既定は先行3規則。3規則の列挙、重複不可、1〜3件。未実装IDは入力拒否。契約に合わせ、当初案rule_idsから名称を統一 |
 | max_records | 任意、整数、既定20、1〜100。対象外/削除を含むmetadata行の予算であり解析成功数ではない |
+| selection_mode | 任意、bounded_all / review_targets。省略時は従来経路・0.2。review_targetsだけ対象候補へ絞り0.3を返す（具体化資料参照） |
 | instance | 既存serverが消費する選択値。ハンドラーへ転送せず、選択済みclientを固定して使う |
 
 raw payload、コード、query、fields、table、URL、release、actor/impersonation、code_return_mode、

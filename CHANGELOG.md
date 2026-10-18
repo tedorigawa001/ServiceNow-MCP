@@ -14,6 +14,7 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 ### Added
 
+- Opt-in `selection_mode=review_targets` for best-practice review: fixed update/name candidate selection and a versioned 0.3 aggregate with explicit incomplete-inventory warnings. Omitted/`bounded_all` retains 0.2 behavior; record, receive and 60-second budgets are unchanged. New-mode validation is synthetic only, not PDI E2E.
 - Read-only PoC MCP tool `review_update_set_best_practices` in `full` and `platform_developer` (503 tools total). Strict sys_id/rule/record-budget inputs, session-pinned credentials, bounded payload-only analysis, source-free JSON, fixed errors and MCP cancellation propagation. Australia and three rules only; rules and independent human quality evaluation are unapproved, and live payload-analysis E2E remains pending. Existing tools retain their behavior.
 - Internal 50/55-second acquisition/verification cutoffs retain analyzed results and label unprocessed rows before the unchanged 60-second hard deadline. Hard deadline, cancellation and internal contract failures still return fixed errors without partial results.
 

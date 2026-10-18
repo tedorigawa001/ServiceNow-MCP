@@ -3,7 +3,7 @@ import { parentPort } from 'node:worker_threads';
 import { reviewUpdateSetPayloadV2 } from './payload-review.js';
 import { assetOutcomeStructure } from './aggregate-schema.js';
 import { finalizeAggregate } from './aggregate-finalize.js';
-import type { AggregateReview } from './aggregate-schema.js';
+import type { AnyAggregateReview as AggregateReview } from './aggregate-schema.js';
 
 if (!parentPort) throw new Error('internal_review_error');
 parentPort.on('message', (message: { id: number; kind: string; input: unknown }) => {

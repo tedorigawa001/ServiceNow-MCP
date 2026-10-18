@@ -1,8 +1,13 @@
 /** CPU-side aggregate accounting, whole-result omission, validation and serialization. */
-import { aggregateReviewSchema, type AggregateReview } from './aggregate-schema.js';
+import { anyAggregateReviewSchema, type AnyAggregateReview as AggregateReview } from './aggregate-schema.js';
 
 export function addReviewError(run: AggregateReview, error: AggregateReview['errors'][number]) {
-  if (run.errors.length < 100) run.errors.push(error);
+  if (run.errors.length < 100) {
+    if (error.code === 'candidate_filter_violation') {
+      if (run.schema_version !== 'bp-mcp-review-0.3') throw new Error('internal_review_error');
+      run.errors.push(error);
+    } else run.errors.push({ ...error, code: error.code });
+  }
   else if (!run.limitations.includes('error_details_truncated')) run.limitations.push('error_details_truncated');
 }
 export function finalizeAggregate(run: AggregateReview): AggregateReview {
@@ -30,6 +35,7 @@ export function finalizeAggregate(run: AggregateReview): AggregateReview {
   }
   recount();
   run.coverage.analysis_complete = run.collection.status === 'complete' && !run.collection.truncated
+    && (run.schema_version !== 'bp-mcp-review-0.3' || run.collection.selected > 0)
     && run.consistency === 'stable_observation' && run.release_match === 'matched' && !run.errors.length
     && run.assets.every(a => a.state === 'not_applicable' || a.state === 'skipped_deleted'
       || a.state === 'reviewed' && !a.result.coverage.skipped_rules.length);
@@ -40,5 +46,5 @@ export function finalizeAggregate(run: AggregateReview): AggregateReview {
     omit(i);
   }
   run.limitations = [...new Set(run.limitations)];
-  return aggregateReviewSchema.parse(run);
+  return anyAggregateReviewSchema.parse(run);
 }

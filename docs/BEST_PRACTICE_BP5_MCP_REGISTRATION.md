@@ -3,6 +3,8 @@
 Version: bp5-mcp-registration-0.1 / Date: 2026-10-18。
 実装と合成検証の記録。実機操作・人手評価・製品品質/公開の承認は行っていない。
 ツールが呼べることと、規則/根拠の承認・独立した検出品質を区別する。
+後続の[opt-in対象選択・0.3契約の実装記録](BEST_PRACTICE_BP5_TARGET_SELECTION_IMPLEMENTATION.md)を参照。
+以下の登録時点の合成検証結果は履歴として維持する。
 
 ## 1. 公開する範囲
 
@@ -24,7 +26,8 @@ source_approval_pending、候補/low/info、poc_only=true、code_return_mode=non
 | 引数 | JSON Schema/ランタイムの共通制約 |
 |---|---|
 | update_set_sys_id | 必須、小文字hex32桁。名前/URL/encoded query不可 |
-| max_records | 整数1–100、既定20。対象外/削除を含むmetadata行数 |
+| max_records | 整数1–100、既定20。metadata候補行の予算。従来モードは対象外/削除も含む |
+| selection_mode | 任意、bounded_all / review_targets。省略/bounded_allは従来の0.2、review_targetsだけ固定候補選択と0.3 |
 | requested_rule_ids | 先行3規則だけ、1–3件、重複不可。既定は全3規則 |
 | instance | サーバー側の既存接続先選択値。任意、空でない文字列、最大100文字 |
 
@@ -79,6 +82,10 @@ AIへの依頼例：
 > JSONの公式根拠URL・該当規則・位置・required_follow_upを添えて、候補として報告してください。
 > releaseの実測/運用者申告、取得範囲・未評価/未処理・省略・一貫性・未承認の制限を最初に示してください。
 > 0件を「安全」「違反なし」と言い換えず、本文の再取得や修正・実行はしないでください。
+
+BR/Client Scriptの規則を評価する場合は、上記引数に`"selection_mode": "review_targets"`を明示する。
+省略時の既定動作は変更しない。0.3のselection・coverage・limitationsを確認し、除外件数のnullを0へ読み替えない。
+候補の全件取得は保証されず、解析窓が完了してもUpdate Set全体のレビューとは報告しない。
 
 sys_update_set/sys_update_xmlとリリース証拠の可視性が必要。sys_cluster_stateが読めない場合の
 運用者設定は[設定導入手順](BEST_PRACTICE_BP5_OPERATOR_SETUP.md)を参照する。

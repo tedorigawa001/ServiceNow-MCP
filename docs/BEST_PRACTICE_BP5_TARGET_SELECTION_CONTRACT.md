@@ -1,9 +1,10 @@
 # BP-5：opt-in候補選択の公式仕様照合と次版JSON契約案
 
-Version: bp5-target-contract-draft-0.1 / Date: 2026-10-18。
-Status: **案A・opt-in方式は採用方針。以下の契約は設計案、コード未実装、実機未検証**。
-[対象選択設計](BEST_PRACTICE_BP5_TARGET_SELECTION_DESIGN.md)の具体化であり、実装完了記録ではない。
-公式資料の閲覧とローカルMDの更新だけを実施。規則カード・人手品質の承認状態は変更しない。
+Version: bp5-target-contract-0.2 / Date: 2026-10-18。
+Status: **案A・opt-in方式と次版契約を実装。新モードの実機E2Eは未実施**。
+[対象選択設計](BEST_PRACTICE_BP5_TARGET_SELECTION_DESIGN.md)の契約を定義し、実行結果は実装記録へ分離する。
+公式資料の照合後、[実装・合成検証](BEST_PRACTICE_BP5_TARGET_SELECTION_IMPLEMENTATION.md)へ接続した。
+§6.1の既存metadata照会は新モードのE2Eとは区別する。規則カード・人手品質の承認状態は変更しない。
 
 ## 1. 公式資料と確認範囲
 
@@ -84,7 +85,7 @@ limitがACL評価前なので、返却数がN以下でも「可視候補を全�
 
 ## 3. MCP入力と版の分岐
 
-追加予定の入力は`selection_mode`だけ。型は文字列列挙`bounded_all | review_targets`、省略可。
+追加した入力は`selection_mode`だけ。型は文字列列挙`bounded_all | review_targets`、省略可。
 省略またはbounded_allは現行入力を内部へ渡し、従来の選択・`bp-mcp-review-0.2`結果を保持する。
 review_targetsだけ本書のフィルターと`bp-mcp-review-0.3`を使う。自動フォールバックはしない。
 誤綴り・null・未知値・余計なキーはJSON Schemaとランタイムの双方で拒否する。
@@ -96,12 +97,12 @@ max_recordsとrequested_rule_ids等の既存制約は不変。省略時の結果
 `selection_mode: "review_targets"`を指定する」と明記する。省略時の既定値（bounded_all）は変えず、
 既定値の切替は従来どおり別途承認・リリース通知の対象とする。案内文は網羅性・安全性を示唆しない。
 
-0.3のJSON Schema予定ID：`urn:servicenow-mcp:best-practice-mcp-review-result:0.3`。
+0.3のJSON Schema ID：`urn:servicenow-mcp:best-practice-mcp-review-result:0.3`。
 MCP応答側はschema_versionで判別する0.2/0.3のunionを明記する。固定評価セット・既存0.2検証器を改変しない。
 外側の固定エラー（入力拒否・worker起動不能・hard deadline等）は既存の経路を維持する。
 0.3は集約結果の版であり、入れ子の1件結果`bp-review-0.2`やruleset版を便乗して変更しない。
 
-## 4. 0.3の構造差分（実装前の契約定義）
+## 4. 0.3の構造差分
 
 全objectは追加キー拒否。下表以外は[現行集約スキーマ](../src/review/aggregate-schema.ts)と
 同じ型・上限・不変条件を継承する。全項目必須、nullを許す箇所だけ明示する。
@@ -204,12 +205,12 @@ metadata_seen>Nなら既存metadata_truncatedも必須。JSONの4文字列と固
 名前の正規表現をサーバーへ要求せず、未知接頭辞の混入とACL前limitを明示する方式とする。
 100件・HTTP受信量・全体60秒・最終照合予約は変更しない。
 
-次工程では本書をもとに合成テストと新旧契約検証を実装する。最低限、固定3クエリの文字列、
+本書をもとに合成テストと新旧契約検証を実装した。検証項目として、固定3クエリの文字列、
 OR不使用、正規名を除外しないこと、0件/N/N+1、ACLによる短い応答、lookaheadの条件違反、
 除外語混入、フィルター無視、初回/最終の失敗、50/55/60秒、返却量・再試行の共有予算を検証する。
 固定評価セットは変更せず、MCP定義・dispatch・梱包の新旧経路を別に検証する。
 合成テストでServiceNowの実際の演算子解釈やDB実行計画まで証明したことにはしない。
-PDI読み取りE2Eは実装後に別途承認を得て行う。本書の作成では製品実装を行っていない。
+新モードのPDI読み取りE2Eは別途承認を得て行う。後続実装の確認範囲は実装記録を参照する。
 実機の観測は次の§6.1のAI読み取り照会だけで、E2Eや契約実装の検証とは区別する。
 
 ### 6.1. AIによるPDI読み取り照会（参考、2026-10-18）

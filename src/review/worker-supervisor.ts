@@ -1,5 +1,5 @@
 import { Worker, type WorkerOptions } from 'node:worker_threads';
-import type { AggregateReview } from './aggregate-schema.js';
+import type { AnyAggregateReview as AggregateReview } from './aggregate-schema.js';
 
 export type ReviewWorkerFactory = (url: URL, options: WorkerOptions) => Worker;
 type Failure = 'deadline_exceeded' | 'cancelled' | 'internal_review_error' | 'worker_unavailable';
@@ -62,7 +62,7 @@ export class ReviewWorker {
           // Only the trusted worker performs full contract validation. Reject non-result
           // protocol messages here; bounded JSON decoding stays on the parent thread.
           if (!result || typeof result !== 'object' || Array.isArray(result)
-            || (kind === 'finish' ? result.schema_version !== 'bp-mcp-review-0.2'
+            || (kind === 'finish' ? result.schema_version !== (input as AggregateReview).schema_version
               || result.poc_only !== true || result.code_return_mode !== 'none'
               : !['reviewed', 'rejected', 'result_omitted'].includes(result.state))) {
             throw new ReviewWorkerError('internal_review_error');

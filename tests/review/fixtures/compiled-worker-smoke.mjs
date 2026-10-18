@@ -21,4 +21,11 @@ const outcome = await reviewBoundedUpdateSet(selected, { update_set_sys_id: pare
 assert.equal(outcome.isError, false);
 assert.equal(outcome.result.counts.findings, 1);
 assert.equal(outcome.result.consistency, 'stable_observation');
+assert.equal(outcome.result.schema_version, 'bp-mcp-review-0.2');
+const optIn = await reviewBoundedUpdateSet(selected, { update_set_sys_id: parent, selection_mode: 'review_targets' }, { fetch: fetcher });
+assert.equal(optIn.isError, false);
+assert.equal(optIn.result.schema_version, 'bp-mcp-review-0.3');
+assert.equal(optIn.result.counts.findings, 1);
+assert.equal(optIn.result.selection.filter_version, 'target-prefix-0.1');
+assert.equal(optIn.result.coverage.candidate_inventory_complete, false);
 console.log('Compiled worker default entry: analysis + aggregation PASS');

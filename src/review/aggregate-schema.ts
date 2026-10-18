@@ -1,6 +1,7 @@
 /** BP-5 aggregation contract; does not collect records or run the reviewer. */
 import { z } from 'zod';
 import { CATALOG_VERSION, RULES } from './catalog.js';
+import { requestedAssetTypes, TARGET_FILTER_VERSION, TARGET_LIMITATIONS } from './target-selection.js';
 import { bp5RuleIdsSchema, bp5RuleIdSchema, releaseEvidenceStructure, reviewResultV2Structure,
   reviewResultV2Schema, checkReleaseEvidence, releaseMatchForEvidence } from './result-schema-v2.js';
 
@@ -51,8 +52,37 @@ export const aggregateReviewStructure = z.strictObject({
       'rate_limited', 'upstream_unavailable', 'deadline_exceeded', 'request_budget_exceeded', 'receive_budget_exceeded',
       'payload_budget_exceeded', 'changed_during_review', 'response_limit', 'internal_review_error']) })).max(100),
 });
-export const aggregateReviewSchema = aggregateReviewStructure.superRefine((r, ctx) => {
+export const aggregateReviewV3Structure = aggregateReviewStructure.extend({
+  schema_version: z.literal('bp-mcp-review-0.3'),
+  selection: z.strictObject({ mode: z.literal('review_targets'), filter_version: z.literal(TARGET_FILTER_VERSION),
+    requested_asset_types: z.array(z.enum(['business_rule', 'client_script'])).min(1).max(2),
+    action_scope: z.literal('insert_or_update_only'), order: z.literal('sys_id_asc'),
+    excluded_counts: z.strictObject({ unsupported_assets: z.null(), deleted_assets: z.null(), other_actions: z.null() }) }),
+  coverage: aggregateReviewStructure.shape.coverage.extend({ analysis_scope: z.literal('selected_candidate_window'),
+    candidate_inventory_complete: z.literal(false), update_set_inventory_complete: z.literal(false) }),
+  errors: z.array(aggregateReviewStructure.shape.errors.element.extend({ code: z.enum([
+    ...aggregateReviewStructure.shape.errors.element.shape.code.options, 'candidate_filter_violation',
+  ]) })).max(100),
+});
+export type AggregateReview = z.infer<typeof aggregateReviewStructure>;
+export type AggregateReviewV3 = z.infer<typeof aggregateReviewV3Structure>;
+export type AnyAggregateReview = AggregateReview | AggregateReviewV3;
+function checkAggregate(r: AnyAggregateReview, ctx: z.RefinementCtx) {
   const fail = (message: string) => ctx.addIssue({ code: 'custom', message });
+  if (r.schema_version === 'bp-mcp-review-0.3') {
+    if (JSON.stringify(r.selection.requested_asset_types) !== JSON.stringify(requestedAssetTypes(r.coverage.requested_rule_ids))) fail('Selection types contradict requested rules');
+    if (TARGET_LIMITATIONS.some(s => !r.limitations.includes(s))) fail('Target selection requires inventory limitations');
+    if (r.counts.skipped_deleted || r.assets.some(a => a.state === 'skipped_deleted')) fail('Target selection cannot include deleted rows');
+    if (r.coverage.analysis_complete && !r.collection.selected) fail('Empty candidate window cannot assert analysis complete');
+    if (r.errors.some(e => e.code === 'candidate_filter_violation' && !['metadata', 'consistency'].includes(e.stage))) fail('Invalid candidate filter error stage');
+    for (const error of r.errors.filter(e => e.code === 'candidate_filter_violation')) {
+      if (error.update_xml_sys_id || r.consistency !== 'unverified'
+        || error.stage === 'metadata' && (r.collection.status !== 'failed' || r.status !== 'failed')
+        || error.stage === 'consistency' && (r.collection.status !== 'complete' || r.status !== 'partial')) {
+        fail('Candidate filter violation contradicts collection/consistency');
+      }
+    }
+  }
   const equalIds = (a: string[], b: string[]) => a.length === b.length && new Set(a).size === a.length && a.every(x => b.includes(x));
   const startedAt = Date.parse(r.started_at);
   const endedAt = Date.parse(r.ended_at);
@@ -118,10 +148,21 @@ export const aggregateReviewSchema = aggregateReviewStructure.superRefine((r, ct
   if (r.coverage.analysis_complete && incomplete) fail('Incomplete review cannot assert full analysis');
   if (r.status === 'failed' && (findings || r.coverage.analysis_complete || !r.errors.length)) fail('Failed run needs an error, no findings and incomplete analysis');
   if (Buffer.byteLength(JSON.stringify(r), 'utf8') > r.limits.max_response_bytes) fail('Aggregate JSON exceeds response budget');
-});
-export type AggregateReview = z.infer<typeof aggregateReviewSchema>;
+}
+export const aggregateReviewSchema = aggregateReviewStructure.superRefine(checkAggregate);
+export const aggregateReviewV3Schema = aggregateReviewV3Structure.superRefine(checkAggregate);
+export const anyAggregateReviewSchema = z.discriminatedUnion('schema_version', [aggregateReviewSchema, aggregateReviewV3Schema]);
 export const aggregateReviewJsonSchema = {
   ...z.toJSONSchema(aggregateReviewStructure, { target: 'draft-7' }),
   $id: 'urn:servicenow-mcp:best-practice-mcp-review-result:0.2',
   $comment: 'PoC only. Structural schema; also run aggregateReviewSchema for nested reviews, provenance, release, accounting, completeness and serialized response budget checks. No fetching or MCP registration.',
+};
+export const aggregateReviewV3JsonSchema = {
+  ...z.toJSONSchema(aggregateReviewV3Structure, { target: 'draft-7' }),
+  $id: 'urn:servicenow-mcp:best-practice-mcp-review-result:0.3',
+  $comment: 'Structural schema only; also run aggregateReviewV3Schema for provenance, selection, accounting and budgets.',
+};
+export const anyAggregateReviewJsonSchema = {
+  ...z.toJSONSchema(z.discriminatedUnion('schema_version', [aggregateReviewStructure, aggregateReviewV3Structure]), { target: 'draft-7' }),
+  $comment: 'Omitted/bounded_all selection uses 0.2; review_targets uses 0.3. Runtime refinements are also required.',
 };

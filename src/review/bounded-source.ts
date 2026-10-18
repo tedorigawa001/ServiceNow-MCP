@@ -3,9 +3,12 @@ import { z } from 'zod';
 import type { ServiceNowClient } from '../servicenow/client.js';
 import { BoundedReadError, type BoundedReadOptions, type BoundedReadSession } from '../servicenow/bounded-read.js';
 import { releaseEvidenceStructure, releaseMatchForEvidence, type ReleaseEvidence } from './result-schema-v2.js';
+import { bp5RuleIdsSchema } from './result-schema-v2.js';
+import { candidatePolicy, selectionModeSchema } from './target-selection.js';
 
 const id = z.string().regex(/^[a-f0-9]{32}$/);
-const inputSchema = z.strictObject({ update_set_sys_id: id, max_records: z.number().int().min(1).max(100).default(20) });
+const inputSchema = z.strictObject({ update_set_sys_id: id, max_records: z.number().int().min(1).max(100).default(20),
+  selection_mode: selectionModeSchema.optional(), requested_rule_ids: bp5RuleIdsSchema.optional() });
 const version = { sys_updated_on: z.string().min(1).max(40), sys_mod_count: z.string().regex(/^\d{1,20}$/) };
 const parentSchema = z.strictObject({ sys_id: id, state: z.string().max(100), application: z.string().max(32), ...version });
 const metadataSchema = z.strictObject({ sys_id: id, update_set: id, name: z.string().min(1).max(200),
@@ -133,9 +136,16 @@ export class BoundedUpdateSetSource {
   }
   async #fetchMetadata(final = false) {
     if (!this.parent) throw new BoundedReadError('invalid_input');
-    const rows = await this.rows(this.path('sys_update_xml', metadataFields,
-      `update_set=${this.input.update_set_sys_id}^ORDERBYsys_id`, this.input.max_records + 1), this.input.max_records + 1, final);
+    const policy = this.input.selection_mode === 'review_targets'
+      ? candidatePolicy(this.input.requested_rule_ids ?? ['AU-BR-001', 'AU-BR-002', 'AU-CL-004']) : undefined;
+    let path = this.path('sys_update_xml', metadataFields,
+      `update_set=${this.input.update_set_sys_id}${policy?.query ?? ''}^ORDERBYsys_id`, this.input.max_records + 1);
+    if (policy) path += '&sysparm_offset=0&sysparm_no_count=true';
+    const rows = await this.rows(path, this.input.max_records + 1, final);
     const parsed = z.array(metadataSchema).safeParse(rows);
+    if (parsed.success && policy && parsed.data.some(row => row.update_set !== this.input.update_set_sys_id || !policy.accepts(row))) {
+      throw new BoundedReadError('candidate_filter_violation');
+    }
     if (!parsed.success || parsed.data.some(row => row.update_set !== this.input.update_set_sys_id)
       || new Set(parsed.data.map(row => row.sys_id)).size !== rows.length
       || parsed.data.some((row, i) => i > 0 && row.sys_id <= parsed.data[i - 1].sys_id)) throw new BoundedReadError('invalid_response');
