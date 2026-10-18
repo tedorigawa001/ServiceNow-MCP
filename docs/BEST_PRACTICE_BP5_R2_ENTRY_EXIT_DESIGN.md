@@ -255,6 +255,9 @@ server/既存CLI/bin/package.json/MCP登録は変更せず、R-2非同梱を維�
   検証済みreportの73/71をsummary表示前に内部通知し、固定優先状態を後続の表示失敗/fatalで上書きしない。
   通知は同じ優先状態で重複せず、73の後に71へ下げない。raw reportのfieldから通知しない。
 - checker/TTY/host中のsignal所有者は既存launcher→監督の引継ぎに委ね、entryはhandlerを重ねない。
+  監督の返却直後、次のawait前にlauncherがSIGINT/SIGTERMを再取得し、最終summary表示まで所有する。
+  この間の取消しはpending writeを閉じて表示失敗とするが、既知の73/71を81や130で上書きしない。
+  finallyでlauncherのlistenerを解除する。認可前取消しでrootが既にabort済みでも、summary自体は表示を試みる。
   launcherが終了した後の固定拒否notice中だけentryが所有し、表示上限1秒でfinally解除する。
   全体385秒/cleanup3秒、製品解析60秒、checker/TTY上限を変更・延長しない。
 

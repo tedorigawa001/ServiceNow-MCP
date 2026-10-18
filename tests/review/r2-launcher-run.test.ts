@@ -151,6 +151,42 @@ it('keeps cleanup priority before and after a failed summary, with no duplicate 
   } } });
   expect(selectR2EntryExitCode(result)).toBe(71); expect(known).toHaveBeenCalledTimes(1);
 });
+it.each([71, 73] as const)('owns SIGINT during a pending final summary and preserves priority %s', async priority => {
+  const f = plan(), input = Object.assign(new PassThrough(), { isTTY: true, isRaw: false }), known = vi.fn();
+  const before = process.listeners('SIGINT'), beforeTerm = process.listeners('SIGTERM');
+  let owned = false, handled = false, waitedForTimeout = false, release = () => {};
+  let stallTimer: ReturnType<typeof setTimeout> | undefined;
+  const output = Object.assign(new Writable({ write(chunk, _encoding, done) {
+    if (String(chunk).includes('Type APPROVE')) { done(); setImmediate(() => input.write('APPROVE\n')); }
+    else {
+      release = done;
+      setImmediate(() => {
+        owned = process.listenerCount('SIGINT') === before.length + 1;
+        stallTimer = setTimeout(() => { waitedForTimeout = true; }, 200);
+        // Dispatch through Node's signal listeners without killing the test worker on the RED path.
+        handled = process.emit('SIGINT');
+      });
+    }
+  } }), { isTTY: true });
+  const child = Object.assign(new EventEmitter(), { pid: 12345, connected: true, exitCode: null as number | null, signalCode: null,
+    kill: vi.fn(() => false), unref: vi.fn(), disconnect: vi.fn(), send: (value: { type: string }, callback: (error: null) => void) => {
+      callback(null);
+      if (priority === 71 && value.type === 'run_grant_v2') queueMicrotask(() => {
+        child.exitCode = 71; child.emit('exit', 71, null); child.emit('close');
+      });
+      return true;
+    } });
+  try {
+    const result = await runR2ApprovedEntry(['run', f.path], { input, output, onKnownPriority: known,
+      supervisor: { totalTimeoutMs: 100, cleanupTimeoutMs: 10, observationTimeoutMs: 10, spawnHost: () => {
+        queueMicrotask(() => child.emit('message', { type: 'prepared_v2', digest: f.digest })); return child as unknown as ChildProcess;
+      } } });
+    expect(owned).toBe(true); expect(handled).toBe(true); expect(waitedForTimeout).toBe(false);
+    expect(result).toMatchObject({ mode: 'run', display: 'failed', result: { stage: 'display', code: 'display_failed' } });
+    expect(selectR2EntryExitCode(result)).toBe(priority); expect(known).toHaveBeenCalledExactlyOnceWith(priority);
+    expect(process.listeners('SIGINT')).toEqual(before); expect(process.listeners('SIGTERM')).toEqual(beforeTerm);
+  } finally { clearTimeout(stallTimer); release(); }
+});
 it.each(['changed', 'expired'] as const)('stops after TTY approval if the on-disk plan is %s before host preparation', async kind => {
   const f = plan(), terminal = tty('APPROVE\n'), sent: unknown[] = [], received: unknown[] = [];
   const result = await runR2ApprovedEntry(['run', f.path], { ...terminal, supervisor: { spawnHost: (command, args, options) => {

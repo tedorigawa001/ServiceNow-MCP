@@ -100,3 +100,28 @@ bootstrap前のloader/native/OS診断、Node自身が非Error throwのtoString�
 runは前工程の未コミットr2-terminal-displayとapproved-launchの表示接続へ依存する。
 コミットする場合は前工程の必要な実装/テスト/記録と、今回のrun接続/固定優先通知を分離し、各候補だけで検証する必要がある。
 今回の検証範囲にステージ・コミット・Push・npm公開は含めない。
+
+## 7. 最終summary中のsignal所有権の回帰修正（2026-10-19）
+
+監督は返却前にSIGINT/SIGTERMを解除するが、launcherは最終表示中に再取得していなかった。
+そのため実OS signalではNodeの既定終了が既知の73/71を迂回し得た。
+またroot Abortだけでは表示クラスのpending writeを止めないため、handler追加だけでは不十分だった。
+
+監督の返却直後・次のawait前にlauncherが両signalを再取得する。
+この表示段階のcancelはroot Abortとdisplay.closeを行い、表示失敗として返すが、既知の73/71は維持する。
+finallyで所有listenerを解除する。監督中の二重所有や、認可前取消し後のsummary表示の一律抑止は追加しない。
+
+回帰は実checker・合成TTY・OS child境界のpeerを通す2ケース（71/73）。
+未決着のsummary書き込み中にprocess.emit('SIGINT')でNodeのsignal listenerへ配送し、
+1者の所有・表示timeoutを待たない中断・表示失敗・優先コード・通知1回・両listenerの解放を確認する。
+RED時にtest worker自身を終了させないため、OSのkill送信や実Ctrl-C/PTY配送を検証した試験とは区別する。
+
+| 検証 | 結果 |
+|---|---|
+| 修正前run回帰 | 24成功・新規2失敗（表示中の所有者なし） |
+| 修正後run/approved-launch/display/compiled entry回帰 | 4ファイル・66件成功、13.46秒（即時中断の追加assert前） |
+| 最終全体回帰 `npm test -- --maxWorkers=1` | 121ファイル・3,122件成功、77.42秒（即時中断assert含む） |
+| `npm run build` / 追加テストの明示strict型検査 | 成功 / 成功 |
+| 対象実装・テストのESLint | エラー・警告なし |
+
+製品期限・表示1秒上限は変更しない。telemetry保留、実機操作・token発行・設定変更・Pushなし。

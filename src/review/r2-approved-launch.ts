@@ -19,8 +19,10 @@ export type R2ApprovedLaunchResult = { stage: 'check' | 'approval'; ok: false; c
   | { stage: 'execution'; report: R2SupervisorReport; summary: R2ExitSummary };
 export async function approveAndRunR2Plan(path: string, options: R2ApprovedLaunchOptions = {}): Promise<R2ApprovedLaunchResult> {
   const fixed = { ...options, tty: { ...options.tty }, checker: { ...options.checker }, supervisor: { ...options.supervisor } };
-  const root = new AbortController(), cancel = () => root.abort();
+  const root = new AbortController();
   let display: R2TerminalDisplay | undefined;
+  let showingSummary = false;
+  const cancel = () => { root.abort(); if (showingSummary) display?.close(); };
   fixed.signal?.addEventListener('abort', cancel, { once: true });
   if (fixed.signal?.aborted) cancel();
   // Exactly one signal owner: this phase ends synchronously before supervisor is invoked.
@@ -37,6 +39,10 @@ export async function approveAndRunR2Plan(path: string, options: R2ApprovedLaunc
     // No await between handover and supervisor's synchronous handler registration/spawn.
     const report = await superviseR2Host(path, { ...fixed.supervisor, signal: root.signal, approvedDigest: check.digest,
       onReady: () => { display!.ready(); return fixed.supervisor.onReady?.(); } });
+    // Supervisor has released its handlers. Reclaim ownership before the next await,
+    // including pending final writes, without stacking handlers while the host is supervised.
+    showingSummary = true;
+    process.on('SIGINT', cancel); process.on('SIGTERM', cancel);
     const checked = parseR2SupervisorReport(report);
     if (checked?.terminal_reason === 'termination_unconfirmed') fixed.onTerminalPriority?.(73);
     else if (checked?.cleanup === 'incomplete' || checked?.terminal_reason === 'cleanup_incomplete') fixed.onTerminalPriority?.(71);
