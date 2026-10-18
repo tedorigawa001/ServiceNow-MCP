@@ -14,10 +14,11 @@ const failureCodes = [
   'identity_unconfirmed', 'identity_mismatch', 'identity_request_failed', 'identity_budget_exceeded', 'review_busy',
   'review_failed', 'cleanup_incomplete', 'secret_output_detected', 'callback_unavailable', 'start_page_reused', 'listener_failed',
 ] as const;
+export const r2HostFailureCodeSchema = z.enum(failureCodes);
 const receiptBase = { cleanup: z.literal('complete'), mcpListed: z.boolean(), tokenMayHaveBeenIssued: z.boolean(),
   otherAccountTokenPossible: z.boolean() };
 const receiptSchema = z.discriminatedUnion('ok', [
-  z.strictObject({ ...receiptBase, ok: z.literal(false), code: z.enum(failureCodes) }),
+  z.strictObject({ ...receiptBase, ok: z.literal(false), code: r2HostFailureCodeSchema }),
   z.strictObject({ ...receiptBase, ok: z.literal(true), result: z.strictObject({ isError: z.boolean(),
     content: z.array(z.strictObject({ type: z.literal('text'), text: z.string().max(262144) })).length(1) }) }),
 ]);
