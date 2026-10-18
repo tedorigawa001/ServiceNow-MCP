@@ -212,3 +212,7 @@ checker/限定確認票は§9、TTY承認/digest結合は§10を参照。ready�
 - ready案内/最終summary・公開entryは追加していない。既存onReadyの信頼済み口と監督report返却は維持する。
   正しいdigestの実hostは合成manifestでreadyまで進み、認可操作前に取消してcleanup/終了を確認した。
   全体385秒・製品60秒・cleanup3秒、checker5秒/450秒事前余裕、R-2非同梱を維持する。
+- 補足：digestを結合しない旧経路（`approvedDigest`なしの`superviseR2Host`、フラグなしのhost entry）は、
+  内部APIとしてはまだ呼び出せる。人向けの`approveAndRunR2Plan`は常に結合するため現時点の経路では使われない。
+  将来の公開入口は承認付き経路だけに接続し、旧経路を外部から選べないようにする（削除または内部テスト専用化）ことを
+  公開前の必須条件とする。
