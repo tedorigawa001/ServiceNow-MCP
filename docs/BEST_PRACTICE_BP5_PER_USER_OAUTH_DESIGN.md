@@ -52,10 +52,18 @@ Table GET/POSTは非アクティブで関連認証プロファイルも表示さ
 
 同記録§4.1の追加調査でもTrino Connector・Prism・WebKit HTML to PDFのTable API実利用は未確認、
 運用担当者は未特定。Metricsの351行は一意な組合せの表示件数であり、3登録の呼出し数ではない。
-アプリ別usage dashboardは「not found」で表示不能、registryとclient/server mappingで対象の関連は
+アプリ別usage dashboardは初回「not found」で表示不能、registryとclient/server mappingで対象の関連は
 確認できなかったが、未利用の証拠にはしない。用途コメントや別APIのmTLS設定も担当者/利用実績の代替にはならない。
 非秘密の帰属証拠と収集・保持・除外範囲、運用台帳等による責任者を確定する課題を残し、
 dashboard修復・ロール追加・新規ログ有効化やtoken取得で調査を補うことは別途承認なしに行わない。
+
+同記録§4.2ではMetricsと標準メニューのdashboard参照先不整合を確認。ただし標準メニューの
+有効な参照先でも最終的に`Inbound Integration Usage is not available`で、統計取得は未達。
+metering設定は保存値true、Framework導入記録あり、確認したデータリソースACLはadmin overrideを許すが、
+PDIでの一律制約や下流権限は未確定。既存telemetryエラーと標準処理を照合すると、同スコープの
+`QueryServiceHttpClient`が未初期化に見える`this.logger`をエラー処理で参照しており、元のエラーを
+隠す疑いがある。行番号付きスタックによる確証はなく、修正や機能有効化は承認しない。
+3登録の利用/owner確認、G1の進行条件、P/L/S未実行の扱いは変わらない。
 
 ## 2. 登録案と責任分離
 

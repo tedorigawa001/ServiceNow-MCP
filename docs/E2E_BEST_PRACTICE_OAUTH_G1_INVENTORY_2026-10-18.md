@@ -114,7 +114,7 @@ Trino Connectorの表示した既定フォームにもOwner/Contactはなかっ�
 | 確認経路 | 観測結果 | 確認できなかった理由/限界 |
 |---|---|---|
 | Machine Identity Console → Metrics → Unique API calls in last 7 days | 表示総数351行。先頭15行でTable APIの`now/table/sys_update_xml`、`now/table/sys_update_set`等を確認 | **351は一覧の一意な組合せの行数で、リクエスト総数ではない**。表示列はidentity/authentication/resource/method/type/最終アクセス時刻で、OAuth application/clientの列はない。全351行は精査しておらず、同一identityから3登録へ帰属させない |
-| Metricsの既存リンクからInbound API Integration Usage dashboard | `Can't display this dashboard` / `The dashboard that you are looking for was not found` | アプリ別利用の確認に到達できなかった。画面だけでは実体不存在・リンク不整合・権限による不可視等を切り分けられない。修復・権限追加はしていない |
+| Metricsの既存リンクからInbound API Integration Usage dashboard | `Can't display this dashboard` / `The dashboard that you are looking for was not found` | 初回観測。追加調査で標準メニューとの参照先不整合を確認したが、正しい参照先でも利用不可（§4.2）。修復・権限追加はしていない |
 | Registered Integrations（`inbound_integration_provider_registry`） | 未フィルター6件。OAuth Entity参照はAzureAD、client001、Okta、ADFS、Auth0、Googleで、対象3登録は含まれなかった | 登録一覧での不在であり、実呼出しがない証拠ではない。Basic Auth Userの個人情報は記録しない |
 | Auth Client Server Mappings（`auth_client_server_mapping`） | 観測済み3登録の参照IDで`auth_client`を限定した一覧は0件 | 関連設定の表示0件のみ。Table API未利用や他の経路の不存在は証明しない |
 
@@ -137,6 +137,64 @@ Trino Connectorの表示した既定フォームにもOwner/Contactはなかっ�
 したがって、既存設定から登録の有効状態と一部の用途は確認できたが、アプリ別の実績と人の責任者を
 結び付ける証拠は得られなかった。ログの取得不能を「0呼出し」と置き換えない。
 
+### 4.2 dashboardリンク不整合・利用不可の切り分け
+
+2026-10-18の追加読み取り調査。既存UI・設定・標準処理・当日の限定した`syslog`を照合した。
+§4.1のメタデータ照会と異なり、ここでは既存のアプリケーションエラーログを参照したが、
+`syslog_transaction`の生ログやcredential/tokenの値は取得していない。
+新規登録・認可/token発行・ロール/ACL/プロパティ/標準処理の保存変更・機能の有効化は行っていない。
+
+#### 確認した事実
+
+| 観点 | 観測 | 判定の範囲 |
+|---|---|---|
+| Metricsのリンク | `/now/platform-analytics-workspace/dashboards/params/edit/false/sys-id/99dd82d2ff222210469fffffffffff4c`を参照し、not foundを再現 | 標準メニューと参照先が異なる。なぜこのIDを参照するかは未確認 |
+| 標準メニュー | 有効なSystem Web ServicesのUsage Dashboardモジュールは同経路のID`543b66e7f350321033d25169f6968c2e`を参照。必要ロールは`inbound_integration_metering_admin` | 同一セッションでdashboard名・フィルターを表示。統計の取得成功ではない |
+| dashboard登録 | 両IDに限定した`par_dashboard`一覧は後者の有効レコード1件。`pa_dashboards`は両IDとも表示0件 | 今回の可視範囲での登録照合。プラットフォーム全体の不存在を断定しない |
+| 正しい参照先の最終表示 | `Inbound Integration Usage is not available`。一時的な`Loading...`の後も統計を利用できず、利用者の提示画像とも一致 | 「正しいリンクなら利用可能」という結論には訂正が必要。リンク不整合と統計利用不可は別問題 |
+| 有効化設定 | `glide.inbound_integration_metering.enabled`の保存値は`true` | 単純な設定falseの説明を支持しない。実効キャッシュ・全依存機能・バックエンド利用権まで証明しない |
+| 導入記録 | `sys_plugins`でInbound API Integration Usage Framework（`com.glide.inbound_integration_metering`）、Install date=2026-06-12 14:33:40を確認。dashboard資産とtelemetry用の有効Script Includeも存在 | 画面/処理が丸ごと未導入とは考えにくい。導入記録は全依存の正常稼働の証拠ではない |
+| プラグイン一覧の制約 | `v_plugin`のInbound検索には公開/契約に関係する追加条件が見え、Frameworkは表示されなかった | この一覧の不在だけで未導入としない。上記`sys_plugins`の観測と区別する |
+| 権限 | セッション表示はSystem Administrator。表示名に対応する限定ロール一覧で有効なadmin関連を確認。Single Score Visualizationの`ux_data_broker/execute` ACLはActive=true、Admin overrides=true、Advanced=false、要求ロールは`inbound_integration_metering_admin` | 単純な入口ACLのロール不足は主因と考えにくいが、全ACL・下流サービスの権限を排除しない。非管理者での実効試験は未実施 |
+
+公式の必要ロールも`inbound_integration_metering_admin`（§6）。PDIでこの機能が一律利用不可とする
+公式根拠は今回の検索では確認できなかった。これはPDIでの利用可能性を保証するものでもない。
+
+#### 既存エラーと標準処理の照合
+
+- 当日の`TelemetryDataHandler._fetchData: Error fetching data:`に限定した既存ログは、
+  確認した表示10行すべてが`The undefined value has no properties.`だった。10は総発生件数とはしない。
+- 当日の`messageSTARTSWITHTelemetry`一覧は表示総数30行、先頭20行を確認。その表示範囲で
+  `TelemetryQueryServiceDataConnector.executeQuery`、`TelemetryDataProviderFacade.fetchData`、
+  `TelemetryDataHandler._fetchData`に同じエラーを確認した。件数はAPI呼出し数ではなく、
+  同一要求への帰属・相関IDの照合や全30行の精査はしていない。
+- 標準処理はSingle Score Visualization → `sn_telemetry_data.TelemetryDataHandler` →
+  `TelemetryDataProviderFacade` → `TelemetryQueryServiceDataConnector` → `BaseTelemetryConnector` →
+  同スコープの`QueryServiceHttpClient`を参照する構成。別スコープの同名クライアントとは区別した。
+  これは静的な参照経路であり、今回の要求の完全な実行トレースではない。
+
+**疑い：`QueryServiceHttpClient`の`this.logger`未初期化。** 読み取った同クラスの`initialize()`は
+`this.client`だけを設定し、クラス本文に`this.logger`への代入や`Object.extendsObject`はなかった。
+一方、応答解析のcatchに`this.logger.error(...)`、HTTP失敗時の`_handleError()`にも
+`this.logger.error(...)`がある。取得本文での該当箇所はそれぞれ142行・173行（版依存）。
+元の通信/解析エラーを処理する際に二次エラーが発生し、最初の原因を隠す可能性がある。
+
+これは**静的な不整合の疑いで、今回のundefined値を実測で確定したものではない**。
+同クライアントのレコードIDを含む当日ログの限定検索は表示0件で、行番号付きスタックは確認できなかった。
+`BaseTelemetryConnector.getApiConfig()`は取得値がfalsyなら明示的な別エラーを投げるため、
+先に挙げた`apiConfig`欠落説をそのまま確定原因にはしない。元のHTTP応答・失敗段階も未確認。
+
+#### 未確認事項と次の判断
+
+1. Metrics側のIDの由来、画面資産の版・移行/更新との関係。
+2. `this.logger`が実際の例外箇所か、元の通信/解析エラーは何か。既存の秘密を含まないスタックや
+   相関情報が得られるかを先に確認し、ログ全文・応答・ヘッダー・接続設定の実値を無条件に収集しない。
+3. telemetryバックエンドの提供/構成・PDI制約・下流権限との因果関係。現時点でどれも確定しない。
+
+標準処理の修正、logger追加、新規ログ有効化、プラグイン修復、権限追加で仮説を試していない。
+必要になれば別の変更承認・影響/復旧計画を先に用意する。3登録の実利用/ownerは依然未確認で、
+dashboardが使えないことを「利用なし」「共有変更の影響なし」に置き換えない。
+
 ## 5. G1の残項目と進行条件
 
 優先順位は以下。いずれも未完了で、G2/G3/G4へ自動で進まない。
@@ -146,6 +204,8 @@ Trino Connectorの表示した既定フォームにもOwner/Contactはなかっ�
    §4.1の追加調査でも3件は未解決。既存の運用台帳・ジョブ設定等から責任者と非秘密のclient→resourceの
    帰属証拠を特定し、対象期間・収集/保持・除外・不可視範囲を記録する。担当者への連絡は別途許可を得る。
    dashboardの表示不能は修復やロール追加の許可ではない。新規ログ有効化・設定変更・token取得で補わない。
+   §4.2のリンク不整合とtelemetryエラーの調査でも利用統計は取得できていない。
+   logger未初期化は疑いとして保持し、確定原因・PDI一律制約・権限問題の解消とは扱わない。
 2. **実効設定/可視性**：閲覧主体・ACL/ドメイン/スコープによる不可視、プロパティ実効値、
    対象clientの制限フラグ、ポリシーの正確な対象表・条件/優先を確認。
    credential内容や既存tokenを収集する代わりに、承認した非秘密の証拠経路を先に設計する。
@@ -170,7 +230,7 @@ Trino Connectorの表示した既定フォームにもOwner/Contactはなかっ�
 | [REST API scope troubleshooting](https://www.servicenow.com/docs/r/platform-security/authentication/rest-api-scope-troubleshooting.html) | scope検査プロパティ、useraccount、OAuth/OIDCとBasic/Session Cookie/証明書認証の違い |
 | [Machine identity metrics](https://www.servicenow.com/docs/r/platform-security/identity/machine-identity-metrics.html) | Australia・2026-03-12更新表示。Unique API calls in last 7 days、Internal Integration User=trueの除外。対象の実効除外状態は未確認 |
 | [Monitor inbound API integration usage](https://www.servicenow.com/docs/r/api-reference/web-services/inbound-api-integration-usage-dashboard.html) | Australia・2025-09-29更新表示。アプリ別OAuth呼出し、`inbound_integration_metering_admin`、30日/13か月等の表示期間。PDIの保持・収集の実測ではない |
-| [View inbound API integration usage dashboard](https://www.servicenow.com/docs/r/api-reference/web-services/view-inbound-api-integration-usage-dashboard.html) | Australia・2025-10-01更新表示。アプリ/resourceの絞り込みと必要ロール。今回のPDIではdashboard本文に到達できず |
+| [View inbound API integration usage dashboard](https://www.servicenow.com/docs/r/api-reference/web-services/view-inbound-api-integration-usage-dashboard.html) | Australia・2025-10-01更新の検索表示。アプリ/resourceの絞り込みと必要ロール。追加調査ではPDIの画面枠に到達したが統計は利用不可。直接本文はBrazil表示となり、Australia固定の根拠と混同しない |
 | [Register Basic Authentication](https://www.servicenow.com/docs/r/api-reference/web-services/register-basic-authentication.html) | Australia・2026-03-12更新表示。Registered IntegrationsとOAuth Entityによる名称補完。registryの不在から未利用とは推論しない |
 
 Dictionaryの正規関連テーブル名と件数はPDIでの観測。公式資料を読んだことを、そのPDIでの

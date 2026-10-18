@@ -134,11 +134,21 @@ scope新設の一部として自動実行しない。スコープ検査プロパ
 
 追加調査ではMetricsに一意な組合せ351行が表示されたが、先頭15行の確認と表示列だけでは
 Trino Connector/Prism/WebKit HTML to PDFへ呼出しを帰属できなかった。アプリ別usage dashboardは
-「not found」で表示不能。registryの6件に対象参照がないこととclient/server mappingの対象0件を、
+初回「not found」で表示不能。registryの6件に対象参照がないこととclient/server mappingの対象0件を、
 未利用・影響なしとは判定しない。用途コメントやTrinoの別API/mTLS関連もTable API利用の証拠ではない。
 G3の前に、責任者と非秘密のclient→resource帰属、対象期間、収集・保持・除外/不可視範囲を確定する。
 dashboardの復旧・ロール追加・ログ有効化はこの読み取り調査に含めず、必要なら別の変更/復旧承認を得る。
 生のtransactionログやcredential/tokenの値は今回取得しておらず、既存ログ全体を調べ尽くしたとは扱わない。
+
+[G1記録§4.2](E2E_BEST_PRACTICE_OAUTH_G1_INVENTORY_2026-10-18.md)の追加調査でMetricsと標準メニューの
+参照先不整合を確認したが、正しい参照先でも`Inbound Integration Usage is not available`となった。
+保存済みmetering設定true・Framework導入記録・確認した入口ACLのadmin overrideだけでは、
+telemetryバックエンドの稼働や下流権限、PDIでの提供条件を保証しない。
+限定した既存`syslog`と標準処理の照合では`QueryServiceHttpClient.this.logger`未初期化による
+二次エラーの疑いがあるが、行番号付きスタック・元のHTTP失敗原因は未確認。実測確定とは採点しない。
+リンク修正、標準処理改修、プラグイン修復、ログ有効化や権限追加をG1の読取操作として実施しない。
+秘密を含まない既存の相関/スタック証拠の確認を優先し、変更が必要なら別途承認と復旧計画を用意する。
+統計を取得できないまま3登録を未利用と判断してG3へ進めず、P/L/Sは全件未実行を維持する。
 
 1. 権限/スコープ/ドメイン/件数制限による不可視を確認し、既存API-scope、OAuth関連付け、
    API access policyの順序/条件、制限フラグと適用API/version/resourceを全ページ棚卸しする。
