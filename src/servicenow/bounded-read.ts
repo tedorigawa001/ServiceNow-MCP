@@ -136,6 +136,10 @@ export class BoundedReadSession {
     this.phase.abort();
     this.controller.abort(); active--; principals.delete(this.principalKey);
     this.token = undefined;
+    // A closed snapshot must not retain per-user credentials after its owner
+    // revokes an R-2 session. This snapshot is an isolated copy, not user config.
+    this.snapshot.perUserBearerToken = undefined;
+    this.snapshot.accessToken = undefined;
   }
   private async attempt(path: string, init: RequestInit, final: boolean): Promise<{ status: number; value?: unknown }> {
     this.check();

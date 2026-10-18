@@ -114,7 +114,8 @@ R-1（既存2ロール、残存書込みあり）は採らない。G2の前に�
 
 R01の固定GET候補と、失敗時停止・メモリ内token引渡し・秘密非出力・終了処理の設計は
 [方式R-2本人確認/token引渡し設計](BEST_PRACTICE_BP5_R2_IDENTITY_TOKEN_DESIGN.md)を参照する。
-設計の具体化のみで、実装・G0追加試験・実機でのR01成立を完了扱いにしない。
+内部session/同一プロセスMCPは[合成検証済み](E2E_BEST_PRACTICE_R2_IDENTITY_SYNTHETIC_2026-10-18.md)。
+既存G0・実OAuth交換/runnerへの接続と、実機でのR01成立は未完了のまま。
 
 各ケースは検証利用者の正常token（P01=L01で得たもの、または承認済みの追加発行）を使う。
 BP-5製品の取得経路（固定GET・3テーブル・bounded上限）を通し、本文・payload・原応答は出力しない。

@@ -24,6 +24,8 @@ try {
     'evaluation harness must remain development-only');
   assert(![...files].some(path => path.startsWith('dist/review/search')),
     'search PoC must remain development-only');
+  assert(![...files].some(path => path.startsWith('dist/review/r2-')),
+    'unregistered R-2 identity PoC must remain development-only');
   run('tar', ['-xzf', join(temporary, packed.filename), '-C', temporary]);
   const installed = join(temporary, 'package');
   const manifest = JSON.parse(readFileSync(join(installed, 'package.json'), 'utf8'));

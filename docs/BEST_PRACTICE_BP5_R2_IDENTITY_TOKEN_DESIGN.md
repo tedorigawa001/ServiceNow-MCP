@@ -1,6 +1,9 @@
 # BP-5 方式R-2：固定GET本人確認・メモリ内token引渡し
 
-Version: draft-0.1 / Date: 2026-10-18 / Status: 設計案。未実装・未承認・実機未検証。
+Version: draft-0.2 / Date: 2026-10-18 / Status: 内部PoCを実装・合成検証。実機/運用は未承認・未検証。
+
+[実装・合成検証記録](E2E_BEST_PRACTICE_R2_IDENTITY_SYNTHETIC_2026-10-18.md)を参照。
+交換後の内部session/同一プロセスMCPまでの部分実装で、実OAuth交換・runner/OS終了処理は未接続。
 
 ## 1. 範囲と不変条件
 
@@ -106,10 +109,11 @@ HTTP原応答・例外のmessage/cause・ヘッダー・入力値を固定理由
 - 信頼済み内部bridgeがcapabilityに対応するtokenを専用のper-user clientへ一時供給する。
   `authMode=per-user`を明示し、開始前後にorigin/token/期限を固定。既存共有client・instance registryを変更しない。
   1セッション1レビュー同時実行までとし、実行中のswitch_instanceや別toolへの流用を認めない。
-- SDKの同一プロセスInMemoryTransportによるMCP list/callと既存dispatchを通す経路を設計候補とする。
+- SDKの同一プロセスInMemoryTransportによるMCP list/callと既存レビューexecutorを通す内部PoCを実装した。
   専用接続に私的なセッションコンテキストを関連付け、本人確認前のcallをbridgeで拒否する。
-  共通サーバーへの認証バックドア/新規tool引数/HTTPヘッダーは追加しない。サーバー生成・内部接続の
-  実装方法は後続設計/合成試験で確定する。既存のserver.tsを読み込むだけで安全に生成できるとは仮定しない。
+  共通サーバーへの認証バックドア/新規tool引数/HTTPヘッダーは追加しない。
+  内部bridgeは既存のレビューtool executorへ接続する専用SDK Serverとして実装した。
+  汎用server.tsを読み込まず、汎用サーバーの認証/登録は変更しない。
 - `withUser({bearerToken})`や`createBoundedReadSession()`は既存接続点の候補だが、前者は共有状態を
   shallow copyする実装である。呼ぶだけで秘密の寿命・本人性・全参照の解放が保証されるとはしない。
   callback、client、snapshot、HTTP request、同時実行管理等に残る参照の所有者と破棄を実装前に列挙する。
@@ -142,7 +146,8 @@ C方式設定の有効期限は別途`expires_at > started_at + deadline_ms`を�
 
 ## 7. 後続の合成試験と承認ゲート
 
-未実施。実装許可後に、少なくとも次を実PDIへ接続しない合成試験で確認する。
+以下の内部session/同一プロセスMCPの範囲は合成試験で確認した（上記記録）。
+実OAuth/runnerとの接続、実機承認ゲートは未完了のまま。
 
 1. 固定GETの完全一致、Bearer同一性、fields/limit、redirect拒否、上限、TLS方針。任意query/URL追加を拒否。
 2. 0/2件、ID不一致、表示値形式、余分なキー、重複キー、不正JSON、HTML、401/403/5xx、timeoutの安全側停止。
@@ -164,4 +169,5 @@ G0の合成試験だけではこれらを満たさず、ロール追加や共有
 Australia固定URLの本文は今回取得できず、family固定の再照合とR-2実機確認は未完了である。
 
 接続点はローカルの`src/servicenow/client.ts`、`src/servicenow/bounded-read.ts`、
-`src/review/bounded-source.ts`を読んで確認した。本人確認bridge・capability・破棄機構が既に実装済みとはしない。
+`src/review/bounded-source.ts`を読んで確認した。内部session/bridgeは実装したが、
+公開CLIや既存HTTP/stdioへの秘密供給・実PDI本人確認が完了したとはしない。

@@ -225,7 +225,8 @@ dev441827（Australia）の`sys_security_acl`/`sys_security_acl_role`/`sys_user_
 
 固定GET候補・安全側停止・同一プロセスの不透明capabilityによる引渡し・終了時の参照破棄は
 [方式R-2本人確認/token引渡し設計](BEST_PRACTICE_BP5_R2_IDENTITY_TOKEN_DESIGN.md)に具体化した。
-未承認・未実装であり、固定GETの対象版/R-2での成立と実機操作の承認は別途必要。
+内部sessionと同一プロセスMCPは[合成検証済み](E2E_BEST_PRACTICE_R2_IDENTITY_SYNTHETIC_2026-10-18.md)。
+実OAuth交換/runnerとの接続は未実装で、固定GETの対象版/R-2での成立と実機操作の承認は別途必要。
 
 - 取得後、同じtokenで実行ユーザーのsys_idを読み取り、検証利用者のIDとの一致だけを記録する。
   sys_user一覧の先頭、指定した検証利用者レコードが読めること、UIの表示名では本人性を証明しない。
@@ -236,9 +237,9 @@ dev441827（Australia）の`sys_security_acl`/`sys_security_acl_role`/`sys_user_
   リリース証拠に候補本人の自己申告を使わず、運用者確認・期限・ファイル信頼検査を維持する。
 - 新規トークンのまま、設定なし→有効C方式→期限/binding不正の順で確認する案とする。
   実測できた場合はresolvedとし、フォールバックできた実績として数えない。
-- token取得後の安全なMCP引渡しは**未実装**。既存のperUserBearerToken受け口があることと、
-  tokenを秘密保管から安全に供給する経路があることは別。HTTPヘッダーや任意tool引数への追加はしない。
-  同一プロセスの検証ハーネス等の供給設計・実装/合成試験が必要で、ハンドラー直呼びの結果を実MCP認証E2Eと混ぜない。
+- token取得後の内部session→同一プロセスMCP引渡しは合成検証済み。実PDIアダプター/runnerからの
+  供給と実stdio/HTTPへの秘密引渡しは**未実装**。HTTPヘッダーや任意tool引数への追加はしない。
+  同一プロセスSDKと既存tool executorの試験を、汎用サーバーの認証や実stdio/HTTPのper-user E2Eと混ぜない。
 
 ## 7. トークン保管・寿命・終了
 

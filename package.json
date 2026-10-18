@@ -13,6 +13,7 @@
     "dist/",
     "!dist/review/evaluation*",
     "!dist/review/search*",
+    "!dist/review/r2-*",
     "instances.example.json"
   ],
   "engines": {

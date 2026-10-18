@@ -1,7 +1,7 @@
 /** Read-only PoC integration. Never returns payloads or raw diagnostics. */
 import { z } from 'zod';
 import type { ServiceNowClient } from '../servicenow/client.js';
-import { reviewBoundedUpdateSet, reviewUpdateSetInputSchema, type BoundedReviewOutcome } from '../review/update-set-adapter.js';
+import { reviewBoundedUpdateSet, reviewUpdateSetInputSchema, type BoundedReviewOutcome, type ReviewAdapterOptions } from '../review/update-set-adapter.js';
 
 export const REVIEW_TOOL_NAME = 'review_update_set_best_practices';
 // instance is a server-owned selector; it is never passed to the adapter.
@@ -16,9 +16,10 @@ export function getBestPracticeToolDefinitions() {
   }];
 }
 export async function executeBestPracticeToolCall(client: ServiceNowClient, name: string,
-  args: Record<string, unknown>, context?: { signal?: AbortSignal }) {
+  args: Record<string, unknown>, context?: Pick<ReviewAdapterOptions, 'signal' | 'workerFactory'>) {
   if (name !== REVIEW_TOOL_NAME) return null;
-  return reviewBoundedUpdateSet(client, args, { signal: context?.signal });
+  return reviewBoundedUpdateSet(client, args, { signal: context?.signal,
+    ...(context?.workerFactory ? { workerFactory: context.workerFactory } : {}) });
 }
 
 /** Compact MCP boundary, not the server's generic pretty-printer/error logger. */
