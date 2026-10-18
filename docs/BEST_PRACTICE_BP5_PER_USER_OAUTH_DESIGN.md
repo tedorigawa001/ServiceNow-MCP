@@ -228,6 +228,10 @@ dev441827（Australia）の`sys_security_acl`/`sys_security_acl_role`/`sys_user_
 内部sessionと同一プロセスMCPは[合成検証済み](E2E_BEST_PRACTICE_R2_IDENTITY_SYNTHETIC_2026-10-18.md)。
 実OAuth交換/runnerとの接続は未実装で、固定GETの対象版/R-2での成立と実機操作の承認は別途必要。
 
+実OAuth交換・開始ページ/callback・sessionへの所有権移譲・runnerの終了signal接続は
+[実PDIアダプター/runner設計](BEST_PRACTICE_BP5_R2_PDI_ADAPTER_RUNNER_DESIGN.md)を参照する。
+初期アダプターではscope省略を拒否し、受理を広げる場合は別途根拠確認/承認を必要とする未実装案。
+
 - 取得後、同じtokenで実行ユーザーのsys_idを読み取り、検証利用者のIDとの一致だけを記録する。
   sys_user一覧の先頭、指定した検証利用者レコードが読めること、UIの表示名では本人性を証明しない。
   固定の現在ユーザー照会または承認済みの本人確認APIを実機で確認する。拒否/不明なら停止。

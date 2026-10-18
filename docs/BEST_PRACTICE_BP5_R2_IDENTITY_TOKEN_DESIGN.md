@@ -5,6 +5,10 @@ Version: draft-0.2 / Date: 2026-10-18 / Status: 内部PoCを実装・合成検�
 [実装・合成検証記録](E2E_BEST_PRACTICE_R2_IDENTITY_SYNTHETIC_2026-10-18.md)を参照。
 交換後の内部session/同一プロセスMCPまでの部分実装で、実OAuth交換・runner/OS終了処理は未接続。
 
+未接続部分の責任分離・交換応答・所有権移譲・開始ページ・OS終了処理は
+[実PDI OAuthアダプター/runner接続設計](BEST_PRACTICE_BP5_R2_PDI_ADAPTER_RUNNER_DESIGN.md)に具体化した。
+同設計は未承認・未実装で、実機操作やtoken発行を許可しない。
+
 ## 1. 範囲と不変条件
 
 [専用OAuth設計§0・§5–7](BEST_PRACTICE_BP5_PER_USER_OAUTH_DESIGN.md)を具体化する。
