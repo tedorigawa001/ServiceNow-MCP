@@ -1,6 +1,6 @@
 # BP-5 R-2：専用hostの終了・強制停止設計
 
-Version: draft-0.3 / Date: 2026-10-18 / Status: runner接続初段のみ内部実装・合成検証。専用host/監督は未実装・未試験・実機未承認。
+Version: draft-0.4 / Date: 2026-10-18 / Status: runner接続・専用bootstrap/hostを内部実装・合成検証。外部監督は未実装・実機未承認。
 
 ## 1. 範囲と前提
 
@@ -8,8 +8,8 @@ Version: draft-0.3 / Date: 2026-10-18 / Status: runner接続初段のみ内部�
 `runR2ApprovalManifest`はcleanup不成立を報告するが、プロセスを終了しない。
 ここではその外側の**専用Node main process**の責任を定義する。workerや共有MCP serverへexitを追加しない。
 
-telemetry調査・maint担当者への依頼は保留。runner接続初段は§11の範囲だけ実装した。
-専用host/監督の実装・強制kill試験・実機接続・登録作成・token発行・
+telemetry調査・maint担当者への依頼は保留。runner接続は§11、専用bootstrap/hostは§12の範囲を実装した。
+外部監督の実装・監督による強制kill試験・実機接続・登録作成・実token発行・
 アカウント/ロール/ACL/設定変更は行っていない。実manifestも配置していない。
 本設計の記載は、実行・導入・公開CLI追加の承認ではない。
 
@@ -90,7 +90,7 @@ worker terminate Promiseを待たない。main threadが止まっていれば外
 hostをPID指定で直接停止した場合はhost側で数え、対応する通知を監督が再度の利用者要求と数えない。
 
 runnerの既定は自身でSIGINT/SIGTERM handlerを登録するため、host handlerをただ重ねる実装はしない。
-信頼済み内部optionによるsignal所有者切替・cleanup通知・残予算は§11に実装した。専用host本体は未接続：
+信頼済み内部optionによるsignal所有者切替・cleanup通知・残予算は§11、専用hostへの接続は§12に実装した：
 
 - 既存の直接呼出しはrunner所有を既定のまま維持し、既存テストを変えない。
 - 専用host経由だけhost所有にし、runnerはprocess handlerを追加せず、外部root signalに従う。
@@ -162,7 +162,7 @@ not_attemptedは検証済みrunner票と整合する終了を確認できた場�
 | 専用host/監督用exit code案 | 意味 |
 |---|---|
 | 0 | lifecycle終了・内側isError=false。partialや候補なしを安全と主張しない |
-| 10 | 検証済みの通常失敗/内側isError=true |
+| 10 | 通常失敗/内側isError=true、起動前提・IPC違反等のfail-stop（終了票なしの場合もある） |
 | 70 | fatal例外/rejection。runner結果採用不可 |
 | 71 | cleanup不成立/期限内にhost終了しないため強制停止 |
 | 72 | 再度の利用者停止要求による強制停止 |
@@ -174,7 +174,8 @@ SIGKILL時の実OS終了signalはそのまま別fieldで保持し、hostが71等
 
 ## 9. 後続の合成検証・実装前ゲート
 
-専用host/監督としてのHSケースは全件未実施。§11のrunner接続初段はその準備の合成検証であり、HS完了とはしない。
+§12でHS-02/03/05/07/10の一部を専用hostの合成試験として実施した。
+監督を含む下表全体・各行の全境界は未完了であり、HS全体完了とはしない。
 実PDIや本物の資格情報は使わず、専用子・合成値・実Worker/loopbackで試験する。
 
 | ID | 確認する境界 |
@@ -208,7 +209,7 @@ hostを外部監督へ接続するまで実機認可は開始しない。公開C
 | H-SRC-04 | [ChildProcess: killed](https://nodejs.org/download/release/v22.23.3/docs/api/child_process.html#subprocesskilled)、[exit](https://nodejs.org/download/release/v22.23.3/docs/api/child_process.html#event-exit)、[close](https://nodejs.org/download/release/v22.23.3/docs/api/child_process.html#event-close) | killedは終了確認ではない。exitとstdioのcloseは別 |
 | H-SRC-05 | [Worker: Class Worker](https://nodejs.org/download/release/v22.23.3/docs/api/worker_threads.html#class-worker)、[terminate](https://nodejs.org/download/release/v22.23.3/docs/api/worker_threads.html#workerterminate) | worker内exitはそのthreadだけ。terminateのPromiseはexit時に成立 |
 
-本文の実装案は、これらの仕様から行った設計判断であり、実装済み/安全性実証済みという意味ではない。
+本文はこれらの仕様から行った設計判断。§11/§12に明記した実装・合成試験以外を実装済み/安全性実証済みとはしない。
 OS全体の停止、監督ごとの侵害/停止、core dump/メモリの完全消去、プロセス終了後のServiceNow token失効は保証しない。
 
 ## 11. runner接続初段の実装境界（2026-10-18）
@@ -246,5 +247,33 @@ readerはpolling監督ではない。await中にhostが**絶対期限をさら�
 通常の残秒減少は同じ期限を表す。通知/readerが同期的にevent loopを停止させる場合は中断できず、
 別プロセスの独立監督が必要という留保は変わらない。runnerは終了/kill/fatal handler/IPCを追加していない。
 
-専用bootstrap/host・監督・signal再入力時のforce・終了票IPC/ack・process.exit・fatal処理は未実装。
-§9のHS試験・Node 22.12系での確認・実機承認も未完了で、今回の合成結果から完了を推定しない。
+専用bootstrap/hostの後続実装は§12を参照。外部監督・§9のHS全体試験・Node 22.12系での確認・実機承認は未完了。
+
+## 12. 専用bootstrap/hostの内部実装（2026-10-18）
+
+[合成検証記録](E2E_BEST_PRACTICE_R2_HOST_SYNTHETIC_2026-10-18.md)。公開CLI/bin/MCP登録・npm同梱は追加しない。
+`r2-host-entry.ts`は最小bootstrapのfatal handlerを登録してから固定の`./r2-host.js`を動的importする。
+ソース実行時は既存tsx loader、本番ビルドでは固定.js経路を使う。引数はmanifest pathのみ。
+main thread・POSIX・接続済みIPCが必要で、共有MCPから呼ぶ関数ではない。
+同一プロセスのテストoptionはlower-only期限・fake fetch等の信頼済み境界であり、IPC入力ではない。
+
+- 安全なmanifest読込・破棄をpreflightし、非秘密`prepared`を送る。最大5秒の自己timerを持つ。
+  runnerは一度限りの`{type:'run_grant',remaining_ms}`まで開始しない。manifestはrunnerで再検査する。
+  grantは整数・cleanup超・385,000ms以下。監督の未実装をこのgrantが補うわけではない。
+- `ready`は固定識別子だけ。認可URL/path/本人IDはIPCへ送らない。
+- 最初のSIGINT/SIGTERM/stopでroot Abort、cleanup開始を通知し、全体残りと3秒の小さい方へ期限を固定。
+  runner/終了票/ack/自然終了で同じ予算を消費する。再度の停止は72で即時exit。
+- cleanup不成立または期限到達は71で即時exit。結果を送らず、追加の非同期cleanupやackを待たない。
+- cleanup completeだけ`finished`にrunner終了票を送る。ackを残予算内で待ち、意図したdisconnectへ移る。
+  自然終了を妨げる残存handleがあれば、unrefした期限timerで71へ移る。成功時0、通常失敗10、
+  期限124、SIGINT130、SIGTERM143。内側isErrorも維持し、partialを安全性成功と読み替えない。
+- 受信はJSON IPCの固定type/厳密key/順序/回数/1KiB、全体512KiBを検査する。
+  finished envelopeは256KiB、送信全体512KiBまで。違反/予期しない切断/送信失敗は10でfail-stop。
+  Nodeによる受信前deserializeの上限を保証しない。監督側での再検証は未実装。
+- fatal handlerは理由引数を受け取らず、format/保存/Abort/IPC/cleanupをせず70でexitする。
+  **Node自身はhandlerより前に例外のstack getter等へ触れる場合がある**。実装内で読まないことと、
+  Nodeランタイムまでgetter評価しないことは異なる。将来監督のstdout/stderr=`ignore`は引き続き必須。
+
+合成controllerは試験専用で、独立監督/公開launcherではない。event loop停止・preflightの同期停止は自己timerでは止められない。
+385秒の独立強制停止、token失効、メモリ完全消去、Windows対応、Node 22.12確認は未達。
+監督を実装・検証するまで実PDI運用を開始しない。

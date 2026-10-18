@@ -503,4 +503,64 @@ it.each(['SIGINT', 'SIGTERM'] as const)('handles actual %s in a dedicated synthe
     expect(stdout).toBe(''); expect(stderr).toBe(''); expect(JSON.stringify(messages).includes('RUNNER_PRIVATE')).toBe(false);
   } finally { clearTimeout(timer); if (child.exitCode === null) child.kill('SIGKILL'); }
 }, 12000);
+
+it.each([
+  ['normal', 'SIGINT', 130], ['normal', 'SIGTERM', 143],
+  ['slow-close', 'SIGINT', 71], ['fail-close', 'SIGINT', 71], ['repeat', 'SIGINT', 72],
+] as const)('dedicated host %s / %s exits %s without secret output', async (mode, signal, expected) => {
+  const child = spawn(process.execPath, ['--import', 'tsx', 'tests/review/fixtures/r2-host.mjs',
+    mode === 'repeat' ? 'slow-close' : mode, file], { env: {}, serialization: 'json', stdio: ['ignore', 'pipe', 'pipe', 'ipc'] });
+  let output = ''; const messages: Array<{ type: string; receipt?: unknown }> = [];
+  child.stdout.on('data', b => { output += b; }); child.stderr.on('data', b => { output += b; });
+  child.on('message', (message: { type: string }) => {
+    messages.push(message);
+    if (message.type === 'prepared') child.send({ type: 'run_grant', remaining_ms: 4000 });
+    if (message.type === 'ready') child.kill(signal);
+    if (message.type === 'stopping' && mode === 'repeat') child.kill('SIGINT');
+    if (message.type === 'finished') child.send({ type: 'finished_ack' });
+  });
+  const timer = setTimeout(() => child.kill('SIGKILL'), 6000);
+  try {
+    expect(await new Promise(resolve => child.on('close', resolve))).toBe(expected);
+    expect(output).toBe('');
+    expect(JSON.stringify(messages)).not.toContain('RUNNER_PRIVATE');
+    expect(messages.some(m => m.type === 'ready')).toBe(true);
+    if (expected === 70 || expected === 71 || expected === 72) expect(messages.some(m => m.type === 'finished')).toBe(false);
+    else expect(messages.find(m => m.type === 'finished')?.receipt).toMatchObject({ cleanup: 'complete', ok: false });
+  } finally { clearTimeout(timer); if (child.exitCode === null) child.kill('SIGKILL'); }
+}, 8000);
+
+it.each(['no-grant', 'duplicate-grant', 'unknown-message', 'oversize', 'disconnect', 'no-ack', 'force'] as const)(
+  'dedicated host fails closed on %s', async mode => {
+  const child = spawn(process.execPath, ['--import', 'tsx', 'tests/review/fixtures/r2-host.mjs', 'normal', file],
+    { env: {}, serialization: 'json', stdio: ['ignore', 'pipe', 'pipe', 'ipc'] });
+  let output = ''; const messages: Array<{ type: string }> = [];
+  const exited = new Promise(resolve => child.once('exit', resolve));
+  const outputClosed = Promise.all([child.stdout, child.stderr].map(stream =>
+    new Promise<void>(resolve => stream.once('close', resolve))));
+  child.stdout.on('data', b => { output += b; }); child.stderr.on('data', b => { output += b; });
+  child.on('message', (message: { type: string }) => {
+    messages.push(message);
+    if (message.type === 'prepared') {
+      if (mode === 'no-grant') { child.send({ type: 'stop' }); return; }
+      if (mode === 'unknown-message') { child.send({ type: 'arbitrary', secret: 'PRIVATE_IPC_BODY' }); return; }
+      if (mode === 'oversize') { child.send({ type: 'stop', padding: 'X'.repeat(2048) }); return; }
+      child.send({ type: 'run_grant', remaining_ms: 4000 });
+      if (mode === 'duplicate-grant') child.send({ type: 'run_grant', remaining_ms: 4000 });
+    }
+    if (message.type === 'ready') {
+      if (mode === 'disconnect') child.disconnect();
+      else child.send({ type: mode === 'force' ? 'force' : 'stop' });
+    }
+  });
+  const timer = setTimeout(() => child.kill('SIGKILL'), 6000);
+  try {
+    expect(await exited).toBe(
+      mode === 'no-grant' ? 130 : mode === 'no-ack' ? 71 : mode === 'force' ? 72 : 10);
+    await outputClosed;
+    expect(output).toBe(''); expect(JSON.stringify(messages)).not.toContain('PRIVATE');
+    if (['no-grant', 'unknown-message', 'oversize'].includes(mode)) expect(messages.some(m => m.type === 'ready')).toBe(false);
+    if (mode === 'no-ack') expect(messages.some(m => m.type === 'finished')).toBe(true);
+  } finally { clearTimeout(timer); if (child.exitCode === null) child.kill('SIGKILL'); }
+}, 8000);
 });
