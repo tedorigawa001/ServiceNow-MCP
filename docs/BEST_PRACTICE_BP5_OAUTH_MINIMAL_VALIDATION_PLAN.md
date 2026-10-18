@@ -4,7 +4,7 @@ Version: draft-0.1 / Date: 2026-10-18 / Status: 未承認・未実行の手順�
 
 本書は[候補A専用OAuth設計](BEST_PRACTICE_BP5_PER_USER_OAUTH_DESIGN.md)の実行前計画。
 [読み取り調査](E2E_BEST_PRACTICE_OAUTH_READINESS_2026-10-18.md)ではUIの存在まで確認したが、
-S256強制・loopback受理・GET限定は未実証。今回の成果物はMDのみであり、
+S256強制・loopback受理・GET限定は未実証。本書は実行前の手順設計であり、
 登録作成・認可/同意・code/token発行・設定変更・拒否試験の実行を許可するものではない。
 
 ## 1. 検証する主張と限界
@@ -33,7 +33,9 @@ scopeだけで成立すると主張しない。候補Aが元から書けない�
 | G4：認可と交換 | ケースごとのcode/token発行、最大回数、短寿命、異常成功時の失効方法・担当を承認。本人が通常ログイン/同意 |
 | G5：変更methodの実証 | §5の安全な対象とscope起因の判定手段を承認。実書込みや制御tokenが必要なら別承認/別環境 |
 
-G0は未実装、本人確認APIも未確定。これらを実装/承認するまでG4へ進まない。
+G0のローカル合成ハーネスは[実装・検証済み](E2E_BEST_PRACTICE_OAUTH_G0_2026-10-18.md)。
+ただし実PDI用HTTPS接続/本人確認API/実MCPへのtoken引渡しは未実装または未確定で、G0の人の承認も未完了。
+これらを実装/承認するまでG4へ進まない。以下のP/L/Sケースは未実行のまま。
 公開clientが成立しない、S256降格が受理される、URIが外部へ流れる、scopeが広がる、
 予期しないtoken発行、既存clientの不具合、token/秘密漏えいの疑いで即中止する。
 adminへの切替、useraccount/空scope、ACL緩和、共有clientの変更で継続しない。
