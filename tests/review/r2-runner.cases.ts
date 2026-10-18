@@ -10,6 +10,7 @@ import { getEventListeners } from 'node:events';
 import { createReviewInstanceBinding } from '../../src/servicenow/review-release-config.js';
 import { aggregateReviewSchema, aggregateReviewV3Schema } from '../../src/review/aggregate-schema.js';
 import { runR2ApprovalManifest, R2_RUNNER_TOTAL_MS, R2_RUNNER_CLEANUP_MS, type R2RunnerOptions } from '../../src/review/r2-runner.js';
+import { superviseR2Host } from '../../src/review/r2-supervisor.js';
 
 // Imported by r2-loopback.test.ts: all tests using the fixed port share one sequential file.
 describe('manifest runner integration', () => {
@@ -563,4 +564,21 @@ it.each(['no-grant', 'duplicate-grant', 'unknown-message', 'oversize', 'disconne
     if (mode === 'no-ack') expect(messages.some(m => m.type === 'finished')).toBe(true);
   } finally { clearTimeout(timer); if (child.exitCode === null) child.kill('SIGKILL'); }
 }, 8000);
+
+it.each(['normal', 'slow-close'] as const)('supervises the actual runner host with %s cleanup', async mode => {
+  const root = new AbortController();
+  const result = await superviseR2Host(file, { signal: root.signal, totalTimeoutMs: 4000, cleanupTimeoutMs: 500,
+    onReady: () => { root.abort(); },
+    spawnHost: (command, args, options) => {
+      expect(options.env).toEqual({}); expect(options.stdio).toEqual(['ignore', 'ignore', 'ignore', 'ipc']);
+      expect(options.detached).toBe(true); expect(options.serialization).toBe('json'); expect(options.shell).toBe(false);
+      expect(args.at(-2)).toMatch(/r2-host-entry\.ts$/);
+      return spawn(command, [...args.slice(0, -2), 'tests/review/fixtures/r2-host.mjs', mode, file], options);
+    } });
+  expect(result.process_termination).toBe('confirmed');
+  expect(JSON.stringify(result)).not.toContain('RUNNER_PRIVATE');
+  if (mode === 'normal') expect(result).toMatchObject({ terminal_reason: 'cancelled', cleanup: 'complete',
+    token_issuance: 'not_attempted', runner_receipt: { ok: false, code: 'cancelled' } });
+  else { expect(result.token_issuance).toBe('unknown'); expect(result).not.toHaveProperty('runner_receipt'); }
+}, 10000);
 });

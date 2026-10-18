@@ -1,6 +1,6 @@
 # BP-5 R-2：専用hostの終了・強制停止設計
 
-Version: draft-0.4 / Date: 2026-10-18 / Status: runner接続・専用bootstrap/hostを内部実装・合成検証。外部監督は未実装・実機未承認。
+Version: draft-0.5 / Date: 2026-10-18 / Status: runner・専用bootstrap/host・外部監督を内部実装・合成検証。公開CLI・実機/運用は未承認。
 
 ## 1. 範囲と前提
 
@@ -8,8 +8,8 @@ Version: draft-0.4 / Date: 2026-10-18 / Status: runner接続・専用bootstrap/h
 `runR2ApprovalManifest`はcleanup不成立を報告するが、プロセスを終了しない。
 ここではその外側の**専用Node main process**の責任を定義する。workerや共有MCP serverへexitを追加しない。
 
-telemetry調査・maint担当者への依頼は保留。runner接続は§11、専用bootstrap/hostは§12の範囲を実装した。
-外部監督の実装・監督による強制kill試験・実機接続・登録作成・実token発行・
+telemetry調査・maint担当者への依頼は保留。runner接続は§11、専用bootstrap/hostは§12、外部監督は§13の範囲を実装した。
+実機接続・登録作成・実token発行・
 アカウント/ロール/ACL/設定変更は行っていない。実manifestも配置していない。
 本設計の記載は、実行・導入・公開CLI追加の承認ではない。
 
@@ -26,7 +26,7 @@ telemetry調査・maint担当者への依頼は保留。runner接続は§11、�
 | 運用者 | 実行前の個別承認、発行結果不明時の失効検討、終了未確認時の調査 | 自動失効したとの推定、未確認のまま同じ認可を再開 |
 
 host自身のtimerだけではhostのevent loop停止を監督できないため、実運用前には外部監督も必要とする。
-監督のない単体hostは合成試験用に限定し、385秒の独立監督を達成したとはしない。
+監督のない単体hostは合成試験用に限定する。§13は385秒境界を合成時計で、独立した実子停止を短縮期限で検証した。
 監督は認可より前にhostを起動し、tokenはhost内で生成・利用する。既存のメモリ内handoffを崩さない。
 
 初期対象はPOSIXのmacOS/Linux。Windowsのsignal/プロセス終了は別設計・試験が済むまで開始拒否。
@@ -146,7 +146,8 @@ runnerのJSONと0.2/0.3契約は変更せず、監督の終了報告は別の`bp
 候補field：`terminal_reason`（固定enum）、`process_termination`（confirmed/unconfirmed）、
 `cleanup`（complete/incomplete/unknown）、`token_issuance`（not_attempted/possible/unknown）、
 `other_account_token`（possible/not_reported/unknown）、検証済みの`runner_receipt`（任意）、`host_exit`（codeまたはsignal）。
-このスキーマは今回未実装。reason/enumの網羅とJSON上限は実装前に確定する。
+§13で`R2SupervisorReport`の固定出力型として具体化した。外部向けJSON Schemaの公開/配布はしていない。
+入力となるfinished/内側JSONはstrictスキーマで再検証する。出力フィールドとenumは§13を参照。
 
 正常結果の採用条件は、正しいfinished 1件・runner cleanup complete・hostの期待exit・監督による終了確認のすべて。
 finishedだけ、exit code 0だけ、killの戻り値や`subprocess.killed=true`だけでは成功としない。
@@ -174,7 +175,7 @@ SIGKILL時の実OS終了signalはそのまま別fieldで保持し、hostが71等
 
 ## 9. 後続の合成検証・実装前ゲート
 
-§12でHS-02/03/05/07/10の一部を専用hostの合成試験として実施した。
+§12・§13でHS-01/02/03/04/05/07/08/09/10の一部を専用host/監督の合成試験として実施した。
 監督を含む下表全体・各行の全境界は未完了であり、HS全体完了とはしない。
 実PDIや本物の資格情報は使わず、専用子・合成値・実Worker/loopbackで試験する。
 
@@ -191,9 +192,9 @@ SIGKILL時の実OS終了signalはそのまま別fieldで保持し、hostが71等
 | HS-09 | 取消/強制/fatal時のtoken発行unknown、別アカウント票、サーバー失効は未実施と記録 |
 | HS-10 | ライブラリ単独の既存signal処理・全テスト・梱包のR-2非同梱を維持。共有server/親/無関係な子を終了しない |
 
-初期実装順：signal所有者/cleanup hookと予算接続 → 専用bootstrap/host → 監督の固定起動/終了確認 →
+実装順：signal所有者/cleanup hookと予算接続 → 専用bootstrap/host → 監督の固定起動/終了確認 →
 fatal/再入力の子プロセス試験 → main停止/終了未確認の試験。各段階で別途実装承認を得る。
-hostを外部監督へ接続するまで実機認可は開始しない。公開CLI/配布、Windows、実機実行は別承認。
+内部接続の合成試験から実機認可の承認を推定しない。公開CLI/配布、Windows、実機実行は別承認。
 
 ## 10. 公式根拠と設計判断の区別
 
@@ -209,7 +210,7 @@ hostを外部監督へ接続するまで実機認可は開始しない。公開C
 | H-SRC-04 | [ChildProcess: killed](https://nodejs.org/download/release/v22.23.3/docs/api/child_process.html#subprocesskilled)、[exit](https://nodejs.org/download/release/v22.23.3/docs/api/child_process.html#event-exit)、[close](https://nodejs.org/download/release/v22.23.3/docs/api/child_process.html#event-close) | killedは終了確認ではない。exitとstdioのcloseは別 |
 | H-SRC-05 | [Worker: Class Worker](https://nodejs.org/download/release/v22.23.3/docs/api/worker_threads.html#class-worker)、[terminate](https://nodejs.org/download/release/v22.23.3/docs/api/worker_threads.html#workerterminate) | worker内exitはそのthreadだけ。terminateのPromiseはexit時に成立 |
 
-本文はこれらの仕様から行った設計判断。§11/§12に明記した実装・合成試験以外を実装済み/安全性実証済みとはしない。
+本文はこれらの仕様から行った設計判断。§11～§13に明記した実装・合成試験以外を実装済み/安全性実証済みとはしない。
 OS全体の停止、監督ごとの侵害/停止、core dump/メモリの完全消去、プロセス終了後のServiceNow token失効は保証しない。
 
 ## 11. runner接続初段の実装境界（2026-10-18）
@@ -247,7 +248,7 @@ readerはpolling監督ではない。await中にhostが**絶対期限をさら�
 通常の残秒減少は同じ期限を表す。通知/readerが同期的にevent loopを停止させる場合は中断できず、
 別プロセスの独立監督が必要という留保は変わらない。runnerは終了/kill/fatal handler/IPCを追加していない。
 
-専用bootstrap/hostの後続実装は§12を参照。外部監督・§9のHS全体試験・Node 22.12系での確認・実機承認は未完了。
+専用bootstrap/hostは§12、外部監督は§13を参照。§9のHS全体試験・Node 22.12系での確認・実機承認は未完了。
 
 ## 12. 専用bootstrap/hostの内部実装（2026-10-18）
 
@@ -269,11 +270,82 @@ main thread・POSIX・接続済みIPCが必要で、共有MCPから呼ぶ関数�
   期限124、SIGINT130、SIGTERM143。内側isErrorも維持し、partialを安全性成功と読み替えない。
 - 受信はJSON IPCの固定type/厳密key/順序/回数/1KiB、全体512KiBを検査する。
   finished envelopeは256KiB、送信全体512KiBまで。違反/予期しない切断/送信失敗は10でfail-stop。
-  Nodeによる受信前deserializeの上限を保証しない。監督側での再検証は未実装。
+  Nodeによる受信前deserializeの上限を保証しない。監督側での再検証は§13に実装した。
 - fatal handlerは理由引数を受け取らず、format/保存/Abort/IPC/cleanupをせず70でexitする。
   **Node自身はhandlerより前に例外のstack getter等へ触れる場合がある**。実装内で読まないことと、
   Nodeランタイムまでgetter評価しないことは異なる。将来監督のstdout/stderr=`ignore`は引き続き必須。
 
-合成controllerは試験専用で、独立監督/公開launcherではない。event loop停止・preflightの同期停止は自己timerでは止められない。
-385秒の独立強制停止、token失効、メモリ完全消去、Windows対応、Node 22.12確認は未達。
-監督を実装・検証するまで実PDI運用を開始しない。
+§12単体の合成controllerは試験専用で、独立監督/公開launcherではない。hostの自己timerだけではevent loop停止を止められない。
+外部監督は§13を参照。token失効、メモリ完全消去、Windows対応、Node 22.12確認は未達。実PDI運用は別承認。
+
+## 13. 秘密を持たない外部監督（2026-10-18）
+
+[合成検証記録](E2E_BEST_PRACTICE_R2_SUPERVISOR_SYNTHETIC_2026-10-18.md)。
+`r2-supervisor.ts`・固定`r2-supervisor-entry.ts`・`r2-host-protocol.ts`を内部実装した。
+公開bin/MCP登録・npm同梱・自動ブラウザー操作は追加しない。監督はmanifest本文を読まず、
+非秘密の絶対pathだけを固定hostへ渡す。OAuth交換・本人確認・秘密比較は引き続きhost内だけ。
+
+### 13.1 起動・独立期限・停止
+
+- 現在の`process.execPath`と固定entryをshellなしで起動する。compiledは相対固定`.js`、
+  sourceは固定tsx loaderと固定`.ts`。任意executable/module/PID/flag/envを外部から指定できない。
+- `env={}`・`stdio=['ignore','ignore','ignore','ipc']`・JSON serialization・`detached:true`を固定する。
+  argv/envへ秘密を追加せず、親のNODE_OPTIONS/execArgv/preload/inspector/stdio/TTYを継承しない。
+  `spawnHost`は信頼済みOSテスト境界だけで、manifest/IPC/公開入力ではない。
+  専用監督自身も秘密のないenv/検証済みflagで起動する前提。entryは、呼出し元から最初に注入された秘密の不在を証明しない。
+  共有アプリへこの関数を組み込んだだけでは、秘密のない専用監督プロセスを設けたことにはならない。
+- spawn～preparedに最大5秒。prepared一度だけでT0を固定し、**監督自身の**382秒/385秒timerをarmしてからgrantを送る。
+  hostの準備やIPC配送遅延でHを延長しない。grantは送信時の残りを整数に切り下げる。
+- 382秒でstop IPC、385秒で所有ChildProcess handleにSIGKILLを要求する。最初の停止/host stoppingで
+  C=min(H, 今+3秒)を一度だけ固定し、結果/ack/自然終了を同じ枠へ収める。lower-onlyの合成試験optionを持つ。
+- 最初のSIGINT/SIGTERM/AbortSignalは取消し。再度の利用者signalはforce IPCとSIGKILL要求へ移る。
+  hostからのstoppingを利用者の2回目として数えず、detachedによりTTY由来の親子二重配送を避ける構成。
+  stop IPCは既存host仕様のためhostの正常停止codeは130（SIGTERMや監督期限でも同じ）。
+  監督のterminal_reasonと実際のhost_exitを別に記録し、143/124だったと捏造しない。
+- force後の遅いmessageは採用しない。killは所有handleに一度だけで、exit観測/exitCode・signalCode確定後は送らない。
+  PID探索・process group・他の子への停止・再起動・再認可はしない。
+
+### 13.2 IPC・結果採用・終了確認
+
+固定type・key・順序・重複・sendHandleを検査し、制御1KiB/finished envelope256KiB/受信総量512KiBを守る。
+生のエラー/拒否フィールドを報告へコピーしない。終了票のcodeは固定allowlist、成功時の本文は
+既存0.2/0.3集約スキーマまたは固定MCPエラーを再検証し、per-user・code_return_mode=noneの契約を維持する。
+JSONは検証後の値から再シリアライズする。実秘密はこの検証のためにも監督へ渡さない。
+信頼済みhost内の秘密一致ガードが先に働く前提であり、侵害hostが任意の自由文字列へ秘密を混入することまで保証しない。
+
+finishedは仮の候補で、ack送信成立・cleanup complete・期待exit・exitとclose両方・期限内の全条件が揃って初めて採用する。
+取消し/期限切れ後の成功票、ack後も生き残るhost、矛盾exit、票なしcode0は成功にしない。
+監督側ready通知も同期undefined限定で、throw/Promiseは固定失敗へ倒し、拒否Promiseも非出力で消費する。
+終端理由はforce時に固定し、SIGKILL後のdisconnectで元の期限理由を書き換えない。
+
+kill要求またはexitから最大1秒の**観測枠**でexit/closeを待つ。killのtrue/killedだけで終了としない。
+観測不能ならtermination_unconfirmedを優先し、未知のtoken状態・元のhost_exitをそのまま返す。
+この場合だけ自身のIPC/参照を解除して運用者へ引き継ぐ。active中はunrefせず、観測枠でhost稼働を許可する意味ではない。
+spawn失敗のcloseのみはnot_started、通常のcloseのみは終了未確認として扱う。所有signal handler/timerだけを解放する。
+
+### 13.3 固定報告契約
+
+`schema_version='bp5-r2-host-exit-0.1'`。次の小さな固定metadataと、採用条件を満たしたrunner_receiptだけを返す。
+report自体は保存/表示せず呼出し元へ返す。専用entryは固定exit codeだけで終了し、stdoutへJSONを出さない。
+
+| field | 値/条件 |
+|---|---|
+| terminal_reason | completed / review_failed / cancelled / deadline_exceeded / forced_stop / host_failed / cleanup_incomplete / fatal / protocol_error / spawn_failed / preflight_timeout / invalid_options / unsupported_platform / termination_unconfirmed |
+| process_termination | not_started / confirmed / unconfirmed。confirmedはexitとclose両方を観測した場合のみ |
+| exit_observed / close_observed | 監督が観測したboolean。遅い成功票で書き換えない |
+| kill_request | not_requested / sent / failed。sentは終了確認ではない |
+| cleanup | complete / incomplete / unknown。completeは採用済み票のみ、host code71はincompleteを維持 |
+| token_issuance | not_attempted / possible / unknown。異常終了・無効票・強制停止はunknown、not_attemptedは整合した採用票のみ |
+| other_account_token | possible / not_reported / unknown。採用済み票のboolean以外から推定しない |
+| host_exit | OSで観測したcode/signal、観測前はnull。SIGKILLをhost code71へ変換しない |
+| runner_receipt | 任意。検証・ack・整合した終了が揃った場合だけ。partial/isErrorを保持 |
+
+completedはlifecycleの完了であって、指摘なし/安全性/analysis_completeの主張ではない。
+公開JSON Schema・公開launcher/配布は別工程。保管/表示先も別承認。
+
+### 13.4 残る制約
+
+385秒の境界は合成時計、実プロセス停止は短縮した期限で確認した。385秒を実時間で待つ試験は未実施。
+監督自身/OSの停止・signal配送遅延・監督のクラッシュとhost停止が同時に起きる場合・kill失敗は絶対停止保証の範囲外。
+観測不能時に他PIDや共有process groupを止めて回復しない。サーバーtoken失効・完全メモリ消去も保証しない。
+実TTYでの配送、Node 22.12、Linux/Windowsの実行、HS全ケース、実認可/実PDI操作、運用適用は未確認または未承認。

@@ -1,6 +1,6 @@
 # BP-5 R-2：実PDI OAuthアダプター・runner接続設計
 
-Version: draft-0.10 / Date: 2026-10-18 / Status: 内部runner接続・起動取消競合・専用bootstrap/hostを合成検証。外部監督・公開CLI・実機/運用は未実装または未承認・未検証。
+Version: draft-0.11 / Date: 2026-10-18 / Status: 内部runner・専用bootstrap/host・外部監督を合成検証。公開CLI・実機/運用は未承認・未検証。
 
 ## 1. 範囲と現状
 
@@ -188,7 +188,8 @@ BP-5開始前は既存sessionの厳密な残り60秒超・C方式の全体期限
 専用hostのcleanup不成立時の強制停止・signal再入力・未捕捉例外と外部監督は、
 [専用host終了設計](BEST_PRACTICE_BP5_R2_HOST_SHUTDOWN_DESIGN.md)へ具体化した。
 signal所有者切替・通知・残予算は同設計§11、専用bootstrap/host本体は§12に内部実装・合成検証した。
-外部監督は未実装で、実PDI運用・独立した強制停止保証はまだ認めない。
+外部監督の固定起動・独立期限・終了確認は同設計§13に実装・合成検証した。
+監督/OS自体の停止まで含む絶対保証や実PDI運用の承認は推定しない。
 
 runner開始時にSIGINT/SIGTERM・予期しない例外を1つのroot停止経路へ集約する設計とする。
 raw例外/stackを標準出力しない。対象はこの専用runnerプロセスだけで、共有アプリへ終了handlerを追加しない。
@@ -408,7 +409,7 @@ cleanup待ちは3秒または全体期限までの残り時間の小さい方。
 起動待ちとclose待ちは**1つのcleanup期限**を共有し、段階ごとに3秒を取り直さない。
 期限内に決着しなければ`cleanup_incomplete`とし、遅れて起動成功した場合もbest-effortのcloseを続けるが、
 既に返した終了票を後から`complete`に書き換えない。回帰試験と制限は[検証記録§6](E2E_BEST_PRACTICE_R2_RUNNER_SYNTHETIC_2026-10-18.md#6-bind取消競合の追補検証)を参照。
-ライブラリAPI自身はprocess.exit/SIGKILLを呼ばない。専用hostのprocess.exitはhost終了設計§12に分離し、外部監督は後続課題で、
+runnerライブラリAPI自身はprocess.exit/SIGKILLを呼ばない。専用hostのprocess.exitはhost終了設計§12、所有hostへの外部監督のSIGKILLは§13に分離し、
 イベントループ停止・OS停止・SIGKILL時の385秒厳密保証/完全cleanupを主張しない。
 
 ### 14.3 終了票と非出力
