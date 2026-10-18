@@ -333,3 +333,11 @@ it('does not use global network fetch, open a listener, or read credentials duri
   const a = new R2PdiOAuthAdapter(config()); adapters.push(a);
   await authorize(a); a.close(); expect(fetcher).not.toHaveBeenCalled();
 });
+
+it('does not dispatch an exchange if the trusted acceptance hook cancels the authorization', async () => {
+  const root = new AbortController(), fetcher = vi.fn<typeof fetch>(async () => Response.json(payload()));
+  const a = create({ signal: root.signal, fetch: fetcher });
+  expect(await a.exchangeCallback(callback(await authorize(a)), () => root.abort()))
+    .toEqual({ ok: false, code: 'cancelled' });
+  expect(fetcher).not.toHaveBeenCalled(); expect(a.status().hasCredential).toBe(false);
+});

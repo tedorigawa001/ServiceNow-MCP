@@ -10,7 +10,8 @@ Version: draft-0.3 / Date: 2026-10-18 / Status: 内部PoCを実装・合成検�
 [実PDI OAuthアダプター/runner接続設計](BEST_PRACTICE_BP5_R2_PDI_ADAPTER_RUNNER_DESIGN.md)に具体化した。
 同設計のアダプター単体は[合成検証](E2E_BEST_PRACTICE_R2_PDI_OAUTH_SYNTHETIC_2026-10-18.md)済み。
 [session接続と本人確認失敗/別アカウントcode/中断の合成検証](E2E_BEST_PRACTICE_R2_OAUTH_HANDOFF_SYNTHETIC_2026-10-18.md)を追加。
-runner/HTTP待受は未実装で、実機操作やtoken発行を許可しない。
+[固定HTTP待受・開始ページの合成検証](E2E_BEST_PRACTICE_R2_LOOPBACK_SYNTHETIC_2026-10-18.md)も追加した。
+runner/SDK接続・OS終了処理は未実装で、実機操作やtoken発行を許可しない。
 
 ## 1. 範囲と不変条件
 

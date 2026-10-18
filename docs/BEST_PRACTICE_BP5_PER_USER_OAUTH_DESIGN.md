@@ -149,7 +149,7 @@ ServiceNowの認可/トークンエンドポイントは外部PDIへの処理で
   実アダプターでは大小文字の違い、省略scopeの受理条件/拒否条件を別の合成テストにする。
 
 大小文字の受理・scope省略の拒否・固定redirect URIは[単体合成検証記録](E2E_BEST_PRACTICE_R2_PDI_OAUTH_SYNTHETIC_2026-10-18.md)
-を参照。HTTP待受とrunnerは未接続で、実PDIの応答や権限を検証済みにするものではない。
+を参照。HTTP待受は後続の合成検証に接続したがrunnerは未実装で、実PDIの応答や権限を検証済みにするものではない。
 
 ## 5. 読み取り境界：検証利用者のロール/ACL（方式R）
 
@@ -235,7 +235,9 @@ dev441827（Australia）の`sys_security_acl`/`sys_security_acl_role`/`sys_user_
 
 [adapter→session接続の合成検証](E2E_BEST_PRACTICE_R2_OAUTH_HANDOFF_SYNTHETIC_2026-10-18.md)では
 メモリ内の一度限りの供給と本人確認前のレビュー拒否、別アカウントcodeの交換後停止、期限/中断時の破棄を確認した。
-実認可・HTTP待受・runner/SDK一連の接続は未実装/未実施で、実PDIの権限やscopeを実証したものではない。
+実認可・runner/SDK一連の接続は未実装/未実施で、実PDIの権限やscopeを実証したものではない。
+[固定HTTP待受・一度限りの開始ページ](E2E_BEST_PRACTICE_R2_LOOPBACK_SYNTHETIC_2026-10-18.md)は
+外部PDI通信を合成に置換して検証した。実ブラウザーでの認可、登録・token発行の実行許可は別途必要。
 
 - 取得後、同じtokenで実行ユーザーのsys_idを読み取り、検証利用者のIDとの一致だけを記録する。
   sys_user一覧の先頭、指定した検証利用者レコードが読めること、UIの表示名では本人性を証明しない。

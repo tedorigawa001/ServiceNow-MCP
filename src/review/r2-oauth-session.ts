@@ -70,12 +70,14 @@ export class R2OAuthSessionConnection {
     }
     return result;
   }
-  async exchangeAndVerify(target: string): Promise<R2ConnectionOutcome> {
+  /** Trusted listener hook: called once when a code/error is consumed, never for rejected callbacks. */
+  async exchangeAndVerify(target: string, onAccepted?: () => void): Promise<R2ConnectionOutcome> {
     if (this.#phase !== 'waiting') return { ok: false, code: this.#reason ?? 'authorization_unavailable' };
     this.#phase = 'verifying';
     try {
-      const pendingExchange = this.#adapter.exchangeCallback(target);
-      if (this.#adapter.status().phase === 'exchanging') clearTimeout(this.#lifetime);
+      const pendingExchange = this.#adapter.exchangeCallback(target, () => {
+        clearTimeout(this.#lifetime); onAccepted?.();
+      });
       const exchange = await pendingExchange;
       if (!exchange.ok) {
         if (exchange.code === 'callback_rejected' && !this.#root.signal.aborted) {

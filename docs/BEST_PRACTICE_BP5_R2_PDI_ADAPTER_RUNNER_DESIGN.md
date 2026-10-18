@@ -1,6 +1,6 @@
 # BP-5 R-2：実PDI OAuthアダプター・runner接続設計
 
-Version: draft-0.3 / Date: 2026-10-18 / Status: アダプター→session接続を内部PoC実装・合成検証。runner未実装、実機/運用は未承認・未検証。
+Version: draft-0.4 / Date: 2026-10-18 / Status: 固定HTTP待受・一度限りの開始ページまで内部PoC実装・合成検証。runner未実装、実機/運用は未承認・未検証。
 
 ## 1. 範囲と現状
 
@@ -8,12 +8,15 @@ Version: draft-0.3 / Date: 2026-10-18 / Status: アダプター→session接続�
 実装済みの`R2ReviewSession`と`createR2ReviewBridge`は交換後のtokenを内部で受け取るが、
 実PDI用OAuth交換の単体境界は`src/review/r2-pdi-oauth.ts`へ実装し、
 `src/review/r2-oauth-session.ts`でsessionの生成・本人確認・固定レビューまで接続した。
-HTTP callback待受・runner/SDKとの一連の接続・OS終了signalの処理はまだない。
+固定HTTP callback待受・開始ページは`src/review/r2-loopback.ts`へ実装した。
+runner/SDKとの一連の接続・OS終了signalの処理はまだない。
 [40件の合成検証](E2E_BEST_PRACTICE_R2_IDENTITY_SYNTHETIC_2026-10-18.md)を実認証の証拠にはしない。
 
 単体実装の範囲と結果は[合成検証記録](E2E_BEST_PRACTICE_R2_PDI_OAUTH_SYNTHETIC_2026-10-18.md)を参照。
 [session接続の合成検証](E2E_BEST_PRACTICE_R2_OAUTH_HANDOFF_SYNTHETIC_2026-10-18.md)では
 別アカウントcodeの交換後も本人確認で停止することを確認。実本人性の検証ではない。
+[待受・開始ページの合成検証](E2E_BEST_PRACTICE_R2_LOOPBACK_SYNTHETIC_2026-10-18.md)は実TCPを使うが、
+外部PDI通信は合成fetchのみ。実ブラウザーでの認可操作はしていない。
 runner/設定ファイルを作らず、PDI接続・認可・実token発行・
 アカウント/ロール/ACL/登録/設定変更はしていない。telemetry調査・maint担当者への依頼は保留を維持する。
 共有REST API Auth Scope/API Access Policyを変更せず、既存service-accountや旧CLIへ代替しない。
@@ -78,7 +81,7 @@ G0のcallback検査を実PDI用の別アダプターへ移す設計とし、G0�
 
 ### 認可URLをargv/ログへ出さない開始ページ案
 
-自動的に認可URLをOSコマンドのargvへ渡す方式は採らない。同じlistenerに固定の`GET /bp5/start`を追加する案とする。
+自動的に認可URLをOSコマンドのargvへ渡す方式は採らない。同じlistenerに固定の`GET /bp5/start`を内部PoCとして実装した。
 runnerが案内できるのはこの**非秘密の固定URLだけ**。利用者が管理者cookieと分離した専用ブラウザープロファイルで開く。
 ページ内の明示的な「認可へ進む」リンクだけに、メモリ内で組み立てた固定PDI認可URLを含める。
 自動redirect・自動submit・手動code貼付け・パスワードの自動入力はしない。
@@ -87,7 +90,7 @@ runnerが案内できるのはこの**非秘密の固定URLだけ**。利用者�
 HTML属性の安全な符号化、scheme/origin/pathの固定、予期しないquery/bodyの拒否を合成試験する。
 非秘密URLを知っていること自体は認可権限の証明ではない。送信側state/S256/固定clientとcallbackの検証は省略しない。
 callback確定・取消・期限で開始ページを含むlistenerを閉じ、重複codeが来ても交換しない。
-このページはG0には未実装であり、承認前にブラウザーを開かない。
+G0は変更せず、独立した待受PoCで合成検証する。承認前に実ブラウザーを開かない。
 
 #### 同一端末の他プロセスによるcode注入・アカウント差替え（2026-10-18追記）
 
@@ -203,7 +206,7 @@ runnerは本人IDや対象を出力・自動操作しない）。
 ## 9. 実装前に確定する契約と合成試験
 
 アダプター単体とsessionへの所有権移譲・本人確認を実装・合成検証済み。
-以下のうち開始ページ/HTTP待受/manifest読込、runner/SDK接続・終了プロセス試験は未実施のまま。
+開始ページ/HTTP待受も合成検証済み。以下のうちmanifest読込、runner/SDK接続・終了プロセス試験は未実施のまま。
 
 - 信頼済みmanifestスキーマ、開始ページ/callbackの制約、追加OAuthフィールドallowlist、scopeの字句検査。
 - 開始ページの2回目以降の取得が固定エラーで、認可リンクを再表示しない。1回目を先取りされた場合に停止する。
@@ -242,8 +245,9 @@ ServiceNowで受理/動作したという記録ではない。実機・発行・
 - adapter内部のAbortSignalをsessionへ渡さない。所有権移譲成功時のadapter cleanupでrunnerのroot signalを
   Abortしない。非協調consumerが既にコピーした文字列/参照やOSメモリの完全消去は保証しない。
   session生成・本人確認を経ずにレビューへ進ませない接続試験は§11と接続検証記録を参照。
-- HTTP待受、HTML、ブラウザー起動、承認manifest、SIGINT/SIGTERM、R-2/MCP連携、終了票、
-  サーバー側失効は未実装。特に§4の同一端末code注入対策は、単体交換の成功だけでは成立しない。
+- HTTP待受/HTMLは独立したlistener（§12）に実装し、単体adapterには含めない。
+  ブラウザー起動、承認manifest、SIGINT/SIGTERM、R-2/MCP連携、終了票、サーバー側失効は未実装。
+  特に§4の同一端末code注入対策は、単体交換の成功だけでは成立しない。
 
 ## 11. メモリ内session接続（2026-10-18）
 
@@ -265,5 +269,35 @@ adapterの内部AbortSignalはsessionへ渡さず、接続層の独立したroot
   自動失効・新規認可・別資格情報への切替はしない。
 
 この接続試験は正しいstate/S256を持つ別アカウントcodeの交換成立を模し、本人確認で止める。
-開始ページの一度限り表示・同一端末の先取り・HTTP Host検査は未実装であり、防御全体の完了とは扱わない。
+開始ページの一度限り表示・HTTP Host検査は§12で合成検証したが、同一端末の先取り防止や
+実ブラウザーでの防御全体の完了とは扱わない。
 JS/HTTP実装のコピーやOSメモリの完全消去、サーバーtoken失効は保証しない。
+
+## 12. 固定ループバック待受と開始ページ（2026-10-18）
+
+`R2LoopbackListener.start`は内部接続層を所有し、127.0.0.1:18765だけにbindする。
+公開CLI/MCPからは未接続で、port/hostの変更口・自動fallback・自動ブラウザー起動はない。
+startはローカルbindだけで、ページ取得も単に認可リンクを返すだけ。実PDIへの交換には正規callbackが必要。
+
+- Hostはraw headerで1件かつ`127.0.0.1:18765`完全一致。GETのみ、bodyなし（Content-Length未指定または0、TEなし）を
+  確認してから要求のendを待つ。固定path以外、開始URLのquery/fragment/絶対形式は拒否する。
+- Host/path/body不正は400、method不正は405。CONNECTも405、Upgradeは400、Expectは417で拒否する。
+  NodeのHTTP parserによる不正framing/過大headerの拒否も利用する。raw packetや例外を出力しない。
+- 開始ページへのforeign Origin/cross-site要求は403、prefetch/prerenderは400。callbackはPDIからの正規cross-site
+  navigationを想定し、cross-siteという理由だけでは拒否しない。Host/state/code/error/PKCE/本人確認は省略しない。
+- `GET /bp5/start`だけが認可リンクを1回表示する。URLをHTML属性として符号化し、明示的なリンククリックのみ。
+  再取得はリンクなし409にし、`start_page_reused`で認可単位全体を停止。自動再表示/再認可はない。
+- 正規callbackの消費はadapter内で一度だけ通知し、同期的な通信例外でも受理済み/未受理を混同しない。
+  browserへは認可/本人確認の成否を含まない汎用ページだけを返す。固定hashのhistory.replaceStateだけを許可する。
+  応答のfinish/close後にHTTP待受を閉じ、交換/本人確認を待つ。成功cleanupでsessionのrootを誤取消しない。
+- 全ページはno-store/referrer-policy:no-referrer/nosniff、CSP default-src/base-uri/form-action/frame-ancestorsをnone。
+  外部資源/自動redirect/フォーム/アクセスログ/CORS許可なし。状態/JSON/inspectへ認可URLやcodeを含めない。
+- header上限8KiB、target上限8KiB、接続数16、1socket1request。socket無通信2秒とNodeのheader/request timeout設定2秒。
+  無通信timeoutは2秒の総実行期限という意味ではない。認可待ち全体は既存どおり最大300秒。
+- 外部Abort・明示close・期限はsessionも停止。closeは全HTTP/未完了/upgrade socketを破棄してbind解放を待つ。
+  ポート競合はcallback_unavailableで停止し、他の待受を閉じたり別ポートを選んだりしない。
+
+`completion`は認可/本人確認の完了通知で、レビュー/runner全体の最終結果ではない。
+成功後もsessionを内部保持するため、呼出し元はfinallyで必ずcloseする。tokenのローカル破棄は失効ではない。
+本PoCはHTTPから本人確認までで、listenerからreview/SDKへ進むrunnerの接続、承認manifest、OS signal、
+385秒の全体監督と終了票は未実装。実機の登録/発行/ブラウザー操作を許可するものではない。

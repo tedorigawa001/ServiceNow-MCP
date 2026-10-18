@@ -91,7 +91,7 @@ export class R2PdiOAuthAdapter {
     } catch { this.#dispose('authorization_consumer_failed'); return this.#unavailable(); }
   }
   /** Validated GET request-target only. Host/method/body/header checks belong to the future listener. */
-  async exchangeCallback(target: string): Promise<PdiOAuthOutcome> {
+  async exchangeCallback(target: string, onAccepted?: () => void): Promise<PdiOAuthOutcome> {
     if (this.#phase !== 'waiting' || !this.#authorized) return this.#unavailable();
     const rejected: PdiOAuthOutcome = { ok: false, code: 'callback_rejected' };
     if (typeof target !== 'string' || Buffer.byteLength(target) > 8192 || !target.startsWith('/bp5/oauth/callback?')
@@ -107,7 +107,9 @@ export class R2PdiOAuthAdapter {
       || p.has('code') === p.has('error')) return rejected;
     if (p.has('error')) {
       if (!p.get('error')) return rejected;
-      this.#dispose('authorization_denied'); return this.#unavailable();
+      this.#dispose('authorization_denied');
+      try { onAccepted?.(); } catch { /* consumed denial remains terminal; never expose hook diagnostics */ }
+      return this.#unavailable();
     }
     let code = p.get('code')!;
     if (!/^[\x21-\x7e]{1,2048}$/.test(code) || p.has('error_description') || p.has('error_uri')) return rejected;
@@ -117,8 +119,10 @@ export class R2PdiOAuthAdapter {
     let reader: ReadableStreamDefaultReader<Uint8Array> | undefined;
     const chunks: Uint8Array[] = [];
     try {
+      try { onAccepted?.(); } catch { throw new PdiOAuthError('authorization_consumer_failed'); }
       const issuedAt = this.#now();
       if (!Number.isFinite(issuedAt)) throw new PdiOAuthError('invalid_token_response');
+      this.#check();
       const body = new URLSearchParams({ grant_type: 'authorization_code', code, client_id: this.#client,
         redirect_uri: R2_CALLBACK, code_verifier: this.#verifier });
       const pending = this.#fetch(new URL('/oauth_token.do', this.#origin), { method: 'POST',
