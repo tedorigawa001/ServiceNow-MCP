@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { chmodSync, mkdtempSync, readFileSync, realpathSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { request } from 'node:http';
+import { request, Server as HttpServer } from 'node:http';
 import { spawn } from 'node:child_process';
 import { Worker } from 'node:worker_threads';
 import { createServer } from 'node:net';
@@ -78,6 +78,53 @@ it('rejects an untrusted manifest offline without binding or contacting an issue
   expect(result).toMatchObject({ ok: false, code: 'manifest_untrusted', cleanup: 'complete',
     tokenMayHaveBeenIssued: false, otherAccountTokenPossible: false });
   expect(fetcher).not.toHaveBeenCalled(); expect(ready).not.toHaveBeenCalled();
+});
+
+it('waits for cancelled startup and its delayed OS close confirmation before reporting cleanup complete', async () => {
+  const root = new AbortController(), fetcher = vi.fn<typeof fetch>(), ready = vi.fn();
+  let release!: () => void, closing!: () => void, settled = false;
+  const gate = new Promise<void>(r => { release = r; }), began = new Promise<void>(r => { closing = r; });
+  const nativeClose = HttpServer.prototype.close;
+  vi.spyOn(HttpServer.prototype, 'close').mockImplementation(function (this: HttpServer, callback?: (error?: Error) => void) {
+    nativeClose.call(this, error => { closing(); void gate.then(() => callback?.(error)); }); return this;
+  });
+  const task = runR2ApprovalManifest(file, { signal: root.signal, fetch: fetcher, onReady: ready });
+  void task.then(() => { settled = true; }); root.abort();
+  try {
+    await began; await new Promise<void>(r => setImmediate(r));
+    expect(settled).toBe(false);
+    release();
+    expect(await task).toMatchObject({ ok: false, code: 'cancelled', cleanup: 'complete' });
+    expect(ready).not.toHaveBeenCalled(); expect(fetcher).not.toHaveBeenCalled();
+    expect(getEventListeners(root.signal, 'abort')).toHaveLength(0);
+    const port = createServer(); await new Promise<void>(r => port.listen(18765, '127.0.0.1', r));
+    await new Promise<void>(r => port.close(() => r()));
+  } finally { release(); await task; }
+});
+
+it('reports cleanup_incomplete when cancelled startup cannot finish inside the shared cleanup budget', async () => {
+  const root = new AbortController(), fetcher = vi.fn<typeof fetch>(), ready = vi.fn();
+  let release!: () => void, closing!: () => void;
+  const gate = new Promise<void>(r => { release = r; }), began = new Promise<void>(r => { closing = r; });
+  const nativeClose = HttpServer.prototype.close;
+  vi.spyOn(HttpServer.prototype, 'close').mockImplementation(function (this: HttpServer, callback?: (error?: Error) => void) {
+    nativeClose.call(this, error => { closing(); void gate.then(() => callback?.(error)); }); return this;
+  });
+  const started = performance.now();
+  const task = runR2ApprovalManifest(file, { signal: root.signal, fetch: fetcher, onReady: ready, cleanupTimeoutMs: 40 });
+  root.abort(Error('RUNNER_PRIVATE_ABORT'));
+  try {
+    await began;
+    const result = await task, snapshot = JSON.stringify(result);
+    expect(result).toMatchObject({ ok: false, code: 'cleanup_incomplete', cleanup: 'incomplete', tokenMayHaveBeenIssued: false });
+    expect(result).not.toHaveProperty('result'); expect(performance.now() - started).toBeLessThan(1000);
+    expect(ready).not.toHaveBeenCalled(); expect(fetcher).not.toHaveBeenCalled();
+    expect(getEventListeners(root.signal, 'abort')).toHaveLength(0);
+    release(); await new Promise<void>(r => setImmediate(r));
+    expect(JSON.stringify(result)).toBe(snapshot);
+    const port = createServer(); await new Promise<void>(r => port.listen(18765, '127.0.0.1', r));
+    await new Promise<void>(r => port.close(() => r()));
+  } finally { release(); await task; }
 });
 it('connects the trusted manifest through callback, identity, SDK list/call and real worker once', async () => {
   const stdout = vi.spyOn(process.stdout, 'write').mockReturnValue(true), stderr = vi.spyOn(process.stderr, 'write').mockReturnValue(true);

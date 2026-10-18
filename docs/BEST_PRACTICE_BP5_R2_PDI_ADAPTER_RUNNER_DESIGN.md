@@ -1,6 +1,6 @@
 # BP-5 R-2：実PDI OAuthアダプター・runner接続設計
 
-Version: draft-0.6 / Date: 2026-10-18 / Status: manifest/listener/session/MCP bridgeを内部runnerで接続・合成検証。公開CLI・実機/運用は未承認・未検証。
+Version: draft-0.7 / Date: 2026-10-18 / Status: 内部runner接続・起動取消競合のcleanup待機を合成検証。公開CLI・実機/運用は未承認・未検証。
 
 ## 1. 範囲と現状
 
@@ -398,6 +398,11 @@ finallyで自分のhandler/外部購読/タイマーだけを解除する。他�
 実workerのterminate・取得枠解放・token/permit参照の破棄・HTTP socket/port解放・SDK closeを待つ。
 cleanup待ちは3秒または全体期限までの残り時間の小さい方。待受/資格情報が残る、closeが失敗、または待ちが終わらなければ、
 結果を捨て`cleanup=incomplete/code=cleanup_incomplete`を返す。成功票にしない。
+起動Promiseはfinallyまで所有し、listenerがまだ変数へ設定されていなくても起動処理の決着を待つ。
+起動が成功すれば同じlistenerのcloseと状態を確認し、起動の非同期失敗ならstart内部のcleanup完了まで待つ。
+起動待ちとclose待ちは**1つのcleanup期限**を共有し、段階ごとに3秒を取り直さない。
+期限内に決着しなければ`cleanup_incomplete`とし、遅れて起動成功した場合もbest-effortのcloseを続けるが、
+既に返した終了票を後から`complete`に書き換えない。回帰試験と制限は[検証記録§6](E2E_BEST_PRACTICE_R2_RUNNER_SYNTHETIC_2026-10-18.md#6-bind取消競合の追補検証)を参照。
 ライブラリAPI自身はprocess.exit/SIGKILLを呼ばない。終了不能workerが残る場合の専用host強制終了は後続課題で、
 イベントループ停止・OS停止・SIGKILL時の385秒厳密保証/完全cleanupを主張しない。
 

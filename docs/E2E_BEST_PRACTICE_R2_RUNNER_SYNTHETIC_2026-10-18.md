@@ -87,3 +87,35 @@ TDDではuntrusted読込、正常接続、非協調readyの期限、失敗後の
 - JS/HTTP実装が保持するコピーやOSメモリの完全消去は保証しない。cleanupはサーバーtoken失効ではない。
 - 実認可・実token・最小権限/R-2のACL・Public Client/S256/loopback・自己参照GET・C方式の実機成立は未確認。
   今回の結果をG2/G4完了と扱わず、失効/同意取消やtelemetry調査も自動実行しない。
+
+## 6. bind取消競合の追補検証
+
+同日、bindの完了/取消が競合すると起動Promiseが未決着のまま、runnerのfinallyでlistener未設定を理由に
+`cleanup=complete`を早返しできる点を修正した。原因は起動Promiseが作業ブロック内にしか保持されていなかったこと。
+
+`starting`をfinallyまで所有し、起動の決着と、成功したlistenerのclose/状態確認を1つのcleanup期限で待つ。
+startの非同期失敗経路は内部cleanupを待ってからrejectするため、そのrejectも待機対象に含める。
+上限は従来どおり全体385秒/cleanup最大3秒。期限超過時は`cleanup_incomplete`、結果なし。
+遅い起動の後始末は継続するが、返却済み終了票は変更しない。
+
+TDD・systematic-debuggingでNode HTTPのclose完了通知だけを遅延するOS境界の合成試験を追加した。
+R2 listener/runner自体はmockせず、実Node serverのbind/取消/close経路を通した。
+
+- 期限内：起動直後の取消でclose完了通知を保留すると、修正前は終了票が早返しされた（期待falseに対しtrue）。
+  修正後は未終了のまま待ち、通知解放後だけ`cancelled/cleanup=complete`になる。
+- 期限超過：close通知を保留し、短縮cleanup予算40msで`cleanup_incomplete`を返す。
+  後から通知を解放しても終了票は変わらず、ready/issuer通信は0回、外部Abort購読なし、固定portを再使用できる。
+
+追補後の確認：
+
+| コマンド | 結果 |
+|---|---|
+| `bdo npm test -- tests/review/r2-loopback.test.ts` | 71件PASS（既存46+runner25） |
+| `bdo npm test -- --maxWorkers=2` | 108ファイル、2,809件PASS |
+| `bdo npm run type-check` | PASS |
+| `bdo npx eslint src/review/r2-runner.ts tests/review/r2-runner.cases.ts` | エラー/警告0 |
+| `bdo npm run test:pack` | build・361ファイル梱包・production-only導入・worker/MCP smoke PASS。R-2非同梱を維持 |
+| `bdo git diff --check` | PASS |
+
+実機操作・token発行・設定変更はせず、telemetry調査も保留を維持した。
+SIGINT再入力時の強制終了・本人IDの一致による安全側拒否は今回変更していない。§5の留保は継続する。

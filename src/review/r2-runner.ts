@@ -23,6 +23,7 @@ const limit = (value: number | undefined, ceiling: number) => {
 
 export async function runR2ApprovalManifest(path: string, options: R2RunnerOptions = {}): Promise<R2RunnerOutcome> {
   let listener: R2LoopbackListener | undefined;
+  let starting: Promise<R2LoopbackListener> | undefined;
   let manifest: ReturnType<typeof loadR2ApprovalManifest> | undefined;
   let result: McpResult | undefined, code: string | undefined;
   let workTimer: ReturnType<typeof setTimeout> | undefined;
@@ -62,7 +63,7 @@ export async function runR2ApprovalManifest(path: string, options: R2RunnerOptio
         end = started + total; workEnd = end - cleanupMs;
         workTimer = setTimeout(() => stop('deadline_exceeded'), total - cleanupMs);
         check();
-        const starting = R2LoopbackListener.start({ ...context.plan, scopes: [...context.plan.scopes] }, { ...options, signal: root.signal });
+        starting = R2LoopbackListener.start({ ...context.plan, scopes: [...context.plan.scopes] }, { ...options, signal: root.signal });
         // Retain late bind ownership even when cancellation wins the race.
         void starting.then(value => { listener = value; if (root.signal.aborted) void value.close().catch(() => {}); }, () => {});
         listener = await guard(starting);
@@ -86,12 +87,21 @@ export async function runR2ApprovalManifest(path: string, options: R2RunnerOptio
     let timer: ReturnType<typeof setTimeout> | undefined;
     try {
       const remaining = Math.min(cleanupMs, Math.max(0, end - now()));
-      if (listener) {
-        await Promise.race([listener.close(), new Promise<never>((_, reject) => {
+      if (starting) {
+        const pendingStart = starting;
+        const cleanup = async () => {
+          // The async start failure path waits for its own cleanup. Cancellation must not
+          // turn an unresolved startup into an unearned cleanup-complete receipt.
+          const owned = await pendingStart.catch(() => undefined);
+          if (!owned) return;
+          listener = owned;
+          await owned.close();
+          const status = owned.status();
+          if (status.listening || status.connection.hasCredential || !owned.runnerStatus().cleanupComplete) throw new Stopped();
+        };
+        await Promise.race([cleanup(), new Promise<never>((_, reject) => {
           timer = setTimeout(() => reject(new Stopped()), remaining);
         })]);
-        const status = listener.status();
-        if (status.listening || status.connection.hasCredential || !listener.runnerStatus().cleanupComplete) throw new Stopped();
       }
     } catch { receipt.cleanup = 'incomplete'; code = 'cleanup_incomplete'; result = undefined; }
     finally {
