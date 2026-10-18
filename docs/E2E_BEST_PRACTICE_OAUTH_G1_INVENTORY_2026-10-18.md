@@ -96,12 +96,56 @@ REST API auth scopeとAPI access policyは別の層。scope新設の結果から
 一方、API access policyまで変更するならOAuth以外の利用者も審査する。
 allow-only-scope/Enforce token restriction/Disable client restrictionの意味・組合せを同一視しない。
 
+### 4.1 対象3登録の実利用・担当者の追加調査
+
+2026-10-18、既存Chromeセッションで登録詳細・既存メトリクス・関連設定と限定したDictionaryを
+読み取り専用で確認した。**3登録ともTable APIの実利用は未確認、運用担当者は未特定**。
+以下は未使用・影響なし・停止する登録の判定ではない。
+
+| 登録 | 登録詳細で確認した非秘密情報 | 実利用/担当者について分かった範囲 |
+|---|---|---|
+| Trino Connector | Active=true、Public Client=false、Application=Global、Commentsは空表示 | §3のTrino API→mTLS関連は別の構成証拠。OAuth登録との実行時の対応やTable API利用、人の担当者を証明しない |
+| Prism | Active=true、Public Client=false、Application=Global、Commentsは空表示 | 表示した既定フォームにOwner/Contactはなく、用途・担当者を特定できなかった |
+| WebKit HTML to PDF | Active=true、Public Client=false、Application=Global。Commentsに`Used by the service WebKit HTML to PDF` | サービス用途の説明であり、Table API利用や人の担当者の証拠ではない。表示した既定フォームにOwner/Contactはなかった |
+
+Trino Connectorの表示した既定フォームにもOwner/Contactはなかった。
+作成者・更新者・接続用アカウントを、運用責任者とみなす推定は行っていない。
+
+| 確認経路 | 観測結果 | 確認できなかった理由/限界 |
+|---|---|---|
+| Machine Identity Console → Metrics → Unique API calls in last 7 days | 表示総数351行。先頭15行でTable APIの`now/table/sys_update_xml`、`now/table/sys_update_set`等を確認 | **351は一覧の一意な組合せの行数で、リクエスト総数ではない**。表示列はidentity/authentication/resource/method/type/最終アクセス時刻で、OAuth application/clientの列はない。全351行は精査しておらず、同一identityから3登録へ帰属させない |
+| Metricsの既存リンクからInbound API Integration Usage dashboard | `Can't display this dashboard` / `The dashboard that you are looking for was not found` | アプリ別利用の確認に到達できなかった。画面だけでは実体不存在・リンク不整合・権限による不可視等を切り分けられない。修復・権限追加はしていない |
+| Registered Integrations（`inbound_integration_provider_registry`） | 未フィルター6件。OAuth Entity参照はAzureAD、client001、Okta、ADFS、Auth0、Googleで、対象3登録は含まれなかった | 登録一覧での不在であり、実呼出しがない証拠ではない。Basic Auth Userの個人情報は記録しない |
+| Auth Client Server Mappings（`auth_client_server_mapping`） | 観測済み3登録の参照IDで`auth_client`を限定した一覧は0件 | 関連設定の表示0件のみ。Table API未利用や他の経路の不存在は証明しない |
+
+メトリクスの「7日」はUIの表示名。PDIでの収集開始・欠損・保持期間・除外条件の実効値は未確認。
+公式資料にはInternal Integration User=trueのアカウントをMetricsから除外する旨があるが、
+対象3登録の利用アカウントとそのフラグは未確認である（§6）。
+
+追加のメタデータ確認は次の範囲に限定した。**生のtransactionログやcredential/tokenの値は取得していない**。
+
+- `sys_dictionary`の`reference=oauth_entity`は12件。関連先を確認し、上記registryとclient/server mappingだけを追跡した。
+  token/credentialを参照する表も候補に出たが、その内容は照会していない。
+- `reference=inbound_integration_provider_registry`は0件、`sys_db_object`の`nameLIKEinbound_integration`はregistryの1件。
+  この命名範囲の結果であり、プラットフォーム全体に別の利用統計経路がないとは判定しない。
+- `name=syslog_transaction`で`element`を`oauth_entity,oauth_client,oauth_client_id,client_id,authentication_type,user,url,sys_created_on`
+  に限定したDictionaryは`url`と`sys_created_on`の2件。選んだ候補ではOAuth clientの帰属キーを確認できなかった。
+  全スキーマや別表との結合を網羅したものではなく、3登録別のtransaction件数は未集計。
+- `name=oauth_entity`で`element`を`owner,owned_by,managed_by,support_group,assignment_group,contact,contact_person`
+  に限定したDictionaryは0件。直接定義された候補名の範囲であり、継承項目・別名のカスタム項目・外部運用台帳は未確認。
+
+したがって、既存設定から登録の有効状態と一部の用途は確認できたが、アプリ別の実績と人の責任者を
+結び付ける証拠は得られなかった。ログの取得不能を「0呼出し」と置き換えない。
+
 ## 5. G1の残項目と進行条件
 
 優先順位は以下。いずれも未完了で、G2/G3/G4へ自動で進まない。
 
 1. **実利用/担当者**：上記3Clientを優先し、他の有効OAuth/OIDC登録もTable API利用の有無、
    method/version/resource/table、定期ジョブ、ownerを確認。未使用の標準/サンプル登録も推測で除外しない。
+   §4.1の追加調査でも3件は未解決。既存の運用台帳・ジョブ設定等から責任者と非秘密のclient→resourceの
+   帰属証拠を特定し、対象期間・収集/保持・除外・不可視範囲を記録する。担当者への連絡は別途許可を得る。
+   dashboardの表示不能は修復やロール追加の許可ではない。新規ログ有効化・設定変更・token取得で補わない。
 2. **実効設定/可視性**：閲覧主体・ACL/ドメイン/スコープによる不可視、プロパティ実効値、
    対象clientの制限フラグ、ポリシーの正確な対象表・条件/優先を確認。
    credential内容や既存tokenを収集する代わりに、承認した非秘密の証拠経路を先に設計する。
@@ -115,7 +159,7 @@ allow-only-scope/Enforce token restriction/Disable client restrictionの意味�
 
 ## 6. 公式根拠
 
-調査時の参照日2026-10-18。以下の公式検索本文はAustralia・2026-03-12更新と表示された。
+調査時の参照日2026-10-18。下の最初の4資料の公式検索本文はAustralia・2026-03-12更新と表示された。
 汎用/r URLの直接本文はBrazilへ切り替わる場合があり、family固定の証拠と混同しない。
 
 | 根拠URL | 該当箇所/用途 |
@@ -124,6 +168,10 @@ allow-only-scope/Enforce token restriction/Disable client restrictionの意味�
 | [Create REST API access policy](https://www.servicenow.com/docs/r/platform-security/authentication/create-api-access-policy.html) | 認証プロファイル関連、method/version/resource/Table指定。新設scopeとの責務の違い |
 | [API access policy prioritization](https://www.servicenow.com/docs/r/platform-security/authentication/api-access-policy-prioritization.html) | non-global優先、method/resource/version等による優先。UIのNameソートは評価順ではない |
 | [REST API scope troubleshooting](https://www.servicenow.com/docs/r/platform-security/authentication/rest-api-scope-troubleshooting.html) | scope検査プロパティ、useraccount、OAuth/OIDCとBasic/Session Cookie/証明書認証の違い |
+| [Machine identity metrics](https://www.servicenow.com/docs/r/platform-security/identity/machine-identity-metrics.html) | Australia・2026-03-12更新表示。Unique API calls in last 7 days、Internal Integration User=trueの除外。対象の実効除外状態は未確認 |
+| [Monitor inbound API integration usage](https://www.servicenow.com/docs/r/api-reference/web-services/inbound-api-integration-usage-dashboard.html) | Australia・2025-09-29更新表示。アプリ別OAuth呼出し、`inbound_integration_metering_admin`、30日/13か月等の表示期間。PDIの保持・収集の実測ではない |
+| [View inbound API integration usage dashboard](https://www.servicenow.com/docs/r/api-reference/web-services/view-inbound-api-integration-usage-dashboard.html) | Australia・2025-10-01更新表示。アプリ/resourceの絞り込みと必要ロール。今回のPDIではdashboard本文に到達できず |
+| [Register Basic Authentication](https://www.servicenow.com/docs/r/api-reference/web-services/register-basic-authentication.html) | Australia・2026-03-12更新表示。Registered IntegrationsとOAuth Entityによる名称補完。registryの不在から未利用とは推論しない |
 
 Dictionaryの正規関連テーブル名と件数はPDIでの観測。公式資料を読んだことを、そのPDIでの
 設定有効化・拒否動作・既存接続の互換性の実証として扱わない。

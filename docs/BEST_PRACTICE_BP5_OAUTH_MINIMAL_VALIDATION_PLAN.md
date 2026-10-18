@@ -38,6 +38,7 @@ G0のローカル合成ハーネスは[実装・検証済み](E2E_BEST_PRACTICE_
 これらを実装/承認するまでG4へ進まない。以下のP/L/Sケースは未実行のまま。
 G1の[読み取り棚卸し記録](E2E_BEST_PRACTICE_OAUTH_G1_INVENTORY_2026-10-18.md)は部分的な構成証拠であり、
 G1の変更開始条件は未完了。実利用/owner、実効設定・不可視範囲、canaryと復旧snapshot/担当の確認が残る。
+対象3登録の追加調査でも実利用未確認・owner未特定のまま（同記録§4.1）。P/L/Sケースの実行状況は変更しない。
 公開clientが成立しない、S256降格が受理される、URIが外部へ流れる、scopeが広がる、
 予期しないtoken発行、既存clientの不具合、token/秘密漏えいの疑いで即中止する。
 adminへの切替、useraccount/空scope、ACL緩和、共有clientの変更で継続しない。
@@ -130,6 +131,14 @@ scope関連なしの有効Client3件（Trino Connector/Prism/WebKit HTML to PDF�
 他のOAuth/OIDCやBasic/mTLS利用者を影響審査から除外しない。
 非アクティブTableポリシーの有効化、既存useraccount/専用用途profileの編集、重複関連の整理を
 scope新設の一部として自動実行しない。スコープ検査プロパティの表示0件も無効化の証拠にしない。
+
+追加調査ではMetricsに一意な組合せ351行が表示されたが、先頭15行の確認と表示列だけでは
+Trino Connector/Prism/WebKit HTML to PDFへ呼出しを帰属できなかった。アプリ別usage dashboardは
+「not found」で表示不能。registryの6件に対象参照がないこととclient/server mappingの対象0件を、
+未利用・影響なしとは判定しない。用途コメントやTrinoの別API/mTLS関連もTable API利用の証拠ではない。
+G3の前に、責任者と非秘密のclient→resource帰属、対象期間、収集・保持・除外/不可視範囲を確定する。
+dashboardの復旧・ロール追加・ログ有効化はこの読み取り調査に含めず、必要なら別の変更/復旧承認を得る。
+生のtransactionログやcredential/tokenの値は今回取得しておらず、既存ログ全体を調べ尽くしたとは扱わない。
 
 1. 権限/スコープ/ドメイン/件数制限による不可視を確認し、既存API-scope、OAuth関連付け、
    API access policyの順序/条件、制限フラグと適用API/version/resourceを全ページ棚卸しする。
