@@ -44,6 +44,12 @@ S256強制・loopback受理・GET限定の[最小検証/共有API影響・復旧
 G0の[ローカル合成ハーネス検証](E2E_BEST_PRACTICE_OAUTH_G0_2026-10-18.md)は完了したが、
 実PDIへの接続・本人確認・実MCPへのtoken供給は未実装、登録作成/発行ゲートは未完了。
 
+[G1読み取り棚卸し](E2E_BEST_PRACTICE_OAUTH_G1_INVENTORY_2026-10-18.md)では、Auth Scope定義2件、
+API-scope関連の表示0件、OAuth-scope関連9行/8登録、REST APIポリシー4件を観測した。
+Table GET/POSTは非アクティブで関連認証プロファイルも表示されず、既存の完成済みGET保護として流用しない。
+関連なしの有効Client3件は実利用の優先確認候補であり、影響確定件数ではない。
+実利用/owner・tokenの実scope・設定の実効値/不可視範囲・復旧準備が未確認なので、G1の変更開始条件も未完了。
+
 ## 2. 登録案と責任分離
 
 | 項目 | 第一案 | 未確認/承認条件 |
@@ -128,6 +134,9 @@ useraccount、空scope、既存の広いscopeへフォールバックしない�
 専用scopeとAPI/resource/HTTP methodの関連付け、clientへの許可、要求/発行scopeの対応をセットで確認する。
 Table APIのGET用mappingの公式例はR4にある。PDIには管理一覧があるが、未フィルター表示は0件だった。
 利用可能な既存GET用mappingは確認できず、新設の保存可否・実効動作は未検証。
+G1で見つかった非アクティブのTable API access policyはauth scope mappingとは別の層で、
+有効化は既存の認証方式にも影響し得る共有変更として別審査する。
+useraccount関連があることも発行済みtokenの実scopeや影響なしの証拠にはしない。
 
 | 用途 | 許す対象案 | 追加権限の扱い |
 |---|---|---|

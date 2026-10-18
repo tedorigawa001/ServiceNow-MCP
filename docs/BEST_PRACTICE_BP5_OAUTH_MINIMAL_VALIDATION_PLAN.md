@@ -36,6 +36,8 @@ scopeだけで成立すると主張しない。候補Aが元から書けない�
 G0のローカル合成ハーネスは[実装・検証済み](E2E_BEST_PRACTICE_OAUTH_G0_2026-10-18.md)。
 ただし実PDI用HTTPS接続/本人確認API/実MCPへのtoken引渡しは未実装または未確定で、G0の人の承認も未完了。
 これらを実装/承認するまでG4へ進まない。以下のP/L/Sケースは未実行のまま。
+G1の[読み取り棚卸し記録](E2E_BEST_PRACTICE_OAUTH_G1_INVENTORY_2026-10-18.md)は部分的な構成証拠であり、
+G1の変更開始条件は未完了。実利用/owner、実効設定・不可視範囲、canaryと復旧snapshot/担当の確認が残る。
 公開clientが成立しない、S256降格が受理される、URIが外部へ流れる、scopeが広がる、
 予期しないtoken発行、既存clientの不具合、token/秘密漏えいの疑いで即中止する。
 adminへの切替、useraccount/空scope、ACL緩和、共有clientの変更で継続しない。
@@ -121,6 +123,13 @@ OPTIONS/HEADの成功や、ローカルfetch mockによる拒否も実際のmeth
 
 GET mappingの新設でも既存tokenを拒否し得る。専用clientにscopeを付けるだけの変更とは分ける。
 以下を読み取りで確定し、秘密を含まない変更台帳と、非公開の復旧用詳細を分離する。
+
+G1ではAuth Scope定義2件、API-scope関連の表示0件、OAuth関連9行/8登録、REST APIポリシー4件、
+policy-profile関連3件を観測。Table GET/POSTは非アクティブでprofile関連も表示されなかった。
+scope関連なしの有効Client3件（Trino Connector/Prism/WebKit HTML to PDF）を実利用の優先確認候補とするが、
+他のOAuth/OIDCやBasic/mTLS利用者を影響審査から除外しない。
+非アクティブTableポリシーの有効化、既存useraccount/専用用途profileの編集、重複関連の整理を
+scope新設の一部として自動実行しない。スコープ検査プロパティの表示0件も無効化の証拠にしない。
 
 1. 権限/スコープ/ドメイン/件数制限による不可視を確認し、既存API-scope、OAuth関連付け、
    API access policyの順序/条件、制限フラグと適用API/version/resourceを全ページ棚卸しする。
