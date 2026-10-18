@@ -195,6 +195,67 @@ Trino Connectorの表示した既定フォームにもOwner/Contactはなかっ�
 必要になれば別の変更承認・影響/復旧計画を先に用意する。3登録の実利用/ownerは依然未確認で、
 dashboardが使えないことを「利用なし」「共有変更の影響なし」に置き換えない。
 
+### 4.3 接続設定のヘッダーJSON解析エラーとACL制約
+
+2026-10-18、元の通信/応答解析エラーを§4.2のlogger未初期化の疑いと分けて追加調査した。
+既存`syslog`・標準Script Include・接続設定一覧・read ACLの読み取りに限定し、
+診断用の通信実行、token発行、ロール昇格/偽装、ACL迂回、設定・標準処理の保存変更は行っていない。
+資格情報、ヘッダー/応答本文、接続先の実値は本記録に収録しない。
+
+#### ログで確認した事実
+
+`syslog`の条件は`sys_created_onONToday@javascript:gs.beginningOfToday()@javascript:gs.endOfToday()`に、
+`messageLIKEQueryService`、`sourceLIKEsn_app_analytics`、
+`messageLIKEFailed to parse API headers JSON`のOR条件を組み合わせ、作成日時の降順で参照した。
+表示総数24行を2ページ（1–20、21–24）で確認し、内訳は次のとおり。
+
+| ログ種別 | 表示行数 | 確認内容 |
+|---|---:|---|
+| 接続設定のヘッダーJSON解析 | 14 | `Failed to parse API headers JSON for key observability_data` |
+| connectorの例外 | 10 | `TelemetryQueryServiceDataConnector.executeQuery error: The undefined value has no properties.` |
+
+UIの表示時刻は2026-10-17 21:48:55–21:51:45。調査日や検索のTodayとの日付差を含め、
+セッション/サーバーのタイムゾーン対応は未検証なのでJSTと断定しない。
+一部は同じ表示秒に両種のログがあったが、要求単位の相関は未確認。14/10は限定検索内のログ行数で、
+要求数・全期間の総件数・因果関係の証明ではない。
+
+#### 標準処理との照合
+
+- `APIConfigLookupService`は`sn_telemetry_api_service_config`を`api_key`で検索し、
+  一致しなければ先頭のサービス名部分を除いたキーでも検索する。ここでの`api_key`は設定識別名で、
+  認証用APIキーの実値を取得したという意味ではない。
+- `APIKeyBuilder`はDTOのserviceName/dataTypeから識別名を組み立てる。
+  静的参照の確認であり、今回の要求ごとの入力や解決済み設定を取得したわけではない。
+- `APIConfigLookupService._createConfigObject()`は`api_headers`を`getValue(...) || {}`で受け、
+  truthyなら`JSON.parse(...)`する。catchでは上表のヘッダー解析エラーを記録し、
+  `api_headers={}`として続行する。**HTTP応答のJSON解析とは別の段階**である。
+- 空値が代替オブジェクト`{}`となった場合でも解析失敗し得るため、このログだけで保存済みJSONの
+  破損を断定しない。空ヘッダーでの続行が最終エラーを起こしたかも未確認。
+- `QueryServiceHttpClient`は`sn_app_analytics.SNAnalyticsQueryService`へ通信を委譲する。
+  同名Script Includeの限定一覧は表示0件で、当該通信実装までは読み取れなかった。
+  ネイティブ実装か他の提供経路か、また実装そのものが存在しないかは、この結果だけでは判定しない。
+
+#### 接続設定を確認できなかった理由
+
+`sn_telemetry_api_service_config`の未フィルター一覧は表示0件で、データ列も表示されなかった。
+同表の有効なrecord/read ACLは`maint`を要求し、**Admin overrides=false**、Advanced=falseだった。
+§4.2の統計データリソースACLとは別の保護であり、管理者セッションで画面枠を開けることは
+接続設定の閲覧権限を意味しない。今回の0件を設定不存在と扱わず、権限境界で調査を止めた。
+設定の存在・解決される行・HTTPメソッド・接続先・ヘッダー内容の実効値は未確認である。
+Script Includeの直接実行や別APIで保護を迂回して取得していない。
+
+#### 元の通信エラーについての到達点
+
+上記24行の表示範囲からは元のHTTPステータス、応答本文、通信失敗理由、行番号付きスタックを
+確認できなかった。既存ログ全体に存在しないという判定ではない。
+設定の可視性制約と、§4.2のloggerが元の例外を隠す可能性が残るため、
+接続設定欠落・不正JSON・認証失敗・PDI制約のいずれも確定原因とはしない。
+ヘッダー解析の回復可能なエラーと、logger未初期化による二次エラーの疑いは独立に記録する。
+
+次の調査には、権限を持つ担当者が既存証拠から秘密を除いた設定検証結果や相関/スタック情報を
+提供できるかの整理が必要。担当者への連絡、権限追加、ログ有効化、修正/再試験は別途承認の対象であり、
+本記録はそれらの実施許可ではない。G1の変更開始条件と3登録の利用/owner確認は未完了のまま。
+
 ## 5. G1の残項目と進行条件
 
 優先順位は以下。いずれも未完了で、G2/G3/G4へ自動で進まない。
@@ -206,6 +267,8 @@ dashboardが使えないことを「利用なし」「共有変更の影響な�
    dashboardの表示不能は修復やロール追加の許可ではない。新規ログ有効化・設定変更・token取得で補わない。
    §4.2のリンク不整合とtelemetryエラーの調査でも利用統計は取得できていない。
    logger未初期化は疑いとして保持し、確定原因・PDI一律制約・権限問題の解消とは扱わない。
+   §4.3でヘッダーJSON解析エラーを確認したが、接続設定はmaint必須・admin overrideなしで検証できず、
+   元のHTTP失敗も未確認。0件表示を設定欠落、解析エラーを最終原因と決め付けない。
 2. **実効設定/可視性**：閲覧主体・ACL/ドメイン/スコープによる不可視、プロパティ実効値、
    対象clientの制限フラグ、ポリシーの正確な対象表・条件/優先を確認。
    credential内容や既存tokenを収集する代わりに、承認した非秘密の証拠経路を先に設計する。
