@@ -1,6 +1,6 @@
 # BP-5 R-2：専用hostの終了・強制停止設計
 
-Version: draft-0.1 / Date: 2026-10-18 / Status: 設計案。未実装・未試験・実機未承認。
+Version: draft-0.2 / Date: 2026-10-18 / Status: 設計案。未実装・未試験・実機未承認。
 
 ## 1. 範囲と前提
 
@@ -31,6 +31,8 @@ host自身のtimerだけではhostのevent loop停止を監督できないため
 初期対象はPOSIXのmacOS/Linux。Windowsのsignal/プロセス終了は別設計・試験が済むまで開始拒否。
 固定Node executable/固定entryをshellなしで起動し、hostは専用sessionへ分離する案（`detached:true`、unrefしない）。
 TTYのsignalを監督とhostで二重計数しないことを実装前に確認する。共有process groupへsignalを送らない。
+分離したhostは監督の終了で自動的には止まらない。監督が異常終了し、かつhostのevent loopも停止している場合は、
+IPC切断を検知できずhostを止める主体がなくなる。この残余リスクは本設計では解消せず、運用者の調査対象とする（§4・HS-04）。
 hostが所有する解析はWorker threadsだけとし、任意のOS子プロセス生成を許さない。
 
 ## 3. 期限と監督の開始
@@ -123,6 +125,7 @@ bootstrapより前の構文/loader失敗、handler自身の例外、native fatal
   OS core dump等の既存運用が秘密管理に適合するかは導入前条件で、自動で設定変更しない。
 - 制御IPCはstrictな固定messageだけ：`prepared/run_grant/ready/stopping/stop/force/finished/finished_ack`。
   任意module/command/PID/endpoint・例外/headers/raw応答・sendHandleを許さない。
+  spawn時に`serialization: 'json'`を明示し、advanced serializationによる型の拡張を受けない。
   順序/回数/サイズ/期限違反は停止し、部分的に受理して続行しない。
 - readyには固定start URLまたは固定識別子しか含めない。auth URLは既存の一度限りの開始ページだけに置く。
 - finishedにだけ既存runner終了票/許可済み0.2/0.3結果を含め、個別256KiB、run全体512KiB、制御message 1KiB以下を上限案とする。
@@ -174,7 +177,7 @@ SIGKILL時の実OS終了signalはそのまま別fieldで保持し、hostが71等
 
 | ID | 確認する境界 |
 |---|---|
-| HS-01 | cleanup completeの正常終了。0.2/0.3・partial/isError維持、自然終了、stdout/stderr非露出 |
+| HS-01 | cleanup completeの正常終了。0.2/0.3・partial/isError維持、自然終了、stdout/stderr非露出（試験専用にpipeで起動して観測。本番の`ignore`構成とは分けて記録） |
 | HS-02 | 非終了worker/遅いbind・closeでcleanup_incomplete→host停止。worker/port消滅確認とcleanup報告を分離 |
 | HS-03 | 実SIGINT 1回でdrain、2回目は即force。SIGTERM→SIGINT、cleanup中の再入力、TTY二重配送も検証 |
 | HS-04 | main event loopを停止させ、独立監督がHで所有hostのみ停止。kill失敗/終了未確認/監督クラッシュも切り分け |
@@ -192,6 +195,7 @@ hostを外部監督へ接続するまで実機認可は開始しない。公開C
 ## 10. 公式根拠と設計判断の区別
 
 参照日2026-10-18。Node v22.23.3の公式資料を確認した。最小engine 22.12.0や他の採用版での実動作は別途試験する。
+これまでのR-2合成試験はローカルのNode v24.18.0で実行した。HS試験はengine下限の22.12系と開発環境の24系の両方で実施する。
 5秒/382秒/385秒/3秒/1秒、状態・IPC・exit code・POSIX限定は本プロジェクトの設計案。
 
 | ID | 根拠URL・該当箇所 | 確認した仕様 |
