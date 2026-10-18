@@ -206,6 +206,10 @@ dev441827（Australia）の`sys_security_acl`/`sys_security_acl_role`/`sys_user_
 
 ## 6. 本人性・MCPへの引渡し・C方式
 
+固定GET候補・安全側停止・同一プロセスの不透明capabilityによる引渡し・終了時の参照破棄は
+[方式R-2本人確認/token引渡し設計](BEST_PRACTICE_BP5_R2_IDENTITY_TOKEN_DESIGN.md)に具体化した。
+未承認・未実装であり、固定GETの対象版/R-2での成立と実機操作の承認は別途必要。
+
 - 取得後、同じtokenで実行ユーザーのsys_idを読み取り、検証利用者のIDとの一致だけを記録する。
   sys_user一覧の先頭、指定した検証利用者レコードが読めること、UIの表示名では本人性を証明しない。
   固定の現在ユーザー照会または承認済みの本人確認APIを実機で確認する。拒否/不明なら停止。
