@@ -1,6 +1,6 @@
 # BP-5：候補A専用Authorization Code登録・トークン管理設計
 
-Version: draft-0.1 / Date: 2026-10-18 / Status: 設計案・実装/運用承認前。
+Version: draft-0.2 / Date: 2026-10-18 / Status: 設計案・実装/運用承認前。
 
 本書は登録作成・認可・トークン発行・設定変更の実行許可ではない。
 今回の成果物は文書のみ。アカウント/ロール/ACL、既存OAuth登録、共有API保護、MCP接続設定は変更しない。
@@ -23,6 +23,21 @@ Version: draft-0.1 / Date: 2026-10-18 / Status: 設計案・実装/運用承認�
 - ブラウザーの通常UIは参照できたが、Table APIへの直接ナビゲーションは未認証として拒否された。
   ブラウザーのログイン成功をOAuth APIの成功と同一視せず、cookie/CSRF情報を抽出して代替しない。
 
+専用登録の作成前に行った追加の[読み取り専用調査記録](E2E_BEST_PRACTICE_OAUTH_READINESS_2026-10-18.md)：
+
+- 既存ServiceNow SDK登録のAuthorization Code画面でPublic Clientオンを観測。
+  ヘルプは「client secret検証を省略しPKCEを使用」と説明する。既存登録は流用・変更しない。
+- Redirect URLs欄と絶対URL・カンマ区切りの説明を確認。ただし提案loopback URLの入力/保存/認可は未実施。
+- S256は公式仕様に記載されるが、当該inbound画面でS256専用の強制設定は確認できず、
+  plain/PKCEなし/不正verifierの拒否動作も未検証。outbound OAuthの設定項目を証拠に流用しない。
+- Allow access only to APIs in selected scopeの設定欄あり。既存登録ではオンとuseraccountを観測するが、
+  これをGET限定の証拠にしない。REST API Auth Scopesの未フィルター一覧は表示0件。
+  全ACL/別経路/ポリシーの網羅確認ではなく、利用可能な既存GET mappingを確認できなかったという意味。
+- Access token lifespan (seconds)欄（既存値1800）を確認。900秒以下の保存可否・実発行寿命は未検証。
+
+設定欄の存在、公式仕様、保存時の受理、認可/拒否動作は別の証拠として扱う。
+今回の調査で実行開始ゲートを完了扱いにしない。
+
 ## 2. 登録案と責任分離
 
 | 項目 | 第一案 | 未確認/承認条件 |
@@ -30,11 +45,11 @@ Version: draft-0.1 / Date: 2026-10-18 / Status: 設計案・実装/運用承認�
 | 識別名 | BP5 Candidate A - Authorization Code PoC（仮称） | 専用登録。作成許可は別途必要 |
 | 接続先 | `https://dev441827.service-now.com`だけ | 再割当・ホスト変更時は失効扱い、再承認 |
 | grant | Authorization Codeのみ | Client Credentials/Password/Implicitへの切替なし |
-| クライアント種別 | ネイティブ公開クライアント、PKCE必須、client secretを保持しない | PDIのPublic Client/PKCE設定とS256強制を実装前に確認 |
+| クライアント種別 | ネイティブ公開クライアント、PKCE必須、client secretを保持しない | PDIのPublic Client欄とPKCEのヘルプは確認済み。S256強制/降格拒否は未検証 |
 | 実行主体 | 候補A本人のログイン・同意 | サービスアカウント固定ユーザー、impersonation、パスワード共有は使わない |
 | callback | `http://127.0.0.1:18765/bp5/oauth/callback` | loopback HTTP許容・完全一致登録をPDIで確認。未登録の設計値 |
 | scope | 専用GET用scope（仮名 `bp5_review_read`）だけ | §5の実現性/共有影響を確認するまで作成・関連付けしない |
-| token寿命 | 検証用に短くする。15分以下を承認候補とする | per-clientで設定可能か未確認。全体プロパティは変更しない |
+| token寿命 | 検証用に短くする。15分以下を承認候補とする | per-clientの寿命入力欄は確認済み。900秒以下の保存/実発行寿命は未検証。全体プロパティは変更しない |
 | refresh | 初回PoCは使用・保管・自動更新しない | サーバーが返す場合も保存しない。発行済み状態が残る可能性を別途管理 |
 
 運用者が登録・scope・寿命を承認し、候補A本人がログイン/同意する。実行担当はパスワードを扱わない。
@@ -83,7 +98,8 @@ ServiceNowの認可/トークンエンドポイントは外部PDIへの処理で
 
 useraccount、空scope、既存の広いscopeへフォールバックしない。scope名をreadにしてもGET制限は成立しない。
 専用scopeとAPI/resource/HTTP methodの関連付け、clientへの許可、要求/発行scopeの対応をセットで確認する。
-Table APIのGET用mappingの公式例はR4にある。ただしPDIへの導入状況・実効動作は未検証。
+Table APIのGET用mappingの公式例はR4にある。PDIには管理一覧があるが、未フィルター表示は0件だった。
+利用可能な既存GET用mappingは確認できず、新設の保存可否・実効動作は未検証。
 
 | 用途 | 許す対象案 | 追加権限の扱い |
 |---|---|---|
@@ -157,6 +173,7 @@ token失効・同意取消・登録無効化は操作対象と権限を確認し
 作成/発行前のチェックリスト（すべて未承認/未実装事項を解消してから個別に実行許可を得る）：
 
 - [ ] PDIのPublic Client＋S256必須設定、固定loopback callbackの受理を確認する方法を承認。
+  Public Client欄/PKCEヘルプの読み取り確認のみ完了。保存・降格拒否・loopback受理は未完了。
 - [ ] 新規専用登録の作成内容を承認。既存client001/標準登録/候補Aのロールを変更しない。
 - [ ] 専用GET scopeとAPI mappingの既存影響、対象外APIの拒否、回復計画を審査。scope文字列だけで済ませない。
 - [ ] callback receiver、state/S256、期限、交換結果不明、安全なtoken引渡しを合成試験で確認。
@@ -176,6 +193,7 @@ token失効・同意取消・登録無効化は操作対象と権限を確認し
 | R3 | [ServiceNow Authorization workflow](https://www.servicenow.com/docs/r/platform-security/authentication/authorization-workflow.html) Public Client - PKCE、認可/交換の表 | 公式検索結果にAustraliaとS256/stateの記述。汎用/r URLの直接表示は別familyに切替わるため、作成前にAustralia本文/画面の再照合が必要 |
 | R4 | [Configure REST API Auth scope](https://www.servicenow.com/docs/r/platform-security/authentication/configure-rest-api-auth-scope.html) Table APIの3構成例 | 公式検索結果はAustralia、GET/method/version/resourceの指定例。PDIでの設定/拒否実績は未確認 |
 | R5 | [REST API Auth Scope](https://www.servicenow.com/docs/r/platform-security/authentication/rest-api-auth-scope.html) Note / Configurations | scopeのAPI/client関連付け、useraccountの特別扱い、既存tokenへの影響。検索結果はAustralia、直接本文はBrazil表示で確認。Australia実機の承認根拠として単独採用しない |
+| R6 | [Configure an OAuth authorization code grant](https://www.servicenow.com/docs/r/platform-security/authentication/configure-an-oauth-authorization-code-grant.html) Before you begin / Procedure / Details form | 追加調査の公式検索本文はAustralia・2026-03-12更新。設定経路とロールを確認。PDIでの新規保存成功を意味しない |
 
 loopback公開client、専用GET scope、15分/5分/10秒等の提案値、Keychain保管は未検証の設計であり、
 この文書をもって導入済み・安全性確認済み・最小権限達成とはしない。
