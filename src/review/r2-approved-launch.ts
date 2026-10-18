@@ -11,6 +11,8 @@ export interface R2ApprovedLaunchOptions {
   supervisor?: Omit<R2SupervisorOptions, 'approvedDigest' | 'signal'>;
   /** Lower-only terminal observation budget. Does not extend host execution. */
   displayTimeoutMs?: number;
+  /** Fixed validated priority only, before terminal rendering. Internal bootstrap boundary. */
+  onTerminalPriority?: (code: 71 | 73) => void;
 }
 export type R2ApprovedLaunchResult = { stage: 'check' | 'approval'; ok: false; code: string }
   | { stage: 'display'; ok: false; code: 'display_failed' | 'report_unavailable'; report?: R2SupervisorReport }
@@ -36,6 +38,8 @@ export async function approveAndRunR2Plan(path: string, options: R2ApprovedLaunc
     const report = await superviseR2Host(path, { ...fixed.supervisor, signal: root.signal, approvedDigest: check.digest,
       onReady: () => { display!.ready(); return fixed.supervisor.onReady?.(); } });
     const checked = parseR2SupervisorReport(report);
+    if (checked?.terminal_reason === 'termination_unconfirmed') fixed.onTerminalPriority?.(73);
+    else if (checked?.cleanup === 'incomplete' || checked?.terminal_reason === 'cleanup_incomplete') fixed.onTerminalPriority?.(71);
     const shown = await display.show(checked ?? report);
     if (!shown.ok) return { stage: 'display', ok: false, code: shown.code, ...(checked ? { report: checked } : {}) };
     return { stage: 'execution', report: checked!, summary: shown.summary };

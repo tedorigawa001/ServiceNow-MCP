@@ -1,5 +1,5 @@
 /** Repository-only offline entry body. No host/execution approval, session, SDK or browser path. */
-import { isAbsolute, normalize } from 'node:path';
+import { parseR2LauncherArguments, R2_LAUNCHER_USAGE } from './r2-launcher-args.js';
 import { runR2PlanCheck, type R2PlanCheckProcessOptions } from './r2-plan-check-process.js';
 import { r2PlanCheckSchema, rejectedR2PlanCheck } from './r2-plan-check.js';
 import type { R2EntryTerminal } from './r2-entry-terminal.js';
@@ -21,19 +21,16 @@ export async function runR2CheckPlanEntry(args: readonly string[], options: R2Ch
   const onTerminationUnconfirmed = options.onTerminationUnconfirmed;
   const base = { schema_version: 'bp5-r2-entry-terminal-0.1', finalization: 'complete', fatal: false } as const;
   if (!canWriteR2EntryNotice(output, timeout)) return { ...base, mode: 'entry', code: 'usage', display: 'failed' };
-  const path = Array.isArray(args) && args.length === 1 ? args[0]
-    : Array.isArray(args) && args.length === 2 && args[0] === 'check-plan' ? args[1] : undefined;
-  const valid = process.platform !== 'win32' && typeof path === 'string' && isAbsolute(path)
-    && normalize(path) === path && path.length <= 4096 && !path.includes('\0');
+  const parsedArgs = parseR2LauncherArguments(args);
   external?.addEventListener('abort', cancel, { once: true });
   process.on('SIGINT', cancel); process.on('SIGTERM', cancel);
   if (external?.aborted) cancel();
   try {
-    if (!valid) {
-      const shown = await writeR2EntryNotice(output, 'Usage: r2-launcher [check-plan] <absolute-manifest-path>\nOffline validation only; run is unavailable.\n', root.signal, timeout);
+    if (!parsedArgs || parsedArgs.mode !== 'check-plan') {
+      const shown = await writeR2EntryNotice(output, R2_LAUNCHER_USAGE, root.signal, timeout);
       return { ...base, mode: 'entry', code: 'usage', display: shown ? 'confirmed' : 'failed' };
     }
-    const parsed = r2PlanCheckSchema.safeParse(await runR2PlanCheck(path, { ...checker, signal: root.signal }));
+    const parsed = r2PlanCheckSchema.safeParse(await runR2PlanCheck(parsedArgs.path, { ...checker, signal: root.signal }));
     if (!parsed.success) {
       const shown = await writeR2EntryNotice(output, 'report_unavailable\n', root.signal, timeout);
       return { ...base, mode: 'entry', code: 'report_unavailable', display: shown ? 'confirmed' : 'failed' };

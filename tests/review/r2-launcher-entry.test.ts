@@ -42,7 +42,7 @@ it('checks a synthetic manifest through compiled entry and checker with forbidde
     }
   } finally { rmSync(f.dir, { recursive: true, force: true }); }
 });
-it.each([['offline', 10, ['/PRIVATE_MISSING']], ['usage', 64, ['run', '/PRIVATE_MISSING']],
+it.each([['offline', 10, ['/PRIVATE_MISSING']], ['usage', 64, ['run', '/PRIVATE_MISSING', '--yes']],
   ['non-tty', 81, ['/PRIVATE_MISSING']], ['throw', 81, ['/PRIVATE_MISSING']], ['blocked', 81, ['/PRIVATE_MISSING']],
   ['fatal', 70, ['/PRIVATE_MISSING']], ['guard-73', 73, []], ['guard-71', 71, []], ['guard-unknown', 70, []],
   ['guard-throw', 70, []], ['guard-priority', 73, []]] as const)(
@@ -62,3 +62,27 @@ it('returns a fixed fatal exit if its fixed body cannot be imported, without pri
     copyFileSync(join(dir, 'dist/review', name), join(missing, name));
   expect(await run([join(missing, 'r2-launcher-entry.js'), '/PRIVATE_MISSING'])).toEqual({ code: 70, stdout: '', stderr: '' });
 });
+it('dispatches run through checker and synthetic cooked TTY denial without a host or network (compiled entry)', async () => {
+  const f = approvedPlanFixture();
+  try {
+    const result = await run([fileURLToPath(new URL('./fixtures/r2-launcher-run.mjs', import.meta.url)), entry, 'deny', f.path]);
+    expect(result).toMatchObject({ code: 82, stdout: '' });
+    expect(result.stderr).toContain('approval_denied'); expect(result.stderr).toContain('Type APPROVE');
+    expect(result.stderr).not.toMatch(/PRIVATE|service-now|manifest\.json/);
+  } finally { rmSync(f.dir, { recursive: true, force: true }); }
+});
+it.each(['approve', 'changed', 'expire-before', 'expire-after', 'bad-digest', 'raw'] as const)(
+  'enforces approval + bound grant and fail-closed transitions for %s (compiled entry/OS peer)', async mode => {
+    const f = approvedPlanFixture();
+    try {
+      const result = await run([fileURLToPath(new URL('./fixtures/r2-launcher-run.mjs', import.meta.url)), entry, mode, f.path]);
+      expect(result).toMatchObject({ code: 10, stdout: '' });
+      expect(result.stderr).not.toMatch(/PRIVATE|service-now|manifest\.json|content|script/);
+      if (['expire-before', 'raw'].includes(mode)) expect(result.stderr).not.toContain('Type APPROVE');
+      if (mode === 'approve') {
+        expect(result.stderr.match(/bp5-r2-exit-summary-0.1/g)).toHaveLength(1);
+        expect(result.stderr.match(/http:\/\/127\.0\.0\.1:18765\/bp5\/start/g)).toHaveLength(1);
+        expect(result.stderr).toContain('"token_issuance":"not_attempted"');
+      } else expect(result.stderr).not.toContain('http://127.0.0.1:18765/bp5/start');
+    } finally { rmSync(f.dir, { recursive: true, force: true }); }
+  });

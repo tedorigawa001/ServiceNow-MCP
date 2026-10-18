@@ -1,12 +1,12 @@
 # BP-5 R-2：専用entry接続・終了コード設計
 
-Version: draft-0.4 / Date: 2026-10-19 / Status: 終端契約・exit選択器・最小bootstrap・check-plan入口/表示を内部実装。run・公開入口・最終化監督は未実装。
+Version: draft-0.5 / Date: 2026-10-19 / Status: check-planと承認付きrunを内部接続。公開CLI/運用・汎用最終化監督は未実装/未承認。
 
 ## 1. 範囲と現状
 
 [launcher接続設計](BEST_PRACTICE_BP5_R2_LAUNCHER_CONNECTION_DESIGN.md)の内部実装を、
 明示的な専用プロセスから呼ぶ入口と、その終了コードを定める。
-内部終端契約・純粋選択器は§8、最小bootstrap・check-plan接続は§9に実装した。run・運用部分は設計のみ。
+内部終端契約・純粋選択器は§8、最小bootstrap・check-plan接続は§9、承認付きrun接続は§10に実装した。運用実行は未承認。
 telemetry調査・maint依頼は保留。実機操作・token発行・登録/ACL/設定変更は行わない。
 実manifestの作成/配置、実行許可、公開bin/MCP登録・npm同梱も対象外。
 
@@ -26,20 +26,20 @@ telemetry調査・maint依頼は保留。実機操作・token発行・登録/ACL
 ## 2. 新しい専用入口
 
 r2-launcher-entryと最小bootstrapをリポジトリ内部・POSIX・compiled固定.jsに限定して追加した。
-以下は構文契約。check-planだけを接続しており、公開CLIの利用例や実manifest実行許可ではない。
+以下は内部の構文契約。公開CLIの利用例や実manifest実行許可ではない。
 
 | 引数 | モード |
 |---|---|
 | 絶対manifest path 1個 | check-plan（既定）。runへ昇格しない |
 | check-plan＋絶対manifest path | 明示的check-plan |
-| run＋絶対manifest path | 後続設計のみ。現在はusageとして拒否し、hostへ進まない |
+| run＋絶対manifest path | checker・専用cooked TTY承認・snapshot digest結合を必須とするrun |
 
 引数数・モード・path構文を固定検査する。未知option、相対path、複数path、NUL、4096文字超、dot segment、
 --yes/任意module/任意endpoint/port/token/digest/予算/旧protocol指定は拒否する。
 不正入力の値をusageや例外へ反射しない。既定path探索・env設定・dotenv・既存auth login/tokens.jsonへの接続はしない。
 
 - check-planはrunR2PlanCheckだけ。待受・host・SDK・browser・認可/交換は開始しない。
-- 将来のrunはapproveAndRunR2Planだけ。現在はimport/dispatchせず、entryがsuperviseR2Hostやrunner/executorを直接呼ぶ分岐もない。
+- runはapproveAndRunR2Planだけ。構文が有効な明示run時だけ専用run moduleを固定importし、superviseR2Hostやrunner/executorを直接呼ぶ分岐はない。
 - 旧supervisor entryとフラグなしhostは既存内部試験用の位置付けを維持し、人向けモードから選べないようにする。
   将来の公開前には削除または外部到達不能な内部試験専用化を必須とする。非同梱だけで任意のローカル呼出しを禁止できるとはしない。
 - sourceのtsx起動を人向け初版へ自動fallbackさせない。開発用source経路は既存の合成試験境界に残す。
@@ -61,7 +61,7 @@ check-planの表示はstrict限定確認票だけ、各write最大1秒/16KiBの�
 既存R2TerminalDisplay.showは監督report専用なので、checker票を偽の監督reportに包んで流用しない。
 
 runの承認票/ready/最終summaryは内部launcherが既に表示するため、entryは再度表示しない。
-check/approval段階の失敗だけ、固定enumのstage/codeから小さな固定診断を組み立てる案。
+check/approval段階の失敗だけ、固定enumのstage/codeから小さな固定診断を組み立てる（§10）。
 path・origin・承認参照・ID・元例外・拒否された未知codeは出さない。ファイル保存/再認可/自動再実行なし。
 
 ## 4. entryで受け付ける終端契約
@@ -203,7 +203,7 @@ Node下限22.12系・実PTY/TTYの配送・他OS・dump/起動環境の確認は
 全snapshot検証に失敗した後、raw fieldからfatal/終了未確認/cleanup不成立を救済しない。
 全体が有効な場合だけ§5の優先順位を適用する。selectorは入力不変で、表示・signal・process.exit・通信・再試行を行わない。
 check-planの既知codeとfatal guardの固定通知による接続は§9を参照。
-runの統合や表示実体/終了観測の真正性の確認は後続entry接続の責任である。
+runの統合は§10を参照。表示実体/終了観測の真正性の確認は信頼済み生成元・運用の責任である。
 
 ## 9. 第2段階：最小bootstrap・check-plan接続
 
@@ -232,3 +232,33 @@ runの統合や表示実体/終了観測の真正性の確認は後続entry接�
 Node自身が非Error例外のtoStringに触れる場合があり、handlerが理由を読まないだけで任意getterの副作用非発生を保証できない。
 bootstrap以前の構文/loader/native障害、OS/TTYの記録・dump、外側の停止保証は引き続き留保する。
 server/既存CLI/bin/package.json/MCP登録は変更せず、R-2非同梱を維持する。
+
+## 10. 第3段階：承認付きrunへの固定接続
+
+[run接続の合成検証記録](E2E_BEST_PRACTICE_R2_RUN_ENTRY_SYNTHETIC_2026-10-19.md)を参照。
+§9の「run未追加」は第2段階時点の記録であり、本節は内部runだけを追加する。
+
+- r2-launcher-argsは副作用のない共通構文検査。省略時はcheck-planのまま。明示run＋絶対path1個以外にrunへ進む入力はない。
+  --yes/自己申告digest/legacy/任意module・URL・予算などのoptionは受け付けない。
+  無効runを含む未知構文は固定usageだけで、run module/hostを読み込むdispatchへ進まない。
+- r2-launcher-runは同じ専用output TTYと、非raw・未終了・未バッファ・他のreaderがいないinput TTYを検査する。
+  不適合はchecker/hostより前に固定拒否。別input/outputや非対話承認へfallbackしない。
+- 実行はapproveAndRunR2Planだけ。既存checker1回→期限/信頼/binding付き確認票→完全一致のAPPROVE行→
+  checkerのdigestをapprovedDigestとして固定→--approval-bound hostへ接続する。
+  callerが内部optionsへapprovedDigestを混ぜても、checker値を上書きする経路にはならない。
+- 否認・開始時期限切れ・確認timeoutはhostを起動しない。承認後の変更/期限切れは、hostのprepared照合やgrant消費時再検証で停止する。
+  preflight hostの起動と業務実行のgrantは区別する。変更時にhostが起動しても、必ず認可/待受/HTTPへ進んだとは解釈しない。
+- 実行結果は終端契約へstrict検証してから解釈する。executionのsummaryはlauncherが表示済みなので再表示しない。
+  check/approvalの拒否だけ、schema_version=bp5-r2-run-notice-0.1・stage=check/approval・固定codeを同じstderrへ1回表示する。
+  このnoticeは公開MCP契約ではなく、本文/ID/path/元例外を持たない内部固定投影である。
+- 不正な終端は固定report_unavailableだけ。表示不能81、否認82、timeout124、取消し130等は既存exit選択器を使用する。
+  検証済みreportの73/71をsummary表示前に内部通知し、固定優先状態を後続の表示失敗/fatalで上書きしない。
+  通知は同じ優先状態で重複せず、73の後に71へ下げない。raw reportのfieldから通知しない。
+- checker/TTY/host中のsignal所有者は既存launcher→監督の引継ぎに委ね、entryはhandlerを重ねない。
+  launcherが終了した後の固定拒否notice中だけentryが所有し、表示上限1秒でfinally解除する。
+  全体385秒/cleanup3秒、製品解析60秒、checker/TTY上限を変更・延長しない。
+
+今回の合成試験では実認可・実token・実PDIを使わない。正常なdigest結合の先は合成peerのauthorization_deniedで終了する。
+承認後変更の一部は実hostコード＋bind/fetch禁止fixtureを用い、prepared後再検証は既存bound-host回帰にも依存する。
+実TTY/Node下限/他OS、外側の安全な起動手順・任意handleの終了保証・100ms最終化監督・G2/G4実行許可は引き続き未確認/未実装。
+公開bin/MCP登録・npm同梱・自動browser/再認可/再試行/ファイル保存は追加しない。
