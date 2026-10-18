@@ -13,6 +13,8 @@ bounded取得と既存解析器/結果契約の接続、失敗・省略の扱い
 起動不能は固定`worker_unavailable`とし、本番からソースへの代替実行はしない（同記録§4.1）。
 MCP入力/応答境界、パッケージ別公開、SDKキャンセル、利用例と最新検証は[登録記録](BEST_PRACTICE_BP5_MCP_REGISTRATION.md)参照。
 [PDI読み取り記録](E2E_BEST_PRACTICE_REVIEW_2026-10-18.md)では、payload解析の未到達を取得/集約の成功と区別する。
+先頭100行の外にある解析対象への到達改善は[対象選択の設計案](BEST_PRACTICE_BP5_TARGET_SELECTION_DESIGN.md)を参照。
+同案は未実装・採用未承認であり、以下の現行取得順序・入力/結果契約はまだ変更していない。
 
 ## 1. 初版の範囲
 
