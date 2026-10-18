@@ -108,3 +108,9 @@ bdo env RUN_E2E=true MCP_TOOL_PACKAGE=full \
 AU-CL-004の実機解析・指摘正例・拒否分岐・UI制約の検証は未完了のまま残す。
 次に必要なのは、読み取り可能なClient Script更新を含む**既存**Update Setの特定である。
 新規データ作成を行う場合は、今回の読み取り許可とは別に明示的な承認が必要。
+
+後続で承認を得た[fixture作成試行](E2E_BEST_PRACTICE_CLIENT_FIXTURE_2026-10-18.md)は、名前の保存値検査と
+version削除権限で停止した。その後、履歴を削除対象外とする承認を得て再実行し、
+非アクティブ合成Client ScriptでAU-CL-004の候補1件を0.3 JSONで確認した（1成功）。
+Client Script・Update Set・Customer Updateは削除済み、履歴は保持する。
+本記録の既存データ探索1スキップは維持し、後続fixtureの成功とは混ぜない。

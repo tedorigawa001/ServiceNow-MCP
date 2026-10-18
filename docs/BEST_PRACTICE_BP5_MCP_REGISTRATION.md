@@ -6,9 +6,13 @@ Version: bp5-mcp-registration-0.1 / Date: 2026-10-18。
 後続の[opt-in対象選択・0.3契約の実装記録](BEST_PRACTICE_BP5_TARGET_SELECTION_IMPLEMENTATION.md)を参照。
 以下の登録時点の合成検証結果は履歴として維持する。
 最新の[対象選択PDI E2E](E2E_BEST_PRACTICE_TARGET_SELECTION_2026-10-18.md)は5成功・0スキップ。
-opt-inで既存BR10件へ到達し、省略時の0.2互換性も確認した。Client Scriptの実機正例は未確認。
+opt-inで既存BR10件へ到達し、省略時の0.2互換性も確認した。
 後続の[Client Script探索記録](E2E_BEST_PRACTICE_CLIENT_SCRIPT_2026-10-18.md)は候補0件・1理由付きスキップで、
 AU-CL-004の実機評価成功とは扱わない。
+承認後の[非アクティブfixture E2E](E2E_BEST_PRACTICE_CLIENT_FIXTURE_2026-10-18.md)は初回停止を経て、
+履歴保持方針で再実行し1成功。AU-CL-004の候補1件とinactive_assetを0.3 JSONで確認した。
+作成したClient Script・Update Set・Customer Updateは削除確認済み。バージョン履歴は削除対象外として保持する。
+これは合成資産の解析正例であり、UI実行・人手承認・独立品質評価の確認ではない。
 
 ## 1. 公開する範囲
 
