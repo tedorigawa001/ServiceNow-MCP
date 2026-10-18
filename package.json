@@ -28,6 +28,7 @@
     "test:watch": "vitest",
     "test:coverage": "vitest run --coverage",
     "test:pack": "npm run build && node tests/review/package-worker.mjs",
+    "test:review:http": "npm run build && vitest run -c vitest.transport.config.ts",
     "test:e2e": "RUN_E2E=true vitest run -c vitest.e2e.config.ts",
     "test:e2e:write": "RUN_E2E=true WRITE_ENABLED=true vitest run -c vitest.e2e.config.ts",
     "lint": "eslint src tests",

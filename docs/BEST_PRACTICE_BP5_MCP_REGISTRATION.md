@@ -129,7 +129,9 @@ README/TOOLS/CHANGELOGと設計の実装状態を更新する。241件の既存�
 
 登録時の検証環境はmacOS/Node v24.18.0。後続の[実stdio E2E](E2E_BEST_PRACTICE_STDIO_2026-10-18.md)では
 本番ビルドの別プロセスへlist/call/キャンセルを通し、非露出と回復・終了を確認した（HTTP境界のみ合成）。
-Node 22.12、Linux/Windows、HTTPの実通信、最小権限/per-user/C方式の実機確認は残っている。残課題はこれらの許可済み確認、
+後続の[HTTP E2E](E2E_BEST_PRACTICE_HTTP_2026-10-18.md)ではloopbackの実HTTPでBearer認証、
+list/call、キャンセル、本文非露出、セッション終了を確認した（上流HTTP境界のみ合成）。
+Node 22.12、Linux/Windows、TLS/プロキシ、最小権限/per-user/C方式の実機確認は残っている。残課題はこれらの許可済み確認、
 運用上の権限/上限・規則/境界の人による承認、独立評価と品質/公開審査。
 
 後続の[PDI読み取りE2E](E2E_BEST_PRACTICE_REVIEW_2026-10-18.md)では取得/分類/集約を2件成功で確認した。

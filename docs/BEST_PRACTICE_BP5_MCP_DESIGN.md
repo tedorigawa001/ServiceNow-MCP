@@ -14,6 +14,8 @@ bounded取得と既存解析器/結果契約の接続、失敗・省略の扱い
 MCP入力/応答境界、パッケージ別公開、SDKキャンセル、利用例と最新検証は[登録記録](BEST_PRACTICE_BP5_MCP_REGISTRATION.md)参照。
 本番ビルドの別プロセスと実stdioでlist/call/キャンセル・非露出・回復を確認した
 [stdio E2E](E2E_BEST_PRACTICE_STDIO_2026-10-18.md)も参照。外部HTTP境界は合成で、PDI実通信とは区別する。
+[HTTP E2E](E2E_BEST_PRACTICE_HTTP_2026-10-18.md)でもloopback上の実MCP通信で認証/list/call/
+キャンセル・非露出・セッション終了を確認した。TLSや実PDI認証/ACLは検証範囲外。
 [PDI読み取り記録](E2E_BEST_PRACTICE_REVIEW_2026-10-18.md)では、payload解析の未到達を取得/集約の成功と区別する。
 先頭100行の外にある解析対象への到達改善は[対象選択の設計案](BEST_PRACTICE_BP5_TARGET_SELECTION_DESIGN.md)を参照。
 案A・opt-in方式を採用する方針で、[公式仕様照合・次版JSON契約案](BEST_PRACTICE_BP5_TARGET_SELECTION_CONTRACT.md)へ具体化した。
