@@ -2,6 +2,10 @@
 
 Version: draft-0.4 / Date: 2026-10-18 / Status: checker・TTY承認・snapshot digest結合を内部実装/合成検証。ready案内・終了summary・公開入口・実機/運用は未対応。
 
+専用entryへの接続・表示失敗を含む終了コードは、
+[entry接続/終了コード設計draft-0.1](BEST_PRACTICE_BP5_R2_ENTRY_EXIT_DESIGN.md)を参照。
+新entry・終端契約/exit選択・最終化の実装や実行許可は、この設計の追加からは導かない。
+
 ## 1. 範囲と現状
 
 [runner接続設計](BEST_PRACTICE_BP5_R2_PDI_ADAPTER_RUNNER_DESIGN.md)と

@@ -2,6 +2,10 @@
 
 Version: draft-0.5 / Date: 2026-10-18 / Status: runner・専用bootstrap/host・外部監督を内部実装・合成検証。公開CLI・実機/運用は未承認。
 
+人向けの新しい専用entryと終了コードの案は
+[entry接続/終了コード設計](BEST_PRACTICE_BP5_R2_ENTRY_EXIT_DESIGN.md)を参照。
+既存host/監督の終了コードは変更せず、表示失敗等を含む新entry独自の優先順位を分離する。
+
 ## 1. 範囲と前提
 
 [runner接続設計§7・§8・§14](BEST_PRACTICE_BP5_R2_PDI_ADAPTER_RUNNER_DESIGN.md)の後続案。
