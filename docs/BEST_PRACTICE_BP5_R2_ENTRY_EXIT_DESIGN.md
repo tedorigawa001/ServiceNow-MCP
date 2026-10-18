@@ -1,12 +1,12 @@
 # BP-5 R-2：専用entry接続・終了コード設計
 
-Version: draft-0.3 / Date: 2026-10-19 / Status: 終端契約・純粋exit選択器を内部実装。専用entry・表示接続・最終化監督は未実装。
+Version: draft-0.4 / Date: 2026-10-19 / Status: 終端契約・exit選択器・最小bootstrap・check-plan入口/表示を内部実装。run・公開入口・最終化監督は未実装。
 
 ## 1. 範囲と現状
 
 [launcher接続設計](BEST_PRACTICE_BP5_R2_LAUNCHER_CONNECTION_DESIGN.md)の内部実装を、
 明示的な専用プロセスから呼ぶ入口と、その終了コードを定める。
-入口・運用部分は設計のみ。内部終端契約・純粋選択器の実装範囲は§8に限定する。
+内部終端契約・純粋選択器は§8、最小bootstrap・check-plan接続は§9に実装した。run・運用部分は設計のみ。
 telemetry調査・maint依頼は保留。実機操作・token発行・登録/ACL/設定変更は行わない。
 実manifestの作成/配置、実行許可、公開bin/MCP登録・npm同梱も対象外。
 
@@ -25,21 +25,21 @@ telemetry調査・maint依頼は保留。実機操作・token発行・登録/ACL
 
 ## 2. 新しい専用入口
 
-仮称r2-launcher-entryと、最小bootstrapを新設する案。初版はリポジトリ内部・POSIX・compiled固定.jsに限定する。
-以下の構文は実装契約案であり、現在実行できるコマンド例ではない。
+r2-launcher-entryと最小bootstrapをリポジトリ内部・POSIX・compiled固定.jsに限定して追加した。
+以下は構文契約。check-planだけを接続しており、公開CLIの利用例や実manifest実行許可ではない。
 
 | 引数 | モード |
 |---|---|
 | 絶対manifest path 1個 | check-plan（既定）。runへ昇格しない |
 | check-plan＋絶対manifest path | 明示的check-plan |
-| run＋絶対manifest path | checkerとTTY承認を必須とするrun |
+| run＋絶対manifest path | 後続設計のみ。現在はusageとして拒否し、hostへ進まない |
 
 引数数・モード・path構文を固定検査する。未知option、相対path、複数path、NUL、4096文字超、dot segment、
 --yes/任意module/任意endpoint/port/token/digest/予算/旧protocol指定は拒否する。
 不正入力の値をusageや例外へ反射しない。既定path探索・env設定・dotenv・既存auth login/tokens.jsonへの接続はしない。
 
 - check-planはrunR2PlanCheckだけ。待受・host・SDK・browser・認可/交換は開始しない。
-- runはapproveAndRunR2Planだけ。entryがsuperviseR2Hostやrunner/executorを直接呼ぶ分岐を設けない。
+- 将来のrunはapproveAndRunR2Planだけ。現在はimport/dispatchせず、entryがsuperviseR2Hostやrunner/executorを直接呼ぶ分岐もない。
 - 旧supervisor entryとフラグなしhostは既存内部試験用の位置付けを維持し、人向けモードから選べないようにする。
   将来の公開前には削除または外部到達不能な内部試験専用化を必須とする。非同梱だけで任意のローカル呼出しを禁止できるとはしない。
 - sourceのtsx起動を人向け初版へ自動fallbackさせない。開発用source経路は既存の合成試験境界に残す。
@@ -182,7 +182,8 @@ Node下限22.12系・実PTY/TTYの配送・他OS・dump/起動環境の確認は
 
 `src/review/r2-entry-terminal.ts`に終端union・exit選択器を内部実装した。
 [合成検証記録](E2E_BEST_PRACTICE_R2_ENTRY_TERMINAL_SYNTHETIC_2026-10-19.md)を参照。
-新entry、check-plan表示接続、最終化監督は未実装・未検証。100msは引き続き提案値である。
+第1段階時点では新entry、check-plan表示接続、最終化監督は未実装だった。前2者の後続実装は§9を参照。
+100msの汎用最終化監督は引き続き未実装の提案である。
 既存の表示/launcher/host実装を変更せず、前工程のdirtyな差分も保持した。
 専用entryを実行した際のOS終了コード、実TTY、G2/G4、実PDIの成立を今回の内部試験から主張しない。
 
@@ -201,4 +202,33 @@ Node下限22.12系・実PTY/TTYの配送・他OS・dump/起動環境の確認は
 `parseR2EntryTerminal`は拒否時undefined、`selectR2EntryExitCode`は不正snapshotに80だけを返す。
 全snapshot検証に失敗した後、raw fieldからfatal/終了未確認/cleanup不成立を救済しない。
 全体が有効な場合だけ§5の優先順位を適用する。selectorは入力不変で、表示・signal・process.exit・通信・再試行を行わない。
-fatal guardが保持する既知の優先codeとの統合や、表示実体/終了観測の真正性は後続entry接続の責任である。
+check-planの既知codeとfatal guardの固定通知による接続は§9を参照。
+runの統合や表示実体/終了観測の真正性の確認は後続entry接続の責任である。
+
+## 9. 第2段階：最小bootstrap・check-plan接続
+
+[合成検証記録](E2E_BEST_PRACTICE_R2_CHECK_PLAN_ENTRY_SYNTHETIC_2026-10-19.md)を参照。
+§8の「新entry/表示未実装」は第1段階の到達点であり、本節でオフライン部分だけを追加した。
+
+- r2-launcher-bootstrapはruntime importなし。理由を受け取らないfatal handlerを最初に登録し、例外/rejectionをformat・保持しない。
+  保持するのは固定整数だけで、73＞71＞70。checker終了未確認は表示前に固定通知し、後続fatal/表示失敗で73を上書きしない。
+- r2-launcher-entryはcompiled `.js`・POSIX・追加execArgvなし・継承envなし・IPCなしを検査してから固定bodyを動的importする。
+  macOSがenv={}にも自動付与する`__CF_USER_TEXT_ENCODING`だけは、3要素のhex形式に限って許可する。他のキーや不正形式は拒否する。
+  検査前に実行されたpreload/loaderを無害化したという主張ではなく、信頼済み外側起動手順は依然必要。
+  この早期起動条件の拒否は64・無出力。起動後のusage表示は64、表示できなければ81とする。
+- bodyは既定/明示check-planだけを受け付け、構文不正はcheckerを起動せず固定usageのみ。非TTY・表示予算不正もcheckerより前に拒否する。
+  認証/login/設定探索/旧supervisor/runへのfallbackはない。起動する子は既存固定checker1個だけ、env={}・shell=false・出力ignore・IPC固定を維持する。
+- checker結果を再検証し、限定確認票だけを同じstderr TTYへ1回表示する。完全終端report・path・接続先・対象ID・コード・資格情報は表示しない。
+  outputが使用不能ならstdout/ファイル/別TTYへfallbackしない。checker拒否は理由を含む限定票と非0 codeで返す。
+- noticeは最大1秒・16KiB、拡張不可。callback/throw/error/close/timeout/取消しは表示不成立。
+  callback成功後の通知turnも確認し、失敗なら81。遅延native error用の非formatting guardはcallback決着と通知turnまで保持する。
+  callback未決着ならguardだけを保持し、非0の専用entryを終了させる。部分的に送った文字列の巻戻しや人が読んだことは保証しない。
+- check-plan中のSIGINT/SIGTERMはbodyが1者で所有し、checkerへ同じAbortSignalを渡す。終了時は所有listenerを解除する。
+  checkerが既に取消しを観測した場合は、最大1秒の固定最終noticeを1回試す。表示成立なら130、不成立なら81（終了未確認73は優先）。
+- 正常時はwrite確認/通知turn後にexitCodeを設定して自然終了する。非0は確認済みcodeで専用entryだけを終了し、未決着sinkで居残らない。
+  汎用の100ms最終化監督・任意handleの終了保証・runのsignal引継ぎはまだ追加しない。
+
+今回の最終化completeはentryのchecker観測/表示観測の後始末を表す。checker自身の終了未確認をcompleteに変換しない。
+Node自身が非Error例外のtoStringに触れる場合があり、handlerが理由を読まないだけで任意getterの副作用非発生を保証できない。
+bootstrap以前の構文/loader/native障害、OS/TTYの記録・dump、外側の停止保証は引き続き留保する。
+server/既存CLI/bin/package.json/MCP登録は変更せず、R-2非同梱を維持する。
