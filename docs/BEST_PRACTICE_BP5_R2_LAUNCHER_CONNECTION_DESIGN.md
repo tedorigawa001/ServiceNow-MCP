@@ -1,6 +1,6 @@
 # BP-5 R-2：オフライン事前確認・明示承認・ready案内・終了報告の接続設計
 
-Version: draft-0.2 / Date: 2026-10-18 / Status: 未承認・未実装の接続案。
+Version: draft-0.3 / Date: 2026-10-18 / Status: checker・限定確認票のみ内部実装/合成検証。人向け接続・実機/運用は未承認・未実装。
 
 ## 1. 範囲と現状
 
@@ -9,7 +9,7 @@ Version: draft-0.2 / Date: 2026-10-18 / Status: 未承認・未実装の接続�
 人が明示的に開始・停止し、結果を確認できるリポジトリ内の専用入口へ接続する案。
 公開CLI/bin/MCP登録・npm同梱・既存auth CLIとの接続は対象外。
 
-| 現行実装 | この設計で追加するもの（未実装） |
+| 既存実装 | この設計で追加するもの（§9のchecker以外は未実装） |
 |---|---|
 | manifestの安全な読込・期限/binding・消費直前再検証 | オフラインcheck-plan、公開値を限定した確認票、実行承認との結合 |
 | 専用host・秘密を持たない監督・固定IPC | 確認済みmanifestとhostが使う計画の一致検証 |
@@ -17,7 +17,8 @@ Version: draft-0.2 / Date: 2026-10-18 / Status: 未承認・未実装の接続�
 | 監督が検証済みreportを呼出し元へ返す | 終了報告のstrict検証、端末への限定表示 |
 | 専用entryは終了コードだけで終了 | 明示実行モードと上記の接続。現entryをそのまま使えば案内・報告も出る、とはしない |
 
-本書は設計のみ。telemetry調査・maint依頼は保留。実装・実機操作・token発行・アカウント/登録/ACL/設定変更は行わない。
+接続全体のうち今回の実装範囲は§9だけ。telemetry調査・maint依頼は保留。
+実機操作・token発行・アカウント/登録/ACL/設定変更は行わない。
 実manifestの作成・配置・領域設定も行わない。設計の承認と、G2/G4の実行許可は別である。
 
 ## 2. 責任分離
@@ -44,7 +45,7 @@ launcher自身も秘密を注入しない専用起動環境を前提とし、共
 - checker実行の観測上限は5秒。所有checkerだけを停止し、exit/closeを確認する。確認不能は失敗とし実行へ進まない。
 - 確認時の承認期限とC方式assertionは、従来どおり現在+385秒より厳密に後が必要。実行直前も再検証する。
   ただし人の確認待ち60秒・host preflight 5秒の後にも満たせなければ、承認後に予測可能な期限不足で停止する。
-  checkerは385+60+5秒（450秒）を満たさない場合、合格とせず固定の`validity_insufficient_for_approval`で停止する案とする。
+  checkerは385+60+5秒（450秒）超を満たさない場合、合格とせず固定の`validity_insufficient_for_approval`で停止する（§9へ実装）。
   これはchecker側の要求を厳しくするだけで、実行時の385秒の再検証を置き換えない。
 - 成功は`offline_valid`であって、承認の真正性、Public Client/S256の実効性、ACL、リリースmatched、PDI到達を証明しない。
   `approval.reference`の存在は人の承認証明ではない。assertionなしは実測が必要、という既存扱いも維持する。
@@ -156,5 +157,30 @@ Node下限22.12系・実TTY・HS未完了境界の確認と、G2/G4・C設定・
 
 ## 8. 今回の到達点
 
-接続方針をMDに整理しただけであり、上記checker/TTY/digest結合/summaryを実装・検証済みとはしない。
-実運用の入口・実行権限・承認manifestは作成していない。telemetry調査も再開しない。
+checker/限定確認票の内部実装は§9を参照。TTY/digestによる実行承認との結合/ready案内/終了summaryは未実装。
+実運用の入口・実行権限・実manifestは作成していない。telemetry調査も再開しない。
+
+## 9. 第1段階：checker・限定確認票の実装境界（2026-10-18）
+
+[合成検証記録](E2E_BEST_PRACTICE_R2_PLAN_CHECK_SYNTHETIC_2026-10-18.md)を参照。§1の表は接続全体の計画を示し、この節だけを実装済みとする。
+
+- `checkR2PlanOffline(path)`は既存manifest読込/consumeを通し、固定の`bp5-r2-plan-check-0.1`確認票だけを返す。
+  consumeの信頼済みconsumerへ、第2引数として正規化文書のdigestを渡す最小拡張を加えた。
+  従来のconsumer・状態/JSON/inspect・返却型は維持し、本文の新getterは設けない。
+  digestは再読込/期限/意味の一致を確認済みsnapshotに対応するが、人の承認や後続hostと結合されたcapabilityではない。
+- `r2PlanCheckSchema`は未知field拒否の成功/拒否union。成功の検査boolは全てtrue、PDIは常にnot_verified。
+  拒否時は固定codeだけで、digestや部分的確認票を返さない。JSON Schemaも出力するが公開MCP登録はしない。
+- 既存manifestの385秒条件に加え、checkerは承認/C設定期限が検査時刻+450秒より厳密に後であることを要求する。
+  385秒を満たしても450秒以下ならvalidity_insufficient_for_approval。実行時の385秒再検証は緩めない。
+- `runR2PlanCheck(path)`が固定r2-plan-check-entry子を起動する。sourceは固定tsx＋.ts、compiledは固定.js。
+  空env、shellなし、detached、JSON IPC、raw stdin/stdout/stderrはignore。token入力・任意entryの公開選択口はない。
+  spawnCheckerとlower-only期限は信頼済みOS合成境界だけで、CLI/manifest/MCP入力ではない。
+- 実行上限5秒はspawn前からの単調時計で固定。取消/期限/不正IPCは所有checkerだけにSIGKILLを要求する。
+  終了観測は最大1秒。結果を1件・8KiB以内・strict schema・対応exit code・exit/close両方・期限内で検証して採用する。
+  kill要求だけで終了確認にしない。未確認時はchecker_termination_unconfirmed、結果は破棄する。
+- 既定check-plan CLI、TTY承認、OS signalの人向け接続、host prepared/grantのdigest結合は追加していない。
+  checkerはhostを起動せず、承認済みの実機計画でも読み取り検査以上へ進まない。失敗後の再試行/権限修復なし。
+- ファイル信頼性の検査には既存の固定ローカルACLコマンド（macOS /bin/ls、Linux /usr/bin/getfacl）を利用する。
+  「子プロセスを一切起動しない」ではなく、「checker自身と固定ACL検査以外のhost/実行子を起動しない」が境界。
+  ACL検査不能/非対応OSもfail-closed。checker終了はOS全体・ACL utilityの完全回収やメモリゼロ化の保証ではない。
+- 実manifestなし、一時fixture/合成入力だけで検証。R-2非同梱・公開JSON 0.2/0.3・製品期限は維持する。

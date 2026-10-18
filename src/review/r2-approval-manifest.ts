@@ -98,8 +98,9 @@ class LoadedR2ApprovalManifest {
   status() { return { state: this.#state, hasSnapshot: this.#document !== undefined }; }
   toJSON() { return this.status(); }
   [inspect.custom]() { return this.status(); }
-  /** One trusted offline consumer; no returned context or callback result, no execution authorization. */
-  async consume(consumer: (context: R2ApprovedContext) => void | Promise<void>): Promise<{ ok: true } | { ok: false; code: R2ManifestFailure }> {
+  /** One trusted offline consumer; normalized digest is metadata, not execution authorization.
+   * No returned context or callback result. Existing one-argument consumers remain unchanged. */
+  async consume(consumer: (context: R2ApprovedContext, digest: string) => void | Promise<void>): Promise<{ ok: true } | { ok: false; code: R2ManifestFailure }> {
     if (this.#state !== 'ready' || !this.#document) return { ok: false, code: 'manifest_unavailable' };
     const document = this.#document; this.#document = undefined; this.#state = 'consumed';
     try {
@@ -109,10 +110,11 @@ class LoadedR2ApprovalManifest {
     } catch (error) {
       this.close(); return { ok: false, code: error instanceof R2ManifestError ? error.code : 'manifest_invalid' };
     }
+    const digest = this.#digest;
     this.#path = ''; this.#digest = '';
     try {
       await consumer(freeze({ plan: document.plan, review: document.review, approval: document.approval,
-        instance_binding: document.instance_binding })); return { ok: true };
+        instance_binding: document.instance_binding }), digest); return { ok: true };
     } catch { return { ok: false, code: 'manifest_consumer_failed' }; }
   }
   close() { this.#document = undefined; this.#path = ''; this.#digest = ''; this.#state = 'closed'; }
