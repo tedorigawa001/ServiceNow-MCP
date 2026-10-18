@@ -6,6 +6,9 @@ Version: draft-0.1 / Date: 2026-10-18 / Status: **保留（方式Rの決定に�
 > 共有Table APIの設定を変更しないため、既存OAuth登録の利用統計やtelemetryの不具合原因を確定する必要がなくなった。
 > 本計画は、将来共有APIの保護を別途検討する場合の参考として保持する。担当者への依頼・証拠取得は行わない。
 
+[担当者向け調査依頼文（未送信案）](BEST_PRACTICE_BP5_TELEMETRY_MAINT_REQUEST_DRAFT.md)を参考資料として保存する。
+依頼文の保存は本計画の保留解除や送信・調査実施の承認を意味しない。
+
 ## 1. 目的と実施境界
 
 [G1検証記録§4.2–4.3](E2E_BEST_PRACTICE_OAUTH_G1_INVENTORY_2026-10-18.md)の未解決事項について、
