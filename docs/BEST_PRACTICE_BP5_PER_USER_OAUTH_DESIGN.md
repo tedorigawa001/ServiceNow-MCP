@@ -1,17 +1,36 @@
-# BP-5：候補A専用Authorization Code登録・トークン管理設計
+# BP-5：専用Authorization Code登録・ロール境界・トークン管理設計
 
-Version: draft-0.2 / Date: 2026-10-18 / Status: 設計案・実装/運用承認前。
+Version: draft-0.3 / Date: 2026-10-18 / Status: 設計案・実装/運用承認前。
 
-本書は登録作成・認可・トークン発行・設定変更の実行許可ではない。
-本書は専用登録の設計案。別記のG0はローカル合成試験のみで、アカウント/ロール/ACL、
-既存OAuth登録、共有API保護、MCP接続設定は変更しない。
-既存service-accountのdev接続とは分離し、根拠不足を権限付与や別認証で補わない。
+本書は登録作成・認可・トークン発行・アカウント/ロール/ACL作成・設定変更の実行許可ではない。
+別記のG0はローカル合成試験のみで、アカウント/ロール/ACL、既存OAuth登録、共有API保護、
+MCP接続設定は変更しない。既存service-accountのdev接続とは分離し、根拠不足を権限付与や別認証で補わない。
+
+## 0. 方式の決定：読み取り境界は利用者ロールで強制する（方式R、2026-10-18）
+
+利用者の判断により、GET限定を**トークンのscopeではなく、検証用利用者のロール/ACLで**サーバー側に強制する。
+
+- **REST API Auth Scope、API Access Policy、共有Table APIの設定は作成・変更しない。**
+  REST API Auth Scopeを付けると、そのscopeを持たない既存OAuthが当該APIへアクセスできなくなる
+  （公式資料R5、Australia・2026-03-12更新の本文で確認）。方式Rはこの共有影響を発生させない。
+  useraccount関連の8登録、関連なしの有効Client3件、外部OIDC、Basic/mTLS利用者のいずれにも設定変更は及ばない。
+- トークンの実効権限は**検証用利用者のロール/ACLそのもの**。scopeによる二重防御は得ない。
+  トークン流出時は、その利用者が持つ権限が有効期限まで使われ得る。短寿命・メモリ保管（§7）で軽減する。
+- 読み取り専用はクライアント側でも維持する。BP-5の取得は固定GET・3テーブル・bounded上限のみ（既存実装）。
+  ただしクライアント側の制限はトークン流出後の権限を制限しない。サーバー側の境界はロールだけである。
+- 候補A（46ロール保持、admin/security_adminなし）は、最小権限の主張に使えるロール構成ではないため、
+  本PoCの検証主体から外す。検証は**専用の検証用利用者**（以下「検証利用者」）で行う（§5）。
+- [G1読み取り棚卸し](E2E_BEST_PRACTICE_OAUTH_G1_INVENTORY_2026-10-18.md)は、共有変更を避ける判断の根拠として保持する。
+  同記録§4.2–4.3のdashboard/telemetry調査（ServiceNow側の実装・PDI固有の問題）は、方式Rの判断を変えないため打ち切る。
+  「このPDIではアプリ別の利用統計を取得できない」を結論とし、3登録の利用実績・担当者の特定はG1の完了条件から外す。
 
 ## 1. 目的と前提
 
-候補A（sys_id `06f97342c37030009b5efcfc5bba8fc3`）本人の認証で、既存Update Set
-`9055f6338c9503100a22deb6dd2b4ead`への読み取り可否とBP-5の安全側停止を確認する。
-氏名/ユーザー名/メールは記録しない。これらのsys_idも識別情報であり匿名化値ではない。
+**検証利用者**本人の認証で、既存Update Set`9055f6338c9503100a22deb6dd2b4ead`への読み取り可否、
+書込み権限を持たないロール構成、BP-5の安全側停止（リリース未観測時のC方式を含む）を確認する。
+氏名/ユーザー名/メールは記録しない。sys_idも識別情報であり匿名化値ではない。
+
+以下は方式Rの決定前に、候補A（sys_id `06f97342c37030009b5efcfc5bba8fc3`）について行った観測の記録である。
 
 前回の読み取り観測（2026-10-18、dev441827 / Australia）：
 
@@ -45,36 +64,11 @@ G0の[ローカル合成ハーネス検証](E2E_BEST_PRACTICE_OAUTH_G0_2026-10-1
 実PDIへの接続・本人確認・実MCPへのtoken供給は未実装、登録作成/発行ゲートは未完了。
 
 [G1読み取り棚卸し](E2E_BEST_PRACTICE_OAUTH_G1_INVENTORY_2026-10-18.md)では、Auth Scope定義2件、
-API-scope関連の表示0件、OAuth-scope関連9行/8登録、REST APIポリシー4件を観測した。
-Table GET/POSTは非アクティブで関連認証プロファイルも表示されず、既存の完成済みGET保護として流用しない。
-関連なしの有効Client3件は実利用の優先確認候補であり、影響確定件数ではない。
-実利用/owner・tokenの実scope・設定の実効値/不可視範囲・復旧準備が未確認なので、G1の変更開始条件も未完了。
-
-同記録§4.1の追加調査でもTrino Connector・Prism・WebKit HTML to PDFのTable API実利用は未確認、
-運用担当者は未特定。Metricsの351行は一意な組合せの表示件数であり、3登録の呼出し数ではない。
-アプリ別usage dashboardは初回「not found」で表示不能、registryとclient/server mappingで対象の関連は
-確認できなかったが、未利用の証拠にはしない。用途コメントや別APIのmTLS設定も担当者/利用実績の代替にはならない。
-非秘密の帰属証拠と収集・保持・除外範囲、運用台帳等による責任者を確定する課題を残し、
-dashboard修復・ロール追加・新規ログ有効化やtoken取得で調査を補うことは別途承認なしに行わない。
-
-同記録§4.2ではMetricsと標準メニューのdashboard参照先不整合を確認。ただし標準メニューの
-有効な参照先でも最終的に`Inbound Integration Usage is not available`で、統計取得は未達。
-metering設定は保存値true、Framework導入記録あり、確認したデータリソースACLはadmin overrideを許すが、
-PDIでの一律制約や下流権限は未確定。既存telemetryエラーと標準処理を照合すると、同スコープの
-`QueryServiceHttpClient`が未初期化に見える`this.logger`をエラー処理で参照しており、元のエラーを
-隠す疑いがある。行番号付きスタックによる確証はなく、修正や機能有効化は承認しない。
-3登録の利用/owner確認、G1の進行条件、P/L/S未実行の扱いは変わらない。
-
-同記録§4.3の限定した既存ログ24行では、接続設定`observability_data`のヘッダーJSON解析エラー14行と
-connectorのundefinedエラー10行を確認した。前者はHTTP応答解析ではなく、空ヘッダーで続行する処理であり、
-空値の代替オブジェクトでも発生し得る。保存済みJSONの破損や最終失敗原因とは断定しない。
-接続設定表のread ACLはmaint必須・Admin overrides=falseで、一覧0件を設定不存在とは扱わない。
-元のHTTPステータス/応答/通信失敗理由は確認できず、loggerの二次エラーの疑いとは分けて保持する。
-権限境界を迂回せず、必要な追加証拠は権限を持つ担当者による秘密を除いた検証結果として別途整理する。
-
-[maint担当者向け証拠取得計画](BEST_PRACTICE_BP5_TELEMETRY_MAINT_EVIDENCE_PLAN.md)で、
-接続設定・元の通信/解析エラー・logger二次例外の確認項目と白リスト方式の提出票を定義する。
-未承認・未実施の案であり、依頼連絡・権限追加・診断通信や設定変更を許可するものではない。
+API-scope関連の表示0件、OAuth-scope関連9行/8登録、REST APIポリシー4件、scope関連なしの有効Client3件を観測した。
+これは、共有Table APIへscope/policyを追加した場合の影響候補の記録である。方式Rでは共有設定を変更しないため、
+3登録の利用実績・担当者の特定や、dashboard/telemetryの不具合調査（同記録§4.1–4.3）は本PoCの前提から外した。
+[maint担当者向け証拠取得計画](BEST_PRACTICE_BP5_TELEMETRY_MAINT_EVIDENCE_PLAN.md)も方式Rの決定により保留とする。
+これらの記録は、将来共有APIの保護を別途検討する場合の参考として残す。
 
 ## 2. 登録案と責任分離
 
@@ -84,13 +78,13 @@ connectorのundefinedエラー10行を確認した。前者はHTTP応答解析�
 | 接続先 | `https://dev441827.service-now.com`だけ | 再割当・ホスト変更時は失効扱い、再承認 |
 | grant | Authorization Codeのみ | Client Credentials/Password/Implicitへの切替なし |
 | クライアント種別 | ネイティブ公開クライアント、PKCE必須、client secretを保持しない | PDIのPublic Client欄とPKCEのヘルプは確認済み。S256強制/降格拒否は未検証 |
-| 実行主体 | 候補A本人のログイン・同意 | サービスアカウント固定ユーザー、impersonation、パスワード共有は使わない |
+| 実行主体 | 検証利用者本人のログイン・同意 | サービスアカウント固定ユーザー、impersonation、パスワード共有は使わない。§5のロール構成以外を付与しない |
 | callback | `http://127.0.0.1:18765/bp5/oauth/callback` | loopback HTTP許容・完全一致登録をPDIで確認。未登録の設計値 |
-| scope | 専用GET用scope（仮名 `bp5_review_read`）だけ | §5の実現性/共有影響を確認するまで作成・関連付けしない |
+| scope | 専用scopeを作らない。REST API Auth Scope/API Access Policyを変更しない | 実効権限は検証利用者のロール/ACL（§0、§5）。登録に関連付けるscopeの実際の値と発行tokenのscopeは記録するが、GET限定の根拠にしない |
 | token寿命 | 検証用に短くする。15分以下を承認候補とする | per-clientの寿命入力欄は確認済み。900秒以下の保存/実発行寿命は未検証。全体プロパティは変更しない |
 | refresh | 初回PoCは使用・保管・自動更新しない | サーバーが返す場合も保存しない。発行済み状態が残る可能性を別途管理 |
 
-運用者が登録・scope・寿命を承認し、候補A本人がログイン/同意する。実行担当はパスワードを扱わない。
+運用者が登録・寿命・検証利用者のロール構成を承認し、検証利用者本人がログイン/同意する。実行担当はパスワードを扱わない。
 公開クライアントが成立しない場合は停止する。秘密クライアントへの変更は自動代替せず別設計/承認とする。
 
 ## 3. コールバック受信
@@ -121,7 +115,8 @@ RFC 8252 §7.3/§8.4はloopback redirectのport差を許容する。サーバー
 1. 毎回CSPRNGの32byteから独立したstate（hex 64文字）とverifier（base64url、43文字）を作り、メモリだけに置く。
 2. challengeはverifierのSHA-256をbase64url化し、method=S256を明示。plain/PKCEなしへの降格は禁止。
 3. 認可URLは固定PDIの/oauth_auth.do、response_type=code、専用client ID、完全一致redirect_uri、
-   専用scope、state、challengeだけを組み立てる。URLをログ/チャットへ出さず、外部ブラウザーで候補A本人が操作する。
+   登録で許可されたscope、state、challengeだけを組み立てる。URLをログ/チャットへ出さず、外部ブラウザーで検証利用者本人が操作する。
+   方式Rではscopeを実効権限の根拠にしない（§5）。要求したscopeは開始時に固定し、応答との対応を記録する。
 4. 管理者cookieと分離したブラウザープロファイルで通常ログインする。ログイン不可なら停止し、パスワード変更しない。
 5. callbackのstateを照合し、開始時のホスト/client/callback/scope/verifierと対応付ける。
    issuerパラメーターを使う場合の期待値は事前確認し、不一致は拒否。別ホストのissuer/token endpointへ追随しない。
@@ -130,7 +125,7 @@ RFC 8252 §7.3/§8.4はloopback redirectのport差を許容する。サーバー
 7. 交換のタイムアウト/結果不明では同じcodeを再送しない。トークンが既に発行された可能性を記録し、
    「発行なし」と断定しない。新規認可や失効操作は別承認を受ける。
 8. token_typeは文字列であることを確認し、Bearerと大小文字を区別せず比較する設計とする（R7）。
-   空でないaccess token、有効なexpires_in、承認scopeとの対応も検証する。
+   空でないaccess token、有効なexpires_in、要求scopeとの対応（拡大・不一致の検出）も検証する。
    scopeの追加/変更/省略をどう確認するかはPDI応答と公式仕様で確定するまで実装開始ゲートとする。
    JWTを未検証でdecodeしたsubだけでは本人性を判定しない。
 
@@ -144,7 +139,7 @@ ServiceNowの認可/トークンエンドポイントは外部PDIへの処理で
   token文字列そのものやscope名を小文字化しない。現G0は合成契約として`'Bearer'`完全一致のまま。
 - **scope省略**：RFC 6749 §5.1では要求と同じ範囲なら応答scopeを省略できる。
   これは空scopeを要求してよいという意味ではない。実アダプターではG2以降の承認済み検証で
-  ServiceNowの実応答、専用登録の許可scope・API関連付け、要求scopeとの対応を確かめ、
+  ServiceNowの実応答、専用登録の許可scope、要求scopeとの対応を確かめ、
   省略時に要求範囲を実効scopeとして扱える条件と証拠を先に決める。
   接続先/client/要求scopeは開始時に固定し、明示応答の拡大/不一致/不明な範囲を黙って受理しない。
   GET成功だけで書込み不可や同一scope付与を証明したとしない。条件未確定なら安全側停止を維持する。
@@ -154,43 +149,65 @@ ServiceNowの認可/トークンエンドポイントは外部PDIへの処理で
 
 上記は後続実装の設計条件であり、実PDIの応答や権限を検証済みにするものではない。
 
-## 5. scopeと読み取り境界（共有影響を伴うため別承認）
+## 5. 読み取り境界：検証利用者のロール/ACL（方式R）
 
-useraccount、空scope、既存の広いscopeへフォールバックしない。scope名をreadにしてもGET制限は成立しない。
-専用scopeとAPI/resource/HTTP methodの関連付け、clientへの許可、要求/発行scopeの対応をセットで確認する。
-Table APIのGET用mappingの公式例はR4にある。PDIには管理一覧があるが、未フィルター表示は0件だった。
-利用可能な既存GET用mappingは確認できず、新設の保存可否・実効動作は未検証。
-G1で見つかった非アクティブのTable API access policyはauth scope mappingとは別の層で、
-有効化は既存の認証方式にも影響し得る共有変更として別審査する。
-useraccount関連があることも発行済みtokenの実scopeや影響なしの証拠にはしない。
+サーバー側の読み取り境界は、検証利用者に付与するロールと、それに対応するACLだけで作る。
+REST API Auth Scope、API Access Policy、既存ロール/ACL、共有Table API設定は変更しない。
+登録のscope（既定値・useraccountを含む）は実効権限の根拠にせず、実際の値を記録するだけとする。
+これはscope保護から後退した「フォールバック」ではなく、§0で承認された方式の前提である。
 
-| 用途 | 許す対象案 | 追加権限の扱い |
-|---|---|---|
-| 本人確認 | sys_userの本人ID確認だけ。固定の現在ユーザー照会でsys_idのみ | 表示名・メール等は取得しない。既存ACLで拒否なら本人性未確認として停止 |
-| 親 | sys_update_setの指定IDとBP-5必須メタデータ | 既存ACLを維持 |
-| 子 | sys_update_xmlの所属条件付きmetadata/payload | payloadはプロセス内解析だけ、本文非返却 |
-| リリース | sys_cluster_state.build_nameだけ | 読めなければC方式。ロール追加/ACL緩和なし |
+### 5.1 PDIのACL観測（2026-10-18、AIによる読み取り照会。人の承認ではない）
 
-REST API Auth ScopeではGETとresourceを指定できるが、汎用Table APIの{tableName}resourceだけで
-上表の表/列/レコードに制限できるとは断定しない。POST/PUT/PATCH/DELETEを許すmappingは割り当てない。
-unversionedの実際のBP-5 URLが対応するresource/version、および一覧と/{sys_id}の双方を確認する。
-API外の呼出しを拒否するclient側設定も適用対象を確認し、広い未scoped APIへのアクセスを許容しない。
+dev441827（Australia）の`sys_security_acl`/`sys_security_acl_role`/`sys_user_role_contains`を読み取りで照会した。
 
-特に、**共有Table APIへのscope保護の追加は他の既存OAuth clientを拒否し得る**（R5）。
-新規OAuth登録の作成承認だけでは、共有APIへのscope/policy追加・既存scope編集を許可したことにしない。
-先に既存API-scope/policy/client関連を読み取りで棚卸しし、管理者が影響・回復手順を別途承認する。
-既存の適切なGET用mappingがあれば利用可否を審査し、なければ安全に新設できるまで停止する。
-本書の目的でScripted RESTやACL迂回経路を追加しない。
+| 対象 | 観測 |
+|---|---|
+| `sys_update_set` read（Allow If） | update_set_admin / teamdev_user / update_set_picker。Admin overrides=true |
+| `sys_update_xml` read（Allow If） | update_set_previewer / upgrade_admin / teamdev_user / update_set_admin。Admin overrides=false |
+| 両表のDeny Unless（read） | Security Attribute `UserIsAuthenticated`のみ。認証済み利用者なら通過する |
+| 両表のフィールド単位read ACL | 有効なもの0件（`payload`等の列単位の追加制約は観測されなかった） |
+| `update_set_picker`の全ACL | `sys_update_set` readの1件だけ。継承ロールなし、elevated=false |
+| `update_set_previewer`の全ACL | `sys_update_xml` readに加え、**`sys_remote_update_set` read/write、`sys_update_preview_xml` read/write/delete、`sys_update_preview_problem` read/write/delete**。継承ロールなし、elevated=false |
+| `sys_cluster_state` read | cluster_node_admin等（前回観測）。上記2ロールでは読めない見込み |
+
+この観測はACL定義の照会であり、検証利用者でログインした実効アクセスの確認ではない。
+ドメイン分離・ACLのscript/条件・他のDeny Unless・キャッシュ等は実ログインの検証で確認する。
+
+### 5.2 ロール構成案
+
+| 案 | 付与するロール | 読める範囲 | 書込み権限 | 変更の範囲 |
+|---|---|---|---|---|
+| **R-2（採用、2026-10-18）** | 新規の専用ロール1つ（仮`u_bp5_update_set_reader`、継承なし） | 新設する2件のAllow If read ACL（`sys_update_set`・`sys_update_xml`、当該ロールのみ）で両表 | なし | 新規ロール・新規ACL2件・新規利用者。Allow If ACLの追加は当該ロール保持者へのreadを追加するだけで、他の利用者・既存OAuth/Basicのアクセスを変えない |
+| R-1（不採用） | 既存の`update_set_picker`＋`update_set_previewer` | 両表 | **プレビュー表・リモートUpdate Set表への書込み/削除あり** | 新規利用者と既存ロールの付与だけ。ACLは作らない |
+
+利用者の決定（2026-10-18）によりR-2を採用し、R-1は採らない。採用の決定は、専用ロール・ACL・検証利用者の
+作成やsecurity_admin昇格の実行許可ではない（§8のゲートで個別に承認する）。
+
+- R-2は「書込み権限を持たない」と言える構成。ACL作成にはsecurity_adminの昇格が必要で、作成・削除の承認と
+  復旧（ACL・ロール・利用者の無効化/削除）を別途得る。ACLは追加だけで、既存ACLの編集・無効化はしない。
+- R-1はACLを作らずに済むが、`update_set_previewer`の書込み権限が残る。PDIでのPoCとして受容するなら、
+  「読み取り専用」ではなく「レビュー対象表は読み取りのみ、プレビュー/リモート表には書込み可」と報告する。
+- いずれも`sys_cluster_state`は読めない想定。リリース証拠はC方式（運用者設定）へフォールバックし、
+  BP-5は`asserted`の`partial`を返す。これは方式Rの欠点ではなく、C方式の実機確認を兼ねる。
+  `cluster_node_admin`等の付与で補わない。
+- 本人確認（§6）の`sys_user`自己参照が上記ロールで読めるかは未確認。読めなければ本人性未確認として停止し、
+  sys_user読取のためのロール追加は別途審査する。
+
+### 5.3 クライアント側の制限と報告の範囲
 
 検証ハーネスにもPDI固定・GET固定・表/fields/query固定ガードを置き、製品のBP-5上限を維持する。
-ただしこのガードはトークン流出後の権限を制限しない。サーバー側GET/対象外API拒否を確認できなければ
-「読み取り専用トークン」「最小権限達成」とは報告せず、広いtokenを発行して書込み試験もしない。
-対象外APIや変更methodの拒否試験は、実レコードを変更しない方法を先に設計・承認する。
+ただしこのガードはトークン流出後の権限を制限しない。サーバー側の境界は§5.2のロール構成だけである。
+
+- 「読み取り専用トークン」とは報告しない。報告は「検証利用者のロール構成に書込み権限がない（R-2）」または
+  「R-1の残存書込み権限あり」とし、ロール/ACLの照会結果と、実ログインでの読取成功を別の証拠として記録する。
+- 書込みが拒否されることを確かめるための変更method試験は行わない。実レコードを変更し得るため、
+  書込み不能の根拠はロール/ACL構成の照会とする（§9の留保を参照）。
+- 本書の目的でScripted REST、ACL迂回経路、既存ACLの編集を追加しない。
 
 ## 6. 本人性・MCPへの引渡し・C方式
 
-- 取得後、同じtokenで実行ユーザーのsys_idを読み取り、候補AのIDとの一致だけを記録する。
-  sys_user一覧の先頭、指定した候補Aレコードが読めること、UIの表示名では本人性を証明しない。
+- 取得後、同じtokenで実行ユーザーのsys_idを読み取り、検証利用者のIDとの一致だけを記録する。
+  sys_user一覧の先頭、指定した検証利用者レコードが読めること、UIの表示名では本人性を証明しない。
   固定の現在ユーザー照会または承認済みの本人確認APIを実機で確認する。拒否/不明なら停止。
 - 初期検証ハーネスは専用client、authMode=per-user、開始時にtoken/接続先を固定。
   401/失効でrefreshやservice-accountへ代替しない。HTTP MCP BearerとServiceNow tokenを混同しない。
@@ -215,7 +232,7 @@ tokens.json、instances.json、.env、argv、シェル履歴、クリップボ�
 | 平文ファイル | 初期PoCでは採用しない。0600でも暗号化にはならず、共有tokens.jsonの代替にしない |
 | 環境変数 | 現行runtimeの受け口はあるが既定案にしない。同一UID/子プロセス/診断への露出があるため、使うなら別途リスク承認 |
 
-Keychainを使う場合はorigin＋専用client識別子＋候補A sys_id＋用途でキーを分離し、期限/scope/本人確認結果も対応付ける。
+Keychainを使う場合はorigin＋専用client識別子＋検証利用者sys_id＋用途でキーを分離し、期限/scope/本人確認結果も対応付ける。
 登録名や単一hostだけで別ユーザーのtokenを上書きしない。OSの秘密保管/プロンプトの設定変更も別承認が必要。
 同一UID/root/悪意あるプロセスを完全に隔離できるという保証はしない。
 
@@ -237,13 +254,16 @@ token失効・同意取消・登録無効化は操作対象と権限を確認し
 
 - [ ] PDIのPublic Client＋S256必須設定、固定loopback callbackの受理を確認する方法を承認。
   Public Client欄/PKCEヘルプの読み取り確認のみ完了。保存・降格拒否・loopback受理は未完了。
-- [ ] 新規専用登録の作成内容を承認。既存client001/標準登録/候補Aのロールを変更しない。
-- [ ] 専用GET scopeとAPI mappingの既存影響、対象外APIの拒否、回復計画を審査。scope文字列だけで済ませない。
+- [ ] 新規専用登録の作成内容を承認。既存client001/標準登録/既存利用者のロールを変更しない。
+- [x] 検証利用者のロール構成としてR-2を採用（2026-10-18、利用者の決定）。
+- [ ] R-2の具体値（専用ロール名・Allow If read ACL 2件・検証利用者）、security_admin昇格、
+  復旧（無効化/削除）の手順を承認。既存ACLは編集しない。
+- [ ] REST API Auth Scope・API Access Policy・共有Table API設定を変更しないことを確認（方式R）。
 - [ ] callback receiver、state/S256、期限、交換結果不明、安全なtoken引渡しを合成試験で確認。
   G0ではloopback合成issuerへの受信/交換/メモリ内利用/取消を確認。実PDI用アダプターと実MCP引渡しは対象外。
-- [ ] 本人確認の固定GETが候補Aで成立するか確認し、失敗時に停止する。
+- [ ] 本人確認の固定GETが検証利用者で成立するか確認し、失敗時に停止する。
 - [ ] サーバー寿命とローカル寿命を承認。refresh不使用、必要なら失効操作の対象/手順を別途承認。
-- [ ] 候補A本人のログイン/同意、外部ブラウザー起動、token発行に実行時の承認を得る。
+- [ ] 検証利用者本人のログイン/同意、外部ブラウザー起動、token発行に実行時の承認を得る。
 - [ ] C方式の運用者証拠・専用binding・期限と非公開設定配置を別途承認。
 
 ## 9. 根拠と未確認事項
@@ -255,10 +275,15 @@ token失効・同意取消・登録無効化は操作対象と権限を確認し
 | R1 | [RFC 8252](https://www.rfc-editor.org/rfc/rfc8252.html#section-7.3) §7.3、§8.3/§8.5 | 外部ブラウザー/loopback IP/ネイティブclientの秘密。PDIで当該callbackを受理する実績ではない |
 | R2 | [RFC 7636](https://www.rfc-editor.org/rfc/rfc7636.html#section-4.1) §4.1–4.6 | verifier/challenge/S256と検証。候補アカウントの権限は規定しない |
 | R3 | [ServiceNow Authorization workflow](https://www.servicenow.com/docs/r/platform-security/authentication/authorization-workflow.html) Public Client - PKCE、認可/交換の表 | 公式検索結果にAustraliaとS256/stateの記述。汎用/r URLの直接表示は別familyに切替わるため、作成前にAustralia本文/画面の再照合が必要 |
-| R4 | [Configure REST API Auth scope](https://www.servicenow.com/docs/r/platform-security/authentication/configure-rest-api-auth-scope.html) Table APIの3構成例 | 公式検索結果はAustralia、GET/method/version/resourceの指定例。PDIでの設定/拒否実績は未確認 |
-| R5 | [REST API Auth Scope](https://www.servicenow.com/docs/r/platform-security/authentication/rest-api-auth-scope.html) Note / Configurations | scopeのAPI/client関連付け、useraccountの特別扱い、既存tokenへの影響。検索結果はAustralia、直接本文はBrazil表示で確認。Australia実機の承認根拠として単独採用しない |
+| R4 | [Configure REST API Auth scope](https://www.servicenow.com/docs/r/platform-security/authentication/configure-rest-api-auth-scope.html) Table APIの3構成例 | 方式Rでは使用しない。scope保護を将来別途検討する場合の参考 |
+| R5 | [REST API Auth Scope](https://www.servicenow.com/docs/r/australia/platform-security/authentication/rest-api-auth-scope.html) Note / Configurations | Australia・2026-03-12更新の本文（2026-10-18にAIが参照）：scopeを付けたAPIへは、そのscopeを持たない既存OAuthがアクセスできなくなる。useraccountは保護されたAPIを含め任意のAPIへアクセスできる。APIにscope記録がなければ有効なOAuth登録はアクセスできる。方式Rを選んだ根拠（共有影響の回避）。人による再照合ではない |
 | R6 | [Configure an OAuth authorization code grant](https://www.servicenow.com/docs/r/platform-security/authentication/configure-an-oauth-authorization-code-grant.html) Before you begin / Procedure / Details form | 追加調査の公式検索本文はAustralia・2026-03-12更新。設定経路とロールを確認。PDIでの新規保存成功を意味しない |
 | R7 | [RFC 6749 §5.1](https://www.rfc-editor.org/rfc/rfc6749.html#section-5.1)、[§7.1](https://www.rfc-editor.org/rfc/rfc6749.html#section-7.1) | token_typeの大小文字非区別、要求と同じscopeなら応答で省略可。G0の厳格な合成契約とは別。ServiceNowでの省略/付与範囲の実証ではない |
 
-loopback公開client、専用GET scope、15分/5分/10秒等の提案値、Keychain保管は未検証の設計であり、
+loopback公開client、§5.2のロール構成、15分/5分/10秒等の提案値、Keychain保管は未検証の設計であり、
 この文書をもって導入済み・安全性確認済み・最小権限達成とはしない。
+
+方式Rの留保：書込み不能の根拠は、ロール/ACL構成の照会と、新設ACLの内容の確認である。
+ACLのscript・条件・ドメイン分離、他のロールに紐づく将来の変更、ACLキャッシュ等により実効権限は変わり得る。
+変更methodの拒否を実リクエストで確かめる試験は、実レコードを変更し得るため実施しない。
+したがって報告は「ロール構成上、書込み権限を持たない」に留め、「書込みが拒否されることを実測した」とはしない。

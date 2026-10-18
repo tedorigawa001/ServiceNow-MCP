@@ -2,6 +2,14 @@
 
 Date: 2026-10-18 / Status: 読み取り観測。G1の変更開始条件・人の承認は未完了。
 
+> **方式Rの決定による位置付けの変更（2026-10-18）**：利用者の判断により、読み取り境界は
+> トークンのscopeではなく検証利用者のロール/ACLで強制する（[設計§0](BEST_PRACTICE_BP5_PER_USER_OAUTH_DESIGN.md)）。
+> REST API Auth Scope・API Access Policy・共有Table API設定は変更しないため、本記録は**共有変更を避ける判断の根拠**として保持する。
+> 本記録の§5に挙げた残項目（3登録の実利用/owner、canary、共有設定の復旧準備）は、方式RのG1の完了条件から外した。
+> §4.2–4.3のdashboard/telemetry調査はServiceNow側の実装・PDI固有の問題であり、方式Rの判断を変えないため打ち切った。
+> 結論は「このPDIではアプリ別の利用統計を取得できない」とする。新しいG1は[検証計画§5.1](BEST_PRACTICE_BP5_OAUTH_MINIMAL_VALIDATION_PLAN.md)のロール/ACL棚卸し。
+> 以下の本文は観測時点の記録として変更しない。
+
 ## 1. 範囲と証拠の扱い
 
 対象はdev441827。Australiaは既存のリリース観測によるもので、今回ビルド情報を再取得していない。
