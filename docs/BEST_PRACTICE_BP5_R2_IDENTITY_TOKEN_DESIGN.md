@@ -4,7 +4,7 @@ Version: draft-0.3 / Date: 2026-10-18 / Status: 内部PoCを実装・合成検�
 
 [実装・合成検証記録](E2E_BEST_PRACTICE_R2_IDENTITY_SYNTHETIC_2026-10-18.md)を参照。
 交換後の内部session/同一プロセスMCPに加え、OAuthアダプターからsessionへの内部接続を合成検証済み。
-実認可・runner/OS終了処理・実PDIは未接続/未検証。
+内部runner/OS signalは下記合成試験で確認した。実認可・実PDIは未接続/未検証。
 
 未接続部分の責任分離・交換応答・所有権移譲・開始ページ・OS終了処理は
 [実PDI OAuthアダプター/runner接続設計](BEST_PRACTICE_BP5_R2_PDI_ADAPTER_RUNNER_DESIGN.md)に具体化した。
@@ -13,8 +13,9 @@ Version: draft-0.3 / Date: 2026-10-18 / Status: 内部PoCを実装・合成検�
 [固定HTTP待受・開始ページの合成検証](E2E_BEST_PRACTICE_R2_LOOPBACK_SYNTHETIC_2026-10-18.md)も追加した。
 [承認manifestのオフライン読込の合成検証](E2E_BEST_PRACTICE_R2_APPROVAL_MANIFEST_SYNTHETIC_2026-10-18.md)を追加。
 strict契約・ファイル信頼性・385秒の有効余裕・bindingを検査するが、人の承認や本人性を証明せず、
-listener/sessionへまだ接続しない。具体的な契約は上記runner設計§13を参照。
-runner/SDK接続・OS終了処理は未実装で、実機操作やtoken発行を許可しない。
+具体的な契約は上記runner設計§13を参照。
+[manifest→listener→session→MCP bridgeの内部runner合成検証](E2E_BEST_PRACTICE_R2_RUNNER_SYNTHETIC_2026-10-18.md)を追加した。
+385秒の全体予算と取消/SIGINT/SIGTERM、worker/port/購読の解放を確認。公開CLI・実機操作やtoken発行を許可しない。
 
 ## 1. 範囲と不変条件
 
@@ -158,7 +159,7 @@ C方式設定の有効期限は別途`expires_at > started_at + deadline_ms`を�
 ## 7. 後続の合成試験と承認ゲート
 
 以下の内部session/同一プロセスMCPの範囲は合成試験で確認した（上記記録）。
-実OAuth/runnerとの接続、実機承認ゲートは未完了のまま。
+実OAuthとの接続、実機承認ゲートは未完了のまま。内部runner接続は上記合成試験を参照。
 
 1. 固定GETの完全一致、Bearer同一性、fields/limit、redirect拒否、上限、TLS方針。任意query/URL追加を拒否。
 2. 0/2件、ID不一致、表示値形式、余分なキー、重複キー、不正JSON、HTML、401/403/5xx、timeoutの安全側停止。

@@ -5,6 +5,7 @@ import { getEventListeners } from 'node:events';
 import { inspect } from 'node:util';
 import { createHash } from 'node:crypto';
 import { R2LoopbackListener, R2_START_URL } from '../../src/review/r2-loopback.js';
+import './r2-runner.cases.js';
 
 const origin = 'https://loopback-fixture.service-now.com';
 const plan = () => ({ instanceUrl: origin, clientId: 'LOOP_PRIVATE_CLIENT', scopes: ['review_read'],

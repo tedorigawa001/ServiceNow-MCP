@@ -227,7 +227,7 @@ dev441827（Australia）の`sys_security_acl`/`sys_security_acl_role`/`sys_user_
 固定GET候補・安全側停止・同一プロセスの不透明capabilityによる引渡し・終了時の参照破棄は
 [方式R-2本人確認/token引渡し設計](BEST_PRACTICE_BP5_R2_IDENTITY_TOKEN_DESIGN.md)に具体化した。
 内部sessionと同一プロセスMCPは[合成検証済み](E2E_BEST_PRACTICE_R2_IDENTITY_SYNTHETIC_2026-10-18.md)。
-実認可からrunner/SDKまでの一連の接続は未実装で、固定GETの対象版/R-2での成立と実機操作の承認は別途必要。
+manifestからrunner/SDKまでの内部接続は下記合成試験で確認したが、実認可と固定GETの対象版/R-2での成立、実機操作の承認は別途必要。
 
 実OAuth交換・開始ページ/callback・sessionへの所有権移譲・runnerの終了signal接続は
 [実PDIアダプター/runner設計](BEST_PRACTICE_BP5_R2_PDI_ADAPTER_RUNNER_DESIGN.md)を参照する。
@@ -235,13 +235,17 @@ dev441827（Australia）の`sys_security_acl`/`sys_security_acl_role`/`sys_user_
 
 [adapter→session接続の合成検証](E2E_BEST_PRACTICE_R2_OAUTH_HANDOFF_SYNTHETIC_2026-10-18.md)では
 メモリ内の一度限りの供給と本人確認前のレビュー拒否、別アカウントcodeの交換後停止、期限/中断時の破棄を確認した。
-実認可・runner/SDK一連の接続は未実装/未実施で、実PDIの権限やscopeを実証したものではない。
+実認可は未実施で、実PDIの権限やscopeを実証したものではない。runner/SDK接続は下記合成試験を参照。
 [固定HTTP待受・一度限りの開始ページ](E2E_BEST_PRACTICE_R2_LOOPBACK_SYNTHETIC_2026-10-18.md)は
 外部PDI通信を合成に置換して検証した。実ブラウザーでの認可、登録・token発行の実行許可は別途必要。
 
 [承認manifestの合成検証](E2E_BEST_PRACTICE_R2_APPROVAL_MANIFEST_SYNTHETIC_2026-10-18.md)では、
 非秘密のstrict契約・所有者/権限/symlink・期限/bindingと消費直前の再検証を確認した。
-詳細はrunner設計§13。読込成功は人の承認の証明でも実行許可でもなく、runner接続/実機は未実施。
+詳細はrunner設計§13。読込成功は人の承認の証明でも実行許可でもなく、実機は未実施。
+
+[内部runnerの合成検証](E2E_BEST_PRACTICE_R2_RUNNER_SYNTHETIC_2026-10-18.md)ではmanifest/listener/
+本人確認/session/MCP list・callを接続し、385秒の全体予算・取消・実OS signal・worker終了・秘密一致時の拒否を確認した。
+公開CLI/実機承認は未対応。詳細はrunner設計§14。合成tokenだけを使い、G2/G4の完了には数えない。
 
 - 取得後、同じtokenで実行ユーザーのsys_idを読み取り、検証利用者のIDとの一致だけを記録する。
   sys_user一覧の先頭、指定した検証利用者レコードが読めること、UIの表示名では本人性を証明しない。

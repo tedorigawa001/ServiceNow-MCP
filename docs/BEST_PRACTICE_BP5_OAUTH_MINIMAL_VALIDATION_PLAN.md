@@ -135,7 +135,11 @@ Host/method/body・開始ページ再取得・port競合・中断時の解放を
 
 [承認manifestの合成検証](E2E_BEST_PRACTICE_R2_APPROVAL_MANIFEST_SYNTHETIC_2026-10-18.md)は、
 一時fixtureだけでstrict契約・信頼済み読込・期限/binding・再消費拒否を確認する。
-人の承認照合・実manifest配置・runner接続は未実施。読込成功でG2/G4を完了/実行許可にしない。
+人の承認照合・実manifest配置は未実施。読込成功でG2/G4を完了/実行許可にしない。
+
+[内部runnerの合成検証](E2E_BEST_PRACTICE_R2_RUNNER_SYNTHETIC_2026-10-18.md)で、manifestから
+固定listener・本人確認・MCP bridgeを接続した。385秒の予算、取消・実OS signal・worker終了・秘密非出力は
+合成通信/一時fixtureだけで検証し、実機の登録/発行/設定変更やG2/G4を完了扱いにしない。
 
 各ケースは検証利用者の正常token（P01=L01で得たもの、または承認済みの追加発行）を使う。
 BP-5製品の取得経路（固定GET・3テーブル・bounded上限）を通し、本文・payload・原応答は出力しない。

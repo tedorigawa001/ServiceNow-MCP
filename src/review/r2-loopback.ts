@@ -1,4 +1,4 @@
-/** Repository-only loopback boundary; no browser automation, CLI, storage or runner. */
+/** Repository-only loopback boundary; no browser automation, CLI or storage. */
 import { createServer, type IncomingMessage, type Server, type ServerResponse } from 'node:http';
 import { inspect } from 'node:util';
 import { createHash } from 'node:crypto';
@@ -81,6 +81,10 @@ export class R2LoopbackListener {
   status() { return { listening: this.#listening, connection: this.#connection.status() }; }
   toJSON() { return this.status(); }
   [inspect.custom]() { return this.status(); }
+  /** Internal runner entry, unavailable until mandatory identity verification succeeds. */
+  reviewViaMcp(raw: unknown, signal?: AbortSignal) { return this.#connection.reviewViaMcp(raw, signal); }
+  runnerStatus() { return { ...this.#connection.mcpStatus(), cleanupComplete:
+    this.#failure?.code !== 'cleanup_incomplete' && this.#connection.mcpStatus().cleanupComplete }; }
   #respond(res: ServerResponse, status: number, body: string, callback = false) {
     res.writeHead(status, { 'content-type': 'text/html; charset=utf-8', 'cache-control': 'no-store',
       'referrer-policy': 'no-referrer', 'x-content-type-options': 'nosniff', connection: 'close',

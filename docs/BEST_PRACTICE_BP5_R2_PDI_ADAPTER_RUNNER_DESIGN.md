@@ -1,6 +1,6 @@
 # BP-5 R-2：実PDI OAuthアダプター・runner接続設計
 
-Version: draft-0.5 / Date: 2026-10-18 / Status: 承認manifestのオフライン読込まで内部PoC実装・合成検証。runner未実装、実機/運用は未承認・未検証。
+Version: draft-0.6 / Date: 2026-10-18 / Status: manifest/listener/session/MCP bridgeを内部runnerで接続・合成検証。公開CLI・実機/運用は未承認・未検証。
 
 ## 1. 範囲と現状
 
@@ -9,7 +9,7 @@ Version: draft-0.5 / Date: 2026-10-18 / Status: 承認manifestのオフライン
 実PDI用OAuth交換の単体境界は`src/review/r2-pdi-oauth.ts`へ実装し、
 `src/review/r2-oauth-session.ts`でsessionの生成・本人確認・固定レビューまで接続した。
 固定HTTP callback待受・開始ページは`src/review/r2-loopback.ts`へ実装した。
-runner/SDKとの一連の接続・OS終了signalの処理はまだない。
+runner/SDKとの一連の接続・OS終了signalの処理は内部APIとして実装した（§14）。公開CLIはない。
 [40件の合成検証](E2E_BEST_PRACTICE_R2_IDENTITY_SYNTHETIC_2026-10-18.md)を実認証の証拠にはしない。
 
 単体実装の範囲と結果は[合成検証記録](E2E_BEST_PRACTICE_R2_PDI_OAUTH_SYNTHETIC_2026-10-18.md)を参照。
@@ -17,7 +17,7 @@ runner/SDKとの一連の接続・OS終了signalの処理はまだない。
 別アカウントcodeの交換後も本人確認で停止することを確認。実本人性の検証ではない。
 [待受・開始ページの合成検証](E2E_BEST_PRACTICE_R2_LOOPBACK_SYNTHETIC_2026-10-18.md)は実TCPを使うが、
 外部PDI通信は合成fetchのみ。実ブラウザーでの認可操作はしていない。
-runner/設定ファイルを作らず、PDI接続・認可・実token発行・
+実運用の設定ファイルを作らず、PDI接続・認可・実token発行・
 アカウント/ロール/ACL/登録/設定変更はしていない。telemetry調査・maint担当者への依頼は保留を維持する。
 共有REST API Auth Scope/API Access Policyを変更せず、既存service-accountや旧CLIへ代替しない。
 
@@ -163,6 +163,7 @@ SDKでlistの対象toolを確認し、固定argsでcallを1回行う。本人性
 
 設計上限は、認可待ち300秒、交換10秒、本人確認10秒、BP-5全体60秒、cleanup 3秒。
 root実行期限はbind開始から385秒とし、各段階はその残り時間と段階上限の小さい方まで。
+内部runnerは最後の3秒をcleanup用に確保し、作業は382秒で打ち切る（§14）。
 上限は別々に延長せず、本人確認/交換の時間もtoken寿命から消費する。
 BP-5開始前は既存sessionの厳密な残り60秒超・C方式の全体期限を覆う有効期間の両方が必要。
 
@@ -246,7 +247,8 @@ ServiceNowで受理/動作したという記録ではない。実機・発行・
   Abortしない。非協調consumerが既にコピーした文字列/参照やOSメモリの完全消去は保証しない。
   session生成・本人確認を経ずにレビューへ進ませない接続試験は§11と接続検証記録を参照。
 - HTTP待受/HTMLは独立したlistener（§12）に実装し、単体adapterには含めない。
-  ブラウザー起動、manifestからのrunner接続、SIGINT/SIGTERM、R-2/MCP連携、終了票、サーバー側失効は未実装。
+  manifestからのrunner接続、SIGINT/SIGTERM、R-2/MCP連携、固定終了票は§14に実装した。
+  自動ブラウザー起動・公開CLI・サーバー側失効は実装しない。
   特に§4の同一端末code注入対策は、単体交換の成功だけでは成立しない。
 
 ## 11. メモリ内session接続（2026-10-18）
@@ -260,9 +262,9 @@ adapterの内部AbortSignalはsessionへ渡さず、接続層の独立したroot
 本人確認成功後だけ内部permitを保存し、`review`が1回消費する。取得・解析・0.2/0.3契約は既存sessionを使う。
 接続層のreviewは内部executorへの直接接続で、SDK list/callやOS runnerの実装ではない。
 本人確認失敗・認可失敗・期限・取消は安全側停止し、token・permit・timer・外部Abort購読を破棄する。
-認可待ちは最大300秒、交換/本人確認/レビューは既存の段階上限を維持する。385秒のrunner監督は未実装。
+認可待ちは最大300秒、交換/本人確認/レビューは既存の段階上限を維持する。385秒のrunner監督は§14を参照。
 
-状態/JSON/inspectにはphase・hasCredentialと次のboolだけを出す。終了票/公開JSONへの追加ではない。
+接続層の状態/JSON/inspectにはphase・hasCredentialと次のboolだけを出す。§14の終了票にも固定boolを使うが、BP-5公開JSONは変更しない。
 
 - `tokenMayHaveBeenIssued`：token POSTを開始した時点でtrue。通信結果不明/取消/不正応答を「未発行」としない保守的な記録。
 - `otherAccountTokenPossible`：固定GETが期待IDと不一致だったときtrue。別アカウントのtokenの可能性を残し、
@@ -299,8 +301,8 @@ startはローカルbindだけで、ページ取得も単に認可リンクを�
 
 `completion`は認可/本人確認の完了通知で、レビュー/runner全体の最終結果ではない。
 成功後もsessionを内部保持するため、呼出し元はfinallyで必ずcloseする。tokenのローカル破棄は失効ではない。
-本PoCはHTTPから本人確認までで、listenerからreview/SDKへ進むrunnerとmanifestの接続、OS signal、
-385秒の全体監督と終了票は未実装。実機の登録/発行/ブラウザー操作を許可するものではない。
+単体listenerはHTTPから本人確認までを担当する。review/SDKへ進むrunnerとmanifestの接続、OS signal、
+385秒の全体監督と固定終了票は§14を参照。実機の登録/発行/ブラウザー操作を許可するものではない。
 
 ## 13. 承認manifestのオフライン契約（2026-10-18）
 
@@ -355,5 +357,64 @@ consumerは同期例外・非同期rejectとも固定`manifest_consumer_failed`�
 同一UID/管理者侵害、信頼時計の改変、検査後の全OS競合を完全防止するものではなく、人の承認の真偽も検査しない。
 信頼済みconsumerのコピーやJS/OSメモリの完全消去も保証しない。
 
-runner/listener/SDKへの接続、実行時の個別承認、385秒の全体監督・OS signal・終了票は未実装。
-この読込成功だけではbind・認可・発行・実機操作を始めない。telemetry調査は保留を維持する。
+runner/listener/SDKへの接続、385秒の全体監督・OS signal・終了票は§14へ実装した。
+実行時の個別承認は未実施。この読込成功だけではbind・認可・発行・実機操作を始めない。
+telemetry調査は保留を維持する。
+
+## 14. 内部runnerの接続と合成検証（2026-10-18）
+
+`src/review/r2-runner.ts`の`runR2ApprovalManifest(path, options)`が、
+信頼済み読込→消費直前の再検証→固定listener→OAuth交換→固定GET本人確認→MCP list/call→cleanupを接続する。
+[runner合成検証記録](E2E_BEST_PRACTICE_R2_RUNNER_SYNTHETIC_2026-10-18.md)を参照。
+公開CLI/check-plan/自動起動/ブラウザー操作は追加しない。`server.ts`・HTTP/stdio・npm配布物への登録もない。
+実manifestの配置やPDIの実行許可を、この内部APIの存在やmanifest成功から導かない。
+
+### 14.1 固定条件・所有権
+
+- manifestの固定snapshotだけを使う。runnerへtoken/任意tool/任意review argsを渡す口はなく、
+  `onReady`へ渡すのは非秘密の固定start URLだけ。認可URL・session・permit・bridgeの公開getterはない。
+- listenerの内部connectionが本人確認済みsession/permitを所有し、`reviewViaMcp`でpermitを1回消費する。
+  同一プロセスのSDK/InMemoryTransportでlistを行い、toolが1件・固定名・readOnlyであることを確かめ、
+  manifestのreview条件でcallを1回行う。直接executorに迂回しない。
+- list/call中もroot Abortを共有し、tokenは同じsession/bounded取得だけに使う。workerに渡さない。
+  bridge生成と取消の競合でも、遅れて生成されたbridgeを閉じる。list成立のboolはcall失敗後も保持する。
+- 認可待ちのHTTP終了とsessionの終了を分ける。callbackでportを解放しても本人確認済みtokenはreview完了まで保持し、
+  runnerのfinallyでlistener/connection/session/bridgeを冪等に閉じる。
+
+### 14.2 全体期限・中断
+
+bind開始直前に単調時刻を固定し、全体385,000ms、cleanup最大3,000msを設定する。
+作業期限382,000msで新規作業/結果採用を止めrootをAbortし、残り3秒以内でcleanupを待つ。
+既存の300秒/10秒/10秒/60秒の段階上限は延長せず、rootによるPromise競合と各await後の経過時間検査を重ねる。
+`onReady`やfetchがAbortに協調しなくても待ち続けず、遅延応答・遅い成功を採用しない。
+
+外部Abortは`cancelled`、SIGINT/SIGTERMは`interrupted`、作業期限は`deadline_exceeded`。
+最初の停止理由を保持し、cleanup失敗だけは`cleanup_incomplete`を優先する。
+専用hostプロセスでの使用を前提にsignal handlerを一時登録し、cleanup中の重複signalも同じ停止経路で処理し、
+finallyで自分のhandler/外部購読/タイマーだけを解除する。他のhandlerの削除や親プロセスのexitは行わない。
+テスト用の短縮上限は信頼済み内部optionsだけで受け付け、全体385秒/cleanup3秒を超える値や
+全体以下でないcleanupはbind前に拒否する。manifestの有効余裕は短縮せず385秒超を要求する。
+
+実workerのterminate・取得枠解放・token/permit参照の破棄・HTTP socket/port解放・SDK closeを待つ。
+cleanup待ちは3秒または全体期限までの残り時間の小さい方。待受/資格情報が残る、closeが失敗、または待ちが終わらなければ、
+結果を捨て`cleanup=incomplete/code=cleanup_incomplete`を返す。成功票にしない。
+ライブラリAPI自身はprocess.exit/SIGKILLを呼ばない。終了不能workerが残る場合の専用host強制終了は後続課題で、
+イベントループ停止・OS停止・SIGKILL時の385秒厳密保証/完全cleanupを主張しない。
+
+### 14.3 終了票と非出力
+
+終了票は`ok`、`cleanup`（complete/incomplete）、`mcpListed`、`tokenMayHaveBeenIssued`、
+`otherAccountTokenPossible`と、成功時の`result`または失敗時の固定`code`だけ。
+`ok=true`はMCP応答取得とcleanupの成立を表す。レビューの成功/完全性は内側の`result.isError`と0.2/0.3の
+status/limitations等で判断し、partialや0件を安全・適合と読まない。出力をファイル保存/標準出力する処理はない。
+
+connectionは出力検査用に、認可URL/state/code/verifier/Bearer、client ID/期待本人IDをprivate集合に保持する。
+SDK結果の直前に、実値とURL符号化/最大2段のJSON escapeの一致を検査し、該当すれば
+置換せず`secret_output_detected`だけを返す。集合はconnectionのcleanupで破棄する。
+runner・worker・MCPへ検査用の秘密を渡さず、getter/logにも出さない。
+これには検査用参照をcleanupまで保持するトレードオフがある。短い値や偶然一致も安全側拒否になり得る。
+任意の難読化・分割・すべての符号化への漏えい検出、JS/OSメモリの完全消去は保証しない。
+原応答/例外cause/コード本文の非返却と既存JSON契約は引き続き主防御とし、文字列ガードだけに依存しない。
+
+実機/実token・人の承認照合・公開CLI/非同期uncaught例外の最終exit・失効は未実施/未接続。
+G2/G4・最小権限・実PDI本人性が成立したとは扱わず、telemetry調査も保留を維持する。
