@@ -127,8 +127,9 @@ README/TOOLS/CHANGELOGと設計の実装状態を更新する。241件の既存�
 - `bdo npm run lint`：エラー0、既存警告374。新規モジュール/テスト/fixtureは警告0。
 - `git diff --check`：成功。package/lock、1件/集約JSON契約、固定評価器/fixture・規則カタログは変更なし。
 
-検証環境はmacOS/Node v24.18.0。Node 22.12、Linux/Windows、実ServiceNowでの読み取りE2E、
-stdio/HTTPの実ネットワークを通した新ツールの通信は未検証。残課題はこれらの許可済み確認、
+登録時の検証環境はmacOS/Node v24.18.0。後続の[実stdio E2E](E2E_BEST_PRACTICE_STDIO_2026-10-18.md)では
+本番ビルドの別プロセスへlist/call/キャンセルを通し、非露出と回復・終了を確認した（HTTP境界のみ合成）。
+Node 22.12、Linux/Windows、HTTPの実通信、最小権限/per-user/C方式の実機確認は残っている。残課題はこれらの許可済み確認、
 運用上の権限/上限・規則/境界の人による承認、独立評価と品質/公開審査。
 
 後続の[PDI読み取りE2E](E2E_BEST_PRACTICE_REVIEW_2026-10-18.md)では取得/分類/集約を2件成功で確認した。
