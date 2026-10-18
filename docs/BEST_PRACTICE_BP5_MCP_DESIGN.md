@@ -1,7 +1,7 @@
 # BP-5：Update SetベストプラクティスレビューのMCP統合設計案
 
-Version: bp5-mcp-design-0.4 / Date: 2026-10-18。
-Status: **1件/集約JSON契約、bounded取得・認証固定・C方式ゲート、安全な設定ファイル読込/binding CLI、1件解析/集約アダプター、workerによる同期解析/集約の中断と合成テストを実装。MCP登録は未実装**。
+Version: bp5-mcp-design-0.5 / Date: 2026-10-18。
+Status: **1件/集約JSON契約、bounded取得・認証固定・C方式、設定導入、worker中断・内部期限・npm梱包、読み取り専用MCP登録/dispatchと合成テストを実装。実機E2E・規則/独立品質の承認は未実施**。
 製品採用・根拠/判定境界・人手品質の承認は未実施。実装や公開を承認する文書ではない。
 契約の実装範囲・使い方・未実装境界は[第1段階の契約記録](BEST_PRACTICE_BP5_CONTRACTS.md)を参照。PDI照会/書き込み・本試行ケース作成は行っていない。
 取得プリミティブの実装範囲・制限・検証は[bounded取得記録](BEST_PRACTICE_BP5_BOUNDED_ACQUISITION.md)を参照。
@@ -11,10 +11,11 @@ bounded取得と既存解析器/結果契約の接続、失敗・省略の扱い
 同じ60秒予算の伝播、worker終了待ちと資源解放、実時間保証の限界は[worker記録](BEST_PRACTICE_BP5_WORKERS.md)を参照。
 開発のtsxソース実行では専用bootstrap、本番では固定の`review-worker.js`を使う。
 起動不能は固定`worker_unavailable`とし、本番からソースへの代替実行はしない（同記録§4.1）。
+MCP入力/応答境界、パッケージ別公開、SDKキャンセル、利用例と最新検証は[登録記録](BEST_PRACTICE_BP5_MCP_REGISTRATION.md)参照。
 
 ## 1. 初版の範囲
 
-提案ツール名：`review_update_set_best_practices`。まだ存在しないツール。
+登録ツール名：`review_update_set_best_practices`。full/platform_developerで公開する読み取り専用PoC。
 対象はローカルUpdate Set（sys_update_set）に保存されたsys_update_xmlの**payload版**だけ。
 サーバー上の現行資産、sys_remote_update_set、子Update Set/バッチの再帰探索、名前検索は対象外。
 sys_id指定で同名/別scopeの取り違えを避け、現行コードへの黙ったフォールバックはしない。
@@ -30,13 +31,13 @@ sys_id指定で同名/別scopeの取り違えを避け、現行コードへの�
 |---|---|---|
 | [updateset.ts](../src/tools/updateset.ts) のscan_update_set_sca | 親取得→metadata一覧→対象payload詳細という取得の段階分離 | SCA専用の抽出/外部照会/集計契約は流用しない。既存のextractUpdateXmlTextも使用しない |
 | [client.ts](../src/servicenow/client.ts) のgetRecord/queryRecords | 既存インスタンス・認証・fields指定・Table API経路 | requestはresponse.json()/text()を読むため、取得後の文字列長チェックだけでは受信上限にならない |
-| [payload-review.ts](../src/review/payload-review.ts) | reviewUpdateSetPayloadのbp3-0.4ローカル解析、V2入口で実測/設定証拠を保持 | bounded取得/集約アダプターへ接続済み。MCP登録は未実装 |
+| [payload-review.ts](../src/review/payload-review.ts) | reviewUpdateSetPayloadのbp3-0.4ローカル解析、V2入口で実測/設定証拠を保持 | bounded取得/集約アダプターとMCP dispatchへ接続済み。実機の認可/品質検証は別工程 |
 | [update-xml.ts](../src/review/update-xml.ts) | 拒否型XML抽出、識別照合、既存容量/深さ制限 | 抽出前のHTTP受信/全体処理の上限は別途必要 |
 | [result-schema.ts](../src/review/result-schema.ts) | bp-review-0.1と由来/coverageの項目間検証 | 1件用。外側契約に加え、operator_config/assertedを保持する1件契約の別版が必要（§4.1） |
-| [server.ts](../src/server.ts)、[tools/index.ts](../src/tools/index.ts) | セッション別InstanceContext、定義登録/dispatch/annotations | ツール未登録。serverの一般エラー出力/ログへ原エラーを通さないアダプターが必要 |
+| [server.ts](../src/server.ts)、[tools/index.ts](../src/tools/index.ts) | セッション別InstanceContext、定義登録/dispatch/annotations | 専用入力検証・コンパクトJSON/isError・原例外非露出・キャンセル伝播を接続済み |
 | [package.json](../package.json) | review実行コードを同梱し、評価ハーネスは除外 | 本番依存のみの隔離梱包テストを実装。[梱包記録](BEST_PRACTICE_BP5_PACKAGING.md)参照。MCP登録/公開は別工程 |
 
-## 3. 提案入力契約
+## 3. 入力契約
 
 全階層で追加キー拒否、JSON Schemaとランタイムの双方で検証する。
 
@@ -253,5 +254,5 @@ source_approval_pendingや未承認のカード境界を隠さず、原解析res
 - 実機確認は別途許可を得た読み取り専用の経路から開始し、ACL不足を修正するための設定変更は自動実施しない。
 
 実装順案：外側契約/合成テスト → bounded取得/認証固定 → 1件解析アダプター/集約 → MCP登録/梱包 →
-許可済み読み取りE2E → 品質/公開審査。現段階では外側/1件契約、bounded取得・認証固定・C方式、設定導入、1件解析/集約アダプター、worker中断と合成テスト、[worker梱包/本番依存の隔離検証](BEST_PRACTICE_BP5_PACKAGING.md)を実装した。MCP登録は未実装。
+許可済み読み取りE2E → 品質/公開審査。現段階では外側/1件契約、bounded取得・認証固定・C方式、設定導入、1件解析/集約アダプター、worker中断と合成テスト、[worker梱包/本番依存の隔離検証](BEST_PRACTICE_BP5_PACKAGING.md)、[MCP登録/dispatch](BEST_PRACTICE_BP5_MCP_REGISTRATION.md)を実装した。実機E2Eは未実施。
 人手運用48件の設計・保管先選定も別課題であり、MCP統合で完了したとは扱わない。

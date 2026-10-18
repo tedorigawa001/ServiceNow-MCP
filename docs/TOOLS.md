@@ -2833,7 +2833,20 @@ Get audit history for a system property (changes over time).
 
 ---
 
-## Update Set Management (9 tools)
+## Update Set Management (10 tools, including the read-only review module)
+
+### review_update_set_best_practices
+
+Read-only **PoC** review of a local Update Set's stored `sys_update_xml.payload` snapshot. Available in `full` and `platform_developer`; does not require write/scripting flags. The selected ServiceNow client's ACLs still apply. Only Australia and AU-BR-001 / AU-BR-002 / AU-CL-004 (BR / Client Script) are supported; this is not SCA or a security/compliance certification.
+
+- `update_set_sys_id` (required): exactly 32 lowercase hexadecimal characters; no name/URL/query lookup.
+- `requested_rule_ids`: unique subset of the three IDs above, 1–3 values; defaults to all three.
+- `max_records`: integer 1–100, default 20; includes unsupported/deleted metadata rows.
+- `instance`: optional existing connection selector, consumed by the server rather than sent to the adapter.
+
+Unknown keys are rejected by JSON Schema and runtime validation. Code, payload, release assertions, arbitrary queries, actors and limits cannot be supplied.
+Returns compact JSON text: successful calls contain a `bp-mcp-review-0.2` aggregate; fixed failures set MCP `isError=true` and return `{status:"failed",error:{stage,code}}`, optionally with a validated failed aggregate in `result`. Partial analysis is not a failed MCP call and must not be interpreted as safe/clear. Code and raw server diagnostics are never returned. If the full escaped MCP envelope exceeds 256KiB, returns fixed `response_limit` without a fragment.
+The original 60-second budget includes acquisition, analysis, verification, aggregation and shutdown; internal 50/55-second cutoffs retain completed results and label remaining rows. Cancellation/hard deadline discard partial output. Rules and quality remain unapproved; live E2E is pending. See [usage, release evidence and verification record](BEST_PRACTICE_BP5_MCP_REGISTRATION.md).
 
 ### get_current_update_set
 Get all currently active (in-progress) Update Sets.

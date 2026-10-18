@@ -29,7 +29,8 @@ MCP登録・実機操作・公開処理は対象外。規則承認・独立人�
 依存バージョン、resolved URL、integrityの更新は行わず、package-lockを依存区分に合わせて同期する。
 依存そのものをtarballへvendorする方式ではない。利用時はnpmが本番依存とその推移依存を導入する。
 すべての利用者にacorn/saxes/xmlcharsが追加導入され、パッケージ容量も増える。
-MCPツールはまだ登録しないため既存ツールの動作は変わらない。次回公開向けにCHANGELOGのUnreleasedへ記録する。
+同梱段階ではツール未登録で既存動作は変わらなかった。後続の[MCP登録](BEST_PRACTICE_BP5_MCP_REGISTRATION.md)で
+読み取り専用PoCを追加した。依存追加・容量増加はCHANGELOGのUnreleasedへ記録する。
 
 ## 3. 再現手順と検証範囲
 
@@ -78,3 +79,6 @@ Vitestの2,368件とは別の梱包結合テストである。`prepublishOnly`�
 残課題：MCP登録/dispatch/文書、許可済み読み取りE2E、権限/上限の承認、独立評価と品質/公開審査。
 上記は梱包段階の検証記録。後続の[内部期限対応](BEST_PRACTICE_BP5_SOFT_DEADLINE.md)でsoft cutoffを実装し、
 hard deadline時の固定エラー方針は維持する。
+
+後続の[MCP登録記録](BEST_PRACTICE_BP5_MCP_REGISTRATION.md)では、tarball内の登録ツールをcompiled server handlerから
+呼ぶ合成smokeも追加した。初期の357件→検索PoC除外353件→登録モジュール追加357件というファイル数の経過を区別する。

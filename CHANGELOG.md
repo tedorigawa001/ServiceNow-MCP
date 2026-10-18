@@ -10,11 +10,17 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 ### Changed
 
-- Package the internal best-practice review worker and its runtime modules. `acorn` and `saxes` are now production dependencies, with `xmlchars` installed transitively; all installations gain these dependencies and the package size increases. The review feature is not yet registered as an MCP tool, so existing tool behavior is unchanged. Development-only evaluation harnesses and the BP-2 search PoC are excluded.
+- Package the best-practice review worker and its runtime modules. `acorn` and `saxes` are now production dependencies, with `xmlchars` installed transitively; all installations gain these dependencies and the package size increases. Development-only evaluation harnesses and the BP-2 search PoC are excluded.
+
+### Added
+
+- Read-only PoC MCP tool `review_update_set_best_practices` in `full` and `platform_developer` (503 tools total). Strict sys_id/rule/record-budget inputs, session-pinned credentials, bounded payload-only analysis, source-free JSON, fixed errors and MCP cancellation propagation. Australia and three rules only; rules and independent human quality evaluation are unapproved, and live E2E is pending. Existing tools retain their behavior.
+- Internal 50/55-second acquisition/verification cutoffs retain analyzed results and label unprocessed rows before the unchanged 60-second hard deadline. Hard deadline, cancellation and internal contract failures still return fixed errors without partial results.
 
 ### Tests
 
 - Verify the actual npm tarball in an isolated production-only installation: the fixed JavaScript worker must parse and aggregate synthetic input without tsx, TypeScript or Vitest. Run with `npm run test:pack`; the same check runs before publication.
+- Synthetic server/router tests and in-memory MCP SDK calls cover registration, strict JSON/runtime input validation, client/credential separation, fixed diagnostics, partial/error flags and cancellation. The packaged tool is also called through the compiled server handlers using synthetic settings/HTTP only.
 
 ## [1.15.0] — 2026-10-17
 

@@ -160,6 +160,7 @@ npm梱包変更は対象外。soft cutoff/partial救済は未実装で、hard de
 
 後続のworker同梱・本番依存の隔離検証は[梱包記録](BEST_PRACTICE_BP5_PACKAGING.md)参照。
 後続の早期打切り・partial返却は[内部期限記録](BEST_PRACTICE_BP5_SOFT_DEADLINE.md)参照。
+後続の読み取り専用MCP登録とSDKキャンセル接続は[登録記録](BEST_PRACTICE_BP5_MCP_REGISTRATION.md)参照。
 上記の「梱包変更は対象外」「package/lock変更なし」は各段階の検証記録であり、現在の梱包状態は同記録に従う。
 
 残課題：MCP登録、許可済み読み取りE2E、運用上の上限/権限の承認、独立評価と品質/公開審査。

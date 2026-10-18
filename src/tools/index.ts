@@ -106,6 +106,7 @@ import { getSmartQueryToolDefinitions, executeSmartQueryToolCall } from './smart
 import { getStoreToolDefinitions, executeStoreToolCall } from './store.js';
 // Data Management Policies, archive rules, destroy rules, and restores
 import { getDataManagementToolDefinitions, executeDataManagementToolCall } from './data-management.js';
+import { getBestPracticeToolDefinitions, executeBestPracticeToolCall, REVIEW_TOOL_NAME } from './best-practice.js';
 
 // ─── Package Definitions ──────────────────────────────────────────────────────
 
@@ -276,6 +277,7 @@ const PACKAGE_TOOL_NAMES: Record<string, string[]> = {
     'list_acls', 'get_acl', 'create_acl', 'update_acl',
     'list_changesets', 'get_changeset', 'commit_changeset', 'publish_changeset',
     'scan_update_set_sca',
+    REVIEW_TOOL_NAME,
     'list_atf_suites', 'get_atf_suite', 'run_atf_suite', 'list_atf_tests', 'get_atf_test', 'run_atf_test', 'get_atf_suite_result', 'list_atf_test_results', 'get_atf_failure_insight',
   ],
   itom_engineer: [
@@ -365,6 +367,8 @@ const WRITE_IDEMPOTENT_EXACT = new Set([
 function annotate(tool: Record<string, any>): Record<string, any> {
   const n: string = tool.name;
 
+  if (n === REVIEW_TOOL_NAME) return { ...tool, annotations: { ...ANNOTATIONS_READ, destructiveHint: false } };
+
   if (DESTRUCTIVE_EXACT.has(n)) {
     return { ...tool, annotations: ANNOTATIONS_DESTRUCTIVE };
   }
@@ -387,7 +391,8 @@ function annotate(tool: Record<string, any>): Record<string, any> {
 type ToolExecutor = (
   client: ServiceNowClient,
   name: string,
-  args: Record<string, any>
+  args: Record<string, any>,
+  context?: { signal?: AbortSignal },
 ) => Promise<any>;
 
 interface ToolModule {
@@ -442,6 +447,7 @@ const MODULES: ToolModule[] = [
   { defs: getSmartQueryToolDefinitions, exec: executeSmartQueryToolCall },
   { defs: getStoreToolDefinitions, exec: executeStoreToolCall },
   { defs: getDataManagementToolDefinitions, exec: executeDataManagementToolCall },
+  { defs: getBestPracticeToolDefinitions, exec: executeBestPracticeToolCall },
 ];
 
 // Name → executor map, built once at module load. Detects duplicate tool names
@@ -484,6 +490,7 @@ export async function executeTool(
   name: string,
   args: Record<string, any>,
   instanceContext?: InstanceContext,
+  context?: { signal?: AbortSignal },
 ): Promise<any> {
   // Instance selection belongs to the MCP connection, not the process-wide
   // InstanceManager. These tools therefore bypass domain-module dispatch.
@@ -511,7 +518,7 @@ export async function executeTool(
     throw new ServiceNowError(`Tool ${name} requires a ServiceNow client.`, 'INVALID_REQUEST');
   }
 
-  const result = await exec(client, name, args);
+  const result = await exec(client, name, args, context);
   if (result === null) {
     // The owning module returned null — name is registered but unhandled.
     throw new ServiceNowError(`Unknown tool: ${name}`, 'UNKNOWN_TOOL');

@@ -18,6 +18,7 @@ import { getResources, readResource } from './resources/index.js';
 import { getPrompts, resolvePrompt } from './prompts/index.js';
 import { logger } from './utils/logging.js';
 import { ServiceNowError } from './utils/errors.js';
+import { REVIEW_TOOL_NAME, reviewToolArgumentsSchema, renderReviewToolOutcome } from './tools/best-practice.js';
 
 // quiet: dotenv 17 prints "injected env (N) from .env" to stdout, and stdout is
 // the MCP stdio transport — the banner arrives at the client as a non-JSON line.
@@ -48,7 +49,7 @@ const defaultInstanceContext = instanceManager.createContext();
 
 export async function handleCallTool(request: {
   params: { name: string; arguments?: Record<string, unknown> };
-}, instanceContext: InstanceContext = defaultInstanceContext) {
+}, instanceContext: InstanceContext = defaultInstanceContext, context?: { signal?: AbortSignal }) {
   const { name, arguments: args } = request.params;
 
   logger.info(`Tool called: ${name}`);
@@ -57,6 +58,16 @@ export async function handleCallTool(request: {
     const known = getTools().some(t => t.name === name);
     if (!known) {
       throw new ServiceNowError(`Unknown tool: ${name}`, 'UNKNOWN_TOOL');
+    }
+
+    if (name === REVIEW_TOOL_NAME) {
+      const parsed = reviewToolArgumentsSchema.safeParse(args ?? {});
+      if (!parsed.success) return renderReviewToolOutcome({ isError: true, error: { stage: 'input', code: 'invalid_input' } });
+      const { instance, ...toolArgs } = parsed.data;
+      let client;
+      try { client = instanceContext.getClient(instance); }
+      catch { return renderReviewToolOutcome({ isError: true, error: { stage: 'input', code: 'config_invalid' } }); }
+      return renderReviewToolOutcome(await executeTool(client, name, toolArgs, instanceContext, { signal: context?.signal }));
     }
 
     // `instance` (docs/MULTI_INSTANCE.md: "pass `instance` to any tool") selects the
@@ -78,6 +89,10 @@ export async function handleCallTool(request: {
       ],
     };
   } catch (error) {
+    if (name === REVIEW_TOOL_NAME) {
+      return renderReviewToolOutcome({ isError: true, error: { stage: 'input', code:
+        error instanceof ServiceNowError && error.code === 'UNKNOWN_TOOL' ? 'invalid_input' : 'internal_review_error' } });
+    }
     logger.error(`Tool execution error: ${name}`, error);
 
     if (error instanceof ServiceNowError) {
@@ -166,7 +181,7 @@ export function createServer(): Server {
   );
 
   server.setRequestHandler(ListToolsRequestSchema, handleListTools);
-  server.setRequestHandler(CallToolRequestSchema, (request) => handleCallTool(request, instanceContext));
+  server.setRequestHandler(CallToolRequestSchema, (request, extra) => handleCallTool(request, instanceContext, { signal: extra.signal }));
   server.setRequestHandler(ListResourcesRequestSchema, handleListResources);
   server.setRequestHandler(ReadResourceRequestSchema, (request) => handleReadResource(request, instanceContext));
   server.setRequestHandler(ListPromptsRequestSchema, handleListPrompts);

@@ -12,7 +12,7 @@
 <br/>
 
 [![AI-Powered](https://img.shields.io/badge/AI--Powered-Claude%20%7C%20ChatGPT%20%7C%20Gemini%20%7C%20Cursor%20%7C%20Copilot-00D4AA?style=flat-square)](https://github.com/tedorigawa001/ServiceNow-MCP)
-[![Tools](https://img.shields.io/badge/502%20Tools-46%20Modules-0F4C81?style=flat-square)](docs/TOOLS.md)
+[![Tools](https://img.shields.io/badge/503%20Tools-47%20Modules-0F4C81?style=flat-square)](docs/TOOLS.md)
 [![npm](https://img.shields.io/npm/v/%40tedorigawa001%2Fservicenow-mcp?style=flat-square&logo=npm&color=CB3837)](https://www.npmjs.com/package/@tedorigawa001/servicenow-mcp)
 [![TypeScript](https://img.shields.io/badge/TypeScript-5.x-3178C6?style=flat-square&logo=typescript&logoColor=white)](https://www.typescriptlang.org/)
 [![License: MIT](https://img.shields.io/badge/license-MIT-f59e0b?style=flat-square)](LICENSE)
@@ -23,9 +23,13 @@
 
 ## AI から ServiceNow を自然言語で操作する MCP サーバー
 
-> **ローカル PC で動作 · 502 ツール · 5 分セットアップ · MIT ライセンス**
+> **ローカル PC で動作 · 503 ツール · 5 分セットアップ · MIT ライセンス**
 
 Claude・Cursor・VS Code などの AI ツールから、ServiceNow のインシデント・変更・CMDB・スクリプトなどをすべて自然言語で操作できます。
+
+### 開発版（未リリース）
+
+- 読み取り専用PoC `review_update_set_best_practices` を登録。AustraliaのUpdate Set payloadを対象に、3規則の候補と公式根拠を本文なしのJSONで返します。人による規則承認・独立品質評価・実機E2Eは未完了で、「安全」「違反確定」を意味しません。詳細は[利用例・制限](docs/BEST_PRACTICE_BP5_MCP_REGISTRATION.md)。
 
 ### v1.13 ハイライト
 
@@ -581,7 +585,7 @@ SCRIPTING_ENABLED=false      # 本番では原則 false のまま
 mindmap
   root((ツールパッケージ))
     full
-      全502ツール
+      全503ツール
     service_desk
       インシデント管理
       タスク/承認
@@ -616,7 +620,7 @@ mindmap
 
 | パッケージ名 | 対象ロール | 主なツール |
 |------------|----------|-----------|
-| `full` | 管理者 | 全ツール (502) |
+| `full` | 管理者 | 全ツール (503) |
 | `service_desk` | L1/L2 エージェント | インシデント・タスク・KB・SLA |
 | `change_coordinator` | 変更管理者 | 変更リクエスト・CAB・CMDB |
 | `knowledge_author` | KB 著者 | KB 作成・公開 |
@@ -824,7 +828,7 @@ servicenow-mcp/
 │   │   ├── client.ts               # REST API クライアント (OAuth)
 │   │   ├── instances.ts            # マルチインスタンスマネージャー
 │   │   └── types.ts                # TypeScript 型定義
-│   ├── tools/                      # 46 ドメインモジュール (502 ツール)
+│   ├── tools/                      # 47 ドメインモジュール (503 ツール)
 │   │   ├── index.ts                # ツールルーター & パッケージ定義
 │   │   ├── incident.ts
 │   │   ├── change.ts
@@ -860,7 +864,8 @@ npm run lint         # ESLint
 スキップは VI／RT／グループの対象レコード不足による詳細取得テストで、成功件数には含めていません。
 Now Assist はメタデータ取得のみで、AI 推論・生成・プレイブック起動は未検証です。
 
-E2E コード内のツール名を静的集計した対象範囲は **241／502 ツール（約48.0%）**です。
+E2E コード内のツール名を静的集計した対象範囲は **241／503 ツール（約47.9%）**です。
+追加したベストプラクティスレビューの実機E2Eは未実施で、対象数の241件は増やしていません。
 これはコード行・分岐のカバレッジや、全241ツールの実機成功率を示す数値ではありません。
 テスト件数は変更されるため、通常テストの最新件数は `npm test` の実行結果を参照してください。
 
@@ -939,7 +944,7 @@ Model Context Protocol の略で、AI クライアントが外部ツールを呼
 
 <div align="center">
 
-**502 ツール · 46 モジュール · ローカル PC で動作 · 永久オープンソース**
+**503 ツール · 47 モジュール · ローカル PC で動作 · 永久オープンソース**
 
 役に立ったら ⭐ スターをお願いします — 他の人が見つけやすくなります。
 

@@ -14,6 +14,7 @@ try {
   const [packed] = JSON.parse(run('npm', ['pack', '--json', '--ignore-scripts', '--pack-destination', temporary]));
   const files = new Set(packed.files.map(file => file.path));
   assert(files.has('dist/review/review-worker.js'), 'packed worker entry missing');
+  assert(files.has('dist/tools/best-practice.js'), 'packed MCP review tool missing');
   for (const path of ['worker-supervisor', 'payload-review', 'update-xml', 'aggregate-finalize', 'aggregate-schema',
     'result-schema', 'result-schema-v2', 'catalog', 'follow-up-catalog', 'scope-analysis', 'constant-value', 'update-set-adapter', 'bounded-source']) {
     assert(files.has(`dist/review/${path}.js`), `packed runtime module missing: ${path}`);
@@ -39,6 +40,10 @@ try {
   const output = execFileSync(process.execPath, [join(fixture, 'compiled-worker-smoke.mjs')],
     { cwd: installed, env: {}, encoding: 'utf8', timeout: 15000 });
   assert.equal(output.trim(), 'Compiled worker default entry: analysis + aggregation PASS');
+  copyFileSync(join(root, 'tests/review/fixtures/compiled-review-mcp-smoke.mjs'), join(fixture, 'compiled-review-mcp-smoke.mjs'));
+  const mcpOutput = execFileSync(process.execPath, [join(fixture, 'compiled-review-mcp-smoke.mjs')],
+    { cwd: installed, env: {}, encoding: 'utf8', timeout: 15000 });
+  assert.equal(mcpOutput.trim(), 'Packaged MCP review: registration + dispatch + worker PASS');
   for (const devDependency of ['tsx', 'typescript', 'vitest']) {
     assert.throws(() => readFileSync(join(installed, 'node_modules', devDependency, 'package.json')),
       { code: 'ENOENT' });

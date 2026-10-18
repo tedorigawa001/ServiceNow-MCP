@@ -8,7 +8,7 @@ import { bp5RuleIdsSchema } from './result-schema-v2.js';
 import { CATALOG_VERSION, RULES } from './catalog.js';
 import { ReviewWorker, ReviewWorkerError, type ReviewWorkerFactory } from './worker-supervisor.js';
 
-const inputSchema = z.strictObject({ update_set_sys_id: z.string().regex(/^[a-f0-9]{32}$/),
+export const reviewUpdateSetInputSchema = z.strictObject({ update_set_sys_id: z.string().regex(/^[a-f0-9]{32}$/),
   max_records: z.number().int().min(1).max(100).default(20),
   requested_rule_ids: bp5RuleIdsSchema.refine(ids => new Set(ids).size === ids.length)
     .default(['AU-BR-001', 'AU-BR-002', 'AU-CL-004']),
@@ -62,7 +62,7 @@ export async function reviewBoundedUpdateSet(client: ServiceNowClient, raw: unkn
 }
 async function executeReview(client: ServiceNowClient, raw: unknown, execution: Execution,
   options?: ReviewAdapterOptions): Promise<BoundedReviewOutcome> {
-  const parsed = inputSchema.safeParse(raw);
+  const parsed = reviewUpdateSetInputSchema.safeParse(raw);
   if (!parsed.success) return fail('input', 'invalid_input');
   const input = parsed.data;
   let stage: Stage = 'input';
