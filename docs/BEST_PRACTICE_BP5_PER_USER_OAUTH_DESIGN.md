@@ -67,6 +67,8 @@ RFC 8252 §7.3/§8.3を根拠に、localhost名ではなくloopback IPを採る�
 固定portは今回のPoCで登録値を明確にするプロジェクト判断で、RFCが固定portを要求するという意味ではない。
 RFC 8252 §7.3/§8.4はloopback redirectのport差を許容する。サーバーが別portを受理しただけで
 安全性不合格にせず、ハーネス自身が固定port以外へ自動代替しないこととは分けて検証する。
+18765固定・競合時停止の方針は維持するが、PDIがportを含む完全一致を強制するかは未検証。
+保存済みURIと同じ値を要求/交換へ渡すクライアント方針と、サーバーが別portを拒否するかという実測を区別する。
 
 - listenerを127.0.0.1:18765へ先にbindし、成功後だけブラウザーを開く。0.0.0.0、LAN、公開トンネルへ公開しない。
 - 競合時は停止。他port/localhost/IPv6へ黙って変更しない。PDIがこのURIを拒否してもTLS検証を緩めない。
@@ -95,12 +97,30 @@ RFC 8252 §7.3/§8.4はloopback redirectのport差を許容する。サーバー
    client secretは送らない。redirectは拒否、TLS検証は維持。提案10秒/応答64KiBの上限を設ける。
 7. 交換のタイムアウト/結果不明では同じcodeを再送しない。トークンが既に発行された可能性を記録し、
    「発行なし」と断定しない。新規認可や失効操作は別承認を受ける。
-8. token_type=Bearer、空でないaccess token、有効なexpires_in、承認scopeとの対応を検証。
+8. token_typeは文字列であることを確認し、Bearerと大小文字を区別せず比較する設計とする（R7）。
+   空でないaccess token、有効なexpires_in、承認scopeとの対応も検証する。
    scopeの追加/変更/省略をどう確認するかはPDI応答と公式仕様で確定するまで実装開始ゲートとする。
    JWTを未検証でdecodeしたsubだけでは本人性を判定しない。
 
 ServiceNowの認可/トークンエンドポイントは外部PDIへの処理であり、トークン発行や同意記録を伴い得る。
 後続の「読み取りE2E」の許可だけから、これらの実行許可を推定しない。
+
+### 4.1 実PDIアダプターへの互換性上の注意（未実装）
+
+- **token_type**：RFC 6749 §5.1/§7.1では大小文字を区別しない。実アダプターでは
+  Bearer/bearer等を同じ型として比較する。ただし欠落/非文字列/未知の型/不要な空白は受理せず、
+  token文字列そのものやscope名を小文字化しない。現G0は合成契約として`'Bearer'`完全一致のまま。
+- **scope省略**：RFC 6749 §5.1では要求と同じ範囲なら応答scopeを省略できる。
+  これは空scopeを要求してよいという意味ではない。実アダプターではG2以降の承認済み検証で
+  ServiceNowの実応答、専用登録の許可scope・API関連付け、要求scopeとの対応を確かめ、
+  省略時に要求範囲を実効scopeとして扱える条件と証拠を先に決める。
+  接続先/client/要求scopeは開始時に固定し、明示応答の拡大/不一致/不明な範囲を黙って受理しない。
+  GET成功だけで書込み不可や同一scope付与を証明したとしない。条件未確定なら安全側停止を維持する。
+- **G0との区別**：G0はscope必須・完全一致を意図的に要求する合成テストであり、
+  省略を拒否した結果はServiceNowやRFCの不適合判定ではない。今回G0のコード・42ケースは変更しない。
+  実アダプターでは大小文字の違い、省略scopeの受理条件/拒否条件を別の合成テストにする。
+
+上記は後続実装の設計条件であり、実PDIの応答や権限を検証済みにするものではない。
 
 ## 5. scopeと読み取り境界（共有影響を伴うため別承認）
 
@@ -203,6 +223,7 @@ token失効・同意取消・登録無効化は操作対象と権限を確認し
 | R4 | [Configure REST API Auth scope](https://www.servicenow.com/docs/r/platform-security/authentication/configure-rest-api-auth-scope.html) Table APIの3構成例 | 公式検索結果はAustralia、GET/method/version/resourceの指定例。PDIでの設定/拒否実績は未確認 |
 | R5 | [REST API Auth Scope](https://www.servicenow.com/docs/r/platform-security/authentication/rest-api-auth-scope.html) Note / Configurations | scopeのAPI/client関連付け、useraccountの特別扱い、既存tokenへの影響。検索結果はAustralia、直接本文はBrazil表示で確認。Australia実機の承認根拠として単独採用しない |
 | R6 | [Configure an OAuth authorization code grant](https://www.servicenow.com/docs/r/platform-security/authentication/configure-an-oauth-authorization-code-grant.html) Before you begin / Procedure / Details form | 追加調査の公式検索本文はAustralia・2026-03-12更新。設定経路とロールを確認。PDIでの新規保存成功を意味しない |
+| R7 | [RFC 6749 §5.1](https://www.rfc-editor.org/rfc/rfc6749.html#section-5.1)、[§7.1](https://www.rfc-editor.org/rfc/rfc6749.html#section-7.1) | token_typeの大小文字非区別、要求と同じscopeなら応答で省略可。G0の厳格な合成契約とは別。ServiceNowでの省略/付与範囲の実証ではない |
 
 loopback公開client、専用GET scope、15分/5分/10秒等の提案値、Keychain保管は未検証の設計であり、
 この文書をもって導入済み・安全性確認済み・最小権限達成とはしない。

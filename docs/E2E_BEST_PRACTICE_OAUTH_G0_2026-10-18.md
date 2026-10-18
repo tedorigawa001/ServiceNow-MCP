@@ -76,6 +76,18 @@ TypeScript APIで新規3ファイルを含む場合/除く場合を比較する�
   最小検証計画のP/L/Sケースを実行済みに変更しない。
 - 実PDI用HTTPSアダプター、本人確認、scope省略時の確認、安全な実MCPへの引渡しは未実装。
   synthetic origin制限を外して実環境へ接続する変更は別設計/試験/承認を必要とする。
+- **token_type**：現G0は`'Bearer'`との完全一致。
+  [RFC 6749 §5.1/§7.1](https://www.rfc-editor.org/rfc/rfc6749.html#section-7.1)の大小文字非区別に合わせ、
+  実アダプターでは文字列型を検査してからBearerを大小文字非区別で比較する設計とする。
+  今回はG0の実装・採点条件・テスト結果を変更しておらず、RFC一般への適合試験とも主張しない。
+- **scope省略**：[RFC 6749 §5.1](https://www.rfc-editor.org/rfc/rfc6749.html#section-5.1)では要求と同じなら省略可。
+  現G0の欠落拒否は合成契約としての厳格化。実PDIでの省略の有無や、要求範囲を実効scopeと扱える条件は未確認で、
+  G2以降の承認済み検証と[設計書§4.1](BEST_PRACTICE_BP5_PER_USER_OAUTH_DESIGN.md)で確定する。
+  検査を単に削除したり、GET成功だけからscope一致/GET限定を推定したりしない。
+- **固定port**：18765・競合時停止はクライアント側の方針として維持。
+  合成試験のport0は並列試験用であり、実PDI向けの自動port変更ではない。
+  [RFC 8252 §7.3/§8.4](https://www.rfc-editor.org/rfc/rfc8252.html#section-7.3)にはloopbackのport例外がある。
+  PDIでport込み完全一致が強制されることは未検証で、別port受理だけでは安全性不合格にしない。
 - completion=readyは過去の合成交換の完了だけを表す。現在のtoken利用可否は期限/取消を確認するuseToken側で判定。
 - 信頼したconsumerが受け取った文字列をコピー/ログ出力することや、協調しないconsumerを強制終了することは防げない。
   AbortSignalの協調が前提。JavaScriptヒープ/クラッシュダンプの完全消去・既発行tokenのサーバー失効も保証しない。
