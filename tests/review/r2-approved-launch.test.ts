@@ -11,7 +11,8 @@ function tty(reply: string, beforeReply = () => {}) {
   const input = Object.assign(new PassThrough(), { isTTY: true, isRaw: false });
   let text = '';
   const output = Object.assign(new Writable({ write(chunk, _encoding, done) {
-    text += String(chunk); done(); setImmediate(() => { beforeReply(); input.write(reply); });
+    text += String(chunk); done();
+    if (String(chunk).includes('Type APPROVE')) setImmediate(() => { beforeReply(); input.write(reply); });
   } }), { isTTY: true });
   return { input, output, text: () => text };
 }
@@ -73,4 +74,38 @@ it('hands signal ownership to supervisor once and binds grant to the exact confi
   expect(result).toMatchObject({ stage: 'execution', report: { cleanup: 'complete', token_issuance: 'not_attempted', terminal_reason: 'review_failed' } });
   expect(process.listeners('SIGINT')).toHaveLength(before); expect(getEventListeners(root.signal, 'abort')).toHaveLength(0);
   expect(JSON.stringify(result)).not.toMatch(/PRIVATE|service-now/);
+});
+
+it.each(['ready', 'summary'] as const)('stops on %s display failure, without raw diagnostics or a retry', async phase => {
+  const f = plan(), input = Object.assign(new PassThrough(), { isTTY: true, isRaw: false });
+  let text = '';
+  const output = Object.assign(new Writable({ write(chunk, _encoding, done) {
+    const line = String(chunk);
+    if (line.includes('Type APPROVE')) { text += line; done(); setImmediate(() => input.write('APPROVE\n')); }
+    else done(Error('PRIVATE_DISPLAY_ERROR'));
+  } }), { isTTY: true });
+  const child = Object.assign(new EventEmitter(), { pid: 12345, connected: true, exitCode: null, signalCode: null,
+    kill: vi.fn(() => true), unref: vi.fn(), disconnect: vi.fn(),
+    send: vi.fn((value: {type: string}, callback: (error: null) => void) => {
+      callback(null);
+      if (value.type === 'run_grant_v2') queueMicrotask(() => {
+        if (phase === 'ready') child.emit('message', { type: 'ready' });
+        else finish('authorization_denied');
+      });
+      if (value.type === 'stop') queueMicrotask(() => finish('cancelled'));
+      if (value.type === 'finished_ack') queueMicrotask(() => { child.emit('exit', phase === 'ready' ? 130 : 10, null); child.emit('close'); });
+      return true;
+    }) });
+  const finish = (code: string) => {
+    child.emit('message', { type: 'stopping' });
+    child.emit('message', { type: 'finished', receipt: { ok: false, code, cleanup: 'complete', mcpListed: false,
+      tokenMayHaveBeenIssued: false, otherAccountTokenPossible: false } });
+  };
+  const spawnHost = vi.fn(() => { queueMicrotask(() => child.emit('message', { type: 'prepared_v2', digest: f.digest })); return child as unknown as ChildProcess; });
+  const result = await approveAndRunR2Plan(f.path, { tty: { input, output }, supervisor: { spawnHost } });
+  expect(result).toMatchObject({ stage: 'display', ok: false, code: 'display_failed', report: {
+    process_termination: 'confirmed', cleanup: 'complete', terminal_reason: phase === 'ready' ? 'cancelled' : 'review_failed' } });
+  expect(spawnHost).toHaveBeenCalledTimes(1);
+  expect(child.send.mock.calls.filter(([v]) => v.type === 'stop')).toHaveLength(phase === 'ready' ? 1 : 0);
+  expect(text).not.toMatch(/PRIVATE|exit-summary|content|script/);
 });

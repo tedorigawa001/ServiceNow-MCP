@@ -331,6 +331,8 @@ spawn失敗のcloseのみはnot_started、通常のcloseのみは終了未確認
 
 `schema_version='bp5-r2-host-exit-0.1'`。次の小さな固定metadataと、採用条件を満たしたrunner_receiptだけを返す。
 report自体は保存/表示せず呼出し元へ返す。専用entryは固定exit codeだけで終了し、stdoutへJSONを出さない。
+承認付き内部launcherのready固定URL・strict報告検証・限定summaryへの接続は
+[専用入口設計§11](BEST_PRACTICE_BP5_R2_LAUNCHER_CONNECTION_DESIGN.md)を参照。完全reportの直接表示やファイル保存はしない。
 
 人向けのready案内・承認・限定終了summaryへの接続案は
 [専用入口の接続設計](BEST_PRACTICE_BP5_R2_LAUNCHER_CONNECTION_DESIGN.md)を参照。

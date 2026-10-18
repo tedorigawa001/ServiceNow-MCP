@@ -3,8 +3,9 @@
 Version: draft-0.11 / Date: 2026-10-18 / Status: 内部runner・専用bootstrap/host・外部監督を合成検証。公開CLI・実機/運用は未承認・未検証。
 
 オフライン事前確認・明示承認・ready案内・終了報告の人向け接続は、
-[専用入口の接続設計draft-0.4](BEST_PRACTICE_BP5_R2_LAUNCHER_CONNECTION_DESIGN.md)に整理した。
-checker・限定確認票・TTY承認・host/runnerのsnapshot digest結合を内部実装/合成検証した。ready案内・端末summaryは未実装で、
+[専用入口の接続設計draft-0.5](BEST_PRACTICE_BP5_R2_LAUNCHER_CONNECTION_DESIGN.md)に整理した。
+checker・限定確認票・TTY承認・snapshot digest結合・ready固定URL・strict限定終了summaryを内部実装/合成検証した。
+公開入口・実TTY・実機/G2/G4の承認は未対応であり、
 実機/G2/G4の実行許可を与えるものではない。
 
 ## 1. 範囲と現状

@@ -12,6 +12,8 @@ import { aggregateReviewSchema, aggregateReviewV3Schema } from '../../src/review
 import { runR2ApprovalManifest, R2_RUNNER_TOTAL_MS, R2_RUNNER_CLEANUP_MS, type R2RunnerOptions } from '../../src/review/r2-runner.js';
 import { superviseR2Host } from '../../src/review/r2-supervisor.js';
 import { checkR2PlanOffline } from '../../src/review/r2-plan-check.js';
+import { approveAndRunR2Plan } from '../../src/review/r2-approved-launch.js';
+import { PassThrough, Writable } from 'node:stream';
 
 // Imported by r2-loopback.test.ts: all tests using the fixed port share one sequential file.
 describe('manifest runner integration', () => {
@@ -98,6 +100,23 @@ it('binds a matching approved snapshot through the actual fixed bound host and c
   expect(ready).toBe(1);
   expect(result).toMatchObject({ terminal_reason: 'cancelled', process_termination: 'confirmed', cleanup: 'complete',
     token_issuance: 'not_attempted', runner_receipt: { ok: false, code: 'cancelled', tokenMayHaveBeenIssued: false } });
+});
+
+it('shows the fixed ready URL and a limited summary through the actual approved host without opening the authorization page', async () => {
+  const input = Object.assign(new PassThrough(), { isTTY: true, isRaw: false });
+  let visible = '';
+  const output = Object.assign(new Writable({ write(chunk, _encoding, done) {
+    const line = String(chunk); visible += line; done();
+    if (line.includes('Type APPROVE')) setImmediate(() => input.write('APPROVE\n'));
+  } }), { isTTY: true });
+  const root = new AbortController();
+  const result = await approveAndRunR2Plan(file, { tty: { input, output }, signal: root.signal,
+    supervisor: { onReady: () => root.abort() } });
+  expect(result).toMatchObject({ stage: 'execution', summary: { terminal_reason: 'cancelled', cleanup: 'complete', token_issuance: 'not_attempted' } });
+  expect(visible.split('http://127.0.0.1:18765/bp5/start').length - 1).toBe(1);
+  expect(visible).toContain('bp5-r2-exit-summary-0.1');
+  for (const secret of secretNeedles) expect(visible.includes(secret)).toBe(false);
+  expect(visible).not.toContain('/oauth_auth.do');
 });
 
 it('leaves process signal handlers exclusively owned by the host while obeying its AbortSignal', async () => {

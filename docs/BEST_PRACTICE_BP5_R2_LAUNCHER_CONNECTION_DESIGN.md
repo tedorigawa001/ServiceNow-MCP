@@ -1,6 +1,6 @@
 # BP-5 R-2：オフライン事前確認・明示承認・ready案内・終了報告の接続設計
 
-Version: draft-0.4 / Date: 2026-10-18 / Status: checker・TTY承認・snapshot digest結合を内部実装/合成検証。ready案内・終了summary・公開入口・実機/運用は未対応。
+Version: draft-0.5 / Date: 2026-10-18 / Status: checker・TTY承認・snapshot結合・ready案内・strict終了summaryを内部実装/合成検証。公開入口・実TTY・実機/運用は未対応。
 
 専用entryへの接続・表示失敗を含む終了コードは、
 [entry接続/終了コード設計draft-0.1](BEST_PRACTICE_BP5_R2_ENTRY_EXIT_DESIGN.md)を参照。
@@ -13,7 +13,7 @@ Version: draft-0.4 / Date: 2026-10-18 / Status: checker・TTY承認・snapshot d
 人が明示的に開始・停止し、結果を確認できるリポジトリ内の専用入口へ接続する案。
 公開CLI/bin/MCP登録・npm同梱・既存auth CLIとの接続は対象外。
 
-| 既存実装 | この設計で追加するもの（実装済みの範囲は§9・§10） |
+| 既存実装 | この設計で追加するもの（実装済みの範囲は§9〜§11） |
 |---|---|
 | manifestの安全な読込・期限/binding・消費直前再検証 | オフラインcheck-plan、公開値を限定した確認票、実行承認との結合 |
 | 専用host・秘密を持たない監督・固定IPC | 確認済みmanifestとhostが使う計画の一致検証 |
@@ -21,7 +21,7 @@ Version: draft-0.4 / Date: 2026-10-18 / Status: checker・TTY承認・snapshot d
 | 監督が検証済みreportを呼出し元へ返す | 終了報告のstrict検証、端末への限定表示 |
 | 専用entryは終了コードだけで終了 | 明示実行モードと上記の接続。現entryをそのまま使えば案内・報告も出る、とはしない |
 
-接続全体のうち実装範囲は§9・§10。telemetry調査・maint依頼は保留。
+接続全体のうち実装範囲は§9〜§11。telemetry調査・maint依頼は保留。
 実機操作・token発行・アカウント/登録/ACL/設定変更は行わない。
 実manifestの作成・配置・領域設定も行わない。設計の承認と、G2/G4の実行許可は別である。
 
@@ -117,8 +117,8 @@ launcherは勝手に設定を変更しない。不適合なら開始しない。
 
 ### 6.1 採用と表示
 
-監督自身の終了報告`bp5-r2-host-exit-0.1`を新たにstrict検証する境界を設ける。
-現状は内部型/監督検証であり、launcher用の報告スキーマ・出力接続は未実装。
+監督自身の終了報告`bp5-r2-host-exit-0.1`のstrict検証境界を§11へ実装した。
+内部のruntime schemaであり、公開launcher/外部契約として配布したという意味ではない。
 hostの生IPCやfinishedを直接表示せず、ack・期待exit・exit/close・期限内の採用条件を満たした監督reportだけを扱う。
 
 既定は人向け固定summaryを端末へ1回表示する。fieldはterminal_reason、process_termination、cleanup、
@@ -161,7 +161,7 @@ Node下限22.12系・実TTY・HS未完了境界の確認と、G2/G4・C設定・
 
 ## 8. 今回の到達点
 
-checker/限定確認票は§9、TTY承認/digest結合は§10を参照。ready案内/終了summary・公開CLIは未実装。
+checker/限定確認票は§9、TTY承認/digest結合は§10、ready案内/終了summaryは§11を参照。公開CLIは未実装。
 実運用の入口・実行権限・実manifestは作成していない。telemetry調査も再開しない。
 
 ## 9. 第1段階：checker・限定確認票の実装境界（2026-10-18）
@@ -220,3 +220,32 @@ checker/限定確認票は§9、TTY承認/digest結合は§10を参照。ready�
   内部APIとしてはまだ呼び出せる。人向けの`approveAndRunR2Plan`は常に結合するため現時点の経路では使われない。
   将来の公開入口は承認付き経路だけに接続し、旧経路を外部から選べないようにする（削除または内部テスト専用化）ことを
   公開前の必須条件とする。
+
+## 11. 第3段階：ready固定URL・strict終了summary（2026-10-18）
+
+[合成検証記録](E2E_BEST_PRACTICE_R2_DISPLAY_SUMMARY_SYNTHETIC_2026-10-18.md)を参照。
+§10の「案内/summary未追加」は第2段階時点の記録であり、本節の範囲で接続した。
+公開entry/CLI、実TTY/人の操作、G2/G4・PDIは別工程。
+
+- `approveAndRunR2Plan`は承認に使った専用TTYへ、監督の検証済みreadyで固定URL
+  `http://127.0.0.1:18765/bp5/start`を一度だけ案内する。host/IPCからURLを受け取らず、GET/HEADや自動ブラウザー起動をしない。
+  onReadyは同期undefinedのまま。表示完了待ちは内部で所有し、失敗/timeoutはroot Abortで監督の既存停止へ伝える。
+- `r2SupervisorReportSchema`はroot/host_exit/内側receiptの未知field、未知enum、矛盾した終了/cleanup/token状態を拒否する。
+  内側0.2/0.3 JSONも既存検証器で再検査する。ack等の履歴は生成元の信頼済み監督が確認する前提で、報告単体から履歴を証明するものではない。
+- `r2ExitSummarySchema`の`bp5-r2-exit-summary-0.1`だけを再構成して1行JSONで表示する。
+  固定lifecycle metadataと、採用済みの場合だけ内側schema/status/isError/analysis_complete・counts・
+  aggregateの制限/拒否/errorの固定理由別件数を含む。個別資産ID/名前/コード/自由記述/元例外/完全JSONは出さない。
+  未知のaggregate制限文はunclassifiedの件数に集約し、原文は表示しない。個別資産の制限や確認項目を網羅した表示ではない。
+- summaryにはinterpretation=lifecycle_only_not_safetyを固定する。partial/isError/unknown/incompleteを成功や安全へ格上げしない。
+  既存の監督reportはstrict検証済みの値だけを内部callerへ返す。結果ファイル保存や自動アップロードはしない。
+- 不正報告/集計不能はreport_unavailableだけ。表示失敗はdisplay_failedで、raw JSON/別出力先へのfallbackなし。
+  返却はstage=display/ok=falseとし、検証できた元のreportだけを任意で保持する。表示成功として実行結果を採用しない。
+  ready失敗は稼働hostを停止、終了summary失敗は既に終了したhostを再起動/再認可しない。
+- 専用表示のwrite確認は各最大1秒・出力最大16KiB。lower-onlyの試験上限だけを許す。
+  ready表示は既存host期限内、最終表示は終了確認後の端末観測枠であり、hostの385秒/cleanup3秒を延長しない。
+  遅延callbackも単調時刻で拒否し、timer/所有error購読を解除する。partialに送られた安全な文字列を巻き戻すことや人が読んだことは保証しない。
+  例外は未決着のnative write用の固定・非formatting error guard。観測終了後にも遅延write errorを処理できるよう、
+  同じ出力先に1個だけ保持し、実write callback決着後のerror通知turnを過ぎたら解除する。
+  callbackが永久に来ない場合はguardを保持するが、例外/表示本文/資格情報はそこへ保存しない。
+- 実合成hostをready直後・認可前に取消し、URL一度だけ・限定summary・token not_attemptedを確認した。
+  実PDIへの通信/発行、実TTYの表示/配送、侵害hostからの任意秘密混入の完全防止は実証していない。
