@@ -1,12 +1,13 @@
 # BP-5 R-2：専用entry接続・終了コード設計
 
-Version: draft-0.1 / Date: 2026-10-19 / Status: 未承認・未実装の設計案。
+Version: draft-0.3 / Date: 2026-10-19 / Status: 終端契約・純粋exit選択器を内部実装。専用entry・表示接続・最終化監督は未実装。
 
 ## 1. 範囲と現状
 
 [launcher接続設計](BEST_PRACTICE_BP5_R2_LAUNCHER_CONNECTION_DESIGN.md)の内部実装を、
 明示的な専用プロセスから呼ぶ入口と、その終了コードを定める。
-本書はMDのみ。telemetry調査・maint依頼は保留。実装・実機操作・token発行・登録/ACL/設定変更は行わない。
+入口・運用部分は設計のみ。内部終端契約・純粋選択器の実装範囲は§8に限定する。
+telemetry調査・maint依頼は保留。実機操作・token発行・登録/ACL/設定変更は行わない。
 実manifestの作成/配置、実行許可、公開bin/MCP登録・npm同梱も対象外。
 
 確認した現行経路：
@@ -66,7 +67,7 @@ path・origin・承認参照・ID・元例外・拒否された未知codeは出�
 ## 4. entryで受け付ける終端契約
 
 終了選択は純粋関数とし、検証済みのmode・内部結果・表示成否・entry自身の後始末状態だけを受け取る。
-実装前に次のstrictな内部終端unionを確定する。外部から自己申告する入力口ではない。
+次のstrictな内部終端unionを§8.1の内部契約として実装した。外部から自己申告する入力口ではない。
 
 | 結果の段階 | 検証・扱い |
 |---|---|
@@ -93,12 +94,12 @@ strict検証は報告の真正性やIPCの履歴を単独で証明しない。�
 | 2 | 71 | 検証済みreportのcleanup incomplete/cleanup_incomplete、またはentry自身の所有資源の後始末不成立 |
 | 3 | 70 | fatal/未捕捉例外・rejection・固定module読込失敗。結果は成功として採用しない |
 | 4 | 72 | 検証済みのforced_stop。再度の停止要求による強制終了 |
-| 5 | 74（新設） | report_unavailable。strict終端検証・再投影照合ができない。元の状態は未確認として扱う |
-| 6 | 75（新設） | display_failed。実行/終了が正常でも、必要な表示の成立を確認できない |
+| 5 | 80（新設） | report_unavailable。strict終端検証・再投影照合ができない。元の状態は未確認として扱う |
+| 6 | 81（新設） | display_failed。実行/終了が正常でも、必要な表示の成立を確認できない |
 | 7 | 124 | checker_timeout、approval_timeout、preflight_timeout、または監督deadline_exceeded。各段階を固定理由で区別して保持 |
 | 8 | 130 | checker_cancelled、approval_cancelled、または監督cancelled。初版ではSIGINT/SIGTERMの制御取消しを区別しない |
-| 9 | 77（新設） | approval_denied。host未起動の明示否認/EOF/不正確認入力。未発行等の報告を捏造しない |
-| 10 | 64（新設） | 起動構文不正。そもそも処理を開始せず固定usageだけ。usage表示に失敗すれば上位75 |
+| 9 | 82（新設） | approval_denied。host未起動の明示否認/EOF/不正確認入力。未発行等の報告を捏造しない |
+| 10 | 64（新設） | 起動構文不正。そもそも処理を開始せず固定usageだけ。usage表示に失敗すれば上位81 |
 | 11 | 10 | その他の既知失敗。manifest拒否/期限不足/approval_unavailable/spawn_failed/host_failed/protocol_error/review_failed等 |
 | 12 | 0 | check-planのoffline_valid＋表示成立、またはrunの検証済みcompleted＋cleanup/終了確認＋限定summary表示成立 |
 
@@ -107,8 +108,15 @@ source_approval_pendingでも0になり得る。適合・安全・全件解析�
 release gate等によるinner isErrorはreview_failed/10であり、partialと混同しない。
 
 check-planの0は承認や実機成立の証拠ではない。denyやtimeoutを0に変換しない。
-不正なraw reportのfieldを拾って73/71を推測しない。検証不能なら74＋状態未確認の固定案内とする。
-同時に報告検証・表示が失敗した場合は74を優先し、別出力先やraw reportを使って理由を復元しない。
+不正なraw reportのfieldを拾って73/71を推測しない。検証不能なら80＋状態未確認の固定案内とする。
+同時に報告検証・表示が失敗した場合は80を優先し、別出力先やraw reportを使って理由を復元しない。
+
+**新設値は内部実装で80/81/82に再選定した。** 旧案74/75/77はsysexitsの範囲（64〜78）と重なる。
+特に75は`EX_TEMPFAIL`（一時的失敗）として、メール配送・ジョブ管理等の外側ラッパーが自動再試行の合図に使う慣例がある。
+本設計は表示失敗後の再実行を禁止しており、この慣例と衝突し得る。74（`EX_IOERR`）・77（`EX_NOPERM`）も別の意味に読まれ得る。
+sysexitsの意味を採用しない方針に合わせ、report_unavailable=80、display_failed=81、approval_denied=82に固定する。
+64は`EX_USAGE`と意味が一致するため維持した。既存host/監督の70〜73等は変更しない。
+番号だけで外側の再試行を防げるとは主張せず、表示失敗後の自動再実行は禁止する。
 
 ### 5.2 競合時の例
 
@@ -116,16 +124,22 @@ check-planの0は承認や実機成立の証拠ではない。denyやtimeoutを0
 |---|---:|---|
 | host終了未確認＋表示失敗 | 73 | 終了確認が最優先。表示失敗も内部固定状態に残す |
 | cleanup incomplete＋reportの表示失敗 | 71 | hostが終了してもcleanup completeへ変更しない |
-| completed/partial＋summary write失敗 | 75 | 元のcompleted/partialは保持するがentryを成功にしない |
-| cancelled＋summary write失敗 | 75 | 取消しと表示失敗を両方保持。再実行しない |
-| strict報告不正＋固定report_unavailable表示も失敗 | 74 | 未確認状態を75だけで覆わない |
-| checker成功＋確認票表示失敗 | 75 | runへ進まない。offline_validを実行許可にしない |
+| completed/partial＋summary write失敗 | 81 | 元のcompleted/partialは保持するがentryを成功にしない |
+| cancelled＋summary write失敗 | 81 | 取消しと表示失敗を両方保持。再実行しない |
+| strict報告不正＋固定report_unavailable表示も失敗 | 80 | 未確認状態を81だけで覆わない |
+| checker成功＋確認票表示失敗 | 81 | runへ進まない。offline_validを実行許可にしない |
 | cleanup確認済みの期限停止 | 124 | OSで観測したhost_exitが130でも、監督deadlineのentry codeは124 |
 
 143は既存hostの直接SIGTERM終了等に残すが、新entryの制御取消しから推測して付けない。
 現在の監督はSIGINT/SIGTERMを同じcancelledへまとめるため、初版は双方130。
 将来143を区別するにはsignal源を秘密を含まない固定metadataとして保持する契約変更・別試験が必要。
 OSがentryをSIGKILL等で直接終了した場合は、実OS signalとshell側の扱いを観測し、正常なentry票があると捏造しない。
+
+**`$?`だけでは制御された停止を証明しない。** shellはsignalで終了したプロセスを128+signal番号で表し、
+SIGINTによる終了も130になる。124はcoreutils `timeout`が時間切れ時に返す値でもある。
+entryはSIGINT handlerを登録するため通常は制御された取消しだけが130になるが、bootstrapのhandler登録前のsignalや、
+`timeout`等で包んだ実行では外側から区別できない。130/124は「制御された停止・cleanup確認済み」の証拠とせず、
+entryが最終化を完了した場合の検証済み状態（限定summary・内部終端状態）と併せて判断する。
 
 ## 6. signal・最終化・失敗時停止
 
@@ -137,7 +151,7 @@ OSがentryをSIGKILL等で直接終了した場合は、実OS signalとshell側�
 - native writeのerror通知guardを解放する1 turnだけ、最大100msのentry最終化枠を置く案。
   新しいI/O/認可/再表示は始めず、期限が来たら専用entry自身を確定した非0 codeで終了する。
   解放確認不能を0で強制終了して成功扱いにせず、entry_cleanup_incomplete/71として扱う。
-  表示timeoutでnative callbackが来ない状態は75を基本とし、guardの保持自体を追加のhost cleanup失敗とは推定しない。
+  表示timeoutでnative callbackが来ない状態は81を基本とし、guardの保持自体を追加のhost cleanup失敗とは推定しない。
   既存のより高い73/71/70/72は維持する。どの状態を最終化不成立とするかは実装時に明示的な所有資源表で固定する。
 - 期限内に最終化できれば確定codeを設定して終了する。自然終了を待つ場合にも独立した短い最終化監督をarmし、
   未解決handleで居残らない。共有アプリやhostをentryの終了処理で強制終了する設計にはしない。
@@ -166,6 +180,25 @@ Node下限22.12系・実PTY/TTYの配送・他OS・dump/起動環境の確認は
 
 ## 8. 今回の到達点
 
-上記は設計のみ。新entry、終端union/exit選択器、check-plan表示接続、最終化監督は未実装・未検証。
-既存の表示/launcher実装を変更せず、前工程のdirtyな差分も保持した。
-74/75/77/64や100msは今回の提案値であり、現行コードの動作・外部仕様として記載したものではない。
+`src/review/r2-entry-terminal.ts`に終端union・exit選択器を内部実装した。
+[合成検証記録](E2E_BEST_PRACTICE_R2_ENTRY_TERMINAL_SYNTHETIC_2026-10-19.md)を参照。
+新entry、check-plan表示接続、最終化監督は未実装・未検証。100msは引き続き提案値である。
+既存の表示/launcher/host実装を変更せず、前工程のdirtyな差分も保持した。
+専用entryを実行した際のOS終了コード、実TTY、G2/G4、実PDIの成立を今回の内部試験から主張しない。
+
+### 8.1 内部終端契約0.1
+
+`schema_version=bp5-r2-entry-terminal-0.1`。modeはcheck-plan/run/entryのstrict union。
+全modeでdisplay=confirmed/failed、finalization=complete/incomplete、fatal=booleanを必須にする。
+既定値による成功補完はしない。entry自身の状態は信頼済みcallerだけが生成する内部metadataであり、公開入力ではない。
+
+- check-plan: resultは既存r2PlanCheckSchema（offline_valid/rejected）。offline_validは実行承認ではない。
+- run: resultはcheck/approval/display/executionのstrict union。stageごとの固定失敗enumを分け、checker codeをapprovalとして受理しない。
+- execution: 既存strict report/summaryを検証し、reportから再投影したsummaryと構造的な完全一致を必須とする。JSON key順序は問わない。
+- display: display_failed/report_unavailableだけ。任意reportも全検証必須、display=failed以外は拒否する。
+- entry: fatal/usage/report_unavailableのみ。例外・path・stack・自由記述を保持しない。
+
+`parseR2EntryTerminal`は拒否時undefined、`selectR2EntryExitCode`は不正snapshotに80だけを返す。
+全snapshot検証に失敗した後、raw fieldからfatal/終了未確認/cleanup不成立を救済しない。
+全体が有効な場合だけ§5の優先順位を適用する。selectorは入力不変で、表示・signal・process.exit・通信・再試行を行わない。
+fatal guardが保持する既知の優先codeとの統合や、表示実体/終了観測の真正性は後続entry接続の責任である。
