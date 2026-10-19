@@ -1,11 +1,11 @@
 # BP-5 R-2 OL-03：secure openerからmetadata sourceへの保持FD移譲
 
-Version: draft-0.1 / Date: 2026-10-19 / Status: 詳細設計案。移譲・binding型・最終再照合は未実装/未承認。
+Version: draft-0.2 / Date: 2026-10-19 / Status: binding比較/移譲の内部契約を合成resourceで実装。実reader/opener/source接続・最終再照合は未実装/未承認。
 
 ## 1. 範囲と停止境界
 
 [保持FD/parser設計](BEST_PRACTICE_BP5_R2_OL03_HELD_FD_PARSER_DESIGN.md)と[実metadata source設計](BEST_PRACTICE_BP5_R2_OL03_METADATA_SOURCE_DESIGN.md)の間に、record由来の対象選択・安全なopen・File所有権移譲・祖先/path再照合を置く。
-本書は既存ソースを読んだ設計案で、OS/APIの新しい動作試験結果ではない。実装・実機操作・API実接続・トークン発行・設定変更・permit発行・Pushは行わない。telemetry調査は保留。
+本書は既存ソースを読んだ設計案で、OS/APIの新しい動作試験結果ではない。draft-0.1の後に§12の内部契約だけを合成実装した。実機操作・API実接続・トークン発行・設定変更・permit発行・Pushは行わない。telemetry調査は保留。
 APPROVED_REGISTRY=None、通常v2入口Unavailable、runtime gate92、DER/absence停止を維持する。FD移譲の成功も署名validity/実行許可にしない。
 
 ## 2. 現在の部品と不足
@@ -23,7 +23,7 @@ deploymentの既存独立10秒・総量変数やrecords_v2の独立開始Instant
 
 ## 3. 内部所有モデル案
 
-型名は設計用で、Rust定義/公開APIはまだ作らない。すべて非Clone・非serialize、constructorはsealedな内部moduleに限定する。Debugは固定文言のみ。
+下記は全体設計の型案。§12で一部のRust内部契約を追加したが、Session/RecordEvidence等の運用producerは未実装。所有型・BoundTargetは非Clone/非serializeとし、比較用の非authorityデータだけは内部でCloneできる。constructorはprivate moduleに限定し、Debugは固定文言のみ。
 
 | 型案 | 所有/借用と不変条件 |
 |---|---|
@@ -167,7 +167,32 @@ error/Debugは固定理由と件数だけ。record bytes/hash/approval ref、pat
 後続合成試験には、別Session/role/hash/世代の混在、同hash別inode、祖先/rootのrename、leaf symlink/hardlink/特殊file、open→move直前の変更、M0/B/M4前後の差、record差替え、全失敗点のDrop件数・FD上限・取消/遅延・固定非出力を含める。
 合成成功でも実root配備/OS syscall/実署名/leaseを検証済みとせず、明示承認なしに実機テストを追加しない。
 
-## 11. 今回の文書検証
+## 11. draft-0.1の文書検証
 
 新規本書と関連設計の参照を更新し、local link/code fence/行末空白とgit diffを検査する。
 Rust/TSコードを変更しないためビルド・テストは再実行しない。362件成功は前工程の実source合成検証で、本移譲の実装/試験結果ではない。
+
+## 12. record binding・所有権移譲の内部契約
+
+[合成検証記録](E2E_BEST_PRACTICE_R2_OL03_FD_TRANSFER_CONTRACT_SYNTHETIC_2026-10-19.md)に追加18件・全体380件を記録する。
+[transfer.rs](../native/r2-outer/src/signature_boundary/positioned_read/metadata/transfer.rs)はprivate moduleで、実reader/openerやmacOS constructorには接続しない。
+
+- `RecordBinding`はactivation/ledger/indexのpath/hash・世代/release・実行UID/readerGID・platform・registry/policy・root・時刻を保持する**比較用データ**。
+  raw record bytesを認証した型ではない。hash配列は入力された比較値であり、現実のrecordから計算した証拠ではない。JSON/公開結果からのproducerはない。
+- `BoundTarget`はrecordとopaque lineageを借用し、Nodeのledger/index hash一致・Indexed size・mode0555・role/policy・root-relative pathを検査する。
+  role=LauncherはUnavailableでopen前停止。ObservedBoundedをNodeの宣言sizeに変換しない。root/relative各64、結合path最大128 components、4096bytesをbounded検査する。
+- `OpenedTarget<R>`はleaf R・祖先R群・初期Observationと、比較用record/target値・originを所有する。移譲時に全比較fieldと`Rc::ptr_eq`、祖先componentの数/順序を照合する。
+  このoriginはprivateなscopeの対応だけで、実利用者・root承認・readerセッションの真正性を証明しない。
+- 正常化した初期leaf policyが適合した場合だけ、同じRを`TransferSource<R>`へmoveし、`HeldTargetScope`が祖先とBoundTargetを保持する。
+  **TransferSourceは所有権carrierであり、まだMetadataOpsを実装せず、実HeldSource<SystemApi>にも接続していない。** M0結合・ancestor snapshot/実path再walk・record最終再読は後工程。
+- private `with_target`はopen前後/source-use前後/drop後に元SharedBudgetのcheckpointを確認し、最初の有限失敗をラッチする。
+  source-use closureはテスト用内部境界で、公開runtime callback/injection口ではない。結果型はunit相当の非authority診断だけで、resource/FDを返せない。
+  owned RのDropを使い、leaf→祖先の解放を確認。部分open失敗、移譲前拒否、移譲後失敗、遅延成功/エラー、取消、unwindを含めて1回だけ解放する。
+- record時刻は比較用start wall値に対する受付460秒超・元Instantから導出した終了wallで450秒超を確認する。承認が開始より未来/加算overflowはBinding、残期限不足はExpired。
+  実wall/monotonic clock pairの再取得/整合は未接続であり、この純粋検査を実record期限の観測証拠とはしない。
+- 既存内部FailureにBinding/Unavailable/Expiredを追加しただけで、公開JSON/exit codeを変更しない。payload/metadataの容量・要求・再試行枠も変更しない。
+  receiptの祖先数＋leaf＋一時2枠が132超ならLimit。ただし実openerの各open前予約やprocess全体FD台帳は未実装。
+
+成功Debugは`MovedTarget(pending_m0_topology_records_not_execution_authority)`固定、execution_gateは必ずUnavailable。
+実Session/RecordEvidence producer、祖先のOS metadata/namespace証明、M0結合/M4 finalizer、追加topology予算、lease/実macOS source移譲・native/API/permitは引き続き停止する。
+合成resourceのBox token/Drop一致はRust所有権の証拠であり、実close成功や実FD数/OSメタデータの証拠ではない。

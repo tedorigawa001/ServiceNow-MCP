@@ -15,6 +15,9 @@ const EINTR_RETRIES: u8 = 8;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(super) enum Failure {
+    Binding,
+    Unavailable,
+    Expired,
     Changed,
     InvalidRange,
     ReadFailed,

@@ -309,5 +309,5 @@ constructorは通常入口/secure openerへ未接続。元10秒・metadata100回
 
 ## 18. secure openerからの所有権移譲設計
 
-[保持FD移譲詳細設計draft-0.1](BEST_PRACTICE_BP5_R2_OL03_SECURE_FD_TRANSFER_DESIGN.md)に、record evidence/role descriptor・OpenedTargetからsourceへのmove・祖先/namespace再照合・M4前finalizer・失敗時解放を具体化した。
-M0とopen snapshotの結合やB〜M4のtopology検査hookは現行APIにない。移譲/finalizer・追加topology台帳は設計案のみで実装しない。
+[保持FD移譲詳細設計draft-0.2](BEST_PRACTICE_BP5_R2_OL03_SECURE_FD_TRANSFER_DESIGN.md)に、record evidence/role descriptor・OpenedTargetからsourceへのmove・祖先/namespace再照合・M4前finalizer・失敗時解放を具体化した。
+binding比較と所有権carrierへのmoveだけを[合成resourceで内部実装](E2E_BEST_PRACTICE_R2_OL03_FD_TRANSFER_CONTRACT_SYNTHETIC_2026-10-19.md)した。実macOS sourceへの移譲、M0/open snapshot結合やB〜M4のtopology検査hook、record reader/lease/finalizer・追加台帳は未接続/未実装。

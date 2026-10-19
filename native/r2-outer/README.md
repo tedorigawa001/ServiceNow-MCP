@@ -140,6 +140,10 @@ arm64 held-File source now implements it using single-attempt fstat/fstatfs,
 filesec/ACL, flistxattr and pread calls. Only a no-FD RawApi fake is executed in its
 new tests; the actual OS source is not invoked or connected to the secure opener,
 native Security API, runtime entry or permits. See
+the [transfer contract](../../docs/BEST_PRACTICE_BP5_R2_OL03_SECURE_FD_TRANSFER_DESIGN.md)
+for inert record binding and exactly-once ownership moves tested with synthetic
+resources. Its source-shaped carrier is not yet a MetadataOps source, record
+authenticator, trusted opener or execution authority. See
 [M0–M4 synthetic verification](../../docs/E2E_BEST_PRACTICE_R2_OL03_METADATA_SYNTHETIC_2026-10-19.md).
 See [boundary contract](../../docs/BEST_PRACTICE_BP5_R2_OL03_SECURITY_BOUNDARY_DESIGN.md)
 and [synthetic verification](../../docs/E2E_BEST_PRACTICE_R2_OL03_SECURITY_BOUNDARY_SYNTHETIC_2026-10-19.md).

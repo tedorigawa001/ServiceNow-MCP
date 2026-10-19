@@ -197,5 +197,5 @@ trusted opener/祖先/path/record/leaseからのFile移譲、配備roleの運用
 
 ## 15. secure opener側の詳細設計
 
-[保持FD移譲詳細設計draft-0.1](BEST_PRACTICE_BP5_R2_OL03_SECURE_FD_TRANSFER_DESIGN.md)に、同じ所有Fileのmove、record/size出所、保持祖先と信頼anchorからの再walk、M0/open snapshot結合・M4前finalizerの不足を分離した。
-既存staged constructorを公開せず、sealedなscopeへ接続する案。移譲・最終再照合・追加予算は未実装で、実sourceの運用呼出しも開始しない。
+[保持FD移譲詳細設計draft-0.2](BEST_PRACTICE_BP5_R2_OL03_SECURE_FD_TRANSFER_DESIGN.md)に、同じ所有Fileのmove、record/size出所、保持祖先と信頼anchorからの再walk、M0/open snapshot結合・M4前finalizerの不足を分離した。
+binding/所有権の内部契約だけを合成resourceで追加した。generic TransferSourceはまだMetadataOpsを実装せず、実HeldSourceのconstructorは非公開・未接続のまま。最終再照合/追加予算も未実装で、実sourceの運用呼出しは開始しない。
