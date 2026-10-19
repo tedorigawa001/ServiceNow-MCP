@@ -1,6 +1,6 @@
 # BP-5 R-2 OL-03：launcher／Nodeの署名・entitlement検証設計
 
-Version: draft-0.8 / Date: 2026-10-19 / Status: C方式を採択。未有効native部品を追加し、reader・Security境界/driverを内部合成検証済み。実署名検証・OS適合試験は未実施。
+Version: draft-0.9 / Date: 2026-10-19 / Status: native部品は未有効。raw／DER・absenceの後続設計を追加。実署名検証・OS適合試験は未実施。
 
 ## 1. 目的と現在の境界
 
@@ -76,6 +76,8 @@ requirementを再文字列化すると表記が変わり得るので、round-tri
 上限は取得後の投影をboundedにする要件であり、Security.framework内部の確保量を制御できる証拠ではない。
 
 ### 4.2 「欠落」と「空」を分ける
+
+[raw／DER整合・absence証拠設計draft-0.1](BEST_PRACTICE_BP5_R2_OL03_ENTITLEMENT_EVIDENCE_DESIGN.md)で、API XML一致・全物理表現一致・absence候補を分けた。公式Web/SDKの取得flags差、API raw再構成の可能性、DER decoder未承認も含め、今回実装/producer有効化は行わない。
 
 `kSecCodeInfoEntitlementsDict`の欠落は、entitlementなしだけでなく別形式の場合もあるため、空集合へ変換しない。[A3](https://developer.apple.com/documentation/security/kseccodeinfoentitlementsdict)
 adapterは少なくとも`dictionary`／`absence_proven`／`unsupported_or_unknown`を区別する案。

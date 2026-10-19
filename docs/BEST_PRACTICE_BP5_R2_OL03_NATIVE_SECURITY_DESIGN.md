@@ -1,6 +1,6 @@
 # BP-5 R-2 OL-03：native Security backend（未有効）
 
-Version: draft-0.2 / Date: 2026-10-19 / Status: native FFI・driverを実装、合成APIでのみ検証。実署名検査・本番有効化は未実施。
+Version: draft-0.3 / Date: 2026-10-19 / Status: native部品は未有効。raw／DER整合・absenceの後続設計を追加。今回実装・実API検証は行っていない。
 
 ## 1. 境界
 
@@ -53,6 +53,9 @@ Team IDとidentifierはsigning dictionaryから型付き取得して既存比較
 - static再検証開始で以前の検証済み状態を破棄。launcherのSnapshotはdynamic self検証も成功していないと拒否する。
 
 ## 5. entitlementの保守的な対応範囲
+
+[raw／DER整合・absence証拠設計draft-0.1](BEST_PRACTICE_BP5_R2_OL03_ENTITLEMENT_EVIDENCE_DESIGN.md)に公式仕様/SDKの照合、対応形式案、拒否条件、未確認事項を整理した。以下は現実装と既存観測の記録で、今回停止条件を緩めたものではない。
+特にAPI rawは物理署名slotの元bytesとは限らない。公式WebのRequirementInformation指定とSDKのgeneric注記の差も記録し、将来は固定取得profileを審査する。今回はSigningInformationのみの実装を変更していない。
 
 native初期対応は**型確認済みdictionaryが存在し、raw entitlementキーが存在しない場合だけ**。
 辞書欠落はUnknownObservation。raw/DER等が同時にある場合は、対応形式・辞書との整合を未検証のためUnsupportedで停止する。
