@@ -51,6 +51,23 @@ pub fn check(
     let decoded = crate::json::decode_bounded(bytes, MAX_BYTES, MAX_ENTRIES, started);
     budget(started)?;
     let index: Index = decoded.map_err(|_| ClosureFailure::Invalid)?;
+    header(&index, binding, || format!("{:x}", Sha256::digest(bytes)))?;
+    check_entries(
+        &index,
+        bytes.len(),
+        binding,
+        Some(observed),
+        &mut || budget(started),
+        |e| e,
+    )
+}
+// Keep the legacy header/digest evaluation order; the staged shared caller supplies an
+// already authenticated digest, while public check retains its existing decode-first contract.
+fn header(
+    index: &Index,
+    binding: &Binding<'_>,
+    digest: impl FnOnce() -> String,
+) -> Result<(), ClosureFailure> {
     if index.schema_version != "bp5-r2-closure-index-0.1"
         || !release(&index.release_id)
         || index.generation == 0
@@ -61,31 +78,43 @@ pub fn check(
     if index.release_id != binding.release_id
         || index.generation != binding.generation
         || !hex(binding.index_sha256)
-        || format!("{:x}", Sha256::digest(bytes)) != binding.index_sha256
+        || digest() != binding.index_sha256
         || !path(binding.index_path)
         || !path(binding.node_path)
         || binding.index_path == binding.node_path
     {
         return Err(ClosureFailure::Binding);
     }
+    Ok(())
+}
+fn check_entries<E>(
+    index: &Index,
+    index_bytes: usize,
+    binding: &Binding<'_>,
+    observed: Option<&[Entry]>,
+    step: &mut impl FnMut() -> Result<(), E>,
+    error: impl Fn(ClosureFailure) -> E,
+) -> Result<CheckedIndex, E> {
     let mut expected = BTreeMap::new();
     let mut folded = BTreeSet::from([binding.index_path.to_ascii_lowercase()]);
-    let mut total = bytes.len() as u64;
+    let mut total = index_bytes as u64;
     let mut previous: Option<&str> = None;
     for entry in &index.entries {
-        budget(started)?;
-        validate(entry, binding.node_path)?;
+        step()?;
+        validate(entry, binding.node_path).map_err(&error)?;
         let p = entry.path();
         if p == binding.index_path
             || previous.is_some_and(|v| v >= p)
             || !folded.insert(p.to_ascii_lowercase())
         {
-            return Err(ClosureFailure::Invalid);
+            return Err(error(ClosureFailure::Invalid));
         }
         if let Entry::File { size, .. } = entry {
-            total = total.checked_add(*size).ok_or(ClosureFailure::Limit)?;
+            total = total
+                .checked_add(*size)
+                .ok_or_else(|| error(ClosureFailure::Limit))?;
             if total > MAX_FILE_BYTES {
-                return Err(ClosureFailure::Limit);
+                return Err(error(ClosureFailure::Limit));
             }
         }
         previous = Some(p);
@@ -98,46 +127,61 @@ pub fn check(
             Some(Entry::File { .. })
         )
     {
-        return Err(ClosureFailure::Binding);
+        return Err(error(ClosureFailure::Binding));
     }
     for p in expected
         .keys()
         .copied()
         .chain(std::iter::once(binding.index_path))
     {
-        budget(started)?;
+        step()?;
         let mut parent = p;
         while let Some((prefix, _)) = parent.rsplit_once('/') {
-            budget(started)?;
+            step()?;
             if !matches!(expected.get(prefix), Some(Entry::Directory { .. })) {
-                return Err(ClosureFailure::Invalid);
+                return Err(error(ClosureFailure::Invalid));
             }
             parent = prefix;
         }
     }
-    let mut actual = BTreeMap::new();
-    for entry in observed {
-        budget(started)?;
-        validate(entry, binding.node_path)?;
-        if actual.insert(entry.path(), entry).is_some() {
-            return Err(ClosureFailure::Set);
+    // A declaration-only result is NOT an observation or evidence of files on disk.
+    if let Some(observed) = observed {
+        let mut actual = BTreeMap::new();
+        for entry in observed {
+            step()?;
+            validate(entry, binding.node_path).map_err(&error)?;
+            if actual.insert(entry.path(), entry).is_some() {
+                return Err(error(ClosureFailure::Set));
+            }
+        }
+        let expected_index = Entry::File {
+            path: binding.index_path.into(),
+            mode: "0444".into(),
+            size: index_bytes as u64,
+            sha256: binding.index_sha256.into(),
+        };
+        step()?;
+        if actual.remove(binding.index_path) != Some(&expected_index)
+            || actual.len() != expected.len()
+        {
+            return Err(error(ClosureFailure::Set));
+        }
+        // Avoid one uncheckpointed aggregate map comparison over up to 100,000 entries.
+        for (path, entry) in &expected {
+            step()?;
+            if actual.get(path) != Some(entry) {
+                return Err(error(ClosureFailure::Set));
+            }
         }
     }
-    let expected_index = Entry::File {
-        path: binding.index_path.into(),
-        mode: "0444".into(),
-        size: bytes.len() as u64,
-        sha256: binding.index_sha256.into(),
-    };
-    if actual.remove(binding.index_path) != Some(&expected_index) || actual != expected {
-        return Err(ClosureFailure::Set);
-    }
-    budget(started)?;
+    step()?;
     Ok(CheckedIndex {
         entries: index.entries.len(),
         file_bytes: total,
     })
 }
+#[allow(dead_code)]
+pub(crate) mod shared;
 fn budget(started: Instant) -> Result<(), ClosureFailure> {
     if Instant::now()
         .checked_duration_since(started)

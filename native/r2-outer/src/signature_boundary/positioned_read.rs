@@ -192,6 +192,7 @@ impl SharedBudget<'_> {
     }
 }
 
+mod closure_json;
 #[cfg(test)]
 mod json_tests;
 mod record_json;

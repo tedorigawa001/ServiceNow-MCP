@@ -1,13 +1,13 @@
 # BP-5 R-2 OL-03：厳密record parser・全closure集合の再検証接続
 
-Version: draft-0.4 / Date: 2026-10-20 / Status: 共有予算JSON coreとactivation/ledger-0.2/registryの純粋な厳密検証を内部実装/合成検証。読取/closure再検証への接続・運用承認は未実施。
+Version: draft-0.5 / Date: 2026-10-20 / Status: 共有予算JSON、activation/ledger-0.2/registry、closure index/全集合の純粋検証を内部実装/合成検証。実読取/再検証pipeline・運用承認は未実施。
 
 ## 1. 範囲と停止境界
 
 [FD移譲設計§15](BEST_PRACTICE_BP5_R2_OL03_SECURE_FD_TRANSFER_DESIGN.md)の合成`RecordSource::revalidate`を、既存の厳密parserと**全closure集合**の検証へ置き換える設計。
 前工程の[424件の合成検証](E2E_BEST_PRACTICE_R2_OL03_RECORD_FINAL_SYNTHETIC_2026-10-20.md)は、架空の非JSON bytesと手動投影の契約試験であり、本書の接続が動く証拠ではない。
 
-draft-0.1/0.2の成果物はMDだけだった。後続の§10でJSON core、§11でactivation/ledger/registryの純粋検証を追加した。telemetry調査は保留。実record読取/closure pipelineへの接続実装、実機/PDI操作、API実接続、token発行、設定変更、実署名、本番policy投入、permit発行は対象外。
+draft-0.1/0.2の成果物はMDだけだった。後続の§10でJSON core、§11でactivation/ledger/registry、§12でclosure index/全集合の純粋検証を追加した。telemetry調査は保留。実record/closure読取pipelineへの接続実装、実機/PDI操作、API実接続、token発行、設定変更、実署名、本番policy投入、permit発行は対象外。
 APPROVED_REGISTRY=None、通常v2入口Unavailable、runtime gate92、DER/absence停止を維持する。parser/集合照合の成功も実行許可にしない。
 
 ## 2. 現状と接続上の不足（ソース照合）
@@ -195,4 +195,21 @@ draft-0.1/0.2ではMDだけを検査した。424件は前工程の記録で、�
 - 元のpublic parse/parse_and_bind・legacy decode契約、hash-first ledger順序、失敗型は維持。共通化に伴う公開経路の回帰も全体テストで確認する。coreの1,000,000暫定work cap・非interruptibleなserde/schema/文字列処理・allocation未対応は§10のまま。
 - 成功は非Clone/非serializeで固定Debugの`ValidatedRecords(pure_pending_reader_closure_lease_not_execution_authority)`だけ。現RecordBindingへの自動投影や実revalidateとの接続は未実装で、この値からpermitを生成できない。
 
-次工程はindex/closureのbudget-aware検証、固定context/registry/pinsの実producerと実record再読への接続、同round全集合証拠である。純粋JSON/意味検証の成功だけでそれらを埋めない。
+§11時点の次工程だったindex/closureのbudget-aware pure検証は後続§12で追加した。固定context/registry/pinsの実producer、実record再読への接続、同round全集合証拠は引き続き未対応。純粋JSON/意味検証の成功だけでそれらを埋めない。
+
+## 12. closure index parser・全集合照合の共有予算接続
+
+[closure共有予算検証記録](E2E_BEST_PRACTICE_R2_OL03_SHARED_CLOSURE_JSON_SYNTHETIC_2026-10-20.md)に追加22件と全体検証を記録する。
+[closure/shared.rs](../native/r2-outer/src/closure/shared.rs)はpureな宣言検証/全集合照合、[SharedBudget bridge](../native/r2-outer/src/signature_boundary/positioned_read/closure_json.rs)は元budget/first failureへの接続だけを担う。observedは引き続き合成/呼出側の比較データで、実filesystemを列挙しない。
+
+- 新しいshared経路は16MiB/観測100,001件のsize guard、raw index hash（64KiB chunk）、strict JSON decodeの順序を強制する。未認証の不正JSON/UTF-8はClosure(Binding)、pin済み不正JSONはJson(InvalidRecord)で区別する。
+- index profileは深さ16/container100,000。既存Index/Entryのdeny_unknown_fieldsを用い、schema/release/generation/path/mode/hash/native suffix/宣言順/case衝突/必要なNodeと固定entry/全親directoryを検査する。
+- header・宣言/親directory・全集合の意味検証は既存public checkと共通化。公開check/既存declaredのdecode-first失敗契約は維持する。§4の公開関数自体をhash-firstへ変える候補は未採択で、新しいshared経路だけがhash-firstとなる。
+- 全expected/actual mapを1回で比較せず、index自身のentry・集合件数・各path/Entryを個別に照合する。Node以外のfile/directory/indexも追加/欠落/重複・size/hash/type/mode差を拒否し、各要素・parent prefixで元budgetを確認する。意味検証終了後にもguardするが、個々の文字列/BTree操作内部のhard中断は保証しない。
+- Declarationは全宣言の整合検証だけで、観測集合を偽造して照合済みと扱わない。Debugは`ClosureDeclaration(pure_not_observation_or_execution_authority)`固定。Comparisonは合成observedとの全集合照合で、`ClosureComparison(pure_pending_observation_producer_lease_not_execution_authority)`固定。どちらも非Clone/非serializeでauthorityへ変換しない。
+- RejectionはJson(Rejection<E>)/Closure(ClosureFailure)/Budget(E)。JSON local Limitと意味上の2GiB/件数/size Limit、元Deadline/Cancelled/work LimitをInvalidへ畳まない。意味検査の終了後にもcheckpointを通し、遅延したエラー/成功を確認する。
+- SharedBudgetのdeclare_closure_json/check_closure_jsonは同じstart/cancel/json_workを借用。Limitを既存Limit、集合差をChanged、構造/参照不正をBindingへラッチし、戻り値の詳細分類を保持する。宣言→照合や次roundでwork/開始時刻をresetしない。
+- 宣言総量（index bytes含む）2GiBは形式検査であり、実read成功bytesの台帳ではない。pure検証ではpayload/予約/metadata/topology/pread/EINTRを変更しない。将来の全scanでのI/O課金/事前予約は別工程。
+- 100,000件は形式上限で、暫定1,000,000 work capで全件を扱える保証ではない。Value/typed/index/expected/actualのallocation/RSS、serde内部、sourceの真正性/鮮度/identityを検証したとはしない。
+
+実record parserとの限定projection、index/root/Nodeを同じregistry/contextへ結ぶ実producer、全closure観測の同session/round完了値、実scan/metadata/clock/lease、再検証pipelineへの接続は未対応。通常gate/DER/absence/permit停止を維持する。

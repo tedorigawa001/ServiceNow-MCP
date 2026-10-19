@@ -203,3 +203,9 @@ privileged metadata/leaseのfake成功をOSでの保証と呼ばず、OS境界�
 [厳密record parser・全closure接続設計draft-0.1](BEST_PRACTICE_BP5_R2_OL03_RECORD_PARSER_CLOSURE_DESIGN.md)で、宣言自身の純粋checkと実観測の完了値を区別し、session/round/root/index bindingを持つ全件観測producerを提案した。
 元の2GiB/10秒/契約call枠へ初回とM4前後の全scan・record前後再読を合算し、形式上限100,000件でも受付予算に収まらなければ停止する。CheckedIndexのcountsやcaller-supplied Entry一覧を運用証拠へ変換しない。
 既存deployment scannerのNode独立resolve・独自total/cancel未接続をそのまま流用せず、同じ保持leaf/元台帳に結ぶadapterが必要。これはMDのみの設計で、parser/collector接続や運用gate解除は行わない。
+
+## 9. 共有予算strict parser・pure全集合照合
+
+後続の[接続設計§12](BEST_PRACTICE_BP5_R2_OL03_RECORD_PARSER_CLOSURE_DESIGN.md)で、共有予算JSON/hash-firstの内部宣言parserとpure全集合checkerを追加した。[合成検証記録](E2E_BEST_PRACTICE_R2_OL03_SHARED_CLOSURE_JSON_SYNTHETIC_2026-10-20.md)を参照する。
+既存public check/declaredの失敗型とdecode-first順序は維持し、宣言/親directory/集合の意味検証を共通化した。新しいshared経路はdecode前にraw hashを必須照合し、元10秒/cancel/workを全段階へ伝播する。
+observedはなお呼出側の比較データで、Declarationを実観測へ変換しない。source/同round完了証拠・OS scan・recordとの最終binding/leaseは未接続。100,000件/宣言2GiBの形式上限を実I/O/CPU予算の保証とせず、運用gate/permitは停止を維持する。
