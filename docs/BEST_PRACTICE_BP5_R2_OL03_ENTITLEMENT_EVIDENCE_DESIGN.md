@@ -1,6 +1,6 @@
 # BP-5 R-2 OL-03：raw／DER整合確認とabsence証明
 
-Version: draft-0.3 / Date: 2026-10-19 / Status: raw XML限定部品は内部合成実装済み。物理signature/CD結合の詳細設計を追加。native接続・DER・absence・実API検証は未実施。
+Version: draft-0.4 / Date: 2026-10-19 / Status: raw XML・純粋物理signature parserは内部合成実装済み。保持FD/API結合・native接続・DER・absence・実API検証は未実施。
 
 ## 1. 結論と現在の境界
 
@@ -62,8 +62,8 @@ EE-06の公開実装にはDER由来のXML再構成やdictionary補正、情報�
 |---|---|---|
 | API CFDictionary | rawなしの場合だけ型投影 | rawと別に型/件数/値を保持、後で完全比較 |
 | API CFDataのXML blob | nativeはrawがあれば停止。別の純粋部品だけ内部合成実装済み | §5の限定profileでAPI内部一致だけを検査。物理slot/CFData取得との接続はない |
-| 物理XML slot 5 | 未読取 | bounded envelope/意味解析候補。API rawとはbyte一致を要求せずtyped値を比較 |
-| 物理DER slot 7／DER magic | 未読取 | envelopeを識別しても意味decoder未承認なら停止。未知DERをXMLや空へ変換しない |
+| 物理XML slot 5 | 合成bytesのenvelope/hash検査のみ実装、実FDは未読取 | 意味解析は未接続。将来API rawとはbyte一致を要求せずtyped値を比較 |
+| 物理DER slot 7／DER magic | 合成bytesのenvelope/hash検査のみ実装、実FDは未読取 | 意味decoder未承認のため停止。未知DERをXMLや空へ変換しない |
 | binary/OpenStep plist、未知magic/将来形式 | 未対応 | 初期profileでは拒否 |
 | entitlement slotなし | 未判定 | §7の構造検査と同一signature結合を設計・検証するまでunknown |
 
@@ -98,7 +98,7 @@ native raw拒否・signing情報flags・reader・permit/execは変更してい�
 
 ## 6. 物理signatureの列挙とDER（必要な追加設計）
 
-[物理signature列挙・CodeDirectory結合draft-0.1](BEST_PRACTICE_BP5_R2_OL03_PHYSICAL_SIGNATURE_DESIGN.md)に、固定commitの根拠、bounded FD解析、single-CD/SHA-256初期subset、APIの20bytes cdhashとの照合、拒否条件・未確認事項を具体化した。設計のみで、DER/absenceの停止は変更しない。
+[物理signature列挙・CodeDirectory結合draft-0.3](BEST_PRACTICE_BP5_R2_OL03_PHYSICAL_SIGNATURE_DESIGN.md)に、固定commitの根拠、bounded FD解析、single-CD/SHA-256初期subset、APIの20bytes cdhashとの照合、拒否条件・未確認事項を具体化した。純粋bytes parserだけ[合成検証済み](E2E_BEST_PRACTICE_R2_OL03_PHYSICAL_SIGNATURE_SYNTHETIC_2026-10-19.md)。保持FD/API結合は未接続で、DER/absenceの停止は変更しない。
 
 保持FDの同一thin arm64/MH_EXECUTEからload commandsを完全走査し、LC_CODE_SIGNATUREをちょうど1件要求する案。
 cmdsize/sizeofcmds/ncmds、領域のfile内包含、加算/乗算overflow、重複/重なり、切詰めを検査する。signatureなしをabsenceにしない。
@@ -136,7 +136,7 @@ signature envelopeは4MiB、load-command領域1MiB、ncmds4096、SuperBlob index
 内部理由案：`invalid_envelope`、`unsupported_representation`、`representation_mismatch`、`duplicate_key`、`absence_unproven`、`limit`、`deadline`、`cancelled`。
 公開exit codeや既存enumを今回変更しない。raw bytes/keys/values/path/証明書をerrorへ出さず、形式・件数・有限理由だけを将来返す。
 
-| 合成群 | 必須ケース（実装済み範囲は§5.1/検証記録を参照。物理signature/DER/absenceは未実装） |
+| 合成群 | 必須ケース（実装済み範囲は§5.1/§6/検証記録を参照。実FD/API結合・DER意味解析/absenceは未実装） |
 |---|---|
 | API XML一致 | key順だけ違う一致、entity復号、empty、false保持、raw/辞書片方欠落・値/型/集合不一致 |
 | XML拒否 | 重複key、DTD/ENTITY/外部参照、未承認DOCTYPE、深さ/件数/長さ超過、数値/string/nested、末尾データ、不正UTF-8 |
@@ -161,7 +161,7 @@ SuperBlobは5 slot：CodeDirectory（0）、requirements（2）、**XML entitlem
 
 1. evidence level、上限、取得flags、DOCTYPE許可構文をレビューする。
 2. raw XMLのbounded envelope/限定構造/typed比較器だけを合成実装済み（24テスト）。標準DOCTYPE許可・native有効化は別工程。
-3. 物理signature列挙/CodeDirectory結合の詳細設計案を追加済み。subset/上限/結合条件をレビュー後、未対応を拒否する部品の合成実装を別工程で行う。
+3. 物理signature列挙の純粋bounded parserだけ合成実装済み。実FD読取/CodeDirectoryとAPIの結合、未承認のDER/absenceは別工程であり、停止を維持する。
 4. DER decoderの信頼元/対応subsetとabsence十分条件を別審査する。確認できなければproducerは無効維持。
 5. 別承認後の実artifact/OS適合で、API再構成、形式併存、empty/absence、例外/部分情報の挙動を検証する。
 

@@ -54,7 +54,7 @@ Team IDとidentifierはsigning dictionaryから型付き取得して既存比較
 
 ## 5. entitlementの保守的な対応範囲
 
-[raw／DER整合・absence証拠設計draft-0.2](BEST_PRACTICE_BP5_R2_OL03_ENTITLEMENT_EVIDENCE_DESIGN.md)に公式仕様/SDKの照合、対応形式案、拒否条件、未確認事項を整理した。raw XMLの限定解析/型付き辞書比較は[別の純粋部品として合成実装](E2E_BEST_PRACTICE_R2_OL03_RAW_XML_SYNTHETIC_2026-10-19.md)したが、nativeへは未接続。以下の停止条件は緩めていない。
+[raw／DER整合・absence証拠設計draft-0.4](BEST_PRACTICE_BP5_R2_OL03_ENTITLEMENT_EVIDENCE_DESIGN.md)に公式仕様/SDKの照合、対応形式案、拒否条件、未確認事項を整理した。raw XMLの限定解析/型付き辞書比較は[別の純粋部品として合成実装](E2E_BEST_PRACTICE_R2_OL03_RAW_XML_SYNTHETIC_2026-10-19.md)したが、nativeへは未接続。[物理signatureの純粋bytes parser](E2E_BEST_PRACTICE_R2_OL03_PHYSICAL_SIGNATURE_SYNTHETIC_2026-10-19.md)も同様に未接続である。以下の停止条件は緩めていない。
 特にAPI rawは物理署名slotの元bytesとは限らない。公式WebのRequirementInformation指定とSDKのgeneric注記の差も記録し、将来は固定取得profileを審査する。今回はSigningInformationのみの実装を変更していない。
 
 native初期対応は**型確認済みdictionaryが存在し、raw entitlementキーが存在しない場合だけ**。

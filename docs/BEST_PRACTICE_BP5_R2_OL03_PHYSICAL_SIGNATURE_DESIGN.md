@@ -1,6 +1,6 @@
 # BP-5 R-2 OL-03：保持FDの物理signature列挙・CodeDirectory結合
 
-Version: draft-0.2 / Date: 2026-10-19 / Status: 詳細設計案のみ。parser・native接続・実artifact検証は未実施。
+Version: draft-0.3 / Date: 2026-10-19 / Status: 純粋bounded parserを内部合成実装済み。保持FD/native接続・API結合・実artifact検証は未実施。
 
 ## 1. 目的と停止境界
 
@@ -10,7 +10,7 @@ Version: draft-0.2 / Date: 2026-10-19 / Status: 詳細設計案のみ。parser�
 
 DERはenvelope/slotの存在を診断しても意味解析せず停止する。slotなし/zero hashをabsenceへ昇格させない。
 本番registry未設定、通常v2入口Unavailable、runtime gate92、permit未発行を維持する。
-telemetry調査は保留。今回はMDのみで、実装・実Security/CF呼出し・署名・実機/PDI操作・token発行・設定変更は行わない。
+telemetry調査は保留。今回の実装は借用bytesの純粋parserだけで、実Security/CF呼出し・署名・実機/PDI操作・token発行・設定変更は行わない。
 既存文書にある以前のNode観測は再実行していない。本案がそのNodeや採用予定版を通せるとはしない。
 
 ## 2. 根拠・固定した参照元
@@ -44,7 +44,16 @@ argv/env/path文字列だけや「検証済み:true」という呼出し側bool�
 2. `CodeDirectoryMatchOnly`相当：同一profileで局所算出したCD digestと、型検査したAPI観測との一致。CMS/OS validityの代用ではない。
 3. entitlement統合：別のXML typed比較を使い、DERがあればUnsupported、なしでもabsence未証明なら停止。全表現一致を自動生成しない。
 
-いずれもprivateな将来型で、今回API/JSON/実装を追加しない。raw bytes/identifier/Team ID/pathはDebugや有限理由へ出さず、件数/形式/停止理由だけを扱う。
+1の相当部品だけprivate実装した。2/3は未接続で、公開API/JSONは追加しない。raw bytes/identifier/Team ID/pathはDebugや有限理由へ出さず、件数/形式/停止理由だけを扱う。
+
+### 3.1 今回の純粋parser境界
+
+`signature_boundary::physical_signature`は、宣言file長・header/commands bytes・signature bytesの借用sliceを受け取る。
+同一保持FDから取得した証拠ではなく、呼出し側が別々に作ったrangeも構造が整合すれば受理する。path/FD取得、metadata、file全体hash、更新排他は実装しない。
+成功値は内部`Inventory`で、slot数、CD属性と局所32bytes digest、XML/DER wrapperの借用viewを保持する。
+Debugは固定の`structure_only_not_execution_authority`表記。公開constructor/serialize/permit変換はない。
+`entitlement_gate()`は常に拒否し、DERありはUnsupportedDer、XMLもなしはAbsenceUnproven、XMLありだけでもUnverifiedXmlを返す。
+XML限定比較器にも接続せず、構造成功を全表現一致へ昇格させない。
 
 ## 4. 解析上限案
 
@@ -71,11 +80,13 @@ file上限・nCodeSlots上限・CD上限・signature領域上限が同じpage数
 
 値は初期局所上限案で、既存の上限を緩めない。framework内部の確保量/停止しないFFIのhard timeoutを保証しない。
 割当は検査後のcommand領域・signature領域へ限定し、全fileをVecやmmapで確保しない。
+今回のparserは入力を複写せず、最大64件のslot metadata/setだけを確保する。物理XML＋DERをwrapper込み64KiBに制限するが、API rawとの共有合計は接続前の未対応項目である。
+file/signature/CDの局所最大値は同時に到達できるとは限らず、全制約を同時に満たす必要がある。
 
 ## 5. Mach-Oからsignature領域まで
 
 1. 同一保持FDでmetadata/full-file SHA-256を取得し、ledgerの期待値と一致させる。file offsetを変えないpreadを使う案。
-2. headerをlittle-endianとして明示decode。fat/swapped/別arch/subtype/bundle/dylibを拒否する。
+2. headerをlittle-endianとして明示decode。fat/swapped/別arch/subtype/bundle/dylibを拒否する。初期subsetではreserved field=0も要求する。
 3. `32 + sizeofcmds`をchecked加算しfile内に収める。ncmdsと最小command長の必要量も検査する。
 4. commandをncmds件完全走査。cmdsize>=8、8の倍数、現在位置へのchecked加算、command領域内包含を検査し、最後は領域末尾に一致させる。
 5. 非対象commandはサイズ検査後に読み飛ばすが、未知の`LC_REQ_DYLD`付きcommandは初期未対応として拒否する。理解していない必要機能を無視しない。
@@ -115,7 +126,7 @@ versionは**0x20400と0x20500だけ**を初期候補とし、最小header長を�
 magic/総長、spare2/spare3=0、scatterOffset=0を要求。0x20500はpreEncryptOffset=0のみ。linkageやscatter等の追加配列は未対応。
 hashType=2（SHA-256）、hashSize=32、platform=0を要求。SHA-1/SHA-256-truncated/SHA-384等へfallbackしない。
 
-`S=32*nSpecialSlots`、`C=32*nCodeSlots`をchecked演算し、`hashOffset >= S`、`H=hashOffset-S >= header_min`、`hashOffset+C <= length`を要求。
+`S=32*nSpecialSlots`、`C=32*nCodeSlots`をchecked演算し、`hashOffset >= S`、`H=hashOffset-S >= header_min`、`hashOffset+C == length`を要求。hashOffsetは64KiB以下。
 identifier/teamのoffsetはheaderの後・Hの前。各128bytes以下の非空UTF-8をNUL終端まで完全に確認し、制御文字/範囲外/相互重なりを拒否する。hash配列/固定fieldへstringを重ねない。
 team offset=0を初期profileでは拒否する（後段のDeveloper ID policyにも必要）。表示用文字列やcase-foldで代替しない。
 
@@ -169,7 +180,7 @@ inode/mtimeだけが同じ、またはcdhashだけが同じことを理由に、
 内部有限理由案：invalid_macho / invalid_range / duplicate_slot / overlapping_blob / unsupported_cd / unsupported_slot / special_hash_mismatch / api_cd_mismatch / identity_changed / unsupported_der / absence_unproven / limit / deadline / cancelled。
 理由の細分化は内部診断案であり、公開exit code/JSON契約を今回変更しない。
 
-| 合成群（未作成・未実行） | 必須ケース |
+| 合成群（今回の実行範囲は§10.2。API/FD関連は未実行） | 必須ケース |
 |---|---|
 | bounded構造 | ncmds/sizeofcmds/全length/offsetの上限±1、checked overflow、EOF/短読取、alignment、未知required command |
 | signature | LC欠落/重複、table侵入、未整列index、同一blob alias/重複/重なり、zero padding/非zero padding、未知slot/alternate |
@@ -191,4 +202,11 @@ inode/mtimeだけが同じ、またはcdhashだけが同じことを理由に、
 
 承認待ち：subset/局所上限、zero padding方針、execSegFlags、CodeDirectoryの実OS対応、20bytes API対応、CMSとembedded CDの同一性、SDK/profile固定、更新排他とhard timeout。
 Nodeのsingle/alternate CD構成、CodeDirectory version/pageSizeや署名末尾条件は採用artifactで未確認。既存1台・1版のslot観測だけでは本subset全体の適合を証明しない。
-DER decoder・absence十分条件・標準DOCTYPEは別課題のまま。実装開始はまず純粋なbounded inventory/parserからとし、合成fixtureを本番policyへ転用しない。
+DER decoder・absence十分条件・標準DOCTYPEは別課題のまま。合成fixtureを本番policyへ転用しない。
+
+### 10.2 純粋parserの合成実装
+
+[合成検証記録](E2E_BEST_PRACTICE_R2_OL03_PHYSICAL_SIGNATURE_SYNTHETIC_2026-10-19.md)に33件の追加試験と全体221件の結果を記録した。
+§5の手順2〜7、§6、§7の構造/局所hash検査を対象にした。§5手順1の保持FD/全体hash、§8のAPI結合、§9の差替え検知は未実装。
+全page hash/CMSの暗号検証、DER意味解析、absence証明、execSegFlagsの承認policy、通常v2入口・permitへの接続は追加していない。
+共有開始Instantから10秒の期限/cancelをcommand/index/zero走査/hash chunkと最終返却前に確認する。OS強制停止の保証ではない。

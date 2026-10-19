@@ -106,6 +106,12 @@ all DOCTYPEs (including the usual plist declaration), DER and absence assertions
 only API-local consistency counts. No native rejection or acquisition flag is changed and
 no physical-signature/DER/absence evidence is produced. See
 [raw XML synthetic verification](../../docs/E2E_BEST_PRACTICE_R2_OL03_RAW_XML_SYNTHETIC_2026-10-19.md).
+The private `physical_signature` parser inventories bounded synthetic Mach-O ranges,
+SuperBlob slots and the single SHA-256 CodeDirectory subset, including wrapper hashes.
+It borrows bytes only: no held-FD reader, native/API binding, page/CMS validity or
+entitlement semantics is connected. Its entitlement gate always rejects (DER,
+absence or unverified XML); no authority or permit is produced. See
+[physical inventory synthetic verification](../../docs/E2E_BEST_PRACTICE_R2_OL03_PHYSICAL_SIGNATURE_SYNTHETIC_2026-10-19.md).
 See [boundary contract](../../docs/BEST_PRACTICE_BP5_R2_OL03_SECURITY_BOUNDARY_DESIGN.md)
 and [synthetic verification](../../docs/E2E_BEST_PRACTICE_R2_OL03_SECURITY_BOUNDARY_SYNTHETIC_2026-10-19.md).
 
