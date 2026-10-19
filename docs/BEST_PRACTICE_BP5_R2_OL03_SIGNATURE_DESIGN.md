@@ -1,6 +1,6 @@
 # BP-5 R-2 OL-03：launcher／Nodeの署名・entitlement検証設計
 
-Version: draft-0.5 / Date: 2026-10-19 / Status: C方式を採択。純粋policy/ledger-0.2解析・参照/entitlement比較は内部合成検証済み。実署名検証・OS適合試験は未実施。
+Version: draft-0.6 / Date: 2026-10-19 / Status: C方式を採択。純粋policy/ledger-0.2解析・参照/entitlement比較・安全なreader接続は内部合成検証済み。実署名検証・OS適合試験は未実施。
 
 ## 1. 目的と現在の境界
 
@@ -54,8 +54,8 @@ Appleはuniversalの一sliceだけの検査では不十分で、全sliceの署�
 現行0.1 ledgerの`signature_requirement`は文字列、`publisher`は文字列、`entitlements`は名前の配列、`hardened_runtime`はboolである。
 これだけでは証明書クラス・期待する全flag・entitlement値や型の完全一致を表せない。
 署名器が自由なrequirementを解釈して許可範囲を拡大する方式にはしない。
-候補の比較・型付き期待値/観測値・移行は[型付き署名policy設計draft-0.3](BEST_PRACTICE_BP5_R2_OL03_TYPED_SIGNATURE_POLICY_DESIGN.md)に具体化した。
-固定registryに期待値を一元化し、参照専用ledger-0.2からID/digestで結合するC方式を採択。[ledger-0.2 parser/参照binding](E2E_BEST_PRACTICE_R2_OL03_LEDGER_V2_SYNTHETIC_2026-10-19.md)は合成検証済みだが、個別policy承認・実署名・installed reader移行は未完了。
+候補の比較・型付き期待値/観測値・移行は[型付き署名policy設計draft-0.4](BEST_PRACTICE_BP5_R2_OL03_TYPED_SIGNATURE_POLICY_DESIGN.md)に具体化した。
+固定registryに期待値を一元化し、参照専用ledger-0.2からID/digestで結合するC方式を採択。[ledger-0.2 parser/参照binding](E2E_BEST_PRACTICE_R2_OL03_LEDGER_V2_SYNTHETIC_2026-10-19.md)と[安全なreaderへの内部接続](E2E_BEST_PRACTICE_R2_OL03_LEDGER_V2_READ_SYNTHETIC_2026-10-19.md)は合成検証済みだが、個別policy承認・実署名・本番reader有効化は未完了。
 root activationがledger bytesをpinする点を維持し、旧recordを黙って新契約に読み替えない。
 requirementを再文字列化すると表記が変わり得るので、round-trip文字列一致を論理的な同一性の証明にしない。[A2](https://developer.apple.com/documentation/security/secrequirementcreatewithstring(_:_:_:))
 
@@ -162,7 +162,7 @@ ad-hocのfixtureをDeveloper ID正常系として採点しない。今回署名�
 5. offline失効/公証の鮮度・receipt、配布形式、quarantine拒否との両立、撤回/再承認の責任者。Nodeは単体公証を要求するか、配布物の公証＋展開後hash結合で代替するか（§6）。
 6. 10秒内の強制停止方式とthread/FD前提。更新lease・path差替え防止・exec直前再検証との統合。
 
-純粋parser/entitlement比較器は[合成検証済み](E2E_BEST_PRACTICE_R2_OL03_TYPED_POLICY_SYNTHETIC_2026-10-19.md)。本番policy承認・registry信頼元・次版ledger接続は未完了で、実署名検証やgate解除を先行させない。
+純粋parser/entitlement比較器は[合成検証済み](E2E_BEST_PRACTICE_R2_OL03_TYPED_POLICY_SYNTHETIC_2026-10-19.md)。次版ledgerの安全なreaderへの内部接続は合成検証済み。本番policy承認・registry信頼元・本番有効化は未完了で、実署名検証やgate解除を先行させない。
 人の承認、実署名検証、信頼済み配備・実Node適合・実PDI開始条件は未完了。
 
 ## 9. 公式根拠・確認範囲（2026-10-19）

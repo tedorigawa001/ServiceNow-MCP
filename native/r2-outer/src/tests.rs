@@ -455,3 +455,292 @@ fn offline_v1_stays_valid_and_never_accepts_v2_records() {
     });
     stopped(&f, Failure::InvalidRecord);
 }
+
+mod v2_reader {
+    use super::*;
+    fn registry() -> Vec<u8> {
+        let policy = |role: &str| json!({"id":format!("{role}-1"),"role":role,"artifact_class":"mach_o_thin_arm64","requirement_template_id":"developer_id_application_v1","issuer":{"anchor":"apple_developer_id","certificate_class":"developer_id_application","team_id":"SYNTHETIC","signing_identifier":format!("test.{role}")},"expected_static_flags":65536,"entitlement_expectation":{"kind":"empty"}});
+        bytes(
+            &json!({"schema_version":"bp5-r2-signature-registry-0.1","registry_id":"synthetic","policies":[policy("launcher"),policy("node")]}),
+        )
+    }
+    fn fixture_v2() -> Fake {
+        let mut f = fixture();
+        change(&mut f, Role::Ledger, |v| {
+            v["schema_version"] = json!("bp5-r2-launch-ledger-0.2");
+            v["policy_id"] = json!("bp5-r2-outer-macos-arm64-0.2");
+            v["signature_registry"] = json!({"schema_version":"bp5-r2-signature-registry-0.1","registry_id":"synthetic","sha256":digest(&registry())});
+            for role in ["launcher", "node"] {
+                let b = v[role].as_object_mut().unwrap();
+                for key in [
+                    "signature_requirement",
+                    "publisher",
+                    "hardened_runtime",
+                    "entitlements",
+                ] {
+                    b.remove(key);
+                }
+                b.insert("signature_policy_id".into(), json!(format!("{role}-1")));
+            }
+        });
+        f
+    }
+    fn run(f: &Fake) -> Result<records_v2::InspectedV2Records, Failure> {
+        records_v2::inspect(f, &registry())
+    }
+    fn rejects(f: &Fake, error: Failure) {
+        assert_eq!(run(f).unwrap_err(), error);
+        assert!(!format!("{error:?}").contains("PRIVATE"));
+    }
+    #[test]
+    fn safe_read_binds_registry_and_returns_opaque_non_authority() {
+        let f = fixture_v2();
+        assert_eq!(
+            format!("{:?}", run(&f).unwrap()),
+            "InspectedV2Records(not_execution_authority)"
+        );
+        assert_eq!(
+            *f.reads.borrow(),
+            [ACTIVATION_PATH, LEDGER, ACTIVATION_PATH, LEDGER]
+        );
+    }
+    #[test]
+    fn no_approved_build_registry_means_no_operational_reader() {
+        assert_eq!(
+            inspect_installed_v2_records().unwrap_err(),
+            Failure::Unavailable
+        );
+    }
+    #[test]
+    fn invalid_build_registry_stops_before_any_file_read() {
+        for bad in [b"{".as_slice(), b"{}", b"\xff"] {
+            let f = fixture_v2();
+            assert_eq!(
+                records_v2::inspect(&f, bad).unwrap_err(),
+                Failure::InvalidRecord
+            );
+            assert!(f.reads.borrow().is_empty());
+        }
+    }
+    #[test]
+    fn registry_bytes_cannot_be_substituted_by_same_id() {
+        let f = fixture_v2();
+        let mut other = registry();
+        other.push(b' ');
+        assert_eq!(
+            records_v2::inspect(&f, &other).unwrap_err(),
+            Failure::BindingMismatch
+        );
+    }
+    #[test]
+    fn v2_and_legacy_offline_readers_remain_separate() {
+        rejects(&fixture(), Failure::InvalidRecord);
+        assert!(inspect(&fixture()).is_ok());
+        assert_eq!(inspect(&fixture_v2()).unwrap_err(), Failure::InvalidRecord);
+    }
+    #[test]
+    fn both_documents_require_safe_owner_mode_acl_and_regular_single_link_files() {
+        for role in [Role::Activation, Role::Ledger] {
+            for kind in 0..8 {
+                let mut f = fixture_v2();
+                let m = if role == Role::Activation {
+                    &mut f.a.meta
+                } else {
+                    &mut f.l.meta
+                };
+                match kind {
+                    0 => m.uid = 900,
+                    1 => m.mode |= 0o020,
+                    2 => m.mode |= 0o4000,
+                    3 => m.links = 2,
+                    4 => m.no_acl = false,
+                    5 => m.regular = false,
+                    6 => m.directory = true,
+                    _ => m.mode = 0o644,
+                }
+                rejects(&f, Failure::UntrustedFile);
+            }
+        }
+    }
+    #[test]
+    fn ancestor_changes_and_untrusted_parents_stop() {
+        for role in [Role::Activation, Role::Ledger] {
+            for kind in 0..5 {
+                let mut f = fixture_v2();
+                let a = if role == Role::Activation {
+                    &mut f.a.ancestors
+                } else {
+                    &mut f.l.ancestors
+                };
+                match kind {
+                    0 => a[0].uid = 900,
+                    1 => a[0].mode |= 0o002,
+                    2 => a[0].no_acl = false,
+                    3 => a[0].directory = false,
+                    _ => a.clear(),
+                }
+                rejects(&f, Failure::UntrustedFile);
+            }
+        }
+    }
+    #[test]
+    fn replacements_of_activation_or_ledger_are_detected() {
+        for role in [Role::Activation, Role::Ledger] {
+            let mut f = fixture_v2();
+            f.mutation = Some(role);
+            rejects(&f, Failure::Changed);
+        }
+    }
+    #[test]
+    fn hash_is_checked_before_ledger_json_and_no_fallback_occurs() {
+        let mut f = fixture_v2();
+        f.l.bytes = b"{".to_vec();
+        rejects(&f, Failure::HashMismatch);
+        let hash = digest(&f.l.bytes);
+        change(&mut f, Role::Activation, |v| {
+            v["ledger_sha256"] = json!(hash)
+        });
+        rejects(&f, Failure::InvalidRecord);
+    }
+    #[test]
+    fn group_uid_generation_platform_and_index_bindings_stop() {
+        for kind in 0..7 {
+            let mut f = fixture_v2();
+            match kind {
+                0 => f.uid = 0,
+                1 => f.groups.clear(),
+                2 => f.a.meta.gid = 888,
+                3 => change(&mut f, Role::Ledger, |v| v["generation"] = json!(2)),
+                4 => change(&mut f, Role::Ledger, |v| {
+                    v["platform"]["os_build"] = json!("OTHER")
+                }),
+                5 => change(&mut f, Role::Ledger, |v| {
+                    v["runtime"]["index_sha256"] = json!("f".repeat(64))
+                }),
+                _ => change(&mut f, Role::Ledger, |v| v["execution_uid"] = json!(502)),
+            }
+            rejects(
+                &f,
+                if kind == 0 {
+                    Failure::UntrustedFile
+                } else {
+                    Failure::BindingMismatch
+                },
+            );
+        }
+    }
+    #[test]
+    fn unknown_policy_role_or_external_registry_fields_stop() {
+        for kind in 0..4 {
+            let mut f = fixture_v2();
+            change(&mut f, Role::Ledger, |v| match kind {
+                0 => v["node"]["signature_policy_id"] = json!("unknown"),
+                1 => v["launcher"]["signature_policy_id"] = json!("node-1"),
+                2 => v["signature_registry"]["path"] = json!("/untrusted/registry.json"),
+                _ => v["signature_registry"]["sha256"] = json!("f".repeat(64)),
+            });
+            rejects(
+                &f,
+                if kind == 2 {
+                    Failure::InvalidRecord
+                } else {
+                    Failure::BindingMismatch
+                },
+            );
+        }
+    }
+    #[test]
+    fn missing_oversized_or_invalid_activation_stops() {
+        let mut f = fixture_v2();
+        f.missing = true;
+        rejects(&f, Failure::Unavailable);
+        for role in [Role::Activation, Role::Ledger] {
+            let mut f = fixture_v2();
+            if role == Role::Activation {
+                f.a.bytes.resize(MAX_BYTES + 1, b' ');
+            } else {
+                f.l.bytes.resize(MAX_BYTES + 1, b' ');
+            }
+            rejects(&f, Failure::UntrustedFile);
+        }
+        let mut f = fixture_v2();
+        f.a.bytes = b"{}".to_vec();
+        rejects(&f, Failure::InvalidRecord);
+        assert_eq!(f.reads.borrow().len(), 1);
+    }
+    #[test]
+    fn deadline_and_clock_failure_stop_before_new_reads() {
+        for (end, error) in [
+            ((NOW + 10000, 10000), Failure::Deadline),
+            ((NOW - 1, 0), Failure::ClockInvalid),
+            ((NOW + 10, 0), Failure::ClockInvalid),
+        ] {
+            let mut f = fixture_v2();
+            f.end = end;
+            rejects(&f, error);
+            assert!(f.reads.borrow().is_empty());
+        }
+    }
+    #[test]
+    fn expiry_of_either_record_is_checked() {
+        for role in [Role::Activation, Role::Ledger] {
+            let mut f = fixture_v2();
+            change(&mut f, role, |v| {
+                v["expires_at"] = json!("2026-10-19T00:07:40.000Z")
+            });
+            rejects(&f, Failure::Expired);
+        }
+    }
+    struct Timed {
+        inner: Fake,
+        after_reads: usize,
+        elapsed: u64,
+    }
+    impl Source for Timed {
+        fn context(&self) -> Result<Context, Failure> {
+            self.inner.context()
+        }
+        fn read(&self, path: &str, role: Role, uid: u32) -> Result<Snapshot, Failure> {
+            self.inner.read(path, role, uid)
+        }
+        fn clock(&self) -> Result<(u64, u64), Failure> {
+            let elapsed = if self.inner.reads.borrow().len() >= self.after_reads {
+                self.elapsed
+            } else {
+                0
+            };
+            Ok((NOW + elapsed, elapsed))
+        }
+    }
+    #[test]
+    fn shared_deadline_covers_initial_reads_and_final_rereads() {
+        for count in 1..=4 {
+            let f = Timed {
+                inner: fixture_v2(),
+                after_reads: count,
+                elapsed: 10000,
+            };
+            assert_eq!(
+                records_v2::inspect(&f, &registry()).unwrap_err(),
+                Failure::Deadline
+            );
+            assert_eq!(f.inner.reads.borrow().len(), count);
+        }
+    }
+    #[test]
+    fn valid_just_inside_shared_deadline_preserves_return_validity() {
+        let mut inner = fixture_v2();
+        for role in [Role::Activation, Role::Ledger] {
+            change(&mut inner, role, |v| {
+                v["expires_at"] = json!("2026-10-19T00:07:40.001Z")
+            });
+        }
+        let f = Timed {
+            inner,
+            after_reads: 1,
+            elapsed: 9999,
+        };
+        assert!(records_v2::inspect(&f, &registry()).is_ok());
+        assert_eq!(f.inner.reads.borrow().len(), 4);
+    }
+}

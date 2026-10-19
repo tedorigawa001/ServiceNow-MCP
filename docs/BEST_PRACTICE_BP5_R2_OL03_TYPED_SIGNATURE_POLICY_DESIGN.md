@@ -1,6 +1,6 @@
 # BP-5 R-2 OL-03：型付き署名policy・registry/ledger移行契約
 
-Version: draft-0.3 / Date: 2026-10-19 / Status: C方式を採択。policy/ledger-0.2 parser・純粋照合を内部合成検証済み。個別policy承認・実署名・installed reader移行は未実施。
+Version: draft-0.4 / Date: 2026-10-19 / Status: C方式を採択。policy/ledger-0.2 parser・安全なreader接続を内部合成検証済み。個別policy承認・実署名・本番reader有効化は未実施。
 
 ## 1. 目的と境界
 
@@ -123,8 +123,24 @@ Node versionはartifact receiptと最終hashへ結合し、policy IDだけで任
 
 activation-0.1のledger raw hash bindingで新ledger bytesを固定できるため、この案ではactivation項目を増やさない。
 新runtime用readerはledger-0.2のみを受理し、署名検証のために旧ledgerへfallbackしない。
-現行OL-02 installed readerは0.1のまま。0.2のメモリ上データ検査/registry参照は実装したが、実file読込やpermit発行へ接続したという意味ではない。
+現行OL-02 offline readerは0.1のまま。別経路の0.2 readerを既存の安全なファイル読取へ接続した（§5.1）。本番registry不在のため通常入口は有効化しておらず、permit発行にも接続しない。
 registry/ledgerのschema version、outer policy ID、activation generationは別概念で、自動的に同じ数値へ同期しない。
+
+### 5.1 安全なreader接続（内部合成検証）
+
+[reader接続検証記録](E2E_BEST_PRACTICE_R2_OL03_LEDGER_V2_READ_SYNTHETIC_2026-10-19.md)を参照。
+`inspect_installed_v2_records()`は引数なしの別入口。承認済みbuild registryが未設定なので、現時点ではファイルを読む前に`Unavailable`で停止する。
+内部経路のみ合成registryで検証し、外部registryファイルの読込・path指定・env/argv上書きは追加しない。C方式の正本は引き続き組込みbytesである。
+
+1. 共通の10秒予算を開始し、固定build bytesをstrict registry parserへ渡す。不正registryはファイル読取前に停止。
+2. 実UID/group/OS文脈を取得し、固定activationを既存のdirectory-FD readerで検査する。root所有・0440・reader GID・単一link・regular・ACLなし、信頼された祖先を要求。
+3. activationの期限と実行UID/groupを検査し、指定ledgerを同readerで読む。実行UID所有・0600を要求し、raw hashを解析前に照合。
+4. activation由来の世代/release/UID/indexと実OSをContextに結合し、0.2 parser/registry ID・digest/policy roleを照合。旧版fallbackなし。
+5. activation/ledgerを再読取しbytes・metadata・祖先identityを比較。各読取前後の期限と壁時計/単調時計の整合を確認し、終了時に両recordの残期限450秒超を検査。
+
+結果は`InspectedV2Records(not_execution_authority)`というopaque型。コード/registry内容・path・issuer等をDebug/errorへ出さず、旧`InspectedRecords`やexec用permitへの変換は設けない。
+filesystemのFD traversal・symlink拒否・bounded読取は既存実装を再利用する。registryの同一IDでもraw bytesが違えば停止する。
+更新排他・OS署名/entitlement・closureを一体検証した証拠ではなく、検査完了後の差替え防止も未解決。ファイルI/O中の強制中断はなく、10秒は各段階の経過時間検査である。
 
 ## 6. 移行・更新・撤回
 
@@ -169,5 +185,5 @@ strict parserとentitlement純粋比較を合成実装した。初期descriptor/
 - 新runtime/旧offline readerの分離・activation-0.1継続の可否、切替/撤回・更新排他の責任者。
 - 信頼済みbuild/署名、公証/失効確認・thread/FD/timeoutの未決事項とregistry更新コスト。
 
-型付きpolicy比較と0.2 ledgerのstrict parser/registry参照bindingは合成検証済み。次は本番registryの信頼元・installed-record readerへの安全な接続を別工程で具体化する。
+型付きpolicy比較、0.2 ledgerのstrict parser/registry参照binding、安全なreaderへの内部接続は合成検証済み。次は本番registryの承認・信頼済みbuildへの組込みと、実署名/更新排他を別工程で具体化する。reader有効化や本番policy投入は自動で行わない。
 実Security adapter・実配備・gate解除は別承認。telemetry調査の再開を前提にせず、実PDI開始許可にも転用しない。

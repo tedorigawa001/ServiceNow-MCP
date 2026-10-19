@@ -36,6 +36,15 @@ pub fn parse_and_bind(
     context: &Context<'_>,
     started: Instant,
 ) -> Result<BindingSummary, LedgerFailure> {
+    parse_bound_ledger(bytes, registry, context, started)?;
+    Ok(BindingSummary { bound_policies: 2 })
+}
+pub(crate) fn parse_bound_ledger(
+    bytes: &[u8],
+    registry: &ParsedRegistry,
+    context: &Context<'_>,
+    started: Instant,
+) -> Result<LedgerV2, LedgerFailure> {
     elapsed(started)?;
     if bytes.len() > 65536 {
         return Err(LedgerFailure::Limit);
@@ -88,7 +97,7 @@ pub fn parse_and_bind(
         .checked_add(elapsed(started)?)
         .ok_or(LedgerFailure::Invalid)?;
     ledger.time().validate(end, 450_000).map_err(time_error)?;
-    Ok(BindingSummary { bound_policies: 2 })
+    Ok(ledger)
 }
 fn time_error(error: crate::Failure) -> LedgerFailure {
     if error == crate::Failure::Expired {

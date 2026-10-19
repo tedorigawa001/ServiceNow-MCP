@@ -8,6 +8,8 @@ mod json;
 mod launch;
 mod launch_args;
 pub mod ledger_v2;
+mod records_v2;
+pub use records_v2::{InspectedV2Records, inspect_installed_v2_records};
 pub mod signature_policy;
 pub use launch::{LaunchFailure, exec_installed};
 mod schema;

@@ -81,6 +81,15 @@ registry-reference/role binding. Its Context is caller-provided data, not proof 
 inspected activation. The installed offline reader remains v0.1-only and no runtime
 gate is enabled. See [ledger-0.2 verification](../../docs/E2E_BEST_PRACTICE_R2_OL03_LEDGER_V2_SYNTHETIC_2026-10-19.md).
 
+The separate `inspect_installed_v2_records` path connects the existing directory-FD
+safe activation/ledger reader to the strict v2 parser and fixed build-registry bytes.
+The internal connection is covered by synthetic sources; the production build registry
+is deliberately absent, so this public no-argument entry returns `Unavailable` before
+file access. There is no external registry file, path override or synthetic-policy switch.
+Successful internal inspection returns an opaque non-authority value, not legacy records
+usable by `exec_installed`. Legacy v0.1 offline inspection is unchanged. See
+[safe-reader connection verification](../../docs/E2E_BEST_PRACTICE_R2_OL03_LEDGER_V2_READ_SYNTHETIC_2026-10-19.md).
+
 The additional `closure::check` API parses bounded in-memory index bytes and compares a
 caller-supplied binding and observation list. It returns counts only, never an execution
 permit. It does not read or verify deployed files, signatures, ACLs or xattrs. The fixed
