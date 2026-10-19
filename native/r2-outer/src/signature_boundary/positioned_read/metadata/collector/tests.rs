@@ -56,7 +56,7 @@ struct Synthetic<'a> {
     sizes: Option<(i64, i64)>,
     got: Option<usize>,
     present: i32,
-    present_at: Option<Phase>,
+    present_at: Option<(Phase, i32)>,
     fs: FsObservation,
     change: Option<(Phase, Step)>,
     bad_stat: bool,
@@ -187,10 +187,9 @@ impl MetadataOps for Synthetic<'_> {
     fn acl_query(&mut self, p: Phase, handle: &mut Handle) -> Result<i32, OpFailure> {
         assert_eq!(p, handle.phase);
         self.event(p, Step::Query)?;
-        Ok(if self.present_at == Some(p) {
-            1
-        } else {
-            self.present
+        Ok(match self.present_at {
+            Some((q, value)) if q == p => value,
+            _ => self.present,
         })
     }
     fn acl_free(&mut self, handle: Handle) {
@@ -326,13 +325,30 @@ fn filesystem_profile_rejects_nonlocal_unknown_nonapfs_ignored_owners_and_noexec
 }
 #[test]
 fn acl_present_and_invalid_sentinel_never_become_absent() {
-    for present in [1, -1, 2, i32::MAX] {
-        let mut s = Synthetic::new();
-        s.present = present;
-        assert_eq!(run(&mut s).0.unwrap_err(), Failure::Metadata);
-        assert_eq!(s.events.last(), Some(&(Phase::M0, Step::Free)));
-        assert!(!s.events.iter().any(|v| v.1 == Step::Size));
-        released(&s);
+    for phase in PHASES {
+        for present in [1, -1, 2, i32::MAX] {
+            let mut s = Synthetic::new();
+            s.present_at = Some((phase, present));
+            let reason = match (phase, present) {
+                (Phase::M0, 1) => Failure::Metadata,
+                (_, 1) => Failure::Changed,
+                _ => Failure::MetadataUnavailable,
+            };
+            let cancel = AtomicBool::new(false);
+            let mut b = SharedBudget::new(Instant::now(), &cancel);
+            let expected = hash(&s.bytes);
+            let n = s.bytes.len() as u64;
+            let out = b
+                .begin(&mut s, n)
+                .unwrap()
+                .compare_collected_m0_m4(&expected, 7);
+            assert_eq!(out.unwrap_err(), reason);
+            assert_eq!(b.checkpoint(), Err(reason));
+            assert_eq!(b.metadata_cleanup_reserved, 0);
+            assert_eq!(s.events.last(), Some(&(phase, Step::Free)));
+            assert!(!s.events.contains(&(phase, Step::Size)));
+            released(&s);
+        }
     }
 }
 #[test]
@@ -564,7 +580,7 @@ fn successful_copy_is_charged_before_deadline_and_impossible_return_is_capped() 
 fn later_policy_failure_latches_changed_and_does_not_return_old_success() {
     for p in PHASES.into_iter().skip(1) {
         let mut s = Synthetic::new();
-        s.present_at = Some(p);
+        s.present_at = Some((p, 1));
         let cancel = AtomicBool::new(false);
         let mut b = SharedBudget::new(Instant::now(), &cancel);
         let expected = hash(&s.bytes);

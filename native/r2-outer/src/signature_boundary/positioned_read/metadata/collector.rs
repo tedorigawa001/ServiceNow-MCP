@@ -160,8 +160,10 @@ impl<S: MetadataOps> ReadScope<'_, '_, S> {
                 .scope
                 .metadata_op(false, |s| s.acl_query(phase, handle))?
         };
-        if present != 0 {
-            return Err(Failure::Metadata);
+        match present {
+            0 => {}
+            1 => return Err(Failure::Metadata),
+            _ => return Err(Failure::MetadataUnavailable),
         }
         guard.scope.checkpoint()?;
         let declared = guard.scope.metadata_op(true, |s| s.names_size(phase))?;

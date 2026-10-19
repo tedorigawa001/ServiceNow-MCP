@@ -76,7 +76,7 @@ MNT_NOEXECも実行対象には拒否する案。取得不能・未対応FSは�
 1. filesec_initを1回だけ呼び、nullなら取得失敗。成功直後にRAII guardへ移し、全経路でfilesec_freeを1回だけ行う。
 2. 同じFDのfstatx_npへ正しいlibc::statとfilesecを渡す。成功時だけstatを投影し、beforeとexact比較。失敗で未初期化statを参照しない。
 3. presentを不正sentinelで初期化してfilesec_query_property(FILESEC_ACL)を呼ぶ。戻り値0かつpresent=0だけAbsent候補、present=1はPresent。
-4. 不正present・失敗・API未対応はUnknown/取得失敗で停止。空/deny-only ACLでもpropertyがあれば拒否し、ACE数0を不存在の代替にしない。
+4. 不正present（0/1以外）・失敗・API未対応はUnknown/取得失敗として、全phaseでMetadataUnavailableをラッチする。present=1だけはpolicy不適合としてM0でMetadata、M1〜M4でChanged。空/deny-only ACLでもpropertyがあれば拒否し、ACE数0を不存在の代替にしない。
 
 ACL本文、principal、UUID、ACEを取得/表示しない。FILESEC_ACL_RAW/ALLOCSIZEはSDKでprivate注記があるため使用しない。
 filesec内部の確保量とFSごとの「propertyなし／空ACL／未対応」の区別は未確認。呼出し数を有限化してもframework内部memoryのhard capを証明したことにはならない。
@@ -167,7 +167,7 @@ Rust/TypeScriptの実装・テストは変更していないため再実行し�
 - 名前bufferは照会後に64KiB以下をtry_reserve_exactで確保。空でも1byteを渡し、copy/requeryを省略しない。3回の照会取得は各1attemptだけ。
   名前成功copyは返却後guardの前に課金し、遅延/拒否でも残す。不正な過大返却は渡したslice長まで保守的計数してChanged。これは壊れたsourceの実OS転送量の証明ではない。
   名前台帳は全体640KiB、各観測64KiB。確保前に今回のslice長が残枠に入るか確認し、不足時はcopy前に停止する。照会長はbytes課金に足さない。許可名以外は固定比較で拒否し、一般名前parserやsortは不要。
-- FSはtyped `Local + apfs + !ownership_ignored + !noexec`だけ、ACL queryは0だけを許可。fstatx相当Stat/前後Statを完全照合する。
+- FSはtyped `Local + apfs + !ownership_ignored + !noexec`だけ、ACL queryは0だけを許可。1はpolicy不適合、0/1以外は全phaseでMetadataUnavailableとして区別する。fstatx相当Stat/前後Statを完全照合する。
   M0 policy不適合はMetadata、後続はChangedを**ラッチ前**に選び、取得失敗はMetadataUnavailable、上限はLimit。遅延/cancelはcheckpointで優先し、既存の最初の失敗は上書きしない。
 - `ComparedM0M4`の固定Debug・非Clone/非serialize・DER/absence/XMLの停止を維持。OS取得・ACL/xattr可視性・hard timeout・trusted opener/祖先/path/record/lease・API/permitの未対応を解消したとはしない。
 

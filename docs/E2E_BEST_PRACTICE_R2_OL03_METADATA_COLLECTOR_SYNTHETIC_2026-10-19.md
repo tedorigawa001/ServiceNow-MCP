@@ -61,3 +61,12 @@ typed Opsは実syscall結果の真正性を保証しない。実FD/ABI/errno変�
 trait実装内の隠れretryを本境界だけで排除したとは主張しない。今回のsourceは合成実装だけ。
 OS sourceがなく、trusted opener/祖先/path/record/leaseも未接続。native API/raw整合/DER/absence/permitへの昇格経路を追加しない。
 RAII unwind試験はhandle解放の証拠であり、backend panicの秘密非出力・panic後の運用再開を保証しない。
+
+## 7. ACL present分類の設計整合修正
+
+レビューで、§6の設計は不正presentを取得不明とする一方、実装は全非0値をpolicy不適合にしていた点を確認した。
+先に既存testを全5phase×present=1/-1/2/i32::MAXへ拡張し、不正値の期待をMetadataUnavailableに変更したところ、変更前実装はMetadataを返して失敗した。
+その後query結果を0（続行）/1（policy不適合）/その他（MetadataUnavailable）に分離した。
+全phaseで停止理由のラッチ、後続の名前照会0回、解放1回を確認する。present=1は従来どおりM0がMetadata、後続がChanged。
+test関数は置換/拡張のため総数は20/全体348件のまま。修正後に対象test・全体Rust test・release build・Clippy・整形・文書検査を再実行した。
+安全側の拒否範囲、共有予算、OS/API未接続・DER/absence/permit停止は変更しない。
