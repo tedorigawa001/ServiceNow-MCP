@@ -1,6 +1,6 @@
 # BP-5 R-2：安全な外側起動手順
 
-Version: draft-0.1 / Date: 2026-10-19 / Status: 設計案。外側launcherの実装・環境適合検証・運用承認は未実施。
+Version: draft-0.2 / Date: 2026-10-19 / Status: 設計案。外側launcherの実装・環境適合検証・運用承認は未実施。
 
 ## 1. 判断と範囲
 
@@ -111,6 +111,9 @@ immutableな配置と更新の排他を前提にし、同一UID/管理者が同�
    親envを複製してキーを削る方式ではなく、Nodeへ渡すenvを空から構築する。
    NODE_OPTIONS、NODE_PATH、loader/inspector設定、動的loader向け変数、proxy/CA/資格情報の値を転送しない。
    空envにより企業CA/proxy等が必要な環境で接続できなくても、その場で継承へ切り替えない。
+   空envでは`PATH`・`HOME`・`TMPDIR`・`LANG`/`LC_*`・`TZ`も渡らない。現行R-2はACL検査を`/bin/ls`/`getfacl`の絶対pathで呼び、
+   tmpdir/homedirも使わないため直接の依存は確認していないが、Nodeの既定locale/timezoneは環境で変わり得る。
+   OL-03では空envでも表示文言・承認/期限の時刻判定・集計の並び順・summary再投影の一致が変わらないことを合格条件に含める。
 5. **診断/資源条件**：子へ継承するprocess単位のcore dump上限0を設定・検証する案。
    Node診断report・heap snapshot・trace/inspector等を起動引数に付けない。OS/端末/EDRの収集運用は別途適合確認する。
    カーネル/共有OS設定や監査を自動変更しない。要求される秘密管理を確認できなければ開始しない。
@@ -129,7 +132,9 @@ Darwinが空envの子へ追加する`__CF_USER_TEXT_ENCODING`については、�
 
 exec成功後はentry自身が同じPIDでsignalを受ける。外側は既知73/71を130や0に変換せず、exit codeの再解釈・自動再試行をしない。
 exec前の検査拒否/exec失敗は外側専用の固定結果として扱い、entryのstrict reportがあるとは報告しない。
-候補は拒否64・内部失敗70だが、外側/entryどちらの状態かは別の実行記録で区別する。番号だけからcleanupや未発行を推定しない。
+外側専用の番号はentryの0/10/64/70〜73/80〜82/124/130と重ならない範囲（例：90〜99）から選ぶ案とする。
+旧案の拒否64・内部失敗70はentryの使い方誤り/起動条件不適合（64）・fatal（70）と同値で、exec後はentryの番号がそのまま返るため区別できない。
+最終値は実装時に固定し、外側/entryの別は引き続き非秘密の実行記録でも区別する。番号だけからcleanupや未発行を推定しない。
 exec前/最小bootstrap以前のSIGINT等による既定終了は残る。これを71/73保持済みと扱わない。
 
 非秘密manifest pathも識別情報でありargv/process一覧へ見え得る。pathには氏名・接続先・秘密を入れず、
@@ -148,7 +153,7 @@ entryの汎用100ms最終化監督は別の未実装提案であり、本設計�
 |---|---|---|
 | OL-01 | 言語/OS/信頼済みビルド・配備、台帳方式の選定 | 実行ファイルの入手根拠・依存閉包・更新担当・撤回が確定。Nodeによる自己検査だけに戻らない |
 | OL-02 | オフライン検査と固定拒否 | owner/ACL/symlink/改ざん/競合/非TTY/dump不適合でNode起動0回、待受/外部通信/任意子0回。固定理由だけ |
-| OL-03 | exec接続・FD/環境制御 | fake NodeのOS境界でargv/env/FD/cwd/limitsを照合。起動前注入markerが実行されない。実Node版との適合も確認 |
+| OL-03 | exec接続・FD/環境制御 | fake NodeのOS境界でargv/env/FD/cwd/limitsを照合。起動前注入markerが実行されない。実Node版との適合も確認。空envでの表示・時刻判定・並び順の不変、外側専用exit codeがentryと重ならないことも確認 |
 | OL-04 | entryとの合成接続 | check-plan/denyはhost0回、runの承認/変更拒否/ready/summary、signalと終了code不変、秘密非出力 |
 | OL-05 | 実PTY/Node下限/実行OS | PDIなしでcooked TTY承認/否認/Ctrl-C/再入力/表示失敗、Node22.12、端末/診断条件を確認。未確認OSへ展開しない |
 | OL-06 | G2/G4と運用者レビュー | 実行対象・本人・登録・read ACL・C設定・失効/復旧担当・発行回数が個別承認済み。実manifest配置はさらに別承認 |
