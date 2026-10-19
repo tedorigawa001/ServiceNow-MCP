@@ -125,3 +125,45 @@ RED時にtest worker自身を終了させないため、OSのkill送信や実Ctr
 | 対象実装・テストのESLint | エラー・警告なし |
 
 製品期限・表示1秒上限は変更しない。telemetry保留、実機操作・token発行・設定変更・Pushなし。
+
+## 8. 専用entry子プロセスへの実OS signal配送（2026-10-19）
+
+§7のprocess.emit試験とは別に、コンパイルした固定.js専用entryを独立したOS子プロセスで起動した。
+[compiled entry試験](../tests/review/r2-launcher-entry.test.ts)と
+[合成run fixture](../tests/review/fixtures/r2-launcher-run.mjs)を拡張。製品実装・期限・設定は変更していない。
+
+### 配送・採用条件
+
+- 実checker・合成manifest・合成cooked TTYのAPPROVE・prepared_v2/grant_v2を通る。
+  実host/auth/session/MCP bridgeは起動せず、固定位置の合成OS peerだけを起動する。
+  既存の親/checker/peerの通信・待受・任意子/worker禁止trapを維持する。
+- 71は実peerのexit 71から得る。ただし先行IPC disconnectをfixture境界で監督に通知せず、
+  cleanup_incompleteの終了証拠を入力する。実機のIPC通知順序の再現試験ではない。
+- 73は不正な合成IPCで監督の強制停止を起動し、実peerは終了するが、exit/closeの証拠だけを監督から隠す。
+  監督の既定観測上限後にtermination_unconfirmedを得る。OS上で生存/強制停止不能なhostを作る試験ではない。
+- fixtureは実peerのcloseを別途確認し、最終summaryの固定terminal_reasonを確認した場合だけ書き込みを保留する。
+  native write callbackは未決着にし、固定通知R2_SUMMARY_PENDINGをテスト親へ送る。
+  親は通知を受けた後、所有するentry子へchild.kill('SIGINT'/'SIGTERM')で実OS signalを1回送る。
+  process.emitや時刻推測による配送ではない。
+- 親はkill成功、通知1回、終了code=71/73、exit signal=null、stdout空、秘密/例外非露出を検査する。
+  10秒の試験用watchdogは失敗時のSIGKILLだけで、製品の期限は緩めない。
+  保留write中の生存用handleも専用entryの制御終了で終了する。通知前に実peer終了を必須とし、後続peerを残さない。
+
+### 結果・負の対照
+
+| 検証 | 結果 |
+|---|---|
+| 実OS配送 | 71×SIGINT、71×SIGTERM、73×SIGINT、73×SIGTERMの4件すべて期待code、exit signal=null |
+| compiled entry全回帰 | 26件成功、10.33秒 |
+| 隔離した負の対照 | 再取得するprocess.onの1行だけを隔離コピーから削除。4件すべて失敗、code=null・exit signal=送信したsignalとなり既定終了を再現。22件は選択対象外 |
+| 全体回帰 `npm test -- --maxWorkers=1` | 121ファイル・3,126件成功、79.97秒 |
+| `npm run build` / entry試験の明示strict型検査 | 成功 / 成功 |
+| 対象テスト・fixtureのESLint / `git diff --check` | エラー・警告なし / 成功 |
+
+追加初回は未対応fixtureのgrant件数検査で98となり、通知/配送に未到達で失敗。
+次の試行では先行disconnectがprotocol_errorを作ることを切り分け、上記71の境界へ訂正した。
+これらを製品不具合やsignal検証成功として数えていない。最初の71/SIGINTが成功してから残り3組合せへ拡張した。
+負の対照の変更は一時コピーだけに適用し、コピーは削除済み。
+
+実PTYのCtrl-C、他OS・Node下限、実PDI・OAuth・本人ACL・C方式の成立は未検証のまま。
+telemetry保留、実機操作・トークン発行・設定変更なし。

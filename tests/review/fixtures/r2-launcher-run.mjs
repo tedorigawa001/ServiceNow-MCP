@@ -17,6 +17,8 @@ dns.lookup = forbidden; dns.resolve = forbidden; dns.promises.lookup = forbidden
 globalThis.fetch = forbidden; workers.Worker = class { constructor() { forbidden(); } };
 const spawn = cp.spawn, acl = cp.execFileSync;
 let checkers = 0, hosts = 0, grants = 0, confirmedDigest;
+const summarySignal = mode === 'signal-71' || mode === 'signal-73';
+let peerEnded = false, summaryPending = false;
 cp.spawn = (command, args, options) => {
   if (mode.startsWith('host') || command !== process.execPath || Object.keys(options.env).length
     || options.shell !== false || options.serialization !== 'json'
@@ -27,7 +29,17 @@ cp.spawn = (command, args, options) => {
   }
   if (args.length !== 3 || args[0] !== fileURLToPath(new URL('./r2-host-entry.js', url)) || args[2] !== '--approval-bound') return forbidden();
   hosts++;
-  const child = spawn(command, [fileURLToPath(import.meta.url), entry, mode === 'bad-digest' ? 'host-bad-digest' : 'host', args[1]], options);
+  const peerMode = summarySignal ? `host-${mode}` : mode === 'bad-digest' ? 'host-bad-digest' : 'host';
+  const child = spawn(command, [fileURLToPath(import.meta.url), entry, peerMode, args[1]], options);
+  const emit = child.emit.bind(child);
+  child.emit = (event, ...values) => {
+    if (event === 'close') peerEnded = true;
+    // Model exit-71 evidence without an earlier IPC-disconnect protocol failure.
+    if (mode === 'signal-71' && event === 'disconnect') return true;
+    // The real OS peer still exits; only its supervisor-facing exit/close evidence is withheld.
+    if (mode === 'signal-73' && (event === 'exit' || event === 'close')) return true;
+    return emit(event, ...values);
+  };
   const send = child.send.bind(child);
   child.send = (value, ...rest) => {
     if (value.type === 'run_grant') return forbidden();
@@ -52,6 +64,8 @@ if (mode.startsWith('host')) {
   } catch { process.exit(10); }
   process.on('message', value => {
     if (value.type === 'run_grant_v2' && value.digest === digest) {
+      if (mode === 'host-signal-71') { process.disconnect(); process.exit(71); }
+      if (mode === 'host-signal-73') { process.send({ type: 'invalid-synthetic-message' }); return; }
       process.send({ type: 'ready' }); process.send({ type: 'stopping' });
       process.send({ type: 'finished', receipt: { ok: false, code: 'authorization_denied', cleanup: 'complete',
         mcpListed: false, tokenMayHaveBeenIssued: false, otherAccountTokenPossible: false } });
@@ -72,6 +86,15 @@ if (mode.startsWith('host')) {
   };
   if (mode === 'expire-before') change(mode);
   process.stderr.write = (text, callback) => {
+    if (summarySignal && String(text).includes('bp5-r2-exit-summary-0.1')) {
+      const summary = JSON.parse(String(text));
+      if (summaryPending || !peerEnded || summary.terminal_reason !== (mode === 'signal-71' ? 'cleanup_incomplete' : 'termination_unconfirmed')) return forbidden();
+      summaryPending = true;
+      // Keep the native callback unresolved until the OS signal interrupts display.
+      // A live handle avoids Node's unsettled-top-level-await exit before parent delivery.
+      setInterval(() => {}, 1000);
+      return write('R2_SUMMARY_PENDING\n');
+    }
     const written = write(text, callback);
     if (String(text).includes('Type APPROVE')) {
       confirmedDigest = String(text).match(/Offline plan digest: ([a-f0-9]{64})/)?.[1];
@@ -82,7 +105,8 @@ if (mode.startsWith('host')) {
   };
   process.on('exit', () => {
     const authorized = !['deny', 'expire-before', 'raw'].includes(mode);
-    if (checkers !== (mode === 'raw' ? 0 : 1) || hosts !== (authorized ? 1 : 0) || grants !== (mode === 'approve' ? 1 : 0)) process.exitCode = 98;
+    if (checkers !== (mode === 'raw' ? 0 : 1) || hosts !== (authorized ? 1 : 0) || grants !== (mode === 'approve' || summarySignal ? 1 : 0)
+      || summarySignal && (!peerEnded || !summaryPending)) process.exitCode = 98;
   });
   process.argv = [process.execPath, entry, 'run', path];
   await import(url.href);

@@ -17,18 +17,33 @@ beforeAll(() => {
   entry = join(dir, 'dist/review/r2-launcher-entry.js');
 }, 35000);
 afterAll(() => { if (dir) rmSync(dir, { recursive: true, force: true }); });
-async function run(args: string[], env: NodeJS.ProcessEnv = {}) {
+async function run(args: string[], env: NodeJS.ProcessEnv = {}, finalSignal?: NodeJS.Signals) {
   const child = spawn(process.execPath, args, { env, stdio: ['ignore', 'pipe', 'pipe'] });
   let stdout = '', stderr = '';
-  child.stdout.on('data', b => { stdout += b; }); child.stderr.on('data', b => { stderr += b; });
+  let sent = false, exitSignal: NodeJS.Signals | null = null;
+  child.stdout.on('data', b => { stdout += b; }); child.stderr.on('data', b => {
+    stderr += b;
+    if (finalSignal && !sent && stderr.includes('R2_SUMMARY_PENDING\n')) { sent = child.kill(finalSignal); }
+  });
+  child.once('exit', (_code, signal) => { exitSignal = signal; });
   const timer = setTimeout(() => child.kill('SIGKILL'), 10000);
   try {
     const code = await new Promise<number | null>((resolve, reject) => { child.once('error', reject); child.once('close', resolve); });
-    return { code, stdout, stderr };
+    return { code, stdout, stderr, ...(finalSignal ? { sent, exitSignal } : {}) };
   } finally { clearTimeout(timer); if (child.exitCode === null && child.signalCode === null) child.kill('SIGKILL'); }
 }
 it('uses the real compiled entry and fails closed on a non-TTY without printing a path or exception', async () => {
   expect(await run([entry, '/PRIVATE_MISSING'])).toEqual({ code: 81, stdout: '', stderr: '' });
+});
+it.each([[71, 'SIGINT'], [71, 'SIGTERM'], [73, 'SIGINT'], [73, 'SIGTERM']] as const)(
+  'preserves %s when the parent sends OS %s during the compiled entry final summary', async (priority, signal) => {
+  const f = approvedPlanFixture();
+  try {
+    const result = await run([fileURLToPath(new URL('./fixtures/r2-launcher-run.mjs', import.meta.url)), entry, `signal-${priority}`, f.path], {}, signal);
+    expect(result).toMatchObject({ code: priority, exitSignal: null, sent: true, stdout: '' });
+    expect(result.stderr.match(/R2_SUMMARY_PENDING\n/g)).toHaveLength(1);
+    expect(result.stderr).not.toMatch(/PRIVATE|service-now|manifest\.json|content|script|Error|stack/);
+  } finally { rmSync(f.dir, { recursive: true, force: true }); }
 });
 const fixture = fileURLToPath(new URL('./fixtures/r2-launcher-offline.mjs', import.meta.url));
 it('checks a synthetic manifest through compiled entry and checker with forbidden OS effects trapped in both processes', async () => {
