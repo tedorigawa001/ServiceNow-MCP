@@ -1,8 +1,11 @@
-# R-2 outer records: OL-02 offline library
+# R-2 outer records: offline inspection and gated exec components
 
-This unpublished Rust library inspects activation/ledger records. It has **no executable,
-Node spawn/exec, network, OAuth, permission repair or MCP registration**. A successful
-`InspectedRecords` is opaque and is not an execution permit.
+This unpublished Rust library inspects activation/ledger records and contains private
+dedicated-process exec components. It has **no executable, network, OAuth, permission
+repair or MCP registration**. `InspectedRecords` remains opaque and is not an execution permit.
+The new `exec_installed` entry checks fixed arguments/records but refuses with
+`TrustGatePending` (92) before exec: signed deployment, actual binary signatures,
+closure and group exclusivity have not been implemented. There is no runtime bypass option.
 
 The sole installed-record entry point uses the fixed proposed activation location in
 `src/lib.rs`; no argv/env/path override is exposed. That location has not been deployed.
@@ -56,11 +59,39 @@ be run explicitly; npm users do not gain a Rust build dependency.
   members. Membership uses `getgroups`, which on macOS may return at most 16 groups; a
   user in more groups can be refused (fail-closed). Test >16 groups or switch to
   `getgrouplist` in OL-03. Signature requirements/entitlements/closure hashes are schema-checked, not
-  compared to actual binaries/index yet. Those gates, actual TTY/FD/env/rlimits, trusted
-  signed deployment, and pre-exec revalidation belong to OL-03+.
-- Only the Darwin adapter permits unsafe FFI. Raw record/path/OS/JSON errors are not
+  compared to actual binaries/index yet. Those gates, trusted signed deployment and
+  pre-exec revalidation remain pending. Private exec components check cooked controlling
+  TTY/FD/env/rlimits and are exercised by a test-only OS peer, not operational Node.
+- Only the Darwin filesystem/exec adapters and owned OS test harness permit unsafe FFI. Raw record/path/OS/JSON errors are not
   exposed via Debug/error objects; failures are fixed enum values. Panic/native/loader
   diagnostics before a future protected bootstrap are not covered.
 
 See [verification record](../../docs/E2E_BEST_PRACTICE_R2_OL02_RECORDS_SYNTHETIC_2026-10-19.md)
 and [OL-01 design](../../docs/BEST_PRACTICE_BP5_R2_OL01_BUILD_DEPLOY_LEDGER_DESIGN.md).
+
+## OL-03 component tests
+
+The macOS arm64 tests compile a disposable Rust peer using the development rustc/libc
+artifact, then exec that peer at the synthetic fixed Node path in owned PTY children.
+The fixture directly includes private OS-boundary modules; it never becomes part of
+the library's public API or a trust-gate bypass in an operational launcher.
+All environment/FD/cwd/umask/core-limit/signal changes happen only in these children.
+The peer validates the received conditions and reports fixed PID/code metadata.
+This is not a test of real Node, Developer ID/notarization or production signatures.
+
+Parser errors=90, rejected records=91, pending trust gates=92, setup failure=93,
+execve failure=94, unsupported execution adapter=95. After exec succeeds the outer
+image is gone: target exit codes/signals are not mapped or retried. On setup failure
+after process state changes, the dedicated child exits with 93 rather than returning
+into a partially modified caller. Never call this component from a shared MCP process.
+
+The fixed policy sends `[node, fixed-entry, check-plan|run, manifest]` to execve with an
+explicit empty env, fixed cwd, umask 077 and soft/hard RLIMIT_CORE=0. stdin/stderr must
+refer to the same cooked foreground controlling TTY with no pending input. stdout is
+replaced with /dev/null. A bounded proc_pidinfo FD inventory closes all FD>=3 and
+verifies the remaining set before exec. This assumes a dedicated single-threaded
+process and is not proof against a hostile concurrent thread or a stopped kernel.
+Signature/closure verification and retained-file identity protection must precede
+this primitive; the current production gate deliberately cannot succeed.
+
+See [OL-03 verification](../../docs/E2E_BEST_PRACTICE_R2_OL03_EXEC_SYNTHETIC_2026-10-19.md).

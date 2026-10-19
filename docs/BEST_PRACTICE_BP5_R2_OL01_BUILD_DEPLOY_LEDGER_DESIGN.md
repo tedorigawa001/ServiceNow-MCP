@@ -1,9 +1,11 @@
 # BP-5 R-2 OL-01：言語・初期OS・信頼済みビルド／配備・起動台帳
 
-Version: draft-0.3 / Date: 2026-10-19 / Status: 選定・契約案。OL-02 record検査は内部実装/合成ビルド済み。正式なtoolchain/署名/配備・実行環境の承認は未完了。
+Version: draft-0.4 / Date: 2026-10-19 / Status: 選定・契約案。record検査・gated exec部品は内部合成検証済み。正式なtoolchain/署名/配備・実行環境の承認は未完了。
 
 後続の[OL-02合成検証](E2E_BEST_PRACTICE_R2_OL02_RECORDS_SYNTHETIC_2026-10-19.md)では、Rust typed schemaとsafe readerだけを追加した。
 開発toolchainの実測版記録とoffline buildは、OL-01のtoolchain固定・信頼済みビルド/署名・人の承認が成立したことを意味しない。
+[OL-03 exec部品](E2E_BEST_PRACTICE_R2_OL03_EXEC_SYNTHETIC_2026-10-19.md)はOS peerで空env/FD/cwd/limits・終了codeを確認した。
+runtime trust gateは閉じたままで、実署名/entitlement/closure/group排他性・exec直前の再検証は未完了。
 
 ## 1. 決定案と境界
 

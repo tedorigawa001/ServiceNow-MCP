@@ -168,6 +168,9 @@ pub(crate) struct Ledger {
     policy_id: String,
 }
 impl Ledger {
+    pub(crate) fn launch_paths(&self) -> (&str, &str) {
+        (&self.node.path, &self.runtime.cwd)
+    }
     pub fn time(&self) -> Time {
         Time {
             approved_at: self.approved_at.clone(),

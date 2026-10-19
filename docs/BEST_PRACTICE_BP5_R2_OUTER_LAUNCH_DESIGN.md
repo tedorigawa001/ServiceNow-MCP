@@ -1,11 +1,13 @@
 # BP-5 R-2：安全な外側起動手順
 
-Version: draft-0.4 / Date: 2026-10-19 / Status: OL-02のrecord検査を内部Rust libraryで合成検証。外側exec/署名/配備・環境適合・運用承認は未実施。
+Version: draft-0.5 / Date: 2026-10-19 / Status: record検査とOL-03のgated exec部品を内部実装/合成検証。runtime trust gate・署名/配備・実Node適合・運用承認は未完了。
 
 OL-01の推奨選定案は[Rust/macOS arm64・ビルド/配備/起動台帳設計](BEST_PRACTICE_BP5_R2_OL01_BUILD_DEPLOY_LEDGER_DESIGN.md)を参照。
 人の採択・正確なtoolchain/OS版・署名担当・実配備は未確定であり、OL-01完了ではない。
 OL-02のスキーマ・FD reader・合成検証は[record検証記録](E2E_BEST_PRACTICE_R2_OL02_RECORDS_SYNTHETIC_2026-10-19.md)を参照。
-戻り値は実行permitではなく、Node/exec接続は追加していない。外側launcher全体の未実装条件と区別する。
+戻り値は実行permitではない。後続[OL-03 exec部品検証](E2E_BEST_PRACTICE_R2_OL03_EXEC_SYNTHETIC_2026-10-19.md)では
+固定argv/空env/FD/cwd/limits/execを合成OS peerで確認したが、runtime trust gateは92で拒否する状態を維持する。
+実Node・署名/closure・直前再検証は未完了で、外側launcher全体の起動許可と区別する。
 
 ## 1. 判断と範囲
 
@@ -168,7 +170,8 @@ entryの汎用100ms最終化監督は別の未実装提案であり、本設計�
 導入は非公開の合成果物でOL-01〜05を満たしてから、G2/G4を含む実PDI手順へ進む。
 撤回時は外側起動を無効化する。実行中のtoken/hostの状態を、ファイルやlauncherを戻しただけで復旧済みとしない。
 本設計の初版は実装・試験・設定変更・領域配置を行わない設計案だった。
-後続のOL-02はrecord検査だけを内部実装/合成検証した。署名/配備・領域設定・exec/運用は未実施のまま。
+後続のOL-02はrecord検査、OL-03はgated exec部品を内部実装/合成検証した。
+実運用のexec gateは閉じており、署名/配備・領域設定・実Node適合/運用は未実施のまま。
 
 ## 9. 承認前チェックリスト
 

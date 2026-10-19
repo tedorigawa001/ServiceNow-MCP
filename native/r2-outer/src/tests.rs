@@ -6,7 +6,7 @@ const NOW: u64 = 1792368000000; // 2026-10-19T00:00:00.000Z, synthetic only
 fn bytes(v: &Value) -> Vec<u8> {
     serde_json::to_vec(v).unwrap()
 }
-struct Fake {
+pub(super) struct Fake {
     a: Snapshot,
     l: Snapshot,
     reads: RefCell<Vec<String>>,
@@ -28,7 +28,7 @@ fn meta(uid: u32, mode: u32) -> Metadata {
         no_acl: true,
     }
 }
-fn fixture() -> Fake {
+pub(super) fn fixture() -> Fake {
     let binary = json!({"path":"/release/bin/node","sha256":"a".repeat(64),"version":"v24.18.0",
         "signature_requirement":"PRIVATE_REQUIREMENT","publisher":"PRIVATE_PUBLISHER","hardened_runtime":true,"entitlements":[]});
     let l = json!({"schema_version":"bp5-r2-launch-ledger-0.1","generation":1,"release_id":"PRIVATE_RELEASE","execution_uid":501,

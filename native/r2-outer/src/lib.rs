@@ -1,7 +1,11 @@
-//! OL-02 offline records only. No executable, Node, OAuth, network or permission repair.
+//! Offline records and gated, dedicated-process exec components. No executable, OAuth or network.
 #![deny(unsafe_code)]
+mod exec_os;
 mod filesystem;
 mod json;
+mod launch;
+mod launch_args;
+pub use launch::{LaunchFailure, exec_installed};
 mod schema;
 use schema::{Activation, Ledger};
 use sha2::{Digest, Sha256};
@@ -152,5 +156,7 @@ fn inspect(s: &impl Source) -> Result<InspectedRecords, Failure> {
 pub fn inspect_installed_records() -> Result<InspectedRecords, Failure> {
     inspect(&filesystem::Native::new())
 }
+#[cfg(all(test, target_os = "macos", target_arch = "aarch64"))]
+mod exec_tests;
 #[cfg(test)]
 mod tests;
