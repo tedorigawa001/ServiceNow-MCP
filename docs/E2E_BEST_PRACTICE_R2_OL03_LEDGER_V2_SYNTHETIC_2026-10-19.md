@@ -77,3 +77,14 @@ activation-0.1の実record切替・0.2 installed readerへの接続・ledger書�
 Security APIでの暗号検証・self/path結合・CF型/absence証明・実entitlement照合は未実施。
 更新排他・exec直前再検証・全gate統合も未完了。binding summaryを実行permitへ昇格しない。
 実機/PDI操作・token発行・設定変更・署名/登録・Pushは行っていない。telemetry調査は保留。
+
+## 追補：raw hashの照合をJSON解析より前へ移動（2026-10-19）
+
+レビューで、`parse_and_bind`がstrict JSON解析・schema検証の後に`context.ledger_sha256`を照合していた点を確認した。
+OL-02 reader（digest照合→decode）とclosure設計§4の3（bytes hash照合→schema検証）の順序と逆であり、
+上限付きparserとはいえ未認証bytesを先に解析していた。
+
+- 回帰試験`raw_hash_is_bound_before_any_json_parsing`を追加した。pinしたhashと異なる不正JSON・不正UTF-8・未知schemaは`Binding`、
+  pinしたhashと一致する不正JSONだけが`Invalid`になることを固定する。修正前は`Invalid`を返して失敗した（RED）。
+- 照合を`decode_bounded`の前へ移し、hash不一致はJSONの形に関わらず`Binding`で停止するようにした。
+- 修正後は114件成功（既存113＋追加1、5 suites）。既存試験の期待する失敗種別は変わらなかった。clippy `-D warnings`・`fmt --check`も成功。

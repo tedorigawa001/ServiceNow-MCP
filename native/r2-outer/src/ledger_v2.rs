@@ -40,12 +40,15 @@ pub fn parse_and_bind(
     if bytes.len() > 65536 {
         return Err(LedgerFailure::Limit);
     }
+    // Authenticate the exact bytes against the pinned hash before parsing anything (same order as OL-02).
+    if format!("{:x}", Sha256::digest(bytes)) != context.ledger_sha256 {
+        return Err(LedgerFailure::Binding);
+    }
     let decoded = crate::json::decode_bounded(bytes, 65536, 65536, started);
     elapsed(started)?;
     let ledger: LedgerV2 = decoded.map_err(|_| LedgerFailure::Invalid)?;
     ledger.validate().map_err(|_| LedgerFailure::Invalid)?;
-    if format!("{:x}", Sha256::digest(bytes)) != context.ledger_sha256
-        || ledger.generation != context.generation
+    if ledger.generation != context.generation
         || ledger.release_id != context.release_id
         || ledger.execution_uid != context.execution_uid
         || ledger.runtime.index_sha256 != context.index_sha256

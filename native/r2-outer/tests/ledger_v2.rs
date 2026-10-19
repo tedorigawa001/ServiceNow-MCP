@@ -309,3 +309,31 @@ fn wall_time_overflow_is_not_an_implicit_valid_approval() {
         Err(LedgerFailure::Invalid)
     );
 }
+#[test]
+fn raw_hash_is_bound_before_any_json_parsing() {
+    let registry = signature_policy::parse(&registry_bytes(), Instant::now()).unwrap();
+    let pinned = hash(&serde_json::to_vec(&document()).unwrap());
+    // Unauthenticated bytes must stop at the hash binding, whatever their JSON shape is.
+    for unpinned in [
+        b"{".as_slice(),
+        b"\xff\xfe".as_slice(),
+        br#"{"schema_version":"unknown"}"#.as_slice(),
+    ] {
+        assert_eq!(
+            parse_and_bind(unpinned, &registry, &context(&pinned), Instant::now()).unwrap_err(),
+            LedgerFailure::Binding
+        );
+    }
+    // Pinned bytes that are not a valid ledger are still rejected as invalid after binding.
+    let malformed = b"{";
+    assert_eq!(
+        parse_and_bind(
+            malformed,
+            &registry,
+            &context(&hash(malformed)),
+            Instant::now()
+        )
+        .unwrap_err(),
+        LedgerFailure::Invalid
+    );
+}
