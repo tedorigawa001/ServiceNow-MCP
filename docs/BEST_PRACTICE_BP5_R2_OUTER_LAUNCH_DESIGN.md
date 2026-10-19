@@ -1,6 +1,9 @@
 # BP-5 R-2：安全な外側起動手順
 
-Version: draft-0.2 / Date: 2026-10-19 / Status: 設計案。外側launcherの実装・環境適合検証・運用承認は未実施。
+Version: draft-0.3 / Date: 2026-10-19 / Status: 設計案。OL-01の言語/OS/ビルド/配備/台帳は別紙で具体化。実装・環境適合検証・運用承認は未実施。
+
+OL-01の推奨選定案は[Rust/macOS arm64・ビルド/配備/起動台帳設計](BEST_PRACTICE_BP5_R2_OL01_BUILD_DEPLOY_LEDGER_DESIGN.md)を参照。
+人の採択・正確なtoolchain/OS版・署名担当・実配備は未確定であり、OL-01完了ではない。
 
 ## 1. 判断と範囲
 
@@ -35,9 +38,10 @@ telemetry調査・maint依頼は保留を維持する。G2/G4の個別承認を�
 ただしshell alias/function、PATH、環境継承やNode実体の選定を人に毎回委ねる。空env相当のコマンドも、
 それを実行するshellやenv実行ファイル自体の信頼性を作らない。比較基準に留め、今回の安全な起動境界の完成とはしない。
 
-**案2：固定の非Node外側launcherで検査してexec（推奨案、未選定の実装言語）。**
+**案2：固定の非Node外側launcherで検査してexec（推奨案、OL-01別紙ではRustを提案）。**
 起動条件を1か所へ集約し、拒否時はNodeを起動しない。Nodeで外側launcherを書くと、そのNodeの起動問題が再帰するため採らない。
-初期案はPOSIXの信頼済み実行ファイルとし、setuid/root権限は使わない。実装言語・ビルド/配備方法は別途選定する。
+初期案はmacOS arm64の信頼済み実行ファイルとし、実行時setuid/root権限は使わない。
+Rust・署名済みビルド・管理担当によるroot所有配備・二段階台帳はOL-01の提案で、人の承認と環境の確定は未完了。
 shell scriptはinterpreter起動前の継承問題があるので、同等性を検証する別設計なしに代用しない。
 非Node化だけで外側launcher自身のloaderを保護できるわけではない。
 外側launcherが動く以前の環境も適合させるOS管理下の起動元と、その検証方法をOL-01で確定する。
