@@ -1,6 +1,26 @@
 use super::*;
 use std::cell::Cell;
 
+pub(super) fn file_fixture(xml: bool, der: bool, offset: usize, header_bytes: usize) -> Vec<u8> {
+    let mut f = Fixture::new(0x20500, xml, der, offset.div_ceil(4096));
+    little(&mut f.header, 40, offset as u32);
+    f.cd(32, offset as u32);
+    let cd = f.start(0);
+    f.signature[cd + 72..cd + 80].copy_from_slice(&(offset as u64).to_be_bytes());
+    if header_bytes > 48 {
+        assert!(header_bytes >= 56 && (header_bytes - 48).is_multiple_of(8));
+        f.header.resize(header_bytes, 0);
+        little(&mut f.header, 16, 2);
+        little(&mut f.header, 20, (header_bytes - 32) as u32);
+        little(&mut f.header, 48, 1);
+        little(&mut f.header, 52, (header_bytes - 48) as u32);
+    }
+    let mut bytes = vec![0x53; offset + f.signature.len()];
+    bytes[..f.header.len()].copy_from_slice(&f.header);
+    bytes[offset..].copy_from_slice(&f.signature);
+    bytes
+}
+
 fn put(b: &mut [u8], at: usize, value: u32) {
     b[at..at + 4].copy_from_slice(&value.to_be_bytes());
 }

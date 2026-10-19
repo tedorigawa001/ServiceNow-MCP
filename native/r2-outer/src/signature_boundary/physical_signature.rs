@@ -12,7 +12,7 @@ const MAX_SIGNATURE: usize = 5 * 1024 * 1024;
 const MAX_CD_HEADER: usize = 65536;
 const MAX_CODE_SLOTS: usize = 131072;
 const MAX_ENTITLEMENTS: usize = 65536;
-#[derive(Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(super) enum Rejection {
     InvalidMachO,
     InvalidRange,
@@ -146,7 +146,7 @@ pub(super) fn parse<'a>(
 ) -> Result<Inventory<'a>, Rejection> {
     parse_inner(input, started, cancelled, &Instant::now)
 }
-fn parse_inner<'a>(
+pub(super) fn parse_inner<'a>(
     input: Input<'a>,
     started: Instant,
     cancelled: &AtomicBool,
@@ -264,8 +264,18 @@ fn macho(input: &Input<'_>, budget: &Budget<'_>) -> Result<usize, Rejection> {
     {
         return Err(Rejection::Limit);
     }
-    let h = input.header_commands;
-    if h.len() < 32
+    let range = macho_range(input.header_commands, input.file_bytes, budget)?;
+    if range.len() != input.signature.len() {
+        return Err(Rejection::InvalidRange);
+    }
+    Ok(range.start)
+}
+// Shared bounded-header validation; no allocation and no interpretation of partial commands.
+pub(super) fn preflight_length(h: &[u8], file_bytes: u64) -> Result<usize, Rejection> {
+    if file_bytes > MAX_FILE {
+        return Err(Rejection::Limit);
+    }
+    if h.len() != 32
         || le(h, 0)? != 0xfeedfacf
         || le(h, 4)? != 0x0100000c
         || le(h, 8)? != 0
@@ -279,9 +289,36 @@ fn macho(input: &Input<'_>, budget: &Budget<'_>) -> Result<usize, Rejection> {
     if count > 4096 || size > MAX_COMMANDS {
         return Err(Rejection::Limit);
     }
-    if add(32, size)? != h.len() || h.len() as u64 > input.file_bytes || mul(count, 8)? > size {
+    let length = add(32, size)?;
+    if length as u64 > file_bytes || mul(count, 8)? > size {
         return Err(Rejection::InvalidRange);
     }
+    Ok(length)
+}
+pub(super) fn preflight_range(
+    h: &[u8],
+    file_bytes: u64,
+    started: Instant,
+    cancelled: &AtomicBool,
+    now: &dyn Fn() -> Instant,
+) -> Result<Range<usize>, Rejection> {
+    let budget = Budget {
+        started,
+        cancelled,
+        now,
+    };
+    budget.check()?;
+    macho_range(h, file_bytes, &budget)
+}
+fn macho_range(h: &[u8], file_bytes: u64, budget: &Budget<'_>) -> Result<Range<usize>, Rejection> {
+    if h.len() > 32 + MAX_COMMANDS {
+        return Err(Rejection::Limit);
+    }
+    let length = preflight_length(slice(h, 0, 32)?, file_bytes)?;
+    if length != h.len() {
+        return Err(Rejection::InvalidRange);
+    }
+    let count = le(h, 16)? as usize;
     let mut cursor = 32;
     let mut signature = None;
     for _ in 0..count {
@@ -307,14 +344,10 @@ fn macho(input: &Input<'_>, budget: &Budget<'_>) -> Result<usize, Rejection> {
             if length > MAX_SIGNATURE {
                 return Err(Rejection::Limit);
             }
-            if offset < h.len()
-                || length < 12
-                || length != input.signature.len()
-                || add(offset, length)? as u64 != input.file_bytes
-            {
+            if offset < h.len() || length < 12 || add(offset, length)? as u64 != file_bytes {
                 return Err(Rejection::InvalidRange);
             }
-            signature = Some(offset);
+            signature = Some(offset..add(offset, length)?);
         } else if kind & 0x80000000 != 0
             && !matches!(
                 kind,
@@ -470,3 +503,7 @@ fn code_directory<'a>(
 }
 #[cfg(test)]
 mod tests;
+#[cfg(test)]
+pub(super) fn synthetic_file(xml: bool, der: bool, offset: usize, header_bytes: usize) -> Vec<u8> {
+    tests::file_fixture(xml, der, offset, header_bytes)
+}

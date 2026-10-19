@@ -1,6 +1,6 @@
 # BP-5 R-2 OL-03：保持FDの安全読取・物理signature parser接続
 
-Version: draft-0.2 / Date: 2026-10-19 / Status: 共有予算・位置指定読取境界のみ内部合成実装済み。OS adapter/保持FD・hash採取/parser接続・運用承認は未実施。
+Version: draft-0.3 / Date: 2026-10-19 / Status: 共有予算・位置指定読取境界、合成sourceのpreflight/A採取/parser接続を内部実装済み。OS adapter/保持FD・B再走査/metadata接続・運用承認は未実施。
 
 ## 1. 目的と停止境界
 
@@ -8,7 +8,7 @@ Version: draft-0.2 / Date: 2026-10-19 / Status: 共有予算・位置指定読�
 file全体SHA-256とparser入力の対応、metadata、record binding、共有予算を結ぶ。pathだけで開き直したfileや呼出し側のbytesを「保持FD由来」と扱わない。
 本書は既存実装の調査に基づくプロジェクトの設計案であり、新しいOS/API適合試験の結果ではない。
 
-telemetry調査は保留。実装は§12の内部予算/I/O境界だけ。API実接続・DER意味解析/absence証明・実機/PDI操作・token発行・設定変更・permit発行は対象外。
+telemetry調査は保留。実装は§12/§13の内部予算/I/O境界と合成sourceのA採取/parser接続まで。API実接続・DER意味解析/absence証明・実機/PDI操作・token発行・設定変更・permit発行は対象外。
 本番registry未設定、通常v2入口Unavailable、runtime gate92を維持する。後日の読取接続が成功しても、署名validity・実行許可を生成しない。
 
 ## 2. 現状との境界
@@ -19,7 +19,7 @@ telemetry調査は保留。実装は§12の内部予算/I/O境界だけ。API実
 | [native/file.rs](../native/r2-outer/src/signature_boundary/native/file.rs) | private PinnedFileの位置指定読取/hash、前後metadata、同じ開始Instant/cancel | deploymentから未接続。identity/layoutの呼出しごとに再hashし、path照合は絶対pathを再openする。parser用buffer・共通I/O台帳はない |
 | [physical_signature.rs](../native/r2-outer/src/signature_boundary/physical_signature.rs) | 宣言file長＋header/commands＋signatureの借用bytesをbounded解析 | bytesが同じFD/走査由来であること、全体hash/metadata/世代は証明しない |
 | [ledger_v2.rs](../native/r2-outer/src/ledger_v2.rs) | registry参照・role・record bindingの純粋照合 | 運用上信頼済みrecord・保持FD・leaseの一体化ではない |
-| [positioned_read.rs](../native/r2-outer/src/signature_boundary/positioned_read.rs) | 共通10秒/2GiB/再試行枠、予約/精算、位置指定要求・短読取/遅延応答の拒否 | 合成sourceだけで検証。実pread adapter・deployment/PinnedFile・hash/parserへは未接続 |
+| [positioned_read.rs](../native/r2-outer/src/signature_boundary/positioned_read.rs) | 共通10秒/2GiB/再試行枠、予約/精算、位置指定要求・短読取/遅延応答の拒否。childでpreflight/A採取/parserへ接続 | 合成sourceだけで検証。実pread adapter・deployment/PinnedFile・B/metadataへは未接続 |
 
 既存の[配備読取検証](E2E_BEST_PRACTICE_R2_OL03_DEPLOYMENT_READ_SYNTHETIC_2026-10-19.md)と[parser合成検証](E2E_BEST_PRACTICE_R2_OL03_PHYSICAL_SIGNATURE_SYNTHETIC_2026-10-19.md)はそれぞれの部品の証拠であり、本接続の試験へ流用しない。
 公開`inspect_deployment(root, binding, started)`の成功や外部から渡されたFileだけを、新しい信頼済み接続のconstructorにしない。
@@ -49,7 +49,7 @@ role対象は順次処理し、全closureのfile FDを保持しない。既存pa
 自己参照structを作らず、所有bufferから限定closure内でInventoryを借用するか、必要な限定属性だけ投影する。Inventoryの寿命がbuffer/保持対象を越えないことを型で守る。
 既存`Identity`（device/inode/size/hash）だけへmetadataを縮約して前後照合を省略しない。native SnapshotやAbsenceProvenへの変換は設けない。
 Debug/エラーは固定理由と件数だけとし、path/bytes/identifier/Team/hash/FD番号を表示・serializeしない。
-これは新しい型の設計案で、今回は型・constructor・公開APIを追加しない。
+HeldArtifactReadOnly/FdInventoryReadOnlyは引き続き設計案で、constructor・公開APIは追加しない。§13のCapturedAは別の再検証待ち診断型で、FDやrecordの信頼を示さない。
 
 ## 4. 安全なopen・metadata契約
 
@@ -79,7 +79,7 @@ snapshotはfstat前→ACL/xattr検査→fstat後とし、前後identityが違え
 
 1. **受付**：元の開始Instant/cancel・I/O台帳・binding/record期限を確認。更新leaseが必要な運用経路では取得/存続証拠がなければ停止（§8）。
 2. **保持**：安全なdirectory FD相対openからFileを移し、初期snapshot M0と承認size Nを完全照合。期待hashはこの時点で固定。
-3. **bounded preflight**：offset0の32bytesを取得し、sizeofcmds/ncmdsを上限検査後、同じpreflight bufferを拡張してheader/commands全体を最大1MiB＋32bytesまで読む。
+3. **bounded preflight**：offset0の32bytesを固定配列へ取得し、sizeofcmds/ncmdsを上限検査後、header/commands全体を最大1MiB＋32bytesのbufferへ読む。再読した先頭32bytesも初期配列と完全一致させる。
    純粋parserと共有する限定Mach-O range検査でLC_CODE_SIGNATUREを一意に求める。署名領域は5MiB以内、offset/長さはchecked、commandsの後、終端=Nを要求する。
    このrange抽出部品の分離は将来の最小refactor案であり、別の緩い検査器や「先頭のLCだけ採用」は作らない。
 4. **metadata M1**：preflight後にM0と照合。未検証長から巨大bufferを確保しない。header/commandsとsignatureだけ上限内で確保する。
@@ -113,7 +113,7 @@ EAGAIN・その他I/Oエラー・返却量超過/不正offset・checked変換失
 | wall期限 | ledger/activation等の期限を開始/最終で照合。既存の直前再検証・残期限450秒超の条件を緩めない。monotonic超過をwall clockで救済しない |
 | 実読取量 | 既存の全file読取2GiB上限を拡大せず、index/closure、preflight、A/B、追加再確認等の成功読取bytesを共通台帳に**重複分も**計上する |
 | 予約と回数 | Nから2*N＋preflight最大量（32bytes＋header/commands全長）をchecked計算して残予算に入るか開始前確認。A/BのEOF検査各1byteも要求枠を予約。実使用分へ精算し二重課金しない。各対象のpread試行最大32768回＋共有EINTR枠8回を初期上限案にする |
-| buffer | 最大(1MiB＋32bytes)のpreflight、同長のA採取header、signature5MiB、stream用64KiB。payload bufferは合計7MiB＋64KiB＋64bytes以内。Aのheader比較後はpreflightを解放可能 |
+| buffer | 初期32bytes、最大(1MiB＋32bytes)のpreflight、同長のA採取header、signature5MiB、stream用64KiB。payload bufferは合計7MiB＋64KiB＋96bytes以内。Aのheader比較後はpreflightを解放 |
 | 合計memory | 上記はbytes bufferだけ。slot metadata、record/index、祖先snapshot、allocator/OS内部量を含むRSS上限の証明ではない。全file Vec/mmap・B用大blob複製なし |
 | 対象順 | Launcher/Nodeは順次。不要なbuffer/対象FDを解放してから次へ。ただし後続API/execに必要な保持FDは別の所有設計へ移すまで閉じない |
 
@@ -151,7 +151,7 @@ Securityのpath-based APIと保持FDはatomicに結合されない。本接続�
 exec adapterがFD>=3を閉鎖する現状も変更しない。検査用FDの保持と、exec後のrelease寿命管理は別問題である。
 後続API接続では同じ所有対象を維持し、API前後・exec直前の再確認を追加する必要がある。本案A/Bの完了をexec/importまで有効なcacheにしない。
 
-## 9. 接続全体の合成試験計画（実行済みの境界単体は§12）
+## 9. 接続全体の合成試験計画（実行済みの範囲は§12/§13）
 
 | 試験群 | 必須の確認 |
 |---|---|
@@ -202,4 +202,27 @@ exec adapterがFD>=3を閉鎖する現状も変更しない。検査用FDの保�
   呼出し後guardの前に課金するため、すでに取得した遅延bytesも数える。既存scanからの呼出しはない。
 
 予算/読取境界はprivateかつ非authority。公開JSON/exit code・既存source・runtime gate・permitを変更していない。
-実FD owner/metadata・binding/lease、preflight range分離、A/B hash・採取buffer・parserへの共通予算接続は次工程。
+本節の段階では実FD owner/metadata・binding/lease、preflight range分離、A/B hash・採取buffer・parserへの共通予算接続を次工程としていた。後続の実装済み範囲は§13を参照。
+
+## 13. preflight・A採取・純粋parserの合成接続
+
+[合成検証記録](E2E_BEST_PRACTICE_R2_OL03_CAPTURE_A_SYNTHETIC_2026-10-19.md)に追加25件と全体273件の結果を記録する。
+`positioned_read/capture.rs`の`ReadScope::capture_a`は、同じscope/source・予約・EINTR枠のまま以下を行う。
+
+1. 32bytesの初期headerを読み、純粋parserと共有する`preflight_length`でprofile/件数/長さを確保前に検査。
+2. preflight header/commandsを64KiB以下で再読し、初期32bytesとの一致を要求。
+3. `preflight_range`を使って署名rangeを取得。parser側も同じ`macho_range`を使用し、別の緩いLC判定は作らない。
+4. A走査で全file bytesをSHA-256に渡し、その同じblockの重なり部分だけをheader/signature bufferへ採取。採取量と宣言長の完全一致を要求。
+5. 全体hashと入力期待hashの完全一致、EOF、preflightと採取headerの完全一致を要求。不一致では再計算/retryせず台帳に失敗をラッチ。
+6. A採取bufferを借用して純粋parserを実行。元Instant/cancel/clockを引き継ぎ、command/index/hash loopでも10秒期限を更新しない。
+
+成功値`CapturedA(pending_revalidation_not_execution_authority)`はprivate・非serialize・非Cloneの所有bufferと局所診断であり、Inventoryの自己参照structにはしない。
+entitlement gateはUnsupportedDer/AbsenceUnproven/UnverifiedXmlのいずれかで必ず停止する。XML意味解析/DER/absenceへ接続しない。
+期待hash/file長はこの部品への入力データにすぎず、root承認record由来を証明しない。traitは同じsource objectを借用するだけで、同じ実FDを証明しない。
+
+読取実bytesは既存台帳へ重複込みで計上。今回の正常経路は`32 + header/commands全長 + N`bytes（EOF0bytes）を使用し、B用を含む未使用予約はscope寿命中保持する。
+各allocationは上限確認と`try_reserve_exact`、loop/copy/hash/比較/parse前後は共通checkpointを使う。全file Vec/mmapや署名rangeの独立再読はしない。
+新規有限理由HashMismatch/SourceMismatch/Parser(reason)を内部台帳へ追加したが、公開JSON/exit codeは変えない。
+
+**B再hash・M0〜M4・祖先/path/record/lease照合は未実装。** A cursorが通過した後のin-place変更はAだけでは見つからない場合があり、それを示す合成ケースも残す。
+CapturedAをFdInventoryReadOnlyや署名validity/permitへ変換する経路はない。実OS adapter・deployment/native接続・本番policyは引き続き停止したまま。

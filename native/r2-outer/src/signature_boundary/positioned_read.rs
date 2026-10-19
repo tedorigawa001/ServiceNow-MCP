@@ -1,4 +1,5 @@
 //! Staged shared budget and single-shot positioned-I/O boundary; no OS adapter or trust authority.
+use super::physical_signature;
 use std::{
     sync::atomic::{AtomicBool, Ordering},
     time::{Duration, Instant},
@@ -19,6 +20,9 @@ pub(super) enum Failure {
     Limit,
     Deadline,
     Cancelled,
+    HashMismatch,
+    SourceMismatch,
+    Parser(physical_signature::Rejection),
 }
 #[derive(Clone, Copy)]
 pub(super) enum IoFailure {
@@ -210,5 +214,6 @@ impl<S: PositionedSource> Drop for ReadScope<'_, '_, S> {
     }
 }
 
+mod capture;
 #[cfg(test)]
 mod tests;
