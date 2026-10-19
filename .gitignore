@@ -1,6 +1,7 @@
 /dist
 /node_modules
 /coverage
+/native/r2-outer/target
 /research
 .DS_Store
 /qiita
