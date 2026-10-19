@@ -47,12 +47,43 @@ pub struct ParsedRegistry {
     registry: Registry,
     digest: String,
 }
+pub(crate) struct BoundPolicy<'a> {
+    pub template: &'a str,
+    pub anchor: &'a str,
+    pub certificate_class: &'a str,
+    pub team_id: &'a str,
+    pub identifier: &'a str,
+    pub static_flags: u32,
+}
 impl std::fmt::Debug for ParsedRegistry {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.write_str("ParsedRegistry(not_execution_authority)")
     }
 }
 impl ParsedRegistry {
+    pub(crate) fn bound_policy(
+        &self,
+        reference: &RegistryReference<'_>,
+        policy_id: &str,
+        role: Role,
+        started: Instant,
+    ) -> Result<BoundPolicy<'_>, PolicyFailure> {
+        self.bind_reference(reference, policy_id, role, started)?;
+        let p = self
+            .registry
+            .policies
+            .iter()
+            .find(|p| p.id == policy_id)
+            .ok_or(PolicyFailure::UnknownPolicy)?;
+        Ok(BoundPolicy {
+            template: &p.requirement_template_id,
+            anchor: &p.issuer.anchor,
+            certificate_class: &p.issuer.certificate_class,
+            team_id: &p.issuer.team_id,
+            identifier: &p.issuer.signing_identifier,
+            static_flags: p.expected_static_flags,
+        })
+    }
     pub(crate) fn bind_reference(
         &self,
         reference: &RegistryReference<'_>,

@@ -11,6 +11,9 @@ pub mod ledger_v2;
 mod records_v2;
 pub use records_v2::{InspectedV2Records, inspect_installed_v2_records};
 pub mod signature_policy;
+// Staged internal boundary only: no native backend or operational call site yet.
+#[allow(dead_code)]
+mod signature_boundary;
 pub use launch::{LaunchFailure, exec_installed};
 mod schema;
 use schema::{Activation, Ledger};

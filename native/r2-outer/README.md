@@ -90,6 +90,14 @@ Successful internal inspection returns an opaque non-authority value, not legacy
 usable by `exec_installed`. Legacy v0.1 offline inspection is unchanged. See
 [safe-reader connection verification](../../docs/E2E_BEST_PRACTICE_R2_OL03_LEDGER_V2_READ_SYNTHETIC_2026-10-19.md).
 
+The private staged `signature_boundary` contract connects bound policy data, separate
+validity/self checks, typed issuer/flags/entitlement observations and before/after
+identity comparison. Its test-only backend verifies shared deadline/cancellation and
+Rust handle cleanup, not real cryptographic validity or CF ownership. There is no native
+Security.framework backend or operational caller; no runtime gate or permit is enabled.
+See [boundary contract](../../docs/BEST_PRACTICE_BP5_R2_OL03_SECURITY_BOUNDARY_DESIGN.md)
+and [synthetic verification](../../docs/E2E_BEST_PRACTICE_R2_OL03_SECURITY_BOUNDARY_SYNTHETIC_2026-10-19.md).
+
 The additional `closure::check` API parses bounded in-memory index bytes and compares a
 caller-supplied binding and observation list. It returns counts only, never an execution
 permit. It does not read or verify deployed files, signatures, ACLs or xattrs. The fixed

@@ -1,6 +1,6 @@
 # BP-5 R-2 OL-03：launcher／Nodeの署名・entitlement検証設計
 
-Version: draft-0.6 / Date: 2026-10-19 / Status: C方式を採択。純粋policy/ledger-0.2解析・参照/entitlement比較・安全なreader接続は内部合成検証済み。実署名検証・OS適合試験は未実施。
+Version: draft-0.7 / Date: 2026-10-19 / Status: C方式を採択。純粋policy/ledger解析・安全なreader接続・Security境界は内部合成検証済み。実署名検証・OS適合試験は未実施。
 
 ## 1. 目的と現在の境界
 
@@ -86,6 +86,8 @@ adapterは少なくとも`dictionary`／`absence_proven`／`unsupported_or_unkno
 
 ## 5. Security.framework adapter案と手順
 
+[内部境界契約draft-0.1](BEST_PRACTICE_BP5_R2_OL03_SECURITY_BOUNDARY_DESIGN.md)と[test-only backendの合成検証](E2E_BEST_PRACTICE_R2_OL03_SECURITY_BOUNDARY_SYNTHETIC_2026-10-19.md)を追加した。型付き観測・validityと情報取得の分離・self identity照合・期限/cancel・Rust handle解放を検証する内部部品で、native Security/CF実装や暗号検証成功を意味しない。通常起動・permitには接続しない。
+
 Rustの小さいFFI境界から公開Security/CoreFoundation APIを使う案。crate/SDK/framework link・CF所有権は追加審査する。
 通常起動では`codesign`/`spctl`/`security`/shell等の子processを起動せず、署名情報やraw CFErrorをstdout/stderrへ渡さない。
 
@@ -148,7 +150,7 @@ Node起動0回で停止する。raw OSStatus文言、CFError/証明書全文、p
 | 停止/秘密 | 全拒否でNode0回、raw error/証明書/marker非出力、snapshotをpermitへ変換できないこと |
 | 予算/資源 | 全体deadline、CF objectの所有権/失敗時解放、補助thread/FDがexec前提と矛盾する場合の停止 |
 
-第一段階は型付き期待policyと純粋比較器、次にSecurity API境界のfake応答を使う合成テストとする。
+型付き期待policyと純粋比較器、Security API境界のfake応答を使う合成テストは内部実装済み。
 これは本物の暗号検証やOSの注入拒否の証拠ではない。実adapter試験では別承認で専用の非秘密fixtureを用意し、
 署名済み正常系・署名後の破損・誤署名者・entitlement差分・self結合・offline/timeoutを確認する。
 ad-hocのfixtureをDeveloper ID正常系として採点しない。今回署名用鍵・登録・公証送信・fixture作成は行わない。
