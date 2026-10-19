@@ -1,12 +1,13 @@
 # BP-5 R-2 OL-03：型付き署名policy・registry/ledger移行契約
 
-Version: draft-0.2 / Date: 2026-10-19 / Status: C方式は利用者が採択。strict parser/entitlement純粋比較は内部合成検証済み。個別policy承認・実署名・移行は未実施。
+Version: draft-0.3 / Date: 2026-10-19 / Status: C方式を採択。policy/ledger-0.2 parser・純粋照合を内部合成検証済み。個別policy承認・実署名・installed reader移行は未実施。
 
 ## 1. 目的と境界
 
 [署名・entitlement詳細設計](BEST_PRACTICE_BP5_R2_OL03_SIGNATURE_DESIGN.md)§3.1/§4を具体化する。
 [OL-01台帳設計](BEST_PRACTICE_BP5_R2_OL01_BUILD_DEPLOY_LEDGER_DESIGN.md)のroot activation→ledger hashの信頼順序を維持する。
-現行ledger-0.1のentitlementは名前配列。本書ではRust schema/reader・実配備設定を変更しない。
+現行ledger-0.1のentitlementは名前配列。旧schema/offline readerは維持し、0.2の専用schema/parser・registry参照bindingを別に追加した。
+[0.2合成検証記録](E2E_BEST_PRACTICE_R2_OL03_LEDGER_V2_SYNTHETIC_2026-10-19.md)の純粋Contextを、root所有activation検査済みの証拠とはしない。実配備設定は変更しない。
 runtime gateは必ず92で停止し、contract検証・型付き比較器の成功から実行permitを発行しない。
 telemetry調査は保留。[純粋部品の実装/合成検証](E2E_BEST_PRACTICE_R2_OL03_TYPED_POLICY_SYNTHETIC_2026-10-19.md)と、未実施の実署名/registry組込み/移行を区別する。実機/PDI操作・署名/登録・token発行・設定変更は対象外。
 以下はプロジェクト固有の仕様案。Apple APIの公式根拠は親設計§9を参照し、新しいOS動作を実測したとはしない。
@@ -122,7 +123,7 @@ Node versionはartifact receiptと最終hashへ結合し、policy IDだけで任
 
 activation-0.1のledger raw hash bindingで新ledger bytesを固定できるため、この案ではactivation項目を増やさない。
 新runtime用readerはledger-0.2のみを受理し、署名検証のために旧ledgerへfallbackしない。
-現行OL-02 readerは0.1のまま。本書で次版対応やpermit発行を実装したという意味ではない。
+現行OL-02 installed readerは0.1のまま。0.2のメモリ上データ検査/registry参照は実装したが、実file読込やpermit発行へ接続したという意味ではない。
 registry/ledgerのschema version、outer policy ID、activation generationは別概念で、自動的に同じ数値へ同期しない。
 
 ## 6. 移行・更新・撤回
@@ -168,5 +169,5 @@ strict parserとentitlement純粋比較を合成実装した。初期descriptor/
 - 新runtime/旧offline readerの分離・activation-0.1継続の可否、切替/撤回・更新排他の責任者。
 - 信頼済みbuild/署名、公証/失効確認・thread/FD/timeoutの未決事項とregistry更新コスト。
 
-型付き期待値/観測値のparser・純粋比較は合成検証済み。次は本番registryの信頼元接続・次版ledger参照契約を別工程で具体化する。
+型付きpolicy比較と0.2 ledgerのstrict parser/registry参照bindingは合成検証済み。次は本番registryの信頼元・installed-record readerへの安全な接続を別工程で具体化する。
 実Security adapter・実配備・gate解除は別承認。telemetry調査の再開を前提にせず、実PDI開始許可にも転用しない。

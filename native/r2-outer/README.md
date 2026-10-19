@@ -73,8 +73,13 @@ and [OL-01 design](../../docs/BEST_PRACTICE_BP5_R2_OL01_BUILD_DEPLOY_LEDGER_DESI
 
 `signature_policy` provides a bounded draft-registry parser and a pure entitlement
 comparator. Its public inputs are caller-supplied data, not Security.framework proof.
-No trusted registry is installed or embedded, no ledger-0.2 reader is enabled, and no
+No trusted registry is installed or embedded, no installed ledger-0.2 reader is enabled, and no
 execution permit is issued. See [typed policy verification](../../docs/E2E_BEST_PRACTICE_R2_OL03_TYPED_POLICY_SYNTHETIC_2026-10-19.md).
+
+`ledger_v2::parse_and_bind` adds a separate strict in-memory ledger-0.2 schema and
+registry-reference/role binding. Its Context is caller-provided data, not proof of an
+inspected activation. The installed offline reader remains v0.1-only and no runtime
+gate is enabled. See [ledger-0.2 verification](../../docs/E2E_BEST_PRACTICE_R2_OL03_LEDGER_V2_SYNTHETIC_2026-10-19.md).
 
 The additional `closure::check` API parses bounded in-memory index bytes and compares a
 caller-supplied binding and observation list. It returns counts only, never an execution

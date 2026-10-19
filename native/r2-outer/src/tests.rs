@@ -431,3 +431,27 @@ fn rejects_nested_duplicate_keys_before_schema_conversion() {
     });
     stopped(&f, Failure::InvalidRecord);
 }
+
+#[test]
+fn offline_v1_stays_valid_and_never_accepts_v2_records() {
+    assert!(inspect(&fixture()).is_ok());
+    let mut f = fixture();
+    change(&mut f, Role::Ledger, |v| {
+        v["schema_version"] = json!("bp5-r2-launch-ledger-0.2");
+        v["policy_id"] = json!("bp5-r2-outer-macos-arm64-0.2");
+        v["signature_registry"] = json!({"schema_version":"bp5-r2-signature-registry-0.1","registry_id":"synthetic","sha256":"a".repeat(64)});
+        for role in ["launcher", "node"] {
+            let binary = v[role].as_object_mut().unwrap();
+            for old in [
+                "signature_requirement",
+                "publisher",
+                "hardened_runtime",
+                "entitlements",
+            ] {
+                binary.remove(old);
+            }
+            binary.insert("signature_policy_id".into(), json!(format!("{role}-1")));
+        }
+    });
+    stopped(&f, Failure::InvalidRecord);
+}

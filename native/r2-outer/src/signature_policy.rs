@@ -53,20 +53,13 @@ impl std::fmt::Debug for ParsedRegistry {
     }
 }
 impl ParsedRegistry {
-    pub fn policy_count(&self) -> usize {
-        self.registry.policies.len()
-    }
-}
-impl ParsedRegistry {
-    /// Pure comparison of caller-supplied data, not CF type verification or cryptographic validity.
-    pub fn compare_entitlements(
+    pub(crate) fn bind_reference(
         &self,
         reference: &RegistryReference<'_>,
         policy_id: &str,
         role: Role,
-        observed: &Observation,
         started: Instant,
-    ) -> Result<EntitlementMatch, PolicyFailure> {
+    ) -> Result<(), PolicyFailure> {
         budget(started)?;
         if reference.schema_version != SCHEMA
             || reference.registry_id != self.registry.registry_id
@@ -83,6 +76,30 @@ impl ParsedRegistry {
         if policy.role != role {
             return Err(PolicyFailure::RoleMismatch);
         }
+        budget(started)?;
+        Ok(())
+    }
+    pub fn policy_count(&self) -> usize {
+        self.registry.policies.len()
+    }
+}
+impl ParsedRegistry {
+    /// Pure comparison of caller-supplied data, not CF type verification or cryptographic validity.
+    pub fn compare_entitlements(
+        &self,
+        reference: &RegistryReference<'_>,
+        policy_id: &str,
+        role: Role,
+        observed: &Observation,
+        started: Instant,
+    ) -> Result<EntitlementMatch, PolicyFailure> {
+        self.bind_reference(reference, policy_id, role, started)?;
+        let policy = self
+            .registry
+            .policies
+            .iter()
+            .find(|p| p.id == policy_id)
+            .ok_or(PolicyFailure::UnknownPolicy)?;
         if observed.blob_bytes > 65536 {
             return Err(PolicyFailure::Limit);
         }
@@ -174,7 +191,7 @@ enum Expectation {
 enum ExpectedValue {
     Boolean { value: bool },
 }
-fn id(v: &str) -> bool {
+pub(crate) fn id(v: &str) -> bool {
     !v.is_empty()
         && v.len() <= 128
         && v.bytes()

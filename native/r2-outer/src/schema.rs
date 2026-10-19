@@ -218,3 +218,99 @@ impl Ledger {
         Ok(())
     }
 }
+
+// Separate schema: never deserialize v2 through the legacy offline Ledger.
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+pub(crate) struct RegistryLink {
+    pub schema_version: String,
+    pub registry_id: String,
+    pub sha256: String,
+}
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+pub(crate) struct BinaryV2 {
+    path: String,
+    sha256: String,
+    version: String,
+    pub signature_policy_id: String,
+}
+impl BinaryV2 {
+    fn valid(&self) -> bool {
+        path(&self.path)
+            && hex(&self.sha256, 64)
+            && version(&self.version)
+            && crate::signature_policy::id(&self.signature_policy_id)
+    }
+}
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+pub(crate) struct LedgerV2 {
+    schema_version: String,
+    pub generation: u64,
+    pub release_id: String,
+    pub execution_uid: u32,
+    pub platform: Platform,
+    pub launcher: BinaryV2,
+    pub node: BinaryV2,
+    pub runtime: Runtime,
+    pub signature_registry: RegistryLink,
+    build_receipt_sha256: String,
+    source_revision: String,
+    lockfile_sha256: String,
+    approved_at: String,
+    expires_at: String,
+    approval_ref: String,
+    policy_id: String,
+}
+impl LedgerV2 {
+    pub fn time(&self) -> Time {
+        Time {
+            approved_at: self.approved_at.clone(),
+            expires_at: self.expires_at.clone(),
+            approval_ref: self.approval_ref.clone(),
+        }
+    }
+    pub fn validate(&self) -> Result<(), Failure> {
+        let r = &self.runtime;
+        if self.schema_version != "bp5-r2-launch-ledger-0.2"
+            || self.policy_id != "bp5-r2-outer-macos-arm64-0.2"
+            || self.generation == 0
+            || self.generation > 9007199254740991
+            || self.execution_uid == 0
+            || !text(&self.release_id, 128)
+            || self.platform.os != "darwin"
+            || self.platform.arch != "arm64"
+            || !text(&self.platform.product_version, 32)
+            || !self
+                .platform
+                .product_version
+                .bytes()
+                .all(|c| c.is_ascii_digit() || c == b'.')
+            || !text(&self.platform.os_build, 32)
+            || !self
+                .platform
+                .os_build
+                .bytes()
+                .all(|c| c.is_ascii_alphanumeric())
+            || !self.launcher.valid()
+            || !self.node.valid()
+            || !path(&r.root)
+            || r.cwd != r.root
+            || r.entry_relative_path != "dist/review/r2-launcher-entry.js"
+            || !path(&r.index_path)
+            || !within(&r.index_path, &r.root)
+            || !within(&self.node.path, &r.root)
+            || !hex(&r.index_sha256, 64)
+            || !hex(&self.build_receipt_sha256, 64)
+            || !hex(&self.source_revision, 40)
+            || !hex(&self.lockfile_sha256, 64)
+            || self.signature_registry.schema_version != "bp5-r2-signature-registry-0.1"
+            || !crate::signature_policy::id(&self.signature_registry.registry_id)
+            || !hex(&self.signature_registry.sha256, 64)
+        {
+            return Err(invalid());
+        }
+        Ok(())
+    }
+}
