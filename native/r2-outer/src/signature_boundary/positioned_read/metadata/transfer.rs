@@ -1,6 +1,12 @@
 //! Inert record/ownership contract. No record reader, OS opener, source activation or permit.
+use super::collector::MetadataOps;
 use super::*;
 use crate::signature_policy::Role;
+
+// Opaque ownership origin, not an OS identity or a caller-supplied FD number.
+trait ResourceOrigin {
+    fn resource_origin(&self) -> &Rc<()>;
+}
 
 // Clone applies only to comparison data, never to the session, target or owned resources.
 #[derive(Clone, PartialEq, Eq)]
@@ -148,6 +154,7 @@ struct OpenedTarget<R> {
     target: TargetDeclaration,
     root_device: u64,
     initial: Observation,
+    initial_origin: Rc<()>,
     // Drop leaf before ancestors on all failure paths, including before the move.
     leaf: R,
     ancestors: Vec<Ancestor<R>>,
@@ -160,6 +167,7 @@ struct HeldTargetScope<'s, R> {
     ancestors: Vec<Ancestor<R>>,
     bound: &'s BoundTarget<'s>,
     initial: Snapshot,
+    initial_origin: Rc<()>,
 }
 struct TransferDiagnostic;
 impl std::fmt::Debug for TransferDiagnostic {
@@ -182,7 +190,7 @@ fn record_time(records: &RecordBinding, wall_ms: u64, margin: u64) -> Result<(),
     }
     Ok(())
 }
-fn attach<'s, R>(
+fn attach<'s, R: ResourceOrigin>(
     bound: &'s BoundTarget<'s>,
     opened: OpenedTarget<R>,
 ) -> Result<HeldTargetScope<'s, R>, Failure> {
@@ -195,6 +203,7 @@ fn attach<'s, R>(
         return Err(Failure::Limit);
     }
     if !Rc::ptr_eq(&opened.lineage, bound.lineage)
+        || !Rc::ptr_eq(&opened.initial_origin, opened.leaf.resource_origin())
         || opened.records != *bound.records
         || opened.target != *bound.target
         || opened.ancestors.len() != bound.chain_names.len()
@@ -212,9 +221,10 @@ fn attach<'s, R>(
         ancestors: opened.ancestors,
         bound,
         initial,
+        initial_origin: opened.initial_origin,
     })
 }
-fn with_target<R>(
+fn with_target<R: ResourceOrigin>(
     budget: &mut SharedBudget<'_>,
     records: &RecordBinding,
     lineage: &Rc<()>,
@@ -256,6 +266,71 @@ fn with_target<R>(
         Ok(value) => Ok(value),
         Err(reason) => budget.stop(reason),
     }
+}
+
+// Consume the scope so all owned resources are dropped before returning either a pending
+// diagnostic or a failure. No source/snapshot/expected-hash override parameter exists.
+struct OpenBoundComparison {
+    compared: ComparedM0M4,
+}
+impl std::fmt::Debug for OpenBoundComparison {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str("OpenBoundComparison(pending_topology_records_lease_not_execution_authority)")
+    }
+}
+impl OpenBoundComparison {
+    fn entitlement_gate(&self) -> Result<(), physical_signature::Rejection> {
+        self.compared.entitlement_gate()
+    }
+}
+fn review_opened_target<R: MetadataOps + ResourceOrigin>(
+    mut held: HeldTargetScope<'_, R>,
+    budget: &mut SharedBudget<'_>,
+) -> Result<OpenBoundComparison, Failure> {
+    let result = (|| {
+        budget.checkpoint()?;
+        if !Rc::ptr_eq(&held.initial_origin, held.source.leaf.resource_origin()) {
+            return Err(Failure::SourceMismatch);
+        }
+        let expected = &held.initial;
+        let origin = &held.initial_origin;
+        let device = expected.stat.device;
+        let bytes = held.bound.bytes;
+        let mut read = budget.begin(&mut held.source.leaf, bytes)?;
+        read.compare_metadata(&held.bound.target.ledger_hash, device, &mut |r, p| {
+            r.checkpoint()?;
+            if !Rc::ptr_eq(origin, r.source.resource_origin()) {
+                return Err(Failure::SourceMismatch);
+            }
+            let raw = r.collect_metadata_after_open(p, device)?;
+            r.checkpoint()?;
+            if !Rc::ptr_eq(origin, r.source.resource_origin()) {
+                return Err(Failure::SourceMismatch);
+            }
+            if p == Phase::M0 {
+                let snapshot = normalize(raw.clone(), device, bytes).map_err(|e| {
+                    if e == Failure::Metadata {
+                        Failure::Changed
+                    } else {
+                        e
+                    }
+                })?;
+                if snapshot != *expected {
+                    return Err(Failure::Changed);
+                }
+                r.checkpoint()?;
+            }
+            Ok(raw)
+        })
+    })();
+    // Latch before resource release; drop-time cancel must not overwrite an earlier failure.
+    let result = match result {
+        Ok(value) => Ok(value),
+        Err(reason) => budget.stop(reason),
+    };
+    drop(held);
+    budget.checkpoint()?;
+    result.map(|compared| OpenBoundComparison { compared })
 }
 #[cfg(test)]
 mod tests;

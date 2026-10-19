@@ -1,6 +1,6 @@
 # BP-5 R-2 OL-03：secure openerからmetadata sourceへの保持FD移譲
 
-Version: draft-0.2 / Date: 2026-10-19 / Status: binding比較/移譲の内部契約を合成resourceで実装。実reader/opener/source接続・最終再照合は未実装/未承認。
+Version: draft-0.3 / Date: 2026-10-19 / Status: binding/移譲・open snapshot/M0結合を合成resourceで内部実装。実reader/opener/macOS source接続・最終topology/record再照合は未実装/未承認。
 
 ## 1. 範囲と停止境界
 
@@ -106,8 +106,8 @@ path再解決で失敗/取得不能/消失した場合も停止し、旧FDのbyt
 4. M4を**1回だけ**取得してM0と比較。重複phaseやM4の再取得は許さない。
 5. 結果をscope内に保留したまま、record exact bytes/identity/世代/期限・leaseを最終確認し、共通checkpointを通す。すべて完了してから限定診断を返す。
 
-現行compare_collected_m0_m4はM0 baselineを独自に固定し、B〜M4の間にtopology callbackがない。そのまま前後に関数を並べただけでは上の手順を満たさない。
-後続実装ではsealedなphase coordinator/guardを追加し、M0とopen snapshotの比較・M4前finalizerを同じReadScopeへ接続する必要がある。caller任意callbackでpath検査をskipできる形にはしない。
+従来のcompare_collected_m0_m4はM0 baselineを独自に固定し、B〜M4の間にtopology callbackがない。そのまま前後に関数を並べただけでは上の手順を満たさない。
+§13でsealedなopen snapshot/M0比較を同じReadScopeへ追加したが、M4前finalizerはまだない。caller任意callbackでpath検査をskipできる形にはしない。
 topology検査のleaf観測はM0〜M4とは別の観測で、既存100呼出し枠をresetしない（§8）。
 
 どの並べ方でもFile/namespace/recordをatomicには検証できない。M4後のrecord読取中の変更や検査後のABAを完全排除しない。
@@ -184,7 +184,7 @@ Rust/TSコードを変更しないためビルド・テストは再実行しな�
 - `OpenedTarget<R>`はleaf R・祖先R群・初期Observationと、比較用record/target値・originを所有する。移譲時に全比較fieldと`Rc::ptr_eq`、祖先componentの数/順序を照合する。
   このoriginはprivateなscopeの対応だけで、実利用者・root承認・readerセッションの真正性を証明しない。
 - 正常化した初期leaf policyが適合した場合だけ、同じRを`TransferSource<R>`へmoveし、`HeldTargetScope`が祖先とBoundTargetを保持する。
-  **TransferSourceは所有権carrierであり、まだMetadataOpsを実装せず、実HeldSource<SystemApi>にも接続していない。** M0結合・ancestor snapshot/実path再walk・record最終再読は後工程。
+  **TransferSourceは所有権carrierであり、実HeldSource<SystemApi>には接続していない。** この段階ではM0結合も後工程だった。後続の§13で所有leafのMetadataOpsを使うM0結合を追加したが、ancestor snapshot/実path再walk・record最終再読はまだない。
 - private `with_target`はopen前後/source-use前後/drop後に元SharedBudgetのcheckpointを確認し、最初の有限失敗をラッチする。
   source-use closureはテスト用内部境界で、公開runtime callback/injection口ではない。結果型はunit相当の非authority診断だけで、resource/FDを返せない。
   owned RのDropを使い、leaf→祖先の解放を確認。部分open失敗、移譲前拒否、移譲後失敗、遅延成功/エラー、取消、unwindを含めて1回だけ解放する。
@@ -194,5 +194,26 @@ Rust/TSコードを変更しないためビルド・テストは再実行しな�
   receiptの祖先数＋leaf＋一時2枠が132超ならLimit。ただし実openerの各open前予約やprocess全体FD台帳は未実装。
 
 成功Debugは`MovedTarget(pending_m0_topology_records_not_execution_authority)`固定、execution_gateは必ずUnavailable。
-実Session/RecordEvidence producer、祖先のOS metadata/namespace証明、M0結合/M4 finalizer、追加topology予算、lease/実macOS source移譲・native/API/permitは引き続き停止する。
+実Session/RecordEvidence producer、祖先のOS metadata/namespace証明、M4 finalizer、追加topology予算、lease/実macOS source移譲・native/API/permitは引き続き停止する。M0結合の後続実装は§13。
 合成resourceのBox token/Drop一致はRust所有権の証拠であり、実close成功や実FD数/OSメタデータの証拠ではない。
+
+## 13. open snapshotとM0の内部結合
+
+[open/M0合成検証記録](E2E_BEST_PRACTICE_R2_OL03_OPEN_M0_SYNTHETIC_2026-10-19.md)に新規14件・全体394件を記録する。
+実opener/macOS constructorへは接続せず、合成resourceだけがprivate ResourceOriginとMetadataOpsを実装する。
+
+- open receiptに初期Observationとresource originを保持し、attach時にleafのoriginと`Rc::ptr_eq`で一致を要求する。同じmetadataでも別originのleafへ取り換えるとBindingで止める。
+  ResourceOriginはowned resourceに対応するprivateなopaque Rcで、FD整数や公開JSONではない。実openerが同じ保持Fileからsnapshot/originをmintするproducerはまだない。
+- `review_opened_target`がHeldTargetScopeを消費し、sourceの所有leafを直接1つのReadScopeへ可変借用する。別source・snapshot・期待hashを注入する引数は持たない。
+- collector呼出しの前後でoriginを確認し、移譲後のresource差替えや取得中のorigin変更をSourceMismatchで停止する。M0前の差ならmetadata/payload呼出し0回。
+- M0はcollectorから**1回だけ**取得する。正常化したStat全field・ACL/FS・可視xattr名の集合をopen時Snapshotとexact比較し、一致する場合だけ既存Flowのbaselineへ渡す。
+  M0でbaselineを更新して変更を救済しない。不一致ではpreflight/read payload0回。取得不明/期限/取消はopen snapshotへのfallbackなし。
+- open時にpolicy適合を確認済みなので、この経路のM0 policy不適合はChangedへ**sticky latch前に**変換する。不正ACL present等の取得不明はMetadataUnavailableのまま。
+  従来のunbound collectorのM0 policy分類は変更しない。
+- 同じscopeのA/parser/B/M1〜M4をそのまま継続し、metadata50回/正常role・元のpayload課金を維持。open照合のためのM0再取得や新しい10秒は設けない。
+- source/祖先/ACL handle/読取予約は返却前に解放する。失敗をラッチしてからdropし、解放後にもcheckpointを通す。unwindでもRAIIを維持する。
+- 成功は非Clone/非serializeの`OpenBoundComparison(pending_topology_records_lease_not_execution_authority)`。従来のComparedM0M4から直接昇格するconstructorはない。
+  XML/DER/absenceの既存entitlement gateは停止を維持し、祖先/path/record/leaseが未検証のままpermitを発行しない。
+
+origin比較は協調的な所有型の結合であり、悪意あるMetadataOps実装やABA・実FD/OS identity・可視性を証明しない。raw Observationだけを別resourceから偽造するtrusted producerの侵害も保証対象外。
+M4前topology hook・record再読・更新排他・実opener/File移譲・実機/API/permitは依然未実装/未接続。

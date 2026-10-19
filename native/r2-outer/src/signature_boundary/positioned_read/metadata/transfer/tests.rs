@@ -7,6 +7,7 @@ struct Life {
     dropped: RefCell<Vec<usize>>,
 }
 struct Resource {
+    origin: Rc<()>,
     id: usize,
     token: Box<u8>,
     life: Rc<Life>,
@@ -16,11 +17,17 @@ impl Resource {
     fn new(id: usize, life: &Rc<Life>) -> Self {
         life.made.borrow_mut().push(id);
         Self {
+            origin: Rc::new(()),
             id,
             token: Box::new(7),
             life: life.clone(),
             on_drop: None,
         }
+    }
+}
+impl ResourceOrigin for Resource {
+    fn resource_origin(&self) -> &Rc<()> {
+        &self.origin
     }
 }
 impl Drop for Resource {
@@ -106,13 +113,15 @@ fn initial() -> Observation {
     }
 }
 fn opened(bound: &BoundTarget<'_>, life: &Rc<Life>) -> OpenedTarget<Resource> {
+    let leaf = Resource::new(99, life);
     OpenedTarget {
         lineage: bound.lineage.clone(),
         records: bound.records.clone(),
         target: bound.target.clone(),
         root_device: 7,
         initial: initial(),
-        leaf: Resource::new(99, life),
+        initial_origin: leaf.origin.clone(),
+        leaf,
         ancestors: bound
             .chain_names
             .iter()
@@ -124,6 +133,8 @@ fn opened(bound: &BoundTarget<'_>, life: &Rc<Life>) -> OpenedTarget<Resource> {
             .collect(),
     }
 }
+
+mod m0;
 fn check(
     records: &RecordBinding,
     target: &TargetDeclaration,

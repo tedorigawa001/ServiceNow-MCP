@@ -92,6 +92,20 @@ impl<S: MetadataOps> Drop for AclGuard<'_, '_, '_, S> {
 }
 
 impl<S: MetadataOps> ReadScope<'_, '_, S> {
+    // Used only with an already validated open snapshot. Policy failure at M0 is now a
+    // change from that snapshot, not an initial-policy decision. Map BEFORE sticky latch.
+    pub(super) fn collect_metadata_after_open(
+        &mut self,
+        phase: Phase,
+        device: u64,
+    ) -> Result<Observation, Failure> {
+        let result = self.collect_metadata_inner(phase, device);
+        match result {
+            Ok(value) => Ok(value),
+            Err(Failure::Metadata) => self.budget.stop(Failure::Changed),
+            Err(reason) => self.budget.stop(reason),
+        }
+    }
     fn metadata_op<T>(
         &mut self,
         range_is_change: bool,
