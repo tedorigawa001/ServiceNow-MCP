@@ -46,6 +46,8 @@ Node22.12は下限互換試験用。実PDI用Nodeは別途承認した保守対�
 
 ## 3. launcher自身の信頼の起点
 
+[署名・entitlement詳細設計draft-0.1](BEST_PRACTICE_BP5_R2_OL03_SIGNATURE_DESIGN.md)で、信頼元・型付き照合・オフライン/公証の限界・合成試験・承認待ち事項を具体化した。署名検証の実装・運用承認を意味しない。
+
 launcherがmainに入ってからenvを消すだけでは、そのlauncherのloader注入を防げない。
 この再帰を「Rustだから安全」で打ち切らず、署名・Hardened Runtime・OSの実行制御と信頼済み配備を外側の前提にする。
 AppleはHardened Runtimeと例外entitlementを区別し、DYLD変数の使用には専用entitlementを記載している（S2/S3）。
@@ -213,6 +215,7 @@ OL-01案の作成や公式資料の確認を、これらの試験や実行許可
 | S6 | [npm ci](https://docs.npmjs.com/cli/v11/commands/npm-ci/) Description / ignore-scripts | lock整合・script制御の参考。採用npmの正確な版と挙動は再照合 |
 | S7 | [Node.js release-keys](https://github.com/nodejs/release-keys) Verifying Release Packages | 公式の署名鍵/SHASUMS検証。鍵の信頼元・採用artifact/署名の記録は別途必要 |
 
-Appleの[notarization資料](https://developer.apple.com/documentation/security/notarizing-macos-software-before-distribution)は今回取得できた本文が限定的。
-Developer ID署名済みCLIの配布形式・ticket照合・オフライン検証の可否/条件は追加確認事項とし、notarization可能/完了とは断定しない。
+Appleの[notarization資料](https://developer.apple.com/documentation/security/notarizing-macos-software-before-distribution)はOL-01初回確認では取得本文が限定的だった。
+後続の[署名詳細設計§6/§9](BEST_PRACTICE_BP5_R2_OL03_SIGNATURE_DESIGN.md)では公式workflowのstandalone binaryへの直接staple不可を確認した。
+R-2用の配布形式・ticket照合・オフライン起動の可否/条件は未確認のままとし、公証可能/完了とは断定しない。
 Hardened Runtimeがnotarizationの前提という記述はS2で確認した。

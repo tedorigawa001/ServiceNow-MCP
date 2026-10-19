@@ -14,6 +14,7 @@ Version: draft-0.5 / Date: 2026-10-19 / Status: 承認前の設計案。parser�
 純粋照合の観測一覧は呼出し側のデータである。後続の[FD読取合成検証](E2E_BEST_PRACTICE_R2_OL03_DEPLOYMENT_READ_SYNTHETIC_2026-10-19.md)で
 directory FD基準の読取・owner/mode/ACL/xattr・metadata/hash照合部品を追加したが、root所有の信頼済み実配備を検証済みとはしない。
 closure検査だけの成功でもgateは解除しない。実署名・entitlement・reader group排他性・配備承認も別途必要。
+[署名・entitlement詳細設計案](BEST_PRACTICE_BP5_R2_OL03_SIGNATURE_DESIGN.md)で、署名APIとFD/pathの結合・更新排他の限界・承認待ちpolicyを別途整理する。署名確認を実装済みとはしない。
 telemetry調査は保留。本書はPDI/OAuth/token設定を変更せず、コマンド実行手順や実値入り台帳を提供しない。
 
 ## 2. 信頼の結合と閉包の範囲
