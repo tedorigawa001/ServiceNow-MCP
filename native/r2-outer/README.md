@@ -153,6 +153,13 @@ shared 16384 contract-call cap. This is not OS syscall/FD accounting or an appro
 ancestor profile. Its fixed TopologyComparison still awaits records/lease and cannot
 issue authority. See [topology synthetic verification](../../docs/E2E_BEST_PRACTICE_R2_OL03_TOPOLOGY_SYNTHETIC_2026-10-19.md) and
 [M0–M4 synthetic verification](../../docs/E2E_BEST_PRACTICE_R2_OL03_METADATA_SYNTHETIC_2026-10-19.md).
+A separate private records path now rereads pinned activation/ledger/index bytes
+before and after M4, including complete pre/post-read namespace walks, metadata,
+binding projection and clock comparisons. It shares the original payload and
+contract-call budgets. Its no-FD fake uses synthetic non-JSON bytes/projections;
+the real reader, strict parser/closure producer, OS clock and lease remain disconnected.
+No record or topology result can issue an execution permit. See
+[record final comparison verification](../../docs/E2E_BEST_PRACTICE_R2_OL03_RECORD_FINAL_SYNTHETIC_2026-10-20.md).
 See [boundary contract](../../docs/BEST_PRACTICE_BP5_R2_OL03_SECURITY_BOUNDARY_DESIGN.md)
 and [synthetic verification](../../docs/E2E_BEST_PRACTICE_R2_OL03_SECURITY_BOUNDARY_SYNTHETIC_2026-10-19.md).
 

@@ -206,6 +206,27 @@ fn review_topology_target<R: MetadataOps + ResourceOrigin, S: TopologySource<R>>
     mut source: S,
     budget: &mut SharedBudget<'_>,
 ) -> Result<TopologyComparison, Failure> {
+    let result = compare_topology(&mut held, &receipt, &mut source, budget, &mut |b| {
+        b.checkpoint()
+    });
+    let result = match result {
+        Ok(value) => Ok(value),
+        Err(reason) => budget.stop(reason),
+    };
+    drop(source);
+    drop(held);
+    budget.checkpoint()?;
+    result.map(|compared| TopologyComparison { compared })
+}
+// The lower-level comparison remains non-authority. The records path below supplies its
+// mandatory finalizer here and never converts a completed TopologyComparison into evidence.
+fn compare_topology<R: MetadataOps + ResourceOrigin, S: TopologySource<R>>(
+    held: &mut HeldTargetScope<'_, R>,
+    receipt: &TopologyReceipt,
+    source: &mut S,
+    budget: &mut SharedBudget<'_>,
+    before_m4: &mut impl FnMut(&mut SharedBudget<'_>) -> Result<(), Failure>,
+) -> Result<ComparedM0M4, Failure> {
     let result = (|| {
         budget.checkpoint()?;
         if !Rc::ptr_eq(&held.initial_origin, held.source.leaf.resource_origin()) {
@@ -215,8 +236,8 @@ fn review_topology_target<R: MetadataOps + ResourceOrigin, S: TopologySource<R>>
             held.bound,
             &held.ancestors,
             &held.initial,
-            &receipt,
-            &mut source,
+            receipt,
+            source,
             budget,
         )?;
         let expected = &held.initial;
@@ -235,10 +256,11 @@ fn review_topology_target<R: MetadataOps + ResourceOrigin, S: TopologySource<R>>
                     held.bound,
                     &held.ancestors,
                     expected,
-                    &receipt,
-                    &mut source,
+                    receipt,
+                    source,
                     r.budget,
                 )?;
+                before_m4(r.budget)?;
             }
             let raw = r.collect_metadata_after_open(p, device)?;
             r.checkpoint()?;
@@ -251,15 +273,12 @@ fn review_topology_target<R: MetadataOps + ResourceOrigin, S: TopologySource<R>>
             Ok(raw)
         })
     })();
-    let result = match result {
+    match result {
         Ok(value) => Ok(value),
         Err(reason) => budget.stop(reason),
-    };
-    drop(source);
-    drop(held);
-    budget.checkpoint()?;
-    result.map(|compared| TopologyComparison { compared })
+    }
 }
 
+mod records;
 #[cfg(test)]
 mod tests;

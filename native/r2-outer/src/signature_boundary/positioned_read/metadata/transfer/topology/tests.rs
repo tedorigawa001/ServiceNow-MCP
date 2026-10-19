@@ -5,19 +5,19 @@ use sha2::{Digest, Sha256};
 use std::cell::{Cell, RefCell};
 
 #[derive(Default)]
-struct Counts {
-    made: Cell<usize>,
-    dropped: Cell<usize>,
-    live: Cell<usize>,
-    peak: Cell<usize>,
+pub(super) struct Counts {
+    pub(super) made: Cell<usize>,
+    pub(super) dropped: Cell<usize>,
+    pub(super) live: Cell<usize>,
+    pub(super) peak: Cell<usize>,
     opened: RefCell<Vec<(String, bool)>>,
-    phases: RefCell<Vec<Phase>>,
-    reads: Cell<usize>,
-    copied: Cell<u64>,
+    pub(super) phases: RefCell<Vec<Phase>>,
+    pub(super) reads: Cell<usize>,
+    pub(super) copied: Cell<u64>,
     attempts: Cell<usize>,
     round: Cell<usize>,
 }
-struct Resource {
+pub(super) struct Resource {
     id: usize,
     origin: Rc<()>,
     c: Rc<Counts>,
@@ -104,7 +104,7 @@ fn observation(s: Stat) -> TopologyObservation {
         names: VisibleNames::Empty,
     }
 }
-struct Temporary {
+pub(super) struct Temporary {
     index: usize,
     c: Rc<Counts>,
 }
@@ -126,7 +126,7 @@ impl Drop for Temporary {
     }
 }
 type Hook = Box<dyn FnMut(usize, usize)>;
-struct Synthetic {
+pub(super) struct Synthetic {
     c: Rc<Counts>,
     held: Vec<TopologyObservation>,
     namespace: Vec<TopologyObservation>,
@@ -193,7 +193,7 @@ impl TopologySource<Resource> for Synthetic {
         Ok(self.namespace[r.index].clone())
     }
 }
-fn setup(
+pub(super) fn setup(
     b: &BoundTarget<'_>,
     c: &Rc<Counts>,
 ) -> (OpenedTarget<Resource>, TopologyReceipt, Synthetic) {

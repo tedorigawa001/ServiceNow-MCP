@@ -1,11 +1,11 @@
 # BP-5 R-2 OL-03：secure openerからmetadata sourceへの保持FD移譲
 
-Version: draft-0.4 / Date: 2026-10-19 / Status: binding/移譲・open snapshot/M0結合・祖先/path再照合を合成resourceで内部実装。実reader/opener/macOS source接続・record/lease最終再照合は未実装/未承認。
+Version: draft-0.5 / Date: 2026-10-20 / Status: binding/移譲・open snapshot/M0結合・祖先/path・record再読/最終照合の内部契約を合成resourceで実装。実reader/parser/opener/macOS source・leaseは未接続/未承認。
 
 ## 1. 範囲と停止境界
 
 [保持FD/parser設計](BEST_PRACTICE_BP5_R2_OL03_HELD_FD_PARSER_DESIGN.md)と[実metadata source設計](BEST_PRACTICE_BP5_R2_OL03_METADATA_SOURCE_DESIGN.md)の間に、record由来の対象選択・安全なopen・File所有権移譲・祖先/path再照合を置く。
-本書は既存ソースを読んだ設計案で、OS/APIの新しい動作試験結果ではない。draft-0.1の後に§12の内部契約だけを合成実装した。実機操作・API実接続・トークン発行・設定変更・permit発行・Pushは行わない。telemetry調査は保留。
+本書は既存ソースを読んだ設計案で、OS/APIの新しい動作試験結果ではない。draft-0.1の後に§12〜§15の内部契約を合成実装した。実機操作・API実接続・トークン発行・設定変更・permit発行・Pushは行わない。telemetry調査は保留。
 APPROVED_REGISTRY=None、通常v2入口Unavailable、runtime gate92、DER/absence停止を維持する。FD移譲の成功も署名validity/実行許可にしない。
 
 ## 2. 現在の部品と不足
@@ -107,7 +107,7 @@ path再解決で失敗/取得不能/消失した場合も停止し、旧FDのbyt
 5. 結果をscope内に保留したまま、record exact bytes/identity/世代/期限・leaseを最終確認し、共通checkpointを通す。すべて完了してから限定診断を返す。
 
 従来のcompare_collected_m0_m4はM0 baselineを独自に固定し、B〜M4の間にtopology callbackがない。そのまま前後に関数を並べただけでは上の手順を満たさない。
-§13でsealedなopen snapshot/M0比較を同じReadScopeへ追加し、§14の別経路でM4前topology照合を必須にした。record/lease finalizerはまだない。caller任意callbackでpath検査をskipできる形にはしない。
+§13でsealedなopen snapshot/M0比較を同じReadScopeへ追加し、§14の別経路でM4前topology照合を必須にした。§15ではrecord再読をM4前/M4後に必須化したが、実record reader/parser・lease finalizerはまだない。caller任意callbackでpath検査をskipできる形にはしない。
 topology検査のleaf観測はM0〜M4とは別の観測で、既存100呼出し枠をresetしない（§8）。
 
 どの並べ方でもFile/namespace/recordをatomicには検証できない。M4後のrecord読取中の変更や検査後のABAを完全排除しない。
@@ -216,7 +216,7 @@ Rust/TSコードを変更しないためビルド・テストは再実行しな�
   XML/DER/absenceの既存entitlement gateは停止を維持し、祖先/path/record/leaseが未検証のままpermitを発行しない。
 
 origin比較は協調的な所有型の結合であり、悪意あるMetadataOps実装やABA・実FD/OS identity・可視性を証明しない。raw Observationだけを別resourceから偽造するtrusted producerの侵害も保証対象外。
-この段階の結果型にtopology保証は追加しない。別の§14の経路がM4前topologyを必須化する。record再読・更新排他・実opener/File移譲・実機/API/permitは依然未実装/未接続。
+この段階の結果型にtopology保証は追加しない。別の§14の経路がM4前topologyを必須化し、§15がrecord再読契約を追加する。実record reader/parser・更新排他・実opener/File移譲・実機/API/permitは依然未実装/未接続。
 
 ## 14. 祖先/path再照合の内部契約・合成source
 
@@ -234,3 +234,21 @@ origin比較は協調的な所有型の結合であり、悪意あるMetadataOps
 - 成功は非Clone/非serializeの`TopologyComparison(synthetic_pending_records_lease_not_execution_authority)`だけ。従来のOpenBoundComparisonから変換できず、entitlement/native/permit gateを開かない。
 
 この契約は協調的な合成sourceの挙動を検証するもの。実sourceの内部で隠れた再試行/巨大allocation/別path読取がないこと、ABA/検査後変更の防止、更新lease/record再読、OS hard timeoutは未証明。telemetry調査は保留し、実機/API・本番policy・token/設定/permit/Pushは行わない。
+
+## 15. record再読・最終照合の内部契約
+
+[record合成検証記録](E2E_BEST_PRACTICE_R2_OL03_RECORD_FINAL_SYNTHETIC_2026-10-20.md)とprivateな[records.rs](../native/r2-outer/src/signature_boundary/positioned_read/metadata/transfer/topology/records.rs)を追加した。実installed reader/厳密JSON parser・closure集合producerへは接続しない。
+
+- `RecordReceipt`は同じlineage/RecordBindingとactivation/ledger/indexの固定順3件のpinsを所有する。pinは初回exact bytes・祖先/leaf snapshot。非Clone/非serialize、公開constructorなし。合成fixtureがmintし、初回実readerによる認証済み証拠とはしない。
+- 入力結合時にrecord全field・lineage・kind順序・path深さ/祖先数・size・SHA-256を確認する。activation固定path、ledger/indexは元bindingのpathに固定し、後から得たpathへ追従しない。activation/ledger各64KiB、index16MiB。hashは64KiB chunkごとに元checkpointを通す。
+- `RecordSource`はclock、kind固定anchor、parent相対child、観測、位置指定read、3件の意味投影再検証という単発境界。retry/fallback/公開path/flagsの注入口はない。各再読では新しいanchorから全edgeをwalkし、初回snapshotと照合した**同じleaf handle**を読む。
+- positive short readは進捗分だけ継続し、0進捗・過大返却はReadFailed、extra EOF/bytes差はChanged。コピー成功bytesは既存2GiBへ課金し、A/B用予約を流用しない。最大64KiBの追加bufferでpinと逐次exact比較し、raw record/code/path/hashは出力しない。
+- read前の全path、同じhandleのread後metadata、handle解放後の全path再walkを要求する。旧FDが不変でもnamespace差替えは拒否。recordは順次処理し、再walkの一時handle最大2個、旧target祖先＋leafと合わせた132の構造上限を維持する。record Fileを全工程保持したという主張ではない。
+- activation leafはroot/0440/readerGID、ledger leafはexecutionUID/0600、index leafはroot/0444、いずれもregular/single link。全Stat/ACL/FS/可視名をexact比較。directoryはrootまたはledgerのexecutionUIDを許す既存条件と書込/special bit拒否を用い、leafのsize/nlink規則を適用しない。system/record xattr/FSの運用profile承認は別途必要。
+- `revalidate`は再読でexact一致した3件のpin bytesだけを受け、返した全RecordBindingを元値と比較する。generation/release/registry/policy/UID/期限/index bindingの変更もChanged。**今回のsourceは架空bytesから合成投影を返す契約テスト**であり、厳密JSON/schema/closure集合検査を実装したものではない。既存parserを元予算へ接続するproducerは未実装。
+- 元のstart wall/monotonicとclock再取得を結ぶ。両clockの巻戻し・elapsed差1ms超・元SharedBudgetのelapsedとの差1ms超をExpiredで拒否。開始時の460秒超、再読前後の450秒超を厳密に要求し、期限を更新しない。元10秒/checkpoint/cancelが優先し、実clock sourceやhard timeoutは未接続。
+- 新しい`review_record_target`は初期receipt/time検証→M0前topology→A/B→M4前topology→record再読→M4→record最終再読/投影/clock確認を必須にする。共通比較器のprivate hookへ固定処理を接続し、利用者が省略できない。旧TopologyComparisonの保証は変更せず、そこから新結果へ昇格するconstructorはない。
+- record境界も元のtopology契約16384回枠を共有し、phase/role/recordごとにresetしない。payload/metadata100/名前640KiB/EINTR8枠を増やさない。これは契約call数であってsyscall数ではない。
+- 最初の失敗をラッチし、保留解析結果・source/target/record bytesを解放してから最終checkpoint。失敗後M4/次record/次roleへ継続しない。成功は固定Debugの`RecordComparison(synthetic_pending_lease_os_reader_not_execution_authority)`で、entitlement/native/permit停止を維持する。
+
+実reader側の安全な初回allocation/読取課金、protected path/flags・実ACL/xattr可視性・APFS等、再parseと全closure集合照合、更新lease、OS FD/cleanup台帳、clock取得、API/permitは未接続。合成snapshot・手動投影はroot承認や実inodeを証明しない。record間の変更、ABA、検査後変更をatomicに排除せず、今回の成功を後続execの有効cacheへ持ち越さない。

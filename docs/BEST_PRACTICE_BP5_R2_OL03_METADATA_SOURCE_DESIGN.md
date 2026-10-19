@@ -197,5 +197,6 @@ trusted opener/祖先/path/record/leaseからのFile移譲、配備roleの運用
 
 ## 15. secure opener側の詳細設計
 
-[保持FD移譲詳細設計draft-0.4](BEST_PRACTICE_BP5_R2_OL03_SECURE_FD_TRANSFER_DESIGN.md)に、同じ所有Fileのmove、record/size出所、保持祖先と信頼anchorからの再walkを分離した。
+[保持FD移譲詳細設計draft-0.5](BEST_PRACTICE_BP5_R2_OL03_SECURE_FD_TRANSFER_DESIGN.md)に、同じ所有Fileのmove、record/size出所、保持祖先と信頼anchorからの再walkを分離した。
 binding/所有権契約に続き、所有leafのMetadataOpsとopen snapshotをM0で結合し、[祖先/path合成契約](E2E_BEST_PRACTICE_R2_OL03_TOPOLOGY_SYNTHETIC_2026-10-19.md)の別経路でM0前/M4前の保持祖先・namespace再照合を必須化した。実HeldSource constructorは非公開・未接続。実topology source/record最終再照合/OS追加予算は未実装で、実sourceの運用呼出しは開始しない。
+後続の[record再読契約](E2E_BEST_PRACTICE_R2_OL03_RECORD_FINAL_SYNTHETIC_2026-10-20.md)ではM4前/M4後の固定3件再読・bytes/metadata/path/投影/clock比較を合成sourceで追加した。実record reader/parser・lease・OS追加予算は依然未接続で、運用開始を意味しない。

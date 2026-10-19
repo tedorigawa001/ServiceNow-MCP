@@ -309,5 +309,5 @@ constructorは通常入口/secure openerへ未接続。元10秒・metadata100回
 
 ## 18. secure openerからの所有権移譲設計
 
-[保持FD移譲詳細設計draft-0.4](BEST_PRACTICE_BP5_R2_OL03_SECURE_FD_TRANSFER_DESIGN.md)に、record evidence/role descriptor・OpenedTargetからsourceへのmove・祖先/namespace再照合・M4前finalizer・失敗時解放を具体化した。
-binding/所有権契約に続き[open snapshotとM0の結合](E2E_BEST_PRACTICE_R2_OL03_OPEN_M0_SYNTHETIC_2026-10-19.md)、[祖先/path内部契約と合成source](E2E_BEST_PRACTICE_R2_OL03_TOPOLOGY_SYNTHETIC_2026-10-19.md)を追加した。後者はM0前/B〜M4間の全再照合を必須にし、共有契約呼出し枠を持つ。実macOS sourceへの移譲、実OS topology・record reader/lease/finalizer・OS syscall/FD追加台帳は未接続/未実装。
+[保持FD移譲詳細設計draft-0.5](BEST_PRACTICE_BP5_R2_OL03_SECURE_FD_TRANSFER_DESIGN.md)に、record evidence/role descriptor・OpenedTargetからsourceへのmove・祖先/namespace再照合・M4前finalizer・失敗時解放を具体化した。
+binding/所有権契約に続き[open snapshotとM0の結合](E2E_BEST_PRACTICE_R2_OL03_OPEN_M0_SYNTHETIC_2026-10-19.md)、[祖先/path内部契約と合成source](E2E_BEST_PRACTICE_R2_OL03_TOPOLOGY_SYNTHETIC_2026-10-19.md)、[record再読・最終照合契約](E2E_BEST_PRACTICE_R2_OL03_RECORD_FINAL_SYNTHETIC_2026-10-20.md)を追加した。record経路はM4前/M4後の再読・全path/bytes/投影/time比較を必須にする。実macOS sourceへの移譲、実OS topology・record reader/parser/lease・OS syscall/FD追加台帳は未接続/未実装。
