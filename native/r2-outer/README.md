@@ -71,6 +71,11 @@ and [OL-01 design](../../docs/BEST_PRACTICE_BP5_R2_OL01_BUILD_DEPLOY_LEDGER_DESI
 
 ## OL-03 component tests
 
+The additional `closure::check` API parses bounded in-memory index bytes and compares a
+caller-supplied binding and observation list. It returns counts only, never an execution
+permit. It does not read or verify deployed files, signatures, ACLs or xattrs. The fixed
+runtime gate remains closed. See [closure parser verification](../../docs/E2E_BEST_PRACTICE_R2_OL03_CLOSURE_PARSER_SYNTHETIC_2026-10-19.md).
+
 The macOS arm64 tests compile a disposable Rust peer using the development rustc/libc
 artifact, then exec that peer at the synthetic fixed Node path in owned PTY children.
 The fixture directly includes private OS-boundary modules; it never becomes part of

@@ -1,6 +1,6 @@
 # BP-5 R-2 OL-03：closure index・配備ファイル検証の詳細設計
 
-Version: draft-0.3 / Date: 2026-10-19 / Status: 承認前の設計案。実装・運用検証は未実施。
+Version: draft-0.4 / Date: 2026-10-19 / Status: 承認前の設計案。strict parser・純粋集合/binding照合のみ内部実装/合成検証。OS配備検証・運用は未実施。
 
 ## 1. 目的と現在の境界
 
@@ -9,7 +9,9 @@ Version: draft-0.3 / Date: 2026-10-19 / Status: 承認前の設計案。実装�
 [OL-03合成検証記録](E2E_BEST_PRACTICE_R2_OL03_EXEC_SYNTHETIC_2026-10-19.md)を補足する。
 
 現在の`runtime_gate`は常に92で停止する。OL-02の`InspectedRecords`は実行許可ではない。
-以下は新しい検証器の要求であり、現在の実装済み機能として扱わない。
+以下は検証器全体の要求である。parser・純粋集合/binding照合だけ
+[合成検証記録](E2E_BEST_PRACTICE_R2_OL03_CLOSURE_PARSER_SYNTHETIC_2026-10-19.md)に示す内部実装がある。
+観測一覧は呼出し側のデータであり、実FDの安全読込・OS metadata検査を実装済みとして扱わない。
 closure検査だけの成功でもgateは解除しない。実署名・entitlement・reader group排他性・配備承認も別途必要。
 telemetry調査は保留。本書はPDI/OAuth/token設定を変更せず、コマンド実行手順や実値入り台帳を提供しない。
 
@@ -87,7 +89,7 @@ activation/ledger/manifest・lock・ログ・cacheはroot外とし、indexの除
 
 ### 3.2 上限
 
-index最大16MiB、JSON深さ16、entry最大100,000、全file実読取合計最大2GiB。
+index最大16MiB、JSON深さ16、entry最大100,000、全file実読取合計最大2GiB（index自身も容量へ計上）。
 個別fileも合計上限以下。directory列挙・検証用metadataもentry上限内でboundedに保持する。
 streaming parser等の選定は別途審査し、巨大な未検証配列を先に無制限確保しない。
 外側全検査で共通のmonotonic 10秒以内。fileごとの10秒へ更新しない。
@@ -179,11 +181,11 @@ privileged metadata/leaseのfake成功をOSでの保証と呼ばず、OS境界�
 
 1. **前提承認**：初期macOS/FS/Node/toolchain、署名者・Node entitlement集合、配備担当と信頼元。
 2. **契約承認**：ASCII path制約、mode/owner方針、index自身の唯一の除外、閉包に含める動的依存、容量上限。xattrはprovenanceだけ許可・quarantineを含む他属性拒否の案、system祖先への適用範囲、列挙上限と正規配布との両立も承認待ち。
-3. **先行可能な実装案**：strict bounded index parserと純粋な集合/binding照合、合成テスト。permitは発行しない。
+3. **先行実装済みの部分**：strict bounded index parserと純粋な集合/binding照合、合成テスト。観測値のOS上の真正性は未確認。permitは発行しない。
 4. **次の実装案**：directory FD基準の安全なfile読取とmetadata/hash照合。root/FS条件はfakeとOS境界を分けて検証。
 5. **排他の採択**：外部lease所有方式か運用freezeか、FD閉鎖/execモデルへの影響、終了確認・復旧責任。
 6. **統合承認**：実署名・group排他・直前再検証・全体deadlineを接続した後でのみgate解除を検討。
 
 正確な入手元/署名API・配布ticketのオフライン照合条件は既存OL-01の未確認事項を引き継ぐ。
 本書は新たな公式仕様確認の記録ではなく、既存設計と現在のコードを基にしたプロジェクト要件案である。
-人の承認・閉包の実測・更新排他・署名/配備検証は未実施。実装開始や実PDI開始の許可を意味しない。
+人の承認・閉包の実測・更新排他・署名/配備検証は未実施。後続実装や実PDI開始の許可を意味しない。
