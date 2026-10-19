@@ -1,6 +1,6 @@
 # BP-5 R-2 OL-03：launcher／Nodeの署名・entitlement検証設計
 
-Version: draft-0.1 / Date: 2026-10-19 / Status: 承認前の設計案。署名検証の実装・OS適合試験は未実施。
+Version: draft-0.2 / Date: 2026-10-19 / Status: 承認前の設計案。署名検証の実装・OS適合試験は未実施。
 
 ## 1. 目的と現在の境界
 
@@ -113,6 +113,17 @@ Appleは、standalone binaryにはticketを直接stapleできず、app/bundle/di
 そのまま代替するとはしない。採用形式・offline時の初回起動・OS更新後の挙動を別検証する。
 quarantineは既存closure方針どおり存在すれば拒否し、署名成功を理由に削除/無視しない。公証・配布と両立するかは未確認。
 
+**Node単体は公証されていない可能性がある。** 2026-10-19のレビューでローカルのNode v24.18.0（1台・1版）を`codesign`/`lipo`で確認し、
+thin arm64、`Developer ID Application`の署名連鎖、Hardened Runtime、6個のentitlement（値はすべて`<true/>`）を観測した。
+そのうち`com.apple.security.get-task-allow`はAppleの公証サービスが受け付けないことが一般に知られており、
+tarball内の`node`単体は公証されず、公証は配布用`.pkg`側だけである可能性がある。これは知識に基づく推測で、
+本レビューでは`spctl`等による評価（ネットワーク照会を伴い得る）を実行しておらず、未確認である。
+Nodeについて次のいずれかを承認するまで、公証を前提とした検査成功にしない。
+
+1. Node単体の公証を要求する（観測したentitlementのままでは満たせない可能性が高い）。
+2. 署名・公証済み`.pkg`等の配布物の確認と、展開後のNode最終bytes hash・署名者・entitlementの承認を結合して代替とする。
+3. いずれの場合も、OL-05で採用版の公証状況を確認方法とともに記録する。
+
 外側の全検査10秒・exec直前の残期限450秒超を維持する。Security APIごとに新しい10秒を付与しない。
 同期FFIが停止しない場合、呼出し前後のdeadlineだけでは強制中断できない。
 補助processで隔離する案は「通常起動は任意子processなし」からの設計変更であり、黙って導入しない。強制停止方式は承認待ち。
@@ -147,7 +158,7 @@ ad-hocのfixtureをDeveloper ID正常系として採点しない。今回署名�
 2. Node公式署名の採用か別署名か、entitlementのexact typed dictionary・全静的flag・残余リスクの承認。
 3. 固定policy registryか次版ledgerかの選択。現行文字列/名前配列を安全に移行する契約。
 4. entitlementのabsence証明・DER等の対応、thin arm64検査、Security API/CF bindingと採用SDKの確定。
-5. offline失効/公証の鮮度・receipt、配布形式、quarantine拒否との両立、撤回/再承認の責任者。
+5. offline失効/公証の鮮度・receipt、配布形式、quarantine拒否との両立、撤回/再承認の責任者。Nodeは単体公証を要求するか、配布物の公証＋展開後hash結合で代替するか（§6）。
 6. 10秒内の強制停止方式とthread/FD前提。更新lease・path差替え防止・exec直前再検証との統合。
 
 次に進める候補は1〜3の契約を具体化してからの純粋比較器であり、実署名検証やgate解除を先行させない。
