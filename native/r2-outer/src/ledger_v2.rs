@@ -56,16 +56,7 @@ pub(crate) fn parse_bound_ledger(
     let decoded = crate::json::decode_bounded(bytes, 65536, 65536, started);
     elapsed(started)?;
     let ledger: LedgerV2 = decoded.map_err(|_| LedgerFailure::Invalid)?;
-    ledger.validate().map_err(|_| LedgerFailure::Invalid)?;
-    if ledger.generation != context.generation
-        || ledger.release_id != context.release_id
-        || ledger.execution_uid != context.execution_uid
-        || ledger.runtime.index_sha256 != context.index_sha256
-        || ledger.platform.product_version != context.product_version
-        || ledger.platform.os_build != context.os_build
-    {
-        return Err(LedgerFailure::Binding);
-    }
+    validate_context(&ledger, context)?;
     ledger
         .time()
         .validate(context.start_wall_ms, 460_000)
@@ -97,6 +88,69 @@ pub(crate) fn parse_bound_ledger(
         .checked_add(elapsed(started)?)
         .ok_or(LedgerFailure::Invalid)?;
     ledger.time().validate(end, 450_000).map_err(time_error)?;
+    Ok(ledger)
+}
+fn validate_context(ledger: &LedgerV2, context: &Context<'_>) -> Result<(), LedgerFailure> {
+    ledger.validate().map_err(|_| LedgerFailure::Invalid)?;
+    if ledger.generation != context.generation
+        || ledger.release_id != context.release_id
+        || ledger.execution_uid != context.execution_uid
+        || ledger.runtime.index_sha256 != context.index_sha256
+        || ledger.platform.product_version != context.product_version
+        || ledger.platform.os_build != context.os_build
+    {
+        return Err(LedgerFailure::Binding);
+    }
+    Ok(())
+}
+pub(crate) fn parse_shared<B: crate::json::shared::Budget>(
+    bytes: &[u8],
+    registry: &ParsedRegistry,
+    context: &Context<'_>,
+    now_wall_ms: u64,
+    b: &mut B,
+) -> Result<LedgerV2, crate::record_validation::Rejection<B::Failure>> {
+    use crate::{
+        json::shared::{self, Limits},
+        record_validation as r,
+    };
+    // Size + exact raw hash FIRST. Do not decode unauthenticated bytes, even malformed JSON.
+    let digest = r::hash_record(bytes, b)?;
+    if digest != context.ledger_sha256 {
+        return Err(r::Rejection::Binding);
+    }
+    let ledger: LedgerV2 = shared::decode(
+        bytes,
+        Limits {
+            max_bytes: 65536,
+            max_depth: 16,
+            max_items: 65536,
+        },
+        b,
+    )
+    .map_err(r::Rejection::Json)?;
+    r::step(b)?;
+    let result = validate_context(&ledger, context);
+    r::step(b)?;
+    result.map_err(|e| match e {
+        LedgerFailure::Binding => r::Rejection::Binding,
+        _ => r::Rejection::InvalidRecord,
+    })?;
+    r::time(&ledger.time(), context.start_wall_ms, now_wall_ms, b)?;
+    let link = &ledger.signature_registry;
+    let reference = RegistryReference {
+        schema_version: &link.schema_version,
+        registry_id: &link.registry_id,
+        sha256: &link.sha256,
+    };
+    registry.bind_reference_shared(
+        &reference,
+        &ledger.launcher.signature_policy_id,
+        Role::Launcher,
+        b,
+    )?;
+    registry.bind_reference_shared(&reference, &ledger.node.signature_policy_id, Role::Node, b)?;
+    r::step(b)?;
     Ok(ledger)
 }
 fn time_error(error: crate::Failure) -> LedgerFailure {

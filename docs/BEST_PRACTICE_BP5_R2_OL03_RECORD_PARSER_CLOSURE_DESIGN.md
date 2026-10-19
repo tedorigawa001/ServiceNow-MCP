@@ -1,13 +1,13 @@
 # BP-5 R-2 OL-03：厳密record parser・全closure集合の再検証接続
 
-Version: draft-0.3 / Date: 2026-10-20 / Status: 共有予算JSON coreのみ内部実装/合成検証。record/closure再検証への接続・運用承認は未実施。
+Version: draft-0.4 / Date: 2026-10-20 / Status: 共有予算JSON coreとactivation/ledger-0.2/registryの純粋な厳密検証を内部実装/合成検証。読取/closure再検証への接続・運用承認は未実施。
 
 ## 1. 範囲と停止境界
 
 [FD移譲設計§15](BEST_PRACTICE_BP5_R2_OL03_SECURE_FD_TRANSFER_DESIGN.md)の合成`RecordSource::revalidate`を、既存の厳密parserと**全closure集合**の検証へ置き換える設計。
 前工程の[424件の合成検証](E2E_BEST_PRACTICE_R2_OL03_RECORD_FINAL_SYNTHETIC_2026-10-20.md)は、架空の非JSON bytesと手動投影の契約試験であり、本書の接続が動く証拠ではない。
 
-draft-0.1/0.2の成果物はMDだけだった。後続の§10でJSON coreだけを追加した。telemetry調査は保留。record/closure接続実装、実機/PDI操作、API実接続、token発行、設定変更、実署名、本番policy投入、permit発行は対象外。
+draft-0.1/0.2の成果物はMDだけだった。後続の§10でJSON core、§11でactivation/ledger/registryの純粋検証を追加した。telemetry調査は保留。実record読取/closure pipelineへの接続実装、実機/PDI操作、API実接続、token発行、設定変更、実署名、本番policy投入、permit発行は対象外。
 APPROVED_REGISTRY=None、通常v2入口Unavailable、runtime gate92、DER/absence停止を維持する。parser/集合照合の成功も実行許可にしない。
 
 ## 2. 現状と接続上の不足（ソース照合）
@@ -179,4 +179,20 @@ draft-0.1/0.2ではMDだけを検査した。424件は前工程の記録で、�
 - 1,000,000は§6.1の候補を**停止中の内部合成経路で**用いる暫定capであり、運用承認・最悪CPU時間の保証ではない。payload2GiB/metadata100/名前640KiB/topology16384/pread要求/EINTR枠を消費・resetしない。CPU workと受信bytesを混同しない。
 - 長いJSON tokenのserde内部unescape、UTF-8処理、key比較、from_valueの内部処理はまだinterruptibleではない。前後guardで遅延成功/エラーを拒否するがhard timeoutとはしない。Value木/typed objectの管理allocation64MiB/総128MiB候補は**未実装**で、RSS上限も保証しない。
 
-record revalidate、ledger/registry/closureのbudget-aware core、全closure観測producerと新JSON coreの接続は後工程。legacy parserの失敗写像/既存offline契約はこの変更では変えない。§4のhash-first追加候補も未実装のまま保持する。運用gateは停止を維持する。
+この段階ではrecord revalidate、ledger/registry/closureのbudget-aware core接続は後工程だった。後続の§11でledger/registryとactivationの純粋検証だけを接続した。legacy parserの失敗写像/既存offline契約は維持する。§4のclosure hash-first追加候補は未実装のまま保持する。運用gateは停止を維持する。
+
+## 11. activation/ledger-0.2/registryの共有予算検証
+
+[厳密record検証記録](E2E_BEST_PRACTICE_R2_OL03_STRICT_RECORD_JSON_SYNTHETIC_2026-10-20.md)に追加21件と全体検証を記録する。
+[record_validation.rs](../native/r2-outer/src/record_validation.rs)と[SharedBudget bridge](../native/r2-outer/src/signature_boundary/positioned_read/record_json.rs)はprivateな純粋検証経路。実reader/revalidateへの登録、APPROVED_REGISTRYへの投入、index/closure観測は行わない。
+
+- activation/registryは期待raw hashを内部引数で受け、ledgerはactivationが持つledger_sha256へ結合する。3種類とも64KiBのsize guard→checkpoint付きraw hash→JSON decodeの順序。hash違いは不正UTF-8/JSONでもBindingとしてdecode前に停止する。期待hash/contextは比較入力であり、root承認やbuild registryの実証ではない。
+- shared JSONはactivation/ledgerが深さ16/container65536、registryが深さ8/container32。既存のschema型/deny_unknown_fieldsを使い、unknown/duplicate/missing/trailing/旧版混在を拒否する。registryのrole/issuer/flags/entitlement検査とledger schema/context検査は既存public parserと意味ロジックを共通化し、別の緩いvalidatorを作らない。
+- activationのUID/GID/groups、generation/release/index hash、ledgerのplatform/registry参照/Launcher・Nodeの両roleを検査する。groupsは要素ごとに共有workを消費。新しいregistryへ追従せず、利用者設定/外部registryを取得する口は追加しない。
+- 時刻は元started_wall_msと現在now_wall_msを別々の内部context値として受ける。元開始wallで460秒超、現在wallで450秒超。schema::Timeの承認/期限構文を再利用し、現在wallへelapsedを再加算しない。今はpure context値の検査であり、実clock取得/整合/丸め方針を解消したものではない。
+- 新しい型付き理由はJson(Rejection<E>)/InvalidRecord/Binding/Expired/Limit/Policy(PolicyFailure)/Budget(E)。serde文字列を照合せず、JSON内部と意味検証境界のDeadline/Cancelled/共有work Limitを保持する。
+- SharedBudget::validate_record_jsonは全段階で同じ期限/cancel/workを借用し、最初の有限Failureをラッチ。Json Limit/local LimitはLimit、期限不足はExpired、構造/参照/policy不適合はBindingへ接続し、戻り値の詳細分類は保持する。I/O bytes/予約/metadata/topology枠・開始時刻を変更しない。
+- 元のpublic parse/parse_and_bind・legacy decode契約、hash-first ledger順序、失敗型は維持。共通化に伴う公開経路の回帰も全体テストで確認する。coreの1,000,000暫定work cap・非interruptibleなserde/schema/文字列処理・allocation未対応は§10のまま。
+- 成功は非Clone/非serializeで固定Debugの`ValidatedRecords(pure_pending_reader_closure_lease_not_execution_authority)`だけ。現RecordBindingへの自動投影や実revalidateとの接続は未実装で、この値からpermitを生成できない。
+
+次工程はindex/closureのbudget-aware検証、固定context/registry/pinsの実producerと実record再読への接続、同round全集合証拠である。純粋JSON/意味検証の成功だけでそれらを埋めない。

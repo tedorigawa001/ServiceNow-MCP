@@ -194,6 +194,7 @@ impl SharedBudget<'_> {
 
 #[cfg(test)]
 mod json_tests;
+mod record_json;
 
 pub(super) struct ReadScope<'b, 'a, S: PositionedSource> {
     budget: &'b mut SharedBudget<'a>,

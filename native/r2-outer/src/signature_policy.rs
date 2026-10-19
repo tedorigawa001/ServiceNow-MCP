@@ -92,6 +92,16 @@ impl ParsedRegistry {
         started: Instant,
     ) -> Result<(), PolicyFailure> {
         budget(started)?;
+        self.check_reference(reference, policy_id, role)?;
+        budget(started)?;
+        Ok(())
+    }
+    fn check_reference(
+        &self,
+        reference: &RegistryReference<'_>,
+        policy_id: &str,
+        role: Role,
+    ) -> Result<(), PolicyFailure> {
         if reference.schema_version != SCHEMA
             || reference.registry_id != self.registry.registry_id
             || reference.sha256 != self.digest
@@ -107,7 +117,6 @@ impl ParsedRegistry {
         if policy.role != role {
             return Err(PolicyFailure::RoleMismatch);
         }
-        budget(started)?;
         Ok(())
     }
     pub fn policy_count(&self) -> usize {
@@ -249,17 +258,29 @@ pub fn parse(bytes: &[u8], started: Instant) -> Result<ParsedRegistry, PolicyFai
     let decoded = crate::json::decode_policy(bytes, started);
     budget(started)?;
     let registry: Registry = decoded.map_err(|_| PolicyFailure::Invalid)?;
+    validate_registry(&registry, &mut || budget(started), || {
+        PolicyFailure::Invalid
+    })?;
+    let digest = format!("{:x}", Sha256::digest(bytes));
+    budget(started)?;
+    Ok(ParsedRegistry { registry, digest })
+}
+fn validate_registry<E>(
+    registry: &Registry,
+    step: &mut impl FnMut() -> Result<(), E>,
+    invalid: impl Fn() -> E,
+) -> Result<(), E> {
     if registry.schema_version != SCHEMA
         || !id(&registry.registry_id)
         || !(2..=32).contains(&registry.policies.len())
     {
-        return Err(PolicyFailure::Invalid);
+        return Err(invalid());
     }
     let mut ids = BTreeSet::new();
     let mut launcher = false;
     let mut node = false;
     for policy in &registry.policies {
-        budget(started)?;
+        step()?;
         if !id(&policy.id)
             || !ids.insert(&policy.id)
             || policy.artifact_class != "mach_o_thin_arm64"
@@ -276,7 +297,7 @@ pub fn parse(bytes: &[u8], started: Instant) -> Result<ParsedRegistry, PolicyFai
             || !id(&policy.issuer.signing_identifier)
             || policy.expected_static_flags != RUNTIME_ONLY_FLAGS
         {
-            return Err(PolicyFailure::Invalid);
+            return Err(invalid());
         }
         match policy.role {
             Role::Launcher => launcher = true,
@@ -292,15 +313,56 @@ pub fn parse(bytes: &[u8], started: Instant) -> Result<ParsedRegistry, PolicyFai
                         !key(k) || !matches!(v, ExpectedValue::Boolean { value: true })
                     })
                 {
-                    return Err(PolicyFailure::Invalid);
+                    return Err(invalid());
                 }
             }
         }
     }
     if !launcher || !node {
-        return Err(PolicyFailure::Invalid);
+        return Err(invalid());
     }
-    let digest = format!("{:x}", Sha256::digest(bytes));
-    budget(started)?;
+    Ok(())
+}
+
+pub(crate) fn parse_shared<B: crate::json::shared::Budget>(
+    bytes: &[u8],
+    expected: &[u8; 32],
+    b: &mut B,
+) -> Result<ParsedRegistry, crate::record_validation::Rejection<B::Failure>> {
+    use crate::{
+        json::shared::{self, Limits},
+        record_validation as r,
+    };
+    let digest = r::authenticate(bytes, expected, b)?;
+    let registry: Registry = shared::decode(
+        bytes,
+        Limits {
+            max_bytes: 65536,
+            max_depth: 8,
+            max_items: 32,
+        },
+        b,
+    )
+    .map_err(r::Rejection::Json)?;
+    r::step(b)?;
+    validate_registry(&registry, &mut || r::step(b), || {
+        r::Rejection::Policy(PolicyFailure::Invalid)
+    })?;
+    r::step(b)?;
     Ok(ParsedRegistry { registry, digest })
+}
+impl ParsedRegistry {
+    pub(crate) fn bind_reference_shared<B: crate::json::shared::Budget>(
+        &self,
+        reference: &RegistryReference<'_>,
+        policy_id: &str,
+        role: Role,
+        b: &mut B,
+    ) -> Result<(), crate::record_validation::Rejection<B::Failure>> {
+        use crate::record_validation as r;
+        r::step(b)?;
+        let result = self.check_reference(reference, policy_id, role);
+        r::step(b)?;
+        result.map_err(r::Rejection::Policy)
+    }
 }
