@@ -1,6 +1,6 @@
 # BP-5 R-2 OL-03：raw／DER整合確認とabsence証明
 
-Version: draft-0.2 / Date: 2026-10-19 / Status: raw XML限定parser/型付き比較を内部合成実装。native接続・DER・absence・実API検証は未実施。
+Version: draft-0.3 / Date: 2026-10-19 / Status: raw XML限定部品は内部合成実装済み。物理signature/CD結合の詳細設計を追加。native接続・DER・absence・実API検証は未実施。
 
 ## 1. 結論と現在の境界
 
@@ -98,6 +98,8 @@ native raw拒否・signing情報flags・reader・permit/execは変更してい�
 
 ## 6. 物理signatureの列挙とDER（必要な追加設計）
 
+[物理signature列挙・CodeDirectory結合draft-0.1](BEST_PRACTICE_BP5_R2_OL03_PHYSICAL_SIGNATURE_DESIGN.md)に、固定commitの根拠、bounded FD解析、single-CD/SHA-256初期subset、APIの20bytes cdhashとの照合、拒否条件・未確認事項を具体化した。設計のみで、DER/absenceの停止は変更しない。
+
 保持FDの同一thin arm64/MH_EXECUTEからload commandsを完全走査し、LC_CODE_SIGNATUREをちょうど1件要求する案。
 cmdsize/sizeofcmds/ncmds、領域のfile内包含、加算/乗算overflow、重複/重なり、切詰めを検査する。signatureなしをabsenceにしない。
 SuperBlobのmagic/length/count/indexを全件走査。slot 5（XML）・7（DER）と、それぞれmagic `0xfade7171`／`0xfade7172`の整合を検査する。
@@ -159,7 +161,7 @@ SuperBlobは5 slot：CodeDirectory（0）、requirements（2）、**XML entitlem
 
 1. evidence level、上限、取得flags、DOCTYPE許可構文をレビューする。
 2. raw XMLのbounded envelope/限定構造/typed比較器だけを合成実装済み（24テスト）。標準DOCTYPE許可・native有効化は別工程。
-3. 物理signature列挙/CodeDirectory結合の詳細契約を固め、未対応は拒否する部品を合成実装する。
+3. 物理signature列挙/CodeDirectory結合の詳細設計案を追加済み。subset/上限/結合条件をレビュー後、未対応を拒否する部品の合成実装を別工程で行う。
 4. DER decoderの信頼元/対応subsetとabsence十分条件を別審査する。確認できなければproducerは無効維持。
 5. 別承認後の実artifact/OS適合で、API再構成、形式併存、empty/absence、例外/部分情報の挙動を検証する。
 

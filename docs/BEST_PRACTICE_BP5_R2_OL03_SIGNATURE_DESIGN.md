@@ -1,6 +1,6 @@
 # BP-5 R-2 OL-03：launcher／Nodeの署名・entitlement検証設計
 
-Version: draft-0.10 / Date: 2026-10-19 / Status: native部品は未有効。raw XML限定比較を内部合成実装。DER/absence・実署名検証・OS適合試験は未実施。
+Version: draft-0.11 / Date: 2026-10-19 / Status: native部品は未有効。raw XML限定部品は合成実装済み、物理signature/CD結合は詳細設計のみ。DER/absence・実署名検証・OS適合試験は未実施。
 
 ## 1. 目的と現在の境界
 
@@ -77,7 +77,7 @@ requirementを再文字列化すると表記が変わり得るので、round-tri
 
 ### 4.2 「欠落」と「空」を分ける
 
-[raw／DER整合・absence証拠設計draft-0.2](BEST_PRACTICE_BP5_R2_OL03_ENTITLEMENT_EVIDENCE_DESIGN.md)で、API XML一致・全物理表現一致・absence候補を分けた。raw XML限定比較器だけを合成実装し、native接続・取得flags変更・DER/absence producer有効化は行っていない。
+[raw／DER整合・absence証拠設計draft-0.3](BEST_PRACTICE_BP5_R2_OL03_ENTITLEMENT_EVIDENCE_DESIGN.md)で、API XML一致・全物理表現一致・absence候補を分けた。raw XML限定比較器だけを合成実装し、native接続・取得flags変更・DER/absence producer有効化は行っていない。
 
 `kSecCodeInfoEntitlementsDict`の欠落は、entitlementなしだけでなく別形式の場合もあるため、空集合へ変換しない。[A3](https://developer.apple.com/documentation/security/kseccodeinfoentitlementsdict)
 adapterは少なくとも`dictionary`／`absence_proven`／`unsupported_or_unknown`を区別する案。
@@ -87,6 +87,8 @@ adapterは少なくとも`dictionary`／`absence_proven`／`unsupported_or_unkno
 この部分のAPI適合確認は未実施であり、未署名ならキーがないという理由でlauncherを受理しない。
 
 ## 5. Security.framework adapter案と手順
+
+[物理signature列挙・CodeDirectory結合draft-0.1](BEST_PRACTICE_BP5_R2_OL03_PHYSICAL_SIGNATURE_DESIGN.md)で、保持FD・公開APIのalgorithm/hash情報・同じcode handleとの結合案を整理した。cdhash単独やpath一致を完全な実体結合の証明にせず、更新排他/実OS適合/DER/absenceは未対応のまま。
 
 [内部境界契約draft-0.2](BEST_PRACTICE_BP5_R2_OL03_SECURITY_BOUNDARY_DESIGN.md)と[test-only backendの合成検証](E2E_BEST_PRACTICE_R2_OL03_SECURITY_BOUNDARY_SYNTHETIC_2026-10-19.md)に続き、[未有効native FFI/driver](BEST_PRACTICE_BP5_R2_OL03_NATIVE_SECURITY_DESIGN.md)と[合成検証](E2E_BEST_PRACTICE_R2_OL03_NATIVE_SECURITY_SYNTHETIC_2026-10-19.md)を追加した。実Security呼出し・暗号検証成功・実CF所有権適合を検証したものではない。通常起動・permitには接続しない。
 
