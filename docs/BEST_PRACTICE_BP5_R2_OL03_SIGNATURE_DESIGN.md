@@ -1,6 +1,6 @@
 # BP-5 R-2 OL-03：launcher／Nodeの署名・entitlement検証設計
 
-Version: draft-0.7 / Date: 2026-10-19 / Status: C方式を採択。純粋policy/ledger解析・安全なreader接続・Security境界は内部合成検証済み。実署名検証・OS適合試験は未実施。
+Version: draft-0.8 / Date: 2026-10-19 / Status: C方式を採択。未有効native部品を追加し、reader・Security境界/driverを内部合成検証済み。実署名検証・OS適合試験は未実施。
 
 ## 1. 目的と現在の境界
 
@@ -86,7 +86,7 @@ adapterは少なくとも`dictionary`／`absence_proven`／`unsupported_or_unkno
 
 ## 5. Security.framework adapter案と手順
 
-[内部境界契約draft-0.1](BEST_PRACTICE_BP5_R2_OL03_SECURITY_BOUNDARY_DESIGN.md)と[test-only backendの合成検証](E2E_BEST_PRACTICE_R2_OL03_SECURITY_BOUNDARY_SYNTHETIC_2026-10-19.md)を追加した。型付き観測・validityと情報取得の分離・self identity照合・期限/cancel・Rust handle解放を検証する内部部品で、native Security/CF実装や暗号検証成功を意味しない。通常起動・permitには接続しない。
+[内部境界契約draft-0.2](BEST_PRACTICE_BP5_R2_OL03_SECURITY_BOUNDARY_DESIGN.md)と[test-only backendの合成検証](E2E_BEST_PRACTICE_R2_OL03_SECURITY_BOUNDARY_SYNTHETIC_2026-10-19.md)に続き、[未有効native FFI/driver](BEST_PRACTICE_BP5_R2_OL03_NATIVE_SECURITY_DESIGN.md)と[合成検証](E2E_BEST_PRACTICE_R2_OL03_NATIVE_SECURITY_SYNTHETIC_2026-10-19.md)を追加した。実Security呼出し・暗号検証成功・実CF所有権適合を検証したものではない。通常起動・permitには接続しない。
 
 Rustの小さいFFI境界から公開Security/CoreFoundation APIを使う案。crate/SDK/framework link・CF所有権は追加審査する。
 通常起動では`codesign`/`spctl`/`security`/shell等の子processを起動せず、署名情報やraw CFErrorをstdout/stderrへ渡さない。

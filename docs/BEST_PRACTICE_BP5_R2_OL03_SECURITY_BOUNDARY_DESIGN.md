@@ -1,6 +1,6 @@
 # BP-5 R-2 OL-03：Security API境界・合成アダプターの内部契約
 
-Version: draft-0.1 / Date: 2026-10-19 / Status: 内部契約と合成backendのみ。実Security/CF API・署名検査・permit発行は未実装。
+Version: draft-0.2 / Date: 2026-10-19 / Status: 内部契約・合成backendと未有効native部品を実装。実署名検査・permit発行は未実施。
 
 ## 1. 目的・対象外
 
@@ -10,7 +10,7 @@ Version: draft-0.1 / Date: 2026-10-19 / Status: 内部契約と合成backendの�
 公開の検証成功hook・任意requirement文字列・外部registry・flags上書き口はない。
 
 telemetry調査は保留。本番registry・発行者・証明書・採用SDK/OSの承認を進めたものではない。
-Security.framework/CFへのFFI、実署名操作、ネットワーク、PDI、token発行、設定変更は行わない。
+後続で[未有効native FFI/driver](BEST_PRACTICE_BP5_R2_OL03_NATIVE_SECURITY_DESIGN.md)を追加した。実Security/CF呼出し、実署名操作、PDI、token発行、設定変更は行っていない。
 本書の意味profileはプロジェクト契約であり、Apple SDK数値定数や実API動作を確定する資料ではない。
 
 ## 2. 入出力と型
@@ -54,6 +54,7 @@ cancelはdeadlineより先に判定。API失敗後の弱いflags再試行、onli
 ## 5. 資源・秘密・時間の限界
 
 backendは所有handleを返し、inspectがRAIIで管理する。エラー・null snapshot・取消・期限後の成功応答でも解放する。
+native driver側にもCreate/Copy所有objectのRAIIと内部checkpointを追加した。合成APIによる検証であり、実CFの適合は未確認。
 合成backendはDrop counterでこのRust所有権を確認する。取得処理の内部で失敗したCF objectの解放やCF retain/releaseの正しさは、未実装のnative backendで別途検証する。
 raw CF型/証明書/blobや自由記述errorを境界へ持ち込まない。入力型はDebug/serializeを実装しない。
 

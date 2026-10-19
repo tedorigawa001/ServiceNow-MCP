@@ -93,8 +93,12 @@ usable by `exec_installed`. Legacy v0.1 offline inspection is unchanged. See
 The private staged `signature_boundary` contract connects bound policy data, separate
 validity/self checks, typed issuer/flags/entitlement observations and before/after
 identity comparison. Its test-only backend verifies shared deadline/cancellation and
-Rust handle cleanup, not real cryptographic validity or CF ownership. There is no native
-Security.framework backend or operational caller; no runtime gate or permit is enabled.
+Rust handle cleanup, not real cryptographic validity or CF ownership. A private native
+driver and macOS arm64 Security/CF FFI are now implemented but dormant; the driver is tested
+with synthetic calls only. Raw entitlement/DER coexistence and missing dictionaries stop
+conservatively. No operational caller, runtime gate or permit is enabled. See
+[native backend design](../../docs/BEST_PRACTICE_BP5_R2_OL03_NATIVE_SECURITY_DESIGN.md) and
+[native synthetic verification](../../docs/E2E_BEST_PRACTICE_R2_OL03_NATIVE_SECURITY_SYNTHETIC_2026-10-19.md).
 See [boundary contract](../../docs/BEST_PRACTICE_BP5_R2_OL03_SECURITY_BOUNDARY_DESIGN.md)
 and [synthetic verification](../../docs/E2E_BEST_PRACTICE_R2_OL03_SECURITY_BOUNDARY_SYNTHETIC_2026-10-19.md).
 
