@@ -1,9 +1,11 @@
 # BP-5 R-2：オフライン事前確認・明示承認・ready案内・終了報告の接続設計
 
-Version: draft-0.5 / Date: 2026-10-18 / Status: checker・TTY承認・snapshot結合・ready案内・strict終了summaryを内部実装/合成検証。公開入口・実TTY・実機/運用は未対応。
+Version: draft-0.6 / Date: 2026-10-19 / Status: checker・TTY承認・snapshot結合・表示・専用entry接続を内部実装/合成検証。外側起動は設計のみ。公開CLI・実TTY・実機/運用は未対応。
 
 専用entryへの接続・表示失敗を含む終了コードは、
-[entry接続/終了コード設計draft-0.1](BEST_PRACTICE_BP5_R2_ENTRY_EXIT_DESIGN.md)を参照。
+[entry接続/終了コード設計](BEST_PRACTICE_BP5_R2_ENTRY_EXIT_DESIGN.md)を参照。
+内部entryのcheck-plan/run接続と最終summary中の実OS signal検証は完了したが、公開CLIや実運用の入口ではない。
+Node開始前の環境/成果物/端末の条件は[外側起動設計](BEST_PRACTICE_BP5_R2_OUTER_LAUNCH_DESIGN.md)の案に分離する。
 新entry・終端契約/exit選択・最終化の実装や実行許可は、この設計の追加からは導かない。
 
 ## 1. 範囲と現状
@@ -225,7 +227,8 @@ checker/限定確認票は§9、TTY承認/digest結合は§10、ready案内/終�
 
 [合成検証記録](E2E_BEST_PRACTICE_R2_DISPLAY_SUMMARY_SYNTHETIC_2026-10-18.md)を参照。
 §10の「案内/summary未追加」は第2段階時点の記録であり、本節の範囲で接続した。
-公開entry/CLI、実TTY/人の操作、G2/G4・PDIは別工程。
+本節は表示接続時点の記録。後続の内部専用entryは上記entry設計で実装・合成検証済み。
+公開CLI・外側launcherの実装、実TTY/人の操作、G2/G4・PDIは別工程。
 
 - `approveAndRunR2Plan`は承認に使った専用TTYへ、監督の検証済みreadyで固定URL
   `http://127.0.0.1:18765/bp5/start`を一度だけ案内する。host/IPCからURLを受け取らず、GET/HEADや自動ブラウザー起動をしない。

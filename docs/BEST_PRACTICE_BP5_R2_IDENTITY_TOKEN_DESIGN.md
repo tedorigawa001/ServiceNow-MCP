@@ -1,12 +1,12 @@
 # BP-5 方式R-2：固定GET本人確認・メモリ内token引渡し
 
-Version: draft-0.3 / Date: 2026-10-18 / Status: 内部PoCを実装・合成検証。実機/運用は未承認・未検証。
+Version: draft-0.4 / Date: 2026-10-19 / Status: 内部PoC・runner/専用entryを合成検証。外側起動は設計のみ。実機/運用は未承認・未検証。
 
 [実装・合成検証記録](E2E_BEST_PRACTICE_R2_IDENTITY_SYNTHETIC_2026-10-18.md)を参照。
 交換後の内部session/同一プロセスMCPに加え、OAuthアダプターからsessionへの内部接続を合成検証済み。
 内部runner/OS signalは下記合成試験で確認した。実認可・実PDIは未接続/未検証。
 
-未接続部分の責任分離・交換応答・所有権移譲・開始ページ・OS終了処理は
+後続の内部接続の責任分離・交換応答・所有権移譲・開始ページ・OS終了処理は
 [実PDI OAuthアダプター/runner接続設計](BEST_PRACTICE_BP5_R2_PDI_ADAPTER_RUNNER_DESIGN.md)に具体化した。
 同設計のアダプター単体は[合成検証](E2E_BEST_PRACTICE_R2_PDI_OAUTH_SYNTHETIC_2026-10-18.md)済み。
 [session接続と本人確認失敗/別アカウントcode/中断の合成検証](E2E_BEST_PRACTICE_R2_OAUTH_HANDOFF_SYNTHETIC_2026-10-18.md)を追加。
@@ -16,6 +16,8 @@ strict契約・ファイル信頼性・385秒の有効余裕・bindingを検査�
 具体的な契約は上記runner設計§13を参照。
 [manifest→listener→session→MCP bridgeの内部runner合成検証](E2E_BEST_PRACTICE_R2_RUNNER_SYNTHETIC_2026-10-18.md)を追加した。
 385秒の全体予算と取消/SIGINT/SIGTERM、worker/port/購読の解放を確認。公開CLI・実機操作やtoken発行を許可しない。
+内部専用entryのcheck-plan/承認付きrunと最終summary中のsignalは[entry設計](BEST_PRACTICE_BP5_R2_ENTRY_EXIT_DESIGN.md)で合成検証済み。
+Node開始前の成果物/環境/端末は[外側起動設計](BEST_PRACTICE_BP5_R2_OUTER_LAUNCH_DESIGN.md)へ具体化したが、実装・適合確認は未完了。
 
 ## 1. 範囲と不変条件
 

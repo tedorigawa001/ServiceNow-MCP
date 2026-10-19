@@ -1,6 +1,6 @@
 # BP-5 R-2：専用entry接続・終了コード設計
 
-Version: draft-0.5 / Date: 2026-10-19 / Status: check-planと承認付きrunを内部接続。公開CLI/運用・汎用最終化監督は未実装/未承認。
+Version: draft-0.6 / Date: 2026-10-19 / Status: check-plan・承認付きrun・最終summary中のsignalを内部接続/合成検証。外側起動は設計のみ。公開CLI/運用・汎用最終化監督は未実装/未承認。
 
 ## 1. 範囲と現状
 
@@ -21,7 +21,8 @@ telemetry調査・maint依頼は保留。実機操作・token発行・登録/ACL
 | executionの結果 | strict監督reportと限定summary。completedでも内側はpartialであり得る |
 | 既存bootstrap | 無引数fatal handlerで70へ終了する。新entryの終了優先順位・最終化は別の設計が必要 |
 
-前工程の作業ツリー変更・検証記録は保持する。本書の追加を前工程の実装検証・コミットの代わりにしない。
+内部entryの到達点は§9〜§10と[実OS signal検証§8](E2E_BEST_PRACTICE_R2_RUN_ENTRY_SYNTHETIC_2026-10-19.md#8-専用entry子プロセスへの実os-signal配送2026-10-19)を参照。
+人向けの安全な起動条件は[外側起動設計draft-0.1](BEST_PRACTICE_BP5_R2_OUTER_LAUNCH_DESIGN.md)へ分離した。
 
 ## 2. 新しい専用入口
 
@@ -49,7 +50,9 @@ r2-launcher-entryと最小bootstrapをリポジトリ内部・POSIX・compiled�
 
 専用entryは信頼済みの外側起動手順で、固定Node executable/compiled entry・非秘密引数・空envから開始する。
 Node起動前にNODE_OPTIONS/preload/inspector等を継承させない。開始後のenv検査/削除だけで、事前注入を防いだとは主張しない。
-この外側の安全な起動手順・実行ファイル選定も未実装/未承認であり、本書を通常shell起動の安全性証明にしない。
+外側の成果物/実行ファイル選定・FD/環境・端末/診断条件・exec・失敗時停止は
+[外側起動設計](BEST_PRACTICE_BP5_R2_OUTER_LAUNCH_DESIGN.md)へ具体化した。設計のみで実装/適合確認/運用承認は未完了。
+本書を通常shell起動の安全性証明にしない。
 
 最小bootstrapはfatal guardを先に登録し、固定launcher本体だけを動的importする。
 任意loader/JS callback/OS境界optionを引数やmanifestから指定できない。資格情報はentry/監督に渡さずhost内に限定する。
@@ -144,7 +147,7 @@ entryが最終化を完了した場合の検証済み状態（限定summary・�
 ## 6. signal・最終化・失敗時停止
 
 - check-plan実行中とrunのchecker/TTY段階は、入口/launcherのどちらか1者だけがsignalを所有する。
-  現行runはlauncher→監督の引継ぎを持つため、entryが追加handlerを重ねない。check-planは専用の所有者を設ける。
+  現行runはlauncher→監督→launcher（最終summary）の引継ぎを持つため、entryが追加handlerを重ねない。check-planは専用の所有者を持つ。
 - 表示失敗で稼働hostを止める処理は既存launcher/監督へ委譲する。entryは完了を待たずにprocess.exitしない。
   終了確認/最大1秒の観測後だけ終端選択する。kill要求成功を終了確認にせず、他PID/process groupへ操作しない。
 - 新entry自身の終了は、検証・表示・所有資源の終了を確認した後に制御する。表示確認は既存最大1秒、hostの385秒/cleanup3秒は延長しない。
@@ -185,7 +188,8 @@ Node下限22.12系・実PTY/TTYの配送・他OS・dump/起動環境の確認は
 第1段階時点では新entry、check-plan表示接続、最終化監督は未実装だった。前2者の後続実装は§9を参照。
 100msの汎用最終化監督は引き続き未実装の提案である。
 既存の表示/launcher/host実装を変更せず、前工程のdirtyな差分も保持した。
-専用entryを実行した際のOS終了コード、実TTY、G2/G4、実PDIの成立を今回の内部試験から主張しない。
+本節の第1段階は選択器だけの検証。専用entryの後続OS終了コード検証は§9〜§10と上記実OS signal記録を参照。
+実TTY、G2/G4、実PDIの成立は未検証のまま。
 
 ### 8.1 内部終端契約0.1
 
@@ -263,5 +267,6 @@ server/既存CLI/bin/package.json/MCP登録は変更せず、R-2非同梱を維�
 
 今回の合成試験では実認可・実token・実PDIを使わない。正常なdigest結合の先は合成peerのauthorization_deniedで終了する。
 承認後変更の一部は実hostコード＋bind/fetch禁止fixtureを用い、prepared後再検証は既存bound-host回帰にも依存する。
-実TTY/Node下限/他OS、外側の安全な起動手順・任意handleの終了保証・100ms最終化監督・G2/G4実行許可は引き続き未確認/未実装。
+実TTY/Node下限/他OS・任意handleの終了保証・100ms最終化監督・G2/G4実行許可は引き続き未確認/未実装。
+外側起動は別設計へ具体化済みだが、実装・適合確認・実行承認は未完了。
 公開bin/MCP登録・npm同梱・自動browser/再認可/再試行/ファイル保存は追加しない。

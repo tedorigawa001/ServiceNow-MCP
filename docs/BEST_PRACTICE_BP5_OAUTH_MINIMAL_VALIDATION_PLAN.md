@@ -1,6 +1,6 @@
 # BP-5：専用OAuthの最小検証・ロール境界計画
 
-Version: draft-0.2 / Date: 2026-10-18 / Status: 未承認・未実行の手順案。
+Version: draft-0.3 / Date: 2026-10-19 / Status: 実機手順は未承認・未実行。内部接続の合成検証と区別する。
 
 本書は[専用OAuth設計](BEST_PRACTICE_BP5_PER_USER_OAUTH_DESIGN.md)の実行前計画。
 同設計§0のとおり、読み取り境界はトークンのscopeではなく**検証利用者のロール/ACLで強制する（方式R）**。
@@ -40,8 +40,10 @@ S256強制・loopback受理・ロール境界の実効動作は未実証。本�
 書込み不能はロール/ACL構成の照会で示し、変更methodの実リクエスト試験は行わない。
 
 G0のローカル合成ハーネスは[実装・検証済み](E2E_BEST_PRACTICE_OAUTH_G0_2026-10-18.md)。
-ただし実PDI用HTTPS接続/本人確認API/実MCPへのtoken引渡しは未実装または未確定で、G0の人の承認も未完了。
-これらを実装/承認するまでG4へ進まない。以下のP/L/Rケースは未実行のまま。
+固定HTTPS交換/本人確認GET/同一プロセスMCPへのtoken引渡し/runner/専用entryは内部実装・合成検証済み。
+実PDIでの認可・応答・本人ACLの成立、G0/G1の人の確認、G2/G4の承認は未完了。
+外側launcherの実装・実TTY/Node下限等の適合条件は[外側起動設計](BEST_PRACTICE_BP5_R2_OUTER_LAUNCH_DESIGN.md)の案に従って別途解消する。
+これらの開始条件と段階別承認が揃うまでG4へ進まない。以下のP/L/R実機ケースは未実行のまま。
 G1は§5.1の読み取り照会で開始条件を満たす見込みだが、人の確認は未完了。
 旧G1の[共有API棚卸し記録](E2E_BEST_PRACTICE_OAUTH_G1_INVENTORY_2026-10-18.md)は、共有変更を避ける判断の根拠として保持する。
 公開clientが成立しない、S256降格が受理される、URIが外部へ流れる、検証利用者が想定外の表を読める/書けると判明する、
@@ -115,19 +117,22 @@ R-1（既存2ロール、残存書込みあり）は採らない。G2の前に�
 R01の固定GET候補と、失敗時停止・メモリ内token引渡し・秘密非出力・終了処理の設計は
 [方式R-2本人確認/token引渡し設計](BEST_PRACTICE_BP5_R2_IDENTITY_TOKEN_DESIGN.md)を参照する。
 内部session/同一プロセスMCPは[合成検証済み](E2E_BEST_PRACTICE_R2_IDENTITY_SYNTHETIC_2026-10-18.md)。
-既存G0・実OAuth交換/runnerへの接続と、実機でのR01成立は未完了のまま。
+既存G0は合成issuer専用のまま維持する。実PDI用adapter→session→runner→専用entryの内部接続は合成検証済みで、
+実OAuth交換や実機でのR01成立は未確認のまま。
 
-未接続部分の実装前ゲート・HTTPS交換・終了signal/cleanupと後続合成試験は
+内部接続の実装境界・HTTPS交換・終了signal/cleanupと後続合成試験は
 [実PDI OAuthアダプター/runner接続設計](BEST_PRACTICE_BP5_R2_PDI_ADAPTER_RUNNER_DESIGN.md)を参照。
 設計の追加だけでG2/G4やP/L/R実機ケースを完了扱いにせず、telemetry調査も再開しない。
 
 [実PDIアダプター単体の合成検証](E2E_BEST_PRACTICE_R2_PDI_OAUTH_SYNTHETIC_2026-10-18.md)を追加した。
-固定HTTPS交換・S256・応答検証のみで、実際の待受/認可/token発行/本人確認/runner接続は未実施。
+この単体記録の対象は固定HTTPS交換・S256・応答検証だけ。後続の待受/本人確認/runner接続の合成検証とは分け、
+実PDIの認可/token発行/本人確認は未実施のまま。
 この結果からG2/G4や実機ケースの完了・実行許可を推定しない。
 
 [adapter→session接続の合成検証](E2E_BEST_PRACTICE_R2_OAUTH_HANDOFF_SYNTHETIC_2026-10-18.md)も追加した。
 本人不一致の停止後にtoken発行済みの可能性を残すことを含むが、本人の実token・実ACL・HTTP待受・
-runner/OS終了処理はまだ検証していない。G2/G4の実機完了には数えない。
+このadapter/session単体記録ではrunner/OS終了処理は対象外。後続の内部runner/専用entry・実OS signal試験は
+[実行検証記録](E2E_BEST_PRACTICE_R2_RUN_ENTRY_SYNTHETIC_2026-10-19.md)を参照し、G2/G4の実機完了には数えない。
 
 [固定ループバック待受の合成検証](E2E_BEST_PRACTICE_R2_LOOPBACK_SYNTHETIC_2026-10-18.md)では、
 Host/method/body・開始ページ再取得・port競合・中断時の解放を実TCPで確認した。

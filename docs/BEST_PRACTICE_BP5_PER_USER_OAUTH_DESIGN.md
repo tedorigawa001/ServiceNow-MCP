@@ -1,6 +1,6 @@
 # BP-5：専用Authorization Code登録・ロール境界・トークン管理設計
 
-Version: draft-0.3 / Date: 2026-10-18 / Status: 設計案・実装/運用承認前。
+Version: draft-0.4 / Date: 2026-10-19 / Status: 内部OAuth/session/runner/専用entryは合成検証済み。外側起動は設計のみ。実機/運用承認前。
 
 本書は登録作成・認可・トークン発行・アカウント/ロール/ACL作成・設定変更の実行許可ではない。
 別記のG0はローカル合成試験のみで、アカウント/ロール/ACL、既存OAuth登録、共有API保護、
@@ -62,7 +62,11 @@ MCP接続設定は変更しない。既存service-accountのdev接続とは分�
 S256強制・loopback受理・GET限定の[最小検証/共有API影響・復旧計画](BEST_PRACTICE_BP5_OAUTH_MINIMAL_VALIDATION_PLAN.md)は
 未承認・未実行の手順案。作成・発行・共有設定変更を段階別に承認し、403/404だけをscope拒否の証拠にしない。
 G0の[ローカル合成ハーネス検証](E2E_BEST_PRACTICE_OAUTH_G0_2026-10-18.md)は完了したが、
-実PDIへの接続・本人確認・実MCPへのtoken供給は未実装、登録作成/発行ゲートは未完了。
+固定HTTPS交換・本人確認・同一プロセスMCPへのメモリ内token供給・runner/専用entryは内部実装・合成検証済み。
+実PDIの認可/本人ACL/応答で成立したという証拠ではなく、登録作成/発行ゲートは未完了。
+現行の接続は[runner設計](BEST_PRACTICE_BP5_R2_PDI_ADAPTER_RUNNER_DESIGN.md)と
+[entry設計](BEST_PRACTICE_BP5_R2_ENTRY_EXIT_DESIGN.md)、Node開始前の条件は
+[外側起動設計](BEST_PRACTICE_BP5_R2_OUTER_LAUNCH_DESIGN.md)を参照する。外側launcherは未実装。
 
 [G1読み取り棚卸し](E2E_BEST_PRACTICE_OAUTH_G1_INVENTORY_2026-10-18.md)では、Auth Scope定義2件、
 API-scope関連の表示0件、OAuth-scope関連9行/8登録、REST APIポリシー4件、scope関連なしの有効Client3件を観測した。
@@ -149,7 +153,7 @@ ServiceNowの認可/トークンエンドポイントは外部PDIへの処理で
   実アダプターでは大小文字の違い、省略scopeの受理条件/拒否条件を別の合成テストにする。
 
 大小文字の受理・scope省略の拒否・固定redirect URIは[単体合成検証記録](E2E_BEST_PRACTICE_R2_PDI_OAUTH_SYNTHETIC_2026-10-18.md)
-を参照。HTTP待受は後続の合成検証に接続したがrunnerは未実装で、実PDIの応答や権限を検証済みにするものではない。
+を参照。HTTP待受・runner・専用entryも後続で内部接続/合成検証したが、実PDIの応答や権限を検証済みにするものではない。
 
 ## 5. 読み取り境界：検証利用者のロール/ACL（方式R）
 

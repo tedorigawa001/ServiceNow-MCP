@@ -1,11 +1,13 @@
 # BP-5 R-2：実PDI OAuthアダプター・runner接続設計
 
-Version: draft-0.11 / Date: 2026-10-18 / Status: 内部runner・専用bootstrap/host・外部監督を合成検証。公開CLI・実機/運用は未承認・未検証。
+Version: draft-0.12 / Date: 2026-10-19 / Status: 内部runner・host/監督・専用entry接続を合成検証。外側起動は設計のみ。公開CLI・実機/運用は未承認・未検証。
 
 オフライン事前確認・明示承認・ready案内・終了報告の人向け接続は、
-[専用入口の接続設計draft-0.5](BEST_PRACTICE_BP5_R2_LAUNCHER_CONNECTION_DESIGN.md)に整理した。
+[専用入口の接続設計](BEST_PRACTICE_BP5_R2_LAUNCHER_CONNECTION_DESIGN.md)に整理した。
 checker・限定確認票・TTY承認・snapshot digest結合・ready固定URL・strict限定終了summaryを内部実装/合成検証した。
-公開入口・実TTY・実機/G2/G4の承認は未対応であり、
+内部専用entryのcheck-plan/承認付きrun接続とsummary中のsignalは[entry設計](BEST_PRACTICE_BP5_R2_ENTRY_EXIT_DESIGN.md)で合成検証済み。
+Node開始前の信頼条件は[外側起動設計](BEST_PRACTICE_BP5_R2_OUTER_LAUNCH_DESIGN.md)へ具体化したが、外側launcherは未実装。
+公開CLI・実TTY・実機/G2/G4の承認は未対応であり、
 実機/G2/G4の実行許可を与えるものではない。
 
 ## 1. 範囲と現状
@@ -243,9 +245,10 @@ ServiceNowで受理/動作したという記録ではない。実機・発行・
 - `R2PdiOAuthAdapter`は信頼済み計画由来のcanonical HTTPS origin・client ID・scope集合をコピーして固定。
   呼出し単位でendpoint/redirect URIを変更できず、生成時はネットワーク/待受/ファイルアクセスなし。
 - `withAuthorizationRequest`は信頼済み内部consumerへ認可URLを1回だけ渡す。公開getterなし。
-  state/verifierはそれぞれ32 random bytes、S256固定。未実装の開始ページやHTTPアクセス制御を代替しない。
+  state/verifierはそれぞれ32 random bytes、S256固定。単体アダプターは開始ページやHTTPアクセス制御を代替しない。
+  これらは後続のlistener（§12）へ内部接続・合成検証済みであり、実ブラウザー/実PDIで確認済みという意味ではない。
 - `exchangeCallback`は固定pathのGET request-targetを検証する単体境界で、Host/method/body/raw headerの
-  検査は将来のHTTP listenerの責任。URL文字列を受け取れることを手動code入力や実認可の許可と扱わない。
+  検査はHTTP listener（§12）の責任。URL文字列を受け取れることを手動code入力や実認可の許可と扱わない。
 - 交換は固定POST 1回、redirect拒否、cookie/secretなし。10秒・解凍後64KiB、Abort競合による非協調処理の停止。
   Content-Lengthだけに頼らず実chunkを数える。失敗/中断後の再交換・遅延成功からの復活なし。
 - JSONは重複キー（エスケープ同名も含む）・不正UTF-8を拒否。許可fieldは
@@ -433,7 +436,8 @@ runner・worker・MCPへ検査用の秘密を渡さず、getter/logにも出さ�
 任意の難読化・分割・すべての符号化への漏えい検出、JS/OSメモリの完全消去は保証しない。
 原応答/例外cause/コード本文の非返却と既存JSON契約は引き続き主防御とし、文字列ガードだけに依存しない。
 
-実機/実token・人の承認照合・公開CLI/非同期uncaught例外の最終exit・失効は未実施/未接続。
+内部host/専用entryの非同期uncaught例外の固定exitと優先コードは、host終了設計§12とentry設計で合成検証済み。
+実機/実token・人の承認照合・公開CLI・外側起動の実装/適合確認・サーバー失効は未実施/未接続。
 G2/G4・最小権限・実PDI本人性が成立したとは扱わず、telemetry調査も保留を維持する。
 host/監督への接続初段としてsignal所有者・cleanup開始通知・残予算の伝播を内部APIへ追加した。
 既定のsignal処理と0.2/0.3/runner終了票は維持する。具体的な契約・未実装部分は
