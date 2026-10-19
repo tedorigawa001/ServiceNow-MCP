@@ -1,6 +1,6 @@
 # BP-5 R-2 OL-03：型付き署名policy・registry/ledger移行契約
 
-Version: draft-0.1 / Date: 2026-10-19 / Status: 承認前の契約案。実装・実policy登録・移行は未実施。
+Version: draft-0.2 / Date: 2026-10-19 / Status: C方式は利用者が採択。strict parser/entitlement純粋比較は内部合成検証済み。個別policy承認・実署名・移行は未実施。
 
 ## 1. 目的と境界
 
@@ -8,7 +8,7 @@ Version: draft-0.1 / Date: 2026-10-19 / Status: 承認前の契約案。実装�
 [OL-01台帳設計](BEST_PRACTICE_BP5_R2_OL01_BUILD_DEPLOY_LEDGER_DESIGN.md)のroot activation→ledger hashの信頼順序を維持する。
 現行ledger-0.1のentitlementは名前配列。本書ではRust schema/reader・実配備設定を変更しない。
 runtime gateは必ず92で停止し、contract検証・型付き比較器の成功から実行permitを発行しない。
-telemetry調査は保留。実装・実機/PDI操作・署名/登録・token発行・設定変更は対象外。
+telemetry調査は保留。[純粋部品の実装/合成検証](E2E_BEST_PRACTICE_R2_OL03_TYPED_POLICY_SYNTHETIC_2026-10-19.md)と、未実施の実署名/registry組込み/移行を区別する。実機/PDI操作・署名/登録・token発行・設定変更は対象外。
 以下はプロジェクト固有の仕様案。Apple APIの公式根拠は親設計§9を参照し、新しいOS動作を実測したとはしない。
 
 ## 2. 方式比較と推奨案
@@ -21,7 +21,7 @@ telemetry調査は保留。実装・実機/PDI操作・署名/登録・token発�
 | 誤設定の影響 | 旧項目の読み替え/不整合処理が複雑 | 広すぎる期待値を承認するリスク。固定の意味制約は別途必要 | 実行UIDのledgerだけで許可集合を追加/緩和できない |
 | 保守 | 過渡策には小さいが期待値が重複 | 配備単位で監査しやすいが期待値が分散 | 更新コストは高いが正本と選択の責任を分離 |
 
-**推奨はC（併用案）**。初期の少数固定policyとfail-closed方針に合わせた判断で、A/Bを危険と断定しない。人の採択は未実施。
+**C（併用案）を利用者が採択（2026-10-19）**。初期の少数固定policyとfail-closed方針に合わせた判断で、A/Bを危険と断定しない。個別issuer/template/値の本番承認は未実施。
 外部registry JSONを追加する案は信頼ファイル/更新排他の対象を増やすため初期案では採らない。
 registryの配布URL・online更新・env/argv/MCPからのpath/ID上書き・未知ID探索を設けない。
 
@@ -158,15 +158,15 @@ Node単体の公証状況は親設計§6の未確認事項を引き継ぐ。enti
 | 秘密/authority | raw blob/issuer一覧/詳細errorを返さず、summaryをpermitや暗号検証成功と扱わない |
 
 合成registry/観測は架空のtest-onlyデータ。本番をtest registryへ切り替えるpublic flagやinject可能な検証成功hookは設けない。
-本書では実装・テスト実行・本番registry作成・旧データの書換を行わない。
+strict parserとentitlement純粋比較を合成実装した。初期descriptor/flag profileと検証の限界は上記記録を参照する。本番registry作成・旧データの書換は行わない。
 
 ## 8. 承認待ちと次工程
 
-- C方式の採否、registry/ledger schema名・上限・ID運用。
+- C方式は採択済み。個別policyと本番registryの承認、ledger移行のschema・ID運用は未完了。
 - issuer/template・static flags・Node entitlement集合。falseや非bool型を初期契約で拒否する方針の採否。
 - `absence_proven`の実API生成条件、CF型投影、OS/SDK適合。
 - 新runtime/旧offline readerの分離・activation-0.1継続の可否、切替/撤回・更新排他の責任者。
 - 信頼済みbuild/署名、公証/失効確認・thread/FD/timeoutの未決事項とregistry更新コスト。
 
-次工程の推奨は契約案のレビュー後、採択した型付き期待値/観測値の純粋比較を合成テストで実装すること。
+型付き期待値/観測値のparser・純粋比較は合成検証済み。次は本番registryの信頼元接続・次版ledger参照契約を別工程で具体化する。
 実Security adapter・実配備・gate解除は別承認。telemetry調査の再開を前提にせず、実PDI開始許可にも転用しない。

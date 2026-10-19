@@ -7,6 +7,7 @@ mod filesystem;
 mod json;
 mod launch;
 mod launch_args;
+pub mod signature_policy;
 pub use launch::{LaunchFailure, exec_installed};
 mod schema;
 use schema::{Activation, Ledger};

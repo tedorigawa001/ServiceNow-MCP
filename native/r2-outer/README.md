@@ -71,6 +71,11 @@ and [OL-01 design](../../docs/BEST_PRACTICE_BP5_R2_OL01_BUILD_DEPLOY_LEDGER_DESI
 
 ## OL-03 component tests
 
+`signature_policy` provides a bounded draft-registry parser and a pure entitlement
+comparator. Its public inputs are caller-supplied data, not Security.framework proof.
+No trusted registry is installed or embedded, no ledger-0.2 reader is enabled, and no
+execution permit is issued. See [typed policy verification](../../docs/E2E_BEST_PRACTICE_R2_OL03_TYPED_POLICY_SYNTHETIC_2026-10-19.md).
+
 The additional `closure::check` API parses bounded in-memory index bytes and compares a
 caller-supplied binding and observation list. It returns counts only, never an execution
 permit. It does not read or verify deployed files, signatures, ACLs or xattrs. The fixed
