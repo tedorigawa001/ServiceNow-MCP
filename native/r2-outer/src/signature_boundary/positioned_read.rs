@@ -1,6 +1,7 @@
 //! Staged shared budget and single-shot positioned-I/O boundary; no OS adapter or trust authority.
 use super::physical_signature;
 use std::{
+    rc::Rc,
     sync::atomic::{AtomicBool, Ordering},
     time::{Duration, Instant},
 };
@@ -129,6 +130,7 @@ impl<'a> SharedBudget<'a> {
             file_bytes,
             credit: plan,
             requests: 0,
+            lineage: Rc::new(()),
         })
     }
 }
@@ -139,6 +141,8 @@ pub(super) struct ReadScope<'b, 'a, S: PositionedSource> {
     file_bytes: u64,
     credit: u64,
     requests: u32,
+    // Opaque scope identity, not proof of an OS FD or record binding.
+    lineage: Rc<()>,
 }
 impl<S: PositionedSource> std::fmt::Debug for ReadScope<'_, '_, S> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {

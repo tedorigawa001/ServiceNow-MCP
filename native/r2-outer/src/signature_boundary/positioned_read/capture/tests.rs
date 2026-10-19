@@ -476,3 +476,569 @@ fn changes_behind_hash_cursor_are_not_claimed_as_revalidated() {
     );
     assert!(out.entitlement_gate().is_err()); // B/metadata are required in a later stage
 }
+
+fn run_ab(m: &mut Memory<'_>, expected: &[u8; 32]) -> (Result<ComparedAB, Failure>, u64) {
+    let cancel = AtomicBool::new(false);
+    let mut b = SharedBudget::new(Instant::now(), &cancel);
+    let n = m.bytes.len() as u64;
+    let result = {
+        let mut r = b.begin(m, n).unwrap();
+        r.capture_a(expected).and_then(|a| r.recheck_b(a))
+    };
+    assert_eq!(b.reserved, 0);
+    (result, b.used)
+}
+#[test]
+fn b_matches_all_bytes_and_charges_a_and_b_without_new_scope() {
+    let bytes = fixture(true, false, 4096, 48);
+    let expected = digest(&bytes);
+    let n = bytes.len();
+    let mut m = Memory::new(bytes.clone());
+    let (result, used) = run_ab(&mut m, &expected);
+    let out = result.unwrap();
+    assert_eq!(out.capture.full_hash, expected);
+    assert_eq!(out.capture.header, &bytes[..48]);
+    assert_eq!(out.capture.signature, &bytes[4096..]);
+    assert_eq!(used, (32 + 48 + 2 * n) as u64);
+    assert_eq!(
+        m.calls,
+        [
+            (0, 32),
+            (0, 48),
+            (0, n),
+            (n as u64, 1),
+            (0, n),
+            (n as u64, 1)
+        ]
+    );
+    assert_eq!(
+        format!("{out:?}"),
+        "ComparedAB(bytes_only_pending_metadata_not_execution_authority)"
+    );
+    assert_eq!(
+        out.entitlement_gate(),
+        Err(physical_signature::Rejection::UnverifiedXml)
+    );
+}
+#[test]
+fn b_preserves_der_and_absence_stop_without_semantic_upgrade() {
+    for (xml, der, stop) in [
+        (true, true, physical_signature::Rejection::UnsupportedDer),
+        (false, true, physical_signature::Rejection::UnsupportedDer),
+        (false, false, physical_signature::Rejection::AbsenceUnproven),
+    ] {
+        let bytes = fixture(xml, der, 4096, 48);
+        let expected = digest(&bytes);
+        let mut m = Memory::new(bytes);
+        assert_eq!(
+            run_ab(&mut m, &expected).0.unwrap().entitlement_gate(),
+            Err(stop)
+        );
+    }
+}
+#[test]
+fn b_handles_split_ranges_and_maximum_header() {
+    for (offset, header) in [(131069, 65568), (2 * 1024 * 1024 + 3, 1024 * 1024 + 32)] {
+        let bytes = fixture(true, false, offset, header);
+        let expected = digest(&bytes);
+        let n = bytes.len();
+        let mut m = Memory::new(bytes.clone());
+        let (out, used) = run_ab(&mut m, &expected);
+        let out = out.unwrap();
+        assert_eq!(out.capture.header, &bytes[..header]);
+        assert_eq!(out.capture.signature, &bytes[offset..]);
+        assert_eq!(used, (32 + header + 2 * n) as u64);
+        assert!(m.calls.iter().all(|(_, n)| *n <= MAX_CHUNK));
+    }
+}
+#[test]
+fn b_reuses_a_signature_buffer_at_five_mib_without_a_second_blob() {
+    let mut bytes = fixture(true, false, 4096, 48);
+    bytes.resize(4096 + 5 * 1024 * 1024, 0);
+    le(&mut bytes, 44, 5 * 1024 * 1024);
+    let expected = digest(&bytes);
+    let n = bytes.len() as u64;
+    let cancel = AtomicBool::new(false);
+    let mut b = SharedBudget::new(Instant::now(), &cancel);
+    let mut m = Memory::new(bytes);
+    {
+        let mut r = b.begin(&mut m, n).unwrap();
+        let a = r.capture_a(&expected).unwrap();
+        let allocation = a.signature.as_ptr();
+        let out = r.recheck_b(a).unwrap();
+        assert_eq!(out.capture.signature.as_ptr(), allocation);
+        assert_eq!(out.capture.signature.len(), 5 * 1024 * 1024);
+    }
+}
+#[test]
+fn b_rejects_header_and_signature_changes_without_recomputing_ranges() {
+    for index in [0, 24, 32, 4096, 4200] {
+        let bytes = fixture(true, false, 4096, 48);
+        let expected = digest(&bytes);
+        let n = bytes.len() as u64;
+        let cancel = AtomicBool::new(false);
+        let mut b = SharedBudget::new(Instant::now(), &cancel);
+        let mut m = Memory::new(bytes);
+        {
+            let mut r = b.begin(&mut m, n).unwrap();
+            let a = r.capture_a(&expected).unwrap();
+            r.source.bytes[index] ^= 1;
+            assert_eq!(r.recheck_b(a).unwrap_err(), Failure::SourceMismatch);
+        }
+        assert_eq!(m.calls.len(), 5);
+    }
+}
+#[test]
+fn b_full_hash_detects_changes_outside_the_captured_ranges() {
+    let bytes = fixture(true, false, 4096, 48);
+    let expected = digest(&bytes);
+    let n = bytes.len() as u64;
+    let cancel = AtomicBool::new(false);
+    let mut b = SharedBudget::new(Instant::now(), &cancel);
+    let mut m = Memory::new(bytes);
+    {
+        let mut r = b.begin(&mut m, n).unwrap();
+        let a = r.capture_a(&expected).unwrap();
+        r.source.bytes[100] ^= 1;
+        assert_eq!(r.recheck_b(a).unwrap_err(), Failure::HashMismatch);
+        assert_eq!(r.read(0, &mut [0; 1]), Err(Failure::HashMismatch));
+    }
+    assert_eq!(m.calls.len(), 5);
+    assert_eq!(b.reserved, 0);
+    assert!(matches!(b.begin(&mut m, n), Err(Failure::HashMismatch)));
+}
+#[test]
+fn b_checks_range_bytes_even_if_full_file_digest_would_match() {
+    // Corrupt only private synthetic A buffers, never a production mutation API.
+    for signature in [false, true] {
+        let bytes = fixture(true, false, 4096, 48);
+        let expected = digest(&bytes);
+        let n = bytes.len() as u64;
+        let cancel = AtomicBool::new(false);
+        let mut b = SharedBudget::new(Instant::now(), &cancel);
+        let mut m = Memory::new(bytes);
+        {
+            let mut r = b.begin(&mut m, n).unwrap();
+            let mut a = r.capture_a(&expected).unwrap();
+            if signature {
+                a.signature[0] ^= 1;
+            } else {
+                a.header[24] ^= 1;
+            }
+            assert_eq!(r.recheck_b(a).unwrap_err(), Failure::SourceMismatch);
+        }
+        assert_eq!(m.calls.len(), 5);
+    }
+}
+#[test]
+fn b_detects_the_a_cursor_change_that_pending_a_alone_could_not_detect() {
+    let bytes = fixture(true, false, 131069, 48);
+    let expected = digest(&bytes);
+    let n = bytes.len() as u64;
+    let cancel = AtomicBool::new(false);
+    let mut b = SharedBudget::new(Instant::now(), &cancel);
+    let mut m = Memory::new(bytes);
+    m.edit = Some((4, 100, 0));
+    {
+        let mut r = b.begin(&mut m, n).unwrap();
+        let a = r.capture_a(&expected).unwrap();
+        assert_ne!(digest(&r.source.bytes), a.full_hash);
+        assert_eq!(r.recheck_b(a).unwrap_err(), Failure::HashMismatch);
+    }
+    assert_eq!(m.calls.len(), 9);
+}
+#[test]
+fn b_detects_observable_mid_scan_body_and_signature_changes() {
+    for (call, index, reason) in [
+        (8, 70000, Failure::HashMismatch),
+        (9, 131080, Failure::SourceMismatch),
+    ] {
+        let bytes = fixture(true, false, 131069, 48);
+        let expected = digest(&bytes);
+        let n = bytes.len() as u64;
+        let cancel = AtomicBool::new(false);
+        let mut b = SharedBudget::new(Instant::now(), &cancel);
+        let mut m = Memory::new(bytes);
+        {
+            let mut r = b.begin(&mut m, n).unwrap();
+            let a = r.capture_a(&expected).unwrap();
+            assert_ne!(r.source.bytes[index], 0);
+            r.source.edit = Some((call, index, 0));
+            assert_eq!(r.recheck_b(a).unwrap_err(), reason);
+        }
+        assert_eq!(m.calls.len(), 9);
+    }
+}
+#[test]
+fn b_short_reads_and_truncation_stop_without_completing_the_read() {
+    for truncate in [false, true] {
+        let bytes = fixture(true, false, 4096, 48);
+        let expected = digest(&bytes);
+        let n = bytes.len() as u64;
+        let cancel = AtomicBool::new(false);
+        let mut b = SharedBudget::new(Instant::now(), &cancel);
+        let mut m = Memory::new(bytes);
+        {
+            let mut r = b.begin(&mut m, n).unwrap();
+            let a = r.capture_a(&expected).unwrap();
+            if truncate {
+                r.source.bytes.pop();
+            } else {
+                r.source.short = Some(5);
+            }
+            assert_eq!(r.recheck_b(a).unwrap_err(), Failure::Changed);
+        }
+        assert_eq!(m.calls.len(), 5);
+    }
+}
+#[test]
+fn b_eof_refuses_growth_and_keeps_the_original_length() {
+    let bytes = fixture(true, false, 4096, 48);
+    let expected = digest(&bytes);
+    let n = bytes.len() as u64;
+    let cancel = AtomicBool::new(false);
+    let mut b = SharedBudget::new(Instant::now(), &cancel);
+    let mut m = Memory::new(bytes);
+    {
+        let mut r = b.begin(&mut m, n).unwrap();
+        let a = r.capture_a(&expected).unwrap();
+        r.source.append = Some(6);
+        assert_eq!(r.recheck_b(a).unwrap_err(), Failure::Changed);
+    }
+    assert_eq!(m.calls.len(), 6);
+    assert_eq!(b.used, 32 + 48 + 2 * n + 1);
+}
+#[test]
+fn b_cannot_take_a_from_a_different_scope_even_with_identical_bytes() {
+    let bytes = fixture(true, false, 4096, 48);
+    let expected = digest(&bytes);
+    let n = bytes.len() as u64;
+    let cancel = AtomicBool::new(false);
+    let mut b = SharedBudget::new(Instant::now(), &cancel);
+    let mut first = Memory::new(bytes.clone());
+    let mut second = Memory::new(bytes);
+    let a = {
+        let mut r = b.begin(&mut first, n).unwrap();
+        r.capture_a(&expected).unwrap()
+    };
+    {
+        let mut r = b.begin(&mut second, n).unwrap();
+        assert_eq!(r.recheck_b(a).unwrap_err(), Failure::SourceMismatch);
+    }
+    assert!(second.calls.is_empty());
+    assert_eq!(first.calls.len(), 4);
+}
+#[test]
+fn b_cannot_transfer_a_to_a_fresh_budget_of_the_same_source() {
+    let bytes = fixture(true, false, 4096, 48);
+    let expected = digest(&bytes);
+    let n = bytes.len() as u64;
+    let cancel = AtomicBool::new(false);
+    let mut first = SharedBudget::new(Instant::now(), &cancel);
+    let mut m = Memory::new(bytes);
+    let a = {
+        let mut r = first.begin(&mut m, n).unwrap();
+        r.capture_a(&expected).unwrap()
+    };
+    let mut second = SharedBudget::new(Instant::now(), &cancel);
+    {
+        let mut r = second.begin(&mut m, n).unwrap();
+        assert_eq!(r.recheck_b(a).unwrap_err(), Failure::SourceMismatch);
+    }
+    assert_eq!(m.calls.len(), 4);
+    assert_eq!(second.used, 0);
+    assert_eq!(second.reserved, 0);
+}
+#[test]
+fn b_rejects_inconsistent_private_capture_extent_before_reading() {
+    let bytes = fixture(true, false, 4096, 48);
+    let expected = digest(&bytes);
+    let n = bytes.len() as u64;
+    let cancel = AtomicBool::new(false);
+    let mut b = SharedBudget::new(Instant::now(), &cancel);
+    let mut m = Memory::new(bytes);
+    {
+        let mut r = b.begin(&mut m, n).unwrap();
+        let mut a = r.capture_a(&expected).unwrap();
+        a.signature_start = u64::MAX;
+        assert_eq!(r.recheck_b(a).unwrap_err(), Failure::SourceMismatch);
+    }
+    assert_eq!(m.calls.len(), 4);
+}
+#[test]
+fn b_uses_the_eintr_allowance_already_consumed_by_a() {
+    let bytes = fixture(true, false, 4096, 48);
+    let expected = digest(&bytes);
+    let n = bytes.len() as u64;
+    let cancel = AtomicBool::new(false);
+    let mut b = SharedBudget::new(Instant::now(), &cancel);
+    let mut m = Memory::new(bytes);
+    m.interrupts = (1..=8).collect();
+    {
+        let mut r = b.begin(&mut m, n).unwrap();
+        let a = r.capture_a(&expected).unwrap();
+        assert_eq!(r.budget.retries_left, 0);
+        r.source.interrupts.push(13);
+        assert_eq!(r.recheck_b(a).unwrap_err(), Failure::ReadFailed);
+    }
+    assert_eq!(m.calls.len(), 13);
+}
+#[test]
+fn a_and_b_eintr_retry_the_same_offset_and_do_not_charge_failed_attempts() {
+    let bytes = fixture(true, false, 4096, 48);
+    let expected = digest(&bytes);
+    let n = bytes.len();
+    let mut m = Memory::new(bytes);
+    m.interrupts = vec![1, 6];
+    let (out, used) = run_ab(&mut m, &expected);
+    assert!(out.is_ok());
+    assert_eq!(used, (32 + 48 + 2 * n) as u64);
+    assert_eq!(m.calls[5], m.calls[6]);
+    assert_eq!(m.calls.len(), 8);
+}
+#[test]
+fn b_preserves_the_original_request_limit_including_its_eof_probe() {
+    let bytes = fixture(true, false, 4096, 48);
+    let expected = digest(&bytes);
+    let n = bytes.len() as u64;
+    let cancel = AtomicBool::new(false);
+    let mut b = SharedBudget::new(Instant::now(), &cancel);
+    let mut m = Memory::new(bytes);
+    {
+        let mut r = b.begin(&mut m, n).unwrap();
+        let a = r.capture_a(&expected).unwrap();
+        r.requests = MAX_REQUESTS - 1;
+        assert_eq!(r.recheck_b(a).unwrap_err(), Failure::Limit);
+    }
+    assert_eq!(m.calls.len(), 5);
+}
+#[test]
+fn b_refuses_insufficient_reserved_credit_without_new_reservation() {
+    let bytes = fixture(true, false, 4096, 48);
+    let expected = digest(&bytes);
+    let n = bytes.len() as u64;
+    let cancel = AtomicBool::new(false);
+    let mut b = SharedBudget::new(Instant::now(), &cancel);
+    let mut m = Memory::new(bytes);
+    {
+        let mut r = b.begin(&mut m, n).unwrap();
+        let a = r.capture_a(&expected).unwrap();
+        let release = r.credit - (n - 1);
+        r.credit = n - 1;
+        r.budget.reserved -= release;
+        assert_eq!(r.recheck_b(a).unwrap_err(), Failure::Limit);
+    }
+    assert_eq!(m.calls.len(), 4);
+    assert_eq!(b.reserved, 0);
+}
+#[test]
+fn b_keeps_prior_consumption_and_releases_only_unused_credit() {
+    let bytes = fixture(true, false, 4096, 48);
+    let expected = digest(&bytes);
+    let n = bytes.len() as u64;
+    let plan = 2 * n + 32 + MAX_HEADER + 2;
+    let cancel = AtomicBool::new(false);
+    let mut b = SharedBudget::new(Instant::now(), &cancel);
+    b.account_read(MAX_BYTES - plan).unwrap();
+    let prior = b.used;
+    let mut m = Memory::new(bytes);
+    {
+        let mut r = b.begin(&mut m, n).unwrap();
+        let a = r.capture_a(&expected).unwrap();
+        r.recheck_b(a).unwrap();
+        assert_eq!(r.budget.used, prior + 32 + 48 + 2 * n);
+    }
+    assert_eq!(b.reserved, 0);
+}
+#[test]
+fn b_initial_deadline_or_cancel_has_no_io_and_no_fresh_deadline() {
+    for is_cancel in [false, true] {
+        let start = Instant::now();
+        let tick = Cell::new(Duration::from_secs(9));
+        let now = || start + tick.get();
+        let cancel = AtomicBool::new(false);
+        let bytes = fixture(true, false, 4096, 48);
+        let expected = digest(&bytes);
+        let n = bytes.len() as u64;
+        let mut b = SharedBudget::new(start, &cancel);
+        b.now = &now;
+        let mut m = Memory::new(bytes);
+        {
+            let mut r = b.begin(&mut m, n).unwrap();
+            let a = r.capture_a(&expected).unwrap();
+            if is_cancel {
+                cancel.store(true, Ordering::Release);
+            } else {
+                tick.set(Duration::from_secs(10));
+            }
+            assert_eq!(
+                r.recheck_b(a).unwrap_err(),
+                if is_cancel {
+                    Failure::Cancelled
+                } else {
+                    Failure::Deadline
+                }
+            );
+        }
+        assert_eq!(m.calls.len(), 4);
+    }
+}
+#[test]
+fn b_late_success_at_each_block_or_eof_is_discarded() {
+    for at in 7..=10 {
+        let start = Instant::now();
+        let tick = Cell::new(Duration::ZERO);
+        let now = || start + tick.get();
+        let cancel = AtomicBool::new(false);
+        let bytes = fixture(true, false, 131069, 48);
+        let expected = digest(&bytes);
+        let n = bytes.len() as u64;
+        let mut b = SharedBudget::new(start, &cancel);
+        b.now = &now;
+        let mut m = Memory::new(bytes);
+        m.hook = Some(Box::new(|call, _, _| {
+            if call == at {
+                tick.set(Duration::from_secs(10));
+            }
+        }));
+        {
+            let mut r = b.begin(&mut m, n).unwrap();
+            let a = r.capture_a(&expected).unwrap();
+            assert_eq!(r.recheck_b(a).unwrap_err(), Failure::Deadline);
+        }
+        assert_eq!(m.calls.len(), at);
+        assert_eq!(b.reserved, 0);
+    }
+}
+#[test]
+fn b_cancel_at_each_block_or_eof_is_latched() {
+    for at in 7..=10 {
+        let cancel = AtomicBool::new(false);
+        let bytes = fixture(true, false, 131069, 48);
+        let expected = digest(&bytes);
+        let n = bytes.len() as u64;
+        let mut b = SharedBudget::new(Instant::now(), &cancel);
+        let mut m = Memory::new(bytes);
+        m.hook = Some(Box::new(|call, _, _| {
+            if call == at {
+                cancel.store(true, Ordering::Release);
+            }
+        }));
+        {
+            let mut r = b.begin(&mut m, n).unwrap();
+            let a = r.capture_a(&expected).unwrap();
+            assert_eq!(r.recheck_b(a).unwrap_err(), Failure::Cancelled);
+            cancel.store(false, Ordering::Release);
+            assert_eq!(r.checkpoint(), Err(Failure::Cancelled));
+        }
+        assert_eq!(m.calls.len(), at);
+    }
+}
+#[test]
+fn b_hash_and_range_comparison_checkpoint_expiry_is_not_ignored() {
+    for cutoff in [3, 4, 5] {
+        let start = Instant::now();
+        let armed = Cell::new(false);
+        let checks = Cell::new(0);
+        let now = || {
+            if armed.get() {
+                let n = checks.get() + 1;
+                checks.set(n);
+                if n >= cutoff {
+                    return start + Duration::from_secs(10);
+                }
+            }
+            start
+        };
+        let cancel = AtomicBool::new(false);
+        let bytes = fixture(true, false, 4096, 48);
+        let expected = digest(&bytes);
+        let n = bytes.len() as u64;
+        let mut b = SharedBudget::new(start, &cancel);
+        b.now = &now;
+        let mut m = Memory::new(bytes);
+        m.hook = Some(Box::new(|call, _, _| {
+            if call == 5 {
+                armed.set(true);
+            }
+        }));
+        {
+            let mut r = b.begin(&mut m, n).unwrap();
+            let a = r.capture_a(&expected).unwrap();
+            assert_eq!(r.recheck_b(a).unwrap_err(), Failure::Deadline);
+        }
+        assert_eq!(checks.get(), cutoff);
+        assert_eq!(m.calls.len(), 5);
+    }
+}
+#[test]
+fn b_final_checkpoint_after_zero_eof_can_still_reject() {
+    let start = Instant::now();
+    let after = Cell::new(false);
+    let checks = Cell::new(0);
+    let now = || {
+        if after.get() {
+            let n = checks.get() + 1;
+            checks.set(n);
+            if n >= 2 {
+                return start + Duration::from_secs(10);
+            }
+        }
+        start
+    };
+    let cancel = AtomicBool::new(false);
+    let bytes = fixture(true, false, 4096, 48);
+    let expected = digest(&bytes);
+    let n = bytes.len() as u64;
+    let mut b = SharedBudget::new(start, &cancel);
+    b.now = &now;
+    let mut m = Memory::new(bytes);
+    m.hook = Some(Box::new(|call, _, _| {
+        if call == 6 {
+            after.set(true);
+        }
+    }));
+    {
+        let mut r = b.begin(&mut m, n).unwrap();
+        let a = r.capture_a(&expected).unwrap();
+        assert_eq!(r.recheck_b(a).unwrap_err(), Failure::Deadline);
+    }
+    assert_eq!(m.calls.len(), 6);
+    assert_eq!(checks.get(), 2);
+}
+#[test]
+fn even_b_cannot_claim_absence_of_changes_behind_its_cursor() {
+    let bytes = fixture(true, false, 131069, 48);
+    let expected = digest(&bytes);
+    let n = bytes.len() as u64;
+    let cancel = AtomicBool::new(false);
+    let mut b = SharedBudget::new(Instant::now(), &cancel);
+    let mut m = Memory::new(bytes);
+    {
+        let mut r = b.begin(&mut m, n).unwrap();
+        let a = r.capture_a(&expected).unwrap();
+        r.source.edit = Some((8, 100, 0));
+        let out = r.recheck_b(a).unwrap();
+        assert_ne!(digest(&r.source.bytes), out.capture.full_hash);
+        assert_eq!(
+            format!("{out:?}"),
+            "ComparedAB(bytes_only_pending_metadata_not_execution_authority)"
+        );
+        assert!(out.entitlement_gate().is_err());
+    }
+}
+#[test]
+fn b_comparison_helper_checks_partials_empty_intersections_and_overflow() {
+    let target = [3, 4, 5, 6, 7];
+    assert_eq!(compare_part(&target, 10, 8, &[1, 2, 3, 4]), Ok(2));
+    assert_eq!(compare_part(&target, 10, 12, &[5, 6, 7, 8]), Ok(3));
+    assert_eq!(compare_part(&target, 10, 15, &[8]), Ok(0));
+    assert_eq!(
+        compare_part(&target, 10, 8, &[1, 2, 3, 0]),
+        Err(Failure::SourceMismatch)
+    );
+    assert_eq!(
+        compare_part(&target, u64::MAX, 0, &[1]),
+        Err(Failure::InvalidRange)
+    );
+}

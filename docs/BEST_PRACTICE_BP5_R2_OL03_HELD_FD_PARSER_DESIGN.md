@@ -1,6 +1,6 @@
 # BP-5 R-2 OL-03：保持FDの安全読取・物理signature parser接続
 
-Version: draft-0.3 / Date: 2026-10-19 / Status: 共有予算・位置指定読取境界、合成sourceのpreflight/A採取/parser接続を内部実装済み。OS adapter/保持FD・B再走査/metadata接続・運用承認は未実施。
+Version: draft-0.4 / Date: 2026-10-19 / Status: 共有予算・位置指定読取境界、合成sourceのpreflight/A採取/parser/B再走査を内部実装済み。OS adapter/保持FD・metadata接続・運用承認は未実施。
 
 ## 1. 目的と停止境界
 
@@ -8,7 +8,7 @@ Version: draft-0.3 / Date: 2026-10-19 / Status: 共有予算・位置指定読�
 file全体SHA-256とparser入力の対応、metadata、record binding、共有予算を結ぶ。pathだけで開き直したfileや呼出し側のbytesを「保持FD由来」と扱わない。
 本書は既存実装の調査に基づくプロジェクトの設計案であり、新しいOS/API適合試験の結果ではない。
 
-telemetry調査は保留。実装は§12/§13の内部予算/I/O境界と合成sourceのA採取/parser接続まで。API実接続・DER意味解析/absence証明・実機/PDI操作・token発行・設定変更・permit発行は対象外。
+telemetry調査は保留。実装は§12〜§14の内部予算/I/O境界と合成sourceのA採取/parser/B再走査まで。API実接続・DER意味解析/absence証明・実機/PDI操作・token発行・設定変更・permit発行は対象外。
 本番registry未設定、通常v2入口Unavailable、runtime gate92を維持する。後日の読取接続が成功しても、署名validity・実行許可を生成しない。
 
 ## 2. 現状との境界
@@ -19,7 +19,7 @@ telemetry調査は保留。実装は§12/§13の内部予算/I/O境界と合成s
 | [native/file.rs](../native/r2-outer/src/signature_boundary/native/file.rs) | private PinnedFileの位置指定読取/hash、前後metadata、同じ開始Instant/cancel | deploymentから未接続。identity/layoutの呼出しごとに再hashし、path照合は絶対pathを再openする。parser用buffer・共通I/O台帳はない |
 | [physical_signature.rs](../native/r2-outer/src/signature_boundary/physical_signature.rs) | 宣言file長＋header/commands＋signatureの借用bytesをbounded解析 | bytesが同じFD/走査由来であること、全体hash/metadata/世代は証明しない |
 | [ledger_v2.rs](../native/r2-outer/src/ledger_v2.rs) | registry参照・role・record bindingの純粋照合 | 運用上信頼済みrecord・保持FD・leaseの一体化ではない |
-| [positioned_read.rs](../native/r2-outer/src/signature_boundary/positioned_read.rs) | 共通10秒/2GiB/再試行枠、予約/精算、位置指定要求・短読取/遅延応答の拒否。childでpreflight/A採取/parserへ接続 | 合成sourceだけで検証。実pread adapter・deployment/PinnedFile・B/metadataへは未接続 |
+| [positioned_read.rs](../native/r2-outer/src/signature_boundary/positioned_read.rs) | 共通10秒/2GiB/再試行枠、予約/精算、位置指定要求・短読取/遅延応答の拒否。childでpreflight/A採取/parser/Bへ接続 | 合成sourceだけで検証。実pread adapter・deployment/PinnedFile・metadataへは未接続 |
 
 既存の[配備読取検証](E2E_BEST_PRACTICE_R2_OL03_DEPLOYMENT_READ_SYNTHETIC_2026-10-19.md)と[parser合成検証](E2E_BEST_PRACTICE_R2_OL03_PHYSICAL_SIGNATURE_SYNTHETIC_2026-10-19.md)はそれぞれの部品の証拠であり、本接続の試験へ流用しない。
 公開`inspect_deployment(root, binding, started)`の成功や外部から渡されたFileだけを、新しい信頼済み接続のconstructorにしない。
@@ -151,7 +151,7 @@ Securityのpath-based APIと保持FDはatomicに結合されない。本接続�
 exec adapterがFD>=3を閉鎖する現状も変更しない。検査用FDの保持と、exec後のrelease寿命管理は別問題である。
 後続API接続では同じ所有対象を維持し、API前後・exec直前の再確認を追加する必要がある。本案A/Bの完了をexec/importまで有効なcacheにしない。
 
-## 9. 接続全体の合成試験計画（実行済みの範囲は§12/§13）
+## 9. 接続全体の合成試験計画（実行済みの範囲は§12〜§14）
 
 | 試験群 | 必須の確認 |
 |---|---|
@@ -221,8 +221,29 @@ entitlement gateはUnsupportedDer/AbsenceUnproven/UnverifiedXmlのいずれか�
 期待hash/file長はこの部品への入力データにすぎず、root承認record由来を証明しない。traitは同じsource objectを借用するだけで、同じ実FDを証明しない。
 
 読取実bytesは既存台帳へ重複込みで計上。今回の正常経路は`32 + header/commands全長 + N`bytes（EOF0bytes）を使用し、B用を含む未使用予約はscope寿命中保持する。
-各allocationは上限確認と`try_reserve_exact`、loop/copy/hash/比較/parse前後は共通checkpointを使う。全file Vec/mmapや署名rangeの独立再読はしない。
+payload bufferの確保は上限確認と`try_reserve_exact`、loop/copy/hash/比較/parse前後は共通checkpointを使う。全file Vec/mmapや署名rangeの独立再読はしない。
 新規有限理由HashMismatch/SourceMismatch/Parser(reason)を内部台帳へ追加したが、公開JSON/exit codeは変えない。
 
-**B再hash・M0〜M4・祖先/path/record/lease照合は未実装。** A cursorが通過した後のin-place変更はAだけでは見つからない場合があり、それを示す合成ケースも残す。
+本A追加時点ではB再hashも未実装だった。後続のB実装は§14を参照。**M0〜M4・祖先/path/record/lease照合は未実装。** A cursorが通過した後のin-place変更はAだけでは見つからない場合があり、それを示す合成ケースも残す。
 CapturedAをFdInventoryReadOnlyや署名validity/permitへ変換する経路はない。実OS adapter・deployment/native接続・本番policyは引き続き停止したまま。
+
+## 14. B再走査によるbytes-only照合
+
+[B合成検証記録](E2E_BEST_PRACTICE_R2_OL03_RECHECK_B_SYNTHETIC_2026-10-19.md)に追加26件・全体299件を記録する。
+同じReadScopeの`recheck_b`へCapturedAを所有権移動して渡し、成功時だけ`ComparedAB(bytes_only_pending_metadata_not_execution_authority)`を返す。
+CapturedA/ComparedABは非Clone・非serializeであり、失敗時はAのbufferも破棄する。B結果をpermit/FD検証済み型へ変換する経路はない。
+
+- scope開始時にprivateな`Rc<()>`識別子を1つ作り、Aへ同じ識別子を保持。Bは`Rc::ptr_eq`とN/保存rangeの整合を確認し、別scope/source・別台帳へのA持越しを読取前に拒否する。
+  この識別子は生FD番号やcaller申告ではないが、OSのFD/record/metadataの真正性を証明するものでもない。小さい管理用割当で、payload/RSS上限とは分ける。
+- Bは同じsource object・元Instant/cancel/clock・残予約・読取回数・EINTR枠を使う。beginし直さず、Nも期待hashも呼出し側がB用に上書きできない。
+- 0〜Nを64KiB以下で再読してSHA-256へ渡し、その同じblockとAのheader/commands・署名rangeの交差をbyte完全一致で照合する。
+  A採取とB比較はcheckedな同じ交差計算helperを使用。全体hash一致だけでrange比較を省略せず、range一致だけでfile本文のhashを省略しない。
+- 成功条件は全体hash B = Aで期待hash照合済みの全体hash、両rangeの照合量 = 宣言長、元NでEOF0bytes、最終checkpoint成功。
+  range差はSourceMismatchで早期停止できる。この場合、未完了のB hashを照合済みと報告しない。range外の差は最終HashMismatchで拒否する。
+- Bの大容量bufferは作らずstream用64KiBだけ。Aのbufferをそのまま所有して返し、parserの再解釈・署名rangeの再選択・別FDへのfallbackは行わない。
+- 正常実読取量はA/B合わせて`32 + header/commands全長 + 2*N`（EOF応答は0bytes）。Bも課金し、B前の残予約不足・要求回数上限・共有EINTR枠枯渇で停止する。
+- read/hash/range比較/EOFの前後と最終返却前で共通checkpointを確認。遅い成功・取消・短読取・追記/切詰め・不正scopeは既存台帳へラッチし、後続read/新scopeも拒否する。
+
+ComparedABのentitlement gateは、AのUnsupportedDer/AbsenceUnproven/UnverifiedXmlをそのまま保ち、常に失敗する。
+同じsourceを保持しても、source内の実体交換を防いだことにはならない。Bの既読位置への後発変更・ABAを全hash2回だけで完全に排除できない。
+その限界を合成ケースでも確認しており、metadata/祖先/path/record/lease・実FD読取・hard timeoutが未完了のまま信頼済み証拠へ昇格しない。

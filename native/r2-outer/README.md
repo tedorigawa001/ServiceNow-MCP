@@ -118,12 +118,16 @@ positioned-source interface. Short reads, late responses and cancellation latch 
 Only synthetic sources are tested: no OS pread adapter or deployment/PinnedFile hookup
 is enabled. See
 [positioned read synthetic verification](../../docs/E2E_BEST_PRACTICE_R2_OL03_POSITIONED_READ_SYNTHETIC_2026-10-19.md).
-The private A-pass connector now shares Mach-O range validation with the pure parser,
+The private A-pass connector shares Mach-O range validation with the pure parser,
 captures header/signature bytes directly from the full-file hash stream, and parses only
 those captures under the original deadline/cancel source. It returns a pending diagnostic,
-not revalidated FD evidence: B-pass hashing, metadata/path/record/lease checks remain
-unimplemented. DER/absence and execution authority stay closed. See
+not revalidated FD evidence. DER/absence and execution authority stay closed. See
 [A capture synthetic verification](../../docs/E2E_BEST_PRACTICE_R2_OL03_CAPTURE_A_SYNTHETIC_2026-10-19.md).
+The B-pass consumes A from the same opaque scope identity, reuses its budget and source,
+and compares the full-file hash and captured ranges without allocating a second blob.
+Success is bytes-only and pending metadata; metadata/path/record/lease and real-FD
+connections remain unimplemented. Changes behind B's cursor/ABA are not fully excluded.
+See [B recheck synthetic verification](../../docs/E2E_BEST_PRACTICE_R2_OL03_RECHECK_B_SYNTHETIC_2026-10-19.md).
 See [boundary contract](../../docs/BEST_PRACTICE_BP5_R2_OL03_SECURITY_BOUNDARY_DESIGN.md)
 and [synthetic verification](../../docs/E2E_BEST_PRACTICE_R2_OL03_SECURITY_BOUNDARY_SYNTHETIC_2026-10-19.md).
 

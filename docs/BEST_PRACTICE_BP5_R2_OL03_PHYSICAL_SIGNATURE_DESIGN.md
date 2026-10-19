@@ -1,6 +1,6 @@
 # BP-5 R-2 OL-03：保持FDの物理signature列挙・CodeDirectory結合
 
-Version: draft-0.6 / Date: 2026-10-19 / Status: 純粋bounded parser・共有予算/I/O境界・合成sourceのA採取/parser接続を内部実装済み。実保持FD/native接続・API結合・実artifact検証は未実施。
+Version: draft-0.7 / Date: 2026-10-19 / Status: 純粋bounded parser・共有予算/I/O境界・合成sourceのA採取/parser/B照合を内部実装済み。実保持FD/metadata/native接続・API結合・実artifact検証は未実施。
 
 ## 1. 目的と停止境界
 
@@ -166,7 +166,7 @@ single-CD制限を広げる場合は全alternateとalgorithm集合、OSの選択
 
 ## 9. FD・世代・時刻と差替えの限界
 
-[保持FDの安全読取・parser接続設計](BEST_PRACTICE_BP5_R2_OL03_HELD_FD_PARSER_DESIGN.md)で、同じ所有File・metadata・全体hash A/B・hash走査からのrange採取・共通I/O/10秒予算・拒否条件を具体化した。共有予算/位置指定読取境界の後、[合成sourceのpreflight/A採取/parser接続](E2E_BEST_PRACTICE_R2_OL03_CAPTURE_A_SYNTHETIC_2026-10-19.md)まで実装した。OS adapter・B/metadata照合は未実施。
+[保持FDの安全読取・parser接続設計](BEST_PRACTICE_BP5_R2_OL03_HELD_FD_PARSER_DESIGN.md)で、同じ所有File・metadata・全体hash A/B・hash走査からのrange採取・共通I/O/10秒予算・拒否条件を具体化した。[合成sourceのpreflight/A採取/parser接続](E2E_BEST_PRACTICE_R2_OL03_CAPTURE_A_SYNTHETIC_2026-10-19.md)と[B全体hash/range照合](E2E_BEST_PRACTICE_R2_OL03_RECHECK_B_SYNTHETIC_2026-10-19.md)まで実装した。OS adapter・metadata照合は未実施。
 この読取接続の設計と、以下のnative API結合・寿命全体の更新排他は別段階であり、前者の成功で後者を省略しない。
 
 将来の統合順序案：更新排他取得→保持FD/full hash/metadata→inventory→同じpathのnative validity/情報取得→CD照合→同じFDのsignature領域/全体hash/metadata再確認→activation/ledger世代と期限再確認。
