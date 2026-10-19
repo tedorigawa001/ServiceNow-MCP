@@ -132,7 +132,11 @@ The separate private M0–M4 workflow now compares typed before/after stat, ACL,
 xattr-name and filesystem observations from the same synthetic source around A/B.
 It refuses unknown/retrieval failures and late results under the original budget.
 Success is source-observation consistency only, pending trusted FD/path/record/lease
-binding; it enables no OS metadata acquisition, signature API or permit. See
+binding; it enables no OS metadata acquisition, signature API or permit. A staged
+ReadScope collector now obtains each observation through single-attempt typed
+MetadataOps in synthetic tests, sharing the original deadline/cancel and bounded
+metadata accounting, with reserved exactly-once ACL-handle cleanup. No OS source
+implements this boundary. See
 [M0–M4 synthetic verification](../../docs/E2E_BEST_PRACTICE_R2_OL03_METADATA_SYNTHETIC_2026-10-19.md).
 See [boundary contract](../../docs/BEST_PRACTICE_BP5_R2_OL03_SECURITY_BOUNDARY_DESIGN.md)
 and [synthetic verification](../../docs/E2E_BEST_PRACTICE_R2_OL03_SECURITY_BOUNDARY_SYNTHETIC_2026-10-19.md).

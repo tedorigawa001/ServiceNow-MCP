@@ -479,8 +479,16 @@ fn metadata_workflow_rejects_skipped_duplicate_and_out_of_order_phases() {
         let mut b = SharedBudget::new(Instant::now(), &cancel);
         {
             let mut r = b.begin(&mut s, n).unwrap();
-            let mut flow = Flow::start(&mut r, 7).unwrap();
-            assert_eq!(flow.advance(&mut r, wrong), Err(Failure::SourceMismatch));
+            let mut acquire = |r: &mut ReadScope<'_, '_, Synthetic<'_>>, p| {
+                r.source
+                    .metadata(p)
+                    .map_err(|_| Failure::MetadataUnavailable)
+            };
+            let mut flow = Flow::start(&mut r, 7, &mut acquire).unwrap();
+            assert_eq!(
+                flow.advance(&mut r, wrong, &mut acquire),
+                Err(Failure::SourceMismatch)
+            );
         }
         assert_eq!(s.phases(), [Phase::M0]);
     }
@@ -490,10 +498,15 @@ fn metadata_workflow_rejects_skipped_duplicate_and_out_of_order_phases() {
     let mut b = SharedBudget::new(Instant::now(), &cancel);
     {
         let mut r = b.begin(&mut s, n).unwrap();
-        let mut flow = Flow::start(&mut r, 7).unwrap();
-        flow.advance(&mut r, Phase::M1).unwrap();
+        let mut acquire = |r: &mut ReadScope<'_, '_, Synthetic<'_>>, p| {
+            r.source
+                .metadata(p)
+                .map_err(|_| Failure::MetadataUnavailable)
+        };
+        let mut flow = Flow::start(&mut r, 7, &mut acquire).unwrap();
+        flow.advance(&mut r, Phase::M1, &mut acquire).unwrap();
         assert_eq!(
-            flow.advance(&mut r, Phase::M1),
+            flow.advance(&mut r, Phase::M1, &mut acquire),
             Err(Failure::SourceMismatch)
         );
     }

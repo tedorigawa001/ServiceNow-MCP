@@ -1,6 +1,6 @@
 # BP-5 R-2 OL-03：保持FDの安全読取・物理signature parser接続
 
-Version: draft-0.6 / Date: 2026-10-19 / Status: 共有予算・合成sourceのpreflight/A採取/parser/B再走査・M0〜M4照合を内部実装済み。OS adapter/保持FD・実metadata取得・運用承認は未実施。
+Version: draft-0.7 / Date: 2026-10-19 / Status: 共有予算・合成sourceのpreflight/A採取/parser/B再走査・M0〜M4照合・単発metadata collectorを内部実装済み。OS adapter/保持FD・実metadata取得・運用承認は未実施。
 
 ## 1. 目的と停止境界
 
@@ -295,7 +295,8 @@ metadata差が観測されれば既読位置の変更も止めるが、元値へ
 
 ## 16. 実metadata sourceの詳細設計への分離
 
-[実metadata source詳細設計draft-0.1](BEST_PRACTICE_BP5_R2_OL03_METADATA_SOURCE_DESIGN.md)に、同じ保持Fileへのfstat/fstatfs・filesecによるACL確認・bounded flistxattrの順序を具体化した。
-現行一括MetadataSourceではsyscallごとの共通checkpoint/Changed・Limitを渡せないため、ReadScope collectorと単発Opsへの内部接続案を示した。コードは変更していない。
+[実metadata source詳細設計draft-0.2](BEST_PRACTICE_BP5_R2_OL03_METADATA_SOURCE_DESIGN.md)に、同じ保持Fileへのfstat/fstatfs・filesecによるACL確認・bounded flistxattrの順序を具体化した。
+一括MetadataSourceではsyscallごとの共通checkpoint/Changed・Limitを渡せないため、ReadScope collectorと単発Opsの内部接続を合成実装した。[追加20件・全体348件の検証記録](E2E_BEST_PRACTICE_R2_OL03_METADATA_COLLECTOR_SYNTHETIC_2026-10-19.md)を参照。OS sourceは未実装。
+collectorは全対象共通のmetadata100呼出し枠・名前640KiB台帳を追加し、ACL解放枠を先行予約する。既存payload2GiB/10秒/32768要求/8再試行枠を緩めず、解放は期限後も実行する。
 SDKのXATTR_MAXNAMELENは127bytesで、§4の255bytesは従来の局所上限でありDarwin定数ではない。
 公式資料の列挙対象は呼出し主体に可視な属性名だけであり、空/許可名の結果を全属性不存在の証拠にはしない。可視性・ACL意味・内部memory・FS適合は承認待ちで、運用接続は停止を維持する。

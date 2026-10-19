@@ -1,14 +1,14 @@
 # BP-5 R-2 OL-03：保持FDの実metadata source詳細設計
 
-Version: draft-0.1 / Date: 2026-10-19 / Status: 設計案。実source・OS取得・適合試験・運用承認は未実施。
+Version: draft-0.2 / Date: 2026-10-19 / Status: ReadScope collector・単発Ops・合成sourceを内部実装。実source・OS取得・適合試験・運用承認は未実施。
 
 ## 1. 目的・停止境界
 
 [保持FD/parser設計§15](BEST_PRACTICE_BP5_R2_OL03_HELD_FD_PARSER_DESIGN.md)のM0〜M4と[合成検証記録](E2E_BEST_PRACTICE_R2_OL03_METADATA_SYNTHETIC_2026-10-19.md)を前提に、同じ所有Fileからstat・ACL・xattr名・filesystemを取得する内部sourceを設計する。
 既存328テストは合成観測の整合性の証拠であり、本書のOS取得経路の証拠ではない。
 
-telemetry調査は保留。本書ではMDだけを変更し、実装・Security API実接続・実artifact/PDI操作・トークン発行・設定変更・permit発行・Pushは行わない。
-SDK/既存ソースの読取と公式資料照合は行ったが、対象Fileへのmetadata syscallやprobeは実行していない。
+telemetry調査は保留。draft-0.1はMDだけの設計で、後続の内部collector/単発Ops合成実装を§13に記録する。OS実source・Security API実接続・実artifact/PDI操作・トークン発行・設定変更・permit発行・Pushは行わない。
+§2はdraft-0.1でのSDK/公式資料照合であり、今回対象Fileへのmetadata syscallやprobeを実行した記録ではない。
 本番registry未設定、通常v2入口Unavailable、runtime gate92、DER/absence停止を維持する。
 
 ## 2. 根拠・確認範囲
@@ -32,7 +32,7 @@ APIの一般的意味と、以下で選ぶ厳格profile・局所上限は別物�
   同じFileを可変借用し、raw FDは各FFI呼出し中だけ借用する。任意FD番号・公開File constructor・owner override・pathによる再openを成功経路に設けない。
 - fstat/fstatx_np/flistxattr/fstatfsとpreadはすべてこのFileを使う。別FDで採取した値をObservationへ混ぜない。FD複製・cursor操作・proc経由のpath復元も使わない。
 - root/祖先・期待device/N/hash・role・record bindingは別の信頼済みopener/contextの責務。metadata sourceが自分の観測値から期待値を作ることは禁止する。
-- 現行`MetadataSource::metadata(phase)`はObservationを一括で返し、共通checkpointは呼出しの前後だけ。これだけで各内部syscallの期限を守ったとはいえない。
+- 従来の`MetadataSource::metadata(phase)`はObservationを一括で返し、共通checkpointは呼出しの前後だけ。これだけで各内部syscallの期限を守ったとはいえない。
   **接続案はReadScope側collector＋単発MetadataOps境界**とする。collectorが同じsourceへ順に要求し、同じSharedBudgetを前後で確認して最後に既存Observationを組み立てる。
   sourceにbudgetの別コピー・新Instant・独自cancelを持たせず、sourceとbudgetを同時に再借用する循環も作らない。
 - MetadataOpsは内部の単発操作だけ。OS結果の型付き投影/固定失敗を返し、phaseを選ぶ権限や比較成功を生成しない。M0〜M4の挿入位置・Flowの順序は変えない。
@@ -110,7 +110,7 @@ rootへの昇格、可視性を自己申告するJSON、未確認のprivate opti
 | 課金 | fileの2GiB実bytes/予約/32768要求枠とは別にmetadata操作数と名前返却bytesを記録する案。名前のcopy成功は遅延/拒否分も数える。長さ照会値を実取得bytesと二重課金しない |
 | lifecycle | sourceはFDを増やさない。filesec/名前bufferは観測単位RAII。budget/cancel中でも解放を省かず、取得失敗後に観測を継続しない |
 
-現行SharedBudgetにはmetadata操作数・名前bytesの集計欄はまだない。実装前に局所枠と共通台帳への接続を追加する必要がある。preflight/A/Bの予約をmetadata用として横取りしない。
+draft-0.1時点でSharedBudgetにはmetadata操作数・名前bytesの集計欄がなかった。§13で共通台帳へ追加した。preflight/A/Bの予約をmetadata用として横取りしない。
 不適合returnや失敗も試行枠へ計上し、filesec_freeの解放用枠は成功判定の予算と分けて確保する。
 現在の2GiBはfile payload実I/O台帳であり、xattr/ACLのkernel内部I/Oまで2GiB以下だとは主張しない。
 checkpointはsyscallが復帰してから遅延を拒否する協調停止である。停止しないsyscallに対するhard timeoutは未接続で、10秒以内の終了保証は別課題。
@@ -125,7 +125,7 @@ checkpointはsyscallが復帰してから遅延を拒否する協調停止であ
 | 確保失敗・64KiB超・枠/変換容量超過 | Limit。結果/診断bufferを外へ返さない |
 | cancel/期限/既存失敗 | 共通checkpointの有限理由を優先してラッチ。遅い成功/エラーを結果として採用しない |
 
-現行RetrievalFailureはUnavailableだけでChanged/Limitを表せない。collectorが内部Failureを返す設計にして、全エラーをUnavailableへ潰さない。
+従来のRetrievalFailureはUnavailableだけでChanged/Limitを表せない。§13のcollectorは内部Failureを返し、全エラーをUnavailableへ潰さない。従来の一括合成sourceは互換性を維持する。
 errnoは操作直後に内部で分類し、OSエラー文字列やpath/FD番号/属性名/ACL/UID/GID/stat/hashをDebug・JSON・panic・ログへ出さない。
 固定phase/理由/件数だけを内部診断に使う。比較成功でも非authorityのComparedM0M4以上へ昇格せず、entitlement gateは必ず停止する。
 
@@ -147,7 +147,28 @@ errnoは操作直後に内部で分類し、OSエラー文字列やpath/FD番号
 5. 既存328テストとA/B/M0〜M4・未設定registry/旧offline互換の回帰を実行する計画。新規OS sourceの実装後にだけ、新経路の試験結果を記録する。
 6. 合成試験後も実OS適合は別の明示承認が必要。実ACL/xattr変更・root所有fixture・API接続・permitはこの計画の実行対象に含めない。
 
-## 12. 今回の文書検証
+## 12. draft-0.1の文書検証
 
 変更は本書と関連設計3文書の参照だけ。local link・code fence・行末空白・git diffを検査する。
 Rust/TypeScriptの実装・テストは変更していないため再実行しない。上記は将来の試験計画であり、OS実sourceの検証済み記録ではない。
+
+## 13. ReadScope collector・単発MetadataOpsの合成実装
+
+[collector合成検証記録](E2E_BEST_PRACTICE_R2_OL03_METADATA_COLLECTOR_SYNTHETIC_2026-10-19.md)に追加20件・全体348件と初回検査の失敗/修正を記録する。
+[collector.rs](../native/r2-outer/src/signature_boundary/positioned_read/metadata/collector.rs)はOS syscallを持たない内部境界で、実装しているsourceはテスト内の合成値だけである。
+
+- `MetadataOps: PositionedSource`はtyped stat/FS、ACL init/stat/query/free、名前size/readの単発操作を持つ。ABI/errno変換・実FD/OSの真正性はまだ実装/検証していない。
+- `ReadScope::compare_collected_m0_m4`がcollectorでObservationを作り、従来のnormalize/Flow、A採取/parser/B再走査へ渡す。同じsource object・元Instant/cancel・payload台帳を使い、別sourceの注入引数はない。
+  従来のcompare_m0_m4も同じFlowを使う。単発経路と一括合成経路の成功値はどちらも非authorityで、運用sourceが一括経路へfallbackする接続はない。
+- 各操作の前後・変換/検査後に共通checkpoint。ACL initはcleanup1枠も先行予約し、成功handleを**post-checkpointより前に**AclGuardへ移す。
+  guardは同じscope/sourceを借用して、正常/エラー/取消/期限/unwindでfreeを1回実行する。init失敗時はhandleをfreeせず予約だけ解放。free後の遅延/取消も最終checkpointで停止する。
+- metadata呼出し上限100は同じSharedBudget全体で共有。初期phaseの正常経路は10回、5phaseで50回。両role相当の2回の比較で100に達し、新scopeでresetしない。
+  cleanup予約は取得操作から消費できない。失敗attemptも計数し、metadataのInterruptedを再試行しない。preadの8回枠と32768要求/2GiB予約は別で、変更しない。
+- 名前bufferは照会後に64KiB以下をtry_reserve_exactで確保。空でも1byteを渡し、copy/requeryを省略しない。3回の照会取得は各1attemptだけ。
+  名前成功copyは返却後guardの前に課金し、遅延/拒否でも残す。不正な過大返却は渡したslice長まで保守的計数してChanged。これは壊れたsourceの実OS転送量の証明ではない。
+  名前台帳は全体640KiB、各観測64KiB。確保前に今回のslice長が残枠に入るか確認し、不足時はcopy前に停止する。照会長はbytes課金に足さない。許可名以外は固定比較で拒否し、一般名前parserやsortは不要。
+- FSはtyped `Local + apfs + !ownership_ignored + !noexec`だけ、ACL queryは0だけを許可。fstatx相当Stat/前後Statを完全照合する。
+  M0 policy不適合はMetadata、後続はChangedを**ラッチ前**に選び、取得失敗はMetadataUnavailable、上限はLimit。遅延/cancelはcheckpointで優先し、既存の最初の失敗は上書きしない。
+- `ComparedM0M4`の固定Debug・非Clone/非serialize・DER/absence/XMLの停止を維持。OS取得・ACL/xattr可視性・hard timeout・trusted opener/祖先/path/record/lease・API/permitの未対応を解消したとはしない。
+
+今回追加したのはcollector境界の合成検証で、実OSのfilesec_freeやstatを呼んだ結果ではない。合成unwind試験はRAII解放を確認するもので、backend panicの機密非出力やpanic後の運用再開を承認するものではない。

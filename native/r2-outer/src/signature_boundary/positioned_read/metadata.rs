@@ -94,25 +94,9 @@ fn normalize(value: Observation, device: u64, size: u64) -> Result<Snapshot, Fai
     if raw.len() != value.declared_name_bytes as usize {
         return Err(Failure::Changed);
     }
-    let names = if raw.is_empty() {
-        Names::Empty
-    } else if raw == b"com.apple.provenance\0" {
-        Names::Provenance
-    } else {
-        return Err(Failure::Metadata);
-    };
-    if stat.kind != FileType::Regular
-        || stat.uid != 0
-        || stat.mode != 0o555
-        || stat.links != 1
-        || stat.device != device
-        || stat.size != size
-        || !(32..=MAX_FILE).contains(&stat.size)
-        || stat.mtime.nanoseconds >= 1_000_000_000
-        || stat.ctime.nanoseconds >= 1_000_000_000
-        || value.acl != Acl::Absent
-        || value.filesystem != Filesystem::Local
-    {
+    let names = normalize_names(&raw)?;
+    check_stat(&stat, device, size)?;
+    if value.acl != Acl::Absent || value.filesystem != Filesystem::Local {
         return Err(Failure::Metadata);
     }
     Ok(Snapshot {
@@ -122,33 +106,59 @@ fn normalize(value: Observation, device: u64, size: u64) -> Result<Snapshot, Fai
         names,
     })
 }
+fn normalize_names(raw: &[u8]) -> Result<Names, Failure> {
+    if raw.is_empty() {
+        Ok(Names::Empty)
+    } else if raw == b"com.apple.provenance\0" {
+        Ok(Names::Provenance)
+    } else {
+        Err(Failure::Metadata)
+    }
+}
+fn check_stat(stat: &Stat, device: u64, size: u64) -> Result<(), Failure> {
+    if stat.kind != FileType::Regular
+        || stat.uid != 0
+        || stat.mode != 0o555
+        || stat.links != 1
+        || stat.device != device
+        || stat.size != size
+        || !(32..=MAX_FILE).contains(&stat.size)
+        || stat.mtime.nanoseconds >= 1_000_000_000
+        || stat.ctime.nanoseconds >= 1_000_000_000
+    {
+        return Err(Failure::Metadata);
+    }
+    Ok(())
+}
 struct Flow {
     baseline: Snapshot,
     next: Option<Phase>,
     device: u64,
 }
 impl Flow {
-    fn start<S: MetadataSource>(
+    fn start<S: PositionedSource>(
         r: &mut ReadScope<'_, '_, S>,
         device: u64,
+        acquire: &mut impl FnMut(&mut ReadScope<'_, '_, S>, Phase) -> Result<Observation, Failure>,
     ) -> Result<Self, Failure> {
-        let baseline = observe(r, Phase::M0, device, None)?;
+        let baseline = observe(r, Phase::M0, device, None, acquire)?;
         Ok(Self {
             baseline,
             next: Some(Phase::M1),
             device,
         })
     }
-    fn advance<S: MetadataSource>(
+    fn advance<S: PositionedSource>(
         &mut self,
         r: &mut ReadScope<'_, '_, S>,
         phase: Phase,
+        acquire: &mut impl FnMut(&mut ReadScope<'_, '_, S>, Phase) -> Result<Observation, Failure>,
     ) -> Result<(), Failure> {
         r.checkpoint()?;
         if self.next != Some(phase) {
             return r.budget.stop(Failure::SourceMismatch);
         }
-        observe(r, phase, self.device, Some(&self.baseline))?;
+        observe(r, phase, self.device, Some(&self.baseline), acquire)?;
         self.next = match phase {
             Phase::M1 => Some(Phase::M2),
             Phase::M2 => Some(Phase::M3),
@@ -159,23 +169,25 @@ impl Flow {
         Ok(())
     }
 }
-fn observe<S: MetadataSource>(
+fn observe<S: PositionedSource>(
     r: &mut ReadScope<'_, '_, S>,
     phase: Phase,
     device: u64,
     baseline: Option<&Snapshot>,
+    acquire: &mut impl FnMut(&mut ReadScope<'_, '_, S>, Phase) -> Result<Observation, Failure>,
 ) -> Result<Snapshot, Failure> {
     r.checkpoint()?;
-    let result = r.source.metadata(phase);
+    let result = acquire(r, phase);
     r.checkpoint()?; // Even a late error or successful observation must stop here.
-    let raw = result.map_err(|_| Failure::MetadataUnavailable)?;
-    let snapshot = normalize(raw, device, r.file_bytes).map_err(|reason| {
-        if baseline.is_some() && reason == Failure::Metadata {
-            Failure::Changed
-        } else {
-            reason
-        }
-    })?;
+    let snapshot = result
+        .and_then(|raw| normalize(raw, device, r.file_bytes))
+        .map_err(|reason| {
+            if baseline.is_some() && reason == Failure::Metadata {
+                Failure::Changed
+            } else {
+                reason
+            }
+        })?;
     if baseline.is_some_and(|old| old != &snapshot) {
         return Err(Failure::Changed);
     }
@@ -204,11 +216,25 @@ impl<S: MetadataSource> ReadScope<'_, '_, S> {
         expected: &[u8; 32],
         device: u64,
     ) -> Result<ComparedM0M4, Failure> {
+        self.compare_metadata(expected, device, &mut |r, phase| {
+            r.source
+                .metadata(phase)
+                .map_err(|_| Failure::MetadataUnavailable)
+        })
+    }
+}
+impl<S: PositionedSource> ReadScope<'_, '_, S> {
+    fn compare_metadata(
+        &mut self,
+        expected: &[u8; 32],
+        device: u64,
+        acquire: &mut impl FnMut(&mut ReadScope<'_, '_, S>, Phase) -> Result<Observation, Failure>,
+    ) -> Result<ComparedM0M4, Failure> {
         let result = (|| {
-            let mut flow = Flow::start(self, device)?;
-            let a = self.capture_staged(expected, &mut |r, p| flow.advance(r, p))?;
+            let mut flow = Flow::start(self, device, acquire)?;
+            let a = self.capture_staged(expected, &mut |r, p| flow.advance(r, p, acquire))?;
             let bytes = self.recheck_b(a)?;
-            flow.advance(self, Phase::M4)?;
+            flow.advance(self, Phase::M4, acquire)?;
             self.checkpoint()?;
             if flow.next.is_some() {
                 return Err(Failure::SourceMismatch);
@@ -224,5 +250,6 @@ impl<S: MetadataSource> ReadScope<'_, '_, S> {
         }
     }
 }
+mod collector;
 #[cfg(test)]
 mod tests;

@@ -47,6 +47,10 @@ pub(super) struct SharedBudget<'a> {
     reserved: u64,
     retries_left: u8,
     failed: Option<Failure>,
+    // Metadata has its own shared bounded accounting; never consumes A/B payload credit.
+    metadata_calls: u32,
+    metadata_cleanup_reserved: u32,
+    metadata_name_bytes: u64,
 }
 impl std::fmt::Debug for SharedBudget<'_> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -63,6 +67,9 @@ impl<'a> SharedBudget<'a> {
             reserved: 0,
             retries_left: EINTR_RETRIES,
             failed: None,
+            metadata_calls: 0,
+            metadata_cleanup_reserved: 0,
+            metadata_name_bytes: 0,
         }
     }
     fn stop<T>(&mut self, reason: Failure) -> Result<T, Failure> {

@@ -87,7 +87,7 @@ Security APIのpath参照とこれらの観測はatomicではない。途中差�
 
 ## 7. 根拠と確認範囲
 
-保持FDの[実metadata source詳細設計](BEST_PRACTICE_BP5_R2_OL03_METADATA_SOURCE_DESIGN.md)で、fstat・ACL・xattr名・FSの取得候補とsyscall単位の共有予算を分離した。実装/API接続は未実施。ACL意味・属性名の可視性・hard timeoutの未確認事項をnative検証の成功で救済しない。
+保持FDの[実metadata source詳細設計](BEST_PRACTICE_BP5_R2_OL03_METADATA_SOURCE_DESIGN.md)で、fstat・ACL・xattr名・FSの取得候補と単発操作単位の共有予算を分離した。ReadScope collector/単発Opsは合成実装したが、OS実source/API接続は未実施。ACL意味・属性名の可視性・hard timeoutの未確認事項をnative検証の成功で救済しない。
 
 | 資料 | 今回照合した点 |
 |---|---|
