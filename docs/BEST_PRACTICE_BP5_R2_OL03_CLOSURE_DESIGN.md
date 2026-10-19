@@ -21,6 +21,9 @@ telemetry調査は保留。本書はPDI/OAuth/token設定を変更せず、コ�
 ## 2. 信頼の結合と閉包の範囲
 
 信頼順序は、保護された固定activation → exact bytesのledger hash → index hash → 配備ファイルbytesとmetadata。
+
+[実metadata source詳細設計](BEST_PRACTICE_BP5_R2_OL03_METADATA_SOURCE_DESIGN.md)はrole対象の保持FD向けで、closure scan全体への実装変更ではない。
+公式flistxattrは呼出し主体に可視な属性名だけを返すため、未知属性の完全な不存在証明とは扱わない。運用profileの可視性確認は未完了で、本設計の全属性policyが実証済みになったとはしない。
 index単体の自己申告や、indexと同じ可変場所にある未検証hashを信頼の起点にしない。
 activationとledgerのindex hashは一致を必須とする。pathはledgerからだけ取得し、argv/envで上書きしない。
 

@@ -1,6 +1,6 @@
 # BP-5 R-2 OL-03：保持FDの安全読取・物理signature parser接続
 
-Version: draft-0.5 / Date: 2026-10-19 / Status: 共有予算・合成sourceのpreflight/A採取/parser/B再走査・M0〜M4照合を内部実装済み。OS adapter/保持FD・実metadata取得・運用承認は未実施。
+Version: draft-0.6 / Date: 2026-10-19 / Status: 共有予算・合成sourceのpreflight/A採取/parser/B再走査・M0〜M4照合を内部実装済み。OS adapter/保持FD・実metadata取得・運用承認は未実施。
 
 ## 1. 目的と停止境界
 
@@ -292,3 +292,10 @@ A/B bufferと固定M0観測を保持するが、raw names/stat値をDebug/JSON�
 これは合成sourceの観測整合だけで、OS取得・root承認device/N・同じ実FD・署名validityの証拠ではない。
 metadata差が観測されれば既読位置の変更も止めるが、元値へ復元されるABAや、sourceが不完全/虚偽の観測を返す場合を完全排除しない。
 実FD opener/OS metadata reader・祖先/path/record/lease・hard timeout・API/permitは引き続き未接続。
+
+## 16. 実metadata sourceの詳細設計への分離
+
+[実metadata source詳細設計draft-0.1](BEST_PRACTICE_BP5_R2_OL03_METADATA_SOURCE_DESIGN.md)に、同じ保持Fileへのfstat/fstatfs・filesecによるACL確認・bounded flistxattrの順序を具体化した。
+現行一括MetadataSourceではsyscallごとの共通checkpoint/Changed・Limitを渡せないため、ReadScope collectorと単発Opsへの内部接続案を示した。コードは変更していない。
+SDKのXATTR_MAXNAMELENは127bytesで、§4の255bytesは従来の局所上限でありDarwin定数ではない。
+公式資料の列挙対象は呼出し主体に可視な属性名だけであり、空/許可名の結果を全属性不存在の証拠にはしない。可視性・ACL意味・内部memory・FS適合は承認待ちで、運用接続は停止を維持する。
