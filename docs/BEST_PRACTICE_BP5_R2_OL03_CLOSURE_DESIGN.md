@@ -15,7 +15,7 @@ Version: draft-0.5 / Date: 2026-10-19 / Status: 承認前の設計案。parser�
 directory FD基準の読取・owner/mode/ACL/xattr・metadata/hash照合部品を追加したが、root所有の信頼済み実配備を検証済みとはしない。
 closure検査だけの成功でもgateは解除しない。実署名・entitlement・reader group排他性・配備承認も別途必要。
 [署名・entitlement詳細設計案](BEST_PRACTICE_BP5_R2_OL03_SIGNATURE_DESIGN.md)で、署名APIとFD/pathの結合・更新排他の限界・承認待ちpolicyを別途整理する。署名確認を実装済みとはしない。
-[保持FD/parser接続詳細設計](BEST_PRACTICE_BP5_R2_OL03_HELD_FD_PARSER_DESIGN.md)では、role対象FDの所有権保持・全体hash走査からのbytes採取・再hash・共通I/O台帳への追加読取計上を設計した。共有予算/I/O境界と合成sourceのA採取/parser/B照合まで別部品で実装したが、現行scanは対象Fileを後工程へ渡さず、共有台帳にも未接続である。
+[保持FD/parser接続詳細設計](BEST_PRACTICE_BP5_R2_OL03_HELD_FD_PARSER_DESIGN.md)では、role対象FDの所有権保持・全体hash走査からのbytes採取・再hash・共通I/O台帳への追加読取計上を設計した。共有予算と合成sourceのA/B・M0〜M4照合まで別部品で実装したが、現行scanは対象Fileを後工程へ渡さず、共有台帳/OS metadata readerにも未接続である。
 telemetry調査は保留。本書はPDI/OAuth/token設定を変更せず、コマンド実行手順や実値入り台帳を提供しない。
 
 ## 2. 信頼の結合と閉包の範囲

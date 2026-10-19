@@ -23,6 +23,8 @@ pub(super) enum Failure {
     Cancelled,
     HashMismatch,
     SourceMismatch,
+    Metadata,
+    MetadataUnavailable,
     Parser(physical_signature::Rejection),
 }
 #[derive(Clone, Copy)]
@@ -219,5 +221,6 @@ impl<S: PositionedSource> Drop for ReadScope<'_, '_, S> {
 }
 
 mod capture;
+mod metadata;
 #[cfg(test)]
 mod tests;

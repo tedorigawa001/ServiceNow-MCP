@@ -1,6 +1,6 @@
 # BP-5 R-2 OL-03：保持FDの安全読取・物理signature parser接続
 
-Version: draft-0.4 / Date: 2026-10-19 / Status: 共有予算・位置指定読取境界、合成sourceのpreflight/A採取/parser/B再走査を内部実装済み。OS adapter/保持FD・metadata接続・運用承認は未実施。
+Version: draft-0.5 / Date: 2026-10-19 / Status: 共有予算・合成sourceのpreflight/A採取/parser/B再走査・M0〜M4照合を内部実装済み。OS adapter/保持FD・実metadata取得・運用承認は未実施。
 
 ## 1. 目的と停止境界
 
@@ -8,7 +8,7 @@ Version: draft-0.4 / Date: 2026-10-19 / Status: 共有予算・位置指定読�
 file全体SHA-256とparser入力の対応、metadata、record binding、共有予算を結ぶ。pathだけで開き直したfileや呼出し側のbytesを「保持FD由来」と扱わない。
 本書は既存実装の調査に基づくプロジェクトの設計案であり、新しいOS/API適合試験の結果ではない。
 
-telemetry調査は保留。実装は§12〜§14の内部予算/I/O境界と合成sourceのA採取/parser/B再走査まで。API実接続・DER意味解析/absence証明・実機/PDI操作・token発行・設定変更・permit発行は対象外。
+telemetry調査は保留。実装は§12〜§15の内部予算/I/O境界と合成sourceのA/B・M0〜M4照合まで。API実接続・DER意味解析/absence証明・実機/PDI操作・token発行・設定変更・permit発行は対象外。
 本番registry未設定、通常v2入口Unavailable、runtime gate92を維持する。後日の読取接続が成功しても、署名validity・実行許可を生成しない。
 
 ## 2. 現状との境界
@@ -19,7 +19,8 @@ telemetry調査は保留。実装は§12〜§14の内部予算/I/O境界と合�
 | [native/file.rs](../native/r2-outer/src/signature_boundary/native/file.rs) | private PinnedFileの位置指定読取/hash、前後metadata、同じ開始Instant/cancel | deploymentから未接続。identity/layoutの呼出しごとに再hashし、path照合は絶対pathを再openする。parser用buffer・共通I/O台帳はない |
 | [physical_signature.rs](../native/r2-outer/src/signature_boundary/physical_signature.rs) | 宣言file長＋header/commands＋signatureの借用bytesをbounded解析 | bytesが同じFD/走査由来であること、全体hash/metadata/世代は証明しない |
 | [ledger_v2.rs](../native/r2-outer/src/ledger_v2.rs) | registry参照・role・record bindingの純粋照合 | 運用上信頼済みrecord・保持FD・leaseの一体化ではない |
-| [positioned_read.rs](../native/r2-outer/src/signature_boundary/positioned_read.rs) | 共通10秒/2GiB/再試行枠、予約/精算、位置指定要求・短読取/遅延応答の拒否。childでpreflight/A採取/parser/Bへ接続 | 合成sourceだけで検証。実pread adapter・deployment/PinnedFile・metadataへは未接続 |
+| [positioned_read.rs](../native/r2-outer/src/signature_boundary/positioned_read.rs) | 共通10秒/2GiB/再試行枠、予約/精算、位置指定要求・短読取/遅延応答の拒否。childでpreflight/A採取/parser/Bへ接続 | 合成sourceだけで検証。実pread adapter・deployment/PinnedFile・OS metadataへは未接続 |
+| [metadata.rs](../native/r2-outer/src/signature_boundary/positioned_read/metadata.rs) | typed stat/ACL/xattr名/FS観測、M0〜M4順序・policy/差分照合、A/Bへのphase接続 | 合成観測だけ。OS stat/ACL/xattr取得、実FD/祖先/path/record/leaseへ未接続 |
 
 既存の[配備読取検証](E2E_BEST_PRACTICE_R2_OL03_DEPLOYMENT_READ_SYNTHETIC_2026-10-19.md)と[parser合成検証](E2E_BEST_PRACTICE_R2_OL03_PHYSICAL_SIGNATURE_SYNTHETIC_2026-10-19.md)はそれぞれの部品の証拠であり、本接続の試験へ流用しない。
 公開`inspect_deployment(root, binding, started)`の成功や外部から渡されたFileだけを、新しい信頼済み接続のconstructorにしない。
@@ -151,7 +152,7 @@ Securityのpath-based APIと保持FDはatomicに結合されない。本接続�
 exec adapterがFD>=3を閉鎖する現状も変更しない。検査用FDの保持と、exec後のrelease寿命管理は別問題である。
 後続API接続では同じ所有対象を維持し、API前後・exec直前の再確認を追加する必要がある。本案A/Bの完了をexec/importまで有効なcacheにしない。
 
-## 9. 接続全体の合成試験計画（実行済みの範囲は§12〜§14）
+## 9. 接続全体の合成試験計画（実行済みの範囲は§12〜§15）
 
 | 試験群 | 必須の確認 |
 |---|---|
@@ -224,7 +225,7 @@ entitlement gateはUnsupportedDer/AbsenceUnproven/UnverifiedXmlのいずれか�
 payload bufferの確保は上限確認と`try_reserve_exact`、loop/copy/hash/比較/parse前後は共通checkpointを使う。全file Vec/mmapや署名rangeの独立再読はしない。
 新規有限理由HashMismatch/SourceMismatch/Parser(reason)を内部台帳へ追加したが、公開JSON/exit codeは変えない。
 
-本A追加時点ではB再hashも未実装だった。後続のB実装は§14を参照。**M0〜M4・祖先/path/record/lease照合は未実装。** A cursorが通過した後のin-place変更はAだけでは見つからない場合があり、それを示す合成ケースも残す。
+本A追加時点ではB再hash・M0〜M4も未実装だった。後続のB実装は§14、合成M0〜M4は§15を参照。**実metadata取得・祖先/path/record/lease照合は未実装。** A cursorが通過した後のin-place変更はAだけでは見つからない場合があり、それを示す合成ケースも残す。
 CapturedAをFdInventoryReadOnlyや署名validity/permitへ変換する経路はない。実OS adapter・deployment/native接続・本番policyは引き続き停止したまま。
 
 ## 14. B再走査によるbytes-only照合
@@ -246,4 +247,48 @@ CapturedA/ComparedABは非Clone・非serializeであり、失敗時はAのbuffer
 
 ComparedABのentitlement gateは、AのUnsupportedDer/AbsenceUnproven/UnverifiedXmlをそのまま保ち、常に失敗する。
 同じsourceを保持しても、source内の実体交換を防いだことにはならない。Bの既読位置への後発変更・ABAを全hash2回だけで完全に排除できない。
-その限界を合成ケースでも確認しており、metadata/祖先/path/record/lease・実FD読取・hard timeoutが未完了のまま信頼済み証拠へ昇格しない。
+その限界を合成ケースでも確認しており、実metadata/祖先/path/record/lease・実FD読取・hard timeoutが未完了のまま信頼済み証拠へ昇格しない。後続の合成metadata照合は§15。
+
+## 15. M0〜M4 metadata内部契約・合成接続
+
+[metadata合成検証記録](E2E_BEST_PRACTICE_R2_OL03_METADATA_SYNTHETIC_2026-10-19.md)に追加29件・全体328件を記録する。
+`MetadataSource: PositionedSource`にデフォルト成功はなく、同じsource objectからphaseごとのtyped Observationを取得する。
+Observationは前後Stat、ACL状態（Absent/Present/Unknown）、filesystem（Local/NonLocal/Unknown）、xattr名の照会長と返却bytes（Noneは不明）を持つ。
+実取得の契約は「同じ保持FDでstat前→ACL/名前列挙→stat後」だが、現在は合成値だけであり、そのOS取得手順や真正性を証明しない。
+
+| phase | 挿入位置 | 確認 |
+|---|---|---|
+| M0 | 最初のbytes読取前 | 初期policyと宣言N/期待device。baselineを固定 |
+| M1 | preflight/range検査後、A走査前 | M0との完全一致 |
+| M2 | A hash/採取・EOF/header一致後、parser前 | M0との完全一致。hashが一致してもmetadata差を救済しない |
+| M3 | parserと保守的entitlement gateの分類後、B前 | M0との完全一致 |
+| M4 | B hash/range・EOF後、結果返却前 | M0との完全一致と最終共通checkpoint |
+
+内部FlowはM0→M1→M2→M3→M4だけを許し、欠落・重複・順序違いをSourceMismatchで拒否。後の観測値でM0を更新しない。
+`compare_m0_m4`がA/B・phase hookを一体で呼び、M4完了前はmetadata比較結果を返さない。
+従来のbytes-only診断経路は引き続き非authorityであり、それをmetadata比較結果へcast/変換するconstructorは作らない。
+
+### 15.1 Stat・属性の検査
+
+- Statはdev/ino、FileType、UID/GID、mode、nlink、size、mtime/ctime秒・ns。atimeは契約に含めない。
+- FileTypeはRegularだけ。modeはfile型と分離したpermission/special bitsの完全値で0555のみ、UID0・単一link・local・期待device/Nとの一致を要求する。
+  OS st_modeをそのまま受け取るABI型ではない。将来adapterは型bitsを明示decodeし、未対応bits/変換失敗をmaskや既定値で隠さない。
+- mtime/ctimeのnsは0〜999999999。前後Statは全field完全一致を要求し、差はM0でもChanged。
+- ACLはpropertyなしだけを受理。Present（空/deny-onlyを含む想定）とUnknownを「なし」へcoerceしない。実ACL照会は未実装。
+- xattr名は照会長/返却長が64KiB以内か確認し、長さ差はChanged。空の成功列挙と`com.apple.provenance\0`だけを受理する。
+  重複・未知/quarantine/ResourceFork・NUL不正・case差・不明Noneは拒否。受理可能な集合が2種類だけなので、一般の名前mapや文字列を確保せず固定enumへ投影する。
+  provenanceの値は入力にも取得にも含めず、由来の真正性や値の不変性は主張しない。
+- 正常化したmetadataはM0とexact比較。dev/ino/GID/time差、許可xattr名の追加/削除もChanged。
+
+初期policy不適合/不明はMetadata、後続policy変化/不明はChanged、取得失敗は全phaseでMetadataUnavailable、上限超過はLimit。
+各取得の前後と比較後に元Instant/cancelを確認し、遅延成功/エラーも破棄。結果は既存台帳にラッチし、再取得・別source・新しい10秒で救済しない。
+metadata phaseは最大5回で、file bytesの2GiB台帳・A/B読取回数/EINTR枠を更新し直さない。名前bytesはmetadata専用64KiB/観測の上限で、file payloadの課金には加えない。
+sourceが返すVecは既に確保済みの観測値である。将来OS adapter側で照会長を確保前に検査し、各syscallにも共有checkpointを接続する責務は未実装。
+
+### 15.2 出力と残余
+
+成功値はprivateな`ComparedM0M4(source_only_pending_path_record_lease_not_execution_authority)`。
+A/B bufferと固定M0観測を保持するが、raw names/stat値をDebug/JSONへ出さず、非Clone/非serializeとする。entitlement gateは常に拒否する。
+これは合成sourceの観測整合だけで、OS取得・root承認device/N・同じ実FD・署名validityの証拠ではない。
+metadata差が観測されれば既読位置の変更も止めるが、元値へ復元されるABAや、sourceが不完全/虚偽の観測を返す場合を完全排除しない。
+実FD opener/OS metadata reader・祖先/path/record/lease・hard timeout・API/permitは引き続き未接続。

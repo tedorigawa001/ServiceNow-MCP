@@ -125,9 +125,15 @@ not revalidated FD evidence. DER/absence and execution authority stay closed. Se
 [A capture synthetic verification](../../docs/E2E_BEST_PRACTICE_R2_OL03_CAPTURE_A_SYNTHETIC_2026-10-19.md).
 The B-pass consumes A from the same opaque scope identity, reuses its budget and source,
 and compares the full-file hash and captured ranges without allocating a second blob.
-Success is bytes-only and pending metadata; metadata/path/record/lease and real-FD
+Success is bytes-only and pending metadata; OS metadata/path/record/lease and real-FD
 connections remain unimplemented. Changes behind B's cursor/ABA are not fully excluded.
 See [B recheck synthetic verification](../../docs/E2E_BEST_PRACTICE_R2_OL03_RECHECK_B_SYNTHETIC_2026-10-19.md).
+The separate private M0–M4 workflow now compares typed before/after stat, ACL, bounded
+xattr-name and filesystem observations from the same synthetic source around A/B.
+It refuses unknown/retrieval failures and late results under the original budget.
+Success is source-observation consistency only, pending trusted FD/path/record/lease
+binding; it enables no OS metadata acquisition, signature API or permit. See
+[M0–M4 synthetic verification](../../docs/E2E_BEST_PRACTICE_R2_OL03_METADATA_SYNTHETIC_2026-10-19.md).
 See [boundary contract](../../docs/BEST_PRACTICE_BP5_R2_OL03_SECURITY_BOUNDARY_DESIGN.md)
 and [synthetic verification](../../docs/E2E_BEST_PRACTICE_R2_OL03_SECURITY_BOUNDARY_SYNTHETIC_2026-10-19.md).
 

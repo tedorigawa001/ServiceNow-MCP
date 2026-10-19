@@ -1,6 +1,6 @@
 # BP-5 R-2 OL-03：native Security backend（未有効）
 
-Version: draft-0.8 / Date: 2026-10-19 / Status: native部品は未有効。raw XML・共有予算/I/O境界・合成sourceのA採取/parser/B照合は別部品で実装。実保持FD/metadata・native接続・DER/absence・実API適合は未確認。
+Version: draft-0.9 / Date: 2026-10-19 / Status: native部品は未有効。raw XML・共有予算・合成sourceのA/B・M0〜M4照合は別部品で実装。実保持FD/OS metadata・native接続・DER/absence・実API適合は未確認。
 
 ## 1. 境界
 
@@ -76,7 +76,7 @@ empty launcherが辞書欠落になる場合も救済しない。raw/DER整合�
 
 privateな`PinnedFile`は、将来deployment inspectorが保持したFileと正確な承認pathを渡すための部品。親directoryのtrustを再定義せず、owner緩和やpublic constructorは設けない。
 現在はinstalled reader/deploymentとの受渡しを接続していない。
-[保持FD/parser接続設計](BEST_PRACTICE_BP5_R2_OL03_HELD_FD_PARSER_DESIGN.md)に、安全なopenerからの所有権移動、A/B全体hashと採取bufferの結合、metadata/path/recordの再確認、共有読取予算の設計を分離した。共有予算/I/O境界と合成sourceのA採取/parser/B照合まで実装済みで、PinnedFile・metadataへは未接続。既存PinnedFileの呼出しごとの再hashや絶対path再openを、その接続が実装済みである証拠にしない。API実接続は同設計でも対象外。
+[保持FD/parser接続設計](BEST_PRACTICE_BP5_R2_OL03_HELD_FD_PARSER_DESIGN.md)に、安全なopenerからの所有権移動、A/B全体hashと採取bufferの結合、metadata/path/recordの再確認、共有読取予算の設計を分離した。共有予算と合成sourceのA/B・M0〜M4照合まで実装済みで、PinnedFile・OS metadataへは未接続。既存PinnedFileの呼出しごとの再hashや絶対path再openを、その接続が実装済みである証拠にしない。API実接続は同設計でも対象外。
 preadでoffsetを変えずSHA-256を計算し、file/device/inode/size/owner/mode/link/mtime/ctimeを前後比較する。32bytes以上512MiB以下、regular単一linkを要求。
 Mach-Oはlittle-endian64/ARM64/ALL subtype/MH_EXECUTEだけを初期受理する。
 現在pathはO_NOFOLLOW/CLOEXEC/NONBLOCKで再openし同様にhashし、保持FDと比較する。親directoryの排他は別工程。

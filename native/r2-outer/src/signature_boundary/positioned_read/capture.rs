@@ -1,4 +1,5 @@
 //! A/B bytes comparison only, not held-FD identity, metadata revalidation, or signature authority.
+use super::metadata::Phase;
 use super::*;
 use sha2::{Digest, Sha256};
 use std::ops::Range;
@@ -198,13 +199,20 @@ impl<S: PositionedSource> ReadScope<'_, '_, S> {
         &mut self,
         expected: &[u8; 32],
     ) -> Result<CapturedA, Failure> {
-        let result = self.capture_inner(expected);
+        let result = self.capture_staged(expected, &mut |_, _| Ok(()));
         match result {
             Ok(v) => Ok(v),
             Err(reason) => self.budget.stop(reason),
         }
     }
-    fn capture_inner(&mut self, expected: &[u8; 32]) -> Result<CapturedA, Failure> {
+    pub(super) fn capture_staged<F>(
+        &mut self,
+        expected: &[u8; 32],
+        phases: &mut F,
+    ) -> Result<CapturedA, Failure>
+    where
+        F: FnMut(&mut Self, Phase) -> Result<(), Failure>,
+    {
         self.checkpoint()?;
         let mut initial = [0u8; 32];
         self.read(0, &mut initial)?;
@@ -222,6 +230,8 @@ impl<S: PositionedSource> ReadScope<'_, '_, S> {
             self.budget.now,
         )
         .map_err(parser_failure)?;
+        self.checkpoint()?;
+        phases(self, Phase::M1)?;
         self.checkpoint()?;
         let mut header = allocate(header_len)?;
         let mut signature = allocate(range.len())?;
@@ -263,6 +273,8 @@ impl<S: PositionedSource> ReadScope<'_, '_, S> {
         self.eof()?;
         same(self, &preflight, &header)?;
         drop(preflight);
+        phases(self, Phase::M2)?;
+        self.checkpoint()?;
         let inventory = physical_signature::parse_inner(
             physical_signature::Input {
                 file_bytes: self.file_bytes,
@@ -282,6 +294,8 @@ impl<S: PositionedSource> ReadScope<'_, '_, S> {
                 ));
             }
         };
+        self.checkpoint()?;
+        phases(self, Phase::M3)?;
         self.checkpoint()?;
         Ok(CapturedA {
             header,
