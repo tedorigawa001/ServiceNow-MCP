@@ -24,6 +24,7 @@ telemetry調査は保留。本書はPDI/OAuth/token設定を変更せず、コ�
 
 [実metadata source詳細設計](BEST_PRACTICE_BP5_R2_OL03_METADATA_SOURCE_DESIGN.md)はrole対象の保持FD向けで、closure scan全体への実装変更ではない。
 staged macOS sourceを内部実装/合成backendで検証したが、現行scanからのFile移譲・実sourceのOS実行・runtime接続は未実施。
+[保持FD移譲詳細設計](BEST_PRACTICE_BP5_R2_OL03_SECURE_FD_TRANSFER_DESIGN.md)で、scan/recordからのsealed binding・leafの所有move・祖先/path/record再照合と追加予算を具体化した。CheckedIndexの公開結果を保持FDの信頼証拠へ昇格しない。
 公式flistxattrは呼出し主体に可視な属性名だけを返すため、未知属性の完全な不存在証明とは扱わない。運用profileの可視性確認は未完了で、本設計の全属性policyが実証済みになったとはしない。
 index単体の自己申告や、indexと同じ可変場所にある未検証hashを信頼の起点にしない。
 activationとledgerのindex hashは一致を必須とする。pathはledgerからだけ取得し、argv/envで上書きしない。

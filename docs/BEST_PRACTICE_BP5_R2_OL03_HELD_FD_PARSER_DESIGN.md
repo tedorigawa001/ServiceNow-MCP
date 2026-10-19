@@ -8,7 +8,7 @@ Version: draft-0.8 / Date: 2026-10-19 / Status: A/B・M0〜M4・collector・macO
 file全体SHA-256とparser入力の対応、metadata、record binding、共有予算を結ぶ。pathだけで開き直したfileや呼出し側のbytesを「保持FD由来」と扱わない。
 本書は既存実装の調査に基づくプロジェクトの設計案であり、新しいOS/API適合試験の結果ではない。
 
-telemetry調査は保留。実装は§12〜§15の内部予算/I/O境界と合成sourceのA/B・M0〜M4照合まで。API実接続・DER意味解析/absence証明・実機/PDI操作・token発行・設定変更・permit発行は対象外。
+telemetry調査は保留。実装済み範囲は§12〜§17の内部予算/A/B/M0〜M4/collector・staged実source。secure openerからの運用移譲は未実装。API実接続・DER意味解析/absence証明・実機/PDI操作・token発行・設定変更・permit発行は対象外。
 本番registry未設定、通常v2入口Unavailable、runtime gate92を維持する。後日の読取接続が成功しても、署名validity・実行許可を生成しない。
 
 ## 2. 現状との境界
@@ -31,7 +31,7 @@ telemetry調査は保留。実装は§12〜§15の内部予算/I/O境界と合�
 
 将来の運用入力は、安全なrecord readerが固定activation/ledger/indexをexact bytesで照合して得たimmutableな内部contextからだけ導出する。
 roleはLauncher/Nodeのどちらか1つ、接続先path・期待size/full-file SHA-256・mode・release_id・generation・ledger/index digest・policy参照を固定する。
-Nodeの期待size/hashはledgerとclosure宣言の両方が同じ値であることを要求し、片方を優先しない。
+Nodeの期待hashはledgerとclosure宣言の完全一致を要求し、片方を優先しない。ledger-0.2のBinaryV2にsize欄はなく、Node sizeはpinされたindex entry由来。Launcher sizeの出所は[FD移譲設計§4](BEST_PRACTICE_BP5_R2_OL03_SECURE_FD_TRANSFER_DESIGN.md)の承認待ち事項で、観測Nを宣言値と偽装しない。
 Launcherもledger側の承認対象と結ぶ。runtime root外のlauncherへruntime closureの所属を偽って適用せず、固定launcher配備root/祖先の保護を別に検査する。
 root/device/role/期待値が別contextのもの、record世代の混在、size/hash欠落、未承認pathは読取前に拒否する。
 registry/policyが未設定の通常入口は、引き続きfileを開く前にUnavailableで停止する。
@@ -306,3 +306,8 @@ SDKのXATTR_MAXNAMELENは127bytesで、§4の255bytesは従来の局所上限で
 [macOS実source合成検証記録](E2E_BEST_PRACTICE_R2_OL03_MACOS_METADATA_SOURCE_SYNTHETIC_2026-10-19.md)に新規14件・全体362件を記録する。
 privateな所有File sourceと単発FFIを実装し、collector/同じReadScopeへ接続可能にした。実FDでは動かさず、RawApiをFDなしの合成backendへ差し替えて投影/失敗/解放を確認した。
 constructorは通常入口/secure openerへ未接続。元10秒・metadata100回・名前640KiB・payload2GiB/32768要求/8再試行を変更せず、OS適合・path/record/lease・hard timeout・API/permitも未接続。
+
+## 18. secure openerからの所有権移譲設計
+
+[保持FD移譲詳細設計draft-0.1](BEST_PRACTICE_BP5_R2_OL03_SECURE_FD_TRANSFER_DESIGN.md)に、record evidence/role descriptor・OpenedTargetからsourceへのmove・祖先/namespace再照合・M4前finalizer・失敗時解放を具体化した。
+M0とopen snapshotの結合やB〜M4のtopology検査hookは現行APIにない。移譲/finalizer・追加topology台帳は設計案のみで実装しない。
