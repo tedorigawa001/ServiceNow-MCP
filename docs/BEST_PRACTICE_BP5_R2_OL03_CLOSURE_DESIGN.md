@@ -1,6 +1,6 @@
 # BP-5 R-2 OL-03：closure index・配備ファイル検証の詳細設計
 
-Version: draft-0.2 / Date: 2026-10-19 / Status: 承認前の設計案。実装・運用検証は未実施。
+Version: draft-0.3 / Date: 2026-10-19 / Status: 承認前の設計案。実装・運用検証は未実施。
 
 ## 1. 目的と現在の境界
 
@@ -60,9 +60,16 @@ indexに任意のxattr許可リストを持たせず、検査器の固定policy�
 quarantine拒否時に属性を削除・変更して再試行する処理や、削除を促す復旧コマンドは設けない。
 OL-01の「quarantine除去を代替手段にしない」を維持する。正規配布・OS評価を含む配備方式がこの方針と両立するかは承認待ちであり、
 全ての署名済み/公証済み配布物がそのまま受理されるとは主張しない。
-provenanceのローカル観測は利用者からの報告であり、本書の作成時に属性の自動付与・削除可否のOS仕様を独立検証したものではない。
+provenanceは、2026-10-19のレビュー中にローカルで`xattr`を実行し、Node本体・`dist/review/r2-launcher-entry.js`・
+`node_modules/zod/package.json`の3件で観測した。1台での観測であり、属性の自動付与・削除可否のOS仕様を独立検証したものではない。
 属性なしを必須とする案を避ける一方、未知属性を一般的なOS metadataとして黙認しない。
 配備rootより上のsystem祖先に同じ一覧を機械的に適用するかは別途OS適合確認を要する。祖先のowner/mode/ACL検査は引き続き必須とする。
+
+**OL-02のactivation/ledger readerにも同じ固定policyを適用する案とする。** 実装済みのOL-02 readerは現在xattrを検査していない。
+利用者が作成するledgerにもprovenanceが付く可能性が高く、対象外にするとrecordだけ未知属性（resource fork等）を黙認する不整合になる。
+activation/ledgerでも受理できる名前集合は空または`{com.apple.provenance}`、quarantine・その他は拒否し、
+前後のidentity照合に属性名集合を含める。値は読まず、信頼判断に使わない。OL-02 readerへの追加実装と合成試験は別承認で行い、
+追加するまでrecord側のxattrは未検査であることを残余として扱う（runtime gateは閉じたまま）。
 
 ### 3.1 pathと集合
 

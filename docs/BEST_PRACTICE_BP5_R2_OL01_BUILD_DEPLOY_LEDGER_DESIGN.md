@@ -130,6 +130,7 @@ ledgerは実行UID所有0600、通常file、single link、特殊permissionなし
 symlink拒否・granting ACL拒否を要求する。既存[trusted config方針](../src/servicenow/trusted-config-file.ts)を設計根拠とするが、
 Rust側へ同等の検査を実装/試験する必要があり、既存TypeScript readerをNode開始前に呼ばない。
 root activation record用readerは別のowner方針で、既存manifest readerのUID所有条件を緩めない。
+activation/ledgerの拡張属性は[closure設計§3.0](BEST_PRACTICE_BP5_R2_OL03_CLOSURE_DESIGN.md)と同じ固定policy（空または`com.apple.provenance`だけ）を適用する案。OL-02 readerは未対応。
 台帳が変わると、配備担当が新bytesのhashを承認しactivationを更新するまで起動を拒否する。
 
 ### 6.2 strict JSONの項目
