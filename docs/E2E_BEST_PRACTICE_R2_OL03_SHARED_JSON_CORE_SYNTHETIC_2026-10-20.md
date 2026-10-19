@@ -60,4 +60,5 @@ APPROVED_REGISTRY=None、通常v2入口Unavailable、runtime gate92、DER/absenc
 
 file entry 1件あたり約26 work unitのため、暫定cap 1,000,000では1回のparseで約3.8万entry、indexを3回parseすると約1.2万entryが目安となる。
 index形式上限100,000件には実効上届かない。本プロジェクトの本番閉包（約5,000〜6,000 entryの見積り）は3回parseで約40万unitの見込み。
+上記はJSON decode分だけの値である。後続のclosure全集合照合（`check_entries`）の課金を含めると約34 unit/entryとなり、1回で約2.9万entry・3回で約1万entry、本番閉包は約51万〜61万unitの見込み（[詳細設計§6.1](BEST_PRACTICE_BP5_R2_OL03_RECORD_PARSER_CLOSURE_DESIGN.md)）。
 詳細と受付時の扱いは[詳細設計§6.1](BEST_PRACTICE_BP5_R2_OL03_RECORD_PARSER_CLOSURE_DESIGN.md)を参照。見積りであり、本記録の試験件数・結果は変わらない。
