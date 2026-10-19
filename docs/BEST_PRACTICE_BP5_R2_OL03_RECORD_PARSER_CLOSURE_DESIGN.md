@@ -1,6 +1,6 @@
 # BP-5 R-2 OL-03：厳密record parser・全closure集合の再検証接続
 
-Version: draft-0.1 / Date: 2026-10-20 / Status: 詳細設計案。接続実装・運用承認は未実施。
+Version: draft-0.2 / Date: 2026-10-20 / Status: 詳細設計案。接続実装・運用承認は未実施。
 
 ## 1. 範囲と停止境界
 
@@ -50,6 +50,7 @@ APPROVED_REGISTRY=None、通常v2入口Unavailable、runtime gate92、DER/absenc
 4. activationがpinしたledger exact hashをdecode**前**に確認。ledger-0.2専用parserを使い、legacy ledger-0.1へfallbackしない。platform/registry/schema/id/digest/両role policy・activation fieldを照合する。
 5. ledgerのroot/index/Node absolute pathからcomponent単位でrelative pathを投影。文字列prefixだけで包含を決めない。closure::path等のstrict条件と一致させ、pathを正規化して不正入力を救済しない。
 6. ledger/activationがpinしたindex exact hashをdecode**前**に確認。closure::check自体はdecode後にhashを確認するため、接続adapterで事前hashを省略しない。index全体をstrict decodeし全宣言を検査する。
+   **補足（将来の実装候補）**：ledger_v2はレビュー指摘を受けて公開関数自体を「hash照合→decode」の順へ修正済み（`e9d4b8e`）。`closure::check`/`declared`も同様に関数内で先にraw hashを照合すれば、adapterが事前照合を省略する余地がなくなり、activation/ledger/indexの3種類で順序がそろう。hash不一致時の公開戻り値の種類（現状Invalid等）が変わり得るが、いずれも拒否であることは変わらない。採否と既存試験の期待値更新は実装時に別途判断する。
 7. release/generation/index hash、registry両role、Node ledger hash=index entry hash、Indexed size/mode0555・固定entry pathを初回BoundTargetと比較。launcherのsize/root承認待ちは解消したことにしない。
 8. 同roundの全closure観測に対して集合照合する（§5）。初回投影との全field一致と現在clock/450秒超を確認し、限定比較結果だけを返す。
 
