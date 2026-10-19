@@ -1,4 +1,4 @@
-//! Single-attempt typed boundary only. No OS implementation, FD constructor or permit.
+//! Single-attempt typed collector. No OS calls, FD constructor or permit in this module.
 use super::*;
 
 const MAX_METADATA_CALLS: u32 = 100; // Two roles, five observations, ten calls including cleanup.
@@ -23,7 +23,7 @@ pub(in crate::signature_boundary) struct FsObservation {
     pub noexec: bool,
 }
 // Each method is exactly one attempt. No hidden retry, path access, FD replacement or clock reset.
-// A future OS implementation must decode ABI/errno without exposing raw values in errors.
+// OS implementations must decode ABI/errno without exposing raw values in errors.
 pub(in crate::signature_boundary) trait MetadataOps:
     PositionedSource
 {

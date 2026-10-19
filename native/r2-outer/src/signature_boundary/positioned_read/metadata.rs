@@ -1,4 +1,4 @@
-//! Typed source observations only. No stat/ACL/xattr syscalls, trusted opener or permit.
+//! Typed observations and staged sources. No trusted opener, runtime connection or permit.
 use super::capture::ComparedAB;
 use super::*;
 
@@ -251,5 +251,7 @@ impl<S: PositionedSource> ReadScope<'_, '_, S> {
     }
 }
 mod collector;
+#[cfg(all(target_os = "macos", target_arch = "aarch64"))]
+mod darwin;
 #[cfg(test)]
 mod tests;

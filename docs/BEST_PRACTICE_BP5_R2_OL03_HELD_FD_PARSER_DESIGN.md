@@ -1,6 +1,6 @@
 # BP-5 R-2 OL-03：保持FDの安全読取・物理signature parser接続
 
-Version: draft-0.7 / Date: 2026-10-19 / Status: 共有予算・合成sourceのpreflight/A採取/parser/B再走査・M0〜M4照合・単発metadata collectorを内部実装済み。OS adapter/保持FD・実metadata取得・運用承認は未実施。
+Version: draft-0.8 / Date: 2026-10-19 / Status: A/B・M0〜M4・collector・macOS実sourceを内部実装。保持FDの運用移譲・実OS取得/適合・運用承認は未実施。
 
 ## 1. 目的と停止境界
 
@@ -225,7 +225,7 @@ entitlement gateはUnsupportedDer/AbsenceUnproven/UnverifiedXmlのいずれか�
 payload bufferの確保は上限確認と`try_reserve_exact`、loop/copy/hash/比較/parse前後は共通checkpointを使う。全file Vec/mmapや署名rangeの独立再読はしない。
 新規有限理由HashMismatch/SourceMismatch/Parser(reason)を内部台帳へ追加したが、公開JSON/exit codeは変えない。
 
-本A追加時点ではB再hash・M0〜M4も未実装だった。後続のB実装は§14、合成M0〜M4は§15を参照。**実metadata取得・祖先/path/record/lease照合は未実装。** A cursorが通過した後のin-place変更はAだけでは見つからない場合があり、それを示す合成ケースも残す。
+本A追加時点ではB再hash・M0〜M4も未実装だった。後続のB実装は§14、合成M0〜M4は§15、staged実sourceは§17を参照。**実metadata取得の運用実行・祖先/path/record/lease照合は未接続。** A cursorが通過した後のin-place変更はAだけでは見つからない場合があり、それを示す合成ケースも残す。
 CapturedAをFdInventoryReadOnlyや署名validity/permitへ変換する経路はない。実OS adapter・deployment/native接続・本番policyは引き続き停止したまま。
 
 ## 14. B再走査によるbytes-only照合
@@ -274,7 +274,7 @@ Observationは前後Stat、ACL状態（Absent/Present/Unknown）、filesystem（
 - FileTypeはRegularだけ。modeはfile型と分離したpermission/special bitsの完全値で0555のみ、UID0・単一link・local・期待device/Nとの一致を要求する。
   OS st_modeをそのまま受け取るABI型ではない。将来adapterは型bitsを明示decodeし、未対応bits/変換失敗をmaskや既定値で隠さない。
 - mtime/ctimeのnsは0〜999999999。前後Statは全field完全一致を要求し、差はM0でもChanged。
-- ACLはpropertyなしだけを受理。Present（空/deny-onlyを含む想定）とUnknownを「なし」へcoerceしない。実ACL照会は未実装。
+- ACLはpropertyなしだけを受理。Present（空/deny-onlyを含む想定）とUnknownを「なし」へcoerceしない。当初は実ACL照会未実装で、後続のstaged実sourceは§17。
 - xattr名は照会長/返却長が64KiB以内か確認し、長さ差はChanged。空の成功列挙と`com.apple.provenance\0`だけを受理する。
   重複・未知/quarantine/ResourceFork・NUL不正・case差・不明Noneは拒否。受理可能な集合が2種類だけなので、一般の名前mapや文字列を確保せず固定enumへ投影する。
   provenanceの値は入力にも取得にも含めず、由来の真正性や値の不変性は主張しない。
@@ -283,7 +283,7 @@ Observationは前後Stat、ACL状態（Absent/Present/Unknown）、filesystem（
 初期policy不適合/不明はMetadata、後続policy変化/不明はChanged、取得失敗は全phaseでMetadataUnavailable、上限超過はLimit。
 各取得の前後と比較後に元Instant/cancelを確認し、遅延成功/エラーも破棄。結果は既存台帳にラッチし、再取得・別source・新しい10秒で救済しない。
 metadata phaseは最大5回で、file bytesの2GiB台帳・A/B読取回数/EINTR枠を更新し直さない。名前bytesはmetadata専用64KiB/観測の上限で、file payloadの課金には加えない。
-sourceが返すVecは既に確保済みの観測値である。将来OS adapter側で照会長を確保前に検査し、各syscallにも共有checkpointを接続する責務は未実装。
+一括sourceが返すVecは既に確保済みの観測値である。後続collector/単発Opsでは照会長を確保前に検査し、各操作へ共有checkpointを接続した（§16/§17）。一括sourceの自己申告を実OS取得の証拠にはしない。
 
 ### 15.2 出力と残余
 
@@ -295,8 +295,14 @@ metadata差が観測されれば既読位置の変更も止めるが、元値へ
 
 ## 16. 実metadata sourceの詳細設計への分離
 
-[実metadata source詳細設計draft-0.2](BEST_PRACTICE_BP5_R2_OL03_METADATA_SOURCE_DESIGN.md)に、同じ保持Fileへのfstat/fstatfs・filesecによるACL確認・bounded flistxattrの順序を具体化した。
-一括MetadataSourceではsyscallごとの共通checkpoint/Changed・Limitを渡せないため、ReadScope collectorと単発Opsの内部接続を合成実装した。[追加20件・全体348件の検証記録](E2E_BEST_PRACTICE_R2_OL03_METADATA_COLLECTOR_SYNTHETIC_2026-10-19.md)を参照。OS sourceは未実装。
+[実metadata source詳細設計draft-0.3](BEST_PRACTICE_BP5_R2_OL03_METADATA_SOURCE_DESIGN.md)に、同じ保持Fileへのfstat/fstatfs・filesecによるACL確認・bounded flistxattrの順序を具体化した。
+一括MetadataSourceではsyscallごとの共通checkpoint/Changed・Limitを渡せないため、ReadScope collectorと単発Opsの内部接続を合成実装した。[追加20件・全体348件の検証記録](E2E_BEST_PRACTICE_R2_OL03_METADATA_COLLECTOR_SYNTHETIC_2026-10-19.md)を参照。この追加時点ではOS source未実装で、後続は§17。
 collectorは全対象共通のmetadata100呼出し枠・名前640KiB台帳を追加し、ACL解放枠を先行予約する。既存payload2GiB/10秒/32768要求/8再試行枠を緩めず、解放は期限後も実行する。
 SDKのXATTR_MAXNAMELENは127bytesで、§4の255bytesは従来の局所上限でありDarwin定数ではない。
 公式資料の列挙対象は呼出し主体に可視な属性名だけであり、空/許可名の結果を全属性不存在の証拠にはしない。可視性・ACL意味・内部memory・FS適合は承認待ちで、運用接続は停止を維持する。
+
+## 17. staged macOS MetadataOps実source
+
+[macOS実source合成検証記録](E2E_BEST_PRACTICE_R2_OL03_MACOS_METADATA_SOURCE_SYNTHETIC_2026-10-19.md)に新規14件・全体362件を記録する。
+privateな所有File sourceと単発FFIを実装し、collector/同じReadScopeへ接続可能にした。実FDでは動かさず、RawApiをFDなしの合成backendへ差し替えて投影/失敗/解放を確認した。
+constructorは通常入口/secure openerへ未接続。元10秒・metadata100回・名前640KiB・payload2GiB/32768要求/8再試行を変更せず、OS適合・path/record/lease・hard timeout・API/permitも未接続。

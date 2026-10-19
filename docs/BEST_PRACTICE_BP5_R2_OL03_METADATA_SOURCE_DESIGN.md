@@ -1,13 +1,13 @@
 # BP-5 R-2 OL-03：保持FDの実metadata source詳細設計
 
-Version: draft-0.2 / Date: 2026-10-19 / Status: ReadScope collector・単発Ops・合成sourceを内部実装。実source・OS取得・適合試験・運用承認は未実施。
+Version: draft-0.3 / Date: 2026-10-19 / Status: collector・単発Ops・macOS実sourceを内部実装。実FDでのOS取得・適合試験・運用接続/承認は未実施。
 
 ## 1. 目的・停止境界
 
 [保持FD/parser設計§15](BEST_PRACTICE_BP5_R2_OL03_HELD_FD_PARSER_DESIGN.md)のM0〜M4と[合成検証記録](E2E_BEST_PRACTICE_R2_OL03_METADATA_SYNTHETIC_2026-10-19.md)を前提に、同じ所有Fileからstat・ACL・xattr名・filesystemを取得する内部sourceを設計する。
 既存328テストは合成観測の整合性の証拠であり、本書のOS取得経路の証拠ではない。
 
-telemetry調査は保留。draft-0.1はMDだけの設計で、後続の内部collector/単発Ops合成実装を§13に記録する。OS実source・Security API実接続・実artifact/PDI操作・トークン発行・設定変更・permit発行・Pushは行わない。
+telemetry調査は保留。draft-0.1はMDだけの設計で、後続のcollector/単発Opsを§13、macOS実source内部実装を§14に記録する。実sourceのOS呼出し実行・Security API実接続・実artifact/PDI操作・トークン発行・設定変更・permit発行・Pushは行わない。
 §2はdraft-0.1でのSDK/公式資料照合であり、今回対象Fileへのmetadata syscallやprobeを実行した記録ではない。
 本番registry未設定、通常v2入口Unavailable、runtime gate92、DER/absence停止を維持する。
 
@@ -60,7 +60,7 @@ Rust libcの採用target用struct/APIを使い、SDK structの手書き再現や
 `st_mode & S_IFMT`を明示decodeしてRegular/Directory/Symlink/Otherへ投影し、型以外のpermission/special bitsを完全保持する。
 未対応bitsは拒否し、0555に見せるためのmaskはしない。UID0、regular、単一link、32bytes〜512MiB、期待device/N一致を従来どおり要求する。
 
-dev/ino/UID/GID/nlink/size/mtime/ctimeを既存Statへlosslessに変換する。signed dev_tはMetadataExt::devと整合するbit-pattern表現をtarget幅を固定して定義し、負値の単純なchecked u64変換で全deviceを拒否する実装にしない。
+dev/ino/UID/GID/nlink/size/mtime/ctimeを既存Statへlosslessに変換する。signed dev_tはDarwinのi32からu64への符号拡張castでMetadataExt::devの表現と整合させる（-1はu64::MAX）。u32幅への縮約やchecked変換による負deviceの一律拒否はしない。期待deviceも同じ表現を使う必要があり、実openerとの照合は未接続。
 負size・nanoseconds範囲外・幅超過は拒否。時刻の秒はi64の符号を保持し、mtime/ctimeのnsは0〜999999999。
 atimeは読取で変化するため比較対象外。st_flags/birthtime/generation等は現行Stat外であり、検査済みとは主張しない。追加が必要なら契約変更として別審査する。
 
@@ -172,3 +172,25 @@ Rust/TypeScriptの実装・テストは変更していないため再実行し�
 - `ComparedM0M4`の固定Debug・非Clone/非serialize・DER/absence/XMLの停止を維持。OS取得・ACL/xattr可視性・hard timeout・trusted opener/祖先/path/record/lease・API/permitの未対応を解消したとはしない。
 
 今回追加したのはcollector境界の合成検証で、実OSのfilesec_freeやstatを呼んだ結果ではない。合成unwind試験はRAII解放を確認するもので、backend panicの機密非出力やpanic後の運用再開を承認するものではない。
+
+## 14. macOS MetadataOps実sourceの内部実装
+
+[実source層の合成検証記録](E2E_BEST_PRACTICE_R2_OL03_MACOS_METADATA_SOURCE_SYNTHETIC_2026-10-19.md)に新規14件・全体362件を記録する。
+`metadata/darwin.rs`と`darwin/ffi.rs`はmacOS arm64にだけコンパイルする。公開constructor/通常入口への登録はなく、privateなstaged constructorだけが所有Fileを移譲して保持する。これ自体はFileの信頼性を証明しない。
+
+- `HeldSource<SystemApi>`は同じFileを全操作へ借用し、fstat/fstatfs/fstatx_np/flistxattr/preadを各1回だけ呼ぶ。open/clone/seek/別path/FD差替え/独自時計/retryはない。
+  source自体は予算を所有せず、既存collector/ReadScopeが全操作の前後で同じ予算を確認する。preadのEINTR再試行は既存ReadScopeだけが行う。
+- `RawApi`はprivateなFFI差替え境界。実backendはFile、合成backendはFDを持たないFakeFileを関連型にし、実sourceと同じ投影・collector/A/B経路を通す。合成backendからSystemApiや実Fileを起動しない。
+- fstat/fstatx_np/fstatfsの出力は正しいlibc ABIのzeroed storageを渡し、戻り値0のときだけ読む。失敗時に部分出力を使わない。
+  statはtypeを明示decodeしてpermission/special bitsを完全保持。未知type/負size/ns不正はUnavailable。UID等のpolicyはcollectorで判定する。
+- fstatfsの16byte FS名は配列内NULを必須にし、apfsのexact bytesとlocal/ownership/noexec flagsだけを投影する。mount path/source文字列やraw structは保持/表示しない。
+- filesec_initのnullは取得失敗。成功pointerは非CloneのFilesecが所有し、collector guardのfreeでDrop→filesec_freeを1回実行する。
+  生pointerから所有型を作るhelperはprivate unsafeとし、nullかuniqueなinit結果だけを許す。queryは-1 sentinelを初期化し、無更新/不正値を0へ救済しない。
+- flistxattrはFD版options=0、size照会はNULL/0、copyはcollectorの非空64KiB以下sliceをそのまま渡す。負戻り値は取得失敗、非負の長さ/返却量はcollectorの既存上限・課金・差分照合へ渡す。
+- errnoは失敗直後に取得し、EINTR/ERANGE/その他を有限分類。metadataのEINTRはretryせず停止し、ACL query不正値は全phaseでMetadataUnavailableを維持する。
+  preadだけはEINTR/EAGAIN/その他を既存IoFailureへ分ける。off_t変換・offset+slice長・64KiBをcall前に検査する。
+- source/errno/stat/filesecはraw Debug/JSONを持たない。source Debugは固定文言。OSエラー文字列・FD/path・属性値を外へ出さない。
+
+テストが実行したのはFakeFile/FakeApiと純粋投影だけで、実SystemApiを使ったstat/ACL/xattr/preadは実行していない。null所有化helperの試験もinit/freeを呼ばない。
+SDK/libc宣言の照合とコンパイル/合成成功は、採用OS/ABI・ACL不存在・xattr可視性・filesec内部memoryの実機適合証拠ではない。
+trusted opener/祖先/path/record/leaseからのFile移譲、配備roleの運用binding、同期syscallのhard timeout、API実接続、DER/absence、permitは未接続/停止のまま。
