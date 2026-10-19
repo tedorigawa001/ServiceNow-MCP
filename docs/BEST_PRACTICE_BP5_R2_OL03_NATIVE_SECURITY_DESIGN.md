@@ -1,6 +1,6 @@
 # BP-5 R-2 OL-03：native Security backend（未有効）
 
-Version: draft-0.4 / Date: 2026-10-19 / Status: native部品は未有効。raw XML限定比較器を別部品として合成実装。native接続・DER/absence・実API適合は未確認。
+Version: draft-0.5 / Date: 2026-10-19 / Status: native部品は未有効。raw XML限定比較器を別部品として合成実装。保持FD/parser接続の詳細設計を追加。native接続・DER/absence・実API適合は未確認。
 
 ## 1. 境界
 
@@ -76,6 +76,7 @@ empty launcherが辞書欠落になる場合も救済しない。raw/DER整合�
 
 privateな`PinnedFile`は、将来deployment inspectorが保持したFileと正確な承認pathを渡すための部品。親directoryのtrustを再定義せず、owner緩和やpublic constructorは設けない。
 現在はinstalled reader/deploymentとの受渡しを接続していない。
+[保持FD/parser接続draft-0.1](BEST_PRACTICE_BP5_R2_OL03_HELD_FD_PARSER_DESIGN.md)に、安全なopenerからの所有権移動、A/B全体hashと採取bufferの結合、metadata/path/recordの再確認、共有読取予算の設計を分離した。既存PinnedFileの呼出しごとの再hashや絶対path再openを、その接続が実装済みである証拠にしない。API実接続は同設計でも対象外。
 preadでoffsetを変えずSHA-256を計算し、file/device/inode/size/owner/mode/link/mtime/ctimeを前後比較する。32bytes以上512MiB以下、regular単一linkを要求。
 Mach-Oはlittle-endian64/ARM64/ALL subtype/MH_EXECUTEだけを初期受理する。
 現在pathはO_NOFOLLOW/CLOEXEC/NONBLOCKで再openし同様にhashし、保持FDと比較する。親directoryの排他は別工程。

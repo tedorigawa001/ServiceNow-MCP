@@ -1,6 +1,6 @@
 # BP-5 R-2 OL-03：保持FDの物理signature列挙・CodeDirectory結合
 
-Version: draft-0.3 / Date: 2026-10-19 / Status: 純粋bounded parserを内部合成実装済み。保持FD/native接続・API結合・実artifact検証は未実施。
+Version: draft-0.4 / Date: 2026-10-19 / Status: 純粋bounded parserを内部合成実装済み。保持FD読取接続は詳細設計のみ。保持FD/native接続・API結合・実artifact検証は未実施。
 
 ## 1. 目的と停止境界
 
@@ -165,6 +165,9 @@ full-file SHA-256はroot ledgerの期待値、full CD SHA-256は局所digest、2
 single-CD制限を広げる場合は全alternateとalgorithm集合、OSの選択挙動を別設計/承認する。
 
 ## 9. FD・世代・時刻と差替えの限界
+
+[保持FDの安全読取・parser接続draft-0.1](BEST_PRACTICE_BP5_R2_OL03_HELD_FD_PARSER_DESIGN.md)で、同じ所有File・metadata・全体hash A/B・hash走査からのrange採取・共通I/O/10秒予算・拒否条件を具体化した。文書のみで、接続実装/試験は未実施。
+この読取接続の設計と、以下のnative API結合・寿命全体の更新排他は別段階であり、前者の成功で後者を省略しない。
 
 将来の統合順序案：更新排他取得→保持FD/full hash/metadata→inventory→同じpathのnative validity/情報取得→CD照合→同じFDのsignature領域/全体hash/metadata再確認→activation/ledger世代と期限再確認。
 metadata比較はdev/ino/size/owner/mode/link/mtime/ctimeを含め、保持祖先FD/path再openの検査も引き継ぐ。

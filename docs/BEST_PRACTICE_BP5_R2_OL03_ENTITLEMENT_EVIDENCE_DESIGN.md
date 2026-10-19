@@ -98,7 +98,7 @@ native raw拒否・signing情報flags・reader・permit/execは変更してい�
 
 ## 6. 物理signatureの列挙とDER（必要な追加設計）
 
-[物理signature列挙・CodeDirectory結合draft-0.3](BEST_PRACTICE_BP5_R2_OL03_PHYSICAL_SIGNATURE_DESIGN.md)に、固定commitの根拠、bounded FD解析、single-CD/SHA-256初期subset、APIの20bytes cdhashとの照合、拒否条件・未確認事項を具体化した。純粋bytes parserだけ[合成検証済み](E2E_BEST_PRACTICE_R2_OL03_PHYSICAL_SIGNATURE_SYNTHETIC_2026-10-19.md)。保持FD/API結合は未接続で、DER/absenceの停止は変更しない。
+[物理signature列挙・CodeDirectory結合設計](BEST_PRACTICE_BP5_R2_OL03_PHYSICAL_SIGNATURE_DESIGN.md)に、固定commitの根拠、bounded FD解析、single-CD/SHA-256初期subset、APIの20bytes cdhashとの照合、拒否条件・未確認事項を具体化した。純粋bytes parserだけ[合成検証済み](E2E_BEST_PRACTICE_R2_OL03_PHYSICAL_SIGNATURE_SYNTHETIC_2026-10-19.md)。保持FD/API結合は未接続で、DER/absenceの停止は変更しない。
 
 保持FDの同一thin arm64/MH_EXECUTEからload commandsを完全走査し、LC_CODE_SIGNATUREをちょうど1件要求する案。
 cmdsize/sizeofcmds/ncmds、領域のfile内包含、加算/乗算overflow、重複/重なり、切詰めを検査する。signatureなしをabsenceにしない。
