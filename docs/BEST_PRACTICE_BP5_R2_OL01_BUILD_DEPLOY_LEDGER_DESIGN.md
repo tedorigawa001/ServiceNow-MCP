@@ -155,7 +155,7 @@ SHA-256は小文字hex64桁、日時はUTCの明示ISO8601、UID/世代は非負
 | ledger | `policy_id=bp5-r2-outer-macos-arm64-0.1` | env/FD/limits/argument grammar/禁止fallbackは実装の固定policy。JSONで任意optionを許可しない |
 
 closure indexは別のroot所有0444 file。release内の相対path・kind・size・SHA-256・期待modeの一覧とする。
-[OL-03 closure詳細設計draft-0.4](BEST_PRACTICE_BP5_R2_OL03_CLOSURE_DESIGN.md)に、strict schema・index自身の循環回避・安全な実読取・xattr方針・更新排他と承認待ち事項を整理した。parser/純粋照合だけ内部実装済みで、OS配備検証・承認済みとはしない。
+[OL-03 closure詳細設計draft-0.5](BEST_PRACTICE_BP5_R2_OL03_CLOSURE_DESIGN.md)に、strict schema・index自身の循環回避・FD読取・xattr方針・更新排他と承認待ち事項を整理した。parser/純粋照合/FD読取部品は内部合成検証済みで、信頼済み実配備・承認済みとはしない。
 通常file/directory以外、symlink/hardlink、重複path、`..`、未知file、未承認native addon/loaderを拒否する案。
 全JS/JSON/node_modules/host/checker/worker/dynamic import先を含め、system frameworkはOS buildの信頼前提へ分離する。
 初期入力上限案はindex16MiB・100,000項目・閉包実読取2GiB。実際の閉包が収まるか未測定であり、超過時の自動拡張はしない。

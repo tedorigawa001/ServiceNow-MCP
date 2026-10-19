@@ -76,6 +76,13 @@ caller-supplied binding and observation list. It returns counts only, never an e
 permit. It does not read or verify deployed files, signatures, ACLs or xattrs. The fixed
 runtime gate remains closed. See [closure parser verification](../../docs/E2E_BEST_PRACTICE_R2_OL03_CLOSURE_PARSER_SYNTHETIC_2026-10-19.md).
 
+`deployment::inspect_deployment` adds read-only macOS arm64 directory-FD traversal,
+metadata/ACL/xattr-name checks and streaming payload hashing. Production inspection
+requires root-owned protected ancestors and runtime files; no public owner override is
+provided. Synthetic success tests exercise the private scan component on owned temporary
+files, not a trusted root-owned deployment. No execution permit is issued and the runtime
+gate stays closed. See [deployment read verification](../../docs/E2E_BEST_PRACTICE_R2_OL03_DEPLOYMENT_READ_SYNTHETIC_2026-10-19.md).
+
 The macOS arm64 tests compile a disposable Rust peer using the development rustc/libc
 artifact, then exec that peer at the synthetic fixed Node path in owned PTY children.
 The fixture directly includes private OS-boundary modules; it never becomes part of

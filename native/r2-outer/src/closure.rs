@@ -156,7 +156,7 @@ fn hex(v: &str) -> bool {
         && v.bytes()
             .all(|c| c.is_ascii_digit() || (b'a'..=b'f').contains(&c))
 }
-fn path(v: &str) -> bool {
+pub(crate) fn path(v: &str) -> bool {
     !v.is_empty()
         && v.len() <= 4096
         && v.split('/').count() <= 64
@@ -164,6 +164,26 @@ fn path(v: &str) -> bool {
             .all(|c| c.is_ascii_alphanumeric() || b"._@+/-".contains(&c))
         && v.split('/')
             .all(|c| !c.is_empty() && c != "." && c != ".." && c.len() <= 255)
+}
+/// Validate the full declaration before any deployment payload is read. Still not execution authority.
+#[cfg(all(target_os = "macos", target_arch = "aarch64"))]
+pub(crate) fn declared(
+    bytes: &[u8],
+    binding: &Binding<'_>,
+    started: Instant,
+) -> Result<Vec<Entry>, ClosureFailure> {
+    let index: Index = crate::json::decode_bounded(bytes, MAX_BYTES, MAX_ENTRIES, started)
+        .map_err(|_| ClosureFailure::Invalid)?;
+    let mut entries = index.entries;
+    entries.push(Entry::File {
+        path: binding.index_path.into(),
+        mode: "0444".into(),
+        size: bytes.len() as u64,
+        sha256: binding.index_sha256.into(),
+    });
+    check(bytes, binding, &entries, started)?;
+    entries.pop();
+    Ok(entries)
 }
 fn validate(e: &Entry, node: &str) -> Result<(), ClosureFailure> {
     if !path(e.path()) {
@@ -208,7 +228,7 @@ pub enum Entry {
     Directory { path: String, mode: String },
 }
 impl Entry {
-    fn path(&self) -> &str {
+    pub(crate) fn path(&self) -> &str {
         match self {
             Self::File { path, .. } | Self::Directory { path, .. } => path,
         }

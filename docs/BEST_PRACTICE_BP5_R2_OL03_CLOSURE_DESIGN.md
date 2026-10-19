@@ -1,6 +1,6 @@
 # BP-5 R-2 OL-03：closure index・配備ファイル検証の詳細設計
 
-Version: draft-0.4 / Date: 2026-10-19 / Status: 承認前の設計案。strict parser・純粋集合/binding照合のみ内部実装/合成検証。OS配備検証・運用は未実施。
+Version: draft-0.5 / Date: 2026-10-19 / Status: 承認前の設計案。parser・純粋照合・FD読取部品を内部実装/合成検証。信頼済み実配備・運用は未実施。
 
 ## 1. 目的と現在の境界
 
@@ -11,7 +11,8 @@ Version: draft-0.4 / Date: 2026-10-19 / Status: 承認前の設計案。strict p
 現在の`runtime_gate`は常に92で停止する。OL-02の`InspectedRecords`は実行許可ではない。
 以下は検証器全体の要求である。parser・純粋集合/binding照合だけ
 [合成検証記録](E2E_BEST_PRACTICE_R2_OL03_CLOSURE_PARSER_SYNTHETIC_2026-10-19.md)に示す内部実装がある。
-観測一覧は呼出し側のデータであり、実FDの安全読込・OS metadata検査を実装済みとして扱わない。
+純粋照合の観測一覧は呼出し側のデータである。後続の[FD読取合成検証](E2E_BEST_PRACTICE_R2_OL03_DEPLOYMENT_READ_SYNTHETIC_2026-10-19.md)で
+directory FD基準の読取・owner/mode/ACL/xattr・metadata/hash照合部品を追加したが、root所有の信頼済み実配備を検証済みとはしない。
 closure検査だけの成功でもgateは解除しない。実署名・entitlement・reader group排他性・配備承認も別途必要。
 telemetry調査は保留。本書はPDI/OAuth/token設定を変更せず、コマンド実行手順や実値入り台帳を提供しない。
 
@@ -182,7 +183,7 @@ privileged metadata/leaseのfake成功をOSでの保証と呼ばず、OS境界�
 1. **前提承認**：初期macOS/FS/Node/toolchain、署名者・Node entitlement集合、配備担当と信頼元。
 2. **契約承認**：ASCII path制約、mode/owner方針、index自身の唯一の除外、閉包に含める動的依存、容量上限。xattrはprovenanceだけ許可・quarantineを含む他属性拒否の案、system祖先への適用範囲、列挙上限と正規配布との両立も承認待ち。
 3. **先行実装済みの部分**：strict bounded index parserと純粋な集合/binding照合、合成テスト。観測値のOS上の真正性は未確認。permitは発行しない。
-4. **次の実装案**：directory FD基準の安全なfile読取とmetadata/hash照合。root/FS条件はfakeとOS境界を分けて検証。
+4. **読取部品を内部実装済み**：directory FD基準のfile読取とmetadata/hash照合。通常UIDの一時fixtureと合成metadataを分けて検証した。root所有正常配備・不適合ACLの実付与・実署名・更新排他の検証は未完了。
 5. **排他の採択**：外部lease所有方式か運用freezeか、FD閉鎖/execモデルへの影響、終了確認・復旧責任。
 6. **統合承認**：実署名・group排他・直前再検証・全体deadlineを接続した後でのみgate解除を検討。
 

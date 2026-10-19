@@ -1,6 +1,7 @@
 //! Offline records and gated, dedicated-process exec components. No executable, OAuth or network.
 #![deny(unsafe_code)]
 pub mod closure;
+pub mod deployment;
 mod exec_os;
 mod filesystem;
 mod json;

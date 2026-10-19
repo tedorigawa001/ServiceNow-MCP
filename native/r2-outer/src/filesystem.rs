@@ -60,7 +60,7 @@ mod darwin {
         ) -> libc::c_int;
         fn fstatx_np(fd: libc::c_int, stat: *mut libc::stat, sec: *mut c_void) -> libc::c_int;
     }
-    fn no_acl(file: &File) -> Result<bool, Failure> {
+    pub(crate) fn no_acl(file: &File) -> Result<bool, Failure> {
         // SAFETY: filesec is owned locally, never dereferenced and freed once. fstatx writes to
         // a correctly sized Darwin stat buffer; query writes to one initialized integer.
         unsafe {
@@ -288,5 +288,7 @@ mod darwin {
         }
     }
 }
+#[cfg(all(target_os = "macos", target_arch = "aarch64"))]
+pub(crate) use darwin::no_acl;
 #[cfg(all(target_os = "macos", target_arch = "aarch64"))]
 use darwin::{context as platform_context, read as platform_read};
