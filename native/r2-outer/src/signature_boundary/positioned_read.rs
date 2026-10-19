@@ -56,6 +56,8 @@ pub(super) struct SharedBudget<'a> {
     metadata_name_bytes: u64,
     // Comparison-only topology boundary calls; not an OS syscall/FD accounting proof.
     topology_calls: u32,
+    // Staged JSON work cap from the draft design; no allocator/RSS or operation permit.
+    json_work: u64,
 }
 impl std::fmt::Debug for SharedBudget<'_> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -76,6 +78,7 @@ impl<'a> SharedBudget<'a> {
             metadata_cleanup_reserved: 0,
             metadata_name_bytes: 0,
             topology_calls: 0,
+            json_work: 0,
         }
     }
     fn stop<T>(&mut self, reason: Failure) -> Result<T, Failure> {
@@ -149,6 +152,48 @@ impl<'a> SharedBudget<'a> {
         })
     }
 }
+
+impl crate::json::shared::Budget for SharedBudget<'_> {
+    type Failure = Failure;
+    fn checkpoint(&mut self) -> Result<(), Failure> {
+        SharedBudget::checkpoint(self)
+    }
+    fn work(&mut self, units: u64) -> Result<(), Failure> {
+        self.checkpoint()?;
+        let Some(total) = self
+            .json_work
+            .checked_add(units)
+            .filter(|n| *n <= 1_000_000)
+        else {
+            return self.stop(Failure::Limit);
+        };
+        self.json_work = total;
+        self.checkpoint()
+    }
+}
+impl SharedBudget<'_> {
+    fn decode_json<T: serde::de::DeserializeOwned>(
+        &mut self,
+        bytes: &[u8],
+        limits: crate::json::shared::Limits,
+    ) -> Result<T, crate::json::shared::Rejection<Failure>> {
+        use crate::json::shared::{self, Rejection};
+        let result = shared::decode(bytes, limits, self);
+        match &result {
+            Err(Rejection::Limit(_)) => {
+                let _ = self.stop::<()>(Failure::Limit);
+            }
+            Err(Rejection::InvalidRecord) => {
+                let _ = self.stop::<()>(Failure::Binding);
+            }
+            _ => {}
+        }
+        result
+    }
+}
+
+#[cfg(test)]
+mod json_tests;
 
 pub(super) struct ReadScope<'b, 'a, S: PositionedSource> {
     budget: &'b mut SharedBudget<'a>,

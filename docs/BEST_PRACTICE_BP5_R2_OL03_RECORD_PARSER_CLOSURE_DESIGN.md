@@ -1,13 +1,13 @@
 # BP-5 R-2 OL-03：厳密record parser・全closure集合の再検証接続
 
-Version: draft-0.2 / Date: 2026-10-20 / Status: 詳細設計案。接続実装・運用承認は未実施。
+Version: draft-0.3 / Date: 2026-10-20 / Status: 共有予算JSON coreのみ内部実装/合成検証。record/closure再検証への接続・運用承認は未実施。
 
 ## 1. 範囲と停止境界
 
 [FD移譲設計§15](BEST_PRACTICE_BP5_R2_OL03_SECURE_FD_TRANSFER_DESIGN.md)の合成`RecordSource::revalidate`を、既存の厳密parserと**全closure集合**の検証へ置き換える設計。
 前工程の[424件の合成検証](E2E_BEST_PRACTICE_R2_OL03_RECORD_FINAL_SYNTHETIC_2026-10-20.md)は、架空の非JSON bytesと手動投影の契約試験であり、本書の接続が動く証拠ではない。
 
-今回の成果物はMDだけ。telemetry調査は保留。実装、実機/PDI操作、API実接続、token発行、設定変更、実署名、本番policy投入、permit発行は対象外。
+draft-0.1/0.2の成果物はMDだけだった。後続の§10でJSON coreだけを追加した。telemetry調査は保留。record/closure接続実装、実機/PDI操作、API実接続、token発行、設定変更、実署名、本番policy投入、permit発行は対象外。
 APPROVED_REGISTRY=None、通常v2入口Unavailable、runtime gate92、DER/absence停止を維持する。parser/集合照合の成功も実行許可にしない。
 
 ## 2. 現状と接続上の不足（ソース照合）
@@ -115,6 +115,7 @@ scanの前後で新しいplanへ追従しない。同じpins/planでの同一呼
 bytes/depth/container件数だけでは全allocation/RSSやcancel応答間隔を保証できない。現在のValue木＋typed object＋BTree集合の同時保持を無制限に継承しない。
 
 - parser/work予約は全再parse/roundで共有する。候補は最大1,000,000 work units（JSON node/key/entry/prefix/集合操作、長い文字列・hashの64KiB chunkを各1単位）で、算術overflow/枠超過をLimitとする。allocatorや比較関数内部の処理量まで証明した値ではない。
+  **work上限から導く実効件数（レビュー時の見積り、2026-10-20）**：実装済みのstrict core（`json/shared.rs`）の課金では、file entry 1件（5 key中4つが文字列、1つが数値）がnode・key・文字列・挿入を合わせて約26 unitを使う。上限1,000,000では1回のparseでおよそ3.8万entry、§5.1どおりindexを初回・M4前・M4後の3回parseすると共有上限内でおよそ1.2万entryが目安となる。index形式上限100,000件は実効上届かない（§6の呼出し枠と同じ性質）。受付時の上界計算ではこの実効件数を使い、超える計画は開始前にLimitで停止する。参考：本プロジェクトの本番依存閉包は、本番依存140 packageのfile約4,100件と`dist`の488件で、directoryを含めても5,000〜6,000件程度と見積もられ、3回parseで約40万unitの見込み。いずれも見積りで、from_value変換・registry/activation/ledgerのparse分を含む実測ではない。
 - allocation候補はparse作業同時64MiB、inspection管理下の総同時128MiB。元pins（最大16MiB＋128KiB）・registry・観測集合・path/keyの複製・bufferを合計し、事前予約とDrop時解放を行う。これは**RSS上限ではなく管理allocationの候補**。
 - Value木と型/expected/actual mapの重複を減らすbounded typed decoder/限定内部viewを検討する。duplicate key/unknown field/trailing data/深さ/件数拒否を弱める変更は不可。container上限は要素decode前にも確認できる境界を設計する。
 - 現codeのmax_itemsを総node枠と説明しない。単一巨大stringのunescape/UTF-8、serde_json::from_value、BTree比較等にcheckpointが入らない区間も洗い出す。
@@ -163,4 +164,19 @@ close/freeのために取得枠を再使用せず、解放失敗/終了未確認
 | 実FS/ACL/xattr可視性・system/record profile・APFS等 | 空/Absentを仮定しない。実sourceの適合を本設計では確認しない |
 | 原子性/ABA/検査後変更・外側hostのhard終了 | 診断を実行authorityへ昇格しない。lease/監督の別承認が必要 |
 
-本設計で実装/ビルド/実機テストは行わない。文書のlocal links/code fence/行末空白・diffと、変更がMDだけであることを確認する。424件は前工程の記録で、新接続の合格件数ではない。
+draft-0.1/0.2ではMDだけを検査した。424件は前工程の記録で、新接続の合格件数ではない。後続JSON coreの検証は§10で別に記録する。
+
+## 10. 共有予算strict JSON coreの先行実装
+
+[JSON core検証記録](E2E_BEST_PRACTICE_R2_OL03_SHARED_JSON_CORE_SYNTHETIC_2026-10-20.md)に、追加23件と全体検証を記録する。
+[json/shared.rs](../native/r2-outer/src/json/shared.rs)はcrate内部のstaged coreで、I/O・record trust・registry投入・permitを持たない。旧json.rsのdecode/decode_bounded/decode_policyは変更しない。
+
+- coreはbudgetのcheckpoint/workを借用し、元開始時刻を作り直さない。内部Stateが最初の型付き理由を保持し、serde境界へ固定文言だけを渡す。戻り値はInvalidRecord、Limit(Configuration/Bytes/Depth/Container)、Budget(E)。文字列matchingで理由を復元しない。
+- entry/各node/key・挿入・終了確認・型変換の前後をguardする。inputの64KiB chunk、node、key、container挿入、string/key長の64KiB単位、typed変換開始をwork計上する。generic Budgetでは型付きEをそのまま保持する。
+- hard入力上限16MiB・深さ16・各container100,000以下をcoreで制限し、profile別の低い上限をLimitsで指定する。policy深さ8/32件等を自動推測しない。超過element/keyはそのsubtreeをdecodeする前に拒否し、空containerはmax_items=0でも受理する。
+- UTF-8/文法/duplicate decoded key/trailing dataは拒否。typed decodeはT側のdeny_unknown_fields等を適用する。generic coreが任意Tのunknown fieldを自動拒否するとはしない。
+- SharedBudgetのprivate decode_json bridgeを追加した。既存10秒/cancel/first failureを借用し、json_workを全decodeで共有して1,000,000単位を超える前にLimit。local Limitは既存budget Limitへ、InvalidRecordはBindingへラッチするが、最初の戻り値の型付き理由は保持する。
+- 1,000,000は§6.1の候補を**停止中の内部合成経路で**用いる暫定capであり、運用承認・最悪CPU時間の保証ではない。payload2GiB/metadata100/名前640KiB/topology16384/pread要求/EINTR枠を消費・resetしない。CPU workと受信bytesを混同しない。
+- 長いJSON tokenのserde内部unescape、UTF-8処理、key比較、from_valueの内部処理はまだinterruptibleではない。前後guardで遅延成功/エラーを拒否するがhard timeoutとはしない。Value木/typed objectの管理allocation64MiB/総128MiB候補は**未実装**で、RSS上限も保証しない。
+
+record revalidate、ledger/registry/closureのbudget-aware core、全closure観測producerと新JSON coreの接続は後工程。legacy parserの失敗写像/既存offline契約はこの変更では変えない。§4のhash-first追加候補も未実装のまま保持する。運用gateは停止を維持する。

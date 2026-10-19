@@ -3,6 +3,9 @@ use serde::de::{DeserializeOwned, DeserializeSeed, Error, MapAccess, SeqAccess, 
 use serde_json::{Map, Number, Value};
 use std::fmt;
 use std::time::{Duration, Instant};
+// Staged internal core; legacy decode contracts below intentionally remain unchanged.
+#[allow(dead_code)]
+pub(crate) mod shared;
 struct Seed(usize, usize, Option<Instant>, usize);
 impl<'de> DeserializeSeed<'de> for Seed {
     type Value = Value;
