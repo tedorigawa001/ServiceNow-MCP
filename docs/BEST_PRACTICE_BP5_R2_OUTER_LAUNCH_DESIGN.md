@@ -89,6 +89,7 @@ shell scriptはinterpreter起動前の継承問題があるので、同等性を
 固定compiled entry・package root・作業directory、ソースrevision/lockfile・ビルド成果物全体のdigestを保持する。
 台帳にはNodeが読み込むpackage.json、依存node_modules、worker/host/checker、動的import先を含む閉包を対応付ける。
 entry1ファイルのhashやlockfile一致だけで依存閉包の信頼性を証明しない。台帳自身の真正性・所有者/ACLも検査対象とする。
+[closure index・配備検証の詳細設計案](BEST_PRACTICE_BP5_R2_OL03_CLOSURE_DESIGN.md)で、更新leaseとFD全閉鎖の両立が未決定であることも明記する。runtime gateは閉じたままとする。
 台帳はOAuth承認manifestと別物で、PDI/client/token設定を上書きできない。
 
 成果物は別工程で検証した固定snapshotを用意する案とし、起動中のnpm install/build/download、npx、tsx、
