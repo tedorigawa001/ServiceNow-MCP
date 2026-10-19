@@ -37,7 +37,13 @@ fn main() {
                 stop(96);
             }
             libc::close(fd);
-            for signal in [libc::SIGINT, libc::SIGHUP, libc::SIGQUIT, libc::SIGTSTP, libc::SIGUSR1] {
+            for signal in [
+                libc::SIGINT,
+                libc::SIGHUP,
+                libc::SIGQUIT,
+                libc::SIGTSTP,
+                libc::SIGUSR1,
+            ] {
                 libc::signal(signal, libc::SIG_IGN);
             }
             let mut mask = std::mem::MaybeUninit::<libc::sigset_t>::uninit();
@@ -112,7 +118,8 @@ fn main() {
         }
         // No catchable signal may remain SIG_IGN: an inherited ignore (e.g. nohup) would survive exec.
         // The Rust runtime installs its own SIGSEGV/SIGBUS handlers, so test for SIG_IGN, not SIG_DFL.
-        for signal in 1..32 { // Darwin NSIG; libc does not export it for macOS.
+        for signal in 1..32 {
+            // Darwin NSIG; libc does not export it for macOS.
             // Rust std (like Node) sets SIGPIPE to SIG_IGN during its own startup, so it is not observable here.
             if signal == libc::SIGKILL || signal == libc::SIGSTOP || signal == libc::SIGPIPE {
                 continue;
