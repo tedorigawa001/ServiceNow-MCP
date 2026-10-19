@@ -1,6 +1,6 @@
 # BP-5 R-2 OL-03：launcher／Nodeの署名・entitlement検証設計
 
-Version: draft-0.2 / Date: 2026-10-19 / Status: 承認前の設計案。署名検証の実装・OS適合試験は未実施。
+Version: draft-0.3 / Date: 2026-10-19 / Status: 承認前の設計案。署名検証の実装・OS適合試験は未実施。
 
 ## 1. 目的と現在の境界
 
@@ -54,7 +54,8 @@ Appleはuniversalの一sliceだけの検査では不十分で、全sliceの署�
 現行0.1 ledgerの`signature_requirement`は文字列、`publisher`は文字列、`entitlements`は名前の配列、`hardened_runtime`はboolである。
 これだけでは証明書クラス・期待する全flag・entitlement値や型の完全一致を表せない。
 署名器が自由なrequirementを解釈して許可範囲を拡大する方式にはしない。
-候補は「別承認の固定policy registryに期待値を置いてledgerと照合する」か「strictな次版ledgerで型付きpolicy参照/期待値を表す」。採択は承認待ち。
+候補の比較・型付き期待値/観測値・移行は[型付き署名policy設計draft-0.1](BEST_PRACTICE_BP5_R2_OL03_TYPED_SIGNATURE_POLICY_DESIGN.md)に具体化した。
+推奨案は固定registryに期待値を一元化し、参照専用ledger-0.2からID/digestで結合する併用方式。採択は承認待ち。
 root activationがledger bytesをpinする点を維持し、旧recordを黙って新契約に読み替えない。
 requirementを再文字列化すると表記が変わり得るので、round-trip文字列一致を論理的な同一性の証明にしない。[A2](https://developer.apple.com/documentation/security/secrequirementcreatewithstring(_:_:_:))
 
@@ -156,7 +157,7 @@ ad-hocのfixtureをDeveloper ID正常系として採点しない。今回署名�
 
 1. launcher/Nodeの正確な版・署名担当・Team ID/identifier/Developer ID証明書クラスとrequirement template。
 2. Node公式署名の採用か別署名か、entitlementのexact typed dictionary・全静的flag・残余リスクの承認。
-3. 固定policy registryか次版ledgerかの選択。現行文字列/名前配列を安全に移行する契約。
+3. 型付き署名policy契約案の採否。固定registry＋参照専用次版ledgerの移行・旧offline readerとの分離を承認する。
 4. entitlementのabsence証明・DER等の対応、thin arm64検査、Security API/CF bindingと採用SDKの確定。
 5. offline失効/公証の鮮度・receipt、配布形式、quarantine拒否との両立、撤回/再承認の責任者。Nodeは単体公証を要求するか、配布物の公証＋展開後hash結合で代替するか（§6）。
 6. 10秒内の強制停止方式とthread/FD前提。更新lease・path差替え防止・exec直前再検証との統合。

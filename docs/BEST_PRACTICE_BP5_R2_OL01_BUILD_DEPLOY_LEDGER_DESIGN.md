@@ -46,7 +46,7 @@ Node22.12は下限互換試験用。実PDI用Nodeは別途承認した保守対�
 
 ## 3. launcher自身の信頼の起点
 
-[署名・entitlement詳細設計draft-0.1](BEST_PRACTICE_BP5_R2_OL03_SIGNATURE_DESIGN.md)で、信頼元・型付き照合・オフライン/公証の限界・合成試験・承認待ち事項を具体化した。署名検証の実装・運用承認を意味しない。
+[署名・entitlement詳細設計draft-0.3](BEST_PRACTICE_BP5_R2_OL03_SIGNATURE_DESIGN.md)と[型付きpolicy契約案](BEST_PRACTICE_BP5_R2_OL03_TYPED_SIGNATURE_POLICY_DESIGN.md)で、信頼元・型付き照合・registry/次版ledger・移行・承認待ち事項を具体化した。署名検証の実装・運用承認を意味しない。
 
 launcherがmainに入ってからenvを消すだけでは、そのlauncherのloader注入を防げない。
 この再帰を「Rustだから安全」で打ち切らず、署名・Hardened Runtime・OSの実行制御と信頼済み配備を外側の前提にする。
