@@ -112,6 +112,12 @@ It borrows bytes only: no held-FD reader, native/API binding, page/CMS validity 
 entitlement semantics is connected. Its entitlement gate always rejects (DER,
 absence or unverified XML); no authority or permit is produced. See
 [physical inventory synthetic verification](../../docs/E2E_BEST_PRACTICE_R2_OL03_PHYSICAL_SIGNATURE_SYNTHETIC_2026-10-19.md).
+The private `positioned_read` component stages a shared 10-second/2GiB budget,
+worst-case reservations, eight shared EINTR retries and a bounded single-shot
+positioned-source interface. Short reads, late responses and cancellation latch failure.
+Only synthetic sources are tested: no OS pread adapter, deployment/PinnedFile hookup,
+hash capture or parser connection is enabled. See
+[positioned read synthetic verification](../../docs/E2E_BEST_PRACTICE_R2_OL03_POSITIONED_READ_SYNTHETIC_2026-10-19.md).
 See [boundary contract](../../docs/BEST_PRACTICE_BP5_R2_OL03_SECURITY_BOUNDARY_DESIGN.md)
 and [synthetic verification](../../docs/E2E_BEST_PRACTICE_R2_OL03_SECURITY_BOUNDARY_SYNTHETIC_2026-10-19.md).
 

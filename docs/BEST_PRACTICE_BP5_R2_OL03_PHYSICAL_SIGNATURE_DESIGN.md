@@ -1,6 +1,6 @@
 # BP-5 R-2 OL-03：保持FDの物理signature列挙・CodeDirectory結合
 
-Version: draft-0.4 / Date: 2026-10-19 / Status: 純粋bounded parserを内部合成実装済み。保持FD読取接続は詳細設計のみ。保持FD/native接続・API結合・実artifact検証は未実施。
+Version: draft-0.5 / Date: 2026-10-19 / Status: 純粋bounded parser・別部品の共有予算/I/O境界を内部合成実装済み。保持FD/parser・native接続・API結合・実artifact検証は未実施。
 
 ## 1. 目的と停止境界
 
@@ -166,7 +166,7 @@ single-CD制限を広げる場合は全alternateとalgorithm集合、OSの選択
 
 ## 9. FD・世代・時刻と差替えの限界
 
-[保持FDの安全読取・parser接続draft-0.1](BEST_PRACTICE_BP5_R2_OL03_HELD_FD_PARSER_DESIGN.md)で、同じ所有File・metadata・全体hash A/B・hash走査からのrange採取・共通I/O/10秒予算・拒否条件を具体化した。文書のみで、接続実装/試験は未実施。
+[保持FDの安全読取・parser接続設計](BEST_PRACTICE_BP5_R2_OL03_HELD_FD_PARSER_DESIGN.md)で、同じ所有File・metadata・全体hash A/B・hash走査からのrange採取・共通I/O/10秒予算・拒否条件を具体化した。共有予算/位置指定読取境界だけ別部品で[合成検証](E2E_BEST_PRACTICE_R2_OL03_POSITIONED_READ_SYNTHETIC_2026-10-19.md)し、OS adapter・parser接続実装/試験は未実施。
 この読取接続の設計と、以下のnative API結合・寿命全体の更新排他は別段階であり、前者の成功で後者を省略しない。
 
 将来の統合順序案：更新排他取得→保持FD/full hash/metadata→inventory→同じpathのnative validity/情報取得→CD照合→同じFDのsignature領域/全体hash/metadata再確認→activation/ledger世代と期限再確認。

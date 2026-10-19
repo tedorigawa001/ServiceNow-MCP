@@ -1,6 +1,6 @@
 # BP-5 R-2 OL-03：保持FDの安全読取・物理signature parser接続
 
-Version: draft-0.1 / Date: 2026-10-19 / Status: 詳細設計案。接続実装・合成試験・運用承認は未実施。
+Version: draft-0.2 / Date: 2026-10-19 / Status: 共有予算・位置指定読取境界のみ内部合成実装済み。OS adapter/保持FD・hash採取/parser接続・運用承認は未実施。
 
 ## 1. 目的と停止境界
 
@@ -8,7 +8,7 @@ Version: draft-0.1 / Date: 2026-10-19 / Status: 詳細設計案。接続実装�
 file全体SHA-256とparser入力の対応、metadata、record binding、共有予算を結ぶ。pathだけで開き直したfileや呼出し側のbytesを「保持FD由来」と扱わない。
 本書は既存実装の調査に基づくプロジェクトの設計案であり、新しいOS/API適合試験の結果ではない。
 
-telemetry調査は保留。今回の成果物はMDのみ。実装・API実接続・DER意味解析/absence証明・実機/PDI操作・token発行・設定変更・permit発行は対象外。
+telemetry調査は保留。実装は§12の内部予算/I/O境界だけ。API実接続・DER意味解析/absence証明・実機/PDI操作・token発行・設定変更・permit発行は対象外。
 本番registry未設定、通常v2入口Unavailable、runtime gate92を維持する。後日の読取接続が成功しても、署名validity・実行許可を生成しない。
 
 ## 2. 現状との境界
@@ -19,6 +19,7 @@ telemetry調査は保留。今回の成果物はMDのみ。実装・API実接続
 | [native/file.rs](../native/r2-outer/src/signature_boundary/native/file.rs) | private PinnedFileの位置指定読取/hash、前後metadata、同じ開始Instant/cancel | deploymentから未接続。identity/layoutの呼出しごとに再hashし、path照合は絶対pathを再openする。parser用buffer・共通I/O台帳はない |
 | [physical_signature.rs](../native/r2-outer/src/signature_boundary/physical_signature.rs) | 宣言file長＋header/commands＋signatureの借用bytesをbounded解析 | bytesが同じFD/走査由来であること、全体hash/metadata/世代は証明しない |
 | [ledger_v2.rs](../native/r2-outer/src/ledger_v2.rs) | registry参照・role・record bindingの純粋照合 | 運用上信頼済みrecord・保持FD・leaseの一体化ではない |
+| [positioned_read.rs](../native/r2-outer/src/signature_boundary/positioned_read.rs) | 共通10秒/2GiB/再試行枠、予約/精算、位置指定要求・短読取/遅延応答の拒否 | 合成sourceだけで検証。実pread adapter・deployment/PinnedFile・hash/parserへは未接続 |
 
 既存の[配備読取検証](E2E_BEST_PRACTICE_R2_OL03_DEPLOYMENT_READ_SYNTHETIC_2026-10-19.md)と[parser合成検証](E2E_BEST_PRACTICE_R2_OL03_PHYSICAL_SIGNATURE_SYNTHETIC_2026-10-19.md)はそれぞれの部品の証拠であり、本接続の試験へ流用しない。
 公開`inspect_deployment(root, binding, started)`の成功や外部から渡されたFileだけを、新しい信頼済み接続のconstructorにしない。
@@ -116,7 +117,7 @@ EAGAIN・その他I/Oエラー・返却量超過/不正offset・checked変換失
 | 合計memory | 上記はbytes bufferだけ。slot metadata、record/index、祖先snapshot、allocator/OS内部量を含むRSS上限の証明ではない。全file Vec/mmap・B用大blob複製なし |
 | 対象順 | Launcher/Nodeは順次。不要なbuffer/対象FDを解放してから次へ。ただし後続API/execに必要な保持FDは別の所有設計へ移すまで閉じない |
 
-既存deploymentの容量台帳は、そのscanの読取を数える内部変数であり、native/PinnedFileの再hashを含む共有台帳は**まだない**。
+既存deploymentの容量台帳は、そのscanの読取を数える内部変数である。共有予算の部品は追加したが、deployment/native/PinnedFileへは**まだ接続していない**。
 本案は新規接続で重複読取も課金するため、今まで上限内だった配備でも追加検査でLimitになり得る。unique file総量と実I/O総量を同じ値として報告しない。
 両roleが512MiB、closure読取も別に行う場合、A/Bだけで2GiBに達しpreflight等を含めて拒否される。容量や10秒を自動緩和しない。
 将来closureの対象hashとAを同一走査に統合する場合は、同じbytes/binding/metadataを共有する実装・試験が必要。既存成功値のcache流用だけで読取を省略しない。
@@ -150,7 +151,7 @@ Securityのpath-based APIと保持FDはatomicに結合されない。本接続�
 exec adapterがFD>=3を閉鎖する現状も変更しない。検査用FDの保持と、exec後のrelease寿命管理は別問題である。
 後続API接続では同じ所有対象を維持し、API前後・exec直前の再確認を追加する必要がある。本案A/Bの完了をexec/importまで有効なcacheにしない。
 
-## 9. 合成試験計画（未作成・未実行）
+## 9. 接続全体の合成試験計画（実行済みの境界単体は§12）
 
 | 試験群 | 必須の確認 |
 |---|---|
@@ -175,8 +176,30 @@ exec adapterがFD>=3を閉鎖する現状も変更しない。検査用FDの保�
 4. 承認後の実装は、共有予算/位置指定読取境界→range採取/純粋parser接続→再hash/metadata/再解決→合成失敗点試験の順。API/nativeへの実接続は別工程。
 5. 本番policy/registry、API-CD結合、XML意味統合、DER/absence、permit/exec接続は引き続き未対応の停止条件として残す。
 
-## 11. 今回の文書確認
+## 11. draft-0.1時点の文書確認
 
 既存deployment/native file/parser/ledgerのソースと関連設計を読み取り、現在実装済みの部品と今回の提案を分離した。
 関連MDのlocal link・code fence・行末空白とgit diffを確認する。今回コード変更はなく、Rust/TypeScriptテストや実機適合試験は再実行しない。
 過去の221件成功は純粋parser追加時の記録であり、本書のFD接続が検証済みという意味にはしない。
+
+## 12. 共有予算・位置指定読取境界の内部実装
+
+[合成検証記録](E2E_BEST_PRACTICE_R2_OL03_POSITIONED_READ_SYNTHETIC_2026-10-19.md)に追加27件と全体248件の結果を記録する。
+`SharedBudget`は元Instant/cancel、2GiB実読取量、未消費予約、全対象共通EINTR再試行8回、最初の失敗を保持する。
+`ReadScope`が同じ台帳と単一sourceを排他的に借用する。途中のsource差替え・共有台帳のClone/resetは提供しない。
+最初の失敗をラッチし、次のread/begin/checkpointは同じ理由で停止する。cancel解除/時計の巻戻し/新scopeで再開させない。
+
+- `begin`はNが32bytes〜512MiBの範囲内か確認し、`2*N + 32 + (1MiB+32) + 2`をchecked予約する。
+  preflightのcommands長が未判明なため、初期境界では最大header量を保守的に予約する。小さいfileでも残予算がこの予約を満たさなければ停止し得る。
+- `PositionedSource::pread`はoffset/可変sliceを受ける単発試行trait。現在その本番実装はなく、raw FD/path/open/seek/OS syscallは追加していない。
+  trait実装の自己申告を同じ保持FDの証拠にしない。将来OS adapterが隠れたretryや別FDを使わないことは別試験が必要。
+- 通常readは非空64KiB以内、checked終端がN以内。0/正の短読取は補完せずChanged。不正返却量はReadFailed。EOFはNから1byteを要求し0だけ受理する。
+- 通常要求は対象ごと32768回まで。EINTRだけ同じoffset/sliceで最大8回を全対象共有枠から再試行し、成功後も回復しない。9回目/EAGAIN/他エラーは停止。
+- 成功応答の実bytesは短読取/遅延/取消応答も含めて課金し、予約から同量を消費。EOFの0bytes/EINTRは0課金。残予約はscopeのDropで解放する。
+  返却量がslice長を超える壊れたsourceは要求長までを保守的に計上し停止する。この値を実OS読取量の証拠にしない。
+- source呼出し前後に期限/cancelを確認する。遅い成功も破棄。I/Oを試行したreadの失敗時は現在のbounded出力sliceをzeroにするが、一般的な秘密メモリ完全消去ではない。
+- `account_read`は将来index/closure adapter用の実成功bytes課金補助。I/O許可/予約を発行するAPIではなく、前段のcheckpointと容量確保は接続側に必要。
+  呼出し後guardの前に課金するため、すでに取得した遅延bytesも数える。既存scanからの呼出しはない。
+
+予算/読取境界はprivateかつ非authority。公開JSON/exit code・既存source・runtime gate・permitを変更していない。
+実FD owner/metadata・binding/lease、preflight range分離、A/B hash・採取buffer・parserへの共通予算接続は次工程。
