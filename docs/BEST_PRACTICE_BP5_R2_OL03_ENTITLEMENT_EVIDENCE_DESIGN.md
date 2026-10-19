@@ -1,6 +1,6 @@
 # BP-5 R-2 OL-03：raw／DER整合確認とabsence証明
 
-Version: draft-0.1 / Date: 2026-10-19 / Status: 公式資料・SDK照合と設計のみ。parser・native変更・実API検証は未実施。
+Version: draft-0.2 / Date: 2026-10-19 / Status: raw XML限定parser/型付き比較を内部合成実装。native接続・DER・absence・実API検証は未実施。
 
 ## 1. 結論と現在の境界
 
@@ -10,7 +10,7 @@ rawキーの値を署名内の元bytesと断定せず、APIの両キー欠落だ
 DERの形式識別と意味解析も区別する。現時点で実装/承認済みのDER意味decoderはなく、DERが関係する完全照合は未対応として停止する。
 
 本番registry未設定・通常v2入口Unavailable・runtime gate92・permit未発行を維持。
-今回はMDのみ。実装、実Security/CF呼出し、署名、公証、実機/PDI操作、token発行、設定変更は行わない。telemetry調査は保留。
+初版はMDのみ。後続で[raw XML限定部品の合成実装](E2E_BEST_PRACTICE_R2_OL03_RAW_XML_SYNTHETIC_2026-10-19.md)を追加した。native接続、実Security/CF呼出し、署名、公証、実機/PDI操作、token発行、設定変更は行っていない。telemetry調査は保留。
 既存native設計に記載された以前の1台・1版のprobe観測は引き継ぐが、今回再実行した証拠ではない。
 
 ## 2. 根拠台帳（2026-10-19照合）
@@ -29,7 +29,7 @@ DERの形式識別と意味解析も区別する。現時点で実装/承認済�
 
 SDKの場所は`/Library/Developer/CommandLineTools/SDKs/MacOSX26.5.sdk`と`MacOSX27.0.sdk`。採用toolchain/OSの承認ではない。
 Apple Webの一部は直接取得がJS外枠で、Markdownリンクも取得失敗。公式検索抽出とSDK本文を突き合わせ、取得できなかった本文を読了済みとはしない。
-EE-06/07は調査日の`main`を読んだ補助根拠で、特定OS buildと同一とは未確認。将来の実装承認前に対象release/tag/commitと全必要構造を固定・再照合する。
+EE-06/07は調査日の`main`を読んだ補助根拠で、特定OS buildと同一とは未確認。物理signature/DER parserの実装承認前に対象release/tag/commitと全必要構造を固定・再照合する。今回のAPI XML wrapperは設計済みmagic/length契約だけの合成実装で、実API適合を主張しない。
 Community投稿・非公式DER decoder・private APIを本番根拠/依存に採用していない。
 
 ## 3. 今回見つかった取得条件の差
@@ -49,7 +49,7 @@ EE-06の公開実装にはDER由来のXML再構成やdictionary補正、情報�
 
 ## 4. 証拠レベルと対応形式案
 
-以下は**内部の将来状態案**で、既存JSON/enumへの実装追加ではない。
+以下は証拠レベルの契約案。API内XML一致だけを示すprivate `ApiXmlMatch`を追加した。公開JSON/既存署名結果enumの変更はない。
 
 | 状態 | 言えること | 言えないこと |
 |---|---|---|
@@ -61,7 +61,7 @@ EE-06の公開実装にはDER由来のXML再構成やdictionary補正、情報�
 | 形式 | 現実装 | 次の限定設計 |
 |---|---|---|
 | API CFDictionary | rawなしの場合だけ型投影 | rawと別に型/件数/値を保持、後で完全比較 |
-| API CFDataのXML blob | rawがあれば停止 | §5の限定profile候補。API rawが再構成物でもAPI内部一致だけを報告 |
+| API CFDataのXML blob | nativeはrawがあれば停止。別の純粋部品だけ内部合成実装済み | §5の限定profileでAPI内部一致だけを検査。物理slot/CFData取得との接続はない |
 | 物理XML slot 5 | 未読取 | bounded envelope/意味解析候補。API rawとはbyte一致を要求せずtyped値を比較 |
 | 物理DER slot 7／DER magic | 未読取 | envelopeを識別しても意味decoder未承認なら停止。未知DERをXMLや空へ変換しない |
 | binary/OpenStep plist、未知magic/将来形式 | 未対応 | 初期profileでは拒否 |
@@ -70,7 +70,7 @@ EE-06の公開実装にはDER由来のXML再構成やdictionary補正、情報�
 DERが存在するのにXML/API一致だけで`embedded_consistent`へ上げない。
 最初のXML照合部品だけで、現在のraw拒否や通常入口停止を解除しない。
 
-## 5. 限定XML profile案（未実装・未承認）
+## 5. 限定XML profile（内部部品のみ実装）
 
 - api_blobはCFData型確認後、長さを確認してbounded copy。`0xfade7171`とbig-endian長さを持つ8bytes wrapperだけを初期候補にする（EE-07）。headerなしpayloadを推測して救済しない。
 - lengthはheader込み実bytesに一致。切詰め・overflow・末尾データ/余分NUL・BOM・別magicを拒否。実APIがこのwrapperを返す条件は採用OSで未検証。
@@ -79,7 +79,22 @@ DERが存在するのにXML/API一致だけで`embedded_consistent`へ上げな�
 - falseは観測値として保持してtrueとの不一致を検出する。数値1・文字列true・array/data/nested dictは初期profile外として拒否し、存在しなかった値へ変換しない。
 - ネットワーク/外部実体の解決は禁止。任意DOCTYPE、内部subset、ENTITY、parameter entity、未知PIを拒否。
 - 通常plistにあるApple PLIST 1.0の標準PUBLIC DOCTYPEは、固定の識別子/URLからなる宣言を**不活性な字句としてのみ許す案**。DTDを取得/展開しない。正確な許可構文・引用符/空白の扱いは実装前レビューで固定する。承認前はDOCTYPE付き入力も停止。
-- `CFPropertyListCreateWithData`だけへの丸投げでは、事前の重複key/深さ/DTD制限を満たしたとしない。限定字句/構造検査＋必要ならCF解析結果との比較を候補とし、parserの選定は未決。
+- `CFPropertyListCreateWithData`だけへの丸投げでは、事前の重複key/深さ/DTD制限を満たしたとしない。今回CFは使わず§5.1の限定文法を実装した。CF解析結果との比較は未実施。
+
+### 5.1 今回実装したsubsetと接続境界
+
+`signature_boundary/raw_xml.rs`に、依存追加なし・非再帰の限定文法を実装した。一般XML parserや正規表現抽出ではなく、閉じたtoken/構造だけを受理する。
+optional XML宣言は先頭のみ、version 1.0、optional encodingはUTF-8のみ（順序固定）。plistはversion 1.0属性が必須、dict属性は禁止。
+ASCII空白と両種の引用符を許可し、empty dictは自己終了/開始終了の両方、booleanは自己終了/内容なしの開始終了の両方を受理する。
+comment/CDATA/未知PI/standalone/namespace/BOM/全DOCTYPEを拒否する。標準DOCTYPEの不活性許可も未承認なので実装していない。
+plist→dict→key/boolean以外の入れ子は即拒否するため、深さ8より厳しい固定構造。XML再帰やentity再展開は行わない。
+
+入力は借用したblob bytesと既存の型付き`Observation`。CFData取得・CFDictionaryの真正性は検査しておらず、呼出し側が与えた観測同士の比較である。
+raw envelope込み64KiB・観測の既存byte予算64KiB、32keys、key復号後UTF-8 128bytesを検査する。原本全体をStringへ複写せず、keyだけboundedに確保する。
+false同士の一致を認めるのは観測の整合であり、本番policyとしてfalseを許す変更ではない。既存policy比較器/PA-06は別契約のまま。
+結果は件数のみの`ApiXmlMatch(api_only_not_execution_authority)`。DER magic、raw欠落、AbsenceProven/Unknown観測は拒否し、完全な物理表現一致/absenceの証拠型を生成しない。
+元のInstant/cancelを共有し、空白/実体参照/key走査と最終照合まで期限を確認する。時計のtest hookはprivate関数内だけで、公開起動口は増やさない。
+native raw拒否・signing情報flags・reader・permit/execは変更していない。API XMLだけ一致してもnativeの停止を解除しない。
 
 ## 6. 物理signatureの列挙とDER（必要な追加設計）
 
@@ -119,7 +134,7 @@ signature envelopeは4MiB、load-command領域1MiB、ncmds4096、SuperBlob index
 内部理由案：`invalid_envelope`、`unsupported_representation`、`representation_mismatch`、`duplicate_key`、`absence_unproven`、`limit`、`deadline`、`cancelled`。
 公開exit codeや既存enumを今回変更しない。raw bytes/keys/values/path/証明書をerrorへ出さず、形式・件数・有限理由だけを将来返す。
 
-| 合成群 | 必須ケース（まだ作成/実行していない） |
+| 合成群 | 必須ケース（実装済み範囲は§5.1/検証記録を参照。物理signature/DER/absenceは未実装） |
 |---|---|
 | API XML一致 | key順だけ違う一致、entity復号、empty、false保持、raw/辞書片方欠落・値/型/集合不一致 |
 | XML拒否 | 重複key、DTD/ENTITY/外部参照、未承認DOCTYPE、深さ/件数/長さ超過、数値/string/nested、末尾データ、不正UTF-8 |
@@ -128,10 +143,22 @@ signature envelopeは4MiB、load-command領域1MiB、ncmds4096、SuperBlob index
 | absence | 物理/CodeDirectory/APIの全組合せ、unsigned/不完全情報/外部署名を拒否、emptyと不存在を区別 |
 | 結合/資源 | 別FD/別CodeDirectory、前後差替え、期限/cancel、部分取得CF資源解放、raw非出力 |
 
+## 8.1 観測したNodeでの到達範囲（2026-10-19、レビュー）
+
+レビュー中にローカルのNode v24.18.0（1台・1版）の`LC_CODE_SIGNATURE`を読取専用で走査した（scratchpadの小さなscriptで、プロジェクトへは追加していない）。
+SuperBlobは5 slot：CodeDirectory（0）、requirements（2）、**XML entitlement（slot 5、`0xfade7171`、640 bytes）**、
+**DER entitlement（slot 7、`0xfade7172`、337 bytes）**、CMS（`0x10000`）。また以前`codesign`で確認したXML entitlementには、
+標準の`<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" …>`が含まれていた。
+
+- §5.1の初期subsetは全DOCTYPEを拒否するため、観測Nodeのentitlement XMLは現状必ず`InvalidXml`になる。§9の1（DOCTYPE許可構文の審査）が実artifact対応の前提である。
+- XML/DOCTYPEが通るようになっても、§4のとおりDERが存在する限りXML/API一致だけで`embedded_consistent`へ上げないため、観測Nodeは`api_xml_consistent`までしか到達しない。
+  §9の4（DER decoderの信頼元・対応subset）は、absenceのためだけでなく**Nodeを通すための必須前提**である。
+1台・1版の観測であり、採用版の署名構成は別途確認する。
+
 ## 9. 次の順序・承認待ち
 
 1. evidence level、上限、取得flags、DOCTYPE許可構文をレビューする。
-2. raw XMLのbounded envelope/限定構造/typed比較器だけを合成実装する。native有効化は別工程。
+2. raw XMLのbounded envelope/限定構造/typed比較器だけを合成実装済み（24テスト）。標準DOCTYPE許可・native有効化は別工程。
 3. 物理signature列挙/CodeDirectory結合の詳細契約を固め、未対応は拒否する部品を合成実装する。
 4. DER decoderの信頼元/対応subsetとabsence十分条件を別審査する。確認できなければproducerは無効維持。
 5. 別承認後の実artifact/OS適合で、API再構成、形式併存、empty/absence、例外/部分情報の挙動を検証する。

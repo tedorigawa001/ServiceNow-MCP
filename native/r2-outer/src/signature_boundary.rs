@@ -236,5 +236,6 @@ pub(super) fn inspect(b: &impl Backend, r: &Request<'_>) -> Result<ComparedSnaps
 }
 
 mod native;
+mod raw_xml;
 #[cfg(test)]
 mod tests;
