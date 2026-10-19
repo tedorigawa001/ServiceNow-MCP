@@ -197,3 +197,9 @@ privileged metadata/leaseのfake成功をOSでの保証と呼ばず、OS境界�
 正確な入手元/署名API・配布ticketのオフライン照合条件は既存OL-01の未確認事項を引き継ぐ。
 本書は新たな公式仕様確認の記録ではなく、既存設計と現在のコードを基にしたプロジェクト要件案である。
 人の承認・閉包の実測・更新排他・署名/配備検証は未実施。後続実装や実PDI開始の許可を意味しない。
+
+## 8. record再検証契約への接続設計
+
+[厳密record parser・全closure接続設計draft-0.1](BEST_PRACTICE_BP5_R2_OL03_RECORD_PARSER_CLOSURE_DESIGN.md)で、宣言自身の純粋checkと実観測の完了値を区別し、session/round/root/index bindingを持つ全件観測producerを提案した。
+元の2GiB/10秒/契約call枠へ初回とM4前後の全scan・record前後再読を合算し、形式上限100,000件でも受付予算に収まらなければ停止する。CheckedIndexのcountsやcaller-supplied Entry一覧を運用証拠へ変換しない。
+既存deployment scannerのNode独立resolve・独自total/cancel未接続をそのまま流用せず、同じ保持leaf/元台帳に結ぶadapterが必要。これはMDのみの設計で、parser/collector接続や運用gate解除は行わない。

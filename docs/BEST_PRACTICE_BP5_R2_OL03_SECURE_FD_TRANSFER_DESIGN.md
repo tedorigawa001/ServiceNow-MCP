@@ -253,3 +253,9 @@ origin比較は協調的な所有型の結合であり、悪意あるMetadataOps
 - 最初の失敗をラッチし、保留解析結果・source/target/record bytesを解放してから最終checkpoint。失敗後M4/次record/次roleへ継続しない。成功は固定Debugの`RecordComparison(synthetic_pending_lease_os_reader_not_execution_authority)`で、entitlement/native/permit停止を維持する。
 
 実reader側の安全な初回allocation/読取課金、protected path/flags・実ACL/xattr可視性・APFS等、再parseと全closure集合照合、更新lease、OS FD/cleanup台帳、clock取得、API/permitは未接続。合成snapshot・手動投影はroot承認や実inodeを証明しない。record間の変更、ABA、検査後変更をatomicに排除せず、今回の成功を後続execの有効cacheへ持ち越さない。
+
+## 16. 厳密parser・全closure再検証の接続設計
+
+[再検証接続詳細設計draft-0.1](BEST_PRACTICE_BP5_R2_OL03_RECORD_PARSER_CLOSURE_DESIGN.md)に、I/O sourceと固定verifierの分離、activation/ledger-0.2/固定registry/index全宣言の照合、同session/roundの全closure観測producer、M4前後の全scanとrecord前後再読を具体化した。
+元10秒/2GiB/16384契約callをresetせず、100,000件の形式上限を実行可能件数としない。ledger時刻の二重加算、decodeの理由丸め、cancel/管理allocation/同じNode sourceへの限定借用、実clock丸めとlease等の未確認事項を明記した。
+これはMDのみの後続設計であり、§15の合成revalidateを厳密parser/全closureへ接続した実装・テスト結果ではない。運用gateは停止したまま。
