@@ -157,6 +157,8 @@ ad-hocのfixtureをDeveloper ID正常系として採点しない。今回署名�
 
 ## 8. 承認待ち事項・次の順序
 
+[本番policy選定・承認票draft-0.1](BEST_PRACTICE_BP5_R2_OL03_PRODUCTION_POLICY_APPROVAL.md)に、Node署名/公証の選択、対象別証拠、非公開記録と組込みまでの停止条件を整理した。値の確定・人の承認は未実施。
+
 1. launcher/Nodeの正確な版・署名担当・Team ID/identifier/Developer ID証明書クラスとrequirement template。
 2. Node公式署名の採用か別署名か、entitlementのexact typed dictionary・全静的flag・残余リスクの承認。
 3. C方式は採択済み。個別の本番policy、registry組込み・参照専用次版ledgerの移行と旧offline reader分離を承認する。
