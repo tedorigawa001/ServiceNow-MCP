@@ -1,6 +1,6 @@
 # BP-5 R-2 OL-03：secure openerからmetadata sourceへの保持FD移譲
 
-Version: draft-0.3 / Date: 2026-10-19 / Status: binding/移譲・open snapshot/M0結合を合成resourceで内部実装。実reader/opener/macOS source接続・最終topology/record再照合は未実装/未承認。
+Version: draft-0.4 / Date: 2026-10-19 / Status: binding/移譲・open snapshot/M0結合・祖先/path再照合を合成resourceで内部実装。実reader/opener/macOS source接続・record/lease最終再照合は未実装/未承認。
 
 ## 1. 範囲と停止境界
 
@@ -107,7 +107,7 @@ path再解決で失敗/取得不能/消失した場合も停止し、旧FDのbyt
 5. 結果をscope内に保留したまま、record exact bytes/identity/世代/期限・leaseを最終確認し、共通checkpointを通す。すべて完了してから限定診断を返す。
 
 従来のcompare_collected_m0_m4はM0 baselineを独自に固定し、B〜M4の間にtopology callbackがない。そのまま前後に関数を並べただけでは上の手順を満たさない。
-§13でsealedなopen snapshot/M0比較を同じReadScopeへ追加したが、M4前finalizerはまだない。caller任意callbackでpath検査をskipできる形にはしない。
+§13でsealedなopen snapshot/M0比較を同じReadScopeへ追加し、§14の別経路でM4前topology照合を必須にした。record/lease finalizerはまだない。caller任意callbackでpath検査をskipできる形にはしない。
 topology検査のleaf観測はM0〜M4とは別の観測で、既存100呼出し枠をresetしない（§8）。
 
 どの並べ方でもFile/namespace/recordをatomicには検証できない。M4後のrecord読取中の変更や検査後のABAを完全排除しない。
@@ -136,7 +136,7 @@ record用xattr検査は現reader未実装であり、追加方針/可視性が�
 | FD | role scope132を先行予約。一時再walk・失敗時close用の余裕を含める。processのrecord/lock等も含む上限へ収まらなければ停止。RLIMITを自動引上げしない |
 | 解放 | ACL/一時File/leaf/chainの解放は期限後も行う。close/free用resource枠は取得枠が枯渇しても使えるよう予約する。解放で10秒のhard終了を保証しない |
 
-追加topology枠は**未採択の新規案**で、現行SharedBudgetには存在しない。既存100/640KiBへ入ると偽装したり、limitを自動拡張したりしない。採用/実装前は運用finalizerをUnavailableで停止する。
+追加topology枠のOS境界ごとの正確な配賦は**未採択**。§14ではSharedBudgetへ合成契約の単発呼出し16384上限だけを追加した。1契約呼出しを1 syscallと数えず、既存100/640KiBへ入るとも主張しない。名前copy8MiB・OS FD/cleanup台帳・record/closure統合の採用/実装前は運用finalizerを停止する。
 実metadataの可視性・syscall内部memory/I/O・blocked I/Oの中断は引き続き未確認。OSの非復帰を協調checkpointだけで止められるとは主張しない。
 
 ## 9. 失敗時の解放・出力
@@ -216,4 +216,21 @@ Rust/TSコードを変更しないためビルド・テストは再実行しな�
   XML/DER/absenceの既存entitlement gateは停止を維持し、祖先/path/record/leaseが未検証のままpermitを発行しない。
 
 origin比較は協調的な所有型の結合であり、悪意あるMetadataOps実装やABA・実FD/OS identity・可視性を証明しない。raw Observationだけを別resourceから偽造するtrusted producerの侵害も保証対象外。
-M4前topology hook・record再読・更新排他・実opener/File移譲・実機/API/permitは依然未実装/未接続。
+この段階の結果型にtopology保証は追加しない。別の§14の経路がM4前topologyを必須化する。record再読・更新排他・実opener/File移譲・実機/API/permitは依然未実装/未接続。
+
+## 14. 祖先/path再照合の内部契約・合成source
+
+[topology合成検証記録](E2E_BEST_PRACTICE_R2_OL03_TOPOLOGY_SYNTHETIC_2026-10-19.md)と、privateな[topology.rs](../native/r2-outer/src/signature_boundary/positioned_read/metadata/transfer/topology.rs)を追加した。実filesystem/OS adapterはない。
+
+- `TopologyReceipt`は同じopenに伴う比較用lineage/record/targetと、各保持祖先のorigin/初期snapshotを所有する。非Clone・非serialize・公開constructorなし。実opener producerは未実装であり、root承認済みの証拠ではない。
+- `TopologySource<R>`は保持祖先観測・固定`/`の新規anchor・parent相対child・一時resource観測という単発境界。component/順序とdirectory/leaf区分はBoundTargetから固定し、callerのpathやflagsを受け取らない。sourceはprivateな合成実装だけで、trusted OS backendではない。
+- `review_topology_target`はHeldTargetScope/receipt/sourceを消費する。**移譲後・M0前**と**B完了後・M4取得前**の2回、保持祖先を全件再観測し、anchorから全edgeと最後のleafを再walkする。一方が成功しても他方を省略しない。M0〜M4は従来どおり各1回。
+- origin・record/target・component/cardinalityの結合を前後で確認し、同metadataの別保持resourceはSourceMismatch、別receiptはBinding。directoryはbefore/after全Stat、ACL/FS、可視名の分類を初期snapshotとexact比較する。leafはopen時のStat/可視名へ結び、hash一致で別inodeを救済しない。
+- directoryはleafのlinks=1やsize>=32を適用しない。合成profileではroot UID・directory type・mode0555/0755・非zero links・時刻ns・ACL absent/FS localを要求する。祖先のdeviceはleafと同一と仮定せず、各初期値と比較する。**system祖先のmode/xattr/FS適合が承認済みという意味ではない**。OS側のAPFS/ownership/noexec等の取得/方針は未接続。
+- raw xattr名を受け取る契約にはせず、Empty/Provenance/Disallowed/Unknownの固定型を使う。実OS列挙のbounded解析・可視性・成功copy課金を代替しない。UnknownはMetadataUnavailable、policy不適合・初期値との差はChanged。
+- `SharedBudget.topology_calls`は全呼出しで共有し、単発境界16384回を超える前にLimit。同じ10秒・cancel・sticky failureを全境界の前後へ伝播する。M4前に予算をresetしない。payload/metadata50正常呼出し/100上限・名前枠・EINTR枠は変更しない。
+- namespaceのcurrent/nextは最大2個だけ生存するstreaming所有型。一時resourceをpread/parserに渡さず、失敗/遅延/取消/unwindでも解放する。132の構造上限を維持するが、合成Drop数は実FD/close成功/OS resource予約の証拠ではない。
+- B後の再照合失敗では保留中の解析結果を捨て、M4を取得せず停止する。初回失敗ではM0/bytesを取得しない。再試行・旧FDからの継続・弱いpolicyへのfallbackはない。
+- 成功は非Clone/非serializeの`TopologyComparison(synthetic_pending_records_lease_not_execution_authority)`だけ。従来のOpenBoundComparisonから変換できず、entitlement/native/permit gateを開かない。
+
+この契約は協調的な合成sourceの挙動を検証するもの。実sourceの内部で隠れた再試行/巨大allocation/別path読取がないこと、ABA/検査後変更の防止、更新lease/record再読、OS hard timeoutは未証明。telemetry調査は保留し、実機/API・本番policy・token/設定/permit/Pushは行わない。

@@ -46,7 +46,7 @@ fn released(life: &Life) {
     assert_eq!(made, freed);
     assert!(freed.windows(2).all(|v| v[0] != v[1]));
 }
-fn records() -> RecordBinding {
+pub(super) fn records() -> RecordBinding {
     RecordBinding {
         activation_path: crate::ACTIVATION_PATH.into(),
         activation_hash: [1; 32],
@@ -71,7 +71,7 @@ fn records() -> RecordBinding {
         ledger_expires_ms: 600_000,
     }
 }
-fn target() -> TargetDeclaration {
+pub(super) fn target() -> TargetDeclaration {
     TargetDeclaration {
         role: Role::Node,
         path: "/sealed/runtime/bin/node".into(),
@@ -84,7 +84,7 @@ fn target() -> TargetDeclaration {
         policy_role: Role::Node,
     }
 }
-fn initial() -> Observation {
+pub(super) fn initial() -> Observation {
     let stat = Stat {
         device: 7,
         inode: 42,

@@ -54,6 +54,8 @@ pub(super) struct SharedBudget<'a> {
     metadata_calls: u32,
     metadata_cleanup_reserved: u32,
     metadata_name_bytes: u64,
+    // Comparison-only topology boundary calls; not an OS syscall/FD accounting proof.
+    topology_calls: u32,
 }
 impl std::fmt::Debug for SharedBudget<'_> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -73,6 +75,7 @@ impl<'a> SharedBudget<'a> {
             metadata_calls: 0,
             metadata_cleanup_reserved: 0,
             metadata_name_bytes: 0,
+            topology_calls: 0,
         }
     }
     fn stop<T>(&mut self, reason: Failure) -> Result<T, Failure> {

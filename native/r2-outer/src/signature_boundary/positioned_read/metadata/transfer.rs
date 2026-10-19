@@ -334,3 +334,4 @@ fn review_opened_target<R: MetadataOps + ResourceOrigin>(
 }
 #[cfg(test)]
 mod tests;
+mod topology;

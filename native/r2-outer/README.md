@@ -146,7 +146,12 @@ resources. The held resource can now use a private MetadataOps review path that
 binds its open snapshot and opaque origin to M0 before payload reads. The resulting
 OpenBoundComparison still awaits topology/records/lease; it is no record
 authenticator, trusted opener or execution authority. No real opener/File is
-connected. See
+connected. A separate private topology path now requires retained-ancestor observations
+and a complete anchor-to-leaf namespace rewalk before M0 and after B/before M4.
+It uses a bounded no-FD synthetic source, at most two temporary resources, and a
+shared 16384 contract-call cap. This is not OS syscall/FD accounting or an approved
+ancestor profile. Its fixed TopologyComparison still awaits records/lease and cannot
+issue authority. See [topology synthetic verification](../../docs/E2E_BEST_PRACTICE_R2_OL03_TOPOLOGY_SYNTHETIC_2026-10-19.md) and
 [M0–M4 synthetic verification](../../docs/E2E_BEST_PRACTICE_R2_OL03_METADATA_SYNTHETIC_2026-10-19.md).
 See [boundary contract](../../docs/BEST_PRACTICE_BP5_R2_OL03_SECURITY_BOUNDARY_DESIGN.md)
 and [synthetic verification](../../docs/E2E_BEST_PRACTICE_R2_OL03_SECURITY_BOUNDARY_SYNTHETIC_2026-10-19.md).
