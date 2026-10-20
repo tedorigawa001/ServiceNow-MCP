@@ -5,6 +5,23 @@ use crate::{
     json::shared as json,
 };
 impl SharedBudget<'_> {
+    pub(super) fn decode_round_declaration<'a>(
+        &mut self,
+        bytes: &'a [u8],
+        binding: &closure::Binding<'_>,
+    ) -> Result<c::DecodedDeclaration<'a>, c::Rejection<Failure>> {
+        let result = c::decode_declaration(bytes, binding, self);
+        self.closure_result(result)
+    }
+    pub(super) fn recheck_round_declaration(
+        &mut self,
+        parsed: &c::DecodedDeclaration<'_>,
+        binding: &closure::Binding<'_>,
+        observed: Option<&[closure::Entry]>,
+    ) -> Result<closure::CheckedIndex, c::Rejection<Failure>> {
+        let result = parsed.recheck(binding, observed, self);
+        self.closure_result(result)
+    }
     pub(super) fn check_closure_json(
         &mut self,
         bytes: &[u8],

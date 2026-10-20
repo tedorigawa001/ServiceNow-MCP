@@ -58,6 +58,8 @@ pub(super) struct SharedBudget<'a> {
     topology_calls: u32,
     // Staged JSON work cap from the draft design; no allocator/RSS or operation permit.
     json_work: u64,
+    // Private identity of this shared inspection budget, not an execution capability.
+    inspection_origin: Rc<()>,
 }
 impl std::fmt::Debug for SharedBudget<'_> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -79,6 +81,7 @@ impl<'a> SharedBudget<'a> {
             metadata_name_bytes: 0,
             topology_calls: 0,
             json_work: 0,
+            inspection_origin: Rc::new(()),
         }
     }
     fn stop<T>(&mut self, reason: Failure) -> Result<T, Failure> {

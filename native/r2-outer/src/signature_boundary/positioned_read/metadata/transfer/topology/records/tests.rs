@@ -59,7 +59,7 @@ fn raw(s: Stat) -> TopologyObservation {
         names: VisibleNames::Empty,
     }
 }
-fn make_receipt(binding: &mut RecordBinding, lineage: &Rc<()>) -> RecordReceipt {
+pub(super) fn make_receipt(binding: &mut RecordBinding, lineage: &Rc<()>) -> RecordReceipt {
     let pins = KINDS.map(|kind| {
         let bytes = format!("synthetic-record-{}-not-json", index(kind)).into_bytes();
         let hash: [u8; 32] = Sha256::digest(&bytes).into();

@@ -1,6 +1,6 @@
 # BP-5 R-2 OL-03：同一round内のimmutable index宣言再利用・work事前受付
 
-Version: draft-0.1 / Date: 2026-10-20 / Status: MD設計案のみ。実装・運用承認・実測は未実施。
+Version: draft-0.2 / Date: 2026-10-20 / Status: 同round型・decode/意味検査分離を内部実装し合成検証。pipeline接続・work事前受付・運用承認は未実施。
 
 ## 1. 目的・現状・非対象
 
@@ -8,7 +8,7 @@ Version: draft-0.1 / Date: 2026-10-20 / Status: MD設計案のみ。実装・運
 現在は初回/M4前/M4後の各roundでdeclare→check→declareがそれぞれindexをparseし、計9回となる。activation/ledger/registryはscan前後の計6回検証する。
 本案では**indexのJSON decode/typed変換だけを1round1回、全3回へ減らす**。scan前後の厳密なrecord/時刻/binding検証、全closure観測、宣言の意味検査・全集合比較は維持する。
 
-telemetry調査は保留。本書では実装、実機/PDI操作、API実接続、token発行、設定変更、本番policy投入、実署名、permit発行を行わない。APPROVED_REGISTRY=None、通常v2入口Unavailable、gate92、DER/absence停止を維持する。
+draft-0.1はMDだけだった。後続§9で先行部品を実装したが、telemetry調査は保留。実機/PDI操作、API実接続、token発行、設定変更、本番policy投入、実署名、permit発行は行わない。APPROVED_REGISTRY=None、通常v2入口Unavailable、gate92、DER/absence停止を維持する。
 既存public check/declared、公開JSON/exit code、固定予算上限を変える提案ではない。実collector・保護された初回receipt/context・leaseの未接続も解消しない。
 
 ## 2. ソースに基づく分離点
@@ -23,7 +23,7 @@ telemetry調査は保留。本書では実装、実機/PDI操作、API実接続�
 
 これはリポジトリ内の現実装を照合した設計で、新しい外部仕様の調査記録ではない。
 
-## 3. 再利用型と不変条件（設計名、未実装）
+## 3. 再利用型と不変条件（全体設計案、先行実装は§9）
 
 `RoundDeclaration<'session, 'round>`は次を所有/借用するprivate型とする。
 
@@ -159,5 +159,18 @@ workだけで受付成功にしない。元10秒/現在の残期限、実I/O2GiB
 3. work_model_id、shape統計、R_max/K_round/scan/その他の費目表を固定し、計数試験で上界を確認する。モデル不一致はUnavailableとし、capを黙って増やさない。
 4. bootstrap後の残予約/単一消費台帳と受付停止を接続する。実sourceや実運用への接続は別途承認する。
 
-round型の具体的なborrow/brand実装、固定費128の証明、R_maxとcollector全操作のW_scan、管理allocation/FD/clock/leaseの上界は未確定・承認待ち。本書の式や架空例だけでgateを解除しない。
-本書ではMDの参照・体裁・式の算術だけを検査し、実装テスト/実機検証を行ったという記録にはしない。
+round型の先行borrow/token実装は§9に記録する。固定費128の証明、work_model_id/shape統計、R_maxとcollector全操作のW_scan、管理allocation/FD/clock/leaseの上界は未確定・承認待ち。本書の式や架空例だけでgateを解除しない。
+draft-0.1の検査はMD/算術だけであり、§9の合成検証や実機検証と混同しない。
+
+## 9. 同round型・decode/意味検査分離の先行実装
+
+[先行実装の合成検証記録](E2E_BEST_PRACTICE_R2_OL03_ROUND_DECLARATION_SYNTHETIC_2026-10-20.md)を追加した。今回の範囲は§8の第1段階であり、既存strict pipelineの9→3 decode接続やwork予約は変更しない。
+
+- `closure::shared::DecodedDeclaration`が元immutable bytesをborrowし、Index全体をprivateに保持する。raw認証→strict decode→header/全宣言検査で生成する。`recheck`はraw hash/headerを再検査し、同じcheck_entriesで全宣言/親/全集合を再検査するが、JSONをdecodeし直さない。元public経路や従来Declaration/checkの戻り値・課金順序は維持する。
+- privateな`with_round`が元receipt/targetのbinding・pins/timeを確認し、fresh nonceのRoundScopeを作る。scopeのborrowを保持する`RoundDeclaration<'s,'r>`は非Clone/非serdeで、immutable entriesだけを公開する。callbackの任意戻り型Tへscope borrowを逃がさないシグネチャとし、roundのenum値だけで再利用を認めない。
+- 再利用時にnonce、同じreceipt/target/context object、lineage、round、元SharedBudgetのprivate originを要求する。別allocationの同bytes/同binding・同enumの新nonce・新budgetで拒否する。object addressはsealed borrow/nonce結合の補助であり、利用者が指定するpointer/hashを承認証拠にしない。
+- decode試行はscopeごとに一度だけ。scope内のCellは試行開始を消費するためだけに用い、宣言tree/bytesへ内部可変性を持たせない。失敗後も再試行/fallbackしない。decode/再利用の有限失敗を元budgetへラッチし、scopeをdropした後も最終checkpointを通す。
+- pure DecodedDeclaration自体にはsession/roundのauthorityがない。将来pipelineへ接続する際はround wrapperと既存のrecord strict verifier/前後再読/clock/観測bindingを必須にする。今回のwith_roundはreceipt/pinsの比較部品で、activation/ledger/registry schemaの再検証を代行しない。
+- private budget origin以外にstart/capやpayload/予約/topology等の台帳を変更しない。test-only thread-local counterで同scopeの再検査時にdecodeが増えないことを確認するが、cacheの運用性能やRSSの測定値にはしない。
+
+work_model_id/shape統計・固定費128の証明・残予約、scope後の利用に関する独立compile-fail fixture、実sourceの真正性/leaseは未対応。scope lifetime制約とnested別roundの拒否を区別して記録する。APPROVED_REGISTRY=None・通常v2 Unavailable・gate92・DER/absenceの停止を維持する。

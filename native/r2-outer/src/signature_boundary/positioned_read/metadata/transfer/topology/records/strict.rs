@@ -2,6 +2,8 @@
 use super::*;
 use crate::{closure, record_validation as r};
 
+mod round_declaration;
+
 pub(super) struct InspectionContext<'a> {
     // Pinned build bytes and effective groups from a future protected context producer.
     // Supplying these in synthetic tests does not establish their operational trust.

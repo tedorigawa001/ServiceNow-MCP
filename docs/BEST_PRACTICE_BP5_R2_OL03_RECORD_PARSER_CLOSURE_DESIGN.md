@@ -1,6 +1,6 @@
 # BP-5 R-2 OL-03：厳密record parser・全closure集合の再検証接続
 
-Version: draft-0.7 / Date: 2026-10-20 / Status: 内部strict pipelineの合成検証済み。同round宣言再利用・work事前受付は設計案のみ。実reader/collector・運用承認は未実施。
+Version: draft-0.8 / Date: 2026-10-20 / Status: 内部strict pipelineと同round宣言型を合成検証。宣言再利用のpipeline接続・work事前受付・実reader/collector・運用承認は未実施。
 
 ## 1. 範囲と停止境界
 
@@ -231,6 +231,7 @@ draft-0.1/0.2ではMDだけを検査した。424件は前工程の記録で、�
 
 ## 14. 同round宣言再利用・work事前受付の設計案（未実装）
 
-[詳細設計draft-0.1](BEST_PRACTICE_BP5_R2_OL03_ROUND_DECLARATION_WORK_DESIGN.md)に、同receipt/同round tokenに結合したimmutable宣言の再利用と残work予約を整理した。indexのJSON decodeだけを全9回から全3回へ減らし、raw hash・全宣言/全集合照合、scan前後のrecord strict検証（計6回）・exact再読/最新clockは維持する案である。
+[詳細設計draft-0.2](BEST_PRACTICE_BP5_R2_OL03_ROUND_DECLARATION_WORK_DESIGN.md)に、同receipt/同round tokenに結合したimmutable宣言の再利用と残work予約を整理した。indexのJSON decodeだけを全9回から全3回へ減らし、raw hash・全宣言/全集合照合、scan前後のrecord strict検証（計6回）・exact再読/最新clockは維持する案である。
 受付は元budget下のbounded bootstrapと、最初のscan前の残工程予約を分ける。accepted shapeのfile/directory数・全parent prefix・raw長に基づく式と、registry/scan/その他費目の上界を合算し、消費済みworkを二重課金/返却しない。§6.1の概算値を安全な受付上界へ読み替えない。
-round型/固定費/record・collectorのwork上界/予約台帳は未実装・未承認。実装・実機・API・token/設定/permitの変更を行ったものではなく、運用gateの停止を維持する。
+後続で[round型・decode/意味検査分離の先行合成検証](E2E_BEST_PRACTICE_R2_OL03_ROUND_DECLARATION_SYNTHETIC_2026-10-20.md)を追加した。同receipt/target/context・fresh nonce・budget originへ結合する型と、decodeなしの再認証/意味検査APIだけを実装した。既存pipelineの9回decodeやscan前後のstrict検証は変更していない。
+固定費/record・collectorのwork上界/予約台帳は未実装・未承認。実機・API・token/設定/permitの変更を行ったものではなく、運用gateの停止を維持する。

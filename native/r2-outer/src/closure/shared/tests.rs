@@ -1,6 +1,8 @@
 use super::*;
 use serde_json::{Value, json};
 
+mod decoded_cases;
+
 pub(crate) struct Fixture {
     pub bytes: Vec<u8>,
     pub hash: String,

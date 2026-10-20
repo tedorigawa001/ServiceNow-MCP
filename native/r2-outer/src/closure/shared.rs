@@ -13,11 +13,11 @@ fn step<B: Budget>(b: &mut B) -> Result<(), Rejection<B::Failure>> {
     b.work(1).map_err(Rejection::Budget)?;
     b.checkpoint().map_err(Rejection::Budget)
 }
-fn parse<B: Budget>(
+fn authenticate<B: Budget>(
     bytes: &[u8],
     binding: &Binding<'_>,
     b: &mut B,
-) -> Result<Index, Rejection<B::Failure>> {
+) -> Result<String, Rejection<B::Failure>> {
     step(b)?;
     if bytes.len() > MAX_BYTES {
         return Err(Rejection::Closure(ClosureFailure::Limit));
@@ -36,6 +36,22 @@ fn parse<B: Budget>(
     if digest != binding.index_sha256 {
         return Err(Rejection::Closure(ClosureFailure::Binding));
     }
+    Ok(digest)
+}
+#[cfg(test)]
+std::thread_local! { static INDEX_DECODES: std::cell::Cell<usize> = const { std::cell::Cell::new(0) }; }
+#[cfg(test)]
+pub(crate) fn index_decode_count() -> usize {
+    INDEX_DECODES.with(|n| n.get())
+}
+fn parse<B: Budget>(
+    bytes: &[u8],
+    binding: &Binding<'_>,
+    b: &mut B,
+) -> Result<Index, Rejection<B::Failure>> {
+    let digest = authenticate(bytes, binding, b)?;
+    #[cfg(test)]
+    INDEX_DECODES.with(|n| n.set(n.get() + 1));
     let index: Index = json::decode(
         bytes,
         Limits {
@@ -51,6 +67,69 @@ fn parse<B: Budget>(
     step(b)?;
     checked.map_err(Rejection::Closure)?;
     Ok(index)
+}
+// Immutable parsed data only. No constructor from entries/serde/Clone, no OS evidence.
+pub(crate) struct DecodedDeclaration<'a> {
+    index: Index,
+    bytes: &'a [u8],
+}
+impl std::fmt::Debug for DecodedDeclaration<'_> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str("DecodedDeclaration(pure_pending_round_binding_not_execution_authority)")
+    }
+}
+impl DecodedDeclaration<'_> {
+    pub(crate) fn entries(&self) -> &[Entry] {
+        &self.index.entries
+    }
+    pub(crate) fn recheck<B: Budget>(
+        &self,
+        binding: &Binding<'_>,
+        observed: Option<&[Entry]>,
+        b: &mut B,
+    ) -> Result<CheckedIndex, Rejection<B::Failure>> {
+        step(b)?;
+        if observed.is_some_and(|v| v.len() > MAX_ENTRIES + 1) {
+            return Err(Rejection::Closure(ClosureFailure::Limit));
+        }
+        // Hash/header and every semantic check are fresh; only JSON decode is reused.
+        let digest = authenticate(self.bytes, binding, b)?;
+        step(b)?;
+        let checked = header(&self.index, binding, || digest);
+        step(b)?;
+        checked.map_err(Rejection::Closure)?;
+        let result = check_entries(
+            &self.index,
+            self.bytes.len(),
+            binding,
+            observed,
+            &mut || step(b),
+            Rejection::Closure,
+        );
+        b.checkpoint().map_err(Rejection::Budget)?;
+        let result = result?;
+        step(b)?;
+        Ok(result)
+    }
+}
+pub(crate) fn decode_declaration<'a, B: Budget>(
+    bytes: &'a [u8],
+    binding: &Binding<'_>,
+    b: &mut B,
+) -> Result<DecodedDeclaration<'a>, Rejection<B::Failure>> {
+    let index = parse(bytes, binding, b)?;
+    let result = check_entries(
+        &index,
+        bytes.len(),
+        binding,
+        None,
+        &mut || step(b),
+        Rejection::Closure,
+    );
+    b.checkpoint().map_err(Rejection::Budget)?;
+    result?;
+    step(b)?;
+    Ok(DecodedDeclaration { index, bytes })
 }
 pub(crate) struct Declaration {
     entries: Vec<Entry>,
@@ -70,20 +149,9 @@ pub(crate) fn declared<B: Budget>(
     binding: &Binding<'_>,
     b: &mut B,
 ) -> Result<Declaration, Rejection<B::Failure>> {
-    let index = parse(bytes, binding, b)?;
-    let validated = check_entries(
-        &index,
-        bytes.len(),
-        binding,
-        None,
-        &mut || step(b),
-        Rejection::Closure,
-    );
-    b.checkpoint().map_err(Rejection::Budget)?;
-    validated?;
-    step(b)?;
+    let parsed = decode_declaration(bytes, binding, b)?;
     Ok(Declaration {
-        entries: index.entries,
+        entries: parsed.index.entries,
     })
 }
 pub(crate) struct Comparison {
