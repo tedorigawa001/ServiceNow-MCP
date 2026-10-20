@@ -1,9 +1,10 @@
 //! Single-attempt internal boundary. No OS backend or operational quota/scope constructor.
 use super::*;
 use crate::signature_boundary::positioned_read::metadata::collector::FsObservation;
-use std::cell::RefCell;
+use std::cell::{Cell, RefCell};
 
 mod child_set;
+mod declared_read;
 
 #[derive(Clone, Copy, PartialEq, Eq)]
 enum Kind {
@@ -113,6 +114,8 @@ struct Ledger {
     serial: u64,
     unconfirmed: u64,
     retry: Option<PendingRead>,
+    declared_pending: u64,
+    declared_abandoned: bool,
 }
 struct ScopeMarker;
 struct Resource<'s, S: ScanOps> {
@@ -122,6 +125,7 @@ struct Resource<'s, S: ScanOps> {
     raw: Option<S::Handle>,
     kind: Kind,
     serial: u64,
+    declared: Cell<bool>,
 }
 impl<S: ScanOps> std::fmt::Debug for Resource<'_, S> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -175,6 +179,9 @@ impl<'s, S: ScanOps> Boundary<'s, '_, '_, S> {
             let l = self.ledger.borrow();
             if l.unconfirmed != 0 {
                 return self.budget.stop(Failure::Unavailable);
+            }
+            if l.declared_abandoned {
+                return self.budget.stop(Failure::Changed);
             }
             if l.retry.is_some() && op != Op::Read {
                 return self.budget.stop(Failure::Binding);
@@ -233,6 +240,7 @@ impl<'s, S: ScanOps> Boundary<'s, '_, '_, S> {
             raw: Some(raw),
             kind,
             serial,
+            declared: Cell::new(false),
         }
     }
     fn acquire(
@@ -502,6 +510,7 @@ struct Summary {
     retry_pending: bool,
     names: u64,
     peak: u64,
+    declared_pending: u64,
 }
 impl std::fmt::Debug for Summary {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -557,12 +566,15 @@ fn with_boundary<'a, S: ScanOps, T>(
         retry_pending: l.retry.is_some(),
         names: l.names,
         peak: l.peak,
+        declared_pending: l.declared_pending,
     };
     drop(l);
     if summary.live != 0 || summary.pending_cleanup != 0 || summary.unconfirmed != 0 {
         let _ = budget.stop::<()>(Failure::Unavailable);
     } else if summary.retry_pending {
         let _ = budget.stop::<()>(Failure::ReadFailed);
+    } else if summary.declared_pending != 0 {
+        let _ = budget.stop::<()>(Failure::Changed);
     }
     // No work is charged after a sticky stop; prepaid cleanup has still run.
     let final_guard = budget.checkpoint().and_then(|_| work(budget));

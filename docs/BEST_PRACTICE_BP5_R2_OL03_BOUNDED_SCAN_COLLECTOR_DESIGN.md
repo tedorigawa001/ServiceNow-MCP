@@ -1,12 +1,12 @@
 # BP-5 R-2 OL-03：scan work上界・bounded collector詳細設計
 
-Version: draft-0.4 / Date: 2026-10-20 / Status: 計算器・単発操作・direct-child/seen照合subsetを内部実装・合成検証。完全collector・workモデルとの接続・OS backend・運用quota承認は未対応。
+Version: draft-0.5 / Date: 2026-10-20 / Status: 計算器・単発操作・child/seen・宣言size読取subsetを内部実装・合成検証。完全collector・workモデルとの接続・OS backend・運用quota承認は未対応。
 
 ## 1. 目的・前提・非対象
 
 [全体work受付設計](BEST_PRACTICE_BP5_R2_OL03_TOTAL_WORK_ADMISSION_DESIGN.md)のSを具体化する。[index子phase](BEST_PRACTICE_BP5_R2_OL03_ROUND_DECLARATION_WORK_DESIGN.md#14-index上界の子phase分解とscan直前境界)のReady直後から、新しい全closure観測を返すまでが対象である。3roundの各roundで必ず新しく取得し、宣言からobservedを合成しない。
 
-本書はローカルソースに基づく設計であり、macOS SDKや公式APIの実証記録ではない。初稿はMDのみで、§11の計算器、§12の単発操作境界、§13のdirect-child照合を先行実装した。完全collectorとOS backendは未接続。全体受付は無効、telemetry調査は保留。APPROVED_REGISTRY=None、通常v2 Unavailable、gate92、DER/absence停止を維持する。
+本書はローカルソースに基づく設計であり、macOS SDKや公式APIの実証記録ではない。初稿はMDのみで、§11の計算器、§12の単発操作境界、§13のdirect-child照合、§14の宣言size読取を先行実装した。完全collectorとOS backendは未接続。全体受付は無効、telemetry調査は保留。APPROVED_REGISTRY=None、通常v2 Unavailable、gate92、DER/absence停止を維持する。
 
 workはBudget::workの課金量であって、CPU/RSS/OS syscall実行時間の上界ではない。名前列挙・metadata・読取の単発境界を実装しても、blocked I/Oや検査後変更を協調checkpointだけで排除したことにはならない。保護されたroot/context、更新leaseと外側監督は別の未解決条件である。
 
@@ -290,3 +290,29 @@ direct-child helper自身の実課金（open/precharge・visitor・外側scope�
 - 保守的な単一式としては `c <= (E+1)×17`。directory分布を使う式の方が小さいが、分布をshape producerから受け取る結合が必要になる。
 
 12追加テストでunknown/extra/duplicate/missing、dot重複、大小文字/部分一致の拒否、expected不正/件数境界、別親で同名child、visitor/cleanup/enum失敗、遅延Cancel/Deadlineを検証した。未知拒否を意図的に無効化するとunknown-nameテストが失敗し、復旧後に再成功した。完全metadata・型/size/hash同一性、全path再照合、保護されたexpected producer、全closure seal、同時生存allocation総量/3round quota・OS backendは未接続。全体受付・運用gateは引き続き停止する。
+
+## 14. 宣言sizeへのread / EOF位置結合（部分実装）
+
+[declared_read.rs](../native/r2-outer/src/signature_boundary/positioned_read/metadata/transfer/topology/records/strict/scan_ops/declared_read.rs)と[合成検証記録](E2E_BEST_PRACTICE_R2_OL03_SCAN_DECLARED_READ_SYNTHETIC_2026-10-20.md)で、§13の未対応事項のうちsize/進行位置とstat前後照合を先行実装した。hash・完全metadata policy・全pathの信頼結合を実装済みとはしない。
+
+`bind_declared` は同scopeのFile resourceとimmutableな `closure::Entry::File` をborrowし、宣言size 0〜512MiB、実statのRegular/size一致を検査して、非Clone/非serdeの `DeclaredFile` を返す。scope/source/ledgerを検査し、同resourceの再bindは拒否する。元のresourceはborrow中に解放・差替えできない。
+
+ただしこのEntryは**型付き入力であって信頼済み宣言の証明ではない**。accepted index/親path/name/receipt/roundに結合するproducerは未実装で、任意Entryとresourceのpath対応を本関数が証明するものではない。合成のchild visitorでは対応するentryを明示して接続しただけである。従来の低水準read APIも単発試験用に残っており、通常ClosureSourceや運用入口を本経路へ切り替えていない。
+
+| 段階 | 強制する条件 |
+|---|---|
+| data read | offsetは次の未読位置と完全一致。長さは `min(65536, declared_size-next)` と完全一致し、空要求/skip/rewind/overlap/tiny chunk/範囲外をsource前にInvalidRange。実bytesが要求未満ならChangedで停止し補完しない |
+| 進行 | 完全read成功のときだけnextを更新する。Interruptedは同位置に留まり、元共有retry残を消費した明示的な次の1試行だけを許す |
+| EOF | 全dataを読み終え、offsetが宣言sizeそのもののときだけ1-byte probeを許す。0だけ成功、1ならChangedで停止。空fileはdata呼出しなしでoffset0のprobeが必要 |
+| post-stat | EOF0の後に同resourceへstatを1回取得し、beforeの全Stat（size/型/device/inode/owner/mode/links/mtime/ctime）と完全一致を要求。差はChanged、取得不能はMetadataUnavailable。ACL/xattr/FSの完全metadata観測ではない |
+| 完了 | EOF0＋post-stat一致で一度だけpendingを解除。未完了bindingの放棄は次の通常primitiveをChangedで停止し、scope終端でも未完了を拒否。終端で未完了EINTRが残る場合はReadFailed。元のsticky失敗やcleanup不明は既存の優先順で保持。完了後read/EOF/rebindはBinding |
+
+元SharedBudget、元deadline、payload上限/既存予約、共有EINTRと一度限りcleanupを維持する。新しいbindingはhandleを複製せず、scope台帳のpending件数だけを追加する。破棄で未完了を完了扱いにしない。返る完了はこのsize/stat subsetだけで、digest一致・ABA防止・実行authorityではない。
+
+### 14.1 課金・合成検証・未接続
+
+bindはguard1＋stat dispatch1＋照合1＝3 work。各data/read retryはguard1＋既存read dispatch/分類2＝3 work。最後のEOF0はguard1＋read2＋post-stat1＋照合1＝5 work、EOF retryは3 work。`eof_declared`は高水準手順でEOF1試行と成功後stat1試行を組み合わせるが、各ScanOps primitiveは引き続き1呼出し1試行で隠れたretryはない。
+
+standaloneの成功はdata chunk数Cとして **`14+3C` work**（anchor/file取得・cleanup precharge4、scope2を含む）。4-byte fileは17、既存1-child照合内のvisitorとして実行した成功は32。残work0〜17で停止prefixと解放を検証した。既存候補式への費目割当、snapshotとのstat重複排除、retry係数・hash費・quotaへの接続は未対応で、`bp5-r2-scan-work-0.1` を本経路の検証済み上界として使わない。
+
+16追加テストで空/単chunk/64KiB境界/末尾chunk、範囲外/早期EOF、short/過大count、開始時size/型差、読取後size/stat差・EOFでの増加、data/EOFのEINTR、未完了/再bind/完了後再利用、取消/期限、取得不能、work/cap/異なるledger、child visitor接続を検証した。早期EOF guardを無効化すると対応試験が失敗し、復旧後に全体再検証した。完全metadata/hash・祖先/path再照合・protected producer/全closure seal・全体受付/OS backendは未接続のままである。
