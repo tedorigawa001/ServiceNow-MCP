@@ -1,6 +1,6 @@
 # BP-5 R-2 OL-03：現行完全collectorの費目・work上界再設計
 
-Version: draft-0.6 / Date: 2026-10-21 / Status: test-only計数・oracleとprivate sealed profile収集/純粋計算器を合成検証。運用接続・全体受付は未対応。
+Version: draft-0.7 / Date: 2026-10-21 / Status: test-only計数・oracleとprivate sealed profile収集/純粋計算器を合成検証。利用bridgeは別紙で設計のみ。運用接続・全体受付は未対応。
 
 ## 1. 範囲と停止状態
 
@@ -239,3 +239,5 @@ work合計の監査と運用受付は別であり、3round operation/name台帳�
 ## 12. sealed shape/profileの後続詳細設計と収集subset
 
 [sealed profile・純粋計算器draft-0.3](BEST_PRACTICE_BP5_R2_OL03_SEALED_SCAN_PROFILE_DESIGN.md)に、count-only一時集計→scalar-only出力、receipt/Inputs/round/token/budget結合、one-shot消費、統計収集 `11+2N+5E+K+B+M+D` と15-row算術（require込み20 work）を整理した。収集とrequire（基本61/5 work）に加え、profile消費型計算器20 work・estimateも内部実装/合成検証済み。利用bridgeは未実装であり、§11のkernel実費や上界へ既に含まれる費用ではない。S.groupsの検査とその費用を控除せず、O.profile/O.calculate/O.useとして別に扱う。[収集合成記録](E2E_BEST_PRACTICE_R2_OL03_SEALED_SCAN_PROFILE_SYNTHETIC_2026-10-21.md)・[計算器記録](E2E_BEST_PRACTICE_R2_OL03_SCAN_CALCULATOR_SYNTHETIC_2026-10-21.md)を参照。全体受付は無効のまま。
+
+後続の[estimate bridge設計draft-0.1](BEST_PRACTICE_BP5_R2_OL03_ESTIMATE_BRIDGE_DESIGN.md)でO.use7と固定collector呼出しの境界を具体化した。Sのlayout/groups/seal/終端費は控除せず、AfterScan/FinalIndexはIへ残す。basicのS＋use=1909、profile＋calculate＋use＋S=1990は将来の合成試験目標で、bridgeを実装/計数した結果ではない。3round resource受付・全体予約は無効のまま維持する。

@@ -1,6 +1,6 @@
 # BP-5 R-2 OL-03：sealed scan shape/profile・純粋計算器の詳細設計
 
-Version: draft-0.3 / Date: 2026-10-21 / Status: private sealed profile・count-only収集とprofile消費型15-row計算器/estimateを合成検証。利用bridge・全体受付は未実装。
+Version: draft-0.4 / Date: 2026-10-21 / Status: private sealed profile・count-only収集とprofile消費型15-row計算器/estimateを合成検証。利用bridge/guard7は別紙で詳細設計のみ。全体受付は未実装。
 
 ## 1. 目的・停止条件
 
@@ -196,7 +196,7 @@ I/R/target/phase/bridgeのその他費用と独立resource上界は未完了。�
 
 ## 10. 実装順・未確定事項
 
-private scalar型・収集・binding/retry guardは§12、profile消費型15-row計算器と失敗prefixは§13で合成検証済み。次工程は利用bridge/3round resource配賦・全体other上界との接続設計である。既存test oracleを比較対象に残し、同じ実装helperだけで期待値を作らない。
+private scalar型・収集・binding/retry guardは§12、profile消費型15-row計算器と失敗prefixは§13で合成検証済み。利用bridgeの後続詳細設計は§14を参照。3round resource配賦・全体other上界との接続はさらに後工程である。既存test oracleを比較対象に残し、同じ実装helperだけで期待値を作らない。
 
 課金ブロックの係数・最大32演算の独立確認、Rustの具体的なlifetime/one-shot field配置、allocationの独立上界、submodel ID確定は実装前後のレビュー対象。OS権限やpolicyは本書で承認しない。3round resource台帳・全体work予約・通常strict bridge・hard停止はさらに後工程とし、ここまで全体受付を無効のまま維持する。
 
@@ -226,3 +226,9 @@ private scalar型・収集・binding/retry guardは§12、profile消費型15-row
 7 shape×3round×retry0〜8（189条件）の独立u128 oracle、20未満の全work不足prefix、20課金点それぞれの取消/期限、全15行の計算後期限、binding/model拒否、raw算術overflow/underflowとprivate破損時の拒否を確認した。通常のsealed shape上限からは算術overflowに到達しないため、極端値はtest-onlyのprivate helper/field操作で注入し、運用constructorにはしない。
 
 5,000 root file追加の合成shapeではU_S>100万を数量として保持し、共有work/payload等を予約しないことを確認した。これは受付可能という意味ではない。OS接続・通常strict・collector・全体受付は変更しない。[計算器検証記録](E2E_BEST_PRACTICE_R2_OL03_SCAN_CALCULATOR_SYNTHETIC_2026-10-21.md)を参照。
+
+## 14. estimate消費型bridgeの後続詳細設計（未実装）
+
+[bridge・利用guard7設計draft-0.1](BEST_PRACTICE_BP5_R2_OL03_ESTIMATE_BRIDGE_DESIGN.md)に、estimateの移動と利用claim先行消費、同Inputs/receipt/round/token/origin/started/r/Ready結合、require5＋model1＋一度限り移譲1を整理した。scan中の合法なretry消費後にProfile.requireを再適用しない。既存collector Outcomeの失敗とcleanup summaryを保持し、遅い成功も元checkpointで破棄する。
+
+bridge成功でphaseを進めず、S.seal・AfterScan・FinalIndexはそれぞれの所有費で維持する。O.use7は既存S.control/計算20へ吸収しない。固定collectorの係数model結合・最小可視性/具体lifetime・利用guardの合成計数は未実装/未検証であり、全体受付・通常strict・OS接続・permitを有効化しない。
