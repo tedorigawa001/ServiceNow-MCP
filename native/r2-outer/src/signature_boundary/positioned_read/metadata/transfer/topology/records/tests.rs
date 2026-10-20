@@ -3,6 +3,8 @@ use super::super::tests::{Counts as TargetCounts, setup};
 use super::*;
 use std::cell::{Cell, RefCell};
 
+mod strict_cases;
+
 #[derive(Default)]
 struct Counts {
     calls: Cell<usize>,

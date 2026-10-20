@@ -209,3 +209,8 @@ privileged metadata/leaseのfake成功をOSでの保証と呼ばず、OS境界�
 後続の[接続設計§12](BEST_PRACTICE_BP5_R2_OL03_RECORD_PARSER_CLOSURE_DESIGN.md)で、共有予算JSON/hash-firstの内部宣言parserとpure全集合checkerを追加した。[合成検証記録](E2E_BEST_PRACTICE_R2_OL03_SHARED_CLOSURE_JSON_SYNTHETIC_2026-10-20.md)を参照する。
 既存public check/declaredの失敗型とdecode-first順序は維持し、宣言/親directory/集合の意味検証を共通化した。新しいshared経路はdecode前にraw hashを必須照合し、元10秒/cancel/workを全段階へ伝播する。
 observedはなお呼出側の比較データで、Declarationを実観測へ変換しない。source/同round完了証拠・OS scan・recordとの最終binding/leaseは未接続。100,000件/宣言2GiBの形式上限を実I/O/CPU予算の保証とせず、運用gate/permitは停止を維持する。
+
+## 10. strict record再検証pipelineへの合成接続
+
+[接続設計§13](BEST_PRACTICE_BP5_R2_OL03_RECORD_PARSER_CLOSURE_DESIGN.md)と[検証記録](E2E_BEST_PRACTICE_R2_OL03_STRICT_RECORD_PIPELINE_SYNTHETIC_2026-10-20.md)で、固定strict verifierをrecord再読/最終照合へ接続した。初回/M4前/M4後の各roundでscan前後のrecord exact再読・意味/time検証と、同lineage/binding/roundの合成closure集合照合を行う。sourceの任意意味投影は新経路で使用しない。
+実scanのoperation/read予算・metadata/path/identity・完了producerは未接続。合成観測を実配備の証拠やpermitへ昇格しない。現在の重複parseを含む全work上界・事前受付・leaseは未解決で、§6.1の3parse概算を実pipelineの予算と読み替えない。

@@ -1,4 +1,4 @@
-//! Private bridge only. The installed reader and record revalidation pipeline are not connected.
+//! Private bridge, used by the synthetic record pipeline. No installed-reader producer.
 use super::*;
 use crate::{json::shared, record_validation as r};
 impl SharedBudget<'_> {

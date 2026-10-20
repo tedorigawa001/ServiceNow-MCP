@@ -1,4 +1,4 @@
-//! Comparison-only final record rereads. No installed reader, JSON authority or permit.
+//! Internal record rereads and strict synthetic verification. No installed reader or permit.
 use super::*;
 use sha2::{Digest, Sha256};
 
@@ -69,8 +69,8 @@ trait RecordSource {
         offset: u64,
         out: &mut [u8],
     ) -> Result<usize, Failure>;
-    // Receives ONLY the already exact-compared bytes. A future backend must strictly parse
-    // and cross-bind all three; the synthetic projection is not a real schema validator.
+    // Historical contract tests only. The strict pipeline never calls a source projection.
+    #[cfg(test)]
     fn revalidate(&mut self, bytes: [&[u8]; 3]) -> Result<RecordBinding, Failure>;
 }
 fn normalize_record(
@@ -166,7 +166,7 @@ fn clock_check<S: RecordSource>(
     receipt: &RecordReceipt,
     budget: &mut SharedBudget<'_>,
     margin: u64,
-) -> Result<(), Failure> {
+) -> Result<ClockReading, Failure> {
     let reading = attempt(budget, || s.clock())?;
     let wall = reading
         .wall_ms
@@ -184,9 +184,10 @@ fn clock_check<S: RecordSource>(
         return Err(Failure::Expired);
     }
     record_time(&receipt.binding, reading.wall_ms, margin)?;
-    budget.checkpoint()
+    budget.checkpoint()?;
+    Ok(reading)
 }
-fn reread<S: RecordSource>(
+fn reread_bytes<S: RecordSource>(
     s: &mut S,
     receipt: &RecordReceipt,
     budget: &mut SharedBudget<'_>,
@@ -220,6 +221,15 @@ fn reread<S: RecordSource>(
         // the approved path still resolves to it. Release it first to keep peak <=2.
         drop(walk_record(s, pin, &receipt.binding, budget)?);
     }
+    Ok(())
+}
+#[cfg(test)]
+fn reread<S: RecordSource>(
+    s: &mut S,
+    receipt: &RecordReceipt,
+    budget: &mut SharedBudget<'_>,
+) -> Result<(), Failure> {
+    reread_bytes(s, receipt, budget)?;
     let projection = attempt(budget, || {
         s.revalidate([
             &receipt.pins[0].bytes,
@@ -230,7 +240,7 @@ fn reread<S: RecordSource>(
     if projection != receipt.binding {
         return Err(Failure::Changed);
     }
-    clock_check(s, receipt, budget, 450_000)
+    clock_check(s, receipt, budget, 450_000).map(|_| ())
 }
 fn walk_record<S: RecordSource>(
     s: &mut S,
@@ -296,6 +306,7 @@ impl RecordComparison {
         self.compared.entitlement_gate()
     }
 }
+#[cfg(test)]
 fn review_record_target<R: MetadataOps + ResourceOrigin, T: TopologySource<R>, S: RecordSource>(
     mut held: HeldTargetScope<'_, R>,
     topology: TopologyReceipt,
@@ -331,5 +342,6 @@ fn review_record_target<R: MetadataOps + ResourceOrigin, T: TopologySource<R>, S
     result.map(|compared| RecordComparison { compared })
 }
 
+mod strict;
 #[cfg(test)]
 mod tests;

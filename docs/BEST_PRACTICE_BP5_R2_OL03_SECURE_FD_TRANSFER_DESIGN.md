@@ -1,6 +1,6 @@
 # BP-5 R-2 OL-03：secure openerからmetadata sourceへの保持FD移譲
 
-Version: draft-0.5 / Date: 2026-10-20 / Status: binding/移譲・open snapshot/M0結合・祖先/path・record再読/最終照合の内部契約を合成resourceで実装。実reader/parser/opener/macOS source・leaseは未接続/未承認。
+Version: draft-0.6 / Date: 2026-10-20 / Status: binding/移譲・open snapshot/M0・祖先/path・record再読と共有予算strict parser/closureの内部接続を合成検証。実reader/opener/collector・leaseは未接続/未承認。
 
 ## 1. 範囲と停止境界
 
@@ -256,8 +256,11 @@ origin比較は協調的な所有型の結合であり、悪意あるMetadataOps
 
 ## 16. 厳密parser・全closure再検証の接続設計
 
-[再検証接続詳細設計draft-0.5](BEST_PRACTICE_BP5_R2_OL03_RECORD_PARSER_CLOSURE_DESIGN.md)に、I/O sourceと固定verifierの分離、activation/ledger-0.2/固定registry/index全宣言の照合、同session/roundの全closure観測producer、M4前後の全scanとrecord前後再読を具体化した。
+[再検証接続詳細設計draft-0.6](BEST_PRACTICE_BP5_R2_OL03_RECORD_PARSER_CLOSURE_DESIGN.md)に、I/O sourceと固定verifierの分離、activation/ledger-0.2/固定registry/index全宣言の照合、同session/roundの全closure観測producer、M4前後の全scanとrecord前後再読を具体化した。
 元10秒/2GiB/16384契約callをresetせず、100,000件の形式上限を実行可能件数としない。ledger時刻の二重加算、decodeの理由丸め、cancel/管理allocation/同じNode sourceへの限定借用、実clock丸めとlease等の未確認事項を明記した。
 後続で[共有予算JSON core](E2E_BEST_PRACTICE_R2_OL03_SHARED_JSON_CORE_SYNTHETIC_2026-10-20.md)だけを先行実装した。元SharedBudgetの期限/cancel/workと型付き理由を保持するが、§15の合成revalidateを厳密record parser/全closureへ接続した実装・テスト結果ではない。旧decode契約と運用gateの停止を維持する。
 さらに[activation/ledger-0.2/registryの純粋検証](E2E_BEST_PRACTICE_R2_OL03_STRICT_RECORD_JSON_SYNTHETIC_2026-10-20.md)を共有予算JSONへ接続した。raw hash-first・既存schema/意味検査・型付き理由を維持するが、実reader/revalidate・実registry producer・index/全closure観測は依然未接続で、permitを発行しない。
 [closure index/全集合のpure共有予算検証](E2E_BEST_PRACTICE_R2_OL03_SHARED_CLOSURE_JSON_SYNTHETIC_2026-10-20.md)も追加した。新shared経路はhash-firstで、宣言と観測を区別する。実filesystemの観測producer/同round結合/再検証pipelineへの接続は未対応で、合成observedの集合一致を実配備の証拠へ昇格しない。
+
+後続の[厳密record/closure pipeline合成検証](E2E_BEST_PRACTICE_R2_OL03_STRICT_RECORD_PIPELINE_SYNTHETIC_2026-10-20.md)で、§15の通常RecordSourceから意味投影を外し、固定strict verifierと合成scan境界を初回/M4前/M4後へ接続した。旧revalidateと旧wrapperは過去の回帰試験用`cfg(test)`に限定する。scan前後のexact再読・strict binding/time、session/round照合・全集合検査を必須化し、元予算と失敗理由を保持する。
+これは実OS collectorや保護されたreceipt/context producerではない。indexは全9回、record/registryは全6回parseするため、暫定100万workに実閉包が収まる保証はなく、事前予約/重複解析の削減は別途必要。実reader/clock/lease/permitは接続せず、運用gateの停止を維持する。

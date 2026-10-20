@@ -132,6 +132,11 @@ impl std::fmt::Debug for ValidatedRecords {
         f.write_str("ValidatedRecords(pure_pending_reader_closure_lease_not_execution_authority)")
     }
 }
+impl ValidatedRecords {
+    pub(crate) fn inspection_parts(&self) -> (&Activation, &LedgerV2) {
+        (&self._activation, &self._ledger)
+    }
+}
 pub(crate) fn validate<B: Budget>(
     activation_bytes: &[u8],
     ledger_bytes: &[u8],

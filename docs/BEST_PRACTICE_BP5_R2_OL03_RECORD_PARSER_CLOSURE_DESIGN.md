@@ -1,13 +1,13 @@
 # BP-5 R-2 OL-03：厳密record parser・全closure集合の再検証接続
 
-Version: draft-0.5 / Date: 2026-10-20 / Status: 共有予算JSON、activation/ledger-0.2/registry、closure index/全集合の純粋検証を内部実装/合成検証。実読取/再検証pipeline・運用承認は未実施。
+Version: draft-0.6 / Date: 2026-10-20 / Status: 共有予算の厳密record/closure検証を再読・最終照合の内部pipelineへ接続し合成検証。実reader/collector・運用承認は未実施。
 
 ## 1. 範囲と停止境界
 
 [FD移譲設計§15](BEST_PRACTICE_BP5_R2_OL03_SECURE_FD_TRANSFER_DESIGN.md)の合成`RecordSource::revalidate`を、既存の厳密parserと**全closure集合**の検証へ置き換える設計。
 前工程の[424件の合成検証](E2E_BEST_PRACTICE_R2_OL03_RECORD_FINAL_SYNTHETIC_2026-10-20.md)は、架空の非JSON bytesと手動投影の契約試験であり、本書の接続が動く証拠ではない。
 
-draft-0.1/0.2の成果物はMDだけだった。後続の§10でJSON core、§11でactivation/ledger/registry、§12でclosure index/全集合の純粋検証を追加した。telemetry調査は保留。実record/closure読取pipelineへの接続実装、実機/PDI操作、API実接続、token発行、設定変更、実署名、本番policy投入、permit発行は対象外。
+draft-0.1/0.2の成果物はMDだけだった。後続の§10でJSON core、§11でactivation/ledger/registry、§12でclosure index/全集合の純粋検証、§13で合成sourceによる再読pipeline接続を追加した。telemetry調査は保留。実record/closure sourceへの接続、実機/PDI操作、API実接続、token発行、設定変更、実署名、本番policy投入、permit発行は対象外。
 APPROVED_REGISTRY=None、通常v2入口Unavailable、runtime gate92、DER/absence停止を維持する。parser/集合照合の成功も実行許可にしない。
 
 ## 2. 現状と接続上の不足（ソース照合）
@@ -27,7 +27,7 @@ APPROVED_REGISTRY=None、通常v2入口Unavailable、runtime gate92、DER/absenc
 
 ## 3. 接続モデル案：I/Oと意味検証の分離
 
-以下はprivate型/関数の設計名で、まだ実装しない。
+以下はprivate型/関数の設計名。後続§13の内部接続はこのモデルの限定実装で、OS観測の真正性を持つproducerは未実装。
 
 | 型/境界案 | 所有・結合・権限 |
 |---|---|
@@ -87,7 +87,7 @@ scan中にrecordが変わらなかったことを確認するため、scanの前
 scanの前後で新しいplanへ追従しない。同じpins/planでの同一呼出しretryもしない。
 初回scanのキャッシュだけでM4前/後の完了値を作る案は採らない。将来lease下で再利用を最適化する場合は別設計・承認とする。
 
-これは**今後の推奨順序**。現records.rsにはfull scan/scan後追加record再読はない。revalidateの1呼出し内へ全scanを隠して実装済みに見せない。
+これは運用接続の推奨順序。後続§13のstrict経路は合成scan境界とscan後追加record再読を実装したが、実full scanはない。revalidateの1呼出し内へ全scanを隠して実装済みに見せない。
 全scan中にもtarget/recordが変化し得るため、各snapshot/前後検査でも原子性やABA排除は保証しない。実行許可へ接続するには更新排他・寿命設計が別途必要。
 
 ## 6. 共有予算と事前受付
@@ -117,6 +117,7 @@ bytes/depth/container件数だけでは全allocation/RSSやcancel応答間隔を
 - parser/work予約は全再parse/roundで共有する。候補は最大1,000,000 work units（JSON node/key/entry/prefix/集合操作、長い文字列・hashの64KiB chunkを各1単位）で、算術overflow/枠超過をLimitとする。allocatorや比較関数内部の処理量まで証明した値ではない。
   **work上限から導く実効件数（レビュー時の概算、2026-10-20、全集合照合の課金を反映）**：実装済みのstrict core（`json/shared.rs`）の課金では、file entry 1件（5 key中4つが文字列、1つが数値）がnode・key・文字列・挿入を合わせて約26 unitを使う。これに`check_entries`のentry検査、親確認ループのentryごとの処理と各prefix確認、観測側挿入、要素ごとの比較が加わる。pathが5段程度（親prefix約4個）なら約8 unit増え、parse＋全集合照合は合計約34 unit/entryとなる。上限1,000,000では1回でおよそ2.9万entry、§5.1どおり初回・M4前・M4後の3回ではおよそ1万entryが目安となる。index形式上限100,000件は実効上届かない（§6の呼出し枠と同じ性質）。
   参考：本プロジェクトの本番依存閉包は、本番依存140 packageのfile約4,100件と`dist`の488件で、directoryを含めても5,000〜6,000件程度と見積もられ、3回のparse＋照合で約51万〜61万unit（概ね60万unit）の見込み。100万unitには収まる見込みだが、decodeだけの旧見積り約40万unitより余裕は小さい。これらは典型的なfile entryとpath深さに基づく概算であり、受付の安全な上界ではない。受付時には実際のfile/directory構成・全path深さ・全roundと追加の宣言検査、hash chunk・固定処理・registry/activation/ledgerのparse分を含む上界をchecked算術で別途計算し、超える計画は開始前にLimitで停止する。from_value変換内部を含む実測CPU量・実行時間を保証した値でもない。
+  **§13の接続時の追加コスト**：現在のstrict pipelineは1roundにつきscan前declare・全集合check・scan後declareの3回、全3roundでindexを9回parseする。activation/ledger/registryもscan前後の計6回検証する。上の「3回で約60万unit」はこのpipeline全体の見積りではなく、そのまま受付根拠に使わない。典型的な深さのfileだけならindex部分は約294 unit/entry（26＋宣言検査約6、全集合検査約34、26＋宣言検査約6を3round）で、5,000〜6,000件では約147万〜176万unitとなり、暫定100万capを超え得る。directory構成・Node検索・固定処理等を含む実測値ではない。capを緩めず、運用前に厳密な事前予約と、同一round内のimmutable宣言を安全に再利用する別設計・検証が必要。現段階で本番閉包が通るとは主張しない。
 - allocation候補はparse作業同時64MiB、inspection管理下の総同時128MiB。元pins（最大16MiB＋128KiB）・registry・観測集合・path/keyの複製・bufferを合計し、事前予約とDrop時解放を行う。これは**RSS上限ではなく管理allocationの候補**。
 - Value木と型/expected/actual mapの重複を減らすbounded typed decoder/限定内部viewを検討する。duplicate key/unknown field/trailing data/深さ/件数拒否を弱める変更は不可。container上限は要素decode前にも確認できる境界を設計する。
 - 現codeのmax_itemsを総node枠と説明しない。単一巨大stringのunescape/UTF-8、serde_json::from_value、BTree比較等にcheckpointが入らない区間も洗い出す。
@@ -213,4 +214,17 @@ draft-0.1/0.2ではMDだけを検査した。424件は前工程の記録で、�
 - 宣言総量（index bytes含む）2GiBは形式検査であり、実read成功bytesの台帳ではない。pure検証ではpayload/予約/metadata/topology/pread/EINTRを変更しない。将来の全scanでのI/O課金/事前予約は別工程。
 - 100,000件は形式上限で、暫定1,000,000 work capで全件を扱える保証ではない。Value/typed/index/expected/actualのallocation/RSS、serde内部、sourceの真正性/鮮度/identityを検証したとはしない。
 
-実record parserとの限定projection、index/root/Nodeを同じregistry/contextへ結ぶ実producer、全closure観測の同session/round完了値、実scan/metadata/clock/lease、再検証pipelineへの接続は未対応。通常gate/DER/absence/permit停止を維持する。
+## 13. record再読・最終照合への内部接続
+
+[接続の合成検証記録](E2E_BEST_PRACTICE_R2_OL03_STRICT_RECORD_PIPELINE_SYNTHETIC_2026-10-20.md)と、privateな[strict.rs](../native/r2-outer/src/signature_boundary/positioned_read/metadata/transfer/topology/records/strict.rs)を追加した。
+
+- `RecordSource`の通常境界はclock/open/observe/readだけ。旧`revalidate`と旧review wrapperは`cfg(test)`に限定し、以前の非JSON・手動投影の回帰試験専用に残す。新strict経路はsourceの意味投影を呼ばない。
+- 元receipt/lineage/pin bytes/hash/metadata/pathを確認し、固定verifierが共有予算activation/ledger-0.2/registry検証を呼ぶ。限定されたborrowed inspection viewからledger/index/root/Node path・digest・policy・世代・release・UID/GID・platform・registry参照・承認/期限を元bindingへ照合する。serde fieldをpublic化せず、公開契約も変えない。
+- rootとの包含はslash境界を必要とし、relative pathは既存strict path規則へ合わせる。indexをhash-firstでdeclareし、Nodeのledger hash=index hash、Indexed size/mode0555と元targetを結ぶ。root/size/Nodeだけ合っていることを全closure検査の代替にしない。
+- 初回（target解析前）・M4前・M4後の固定3roundで、**3件exact再読→clock→strict検証/全宣言→新しいscan境界→全集合照合→3件exact再読→clock→strict検証/全宣言→clock**を必須化する。scan前後でbytes/metadata/pathが変われば停止し、新しいpin/世代へ追従しない。
+- `ClosureObservation`は非Clone/非serializeで、lineage・全RecordBinding・roundを照合する。sourceは検証済み宣言を借りるが、宣言を自動的に観測へコピーする実装は設けない。合成fixtureの観測一覧は別に用意した架空データである。
+- scan境界は共有budgetを受け、呼出し全体を1件のI/Oとして課金しない。将来のcollectorは各operation/readを同じ台帳へ課金する必要がある。今回はOS producer、directory names/identityの真正な完了証拠、初回保護読取のproducer、leaseを実装せず、合成観測の一致だけを確認した。
+- parser/closure bridgeの型付き失敗を文字列判定せず元sticky Failureへ写像する。Deadline/Cancelled/Limit/Expired、集合・投影差のChanged、構造/registry/policy不適合のBindingを保持し、最初の失敗でM4/次roundへ進まない。leaf parserの詳細型は従来のbridge契約のまま、pipeline外へは既存有限Failureだけを返す。
+- 元start/10秒、json_work暫定100万、payload2GiB、A/B予約、topology16384、metadata/name/EINTR等をresetしない。record再読bytesだけ実copy分を課金し、pure解析で受信bytesを水増ししない。全owned source/held target/pinsをdropしてから最終checkpointを通す。旧RecordComparisonの固定Debug/entitlement停止を維持する。
+
+この接続は合成sourceによる内部pipelineで、実filesystem scanの完全性・同inode/ABA・root承認・system profile適合・原子性・hard中断/RSSを証明しない。運用source/事前受付/leaseと本番registryは未接続で、APPROVED_REGISTRY=None・通常v2 Unavailable・gate92・DER/absence停止を維持する。§6.1の追加parseコストを運用前に解決する。

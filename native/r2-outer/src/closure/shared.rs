@@ -55,6 +55,11 @@ fn parse<B: Budget>(
 pub(crate) struct Declaration {
     entries: Vec<Entry>,
 }
+impl Declaration {
+    pub(crate) fn entries(&self) -> &[Entry] {
+        &self.entries
+    }
+}
 impl std::fmt::Debug for Declaration {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.write_str("ClosureDeclaration(pure_not_observation_or_execution_authority)")

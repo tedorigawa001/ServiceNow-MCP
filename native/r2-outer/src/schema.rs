@@ -36,6 +36,12 @@ pub(crate) struct Time {
     pub approval_ref: String,
 }
 impl Time {
+    pub(crate) fn inspection_bounds(&self) -> Result<(u64, u64), Failure> {
+        Ok((
+            Self::millis(&self.approved_at)?,
+            Self::millis(&self.expires_at)?,
+        ))
+    }
     fn millis(v: &str) -> Result<u64, Failure> {
         if v.len() != 24
             || !v.ends_with('Z')
@@ -264,6 +270,15 @@ pub(crate) struct LedgerV2 {
     policy_id: String,
 }
 impl LedgerV2 {
+    // Borrowed inspection data only, never an execution capability.
+    pub(crate) fn inspection_paths(&self) -> (&str, &str, &str, &str) {
+        (
+            &self.runtime.root,
+            &self.runtime.index_path,
+            &self.node.path,
+            &self.node.sha256,
+        )
+    }
     pub fn time(&self) -> Time {
         Time {
             approved_at: self.approved_at.clone(),
