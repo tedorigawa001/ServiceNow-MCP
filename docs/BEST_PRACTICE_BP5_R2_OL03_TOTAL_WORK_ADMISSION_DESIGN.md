@@ -1,6 +1,6 @@
 # BP-5 R-2 OL-03：record・scanを含む全体work上界と事前受付
 
-Version: draft-0.2 / Date: 2026-10-20 / Status: record側のopt-in内部モデルを合成検証。全体受付・scan/other上界・運用承認は未実施。
+Version: draft-0.3 / Date: 2026-10-20 / Status: record opt-inモデル・index子phaseを合成検証。全体受付・scan/other上界・運用承認は未実施。
 
 ## 1. 範囲と停止状態
 
@@ -98,10 +98,10 @@ U_total = 3×U_index_round
 ### 6.1 二段階とphase台帳
 
 1. **bootstrap**：元budgetのままreceipt/hash/context、初回record strict、初回index decode/意味検査・profile作成を行う。work収集も課金し、枯渇ならscanへ進まない。
-2. **初回scan直前**：index round途中を表す固定phase境界で全体残工程を計算する。現行strict_roundにはまだこの受付境界がないため、接続は将来の実装課題。受付のために初回decodeを増やさない。
+2. **初回scan直前**：index round途中を表す固定phase境界で全体残工程を計算する。後続§11でReady境界とindex残予定量を実装したが、全体受付hookは未接続。受付のために初回decodeを増やさない。
 3. **残予約確定**：最後の算術・guardまで課金した後、元checkpointと残量を再確認して単一budgetへ予約する。profile/計算途中の取消や遅延成功は捨てる。
 
-indexの初回roundは途中まで実施済みなので、`3×U_index_round - W_used` を残量にしない。indexをhash/decode/shape/declare、scan後集合照合、最終再認証等の固定子phaseへ分解し、既存全体上界以上にならない所有表を導出する。まだこの子phaseの上界分解は未実装・未検証である。
+indexの初回roundは途中まで実施済みなので、`3×U_index_round - W_used` を残量にしない。indexをhash/decode/shape/declare、scan後集合照合、最終再認証等の固定子phaseへ分解し、既存全体上界以上にならない所有表を導出する。このindex分解は後続§11で実装・合成検証したが、record/scan/otherを合算する全体受付は未対応である。
 
 台帳はsession/budget origin、同receipt/context、全submodel、Initial/BeforeM4/AfterM4＋子phase、完了済み固定phase集合を封じ込める。単調な一方向遷移だけを許し、skip/retry/二重完了/別round planの流用は拒否する。完了phaseの**上界**を残予定から除外し、その実消費はspentに残す。途中phaseの実測deltaを上界から恣意的に引かず、境界外なら停止する。
 
@@ -134,7 +134,7 @@ Deadline/Cancelled/Expired/既存sticky failureを維持する。work不足でBi
 ## 9. 未確認事項・対応順・承認待ち
 
 1. record shape/profileの取得費、groups上限、固定19と全prefixの独立計数検証。registry/contextの保護されたproducer。
-2. indexの固定128を子phaseへ分解する証明と、初回scan直前の受付hook。既存index ID/式との互換性を先に確認する。
+2. indexの固定128を子phaseへ分解する証明と、初回scan直前の受付hook。§11でindex分解・互換性とReady境界は先行検証した。全体受付hookへの接続は残る。
 3. 実collectorの方式、全operation・retry・余剰拒否の上界、workと別resourceの対応表。未接続のままSを数値化しない。
 4. O全項、target/parserの共有予算範囲、解放の有限性、work予約を既存入口へ一元接続する方法。
 5. 全体modelの係数・100万capの妥当性と独立resource受付の承認。必要なら別提案で最適化／cap再承認を行い、今回黙って緩和しない。
@@ -153,3 +153,11 @@ Deadline/Cancelled/Expired/既存sticky failureを維持する。work不足でBi
 - 共有予算へのopt-in bridgeは元start/originとspentを保ち、I/O予約・metadata/topology台帳を変更しない。Budget失敗は元理由、groups/算術上限はLimitへラッチする。通常strict pipelineは従来のbridgeを使い、profile付き経路へまだ切り替えていない。
 
 今回のモデルはprofileを毎回作る。初回だけ収集して後続は再利用する最適化ではないため、§4の一般式を適用する場合は `U_record_profile=6×(E+12)` として数える。追加require guardを使うならその回数も別に加える。§9のgroups数値候補・固定費計数の一部は解消したが、子phase/collector/other/予約・独立resource・運用承認は引き続き未完了。全体gateを解除しない。
+
+## 11. index子phaseの先行接続
+
+[同round設計draft-0.8 §14](BEST_PRACTICE_BP5_R2_OL03_ROUND_DECLARATION_WORK_DESIGN.md#14-index上界の子phase分解とscan直前境界)で§6.1のindex部分を先行実装した。PreScan/AfterScan/FinalIndexの和を既存index上界と一致させ、初回scan直前は2将来round＋後続2phaseだけを残す。既存synthetic strict pipelineのNode照合・scan後照合・最終再検証をこの一方向planで接続し、別budget/別scope・二重完了を拒否する。
+
+record projection4/roundはRが所有する。旧index互換テストの固定45を実際の純index41と区別し、固定128との差87は最終子phaseの上界枠へ残す。追加のphase制御8/round（全24）と任意snapshot4/回はU_otherの別費目とする。旧index ID・全体式・capは維持し、未実施費目をspentから引く口・予約は追加しない。
+
+§9のindex子phase分解の一部は解消したが、全体受付・各resource残上界・予約台帳・実source接続は未対応。record profileは引き続き通常pipelineへ未接続で、scan/otherの未知項は0にしない。運用gate・telemetry保留を維持する。

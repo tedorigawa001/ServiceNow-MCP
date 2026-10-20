@@ -156,7 +156,8 @@ fn strict_round<S: RecordSource, C: ClosureSource>(
     verify_records(receipt, target, context, reading.wall_ms, budget)?;
     round_declaration::with_round(receipt, target, context, round, budget, |scope, budget| {
         let plan = scope.decode(budget)?;
-        verify_node_entries(plan.entries(), target, budget)?;
+        let mut phases =
+            plan.prepare_scan(scope, round_declaration::phases::PHASE_MODEL_ID, budget)?;
         budget.checkpoint()?;
         let observed = closure_source.scan(
             ClosureRequest {
@@ -170,21 +171,13 @@ fn strict_round<S: RecordSource, C: ClosureSource>(
         );
         budget.checkpoint()?; // Drop late successes, preserving cancel/deadline.
         let observed = observed?;
-        if !Rc::ptr_eq(&observed.lineage, &receipt.lineage)
-            || observed.records != receipt.binding
-            || observed.round != round
-            || !Rc::ptr_eq(&observed.token, scope.token())
-        {
-            return Err(Failure::Changed);
-        }
-        plan.recheck(scope, Some(&observed.entries), budget)?;
+        phases.after_scan(&observed, budget)?;
         drop(observed);
         // Exact record/path/metadata/time and strict record validation are NOT cached.
         reread_bytes(source, receipt, budget)?;
         let reading = clock_check(source, receipt, budget, 450_000)?;
         verify_records(receipt, target, context, reading.wall_ms, budget)?;
-        plan.recheck(scope, None, budget)?;
-        verify_node_entries(plan.entries(), target, budget)?;
+        phases.finish(budget)?;
         clock_check(source, receipt, budget, 450_000)?;
         Ok(())
     })

@@ -1,6 +1,7 @@
 //! Round-local parse reuse in the synthetic strict pipeline. No runtime entry or permit.
 use super::*;
 
+pub(super) mod phases;
 mod work_model;
 
 pub(super) struct RoundScope<'s> {
@@ -34,6 +35,7 @@ pub(super) struct RoundDeclaration<'s, 'r> {
     scope: &'r RoundScope<'s>,
     parsed: closure::shared::DecodedDeclaration<'s>,
     index_work: work_model::IndexWork,
+    phase_started: std::cell::Cell<bool>,
 }
 // Inspection-only copy of counts/units, never accepted as a constructor or reservation.
 pub(super) struct IndexWorkSummary {
@@ -161,6 +163,7 @@ impl<'s> RoundScope<'s> {
                 scope: self,
                 parsed,
                 index_work,
+                phase_started: std::cell::Cell::new(false),
             })
         })();
         match result {

@@ -4,6 +4,78 @@ use crate::json::shared::Budget;
 use std::cell::Cell;
 
 #[test]
+fn child_partition_preserves_whole_bound_at_shape_chunk_and_depth_extremes() {
+    use super::super::phases::{PHASE_MODEL_ID, partition};
+    let stop = AtomicBool::new(false);
+    for bytes in [1, 65535, 65536, 65537, 16 * 1024 * 1024] {
+        for (files, directories, parents) in [(0, 0, 0), (3, 65, 2082), (100000, 0, 6300063)] {
+            let mut b = SharedBudget::new(Instant::now(), &stop);
+            let shape = Shape {
+                bytes,
+                files,
+                directories,
+                parents,
+            };
+            let bound = calculate(&shape, WORK_MODEL_ID, &mut b).unwrap();
+            let index = IndexWork {
+                id: WORK_MODEL_ID,
+                shape,
+                bound,
+            };
+            let before = b.json_work;
+            let p = partition(&index, PHASE_MODEL_ID, &mut b).unwrap();
+            assert_eq!(b.json_work - before, 4);
+            let n = files + directories;
+            let c = bytes.div_ceil(65536);
+            assert_eq!(p.pre, index.bound.decode + 2 * c + 4 * n + 2 * parents + 20);
+            assert_eq!(p.compare, 2 * c + 3 * n + parents + 100001 + 11);
+            assert_eq!(p.final_check, 2 * c + 3 * n + parents + 97);
+            assert_eq!(p.pre + p.compare + p.final_check, index.bound.per_round);
+            assert_eq!(3 * p.per_round, index.bound.three_rounds);
+        }
+    }
+}
+
+#[test]
+fn child_partition_mismatch_and_checked_overflow_cannot_produce_a_plan() {
+    use super::super::phases::{PHASE_MODEL_ID, partition};
+    let stop = AtomicBool::new(false);
+    for case in 0..3 {
+        let mut b = SharedBudget::new(Instant::now(), &stop);
+        let shape = Shape {
+            bytes: 65537,
+            files: 2,
+            directories: 2,
+            parents: 3,
+        };
+        let bound = calculate(&shape, WORK_MODEL_ID, &mut b).unwrap();
+        let mut index = IndexWork {
+            id: WORK_MODEL_ID,
+            shape,
+            bound,
+        };
+        let expected = match case {
+            0 => {
+                index.bound.per_round += 1;
+                Error::ModelMismatch
+            }
+            1 => {
+                index.shape.files = u64::MAX;
+                Error::Limit(Limit::Overflow)
+            }
+            _ => {
+                index.shape.parents = u64::MAX;
+                Error::Limit(Limit::Overflow)
+            }
+        };
+        assert_eq!(
+            partition(&index, PHASE_MODEL_ID, &mut b).err(),
+            Some(expected)
+        );
+    }
+}
+
+#[test]
 fn sealed_shape_summary_is_exact_and_uses_original_shared_budget() {
     let s = Setup::new();
     let c = context();

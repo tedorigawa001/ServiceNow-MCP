@@ -1,6 +1,6 @@
 # BP-5 R-2 OL-03：同一round内のimmutable index宣言再利用・work事前受付
 
-Version: draft-0.7 / Date: 2026-10-20 / Status: 同round型・index上界とrecord opt-inモデルを内部実装し合成検証。全工程の事前受付・予約・運用承認は未実施。
+Version: draft-0.8 / Date: 2026-10-20 / Status: index上界・子phase接続とrecord opt-inモデルを内部実装し合成検証。全工程の事前受付・予約・運用承認は未実施。
 
 ## 1. 目的・現状・非対象
 
@@ -227,3 +227,27 @@ capを黙って広げない方針は維持する。このまま次工程へ進�
 [全体work上界・事前受付設計draft-0.1](BEST_PRACTICE_BP5_R2_OL03_TOTAL_WORK_ADMISSION_DESIGN.md)へ、record JSON/意味検査の上界導出案、collector/otherの費目契約、子phase単位の実施済み控除、単一work予約と独立resource受付を分離して記載した。未確定費目を0にせず、record固定費・collector・index子phaseの計数検証と保護されたproducerが揃うまで受付を無効にする。MDだけの設計で、実装・上限変更・permit発行は行わない。
 
 後続の[全体設計draft-0.2 §10](BEST_PRACTICE_BP5_R2_OL03_TOTAL_WORK_ADMISSION_DESIGN.md#10-recordモデルの先行実装内部opt-in)でrecordのopt-inモデルを先行実装した。JSON統計・groups最大1,024・固定kernel19・収集/計算固定12・追加guard1を合成計数した。通常strict pipeline/全体予約へは未接続で、indexモデル・元共有予算・運用停止は維持する。
+
+## 14. index上界の子phase分解とscan直前境界
+
+[phases.rs](../native/r2-outer/src/signature_boundary/positioned_read/metadata/transfer/topology/records/strict/round_declaration/phases.rs)をsynthetic strict pipelineへ接続した。[合成検証記録](E2E_BEST_PRACTICE_R2_OL03_INDEX_CHILD_PHASE_SYNTHETIC_2026-10-20.md)を参照する。これはindex-onlyの費目分解で、全体受付・work予約・実collector接続ではない。
+
+固定の子phase IDは `bp5-r2-index-phase-work-0.1`。元 `bp5-r2-index-work-0.1` のID・全体式・固定枠128・observed上限100,001は変更しない。N=F+D、C=ceil(B/65536)、P/Jは既存定義のまま、次の3枠へ分ける。
+
+| 子phase | 上界 | 完了条件 |
+|---|---|---|
+| PreScan | J + 2C + 4N + 2P + 20 | with_round・hash-first decode・全宣言検査・shape/上界計算・実際のNode全件照合が成功 |
+| AfterScan | 2C + 3N + P + 100001 + 11 | 同lineage/RecordBinding/round/tokenの観測に対しraw再認証・全宣言/親/全集合再検証が成功 |
+| FinalIndex | 2C + 3N + P + 97 | 後側record strict検証の後、raw再認証・全宣言/親/Node照合が成功 |
+
+3枠の和は厳密に既存U_index_round（J+6C+10N+4P+100001+128）へ一致する。初回scan直前は**2×U_index_round + AfterScan + FinalIndex**がindex残予定量で、PreScanだけを除外する。BeforeM4では将来1round、AfterM4では将来0roundとして、scopeの固定roundから決める。利用者が完了phaseやround数を指定しない。
+
+現行実装の成功kernel固定費はPreScan20・AfterScan11・FinalIndex10、合計41である。旧§11の45は互換テストで加えていたrecord projection4を含む合成kernelの値だった。recordモデルがprojection2×2回を担当するため、子phaseではそれを再課金しない。旧固定128は縮めず、余り87をFinalIndexの未使用上界枠へ置く。87をspent・予約・返却へ変換しない。AfterScanの100001と実observed件数との差も同様に、上界と実消費の差である。
+
+phase制御の新費用は元kernel枠の外へ別計上する。prepare時のscope/model照合2＋partition算術4＝6、AfterScan遷移1、FinalIndex遷移1で**8 work/round、3roundで24**。任意のremaining snapshotはscope/model照合2＋算術/終端2＝**4 work/呼出し**。全体設計のU_otherへ含める必要があり、今回予約を発行しない。完了済み費目を除外するときもこれらの実消費や他phaseのworkはspentに残す。
+
+RoundDeclarationから一度だけ非Clone/非serdeのprivate planを作り、Ready→Compared→Finishedの一方向に進める。Readyは実Node照合後だけ発行する。二重prepare、逆順finish、二重compare/finishはBindingで停止。観測差はChanged、未知モデルはUnavailable、算術/予算上限はLimitへ接続し、元sticky failureを維持する。snapshotは単なる比較用scalarであり、受付/予約/完了証拠として入力し直す口はない。
+
+同じreceipt/target/context/nonce/budget originとscope borrowを要求する。別budget・別round scopeでは拒否する。後側record再読・strict検証、3 decode・6 record検証・3新規scan、最新clock、解放後guardは維持する。FinalIndexだけを直接呼んでもrecord検証を済ませたことにはならず、private pipelineの固定順序を必須にする。
+
+scan直前にはReady planが存在し、remainingを算出できるが、全体受付hookの有効化・record/scan/otherとの合算・予約は未対応。合成sourceの観測は実OSの完全性を証明しない。協調checkpointより後に発生した取消は検知保証の外で、hard停止・更新lease・実sourceの真正性は引き続き未確認である。

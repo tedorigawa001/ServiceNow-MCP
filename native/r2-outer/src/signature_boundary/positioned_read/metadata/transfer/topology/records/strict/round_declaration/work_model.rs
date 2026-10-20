@@ -4,9 +4,10 @@ use super::*;
 pub(super) const WORK_MODEL_ID: &str = "bp5-r2-index-work-0.1";
 const CAP: u64 = 1_000_000;
 const FIXED_BOUND: u64 = 128;
-// Current charged fixed steps: existing path32 + shape3 + calculation8 + reuse model guards2.
+// Legacy compatibility harness: existing32 + shape3 + calculation8 + reuse guards2.
+// Its45 includes projection4 now owned by records; the pure index child kernel is41.
 const FIXED_CHARGED: u64 = 45;
-const OBSERVED_MAX: u64 = 100_001; // N+1 early rejection is NOT implemented.
+pub(super) const OBSERVED_MAX: u64 = 100_001; // N+1 early rejection is NOT implemented.
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(super) enum Limit {
@@ -20,23 +21,23 @@ pub(super) enum Error {
     Limit(Limit),
     Budget(Failure),
 }
-fn step(b: &mut SharedBudget<'_>) -> Result<(), Error> {
+pub(super) fn step(b: &mut SharedBudget<'_>) -> Result<(), Error> {
     work(b).map_err(Error::Budget)
 }
-fn add(a: u64, b: u64) -> Result<u64, Error> {
+pub(super) fn add(a: u64, b: u64) -> Result<u64, Error> {
     a.checked_add(b).ok_or(Error::Limit(Limit::Overflow))
 }
-fn mul(a: u64, b: u64) -> Result<u64, Error> {
+pub(super) fn mul(a: u64, b: u64) -> Result<u64, Error> {
     a.checked_mul(b).ok_or(Error::Limit(Limit::Overflow))
 }
-fn sum(values: &[u64]) -> Result<u64, Error> {
+pub(super) fn sum(values: &[u64]) -> Result<u64, Error> {
     values.iter().try_fold(0, |a, v| add(a, *v))
 }
 pub(super) struct Shape {
-    bytes: u64,
-    files: u64,
-    directories: u64,
-    parents: u64,
+    pub(super) bytes: u64,
+    pub(super) files: u64,
+    pub(super) directories: u64,
+    pub(super) parents: u64,
 }
 impl Shape {
     pub(super) fn counts(&self) -> (u64, u64, u64, u64) {
@@ -44,7 +45,7 @@ impl Shape {
     }
 }
 pub(super) struct Bound {
-    decode: u64,
+    pub(super) decode: u64,
     statistics: u64,
     variable: u64,
     per_round: u64,
