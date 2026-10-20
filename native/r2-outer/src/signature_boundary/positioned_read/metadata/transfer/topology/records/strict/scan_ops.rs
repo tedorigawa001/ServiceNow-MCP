@@ -539,6 +539,7 @@ fn with_boundary<'a, S: ScanOps, T>(
     budget: &mut SharedBudget<'a>,
     run: impl for<'s, 'b> FnOnce(&mut Boundary<'s, 'b, 'a, S>) -> Result<T, Failure>,
 ) -> Outcome<T> {
+    audit_owner!(budget, Control);
     let ledger = Rc::new(RefCell::new(Ledger::default()));
     let source = Rc::new(RefCell::new(source));
     let marker = ScopeMarker;

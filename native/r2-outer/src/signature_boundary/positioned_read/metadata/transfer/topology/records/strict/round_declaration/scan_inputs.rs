@@ -144,6 +144,7 @@ impl<'i, 'd, 's, 'r> ScanInputs<'i, 'd, 's, 'r> {
         entries: Vec<closure::Entry>,
         b: &mut SharedBudget<'_>,
     ) -> Result<ClosureObservation, Failure> {
+        audit_owner!(b, Seal);
         self.guard(current, b)?;
         // Still required again by AfterScan; this is NOT permission to skip the strict phase.
         self.declaration.recheck(current, Some(&entries), b)?;

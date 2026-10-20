@@ -1,6 +1,6 @@
 # BP-5 R-2 OL-03：現行完全collectorの費目・work上界再設計
 
-Version: draft-0.2 / Date: 2026-10-20 / Status: ローカルソース照合に基づく設計案。レビューでgroups上界の引締めと実閉包規模の試算を追記。計算器・profile・受付への実装と係数の独立検証は未実施。
+Version: draft-0.3 / Date: 2026-10-20 / Status: groups引締め・規模試算を維持し、test-only費目計数と独立oracleの成功/拒否/中断subsetを検証。最終root費漏れを訂正。運用profile・計算器・全体受付は未実装。
 
 ## 1. 範囲と停止状態
 
@@ -26,7 +26,7 @@ Sの核は、Readyに結合済みのScanInputsを受けて `collect()` に入り
 
 | 所有者 | 対象・課金点 | 含めないもの／注意 |
 |---|---|---|
-| S.control | with_boundary開始/終端、layout guard、配列guard・slot初期化/完了、directory観測射影 | sourceの真実性・OS syscall時間を証明しない |
+| S.control | with_boundary開始/終端、layout guard、配列guard・slot初期化/完了、directory観測射影、最後の保持root snapshot/比較 | sourceの真実性・OS syscall時間を証明しない |
 | S.groups | 親bucket、親binary search、count/prefix、stable scatter、virtual index挿入 | 全entryをdirectoryごとに走査する旧式は使わない |
 | S.route | root/entryのStep配列・prefix作成・directory検索、index pin結合 | 実walkとは別費用。再walkは作成済みStepを使う |
 | S.walk | 各acquire、完全snapshot→record、元snapshot比較、walk開始 | 絶対祖先を毎回固定anchorから探索。rootへ短絡しない |
@@ -74,7 +74,7 @@ Sの核は、Readyに結合済みのScanInputsを受けて `collect()` に入り
 
 ## 5. 1roundの候補上界
 
-以下は受理済み宣言に結合したcollect核へ適用する**保守的な設計式**。係数を計算器へ実装・検証するまでは受付に使わない。各演算はchecked u64、減算も定義域を確認する。未知modelはUnavailable、overflow・数量不適合はLimitで停止させる設計とする。
+以下は受理済み宣言に結合したcollect核へ適用する**保守的な設計式**。§11でtest-only oracleによる有限の合成照合を行ったが、運用用のsealed shape計算器と全体/独立resource受付は未実装であり、受付には使わない。将来の運用計算器はchecked u64、減算も定義域を確認する。未知modelはUnavailable、overflow・数量不適合はLimitで停止させる設計とする。
 
 ### 5.1 groups・route
 
@@ -120,11 +120,13 @@ U_file = 56F + 5C
 ### 5.5 control・追加seal
 
 ```text
-U_control = 16 + 4E + D
+U_control = 37 + 4E + D
 U_seal    = 11 + 2C_v + 4E + P
 ```
 
-controlはscope開始/終端、layout guard、3配列guardとE slot初期化、entry開始/完了・directory観測、output vector/全slot取出しを覆う候補。式の16は関数群の固定処理を数える枠であり、旧collector固定16の流用ではない。実施費の独立計数で各定数へ対応付ける。
+controlはscope開始/終端、layout guard、3配列guardとE slot初期化、entry開始/完了・directory観測、output vector/全slot取出しに加え、最後の保持rootのsnapshot/比較を所有する。draft-0.1/0.2の16には最後の処理が抜けており、基本fixtureで実費52に対して上界38となった。最後のrecord上界20＋比較1を明示的に追加し、`37=16+21` と訂正した。これは製品のwork増加やcap増額ではない。
+
+計数上、最後のroot record/比較は20、その他のcontrolは `10+4E+D`（fixture32）で、合計 `30+4E+D`（fixture52）。候補 `37+4E+D` には元の固定余裕6とrecordの余裕1を残す。旧collector固定16を認証済み係数として流用しない。
 
 sealはcomplete guard3、declaration.ensure_scope1、index model guard1、pure recheckの `6+2C_v+4E+P` を合計する候補。pure recheckにはindex hash/header、通常entry検査、全親prefix、観測map生成、virtual index照合、通常entryとの全集合比較を含む。O(E)の追加decodeはなくても、このhash/意味検査/集合照合は存在する。
 
@@ -179,7 +181,7 @@ U_total = U_index_existing + U_record_existing
 | U_enum | 267,096〜283,599 |
 | U_groups | ≤97,543（旧P×ell(N)式では312,030） |
 | U_seal | 44,527 |
-| U_control | 23,020 |
+| U_control | 23,041 |
 | U_tail(0) | 25〜28 |
 | **U_S** | **約387万〜388万** |
 
@@ -187,7 +189,9 @@ U_total = U_index_existing + U_record_existing
 - 支配項はU_walkの各edge `acquire2＋snapshot上界20＋比較1＝23` と、A=(2E+3)(h+1)+2Kのうち絶対祖先分 (2E+3)(h+1)=66,030 と相対edge分 2K=55,002 である。scan詳細設計[§6.4](BEST_PRACTICE_BP5_R2_OL03_BOUNDED_SCAN_COLLECTOR_DESIGN.md#64-現行式で実閉包規模を受け付けられない見通しと判断事項2026-10-20レビュー)の判断事項（祖先edgeの軽量化、root祖先検証のround内集約、上限の再承認）は本collectorにもそのまま当てはまる。
 - groups式の引締めは上界を約21万下げるが、結論（受付不能）は変わらない。いずれの判断も人が行うまで、係数・上限・期限を黙って変更せず、全体受付は無効のまま維持する。
 
-## 8. 実装時の検証条件（本工程では未実施）
+draft-0.3では最終root照合漏れの修正によりcontrolを21増やした。上の合計レンジと受付不能という結論は変わらない。groupsのmin式とレビューで追加された規模試算を維持する。
+
+## 8. 検証受入条件（今回の実施範囲は§11/検証記録）
 
 | 群 | 必須条件 |
 |---|---|
@@ -214,8 +218,20 @@ U_total = U_index_existing + U_record_existing
 
 本書の係数の独立検証、費目所有の承認、profile収集方式、submodel ID、運用quota/ancestor policy、blocked I/Oのhard停止、更新lease/ABAと全検査後差替え防止、hostへのcleanup票は未確定。これらを省いた「受付済み」「本番ready」は出さない。
 
-## 10. 今回の文書確認
+## 10. draft-0.1/0.2作成時の文書確認（履歴）
 
 追加設計書と親2文書の相対リンク58件について参照先ファイルの存在、code fenceの対応、末尾改行と`git diff --check`を確認した。sourceコードの変更はないため、Rustビルド・テストは再実行していない。
 
 §7のshapeを候補式へ代入する算術確認では、groups54/route47/walk1278/enumeration342/file183/control38/seal36/tail21（r=0）の計**1999 work**だった（draft-0.1式）。draft-0.2のgroups min式ではc_0=3・min(P=3, E−c_0=2)=2によりgroups51、計**1996 work**となり、引き続き実測1902以上である。既存実測1902を上回るが、これは算術上の一点照合だけで、係数の独立計数・拒否prefix・大規模shapeの証明ではない。既存1902の実測を今回再実行したとも主張しない。§8の合成検証は未実施のままである。
+
+## 11. 費目別合成計数と独立oracle（draft-0.3）
+
+[検証記録](E2E_BEST_PRACTICE_R2_OL03_COLLECTOR_WORK_ACCOUNTING_SYNTHETIC_2026-10-20.md)。`cfg(test)`限定で、元Budget::workが実際に加算したunitを現在の所有者へ記録する。課金後guardで取り消されたunitも保持し、課金前のLimit/取消は加算しない。nested ownerはRAIIでerror時にも復元し、collector外のprepare/AfterScan/FinalIndexを記録しない。非testビルドにはobserver state/注入hookを含めず、製品課金と停止処理は変更しない。
+
+基本fixtureはcontrol52/groups49/route46/walk1223/enumeration322/file174/seal36、計1902、未割当0。実費総和を元budget deltaと照合する。候補式はgroups min式を維持してcontrol訂正後 **2017 work**（r=0）。総和1996が1902を覆っていても、費目ごとの38<52を見落とすため、費目と総和の両方を検査する。
+
+算術oracleはcollectorのgroups/route/旧scan_work計算器を呼ばず、fixtureのentryから別途BTreeMapで親別子数とdepth/chunkを導く。これは算術経路の独立性であり、別作問者・人手ブラインド評価や数学的全入力証明ではない。oracle準備は試験setupであり、課金済みprofile収集の実装ではない。
+
+10種類のshape×3roundで実費と費目別上界、全876 source点の取消/期限、各非cleanup点の失敗/各cleanup点の解放不明、全1902の不足work prefix、課金直後の選択14点の取消/期限を確認した。data/EOF双方のretry0/1/8/9、3roundで共通EINTR8の枯渇も検査した。成功shapeの相対depth64とwidth128までを扱うが、最大N/最大file/全ABI応答の網羅は未実施である。
+
+work合計の監査と運用受付は別であり、3round operation/name台帳・運用quota producer・全体other上界・hard停止・OS/通常strict bridgeは依然未対応。§9の順序を維持し、次はsealed shape/profileと計算器・その収集/算術費の設計から進める。

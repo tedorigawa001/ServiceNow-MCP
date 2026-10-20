@@ -80,6 +80,7 @@ fn route<'a>(
     target: Option<usize>,
     b: &mut SharedBudget<'_>,
 ) -> Result<Vec<Step<'a>>, Failure> {
+    audit_owner!(b, Route);
     let mut steps = vector(129, b)?;
     for i in 0..=layout.components.len() {
         work(b)?;
@@ -177,6 +178,7 @@ impl<'s, S: ScanOps> Boundary<'s, '_, '_, S> {
         Ok(())
     }
     fn walk(&mut self, steps: &[Step<'_>]) -> Result<Walk<'s, S>, Failure> {
+        audit_owner!(self.budget, Walk);
         work(self.budget)?;
         if steps.is_empty() || steps.len() > 129 {
             return self.fail(Failure::Binding);
@@ -210,6 +212,7 @@ impl<'s, S: ScanOps> Boundary<'s, '_, '_, S> {
         parent: Option<usize>,
         cached: &mut [Option<RecordSnapshot>],
     ) -> Result<(), Failure> {
+        audit_owner!(self.budget, Enumeration);
         let entries = groups.entries;
         let slots = groups.children(parent, self.budget)?;
         let count = slots.len();
@@ -250,6 +253,7 @@ impl<'s, S: ScanOps> Boundary<'s, '_, '_, S> {
         entry: &closure::Entry,
         device: u64,
     ) -> Result<closure::Entry, Failure> {
+        audit_owner!(self.budget, File);
         let mut file = self.bind_declared(&walk.resource, entry, device)?;
         let initial = file.initial_record(self.budget)?;
         self.compare(&initial, &walk.record)?;

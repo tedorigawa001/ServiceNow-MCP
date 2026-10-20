@@ -13,6 +13,18 @@ const MAX_CHUNK: usize = 65536;
 const MAX_REQUESTS: u32 = 32768;
 const EINTR_RETRIES: u8 = 8;
 
+#[cfg(test)]
+mod work_audit;
+// Test instrumentation has no production state, work charge, reservation or authority.
+macro_rules! audit_owner {
+    ($budget:expr, $owner:ident) => {
+        #[cfg(test)]
+        let _work_audit_owner = $budget.work_audit.as_ref().map(|a| {
+            a.enter(crate::signature_boundary::positioned_read::work_audit::Owner::$owner)
+        });
+    };
+}
+
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(super) enum Failure {
     Binding,
@@ -60,6 +72,8 @@ pub(super) struct SharedBudget<'a> {
     json_work: u64,
     // Private identity of this shared inspection budget, not an execution capability.
     inspection_origin: Rc<()>,
+    #[cfg(test)]
+    work_audit: Option<work_audit::Audit>,
 }
 impl std::fmt::Debug for SharedBudget<'_> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -82,6 +96,8 @@ impl<'a> SharedBudget<'a> {
             topology_calls: 0,
             json_work: 0,
             inspection_origin: Rc::new(()),
+            #[cfg(test)]
+            work_audit: None,
         }
     }
     fn stop<T>(&mut self, reason: Failure) -> Result<T, Failure> {
@@ -171,6 +187,10 @@ impl crate::json::shared::Budget for SharedBudget<'_> {
             return self.stop(Failure::Limit);
         };
         self.json_work = total;
+        #[cfg(test)]
+        if let Some(audit) = &self.work_audit {
+            audit.charge(units);
+        }
         self.checkpoint()
     }
 }

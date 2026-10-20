@@ -40,6 +40,20 @@ enum Case {
     Quota(usize),
     NamesZero,
     WrongScope,
+    Shape { width: u16, depth: u8 },
+    IndexFirst,
+    IndexLast,
+    Interrupts { count: u8, eof: bool },
+    WorkCancelAt(u64),
+    WorkDeadlineAt(u64),
+    DuplicateDot,
+    InvalidUtf8,
+    WrongMetaVariant,
+    AclPresent,
+    NamesChanged,
+    NamesOversize,
+    CleanupAt(u64),
+    CancelCleanup(u64),
 }
 struct Raw {
     id: u64,
@@ -60,6 +74,7 @@ struct State {
     opens: BTreeMap<String, u64>,
     case: Case,
     interrupted: bool,
+    interruptions: u8,
     cancelled: Rc<AtomicBool>,
     now: Rc<Cell<Instant>>,
     start: Instant,
@@ -73,6 +88,7 @@ impl Fake {
         s.trace.push((op, path.into()));
         match s.case {
             Case::Cancel(at) if s.calls == at => s.cancelled.store(true, Ordering::Release),
+            Case::CancelCleanup(at) if s.calls == at => s.cancelled.store(true, Ordering::Release),
             Case::Deadline(at) if s.calls == at => s.now.set(s.start + Duration::from_secs(10)),
             Case::Failure(at) if s.calls == at => return Err(OpFailure::Unavailable),
             _ => {}
@@ -149,6 +165,10 @@ impl ScanOps for Fake {
     fn enumerate(&mut self, r: &Raw, out: &mut [u8; 255]) -> Result<EnumValue, OpFailure> {
         self.event(Op::Enum, &r.path)?;
         let mut s = self.0.borrow_mut();
+        if matches!(s.case, Case::InvalidUtf8) {
+            out[0] = 255;
+            return Ok(EnumValue::Name(1));
+        }
         let mut names = vec![".".to_string(), "..".to_string()];
         for path in s.stats.keys() {
             if path != "/"
@@ -165,6 +185,7 @@ impl ScanOps for Fake {
                 Case::Surplus => names.insert(2, "evil".into()),
                 Case::Duplicate => names.push("node".into()),
                 Case::Missing => names.retain(|v| v != "node"),
+                Case::DuplicateDot => names.insert(2, ".".into()),
                 _ => {}
             }
         }
@@ -182,6 +203,13 @@ impl ScanOps for Fake {
         self.event(Op::Read, &r.path)?;
         let mut s = self.0.borrow_mut();
         s.reads.push((r.path.clone(), offset, out.len()));
+        if let Case::Interrupts { count, eof } = s.case {
+            let is_eof = offset == s.data[&r.path].len() as u64;
+            if is_eof == eof && s.interruptions < count {
+                s.interruptions += 1;
+                return Err(OpFailure::Interrupted);
+            }
+        }
         if matches!(s.case, Case::EintrForever) || (matches!(s.case, Case::Eintr) && !s.interrupted)
         {
             s.interrupted = true;
@@ -209,14 +237,28 @@ impl ScanOps for Fake {
         self.event(Op::Metadata, &r.path)?;
         Ok(match op {
             MetaOp::Stat | MetaOp::AclStat => MetaValue::Stat(self.stat(r)),
-            MetaOp::AclQuery => MetaValue::Acl(0),
-            MetaOp::NamesSize => MetaValue::Size(0),
+            MetaOp::AclQuery => {
+                MetaValue::Acl(i32::from(matches!(self.0.borrow().case, Case::AclPresent)))
+            }
+            MetaOp::NamesSize => {
+                MetaValue::Size(if matches!(self.0.borrow().case, Case::NamesOversize) {
+                    65537
+                } else {
+                    0
+                })
+            }
             MetaOp::NamesRead => {
                 assert!(!out.is_empty());
-                MetaValue::Bytes(0)
+                MetaValue::Bytes(usize::from(matches!(
+                    self.0.borrow().case,
+                    Case::NamesChanged
+                )))
             }
             MetaOp::Filesystem => {
                 let s = self.0.borrow();
+                if matches!(s.case, Case::WrongMetaVariant) {
+                    return Ok(MetaValue::Stat(s.stats[&r.path].clone()));
+                }
                 MetaValue::Filesystem(FsObservation {
                     location: if matches!(s.case, Case::FsUnknown) {
                         Filesystem::Unknown
@@ -235,7 +277,9 @@ impl ScanOps for Fake {
         let mut s = self.0.borrow_mut();
         assert!(s.alive.remove(&r.id));
         assert!(s.released.insert(r.id));
-        if matches!(s.case, Case::CleanupUnknown) {
+        if matches!(s.case, Case::CleanupUnknown | Case::CancelCleanup(_))
+            || matches!(s.case,Case::CleanupAt(at) if s.calls==at)
+        {
             Cleanup::Unconfirmed
         } else {
             Cleanup::Released
@@ -258,6 +302,24 @@ fn fixture(case: Case) -> (Setup, Rc<RefCell<State>>) {
     value["entries"][2]["sha256"] = serde_json::json!(format!("{:x}", Sha256::digest(&js)));
     let hash: [u8; 32] = Sha256::digest(&node).into();
     value["entries"][3]["sha256"] = serde_json::json!(hex(&hash));
+    if let Case::Shape { width, depth } = case {
+        let entries = value["entries"].as_array_mut().unwrap();
+        for i in 0..width {
+            entries.push(serde_json::json!({"kind":"file","path":format!("f{i:04}"),"mode":"0444","size":0,"sha256":format!("{:x}",Sha256::digest([]))}));
+        }
+        let mut path = String::new();
+        for _ in 0..depth {
+            if !path.is_empty() {
+                path.push('/');
+            }
+            path.push('x');
+            entries.push(serde_json::json!({"kind":"directory","path":path,"mode":"0555"}));
+        }
+        if depth > 0 {
+            entries.push(serde_json::json!({"kind":"file","path":format!("{path}/empty"),"mode":"0444","size":0,"sha256":format!("{:x}",Sha256::digest([]))}));
+        }
+        entries.sort_by(|a, b| a["path"].as_str().cmp(&b["path"].as_str()));
+    }
     f.target.index_hash = hash;
     f.target.ledger_hash = hash;
     f.receipt.pins[2].bytes = serde_json::to_vec(&value).unwrap();
@@ -265,10 +327,11 @@ fn fixture(case: Case) -> (Setup, Rc<RefCell<State>>) {
     f.receipt.binding.index_hash = Sha256::digest(&f.receipt.pins[2].bytes).into();
     let entries: Vec<closure::Entry> = serde_json::from_value(value["entries"].clone()).unwrap();
     f.observed = entries.clone();
-    let index_path = if matches!(case, Case::NestedIndex) {
-        "dist/index.json"
-    } else {
-        "index.json"
+    let index_path = match case {
+        Case::NestedIndex => "dist/index.json",
+        Case::IndexFirst => "-index.json",
+        Case::IndexLast => "zz-index.json",
+        _ => "index.json",
     };
     f.receipt.binding.index_path = format!("/sealed/runtime/{index_path}");
     f.observed.push(closure::Entry::File {
@@ -306,7 +369,7 @@ fn fixture(case: Case) -> (Setup, Rc<RefCell<State>>) {
         index_stat.inode += 1;
     }
     stats.insert(format!("/sealed/runtime/{index_path}"), index_stat);
-    let data = BTreeMap::from([
+    let mut data = BTreeMap::from([
         (
             "/sealed/runtime/dist/review/r2-launcher-entry.js".into(),
             js,
@@ -317,6 +380,12 @@ fn fixture(case: Case) -> (Setup, Rc<RefCell<State>>) {
             f.receipt.pins[2].bytes.clone(),
         ),
     ]);
+    for entry in &entries {
+        if matches!(entry, closure::Entry::File { .. }) {
+            data.entry(format!("/sealed/runtime/{}", entry.path()))
+                .or_default();
+        }
+    }
     let start = Instant::now();
     let state = State {
         stats,
@@ -331,6 +400,7 @@ fn fixture(case: Case) -> (Setup, Rc<RefCell<State>>) {
         opens: BTreeMap::new(),
         case,
         interrupted: false,
+        interruptions: 0,
         cancelled: Rc::new(AtomicBool::new(false)),
         now: Rc::new(Cell::new(start)),
         start,
@@ -339,11 +409,30 @@ fn fixture(case: Case) -> (Setup, Rc<RefCell<State>>) {
     (f, Rc::new(RefCell::new(state)))
 }
 fn run(case: Case, round: Round) -> (Result<(), Failure>, Rc<RefCell<State>>, u64, u64) {
+    run_with_audit(case, round, None)
+}
+fn run_with_audit(
+    case: Case,
+    round: Round,
+    audit: Option<crate::signature_boundary::positioned_read::work_audit::Audit>,
+) -> (Result<(), Failure>, Rc<RefCell<State>>, u64, u64) {
     let (f, state) = fixture(case);
     let c = context();
     let cancel = state.borrow().cancelled.clone();
     let now = state.borrow().now.clone();
-    let clock = || now.get();
+    let active = Cell::new(false);
+    let clock = || {
+        if active.get() {
+            let spent = audit.as_ref().map_or(0, |a| a.counts().iter().sum::<u64>());
+            match case {
+                Case::WorkDeadlineAt(at) if spent >= at => {
+                    return now.get() + Duration::from_secs(10);
+                }
+                _ => {}
+            }
+        }
+        now.get()
+    };
     let mut b = SharedBudget::new(now.get(), &cancel);
     b.now = &clock;
     let mut spent = 0;
@@ -353,7 +442,7 @@ fn run(case: Case, round: Round) -> (Result<(), Failure>, Rc<RefCell<State>>, u6
             let mut phases = d.prepare_scan(scope, PHASE_MODEL_ID, b)?;
             let inputs = phases.bind_inputs(scope, b)?;
             let mut quotas = Quotas {
-                attempts: [10000; 5],
+                attempts: [if audit.is_some() { 1_000_000 } else { 10000 }; 5],
                 live: 8,
                 name_bytes: 100000,
             };
@@ -371,6 +460,11 @@ fn run(case: Case, round: Round) -> (Result<(), Failure>, Rc<RefCell<State>>, u6
                 b.json_work = 1_000_000 - left;
             }
             let before = b.json_work;
+            if let (Some(a), Case::WorkCancelAt(at)) = (&audit, case) {
+                a.cancel_after_work(at, cancel.clone());
+            }
+            b.work_audit = audit.clone();
+            active.set(true);
             let outcome = if matches!(case, Case::WrongScope) {
                 round_declaration::with_round(&f.receipt, &f.target, &c, round, b, |wrong, b| {
                     Ok(collect(
@@ -395,6 +489,11 @@ fn run(case: Case, round: Round) -> (Result<(), Failure>, Rc<RefCell<State>>, u6
                 )
             };
             spent = b.json_work - before;
+            if let Some(a) = &audit {
+                a.finish(outcome.result.as_ref().map(|_| ()).map_err(|e| *e));
+            }
+            b.work_audit = None;
+            active.set(false);
             assert_eq!(outcome.summary.live, 0);
             assert_eq!(outcome.summary.pending_cleanup, 0);
             let observed = outcome.result?;
@@ -414,6 +513,8 @@ fn run(case: Case, round: Round) -> (Result<(), Failure>, Rc<RefCell<State>>, u6
     drop(s);
     (result, state, spent, b.used)
 }
+
+mod work_accounting;
 #[test]
 fn all_entries_are_read_and_observed_then_accepted_by_after_scan_in_each_round() {
     for round in [Round::Initial, Round::BeforeM4, Round::AfterM4] {

@@ -16,6 +16,7 @@ impl<'p, 'e> ChildGroups<'p, 'e> {
         entries: &'p [&'e closure::Entry],
         b: &mut SharedBudget<'_>,
     ) -> Result<Self, Failure> {
+        audit_owner!(b, Groups);
         let result = (|| {
             work(b)?;
             let n = entries.len();
