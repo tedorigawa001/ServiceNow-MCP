@@ -1,6 +1,6 @@
 # BP-5 R-2 OL-03：scan work上界・bounded collector詳細設計
 
-Version: draft-0.9 / Date: 2026-10-20 / Status: 計算器・単発操作・child/seen・size/digest・同resourceのACL/xattr/FS正規化・receipt/round限定の宣言入力結合を内部実装・合成検証。完全collector・workモデル/OS接続・運用quota承認は未対応。
+Version: draft-0.10 / Date: 2026-10-20 / Status: 計算器・単発操作・child/seen・size/digest・metadata正規化・宣言入力結合・root/絶対祖先path再照合の内部契約を合成検証。完全collector・workモデル/OS接続・運用quota承認は未対応。
 
 ## 1. 目的・前提・非対象
 
@@ -391,3 +391,41 @@ projection生成は `7+A` work（Aはruntime root〜index parentの祖先数、�
 expected配列は宣言順＋virtual index末尾で、既存scan_opsのsorted child照合へはまだ接続しない。全entryを親ごとに走査するため、完全探索では二次的な比較量になり得る。現行数量計算器の定数lookupや既存index workにこの追加費を含むとは主張せず、将来のcollector接続でlookup構造・費目所有・上界の再設計を必要とする。全体受付は無効のまま。
 
 §16の未解決事項のうち宣言/親path/deviceの**receipt内の由来**だけを内部契約として具体化した。scan_opsへの保護されたproducer接続、物理root/祖先/path再照合、open後resourceとの結合、全集合の観測seal、3round配賦/OS backendは未対応。宣言から観測結果を合成しない。APPROVED_REGISTRY=None、通常v2 Unavailable、gate92、DER/absence停止、telemetry保留を維持する。
+
+## 18. root / 絶対祖先path再照合の内部契約
+
+[root_path.rs](../native/r2-outer/src/signature_boundary/positioned_read/metadata/transfer/topology/records/strict/round_declaration/scan_inputs/root_path.rs)と[合成検証記録](E2E_BEST_PRACTICE_R2_OL03_SCAN_ROOT_PATH_SYNTHETIC_2026-10-20.md)で、§17の入力に結合したroot再照合subsetを追加した。RootBindingは非Clone/非serdeで、ScanInputs・保持root resourceのopaque origin・receipt root snapshotへのborrowを固定する。path/FD番号/任意観測から作る本番constructorは設けず、テストだけで生成する。成功は比較終了のunitであり、実行permit・全closure観測sealではない。
+
+1. 同ScanInputs、Ready、元scope/receipt/round/budgetと、保持root origin・baseline参照の同一性を検査する。各edge前と終端でも元guardを実行する。1 bindingは1回だけ試行できる。
+2. 保持rootを観測し、receipt root snapshotと完全比較する。
+3. 新しい固定anchor `/` を取得する。runtime_rootの既存absolute parserが返す最大64 componentを、全て親handle基準で順に開き、各祖先をreceiptのindex pin祖先snapshotと比較する。保持中のroot/途中directoryを新しいanchorへ代用しない。
+4. 直前parentと新childの最大2 temporary ownerを維持し、各比較後に古いparentを解放する。最後のtemporaryも解放してから保持rootを再観測し、元snapshot・bindingと再照合する。baselineの更新・差が出たpathでの再open/retryはしない。
+
+bounded Observationはbefore/after Stat、ACL、FS属性、型付きnamesを持つ**合成比較用の集約値**で、native metadata primitive1回として課金する契約ではない。取得失敗/Interrupted/WouldBlockは再試行せず、openはUnavailable、観測はMetadataUnavailable。before/after差・receiptのStat/names差はChanged、UnknownはMetadataUnavailable。既知不適合もChangedで停止する。
+
+許可subsetはDirectory/root uid/links>0/正常nanoseconds、ACL absent、local APFS・ownership ignored=false・noexec=false、names空またはprovenanceのみ。runtime rootは0555、system祖先は0555/0755を許すが、いずれもreceiptのmode/device/inode/gid/size/times等へ完全一致させる。system祖先にrootのdeviceや0555を一律適用しない。このsubsetは全macOS system祖先の承認済みprofileではなく、実配備で成功することを主張しない。
+
+補足（2026-10-20、レビュー時のローカル読取専用確認）：開発機（macOS arm64、`/` はsealed read-onlyのAPFS system volume）で代表的な祖先を `stat`/`ls -le`/`xattr` だけで確認した。製品コードやOS adapterによる観測ではなく、別環境・別OS版での同一性も保証しない。
+
+| path | mode | uid | xattr names | BSD flags |
+|---|---|---|---|---|
+| `/` | 0755 | 0 | なし | sunlnk |
+| `/usr` | 0755 | 0 | `com.apple.rootless` | restricted, hidden |
+| `/usr/local` | 0755 | 0 | なし | sunlnk |
+| `/Library` | 0755 | 0 | なし | sunlnk |
+| `/Library/Application Support` | 0755 | 0 | なし | なし |
+| `/opt` | 0755 | 0 | なし | hidden |
+
+- いずれもACL表示はなく、mode0755・uid0はsystem祖先の許可subsetに収まる。
+- ただし `/usr` は `com.apple.rootless` を持つため、names空/provenanceのみの現subsetでは **`/usr/local` 配下のruntime rootは必ずChangedで停止する**。`/Library/...` や `/opt/...` 配下はnames条件を満たす。runtime rootの配置選定ではこの制約を前提にし、`/usr` 系祖先を許可する場合はrootless名の扱いを別途審査する（黙って許可名へ追加しない）。
+- `Stat` はBSD flags（`st_flags`：restricted/uchg/schg/sunlnk/hidden等）を保持しない。従って保持root・祖先・fileの前後照合はflagsの変化を検出しない。flagsをpolicy/前後比較へ含めるかは、Stat拡張とOS adapterの設計時に判断する残課題とする。
+
+### 18.1 共有予算・解放・残課題
+
+元SharedBudgetのstart/origin/10秒・work100万を維持する。成功subsetのprogram workは `8h+26`（hはabsolute component数、合成h=2で42）。内訳はbinding guard4をh+4回、開始claim/absolute projection2、openのdispatch＋cleanup prechargeをh+1回、観測dispatch＋比較をh+3回。open失敗でもprechargeを返さない。既存index/scan候補式の認証済み係数には含めない。
+
+source試行は最大 `2h+4<=132`、temporary acquire/cleanupは最大h+1、同時ownerは最大2。これは本subsetのローカルな有限検査で、承認済みscan quota/3round配賦やOS syscall数の証明ではない。payload/read/EINTR残・target metadata/topology台帳は消費/増額しない。将来native/scan_opsへ接続する際は、実metadata操作・quota・全体workの費目を別途結合する必要がある。
+
+成功したtemporaryはpost-operation guard**前**にowner化し、遅延取消/期限切れでもprecharge済みDropで一度だけ解放する。解放不明はsuccessにせずUnavailable、先行のsticky失敗があればその理由を保持する。保持rootの所有者は外側scopeのままで、再照合sourceは解放しない。hostのcleanup終了票への接続は未対応。
+
+runtime root以下の相対directory/file祖先、実OS rootの保護されたproducer、scan_ops完全snapshotとの接続、更新lease/ABA・検査後変更の防止、全closure collector/sealは依然未対応。合成sourceの真実性をこの比較器で証明せず、既存停止gate・telemetry保留・全体受付無効を維持する。

@@ -2,6 +2,8 @@
 use super::*;
 use phases::IndexPhases;
 
+mod root_path;
+
 pub(in super::super) struct ScanInputs<'i, 'd, 's, 'r> {
     declaration: &'d RoundDeclaration<'s, 'r>,
     phases: &'i IndexPhases<'d, 's, 'r>,

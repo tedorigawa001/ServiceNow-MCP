@@ -183,3 +183,5 @@ record projection4/roundはRが所有する。旧index互換テストの固定45
 [scan詳細設計draft-0.8 §16](BEST_PRACTICE_BP5_R2_OL03_BOUNDED_SCAN_COLLECTOR_DESIGN.md#16-同resourceのacl--xattr--fs正規化前後照合)で同resourceのACL/xattr/FSを含むsnapshotを前後へ接続した。内部subsetの1 snapshot18 workを計数し、stat照会を置換した現行bind22/EOF24・standalone `52+5C`（1 chunk57、child接続72）へ更新した。§15の18/23/38は過去の費用である。expected deviceのtrusted producer/全祖先policyと全体モデル・3round配賦は未接続で、18Mを全運用経路で認証済みとは扱わない。元quotaを緩めず全体受付・実行permitは無効とする。
 
 [scan詳細設計draft-0.9 §17](BEST_PRACTICE_BP5_R2_OL03_BOUNDED_SCAN_COLLECTOR_DESIGN.md#17-receipt--round限定の宣言入力結合内部契約のみ)で、Readyのimmutable宣言からreceipt/round・root device・親子viewへ由来を結合する内部契約を追加した。元budget/checkpointで利用ごとに検査し、追加decodeや予約は行わない。既存scan_opsへの実接続・trusted OS producerではなく、線形探索の追加費は旧index/scan上界へ含まれない。費目の上界更新・完全collector・全体受付は未対応であり、未知費を0として進めない。
+
+[scan詳細設計draft-0.10 §18](BEST_PRACTICE_BP5_R2_OL03_BOUNDED_SCAN_COLLECTOR_DESIGN.md#18-root--絶対祖先path再照合の内部契約)で保持rootと固定anchorからの絶対祖先全edgeをreceiptへ照合する内部契約を合成検証した。h=2のprogram work42（一般形8h+26）を計数したが、集約Observationはnative metadata primitiveではない。既存18M/scan operation quota・3round配賦へ接続済みとはせず、全体受付・運用gateは停止を維持する。

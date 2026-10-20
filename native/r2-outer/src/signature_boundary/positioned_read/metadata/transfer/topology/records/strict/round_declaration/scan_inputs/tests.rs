@@ -3,7 +3,7 @@ use super::*;
 use crate::closure::shared::index_decode_count;
 use phases::PHASE_MODEL_ID;
 
-fn setup() -> Setup {
+pub(super) fn setup() -> Setup {
     let mut s = Setup::new();
     let depth = absolute(&s.receipt.binding.runtime_root).unwrap().len();
     for ancestor in &mut s.receipt.pins[2].ancestors[depth..] {
