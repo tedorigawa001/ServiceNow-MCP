@@ -1,6 +1,6 @@
 # BP-5 R-2 OL-03：同一round内のimmutable index宣言再利用・work事前受付
 
-Version: draft-0.5 / Date: 2026-10-20 / Status: 同round型・index work_model/shape/上界を内部実装し合成検証。全工程の事前受付・予約・運用承認は未実施。
+Version: draft-0.6 / Date: 2026-10-20 / Status: 同round型・index work_model/shape/上界を内部実装し合成検証。全工程の事前受付・予約・運用承認は未実施。
 
 ## 1. 目的・現状・非対象
 
@@ -221,3 +221,7 @@ capを黙って広げない方針は維持する。このまま次工程へ進�
 3. **暫定cap 1,000,000の再承認**：実閉包のshape実測と全費目上界を根拠に、cap値自体を承認し直す。根拠なしの増額や一律marginは採らない。
 
 判断と実装が済むまで、全工程の事前受付・予約は有効化せず、実運用経路はLimit/Unavailableで停止したままとする。
+
+## 13. record・scanを含む全体work受付の詳細化
+
+[全体work上界・事前受付設計draft-0.1](BEST_PRACTICE_BP5_R2_OL03_TOTAL_WORK_ADMISSION_DESIGN.md)へ、record JSON/意味検査の上界導出案、collector/otherの費目契約、子phase単位の実施済み控除、単一work予約と独立resource受付を分離して記載した。未確定費目を0にせず、record固定費・collector・index子phaseの計数検証と保護されたproducerが揃うまで受付を無効にする。MDだけの設計で、実装・上限変更・permit発行は行わない。
