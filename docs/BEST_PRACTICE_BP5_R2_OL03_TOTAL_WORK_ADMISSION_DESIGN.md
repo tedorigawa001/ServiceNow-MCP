@@ -191,3 +191,5 @@ record projection4/roundはRが所有する。旧index互換テストの固定45
 [scan詳細設計draft-0.12 §20](BEST_PRACTICE_BP5_R2_OL03_BOUNDED_SCAN_COLLECTOR_DESIGN.md#20-canonical-entry所属判定の固定回数化)でcanonical参照確認の線形検索を除去した。上段112/96は先行版の記録とし、現行の入口費はΣp_iのない `V=6+Q+3k`（Q=6/7）、再照合はfile106/directory94となる。名前によるdirectory/child lookup、完全metadata、3round配賦の費用は解消しておらず、全体受付は無効のまま維持する。
 
 [scan詳細設計draft-0.13 §21](BEST_PRACTICE_BP5_R2_OL03_BOUNDED_SCAN_COLLECTOR_DESIGN.md#21-scan_ops接続全件回収collectorprivate合成経路)でprivateな全件回収collectorをscan_opsへ接続した。実read/hash/完全metadata・名前全集合・全path前後照合・終端cleanupを通過したslotだけで観測を構築し、AfterScanへ渡す合成試験を行った。fixture1886 work/876 source操作/peak5は計数結果であり、旧候補式や本番上界の認証ではない。expected構築/重複snapshot・追加walk等の費目と3round resource配賦を再整理するまで、全体受付・通常strict経路への切替・OS producerは未接続とする。
+
+[scan詳細設計draft-0.14 §22](BEST_PRACTICE_BP5_R2_OL03_BOUNDED_SCAN_COLLECTOR_DESIGN.md#22-scan単位の期待子一覧前処理)で期待子一覧のdirectoryごとの全entry走査を廃止した。scan単位のO(E log E)前処理と、子数に比例する射影へ変更した。E=5,501/T=1,001の準備部分は85,393 work、小fixture全collectorは1,902 work/876操作/peak5。前処理費は `8+4E+4T+B+V+M`、取得/射影は `E+2T` だが、全collector/3roundの上界・受付適合の証明ではない。既存work上限・全体受付無効を維持する。

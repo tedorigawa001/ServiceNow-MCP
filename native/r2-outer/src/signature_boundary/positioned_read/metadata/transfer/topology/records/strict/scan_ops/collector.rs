@@ -5,6 +5,8 @@ use super::super::round_declaration::{
 };
 use super::normalized_metadata::MetadataPolicy;
 use super::*;
+mod expected_groups;
+use expected_groups::ChildGroups;
 
 struct Step<'a> {
     name: Option<&'a str>,
@@ -204,51 +206,21 @@ impl<'s, S: ScanOps> Boundary<'s, '_, '_, S> {
         held: &Resource<'s, S>,
         before: &RecordSnapshot,
         p: &MetadataPolicy,
-        entries: &[&closure::Entry],
-        parent: &str,
+        groups: &ChildGroups<'_, '_>,
+        parent: Option<usize>,
         cached: &mut [Option<RecordSnapshot>],
     ) -> Result<(), Failure> {
-        fn parent_of(path: &str) -> &str {
-            path.rsplit_once('/').map_or("", |(p, _)| p)
-        }
-        let mut count = 0usize;
-        for entry in entries {
-            work(self.budget)?;
-            if parent_of(entry.path()) == parent {
-                count = count.checked_add(1).ok_or(Failure::Limit)?;
-            }
-        }
-        let mut slots = vector(count, self.budget)?;
+        let entries = groups.entries;
+        let slots = groups.children(parent, self.budget)?;
+        let count = slots.len();
         let mut expected = vector(count, self.budget)?;
-        for (slot, e) in entries.iter().enumerate() {
+        for slot in slots {
             work(self.budget)?;
-            if parent_of(e.path()) == parent {
-                slots.push(slot);
-                expected.push(child_set::ExpectedChild {
-                    name: e.path().rsplit('/').next().ok_or(Failure::Binding)?,
-                    kind: policy(e, p.device)?.kind,
-                });
-            }
-        }
-        // Only the appended index can be out of order. Charge comparisons and shifts.
-        if slots.last() == Some(&(entries.len() - 1)) {
-            let last = slots.len() - 1;
-            let (mut low, mut high) = (0, last);
-            while low < high {
-                work(self.budget)?;
-                let mid = low + (high - low) / 2;
-                match expected[mid].name.cmp(expected[last].name) {
-                    std::cmp::Ordering::Less => low = mid + 1,
-                    std::cmp::Ordering::Greater => high = mid,
-                    std::cmp::Ordering::Equal => return self.fail(Failure::Binding),
-                }
-            }
-            if low != last {
-                use crate::json::shared::Budget;
-                self.budget.work(((last + 1 - low) * 2) as u64)?;
-                slots[low..].rotate_right(1);
-                expected[low..].rotate_right(1);
-            }
+            let e = entries[*slot];
+            expected.push(child_set::ExpectedChild {
+                name: e.path().rsplit('/').next().ok_or(Failure::Binding)?,
+                kind: policy(e, p.device)?.kind,
+            });
         }
         self.children_checked(
             held,
@@ -318,6 +290,7 @@ pub(super) fn collect<S: ScanOps>(
             cached.push(None);
             observed.push(None);
         }
+        let groups = ChildGroups::build(&entries, b.budget)?;
         let root_steps = route(&layout, &entries, &cached, None, b.budget)?;
         let root = b.walk(&root_steps)?;
         let root_policy = MetadataPolicy {
@@ -330,8 +303,8 @@ pub(super) fn collect<S: ScanOps>(
             &root.resource,
             &root.record,
             &root_policy,
-            &entries,
-            "",
+            &groups,
+            None,
             &mut cached,
         )?;
         b.rewalk(&root_steps)?;
@@ -348,8 +321,8 @@ pub(super) fn collect<S: ScanOps>(
                         &walk.resource,
                         &walk.record,
                         &policy(entry, root_policy.device)?,
-                        &entries,
-                        entry.path(),
+                        &groups,
+                        Some(slot),
                         &mut cached,
                     )?;
                     work(b.budget)?;

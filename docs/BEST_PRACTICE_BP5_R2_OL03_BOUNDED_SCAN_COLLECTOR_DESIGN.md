@@ -1,6 +1,6 @@
 # BP-5 R-2 OL-03：scan work上界・bounded collector詳細設計
 
-Version: draft-0.13 / Date: 2026-10-20 / Status: scan_ops上で全entryを回収するprivate合成collectorを実装・検証。通常strict経路への組込み・全体work受付・OS接続・運用quota承認は未対応。
+Version: draft-0.14 / Date: 2026-10-20 / Status: private合成collectorの期待子一覧をscan単位の前処理へ変更。通常strict経路への組込み・全体work受付・OS接続・運用quota承認は未対応。
 
 ## 1. 目的・前提・非対象
 
@@ -500,3 +500,17 @@ fixture（通常宣言4 entry＋index、directory2/file3、root深さ2）では�
 full metadata、child visitorの初期snapshot、bind前後snapshot、各walk/rewalk、追加のroot再照合・全集合再検証等があるため、旧候補式1362や純粋比較器の106/94をそのまま本collectorへ使わない。expected child構築の2回全entry走査はdirectoryごとに残る。routeのprefix検索はaccepted宣言上のbinary searchで比較ごとに課金する。モデル/費目所有・配賦・全体受付を更新するまでは未知費を0とせず、100万を超える実閉包を上限増額で通さない。
 
 system祖先profile/xattr/flagsの承認、保護されたroot/context/record producer、OS backend、更新lease/ABA/全検査後の変更防止、blocked I/Oのhard停止、hostへのcleanup終了票、通常ClosureSourceへの型付きbridge、work/resource全体受付は未対応。合成sourceの真実性やOSの原子的一貫性を検証したものではない。既存運用gate・本番policy未投入・DER/absence停止・telemetry保留を維持する。
+
+## 22. scan単位の期待子一覧前処理
+
+計測の基準：§21の1886は先行作業ツリーの記録。コミット分割で最適化前列挙を分離・再構成した前工程snapshotは1884 workだった。現行1902との差はそのコミット基準では18、先行作業ツリー基準では16である。source/payload/peakの値は変わらない。
+
+§20/21で残課題としたdirectoryごとの2回全entry走査を、この段階で置き換えた。[検証記録](E2E_BEST_PRACTICE_R2_OL03_EXPECTED_GROUPS_SYNTHETIC_2026-10-20.md)。同じLayoutをimmutable borrowするprivate `ChildGroups`をsource操作より前に各scanで一度だけ構築する。別scan/roundへcacheしない。rootをbucket 0とし、各directoryにcompact bucketを割り当てる。各entryの親pathは、末尾virtual indexを除いたaccepted宣言へbinary searchし、Directory以外・親欠落ならBindingで停止する。
+
+親ごとのcountとprefix startsを作り、entry slotをstable counting scatterで1つの連続配列へ格納する。通常entryのpath順は同じ親内のbasename順を保つ。最後にvirtual indexだけをその親の範囲へbinary insertionする。同名は拒否し、移動する範囲のworkを移動前に課金する。空directoryは空slice、root/任意directoryの一覧取得は固定1 workであり、毎回の全entry走査・slot配列作成は行わない。ExpectedChildへの射影は実際の子数に比例し、既存child/seen照合と未知名のopen前拒否は変更しない。
+
+E=通常宣言＋virtual index、T=directory数＋root、B=親検索比較回数、V=virtual挿入比較回数、M=移動slice長（移動なしは0）とすると、成功する前処理は `8 + 4E + 4T + B + V + M` work。全directoryの一覧取得とExpectedChild射影は追加 `E + 2T` work（既存child/seen・metadata等は別）。前処理はO(E log E)、列挙準備は総O(E+T)である。文字列比較の実時間を単位workと同一視する主張ではない。
+
+6配列は各々EまたはT以下で、既存vector上限100,001とtry_reserve_exactを使う。末尾がFileなのでT≤E、E+1のsentinelや上限増額は不要。temporary parent/cursorはbuild終了時に解放し、失敗は同じSharedBudgetへstickyに保持する。総メモリ/allocator時間の証明や受付permitではない。
+
+E=5,501/T=1,001の合成形状では、旧走査相当11,013,002 workに対し前処理77,890、一覧取得1,001、ExpectedChild射影相当6,502で計85,393 work。ただしこれは期待子準備の部分費のみ。小fixtureのcollector全体は1,886から1,902 workへ16増加し、source876操作・payload4,590 bytes・peak owner5は不変。小入力では前処理固定費が勝つ。全collector・3roundが100万workへ収まると結論せず、全体受付は無効のままとする。
