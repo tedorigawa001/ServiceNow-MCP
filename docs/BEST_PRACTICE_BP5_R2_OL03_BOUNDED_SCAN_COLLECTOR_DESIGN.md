@@ -282,4 +282,11 @@ direct-child helper自身の実課金（open/precharge・visitor・外側scope�
 
 1 child/dotなしの合成成功は、helper13＋anchor2＋cursor2＋child2＋scope2＝**21 work**。残work0〜21の試験で全停止prefixの解放と上限等号を確認した。これは完全collectorの期待構築4E/固定16/metadata18の認定ではない。
 
+補足（2026-10-20、レビュー）：次のモデル改訂に向けた探索比較数cの上界案。directoryごとのexpected件数を `n_dir`、`λ(n)=floor(log2 n)+1`（n>0、n=0では0）とする。
+
+- 成功時：`c <= Σ_dir n_dir × λ(n_dir)`。n<=100,001なので1探索は最大17比較。
+- 拒否時：上記に、拒否される未知名1件分の `λ(n_dir)` を加えた値以下（重複childは探索で一致した後のseen検査で拒否されるため同じく最大`λ(n_dir)`）。
+- `.`/`..` は探索しないためcへ含めない。
+- 保守的な単一式としては `c <= (E+1)×17`。directory分布を使う式の方が小さいが、分布をshape producerから受け取る結合が必要になる。
+
 12追加テストでunknown/extra/duplicate/missing、dot重複、大小文字/部分一致の拒否、expected不正/件数境界、別親で同名child、visitor/cleanup/enum失敗、遅延Cancel/Deadlineを検証した。未知拒否を意図的に無効化するとunknown-nameテストが失敗し、復旧後に再成功した。完全metadata・型/size/hash同一性、全path再照合、保護されたexpected producer、全closure seal、同時生存allocation総量/3round quota・OS backendは未接続。全体受付・運用gateは引き続き停止する。
