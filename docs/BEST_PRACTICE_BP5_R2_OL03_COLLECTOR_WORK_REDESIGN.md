@@ -1,6 +1,6 @@
 # BP-5 R-2 OL-03：現行完全collectorの費目・work上界再設計
 
-Version: draft-0.3 / Date: 2026-10-20 / Status: groups引締め・規模試算を維持し、test-only費目計数と独立oracleの成功/拒否/中断subsetを検証。最終root費漏れを訂正。運用profile・計算器・全体受付は未実装。
+Version: draft-0.4 / Date: 2026-10-20 / Status: test-only計数・oracleのsubsetを検証。sealed profile/計算器は別紙draftで詳細設計。運用実装・全体受付は未対応。
 
 ## 1. 範囲と停止状態
 
@@ -235,3 +235,7 @@ draft-0.3では最終root照合漏れの修正によりcontrolを21増やした�
 10種類のshape×3roundで実費と費目別上界、全876 source点の取消/期限、各非cleanup点の失敗/各cleanup点の解放不明、全1902の不足work prefix、課金直後の選択14点の取消/期限を確認した。data/EOF双方のretry0/1/8/9、3roundで共通EINTR8の枯渇も検査した。成功shapeの相対depth64とwidth128までを扱うが、最大N/最大file/全ABI応答の網羅は未実施である。
 
 work合計の監査と運用受付は別であり、3round operation/name台帳・運用quota producer・全体other上界・hard停止・OS/通常strict bridgeは依然未対応。§9の順序を維持し、次はsealed shape/profileと計算器・その収集/算術費の設計から進める。
+
+## 12. sealed shape/profileの後続詳細設計（設計のみ）
+
+[sealed profile・純粋計算器draft-0.1](BEST_PRACTICE_BP5_R2_OL03_SEALED_SCAN_PROFILE_DESIGN.md)に、count-only一時集計→scalar-only出力、receipt/Inputs/round/token/budget結合、one-shot消費、統計収集 `11+2N+5E+K+B+M+D` と15-row算術（require込み20 work）の課金案を整理した。これらは未実装・未計数検証であり、§11のkernel実費や上界へ既に含まれる費用ではない。S.groupsの検査とその費用を控除せず、O.profile/O.calculate/O.useとして別に扱う。

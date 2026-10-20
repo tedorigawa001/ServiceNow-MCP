@@ -1,6 +1,6 @@
 # BP-5 R-2 OL-03：record・scanを含む全体work上界と事前受付
 
-Version: draft-0.7 / Date: 2026-10-20 / Status: private合成collectorの費目別計数・上界oracleのsubsetを検証。運用collectorモデル・全体受付・other上界・通常strict接続・運用承認は未対応。
+Version: draft-0.8 / Date: 2026-10-20 / Status: private合成collectorの計数を検証。O.profile/calculate/useは別紙で詳細設計のみ。運用モデル・全体受付・other上界・通常strict・運用承認は未対応。
 
 ## 1. 範囲と停止状態
 
@@ -167,6 +167,8 @@ record projection4/roundはRが所有する。旧index互換テストの固定45
 **現行への適用範囲**：[collector費目・work上界再設計draft-0.1](BEST_PRACTICE_BP5_R2_OL03_COLLECTOR_WORK_REDESIGN.md)に、現在の核の費目・shape・保守的上界候補と独立検証条件を分離した。以下のscan-work-0.1等は各時点の部分計算器の記録であり、現行collectorの受付上界ではない。S.sealの追加recheckを既存index子phaseへ吸収せず、Oの収集/計算/bridge費と3round resource配賦は未確定のまま維持する。
 
 後続draft-0.3と[費目別合成検証](E2E_BEST_PRACTICE_R2_OL03_COLLECTOR_WORK_ACCOUNTING_SYNTHETIC_2026-10-20.md)で、各workの所有者と実費総和を確認した。control候補のroot最終照合漏れを訂正したが、これはtest-onlyの検証でありsealed shape/運用計算器・予約・全体受付の実装ではない。3roundの累積work/EINTR照合と、各scanで再生成されるoperation台帳の累積quota保証は区別する。
+
+[sealed profile/計算器詳細設計draft-0.1](BEST_PRACTICE_BP5_R2_OL03_SEALED_SCAN_PROFILE_DESIGN.md)でOの収集/算術/利用guardを分離した。未実装の課金案はO.profile=`11+2N+5E+K+B+M+D`、O.calculate=20、将来O.use=7である。初回bootstrapでこれらを実消費してもspentを返却せず、将来roundの分を未計上にしない。count-onlyの一時配列を解放してからscalar profileを返し、S.groupsの全費用は維持する。独立resource受付と全体work予約は有効化しない。
 
 [scan詳細設計draft-0.1](BEST_PRACTICE_BP5_R2_OL03_BOUNDED_SCAN_COLLECTOR_DESIGN.md)へ、全entry/rootの2回全path解決、逐次名前照合と余剰entryのopen前拒否、短読取停止・元共有EINTR残8、snapshot/解放を含む操作数・work式候補を整理した。cleanupはacquire前prechargeと一度限りのownerへ結合する案とし、元spentを返さない。
 
