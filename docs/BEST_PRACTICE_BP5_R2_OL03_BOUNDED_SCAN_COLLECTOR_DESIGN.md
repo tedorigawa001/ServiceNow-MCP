@@ -1,12 +1,12 @@
 # BP-5 R-2 OL-03：scan work上界・bounded collector詳細設計
 
-Version: draft-0.3 / Date: 2026-10-20 / Status: 純粋な計算器と単発操作境界を内部実装・合成検証。完全collector・係数16/18の実計数・OS backend・運用quota承認は未対応。
+Version: draft-0.4 / Date: 2026-10-20 / Status: 計算器・単発操作・direct-child/seen照合subsetを内部実装・合成検証。完全collector・workモデルとの接続・OS backend・運用quota承認は未対応。
 
 ## 1. 目的・前提・非対象
 
 [全体work受付設計](BEST_PRACTICE_BP5_R2_OL03_TOTAL_WORK_ADMISSION_DESIGN.md)のSを具体化する。[index子phase](BEST_PRACTICE_BP5_R2_OL03_ROUND_DECLARATION_WORK_DESIGN.md#14-index上界の子phase分解とscan直前境界)のReady直後から、新しい全closure観測を返すまでが対象である。3roundの各roundで必ず新しく取得し、宣言からobservedを合成しない。
 
-本書はローカルソースに基づく設計であり、macOS SDKや公式APIの実証記録ではない。初稿はMDのみで、§11の計算器、§12の単発操作境界を先行実装した。完全collectorとOS backendは未接続。全体受付は無効、telemetry調査は保留。APPROVED_REGISTRY=None、通常v2 Unavailable、gate92、DER/absence停止を維持する。
+本書はローカルソースに基づく設計であり、macOS SDKや公式APIの実証記録ではない。初稿はMDのみで、§11の計算器、§12の単発操作境界、§13のdirect-child照合を先行実装した。完全collectorとOS backendは未接続。全体受付は無効、telemetry調査は保留。APPROVED_REGISTRY=None、通常v2 Unavailable、gate92、DER/absence停止を維持する。
 
 workはBudget::workの課金量であって、CPU/RSS/OS syscall実行時間の上界ではない。名前列挙・metadata・読取の単発境界を実装しても、blocked I/Oや検査後変更を協調checkpointだけで排除したことにはならない。保護されたroot/context、更新leaseと外側監督は別の未解決条件である。
 
@@ -257,4 +257,29 @@ workをprechargeしてもOS非復帰は解決しない。解放処理のhard期�
 
 通常の成功・失敗・取消・unwindではownerが解放する。忘却されたownerはlive/cleanup予約残として終端拒否するが、`mem::forget`された資源を回収できるとは主張しない。sourceはnon-panicking・隠れたretry/refillなしを満たす必要があり、合成試験はnative ABI/非復帰/cleanup hard期限を証明しない。不明件数の外側hostへの接続も未実装である。
 
-15テストで各操作cap、live/name/work/payload枯渇、source前拒否、遅延成功、EINTR共有、短読取/EOF、列挙/metadata不正応答、cleanup不明、unwind/忘却・別scopeを検証した。完全snapshotの正規化/前後比較、宣言sizeへの読取結合、expected/seen/余剰entry拒否、path walk・実metadata policy・3round quota配賦は未実装。§6の16/18と全体式は依然候補で、全体受付・permitを有効化しない。
+15テストで各操作cap、live/name/work/payload枯渇、source前拒否、遅延成功、EINTR共有、短読取/EOF、列挙/metadata不正応答、cleanup不明、unwind/忘却・別scopeを検証した。この段階のexpected/seen/余剰拒否未対応は、後続§13でdirect-child subsetを実装した。完全snapshotの正規化/前後比較、宣言sizeへの読取結合、path walk・実metadata policy・3round quota配賦は未実装。§6の16/18と全体式は依然候補で、全体受付・permitを有効化しない。
+
+## 13. expected child / seen照合subset（運用未接続）
+
+[child_set.rs](../native/r2-outer/src/signature_boundary/positioned_read/metadata/transfer/topology/records/strict/scan_ops/child_set.rs)のprivate `children` は、同scopeの親resource・借用したexpected slice・bounded visitorを受ける。[合成検証記録](E2E_BEST_PRACTICE_R2_OL03_SCAN_CHILD_SET_SYNTHETIC_2026-10-20.md)に結果を分離した。expectedはこのsubsetでは合成入力であり、accepted index/parent path/receipt/roundへ結合したproducerではない。結果もClosureObservation/完了seal/permitではない。
+
+1. expected件数を**割当前**に100,001以下と検査し、nameが有効なcomponent、kindがFile/Directory、名前が昇順かつ重複なしであることをcursor取得前に検査する。内部でsort/copyしない。不正入力はBinding、件数/割当/work不足はLimit。
+2. expected数と同じ固定長seen配列をbounded allocationで構築する。可変長HashSetや列挙名の蓄積はしない。列挙順は自由、比較はcase-sensitiveの完全一致。dotfileも通常のexpected childである。
+3. 単発enumから1件ずつ受け、`.`/`..`は各1回だけ許す。再出現、不正frame、未知名、既出childの再出現はChangedで停止する。**照合成功とseen更新の後だけ**その名前をopenし、visitorへ渡す。未知/重複/dotはchild open・metadata/read・visitorに到達しない。
+4. EOFでseenを順に検査し、最初のmissingでChanged。enumのErrorはReadFailedであってmissing/EOFではない。空expectedも検査対象であり、dot以外の最初の1件を余剰として拒否する。
+5. child/cursorは既存ownerで解放する。visitorの失敗をstickyにし、握り潰された元失敗・cleanup不明も次のenum前に停止する。成功rawの即時owner化、cleanup precharge、共有期限/取消を維持する。
+
+### 13.1 実workと未接続の上界
+
+名前探索の二分探索は**比較1回ごとに1 work**を課金する。lookupを定数1 unitと仮定した§6.2の `3H` を、今回の実装へそのまま適用してはならない。既存 `bp5-r2-scan-work-0.1` の数量計算器は変更していないが、このsubsetを覆う検証済み上界/受付authorityではない。次のモデル改訂ではlookup費・expected構築の費目所有者・固定費を照合する必要がある。
+
+direct-child helper自身の実課金（open/precharge・visitor・外側scope固定2を除く）は次のとおり。
+
+- setup/割当2、expected検査n、seen初期化n。
+- enum dispatch/分類2q、各yield分類y、二分探索の実比較c、見つかったchildのseen検査/更新m。
+- EOF分類1（EOF到達時だけ）、missingの実走査k（最大n）。
+- 成功時は `q=n+d+1, y=n+d, m=k=n`（dot数d<=2）で **`5+7n+3d+c`**。`n>0` の1探索は最大 `floor(log2(n))+1` 比較、空集合は0比較。失敗prefixも各課金点で停止し、余剰名をopenして上界を拡大しない。
+
+1 child/dotなしの合成成功は、helper13＋anchor2＋cursor2＋child2＋scope2＝**21 work**。残work0〜21の試験で全停止prefixの解放と上限等号を確認した。これは完全collectorの期待構築4E/固定16/metadata18の認定ではない。
+
+12追加テストでunknown/extra/duplicate/missing、dot重複、大小文字/部分一致の拒否、expected不正/件数境界、別親で同名child、visitor/cleanup/enum失敗、遅延Cancel/Deadlineを検証した。未知拒否を意図的に無効化するとunknown-nameテストが失敗し、復旧後に再成功した。完全metadata・型/size/hash同一性、全path再照合、保護されたexpected producer、全closure seal、同時生存allocation総量/3round quota・OS backendは未接続。全体受付・運用gateは引き続き停止する。

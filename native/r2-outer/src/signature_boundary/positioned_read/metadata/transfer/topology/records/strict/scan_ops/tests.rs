@@ -1,6 +1,8 @@
 use super::*;
 use std::{cell::Cell, collections::VecDeque};
 
+mod children;
+
 struct Raw(u64); // Not Clone, not a descriptor; no OS objects in the synthetic source.
 #[derive(Clone, Copy)]
 enum Hook {

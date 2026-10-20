@@ -171,3 +171,5 @@ record projection4/roundはRが所有する。旧index互換テストの固定45
 後続の[scan詳細設計draft-0.2 §11](BEST_PRACTICE_BP5_R2_OL03_BOUNDED_SCAN_COLLECTOR_DESIGN.md#11-純粋な計算器の先行実装collector未接続)で数量計算器のみを先行実装した。計算自体12 work・追加guard1・数量cap helper2はU_otherの別費目である。係数16/18はcollector未計数の候補値、shapeは運用証拠ではない。全体受付・予約・実sourceへ接続せず、未知quotaと大規模shapeの100万超過を解消済みと扱わない。
 
 さらに[scan詳細設計draft-0.3 §12](BEST_PRACTICE_BP5_R2_OL03_BOUNDED_SCAN_COLLECTOR_DESIGN.md#12-単発操作の内部契約合成source運用未接続)でenum/open/read/metadata/cleanupの単発内部境界を合成検証した。同SharedBudgetと元EINTR残を使い、取得前cleanup precharge・取得成功の即時owner化・一度限り解放・不明件数を保持する。scope固定費2は現段階で別に計数し、collector固定16への対応は未確定。完全collector/expected集合/size結合・承認quota/3round配賦・OS backend/host終了票接続はなく、全体受付は無効のまま維持する。
+
+[scan詳細設計draft-0.4 §13](BEST_PRACTICE_BP5_R2_OL03_BOUNDED_SCAN_COLLECTOR_DESIGN.md#13-expected-child--seen照合subset運用未接続)でdirect-childのexpected/seen・余剰/重複/missing拒否を内部接続した。保護された宣言producer/全closure collectorではない。探索の比較ごとにworkを課金するため、既存候補式の定数lookup費 `3H` はこの実装をそのまま覆わない。計算器ID/式を変更せず受付へ流用することを禁止し、モデル改訂/費目所有表・独立resource配賦が揃うまで全体受付は無効とする。

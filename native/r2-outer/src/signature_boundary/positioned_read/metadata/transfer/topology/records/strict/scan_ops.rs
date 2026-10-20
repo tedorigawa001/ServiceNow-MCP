@@ -3,6 +3,8 @@ use super::*;
 use crate::signature_boundary::positioned_read::metadata::collector::FsObservation;
 use std::cell::RefCell;
 
+mod child_set;
+
 #[derive(Clone, Copy, PartialEq, Eq)]
 enum Kind {
     Anchor,
