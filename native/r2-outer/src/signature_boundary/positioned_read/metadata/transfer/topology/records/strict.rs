@@ -3,6 +3,7 @@ use super::*;
 use crate::{closure, record_validation as r};
 
 mod round_declaration;
+mod scan_work;
 
 pub(super) struct InspectionContext<'a> {
     // Pinned build bytes and effective groups from a future protected context producer.

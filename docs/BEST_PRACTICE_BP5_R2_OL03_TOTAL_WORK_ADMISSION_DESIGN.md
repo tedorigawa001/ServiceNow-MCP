@@ -1,6 +1,6 @@
 # BP-5 R-2 OL-03：record・scanを含む全体work上界と事前受付
 
-Version: draft-0.4 / Date: 2026-10-20 / Status: record opt-inモデル・index子phaseを合成検証。scan詳細設計を追加。全体受付・scan/other上界実装・運用承認は未実施。
+Version: draft-0.5 / Date: 2026-10-20 / Status: record opt-in・index子phase・scan純粋計算器を合成検証。全体受付・collector・other上界・運用承認は未対応。
 
 ## 1. 範囲と停止状態
 
@@ -167,3 +167,5 @@ record projection4/roundはRが所有する。旧index互換テストの固定45
 [scan詳細設計draft-0.1](BEST_PRACTICE_BP5_R2_OL03_BOUNDED_SCAN_COLLECTOR_DESIGN.md)へ、全entry/rootの2回全path解決、逐次名前照合と余剰entryのopen前拒否、短読取停止・元共有EINTR残8、snapshot/解放を含む操作数・work式候補を整理した。cleanupはacquire前prechargeと一度限りのownerへ結合する案とし、元spentを返さない。
 
 既存target用metadata100回/640KiBやtopology16,384をscanへ黙って流用・増額しない。単発native列挙・係数計数・scan専用quota/配賦・管理allocation/FD/cleanup方式が未確定なら開始前にUnavailableとする。設計のみで、実装・全体受付・native接続・permitは有効化しない。
+
+後続の[scan詳細設計draft-0.2 §11](BEST_PRACTICE_BP5_R2_OL03_BOUNDED_SCAN_COLLECTOR_DESIGN.md#11-純粋な計算器の先行実装collector未接続)で数量計算器のみを先行実装した。計算自体12 work・追加guard1・数量cap helper2はU_otherの別費目である。係数16/18はcollector未計数の候補値、shapeは運用証拠ではない。全体受付・予約・実sourceへ接続せず、未知quotaと大規模shapeの100万超過を解消済みと扱わない。

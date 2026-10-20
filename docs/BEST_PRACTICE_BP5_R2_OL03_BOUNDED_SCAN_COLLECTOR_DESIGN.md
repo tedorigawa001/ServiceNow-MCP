@@ -1,12 +1,12 @@
 # BP-5 R-2 OL-03：scan work上界・bounded collector詳細設計
 
-Version: draft-0.1 / Date: 2026-10-20 / Status: MDのみの設計案。係数・OS backend・台帳・上界試験・運用承認は未実装／未実施。
+Version: draft-0.2 / Date: 2026-10-20 / Status: 純粋なshape/操作数/work計算器のみ内部実装・合成検証。collector・係数の実操作計数・OS backend・台帳・運用承認は未対応。
 
 ## 1. 目的・前提・非対象
 
 [全体work受付設計](BEST_PRACTICE_BP5_R2_OL03_TOTAL_WORK_ADMISSION_DESIGN.md)のSを具体化する。[index子phase](BEST_PRACTICE_BP5_R2_OL03_ROUND_DECLARATION_WORK_DESIGN.md#14-index上界の子phase分解とscan直前境界)のReady直後から、新しい全closure観測を返すまでが対象である。3roundの各roundで必ず新しく取得し、宣言からobservedを合成しない。
 
-本書はローカルソースに基づく設計であり、macOS SDKや公式APIの実証記録ではない。実装・実機操作・API実接続・token発行・設定変更・permit発行・Pushは行わない。全体受付は無効、telemetry調査は保留。APPROVED_REGISTRY=None、通常v2 Unavailable、gate92、DER/absence停止を維持する。
+本書はローカルソースに基づく設計であり、macOS SDKや公式APIの実証記録ではない。初稿はMDのみで、後続§11で純粋な計算器を先行実装した。collector実装・実機操作・API実接続・token発行・設定変更・permit発行・Pushは行わない。全体受付は無効、telemetry調査は保留。APPROVED_REGISTRY=None、通常v2 Unavailable、gate92、DER/absence停止を維持する。
 
 workはBudget::workの課金量であって、CPU/RSS/OS syscall実行時間の上界ではない。名前列挙・metadata・読取の単発境界を実装しても、blocked I/Oや検査後変更を協調checkpointだけで排除したことにはならない。保護されたroot/context、更新leaseと外側監督は別の未解決条件である。
 
@@ -211,7 +211,7 @@ workをprechargeしてもOS非復帰は解決しない。解放処理のhard期�
 | 解放 | acquire成功直後の取消・失敗・unwind、各handle一度だけ解放。close失敗/不明・非復帰・FD再利用時にretryしない |
 | 感度 | extra拒否・path後検査・retry減算・prechargeを外す、係数を1減らす変異で対応試験が失敗 |
 
-本書では試験やnative呼出しは実行していない。評価用の合成sourceは実filesystem完全性・監査証拠・leaseの代替ではない。
+本節のcollector試験やnative呼出しは未実施。後続§11では純粋な計算器の試験だけを行った。評価用の合成sourceは実filesystem完全性・監査証拠・leaseの代替ではない。
 
 ## 10. 実装順・承認待ち
 
@@ -222,3 +222,20 @@ workをprechargeしてもOS非復帰は解決しない。解放処理のhard期�
 5. scan用ops/name/allocation cap、既存16,384/100/640KiBとの配賦、FD132、100万workでの実shape受付可否を人が承認する（§6.4の見通しと判断事項を前提とする）。未承認のcap増額・並列化・retry追加は行わない。
 
 これらが揃うまでSの運用受付は無効。係数表・架空例だけで全体受付やpermitを有効化しない。
+
+## 11. 純粋な計算器の先行実装（collector未接続）
+
+[scan_work.rs](../native/r2-outer/src/signature_boundary/positioned_read/metadata/transfer/topology/records/strict/scan_work.rs)と[合成検証記録](E2E_BEST_PRACTICE_R2_OL03_SCAN_WORK_CALCULATOR_SYNTHETIC_2026-10-20.md)を追加した。§9のcollector/OS試験ではなく、候補式の算術と共有予算失敗の検証である。native操作を実装・実行していない。
+
+- 固定ID `bp5-r2-scan-work-0.1`。入力はF/D/P/h、index raw長、indexを含むfile総bytes Lとchunk総数Cの数量だけである。protectedなshape producer、accepted indexとの結合は未接続。N=0等の算術envelopeも扱うが、実際に有効なclosure宣言と認定しない。
+- N<=100,000、P<=63(N+1)、h=1〜64、index=1〜16MiB、index<=L<=2GiBと、F×512MiBのdata容量を防御的に検査する。index chunk＋dataのceil下界と、positive file数・data bytes・per-file capからのchunk上界を検査する。集約値だけでは各fileの構造・正しいCを証明できず、将来のproducerは同宣言から実際のΣceilを収集する必要がある。
+- 元budgetからretry残r（0〜8）を読み取り、式の `3×base + 2r`（work）、`3×primitive_base + r`（操作数）へ一度だけ加える。rを消費・補充しない。r>8は内部Retry limitとして拒否する。
+- O/M/H/Qenum/read/cleanup/live/totalのoperation histogramと、費目別work・payload/name-copyの上界をchecked u64で計算する。大きい数量は計算できても受付可能とはしない。§6.4の2例は現行100万workの数量チェックで拒否される。
+- **計算自体の実消費は12 work**。model1・構造1・byte/chunk1・retry1・walk/metadata1・enum1・operation histogram1・work費目1・round合計1・3round合計1・独立resource量1・終端1。元のcollector固定16に混ぜず、将来U_otherの計画作成費へ別計上する。これでcollectorの固定16/metadata18が実計数済みになったとは扱わない。
+- 結果はprivate・非Clone/非serde・固定Debugで、budget originとretry snapshotを保持する。追加requireは1 workで、未知model/別budget/retry変化をそれぞれUnavailable/Binding/Changedへ接続する。receipt/root/scopeに結合したscan planや実行authorityは作れない。
+  - 補足（2026-10-20、レビュー）：retry残は減る方向にしか変化しないため、古いsnapshotの上界はむしろ保守的である。それでも変化を拒否するのは安全側の選択だが、このChangedは**filesystem観測の変化ではなく共有予算状態のずれ**を表す。診断・監査ではnamespace/metadata差のChangedと同一視しない。将来理由を分ける（例：Binding寄せ）場合はモデル・試験を併せて更新する。
+  - 補足（同）：この性質上、将来collectorへ接続する際は見積もりを**scan直前**に作る必要がある。前工程（record再読等）でEINTRを1回でも消費すると、それ以前に作った見積もりはrequireで拒否される。見積もりの早期作成・round間の使い回しは前提にしない。
+- 任意のindex互換型quantity-only cap helperはrequire1＋比較1の計2 work。available<=100万、3scanのwork<=availableなら等号を許すが、spent/他予約を引かず、work/bytes/FDの予約も発行しない。spentがほぼ100万でも数量比較だけは成功し得るため、全体受付の代用は禁止する。
+- 元start/origin/spent・I/O予約・metadata/topology/name台帳をresetしない。計算・guard・cap helperのBudget失敗はstickyな元理由を保持し、モデル不一致はUnavailable、Shape/Overflow/Retry/Capは内部で区別したLimitへ接続する。
+
+13件の追加テストで、机上例と費目、テスト専用の予定操作schedule interpreter、量の境界/overflow、共有retry・台帳・期限/取消・first failureを照合した。interpreterはcollectorの実装でも、native syscall数・hidden buffer・解放保証の証明でもない。§10の単発source・bounded collector・scan専用quota・root/clock/lease・上限再承認は引き続き未対応。全体受付と運用gateは停止したままである。
