@@ -1,9 +1,15 @@
 use super::*;
-use std::{cell::Cell, collections::VecDeque};
+use std::{
+    cell::Cell,
+    collections::{BTreeMap, VecDeque},
+};
 
 mod children;
 mod declared;
 mod digest;
+mod normalized;
+
+type MetadataReply = (MetaOp, Result<MetaValue, OpFailure>, Vec<u8>);
 
 struct Raw(u64); // Not Clone, not a descriptor; no OS objects in the synthetic source.
 #[derive(Clone, Copy)]
@@ -24,6 +30,10 @@ struct State {
     acl_failure: Option<OpFailure>,
     metadata_failure: Option<OpFailure>,
     metadata_value: Option<MetaValue>,
+    metadata_script: VecDeque<MetadataReply>,
+    metadata_requests: Vec<(u64, MetaOp)>,
+    file_stats: BTreeMap<u64, Stat>,
+    acl_parents: BTreeMap<u64, u64>,
     cleanup: VecDeque<Cleanup>,
     at: Option<(u64, Hook)>,
     stop: Rc<AtomicBool>,
@@ -57,7 +67,7 @@ fn stat() -> Stat {
         kind: FileType::Regular,
         uid: 0,
         gid: 0,
-        mode: 0o555,
+        mode: 0o444,
         links: 1,
         size: 4,
         mtime: Timestamp {
@@ -81,13 +91,15 @@ impl ScanOps for Fake {
             Ok(self.raw())
         }
     }
-    fn acl_init(&mut self, _: &Raw) -> Result<Raw, OpFailure> {
+    fn acl_init(&mut self, file: &Raw) -> Result<Raw, OpFailure> {
         self.call(Op::Metadata);
         let fail = self.0.borrow_mut().acl_failure.take();
         if let Some(e) = fail {
             Err(e)
         } else {
-            Ok(self.raw())
+            let raw = self.raw();
+            self.0.borrow_mut().acl_parents.insert(raw.0, file.0);
+            Ok(raw)
         }
     }
     fn enumerate(&mut self, _: &Raw, out: &mut [u8; 255]) -> Result<EnumValue, OpFailure> {
@@ -119,18 +131,45 @@ impl ScanOps for Fake {
             .pop_front()
             .unwrap_or(Ok(out.len()))
     }
-    fn metadata(&mut self, _: &Raw, op: MetaOp, out: &mut [u8]) -> Result<MetaValue, OpFailure> {
+    fn metadata(
+        &mut self,
+        resource: &Raw,
+        op: MetaOp,
+        out: &mut [u8],
+    ) -> Result<MetaValue, OpFailure> {
         self.call(Op::Metadata);
         let mut s = self.0.borrow_mut();
+        s.metadata_requests.push((resource.0, op));
+        if let Some((expected, value, data)) = s.metadata_script.pop_front() {
+            assert!(op == expected, "unexpected synthetic metadata operation");
+            let n = data.len().min(out.len());
+            out[..n].copy_from_slice(&data[..n]);
+            return value;
+        }
         if let Some(e) = s.metadata_failure.take() {
             return Err(e);
         }
         if let Some(v) = s.metadata_value.take() {
             out.fill(b'x');
+            if let MetaValue::Stat(value) = &v
+                && op == MetaOp::Stat
+            {
+                s.file_stats.insert(resource.0, value.clone());
+            }
             return Ok(v);
         }
         Ok(match op {
-            MetaOp::Stat | MetaOp::AclStat => MetaValue::Stat(stat()),
+            MetaOp::Stat | MetaOp::AclStat => {
+                let id = if op == MetaOp::AclStat {
+                    s.acl_parents
+                        .get(&resource.0)
+                        .copied()
+                        .unwrap_or(resource.0)
+                } else {
+                    resource.0
+                };
+                MetaValue::Stat(s.file_stats.get(&id).cloned().unwrap_or_else(stat))
+            }
             MetaOp::Filesystem => MetaValue::Filesystem(FsObservation {
                 location: Filesystem::Local,
                 apfs: true,
@@ -170,6 +209,10 @@ fn fixture() -> Fixture {
         acl_failure: None,
         metadata_failure: None,
         metadata_value: None,
+        metadata_script: VecDeque::new(),
+        metadata_requests: Vec::new(),
+        file_stats: BTreeMap::new(),
+        acl_parents: BTreeMap::new(),
         cleanup: VecDeque::new(),
         at: None,
         stop: stop.clone(),

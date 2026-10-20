@@ -5,6 +5,7 @@ use std::cell::{Cell, RefCell};
 
 mod child_set;
 mod declared_read;
+mod normalized_metadata;
 
 #[derive(Clone, Copy, PartialEq, Eq)]
 enum Kind {
@@ -33,7 +34,7 @@ enum Cleanup {
     Released,
     Unconfirmed,
 }
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, PartialEq, Eq)]
 enum MetaOp {
     Stat,
     Filesystem,

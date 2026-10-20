@@ -27,7 +27,7 @@ fn digest_mismatch_never_completes_and_stops_following_source_calls() {
     let out = with_boundary(source, Some(quotas()), &mut b, |s| {
         let a = s.acquire(None, None, Kind::Anchor)?;
         let f = s.acquire(Some(&a), Some("file"), Kind::File)?;
-        let mut bound = s.bind_declared(&f, &declaration)?;
+        let mut bound = s.bind_declared(&f, &declaration, 1)?;
         s.read_declared(&mut bound, 0, &mut [0; 3])?;
         sized(&state, 3);
         let result = s.eof_declared(&mut bound, 3, &mut [0]);
@@ -63,7 +63,7 @@ fn golden_vectors_hash_fresh_bytes_not_mutated_caller_buffer_or_eof() {
         let out = with_boundary(source, Some(quotas()), &mut b, |s| {
             let a = s.acquire(None, None, Kind::Anchor)?;
             let f = s.acquire(Some(&a), Some("file"), Kind::File)?;
-            let mut bound = s.bind_declared(&f, &declaration)?;
+            let mut bound = s.bind_declared(&f, &declaration, 1)?;
             if !empty {
                 let mut output = [0; 3];
                 s.read_declared(&mut bound, 0, &mut output)?;
@@ -76,7 +76,7 @@ fn golden_vectors_hash_fresh_bytes_not_mutated_caller_buffer_or_eof() {
         assert_eq!(out.result, Ok(()));
         assert_eq!((out.summary.live, out.summary.declared_pending), (0, 0));
         assert_eq!(b.used, size);
-        assert_eq!(b.json_work, if empty { 18 } else { 23 });
+        assert_eq!(b.json_work, if empty { 52 } else { 57 });
         assert!(Rc::ptr_eq(&origin, &b.inspection_origin));
         assert_eq!(
             (
@@ -107,7 +107,7 @@ fn malformed_digest_is_rejected_before_metadata_or_read() {
         let out = with_boundary(source, Some(quotas()), &mut b, |s| {
             let a = s.acquire(None, None, Kind::Anchor)?;
             let f = s.acquire(Some(&a), Some("file"), Kind::File)?;
-            s.bind_declared(&f, &declaration).map(|_| ())
+            s.bind_declared(&f, &declaration, 1).map(|_| ())
         });
         assert_eq!(out.result, Err(Failure::Binding));
         assert_eq!(state.borrow().counts, [2, 0, 0, 0, 2]);
@@ -134,7 +134,7 @@ fn interrupted_output_and_eof_buffer_are_never_hashed() {
     let out = with_boundary(source, Some(quotas()), &mut b, |s| {
         let a = s.acquire(None, None, Kind::Anchor)?;
         let f = s.acquire(Some(&a), Some("file"), Kind::File)?;
-        let mut bound = s.bind_declared(&f, &declaration)?;
+        let mut bound = s.bind_declared(&f, &declaration, 1)?;
         assert_eq!(
             s.read_declared(&mut bound, 0, &mut [0; 3])?,
             ReadStep::Interrupted
@@ -148,7 +148,7 @@ fn interrupted_output_and_eof_buffer_are_never_hashed() {
         s.eof_declared(&mut bound, 3, &mut [0]).map(|_| ())
     });
     assert_eq!(out.result, Ok(()));
-    assert_eq!((b.used, b.retries_left, b.json_work), (3, 6, 29));
+    assert_eq!((b.used, b.retries_left, b.json_work), (3, 6, 63));
     assert_eq!(
         state.borrow().read_requests,
         [(2, 0, 3), (2, 0, 3), (2, 3, 1), (2, 3, 1)]
@@ -175,9 +175,9 @@ fn interleaved_files_keep_separate_hash_state_bound_to_their_resource() {
         let f = s.acquire(Some(&a), Some("file"), Kind::File)?;
         let g = s.acquire(Some(&a), Some("other"), Kind::File)?;
         sized(&state, 3);
-        let mut f = s.bind_declared(&f, &first)?;
+        let mut f = s.bind_declared(&f, &first, 1)?;
         sized(&state, 3);
-        let mut g = s.bind_declared(&g, &second)?;
+        let mut g = s.bind_declared(&g, &second, 1)?;
         s.read_declared(&mut f, 0, &mut [0; 3])?;
         s.read_declared(&mut g, 0, &mut [0; 3])?;
         sized(&state, 3);
@@ -217,14 +217,14 @@ fn multichunk_stream_matches_independent_one_shot_digest() {
     let out = with_boundary(source, Some(quotas()), &mut b, |s| {
         let a = s.acquire(None, None, Kind::Anchor)?;
         let f = s.acquire(Some(&a), Some("file"), Kind::File)?;
-        let mut bound = s.bind_declared(&f, &declaration)?;
+        let mut bound = s.bind_declared(&f, &declaration, 1)?;
         s.read_declared(&mut bound, 0, &mut [0; MAX_CHUNK])?;
         s.read_declared(&mut bound, MAX_CHUNK as u64, &mut [0; 5])?;
         sized(&state, size);
         s.eof_declared(&mut bound, size, &mut [0]).map(|_| ())
     });
     assert_eq!(out.result, Ok(()));
-    assert_eq!((b.used, b.json_work), (size, 28));
+    assert_eq!((b.used, b.json_work), (size, 62));
 }
 
 #[test]
@@ -243,7 +243,7 @@ fn deadline_and_cancel_at_hash_phase_checkpoints_never_return_success() {
             let n = counter.get() + 1;
             counter.set(n);
             if trigger.is_none()
-                && matches!(state.borrow().counts.iter().sum::<u64>(), 2 | 3 | 4 | 6)
+                && matches!(state.borrow().counts.iter().sum::<u64>(), 2 | 12 | 13 | 24)
             {
                 positions.borrow_mut().push(n);
             }
@@ -263,13 +263,13 @@ fn deadline_and_cancel_at_hash_phase_checkpoints_never_return_success() {
         let out = with_boundary(source, Some(quotas()), &mut b, |s| {
             let a = s.acquire(None, None, Kind::Anchor)?;
             let f = s.acquire(Some(&a), Some("file"), Kind::File)?;
-            let mut bound = s.bind_declared(&f, &declaration)?;
+            let mut bound = s.bind_declared(&f, &declaration, 1)?;
             s.read_declared(&mut bound, 0, &mut [0; 3])?;
             sized(&state, 3);
             s.eof_declared(&mut bound, 3, &mut [0]).map(|_| ())
         });
         assert_eq!(out.summary.live, 0);
-        assert_eq!(state.borrow().counts[0], state.borrow().counts[4]);
+        assert_eq!(state.borrow().next, state.borrow().counts[4]);
         assert!(!state.borrow().duplicate);
         assert!(b.used <= 3);
         out.result

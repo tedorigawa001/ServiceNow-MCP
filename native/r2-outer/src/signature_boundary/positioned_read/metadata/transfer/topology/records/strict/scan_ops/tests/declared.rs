@@ -32,7 +32,7 @@ fn empty_single_and_multichunk_files_have_exact_positions() {
         let out = with_boundary(source, Some(quotas()), &mut b, |s| {
             let a = s.acquire(None, None, Kind::Anchor)?;
             let f = s.acquire(Some(&a), Some("file"), Kind::File)?;
-            let mut file = s.bind_declared(&f, &entry)?;
+            let mut file = s.bind_declared(&f, &entry, 1)?;
             assert_eq!(
                 format!("{file:?}"),
                 "DeclaredScanFile(pending_not_execution_authority)"
@@ -62,7 +62,7 @@ fn empty_single_and_multichunk_files_have_exact_positions() {
         requests.push((2, size, 1));
         assert_eq!(state.borrow().read_requests, requests);
         assert_eq!(b.used, size);
-        assert_eq!(state.borrow().counts[3], 2); // before + after stat
+        assert_eq!(state.borrow().counts[3], 18); // two complete snapshots
         assert_eq!((out.summary.declared_pending, out.summary.live), (0, 0));
         assert!(!state.borrow().duplicate);
     }
@@ -77,7 +77,7 @@ fn invalid_range_or_early_eof_never_calls_read_source() {
         let out = with_boundary(source, Some(quotas()), &mut b, |s| {
             let a = s.acquire(None, None, Kind::Anchor)?;
             let f = s.acquire(Some(&a), Some("file"), Kind::File)?;
-            let mut file = s.bind_declared(&f, &entry)?;
+            let mut file = s.bind_declared(&f, &entry, 1)?;
             match case {
                 0 => s.read_declared(&mut file, 1, &mut [0; 4]),
                 1 => s.read_declared(&mut file, 0, &mut [0; 5]),
@@ -91,7 +91,7 @@ fn invalid_range_or_early_eof_never_calls_read_source() {
             .map(|_| ())
         });
         assert_eq!(out.result, Err(Failure::InvalidRange));
-        assert_eq!(state.borrow().counts, [2, 0, 0, 1, 2]);
+        assert_eq!(state.borrow().counts, [2, 0, 0, 9, 3]);
         assert_eq!(b.used, 0);
     }
 }
@@ -106,7 +106,7 @@ fn short_reads_charge_actual_bytes_and_stop_without_refill() {
         let out = with_boundary(source, Some(quotas()), &mut b, |s| {
             let a = s.acquire(None, None, Kind::Anchor)?;
             let f = s.acquire(Some(&a), Some("file"), Kind::File)?;
-            let mut file = s.bind_declared(&f, &entry)?;
+            let mut file = s.bind_declared(&f, &entry, 1)?;
             s.read_declared(&mut file, 0, &mut [0; 4]).map(|_| ())
         });
         assert_eq!(
@@ -117,7 +117,7 @@ fn short_reads_charge_actual_bytes_and_stop_without_refill() {
                 Failure::Changed
             })
         );
-        assert_eq!(state.borrow().counts, [2, 0, 1, 1, 2]);
+        assert_eq!(state.borrow().counts, [2, 0, 1, 9, 3]);
         assert_eq!(state.borrow().reads.len(), 1);
         assert_eq!(b.used, n.min(4) as u64);
     }
@@ -140,7 +140,7 @@ fn initial_size_or_file_type_mismatch_rejects_before_read() {
         let out = with_boundary(source, Some(quotas()), &mut b, |s| {
             let a = s.acquire(None, None, Kind::Anchor)?;
             let f = s.acquire(Some(&a), Some("file"), Kind::File)?;
-            s.bind_declared(&f, &entry).map(|_| ())
+            s.bind_declared(&f, &entry, 1).map(|_| ())
         });
         assert_eq!(out.result, Err(Failure::Changed));
         assert_eq!(state.borrow().counts, [2, 0, 0, 1, 2]);
@@ -158,7 +158,7 @@ fn size_or_stat_change_after_eof_never_completes_binding() {
         let out = with_boundary(source, Some(quotas()), &mut b, |s| {
             let a = s.acquire(None, None, Kind::Anchor)?;
             let f = s.acquire(Some(&a), Some("file"), Kind::File)?;
-            let mut file = s.bind_declared(&f, &entry)?;
+            let mut file = s.bind_declared(&f, &entry, 1)?;
             s.read_declared(&mut file, 0, &mut [0; 4])?;
             let mut after = stat();
             match case {
@@ -173,7 +173,14 @@ fn size_or_stat_change_after_eof_never_completes_binding() {
         });
         assert_eq!(out.result, Err(Failure::Changed));
         assert_eq!(out.summary.declared_pending, 1);
-        assert_eq!(state.borrow().counts, [2, 0, 2, 2, 2]);
+        assert_eq!(
+            state.borrow().counts,
+            if case == 2 || case == 3 {
+                [2, 0, 2, 18, 4]
+            } else {
+                [2, 0, 2, 10, 3]
+            }
+        );
     }
 }
 
@@ -186,13 +193,13 @@ fn growth_at_eof_stops_before_post_stat_and_charges_probe_byte() {
     let out = with_boundary(source, Some(quotas()), &mut b, |s| {
         let a = s.acquire(None, None, Kind::Anchor)?;
         let f = s.acquire(Some(&a), Some("file"), Kind::File)?;
-        let mut file = s.bind_declared(&f, &entry)?;
+        let mut file = s.bind_declared(&f, &entry, 1)?;
         s.read_declared(&mut file, 0, &mut [0; 4])?;
         s.eof_declared(&mut file, 4, &mut [0]).map(|_| ())
     });
     assert_eq!(out.result, Err(Failure::Changed));
     assert_eq!(b.used, 5);
-    assert_eq!(state.borrow().counts, [2, 0, 2, 1, 2]);
+    assert_eq!(state.borrow().counts, [2, 0, 2, 9, 3]);
 }
 
 #[test]
@@ -209,7 +216,7 @@ fn retries_keep_same_position_for_data_and_eof() {
     let out = with_boundary(source, Some(quotas()), &mut b, |s| {
         let a = s.acquire(None, None, Kind::Anchor)?;
         let f = s.acquire(Some(&a), Some("file"), Kind::File)?;
-        let mut file = s.bind_declared(&f, &entry)?;
+        let mut file = s.bind_declared(&f, &entry, 1)?;
         assert_eq!(
             s.read_declared(&mut file, 0, &mut [0; 4])?,
             ReadStep::Interrupted
@@ -243,18 +250,18 @@ fn unfinished_and_double_binding_or_completed_reuse_are_rejected() {
         let out = with_boundary(source, Some(quotas()), &mut b, |s| {
             let a = s.acquire(None, None, Kind::Anchor)?;
             let f = s.acquire(Some(&a), Some("file"), Kind::File)?;
-            let mut file = s.bind_declared(&f, &entry)?;
+            let mut file = s.bind_declared(&f, &entry, 1)?;
             if case == 0 {
                 drop(file);
                 assert_eq!(
                     s.metadata(&f, MetaOp::Stat, &mut []).map(|_| ()),
                     Err(Failure::Changed)
                 );
-                assert_eq!(state.borrow().counts[3], 1);
+                assert_eq!(state.borrow().counts[3], 9);
                 return Ok(());
             }
             if case == 1 {
-                return s.bind_declared(&f, &entry).map(|_| ());
+                return s.bind_declared(&f, &entry, 1).map(|_| ());
             }
             s.read_declared(&mut file, 0, &mut [0; 4])?;
             if case == 2 {
@@ -295,7 +302,7 @@ fn invalid_declaration_or_oversize_is_rejected_before_stat() {
         let out = with_boundary(source, Some(quotas()), &mut b, |s| {
             let a = s.acquire(None, None, Kind::Anchor)?;
             let f = s.acquire(Some(&a), Some("file"), Kind::File)?;
-            s.bind_declared(&f, &entry).map(|_| ())
+            s.bind_declared(&f, &entry, 1).map(|_| ())
         });
         assert!(matches!(out.result, Err(Failure::Limit | Failure::Binding)));
         assert_eq!(state.borrow().counts, [2, 0, 0, 0, 2]);
@@ -305,8 +312,8 @@ fn invalid_declaration_or_oversize_is_rejected_before_stat() {
 #[test]
 fn cancellation_at_each_io_keeps_reason_bytes_and_cleanup() {
     for hook in [Hook::Cancel, Hook::Deadline] {
-        for at in 1..=6 {
-            // anchor, file, before-stat, data, EOF, after-stat
+        for at in 1..=24 {
+            // Includes both complete snapshot primitives and their ACL cleanup.
             let (source, state, stop, tick) = fixture();
             state.borrow_mut().reads.extend([Ok(4), Ok(0)]);
             state.borrow_mut().at = Some((at, hook));
@@ -317,7 +324,7 @@ fn cancellation_at_each_io_keeps_reason_bytes_and_cleanup() {
             let out = with_boundary(source, Some(quotas()), &mut b, |s| {
                 let a = s.acquire(None, None, Kind::Anchor)?;
                 let f = s.acquire(Some(&a), Some("file"), Kind::File)?;
-                let mut file = s.bind_declared(&f, &entry)?;
+                let mut file = s.bind_declared(&f, &entry, 1)?;
                 s.read_declared(&mut file, 0, &mut [0; 4])?;
                 s.eof_declared(&mut file, 4, &mut [0]).map(|_| ())
             });
@@ -328,9 +335,9 @@ fn cancellation_at_each_io_keeps_reason_bytes_and_cleanup() {
                     Hook::Deadline => Failure::Deadline,
                 })
             );
-            assert_eq!(b.used, if at >= 4 { 4 } else { 0 });
+            assert_eq!(b.used, if at >= 13 { 4 } else { 0 });
             assert_eq!(out.summary.live, 0);
-            assert_eq!(state.borrow().counts[0], state.borrow().counts[4]);
+            assert_eq!(state.borrow().next, state.borrow().counts[4]);
             assert!(!state.borrow().duplicate);
         }
     }
@@ -345,7 +352,7 @@ fn post_data_wrong_eof_or_rewind_never_adds_an_io_attempt() {
         let out = with_boundary(source, Some(quotas()), &mut b, |s| {
             let a = s.acquire(None, None, Kind::Anchor)?;
             let f = s.acquire(Some(&a), Some("file"), Kind::File)?;
-            let mut file = s.bind_declared(&f, &entry)?;
+            let mut file = s.bind_declared(&f, &entry, 1)?;
             s.read_declared(&mut file, 0, &mut [0; 4])?;
             if case == 0 {
                 s.read_declared(&mut file, 0, &mut [0; 4]).map(|_| ())
@@ -373,7 +380,7 @@ fn short_tail_does_not_advance_or_issue_eof() {
     let out = with_boundary(source, Some(quotas()), &mut b, |s| {
         let a = s.acquire(None, None, Kind::Anchor)?;
         let f = s.acquire(Some(&a), Some("file"), Kind::File)?;
-        let mut file = s.bind_declared(&f, &entry)?;
+        let mut file = s.bind_declared(&f, &entry, 1)?;
         s.read_declared(&mut file, 0, &mut [0; MAX_CHUNK])?;
         s.read_declared(&mut file, MAX_CHUNK as u64, &mut [0; 3])
             .map(|_| ())
@@ -400,7 +407,7 @@ fn stat_failure_is_not_size_match_and_first_reason_is_retained() {
         let out = with_boundary(source, Some(quotas()), &mut b, |s| {
             let a = s.acquire(None, None, Kind::Anchor)?;
             let f = s.acquire(Some(&a), Some("file"), Kind::File)?;
-            let mut file = s.bind_declared(&f, &entry)?;
+            let mut file = s.bind_declared(&f, &entry, 1)?;
             s.read_declared(&mut file, 0, &mut [0; 4])?;
             state.borrow_mut().metadata_failure = Some(OpFailure::Interrupted);
             s.eof_declared(&mut file, 4, &mut [0]).map(|_| ())
@@ -414,7 +421,7 @@ fn stat_failure_is_not_size_match_and_first_reason_is_retained() {
 
 #[test]
 fn exact_shared_work_cost_and_each_exhaustion_prefix_release_handles() {
-    for available in 0..=23 {
+    for available in 0..=57 {
         let (source, state, stop, tick) = fixture();
         state.borrow_mut().reads.extend([Ok(4), Ok(0)]);
         let mut b = SharedBudget::new(tick.get(), &stop);
@@ -423,20 +430,20 @@ fn exact_shared_work_cost_and_each_exhaustion_prefix_release_handles() {
         let out = with_boundary(source, Some(quotas()), &mut b, |s| {
             let a = s.acquire(None, None, Kind::Anchor)?;
             let f = s.acquire(Some(&a), Some("file"), Kind::File)?;
-            let mut file = s.bind_declared(&f, &entry)?;
+            let mut file = s.bind_declared(&f, &entry, 1)?;
             s.read_declared(&mut file, 0, &mut [0; 4])?;
             s.eof_declared(&mut file, 4, &mut [0]).map(|_| ())
         });
         assert_eq!(
             out.result,
-            if available == 23 {
+            if available == 57 {
                 Ok(())
             } else {
                 Err(Failure::Limit)
             }
         );
         assert!(b.json_work <= 1_000_000);
-        assert_eq!(state.borrow().counts[0], state.borrow().counts[4]);
+        assert_eq!(state.borrow().next, state.borrow().counts[4]);
         assert_eq!(out.summary.live, 0);
     }
 }
@@ -459,7 +466,7 @@ fn size_cap_is_inclusive_and_foreign_ledger_binding_is_rejected() {
             quotas: quotas(),
             budget: s.budget,
         };
-        inner.bind_declared(&f, &entry).map(|_| ())
+        inner.bind_declared(&f, &entry, 1).map(|_| ())
     });
     assert_eq!(out.result, Err(Failure::Binding));
     assert_eq!(state.borrow().counts, [0; 5]);
@@ -471,13 +478,13 @@ fn size_cap_is_inclusive_and_foreign_ledger_binding_is_rejected() {
     let out = with_boundary(source, Some(quotas()), &mut b, |s| {
         let a = s.acquire(None, None, Kind::Anchor)?;
         let f = s.acquire(Some(&a), Some("file"), Kind::File)?;
-        let _file = s.bind_declared(&f, &entry)?;
+        let _file = s.bind_declared(&f, &entry, 1)?;
         bound.set(true);
         Ok(()) // Intentionally unfinished: cap acceptance does not prove a completed read.
     });
     assert!(bound.get());
     assert_eq!(out.result, Err(Failure::Changed));
-    assert_eq!(state.borrow().counts, [2, 0, 0, 1, 2]);
+    assert_eq!(state.borrow().counts, [2, 0, 0, 9, 3]);
 }
 
 #[test]
@@ -499,16 +506,16 @@ fn matched_child_visitor_can_complete_a_size_bound_read_on_same_resource() {
         let a = s.acquire(None, None, Kind::Anchor)?;
         s.children(&a, &expected, |s, i, f| {
             assert_eq!(i, 0);
-            let mut file = s.bind_declared(&f, &entry)?;
+            let mut file = s.bind_declared(&f, &entry, 1)?;
             s.read_declared(&mut file, 0, &mut [0; 4])?;
             s.eof_declared(&mut file, 4, &mut [0]).map(|_| ())
         })
     });
     assert_eq!(out.result, Ok(()));
-    assert_eq!(state.borrow().counts, [3, 2, 2, 2, 3]);
+    assert_eq!(state.borrow().counts, [3, 2, 2, 18, 5]);
     assert_eq!(state.borrow().read_requests, [(3, 0, 4), (3, 4, 1)]);
     assert_eq!((out.summary.live, out.summary.declared_pending), (0, 0));
-    assert_eq!(b.json_work, 38);
+    assert_eq!(b.json_work, 72);
 }
 
 #[test]
@@ -521,7 +528,7 @@ fn raw_read_and_eof_cannot_bypass_pending_or_completed_declaration() {
         let out = with_boundary(source, Some(quotas()), &mut b, |s| {
             let a = s.acquire(None, None, Kind::Anchor)?;
             let f = s.acquire(Some(&a), Some("file"), Kind::File)?;
-            let mut file = s.bind_declared(&f, &entry)?;
+            let mut file = s.bind_declared(&f, &entry, 1)?;
             if case >= 2 {
                 s.read_declared(&mut file, 0, &mut [0; 4])?;
                 s.eof_declared(&mut file, 4, &mut [0])?;
@@ -571,7 +578,7 @@ fn raw_read_cannot_finish_a_declared_eintr_retry() {
         let out = with_boundary(source, Some(quotas()), &mut b, |s| {
             let a = s.acquire(None, None, Kind::Anchor)?;
             let f = s.acquire(Some(&a), Some("file"), Kind::File)?;
-            let mut file = s.bind_declared(&f, &entry)?;
+            let mut file = s.bind_declared(&f, &entry, 1)?;
             let interrupted = if eof {
                 s.read_declared(&mut file, 0, &mut [0; 4])?;
                 s.eof_declared(&mut file, 4, &mut [0])?

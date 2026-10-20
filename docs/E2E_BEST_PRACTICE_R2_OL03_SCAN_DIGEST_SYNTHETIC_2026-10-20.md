@@ -2,6 +2,8 @@
 
 Date: 2026-10-20 / Status: 内部subset・合成source検証。OS/実filesystem E2Eではない。
 
+本書はdigest先行段階の記録である。[後続metadata実装記録](E2E_BEST_PRACTICE_R2_OL03_SCAN_METADATA_SYNTHETIC_2026-10-20.md)でACL/xattr/FSの前後snapshotを追加し、現行費用は空52/1 chunk57/child接続72へ更新した。本書の18/23/38は過去の費用として残す。
+
 ## 1. 範囲・停止状態
 
 [設計draft-0.7 §15](BEST_PRACTICE_BP5_R2_OL03_BOUNDED_SCAN_COLLECTOR_DESIGN.md#15-同resourceのbytesによるsha-256宣言digest照合)と[declared_read.rs](../native/r2-outer/src/signature_boundary/positioned_read/metadata/transfer/topology/records/strict/scan_ops/declared_read.rs)が対象。[digest.rs](../native/r2-outer/src/signature_boundary/positioned_read/metadata/transfer/topology/records/strict/scan_ops/tests/digest.rs)へ7件を追加した。既存のsize/metadata/低水準read拒否の18件も、成功fixtureのdigestと現行work費用を更新して維持した。

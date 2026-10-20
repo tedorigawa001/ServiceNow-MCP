@@ -1,12 +1,12 @@
 # BP-5 R-2 OL-03：scan work上界・bounded collector詳細設計
 
-Version: draft-0.7 / Date: 2026-10-20 / Status: 計算器・単発操作・child/seen・宣言size/digest読取subsetを内部実装・合成検証。完全collector・workモデル/OS接続・運用quota承認は未対応。
+Version: draft-0.8 / Date: 2026-10-20 / Status: 計算器・単発操作・child/seen・size/digest・同resourceのACL/xattr/FS正規化を内部実装・合成検証。完全collector・workモデル/OS接続・運用quota承認は未対応。
 
 ## 1. 目的・前提・非対象
 
 [全体work受付設計](BEST_PRACTICE_BP5_R2_OL03_TOTAL_WORK_ADMISSION_DESIGN.md)のSを具体化する。[index子phase](BEST_PRACTICE_BP5_R2_OL03_ROUND_DECLARATION_WORK_DESIGN.md#14-index上界の子phase分解とscan直前境界)のReady直後から、新しい全closure観測を返すまでが対象である。3roundの各roundで必ず新しく取得し、宣言からobservedを合成しない。
 
-本書はローカルソースに基づく設計であり、macOS SDKや公式APIの実証記録ではない。初稿はMDのみで、§11の計算器、§12の単発操作境界、§13のdirect-child照合、§14の宣言size読取、§15のdigest比較を先行実装した。完全collectorとOS backendは未接続。全体受付は無効、telemetry調査は保留。APPROVED_REGISTRY=None、通常v2 Unavailable、gate92、DER/absence停止を維持する。
+本書はローカルソースに基づく設計であり、macOS SDKや公式APIの実証記録ではない。§11〜15で計算器・単発操作・child/seen・size/digestを、§16でruntime resourceのACL/xattr/FS正規化を先行実装した。完全collectorとOS backendは未接続。全体受付は無効、telemetry調査は保留。APPROVED_REGISTRY=None、通常v2 Unavailable、gate92、DER/absence停止を維持する。
 
 workはBudget::workの課金量であって、CPU/RSS/OS syscall実行時間の上界ではない。名前列挙・metadata・読取の単発境界を実装しても、blocked I/Oや検査後変更を協調checkpointだけで排除したことにはならない。保護されたroot/context、更新leaseと外側監督は別の未解決条件である。
 
@@ -293,7 +293,7 @@ direct-child helper自身の実課金（open/precharge・visitor・外側scope�
 
 ## 14. 宣言sizeへのread / EOF位置結合（部分実装）
 
-[declared_read.rs](../native/r2-outer/src/signature_boundary/positioned_read/metadata/transfer/topology/records/strict/scan_ops/declared_read.rs)と[合成検証記録](E2E_BEST_PRACTICE_R2_OL03_SCAN_DECLARED_READ_SYNTHETIC_2026-10-20.md)で、§13の未対応事項のうちsize/進行位置とstat前後照合を先行実装した。後続§15でhashを追加したが、完全metadata policy・全pathの信頼結合は未対応。
+[declared_read.rs](../native/r2-outer/src/signature_boundary/positioned_read/metadata/transfer/topology/records/strict/scan_ops/declared_read.rs)と[合成検証記録](E2E_BEST_PRACTICE_R2_OL03_SCAN_DECLARED_READ_SYNTHETIC_2026-10-20.md)で、size/進行位置とstat前後照合を先行実装した。本節はその先行段階の説明であり、現行のbind/EOFのmetadataは§16のsnapshot、hashは§15、現行費用は§16.1を適用する。全pathの信頼結合は未対応。
 
 `bind_declared` は同scopeのFile resourceとimmutableな `closure::Entry::File` をborrowし、宣言size 0〜512MiB、実statのRegular/size一致を検査して、非Clone/非serdeの `DeclaredFile` を返す。scope/source/ledgerを検査し、同resourceの再bindは拒否する。元のresourceはborrow中に解放・差替えできない。
 
@@ -339,6 +339,37 @@ bindは旧3＋digest decode1＋hasher初期化1＝**5 work**。完全data chunk�
 
 standalone成功は **`18+5C` work**（anchor/fileとcleanup precharge4、scope2込み）。空file18、1 chunk23、2 chunks28。各phaseのEINTR1回ずつなら1 chunk29、1-child照合visitorでは38。残work0〜23で元100万上限と全枯渇prefixのcleanupを再検証した。§14の17/32は過去のsize-only費用であり、現行費用ではない。
 
-hash状態は定数量でdata全体を蓄積せず、payload実bytes/既存予約・retry・start/originを元SharedBudgetで共有する。新Budget/上限増額はない。64KiB/hash処理の協調checkpointであり、CPU/hard期限・RSS・検査後改変/ABAを証明しない。全体workモデル・完全metadata/祖先path・trusted producer・全closure観測seal・OS接続は未対応で、全体受付/実行permitは無効のまま。
+hash状態は定数量でdata全体を蓄積せず、payload実bytes/既存予約・retry・start/originを元SharedBudgetで共有する。新Budget/上限増額はない。64KiB/hash処理の協調checkpointであり、CPU/hard期限・RSS・検査後改変/ABAを証明しない。後続§16でruntime snapshotを追加したが、全体workモデル・祖先path・trusted producer・全closure観測seal・OS接続は未対応で、全体受付/実行permitは無効のまま。§15.1の18/23/38はdigest先行段階の費用として残し、現行では§16.1を使う。
 
 7追加テストで独立golden vectors（空/abc）、同sizeのdigest不一致、buffer書換え、EINTR/probe除外、2 resourceのhash分離、複数chunkとone-shot照合、不正digest、hash phaseの全clock checkpointへの期限/取消注入を確認した。従来size/短読取/metadata/低水準迂回試験も維持した。
+
+## 16. 同resourceのACL / xattr / FS正規化・前後照合
+
+[normalized_metadata.rs](../native/r2-outer/src/signature_boundary/positioned_read/metadata/transfer/topology/records/strict/scan_ops/normalized_metadata.rs)と[合成検証記録](E2E_BEST_PRACTICE_R2_OL03_SCAN_METADATA_SYNTHETIC_2026-10-20.md)で、bindとEOF後のstatだけの照会を、同resourceの正規化snapshotへ置き換えた。既存署名対象用collectorはmin size32/固定mode0555/target quotaを持つため、scanへそのまま流用しない。
+
+`bind_declared` はexpected deviceを内部引数で明示し、宣言modeも検査する。deviceの信頼元（承認済みroot/context/receipt）のproducerは未接続であり、呼出し引数だけで正当性を証明しない。ownerはroot（uid0）固定。fileはRegular・宣言size 0〜512MiB・宣言mode0444/0555・links1・指定device、directory/cursorはDirectory・mode0555・指定deviceを要求する。mtime/ctimeのnanosecondsも検査し、special bit等をmaskしない。gidは固定値を要求せず前後のStat一致で維持する。システムanchorの特殊policyは本collectorの対象外である。
+
+1 snapshotは次の**単発9操作＋ACL解放1回**である。
+
+1. 同resource stat前取得・policy照合。
+2. FS照会。Local/APFS、ownership ignored=false、noexec=falseだけを受け入れる。Unknownは取得不能であってLocalではない。
+3. ACL initで返ったhandleをpost-guard前にowner化し、ACL statを最初のstatと完全比較。ACL query=0だけ許可、1は不適合、その他は取得不能。
+4. xattr names size query → bounded copy → size再確認。最大64KiB、独立scan name allowanceを割当前に検査。0-byte一覧も1-byte bufferで1回照会し、出現/短コピー/size変化をChangedとする。負値/過大size/不正typed応答は既存primitiveがMetadataUnavailableで停止する。
+5. 正常namesは空または `com.apple.provenance\0` と完全一致する21 bytesだけ。他属性、quarantine、ResourceFork、重複・不正frameを拒否する。値は取得しないため、許可provenanceのvalue不変性を保証しない。
+6. 同resource stat後取得を最初のstatと完全比較し、ACLを一度だけ解放、解放後の共有guardとcleanup状態を確認する。
+
+snapshotはresource borrowを保持する非Clone/非serde型で、同一Statでも別resourceなら等しくない。ACL stat/queryはそのresourceから取得したACL handleを使い、file/FS/namesは元resourceを使う。低水準sourceの真実性・native ABIは将来のbackend検証が必要である。
+
+最初の既知policy不適合はMetadata、読取後の不適合はChanged。kind/宣言sizeとの不一致、snapshot内部のACL-stat/前後stat/copy-size差、前後snapshotの許可xattr有無の差もChanged。取得不能/UnknownはMetadataUnavailable、quotaはLimit。元期限/取消/first failureを保持し、metadata異常を後続HashMismatchで上書きしない。post-snapshot一致後だけdigestをfinalize/比較してpendingを解除する。
+
+### 16.1 実計数・独立台帳・残課題
+
+1 snapshotはdispatch9＋ACL cleanup precharge1＝10 workと、stat policy/FS/ACL stat比較/ACL正規化/割当copy guard/name size再比較/name正規化/stat後比較の8 work、合計**18 work**。独立した2 snapshotの合成試験はprefix6込み42 workで照合した。これは実装したsubsetのprogram workであり、native syscall数・全祖先policyの証明ではない。
+
+補足（2026-10-20、レビュー）：この18は§6.1の候補係数18（数量計算器 `SNAPSHOT_WORK`）と**総額だけ一致**した。内訳は異なり、候補は「単発操作10＋before/FS/ACL正規化3＋names copy/frame1＋name token最大2＋after/identity比較2」、実装は「dispatch9＋ACL cleanup precharge1＋検査guard8」である（ACL initのdispatch/prechargeを操作数へどう数えるかも異なる）。次のモデル改訂では総額の一致を検証済み係数の根拠とせず、実装の課金点表で費目所有を照合する。
+
+既存stat dispatch1を各snapshot18で置換したため、bindは**22**、EOF0/post-snapshot/digest比較は**24**、data完全chunk5・Interrupted各3。standaloneは **`52+5C`**、空52、1 chunk57、2 chunks62、data/EOF各1 retryの1 chunk63、1-child照合内の1 chunk72となる。旧17/32、18/23/38は過去の部分実装の費用である。残work0〜57と全停止prefixのcleanupを再検証した。
+
+metadataはtarget用100回/640KiBを使わず、同scan ledgerのoperation/live/cleanup/name quotaと元workを使う。1 snapshotでmetadata9・cleanup1、許可name copy21 bytes（前後なら42）。空一覧の要求buffer1 byteは元payloadへ課金せず、name allowanceだけを事前検査する。ACL handle分のlive/cleanup枠も取得前に検査し、取消後もprechargeで一度だけ解放する。不明はUnavailable、元失敗は維持する。
+
+11追加テストでpolicy不適合・Unknown/各取得失敗・ACL/stat/name race・不正xattr・前後の許可names差・resource混入・directory・全取得点の取消/期限・独立quota・解放不明を検証した。noexec拒否を外すと対応テストが失敗し、復旧後に全体再検証した。trusted device/宣言/親path/receipt/round結合、root/全祖先再照合、全closure観測seal、全体workモデル/独立resource受付・OS backend・hard停止は未対応。全体受付無効・telemetry保留・運用gate停止を維持する。

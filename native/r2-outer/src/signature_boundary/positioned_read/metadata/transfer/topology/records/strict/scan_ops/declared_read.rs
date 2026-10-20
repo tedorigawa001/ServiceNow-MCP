@@ -1,4 +1,5 @@
-//! Sequential size/digest-bound subset; no complete metadata policy or execution seal.
+//! Sequential size/digest and same-resource normalized metadata; no execution seal.
+use super::normalized_metadata::{MetadataPolicy, MetadataSnapshot};
 use super::*;
 use sha2::{Digest, Sha256};
 
@@ -48,7 +49,8 @@ pub(super) struct DeclaredFile<'r, 's, 'd, S: ScanOps> {
     _declaration: &'d closure::Entry,
     size: u64,
     next: u64,
-    before: Stat,
+    before: MetadataSnapshot<'r, 's, S>,
+    policy: MetadataPolicy,
     complete: bool,
     expected_digest: [u8; 32],
     hash: Option<Sha256>,
@@ -72,18 +74,33 @@ impl<'s, S: ScanOps> Boundary<'s, '_, '_, S> {
         &mut self,
         file: &'r Resource<'s, S>,
         declaration: &'d closure::Entry,
+        device: u64,
     ) -> Result<DeclaredFile<'r, 's, 'd, S>, Failure> {
         self.check(file)?;
         work(self.budget)?;
         if file.kind != Kind::File || file.declared.get() {
             return self.fail(Failure::Binding);
         }
-        let closure::Entry::File { size, sha256, .. } = declaration else {
+        let closure::Entry::File {
+            size, sha256, mode, ..
+        } = declaration
+        else {
             return self.fail(Failure::Binding);
         };
         if *size > MAX_FILE {
             return self.fail(Failure::Limit);
         }
+        let mode = match mode.as_str() {
+            "0444" => 0o444,
+            "0555" => 0o555,
+            _ => return self.fail(Failure::Binding),
+        };
+        let policy = MetadataPolicy {
+            device,
+            kind: Kind::File,
+            mode,
+            size: Some(*size),
+        };
         work(self.budget)?; // bounded 64-byte lowercase digest decode
         let Some(expected_digest) = digest_value(sha256) else {
             return self.fail(Failure::Binding);
@@ -92,13 +109,8 @@ impl<'s, S: ScanOps> Boundary<'s, '_, '_, S> {
         let Some(pending) = pending else {
             return self.fail(Failure::Limit);
         };
-        let MetaValue::Stat(before) = self.metadata(file, MetaOp::Stat, &mut [])? else {
-            return self.fail(Failure::MetadataUnavailable);
-        };
+        let before = self.collect_snapshot(file, &policy, false)?;
         work(self.budget)?;
-        if before.kind != FileType::Regular || before.size != *size {
-            return self.fail(Failure::Changed);
-        }
         work(self.budget)?;
         let hash = Sha256::new();
         self.budget.checkpoint()?;
@@ -110,6 +122,7 @@ impl<'s, S: ScanOps> Boundary<'s, '_, '_, S> {
             size: *size,
             next: 0,
             before,
+            policy,
             complete: false,
             expected_digest,
             hash: Some(hash),
@@ -176,9 +189,7 @@ impl<'s, S: ScanOps> Boundary<'s, '_, '_, S> {
         if step == ReadStep::Interrupted {
             return Ok(step);
         }
-        let MetaValue::Stat(after) = self.metadata(file.resource, MetaOp::Stat, &mut [])? else {
-            return self.fail(Failure::MetadataUnavailable);
-        };
+        let after = self.collect_snapshot(file.resource, &file.policy, true)?;
         work(self.budget)?;
         if after != file.before {
             return self.fail(Failure::Changed);

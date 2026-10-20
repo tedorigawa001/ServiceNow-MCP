@@ -179,3 +179,5 @@ record projection4/roundはRが所有する。旧index互換テストの固定45
 同設計draft-0.6ではbind済みresourceの低水準read/EOFを拒否し、宣言経路内だけで生成する1呼出し用内部アクセス値を要求する。indexのper-file2GiBとscanの512MiBは安全側の制約差として維持し、3scanのLと他read/予約を元payload2GiB内で共有することも明記した。上限・work課金・全体受付の停止状態は変更しない。
 
 [scan詳細設計draft-0.7 §15](BEST_PRACTICE_BP5_R2_OL03_BOUNDED_SCAN_COLLECTOR_DESIGN.md#15-同resourceのbytesによるsha-256宣言digest照合)で同resourceのfresh dataへstreaming SHA-256を追加した。bind5・完全data5・EOF0/post-stat/finalize/比較7（Interrupted各3）を元共有workへ計上する。standalone `18+5C`、1-childの1 chunk38を実計数した。以前の17/32はsize-only段階の費用で、現行では使わない。lookup/stat/hash/producersの費目所有表と全体workモデル/独立resource受付は依然未接続であり、全体受付・実行permitを有効化しない。
+
+[scan詳細設計draft-0.8 §16](BEST_PRACTICE_BP5_R2_OL03_BOUNDED_SCAN_COLLECTOR_DESIGN.md#16-同resourceのacl--xattr--fs正規化前後照合)で同resourceのACL/xattr/FSを含むsnapshotを前後へ接続した。内部subsetの1 snapshot18 workを計数し、stat照会を置換した現行bind22/EOF24・standalone `52+5C`（1 chunk57、child接続72）へ更新した。§15の18/23/38は過去の費用である。expected deviceのtrusted producer/全祖先policyと全体モデル・3round配賦は未接続で、18Mを全運用経路で認証済みとは扱わない。元quotaを緩めず全体受付・実行permitは無効とする。
