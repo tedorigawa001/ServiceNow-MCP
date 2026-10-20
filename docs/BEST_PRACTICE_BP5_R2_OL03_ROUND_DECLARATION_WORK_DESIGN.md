@@ -1,0 +1,163 @@
+# BP-5 R-2 OL-03：同一round内のimmutable index宣言再利用・work事前受付
+
+Version: draft-0.1 / Date: 2026-10-20 / Status: MD設計案のみ。実装・運用承認・実測は未実施。
+
+## 1. 目的・現状・非対象
+
+[接続設計§13](BEST_PRACTICE_BP5_R2_OL03_RECORD_PARSER_CLOSURE_DESIGN.md)の共有予算strict pipelineを前提とする。
+現在は初回/M4前/M4後の各roundでdeclare→check→declareがそれぞれindexをparseし、計9回となる。activation/ledger/registryはscan前後の計6回検証する。
+本案では**indexのJSON decode/typed変換だけを1round1回、全3回へ減らす**。scan前後の厳密なrecord/時刻/binding検証、全closure観測、宣言の意味検査・全集合比較は維持する。
+
+telemetry調査は保留。本書では実装、実機/PDI操作、API実接続、token発行、設定変更、本番policy投入、実署名、permit発行を行わない。APPROVED_REGISTRY=None、通常v2入口Unavailable、gate92、DER/absence停止を維持する。
+既存public check/declared、公開JSON/exit code、固定予算上限を変える提案ではない。実collector・保護された初回receipt/context・leaseの未接続も解消しない。
+
+## 2. ソースに基づく分離点
+
+| 現在の部品 | 残す検査 | 分離する処理 |
+|---|---|---|
+| [closure/shared.rs](../native/r2-outer/src/closure/shared.rs) | raw hash-first、strict JSON、header、全宣言検査 | parse済みIndexを保持するprivateなround専用型。現Declarationはentriesだけなのでそのまま流用しない |
+| [closure.rs::check_entries](../native/r2-outer/src/closure.rs) | path/mode/hash/順序/case/親/必要entry、index自身と全集合比較、各step | parse済みのimmutable treeを借りる意味検査。初版はexpected/actual mapのcacheまで行わない |
+| [strict.rs](../native/r2-outer/src/signature_boundary/positioned_read/metadata/transfer/topology/records/strict.rs) | scan前後のrecord strict検証・projection・clock・Node整合、固定3round | record検証とindex decodeを分け、scan後は同round宣言へ再結合する |
+| [json/shared.rs](../native/r2-outer/src/json/shared.rs) | duplicate/unknown/trailing/UTF-8/depth/container、共有work/期限/取消 | 初回decode時のwork計測とshape統計。未認証raw bytesから統計を信用しない |
+| [SharedBudget](../native/r2-outer/src/signature_boundary/positioned_read.rs) | 元start/10秒、sticky failure、暫定100万work、既存I/O等の別台帳 | 消費済みworkと残工程の予約を区別する内部台帳案。新startやcap拡大はしない |
+
+これはリポジトリ内の現実装を照合した設計で、新しい外部仕様の調査記録ではない。
+
+## 3. 再利用型と不変条件（設計名、未実装）
+
+`RoundDeclaration<'session, 'round>`は次を所有/借用するprivate型とする。
+
+- 検証済みIndex全体（header/entriesを含む）。全entryへのimmutable borrowだけを公開し、mutable getter/内部可変性/Clone/serde/public constructorを設けない。
+- 元RecordReceiptの**同じimmutable index bytesへのborrow**、raw digest/byte長、全RecordBinding、registry/contextとBoundTargetの固定projection。
+- session lineageと、pipelineがそのroundの開始時にだけ作る非Cloneのround token。Initial/BeforeM4/AfterM4のenum値だけでは同一性を認めない。
+- work_model_idと検証済みshape統計。観測や実行authorityではなく、予算計算のための比較データに限る。
+
+再利用は同じtoken・同じreceipt・同じ全binding/target/contextで、そのroundの固定順序にいる間だけ許可する。digest/byte長だけの一致、別Vecの同bytes、同path/世代だけの一致は不十分。
+borrowとprivate producerにより元bytesの差替えを構造上できなくする。raw pointerの一致を信頼証拠の代わりにしない。差替えや結合不足を検出したらChanged/Bindingで停止し、新しい宣言へ自動parseし直すfallbackは設けない。
+
+round終了/失敗/取消で宣言・一時map・観測を破棄する。次roundは元pinsに対して新しいtokenでhash-first decodeする。cross-round、別role、別呼出し、process/global cacheへの持越しは禁止。
+予算の集計用shape/costだけは元immutable receiptへ結合してsession内で保持できるが、宣言tree/観測完了値の再利用権にはしない。
+固定Debugはpending/not_execution_authorityとし、コード・path・hash・raw bytes・tokenを出力しない。
+
+## 4. 固定順序と再検証の維持
+
+| 順序 | 必須処理 | decode再利用との関係 |
+|---|---|---|
+| 1 | 3recordの全path/metadata/bytes exact再読、元clock pair/期限確認 | scan前の既存処理を省略しない |
+| 2 | activation/ledger-0.2/registryのhash-first strict検証と全projection/Node整合 | 現在と同様に毎回実行。前roundの成功を使わない |
+| 3 | index raw hash-first→strict decode→header/全宣言検査→round型生成 | このroundで唯一のJSON decode |
+| 4 | 検証済み宣言に基づく**新しい**全closure scan | 宣言からobservedを生成しない。source各操作は元予算へ課金 |
+| 5 | observationのsession/round/binding照合→index再認証→全宣言再検査→全集合比較 | 同じtreeをborrow。raw digestは再計算し、check_entries相当は省略しない |
+| 6 | 3recordの全path/metadata/bytes exact再読と最新clock | scan中のrecord差替え・namespace変更を拒否 |
+| 7 | activation/ledger/registryを改めてstrict検証し全projection/timeを確認 | 現在と同じ元開始wallと現在wallを用い、二重加算しない |
+| 8 | 宣言token/receipt/contextの再結合→index再認証→header/全宣言・Node整合再検査→最新clock | 同じimmutable bytes/treeなのでdecodeだけ省略。意味検査やraw hashを省略しない |
+| 9 | round宣言/観測/一時mapを解放→元checkpoint→次の固定phase | 失敗ならM4/次roundへ進まない |
+
+index再認証は、直前の再読が一致した元immutable bytesに対して、同じpin digest・raw長・borrow・tokenを確認し、64KiB chunkのhashを同じbudgetで再計算する。decode済みtreeはそのbytesからしか生成されない。
+scan後に新しく取得したbytesを「同じhashだから」と別のtreeへ付け替えない。元receiptとのexact比較を先に要求する。
+新しい全集合scanは引き続き3回で、scan後にcache済みobservedを再利用したり、Nodeだけへ縮小したりしない。
+
+全entry/親prefix/集合要素、hash chunk、再結合の前後でcheckpoint/workを行い、前後guardのみで巨大処理を無課金にしない。parseを減らしてもhard timeout/RSS・原子性/ABA・leaseを証明したことにはならない。
+
+## 5. workモデルの変数と導出
+
+以下は**課金単位の上界案**でありCPU時間の上界ではない。今後の実装・合成試験で各work呼出しとの対応を固定するまでは運用受付に使わない。
+
+| 記号 | 定義 |
+|---|---|
+| B / C | pin済みindexのraw byte長 / ceil(B / 65536) |
+| F / D / N | index内file数 / directory数 / F+D。index自身はNに含めない |
+| P | 全N pathとindex自身について、実際に親確認するprefix数の総和。平均深さで代用しない |
+| M_max | 集合挿入を許すobserved数の上限N+1（index自身込み） |
+| J_index | 1回のaccepted index JSON decodeに課金されるwork |
+| R_max | 同じpin bytes・固定registry・同じgroups/contextで1回のrecord三者検証が使うworkの上界 |
+| W_scan / W_other | 全3scanのCPU work上界 / admission・target A/B・metadata/topology・cleanup等でwork計上する残工程の上界 |
+
+### 5.1 accepted indexのdecode分
+
+現在のstrict JSON coreとIndex/Entryのaccepted shapeから、短い固定key、fileの4文字列＋数値、directoryの3文字列について次を導く。
+pathは最大4096 bytes、releaseは128 bytes等の既存制約下で、各decoded key/stringのtext課金は1 unitとなる。
+
+```text
+JSON nodes                  = 5 + 6F + 4D
+object keys                 = 4 + 5F + 3D
+string values               = 2 + 4F + 3D
+container insertions        = object keys + N
+input chunks + typed guard  = C + 1
+J_index                     = C + 20 + 26F + 17D
+```
+
+keyごとの課金はKeySeed＋textの2、object挿入は別の1として数える。この式はaccepted schemaの**decodeのみ**で、raw hash/意味検査/Node検索・観測/registry等を含まない。
+raw内の空白/escapeはB/Cへ反映する。未知field/巨大文字列/不正JSONはこのshape式の前提外なので、初期解析前の予約にこの式を当てはめない。常に既存byte/depth/container/work capで途中停止できることが必要。
+
+### 5.2 同round再利用後のindex側上界案
+
+初版は安全性を優先し、decodeだけを削減する。宣言検査を3回行い、全expected map/親検査も各回やり直す。Node検索もscan前後で全Nを走査する保守的な計画とする。
+
+```text
+宣言のみの意味検査 1回       = 2N + P + 2
+全集合の意味検査 1回         = 3N + P + M_max + 3
+scan前後のNode検索            = 2N
+3回のraw hashのchunk課金      = 6C
+U_index_round                = J_index + 6C + 9N + 3P + M_max + K_round
+```
+
+K_roundはraw hash開始/終了・header/結合・projection・最終step等、上式に含めていない固定部分の上界。初期候補は**128 unit/round**とし、全work呼出しを列挙して128以内と確認できることを実装条件とする。未証明のまま採用しない。128はcap増額や一律の経験的marginではない。
+observedのlenがN+1を超えたら、actual mapの挿入前に拒否する設計を追加する。100,001超は既存Limit、その範囲内のextraはChangedの意味を維持する。collector自体も返却前にboundedな余剰検出/各operation課金を必要とし、巨大Vecを返してからlenだけ確認する方式にはしない。
+M_max制約を実装できない場合は旧上限100,001を使った上界へ戻すかUnavailableで停止し、計算だけN+1に小さくしない。
+
+全3roundのindex枠は3×U_index_round。record側は6×R_maxを別途加える。R_maxは固定raw/contextとwork_model_idに結合した各ループ/stepの上界を導出し、初回の実課金deltaも照合する。平均時間や少数ベンチマークの最大値だけを上界としない。理由付き早期停止のprefixも上界を超えないことを確認する。
+
+### 5.3 数値例（index分だけ、成功保証ではない）
+
+架空のF=4,500、D=1,000、N=5,500、B=1,048,576、C=16、P=22,000、M_max=5,501、K_round=128なら、J_index=134,036、U_index_round=255,261、3round=765,783 unit。
+残り234,217 unitへ6×R_max＋W_scan＋W_otherが収まるかは未確認。Node検索/意味検査まで含むため、従来の「3decode＋照合は約60万unit」と同じ数値にはならない。
+本プロジェクトの実閉包を測定した値ではない。深いpath、多数directory、rawの長い空白で変わり、5,000〜6,000件でも受付可能とは主張しない。
+
+## 6. 段階的受付と共有予約
+
+「parseする前にparse済みshapeがある」という循環を避け、次の2段階に分ける。
+
+1. **bootstrap（scan/target解析前）**：元budgetのままpin長/hash/byte/depth等を確認し、初回roundのrecord strict検証とindexの唯一のdecode/全宣言検査を実施する。統計・上界計算の各要素走査もwork課金する。不正入力や枯渇はこの段階で停止する。ここで既に行った解析は無料でも別capでもない。
+2. **scan開始受付**：accepted shapeと固定raw/contextから、全残round・scan前後record検証・scan/target/cleanupを含む残予定量をchecked算術で計算する。初回の実施済みpre-parseはそのまま初回RoundDeclarationとして使い、受付のためにさらにdecodeし直さない。未知のproducer/工程で上界を出せなければUnavailable、算術overflow/量超過はLimit。
+
+```text
+W_total_model = 3×U_index_round + 6×R_max + W_scan + W_other
+W_remaining  = 未実施phaseごとの上界の和（実施済みphaseを二重加算しない）
+受付条件      = W_used + W_reserved_existing + W_remaining <= 1,000,000
+```
+
+全体modelから単純に現在のW_usedを引かない。W_usedには別工程・途中失敗prefix・統計計算も含まれ得るため、privateな固定phase台帳で完了した費目だけを除外し、その他消費はW_used側へ残す。
+受付処理/phase台帳検査自体のworkもW_otherへ含め、予約決定の最後にもう一度残量と元checkpointを確認する。
+
+予約は非Clone/非serializeの内部RemainingWorkPlanに元budget/session/modelを結合する案とする。各work(n)は残予約をn減らし消費済みをn増やす。総和は増えず、事前予約を実消費へ**二重課金しない**。予約外消費や予定量超過はLimitで即停止する。
+解放できるのは未使用予約だけで、消費済みworkを返却/リセットしない。roundごとに100万を作り直さず、追加role/scan/retryにも残予約を流用しない。失敗時の理由優先とcleanupは維持する。
+
+workだけで受付成功にしない。元10秒/現在の残期限、実I/O2GiB（全再読/scan/A/B/EOF込み）、topology16384、metadata/name/EINTR、FD/管理allocation/解放予定量の各独立上界も必要で、別枠間の振替は禁止。
+協調workが収まってもOS/serde/BTree/解放のhard実行時間やRSSは保証できない。未接続のcollectorがW_scanや実operation上界を出せない限り、実運用受付は有効化しない。
+
+## 7. 失敗・解放と合成検証計画
+
+型付きDeadline/Cancelled/Limit/ExpiredをBindingへ畳まず、元sticky failureを保持する。raw hash/構造不適合は既存の有限理由、binding/round/集合変更はChanged/Bindingとして固定し、文字列matchingを用いない。
+再利用不能時の自動reparse・cache更新・部分集合成功・次round継続は行わない。全borrow/観測/map/予約を解放し、終了時checkpointを通す。leaseやpermitを発行しない。
+
+| 合成試験群 | 必須確認 |
+|---|---|
+| parse回数 | 正常3roundでindex decodeが3回、record/registry検証が6回。raw hash/全宣言検査・scan/前後再読は維持 |
+| binding/寿命 | 別receipt、同bytes別allocation、同digest別context、別round token/別session/role、round後利用の拒否。公開constructor/serde/Cloneなし |
+| strict再検証 | unknown/duplicate/trailing/UTF-8、scan後record/namespace/metadata差、最新clock/期限・groups/policy/Node整合の検査が減らない |
+| 全集合 | 非Node/indexのmissing/extra/duplicate/type/mode/hash差、parent/case/order、observed N+1境界・超過を拒否 |
+| work式 | F/D混在、全path深さ/最大深さ、escaped JSON/空白/byte chunk境界、record/registry構成・groups境界。計測した全workが式以下、費目漏れなし |
+| 予約 | 等号/1unit不足、checked add/mul overflow、bootstrapで枯渇、受付計算自体の費用、実施済み費目の二重加算/誤控除、予約外消費、解放でspentが戻らない |
+| 失敗時停止 | 新しい全checkpoint/各phaseで期限/取消/既存理由、scan遅延成功、途中エラー、release後の最終guard。M4/次round/次roleへ進まない |
+| 感度・互換 | 同round/byte結合や全集合比較、work予約の条件を1つずつ外すと該当試験が失敗。旧public decode-first契約・固定評価/既存506テストの意味を維持 |
+
+## 8. 実装順と承認待ち
+
+1. decode/意味検査のprivate分離と同round型・borrow/token結合を先行。既存のentry/parent/集合検査は共通coreのまま、公開関数の契約を変えない。
+2. 1round内のdecode3→1と固定3roundへ接続し、scan前後のstrict検証が減らないことを合成検証する。
+3. work_model_id、shape統計、R_max/K_round/scan/その他の費目表を固定し、計数試験で上界を確認する。モデル不一致はUnavailableとし、capを黙って増やさない。
+4. bootstrap後の残予約/単一消費台帳と受付停止を接続する。実sourceや実運用への接続は別途承認する。
+
+round型の具体的なborrow/brand実装、固定費128の証明、R_maxとcollector全操作のW_scan、管理allocation/FD/clock/leaseの上界は未確定・承認待ち。本書の式や架空例だけでgateを解除しない。
+本書ではMDの参照・体裁・式の算術だけを検査し、実装テスト/実機検証を行ったという記録にはしない。
