@@ -1,5 +1,22 @@
-//! Sequential size-bound subset; no digest, complete metadata policy, or execution seal.
+//! Sequential size/digest-bound subset; no complete metadata policy or execution seal.
 use super::*;
+use sha2::{Digest, Sha256};
+
+fn digest_value(value: &str) -> Option<[u8; 32]> {
+    if value.len() != 64
+        || !value
+            .bytes()
+            .all(|b| b.is_ascii_digit() || (b'a'..=b'f').contains(&b))
+    {
+        return None;
+    }
+    let nibble = |b: u8| if b <= b'9' { b - b'0' } else { b - b'a' + 10 };
+    let mut digest = [0; 32];
+    for (out, pair) in digest.iter_mut().zip(value.as_bytes().as_chunks::<2>().0) {
+        *out = (nibble(pair[0]) << 4) | nibble(pair[1]);
+    }
+    Some(digest)
+}
 
 // Only this module can construct the one-call access value, after checking declaration
 // position/length/state. Consumed by transfer_once; not an execution permit or public input.
@@ -33,6 +50,8 @@ pub(super) struct DeclaredFile<'r, 's, 'd, S: ScanOps> {
     next: u64,
     before: Stat,
     complete: bool,
+    expected_digest: [u8; 32],
+    hash: Option<Sha256>,
 }
 impl<S: ScanOps> std::fmt::Debug for DeclaredFile<'_, '_, '_, S> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -59,12 +78,16 @@ impl<'s, S: ScanOps> Boundary<'s, '_, '_, S> {
         if file.kind != Kind::File || file.declared.get() {
             return self.fail(Failure::Binding);
         }
-        let closure::Entry::File { size, .. } = declaration else {
+        let closure::Entry::File { size, sha256, .. } = declaration else {
             return self.fail(Failure::Binding);
         };
         if *size > MAX_FILE {
             return self.fail(Failure::Limit);
         }
+        work(self.budget)?; // bounded 64-byte lowercase digest decode
+        let Some(expected_digest) = digest_value(sha256) else {
+            return self.fail(Failure::Binding);
+        };
         let pending = self.ledger.borrow().declared_pending.checked_add(1);
         let Some(pending) = pending else {
             return self.fail(Failure::Limit);
@@ -76,6 +99,9 @@ impl<'s, S: ScanOps> Boundary<'s, '_, '_, S> {
         if before.kind != FileType::Regular || before.size != *size {
             return self.fail(Failure::Changed);
         }
+        work(self.budget)?;
+        let hash = Sha256::new();
+        self.budget.checkpoint()?;
         file.declared.set(true);
         self.ledger.borrow_mut().declared_pending = pending;
         Ok(DeclaredFile {
@@ -85,6 +111,8 @@ impl<'s, S: ScanOps> Boundary<'s, '_, '_, S> {
             next: 0,
             before,
             complete: false,
+            expected_digest,
+            hash: Some(hash),
         })
     }
 
@@ -112,6 +140,13 @@ impl<'s, S: ScanOps> Boundary<'s, '_, '_, S> {
         };
         let step = self.transfer_once(file.resource, offset, output, false, Some(access))?;
         if step == ReadStep::Complete {
+            work(self.budget)?; // one bounded <=64KiB hash update of the fresh source output
+            let Some(hash) = file.hash.as_mut() else {
+                return self.fail(Failure::Binding);
+            };
+            hash.update(&*output);
+            self.budget.checkpoint()?;
+            work(self.budget)?; // advance only after hashing and the post-hash guard
             file.next += length as u64; // <= size <= MAX_FILE, checked before first source call
         }
         Ok(step)
@@ -148,7 +183,19 @@ impl<'s, S: ScanOps> Boundary<'s, '_, '_, S> {
         if after != file.before {
             return self.fail(Failure::Changed);
         }
-        // Only EOF0 + stable post-stat finish a traversal. Dropping an unfinished binding
+        work(self.budget)?;
+        let Some(hash) = file.hash.take() else {
+            return self.fail(Failure::Binding);
+        };
+        let actual: [u8; 32] = hash.finalize().into();
+        self.budget.checkpoint()?;
+        work(self.budget)?;
+        let matched = actual == file.expected_digest;
+        self.budget.checkpoint()?;
+        if !matched {
+            return self.fail(Failure::HashMismatch);
+        }
+        // Only EOF0 + stable post-stat + digest match finish a traversal. An unfinished binding
         // leaves pending evidence, so the scope terminal check cannot report success.
         file.complete = true;
         self.ledger.borrow_mut().declared_pending -= 1;

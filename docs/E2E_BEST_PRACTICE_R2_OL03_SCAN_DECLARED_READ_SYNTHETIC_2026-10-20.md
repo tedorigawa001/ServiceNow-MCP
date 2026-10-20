@@ -2,6 +2,8 @@
 
 Date: 2026-10-20 / Status: 同resourceのsize/進行位置/stat照合subset。OS・実filesystem E2Eではない。
 
+本書はsize先行段階と低水準迂回修正の記録である。後続の[digest実装・再検証記録](E2E_BEST_PRACTICE_R2_OL03_SCAN_DIGEST_SYNTHETIC_2026-10-20.md)でhash比較を追加し、現行work費用は空18/1 chunk23/child接続38へ更新した。本書の17/32は過去の費用として残す。
+
 ## 1. 対象・停止状態
 
 [設計draft-0.5 §14](BEST_PRACTICE_BP5_R2_OL03_BOUNDED_SCAN_COLLECTOR_DESIGN.md#14-宣言sizeへのread--eof位置結合部分実装)、[declared_read.rs](../native/r2-outer/src/signature_boundary/positioned_read/metadata/transfer/topology/records/strict/scan_ops/declared_read.rs)、[declared.rs](../native/r2-outer/src/signature_boundary/positioned_read/metadata/transfer/topology/records/strict/scan_ops/tests/declared.rs)が対象。

@@ -1,12 +1,12 @@
 # BP-5 R-2 OL-03：scan work上界・bounded collector詳細設計
 
-Version: draft-0.6 / Date: 2026-10-20 / Status: 計算器・単発操作・child/seen・宣言size読取subsetを内部実装・合成検証。bind後の低水準read迂回を拒否。完全collector・workモデル/OS接続・運用quota承認は未対応。
+Version: draft-0.7 / Date: 2026-10-20 / Status: 計算器・単発操作・child/seen・宣言size/digest読取subsetを内部実装・合成検証。完全collector・workモデル/OS接続・運用quota承認は未対応。
 
 ## 1. 目的・前提・非対象
 
 [全体work受付設計](BEST_PRACTICE_BP5_R2_OL03_TOTAL_WORK_ADMISSION_DESIGN.md)のSを具体化する。[index子phase](BEST_PRACTICE_BP5_R2_OL03_ROUND_DECLARATION_WORK_DESIGN.md#14-index上界の子phase分解とscan直前境界)のReady直後から、新しい全closure観測を返すまでが対象である。3roundの各roundで必ず新しく取得し、宣言からobservedを合成しない。
 
-本書はローカルソースに基づく設計であり、macOS SDKや公式APIの実証記録ではない。初稿はMDのみで、§11の計算器、§12の単発操作境界、§13のdirect-child照合、§14の宣言size読取を先行実装した。完全collectorとOS backendは未接続。全体受付は無効、telemetry調査は保留。APPROVED_REGISTRY=None、通常v2 Unavailable、gate92、DER/absence停止を維持する。
+本書はローカルソースに基づく設計であり、macOS SDKや公式APIの実証記録ではない。初稿はMDのみで、§11の計算器、§12の単発操作境界、§13のdirect-child照合、§14の宣言size読取、§15のdigest比較を先行実装した。完全collectorとOS backendは未接続。全体受付は無効、telemetry調査は保留。APPROVED_REGISTRY=None、通常v2 Unavailable、gate92、DER/absence停止を維持する。
 
 workはBudget::workの課金量であって、CPU/RSS/OS syscall実行時間の上界ではない。名前列挙・metadata・読取の単発境界を実装しても、blocked I/Oや検査後変更を協調checkpointだけで排除したことにはならない。保護されたroot/context、更新leaseと外側監督は別の未解決条件である。
 
@@ -293,7 +293,7 @@ direct-child helper自身の実課金（open/precharge・visitor・外側scope�
 
 ## 14. 宣言sizeへのread / EOF位置結合（部分実装）
 
-[declared_read.rs](../native/r2-outer/src/signature_boundary/positioned_read/metadata/transfer/topology/records/strict/scan_ops/declared_read.rs)と[合成検証記録](E2E_BEST_PRACTICE_R2_OL03_SCAN_DECLARED_READ_SYNTHETIC_2026-10-20.md)で、§13の未対応事項のうちsize/進行位置とstat前後照合を先行実装した。hash・完全metadata policy・全pathの信頼結合を実装済みとはしない。
+[declared_read.rs](../native/r2-outer/src/signature_boundary/positioned_read/metadata/transfer/topology/records/strict/scan_ops/declared_read.rs)と[合成検証記録](E2E_BEST_PRACTICE_R2_OL03_SCAN_DECLARED_READ_SYNTHETIC_2026-10-20.md)で、§13の未対応事項のうちsize/進行位置とstat前後照合を先行実装した。後続§15でhashを追加したが、完全metadata policy・全pathの信頼結合は未対応。
 
 `bind_declared` は同scopeのFile resourceとimmutableな `closure::Entry::File` をborrowし、宣言size 0〜512MiB、実statのRegular/size一致を検査して、非Clone/非serdeの `DeclaredFile` を返す。scope/source/ledgerを検査し、同resourceの再bindは拒否する。元のresourceはborrow中に解放・差替えできない。
 
@@ -309,16 +309,36 @@ direct-child helper自身の実課金（open/precharge・visitor・外側scope�
 | 進行 | 完全read成功のときだけnextを更新する。Interruptedは同位置に留まり、元共有retry残を消費した明示的な次の1試行だけを許す |
 | EOF | 全dataを読み終え、offsetが宣言sizeそのもののときだけ1-byte probeを許す。0だけ成功、1ならChangedで停止。空fileはdata呼出しなしでoffset0のprobeが必要 |
 | post-stat | EOF0の後に同resourceへstatを1回取得し、beforeの全Stat（size/型/device/inode/owner/mode/links/mtime/ctime）と完全一致を要求。差はChanged、取得不能はMetadataUnavailable。ACL/xattr/FSの完全metadata観測ではない |
-| 完了 | EOF0＋post-stat一致で一度だけpendingを解除。未完了bindingの放棄は次の通常primitiveをChangedで停止し、scope終端でも未完了を拒否。終端で未完了EINTRが残る場合はReadFailed。元のsticky失敗やcleanup不明は既存の優先順で保持。完了後read/EOF/rebindはBinding |
+| 完了 | EOF0＋post-stat一致＋§15のdigest一致で一度だけpendingを解除。未完了bindingの放棄は次の通常primitiveをChangedで停止し、scope終端でも未完了を拒否。終端で未完了EINTRが残る場合はReadFailed。元のsticky失敗やcleanup不明は既存の優先順で保持。完了後read/EOF/rebindはBinding |
 
-元SharedBudget、元deadline、payload上限/既存予約、共有EINTRと一度限りcleanupを維持する。新しいbindingはhandleを複製せず、scope台帳のpending件数だけを追加する。破棄で未完了を完了扱いにしない。返る完了はこのsize/stat subsetだけで、digest一致・ABA防止・実行authorityではない。
+元SharedBudget、元deadline、payload上限/既存予約、共有EINTRと一度限りcleanupを維持する。bindingはhandleを複製しない。破棄で未完了を完了扱いにしない。size/statに§15のdigest一致を加えても、ABA防止・実行authorityではない。
 
 ### 14.1 課金・合成検証・未接続
 
-bindはguard1＋stat dispatch1＋照合1＝3 work。各data/read retryはguard1＋既存read dispatch/分類2＝3 work。最後のEOF0はguard1＋read2＋post-stat1＋照合1＝5 work、EOF retryは3 work。`eof_declared`は高水準手順でEOF1試行と成功後stat1試行を組み合わせるが、各ScanOps primitiveは引き続き1呼出し1試行で隠れたretryはない。
+size先行段階の費用は、bindがguard1＋stat dispatch1＋照合1＝3 work、各data/read retryはguard1＋既存read dispatch/分類2＝3 work、最後のEOF0はguard1＋read2＋post-stat1＋照合1＝5 work、EOF retryは3 workだった。hash追加後の現行費用は§15.1に置く。`eof_declared`は高水準手順でEOF1試行と成功後stat1試行を組み合わせるが、各ScanOps primitiveは引き続き1呼出し1試行で隠れたretryはない。
 
-standaloneの成功はdata chunk数Cとして **`14+3C` work**（anchor/file取得・cleanup precharge4、scope2を含む）。4-byte fileは17、既存1-child照合内のvisitorとして実行した成功は32。残work0〜17で停止prefixと解放を検証した。既存候補式への費目割当、snapshotとのstat重複排除、retry係数・hash費・quotaへの接続は未対応で、`bp5-r2-scan-work-0.1` を本経路の検証済み上界として使わない。
+size先行段階のstandalone成功はdata chunk数Cとして `14+3C` work（anchor/file取得・cleanup precharge4、scope2を含む）、4-byteは17、1-child照合内の成功は32だった。残work0〜17で停止prefixと解放を検証した。現行は§15.1の追加費を含む。既存候補式への費目割当、snapshotとのstat重複排除、retry係数・quotaへの接続は未対応で、`bp5-r2-scan-work-0.1` を本経路の検証済み上界として使わない。
 
 16追加テストで空/単chunk/64KiB境界/末尾chunk、範囲外/早期EOF、short/過大count、開始時size/型差、読取後size/stat差・EOFでの増加、data/EOFのEINTR、未完了/再bind/完了後再利用、取消/期限、取得不能、work/cap/異なるledger、child visitor接続を検証した。早期EOF guardを無効化すると対応試験が失敗し、復旧後に全体再検証した。完全metadata/hash・祖先/path再照合・protected producer/全closure seal・全体受付/OS backendは未接続のままである。
 
 後続の互換修正で低水準迂回の回帰テストを2件追加した。未修正時の両テスト失敗を確認し、修正後はpending/完了後のread/EOF、data/EOFのEINTR横取りをBindingで拒否した。拒否でsource/work/payload/retryが増えないことと、既存の宣言経路・未bind低水準経路の互換性を確認した。§14.1の17/32 workは維持する。
+
+## 15. 同resourceのbytesによるSHA-256・宣言digest照合
+
+[digest合成検証記録](E2E_BEST_PRACTICE_R2_OL03_SCAN_DIGEST_SYNTHETIC_2026-10-20.md)で§14のsize/stat経路へstreaming SHA-256を追加した。既存のsha2依存を使い、新規依存・OS backend・運用入口は追加しない。
+
+- bind時に同immutable File entryのsha256を64桁の小文字hexとしてboundedに検査・32-byteへ復号する。不正ならBinding、metadata/read前に停止する。宣言自体の信頼/親path/receipt/round結合は依然producer側の未対応事項。
+- hasherは非CloneのDeclaredFile内部だけで保持する。完全成功したdata readのfresh outputを、呼出し元へ返す**前**に最大64KiBずつupdateする。callerが返却bufferを書き換えてもhashは変わらない。引数でhash対象bytesを別途受け取るAPIは設けない。
+- short/過大応答/取得不能は従来どおり停止し、そのbufferをhashへ入れない。EINTRも進行/hashを更新せず、成功retryだけ一度反映する。EOF probeのbufferは結果0でもhashへ入れない。
+- update前にwork、直後にcheckpoint、進行更新にもworkを課金する。EOF0とpost-stat一致後だけhasherを一度消費してfinalizeし、宣言digestと比較する。finalize/比較の前後にも元checkpointを置く。
+- digest差はHashMismatchでsticky停止し、pendingを解除しない。期限/取消/元失敗は元理由を保持し、通常の後続sourceへ進まない。cleanupは既存prechargeで一度だけ行う。成功値はdigestを外へ公開せず、この部分検証の完了だけである。
+
+### 15.1 現行work・制限
+
+bindは旧3＋digest decode1＋hasher初期化1＝**5 work**。完全data chunkは旧3＋hash update1＋進行更新1＝**5 work**。最終EOF0は旧5＋finalize1＋digest比較1＝**7 work**。data/EOFのInterrupted試行は3 workで、hash/進行を二重計上しない。
+
+standalone成功は **`18+5C` work**（anchor/fileとcleanup precharge4、scope2込み）。空file18、1 chunk23、2 chunks28。各phaseのEINTR1回ずつなら1 chunk29、1-child照合visitorでは38。残work0〜23で元100万上限と全枯渇prefixのcleanupを再検証した。§14の17/32は過去のsize-only費用であり、現行費用ではない。
+
+hash状態は定数量でdata全体を蓄積せず、payload実bytes/既存予約・retry・start/originを元SharedBudgetで共有する。新Budget/上限増額はない。64KiB/hash処理の協調checkpointであり、CPU/hard期限・RSS・検査後改変/ABAを証明しない。全体workモデル・完全metadata/祖先path・trusted producer・全closure観測seal・OS接続は未対応で、全体受付/実行permitは無効のまま。
+
+7追加テストで独立golden vectors（空/abc）、同sizeのdigest不一致、buffer書換え、EINTR/probe除外、2 resourceのhash分離、複数chunkとone-shot照合、不正digest、hash phaseの全clock checkpointへの期限/取消注入を確認した。従来size/短読取/metadata/低水準迂回試験も維持した。

@@ -3,6 +3,7 @@ use std::{cell::Cell, collections::VecDeque};
 
 mod children;
 mod declared;
+mod digest;
 
 struct Raw(u64); // Not Clone, not a descriptor; no OS objects in the synthetic source.
 #[derive(Clone, Copy)]
@@ -17,6 +18,7 @@ struct State {
     duplicate: bool,
     reads: VecDeque<Result<usize, OpFailure>>,
     read_requests: Vec<(u64, u64, usize)>,
+    read_data: VecDeque<Vec<u8>>,
     names: VecDeque<Result<Option<Vec<u8>>, OpFailure>>,
     open_failure: Option<OpFailure>,
     acl_failure: Option<OpFailure>,
@@ -107,6 +109,10 @@ impl ScanOps for Fake {
             .read_requests
             .push((file.0, offset, out.len()));
         out.fill(b'x');
+        if let Some(data) = self.0.borrow_mut().read_data.pop_front() {
+            let n = data.len().min(out.len());
+            out[..n].copy_from_slice(&data[..n]);
+        }
         self.0
             .borrow_mut()
             .reads
@@ -158,6 +164,7 @@ fn fixture() -> Fixture {
         duplicate: false,
         reads: VecDeque::new(),
         read_requests: Vec::new(),
+        read_data: VecDeque::new(),
         names: VecDeque::new(),
         open_failure: None,
         acl_failure: None,

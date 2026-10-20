@@ -1,11 +1,19 @@
 use super::*;
 
 fn declaration(size: u64) -> closure::Entry {
+    use sha2::{Digest, Sha256};
+    // Successful vectors here are <= one chunk plus tail. Larger declarations are only
+    // cap/rejection tests; do not allocate/hash an attacker-sized synthetic declaration.
+    let digest = if size <= MAX_CHUNK as u64 + 3 {
+        format!("{:x}", Sha256::digest(vec![b'x'; size as usize]))
+    } else {
+        "a".repeat(64)
+    };
     closure::Entry::File {
         path: "file".into(),
         mode: "0444".into(),
         size,
-        sha256: "a".repeat(64),
+        sha256: digest,
     }
 }
 fn observed(state: &Rc<RefCell<State>>, size: u64) {
@@ -406,7 +414,7 @@ fn stat_failure_is_not_size_match_and_first_reason_is_retained() {
 
 #[test]
 fn exact_shared_work_cost_and_each_exhaustion_prefix_release_handles() {
-    for available in 0..=17 {
+    for available in 0..=23 {
         let (source, state, stop, tick) = fixture();
         state.borrow_mut().reads.extend([Ok(4), Ok(0)]);
         let mut b = SharedBudget::new(tick.get(), &stop);
@@ -421,7 +429,7 @@ fn exact_shared_work_cost_and_each_exhaustion_prefix_release_handles() {
         });
         assert_eq!(
             out.result,
-            if available == 17 {
+            if available == 23 {
                 Ok(())
             } else {
                 Err(Failure::Limit)
@@ -500,7 +508,7 @@ fn matched_child_visitor_can_complete_a_size_bound_read_on_same_resource() {
     assert_eq!(state.borrow().counts, [3, 2, 2, 2, 3]);
     assert_eq!(state.borrow().read_requests, [(3, 0, 4), (3, 4, 1)]);
     assert_eq!((out.summary.live, out.summary.declared_pending), (0, 0));
-    assert_eq!(b.json_work, 32);
+    assert_eq!(b.json_work, 38);
 }
 
 #[test]
