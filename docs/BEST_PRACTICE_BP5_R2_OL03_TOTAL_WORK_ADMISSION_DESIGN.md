@@ -1,12 +1,12 @@
 # BP-5 R-2 OL-03：record・scanを含む全体work上界と事前受付
 
-Version: draft-0.1 / Date: 2026-10-20 / Status: 内部詳細設計案。実装・上界の計数試験・運用承認は未実施。
+Version: draft-0.2 / Date: 2026-10-20 / Status: record側のopt-in内部モデルを合成検証。全体受付・scan/other上界・運用承認は未実施。
 
 ## 1. 範囲と停止状態
 
 [同round宣言・indexモデル設計](BEST_PRACTICE_BP5_R2_OL03_ROUND_DECLARATION_WORK_DESIGN.md)を引き継ぐ。indexの固定ID `bp5-r2-index-work-0.1`、上界式、3 decode・6 record検証・3 closure scan、scan前後の厳密再検証を維持する。本書は新しい外部仕様の調査ではなく、リポジトリ内の課金点に基づく設計案である。
 
-telemetry調査は保留。実装、実機操作、API実接続、token発行、設定変更、permit発行、Pushは本工程に含めない。APPROVED_REGISTRY=None、通常v2 Unavailable、gate92、DER/absence停止を維持する。受付成功を実行permitや署名検証の成功に読み替えない。
+telemetry調査は保留。初稿は設計のみで、後続§10でrecord側の内部モデルだけを実装した。実機操作、API実接続、token発行、設定変更、permit発行、Pushは本工程に含めない。APPROVED_REGISTRY=None、通常v2 Unavailable、gate92、DER/absence停止を維持する。受付成功を実行permitや署名検証の成功に読み替えない。
 
 全体上界は**共有Budget::workへの課金量**を対象とする。CPU命令数・wall time・RSS・OS処理時間の上界ではない。現在の `json_work` というフィールド名を理由にJSON以外の費目を除外しない。一方、checkpointや別台帳だけの処理を、既にwork課金済みと扱わない。
 
@@ -139,4 +139,17 @@ Deadline/Cancelled/Expired/既存sticky failureを維持する。work不足でBi
 4. O全項、target/parserの共有予算範囲、解放の有限性、work予約を既存入口へ一元接続する方法。
 5. 全体modelの係数・100万capの妥当性と独立resource受付の承認。必要なら別提案で最適化／cap再承認を行い、今回黙って緩和しない。
 
-本書の式・候補ID・試験計画は実装完了や実閉包の受付可能性を意味しない。上記が揃うまで全体事前受付は無効、停止状態を維持する。
+本書の式・候補ID・試験計画は全体実装完了や実閉包の受付可能性を意味しない。上記が揃うまで全体事前受付は無効、停止状態を維持する。
+
+## 10. recordモデルの先行実装（内部opt-in）
+
+[record workモデル](../native/r2-outer/src/record_validation/work_model.rs)と[合成検証記録](E2E_BEST_PRACTICE_R2_OL03_RECORD_WORK_MODEL_SYNTHETIC_2026-10-20.md)を追加した。§4の未計数だった式を先行検証する段階であり、§6の全体受付・予約・strict pipelineへの自動接続は変更していない。
+
+- 固定IDは `bp5-r2-record-work-0.1`。groupsは**内部モデル固有の最大1,024要素**とし、重複も全て課金する。OSの上限・運用承認済み値という意味ではない。1,025以上は初回guardの1 workだけを消費して、hash/decode前にLimitで停止する。空groupsは既存の所属不一致Binding。既存の通常validate/activation経路のgroups契約は変更しない。
+- JSON visitorのopt-inでB/V/K/T/Qとtextイベント数を同じdecode中に収集する。統計用reparseはない。typed変換まで成功したshapeだけを渡し、三者の意味検査が完了して初めてsealed profileを返す。通常decodeとindex経路はopt-inしないため課金式を変えない。
+- `E = Σ(Vx + Kx + text_events_x + Qx)` が収集可変費。textの課金量Tとイベント回数は分離する（text長が大きい場合でも、統計counter更新は1イベント1 work）。初期化・公開は各JSONで2 work。groups guard1＋三つのJSON固定6＋モデル計算5の固定費は**12 work**。
+- `R_kernel = Σ(Jx+Hx)+g+p+19` を計数した。通常のpure validate内の固定は17、既存strict callerのprojection2を含めて19。`R_profiled = R_kernel + E + 12`、全6回を毎回profile付きで実施する保守的モデルは `6×R_profiled`。profile関数自身はprojectionを実施しないので、実消費はR_profiledより2少ない。scalar上界を読んでもprojection検査が済んだことにはしない。
+- 元raw三者・同じPins object・同じContext objectをborrowしたprivate非Clone/非serde profileに結合する。追加のmodel/input guardは**1 work/呼出し**で、上の通常費用の外へ別計上する。別allocationの同bytes、別Pins/Context、未知modelを拒否する。これは純粋なborrow結合で、budget origin/session/roundへの運用結合・信頼済みcontext producerは未接続。将来受付時にそれらを追加し、別budgetでも使える汎用guardをauthorityと誤認しない。
+- 共有予算へのopt-in bridgeは元start/originとspentを保ち、I/O予約・metadata/topology台帳を変更しない。Budget失敗は元理由、groups/算術上限はLimitへラッチする。通常strict pipelineは従来のbridgeを使い、profile付き経路へまだ切り替えていない。
+
+今回のモデルはprofileを毎回作る。初回だけ収集して後続は再利用する最適化ではないため、§4の一般式を適用する場合は `U_record_profile=6×(E+12)` として数える。追加require guardを使うならその回数も別に加える。§9のgroups数値候補・固定費計数の一部は解消したが、子phase/collector/other/予約・独立resource・運用承認は引き続き未完了。全体gateを解除しない。

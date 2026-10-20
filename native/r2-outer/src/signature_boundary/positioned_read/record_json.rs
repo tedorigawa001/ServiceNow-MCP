@@ -2,6 +2,34 @@
 use super::*;
 use crate::{json::shared, record_validation as r};
 impl SharedBudget<'_> {
+    // Opt-in internal model bridge only; the strict pipeline still uses validate_record_json.
+    pub(super) fn profile_record_json<'a>(
+        &mut self,
+        a: &'a [u8],
+        l: &'a [u8],
+        registry: &'a [u8],
+        pins: &'a r::Pins<'a>,
+        context: &'a r::Context<'a>,
+    ) -> Result<r::work_model::Profiled<'a>, r::work_model::Error<Failure>> {
+        use r::work_model::Error;
+        let result = r::work_model::validate_profiled(a, l, registry, pins, context, self);
+        if let Err(ref reason) = result {
+            let failure = match reason {
+                Error::Record(
+                    r::Rejection::Budget(e) | r::Rejection::Json(shared::Rejection::Budget(e)),
+                ) => *e,
+                Error::Limit
+                | Error::Record(
+                    r::Rejection::Limit | r::Rejection::Json(shared::Rejection::Limit(_)),
+                ) => Failure::Limit,
+                Error::Record(r::Rejection::Expired) => Failure::Expired,
+                Error::ModelMismatch => Failure::Unavailable,
+                _ => Failure::Binding,
+            };
+            let _ = self.stop::<()>(failure);
+        }
+        result
+    }
     pub(super) fn validate_record_json(
         &mut self,
         a: &[u8],
@@ -31,6 +59,76 @@ mod tests {
     use super::*;
     use crate::record_validation::tests::{NOW, context, fixture, hash};
     use std::cell::Cell;
+    #[test]
+    fn profiled_record_bridge_keeps_shared_origin_start_and_independent_resource_ledgers() {
+        let f = fixture();
+        let pins = f.pins();
+        let context = context();
+        let stop = AtomicBool::new(false);
+        let start = Instant::now();
+        let mut b = SharedBudget::new(start, &stop);
+        let origin = b.inspection_origin.clone();
+        let profile = b
+            .profile_record_json(&f.a, &f.l, &f.registry, &pins, &context)
+            .unwrap();
+        assert_eq!(profile.profile.per_validation(), b.json_work + 2);
+        let work = b.json_work;
+        b.profile_record_json(&f.a, &f.l, &f.registry, &pins, &context)
+            .unwrap();
+        assert_eq!(b.json_work, 2 * work);
+        assert_eq!(b.started, start);
+        assert!(Rc::ptr_eq(&b.inspection_origin, &origin));
+        assert_eq!(
+            (b.used, b.reserved, b.metadata_calls, b.topology_calls),
+            (0, 0, 0, 0)
+        );
+        stop.store(true, Ordering::Release);
+        assert!(
+            b.profile_record_json(&f.a, &f.l, &f.registry, &pins, &context)
+                .is_err()
+        );
+        assert_eq!(b.failed, Some(Failure::Cancelled));
+        assert_eq!(b.json_work, 2 * work);
+    }
+    #[test]
+    fn profiled_bridge_latches_groups_limit_deadline_and_existing_failure() {
+        let f = fixture();
+        let pins = f.pins();
+        let groups = vec![80; r::work_model::MAX_GROUPS + 1];
+        for case in 0..4 {
+            let stop = AtomicBool::new(false);
+            let mut b = SharedBudget::new(Instant::now(), &stop);
+            let mut c = context();
+            let expected = match case {
+                0 => {
+                    c.groups = &groups;
+                    Failure::Limit
+                }
+                1 => {
+                    b.started -= Duration::from_secs(10);
+                    Failure::Deadline
+                }
+                2 => {
+                    b.failed = Some(Failure::HashMismatch);
+                    Failure::HashMismatch
+                }
+                _ => {
+                    b.json_work = 999_999;
+                    Failure::Limit
+                }
+            };
+            assert!(
+                b.profile_record_json(&f.a, &f.l, &f.registry, &pins, &c)
+                    .is_err()
+            );
+            assert_eq!(b.failed, Some(expected));
+            assert!(
+                b.profile_record_json(&f.a, &f.l, &f.registry, &pins, &c)
+                    .is_err()
+            );
+            assert_eq!(b.failed, Some(expected));
+        }
+    }
     #[test]
     fn strict_record_bridge_consumes_shared_work_without_io_or_clock_reset() {
         let f = fixture();

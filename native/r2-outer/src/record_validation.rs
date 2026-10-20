@@ -6,6 +6,8 @@ use crate::{
 };
 use sha2::{Digest, Sha256};
 
+pub(crate) mod work_model;
+
 #[derive(Debug, PartialEq, Eq)]
 pub(crate) enum Rejection<E> {
     Json(shared::Rejection<E>),

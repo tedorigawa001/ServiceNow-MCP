@@ -352,6 +352,9 @@ pub(crate) fn parse_shared<B: crate::json::shared::Budget>(
     Ok(ParsedRegistry { registry, digest })
 }
 impl ParsedRegistry {
+    pub(crate) fn inspection_policy_count(&self) -> usize {
+        self.registry.policies.len()
+    }
     pub(crate) fn bind_reference_shared<B: crate::json::shared::Budget>(
         &self,
         reference: &RegistryReference<'_>,

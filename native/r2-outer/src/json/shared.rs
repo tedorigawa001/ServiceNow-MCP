@@ -7,6 +7,28 @@ pub(crate) trait Budget {
     type Failure: Copy;
     fn checkpoint(&mut self) -> Result<(), Self::Failure>;
     fn work(&mut self, units: u64) -> Result<(), Self::Failure>;
+    fn collect_json_shape(&self) -> bool {
+        false
+    }
+    fn accepted_json_shape(&mut self, _shape: JsonShape) -> Result<(), Self::Failure> {
+        Ok(())
+    }
+}
+// Emitted only after strict decoding AND typed conversion succeed. Not input authority.
+#[derive(Default, Debug, PartialEq, Eq)]
+pub(crate) struct JsonShape {
+    pub(crate) bytes: u64,
+    pub(crate) values: u64,
+    pub(crate) keys: u64,
+    pub(crate) text: u64,
+    pub(crate) arrays: u64,
+    pub(crate) text_events: u64,
+}
+enum ShapeEvent {
+    Value,
+    Key,
+    Text(u64),
+    Array,
 }
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(crate) enum Limit {
@@ -31,6 +53,7 @@ struct State<'a, B: Budget> {
     budget: &'a mut B,
     limits: Limits,
     first: Option<Rejection<B::Failure>>,
+    shape: Option<JsonShape>,
 }
 impl<B: Budget> State<'_, B> {
     fn save(&mut self, reason: Rejection<B::Failure>) -> Rejection<B::Failure> {
@@ -54,7 +77,32 @@ impl<B: Budget> State<'_, B> {
     fn text(&mut self, bytes: usize) -> Result<(), Rejection<B::Failure>> {
         // Count string/key work without copying it here. serde's internal unescape is not
         // interruptible by these visitor callbacks; max input bytes still bounds its input.
-        self.work(bytes.div_ceil(65536).max(1) as u64)
+        let units = bytes.div_ceil(65536).max(1) as u64;
+        self.work(units)?;
+        self.collect(ShapeEvent::Text(units))
+    }
+    fn collect(&mut self, event: ShapeEvent) -> Result<(), Rejection<B::Failure>> {
+        if self.shape.is_none() {
+            return Ok(());
+        }
+        self.work(1)?;
+        let s = self.shape.as_mut().expect("shape enabled");
+        let (value, n) = match event {
+            ShapeEvent::Value => (&mut s.values, 1),
+            ShapeEvent::Key => (&mut s.keys, 1),
+            ShapeEvent::Array => (&mut s.arrays, 1),
+            ShapeEvent::Text(n) => {
+                s.text_events = s
+                    .text_events
+                    .checked_add(1)
+                    .ok_or(Rejection::Limit(Limit::Container))?;
+                (&mut s.text, n)
+            }
+        };
+        *value = value
+            .checked_add(n)
+            .ok_or(Rejection::Limit(Limit::Container))?;
+        self.guard()
     }
     fn error<E: Error>(&mut self, reason: Rejection<B::Failure>) -> E {
         self.save(reason);
@@ -72,6 +120,8 @@ impl<'de, B: Budget> DeserializeSeed<'de> for Seed<'_, '_, B> {
     type Value = Value;
     fn deserialize<D: serde::Deserializer<'de>>(self, d: D) -> Result<Value, D::Error> {
         let result = self.state.work(1);
+        self.state.checked(result)?;
+        let result = self.state.collect(ShapeEvent::Value);
         self.state.checked(result)?;
         if self.depth > self.state.limits.max_depth {
             return Err(self.state.error(Rejection::Limit(Limit::Depth)));
@@ -140,6 +190,8 @@ impl<'de, B: Budget> Visitor<'de> for Tree<'_, '_, B> {
             };
             let result = self.state.work(1);
             self.state.checked(result)?;
+            let result = self.state.collect(ShapeEvent::Array);
+            self.state.checked(result)?;
             values.push(value);
         }
         Ok(Value::Array(values))
@@ -193,6 +245,8 @@ impl<'de, B: Budget> DeserializeSeed<'de> for KeySeed<'_, '_, B> {
             return Err(self.state.error(Rejection::Limit(Limit::Container)));
         }
         let key = <String as serde::Deserialize>::deserialize(d)?;
+        let result = self.state.collect(ShapeEvent::Key);
+        self.state.checked(result)?;
         let result = self.state.text(key.len());
         self.state.checked(result)?;
         Ok(key)
@@ -203,10 +257,15 @@ pub(crate) fn decode<T: DeserializeOwned, B: Budget>(
     limits: Limits,
     budget: &mut B,
 ) -> Result<T, Rejection<B::Failure>> {
+    let collect = budget.collect_json_shape();
     let mut state = State {
         budget,
         limits,
         first: None,
+        shape: collect.then(|| JsonShape {
+            bytes: bytes.len() as u64,
+            ..JsonShape::default()
+        }),
     };
     state.guard()?;
     if limits.max_bytes > 16 * 1024 * 1024 || limits.max_depth > 16 || limits.max_items > 100_000 {
@@ -214,6 +273,9 @@ pub(crate) fn decode<T: DeserializeOwned, B: Budget>(
     }
     if bytes.len() > limits.max_bytes {
         return Err(state.save(Rejection::Limit(Limit::Bytes)));
+    }
+    if collect {
+        state.work(1)?; // bounded profile initialization
     }
     // Account input inspection work before serde. This is not payload I/O charging.
     for _ in bytes.chunks(65536) {
@@ -235,7 +297,17 @@ pub(crate) fn decode<T: DeserializeOwned, B: Budget>(
     // cooperative cancellation boundary, nor does this core enforce allocator/RSS limits.
     let typed = serde_json::from_value(value);
     state.guard()?;
-    typed.map_err(|_| state.save(Rejection::InvalidRecord))
+    let typed = typed.map_err(|_| state.save(Rejection::InvalidRecord))?;
+    if collect {
+        state.work(1)?; // completed profile publication
+        let shape = state.shape.take().expect("shape enabled");
+        state
+            .budget
+            .accepted_json_shape(shape)
+            .map_err(Rejection::Budget)?;
+        state.guard()?;
+    }
+    Ok(typed)
 }
 
 #[cfg(test)]
