@@ -4,6 +4,8 @@ use crate::json::shared::Budget;
 use crate::signature_boundary::positioned_read::metadata::collector::FsObservation;
 use std::cell::{Cell, RefCell};
 
+mod relative_path;
+
 // This aggregate is bounded comparison data, NOT a credited native metadata primitive.
 struct Observation {
     before: Stat,
@@ -53,13 +55,25 @@ impl<R: ResourceOrigin> std::fmt::Debug for RootBinding<'_, '_, '_, '_, '_, R> {
         f.write_str("ScanRootBinding(synthetic_only_not_execution_authority)")
     }
 }
-#[derive(Default)]
 struct Ledger {
+    attempt_limit: u32,
     attempts: u32,
     live: u32,
     peak: u32,
     releases: u32,
     unconfirmed: u32,
+}
+impl Default for Ledger {
+    fn default() -> Self {
+        Self {
+            attempt_limit: 132,
+            attempts: 0,
+            live: 0,
+            peak: 0,
+            releases: 0,
+            unconfirmed: 0,
+        }
+    }
 }
 struct Temporary<R: ResourceOrigin, S: RootPathSource<R>> {
     source: Rc<RefCell<S>>,
@@ -90,7 +104,9 @@ fn begin(ledger: &RefCell<Ledger>, acquire: bool, b: &mut SharedBudget<'_>) -> R
     guard(ledger, b)?;
     // h<=64: at most 65 opens + 65 temporary observations + 2 held observations.
     // This synthetic per-rewalk cap is NOT the approved scan operation quota.
-    if ledger.borrow().attempts >= 132 || (acquire && ledger.borrow().live >= 2) {
+    if ledger.borrow().attempts >= ledger.borrow().attempt_limit
+        || (acquire && ledger.borrow().live >= 2)
+    {
         return b.stop(Failure::Limit);
     }
     b.work(if acquire { 2 } else { 1 })?; // acquisition prepays exactly one cleanup

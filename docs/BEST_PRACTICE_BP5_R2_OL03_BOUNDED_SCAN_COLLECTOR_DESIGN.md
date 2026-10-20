@@ -1,6 +1,6 @@
 # BP-5 R-2 OL-03：scan work上界・bounded collector詳細設計
 
-Version: draft-0.10 / Date: 2026-10-20 / Status: 計算器・単発操作・child/seen・size/digest・metadata正規化・宣言入力結合・root/絶対祖先path再照合の内部契約を合成検証。完全collector・workモデル/OS接続・運用quota承認は未対応。
+Version: draft-0.11 / Date: 2026-10-20 / Status: 計算器・単発操作・child/seen・size/digest・metadata正規化・宣言入力結合・root/絶対祖先および相対directory/file再照合の内部契約を合成検証。完全collector・workモデル/OS接続・運用quota承認は未対応。
 
 ## 1. 目的・前提・非対象
 
@@ -429,3 +429,32 @@ source試行は最大 `2h+4<=132`、temporary acquire/cleanupは最大h+1、同�
 成功したtemporaryはpost-operation guard**前**にowner化し、遅延取消/期限切れでもprecharge済みDropで一度だけ解放する。解放不明はsuccessにせずUnavailable、先行のsticky失敗があればその理由を保持する。保持rootの所有者は外側scopeのままで、再照合sourceは解放しない。hostのcleanup終了票への接続は未対応。
 
 runtime root以下の相対directory/file祖先、実OS rootの保護されたproducer、scan_ops完全snapshotとの接続、更新lease/ABA・検査後変更の防止、全closure collector/sealは依然未対応。合成sourceの真実性をこの比較器で証明せず、既存停止gate・telemetry保留・全体受付無効を維持する。
+
+## 19. runtime root以下の相対directory / file再照合の内部契約
+
+[relative_path.rs](../native/r2-outer/src/signature_boundary/positioned_read/metadata/transfer/topology/records/strict/round_declaration/scan_inputs/root_path/relative_path.rs)と[合成検証記録](E2E_BEST_PRACTICE_R2_OL03_SCAN_RELATIVE_PATH_SYNTHETIC_2026-10-20.md)で、§18のroot契約に、宣言された相対祖先とleafの再照合を追加した。OS backend・完全collectorへの接続ではない。
+
+### 19.1 結合と入口検査
+
+RelativeBindingは非Clone/非serdeで、同ScanInputsに由来するRootBinding・特定のChildInput（親viewを含む）・保持leaf resourceのorigin・初回walkの各edge snapshotを固定する。root/leafのorigin共用を拒否する。本番constructorはなく、任意path/FD番号/呼出し元metadataから生成する口は提供しない。現在の初回walk receipt producerは合成テストだけである。
+
+source呼出し前に、同receipt/target/context/round/token/budget、正しい親子view、canonical entry参照の同一性を検査する。相対edgeは1〜64、最初の親は空path（runtime root）、各edgeの親は直前edgeのpath、末尾は対象ChildInputのentryそのものを必須とする。中間edgeはDirectoryのみ。コピーしたentry、欠落・逆順・別leaf・同pathの別ChildInputを拒否する。受付済み宣言のprefixをそのまま辿り、未知pathへのopenはしない。
+
+各初回snapshotは、root device/uid0/正常nanoseconds/許可names、Directory 0555・links>0、またはFileの宣言mode 0444/0555・size・Regular・links1へ適合する必要がある。不正な初期bindingはBinding（512MiB超のFileはLimit）でI/O前に停止する。snapshotはinode/gid/size/times/names等を含む不変値として保持し、再観測で更新しない。digest本文はこの比較器では検証せず、§15の同resource読取/hash照合が別途必要である。
+
+### 19.2 固定再探索と解放
+
+1. 保持rootと保持leafのmetadataを初回snapshotへ照合する。
+2. 毎回新しい固定anchor `/` を開く。全絶対祖先 → runtime root → 全相対祖先 → leafを、直前parent handle基準で順に開く。保持rootや途中directoryへ探索を短絡しない。
+3. 各絶対祖先は§18のreceiptへ、相対edgeは対応する初回snapshotへ完全比較する。DirectoryとFileで別のopen契約を使い、中間fileを辿らない。
+4. 旧parentは新childの比較後に解放し、同時temporary ownerは最大2。最後のtemporaryも解放してから保持leafとrootを再観測し、元origin/bindingを再確認する。
+
+相対Observationも固定サイズの合成集約値で、native primitiveではない。before/after Stat差や初回snapshotとの差、ACL present/nonlocal/nonAPFS/ownership ignored/noexecはChanged、UnknownはMetadataUnavailable。open/観測の取得失敗・Interrupted・WouldBlockはそれぞれUnavailable/MetadataUnavailableで再試行しない。成功した新handleはpost-operation guard前にowner化する。解放はprecharge済みDropで一度だけ行い、解放不明なら成功させず、先行sticky失敗は保持する。保持root/leaf自体は外側ownerが保持し、このsourceでは解放しない。
+
+### 19.3 費用・停止条件・残課題
+
+元SharedBudgetのstart/origin/10秒/work100万/payload2GiBと元EINTR残を維持する。hを絶対component数、kを相対edge数とすると、source試行は `2(h+k)+6<=262`、temporary acquire/cleanupはh+k+1、同時ownerは最大2。§18単独の132上限は変えず、新subset内だけに固定262の有限capを置く。これは全scan quotaの増額や3roundの新規予算ではない。target metadata/topology台帳・payload/readは使わない。
+
+追加の入口費Vは `6+Q+2k+Σp_i`。Qは既存require_childの実課金、p_iはcanonical entry検索の比較回数。再照合成功は **`V+9(h+k)+39` work**。fixtureのfile（h=2,k=3,V=28）は112、directory（h=2,k=2,V=21）は96。lookupの線形費を隠さず課金し、元scan/index計算器をそのまま検証済み上界としない。将来の完全collectorでは索引化・費目所有・3round配賦・全体受付の見直しが必要である。
+
+root/relative初回snapshotとresourceを保護されたopenerから生成する処理、scan_ops完全metadata/read/hashとの同一resource接続、全closure観測seal、OS接続、更新lease/ABA/検査後差替え対策、hostへのcleanup終了票伝播は未対応。BSD flagsやsystem祖先xattrの§18の制約も未解決のままである。全体受付無効・本番policy未投入・DER/absence停止・gate92/通常v2 Unavailable・telemetry保留を維持する。
