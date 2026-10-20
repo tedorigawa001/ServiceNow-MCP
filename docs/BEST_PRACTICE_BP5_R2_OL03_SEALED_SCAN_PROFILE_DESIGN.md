@@ -1,14 +1,14 @@
 # BP-5 R-2 OL-03：sealed scan shape/profile・純粋計算器の詳細設計
 
-Version: draft-0.2 / Date: 2026-10-21 / Status: private sealed profile・count-only収集・one-shot・結合guardを合成検証。計算器・estimate・利用bridge・全体受付は未実装。
+Version: draft-0.3 / Date: 2026-10-21 / Status: private sealed profile・count-only収集とprofile消費型15-row計算器/estimateを合成検証。利用bridge・全体受付は未実装。
 
 ## 1. 目的・停止条件
 
 [現行collector費目設計draft-0.3](BEST_PRACTICE_BP5_R2_OL03_COLLECTOR_WORK_REDESIGN.md)と[費目別合成検証](E2E_BEST_PRACTICE_R2_OL03_COLLECTOR_WORK_ACCOUNTING_SYNTHETIC_2026-10-20.md)の次工程として、受理済み宣言から運用内部で統計を導出し、その由来を保持したまま上界を計算する契約を定める。参照実装は `81c2653`。test oracleを運用profileへそのまま昇格させない。
 
-全体受付無効、telemetry保留、APPROVED_REGISTRY=None、通常v2 Unavailable、gate92、DER/absence停止を維持する。draft-0.2は内部収集の実装だけを追加し、OS接続・実機操作・トークン発行・設定変更・本番policy投入・permit発行を含めない。数値計算成功はscan開始許可・quota承認・実署名成功ではない。
+全体受付無効、telemetry保留、APPROVED_REGISTRY=None、通常v2 Unavailable、gate92、DER/absence停止を維持する。draft-0.3は内部収集と純粋計算器だけを追加し、OS接続・実機操作・トークン発行・設定変更・本番policy投入・permit発行を含めない。数値計算成功はscan開始許可・quota承認・実署名成功ではない。
 
-workは元SharedBudgetの課金量であり、CPU時間・RSS・allocator/OS処理時間の上界ではない。収集費は§12で実装・計数済み、算術費は今後の固定スケジュール案である。いずれも既存collectorの1,902 workへ既に含まれる実費ではない。
+workは元SharedBudgetの課金量であり、CPU時間・RSS・allocator/OS処理時間の上界ではない。収集費は§12、算術費は§13で実装・計数済み。いずれも既存collectorの1,902 workへ既に含まれる実費ではない。
 
 ## 2. 選択：count-onlyの一時集計、scalar-onlyのsealed出力
 
@@ -22,7 +22,7 @@ workは元SharedBudgetの課金量であり、CPU時間・RSS・allocator/OS処�
 
 ## 3. 非公開型・由来の契約
 
-以下は公開API/serde schemaではない。ScanShapeProfileのみ内部実装済みで、ScanWorkEstimate/ScanWorkSummaryは設計案のままである。
+以下は公開API/serde schemaではない。ScanShapeProfile/ScanWorkEstimateは内部実装済み。ScanWorkSummaryと利用bridgeは未実装で、外部へ数量を出す口は設けていない。
 
 | 型 | 保持するもの | 禁止事項 |
 |---|---|---|
@@ -92,7 +92,7 @@ count配列はN要素のu64、通常宣言とvirtual entryはborrowし、pathを
 
 ## 6. 純粋計算器と算術費
 
-固定内部IDはprofile `bp5-r2-scan-profile-0.1`（実装済み）、calculator `bp5-r2-collector-work-0.1`（案）。APPROVED_REGISTRY投入は行わない。旧 `bp5-r2-scan-work-0.1` やindex/record modelを代用しない。係数表・model名の任意入力を許さない。
+固定内部IDはprofile `bp5-r2-scan-profile-0.1`、calculator `bp5-r2-collector-work-0.1`（ともに内部実装済み）。kernel係数表の版はcalculatorと同じIDへ固定するが、実collectorの登録やOS kernelの検証を表すものではない。APPROVED_REGISTRY投入は行わない。旧 `bp5-r2-scan-work-0.1` やindex/record modelを代用しない。係数表・model名の任意入力を許さない。
 
 計算器はsealed profileを消費し、fixture/test oracleのu128算術をコピーせず、各中間値をchecked u64で扱う。飽和演算・wrapping・float log・失敗時の0置換は禁止。ceil/ell helperは固定幅scalarだけを受け、配列走査・I/O・JSON decode・再統計を行わない。
 
@@ -110,7 +110,7 @@ retry残が減っていればChanged。古い上界が保守的に見えても�
 
 | row | 固定計算・検査 |
 |---|---|
-| 1 | calculator/kernel/profileの固定model整合、数量の定義域/関係式の再確認 |
+| 1 | calculator/kernel/profileの固定model整合、数量の定義域とvirtual indexのbyte/chunk関係の再確認 |
 | 2 | M、ell(N)、ell(c_v)、ell(c_max)、同roundから残round数n（Initial=3/BeforeM4=2/AfterM4=1） |
 | 3 | `U_groups = 8+4E+4T+min(P,M)×ell(N)+ell(c_v)+c_v` |
 | 4 | `U_route = h+2+E×(h+3)+K+k_v+P×ell(N)` |
@@ -131,11 +131,11 @@ W_calculate_success = Profile.require(5) + 15 = 20
 U_calculate_prefix  = 20
 ```
 
-20も実装予定の課金契約で、独立計数が未実施。各row内の32演算上限やguard数が実装時に超えるなら、隠れた無課金処理を置かず表/式/試験を更新する。再帰・可変長のsum(Vec)・同じentry全件走査をfixed rowへ混ぜない。
+20はdraft-0.3で実装・計数済み。各rowを既存workと終端checkpointで挟み、row15は同budgetのbinding/retryを直接再照合する。byte/chunk整合をrow1に配置してrow15へ検査を集中させない。各row内の32演算という設計上限の独立監査は引き続き別課題で、machine instruction数の証明ではない。再帰・可変長のsum(Vec)・同じentry全件走査をfixed rowへ混ぜない。
 
-既存の基本fixture（N=4/E=5/D=2/K=8/c_0=3/M=2/ell(N)=3）ではU_profile=62、計算20、将来利用guard7でOの追加部分は89 workとなる案。profile実費61は§12で確認したが、計算/利用guardを含む89は未実装部分を含む算術例で実測ではない。kernel候補2017へ加えると2106だが、ScanInputs構築・I/R/その他Oを含む全体額ではなく、受付可能性は判定しない。
+既存の基本fixture（N=4/E=5/D=2/K=8/c_0=3/M=2/ell(N)=3）ではU_profile=62、計算20、将来利用guard7でOの追加部分は89 workとなる案。実測はprofile61＋計算20＝81。利用guard7を含む89は未実装部分を含む算術例で実測ではない。retry残r=0のkernel候補2017へ加えると2106だが、ScanInputs構築・I/R/その他Oを含む全体額ではなく、受付可能性は判定しない。r=8の計算例は§13を参照。
 
-estimateは純粋な上界と同shapeの予測を持つだけ。残work/payload/operation/cleanup枠との比較や予約を行わず、「fits」「admitted」を返さない。上界が100万を超えても、純粋算術結果を検査用の過大見積りとして保持できる案とする。算術overflowはLimitで停止する。上限超過を実行可能へ変換する口は設けない。
+estimateは純粋な上界と同shapeの予測を持つだけ。残work/payload/operation/cleanup枠との比較や予約を行わず、「fits」「admitted」を返さない。上界が100万を超えても、純粋算術結果を内部で保持する（合成検証済み）。算術overflowはLimitで停止する。上限超過を実行可能へ変換する口は設けない。
 
 ## 7. 費目所有・3round予測
 
@@ -182,7 +182,7 @@ I/R/target/phase/bridgeのその他費用と独立resource上界は未完了。�
 
 元10秒のstart/originを保持して各loop/算術row前後でcheckpointを行う。checked演算が成功しても、最後の取消/期限・binding guardが失敗した値は公開しない。recordやmanifestのwall-clock期限を本書のmonotonic checkpointだけで検証したことにはしない。
 
-## 9. 段階全体の受入試験計画（収集subsetの実績は§12）
+## 9. 段階全体の受入試験計画（収集・計算subsetの実績は§12/13）
 
 1. 同Readyからのtracer：profile→calcが完了し、collector oracleのscalar/費目と一致。ただし製品collectorへ接続しない。
 2. 単独費：収集の各ブロック/loopと算術15行をobserverへ対応付け、費目総和=元budget delta。file/Directory・root/nested・空directory・nested/先頭/末尾indexで `W_profile_success` と照合。
@@ -196,7 +196,7 @@ I/R/target/phase/bridgeのその他費用と独立resource上界は未完了。�
 
 ## 10. 実装順・未確定事項
 
-private scalar型と収集の固定ブロック/親count pass・binding/retry guardは§12で合成検証済み。次にprofile消費型の15-row計算器と失敗prefixの検証へ進む。既存test oracleを比較対象に残し、同じ実装helperだけで期待値を作らない。
+private scalar型・収集・binding/retry guardは§12、profile消費型15-row計算器と失敗prefixは§13で合成検証済み。次工程は利用bridge/3round resource配賦・全体other上界との接続設計である。既存test oracleを比較対象に残し、同じ実装helperだけで期待値を作らない。
 
 課金ブロックの係数・最大32演算の独立確認、Rustの具体的なlifetime/one-shot field配置、allocationの独立上界、submodel ID確定は実装前後のレビュー対象。OS権限やpolicyは本書で承認しない。3round resource台帳・全体work予約・通常strict bridge・hard停止はさらに後工程とし、ここまで全体受付を無効のまま維持する。
 
@@ -215,4 +215,14 @@ private scalar型と収集の固定ブロック/親count pass・binding/retry gu
 - 別Inputs/receipt/target/context/scope/token/round/budget/start、未知model、retry増減を拒否。再構築拒否と既存失敗時のclaim保持を確認。Clone/Copy/serde禁止は型推論によるcompile-time guardを追加。
 - 61未満の全work不足prefixと、61箇所の課金直後の取消・期限切れをそれぞれ検証。失敗は元budgetにstickyで保持し、profileを返さない。count配列は成功時も失敗時もRAIIで解放する。
 
-実allocator障害の注入、全100,000 entry/16MiBの最大実量、Ready遷移の専用compile-fail試験、最大32演算の独立監査は未実施。allocator/RSS/CPU時間の保証に拡張しない。計算器15行・estimate・利用guard7・3round resource台帳・通常strict bridge・受付/permitは後工程である。[検証記録](E2E_BEST_PRACTICE_R2_OL03_SEALED_SCAN_PROFILE_SYNTHETIC_2026-10-21.md)を参照。
+実allocator障害の注入、全100,000 entry/16MiBの最大実量、Ready遷移の専用compile-fail試験、最大32演算の独立監査は未実施。allocator/RSS/CPU時間の保証に拡張しない。draft-0.2時点では計算器15行・estimateも後工程だったが、§13で内部実装した。利用guard7・3round resource台帳・通常strict bridge・受付/permitは未接続。[収集検証記録](E2E_BEST_PRACTICE_R2_OL03_SEALED_SCAN_PROFILE_SYNTHETIC_2026-10-21.md)を参照。
+
+## 13. draft-0.3：profile消費型の純粋計算器
+
+`profile/calculator.rs` と `calculator/arithmetic.rs` を追加。calculateはprofileを値で受け、require5＋固定15行でchecked u64算術を行い、成功時だけprofileを所有するScanWorkEstimateを返す。失敗時もprofileを消費し、one-shot claimやspentを戻さない。estimateの全fieldはprivateで、Clone/Copy/serde・復元constructor・profileを取り出す口はない。Debugは固定labelのみ。
+
+基本fixtureのr=8では、groups/route/walk/enumeration/file/control/seal/tailは `51/47/1278/342/183/59/36/45`、U_S=2041、U_base=2014、Initialの同shape残scan予測=6069、U_profile=62。retry項をroundごとに8へ戻さず、現budgetのrで計算する。r=0ならU_S=2017、予測=6045となる。
+
+7 shape×3round×retry0〜8（189条件）の独立u128 oracle、20未満の全work不足prefix、20課金点それぞれの取消/期限、全15行の計算後期限、binding/model拒否、raw算術overflow/underflowとprivate破損時の拒否を確認した。通常のsealed shape上限からは算術overflowに到達しないため、極端値はtest-onlyのprivate helper/field操作で注入し、運用constructorにはしない。
+
+5,000 root file追加の合成shapeではU_S>100万を数量として保持し、共有work/payload等を予約しないことを確認した。これは受付可能という意味ではない。OS接続・通常strict・collector・全体受付は変更しない。[計算器検証記録](E2E_BEST_PRACTICE_R2_OL03_SCAN_CALCULATOR_SYNTHETIC_2026-10-21.md)を参照。

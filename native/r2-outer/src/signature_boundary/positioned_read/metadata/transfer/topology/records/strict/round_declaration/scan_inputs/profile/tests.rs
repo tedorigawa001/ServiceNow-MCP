@@ -3,7 +3,7 @@ use super::super::super::tests::context;
 use sha2::{Digest, Sha256};
 use std::{cell::Cell, collections::BTreeMap, time::Duration};
 
-fn ready<T>(
+pub(super) fn ready<T>(
     s: &Setup,
     round: Round,
     b: &mut SharedBudget<'_>,
@@ -21,7 +21,7 @@ fn ready<T>(
         f(&inputs, scope, b)
     })
 }
-fn augmented(width: usize, depth: usize, index: &str, size: u64) -> Setup {
+pub(super) fn augmented(width: usize, depth: usize, index: &str, size: u64) -> Setup {
     let mut s = setup();
     let mut value: serde_json::Value = serde_json::from_slice(&s.receipt.pins[2].bytes).unwrap();
     let entries = value["entries"].as_array_mut().unwrap();

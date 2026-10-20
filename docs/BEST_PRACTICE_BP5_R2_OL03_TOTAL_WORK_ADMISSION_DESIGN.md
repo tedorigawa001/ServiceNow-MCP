@@ -1,6 +1,6 @@
 # BP-5 R-2 OL-03：record・scanを含む全体work上界と事前受付
 
-Version: draft-0.9 / Date: 2026-10-21 / Status: private合成collector計数とO.profile収集/結合guardを検証。calculate/use・全体受付・other上界・通常strict・運用承認は未対応。
+Version: draft-0.10 / Date: 2026-10-21 / Status: private合成collector計数とO.profile収集/O.calculateを検証。use・全体受付・other上界・通常strict・運用承認は未対応。
 
 ## 1. 範囲と停止状態
 
@@ -168,7 +168,7 @@ record projection4/roundはRが所有する。旧index互換テストの固定45
 
 後続draft-0.3と[費目別合成検証](E2E_BEST_PRACTICE_R2_OL03_COLLECTOR_WORK_ACCOUNTING_SYNTHETIC_2026-10-20.md)で、各workの所有者と実費総和を確認した。control候補のroot最終照合漏れを訂正したが、これはtest-onlyの検証でありsealed shape/運用計算器・予約・全体受付の実装ではない。3roundの累積work/EINTR照合と、各scanで再生成されるoperation台帳の累積quota保証は区別する。
 
-[sealed profile/計算器詳細設計draft-0.2](BEST_PRACTICE_BP5_R2_OL03_SEALED_SCAN_PROFILE_DESIGN.md)でOの収集/算術/利用guardを分離した。O.profile=`11+2N+5E+K+B+M+D` とrequire5を内部実装・合成検証済み。O.calculate=20、将来O.use=7は未実装の案である。初回bootstrapでこれらを実消費してもspentを返却せず、将来roundの分を未計上にしない。count-onlyの一時配列を解放してからscalar profileを返し、S.groupsの全費用は維持する。独立resource受付と全体work予約は有効化しない。[収集合成記録](E2E_BEST_PRACTICE_R2_OL03_SEALED_SCAN_PROFILE_SYNTHETIC_2026-10-21.md)を参照。
+[sealed profile/計算器詳細設計draft-0.3](BEST_PRACTICE_BP5_R2_OL03_SEALED_SCAN_PROFILE_DESIGN.md)でOの収集/算術/利用guardを分離した。O.profile=`11+2N+5E+K+B+M+D` とrequire5・O.calculate=20を内部実装/合成検証済み。将来O.use=7は未実装の案である。初回bootstrapでこれらを実消費してもspentを返却せず、将来roundの分を未計上にしない。count-onlyの一時配列を解放してからscalar profileを返し、S.groupsの全費用は維持する。独立resource受付と全体work予約は有効化しない。[収集合成記録](E2E_BEST_PRACTICE_R2_OL03_SEALED_SCAN_PROFILE_SYNTHETIC_2026-10-21.md)・[計算器記録](E2E_BEST_PRACTICE_R2_OL03_SCAN_CALCULATOR_SYNTHETIC_2026-10-21.md)を参照。
 
 [scan詳細設計draft-0.1](BEST_PRACTICE_BP5_R2_OL03_BOUNDED_SCAN_COLLECTOR_DESIGN.md)へ、全entry/rootの2回全path解決、逐次名前照合と余剰entryのopen前拒否、短読取停止・元共有EINTR残8、snapshot/解放を含む操作数・work式候補を整理した。cleanupはacquire前prechargeと一度限りのownerへ結合する案とし、元spentを返さない。
 

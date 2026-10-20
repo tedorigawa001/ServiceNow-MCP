@@ -1,5 +1,6 @@
-//! Count-only, round-bound statistics. No calculator, collector dispatch or admission.
+//! Round-bound statistics and pure estimates. No collector dispatch or admission.
 use super::*;
+pub(in super::super::super) mod calculator;
 mod collect;
 
 pub(in super::super::super) const MODEL_ID: &str = "bp5-r2-scan-profile-0.1";
