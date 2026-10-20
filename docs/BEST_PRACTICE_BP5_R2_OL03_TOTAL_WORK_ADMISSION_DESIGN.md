@@ -1,6 +1,6 @@
 # BP-5 R-2 OL-03：record・scanを含む全体work上界と事前受付
 
-Version: draft-0.5 / Date: 2026-10-20 / Status: record opt-in・index子phase・scan純粋計算器を合成検証。全体受付・collector・other上界・運用承認は未対応。
+Version: draft-0.6 / Date: 2026-10-20 / Status: record opt-in・index子phase・scan純粋計算器とprivate合成collectorを検証。現行collector上界は再設計中。全体受付・other上界・通常strict接続・運用承認は未対応。
 
 ## 1. 範囲と停止状態
 
@@ -163,6 +163,8 @@ record projection4/roundはRが所有する。旧index互換テストの固定45
 §9のindex子phase分解の一部は解消したが、全体受付・各resource残上界・予約台帳・実source接続は未対応。record profileは引き続き通常pipelineへ未接続で、scan/otherの未知項は0にしない。運用gate・telemetry保留を維持する。
 
 ## 12. scan上界・bounded collectorの詳細設計
+
+**現行への適用範囲**：[collector費目・work上界再設計draft-0.1](BEST_PRACTICE_BP5_R2_OL03_COLLECTOR_WORK_REDESIGN.md)に、現在の核の費目・shape・保守的上界候補と独立検証条件を分離した。以下のscan-work-0.1等は各時点の部分計算器の記録であり、現行collectorの受付上界ではない。S.sealの追加recheckを既存index子phaseへ吸収せず、Oの収集/計算/bridge費と3round resource配賦は未確定のまま維持する。
 
 [scan詳細設計draft-0.1](BEST_PRACTICE_BP5_R2_OL03_BOUNDED_SCAN_COLLECTOR_DESIGN.md)へ、全entry/rootの2回全path解決、逐次名前照合と余剰entryのopen前拒否、短読取停止・元共有EINTR残8、snapshot/解放を含む操作数・work式候補を整理した。cleanupはacquire前prechargeと一度限りのownerへ結合する案とし、元spentを返さない。
 

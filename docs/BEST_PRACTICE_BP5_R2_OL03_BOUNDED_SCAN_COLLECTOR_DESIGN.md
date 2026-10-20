@@ -1,6 +1,6 @@
 # BP-5 R-2 OL-03：scan work上界・bounded collector詳細設計
 
-Version: draft-0.14 / Date: 2026-10-20 / Status: private合成collectorの期待子一覧をscan単位の前処理へ変更。通常strict経路への組込み・全体work受付・OS接続・運用quota承認は未対応。
+Version: draft-0.15 / Date: 2026-10-20 / Status: private合成collectorの期待子一覧前処理まで実装。現行核の費目・work上界再設計は別紙draft。通常strict経路・全体受付・OS接続・運用quota承認は未対応。
 
 ## 1. 目的・前提・非対象
 
@@ -502,6 +502,8 @@ full metadata、child visitorの初期snapshot、bind前後snapshot、各walk/re
 system祖先profile/xattr/flagsの承認、保護されたroot/context/record producer、OS backend、更新lease/ABA/全検査後の変更防止、blocked I/Oのhard停止、hostへのcleanup終了票、通常ClosureSourceへの型付きbridge、work/resource全体受付は未対応。合成sourceの真実性やOSの原子的一貫性を検証したものではない。既存運用gate・本番policy未投入・DER/absence停止・telemetry保留を維持する。
 
 ## 22. scan単位の期待子一覧前処理
+
+次工程の[現行collector費目・work上界再設計draft-0.1](BEST_PRACTICE_BP5_R2_OL03_COLLECTOR_WORK_REDESIGN.md)に、S.control/groups/route/walk/enumeration/file/sealの所有表、shape、候補式とprefix試験条件を整理した。collector.completeの追加集合照合は既存AfterScanとは別費として扱う。設計のみで計算器・全体受付・通常strict接続を変更しない。
 
 計測の基準：§21の1886は先行作業ツリーの記録。コミット分割で最適化前列挙を分離・再構成した前工程snapshotは1884 workだった。現行1902との差はそのコミット基準では18、先行作業ツリー基準では16である。source/payload/peakの値は変わらない。
 
