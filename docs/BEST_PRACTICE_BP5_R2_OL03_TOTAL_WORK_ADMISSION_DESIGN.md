@@ -1,6 +1,6 @@
 # BP-5 R-2 OL-03：record・scanを含む全体work上界と事前受付
 
-Version: draft-0.3 / Date: 2026-10-20 / Status: record opt-inモデル・index子phaseを合成検証。全体受付・scan/other上界・運用承認は未実施。
+Version: draft-0.4 / Date: 2026-10-20 / Status: record opt-inモデル・index子phaseを合成検証。scan詳細設計を追加。全体受付・scan/other上界実装・運用承認は未実施。
 
 ## 1. 範囲と停止状態
 
@@ -161,3 +161,9 @@ Deadline/Cancelled/Expired/既存sticky failureを維持する。work不足でBi
 record projection4/roundはRが所有する。旧index互換テストの固定45を実際の純index41と区別し、固定128との差87は最終子phaseの上界枠へ残す。追加のphase制御8/round（全24）と任意snapshot4/回はU_otherの別費目とする。旧index ID・全体式・capは維持し、未実施費目をspentから引く口・予約は追加しない。
 
 §9のindex子phase分解の一部は解消したが、全体受付・各resource残上界・予約台帳・実source接続は未対応。record profileは引き続き通常pipelineへ未接続で、scan/otherの未知項は0にしない。運用gate・telemetry保留を維持する。
+
+## 12. scan上界・bounded collectorの詳細設計
+
+[scan詳細設計draft-0.1](BEST_PRACTICE_BP5_R2_OL03_BOUNDED_SCAN_COLLECTOR_DESIGN.md)へ、全entry/rootの2回全path解決、逐次名前照合と余剰entryのopen前拒否、短読取停止・元共有EINTR残8、snapshot/解放を含む操作数・work式候補を整理した。cleanupはacquire前prechargeと一度限りのownerへ結合する案とし、元spentを返さない。
+
+既存target用metadata100回/640KiBやtopology16,384をscanへ黙って流用・増額しない。単発native列挙・係数計数・scan専用quota/配賦・管理allocation/FD/cleanup方式が未確定なら開始前にUnavailableとする。設計のみで、実装・全体受付・native接続・permitは有効化しない。
