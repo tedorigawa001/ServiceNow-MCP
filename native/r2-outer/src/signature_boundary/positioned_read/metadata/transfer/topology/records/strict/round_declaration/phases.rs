@@ -68,6 +68,7 @@ pub(in super::super) struct IndexPhases<'d, 's, 'r> {
     declaration: &'d RoundDeclaration<'s, 'r>,
     partition: Partition,
     state: State,
+    scan_inputs_started: std::cell::Cell<bool>,
 }
 impl std::fmt::Debug for IndexPhases<'_, '_, '_> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -105,6 +106,7 @@ impl<'s, 'r> RoundDeclaration<'s, 'r> {
                 declaration: self,
                 partition,
                 state: State::Ready,
+                scan_inputs_started: std::cell::Cell::new(false),
             })
         })();
         match result {
@@ -206,6 +208,30 @@ impl IndexPhases<'_, '_, '_> {
             Ok(v) => Ok(v),
             Err(e) => b.stop(e),
         }
+    }
+}
+
+impl<'d, 's, 'r> IndexPhases<'d, 's, 'r> {
+    pub(super) fn input_declaration(
+        &self,
+        b: &mut SharedBudget<'_>,
+    ) -> Result<&'d RoundDeclaration<'s, 'r>, Failure> {
+        self.transition(State::Ready, b)?;
+        Ok(self.declaration)
+    }
+    pub(super) fn claim_inputs(&self, b: &mut SharedBudget<'_>) -> Result<(), Failure> {
+        work(b)?;
+        if self.scan_inputs_started.replace(true) {
+            return Err(Failure::Binding);
+        }
+        Ok(())
+    }
+    pub(in super::super) fn bind_inputs<'i>(
+        &'i self,
+        current: &RoundScope<'_>,
+        b: &mut SharedBudget<'_>,
+    ) -> Result<super::scan_inputs::ScanInputs<'i, 'd, 's, 'r>, Failure> {
+        super::scan_inputs::build(self, current, b)
     }
 }
 

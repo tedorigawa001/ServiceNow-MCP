@@ -2,6 +2,7 @@
 use super::*;
 
 pub(super) mod phases;
+pub(super) mod scan_inputs;
 mod work_model;
 
 pub(super) struct RoundScope<'s> {

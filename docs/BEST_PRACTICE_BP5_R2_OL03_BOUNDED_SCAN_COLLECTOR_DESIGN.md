@@ -1,6 +1,6 @@
 # BP-5 R-2 OL-03：scan work上界・bounded collector詳細設計
 
-Version: draft-0.8 / Date: 2026-10-20 / Status: 計算器・単発操作・child/seen・size/digest・同resourceのACL/xattr/FS正規化を内部実装・合成検証。完全collector・workモデル/OS接続・運用quota承認は未対応。
+Version: draft-0.9 / Date: 2026-10-20 / Status: 計算器・単発操作・child/seen・size/digest・同resourceのACL/xattr/FS正規化・receipt/round限定の宣言入力結合を内部実装・合成検証。完全collector・workモデル/OS接続・運用quota承認は未対応。
 
 ## 1. 目的・前提・非対象
 
@@ -373,3 +373,21 @@ snapshotはresource borrowを保持する非Clone/非serde型で、同一Statで
 metadataはtarget用100回/640KiBを使わず、同scan ledgerのoperation/live/cleanup/name quotaと元workを使う。1 snapshotでmetadata9・cleanup1、許可name copy21 bytes（前後なら42）。空一覧の要求buffer1 byteは元payloadへ課金せず、name allowanceだけを事前検査する。ACL handle分のlive/cleanup枠も取得前に検査し、取消後もprechargeで一度だけ解放する。不明はUnavailable、元失敗は維持する。
 
 11追加テストでpolicy不適合・Unknown/各取得失敗・ACL/stat/name race・不正xattr・前後の許可names差・resource混入・directory・全取得点の取消/期限・独立quota・解放不明を検証した。noexec拒否を外すと対応テストが失敗し、復旧後に全体再検証した。trusted device/宣言/親path/receipt/round結合、root/全祖先再照合、全closure観測seal、全体workモデル/独立resource受付・OS backend・hard停止は未対応。全体受付無効・telemetry保留・運用gate停止を維持する。
+
+## 17. receipt / round限定の宣言入力結合（内部契約のみ）
+
+[scan_inputs.rs](../native/r2-outer/src/signature_boundary/positioned_read/metadata/transfer/topology/records/strict/round_declaration/scan_inputs.rs)と[合成検証記録](E2E_BEST_PRACTICE_R2_OL03_SCAN_INPUT_BINDING_SYNTHETIC_2026-10-20.md)で、Ready状態のIndexPhasesから1回だけ生成する非Clone/非serdeのScanInputsを追加した。既存strict pipelineへの自動接続、完全collector、実resourceのproducerではない。
+
+- decode済みRoundDeclarationを借用し、receipt/target/contextの同一オブジェクト、lineage、round enum/token、元budget originを毎回検査する。同内容のコピーや同enumの新roundは代用できない。IndexPhasesの不変借用でview使用中のphase遷移も防ぐ。
+- rootはreceiptのindex pin祖先配列とruntime_rootの深さから選ぶ。root以下のindex祖先はDirectory/root owner/0555、許可names、同device、正常nanosecondsを要求する。index leafはRegular/root owner/0444/links1・同device・正常nanoseconds・許可namesを要求する。未知/不適合はBinding。これは既存receipt内snapshotの内部整合検査であって、現時点のOS/root信頼やACL/FS再観測ではない。
+- expected childrenは受理済み宣言の**直接の子だけ**。virtual indexは元receipt raw bytesの長さとscopeの検証済みhash/pathから作り、呼出し元のEntryで置き換えない。親を任意pathから偽造せず、root専用viewか宣言に実在するDirectoryから選ぶ。
+- ChildInputは特定の親viewを借用する。同じpathの別親view、同内容のEntryコピー、別plan、別round/budgetからの混入はBinding。file入力はそのcanonical Entry参照とreceipt rootのdeviceだけを返す。Directoryはfileにできず、indexでは許される512MiB超のFileもscan入力ではLimitになる。
+- 生成時・各viewの利用時に元共有work/checkpointを消費する。失敗はstickyで保持し、追加decode、I/O、payload/metadata/topology/retry課金、予約・permit発行はしない。Debugは固定文のみ。
+
+### 17.1 費用・残る接続
+
+projection生成は `7+A` work（Aはruntime root〜index parentの祖先数、合成root直下では8）。root viewは3、rootのexpected収集は `5+2N`（Nはvirtual index込みentry数、合成N=5で15）。directory選択・membership検査は比較ごとに課金し、各利用のscope/phase guardも省略しない。新しい上限・Budgetは設けない。
+
+expected配列は宣言順＋virtual index末尾で、既存scan_opsのsorted child照合へはまだ接続しない。全entryを親ごとに走査するため、完全探索では二次的な比較量になり得る。現行数量計算器の定数lookupや既存index workにこの追加費を含むとは主張せず、将来のcollector接続でlookup構造・費目所有・上界の再設計を必要とする。全体受付は無効のまま。
+
+§16の未解決事項のうち宣言/親path/deviceの**receipt内の由来**だけを内部契約として具体化した。scan_opsへの保護されたproducer接続、物理root/祖先/path再照合、open後resourceとの結合、全集合の観測seal、3round配賦/OS backendは未対応。宣言から観測結果を合成しない。APPROVED_REGISTRY=None、通常v2 Unavailable、gate92、DER/absence停止、telemetry保留を維持する。
