@@ -127,6 +127,12 @@ pub(crate) struct ValidatedRecords {
     _ledger: LedgerV2,
     _registry: ParsedRegistry,
 }
+#[cfg(test)]
+std::thread_local! { static RECORD_VALIDATIONS: std::cell::Cell<usize> = const { std::cell::Cell::new(0) }; }
+#[cfg(test)]
+pub(crate) fn record_validation_count() -> usize {
+    RECORD_VALIDATIONS.with(|n| n.get())
+}
 impl std::fmt::Debug for ValidatedRecords {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.write_str("ValidatedRecords(pure_pending_reader_closure_lease_not_execution_authority)")
@@ -145,6 +151,8 @@ pub(crate) fn validate<B: Budget>(
     context: &Context<'_>,
     b: &mut B,
 ) -> Result<ValidatedRecords, Rejection<B::Failure>> {
+    #[cfg(test)]
+    RECORD_VALIDATIONS.with(|n| n.set(n.get() + 1));
     let a = activation(activation_bytes, pins.activation_hash, context, b)?;
     let registry = signature_policy::parse_shared(registry_bytes, pins.registry_hash, b)?;
     let ledger = crate::ledger_v2::parse_shared(

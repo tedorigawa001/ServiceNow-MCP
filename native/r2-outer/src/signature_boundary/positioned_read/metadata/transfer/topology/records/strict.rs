@@ -20,6 +20,7 @@ pub(super) struct ClosureRequest<'a> {
     pub(super) lineage: &'a Rc<()>,
     pub(super) records: &'a RecordBinding,
     pub(super) round: Round,
+    pub(super) token: &'a Rc<()>,
     pub(super) entries: &'a [closure::Entry],
 }
 // Private, non-Clone and non-serializable. No OS producer exists; synthetic data is NOT
@@ -28,6 +29,7 @@ pub(super) struct ClosureObservation {
     pub(super) lineage: Rc<()>,
     pub(super) records: RecordBinding,
     pub(super) round: Round,
+    pub(super) token: Rc<()>,
     pub(super) entries: Vec<closure::Entry>,
 }
 pub(super) trait ClosureSource {
@@ -62,13 +64,13 @@ fn work(b: &mut SharedBudget<'_>) -> Result<(), Failure> {
     b.work(1)
 }
 // This function cannot open files or ask the I/O source for a binding projection.
-fn verify(
+fn verify_records(
     receipt: &RecordReceipt,
     target: &TargetDeclaration,
     context: &InspectionContext<'_>,
     wall_ms: u64,
     budget: &mut SharedBudget<'_>,
-) -> Result<closure::shared::Declaration, Failure> {
+) -> Result<(), Failure> {
     let b = &receipt.binding;
     let validated = budget
         .validate_record_json(
@@ -117,25 +119,17 @@ fn verify(
         return Err(Failure::Changed);
     }
     work(budget)?;
-    let hash = hex(&b.index_hash);
-    let index = relative(index_path, root)?;
-    let node = relative(node_path, root)?;
-    let declaration = budget
-        .declare_closure_json(
-            &receipt.pins[2].bytes,
-            &closure::Binding {
-                release_id: &b.release,
-                generation: b.generation,
-                index_sha256: &hash,
-                index_path: index,
-                node_path: node,
-            },
-        )
-        .map_err(|_| latched(budget))?;
+    budget.checkpoint()
+}
+fn verify_node_entries(
+    entries: &[closure::Entry],
+    target: &TargetDeclaration,
+    budget: &mut SharedBudget<'_>,
+) -> Result<(), Failure> {
     let mut found = false;
-    for entry in declaration.entries() {
+    for entry in entries {
         work(budget)?;
-        if entry.path() == node {
+        if entry.path() == target.relative {
             found = matches!(entry, closure::Entry::File { mode, size, sha256, .. }
                 if mode == "0555" && SizeEvidence::Indexed(*size) == target.size
                     && *sha256 == hex(&target.index_hash));
@@ -145,7 +139,7 @@ fn verify(
         return Err(Failure::Changed);
     }
     budget.checkpoint()?;
-    Ok(declaration)
+    Ok(())
 }
 fn strict_round<S: RecordSource, C: ClosureSource>(
     source: &mut S,
@@ -159,47 +153,41 @@ fn strict_round<S: RecordSource, C: ClosureSource>(
     // All three records must match before any semantic parsing or new closure scan.
     reread_bytes(source, receipt, budget)?;
     let reading = clock_check(source, receipt, budget, 450_000)?;
-    let plan = verify(receipt, target, context, reading.wall_ms, budget)?;
-    budget.checkpoint()?;
-    let observed = closure_source.scan(
-        ClosureRequest {
-            lineage: &receipt.lineage,
-            records: &receipt.binding,
-            round,
-            entries: plan.entries(),
-        },
-        budget,
-    );
-    budget.checkpoint()?; // Drop late successful observations, preserving cancel/deadline.
-    let observed = observed?;
-    if !Rc::ptr_eq(&observed.lineage, &receipt.lineage)
-        || observed.records != receipt.binding
-        || observed.round != round
-    {
-        return Err(Failure::Changed);
-    }
-    let b = &receipt.binding;
-    let hash = hex(&b.index_hash);
-    budget
-        .check_closure_json(
-            &receipt.pins[2].bytes,
-            &closure::Binding {
-                release_id: &b.release,
-                generation: b.generation,
-                index_sha256: &hash,
-                index_path: relative(&b.index_path, &b.runtime_root)?,
-                node_path: &target.relative,
+    verify_records(receipt, target, context, reading.wall_ms, budget)?;
+    round_declaration::with_round(receipt, target, context, round, budget, |scope, budget| {
+        let plan = scope.decode(budget)?;
+        verify_node_entries(plan.entries(), target, budget)?;
+        budget.checkpoint()?;
+        let observed = closure_source.scan(
+            ClosureRequest {
+                lineage: &receipt.lineage,
+                records: &receipt.binding,
+                round,
+                token: scope.token(),
+                entries: plan.entries(),
             },
-            &observed.entries,
-        )
-        .map_err(|_| latched(budget))?;
-    drop(observed);
-    // Do not let a scan conceal a concurrent record/path/metadata change.
-    reread_bytes(source, receipt, budget)?;
-    let reading = clock_check(source, receipt, budget, 450_000)?;
-    verify(receipt, target, context, reading.wall_ms, budget)?;
-    clock_check(source, receipt, budget, 450_000)?;
-    Ok(())
+            budget,
+        );
+        budget.checkpoint()?; // Drop late successes, preserving cancel/deadline.
+        let observed = observed?;
+        if !Rc::ptr_eq(&observed.lineage, &receipt.lineage)
+            || observed.records != receipt.binding
+            || observed.round != round
+            || !Rc::ptr_eq(&observed.token, scope.token())
+        {
+            return Err(Failure::Changed);
+        }
+        plan.recheck(scope, Some(&observed.entries), budget)?;
+        drop(observed);
+        // Exact record/path/metadata/time and strict record validation are NOT cached.
+        reread_bytes(source, receipt, budget)?;
+        let reading = clock_check(source, receipt, budget, 450_000)?;
+        verify_records(receipt, target, context, reading.wall_ms, budget)?;
+        plan.recheck(scope, None, budget)?;
+        verify_node_entries(plan.entries(), target, budget)?;
+        clock_check(source, receipt, budget, 450_000)?;
+        Ok(())
+    })
 }
 pub(super) fn review_strict_record_target<
     R: MetadataOps + ResourceOrigin,

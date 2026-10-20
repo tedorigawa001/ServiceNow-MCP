@@ -64,6 +64,8 @@ struct ScanCounts {
     rounds: RefCell<Vec<Round>>,
     phases: RefCell<Vec<Vec<Phase>>>,
     work: RefCell<Vec<u64>>,
+    decodes: RefCell<Vec<usize>>,
+    validations: RefCell<Vec<usize>>,
     dropped: Cell<bool>,
 }
 struct Scanner {
@@ -76,6 +78,9 @@ struct Scanner {
     stop: Rc<AtomicBool>,
     tick: Rc<Cell<Instant>>,
     start: Instant,
+    initial_decodes: usize,
+    initial_records: usize,
+    previous_token: Option<Rc<()>>,
 }
 impl ClosureSource for Scanner {
     fn scan(
@@ -90,7 +95,16 @@ impl ClosureSource for Scanner {
             .borrow_mut()
             .push(self.target.phases.borrow().clone());
         self.c.work.borrow_mut().push(b.json_work);
-        assert_eq!(q.entries.len(), 5);
+        self.c
+            .decodes
+            .borrow_mut()
+            .push(crate::closure::shared::index_decode_count() - self.initial_decodes);
+        self.c
+            .validations
+            .borrow_mut()
+            .push(crate::record_validation::record_validation_count() - self.initial_records);
+        assert_eq!(q.entries.len() + 1, self.entries.len());
+        let previous = self.previous_token.replace(q.token.clone());
         // Synthetic producer has no filesystem activity. No hidden I/O credit is claimed.
         if self.c.rounds.borrow().len() == self.at {
             if let Some(f) = self.fail {
@@ -113,6 +127,7 @@ impl ClosureSource for Scanner {
             lineage: q.lineage.clone(),
             records: q.records.clone(),
             round: q.round,
+            token: q.token.clone(),
             entries: self.entries.clone(),
         };
         if self.c.rounds.borrow().len() == self.at {
@@ -136,6 +151,8 @@ impl ClosureSource for Scanner {
                     }
                 }
                 7 => result.records.runtime_root.push('x'),
+                12 => result.token = Rc::new(()),
+                13 => result.token = previous.expect("test requires a previous round"),
                 _ => {}
             }
         }
@@ -156,11 +173,15 @@ struct ResultData {
     work: u64,
     used: u64,
     checks: usize,
+    index_decodes: usize,
+    record_validations: usize,
 }
 fn execute(
     data: Data,
     change: impl FnOnce(&mut RecordReceipt, &mut Fake, &mut Scanner, &mut SharedBudget<'_>),
 ) -> ResultData {
+    let initial_decodes = crate::closure::shared::index_decode_count();
+    let initial_records = crate::record_validation::record_validation_count();
     let start = Instant::now();
     let now = Rc::new(Cell::new(start));
     let cancel = Rc::new(AtomicBool::new(false));
@@ -239,6 +260,9 @@ fn execute(
         stop: cancel.clone(),
         tick: now.clone(),
         start,
+        initial_decodes,
+        initial_records,
+        previous_token: None,
     };
     change(&mut receipt, &mut source, &mut scanner, &mut b);
     let result = review_strict_record_target(
@@ -273,6 +297,8 @@ fn execute(
         work: b.json_work,
         used: b.used,
         checks: checks.get(),
+        index_decodes: crate::closure::shared::index_decode_count() - initial_decodes,
+        record_validations: crate::record_validation::record_validation_count() - initial_records,
     }
 }
 fn run_strict(
@@ -306,6 +332,91 @@ fn strict_three_rounds_bracket_scans_and_keep_all_original_resources_and_budget(
         result.entitlement_gate(),
         Err(physical_signature::Rejection::UnverifiedXml)
     );
+}
+#[test]
+fn pipeline_decodes_index_once_per_round_without_caching_strict_record_checks() {
+    let o = run_strict(|_, _, _, _| {});
+    assert!(o.result.is_ok());
+    assert_eq!(o.index_decodes, 3);
+    assert_eq!(o.record_validations, 6);
+    assert_eq!(*o.scan.decodes.borrow(), [1, 2, 3]);
+    assert_eq!(*o.scan.validations.borrow(), [1, 3, 5]);
+    assert_eq!(o.source.cycles.get(), 6);
+    assert_eq!(
+        *o.scan.rounds.borrow(),
+        [Round::Initial, Round::BeforeM4, Round::AfterM4]
+    );
+}
+#[test]
+fn pipeline_rejects_foreign_or_previous_token_even_with_correct_round_enum() {
+    for (at, change) in [(1, 12), (2, 12), (3, 12), (2, 13), (3, 13)] {
+        let o = run_strict(|_, _, s, _| {
+            s.at = at;
+            s.change = change;
+        });
+        assert_eq!(o.result.unwrap_err(), Failure::Changed);
+        assert_eq!(o.failed, Some(Failure::Changed));
+        assert_eq!(o.scan.rounds.borrow().len(), at);
+        assert_eq!(o.index_decodes, at);
+        assert_eq!(o.record_validations, 2 * at - 1);
+        assert_eq!(o.target.phases.borrow().contains(&Phase::M4), at == 3);
+    }
+}
+
+#[test]
+fn larger_fixture_fits_shared_cap_where_legacy_nine_parse_index_sequence_does_not() {
+    let mut d = Data::new();
+    let mut index: Value = serde_json::from_slice(&d.index).unwrap();
+    let entries = index["entries"].as_array_mut().unwrap();
+    entries.push(json!({"kind":"directory","path":"files","mode":"0555"}));
+    for i in 0..4000 {
+        entries.push(json!({"kind":"file","path":format!("files/item-{i:05}.js"),"mode":"0444","size":1,"sha256":"a".repeat(64)}));
+    }
+    entries.sort_by(|a, b| a["path"].as_str().unwrap().cmp(b["path"].as_str().unwrap()));
+    d.index = serde_json::to_vec(&index).unwrap();
+    d.repin();
+    d.observed = serde_json::from_value(index["entries"].clone()).unwrap();
+    d.observed.push(Entry::File {
+        path: "index.json".into(),
+        mode: "0444".into(),
+        size: d.index.len() as u64,
+        sha256: digest(&d.index),
+    });
+    let stop = AtomicBool::new(false);
+    let fixed = Instant::now();
+    let clock = || fixed;
+    let mut old = SharedBudget::new(fixed, &stop);
+    old.now = &clock; // Work-cap comparison only; not a wall-clock benchmark.
+    let hash = digest(&d.index);
+    let binding = crate::closure::Binding {
+        release_id: "synthetic",
+        generation: 1,
+        index_sha256: &hash,
+        index_path: "index.json",
+        node_path: "bin/node",
+    };
+    for _ in 0..3 {
+        let result = (|| -> Result<(), ()> {
+            old.declare_closure_json(&d.index, &binding)
+                .map_err(|_| ())?;
+            old.check_closure_json(&d.index, &binding, &d.observed)
+                .map_err(|_| ())?;
+            old.declare_closure_json(&d.index, &binding)
+                .map_err(|_| ())?;
+            Ok(())
+        })();
+        if result.is_err() {
+            break;
+        }
+    }
+    assert_eq!(old.failed, Some(Failure::Limit));
+    let o = execute(d, |_, _, _, _| {});
+    assert!(o.result.is_ok());
+    assert!(o.failed.is_none());
+    assert_eq!(o.index_decodes, 3);
+    assert_eq!(o.record_validations, 6);
+    assert!(o.work < 1_000_000);
+    println!("synthetic 4006-entry pipeline work: {}", o.work);
 }
 #[test]
 fn full_set_missing_duplicate_and_non_node_hash_changes_stop_each_round() {

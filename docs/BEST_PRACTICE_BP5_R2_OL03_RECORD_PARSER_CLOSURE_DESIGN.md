@@ -1,6 +1,6 @@
 # BP-5 R-2 OL-03：厳密record parser・全closure集合の再検証接続
 
-Version: draft-0.8 / Date: 2026-10-20 / Status: 内部strict pipelineと同round宣言型を合成検証。宣言再利用のpipeline接続・work事前受付・実reader/collector・運用承認は未実施。
+Version: draft-0.9 / Date: 2026-10-20 / Status: 内部strict pipelineへ同round宣言を接続し合成検証。index decodeは3回。work事前受付・実reader/collector・運用承認は未実施。
 
 ## 1. 範囲と停止境界
 
@@ -117,7 +117,7 @@ bytes/depth/container件数だけでは全allocation/RSSやcancel応答間隔を
 - parser/work予約は全再parse/roundで共有する。候補は最大1,000,000 work units（JSON node/key/entry/prefix/集合操作、長い文字列・hashの64KiB chunkを各1単位）で、算術overflow/枠超過をLimitとする。allocatorや比較関数内部の処理量まで証明した値ではない。
   **work上限から導く実効件数（レビュー時の概算、2026-10-20、全集合照合の課金を反映）**：実装済みのstrict core（`json/shared.rs`）の課金では、file entry 1件（5 key中4つが文字列、1つが数値）がnode・key・文字列・挿入を合わせて約26 unitを使う。これに`check_entries`のentry検査、親確認ループのentryごとの処理と各prefix確認、観測側挿入、要素ごとの比較が加わる。pathが5段程度（親prefix約4個）なら約8 unit増え、parse＋全集合照合は合計約34 unit/entryとなる。上限1,000,000では1回でおよそ2.9万entry、§5.1どおり初回・M4前・M4後の3回ではおよそ1万entryが目安となる。index形式上限100,000件は実効上届かない（§6の呼出し枠と同じ性質）。
   参考：本プロジェクトの本番依存閉包は、本番依存140 packageのfile約4,100件と`dist`の488件で、directoryを含めても5,000〜6,000件程度と見積もられ、3回のparse＋照合で約51万〜61万unit（概ね60万unit）の見込み。100万unitには収まる見込みだが、decodeだけの旧見積り約40万unitより余裕は小さい。これらは典型的なfile entryとpath深さに基づく概算であり、受付の安全な上界ではない。受付時には実際のfile/directory構成・全path深さ・全roundと追加の宣言検査、hash chunk・固定処理・registry/activation/ledgerのparse分を含む上界をchecked算術で別途計算し、超える計画は開始前にLimitで停止する。from_value変換内部を含む実測CPU量・実行時間を保証した値でもない。
-  **§13の接続時の追加コスト**：現在のstrict pipelineは1roundにつきscan前declare・全集合check・scan後declareの3回、全3roundでindexを9回parseする。activation/ledger/registryもscan前後の計6回検証する。上の「3回で約60万unit」はこのpipeline全体の見積りではなく、そのまま受付根拠に使わない。典型的な深さのfileだけならindex部分は約294 unit/entry（26＋宣言検査約6、全集合検査約34、26＋宣言検査約6を3round）で、5,000〜6,000件では約147万〜176万unitとなり、暫定100万capを超え得る。directory構成・Node検索・固定処理等を含む実測値ではない。capを緩めず、運用前に厳密な事前予約と、同一round内のimmutable宣言を安全に再利用する別設計・検証が必要。現段階で本番閉包が通るとは主張しない。
+  **§13の初期接続時（§15適用前）の追加コスト**：当時のstrict pipelineは1roundにつきscan前declare・全集合check・scan後declareの3回、全3roundでindexを9回parseしていた。activation/ledger/registryもscan前後の計6回検証する。上の「3回で約60万unit」はこの初期pipeline全体の見積りではなく、そのまま受付根拠に使わない。典型的な深さのfileだけならindex部分は約294 unit/entry（26＋宣言検査約6、全集合検査約34、26＋宣言検査約6を3round）で、5,000〜6,000件では約147万〜176万unitとなり、暫定100万capを超え得た。directory構成・Node検索・固定処理等を含む実測値ではない。§15でdecodeを全3回へ減らしたが、厳密な事前予約・費目上界は未対応で、本番閉包が通るとは主張しない。
 - allocation候補はparse作業同時64MiB、inspection管理下の総同時128MiB。元pins（最大16MiB＋128KiB）・registry・観測集合・path/keyの複製・bufferを合計し、事前予約とDrop時解放を行う。これは**RSS上限ではなく管理allocationの候補**。
 - Value木と型/expected/actual mapの重複を減らすbounded typed decoder/限定内部viewを検討する。duplicate key/unknown field/trailing data/深さ/件数拒否を弱める変更は不可。container上限は要素decode前にも確認できる境界を設計する。
 - 現codeのmax_itemsを総node枠と説明しない。単一巨大stringのunescape/UTF-8、serde_json::from_value、BTree比較等にcheckpointが入らない区間も洗い出す。
@@ -229,9 +229,15 @@ draft-0.1/0.2ではMDだけを検査した。424件は前工程の記録で、�
 
 この接続は合成sourceによる内部pipelineで、実filesystem scanの完全性・同inode/ABA・root承認・system profile適合・原子性・hard中断/RSSを証明しない。運用source/事前受付/leaseと本番registryは未接続で、APPROVED_REGISTRY=None・通常v2 Unavailable・gate92・DER/absence停止を維持する。§6.1の追加parseコストを運用前に解決する。
 
-## 14. 同round宣言再利用・work事前受付の設計案（未実装）
+## 14. 同round宣言再利用・work事前受付の設計案（受付は未実装）
 
-[詳細設計draft-0.2](BEST_PRACTICE_BP5_R2_OL03_ROUND_DECLARATION_WORK_DESIGN.md)に、同receipt/同round tokenに結合したimmutable宣言の再利用と残work予約を整理した。indexのJSON decodeだけを全9回から全3回へ減らし、raw hash・全宣言/全集合照合、scan前後のrecord strict検証（計6回）・exact再読/最新clockは維持する案である。
+[詳細設計draft-0.3](BEST_PRACTICE_BP5_R2_OL03_ROUND_DECLARATION_WORK_DESIGN.md)に、同receipt/同round tokenに結合したimmutable宣言の再利用と残work予約を整理した。indexのJSON decodeだけを全9回から全3回へ減らし、raw hash・全宣言/全集合照合、scan前後のrecord strict検証（計6回）・exact再読/最新clockは維持する。
 受付は元budget下のbounded bootstrapと、最初のscan前の残工程予約を分ける。accepted shapeのfile/directory数・全parent prefix・raw長に基づく式と、registry/scan/その他費目の上界を合算し、消費済みworkを二重課金/返却しない。§6.1の概算値を安全な受付上界へ読み替えない。
-後続で[round型・decode/意味検査分離の先行合成検証](E2E_BEST_PRACTICE_R2_OL03_ROUND_DECLARATION_SYNTHETIC_2026-10-20.md)を追加した。同receipt/target/context・fresh nonce・budget originへ結合する型と、decodeなしの再認証/意味検査APIだけを実装した。既存pipelineの9回decodeやscan前後のstrict検証は変更していない。
+後続で[round型・decode/意味検査分離の先行合成検証](E2E_BEST_PRACTICE_R2_OL03_ROUND_DECLARATION_SYNTHETIC_2026-10-20.md)を追加した。同receipt/target/context・fresh nonce・budget originへ結合する型と、decodeなしの再認証/意味検査APIだけを先行実装した。その段階では9回decodeのままで、後続§15でpipelineへ接続した。
 固定費/record・collectorのwork上界/予約台帳は未実装・未承認。実機・API・token/設定/permitの変更を行ったものではなく、運用gateの停止を維持する。
+
+## 15. 同round宣言のpipeline接続
+
+[再利用pipelineの合成検証](E2E_BEST_PRACTICE_R2_OL03_ROUND_REUSE_PIPELINE_SYNTHETIC_2026-10-20.md)を追加。各roundにwith_roundと一度限りのdecodeを接続し、scan後の全集合照合と最終宣言照合は同じimmutable treeをraw再認証して再検査する。record三者/全projection/Node整合、scan前後のexact再読・clock・元予算は省略しない。
+index decodeは3回、record三者strict検証は6回、record再読6cycle・scan3回を合成経路で確認した。観測のlineage/全binding/enumにfresh nonce一致も加え、正しいenumでも前roundの観測tokenを拒否する。失敗後のM4/次round停止・全resource解放と既存gateを維持する。
+4,006 entryの架空データで現在の新pipeline課金値は471,312 work。旧9parse相当のindex-only手順が100万capでLimitとなることも比較したが、これは実source/実閉包・hard時間・RSSや§14のwork上界式を証明する試験ではない。費目上界・事前受付・実source/leaseは引き続き未対応。

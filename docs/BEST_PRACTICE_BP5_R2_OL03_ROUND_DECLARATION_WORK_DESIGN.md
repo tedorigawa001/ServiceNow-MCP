@@ -1,14 +1,14 @@
 # BP-5 R-2 OL-03：同一round内のimmutable index宣言再利用・work事前受付
 
-Version: draft-0.2 / Date: 2026-10-20 / Status: 同round型・decode/意味検査分離を内部実装し合成検証。pipeline接続・work事前受付・運用承認は未実施。
+Version: draft-0.3 / Date: 2026-10-20 / Status: 同round型を内部strict pipelineへ接続し合成検証。index decodeは3回。work事前受付・運用承認は未実施。
 
 ## 1. 目的・現状・非対象
 
 [接続設計§13](BEST_PRACTICE_BP5_R2_OL03_RECORD_PARSER_CLOSURE_DESIGN.md)の共有予算strict pipelineを前提とする。
-現在は初回/M4前/M4後の各roundでdeclare→check→declareがそれぞれindexをparseし、計9回となる。activation/ledger/registryはscan前後の計6回検証する。
-本案では**indexのJSON decode/typed変換だけを1round1回、全3回へ減らす**。scan前後の厳密なrecord/時刻/binding検証、全closure観測、宣言の意味検査・全集合比較は維持する。
+初期pipelineは初回/M4前/M4後の各roundでdeclare→check→declareがそれぞれindexをparseし、計9回だった。§10の接続後は**indexのJSON decode/typed変換だけを1round1回、全3回へ削減**した。activation/ledger/registryはscan前後の計6回検証する。
+scan前後の厳密なrecord/時刻/binding検証、全closure観測、宣言の意味検査・全集合比較は維持する。以降のwork受付・上界式は引き続き設計案である。
 
-draft-0.1はMDだけだった。後続§9で先行部品を実装したが、telemetry調査は保留。実機/PDI操作、API実接続、token発行、設定変更、本番policy投入、実署名、permit発行は行わない。APPROVED_REGISTRY=None、通常v2入口Unavailable、gate92、DER/absence停止を維持する。
+draft-0.1はMDだけだった。後続§9で先行部品を実装し、§10で内部pipelineへ接続した。telemetry調査は保留。実機/PDI操作、API実接続、token発行、設定変更、本番policy投入、実署名、permit発行は行わない。APPROVED_REGISTRY=None、通常v2入口Unavailable、gate92、DER/absence停止を維持する。
 既存public check/declared、公開JSON/exit code、固定予算上限を変える提案ではない。実collector・保護された初回receipt/context・leaseの未接続も解消しない。
 
 ## 2. ソースに基づく分離点
@@ -155,7 +155,7 @@ workだけで受付成功にしない。元10秒/現在の残期限、実I/O2GiB
 ## 8. 実装順と承認待ち
 
 1. decode/意味検査のprivate分離と同round型・borrow/token結合を先行。既存のentry/parent/集合検査は共通coreのまま、公開関数の契約を変えない。
-2. 1round内のdecode3→1と固定3roundへ接続し、scan前後のstrict検証が減らないことを合成検証する。
+2. 1round内のdecode3→1と固定3roundへ接続し、scan前後のstrict検証が減らないことを合成検証する（§10で内部接続済み）。
 3. work_model_id、shape統計、R_max/K_round/scan/その他の費目表を固定し、計数試験で上界を確認する。モデル不一致はUnavailableとし、capを黙って増やさない。
 4. bootstrap後の残予約/単一消費台帳と受付停止を接続する。実sourceや実運用への接続は別途承認する。
 
@@ -164,7 +164,7 @@ draft-0.1の検査はMD/算術だけであり、§9の合成検証や実機検�
 
 ## 9. 同round型・decode/意味検査分離の先行実装
 
-[先行実装の合成検証記録](E2E_BEST_PRACTICE_R2_OL03_ROUND_DECLARATION_SYNTHETIC_2026-10-20.md)を追加した。今回の範囲は§8の第1段階であり、既存strict pipelineの9→3 decode接続やwork予約は変更しない。
+[先行実装の合成検証記録](E2E_BEST_PRACTICE_R2_OL03_ROUND_DECLARATION_SYNTHETIC_2026-10-20.md)を追加した。draft-0.2での範囲は§8の第1段階であり、その時点ではstrict pipelineの9→3 decode接続やwork予約を変更しなかった。後続の内部接続は§10へ別に記録する。
 
 - `closure::shared::DecodedDeclaration`が元immutable bytesをborrowし、Index全体をprivateに保持する。raw認証→strict decode→header/全宣言検査で生成する。`recheck`はraw hash/headerを再検査し、同じcheck_entriesで全宣言/親/全集合を再検査するが、JSONをdecodeし直さない。元public経路や従来Declaration/checkの戻り値・課金順序は維持する。
 - privateな`with_round`が元receipt/targetのbinding・pins/timeを確認し、fresh nonceのRoundScopeを作る。scopeのborrowを保持する`RoundDeclaration<'s,'r>`は非Clone/非serdeで、immutable entriesだけを公開する。callbackの任意戻り型Tへscope borrowを逃がさないシグネチャとし、roundのenum値だけで再利用を認めない。
@@ -174,3 +174,15 @@ draft-0.1の検査はMD/算術だけであり、§9の合成検証や実機検�
 - private budget origin以外にstart/capやpayload/予約/topology等の台帳を変更しない。test-only thread-local counterで同scopeの再検査時にdecodeが増えないことを確認するが、cacheの運用性能やRSSの測定値にはしない。
 
 work_model_id/shape統計・固定費128の証明・残予約、scope後の利用に関する独立compile-fail fixture、実sourceの真正性/leaseは未対応。scope lifetime制約とnested別roundの拒否を区別して記録する。APPROVED_REGISTRY=None・通常v2 Unavailable・gate92・DER/absenceの停止を維持する。
+
+## 10. immutable宣言のstrict pipeline接続
+
+[pipeline再利用の合成検証記録](E2E_BEST_PRACTICE_R2_OL03_ROUND_REUSE_PIPELINE_SYNTHETIC_2026-10-20.md)に、追加3件と既存停止/解放試験の再実行を記録する。
+
+- strict verifierをrecord三者/全projection検証とNode entry整合へ分離した。各roundは前側exact再読/clock/record strict検証→with_round/decode→Node整合→scan→raw再認証/全宣言/全集合再検査→後側exact再読/clock/record strict検証→raw再認証/全宣言/Node再検査→最新clockの順。
+- index decodeはroundごとに1回で全3回。record三者strict検証は6回、前後再読は6cycle、closure scanは3回を維持する。宣言やrecordの成功を別roundへ持ち越さない。
+- request/observationへscopeのfresh nonceを内部結合し、lineage・全RecordBinding・roundのenumに加えてnonce一致を要求する。前roundのnonceや別nonceを、正しいenum/同じ内容で返されてもChangedで停止する。これは合成sourceとの契約で、実OS観測の真正性の証明ではない。
+- 元budget origin/start・cap・first failure、I/O/予約/metadata/topology等をresetしない。scope終了時と全resource/pins解放後のguardを維持する。with_round内のreceipt検証も元budgetへcheckpointするが、全work費目/固定費の証明はまだ完了していない。
+- 4,006 entryの架空fixtureでは新pipelineの現在の課金値471,312 workで成功し、旧9parse相当のindex-only手順は100万capでLimitとなった。固定fake clockでworkだけを比較した合成値であり、実閉包の受付可否/CPU時間/RSSの証明ではない。
+
+§5〜6のM_max=N+1早期guard、shape統計/work_model_id、固定費128・R_max/W_scan/W_otherの証明、全残工程の事前予約は未実装。再利用接続の成功を事前受付や運用gate解除へ読み替えない。

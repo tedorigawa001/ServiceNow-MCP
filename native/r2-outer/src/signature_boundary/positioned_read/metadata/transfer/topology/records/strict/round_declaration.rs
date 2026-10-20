@@ -1,4 +1,4 @@
-//! Staged round-local parse reuse. Not connected to the review pipeline or runtime entry.
+//! Round-local parse reuse in the synthetic strict pipeline. No runtime entry or permit.
 use super::*;
 
 pub(super) struct RoundScope<'s> {
@@ -13,6 +13,9 @@ pub(super) struct RoundScope<'s> {
     index_path: String,
 }
 impl RoundScope<'_> {
+    pub(super) fn token(&self) -> &Rc<()> {
+        &self.token
+    }
     fn binding(&self) -> closure::Binding<'_> {
         closure::Binding {
             release_id: &self.receipt.binding.release,
