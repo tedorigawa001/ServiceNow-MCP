@@ -1,6 +1,6 @@
 # BP-5 R-2 OL-03：scan work上界・bounded collector詳細設計
 
-Version: draft-0.11 / Date: 2026-10-20 / Status: 計算器・単発操作・child/seen・size/digest・metadata正規化・宣言入力結合・root/絶対祖先および相対directory/file再照合の内部契約を合成検証。完全collector・workモデル/OS接続・運用quota承認は未対応。
+Version: draft-0.12 / Date: 2026-10-20 / Status: canonical参照所属判定を固定回数化。完全collector・全体work受付・OS接続・運用quota承認は未対応。
 
 ## 1. 目的・前提・非対象
 
@@ -386,7 +386,7 @@ metadataはtarget用100回/640KiBを使わず、同scan ledgerのoperation/live/
 
 ### 17.1 費用・残る接続
 
-projection生成は `7+A` work（Aはruntime root〜index parentの祖先数、合成root直下では8）。root viewは3、rootのexpected収集は `5+2N`（Nはvirtual index込みentry数、合成N=5で15）。directory選択・membership検査は比較ごとに課金し、各利用のscope/phase guardも省略しない。新しい上限・Budgetは設けない。
+projection生成は `7+A` work（Aはruntime root〜index parentの祖先数、合成root直下では8）。root viewは3、rootのexpected収集は `5+2N`（Nはvirtual index込みentry数、合成N=5で15）。directory選択は比較ごとに課金する。先行版のmembership検査も線形だったが、§20で固定回数の所属判定へ置換した。各利用のscope/phase guardは省略せず、新しい上限・Budgetは設けない。
 
 expected配列は宣言順＋virtual index末尾で、既存scan_opsのsorted child照合へはまだ接続しない。全entryを親ごとに走査するため、完全探索では二次的な比較量になり得る。現行数量計算器の定数lookupや既存index workにこの追加費を含むとは主張せず、将来のcollector接続でlookup構造・費目所有・上界の再設計を必要とする。全体受付は無効のまま。
 
@@ -455,6 +455,17 @@ source呼出し前に、同receipt/target/context/round/token/budget、正しい
 
 元SharedBudgetのstart/origin/10秒/work100万/payload2GiBと元EINTR残を維持する。hを絶対component数、kを相対edge数とすると、source試行は `2(h+k)+6<=262`、temporary acquire/cleanupはh+k+1、同時ownerは最大2。§18単独の132上限は変えず、新subset内だけに固定262の有限capを置く。これは全scan quotaの増額や3roundの新規予算ではない。target metadata/topology台帳・payload/readは使わない。
 
-追加の入口費Vは `6+Q+2k+Σp_i`。Qは既存require_childの実課金、p_iはcanonical entry検索の比較回数。再照合成功は **`V+9(h+k)+39` work**。fixtureのfile（h=2,k=3,V=28）は112、directory（h=2,k=2,V=21）は96。lookupの線形費を隠さず課金し、元scan/index計算器をそのまま検証済み上界としない。将来の完全collectorでは索引化・費目所有・3round配賦・全体受付の見直しが必要である。
+再照合成功は **`V+9(h+k)+39` work**。先行版の入口費は `V=6+Q+2k+Σp_i`（Qはrequire_child費、p_iはcanonical entry検索の比較回数）で、file112/directory96だった。§20でmembershipを固定回数化し、現行は `V=6+Q+3k`、Qはroot直下6/それ以外7。fixture file（h=2,k=3,V=22）は**106**、directory（h=2,k=2,V=19）は**94**。既存scan/index計算器をそのまま検証済み上界とせず、完全collectorの費目所有・3round配賦・全体受付の見直しは引き続き必要である。
 
 root/relative初回snapshotとresourceを保護されたopenerから生成する処理、scan_ops完全metadata/read/hashとの同一resource接続、全closure観測seal、OS接続、更新lease/ABA/検査後差替え対策、hostへのcleanup終了票伝播は未対応。BSD flagsやsystem祖先xattrの§18の制約も未解決のままである。全体受付無効・本番policy未投入・DER/absence停止・gate92/通常v2 Unavailable・telemetry保留を維持する。
+
+## 20. canonical entry所属判定の固定回数化
+
+[canonical.rs](../native/r2-outer/src/signature_boundary/positioned_read/metadata/transfer/topology/records/strict/round_declaration/scan_inputs/canonical.rs)と[検証記録](E2E_BEST_PRACTICE_R2_OL03_CANONICAL_MEMBERSHIP_SYNTHETIC_2026-10-20.md)で、relative validate・require_parent・require_childのcanonical確認を共通化した。親子view/receipt/round/budgetの認証は従来どおり別のguardとして維持し、所属判定だけを認証/permitへ昇格させない。
+
+- 元immutable宣言sliceの`as_ptr_range()`内であることを検査する。要素幅に対するoffset整合とsliceのget・ptr::eqで正確な要素境界も確認する。virtual indexだけは元ScanInputsのindexへのptr::eqで別途受け付ける。
+- 内容が同じコピー、別slice/別ScanInputsのentry、virtual indexのコピーは所属しない。空sliceやsubsliceの直前/終端を含む範囲外も拒否する。未知参照はpath文字列を読む前に検査する。
+- `unsafe`、offset_from、整数からのポインタ復元、外部ポインタのdereference、反復・allocation・path/value比較は使わない。addressを結果/ログへ出さない。元sliceはimmutable borrow下にあり、判定中に再配置しない。
+- membership1回を固定1 workとし、前後の共有checkpoint・sticky失敗を維持する。workは固定処理群の課金単位であり、CPU命令数・実時間を1に固定する主張ではない。
+
+入口のΣp_iは消え、Qもentry位置/Nに依存しない6/7となる。入口Vはkに線形（6+Q+3k）で、N=100,000/k=64でもcanonical所属確認64回は64 workである。ただし100,000 entryのJSON受付/完全collectorを成功させたという意味ではない。directory(path)の名前検索、expected childの2回全entry走査、child/seenの名前lookup、18M等のmetadata費は今回の対象外であり、全collectorの上界/受付問題は未解決。既存model ID・上限・運用gateは変更しない。

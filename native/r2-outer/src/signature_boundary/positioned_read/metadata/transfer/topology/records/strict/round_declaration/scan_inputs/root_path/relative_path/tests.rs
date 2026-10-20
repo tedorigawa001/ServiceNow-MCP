@@ -346,7 +346,7 @@ fn exercise(case: Case) -> Outcome {
 fn directory_and_file_rewalk_every_absolute_and_relative_edge() {
     let file = exercise(Case::File);
     file.result.unwrap();
-    assert_eq!(file.work, 112);
+    assert_eq!(file.work, 106);
     assert_eq!(file.trace.borrow().calls, 16);
     assert_eq!(file.trace.borrow().issued, 6);
     assert_eq!(
@@ -372,7 +372,7 @@ fn directory_and_file_rewalk_every_absolute_and_relative_edge() {
     );
     let dir = exercise(Case::Directory);
     dir.result.unwrap();
-    assert_eq!(dir.work, 96);
+    assert_eq!(dir.work, 94);
     assert_eq!(dir.trace.borrow().calls, 14);
     assert!(
         !dir.trace
@@ -435,9 +435,9 @@ fn late_successes_cancel_or_expire_and_release_every_owned_handle() {
 }
 #[test]
 fn shared_work_cap_all_prefixes_stop_and_release() {
-    for remaining in 0..=112 {
+    for remaining in 0..=106 {
         let out = exercise(Case::Work(remaining));
-        if remaining == 112 {
+        if remaining == 106 {
             out.result.unwrap();
         } else {
             assert_eq!(out.result.unwrap_err(), Failure::Limit);

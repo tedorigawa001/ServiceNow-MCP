@@ -2,6 +2,7 @@
 use super::*;
 use phases::IndexPhases;
 
+mod canonical;
 mod root_path;
 
 pub(in super::super) struct ScanInputs<'i, 'd, 's, 'r> {
@@ -112,6 +113,9 @@ pub(super) fn build<'i, 'd, 's, 'r>(
 }
 
 impl<'i, 'd, 's, 'r> ScanInputs<'i, 'd, 's, 'r> {
+    fn canonical(&self, entry: &closure::Entry, b: &mut SharedBudget<'_>) -> Result<bool, Failure> {
+        canonical::contains(self.declaration.entries(), &self.index, entry, b)
+    }
     fn entries(&self) -> impl Iterator<Item = &closure::Entry> {
         self.declaration
             .entries()
@@ -181,13 +185,9 @@ impl<'i, 'd, 's, 'r> ScanInputs<'i, 'd, 's, 'r> {
             return b.stop(Failure::Binding);
         }
         if let Some(selected) = parent.entry {
-            for entry in self.declaration.entries() {
-                work(b)?;
-                if std::ptr::eq(selected, entry)
-                    && matches!(entry, closure::Entry::Directory { .. })
-                {
-                    return Ok(());
-                }
+            if self.canonical(selected, b)? && matches!(selected, closure::Entry::Directory { .. })
+            {
+                return Ok(());
             }
             return b.stop(Failure::Binding);
         }
@@ -203,16 +203,12 @@ impl<'i, 'd, 's, 'r> ScanInputs<'i, 'd, 's, 'r> {
         let result = (|| {
             self.require_parent(parent, current, b)?;
             work(b)?;
-            if !std::ptr::eq(child.parent, parent)
-                || parent_of(child.entry.path()).0 != parent.path()
-            {
+            if !std::ptr::eq(child.parent, parent) {
                 return Err(Failure::Binding);
             }
-            for entry in self.entries() {
-                work(b)?;
-                if std::ptr::eq(child.entry, entry) {
-                    return Ok(());
-                }
+            if self.canonical(child.entry, b)? && parent_of(child.entry.path()).0 == parent.path() {
+                b.checkpoint()?;
+                return Ok(());
             }
             Err(Failure::Binding)
         })();

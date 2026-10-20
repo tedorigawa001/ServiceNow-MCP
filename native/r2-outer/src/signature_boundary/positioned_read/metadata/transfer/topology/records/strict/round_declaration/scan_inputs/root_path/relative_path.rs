@@ -87,21 +87,13 @@ fn validate<R: ResourceOrigin>(
     let mut prefix = "";
     for (i, edge) in bound.edges.iter().enumerate() {
         work(b)?;
+        if !inputs.canonical(edge.entry, b)? {
+            return b.stop(Failure::Binding);
+        }
         if parent_of(edge.entry.path()).0 != prefix
             || (i + 1 < bound.edges.len()
                 && !matches!(edge.entry, closure::Entry::Directory { .. }))
         {
-            return b.stop(Failure::Binding);
-        }
-        let mut canonical = false;
-        for entry in inputs.entries() {
-            work(b)?;
-            if std::ptr::eq(edge.entry, entry) {
-                canonical = true;
-                break;
-            }
-        }
-        if !canonical {
             return b.stop(Failure::Binding);
         }
         policy(edge.entry, &edge.snapshot, inputs.root.stat.device, b)?;
