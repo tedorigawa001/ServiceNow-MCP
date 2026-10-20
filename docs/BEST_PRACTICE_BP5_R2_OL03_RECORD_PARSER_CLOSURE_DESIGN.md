@@ -1,6 +1,6 @@
 # BP-5 R-2 OL-03：厳密record parser・全closure集合の再検証接続
 
-Version: draft-0.9 / Date: 2026-10-20 / Status: 内部strict pipelineへ同round宣言を接続し合成検証。index decodeは3回。work事前受付・実reader/collector・運用承認は未実施。
+Version: draft-0.10 / Date: 2026-10-20 / Status: 同round宣言・index model/shape/上界を内部実装し合成検証。全工程のwork事前受付・実reader/collector・運用承認は未実施。
 
 ## 1. 範囲と停止境界
 
@@ -231,13 +231,20 @@ draft-0.1/0.2ではMDだけを検査した。424件は前工程の記録で、�
 
 ## 14. 同round宣言再利用・work事前受付の設計案（受付は未実装）
 
-[詳細設計draft-0.3](BEST_PRACTICE_BP5_R2_OL03_ROUND_DECLARATION_WORK_DESIGN.md)に、同receipt/同round tokenに結合したimmutable宣言の再利用と残work予約を整理した。indexのJSON decodeだけを全9回から全3回へ減らし、raw hash・全宣言/全集合照合、scan前後のrecord strict検証（計6回）・exact再読/最新clockは維持する。
+[詳細設計draft-0.4](BEST_PRACTICE_BP5_R2_OL03_ROUND_DECLARATION_WORK_DESIGN.md)に、同receipt/同round tokenに結合したimmutable宣言の再利用と残work予約を整理した。indexのJSON decodeだけを全9回から全3回へ減らし、raw hash・全宣言/全集合照合、scan前後のrecord strict検証（計6回）・exact再読/最新clockは維持する。
 受付は元budget下のbounded bootstrapと、最初のscan前の残工程予約を分ける。accepted shapeのfile/directory数・全parent prefix・raw長に基づく式と、registry/scan/その他費目の上界を合算し、消費済みworkを二重課金/返却しない。§6.1の概算値を安全な受付上界へ読み替えない。
 後続で[round型・decode/意味検査分離の先行合成検証](E2E_BEST_PRACTICE_R2_OL03_ROUND_DECLARATION_SYNTHETIC_2026-10-20.md)を追加した。同receipt/target/context・fresh nonce・budget originへ結合する型と、decodeなしの再認証/意味検査APIだけを先行実装した。その段階では9回decodeのままで、後続§15でpipelineへ接続した。
-固定費/record・collectorのwork上界/予約台帳は未実装・未承認。実機・API・token/設定/permitの変更を行ったものではなく、運用gateの停止を維持する。
+index固定費・上界は後続§16に記録する。record・collector等の全工程work上界/予約台帳は未実装・未承認。実機・API・token/設定/permitの変更を行ったものではなく、運用gateの停止を維持する。
 
 ## 15. 同round宣言のpipeline接続
 
 [再利用pipelineの合成検証](E2E_BEST_PRACTICE_R2_OL03_ROUND_REUSE_PIPELINE_SYNTHETIC_2026-10-20.md)を追加。各roundにwith_roundと一度限りのdecodeを接続し、scan後の全集合照合と最終宣言照合は同じimmutable treeをraw再認証して再検査する。record三者/全projection/Node整合、scan前後のexact再読・clock・元予算は省略しない。
 index decodeは3回、record三者strict検証は6回、record再読6cycle・scan3回を合成経路で確認した。観測のlineage/全binding/enumにfresh nonce一致も加え、正しいenumでも前roundの観測tokenを拒否する。失敗後のM4/次round停止・全resource解放と既存gateを維持する。
-4,006 entryの架空データで現在の新pipeline課金値は471,312 work。旧9parse相当のindex-only手順が100万capでLimitとなることも比較したが、これは実source/実閉包・hard時間・RSSや§14のwork上界式を証明する試験ではない。費目上界・事前受付・実source/leaseは引き続き未対応。
+4,006 entryの架空データで再利用接続時（model収集前）の課金値は471,312 workだった。旧9parse相当のindex-only手順が100万capでLimitとなることも比較したが、これは実source/実閉包・hard時間・RSSや全費目を証明する試験ではない。後続§16でindex modelを追加し、全工程の費目上界・事前受付・実source/leaseは引き続き未対応。
+
+## 16. index work_model_id・shape・課金work上界
+
+[index model合成検証記録](E2E_BEST_PRACTICE_R2_OL03_INDEX_WORK_MODEL_SYNTHETIC_2026-10-20.md)を追加した。strict decode/宣言検証後にsealed profileを同roundへ結合し、B/F/D/Pと固定ID`bp5-r2-index-work-0.1`、index-onlyの1round/3round上界を計算する。shape収集・計算も元budgetへ課金し、model不一致はUnavailable、shape/cap/overflowはtyped理由を保持してLimitへ接続する。
+式はJ_index=C+20+26F+17D、収集の可変費N+P、その他可変費6C+9N+3P+100001、固定枠128。固定実消費は既存32＋収集固定3＋計算8＋reuse model照合2＝45で、128を消費workにしない。観測N+1 guard未対応のため現global上限100,001を使い、過小なM_maxを仮定しない。
+scope付きsummary/cap helperは分析/量比較だけで、spent控除・残工程予約や全体受付には接続しない。R/scan/その他・管理allocation/FD/clock/leaseの証明は未完了。課金work上界はhard CPU時間/RSSや未課金のpin-memory hash等を覆う保証ではない。
+同じ4,006 entry fixtureの現在の実消費は495,381 workで、以前の471,312との差24,069は各roundのN+P+3収集＋8計算＋2モデル照合を加えた分。index decode3回・record検証6回・前後再読・各停止gateは維持する。

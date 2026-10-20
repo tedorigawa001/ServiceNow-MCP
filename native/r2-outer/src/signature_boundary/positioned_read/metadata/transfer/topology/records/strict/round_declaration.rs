@@ -1,6 +1,8 @@
 //! Round-local parse reuse in the synthetic strict pipeline. No runtime entry or permit.
 use super::*;
 
+mod work_model;
+
 pub(super) struct RoundScope<'s> {
     receipt: &'s RecordReceipt,
     target: &'s TargetDeclaration,
@@ -31,6 +33,15 @@ impl RoundScope<'_> {
 pub(super) struct RoundDeclaration<'s, 'r> {
     scope: &'r RoundScope<'s>,
     parsed: closure::shared::DecodedDeclaration<'s>,
+    index_work: work_model::IndexWork,
+}
+// Inspection-only copy of counts/units, never accepted as a constructor or reservation.
+pub(super) struct IndexWorkSummary {
+    pub(super) model_id: &'static str,
+    pub(super) counts: (u64, u64, u64, u64),
+    pub(super) components: (u64, u64, u64, u64),
+    pub(super) per_round: u64,
+    pub(super) three_rounds: u64,
 }
 impl std::fmt::Debug for RoundDeclaration<'_, '_> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -41,6 +52,68 @@ impl<'s, 'r> RoundDeclaration<'s, 'r> {
     pub(super) fn entries(&self) -> &[closure::Entry] {
         self.parsed.entries()
     }
+    fn ensure_scope(
+        &self,
+        current: &RoundScope<'_>,
+        budget: &mut SharedBudget<'_>,
+    ) -> Result<(), Failure> {
+        work(budget)?;
+        if !Rc::ptr_eq(&self.scope.budget_origin, &budget.inspection_origin)
+            || !Rc::ptr_eq(&current.budget_origin, &budget.inspection_origin)
+            || !Rc::ptr_eq(&self.scope.token, &current.token)
+            || !Rc::ptr_eq(&self.scope.receipt.lineage, &current.receipt.lineage)
+            || !std::ptr::eq(self.scope.receipt, current.receipt)
+            || !std::ptr::eq(self.scope.target, current.target)
+            || !std::ptr::eq(self.scope.context, current.context)
+            || self.scope.round != current.round
+        {
+            return Err(Failure::Binding);
+        }
+        Ok(())
+    }
+    pub(super) fn work_summary(
+        &self,
+        current: &RoundScope<'_>,
+        expected: &str,
+        budget: &mut SharedBudget<'_>,
+    ) -> Result<IndexWorkSummary, Failure> {
+        let result = (|| {
+            self.ensure_scope(current, budget)?;
+            self.index_work
+                .require_model(expected, budget)
+                .map_err(|e| work_model::latch(e, budget))?;
+            work(budget)?; // Optional summary access is separate from the kernel bound.
+            Ok(IndexWorkSummary {
+                model_id: self.index_work.model_id(),
+                counts: self.index_work.shape().counts(),
+                components: self.index_work.bound().components(),
+                per_round: self.index_work.bound().per_round(),
+                three_rounds: self.index_work.bound().three_rounds(),
+            })
+        })();
+        match result {
+            Ok(v) => Ok(v),
+            Err(e) => budget.stop(e),
+        }
+    }
+    pub(super) fn check_index_cap(
+        &self,
+        current: &RoundScope<'_>,
+        expected: &str,
+        available: u64,
+        budget: &mut SharedBudget<'_>,
+    ) -> Result<(), Failure> {
+        let result = (|| {
+            self.ensure_scope(current, budget)?;
+            self.index_work
+                .check_cap(expected, available, budget)
+                .map_err(|e| work_model::latch(e, budget))
+        })();
+        match result {
+            Ok(v) => Ok(v),
+            Err(e) => budget.stop(e),
+        }
+    }
     pub(super) fn recheck(
         &self,
         current: &RoundScope<'_>,
@@ -48,18 +121,10 @@ impl<'s, 'r> RoundDeclaration<'s, 'r> {
         budget: &mut SharedBudget<'_>,
     ) -> Result<closure::CheckedIndex, Failure> {
         let result = (|| {
-            work(budget)?;
-            if !Rc::ptr_eq(&self.scope.budget_origin, &budget.inspection_origin)
-                || !Rc::ptr_eq(&current.budget_origin, &budget.inspection_origin)
-                || !Rc::ptr_eq(&self.scope.token, &current.token)
-                || !Rc::ptr_eq(&self.scope.receipt.lineage, &current.receipt.lineage)
-                || !std::ptr::eq(self.scope.receipt, current.receipt)
-                || !std::ptr::eq(self.scope.target, current.target)
-                || !std::ptr::eq(self.scope.context, current.context)
-                || self.scope.round != current.round
-            {
-                return Err(Failure::Binding);
-            }
+            self.ensure_scope(current, budget)?;
+            self.index_work
+                .require_model(work_model::WORK_MODEL_ID, budget)
+                .map_err(|e| work_model::latch(e, budget))?;
             // Identity checks supplement the sealed borrowed scope; an address/hash
             // supplied by a caller is never a producer of approved record evidence.
             budget
@@ -90,9 +155,12 @@ impl<'s> RoundScope<'s> {
             let parsed = budget
                 .decode_round_declaration(&self.receipt.pins[2].bytes, &self.binding())
                 .map_err(|_| latched(budget))?;
+            let index_work = work_model::IndexWork::build(self, &parsed, budget)
+                .map_err(|e| work_model::latch(e, budget))?;
             Ok(RoundDeclaration {
                 scope: self,
                 parsed,
+                index_work,
             })
         })();
         match result {

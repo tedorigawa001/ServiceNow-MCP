@@ -1,12 +1,12 @@
 # BP-5 R-2 OL-03：同一round内のimmutable index宣言再利用・work事前受付
 
-Version: draft-0.3 / Date: 2026-10-20 / Status: 同round型を内部strict pipelineへ接続し合成検証。index decodeは3回。work事前受付・運用承認は未実施。
+Version: draft-0.5 / Date: 2026-10-20 / Status: 同round型・index work_model/shape/上界を内部実装し合成検証。全工程の事前受付・予約・運用承認は未実施。
 
 ## 1. 目的・現状・非対象
 
 [接続設計§13](BEST_PRACTICE_BP5_R2_OL03_RECORD_PARSER_CLOSURE_DESIGN.md)の共有予算strict pipelineを前提とする。
 初期pipelineは初回/M4前/M4後の各roundでdeclare→check→declareがそれぞれindexをparseし、計9回だった。§10の接続後は**indexのJSON decode/typed変換だけを1round1回、全3回へ削減**した。activation/ledger/registryはscan前後の計6回検証する。
-scan前後の厳密なrecord/時刻/binding検証、全closure観測、宣言の意味検査・全集合比較は維持する。以降のwork受付・上界式は引き続き設計案である。
+scan前後の厳密なrecord/時刻/binding検証、全closure観測、宣言の意味検査・全集合比較は維持する。index側の課金work上界は§11で先行実装し、全工程のwork受付・R/scan等の上界は引き続き設計案である。
 
 draft-0.1はMDだけだった。後続§9で先行部品を実装し、§10で内部pipelineへ接続した。telemetry調査は保留。実機/PDI操作、API実接続、token発行、設定変更、本番policy投入、実署名、permit発行は行わない。APPROVED_REGISTRY=None、通常v2入口Unavailable、gate92、DER/absence停止を維持する。
 既存public check/declared、公開JSON/exit code、固定予算上限を変える提案ではない。実collector・保護された初回receipt/context・leaseの未接続も解消しない。
@@ -61,14 +61,14 @@ scan後に新しく取得したbytesを「同じhashだから」と別のtreeへ
 
 ## 5. workモデルの変数と導出
 
-以下は**課金単位の上界案**でありCPU時間の上界ではない。今後の実装・合成試験で各work呼出しとの対応を固定するまでは運用受付に使わない。
+以下は**課金単位のモデル**でありCPU時間の上界ではない。§11のindex部分だけを内部実装・合成検証し、全工程の運用受付には使わない。
 
 | 記号 | 定義 |
 |---|---|
 | B / C | pin済みindexのraw byte長 / ceil(B / 65536) |
 | F / D / N | index内file数 / directory数 / F+D。index自身はNに含めない |
 | P | 全N pathとindex自身について、実際に親確認するprefix数の総和。平均深さで代用しない |
-| M_max | 集合挿入を許すobserved数の上限N+1（index自身込み） |
+| M_max | 現行model-0.1は100,001（既存global上限）。将来のN+1早期guardは未実装 |
 | J_index | 1回のaccepted index JSON decodeに課金されるwork |
 | R_max | 同じpin bytes・固定registry・同じgroups/contextで1回のrecord三者検証が使うworkの上界 |
 | W_scan / W_other | 全3scanのCPU work上界 / admission・target A/B・metadata/topology・cleanup等でwork計上する残工程の上界 |
@@ -95,23 +95,27 @@ raw内の空白/escapeはB/Cへ反映する。未知field/巨大文字列/不正
 初版は安全性を優先し、decodeだけを削減する。宣言検査を3回行い、全expected map/親検査も各回やり直す。Node検索もscan前後で全Nを走査する保守的な計画とする。
 
 ```text
-宣言のみの意味検査 1回       = 2N + P + 2
-全集合の意味検査 1回         = 3N + P + M_max + 3
-scan前後のNode検索            = 2N
-3回のraw hashのchunk課金      = 6C
-U_index_round                = J_index + 6C + 9N + 3P + M_max + K_round
+宣言のみの意味検査 1回        = 2N + P + 2
+全集合の意味検査 1回          = 3N + P + M_max + 3
+scan前後のNode検索             = 2N
+3回のraw hashのchunk課金       = 6C
+shape収集の実消費              = N + P + 3
+上界計算の実消費               = 8
+model照合の実消費（再利用2回）  = 2
+U_index_round                 = J_index + 6C + 9N + 3P + M_max + (N + P) + 128
+M_max                         = 100001
 ```
 
-K_roundはraw hash開始/終了・header/結合・projection・最終step等、上式に含めていない固定部分の上界。初期候補は**128 unit/round**とし、全work呼出しを列挙して128以内と確認できることを実装条件とする。未証明のまま採用しない。128はcap増額や一律の経験的marginではない。
-observedのlenがN+1を超えたら、actual mapの挿入前に拒否する設計を追加する。100,001超は既存Limit、その範囲内のextraはChangedの意味を維持する。collector自体も返却前にboundedな余剰検出/各operation課金を必要とし、巨大Vecを返してからlenだけ確認する方式にはしない。
-M_max制約を実装できない場合は旧上限100,001を使った上界へ戻すかUnavailableで停止し、計算だけN+1に小さくしない。
+固定枠128はraw hash開始/終了・header/結合・projection・最終step等を覆う上界で、実消費ではない。現行の課金点は既存index経路32＋shape固定3＋計算8＋再利用時model照合2＝**45 unit/round**。残り83は上界と実消費の差で、課金/予約/返却しない。shapeの可変費N+Pは128とは別に加える。
+現行の100,001件guardを維持してM_max=100,001を計算する。N+1の早期拒否を実装していないのに、上界だけN+1に小さくしない。将来このguardを追加してmodelを変える際は、新しいwork_model_idと互換性/費目検証が必要。
+collector自体の余剰検出/各operation課金や受信allocationは別途必要で、巨大Vecを返してからlenだけ確認すれば運用安全という意味ではない。
 
 全3roundのindex枠は3×U_index_round。record側は6×R_maxを別途加える。R_maxは固定raw/contextとwork_model_idに結合した各ループ/stepの上界を導出し、初回の実課金deltaも照合する。平均時間や少数ベンチマークの最大値だけを上界としない。理由付き早期停止のprefixも上界を超えないことを確認する。
 
 ### 5.3 数値例（index分だけ、成功保証ではない）
 
-架空のF=4,500、D=1,000、N=5,500、B=1,048,576、C=16、P=22,000、M_max=5,501、K_round=128なら、J_index=134,036、U_index_round=255,261、3round=765,783 unit。
-残り234,217 unitへ6×R_max＋W_scan＋W_otherが収まるかは未確認。Node検索/意味検査まで含むため、従来の「3decode＋照合は約60万unit」と同じ数値にはならない。
+架空のF=4,500、D=1,000、N=5,500、B=1,048,576、C=16、P=22,000、M_max=100,001なら、J_index=134,036、shape可変費=27,500、その他可変費=215,597、固定枠=128。U_index_round=377,261、3round=1,131,783 unitとなる。
+この例はindex-only cap検査で既に100万を超える。draft-0.1の765,783はN+1上限を前提にし、収集費をまだ含まなかった数値で、現行modelには使わない。R/scan/その他を含む全体受付も未対応。
 本プロジェクトの実閉包を測定した値ではない。深いpath、多数directory、rawの長い空白で変わり、5,000〜6,000件でも受付可能とは主張しない。
 
 ## 6. 段階的受付と共有予約
@@ -156,10 +160,10 @@ workだけで受付成功にしない。元10秒/現在の残期限、実I/O2GiB
 
 1. decode/意味検査のprivate分離と同round型・borrow/token結合を先行。既存のentry/parent/集合検査は共通coreのまま、公開関数の契約を変えない。
 2. 1round内のdecode3→1と固定3roundへ接続し、scan前後のstrict検証が減らないことを合成検証する（§10で内部接続済み）。
-3. work_model_id、shape統計、R_max/K_round/scan/その他の費目表を固定し、計数試験で上界を確認する。モデル不一致はUnavailableとし、capを黙って増やさない。
+3. work_model_id、shape統計、R_max/K_round/scan/その他の費目表を固定し、計数試験で上界を確認する。モデル不一致はUnavailableとし、capを黙って増やさない（§11でindex部分のみ実装）。
 4. bootstrap後の残予約/単一消費台帳と受付停止を接続する。実sourceや実運用への接続は別途承認する。
 
-round型の先行borrow/token実装は§9に記録する。固定費128の証明、work_model_id/shape統計、R_maxとcollector全操作のW_scan、管理allocation/FD/clock/leaseの上界は未確定・承認待ち。本書の式や架空例だけでgateを解除しない。
+round型の先行borrow/token実装は§9、index model/shape/固定費は§11に記録する。R_maxとcollector全操作のW_scan/W_other、管理allocation/FD/clock/leaseの上界・運用承認は未完了。本書の式や架空例だけでgateを解除しない。
 draft-0.1の検査はMD/算術だけであり、§9の合成検証や実機検証と混同しない。
 
 ## 9. 同round型・decode/意味検査分離の先行実装
@@ -185,4 +189,35 @@ work_model_id/shape統計・固定費128の証明・残予約、scope後の利�
 - 元budget origin/start・cap・first failure、I/O/予約/metadata/topology等をresetしない。scope終了時と全resource/pins解放後のguardを維持する。with_round内のreceipt検証も元budgetへcheckpointするが、全work費目/固定費の証明はまだ完了していない。
 - 4,006 entryの架空fixtureでは新pipelineの現在の課金値471,312 workで成功し、旧9parse相当のindex-only手順は100万capでLimitとなった。固定fake clockでworkだけを比較した合成値であり、実閉包の受付可否/CPU時間/RSSの証明ではない。
 
-§5〜6のM_max=N+1早期guard、shape統計/work_model_id、固定費128・R_max/W_scan/W_otherの証明、全残工程の事前予約は未実装。再利用接続の成功を事前受付や運用gate解除へ読み替えない。
+§10の接続段階ではshape/model/費目上界も未実装だった。後続§11でindex部分を実装し、M_max=N+1早期guard、R_max/W_scan/W_other・全残工程の事前予約は未対応のまま残す。再利用接続の成功を事前受付や運用gate解除へ読み替えない。
+
+## 11. index work_model_id・shape・上界の先行実装
+
+[index modelの合成検証記録](E2E_BEST_PRACTICE_R2_OL03_INDEX_WORK_MODEL_SYNTHETIC_2026-10-20.md)とprivateな[work_model.rs](../native/r2-outer/src/signature_boundary/positioned_read/metadata/transfer/topology/records/strict/round_declaration/work_model.rs)を追加した。
+
+- 固定IDは`bp5-r2-index-work-0.1`のみ。係数表やIDを利用者設定から受け取らない。sealed profileのIDと期待IDを照合し、不一致/未知/空IDはtyped ModelMismatchから既存Unavailableへ接続する。default/旧モデルへfallbackしない。
+- strict decode/全宣言検証が成功した同roundのimmutable treeから、B/F/D/Pを収集する。index自身のparent prefixもPへ含める。収集は元budgetでN+P+3、計算は8 unitを消費し、全roundでresetしない。未認証raw bytesへaccepted-shape式を適用しない。
+- Bは1〜16MiB、Nは100,000以下、Pは63×(N+1)以下を防御的に確認する。checked add/mulでoverflowをtyped Limit(Overflow)とし、Shape/Cap超過のLimitと区別する。統計・上界は非Clone/非serdeのprofileに格納し、元RoundDeclarationのborrow/token/budget結合下で保持する。
+- 各reuseでもmodel照合を行う。scope付きwork_summaryは比較用counts/unitsのcopyで、再度profileを作る入力/予約/authorityには使えない。summary取得とindex-only cap helperはそれぞれ追加3 unitを消費し、通常kernel上界の外のW_otherへ計上する。
+- index-only cap helperは3round上界と指定availableの比較だけを行い、等号を許し1 unit不足/100万を超えるavailable指定をLimitで拒否する。現在のspent/残工程を引かず、予約を発行しない。このhelperの成功も全工程受付ではない。
+- index kernel（decode/収集/計算、意味検査/Node検索、scope/model guard、record検証外のprojection4 step）の課金点を列挙し、実測した固定45が128以下であることを、F/D混在・depth64・16MiB・escape/chunk境界の合成値と照合した。checkpointだけの処理・OS/serde/文字列/BTree内部CPU・pin-memory hash等の全CPUを45で覆うという意味ではない。
+
+N+1 guard・全R/scan/その他工程の上界/モデル整合、phase別の実施済み費目控除・残予約は未接続。profile構築費を含めてもindex decode3回/record検証6回/前後再読・元時間/cancel/first failure・運用gateを維持する。費目やcore課金点を変えたら、ID/式/計数試験を同時に更新し、未知modelを運用承認へ昇格しない。
+
+## 12. 現行上界で実閉包を受け付けられない見通しと判断事項（2026-10-20、レビュー）
+
+§11の上界式（observedに全体上限100,001を使用）では、§5.3の例（F=4,500、D=1,000、P=22,000、C=16）のindex分だけで
+1round 377,261、3round **1,131,783 unit**となり、暫定cap 1,000,000を超える（検証記録の計算器試験とも一致）。
+最大の要因はround毎の固定observed上限100,001で、3roundで約30万unitを占める。
+
+§5.2のN+1早期拒否を実装した場合、同じ例はレビュー時の計算で1round 282,761、3round **848,283 unit**へ下がる見込み。
+それでも残り約15万unitへ6回のrecord三者検証・3回の全closure scan・target A/B・metadata/topology・cleanup等を収める必要があり、
+現実的な構成では不足する可能性が高い。いずれも架空shapeの計算値で、本プロジェクトの実閉包の測定ではない。
+
+capを黙って広げない方針は維持する。このまま次工程へ進むと実受付は常にLimitとなる見通しのため、先に次を人が判断する。
+
+1. **N+1早期拒否の実装**（必須に近い）：collector返却前のbounded余剰検出と、actual map挿入前の拒否。実装時はmodel ID・式・計数試験を更新する。
+2. **保守的な意味検査の削減**：scan前後の全N Node検索、宣言のみ再検査など、安全性を落とさずに減らせる費目の再設計。各削減は感度試験で検出性を確認する。
+3. **暫定cap 1,000,000の再承認**：実閉包のshape実測と全費目上界を根拠に、cap値自体を承認し直す。根拠なしの増額や一律marginは採らない。
+
+判断と実装が済むまで、全工程の事前受付・予約は有効化せず、実運用経路はLimit/Unavailableで停止したままとする。
