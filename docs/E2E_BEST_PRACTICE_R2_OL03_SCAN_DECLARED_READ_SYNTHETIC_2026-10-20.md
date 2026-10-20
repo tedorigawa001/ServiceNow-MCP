@@ -70,3 +70,24 @@ bind3、data/retry3、EOF0＋post-stat5、EOF retry3。standalone成功は `14+3
 ## 6. 残課題
 
 hash計算/宣言digest比較、完全metadata/祖先path前後照合、protected expected/size producer、accepted宣言と親path/receipt/roundの結合、全closure観測構築・seal、実消費に合うworkモデル/独立resource配賦、OS backend/cleanup hard期限。stat前後一致だけで同size改変・ABA・検査後変更・実filesystem完全性を排除したとは扱わない。
+
+## 7. bind後の低水準迂回拒否・サイズ上限の追記
+
+レビューで、bind済みresourceにも低水準read/EOFが通り、宣言経由のEINTR後に同条件の低水準呼出しでretryを横取りできる点を確認した。privateな部分実装だが、宣言順序の外でpayload/retryを消費できるため内部契約を修正した。
+
+修正前に追加した2回帰テストは両方失敗した（0 passed / 2 failed）。期待Bindingに対してOk(Complete)となり、低水準readが実際にsourceへ到達することを再現した。
+
+- `transfer_once` はbind済みresourceに対する通常の低水準read/EOFをBindingで拒否する。pending/完了後とも拒否し、宣言経由のdata/EOFのEINTRも低水準から完了させない。
+- 宣言経路は位置/長さ/完了状態を検査した後、そのmodule内だけで作れる非Cloneの `DeclaredAccess` を渡す。resource実体/offset/長さ/data・EOF種別を照合し、1呼出しで消費する。公開入力・実行permit・新しい運用authorityではない。
+- 回帰試験は拒否前後のsource/work/payload/retryが不変であること、EINTR後の応答queueが消費されないこと、解放が一度だけ行われることを確認した。既存の未bind低水準試験、宣言経路の正常retry・17/32 workは維持した。
+
+設計draft-0.6 §14へ、indexのper-file上限2GiB（別途総量制限あり）とscan bind/read/計算器の512MiBの差を追記した。512MiB超をindexが受け付け得てもscanはLimitとなる安全側の現状を維持する。3scanのdataは少なくとも3Lで、record再読/A・B/その他消費・予約も元payload2GiBを共有する。保守的受付量は `3(L+F')`＋他費目であり、1 fileの上限とLの受付可能量を混同しない。今回上限増額・Budget reset・全体受付有効化は行っていない。
+
+| 修正後の確認 | 結果 |
+|---|---|
+| `cargo test --offline --locked --manifest-path native/r2-outer/Cargo.toml scan_ops::tests::declared` | 18 passed、601 filtered out |
+| `cargo test --offline --locked --manifest-path native/r2-outer/Cargo.toml` | **619 passed、5 suites、8.14秒** |
+| release build / Clippy `--all-targets -- -D warnings` | 成功 |
+| cargo fmt / exec_probe rustfmt / git diff空白検査 | 成功 |
+
+各コマンドは従来どおりbdo経由。全体受付無効・telemetry保留・OS接続/実機操作/token発行/設定変更/実行permit発行/Pushなしを維持した。

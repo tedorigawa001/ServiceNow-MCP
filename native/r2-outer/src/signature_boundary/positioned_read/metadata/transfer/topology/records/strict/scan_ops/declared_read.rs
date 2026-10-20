@@ -1,6 +1,29 @@
 //! Sequential size-bound subset; no digest, complete metadata policy, or execution seal.
 use super::*;
 
+// Only this module can construct the one-call access value, after checking declaration
+// position/length/state. Consumed by transfer_once; not an execution permit or public input.
+pub(super) struct DeclaredAccess<'r, 's, S: ScanOps> {
+    resource: &'r Resource<'s, S>,
+    offset: u64,
+    length: usize,
+    eof: bool,
+}
+impl<S: ScanOps> DeclaredAccess<'_, '_, S> {
+    pub(super) fn matches(
+        &self,
+        resource: &Resource<'_, S>,
+        offset: u64,
+        length: usize,
+        eof: bool,
+    ) -> bool {
+        std::ptr::eq(self.resource, resource)
+            && self.offset == offset
+            && self.length == length
+            && self.eof == eof
+    }
+}
+
 // Neither Clone nor serializable. Borrow both the held resource and immutable declaration.
 // A future protected producer must prove the declaration's parent/path/round provenance.
 pub(super) struct DeclaredFile<'r, 's, 'd, S: ScanOps> {
@@ -81,7 +104,13 @@ impl<'s, S: ScanOps> Boundary<'s, '_, '_, S> {
         if length == 0 || offset != file.next || output.len() != length {
             return self.fail(Failure::InvalidRange);
         }
-        let step = self.read_once(file.resource, offset, output)?;
+        let access = DeclaredAccess {
+            resource: file.resource,
+            offset,
+            length,
+            eof: false,
+        };
+        let step = self.transfer_once(file.resource, offset, output, false, Some(access))?;
         if step == ReadStep::Complete {
             file.next += length as u64; // <= size <= MAX_FILE, checked before first source call
         }
@@ -102,7 +131,13 @@ impl<'s, S: ScanOps> Boundary<'s, '_, '_, S> {
         if offset != file.size || file.next != file.size {
             return self.fail(Failure::InvalidRange);
         }
-        let step = self.eof_once(file.resource, offset, output)?;
+        let access = DeclaredAccess {
+            resource: file.resource,
+            offset,
+            length: 1,
+            eof: true,
+        };
+        let step = self.transfer_once(file.resource, offset, output, true, Some(access))?;
         if step == ReadStep::Interrupted {
             return Ok(step);
         }

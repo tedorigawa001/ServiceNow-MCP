@@ -502,3 +502,101 @@ fn matched_child_visitor_can_complete_a_size_bound_read_on_same_resource() {
     assert_eq!((out.summary.live, out.summary.declared_pending), (0, 0));
     assert_eq!(b.json_work, 32);
 }
+
+#[test]
+fn raw_read_and_eof_cannot_bypass_pending_or_completed_declaration() {
+    for case in 0..4 {
+        let (source, state, stop, tick) = fixture();
+        state.borrow_mut().reads.extend([Ok(4), Ok(0)]);
+        let mut b = SharedBudget::new(tick.get(), &stop);
+        let entry = declaration(4);
+        let out = with_boundary(source, Some(quotas()), &mut b, |s| {
+            let a = s.acquire(None, None, Kind::Anchor)?;
+            let f = s.acquire(Some(&a), Some("file"), Kind::File)?;
+            let mut file = s.bind_declared(&f, &entry)?;
+            if case >= 2 {
+                s.read_declared(&mut file, 0, &mut [0; 4])?;
+                s.eof_declared(&mut file, 4, &mut [0])?;
+            }
+            let before = (
+                s.budget.json_work,
+                s.budget.used,
+                s.budget.retries_left,
+                state.borrow().counts,
+            );
+            let result = if case % 2 == 0 {
+                s.read_once(&f, 0, &mut [0; 4])
+            } else {
+                s.eof_once(&f, 4, &mut [0])
+            };
+            assert_eq!(result, Err(Failure::Binding));
+            assert_eq!(
+                (
+                    s.budget.json_work,
+                    s.budget.used,
+                    s.budget.retries_left,
+                    state.borrow().counts
+                ),
+                before
+            );
+            result.map(|_| ())
+        });
+        assert_eq!(out.result, Err(Failure::Binding));
+        assert_eq!(out.summary.live, 0);
+        assert!(!state.borrow().duplicate);
+    }
+}
+
+#[test]
+fn raw_read_cannot_finish_a_declared_eintr_retry() {
+    for eof in [false, true] {
+        let (source, state, stop, tick) = fixture();
+        if eof {
+            state.borrow_mut().reads.push_back(Ok(4));
+        }
+        state
+            .borrow_mut()
+            .reads
+            .extend([Err(OpFailure::Interrupted), Ok(if eof { 0 } else { 4 })]);
+        let mut b = SharedBudget::new(tick.get(), &stop);
+        let entry = declaration(4);
+        let out = with_boundary(source, Some(quotas()), &mut b, |s| {
+            let a = s.acquire(None, None, Kind::Anchor)?;
+            let f = s.acquire(Some(&a), Some("file"), Kind::File)?;
+            let mut file = s.bind_declared(&f, &entry)?;
+            let interrupted = if eof {
+                s.read_declared(&mut file, 0, &mut [0; 4])?;
+                s.eof_declared(&mut file, 4, &mut [0])?
+            } else {
+                s.read_declared(&mut file, 0, &mut [0; 4])?
+            };
+            assert_eq!(interrupted, ReadStep::Interrupted);
+            let before = (
+                s.budget.json_work,
+                s.budget.used,
+                s.budget.retries_left,
+                state.borrow().counts,
+            );
+            let result = if eof {
+                s.eof_once(&f, 4, &mut [0])
+            } else {
+                s.read_once(&f, 0, &mut [0; 4])
+            };
+            assert_eq!(result, Err(Failure::Binding));
+            assert_eq!(
+                (
+                    s.budget.json_work,
+                    s.budget.used,
+                    s.budget.retries_left,
+                    state.borrow().counts
+                ),
+                before
+            );
+            assert_eq!(state.borrow().reads.len(), 1);
+            result.map(|_| ())
+        });
+        assert_eq!(out.result, Err(Failure::Binding));
+        assert_eq!(b.retries_left, 7);
+        assert_eq!(out.summary.live, 0);
+    }
+}

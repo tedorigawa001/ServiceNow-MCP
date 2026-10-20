@@ -348,7 +348,7 @@ impl<'s, S: ScanOps> Boundary<'s, '_, '_, S> {
         offset: u64,
         out: &mut [u8],
     ) -> Result<ReadStep, Failure> {
-        self.transfer_once(r, offset, out, false)
+        self.transfer_once(r, offset, out, false, None)
     }
     fn eof_once(
         &mut self,
@@ -356,7 +356,7 @@ impl<'s, S: ScanOps> Boundary<'s, '_, '_, S> {
         offset: u64,
         out: &mut [u8; 1],
     ) -> Result<ReadStep, Failure> {
-        self.transfer_once(r, offset, out, true)
+        self.transfer_once(r, offset, out, true, None)
     }
     fn transfer_once(
         &mut self,
@@ -364,8 +364,16 @@ impl<'s, S: ScanOps> Boundary<'s, '_, '_, S> {
         offset: u64,
         out: &mut [u8],
         eof: bool,
+        access: Option<declared_read::DeclaredAccess<'_, '_, S>>,
     ) -> Result<ReadStep, Failure> {
         self.check(r)?;
+        let authorized = match access {
+            Some(access) => r.declared.get() && access.matches(r, offset, out.len(), eof),
+            None => !r.declared.get(),
+        };
+        if !authorized {
+            return self.fail(Failure::Binding);
+        }
         if r.kind != Kind::File
             || out.is_empty()
             || out.len() > MAX_CHUNK

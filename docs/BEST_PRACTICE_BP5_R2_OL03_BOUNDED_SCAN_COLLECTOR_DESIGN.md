@@ -1,6 +1,6 @@
 # BP-5 R-2 OL-03：scan work上界・bounded collector詳細設計
 
-Version: draft-0.5 / Date: 2026-10-20 / Status: 計算器・単発操作・child/seen・宣言size読取subsetを内部実装・合成検証。完全collector・workモデルとの接続・OS backend・運用quota承認は未対応。
+Version: draft-0.6 / Date: 2026-10-20 / Status: 計算器・単発操作・child/seen・宣言size読取subsetを内部実装・合成検証。bind後の低水準read迂回を拒否。完全collector・workモデル/OS接続・運用quota承認は未対応。
 
 ## 1. 目的・前提・非対象
 
@@ -297,7 +297,11 @@ direct-child helper自身の実課金（open/precharge・visitor・外側scope�
 
 `bind_declared` は同scopeのFile resourceとimmutableな `closure::Entry::File` をborrowし、宣言size 0〜512MiB、実statのRegular/size一致を検査して、非Clone/非serdeの `DeclaredFile` を返す。scope/source/ledgerを検査し、同resourceの再bindは拒否する。元のresourceはborrow中に解放・差替えできない。
 
-ただしこのEntryは**型付き入力であって信頼済み宣言の証明ではない**。accepted index/親path/name/receipt/roundに結合するproducerは未実装で、任意Entryとresourceのpath対応を本関数が証明するものではない。合成のchild visitorでは対応するentryを明示して接続しただけである。従来の低水準read APIも単発試験用に残っており、通常ClosureSourceや運用入口を本経路へ切り替えていない。
+ただしこのEntryは**型付き入力であって信頼済み宣言の証明ではない**。accepted index/親path/name/receipt/roundに結合するproducerは未実装で、任意Entryとresourceのpath対応を本関数が証明するものではない。合成のchild visitorでは対応するentryを明示して接続しただけである。従来の低水準read APIは未bind resourceの単発試験用に残るが、**bind後は宣言経路だけを許可**する。通常ClosureSourceや運用入口を本経路へ切り替えていない。
+
+`transfer_once` は `declared` resourceに対する通常の `read_once` / `eof_once` をBindingで拒否する。宣言経路は位置/長さ/完了状態の検査後に、そのmodule内だけで構築できる非Clone・1呼出し用 `DeclaredAccess` を渡す。transferは同resource実体・offset・長さ・data/EOF種別を照合して消費する。これは内部APIの経路制約であって実行permitではない。pending/完了後・EINTR待ちのいずれでも低水準呼出しをsource/work/payload/retry消費前に止め、宣言の進行位置を更新しない迂回retryを禁止する。
+
+サイズ上限は現段階の安全側の制約差として維持する。closure indexのper-file上限は `closure::MAX_FILE_BYTES` の2GiB（別途index全体の総量制限あり）だが、scan bind/read/数量計算器は `positioned_read::MAX_FILE` の512MiB。従ってindexが受け付け得る512MiB超のFile宣言でもscanはLimitで停止する。3scanが同じpayload上限2GiBを共有し、record再読/A・B/その他の消費・予約も合算するため、1round分の総量Lはさらに制限される。正常EOFの実課金は0だが、保守的な事前量は§7の `3(L+F')` を用い、他消費/予約と合わせる。全scan成功時のdataだけでも `3L` を要し、scanだけに全2GiBを割り当てた机上条件でもLは約682.7MiB以下に留まる。これは受付済みという意味ではなく、capを増額・roundごとにresetしない。
 
 | 段階 | 強制する条件 |
 |---|---|
@@ -316,3 +320,5 @@ bindはguard1＋stat dispatch1＋照合1＝3 work。各data/read retryはguard1�
 standaloneの成功はdata chunk数Cとして **`14+3C` work**（anchor/file取得・cleanup precharge4、scope2を含む）。4-byte fileは17、既存1-child照合内のvisitorとして実行した成功は32。残work0〜17で停止prefixと解放を検証した。既存候補式への費目割当、snapshotとのstat重複排除、retry係数・hash費・quotaへの接続は未対応で、`bp5-r2-scan-work-0.1` を本経路の検証済み上界として使わない。
 
 16追加テストで空/単chunk/64KiB境界/末尾chunk、範囲外/早期EOF、short/過大count、開始時size/型差、読取後size/stat差・EOFでの増加、data/EOFのEINTR、未完了/再bind/完了後再利用、取消/期限、取得不能、work/cap/異なるledger、child visitor接続を検証した。早期EOF guardを無効化すると対応試験が失敗し、復旧後に全体再検証した。完全metadata/hash・祖先/path再照合・protected producer/全closure seal・全体受付/OS backendは未接続のままである。
+
+後続の互換修正で低水準迂回の回帰テストを2件追加した。未修正時の両テスト失敗を確認し、修正後はpending/完了後のread/EOF、data/EOFのEINTR横取りをBindingで拒否した。拒否でsource/work/payload/retryが増えないことと、既存の宣言経路・未bind低水準経路の互換性を確認した。§14.1の17/32 workは維持する。
