@@ -1,6 +1,6 @@
 # BP-5 R-2 OL-03：現行完全collectorの費目・work上界再設計
 
-Version: draft-0.4 / Date: 2026-10-20 / Status: test-only計数・oracleのsubsetを検証。sealed profile/計算器は別紙draftで詳細設計。運用実装・全体受付は未対応。
+Version: draft-0.5 / Date: 2026-10-21 / Status: test-only計数・oracleとprivate sealed profile収集を合成検証。計算器・運用接続・全体受付は未対応。
 
 ## 1. 範囲と停止状態
 
@@ -236,6 +236,6 @@ draft-0.3では最終root照合漏れの修正によりcontrolを21増やした�
 
 work合計の監査と運用受付は別であり、3round operation/name台帳・運用quota producer・全体other上界・hard停止・OS/通常strict bridgeは依然未対応。§9の順序を維持し、次はsealed shape/profileと計算器・その収集/算術費の設計から進める。
 
-## 12. sealed shape/profileの後続詳細設計（設計のみ）
+## 12. sealed shape/profileの後続詳細設計と収集subset
 
-[sealed profile・純粋計算器draft-0.1](BEST_PRACTICE_BP5_R2_OL03_SEALED_SCAN_PROFILE_DESIGN.md)に、count-only一時集計→scalar-only出力、receipt/Inputs/round/token/budget結合、one-shot消費、統計収集 `11+2N+5E+K+B+M+D` と15-row算術（require込み20 work）の課金案を整理した。これらは未実装・未計数検証であり、§11のkernel実費や上界へ既に含まれる費用ではない。S.groupsの検査とその費用を控除せず、O.profile/O.calculate/O.useとして別に扱う。
+[sealed profile・純粋計算器draft-0.2](BEST_PRACTICE_BP5_R2_OL03_SEALED_SCAN_PROFILE_DESIGN.md)に、count-only一時集計→scalar-only出力、receipt/Inputs/round/token/budget結合、one-shot消費、統計収集 `11+2N+5E+K+B+M+D` と15-row算術（require込み20 work）を整理した。収集とrequireのみ内部実装・合成検証済み（基本61/5 work）。計算器・estimate・利用bridgeは未実装であり、§11のkernel実費や上界へ既に含まれる費用ではない。S.groupsの検査とその費用を控除せず、O.profile/O.calculate/O.useとして別に扱う。[収集合成記録](E2E_BEST_PRACTICE_R2_OL03_SEALED_SCAN_PROFILE_SYNTHETIC_2026-10-21.md)を参照。全体受付は無効のまま。

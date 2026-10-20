@@ -3,6 +3,7 @@ use super::*;
 use phases::IndexPhases;
 
 mod canonical;
+pub(in super::super) mod profile;
 mod root_path;
 
 pub(in super::super) struct ScanInputs<'i, 'd, 's, 'r> {
@@ -10,6 +11,7 @@ pub(in super::super) struct ScanInputs<'i, 'd, 's, 'r> {
     phases: &'i IndexPhases<'d, 's, 'r>,
     root: &'s RecordSnapshot,
     index: closure::Entry,
+    profile_started: std::cell::Cell<bool>,
 }
 pub(in super::super) struct ParentInput<'p, 'i, 'd, 's, 'r> {
     inputs: &'p ScanInputs<'i, 'd, 's, 'r>,
@@ -116,6 +118,7 @@ pub(super) fn build<'i, 'd, 's, 'r>(
             phases,
             root,
             index,
+            profile_started: std::cell::Cell::new(false),
         })
     })();
     stop(result, b)

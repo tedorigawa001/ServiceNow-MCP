@@ -1,6 +1,6 @@
 # BP-5 R-2 OL-03：scan work上界・bounded collector詳細設計
 
-Version: draft-0.17 / Date: 2026-10-20 / Status: private合成collectorの費目別計数を検証。sealed profile/計算器は別紙で設計のみ。通常strict・全体受付・OS接続・運用quota承認は未対応。
+Version: draft-0.18 / Date: 2026-10-21 / Status: private合成collectorの費目別計数とsealed profile収集を検証。計算器・通常strict・全体受付・OS接続・運用quota承認は未対応。
 
 ## 1. 目的・前提・非対象
 
@@ -507,7 +507,7 @@ system祖先profile/xattr/flagsの承認、保護されたroot/context/record pr
 
 同再設計のdraft-0.3/§11と[費目別検証記録](E2E_BEST_PRACTICE_R2_OL03_COLLECTOR_WORK_ACCOUNTING_SYNTHETIC_2026-10-20.md)で、test-only observerと別算術oracleを接続した。基本費52/49/46/1223/322/174/36の総和1902を維持。controlの最後のroot snapshot/比較漏れを修正し候補式は37+4E+D、groups min式維持で基本fixture上界は2017となった。運用shape/profile・計算器・全体受付を有効化したものではない。
 
-次の[sealed profile/計算器詳細設計](BEST_PRACTICE_BP5_R2_OL03_SEALED_SCAN_PROFILE_DESIGN.md)では、collectorのgroupsを再利用/省略せずcount-only統計を先行導出する案とした。収集・算術・利用guardはOへ別計上し、round間でprofileを再利用しない。設計のみで本collectorの動作・課金・入口は変更しない。
+次の[sealed profile/計算器詳細設計draft-0.2](BEST_PRACTICE_BP5_R2_OL03_SEALED_SCAN_PROFILE_DESIGN.md)では、collectorのgroupsを再利用/省略せずcount-only統計を先行導出する。private収集/requireを合成検証したが、算術・estimate・利用bridgeは未実装。収集・算術・利用guardはOへ別計上し、round間でprofileを再利用しない。本collectorの動作・課金・入口は変更しない。[収集合成記録](E2E_BEST_PRACTICE_R2_OL03_SEALED_SCAN_PROFILE_SYNTHETIC_2026-10-21.md)を参照。
 
 計測の基準：§21の1886は先行作業ツリーの記録。コミット分割で最適化前列挙を分離・再構成した前工程snapshotは1884 workだった。現行1902との差はそのコミット基準では18、先行作業ツリー基準では16である。source/payload/peakの値は変わらない。
 
