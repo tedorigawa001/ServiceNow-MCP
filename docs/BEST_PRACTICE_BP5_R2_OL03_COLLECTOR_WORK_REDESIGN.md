@@ -1,6 +1,6 @@
 # BP-5 R-2 OL-03：現行完全collectorの費目・work上界再設計
 
-Version: draft-0.1 / Date: 2026-10-20 / Status: ローカルソース照合に基づく設計案。計算器・profile・受付への実装と係数の独立検証は未実施。
+Version: draft-0.2 / Date: 2026-10-20 / Status: ローカルソース照合に基づく設計案。レビューでgroups上界の引締めと実閉包規模の試算を追記。計算器・profile・受付への実装と係数の独立検証は未実施。
 
 ## 1. 範囲と停止状態
 
@@ -79,11 +79,13 @@ Sの核は、Readyに結合済みのScanInputsを受けて `collect()` に入り
 ### 5.1 groups・route
 
 ```text
-U_groups = 8 + 4E + 4T + P×ell(N) + ell(c_v) + c_v
+U_groups = 8 + 4E + 4T + min(P, E−c_0)×ell(N) + ell(c_v) + c_v
 U_route  = (h+2) + E×(h+3) + K + k_v + P×ell(N)
 ```
 
-groupsの成功実費は既存§22の `8+4E+4T+B+V+M`。親を持つentry数≤PなのでB≤P×ell(N)、V≤ell(c_v)、M≤c_vで上から覆う。割当guard6回、配列の初期化/scatter、virtual indexの移動前課金を含む。
+補足（2026-10-20、レビュー）：draft-0.1のgroupsは `P×ell(N)` だった。Pは1 entryあたり最大63まで親prefixを数えるため、1 entry 1探索のgroupsには過大である（実閉包規模の試算でP×ell(N)=286,000、min式では最大でもE×ell(N)=71,513）。routeは各entryの中間prefixごとに `directory()` を検索するため、`P×ell(N)` が正しい上界でありそのまま維持する。c_0は§4の統計（root bucketのc_d）から取り、呼出し元の申告値を使わない。
+
+groupsの成功実費は既存§22の `8+4E+4T+B+V+M`。groupsは各entryにつき親directoryの二分探索を高々1回行うだけなので、Bは「親を持つentry数×ell(N)」で覆える。c_0をruntime root直下の子数（virtual indexを含む）とすると親を持つentry数はE−c_0であり、各entryはPへ1以上寄与するためP以下でもある。よってB≤min(P, E−c_0)×ell(N)、V≤ell(c_v)、M≤c_vで上から覆う。割当guard6回、配列の初期化/scatter、virtual indexの移動前課金を含む。
 
 routeはrootの1回と各entryの1回だけStepを作成する。h+1個の絶対snapshot、prefix構築、相対edge、directory検索、virtual indexのpin比較を含める。walk/rewalkのたびにrouteを再作成したと仮定して二重計上しない。逆に現行の実walk回数を減らさない。
 
@@ -163,6 +165,28 @@ U_total = U_index_existing + U_record_existing
 
 期待子準備5,501 entryの85,393 workはgroups/一覧参照/射影の部分費にすぎない。さらにwalk/rewalk・全snapshot・seal等を加える必要がある。通常閉包5,000〜6,000件が100万workに収まると主張しない。超える場合は上限を緩めず停止し、測定後に別途最適化案を検討する。
 
+### 7.1 実閉包規模の机上試算（2026-10-20、レビュー）
+
+§5の候補式（groupsは上記min式）へ、既存試算と同じ規模のshapeを代入した。実測・実閉包の計数ではなく、shapeの一部は仮定値である。
+
+前提：E=5,501（N=5,500）、F=4,501（index込み）、D=1,000（T=1,001）、P=22,000（K=27,501）、h=5、C=6,000、C_v=256（index16MiBの上限）、k_v=3、c_v=10、c_max=50〜500、J≤E×ell(c_max)、r=0。groupsのmin項は c_0 未確定のため保守的に E×ell(N)=71,513 で上から置いた。
+
+| 費目 | 1round |
+|---|---|
+| U_walk | **2,794,741**（約72%） |
+| U_route | 357,519 |
+| U_file | 282,056 |
+| U_enum | 267,096〜283,599 |
+| U_groups | ≤97,543（旧P×ell(N)式では312,030） |
+| U_seal | 44,527 |
+| U_control | 23,020 |
+| U_tail(0) | 25〜28 |
+| **U_S** | **約387万〜388万** |
+
+- 3round（§6の `3×U_S_base+3r0+3`、r0=0）は**約1,160万〜1,165万 work**で、元work上限100万の約12倍。U_walk単独でも1roundで上限の約2.8倍となり、index・record・otherを加える前に受付不能である。
+- 支配項はU_walkの各edge `acquire2＋snapshot上界20＋比較1＝23` と、A=(2E+3)(h+1)+2Kのうち絶対祖先分 (2E+3)(h+1)=66,030 と相対edge分 2K=55,002 である。scan詳細設計[§6.4](BEST_PRACTICE_BP5_R2_OL03_BOUNDED_SCAN_COLLECTOR_DESIGN.md#64-現行式で実閉包規模を受け付けられない見通しと判断事項2026-10-20レビュー)の判断事項（祖先edgeの軽量化、root祖先検証のround内集約、上限の再承認）は本collectorにもそのまま当てはまる。
+- groups式の引締めは上界を約21万下げるが、結論（受付不能）は変わらない。いずれの判断も人が行うまで、係数・上限・期限を黙って変更せず、全体受付は無効のまま維持する。
+
 ## 8. 実装時の検証条件（本工程では未実施）
 
 | 群 | 必須条件 |
@@ -194,4 +218,4 @@ U_total = U_index_existing + U_record_existing
 
 追加設計書と親2文書の相対リンク58件について参照先ファイルの存在、code fenceの対応、末尾改行と`git diff --check`を確認した。sourceコードの変更はないため、Rustビルド・テストは再実行していない。
 
-§7のshapeを候補式へ代入する算術確認では、groups54/route47/walk1278/enumeration342/file183/control38/seal36/tail21（r=0）の計**1999 work**だった。既存実測1902を上回るが、これは算術上の一点照合だけで、係数の独立計数・拒否prefix・大規模shapeの証明ではない。既存1902の実測を今回再実行したとも主張しない。§8の合成検証は未実施のままである。
+§7のshapeを候補式へ代入する算術確認では、groups54/route47/walk1278/enumeration342/file183/control38/seal36/tail21（r=0）の計**1999 work**だった（draft-0.1式）。draft-0.2のgroups min式ではc_0=3・min(P=3, E−c_0=2)=2によりgroups51、計**1996 work**となり、引き続き実測1902以上である。既存実測1902を上回るが、これは算術上の一点照合だけで、係数の独立計数・拒否prefix・大規模shapeの証明ではない。既存1902の実測を今回再実行したとも主張しない。§8の合成検証は未実施のままである。
