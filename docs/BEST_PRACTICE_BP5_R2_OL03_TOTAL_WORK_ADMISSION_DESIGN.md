@@ -169,3 +169,5 @@ record projection4/roundはRが所有する。旧index互換テストの固定45
 既存target用metadata100回/640KiBやtopology16,384をscanへ黙って流用・増額しない。単発native列挙・係数計数・scan専用quota/配賦・管理allocation/FD/cleanup方式が未確定なら開始前にUnavailableとする。設計のみで、実装・全体受付・native接続・permitは有効化しない。
 
 後続の[scan詳細設計draft-0.2 §11](BEST_PRACTICE_BP5_R2_OL03_BOUNDED_SCAN_COLLECTOR_DESIGN.md#11-純粋な計算器の先行実装collector未接続)で数量計算器のみを先行実装した。計算自体12 work・追加guard1・数量cap helper2はU_otherの別費目である。係数16/18はcollector未計数の候補値、shapeは運用証拠ではない。全体受付・予約・実sourceへ接続せず、未知quotaと大規模shapeの100万超過を解消済みと扱わない。
+
+さらに[scan詳細設計draft-0.3 §12](BEST_PRACTICE_BP5_R2_OL03_BOUNDED_SCAN_COLLECTOR_DESIGN.md#12-単発操作の内部契約合成source運用未接続)でenum/open/read/metadata/cleanupの単発内部境界を合成検証した。同SharedBudgetと元EINTR残を使い、取得前cleanup precharge・取得成功の即時owner化・一度限り解放・不明件数を保持する。scope固定費2は現段階で別に計数し、collector固定16への対応は未確定。完全collector/expected集合/size結合・承認quota/3round配賦・OS backend/host終了票接続はなく、全体受付は無効のまま維持する。

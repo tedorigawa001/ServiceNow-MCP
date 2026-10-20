@@ -1,12 +1,12 @@
 # BP-5 R-2 OL-03：scan work上界・bounded collector詳細設計
 
-Version: draft-0.2 / Date: 2026-10-20 / Status: 純粋なshape/操作数/work計算器のみ内部実装・合成検証。collector・係数の実操作計数・OS backend・台帳・運用承認は未対応。
+Version: draft-0.3 / Date: 2026-10-20 / Status: 純粋な計算器と単発操作境界を内部実装・合成検証。完全collector・係数16/18の実計数・OS backend・運用quota承認は未対応。
 
 ## 1. 目的・前提・非対象
 
 [全体work受付設計](BEST_PRACTICE_BP5_R2_OL03_TOTAL_WORK_ADMISSION_DESIGN.md)のSを具体化する。[index子phase](BEST_PRACTICE_BP5_R2_OL03_ROUND_DECLARATION_WORK_DESIGN.md#14-index上界の子phase分解とscan直前境界)のReady直後から、新しい全closure観測を返すまでが対象である。3roundの各roundで必ず新しく取得し、宣言からobservedを合成しない。
 
-本書はローカルソースに基づく設計であり、macOS SDKや公式APIの実証記録ではない。初稿はMDのみで、後続§11で純粋な計算器を先行実装した。collector実装・実機操作・API実接続・token発行・設定変更・permit発行・Pushは行わない。全体受付は無効、telemetry調査は保留。APPROVED_REGISTRY=None、通常v2 Unavailable、gate92、DER/absence停止を維持する。
+本書はローカルソースに基づく設計であり、macOS SDKや公式APIの実証記録ではない。初稿はMDのみで、§11の計算器、§12の単発操作境界を先行実装した。完全collectorとOS backendは未接続。全体受付は無効、telemetry調査は保留。APPROVED_REGISTRY=None、通常v2 Unavailable、gate92、DER/absence停止を維持する。
 
 workはBudget::workの課金量であって、CPU/RSS/OS syscall実行時間の上界ではない。名前列挙・metadata・読取の単発境界を実装しても、blocked I/Oや検査後変更を協調checkpointだけで排除したことにはならない。保護されたroot/context、更新leaseと外側監督は別の未解決条件である。
 
@@ -211,7 +211,7 @@ workをprechargeしてもOS非復帰は解決しない。解放処理のhard期�
 | 解放 | acquire成功直後の取消・失敗・unwind、各handle一度だけ解放。close失敗/不明・非復帰・FD再利用時にretryしない |
 | 感度 | extra拒否・path後検査・retry減算・prechargeを外す、係数を1減らす変異で対応試験が失敗 |
 
-本節のcollector試験やnative呼出しは未実施。後続§11では純粋な計算器の試験だけを行った。評価用の合成sourceは実filesystem完全性・監査証拠・leaseの代替ではない。
+本節の完全collector試験やnative呼出しは未実施。§11では計算器、§12では単発操作境界の部分試験を行った。評価用の合成sourceは実filesystem完全性・監査証拠・leaseの代替ではない。
 
 ## 10. 実装順・承認待ち
 
@@ -238,4 +238,23 @@ workをprechargeしてもOS非復帰は解決しない。解放処理のhard期�
 - 任意のindex互換型quantity-only cap helperはrequire1＋比較1の計2 work。available<=100万、3scanのwork<=availableなら等号を許すが、spent/他予約を引かず、work/bytes/FDの予約も発行しない。spentがほぼ100万でも数量比較だけは成功し得るため、全体受付の代用は禁止する。
 - 元start/origin/spent・I/O予約・metadata/topology/name台帳をresetしない。計算・guard・cap helperのBudget失敗はstickyな元理由を保持し、モデル不一致はUnavailable、Shape/Overflow/Retry/Capは内部で区別したLimitへ接続する。
 
-13件の追加テストで、机上例と費目、テスト専用の予定操作schedule interpreter、量の境界/overflow、共有retry・台帳・期限/取消・first failureを照合した。interpreterはcollectorの実装でも、native syscall数・hidden buffer・解放保証の証明でもない。§10の単発source・bounded collector・scan専用quota・root/clock/lease・上限再承認は引き続き未対応。全体受付と運用gateは停止したままである。
+13件の追加テストで、机上例と費目、テスト専用の予定操作schedule interpreter、量の境界/overflow、共有retry・台帳・期限/取消・first failureを照合した。interpreterはcollectorの実装でも、native syscall数・hidden buffer・解放保証の証明でもない。この計算器の段階では単発sourceも未対応だったが、後続§12で内部境界を先行実装した。bounded collector・scan専用運用quota・root/clock/lease・上限再承認は未対応。全体受付と運用gateは停止したままである。
+
+## 12. 単発操作の内部契約・合成source（運用未接続）
+
+[scan_ops.rs](../native/r2-outer/src/signature_boundary/positioned_read/metadata/transfer/topology/records/strict/scan_ops.rs)と[合成検証記録](E2E_BEST_PRACTICE_R2_OL03_SCAN_SINGLE_ATTEMPT_SYNTHETIC_2026-10-20.md)で§10の第2段階を先行実装した。privateな境界のみで、OS実装・運用呼出し・承認済みquota producerはない。quota未設定ならcallback/source前にUnavailableとする。合成quotaは承認済みscan planではなく、root/receipt/round結合を証明しない。
+
+| 操作 | 1呼出しの契約・課金 |
+|---|---|
+| open / ACL init | 1試行のみ。dispatch1＋cleanup precharge1を取得前に課金し、操作枠・live枠・cleanup枠を検査/確保。成功handleをpost-guardより前に非Clone ownerへ取り込む。失敗時は予約だけ解除しspentは戻さない |
+| enum | 1件/EOF/有限Errorのみ。dispatch1＋構造分類1。固定255-byte buffer、UTF-8/component境界を検査。ErrorをEOF化せず、Interruptedでも再試行しない |
+| read / EOF probe | dispatch1＋結果分類1。64KiB/512MiBの絶対envelopeと既存payload予約を含む2GiBを検査。短読取補完なし。成功bytesはpost-guard前に課金。EOFは1-byte要求の0だけ成功 |
+| EINTR | 1回のsource呼出しでInterruptedを返し、元共有retry残を1減らす。内部retry loopなし。呼出し側が同resource・offset・長さ・probe種別で明示的に次の1試行を行う。他操作への移行・未完了retryの放置を拒否 |
+| metadata | stat/FS/ACL stat/query/name size/read各1試行、各dispatch1。ACL init/freeは別操作。型・ACL sentinel 0/1・size/copy境界を検査。nameコピーは独立台帳へ遅延成功も計上し、target metadata枠を流用しない |
+| cleanup | ownerのDropが所有handleを一度だけ消費。取消/sticky stop後もprecharge済み枠で1試行し、再試行なし。Released/Unconfirmedを区別し、不明後は新規操作を停止。元失敗理由と別に不明件数を保持 |
+
+同じSharedBudgetをborrowし、start/origin/work/payload/retryをresetしない。scopeのresourceは同source/同ledgerへの結合を検査し、別scopeからの混入を拒否する。scoped harnessのsetup/terminal guardは合計**2 work**で、dispatch/prechargeと別費目。collector固定16のどのstepへ含めるかは未確定であり、二重加算・無根拠な控除はしない。
+
+通常の成功・失敗・取消・unwindではownerが解放する。忘却されたownerはlive/cleanup予約残として終端拒否するが、`mem::forget`された資源を回収できるとは主張しない。sourceはnon-panicking・隠れたretry/refillなしを満たす必要があり、合成試験はnative ABI/非復帰/cleanup hard期限を証明しない。不明件数の外側hostへの接続も未実装である。
+
+15テストで各操作cap、live/name/work/payload枯渇、source前拒否、遅延成功、EINTR共有、短読取/EOF、列挙/metadata不正応答、cleanup不明、unwind/忘却・別scopeを検証した。完全snapshotの正規化/前後比較、宣言sizeへの読取結合、expected/seen/余剰entry拒否、path walk・実metadata policy・3round quota配賦は未実装。§6の16/18と全体式は依然候補で、全体受付・permitを有効化しない。

@@ -3,6 +3,7 @@ use super::*;
 use crate::{closure, record_validation as r};
 
 mod round_declaration;
+mod scan_ops;
 mod scan_work;
 
 pub(super) struct InspectionContext<'a> {
