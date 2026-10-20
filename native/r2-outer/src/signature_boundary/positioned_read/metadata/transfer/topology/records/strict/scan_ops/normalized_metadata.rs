@@ -19,6 +19,19 @@ impl<S: ScanOps> PartialEq for MetadataSnapshot<'_, '_, S> {
     }
 }
 impl<S: ScanOps> Eq for MetadataSnapshot<'_, '_, S> {}
+impl<S: ScanOps> MetadataSnapshot<'_, '_, S> {
+    pub(super) fn record(&self, b: &mut SharedBudget<'_>) -> Result<RecordSnapshot, Failure> {
+        work(b)?;
+        Ok(RecordSnapshot {
+            stat: self.stat.clone(),
+            names: match self.names {
+                AttributeNames::Empty => VisibleNames::Empty,
+                AttributeNames::Provenance => VisibleNames::Provenance,
+            },
+        })
+    }
+}
+#[derive(Clone, Copy)]
 pub(super) struct MetadataPolicy {
     pub(super) device: u64,
     pub(super) kind: Kind,
@@ -39,12 +52,34 @@ impl<S: ScanOps> Boundary<'_, '_, '_, S> {
         policy: &MetadataPolicy,
         after: bool,
     ) -> Result<MetadataSnapshot<'r, 's, S>, Failure> {
+        self.collect_profile(resource, policy, after, false)
+    }
+    // Synthetic system-ancestor subset only. Never widen the runtime 0555 policy.
+    pub(super) fn collect_system<'r, 's>(
+        &mut self,
+        resource: &'r Resource<'s, S>,
+        policy: &MetadataPolicy,
+    ) -> Result<MetadataSnapshot<'r, 's, S>, Failure> {
+        self.collect_profile(resource, policy, true, true)
+    }
+    fn collect_profile<'r, 's>(
+        &mut self,
+        resource: &'r Resource<'s, S>,
+        policy: &MetadataPolicy,
+        after: bool,
+        system: bool,
+    ) -> Result<MetadataSnapshot<'r, 's, S>, Failure> {
         self.check(resource)?;
         let kind = match (resource.kind, policy.kind, policy.mode, policy.size) {
-            (Kind::File, Kind::File, 0o444 | 0o555, Some(size)) if size <= MAX_FILE => {
+            (Kind::Anchor | Kind::Directory, Kind::Directory, 0o555 | 0o755, None) if system => {
+                FileType::Directory
+            }
+            (Kind::File, Kind::File, 0o444 | 0o555, Some(size)) if !system && size <= MAX_FILE => {
                 FileType::Regular
             }
-            (Kind::Directory | Kind::Cursor, Kind::Directory, 0o555, None) => FileType::Directory,
+            (Kind::Directory | Kind::Cursor, Kind::Directory, 0o555, None) if !system => {
+                FileType::Directory
+            }
             _ => return self.fail(Failure::Binding),
         };
         let MetaValue::Stat(before) = self.metadata(resource, MetaOp::Stat, &mut [])? else {
@@ -58,6 +93,7 @@ impl<S: ScanOps> Boundary<'_, '_, '_, S> {
             || before.device != policy.device
             || before.mode != policy.mode
             || (kind == FileType::Regular && before.links != 1)
+            || (kind == FileType::Directory && before.links == 0)
             || before.mtime.nanoseconds >= 1_000_000_000
             || before.ctime.nanoseconds >= 1_000_000_000
         {

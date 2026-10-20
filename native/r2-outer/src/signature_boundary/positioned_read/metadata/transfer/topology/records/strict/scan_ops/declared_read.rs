@@ -54,6 +54,7 @@ pub(super) struct DeclaredFile<'r, 's, 'd, S: ScanOps> {
     complete: bool,
     expected_digest: [u8; 32],
     hash: Option<Sha256>,
+    verified_digest: Option<[u8; 32]>,
 }
 impl<S: ScanOps> std::fmt::Debug for DeclaredFile<'_, '_, '_, S> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -126,6 +127,7 @@ impl<'s, S: ScanOps> Boundary<'s, '_, '_, S> {
             complete: false,
             expected_digest,
             hash: Some(hash),
+            verified_digest: None,
         })
     }
 
@@ -209,7 +211,40 @@ impl<'s, S: ScanOps> Boundary<'s, '_, '_, S> {
         // Only EOF0 + stable post-stat + digest match finish a traversal. An unfinished binding
         // leaves pending evidence, so the scope terminal check cannot report success.
         file.complete = true;
+        file.verified_digest = Some(actual);
         self.ledger.borrow_mut().declared_pending -= 1;
         Ok(ReadStep::Complete)
+    }
+}
+impl<S: ScanOps> DeclaredFile<'_, '_, '_, S> {
+    pub(super) fn initial_record(
+        &self,
+        b: &mut SharedBudget<'_>,
+    ) -> Result<RecordSnapshot, Failure> {
+        self.before.record(b)
+    }
+    pub(super) fn observation(
+        &mut self,
+        b: &mut SharedBudget<'_>,
+    ) -> Result<closure::Entry, Failure> {
+        work(b)?;
+        if !self.complete {
+            return b.stop(Failure::Binding);
+        }
+        let Some(digest) = self.verified_digest.take() else {
+            return b.stop(Failure::Binding);
+        };
+        let snapshot = self.before.record(b)?;
+        // Bounded path/mode/digest output allocation, only AFTER actual read/hash success.
+        use crate::json::shared::Budget;
+        b.work(3)?;
+        let value = closure::Entry::File {
+            path: self._declaration.path().into(),
+            mode: format!("{:04o}", snapshot.stat.mode),
+            size: snapshot.stat.size,
+            sha256: hex(&digest),
+        };
+        b.checkpoint()?;
+        Ok(value)
     }
 }

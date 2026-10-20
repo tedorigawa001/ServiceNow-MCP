@@ -17,6 +17,15 @@ impl<'s, S: ScanOps> Boundary<'s, '_, '_, S> {
         expected: &[ExpectedChild<'_>],
         mut visit: impl FnMut(&mut Self, usize, Resource<'s, S>) -> Result<(), Failure>,
     ) -> Result<(), Failure> {
+        self.children_checked(parent, expected, |_, _| Ok(()), &mut visit)
+    }
+    pub(super) fn children_checked(
+        &mut self,
+        parent: &Resource<'_, S>,
+        expected: &[ExpectedChild<'_>],
+        mut check_cursor: impl FnMut(&mut Self, &Resource<'_, S>) -> Result<(), Failure>,
+        mut visit: impl FnMut(&mut Self, usize, Resource<'s, S>) -> Result<(), Failure>,
+    ) -> Result<(), Failure> {
         self.check(parent)?;
         if !matches!(parent.kind, Kind::Anchor | Kind::Directory) {
             return self.fail(Failure::Binding);
@@ -45,6 +54,7 @@ impl<'s, S: ScanOps> Boundary<'s, '_, '_, S> {
             seen.push(false);
         }
         let cursor = self.acquire(Some(parent), None, Kind::Cursor)?;
+        check_cursor(self, &cursor)?;
         let mut dots = [false; 2];
         let mut name = [0; 255];
         loop {

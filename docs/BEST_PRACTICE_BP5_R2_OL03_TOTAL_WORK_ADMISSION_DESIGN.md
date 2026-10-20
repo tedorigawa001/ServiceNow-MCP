@@ -189,3 +189,5 @@ record projection4/roundはRが所有する。旧index互換テストの固定45
 [scan詳細設計draft-0.11 §19](BEST_PRACTICE_BP5_R2_OL03_BOUNDED_SCAN_COLLECTOR_DESIGN.md#19-runtime-root以下の相対directory--file再照合の内部契約)で、相対祖先/leafとcanonical宣言・親子view・保持resourceを結合し、固定anchorから全絶対/相対edgeを再探索するsubsetを追加した。初回snapshot生成とscan_opsへの実接続はなく、一般費 `V+9(h+k)+39`、fixture file112/directory96は合成比較のprogram workである。元quota/100万上限を緩めず、全scan/3roundの操作配賦・上界・受付へは接続しない。
 
 [scan詳細設計draft-0.12 §20](BEST_PRACTICE_BP5_R2_OL03_BOUNDED_SCAN_COLLECTOR_DESIGN.md#20-canonical-entry所属判定の固定回数化)でcanonical参照確認の線形検索を除去した。上段112/96は先行版の記録とし、現行の入口費はΣp_iのない `V=6+Q+3k`（Q=6/7）、再照合はfile106/directory94となる。名前によるdirectory/child lookup、完全metadata、3round配賦の費用は解消しておらず、全体受付は無効のまま維持する。
+
+[scan詳細設計draft-0.13 §21](BEST_PRACTICE_BP5_R2_OL03_BOUNDED_SCAN_COLLECTOR_DESIGN.md#21-scan_ops接続全件回収collectorprivate合成経路)でprivateな全件回収collectorをscan_opsへ接続した。実read/hash/完全metadata・名前全集合・全path前後照合・終端cleanupを通過したslotだけで観測を構築し、AfterScanへ渡す合成試験を行った。fixture1886 work/876 source操作/peak5は計数結果であり、旧候補式や本番上界の認証ではない。expected構築/重複snapshot・追加walk等の費目と3round resource配賦を再整理するまで、全体受付・通常strict経路への切替・OS producerは未接続とする。

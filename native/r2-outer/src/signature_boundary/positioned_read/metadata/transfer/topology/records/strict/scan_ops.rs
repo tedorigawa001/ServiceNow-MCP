@@ -4,6 +4,7 @@ use crate::signature_boundary::positioned_read::metadata::collector::FsObservati
 use std::cell::{Cell, RefCell};
 
 mod child_set;
+pub(super) mod collector;
 mod declared_read;
 mod normalized_metadata;
 

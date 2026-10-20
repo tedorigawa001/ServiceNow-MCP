@@ -214,4 +214,4 @@ pub(super) fn with_round<'s, T>(
 }
 
 #[cfg(test)]
-mod tests;
+pub(super) mod tests;

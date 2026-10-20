@@ -4,13 +4,13 @@ use crate::closure::shared::{index_decode_count, tests::fixture};
 use crate::signature_boundary::positioned_read::metadata::transfer::tests::{records, target};
 use std::cell::Cell;
 
-pub(super) struct Setup {
-    pub(super) receipt: RecordReceipt,
-    pub(super) target: TargetDeclaration,
-    pub(super) observed: Vec<closure::Entry>,
+pub(in super::super) struct Setup {
+    pub(in super::super) receipt: RecordReceipt,
+    pub(in super::super) target: TargetDeclaration,
+    pub(in super::super) observed: Vec<closure::Entry>,
 }
 impl Setup {
-    pub(super) fn new() -> Self {
+    pub(in super::super) fn new() -> Self {
         let mut f = fixture();
         let mut v: serde_json::Value = serde_json::from_slice(&f.bytes).unwrap();
         v["entries"][3]["size"] = serde_json::json!(4096);
@@ -43,7 +43,7 @@ impl Setup {
         }
     }
 }
-pub(super) fn context() -> InspectionContext<'static> {
+pub(in super::super) fn context() -> InspectionContext<'static> {
     InspectionContext {
         registry: b"synthetic context only",
         groups: &[80],

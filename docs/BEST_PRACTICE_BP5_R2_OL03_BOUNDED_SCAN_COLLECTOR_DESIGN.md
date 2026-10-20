@@ -1,12 +1,12 @@
 # BP-5 R-2 OL-03：scan work上界・bounded collector詳細設計
 
-Version: draft-0.12 / Date: 2026-10-20 / Status: canonical参照所属判定を固定回数化。完全collector・全体work受付・OS接続・運用quota承認は未対応。
+Version: draft-0.13 / Date: 2026-10-20 / Status: scan_ops上で全entryを回収するprivate合成collectorを実装・検証。通常strict経路への組込み・全体work受付・OS接続・運用quota承認は未対応。
 
 ## 1. 目的・前提・非対象
 
 [全体work受付設計](BEST_PRACTICE_BP5_R2_OL03_TOTAL_WORK_ADMISSION_DESIGN.md)のSを具体化する。[index子phase](BEST_PRACTICE_BP5_R2_OL03_ROUND_DECLARATION_WORK_DESIGN.md#14-index上界の子phase分解とscan直前境界)のReady直後から、新しい全closure観測を返すまでが対象である。3roundの各roundで必ず新しく取得し、宣言からobservedを合成しない。
 
-本書はローカルソースに基づく設計であり、macOS SDKや公式APIの実証記録ではない。§11〜15で計算器・単発操作・child/seen・size/digestを、§16でruntime resourceのACL/xattr/FS正規化を先行実装した。完全collectorとOS backendは未接続。全体受付は無効、telemetry調査は保留。APPROVED_REGISTRY=None、通常v2 Unavailable、gate92、DER/absence停止を維持する。
+本書はローカルソースに基づく設計であり、macOS SDKや公式APIの実証記録ではない。§11〜20の部分実装に加え、§21で全entryを回収するprivate合成collectorをscan_opsへ接続した。通常のClosureSource呼出し経路とOS backendは未切替。全体受付は無効、telemetry調査は保留。APPROVED_REGISTRY=None、通常v2 Unavailable、gate92、DER/absence停止を維持する。
 
 workはBudget::workの課金量であって、CPU/RSS/OS syscall実行時間の上界ではない。名前列挙・metadata・読取の単発境界を実装しても、blocked I/Oや検査後変更を協調checkpointだけで排除したことにはならない。保護されたroot/context、更新leaseと外側監督は別の未解決条件である。
 
@@ -469,3 +469,34 @@ root/relative初回snapshotとresourceを保護されたopenerから生成する
 - membership1回を固定1 workとし、前後の共有checkpoint・sticky失敗を維持する。workは固定処理群の課金単位であり、CPU命令数・実時間を1に固定する主張ではない。
 
 入口のΣp_iは消え、Qもentry位置/Nに依存しない6/7となる。入口Vはkに線形（6+Q+3k）で、N=100,000/k=64でもcanonical所属確認64回は64 workである。ただし100,000 entryのJSON受付/完全collectorを成功させたという意味ではない。directory(path)の名前検索、expected childの2回全entry走査、child/seenの名前lookup、18M等のmetadata費は今回の対象外であり、全collectorの上界/受付問題は未解決。既存model ID・上限・運用gateは変更しない。
+
+## 21. scan_ops接続・全件回収collector（private合成経路）
+
+[collector.rs](../native/r2-outer/src/signature_boundary/positioned_read/metadata/transfer/topology/records/strict/scan_ops/collector.rs)と[検証記録](E2E_BEST_PRACTICE_R2_OL03_FULL_COLLECTOR_SYNTHETIC_2026-10-20.md)で、元SharedBudgetとscan_ops台帳を共有する全件回収を実装した。sourceとquotaをprivate harnessへ渡す合成経路であり、本番の保護されたproducer/OS backend/実行permitではない。
+
+### 21.1 全件完了の条件
+
+1. ReadyのScanInputsから同receipt/target/context/round/token/budgetへ結合したreadonly Layoutを取得する。期待entryは受理済み宣言＋同indexのvirtual entryだけ。各配列は上限検査・割当guard後に作成し、初期metadata slotと完了観測slotを別にNoneで初期化する。
+2. rootを固定anchor `/` から開く。system祖先は専用profile（Directory/root owner/0555または0755、local APFS等）で、runtime root以下は従来の0555/宣言file modeを使い、各edgeに完全metadata snapshotを取る。絶対祖先/rootは元receiptと比較する。
+3. rootおよび全宣言directoryを列挙する。expectedを同じaccepted Layoutから作り、末尾virtual indexだけを明示的な比較/shift課金でsorted位置へmergeする。child/seenは既存binary-search実装を使い、未知/重複名を子open前に拒否、EOFでmissingを拒否する。
+4. cursorは独立handleとして完全snapshotを取り、保持parentのsnapshotと一致を要求する。既存children_checked visitorでmatched childを開き、その完全snapshotを初期slotへ一度だけ格納する。directory列挙の前後でも同parentを比較する。
+5. 全entryは改めて `/` から絶対・相対の全edgeを開く。相対祖先/leafは初期slotのsnapshotと比較し、同inode/ctime等を新値へ更新して受け入れない。virtual indexでは元record pinのleafとindex親祖先にも一致を要求する。
+6. fileはその同resourceでbind_declared→正確な64KiB chunk→EOF0→post-metadata→実SHA-256一致まで完了させる。観測fileは実Statのmode/sizeと実計算digestから作る。declarationをそのままcloneして完了結果にしない。空fileもEOF/hashを検査する。
+7. entry作業のhandleを閉じてから再び全pathを開き直し、初期snapshotへ照合する。その後だけ完了slotへ観測を格納する。最後に保持rootのmetadataとroot全pathも再確認する。
+8. 全slotがSomeであることを検査し、同immutable宣言で全集合を再検証してClosureObservationを作る。with_boundaryの終端（live/cleanup/retry/pending/guard）が不成立なら結果全体を捨てる。成功値も通常のAfterScan/FinalIndexを省略する権限ではない。
+
+### 21.2 既存契約との接続境界
+
+§18/19のRootPathSource/RelativeSourceは集約Observationを返す比較用契約なので、その1呼出しをnative操作1回として包まない。collectorのwalk/rewalkは同じ固定anchor・全edge・元snapshot照合条件を、scan_opsのacquire/完全snapshot/Dropへ接続する。scan側で新たに独立した10秒予算やEINTR残を作らない。
+
+MetadataSnapshotのrecord射影は完全snapshot取得後のみ。system用の専用入口はruntime入口の0755許可へ流用できず、file/cursorをsystem profileとして受け付けない。DeclaredFileの観測射影は完了flag＋実計算済みdigestを一度だけ消費し、未完了では拒否する。Resourceのsource/ledger同一性、DeclaredFileの同resource borrow、cursor/leafとparent/初期slotのStat/names一致を維持する。
+
+通常strict_roundのClosureSource::scan呼出しはまだ変更しない。現行ClosureRequestはScanInputs/Ready phaseを渡さないため、将来の型付きbridge設計と承認済みquota producerが必要である。合成テストではReady→collector→AfterScan→FinalIndexを直接接続し、別途1つのSharedBudgetを使う3roundも検証する。
+
+### 21.3 費用・未対応
+
+fixture（通常宣言4 entry＋index、directory2/file3、root深さ2）では、collector入口〜with_boundary終端が**1886 work / 876 source操作（cleanup込み） / payload4590 bytes / peak owner5**。source操作はnative syscall数ではない。全体work上界・係数の証明ではなく、Node/Readyの前処理や呼出し元AfterScan/FinalIndexはこの1886へ含めない。3roundは同start/work/payload/EINTR残で共有し、取得/cleanup/metadata等のquotaは依然合成値のみである。
+
+full metadata、child visitorの初期snapshot、bind前後snapshot、各walk/rewalk、追加のroot再照合・全集合再検証等があるため、旧候補式1362や純粋比較器の106/94をそのまま本collectorへ使わない。expected child構築の2回全entry走査はdirectoryごとに残る。routeのprefix検索はaccepted宣言上のbinary searchで比較ごとに課金する。モデル/費目所有・配賦・全体受付を更新するまでは未知費を0とせず、100万を超える実閉包を上限増額で通さない。
+
+system祖先profile/xattr/flagsの承認、保護されたroot/context/record producer、OS backend、更新lease/ABA/全検査後の変更防止、blocked I/Oのhard停止、hostへのcleanup終了票、通常ClosureSourceへの型付きbridge、work/resource全体受付は未対応。合成sourceの真実性やOSの原子的一貫性を検証したものではない。既存運用gate・本番policy未投入・DER/absence停止・telemetry保留を維持する。

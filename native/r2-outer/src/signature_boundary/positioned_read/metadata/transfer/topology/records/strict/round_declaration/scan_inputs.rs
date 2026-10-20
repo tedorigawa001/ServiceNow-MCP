@@ -19,6 +19,15 @@ pub(in super::super) struct ChildInput<'c, 'p, 'i, 'd, 's, 'r> {
     parent: &'c ParentInput<'p, 'i, 'd, 's, 'r>,
     entry: &'p closure::Entry,
 }
+// Read-only accepted layout for the private scan_ops collector; not an OS receipt producer.
+pub(in super::super) struct Layout<'a> {
+    pub(in super::super) ancestors: &'a [RecordSnapshot],
+    pub(in super::super) components: Vec<String>,
+    pub(in super::super) entries: &'a [closure::Entry],
+    pub(in super::super) index: &'a closure::Entry,
+    pub(in super::super) root: &'a RecordSnapshot,
+    pub(in super::super) index_record: &'a RecordSnapshot,
+}
 impl std::fmt::Debug for ScanInputs<'_, '_, '_, '_> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.write_str("ScanInputs(receipt_round_only_not_execution_authority)")
@@ -113,6 +122,40 @@ pub(super) fn build<'i, 'd, 's, 'r>(
 }
 
 impl<'i, 'd, 's, 'r> ScanInputs<'i, 'd, 's, 'r> {
+    pub(in super::super) fn layout(
+        &self,
+        current: &RoundScope<'_>,
+        b: &mut SharedBudget<'_>,
+    ) -> Result<Layout<'_>, Failure> {
+        self.guard(current, b)?;
+        work(b)?;
+        Ok(Layout {
+            ancestors: &self.declaration.scope.receipt.pins[2].ancestors,
+            components: absolute(&self.declaration.scope.receipt.binding.runtime_root)?,
+            entries: self.declaration.entries(),
+            index: &self.index,
+            root: self.root,
+            index_record: &self.declaration.scope.receipt.pins[2].leaf,
+        })
+    }
+    pub(in super::super) fn complete(
+        &self,
+        current: &RoundScope<'_>,
+        entries: Vec<closure::Entry>,
+        b: &mut SharedBudget<'_>,
+    ) -> Result<ClosureObservation, Failure> {
+        self.guard(current, b)?;
+        // Still required again by AfterScan; this is NOT permission to skip the strict phase.
+        self.declaration.recheck(current, Some(&entries), b)?;
+        b.checkpoint()?;
+        Ok(ClosureObservation {
+            lineage: current.receipt.lineage.clone(),
+            records: current.receipt.binding.clone(),
+            round: current.round,
+            token: current.token.clone(),
+            entries,
+        })
+    }
     fn canonical(&self, entry: &closure::Entry, b: &mut SharedBudget<'_>) -> Result<bool, Failure> {
         canonical::contains(self.declaration.entries(), &self.index, entry, b)
     }
