@@ -20,6 +20,8 @@ Date: 2026-10-20 / Status: 内部subsetのみ実装・合成検証。実filesyst
 
 scope setup/terminal guardの固定費は2 work。成功flow（open3、enum1、read2、metadata2、cleanup4）は17 work、payload4 bytes。metadataの通常9 primitive（ACL init込み）＋ACL free、anchor/fileの取得/解放を含むflowは16 work。これらは単発境界の計数で、collector固定16/完全snapshot18の証明ではない。
 
+補足（2026-10-20、レビュー）：上の17・16はいずれもscope固定2を**含む**値である。内訳は、1呼出し当たりopen/ACL init 2（dispatch1＋cleanup precharge1）、enum 2、read/EOF probe 2、metadata 1、cleanup 0（precharge済み）で、成功flowは 2＋open3×2＋ACL init2＋AclQuery1＋enum2＋read2＋EOF2＝17、metadata flowは 2＋open2×2＋ACL init2＋metadata8×1＝16。
+
 ## 3. 合成15テストの結果
 
 | 群 | 確認内容 |
