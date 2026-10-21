@@ -1,6 +1,7 @@
 //! Guard-only internal stage. No collector/source dispatch or permit is returned.
 use super::super::super::use_state::State;
 use super::*;
+use crate::signature_boundary::positioned_read::metadata::transfer::topology::records::strict::scan_ops::collector::{ENTRY_MODEL_ID, KERNEL_MODEL_ID};
 
 pub(super) fn consume(
     estimate: ScanWorkEstimate<'_, '_, '_, '_, '_>,
@@ -17,8 +18,11 @@ pub(super) fn consume(
     }
     let result = (|| {
         estimate.profile.require(inputs, current, MODEL_ID, b)?; // 1..5
-        work(b)?; // 6: fixed estimate model contract, not an attestation of a live callee
-        if estimate.calculator_model != CALCULATOR_ID || estimate.kernel_model != KERNEL_ID {
+        work(b)?; // 6: fixed collector contract; no caller-selected callee or expected ID
+        if estimate.calculator_model != CALCULATOR_ID
+            || estimate.kernel_model != KERNEL_MODEL_ID
+            || KERNEL_ID != KERNEL_MODEL_ID
+        {
             return Err(Failure::Unavailable);
         }
         b.checkpoint()?;
@@ -38,8 +42,11 @@ pub(super) fn consume(
         // Publish only after the last fallible step; no rollback/reset or further work.
         b.checkpoint()?;
         original.scan_started.set(State::BridgeReady {
+            owner: std::ptr::from_ref(original).cast::<()>(),
             started: estimate.profile.started,
             retries: estimate.profile.shape.r,
+            kernel_model: KERNEL_MODEL_ID,
+            entry_model: ENTRY_MODEL_ID,
         });
         Ok(())
     })();

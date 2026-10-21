@@ -1,6 +1,6 @@
 # BP-5 R-2 OL-03：estimate消費型bridge・利用guard7の詳細設計
 
-Version: draft-0.3 / Date: 2026-10-21 / Status: ScanInputs側の利用状態とguard7単体の内部subsetを合成検証。固定callee結合・collector入口guard・bridge dispatchは未実装。
+Version: draft-0.4 / Date: 2026-10-21 / Status: 固定collector model結合・guard7・入口guard1と合成kernel接続を検証。単一bridge関数・通常strict/OS接続・全体受付は未実装。
 
 ## 1. 範囲と停止状態
 
@@ -21,7 +21,7 @@ Version: draft-0.3 / Date: 2026-10-21 / Status: ScanInputs側の利用状態とg
 | `phases.finish` | Compared→Finished。record再読/厳密検証を挟みFinalIndex/Node照合 | bridge外のI/R費。省略しない |
 | 通常 `strict_round` | 現在は従来のClosureSourceを呼び、estimate/完全collectorと未接続 | 本書では切り替えない。後の通常strict統合は別承認/検証 |
 
-既存の直接collect合成テストはestimateを要求していない。draft-0.2以降の案では、外側のcollect入口も同Inputsの利用状態を消費する構造にする。未claimのInputs、guard途中で失敗したInputs、既にcollectorへ渡したInputsでは、新しいsource操作前に拒否する。旧本体を呼ぶ口はprivateなkernelに閉じ、直接kernelを必要とする合成試験はcfg(test)専用入口に限る。他はbridge経由へ移行する。draft-0.3は利用状態/guard単体だけを実装し、collect入口は未変更なので、直接collectの強制拒否はまだ未実装である。
+draft-0.4では外側collect入口も同Inputsの利用状態を消費する。未claim/Attempted/既EnteredのInputsをsource操作前に拒否し、旧本体はprivate `kernel` に閉じた。従来のkernel単独費目/感度試験は明示的な `#[cfg(test)] kernel_for_test` へ移し、追加入口試験はestimate→guard→外側collectを通す。非test buildにtest bypass入口は存在しない。単一consume_and_collect関数と通常strictへの切替はまだ追加しない。
 
 ## 3. 所有権・内部API案
 
@@ -61,9 +61,9 @@ estimateはmove/非Cloneによって再利用不能なので、estimate内のboo
 | Fresh | Inputs構築時のみ | profile_startedとは別のscan利用状態 |
 | Attempted | bridge入口、最初のfallible処理前にFreshから移す | 元がFresh以外なら拒否。失敗でもFreshへ戻さない |
 | BridgeReady | guard第7点で全検査成功後、Attemptedから移す | 正当なestimate/同bindingの確認を完了。guard途中の失敗では作らない |
-| Entered（遷移は未実装） | 将来collector入口でBridgeReadyを一度だけ消費 | Fresh/Attempted/Enteredは拒否する予定。quota不足/中断/途中失敗でも戻さない |
+| Entered | collector入口でBridgeReadyを一度だけ消費（draft-0.4実装） | Fresh/Attempted/Enteredは拒否。quota不足/中断/途中失敗でも戻さない |
 
-BridgeReadyには元startedと入口rの固定snapshotを保持する（draft-0.3実装済み）。receipt/scope/token/originは同Inputsのdeclarationへのborrowから照合し、呼出し元にsetter・公開constructor・状態resetを与えない。将来collector入口は同RoundScope object・同origin/started/rを再確認する。後続の既存layout/Ready検査は省略しない。
+BridgeReadyには元started/rに加え、元Inputsの比較専用owner pointer、固定kernel/entry model IDを保持する。ownerは参照解除せず、Debug/serdeへ出さない。同内容の別Inputsへ状態をコピーしても拒否し、guard後にInputsを移動して別addressになった場合も安全側に拒否する。OS上のABA/FD identityを証明する値ではない。receipt/scope/token/originは同Inputsのdeclarationへのborrowから照合し、setter・公開constructor・状態resetはない。collector入口は同Inputs/同RoundScope object/同origin/started/r/modelを再確認し、後続layout/Ready検査も省略しない。
 
 collector入口では状態を先に不可逆に消費してから、fallibleな課金/検査を行う。正しいBridgeReadyでも、そこで取消/期限/上限に達したら再利用不可。状態の消費は新budgetへ移す権利やpermitを作らない。bridgeからcollectorへの間にawait/任意callbackを挟まない。
 
@@ -93,23 +93,25 @@ guardが通ってもrecordのwall-clock期限、FSの不変性、sourceの真実
 | 1〜3 | Profile.require内のInputs.guard：scope/budget/receipt等の一致、Ready、同declaration | 3 |
 | 4 | Profile.require内のprofile固定model、同Inputs/scope/origin/startedの確認 | 1 |
 | 5 | Profile.require内の保存rと現retry残一致、終端checkpoint | 1 |
-| 6 | estimateのcalculator/kernel固定modelの一致。固定calleeとの結合は未接続で、実装範囲を§12で区別 | 1 |
+| 6 | estimateのcalculator/kernel固定modelと、固定collector module宣言KERNEL_MODEL_IDとの一致。入口modelも固定定数から結合 | 1 |
 | 7 | 同Inputsが今回のAttemptedで元はFreshだったこと、binding/start/r不変を確認。終端guard成功と結びBridgeReadyへ一方向に移す | 1 |
 | 合計 | 元SharedBudgetへ課金。新budget・返金・予約なし | **7** |
 
 第6/7点も既存workの前後guardに加えて検査後checkpointを置く。unknown/旧modelであれば第6点まで、work不足なら該当prefixまでで停止する。既存sticky failureがあれば課金前に元理由を返すが、利用claimは消費済みのままとする。各点は固定scalar/identity検査だけで、fieldの可変長走査・合計再計算・payload hash・quota全走査を含めない。
 
-現calculatorのKERNEL_IDはcalculator IDのaliasで、collector側にはまだこの係数model宣言がない。実装時には固定collector入口と係数表を版で明示的に結び、**文字列一致だけで任意実装を認証しない**。入口が未対応/未知ならUnavailableにする。旧scan-work-0.1へのfallbackや任意の係数入力は不可。
+calculatorのKERNEL_IDはcalculator IDのaliasだが、collector側は独立の固定literal `KERNEL_MODEL_ID=bp5-r2-collector-work-0.1` を宣言する。guard第6点で双方を照合し、BridgeReadyへ固定 `ENTRY_MODEL_ID=bp5-r2-collector-entry-0.1` とともに保存する。入口も両IDを確認し、不一致はUnavailable。旧scan-work-0.1へのfallbackや任意係数入力はない。
 
-draft-0.3のguard単体はestimate内部の固定model契約までを確認する。実collector/未対応calleeへdispatchするAPIはなく、calleeを確認済みとする証拠も返さない。次工程で固定callee結合を実装するまでは、BridgeReadyをcollector開始許可として扱わない。guardの成功試験とbridge全体の成功試験は区別する。
+draft-0.3ではestimate内部modelだけを見ていたが、draft-0.4は固定入口から**同moduleのprivate kernelへ直接dispatch**する。呼出し元のexpected ID・関数pointer・任意collector callbackは受け付けず、文字列一致だけで別実装を認証しない。sourceはScanOpsの合成契約に従うもので、kernel選択とは別。これは署名/OS producerの信頼を証明する検査ではない。BridgeReadyを外部permitや全体受付へ変換しない。
 
 7 workはcollectorに入る前の固定費だけである。独立resource/quotaの事前受付、全体残workとの比較、運用producerの承認は含まない。quota未提供は既存with_boundaryでUnavailable、範囲不適合はLimitとし、guardがquotaを発行・補充しない。
 
-### 5.1 collector入口の追加guard（O.dispatch、1 work案）
+### 5.1 collector入口の追加guard（O.dispatch、1 work、合成検証済み）
 
 外側collect入口でBridgeReady→Enteredの一度限り消費と、同scope/origin/started/rを固定scalarで照合する。新しいsource操作・with_boundary本体より前に行い、元budgetへ追加1 workを課金し前後/終端checkpointを置く。先行sticky failureは優先し、失敗時に状態を戻さない。
 
-この追加費は**O.use7にも既存S.controlにも吸収しない**。外側collect入口と旧kernel本体を区別し、O.dispatch=1という別費にする。既存kernelの実費/係数model0.1はその範囲で維持できるが、bridge接続経路全体はdispatchを別途加算しなければならない。入口用の固定submodelをkernel係数と区別する案とし、具体ID/固定ブロック上限・実費は実装時に検証する。追加1は未実装の候補である。
+この追加費は**O.use7にも既存S.controlにも吸収しない**。外側collect入口と旧kernel本体を区別し、O.dispatch=1を別費として計数した。kernelの実費/係数model0.1は元の範囲で維持し、接続経路へdispatchを加算する。入口submodelは上記ENTRY_MODEL_ID。固定ブロック最大32 scalar演算の独立監査は引き続き別課題。
+
+入口失敗は `DispatchOutcome::NotStarted(Failure)`、kernelを呼んだ場合は `Collected(既存Outcome)` として区別する。前者に架空のcleanup summaryを作らず、後者のresult/summaryはそのままmoveする。NotStartedでも入力状態はEnteredのまま。sourceは事前handleなしの合成契約で、入口失敗時のdropで新source操作を行わない。
 
 ## 6. one-shot・lifetime・成功経路
 
@@ -123,7 +125,7 @@ Ready → bind_inputs → profile収集 → calculate（profile消費）
       → AfterScan → record再読/clock/strict → FinalIndex
 ```
 
-これは将来の合成接続順序で、通常strictへ実装済みではない。bridgeはReady→Compared/Finishedを実行しない。成功しても既存IndexPhases.stateはReadyのままで、呼出し元がInputsをdropしてからphases.after_scanへ進む。estimate/profileはbridge内で消費済みなので外へ逃がさない。
+これは単一bridgeの目標順序で、通常strictへ実装済みではない。draft-0.4の合成経路は `estimate.consume_for_collector` と外側collectを連続して呼び、成功後にborrowを解放して既存AfterScan/FinalIndexを通した。単一consume_and_collectの前後checkpoint/終了報告統合は未対応。guard/入口自身はReady→Compared/Finishedを実行しない。
 
 成功時はcollector既存のClosureObservationをmoveする。lineage/records/round/token/entriesをbridgeでclone・再構成・再sealしない。AfterScanでは既存どおり再検証する。S.seal成功をAfterScan完了票に変換しない。
 
@@ -165,11 +167,11 @@ bridgeのcollector前後に追加するcheckpointはworkを課金しない既存
 | I | AfterScan/FinalIndex/Node等の既存index子phase | S.sealを移管/完了扱いしない |
 | R/その他O | record再読/strict/time、target、phase制御、将来quota受付/bridge追加費 | 未確定分を0にしない |
 
-基本fixtureでは既存S実費1902、O.profile実費61、O.calculate実費20が別々に確認済み。draft-0.1の1909/1990はdispatchを含まない値だった。draft-0.2の将来検証目標はS＋use＋dispatch=1910、profile＋calculate＋use＋dispatch＋S=1991。**bridge/dispatchは未実装のため実測ではない。** bind/I/R/その他Oは含まない。
+基本fixtureでは既存S実費1902、O.profile61、O.calculate20、O.use7、O.dispatch1を計数した。外側collectはS＋dispatch=1903、profile＋calculate＋use＋dispatch＋S=1991を3種roundで実測。S＋use＋dispatch=1910はこの分解の和である。draft-0.1の1909/1990はdispatchを含まない値だった。bind/I/R/その他Oは含めず、単一bridge全体や運用受付の額とはしない。
 
 同fixtureのr=8なら、収集上界62＋計算20＋use7＋dispatch1＋U_S2041＝2131。r=0なら2107。実費と上界、入口rとsession初期rを混ぜない。3round分のuse21＋dispatch3＝24を候補とするが、3round resource受付・全体other/予約は未完成で、24を足すだけで全体受付を有効化しない。初回に消費したworkは返金しない。
 
-## 9. 合成受入試験案（未実施）
+## 9. 段階全体の受入試験計画（実施subsetは§12/13）
 
 1. estimate→guard7→入口guard1→固定kernelのtracer。O.use7/O.dispatch1とS既存実費を別observerで数え、全体budget deltaと一致。basicの将来目標1910/1991を照合する。
 2. 入口同一性：別Inputs/receipt/target/context/scope/token/round/budget/start、Ready外を拒否。guard不成立時はsourceのopen/enum/read/metadata/cleanupがすべて未呼出し。
@@ -184,11 +186,11 @@ bridgeのcollector前後に追加するcheckpointはworkを課金しない既存
 ## 10. 未確定事項と実装順
 
 1. ScanInputsのprivate利用状態とguard7単体は§12で合成検証済み。型のconsumeと元bindingを固定し、許可tokenを返さない。
-2. 次に外側collect入口の状態消費/guard1・固定kernel呼出口/係数modelを結び、合成source・既存Outcomeのmove・終端失敗を接続する。直接collect試験はbridge経由またはcfg(test)専用kernel入口へ移す。lifetime/最小可視性、borrow解放後のphase接続をコンパイラで確認。
+2. 外側collect入口の状態消費/guard1・固定kernel係数model、合成source/既存Outcomeのmoveは§13で接続済み。直接collect試験は入口付き経路またはcfg(test)専用kernel入口へ移した。単一bridgeの前後guard/終了処理統合は後工程。
 3. O.use observerの所有区分と、source事前resourceを持たないことの検証方法を確定。追加helper課金が必要なら7を無断維持せず、所有表/式を改版。
 4. 3round resource配賦・全体work/other上界・承認quota producer・通常strictへの接続はさらに後工程。real sourceの信頼、OS cleanup、hard停止の承認は本設計で行わない。
 
-guard単体7 workは§12で計数済み。固定callee結合・dispatch1/1910/1991の合成計数、最大固定ブロックの独立監査、compile-fail試験は未実施。subsetの検証でbridge全体を実装済み/検証済みへ更新しない。
+guard7は§12、固定callee結合・dispatch1/1903/1991の合成計数は§13で確認済み。最大固定ブロックの独立監査・専用compile-fail試験・単一bridge全体は未検証で、subsetの結果を運用経路の証明に拡張しない。
 
 ## 11. draft-0.2の文書検証（履歴）
 
@@ -198,6 +200,14 @@ draft-0.2更新は本設計書と親3文書のみ。4文書の相対リンク先
 
 `scan_inputs/use_state.rs` と `profile/calculator/use_guard.rs` を追加。Fresh初期化は既存Inputs構築の固定処理に含め、O.bindのworkは変えない。estimateを値で受けるprivate `consume` が、元Inputsだけを先にAttemptedへ移し、Profile.require5＋model検査1＋最終binding/one-shot検査1で7 workを消費する。最後のcheckpointより前にBridgeReadyを公開しない。成功時の元started/rを保存し、失敗時に状態やworkを戻さない。既にAttempted/BridgeReady/Enteredの場合は状態を降格/再初期化せず拒否する。
 
-呼出しは合成テスト内だけで、guard関数はcalculator内部までの可視性に限定する。source/quotas/任意callbackを受けず、Result<()>以外のtoken・permit・Observation・estimateを返さない。Enteredは将来用variantで、運用の遷移はない。実collectorとのmodel結合、外側入口O.dispatch1、直接collect試験の移行、通常strict接続は未実装。
+draft-0.3時点の呼出しは合成テスト内だけで、guard関数はcalculator内部までの可視性に限定した。source/quotas/任意callbackを受けず、Result<()>以外のtoken・permit・Observation・estimateを返さない。当時のEntered遷移/model結合/入口/テスト移行は未実装だったが、§13で合成接続した。通常strict接続は引き続き未対応。
 
 新規11テストで7 work・27 round/retry条件・identity/model拒否・全不足work prefix・取消/期限・先行理由保持・one-shotを確認した。[合成検証記録](E2E_BEST_PRACTICE_R2_OL03_SCAN_USE_GUARD_SYNTHETIC_2026-10-21.md)を参照。直接collectの拒否や合法EINTR後のscan完了は後工程の試験であり、今回の結果では主張しない。全体受付・telemetry保留等の停止状態は変更しない。
+
+## 13. draft-0.4：固定collectorと入口guardの内部実装
+
+`ScanWorkEstimate::consume_for_collector` は既存guardを値消費で呼ぶ限定的内部methodで、固定collector modelとの照合を行う。`ScanInputs::enter_collector` は状態を最初のfallible処理より前にEnteredへ消費し、owner/scope/origin/started/model/rを1 workで再照合する。入口停止時もEnteredから戻さない。先行sticky理由を優先するため、初回scan失敗後の二重呼出しでは新Bindingより先行理由が返ることがあるが、再scanは行わない。
+
+`collector::collect` は入口guard成功時のみprivate kernelを呼ぶ。kernel単独試験用の4呼出し箇所をcfg(test)入口へ移し、旧費目テストの範囲を明示した。新規14テスト（状態単体6、固定入口8）で、直接/二重collect・コピーclaim・model/binding不適合、取消/期限/上限、quota/hash/metadata/cleanup失敗、合法EINTRと全3roundのAfterScan/FinalIndexを確認した。
+
+observerの既存7 kernel bucketは `52/49/46/1223/322/174/36` のまま。入口1はその外側（test observerのUnassigned）で計数し、S.controlへ押し込まない。source操作876/peak5・payloadの課金は元kernelの範囲で維持する。[固定入口の合成検証記録](E2E_BEST_PRACTICE_R2_OL03_COLLECTOR_ENTRY_SYNTHETIC_2026-10-21.md)を参照。単一bridge、全体受付、OS producerは未実装のまま維持する。

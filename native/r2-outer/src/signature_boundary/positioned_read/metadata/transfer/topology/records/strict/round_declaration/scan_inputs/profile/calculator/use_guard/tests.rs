@@ -35,8 +35,11 @@ fn consuming_guard_sets_only_original_inputs_ready_in_exactly_seven_work() {
         assert_eq!(
             inputs.scan_started.get(),
             State::BridgeReady {
+                owner: std::ptr::from_ref(inputs).cast::<()>(),
                 started: b.started,
-                retries: b.retries_left
+                retries: b.retries_left,
+                kernel_model: KERNEL_MODEL_ID,
+                entry_model: ENTRY_MODEL_ID,
             }
         );
         assert_eq!((b.used, b.reserved, b.retries_left, b.started), resources);
@@ -64,8 +67,11 @@ fn all_rounds_and_retry_remainders_preserve_the_shared_resources_and_ready_phase
                 assert_eq!(
                     inputs.scan_started.get(),
                     State::BridgeReady {
+                        owner: std::ptr::from_ref(inputs).cast::<()>(),
                         started: b.started,
-                        retries
+                        retries,
+                        kernel_model: KERNEL_MODEL_ID,
+                        entry_model: ENTRY_MODEL_ID,
                     }
                 );
                 // No phase advancement: the existing Ready guard still succeeds.
@@ -122,8 +128,11 @@ fn already_attempted_ready_or_entered_inputs_cannot_be_reused_or_downgraded() {
     for prior in [
         State::Attempted,
         State::BridgeReady {
+            owner: std::ptr::null(),
             started: start,
             retries: 8,
+            kernel_model: KERNEL_MODEL_ID,
+            entry_model: ENTRY_MODEL_ID,
         },
         State::Entered,
     ] {

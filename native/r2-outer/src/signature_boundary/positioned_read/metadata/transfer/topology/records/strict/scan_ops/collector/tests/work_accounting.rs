@@ -286,7 +286,7 @@ fn three_rounds_charge_seals_separately_and_share_only_one_retry_allowance() {
             let inputs = phases.bind_inputs(scope, b)?;
             let before = b.json_work;
             b.work_audit = Some(audit.clone());
-            let outcome = collect(
+            let outcome = kernel_for_test(
                 &inputs,
                 scope,
                 Fake(state.clone()),

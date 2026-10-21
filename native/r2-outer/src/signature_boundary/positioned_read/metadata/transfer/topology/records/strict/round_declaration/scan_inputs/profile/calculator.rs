@@ -22,6 +22,16 @@ impl std::fmt::Debug for ScanWorkEstimate<'_, '_, '_, '_, '_> {
         f.write_str("ScanWorkEstimate(round_budget_only_not_admission_authority)")
     }
 }
+impl ScanWorkEstimate<'_, '_, '_, '_, '_> {
+    pub(in super::super::super::super) fn consume_for_collector(
+        self,
+        inputs: &ScanInputs<'_, '_, '_, '_>,
+        current: &RoundScope<'_>,
+        b: &mut SharedBudget<'_>,
+    ) -> Result<(), Failure> {
+        use_guard::consume(self, inputs, current, b)
+    }
+}
 pub(in super::super::super::super) fn calculate<'p, 'i, 'd, 's, 'r>(
     profile: ScanShapeProfile<'p, 'i, 'd, 's, 'r>,
     inputs: &ScanInputs<'_, '_, '_, '_>,

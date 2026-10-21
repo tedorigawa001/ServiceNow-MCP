@@ -467,7 +467,7 @@ fn run_with_audit(
             active.set(true);
             let outcome = if matches!(case, Case::WrongScope) {
                 round_declaration::with_round(&f.receipt, &f.target, &c, round, b, |wrong, b| {
-                    Ok(collect(
+                    Ok(kernel_for_test(
                         &inputs,
                         wrong,
                         Fake(state.clone()),
@@ -476,7 +476,7 @@ fn run_with_audit(
                     ))
                 })?
             } else {
-                collect(
+                kernel_for_test(
                     &inputs,
                     scope,
                     Fake(state.clone()),
@@ -514,6 +514,7 @@ fn run_with_audit(
     (result, state, spent, b.used)
 }
 
+mod entry;
 mod work_accounting;
 #[test]
 fn all_entries_are_read_and_observed_then_accepted_by_after_scan_in_each_round() {
@@ -688,7 +689,7 @@ fn three_rounds_share_one_start_payload_and_eintr_allowance() {
             let d = scope.decode(b)?;
             let mut phases = d.prepare_scan(scope, PHASE_MODEL_ID, b)?;
             let inputs = phases.bind_inputs(scope, b)?;
-            let outcome = collect(
+            let outcome = kernel_for_test(
                 &inputs,
                 scope,
                 Fake(state.clone()),

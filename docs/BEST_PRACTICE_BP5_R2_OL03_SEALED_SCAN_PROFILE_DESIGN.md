@@ -1,6 +1,6 @@
 # BP-5 R-2 OL-03：sealed scan shape/profile・純粋計算器の詳細設計
 
-Version: draft-0.6 / Date: 2026-10-21 / Status: private sealed profile・計算器/estimate・Inputs利用状態/guard7単体を合成検証。固定callee/入口guard1/bridge dispatch・全体受付は未実装。
+Version: draft-0.7 / Date: 2026-10-21 / Status: private sealed profile・計算器・guard7・固定collector/入口guard1を合成検証。単一bridge・通常strict・全体受付は未実装。
 
 ## 1. 目的・停止条件
 
@@ -102,7 +102,7 @@ Profile.requireは、既存Inputs.guard3＋由来/固定model/immutable統計の
 
 retry残が減っていればChanged。古い上界が保守的に見えても自動的にrを差し替えて再計算しない。増えていれば同じく拒否する。内部で新budgetを作り「同じ残数」に合わせることも禁止する。builder完了からcalc/利用入口まで元budgetへ別の作業を挿入しても、spentを巻き戻さず、残workの受付成功とは扱わない。
 
-estimateを利用するguard単体は、上記5＋estimate/profile/modelの結合確認1＋同Inputsの利用状態を一度だけ移譲する確認1の**7 work**をO.useへ別計上し合成検証した（§14）。claimはestimate内ではなくScanInputsに置く。固定callee結合・collector入口の再利用拒否に必要なO.dispatch1は未実装。橋渡しは未実装なので、このguardが現行collectに存在するとは記さない。内部estimateの消費は実行permitの発行ではない。
+estimateを利用するguardは、上記5＋estimate/profile/固定collector modelの結合確認1＋同Inputsの利用状態の移譲確認1の**7 work**をO.useへ別計上する（§14）。claimはScanInputsに置き、collector入口の再利用拒否O.dispatch1も内部実装/合成検証済み。通常strictへの単一bridgeは未対応で、内部estimateの消費は実行permitの発行ではない。
 
 ### 6.2 固定15算術ブロック
 
@@ -133,7 +133,7 @@ U_calculate_prefix  = 20
 
 20はdraft-0.3で実装・計数済み。各rowを既存workと終端checkpointで挟み、row15は同budgetのbinding/retryを直接再照合する。byte/chunk整合をrow1に配置してrow15へ検査を集中させない。各row内の32演算という設計上限の独立監査は引き続き別課題で、machine instruction数の証明ではない。再帰・可変長のsum(Vec)・同じentry全件走査をfixed rowへ混ぜない。
 
-既存の基本fixture（N=4/E=5/D=2/K=8/c_0=3/M=2/ell(N)=3）ではU_profile=62、計算20、利用guard単体7までの上界部分和は89 work。さらに§14のdispatch1を足すと90となる案。実測の部分和はprofile61＋計算20＋guard単体7＝88で、90は未実装部分を含む算術例。retry残r=0のkernel候補2017へ加えると2107だが、ScanInputs構築・I/R/その他Oを含む全体額ではなく、受付可能性は判定しない。r=8の計算器単体の例は§13を参照。
+既存の基本fixture（N=4/E=5/D=2/K=8/c_0=3/M=2/ell(N)=3）ではU_profile=62、計算20、利用guard7、dispatch1の上界部分和は90 work。実測の部分和はprofile61＋計算20＋guard7＋dispatch1＝89。retry残r=0のkernel候補2017へ上界90を加えると2107だが、ScanInputs構築・I/R/その他Oを含む全体額ではなく、受付可能性は判定しない。r=8の計算器単体の例は§13を参照。
 
 estimateは純粋な上界と同shapeの予測を持つだけ。残work/payload/operation/cleanup枠との比較や予約を行わず、「fits」「admitted」を返さない。上界が100万を超えても、純粋算術結果を内部で保持する（合成検証済み）。算術overflowはLimitで停止する。上限超過を実行可能へ変換する口は設けない。
 
@@ -145,7 +145,7 @@ estimateは純粋な上界と同shapeの予測を持つだけ。残work/payload/
 | profileのlayout取得・統計収集 | O.profile | kernel内のlayout/groupsは依然別の実行。控除しない |
 | 20 workの算術とそのguard | O.calculate | Sの候補式の固定余裕へ吸収しない |
 | 利用guard単体7（合成検証済み） | O.use | 固定callee結合/通常strict bridgeの他費用が0になったとはしない |
-| 将来collector入口guard1 | O.dispatch | 同InputsのBridgeReadyを一度だけ消費。S.controlへ吸収しない |
+| collector入口guard1（合成検証済み） | O.dispatch | 同InputsのBridgeReadyを一度だけ消費。S.controlへ吸収しない |
 | 現行collect核 | S | 既存費目式とseal/AfterScanの分離を維持 |
 
 3roundともfreshなInputs/profile/estimateが必要。同じprofileやcount配列を次roundへ持ち越さず、各record/indexの前後厳密検証も維持する。n×U_base等は同じ不変宣言・shapeを将来も厳密再確認できる場合の**予測値**で、将来roundのbindingを発行した値ではない。
@@ -230,6 +230,6 @@ private scalar型・収集・binding/retry guardは§12、profile消費型15-row
 
 ## 14. estimate消費型bridgeの後続詳細設計（未実装）
 
-[bridge・利用guard7設計draft-0.3](BEST_PRACTICE_BP5_R2_OL03_ESTIMATE_BRIDGE_DESIGN.md)で、ScanInputs側のFresh→Attempted→BridgeReadyと、同receipt/round/token/origin/started/r/Ready結合・require5＋model1＋移譲1の内部subsetを合成検証した。guardはestimateを値で消費しtokenを返さず、sourceにも接続しない。固定calleeの検証と、collector入口でBridgeReadyをEnteredへ一度だけ消費して直接/二重collectを拒否するO.dispatch1は後工程。scan中の合法なretry消費後にProfile.requireを再適用しない方針、既存Outcomeの失敗とcleanup summary保持も引き続き接続待ち。[guard合成記録](E2E_BEST_PRACTICE_R2_OL03_SCAN_USE_GUARD_SYNTHETIC_2026-10-21.md)を参照。
+[bridge設計draft-0.4](BEST_PRACTICE_BP5_R2_OL03_ESTIMATE_BRIDGE_DESIGN.md)で、guard7の固定collector model結合と、入口のBridgeReady→Entered一度限り消費O.dispatch1を合成検証した。比較専用owner pointerで同Inputs objectを確認し、直接/二重collect・別Inputsへのclaimコピーを拒否する。kernelはprivateに閉じ、旧直接試験はcfg(test)入口へ移した。入口失敗はNotStarted、呼出し後は既存Outcome/cleanup summaryを含むCollectedとして区別する。[guard記録](E2E_BEST_PRACTICE_R2_OL03_SCAN_USE_GUARD_SYNTHETIC_2026-10-21.md)・[入口記録](E2E_BEST_PRACTICE_R2_OL03_COLLECTOR_ENTRY_SYNTHETIC_2026-10-21.md)を参照。
 
-bridge成功でphaseを進めず、S.seal・AfterScan・FinalIndexはそれぞれの所有費で維持する。O.use7は既存S.control/計算20へ吸収しない。guard単体の7 workは検証済みだが、固定collectorの係数model結合・dispatch・sourceを含む具体lifetime/cleanupは未接続。全体受付・通常strict・OS接続・permitを有効化しない。
+guard/入口成功だけでphaseを進めず、S.seal・AfterScan・FinalIndexはそれぞれの所有費で維持する。O.use7/O.dispatch1はS.control/計算20へ吸収しない。合成接続の外側collect1903、収集/計算/guard/入口/kernel合計1991を確認し、全3roundで合法EINTR後もAfterScan/FinalIndexを通した。単一bridge前後guard・運用source/cleanup統合・全体受付・通常strict・OS接続・permitは未対応。

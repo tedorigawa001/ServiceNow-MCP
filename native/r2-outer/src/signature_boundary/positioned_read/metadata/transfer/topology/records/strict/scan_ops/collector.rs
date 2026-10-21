@@ -274,8 +274,42 @@ impl<'s, S: ScanOps> Boundary<'s, '_, '_, S> {
         file.observation(self.budget)
     }
 }
-// Called only by this private synthetic integration harness. Missing quotas fail closed.
+// Only this module dispatches this fixed implementation. No caller-selected kernel.
+pub(in super::super) const KERNEL_MODEL_ID: &str = "bp5-r2-collector-work-0.1";
+pub(in super::super) const ENTRY_MODEL_ID: &str = "bp5-r2-collector-entry-0.1";
+
+pub(super) enum DispatchOutcome<T> {
+    NotStarted(Failure),
+    Collected(Outcome<T>),
+}
+
 pub(super) fn collect<S: ScanOps>(
+    inputs: &ScanInputs<'_, '_, '_, '_>,
+    current: &RoundScope<'_>,
+    source: S,
+    quotas: Option<Quotas>,
+    budget: &mut SharedBudget<'_>,
+) -> DispatchOutcome<ClosureObservation> {
+    if let Err(reason) = inputs.enter_collector(current, budget) {
+        drop(source); // Contract: inert/no pre-owned handles, no new source operation.
+        return DispatchOutcome::NotStarted(reason);
+    }
+    DispatchOutcome::Collected(kernel(inputs, current, source, quotas, budget))
+}
+
+// Test-only compatibility path for the unchanged kernel cost/sensitivity suite.
+#[cfg(test)]
+fn kernel_for_test<S: ScanOps>(
+    inputs: &ScanInputs<'_, '_, '_, '_>,
+    current: &RoundScope<'_>,
+    source: S,
+    quotas: Option<Quotas>,
+    budget: &mut SharedBudget<'_>,
+) -> Outcome<ClosureObservation> {
+    kernel(inputs, current, source, quotas, budget)
+}
+
+fn kernel<S: ScanOps>(
     inputs: &ScanInputs<'_, '_, '_, '_>,
     current: &RoundScope<'_>,
     source: S,
