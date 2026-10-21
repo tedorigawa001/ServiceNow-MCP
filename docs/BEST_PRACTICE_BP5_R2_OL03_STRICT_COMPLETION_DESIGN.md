@@ -147,6 +147,8 @@ Rust所有権の順序は、plan/phase生成→Inputsのimmutable borrow→profi
 
 既存ClosureSource::scan→Result<ClosureObservation>へ新Outcomeを押し込めない。固定ScanOps sourceを受けるstrict専用adapterを設け、成功/失敗双方でcleanup診断を移動する。旧traitは互換用の合成経路に限定し、session開始済みinspectionのfallbackに使わない。source/Quotasの可視性拡大が必要なら最小のstrict内部に限り、公開crate APIへ広げない。
 
+**RecordSourceの同一性（2026-10-21、レビュー）**：typed record stage（`revalidate_records`）と最終clock stageが受ける `RecordSource` は呼出し側が渡す値で、traitに `ResourceOrigin` 相当のidentityがないため、scan前の再読に使ったsourceと**同一instanceであること**は検査していない。既存 `strict_round` も同じ形であり、内容面ではreceipt pinのbytes一致・walk照合・metadataで束縛されるため、別sourceへ差し替えても同内容を返さない限り `Changed` 等で停止する。通常strictの固定orchestratorへ接続する際は、scan前reread・各round tail・最終clockで同じ `source` を `&mut` 借用で順に使う所有構造により同一性を保証し、round helperへ別source/再生成factoryを渡す口を設けない。より強い束縛が必要なら、`RecordSource` にprivate originを追加してreceipt/session生成時に記録し、各stageで `Rc::ptr_eq` 照合する案を別途検討する（未実装）。
+
 固定collectorはsourceを値で消費するため、新adapterには3round分のinert sourceを持つ非公開3slot ownerを置く案とする。固定位置で該当Optionをfallible処理前にtakeし、失敗でも補充/clone/再返却しない。生成・破棄時にhandle取得/外部効果を持たず、各sourceの操作だけが同じbudgetを使う。任意factory callbackからbounded性の分からないsourceを再生成する口は設けない。将来backendが事前resourceを持つならこの案をそのまま適用せず、取得/寿命/cleanup予約を別設計し、未承認の間は停止する。
 
 外側の破棄順は、未完了Pending/ack/round scope→session ledger→借用元receipt/context/held等の順に制約する。ledgerはAfterM4 ackと外側bodyの最終checkpointまで生存し、Finished後もbodyが失敗すれば元Failureを保持する。既存のsource/topology_source/held/recordsの破棄とその後のcheckpointを省略しない。ledgerを先に正常dropしたことを外側cleanup成功の代用にしない。
