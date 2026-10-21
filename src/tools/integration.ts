@@ -38,6 +38,40 @@ function validateStagingField(field: string): void {
   }
 }
 
+const IMPORT_SET_ROW_TABLE = 'sys_import_set_row';
+const MAX_STAGING_HIERARCHY_DEPTH = 10;
+const SYS_ID_RE = /^[0-9a-f]{32}$/i;
+
+function referenceSysId(value: unknown): string | undefined {
+  const raw = value && typeof value === 'object' ? (value as { value?: unknown }).value : value;
+  return typeof raw === 'string' && raw ? raw : undefined;
+}
+
+/**
+ * The caller names the destination table, so prove it is an Import Set staging table
+ * (a descendant of sys_import_set_row) before writing. Otherwise these tools become a
+ * generic WRITE-tier table writer that can bypass the scripting gate (e.g. sp_widget,
+ * sys_script) or write to security tables. Fails closed on any unexpected metadata.
+ */
+async function requireImportSetStagingTable(client: ServiceNowClient, table: string): Promise<void> {
+  const reject = () => new ServiceNowError(
+    `staging_table "${table}" is not an Import Set staging table (must extend ${IMPORT_SET_ROW_TABLE})`,
+    'VALIDATION_ERROR'
+  );
+  if (!STAGING_FIELD_RE.test(table) || table === IMPORT_SET_ROW_TABLE) throw reject();
+  let query = `name=${table}`;
+  for (let depth = 0; depth < MAX_STAGING_HIERARCHY_DEPTH; depth++) {
+    const resp = await client.queryRecords({ table: 'sys_db_object', query, fields: 'name,super_class', limit: 1 });
+    const record = resp.records?.[0];
+    if (!record) throw reject();
+    if (depth > 0 && record.name === IMPORT_SET_ROW_TABLE) return;
+    const parent = referenceSysId(record.super_class);
+    if (!parent || !SYS_ID_RE.test(parent)) throw reject();
+    query = `sys_id=${parent}`;
+  }
+  throw reject();
+}
+
 function decodeXlsxBase64(contentBase64: unknown): Buffer {
   if (typeof contentBase64 !== 'string' || !contentBase64) {
     throw new ServiceNowError('content_base64 is required', 'INVALID_REQUEST');
@@ -287,13 +321,13 @@ export function getIntegrationToolDefinitions() {
     },
     {
       name: 'create_import_set_row',
-      description: 'Insert a row into an Import Set staging table for later transformation (requires WRITE_ENABLED=true)',
+      description: 'Insert a row into an Import Set staging table (a table extending sys_import_set_row) for later transformation (requires WRITE_ENABLED=true)',
       inputSchema: {
         type: 'object',
         properties: {
           staging_table: {
             type: 'string',
-            description: 'Staging table name (e.g. "u_import_incident"). Must already exist.',
+            description: 'Staging table name (e.g. "u_import_incident"). Must already exist and extend sys_import_set_row.',
           },
           import_set_sys_id: { type: 'string', description: 'sys_id of the Import Set that owns this staging table' },
           data: { type: 'object', description: 'Key-value pairs for the staging table row' },
@@ -314,7 +348,7 @@ export function getIntegrationToolDefinitions() {
             type: 'string',
             description: 'Base64-encoded .xlsx content (maximum 10 MiB compressed; ZIP expansion limits apply)',
           },
-          staging_table: { type: 'string', description: 'Existing Import Set staging table to receive parsed rows' },
+          staging_table: { type: 'string', description: 'Existing Import Set staging table (must extend sys_import_set_row) to receive parsed rows' },
           transform_map_sys_id: { type: 'string', description: 'Optional Transform Map sys_id to run after rows are inserted' },
           sheet_name: { type: 'string', description: 'Optional worksheet name (default: first worksheet)' },
           import_set_label: { type: 'string', description: 'Optional Import Set label' },
@@ -637,8 +671,10 @@ export async function executeIntegrationToolCall(
           typeof args.data !== 'object' || Array.isArray(args.data)) {
         throw new ServiceNowError('staging_table, import_set_sys_id, and data are required', 'INVALID_REQUEST');
       }
+      const stagingTable = String(args.staging_table);
+      await requireImportSetStagingTable(client, stagingTable);
       const importSet = await client.getRecord('sys_import_set', args.import_set_sys_id);
-      if (importSet.table_name !== args.staging_table) {
+      if (importSet.table_name !== stagingTable) {
         throw new ServiceNowError('staging_table does not match the specified import set.', 'VALIDATION_ERROR');
       }
       const unsafeFields = Object.keys(args.data).filter(field =>
@@ -647,11 +683,11 @@ export async function executeIntegrationToolCall(
       if (unsafeFields.length) {
         throw new ServiceNowError(`System fields are not permitted in import rows: ${unsafeFields.join(', ')}`, 'VALIDATION_ERROR');
       }
-      const result = await client.createRecord(args.staging_table, {
+      const result = await client.createRecord(stagingTable, {
         ...args.data,
         sys_import_set: args.import_set_sys_id,
       });
-      return { ...result, summary: `Inserted row into staging table "${args.staging_table}"` };
+      return { ...result, summary: `Inserted row into staging table "${stagingTable}"` };
     }
     case 'import_excel_to_import_set': {
       requireWrite();
@@ -675,6 +711,7 @@ export async function executeIntegrationToolCall(
       }
 
       const parsed = await parseExcelImportRows(args.content_base64, args.sheet_name, args.column_mapping);
+      await requireImportSetStagingTable(client, stagingTable);
       const importSet = await client.createRecord('sys_import_set', {
         table_name: stagingTable,
         label: typeof args.import_set_label === 'string' && args.import_set_label.trim()
