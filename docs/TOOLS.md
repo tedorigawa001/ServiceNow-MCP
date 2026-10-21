@@ -15,7 +15,7 @@ Complete reference for all tools across all ServiceNow modules. A `table` parame
 | Now Assist | `NOW_ASSIST_ENABLED=true` | AI summaries, NLQ, agentic playbooks |
 | ATF | `ATF_ENABLED=true` | Run test suites and individual tests |
 
-`import_cmdb_data`, `create_ci_relationship`, and `run_discovery_scan` use the CMDB Write tier. `create_import_set_row` must include the owning `import_set_sys_id`; ServiceNow system fields cannot be supplied.
+`import_cmdb_data`, `create_ci_relationship`, and `run_discovery_scan` use the CMDB Write tier. `create_import_set_row` must include the owning `import_set_sys_id`; ServiceNow system fields cannot be supplied. Both Import Set write tools verify through `sys_db_object` that `staging_table` extends `sys_import_set_row` before writing, so they cannot be used to write to arbitrary tables.
 
 ---
 
@@ -2445,7 +2445,7 @@ Get import set details and processing status.
 Create a row in a staging import set table. **[Write]**
 
 **Parameters**:
-- `staging_table` (required) — Import set staging table name
+- `staging_table` (required) — Import set staging table name; must extend `sys_import_set_row` (verified before any read of the Import Set or write)
 - `import_set_sys_id` (required) — Owning Import Set; added to every staging row automatically
 - `data` (required) — Key/value field data
 
@@ -2457,7 +2457,7 @@ The first row is the header. Headers either match staging-table column names or 
 **Parameters**:
 - `file_name` (required) — `.xlsx` file name
 - `content_base64` (required) — Base64-encoded workbook (subject to the ZIP expansion limits above)
-- `staging_table` (required) — Existing staging table
+- `staging_table` (required) — Existing staging table; must extend `sys_import_set_row` (verified before the Import Set is created)
 - `transform_map_sys_id` — Optional Transform Map to run after row insertion
 - `sheet_name` — Optional worksheet name (first worksheet by default)
 - `import_set_label` — Optional Import Set label

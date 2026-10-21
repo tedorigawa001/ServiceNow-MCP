@@ -32,6 +32,13 @@ describe('P2 write boundaries', () => {
   it('binds an import row to its import set and rejects system fields', async () => {
     process.env.WRITE_ENABLED = 'true';
     (client.getRecord as ReturnType<typeof vi.fn>).mockResolvedValue({ table_name: 'u_import_ci' });
+    // The destination must be proven to extend sys_import_set_row before any write.
+    (client.queryRecords as ReturnType<typeof vi.fn>).mockImplementation(async ({ query }: { query: string }) => ({
+      count: 1,
+      records: [query === 'name=u_import_ci'
+        ? { name: 'u_import_ci', super_class: { value: 'b'.repeat(32) } }
+        : { name: 'sys_import_set_row', super_class: '' }],
+    }));
     await expect(executeIntegrationToolCall(client, 'create_import_set_row', { staging_table: 'u_import_ci', import_set_sys_id: 'a'.repeat(32), data: { sys_id: 'x' } })).rejects.toMatchObject({ code: 'VALIDATION_ERROR' });
     await executeIntegrationToolCall(client, 'create_import_set_row', { staging_table: 'u_import_ci', import_set_sys_id: 'a'.repeat(32), data: { hostname: 'server-1' } });
     expect(client.createRecord).toHaveBeenCalledWith('u_import_ci', {

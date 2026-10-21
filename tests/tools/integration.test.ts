@@ -15,6 +15,24 @@ const gr = () => mockClient.getRecord as ReturnType<typeof vi.fn>;
 const cr = () => mockClient.createRecord as ReturnType<typeof vi.fn>;
 const ua = () => mockClient.uploadAttachment as ReturnType<typeof vi.fn>;
 
+const ROW_BASE_ID = 'e'.repeat(32);
+const STAGING_ID = 'f'.repeat(32);
+type DbObject = { sys_id: string; name: string; parent?: string };
+/** Serve sys_db_object lookups by name or sys_id; any other table returns nothing. */
+function mockDbObjects(objects: DbObject[]) {
+  qr().mockImplementation(async ({ table, query }: { table: string; query: string }) => {
+    if (table !== 'sys_db_object') return { count: 0, records: [] };
+    const hit = objects.find(o => query === `name=${o.name}` || query === `sys_id=${o.sys_id}`);
+    return hit
+      ? { count: 1, records: [{ name: hit.name, super_class: hit.parent ? { value: hit.parent, link: 'https://x/api' } : '' }] }
+      : { count: 0, records: [] };
+  });
+}
+const STAGING_HIERARCHY: DbObject[] = [
+  { sys_id: STAGING_ID, name: 'u_import_ci', parent: ROW_BASE_ID },
+  { sys_id: ROW_BASE_ID, name: 'sys_import_set_row' },
+];
+
 async function xlsxBase64(rows: unknown[][]): Promise<string> {
   const workbook = new ExcelJS.Workbook();
   const sheet = workbook.addWorksheet('VI Import');
@@ -236,7 +254,7 @@ describe('Import Sets & Data Sources', () => {
   });
 
   describe('create_import_set_row', () => {
-    beforeEach(() => { process.env.WRITE_ENABLED = 'true'; });
+    beforeEach(() => { process.env.WRITE_ENABLED = 'true'; mockDbObjects(STAGING_HIERARCHY); });
     afterEach(() => { delete process.env.WRITE_ENABLED; });
 
     it('is blocked without WRITE_ENABLED', async () => {
@@ -278,10 +296,74 @@ describe('Import Sets & Data Sources', () => {
       expect(cr()).toHaveBeenCalledWith('u_import_ci', { hostname: 'server-1', sys_import_set: 'is1' });
       expect(result.summary).toContain('u_import_ci');
     });
+
+    it('rejects a non-staging table even when an Import Set names it as table_name', async () => {
+      // An Import Set's table_name is caller-controllable (import_excel_to_import_set creates one),
+      // so matching it is not proof that the destination is a staging table.
+      mockDbObjects([
+        { sys_id: STAGING_ID, name: 'sp_widget', parent: ROW_BASE_ID.replace(/e/g, 'd') },
+        { sys_id: ROW_BASE_ID.replace(/e/g, 'd'), name: 'sys_metadata' },
+      ]);
+      gr().mockResolvedValue({ sys_id: 'is1', table_name: 'sp_widget' });
+      await expect(executeIntegrationToolCall(mockClient, 'create_import_set_row', {
+        staging_table: 'sp_widget', import_set_sys_id: 'is1', data: { template: '<div ng-click="c.x()"></div>' },
+      })).rejects.toMatchObject({ code: 'VALIDATION_ERROR', message: expect.stringContaining('sys_import_set_row') });
+      expect(gr()).not.toHaveBeenCalled();
+      expect(cr()).not.toHaveBeenCalled();
+    });
+
+    it.each([
+      ['the base row table itself', 'sys_import_set_row', STAGING_HIERARCHY],
+      ['an unknown table', 'u_missing', STAGING_HIERARCHY],
+      ['a table with no parent', 'u_flat', [{ sys_id: STAGING_ID, name: 'u_flat' }]],
+      ['a malformed super_class reference', 'u_bad_ref', [{ sys_id: STAGING_ID, name: 'u_bad_ref', parent: 'not-a-sys-id' }]],
+    ])('rejects %s before any read or write', async (_label, table, objects) => {
+      mockDbObjects(objects as DbObject[]);
+      await expect(executeIntegrationToolCall(mockClient, 'create_import_set_row', {
+        staging_table: table, import_set_sys_id: 'is1', data: { hostname: 'server-1' },
+      })).rejects.toMatchObject({ code: 'VALIDATION_ERROR' });
+      expect(gr()).not.toHaveBeenCalled();
+      expect(cr()).not.toHaveBeenCalled();
+    });
+
+    it('rejects table names that could alter the encoded query without querying', async () => {
+      await expect(executeIntegrationToolCall(mockClient, 'create_import_set_row', {
+        staging_table: 'u_import_ci^ORname=sys_import_set_row', import_set_sys_id: 'is1', data: { a: '1' },
+      })).rejects.toMatchObject({ code: 'VALIDATION_ERROR' });
+      expect(qr()).not.toHaveBeenCalled();
+      expect(gr()).not.toHaveBeenCalled();
+      expect(cr()).not.toHaveBeenCalled();
+    });
+
+    it('stops at a bounded depth on a cyclic hierarchy', async () => {
+      mockDbObjects([{ sys_id: STAGING_ID, name: 'u_loop', parent: STAGING_ID }]);
+      await expect(executeIntegrationToolCall(mockClient, 'create_import_set_row', {
+        staging_table: 'u_loop', import_set_sys_id: 'is1', data: { a: '1' },
+      })).rejects.toMatchObject({ code: 'VALIDATION_ERROR' });
+      expect(qr().mock.calls.length).toBeGreaterThan(1);
+      expect(qr().mock.calls.length).toBeLessThanOrEqual(10);
+      expect(gr()).not.toHaveBeenCalled();
+      expect(cr()).not.toHaveBeenCalled();
+    });
+
+    it('accepts an indirect descendant of sys_import_set_row', async () => {
+      const middle = 'c'.repeat(32);
+      mockDbObjects([
+        { sys_id: STAGING_ID, name: 'u_import_ci', parent: middle },
+        { sys_id: middle, name: 'u_import_base', parent: ROW_BASE_ID },
+        { sys_id: ROW_BASE_ID, name: 'sys_import_set_row' },
+      ]);
+      gr().mockResolvedValue({ sys_id: 'is1', table_name: 'u_import_ci' });
+      cr().mockResolvedValue({ sys_id: 'row1' });
+      await executeIntegrationToolCall(mockClient, 'create_import_set_row', {
+        staging_table: 'u_import_ci', import_set_sys_id: 'is1', data: { hostname: 'server-1' },
+      });
+      expect(cr()).toHaveBeenCalledWith('u_import_ci', { hostname: 'server-1', sys_import_set: 'is1' });
+    });
   });
 
   describe('import_excel_to_import_set', () => {
-    beforeEach(() => { process.env.WRITE_ENABLED = 'true'; });
+    beforeEach(() => { process.env.WRITE_ENABLED = 'true'; mockDbObjects(STAGING_HIERARCHY); });
     afterEach(() => { delete process.env.WRITE_ENABLED; });
 
     it('parses header-mapped workbook rows without evaluating formulas', async () => {
@@ -397,6 +479,19 @@ describe('Import Sets & Data Sources', () => {
       });
       expect(result.rows_inserted).toBe(2);
       expect(result.transform_run.sys_id).toBe('run1');
+    });
+
+    it('rejects a non-staging destination before creating an Import Set or uploading', async () => {
+      mockDbObjects([
+        { sys_id: STAGING_ID, name: 'sys_script', parent: ROW_BASE_ID.replace(/e/g, 'd') },
+        { sys_id: ROW_BASE_ID.replace(/e/g, 'd'), name: 'sys_metadata' },
+      ]);
+      const base64 = await xlsxBase64([['script', 'when'], ['gs.info("x")', 'before']]);
+      await expect(executeIntegrationToolCall(mockClient, 'import_excel_to_import_set', {
+        file_name: 'rules.xlsx', content_base64: base64, staging_table: 'sys_script',
+      })).rejects.toMatchObject({ code: 'VALIDATION_ERROR', message: expect.stringContaining('sys_import_set_row') });
+      expect(cr()).not.toHaveBeenCalled();
+      expect(ua()).not.toHaveBeenCalled();
     });
 
     it('rejects non-xlsx files before creating records', async () => {
