@@ -106,6 +106,27 @@ impl<'s> ScanSessionLedger<'s> {
         }
         Ok(())
     }
+    pub(in super::super) fn require_acknowledged(
+        &self,
+        round: Round,
+        b: &SharedBudget<'_>,
+    ) -> Result<(), Failure> {
+        self.require_inspection(b)?;
+        let slot = match round {
+            Round::Initial => 0,
+            Round::BeforeM4 => 1,
+            Round::AfterM4 => 2,
+        };
+        let expected = match round {
+            Round::Initial => State::Expect(Round::BeforeM4),
+            Round::BeforeM4 => State::Expect(Round::AfterM4),
+            Round::AfterM4 => State::Finished,
+        };
+        if !self.ack_started[slot] || self.state != expected {
+            return Err(Failure::Binding);
+        }
+        Ok(())
+    }
     pub(in super::super) fn stop_inspection(
         &mut self,
         reason: Failure,

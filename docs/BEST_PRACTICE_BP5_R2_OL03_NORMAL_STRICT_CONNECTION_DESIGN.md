@@ -1,12 +1,12 @@
 # BP-5 R-2 OL-03：通常strictの固定3箇所・同RecordSource・M4 owner接続詳細設計
 
-Version: draft-0.2 / Date: 2026-10-21 / Design baseline: `fd1de54` / Implementation baseline: `2905075` / Status: owner・3slot・同source借用・外側停止の内部subsetを実装。handoff・通常strict接続は未実装。
+Version: draft-0.3 / Date: 2026-10-21 / Design baseline: `fd1de54` / Implementation baselines: owner `2905075`、topology `bd9301b` / Status: ownerと固定topology adapter・位置handoffの内部subsetを実装。通常kernel接続・通常strict差替えは未実施。
 
 ## 1. 範囲と不変条件
 
-[終了証拠設計](BEST_PRACTICE_BP5_R2_OL03_STRICT_COMPLETION_DESIGN.md)の後続として、実装済みの固定collector→typed tail→strict acknowledgementを通常strictの内部orchestratorへ接続する構造を具体化する。§2〜§9はdraft-0.1での接続案であり、実装済みsubsetと計数は§10で区別する。M4 owner/handoff・通常orchestrator・接続用全費目は未実装/未確定。
+[終了証拠設計](BEST_PRACTICE_BP5_R2_OL03_STRICT_COMPLETION_DESIGN.md)の後続として、実装済みの固定collector→typed tail→strict acknowledgementを通常strictの内部orchestratorへ接続する構造を具体化する。§2〜§9はdraft-0.1での接続案であり、実装済みsubsetと計数は§10〜§11で区別する。通常kernel/orchestrator・接続用全費目は未実装/未確定。
 
-全体受付は無効、telemetry調査は保留。APPROVED_REGISTRY=None、通常v2 Unavailable、gate92、DER/absenceの停止を解除しない。実装済み範囲は§10の内部subsetのみで、通常strict差替え・OS接続・実機操作・token発行・設定変更・本番policy投入・permit発行は本工程の対象外。
+全体受付は無効、telemetry調査は保留。APPROVED_REGISTRY=None、通常v2 Unavailable、gate92、DER/absenceの停止を解除しない。実装済み範囲は§10〜§11の内部subsetのみで、通常strict差替え・OS接続・実機操作・token発行・設定変更・本番policy投入・permit発行は本工程の対象外。
 
 接続後も次を必須とする。
 
@@ -74,7 +74,7 @@ scan前の再読を前roundのackやimmutable indexで省略しない。正常�
 
 固定外側orchestratorはadapter呼出しより前に、同held targetのresource origin、同TopologyReceipt/RecordReceipt/target/contextへの安定borrow、元budget/session identityに結合するprivate `TopologyRunOwner` を一度生成する。これはadapterのlocalから返す値ではなく、AfterM4消費まで生存する外側localとして保持する。StrictSessionOwnerのmutable borrowをこのowner内へ保存せず、同session claim/originを結合用identityとして保持する。heldのresource originもRc identityの共有で保持し、held内fieldのborrowを残したままheldをmutably借用する構造にはしない。
 
-adapterとhandoffはこの安定ownerをborrowする。内部の一意tokenはopaque identityとしてのみ使い、ID文字列・再利用可能nonce・allocation addressを外部証拠にしない。すべての照合はborrowが有効な間に行う。holder/receiptを動かして同一性を判定するraw pointer保存やunsafe参照復元は使わない。
+adapterとhandoffはこの安定ownerをborrowする。実装subsetでは元session/inspection identityとowner側の唯一生成claimを使い、追加のID文字列・再利用可能nonce・allocation addressを外部証拠にしない。すべての照合はborrowが有効な間に行う。holder/receiptを動かして同一性を判定するraw pointer保存やunsafe参照復元は使わない。
 
 ownerにはcompare_started／before_started／before_succeeded／completion_consumedの単調な利用状態を持たせる。安定ownerを共有borrowするposition/handoffと両立させるため、利用状態だけをprivateなCellで扱う案とし、RecordSourceやledger全体をRefCellへ入れない。各attempt claimはfallible処理前に消費し、失敗/forgetで戻さない。これらのprivate boolだけを入力にhandoffを作る関数は公開しない。
 
@@ -147,7 +147,7 @@ O.connection_create／O.slot_take／O.before_m4_position／O.after_m4_handoff／
 ## 9. 実装順・承認待ち事項
 
 1. private owner／3slot／同source借用／外側停止・診断結果の内部契約を先に実装し、合成sourceで確認する（subsetは§10）。通常strictはまだ差し替えない。
-2. 固定topology adapterとBeforeM4Position／AfterM4Handoffを合成検証し、B・recheck・M4の位置とowner結合を固定する。
+2. 固定topology adapterとBeforeM4Position／AfterM4Handoffを合成検証し、B・recheck・M4の位置とowner結合を固定する（内部subsetは§11）。通常kernelはまだ接続しない。
 3. 固定round kernelを実collector/typed ackへ接続し、旧経路との順序・費目・終了順序を照合する。通常v2の入口は停止したままにする。
 4. 診断の上位引渡し、O費/全体work/resource上界、運用policy信頼元とcapの承認を別工程で確定する。OS source・受付・署名policy・permitはそれぞれの承認なしには接続しない。
 
@@ -186,4 +186,34 @@ sessionにstrict内部だけのrequire_inspection／stop_inspection／abandon_in
 
 [owner契約合成記録](E2E_BEST_PRACTICE_R2_OL03_OWNER_CONTRACT_SYNTHETIC_2026-10-21.md)の新規11テストで、3slot/同sourceの実ack接続、6再読cycle、重複生成・順序/identity違い、生成の全10checkpoint/4課金後取消・work不足、slotの全6checkpoint/2課金後取消、recordの二重precheck/取得失敗/遅延取消・期限、末尾課金後取消、drop/forget、Finishedからの外側停止、実cleanup診断の保持、policy未提供の停止、型制約を確認する。診断のinline sizeはテストで256 bytes以下を要求する。
 
-通常strict.rsのorchestrator本体は差し替えていない。次は固定M4位置/owner handoffとkernelの接続、上位診断契約・新O費の全体上界が必要。OS source・運用policy・全体受付・permitは引き続き未対応/未承認、telemetryは保留。
+通常strict.rsのorchestrator本体は差し替えていない。このsubsetの後続となる固定M4位置/owner handoffは§11へ続く。残るkernel接続、上位診断契約・新O費の全体上界、OS source・運用policy・全体受付・permitは引き続き未対応/未承認、telemetryは保留。
+
+## 11. 固定topology adapter・位置handoff内部subset（draft-0.3）
+
+### 11.1 発行位置とowner結合
+
+[topology_adapter.rs](../native/r2-outer/src/signature_boundary/positioned_read/metadata/transfer/topology/records/strict/scan_ops/connection_owner/topology_adapter.rs)を追加した。owner.topology_runは唯一のtopology_started claimをfallible処理前に消費し、実Initial ack/期待状態、同receipt/target/context/budget・held origin・TopologyReceiptのbindingを要求する。返すTopologyRunOwnerは外側localに保持し、adapter内localへの参照を返さない。元RecordSourceやledgerのmutable borrowをrootへ移さない。
+
+固定compare wrapperは任意caller callbackや既存ComparedM0M4を受け取らない。private coreが既存compare_topologyをそのまま呼び、B成功→M4直前recheck成功の必須callback内だけでBeforeM4Positionを生成する。owner.before_positionが位置claimを先に消費し、同root/session/予算・Initial ackを照合してBeforeM4 slotをtakeする。body成功後も実BeforeM4 ackとwith_round末尾成功を照合し、checkpoint後にbefore_succeededを確定する。
+
+実M4取得・origin照合・比較終端が成功して初めて、private constructorがその実ComparedM0M4を所有するAfterM4Handoffを発行する。handoff model `bp5-r2-m4-handoff-0.1` はproducer/consumerの独立literalで照合。consumerは元root/receipt/context/session/budgetとBeforeM4 ackを再照合し、completion_consumed claimを先に消費してからAfterM4 slotへ移る。別ownerが同じ進行状態・実ackを持っていても拒否する。
+
+enterの戻り値はAfterM4Roundであり、比較結果を直接取り出せない。元root borrow、排他的slot、owned Comparedを保持し、次の実kernel/ack接続を待つ。4型とも非Clone/非Copy/非serde、private fieldとopaque Debug。旧TopologyComparison/RecordComparison、数値summary、成功boolから作る口はない。
+
+### 11.2 本番停止と合成成功の区別
+
+通常kernel未接続のため、non-testの固定compare wrapperは実BeforeM4位置を消費した時点でUnavailableを返して停止し、M4を取得しない。成功したと偽装するstubや旧ClosureSource fallbackは設けない。BeforeM4のproduction成功口、AfterM4Roundから全体結果へ進む口、通常strict.rsの差替えはまだない。
+
+cfg(test)だけのfixture wrapperが、同じprivate coreの位置取得から既存の実collector/record/FinalIndex/clock/typed ackへ接続する。テスト用固定kernelはcallback Okだけを成功にせず、同ledgerの実ackとwith_round末尾までを確認する。AfterM4Roundの比較結果を取り出すtest-only口も同じ固定kernel完了後に限定する。collectorへの薄いbridgeはcfg(test)のみで、既存production calleeの可視範囲は広げない。
+
+### 11.3 停止・費目・限界
+
+比較/位置/消費のErrでは元Failureをstickyに保ち、ownerを明示的にStoppedへ移し、実BeforeM4 failureのcleanup/summaryがあればmoveして保持する。M4失敗でBeforeM4 ackを取り消して再開可能にすることはない。
+
+TopologyRunOwner/未消費handoffのDropは、ledgerをmutable borrowせず元shared claimへ放棄停止を記録する。その瞬間にownerのenumを書き換えるのではなく、元budget/ownerの次の検査を即時に拒否し、ownerの明示停止/Dropで台帳状態も停止する。AfterM4RoundのDropはさらに未完了slotのDropを通じて台帳を停止する。forgetではDrop成功を主張せず、compare/consumptionのone-shot claimと必須handoffにより再開を拒否する。
+
+新費目はO.topology_owner=2、O.topology_compare=2、O.before_position=2、O.after_handoff=2で、成功subsetの追加は計8 work。既存slot take各2、record/scan/typed tail/ack費と区別する。合成計数はowner生成差分2、BeforeM4 body直前まで4（compare入口1＋位置1＋既存take2）、body後〜比較結果発行まで2、handoff enter差分4（新2＋既存take2）を確認する。位置handoffのための再scan/再parse/metadata再取得は追加しない。全体受付上界/運用capを確定した値ではない。
+
+M4結果はその比較時点までの証拠であり、以後のOS/path不変性や外側cleanup完了を保証しない。元held originのチェックは既存compare_topologyの取得前後で維持し、handoff enter自体ではM4を再取得しない。通常orchestratorの固定所有/呼出し順と、実OS sourceの保証は別途必要。
+
+[topology adapter合成記録](E2E_BEST_PRACTICE_R2_OL03_TOPOLOGY_ADAPTER_SYNTHETIC_2026-10-21.md)の新規11テストを参照。独立したB bytes/EOF計数、全22 topology操作の故障、M4 failure/late result、同状態の別owner、全prepare/handoff予算境界、誤成功/重複/drop/forget、型制約と変異検証を含む。通常kernel接続・OS source・運用policy・全体受付・permitは未対応/未承認、telemetryは保留。

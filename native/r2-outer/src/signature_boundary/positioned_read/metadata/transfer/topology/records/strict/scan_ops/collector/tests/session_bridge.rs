@@ -8,6 +8,7 @@ mod final_clock;
 mod final_index;
 mod owner_contract;
 mod records_stage;
+mod topology_adapter;
 
 fn caps() -> ledger_test::Policy {
     ledger_test::Policy {

@@ -1,6 +1,6 @@
 # BP-5 R-2 OL-03：型付きcleanup証拠・round完了・strict acknowledgement詳細設計
 
-Version: draft-0.11 / Date: 2026-10-21 / Status: typed strict acknowledgementと接続準備owner内部契約まで合成検証。通常strict差替え・M4 handoff接続は未実施。
+Version: draft-0.12 / Date: 2026-10-21 / Status: typed ack、owner、固定topology adapter/位置handoffの内部subsetまで合成検証。通常kernel接続・通常strict差替えは未実施。
 
 ## 1. 範囲と根拠
 
@@ -407,3 +407,9 @@ ack消費はwith_round closure内の最後のfallible処理として使う。wit
 [接続設計draft-0.2 §10](BEST_PRACTICE_BP5_R2_OL03_NORMAL_STRICT_CONNECTION_DESIGN.md)で、同&mut RecordSourceの継続borrow、固定3slotの不可逆takeと排他的RoundSlot、one-shot record precheck、Finishedを含む外側停止と実CompletionFailureの診断移動を実装した。production-facingな口はInitialの未完了slotまでで、通常strict/M4へは未接続。cfg(test)だけが同ledgerの実typed ackを確認して3slotの進行を検証する。
 
 追加費はowner生成2、slot2/round、record guard2/roundで既存費と分離し、停止自体は枠枯渇後も可能とした。[新規11テストの合成記録](E2E_BEST_PRACTICE_R2_OL03_OWNER_CONTRACT_SYNTHETIC_2026-10-21.md)を参照。M4位置/handoff、全体work上界、上位診断引渡し、OS source/運用cap/受付は別工程であり、今回通常strict.rs本体は変更していない。
+
+### 20.2 固定topology adapter・位置handoff（draft-0.12）
+
+[接続設計draft-0.3 §11](BEST_PRACTICE_BP5_R2_OL03_NORMAL_STRICT_CONNECTION_DESIGN.md)に、B→topology recheck後だけのBeforeM4Position、実M4比較結果を所有するAfterM4HandoffとAfterM4Round、同root/session/receipt/budget結合・失敗時停止を実装した。固定production wrapperは通常kernel未接続のためBeforeM4でUnavailable停止を維持し、成功経路はcfg(test)の実collector/typed ackでのみ検証する。
+
+[新規11テストの合成記録](E2E_BEST_PRACTICE_R2_OL03_TOPOLOGY_ADAPTER_SYNTHETIC_2026-10-21.md)ではB bytes/EOFとrecheck全操作、M4失敗/遅延結果、同状態の別owner拒否、one-shot/予算境界・変異を確認。追加coupling費8 workは既存slot/R/I/ackと分離し、全体上界の承認には使わない。通常strict差替え・OS source・運用policy・全体受付・permitは追加していない。

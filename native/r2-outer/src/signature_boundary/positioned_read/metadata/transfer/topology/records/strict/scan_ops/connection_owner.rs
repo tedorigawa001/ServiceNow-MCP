@@ -4,6 +4,7 @@ use collector::completion::CompletionFailure;
 use round_declaration::session::{self, ScanSessionLedger};
 
 const MODEL: &str = "bp5-r2-strict-owner-0.1";
+pub(in super::super) mod topology_adapter;
 #[derive(Clone, Copy, PartialEq, Eq)]
 enum Progress {
     Expected(Round),
@@ -21,6 +22,7 @@ pub(in super::super) struct StrictSessionOwner<'a, 's, S: RecordSource, C> {
     slots: [Option<C>; 3],
     progress: Progress,
     model: &'static str,
+    topology_started: bool,
 }
 pub(in super::super) struct RoundSlot<'o, 'a, 's, S: RecordSource, C> {
     owner: &'o mut StrictSessionOwner<'a, 's, S, C>,
@@ -99,6 +101,7 @@ pub(in super::super) fn create<'a, 's, S: RecordSource, C>(
         slots: scans.map(Some),
         progress: Progress::Expected(Round::Initial),
         model: MODEL,
+        topology_started: false,
     })
 }
 impl<'a, 's, S: RecordSource, C> StrictSessionOwner<'a, 's, S, C> {

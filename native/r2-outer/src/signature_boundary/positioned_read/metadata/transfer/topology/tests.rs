@@ -14,8 +14,15 @@ pub(super) struct Counts {
     pub(super) phases: RefCell<Vec<Phase>>,
     pub(super) reads: Cell<usize>,
     pub(super) copied: Cell<u64>,
-    attempts: Cell<usize>,
+    pub(super) attempts: Cell<usize>,
     round: Cell<usize>,
+    pub(super) adapter_fail_b: Cell<bool>,
+    pub(super) adapter_corrupt_b: Cell<bool>,
+    pub(super) adapter_eofs: Cell<usize>,
+    pub(super) adapter_fail_m4: Cell<bool>,
+    pub(super) adapter_swap_m4: Cell<bool>,
+    pub(super) adapter_cancel_m4: RefCell<Option<Rc<AtomicBool>>>,
+    pub(super) adapter_deadline_m4: RefCell<Option<(Rc<Cell<Instant>>, Instant)>>,
 }
 pub(super) struct Resource {
     id: usize,
@@ -48,10 +55,19 @@ impl PositionedSource for Resource {
     fn pread(&mut self, offset: u64, out: &mut [u8]) -> Result<usize, IoFailure> {
         assert_eq!(self.id, 99);
         self.c.reads.set(self.c.reads.get() + 1);
+        let b_start = offset == 0 && self.c.copied.get() >= 80 + self.bytes.len() as u64;
+        if self.c.adapter_fail_b.get() && b_start {
+            return Err(IoFailure::Failed);
+        }
         let start = offset as usize;
         let n = out.len().min(self.bytes.len().saturating_sub(start));
         if n > 0 {
             out[..n].copy_from_slice(&self.bytes[start..start + n]);
+            if b_start && self.c.adapter_corrupt_b.get() {
+                out[128] ^= 1; // Payload, not the separately compared Mach-O header/signature.
+            }
+        } else if start == self.bytes.len() {
+            self.c.adapter_eofs.set(self.c.adapter_eofs.get() + 1);
         }
         self.c.copied.set(self.c.copied.get() + n as u64);
         Ok(n)
@@ -62,6 +78,20 @@ impl MetadataOps for Resource {
     fn stat(&mut self, p: Phase, point: StatPoint) -> Result<Stat, OpFailure> {
         if matches!(point, StatPoint::Before) {
             self.c.phases.borrow_mut().push(p);
+            if p == Phase::M4 {
+                if let Some(flag) = self.c.adapter_cancel_m4.borrow().as_ref() {
+                    flag.store(true, Ordering::Release);
+                }
+                if let Some((now, at)) = self.c.adapter_deadline_m4.borrow().as_ref() {
+                    now.set(*at);
+                }
+                if self.c.adapter_swap_m4.get() {
+                    self.origin = Rc::new(());
+                }
+                if self.c.adapter_fail_m4.get() {
+                    return Err(OpFailure::Unavailable);
+                }
+            }
         }
         Ok(leaf_stat(self.bytes.len() as u64))
     }
@@ -137,6 +167,12 @@ pub(super) struct Synthetic {
     second_held_change: Option<usize>,
 }
 impl Synthetic {
+    pub(super) fn adapter_fault(&mut self, at: usize) {
+        self.fail = Some(at);
+    }
+    pub(super) fn adapter_hook(&mut self, f: impl FnMut(usize, usize) + 'static) {
+        self.hook = Some(Box::new(f));
+    }
     fn event(&mut self) -> Result<(), Failure> {
         let n = self.c.attempts.get() + 1;
         self.c.attempts.set(n);

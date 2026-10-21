@@ -1,6 +1,6 @@
 # BP-5 R-2 OL-03：3round resource台帳の詳細設計
 
-Version: draft-0.17 / Date: 2026-10-21 / Status: typed strict ackと接続準備owner内部契約まで合成検証。通常strict差替え・運用上限承認は未実施。
+Version: draft-0.18 / Date: 2026-10-21 / Status: typed ack、owner、固定topology adapter/位置handoffの内部subsetまで合成検証。通常strict差替え・運用上限承認は未実施。
 
 ## 1. 範囲と停止状態
 
@@ -406,3 +406,5 @@ Collected Outcomeは従来のsummaryを保持して移動する。NotStartedに�
 後続の[通常strict接続詳細設計draft-0.1](BEST_PRACTICE_BP5_R2_OL03_NORMAL_STRICT_CONNECTION_DESIGN.md)で、唯一のsession/source owner・inert 3slot・固定M4位置のhandoffと、BeforeM4 ack後の比較失敗でもStoppedとする外側伝播を整理した。O.connection等の新費用、運用policy/全体受付は未承認であり、既存の数量モデルや合成policyから実運用capを自動設定しない。詳細設計のみで、接続・OS source・permitは実装していない。
 
 同設計draft-0.2 §10ではowner/3slot/継続source borrow/外側停止・診断の内部subsetを追加した。既存session台帳を1つだけ所有し、slotは利用前にtake、失敗/放棄後も補充しない。cfg(test)で実collector/typed ackを通す3slot試験を行うが、M4位置証拠や通常strictの接続ではない。[合成記録](E2E_BEST_PRACTICE_R2_OL03_OWNER_CONTRACT_SYNTHETIC_2026-10-21.md)を参照。全体受付・運用policy/capは引き続き無効/未承認。
+
+同設計draft-0.3 §11では固定topology adapterとBeforeM4Position/AfterM4Handoffを追加し、実B/recheck/M4の順序と元owner/sessionへの結合を合成検証した。M4失敗でもAfterM4 slotへ進まず、slot補充や予算/retryの初期化はしない。[合成記録](E2E_BEST_PRACTICE_R2_OL03_TOPOLOGY_ADAPTER_SYNTHETIC_2026-10-21.md)を参照。production側は通常kernel未接続のUnavailable停止を維持し、追加coupling費8 workを運用cap/全体受付の自動承認へ転用しない。

@@ -178,6 +178,18 @@ fn collect_success<S: ScanOps>(
 // Test-only pause at the real fixed producer output, never a constructor from counts.
 #[cfg(test)]
 #[allow(clippy::result_large_err)]
+pub(in super::super) fn collect_fixture<'a, 'r, 's, S: ScanOps>(
+    lease: RoundResourceScope<'a, 'r, 's>,
+    estimate: ScanWorkEstimate<'_, '_, '_, '_, '_>,
+    inputs: &ScanInputs<'_, '_, '_, '_>,
+    current: &RoundScope<'_>,
+    scan: (S, Option<Quotas>),
+    b: &mut SharedBudget<'_>,
+) -> Result<PendingStrictRound<'a, 'r, 's>, CompletionFailure> {
+    collect_and_complete(lease, estimate, inputs, current, scan, b)
+}
+#[cfg(test)]
+#[allow(clippy::result_large_err)]
 pub(super) fn pause_after_scan<S: ScanOps>(
     lease: &mut RoundResourceScope<'_, '_, '_>,
     estimate: ScanWorkEstimate<'_, '_, '_, '_, '_>,

@@ -14,6 +14,7 @@ use std::time::Duration;
 #[derive(Clone, Copy)]
 enum Case {
     Good,
+    SignatureNode,
     Empty,
     Chunks,
     NestedIndex,
@@ -311,12 +312,20 @@ fn fixture(case: Case) -> (Setup, Rc<RefCell<State>>) {
     } else {
         b"abc".to_vec()
     };
-    let node = vec![7u8; 4096];
+    let node = if matches!(case, Case::SignatureNode) {
+        physical_signature::synthetic_file(true, false, 4096, 48)
+    } else {
+        vec![7u8; 4096]
+    };
     let mut value: serde_json::Value = serde_json::from_slice(&f.receipt.pins[2].bytes).unwrap();
     value["entries"][2]["size"] = serde_json::json!(js.len());
     value["entries"][2]["sha256"] = serde_json::json!(format!("{:x}", Sha256::digest(&js)));
     let hash: [u8; 32] = Sha256::digest(&node).into();
     value["entries"][3]["sha256"] = serde_json::json!(hex(&hash));
+    if matches!(case, Case::SignatureNode) {
+        value["entries"][3]["size"] = serde_json::json!(node.len());
+        f.target.size = SizeEvidence::Indexed(node.len() as u64);
+    }
     if let Case::Shape { width, depth } = case {
         let entries = value["entries"].as_array_mut().unwrap();
         for i in 0..width {

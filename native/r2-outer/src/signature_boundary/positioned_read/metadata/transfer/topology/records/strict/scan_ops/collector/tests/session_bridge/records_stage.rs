@@ -6,7 +6,13 @@ use round_declaration::session::completion::records::RecordsVerifiedRound;
 use serde_json::{Value, json};
 
 pub(super) fn valid_fixture(bad_json: bool) -> (Setup, Rc<RefCell<State>>, Vec<u8>) {
-    let (mut f, state) = fixture(Case::Good);
+    fixture_for_case(Case::Good, bad_json)
+}
+pub(super) fn valid_signature_fixture() -> (Setup, Rc<RefCell<State>>, Vec<u8>) {
+    fixture_for_case(Case::SignatureNode, false)
+}
+fn fixture_for_case(case: Case, bad_json: bool) -> (Setup, Rc<RefCell<State>>, Vec<u8>) {
+    let (mut f, state) = fixture(case);
     let mut j = json_fixture::fixture();
     let b = &mut f.receipt.binding;
     b.product_version = "26.7".into();
