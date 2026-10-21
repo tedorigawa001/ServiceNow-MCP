@@ -72,6 +72,36 @@ async function requireImportSetStagingTable(client: ServiceNowClient, table: str
   throw reject();
 }
 
+function isActive(value: unknown): boolean {
+  return value === true || value === 'true';
+}
+
+/**
+ * A Transform Map writes to its admin-configured target table. Running an arbitrary map over an
+ * arbitrary Import Set would let a WRITE-tier caller route staging rows they control into any
+ * map's target, bypassing per-tool field allowlists. Require an active map whose source table is
+ * exactly the Import Set's (verified) staging table. Fails closed before any write.
+ */
+async function requireTransformMapForStagingTable(
+  client: ServiceNowClient,
+  transformMapSysId: string,
+  stagingTable: string
+): Promise<void> {
+  if (!SYS_ID_RE.test(transformMapSysId)) {
+    throw new ServiceNowError('transform_map_sys_id must be a 32-char sys_id', 'VALIDATION_ERROR');
+  }
+  const map = await client.getRecord('sys_transform_map', transformMapSysId);
+  if (!isActive(map.active)) {
+    throw new ServiceNowError('Transform Map is not active', 'VALIDATION_ERROR');
+  }
+  if (String(map.source_table ?? '') !== stagingTable) {
+    throw new ServiceNowError(
+      `Transform Map source table does not match the Import Set staging table "${stagingTable}"`,
+      'VALIDATION_ERROR'
+    );
+  }
+}
+
 function decodeXlsxBase64(contentBase64: unknown): Buffer {
   if (typeof contentBase64 !== 'string' || !contentBase64) {
     throw new ServiceNowError('content_base64 is required', 'INVALID_REQUEST');
@@ -627,10 +657,25 @@ export async function executeIntegrationToolCall(
       if (!args.transform_map_sys_id || !args.import_set_sys_id) {
         throw new ServiceNowError('transform_map_sys_id and import_set_sys_id are required', 'INVALID_REQUEST');
       }
-      // Trigger transform via Scripted REST — create a sys_import_set_run record
+      const importSetSysId = String(args.import_set_sys_id);
+      const transformMapSysId = String(args.transform_map_sys_id);
+      if (!SYS_ID_RE.test(importSetSysId)) {
+        throw new ServiceNowError('import_set_sys_id must be a 32-char sys_id', 'VALIDATION_ERROR');
+      }
+      if (!SYS_ID_RE.test(transformMapSysId)) {
+        throw new ServiceNowError('transform_map_sys_id must be a 32-char sys_id', 'VALIDATION_ERROR');
+      }
+      // Bind the pair before any write: the Import Set must belong to a real staging table and the
+      // map must be an active map for exactly that table.
+      const importSet = await client.getRecord('sys_import_set', importSetSysId);
+      const stagingTable = String(importSet.table_name ?? '');
+      await requireImportSetStagingTable(client, stagingTable);
+      await requireTransformMapForStagingTable(client, transformMapSysId, stagingTable);
+      // Request the run by creating a sys_import_set_run record. Whether this alone starts the
+      // transform on an instance has not been verified here.
       const data = {
-        import_set: args.import_set_sys_id,
-        transform_map: args.transform_map_sys_id,
+        import_set: importSetSysId,
+        transform_map: transformMapSysId,
       };
       const result = await client.createRecord('sys_import_set_run', data);
       return {
@@ -712,6 +757,10 @@ export async function executeIntegrationToolCall(
 
       const parsed = await parseExcelImportRows(args.content_base64, args.sheet_name, args.column_mapping);
       await requireImportSetStagingTable(client, stagingTable);
+      if (args.transform_map_sys_id) {
+        // Validate the optional map before creating the Import Set, uploading, or inserting rows.
+        await requireTransformMapForStagingTable(client, String(args.transform_map_sys_id), stagingTable);
+      }
       const importSet = await client.createRecord('sys_import_set', {
         table_name: stagingTable,
         label: typeof args.import_set_label === 'string' && args.import_set_label.trim()

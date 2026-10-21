@@ -2416,11 +2416,13 @@ Get Transform Map details and field mappings.
 - `sys_id` (required)
 
 ### run_transform_map
-Execute a Transform Map on an import set. **[Write]**
+Request a run of a Transform Map on an import set by creating a `sys_import_set_run` record. **[Write]**
+
+Before any write, both sys_ids must be 32-character hex, the Import Set's table must extend `sys_import_set_row`, and the Transform Map must be active with a `source_table` equal to that staging table. A map built for a different source table (for example a user-import map) cannot be run against an unrelated Import Set. Whether creating the run record alone starts the transform has not been verified on an instance.
 
 **Parameters**:
-- `transform_map_sys_id` (required)
-- `import_set_sys_id` (required)
+- `transform_map_sys_id` (required) — 32-character sys_id of an active map for the Import Set's staging table
+- `import_set_sys_id` (required) — 32-character sys_id of an Import Set on a staging table
 
 ### list_transform_field_maps
 List field mappings for a Transform Map.
@@ -2458,7 +2460,7 @@ The first row is the header. Headers either match staging-table column names or 
 - `file_name` (required) — `.xlsx` file name
 - `content_base64` (required) — Base64-encoded workbook (subject to the ZIP expansion limits above)
 - `staging_table` (required) — Existing staging table; must extend `sys_import_set_row` (verified before the Import Set is created)
-- `transform_map_sys_id` — Optional Transform Map to run after row insertion
+- `transform_map_sys_id` — Optional Transform Map to run after row insertion; must be active with `source_table` equal to `staging_table` (checked before the Import Set is created)
 - `sheet_name` — Optional worksheet name (first worksheet by default)
 - `import_set_label` — Optional Import Set label
 - `column_mapping` — Optional Excel-header → staging-column mapping
