@@ -1,6 +1,6 @@
 # BP-5 R-2 OL-03：estimate消費型bridge・利用guard7の詳細設計
 
-Version: draft-0.5 / Date: 2026-10-21 / Status: estimate消費型の単一bridge・固定collector・前後checkpointを合成検証。通常strict/OS接続・全体受付は未実装。
+Version: draft-0.6 / Date: 2026-10-21 / Status: estimate消費型の単一bridge・固定collector・前後checkpointを合成検証。3round resource台帳は詳細設計のみ、通常strict/OS接続・全体受付は未実装。
 
 ## 1. 範囲と停止状態
 
@@ -223,3 +223,9 @@ Collectedでは、まず既存resultがErrなら元budgetへラッチし、そ�
 新規6テストで、3round成功/1991 work、入口前6拒否条件、collector後9拒否条件、終端期限・取消、合法EINTR後の3round AfterScan/FinalIndexを確認した。終端試験は既存分割経路のclock呼出し数に対し単一bridgeが正確に2回追加することを照合し、最後の追加checkpointを狙う。終端checkpointを一時除去すると2テストが失敗し、復元後に成功する。[単一bridge合成記録](E2E_BEST_PRACTICE_R2_OL03_ESTIMATE_BRIDGE_SYNTHETIC_2026-10-21.md)を参照。
 
 全体受付・通常strict切替・3round独立resource配賦・承認quota/OS source・運用終了報告は未対応。APPROVED_REGISTRY=None、通常v2 Unavailable、gate92、DER/absence停止、telemetry保留を維持する。
+
+## 15. 後続：3round resource台帳（設計のみ）
+
+[3round resource台帳詳細設計draft-0.1](BEST_PRACTICE_BP5_R2_OL03_THREE_ROUND_RESOURCE_LEDGER_DESIGN.md)に、操作/xattr名bytesの累積枠とlive ownerの同時枠、acquire前のcleanup予約、元budgetの共有retry、同receipt/budget/startと固定round順序への結合を整理した。bridge成功/cleanup完了だけで次roundを許可せず、既存AfterScan・record再読・FinalIndex/clockの成功に結合する方針である。
+
+台帳・運用cap・通常strictの型付きacknowledgementは未実装。現行のscanごとの合成Quotasをsession承認値へ読み替えず、追加会計の費目/modelを計数するまではO.use7/O.dispatch1/Sの値を無条件に維持すると約束しない。通常strict・全体受付・OS sourceは未接続のまま。
