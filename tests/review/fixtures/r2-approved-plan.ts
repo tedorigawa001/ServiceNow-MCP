@@ -1,9 +1,9 @@
-import { chmodSync, mkdtempSync, realpathSync, writeFileSync } from 'node:fs';
-import { tmpdir } from 'node:os';
+import { chmodSync, mkdtempSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { createHash } from 'node:crypto';
 import { createReviewInstanceBinding } from '../../../src/servicenow/review-release-config.js';
 import { r2ApprovalManifestSchema } from '../../../src/review/r2-approval-manifest.js';
+import { trustedTempRoot } from '../../fixtures/trusted-temp-root.js';
 export function approvedPlanFixture() {
   const now = Date.now(), origin = 'https://approved-fixture.service-now.com', slot = 'approved-pdi';
   const binding = createReviewInstanceBinding(slot, origin);
@@ -14,7 +14,7 @@ export function approvedPlanFixture() {
       reviewReleaseConfig: { instance_id: slot, assertion: { family: 'Australia', instance_binding: binding,
         asserted_at: new Date(now - 1000).toISOString(), expires_at: new Date(now + 3600000).toISOString() } } },
     review: { update_set_sys_id: 'a'.repeat(32), selection_mode: 'review_targets', max_records: 10, requested_rule_ids: ['AU-BR-001'] } };
-  const dir = mkdtempSync(join(realpathSync(process.platform === 'linux' ? process.cwd() : tmpdir()), 'r2-approved-'));
+  const dir = mkdtempSync(join(trustedTempRoot(), 'r2-approved-'));
   chmodSync(dir, 0o700); const path = join(dir, 'manifest.json');
   writeFileSync(path, JSON.stringify(document), { mode: 0o600 });
   const digest = createHash('sha256').update(JSON.stringify(r2ApprovalManifestSchema.parse(document))).digest('hex');

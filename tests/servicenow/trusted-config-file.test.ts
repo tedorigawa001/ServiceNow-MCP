@@ -1,12 +1,12 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { chmodSync, existsSync, mkdirSync, mkdtempSync, realpathSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
-import { tmpdir } from 'node:os';
+import { chmodSync, existsSync, mkdirSync, mkdtempSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { readTrustedConfigJson, validateNoGrantingAcl } from '../../src/servicenow/trusted-config-file.js';
+import { trustedTempRoot } from '../fixtures/trusted-temp-root.js';
 
 let dir: string;
 const supported = process.platform === 'darwin' || (process.platform === 'linux' && existsSync('/usr/bin/getfacl'));
-beforeEach(() => { dir = mkdtempSync(join(realpathSync(process.platform === 'linux' ? process.cwd() : tmpdir()), 'sn-trust-')); chmodSync(dir, 0o700); });
+beforeEach(() => { dir = mkdtempSync(join(trustedTempRoot(), 'sn-trust-')); chmodSync(dir, 0o700); });
 afterEach(() => { vi.restoreAllMocks(); rmSync(dir, { recursive: true, force: true }); });
 describe('trusted operator configuration read', () => {
   it('keeps the legacy size/duplicate policy unless stricter options are selected', () => {

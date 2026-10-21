@@ -1,11 +1,11 @@
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
-import { chmodSync, existsSync, linkSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, statSync, symlinkSync, writeFileSync } from 'node:fs';
-import { tmpdir } from 'node:os';
+import { chmodSync, existsSync, linkSync, mkdirSync, mkdtempSync, readFileSync, rmSync, statSync, symlinkSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { loadR2ApprovalManifest, r2ApprovalManifestJsonSchema } from '../../src/review/r2-approval-manifest.js';
 import { createReviewInstanceBinding } from '../../src/servicenow/review-release-config.js';
 import { R2_CALLBACK } from '../../src/review/r2-pdi-oauth.js';
 import { inspect } from 'node:util';
+import { trustedTempRoot } from '../fixtures/trusted-temp-root.js';
 
 const now = Date.parse('2026-10-18T00:00:00Z');
 const origin = 'https://approval-fixture.service-now.com', slot = 'r2-pdi';
@@ -21,7 +21,7 @@ const document = () => ({ schema_version: 'bp5-r2-approval-0.1',
   review: { update_set_sys_id: parent, selection_mode: 'review_targets', max_records: 20,
     requested_rule_ids: ['AU-BR-001', 'AU-BR-002', 'AU-CL-004'] } });
 beforeEach(() => {
-  dir = mkdtempSync(join(realpathSync(process.platform === 'linux' ? process.cwd() : tmpdir()), 'r2-approval-'));
+  dir = mkdtempSync(join(trustedTempRoot(), 'r2-approval-'));
   chmodSync(dir, 0o700); file = join(dir, 'approval.json');
 });
 afterEach(() => { vi.restoreAllMocks(); rmSync(dir, { recursive: true, force: true }); });

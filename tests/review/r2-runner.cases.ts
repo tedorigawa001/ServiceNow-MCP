@@ -1,6 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { chmodSync, mkdtempSync, readFileSync, realpathSync, rmSync, writeFileSync } from 'node:fs';
-import { tmpdir } from 'node:os';
+import { chmodSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { request, Server as HttpServer } from 'node:http';
 import { spawn } from 'node:child_process';
@@ -14,6 +13,7 @@ import { superviseR2Host } from '../../src/review/r2-supervisor.js';
 import { checkR2PlanOffline } from '../../src/review/r2-plan-check.js';
 import { approveAndRunR2Plan } from '../../src/review/r2-approved-launch.js';
 import { PassThrough, Writable } from 'node:stream';
+import { trustedTempRoot } from '../fixtures/trusted-temp-root.js';
 
 // Imported by r2-loopback.test.ts: all tests using the fixed port share one sequential file.
 describe('manifest runner integration', () => {
@@ -23,7 +23,7 @@ let dir: string, file: string;
 let secretNeedles: string[];
 beforeEach(() => {
   secretNeedles = [token, 'RUNNER_PRIVATE_CLIENT', user, 'RUNNER_PRIVATE_BODY'];
-  dir = mkdtempSync(join(realpathSync(process.platform === 'linux' ? process.cwd() : tmpdir()), 'r2-runner-'));
+  dir = mkdtempSync(join(trustedTempRoot(), 'r2-runner-'));
   chmodSync(dir, 0o700); file = join(dir, 'manifest.json');
   const now = Date.now();
   writeFileSync(file, JSON.stringify({ schema_version: 'bp5-r2-approval-0.1',

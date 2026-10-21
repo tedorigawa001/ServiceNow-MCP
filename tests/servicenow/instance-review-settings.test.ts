@@ -1,10 +1,10 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { chmodSync, existsSync, mkdirSync, mkdtempSync, realpathSync, rmSync, writeFileSync } from 'node:fs';
-import { tmpdir } from 'node:os';
+import { chmodSync, existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { createReviewInstanceBinding } from '../../src/servicenow/review-release-config.js';
 import { withBoundedUpdateSetSource } from '../../src/review/bounded-source.js';
 import { ServiceNowClient } from '../../src/servicenow/client.js';
+import { trustedTempRoot } from '../fixtures/trusted-temp-root.js';
 
 let dir: string;
 let saved: Record<string, string | undefined>;
@@ -18,7 +18,7 @@ const settings = () => ({ instance_id: 'dev', assertion: { family: 'Australia',
 const manual = (review: unknown) => ({ default_instance: 'dev', instances: { dev: { instance_url: url, client_id: '', client_secret: '',
   auth_mode: 'per-user', review_release_config: review } } });
 beforeEach(() => {
-  dir = mkdtempSync(join(realpathSync(process.platform === 'linux' ? process.cwd() : tmpdir()), 'sn-policy-')); chmodSync(dir, 0o700);
+  dir = mkdtempSync(join(trustedTempRoot(), 'sn-policy-')); chmodSync(dir, 0o700);
   saved = Object.fromEntries(Object.entries(process.env).filter(([key]) => relevant(key)));
   for (const key of Object.keys(process.env)) if (relevant(key)) delete process.env[key];
   process.env.HOME = dir; process.env.USERPROFILE = dir;

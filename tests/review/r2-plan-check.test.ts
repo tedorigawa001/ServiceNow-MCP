@@ -1,6 +1,5 @@
 import { afterEach, expect, it, vi } from 'vitest';
-import { chmodSync, mkdtempSync, realpathSync, rmSync, writeFileSync, readFileSync, symlinkSync, statSync } from 'node:fs';
-import { tmpdir } from 'node:os';
+import { chmodSync, mkdtempSync, rmSync, writeFileSync, readFileSync, symlinkSync, statSync } from 'node:fs';
 import { join } from 'node:path';
 import { createHash } from 'node:crypto';
 import { checkR2PlanOffline, r2PlanCheckSchema } from '../../src/review/r2-plan-check.js';
@@ -18,6 +17,7 @@ import { EventEmitter } from 'node:events';
 import type { ChildProcess, SpawnOptions } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import { syncBuiltinESMExports } from 'node:module';
+import { trustedTempRoot } from '../fixtures/trusted-temp-root.js';
 
 const at = Date.now(), origin = 'https://private-check-fixture.service-now.com';
 const binding = createReviewInstanceBinding('r2-check', origin);
@@ -32,7 +32,7 @@ function document() {
 }
 const dirs: string[] = [];
 function fixture(value: unknown = document()) {
-  const dir = mkdtempSync(join(realpathSync(process.platform === 'linux' ? process.cwd() : tmpdir()), 'r2-check-'));
+  const dir = mkdtempSync(join(trustedTempRoot(), 'r2-check-'));
   dirs.push(dir); chmodSync(dir, 0o700);
   const path = join(dir, 'PRIVATE_PLAN.json'); writeFileSync(path, JSON.stringify(value), { mode: 0o600 }); return path;
 }
