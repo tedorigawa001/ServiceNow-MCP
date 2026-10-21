@@ -345,62 +345,14 @@ pub(in super::super::super) mod testing {
     pub(in super::super::super::super) fn corrupt_model(handoff: &mut AfterM4Handoff<'_, '_, '_>) {
         handoff.model = "wrong";
     }
-    // Test-only fixed kernel, not a completion bool or arbitrary success callback.
+    // Synthetic topology fixture delegates to the actual internal fixed kernel.
     #[allow(clippy::result_large_err)]
     pub(in super::super::super) fn run_fixed<S: RecordSource, C: ScanOps>(
-        mut slot: RoundSlot<'_, '_, '_, S, C>,
+        slot: RoundSlot<'_, '_, '_, S, C>,
         b: &mut SharedBudget<'_>,
         quotas: Option<Quotas>,
     ) -> Result<(), StrictInspectionFailure> {
-        slot.precheck_records(b)?;
-        let (receipt, target, context, round) = (
-            slot.owner.receipt,
-            slot.owner.target,
-            slot.owner.context,
-            slot.round,
-        );
-        super::super::testing::run(slot, b, |scan, ledger, source, b| {
-            let mut failure = None;
-            let result =
-                round_declaration::with_round(receipt, target, context, round, b, |scope, b| {
-                    macro_rules! stage {
-                        ($e:expr) => {
-                            match $e {
-                                Ok(v) => v,
-                                Err(e) => {
-                                    let reason = e.reason();
-                                    failure = Some(e);
-                                    return Err(reason);
-                                }
-                            }
-                        };
-                    }
-                    use round_declaration::scan_inputs::profile::{self, calculator};
-                    let d = scope.decode(b)?;
-                    let mut phases =
-                        d.prepare_scan(scope, round_declaration::phases::PHASE_MODEL_ID, b)?;
-                    let inputs = phases.bind_inputs(scope, b)?;
-                    let lease = ledger.begin(scope, b)?;
-                    let p = profile::build(&inputs, scope, profile::MODEL_ID, b)?;
-                    let e = calculator::calculate(p, &inputs, scope, calculator::CALCULATOR_ID, b)?;
-                    let pending = stage!(collector::completion::collect_fixture(
-                        lease,
-                        e,
-                        &inputs,
-                        scope,
-                        (scan, quotas),
-                        b
-                    ));
-                    drop(inputs);
-                    let after = stage!(pending.after_scan(&mut phases, b));
-                    let records = stage!(after.revalidate_records(source, &phases, b));
-                    let index = stage!(records.verify_final_index(&mut phases, b));
-                    let clock = stage!(index.verify_final_clock(source, &phases, b));
-                    stage!(clock.acknowledge(&phases, b));
-                    Ok(())
-                });
-            (result, failure)
-        })
+        slot.run_fixed(quotas, b)
     }
     #[allow(clippy::result_large_err)]
     pub(in super::super::super::super) fn compare_with_fixture<

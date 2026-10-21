@@ -1,12 +1,12 @@
 # BP-5 R-2 OL-03：通常strictの固定3箇所・同RecordSource・M4 owner接続詳細設計
 
-Version: draft-0.4 / Date: 2026-10-21 / Design baseline: `fd1de54` / Implementation baselines: owner `2905075`、topology `bd9301b` / Status: ownerと固定topology adapter・位置handoffの内部subsetを実装。通常kernel接続・通常strict差替えは未実施。
+Version: draft-0.5 / Date: 2026-10-22 / Design baseline: `fd1de54` / Implementation baselines: owner `2905075`、topology `bd9301b` / Status: 固定round kernelとowner完了処理まで内部接続。通常strict全体・production topology成功口は未接続。
 
 ## 1. 範囲と不変条件
 
-[終了証拠設計](BEST_PRACTICE_BP5_R2_OL03_STRICT_COMPLETION_DESIGN.md)の後続として、実装済みの固定collector→typed tail→strict acknowledgementを通常strictの内部orchestratorへ接続する構造を具体化する。§2〜§9はdraft-0.1での接続案であり、実装済みsubsetと計数は§10〜§11で区別する。通常kernel/orchestrator・接続用全費目は未実装/未確定。
+[終了証拠設計](BEST_PRACTICE_BP5_R2_OL03_STRICT_COMPLETION_DESIGN.md)の後続として、実装済みの固定collector→typed tail→strict acknowledgementを通常strictの内部orchestratorへ接続する構造を具体化する。§2〜§9はdraft-0.1での接続案であり、実装済みsubsetと計数は§10〜§12で区別する。固定round kernelは§12で接続済み、通常orchestratorと接続用全費目は未実装/未確定。
 
-全体受付は無効、telemetry調査は保留。APPROVED_REGISTRY=None、通常v2 Unavailable、gate92、DER/absenceの停止を解除しない。実装済み範囲は§10〜§11の内部subsetのみで、通常strict差替え・OS接続・実機操作・token発行・設定変更・本番policy投入・permit発行は本工程の対象外。
+全体受付は無効、telemetry調査は保留。APPROVED_REGISTRY=None、通常v2 Unavailable、gate92、DER/absenceの停止を解除しない。実装済み範囲は§10〜§12の内部subsetのみで、通常strict差替え・OS接続・実機操作・token発行・設定変更・本番policy投入・permit発行は本工程の対象外。
 
 接続後も次を必須とする。
 
@@ -206,7 +206,7 @@ enterの戻り値はAfterM4Roundであり、比較結果を直接取り出せな
 
 通常kernel未接続のため、non-testの固定compare wrapperは実BeforeM4位置を消費した時点でUnavailableを返して停止し、M4を取得しない。成功したと偽装するstubや旧ClosureSource fallbackは設けない。BeforeM4のproduction成功口、AfterM4Roundから全体結果へ進む口、通常strict.rsの差替えはまだない。
 
-cfg(test)だけのfixture wrapperが、同じprivate coreの位置取得から既存の実collector/record/FinalIndex/clock/typed ackへ接続する。テスト用固定kernelはcallback Okだけを成功にせず、同ledgerの実ackとwith_round末尾までを確認する。AfterM4Roundの比較結果を取り出すtest-only口も同じ固定kernel完了後に限定する。collectorへの薄いbridgeはcfg(test)のみで、既存production calleeの可視範囲は広げない。
+cfg(test)だけのfixture wrapperが、同じprivate coreの位置取得から実collector/record/FinalIndex/clock/typed ackへ接続する。draft-0.5ではテスト用kernelの重複を削除し、§12の実内部kernelへ委譲する。AfterM4Roundの比較結果を取り出す口は引き続きtest-onlyで、同kernel完了後に限定する。collectorの既存completion calleeの可視範囲は広げず、scan_ops内だけの固定bridgeを追加した。
 
 ### 11.3 停止・費目・限界
 
@@ -219,3 +219,25 @@ TopologyRunOwner/未消費handoffのDropは、ledgerをmutable borrowせず元sh
 M4結果はその比較時点までの証拠であり、以後のOS/path不変性や外側cleanup完了を保証しない。元held originのチェックは既存compare_topologyの取得前後で維持し、handoff enter自体ではM4を再取得しない。通常orchestratorの固定所有/呼出し順と、実OS sourceの保証は別途必要。
 
 [topology adapter合成記録](E2E_BEST_PRACTICE_R2_OL03_TOPOLOGY_ADAPTER_SYNTHETIC_2026-10-21.md)の新規11テストを参照。独立したB bytes/EOF計数、全22 topology操作の故障、M4 failure/late result、同状態の別owner、全prepare/handoff予算境界、誤成功/重複/drop/forget、型制約と変異検証を含む。通常kernel接続・OS source・運用policy・全体受付・permitは未対応/未承認、telemetryは保留。
+
+## 12. 固定round kernelとowner完了処理（draft-0.5）
+
+### 12.1 固定calleeと進行条件
+
+[kernel.rs](../native/r2-outer/src/signature_boundary/positioned_read/metadata/transfer/topology/records/strict/scan_ops/connection_owner/kernel.rs)の `RoundSlot::run_fixed` はslotを値で消費するscan_ops内部の口であり、source/receipt/round/成功callbackを外から受け取らない。元ownerのone-shot precheck後、with_round内でdecode→prepare→Inputs→元ledgerのlease→profile/calculator→固定collector→AfterScan/Observation破棄→同RecordSourceのrecord厳密再検証→FinalIndex→clock→実ackを順に呼ぶ。新予算・retry・台帳・sourceを生成しない。index decodeは構造上1回/round、合成の3roundで再読cycle6とresource解放を確認する。
+
+collector側の `collect_owned_round` は元のprivate `collect_and_complete` だけを呼ぶ薄い固定bridgeで、任意Outcome/Observation/Closedからの成功生成口ではない。kernelは `ScanOps` と `Quotas` のprivate境界内に留め、型の可視範囲を通常strict向けに広げない。policy/quotasの自動生成や本番constructorは追加せず、未提供ではUnavailable停止する。
+
+ownerは実ackだけでは進まない。with_round全体のOkを確認した後、元owner/ledger/budgetと `Taken(round)`、`require_acknowledged(round)` を再照合し、最後のcheckpoint成功後だけ次round/Finishedへ移り、slot.completedを設定する。この確定後にfallible処理を置かない。cfg(test)の任意callback runやack状態照合helperはkernelから呼ばない。
+
+### 12.2 失敗と費目
+
+typed stageのCompletionFailureはinlineで元round・cleanup disposition・summaryとともにownerの診断へmoveする。precheck/parse等の失敗や、ack後のwith_round末尾・owner完了guard失敗は、その原因で元owner/sessionをStoppedにし、存在しないcleanup票を作らない。ackで消費済みのClosedを再構築しない。失敗後のslot再取得・別理由による上書きを拒否する。
+
+新費目 `O.kernel_complete=2 work/round` を明示する。work1前後＋owner bindingのcheckpoint＋work2前後＋最後のcheckpointで、with_round末尾の後に時刻読取6回を追加する。3roundで6 work、既存owner追加14と合わせて20 work（topology coupling8、既存R/I/collector/tail/ack費は別）。collector/ack側の既存modelは改変せず、新しい費目をその上界に暗黙吸収しない。全体受付用の確定上界ではない。
+
+### 12.3 検証と未接続範囲
+
+[固定kernel合成記録](E2E_BEST_PRACTICE_R2_OL03_ROUND_KERNEL_SYNTHETIC_2026-10-22.md)を参照。実ack欠落の変異を検出し、実ack直前とwith_round末尾の期限境界、取消、owner完了guardのwork不足/課金後取消、policy未提供、hash不一致、cleanup未確認の診断保持を確認する。topologyの既存11テストも実kernelへ委譲するが、成功したM4 fixtureは合成証拠に限る。
+
+通常strict.rsは旧ClosureSourceのまま変更しない。non-test topology compareはBeforeM4位置でUnavailable停止を維持し、AfterM4の成功完了口も未提供。次工程はこの固定kernelをBeforeM4／AfterM4の固定位置へ接続し、外側clock・解放・最終checkpoint・上位診断を統合すること。OS接続・運用policy/全体受付・permitは別工程であり、本内部成功を実運用の許可とはしない。

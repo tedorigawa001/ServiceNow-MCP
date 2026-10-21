@@ -9,6 +9,22 @@ pub(in super::super) mod completion;
 mod expected_groups;
 use expected_groups::ChildGroups;
 
+// Narrow fixed-callee bridge; accepts no fabricated Outcome or completion callback.
+#[allow(clippy::result_large_err)]
+pub(super) fn collect_owned_round<'a, 'r, 's, S: ScanOps>(
+    lease: round_declaration::session::RoundResourceScope<'a, 'r, 's>,
+    estimate: ScanWorkEstimate<'_, '_, '_, '_, '_>,
+    inputs: &ScanInputs<'_, '_, '_, '_>,
+    current: &RoundScope<'_>,
+    scan: (S, Option<Quotas>),
+    b: &mut SharedBudget<'_>,
+) -> Result<
+    round_declaration::session::completion::PendingStrictRound<'a, 'r, 's>,
+    completion::CompletionFailure,
+> {
+    completion::collect_and_complete(lease, estimate, inputs, current, scan, b)
+}
+
 struct Step<'a> {
     name: Option<&'a str>,
     policy: MetadataPolicy,
