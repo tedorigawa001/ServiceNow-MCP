@@ -5,11 +5,12 @@ use scan_ops::connection_owner::{
     self as owner, testing as ot,
     topology_adapter::{self as adapter, testing as at},
 };
+mod fixed_connection;
 
 #[derive(Clone, Copy)]
 enum Mode {
     Good,
-    Blocked,
+    Fixed,
     BadB,
     BadBHash,
     Recheck(usize),
@@ -216,8 +217,16 @@ fn scenario(mode: Mode) -> u64 {
             before_end.set(b.json_work);
             result
         };
-        let handoff = if matches!(mode, Mode::Blocked) {
-            adapter::compare(&run, &mut held, &mut ts, &mut o, &mut b)
+        let handoff = if matches!(
+            mode,
+            Mode::Fixed
+                | Mode::M4Fail
+                | Mode::M4Swap
+                | Mode::M4Cancel
+                | Mode::M4Deadline
+                | Mode::ForeignOwner
+        ) {
+            adapter::compare(&run, &mut held, &mut ts, &mut o, &mut b, quotas())
         } else {
             at::compare_with_fixture(
                 &run,
@@ -233,15 +242,17 @@ fn scenario(mode: Mode) -> u64 {
             )
         };
         match mode {
-            Mode::Good => {
+            Mode::Good | Mode::Fixed => {
                 let handoff = handoff.unwrap();
                 compared_work.set(b.json_work - entry_work);
-                assert_eq!(b.json_work - before_end.get(), 2); // post-before guard + post-M4 guard
+                if matches!(mode, Mode::Good) {
+                    assert_eq!(b.json_work - before_end.get(), 2); // post-before guard + post-M4 guard
+                }
                 assert_eq!(
                     format!("{handoff:?}"),
                     "AfterM4Handoff(actual_comparison_pending_after_round)"
                 );
-                assert_eq!(before.get(), 1);
+                assert_eq!(before.get(), u32::from(matches!(mode, Mode::Good)));
                 assert!(phase_oracle.get());
                 assert_eq!(
                     *tc.phases.borrow(),
@@ -254,7 +265,11 @@ fn scenario(mode: Mode) -> u64 {
                     format!("{after:?}"),
                     "AfterM4Round(pending_kernel_not_authority)"
                 );
-                let compared = at::finish_with_fixture(after, &mut b, quotas()).unwrap();
+                let compared = if matches!(mode, Mode::Fixed) {
+                    after.finish(quotas(), &mut b).unwrap()
+                } else {
+                    at::finish_with_fixture(after, &mut b, quotas()).unwrap()
+                };
                 assert_eq!(
                     compared.entitlement_gate(),
                     Err(physical_signature::Rejection::UnverifiedXml)
@@ -356,7 +371,7 @@ fn scenario(mode: Mode) -> u64 {
             _ => {
                 let e = handoff.unwrap_err();
                 let expected = match mode {
-                    Mode::Blocked | Mode::BeforeFail => Failure::Unavailable,
+                    Mode::BeforeFail => Failure::Unavailable,
                     Mode::BadB => Failure::ReadFailed,
                     Mode::BadBHash => Failure::HashMismatch,
                     Mode::Recheck(_) | Mode::M4Fail => Failure::MetadataUnavailable,
@@ -391,7 +406,7 @@ fn scenario(mode: Mode) -> u64 {
                 assert!(ot::remaining(&o)[2]); // no AfterM4 slot consumed on any compare failure
             }
         }
-        if !matches!(mode, Mode::Good) {
+        if !matches!(mode, Mode::Good | Mode::Fixed) {
             assert!(o.initial(&mut b).is_err());
         }
         if matches!(
@@ -417,7 +432,7 @@ fn scenario(mode: Mode) -> u64 {
     assert_eq!(tc.made.get(), tc.dropped.get());
     assert_eq!(b.reserved, 0);
     assert_eq!(b.metadata_cleanup_reserved, 0);
-    if matches!(mode, Mode::Good) {
+    if matches!(mode, Mode::Good | Mode::Fixed) {
         assert_eq!(b.checkpoint(), Ok(()));
         assert_eq!(source.stage_cycles(), 6);
     } else if !matches!(
@@ -446,8 +461,8 @@ fn real_b_recheck_before_m4_and_after_handoff_order_is_fixed() {
     scenario(Mode::Good);
 }
 #[test]
-fn production_adapter_stops_without_unimplemented_kernel() {
-    scenario(Mode::Blocked);
+fn fixed_positions_use_real_kernel_and_complete_the_original_owner() {
+    scenario(Mode::Fixed);
 }
 #[test]
 fn b_and_every_topology_recheck_failure_prevent_before_or_m4() {

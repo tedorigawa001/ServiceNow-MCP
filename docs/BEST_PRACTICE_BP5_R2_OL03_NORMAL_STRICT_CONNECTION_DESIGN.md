@@ -1,12 +1,12 @@
 # BP-5 R-2 OL-03：通常strictの固定3箇所・同RecordSource・M4 owner接続詳細設計
 
-Version: draft-0.5 / Date: 2026-10-22 / Design baseline: `fd1de54` / Implementation baselines: owner `2905075`、topology `bd9301b` / Status: 固定round kernelとowner完了処理まで内部接続。通常strict全体・production topology成功口は未接続。
+Version: draft-0.6 / Date: 2026-10-22 / Design baseline: `fd1de54` / Implementation baselines: owner `2905075`、topology `bd9301b`、kernel `9d7183e` / Status: 固定round kernelをBeforeM4／AfterM4へ内部接続。通常strict全体・OS接続は未実施。
 
 ## 1. 範囲と不変条件
 
-[終了証拠設計](BEST_PRACTICE_BP5_R2_OL03_STRICT_COMPLETION_DESIGN.md)の後続として、実装済みの固定collector→typed tail→strict acknowledgementを通常strictの内部orchestratorへ接続する構造を具体化する。§2〜§9はdraft-0.1での接続案であり、実装済みsubsetと計数は§10〜§12で区別する。固定round kernelは§12で接続済み、通常orchestratorと接続用全費目は未実装/未確定。
+[終了証拠設計](BEST_PRACTICE_BP5_R2_OL03_STRICT_COMPLETION_DESIGN.md)の後続として、実装済みの固定collector→typed tail→strict acknowledgementを通常strictの内部orchestratorへ接続する構造を具体化する。§2〜§9はdraft-0.1での接続案であり、実装済みsubsetと計数は§10〜§13で区別する。§10〜§11の初期subsetの停止状態は当時の記録で、固定kernelの現状は§12〜§13を参照。通常orchestratorと接続用全費目は未実装/未確定。
 
-全体受付は無効、telemetry調査は保留。APPROVED_REGISTRY=None、通常v2 Unavailable、gate92、DER/absenceの停止を解除しない。実装済み範囲は§10〜§12の内部subsetのみで、通常strict差替え・OS接続・実機操作・token発行・設定変更・本番policy投入・permit発行は本工程の対象外。
+全体受付は無効、telemetry調査は保留。APPROVED_REGISTRY=None、通常v2 Unavailable、gate92、DER/absenceの停止を解除しない。実装済み範囲は§10〜§13の内部subsetのみで、通常strict差替え・OS接続・実機操作・token発行・設定変更・本番policy投入・permit発行は本工程の対象外。
 
 接続後も次を必須とする。
 
@@ -204,7 +204,7 @@ enterの戻り値はAfterM4Roundであり、比較結果を直接取り出せな
 
 ### 11.2 本番停止と合成成功の区別
 
-通常kernel未接続のため、non-testの固定compare wrapperは実BeforeM4位置を消費した時点でUnavailableを返して停止し、M4を取得しない。成功したと偽装するstubや旧ClosureSource fallbackは設けない。BeforeM4のproduction成功口、AfterM4Roundから全体結果へ進む口、通常strict.rsの差替えはまだない。
+draft-0.3時点では通常kernel未接続のため、non-testの固定compare wrapperは実BeforeM4位置を消費した時点でUnavailable停止としていた。draft-0.6でこの内部位置を実kernelへ接続した（§13）。成功したと偽装するstubや旧ClosureSource fallbackは設けず、通常strict.rsの差替えは引き続き行っていない。
 
 cfg(test)だけのfixture wrapperが、同じprivate coreの位置取得から実collector/record/FinalIndex/clock/typed ackへ接続する。draft-0.5ではテスト用kernelの重複を削除し、§12の実内部kernelへ委譲する。AfterM4Roundの比較結果を取り出す口は引き続きtest-onlyで、同kernel完了後に限定する。collectorの既存completion calleeの可視範囲は広げず、scan_ops内だけの固定bridgeを追加した。
 
@@ -240,4 +240,28 @@ typed stageのCompletionFailureはinlineで元round・cleanup disposition・summ
 
 [固定kernel合成記録](E2E_BEST_PRACTICE_R2_OL03_ROUND_KERNEL_SYNTHETIC_2026-10-22.md)を参照。実ack欠落の変異を検出し、実ack直前とwith_round末尾の期限境界、取消、owner完了guardのwork不足/課金後取消、policy未提供、hash不一致、cleanup未確認の診断保持を確認する。topologyの既存11テストも実kernelへ委譲するが、成功したM4 fixtureは合成証拠に限る。
 
-通常strict.rsは旧ClosureSourceのまま変更しない。non-test topology compareはBeforeM4位置でUnavailable停止を維持し、AfterM4の成功完了口も未提供。次工程はこの固定kernelをBeforeM4／AfterM4の固定位置へ接続し、外側clock・解放・最終checkpoint・上位診断を統合すること。OS接続・運用policy/全体受付・permitは別工程であり、本内部成功を実運用の許可とはしない。
+通常strict.rsは旧ClosureSourceのまま変更しない。draft-0.5時点で未提供だったBeforeM4／AfterM4の内部成功口は§13で接続した。外側clock・解放・最終checkpoint・上位診断の通常orchestratorへの統合は別工程。OS接続・運用policy/全体受付・permitも未対応または未承認であり、本内部成功を実運用の許可とはしない。
+
+## 13. BeforeM4／AfterM4の固定kernel接続（draft-0.6）
+
+### 13.1 固定位置と所有権
+
+non-testの `topology_adapter::compare` は、既存のB hash/EOF成功→topology recheck後の唯一のBeforeM4Positionを元ownerのslotへ変換し、固定 `run_fixed` だけを呼ぶ。callerのcallback・成功bool・別RecordSourceは受け取らない。QuotasはOptionをtakeして一度だけ渡し、clone/再補充/既定値生成をしない。再度callbackへ入っても、既存position claimが先に拒否する。QuotasとScanOpsのprivate境界を維持するため、この入口もscan_ops内部に限定する。
+
+BeforeM4の実ack・with_round末尾・kernelのowner完了guardが成功した後だけM4取得へ戻り、実M4/終端checkpoint成功後だけ元ComparedM0M4を所有するhandoffを発行する。M4失敗・origin差替え・遅延取消/期限切れではAfterM4 slotを消費せず、owner/session/rootを停止する。BeforeM4成功をM4成功とは扱わない。
+
+`AfterM4Handoff::enter` の元owner/session/receipt/budget結合とone-shot消費は維持する。`AfterM4Round::finish` はその値を消費し、入口guardで元root・比較結果・BeforeM4 ackを照合してから、保持したslotで実AfterM4 kernelを呼ぶ。kernel内部の同source/実ack/with_round末尾/owner完了を省略しない。入口と終端で同ownerを照合できるよう、kernelの本体をowner内部だけの `run_fixed_in_place` へ分離した。外側の `run_fixed` は従来どおり値消費で、内部再入もprecheckの不可逆claimにより拒否する。
+
+AfterM4 kernel成功後も元root/owner/budget、AfterM4の実ack、owner Finishedを再照合し、最後のcheckpoint成功後だけ元比較結果を返しroot.finishedを確定する。比較結果は引数や数値summaryから生成しない。返るComparedM0M4は内部比較証拠にすぎず、entitlement gateや外側cleanup/最終結果/permitの成功証拠ではない。
+
+### 13.2 診断と費目
+
+BeforeM4のCompletionFailureは既存compare_coreの捕捉経路でroundとともにmoveし、M4/比較失敗では消費済みのBeforeM4 cleanupを再構築しない。AfterM4 kernelのCompletionFailureは置換せずそのまま上へ返す。AfterM4の入口/完了guardで失敗した場合はround=AfterM4と元Failureを保持し、元ownerを明示的にStoppedとする。ack後の失敗にcleanup票を合成しない。
+
+`O.after_finish=2 work/inspection`（入口1＋公開直前1）を追加する。各work前後、元owner結合、明示checkpointにより入口4・終端4、計8回の時刻観測を追加する。元kernelの費目・再読cycle6・index decode1回/round・共有budget/retryは変更しない。owner/kernel追加20＋topology coupling8＋after_finish2＝30 workは既存R/I/scan/tail/ack費と別であり、全体受付用の確定上界ではない。
+
+### 13.3 検証と残課題
+
+[固定位置接続合成記録](E2E_BEST_PRACTICE_R2_OL03_FIXED_POSITION_KERNEL_SYNTHETIC_2026-10-22.md)を参照。非testのcompare/finishを合成sourceで通し、各scanの開始時metadata履歴をInitial=[]／BeforeM4=[M0,M1,M2,M3]／AfterM4=[M0,M1,M2,M3,M4]として観測した。実M4失敗・別owner拒否の既存ケースも固定入口へ移した。Before/Afterの失敗診断、未提供Quotas、入口/完了の予算・期限・取消、kernel欠落の変異も確認する。
+
+通常strict.rsの旧ClosureSourceは差し替えない。残るのは、元receipt/外側clockからのorchestrator、外側解放・最終checkpoint・上位診断、全体work/resource受付・運用policyの統合/承認である。全体受付無効・telemetry保留・OS未接続・実機操作/token発行/設定変更/permit発行なしを維持する。

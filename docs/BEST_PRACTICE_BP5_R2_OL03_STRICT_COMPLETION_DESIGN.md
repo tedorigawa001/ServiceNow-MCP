@@ -1,6 +1,6 @@
 # BP-5 R-2 OL-03：型付きcleanup証拠・round完了・strict acknowledgement詳細設計
 
-Version: draft-0.13 / Date: 2026-10-22 / Status: 固定round kernel・owner完了処理まで内部接続して合成検証。通常strict全体・production topology成功口は未接続。
+Version: draft-0.14 / Date: 2026-10-22 / Status: 固定round kernelをBeforeM4／AfterM4の内部位置へ接続して合成検証。通常strict全体・OS接続は未実施。
 
 ## 1. 範囲と根拠
 
@@ -419,3 +419,9 @@ ack消費はwith_round closure内の最後のfallible処理として使う。wit
 [接続設計draft-0.5 §12](BEST_PRACTICE_BP5_R2_OL03_NORMAL_STRICT_CONNECTION_DESIGN.md)で、値消費するRoundSlotから元sourceのprecheck→with_round→実固定collector→typed tail→実ackを接続した。with_round末尾checkpointのOkと同ledgerの実ackを両方要求し、ownerの最終guard成功後だけ進行する。typed stage失敗では元cleanup/summaryを保持し、ack後の失敗では消費済み証拠を再構築せずStoppedとする。
 
 O.kernel_completeは2 work/round（計6）で既存費と分離する。[新規4テストの合成記録](E2E_BEST_PRACTICE_R2_OL03_ROUND_KERNEL_SYNTHETIC_2026-10-22.md)を参照。通常strict全体の差替え、production topology成功口、外側解放後checkpoint、全体受付/運用policy/OS接続/permitは未対応または未承認のまま。
+
+### 20.4 BeforeM4／AfterM4への固定kernel接続（draft-0.14）
+
+[接続設計draft-0.6 §13](BEST_PRACTICE_BP5_R2_OL03_NORMAL_STRICT_CONNECTION_DESIGN.md)で、§20.3時点では未接続だったnon-test compareの唯一のBeforeM4 callbackと、AfterM4Roundの値消費finishを実kernelへ接続した。M4失敗ではAfterM4を開始しない。元handoff/owner/台帳/予算結合、実ack・with_round末尾・owner完了guardを維持し、AfterM4の入口/終端も同ownerで照合する。
+
+typed kernel失敗の診断を移動して保持し、ack後の失敗にClosedを再構築しない。新O.after_finishは2 work/inspection。[固定位置接続合成記録](E2E_BEST_PRACTICE_R2_OL03_FIXED_POSITION_KERNEL_SYNTHETIC_2026-10-22.md)を参照。通常strict orchestrator・外側解放後checkpoint・運用policy/全体受付/OS接続/permitの停止は変えない。

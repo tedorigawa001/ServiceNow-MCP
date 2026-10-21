@@ -1,4 +1,4 @@
-//! Fixed topology position subset. No normal strict kernel, OS source or permit.
+//! Fixed topology positions with the internal kernel. No normal strict/OS entry or permit.
 use super::*;
 use crate::signature_boundary::positioned_read::ScanSessionClaim;
 
@@ -191,28 +191,92 @@ impl<'a, 's, S: RecordSource, C> StrictSessionOwner<'a, 's, S, C> {
     }
 }
 
-// The only non-test wrapper accepts no caller callback. Until the fixed normal kernel
-// is connected, consuming the real BeforeM4 position stops before M4 acquisition.
+// The fixed wrapper accepts no caller callback: the sole BeforeM4 callee is the kernel.
 #[allow(clippy::result_large_err)]
-pub(in super::super::super) fn compare<
+pub(in super::super) fn compare<
     'm,
     't,
     's,
     R: MetadataOps + ResourceOrigin,
     T: TopologySource<R>,
     S: RecordSource,
-    C,
+    C: ScanOps,
 >(
     run: &'m TopologyRunOwner<'t, 's>,
     held: &mut HeldTargetScope<'_, R>,
     topology_source: &mut T,
     owner: &mut StrictSessionOwner<'_, 's, S, C>,
     b: &mut SharedBudget<'_>,
+    mut quotas: Option<Quotas>,
 ) -> Result<AfterM4Handoff<'m, 't, 's>, StrictInspectionFailure> {
     compare_core(run, held, topology_source, owner, b, |o, p, b| {
         let slot = o.before_position(p, b)?;
-        Err(slot.stop_inspection(Failure::Unavailable, b))
+        slot.run_fixed(quotas.take(), b)
     })
+}
+
+impl<S: RecordSource, C> AfterM4Round<'_, '_, '_, '_, '_, S, C> {
+    #[allow(clippy::result_large_err)] // Keep actual typed-stage diagnostics inline.
+    pub(in super::super) fn finish(
+        mut self,
+        quotas: Option<Quotas>,
+        b: &mut SharedBudget<'_>,
+    ) -> Result<ComparedM0M4, StrictInspectionFailure>
+    where
+        C: ScanOps,
+    {
+        // These fields are produced only by enter; no success bool/foreign comparison input.
+        let Some(slot) = self.slot.as_mut() else {
+            let reason = self.run.stop(Failure::Binding);
+            let _ = b.stop::<()>(reason);
+            return Err(StrictInspectionFailure {
+                reason,
+                round: Some(Round::AfterM4),
+                completion: None,
+            });
+        };
+        let entry = (|| {
+            work(b)?; // O.after_finish 1: original owner / handoff / real comparison
+            self.run.require(slot.owner, b)?;
+            if self.finished
+                || !self.run.completion_consumed.get()
+                || self.compared.is_none()
+                || slot.round != Round::AfterM4
+            {
+                return Err(Failure::Binding);
+            }
+            slot.owner.ledger.require_acknowledged(Round::BeforeM4, b)?;
+            b.checkpoint()
+        })();
+        if let Err(e) = entry {
+            let reason = self.run.stop(e);
+            return Err(slot.owner.failure(reason, Some(Round::AfterM4), None, b));
+        }
+        if let Err(e) = slot.run_fixed_in_place(quotas, b) {
+            self.run.stop(e.reason());
+            return Err(e); // Never replace a real CompletionFailure with an outer-only frame.
+        }
+        let terminal = (|| {
+            work(b)?; // O.after_finish 2: actual AfterM4 ack + final publication guard
+            self.run.require(slot.owner, b)?;
+            slot.owner.ledger.require_acknowledged(Round::AfterM4, b)?;
+            if slot.owner.progress != Progress::Finished {
+                return Err(Failure::Binding);
+            }
+            b.checkpoint()
+        })();
+        if let Err(e) = terminal {
+            let reason = self.run.stop(e);
+            return Err(slot.owner.failure(reason, Some(Round::AfterM4), None, b));
+        }
+        let Some(compared) = self.compared.take() else {
+            let reason = self.run.stop(Failure::Binding);
+            return Err(slot.owner.failure(reason, Some(Round::AfterM4), None, b));
+        };
+        self.run.finished.set(true);
+        self.finished = true;
+        Ok(compared)
+    }
 }
 #[allow(clippy::result_large_err)]
 fn compare_core<
@@ -382,13 +446,10 @@ pub(in super::super::super) mod testing {
     }
     #[allow(clippy::result_large_err)]
     pub(in super::super::super) fn finish_with_fixture<S: RecordSource, C: ScanOps>(
-        mut after: AfterM4Round<'_, '_, '_, '_, '_, S, C>,
+        after: AfterM4Round<'_, '_, '_, '_, '_, S, C>,
         b: &mut SharedBudget<'_>,
         quotas: Option<Quotas>,
     ) -> Result<ComparedM0M4, StrictInspectionFailure> {
-        run_fixed(after.slot.take().unwrap(), b, quotas)?;
-        after.run.finished.set(true);
-        after.finished = true;
-        Ok(after.compared.take().unwrap())
+        after.finish(quotas, b)
     }
 }

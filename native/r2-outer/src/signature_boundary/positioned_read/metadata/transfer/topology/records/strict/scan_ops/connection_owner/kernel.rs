@@ -12,6 +12,19 @@ impl<S: RecordSource, C> RoundSlot<'_, '_, '_, S, C> {
     where
         C: ScanOps,
     {
+        self.run_fixed_in_place(quotas, b)
+    }
+    // Only the enclosing owner/position adapter can retain the slot for final binding.
+    // precheck's irreversible claim still rejects a second invocation.
+    #[allow(clippy::result_large_err)]
+    pub(super) fn run_fixed_in_place(
+        &mut self,
+        quotas: Option<Quotas>,
+        b: &mut SharedBudget<'_>,
+    ) -> Result<(), StrictInspectionFailure>
+    where
+        C: ScanOps,
+    {
         self.precheck_records(b)?;
         let (receipt, target, context, round) = (
             self.owner.receipt,
@@ -21,7 +34,7 @@ impl<S: RecordSource, C> RoundSlot<'_, '_, '_, S, C> {
         );
         // Slot acquisition was irreversible; never manufacture another source/lease.
         let Some(scan) = self.scan.take() else {
-            return Err(self.stop_inspection(Failure::Binding, b));
+            return Err(self.owner.failure(Failure::Binding, Some(round), None, b));
         };
         let mut failure = None;
         let result =
@@ -63,8 +76,8 @@ impl<S: RecordSource, C> RoundSlot<'_, '_, '_, S, C> {
             });
         if let Err(reason) = result {
             return Err(match failure {
-                Some(e) => self.stop_with_completion(e, b),
-                None => self.stop_inspection(reason, b),
+                Some(e) => self.owner.failure(e.reason(), Some(round), Some(e), b),
+                None => self.owner.failure(reason, Some(round), None, b),
             });
         }
         // An ack alone is not sufficient: with_round's terminal checkpoint returned.
@@ -79,7 +92,7 @@ impl<S: RecordSource, C> RoundSlot<'_, '_, '_, S, C> {
             b.checkpoint()
         })();
         if let Err(reason) = result {
-            return Err(self.stop_inspection(reason, b));
+            return Err(self.owner.failure(reason, Some(round), None, b));
         }
         self.owner.progress = match round {
             Round::Initial => Progress::Expected(Round::BeforeM4),
