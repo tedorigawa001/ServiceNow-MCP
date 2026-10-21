@@ -5,13 +5,27 @@ import { aggregate } from './fixtures/bp5-results.js';
 import { Worker } from 'node:worker_threads';
 import { getEventListeners } from 'node:events';
 
+// These tests run a real worker at wall-clock time. Keep the operator assertion window
+// relative to that time instead of relying on the fixture's fixed (now expired) dates;
+// the production expiry checks themselves are unchanged.
+function makeCurrent(input: ReturnType<typeof aggregate>) {
+  const now = Date.now();
+  input.started_at = new Date(now - 1000).toISOString();
+  input.assets[0].result.reviewed_at = new Date(now - 500).toISOString();
+  const window = {
+    asserted_at: new Date(now - 86_400_000).toISOString(),
+    expires_at: new Date(now + 86_400_000).toISOString(),
+  };
+  Object.assign(input.instance_release, window);
+  Object.assign(input.assets[0].result.instance_release, window);
+}
+
 describe('BP-5 supervised CPU worker', () => {
   afterEach(() => vi.restoreAllMocks());
   it('starts the default development worker directly from source without a test factory', async () => {
     const cpu = new ReviewWorker({ remainingMs: () => 5000 });
     const input = aggregate();
-    input.started_at = new Date(Date.now() - 1000).toISOString();
-    input.assets[0].result.reviewed_at = new Date(Date.now() - 500).toISOString();
+    makeCurrent(input);
     try {
       const result = await cpu.finish(input);
       expect(result.counts.findings).toBe(1);
@@ -67,8 +81,7 @@ describe('BP-5 supervised CPU worker', () => {
     const controller = new AbortController();
     const cpu = new ReviewWorker({ remainingMs: () => 5000, signal: controller.signal, factory });
     const input = aggregate();
-    input.started_at = new Date(Date.now() - 1000).toISOString();
-    input.assets[0].result.reviewed_at = new Date(Date.now() - 500).toISOString();
+    makeCurrent(input);
     try {
       for (let n = 0; n < 3; n++) {
         expect((await cpu.finish(input)).counts.findings).toBe(1);
@@ -142,8 +155,7 @@ describe('BP-5 supervised CPU worker', () => {
     } });
     try {
       const input = aggregate();
-      input.started_at = new Date(Date.now() - 1000).toISOString();
-      input.assets[0].result.reviewed_at = new Date(Date.now() - 500).toISOString();
+      makeCurrent(input);
       const result = await cpu.finish(input);
       expect(result.counts.findings).toBe(1);
       expect(result.schema_version).toBe('bp-mcp-review-0.2');
