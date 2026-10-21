@@ -39,6 +39,30 @@ GitHubホストrunner上でどちらの要因が当たっているかは、runne
   - workspaceと `$HOME` の両方が不適合：`No trusted temp root for trusted-config tests: …` で明示的に停止した。
 - macOS：`npm test` 122ファイル・3,234テストすべて成功。`type-check` 成功。lint error 0（既存の警告374件）。
 
-## 残る確認
+## 追補：GitHub runner上の原因の特定と対処（2026-10-22）
 
-GitHub Actions上での成功は、本修正をpushした後のCIで確認する。もしrunnerの `$HOME` も条件を満たさなければ、上記の明示的なエラーメッセージに原因のパスが出る。
+1回目の修正（`c0704aa`）をpushしたCI（run 39685649822）は、helperの診断メッセージで失敗した。
+
+```text
+No trusted temp root for trusted-config tests: /home: extended ACL; /home: extended ACL; /tmp: mode 1777 is group/other-writable
+```
+
+GitHubホストrunnerでは **`/home` に拡張ACL** があり、checkout先（`cwd`）と `$HOME` の両方が祖先の条件を満たさない。`/tmp` も1777で使えない。既定の候補では解決できないことが確定した。
+
+### 対処
+
+- helperは、環境変数 `SN_MCP_TRUSTED_TEST_ROOT` があれば最初の候補として試す。設定されているだけでは信頼せず、他の候補と同じ規則で祖先全体を検査する。
+- CI（Build & Testの両Node版とCoverage）のテスト直前に、次の手順を追加した。
+  - `sudo install -d -m 0700 -o <runner> -g <runner> /srv/servicenow-mcp-trusted-tests` で、root所有の祖先（`/`、`/srv`）の下にrunner所有・0700のディレクトリを用意する。
+  - `getfacl` で `/`、`/srv`、作成したディレクトリのACLをログに残す。
+  - `$GITHUB_ENV` で上記の環境変数を渡す。
+- 製品の検査とその条件は変更していない。
+
+### 検証
+
+Linuxコンテナで `/home` に拡張ACL（`u:nobody:r-x`）を付け、runnerと同じ条件にした。
+
+- 環境変数なし：CIと同じ診断メッセージで停止した。
+- CIの手順と同じコマンドを実行した後：`npm test`、`npm run test:coverage` とも **122ファイル・3,234テストすべて成功**。
+
+GitHub Actions上の結果は、この修正をpushした後のCIで確認する。

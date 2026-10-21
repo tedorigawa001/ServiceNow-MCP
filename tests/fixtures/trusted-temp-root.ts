@@ -8,6 +8,10 @@
  * applies the same rules to each candidate's full ancestor chain and returns the first that
  * qualifies. It never relaxes the product check; when no candidate qualifies it throws with the
  * offending path and reason instead of letting tests fail later as an opaque "untrusted" result.
+ *
+ * Hosts whose shared ancestors cannot qualify (GitHub-hosted runners put an extended ACL on /home
+ * and /tmp is 1777) can provide a prepared directory via SN_MCP_TRUSTED_TEST_ROOT. It is tried
+ * first and is checked by exactly the same rules; it is never trusted just because it is set.
  */
 import { execFileSync } from 'node:child_process';
 import { lstatSync, realpathSync } from 'node:fs';
@@ -54,7 +58,9 @@ export function trustedAncestorIssue(dir: string): string | undefined {
 /** First candidate whose whole ancestor chain satisfies the trusted-config rules. */
 export function trustedTempRoot(): string {
   const preferred = process.platform === 'linux' ? process.cwd() : tmpdir();
-  const candidates = [...new Set([preferred, homedir(), tmpdir()].map(path => realpathSync(path)))];
+  const provided = process.env.SN_MCP_TRUSTED_TEST_ROOT;
+  const candidates = [...new Set([...(provided ? [provided] : []), preferred, homedir(), tmpdir()]
+    .map(path => realpathSync(path)))];
   const problems: string[] = [];
   for (const candidate of candidates) {
     const issue = trustedAncestorIssue(candidate);

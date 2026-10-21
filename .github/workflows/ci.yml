@@ -40,6 +40,16 @@ jobs:
       - name: Build
         run: npm run build
 
+      - name: Prepare trusted-config test root
+        # readTrustedConfigJson rejects files under ancestors with extended ACLs or group/other
+        # write access. On GitHub-hosted runners /home carries an extended ACL and /tmp is 1777,
+        # so give the tests a root-owned-ancestor directory. The tests re-check it with the
+        # product rules; this does not relax any check.
+        run: |
+          sudo install -d -m 0700 -o "$(id -un)" -g "$(id -gn)" /srv/servicenow-mcp-trusted-tests
+          getfacl -c -n -p / /srv /srv/servicenow-mcp-trusted-tests
+          echo "SN_MCP_TRUSTED_TEST_ROOT=/srv/servicenow-mcp-trusted-tests" >> "$GITHUB_ENV"
+
       - name: Test
         run: npm test
 
@@ -57,6 +67,16 @@ jobs:
 
       - name: Install dependencies
         run: npm ci
+
+      - name: Prepare trusted-config test root
+        # readTrustedConfigJson rejects files under ancestors with extended ACLs or group/other
+        # write access. On GitHub-hosted runners /home carries an extended ACL and /tmp is 1777,
+        # so give the tests a root-owned-ancestor directory. The tests re-check it with the
+        # product rules; this does not relax any check.
+        run: |
+          sudo install -d -m 0700 -o "$(id -un)" -g "$(id -gn)" /srv/servicenow-mcp-trusted-tests
+          getfacl -c -n -p / /srv /srv/servicenow-mcp-trusted-tests
+          echo "SN_MCP_TRUSTED_TEST_ROOT=/srv/servicenow-mcp-trusted-tests" >> "$GITHUB_ENV"
 
       - name: Test with coverage
         run: npm run test:coverage
