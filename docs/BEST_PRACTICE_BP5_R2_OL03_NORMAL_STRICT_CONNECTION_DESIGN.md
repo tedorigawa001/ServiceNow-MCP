@@ -1,6 +1,6 @@
 # BP-5 R-2 OL-03：通常strictの固定3箇所・同RecordSource・M4 owner接続詳細設計
 
-Version: draft-0.3 / Date: 2026-10-21 / Design baseline: `fd1de54` / Implementation baselines: owner `2905075`、topology `bd9301b` / Status: ownerと固定topology adapter・位置handoffの内部subsetを実装。通常kernel接続・通常strict差替えは未実施。
+Version: draft-0.4 / Date: 2026-10-21 / Design baseline: `fd1de54` / Implementation baselines: owner `2905075`、topology `bd9301b` / Status: ownerと固定topology adapter・位置handoffの内部subsetを実装。通常kernel接続・通常strict差替えは未実施。
 
 ## 1. 範囲と不変条件
 
@@ -131,6 +131,8 @@ O.connection_create／O.slot_take／O.before_m4_position／O.after_m4_handoff／
 
 3roundで同じSharedBudget・開始時刻・retry・累積resource台帳を使い、slot毎に残量を元へ戻さない。受付未承認の状態で不足を避けるために上限を広げたり、合成policyを運用値に転用したりしない。
 
+**BeforeM4が同時資源の最悪位置（2026-10-21、レビュー）**：BeforeM4 roundは `compare_topology` → `compare_metadata` の途中、`budget.begin(&mut held.source.leaf, bytes)` でtarget leafを保持し、A/B比較の予約/消費とheld祖先・topology sourceを抱えたまま固定callback内で実行される（`1fec974` の固定adapterでこの構造がコード上確定した）。従ってこの位置では、外側held owner＋target leaf＋A/B由来のpayload予約/使用＋scan自身のlive owner（最大5）とpayloadが**同時に**存在する。3roundのうち同時保持数とpayload残量が最も厳しくなるのはBeforeM4であり、台帳設計§6の `outer_held_owners + scan_live_owned + scan_live_reserved` のrole上限と、既存予約を押し退けないpayload検査は、この位置を最悪ケースとして受付・cap承認時に検査する。Initial/AfterM4の値で代用しない。
+
 ## 8. 合成受入条件（未実施）
 
 1. 実collector/typed tail/ackの3roundを、上記固定3箇所から通す。scan時のmetadata履歴はInitial=[]、BeforeM4=[M0,M1,M2,M3]、AfterM4=[M0,M1,M2,M3,M4]。B EOF/hash照合とtopology recheckがBeforeM4開始より前であることも独立イベント列で確認する。
@@ -151,7 +153,7 @@ O.connection_create／O.slot_take／O.before_m4_position／O.after_m4_handoff／
 3. 固定round kernelを実collector/typed ackへ接続し、旧経路との順序・費目・終了順序を照合する。通常v2の入口は停止したままにする。
 4. 診断の上位引渡し、O費/全体work/resource上界、運用policy信頼元とcapの承認を別工程で確定する。OS source・受付・署名policy・permitはそれぞれの承認なしには接続しない。
 
-topology callback中にowner/ledger/sourceを排他的に借用できることは未コンパイル。ownedな循環参照やRefCellによるsource借用回避で解決せず、安定borrowと固定helperの境界を小さくして検証する。実装subsetのlifetime/診断/model/費目は§10に記録し、残る位置handoff/最悪経路費は実装前後のレビュー対象。全体が未確定である限り実運用の安全性・受付可能性を主張しない。
+topology callback中に `&mut StrictSessionOwner`（session台帳と元RecordSourceを含む）を排他的に借用する構造は、固定adapterの `compare_core` で**コンパイルと合成試験を確認済み**（`1fec974`、§11）。通常kernelの本番接続は未実施である。ownedな循環参照やRefCellによるsource借用回避で解決せず、安定borrowと固定helperの境界を小さくして検証する。実装subsetのlifetime/診断/model/費目は§10に記録し、残る位置handoff/最悪経路費は実装前後のレビュー対象。全体が未確定である限り実運用の安全性・受付可能性を主張しない。
 
 ## 10. 実装済みのowner内部契約subset（draft-0.2）
 
