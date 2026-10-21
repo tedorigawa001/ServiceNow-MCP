@@ -130,6 +130,15 @@ async function transformMapRequiresScripting(
   return exists('sys_transform_entry', `map=${transformMapSysId}^use_source_script=true`);
 }
 
+// Creating a sys_import_set_run record is how these tools request a run. ServiceNow's documented REST
+// path transforms rows synchronously when they are inserted through the Import Set API; whether
+// this record alone starts a transform has not been verified on an instance. Report that plainly
+// instead of claiming the transform ran.
+const TRANSFORM_START_UNVERIFIED = 'not_verified' as const;
+const TRANSFORM_START_NOTE =
+  'A sys_import_set_run record was created. Whether this starts the transform has not been verified; ' +
+  'check the Import Set state and transform history in ServiceNow.';
+
 function decodeXlsxBase64(contentBase64: unknown): Buffer {
   if (typeof contentBase64 !== 'string' || !contentBase64) {
     throw new ServiceNowError('content_base64 is required', 'INVALID_REQUEST');
@@ -330,7 +339,7 @@ export function getIntegrationToolDefinitions() {
     },
     {
       name: 'run_transform_map',
-      description: 'Execute a Transform Map on an Import Set to load data (requires WRITE_ENABLED=true; also SCRIPTING_ENABLED=true when the map runs scripts or targets a protected platform table such as sys_*/sp_*)',
+      description: 'Request a Transform Map run on an Import Set by creating a sys_import_set_run record; whether this starts the transform is not verified (requires WRITE_ENABLED=true; also SCRIPTING_ENABLED=true when the map runs scripts or targets a protected platform table such as sys_*/sp_*)',
       inputSchema: {
         type: 'object',
         properties: {
@@ -396,7 +405,7 @@ export function getIntegrationToolDefinitions() {
     {
       name: 'import_excel_to_import_set',
       description:
-        'Upload and parse one .xlsx worksheet, create an Import Set, insert its staging rows, and optionally run a Transform Map. ' +
+        'Upload and parse one .xlsx worksheet, create an Import Set, insert its staging rows, and optionally request a Transform Map run (transform start is not verified). ' +
         'Requires WRITE_ENABLED=true. The original workbook is attached to the Import Set for auditability; formulas and sys_* columns are rejected.',
       inputSchema: {
         type: 'object',
@@ -407,7 +416,7 @@ export function getIntegrationToolDefinitions() {
             description: 'Base64-encoded .xlsx content (maximum 10 MiB compressed; ZIP expansion limits apply)',
           },
           staging_table: { type: 'string', description: 'Existing Import Set staging table (must extend sys_import_set_row) to receive parsed rows' },
-          transform_map_sys_id: { type: 'string', description: 'Optional Transform Map sys_id to run after rows are inserted' },
+          transform_map_sys_id: { type: 'string', description: 'Optional Transform Map sys_id; a run is requested after rows are inserted (transform start is not verified)' },
           sheet_name: { type: 'string', description: 'Optional worksheet name (default: first worksheet)' },
           import_set_label: { type: 'string', description: 'Optional Import Set label' },
           column_mapping: {
@@ -708,7 +717,10 @@ export async function executeIntegrationToolCall(
       const result = await client.createRecord('sys_import_set_run', data);
       return {
         ...result,
-        summary: `Triggered Transform Map ${args.transform_map_sys_id} on Import Set ${args.import_set_sys_id}`,
+        transform_started: TRANSFORM_START_UNVERIFIED,
+        note: TRANSFORM_START_NOTE,
+        summary: `Requested Transform Map ${transformMapSysId} on Import Set ${importSetSysId} ` +
+          '(run record created; transform start not verified)',
       };
     }
     case 'list_transform_field_maps': {
@@ -825,9 +837,11 @@ export async function executeIntegrationToolCall(
         sheet_name: parsed.sheetName,
         columns: parsed.headers,
         rows_inserted: parsed.rows.length,
-        ...(transformRun ? { transform_run: transformRun } : {}),
+        ...(transformRun
+          ? { transform_run: transformRun, transform_started: TRANSFORM_START_UNVERIFIED, note: TRANSFORM_START_NOTE }
+          : {}),
         summary: `Created Import Set ${importSetSysId} from ${fileName}; inserted ${parsed.rows.length} row(s)` +
-          (transformRun ? ' and started the Transform Map' : ''),
+          (transformRun ? '; requested the Transform Map (run record created; transform start not verified)' : ''),
       };
     }
     case 'list_data_sources': {

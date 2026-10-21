@@ -91,8 +91,26 @@ Transform Mapの実行は、管理者が構成したlogicを宛先テーブル�
 - 変異確認：判定を常にfalseにすると13件、script照会を省くと3件が失敗した。いずれも復元済み。
 - build成功、integration 103テスト成功、ESLint error 0（既存any警告10件）、全体 **122ファイル・3,234テストすべて成功**。
 
+## 追補3：変換開始の扱い（案C、2026-10-22）
+
+### 確認結果
+
+- 公式資料の [Import Set API](https://www.servicenow.com/docs/r/api-reference/rest-apis/c_ImportSetAPI.html)（参照日2026-10-22）は、POSTでstaging tableへ行を挿入すると、そのstaging tableに定義されたTransform Mapが同期的に実行されると説明している。GETはstaging行と変換結果を取得する。
+- 一方、既存のImport Setに対して `sys_import_set_run` レコードをTable APIで作成すると変換が始まる、という記載は見つからなかった。同テーブルは通常、変換後の履歴として作られる。
+- 実機（PDI）での確認は、本プロジェクトの停止条件（実機操作を行わない）により実施していない。従って「変換が始まらない」とも断定しない。
+
+### 実装（実機確認を要しない部分）
+
+- `run_transform_map` と `import_excel_to_import_set` の任意Transformは、従来どおり `sys_import_set_run` を作成するが、**変換を実行したとは返さない**。結果に `transform_started: "not_verified"` と、ServiceNow側でImport Setの状態・変換履歴を確認するよう促す `note` を付ける。
+- 要約を「Triggered ...」「started the Transform Map」から「run record created; transform start not verified」へ変更した。ツール説明と `docs/TOOLS.md` も同様に改め、公式に記載された経路（Import Set API）を本ツールは使っていないことを明記した。
+- 既存の成功テスト2件に、`transform_started` が `not_verified` であること、要約が実行済みを主張しないことの検査を追加した。build成功、integration 103テスト成功、ESLint error 0（既存any警告10件）、全体 **122ファイル・3,234テストすべて成功**。
+
+### 未実施（実機確認と設計判断が必要）
+
+- 実際に変換を起動する方式への置換。候補はImport Set API（`/api/now/import/{staging_table}`）による挿入時の同期変換だが、これは**staging tableに定義された全Transform Mapを実行**し、任意のmapを選べない。採用する場合は、案A/Bの検査を「指定したmap」ではなく「そのstaging tableの全map」に対して行うよう設計を改める必要がある。
+- server側scriptで変換を起動する方式は、Scripting段階かつ実機での動作確認が前提になる。
+
 ## 範囲外
 
 - 保護対象prefixの一覧は本修正時点の判断であり、運用で必要なテーブルの追加・除外は別途レビューする。
-- `sys_import_set_run` の作成だけで変換が始まるかは実機で確認していない（案C）。ツールの要約は従来どおり「Triggered」と返す。
 - PDI/ServiceNowへの操作・設定変更は行っていない。`sys_db_object` の応答形状（`super_class` がreference objectまたは文字列）はmockで確認したもので、実インスタンスでの確認ではない。
