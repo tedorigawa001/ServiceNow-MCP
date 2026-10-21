@@ -1,6 +1,6 @@
 # BP-5 R-2 OL-03：record・scanを含む全体work上界と事前受付
 
-Version: draft-0.14 / Date: 2026-10-21 / Status: private kernel計数とO.profile/O.calculate/O.use/固定callee/O.dispatchを検証。単一bridge・全体受付・other上界・通常strict・運用承認は未対応。
+Version: draft-0.15 / Date: 2026-10-21 / Status: private kernel計数とO.profile/O.calculate/O.use/固定callee/O.dispatch・単一bridgeを検証。全体受付・other上界・通常strict・運用承認は未対応。
 
 ## 1. 範囲と停止状態
 
@@ -170,7 +170,7 @@ record projection4/roundはRが所有する。旧index互換テストの固定45
 
 [sealed profile/計算器詳細設計draft-0.3](BEST_PRACTICE_BP5_R2_OL03_SEALED_SCAN_PROFILE_DESIGN.md)でOの収集/算術/利用guardを分離した。O.profile=`11+2N+5E+K+B+M+D` とrequire5・O.calculate=20を内部実装/合成検証済み。将来O.use=7は未実装の案である。初回bootstrapでこれらを実消費してもspentを返却せず、将来roundの分を未計上にしない。count-onlyの一時配列を解放してからscalar profileを返し、S.groupsの全費用は維持する。独立resource受付と全体work予約は有効化しない。[収集合成記録](E2E_BEST_PRACTICE_R2_OL03_SEALED_SCAN_PROFILE_SYNTHETIC_2026-10-21.md)・[計算器記録](E2E_BEST_PRACTICE_R2_OL03_SCAN_CALCULATOR_SYNTHETIC_2026-10-21.md)を参照。
 
-[estimate bridge詳細設計draft-0.4](BEST_PRACTICE_BP5_R2_OL03_ESTIMATE_BRIDGE_DESIGN.md)で、guard7の固定collector model結合とBridgeReady→Enteredを消費する入口O.dispatch1を合成検証した。直接/二重collectを拒否し、元S1902を維持した外側collect1903・準備込み1991を確認。3roundの同start/共有retryとAfterScan/FinalIndexも通したが、独立resource配賦・全体work予約は未対応。use21＋dispatch3＝24だけで全体受付成功とはしない。guard/入口成功はscan permitではなく、未知quota/運用producer不足を救済しない。cleanup summary保持・S.seal/Iの別費を維持し、単一bridge・通常strict・運用受付は接続しない。[入口記録](E2E_BEST_PRACTICE_R2_OL03_COLLECTOR_ENTRY_SYNTHETIC_2026-10-21.md)を参照。
+[estimate bridge詳細設計draft-0.5](BEST_PRACTICE_BP5_R2_OL03_ESTIMATE_BRIDGE_DESIGN.md)で、guard7の固定collector model結合・BridgeReady→Enteredを消費する入口O.dispatch1・estimate消費型単一bridgeと前後checkpointを合成検証した。直接/二重collectを拒否し、元S1902を維持した外側collect1903・単一bridge1910・準備込み1991を確認。checkpointでwork費は増えない。3roundの同start/共有retryとAfterScan/FinalIndexも通したが、独立resource配賦・全体work予約は未対応。use21＋dispatch3＝24だけで全体受付成功とはしない。guard/入口成功はscan permitではなく、未知quota/運用producer不足を救済しない。cleanup summary保持・S.seal/Iの別費を維持し、通常strict・運用受付は接続しない。[入口記録](E2E_BEST_PRACTICE_R2_OL03_COLLECTOR_ENTRY_SYNTHETIC_2026-10-21.md)・[単一bridge記録](E2E_BEST_PRACTICE_R2_OL03_ESTIMATE_BRIDGE_SYNTHETIC_2026-10-21.md)を参照。
 
 [scan詳細設計draft-0.1](BEST_PRACTICE_BP5_R2_OL03_BOUNDED_SCAN_COLLECTOR_DESIGN.md)へ、全entry/rootの2回全path解決、逐次名前照合と余剰entryのopen前拒否、短読取停止・元共有EINTR残8、snapshot/解放を含む操作数・work式候補を整理した。cleanupはacquire前prechargeと一度限りのownerへ結合する案とし、元spentを返さない。
 

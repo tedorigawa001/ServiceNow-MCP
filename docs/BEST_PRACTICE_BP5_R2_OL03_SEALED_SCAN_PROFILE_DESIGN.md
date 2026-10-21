@@ -1,6 +1,6 @@
 # BP-5 R-2 OL-03：sealed scan shape/profile・純粋計算器の詳細設計
 
-Version: draft-0.7 / Date: 2026-10-21 / Status: private sealed profile・計算器・guard7・固定collector/入口guard1を合成検証。単一bridge・通常strict・全体受付は未実装。
+Version: draft-0.8 / Date: 2026-10-21 / Status: private sealed profile・計算器・単一bridge/固定collectorと終端checkpointを合成検証。通常strict・全体受付は未実装。
 
 ## 1. 目的・停止条件
 
@@ -22,7 +22,7 @@ workは元SharedBudgetの課金量であり、CPU時間・RSS・allocator/OS処�
 
 ## 3. 非公開型・由来の契約
 
-以下は公開API/serde schemaではない。ScanShapeProfile/ScanWorkEstimateは内部実装済み。ScanWorkSummaryと利用bridgeは未実装で、外部へ数量を出す口は設けていない。
+以下は公開API/serde schemaではない。ScanShapeProfile/ScanWorkEstimateと単一利用bridgeは内部実装済み。ScanWorkSummaryは未実装で、外部へ数量を出す口は設けていない。
 
 | 型 | 保持するもの | 禁止事項 |
 |---|---|---|
@@ -30,7 +30,7 @@ workは元SharedBudgetの課金量であり、CPU時間・RSS・allocator/OS処�
 | `ScanWorkEstimate` | **所有する**profile、privateな費目別上界/合計/同shape予測、calculator/kernel model識別子 | profileから複数estimate生成、scalar summaryからの復元、予約/permitへの暗黙変換 |
 | `ScanWorkSummary` | 必要なら検査用の数値・固定model名だけ | この値をprofile/estimate/phase完了の入力として受け付けない |
 
-profileはbuilderからのみ返す。計算器はprofileを**値で消費**し、estimateがprofileを所有する。失敗時はdropし、同じprofileで再計算する口を設けない。将来のscan bridgeもestimateを値で消費する案とし、借用summaryによる二重scanを許さない。ただし本工程ではbridgeやscanを接続しない。
+profileはbuilderからのみ返す。計算器はprofileを**値で消費**し、estimateがprofileを所有する。失敗時はdropし、同じprofileで再計算する口を設けない。後続§14の単一scan bridgeもestimateを値で消費し、借用summaryによる二重scanを許さない。通常strictや運用sourceへの接続ではない。
 
 Debugは固定のopaque labelとし、内部address・registry本文・receiptのraw bytes・path/hashを出力しない。検査用summaryは数量と固定model名だけで、元のidentityを復元できる入力口にしない。
 
@@ -228,8 +228,10 @@ private scalar型・収集・binding/retry guardは§12、profile消費型15-row
 
 5,000 root file追加の合成shapeではU_S>100万を数量として保持し、共有work/payload等を予約しないことを確認した。これは受付可能という意味ではない。OS接続・通常strict・collector・全体受付は変更しない。[計算器検証記録](E2E_BEST_PRACTICE_R2_OL03_SCAN_CALCULATOR_SYNTHETIC_2026-10-21.md)を参照。
 
-## 14. estimate消費型bridgeの後続詳細設計（未実装）
+## 14. estimate消費型bridgeの後続詳細設計・合成接続
 
 [bridge設計draft-0.4](BEST_PRACTICE_BP5_R2_OL03_ESTIMATE_BRIDGE_DESIGN.md)で、guard7の固定collector model結合と、入口のBridgeReady→Entered一度限り消費O.dispatch1を合成検証した。比較専用owner pointerで同Inputs objectを確認し、直接/二重collect・別Inputsへのclaimコピーを拒否する。kernelはprivateに閉じ、旧直接試験はcfg(test)入口へ移した。入口失敗はNotStarted、呼出し後は既存Outcome/cleanup summaryを含むCollectedとして区別する。[guard記録](E2E_BEST_PRACTICE_R2_OL03_SCAN_USE_GUARD_SYNTHETIC_2026-10-21.md)・[入口記録](E2E_BEST_PRACTICE_R2_OL03_COLLECTOR_ENTRY_SYNTHETIC_2026-10-21.md)を参照。
 
-guard/入口成功だけでphaseを進めず、S.seal・AfterScan・FinalIndexはそれぞれの所有費で維持する。O.use7/O.dispatch1はS.control/計算20へ吸収しない。合成接続の外側collect1903、収集/計算/guard/入口/kernel合計1991を確認し、全3roundで合法EINTR後もAfterScan/FinalIndexを通した。単一bridge前後guard・運用source/cleanup統合・全体受付・通常strict・OS接続・permitは未対応。
+guard/入口成功だけでphaseを進めず、S.seal・AfterScan・FinalIndexはそれぞれの所有費で維持する。O.use7/O.dispatch1はS.control/計算20へ吸収しない。合成接続の外側collect1903、収集/計算/guard/入口/kernel合計1991を確認し、全3roundで合法EINTR後もAfterScan/FinalIndexを通した。
+
+[bridge設計draft-0.5 §14](BEST_PRACTICE_BP5_R2_OL03_ESTIMATE_BRIDGE_DESIGN.md#14-単一estimate消費型bridgedraft-05合成接続)でestimateとsourceを値消費する単一bridgeを接続した。前後checkpointはwork追加なしで、bridge1910/収集・計算込み1991を維持。終端の取消/期限では成功Observationを破棄し、既存の最初の失敗・cleanup summaryは保持する。[合成検証記録](E2E_BEST_PRACTICE_R2_OL03_ESTIMATE_BRIDGE_SYNTHETIC_2026-10-21.md)を参照。運用source/終了報告統合・全体受付・通常strict・OS接続・permitは未対応。

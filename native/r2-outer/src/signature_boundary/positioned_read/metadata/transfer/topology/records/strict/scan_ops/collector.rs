@@ -1,7 +1,7 @@
 //! Functional synthetic collector over ScanOps. No approved OS/quota producer or admission.
 use super::super::round_declaration::{
     RoundScope,
-    scan_inputs::{Layout, ScanInputs},
+    scan_inputs::{Layout, ScanInputs, profile::calculator::ScanWorkEstimate},
 };
 use super::normalized_metadata::MetadataPolicy;
 use super::*;
@@ -281,6 +281,38 @@ pub(in super::super) const ENTRY_MODEL_ID: &str = "bp5-r2-collector-entry-0.1";
 pub(super) enum DispatchOutcome<T> {
     NotStarted(Failure),
     Collected(Outcome<T>),
+}
+
+// Owned, fixed-callee bridge. No callback, reusable permit, quota producer or OS source.
+pub(super) fn consume_and_collect<S: ScanOps>(
+    estimate: ScanWorkEstimate<'_, '_, '_, '_, '_>,
+    inputs: &ScanInputs<'_, '_, '_, '_>,
+    current: &RoundScope<'_>,
+    source: S,
+    quotas: Option<Quotas>,
+    budget: &mut SharedBudget<'_>,
+) -> DispatchOutcome<ClosureObservation> {
+    // Claim the ORIGINAL Inputs before the first fallible operation, even on pre-stop.
+    let ready = estimate
+        .consume_for_collector(inputs, current, budget)
+        .and_then(|()| budget.checkpoint());
+    if let Err(reason) = ready {
+        drop(source); // Inert source contract: owns no pre-acquired handles.
+        return DispatchOutcome::NotStarted(reason);
+    }
+    match collect(inputs, current, source, quotas, budget) {
+        DispatchOutcome::NotStarted(reason) => DispatchOutcome::NotStarted(reason),
+        DispatchOutcome::Collected(mut out) => {
+            // Preserve the first kernel error before the terminal cancellation/deadline check.
+            if let Err(reason) = &out.result {
+                let _ = budget.stop::<()>(*reason);
+            }
+            if let Err(reason) = budget.checkpoint() {
+                out.result = Err(reason); // Drop late success, keep the original cleanup summary.
+            }
+            DispatchOutcome::Collected(out)
+        }
+    }
 }
 
 pub(super) fn collect<S: ScanOps>(

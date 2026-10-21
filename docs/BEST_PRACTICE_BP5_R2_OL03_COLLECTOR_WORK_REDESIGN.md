@@ -1,6 +1,6 @@
 # BP-5 R-2 OL-03：現行完全collectorの費目・work上界再設計
 
-Version: draft-0.10 / Date: 2026-10-21 / Status: private kernel計数・profile/計算器・guard7/固定collector/入口guard1を合成検証。単一bridge・通常strict・全体受付は未対応。
+Version: draft-0.11 / Date: 2026-10-21 / Status: private kernel計数・profile/計算器・単一bridge/固定collector・終端checkpointを合成検証。通常strict・全体受付は未対応。
 
 ## 1. 範囲と停止状態
 
@@ -240,4 +240,4 @@ work合計の監査と運用受付は別であり、3round operation/name台帳�
 
 [sealed profile・純粋計算器draft-0.3](BEST_PRACTICE_BP5_R2_OL03_SEALED_SCAN_PROFILE_DESIGN.md)に、count-only一時集計→scalar-only出力、receipt/Inputs/round/token/budget結合、one-shot消費、統計収集 `11+2N+5E+K+B+M+D` と15-row算術（require込み20 work）を整理した。収集とrequire（基本61/5 work）に加え、profile消費型計算器20 work・estimateも内部実装/合成検証済み。利用bridgeは未実装であり、§11のkernel実費や上界へ既に含まれる費用ではない。S.groupsの検査とその費用を控除せず、O.profile/O.calculate/O.useとして別に扱う。[収集合成記録](E2E_BEST_PRACTICE_R2_OL03_SEALED_SCAN_PROFILE_SYNTHETIC_2026-10-21.md)・[計算器記録](E2E_BEST_PRACTICE_R2_OL03_SCAN_CALCULATOR_SYNTHETIC_2026-10-21.md)を参照。全体受付は無効のまま。
 
-後続の[estimate bridge設計draft-0.4](BEST_PRACTICE_BP5_R2_OL03_ESTIMATE_BRIDGE_DESIGN.md)で、固定collector model結合・BridgeReady→Enteredの入口O.dispatch1と直接/二重collect拒否を合成検証した。元kernelの7 bucket/1902 workはcfg(test)専用入口で維持し、外側collect1903・profile＋calculate＋use＋dispatch＋S=1991を確認。S＋use＋dispatch=1910は分解の和である。Sのlayout/groups/seal/終端費は控除せず、AfterScan/FinalIndexはIへ残す。単一bridge全体・3round resource受付・全体予約は未対応。[guard記録](E2E_BEST_PRACTICE_R2_OL03_SCAN_USE_GUARD_SYNTHETIC_2026-10-21.md)・[入口記録](E2E_BEST_PRACTICE_R2_OL03_COLLECTOR_ENTRY_SYNTHETIC_2026-10-21.md)を参照。
+後続の[estimate bridge設計draft-0.5](BEST_PRACTICE_BP5_R2_OL03_ESTIMATE_BRIDGE_DESIGN.md)で、固定collector model結合・BridgeReady→Enteredの入口O.dispatch1と直接/二重collect拒否に加え、estimate消費型の単一bridge・前後checkpointを合成検証した。元kernelの7 bucket/1902 workはcfg(test)専用入口で維持し、外側collect1903・profile＋calculate＋use＋dispatch＋S=1991を確認。単一bridgeのS＋use＋dispatch=1910も実測し、追加checkpointはworkを課金しない。Sのlayout/groups/seal/終端費は控除せず、AfterScan/FinalIndexはIへ残す。通常strict・3round resource受付・全体予約は未対応。[guard記録](E2E_BEST_PRACTICE_R2_OL03_SCAN_USE_GUARD_SYNTHETIC_2026-10-21.md)・[入口記録](E2E_BEST_PRACTICE_R2_OL03_COLLECTOR_ENTRY_SYNTHETIC_2026-10-21.md)・[単一bridge記録](E2E_BEST_PRACTICE_R2_OL03_ESTIMATE_BRIDGE_SYNTHETIC_2026-10-21.md)を参照。

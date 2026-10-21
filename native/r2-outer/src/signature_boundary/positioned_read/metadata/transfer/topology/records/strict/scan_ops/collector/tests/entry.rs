@@ -1,6 +1,8 @@
 use super::*;
 use round_declaration::scan_inputs::profile::{self, calculator};
 
+mod bridge;
+
 fn prepare(
     inputs: &ScanInputs<'_, '_, '_, '_>,
     scope: &RoundScope<'_>,

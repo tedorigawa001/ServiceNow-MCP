@@ -1,6 +1,6 @@
 # BP-5 R-2 OL-03：estimate消費型bridge・利用guard7の詳細設計
 
-Version: draft-0.4 / Date: 2026-10-21 / Status: 固定collector model結合・guard7・入口guard1と合成kernel接続を検証。単一bridge関数・通常strict/OS接続・全体受付は未実装。
+Version: draft-0.5 / Date: 2026-10-21 / Status: estimate消費型の単一bridge・固定collector・前後checkpointを合成検証。通常strict/OS接続・全体受付は未実装。
 
 ## 1. 範囲と停止状態
 
@@ -21,11 +21,11 @@ Version: draft-0.4 / Date: 2026-10-21 / Status: 固定collector model結合・gu
 | `phases.finish` | Compared→Finished。record再読/厳密検証を挟みFinalIndex/Node照合 | bridge外のI/R費。省略しない |
 | 通常 `strict_round` | 現在は従来のClosureSourceを呼び、estimate/完全collectorと未接続 | 本書では切り替えない。後の通常strict統合は別承認/検証 |
 
-draft-0.4では外側collect入口も同Inputsの利用状態を消費する。未claim/Attempted/既EnteredのInputsをsource操作前に拒否し、旧本体はprivate `kernel` に閉じた。従来のkernel単独費目/感度試験は明示的な `#[cfg(test)] kernel_for_test` へ移し、追加入口試験はestimate→guard→外側collectを通す。非test buildにtest bypass入口は存在しない。単一consume_and_collect関数と通常strictへの切替はまだ追加しない。
+draft-0.4では外側collect入口も同Inputsの利用状態を消費する。未claim/Attempted/既EnteredのInputsをsource操作前に拒否し、旧本体はprivate `kernel` に閉じた。従来のkernel単独費目/感度試験は明示的な `#[cfg(test)] kernel_for_test` へ移し、追加入口試験はestimate→guard→外側collectを通す。非test buildにtest bypass入口は存在しない。draft-0.5で単一 `consume_and_collect` と前後checkpointを追加したが、通常strictへは切り替えない（§14）。
 
 ## 3. 所有権・内部API案
 
-以下は擬似契約で、公開Rust API/JSON schemaやコンパイル済みsignatureではない。
+以下は内部契約の要約で、公開Rust API/JSON schemaではない。draft-0.5の実装はcollector module内の固定関数である。
 
 ```text
 consume_and_collect(
@@ -38,7 +38,7 @@ consume_and_collect(
 ) -> BridgeOutcome
 ```
 
-bridgeはcalculator配下のprivate module/methodを第一候補とし、estimateのprivate fieldへ内部からアクセスする。collector側には共通のstrict祖先までに限定した型付き呼出口を置く案とする。必要なsource/Outcome等の可視性は最小限に調整するが、raw constructor・primitive操作・policy/任意callbackを公開APIへ広げない。正確なlifetime/可視性は実装時にコンパイラで確認する。
+bridgeは既存の `scan_ops/collector.rs` 内へ置き、estimateの既存値消費methodを呼ぶ。可視性はscan_ops内までに限定し、ScanOps/Quotas/Outcomeの可視性拡張やestimate fieldへの新しいアクセス口は不要とした。raw constructor・primitive操作・policy/任意callbackを公開APIへ広げない。
 
 呼出し先は固定の既存collector本体に限定する。任意のFnOnce/trait実装を「collector」として渡す口や、呼出し元がkernel IDを自己申告して別実装へdispatchする口を設けない。ScanOpsの合成source注入と、collector本体の差替えは別物である。
 
@@ -47,7 +47,7 @@ bridgeはcalculator配下のprivate module/methodを第一候補とし、estimat
 | ScanWorkEstimate | profileを所有したままbridgeへ移動。Clone/Copy/serde、profile取り出し、失敗時の再返却を禁止 |
 | 利用claim | ScanInputs内のprivate `scan_started: Cell<State>` を実装。estimateには置かない。状態遷移は§3.1 |
 | 一時的な検証状態 | 同stack frameだけに置く。保管/再発行可能なtokenやscan permitを返さない |
-| BridgeOutcome（追加案） | guard前/collector開始前のNotStartedと、collectorを呼んだCollectedを区別。estimateや再試行権を含めない |
+| BridgeOutcome（要約名、実装はDispatchOutcome） | guard前/collector開始前のNotStartedと、collectorを呼んだCollectedを区別。estimateや再試行権を含めない |
 | cleanup summary | Collectedなら既存Outcome.summaryをmoveして保持。NotStartedなら「未開始」と記録し、架空のcleanup完了票を作らない |
 
 estimateとsourceは成功/失敗ともbridge内で消費する。sourceは合成段階では事前handleなし・constructor/Dropに外部効果なしを契約とし、guard失敗時の破棄が新しいI/Oを起こさないよう試験する。将来OS sourceが事前resourceを持つ場合、その所有・解放費/不明時の扱いは別設計を必須とし、7 workに吸収しない。
@@ -125,7 +125,7 @@ Ready → bind_inputs → profile収集 → calculate（profile消費）
       → AfterScan → record再読/clock/strict → FinalIndex
 ```
 
-これは単一bridgeの目標順序で、通常strictへ実装済みではない。draft-0.4の合成経路は `estimate.consume_for_collector` と外側collectを連続して呼び、成功後にborrowを解放して既存AfterScan/FinalIndexを通した。単一consume_and_collectの前後checkpoint/終了報告統合は未対応。guard/入口自身はReady→Compared/Finishedを実行しない。
+draft-0.5の単一bridgeは上記の固定collectorと終端checkpointまでを接続した。合成経路では成功後にborrowを解放し既存AfterScan/FinalIndexを通すが、通常strictは未切替。guard/入口/bridge自身はReady→Compared/Finishedを実行しない。運用hostの終了報告との統合は別工程である。
 
 成功時はcollector既存のClosureObservationをmoveする。lineage/records/round/token/entriesをbridgeでclone・再構成・再sealしない。AfterScanでは既存どおり再検証する。S.seal成功をAfterScan完了票に変換しない。
 
@@ -167,7 +167,7 @@ bridgeのcollector前後に追加するcheckpointはworkを課金しない既存
 | I | AfterScan/FinalIndex/Node等の既存index子phase | S.sealを移管/完了扱いしない |
 | R/その他O | record再読/strict/time、target、phase制御、将来quota受付/bridge追加費 | 未確定分を0にしない |
 
-基本fixtureでは既存S実費1902、O.profile61、O.calculate20、O.use7、O.dispatch1を計数した。外側collectはS＋dispatch=1903、profile＋calculate＋use＋dispatch＋S=1991を3種roundで実測。S＋use＋dispatch=1910はこの分解の和である。draft-0.1の1909/1990はdispatchを含まない値だった。bind/I/R/その他Oは含めず、単一bridge全体や運用受付の額とはしない。
+基本fixtureでは既存S実費1902、O.profile61、O.calculate20、O.use7、O.dispatch1を計数した。外側collectはS＋dispatch=1903、profile＋calculate＋use＋dispatch＋S=1991を3種roundで実測。draft-0.5では単一bridgeもS＋use＋dispatch=1910、profile/計算込み1991であることを確認した。追加前後checkpointはworkを課金しない。draft-0.1の1909/1990はdispatchを含まない値だった。bind/I/R/その他Oは含めず、運用受付の額とはしない。
 
 同fixtureのr=8なら、収集上界62＋計算20＋use7＋dispatch1＋U_S2041＝2131。r=0なら2107。実費と上界、入口rとsession初期rを混ぜない。3round分のuse21＋dispatch3＝24を候補とするが、3round resource受付・全体other/予約は未完成で、24を足すだけで全体受付を有効化しない。初回に消費したworkは返金しない。
 
@@ -186,11 +186,11 @@ bridgeのcollector前後に追加するcheckpointはworkを課金しない既存
 ## 10. 未確定事項と実装順
 
 1. ScanInputsのprivate利用状態とguard7単体は§12で合成検証済み。型のconsumeと元bindingを固定し、許可tokenを返さない。
-2. 外側collect入口の状態消費/guard1・固定kernel係数model、合成source/既存Outcomeのmoveは§13で接続済み。直接collect試験は入口付き経路またはcfg(test)専用kernel入口へ移した。単一bridgeの前後guard/終了処理統合は後工程。
+2. 外側collect入口の状態消費/guard1・固定kernel係数model、合成source/既存Outcomeのmoveは§13で接続済み。直接collect試験は入口付き経路またはcfg(test)専用kernel入口へ移した。単一bridgeの前後checkpointは§14で接続し、運用終了処理統合は後工程とする。
 3. O.use observerの所有区分と、source事前resourceを持たないことの検証方法を確定。追加helper課金が必要なら7を無断維持せず、所有表/式を改版。
 4. 3round resource配賦・全体work/other上界・承認quota producer・通常strictへの接続はさらに後工程。real sourceの信頼、OS cleanup、hard停止の承認は本設計で行わない。
 
-guard7は§12、固定callee結合・dispatch1/1903/1991の合成計数は§13で確認済み。最大固定ブロックの独立監査・専用compile-fail試験・単一bridge全体は未検証で、subsetの結果を運用経路の証明に拡張しない。
+guard7は§12、固定callee結合・dispatch1/1903/1991の合成計数は§13、単一bridgeは§14で確認済み。最大固定ブロックの独立監査・専用compile-fail試験は未実施で、合成subsetの結果を運用経路の証明に拡張しない。
 
 ## 11. draft-0.2の文書検証（履歴）
 
@@ -210,4 +210,16 @@ draft-0.3時点の呼出しは合成テスト内だけで、guard関数はcalcul
 
 `collector::collect` は入口guard成功時のみprivate kernelを呼ぶ。kernel単独試験用の4呼出し箇所をcfg(test)入口へ移し、旧費目テストの範囲を明示した。新規14テスト（状態単体6、固定入口8）で、直接/二重collect・コピーclaim・model/binding不適合、取消/期限/上限、quota/hash/metadata/cleanup失敗、合法EINTRと全3roundのAfterScan/FinalIndexを確認した。
 
-observerの既存7 kernel bucketは `52/49/46/1223/322/174/36` のまま。入口1はその外側（test observerのUnassigned）で計数し、S.controlへ押し込まない。source操作876/peak5・payloadの課金は元kernelの範囲で維持する。[固定入口の合成検証記録](E2E_BEST_PRACTICE_R2_OL03_COLLECTOR_ENTRY_SYNTHETIC_2026-10-21.md)を参照。単一bridge、全体受付、OS producerは未実装のまま維持する。
+observerの既存7 kernel bucketは `52/49/46/1223/322/174/36` のまま。入口1はその外側（test observerのUnassigned）で計数し、S.controlへ押し込まない。source操作876/peak5・payloadの課金は元kernelの範囲で維持する。[固定入口の合成検証記録](E2E_BEST_PRACTICE_R2_OL03_COLLECTOR_ENTRY_SYNTHETIC_2026-10-21.md)はdraft-0.4時点の記録であり、後続単一bridgeは§14に分ける。全体受付、OS producerは未実装のまま維持する。
+
+## 14. 単一estimate消費型bridge（draft-0.5、合成接続）
+
+`consume_and_collect` はestimateとsourceを値で受け、既存guard7→追加の無課金checkpoint→固定collect（入口guard1→private kernel）→追加の無課金checkpointを同budget上で連続実行する。awaitや任意collector callbackは挟まない。元Inputsをclaimする前にfallible checkpointを置かず、先行停止時もguardが元の試行を消費する。
+
+guard/collector入口前で停止した場合はsourceをdropしNotStartedを返す。既存の事前handleなし・constructor/Dropが外部効果を起こさない合成source契約を維持する。guard後のcheckpointで停止した場合、BridgeReadyをresetしない。sticky停止が後続collectを拒否し、estimateは既に消費済みである。
+
+Collectedでは、まず既存resultがErrなら元budgetへラッチし、その後のcheckpointで最初の理由を保持する。成功後に取消/期限を検出した場合はObservationをdropしresultだけをErrへ変更する。summaryはclone・再構成せず同じOutcome内に保持し、cleanup不明や未解放を隠さない。再集計やretry残の事後一致要求は追加しない。
+
+新規6テストで、3round成功/1991 work、入口前6拒否条件、collector後9拒否条件、終端期限・取消、合法EINTR後の3round AfterScan/FinalIndexを確認した。終端試験は既存分割経路のclock呼出し数に対し単一bridgeが正確に2回追加することを照合し、最後の追加checkpointを狙う。終端checkpointを一時除去すると2テストが失敗し、復元後に成功する。[単一bridge合成記録](E2E_BEST_PRACTICE_R2_OL03_ESTIMATE_BRIDGE_SYNTHETIC_2026-10-21.md)を参照。
+
+全体受付・通常strict切替・3round独立resource配賦・承認quota/OS source・運用終了報告は未対応。APPROVED_REGISTRY=None、通常v2 Unavailable、gate92、DER/absence停止、telemetry保留を維持する。
