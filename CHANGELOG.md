@@ -25,6 +25,26 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 - Read-only PDI review E2E: two bounded collection/aggregation cases passed; one payload-analysis case explicitly skipped because eligible BR updates were outside the first 100 metadata rows. Results remain partial with truncation and incomplete-analysis warnings; no code or record writes. See `docs/E2E_BEST_PRACTICE_REVIEW_2026-10-18.md`.
 - Follow-up target-selection PDI E2E: all five checks passed without skips. Opt-in 0.3 reviewed ten existing BRs; omitted-mode 0.2 behavior remained compatible. Code was not displayed, and no records were written. See `docs/E2E_BEST_PRACTICE_TARGET_SELECTION_2026-10-18.md` for limitations and untested cases.
 
+## [1.15.1] — 2026-10-22
+
+Security-only patch on top of 1.15.0. It contains no other changes from the development branch.
+
+### Security
+
+- **HTTP transport: a malformed `Host` header could stop the server.** The handler used the untrusted `Host` as the base for URL parsing before authentication, and the listener did not catch the resulting rejection. Malformed `Host` values and request targets now return a fixed `400` without reflecting input, routing uses a fixed base, and the listener converts any handler rejection into a fixed `500` (or closes a response already in progress).
+- **`trend_query`: unbounded `periods` could block the event loop.** `periods` must now be an integer from 1 to 120 (schema and runtime). Omitting it still uses 6.
+- **Excel import: huge or sparse row numbers could block the event loop.** Worksheet row numbers are limited to 1–1,048,576 for explicit, inferred and cell-reference rows, and only populated rows are traversed.
+- **Portal widgets: `create_portal_widget` / `update_portal_widget` now require `SCRIPTING_ENABLED=true`** in addition to `WRITE_ENABLED=true`, because widget templates and scripts are executable definitions.
+- **Import Set tools could write to arbitrary tables.** `create_import_set_row` and `import_excel_to_import_set` now verify through `sys_db_object` that `staging_table` extends `sys_import_set_row` before any read or write.
+- **Transform Maps could be run against unrelated Import Sets.** `run_transform_map` and the optional transform in `import_excel_to_import_set` require 32-character sys_ids, an Import Set on a verified staging table, and an active map whose `source_table` equals that staging table. They additionally require `SCRIPTING_ENABLED=true` when the map targets a protected platform table (`sys_*`, `sp_*`, `sysauto*`, `sysevent_script*`, `oauth_*`, `discovery_credential*`, `ecc_*`, or an empty/malformed target), has `run_script` enabled, has a transform script, or has a field map that uses a source script.
+
+### Changed (behavior restrictions from the fixes above)
+
+- `trend_query` rejects `periods` values that were previously accepted implicitly, such as `0`, `null`, strings, fractions and values above 120, with `INVALID_REQUEST`.
+- Metadata-only widget updates and empty widget creation, previously possible with `WRITE_ENABLED` alone, now also require `SCRIPTING_ENABLED`.
+- Import Set staging tables that do not extend `sys_import_set_row`, and Transform Map / Import Set pairs that do not match, are rejected with `VALIDATION_ERROR`.
+- `run_transform_map` and the Excel import's optional transform no longer claim that the transform ran. They create the `sys_import_set_run` record as before, but return `transform_started: "not_verified"` with a `note`, because starting a transform this way has not been verified on an instance.
+
 ## [1.15.0] — 2026-10-17
 
 ### Changed
