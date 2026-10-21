@@ -1,12 +1,12 @@
 # BP-5 R-2 OL-03：3round resource台帳の詳細設計
 
-Version: draft-0.5 / Date: 2026-10-21 / Status: 純粋resource数量計算に続きsession状態内部型・唯一生成claim・round/budget結合を合成検証。累積会計・配賦・strict完了通知は未実装、運用上限は未承認。
+Version: draft-0.6 / Date: 2026-10-21 / Status: session内部の累積会計・同時最大数・cleanup予約/返却を合成検証。固定collectorへの接続・strict完了通知は未実装、運用上限は未承認。
 
 ## 1. 範囲と停止状態
 
 [estimate消費型bridge](BEST_PRACTICE_BP5_R2_OL03_ESTIMATE_BRIDGE_DESIGN.md)と[現行collector費目設計](BEST_PRACTICE_BP5_R2_OL03_COLLECTOR_WORK_REDESIGN.md)に続き、Initial／BeforeM4／AfterM4の3roundが消費する独立resourceの会計を定義する。基準は `fad0749`。現行の `scan_ops.rs`、`normalized_metadata.rs`、`child_set.rs`、`collector.rs`、`profile.rs`、`strict.rs` と[単一bridge合成記録](E2E_BEST_PRACTICE_R2_OL03_ESTIMATE_BRIDGE_SYNTHETIC_2026-10-21.md)を照合した。外部仕様やOS APIを調査する工程ではない。
 
-全体受付無効、telemetry保留、APPROVED_REGISTRY=None、通常v2 Unavailable、gate92、DER/absence停止を維持する。初稿は設計のみで、§14/15の数量計算、§16のsession状態subsetを追加した。resource累積会計・OS接続・実機操作・token発行・設定変更・本番policy投入・permit発行を含めない。運用quotaの数値を新しく承認せず、設計完了や内部binding成功を実行権へ変換しない。
+全体受付無効、telemetry保留、APPROVED_REGISTRY=None、通常v2 Unavailable、gate92、DER/absence停止を維持する。初稿は設計のみで、§14/15の数量計算、§16のsession状態subset、§18の内部会計を追加した。OS接続・実機操作・token発行・設定変更・本番policy投入・permit発行を含めない。運用quotaの数値を新しく承認せず、設計完了や内部binding成功を実行権へ変換しない。
 
 前工程の740テストは単一bridgeまでの合成検証であり、本書のsession台帳の検証成績ではない。workは課金ブロック、operationは単発source契約の試行であり、CPU時間・RSS・OS syscall数・hard期限の保証ではない。
 
@@ -24,7 +24,7 @@ Version: draft-0.5 / Date: 2026-10-21 / Status: 純粋resource数量計算に続
 
 ## 3. 内部型・binding（擬似契約）
 
-以下は最終形の内部契約案であり、公開API・JSON schemaではない。ScanSessionLedger/RoundResourceScopeの状態とbindingだけは§16で内部実装し、表の累積会計・完了証拠は未接続である。
+以下は最終形の内部契約案であり、公開API・JSON schemaではない。状態/bindingは§16、内部累積会計は§18で実装した。collectorへの強制接続・完了証拠は未接続である。
 
 | 型 | 契約 |
 |---|---|
@@ -165,7 +165,7 @@ roundローカルなowner破棄とsession終端後も、unconfirmed/停止理由
 
 現在のwork上界による実閉包規模の試算は3round約1,160万〜1,165万で、元100万を超える。resource台帳完成はその問題を解消しない。未知のI/R/O・allocation・OS費を0にせず、[全体受付設計](BEST_PRACTICE_BP5_R2_OL03_TOTAL_WORK_ADMISSION_DESIGN.md)の全体受付は無効のままとする。
 
-## 11. 合成テストの受入条件（未実施）
+## 11. 全接続時の合成テスト受入条件（部分検証済み、未接続項目を含む）
 
 1. 同receipt/budget/startで3roundを順に実行。各round残があってもsession総枠の境界±1で停止し、次roundでattempts/xattr/cleanup消費がresetされない。cleanup枠もround/sessionの双方の境界±1で検査する。正当なEINTRをr0回1つのroundへ集中させても§5.1のround枠内で成功し、session枠を超える追加retryは拒否されることを確認する。
 2. 別receipt/target/context/origin/start/token、新sessionでの再開、同名roundの新scope、重複/飛越し/並行/Finished後/Stopped後をsource呼出し0で拒否。
@@ -195,7 +195,7 @@ synthetic policy/context/sourceはtest専用とし、運用producerの承認へ�
 - 各roundの `RoundResourceScope` は、bridge成功とcleanup証拠（live/予約/unconfirmed/pending retry/宣言残が0）をもって完了扱いにしてからdropする。そうしない場合は正常経路でもsession全体が停止する。完了setterは型付きの証拠からだけ呼べる内部契約とし、boolの外部設定口を設けない。
 - ledger生成後に従来の非session経路（session不要のcollect/strict等）を同じbudgetで実行すると、ledger放棄後は停止理由が伝播する。統合後は同inspection内の経路をsession経由へ揃える。
 
-未確定：各運用cap/総操作枠、role側の保持resource内訳、source操作上界の係数、列挙名総量の別枠、管理allocationの同時上界、新会計処理のwork費、唯一生成claimとstrict acknowledgementの正確なRust寿命、hostへのcleanup証拠伝播。実sourceの内部操作/blocked I/O、system祖先policy、更新lease/ABA/全検査後差替え対策は別の停止課題である。
+未確定：各運用cap/総操作枠、role側の保持resource内訳、列挙名総量の別枠、管理allocationの同時上界、実collector接続後の新会計work上界、strict acknowledgementの正確なRust寿命、hostへのcleanup証拠伝播。唯一生成claimは§16、内部会計費は§18まで具体化した。実sourceの内部操作/blocked I/O、system祖先policy、更新lease/ABA/全検査後差替え対策は別の停止課題である。
 
 ## 13. draft-0.1作成時の文書検証（履歴）
 
@@ -226,7 +226,7 @@ round分類別上界はbaseにEnumの異常yield1、Readの共有残r＋最後�
 
 基本fixtureはO=63、M=73、base=`[63,14,6,657,136]`、計876操作。r=8ならround分類別=`[63,15,15,657,136]`、3round分類別=`[189,43,27,1971,408]`、総上界885/2637。これは必要量でありcapの承認・予約ではない。3roundに1回の合法EINTRを含む実測2629操作もこの数量内に入る。
 
-新規10テストでwide u128 oracle、overflow、未知model/不正shape、全不足work prefix、9課金点の取消/行終端期限、10 shape×3round実操作、876点の失敗/解放不明/取消/期限注入、data/EOF retry、共有rの3round経路を確認した。[数量モデル合成記録](E2E_BEST_PRACTICE_R2_OL03_RESOURCE_MODEL_SYNTHETIC_2026-10-21.md)を参照。session台帳・capsの配賦/強制・唯一生成claim・strict acknowledgement・OS sourceは依然未実装。
+新規10テストでwide u128 oracle、overflow、未知model/不正shape、全不足work prefix、9課金点の取消/行終端期限、10 shape×3round実操作、876点の失敗/解放不明/取消/期限注入、data/EOF retry、共有rの3round経路を確認した。[数量モデル合成記録](E2E_BEST_PRACTICE_R2_OL03_RESOURCE_MODEL_SYNTHETIC_2026-10-21.md)を参照。この数量計算の時点ではsession台帳・caps配賦・唯一claimは未実装だったが、後続§16/18に内部subsetを追加した。strict acknowledgement・OS sourceは未実装。
 
 ## 15. xattr上界の停止不変条件とresource-0.2
 
@@ -280,9 +280,9 @@ beginは同receipt/target/context object、同lineage、RoundScopeのbudget orig
 
 新規10テストで、固定費、合成3round順序、重複生成・生成失敗・未完了drop、各slot/状態違反、同内容の別receipt/target/context、別origin/claim/start/model、copied scope/new token/前token再利用、明示失敗と各課金点の取消/期限を検査した。生成のfresh guardを外す変異では重複試験が失敗し、復元後に全体を再検証した。[session状態合成記録](E2E_BEST_PRACTICE_R2_OL03_SESSION_STATE_SYNTHETIC_2026-10-21.md)を参照。
 
-次はround/session累積会計・cleanup/live予約・完了証拠とstrict acknowledgementの接続が必要である。全体受付・運用cap・OS source・実機操作・permitは引き続き対象外。
+後続§18でround/session内部累積会計・cleanup/live予約を追加した。次は固定collectorとの接続、完了証拠とstrict acknowledgementが必要である。全体受付・運用cap・OS source・実機操作・permitは引き続き対象外。
 
-## 16. 実閉包規模のsource操作数試算（2026-10-21、レビュー）
+## 17. 実閉包規模のsource操作数試算（2026-10-21、レビュー）
 
 §14の操作式（resource-0.2、r=8）へ、親設計の[work規模試算](BEST_PRACTICE_BP5_R2_OL03_COLLECTOR_WORK_REDESIGN.md#71-実閉包規模の机上試算2026-10-20レビュー)と同じ規模のshapeを代入した机上計算である（実装・実測・運用cap承認ではない）。前提：E=5,501、F=4,501（index込み）、D=1,000（T=1,001）、h=5、K=27,501、C=6,000。
 
@@ -303,3 +303,42 @@ beginは同receipt/target/context object、同lineage、RoundScopeのbudget orig
 - workと同じく、全walkの各edgeで完全snapshot（Metadata9＋ACL cleanup1）を取る方式が支配的である。source操作数でも1roundで約165万、3roundで約495万となり、§5の運用capを承認する際の規模感として残す。
 - これらは単発source契約の試行数であり、native syscall数・OS処理時間・FD数の実証ではない。walkの軽量化（祖先edgeの限定確認、root祖先の集約等。scan詳細設計§6.4）を採用すれば、操作数・work・xattr枠の各式を同時に改版する必要がある。
 - 数値が算出できることは受付可能性を意味しない。capが未承認のままでは§5どおりUnavailableで開始しない。
+
+## 18. session累積枠・予約/返却の内部実装（draft-0.6）
+
+`session/resources.rs` は `bp5-r2-session-allocation-0.1` の内部会計層である。sessionに1回だけ設定する非CloneのResourcePolicyは、5分類試行・総試行・live・xattr名bytesについてsession capと3slotのround capを別々に持つ。各roundの実消費を固定配列に残し、round切替・boundary再利用で消費をresetしない。ResourcePolicyのfieldはprivateで**本番constructorはない**。合成試験だけがpolicyを作り、resource数量モデルの出力からpolicyへ変換しない。未設定/未知modelはUnavailable、再設定/開始後設定はBindingで停止する。
+
+### 18.1 事前検査と原子的commit
+
+boundary生成時に既存scope.requireを通し、同receipt/round/元budgetへの結合を継承する。各試行直前にも元origin/claim/startedとcheckpointを検査する。固定長のsessionと現在slotの候補値をchecked算術で作り、**両方の全検査とwork prechargeを通った後だけ両方をcommit**する。片側の更新後に不足が分かる形にはしない。
+
+- 通常試行は分類/総消費を各1増加。既存のcleanup予約も総枠とCleanup枠に常に含める。
+- acquireはOpenまたはACL init相当のMetadataだけ。加えてcleanup予約/live予約を各1増やす候補を検査する。非所有attemptによるOpenはBinding。
+- callback直前に試行を消費し、失敗・Interrupted相当の試行も返金しない。callbackは単発・hidden retryなし・失敗時handleなし・非panicという内部source契約を要求する。
+- 成功handleはpost-checkpointより前にRAII Ownerへ移し、live予約を所有へ変換。peakは同時所有のmaxで、round peakの和をsession peakにしない。遅い成功でも取消/期限の後で必ずOwnerがcleanupする。
+- handleなしの失敗はAcquisitionのDropで未使用cleanup/live予約だけを戻す。試行・workは戻さない。予約中のliveも次の候補検査に含める。
+
+### 18.2 cleanupと停止後の解放
+
+Ownerはscope境界へborrowで結合し、Dropでrawをtakeして解放試行を一度だけ行う。round/sessionのcleanup予約を実Cleanup試行へ変換し、総実消費も各1増やす。これは予約時に検査済みなのでDropで新しいfallible workや取消/期限検査を行わない。ほかのOwnerも同様に解放し続ける。
+
+解放未確認はround/sessionのunconfirmedへ残し、共有claimへ最初の理由（なければUnavailable）を保存する。liveが0になっても容量回復や実OS解放の証明にはしない。後続試行はcheckpointで拒否し、先行HashMismatch/取消等を上書きしない。boundary終了時もlive/live予約/cleanup予約/unconfirmedの残を拒否する。`mem::forget`でOwnerが失われた場合、残を検出して成功を拒否するが、失われたresourceを回収できたとは主張しない。
+
+### 18.3 xattrと既存予算
+
+copy_namesはcapacity 1〜65536を、round/session双方の残へ**コピー前に**照合する。Metadata試行と、応答したbounded実bytesを一度だけ加算する。遅延応答でも実bytesを保持し、capacity超過応答はmin(capacity)を残してReadFailed。内容のnormalizationを代替するAPIではなく、既存normalizer/固定collectorとの接続は次工程。directory名とは別会計である。
+
+payload used/reserved、retry残、元startedは新しく作らず、配賦によって増加/返金しない。Read試行数だけは台帳に累積する。pending retryの検査・read payload課金は既存scan_ops側の責務であり、今回まだ接続していない。
+
+### 18.4 費目と未接続事項
+
+設定は1 work、boundary入口は既存requireの1 work。試行会計/dispatchは1 work、acquireはcleanup分1を加え計2 work。cleanupはprepaidで追加workなし。固定2台帳/5分類のみを対象とし、policy storageのRc/RefCell allocationや実collector接続後の全体上界が確定したとはしない。既存collector-work-0.1/resource-0.2の処理は変更せず、今回の費用をそれらの既存Sへ隠して含めない。全体受付は無効のまま。
+
+新規13テストと[累積会計合成記録](E2E_BEST_PRACTICE_R2_OL03_SESSION_ALLOCATION_SYNTHETIC_2026-10-21.md)を追加。成功3roundの進行だけは既存のtest専用完了/strict ack fixtureを使用する。本番の完了setter、strict ack、運用cap producer、role外側ownerの枠、collector summaryの移動、cleanup証拠のhost伝播は未接続。会計boundary成功だけでは次round/permitは開かない。
+
+**固定collector接続時の二重計上（2026-10-21、レビュー）**：既存 `scan_ops::Boundary::begin` と本節の `prepare` はいずれも「dispatch1＋acquire時cleanup prepay1」をworkへ課金し、scan_opsのscan単位 `Ledger`（attempts/live/予約）と本節の `Used` は同じsource試行を別々に数える。そのまま重ねると同一操作にwork・試行数が二重に計上され、§11のS1902等の計数とも一致しなくなる。接続時は次のいずれかを明示的に選び、work model・費目所有表・独立oracleを同時に改版する。
+
+- (a) scan_opsのscan単位会計をsessionのround会計へ置換し、課金点を一本化する。
+- (b) scan_ops側を課金と試行計数の正とし、session側はworkを課金せず、同じ候補値で累積枠検査とcommitだけを行う。
+
+どちらの場合も、片方だけが成功してもう片方の枠が未commitとなる経路を作らず、cleanup予約・live・unconfirmedは単一の真実源から両方の枠へ反映する。

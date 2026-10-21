@@ -4,7 +4,7 @@ use crate::signature_boundary::positioned_read::work_audit::Audit;
 
 // TEST ONLY: real collector cleanup and strict acknowledgement producers do not exist yet.
 // No equivalent completion setter is compiled in a non-test build.
-fn finish_fixture(
+pub(super) fn finish_fixture(
     mut lease: RoundResourceScope<'_, '_, '_>,
     b: &mut SharedBudget<'_>,
 ) -> Result<(), Failure> {
@@ -13,7 +13,7 @@ fn finish_fixture(
     lease.completed = true;
     Ok(())
 }
-fn ack_fixture(ledger: &mut ScanSessionLedger<'_>, round: Round) {
+pub(super) fn ack_fixture(ledger: &mut ScanSessionLedger<'_>, round: Round) {
     assert!(ledger.state == State::AwaitStrict(round));
     ledger.state = match round {
         Round::Initial => State::Expect(Round::BeforeM4),

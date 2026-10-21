@@ -1,4 +1,4 @@
-//! Inspection/round-local state subset. No quotas, collector dispatch, strict ack or permit.
+//! Inspection/round-local state and internal accounting. No operational policy or permit.
 use super::*;
 use crate::signature_boundary::positioned_read::ScanSessionClaim;
 
@@ -25,6 +25,7 @@ pub(super) struct ScanSessionLedger<'s> {
     model: &'static str,
     tokens: [Option<Rc<()>>; 3],
     state: State,
+    resources: Option<Rc<std::cell::RefCell<resources::Accounting>>>,
 }
 pub(super) struct RoundResourceScope<'a, 'r, 's> {
     ledger: &'a mut ScanSessionLedger<'s>,
@@ -73,6 +74,7 @@ pub(super) fn create<'s>(
             model: MODEL_ID,
             tokens: [None, None, None],
             state: State::Expect(Round::Initial),
+            resources: None,
         })
     })();
     match result {
@@ -194,5 +196,6 @@ impl Drop for ScanSessionLedger<'_> {
     }
 }
 
+mod resources;
 #[cfg(test)]
 mod tests;
