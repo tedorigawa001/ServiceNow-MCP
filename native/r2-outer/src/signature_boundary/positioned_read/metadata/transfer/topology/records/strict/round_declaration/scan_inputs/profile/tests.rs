@@ -403,6 +403,7 @@ fn copied_inputs_and_rebuilt_inputs_cannot_reuse_the_profile() {
                         root: inputs.root,
                         index: inputs.index.clone(),
                         profile_started: Cell::new(false),
+                        scan_started: Cell::new(super::super::use_state::State::Fresh),
                     };
                     assert_eq!(
                         profile.require(&copy, scope, MODEL_ID, b),

@@ -239,6 +239,7 @@ fn binding_and_model_failures_consume_the_profile_and_latch_the_first_reason() {
                     root: inputs.root,
                     index: inputs.index.clone(),
                     profile_started: Cell::new(false),
+                    scan_started: Cell::new(super::super::super::use_state::State::Fresh),
                 };
                 match case {
                     0 => b.inspection_origin = Rc::new(()),

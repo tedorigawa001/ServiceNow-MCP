@@ -5,6 +5,7 @@ use phases::IndexPhases;
 mod canonical;
 pub(in super::super) mod profile;
 mod root_path;
+mod use_state;
 
 pub(in super::super) struct ScanInputs<'i, 'd, 's, 'r> {
     declaration: &'d RoundDeclaration<'s, 'r>,
@@ -12,6 +13,7 @@ pub(in super::super) struct ScanInputs<'i, 'd, 's, 'r> {
     root: &'s RecordSnapshot,
     index: closure::Entry,
     profile_started: std::cell::Cell<bool>,
+    scan_started: std::cell::Cell<use_state::State>,
 }
 pub(in super::super) struct ParentInput<'p, 'i, 'd, 's, 'r> {
     inputs: &'p ScanInputs<'i, 'd, 's, 'r>,
@@ -119,6 +121,7 @@ pub(super) fn build<'i, 'd, 's, 'r>(
             root,
             index,
             profile_started: std::cell::Cell::new(false),
+            scan_started: std::cell::Cell::new(use_state::State::Fresh),
         })
     })();
     stop(result, b)

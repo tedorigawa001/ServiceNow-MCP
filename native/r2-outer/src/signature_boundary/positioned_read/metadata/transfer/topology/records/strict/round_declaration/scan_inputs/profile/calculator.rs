@@ -1,6 +1,7 @@
 //! Pure fixed-row estimate; never a work reservation or scan/execution permit.
 use super::*;
 mod arithmetic;
+mod use_guard;
 use arithmetic::{add, mul, sub};
 pub(in super::super::super::super) const CALCULATOR_ID: &str = "bp5-r2-collector-work-0.1";
 // The coefficient table is versioned with the calculator, not a registered OS kernel.

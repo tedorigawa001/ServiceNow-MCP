@@ -535,6 +535,7 @@ fn copied_input_view_and_different_budget_are_not_root_authority() {
                 } else {
                     let copy = ScanInputs {
                         profile_started: std::cell::Cell::new(false),
+                        scan_started: std::cell::Cell::new(super::super::use_state::State::Fresh),
                         declaration: inputs.declaration,
                         phases: inputs.phases,
                         root: inputs.root,
