@@ -1,6 +1,6 @@
 # BP-5 R-2 OL-03：record・scanを含む全体work上界と事前受付
 
-Version: draft-0.16 / Date: 2026-10-21 / Status: private kernel計数とO.profile/O.calculate/O.use/固定callee/O.dispatch・単一bridgeを検証。3round resource台帳は詳細設計のみ。全体受付・other上界・通常strict・運用承認は未対応。
+Version: draft-0.17 / Date: 2026-10-21 / Status: private kernel計数とO.profile/O.calculate/O.use/固定callee/O.dispatch・単一bridge・resource純粋数量計算を検証。3round台帳・全体受付・other上界・通常strict・運用承認は未対応。
 
 ## 1. 範囲と停止状態
 
@@ -173,6 +173,8 @@ record projection4/roundはRが所有する。旧index互換テストの固定45
 [estimate bridge詳細設計draft-0.5](BEST_PRACTICE_BP5_R2_OL03_ESTIMATE_BRIDGE_DESIGN.md)で、guard7の固定collector model結合・BridgeReady→Enteredを消費する入口O.dispatch1・estimate消費型単一bridgeと前後checkpointを合成検証した。直接/二重collectを拒否し、元S1902を維持した外側collect1903・単一bridge1910・準備込み1991を確認。checkpointでwork費は増えない。3roundの同start/共有retryとAfterScan/FinalIndexも通したが、独立resource配賦・全体work予約は未対応。use21＋dispatch3＝24だけで全体受付成功とはしない。guard/入口成功はscan permitではなく、未知quota/運用producer不足を救済しない。cleanup summary保持・S.seal/Iの別費を維持し、通常strict・運用受付は接続しない。[入口記録](E2E_BEST_PRACTICE_R2_OL03_COLLECTOR_ENTRY_SYNTHETIC_2026-10-21.md)・[単一bridge記録](E2E_BEST_PRACTICE_R2_OL03_ESTIMATE_BRIDGE_SYNTHETIC_2026-10-21.md)を参照。
 
 後続の[3round resource台帳詳細設計draft-0.1](BEST_PRACTICE_BP5_R2_OL03_THREE_ROUND_RESOURCE_LEDGER_DESIGN.md)で、操作/xattr名bytesの累積枠とlive同時枠、cleanup予約、共有retry、同receipt/budgetとround順序、strict後続照合までの停止条件を具体化した。設計のみであり、台帳実装・運用cap承認・通常strict接続は未対応。新台帳の費用をO/Sへ計数し、I/R/Oと独立resource・管理allocationを合算するまで全体受付を有効化しない。上界が既存work上限を超える規模試算の制約も維持する。
+
+同設計draft-0.3 §14ではresource必要数量の純粋計算subsetのみを追加した。算術は固定9 work、元budget/retry残を使い新しい予約や予算を作らない。raw scalar入力は受理済み宣言の証拠ではなく、数量と運用capは別である。session台帳・統計の保護されたproducer/binding・通常strictへの接続・全体受付は未対応。[合成記録](E2E_BEST_PRACTICE_R2_OL03_RESOURCE_MODEL_SYNTHETIC_2026-10-21.md)を参照。
 
 [scan詳細設計draft-0.1](BEST_PRACTICE_BP5_R2_OL03_BOUNDED_SCAN_COLLECTOR_DESIGN.md)へ、全entry/rootの2回全path解決、逐次名前照合と余剰entryのopen前拒否、短読取停止・元共有EINTR残8、snapshot/解放を含む操作数・work式候補を整理した。cleanupはacquire前prechargeと一度限りのownerへ結合する案とし、元spentを返さない。
 

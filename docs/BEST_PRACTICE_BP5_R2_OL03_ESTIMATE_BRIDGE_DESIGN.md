@@ -1,6 +1,6 @@
 # BP-5 R-2 OL-03：estimate消費型bridge・利用guard7の詳細設計
 
-Version: draft-0.6 / Date: 2026-10-21 / Status: estimate消費型の単一bridge・固定collector・前後checkpointを合成検証。3round resource台帳は詳細設計のみ、通常strict/OS接続・全体受付は未実装。
+Version: draft-0.7 / Date: 2026-10-21 / Status: estimate消費型の単一bridge・固定collector・前後checkpointを合成検証。resource純粋数量計算を追加。3round台帳・通常strict/OS接続・全体受付は未実装。
 
 ## 1. 範囲と停止状態
 
@@ -229,3 +229,5 @@ Collectedでは、まず既存resultがErrなら元budgetへラッチし、そ�
 [3round resource台帳詳細設計draft-0.1](BEST_PRACTICE_BP5_R2_OL03_THREE_ROUND_RESOURCE_LEDGER_DESIGN.md)に、操作/xattr名bytesの累積枠とlive ownerの同時枠、acquire前のcleanup予約、元budgetの共有retry、同receipt/budget/startと固定round順序への結合を整理した。bridge成功/cleanup完了だけで次roundを許可せず、既存AfterScan・record再読・FinalIndex/clockの成功に結合する方針である。
 
 台帳・運用cap・通常strictの型付きacknowledgementは未実装。現行のscanごとの合成Quotasをsession承認値へ読み替えず、追加会計の費目/modelを計数するまではO.use7/O.dispatch1/Sの値を無条件に維持すると約束しない。通常strict・全体受付・OS sourceは未接続のまま。
+
+後続の[台帳設計draft-0.3 §14](BEST_PRACTICE_BP5_R2_OL03_THREE_ROUND_RESOURCE_LEDGER_DESIGN.md)では、現行collectorの5分類操作上界を純粋計算する最初のsubsetを実装した。raw scalar入力から必要数量を返すだけで、profile/receipt/round結合・台帳・quota生成はない。固定9 workの算術費は未接続のO費として区別し、このbridgeの既存費や運用権限を変更しない。[合成記録](E2E_BEST_PRACTICE_R2_OL03_RESOURCE_MODEL_SYNTHETIC_2026-10-21.md)を参照。

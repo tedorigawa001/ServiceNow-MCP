@@ -1,6 +1,6 @@
 # BP-5 R-2 OL-03：現行完全collectorの費目・work上界再設計
 
-Version: draft-0.12 / Date: 2026-10-21 / Status: private kernel計数・profile/計算器・単一bridge/固定collector・終端checkpointを合成検証。3round resource台帳は詳細設計のみ、通常strict・全体受付は未対応。
+Version: draft-0.13 / Date: 2026-10-21 / Status: private kernel計数・profile/計算器・単一bridge/固定collector・resource純粋数量計算を合成検証。3round台帳・通常strict・全体受付は未対応。
 
 ## 1. 範囲と停止状態
 
@@ -247,3 +247,5 @@ work合計の監査と運用受付は別であり、3round operation/name台帳�
 [台帳詳細設計draft-0.1](BEST_PRACTICE_BP5_R2_OL03_THREE_ROUND_RESOURCE_LEDGER_DESIGN.md)で、現行sourceの5分類のround/session累積枠、xattr名コピー量、live同時枠、cleanup予約/一度だけの解放を定義した。共有retryを各roundへ再付与せず、同receipt/budget/round token・順序と失敗時停止を結合する。旧scan_workの予定操作式は現行collectorの認証へ流用せず、新しいresource上界の係数・必要shapeを独立検証する。
 
 追加台帳処理のwork費・collector/resource model更新は今後の実装で計数する。3roundのpeakを加算せず、外側の保持owner・管理allocationも別途必要とする。台帳実装・通常strict・全体受付・運用quota承認は未対応で、本設計は既存S費用の控除や上限増額を行わない。
+
+[台帳設計draft-0.3 §14](BEST_PRACTICE_BP5_R2_OL03_THREE_ROUND_RESOURCE_LEDGER_DESIGN.md)で、現行kernelのO/Mと5分類試行数・3round共有retry/tailを数量化した。基本fixtureのbase `[63,14,6,657,136]` は既存876操作と一致。10 shape×3roundの合成source traceと独立宣言集計で照合した。新しい算術9 workはSへ含めず、保護された統計/台帳/運用capへは未接続。[resource数量合成記録](E2E_BEST_PRACTICE_R2_OL03_RESOURCE_MODEL_SYNTHETIC_2026-10-21.md)を参照。

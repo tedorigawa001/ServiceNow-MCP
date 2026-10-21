@@ -1,12 +1,12 @@
 # BP-5 R-2 OL-03：3round resource台帳の詳細設計
 
-Version: draft-0.2 / Date: 2026-10-21 / Status: 設計のみ（レビューでround枠のretry/tail収容とcleanup二重検査を明記）。session台帳・配賦・通常strict接続は未実装、運用上限は未承認。
+Version: draft-0.4 / Date: 2026-10-21 / Status: 純粋resource数量計算・独立oracle・xattr停止不変条件による上界引締めを合成検証。session台帳・配賦・通常strict接続は未実装、運用上限は未承認。
 
 ## 1. 範囲と停止状態
 
 [estimate消費型bridge](BEST_PRACTICE_BP5_R2_OL03_ESTIMATE_BRIDGE_DESIGN.md)と[現行collector費目設計](BEST_PRACTICE_BP5_R2_OL03_COLLECTOR_WORK_REDESIGN.md)に続き、Initial／BeforeM4／AfterM4の3roundが消費する独立resourceの会計を定義する。基準は `fad0749`。現行の `scan_ops.rs`、`normalized_metadata.rs`、`child_set.rs`、`collector.rs`、`profile.rs`、`strict.rs` と[単一bridge合成記録](E2E_BEST_PRACTICE_R2_OL03_ESTIMATE_BRIDGE_SYNTHETIC_2026-10-21.md)を照合した。外部仕様やOS APIを調査する工程ではない。
 
-全体受付無効、telemetry保留、APPROVED_REGISTRY=None、通常v2 Unavailable、gate92、DER/absence停止を維持する。本書は実装・OS接続・実機操作・token発行・設定変更・本番policy投入・permit発行を含めない。運用quotaの数値を新しく承認せず、設計完了や内部binding成功を実行権へ変換しない。
+全体受付無効、telemetry保留、APPROVED_REGISTRY=None、通常v2 Unavailable、gate92、DER/absence停止を維持する。初稿は設計のみで、後続§14で純粋な数量計算を実装した。session台帳実装・OS接続・実機操作・token発行・設定変更・本番policy投入・permit発行を含めない。運用quotaの数値を新しく承認せず、設計完了や内部binding成功を実行権へ変換しない。
 
 前工程の740テストは単一bridgeまでの合成検証であり、本書のsession台帳の検証成績ではない。workは課金ブロック、operationは単発source契約の試行であり、CPU時間・RSS・OS syscall数・hard期限の保証ではない。
 
@@ -68,7 +68,7 @@ session_used[j] + 1 <= session_cap[j]
 
 総操作数上限を採用する場合は5分類和もchecked算術で検査し、cleanup予約まで含めて二重の枠を保持する。分類別capの単純合計を承認済み総capとみなさない。
 
-配賦に使う上界は現行の固定collector scheduleに結合した新しいresource submodelとして導出する。候補識別子は `bp5-r2-scan-resource-0.1`（未実装/未承認）。旧 `bp5-r2-scan-work-0.1` の仮定係数・予定操作式を認証として流用しない。work用profile/estimateは操作quotaを発行せず、必要統計の追加・収集費も別途モデル化する。
+配賦に使う上界は現行の固定collector scheduleに結合した新しいresource submodelとして導出する。現在の識別子は `bp5-r2-scan-resource-0.2`（§14/15の純粋数量計算のみ実装、配賦/運用は未承認）。旧 `bp5-r2-scan-work-0.1` の仮定係数・予定操作式を認証として流用しない。work用profile/estimateは操作quotaを発行せず、必要統計の追加・収集費も別途モデル化する。
 
 概念式は次のとおり。数値係数は後続のsource操作別計数・独立oracle検証が終わるまで未確定とする。
 
@@ -190,8 +190,75 @@ synthetic policy/context/sourceはtest専用とし、運用producerの承認へ�
 
 未確定：各運用cap/総操作枠、role側の保持resource内訳、source操作上界の係数、列挙名総量の別枠、管理allocationの同時上界、新会計処理のwork費、唯一生成claimとstrict acknowledgementの正確なRust寿命、hostへのcleanup証拠伝播。実sourceの内部操作/blocked I/O、system祖先policy、更新lease/ABA/全検査後差替え対策は別の停止課題である。
 
-## 13. 本文書の検証範囲
+## 13. draft-0.1作成時の文書検証（履歴）
 
 文書更新のみ。新規本書と親3文書の相対リンク先55件、fence対応・末尾改行・末尾空白・diff checkを確認し、変更対象がMDだけであることを確認した。簡易リンク検査の初回実行ではコードブロック内の `U_shared_retry[j](r0)` をリンクとして誤認したため、コードブロック/inline codeを除外する検査へ改め、数式と実リンクを区別する回帰入力も通した。節anchor内容まで自動照合したものではない。
 
 コード実装・Rustビルド/試験の再実行は行っていない。本書の実装試験が未実施であることは§11のとおり。
+
+## 14. 純粋resource数量計算（draft-0.3、最初の実装subset）
+
+`scan_ops/resource_model.rs` は固定scalar Shapeから数量だけを返す。ShapeはE/F/D/h/K/C/L（virtual index込み）で、入力の整合・範囲・checked算術を検査するが、受理済み宣言の由来や個々のfile上限は証明しない。保護されたprofile/receipt/round/sessionへの結合、統計収集費は未実装。数量出力をResourcePolicy/Quotas/permitへ変換する口はない。Debugは数量や内部情報を含まない固定labelとする。
+
+現行kernelと独立literalでmodel照合し、通常成功経路の操作上界を次とする。T=D+1、W=2E+3、A=W(h+1)+2Kとする。Wの3はroot初回walk・rewalk・最終rewalk。OはACL以外のopen、Mは完全snapshot数である。
+
+```text
+O = A + T + E
+M = A + E + 2T + 2F + 1
+base[Open, Enum, Read, Metadata, Cleanup]
+     = [O, E+3T, C+F, 9M, O+M]
+```
+
+Eは列挙childのopen/snapshot、Tはcursor open、2Tはcursor/親事後snapshot、2Fはbind/EOF後snapshot、末尾1は保持root最終snapshot。ACL initはMetadataに含み、各snapshotはMetadata9試行とACL cleanup1を使う。dot/dotdotが両方返る場合を含む列挙上界で、常に同じ実測件数になるという意味ではない。
+
+round分類別上界はbaseにEnumの異常yield1、Readの共有残r＋最後の異常試行1を加える。3round分類別上界は3baseに同じtail/rを一度だけ加える。総試行上界はそれぞれ `sum(base)+r+1`、`3sum(base)+r+1`。EnumとReadのterminal異常は同じ実行では両方発生しないため、分類別上界の和より総上界が1小さい。session実装時は総枠・各分類枠・cleanup予約を独立して同時に満たす必要がある。
+
+初版resource-0.1はsnapshot1回のxattr出力capacity上界64KiBをM/3M倍していた。resource-0.2では§15の停止不変条件を用いて `21(M−1)+65536` / `21(3M−1)+65536` へ引き締めた。enum出力capacity総量 `enum_three×255`、payloadの保守上界 `3(L+F)`、scan内peak owner上界5は変更しない。enumの値は実コピーbytesの台帳ではない。peak5はrootを保持しながらleaf/cursor/child/ACLを所有する現行逐次scheduleの上界で、OS FD・外側owner・管理memoryを含む承認値ではない。3roundでも15へ加算しない。
+
+計算自体は元SharedBudgetへ固定9 work（model/domain/walk/snapshot/base/round/three/bytes/publication）を課金し、各行の前後/終端checkpointとsticky停止を維持する。ループは5分類の固定長だけ。collectorの既存SやO.use/O.dispatchは変更せず、この算術費を今後のO側に別計上する。runtimeのraw Shape入力を保護された統計とみなさず、由来を持たない出力を受付へ使わない。
+
+基本fixtureはO=63、M=73、base=`[63,14,6,657,136]`、計876操作。r=8ならround分類別=`[63,15,15,657,136]`、3round分類別=`[189,43,27,1971,408]`、総上界885/2637。これは必要量でありcapの承認・予約ではない。3roundに1回の合法EINTRを含む実測2629操作もこの数量内に入る。
+
+新規10テストでwide u128 oracle、overflow、未知model/不正shape、全不足work prefix、9課金点の取消/行終端期限、10 shape×3round実操作、876点の失敗/解放不明/取消/期限注入、data/EOF retry、共有rの3round経路を確認した。[数量モデル合成記録](E2E_BEST_PRACTICE_R2_OL03_RESOURCE_MODEL_SYNTHETIC_2026-10-21.md)を参照。session台帳・capsの配賦/強制・唯一生成claim・strict acknowledgement・OS sourceは依然未実装。
+
+## 15. xattr上界の停止不変条件とresource-0.2
+
+前提は、正規化成功したnames一覧が空0 byteまたは `com.apple.provenance\0` の21 byteだけであり、それ以外・不正応答・取得失敗ではstickyに停止して次のNamesReadへ進まないこと。コピー後に同snapshotのsize再確認等を行う場合はあるが、未知一覧を受理して次のsnapshotへ進む経路はない。失敗後に後続roundも停止する§7/9の契約が3round上界の前提である。
+
+N回までsnapshotを試行するとき、成功prefixの実コピー量は最大21(N−1)。最後の1回だけ、size queryに基づいて最大65536 byteのbufferを要求し得る。現行の枠検査は `names_used + max(declared_size,1)` を読取前に行うため、コピー実消費とこの事前capacity要求の両方を次で覆える。
+
+```text
+Q(N) = 21(N−1) + 65536    # N>=1、checked算術。N=0はBinding
+xattr_round = Q(M)
+xattr_three = Q(3M)       # 全sessionのterminal大コピーは1回。3×Q(M)ではない
+```
+
+基本fixture M=73は1round 4,784,128→67,048 byte、3roundは70,114 byte。規模例M=137,538は1round 2,953,813 byte（約2.95MB）。最終snapshotも成功する場合は21N以下で、この必要枠内に入る。これはcapacityを64KiBへ縮小する変更ではなく、累積上界の引締めである。
+
+normalizerの実受理文字列を `ALLOWED_NONEMPTY_NAMES` へ集約し、`bp5-r2-scan-xattr-names-0.1` と共有capacity定数を数量モデルの前提へ結合した。モデルは固定のpolicy ID・受理文字列（NUL込み21 byte）・65536上限と照合し、変化したらUnavailable。resource-0.1入力も拒否し、出力契約をresource-0.2へ改版した。実kernelの操作/受理動作は変えないのでcollector-work-0.1は維持する。
+
+許可一覧追加/変更、受理最大bytes拡大、capacity変更、未知名を許容して継続、停止後の再scan/次round許可、NamesReadのhidden retryを導入する場合は、前提を再審査しnormalization policyとresource modelを改版する。ID/定数照合だけで将来の制御フロー変更を自動的に証明できるとはしない。
+
+追加2テストと既存oracle拡張でQの境界/overflow/旧model・policy変更拒否、成功prefix0/1/72件＋最後の未知64KiB、capちょうど/1byte不足、コピー後の再snapshot禁止を確認する。3roundの共有台帳そのものは未実装であり、Q(3M)のruntime強制を試験済みとはしない。
+
+## 16. 実閉包規模のsource操作数試算（2026-10-21、レビュー）
+
+§14の操作式（resource-0.2、r=8）へ、親設計の[work規模試算](BEST_PRACTICE_BP5_R2_OL03_COLLECTOR_WORK_REDESIGN.md#71-実閉包規模の机上試算2026-10-20レビュー)と同じ規模のshapeを代入した机上計算である（実装・実測・運用cap承認ではない）。前提：E=5,501、F=4,501（index込み）、D=1,000（T=1,001）、h=5、K=27,501、C=6,000。
+
+| 項目 | 値 |
+|---|---:|
+| A = (2E+3)(h+1)+2K | 121,032 |
+| Open O = A+T+E | 127,534 |
+| snapshot M = A+E+2T+2F+1 | 137,538 |
+| Enum E+3T | 8,504 |
+| Read C+F | 10,501 |
+| Metadata 9M（ACL init込み） | **1,237,842**（約75%） |
+| Cleanup O+M | 265,072 |
+| 1roundのsource操作（base合計） | **1,649,453** |
+| 3roundのsource操作（3×base＋r＋1） | **4,948,368** |
+| xattr名（§15のQ、1round／3round） | 2,953,813 ／ Q(3M)=8,730,409 byte |
+| scan内peak owner | 5（3roundで加算しない） |
+
+- workと同じく、全walkの各edgeで完全snapshot（Metadata9＋ACL cleanup1）を取る方式が支配的である。source操作数でも1roundで約165万、3roundで約495万となり、§5の運用capを承認する際の規模感として残す。
+- これらは単発source契約の試行数であり、native syscall数・OS処理時間・FD数の実証ではない。walkの軽量化（祖先edgeの限定確認、root祖先の集約等。scan詳細設計§6.4）を採用すれば、操作数・work・xattr枠の各式を同時に改版する必要がある。
+- 数値が算出できることは受付可能性を意味しない。capが未承認のままでは§5どおりUnavailableで開始しない。

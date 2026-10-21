@@ -1,6 +1,10 @@
 //! Scan-local normalization. No target metadata quota, OS source, or trusted policy producer.
 use super::*;
 
+// Adding an accepted list or continuing after an unknown list requires a new policy/model.
+pub(super) const NAMES_POLICY_ID: &str = "bp5-r2-scan-xattr-names-0.1";
+pub(super) const ALLOWED_NONEMPTY_NAMES: &[u8] = b"com.apple.provenance\0";
+
 #[derive(PartialEq, Eq)]
 pub(super) enum AttributeNames {
     Empty,
@@ -165,7 +169,7 @@ impl<S: ScanOps> Boundary<'_, '_, '_, S> {
         work(self.budget)?;
         let names = if n == 0 {
             AttributeNames::Empty
-        } else if &raw[..n] == b"com.apple.provenance\0" {
+        } else if &raw[..n] == ALLOWED_NONEMPTY_NAMES {
             AttributeNames::Provenance
         } else {
             return self.unsuitable(after);

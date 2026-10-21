@@ -7,6 +7,10 @@ mod child_set;
 pub(super) mod collector;
 mod declared_read;
 mod normalized_metadata;
+mod resource_model;
+
+// Versioned with normalized_metadata's allowlist and resource_model's copy bound.
+const MAX_XATTR_NAMES_BYTES: usize = 65536;
 
 #[derive(Clone, Copy, PartialEq, Eq)]
 enum Kind {
@@ -450,7 +454,7 @@ impl<'s, S: ScanOps> Boundary<'s, '_, '_, S> {
             MetaOp::AclStat | MetaOp::AclQuery => r.kind == Kind::Acl,
             _ => r.kind != Kind::Acl,
         };
-        if !valid || out.len() > 65536 {
+        if !valid || out.len() > MAX_XATTR_NAMES_BYTES {
             return self.fail(Failure::Binding);
         }
         if matches!(op, MetaOp::NamesRead) {
@@ -492,7 +496,9 @@ impl<'s, S: ScanOps> Boundary<'s, '_, '_, S> {
             (MetaOp::Stat | MetaOp::AclStat, MetaValue::Stat(_))
             | (MetaOp::Filesystem, MetaValue::Filesystem(_)) => true,
             (MetaOp::AclQuery, MetaValue::Acl(n)) => *n == 0 || *n == 1,
-            (MetaOp::NamesSize, MetaValue::Size(n)) => *n >= 0 && *n <= 65536,
+            (MetaOp::NamesSize, MetaValue::Size(n)) => {
+                *n >= 0 && *n <= MAX_XATTR_NAMES_BYTES as i64
+            }
             (MetaOp::NamesRead, MetaValue::Bytes(n)) => *n <= out.len(),
             _ => false,
         };

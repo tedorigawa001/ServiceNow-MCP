@@ -515,6 +515,7 @@ fn run_with_audit(
 }
 
 mod entry;
+mod resource_bounds;
 mod work_accounting;
 #[test]
 fn all_entries_are_read_and_observed_then_accepted_by_after_scan_in_each_round() {

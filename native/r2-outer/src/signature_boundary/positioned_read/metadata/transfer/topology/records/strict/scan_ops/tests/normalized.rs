@@ -93,6 +93,62 @@ fn normalizes_empty_or_provenance_and_counts_each_snapshot_eighteen_work() {
 }
 
 #[test]
+fn one_unknown_64k_list_exhausts_the_terminal_copy_allowance_and_stops_new_snapshots() {
+    for prefix in [0_u64, 1, 72] {
+        for short_cap in [false, true] {
+            let (source, state, stop, tick) = fixture();
+            for _ in 0..prefix {
+                state
+                    .borrow_mut()
+                    .metadata_script
+                    .extend(script(stat(), b"com.apple.provenance\0"));
+            }
+            state
+                .borrow_mut()
+                .metadata_script
+                .extend(script(stat(), &vec![b'x'; 65536]));
+            // A canary list must never be reached after the unknown list or cap failure.
+            state
+                .borrow_mut()
+                .metadata_script
+                .extend(script(stat(), b"com.apple.provenance\0"));
+            let bound = prefix * 21 + 65536;
+            let mut q = quotas();
+            q.attempts[Op::Metadata as usize] = 9 * (prefix + 1); // test's snapshot count, not a product cap
+            q.name_bytes = bound - u64::from(short_cap);
+            let mut b = SharedBudget::new(tick.get(), &stop);
+            let expected = if short_cap {
+                Failure::Limit
+            } else {
+                Failure::Metadata
+            };
+            let out = with_boundary(source, Some(q), &mut b, |s| {
+                let a = s.acquire(None, None, Kind::Anchor)?;
+                let f = s.acquire(Some(&a), Some("file"), Kind::File)?;
+                for _ in 0..prefix {
+                    s.collect_snapshot(&f, &policy(), false)?;
+                }
+                assert!(matches!(s.collect_snapshot(&f,&policy(),false),Err(e) if e==expected));
+                let calls = state.borrow().counts;
+                assert!(matches!(s.collect_snapshot(&f,&policy(),false),Err(e) if e==expected));
+                assert_eq!(state.borrow().counts, calls); // sticky stop: no second copy/size query
+                Err::<(), _>(expected)
+            });
+            assert_eq!(out.result, Err(expected));
+            assert_eq!(
+                out.summary.names,
+                if short_cap { prefix * 21 } else { bound }
+            );
+            assert_eq!(out.summary.live, 0);
+            assert_eq!(out.summary.pending_cleanup, 0);
+            assert_eq!(out.summary.unconfirmed, 0);
+            assert_eq!(state.borrow().counts[4], state.borrow().next);
+            assert!(!state.borrow().duplicate);
+        }
+    }
+}
+
+#[test]
 fn initial_policy_failures_and_after_policy_changes_are_distinct() {
     for after in [false, true] {
         for case in 0..12 {
