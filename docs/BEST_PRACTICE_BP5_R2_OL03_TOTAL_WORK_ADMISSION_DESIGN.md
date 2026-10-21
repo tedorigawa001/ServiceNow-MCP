@@ -1,6 +1,6 @@
 # BP-5 R-2 OL-03：record・scanを含む全体work上界と事前受付
 
-Version: draft-0.11 / Date: 2026-10-21 / Status: private合成collector計数とO.profile収集/O.calculateを検証。useは別紙で設計のみ。全体受付・other上界・通常strict・運用承認は未対応。
+Version: draft-0.12 / Date: 2026-10-21 / Status: private合成collector計数とO.profile収集/O.calculateを検証。use/dispatchは別紙で設計のみ。全体受付・other上界・通常strict・運用承認は未対応。
 
 ## 1. 範囲と停止状態
 
@@ -170,7 +170,7 @@ record projection4/roundはRが所有する。旧index互換テストの固定45
 
 [sealed profile/計算器詳細設計draft-0.3](BEST_PRACTICE_BP5_R2_OL03_SEALED_SCAN_PROFILE_DESIGN.md)でOの収集/算術/利用guardを分離した。O.profile=`11+2N+5E+K+B+M+D` とrequire5・O.calculate=20を内部実装/合成検証済み。将来O.use=7は未実装の案である。初回bootstrapでこれらを実消費してもspentを返却せず、将来roundの分を未計上にしない。count-onlyの一時配列を解放してからscalar profileを返し、S.groupsの全費用は維持する。独立resource受付と全体work予約は有効化しない。[収集合成記録](E2E_BEST_PRACTICE_R2_OL03_SEALED_SCAN_PROFILE_SYNTHETIC_2026-10-21.md)・[計算器記録](E2E_BEST_PRACTICE_R2_OL03_SCAN_CALCULATOR_SYNTHETIC_2026-10-21.md)を参照。
 
-[estimate bridge詳細設計draft-0.1](BEST_PRACTICE_BP5_R2_OL03_ESTIMATE_BRIDGE_DESIGN.md)で、O.use7、同receipt/round/budget/Readyへの結合、estimateと利用claimの消費、固定collectorとcleanup summary保持を具体化した。guard成功はwork/resource受付やscan permitではなく、未知quota/運用producer不足を救済しない。S.sealとIのAfterScan/FinalIndexは別費を維持し、3round分use21も未検証の候補値として残す。通常strict・独立resource配賦・全体予約は接続しない。
+[estimate bridge詳細設計draft-0.2](BEST_PRACTICE_BP5_R2_OL03_ESTIMATE_BRIDGE_DESIGN.md)で、O.use7、同receipt/round/budget/Readyへの結合、ScanInputs側の単調な利用状態とcollector入口での再消費を具体化した。直接/二重collectを拒否する入口費O.dispatch1は別計上し、3round分use21＋dispatch3＝24も未検証の候補値として残す。guard成功はwork/resource受付やscan permitではなく、未知quota/運用producer不足を救済しない。cleanup summary保持・S.sealとIのAfterScan/FinalIndexの別費を維持し、通常strict・独立resource配賦・全体予約は接続しない。
 
 [scan詳細設計draft-0.1](BEST_PRACTICE_BP5_R2_OL03_BOUNDED_SCAN_COLLECTOR_DESIGN.md)へ、全entry/rootの2回全path解決、逐次名前照合と余剰entryのopen前拒否、短読取停止・元共有EINTR残8、snapshot/解放を含む操作数・work式候補を整理した。cleanupはacquire前prechargeと一度限りのownerへ結合する案とし、元spentを返さない。
 
