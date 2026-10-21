@@ -65,4 +65,8 @@ Linuxコンテナで `/home` に拡張ACL（`u:nobody:r-x`）を付け、runner�
 - 環境変数なし：CIと同じ診断メッセージで停止した。
 - CIの手順と同じコマンドを実行した後：`npm test`、`npm run test:coverage` とも **122ファイル・3,234テストすべて成功**。
 
-GitHub Actions上の結果は、この修正をpushした後のCIで確認する。
+### GitHub Actionsでの結果
+
+この修正（`676bc7b`）をpushしたCI（run 39686194682）は、**Build & Test（Node 22.x／24.x）とCoverageの3jobとも成功**した。Node 22.xのTest stepで **122ファイル・3,234テストすべて成功**を確認した。2026-10-17の `5f01f3c` 以降続いていた失敗は解消した。
+
+追加したstepのログでは、`/` と `/srv` は拡張ACLなし（`user::rwx`／`group::r-x`／`other::r-x`）、作成したディレクトリは `group::---`／`other::---` だった。テストはこれらを製品と同じ規則で再検査したうえで使っている。
