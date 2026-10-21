@@ -178,7 +178,16 @@ export async function handleHttpRequest(
     return;
   }
 
-  const url = new URL(req.url || '/', `http://${req.headers.host || 'localhost'}`);
+  let url: URL;
+  try {
+    // Validate the untrusted authority, but never use it as the routing base.
+    new URL(`http://${req.headers.host || 'localhost'}`);
+    url = new URL(req.url || '/', 'http://localhost');
+  } catch {
+    res.writeHead(400, { 'Content-Type': 'application/json' });
+    res.end(jsonRpcError(-32600, 'Invalid request URL or Host'));
+    return;
+  }
 
   // Lightweight health probe for load balancers / container orchestration.
   if (req.method === 'GET' && url.pathname === '/health') {
@@ -257,7 +266,16 @@ export async function handleHttpRequest(
 /** Build the Node HTTP server (without listening). Exported for tests. */
 export function createHttpServer(cfg: HttpConfig = getHttpConfig()): http.Server {
   return http.createServer((req, res) => {
-    void handleHttpRequest(req, res, cfg);
+    void handleHttpRequest(req, res, cfg).catch(() => {
+      // Contain failures even in pre-auth routing/response handling. Do not log
+      // request data (which may include credentials) or reject an unobserved promise.
+      if (!res.headersSent && !res.destroyed) {
+        res.writeHead(500, { 'Content-Type': 'application/json' });
+        res.end(jsonRpcError(-32603, 'Internal server error'));
+      } else {
+        res.destroy();
+      }
+    }).catch(() => res.destroy());
   });
 }
 

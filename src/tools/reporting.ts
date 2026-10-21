@@ -90,7 +90,7 @@ export function getReportingToolDefinitions() {
           date_field: { type: 'string', description: 'Date field to bucket by (e.g., "opened_at", "sys_created_on")' },
           group_by: { type: 'string', description: 'Secondary grouping field (e.g., "priority", "state")' },
           query: { type: 'string', description: 'Optional encoded query filter' },
-          periods: { type: 'number', description: 'Number of months to look back (default: 6)' },
+          periods: { type: 'integer', minimum: 1, maximum: 120, default: 6, description: 'Number of months to look back (1–120, default: 6)' },
         },
         required: ['table', 'date_field', 'group_by'],
       },
@@ -328,7 +328,10 @@ export async function executeReportingToolCall(
     case 'trend_query': {
       if (!args.table || !args.date_field || !args.group_by)
         throw new ServiceNowError('table, date_field, and group_by are required', 'INVALID_REQUEST');
-      const periods = args.periods || 6;
+      const periods = args.periods === undefined ? 6 : args.periods;
+      if (!Number.isSafeInteger(periods) || periods < 1 || periods > 120) {
+        throw new ServiceNowError('periods must be an integer between 1 and 120', 'INVALID_REQUEST');
+      }
       const results = [];
       for (let i = periods - 1; i >= 0; i--) {
         const d = new Date();

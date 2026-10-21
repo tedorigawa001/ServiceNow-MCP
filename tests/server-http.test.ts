@@ -109,6 +109,46 @@ const CFG: HttpConfig = {
   sessionIdleTimeoutMs: 1_800_000,
 };
 
+it('returns 400 for an unauthenticated malformed Host without opening a session', async () => {
+  const req = mockReq({ method: 'POST', headers: { host: '[', authorization: '' } });
+  const res = mockRes();
+  await expect(handleHttpRequest(req, res, CFG)).resolves.toBeUndefined();
+  expect(res.statusCode).toBe(400);
+  expect(res.body).not.toContain('[');
+  expect(mockCreateServer).not.toHaveBeenCalled();
+});
+
+it.each(['%', 'example.com:bad', '[::1'])('rejects malformed Host %s before authentication', async host => {
+  const res = mockRes();
+  await handleHttpRequest(mockReq({ method: 'POST', headers: { host, authorization: '' } }), res, CFG);
+  expect(res.statusCode).toBe(400);
+  expect(mockCreateServer).not.toHaveBeenCalled();
+});
+
+it('rejects an invalid absolute request target without reflecting it', async () => {
+  const res = mockRes();
+  await handleHttpRequest(mockReq({ method: 'POST', url: 'http://[/secret', headers: { authorization: '' } }), res, CFG);
+  expect(res.statusCode).toBe(400);
+  expect(res.body).not.toContain('secret');
+});
+
+it.each(['localhost:3000', '[::1]:3000'])('preserves health routing with valid Host %s', async host => {
+  const res = mockRes();
+  await handleHttpRequest(mockReq({ method: 'GET', url: '/health?probe=1', headers: { host } }), res, CFG);
+  expect(res.statusCode).toBe(200);
+});
+
+it('contains a pre-routing handler rejection at the real listener boundary', async () => {
+  const server = createHttpServer(CFG);
+  const res = mockRes();
+  res.setHeader = () => { throw new Error('synthetic response failure'); };
+  server.emit('request', mockReq({ method: 'GET', url: '/health' }), res);
+  await new Promise(resolve => setImmediate(resolve));
+  expect(res.statusCode).toBe(500);
+  expect(JSON.parse(res.body).error.message).toBe('Internal server error');
+  expect(mockCreateServer).not.toHaveBeenCalled();
+});
+
 beforeEach(() => {
   transportInstances.length = 0;
   state.sessionCounter = 0;

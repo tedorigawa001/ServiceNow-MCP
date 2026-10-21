@@ -34,6 +34,10 @@ run trend_query:
 
 Returns monthly counts grouped by priority level.
 
+`periods` must be an integer from 1 to 120. Omitting it uses 6 months.
+Invalid values (including zero, null, strings, fractions, and larger numbers)
+are rejected before any aggregate request is sent.
+
 ### SLA Compliance Rate
 
 ```

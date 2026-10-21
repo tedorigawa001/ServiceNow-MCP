@@ -267,6 +267,36 @@ describe('executeReportingToolCall – unknown tool', () => {
 describe('trend_query', () => {
   beforeEach(() => vi.clearAllMocks());
 
+  it('rejects zero periods before querying ServiceNow', async () => {
+    await expect(executeReportingToolCall(mockClient, 'trend_query', {
+      table: 'incident', date_field: 'sys_created_on', group_by: 'priority', periods: 0,
+    })).rejects.toMatchObject({ code: 'INVALID_REQUEST' });
+    expect(mockClient.runAggregateQuery).not.toHaveBeenCalled();
+  });
+
+  it.each([-1, 0.5, 121, 1e100, JSON.parse('1e400'), NaN, null, '3', false, {}, []])(
+    'rejects invalid periods %j without an upstream call', async periods => {
+      await expect(executeReportingToolCall(mockClient, 'trend_query', {
+        table: 'incident', date_field: 'sys_created_on', group_by: 'priority', periods,
+      })).rejects.toMatchObject({ code: 'INVALID_REQUEST' });
+      expect(mockClient.runAggregateQuery).not.toHaveBeenCalled();
+    }
+  );
+
+  it.each([[undefined, 6], [1, 1], [120, 120]])('supports periods %s with %i buckets', async (periods, count) => {
+    (mockClient.runAggregateQuery as ReturnType<typeof vi.fn>).mockResolvedValue([]);
+    const result = await executeReportingToolCall(mockClient, 'trend_query', {
+      table: 'incident', date_field: 'sys_created_on', group_by: 'priority', periods,
+    });
+    expect(result.periods).toHaveLength(count);
+    expect(mockClient.runAggregateQuery).toHaveBeenCalledTimes(count);
+  });
+
+  it('publishes the same period bounds to MCP clients', () => {
+    const tool = getReportingToolDefinitions().find(tool => tool.name === 'trend_query')!;
+    expect(tool.inputSchema.properties?.periods).toMatchObject({ type: 'integer', minimum: 1, maximum: 120, default: 6 });
+  });
+
   it('requires table, date_field, and group_by', async () => {
     await expect(executeReportingToolCall(mockClient, 'trend_query', {})).rejects.toThrow(
       'table, date_field, and group_by are required'
