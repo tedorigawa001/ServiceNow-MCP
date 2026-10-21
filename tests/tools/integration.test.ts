@@ -181,7 +181,22 @@ describe('Transform Maps', () => {
   });
 
   describe('run_transform_map', () => {
-    beforeEach(() => { process.env.WRITE_ENABLED = 'true'; });
+    const MAP_ID = '1'.repeat(32);
+    const SET_ID = '2'.repeat(32);
+    /** Serve the Import Set and Transform Map by table; staging hierarchy via sys_db_object. */
+    function mockPair(importSet: Record<string, unknown>, map: Record<string, unknown>) {
+      gr().mockImplementation(async (table: string) => {
+        if (table === 'sys_import_set') return importSet;
+        if (table === 'sys_transform_map') return map;
+        throw new Error(`unexpected table ${table}`);
+      });
+    }
+    beforeEach(() => {
+      process.env.WRITE_ENABLED = 'true';
+      mockDbObjects(STAGING_HIERARCHY);
+      mockPair({ sys_id: SET_ID, table_name: 'u_import_ci' },
+        { sys_id: MAP_ID, active: 'true', source_table: 'u_import_ci', target_table: 'cmdb_ci_server' });
+    });
     afterEach(() => { delete process.env.WRITE_ENABLED; });
 
     it('is blocked without WRITE_ENABLED', async () => {
@@ -196,11 +211,48 @@ describe('Transform Maps', () => {
       );
     });
 
-    it('triggers a transform run', async () => {
+    it('requests a run for an active map whose source table is the Import Set staging table', async () => {
       cr().mockResolvedValue({ sys_id: 'run1' });
-      const result = await executeIntegrationToolCall(mockClient, 'run_transform_map', { transform_map_sys_id: 't1', import_set_sys_id: 'i1' });
-      expect(cr()).toHaveBeenCalledWith('sys_import_set_run', { import_set: 'i1', transform_map: 't1' });
-      expect(result.summary).toContain('t1');
+      const result = await executeIntegrationToolCall(mockClient, 'run_transform_map', { transform_map_sys_id: MAP_ID, import_set_sys_id: SET_ID });
+      expect(gr()).toHaveBeenCalledWith('sys_import_set', SET_ID);
+      expect(gr()).toHaveBeenCalledWith('sys_transform_map', MAP_ID);
+      expect(cr()).toHaveBeenCalledWith('sys_import_set_run', { import_set: SET_ID, transform_map: MAP_ID });
+      expect(result.summary).toContain(MAP_ID);
+    });
+
+    it.each([
+      ['a non-hex map id', { transform_map_sys_id: 't1', import_set_sys_id: '2'.repeat(32) }],
+      ['a non-hex import set id', { transform_map_sys_id: '1'.repeat(32), import_set_sys_id: 'i1' }],
+      ['an encoded-query style id', { transform_map_sys_id: '1'.repeat(32), import_set_sys_id: `${'2'.repeat(32)}^ORactive=true` }],
+    ])('rejects %s before any read or write', async (_label, args) => {
+      await expect(executeIntegrationToolCall(mockClient, 'run_transform_map', args)).rejects.toMatchObject({ code: 'VALIDATION_ERROR' });
+      expect(gr()).not.toHaveBeenCalled();
+      expect(qr()).not.toHaveBeenCalled();
+      expect(cr()).not.toHaveBeenCalled();
+    });
+
+    it('rejects a map built for a different source table (e.g. a user import map)', async () => {
+      mockPair({ sys_id: SET_ID, table_name: 'u_import_ci' },
+        { sys_id: MAP_ID, active: 'true', source_table: 'ldap_import', target_table: 'sys_user' });
+      await expect(executeIntegrationToolCall(mockClient, 'run_transform_map', { transform_map_sys_id: MAP_ID, import_set_sys_id: SET_ID }))
+        .rejects.toMatchObject({ code: 'VALIDATION_ERROR', message: expect.stringContaining('source table') });
+      expect(cr()).not.toHaveBeenCalled();
+    });
+
+    it.each([['false'], [false], [''], [undefined]])('rejects an inactive map (active=%j)', async active => {
+      mockPair({ sys_id: SET_ID, table_name: 'u_import_ci' }, { sys_id: MAP_ID, active, source_table: 'u_import_ci' });
+      await expect(executeIntegrationToolCall(mockClient, 'run_transform_map', { transform_map_sys_id: MAP_ID, import_set_sys_id: SET_ID }))
+        .rejects.toMatchObject({ code: 'VALIDATION_ERROR', message: expect.stringContaining('not active') });
+      expect(cr()).not.toHaveBeenCalled();
+    });
+
+    it('rejects an Import Set whose table is not a staging table, before reading the map', async () => {
+      mockDbObjects([{ sys_id: STAGING_ID, name: 'sys_user' }]);
+      mockPair({ sys_id: SET_ID, table_name: 'sys_user' }, { sys_id: MAP_ID, active: 'true', source_table: 'sys_user' });
+      await expect(executeIntegrationToolCall(mockClient, 'run_transform_map', { transform_map_sys_id: MAP_ID, import_set_sys_id: SET_ID }))
+        .rejects.toMatchObject({ code: 'VALIDATION_ERROR', message: expect.stringContaining('sys_import_set_row') });
+      expect(gr()).not.toHaveBeenCalledWith('sys_transform_map', MAP_ID);
+      expect(cr()).not.toHaveBeenCalled();
     });
   });
 
@@ -459,6 +511,7 @@ describe('Import Sets & Data Sources', () => {
         .mockResolvedValueOnce({ sys_id: 'row2' })
         .mockResolvedValueOnce({ sys_id: 'run1' });
       ua().mockResolvedValue({ sys_id: 'attachment1' });
+      gr().mockResolvedValue({ sys_id: 'b'.repeat(32), active: 'true', source_table: 'u_import_ci' });
 
       const result = await executeIntegrationToolCall(mockClient, 'import_excel_to_import_set', {
         file_name: 'vi-import.xlsx',
@@ -479,6 +532,20 @@ describe('Import Sets & Data Sources', () => {
       });
       expect(result.rows_inserted).toBe(2);
       expect(result.transform_run.sys_id).toBe('run1');
+    });
+
+    it.each([
+      ['a map for another source table', { active: 'true', source_table: 'ldap_import' }, 'source table'],
+      ['an inactive map', { active: 'false', source_table: 'u_import_ci' }, 'not active'],
+    ])('rejects %s before creating the Import Set, uploading, or inserting rows', async (_label, map, message) => {
+      gr().mockResolvedValue({ sys_id: 'b'.repeat(32), ...map });
+      const base64 = await xlsxBase64([['hostname'], ['server-1']]);
+      await expect(executeIntegrationToolCall(mockClient, 'import_excel_to_import_set', {
+        file_name: 'vi-import.xlsx', content_base64: base64, staging_table: 'u_import_ci', transform_map_sys_id: 'b'.repeat(32),
+      })).rejects.toMatchObject({ code: 'VALIDATION_ERROR', message: expect.stringContaining(message) });
+      expect(gr()).toHaveBeenCalledWith('sys_transform_map', 'b'.repeat(32));
+      expect(cr()).not.toHaveBeenCalled();
+      expect(ua()).not.toHaveBeenCalled();
     });
 
     it('rejects a non-staging destination before creating an Import Set or uploading', async () => {

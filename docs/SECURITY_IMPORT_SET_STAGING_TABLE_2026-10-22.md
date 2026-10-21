@@ -1,4 +1,4 @@
-# Import Set宛先テーブル検証の回帰記録（2026-10-22）
+# Import Set宛先テーブル・Transform Map組合せ検証の回帰記録（2026-10-22）
 
 ## 原因と影響
 
@@ -43,7 +43,29 @@ bdo git diff --check
 
 build成功。integration 78テスト成功。ESLint error 0（既存のany警告10件）。全体 **122ファイル・3,209テストすべて成功**。diffチェック成功。
 
+## 追補：Transform Mapの組合せ検証（2026-10-22）
+
+### 確認結果
+
+- `run_transform_map` は `requireWrite()` だけで `sys_import_set_run` を作成し、sys_idの形式もImport SetとTransform Mapの組合せも検査していなかった。`import_excel_to_import_set` の任意Transformも同じ。
+- このMCPにはTransform Map・field map・transform scriptを作成/変更するツールがなく（一覧/取得のみ）、既存自動化の起動（`trigger_flow`、`trigger_scheduled_job` 等）をWrite段階とする既存方針とも整合する。従って本経路がScripting段階を迂回して新しいscriptを書き込むことはない。
+- ただし、正規のstaging tableへ任意の行を入れたうえで**インスタンス既存の任意のTransform Map**を起動できたため、管理者が構成した宛先（例：LDAPユーザー取込みmapの `sys_user`）へ、各ツールの項目allowlistを経由せずにデータを流し込めた。
+
+### 修正（案A）
+
+- 共通helper `requireTransformMapForStagingTable` を追加。mapのsys_idが32桁16進であること、`sys_transform_map` が有効（`active` が `true`/`'true'`）であること、`source_table` が対象staging tableと完全一致することを要求する。
+- `run_transform_map`：両sys_idの形式を最初に検査し、Import Setを取得してその `table_name` に `requireImportSetStagingTable` を適用し、続いて上記helperでmapを照合してから `sys_import_set_run` を作成する。
+- `import_excel_to_import_set`：`transform_map_sys_id` 指定時は、staging table検証の直後、Import Set作成・添付アップロード・行挿入より前にmapを照合する。
+- 失敗はすべて `VALIDATION_ERROR` で、書込みは0回。誤解を招いていたコードコメント（「Scripted REST経由で起動」）は、実際の動作（run記録の作成）と未検証である旨に改めた。
+
+### 回帰テストと結果
+
+- 追加11件：組合せ成功、非16進/検索条件風のsys_id（読取り・書込み0回）、別source tableのmap（例：`ldap_import`→`sys_user`）、無効なmap（`'false'`/`false`/空/未設定）、staging tableでないImport Set（mapを読む前に拒否）、Excel経路での別source table/無効map（Import Set作成・アップロード・行挿入0回）。既存の成功テスト2件を有効な組合せのmockへ更新した。
+- 変異確認：map照合helperを無条件成功にすると8件、`run_transform_map` のstaging table検証を外すと1件が失敗した。いずれも復元済み。
+- build成功、integration 89テスト成功、ESLint error 0（既存any警告10件）、全体 **122ファイル・3,220テストすべて成功**。
+
 ## 範囲外
 
-- `run_transform_map` は既存のTransform Map（宛先は管理者が構成）を起動するだけで、本修正の対象外。Transform Mapの宛先・scriptの権限境界は別途確認が必要。
+- Transform Mapの宛先テーブルやscript（mapの `run_script`、`sys_transform_script`、field mapの `use_source_script`）に応じてScripting段階を要求するかは、権限方針の判断が必要なため未実施（案B）。
+- `sys_import_set_run` の作成だけで変換が始まるかは実機で確認していない（案C）。ツールの要約は従来どおり「Triggered」と返す。
 - PDI/ServiceNowへの操作・設定変更は行っていない。`sys_db_object` の応答形状（`super_class` がreference objectまたは文字列）はmockで確認したもので、実インスタンスでの確認ではない。
