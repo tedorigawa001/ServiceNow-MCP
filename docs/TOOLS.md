@@ -2418,7 +2418,7 @@ Get Transform Map details and field mappings.
 ### run_transform_map
 Request a run of a Transform Map on an import set by creating a `sys_import_set_run` record. **[Write; Scripting when the map runs scripts or targets a protected table]**
 
-Before any write, both sys_ids must be 32-character hex, the Import Set's table must extend `sys_import_set_row`, and the Transform Map must be active with a `source_table` equal to that staging table. A map built for a different source table (for example a user-import map) cannot be run against an unrelated Import Set. Whether creating the run record alone starts the transform has not been verified on an instance.
+Before any write, both sys_ids must be 32-character hex, the Import Set's table must extend `sys_import_set_row`, and the Transform Map must be active with a `source_table` equal to that staging table. A map built for a different source table (for example a user-import map) cannot be run against an unrelated Import Set. Whether creating the run record alone starts the transform has not been verified on an instance, so the result reports `transform_started: "not_verified"` with a `note` and never claims the transform ran; check the Import Set state and transform history in ServiceNow. ServiceNow's documented REST path transforms rows synchronously when they are inserted through the Import Set API (`/api/now/import/{staging_table}`), which these tools do not use.
 
 `SCRIPTING_ENABLED=true` is additionally required when the map's `target_table` is a protected platform table (`sys_*`, `sp_*`, `sysauto*`, `sysevent_script*`, `oauth_*`, `discovery_credential*`, `ecc_*`) or is empty/malformed, when the map has `run_script` enabled, when any `sys_transform_script` exists for the map, or when any field map uses a source script. Business-data targets such as `incident`, `cmdb_ci_*`, `u_*` and `x_*` without scripts stay at the Write tier. The same rule applies to the optional transform in `import_excel_to_import_set`, checked before the Import Set is created.
 
@@ -2454,7 +2454,7 @@ Create a row in a staging import set table. **[Write]**
 - `data` (required) — Key/value field data
 
 ### import_excel_to_import_set
-Upload and parse a single `.xlsx` worksheet, create its Import Set, attach the original workbook for auditability, insert all staging rows, and optionally trigger a Transform Map. **[Write]**
+Upload and parse a single `.xlsx` worksheet, create its Import Set, attach the original workbook for auditability, insert all staging rows, and optionally request a Transform Map run. **[Write]**
 
 The first row is the header. Headers either match staging-table column names or are mapped through `column_mapping`. Files are limited to 10 MiB, 500 data rows, and 50 columns. ZIP archives are also limited to 200 entries, 25 MiB per entry, 50 MiB total uncompressed data, and a 100:1 maximum compression ratio. Formula cells and `sys_*` columns are rejected.
 

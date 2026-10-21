@@ -218,6 +218,11 @@ describe('Transform Maps', () => {
       expect(gr()).toHaveBeenCalledWith('sys_transform_map', MAP_ID);
       expect(cr()).toHaveBeenCalledWith('sys_import_set_run', { import_set: SET_ID, transform_map: MAP_ID });
       expect(result.summary).toContain(MAP_ID);
+      // Never claim the transform ran: creating the run record is only a request.
+      expect(result.transform_started).toBe('not_verified');
+      expect(result.note).toContain('not been verified');
+      expect(result.summary).not.toMatch(/\bTriggered\b|\bstarted\b/i);
+      expect(result.summary).toContain('not verified');
     });
 
     it.each([
@@ -600,6 +605,9 @@ describe('Import Sets & Data Sources', () => {
       });
       expect(result.rows_inserted).toBe(2);
       expect(result.transform_run.sys_id).toBe('run1');
+      expect(result.transform_started).toBe('not_verified');
+      expect(result.summary).not.toMatch(/started the Transform Map/);
+      expect(result.summary).toContain('transform start not verified');
     });
 
     it.each([
