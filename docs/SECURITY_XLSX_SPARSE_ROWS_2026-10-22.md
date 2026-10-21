@@ -47,6 +47,8 @@ build成功、対象2ファイル107テスト成功、ESLint error 0（既存any
 前回の原因確認は [trend/HTTP検証記録](SECURITY_TREND_HTTP_REGRESSION_2026-10-22.md) を参照する。
 当該reviewソース・fixtureには変更を加えておらず、全体greenとは扱わない。
 
+追記（2026-10-22、レビュー）：上記3失敗は、後続の `5d66569`（`test(review): keep supervisor operator assertions relative to wall clock`）でテスト側のassertion期間を実行時刻基準へ変更して解消した。fixture本体と本番の期限検証は変更していない。本修正（`4cf6e8a`）を含むHEADで `bdo npm test` を再実行し、**122ファイル・3,173テストすべて成功**を確認した。対象2ファイル（xlsx/integration）も107テスト成功。
+
 ## 範囲外
 
 ServiceNow/PDIへの操作、設定変更、外部通信は検証対象外。すべて合成workbook・ローカル処理で確認した。
