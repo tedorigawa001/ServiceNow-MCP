@@ -188,6 +188,13 @@ synthetic policy/context/sourceはtest専用とし、運用producerの承認へ�
 4. 通常strictの型付き開始/acknowledgement/終了証拠契約を別途設計し、前後厳密照合を維持した合成経路だけへ接続する。
 5. 全体I/R/O・独立resource・管理allocation・承認producerを合算して審査する。OS接続・受付有効化・permitは別承認である。
 
+**接続時の寿命制約（2026-10-21、レビュー）**：実装済みのScanSessionLedgerは `Finished` 以外でdropされると、claim経由で**同じinspectionのSharedBudget全体**を停止させる（安全側）。上記3〜4の接続では次を満たす必要がある。
+
+- ledgerの寿命は3roundとその後続phase（AfterScan、record再読/clock/strict検証、M4/topology、FinalIndex）を全て覆う。具体的には `review_strict_record_target` 全体をownerの寿命とし、途中のhelper/closureへmoveして早期dropさせない。
+- `Finished` への遷移は、AfterM4のstrict acknowledgement（FinalIndex/clock成功）を受けた後だけに限る。bridge成功・round順序の消化・M4到達だけでは遷移させない。
+- 各roundの `RoundResourceScope` は、bridge成功とcleanup証拠（live/予約/unconfirmed/pending retry/宣言残が0）をもって完了扱いにしてからdropする。そうしない場合は正常経路でもsession全体が停止する。完了setterは型付きの証拠からだけ呼べる内部契約とし、boolの外部設定口を設けない。
+- ledger生成後に従来の非session経路（session不要のcollect/strict等）を同じbudgetで実行すると、ledger放棄後は停止理由が伝播する。統合後は同inspection内の経路をsession経由へ揃える。
+
 未確定：各運用cap/総操作枠、role側の保持resource内訳、source操作上界の係数、列挙名総量の別枠、管理allocationの同時上界、新会計処理のwork費、唯一生成claimとstrict acknowledgementの正確なRust寿命、hostへのcleanup証拠伝播。実sourceの内部操作/blocked I/O、system祖先policy、更新lease/ABA/全検査後差替え対策は別の停止課題である。
 
 ## 13. draft-0.1作成時の文書検証（履歴）
