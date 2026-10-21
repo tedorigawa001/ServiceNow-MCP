@@ -100,6 +100,34 @@ async function requireTransformMapForStagingTable(
       'VALIDATION_ERROR'
     );
   }
+  if (await transformMapRequiresScripting(client, map, transformMapSysId)) requireScripting();
+}
+
+// Platform configuration/security tables. A transform into these can change identities, roles,
+// ACLs, scripts, widgets, scheduled jobs or credentials, so it needs the scripting tier even when
+// the map itself has no script. Business-data tables (incident, cmdb_ci_*, u_*/x_*) stay WRITE.
+const PROTECTED_TRANSFORM_TARGET_RE = /^(sys_|sp_|sysauto|sysevent_script|oauth_|discovery_credential|ecc_)/i;
+
+/**
+ * Running a Transform Map executes its admin-authored logic against its target table. Escalate to
+ * the scripting tier when that logic includes scripts or the target is a protected platform table.
+ * Fails closed: an unknown/empty target counts as protected, and lookup errors abort before writes.
+ */
+async function transformMapRequiresScripting(
+  client: ServiceNowClient,
+  map: Record<string, unknown>,
+  transformMapSysId: string
+): Promise<boolean> {
+  const target = String(map.target_table ?? '');
+  if (!STAGING_FIELD_RE.test(target) || PROTECTED_TRANSFORM_TARGET_RE.test(target)) return true;
+  if (isActive(map.run_script)) return true;
+  const exists = async (table: string, query: string) => {
+    const resp = await client.queryRecords({ table, query, fields: 'sys_id', limit: 1 });
+    return (resp.records?.length ?? 0) > 0 || Number(resp.count ?? 0) > 0;
+  };
+  // Any transform script (onStart/onBefore/onAfter/onComplete/...), active or not, is conservative.
+  if (await exists('sys_transform_script', `map=${transformMapSysId}`)) return true;
+  return exists('sys_transform_entry', `map=${transformMapSysId}^use_source_script=true`);
 }
 
 function decodeXlsxBase64(contentBase64: unknown): Buffer {
@@ -302,7 +330,7 @@ export function getIntegrationToolDefinitions() {
     },
     {
       name: 'run_transform_map',
-      description: 'Execute a Transform Map on an Import Set to load data (requires WRITE_ENABLED=true)',
+      description: 'Execute a Transform Map on an Import Set to load data (requires WRITE_ENABLED=true; also SCRIPTING_ENABLED=true when the map runs scripts or targets a protected platform table such as sys_*/sp_*)',
       inputSchema: {
         type: 'object',
         properties: {

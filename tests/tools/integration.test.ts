@@ -246,6 +246,74 @@ describe('Transform Maps', () => {
       expect(cr()).not.toHaveBeenCalled();
     });
 
+    describe('scripting escalation', () => {
+      /** sys_db_object for staging, plus counts for transform scripts / scripted field maps. */
+      function mockScripts(counts: { scripts?: number; sourceScripts?: number } = {}) {
+        qr().mockImplementation(async ({ table, query }: { table: string; query: string }) => {
+          if (table === 'sys_transform_script') {
+            expect(query).toBe(`map=${MAP_ID}`);
+            return { count: counts.scripts ?? 0, records: Array.from({ length: counts.scripts ?? 0 }, () => ({ sys_id: 'x' })) };
+          }
+          if (table === 'sys_transform_entry') {
+            expect(query).toBe(`map=${MAP_ID}^use_source_script=true`);
+            return { count: counts.sourceScripts ?? 0, records: Array.from({ length: counts.sourceScripts ?? 0 }, () => ({ sys_id: 'y' })) };
+          }
+          const hit = STAGING_HIERARCHY.find(o => query === `name=${o.name}` || query === `sys_id=${o.sys_id}`);
+          return hit
+            ? { count: 1, records: [{ name: hit.name, super_class: hit.parent ? { value: hit.parent } : '' }] }
+            : { count: 0, records: [] };
+        });
+      }
+      const run = () => executeIntegrationToolCall(mockClient, 'run_transform_map', { transform_map_sys_id: MAP_ID, import_set_sys_id: SET_ID });
+      const withMap = (map: Record<string, unknown>) => mockPair(
+        { sys_id: SET_ID, table_name: 'u_import_ci' },
+        { sys_id: MAP_ID, active: 'true', source_table: 'u_import_ci', target_table: 'cmdb_ci_server', ...map }
+      );
+      afterEach(() => { delete process.env.SCRIPTING_ENABLED; });
+
+      it('keeps a script-free map into a business table at the WRITE tier', async () => {
+        mockScripts();
+        withMap({});
+        cr().mockResolvedValue({ sys_id: 'run1' });
+        await expect(run()).resolves.toMatchObject({ sys_id: 'run1' });
+      });
+
+      it.each([
+        ['protected target sys_user', { target_table: 'sys_user' }, {}],
+        ['protected target sys_user_has_role', { target_table: 'sys_user_has_role' }, {}],
+        ['protected target sp_widget', { target_table: 'sp_widget' }, {}],
+        ['protected target sys_script', { target_table: 'sys_script' }, {}],
+        ['protected target sysauto_script', { target_table: 'sysauto_script' }, {}],
+        ['protected target oauth_entity', { target_table: 'oauth_entity' }, {}],
+        ['an empty target (fail closed)', { target_table: '' }, {}],
+        ['a malformed target (fail closed)', { target_table: 'incident^ORx' }, {}],
+        ['a map-level run_script', { run_script: 'true' }, {}],
+        ['a transform script', {}, { scripts: 1 }],
+        ['a field map using a source script', {}, { sourceScripts: 1 }],
+      ])('requires SCRIPTING_ENABLED for %s and writes nothing without it', async (_label, map, counts) => {
+        mockScripts(counts);
+        withMap(map);
+        await expect(run()).rejects.toMatchObject({ code: 'SCRIPTING_NOT_ENABLED' });
+        expect(cr()).not.toHaveBeenCalled();
+
+        process.env.SCRIPTING_ENABLED = 'true';
+        cr().mockResolvedValue({ sys_id: 'run1' });
+        await expect(run()).resolves.toMatchObject({ sys_id: 'run1' });
+        expect(cr()).toHaveBeenCalledWith('sys_import_set_run', { import_set: SET_ID, transform_map: MAP_ID });
+      });
+
+      it('aborts without writing when the script lookup fails', async () => {
+        withMap({});
+        qr().mockImplementation(async ({ table, query }: { table: string; query: string }) => {
+          if (table === 'sys_transform_script') throw new Error('lookup failed');
+          const hit = STAGING_HIERARCHY.find(o => query === `name=${o.name}` || query === `sys_id=${o.sys_id}`);
+          return hit ? { count: 1, records: [{ name: hit.name, super_class: hit.parent ? { value: hit.parent } : '' }] } : { count: 0, records: [] };
+        });
+        await expect(run()).rejects.toThrow('lookup failed');
+        expect(cr()).not.toHaveBeenCalled();
+      });
+    });
+
     it('rejects an Import Set whose table is not a staging table, before reading the map', async () => {
       mockDbObjects([{ sys_id: STAGING_ID, name: 'sys_user' }]);
       mockPair({ sys_id: SET_ID, table_name: 'sys_user' }, { sys_id: MAP_ID, active: 'true', source_table: 'sys_user' });
@@ -511,7 +579,7 @@ describe('Import Sets & Data Sources', () => {
         .mockResolvedValueOnce({ sys_id: 'row2' })
         .mockResolvedValueOnce({ sys_id: 'run1' });
       ua().mockResolvedValue({ sys_id: 'attachment1' });
-      gr().mockResolvedValue({ sys_id: 'b'.repeat(32), active: 'true', source_table: 'u_import_ci' });
+      gr().mockResolvedValue({ sys_id: 'b'.repeat(32), active: 'true', source_table: 'u_import_ci', target_table: 'cmdb_ci_server' });
 
       const result = await executeIntegrationToolCall(mockClient, 'import_excel_to_import_set', {
         file_name: 'vi-import.xlsx',
@@ -544,6 +612,16 @@ describe('Import Sets & Data Sources', () => {
         file_name: 'vi-import.xlsx', content_base64: base64, staging_table: 'u_import_ci', transform_map_sys_id: 'b'.repeat(32),
       })).rejects.toMatchObject({ code: 'VALIDATION_ERROR', message: expect.stringContaining(message) });
       expect(gr()).toHaveBeenCalledWith('sys_transform_map', 'b'.repeat(32));
+      expect(cr()).not.toHaveBeenCalled();
+      expect(ua()).not.toHaveBeenCalled();
+    });
+
+    it('requires SCRIPTING_ENABLED before creating the Import Set when the optional map targets a protected table', async () => {
+      gr().mockResolvedValue({ sys_id: 'b'.repeat(32), active: 'true', source_table: 'u_import_ci', target_table: 'sys_user' });
+      const base64 = await xlsxBase64([['hostname'], ['server-1']]);
+      await expect(executeIntegrationToolCall(mockClient, 'import_excel_to_import_set', {
+        file_name: 'vi-import.xlsx', content_base64: base64, staging_table: 'u_import_ci', transform_map_sys_id: 'b'.repeat(32),
+      })).rejects.toMatchObject({ code: 'SCRIPTING_NOT_ENABLED' });
       expect(cr()).not.toHaveBeenCalled();
       expect(ua()).not.toHaveBeenCalled();
     });

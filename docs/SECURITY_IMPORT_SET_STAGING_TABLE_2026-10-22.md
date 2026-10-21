@@ -64,8 +64,35 @@ build成功。integration 78テスト成功。ESLint error 0（既存のany警�
 - 変異確認：map照合helperを無条件成功にすると8件、`run_transform_map` のstaging table検証を外すと1件が失敗した。いずれも復元済み。
 - build成功、integration 89テスト成功、ESLint error 0（既存any警告10件）、全体 **122ファイル・3,220テストすべて成功**。
 
+## 追補2：宛先・scriptに応じたScripting段階（案B、2026-10-22）
+
+### 方針
+
+Transform Mapの実行は、管理者が構成したlogicを宛先テーブルへ適用する。次のいずれかに該当する場合は、組合せ検証に加えて `requireScripting()`（WRITEとSCRIPTINGの両方）を要求する。
+
+- 宛先 `target_table` が保護対象のplatformテーブル：`sys_*`、`sp_*`、`sysauto*`、`sysevent_script*`、`oauth_*`、`discovery_credential*`、`ecc_*`。identity・role・ACL・script・widget・scheduled job・credentialを変更し得るため、map自体にscriptがなくても対象とする。
+- 宛先が空、または英数字とアンダースコア以外を含む（安全側に保護対象とみなす）。
+- mapの `run_script` が有効。
+- そのmapに `sys_transform_script` が1件でも存在する（有効/無効を問わず保守的に扱う）。
+- そのmapのfield map（`sys_transform_entry`）に `use_source_script=true` が1件でも存在する。
+
+業務データの宛先（`incident`、`cmdb_ci_*`、`u_*`、`x_*` 等）でscriptのないmapは、従来どおりWrite段階に留める。既存自動化の起動をWrite段階とする方針（`trigger_flow` 等）とは、宛先とscriptで線を引く形で両立させた。
+
+### 実装
+
+- `transformMapRequiresScripting` を追加し、`requireTransformMapForStagingTable` の組合せ照合の後に呼ぶ。該当すれば `requireScripting()`。`run_transform_map` と `import_excel_to_import_set`（Import Set作成前）の両方に適用される。
+- script有無の照会（`sys_transform_script`、`sys_transform_entry`）はmap sys_idを検証済み32桁16進で埋め込む。照会が失敗した場合は例外をそのまま伝え、書込みを行わない。
+- ツール説明と `docs/TOOLS.md` に条件を明記した。
+
+### 回帰テストと結果
+
+- 追加14件：script・宛先とも問題のないmapがWriteのまま成功／保護宛先6種（`sys_user`、`sys_user_has_role`、`sp_widget`、`sys_script`、`sysauto_script`、`oauth_entity`）・空/不正な宛先・`run_script`・transform script・source script使用field mapの11条件で、SCRIPTING無効なら `SCRIPTING_NOT_ENABLED` かつ書込み0回、有効なら成功／script照会の失敗で書込み0回／Excel経路で保護宛先のmapをImport Set作成・アップロード前に拒否。
+- 既存のExcel成功テストのmap mockへ `target_table: 'cmdb_ci_server'` を追加（宛先未設定は安全側で保護扱いになるため）。
+- 変異確認：判定を常にfalseにすると13件、script照会を省くと3件が失敗した。いずれも復元済み。
+- build成功、integration 103テスト成功、ESLint error 0（既存any警告10件）、全体 **122ファイル・3,234テストすべて成功**。
+
 ## 範囲外
 
-- Transform Mapの宛先テーブルやscript（mapの `run_script`、`sys_transform_script`、field mapの `use_source_script`）に応じてScripting段階を要求するかは、権限方針の判断が必要なため未実施（案B）。
+- 保護対象prefixの一覧は本修正時点の判断であり、運用で必要なテーブルの追加・除外は別途レビューする。
 - `sys_import_set_run` の作成だけで変換が始まるかは実機で確認していない（案C）。ツールの要約は従来どおり「Triggered」と返す。
 - PDI/ServiceNowへの操作・設定変更は行っていない。`sys_db_object` の応答形状（`super_class` がreference objectまたは文字列）はmockで確認したもので、実インスタンスでの確認ではない。

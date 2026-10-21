@@ -2416,9 +2416,11 @@ Get Transform Map details and field mappings.
 - `sys_id` (required)
 
 ### run_transform_map
-Request a run of a Transform Map on an import set by creating a `sys_import_set_run` record. **[Write]**
+Request a run of a Transform Map on an import set by creating a `sys_import_set_run` record. **[Write; Scripting when the map runs scripts or targets a protected table]**
 
 Before any write, both sys_ids must be 32-character hex, the Import Set's table must extend `sys_import_set_row`, and the Transform Map must be active with a `source_table` equal to that staging table. A map built for a different source table (for example a user-import map) cannot be run against an unrelated Import Set. Whether creating the run record alone starts the transform has not been verified on an instance.
+
+`SCRIPTING_ENABLED=true` is additionally required when the map's `target_table` is a protected platform table (`sys_*`, `sp_*`, `sysauto*`, `sysevent_script*`, `oauth_*`, `discovery_credential*`, `ecc_*`) or is empty/malformed, when the map has `run_script` enabled, when any `sys_transform_script` exists for the map, or when any field map uses a source script. Business-data targets such as `incident`, `cmdb_ci_*`, `u_*` and `x_*` without scripts stay at the Write tier. The same rule applies to the optional transform in `import_excel_to_import_set`, checked before the Import Set is created.
 
 **Parameters**:
 - `transform_map_sys_id` (required) — 32-character sys_id of an active map for the Import Set's staging table
