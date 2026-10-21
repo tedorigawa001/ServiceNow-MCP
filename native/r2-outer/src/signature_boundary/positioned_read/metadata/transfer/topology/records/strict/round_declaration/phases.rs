@@ -82,6 +82,12 @@ pub(in super::super) struct Remaining {
     pub(super) future_rounds: u64,
     pub(super) remaining_schedule: u64,
 }
+#[cfg(test)]
+impl Remaining {
+    pub(in super::super) fn remaining_current_for_test(&self) -> u64 {
+        self.remaining_current
+    }
+}
 impl<'s, 'r> RoundDeclaration<'s, 'r> {
     pub(in super::super) fn prepare_scan<'d>(
         &'d self,
@@ -116,6 +122,25 @@ impl<'s, 'r> RoundDeclaration<'s, 'r> {
     }
 }
 impl IndexPhases<'_, '_, '_> {
+    pub(in super::super) fn finish_for_round(
+        &mut self,
+        current: &RoundScope<'_>,
+        expected: &str,
+        b: &mut SharedBudget<'_>,
+    ) -> Result<(), Failure> {
+        let result = (|| {
+            work(b)?; // O.final_index_stage 2: exact phase/model, not a caller completion enum
+            if expected != "bp5-r2-round-final-index-0.1" {
+                return Err(Failure::Unavailable);
+            }
+            self.require_after_scan(current)?;
+            self.finish(b)
+        })();
+        match result {
+            Ok(()) => Ok(()),
+            Err(e) => b.stop(e),
+        }
+    }
     // Constant-time check, paid by the record-stage owner's fixed binding block.
     pub(in super::super) fn require_after_scan(
         &self,

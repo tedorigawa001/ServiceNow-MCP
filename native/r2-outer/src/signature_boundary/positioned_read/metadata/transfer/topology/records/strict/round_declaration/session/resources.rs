@@ -734,6 +734,19 @@ pub(in super::super::super) mod testing {
     ) {
         lease.ledger.records_started[0] = true;
     }
+    pub(in super::super::super::super) fn consume_final_index_claim(
+        lease: &mut RoundResourceScope<'_, '_, '_>,
+    ) {
+        lease.ledger.final_index_started[0] = true;
+    }
+    pub(in super::super::super::super) fn final_index_state(
+        ledger: &ScanSessionLedger<'_>,
+    ) -> (bool, bool) {
+        (
+            ledger.final_index_started[0],
+            matches!(ledger.state, State::Stopped(_)),
+        )
+    }
     pub(in super::super::super::super) fn records_state(
         ledger: &ScanSessionLedger<'_>,
     ) -> (bool, bool) {

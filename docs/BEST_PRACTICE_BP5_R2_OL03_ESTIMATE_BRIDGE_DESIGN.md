@@ -1,6 +1,6 @@
 # BP-5 R-2 OL-03：estimate消費型bridge・利用guard7の詳細設計
 
-Version: draft-0.14 / Date: 2026-10-21 / Status: 固定collector/session・cleanup・round完了・AfterScan破棄・record再検証stageを合成検証。FinalIndex以降のtyped tail・strict ack・通常strict/OS接続・全体受付は未対応。
+Version: draft-0.15 / Date: 2026-10-21 / Status: 固定collector/sessionからFinalIndex/Node再照合stageまで合成検証。最終clock/typed strict ack・通常strict/OS接続・全体受付は未対応。
 
 ## 1. 範囲と停止状態
 
@@ -245,3 +245,5 @@ Collectedでは、まず既存resultがErrなら元budgetへラッチし、そ�
 同設計draft-0.5 §15では実AfterScan成功後にObservationをdropし、payloadを持たないAfterScanRoundへ移す固定stageを追加した。同phase/scope・元session/budgetとone-shot claimを結合し、既存AfterScan費にO.after_scan_stageの3 workだけを加える。旧estimateやresource試行/bytesは変更せず、全体受付は無効のままとする。[stage合成記録](E2E_BEST_PRACTICE_R2_OL03_AFTER_SCAN_STAGE_SYNTHETIC_2026-10-21.md)を参照。strict tailのack/通常strict接続は未対応。
 
 同設計draft-0.6 §16でAfterScanRoundから既存のrecord再読/clock/strict意味検査を実行し、成功時だけRecordsVerifiedRoundへ移す固定subsetを追加した。同Compared phase/scope・receipt/target/context・元budget/Closed bindingを要求し、O.record_stage=3 workだけを既存tail費に追加する。[合成記録](E2E_BEST_PRACTICE_R2_OL03_RECORD_STAGE_SYNTHETIC_2026-10-21.md)を参照。FinalIndex以降のtyped tail、通常strict/OS接続・運用policy/全体受付は引き続き停止する。
+
+同設計draft-0.7 §17でRecordsVerifiedRoundを消費し、既存finishのindex再認証/厳密意味/Node再照合と終端guard後だけFinalIndexRoundへ移す。O.final_index_stage=3 workを既存phase費に追加し、元上界/slackと照合する。[合成記録](E2E_BEST_PRACTICE_R2_OL03_FINAL_INDEX_STAGE_SYNTHETIC_2026-10-21.md)を参照。最終clock/typed strict ack、通常strict/OS接続・全体受付は未対応のまま。

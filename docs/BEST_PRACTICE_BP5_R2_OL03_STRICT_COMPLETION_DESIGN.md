@@ -1,6 +1,6 @@
 # BP-5 R-2 OL-03：型付きcleanup証拠・round完了・strict acknowledgement詳細設計
 
-Version: draft-0.6 / Date: 2026-10-21 / Status: cleanup・round完了・AfterScan破棄・record再読/厳密検証stageまで内部実装・合成検証。FinalIndex以降のtyped tail・strict acknowledgement・通常strict接続は未実装。
+Version: draft-0.7 / Date: 2026-10-21 / Status: cleanup・round完了・AfterScan破棄・record再検証・FinalIndex/Node再照合stageまで内部実装・合成検証。最終clock/typed strict acknowledgement・通常strict接続は未実装。
 
 ## 1. 範囲と根拠
 
@@ -8,7 +8,7 @@ Version: draft-0.6 / Date: 2026-10-21 / Status: cleanup・round完了・AfterSca
 
 全体受付無効、telemetry保留、APPROVED_REGISTRY=None、通常v2 Unavailable、gate92、DER/absence停止を維持する。初稿は設計のみで、§13にscan_ops終端の最初の内部実装を追記した。通常strict接続、OS接続、実機操作、token発行、設定変更、本番policy投入、permit発行は含めない。証拠はinspection内の診断に保持し、実行権へ変換しない。
 
-## 2. 初稿時の現状と不足（後続実装は§13〜§16）
+## 2. 初稿時の現状と不足（後続実装は§13〜§17）
 
 | 現状 | 接続前に必要なもの |
 |---|---|
@@ -322,4 +322,28 @@ submodel `bp5-r2-round-records-0.1` をstage呼出しと固定helperの独立lit
 
 [record stage合成記録](E2E_BEST_PRACTICE_R2_OL03_RECORD_STAGE_SYNTHETIC_2026-10-21.md)の新規8テストを参照。厳密JSONを満たす合成activation/ledger/registryを使用し、実collector/AfterScanから新stageへ到達する。全source操作境界の失敗/取消/期限、一時handle解放、byte/metadata/path/EOF/clock不整合、ピン済み不正JSON、registry不一致、重複claim/別budget/phase誤順序、workの代表境界と最終課金後取消、3round slot（ackのみcfg(test)）を確認する。厳密検証呼出しを省く変異を拒否試験が検知した。
 
-次はRecordsVerifiedRoundからFinalIndex/Node厳密再照合への型付き遷移と、最終clock/checkpoint・strict acknowledgementが必要。通常strict接続・運用policy/全体受付・OS接続は未対応、telemetryは保留。実機操作・token発行・設定変更・permit発行は含めない。
+このsubset後のRecordsVerifiedRound→FinalIndex/Node厳密再照合は§17へ続く。最終clock/checkpoint・strict acknowledgement、通常strict接続・運用policy/全体受付・OS接続は引き続き未対応、telemetryは保留。実機操作・token発行・設定変更・permit発行は含めない。
+
+## 17. RecordsVerifiedRoundからFinalIndex/Node再照合stageへ（draft-0.7）
+
+### 17.1 固定の消費型遷移
+
+RecordsVerifiedRound::verify_final_indexはselfをmoveで消費し、元session/slotのfinal_index_startedを最初のfallible処理前に消費する。AwaitStrict、record/AfterScanの消費済みclaim、元budget origin/claim/started、Closed/session bindingを照合する。続いてIndexPhases::finish_for_roundで同RoundScope object・Compared state・固定submodelを確認し、実際の既存finishを呼ぶ。呼出し側のFinished enum/検証済みboolや数値からsuccessを復元しない。
+
+finishの既存順序は維持する：Compared遷移guard→immutable宣言のrecheck（index bytes再認証/hash-first・意味/全集合検査・元receipt/target/context/round結合）→verify_node_entries（Node path/mode/size/digest）→checkpoint→Finished。decodeを再実行せず、同roundで一度だけ解析した宣言を再利用するが、再認証/厳密意味の実行を省略しない。これは既存宣言とTargetDeclarationの再照合であり、Node実ファイル/OSや署名を新たに検証する工程ではない。
+
+最後に元budgetの終端work/checkpointを通った場合だけFinalIndexRoundを返す。phaseが既にFinished、別scopeのphase、重複claim、別budget/取消/期限/work不足は停止する。phaseがFinishedへ進んだ後の終端失敗でも型付き成功を返さず、sessionをStoppedにして元Failureを維持する。
+
+### 17.2 所有と費目
+
+FinalIndexRoundのprivate fieldは元の排他的leaseとScanTailDataだけで、Observation/JSON tree/record byteコピーを追加保持しない。非Clone/非Copy/非serde・opaque Debugとし、未ack dropは停止、forgetでもAwaitStrictのままで次roundを拒否する。まだ最終clock/production strict acknowledgement/全体成功の証拠ではない。
+
+submodel `bp5-r2-round-final-index-0.1` をstage呼出しとphase側の独立literalで照合する。追加O.final_index_stage=3 work（claim/owner binding1、phase/model1、終端1）。既存phaseの全費用と上界/slackを変えない。fixtureの旧finish実費28と新stage31を、既存remaining_current−87 slack＋transition1から別に照合する。3roundの追加control費は9。operation/bytes/retry/予約やrecord validationを再加算/再発行しない。全体work/resource受付はまだ有効化しない。
+
+通常strictのorchestrator/旧finish呼出しは変更せず、合成経路に固定adapterを追加しただけである。test-onlyのRemaining読取口と既存正常record fixtureの共有は検証補助であり、運用の可視性やpolicyを広げない。
+
+### 17.3 検証・残課題
+
+[FinalIndex stage合成記録](E2E_BEST_PRACTICE_R2_OL03_FINAL_INDEX_STAGE_SYNTHETIC_2026-10-21.md)の新規7テストで、実費/phase上界の照合、全work不足prefix・全課金後取消・全checkpoint期限、別Compared phase/既Finished/重複/別budget拒否、元診断・Observation破棄維持、3round（ackだけcfg(test)）を確認する。Node checkerの異常入力4種は同じ固定関数を直接検査するcomponent試験として区別する。immutable入力をunsafeに書き換えてstageへ混入させない。
+
+最終clock/checkpointへの消費型遷移、実strict tailのack producer/consumer、通常strict固定位置接続、運用policy/全体受付、OS sourceは未対応。telemetryは保留のまま。実機操作・token発行・設定変更・permit発行は含めない。

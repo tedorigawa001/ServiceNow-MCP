@@ -5,7 +5,7 @@ use crate::signature_boundary::positioned_read::metadata::transfer::topology::re
 use round_declaration::session::completion::records::RecordsVerifiedRound;
 use serde_json::{Value, json};
 
-fn valid_fixture(bad_json: bool) -> (Setup, Rc<RefCell<State>>, Vec<u8>) {
+pub(super) fn valid_fixture(bad_json: bool) -> (Setup, Rc<RefCell<State>>, Vec<u8>) {
     let (mut f, state) = fixture(Case::Good);
     let mut j = json_fixture::fixture();
     let b = &mut f.receipt.binding;

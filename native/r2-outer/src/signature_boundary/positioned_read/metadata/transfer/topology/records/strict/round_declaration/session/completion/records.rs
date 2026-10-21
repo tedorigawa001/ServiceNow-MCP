@@ -4,6 +4,65 @@ pub(in super::super::super::super) struct RecordsVerifiedRound<'a, 'r, 's> {
     lease: RoundResourceScope<'a, 'r, 's>,
     tail: ScanTailData,
 }
+pub(in super::super::super::super) struct FinalIndexRound<'a, 'r, 's> {
+    lease: RoundResourceScope<'a, 'r, 's>,
+    tail: ScanTailData,
+}
+impl std::fmt::Debug for FinalIndexRound<'_, '_, '_> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str("FinalIndexRound(awaiting_final_clock_not_execution_authority)")
+    }
+}
+impl<'a, 'r, 's> RecordsVerifiedRound<'a, 'r, 's> {
+    #[allow(clippy::result_large_err)] // Keep fixed cleanup evidence inline after a stop.
+    pub(in super::super::super::super) fn verify_final_index(
+        self,
+        phases: &mut super::super::super::phases::IndexPhases<'_, '_, '_>,
+        b: &mut SharedBudget<'_>,
+    ) -> Result<FinalIndexRound<'a, 'r, 's>, CompletionFailure> {
+        let slot = match self.lease.scope.round {
+            Round::Initial => 0,
+            Round::BeforeM4 => 1,
+            Round::AfterM4 => 2,
+        };
+        let fresh = !std::mem::replace(&mut self.lease.ledger.final_index_started[slot], true);
+        let result = (|| {
+            work(b)?; // O.final_index_stage 1: irreversible claim and exact owner binding
+            if !fresh
+                || self.lease.ledger.state != State::AwaitStrict(self.lease.scope.round)
+                || !self.lease.ledger.records_started[slot]
+                || !self.lease.ledger.after_scan_started[slot]
+            {
+                return Err(Failure::Binding);
+            }
+            self.lease.ledger.binding(b)?;
+            self.tail.require(&self.lease, b)?;
+            phases.finish_for_round(self.lease.scope, "bp5-r2-round-final-index-0.1", b)?;
+            work(b)?; // O.final_index_stage 3: no typed publication before the terminal guard
+            b.checkpoint()
+        })();
+        if let Err(e) = result {
+            let reason = self.lease.ledger.fail::<()>(e, b).unwrap_err();
+            return Err(self.tail.reject(reason));
+        }
+        Ok(FinalIndexRound {
+            lease: self.lease,
+            tail: self.tail,
+        })
+    }
+}
+#[cfg(test)]
+impl FinalIndexRound<'_, '_, '_> {
+    pub(in super::super::super::super) fn acknowledge_for_test(
+        mut self,
+        b: &mut SharedBudget<'_>,
+    ) -> Result<(), Failure> {
+        b.checkpoint()?;
+        super::super::tests::ack_fixture(self.lease.ledger, self.lease.scope.round);
+        self.lease.completed = true;
+        Ok(())
+    }
+}
 impl std::fmt::Debug for RecordsVerifiedRound<'_, '_, '_> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.write_str("RecordsVerifiedRound(awaiting_final_index_not_execution_authority)")
