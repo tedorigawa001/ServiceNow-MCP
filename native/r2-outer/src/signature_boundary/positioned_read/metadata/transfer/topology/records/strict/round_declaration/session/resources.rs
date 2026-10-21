@@ -105,6 +105,42 @@ pub(in super::super::super) struct RetiredConnection {
     _round_identity: *const (),
     _round_token: Rc<()>,
 }
+impl RetiredConnection {
+    pub(in super::super::super) fn require_completion(
+        &self,
+        lease: &RoundResourceScope<'_, '_, '_>,
+        b: &SharedBudget<'_>,
+    ) -> Result<(), Failure> {
+        let scope = lease.scope;
+        let slot = match scope.round {
+            Round::Initial => 0,
+            Round::BeforeM4 => 1,
+            Round::AfterM4 => 2,
+        };
+        let book = lease.ledger.resources.as_ref().ok_or(Failure::Binding)?;
+        let a = self._book.borrow();
+        if !Rc::ptr_eq(&self._book, book)
+            || !Rc::ptr_eq(&self._origin, &b.inspection_origin)
+            || !Rc::ptr_eq(&self._claim, &b.scan_session_claim)
+            || self._started != b.started
+            || self._slot != slot
+            || self._round_identity != scope as *const RoundScope<'_> as *const ()
+            || !Rc::ptr_eq(&self._round_token, &scope.token)
+            || !std::ptr::eq(lease.ledger.receipt, scope.receipt)
+            || !Rc::ptr_eq(&lease.ledger.lineage, &scope.receipt.lineage)
+            || !std::ptr::eq(lease.ledger.target, scope.target)
+            || !std::ptr::eq(lease.ledger.context, scope.context)
+            || !lease.ledger.tokens[slot]
+                .as_ref()
+                .is_some_and(|t| Rc::ptr_eq(t, &scope.token))
+            || !a.connected[slot]
+            || !a.terminalized[slot]
+        {
+            return Err(Failure::Binding);
+        }
+        Ok(())
+    }
+}
 struct Active(Rc<Cell<bool>>);
 impl Drop for Active {
     fn drop(&mut self) {
@@ -682,5 +718,54 @@ pub(in super::super::super) mod testing {
         super::super::tests::ack_fixture(lease.ledger, round);
         lease.completed = true;
         Ok(())
+    }
+    pub(in super::super::super::super) fn consume_complete_claim(
+        lease: &mut RoundResourceScope<'_, '_, '_>,
+    ) {
+        lease.ledger.complete_started[0] = true;
+    }
+    pub(in super::super::super::super) fn completion_state(
+        ledger: &ScanSessionLedger<'_>,
+    ) -> (bool, bool) {
+        (
+            ledger.complete_started[0],
+            matches!(ledger.state, State::Stopped(_)),
+        )
+    }
+    pub(in super::super::super::super) fn taint_completion_identity<'s>(
+        lease: &mut RoundResourceScope<'_, '_, 's>,
+        receipt: &'s RecordReceipt,
+        target: &'s TargetDeclaration,
+        context: &'s InspectionContext<'s>,
+        kind: u8,
+    ) {
+        match kind {
+            0 => lease.ledger.receipt = receipt,
+            1 => lease.ledger.lineage = Rc::new(()),
+            2 => lease.ledger.target = target,
+            3 => lease.ledger.context = context,
+            4 => lease.ledger.tokens[0] = Some(Rc::new(())),
+            5 => lease.ledger.resources = None,
+            6 => lease.ledger.state = State::Active(Round::BeforeM4),
+            7 => {
+                lease
+                    .ledger
+                    .resources
+                    .as_ref()
+                    .unwrap()
+                    .borrow_mut()
+                    .terminalized[0] = false
+            }
+            8 => {
+                lease
+                    .ledger
+                    .resources
+                    .as_ref()
+                    .unwrap()
+                    .borrow_mut()
+                    .connected[0] = false
+            }
+            _ => unreachable!(),
+        }
     }
 }

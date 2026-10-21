@@ -5,6 +5,7 @@ use super::super::round_declaration::{
 };
 use super::normalized_metadata::MetadataPolicy;
 use super::*;
+pub(in super::super) mod completion;
 mod expected_groups;
 use expected_groups::ChildGroups;
 

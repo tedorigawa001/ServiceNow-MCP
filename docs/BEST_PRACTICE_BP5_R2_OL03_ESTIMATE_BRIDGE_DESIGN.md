@@ -1,6 +1,6 @@
 # BP-5 R-2 OL-03：estimate消費型bridge・利用guard7の詳細設計
 
-Version: draft-0.11 / Date: 2026-10-21 / Status: 固定collector/sessionとscan_ops終端cleanup型を合成検証。round完了/ack・通常strict/OS接続・全体受付は未対応。
+Version: draft-0.12 / Date: 2026-10-21 / Status: 固定collector/session・cleanup型・型付きround完了を合成検証。strict ack・通常strict/OS接続・全体受付は未対応。
 
 ## 1. 範囲と停止状態
 
@@ -239,3 +239,5 @@ Collectedでは、まず既存resultがErrなら元budgetへラッチし、そ�
 通常strictへ移行する前段として[型付きcleanup・round完了・strict acknowledgement詳細設計draft-0.1](BEST_PRACTICE_BP5_R2_OL03_STRICT_COMPLETION_DESIGN.md)を追加した。数値Summary/Okから完了を復元せず、実boundary退役に結合したcleanup証拠とObservation成功を固定adapterで合成し、strict tailの実処理からだけackを発行する案である。late stop/未ack drop時もcleanup診断を失わず、旧Result-only ClosureSourceへ結果だけを押し込めない。新producer/guard/workモデルの実装は行わず、方式(b)と通常strict/OS/全体受付の停止を維持する。
 
 後続の同設計draft-0.3 §13で、最初のscan_ops終端cleanup型を追加した。Outcomeへtyped診断を移動して保持し、cleanup確認とmain Result成功を区別する。終端prepay1によりwork/entry/session-entryを0.2へ改版、base単一bridgeは1992、sessionは1994（EINTR1の最初のround1997）。方式(b)の一度限りdispatch/cleanup課金は維持する。[cleanup証拠合成記録](E2E_BEST_PRACTICE_R2_OL03_CLEANUP_EVIDENCE_SYNTHETIC_2026-10-21.md)を参照。RoundScanSuccess/round完了/ackや通常strict・OS接続を追加したものではない。
+
+同設計draft-0.4 §14で固定session collectorの実OutcomeからだけRoundScanSuccessを作り、owned ClosedとActive scopeを消費するPendingStrictRoundを追加した。with_resourcesとbridgeの終端checkpointを省略せず、完了追加費3 workをO側に分離する（完了経路1997、EINTR1の最初は2000）。旧estimateのkernel上界にこのO費を混ぜず、全体受付は無効のままとする。[round完了合成記録](E2E_BEST_PRACTICE_R2_OL03_ROUND_COMPLETION_SYNTHETIC_2026-10-21.md)を参照。production strict acknowledgement/通常strict/OS接続・実行権は追加しない。

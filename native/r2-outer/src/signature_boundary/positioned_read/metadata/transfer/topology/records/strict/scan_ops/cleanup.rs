@@ -19,10 +19,29 @@ pub(super) enum CleanupDisposition {
     Confirmed(ClosedScanResources),
     Incomplete(IncompleteCleanup),
 }
-pub(super) struct ClosedScanResources {
+pub(in super::super) struct ClosedScanResources {
     _attempt: Rc<RefCell<Ledger>>,
     _origin: Origin,
     _session: Option<RetiredConnection>,
+}
+impl ClosedScanResources {
+    pub(in super::super) fn require_completion(
+        &self,
+        lease: &super::super::round_declaration::session::RoundResourceScope<'_, '_, '_>,
+        b: &SharedBudget<'_>,
+    ) -> Result<(), Failure> {
+        if !Rc::ptr_eq(&self._origin.budget, &b.inspection_origin)
+            || !Rc::ptr_eq(&self._origin.claim, &b.scan_session_claim)
+            || self._origin.started != b.started
+            || !self._attempt.borrow().cleanup.finalized
+        {
+            return Err(Failure::Binding);
+        }
+        self._session
+            .as_ref()
+            .ok_or(Failure::Binding)?
+            .require_completion(lease, b)
+    }
 }
 pub(super) struct IncompleteCleanup {
     reason: Problem,

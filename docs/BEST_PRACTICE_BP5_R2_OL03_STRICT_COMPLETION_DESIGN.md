@@ -1,6 +1,6 @@
 # BP-5 R-2 OL-03：型付きcleanup証拠・round完了・strict acknowledgement詳細設計
 
-Version: draft-0.3 / Date: 2026-10-21 / Status: scan_ops終端の型付きcleanup証拠のみ内部実装・合成検証。round完了/ack producer・通常strict接続は未実装。
+Version: draft-0.4 / Date: 2026-10-21 / Status: cleanup証拠と固定collectorの型付きround完了まで内部実装・合成検証。strict acknowledgement producer・通常strict接続は未実装。
 
 ## 1. 範囲と根拠
 
@@ -8,7 +8,7 @@ Version: draft-0.3 / Date: 2026-10-21 / Status: scan_ops終端の型付きcleanu
 
 全体受付無効、telemetry保留、APPROVED_REGISTRY=None、通常v2 Unavailable、gate92、DER/absence停止を維持する。初稿は設計のみで、§13にscan_ops終端の最初の内部実装を追記した。通常strict接続、OS接続、実機操作、token発行、設定変更、本番policy投入、permit発行は含めない。証拠はinspection内の診断に保持し、実行権へ変換しない。
 
-## 2. 現状と不足
+## 2. 初稿時の現状と不足（後続実装は§13・§14）
 
 | 現状 | 接続前に必要なもの |
 |---|---|
@@ -23,7 +23,7 @@ Version: draft-0.3 / Date: 2026-10-21 / Status: scan_ops終端の型付きcleanu
 
 ## 3. 分離する証拠と所有者
 
-候補submodel名は `bp5-r2-strict-round-completion-0.1`。これは未実装の設計識別子で、registryへ登録した値ではない。
+初稿の候補submodel名は `bp5-r2-strict-round-completion-0.1`。§14でround完了subsetの固定producer/consumerへ実装したが、運用registryへ登録した値ではなく、strict ackを実装した識別子でもない。
 
 | 内部型案 | 発行できる場所 | 意味・禁止事項 |
 |---|---|---|
@@ -78,7 +78,7 @@ ClosedScanResourcesはscan所有者だけの内部契約である。外側held t
 
 ## 6. 固定session adapterとround完了
 
-現在のwith_resourcesはResult<()>を返してactiveを退役させるだけで、成功producerはない。将来は固定collector用adapter内で、Outcomeをcapture→境界を退役→終了証拠を確定、という順序を表す。任意FnOnceから成功tokenを返せる汎用口へ拡張しない。
+初稿時のwith_resourcesはResult<()>を返してactiveを退役させるだけで、成功producerはなかった。§14では固定collector用adapter内で、Outcomeをcapture→境界を退役→終了証拠を確定、という順序を実装した。任意FnOnceから成功tokenを返せる汎用口へ拡張しない。
 
 ```text
 consume estimate / original Inputs claim
@@ -246,4 +246,32 @@ collector-work、collector-entry、session-collector-entryを0.2へ改版。calc
 
 新規10テストを追加し、既存のsource trace/3round会計試験にもtyped診断の検査を加えた。[cleanup証拠合成記録](E2E_BEST_PRACTICE_R2_OL03_CLEANUP_EVIDENCE_SYNTHETIC_2026-10-21.md)を参照。低水準の主HashMismatch＋cleanup確認と、実collectorでhash失敗に伴い宣言が放棄されIncompleteとなるケースを区別している。
 
-RoundScanSuccess、PendingStrictRound、complete、strict acknowledgement、通常strictのsource供給/全体接続は未実装。test専用ackを本番へ移していない。Closedを後続成功へ結合する際はbridge/with_resources/with_roundのlate stopを再確認し、cleanup Confirmedだけで正常完了しない契約を維持する。
+このsubset時点ではRoundScanSuccess、PendingStrictRound、complete、strict acknowledgement、通常strictのsource供給/全体接続は未実装だった。round完了までの後続実装は§14、strict acknowledgement/通常strict接続は引き続き未実装。test専用ackを本番へ移していない。
+
+## 14. ClosedScanResourcesを消費するround完了subset（draft-0.4）
+
+### 14.1 唯一の固定producer
+
+`scan_ops/collector/completion.rs` の `collect_and_complete` だけが、既存estimate/session固定collector→with_resources終端検査/checkpoint→RoundScanSuccess→消費型complete_scanを順に呼ぶ。任意callback、呼出し側のOutcome/Observation/数値からsuccessを構築する入口はない。RoundScanSuccessは同じ実OutcomeのObservation成功とowned ClosedScanResources・数値診断を保持する。NotStarted/Incompleteや主Failureがあるとsuccessを作らず、終了診断を保持したCompletionFailureにする。
+
+`round_declaration/session/completion.rs` のcomplete_scanは元Active scopeとsuccessをmoveで消費する。元sessionのslot別complete_startedを最初のfallible処理より前に不可逆に消費し、同receipt object/lineage・target/context・scope object/token・登録済みslot token・元budget origin/claim/started・同resource book・接続/退役済みslotを照合する。local-onlyのClosedはsession退役証拠を持たず拒否する。次のcheckpointまで成功してからだけActive→AwaitStrictへ進む。失敗は元Failureをstickyに保ってStoppedへ移し、claimを戻さない。
+
+RoundScanSuccess/PendingStrictRoundはprivate field、非Clone/非Copy/非serde、固定opaque Debug。Closedの所有は成功票を経てPendingへ一方向に移り、失敗時はCompletionFailureのConfirmed診断へ移動する。数値summaryからの復元/差替えや再利用可能permitにはしない。
+
+### 14.2 所有と未ack停止
+
+PendingStrictRoundは排他的RoundResourceScope、owned成功票/Closed/Observationを保持し、scope/receiptの寿命に制約される。Inputs/estimate/declarationはborrowし続けず、Inputsをdropしてからafter_scan/finishへ進めることを合成試験で確認した。Observationは借用参照だけを公開し、take/差替え口はない。将来のstrict tailはAfterScan後にObservationを破棄する単調なstage遷移が別途必要で、現subsetはPendingの寿命まで保持する。
+
+Pendingの未ack dropは既存leaseのDropで共有claimとsessionを停止する。forgetしてもAwaitStrictのままで、次roundのbeginがBindingで拒否する。全体成功/strict成功/次round権限を主張しない。3round slotを通す試験だけはcfg(test) acknowledgementを明示して用い、production ack producerは追加しない。
+
+### 14.3 費目・失敗診断
+
+完了submodel `bp5-r2-strict-round-completion-0.1` をproducer/consumerそれぞれの固定literalで照合する。追加費用はO.round_completeの固定3 work（claim/model1、既存require1、Closed/session結合1）とする。最後のcheckpointは追加課金なしで必須。collectorのwork/entry/session-entry 0.2、kernel1903、既存session1994は変更せず、この完了経路は1997（最初のEINTR round2000）。profile/計算済みのfixture開始位置ならkernel1903＋guard7＋entry1＋require/connect2＋complete3＝1916となる。3round完了だけの追加費は9 workで、将来ack/tail費や全体受付を含まない。
+
+新規の可変走査/I/O、試行/bytesの再加算、cleanup予約の返金、budget更新はない。固定長CompletionFailureは主理由とcleanup/summary診断をinlineで保持し、停止後のBox確保を導入しない。この理由で該当Result関数だけにresult_large_errの理由付きallowを付ける。これは失敗の無視や上限緩和ではない。
+
+### 14.4 検証・残課題
+
+[round完了合成記録](E2E_BEST_PRACTICE_R2_OL03_ROUND_COMPLETION_SYNTHETIC_2026-10-21.md)を参照。新規9テストで実Closedの消費、3round slot（test-only ack）、receipt/round/budget結合、重複claim、work不足、全8checkpointの期限切れ、全3課金後の取消、未ack drop/forget、主失敗とcleanup診断の保持を確認する。既存合成fixtureを再利用した内部契約試験であり、独立した人手評価や未使用コードセットの評価ではない。
+
+strict tailのtyped acknowledgement、AfterScan直後のObservation破棄stage、通常strictへの固定位置/source供給接続、全体work/resource受付・運用policyは未実装/未承認。全体受付無効・telemetry保留を維持し、OS接続・実機操作・token発行・設定変更・permit発行は行わない。

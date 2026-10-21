@@ -24,6 +24,7 @@ pub(in super::super) struct ScanSessionLedger<'s> {
     started: Instant,
     model: &'static str,
     tokens: [Option<Rc<()>>; 3],
+    complete_started: [bool; 3],
     state: State,
     resources: Option<Rc<std::cell::RefCell<resources::Accounting>>>,
 }
@@ -73,6 +74,7 @@ pub(in super::super) fn create<'s>(
             started: b.started,
             model: MODEL_ID,
             tokens: [None, None, None],
+            complete_started: [false; 3],
             state: State::Expect(Round::Initial),
             resources: None,
         })
@@ -196,6 +198,7 @@ impl Drop for ScanSessionLedger<'_> {
     }
 }
 
+pub(in super::super) mod completion;
 pub(in super::super) mod resources;
 #[cfg(test)]
 mod tests;
