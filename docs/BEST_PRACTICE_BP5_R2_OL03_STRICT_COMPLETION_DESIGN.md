@@ -1,6 +1,6 @@
 # BP-5 R-2 OL-03：型付きcleanup証拠・round完了・strict acknowledgement詳細設計
 
-Version: draft-0.9 / Date: 2026-10-21 / Status: cleanupから最終clock/checkpoint・typed strict acknowledgementまで内部実装・合成検証。通常strict接続は未実装。
+Version: draft-0.10 / Date: 2026-10-21 / Status: cleanupからtyped strict acknowledgementまで内部実装・合成検証。通常strict接続の詳細設計を追加、接続実装は未実施。
 
 ## 1. 範囲と根拠
 
@@ -395,3 +395,9 @@ ack消費はwith_round closure内の最後のfallible処理として使う。wit
 [strict acknowledgement合成記録](E2E_BEST_PRACTICE_R2_OL03_STRICT_ACK_SYNTHETIC_2026-10-21.md)を参照。新規6テストで実collector→AfterScan→record厳密検証→FinalIndex→最終clock→実typed ackの3slotを通し、test-only ack setterは使用しない。重複・別budget/origin/開始時刻・別Finished phase、全work不足prefix/全課金後取消/全8checkpoint期限、元理由とcleanup診断、外側checkpoint失敗を検証する。既存final_clockの3slotテストも実ackへ置換し、FinalClockRoundのtest-only acknowledgementを削除した。前段stageのcomponent試験だけに残るcfg(test) bypassは実経路の証拠ではない。
 
 通常strict orchestratorへの固定位置/source供給・M4 ownerの接続、全体work/resource受付、運用policy、OS sourceは未実装/未承認。telemetry調査は保留。実機操作・token発行・設定変更・permit発行・Pushは本工程で行わない。
+
+## 20. 通常strict接続の後続詳細設計（draft-0.10）
+
+[固定3箇所・同RecordSource・M4 owner接続詳細設計draft-0.1](BEST_PRACTICE_BP5_R2_OL03_NORMAL_STRICT_CONNECTION_DESIGN.md)で、元sourceをinspection全体で排他的に借用するprivate owner、inert 3slot、B/topology recheck後の固定BeforeM4位置、同実比較結果を所有する非複製AfterM4 handoff、外側失敗時のsession明示停止と診断保持を具体化した。型名/費目/lifetimeは案で未コンパイル、合成受入条件も未実施。
+
+既存ResourcePolicyの本番constructorがないことと、全体受付未承認を接続設計の停止条件として維持する。旧ClosureSourceやtest-only ackへのfallback、Round enumだけのAfterM4開始、M4失敗後の再開を認めない。接続用O費・上位診断契約・運用capは別途確定が必要で、通常strict/OS接続・実機操作・token発行・設定変更・permit発行は本更新に含めない。

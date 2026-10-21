@@ -1,6 +1,6 @@
 # BP-5 R-2 OL-03：3round resource台帳の詳細設計
 
-Version: draft-0.15 / Date: 2026-10-21 / Status: 固定collectorから最終clock・typed strict ackまで合成検証。通常strict接続は未実装、運用上限は未承認。
+Version: draft-0.16 / Date: 2026-10-21 / Status: 固定collectorからtyped strict ackまで合成検証。通常strict接続の詳細設計を参照追加、接続実装・運用上限承認は未実施。
 
 ## 1. 範囲と停止状態
 
@@ -402,3 +402,5 @@ Collected Outcomeは従来のsummaryを保持して移動する。NotStartedに�
 続く同設計draft-0.8 §18でslot別final_clock_startedを先に消費し、FinalIndexRound→実最終clock/checkpoint→FinalClockRoundへ移す。元receipt/scope/Finished phase/budget/Closedへ結合し、clock試行は旧経路と同じ1、追加controlはO.final_clock_stage=3 work/round。未ack drop/forgetで次roundを開けない。[合成記録](E2E_BEST_PRACTICE_R2_OL03_FINAL_CLOCK_STAGE_SYNTHETIC_2026-10-21.md)を参照。typed strict ack・通常strict/全体受付・OS接続は未対応。
 
 続く同設計draft-0.9 §19でslot別ack_startedを先に消費し、FinalClockRound→private typed ack即時消費→Expect(next)/Finishedへ移す。元budget・Closed・同Finished phaseを再照合し、失敗時は停止と元診断を保持する。追加O.strict_ack=3 work/round、操作/bytes/retry/resource数量は不変。Initial/AfterM4後のwith_round末尾失敗も全体失敗とする。[合成記録](E2E_BEST_PRACTICE_R2_OL03_STRICT_ACK_SYNTHETIC_2026-10-21.md)を参照。通常strict固定位置/M4接続、OS source、全体受付、permitは追加していない。
+
+後続の[通常strict接続詳細設計draft-0.1](BEST_PRACTICE_BP5_R2_OL03_NORMAL_STRICT_CONNECTION_DESIGN.md)で、唯一のsession/source owner・inert 3slot・固定M4位置のhandoffと、BeforeM4 ack後の比較失敗でもStoppedとする外側伝播を整理した。O.connection等の新費用、運用policy/全体受付は未承認であり、既存の数量モデルや合成policyから実運用capを自動設定しない。詳細設計のみで、接続・OS source・permitは実装していない。
