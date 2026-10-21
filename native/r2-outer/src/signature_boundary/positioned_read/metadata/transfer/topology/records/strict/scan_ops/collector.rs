@@ -277,10 +277,46 @@ impl<'s, S: ScanOps> Boundary<'s, '_, '_, S> {
 // Only this module dispatches this fixed implementation. No caller-selected kernel.
 pub(in super::super) const KERNEL_MODEL_ID: &str = "bp5-r2-collector-work-0.1";
 pub(in super::super) const ENTRY_MODEL_ID: &str = "bp5-r2-collector-entry-0.1";
+pub(in super::super) const SESSION_ENTRY_MODEL_ID: &str = "bp5-r2-session-collector-entry-0.1";
 
 pub(super) enum DispatchOutcome<T> {
     NotStarted(Failure),
     Collected(Outcome<T>),
+}
+// Session path is a fixed-callee extension, never a caller-selected collector.
+// Method (b): ScanOps is the sole dispatch/cleanup precharge owner. Session checks/commits
+// are fixed substeps of that block; only scope require1 and connection1 are additional.
+pub(super) fn consume_and_collect_session<S: ScanOps>(
+    estimate: ScanWorkEstimate<'_, '_, '_, '_, '_>,
+    inputs: &ScanInputs<'_, '_, '_, '_>,
+    current: &RoundScope<'_>,
+    scan: (S, Option<Quotas>),
+    accounting: &super::super::round_declaration::session::resources::Boundary<'_>,
+    budget: &mut SharedBudget<'_>,
+) -> DispatchOutcome<ClosureObservation> {
+    let (source, quotas) = scan;
+    let ready = estimate
+        .consume_for_collector(inputs, current, budget)
+        .and_then(|()| accounting.connect(current, budget));
+    let connection = match ready {
+        Ok(c) => c,
+        Err(e) => {
+            drop(source);
+            return DispatchOutcome::NotStarted(e);
+        }
+    };
+    if let Err(e) = inputs.enter_collector(current, budget) {
+        drop(source);
+        return DispatchOutcome::NotStarted(e);
+    }
+    let mut out = kernel_accounted(inputs, current, source, quotas, Some(connection), budget);
+    if let Err(e) = out.result {
+        let _ = budget.stop::<()>(e);
+    }
+    if let Err(e) = budget.checkpoint() {
+        out.result = Err(e);
+    }
+    DispatchOutcome::Collected(out)
 }
 
 // Owned, fixed-callee bridge. No callback, reusable permit, quota producer or OS source.
@@ -322,6 +358,11 @@ pub(super) fn collect<S: ScanOps>(
     quotas: Option<Quotas>,
     budget: &mut SharedBudget<'_>,
 ) -> DispatchOutcome<ClosureObservation> {
+    if budget.scan_session_claim.started.get() {
+        drop(source);
+        let _ = budget.stop::<()>(Failure::Binding);
+        return DispatchOutcome::NotStarted(budget.failed.unwrap_or(Failure::Binding));
+    }
     if let Err(reason) = inputs.enter_collector(current, budget) {
         drop(source); // Contract: inert/no pre-owned handles, no new source operation.
         return DispatchOutcome::NotStarted(reason);
@@ -348,7 +389,17 @@ fn kernel<S: ScanOps>(
     quotas: Option<Quotas>,
     budget: &mut SharedBudget<'_>,
 ) -> Outcome<ClosureObservation> {
-    with_boundary(source, quotas, budget, |b| {
+    kernel_accounted(inputs, current, source, quotas, None, budget)
+}
+fn kernel_accounted<S: ScanOps>(
+    inputs: &ScanInputs<'_, '_, '_, '_>,
+    current: &RoundScope<'_>,
+    source: S,
+    quotas: Option<Quotas>,
+    session: Option<Connection>,
+    budget: &mut SharedBudget<'_>,
+) -> Outcome<ClosureObservation> {
+    with_boundary_accounted(source, quotas, session, budget, |b| {
         let layout = inputs.layout(current, b.budget)?;
         let n = layout.entries.len().checked_add(1).ok_or(Failure::Limit)?;
         let mut entries = vector(n, b.budget)?;

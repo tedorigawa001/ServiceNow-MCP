@@ -147,6 +147,9 @@ impl<S: ScanOps> Boundary<'_, '_, '_, S> {
             return self.fail(Failure::Limit);
         }
         let mut raw = Vec::new();
+        if let Some(session) = &self.session {
+            session.check_names(capacity, self.budget)?;
+        }
         if raw.try_reserve_exact(capacity).is_err() {
             return self.fail(Failure::Limit);
         }

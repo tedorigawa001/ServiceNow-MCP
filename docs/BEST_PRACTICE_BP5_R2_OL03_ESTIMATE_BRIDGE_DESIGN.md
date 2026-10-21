@@ -1,6 +1,6 @@
 # BP-5 R-2 OL-03：estimate消費型bridge・利用guard7の詳細設計
 
-Version: draft-0.8 / Date: 2026-10-21 / Status: 単一bridge・resource数量・session状態claim/bindingを合成検証。累積台帳・strict完了通知・通常strict/OS接続・全体受付は未実装。
+Version: draft-0.9 / Date: 2026-10-21 / Status: 単一bridge・session累積会計と固定collector/scan_opsの内部接続を合成検証。strict完了通知・通常strict/OS接続・全体受付は未実装。
 
 ## 1. 範囲と停止状態
 
@@ -228,8 +228,10 @@ Collectedでは、まず既存resultがErrなら元budgetへラッチし、そ�
 
 [3round resource台帳詳細設計draft-0.1](BEST_PRACTICE_BP5_R2_OL03_THREE_ROUND_RESOURCE_LEDGER_DESIGN.md)に、操作/xattr名bytesの累積枠とlive ownerの同時枠、acquire前のcleanup予約、元budgetの共有retry、同receipt/budget/startと固定round順序への結合を整理した。bridge成功/cleanup完了だけで次roundを許可せず、既存AfterScan・record再読・FinalIndex/clockの成功に結合する方針である。
 
-台帳・運用cap・通常strictの型付きacknowledgementは未実装。現行のscanごとの合成Quotasをsession承認値へ読み替えず、追加会計の費目/modelを計数するまではO.use7/O.dispatch1/Sの値を無条件に維持すると約束しない。通常strict・全体受付・OS sourceは未接続のまま。
+当初の台帳設計時点では台帳・運用cap・通常strictの型付きacknowledgementは未実装だった。後続で内部台帳と固定collector接続を追加したが、scanごとの合成Quotasをsession承認値へ読み替えない。通常strict・全体受付・OS sourceは未接続のまま。
 
 後続の[台帳設計draft-0.3 §14](BEST_PRACTICE_BP5_R2_OL03_THREE_ROUND_RESOURCE_LEDGER_DESIGN.md)では、現行collectorの5分類操作上界を純粋計算する最初のsubsetを実装した。raw scalar入力から必要数量を返すだけで、profile/receipt/round結合・台帳・quota生成はない。固定9 workの算術費は未接続のO費として区別し、このbridgeの既存費や運用権限を変更しない。[合成記録](E2E_BEST_PRACTICE_R2_OL03_RESOURCE_MODEL_SYNTHETIC_2026-10-21.md)を参照。
 
 同台帳設計draft-0.5 §16で、budgetに残る唯一生成claim、session状態内部型、同receipt/origin/claim/start・round token/順序の結合を追加した。生成/開始/照合は2/2/1 workをO側の別費とし、未完了drop/失敗後は再開できない。完了通知はtest fixtureだけで模擬し、既存bridge/collectorにsessionを必須化する接続や実cleanup/strict acknowledgementは未実装。[session状態合成記録](E2E_BEST_PRACTICE_R2_OL03_SESSION_STATE_SYNTHETIC_2026-10-21.md)を参照。
+
+後続の[台帳設計draft-0.7 §19](BEST_PRACTICE_BP5_R2_OL03_THREE_ROUND_RESOURCE_LEDGER_DESIGN.md)でsession累積会計を固定collector/scan_opsへ接続した。方式(b)としてscan_opsだけがdispatch/cleanup prepayを課金し、sessionは同イベントの候補検査/commitを行う。session-entry-0.1の固定経路を追加し、scope.require1＋connection1だけを単一bridgeの既存1991へ加えて1993 work（EINTR1回の最初のroundは1996）。旧estimateはbase費の契約であり、session生成/policy/round/全inspectionの総上界を証明しない。session開始済みbudgetの旧入口迂回、別scope/connection再利用/境界後の利用を拒否する。[接続合成記録](E2E_BEST_PRACTICE_R2_OL03_SESSION_COLLECTOR_SYNTHETIC_2026-10-21.md)を参照。運用policy・本番acknowledgement・通常strict/OS/全体受付は開けない。

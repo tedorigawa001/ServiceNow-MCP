@@ -1,4 +1,5 @@
 //! Single-attempt internal boundary. No OS backend or operational quota/scope constructor.
+use super::round_declaration::session::resources::Connection;
 use super::*;
 use crate::signature_boundary::positioned_read::metadata::collector::FsObservation;
 use std::cell::{Cell, RefCell};
@@ -132,6 +133,7 @@ struct Resource<'s, S: ScanOps> {
     kind: Kind,
     serial: u64,
     declared: Cell<bool>,
+    session: Option<Connection>,
 }
 impl<S: ScanOps> std::fmt::Debug for Resource<'_, S> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -148,7 +150,16 @@ impl<S: ScanOps> Drop for Resource<'_, S> {
                 l.attempts[Op::Cleanup as usize] += 1;
             }
             // Cleanup was prepaid and reserved BEFORE acquire. Never gate it on work()/cancel.
-            let result = self.source.borrow_mut().cleanup(raw);
+            let result = if let Some(session) = &self.session {
+                let mut result = Cleanup::Unconfirmed;
+                session.release(|| {
+                    result = self.source.borrow_mut().cleanup(raw);
+                    result == Cleanup::Released
+                });
+                result
+            } else {
+                self.source.borrow_mut().cleanup(raw)
+            };
             if result != Cleanup::Released {
                 self.ledger.borrow_mut().unconfirmed += 1;
             }
@@ -158,6 +169,7 @@ impl<S: ScanOps> Drop for Resource<'_, S> {
 struct Acquisition {
     ledger: Rc<RefCell<Ledger>>,
     committed: bool,
+    session: Option<Connection>,
 }
 impl Drop for Acquisition {
     fn drop(&mut self) {
@@ -165,6 +177,9 @@ impl Drop for Acquisition {
             let mut l = self.ledger.borrow_mut();
             l.reserved_cleanup -= 1;
             l.reserved_live -= 1;
+            if let Some(session) = &self.session {
+                session.unused_acquisition();
+            }
         }
     }
 }
@@ -174,6 +189,7 @@ struct Boundary<'s, 'b, 'a, S: ScanOps> {
     ledger: Rc<RefCell<Ledger>>,
     quotas: Quotas,
     budget: &'b mut SharedBudget<'a>,
+    session: Option<Connection>,
 }
 impl<'s, S: ScanOps> Boundary<'s, '_, '_, S> {
     fn fail<T>(&mut self, e: Failure) -> Result<T, Failure> {
@@ -211,6 +227,9 @@ impl<'s, S: ScanOps> Boundary<'s, '_, '_, S> {
         }
         use crate::json::shared::Budget;
         self.budget.work(if acquire { 2 } else { 1 })?;
+        if let Some(session) = &self.session {
+            session.dispatch(op as usize, acquire, self.budget)?;
+        }
         let mut l = self.ledger.borrow_mut();
         l.attempts[op as usize] += 1;
         if acquire {
@@ -239,6 +258,9 @@ impl<'s, S: ScanOps> Boundary<'s, '_, '_, S> {
             l.serial
         };
         pending.committed = true;
+        if let Some(session) = &self.session {
+            session.acquired();
+        }
         Resource {
             _scope: self.marker,
             source: self.source.clone(),
@@ -247,6 +269,7 @@ impl<'s, S: ScanOps> Boundary<'s, '_, '_, S> {
             kind,
             serial,
             declared: Cell::new(false),
+            session: self.session.clone(),
         }
     }
     fn acquire(
@@ -284,6 +307,7 @@ impl<'s, S: ScanOps> Boundary<'s, '_, '_, S> {
         let mut pending = Acquisition {
             ledger: self.ledger.clone(),
             committed: false,
+            session: self.session.clone(),
         };
         let result = {
             let mut s = self.source.borrow_mut();
@@ -470,6 +494,9 @@ impl<'s, S: ScanOps> Boundary<'s, '_, '_, S> {
             {
                 return self.fail(Failure::Limit);
             }
+            if let Some(session) = &self.session {
+                session.check_names(out.len(), self.budget)?;
+            }
         } else if !out.is_empty() {
             return self.fail(Failure::Binding);
         }
@@ -480,6 +507,9 @@ impl<'s, S: ScanOps> Boundary<'s, '_, '_, S> {
             .metadata(r.raw.as_ref().expect("owned"), op, out);
         // Account copied bytes even for a late/malformed response, independently of target metadata.
         if let Ok(MetaValue::Bytes(n)) = &result {
+            if let Some(session) = &self.session {
+                session.copied_names(*n, out.len());
+            }
             let mut l = self.ledger.borrow_mut();
             let Some(total) = l.names.checked_add((*n).min(out.len()) as u64) else {
                 drop(l);
@@ -545,12 +575,28 @@ fn with_boundary<'a, S: ScanOps, T>(
     budget: &mut SharedBudget<'a>,
     run: impl for<'s, 'b> FnOnce(&mut Boundary<'s, 'b, 'a, S>) -> Result<T, Failure>,
 ) -> Outcome<T> {
+    with_boundary_accounted(source, quotas, None, budget, run)
+}
+fn with_boundary_accounted<'a, S: ScanOps, T>(
+    source: S,
+    quotas: Option<Quotas>,
+    session: Option<Connection>,
+    budget: &mut SharedBudget<'a>,
+    run: impl for<'s, 'b> FnOnce(&mut Boundary<'s, 'b, 'a, S>) -> Result<T, Failure>,
+) -> Outcome<T> {
     audit_owner!(budget, Control);
     let ledger = Rc::new(RefCell::new(Ledger::default()));
     let source = Rc::new(RefCell::new(source));
     let marker = ScopeMarker;
     let result = (|| {
         budget.checkpoint()?;
+        match &session {
+            Some(s) => s.validate(budget)?,
+            None if budget.scan_session_claim.started.get() => {
+                return budget.stop(Failure::Binding);
+            }
+            None => (),
+        }
         let Some(quotas) = quotas else {
             return budget.stop(Failure::Unavailable);
         };
@@ -564,6 +610,7 @@ fn with_boundary<'a, S: ScanOps, T>(
             ledger: ledger.clone(),
             quotas,
             budget,
+            session,
         };
         let result = run(&mut boundary);
         let result = match result {

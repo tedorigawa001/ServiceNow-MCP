@@ -1,4 +1,4 @@
-//! Session accounting only. No production policy constructor or ScanOps connection.
+//! Internal accounting and fixed ScanOps hooks. No production policy constructor.
 use super::*;
 use std::cell::RefCell;
 
@@ -38,6 +38,7 @@ pub(super) struct Accounting {
     policy: ResourcePolicy,
     session: Used,
     rounds: [Used; 3],
+    connected: [bool; 3],
 }
 impl ScanSessionLedger<'_> {
     pub(super) fn configure_resources(
@@ -59,6 +60,7 @@ impl ScanSessionLedger<'_> {
                 policy,
                 session: Used::default(),
                 rounds: [Used::default(); 3],
+                connected: [false; 3],
             })));
             Ok(())
         })();
@@ -69,16 +71,36 @@ impl ScanSessionLedger<'_> {
     }
 }
 struct Marker;
-pub(super) struct Boundary<'s> {
+pub(in super::super::super) struct Boundary<'s> {
     marker: &'s Marker,
     book: Rc<RefCell<Accounting>>,
     origin: Rc<()>,
     claim: Rc<ScanSessionClaim>,
     started: Instant,
     slot: usize,
+    active: Rc<Cell<bool>>,
+    round_identity: *const (),
+    round_token: Rc<()>,
+}
+#[derive(Clone)]
+pub(in super::super::super) struct Connection {
+    book: Rc<RefCell<Accounting>>,
+    origin: Rc<()>,
+    claim: Rc<ScanSessionClaim>,
+    started: Instant,
+    slot: usize,
+    active: Rc<Cell<bool>>,
+    round_identity: *const (),
+    round_token: Rc<()>,
+}
+struct Active(Rc<Cell<bool>>);
+impl Drop for Active {
+    fn drop(&mut self) {
+        self.0.set(false);
+    }
 }
 impl RoundResourceScope<'_, '_, '_> {
-    pub(super) fn with_resources(
+    pub(in super::super::super) fn with_resources(
         &mut self,
         b: &mut SharedBudget<'_>,
         run: impl for<'s> FnOnce(&Boundary<'s>, &mut SharedBudget<'_>) -> Result<(), Failure>,
@@ -93,6 +115,8 @@ impl RoundResourceScope<'_, '_, '_> {
             Round::AfterM4 => 2,
         };
         let marker = Marker;
+        let active = Rc::new(Cell::new(true));
+        let _active = Active(active.clone());
         let boundary = Boundary {
             marker: &marker,
             book,
@@ -100,6 +124,9 @@ impl RoundResourceScope<'_, '_, '_> {
             claim: self.ledger.claim.clone(),
             started: self.ledger.started,
             slot,
+            active,
+            round_identity: self.scope as *const RoundScope<'_> as *const (),
+            round_token: self.scope.token.clone(),
         };
         let result = run(&boundary, b);
         // Leaked/forgotten owners are not cleanup evidence. Never reset their counters.
@@ -148,20 +175,73 @@ fn candidate(mut u: Used, cap: Caps, op: Operation, acquire: bool) -> Result<Use
     Ok(u)
 }
 impl Boundary<'_> {
+    pub(in super::super::super) fn connect(
+        &self,
+        current: &RoundScope<'_>,
+        b: &mut SharedBudget<'_>,
+    ) -> Result<Connection, Failure> {
+        let fresh = !std::mem::replace(&mut self.book.borrow_mut().connected[self.slot], true);
+        let result = (|| {
+            work(b)?;
+            if !fresh {
+                return Err(Failure::Binding);
+            }
+            if super::super::super::scan_ops::collector::SESSION_ENTRY_MODEL_ID
+                != "bp5-r2-session-collector-entry-0.1"
+            {
+                return Err(Failure::Unavailable);
+            }
+            self.check_binding(b)?;
+            if self.round_identity != current as *const RoundScope<'_> as *const ()
+                || !Rc::ptr_eq(&self.round_token, &current.token)
+            {
+                return Err(Failure::Binding);
+            }
+            b.checkpoint()?;
+            Ok(Connection {
+                book: self.book.clone(),
+                origin: self.origin.clone(),
+                claim: self.claim.clone(),
+                started: self.started,
+                slot: self.slot,
+                active: self.active.clone(),
+                round_identity: self.round_identity,
+                round_token: self.round_token.clone(),
+            })
+        })();
+        match result {
+            Ok(v) => Ok(v),
+            Err(e) => b.stop(e),
+        }
+    }
+    fn check_binding(&self, b: &SharedBudget<'_>) -> Result<(), Failure> {
+        if !self.active.get()
+            || !Rc::ptr_eq(&self.origin, &b.inspection_origin)
+            || !Rc::ptr_eq(&self.claim, &b.scan_session_claim)
+            || self.started != b.started
+        {
+            return Err(Failure::Binding);
+        }
+        Ok(())
+    }
     fn prepare(
         &self,
         op: Operation,
         acquire: bool,
         b: &mut SharedBudget<'_>,
     ) -> Result<(), Failure> {
+        self.prepare_inner(op, acquire, b, true)
+    }
+    fn prepare_inner(
+        &self,
+        op: Operation,
+        acquire: bool,
+        b: &mut SharedBudget<'_>,
+        charge: bool,
+    ) -> Result<(), Failure> {
         let result = (|| {
             b.checkpoint()?;
-            if !Rc::ptr_eq(&self.origin, &b.inspection_origin)
-                || !Rc::ptr_eq(&self.claim, &b.scan_session_claim)
-                || self.started != b.started
-            {
-                return Err(Failure::Binding);
-            }
+            self.check_binding(b)?;
             let (session, round) = {
                 let a = self.book.borrow();
                 (
@@ -169,10 +249,12 @@ impl Boundary<'_> {
                     candidate(a.rounds[self.slot], a.policy.rounds[self.slot], op, acquire)?,
                 )
             };
-            work(b)?; // fixed paired accounting/dispatch block
-            if acquire {
-                work(b)?;
-            } // prepaid cleanup: no new work in Drop
+            if charge {
+                work(b)?; // standalone accounting boundary only
+                if acquire {
+                    work(b)?;
+                }
+            } // Connected ScanOps already prepaid dispatch/cleanup exactly once.
             b.checkpoint()?;
             let mut a = self.book.borrow_mut();
             a.session = session;
@@ -281,6 +363,116 @@ struct Acquisition {
     slot: usize,
     committed: bool,
 }
+impl Connection {
+    pub(in super::super::super) fn validate(
+        &self,
+        b: &mut SharedBudget<'_>,
+    ) -> Result<(), Failure> {
+        b.checkpoint()?;
+        match self.view().check_binding(b) {
+            Ok(()) => Ok(()),
+            Err(e) => b.stop(e),
+        }
+    }
+    fn view(&self) -> Boundary<'_> {
+        Boundary {
+            marker: &Marker,
+            book: self.book.clone(),
+            origin: self.origin.clone(),
+            claim: self.claim.clone(),
+            started: self.started,
+            slot: self.slot,
+            active: self.active.clone(),
+            round_identity: self.round_identity,
+            round_token: self.round_token.clone(),
+        }
+    }
+    pub(in super::super::super) fn dispatch(
+        &self,
+        index: usize,
+        acquire: bool,
+        b: &mut SharedBudget<'_>,
+    ) -> Result<(), Failure> {
+        let op = match index {
+            0 => Operation::Open,
+            1 => Operation::Enum,
+            2 => Operation::Read,
+            3 => Operation::Metadata,
+            _ => return b.stop(Failure::Binding),
+        };
+        if (index == 0 && !acquire) || (acquire && index != 0 && index != 3) {
+            return b.stop(Failure::Binding);
+        }
+        self.view().prepare_inner(op, acquire, b, false)
+    }
+    pub(in super::super::super) fn check_names(
+        &self,
+        capacity: usize,
+        b: &mut SharedBudget<'_>,
+    ) -> Result<(), Failure> {
+        b.checkpoint()?;
+        if let Err(e) = self.view().check_binding(b) {
+            return b.stop(e);
+        }
+        let a = self.book.borrow();
+        let valid = capacity > 0
+            && capacity <= 65536
+            && add(a.session.names, capacity as u64).is_ok_and(|n| n <= a.policy.session.names)
+            && add(a.rounds[self.slot].names, capacity as u64)
+                .is_ok_and(|n| n <= a.policy.rounds[self.slot].names);
+        drop(a);
+        if valid {
+            Ok(())
+        } else {
+            b.stop(Failure::Limit)
+        }
+    }
+    pub(in super::super::super) fn copied_names(&self, actual: usize, capacity: usize) {
+        let mut a = self.book.borrow_mut();
+        a.session.names += actual.min(capacity) as u64;
+        a.rounds[self.slot].names += actual.min(capacity) as u64;
+    }
+    pub(in super::super::super) fn acquired(&self) {
+        let mut a = self.book.borrow_mut();
+        let Accounting {
+            session, rounds, ..
+        } = &mut *a;
+        for u in [session, &mut rounds[self.slot]] {
+            u.live_reserved -= 1;
+            u.live += 1;
+            u.peak = u.peak.max(u.live);
+        }
+    }
+    pub(in super::super::super) fn unused_acquisition(&self) {
+        let mut a = self.book.borrow_mut();
+        a.session.live_reserved -= 1;
+        a.session.cleanup_reserved -= 1;
+        a.rounds[self.slot].live_reserved -= 1;
+        a.rounds[self.slot].cleanup_reserved -= 1;
+    }
+    pub(in super::super::super) fn release(&self, run: impl FnOnce() -> bool) {
+        {
+            let mut a = self.book.borrow_mut();
+            let Accounting {
+                session, rounds, ..
+            } = &mut *a;
+            for u in [session, &mut rounds[self.slot]] {
+                u.live -= 1;
+                u.cleanup_reserved -= 1;
+                u.attempts[4] += 1;
+                u.total += 1;
+            }
+        }
+        if !run() {
+            let mut a = self.book.borrow_mut();
+            a.session.unconfirmed += 1;
+            a.rounds[self.slot].unconfirmed += 1;
+            self.claim.failure.set(Some(
+                self.claim.failure.get().unwrap_or(Failure::Unavailable),
+            ));
+        }
+    }
+}
 impl Drop for Acquisition {
     fn drop(&mut self) {
         if !self.committed {
@@ -331,3 +523,78 @@ impl<T: Resource> Drop for Owner<'_, T> {
 
 #[cfg(test)]
 mod tests;
+
+#[cfg(test)]
+pub(in super::super::super) mod testing {
+    use super::*;
+    #[derive(Clone, Copy)]
+    pub(in super::super::super::super) struct Policy {
+        pub attempts: [u64; 5],
+        pub round_attempts: [u64; 5],
+        pub total: u64,
+        pub round_total: u64,
+        pub live: u64,
+        pub names: u64,
+    }
+    pub(in super::super::super::super) fn configure(
+        ledger: &mut ScanSessionLedger<'_>,
+        p: Policy,
+        b: &mut SharedBudget<'_>,
+    ) -> Result<(), Failure> {
+        ledger.configure_resources(
+            ResourcePolicy {
+                model: MODEL,
+                session: Caps {
+                    attempts: p.attempts,
+                    total: p.total,
+                    live: p.live,
+                    names: p.names,
+                },
+                rounds: [Caps {
+                    attempts: p.round_attempts,
+                    total: p.round_total,
+                    live: p.live,
+                    names: p.names,
+                }; 3],
+            },
+            b,
+        )
+    }
+    #[derive(Debug, PartialEq, Eq)]
+    pub(in super::super::super::super) struct Counts {
+        pub attempts: [u64; 5],
+        pub total: u64,
+        pub live: u64,
+        pub reserved: u64,
+        pub peak: u64,
+        pub names: u64,
+        pub unconfirmed: u64,
+    }
+    pub(in super::super::super::super) fn counts(
+        ledger: &ScanSessionLedger<'_>,
+        slot: Option<usize>,
+    ) -> Counts {
+        let a = ledger.resources.as_ref().unwrap().borrow();
+        let u = slot.map_or(a.session, |i| a.rounds[i]);
+        Counts {
+            attempts: u.attempts,
+            total: u.total,
+            live: u.live,
+            reserved: u.cleanup_reserved,
+            peak: u.peak,
+            names: u.names,
+            unconfirmed: u.unconfirmed,
+        }
+    }
+    pub(in super::super::super::super) fn acknowledge(
+        mut lease: RoundResourceScope<'_, '_, '_>,
+        b: &mut SharedBudget<'_>,
+    ) -> Result<(), Failure> {
+        lease.require(lease.scope, b)?;
+        let round = lease.scope.round;
+        lease.ledger.state = State::AwaitStrict(round);
+        super::super::tests::ack_fixture(lease.ledger, round);
+        lease.completed = true;
+        Ok(())
+    }
+}

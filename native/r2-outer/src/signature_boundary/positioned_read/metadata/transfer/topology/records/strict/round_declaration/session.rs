@@ -14,7 +14,7 @@ enum State {
     Finished,
     Stopped(Failure),
 }
-pub(super) struct ScanSessionLedger<'s> {
+pub(in super::super) struct ScanSessionLedger<'s> {
     receipt: &'s RecordReceipt,
     target: &'s TargetDeclaration,
     context: &'s InspectionContext<'s>,
@@ -27,7 +27,7 @@ pub(super) struct ScanSessionLedger<'s> {
     state: State,
     resources: Option<Rc<std::cell::RefCell<resources::Accounting>>>,
 }
-pub(super) struct RoundResourceScope<'a, 'r, 's> {
+pub(in super::super) struct RoundResourceScope<'a, 'r, 's> {
     ledger: &'a mut ScanSessionLedger<'s>,
     scope: &'r RoundScope<'s>,
     completed: bool, // No production setter; later requires real cleanup/strict evidence.
@@ -42,7 +42,7 @@ impl std::fmt::Debug for RoundResourceScope<'_, '_, '_> {
         f.write_str("RoundResourceScope(binding_only_not_scan_permission)")
     }
 }
-pub(super) fn create<'s>(
+pub(in super::super) fn create<'s>(
     receipt: &'s RecordReceipt,
     target: &'s TargetDeclaration,
     context: &'s InspectionContext<'s>,
@@ -104,7 +104,7 @@ impl<'s> ScanSessionLedger<'s> {
         self.state = State::Stopped(reason);
         Err(reason)
     }
-    pub(super) fn begin<'a, 'r>(
+    pub(in super::super) fn begin<'a, 'r>(
         &'a mut self,
         current: &'r RoundScope<'s>,
         b: &mut SharedBudget<'_>,
@@ -196,6 +196,6 @@ impl Drop for ScanSessionLedger<'_> {
     }
 }
 
-mod resources;
+pub(in super::super) mod resources;
 #[cfg(test)]
 mod tests;

@@ -1,6 +1,6 @@
 # BP-5 R-2 OL-03：3round resource台帳の詳細設計
 
-Version: draft-0.6 / Date: 2026-10-21 / Status: session内部の累積会計・同時最大数・cleanup予約/返却を合成検証。固定collectorへの接続・strict完了通知は未実装、運用上限は未承認。
+Version: draft-0.7 / Date: 2026-10-21 / Status: session会計と固定collector/scan_opsを内部接続し、方式(b)の一度限り課金・計数を合成検証。通常strict接続・本番strict完了通知は未実装、運用上限は未承認。
 
 ## 1. 範囲と停止状態
 
@@ -24,7 +24,7 @@ Version: draft-0.6 / Date: 2026-10-21 / Status: session内部の累積会計・�
 
 ## 3. 内部型・binding（擬似契約）
 
-以下は最終形の内部契約案であり、公開API・JSON schemaではない。状態/bindingは§16、内部累積会計は§18で実装した。collectorへの強制接続・完了証拠は未接続である。
+以下は最終形の内部契約案であり、公開API・JSON schemaではない。状態/bindingは§16、内部累積会計は§18、固定collectorのsession経路は§19で実装した。通常strictと完了証拠は未接続である。
 
 | 型 | 契約 |
 |---|---|
@@ -342,3 +342,39 @@ payload used/reserved、retry残、元startedは新しく作らず、配賦に�
 - (b) scan_ops側を課金と試行計数の正とし、session側はworkを課金せず、同じ候補値で累積枠検査とcommitだけを行う。
 
 どちらの場合も、片方だけが成功してもう片方の枠が未commitとなる経路を作らず、cleanup予約・live・unconfirmedは単一の真実源から両方の枠へ反映する。
+
+## 19. 固定collector/scan_ops接続：方式(b)
+
+`consume_and_collect_session` を追加した。既存estimateを値で消費し、同じScanInputsのclaimを先に消費した後、session boundaryから一度だけConnectionを受け取り、固定のcollectorへ渡す。任意kernelの選択やpolicy生成は行わない。Connection発行はround slotごとのone-shot claimで、guard失敗後も戻さない。同RoundScope objectのpointer identityとtokenを照合する（pointerは比較だけに使い、dereference/出力しない）。同名roundの別scopeも拒否する。
+
+接続契約は `bp5-r2-session-collector-entry-0.1`。session側が独立literalと照合する。既存collector-work-0.1/resource-0.2はbase kernelの費目/数量契約として維持するが、session全体の受付証明として単独使用しない。session開始済みbudgetで旧collect/旧boundary（Connectionなし）へ入る場合はBindingでsource操作前に止める。session未開始の従来合成経路は互換性を維持する。
+
+### 19.1 authoritative eventと費目所有
+
+§18末尾の**方式(b)**を選択する。実操作/所有の正は既存scan_opsであり、session側に別のraw ownerを作らない。
+
+| 事象 | 唯一の起点 | session反映とwork |
+|---|---|---|
+| dispatch/acquire前 | scan_ops::Boundary::begin | local枠検査→既存work precharge→session/round候補検査→両側commit。接続側は追加dispatch/cleanup workを課金しない |
+| acquire成功 | 既存own（post-checkpointより前） | local/sessionのlive予約を所有へ変換。sessionはhookだけでrawを所有しない |
+| handleなし失敗 | 既存Acquisition::drop | 両側の未使用cleanup/live予約だけを返却。消費/試行は返さない |
+| cleanup | 既存Resource::dropのraw.take | 両側の予約を実消費へ変換し、同じcallbackでcleanupを一度だけ実行。追加work/再試行なし |
+| xattrコピー | 同じmetadata応答 | local/sessionへ同じbounded実bytesを一度だけ反映。summaryを再加算しない |
+
+local work precharge後にsession枠不足が分かる場合、spent workは残るがどちらの試行/予約もcommitせず、sourceを呼ばない。session側commit後はfallible処理/追加workなしでlocal側もcommitする。source呼出し中は台帳RefCellのborrowを保持しない。固定サイズ候補・Rc clone・予約反映は既存dispatch/prepayの固定blockへ含める。可変長走査/parseや新しいretry loopは加えない。
+
+既存normalizerのxattr buffer確保前とNamesRead直前でsession capacityも検査する。実bytesはコピー後・post-checkpoint前に反映し、遅い/不正応答でも返金しない。内容の許可一覧や前後metadata照合は変更しない。
+
+### 19.2 寿命・失敗・終了証拠
+
+Connectionは同origin/claim/started/slotに結合し、元with_resourcesのactive cellを共有する。boundary終了/unwindでactive=falseになり、保存したcloneも新dispatchに使えない。実Ownerのcleanupはactive/取消/期限にかかわらずprepaidで継続する。Connectionは公開token/permitではなくstrict内部のhookであり、constructできる本番policyはない。
+
+Collected Outcomeは従来のsummaryを保持して移動する。NotStartedには架空summaryを作らない。エラー/late stop時にもcleanup/live/retry/宣言残の終端検査を維持し、unconfirmedをclaimにも残す。summaryのattempts/namesをsessionへ加算する口はない。session入口は実scopeのrequireを通すが、collector成功だけでAwaitStrict/Finishedへ進めない。
+
+### 19.3 workと検証
+
+固定fixtureの実費は、既存単一bridge1991にscope.require1＋Connection1を加え**1993 work**。dispatch/cleanupを二重課金しない。合法EINTR1回は既存宣言read guard1＋dispatch1＋分類1の計3を追加し、最初のroundは1996。3roundのsource試行は `[189,42,19,1971,408]`＝2629でlocal summary/session/独立traceが一致、retry残7を維持する。session生成2、policy設定1、各begin2、record/phase/ackなどはこのbridge実費に含めない。
+
+接続modeの費目所有契約をsession-entry-0.1として明記したが、全inspectionのI/R/O・管理allocation・最大CPU時間を証明したものではない。raw shapeからpolicyへ昇格せず、全体受付は無効のまま。追加8テスト、876×4 source失敗点、160 work prefixなどは[固定collector接続合成記録](E2E_BEST_PRACTICE_R2_OL03_SESSION_COLLECTOR_SYNTHETIC_2026-10-21.md)を参照。
+
+通常strictのproduction acknowledgement/完了setter、運用policy/外側保持owner、host終了証拠、OS sourceは引き続き未接続。3roundの成功進行だけはcfg(test) acknowledgementを用い、M4/FinalIndex全体の本番統合を検証済みとはしない。

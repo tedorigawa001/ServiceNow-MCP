@@ -465,6 +465,7 @@ fn size_cap_is_inclusive_and_foreign_ledger_binding_is_rejected() {
             ledger: Rc::new(RefCell::new(Ledger::default())),
             quotas: quotas(),
             budget: s.budget,
+            session: None,
         };
         inner.bind_declared(&f, &entry, 1).map(|_| ())
     });

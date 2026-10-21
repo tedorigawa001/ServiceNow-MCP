@@ -39,6 +39,7 @@ enum Case {
     NoQuotas,
     Quota(usize),
     NamesZero,
+    Provenance,
     WrongScope,
     Shape { width: u16, depth: u8 },
     IndexFirst,
@@ -243,12 +244,18 @@ impl ScanOps for Fake {
             MetaOp::NamesSize => {
                 MetaValue::Size(if matches!(self.0.borrow().case, Case::NamesOversize) {
                     65537
+                } else if matches!(self.0.borrow().case, Case::Provenance) {
+                    21
                 } else {
                     0
                 })
             }
             MetaOp::NamesRead => {
                 assert!(!out.is_empty());
+                if matches!(self.0.borrow().case, Case::Provenance) {
+                    out[..21].copy_from_slice(b"com.apple.provenance\0");
+                    return Ok(MetaValue::Bytes(21));
+                }
                 MetaValue::Bytes(usize::from(matches!(
                     self.0.borrow().case,
                     Case::NamesChanged
@@ -288,6 +295,14 @@ impl ScanOps for Fake {
 }
 fn fixture(case: Case) -> (Setup, Rc<RefCell<State>>) {
     let mut f = Setup::new();
+    if matches!(case, Case::Provenance) {
+        for pin in &mut f.receipt.pins {
+            pin.leaf.names = VisibleNames::Provenance;
+            for ancestor in &mut pin.ancestors {
+                ancestor.names = VisibleNames::Provenance;
+            }
+        }
+    }
     f.receipt.pins[2].ancestors[2].stat.mode = 0o555;
     let js = if matches!(case, Case::Chunks) {
         vec![9; 65537]
@@ -516,6 +531,7 @@ fn run_with_audit(
 
 mod entry;
 mod resource_bounds;
+mod session_bridge;
 mod work_accounting;
 #[test]
 fn all_entries_are_read_and_observed_then_accepted_by_after_scan_in_each_round() {
