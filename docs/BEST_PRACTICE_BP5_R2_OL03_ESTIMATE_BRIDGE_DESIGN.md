@@ -1,6 +1,6 @@
 # BP-5 R-2 OL-03：estimate消費型bridge・利用guard7の詳細設計
 
-Version: draft-0.9 / Date: 2026-10-21 / Status: 単一bridge・session累積会計と固定collector/scan_opsの内部接続を合成検証。strict完了通知・通常strict/OS接続・全体受付は未実装。
+Version: draft-0.10 / Date: 2026-10-21 / Status: 固定collector/session接続を合成検証済み。通常strictの型付き終了証拠・ack詳細設計を追加、実装・OS接続・全体受付は未対応。
 
 ## 1. 範囲と停止状態
 
@@ -235,3 +235,5 @@ Collectedでは、まず既存resultがErrなら元budgetへラッチし、そ�
 同台帳設計draft-0.5 §16で、budgetに残る唯一生成claim、session状態内部型、同receipt/origin/claim/start・round token/順序の結合を追加した。生成/開始/照合は2/2/1 workをO側の別費とし、未完了drop/失敗後は再開できない。完了通知はtest fixtureだけで模擬し、既存bridge/collectorにsessionを必須化する接続や実cleanup/strict acknowledgementは未実装。[session状態合成記録](E2E_BEST_PRACTICE_R2_OL03_SESSION_STATE_SYNTHETIC_2026-10-21.md)を参照。
 
 後続の[台帳設計draft-0.7 §19](BEST_PRACTICE_BP5_R2_OL03_THREE_ROUND_RESOURCE_LEDGER_DESIGN.md)でsession累積会計を固定collector/scan_opsへ接続した。方式(b)としてscan_opsだけがdispatch/cleanup prepayを課金し、sessionは同イベントの候補検査/commitを行う。session-entry-0.1の固定経路を追加し、scope.require1＋connection1だけを単一bridgeの既存1991へ加えて1993 work（EINTR1回の最初のroundは1996）。旧estimateはbase費の契約であり、session生成/policy/round/全inspectionの総上界を証明しない。session開始済みbudgetの旧入口迂回、別scope/connection再利用/境界後の利用を拒否する。[接続合成記録](E2E_BEST_PRACTICE_R2_OL03_SESSION_COLLECTOR_SYNTHETIC_2026-10-21.md)を参照。運用policy・本番acknowledgement・通常strict/OS/全体受付は開けない。
+
+通常strictへ移行する前段として[型付きcleanup・round完了・strict acknowledgement詳細設計draft-0.1](BEST_PRACTICE_BP5_R2_OL03_STRICT_COMPLETION_DESIGN.md)を追加した。数値Summary/Okから完了を復元せず、実boundary退役に結合したcleanup証拠とObservation成功を固定adapterで合成し、strict tailの実処理からだけackを発行する案である。late stop/未ack drop時もcleanup診断を失わず、旧Result-only ClosureSourceへ結果だけを押し込めない。新producer/guard/workモデルの実装は行わず、方式(b)と通常strict/OS/全体受付の停止を維持する。

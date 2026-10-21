@@ -1,6 +1,6 @@
 # BP-5 R-2 OL-03：3round resource台帳の詳細設計
 
-Version: draft-0.7 / Date: 2026-10-21 / Status: session会計と固定collector/scan_opsを内部接続し、方式(b)の一度限り課金・計数を合成検証。通常strict接続・本番strict完了通知は未実装、運用上限は未承認。
+Version: draft-0.8 / Date: 2026-10-21 / Status: 固定collector接続までを合成検証済み。通常strict向け型付きcleanup/round完了/ack設計を追加、実装・運用上限は未承認。
 
 ## 1. 範囲と停止状態
 
@@ -378,3 +378,11 @@ Collected Outcomeは従来のsummaryを保持して移動する。NotStartedに�
 接続modeの費目所有契約をsession-entry-0.1として明記したが、全inspectionのI/R/O・管理allocation・最大CPU時間を証明したものではない。raw shapeからpolicyへ昇格せず、全体受付は無効のまま。追加8テスト、876×4 source失敗点、160 work prefixなどは[固定collector接続合成記録](E2E_BEST_PRACTICE_R2_OL03_SESSION_COLLECTOR_SYNTHETIC_2026-10-21.md)を参照。
 
 通常strictのproduction acknowledgement/完了setter、運用policy/外側保持owner、host終了証拠、OS sourceは引き続き未接続。3roundの成功進行だけはcfg(test) acknowledgementを用い、M4/FinalIndex全体の本番統合を検証済みとはしない。
+
+## 20. 通常strict向け終了証拠の次工程（設計のみ）
+
+[型付きcleanup・round完了・strict acknowledgement詳細設計draft-0.1](BEST_PRACTICE_BP5_R2_OL03_STRICT_COMPLETION_DESIGN.md)で、ClosedScanResourcesとscan成功を分離し、Active→AwaitStrict→次Expect/Finishedへ進むproducerを定義した。cleanup確認済みの失敗を成功扱いせず、NotStarted/境界未生成には証拠を発行しない。
+
+固定adapterはConnectionの退役と両台帳の終了状態を実行identityへ結合し、round完了はscopeと成功証拠を値で消費する。ackはAfterScan→record再読/厳密検証→FinalIndex/Node→最終clock/checkpoint後のstrict tailだけが発行・消費する。BeforeM4 callbackとAfterM4の実位置、ledgerの全inspection寿命、Inputsをdropしてphaseへ移るborrow順序を維持する。
+
+これはMD設計だけで、既存cfg(test) ackを本番へ移す変更ではない。新guard/work・終端証拠のprepay/allocation・具体的Rust lifetimeは未検証で、783テストを新契約の成績に読み替えない。全体受付・運用policy・OS source・permitは停止を維持する。

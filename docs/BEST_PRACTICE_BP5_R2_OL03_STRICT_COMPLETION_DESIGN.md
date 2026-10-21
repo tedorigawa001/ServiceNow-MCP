@@ -1,0 +1,194 @@
+# BP-5 R-2 OL-03：型付きcleanup証拠・round完了・strict acknowledgement詳細設計
+
+Version: draft-0.1 / Date: 2026-10-21 / Status: 設計案。型・producer・通常strict接続は未実装。
+
+## 1. 範囲と根拠
+
+基準は `db8d8d1`。repository内の `strict.rs`、`round_declaration/phases.rs`、`session.rs`、`session/resources.rs`、`scan_ops.rs`、`scan_ops/collector.rs`、`topology.rs` を読み、[3round台帳設計§19](BEST_PRACTICE_BP5_R2_OL03_THREE_ROUND_RESOURCE_LEDGER_DESIGN.md)と[estimate bridge設計](BEST_PRACTICE_BP5_R2_OL03_ESTIMATE_BRIDGE_DESIGN.md)に続く内部契約を定める。外部仕様/SDKの調査や実機確認ではない。型名・関数名は案であり、公開API/JSON契約ではない。
+
+全体受付無効、telemetry保留、APPROVED_REGISTRY=None、通常v2 Unavailable、gate92、DER/absence停止を維持する。実装、OS接続、実機操作、token発行、設定変更、本番policy投入、permit発行は本工程に含めない。証拠はinspection内の進行だけに用い、実行権へ変換しない。
+
+## 2. 現状と不足
+
+| 現状 | 接続前に必要なもの |
+|---|---|
+| session経路の固定collectorはOutcomeと数値Summaryを返す | producerを制限した終了/cleanup証拠。数値を渡し直して証拠を再構築しない |
+| with_resourcesは排他的scopeとactive cellを持ち、終了時に失効する | 失効・local/session照合の完了と成功結果を結合して返す固定adapter |
+| sessionにはActive/AwaitStrict/Finishedがある | cleanup済みscan成功からだけActive→AwaitStrictへ進める消費型API |
+| cfg(test)だけがackを模擬して次roundへ進む | 通常strictの実際の後処理末尾が発行するone-shot acknowledgement |
+| 通常strict_roundはClosureSource::scanを呼ぶ | 固定collector＋sessionを呼ぶ別の内部経路。旧Result-only traitでcleanup証拠を落とさない |
+| compare_topologyのBeforeM4 callbackはB後・M4取得前に呼ばれる | 同位置を維持し、AfterM4はcompare_topology成功後に限定する |
+
+現行Summaryはlive、pending_cleanup、unconfirmed、retry_pending、declared_pending等を含むが、reserved_liveやdeclared_abandoned、実行/終了nonceを直接表さない。Summaryの全0やOk(())だけを成功証拠として採用できない。既存783テストは前工程の成績であり、本設計のproducer/ackを検証した数ではない。
+
+## 3. 分離する証拠と所有者
+
+候補submodel名は `bp5-r2-strict-round-completion-0.1`。これは未実装の設計識別子で、registryへ登録した値ではない。
+
+| 内部型案 | 発行できる場所 | 意味・禁止事項 |
+|---|---|---|
+| CollectionAttempt | 固定collector入口とscan_ops boundary setup | 同Inputs/round/session接続に結合した唯一の実行identity。単独では成功/cleanupを主張しない |
+| ClosedScanResources | scan_opsの終端finalizerのみ | 実開始済みscanのOwner/予約/宣言/retry残が解消し、解放試行が確認済み。scan内容の正しさやbudget健全性とは別 |
+| CleanupDisposition | 同finalizer/開始前adapter | NotStarted（終了証拠なし）、Confirmed(ClosedScanResources)、Incomplete(有限診断)を区別。失敗Outcomeにも移動して保持する |
+| RoundScanSuccess | 固定session adapterのみ | 同AttemptのObservation成功＋ClosedScanResources＋bridge/境界終端checkpoint成功。cleanupだけ/Observationだけからは作れない |
+| PendingStrictRound | sessionの消費型round-completeのみ | Active scopeとRoundScanSuccessを消費しAwaitStrictへ移した所有者。排他的session borrowを保持し、まだ次roundは開かない |
+| StrictAcknowledgement | strict.rsの固定tail finalizerのみ | 同PendingStrictRoundについてAfterScan以降の必須処理が全て成功した証拠 |
+
+全て非Clone/非Copy/非serde、private field/constructor、Debugは固定opaque labelとする。診断用の数値表示と証拠は別型にし、数値、bool、enum、JSON、SummaryからのFrom/Deserializeや復元口を設けない。CleanupDispositionは成功権を持たないため、Confirmedを保持した失敗報告をround-completeへ直接渡せない形にする。
+
+producerの可視性は必要なstrict内部までに限定する。`unsafe`な参照復元、global map/ランダムな文字列ID、任意callbackによる「完了自己申告」を導入しない。
+
+## 4. 共通bindingとone-shot
+
+証拠は元session claim/origin/started、同receipt object/lineage、同target/context、同RoundScope object/token、固定slot、同Inputsの実行claim由来、同Connection/CollectionAttemptのprivate nonceへ結合する。既存hash/generation/path値の一致だけでは代替しない。
+
+実行/終了nonceはproducer内で作る非公開identityとし、保持はborrow/Rc identityなどで表す。scope objectが生存する期間だけ比較し、addressのdereferenceや出力をしない。Connectionのactive=falseは「この境界が終了した」条件の一つだが、任意の失効ConnectionをClosedScanResourcesへ変換してはならない。
+
+- round接続claimに加え、finalize/complete/ackの試行claimも元owner側へ残す。最初のfallible処理より前に不可逆に消費し、失敗・drop後も解除しない。
+- 値のmoveだけでは、同ownerから証拠を2回発行することは防げない。producer側のone-shot状態と消費型を併用する。
+- 同じ内容の別receipt、別budget/started、別scope/token、別Attempt、別phase/slotの証拠はBindingで拒否する。record内容の実変更は既存Changed等を保持する。
+- 終了証拠ができたslotはsealed/retiredへ移し、standalone境界を含む追加dispatchを禁止する。seal後の数値変更を許したまま過去snapshotを承認に使わない。
+
+## 5. scan終端とcleanupの証明
+
+### 5.1 必須条件
+
+固定scan_ops finalizerは、全stack Ownerとsource所有を既存順序で破棄した後、元local台帳と同slotのsession台帳を直接参照して次を検査する。汎用のcaller-provided Summary検査関数にはしない。
+
+1. CollectionAttemptが実際のEntered→boundary setupに由来する。同Connectionのdispatchは終了し、再接続claimも消費済み。
+2. local/session双方のlive、live予約、cleanup予約が0。unconfirmedが0。
+3. localのpending retryなし、declared_pending=0、declared_abandoned=false。未完了宣言をdropして数だけ0にした状態を受理しない。
+4. localの成功取得数とcleanup実試行数が一致する。現行の成功取得serialを利用するなら、その単調増加/上限とCleanup試行への対応を検証する。Open試行数＋全Metadata試行数から成功取得数を推定しない。
+5. 方式(b)のauthoritative event由来のattempts/names/live/予約/peak/unconfirmedが同roundで整合する。session累積値はそのまま保持し、local Summaryを加算しない。
+6. 当該roundのConnectionを失効させ、slotをsealedへ固定する。退役前のaliasが新dispatchできないことを確認してからClosedScanResourcesを公開する。
+
+local Summaryに未公開の項目は内部finalizerで取得する設計とし、外部JSONへ追加する必要はない。実行identityに結合したfieldを必要に応じ追加するが、snapshot全0の手作りfixtureを本番producerの代用にしない。
+
+ここで開始とはEnteredに加えて実boundary setupが成功したことを指し、最初のsource操作の有無とは分ける。現行DispatchOutcome::Collectedでもquota/初期guardでBoundary構築前に失敗する場合があるため、CollectedのenumだけでClosedScanResourcesを発行しない。その場合は元のCollected診断を保持したままCleanupDisposition::NotStarted（証拠なし）とする。実boundaryが開始し、取得数0のまま終了した場合は、その実行identity/退役に基づく確認は可能だが、main Resultが失敗ならRoundScanSuccessはない。
+
+### 5.2 失敗結果にも解放状況を残す
+
+hash/集合/metadata不一致や取消でscanが失敗しても、全取得resourceのcleanupが確認済みならCleanupDisposition::Confirmedを診断として保持してよい。ただしRoundScanSuccessは発行しない。解放未確認/予約残/forgotten OwnerならIncompleteを保持する。最初のFailureをcleanup由来の理由で上書きせず、cleanup不成立は別項目として残す。
+
+cleanupは既存のprepayとraw.takeの起点を維持し、停止後も他Ownerの一度限りの解放を続ける。証拠の発行に失敗しても再close/retryや枠の返金はしない。取消済みbudgetに新しいworkを要求してcleanupを省略しない。停止中の診断用終了情報の構築は、既存prepaid/有限な終端処理の一部として別途計数する。
+
+### 5.3 証明する範囲
+
+ClosedScanResourcesはscan所有者だけの内部契約である。外側held target、record/topology source等のownerやOSプロセス全体の解放を証明しない。元SharedBudgetのpayload reservedにはA/Bやrecord等の予約があり得るため、global reserved=0を要求したりscan側から返却したりしない。sourceの単発/非panic/事前handleなし契約を前提とし、隠されたhandleやOS上のABA/解放の真実性まで証明したとはしない。
+
+## 6. 固定session adapterとround完了
+
+現在のwith_resourcesはResult<()>を返してactiveを退役させるだけで、成功producerはない。将来は固定collector用adapter内で、Outcomeをcapture→境界を退役→終了証拠を確定、という順序を表す。任意FnOnceから成功tokenを返せる汎用口へ拡張しない。
+
+```text
+consume estimate / original Inputs claim
+  -> connect once / enter fixed collector
+  -> actual scan + S.seal
+  -> Owner cleanup / source retirement / local terminal report
+  -> Connection retirement + session terminal comparison
+  -> bridge + boundary terminal checkpoint
+  -> RoundScanSuccess OR failure-with-cleanup-disposition
+```
+
+RoundScanSuccessは上記の最後まで成功した場合のみ発行する。途中で作成した仮tokenをcheckpoint失敗後に戻さない。late cancel/deadlineなら成功Observationを捨て、cleanup診断を残して停止する。NotStartedではAttempt/cleanup成功票を捏造しない。
+
+`complete_round(active_scope, success, &mut original_budget) -> PendingStrictRound` は両方を値で消費する案とする。開始時にcomplete claimを消費し、同binding/Attempt/closed slot/現在Active/元budgetの健全性を検査し、終端checkpoint成功後だけAwaitStrictへ移す。失敗はStopped、どちらも再返却しない。
+
+PendingStrictRoundは元ledgerへの排他的borrowと同RoundScopeのborrow、owned Observation、終了証拠を保持する。active_scopeの単なるdropを正常完了に読み替えない。PendingStrictRoundの未ack dropは共有claimへ停止を伝え、次roundを拒否する。既存completed boolの任意setterは公開せず、消費型遷移の内部だけで所有移動を扱う。
+
+Observationは内部tailがAfterScanを終えたら現行同様に破棄し、その後はAttempt/phaseのidentityと終了証拠だけを保持する。Vecをackまで余分に保管してallocation寿命を延ばさない。利用者向けtake/差替え口は設けず、内部の単調なstage遷移で所有を扱う。
+
+## 7. strict tailとacknowledgementの発行位置
+
+順序は現行strict_roundから変更しない。記録/clock検証をindexのimmutable宣言再利用で省略しない。
+
+| 順序 | 必須処理 | 完了の由来 |
+|---|---|---|
+| scan前 | reread_bytes→clock_check(450000)→verify_records | 元RecordSource/同receipt/context、hash-first/前後path/metadata検査を維持 |
+| scan | with_round→decode→prepare_scan/Node→bind_inputs→profile/calculate→固定session collector | 同roundのInputs/estimateを消費。profile/台帳を作り直さない |
+| round scan終了 | typed cleanup確定→complete_round | Active→AwaitStrict。次roundはまだ開かない |
+| tail 1 | IndexPhases::after_scan(同Observation) | observed bindingとAfterScanのindex再認証/全集合照合が成功 |
+| tail 2 | reread_bytes→clock_check(450000)→verify_records | record/path/metadata/time・activation/ledger/registryの厳密検証が再成功 |
+| tail 3 | IndexPhases::finish | FinalIndexの再認証/集合/Node照合が成功 |
+| tail 4 | clock_check(450000)→元budget checkpoint | 最終clockと同じ共有期限/取消が成功 |
+| ack | private strict tail finalizer→session consume | 同PendingStrictRound/実phase完了に結合したStrictAcknowledgementを一度発行・消費 |
+
+IndexPhases::Finishedだけではtail 2/4を証明できない。ClockReadingの数値、callerの「実行済みbool」、任意callbackのOkからackを作らない。strict.rsの固定tail ownerが実際の関数を順に呼び、AfterScan/record再検証/FinalIndex/最終clockを通過した内部状態からのみ発行する。record readerやindex phase単独にsession全体のack発行権を与えない。
+
+ackは同Attempt/phase owner identityと固定完了modelに結合する。PendingStrictRoundのborrowをackが持ってから両方をmoveする循環は作らず、照合用identity/既存安定borrowを保持したownedな非Clone証拠をprivate finalizerから直ちに消費させる。発行と消費の間にawait/利用者callbackを挟まない。消費時にも元budget checkpointを行い、その間の取消/期限切れではStoppedへ移す。
+
+| ack対象 | 成功時のsession状態 | 意味 |
+|---|---|---|
+| Initial | Expect(BeforeM4) | BeforeM4の固定位置まで進める期待状態。自由なscan開始権ではない |
+| BeforeM4 | Expect(AfterM4) | M4そのものは未実施。M4失敗なら次へ進まず停止 |
+| AfterM4 | Finished | 当該tailの最終clock/checkpointまで完了。外側終了/permitは別 |
+
+## 8. 通常strictへの所有権・位置接続
+
+session台帳はreview_strict_record_target全体のownerが一度だけ保持する。receipt/target/contextを借用したledgerが生きている間に、それらをmove/dropしない。各round helperの中でledgerを作る/早期dropする方式は採らない。元budget/started/retryを共有し、各roundに新budgetを作らない。
+
+Initialはvalidate_receiptと外側clock_check(460000)後の既存位置。BeforeM4はcompare_topologyがB走査後にtopology再照合を終えたmandatory callback内に固定する。このackが成功して初めてM4取得へ戻る。AfterM4はcompare_topologyがComparedM0M4を正常に返した後だけに固定する。単にround enumが順番どおりという理由でM4実施済みとみなさない。
+
+通常経路では利用者指定Roundを受ける任意runnerではなく、このorchestratorの固定3箇所から呼ぶ。AfterM4開始は同inspectionの成功したM4比較owner/位置に結合する内部handoffを要求する。BeforeM4 ack後にM4/topologyが失敗した場合、その場でsessionをStoppedにし、Expect(AfterM4)を再開可能な状態として残さない。新しいM4比較を再実行する権利も発行しない。
+
+ComparedM0M4は最終RecordComparisonにも必要なので、AfterM4用の位置結合で破棄しない。orchestratorが実比較結果を保持し、その生存borrowに結合した非公開の位置証拠をAfterM4へ渡す案とする。任意のenumからM4成功を再構築せず、比較結果の所有が終端まで残ることをコンパイル試験で確認する。
+
+Rust所有権の順序は、plan/phase生成→Inputsのimmutable borrow→profile/estimate消費→owned Observation/cleanupへ移動→Inputsをdrop→phaseのmutable after_scan/finishとする。PendingStrictRoundはScanInputs/estimateの短いborrowを保持せず、安定したscope/receiptとowned Observationを持つ。これによりphaseの再検証を省略してborrow conflictを回避する設計にしない。具体的lifetime/Drop順序はcompile-fail試験で確認する。
+
+既存ClosureSource::scan→Result<ClosureObservation>へ新Outcomeを押し込めない。固定ScanOps sourceを受けるstrict専用adapterを設け、成功/失敗双方でcleanup診断を移動する。旧traitは互換用の合成経路に限定し、session開始済みinspectionのfallbackに使わない。source/Quotasの可視性拡大が必要なら最小のstrict内部に限り、公開crate APIへ広げない。
+
+固定collectorはsourceを値で消費するため、新adapterには3round分のinert sourceを持つ非公開3slot ownerを置く案とする。固定位置で該当Optionをfallible処理前にtakeし、失敗でも補充/clone/再返却しない。生成・破棄時にhandle取得/外部効果を持たず、各sourceの操作だけが同じbudgetを使う。任意factory callbackからbounded性の分からないsourceを再生成する口は設けない。将来backendが事前resourceを持つならこの案をそのまま適用せず、取得/寿命/cleanup予約を別設計し、未承認の間は停止する。
+
+外側の破棄順は、未完了Pending/ack/round scope→session ledger→借用元receipt/context/held等の順に制約する。ledgerはAfterM4 ackと外側bodyの最終checkpointまで生存し、Finished後もbodyが失敗すれば元Failureを保持する。既存のsource/topology_source/held/recordsの破棄とその後のcheckpointを省略しない。ledgerを先に正常dropしたことを外側cleanup成功の代用にしない。
+
+## 9. 失敗・中断・Drop
+
+| 条件 | 扱い |
+|---|---|
+| NotStarted/未提供policy/model不明 | 現行の有限理由を保持。cleanup成功票/complete/ackなし |
+| hash/集合/metadata/record変更 | 元Failureを保持。cleanup診断は残すがRoundScanSuccess/ackはなし |
+| cleanup未確認/live/予約残 | Incomplete。先行理由がなければUnavailable。数値0へのresetや再closeで救済しない |
+| pending retry/未完了・放棄宣言 | 既存ReadFailed/Changedの区別を保持。cleanup済みだけで無視しない |
+| 別identity/二重発行/二重消費/順序違反 | Binding。claim消費とStoppedを維持 |
+| complete/tail/ack中の取消・期限・work不足 | 既存Cancelled/Deadline/Limitを保持し停止。spentを返金しない |
+| Pending/未消費ackのdrop、unwind | 元claimへ最初の停止理由を伝える。新しいI/O/課金をDropで行わない |
+| AfterM4 ack後の外側checkpoint/cleanup失敗 | 正常resultを返さず停止。Finishedを理由に既存Failureを消さない |
+
+diagのConfirmedは「正常完了」の同義語ではない。逆にmain Failureが残っていてもcleanupの確認/未確認情報を捨てない。外側held/source全体のcleanup証拠やhost終了報告への接続は別課題であり、本設計のClosedScanResourcesを流用して全ownerの解放済み票を作らない。
+
+## 10. 共有予算・費目
+
+方式(b)を維持し、source試行/cleanupはscan_opsだけがwork prechargeする。cleanup/complete/ackでattempts/names/consumptionを再加算しない。retry減少後のrを元へ戻したり、既存payload予約を証拠発行へ転用したりしない。
+
+新しいO費目は、実行identity確立、終了条件/両台帳比較とseal、complete claim/binding/state、tail進行/ack claim/binding/state、終端checkpoint周辺のpublicationへ分ける。既存I.AfterScan、R.record/clock、I.FinalIndexとsource cleanupはそれぞれ既存費目の所有を維持し、重複課金しない。比較は固定長の5分類/3slot以内とし、record/indexを証拠化のために再parseしない。
+
+各新guardの正確なwork unit・終端診断用prepay・nonce/owner allocationは未計数で、0や既存1993へ吸収したことにしない。実装時に独立oracleで費目表/追加上界を更新し、completion modelの独立照合を追加する。全体I/R/O・管理allocation・運用capが未承認である限り、通常strictの合成接続に成功しても全体受付/permitは開けない。
+
+## 11. 実装順と合成受入条件
+
+1. scan_ops終端の型付きCleanupDisposition/ClosedScanResourcesを内部実装。既存diagnosticを保持し、ゼロSummaryからの偽造を拒否する。
+2. 固定session adapterでConnection退役/slot sealとRoundScanSuccessを結合。late stopで成功を出さない。
+3. complete_round/PendingStrictRoundを実装。Active→AwaitStrict、未ack drop停止までを合成確認。
+4. strict tailのproducer/ack消費を実装し、実AfterScan→record→FinalIndex→clock順序と結合。
+5. 通常strictの固定orchestratorに接続し、BeforeM4 callback/AfterM4位置、ledger寿命、従来failure伝播を確認。test ack bypassは新経路の合格根拠に用いない。
+
+| 試験群 | 最低限の条件 |
+|---|---|
+| cleanup証拠 | 通常成功、hash失敗だがcleanup確認、未確認、遅延成功、予約/live残、forgotten Owner、retry/放棄宣言残、source未開始 |
+| binding/one-shot | 別receipt/context/budget/start/scope/Attempt/Connection/phase、同内容別object、各producerの発行再試行、消費再試行、seal後dispatch |
+| 型/寿命 | proofのClone/serde/raw constructor不可、scope/ledgerの二重borrow不可、短命Inputsを落としてphase可変遷移可能、Pending/ack drop停止 |
+| tail failure | AfterScan、各recordの再読/path/metadata/hash、clock、verify_records、FinalIndex/Node、最終clock/ack各guardに失敗・取消・期限・work不足を注入 |
+| M4位置 | Initial ack前のBeforeM4なし、B未完了時のcallbackなし、BeforeM4 ack失敗時M4取得なし、M4失敗時AfterM4なし、AfterM4 ack失敗時Finishedなし |
+| 会計 | 全3roundのtrace/local/session同値、summary再加算なし、共有retry/payload維持、失敗prefix/cleanup後も新費目上界内 |
+| 互換と停止 | 旧session未開始の合成契約を維持、session開始後の旧trait/collector迂回拒否、運用producerなし/全体受付無効を維持 |
+
+以上は未実施の受入条件。既存の783 passedをこれらの検証結果へ転用しない。
+
+## 12. 未確認・後続承認
+
+- concrete lifetime、affine ownerのDrop実装、tail最終producerの可視性、既存Summary/Outcomeの互換移行は実装前レビューとコンパイル試験が必要。
+- session failureを立てた後でも閉じたcleanup診断を保持できるprepaid範囲とallocation上界は未計数。診断生成不能ならUnknown/Incompleteとして安全側に倒し、成功票で代用しない。
+- OS sourceの真実性・blocked I/O・hidden resource、更新lease/ABA/検査後差替え、role外側owner/hostの終了確認は本設計の証明外。
+- 本番ResourcePolicy/信頼済みinspection contextは未承認。実装着手と合成検証、OS接続/実機検証、全体受付/permitの承認を分離する。
+
+本稿はMDのみの設計更新。新規本書と親2文書の相対リンク先23件の存在、fence対応、末尾改行/空白、diff checkを確認した（節anchor内容は未自動照合）。対象コード/設定の差分がないことも確認した。Rust実装・ビルド/テスト再実行・実機実行は行っていない。
