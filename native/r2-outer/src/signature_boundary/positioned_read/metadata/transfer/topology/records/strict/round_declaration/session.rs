@@ -29,13 +29,14 @@ pub(in super::super) struct ScanSessionLedger<'s> {
     records_started: [bool; 3],
     final_index_started: [bool; 3],
     final_clock_started: [bool; 3],
+    ack_started: [bool; 3],
     state: State,
     resources: Option<Rc<std::cell::RefCell<resources::Accounting>>>,
 }
 pub(in super::super) struct RoundResourceScope<'a, 'r, 's> {
     ledger: &'a mut ScanSessionLedger<'s>,
     scope: &'r RoundScope<'s>,
-    completed: bool, // No production setter; later requires real cleanup/strict evidence.
+    completed: bool, // Set only after consuming the complete typed strict tail (or test fixtures).
 }
 impl std::fmt::Debug for ScanSessionLedger<'_> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -83,6 +84,7 @@ pub(in super::super) fn create<'s>(
             records_started: [false; 3],
             final_index_started: [false; 3],
             final_clock_started: [false; 3],
+            ack_started: [false; 3],
             state: State::Expect(Round::Initial),
             resources: None,
         })

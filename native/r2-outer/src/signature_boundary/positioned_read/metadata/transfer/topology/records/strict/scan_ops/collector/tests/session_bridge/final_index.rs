@@ -356,7 +356,7 @@ fn three_slots_recheck_final_index_node_without_a_production_ack() {
             let after = pending.after_scan(&mut phases, b).unwrap();
             let verified = after.revalidate_records(&mut source, &phases, b).unwrap();
             let final_stage = verified.verify_final_index(&mut phases, b).unwrap();
-            final_stage.acknowledge_for_test(b) // TEST ONLY: no final clock/strict ack producer.
+            final_stage.acknowledge_for_test(b) // TEST ONLY: bypass final clock/strict ack.
         })
         .unwrap();
     }

@@ -283,7 +283,7 @@ fn each_round_releases_its_observation_before_test_only_acknowledgement() {
             let stage = pending.after_scan(&mut phases, b).unwrap();
             assert_eq!(dropped.get(), 1);
             phases.finish(b)?;
-            stage.acknowledge_for_test(b) // TEST ONLY; no production strict tail producer.
+            stage.acknowledge_for_test(b) // TEST ONLY: bypass the remaining strict tail.
         })
         .unwrap();
         assert_eq!(dropped.get(), 1);

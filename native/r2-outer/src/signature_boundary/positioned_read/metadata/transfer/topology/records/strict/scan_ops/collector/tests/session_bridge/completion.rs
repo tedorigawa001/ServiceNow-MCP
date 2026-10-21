@@ -287,7 +287,7 @@ fn actual_closed_proofs_bind_each_round_slot_with_test_only_strict_acknowledgeme
             drop(inputs);
             phases.after_scan(pending.observation(), b)?;
             phases.finish(b)?;
-            pending.acknowledge_for_test(b) // No production strict tail/ack producer.
+            pending.acknowledge_for_test(b) // TEST ONLY: bypass the actual strict tail/ack.
         })
         .unwrap();
     }

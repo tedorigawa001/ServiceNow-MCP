@@ -328,7 +328,7 @@ fn final_clock_stage_is_not_clone_copy_or_serializable() {
     not_impl!(FinalClockRound<'_, '_, '_>, serde::de::DeserializeOwned);
 }
 #[test]
-fn three_slots_run_one_final_clock_each_without_a_production_ack() {
+fn three_slots_run_one_final_clock_each_then_typed_ack() {
     let (f, state, registry) = valid_fixture(false);
     let c = InspectionContext {
         registry: &registry,
@@ -379,7 +379,7 @@ fn three_slots_run_one_final_clock_each_without_a_production_ack() {
             assert_eq!(source.stage_counts().0 - calls, 1);
             assert_eq!(b.json_work - work, 3);
             assert_eq!(b.topology_calls - ops, 1);
-            final_clock.acknowledge_for_test(b) // TEST ONLY; real strict acknowledgement is absent.
+            final_clock.acknowledge(&phases, b).map_err(|e| e.reason())
         })
         .unwrap();
     }

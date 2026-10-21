@@ -1,6 +1,6 @@
 # BP-5 R-2 OL-03：型付きcleanup証拠・round完了・strict acknowledgement詳細設計
 
-Version: draft-0.8 / Date: 2026-10-21 / Status: cleanupからFinalIndex/Node再照合・最終clock/checkpoint stageまで内部実装・合成検証。typed strict acknowledgement・通常strict接続は未実装。
+Version: draft-0.9 / Date: 2026-10-21 / Status: cleanupから最終clock/checkpoint・typed strict acknowledgementまで内部実装・合成検証。通常strict接続は未実装。
 
 ## 1. 範囲と根拠
 
@@ -8,7 +8,7 @@ Version: draft-0.8 / Date: 2026-10-21 / Status: cleanupからFinalIndex/Node再�
 
 全体受付無効、telemetry保留、APPROVED_REGISTRY=None、通常v2 Unavailable、gate92、DER/absence停止を維持する。初稿は設計のみで、§13にscan_ops終端の最初の内部実装を追記した。通常strict接続、OS接続、実機操作、token発行、設定変更、本番policy投入、permit発行は含めない。証拠はinspection内の診断に保持し、実行権へ変換しない。
 
-## 2. 初稿時の現状と不足（後続実装は§13〜§18）
+## 2. 初稿時の現状と不足（後続実装は§13〜§19）
 
 | 現状 | 接続前に必要なもの |
 |---|---|
@@ -372,4 +372,26 @@ fixture成功経路はbudget.now読取11回で、10回はcheckpoint、1回（7�
 
 [最終clock stage合成記録](E2E_BEST_PRACTICE_R2_OL03_FINAL_CLOCK_STAGE_SYNTHETIC_2026-10-21.md)の新規7テストを参照。固定source.clock試行、重複/別binding/別Finished phaseのsource前拒否、全work不足/課金後取消、全11時刻読取境界、clock skew/source error/late result、主理由/cleanup保持、3round（ackだけcfg(test)）を確認した。実clock呼出し省略の変異を拒否テストが検知した。
 
-次は実tail由来のStrictAcknowledgement producer/consumerと、with_round末尾checkpointの失敗を成功へ変換しない接続が必要。通常strict固定位置接続、運用policy/全体受付、OS sourceは未対応。telemetry保留、実機操作・token発行・設定変更・permit発行なし。
+このsubsetの後続となる実tail由来のStrictAcknowledgement producer/consumerは§19へ続く。通常strict固定位置接続、運用policy/全体受付、OS sourceは未対応。telemetry保留、実機操作・token発行・設定変更・permit発行なし。
+
+## 19. FinalClockRoundからstrict acknowledgementへ（draft-0.9）
+
+### 19.1 発行・即時消費と結合
+
+FinalClockRound::acknowledgeは値を消費し、元session slotのack_startedを最初のfallible処理前に不可逆に消費する。AwaitStrict、complete/after_scan/records/final_index/final_clockの全claim、元budget/origin/開始時刻、Closedの同attempt/session/receipt/round結合、同RoundScope objectに結合したFinished phaseを要求する。別phaseがFinishedでも拒否する。
+
+固定producerはprivateなStrictAcknowledgement（元の排他的lease・ScanTailData・固定modelのみ）を作り、その場でprivate consumerへ値で渡す。発行と消費の間にawait・利用者callback・公開handoffはない。非Clone/非Copy/非serde、opaque Debugで、利用者のbool/時刻/数値summaryから作るconstructorは公開しない。producer/consumerは独立literal `bp5-r2-strict-ack-0.1` を照合する。直接callerがackを取得して後から再利用するAPIは設けない。
+
+consumerも元budget/Closed/AwaitStrictを再照合し、最後のcheckpoint成功後だけInitial→Expect(BeforeM4)、BeforeM4→Expect(AfterM4)、AfterM4→Finishedとし、lease.completedを設定する。その後にfallibleな処理は挟まない。排他的leaseと非Clone消費に加え、元slot側のclaimで重複試行も拒否する。失敗時は元Failureをstickyに保ちStoppedとし、元Closed/summaryをCompletionFailureへ移す。Observationは既にAfterScanで破棄済みで、新しい保持・再構築は行わない。
+
+### 19.2 費目・終端境界
+
+O.strict_ack=3 work/round（claim/owner/phase1、固定producer1、consumer/終端1）。各workの前後checkpointに加えproducer/consumer末尾checkpointを実施し、成功fixtureの時刻読取は計8回。3roundの追加control費は9。既存kernel/phase上界は変えず、全体受付は無効のまま。操作/bytes/retry/resource予約・scan費は追加・再課金しない。これはwork課金モデルでありCPU時間・RSSの証明ではない。
+
+ack消費はwith_round closure内の最後のfallible処理として使う。with_round自身の末尾checkpointは引き続き必要で、その失敗はExpect(next)/Finishedへ進んだ後でも成功へ変換しない（§7.1）。合成テストではInitial後とAfterM4後の取消/期限を注入し、元budgetのsticky failureで再開できないことを確認する。Finishedは外側body/cleanup成功でもM4実施証拠でもpermitでもない。
+
+### 19.3 検証と未接続範囲
+
+[strict acknowledgement合成記録](E2E_BEST_PRACTICE_R2_OL03_STRICT_ACK_SYNTHETIC_2026-10-21.md)を参照。新規6テストで実collector→AfterScan→record厳密検証→FinalIndex→最終clock→実typed ackの3slotを通し、test-only ack setterは使用しない。重複・別budget/origin/開始時刻・別Finished phase、全work不足prefix/全課金後取消/全8checkpoint期限、元理由とcleanup診断、外側checkpoint失敗を検証する。既存final_clockの3slotテストも実ackへ置換し、FinalClockRoundのtest-only acknowledgementを削除した。前段stageのcomponent試験だけに残るcfg(test) bypassは実経路の証拠ではない。
+
+通常strict orchestratorへの固定位置/source供給・M4 ownerの接続、全体work/resource受付、運用policy、OS sourceは未実装/未承認。telemetry調査は保留。実機操作・token発行・設定変更・permit発行・Pushは本工程で行わない。

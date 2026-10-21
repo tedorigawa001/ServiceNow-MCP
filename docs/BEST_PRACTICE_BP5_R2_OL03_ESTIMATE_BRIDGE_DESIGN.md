@@ -1,6 +1,6 @@
 # BP-5 R-2 OL-03：estimate消費型bridge・利用guard7の詳細設計
 
-Version: draft-0.16 / Date: 2026-10-21 / Status: 固定collector/sessionから最終clock/checkpoint stageまで合成検証。typed strict ack・通常strict/OS接続・全体受付は未対応。
+Version: draft-0.17 / Date: 2026-10-21 / Status: 固定collector/sessionから最終clock・typed strict ackまで合成検証。通常strict/OS接続・全体受付は未対応。
 
 ## 1. 範囲と停止状態
 
@@ -249,3 +249,5 @@ Collectedでは、まず既存resultがErrなら元budgetへラッチし、そ�
 同設計draft-0.7 §17でRecordsVerifiedRoundを消費し、既存finishのindex再認証/厳密意味/Node再照合と終端guard後だけFinalIndexRoundへ移す。O.final_index_stage=3 workを既存phase費に追加し、元上界/slackと照合する。[合成記録](E2E_BEST_PRACTICE_R2_OL03_FINAL_INDEX_STAGE_SYNTHETIC_2026-10-21.md)を参照。最終clock/typed strict ack、通常strict/OS接続・全体受付は未対応のまま。
 
 同設計draft-0.8 §18でFinalIndexRoundから実clock_checkと終端checkpointへ進み、成功時だけFinalClockRoundを返す。元scope/Finished phase/session/budgetに結合し、追加O.final_clock_stage=3 workと旧経路どおりclock試行1を共有予算へ計上する。[合成記録](E2E_BEST_PRACTICE_R2_OL03_FINAL_CLOCK_STAGE_SYNTHETIC_2026-10-21.md)を参照。typed strict ack・通常strict/OS接続・全体受付は未対応。
+
+同設計draft-0.9 §19でFinalClockRoundを消費し、private typed ackを即時発行・消費して次roundの期待状態/Finishedへ移す。元slotのack claim・budget/Closed/同Finished phaseを再照合し、O.strict_ack=3 work/roundを追加する。with_round末尾の失敗は成功へ変換しない。[合成記録](E2E_BEST_PRACTICE_R2_OL03_STRICT_ACK_SYNTHETIC_2026-10-21.md)を参照。通常strict/OS接続・全体受付・permitは開けない。

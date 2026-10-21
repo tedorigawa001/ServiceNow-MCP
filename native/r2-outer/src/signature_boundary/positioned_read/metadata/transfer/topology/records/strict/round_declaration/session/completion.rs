@@ -1,4 +1,4 @@
-//! Scan completion only. No strict acknowledgement or next-round authority.
+//! Typed scan completion and tail stages. Ordinary strict orchestration is disconnected.
 use super::super::super::scan_ops::collector::completion::{
     CompletionFailure, RoundScanSuccess, ScanTailData,
 };
@@ -82,7 +82,7 @@ impl PendingStrictRound<'_, '_, '_> {
 }
 #[cfg(test)]
 impl AfterScanRound<'_, '_, '_> {
-    // TEST ONLY: no record/FinalIndex/clock-tail acknowledgement producer in production.
+    // TEST ONLY: bypass the record/FinalIndex/clock-tail stages for component tests.
     pub(in super::super::super) fn acknowledge_for_test(
         mut self,
         b: &mut SharedBudget<'_>,
@@ -132,7 +132,7 @@ impl<'a, 'r, 's> RoundResourceScope<'a, 'r, 's> {
 }
 #[cfg(test)]
 impl PendingStrictRound<'_, '_, '_> {
-    // TEST ONLY: real strict tail acknowledgement is deliberately not implemented.
+    // TEST ONLY: bypass the actual strict tail; not used by typed acknowledgement.
     pub(in super::super::super) fn acknowledge_for_test(
         mut self,
         b: &mut SharedBudget<'_>,

@@ -744,6 +744,20 @@ pub(in super::super::super) mod testing {
     ) {
         lease.ledger.final_clock_started[0] = true;
     }
+    pub(in super::super::super::super) fn consume_ack_claim(
+        lease: &mut RoundResourceScope<'_, '_, '_>,
+    ) {
+        lease.ledger.ack_started[0] = true;
+    }
+    pub(in super::super::super::super) fn ack_state(
+        ledger: &ScanSessionLedger<'_>,
+    ) -> ([bool; 3], bool, bool) {
+        (
+            ledger.ack_started,
+            ledger.state == State::Finished,
+            matches!(ledger.state, State::Stopped(_)),
+        )
+    }
     pub(in super::super::super::super) fn final_clock_state(
         ledger: &ScanSessionLedger<'_>,
     ) -> (bool, bool) {

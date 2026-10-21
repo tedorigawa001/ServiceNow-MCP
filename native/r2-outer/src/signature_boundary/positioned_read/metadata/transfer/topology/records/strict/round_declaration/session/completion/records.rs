@@ -1,5 +1,6 @@
-//! Actual record reread and strict validation. No FinalIndex/clock-tail acknowledgement.
+//! Typed strict tail. Ordinary strict orchestration remains disconnected.
 use super::*;
+mod acknowledgement;
 pub(in super::super::super::super) struct RecordsVerifiedRound<'a, 'r, 's> {
     lease: RoundResourceScope<'a, 'r, 's>,
     tail: ScanTailData,
@@ -56,18 +57,6 @@ impl<'a, 'r, 's> FinalIndexRound<'a, 'r, 's> {
             lease: self.lease,
             tail: self.tail,
         })
-    }
-}
-#[cfg(test)]
-impl FinalClockRound<'_, '_, '_> {
-    pub(in super::super::super::super) fn acknowledge_for_test(
-        mut self,
-        b: &mut SharedBudget<'_>,
-    ) -> Result<(), Failure> {
-        b.checkpoint()?;
-        super::super::tests::ack_fixture(self.lease.ledger, self.lease.scope.round);
-        self.lease.completed = true;
-        Ok(())
     }
 }
 impl std::fmt::Debug for FinalIndexRound<'_, '_, '_> {

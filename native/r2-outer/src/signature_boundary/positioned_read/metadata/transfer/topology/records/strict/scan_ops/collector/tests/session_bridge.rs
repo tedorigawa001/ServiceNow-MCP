@@ -1,6 +1,7 @@
 use super::*;
 use round_declaration::scan_inputs::profile::{self, calculator};
 use round_declaration::session::{self, resources::testing as ledger_test};
+mod acknowledgement;
 mod after_scan;
 mod completion;
 mod final_clock;

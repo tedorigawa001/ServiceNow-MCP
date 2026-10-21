@@ -2,8 +2,8 @@ use super::super::tests::{Setup, context};
 use super::*;
 use crate::signature_boundary::positioned_read::work_audit::Audit;
 
-// TEST ONLY: real collector cleanup and strict acknowledgement producers do not exist yet.
-// No equivalent completion setter is compiled in a non-test build.
+// TEST ONLY: bypasses the actual typed collector/strict tail for legacy component tests.
+// Never used by the production typed acknowledgement path.
 pub(super) fn finish_fixture(
     mut lease: RoundResourceScope<'_, '_, '_>,
     b: &mut SharedBudget<'_>,
