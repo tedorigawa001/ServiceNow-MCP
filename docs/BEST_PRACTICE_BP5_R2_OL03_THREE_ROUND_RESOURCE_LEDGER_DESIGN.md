@@ -1,6 +1,6 @@
 # BP-5 R-2 OL-03：3round resource台帳の詳細設計
 
-Version: draft-0.10 / Date: 2026-10-21 / Status: 固定collector接続・cleanup終端・型付きround完了を合成検証。strict ack・通常strict接続は未実装、運用上限は未承認。
+Version: draft-0.11 / Date: 2026-10-21 / Status: 固定collector接続・cleanup・round完了・AfterScan破棄stageを合成検証。strict ack・通常strict接続は未実装、運用上限は未承認。
 
 ## 1. 範囲と停止状態
 
@@ -392,3 +392,5 @@ Collected Outcomeは従来のsummaryを保持して移動する。NotStartedに�
 終端診断のprepay1追加に伴いwork/entry/session-entryを0.2へ改版し、kernel1903、単一bridge1992、session bridge1994（EINTR1の最初のround1997）となった。§19の1902/1991/1993/1996はその時点の履歴値。操作数/bytesとresource数量モデル0.2の式は変えず、kernel bindingだけ更新する。通常strict・運用policy・全体受付・permitは引き続き開けない。
 
 続く[終了証拠設計draft-0.4 §14](BEST_PRACTICE_BP5_R2_OL03_STRICT_COMPLETION_DESIGN.md)で、実Closedと同固定collectorのObservation成功を消費してActive→AwaitStrictへ移す内部型を追加した。sessionのslot別完了claimはfallible処理前に消費し、receipt/round/budget/book結合・未ack drop/forget後の停止を検証する。固定O.round_completeは追加3 workで、既存session1994は変更せず完了経路1997（EINTR1は2000）。strict ack/通常strict/全体受付は追加していない。[合成記録](E2E_BEST_PRACTICE_R2_OL03_ROUND_COMPLETION_SYNTHETIC_2026-10-21.md)を参照。
+
+続く同設計draft-0.5 §15ではAwaitStrictのままPending→AfterScanRoundへ値で移す。slot別after_scan_startedを先に消費し、同phase/scopeで実AfterScanを成功させてからObservationをdropする。cleanup/数値診断とleaseだけを新stageへ移す。未ack drop/forgetで次roundを開けず、既存会計へoperation/bytesを再加算しない。追加O.after_scan_stageは3 work/round。[合成記録](E2E_BEST_PRACTICE_R2_OL03_AFTER_SCAN_STAGE_SYNTHETIC_2026-10-21.md)を参照。production strict ack・全体受付・通常strict/OS接続は無効のまま。

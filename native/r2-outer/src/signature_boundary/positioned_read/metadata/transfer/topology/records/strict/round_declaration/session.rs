@@ -25,6 +25,7 @@ pub(in super::super) struct ScanSessionLedger<'s> {
     model: &'static str,
     tokens: [Option<Rc<()>>; 3],
     complete_started: [bool; 3],
+    after_scan_started: [bool; 3],
     state: State,
     resources: Option<Rc<std::cell::RefCell<resources::Accounting>>>,
 }
@@ -75,6 +76,7 @@ pub(in super::super) fn create<'s>(
             model: MODEL_ID,
             tokens: [None, None, None],
             complete_started: [false; 3],
+            after_scan_started: [false; 3],
             state: State::Expect(Round::Initial),
             resources: None,
         })

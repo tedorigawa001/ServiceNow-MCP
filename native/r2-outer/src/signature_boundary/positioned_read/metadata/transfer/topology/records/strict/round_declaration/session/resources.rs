@@ -724,6 +724,19 @@ pub(in super::super::super) mod testing {
     ) {
         lease.ledger.complete_started[0] = true;
     }
+    pub(in super::super::super::super) fn consume_after_scan_claim(
+        lease: &mut RoundResourceScope<'_, '_, '_>,
+    ) {
+        lease.ledger.after_scan_started[0] = true;
+    }
+    pub(in super::super::super::super) fn after_scan_state(
+        ledger: &ScanSessionLedger<'_>,
+    ) -> (bool, bool) {
+        (
+            ledger.after_scan_started[0],
+            matches!(ledger.state, State::Stopped(_)),
+        )
+    }
     pub(in super::super::super::super) fn completion_state(
         ledger: &ScanSessionLedger<'_>,
     ) -> (bool, bool) {

@@ -1,6 +1,6 @@
 # BP-5 R-2 OL-03：型付きcleanup証拠・round完了・strict acknowledgement詳細設計
 
-Version: draft-0.4 / Date: 2026-10-21 / Status: cleanup証拠と固定collectorの型付きround完了まで内部実装・合成検証。strict acknowledgement producer・通常strict接続は未実装。
+Version: draft-0.5 / Date: 2026-10-21 / Status: cleanup・round完了・AfterScan後のObservation破棄stageまで内部実装・合成検証。strict acknowledgement producer・通常strict接続は未実装。
 
 ## 1. 範囲と根拠
 
@@ -8,7 +8,7 @@ Version: draft-0.4 / Date: 2026-10-21 / Status: cleanup証拠と固定collector�
 
 全体受付無効、telemetry保留、APPROVED_REGISTRY=None、通常v2 Unavailable、gate92、DER/absence停止を維持する。初稿は設計のみで、§13にscan_ops終端の最初の内部実装を追記した。通常strict接続、OS接続、実機操作、token発行、設定変更、本番policy投入、permit発行は含めない。証拠はinspection内の診断に保持し、実行権へ変換しない。
 
-## 2. 初稿時の現状と不足（後続実装は§13・§14）
+## 2. 初稿時の現状と不足（後続実装は§13〜§15）
 
 | 現状 | 接続前に必要なもの |
 |---|---|
@@ -260,7 +260,7 @@ RoundScanSuccess/PendingStrictRoundはprivate field、非Clone/非Copy/非serde�
 
 ### 14.2 所有と未ack停止
 
-PendingStrictRoundは排他的RoundResourceScope、owned成功票/Closed/Observationを保持し、scope/receiptの寿命に制約される。Inputs/estimate/declarationはborrowし続けず、Inputsをdropしてからafter_scan/finishへ進めることを合成試験で確認した。Observationは借用参照だけを公開し、take/差替え口はない。将来のstrict tailはAfterScan後にObservationを破棄する単調なstage遷移が別途必要で、現subsetはPendingの寿命まで保持する。
+PendingStrictRoundは排他的RoundResourceScope、owned成功票/Closed/Observationを保持し、scope/receiptの寿命に制約される。Inputs/estimate/declarationはborrowし続けず、Inputsをdropしてからafter_scan/finishへ進めることを合成試験で確認した。Observationは借用参照だけを公開し、take/差替え口はない。このsubset時点ではPendingの寿命まで保持していた。AfterScan成功後に破棄する後続stageは§15で追加した。
 
 Pendingの未ack dropは既存leaseのDropで共有claimとsessionを停止する。forgetしてもAwaitStrictのままで、次roundのbeginがBindingで拒否する。全体成功/strict成功/次round権限を主張しない。3round slotを通す試験だけはcfg(test) acknowledgementを明示して用い、production ack producerは追加しない。
 
@@ -274,4 +274,28 @@ Pendingの未ack dropは既存leaseのDropで共有claimとsessionを停止す�
 
 [round完了合成記録](E2E_BEST_PRACTICE_R2_OL03_ROUND_COMPLETION_SYNTHETIC_2026-10-21.md)を参照。新規9テストで実Closedの消費、3round slot（test-only ack）、receipt/round/budget結合、重複claim、work不足、全8checkpointの期限切れ、全3課金後の取消、未ack drop/forget、主失敗とcleanup診断の保持を確認する。既存合成fixtureを再利用した内部契約試験であり、独立した人手評価や未使用コードセットの評価ではない。
 
-strict tailのtyped acknowledgement、AfterScan直後のObservation破棄stage、通常strictへの固定位置/source供給接続、全体work/resource受付・運用policyは未実装/未承認。全体受付無効・telemetry保留を維持し、OS接続・実機操作・token発行・設定変更・permit発行は行わない。
+このsubset時点で未対応だったAfterScan直後のObservation破棄stageは§15に続く。strict tailのtyped acknowledgement、通常strictへの固定位置/source供給接続、全体work/resource受付・運用policyは引き続き未実装/未承認。全体受付無効・telemetry保留を維持し、OS接続・実機操作・token発行・設定変更・permit発行は行わない。
+
+## 15. AfterScan後のObservation破棄stage（draft-0.5）
+
+### 15.1 固定の消費型遷移
+
+PendingStrictRound::after_scanはPendingを値で消費する。元sessionのslot別after_scan_startedを最初のfallible処理より前に不可逆に消費し、AwaitStrict・元budget・同Closed/session bindingを再照合する。続いて固定のIndexPhases::after_scan_for_roundを呼び、同RoundScope objectと固定submodelを照合してから**実際の既存after_scan**（Observation identity、index再認証、全集合照合）を実行する。呼出し側のbool/既実行申告や任意callbackからstageを作らない。
+
+phaseが同値でも別RoundScopeに属する場合、既にCompared/Finishedの場合、集合不一致、取消・期限・work不足は停止する。元scopeではprepare_scanのone-shot claimによりphase ownerは一つだけであり、別scopeのphaseを承認へ混入させない。phaseへの短いmutable borrowをAfterScanRoundに残さず、同phaseのfinishを後で呼べる。通常strictのrecord/FinalIndex/clock tailを実施した証拠ではない。
+
+### 15.2 Observationの所有終了
+
+RoundScanSuccessはprivateなOwnedObservationを所有する。AfterScan成功後に値を分解してOwnedObservationを明示dropし、その後の終端work/checkpointまで成功してからだけAfterScanRoundを返す。新stageのfieldは排他的leaseとScanTailData（Closed/数値summary）だけで、Observation/Vecやそのborrowを持たない。ScanTailData自身はAfterScan証拠ではなく、Observationを捨てるだけでstageを作れるconstructorもない。
+
+全失敗経路でもObservationを破棄し、CompletionFailureには元理由・Confirmed cleanup診断・summaryだけを移動する。破棄後の取消/期限でもstageを返さない。test-onlyのdrop probeは実OwnedObservationのDropを計数し、stage生存中にも1回だけ破棄済みであることを検査する。これはallocator/RSSやOS解放の測定ではない。既存のRust field dropを早い位置へ移したもので、新しいpayload copyやallocationはない。
+
+AfterScanRoundは非Clone/非Copy/非serde、private field/constructor、opaque Debug。未ack dropはleaseを通じて停止し、forgetでもAwaitStrictのままで次roundを拒否する。まだproduction ackはない。将来のstrict tailはこのstageからrecord再読/厳密検証→FinalIndex→最終clock/checkpointへ進む必要がある。
+
+### 15.3 費目と検証
+
+submodel `bp5-r2-round-after-scan-0.1` を固定stage呼出しとphase側の独立literalで照合する。追加O.after_scan_stageは固定3 work（claim/pending binding1、phase owner/model1、破棄後終端1）で、既存AfterScanの全課金をそのまま残す。従来のkernel/bridge/completion/phaseモデルの上界を改変/返金しない。実fixtureの旧after_scan費＋3を独立の旧経路と比較する。3round追加control費は9であり、全体work受付は無効のまま。implicit Rust dropのCPU/RSSやhard期限の保証とは区別する。
+
+[AfterScan stage合成記録](E2E_BEST_PRACTICE_R2_OL03_AFTER_SCAN_STAGE_SYNTHETIC_2026-10-21.md)の新規6テストで、成功/拒否、全work不足prefix・全課金後取消、破棄後の取消/期限、別phase/重複/集合不一致、3round slot（ackのみcfg(test)）、未ack drop/forget、非Clone等を確認した。Observation破棄を無効化する変異を検知し、復元後に再検証する。
+
+通常strict接続・typed strict acknowledgement・OS source・運用policy/全体受付は未対応。telemetry調査は保留。実機操作・token発行・設定変更・permit発行は行わない。

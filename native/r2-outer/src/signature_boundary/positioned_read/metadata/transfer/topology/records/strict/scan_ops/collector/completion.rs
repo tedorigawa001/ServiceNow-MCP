@@ -7,9 +7,36 @@ use super::*;
 
 const MODEL: &str = "bp5-r2-strict-round-completion-0.1";
 pub(in super::super::super) struct RoundScanSuccess {
-    observation: ClosureObservation,
+    observation: OwnedObservation,
     closed: ClosedScanResources,
     summary: Summary,
+}
+struct OwnedObservation {
+    value: ClosureObservation,
+    #[cfg(test)]
+    dropped: Option<Rc<Cell<u64>>>,
+}
+#[cfg(test)]
+impl Drop for OwnedObservation {
+    fn drop(&mut self) {
+        if let Some(dropped) = &self.dropped {
+            dropped.set(dropped.get() + 1);
+        }
+    }
+}
+// Payload only: NOT an AfterScan/strict completion producer. No Observation field.
+pub(in super::super::super) struct ScanTailData {
+    closed: ClosedScanResources,
+    summary: Summary,
+}
+impl ScanTailData {
+    pub(in super::super::super) fn reject(self, reason: Failure) -> CompletionFailure {
+        CompletionFailure {
+            reason,
+            cleanup: CleanupDisposition::Confirmed(self.closed),
+            summary: Some(self.summary),
+        }
+    }
 }
 pub(in super::super::super) struct CompletionFailure {
     reason: Failure,
@@ -31,7 +58,7 @@ impl RoundScanSuccess {
         MODEL
     }
     pub(in super::super::super) fn observation(&self) -> &ClosureObservation {
-        &self.observation
+        &self.observation.value
     }
     pub(in super::super::super) fn require(
         &self,
@@ -41,11 +68,24 @@ impl RoundScanSuccess {
         self.closed.require_completion(lease, b)
     }
     pub(in super::super::super) fn reject(self, reason: Failure) -> CompletionFailure {
-        CompletionFailure {
-            reason,
-            cleanup: CleanupDisposition::Confirmed(self.closed),
-            summary: Some(self.summary),
-        }
+        self.discard_observation().reject(reason)
+    }
+    pub(in super::super::super) fn discard_observation(self) -> ScanTailData {
+        let Self {
+            observation,
+            closed,
+            summary,
+        } = self;
+        drop(observation); // All entries/strings are released before publishing the next stage.
+        ScanTailData { closed, summary }
+    }
+    #[cfg(test)]
+    pub(super) fn watch_observation_drop(&mut self, dropped: Rc<Cell<u64>>) {
+        self.observation.dropped = Some(dropped);
+    }
+    #[cfg(test)]
+    pub(super) fn corrupt_observation_entries(&mut self) {
+        self.observation.value.entries.clear();
     }
 }
 impl CompletionFailure {
@@ -109,7 +149,11 @@ fn collect_success<S: ScanOps>(
     }
     match (out.result, out.cleanup) {
         (Ok(observation), CleanupDisposition::Confirmed(closed)) => Ok(RoundScanSuccess {
-            observation,
+            observation: OwnedObservation {
+                value: observation,
+                #[cfg(test)]
+                dropped: None,
+            },
             closed,
             summary: out.summary,
         }),

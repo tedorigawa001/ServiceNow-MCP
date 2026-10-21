@@ -116,6 +116,29 @@ impl<'s, 'r> RoundDeclaration<'s, 'r> {
     }
 }
 impl IndexPhases<'_, '_, '_> {
+    // Fixed typed-stage adapter: never accept a caller's "already compared" flag.
+    pub(in super::super) fn after_scan_for_round(
+        &mut self,
+        current: &RoundScope<'_>,
+        observed: &ClosureObservation,
+        expected: &str,
+        b: &mut SharedBudget<'_>,
+    ) -> Result<(), Failure> {
+        let result = (|| {
+            work(b)?; // O.after_scan_stage 2: exact phase owner and fixed submodel
+            if expected != "bp5-r2-round-after-scan-0.1" {
+                return Err(Failure::Unavailable);
+            }
+            if !std::ptr::eq(self.declaration.scope, current) {
+                return Err(Failure::Binding);
+            }
+            self.after_scan(observed, b)
+        })();
+        match result {
+            Ok(()) => Ok(()),
+            Err(e) => b.stop(e),
+        }
+    }
     fn transition(&self, state: State, b: &mut SharedBudget<'_>) -> Result<(), Failure> {
         work(b)?; // one extra control unit, outside legacy kernel bound
         if self.state != state {
