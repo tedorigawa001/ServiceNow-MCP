@@ -7,7 +7,7 @@ mod child_set;
 pub(super) mod collector;
 mod declared_read;
 mod normalized_metadata;
-mod resource_model;
+pub(super) mod resource_model;
 
 // Versioned with normalized_metadata's allowlist and resource_model's copy bound.
 const MAX_XATTR_NAMES_BYTES: usize = 65536;

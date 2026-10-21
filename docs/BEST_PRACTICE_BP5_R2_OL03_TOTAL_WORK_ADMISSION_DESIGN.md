@@ -1,6 +1,6 @@
 # BP-5 R-2 OL-03：record・scanを含む全体work上界と事前受付
 
-Version: draft-0.17 / Date: 2026-10-21 / Status: private kernel計数とO.profile/O.calculate/O.use/固定callee/O.dispatch・単一bridge・resource純粋数量計算を検証。3round台帳・全体受付・other上界・通常strict・運用承認は未対応。
+Version: draft-0.18 / Date: 2026-10-21 / Status: private kernel・単一bridge・resource数量・session状態claim/bindingを検証。累積台帳・全体受付・other上界・通常strict・運用承認は未対応。
 
 ## 1. 範囲と停止状態
 
@@ -175,6 +175,8 @@ record projection4/roundはRが所有する。旧index互換テストの固定45
 後続の[3round resource台帳詳細設計draft-0.1](BEST_PRACTICE_BP5_R2_OL03_THREE_ROUND_RESOURCE_LEDGER_DESIGN.md)で、操作/xattr名bytesの累積枠とlive同時枠、cleanup予約、共有retry、同receipt/budgetとround順序、strict後続照合までの停止条件を具体化した。設計のみであり、台帳実装・運用cap承認・通常strict接続は未対応。新台帳の費用をO/Sへ計数し、I/R/Oと独立resource・管理allocationを合算するまで全体受付を有効化しない。上界が既存work上限を超える規模試算の制約も維持する。
 
 同設計draft-0.3 §14ではresource必要数量の純粋計算subsetのみを追加した。算術は固定9 work、元budget/retry残を使い新しい予約や予算を作らない。raw scalar入力は受理済み宣言の証拠ではなく、数量と運用capは別である。session台帳・統計の保護されたproducer/binding・通常strictへの接続・全体受付は未対応。[合成記録](E2E_BEST_PRACTICE_R2_OL03_RESOURCE_MODEL_SYNTHETIC_2026-10-21.md)を参照。
+
+後続draft-0.5 §16でsession状態内部型・budget-owned唯一claim・receipt/budget/round bindingを追加した。O.session_create=2、O.session_begin=2、O.session_require=1を元budgetへ課金し、S/既存bridge/算術9へ二重計上しない。claim storageの管理allocation、実resource会計・完了通知・通常strict/全体予約は未完了である。単一budget内の再生成拒否を運用producerや全体受付の承認と読み替えない。[session状態合成記録](E2E_BEST_PRACTICE_R2_OL03_SESSION_STATE_SYNTHETIC_2026-10-21.md)を参照。
 
 [scan詳細設計draft-0.1](BEST_PRACTICE_BP5_R2_OL03_BOUNDED_SCAN_COLLECTOR_DESIGN.md)へ、全entry/rootの2回全path解決、逐次名前照合と余剰entryのopen前拒否、短読取停止・元共有EINTR残8、snapshot/解放を含む操作数・work式候補を整理した。cleanupはacquire前prechargeと一度限りのownerへ結合する案とし、元spentを返さない。
 

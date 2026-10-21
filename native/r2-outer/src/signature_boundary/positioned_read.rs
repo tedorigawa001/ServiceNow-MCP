@@ -1,6 +1,7 @@
 //! Staged shared budget and single-shot positioned-I/O boundary; no OS adapter or trust authority.
 use super::physical_signature;
 use std::{
+    cell::Cell,
     rc::Rc,
     sync::atomic::{AtomicBool, Ordering},
     time::{Duration, Instant},
@@ -54,6 +55,14 @@ pub(super) trait PositionedSource {
     fn pread(&mut self, offset: u64, output: &mut [u8]) -> Result<usize, IoFailure>;
 }
 
+// One inspection-local attempt. A dropped session cannot restore creation authority.
+// No resource quota or execution capability is stored here.
+#[derive(Default)]
+struct ScanSessionClaim {
+    started: Cell<bool>,
+    failure: Cell<Option<Failure>>,
+}
+
 pub(super) struct SharedBudget<'a> {
     started: Instant,
     cancelled: &'a AtomicBool,
@@ -72,6 +81,7 @@ pub(super) struct SharedBudget<'a> {
     json_work: u64,
     // Private identity of this shared inspection budget, not an execution capability.
     inspection_origin: Rc<()>,
+    scan_session_claim: Rc<ScanSessionClaim>,
     #[cfg(test)]
     work_audit: Option<work_audit::Audit>,
 }
@@ -96,16 +106,25 @@ impl<'a> SharedBudget<'a> {
             topology_calls: 0,
             json_work: 0,
             inspection_origin: Rc::new(()),
+            scan_session_claim: Rc::new(ScanSessionClaim::default()),
             #[cfg(test)]
             work_audit: None,
         }
     }
     fn stop<T>(&mut self, reason: Failure) -> Result<T, Failure> {
-        Err(*self.failed.get_or_insert(reason))
+        let reason = self
+            .failed
+            .or(self.scan_session_claim.failure.get())
+            .unwrap_or(reason);
+        self.failed = Some(reason);
+        if self.scan_session_claim.started.get() {
+            self.scan_session_claim.failure.set(Some(reason));
+        }
+        Err(reason)
     }
     pub(super) fn checkpoint(&mut self) -> Result<(), Failure> {
-        if let Some(reason) = self.failed {
-            return Err(reason);
+        if let Some(reason) = self.failed.or(self.scan_session_claim.failure.get()) {
+            return self.stop(reason);
         }
         if self.cancelled.load(Ordering::Acquire) {
             return self.stop(Failure::Cancelled);

@@ -1,7 +1,7 @@
 //! Quantity-only model of the current fixed kernel. No policy, reservation or session permit.
 use super::*;
 
-pub(super) const MODEL_ID: &str = "bp5-r2-scan-resource-0.2";
+pub(in super::super) const MODEL_ID: &str = "bp5-r2-scan-resource-0.2";
 const KERNEL_ID: &str = "bp5-r2-collector-work-0.1";
 const XATTR_POLICY_ID: &str = "bp5-r2-scan-xattr-names-0.1";
 pub(super) struct Shape {

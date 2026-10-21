@@ -1,12 +1,12 @@
 # BP-5 R-2 OL-03：3round resource台帳の詳細設計
 
-Version: draft-0.4 / Date: 2026-10-21 / Status: 純粋resource数量計算・独立oracle・xattr停止不変条件による上界引締めを合成検証。session台帳・配賦・通常strict接続は未実装、運用上限は未承認。
+Version: draft-0.5 / Date: 2026-10-21 / Status: 純粋resource数量計算に続きsession状態内部型・唯一生成claim・round/budget結合を合成検証。累積会計・配賦・strict完了通知は未実装、運用上限は未承認。
 
 ## 1. 範囲と停止状態
 
 [estimate消費型bridge](BEST_PRACTICE_BP5_R2_OL03_ESTIMATE_BRIDGE_DESIGN.md)と[現行collector費目設計](BEST_PRACTICE_BP5_R2_OL03_COLLECTOR_WORK_REDESIGN.md)に続き、Initial／BeforeM4／AfterM4の3roundが消費する独立resourceの会計を定義する。基準は `fad0749`。現行の `scan_ops.rs`、`normalized_metadata.rs`、`child_set.rs`、`collector.rs`、`profile.rs`、`strict.rs` と[単一bridge合成記録](E2E_BEST_PRACTICE_R2_OL03_ESTIMATE_BRIDGE_SYNTHETIC_2026-10-21.md)を照合した。外部仕様やOS APIを調査する工程ではない。
 
-全体受付無効、telemetry保留、APPROVED_REGISTRY=None、通常v2 Unavailable、gate92、DER/absence停止を維持する。初稿は設計のみで、後続§14で純粋な数量計算を実装した。session台帳実装・OS接続・実機操作・token発行・設定変更・本番policy投入・permit発行を含めない。運用quotaの数値を新しく承認せず、設計完了や内部binding成功を実行権へ変換しない。
+全体受付無効、telemetry保留、APPROVED_REGISTRY=None、通常v2 Unavailable、gate92、DER/absence停止を維持する。初稿は設計のみで、§14/15の数量計算、§16のsession状態subsetを追加した。resource累積会計・OS接続・実機操作・token発行・設定変更・本番policy投入・permit発行を含めない。運用quotaの数値を新しく承認せず、設計完了や内部binding成功を実行権へ変換しない。
 
 前工程の740テストは単一bridgeまでの合成検証であり、本書のsession台帳の検証成績ではない。workは課金ブロック、operationは単発source契約の試行であり、CPU時間・RSS・OS syscall数・hard期限の保証ではない。
 
@@ -24,7 +24,7 @@ Version: draft-0.4 / Date: 2026-10-21 / Status: 純粋resource数量計算・独
 
 ## 3. 内部型・binding（擬似契約）
 
-以下の名称・型は提案であり、コンパイル済みAPI・JSON schemaではない。
+以下は最終形の内部契約案であり、公開API・JSON schemaではない。ScanSessionLedger/RoundResourceScopeの状態とbindingだけは§16で内部実装し、表の累積会計・完了証拠は未接続である。
 
 | 型 | 契約 |
 |---|---|
@@ -34,7 +34,7 @@ Version: draft-0.4 / Date: 2026-10-21 / Status: 純粋resource数量計算・独
 | `ResourcePolicy` | 保護されたproducerが固定modelと共に供給する承認上限。ScanWorkEstimateから生成しない。未提供/未知modelはUnavailable |
 | 終了証拠 | round差分とsession累積量、cleanup状態・有限理由のみ。Observation・再試行権・permitを含めず、実行条件へ再入力しない |
 
-session生成には元inspection owner側のone-shot claimが必要。同じreceipt/budgetから別sessionを作り、残を満額へ戻す経路を設けない。このclaimと保護されたproducerは今後の実装対象で、ローカルなconstructorだけで成立したことにはしない。
+session生成には元inspection owner側のone-shot claimが必要。同じreceipt/budgetから別sessionを作り、残を満額へ戻す経路を設けない。§16でbudgetに残るclaimを実装したが、実receipt/context/budgetの保護されたproducerは未接続で、内部constructorだけで運用上の由来が成立したことにはしない。
 
 bindingは、元SharedBudgetの `inspection_origin` のRc identityと元started、同RecordReceipt/lineage、同target/contextへのborrow、同固定collector/resource modelを要求する。同じhash/generation/path文字列だけでは代替しない。receiptのrecord binding（release/generation/index/registry等）は既存strict再読/照合で毎回検証し、変更された値へsessionを再bindしない。
 
@@ -240,6 +240,40 @@ normalizerの実受理文字列を `ALLOWED_NONEMPTY_NAMES` へ集約し、`bp5-
 許可一覧追加/変更、受理最大bytes拡大、capacity変更、未知名を許容して継続、停止後の再scan/次round許可、NamesReadのhidden retryを導入する場合は、前提を再審査しnormalization policyとresource modelを改版する。ID/定数照合だけで将来の制御フロー変更を自動的に証明できるとはしない。
 
 追加2テストと既存oracle拡張でQの境界/overflow/旧model・policy変更拒否、成功prefix0/1/72件＋最後の未知64KiB、capちょうど/1byte不足、コピー後の再snapshot禁止を確認する。3roundの共有台帳そのものは未実装であり、Q(3M)のruntime強制を試験済みとはしない。
+
+## 16. session状態内部型・唯一生成claim（draft-0.5）
+
+`round_declaration/session.rs` に非Clone/非serdeのScanSessionLedgerと、台帳への排他的borrowを持つRoundResourceScopeを追加した。固定state modelは `bp5-r2-scan-session-state-0.1`。生成時はresource-0.2/collector-work-0.1の固定IDとも照合する。操作/cleanup/names等の数量・残枠はまだ保持せず、ResourcePolicy/Quotas/collectorへ渡す口もない。
+
+### 16.1 budgetに残る唯一claimと停止理由
+
+SharedBudgetがprivate `Rc<ScanSessionClaim>` を1つ所有し、started Cellとfailure Cellを持つ。createは最初のfallible workより前にstartedをreplace(true)し、失敗・drop・完了後も解除しない。同budgetからの2個目はBinding、先行stickyがあれば元の理由で拒否。session自身のboolだけにclaimを置かず、台帳をdropして生成権を回復させない。
+
+SharedBudget::stopはclaim開始後の最初の理由も保存する。未完了ledger/round scopeのDropは新しいworkやI/Oを行わず、共有cellへUnavailable（既存理由があればその理由）を保存する。Dropはmutable budgetを借りていないため、その時点でbudget.failedがNoneの場合もあるが、次の既存checkpoint/workがcellを読み停止をラッチする。新たなsource操作の前の既存guardを迂回してよいという意味ではない。
+
+claim未開始のbudgetは従来のsticky規則を維持する。新規budgetの固定claim storageを追加したが、CPU/RSS/allocatorの保証や保護されたinspection生成の証明は行わない。別budgetを外側で作り直してinspectionを再開する権限は与えず、その運用producer自体は後工程である。
+
+### 16.2 同receipt/budgetとroundへの結合
+
+sessionは元receipt/target/contextへのborrow、lineage/origin/claimのRc identity、元started、固定modelを保持する。beginは期待slotの状態を最初のfallible処理前に一旦Stoppedへ消費し、全guard成功後だけActiveへ移す。先行停止・budget不足・binding不一致で元状態へ戻さない。
+
+beginは同receipt/target/context object、同lineage、RoundScopeのbudget originと元budget origin/claim/start、期待roundを検査する。同じ内容の別objectや、originだけをコピーした新budgetは拒否する。Active scopeのrequireは同じRoundScope object/tokenも要求し、同tokenをコピーした別scopeさえ受け付けない。使用tokenは固定3slotへ保持し、後続roundで前tokenを再利用することも拒否する。
+
+順序はInitial→BeforeM4→AfterM4。Active/AwaitStrict/Finished/Stoppedの再begin、飛越し、重複を拒否する。排他的borrowで通常の並行beginを型でも阻止するが、専用compile-fail試験は未実施。失敗理由とclaimは継続し、同slot/別sessionを作り直すreset APIはない。
+
+### 16.3 完了遷移はまだ開けない
+
+本番コンパイルにはActiveからAwaitStrictへ進めるproducer、strict acknowledgement、Finishedへ進めるsetterを追加していない。未完了scopeを単にdropするとStoppedになる。cleanup/phaseの証拠なしに「成功」を自己申告して次slotを開けるAPIは提供しない。
+
+3roundの正方向テストだけがprivateなcfg(test) fixtureでscan完了/strict acknowledgementを模擬し、AwaitStrict→次Expect→Finishedへ進める。この試験は実cleanup/AfterScan/record再読/FinalIndex/M4の接続や承認を証明しない。既存collector/通常strictはこの新sessionをまだ必須入力にしておらず、生成成功をscan開始許可へ変換しない。
+
+### 16.4 費用・検証範囲
+
+生成は2 work、beginは2 work、Active scopeのrequireは1 workを元SharedBudgetへ課金する。model/identity/state・最大3token比較だけの固定blockで、可変長record/index走査、parse、I/O、数量集計は行わない。Drop/明示stopは追加workなしで理由を保持する。失敗prefixのspentは返金しない。実resource配賦や最終ackの費用は未実装で、このsubsetの2/2/1をsession全体の上界とは呼ばない。
+
+新規10テストで、固定費、合成3round順序、重複生成・生成失敗・未完了drop、各slot/状態違反、同内容の別receipt/target/context、別origin/claim/start/model、copied scope/new token/前token再利用、明示失敗と各課金点の取消/期限を検査した。生成のfresh guardを外す変異では重複試験が失敗し、復元後に全体を再検証した。[session状態合成記録](E2E_BEST_PRACTICE_R2_OL03_SESSION_STATE_SYNTHETIC_2026-10-21.md)を参照。
+
+次はround/session累積会計・cleanup/live予約・完了証拠とstrict acknowledgementの接続が必要である。全体受付・運用cap・OS source・実機操作・permitは引き続き対象外。
 
 ## 16. 実閉包規模のsource操作数試算（2026-10-21、レビュー）
 
