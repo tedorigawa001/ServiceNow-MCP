@@ -39,6 +39,7 @@ pub(super) struct Accounting {
     session: Used,
     rounds: [Used; 3],
     connected: [bool; 3],
+    terminalized: [bool; 3],
 }
 impl ScanSessionLedger<'_> {
     pub(super) fn configure_resources(
@@ -61,6 +62,7 @@ impl ScanSessionLedger<'_> {
                 session: Used::default(),
                 rounds: [Used::default(); 3],
                 connected: [false; 3],
+                terminalized: [false; 3],
             })));
             Ok(())
         })();
@@ -92,6 +94,16 @@ pub(in super::super::super) struct Connection {
     active: Rc<Cell<bool>>,
     round_identity: *const (),
     round_token: Rc<()>,
+}
+// Not Clone/serde and no constructor outside the terminal binding method below.
+pub(in super::super::super) struct RetiredConnection {
+    _book: Rc<RefCell<Accounting>>,
+    _origin: Rc<()>,
+    _claim: Rc<ScanSessionClaim>,
+    _started: Instant,
+    _slot: usize,
+    _round_identity: *const (),
+    _round_token: Rc<()>,
 }
 struct Active(Rc<Cell<bool>>);
 impl Drop for Active {
@@ -187,7 +199,7 @@ impl Boundary<'_> {
                 return Err(Failure::Binding);
             }
             if super::super::super::scan_ops::collector::SESSION_ENTRY_MODEL_ID
-                != "bp5-r2-session-collector-entry-0.1"
+                != "bp5-r2-session-collector-entry-0.2"
             {
                 return Err(Failure::Unavailable);
             }
@@ -216,6 +228,7 @@ impl Boundary<'_> {
     }
     fn check_binding(&self, b: &SharedBudget<'_>) -> Result<(), Failure> {
         if !self.active.get()
+            || self.book.borrow().terminalized[self.slot]
             || !Rc::ptr_eq(&self.origin, &b.inspection_origin)
             || !Rc::ptr_eq(&self.claim, &b.scan_session_claim)
             || self.started != b.started
@@ -364,6 +377,68 @@ struct Acquisition {
     committed: bool,
 }
 impl Connection {
+    pub(in super::super::super) fn abandon_cleanup(&self) {
+        self.active.set(false);
+        self.book.borrow_mut().terminalized[self.slot] = true;
+    }
+    pub(in super::super::super) fn retire_cleanup(
+        &self,
+        local: &super::super::super::scan_ops::cleanup::LocalTerminal<'_>,
+        b: &SharedBudget<'_>,
+    ) -> Result<RetiredConnection, Failure> {
+        let active = self.active.replace(false);
+        let mut a = self.book.borrow_mut();
+        let fresh = !std::mem::replace(&mut a.terminalized[self.slot], true);
+        if !active
+            || !fresh
+            || !a.connected[self.slot]
+            || !Rc::ptr_eq(&self.origin, &b.inspection_origin)
+            || !Rc::ptr_eq(&self.claim, &b.scan_session_claim)
+            || self.started != b.started
+        {
+            return Err(Failure::Binding);
+        }
+        let l = local.counts();
+        let u = a.rounds[self.slot];
+        let total = l.attempts.iter().try_fold(0_u64, |n, v| n.checked_add(*v));
+        if u.attempts != l.attempts
+            || Some(u.total) != total
+            || u.live != l.live
+            || u.live_reserved != l.reserved_live
+            || u.cleanup_reserved != l.reserved_cleanup
+            || u.unconfirmed != l.unconfirmed
+            || u.names != l.names
+            || u.peak != l.peak
+        {
+            return Err(Failure::Binding);
+        }
+        // Fixed 3x5 conservation check; no summary re-add, variable scan or new work.
+        let mut combined = Used::default();
+        for round in &a.rounds {
+            for (out, v) in combined.attempts.iter_mut().zip(round.attempts) {
+                *out = add(*out, v)?;
+            }
+            combined.total = add(combined.total, round.total)?;
+            combined.live = add(combined.live, round.live)?;
+            combined.live_reserved = add(combined.live_reserved, round.live_reserved)?;
+            combined.cleanup_reserved = add(combined.cleanup_reserved, round.cleanup_reserved)?;
+            combined.unconfirmed = add(combined.unconfirmed, round.unconfirmed)?;
+            combined.names = add(combined.names, round.names)?;
+            combined.peak = combined.peak.max(round.peak);
+        }
+        if combined != a.session {
+            return Err(Failure::Binding);
+        }
+        Ok(RetiredConnection {
+            _book: self.book.clone(),
+            _origin: self.origin.clone(),
+            _claim: self.claim.clone(),
+            _started: self.started,
+            _slot: self.slot,
+            _round_identity: self.round_identity,
+            _round_token: self.round_token.clone(),
+        })
+    }
     pub(in super::super::super) fn validate(
         &self,
         b: &mut SharedBudget<'_>,
@@ -584,6 +659,17 @@ pub(in super::super::super) mod testing {
             peak: u.peak,
             names: u.names,
             unconfirmed: u.unconfirmed,
+        }
+    }
+    // TEST ONLY: corrupt accounting, never a producer of terminal evidence.
+    pub(in super::super::super::super) fn taint_terminal_names(
+        ledger: &ScanSessionLedger<'_>,
+        only_total: bool,
+    ) {
+        let mut a = ledger.resources.as_ref().unwrap().borrow_mut();
+        a.session.names += 1;
+        if !only_total {
+            a.rounds[0].names += 1;
         }
     }
     pub(in super::super::super::super) fn acknowledge(

@@ -2,7 +2,7 @@
 use super::*;
 
 pub(in super::super) const MODEL_ID: &str = "bp5-r2-scan-resource-0.2";
-const KERNEL_ID: &str = "bp5-r2-collector-work-0.1";
+const KERNEL_ID: &str = "bp5-r2-collector-work-0.2";
 const XATTR_POLICY_ID: &str = "bp5-r2-scan-xattr-names-0.1";
 pub(super) struct Shape {
     pub(super) entries: u64, // includes virtual index

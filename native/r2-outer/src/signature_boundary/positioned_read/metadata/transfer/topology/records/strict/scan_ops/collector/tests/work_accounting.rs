@@ -74,7 +74,7 @@ fn bound(f: &Setup, retries: u64) -> Bound {
     let a = w * (h + 1) + 2 * k;
     // +21 explicitly owns final held-root record<=20 and compare=1 (draft-0.1 omitted it).
     let owners = [
-        37 + 4 * e + d,
+        38 + 4 * e + d,
         8 + 4 * e + 4 * t + p.min(e - c0) * ell(entries.len() as u64 - 1) + ell(cv_children) + ci,
         h + 2 + e * (h + 3) + k + kv + p * ell(entries.len() as u64 - 1),
         w + 23 * a,
@@ -92,7 +92,7 @@ fn bound(f: &Setup, retries: u64) -> Bound {
 fn each_owner_respects_the_documented_candidate_bound() {
     let (f, _) = fixture(Case::Good);
     let limit = bound(&f, 0);
-    assert_eq!(limit.owners.iter().sum::<u64>() + limit.tail, 2017);
+    assert_eq!(limit.owners.iter().sum::<u64>() + limit.tail, 2018);
     let audit = Audit::default();
     run_with_audit(Case::Good, Round::Initial, Some(audit.clone()))
         .0
@@ -317,7 +317,7 @@ fn three_rounds_charge_seals_separately_and_share_only_one_retry_allowance() {
     }
     assert_eq!(audit.counts().iter().sum::<u64>(), total);
     assert_eq!(audit.counts()[Owner::Seal as usize], 3 * 36);
-    assert_eq!(total, 3 * 1902 + 3 * 8);
+    assert_eq!(total, 3 * 1903 + 3 * 8);
     let base = cap.owners.iter().sum::<u64>() + cap.tail - 3;
     assert!(total <= 3 * base + 3 * 8 + 3);
     assert!(state.borrow().alive.is_empty());
@@ -329,9 +329,9 @@ fn complete_collector_work_is_attributed_once_without_changing_charges() {
     let (result, _, spent, _) = run_with_audit(Case::Good, Round::Initial, Some(audit.clone()));
     result.unwrap();
     let counts = audit.counts();
-    assert_eq!(counts, [52, 49, 46, 1223, 322, 174, 36, 0]);
+    assert_eq!(counts, [53, 49, 46, 1223, 322, 174, 36, 0]);
     assert_eq!(counts.iter().sum::<u64>(), spent);
     assert_eq!(counts[Owner::Unassigned as usize], 0);
-    assert_eq!(spent, 1902);
+    assert_eq!(spent, 1903);
     eprintln!("collector owners={counts:?} total={spent}");
 }

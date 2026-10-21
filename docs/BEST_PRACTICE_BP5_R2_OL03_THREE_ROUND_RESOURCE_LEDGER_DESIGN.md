@@ -1,6 +1,6 @@
 # BP-5 R-2 OL-03：3round resource台帳の詳細設計
 
-Version: draft-0.8 / Date: 2026-10-21 / Status: 固定collector接続までを合成検証済み。通常strict向け型付きcleanup/round完了/ack設計を追加、実装・運用上限は未承認。
+Version: draft-0.9 / Date: 2026-10-21 / Status: 固定collector接続とscan_ops型付きcleanup終端を合成検証。round完了/ack・通常strict接続は未実装、運用上限は未承認。
 
 ## 1. 範囲と停止状態
 
@@ -386,3 +386,7 @@ Collected Outcomeは従来のsummaryを保持して移動する。NotStartedに�
 固定adapterはConnectionの退役と両台帳の終了状態を実行identityへ結合し、round完了はscopeと成功証拠を値で消費する。ackはAfterScan→record再読/厳密検証→FinalIndex/Node→最終clock/checkpoint後のstrict tailだけが発行・消費する。BeforeM4 callbackとAfterM4の実位置、ledgerの全inspection寿命、Inputsをdropしてphaseへ移るborrow順序を維持する。
 
 これはMD設計だけで、既存cfg(test) ackを本番へ移す変更ではない。新guard/work・終端証拠のprepay/allocation・具体的Rust lifetimeは未検証で、783テストを新契約の成績に読み替えない。全体受付・運用policy・OS source・permitは停止を維持する。
+
+後続の[終了証拠設計draft-0.3 §13](BEST_PRACTICE_BP5_R2_OL03_STRICT_COMPLETION_DESIGN.md)でscan_ops終端のCleanupDisposition/ClosedScanResourcesのみ実装した。未開始/確認済み/不成立を区別し、session mirrorと累積保存則を照合してConnection/slotを退役する。主Failureとcleanup診断は別に保持し、round成功/ackはまだ発行しない。[合成検証記録](E2E_BEST_PRACTICE_R2_OL03_CLEANUP_EVIDENCE_SYNTHETIC_2026-10-21.md)を参照。
+
+終端診断のprepay1追加に伴いwork/entry/session-entryを0.2へ改版し、kernel1903、単一bridge1992、session bridge1994（EINTR1の最初のround1997）となった。§19の1902/1991/1993/1996はその時点の履歴値。操作数/bytesとresource数量モデル0.2の式は変えず、kernel bindingだけ更新する。通常strict・運用policy・全体受付・permitは引き続き開けない。

@@ -99,9 +99,10 @@ fn fixed_collector_charges_one_session_attempt_per_trace_and_keeps_three_round_t
             let mut lease = ledger.begin(scope, b)?;
             let before_work = b.json_work;
             let out = execute(&inputs, scope, &state, &mut lease, b)?;
+            assert!(matches!(out.cleanup, CleanupDisposition::Confirmed(_)));
             assert_eq!(
                 b.json_work - before_work,
-                if slot == 0 { 1996 } else { 1993 }
+                if slot == 0 { 1997 } else { 1994 }
             );
             assert_eq!(out.summary.live, 0);
             assert_eq!(out.summary.pending_cleanup, 0);
@@ -183,6 +184,14 @@ fn source_failure_cancel_deadline_and_unconfirmed_cleanup_keep_exact_prefix_acco
                 let mut lease = ledger.begin(scope, b)?;
                 let out = execute(&inputs, scope, &state, &mut lease, b)?;
                 assert!(out.result.is_err());
+                if matches!(
+                    case,
+                    Case::Corrupt | Case::Short | Case::EintrForever | Case::CleanupUnknown
+                ) {
+                    assert!(matches!(out.cleanup, CleanupDisposition::Incomplete(_)));
+                } else {
+                    assert!(matches!(out.cleanup, CleanupDisposition::Confirmed(_)));
+                }
                 assert_eq!(out.summary.attempts, trace_counts(&state.borrow()));
                 assert_eq!(out.summary.live, 0);
                 assert_eq!(out.summary.pending_cleanup, 0);
@@ -504,6 +513,57 @@ fn second_round_hits_cumulative_cap_without_refill_and_releases_its_existing_own
         Err(Failure::Limit)
     );
     assert_eq!(state.borrow().calls, before);
+}
+
+#[test]
+fn terminal_mirror_and_cumulative_corruption_never_issue_closed_evidence_or_hide_first_error() {
+    for only_total in [false, true] {
+        for case in [Case::Good, Case::Surplus] {
+            let (f, state) = fixture(case);
+            let c = context();
+            let cancel = state.borrow().cancelled.clone();
+            let mut b = SharedBudget::new(state.borrow().start, &cancel);
+            let mut ledger = session::create(
+                &f.receipt,
+                &f.target,
+                &c,
+                "bp5-r2-scan-session-state-0.1",
+                &mut b,
+            )
+            .unwrap();
+            ledger_test::configure(&mut ledger, caps(), &mut b).unwrap();
+            ledger_test::taint_terminal_names(&ledger, only_total);
+            let expected = if matches!(case, Case::Good) {
+                Failure::Binding
+            } else {
+                Failure::Changed
+            };
+            let result = round_declaration::with_round(
+                &f.receipt,
+                &f.target,
+                &c,
+                Round::Initial,
+                &mut b,
+                |scope, b| {
+                    let d = scope.decode(b)?;
+                    let phases = d.prepare_scan(scope, PHASE_MODEL_ID, b)?;
+                    let inputs = phases.bind_inputs(scope, b)?;
+                    let mut lease = ledger.begin(scope, b)?;
+                    let out = execute(&inputs, scope, &state, &mut lease, b)?;
+                    if let CleanupDisposition::Incomplete(problem) = &out.cleanup {
+                        assert_eq!(problem.failure(), Failure::Binding);
+                    } else {
+                        panic!("corrupt mirror issued closed evidence");
+                    }
+                    assert_eq!(out.summary.attempts, trace_counts(&state.borrow()));
+                    out.result.map(|_| ())
+                },
+            );
+            assert_eq!(result, Err(expected));
+            assert_eq!(b.checkpoint(), Err(expected));
+            assert!(state.borrow().alive.is_empty());
+        }
+    }
 }
 
 #[test]

@@ -5,6 +5,7 @@ use std::{
 };
 
 mod children;
+mod cleanup;
 mod declared;
 mod digest;
 mod normalized;
@@ -264,7 +265,7 @@ fn each_method_is_one_attempt_and_cleanup_is_prepaid_and_once() {
     );
     assert_eq!(state.borrow().released.len(), 4);
     assert!(!state.borrow().duplicate);
-    assert_eq!(b.json_work, 17);
+    assert_eq!(b.json_work, 18);
     assert_eq!(b.used, 4);
     assert_eq!(b.retries_left, 8);
     assert_eq!(
@@ -384,7 +385,7 @@ fn failed_acquires_do_not_free_nonexistent_handles_or_refund_precharge() {
         );
         assert_eq!(out.summary.attempts[4], u64::from(acl));
         assert_eq!(out.summary.pending_cleanup, 0);
-        assert_eq!(b.json_work, if acl { 5 } else { 3 });
+        assert_eq!(b.json_work, if acl { 6 } else { 4 });
         assert_eq!(b.retries_left, 8);
     }
 }
@@ -621,7 +622,7 @@ fn metadata_primitives_are_separate_attempts_not_an_implicit_snapshot() {
     });
     out.result.unwrap();
     assert_eq!(out.summary.attempts, [2, 0, 0, 9, 3]);
-    assert_eq!(b.json_work, 16);
+    assert_eq!(b.json_work, 17);
     assert_eq!((b.metadata_calls, b.metadata_name_bytes), (0, 0));
 }
 #[test]

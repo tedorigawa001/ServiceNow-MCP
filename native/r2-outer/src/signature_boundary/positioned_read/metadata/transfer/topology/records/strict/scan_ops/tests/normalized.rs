@@ -64,7 +64,7 @@ fn normalizes_empty_or_provenance_and_counts_each_snapshot_eighteen_work() {
             Ok(())
         });
         assert_eq!(out.result, Ok(()));
-        assert_eq!(b.json_work, 42); // scope2 + file/anchor4 + 2*18
+        assert_eq!(b.json_work, 43); // scope3 (terminal prepay included) + file/anchor4 + 2*18
         assert_eq!(state.borrow().counts, [2, 0, 0, 18, 4]);
         assert_eq!(out.summary.names, 2 * names.len() as u64);
         assert_eq!(
@@ -359,7 +359,7 @@ fn snapshots_are_resource_bound_and_runtime_directory_policy_is_explicit() {
         s.collect_snapshot(&d, &p, false).map(|_| ())
     });
     assert_eq!(out.result, Ok(()));
-    assert_eq!(b.json_work, 24);
+    assert_eq!(b.json_work, 25);
 }
 
 #[test]

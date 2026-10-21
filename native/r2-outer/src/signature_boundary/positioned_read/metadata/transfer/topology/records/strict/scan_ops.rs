@@ -5,6 +5,8 @@ use crate::signature_boundary::positioned_read::metadata::collector::FsObservati
 use std::cell::{Cell, RefCell};
 
 mod child_set;
+pub(super) mod cleanup;
+use cleanup::CleanupDisposition;
 pub(super) mod collector;
 mod declared_read;
 mod normalized_metadata;
@@ -112,6 +114,7 @@ struct PendingRead {
 }
 #[derive(Default)]
 struct Ledger {
+    cleanup: cleanup::Lifecycle,
     attempts: [u64; 5],
     reserved_cleanup: u64,
     reserved_live: u64,
@@ -199,6 +202,9 @@ impl<'s, S: ScanOps> Boundary<'s, '_, '_, S> {
         self.budget.checkpoint()?;
         let valid = {
             let l = self.ledger.borrow();
+            if cleanup::sealed(&l) {
+                return self.budget.stop(Failure::Binding);
+            }
             if l.unconfirmed != 0 {
                 return self.budget.stop(Failure::Unavailable);
             }
@@ -566,6 +572,7 @@ impl std::fmt::Debug for Summary {
 struct Outcome<T> {
     result: Result<T, Failure>,
     summary: Summary,
+    cleanup: CleanupDisposition,
 }
 
 // Private internal harness. No operational caller, approved quota producer or OS implementation.
@@ -603,14 +610,19 @@ fn with_boundary_accounted<'a, S: ScanOps, T>(
         if quotas.live > 132 || quotas.attempts.iter().any(|n| *n > 1_000_000) {
             return budget.stop(Failure::Limit);
         }
+        if cleanup::MODEL_ID != "bp5-r2-scan-cleanup-0.1" {
+            return budget.stop(Failure::Unavailable);
+        }
         work(budget)?; // internal scope setup, separate from dispatch/prepaid cleanup
+        cleanup::start(&ledger, budget)?; // one prepaid, fixed terminal evidence block
+        let terminal_session = session.clone();
         let mut boundary = Boundary {
             marker: &marker,
             source: source.clone(),
             ledger: ledger.clone(),
             quotas,
             budget,
-            session,
+            session: terminal_session,
         };
         let result = run(&mut boundary);
         let result = match result {
@@ -621,6 +633,7 @@ fn with_boundary_accounted<'a, S: ScanOps, T>(
         result
     })();
     drop(source); // release source ownership before the terminal guard
+    let cleanup = cleanup::finish(&ledger, session, budget);
     let l = ledger.borrow();
     let summary = Summary {
         attempts: l.attempts,
@@ -633,6 +646,9 @@ fn with_boundary_accounted<'a, S: ScanOps, T>(
         declared_pending: l.declared_pending,
     };
     drop(l);
+    if let CleanupDisposition::Incomplete(problem) = &cleanup {
+        let _ = budget.stop::<()>(problem.failure());
+    }
     if summary.live != 0 || summary.pending_cleanup != 0 || summary.unconfirmed != 0 {
         let _ = budget.stop::<()>(Failure::Unavailable);
     } else if summary.retry_pending {
@@ -646,7 +662,11 @@ fn with_boundary_accounted<'a, S: ScanOps, T>(
         Err(e) => Err(e),
         Ok(()) => result,
     };
-    Outcome { result, summary }
+    Outcome {
+        result,
+        summary,
+        cleanup,
+    }
 }
 
 #[cfg(test)]

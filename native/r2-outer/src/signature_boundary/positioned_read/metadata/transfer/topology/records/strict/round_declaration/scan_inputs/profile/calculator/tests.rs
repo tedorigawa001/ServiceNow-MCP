@@ -37,7 +37,7 @@ fn oracle(s: &Shape, rounds: u128) -> ([u64; 8], u64, u64, u64, u64) {
         (2 * e + 3) + 23 * ((2 * e + 3) * (h + 1) + 2 * k),
         32 * e + 58 * t + j,
         56 * f + 5 * c,
-        37 + 4 * e + d,
+        38 + 4 * e + d,
         11 + 2 * cv_chunks + 4 * e + p,
         16 + ell(cmax) + 3 * (r + 1),
     ];
@@ -64,7 +64,7 @@ fn consumed_profile_produces_basic_estimate_in_twenty_work() {
         let old = b.json_work;
         let estimate = calculate(profile, inputs, scope, CALCULATOR_ID, b)?;
         assert_eq!(b.json_work - old, 20);
-        assert_eq!(estimate.components, [51, 47, 1278, 342, 183, 59, 36, 45]);
+        assert_eq!(estimate.components, [51, 47, 1278, 342, 183, 60, 36, 45]);
         assert_eq!(
             (
                 estimate.total,
@@ -72,7 +72,7 @@ fn consumed_profile_produces_basic_estimate_in_twenty_work() {
                 estimate.remaining_scans,
                 estimate.profile_upper
             ),
-            (2041, 2014, 6069, 62)
+            (2042, 2015, 6072, 62)
         );
         assert!(std::ptr::eq(estimate.profile.inputs, inputs));
         Ok(())

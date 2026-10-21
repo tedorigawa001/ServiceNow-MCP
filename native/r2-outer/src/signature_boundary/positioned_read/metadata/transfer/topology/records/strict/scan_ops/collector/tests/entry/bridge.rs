@@ -1,4 +1,5 @@
 use super::*;
+mod cleanup;
 
 fn execute(
     inputs: &ScanInputs<'_, '_, '_, '_>,
@@ -29,7 +30,7 @@ fn single_bridge_moves_result_and_keeps_costs_for_each_round() {
             assert_eq!(out.summary.live, 0);
             assert_eq!(out.summary.pending_cleanup, 0);
             assert_eq!(out.summary.unconfirmed, 0);
-            assert_eq!(b.json_work - before, 1991);
+            assert_eq!(b.json_work - before, 1992);
             assert_eq!(state.borrow().calls, 876);
             assert!(state.borrow().alive.is_empty());
             Ok(())
@@ -184,7 +185,7 @@ fn timed_bridge(stop_at: Option<(u64, bool)>, unified: bool) -> (Result<(), Fail
                 DispatchOutcome::NotStarted(_) => panic!("late stop happened before collector"),
             };
             end_ticks.set(ticks.get());
-            assert_eq!(b.json_work - before, 1910); // use7 + dispatch1 + S1902
+            assert_eq!(b.json_work - before, 1911); // use7 + dispatch1 + S1903
             assert_eq!(state.borrow().calls, 876);
             assert!(state.borrow().alive.is_empty());
             assert_eq!(out.summary.live, 0);

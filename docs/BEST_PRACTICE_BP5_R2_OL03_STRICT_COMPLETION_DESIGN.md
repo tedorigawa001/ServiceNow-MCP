@@ -1,18 +1,18 @@
 # BP-5 R-2 OL-03：型付きcleanup証拠・round完了・strict acknowledgement詳細設計
 
-Version: draft-0.2 / Date: 2026-10-21 / Status: 設計案（レビューでack後のwith_round終端checkpointとsession生成位置を明記）。型・producer・通常strict接続は未実装。
+Version: draft-0.3 / Date: 2026-10-21 / Status: scan_ops終端の型付きcleanup証拠のみ内部実装・合成検証。round完了/ack producer・通常strict接続は未実装。
 
 ## 1. 範囲と根拠
 
 基準は `db8d8d1`。repository内の `strict.rs`、`round_declaration/phases.rs`、`session.rs`、`session/resources.rs`、`scan_ops.rs`、`scan_ops/collector.rs`、`topology.rs` を読み、[3round台帳設計§19](BEST_PRACTICE_BP5_R2_OL03_THREE_ROUND_RESOURCE_LEDGER_DESIGN.md)と[estimate bridge設計](BEST_PRACTICE_BP5_R2_OL03_ESTIMATE_BRIDGE_DESIGN.md)に続く内部契約を定める。外部仕様/SDKの調査や実機確認ではない。型名・関数名は案であり、公開API/JSON契約ではない。
 
-全体受付無効、telemetry保留、APPROVED_REGISTRY=None、通常v2 Unavailable、gate92、DER/absence停止を維持する。実装、OS接続、実機操作、token発行、設定変更、本番policy投入、permit発行は本工程に含めない。証拠はinspection内の進行だけに用い、実行権へ変換しない。
+全体受付無効、telemetry保留、APPROVED_REGISTRY=None、通常v2 Unavailable、gate92、DER/absence停止を維持する。初稿は設計のみで、§13にscan_ops終端の最初の内部実装を追記した。通常strict接続、OS接続、実機操作、token発行、設定変更、本番policy投入、permit発行は含めない。証拠はinspection内の診断に保持し、実行権へ変換しない。
 
 ## 2. 現状と不足
 
 | 現状 | 接続前に必要なもの |
 |---|---|
-| session経路の固定collectorはOutcomeと数値Summaryを返す | producerを制限した終了/cleanup証拠。数値を渡し直して証拠を再構築しない |
+| session経路の固定collectorはOutcome/Summaryに加えtyped CleanupDispositionを保持（§13） | cleanupとscan成功を結合する固定adapterは未実装。数値から証拠を再構築しない |
 | with_resourcesは排他的scopeとactive cellを持ち、終了時に失効する | 失効・local/session照合の完了と成功結果を結合して返す固定adapter |
 | sessionにはActive/AwaitStrict/Finishedがある | cleanup済みscan成功からだけActive→AwaitStrictへ進める消費型API |
 | cfg(test)だけがackを模擬して次roundへ進む | 通常strictの実際の後処理末尾が発行するone-shot acknowledgement |
@@ -201,4 +201,49 @@ diagのConfirmedは「正常完了」の同義語ではない。逆にmain Failu
 - OS sourceの真実性・blocked I/O・hidden resource、更新lease/ABA/検査後差替え、role外側owner/hostの終了確認は本設計の証明外。
 - 本番ResourcePolicy/信頼済みinspection contextは未承認。実装着手と合成検証、OS接続/実機検証、全体受付/permitの承認を分離する。
 
-本稿はMDのみの設計更新。新規本書と親2文書の相対リンク先23件の存在、fence対応、末尾改行/空白、diff checkを確認した（節anchor内容は未自動照合）。対象コード/設定の差分がないことも確認した。Rust実装・ビルド/テスト再実行・実機実行は行っていない。
+初稿文書検証の履歴：MDのみの設計更新として本書/親2文書の相対リンク先23件、fence対応、末尾改行/空白、diff checkを確認した（節anchor内容は未自動照合）。その時点ではRust実装・ビルド/テスト再実行・実機実行は行っていない。後続実装の検証は次節と別記録に分離する。
+
+## 13. scan_ops終端の最初の実装subset（draft-0.3）
+
+### 13.1 発行元と区別
+
+`scan_ops/cleanup.rs` に非Clone/非Copy/非serdeのCleanupDisposition、ClosedScanResources、IncompleteCleanupを実装した。Outcomeへcleanupを追加し、固定collector/bridgeの成功・失敗・late stopでも移動して保持する。Summaryからの復元、boolによるconstructor、round成功/ackへの変換はない。Debugは固定labelで、pointer/path/数値や秘密を出力しない。
+
+- NotStarted：実boundaryがまだ構築されていない。quotaなし・setup/prepay中の中断など。Collectedでもこの診断になり得る。
+- Confirmed：実boundary由来のone-shot終端検査を通ったClosedScanResourcesを所有する。main ResultがErrでも発行でき、成功権ではない。
+- Incomplete：local/sessionの残や不整合、解放未確認、pending retry/放棄宣言などで終了条件を証明できない。主Failureと数値診断を別々に保持する。
+
+Incompleteの読取専用CleanupIssueは、Duplicate/Binding/OwnersRemaining/ReleaseUnconfirmed/PendingRetry/DeclarationIncomplete/AcquisitionMismatch/SessionMismatchの固定語彙とする。診断コードは証拠ではなくconstructorへ再入力できない。主Failureと異なる終了不成立理由も保持できる。
+
+Ledgerへprivate lifecycleを追加し、開始時に元budget origin/claim/startedを固定する。元LedgerのRc identityが実行identityを兼ね、終了claimは同Ledgerに不可逆に残る。sourceの所有破棄後にだけ固定finalizerを呼ぶ。二重finalizeはBindingで拒否し、取得成功serialとCleanup実試行の不一致も拒否する。未開始/全0のSummaryを受けて証拠を作るAPIはない。
+
+### 13.2 sealとsession照合
+
+localのlive/live予約/cleanup予約/unconfirmed、pending retry、宣言残/abandonedを検査する。session接続時は、finalizerだけが構築するborrowed LocalTerminalをConnectionへ渡し、元budget binding、同slot/接続claim、local/roundの全会計一致と3round合算の保存則を固定3×5以内で照合する。ownedなTerminalCounts projectionは数値診断であり、RetiredConnection producerへ代わりに渡せない。
+
+同Connectionのactiveをfalseにし、session slotのterminalizedを不可逆に消費する。local finalized/slot terminalizedの両guardが追加dispatchを拒否する。ClosedScanResourcesは元Ledger/budget由来と、session経路なら非CloneのRetiredConnectionも保持する。未開始の場合はConnectionを失効させるだけで閉鎖証拠を作らない。停止後のprepaid cleanupは引き続き許可する。
+
+sessionなしの低水準合成境界のConfirmedはlocal-onlyである。session付きClosedと区別される内部bindingを持ち、将来RoundScanSuccessが要求するsession bindingを代替できない。今回はClosedを消費して次phaseへ進めるAPI自体を作っていない。
+
+### 13.3 prepayとmodel改版
+
+開始時に終端証拠用の固定1 workを追加prepayし、取消/期限/work失敗後の分類・両台帳照合・seal・opaque診断で新たなwork/I/Oを要求しない。従来の終端checkpoint/work1はそのまま残す。main errorがあってもcleanup診断を失わず、不成立理由を主Failureへ上書きしない。global payload reservedやretry残を0へ要求/返金しない。
+
+collector-work、collector-entry、session-collector-entryを0.2へ改版。calculatorのcontrol上界を `37+4E+D`→`38+4E+D` とし、独立wide oracleも別に更新した。cleanup submodelは `bp5-r2-scan-cleanup-0.1` を独立literalで照合する。resource数量モデルの操作式/ID0.2は変えず、そのkernel bindingだけをwork-0.2へ更新した。
+
+| fixture | 旧 | 新 |
+|---|---:|---:|
+| kernel実費S | 1902 | 1903 |
+| 単一bridge（profile/計算込み） | 1991 | 1992 |
+| session bridge | 1993 | 1994 |
+| session bridge・EINTR1の最初のround | 1996 | 1997 |
+| calculator上界（r=8） | 2041 | 2042 |
+| calculator base / remaining3round | 2014 / 6069 | 2015 / 6072 |
+
+これらは固定blockの費目で、CPU時間/RSS/allocatorの保証ではない。証拠が保持するRc/状態は固定長だが管理allocation全体の受付は未対応。旧1993や旧modelで新しい全inspectionを受付済みとはしない。
+
+### 13.4 検証と残課題
+
+新規10テストを追加し、既存のsource trace/3round会計試験にもtyped診断の検査を加えた。[cleanup証拠合成記録](E2E_BEST_PRACTICE_R2_OL03_CLEANUP_EVIDENCE_SYNTHETIC_2026-10-21.md)を参照。低水準の主HashMismatch＋cleanup確認と、実collectorでhash失敗に伴い宣言が放棄されIncompleteとなるケースを区別している。
+
+RoundScanSuccess、PendingStrictRound、complete、strict acknowledgement、通常strictのsource供給/全体接続は未実装。test専用ackを本番へ移していない。Closedを後続成功へ結合する際はbridge/with_resources/with_roundのlate stopを再確認し、cleanup Confirmedだけで正常完了しない契約を維持する。

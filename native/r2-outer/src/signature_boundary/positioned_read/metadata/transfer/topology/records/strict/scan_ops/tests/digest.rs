@@ -76,7 +76,7 @@ fn golden_vectors_hash_fresh_bytes_not_mutated_caller_buffer_or_eof() {
         assert_eq!(out.result, Ok(()));
         assert_eq!((out.summary.live, out.summary.declared_pending), (0, 0));
         assert_eq!(b.used, size);
-        assert_eq!(b.json_work, if empty { 52 } else { 57 });
+        assert_eq!(b.json_work, if empty { 53 } else { 58 });
         assert!(Rc::ptr_eq(&origin, &b.inspection_origin));
         assert_eq!(
             (
@@ -148,7 +148,7 @@ fn interrupted_output_and_eof_buffer_are_never_hashed() {
         s.eof_declared(&mut bound, 3, &mut [0]).map(|_| ())
     });
     assert_eq!(out.result, Ok(()));
-    assert_eq!((b.used, b.retries_left, b.json_work), (3, 6, 63));
+    assert_eq!((b.used, b.retries_left, b.json_work), (3, 6, 64));
     assert_eq!(
         state.borrow().read_requests,
         [(2, 0, 3), (2, 0, 3), (2, 3, 1), (2, 3, 1)]
@@ -224,7 +224,7 @@ fn multichunk_stream_matches_independent_one_shot_digest() {
         s.eof_declared(&mut bound, size, &mut [0]).map(|_| ())
     });
     assert_eq!(out.result, Ok(()));
-    assert_eq!((b.used, b.json_work), (size, 62));
+    assert_eq!((b.used, b.json_work), (size, 63));
 }
 
 #[test]

@@ -266,7 +266,7 @@ fn late_enum_cancel_or_deadline_never_opens_child() {
 
 #[test]
 fn lookup_and_seen_work_is_charged_and_exhaustion_releases_all_owners() {
-    for available in 0..=21 {
+    for available in 0..=22 {
         let (source, state, stop, tick) = fixture();
         names(&state, &["one"]);
         let mut b = SharedBudget::new(tick.get(), &stop);
@@ -281,7 +281,7 @@ fn lookup_and_seen_work_is_charged_and_exhaustion_releases_all_owners() {
         });
         assert_eq!(
             out.result,
-            if available == 21 {
+            if available == 22 {
                 Ok(())
             } else {
                 Err(Failure::Limit)
@@ -291,7 +291,7 @@ fn lookup_and_seen_work_is_charged_and_exhaustion_releases_all_owners() {
         assert_eq!((out.summary.live, out.summary.pending_cleanup), (0, 0));
         assert_eq!(state.borrow().counts[0], state.borrow().counts[4]);
         assert!(!state.borrow().duplicate);
-        if available == 21 {
+        if available == 22 {
             assert_eq!(state.borrow().counts, [3, 2, 0, 0, 3]);
         }
     }
@@ -325,7 +325,7 @@ fn expected_length_cap_precedes_allocation_and_source_io() {
         assert_eq!(state.borrow().counts[0], if n == 100_001 { 2 } else { 1 });
         assert_eq!(state.borrow().counts[1], u64::from(n == 100_001));
         if n > 100_001 {
-            assert_eq!(b.json_work, 4);
+            assert_eq!(b.json_work, 5);
         }
     }
 }

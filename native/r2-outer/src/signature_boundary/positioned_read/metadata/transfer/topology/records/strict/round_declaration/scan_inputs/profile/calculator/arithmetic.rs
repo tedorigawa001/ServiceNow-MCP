@@ -44,7 +44,7 @@ pub(super) fn file(s: &Shape) -> Result<u64, Failure> {
     add(mul(56, s.f)?, mul(5, s.c)?)
 }
 pub(super) fn control(s: &Shape) -> Result<u64, Failure> {
-    add(add(37, mul(4, s.e)?)?, s.d)
+    add(add(38, mul(4, s.e)?)?, s.d)
 }
 pub(super) fn seal(s: &Shape) -> Result<u64, Failure> {
     add(add(add(11, mul(2, s.cv_chunks)?)?, mul(4, s.e)?)?, s.p)

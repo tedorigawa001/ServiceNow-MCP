@@ -77,8 +77,8 @@ fn fixed_collect_succeeds_once_with_one_additional_work_then_rejects_a_second_ca
                     DispatchOutcome::Collected(out) => out,
                     DispatchOutcome::NotStarted(_) => panic!("prepared collector did not enter"),
                 };
-                assert_eq!(b.json_work - old, 1903);
-                assert_eq!(b.json_work - before, 1991);
+                assert_eq!(b.json_work - old, 1904);
+                assert_eq!(b.json_work - before, 1992);
                 assert_eq!(out.summary.live, 0);
                 assert_eq!(out.summary.pending_cleanup, 0);
                 assert_eq!(out.summary.unconfirmed, 0);
@@ -215,11 +215,11 @@ fn accepted_entry_keeps_kernel_work_owners_separate_from_dispatch() {
         };
         b.work_audit = None;
         out.result?;
-        assert_eq!(b.json_work - old, 1903);
-        assert_eq!(audit.counts().iter().sum::<u64>(), 1903);
+        assert_eq!(b.json_work - old, 1904);
+        assert_eq!(audit.counts().iter().sum::<u64>(), 1904);
         // Existing seven kernel owner buckets stay unchanged. Unassigned is the wrapper1 only.
         assert_eq!(audit.counts()[Owner::Unassigned as usize], 1);
-        assert_eq!(&audit.counts()[..7], &[52, 49, 46, 1223, 322, 174, 36]);
+        assert_eq!(&audit.counts()[..7], &[53, 49, 46, 1223, 322, 174, 36]);
         Ok(())
     })
     .unwrap();

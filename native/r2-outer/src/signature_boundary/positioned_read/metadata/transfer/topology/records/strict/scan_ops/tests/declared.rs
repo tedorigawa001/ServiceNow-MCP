@@ -421,7 +421,7 @@ fn stat_failure_is_not_size_match_and_first_reason_is_retained() {
 
 #[test]
 fn exact_shared_work_cost_and_each_exhaustion_prefix_release_handles() {
-    for available in 0..=57 {
+    for available in 0..=58 {
         let (source, state, stop, tick) = fixture();
         state.borrow_mut().reads.extend([Ok(4), Ok(0)]);
         let mut b = SharedBudget::new(tick.get(), &stop);
@@ -436,7 +436,7 @@ fn exact_shared_work_cost_and_each_exhaustion_prefix_release_handles() {
         });
         assert_eq!(
             out.result,
-            if available == 57 {
+            if available == 58 {
                 Ok(())
             } else {
                 Err(Failure::Limit)
@@ -516,7 +516,7 @@ fn matched_child_visitor_can_complete_a_size_bound_read_on_same_resource() {
     assert_eq!(state.borrow().counts, [3, 2, 2, 18, 5]);
     assert_eq!(state.borrow().read_requests, [(3, 0, 4), (3, 4, 1)]);
     assert_eq!((out.summary.live, out.summary.declared_pending), (0, 0));
-    assert_eq!(b.json_work, 72);
+    assert_eq!(b.json_work, 73);
 }
 
 #[test]

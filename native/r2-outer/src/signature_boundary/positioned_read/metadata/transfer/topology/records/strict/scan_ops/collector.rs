@@ -275,9 +275,9 @@ impl<'s, S: ScanOps> Boundary<'s, '_, '_, S> {
     }
 }
 // Only this module dispatches this fixed implementation. No caller-selected kernel.
-pub(in super::super) const KERNEL_MODEL_ID: &str = "bp5-r2-collector-work-0.1";
-pub(in super::super) const ENTRY_MODEL_ID: &str = "bp5-r2-collector-entry-0.1";
-pub(in super::super) const SESSION_ENTRY_MODEL_ID: &str = "bp5-r2-session-collector-entry-0.1";
+pub(in super::super) const KERNEL_MODEL_ID: &str = "bp5-r2-collector-work-0.2";
+pub(in super::super) const ENTRY_MODEL_ID: &str = "bp5-r2-collector-entry-0.2";
+pub(in super::super) const SESSION_ENTRY_MODEL_ID: &str = "bp5-r2-session-collector-entry-0.2";
 
 pub(super) enum DispatchOutcome<T> {
     NotStarted(Failure),

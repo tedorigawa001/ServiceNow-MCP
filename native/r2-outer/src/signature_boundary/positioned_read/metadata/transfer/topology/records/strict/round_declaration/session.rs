@@ -4,7 +4,7 @@ use crate::signature_boundary::positioned_read::ScanSessionClaim;
 
 pub(super) const MODEL_ID: &str = "bp5-r2-scan-session-state-0.1";
 const RESOURCE_ID: &str = "bp5-r2-scan-resource-0.2";
-const KERNEL_ID: &str = "bp5-r2-collector-work-0.1";
+const KERNEL_ID: &str = "bp5-r2-collector-work-0.2";
 
 #[derive(Clone, Copy, PartialEq, Eq)]
 enum State {

@@ -3,7 +3,7 @@ use super::*;
 mod arithmetic;
 mod use_guard;
 use arithmetic::{add, mul, sub};
-pub(in super::super::super::super) const CALCULATOR_ID: &str = "bp5-r2-collector-work-0.1";
+pub(in super::super::super::super) const CALCULATOR_ID: &str = "bp5-r2-collector-work-0.2";
 // The coefficient table is versioned with the calculator, not a registered OS kernel.
 const KERNEL_ID: &str = CALCULATOR_ID;
 
