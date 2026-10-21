@@ -2271,7 +2271,7 @@ Get widget template, CSS, client/server scripts.
 - `sys_id` (required)
 
 ### create_portal_widget
-Create a new Service Portal widget. **[Write]**
+Create a new Service Portal widget. **[Scripting]** Requires `WRITE_ENABLED=true` and `SCRIPTING_ENABLED=true`, including creation without script fields. Angular templates are part of the executable widget definition.
 
 **Parameters**:
 - `name` (required)
@@ -2282,11 +2282,14 @@ Create a new Service Portal widget. **[Write]**
 - `css` — Widget CSS
 
 ### update_portal_widget
-Update an existing widget's code. **[Write]**
+Update an existing widget's code. **[Scripting]** Requires `WRITE_ENABLED=true` and `SCRIPTING_ENABLED=true` for all updates, including metadata/CSS-only changes.
 
 **Parameters**:
 - `sys_id` (required)
 - `fields` (required)
+
+Allowed fields: `name`, `id`, `template`, `css`, `client_script`, `script`, `server_script`, `option_schema`, `demo_data`.
+`server_script` maps to the native `script` field and takes precedence if both are supplied.
 
 ### list_widget_instances
 List widget instances placed on portal pages.

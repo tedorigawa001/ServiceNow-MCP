@@ -1,11 +1,11 @@
 /**
  * Service Portal & UI Builder tools — manage portals, pages, widgets, and themes.
- * Read tools: Tier 0. Write/deploy tools: Tier 1 (WRITE_ENABLED=true).
+ * Read tools: Tier 0. Portal/page writes: Tier 1; widget writes: Tier 3.
  * Inspired by snow-flow's "Deployment" category tools.
  */
 import { sanitizeLikeValue, type ServiceNowClient } from '../servicenow/client.js';
 import { ServiceNowError } from '../utils/errors.js';
-import { requireWrite } from '../utils/permissions.js';
+import { requireWrite, requireScripting } from '../utils/permissions.js';
 
 const PORTAL_WIDGET_UPDATE_FIELDS = new Set([
   'name',
@@ -150,7 +150,7 @@ export function getPortalToolDefinitions() {
     },
     {
       name: 'create_portal_widget',
-      description: 'Create a new Service Portal widget with template, CSS, and scripts (requires WRITE_ENABLED=true)',
+      description: 'Create a new Service Portal widget with template, CSS, and scripts (requires WRITE_ENABLED=true and SCRIPTING_ENABLED=true)',
       inputSchema: {
         type: 'object',
         properties: {
@@ -168,7 +168,7 @@ export function getPortalToolDefinitions() {
     },
     {
       name: 'update_portal_widget',
-      description: 'Update an existing Service Portal widget\'s source code (requires WRITE_ENABLED=true)',
+      description: 'Update an existing Service Portal widget\'s source code (requires WRITE_ENABLED=true and SCRIPTING_ENABLED=true, including metadata-only updates)',
       inputSchema: {
         type: 'object',
         properties: {
@@ -354,7 +354,9 @@ export async function executePortalToolCall(
       return resp.records[0];
     }
     case 'create_portal_widget': {
-      requireWrite();
+      // Angular templates can invoke behavior too; gate the whole operation,
+      // not just non-empty JavaScript fields or a particular field alias.
+      requireScripting();
       if (!args.name || !args.id) throw new ServiceNowError('name and id are required', 'INVALID_REQUEST');
       const data: Record<string, any> = {
         name: args.name,
@@ -370,7 +372,7 @@ export async function executePortalToolCall(
       return { ...result, summary: `Created widget "${args.name}" with id "${args.id}"` };
     }
     case 'update_portal_widget': {
-      requireWrite();
+      requireScripting();
       if (!args.sys_id || !args.fields) throw new ServiceNowError('sys_id and fields are required', 'INVALID_REQUEST');
       assertAllowedFields('Portal widget', args.fields, PORTAL_WIDGET_UPDATE_FIELDS);
       // Map friendly field name
