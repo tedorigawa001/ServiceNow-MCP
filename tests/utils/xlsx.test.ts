@@ -1,6 +1,10 @@
 import { crc32, deflateRawSync } from 'node:zlib';
+import { execFile } from 'node:child_process';
+import { promisify } from 'node:util';
+import { fileURLToPath } from 'node:url';
 import { describe, it, expect } from 'vitest';
 import { isDateFormatCode, readXlsxSheet, scanXml } from '../../src/utils/xlsx.js';
+import { parseExcelImportRows } from '../../src/tools/integration.js';
 
 /** Minimal ZIP writer so tests can hand-craft parts exceljs never produces. */
 function zip(files: Record<string, string | Buffer>, opts: { store?: boolean; tamperCrc?: string; encrypt?: string; duplicate?: string } = {}): Buffer {
@@ -127,6 +131,29 @@ describe('readXlsxSheet — content exceljs cannot produce', () => {
 describe('readXlsxSheet — hostile input', () => {
   const sheet = sheetXml('<row r="1"><c r="A1"><v>1</v></c></row>');
 
+  it('rejects a huge row coordinate before it can reach import traversal', () => {
+    const xml = sheetXml('<row r="100000000000000000000"><c t="inlineStr"><is><t>x</t></is></c></row>');
+    expect(() => readXlsxSheet(book(xml))).toThrow('bad row number');
+  });
+
+  it.each(['0', '-1', '1.5', '1e20', '0x100', '', '1048577', '9007199254740992', '&#49;000000000'])
+    ('rejects invalid explicit row coordinate %s even with an ordinary cell reference', r => {
+      expect(() => readXlsxSheet(book(sheetXml(`<row r="${r}"><c r="A2"><v>1</v></c></row>`))))
+        .toThrow('bad row number');
+    });
+
+  it.each(['0', '1048577', '100000000000000000000', '9'.repeat(400), '&#49;000000000'])
+    ('rejects invalid cell-reference row %s independently of its parent row', r => {
+      expect(() => readXlsxSheet(book(sheetXml(`<row r="2"><c r="A${r}"><v>1</v></c></row>`))))
+        .toThrow('bad row number');
+    });
+
+  it('rejects inferred row overflow and invalid empty rows or cells', () => {
+    for (const rows of ['<row r="1048576"/><row/>', '<row r="1048577"/>', '<row r="2"><c r="A1048577"/></row>']) {
+      expect(() => readXlsxSheet(book(sheetXml(rows)))).toThrow('bad row number');
+    }
+  });
+
   it('rejects a DTD, so entity expansion and external entities never happen', () => {
     const bomb = '<?xml version="1.0"?><!DOCTYPE lolz [<!ENTITY lol "lol"><!ENTITY lol2 "&lol;&lol;">]><worksheet><sheetData><row r="1"><c r="A1" t="inlineStr"><is><t>&lol2;</t></is></c></row></sheetData></worksheet>';
     expect(() => readXlsxSheet(book(bomb))).toThrow('must not contain a DTD');
@@ -169,6 +196,49 @@ describe('readXlsxSheet — hostile input', () => {
   it('rejects a workbook that is missing required parts', () => {
     expect(() => readXlsxSheet(zip({ '_rels/.rels': ROOT_RELS }))).toThrow('is missing');
   });
+});
+
+describe('sparse XLSX import traversal', () => {
+  const header = '<row r="1"><c r="A1" t="inlineStr"><is><t>name</t></is></c></row>';
+  const row = (r: number, value: string) => `<row r="${r}"><c r="A${r}" t="inlineStr"><is><t>${value}</t></is></c></row>`;
+
+  it('imports distant populated rows in numeric order, ignoring gaps and dimension metadata', async () => {
+    const xml = sheetXml(row(1048576, 'last') + header + row(100, 'middle') + row(2, 'first'))
+      .replace('<sheetData>', '<dimension ref="A1:A999999999999999999999"/><sheetData>');
+    const parsed = await parseExcelImportRows(book(xml).toString('base64'));
+    expect(parsed.rows).toEqual([{ name: 'first' }, { name: 'middle' }, { name: 'last' }]);
+  });
+
+  it('still rejects formulas after a large gap using their actual row number', async () => {
+    const xml = sheetXml(header + '<row r="1048576"><c r="A1048576"><f>1+1</f><v>2</v></c></row>');
+    await expect(parseExcelImportRows(book(xml).toString('base64')))
+      .rejects.toThrow('Formula cells are not permitted (row 1048576, column 1)');
+  });
+
+  it('retains the 500 populated data-row limit independently of row positions', async () => {
+    const rows = Array.from({ length: 501 }, (_, i) => row(1000 + i, `v${i}`));
+    expect((await parseExcelImportRows(book(sheetXml(header + rows.slice(0, 500).join(''))).toString('base64'))).rows)
+      .toHaveLength(500);
+    await expect(parseExcelImportRows(book(sheetXml(header + rows.join(''))).toString('base64')))
+      .rejects.toMatchObject({ code: 'VALIDATION_ERROR' });
+  });
+
+  it('rejects an overflowing reference through the public import parser', async () => {
+    const xml = sheetXml(header + `<row r="2"><c r="A${'9'.repeat(400)}"><v>1</v></c></row>`);
+    await expect(parseExcelImportRows(book(xml).toString('base64')))
+      .rejects.toMatchObject({ code: 'VALIDATION_ERROR', message: 'Malformed worksheet: bad row number' });
+  });
+
+  it.each([
+    '<row r="100000000000000000000"><c><v>1</v></c></row>',
+    `<row r="2"><c r="A${'9'.repeat(400)}"><v>1</v></c></row>`,
+  ])('rejects the former non-progressing-loop input in a bounded child process (%#)', async data => {
+    const { stdout } = await promisify(execFile)(process.execPath, [
+      '--import', 'tsx', fileURLToPath(new URL('../fixtures/xlsx-import-boundary.mjs', import.meta.url)),
+      book(sheetXml(header + data)).toString('base64'),
+    ], { timeout: 5000, maxBuffer: 64 * 1024 });
+    expect(stdout).toContain('xlsx-rejected');
+  }, 10_000);
 });
 
 describe('isDateFormatCode', () => {

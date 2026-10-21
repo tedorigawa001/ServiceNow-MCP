@@ -90,9 +90,7 @@ export async function parseExcelImportRows(
 
   // Shape: the widest populated column and the number of populated rows.
   let maxColumn = 0;
-  let maxRow = 0;
-  for (const [rowNumber, cells] of sheet.rows) {
-    maxRow = Math.max(maxRow, rowNumber);
+  for (const cells of sheet.rows.values()) {
     for (const column of cells.keys()) maxColumn = Math.max(maxColumn, column);
   }
   const populatedRows = sheet.rows.size;
@@ -127,11 +125,11 @@ export async function parseExcelImportRows(
     headers.push(mapped);
   }
 
-  // Every row after the header, including those after a blank row.
+  // Visit populated rows only, in worksheet order. Never iterate over gaps:
+  // coordinates are untrusted and must not determine the amount of work.
   const rows: Record<string, ImportCellValue>[] = [];
-  for (let rowNumber = 2; rowNumber <= maxRow; rowNumber++) {
-    const cells = sheet.rows.get(rowNumber);
-    if (!cells) continue;
+  for (const [rowNumber, cells] of [...sheet.rows].sort(([a], [b]) => a - b)) {
+    if (rowNumber === 1) continue;
     const row: Record<string, ImportCellValue> = Object.create(null) as Record<string, ImportCellValue>;
     let hasValue = false;
     for (let column = 1; column <= headers.length; column++) {

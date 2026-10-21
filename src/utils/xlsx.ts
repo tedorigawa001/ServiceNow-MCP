@@ -24,6 +24,7 @@ export const MAX_XLSX_ZIP_ENTRIES = 200;
 export const MAX_XLSX_ENTRY_UNCOMPRESSED_BYTES = 25 * 1024 * 1024;
 export const MAX_XLSX_TOTAL_UNCOMPRESSED_BYTES = 50 * 1024 * 1024;
 export const MAX_XLSX_COMPRESSION_RATIO = 100;
+const MAX_WORKSHEET_ROW = 1_048_576;
 
 const invalid = (message: string) => new ServiceNowError(message, 'VALIDATION_ERROR');
 
@@ -396,6 +397,13 @@ function columnNumber(letters: string): number {
 
 interface SheetContext { sharedStrings: string[]; dateStyles: boolean[]; date1904: boolean }
 
+function worksheetRow(value: number): number {
+  if (!Number.isSafeInteger(value) || value < 1 || value > MAX_WORKSHEET_ROW) {
+    throw invalid('Malformed worksheet: bad row number');
+  }
+  return value;
+}
+
 function parseWorksheet(xml: string, ctx: SheetContext): Map<number, Map<number, XlsxCell>> {
   const rows = new Map<number, Map<number, XlsxCell>>();
   let rowNumber = 0;
@@ -411,8 +419,8 @@ function parseWorksheet(xml: string, ctx: SheetContext): Map<number, Map<number,
       if (name === 'sheetData') { inSheetData = true; return; }
       if (!inSheetData) return;
       if (name === 'row') {
-        rowNumber = attrs.r ? Number(attrs.r) : rowNumber + 1;
-        if (!Number.isInteger(rowNumber) || rowNumber < 1) throw invalid('Malformed worksheet: bad row number');
+        if (attrs.r !== undefined && !/^\d+$/.test(attrs.r)) throw invalid('Malformed worksheet: bad row number');
+        rowNumber = worksheetRow(attrs.r === undefined ? rowNumber + 1 : Number(attrs.r));
         columnCursor = 0;
       } else if (name === 'c') {
         let row = rowNumber;
@@ -423,6 +431,7 @@ function parseWorksheet(xml: string, ctx: SheetContext): Map<number, Map<number,
           column = columnNumber(ref[1]);
           row = Number(ref[2]);
         }
+        worksheetRow(row);
         columnCursor = column;
         cell = { row, column, type: attrs.t ?? 'n', style: attrs.s ? Number(attrs.s) : 0, hasFormula: false, value: null, inline: null };
         if (selfClosing) cell = null;
