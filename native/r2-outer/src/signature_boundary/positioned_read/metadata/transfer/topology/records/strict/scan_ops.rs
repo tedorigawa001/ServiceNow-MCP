@@ -8,6 +8,7 @@ mod child_set;
 pub(super) mod cleanup;
 use cleanup::CleanupDisposition;
 pub(super) mod collector;
+pub(super) mod connection_owner;
 mod declared_read;
 mod normalized_metadata;
 pub(super) mod resource_model;

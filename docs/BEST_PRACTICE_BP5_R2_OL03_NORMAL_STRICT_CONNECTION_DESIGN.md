@@ -1,12 +1,12 @@
 # BP-5 R-2 OL-03：通常strictの固定3箇所・同RecordSource・M4 owner接続詳細設計
 
-Version: draft-0.1 / Date: 2026-10-21 / Baseline: `fd1de54` / Status: 設計案。新owner・handoff・通常strict接続は未実装。
+Version: draft-0.2 / Date: 2026-10-21 / Design baseline: `fd1de54` / Implementation baseline: `2905075` / Status: owner・3slot・同source借用・外側停止の内部subsetを実装。handoff・通常strict接続は未実装。
 
 ## 1. 範囲と不変条件
 
-[終了証拠設計draft-0.9](BEST_PRACTICE_BP5_R2_OL03_STRICT_COMPLETION_DESIGN.md)の後続として、実装済みの固定collector→typed tail→strict acknowledgementを通常strictの内部orchestratorへ接続する構造を具体化する。以下の型名・method名・追加費目は**提案**で、コンパイル済みAPIや実測値ではない。
+[終了証拠設計](BEST_PRACTICE_BP5_R2_OL03_STRICT_COMPLETION_DESIGN.md)の後続として、実装済みの固定collector→typed tail→strict acknowledgementを通常strictの内部orchestratorへ接続する構造を具体化する。§2〜§9はdraft-0.1での接続案であり、実装済みsubsetと計数は§10で区別する。M4 owner/handoff・通常orchestrator・接続用全費目は未実装/未確定。
 
-全体受付は無効、telemetry調査は保留。APPROVED_REGISTRY=None、通常v2 Unavailable、gate92、DER/absenceの停止を解除しない。実装・OS接続・実機操作・token発行・設定変更・本番policy投入・permit発行は本工程の対象外。
+全体受付は無効、telemetry調査は保留。APPROVED_REGISTRY=None、通常v2 Unavailable、gate92、DER/absenceの停止を解除しない。実装済み範囲は§10の内部subsetのみで、通常strict差替え・OS接続・実機操作・token発行・設定変更・本番policy投入・permit発行は本工程の対象外。
 
 接続後も次を必須とする。
 
@@ -38,7 +38,7 @@ Version: draft-0.1 / Date: 2026-10-21 / Baseline: `fd1de54` / Status: 設計案�
 
 保証するのは**同じRecordSource値を連続して使用する所有構造**であり、RecordSource実装内部の物理FD同一性を新たに証明するものではない。操作の正当性は既存のpinned bytes/hash/metadata/path/time照合を維持する。traitへsource-originを追加する強化は別設計であり、今回の案に実装済みの検査として混ぜない。
 
-collector用sourceはRecordSourceとは別物で、同じScanOps型のinertな3slot（各Option）をownerが値で保持する。slotを最初のfallibleな利用処理前にtakeし、失敗時にも補充/clone/返却しない。生成/未使用dropでOS取得やI/Oを行うsourceはこのsubsetへ入れない。未使用slotは停止後に破棄し、skipしたroundを後から実行しない。
+collector用sourceはRecordSourceとは別物で、inertな3slot（各Option）をownerが値で保持する。実装済みの保持subsetはgeneric Cで、ScanOpsを呼ばないため不要なtrait boundや実操作境界の可視性拡大は行わない。将来の固定collector接続側が同一C: ScanOpsを要求する。slotを最初のfallibleな利用処理前にtakeし、失敗時にも補充/clone/返却しない。生成/未使用dropでOS取得やI/Oを行うsourceはこのsubsetへ入れない。未使用slotは停止後に破棄し、skipしたroundを後から実行しない。
 
 ### 3.1 未承認policyを開けない
 
@@ -146,9 +146,44 @@ O.connection_create／O.slot_take／O.before_m4_position／O.after_m4_handoff／
 
 ## 9. 実装順・承認待ち事項
 
-1. private owner／3slot／同source借用／外側停止・診断結果の内部契約を先に実装し、合成sourceで確認する。通常strictはまだ差し替えない。
+1. private owner／3slot／同source借用／外側停止・診断結果の内部契約を先に実装し、合成sourceで確認する（subsetは§10）。通常strictはまだ差し替えない。
 2. 固定topology adapterとBeforeM4Position／AfterM4Handoffを合成検証し、B・recheck・M4の位置とowner結合を固定する。
 3. 固定round kernelを実collector/typed ackへ接続し、旧経路との順序・費目・終了順序を照合する。通常v2の入口は停止したままにする。
 4. 診断の上位引渡し、O費/全体work/resource上界、運用policy信頼元とcapの承認を別工程で確定する。OS source・受付・署名policy・permitはそれぞれの承認なしには接続しない。
 
-Rustの具体的なlifetime/可視性と、topology callback中にowner/ledger/sourceを排他的に借用できることは未コンパイル。ownedな循環参照やRefCellによるsource借用回避で解決せず、安定borrowと固定helperの境界を小さくして検証する。新diagnosticの固定サイズ上限、model ID、各guardのunit/最悪経路費は実装前後のレビュー対象。これらが未確定である限り実運用の安全性・受付可能性を主張しない。
+topology callback中にowner/ledger/sourceを排他的に借用できることは未コンパイル。ownedな循環参照やRefCellによるsource借用回避で解決せず、安定borrowと固定helperの境界を小さくして検証する。実装subsetのlifetime/診断/model/費目は§10に記録し、残る位置handoff/最悪経路費は実装前後のレビュー対象。全体が未確定である限り実運用の安全性・受付可能性を主張しない。
+
+## 10. 実装済みのowner内部契約subset（draft-0.2）
+
+### 10.1 境界と状態
+
+[connection_owner.rs](../native/r2-outer/src/signature_boundary/positioned_read/metadata/transfer/topology/records/strict/scan_ops/connection_owner.rs)にprivate fieldのStrictSessionOwner／RoundSlot／StrictInspectionFailureを追加した。非Clone/非Copy/非serde・opaque Debug、sourceは元の&mut Sを全寿命でborrowし、public source getter/setter/factoryを持たない。slotsは固定長[Option<C>;3]で追加heap配列やsourceのcloneはしない。inertな生成/DropはC実装側の前提であり、generic Cの任意Dropのbounded性を型だけで証明したとはしない。
+
+createは既存session::createの唯一claimを先に消費し、owner model `bp5-r2-strict-owner-0.1` と元budget bindingを照合する。本番ResourcePolicy/Quotasは生成しない。validate_receiptと外側clock(460000)を実施済みとする固定caller接続はまだなく、constructor成功をその証拠とみなさない。
+
+production-facingな内部取得口はinitialだけ。非公開takeは対象slotをfallible処理前にtakeし、Expected→Takenとして排他的RoundSlotを返す。順序違い・空slot・別budget/modelでは停止し、消費済みslotを補充しない。RoundSlot.precheck_recordsはone-shot claimを先に消費し、自分のownerが保持する同sourceだけでreread_bytes→clock_check(450000)→verify_recordsを実行して終端checkpoint後に成功とする。source引数/実行済みbool/新しいreceiptを受け取らない。
+
+BeforeM4/AfterM4のproduction methodや正常kernel接続・進行setterは未提供。cfg(test)のtake/runだけが既存の実collector/typed tail/ackへfixtureを接続し、同ledgerの実ack claimと期待状態を照合してから次slotへ進む。test callbackのOkだけでは進めない。この試験口は位置/M4成功の証明ではなく、通常strictに登録しない。
+
+### 10.2 外側停止と診断
+
+sessionにstrict内部だけのrequire_inspection／stop_inspection／abandon_inspectionを追加した。正常状態setterは設けず、外側停止はFinishedからもStoppedへ移し、元budget/claimの先行Failureを保持する。停止に新I/O/heap allocation/workを要求せず、work枠を使い切っていても止める。owner/slotのdropは未完了時に放棄停止を行う。forgetしてもownerがTakenのままなので次takeを拒否する。
+
+外側で原因が分かる場合はownerまたはslotのstop_inspectionを**drop前に**呼ぶ。単なる放棄dropはUnavailableであり、未記録の実エラー理由を復元できない。StrictInspectionFailureはreason、pending/active round（Finished時はNone）、実CompletionFailureのOptionをinlineに保持する。roundは最後の成功roundや実scan開始を自動証明する値ではない。
+
+実CompletionFailureはprivateな失敗移動口でのみ診断へmoveし、元Closed/summaryを保持する。外側失敗で新cleanup票を作らず、既にackで消費した過去roundの証拠を再構築しない。component試験は同ledgerの実失敗から移動しているが、通常kernelの固定producer/外側診断引渡しは未接続。診断は成功や実行permitへ変換する証拠ではない。
+
+### 10.3 実費と検証範囲
+
+| 費目 | 実装subsetの追加費 |
+|---|---|
+| O.connection_create | 2 work。既存session_create 2とは別なのでconstructor計4。成功時checkpointの時刻読取は計10 |
+| O.slot_take | 2 work、時刻読取6。先行takeを戻さない |
+| O.owner_record_guard | 2 work。実再読/clock/意味検査のR費を維持し、その基準経路との差分として照合 |
+| 外側停止/放棄 | 追加work 0。resource試行/bytes/retryの返金・追加操作なし |
+
+このsubsetだけならcreate追加2＋3round×(take2＋record guard2)＝14 workを既存費に加える。ただし通常接続/M4位置/handoff/全体終了費を含む確定上界ではなく、全体受付は無効のまま。source実試行は既存R/scan_ops側が課金し、ownerが二重計上しない。
+
+[owner契約合成記録](E2E_BEST_PRACTICE_R2_OL03_OWNER_CONTRACT_SYNTHETIC_2026-10-21.md)の新規11テストで、3slot/同sourceの実ack接続、6再読cycle、重複生成・順序/identity違い、生成の全10checkpoint/4課金後取消・work不足、slotの全6checkpoint/2課金後取消、recordの二重precheck/取得失敗/遅延取消・期限、末尾課金後取消、drop/forget、Finishedからの外側停止、実cleanup診断の保持、policy未提供の停止、型制約を確認する。診断のinline sizeはテストで256 bytes以下を要求する。
+
+通常strict.rsのorchestrator本体は差し替えていない。次は固定M4位置/owner handoffとkernelの接続、上位診断契約・新O費の全体上界が必要。OS source・運用policy・全体受付・permitは引き続き未対応/未承認、telemetryは保留。

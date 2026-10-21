@@ -1,6 +1,6 @@
 # BP-5 R-2 OL-03：型付きcleanup証拠・round完了・strict acknowledgement詳細設計
 
-Version: draft-0.10 / Date: 2026-10-21 / Status: cleanupからtyped strict acknowledgementまで内部実装・合成検証。通常strict接続の詳細設計を追加、接続実装は未実施。
+Version: draft-0.11 / Date: 2026-10-21 / Status: typed strict acknowledgementと接続準備owner内部契約まで合成検証。通常strict差替え・M4 handoff接続は未実施。
 
 ## 1. 範囲と根拠
 
@@ -401,3 +401,9 @@ ack消費はwith_round closure内の最後のfallible処理として使う。wit
 [固定3箇所・同RecordSource・M4 owner接続詳細設計draft-0.1](BEST_PRACTICE_BP5_R2_OL03_NORMAL_STRICT_CONNECTION_DESIGN.md)で、元sourceをinspection全体で排他的に借用するprivate owner、inert 3slot、B/topology recheck後の固定BeforeM4位置、同実比較結果を所有する非複製AfterM4 handoff、外側失敗時のsession明示停止と診断保持を具体化した。型名/費目/lifetimeは案で未コンパイル、合成受入条件も未実施。
 
 既存ResourcePolicyの本番constructorがないことと、全体受付未承認を接続設計の停止条件として維持する。旧ClosureSourceやtest-only ackへのfallback、Round enumだけのAfterM4開始、M4失敗後の再開を認めない。接続用O費・上位診断契約・運用capは別途確定が必要で、通常strict/OS接続・実機操作・token発行・設定変更・permit発行は本更新に含めない。
+
+### 20.1 owner内部契約subset（draft-0.11）
+
+[接続設計draft-0.2 §10](BEST_PRACTICE_BP5_R2_OL03_NORMAL_STRICT_CONNECTION_DESIGN.md)で、同&mut RecordSourceの継続borrow、固定3slotの不可逆takeと排他的RoundSlot、one-shot record precheck、Finishedを含む外側停止と実CompletionFailureの診断移動を実装した。production-facingな口はInitialの未完了slotまでで、通常strict/M4へは未接続。cfg(test)だけが同ledgerの実typed ackを確認して3slotの進行を検証する。
+
+追加費はowner生成2、slot2/round、record guard2/roundで既存費と分離し、停止自体は枠枯渇後も可能とした。[新規11テストの合成記録](E2E_BEST_PRACTICE_R2_OL03_OWNER_CONTRACT_SYNTHETIC_2026-10-21.md)を参照。M4位置/handoff、全体work上界、上位診断引渡し、OS source/運用cap/受付は別工程であり、今回通常strict.rs本体は変更していない。

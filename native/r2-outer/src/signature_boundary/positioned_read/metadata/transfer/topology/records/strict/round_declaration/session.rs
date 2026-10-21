@@ -95,6 +95,47 @@ pub(in super::super) fn create<'s>(
     }
 }
 impl<'s> ScanSessionLedger<'s> {
+    // Narrow outer-owner hooks; no state setter or normal completion producer.
+    pub(in super::super) fn require_inspection(&self, b: &SharedBudget<'_>) -> Result<(), Failure> {
+        self.binding(b)?;
+        if let Some(reason) = self.claim.failure.get() {
+            return Err(reason);
+        }
+        if let State::Stopped(reason) = self.state {
+            return Err(reason);
+        }
+        Ok(())
+    }
+    pub(in super::super) fn stop_inspection(
+        &mut self,
+        reason: Failure,
+        b: &mut SharedBudget<'_>,
+    ) -> Failure {
+        self.fail::<()>(reason, b).unwrap_err()
+    }
+    pub(in super::super) fn abandon_inspection(&mut self) {
+        let reason = self.claim.failure.get().unwrap_or(match self.state {
+            State::Stopped(e) => e,
+            _ => Failure::Unavailable,
+        });
+        self.claim.failure.set(Some(reason));
+        self.state = State::Stopped(reason);
+    }
+    #[cfg(test)]
+    pub(in super::super) fn acknowledged_for_owner_test(&self, round: Round) -> bool {
+        let slot = match round {
+            Round::Initial => 0,
+            Round::BeforeM4 => 1,
+            Round::AfterM4 => 2,
+        };
+        self.ack_started[slot]
+            && self.state
+                == match round {
+                    Round::Initial => State::Expect(Round::BeforeM4),
+                    Round::BeforeM4 => State::Expect(Round::AfterM4),
+                    Round::AfterM4 => State::Finished,
+                }
+    }
     fn binding(&self, b: &SharedBudget<'_>) -> Result<(), Failure> {
         if self.model != MODEL_ID {
             return Err(Failure::Unavailable);
