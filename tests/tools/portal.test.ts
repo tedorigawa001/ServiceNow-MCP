@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { executePortalToolCall, getPortalToolDefinitions } from '../../src/tools/portal.js';
 import type { ServiceNowClient } from '../../src/servicenow/client.js';
+import { executeTool } from '../../src/tools/index.js';
 
 const mockClient = {
   createRecord: vi.fn(),
@@ -14,6 +15,98 @@ const qr = () => mockClient.queryRecords as ReturnType<typeof vi.fn>;
 const gr = () => mockClient.getRecord as ReturnType<typeof vi.fn>;
 const cr = () => mockClient.createRecord as ReturnType<typeof vi.fn>;
 
+describe('widget scripting permission boundary', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    vi.stubEnv('WRITE_ENABLED', 'true');
+    vi.stubEnv('SCRIPTING_ENABLED', 'false');
+  });
+  afterEach(() => vi.unstubAllEnvs());
+
+  it('rejects template-only creation without scripting permission before any API call', async () => {
+    await expect(executePortalToolCall(mockClient, 'create_portal_widget', {
+      name: 'Synthetic', id: 'synthetic', template: '<button ng-click="c.server.update()">Run</button>',
+    })).rejects.toMatchObject({ code: 'SCRIPTING_NOT_ENABLED' });
+    expect(cr()).not.toHaveBeenCalled();
+    expect(updateRec()).not.toHaveBeenCalled();
+    expect(qr()).not.toHaveBeenCalled();
+    expect(gr()).not.toHaveBeenCalled();
+  });
+
+  it.each(['server_script', 'client_script', 'script', 'template'])(
+    'rejects creation with %s, including raw aliases, when scripting is disabled', async field => {
+      await expect(executePortalToolCall(mockClient, 'create_portal_widget', {
+        name: 'Synthetic', id: 'synthetic', [field]: 'synthetic source',
+      })).rejects.toMatchObject({ code: 'SCRIPTING_NOT_ENABLED' });
+      expect(cr()).not.toHaveBeenCalled();
+    }
+  );
+
+  it.each(['script', 'server_script', 'client_script', 'template'])(
+    'rejects every value of update field %s, not just nonempty source', async field => {
+      for (const value of ['synthetic source', '', null, undefined]) {
+        await expect(executePortalToolCall(mockClient, 'update_portal_widget', {
+          sys_id: 'widget1', fields: { name: 'Synthetic', [field]: value },
+        })).rejects.toMatchObject({ code: 'SCRIPTING_NOT_ENABLED' });
+      }
+      expect(updateRec()).not.toHaveBeenCalled();
+    }
+  );
+
+  it.each([
+    '<input ng-model="c.data.q" ng-change="c.server.update()">',
+    '<span>{{c.data.value}}</span>',
+    '<sp-widget widget="c.data.embedded"></sp-widget>',
+    '<div>Static content</div>',
+  ])('does not attempt to distinguish safe from executable templates (%#)', async template => {
+    await expect(executePortalToolCall(mockClient, 'update_portal_widget', {
+      sys_id: 'widget1', fields: { template },
+    })).rejects.toMatchObject({ code: 'SCRIPTING_NOT_ENABLED' });
+    expect(updateRec()).not.toHaveBeenCalled();
+  });
+
+  it.each(['create_portal_widget', 'update_portal_widget'])(
+    '%s requires both write and scripting permission even for metadata-only calls', async tool => {
+      const args = tool === 'create_portal_widget'
+        ? { name: 'Synthetic', id: 'synthetic' }
+        : { sys_id: 'widget1', fields: { name: 'Synthetic', css: '.synthetic {}' } };
+      await expect(executePortalToolCall(mockClient, tool, args)).rejects.toMatchObject({ code: 'SCRIPTING_NOT_ENABLED' });
+      vi.stubEnv('SCRIPTING_ENABLED', 'true');
+      vi.stubEnv('WRITE_ENABLED', 'false');
+      await expect(executePortalToolCall(mockClient, tool, args)).rejects.toMatchObject({ code: 'WRITE_NOT_ENABLED' });
+      expect(cr()).not.toHaveBeenCalled();
+      expect(updateRec()).not.toHaveBeenCalled();
+    }
+  );
+
+  it.each(['create_portal_widget', 'update_portal_widget'])('cannot bypass the gate via dispatch: %s', async tool => {
+    await expect(executeTool(mockClient, tool, {
+      name: 'Synthetic', id: 'synthetic', sys_id: 'widget1', fields: { script: 'data.ok = true;' },
+    })).rejects.toMatchObject({ code: 'SCRIPTING_NOT_ENABLED' });
+    expect(cr()).not.toHaveBeenCalled();
+    expect(updateRec()).not.toHaveBeenCalled();
+  });
+
+  it('keeps widget reads available with both write permissions disabled', async () => {
+    vi.stubEnv('WRITE_ENABLED', 'false');
+    qr().mockResolvedValue({ count: 0, records: [] });
+    gr().mockResolvedValue({ sys_id: 'a'.repeat(32) });
+    await executePortalToolCall(mockClient, 'list_portal_widgets', {});
+    await executePortalToolCall(mockClient, 'get_portal_widget', { id_or_sysid: 'a'.repeat(32) });
+    expect(qr()).toHaveBeenCalledOnce();
+    expect(gr()).toHaveBeenCalledOnce();
+  });
+
+  it.each(['create_portal_widget', 'update_portal_widget'])('retains authorized metadata-only %s', async tool => {
+    vi.stubEnv('SCRIPTING_ENABLED', 'true');
+    const args = tool === 'create_portal_widget'
+      ? { name: 'Synthetic', id: 'synthetic' }
+      : { sys_id: 'widget1', fields: { name: 'Synthetic', css: '.synthetic {}' } };
+    await executePortalToolCall(mockClient, tool, args);
+    expect(tool === 'create_portal_widget' ? cr() : updateRec()).toHaveBeenCalledOnce();
+  });
+});
+
 describe('getPortalToolDefinitions', () => {
   it('returns exactly 16 portal tool definitions', () => {
     expect(getPortalToolDefinitions().length).toBe(16);
@@ -25,6 +118,12 @@ describe('getPortalToolDefinitions', () => {
       expect(t.description).toBeTruthy();
       expect(t.inputSchema).toBeTruthy();
     });
+  });
+
+  it.each(['create_portal_widget', 'update_portal_widget'])('%s advertises both permission gates', name => {
+    const tool = getPortalToolDefinitions().find(t => t.name === name)!;
+    expect(tool.description).toContain('WRITE_ENABLED=true');
+    expect(tool.description).toContain('SCRIPTING_ENABLED=true');
   });
 });
 
@@ -165,8 +264,8 @@ describe('Widgets', () => {
   });
 
   describe('create_portal_widget', () => {
-    beforeEach(() => { process.env.WRITE_ENABLED = 'true'; });
-    afterEach(() => { delete process.env.WRITE_ENABLED; });
+    beforeEach(() => { vi.stubEnv('WRITE_ENABLED', 'true'); vi.stubEnv('SCRIPTING_ENABLED', 'true'); });
+    afterEach(() => vi.unstubAllEnvs());
 
     it('requires name and id', async () => {
       await expect(executePortalToolCall(mockClient, 'create_portal_widget', {})).rejects.toThrow('name and id are required');
@@ -176,8 +275,12 @@ describe('Widgets', () => {
       cr().mockResolvedValue({ sys_id: 'w1' });
       const result = await executePortalToolCall(mockClient, 'create_portal_widget', {
         name: 'Clock', id: 'widget-clock', server_script: 'data.now = new Date();',
+        client_script: 'function() {}', template: '<span>{{c.data.now}}</span>',
       });
-      expect(cr()).toHaveBeenCalledWith('sp_widget', expect.objectContaining({ name: 'Clock', id: 'widget-clock', script: 'data.now = new Date();' }));
+      expect(cr()).toHaveBeenCalledWith('sp_widget', expect.objectContaining({
+        name: 'Clock', id: 'widget-clock', script: 'data.now = new Date();',
+        client_script: 'function() {}', template: '<span>{{c.data.now}}</span>',
+      }));
       expect(result.summary).toContain('widget-clock');
     });
   });
@@ -258,11 +361,12 @@ describe('Themes & Branding', () => {
 describe('executePortalToolCall – update_portal_widget', () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    process.env.WRITE_ENABLED = 'true';
+    vi.stubEnv('WRITE_ENABLED', 'true');
+    vi.stubEnv('SCRIPTING_ENABLED', 'true');
   });
 
   afterEach(() => {
-    delete process.env.WRITE_ENABLED;
+    vi.unstubAllEnvs();
   });
 
   it('maps server_script and updates widget fields from the allowlist', async () => {
@@ -293,5 +397,19 @@ describe('executePortalToolCall – update_portal_widget', () => {
       })
     ).rejects.toThrow('Portal widget fields cannot be updated: sys_scope, sys_domain');
     expect(updateRec()).not.toHaveBeenCalled();
+  });
+
+  it.each(['script', 'server_script', 'client_script', 'template'])('retains authorized %s updates and empty-value clearing', async field => {
+    for (const value of ['synthetic source', '']) {
+      await executePortalToolCall(mockClient, 'update_portal_widget', { sys_id: 'widget1', fields: { [field]: value } });
+      expect(updateRec()).toHaveBeenLastCalledWith('sp_widget', 'widget1', { [field === 'server_script' ? 'script' : field]: value });
+    }
+  });
+
+  it('preserves server_script precedence over script when both aliases are supplied', async () => {
+    await executePortalToolCall(mockClient, 'update_portal_widget', {
+      sys_id: 'widget1', fields: { script: 'native', server_script: 'friendly' },
+    });
+    expect(updateRec()).toHaveBeenCalledWith('sp_widget', 'widget1', { script: 'friendly' });
   });
 });
