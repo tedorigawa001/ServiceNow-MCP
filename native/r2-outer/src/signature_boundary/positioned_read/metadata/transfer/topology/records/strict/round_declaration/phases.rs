@@ -122,6 +122,13 @@ impl<'s, 'r> RoundDeclaration<'s, 'r> {
     }
 }
 impl IndexPhases<'_, '_, '_> {
+    // Constant-time binding block paid by the final-clock stage owner.
+    pub(in super::super) fn require_finished(&self, scope: &RoundScope<'_>) -> Result<(), Failure> {
+        if self.state != State::Finished || !std::ptr::eq(self.declaration.scope, scope) {
+            return Err(Failure::Binding);
+        }
+        Ok(())
+    }
     pub(in super::super) fn finish_for_round(
         &mut self,
         current: &RoundScope<'_>,

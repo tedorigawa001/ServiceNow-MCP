@@ -159,6 +159,20 @@ fn revalidate_round_records<S: RecordSource>(
     let reading = clock_check(source, receipt, budget, 450_000)?;
     verify_records(receipt, target, context, reading.wall_ms, budget)
 }
+// Fixed typed final-clock stage only; the ordinary strict orchestrator is unchanged.
+fn check_final_round_clock<S: RecordSource>(
+    source: &mut S,
+    scope: &round_declaration::RoundScope<'_>,
+    expected: &str,
+    budget: &mut SharedBudget<'_>,
+) -> Result<(), Failure> {
+    work(budget)?; // O.final_clock_stage 2: fixed model/callee, never caller-supplied timestamps
+    if expected != "bp5-r2-round-final-clock-0.1" {
+        return Err(Failure::Unavailable);
+    }
+    let (receipt, _, _) = scope.record_inputs();
+    clock_check(source, receipt, budget, 450_000).map(|_| ())
+}
 fn strict_round<S: RecordSource, C: ClosureSource>(
     source: &mut S,
     closure_source: &mut C,

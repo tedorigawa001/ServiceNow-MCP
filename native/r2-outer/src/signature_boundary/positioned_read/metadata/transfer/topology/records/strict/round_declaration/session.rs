@@ -28,6 +28,7 @@ pub(in super::super) struct ScanSessionLedger<'s> {
     after_scan_started: [bool; 3],
     records_started: [bool; 3],
     final_index_started: [bool; 3],
+    final_clock_started: [bool; 3],
     state: State,
     resources: Option<Rc<std::cell::RefCell<resources::Accounting>>>,
 }
@@ -81,6 +82,7 @@ pub(in super::super) fn create<'s>(
             after_scan_started: [false; 3],
             records_started: [false; 3],
             final_index_started: [false; 3],
+            final_clock_started: [false; 3],
             state: State::Expect(Round::Initial),
             resources: None,
         })

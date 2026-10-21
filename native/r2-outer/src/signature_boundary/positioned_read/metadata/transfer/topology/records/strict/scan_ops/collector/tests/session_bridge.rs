@@ -3,6 +3,7 @@ use round_declaration::scan_inputs::profile::{self, calculator};
 use round_declaration::session::{self, resources::testing as ledger_test};
 mod after_scan;
 mod completion;
+mod final_clock;
 mod final_index;
 mod records_stage;
 

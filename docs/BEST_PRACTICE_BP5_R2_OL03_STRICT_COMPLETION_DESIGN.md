@@ -1,6 +1,6 @@
 # BP-5 R-2 OL-03：型付きcleanup証拠・round完了・strict acknowledgement詳細設計
 
-Version: draft-0.7 / Date: 2026-10-21 / Status: cleanup・round完了・AfterScan破棄・record再検証・FinalIndex/Node再照合stageまで内部実装・合成検証。最終clock/typed strict acknowledgement・通常strict接続は未実装。
+Version: draft-0.8 / Date: 2026-10-21 / Status: cleanupからFinalIndex/Node再照合・最終clock/checkpoint stageまで内部実装・合成検証。typed strict acknowledgement・通常strict接続は未実装。
 
 ## 1. 範囲と根拠
 
@@ -8,7 +8,7 @@ Version: draft-0.7 / Date: 2026-10-21 / Status: cleanup・round完了・AfterSca
 
 全体受付無効、telemetry保留、APPROVED_REGISTRY=None、通常v2 Unavailable、gate92、DER/absence停止を維持する。初稿は設計のみで、§13にscan_ops終端の最初の内部実装を追記した。通常strict接続、OS接続、実機操作、token発行、設定変更、本番policy投入、permit発行は含めない。証拠はinspection内の診断に保持し、実行権へ変換しない。
 
-## 2. 初稿時の現状と不足（後続実装は§13〜§17）
+## 2. 初稿時の現状と不足（後続実装は§13〜§18）
 
 | 現状 | 接続前に必要なもの |
 |---|---|
@@ -348,4 +348,28 @@ submodel `bp5-r2-round-final-index-0.1` をstage呼出しとphase側の独立lit
 
 [FinalIndex stage合成記録](E2E_BEST_PRACTICE_R2_OL03_FINAL_INDEX_STAGE_SYNTHETIC_2026-10-21.md)の新規7テストで、実費/phase上界の照合、全work不足prefix・全課金後取消・全checkpoint期限、別Compared phase/既Finished/重複/別budget拒否、元診断・Observation破棄維持、3round（ackだけcfg(test)）を確認する。Node checkerの異常入力4種は同じ固定関数を直接検査するcomponent試験として区別する。immutable入力をunsafeに書き換えてstageへ混入させない。
 
-最終clock/checkpointへの消費型遷移、実strict tailのack producer/consumer、通常strict固定位置接続、運用policy/全体受付、OS sourceは未対応。telemetryは保留のまま。実機操作・token発行・設定変更・permit発行は含めない。
+このsubset後の最終clock/checkpointへの消費型遷移は§18へ続く。実strict tailのack producer/consumer、通常strict固定位置接続、運用policy/全体受付、OS sourceは引き続き未対応。telemetryは保留のまま。実機操作・token発行・設定変更・permit発行は含めない。
+
+## 18. FinalIndexRoundから最終clock/checkpoint stageへ（draft-0.8）
+
+### 18.1 固定の実検査
+
+FinalIndexRound::verify_final_clockはselfをmoveで消費し、元session/slotのfinal_clock_startedを最初のfallible処理前に消費する。AwaitStrict、既存のFinalIndex/record/AfterScan claim、元budget origin/claim/started、Closed/session binding、同RoundScope objectのFinished phaseを照合する。別scopeが実際にFinishedでも代替できない。重複/binding失敗はclock sourceの操作前に拒否する。
+
+固定helper check_final_round_clockは元scopeのreceiptから既存clock_check(source, receipt, budget, 450000)を呼ぶ。caller-suppliedなwall/monotonic値や検証済みbool、任意callbackを成功producerにしない。実source.clockを1試行し、pinned startとのwall/monotonic/elapsed整合性・record残存期限を既存順で確認する。ClockReadingはhelper内で破棄し、後続stageへ数値時刻を渡さない。
+
+その後の共有budget終端work/checkpointまで成功したときだけFinalClockRoundを返す。late source成功・source failure・取消/期限・work不足は元理由をstickyに保持し、CompletionFailureへClosed/summary診断を移して停止する。通常strictの呼出し順序/旧clock_check本体は変更しない。
+
+### 18.2 所有・費目・時間分類
+
+FinalClockRoundのfieldは排他的leaseとScanTailDataだけで、Observation/JSON tree/record bytes/ClockReadingは保持しない。private constructor、非Clone/非Copy/非serde、opaque Debug。未ack dropは停止、forgetでもAwaitStrictのままで次roundを拒否する。production acknowledgementやFinished sessionをまだ発行しない。
+
+submodel `bp5-r2-round-final-clock-0.1` をstage呼出しとhelperの独立literalで照合する。追加O.final_clock_stage=3 work（claim/owner/phase binding1、固定helper/model1、終端1）。旧最終clockと同じsource試行1を共有topology操作枠へ計上し、bytes/retry/scan会計を増やさない。3round追加controlは9、旧clock試行を重複加算しない。全体work/resource受付は無効のまま。
+
+fixture成功経路はbudget.now読取11回で、10回はcheckpoint、1回（7番目）は既存clock_check内のelapsed直接読取。checkpointで10秒到達を捉えた場合はDeadline、elapsed直接読取だけで10秒ジャンプを観測すると既存のclock整合性判定によりExpiredが先に返る。この既存分類を変更せず両方を停止として検証する。実時間/OS clock/hard期限の保証へ読み替えない。
+
+### 18.3 検証・次工程
+
+[最終clock stage合成記録](E2E_BEST_PRACTICE_R2_OL03_FINAL_CLOCK_STAGE_SYNTHETIC_2026-10-21.md)の新規7テストを参照。固定source.clock試行、重複/別binding/別Finished phaseのsource前拒否、全work不足/課金後取消、全11時刻読取境界、clock skew/source error/late result、主理由/cleanup保持、3round（ackだけcfg(test)）を確認した。実clock呼出し省略の変異を拒否テストが検知した。
+
+次は実tail由来のStrictAcknowledgement producer/consumerと、with_round末尾checkpointの失敗を成功へ変換しない接続が必要。通常strict固定位置接続、運用policy/全体受付、OS sourceは未対応。telemetry保留、実機操作・token発行・設定変更・permit発行なし。

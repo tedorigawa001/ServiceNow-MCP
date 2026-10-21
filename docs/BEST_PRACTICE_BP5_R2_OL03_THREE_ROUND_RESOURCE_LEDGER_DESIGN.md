@@ -1,6 +1,6 @@
 # BP-5 R-2 OL-03：3round resource台帳の詳細設計
 
-Version: draft-0.13 / Date: 2026-10-21 / Status: 固定collectorからFinalIndex/Node再照合stageまで合成検証。最終clock/typed strict ack・通常strict接続は未実装、運用上限は未承認。
+Version: draft-0.14 / Date: 2026-10-21 / Status: 固定collectorから最終clock/checkpoint stageまで合成検証。typed strict ack・通常strict接続は未実装、運用上限は未承認。
 
 ## 1. 範囲と停止状態
 
@@ -398,3 +398,5 @@ Collected Outcomeは従来のsummaryを保持して移動する。NotStartedに�
 続く同設計draft-0.6 §16でslot別records_startedを先に消費し、AfterScanRound→record再読/clock/厳密JSON・binding検査→RecordsVerifiedRoundを追加した。元budget/同Compared phase/scopeへ結合し、sourceのprojectionや数値から成功を復元しない。既存record側の共有byte/操作/意味検査費を維持し、O.record_stage=3 work/roundを追加する。[合成記録](E2E_BEST_PRACTICE_R2_OL03_RECORD_STAGE_SYNTHETIC_2026-10-21.md)を参照。FinalIndex以降のtyped tail・production strict ack・通常strict/全体受付・OS接続は未対応。
 
 続く同設計draft-0.7 §17でslot別final_index_startedを先に消費し、RecordsVerifiedRound→実FinalIndex/Node再照合→FinalIndexRoundへ移す。AwaitStrict/元budget/Closed/同Compared phaseを再照合し、終端失敗や未ack drop/forgetでも次roundを開けない。O.final_index_stage=3 work/roundを既存phase費と分離する。[合成記録](E2E_BEST_PRACTICE_R2_OL03_FINAL_INDEX_STAGE_SYNTHETIC_2026-10-21.md)を参照。最終clock/typed strict ack・通常strict/全体受付・OS接続は未対応。
+
+続く同設計draft-0.8 §18でslot別final_clock_startedを先に消費し、FinalIndexRound→実最終clock/checkpoint→FinalClockRoundへ移す。元receipt/scope/Finished phase/budget/Closedへ結合し、clock試行は旧経路と同じ1、追加controlはO.final_clock_stage=3 work/round。未ack drop/forgetで次roundを開けない。[合成記録](E2E_BEST_PRACTICE_R2_OL03_FINAL_CLOCK_STAGE_SYNTHETIC_2026-10-21.md)を参照。typed strict ack・通常strict/全体受付・OS接続は未対応。

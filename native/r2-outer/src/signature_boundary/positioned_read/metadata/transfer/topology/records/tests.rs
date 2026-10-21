@@ -160,6 +160,9 @@ impl Fake {
             self.c.decoded.get(),
         )
     }
+    pub(super) fn stage_clock_skew_current(&mut self) {
+        self.clock_skew = Some(self.c.cycles.get());
+    }
     pub(super) fn stage_fault(&mut self, kind: u8, at: usize) {
         match kind {
             0 => self.fail = Some(at),
