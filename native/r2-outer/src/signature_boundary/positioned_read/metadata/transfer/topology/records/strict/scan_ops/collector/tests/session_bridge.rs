@@ -3,6 +3,7 @@ use round_declaration::scan_inputs::profile::{self, calculator};
 use round_declaration::session::{self, resources::testing as ledger_test};
 mod after_scan;
 mod completion;
+mod records_stage;
 
 fn caps() -> ledger_test::Policy {
     ledger_test::Policy {

@@ -18,6 +18,11 @@ pub(super) struct RoundScope<'s> {
     index_path: String,
 }
 impl RoundScope<'_> {
+    pub(super) fn record_inputs(
+        &self,
+    ) -> (&RecordReceipt, &TargetDeclaration, &InspectionContext<'_>) {
+        (self.receipt, self.target, self.context)
+    }
     pub(super) fn token(&self) -> &Rc<()> {
         &self.token
     }

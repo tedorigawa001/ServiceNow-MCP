@@ -1,6 +1,6 @@
 # BP-5 R-2 OL-03：型付きcleanup証拠・round完了・strict acknowledgement詳細設計
 
-Version: draft-0.5 / Date: 2026-10-21 / Status: cleanup・round完了・AfterScan後のObservation破棄stageまで内部実装・合成検証。strict acknowledgement producer・通常strict接続は未実装。
+Version: draft-0.6 / Date: 2026-10-21 / Status: cleanup・round完了・AfterScan破棄・record再読/厳密検証stageまで内部実装・合成検証。FinalIndex以降のtyped tail・strict acknowledgement・通常strict接続は未実装。
 
 ## 1. 範囲と根拠
 
@@ -8,7 +8,7 @@ Version: draft-0.5 / Date: 2026-10-21 / Status: cleanup・round完了・AfterSca
 
 全体受付無効、telemetry保留、APPROVED_REGISTRY=None、通常v2 Unavailable、gate92、DER/absence停止を維持する。初稿は設計のみで、§13にscan_ops終端の最初の内部実装を追記した。通常strict接続、OS接続、実機操作、token発行、設定変更、本番policy投入、permit発行は含めない。証拠はinspection内の診断に保持し、実行権へ変換しない。
 
-## 2. 初稿時の現状と不足（後続実装は§13〜§15）
+## 2. 初稿時の現状と不足（後続実装は§13〜§16）
 
 | 現状 | 接続前に必要なもの |
 |---|---|
@@ -299,3 +299,27 @@ submodel `bp5-r2-round-after-scan-0.1` を固定stage呼出しとphase側の独�
 [AfterScan stage合成記録](E2E_BEST_PRACTICE_R2_OL03_AFTER_SCAN_STAGE_SYNTHETIC_2026-10-21.md)の新規6テストで、成功/拒否、全work不足prefix・全課金後取消、破棄後の取消/期限、別phase/重複/集合不一致、3round slot（ackのみcfg(test)）、未ack drop/forget、非Clone等を確認した。Observation破棄を無効化する変異を検知し、復元後に再検証する。
 
 通常strict接続・typed strict acknowledgement・OS source・運用policy/全体受付は未対応。telemetry調査は保留。実機操作・token発行・設定変更・permit発行は行わない。
+
+## 16. AfterScanRoundからrecord再読・厳密検証stageへ（draft-0.6）
+
+### 16.1 固定の実処理と結合
+
+`session/completion/records.rs` のAfterScanRound::revalidate_recordsはselfをmoveで消費し、成功時だけRecordsVerifiedRoundを返す。元sessionのslot別records_startedを最初のfallible処理前に消費する。AwaitStrict、元budget origin/claim/started、Closed/session binding、同RoundScope objectに属するIndexPhasesがComparedであることを照合する。別phaseやFinishedへの早すぎる遷移は、RecordSourceの最初の操作より前に拒否する。
+
+固定helper revalidate_round_recordsは、scope内の元receipt/target/contextだけを取り出し、既存の `reread_bytes → clock_check(margin=450000) → verify_records` を順に呼ぶ。receipt/time/厳密意味を呼出し側が再申告する引数や任意callbackを設けない。再読は従来どおりclock、全3 recordの前後path/metadata/byte一致/EOF/再walkを検査し、actual bytesと共有操作枠を計上する。その後のactivation/ledger-0.2/registryのhash-first・strict JSON/意味/binding検査を省略しない。Registryは既存のimmutable context由来であり、新たにOSから再読したとは主張しない。
+
+helperをstrict.rs内に追加したが、通常strict_round/review_strict_record_targetの呼出し/順序/旧Result-only経路は変更していない。RecordSource::revalidateは歴史的なtest-only projectionであり、新stageはそれを一度も呼ばない。
+
+### 16.2 所有・失敗・費目
+
+RecordsVerifiedRoundのfieldは元の排他的leaseとScanTailDataだけで、Observation/JSON tree/record byteコピーを保持しない。元scope/receipt/inspectionの生存borrowを維持し、private constructor、非Clone/非Copy/非serde、opaque Debugとする。Sourceは通常strictと同じくmutable borrowし、このsubsetでSource owner自体をdropしない。一時handleは再読処理内のRAIIで解放し、Sourceが生きたままmade=freedを試験する。実OSの解放の真実性まで証明しない。
+
+失敗時は元Failureをstickyに保ってStoppedへ移し、Closed/数値summaryをCompletionFailureへ移動する。claimを戻さず、次roundを開けない。未ack dropで停止し、forgetでもAwaitStrictのままで次roundを拒否する。FinalIndex/最終clock/ackはまだ成功していない。
+
+submodel `bp5-r2-round-records-0.1` をstage呼出しと固定helperの独立literalで照合する。追加O.record_stage=3 work（claim/owner/phase binding1、固定helper/model1、実検証後の終端1）。既存の再読/clock/strict JSONの全費用は維持する。独立の旧tail直呼び列との実費差3、source操作数同一を検査する。3roundの追加control費は9。kernel/既存phaseの式を改版/返金せず、全体work/resource受付は無効のままとする。
+
+### 16.3 検証と次工程
+
+[record stage合成記録](E2E_BEST_PRACTICE_R2_OL03_RECORD_STAGE_SYNTHETIC_2026-10-21.md)の新規8テストを参照。厳密JSONを満たす合成activation/ledger/registryを使用し、実collector/AfterScanから新stageへ到達する。全source操作境界の失敗/取消/期限、一時handle解放、byte/metadata/path/EOF/clock不整合、ピン済み不正JSON、registry不一致、重複claim/別budget/phase誤順序、workの代表境界と最終課金後取消、3round slot（ackのみcfg(test)）を確認する。厳密検証呼出しを省く変異を拒否試験が検知した。
+
+次はRecordsVerifiedRoundからFinalIndex/Node厳密再照合への型付き遷移と、最終clock/checkpoint・strict acknowledgementが必要。通常strict接続・運用policy/全体受付・OS接続は未対応、telemetryは保留。実機操作・token発行・設定変更・permit発行は含めない。

@@ -30,6 +30,13 @@ pub(in super::super::super) struct ScanTailData {
     summary: Summary,
 }
 impl ScanTailData {
+    pub(in super::super::super) fn require(
+        &self,
+        lease: &RoundResourceScope<'_, '_, '_>,
+        b: &SharedBudget<'_>,
+    ) -> Result<(), Failure> {
+        self.closed.require_completion(lease, b)
+    }
     pub(in super::super::super) fn reject(self, reason: Failure) -> CompletionFailure {
         CompletionFailure {
             reason,

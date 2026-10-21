@@ -18,7 +18,7 @@ struct Counts {
     dropped: Cell<bool>,
     phases: RefCell<Vec<Vec<Phase>>>,
 }
-struct Handle {
+pub(super) struct Handle {
     kind: Kind,
     index: usize,
     c: Rc<Counts>,
@@ -117,7 +117,7 @@ pub(super) fn make_receipt(binding: &mut RecordBinding, lineage: &Rc<()>) -> Rec
     }
 }
 type Hook = Box<dyn FnMut(usize)>;
-struct Fake {
+pub(super) struct Fake {
     c: Rc<Counts>,
     target: Rc<TargetCounts>,
     now: Rc<Cell<Instant>>,
@@ -143,6 +143,54 @@ struct Fake {
     namespace_changed: bool,
 }
 impl Fake {
+    pub(super) fn for_stage(r: &RecordReceipt, now: &Rc<Cell<Instant>>, start: Instant) -> Self {
+        Self::new(
+            r,
+            &Rc::new(Counts::default()),
+            &Rc::new(TargetCounts::default()),
+            now,
+            start,
+        )
+    }
+    pub(super) fn stage_counts(&self) -> (usize, usize, usize, usize) {
+        (
+            self.c.calls.get(),
+            self.c.made.get(),
+            self.c.freed.get(),
+            self.c.decoded.get(),
+        )
+    }
+    pub(super) fn stage_fault(&mut self, kind: u8, at: usize) {
+        match kind {
+            0 => self.fail = Some(at),
+            1 => self.max_read = 7,
+            2 => self.zero = true,
+            3 => self.extra = true,
+            4 => self.byte_change = Some((1, Kind::Activation)),
+            5 => self.change_after_read = true,
+            6 => self.metadata[0][0].names = VisibleNames::Unknown,
+            7 => self.clock_skew = Some(0),
+            8 => self.overreport = true,
+            _ => unreachable!(),
+        }
+    }
+    pub(super) fn stage_interrupt(
+        &mut self,
+        at: usize,
+        cancel: Rc<AtomicBool>,
+        deadline: Option<Instant>,
+    ) {
+        let now = self.now.clone();
+        self.hook = Some(Box::new(move |n| {
+            if n == at {
+                if let Some(end) = deadline {
+                    now.set(end);
+                } else {
+                    cancel.store(true, Ordering::Release);
+                }
+            }
+        }));
+    }
     fn new(
         r: &RecordReceipt,
         c: &Rc<Counts>,

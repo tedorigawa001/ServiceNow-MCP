@@ -1,6 +1,6 @@
 # BP-5 R-2 OL-03：3round resource台帳の詳細設計
 
-Version: draft-0.11 / Date: 2026-10-21 / Status: 固定collector接続・cleanup・round完了・AfterScan破棄stageを合成検証。strict ack・通常strict接続は未実装、運用上限は未承認。
+Version: draft-0.12 / Date: 2026-10-21 / Status: 固定collector接続・cleanup・round完了・AfterScan破棄・record再検証stageを合成検証。FinalIndex以降のtyped tail・strict ack・通常strict接続は未実装、運用上限は未承認。
 
 ## 1. 範囲と停止状態
 
@@ -394,3 +394,5 @@ Collected Outcomeは従来のsummaryを保持して移動する。NotStartedに�
 続く[終了証拠設計draft-0.4 §14](BEST_PRACTICE_BP5_R2_OL03_STRICT_COMPLETION_DESIGN.md)で、実Closedと同固定collectorのObservation成功を消費してActive→AwaitStrictへ移す内部型を追加した。sessionのslot別完了claimはfallible処理前に消費し、receipt/round/budget/book結合・未ack drop/forget後の停止を検証する。固定O.round_completeは追加3 workで、既存session1994は変更せず完了経路1997（EINTR1は2000）。strict ack/通常strict/全体受付は追加していない。[合成記録](E2E_BEST_PRACTICE_R2_OL03_ROUND_COMPLETION_SYNTHETIC_2026-10-21.md)を参照。
 
 続く同設計draft-0.5 §15ではAwaitStrictのままPending→AfterScanRoundへ値で移す。slot別after_scan_startedを先に消費し、同phase/scopeで実AfterScanを成功させてからObservationをdropする。cleanup/数値診断とleaseだけを新stageへ移す。未ack drop/forgetで次roundを開けず、既存会計へoperation/bytesを再加算しない。追加O.after_scan_stageは3 work/round。[合成記録](E2E_BEST_PRACTICE_R2_OL03_AFTER_SCAN_STAGE_SYNTHETIC_2026-10-21.md)を参照。production strict ack・全体受付・通常strict/OS接続は無効のまま。
+
+続く同設計draft-0.6 §16でslot別records_startedを先に消費し、AfterScanRound→record再読/clock/厳密JSON・binding検査→RecordsVerifiedRoundを追加した。元budget/同Compared phase/scopeへ結合し、sourceのprojectionや数値から成功を復元しない。既存record側の共有byte/操作/意味検査費を維持し、O.record_stage=3 work/roundを追加する。[合成記録](E2E_BEST_PRACTICE_R2_OL03_RECORD_STAGE_SYNTHETIC_2026-10-21.md)を参照。FinalIndex以降のtyped tail・production strict ack・通常strict/全体受付・OS接続は未対応。

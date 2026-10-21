@@ -143,6 +143,22 @@ fn verify_node_entries(
     budget.checkpoint()?;
     Ok(())
 }
+// Fixed typed-stage tail subset; NOT connected to the normal strict orchestrator.
+fn revalidate_round_records<S: RecordSource>(
+    source: &mut S,
+    scope: &round_declaration::RoundScope<'_>,
+    expected: &str,
+    budget: &mut SharedBudget<'_>,
+) -> Result<(), Failure> {
+    work(budget)?; // O.record_stage 2: fixed callee/model, not a source projection
+    if expected != "bp5-r2-round-records-0.1" {
+        return Err(Failure::Unavailable);
+    }
+    let (receipt, target, context) = scope.record_inputs();
+    reread_bytes(source, receipt, budget)?;
+    let reading = clock_check(source, receipt, budget, 450_000)?;
+    verify_records(receipt, target, context, reading.wall_ms, budget)
+}
 fn strict_round<S: RecordSource, C: ClosureSource>(
     source: &mut S,
     closure_source: &mut C,

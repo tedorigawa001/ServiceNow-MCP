@@ -116,6 +116,16 @@ impl<'s, 'r> RoundDeclaration<'s, 'r> {
     }
 }
 impl IndexPhases<'_, '_, '_> {
+    // Constant-time check, paid by the record-stage owner's fixed binding block.
+    pub(in super::super) fn require_after_scan(
+        &self,
+        scope: &RoundScope<'_>,
+    ) -> Result<(), Failure> {
+        if self.state != State::Compared || !std::ptr::eq(self.declaration.scope, scope) {
+            return Err(Failure::Binding);
+        }
+        Ok(())
+    }
     // Fixed typed-stage adapter: never accept a caller's "already compared" flag.
     pub(in super::super) fn after_scan_for_round(
         &mut self,

@@ -3,6 +3,7 @@ use super::super::super::scan_ops::collector::completion::{
     CompletionFailure, RoundScanSuccess, ScanTailData,
 };
 use super::*;
+pub(in super::super::super) mod records;
 
 pub(in super::super::super) const MODEL_ID: &str = "bp5-r2-strict-round-completion-0.1";
 pub(in super::super::super) struct PendingStrictRound<'a, 'r, 's> {
