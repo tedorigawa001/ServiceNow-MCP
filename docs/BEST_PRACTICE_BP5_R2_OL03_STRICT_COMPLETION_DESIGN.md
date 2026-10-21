@@ -1,6 +1,6 @@
 # BP-5 R-2 OL-03：型付きcleanup証拠・round完了・strict acknowledgement詳細設計
 
-Version: draft-0.1 / Date: 2026-10-21 / Status: 設計案。型・producer・通常strict接続は未実装。
+Version: draft-0.2 / Date: 2026-10-21 / Status: 設計案（レビューでack後のwith_round終端checkpointとsession生成位置を明記）。型・producer・通常strict接続は未実装。
 
 ## 1. 範囲と根拠
 
@@ -123,9 +123,19 @@ ackは同Attempt/phase owner identityと固定完了modelに結合する。Pendi
 | BeforeM4 | Expect(AfterM4) | M4そのものは未実施。M4失敗なら次へ進まず停止 |
 | AfterM4 | Finished | 当該tailの最終clock/checkpointまで完了。外側終了/permitは別 |
 
+### 7.1 ackとwith_roundの終端checkpointの順序（2026-10-21、レビュー）
+
+PendingStrictRoundは `with_round` が生成・所有する `RoundScope` をborrowするため、ackの発行と消費は `with_round` のclosure内で完了させる必要がある。一方 `with_round` はclosureの戻り後に `drop(scope); budget.checkpoint()?` を実行する。従って、sessionが `Expect(next)` や `Finished` へ進んだ**後**に、`with_round` の終端checkpointが取消/期限で失敗し得る。
+
+- ackの消費はclosure内の**最後のfallible処理**とする。ack消費後にclosure内で新しいI/O・課金・検査を行わない。
+- その後の `with_round` 終端checkpointが失敗した場合、sessionが `Expect(next)`/`Finished` であってもroundは失敗として返す。元budgetのfailureはstickyなので次roundの `begin` は拒否され、Finishedを理由に失敗を成功へ変換しない。
+- Finishedのledgerはdrop時にclaimへ停止を書かないが、budget側の既存failureで外側bodyは停止する。ack成功とround/inspection成功を同一視しない。
+
 ## 8. 通常strictへの所有権・位置接続
 
 session台帳はreview_strict_record_target全体のownerが一度だけ保持する。receipt/target/contextを借用したledgerが生きている間に、それらをmove/dropしない。各round helperの中でledgerを作る/早期dropする方式は採らない。元budget/started/retryを共有し、各roundに新budgetを作らない。
+
+**session生成位置（2026-10-21、レビュー）**：`session::create` は `review_strict_record_target` 内で `validate_receipt` 成功後、最初の `strict_round(Initial)` より前に一度だけ呼び、`configure_resources` もその間で完了させる。各round helper内での生成・再生成はしない。生成後に外側 `clock_check(460000)` 等が失敗した場合、ledgerは `Expect(Initial)` のまま放棄されclaimへ停止が伝播する。これは意図した安全側の動作であり、同inspectionでの再生成・再試行経路を設けない。
 
 Initialはvalidate_receiptと外側clock_check(460000)後の既存位置。BeforeM4はcompare_topologyがB走査後にtopology再照合を終えたmandatory callback内に固定する。このackが成功して初めてM4取得へ戻る。AfterM4はcompare_topologyがComparedM0M4を正常に返した後だけに固定する。単にround enumが順番どおりという理由でM4実施済みとみなさない。
 
