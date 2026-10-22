@@ -1,10 +1,10 @@
 # BP-5 R-2 OL-03：通常strictの外側orchestrator接続詳細設計
 
-Version: draft-0.1 / Date: 2026-10-22 / Source baseline: `cd5bd97` / Status: 設計のみ。型名・API・費目は案で、未実装・未コンパイル・未合成検証。
+Version: draft-0.2 / Date: 2026-10-22 / Source baseline: 設計 `526f6d3`、固定位置 `cd5bd97` / Status: OuterStrictFailureと診断用結果合流器の内部subsetを実装・合成検証（§12）。外側orchestrator本体・解放section・通常strict差替えは未実装。
 
 ## 1. 範囲と停止条件
 
-[固定位置接続設計§13](BEST_PRACTICE_BP5_R2_OL03_NORMAL_STRICT_CONNECTION_DESIGN.md)で実装したInitial kernel、BeforeM4固定compare、AfterM4Handoff/finishを、receipt検査から解放後の最終checkpointまでの単一orchestratorへつなぐための設計である。今回はMDのみで、既存 `review_strict_record_target` の差替えは行わない。
+[固定位置接続設計§13](BEST_PRACTICE_BP5_R2_OL03_NORMAL_STRICT_CONNECTION_DESIGN.md)で実装したInitial kernel、BeforeM4固定compare、AfterM4Handoff/finishを、receipt検査から解放後の最終checkpointまでの単一orchestratorへつなぐための設計である。draft-0.1はMDのみで、draft-0.2では実装順①の診断型・結果合流器だけを追加した。既存 `review_strict_record_target` の差替えは行わない。
 
 全体受付無効、telemetry保留、APPROVED_REGISTRY=None、通常v2 Unavailable、gate92、DER/absence停止を維持する。本番policy投入・OS接続・実機操作・token発行・設定変更・permit発行は含めない。
 
@@ -127,7 +127,7 @@ ownerが既にdrop済みならowner.stop_inspectionを呼べない。解放後�
 - 全体受付は無効のまま。新費目・診断サイズ・解放費/最大保持数を承認済み上界へ吸収したと扱わない。
 - 通常のpanic/unwindで成功を返さない。Dropが戻らない/二重panic/abort/killでは通常の終了診断やDropSequenceReturnedを保証できない。catch_unwindでpanic本文を公開したり同sessionを再開したりしない。専用host/外側監督による終了確認は別契約である。
 
-## 10. 合成受入条件（未実施）
+## 10. 外側orchestrator全体の合成受入条件（全体は未実施、内部subsetは§12）
 
 1. 正常系：receipt→外側clock→owner生成→Initial→B/recheck/BeforeM4→M4→AfterM4→body checkpoint→全解放→最終checkpoint→結果公開の独立イベント列。同source identity、record再読6cycle、index decode3を確認する。
 2. receiptのlineage/binding/pin順序/bytes/hash/size不整合でowner/scan/外側source.clock未到達。clockの取得失敗・wall/monotonic不整合・期限・遅延成功/エラーでowner未生成。元Failureを保持する。
@@ -149,3 +149,32 @@ ownerが既にdrop済みならowner.stop_inspectionを呼べない。解放後�
 4. 新O費/保持サイズ/resource上界を確定し、通常strict呼出し側のopaque入力bridgeと上位診断保存契約を別途レビューする。
 
 未確認：上記lifetime/visibilityの実コンパイル、全分岐のowned値移動と診断サイズ、保護policy供給口、通常strict上位のstructured error所有先、generic Dropのbounded性/実OS解放確認、全体受付上界。未解決部分を自動承認で埋めず、停止を維持する。
+
+## 12. 実装済み：OuterStrictFailure・診断用結果合流器（draft-0.2）
+
+### 12.1 型と限定口
+
+[outer_result.rs](../native/r2-outer/src/signature_boundary/positioned_read/metadata/transfer/topology/records/strict/scan_ops/connection_owner/outer_result.rs)に、private fieldのOuterStrictFailureを追加した。非Clone/非Copy/非serde、固定opaque Debugで、元primary・OuterPhase・ownedなOption<StrictInspectionFailure>・DropObservation・PostReleaseCheckpointをinlineで保持する。サイズは合成テストで384 bytes以下を要求する。
+
+plainは元budget.stopの先行理由を採用し、innerなしの失敗だけを作る。from_innerは元StrictInspectionFailureを丸ごと一度moveし、roundや実CompletionFailureを理由だけへ縮退させない。reason/phase/round/inner参照/解放観測/checkpoint観測のread-only accessorだけを設け、完了setterや任意Closed生成口は追加しない。OuterPhaseには解放section自体の未到達拒否用にReleaseも含む。
+
+実装名DropObservationはNotReached/SequenceReturned、PostReleaseCheckpointはNotReached/Passed/Stopped(Failure)。どちらも診断用enumで、resource解放を型で証明するtokenではない。
+
+### 12.2 結果合流
+
+`merge_after_release<T>` は `Result<T, OuterStrictFailure>` と解放観測、元SharedBudgetを受け取る。bodyがErrでもcheckpointを一度評価し、その後に結果を明示合流する。`?` で元診断を捨てない。
+
+- body Errでは元primary/phase/innerを保持し、観測だけを追記。checkpointがPassedでも元理由を再度stopしてErrのままとする。通常は先行failureによりStopped(primary)となり、二次原因は推測しない。
+- body Ok＋checkpoint Stoppedではpending値を破棄し、PostReleaseCheckpoint起点・innerなしの失敗にする。
+- body Ok＋checkpoint Passedでも、SequenceReturnedでなければRelease/Unavailableで拒否する。
+- body Ok＋SequenceReturned＋checkpoint Passedだけが元Tをそのまま返す。RecordComparisonやpermitを新しく生成する機能ではない。
+
+コンストラクタ・失敗移動・結果合流には新規work/I/O/heap確保を要求しない。work上限を使い切っても停止と保持を行う。既存30 workや全体上界に新費目を加える変更はない。opaque Debugを利用者がformatする際の確保まで不要と主張するものではない。
+
+### 12.3 検証範囲と未接続範囲
+
+[結果合流器合成記録](E2E_BEST_PRACTICE_R2_OL03_OUTER_RESULT_SYNTHETIC_2026-10-22.md)の新規6テストを参照。実kernelの全3roundから得たConfirmed/Incomplete/NotStartedとsummaryを、ownerの停止通知・source/record破棄後も保持する。成功/失敗×checkpoint成功/失敗、解放未到達、先行理由、work枯渇、遅延取消/期限、不整合なPassed、型/サイズ/Debug、診断破棄・checkpoint省略の変異を確認した。
+
+これは診断用の単体部品で、外側orchestratorそのものではない。同じinspection budgetを渡すことと実解放後に呼ぶことは、今後の固定callerの責務であり、この部品はreceipt/budget identityの結合tokenや実解放証拠を発行・検証しない。診断enumや汎用Tからstrict/OS/実行成功を主張してはならない。上位の通常strict戻り値も未変更である。
+
+残るのは§11の②以降：固定body完了helper、receipt/clockからのprivate orchestrator、固定解放sectionと実呼出し順の結合、上位へのstructured診断所有、新O費・保持/resource上界。§11の未確認事項のうち本型と合流器のコンパイル・実診断移動・サイズだけを今回確認し、外側全分岐やOS保証は未確認のままとする。全体受付無効・telemetry保留を維持する。

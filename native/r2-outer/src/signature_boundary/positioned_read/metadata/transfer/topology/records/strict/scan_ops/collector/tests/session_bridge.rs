@@ -6,6 +6,7 @@ mod after_scan;
 mod completion;
 mod final_clock;
 mod final_index;
+mod outer_result;
 mod owner_contract;
 mod records_stage;
 mod round_kernel;
