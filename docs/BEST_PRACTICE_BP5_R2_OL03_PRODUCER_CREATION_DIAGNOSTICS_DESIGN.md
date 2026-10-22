@@ -42,6 +42,8 @@ Envelopeを発行する本番の信頼元はまだない。合成段階ではcfg
 仮称`PreparationOwner`は部分入力を一括所有するprivate領域で、初期化はinlineのmoveだけとする。失敗する検査/確保は結果slotを予約した後で行う。未完成の入力を成功bundleとして公開しない。
 
 1. Envelopeを入口のPreparationOwnerへ値で移す。同budgetの`ProtectedBridgeClaim`へ仮称`preparation_started`を追加し、最初のfallible workより前に不可逆に消費する。別budgetのclaimも消費/停止対象にする。bridgeのgenerated/usedやsession.startedを先取り消費しない。
+   - 停止の伝播：現行`SharedBudget::stop`がbridge claimへ失敗を記録する条件は`generated`だけで、準備段階（generated前）の停止はclaimに残らない。同budgetはsticky failedで止まるが、claimのRcを保持する側（PreparationOwner/seal照合・slot放棄処理）からは停止が見えない。このため記録条件を`preparation_started || generated`へ広げる。準備段階の個別拒否では、従来のreject同様にclaimへ`latch`も行い、先行理由を上書きしない。
+   - 準備claimとowner確認の順序：準備claimはowner/slotのEmpty確認（手順2）より前に消費する。非Emptyのowner（二重開始）でもそのbudgetの準備claimは消費済みとなり、同budgetで新Envelopeを再準備できない。begin_slotは非Emptyを`b.stop(Binding)`で拒否するため、いずれの順序でもbudgetは停止する。claimを先に立てることで「ownerを差し替えて同budgetで再準備する」経路も閉じる、意図したfail-closedの順序とする。
 2. 同じ結果ownerのEmpty→Awaitingを確定し、既存begin_slotの2 workでslotを確保する。非Emptyならproducerを呼ばず拒否する。初回begin失敗時も既存の先行診断を保持する。
 3. 元inspection/準備claim/context保持領域の結合を検査する。別origin/started/session、二重生成、同値コピー/別供給系列を拒否する。
 4. §5の固定producer段階を順に実施する。各段階はPreparationOwnerを借用し、所有resourceを局所Resultへ移して失敗時に暗黙dropしない。
@@ -92,7 +94,7 @@ Envelopeを発行する本番の信頼元はまだない。合成段階ではcfg
 
 現行createのFailureを受け取った後にSequenceReturnedを付け足すだけの実装にはしない。create内部の検査coreを所有管理から分離し、型付きlocationを返す検査→同じ所有者による固定discard→checkpoint→InputRejected返却の順を保証する。検査順・2 work・generated claimの不可逆性は維持する。
 
-begin失敗ではproducerを実行せず、入口が既に所有したEnvelopeだけを破棄する。初回ownerには同じ第一診断へ破棄/checkpoint観測を補う。二重開始の場合は新Envelopeの拒否で先行結果を置換せず、初回結果は保持済み/消費済みのままとする。
+begin失敗ではproducerを実行せず、入口が既に所有したEnvelopeだけを破棄する。初回ownerには同じ第一診断へ破棄/checkpoint観測を補う。二重開始の場合は新Envelopeの拒否で先行結果を置換せず（§4手順1のとおり、そのbudgetは停止し準備claimも消費済みで再準備できない）、初回結果は保持済み/消費済みのままとする。
 
 外部のcontext/registry/groups/BoundTargetと参照先binding保持領域は借用であり、内部discardでは解放しない。上流が結果格納/入口returnまで生存させ、その後に解放する。自己参照struct・unsafeの寿命延長・別allocationへのcontext差替えで解消しない。
 
@@ -127,7 +129,7 @@ SequenceReturnedは通常drop列から戻った観測に限る。OS close確認�
 
 1. owner/slot確保より前にproducerのfallible操作がない。owner失敗/二重開始ではproducer呼出し0・scan開始0。
 2. Supply各段階/Create2段階の拒否位置とprimaryを照合。各work不足/課金後取消/期限切れ/先行理由で停止し、成功公開しない。
-3. 同receipt/context/source/claim/budget/startedと固定3slotを、準備→生成→移譲→実結果格納まで追跡。別系列の同値コピー/二重生成/失敗後再準備を拒否。
+3. 同receipt/context/source/claim/budget/startedと固定3slotを、準備→生成→移譲→実結果格納まで追跡。別系列の同値コピー/二重生成/失敗後再準備を拒否。準備段階（generated前）の停止がclaimへ記録され、claim保持側からも見えること、非Emptyのownerでの開始後に同budgetで再準備できないことを確認する。
 4. 各部分所有状態で存在するresourceだけが一度破棄される。drop watchは記録専用とし、破棄後に順序/回数をassertする。
 5. create失敗後も型付きlocation・元理由・解放/checkpoint観測をownerから取得できる。未開始round/summaryは捏造しない。
 6. 二重開始で新入力を破棄しても先行結果は不変。slotの待機中放棄はSlotAbandonedで通常拒否と区別する。
