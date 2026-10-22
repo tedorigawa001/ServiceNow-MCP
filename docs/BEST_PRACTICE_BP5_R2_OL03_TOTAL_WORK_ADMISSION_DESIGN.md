@@ -1,6 +1,6 @@
 # BP-5 R-2 OL-03：record・scanを含む全体work上界と事前受付
 
-Version: draft-0.21 / Date: 2026-10-23 / Status: private collector/session会計・外側固定解放・内部入力/claim・上位結果ownerを後続設計で先行実装。全体受付・統合other上界・通常strict差替え・運用承認は未対応。以下の各段階の記録と現行状態を区別する。
+Version: draft-0.22 / Date: 2026-10-23 / Status: private collector/session会計・外側固定解放・内部入力/claim・上位結果owner・固定値移譲/callerを後続設計で先行実装。全体受付・統合other上界・通常strict差替え・運用承認は未対応。以下の各段階の記録と現行状態を区別する。
 
 ## 1. 範囲と停止状態
 
@@ -9,6 +9,8 @@ Version: draft-0.21 / Date: 2026-10-23 / Status: private collector/session会計
 同対設計draft-0.2 §11で内部bundle生成2 work・利用identity guard10 workを合成計数した。後者は固定releaseへdispatchしない検査subsetで、policy実内容/運用model承認・供給包装・上位結果owner費を含まない。budget初期化ごとのbridge claim用Rc allocation1個も独立管理allocationに残す。既存35＋Kと今回12だけを合計して全体受付成功とは扱わない。
 
 同対設計draft-0.3 §12でO.result_owner=2 workを追加計数した。格納前の開始guardだけへ課金し、返却後retain/take・有限診断projection・先行理由の保持に新work/heap確保を要求しない。待機slotのRc cloneは既存claimの共有で、新規allocationではない。入力側12、coupling35＋K、既存configure1、R/I/S等との費目所有を分け、未確定のsupply/全体resource上界を0にせず、全体受付を有効化しない。
+
+同[対設計draft-0.4 §13](BEST_PRACTICE_BP5_R2_OL03_PROTECTED_BRIDGE_DIAGNOSTICS_DESIGN.md)でO.bridge_transfer=1 workを追加し、固定releaseへの値移譲と上位ownerの同budget callerを接続した。生成2＋owner2＋利用10＋移譲1＝15は、同じ合成成功fixtureの固定release直呼びとの差分で確認した。caller内release前は13で、生成は外側に残る。供給包装・独立resource・全体R/I/S/O上界は未確定で、既存coupling35＋K/configure1へ二重計上せず、全体受付を有効化しない。
 
 [同round宣言・indexモデル設計](BEST_PRACTICE_BP5_R2_OL03_ROUND_DECLARATION_WORK_DESIGN.md)を引き継ぐ。indexの固定ID `bp5-r2-index-work-0.1`、上界式、3 decode・6 record検証・3 closure scan、scan前後の厳密再検証を維持する。本書は新しい外部仕様の調査ではなく、リポジトリ内の課金点に基づく設計案である。
 

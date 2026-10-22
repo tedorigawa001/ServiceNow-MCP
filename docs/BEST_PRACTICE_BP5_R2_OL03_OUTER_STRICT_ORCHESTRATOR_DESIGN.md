@@ -1,6 +1,6 @@
 # BP-5 R-2 OL-03：通常strictの外側orchestrator接続詳細設計
 
-Version: draft-0.7 / Date: 2026-10-23 / Source baseline: 設計 `526f6d3`、固定位置 `cd5bd97`、結果合流器 `39f643e`、body `44051c5`、固定解放 `8107496` / Status: §14までprivate接続済み。§15の内部入力/claim・上位結果owner subsetを追加。固定値移譲・通常strict差替え・OS接続は未実施。
+Version: draft-0.8 / Date: 2026-10-23 / Source baseline: `8da8db2` / Status: §14までprivate接続済み。§15で内部入力/claim・上位結果ownerと固定値移譲/callerまで接続。通常strict差替え・OS接続は未実施。
 
 ## 1. 範囲と停止条件
 
@@ -239,7 +239,7 @@ SequenceReturnedは通常drop呼出しが戻った診断であり、OS close成�
 
 残課題は保護された通常strict入力bridge・structured診断の上位所有先、追加O費を含む全体work/resource上界と3round配賦、本番policy/OS source/明示解放確認である。全体受付無効・telemetry保留・既存gate/DER/absence停止を維持し、通常strict全体差替え・OS/実機接続・token発行・設定変更・permit発行は行わない。
 
-## 15. 保護入力bridge・上位診断保持の対設計（MDのみ）
+## 15. 保護入力bridge・上位診断保持の対設計と内部subset
 
 [詳細設計draft-0.1](BEST_PRACTICE_BP5_R2_OL03_PROTECTED_BRIDGE_DIAGNOSTICS_DESIGN.md)に、供給元・所有/借用・budget側の一度限りのbridge claim・元receipt/context/source/3slot/policyへの結合と、上位が実OuterStrictFailureをinline所有する出口を整理した。claimは既存session claimと分離し、releaseへの移譲前後で解放責務を分ける。結果の格納は返却後の新しいfallible処理へ依存させない。
 
@@ -248,3 +248,5 @@ draft-0.1時点の新guard10 workは未実装の候補で、既存35＋Kと別�
 後続の[対設計draft-0.2 §11](BEST_PRACTICE_BP5_R2_OL03_PROTECTED_BRIDGE_DIAGNOSTICS_DESIGN.md)で、内部bundleとbudget側生成/利用claim・10点identity検査だけを実装した。生成2＋利用10 workを計数するが、固定releaseへの値移譲・InputRejected/上位結果owner・本番producerは未接続である。検査済みbundleもdrop時は放棄停止となり、既存PendingBody/RecordComparisonへ変換する口は追加しない。
 
 対設計draft-0.3 §12でInputRejected/実Outerをinline保持する上位結果ownerを追加した。beginの一度限りのslotと、返却後の失敗しないmove/takeにより、二重開始で先行診断を置換しない。新O.result_owner=2 workであり、固定入力bridgeの値移譲・同inspectionの固定caller・通常strict/OS/全体受付への接続は未実施のまま。
+
+後続の[対設計draft-0.4 §13](BEST_PRACTICE_BP5_R2_OL03_PROTECTED_BRIDGE_DIAGNOSTICS_DESIGN.md)で、payloadを一度takeして固定releaseへ渡し、同budgetのbegin→移譲→実結果retainを行うcallerを接続した。新O.bridge_transfer1を含め、callerのrelease前13、生成込み差分15 workを合成照合した。移譲前はInputRejected、移譲後は実Outerを保存し、二重開始でも先行診断を置換しない。本番supply producer・生成失敗の上位捕捉・通常strict/OS/全体受付への接続は未対応であり、上段の未接続表記と現行subsetを区別する。

@@ -7,6 +7,7 @@ mod body_orchestrator;
 mod completion;
 mod final_clock;
 mod final_index;
+mod fixed_caller;
 mod outer_release;
 mod outer_result;
 mod owner_contract;

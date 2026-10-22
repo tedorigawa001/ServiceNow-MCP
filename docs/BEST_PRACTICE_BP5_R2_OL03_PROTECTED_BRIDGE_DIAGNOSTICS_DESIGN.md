@@ -1,6 +1,6 @@
 # BP-5 R-2 OL-03：保護入力bridge・上位診断保持の詳細設計
 
-Version: draft-0.3 / Date: 2026-10-23 / Source baseline: 内部入力 `d89fde1`、外部保持レビュー `8d1b061` / Status: §11の内部入力/claim、§12の上位結果ownerを実装/合成検証。保護producer・固定releaseへの値移譲・通常strict差替えは未実装。
+Version: draft-0.4 / Date: 2026-10-23 / Source baseline: `8da8db2` / Status: §13で保護入力から固定releaseへの一度限りの値移譲と上位結果ownerへの固定callerを内部接続/合成検証。保護producer・通常strict差替えは未実装。
 
 ## 1. 範囲と停止状態
 
@@ -180,6 +180,8 @@ claim消費それ自体と失敗通知はwork確保前に行う。sealチェッ�
 
 ## 11. 内部型・生成/利用claim subset（draft-0.2）
 
+以下の未接続表記はdraft-0.2時点の記録である。現行の固定値移譲・callerは§13、上位ownerは§12を参照する。
+
 ### 11.1 実装範囲と由来
 
 [protected_inputs.rs](../native/r2-outer/src/signature_boundary/positioned_read/metadata/transfer/topology/records/strict/scan_ops/connection_owner/protected_inputs.rs)へprivate fieldのProtectedSupply/ProtectedStrictInputsを追加した。payloadはscan/policy/Quotas→RecordSource→TopologySource→held→topology receipt→record receiptの順で所有し、外部BoundTarget/contextを借用する。receiptは値所有し、そのfieldのアドレスを保存しない。外部bindの同値bindingコピーは元lineage一致と完全一致の両方を要求する。自己参照・unsafe・元resourceの複製/再openは追加しない。
@@ -214,6 +216,8 @@ draft-0.2の次工程だったInputRejected/Outerと上位結果ownerは§12で�
 
 ## 12. InputRejected/Outer・上位結果owner subset（draft-0.3）
 
+以下の固定caller未接続表記はdraft-0.3時点の記録であり、§13で内部接続した。owner単体がbudget由来を証明しない制約は変えない。
+
 ### 12.1 型と一方向遷移
 
 [result_owner.rs](../native/r2-outer/src/signature_boundary/positioned_read/metadata/transfer/topology/records/strict/scan_ops/connection_owner/result_owner.rs)にInputRejected、StrictBridgeFailure、StrictBridgeResult、StrictResultOwner、ResultSlotを追加した。private内部型であり、通常strictの裸Failure戻り値は変更しない。source/bridgeを起動するcallbackや任意成功のconstructorはない。
@@ -247,3 +251,36 @@ InputRejectedは48 bytes以下、StrictBridgeFailure/ownerは各512 bytes以下�
 このownerは結果の保持容器であり、結果を元inspectionへ結合する入力bridgeでもリリース証拠resolverでもない。任意callbackを受け取らず、保持する実結果の同inspection由来は今後の固定callerによる線形移譲で結合する。成功も既存RecordComparisonを受け取るだけで新しく生成せず、格納時の時刻再検査やpermit発行をしない。
 
 [新規9テストの検証記録](E2E_BEST_PRACTICE_R2_OL03_RESULT_OWNER_SYNTHETIC_2026-10-23.md)を参照。全3roundの実kernel診断13条件、late checkpoint失敗、全7stage、二重開始/一度だけtake、失敗/放棄、秘密非出力、型/sizeを合成検証した。次は保護入力の固定値移譲とInputRejected/Outerをこのownerへ渡す固定callerの接続であり、通常strict差替えはまだ行わない。全体受付無効・telemetry保留を維持する。
+
+## 13. 固定値移譲・同budget callerの内部接続（draft-0.4）
+
+### 13.1 唯一の値移譲
+
+`ProtectedStrictInputs::into_release(self, b)`は既存の利用guard10を同じ順序・課金で実行し、元inspectionの照合/最終checkpointを1 workで追加する。成功時だけprivateなpayloadを一度`take`し、空のshellを破棄してから元のheld/topology/records/source/topology source/3scan/ResourceInput/Quotasを既存`release::run`へ値で渡す。再充填、raw getter、callee選択callback、unsafeの取り出しはない。sealの解放で元payloadの放棄停止を誤通知せず、移譲後の解放責務は既存固定releaseが所有する。
+
+利用guardの失敗には、7分類の検知stageを添える。従来の`require_use`は理由だけを返す内部検査APIとして互換性を維持する。移譲前の失敗では、元/提示budgetを停止させ、未移譲payloadを固定field順（scan3個→resource/quotas→source→topology source→held→topology→records）で破棄した後、元primary/stageを保ったInputRejectedへSequenceReturnedとcheckpoint観測を記録する。失敗後に追加workやretry、scan開始を要求しない。移譲後の失敗は実OuterStrictFailureをそのままmoveし、round/cleanup/summaryを理由だけで再構築しない。
+
+### 13.2 上位ownerへの固定caller
+
+`StrictResultOwner::run_protected(inputs, b)`は、同じ`&mut SharedBudget`でbegin→利用guard/移譲→固定release→retainを一続きに行う。任意の結果、別budget由来のOuter、callbackを引数に受け取らない。成功/失敗の実結果をslotへ必ずmove保持し、返す軽量Resultは制御用の通知に限る。retain前後へ新しいfallible検証を挟まず、成功を再生成しない。
+
+初回beginの予算/取消/期限失敗でもcallerが所有入力を破棄し、ownerに保存済みの同じ第一診断へ実際の破棄/checkpoint観測を補う。保持済み/消費済みownerへの二重開始は、新入力を破棄して停止するが、先行結果・stage・観測を置換しない。利用済みbundleの再利用、別inspection、各供給系列/slot不一致はrelease開始前に拒否する。低水準begin/retain自体に由来検査を追加したわけではなく、運用側はこの固定callerを使う契約である。
+
+本callerは既に生成されたbundleを受け取る。供給producerと`create`の失敗をここで捕捉する入口は未接続であり、全供給失敗がこのownerに保存されるとは主張しない。cfg(test)以外のProtectedSupply constructorは引き続き存在しない。
+
+### 13.3 費目・検証と限界
+
+| 費目 | work | 所有範囲 |
+|---|---:|---|
+| O.bridge_create | 2 | caller外の生成、既存費を維持 |
+| O.result_owner | 2 | begin、既存費を維持 |
+| O.bridge_use | 10 | 既存固定guard、一度だけ課金 |
+| O.bridge_transfer | 1 | take直前のinspection/checkpoint |
+| callerのrelease前合計 | 13 | 生成費を含めない |
+| 生成を含む固定release直呼びとの差 | 15 | 同じ成功fixtureの実差分で照合 |
+
+既存coupling35＋K、configure1、R/I/S/typed tailと重複させない。停止通知・破棄観測・診断move/retainに新しいwork/heap確保は要求しない。ただし供給包装/claim等の管理allocation・独立resource上界・全体上界は未確定であり、今回の15だけを足して全体受付を認証しない。
+
+[新規5テストの検証記録](E2E_BEST_PRACTICE_R2_OL03_FIXED_CALLER_SYNTHETIC_2026-10-23.md)で、guard不一致/欠落、同budget・二重開始、全3roundの操作/hash/cleanup失敗、外側clock/M4、work各境界/課金後取消、期限切れ、解放後の遅延取消/期限切れを確認した。Drop内の合成watchは観測だけを記録し、検証は破棄後に行う。
+
+SequenceReturnedはRustの固定drop列から戻った観測であり、OS FDのclose確認や停止可能なDropの証明ではない。panic/abort/forget/kill、戻らないDropの解放/診断保存は保証しない。既存UnverifiedXml・APPROVED_REGISTRY=None・通常v2 Unavailable・gate92・DER/absence停止を維持する。通常strict差替え、OS接続、全体受付、運用policy/permitは未接続/未承認である。

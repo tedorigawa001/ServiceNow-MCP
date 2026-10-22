@@ -1,4 +1,4 @@
-//! Inline upper-result retention only. No bridge dispatch, runtime entry or success constructor.
+//! Inline upper-result retention and fixed protected dispatch. No runtime entry or success constructor.
 use super::*;
 use crate::signature_boundary::positioned_read::{ProtectedBridgeClaim, ScanSessionClaim};
 use outer_result::{DropObservation, OuterPhase, OuterStrictFailure, PostReleaseCheckpoint};
@@ -36,7 +36,7 @@ impl InputRejected {
             checkpoint: PostReleaseCheckpoint::NotReached,
         }
     }
-    // Diagnostic join, NOT a release proof. The fixed bridge producer is still unconnected.
+    // Diagnostic join after the fixed bridge drops its payload, NOT an OS release proof.
     pub(in super::super) fn after_release(
         mut self,
         observed: DropObservation,
@@ -177,6 +177,35 @@ impl StrictResultOwner {
         }
         self.state = State::Consumed;
         self.result.take()
+    }
+    pub(in super::super) fn run_protected<
+        R: MetadataOps + ResourceOrigin,
+        T: TopologySource<R>,
+        S: RecordSource,
+        C: ScanOps,
+    >(
+        &mut self,
+        inputs: protected_inputs::ProtectedStrictInputs<'_, R, T, S, C>,
+        b: &mut SharedBudget<'_>,
+    ) -> Result<(), Failure> {
+        let fresh = self.state == State::Empty;
+        let reason = match self.begin(MODEL_ID, b) {
+            Ok(slot) => {
+                let result = inputs.into_release(b);
+                let signal = result.as_ref().map(|_| ()).map_err(|e| e.reason());
+                slot.retain(result); // No additional guard, budget, callback or foreign result input.
+                return signal;
+            }
+            Err(reason) => reason,
+        };
+        let rejection = inputs.discard(InputStage::ModelInputUnavailable, reason, b);
+        if fresh {
+            // Same first begin rejection, now with the actual input-drop/checkpoint observations.
+            self.result = Some(Err(StrictBridgeFailure::input(rejection)));
+            self.state = State::Retained;
+        }
+        // On a duplicate begin, the previous result is never replaced.
+        Err(reason)
     }
 }
 impl ResultSlot<'_> {

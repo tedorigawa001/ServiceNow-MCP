@@ -1,6 +1,8 @@
-//! Inert protected-input ownership/claim subset. No producer, dispatch or result authority.
+//! Protected-input ownership/claim and fixed release transfer. No operational producer/permit.
 use super::*;
 use crate::signature_boundary::positioned_read::{ProtectedBridgeClaim, ScanSessionClaim};
+use outer_result::DropObservation;
+use result_owner::{InputRejected, InputStage, StrictBridgeFailure, StrictBridgeResult};
 
 pub(in super::super) const MODEL_ID: &str = "bp5-r2-protected-bridge-0.1";
 struct Tagged<T> {
@@ -35,7 +37,7 @@ pub(in super::super) struct ProtectedSupply<'s, R, T, S, C> {
     seal: Seal<'s>,
 }
 pub(in super::super) struct ProtectedStrictInputs<'s, R, T, S, C> {
-    // Option only so a future fixed transfer can take it despite Drop; never refilled.
+    // The fixed transfer takes this once despite Drop; never refilled.
     payload: Option<Payload<'s, R, T, S, C>>,
     seal: Seal<'s>,
 }
@@ -106,6 +108,15 @@ impl<'s, R, T, S, C> ProtectedStrictInputs<'s, R, T, S, C> {
         expected: &str,
         b: &mut SharedBudget<'_>,
     ) -> Result<(), Failure> {
+        self.require_use_at(expected, b)
+            .map_err(|(_, reason)| reason)
+    }
+    fn require_use_at(
+        &mut self,
+        expected: &str,
+        b: &mut SharedBudget<'_>,
+    ) -> Result<(), (InputStage, Failure)> {
+        let mut stage = InputStage::ModelInputUnavailable;
         let fresh = !self.seal.claim.used.replace(true);
         if !Rc::ptr_eq(&self.seal.claim, &b.protected_bridge_claim) {
             b.protected_bridge_claim.used.set(true);
@@ -121,12 +132,15 @@ impl<'s, R, T, S, C> ProtectedStrictInputs<'s, R, T, S, C> {
             if expected != MODEL_ID {
                 return Err(Failure::Unavailable);
             }
+            stage = InputStage::InspectionBinding;
             work(b)?; // 2
             inspection(&self.seal, b)?;
+            stage = InputStage::ContextBinding;
             work(b)?; // 3: immutable context retention
             if !std::ptr::eq(payload.context, self.seal.context) {
                 return Err(Failure::Binding);
             }
+            stage = InputStage::ReceiptBinding;
             work(b)?; // 4: receipt/target; the external bind copy is allowed only with lineage
             let bound = payload.held.bound;
             if !std::ptr::eq(bound, self.seal.bound)
@@ -138,6 +152,7 @@ impl<'s, R, T, S, C> ProtectedStrictInputs<'s, R, T, S, C> {
             {
                 return Err(Failure::Binding);
             }
+            stage = InputStage::SourceBinding;
             work(b)?; // 5: same held/open/source supply; no OS identity assertion
             if !Rc::ptr_eq(&payload.held.initial_origin, &self.seal.held_origin)
                 || !self.tag(&payload.source, 0)
@@ -145,6 +160,7 @@ impl<'s, R, T, S, C> ProtectedStrictInputs<'s, R, T, S, C> {
             {
                 return Err(Failure::Binding);
             }
+            stage = InputStage::PolicyBinding;
             work(b)?; // 6: supply seal only; operational policy/model approval is NOT supplied
             let Some(resources) = &payload.resources else {
                 return Err(Failure::Unavailable);
@@ -153,6 +169,7 @@ impl<'s, R, T, S, C> ProtectedStrictInputs<'s, R, T, S, C> {
                 return Err(Failure::Binding);
             }
             for i in 0..3 {
+                stage = InputStage::SlotBinding;
                 work(b)?; // 7..9
                 let Some(quota) = &payload.quotas[i] else {
                     return Err(Failure::Unavailable);
@@ -161,16 +178,95 @@ impl<'s, R, T, S, C> ProtectedStrictInputs<'s, R, T, S, C> {
                     return Err(Failure::Binding);
                 }
             }
+            stage = InputStage::InspectionBinding;
             work(b)?; // 10: terminal identity-check checkpoint, NOT a dispatch
             b.checkpoint()
         })();
         match result {
             Ok(()) => Ok(()),
-            Err(e) => reject(&self.seal, b, e),
+            Err(e) => Err((stage, reject::<()>(&self.seal, b, e).unwrap_err())),
         }
     }
     fn tag<V>(&self, value: &Tagged<V>, slot: usize) -> bool {
         Rc::ptr_eq(&value.supply, &self.seal.supply) && value.slot == slot
+    }
+}
+
+impl<R, T, S, C> ProtectedStrictInputs<'_, R, T, S, C> {
+    pub(super) fn discard(
+        self,
+        stage: InputStage,
+        reason: Failure,
+        b: &mut SharedBudget<'_>,
+    ) -> InputRejected {
+        // No retry/dispatch is permitted after owner rejection, including a foreign budget.
+        self.seal.claim.used.set(true);
+        if !Rc::ptr_eq(&self.seal.claim, &b.protected_bridge_claim) {
+            b.protected_bridge_claim.used.set(true);
+        }
+        let reason = reject::<()>(&self.seal, b, reason).unwrap_err();
+        let rejection = InputRejected::new(stage, reason, b);
+        drop(self); // All owned inputs in fixed payload field order, before the checkpoint.
+        rejection.after_release(DropObservation::SequenceReturned, b)
+    }
+}
+impl<R: MetadataOps + ResourceOrigin, T: TopologySource<R>, S: RecordSource, C: ScanOps>
+    ProtectedStrictInputs<'_, R, T, S, C>
+{
+    // The only payload take; no raw transfer object/getter or caller-selected callee.
+    #[allow(clippy::result_large_err)] // Retain the original bounded diagnostic inline, including after stop.
+    pub(super) fn into_release(mut self, b: &mut SharedBudget<'_>) -> StrictBridgeResult {
+        if let Err((stage, reason)) = self.require_use_at(MODEL_ID, b) {
+            return Err(StrictBridgeFailure::input(self.discard(stage, reason, b)));
+        }
+        let transfer = (|| {
+            work(b)?;
+            inspection(&self.seal, b)?;
+            b.checkpoint()
+        })(); // O.bridge_transfer 1
+        if let Err(reason) = transfer {
+            return Err(StrictBridgeFailure::input(self.discard(
+                InputStage::InspectionBinding,
+                reason,
+                b,
+            )));
+        }
+        let Some(payload) = self.payload.take() else {
+            return Err(StrictBridgeFailure::input(self.discard(
+                InputStage::InspectionBinding,
+                Failure::Binding,
+                b,
+            )));
+        };
+        drop(self); // Empty shell: must not latch abandonment after ownership has moved.
+        let Payload {
+            scans,
+            resources,
+            quotas,
+            source,
+            topology_source,
+            held,
+            topology,
+            records,
+            context,
+        } = payload;
+        let inputs = body::Inputs {
+            context,
+            scans: scans.map(|s| s.value),
+            resources: resources.map(|r| r.value),
+            quotas: quotas.map(|q| q.map(|q| q.value)),
+        };
+        // No fallible code after ownership move except the fixed owning release itself.
+        release::run(
+            held,
+            topology,
+            records,
+            source.value,
+            topology_source.value,
+            inputs,
+            b,
+        )
+        .map_err(StrictBridgeFailure::outer)
     }
 }
 
@@ -228,8 +324,7 @@ impl<'s, R, T, S, C> ProtectedStrictInputs<'s, R, T, S, C> {
 }
 impl<R, T, S, C> Drop for ProtectedStrictInputs<'_, R, T, S, C> {
     fn drop(&mut self) {
-        // No handoff exists in this subset, so even a checked bundle is abandoned on drop.
-        // A future fixed transfer takes the payload; only an untransferred one is abandonment.
+        // The fixed transfer takes the payload; only an untransferred one is abandonment.
         if self.payload.is_some() {
             latch(&self.seal.claim, Failure::Unavailable);
         }
