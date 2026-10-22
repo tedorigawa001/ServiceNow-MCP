@@ -70,6 +70,9 @@ impl<'s, R, T, S, C> PreparationEnvelope<'s, R, T, S, C> {
     ) -> Result<ProtectedSupply<'s, R, T, S, C>, InputRejected> {
         let entry = (|| {
             work(b)?; // O.supply_entry 1; the claim was already consumed before owner begin.
+            // run_creation passes the same b to start_preparation and here, so the attempt's
+            // origin/claim/session/started equalities hold there by construction. They stay as a
+            // guard for any later caller; fresh, supply, claim state and inspection carry the check.
             if !attempt.fresh
                 || !Rc::ptr_eq(&attempt.supply, &self.seal.supply)
                 || !Rc::ptr_eq(&attempt.origin, &b.inspection_origin)

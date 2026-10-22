@@ -240,6 +240,9 @@ impl StrictResultOwner {
         self.state = State::Consumed;
         self.result.take()
     }
+    // Test-only: production builds bundles only inside run_creation, so this entry is unreachable
+    // there. Keeping it out of non-test builds makes the two fixed callers exclusive by type.
+    #[cfg(test)]
     pub(in super::super) fn run_protected<
         R: MetadataOps + ResourceOrigin,
         T: TopologySource<R>,

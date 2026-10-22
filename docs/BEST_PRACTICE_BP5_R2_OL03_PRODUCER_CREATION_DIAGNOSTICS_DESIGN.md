@@ -209,6 +209,12 @@ claimは同じRc allocation内の状態拡張で、サイズ上限64 bytesの回
 
 本番producer、残りのcontext/receipt/source/policy/slot等の供給証拠検査、承認cap、独立resource/全体R/I/S/O上界・受付、OS source/明示close保証は未対応。Envelope受領前/入口へ渡さないままの放棄、panic/forget/abort/killの回収保証も追加しない。全体受付無効・telemetry保留・既存停止gateを維持する。
 
+### 11.4 固定callerの排他性と入口照合の役割
+
+本番で`ProtectedStrictInputs`を作れるのは`create_typed`だけで、その呼出し元は`run_creation`に限られる。生成済みbundleを受ける`run_protected`には本番で渡せる値がないため、`#[cfg(test)]`へ限定した。これにより本番の固定callerは`run_creation`だけとなり、§4の「二つの経路を排他的にする」を型で保証する。`run_protected`は既存の合成回帰テストだけが使う。
+
+`complete`入口の`PreparationAttempt`照合のうち、origin/claim/session/startedの一致は、`run_creation`が`start_preparation`と`complete`へ同じbudgetを渡すため現行構造では常に成立する。後から別の呼出し元を追加した場合の防御として残す。実質的な検査は、fresh（準備claimの一度限り）、同供給系列、claimのgenerated/used状態、`inspection(seal, b)`が担う。
+
 ## 12. 供給証拠検査の詳細設計（MDのみ）
 
 [供給証拠検査draft-0.1](BEST_PRACTICE_BP5_R2_OL03_SUPPLY_EVIDENCE_DESIGN.md)に、発行元専用のContext/Records/HeldSources/PolicyCaps/ScanSlots証拠、payloadと外部保持領域への結合、証拠の一度限り消費、固定順検査・拒否分類・解放責務を整理した。既存sealや単なる型wrapper/Rcは検証済み供給元の代替にならず、本番issuer不在は停止する。
