@@ -29,6 +29,7 @@ Version: draft-0.1 / Date: 2026-10-22 / Source baseline: `8107496` / Status: 設
 | registry | ビルドに固定・承認されたbytesのprotected context producer | immutable借用。env/argv/呼出しごとのpath/任意bytesで置換しない。現在Noneのgateを維持 |
 | groups・実行context | 同起動の検証済みeffective groups/context producer | producerが所有するimmutable保持領域を借用。caller申告の配列や別起動の同値コピーで代替しない。recordモデルのgroups上限との整合も確認 |
 | RecordReceipt/TargetDeclaration | 同一の安全なrecord取得・厳密binding検証producer | receiptはbundleが所有しmove。targetは固定所有元から借用し、generation/hash/role/path/sizeの結合を維持 |
+| BoundTarget（bind結果）と参照先RecordBinding | 同じrecord取得producerがbind時に作る外部保持領域 | bundleの外に置き、bundleより長く生存させて借用する（§3.1）。chain_names/bytesを含めbundle内へ移さない。参照先bindingはreceiptと値が等しい別allocationで、受理条件は§4 |
 | held leaf/祖先・TopologyReceipt | 同open receiptを発行したsecure opener/attach producer | 取得済みresourceを値移譲。別FD・数値FD・path文字列から再生成せず、open snapshot/originを保持 |
 | RecordSource/TopologySource | 上記receipt/open系列に結合した固定内部producer | 元の同source instanceを所有移譲。factoryを再呼出しして補充しない。固定bridgeにcaller指定callback/backend選択を渡さない |
 | inert 3scan | 固定backendの同供給系列。slotをInitial/BeforeM4/AfterM4へ封印 | bundleへ値で格納。slot作成時にopen/read/列挙を開始しない。generic合成adapterはcfg(test)限定、本番backendは未接続 |
@@ -41,7 +42,9 @@ root deviceやcontextの由来は、同じ数値・hashだけでは証明しな�
 
 入力は仮称`ProtectedStrictInputs`、入口は仮称`run_protected_strict`とする。scan_ops配下のprivate moduleが内部型を所有し、上位にはbundle全体の値消費口と結果契約だけを見せる。ScanOps・Quotas・ResourcePolicyの可視範囲を広げて上位に組み立てさせない。上位から具体型を命名できない場合は、最小のopaque facadeを別途設計し、raw型の公開で解消しない。
 
-bundleはsource/held/receipts/inert slot/policyの所有値と、安定した外部context/targetへの借用を持つ。自身のfieldを参照する自己参照structを作らない。context producerの保持領域は呼出しから結果格納まで生存させ、その後に解放できる。unsafeの参照延命、pinで未検証のlifetime問題を隠す方法、source全体のRefCell化は採らない。
+bundleはsource/held/receipts/inert slot/policyの所有値と、安定した外部context/targetへの借用を持つ。自身のfieldを参照する自己参照structを作らない。
+
+HeldTargetScopeは現行実装で外部の`BoundTarget<'s>`（records/lineage/targetへの参照、chain_names、bytes）を借用する（`transfer.rs`）。bundleがRecordReceiptを所有してmoveする以上、BoundTargetのrecords参照をbundle内のreceiptへ向けると自己参照になりmoveできない。このためBoundTargetと、その参照先であるreceiptと値が等しいRecordBindingは、producerが所有する外部保持領域に置き、bundleはその借用lifetimeを型に持つ。保持領域はbridge呼出しから結果格納まで生存させる。release内部の参照正規化（§4）は解放sectionまでの局所的なcanonical BoundTargetを作るだけで、この外部領域を置換・解放しない。context producerの保持領域は呼出しから結果格納まで生存させ、その後に解放できる。unsafeの参照延命、pinで未検証のlifetime問題を隠す方法、source全体のRefCell化は採らない。
 
 registry/groupsのimmutable保持、入力のpackaging、承認済みmodelの選定はproducerの責務。bridgeが再parseしてtrustを作ることはしない。producerの作業・allocationはbridge固定guard費の外に計上する。
 
@@ -61,6 +64,8 @@ bundleのprivateな供給sealは、同供給系列・同context保持領域・�
 | policy/3slot | 同供給seal、固定model群、0/1/2のslot位置 | model混在、順序違い、slot補充、別供給系列のQuotas |
 
 receiptは値moveでアドレスが変わるため、packaging前のreceipt fieldポインタを後まで保存しない。既存release入口のlineage/value照合→所有receiptへのcanonical参照正規化をそのまま用い、body/owner以降のポインタ同一性検査を維持する。receipt・registry・contextの厳密検証を「seal確認済み」で省略しない。
+
+外部BoundTargetが参照するRecordBindingは、所有receiptと値が等しい別allocationである。これは本書で唯一許す同値コピーで、受理条件は「lineage Rcがreceiptと同一（ptr_eq）かつbindingが完全一致」の両方とする。lineageが別なら値が一致しても拒否する。context・registry・groupsの同値コピー拒否（上表）には、この例外を広げない。bindingのコピーを作れるのは同じrecord取得producerだけとし、caller申告のbindingを受け付けない。
 
 利用開始時、最初のfallible workより前にbridge claimを不可逆に消費する。失敗後の再pack・再試行・claim初期化は禁止。bundle/位置/移譲結果は非Clone・非Copy・非serdeとし、slotはOption::take相当で一度だけ移す。Rustのmoveは同じ値の再利用を防ぐが、duplicate producerの抑止はbudget claimが担当する。
 
@@ -90,8 +95,10 @@ Drop/放棄時も元claimへ停止を記録する案とする。mem::forget/abor
 
 StrictBridgeFailureはinlineな排他的variantを持つ案とする。
 
-- `InputRejected`：bridge guard段階の元primary、固定の拒否stage、元lineage/budgetへの診断上の関連、解放観測、checkpoint観測。未開始なのでround/CompletionFailureは持たない。source/path/record bytesは持たない。
+- `InputRejected`：bridge guard段階の元primary、固定の拒否stage、解放観測、checkpoint観測だけをCopyなscalar/enumとして持つ。lineage/budgetのRc複製・参照・ポインタ値は持たない（元allocationを生存させず、identityの再利用口にもしない）。同じinspectionとの対応は§6末尾の線形移譲で担保する。未開始なのでround/CompletionFailureは持たない。source/path/record bytesは持たない。
 - `Outer`：**実際に返ったOuterStrictFailure全体**を値で保持。primary/phase/round/inner/summary/cleanup/観測を再構築しない。
+
+InputRejectedを既存OuterStrictFailure（OuterPhase::Entryと解放/checkpoint観測）で表す案も比較した。OuterPhase::Entryはrelease内部の入口（準備/制御work不足）を指し、bridge guardの7分類を区別できない。OuterPhaseへbridge用の値を足すと、release後の段階とbridge前の段階が同じ型に混在し、「releaseへ渡した後か」（§5.1/§5.2の解放責務の境界）を型で区別できなくなる。このため別variantとする。ただし保持する観測enum（DropObservation/PostReleaseCheckpoint）は既存型を再利用し、新しい観測型は作らない。
 
 拒否stage案はModel/InputUnavailable、InspectionBinding、ContextBinding、ReceiptBinding、SourceBinding、PolicyBinding、SlotBinding。対外enumやMCP schemaへ追加する設計ではなく、bridge内の固定分類とする。binding不一致はBinding、供給元/承認/model欠落はUnavailable、work/上界不適合はLimit、期限/取消は元Failureを維持する。先行Failureがあれば新分類で主理由を上書きしない。
 
@@ -152,7 +159,7 @@ claim消費それ自体と失敗通知はwork確保前に行う。sealチェッ�
 1. 同じ保護fixtureのpack→guard→固定release→結果owner保持を通し、実record再読6cycle・3round・固定解放・最終checkpoint・既存gateを維持する。
 2. registry/context/groups/root/target/source/policy/slotの供給系列を一つずつ混ぜる。同値コピー・別lineage・別budget・別startedも拒否し、open/scan前停止を確認する。
 3. bundle二重生成・利用再入・二重格納・失敗後再pack/再試行を拒否する。bridge claimの開始はsession claimを消費せず、session生成は従来のcalleeだけが行う。
-4. receiptのmove前後とcanonical参照結合を確認する。self-reference/unsafeや別resource再取得なしでコンパイルし、body側のpointer guardを弱めない。
+4. receiptのmove前後とcanonical参照結合を確認する。外部BoundTargetの同値binding受理はlineage同一かつ完全一致の場合だけで、別lineageの同値bindingは拒否されることを確認する。self-reference/unsafeや別resource再取得なしでコンパイルし、body側のpointer guardを弱めない。
 5. guard全点のwork不足・課金後取消・期限切れ・遅延成功で停止し、未開始scan/全所有source/held/receiptsの固定解放と元理由保持を確認する。
 6. releaseの全3roundの実CompletionFailure、M4/body末尾/解放後失敗を、上位結果ownerまでmoveして保持する。元summaryの前後完全一致、cleanup分類、round/phase、sticky理由を照合する。
 7. receipt/context/sourceを破棄しても保持済み診断を参照できる。表示/JSON生成を実行しなくても保持でき、秘密のDebug/ログ非露出を確認する。
@@ -169,4 +176,4 @@ claim消費それ自体と失敗通知はwork確保前に行う。sealチェッ�
 4. [全体work設計](BEST_PRACTICE_BP5_R2_OL03_TOTAL_WORK_ADMISSION_DESIGN.md)の歴史的な未実装表記と現行session/collectorを棚卸しし、最新R/I/S/O・3round・独立resource/管理allocationの上界へ統合する。全体受付の実装/有効化は別工程。
 5. productionのcontext/registry/source/policy/Quotas producerと通常strict呼出し側の戻り値移行を別途承認する。それまでは通常strict差替え・OS接続を停止する。
 
-承認待ち：producerの実trust根拠/配置、bridge claimの保持/初期化方式、opaque facadeのlifetime/visibility、wrapperのinline size上限、上位診断の最終所有先、supply/claim/result費、全体work/resource上界・運用cap、generic Dropのbounded性/実OS解放確認。案の型名や係数を承認済み仕様として実装へ持ち込まない。
+承認待ち：producerの実trust根拠/配置、外部BoundTarget/binding保持領域の所有者と寿命、bridge claimの保持/初期化方式、opaque facadeのlifetime/visibility、wrapperのinline size上限、上位診断の最終所有先、supply/claim/result費、全体work/resource上界・運用cap、generic Dropのbounded性/実OS解放確認。案の型名や係数を承認済み仕様として実装へ持ち込まない。
