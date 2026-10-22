@@ -1,6 +1,6 @@
 # BP-5 R-2 OL-03：保護入力bridge・上位診断保持の詳細設計
 
-Version: draft-0.7 / Date: 2026-10-23 / Source baseline: `bd73802` / Status: §15の生成前保持に加え、§16の準備claim/同budget入口/生成前停止伝播を内部実装。保護producer全体・通常strict差替えは未実装。
+Version: draft-0.8 / Date: 2026-10-23 / Source baseline: `55cdf64` / Status: §16まで内部実装。§17に供給証拠検査の参照を追加（MDのみ）。保護producer全体・通常strict差替えは未実装。
 
 ## 1. 範囲と停止状態
 
@@ -308,3 +308,9 @@ SequenceReturnedはRustの固定drop列から戻った観測であり、OS FDの
 [生成入口設計draft-0.3 §11](BEST_PRACTICE_BP5_R2_OL03_PRODUCER_CREATION_DIAGNOSTICS_DESIGN.md)で、準備flagをowner確認/workより前に一度消費し、slot確保後に同budget/seal/claim/session/startedへ結合したattemptを値消費する入口を追加した。新O.supply_entry1により新生成経路の差分は17、既存生成済みbundle経路は15を維持する。
 
 SharedBudget::stopは準備中もbridge claimへ第一理由を伝播する。新ownerでの再準備、放棄attempt、別budgetを拒否し、準備段階のslot放棄でも元理由を保持する。これは実producer全体・全体work/resource上界・運用承認ではない。[合成検証記録](E2E_BEST_PRACTICE_R2_OL03_PREPARATION_CLAIM_SYNTHETIC_2026-10-23.md)を参照。
+
+## 17. 次の境界：発行元に結合した供給証拠（設計のみ）
+
+[供給証拠検査draft-0.1](BEST_PRACTICE_BP5_R2_OL03_SUPPLY_EVIDENCE_DESIGN.md)で、Context/Records/HeldSources/PolicyCaps/ScanSlotsの証拠と、発行時の検証・専用module・所有値/保持領域・一度限り消費を設計した。既存利用guardは維持し、同じsealの存在だけで検証済み取得/承認capへ昇格しない。
+
+供給段階の失敗は元InputRejectedへ位置/第一理由/破棄観測を保持し、移譲後は実Outerのままとする。証拠はresourceを二重所有せず、証拠参照を閉じた後に元固定payload discardを行う。MDのみで、通常strict/OS source/本番issuer・受付/permitの停止を変更しない。

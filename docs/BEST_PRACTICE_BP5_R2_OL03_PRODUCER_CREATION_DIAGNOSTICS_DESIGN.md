@@ -1,6 +1,6 @@
 # BP-5 R-2 OL-03：保護producer生成入口・生成失敗の上位診断保持
 
-Version: draft-0.3 / Date: 2026-10-23 / Source baseline: `bd73802` / Status: §10の生成前保持に加え、§11の準備claim・同budget入口検査・生成前停止伝播を実装/合成検証。全producer/8段階全体・運用受付は未実装/未承認
+Version: draft-0.4 / Date: 2026-10-23 / Source baseline: `55cdf64` / Status: §11まで内部実装/合成検証。§12に供給証拠検査の後続詳細設計を追加（MDのみ）。全producer/8段階全体・運用受付は未実装/未承認
 
 ## 1. 範囲と停止状態
 
@@ -14,8 +14,8 @@ Version: draft-0.3 / Date: 2026-10-23 / Source baseline: `bd73802` / Status: §1
 
 | 現行ソース | 成立していること | 残る境界 |
 |---|---|---|
-| [protected_inputs.rs](../native/r2-outer/src/signature_boundary/positioned_read/metadata/transfer/topology/records/strict/scan_ops/connection_owner/protected_inputs.rs) | create2 work、利用guard10、移譲1、元budget/供給seal/3slotの結合 | constructorはcfg(test)のfixtureのみ。createはFailureだけを返し、その場でsupplyがdropされる |
-| [result_owner.rs](../native/r2-outer/src/signature_boundary/positioned_read/metadata/transfer/topology/records/strict/scan_ops/connection_owner/result_owner.rs) | 生成済みbundleを同budgetで固定releaseへ移し、実InputRejected/Outerをinline保持 | run_protectedの前に起きたproducer/create失敗は捕捉しない |
+| [protected_inputs.rs](../native/r2-outer/src/signature_boundary/positioned_read/metadata/transfer/topology/records/strict/scan_ops/connection_owner/protected_inputs.rs) | create_typed2 work、利用guard10、移譲1、元budget/供給seal/3slotの結合。生成拒否も固定discard/checkpoint後に型付き保持 | constructorはcfg(test)のみ。sealは承認registry/context/OS取得/capの供給証拠ではない |
+| [result_owner.rs](../native/r2-outer/src/signature_boundary/positioned_read/metadata/transfer/topology/records/strict/scan_ops/connection_owner/result_owner.rs) | run_protectedに加え、run_creationが生成前slotを確保し部分入力/型付きcreate拒否をinline保持 | 本番producer/供給証拠検査は未対応。Envelope受領前の取得失敗は上流の責務 |
 | 同ownerの低水準口 | begin_slot/retain_resultはprivate。test用begin/retain以外は固定callerだけが使う | 新入口のために汎用begin/retainや任意結果の格納口を再公開しない |
 | ResourceInput/Quotas | 内部会計/固定collector接続が存在 | 本番の承認cap・保護された供給元は未対応。数値上界だけではpolicyを生成しない |
 
@@ -208,3 +208,9 @@ claimは同じRc allocation内の状態拡張で、サイズ上限64 bytesの回
 [新規4テストと拡張回帰の記録](E2E_BEST_PRACTICE_R2_OL03_PREPARATION_CLAIM_SYNTHETIC_2026-10-23.md)で、owner開始前の消費、先行attempt放棄、別budget、準備段階の停止伝播、fresh ownerでも再開不可を確認した。既存work/取消/期限の全境界を新entryへ合わせ、全19位置のprojection、固定field解放、元診断保持、成功差分を再検証した。
 
 本番producer、残りのcontext/receipt/source/policy/slot等の供給証拠検査、承認cap、独立resource/全体R/I/S/O上界・受付、OS source/明示close保証は未対応。Envelope受領前/入口へ渡さないままの放棄、panic/forget/abort/killの回収保証も追加しない。全体受付無効・telemetry保留・既存停止gateを維持する。
+
+## 12. 供給証拠検査の詳細設計（MDのみ）
+
+[供給証拠検査draft-0.1](BEST_PRACTICE_BP5_R2_OL03_SUPPLY_EVIDENCE_DESIGN.md)に、発行元専用のContext/Records/HeldSources/PolicyCaps/ScanSlots証拠、payloadと外部保持領域への結合、証拠の一度限り消費、固定順検査・拒否分類・解放責務を整理した。既存sealや単なる型wrapper/Rcは検証済み供給元の代替にならず、本番issuer不在は停止する。
+
+本案は現行complete1を段階別検査/公開へ置換する候補で、固定部分の比較は17−1＋7＝23。発行/動的費を含めず、未計数の23を全体上界や承認capにしない。cap契約・必要数量profile供給と初回decodeの順序は未確定であり、循環した生成/scanや余分なdecodeで補わない。証拠型/検査器の実装・全体受付の有効化は行っていない。
