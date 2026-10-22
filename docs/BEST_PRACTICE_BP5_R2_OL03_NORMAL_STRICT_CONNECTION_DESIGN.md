@@ -1,6 +1,6 @@
 # BP-5 R-2 OL-03：通常strictの固定3箇所・同RecordSource・M4 owner接続詳細設計
 
-Version: draft-0.12 / Date: 2026-10-22 / Design baseline: `fd1de54` / Implementation baselines: owner `2905075`、topology `bd9301b`、kernel `9d7183e`、固定位置 `cd5bd97`、結果合流器 `39f643e`、body `44051c5`、固定解放 `8107496` / Status: 固定3位置から外側解放/最終結果までprivate接続。§15の内部入力/claimだけ先行実装。上位結果保持・通常strict全体・OS接続は未実施。
+Version: draft-0.13 / Date: 2026-10-23 / Design baseline: `fd1de54` / Implementation baselines: owner `2905075`、topology `bd9301b`、kernel `9d7183e`、固定位置 `cd5bd97`、結果合流器 `39f643e`、body `44051c5`、固定解放 `8107496` / Status: 固定3位置から外側解放/最終結果までprivate接続。§15の内部入力/claim・上位結果ownerを先行実装。固定値移譲・通常strict全体・OS接続は未実施。
 
 ## 1. 範囲と不変条件
 
@@ -291,3 +291,5 @@ BeforeM4のCompletionFailureは既存compare_coreの捕捉経路でroundとと�
 [保護入力bridge・診断保持詳細設計draft-0.1](BEST_PRACTICE_BP5_R2_OL03_PROTECTED_BRIDGE_DIAGNOSTICS_DESIGN.md)を参照。元供給系列のopaque bundleを値消費し、固定releaseだけへ渡し、InputRejectedまたは実OuterStrictFailureを上位が保持する対を設計した。raw ScanOps/Quotas公開、旧ClosureSource fallback、reason-onlyへの暗黙変換は禁止する。新claim/供給seal/上位結果ownerは未実装で、費目候補の検証・保護producer・全体上界の承認前に通常strictを差し替えない。
 
 同設計draft-0.2 §11で新claim/内部型/供給seal検査だけを先行実装した。生成2＋利用10 workと合成9テストを記録する。入力生成はcfg(test)だけ、payloadの公開/dispatchはなく、通常strict差替え・上位結果保持・本番policy/OS source/全体受付は未対応のままとする。
+
+同設計draft-0.3 §12で上位結果ownerの内部保持を先行実装した。InputRejectedと実Outerを区別し、実round/cleanup/全summaryのmove保持を確認する。追加費は開始guard2 workで、返却後格納/取得に新workは要求しない。固定bridgeへの接続・通常strict差替え・OS/実機/運用承認は別工程である。

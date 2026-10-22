@@ -9,6 +9,7 @@ mod kernel;
 pub(in super::super) mod outer_result;
 pub(super) mod protected_inputs;
 pub(super) mod release;
+pub(super) mod result_owner;
 pub(in super::super) mod topology_adapter;
 #[derive(Clone, Copy, PartialEq, Eq)]
 enum Progress {

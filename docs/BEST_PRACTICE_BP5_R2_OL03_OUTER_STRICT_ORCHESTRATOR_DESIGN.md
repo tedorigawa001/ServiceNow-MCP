@@ -1,6 +1,6 @@
 # BP-5 R-2 OL-03：通常strictの外側orchestrator接続詳細設計
 
-Version: draft-0.6 / Date: 2026-10-22 / Source baseline: 設計 `526f6d3`、固定位置 `cd5bd97`、結果合流器 `39f643e`、body `44051c5`、固定解放 `8107496` / Status: §14までprivate接続済み。§15の内部入力/claim subsetを追加。releaseへの移譲・上位結果保持・通常strict差替え・OS接続は未実施。
+Version: draft-0.7 / Date: 2026-10-23 / Source baseline: 設計 `526f6d3`、固定位置 `cd5bd97`、結果合流器 `39f643e`、body `44051c5`、固定解放 `8107496` / Status: §14までprivate接続済み。§15の内部入力/claim・上位結果owner subsetを追加。固定値移譲・通常strict差替え・OS接続は未実施。
 
 ## 1. 範囲と停止条件
 
@@ -246,3 +246,5 @@ SequenceReturnedは通常drop呼出しが戻った診断であり、OS close成�
 draft-0.1時点の新guard10 workは未実装の候補で、既存35＋Kと別。後続subsetの計数は次段落を参照する。supply/result owner費・全体work/resource上界は未確定で、数値から本番policyを作らない。保護producer・上位型・通常strict戻り値の変更は未実装であり、全体受付無効・telemetry保留を維持する。
 
 後続の[対設計draft-0.2 §11](BEST_PRACTICE_BP5_R2_OL03_PROTECTED_BRIDGE_DIAGNOSTICS_DESIGN.md)で、内部bundleとbudget側生成/利用claim・10点identity検査だけを実装した。生成2＋利用10 workを計数するが、固定releaseへの値移譲・InputRejected/上位結果owner・本番producerは未接続である。検査済みbundleもdrop時は放棄停止となり、既存PendingBody/RecordComparisonへ変換する口は追加しない。
+
+対設計draft-0.3 §12でInputRejected/実Outerをinline保持する上位結果ownerを追加した。beginの一度限りのslotと、返却後の失敗しないmove/takeにより、二重開始で先行診断を置換しない。新O.result_owner=2 workであり、固定入力bridgeの値移譲・同inspectionの固定caller・通常strict/OS/全体受付への接続は未実施のまま。

@@ -1,6 +1,6 @@
 # BP-5 R-2 OL-03：保護入力bridge・上位診断保持の詳細設計
 
-Version: draft-0.2 / Date: 2026-10-22 / Source baseline: 設計レビュー `0495d39` / Status: §11の内部型・budget側生成/利用claim・identity検査のみ実装/合成検証。保護producer・固定releaseへの移譲・上位結果保持・通常strict差替えは未実装。
+Version: draft-0.3 / Date: 2026-10-23 / Source baseline: 内部入力 `d89fde1`、外部保持レビュー `8d1b061` / Status: §11の内部入力/claim、§12の上位結果ownerを実装/合成検証。保護producer・固定releaseへの値移譲・通常strict差替えは未実装。
 
 ## 1. 範囲と停止状態
 
@@ -210,4 +210,36 @@ forgetでは解放/失敗ラッチを保証せず、生成claimだけがbudget�
 
 [新規9テストの記録](E2E_BEST_PRACTICE_R2_OL03_PROTECTED_INPUTS_SYNTHETIC_2026-10-22.md)を参照。identity/混入、重複生成/利用、失敗後再利用、放棄、全work不足/課金後取消、期限、型/opaque Debug、field解放順を合成検証した。§9の上位結果保持・固定release/通常strictへの接続受入条件は未実施である。
 
-次工程はInputRejected/Outerと上位結果ownerの保持契約、その後の固定releaseへの一度限りの値移譲。claim/guardの本番運用承認、protected supply/result owner費、全体work/resource上界は未確定のまま、全体受付無効・telemetry保留を維持する。
+draft-0.2の次工程だったInputRejected/Outerと上位結果ownerは§12で内部実装した。固定releaseへの一度限りの値移譲、claim/guardの本番運用承認、protected supply費・全体work/resource上界は未対応/未確定のまま、全体受付無効・telemetry保留を維持する。
+
+## 12. InputRejected/Outer・上位結果owner subset（draft-0.3）
+
+### 12.1 型と一方向遷移
+
+[result_owner.rs](../native/r2-outer/src/signature_boundary/positioned_read/metadata/transfer/topology/records/strict/scan_ops/connection_owner/result_owner.rs)にInputRejected、StrictBridgeFailure、StrictBridgeResult、StrictResultOwner、ResultSlotを追加した。private内部型であり、通常strictの裸Failure戻り値は変更しない。source/bridgeを起動するcallbackや任意成功のconstructorはない。
+
+ownerはinlineのOption<StrictBridgeResult>を持ち、Empty→Awaiting→Retained→Consumedを一方向に進む。beginは最初のfallible work前にAwaitingを確定し、成功時だけownerを排他的に借用する値消費slotを返す。slot.retainは値でslotと結果を消費し、追加work/checkpoint/heap確保/失敗する再検査なしに結果を格納する。takeはRetainedの結果を一度だけmoveし、Consumedから再開しない。任意のreplace/reset/二つ目の格納口はない。
+
+非Emptyのbeginは新workを要求せず元budget.stopで拒否し、保持済み結果・phase・summaryを変更しない。begin自身のmodel/予算/取消/期限失敗はInputRejectedとしてownerへ保存してから軽量Failureを返す。これはcallee結果のreason-only縮退ではなく、保持済み診断の存在を伴う開始拒否である。
+
+未格納slotの通常dropはUnavailable（claimに先行理由があればその理由）のInputRejectedを残し、元bridge claimへ停止を記録する。slotが保持するbridge/session Rcは待機中だけで、格納後に解放する。未提出のOuterをdropから回収することはできないため、固定callerは必ず実結果をretainしなければならない。放棄診断のrelease/checkpointはNotReachedで、cleanup成功や実body失敗の再構築ではない。forget/abort/killの格納・解放は保証せず、Awaitingに残ったownerからの再開始だけは拒否する。
+
+### 12.2 診断の所有と限定projection
+
+InputRejectedはprimary、7種のInputStage、既存DropObservation/PostReleaseCheckpointだけを保持する。origin/lineage Rc、ポインタ値、source/resource/FD、path、registry/groups、raw bytes、tokenを持たない。stageは拒否を検知した位置であり、先行Failureの原因を新しいmodel違反等へ読み替えない。newは元budgetの先行理由を採用し、after_releaseはcheckpoint観測を追記する診断用合流口である。後者は実解放証拠を作らず、完全な固定bridgeからの呼出しは未接続。
+
+Outer variantは実OuterStrictFailure全体をmove保持し、reason/round/CompletionFailureを再構築しない。read-only projectionはprimary、input stage/outer phase、round、解放/checkpoint観測、cleanup分類とsummaryの有限scalarだけとする。CompletionFailureにコピー専用のCompletionDiagnostic/SummaryCountsを追加し、attempts全5区分・live・pending_cleanup・unconfirmed・retry_pending・names・peak・declared_pendingを保持する。projectionはClosed/ack/permitの入力にはならない。
+
+InputRejected/StrictBridgeFailure/owner/slotは非Clone・非Copy・非serdeで、Debugは固定opaque文字列。copy可能なprojectionも型付きcounts/enumだけでraw値や秘密文字列は含まない。非serde性はJSON/logの将来設計が不要という意味ではなく、その外部化は別工程である。
+
+InputRejectedは48 bytes以下、StrictBridgeFailure/ownerは各512 bytes以下、slotは64 bytes以下を合成のsize試験で要求する。大きなOuterをBoxへ逃がすと失敗後allocationを要するため、large_enum_variant例外はStrictBridgeFailureだけへ理由付きで限定した。既存Outerの384 bytes上限は変更しない。
+
+### 12.3 費目・identity・未接続範囲
+
+`O.result_owner=2 work`：beginの不可逆開始/model1＋slot公開前guard/checkpoint1。newのinline初期化、retain/take、診断move/projection、先行失敗通知に追加workはない。slotは既存claimのRc cloneだけを保持し、新規heap allocationはしない。ownerへの格納は外側最終checkpoint後の結果を再検証する工程ではない。
+
+既存入力生成2＋利用10、coupling35＋K、resource configure1、R/I/S/typed tail費とは別に一度計上する。単なる費目の足し算で全体受付を認証せず、protected supply/管理allocation・独立resource/全体上界は未確定のまま維持する。
+
+このownerは結果の保持容器であり、結果を元inspectionへ結合する入力bridgeでもリリース証拠resolverでもない。任意callbackを受け取らず、保持する実結果の同inspection由来は今後の固定callerによる線形移譲で結合する。成功も既存RecordComparisonを受け取るだけで新しく生成せず、格納時の時刻再検査やpermit発行をしない。
+
+[新規9テストの検証記録](E2E_BEST_PRACTICE_R2_OL03_RESULT_OWNER_SYNTHETIC_2026-10-23.md)を参照。全3roundの実kernel診断13条件、late checkpoint失敗、全7stage、二重開始/一度だけtake、失敗/放棄、秘密非出力、型/sizeを合成検証した。次は保護入力の固定値移譲とInputRejected/Outerをこのownerへ渡す固定callerの接続であり、通常strict差替えはまだ行わない。全体受付無効・telemetry保留を維持する。

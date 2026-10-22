@@ -12,6 +12,7 @@ mod outer_result;
 mod owner_contract;
 mod protected_inputs;
 mod records_stage;
+mod result_owner;
 mod round_kernel;
 mod topology_adapter;
 

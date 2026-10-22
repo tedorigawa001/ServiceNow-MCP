@@ -105,6 +105,58 @@ impl CompletionFailure {
     pub(super) fn summary_attempts(&self) -> Option<[u64; 5]> {
         self.summary.as_ref().map(|s| s.attempts)
     }
+    pub(in super::super) fn diagnostic(&self) -> CompletionDiagnostic {
+        CompletionDiagnostic {
+            cleanup: match &self.cleanup {
+                CleanupDisposition::NotStarted => CleanupClass::NotStarted,
+                CleanupDisposition::Confirmed(_) => CleanupClass::Confirmed,
+                CleanupDisposition::Incomplete(e) => CleanupClass::Incomplete(e.issue()),
+            },
+            summary: self.summary.as_ref().map(|s| SummaryCounts {
+                attempts: s.attempts,
+                live: s.live,
+                pending_cleanup: s.pending_cleanup,
+                unconfirmed: s.unconfirmed,
+                retry_pending: s.retry_pending,
+                names: s.names,
+                peak: s.peak,
+                declared_pending: s.declared_pending,
+            }),
+        }
+    }
+}
+// Read-only copied counts/classification only, never accepted as cleanup/round evidence.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(in super::super) enum CleanupClass {
+    NotStarted,
+    Confirmed,
+    Incomplete(super::super::cleanup::CleanupIssue),
+}
+#[derive(Clone, Copy, PartialEq, Eq)]
+pub(in super::super) struct SummaryCounts {
+    pub(in super::super) attempts: [u64; 5],
+    pub(in super::super) live: u64,
+    pub(in super::super) pending_cleanup: u64,
+    pub(in super::super) unconfirmed: u64,
+    pub(in super::super) retry_pending: bool,
+    pub(in super::super) names: u64,
+    pub(in super::super) peak: u64,
+    pub(in super::super) declared_pending: u64,
+}
+#[derive(Clone, Copy, PartialEq, Eq)]
+pub(in super::super) struct CompletionDiagnostic {
+    pub(in super::super) cleanup: CleanupClass,
+    pub(in super::super) summary: Option<SummaryCounts>,
+}
+impl std::fmt::Debug for CompletionDiagnostic {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str("CompletionDiagnostic(counts_only_not_evidence)")
+    }
+}
+impl std::fmt::Debug for SummaryCounts {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str("SummaryCounts(diagnostics_only)")
+    }
 }
 // Fixed-size diagnostic/evidence stays inline: no fallible heap allocation after stop.
 #[allow(clippy::result_large_err)]
