@@ -1,6 +1,6 @@
 # BP-5 R-2 OL-03：通常strictの固定3箇所・同RecordSource・M4 owner接続詳細設計
 
-Version: draft-0.9 / Date: 2026-10-22 / Design baseline: `fd1de54` / Implementation baselines: owner `2905075`、topology `bd9301b`、kernel `9d7183e`、固定位置 `cd5bd97`、結果合流器 `39f643e` / Status: receipt/外側clockから固定3位置・body完了までprivate接続。外側解放/最終結果・通常strict全体・OS接続は未実施。
+Version: draft-0.10 / Date: 2026-10-22 / Design baseline: `fd1de54` / Implementation baselines: owner `2905075`、topology `bd9301b`、kernel `9d7183e`、固定位置 `cd5bd97`、結果合流器 `39f643e`、body `44051c5` / Status: 固定3位置から外側解放/最終結果までprivate接続。通常strict全体・OS接続は未実施。
 
 ## 1. 範囲と不変条件
 
@@ -279,3 +279,9 @@ BeforeM4のCompletionFailureは既存compare_coreの捕捉経路でroundとと�
 ### 14.2 receipt/外側clockからのprivate body
 
 [外側orchestrator設計draft-0.3 §13](BEST_PRACTICE_BP5_R2_OL03_OUTER_STRICT_ORCHESTRATOR_DESIGN.md)で、owner生成前のreceipt検査・元source.clock、固定3位置、元root/owner/実ack/3slotを照合するone-shot body完了helperを接続した。ResourceInputは移動wrapperだけで、本番policy constructorはない。成功は解放前のopaque PendingBody、失敗は元診断のまま返し、外側解放/最終checkpoint/結果合流は未接続。[新規7テストの記録](E2E_BEST_PRACTICE_R2_OL03_BODY_ORCHESTRATOR_SYNTHETIC_2026-10-22.md)を参照。追加費3 workを既存30と分離し、全体受付無効・telemetry保留を維持する。
+
+### 14.3 外側固定解放・PendingBody消費・最終合流
+
+[外側orchestrator設計draft-0.4 §14](BEST_PRACTICE_BP5_R2_OL03_OUTER_STRICT_ORCHESTRATOR_DESIGN.md)で、値所有のprivate release入口から既存bodyを呼び、固定順の解放後だけReleasePositionを発行し、PendingBodyを同origin/claim/startedで一度消費する接続を追加した。元receiptへの参照正規化はlineage/value照合後だけで、既存ownerのポインタ同一性検査を維持する。最後のcheckpointと診断保持は既存合流器へ固定接続し、成功公開はその後だけとする。
+
+追加費は準備1＋Kと固定制御1、既存coupling33と合わせ35＋K work。最終checkpoint/診断保持に新workは課さない。[合成検証記録](E2E_BEST_PRACTICE_R2_OL03_OUTER_RELEASE_SYNTHETIC_2026-10-22.md)を参照。通常strict差替え、上位診断保存、全体受付/運用cap、OS/permitは引き続き未実施または未承認で、telemetry保留を維持する。

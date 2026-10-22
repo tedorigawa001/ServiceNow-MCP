@@ -1,6 +1,6 @@
 # BP-5 R-2 OL-03：通常strictの外側orchestrator接続詳細設計
 
-Version: draft-0.3 / Date: 2026-10-22 / Source baseline: 設計 `526f6d3`、固定位置 `cd5bd97`、結果合流器 `39f643e` / Status: 診断型・合流器（§12）とreceipt/外側clockから固定3位置へのprivate body（§13）を実装・合成検証。外側の所有/解放section・最終結果への接続・通常strict差替えは未実施。
+Version: draft-0.4 / Date: 2026-10-22 / Source baseline: 設計 `526f6d3`、固定位置 `cd5bd97`、結果合流器 `39f643e`、body `44051c5` / Status: private body、固定解放section・PendingBody identity消費・解放後checkpoint/結果合流を接続（§14）。通常strict差替え・OS接続は未実施。
 
 ## 1. 範囲と停止条件
 
@@ -211,4 +211,30 @@ receipt/外側clock失敗はowner生成前のplain OuterStrictFailure（round/in
 
 [private body合成記録](E2E_BEST_PRACTICE_R2_OL03_BODY_ORCHESTRATOR_SYNTHETIC_2026-10-22.md)の新規7テストを参照。receipt/外側clock/依存欠落での未到達、固定3位置のphase順・再読6cycle、実kernel診断保持、M4失敗後の停止、入口/owner生成/body末尾のwork・取消/期限、helperの早期/二重/別budget、型制約と省略変異を確認した。index decodeは既存固定kernelの1箇所/roundを維持し、新しい独立decode計数器は追加していない。
 
-残るのは、外側が入力を所有するrelease section、PendingBodyのidentity付き消費と最終checkpoint/結果合流、上位の診断所有先、全体work/resource受付・本番policy/OS解放契約。通常strict.rs全体の差替え・OS/実機接続・token発行・設定変更・permit発行は行わず、全体受付無効・telemetry保留を維持する。
+draft-0.3時点で残っていた外側release section、PendingBodyのidentity付き消費・最終checkpoint/結果合流は§14で接続した。上位の診断所有先、全体work/resource受付・本番policy/OS解放契約は引き続き別工程である。
+
+## 14. 固定解放section・identity消費・最終結果合流（draft-0.4）
+
+### 14.1 所有するprivate入口とreceipt参照
+
+[release.rs](../native/r2-outer/src/signature_boundary/positioned_read/metadata/transfer/topology/records/strict/scan_ops/connection_owner/release.rs)は元RecordSource・TopologySource・HeldTargetScope・TopologyReceipt・RecordReceiptを値で所有するscan_ops内部の入口である。既存bodyへ借用し、bodyのowner/root/slot/handoffが終了してから固定解放へ進む。通常strict.rsからは呼ばず、旧ClosureSourceを変換しない。ResourceInput/Quotasの本番生成口も追加しない。
+
+receiptを値で移すため、呼出し側のBoundTarget.recordsと所有receipt.bindingは同じ値でもアドレスが異なり得る。最初の正常合成テストはTopologyPrepare/Bindingで停止した。既存topology ownerのポインタ同一性検査を緩めるのではなく、元lineageのRc identityとbinding完全一致を入口で要求し、その後だけ所有receiptへのcanonical BoundTargetを作る。chain_names/bytes/targetは元bindingから維持し、同source・祖先resource・open時snapshot・initial_originをmoveする。再open、snapshot再取得、resource複製、unsafeによる参照延命はない。body内のreceipt/hash/期限検査も省略しない。
+
+この参照正規化は新しいrecord生成や署名検証ではない。コピーするのは既存bind済みpath component一覧だけであり、binding/lineage不一致ではコピー・body/clock/scanに進まない。入口準備費は1＋K work（K=chain_names数）、結果公開の固定制御費は1 workを解放前に課す。既存追加33と合わせたcoupling費は35＋K workで、既存R/I/collector/typed tail費とは別。各componentの既存長さ/段数制約を維持する。全体上界・配賦を承認したとは扱わない。
+
+### 14.2 固定解放と一度限りの消費
+
+成功/失敗resultを保持し、途中に`?`を置かず、元RecordSource→TopologySource→HeldTargetScope→canonical component buffer→TopologyReceipt→RecordReceiptの順でdropする。body開始前の拒否でも同じsectionを通り、未移譲scan入力はbodyまたは明示dropで先に解放する。caller所有のcontext/registry/groupsの解放は含まない。
+
+通常dropがすべて戻った位置だけでprivateなReleasePositionを作る。PendingBodyの消費は値移動で一度限りとし、position・PendingBody・元budgetのinspection origin Rc、session claim Rc、startedの一致とclaim開始済みを要求する。identity不一致では元pending claimと提示budgetをBindingで停止し、比較結果を破棄する。position/比較結果のpublic constructor、Clone/Copy/serde、診断enumからの成功生成は設けない。cfg(test)の破損fixtureは実PendingBodyだけを消費し、任意比較成功を生成しない。
+
+消費後に既存merge_after_releaseを呼び、元budgetのcheckpointを一度評価する。解放後に取消・期限切れが起きた場合は成功を返さない。body失敗なら元primary/phase/innerをmove保持し、解放・checkpoint観測だけを追記する。sticky失敗で取消/期限を新たに観測できない場合は先行理由を残し、二次原因を推定しない。identity消費・最終checkpoint・診断保持に失敗後のwork/新規heap/I/Oは要求しない。
+
+SequenceReturnedは通常drop呼出しが戻った診断であり、OS close成功やbounded Dropの証明ではない。panic/abort/kill/戻らないDropで正常な終了票を保証せず、panic本文を出すcatch/fallbackも追加しない。返るRecordComparisonも既存entitlement gateを維持し、permitではない。
+
+### 14.3 合成検証と残課題
+
+[固定解放・最終合流の検証記録](E2E_BEST_PRACTICE_R2_OL03_OUTER_RELEASE_SYNTHETIC_2026-10-22.md)を参照。test-only watchでsource→topology source→held解放済み→topology receipt→record receiptの順序を観測し、最終record破棄後のcheckpoint、遅延取消/期限、receipt/clock/M4失敗と診断保持、binding/lineage不一致、入口workの全不足prefix、position/pending/budget identity破損を確認する。watchは本番構造に存在しない。
+
+残課題は保護された通常strict入力bridge・structured診断の上位所有先、追加O費を含む全体work/resource上界と3round配賦、本番policy/OS source/明示解放確認である。全体受付無効・telemetry保留・既存gate/DER/absence停止を維持し、通常strict全体差替え・OS/実機接続・token発行・設定変更・permit発行は行わない。

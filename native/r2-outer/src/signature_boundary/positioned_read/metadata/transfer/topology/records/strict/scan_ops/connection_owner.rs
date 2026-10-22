@@ -7,6 +7,7 @@ const MODEL: &str = "bp5-r2-strict-owner-0.1";
 pub(super) mod body;
 mod kernel;
 pub(in super::super) mod outer_result;
+pub(super) mod release;
 pub(in super::super) mod topology_adapter;
 #[derive(Clone, Copy, PartialEq, Eq)]
 enum Progress {

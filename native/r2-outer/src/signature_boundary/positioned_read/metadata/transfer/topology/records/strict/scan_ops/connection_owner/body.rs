@@ -1,4 +1,4 @@
-//! Private borrowed body only. No release section, normal-strict replacement or permit.
+//! Private borrowed body. Owning release lives separately; no normal-strict replacement/permit.
 use super::*;
 use crate::signature_boundary::positioned_read::ScanSessionClaim;
 use outer_result::{OuterPhase, OuterStrictFailure};
@@ -9,7 +9,7 @@ pub(in super::super) struct Inputs<'s, C> {
     pub(in super::super) resources: Option<session::ResourceInput>,
     pub(in super::super) quotas: [Option<Quotas>; 3],
 }
-// Only this fixed body can construct it. No comparison getter/RecordComparison conversion.
+// Only this fixed body constructs it. Comparison extraction requires the release position.
 pub(in super::super) struct PendingBody {
     compared: ComparedM0M4,
     _origin: Rc<()>,
@@ -19,6 +19,23 @@ pub(in super::super) struct PendingBody {
 impl std::fmt::Debug for PendingBody {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.write_str("PendingBody(before_release_not_execution_authority)")
+    }
+}
+impl PendingBody {
+    #[allow(clippy::result_large_err)]
+    pub(super) fn consume_after_release(
+        self,
+        position: super::release::ReleasePosition,
+        b: &mut SharedBudget<'_>,
+    ) -> Result<ComparedM0M4, OuterStrictFailure> {
+        if let Err(e) = position.require(&self._origin, &self._claim, self._started, b) {
+            // Reject both the original pending inspection and the supplied budget.
+            self._claim
+                .failure
+                .set(Some(self._claim.failure.get().unwrap_or(e)));
+            return Err(OuterStrictFailure::plain(OuterPhase::Release, e, b));
+        }
+        Ok(self.compared)
     }
 }
 

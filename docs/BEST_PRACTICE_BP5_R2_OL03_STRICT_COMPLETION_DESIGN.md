@@ -1,6 +1,6 @@
 # BP-5 R-2 OL-03：型付きcleanup証拠・round完了・strict acknowledgement詳細設計
 
-Version: draft-0.17 / Date: 2026-10-22 / Status: receipt/外側clockから固定3位置・body完了までprivate接続。外側解放/最終結果・通常strict全体・OS接続は未実施。
+Version: draft-0.18 / Date: 2026-10-22 / Status: 固定3位置から外側固定解放・最終結果合流までprivate接続。通常strict全体・OS接続は未実施。
 
 ## 1. 範囲と根拠
 
@@ -445,3 +445,9 @@ draft-0.1時点ではMDのみで、診断型・結果合流器の後続実装は
 [外側orchestrator設計draft-0.3 §13](BEST_PRACTICE_BP5_R2_OL03_OUTER_STRICT_ORCHESTRATOR_DESIGN.md)で、receipt/外側clock→唯一owner→固定3位置→元rootと実ackのbody末尾照合までを接続した。戻り値は解放前のPendingBodyか、元CompletionFailureを保持したOuterStrictFailureであり、最終strict成功ではない。追加O費は入口1＋body完了2。[合成検証記録](E2E_BEST_PRACTICE_R2_OL03_BODY_ORCHESTRATOR_SYNTHETIC_2026-10-22.md)を参照。
 
 外側所有/解放section・PendingBody消費・解放後checkpoint/結果合流・上位診断保存は次工程で、通常strict全体・OS/実機・全体受付/permitの停止は変更しない。
+
+### 20.8 外側固定解放・identity付き消費・結果合流
+
+[外側orchestrator設計draft-0.4 §14](BEST_PRACTICE_BP5_R2_OL03_OUTER_STRICT_ORCHESTRATOR_DESIGN.md)で、§20.7時点の未接続だった固定解放sectionと、同inspection origin/session claim/startedを照合するPendingBodyの値消費、解放後の最終checkpoint・診断保持を接続した。参照正規化は元lineage/value一致が前提で、source/resource/snapshotを取り直さない。解放後取消/期限ではpending比較結果を破棄し、先行診断は上書きしない。
+
+[合成検証記録](E2E_BEST_PRACTICE_R2_OL03_OUTER_RELEASE_SYNTHETIC_2026-10-22.md)を参照。SequenceReturnedはOS close証明ではなく、通常strict差替え・上位診断所有先・全体work/resource受付・本番policy/OS source/permitは別工程。全体受付無効・telemetry保留を維持する。

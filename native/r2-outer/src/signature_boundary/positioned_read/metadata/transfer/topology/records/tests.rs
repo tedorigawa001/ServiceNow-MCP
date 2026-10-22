@@ -114,6 +114,7 @@ pub(super) fn make_receipt(binding: &mut RecordBinding, lineage: &Rc<()>) -> Rec
         binding: binding.clone(),
         start_monotonic_ms: 2000,
         pins,
+        release_watch: None,
     }
 }
 type Hook = Box<dyn FnMut(usize)>;

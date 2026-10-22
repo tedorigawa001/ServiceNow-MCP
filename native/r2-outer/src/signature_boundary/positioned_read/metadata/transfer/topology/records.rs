@@ -51,6 +51,8 @@ struct RecordReceipt {
     binding: RecordBinding,
     start_monotonic_ms: u64,
     pins: [RecordPin; 3],
+    #[cfg(test)]
+    release_watch: Option<ReleaseWatch>,
 }
 trait RecordSource {
     type Handle;

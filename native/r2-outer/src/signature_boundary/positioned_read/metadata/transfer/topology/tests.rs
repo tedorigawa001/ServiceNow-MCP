@@ -272,6 +272,7 @@ pub(super) fn setup(
         records: b.records.clone(),
         target: b.target.clone(),
         ancestors: baselines,
+        release_watch: None,
     };
     let mut namespace = observed.clone();
     namespace.push(observation(raw.before.clone()));

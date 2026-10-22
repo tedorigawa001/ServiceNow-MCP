@@ -67,6 +67,18 @@ struct TopologyReceipt {
     records: RecordBinding,
     target: TargetDeclaration,
     ancestors: Vec<AncestorBaseline>,
+    #[cfg(test)]
+    release_watch: Option<ReleaseWatch>,
+}
+
+// Test-only observation, not a release proof or production finalizer.
+#[cfg(test)]
+struct ReleaseWatch(Box<dyn FnMut()>);
+#[cfg(test)]
+impl Drop for ReleaseWatch {
+    fn drop(&mut self) {
+        (self.0)();
+    }
 }
 
 trait TopologySource<R> {
