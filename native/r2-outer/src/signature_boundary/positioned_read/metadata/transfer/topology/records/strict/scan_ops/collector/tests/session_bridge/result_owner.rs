@@ -315,6 +315,7 @@ fn input_rejection_keeps_stage_observations_and_first_reason_without_post_return
         SourceBinding,
         PolicyBinding,
         SlotBinding,
+        SlotAbandoned,
     ] {
         let cancel = AtomicBool::new(false);
         let start = Instant::now();
@@ -408,6 +409,8 @@ fn abandoning_an_awaiting_slot_stops_original_budget_without_claiming_release() 
     assert_eq!(b.checkpoint(), Err(Failure::Unavailable));
     let e = owner.failure().unwrap();
     assert_eq!(e.reason(), Failure::Unavailable);
+    // Distinguishable from a begin model/input failure with the same primary reason.
+    assert_eq!(e.input_stage(), Some(upper::InputStage::SlotAbandoned));
     assert_eq!(e.release(), DropObservation::NotReached);
     assert_eq!(e.checkpoint(), PostReleaseCheckpoint::NotReached);
 }

@@ -16,11 +16,11 @@ InputRejectedはprimary・7種のstage・既存の解放/checkpoint観測だけ�
 |---|---|
 | `upper_owner_stores_input_rejection_once_and_preserves_it_on_duplicate_begin` | 一度限りのslot格納、二重開始で先行primary/stage/観測を保持、一度だけtake、消費後再開始拒否 |
 | `upper_begin_guard_failure_is_retained_and_cannot_restart` | work不足0/1、取消/10秒期限、先行HashMismatch、課金後取消1/2、未知modelで開始失敗をowner内へ保存。再開始でも新work/診断置換なし |
-| `input_rejection_keeps_stage_observations_and_first_reason_without_post_return_work` | 全7stageで先行Expired優先。release/checkpoint観測を保持し、work枯渇・取消・期限切れ後もretain/takeが元診断を失わない |
+| `input_rejection_keeps_stage_observations_and_first_reason_without_post_return_work` | 全7stage＋SlotAbandoned（後続修正で追加）で先行Expired優先。release/checkpoint観測を保持し、work枯渇・取消・期限切れ後もretain/takeが元診断を失わない |
 | `upper_owner_retains_real_outer_round_cleanup_and_full_summary_after_source_destruction` | 全3round×操作/hash/cleanup未確認/Quotas欠落の12条件＋Initial policy欠落。実kernelのround/phase/cleanup/全summaryが元owner/source/receipt破棄後も一致。late post-release期限失敗ではround/frameなしを保持 |
 | `upper_owner_moves_only_genuine_success_and_does_not_revalidate_during_storage` | 固定releaseから得た実RecordComparisonだけをmove。一度だけ取得でき、既存UnverifiedXml gateを維持。格納に新work/checkpointなし |
 | `upper_debug_output_is_fixed_and_never_contains_supplied_secret_or_diagnostic_fields` | 合成の秘密markerを未知modelへ渡してもowner/slot/InputRejected/FailureのDebugは固定文字列。待機slotのRc cloneは格納後に解放される |
-| `abandoning_an_awaiting_slot_stops_original_budget_without_claiming_release` | 未格納slotのdropで元budgetを停止し、解放/checkpoint観測はNotReachedのまま |
+| `abandoning_an_awaiting_slot_stops_original_budget_without_claiming_release` | 未格納slotのdropで元budgetを停止し、stageはowner専用のSlotAbandoned（beginのModelInputUnavailableと区別）、解放/checkpoint観測はNotReachedのまま |
 | `forgetting_an_awaiting_slot_does_not_allow_another_begin` | forget後のAwaitingから再開始を拒否。格納/drop成功は主張しない |
 | `upper_ownership_is_inline_move_only_and_not_serializable` | owner/slot/InputRejected/Failureの非Clone/非Copy/非serde。InputRejected≤48 bytes、Failure/owner各≤512、slot≤64 |
 

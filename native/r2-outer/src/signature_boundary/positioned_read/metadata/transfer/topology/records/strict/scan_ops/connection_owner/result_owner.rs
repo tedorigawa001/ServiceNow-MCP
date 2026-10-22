@@ -13,6 +13,8 @@ pub(in super::super) enum InputStage {
     SourceBinding,
     PolicyBinding,
     SlotBinding,
+    // Owner-only: an awaiting result slot dropped without retain. Not a bridge guard stage.
+    SlotAbandoned,
 }
 // Scalars only: no origin/lineage Rc, resource, path, raw bytes or identity authority.
 pub(in super::super) struct InputRejected {
@@ -197,7 +199,7 @@ impl Drop for ResultSlot<'_> {
             self.bridge.failure.set(Some(reason));
             self.owner.result = Some(Err(StrictBridgeFailure::input(InputRejected {
                 primary: reason,
-                stage: InputStage::ModelInputUnavailable,
+                stage: InputStage::SlotAbandoned,
                 release: DropObservation::NotReached,
                 checkpoint: PostReleaseCheckpoint::NotReached,
             })));
