@@ -194,6 +194,8 @@ createは元origin/bridge claim/session claim/started、既存session未開始�
 
 SharedBudgetのstop/checkpointは既存の先行failed/session失敗に続きbridge失敗を検査し、生成済みclaimへ停止を伝える。別budgetへ渡した誤用では、元claimと提示budgetの両方を停止する。先行理由を上書きして再試行しない。検査済みbundleにも移譲口はないため、通常dropは常に放棄Unavailableを元claimへラッチする（既存理由が優先）。次の元budget checkpointも拒否する。
 
+bundleはDropを実装するため、Rustではfieldを分解してmoveできない。将来の固定releaseへの移譲に備え、payloadは`Option`で保持する。移譲口は一度だけ`take`し、再充填しない。Dropは`Some`のとき（未移譲）だけ放棄Unavailableをラッチし、`None`（移譲済み）では解放責務をcalleeへ委ね、ここでは停止を記録しない。現subsetには`take`する口がないため、常に`Some`であり上記の放棄ラッチが働く。ManuallyDrop/unsafeによる取り出しは採らない。移譲後の停止・診断保持は§5.2のrelease側契約に従う。
+
 require_useは内部の一度限りのidentity検査であって値の取り出し/dispatch/permitではない。Err後も所有bundleを呼出し側が保持している間はpayloadを保持し、drop時に固定field順で破棄する。createのErrでは供給payloadをその場で破棄する。§5の値消費bridge、解放後checkpointとInputRejectedへの観測記録は未接続であり、本subsetがそれらまで完了したとは扱わない。
 
 forgetでは解放/失敗ラッチを保証せず、生成claimだけがbudget側に残る。合成試験は意図的なleakを含み、cleanup成功と主張しない。全体受付/上位結果owner/運用producerを追加してこの抜けを自動解除することもない。

@@ -35,7 +35,8 @@ pub(in super::super) struct ProtectedSupply<'s, R, T, S, C> {
     seal: Seal<'s>,
 }
 pub(in super::super) struct ProtectedStrictInputs<'s, R, T, S, C> {
-    payload: Payload<'s, R, T, S, C>,
+    // Option only so a future fixed transfer can take it despite Drop; never refilled.
+    payload: Option<Payload<'s, R, T, S, C>>,
     seal: Seal<'s>,
 }
 impl<R, T, S, C> std::fmt::Debug for ProtectedStrictInputs<'_, R, T, S, C> {
@@ -92,7 +93,7 @@ pub(in super::super) fn create<'s, R, T, S, C>(
     })();
     match result {
         Ok(()) => Ok(ProtectedStrictInputs {
-            payload: supply.payload,
+            payload: Some(supply.payload),
             seal: supply.seal,
         }),
         Err(e) => reject(&supply.seal, b, e), // supply fields drop in fixed order, never scan
@@ -111,6 +112,9 @@ impl<'s, R, T, S, C> ProtectedStrictInputs<'s, R, T, S, C> {
         }
         let result = (|| {
             work(b)?; // O.bridge_use 1
+            let Some(payload) = &self.payload else {
+                return Err(Failure::Binding);
+            };
             if !fresh || !self.seal.claim.generated.get() {
                 return Err(Failure::Binding);
             }
@@ -120,32 +124,29 @@ impl<'s, R, T, S, C> ProtectedStrictInputs<'s, R, T, S, C> {
             work(b)?; // 2
             inspection(&self.seal, b)?;
             work(b)?; // 3: immutable context retention
-            if !std::ptr::eq(self.payload.context, self.seal.context) {
+            if !std::ptr::eq(payload.context, self.seal.context) {
                 return Err(Failure::Binding);
             }
             work(b)?; // 4: receipt/target; the external bind copy is allowed only with lineage
-            let bound = self.payload.held.bound;
+            let bound = payload.held.bound;
             if !std::ptr::eq(bound, self.seal.bound)
-                || !Rc::ptr_eq(&self.payload.records.lineage, bound.lineage)
-                || self.payload.records.binding != *bound.records
-                || self.payload.topology.target != *bound.target
-                || self.payload.topology.records != self.payload.records.binding
-                || !Rc::ptr_eq(
-                    &self.payload.topology.lineage,
-                    &self.payload.records.lineage,
-                )
+                || !Rc::ptr_eq(&payload.records.lineage, bound.lineage)
+                || payload.records.binding != *bound.records
+                || payload.topology.target != *bound.target
+                || payload.topology.records != payload.records.binding
+                || !Rc::ptr_eq(&payload.topology.lineage, &payload.records.lineage)
             {
                 return Err(Failure::Binding);
             }
             work(b)?; // 5: same held/open/source supply; no OS identity assertion
-            if !Rc::ptr_eq(&self.payload.held.initial_origin, &self.seal.held_origin)
-                || !self.tag(&self.payload.source, 0)
-                || !self.tag(&self.payload.topology_source, 0)
+            if !Rc::ptr_eq(&payload.held.initial_origin, &self.seal.held_origin)
+                || !self.tag(&payload.source, 0)
+                || !self.tag(&payload.topology_source, 0)
             {
                 return Err(Failure::Binding);
             }
             work(b)?; // 6: supply seal only; operational policy/model approval is NOT supplied
-            let Some(resources) = &self.payload.resources else {
+            let Some(resources) = &payload.resources else {
                 return Err(Failure::Unavailable);
             };
             if !self.tag(resources, 0) {
@@ -153,10 +154,10 @@ impl<'s, R, T, S, C> ProtectedStrictInputs<'s, R, T, S, C> {
             }
             for i in 0..3 {
                 work(b)?; // 7..9
-                let Some(quota) = &self.payload.quotas[i] else {
+                let Some(quota) = &payload.quotas[i] else {
                     return Err(Failure::Unavailable);
                 };
-                if !self.tag(quota, i) || !self.tag(&self.payload.scans[i], i) {
+                if !self.tag(quota, i) || !self.tag(&payload.scans[i], i) {
                     return Err(Failure::Binding);
                 }
             }
@@ -199,27 +200,28 @@ impl<'s, R, T, S, C> ProtectedStrictInputs<'s, R, T, S, C> {
         fault: FixtureFault,
         context: &'s InspectionContext<'s>,
     ) {
+        let payload = self.payload.as_mut().unwrap();
         match fault {
-            FixtureFault::Context => self.payload.context = context,
-            FixtureFault::Lineage => self.payload.records.lineage = Rc::new(()),
-            FixtureFault::Binding => self.payload.records.binding.generation += 1,
-            FixtureFault::TopologyLineage => self.payload.topology.lineage = Rc::new(()),
-            FixtureFault::TopologyBinding => self.payload.topology.records.generation += 1,
-            FixtureFault::Target => self.payload.topology.target.policy = "wrong".into(),
-            FixtureFault::HeldOrigin => self.payload.held.initial_origin = Rc::new(()),
-            FixtureFault::Source => self.payload.source.supply = Rc::new(()),
-            FixtureFault::TopologySource => self.payload.topology_source.supply = Rc::new(()),
-            FixtureFault::Policy => self.payload.resources.as_mut().unwrap().supply = Rc::new(()),
+            FixtureFault::Context => payload.context = context,
+            FixtureFault::Lineage => payload.records.lineage = Rc::new(()),
+            FixtureFault::Binding => payload.records.binding.generation += 1,
+            FixtureFault::TopologyLineage => payload.topology.lineage = Rc::new(()),
+            FixtureFault::TopologyBinding => payload.topology.records.generation += 1,
+            FixtureFault::Target => payload.topology.target.policy = "wrong".into(),
+            FixtureFault::HeldOrigin => payload.held.initial_origin = Rc::new(()),
+            FixtureFault::Source => payload.source.supply = Rc::new(()),
+            FixtureFault::TopologySource => payload.topology_source.supply = Rc::new(()),
+            FixtureFault::Policy => payload.resources.as_mut().unwrap().supply = Rc::new(()),
             FixtureFault::MissingPolicy => {
-                self.payload.resources.take();
+                payload.resources.take();
             }
-            FixtureFault::ScanSupply(i) => self.payload.scans[i].supply = Rc::new(()),
-            FixtureFault::SwapScans => self.payload.scans.swap(0, 2),
+            FixtureFault::ScanSupply(i) => payload.scans[i].supply = Rc::new(()),
+            FixtureFault::SwapScans => payload.scans.swap(0, 2),
             FixtureFault::QuotaSupply(i) => {
-                self.payload.quotas[i].as_mut().unwrap().supply = Rc::new(())
+                payload.quotas[i].as_mut().unwrap().supply = Rc::new(())
             }
             FixtureFault::MissingQuota(i) => {
-                self.payload.quotas[i].take();
+                payload.quotas[i].take();
             }
         }
     }
@@ -227,7 +229,10 @@ impl<'s, R, T, S, C> ProtectedStrictInputs<'s, R, T, S, C> {
 impl<R, T, S, C> Drop for ProtectedStrictInputs<'_, R, T, S, C> {
     fn drop(&mut self) {
         // No handoff exists in this subset, so even a checked bundle is abandoned on drop.
-        latch(&self.seal.claim, Failure::Unavailable);
+        // A future fixed transfer takes the payload; only an untransferred one is abandonment.
+        if self.payload.is_some() {
+            latch(&self.seal.claim, Failure::Unavailable);
+        }
     }
 }
 
