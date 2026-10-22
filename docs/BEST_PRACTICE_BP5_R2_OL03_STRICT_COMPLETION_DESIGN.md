@@ -1,6 +1,6 @@
 # BP-5 R-2 OL-03：型付きcleanup証拠・round完了・strict acknowledgement詳細設計
 
-Version: draft-0.16 / Date: 2026-10-22 / Status: 固定3位置と外側診断用結果合流器まで内部実装。外側orchestrator本体・通常strict全体・OS接続は未実施。
+Version: draft-0.17 / Date: 2026-10-22 / Status: receipt/外側clockから固定3位置・body完了までprivate接続。外側解放/最終結果・通常strict全体・OS接続は未実施。
 
 ## 1. 範囲と根拠
 
@@ -439,3 +439,9 @@ draft-0.1時点ではMDのみで、診断型・結果合流器の後続実装は
 [外側orchestrator設計draft-0.2 §12](BEST_PRACTICE_BP5_R2_OL03_OUTER_STRICT_ORCHESTRATOR_DESIGN.md)に従い、非Clone/非Copy/非serdeのinline診断型と、元の失敗を捨てずcheckpoint観測を合流する内部部品を実装した。実kernelのround/cleanup/summary保持・遅延成功拒否・work枯渇後の保持を合成検証した。[検証記録](E2E_BEST_PRACTICE_R2_OL03_OUTER_RESULT_SYNTHETIC_2026-10-22.md)を参照。
 
 実orchestrator・解放section・元budget/実解放順との固定接続は未実施であり、汎用結果と観測enumをstrict/OS成功の証拠にしない。通常strict全体・OS/実機・運用policy/全体受付/permitの停止は維持する。
+
+### 20.7 固定body完了helper・private body接続
+
+[外側orchestrator設計draft-0.3 §13](BEST_PRACTICE_BP5_R2_OL03_OUTER_STRICT_ORCHESTRATOR_DESIGN.md)で、receipt/外側clock→唯一owner→固定3位置→元rootと実ackのbody末尾照合までを接続した。戻り値は解放前のPendingBodyか、元CompletionFailureを保持したOuterStrictFailureであり、最終strict成功ではない。追加O費は入口1＋body完了2。[合成検証記録](E2E_BEST_PRACTICE_R2_OL03_BODY_ORCHESTRATOR_SYNTHETIC_2026-10-22.md)を参照。
+
+外側所有/解放section・PendingBody消費・解放後checkpoint/結果合流・上位診断保存は次工程で、通常strict全体・OS/実機・全体受付/permitの停止は変更しない。

@@ -1,10 +1,10 @@
 # BP-5 R-2 OL-03：通常strictの外側orchestrator接続詳細設計
 
-Version: draft-0.2 / Date: 2026-10-22 / Source baseline: 設計 `526f6d3`、固定位置 `cd5bd97` / Status: OuterStrictFailureと診断用結果合流器の内部subsetを実装・合成検証（§12）。外側orchestrator本体・解放section・通常strict差替えは未実装。
+Version: draft-0.3 / Date: 2026-10-22 / Source baseline: 設計 `526f6d3`、固定位置 `cd5bd97`、結果合流器 `39f643e` / Status: 診断型・合流器（§12）とreceipt/外側clockから固定3位置へのprivate body（§13）を実装・合成検証。外側の所有/解放section・最終結果への接続・通常strict差替えは未実施。
 
 ## 1. 範囲と停止条件
 
-[固定位置接続設計§13](BEST_PRACTICE_BP5_R2_OL03_NORMAL_STRICT_CONNECTION_DESIGN.md)で実装したInitial kernel、BeforeM4固定compare、AfterM4Handoff/finishを、receipt検査から解放後の最終checkpointまでの単一orchestratorへつなぐための設計である。draft-0.1はMDのみで、draft-0.2では実装順①の診断型・結果合流器だけを追加した。既存 `review_strict_record_target` の差替えは行わない。
+[固定位置接続設計§13](BEST_PRACTICE_BP5_R2_OL03_NORMAL_STRICT_CONNECTION_DESIGN.md)で実装したInitial kernel、BeforeM4固定compare、AfterM4Handoff/finishを、receipt検査から解放後の最終checkpointまでの単一orchestratorへつなぐための設計である。draft-0.1はMDのみ、draft-0.2では実装順①、draft-0.3では②のprivate bodyまでを追加した。既存 `review_strict_record_target` の差替えは行わない。
 
 全体受付無効、telemetry保留、APPROVED_REGISTRY=None、通常v2 Unavailable、gate92、DER/absence停止を維持する。本番policy投入・OS接続・実機操作・token発行・設定変更・permit発行は含めない。
 
@@ -30,7 +30,7 @@ Version: draft-0.2 / Date: 2026-10-22 / Source baseline: 設計 `526f6d3`、固�
 
 入力は元HeldTargetScope、TopologyReceipt、RecordReceipt、RecordSource、TopologySource、InspectionContext、inertな固定3scan slot、承認済みの内部policy/round別Quotas、同じSharedBudgetの排他的借用。receipt/target/contextはinspection中に差し替えず、source factory・Round指定callback・caller申告の完了bool/時計値は受け取らない。
 
-orchestratorはsource/held/records等を値で所有し、借用順を固定する。StrictSessionOwnerだけが元RecordSourceを&mutで継続借用し、各kernelやclockのためにsourceを作り直さない。安定したTopologyRunOwnerをlocalに置き、handoff消費まで保持する。ownerを含む自己参照structやunsafeによる参照延命、source全体のRefCell化は行わない。
+最終的な外側orchestratorはsource/held/records等を値で所有し、借用順を固定する。§13の途中段階は、その外側から借用するprivate bodyとして分離する。StrictSessionOwnerだけが元RecordSourceを&mutで継続借用し、各kernelやclockのためにsourceを作り直さない。安定したTopologyRunOwnerをlocalに置き、handoff消費まで保持する。ownerを含む自己参照structやunsafeによる参照延命、source全体のRefCell化は行わない。
 
 ### 3.2 確定前の結果
 
@@ -62,7 +62,7 @@ receipt/外側clockが失敗した時点ではownerがまだ存在しない。bu
 | AfterM4 | AfterM4Round.finish。実kernel/ack/with_round末尾＋同ownerの完了guard | 外側成功結果の公開 |
 | body終端 | 元ownerのFinished/実AfterM4 ack/3slot消費と元budgetを固定helperで照合し、body末尾checkpoint | 解放前の成功公開は禁止 |
 
-body終端の固定helperは新設予定であり、現在はtest getterを使う案ではない。固定calleeの実完了から確認し、任意state setter・完了bool・数値summaryで代替しない。AfterM4.finishの成功は外側body/checkpoint/解放完了と別である。
+body終端の固定helperはdraft-0.3で§13のとおり実装した。test getterを使わず、固定calleeの実完了から確認し、任意state setter・完了bool・数値summaryで代替しない。AfterM4.finishの成功は外側body/checkpoint/解放完了と別である。
 
 record厳密再検証の前後計6cycleと、index decode1回/roundを維持する。外側のために追加scan/parse/再読を入れず、必要な再検証を「既にack済み」で省略もしない。body終端はbudget checkpointで、追加source.clockは設けない。最後のrecord clockは既存AfterM4のtyped stageが取得する。
 
@@ -177,4 +177,38 @@ plainは元budget.stopの先行理由を採用し、innerなしの失敗だけ�
 
 これは診断用の単体部品で、外側orchestratorそのものではない。同じinspection budgetを渡すことと実解放後に呼ぶことは、今後の固定callerの責務であり、この部品はreceipt/budget identityの結合tokenや実解放証拠を発行・検証しない。診断enumや汎用Tからstrict/OS/実行成功を主張してはならない。上位の通常strict戻り値も未変更である。
 
-残るのは§11の②以降：固定body完了helper、receipt/clockからのprivate orchestrator、固定解放sectionと実呼出し順の結合、上位へのstructured診断所有、新O費・保持/resource上界。§11の未確認事項のうち本型と合流器のコンパイル・実診断移動・サイズだけを今回確認し、外側全分岐やOS保証は未確認のままとする。全体受付無効・telemetry保留を維持する。
+draft-0.2時点で残っていた§11の②は§13へ続く。固定解放sectionと実呼出し順の結合、上位へのstructured診断所有、新O費・保持/resource上界は引き続き別工程で、外側全分岐やOS保証は未確認のままとする。全体受付無効・telemetry保留を維持する。
+
+## 13. 実装済み：固定body完了helper・借用private orchestrator（draft-0.3）
+
+### 13.1 入口・policy移動・固定3位置
+
+[body.rs](../native/r2-outer/src/signature_boundary/positioned_read/metadata/transfer/topology/records/strict/scan_ops/connection_owner/body.rs)をowner内部に追加した。入口はscan_ops内だけに見え、元held/topology/records/source/topology_sourceを借用する。Inputsは元context、inert 3scan slot、opaqueなOption<ResourceInput>と3つのOption<Quotas>を値で保持する。
+
+prologueで元budgetのwork/checkpoint、session claimの未使用、policy/全3Quotasの存在を確認する。欠落はEntry/Unavailable、再入はEntry/Bindingで止め、receipt/外側source.clock/ownerを開始しない。次に既存validate_receipt、同RecordSourceのclock_check(460000)を行い、両方の成功後だけ元owner/sessionを生成する。
+
+ResourceInputは既存ResourcePolicyのopaque移動wrapperであり、数値からpolicyを作る本番constructorは追加していない。session側の狭いconfigure_inputは値を一度消費して既存configure_resourcesへ渡すだけで、検査/費用を省略しない。合成constructorはcfg(test)に限定し、既存のtest configureも同じbridgeへ寄せた。ScanOps/Quotasの可視範囲は広げていない。
+
+private bodyはInputsのscan配列を元ownerへ移し、Initial→元TopologyRunOwner→固定compare/BeforeM4/M4→handoff.enter→AfterM4.finish→complete_bodyの順に実行する。任意callback・test ack・旧ClosureSourceへのfallbackはない。各Quotasは元slotからtakeし補充しない。元budget/retry/sourceを再生成しない。
+
+### 13.2 body完了とpending結果
+
+owner.complete_bodyはbody_done_startedを最初のfallible処理前に消費する。元TopologyRunOwnerのowner/session/receipt/context/budget結合、owner Finished、topology開始済み、元root.finished/before_succeeded/completion_consumed、3slot消費、実AfterM4 ackを照合し、末尾checkpointの成功後だけ返る。早過ぎる呼出し・二重呼出し・別budget identityは元owner/session/rootを停止する。cfg(test)の薄い委譲口は実helperを呼ぶだけで、setterや成功生成口ではない。
+
+成功時はその固定bodyだけがprivate fieldのPendingBodyを構築する。元ComparedM0M4を所有し、元budget origin/session claim/startedを保持する。非Clone/非Copy/非serde・opaque Debug、通常のcomparison getterやRecordComparison変換口はない。entitlement gateの確認口はcfg(test)だけで、既存のUnverifiedXml停止は解除しない。
+
+PendingBodyは**解放前**の結果であり、解放済みtokenや最終strict結果ではない。保持identityの将来の消費照合・固定解放section・merge_after_releaseへの接続は今回追加していない。genericな診断enumをSequenceReturnedにして最終結果を作るshortcutも設けない。
+
+### 13.3 診断・借用境界
+
+receipt/外側clock失敗はowner生成前のplain OuterStrictFailure（round/innerなし）。owner生成以後は段階を固定enumで記録し、実StrictInspectionFailureをfrom_innerへmoveする。元ownerへのstop通知の戻り値で保持中のCompletionFailureを置き換えず、元round/cleanup/summaryを保持する。body末尾失敗はBodyCheckpoint起点、active roundなし・新cleanup票なしで停止する。
+
+戻る際にlocal owner/root/slot等の借用は終了するが、caller所有のsource/topology_source/held/recordsは解放しない。失敗診断のrelease/checkpoint観測もNotReachedのまま。成功・失敗とも実解放順と解放後の最終checkpointは次工程であり、今回は合流器を呼ばない。
+
+### 13.4 費目と合成検証
+
+新O.outer_entry=1 work（正常時の時刻観測3）、O.outer_body_done=2 work（正常時の時刻観測6）。既存coupling30に対する追加は計3 workで、合わせて33。receipt/hash/外側clockの既存処理とresource configure既存1 work、R/I/scan/tail/ackの費用は別で、全体受付の確定上界ではない。
+
+[private body合成記録](E2E_BEST_PRACTICE_R2_OL03_BODY_ORCHESTRATOR_SYNTHETIC_2026-10-22.md)の新規7テストを参照。receipt/外側clock/依存欠落での未到達、固定3位置のphase順・再読6cycle、実kernel診断保持、M4失敗後の停止、入口/owner生成/body末尾のwork・取消/期限、helperの早期/二重/別budget、型制約と省略変異を確認した。index decodeは既存固定kernelの1箇所/roundを維持し、新しい独立decode計数器は追加していない。
+
+残るのは、外側が入力を所有するrelease section、PendingBodyのidentity付き消費と最終checkpoint/結果合流、上位の診断所有先、全体work/resource受付・本番policy/OS解放契約。通常strict.rs全体の差替え・OS/実機接続・token発行・設定変更・permit発行は行わず、全体受付無効・telemetry保留を維持する。

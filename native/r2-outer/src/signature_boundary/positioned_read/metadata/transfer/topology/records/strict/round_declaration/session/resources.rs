@@ -652,24 +652,24 @@ pub(in super::super::super) mod testing {
         p: Policy,
         b: &mut SharedBudget<'_>,
     ) -> Result<(), Failure> {
-        ledger.configure_resources(
-            ResourcePolicy {
-                model: MODEL,
-                session: Caps {
-                    attempts: p.attempts,
-                    total: p.total,
-                    live: p.live,
-                    names: p.names,
-                },
-                rounds: [Caps {
-                    attempts: p.round_attempts,
-                    total: p.round_total,
-                    live: p.live,
-                    names: p.names,
-                }; 3],
+        ledger.configure_input(input(p), b)
+    }
+    pub(in super::super::super::super) fn input(p: Policy) -> super::super::ResourceInput {
+        super::super::ResourceInput(ResourcePolicy {
+            model: MODEL,
+            session: Caps {
+                attempts: p.attempts,
+                total: p.total,
+                live: p.live,
+                names: p.names,
             },
-            b,
-        )
+            rounds: [Caps {
+                attempts: p.round_attempts,
+                total: p.round_total,
+                live: p.live,
+                names: p.names,
+            }; 3],
+        })
     }
     #[derive(Debug, PartialEq, Eq)]
     pub(in super::super::super::super) struct Counts {

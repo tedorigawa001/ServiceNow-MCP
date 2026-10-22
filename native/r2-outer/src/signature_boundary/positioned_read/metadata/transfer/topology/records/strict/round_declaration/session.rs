@@ -6,6 +6,9 @@ pub(super) const MODEL_ID: &str = "bp5-r2-scan-session-state-0.1";
 const RESOURCE_ID: &str = "bp5-r2-scan-resource-0.2";
 const KERNEL_ID: &str = "bp5-r2-collector-work-0.2";
 
+// Opaque transfer only. There is deliberately no operational constructor.
+pub(in super::super) struct ResourceInput(resources::ResourcePolicy);
+
 #[derive(Clone, Copy, PartialEq, Eq)]
 enum State {
     Expect(Round),
@@ -95,6 +98,13 @@ pub(in super::super) fn create<'s>(
     }
 }
 impl<'s> ScanSessionLedger<'s> {
+    pub(in super::super) fn configure_input(
+        &mut self,
+        input: ResourceInput,
+        b: &mut SharedBudget<'_>,
+    ) -> Result<(), Failure> {
+        self.configure_resources(input.0, b)
+    }
     // Narrow outer-owner hooks; no state setter or normal completion producer.
     pub(in super::super) fn require_inspection(&self, b: &SharedBudget<'_>) -> Result<(), Failure> {
         self.binding(b)?;

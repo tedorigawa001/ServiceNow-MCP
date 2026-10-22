@@ -1,9 +1,10 @@
-//! Internal ownership subset only. No normal strict/M4/OS entry or policy constructor.
+//! Internal fixed owner/position/body subset. No normal strict/OS entry or policy constructor.
 use super::*;
 use collector::completion::CompletionFailure;
 use round_declaration::session::{self, ScanSessionLedger};
 
 const MODEL: &str = "bp5-r2-strict-owner-0.1";
+pub(super) mod body;
 mod kernel;
 pub(in super::super) mod outer_result;
 pub(in super::super) mod topology_adapter;
@@ -25,6 +26,7 @@ pub(in super::super) struct StrictSessionOwner<'a, 's, S: RecordSource, C> {
     progress: Progress,
     model: &'static str,
     topology_started: bool,
+    body_done_started: bool,
 }
 pub(in super::super) struct RoundSlot<'o, 'a, 's, S: RecordSource, C> {
     owner: &'o mut StrictSessionOwner<'a, 's, S, C>,
@@ -104,6 +106,7 @@ pub(in super::super) fn create<'a, 's, S: RecordSource, C>(
         progress: Progress::Expected(Round::Initial),
         model: MODEL,
         topology_started: false,
+        body_done_started: false,
     })
 }
 impl<'a, 's, S: RecordSource, C> StrictSessionOwner<'a, 's, S, C> {
@@ -254,6 +257,14 @@ impl<S: RecordSource, C> Drop for StrictSessionOwner<'_, '_, S, C> {
 #[cfg(test)]
 pub(in super::super) mod testing {
     use super::*;
+    #[allow(clippy::result_large_err)]
+    pub(in super::super::super) fn complete_body<'s, S: RecordSource, C>(
+        owner: &mut StrictSessionOwner<'_, 's, S, C>,
+        run: &topology_adapter::TopologyRunOwner<'_, 's>,
+        b: &mut SharedBudget<'_>,
+    ) -> Result<(), StrictInspectionFailure> {
+        owner.complete_body(run, b)
+    }
     pub(in super::super::super) fn ledger<'o, 's, S: RecordSource, C>(
         o: &'o mut StrictSessionOwner<'_, 's, S, C>,
     ) -> &'o mut ScanSessionLedger<'s> {

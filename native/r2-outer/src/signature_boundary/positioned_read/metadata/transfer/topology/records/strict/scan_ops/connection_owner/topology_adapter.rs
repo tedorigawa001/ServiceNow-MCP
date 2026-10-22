@@ -121,6 +121,35 @@ impl<S: RecordSource, C> Drop for AfterM4Round<'_, '_, '_, '_, '_, S, C> {
 
 impl<'a, 's, S: RecordSource, C> StrictSessionOwner<'a, 's, S, C> {
     #[allow(clippy::result_large_err)]
+    pub(super) fn complete_body(
+        &mut self,
+        run: &TopologyRunOwner<'_, 's>,
+        b: &mut SharedBudget<'_>,
+    ) -> Result<(), StrictInspectionFailure> {
+        let fresh = !std::mem::replace(&mut self.body_done_started, true);
+        let result = (|| {
+            work(b)?; // O.outer_body_done 1: one-shot original owner / finished fixed topology
+            run.require(self, b)?;
+            if !fresh
+                || self.progress != Progress::Finished
+                || !self.topology_started
+                || !run.finished.get()
+                || !run.before_succeeded.get()
+                || !run.completion_consumed.get()
+                || self.slots.iter().any(Option::is_some)
+            {
+                return Err(Failure::Binding);
+            }
+            self.ledger.require_acknowledged(Round::AfterM4, b)?;
+            work(b)?; // O.outer_body_done 2: body terminal checkpoint, not release confirmation
+            b.checkpoint()
+        })();
+        match result {
+            Ok(()) => Ok(()),
+            Err(e) => Err(run.error(self, e, b)),
+        }
+    }
+    #[allow(clippy::result_large_err)]
     pub(in super::super::super) fn topology_run<'t, R: ResourceOrigin>(
         &mut self,
         held: &HeldTargetScope<'_, R>,

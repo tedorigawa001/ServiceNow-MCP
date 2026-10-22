@@ -1,6 +1,6 @@
 # BP-5 R-2 OL-03：通常strictの固定3箇所・同RecordSource・M4 owner接続詳細設計
 
-Version: draft-0.8 / Date: 2026-10-22 / Design baseline: `fd1de54` / Implementation baselines: owner `2905075`、topology `bd9301b`、kernel `9d7183e`、固定位置 `cd5bd97` / Status: 固定3位置と外側診断用結果合流器まで内部実装。外側orchestrator本体・通常strict全体・OS接続は未実施。
+Version: draft-0.9 / Date: 2026-10-22 / Design baseline: `fd1de54` / Implementation baselines: owner `2905075`、topology `bd9301b`、kernel `9d7183e`、固定位置 `cd5bd97`、結果合流器 `39f643e` / Status: receipt/外側clockから固定3位置・body完了までprivate接続。外側解放/最終結果・通常strict全体・OS接続は未実施。
 
 ## 1. 範囲と不変条件
 
@@ -275,3 +275,7 @@ BeforeM4のCompletionFailureは既存compare_coreの捕捉経路でroundとと�
 ### 14.1 診断型・結果合流器の内部subset
 
 [外側orchestrator設計draft-0.2 §12](BEST_PRACTICE_BP5_R2_OL03_OUTER_STRICT_ORCHESTRATOR_DESIGN.md)で、前節の設計に続きOuterStrictFailure・限定観測enum・結果合流器だけを実装した。元理由/round/cleanup/summaryをmove保持し、解放後checkpointの遅延成功や解放未到達を拒否する。汎用Tと診断enumはstrict完了/解放証拠ではなく、通常strictの固定caller・実解放順・元budget identityの結合は次工程である。[新規6テストの記録](E2E_BEST_PRACTICE_R2_OL03_OUTER_RESULT_SYNTHETIC_2026-10-22.md)を参照。全体受付・telemetry・OS/permitの停止は変更しない。
+
+### 14.2 receipt/外側clockからのprivate body
+
+[外側orchestrator設計draft-0.3 §13](BEST_PRACTICE_BP5_R2_OL03_OUTER_STRICT_ORCHESTRATOR_DESIGN.md)で、owner生成前のreceipt検査・元source.clock、固定3位置、元root/owner/実ack/3slotを照合するone-shot body完了helperを接続した。ResourceInputは移動wrapperだけで、本番policy constructorはない。成功は解放前のopaque PendingBody、失敗は元診断のまま返し、外側解放/最終checkpoint/結果合流は未接続。[新規7テストの記録](E2E_BEST_PRACTICE_R2_OL03_BODY_ORCHESTRATOR_SYNTHETIC_2026-10-22.md)を参照。追加費3 workを既存30と分離し、全体受付無効・telemetry保留を維持する。
