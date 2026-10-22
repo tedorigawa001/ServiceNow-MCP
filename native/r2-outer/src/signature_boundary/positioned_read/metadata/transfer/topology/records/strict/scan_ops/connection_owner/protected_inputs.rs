@@ -2,7 +2,10 @@
 use super::*;
 use crate::signature_boundary::positioned_read::{ProtectedBridgeClaim, ScanSessionClaim};
 use outer_result::DropObservation;
-use result_owner::{InputRejected, InputStage, StrictBridgeFailure, StrictBridgeResult};
+use result_owner::{
+    CreateStage, InputLocation, InputRejected, InputStage, StrictBridgeFailure, StrictBridgeResult,
+};
+pub(in super::super) mod preparation;
 
 pub(in super::super) const MODEL_ID: &str = "bp5-r2-protected-bridge-0.1";
 struct Tagged<T> {
@@ -72,15 +75,24 @@ fn inspection(seal: &Seal<'_>, b: &SharedBudget<'_>) -> Result<(), Failure> {
     }
     Ok(())
 }
+#[cfg(test)]
 pub(in super::super) fn create<'s, R, T, S, C>(
     supply: ProtectedSupply<'s, R, T, S, C>,
     expected: &str,
     b: &mut SharedBudget<'_>,
 ) -> Result<ProtectedStrictInputs<'s, R, T, S, C>, Failure> {
+    create_typed(supply, expected, b).map_err(|e| StrictBridgeFailure::input(e).reason())
+}
+pub(super) fn create_typed<'s, R, T, S, C>(
+    supply: ProtectedSupply<'s, R, T, S, C>,
+    expected: &str,
+    b: &mut SharedBudget<'_>,
+) -> Result<ProtectedStrictInputs<'s, R, T, S, C>, InputRejected> {
     let fresh = !supply.seal.claim.generated.replace(true);
     if !Rc::ptr_eq(&supply.seal.claim, &b.protected_bridge_claim) {
         b.protected_bridge_claim.generated.set(true);
     }
+    let mut stage = CreateStage::ClaimModel;
     let result = (|| {
         work(b)?; // O.bridge_create 1: irreversible creation/model
         if !fresh {
@@ -89,6 +101,7 @@ pub(in super::super) fn create<'s, R, T, S, C>(
         if expected != MODEL_ID {
             return Err(Failure::Unavailable);
         }
+        stage = CreateStage::InspectionPublish;
         work(b)?; // O.bridge_create 2: original inspection/publication
         inspection(&supply.seal, b)?;
         b.checkpoint()
@@ -98,7 +111,12 @@ pub(in super::super) fn create<'s, R, T, S, C>(
             payload: Some(supply.payload),
             seal: supply.seal,
         }),
-        Err(e) => reject(&supply.seal, b, e), // supply fields drop in fixed order, never scan
+        Err(e) => {
+            let reason = reject::<()>(&supply.seal, b, e).unwrap_err();
+            let rejection = InputRejected::at(InputLocation::Create(stage), reason, b);
+            drop(supply); // Fixed payload field order, before terminal observation.
+            Err(rejection.after_release(DropObservation::SequenceReturned, b))
+        }
     }
 }
 impl<'s, R, T, S, C> ProtectedStrictInputs<'s, R, T, S, C> {
@@ -196,7 +214,7 @@ impl<'s, R, T, S, C> ProtectedStrictInputs<'s, R, T, S, C> {
 impl<R, T, S, C> ProtectedStrictInputs<'_, R, T, S, C> {
     pub(super) fn discard(
         self,
-        stage: InputStage,
+        location: InputLocation,
         reason: Failure,
         b: &mut SharedBudget<'_>,
     ) -> InputRejected {
@@ -206,7 +224,7 @@ impl<R, T, S, C> ProtectedStrictInputs<'_, R, T, S, C> {
             b.protected_bridge_claim.used.set(true);
         }
         let reason = reject::<()>(&self.seal, b, reason).unwrap_err();
-        let rejection = InputRejected::new(stage, reason, b);
+        let rejection = InputRejected::at(location, reason, b);
         drop(self); // All owned inputs in fixed payload field order, before the checkpoint.
         rejection.after_release(DropObservation::SequenceReturned, b)
     }
@@ -218,7 +236,11 @@ impl<R: MetadataOps + ResourceOrigin, T: TopologySource<R>, S: RecordSource, C: 
     #[allow(clippy::result_large_err)] // Retain the original bounded diagnostic inline, including after stop.
     pub(super) fn into_release(mut self, b: &mut SharedBudget<'_>) -> StrictBridgeResult {
         if let Err((stage, reason)) = self.require_use_at(MODEL_ID, b) {
-            return Err(StrictBridgeFailure::input(self.discard(stage, reason, b)));
+            return Err(StrictBridgeFailure::input(self.discard(
+                InputLocation::Use(stage),
+                reason,
+                b,
+            )));
         }
         let transfer = (|| {
             work(b)?;
@@ -227,14 +249,14 @@ impl<R: MetadataOps + ResourceOrigin, T: TopologySource<R>, S: RecordSource, C: 
         })(); // O.bridge_transfer 1
         if let Err(reason) = transfer {
             return Err(StrictBridgeFailure::input(self.discard(
-                InputStage::InspectionBinding,
+                InputLocation::TransferCommit,
                 reason,
                 b,
             )));
         }
         let Some(payload) = self.payload.take() else {
             return Err(StrictBridgeFailure::input(self.discard(
-                InputStage::InspectionBinding,
+                InputLocation::TransferCommit,
                 Failure::Binding,
                 b,
             )));
@@ -426,6 +448,7 @@ mod contracts {
         }
         opaque!(ProtectedSupply<'static, (), (), (), ()>);
         opaque!(ProtectedStrictInputs<'static, (), (), (), ()>);
+        opaque!(preparation::PreparationEnvelope<'static, (), (), (), ()>);
         assert!(std::mem::size_of::<ProtectedBridgeClaim>() <= 64);
     }
 }

@@ -8,6 +8,7 @@ use scan_ops::connection_owner::outer_result::{
     DropObservation, OuterPhase, PostReleaseCheckpoint,
 };
 use scan_ops::connection_owner::{body, protected_inputs as bridge, result_owner as upper};
+mod creation;
 
 struct Watched<T> {
     inner: T,
@@ -329,6 +330,10 @@ fn exercise(mode: Mode) {
                 _ => upper::InputStage::SlotBinding,
             };
             assert_eq!(error.input_stage(), Some(stage));
+            assert_eq!(
+                error.input_location(),
+                Some(upper::InputLocation::Use(stage))
+            );
             assert!(starts.borrow().is_empty());
         }
         Mode::Prechecked => {

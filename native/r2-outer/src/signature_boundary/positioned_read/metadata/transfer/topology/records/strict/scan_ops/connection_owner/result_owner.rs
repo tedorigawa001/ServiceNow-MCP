@@ -16,22 +16,68 @@ pub(in super::super) enum InputStage {
     // Owner-only: an awaiting result slot dropped without retain. Not a bridge guard stage.
     SlotAbandoned,
 }
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(in super::super) enum SupplyStage {
+    Context,
+    ReceiptTarget,
+    HeldSources,
+    PolicyCaps,
+    Slots,
+    SealPublish,
+}
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(in super::super) enum CreateStage {
+    ClaimModel,
+    InspectionPublish,
+}
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(in super::super) enum InputLocation {
+    OwnerBegin,
+    Supply(SupplyStage),
+    Create(CreateStage),
+    Use(InputStage),
+    TransferCommit,
+    SlotAbandoned,
+}
+impl InputLocation {
+    fn legacy(self) -> Option<InputStage> {
+        match self {
+            Self::OwnerBegin => Some(InputStage::ModelInputUnavailable),
+            Self::Use(s) => Some(s),
+            Self::TransferCommit => Some(InputStage::InspectionBinding),
+            Self::SlotAbandoned => Some(InputStage::SlotAbandoned),
+            Self::Supply(_) | Self::Create(_) => None,
+        }
+    }
+}
 // Scalars only: no origin/lineage Rc, resource, path, raw bytes or identity authority.
 pub(in super::super) struct InputRejected {
     primary: Failure,
-    stage: InputStage,
+    location: InputLocation,
     release: DropObservation,
     checkpoint: PostReleaseCheckpoint,
 }
 impl InputRejected {
+    #[cfg(test)]
     pub(in super::super) fn new(
         stage: InputStage,
         reason: Failure,
         b: &mut SharedBudget<'_>,
     ) -> Self {
+        Self::at(
+            if stage == InputStage::SlotAbandoned {
+                InputLocation::SlotAbandoned
+            } else {
+                InputLocation::Use(stage)
+            },
+            reason,
+            b,
+        )
+    }
+    pub(super) fn at(location: InputLocation, reason: Failure, b: &mut SharedBudget<'_>) -> Self {
         Self {
             primary: b.stop::<()>(reason).unwrap_err(),
-            stage,
+            location,
             release: DropObservation::NotReached,
             checkpoint: PostReleaseCheckpoint::NotReached,
         }
@@ -71,8 +117,14 @@ impl StrictBridgeFailure {
     }
     pub(in super::super) fn input_stage(&self) -> Option<InputStage> {
         match self {
-            Self::InputRejected(e) => Some(e.stage),
+            Self::InputRejected(e) => e.location.legacy(),
             _ => None,
+        }
+    }
+    pub(in super::super) fn input_location(&self) -> Option<InputLocation> {
+        match self {
+            Self::InputRejected(e) => Some(e.location),
+            Self::Outer(_) => None,
         }
     }
     pub(in super::super) fn outer_phase(&self) -> Option<OuterPhase> {
@@ -164,7 +216,7 @@ impl StrictResultOwner {
             b.checkpoint()
         })();
         if let Err(reason) = result {
-            let e = InputRejected::new(InputStage::ModelInputUnavailable, reason, b);
+            let e = InputRejected::at(InputLocation::OwnerBegin, reason, b);
             let reason = e.primary;
             self.result = Some(Err(StrictBridgeFailure::input(e)));
             self.state = State::Retained;
@@ -207,13 +259,46 @@ impl StrictResultOwner {
             }
             Err(reason) => reason,
         };
-        let rejection = inputs.discard(InputStage::ModelInputUnavailable, reason, b);
+        let rejection = inputs.discard(InputLocation::OwnerBegin, reason, b);
         if fresh {
             // Same first begin rejection, now with the actual input-drop/checkpoint observations.
             self.result = Some(Err(StrictBridgeFailure::input(rejection)));
             self.state = State::Retained;
         }
         // On a duplicate begin, the previous result is never replaced.
+        Err(reason)
+    }
+    pub(in super::super) fn run_creation<
+        R: MetadataOps + ResourceOrigin,
+        T: TopologySource<R>,
+        S: RecordSource,
+        C: ScanOps,
+    >(
+        &mut self,
+        input: protected_inputs::preparation::PreparationEnvelope<'_, R, T, S, C>,
+        b: &mut SharedBudget<'_>,
+    ) -> Result<(), Failure> {
+        let fresh = self.state == State::Empty;
+        let reason = match self.begin_slot(MODEL_ID, b) {
+            Ok(slot) => {
+                let result = match input
+                    .complete(b)
+                    .and_then(|s| protected_inputs::create_typed(s, protected_inputs::MODEL_ID, b))
+                {
+                    Ok(bundle) => bundle.into_release(b),
+                    Err(e) => Err(StrictBridgeFailure::input(e)),
+                };
+                let signal = result.as_ref().map(|_| ()).map_err(|e| e.reason());
+                slot.retain_result(result);
+                return signal;
+            }
+            Err(e) => e,
+        };
+        let rejection = input.discard(InputLocation::OwnerBegin, reason, b);
+        if fresh {
+            self.result = Some(Err(StrictBridgeFailure::input(rejection)));
+            self.state = State::Retained;
+        }
         Err(reason)
     }
 }
@@ -242,7 +327,7 @@ impl Drop for ResultSlot<'_> {
             self.bridge.failure.set(Some(reason));
             self.owner.result = Some(Err(StrictBridgeFailure::input(InputRejected {
                 primary: reason,
-                stage: InputStage::SlotAbandoned,
+                location: InputLocation::SlotAbandoned,
                 release: DropObservation::NotReached,
                 checkpoint: PostReleaseCheckpoint::NotReached,
             })));
@@ -273,6 +358,53 @@ opaque_debug!(
 #[cfg(test)]
 mod contracts {
     use super::*;
+    #[test]
+    fn input_location_distinguishes_creation_and_preserves_legacy_projection_and_first_reason() {
+        use InputLocation as L;
+        use InputStage as U;
+        let locations = [
+            (L::OwnerBegin, Some(U::ModelInputUnavailable)),
+            (L::Supply(SupplyStage::Context), None),
+            (L::Supply(SupplyStage::ReceiptTarget), None),
+            (L::Supply(SupplyStage::HeldSources), None),
+            (L::Supply(SupplyStage::PolicyCaps), None),
+            (L::Supply(SupplyStage::Slots), None),
+            (L::Supply(SupplyStage::SealPublish), None),
+            (L::Create(CreateStage::ClaimModel), None),
+            (L::Create(CreateStage::InspectionPublish), None),
+            (
+                L::Use(U::ModelInputUnavailable),
+                Some(U::ModelInputUnavailable),
+            ),
+            (L::Use(U::InspectionBinding), Some(U::InspectionBinding)),
+            (L::Use(U::ContextBinding), Some(U::ContextBinding)),
+            (L::Use(U::ReceiptBinding), Some(U::ReceiptBinding)),
+            (L::Use(U::SourceBinding), Some(U::SourceBinding)),
+            (L::Use(U::PolicyBinding), Some(U::PolicyBinding)),
+            (L::Use(U::SlotBinding), Some(U::SlotBinding)),
+            (L::TransferCommit, Some(U::InspectionBinding)),
+            (L::SlotAbandoned, Some(U::SlotAbandoned)),
+        ];
+        for (location, legacy) in locations {
+            let cancel = std::sync::atomic::AtomicBool::new(false);
+            let mut b = SharedBudget::new(Instant::now(), &cancel);
+            let mut owner = StrictResultOwner::new();
+            let slot = owner.begin_slot(MODEL_ID, &mut b).unwrap();
+            let _ = b.stop::<()>(Failure::Expired);
+            let e = InputRejected::at(location, Failure::Binding, &mut b);
+            b.json_work = 1_000_000;
+            slot.retain_result(Err(StrictBridgeFailure::input(e)));
+            let error = owner.take().unwrap().unwrap_err();
+            assert_eq!(error.reason(), Failure::Expired);
+            assert_eq!(error.input_location(), Some(location));
+            assert_eq!(error.input_stage(), legacy);
+            assert_eq!(b.json_work, 1_000_000);
+            assert_eq!(
+                format!("{error:?}"),
+                "StrictBridgeFailure(diagnostics_only)"
+            );
+        }
+    }
     #[test]
     fn upper_ownership_is_inline_move_only_and_not_serializable() {
         macro_rules! not_impl {

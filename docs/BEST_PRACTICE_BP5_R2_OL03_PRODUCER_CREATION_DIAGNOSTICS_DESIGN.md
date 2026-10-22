@@ -1,12 +1,14 @@
 # BP-5 R-2 OL-03：保護producer生成入口・生成失敗の上位診断保持
 
-Version: draft-0.1 / Date: 2026-10-23 / Source baseline: `1a533e6` / Status: 詳細設計のみ、未実装・未検証・運用未承認
+Version: draft-0.2 / Date: 2026-10-23 / Source baseline: `67355d8` / Status: §10のInputLocation・型付きcreate拒否・部分入力discard・生成前slot確保subsetを実装/合成検証。§3〜9の全producer/claim/8 work候補は未実装・運用未承認
 
 ## 1. 範囲と停止状態
 
 [保護bridge・診断保持設計](BEST_PRACTICE_BP5_R2_OL03_PROTECTED_BRIDGE_DIAGNOSTICS_DESIGN.md)§13の後続である。生成前の結果owner確保、部分入力の所有、producer/create拒否の固定診断、既存releaseへの線形移譲を一つのprivate入口として設計する。
 
-全体受付無効・telemetry保留・APPROVED_REGISTRY=None・通常v2 Unavailable・gate92・DER/absence停止を維持する。本書は実装、OS接続、実機操作、token発行、設定変更、本番policy投入、permit発行を認めない。通常strict.rsの差替えも行わない。以下の新型/API/費用は案であり、既存の合成成功を本番供給元の証拠にしない。
+全体受付無効・telemetry保留・APPROVED_REGISTRY=None・通常v2 Unavailable・gate92・DER/absence停止を維持する。実装済みsubsetは§10に限定し、OS接続、実機操作、token発行、設定変更、本番policy投入、permit発行、通常strict.rsの差替えは対象外とする。既存の合成成功を本番供給元の証拠にしない。
+
+§3〜9は初稿draft-0.1の全体案として残し、現在の型/実装範囲/費用/未対応点は§10を優先する。全producerの8段階検査や準備claimを実装済みとは扱わない。
 
 ## 2. 現状との差
 
@@ -146,3 +148,35 @@ SequenceReturnedは通常drop列から戻った観測に限る。OS close確認�
 4. 本番の供給証拠・cap承認・OS source/解放保証と通常strictの戻り値移行は別承認とする。
 
 型名/新location projection、固定8候補の妥当性、元producerが保持する外部領域の構築方法、cap承認者/固定配布方式、OS明示解放の可否、上流取得失敗の診断所有先は未承認/未検証である。これらを暗黙の既定値で確定せず、実装時の合成結果・費目導出とともに再レビューする。
+
+## 10. 生成前保持・型付きcreate・部分所有subset（draft-0.2）
+
+### 10.1 現在の固定経路
+
+[result_owner.rs](../native/r2-outer/src/signature_boundary/positioned_read/metadata/transfer/topology/records/strict/scan_ops/connection_owner/result_owner.rs)の`run_creation`は、private begin_slotで結果領域を確保してから、部分入力complete→create_typed→既存into_release→同slotのretain_resultを実行する。既存run_protectedを呼び直さず、任意callback/外部結果/別budgetを受け取らない。生成済みbundle入口と新生成入口は同じownerを再開始できない。
+
+初回begin失敗では受領済み部分入力を固定discardし、元OwnerBeginのprimaryを保って破棄/checkpoint観測を補う。二重開始では新入力を破棄するが、保持済み/消費済みの先行結果を変更しない。producer/生成guardの途中でslotを放棄してSlotAbandonedへ潰す経路は使わない。
+
+### 10.2 location・create拒否
+
+InputRejectedはInputStage単独からInputLocationの所有へ移行した。OwnerBegin、Supply(Context/ReceiptTarget/HeldSources/PolicyCaps/Slots/SealPublish)、Create(ClaimModel/InspectionPublish)、Use(既存InputStage)、TransferCommit、SlotAbandonedを区別する。Supply(InspectionEntry/PublicationCheckpoint)は本subsetで未実装のためenumへ追加していない。
+
+従来input_stageはUseの値を維持し、OwnerBegin→ModelInputUnavailable、TransferCommit→InspectionBinding、SlotAbandoned→SlotAbandonedへ射影する。Supply/CreateではNoneになる。新input_locationで位置を取得でき、Noneを「拒否なし」と解釈しない。outer_phase/roundは実Outerだけに存在する。位置とprimaryは独立で、期限/取消/先行Expired等をBindingへ書き換えない。
+
+`create_typed`は生成claim/modelとinspection/publicationの各位置を捕捉し、元budget/claimを停止→supplyの固定field破棄→checkpoint観測の後にInputRejectedを返す。既存2 workと検査順を維持する。理由だけを返すcreateはcfg(test)の互換委譲口に限定し、本番側が型付き拒否を失う入口にはしない。既存begin/retain/require_useの低水準test口も非公開化を維持する。
+
+### 10.3 部分入力・所有と費目
+
+[preparation.rs](../native/r2-outer/src/signature_boundary/positioned_read/metadata/transfer/topology/records/strict/scan_ops/connection_owner/protected_inputs/preparation.rs)のPreparationEnvelopeがprivateなPartialPayloadを所有する。scan3個、policy、quota3個、source、topology source、held、topology、records、context借用をOptionで表し、存在する値だけを既存payloadと同じfield順で破棄する。helperへ所有値を渡して途中で局所dropさせず、全所有値を残したまま欠落位置を判定する。
+
+今回のcompleteは固定数のOption完全性検査のみで、新`O.preparation_complete=1 work`をslot確保後に課金する。context→records→held/topology/source群→policy/quota群→scan群の順に欠落位置を選びUnavailableで拒否する。work/取消/期限失敗の位置はSupply(SealPublish)。全必須値の存在を確認後、callbackやmutationを挟まず供給payloadへmoveする。由来検査は既存create/利用guardへ引き継ぎ、存在確認を保護producerの承認証拠とは扱わない。
+
+同成功fixtureで、生成済みbundle経路より1 work多く、固定release直呼びとの差は**16 work**（owner2＋complete1＋create2＋利用10＋移譲1）と確認した。既存15を二度足さない。§7の8 work候補やU_supply_dynamic・本番供給包装は未実装/未計数である。将来8段階へ接続するときは本complete1の存廃/費目所有を再確認し、8＋1を無条件に加算しない。
+
+Envelopeの構築・欠落操作はcfg(test)だけにあり、non-testのconstructor/OS取得/本番policyは追加していない。準備claim、実producerの8段階、外部保持領域の本番構築、独立resource/全体work受付は次工程。Envelopeを入口へ渡さず放棄/forgetした場合の停止保証も今回追加しない。
+
+### 10.4 合成検証と限界
+
+[新規8テストの記録](E2E_BEST_PRACTICE_R2_OL03_CREATION_DIAGNOSTICS_SYNTHETIC_2026-10-23.md)を参照。13種の単独欠落と13段階の累積欠落、owner開始前/complete/create/利用/移譲までのwork不足・課金後取消・期限、二重owner/生成claim、別inspection、解放後取消/期限を確認した。18種locationのprojection・第一理由保持、固定Debug、非Clone/非Copy/非serde/サイズの既存回帰も維持した。
+
+解放watchは観測専用で、通常dropが戻った後に順序/回数を検査する。SequenceReturnedはOS close確認/Closed/permitではない。通常strict差替え・OS接続・全体受付・運用cap承認・DER/absence停止の解除は行わない。

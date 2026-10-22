@@ -1,6 +1,6 @@
 # BP-5 R-2 OL-03：保護入力bridge・上位診断保持の詳細設計
 
-Version: draft-0.5 / Date: 2026-10-23 / Source baseline: `1a533e6` / Status: §13の固定値移譲/callerと低水準口の非公開化まで実装。§14に生成前owner確保・producer入口の後続設計を追加（MDのみ）。保護producer・通常strict差替えは未実装。
+Version: draft-0.6 / Date: 2026-10-23 / Source baseline: `67355d8` / Status: §13の固定値移譲に加え、§15の生成前slot確保・型付きcreate拒否・部分入力discardを内部実装/合成検証。保護producer全体・通常strict差替えは未実装。
 
 ## 1. 範囲と停止状態
 
@@ -296,3 +296,9 @@ SequenceReturnedはRustの固定drop列から戻った観測であり、OS FDの
 [生成入口・診断保持詳細設計draft-0.1](BEST_PRACTICE_BP5_R2_OL03_PRODUCER_CREATION_DIAGNOSTICS_DESIGN.md)に、Envelope受領→owner/slot確保→部分入力準備→Supply/create→既存into_release→同slot保持の固定順序を整理した。任意callbackやraw型の公開は追加せず、既存run_protectedを内側から再度呼んでbeginを二重実行しない。
 
 生成拒否位置をUse(InputStage)と別のSupply/Create位置で表し、部分所有入力を固定順で破棄して元primaryとcheckpoint観測を保持する案である。固定制御8 work候補と未確定の動的producer費・管理allocationを既存15から分離した。候補の計数/型・本番producer・全体受付は未実装/未承認であり、上流のEnvelope受領前失敗をこの入口が回収するとは扱わない。
+
+## 15. 生成前slot・型付き拒否・部分入力discard subset
+
+[生成入口設計draft-0.2 §10](BEST_PRACTICE_BP5_R2_OL03_PRODUCER_CREATION_DIAGNOSTICS_DESIGN.md)で、run_creation→同slot確保→部分入力complete→create_typed→既存into_release→retainを接続した。InputRejectedは新InputLocationを持ち、生成のSupply/Createと利用Use・TransferCommitを区別する。旧input_stage射影は既存利用値を保つが、Supply/CreateではNoneとなるため、これを拒否なしと解釈しない。
+
+新complete1は部分所有値の存在検査だけであり、生成込み差分16 workを合成確認した。本番producer/準備claim/8段階の固定候補・動的費・独立resource/全体受付は未対応。既存生成済みbundle callerの検査/課金と通常strictの経路を維持する。[合成検証記録](E2E_BEST_PRACTICE_R2_OL03_CREATION_DIAGNOSTICS_SYNTHETIC_2026-10-23.md)を参照。
