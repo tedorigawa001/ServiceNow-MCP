@@ -102,7 +102,8 @@ pub(in super::super) fn create<'s, R, T, S, C>(
     }
 }
 impl<'s, R, T, S, C> ProtectedStrictInputs<'s, R, T, S, C> {
-    // A one-shot identity check ONLY. No release/collector call or payload extraction.
+    // Test-only direct check. Production uses it only inside the fixed into_release transfer.
+    #[cfg(test)]
     pub(in super::super) fn require_use(
         &mut self,
         expected: &str,

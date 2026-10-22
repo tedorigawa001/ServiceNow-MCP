@@ -268,6 +268,12 @@ InputRejectedは48 bytes以下、StrictBridgeFailure/ownerは各512 bytes以下�
 
 本callerは既に生成されたbundleを受け取る。供給producerと`create`の失敗をここで捕捉する入口は未接続であり、全供給失敗がこのownerに保存されるとは主張しない。cfg(test)以外のProtectedSupply constructorは引き続き存在しない。
 
+### 13.2a 低水準口の可視性とstageの読み方
+
+固定callerの接続後、本番で同budgetの線形経路を迂回できる低水準口を閉じた。`StrictResultOwner::begin`と`ResultSlot::retain`はprivateの`begin_slot`/`retain_result`へ移し、本番では`run_protected`の中からだけ呼ぶ。同名の`begin`/`retain`と`ProtectedStrictInputs::require_use`はcfg(test)の委譲口として残し、単体の回帰テストだけが使う。本番の利用検査は`into_release`内の`require_use_at`だけである。可視性の縮小であり、検査内容・work・停止順は変えていない。
+
+InputStageは拒否を検知した位置を表し、原因の種別ではない。例えば利用guard10点目（終端checkpoint）で期限・取消が到来するとstageは`InspectionBinding`になる。診断を読む側はstageだけで「binding不一致」と解釈せず、必ずprimary（Binding/Unavailable/Limit/Deadline/Cancelled等）と組み合わせて判断する。
+
 ### 13.3 費目・検証と限界
 
 | 費目 | work | 所有範囲 |

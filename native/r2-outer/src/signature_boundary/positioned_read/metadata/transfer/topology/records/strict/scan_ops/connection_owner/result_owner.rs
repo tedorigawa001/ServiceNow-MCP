@@ -136,7 +136,16 @@ impl StrictResultOwner {
             result: None,
         }
     }
+    // Test-only low-level entry. Production reaches it only through run_protected's same-budget path.
+    #[cfg(test)]
     pub(in super::super) fn begin<'o>(
+        &'o mut self,
+        expected: &str,
+        b: &mut SharedBudget<'_>,
+    ) -> Result<ResultSlot<'o>, Failure> {
+        self.begin_slot(expected, b)
+    }
+    fn begin_slot<'o>(
         &'o mut self,
         expected: &str,
         b: &mut SharedBudget<'_>,
@@ -189,11 +198,11 @@ impl StrictResultOwner {
         b: &mut SharedBudget<'_>,
     ) -> Result<(), Failure> {
         let fresh = self.state == State::Empty;
-        let reason = match self.begin(MODEL_ID, b) {
+        let reason = match self.begin_slot(MODEL_ID, b) {
             Ok(slot) => {
                 let result = inputs.into_release(b);
                 let signal = result.as_ref().map(|_| ()).map_err(|e| e.reason());
-                slot.retain(result); // No additional guard, budget, callback or foreign result input.
+                slot.retain_result(result); // No additional guard, budget, callback or foreign result input.
                 return signal;
             }
             Err(reason) => reason,
@@ -209,8 +218,13 @@ impl StrictResultOwner {
     }
 }
 impl ResultSlot<'_> {
+    // Test-only low-level store; production stores only the result of its own into_release.
+    #[cfg(test)]
+    pub(in super::super) fn retain(self, result: StrictBridgeResult) {
+        self.retain_result(result)
+    }
     // Unique mutable slot + value consumption: no fallible check/work/callback after return.
-    pub(in super::super) fn retain(mut self, result: StrictBridgeResult) {
+    fn retain_result(mut self, result: StrictBridgeResult) {
         self.owner.result = Some(result);
         self.owner.state = State::Retained;
         self.completed = true;
