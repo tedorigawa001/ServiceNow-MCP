@@ -1,14 +1,14 @@
 # BP-5 R-2 OL-03：保護producer生成入口・生成失敗の上位診断保持
 
-Version: draft-0.2 / Date: 2026-10-23 / Source baseline: `67355d8` / Status: §10のInputLocation・型付きcreate拒否・部分入力discard・生成前slot確保subsetを実装/合成検証。§3〜9の全producer/claim/8 work候補は未実装・運用未承認
+Version: draft-0.3 / Date: 2026-10-23 / Source baseline: `bd73802` / Status: §10の生成前保持に加え、§11の準備claim・同budget入口検査・生成前停止伝播を実装/合成検証。全producer/8段階全体・運用受付は未実装/未承認
 
 ## 1. 範囲と停止状態
 
 [保護bridge・診断保持設計](BEST_PRACTICE_BP5_R2_OL03_PROTECTED_BRIDGE_DIAGNOSTICS_DESIGN.md)§13の後続である。生成前の結果owner確保、部分入力の所有、producer/create拒否の固定診断、既存releaseへの線形移譲を一つのprivate入口として設計する。
 
-全体受付無効・telemetry保留・APPROVED_REGISTRY=None・通常v2 Unavailable・gate92・DER/absence停止を維持する。実装済みsubsetは§10に限定し、OS接続、実機操作、token発行、設定変更、本番policy投入、permit発行、通常strict.rsの差替えは対象外とする。既存の合成成功を本番供給元の証拠にしない。
+全体受付無効・telemetry保留・APPROVED_REGISTRY=None・通常v2 Unavailable・gate92・DER/absence停止を維持する。実装済みsubsetは§10〜11に限定し、OS接続、実機操作、token発行、設定変更、本番policy投入、permit発行、通常strict.rsの差替えは対象外とする。既存の合成成功を本番供給元の証拠にしない。
 
-§3〜9は初稿draft-0.1の全体案として残し、現在の型/実装範囲/費用/未対応点は§10を優先する。全producerの8段階検査や準備claimを実装済みとは扱わない。
+§3〜9は初稿draft-0.1の全体案として残し、現在の型/実装範囲/費用/未対応点は§10〜11を優先する。全producerの8段階検査は実装済みとは扱わない。
 
 ## 2. 現状との差
 
@@ -151,6 +151,8 @@ SequenceReturnedは通常drop列から戻った観測に限る。OS close確認�
 
 ## 10. 生成前保持・型付きcreate・部分所有subset（draft-0.2）
 
+以下の準備claim未対応・差分16・18種locationはdraft-0.2時点の記録である。現行の準備claim/差分17/19種locationは§11を参照する。
+
 ### 10.1 現在の固定経路
 
 [result_owner.rs](../native/r2-outer/src/signature_boundary/positioned_read/metadata/transfer/topology/records/strict/scan_ops/connection_owner/result_owner.rs)の`run_creation`は、private begin_slotで結果領域を確保してから、部分入力complete→create_typed→既存into_release→同slotのretain_resultを実行する。既存run_protectedを呼び直さず、任意callback/外部結果/別budgetを受け取らない。生成済みbundle入口と新生成入口は同じownerを再開始できない。
@@ -180,3 +182,29 @@ Envelopeの構築・欠落操作はcfg(test)だけにあり、non-testのconstru
 [新規8テストの記録](E2E_BEST_PRACTICE_R2_OL03_CREATION_DIAGNOSTICS_SYNTHETIC_2026-10-23.md)を参照。13種の単独欠落と13段階の累積欠落、owner開始前/complete/create/利用/移譲までのwork不足・課金後取消・期限、二重owner/生成claim、別inspection、解放後取消/期限を確認した。18種locationのprojection・第一理由保持、固定Debug、非Clone/非Copy/非serde/サイズの既存回帰も維持した。
 
 解放watchは観測専用で、通常dropが戻った後に順序/回数を検査する。SequenceReturnedはOS close確認/Closed/permitではない。通常strict差替え・OS接続・全体受付・運用cap承認・DER/absence停止の解除は行わない。
+
+## 11. 準備claim・入口結合・生成前停止の伝播（draft-0.3）
+
+### 11.1 最初のworkより前の不可逆消費
+
+同budgetの既存ProtectedBridgeClaimへprivateなpreparation_startedを追加した。run_creationはEnvelopeのstart_preparationを**begin_slotのEmpty確認/最初のworkより前**に呼ぶ。元claimのfreshをreplaceで捕捉し、別budgetが提示された場合は提示側の準備flagも立てる。generated/used/session.startedはこの時点で変更しない。二重ownerでも準備開始は記録され、ownerを替えても同budgetで再準備できない。
+
+非Clone/非Copy/非serdeのPreparationAttemptは、fresh・同供給seal・提示budgetのorigin/bridge claim/session claim/startedを保持し、completeが値で一度消費する。既存Rcのcloneだけで新規Rc allocation/FD/sourceは作らず、検査後に破棄する。tokenを公開/返却したり、数値summaryから作る口はない。
+
+slot確保後の新O.supply_entry=1 workで、fresh、tokenとEnvelope/同budgetのidentity、preparation_started、未generated/未used、既存inspection照合・checkpointを確認する。別origin/claim/session/started、同値だが別budget、放棄した先行attempt、消費済み生成/利用をSupply(InspectionEntry)で拒否し、scan/createへ進めない。元/提示budgetとも停止し、既存固定discard/型付き診断保持を使う。
+
+### 11.2 生成前からの停止理由保持
+
+SharedBudget::stopは`preparation_started || generated`のときに、既存の優先順で選んだ第一理由をbridge claimへ記録する。prepared=false/generated=falseの従来budgetの扱いは変えない。生成前でもbudget内のfailedとshared claimが同じ停止を保持し、claimを持つ待機slotの通常dropはUnavailableではなく元理由を保存できる。
+
+準備の個別拒否/discardも従来rejectのlatchを維持する。先行HashMismatch/Expired/Limit等を新しいBindingで上書きせず、同budgetの新owner/新Envelopeによる再試行は元理由で停止し、新work/scan/生成を開始しない。未格納slotの診断位置はSlotAbandonedであり、元理由の伝播から実解放や未提出のOuter frameを捏造しない。
+
+### 11.3 費目と検証
+
+準備flagの不可逆操作は新work前に行い、O.supply_entry1はidentity検査の所有費とする。slot2＋entry1＋complete1＋create2＋利用10＋移譲1＝**17 work**を固定release直呼びの成功差分として照合した。生成済みbundleの旧callerは15を維持する。設計§7の8候補のうちentryだけを実装し、complete1や残るproducer費と無条件に二重加算しない。
+
+claimは同じRc allocation内の状態拡張で、サイズ上限64 bytesの回帰を維持する。attemptは96 bytes以下のinline型で、新しいheap allocationはない。ただし追加状態/一時Rc参照の保持量・ピークを全体管理resource費へ統合済みとはしない。
+
+[新規4テストと拡張回帰の記録](E2E_BEST_PRACTICE_R2_OL03_PREPARATION_CLAIM_SYNTHETIC_2026-10-23.md)で、owner開始前の消費、先行attempt放棄、別budget、準備段階の停止伝播、fresh ownerでも再開不可を確認した。既存work/取消/期限の全境界を新entryへ合わせ、全19位置のprojection、固定field解放、元診断保持、成功差分を再検証した。
+
+本番producer、残りのcontext/receipt/source/policy/slot等の供給証拠検査、承認cap、独立resource/全体R/I/S/O上界・受付、OS source/明示close保証は未対応。Envelope受領前/入口へ渡さないままの放棄、panic/forget/abort/killの回収保証も追加しない。全体受付無効・telemetry保留・既存停止gateを維持する。

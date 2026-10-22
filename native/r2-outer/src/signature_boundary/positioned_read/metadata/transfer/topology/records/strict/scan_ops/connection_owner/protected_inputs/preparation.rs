@@ -1,4 +1,4 @@
-//! Partial ownership/discard subset only. No operational producer or policy constructor.
+//! Preparation claim and partial ownership/discard subset. No operational producer/policy.
 use super::*;
 use result_owner::SupplyStage;
 
@@ -18,12 +18,38 @@ pub(in super::super::super) struct PreparationEnvelope<'s, R, T, S, C> {
     payload: PartialPayload<'s, R, T, S, C>,
     seal: Seal<'s>,
 }
+// Consumed by complete. Existing identities are shared, never allocated anew or exposed.
+pub(in super::super) struct PreparationAttempt {
+    fresh: bool,
+    supply: Rc<()>,
+    origin: Rc<()>,
+    claim: Rc<ProtectedBridgeClaim>,
+    session: Rc<ScanSessionClaim>,
+    started: Instant,
+}
 impl<R, T, S, C> std::fmt::Debug for PreparationEnvelope<'_, R, T, S, C> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.write_str("PreparationEnvelope(partial_not_producer_or_authority)")
     }
 }
 impl<'s, R, T, S, C> PreparationEnvelope<'s, R, T, S, C> {
+    pub(in super::super) fn start_preparation(
+        &self,
+        b: &mut SharedBudget<'_>,
+    ) -> PreparationAttempt {
+        let fresh = !self.seal.claim.preparation_started.replace(true);
+        if !Rc::ptr_eq(&self.seal.claim, &b.protected_bridge_claim) {
+            b.protected_bridge_claim.preparation_started.set(true);
+        }
+        PreparationAttempt {
+            fresh,
+            supply: self.seal.supply.clone(),
+            origin: b.inspection_origin.clone(),
+            claim: b.protected_bridge_claim.clone(),
+            session: b.scan_session_claim.clone(),
+            started: b.started,
+        }
+    }
     pub(in super::super) fn discard(
         self,
         location: InputLocation,
@@ -39,8 +65,30 @@ impl<'s, R, T, S, C> PreparationEnvelope<'s, R, T, S, C> {
     }
     pub(in super::super) fn complete(
         self,
+        attempt: PreparationAttempt,
         b: &mut SharedBudget<'_>,
     ) -> Result<ProtectedSupply<'s, R, T, S, C>, InputRejected> {
+        let entry = (|| {
+            work(b)?; // O.supply_entry 1; the claim was already consumed before owner begin.
+            if !attempt.fresh
+                || !Rc::ptr_eq(&attempt.supply, &self.seal.supply)
+                || !Rc::ptr_eq(&attempt.origin, &b.inspection_origin)
+                || !Rc::ptr_eq(&attempt.claim, &b.protected_bridge_claim)
+                || !Rc::ptr_eq(&attempt.session, &b.scan_session_claim)
+                || attempt.started != b.started
+                || !self.seal.claim.preparation_started.get()
+                || self.seal.claim.generated.get()
+                || self.seal.claim.used.get()
+            {
+                return Err(Failure::Binding);
+            }
+            inspection(&self.seal, b)?;
+            b.checkpoint()
+        })();
+        drop(attempt); // One-shot identity token never survives preparation validation.
+        if let Err(e) = entry {
+            return Err(self.discard(InputLocation::Supply(SupplyStage::InspectionEntry), e, b));
+        }
         // One fixed-size completeness guard, NOT the proposed eight producer guards.
         if let Err(e) = work(b).and_then(|()| b.checkpoint()) {
             return Err(self.discard(InputLocation::Supply(SupplyStage::SealPublish), e, b));
@@ -122,6 +170,34 @@ pub(in super::super::super) enum PartialField {
 }
 #[cfg(test)]
 impl<R, T, S, C> PreparationEnvelope<'_, R, T, S, C> {
+    pub(in super::super::super) fn preclaim(&self, b: &mut SharedBudget<'_>) {
+        drop(self.start_preparation(b));
+    }
+    pub(in super::super::super) fn empty_retry_fixture(&self) -> Self {
+        Self {
+            payload: PartialPayload {
+                scans: std::array::from_fn(|_| None),
+                resources: None,
+                quotas: std::array::from_fn(|_| None),
+                source: None,
+                topology_source: None,
+                held: None,
+                topology: None,
+                records: None,
+                context: None,
+            },
+            seal: Seal {
+                supply: Rc::new(()),
+                origin: self.seal.origin.clone(),
+                claim: self.seal.claim.clone(),
+                session: self.seal.session.clone(),
+                started: self.seal.started,
+                context: self.seal.context,
+                bound: self.seal.bound,
+                held_origin: self.seal.held_origin.clone(),
+            },
+        }
+    }
     pub(in super::super::super) fn remove(&mut self, field: PartialField) {
         match field {
             PartialField::Context => {
@@ -152,5 +228,35 @@ impl<R, T, S, C> PreparationEnvelope<'_, R, T, S, C> {
                 self.payload.scans[i].take();
             }
         }
+    }
+}
+
+#[cfg(test)]
+mod claim_tests {
+    use super::*;
+    #[test]
+    fn prepared_budget_stop_reaches_a_waiting_slot_before_generation() {
+        let cancel = std::sync::atomic::AtomicBool::new(false);
+        let mut b = SharedBudget::new(Instant::now(), &cancel);
+        let claim = b.protected_bridge_claim.clone();
+        claim.preparation_started.set(true); // Synthetic entry has consumed its preparation claim.
+        let mut owner = result_owner::StrictResultOwner::new();
+        let slot = owner.begin(result_owner::MODEL_ID, &mut b).unwrap();
+        let work = b.json_work;
+        assert_eq!(
+            b.stop::<()>(Failure::HashMismatch),
+            Err(Failure::HashMismatch)
+        );
+        assert_eq!(claim.failure.get(), Some(Failure::HashMismatch));
+        assert!(!claim.generated.get());
+        assert!(!claim.used.get());
+        assert!(!b.scan_session_claim.started.get());
+        drop(slot);
+        let e = owner.take().unwrap().unwrap_err();
+        assert_eq!(e.reason(), Failure::HashMismatch);
+        assert_eq!(e.input_location(), Some(InputLocation::SlotAbandoned));
+        assert_eq!(b.json_work, work);
+        assert_eq!(b.stop::<()>(Failure::Binding), Err(Failure::HashMismatch));
+        assert_eq!(claim.failure.get(), Some(Failure::HashMismatch));
     }
 }

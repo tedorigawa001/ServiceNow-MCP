@@ -18,6 +18,7 @@ pub(in super::super) enum InputStage {
 }
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(in super::super) enum SupplyStage {
+    InspectionEntry,
     Context,
     ReceiptTarget,
     HeldSources,
@@ -188,7 +189,7 @@ impl StrictResultOwner {
             result: None,
         }
     }
-    // Test-only low-level entry. Production reaches it only through run_protected's same-budget path.
+    // Test-only low-level entry. Production reaches it only through fixed same-budget callers.
     #[cfg(test)]
     pub(in super::super) fn begin<'o>(
         &'o mut self,
@@ -278,11 +279,12 @@ impl StrictResultOwner {
         input: protected_inputs::preparation::PreparationEnvelope<'_, R, T, S, C>,
         b: &mut SharedBudget<'_>,
     ) -> Result<(), Failure> {
+        let attempt = input.start_preparation(b); // Irreversible, before even the owner guard/work.
         let fresh = self.state == State::Empty;
         let reason = match self.begin_slot(MODEL_ID, b) {
             Ok(slot) => {
                 let result = match input
-                    .complete(b)
+                    .complete(attempt, b)
                     .and_then(|s| protected_inputs::create_typed(s, protected_inputs::MODEL_ID, b))
                 {
                     Ok(bundle) => bundle.into_release(b),
@@ -303,7 +305,7 @@ impl StrictResultOwner {
     }
 }
 impl ResultSlot<'_> {
-    // Test-only low-level store; production stores only the result of its own into_release.
+    // Test-only low-level store; production stores only its fixed caller's actual result.
     #[cfg(test)]
     pub(in super::super) fn retain(self, result: StrictBridgeResult) {
         self.retain_result(result)
@@ -364,6 +366,7 @@ mod contracts {
         use InputStage as U;
         let locations = [
             (L::OwnerBegin, Some(U::ModelInputUnavailable)),
+            (L::Supply(SupplyStage::InspectionEntry), None),
             (L::Supply(SupplyStage::Context), None),
             (L::Supply(SupplyStage::ReceiptTarget), None),
             (L::Supply(SupplyStage::HeldSources), None),

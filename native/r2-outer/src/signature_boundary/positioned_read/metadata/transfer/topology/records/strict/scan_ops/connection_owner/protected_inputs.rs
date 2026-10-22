@@ -449,6 +449,8 @@ mod contracts {
         opaque!(ProtectedSupply<'static, (), (), (), ()>);
         opaque!(ProtectedStrictInputs<'static, (), (), (), ()>);
         opaque!(preparation::PreparationEnvelope<'static, (), (), (), ()>);
+        opaque!(preparation::PreparationAttempt);
+        assert!(std::mem::size_of::<preparation::PreparationAttempt>() <= 96);
         assert!(std::mem::size_of::<ProtectedBridgeClaim>() <= 64);
     }
 }

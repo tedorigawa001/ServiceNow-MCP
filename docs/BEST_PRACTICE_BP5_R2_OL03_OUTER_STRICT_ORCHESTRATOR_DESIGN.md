@@ -1,6 +1,6 @@
 # BP-5 R-2 OL-03：通常strictの外側orchestrator接続詳細設計
 
-Version: draft-0.10 / Date: 2026-10-23 / Source baseline: `67355d8` / Status: 固定値移譲/callerと、生成前slot・型付きcreate拒否・部分入力discardまで内部接続。通常strict差替え・OS接続は未実施。
+Version: draft-0.11 / Date: 2026-10-23 / Source baseline: `bd73802` / Status: 生成前slot/型付き拒否に加え、準備claim・同budget入口・生成前停止伝播まで内部接続。通常strict差替え・OS接続は未実施。
 
 ## 1. 範囲と停止条件
 
@@ -254,3 +254,5 @@ draft-0.1時点の新guard10 workは未実装の候補で、既存35＋Kと別�
 [生成入口・診断保持詳細設計draft-0.1](BEST_PRACTICE_BP5_R2_OL03_PRODUCER_CREATION_DIAGNOSTICS_DESIGN.md)で、生成前のslot確保と部分入力の固定discard、producer/create拒否位置の区別、同じslotへの実結果格納を設計した。低水準begin/retainはprivateのまま維持し、新入口で既存callerのbeginを二重実行しない。MDのみであり、固定producer/生成失敗保持の実装・通常strict差替え・運用受付を追加したものではない。
 
 同設計draft-0.2 §10で生成前slotと型付き拒否/部分入力discardを内部接続した。Supply/Createは新InputLocation、移譲後は元Outerのまま保持し、二重開始で新入力だけを破棄する。complete1＋既存15の差分16は合成計数であり、実producer/準備claim/全体work/resource受付・OS解放保証の成立ではない。
+
+後続draft-0.3 §11で準備claimをowner確認より前へ接続し、生成前の停止もshared claimへ伝播させた。slot確保後の同budget入口検査1を加えた新生成経路の差分17を確認した。固定release/元Outer保持・通常strictの経路は維持し、実producer全体・全体受付・OS/permitの停止は解除しない。

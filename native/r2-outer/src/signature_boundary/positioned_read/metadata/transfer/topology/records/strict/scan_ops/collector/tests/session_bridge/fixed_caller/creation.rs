@@ -42,7 +42,8 @@ fn creation_caller_reserves_owner_before_create_and_retains_real_success() {
     assert!(state.borrow().alive.is_empty());
     assert_eq!(tc.made.get(), tc.dropped.get());
     assert_eq!(b.checkpoint(), Ok(()));
-    assert_eq!(b.json_work, super::success_work(true) + 1);
+    assert_eq!(b.json_work, super::success_work(true) + 2);
+    assert!(b.protected_bridge_claim.preparation_started.get());
 }
 
 #[test]
@@ -64,6 +65,8 @@ enum Mode {
     Prior,
     Foreign,
     Generated,
+    Preclaimed,
+    OtherBudgetPreclaimed,
     Duplicate,
     Consumed,
     LateCancel,
@@ -156,6 +159,13 @@ fn exercise(mode: Mode) {
         &b,
     );
     let mut input = bridge::preparation::fixture(supply);
+    let retry = input.empty_retry_fixture();
+    if matches!(mode, Mode::Preclaimed) {
+        input.preclaim(&mut b);
+    }
+    if matches!(mode, Mode::OtherBudgetPreclaimed) {
+        input.preclaim(&mut foreign);
+    }
     assert_eq!(
         format!("{input:?}"),
         "PreparationEnvelope(partial_not_producer_or_authority)"
@@ -220,6 +230,10 @@ fn exercise(mode: Mode) {
     } else {
         owner.run_creation(input, &mut b)
     };
+    assert!(b.protected_bridge_claim.preparation_started.get());
+    if matches!(mode, Mode::Foreign | Mode::OtherBudgetPreclaimed) {
+        assert!(foreign.protected_bridge_claim.preparation_started.get());
+    }
     let expected: Vec<_> = (0..=6).filter(|v| !already.contains(v)).collect();
     assert_eq!(&*events.borrow(), &expected);
     if !already.contains(&5) {
@@ -242,6 +256,17 @@ fn exercise(mode: Mode) {
         assert_eq!(first.input_stage(), Some(upper::InputStage::ReceiptBinding));
         assert_eq!(first.release(), DropObservation::NotReached);
         assert!(owner.take().is_none());
+        assert_eq!(
+            b.protected_bridge_claim.failure.get(),
+            Some(Failure::Binding)
+        );
+        let mut next = upper::StrictResultOwner::new();
+        assert_eq!(next.run_creation(retry, &mut b), Err(Failure::Binding));
+        assert_eq!(
+            next.take().unwrap().unwrap_err().input_location(),
+            Some(upper::InputLocation::OwnerBegin)
+        );
+        assert_eq!(b.json_work, 0);
         return;
     }
     let error = owner.take().unwrap().unwrap_err();
@@ -286,6 +311,7 @@ fn exercise(mode: Mode) {
             let locations = [
                 L::OwnerBegin,
                 L::OwnerBegin,
+                L::Supply(S::InspectionEntry),
                 L::Supply(S::SealPublish),
                 L::Create(C::ClaimModel),
                 L::Create(C::InspectionPublish),
@@ -301,8 +327,8 @@ fn exercise(mode: Mode) {
                 L::Use(U::InspectionBinding),
                 L::TransferCommit,
             ];
-            assert_eq!(b.protected_bridge_claim.generated.get(), i >= 3);
-            if i == 16 {
+            assert_eq!(b.protected_bridge_claim.generated.get(), i >= 4);
+            if i == 17 {
                 assert_eq!(error.outer_phase(), Some(OuterPhase::Entry));
                 None
             } else {
@@ -313,13 +339,14 @@ fn exercise(mode: Mode) {
             assert_eq!(reason, Failure::HashMismatch);
             Some(L::OwnerBegin)
         }
-        Mode::Foreign => {
+        Mode::Foreign | Mode::Preclaimed | Mode::OtherBudgetPreclaimed => {
             assert_eq!(reason, Failure::Binding);
-            Some(L::Create(C::InspectionPublish))
+            assert!(!b.protected_bridge_claim.generated.get());
+            Some(L::Supply(S::InspectionEntry))
         }
         Mode::Generated => {
             assert_eq!(reason, Failure::Binding);
-            Some(L::Create(C::ClaimModel))
+            Some(L::Supply(S::InspectionEntry))
         }
         Mode::LateCancel | Mode::LateDeadline => {
             assert_eq!(
@@ -344,23 +371,47 @@ fn exercise(mode: Mode) {
         assert_eq!(error.input_stage(), None);
     }
     assert!(owner.take().is_none());
+    let spent = b.json_work;
+    let mut next = upper::StrictResultOwner::new();
+    assert_eq!(next.run_creation(retry, &mut b), Err(reason));
+    let saved = next.take().unwrap().unwrap_err();
+    assert_eq!(saved.reason(), reason);
+    assert_eq!(saved.input_location(), Some(L::OwnerBegin));
+    assert_eq!(b.protected_bridge_claim.failure.get(), Some(reason));
+    assert_eq!(b.json_work, spent);
+}
+
+#[test]
+fn preparation_claim_is_consumed_before_even_owner_begin_failure() {
+    exercise(Mode::Work(0));
 }
 
 #[test]
 fn creation_each_guard_budget_boundary_retains_its_location_and_sticky_reason() {
-    for n in 0..=16 {
+    for n in 0..=17 {
         exercise(Mode::Work(n));
     }
-    for n in 1..=17 {
+    for n in 1..=18 {
         exercise(Mode::Cancel(n));
     }
     exercise(Mode::Prior);
 }
 #[test]
 fn creation_deadline_at_each_committed_guard_never_publishes_late_success() {
-    for n in 0..=17 {
+    for n in 0..=18 {
         exercise(Mode::Deadline(n));
     }
+}
+#[test]
+fn preparation_claim_rejects_abandoned_attempts_even_with_a_fresh_result_owner() {
+    exercise(Mode::Preclaimed);
+    exercise(Mode::OtherBudgetPreclaimed);
+}
+#[test]
+fn preparation_failed_attempt_cannot_resume_through_a_new_owner() {
+    exercise(Mode::Missing(1));
+    exercise(Mode::Work(0));
+    exercise(Mode::Prior);
 }
 #[test]
 fn creation_foreign_inspection_and_duplicate_claim_never_start_the_release() {

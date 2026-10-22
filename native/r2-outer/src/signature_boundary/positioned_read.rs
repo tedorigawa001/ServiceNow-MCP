@@ -63,9 +63,10 @@ struct ScanSessionClaim {
     failure: Cell<Option<Failure>>,
 }
 
-// Independent of session creation: packaging/use must not consume the session's claim.
+// Independent of session creation: preparation/packaging/use do not consume its claim.
 #[derive(Default)]
 struct ProtectedBridgeClaim {
+    preparation_started: Cell<bool>,
     generated: Cell<bool>,
     used: Cell<bool>,
     failure: Cell<Option<Failure>>,
@@ -128,7 +129,9 @@ impl<'a> SharedBudget<'a> {
             .or(self.protected_bridge_claim.failure.get())
             .unwrap_or(reason);
         self.failed = Some(reason);
-        if self.protected_bridge_claim.generated.get() {
+        if self.protected_bridge_claim.preparation_started.get()
+            || self.protected_bridge_claim.generated.get()
+        {
             self.protected_bridge_claim.failure.set(Some(reason));
         }
         if self.scan_session_claim.started.get() {

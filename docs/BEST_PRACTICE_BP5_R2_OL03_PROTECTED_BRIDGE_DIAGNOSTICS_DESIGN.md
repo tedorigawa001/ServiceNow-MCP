@@ -1,6 +1,6 @@
 # BP-5 R-2 OL-03：保護入力bridge・上位診断保持の詳細設計
 
-Version: draft-0.6 / Date: 2026-10-23 / Source baseline: `67355d8` / Status: §13の固定値移譲に加え、§15の生成前slot確保・型付きcreate拒否・部分入力discardを内部実装/合成検証。保護producer全体・通常strict差替えは未実装。
+Version: draft-0.7 / Date: 2026-10-23 / Source baseline: `bd73802` / Status: §15の生成前保持に加え、§16の準備claim/同budget入口/生成前停止伝播を内部実装。保護producer全体・通常strict差替えは未実装。
 
 ## 1. 範囲と停止状態
 
@@ -302,3 +302,9 @@ SequenceReturnedはRustの固定drop列から戻った観測であり、OS FDの
 [生成入口設計draft-0.2 §10](BEST_PRACTICE_BP5_R2_OL03_PRODUCER_CREATION_DIAGNOSTICS_DESIGN.md)で、run_creation→同slot確保→部分入力complete→create_typed→既存into_release→retainを接続した。InputRejectedは新InputLocationを持ち、生成のSupply/Createと利用Use・TransferCommitを区別する。旧input_stage射影は既存利用値を保つが、Supply/CreateではNoneとなるため、これを拒否なしと解釈しない。
 
 新complete1は部分所有値の存在検査だけであり、生成込み差分16 workを合成確認した。本番producer/準備claim/8段階の固定候補・動的費・独立resource/全体受付は未対応。既存生成済みbundle callerの検査/課金と通常strictの経路を維持する。[合成検証記録](E2E_BEST_PRACTICE_R2_OL03_CREATION_DIAGNOSTICS_SYNTHETIC_2026-10-23.md)を参照。
+
+## 16. 準備claim・生成前停止伝播subset
+
+[生成入口設計draft-0.3 §11](BEST_PRACTICE_BP5_R2_OL03_PRODUCER_CREATION_DIAGNOSTICS_DESIGN.md)で、準備flagをowner確認/workより前に一度消費し、slot確保後に同budget/seal/claim/session/startedへ結合したattemptを値消費する入口を追加した。新O.supply_entry1により新生成経路の差分は17、既存生成済みbundle経路は15を維持する。
+
+SharedBudget::stopは準備中もbridge claimへ第一理由を伝播する。新ownerでの再準備、放棄attempt、別budgetを拒否し、準備段階のslot放棄でも元理由を保持する。これは実producer全体・全体work/resource上界・運用承認ではない。[合成検証記録](E2E_BEST_PRACTICE_R2_OL03_PREPARATION_CLAIM_SYNTHETIC_2026-10-23.md)を参照。

@@ -1,6 +1,6 @@
 # BP-5 R-2 OL-03：record・scanを含む全体work上界と事前受付
 
-Version: draft-0.24 / Date: 2026-10-23 / Status: private collector/session会計・固定値移譲/caller・生成前slot/部分入力completeまでを先行実装。producer全体の費目候補は未計数。全体受付・統合other上界・通常strict差替え・運用承認は未対応。以下の各段階の記録と現行状態を区別する。
+Version: draft-0.25 / Date: 2026-10-23 / Status: 生成前slot/部分入力completeに加え、準備claim入口1を先行実装。producer全体の費目候補は未計数。全体受付・統合other上界・通常strict差替え・運用承認は未対応。以下の各段階の記録と現行状態を区別する。
 
 ## 1. 範囲と停止状態
 
@@ -15,6 +15,8 @@ Version: draft-0.24 / Date: 2026-10-23 / Status: private collector/session会計
 [producer生成入口詳細設計draft-0.1 §7](BEST_PRACTICE_BP5_R2_OL03_PRODUCER_CREATION_DIAGNOSTICS_DESIGN.md)では、生成前owner確保へ既存2 workを移す案と、準備の固定制御8 work候補/未確定のU_supply_dynamic・管理allocationを分離した。候補差分15＋8＋U_supply_dynamicは未計数であり、23を運用上界にしない。生成拒否prefixと部分所有状態の保持/解放費を追加検証するまで、全体受付は無効のままとする。
 
 同設計draft-0.2 §10では部分所有値の固定数存在検査だけをO.preparation_complete=1 workとして実装した。slot2を生成前へ移し、create2・利用10・移譲1は維持し、実成功差分16を確認した。これは8段階producerの実装/上界ではなく、未知のsupply費を埋めない。将来の8候補と本1の所有関係は再導出し、無条件の二重加算を避ける。全体受付は無効を維持する。
+
+同設計draft-0.3 §11でO.supply_entry=1 workの同budget/準備claim検査を追加し、新生成経路の差分17を合成照合した。準備flagの不可逆消費はowner確認/workより前で、停止通知/伝播は失敗後の新workを要求しない。既存Rc内のclaim状態とinline attempt（既存Rc参照5本）の保持費は独立管理resourceへ残す。8候補のentryだけを実装したもので、残るproducer費/全体R/I/S/Oを認証せず、全体受付は無効のまま維持する。
 
 [同round宣言・indexモデル設計](BEST_PRACTICE_BP5_R2_OL03_ROUND_DECLARATION_WORK_DESIGN.md)を引き継ぐ。indexの固定ID `bp5-r2-index-work-0.1`、上界式、3 decode・6 record検証・3 closure scan、scan前後の厳密再検証を維持する。本書は新しい外部仕様の調査ではなく、リポジトリ内の課金点に基づく設計案である。
 
