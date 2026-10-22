@@ -1,6 +1,6 @@
 # BP-5 R-2 OL-03：型付きcleanup証拠・round完了・strict acknowledgement詳細設計
 
-Version: draft-0.14 / Date: 2026-10-22 / Status: 固定round kernelをBeforeM4／AfterM4の内部位置へ接続して合成検証。通常strict全体・OS接続は未実施。
+Version: draft-0.15 / Date: 2026-10-22 / Status: 固定round kernelをBeforeM4／AfterM4の内部位置へ接続して合成検証。外側orchestratorは設計のみ、通常strict全体・OS接続は未実施。
 
 ## 1. 範囲と根拠
 
@@ -135,7 +135,9 @@ PendingStrictRoundは `with_round` が生成・所有する `RoundScope` をborr
 
 session台帳はreview_strict_record_target全体のownerが一度だけ保持する。receipt/target/contextを借用したledgerが生きている間に、それらをmove/dropしない。各round helperの中でledgerを作る/早期dropする方式は採らない。元budget/started/retryを共有し、各roundに新budgetを作らない。
 
-**session生成位置（2026-10-21、レビュー）**：`session::create` は `review_strict_record_target` 内で `validate_receipt` 成功後、最初の `strict_round(Initial)` より前に一度だけ呼び、`configure_resources` もその間で完了させる。各round helper内での生成・再生成はしない。生成後に外側 `clock_check(460000)` 等が失敗した場合、ledgerは `Expect(Initial)` のまま放棄されclaimへ停止が伝播する。これは意図した安全側の動作であり、同inspectionでの再生成・再試行経路を設けない。
+**session生成位置（2026-10-21、レビュー。2026-10-22改訂）**：`session::create`（StrictSessionOwnerの生成）は、[外側orchestrator接続詳細設計§4](BEST_PRACTICE_BP5_R2_OL03_OUTER_STRICT_ORCHESTRATOR_DESIGN.md)に従い、`validate_receipt` と同RecordSourceによる外側 `clock_check(460000)` の**両方が成功した後**、最初のInitial roundより前に一度だけ行い、`configure_resources` もその間で完了させる。receipt検査・外側clockが失敗した時点ではownerも台帳も存在せず、元budgetの `stop` が先行理由を保持する（台帳を後から生成して停止済みを装わない）。各round helper内での生成・再生成はしない。生成後の失敗では、ledgerは放棄されclaimへ停止が伝播する。これは意図した安全側の動作であり、同inspectionでの再生成・再試行経路を設けない。
+
+> 改訂注記：初版（2026-10-21）は「`validate_receipt` 成功後・外側clockより前に生成し、外側clock失敗時はledgerを `Expect(Initial)` のまま放棄する」としていた。外側clockの失敗で不要な台帳を作らないよう、外側orchestrator設計の順序へ置き換えた。
 
 Initialはvalidate_receiptと外側clock_check(460000)後の既存位置。BeforeM4はcompare_topologyがB走査後にtopology再照合を終えたmandatory callback内に固定する。このackが成功して初めてM4取得へ戻る。AfterM4はcompare_topologyがComparedM0M4を正常に返した後だけに固定する。単にround enumが順番どおりという理由でM4実施済みとみなさない。
 
@@ -425,3 +427,9 @@ O.kernel_completeは2 work/round（計6）で既存費と分離する。[新規4
 [接続設計draft-0.6 §13](BEST_PRACTICE_BP5_R2_OL03_NORMAL_STRICT_CONNECTION_DESIGN.md)で、§20.3時点では未接続だったnon-test compareの唯一のBeforeM4 callbackと、AfterM4Roundの値消費finishを実kernelへ接続した。M4失敗ではAfterM4を開始しない。元handoff/owner/台帳/予算結合、実ack・with_round末尾・owner完了guardを維持し、AfterM4の入口/終端も同ownerで照合する。
 
 typed kernel失敗の診断を移動して保持し、ack後の失敗にClosedを再構築しない。新O.after_finishは2 work/inspection。[固定位置接続合成記録](E2E_BEST_PRACTICE_R2_OL03_FIXED_POSITION_KERNEL_SYNTHETIC_2026-10-22.md)を参照。通常strict orchestrator・外側解放後checkpoint・運用policy/全体受付/OS接続/permitの停止は変えない。
+
+### 20.5 外側orchestrator接続案（設計のみ）
+
+[外側orchestrator接続詳細設計draft-0.1](BEST_PRACTICE_BP5_R2_OL03_OUTER_STRICT_ORCHESTRATOR_DESIGN.md)で、receipt/外側clockから固定kernel群への所有権・順序、元owner停止、全解放後の元budget checkpoint、StrictInspectionFailureを失わず上位へmoveするprivate結果契約案を具体化した。scan cleanup証拠と外側Drop到達状態を分け、ack後の証拠を再構築しない。
+
+今回はMDのみで、既存通常strict戻り値の差替え・型/API実装・OS接続・実機検証は行っていない。全体受付無効・telemetry保留・permit停止を維持する。

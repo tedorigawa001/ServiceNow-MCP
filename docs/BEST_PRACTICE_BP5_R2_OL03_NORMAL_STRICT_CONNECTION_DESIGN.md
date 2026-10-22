@@ -1,6 +1,6 @@
 # BP-5 R-2 OL-03：通常strictの固定3箇所・同RecordSource・M4 owner接続詳細設計
 
-Version: draft-0.6 / Date: 2026-10-22 / Design baseline: `fd1de54` / Implementation baselines: owner `2905075`、topology `bd9301b`、kernel `9d7183e` / Status: 固定round kernelをBeforeM4／AfterM4へ内部接続。通常strict全体・OS接続は未実施。
+Version: draft-0.7 / Date: 2026-10-22 / Design baseline: `fd1de54` / Implementation baselines: owner `2905075`、topology `bd9301b`、kernel `9d7183e`、固定位置 `cd5bd97` / Status: 固定3位置まで内部接続済み。外側orchestratorは設計のみ、通常strict全体・OS接続は未実施。
 
 ## 1. 範囲と不変条件
 
@@ -265,3 +265,9 @@ BeforeM4のCompletionFailureは既存compare_coreの捕捉経路でroundとと�
 [固定位置接続合成記録](E2E_BEST_PRACTICE_R2_OL03_FIXED_POSITION_KERNEL_SYNTHETIC_2026-10-22.md)を参照。非testのcompare/finishを合成sourceで通し、各scanの開始時metadata履歴をInitial=[]／BeforeM4=[M0,M1,M2,M3]／AfterM4=[M0,M1,M2,M3,M4]として観測した。実M4失敗・別owner拒否の既存ケースも固定入口へ移した。Before/Afterの失敗診断、未提供Quotas、入口/完了の予算・期限・取消、kernel欠落の変異も確認する。
 
 通常strict.rsの旧ClosureSourceは差し替えない。残るのは、元receipt/外側clockからのorchestrator、外側解放・最終checkpoint・上位診断、全体work/resource受付・運用policyの統合/承認である。全体受付無効・telemetry保留・OS未接続・実機操作/token発行/設定変更/permit発行なしを維持する。
+
+## 14. 外側orchestratorの後続設計（設計のみ）
+
+[外側orchestrator接続詳細設計draft-0.1](BEST_PRACTICE_BP5_R2_OL03_OUTER_STRICT_ORCHESTRATOR_DESIGN.md)に、owner生成前のreceipt検査・同RecordSourceの外側clock(460000)、固定3位置、owner生存中の停止、借用終了と解放順、元budgetの解放後checkpoint、上位へowned診断を保持する結果契約案を整理した。
+
+解放後checkpointの `?` による構造化診断の破棄を避け、body結果と明示的に合流する。DropSequenceReturnedは外側OS close成功の証拠ではなく、scanのClosed証拠と分離する。通常strict全体の差替え・新型の実装/コンパイル/合成検証はまだ行っていない。全体受付無効・telemetry保留と既存gateを維持する。
