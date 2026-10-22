@@ -1,6 +1,6 @@
 # BP-5 R-2 OL-03：通常strictの外側orchestrator接続詳細設計
 
-Version: draft-0.5 / Date: 2026-10-22 / Source baseline: 設計 `526f6d3`、固定位置 `cd5bd97`、結果合流器 `39f643e`、body `44051c5`、固定解放 `8107496` / Status: §14までprivate接続済み。§15の保護入力bridge・上位診断保持は設計のみ。通常strict差替え・OS接続は未実施。
+Version: draft-0.6 / Date: 2026-10-22 / Source baseline: 設計 `526f6d3`、固定位置 `cd5bd97`、結果合流器 `39f643e`、body `44051c5`、固定解放 `8107496` / Status: §14までprivate接続済み。§15の内部入力/claim subsetを追加。releaseへの移譲・上位結果保持・通常strict差替え・OS接続は未実施。
 
 ## 1. 範囲と停止条件
 
@@ -243,4 +243,6 @@ SequenceReturnedは通常drop呼出しが戻った診断であり、OS close成�
 
 [詳細設計draft-0.1](BEST_PRACTICE_BP5_R2_OL03_PROTECTED_BRIDGE_DIAGNOSTICS_DESIGN.md)に、供給元・所有/借用・budget側の一度限りのbridge claim・元receipt/context/source/3slot/policyへの結合と、上位が実OuterStrictFailureをinline所有する出口を整理した。claimは既存session claimと分離し、releaseへの移譲前後で解放責務を分ける。結果の格納は返却後の新しいfallible処理へ依存させない。
 
-新guard10 workは未実装の候補で、既存35＋Kと別。supply/claim/result owner費・全体work/resource上界は未確定で、数値から本番policyを作らない。保護producer・上位型・通常strict戻り値の変更は未実装であり、全体受付無効・telemetry保留を維持する。
+draft-0.1時点の新guard10 workは未実装の候補で、既存35＋Kと別。後続subsetの計数は次段落を参照する。supply/result owner費・全体work/resource上界は未確定で、数値から本番policyを作らない。保護producer・上位型・通常strict戻り値の変更は未実装であり、全体受付無効・telemetry保留を維持する。
+
+後続の[対設計draft-0.2 §11](BEST_PRACTICE_BP5_R2_OL03_PROTECTED_BRIDGE_DIAGNOSTICS_DESIGN.md)で、内部bundleとbudget側生成/利用claim・10点identity検査だけを実装した。生成2＋利用10 workを計数するが、固定releaseへの値移譲・InputRejected/上位結果owner・本番producerは未接続である。検査済みbundleもdrop時は放棄停止となり、既存PendingBody/RecordComparisonへ変換する口は追加しない。

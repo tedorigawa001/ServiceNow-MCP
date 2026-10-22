@@ -63,6 +63,14 @@ struct ScanSessionClaim {
     failure: Cell<Option<Failure>>,
 }
 
+// Independent of session creation: packaging/use must not consume the session's claim.
+#[derive(Default)]
+struct ProtectedBridgeClaim {
+    generated: Cell<bool>,
+    used: Cell<bool>,
+    failure: Cell<Option<Failure>>,
+}
+
 pub(super) struct SharedBudget<'a> {
     started: Instant,
     cancelled: &'a AtomicBool,
@@ -82,6 +90,7 @@ pub(super) struct SharedBudget<'a> {
     // Private identity of this shared inspection budget, not an execution capability.
     inspection_origin: Rc<()>,
     scan_session_claim: Rc<ScanSessionClaim>,
+    protected_bridge_claim: Rc<ProtectedBridgeClaim>,
     #[cfg(test)]
     work_audit: Option<work_audit::Audit>,
 }
@@ -107,6 +116,7 @@ impl<'a> SharedBudget<'a> {
             json_work: 0,
             inspection_origin: Rc::new(()),
             scan_session_claim: Rc::new(ScanSessionClaim::default()),
+            protected_bridge_claim: Rc::new(ProtectedBridgeClaim::default()),
             #[cfg(test)]
             work_audit: None,
         }
@@ -115,15 +125,23 @@ impl<'a> SharedBudget<'a> {
         let reason = self
             .failed
             .or(self.scan_session_claim.failure.get())
+            .or(self.protected_bridge_claim.failure.get())
             .unwrap_or(reason);
         self.failed = Some(reason);
+        if self.protected_bridge_claim.generated.get() {
+            self.protected_bridge_claim.failure.set(Some(reason));
+        }
         if self.scan_session_claim.started.get() {
             self.scan_session_claim.failure.set(Some(reason));
         }
         Err(reason)
     }
     pub(super) fn checkpoint(&mut self) -> Result<(), Failure> {
-        if let Some(reason) = self.failed.or(self.scan_session_claim.failure.get()) {
+        if let Some(reason) = self
+            .failed
+            .or(self.scan_session_claim.failure.get())
+            .or(self.protected_bridge_claim.failure.get())
+        {
             return self.stop(reason);
         }
         if self.cancelled.load(Ordering::Acquire) {

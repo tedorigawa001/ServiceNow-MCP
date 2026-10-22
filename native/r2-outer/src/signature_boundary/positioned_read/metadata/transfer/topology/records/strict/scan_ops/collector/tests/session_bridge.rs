@@ -10,6 +10,7 @@ mod final_index;
 mod outer_release;
 mod outer_result;
 mod owner_contract;
+mod protected_inputs;
 mod records_stage;
 mod round_kernel;
 mod topology_adapter;

@@ -1,10 +1,10 @@
 # BP-5 R-2 OL-03：保護入力bridge・上位診断保持の詳細設計
 
-Version: draft-0.1 / Date: 2026-10-22 / Source baseline: `8107496` / Status: 設計案のみ。型名・費目候補・受入試験は未実装・未検証・未承認。
+Version: draft-0.2 / Date: 2026-10-22 / Source baseline: 設計レビュー `0495d39` / Status: §11の内部型・budget側生成/利用claim・identity検査のみ実装/合成検証。保護producer・固定releaseへの移譲・上位結果保持・通常strict差替えは未実装。
 
 ## 1. 範囲と停止状態
 
-[外側orchestrator設計§14](BEST_PRACTICE_BP5_R2_OL03_OUTER_STRICT_ORCHESTRATOR_DESIGN.md)のprivate release入口を、将来の通常strict呼出し側へ接続するための入力/出力の対を設計する。今回はMDのみであり、既存関数のsignature・可視性・callee・constructorを変更しない。
+[外側orchestrator設計§14](BEST_PRACTICE_BP5_R2_OL03_OUTER_STRICT_ORCHESTRATOR_DESIGN.md)のprivate release入口を、将来の通常strict呼出し側へ接続するための入力/出力の対を設計する。draft-0.1はMDのみ。draft-0.2は§11の内部型/claim subsetを追加し、通常strictのsignature・可視性・calleeや本番producer constructorは変更しない。§3〜10の全体接続案と実装済みsubsetを区別する。
 
 全体受付無効、telemetry保留、APPROVED_REGISTRY=None、通常v2 Unavailable、gate92、DER/absence停止を維持する。本番policy投入・OS接続・実機操作・token発行・設定変更・permit発行を含めない。入力bridgeの成立も診断保持も、全体受付・署名検証・実行許可の成立を意味しない。
 
@@ -52,7 +52,7 @@ registry/groupsのimmutable保持、入力のpackaging、承認済みmodelの選
 
 bundleのprivateな供給sealは、同供給系列・同context保持領域・同target・元lineage・budget origin/claim/startedと固定3slot/modelへ結合する。文字列IDが一致するだけでは受理しない。異なるbundle同士で同値receipt/context/source/slotを混ぜられないproducer APIを前提とする。
 
-利用claimはbundleの移動だけでなく、**budget側に唯一のbridge試行claim**を持たせる案とする。同budgetから二つのbundleを作る抜け道を塞ぐためである。既存session claimはowner生成前にstarted=falseである必要があり、bridgeはそのclaimを先に消費しない。新claimの設置・管理allocation・モデルは未実装である。
+利用claimはbundleの移動だけでなく、**budget側に唯一のbridge試行claim**を持たせる案とする。同budgetから二つのbundleを作る抜け道を塞ぐためである。既存session claimはowner生成前にstarted=falseである必要があり、bridgeはそのclaimを先に消費しない。draft-0.1で未実装だったclaimは§11で内部接続した。管理allocationの全体上界への統合・運用承認は未対応である。
 
 | 結合対象 | 比較/維持するidentity | 拒否する例 |
 |---|---|---|
@@ -122,7 +122,7 @@ read-only accessorはprimary・bridge stage/outer phase・round・cleanup分類�
 
 ### 8.1 新規bridge guardの候補
 
-新規ID候補を`bp5-r2-protected-bridge-0.1`とし、固定入口guardを**10 work候補**に分ける。これは未実装の候補で、計数・拒否prefix・独立oracle検証まで確定値ではない。
+新規ID候補を`bp5-r2-protected-bridge-0.1`とし、固定入口guardを**10 work候補**に分ける。以下はdraft-0.1の全体bridge候補である。§11ではdispatchを含まない内部identity検査の10点を計数したが、保護producer/運用policyの承認・全体上界を確定したとは扱わない。
 
 | 点 | O.bridge_useの所有処理 | work候補 |
 |---|---|---:|
@@ -177,3 +177,35 @@ claim消費それ自体と失敗通知はwork確保前に行う。sealチェッ�
 5. productionのcontext/registry/source/policy/Quotas producerと通常strict呼出し側の戻り値移行を別途承認する。それまでは通常strict差替え・OS接続を停止する。
 
 承認待ち：producerの実trust根拠/配置、外部BoundTarget/binding保持領域の所有者と寿命、bridge claimの保持/初期化方式、opaque facadeのlifetime/visibility、wrapperのinline size上限、上位診断の最終所有先、supply/claim/result費、全体work/resource上界・運用cap、generic Dropのbounded性/実OS解放確認。案の型名や係数を承認済み仕様として実装へ持ち込まない。
+
+## 11. 内部型・生成/利用claim subset（draft-0.2）
+
+### 11.1 実装範囲と由来
+
+[protected_inputs.rs](../native/r2-outer/src/signature_boundary/positioned_read/metadata/transfer/topology/records/strict/scan_ops/connection_owner/protected_inputs.rs)へprivate fieldのProtectedSupply/ProtectedStrictInputsを追加した。payloadはscan/policy/Quotas→RecordSource→TopologySource→held→topology receipt→record receiptの順で所有し、外部BoundTarget/contextを借用する。receiptは値所有し、そのfieldのアドレスを保存しない。外部bindの同値bindingコピーは元lineage一致と完全一致の両方を要求する。自己参照・unsafe・元resourceの複製/再openは追加しない。
+
+唯一の供給constructorはcfg(test)のfixtureであり、non-testのProtectedSupply producerはない。source/scan/policy/Quotasはprivate Tagged値へ一括で封入し、同供給Rcとslot番号を結合する。これは封入後の混入防止であり、OS source identity・registry承認・policyの実内容/modelの承認を証明しない。payload/contextのgetterや移譲口はない。generic型にI/O trait boundも要求せず、生成/利用検査からI/Oを呼ぶ経路を作らない。
+
+### 11.2 budget側claimと停止
+
+SharedBudget::newで独立のRc<ProtectedBridgeClaim>を1個確保し、generated/used=false、failure=Noneで初期化する。既存session claimとは別で、生成/利用検査はsessionを開始しない。createは元claimのgeneratedを、require_useはusedを、それぞれ最初のfallible work前に不可逆に消費する。bundleごとのboolだけではなくbudget側に状態を持つため、同budgetの二つ目の供給から生成しても拒否する。
+
+createは元origin/bridge claim/session claim/started、既存session未開始と固定bridge IDを照合する。require_useは同inspection、同context参照、同BoundTarget、receipt/topologyのlineage・binding・target、held origin、source/policy/3slotの供給stampを固定順で検査する。欠落policy/QuotasはUnavailable、混入/重複はBinding、元work/期限/取消はその理由を保持する。
+
+SharedBudgetのstop/checkpointは既存の先行failed/session失敗に続きbridge失敗を検査し、生成済みclaimへ停止を伝える。別budgetへ渡した誤用では、元claimと提示budgetの両方を停止する。先行理由を上書きして再試行しない。検査済みbundleにも移譲口はないため、通常dropは常に放棄Unavailableを元claimへラッチする（既存理由が優先）。次の元budget checkpointも拒否する。
+
+require_useは内部の一度限りのidentity検査であって値の取り出し/dispatch/permitではない。Err後も所有bundleを呼出し側が保持している間はpayloadを保持し、drop時に固定field順で破棄する。createのErrでは供給payloadをその場で破棄する。§5の値消費bridge、解放後checkpointとInputRejectedへの観測記録は未接続であり、本subsetがそれらまで完了したとは扱わない。
+
+forgetでは解放/失敗ラッチを保証せず、生成claimだけがbudget側に残る。合成試験は意図的なleakを含み、cleanup成功と主張しない。全体受付/上位結果owner/運用producerを追加してこの抜けを自動解除することもない。
+
+### 11.3 費目と検証
+
+- 新`O.bridge_create=2 work`：不可逆生成/model1＋元inspection/公開前照合1。§8の利用guard10とは別。
+- `O.bridge_use=10 work`：§8の固定10点を内部identity subsetとして計数。最後はcheckpointのみでreleaseへ移譲しない。policy内の実model/数量の承認検査は含まない。
+- 正常な生成＋利用検査は計12 work。既存coupling35＋K、resource configure1、R/I/S/typed tail費を含めない。将来つなぐ場合も同じ課金を二重計上しない。
+- claim storageはbudgetごとに追加Rc allocation1個。SharedBudget::newには新work課金を設けていないが、管理allocation/CPU/RSSを無料とみなさず全体resourceモデルに残す。fixture供給のstamp allocation等も本番producer費の確定値ではない。
+- 失敗通知/dropラッチ/元理由保持に追加workを要求しない。I/O bytes用reserved、retry、metadata/topology枠は生成/利用検査で変更しない。
+
+[新規9テストの記録](E2E_BEST_PRACTICE_R2_OL03_PROTECTED_INPUTS_SYNTHETIC_2026-10-22.md)を参照。identity/混入、重複生成/利用、失敗後再利用、放棄、全work不足/課金後取消、期限、型/opaque Debug、field解放順を合成検証した。§9の上位結果保持・固定release/通常strictへの接続受入条件は未実施である。
+
+次工程はInputRejected/Outerと上位結果ownerの保持契約、その後の固定releaseへの一度限りの値移譲。claim/guardの本番運用承認、protected supply/result owner費、全体work/resource上界は未確定のまま、全体受付無効・telemetry保留を維持する。
