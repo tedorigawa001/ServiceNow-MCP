@@ -1,6 +1,6 @@
 # BP-5 R-2 OL-03：通常strictの外側orchestrator接続詳細設計
 
-Version: draft-0.8 / Date: 2026-10-23 / Source baseline: `8da8db2` / Status: §14までprivate接続済み。§15で内部入力/claim・上位結果ownerと固定値移譲/callerまで接続。通常strict差替え・OS接続は未実施。
+Version: draft-0.9 / Date: 2026-10-23 / Source baseline: `1a533e6` / Status: §14までprivate接続済み。§15で固定値移譲/callerと生成入口の後続設計を区別する。通常strict差替え・OS接続は未実施。
 
 ## 1. 範囲と停止条件
 
@@ -250,3 +250,5 @@ draft-0.1時点の新guard10 workは未実装の候補で、既存35＋Kと別�
 対設計draft-0.3 §12でInputRejected/実Outerをinline保持する上位結果ownerを追加した。beginの一度限りのslotと、返却後の失敗しないmove/takeにより、二重開始で先行診断を置換しない。新O.result_owner=2 workであり、固定入力bridgeの値移譲・同inspectionの固定caller・通常strict/OS/全体受付への接続は未実施のまま。
 
 後続の[対設計draft-0.4 §13](BEST_PRACTICE_BP5_R2_OL03_PROTECTED_BRIDGE_DIAGNOSTICS_DESIGN.md)で、payloadを一度takeして固定releaseへ渡し、同budgetのbegin→移譲→実結果retainを行うcallerを接続した。新O.bridge_transfer1を含め、callerのrelease前13、生成込み差分15 workを合成照合した。移譲前はInputRejected、移譲後は実Outerを保存し、二重開始でも先行診断を置換しない。本番supply producer・生成失敗の上位捕捉・通常strict/OS/全体受付への接続は未対応であり、上段の未接続表記と現行subsetを区別する。
+
+[生成入口・診断保持詳細設計draft-0.1](BEST_PRACTICE_BP5_R2_OL03_PRODUCER_CREATION_DIAGNOSTICS_DESIGN.md)で、生成前のslot確保と部分入力の固定discard、producer/create拒否位置の区別、同じslotへの実結果格納を設計した。低水準begin/retainはprivateのまま維持し、新入口で既存callerのbeginを二重実行しない。MDのみであり、固定producer/生成失敗保持の実装・通常strict差替え・運用受付を追加したものではない。

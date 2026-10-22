@@ -1,6 +1,6 @@
 # BP-5 R-2 OL-03：保護入力bridge・上位診断保持の詳細設計
 
-Version: draft-0.4 / Date: 2026-10-23 / Source baseline: `8da8db2` / Status: §13で保護入力から固定releaseへの一度限りの値移譲と上位結果ownerへの固定callerを内部接続/合成検証。保護producer・通常strict差替えは未実装。
+Version: draft-0.5 / Date: 2026-10-23 / Source baseline: `1a533e6` / Status: §13の固定値移譲/callerと低水準口の非公開化まで実装。§14に生成前owner確保・producer入口の後続設計を追加（MDのみ）。保護producer・通常strict差替えは未実装。
 
 ## 1. 範囲と停止状態
 
@@ -290,3 +290,9 @@ InputStageは拒否を検知した位置を表し、原因の種別ではない�
 [新規5テストの検証記録](E2E_BEST_PRACTICE_R2_OL03_FIXED_CALLER_SYNTHETIC_2026-10-23.md)で、guard不一致/欠落、同budget・二重開始、全3roundの操作/hash/cleanup失敗、外側clock/M4、work各境界/課金後取消、期限切れ、解放後の遅延取消/期限切れを確認した。Drop内の合成watchは観測だけを記録し、検証は破棄後に行う。
 
 SequenceReturnedはRustの固定drop列から戻った観測であり、OS FDのclose確認や停止可能なDropの証明ではない。panic/abort/forget/kill、戻らないDropの解放/診断保存は保証しない。既存UnverifiedXml・APPROVED_REGISTRY=None・通常v2 Unavailable・gate92・DER/absence停止を維持する。通常strict差替え、OS接続、全体受付、運用policy/permitは未接続/未承認である。
+
+## 14. 次の境界：生成前owner確保・producer/create拒否（設計のみ）
+
+[生成入口・診断保持詳細設計draft-0.1](BEST_PRACTICE_BP5_R2_OL03_PRODUCER_CREATION_DIAGNOSTICS_DESIGN.md)に、Envelope受領→owner/slot確保→部分入力準備→Supply/create→既存into_release→同slot保持の固定順序を整理した。任意callbackやraw型の公開は追加せず、既存run_protectedを内側から再度呼んでbeginを二重実行しない。
+
+生成拒否位置をUse(InputStage)と別のSupply/Create位置で表し、部分所有入力を固定順で破棄して元primaryとcheckpoint観測を保持する案である。固定制御8 work候補と未確定の動的producer費・管理allocationを既存15から分離した。候補の計数/型・本番producer・全体受付は未実装/未承認であり、上流のEnvelope受領前失敗をこの入口が回収するとは扱わない。
