@@ -31,6 +31,79 @@ pub(in super::super::super::super) struct HeldSourcesEvidence<'s> {
 pub(in super::super::super::super) struct HeldSourcesChecked {
     _identity: Rc<HeldIdentity>,
 }
+#[cfg(test)]
+impl HeldSourcesChecked {
+    pub(in super::super::super::super) fn foreign_fixture(&self) -> Self {
+        Self {
+            _identity: Rc::new(HeldIdentity {
+                owner: self._identity.owner.clone(),
+                model: HELD_MODEL,
+                issued_here: std::cell::Cell::new(true),
+            }),
+        }
+    }
+}
+// A binding projection, NOT PolicyCaps/validated-supply authority. Fields stay in this issuer.
+pub(super) struct SlotBinding<'s> {
+    identity: Rc<HeldIdentity>,
+    leaf: Rc<()>,
+    lineage: Rc<()>,
+    record_origin: Rc<()>,
+    topology_origin: Rc<()>,
+    bound: &'s BoundTarget<'s>,
+}
+impl SlotBinding<'_> {
+    pub(super) fn owner(&self) -> &Rc<Identity> {
+        &self.identity.owner
+    }
+    pub(super) fn require<R: ResourceOrigin, T, S>(
+        &self,
+        inputs: &HeldEvidenceInputs<'_, R, T, S>,
+        b: &mut SharedBudget<'_>,
+    ) -> Result<(), Failure> {
+        guard(&self.identity, b)?;
+        if !self.identity.issued_here.get()
+            || !self.identity.owner.bridge.held_evidence_used.get()
+            || !Rc::ptr_eq(&self.identity, &inputs.identity)
+            || !Rc::ptr_eq(&self.leaf, inputs.held.source.leaf.resource_origin())
+            || !Rc::ptr_eq(&self.leaf, &inputs.held.initial_origin)
+            || !Rc::ptr_eq(&self.lineage, &inputs.receipt.lineage)
+            || !Rc::ptr_eq(&self.lineage, &inputs.topology.lineage)
+            || !Rc::ptr_eq(&self.record_origin, &inputs.record_origin)
+            || !Rc::ptr_eq(&self.topology_origin, &inputs.topology_origin)
+            || !std::ptr::eq(self.bound, inputs.held.bound)
+        {
+            return Err(Failure::Binding);
+        }
+        b.checkpoint()
+    }
+}
+#[cfg(test)]
+impl<'s, R: ResourceOrigin, T, S> HeldEvidenceInputs<'s, R, T, S> {
+    pub(super) fn slot_owner(&self) -> &Rc<Identity> {
+        &self.identity.owner
+    }
+    pub(super) fn bind_slots(
+        &self,
+        checked: HeldSourcesChecked,
+        b: &mut SharedBudget<'_>,
+    ) -> Result<SlotBinding<'s>, Failure> {
+        guard(&self.identity, b)?;
+        if !Rc::ptr_eq(&self.identity, &checked._identity) {
+            return Err(Failure::Binding);
+        }
+        let binding = SlotBinding {
+            identity: self.identity.clone(),
+            leaf: self.held.initial_origin.clone(),
+            lineage: self.receipt.lineage.clone(),
+            record_origin: self.record_origin.clone(),
+            topology_origin: self.topology_origin.clone(),
+            bound: self.held.bound,
+        };
+        binding.require(self, b)?;
+        Ok(binding)
+    }
+}
 fn guard(id: &HeldIdentity, b: &mut SharedBudget<'_>) -> Result<(), Failure> {
     check_identity(&id.owner, b)?;
     if id.model != HELD_MODEL {

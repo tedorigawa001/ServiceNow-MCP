@@ -1,6 +1,6 @@
 # BP-5 R-2 OL-03：保護producer生成入口・生成失敗の上位診断保持
 
-Version: draft-0.6 / Date: 2026-10-23 / Source baseline: `6dae716` / Status: §11まで内部実装/合成検証。§12のContext/Records/HeldSourcesは独立合成subsetを実装、準備入口には未接続。全producer/8段階全体・運用受付は未実装/未承認
+Version: draft-0.7 / Date: 2026-10-23 / Source baseline: `52acb6c` / Status: §11まで内部実装/合成検証。Context/Records/HeldSourcesと独立ScanSlots片を実装、PolicyCaps未確認・準備入口未接続。全producer/8段階全体・運用受付は未実装/未承認
 
 ## 1. 範囲と停止状態
 
@@ -216,6 +216,8 @@ claimは同じRc allocation内の状態拡張で、サイズ上限64 bytesの回
 `complete`入口の`PreparationAttempt`照合のうち、origin/claim/session/startedの一致は、`run_creation`が`start_preparation`と`complete`へ同じbudgetを渡すため現行構造では常に成立する。後から別の呼出し元を追加した場合の防御として残す。実質的な検査は、fresh（準備claimの一度限り）、同供給系列、claimのgenerated/used状態、`inspection(seal, b)`が担う。
 
 ## 12. 供給証拠検査の詳細設計と先行subset
+
+[供給証拠設計draft-0.4 §13](BEST_PRACTICE_BP5_R2_OL03_SUPPLY_EVIDENCE_DESIGN.md)でScanSlotsEvidenceの独立合成fragmentを実装した。固定factoryが作る3sourceのInitial/BeforeM4/AfterM4順・同identity・model・source自身の未開始状態を検査する。返すScanSlotsCheckedはPolicyCaps未確認の検証片で、PolicyCaps→Slotsという全体順序やPreparedSupplyを代替しない。準備入口/通常strictへ未接続。[検証記録](E2E_BEST_PRACTICE_R2_OL03_SCAN_SLOTS_EVIDENCE_SYNTHETIC_2026-10-23.md)を参照。
 
 [供給証拠設計draft-0.3 §12](BEST_PRACTICE_BP5_R2_OL03_SUPPLY_EVIDENCE_DESIGN.md)でHeldSourcesEvidenceを追加した。同じ保持resourceの新metadata、祖先/pathを前後2回照合した合成所有領域へ結び、ContextRecordsCheckedを一度消費する。発行1＋消費1 workは取得費と別に計数し、既存17差分・通常strictは維持する。準備入口/本番issuer/PolicyCaps/Slotsは未接続。[HeldSources検証記録](E2E_BEST_PRACTICE_R2_OL03_HELD_SOURCES_EVIDENCE_SYNTHETIC_2026-10-23.md)を参照。
 

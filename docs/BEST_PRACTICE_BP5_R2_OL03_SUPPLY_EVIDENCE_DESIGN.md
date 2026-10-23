@@ -1,12 +1,12 @@
 # BP-5 R-2 OL-03：保護producerの供給証拠検査・詳細設計
 
-Version: draft-0.3 / Date: 2026-10-23 / Source baseline: `6dae716` / Status: §11のContext/Recordsに続き§12のHeldSources内部subsetを合成issuerで実装。準備Envelope・通常strictへ未接続、本番issuer/運用承認なし
+Version: draft-0.4 / Date: 2026-10-23 / Source baseline: `52acb6c` / Status: Context/Records/HeldSourcesに続き§13のScanSlotsを独立合成fragmentで実装。PolicyCaps未確認、準備Envelope・通常strictへ未接続、本番issuer/運用承認なし
 
 ## 1. 範囲と不変条件
 
 [生成入口設計](BEST_PRACTICE_BP5_R2_OL03_PRODUCER_CREATION_DIAGNOSTICS_DESIGN.md)§11の準備claim・owner確保・同budget結合に続き、context/records/held-source/policy/3slotの**供給証拠**を検査する境界を設計する。既存sealの由来確認と、上流で何を検証したかの証明を分ける。
 
-全体受付無効・telemetry保留・APPROVED_REGISTRY=None・通常v2 Unavailable・gate92・DER/absence停止を維持する。§11〜12の合成内部subset以外の実装、OS接続・実機操作・token発行・設定変更・本番policy投入・permit発行を含めない。通常strictは差し替えない。証拠検査の成功は署名検証/実行許可や現在時点のファイル不変性を意味しない。
+全体受付無効・telemetry保留・APPROVED_REGISTRY=None・通常v2 Unavailable・gate92・DER/absence停止を維持する。§11〜13の合成内部subset以外の実装、OS接続・実機操作・token発行・設定変更・本番policy投入・permit発行を含めない。通常strictは差し替えない。証拠検査の成功は署名検証/実行許可や現在時点のファイル不変性を意味しない。
 
 任意の値をprivate wrapperやRcに包むだけでは、承認済みregistry・実効groups・安全な取得・正しいcapの証拠にはならない。発行時の検証、発行元への到達経路、同じ所有値との結合を成立条件に含める。
 
@@ -149,7 +149,7 @@ model候補を`bp5-r2-supply-evidence-0.1`とする。未知modelは固定regist
 
 ## 10. 次の実装範囲と承認待ち
 
-ContextEvidenceとRecordsEvidenceの内部型/発行前提/消費検査を§11、HeldSourcesを§12で合成issuerだけ実装した。今後はSlotsへ広げ、PolicyCapsは承認cap契約/全体profile供給順序と対で設計・接続する。それまでは全体成功を主張しない。検査順5/6を実装順に合わせて入れ替えない。
+ContextEvidenceとRecordsEvidenceの内部型/発行前提/消費検査を§11、HeldSourcesを§12、独立したScanSlots検証片を§13で合成issuerだけ実装した。PolicyCapsは承認cap契約/全体profile供給順序と対で設計・接続する。それまでは全体成功を主張しない。検査順5/6を実装順に合わせて入れ替えない。
 
 本番issuerの配置/可視性と必要検証、sourceに対応する所有stampの発行方法、外部保持領域の構築、cap承認主体/配布/失効、profile供給と初回decodeの順序、発行claim/保持量、正確な動的費/上界は未承認・未検証である。既存seal・型名・同値hashだけを根拠にこれらを既成事実にしない。
 
@@ -217,3 +217,33 @@ proof/checkedはidentity参照だけで、source/resourceを所有・複製し�
 新規Rc allocationはHeldIdentityとtopology source stampの各1個。既存のissuer/source/lineage/origin参照はRc cloneであり、FDの複製ではない。HeldSourcesEvidenceは64 bytes以下、既存claimは64 bytes以下を合成型契約で検査した。所有source/ancestor/receipt量や一時metadata/temporary/cleanup費を無料と扱わない。
 
 既存Context/Recordsの4 work、run_creationの17差分、通常strictの3round/3decode・6record検証、停止gateは未変更。準備Envelope・通常strictへの接続、本番opener/issuer、PolicyCaps/ScanSlots、上位診断の接続、全体受付は未対応である。[HeldSources合成検証記録](E2E_BEST_PRACTICE_R2_OL03_HELD_SOURCES_EVIDENCE_SYNTHETIC_2026-10-23.md)を参照。
+
+## 13. ScanSlotsの独立合成fragment
+
+[slots.rs](../native/r2-outer/src/signature_boundary/positioned_read/metadata/transfer/topology/records/strict/scan_ops/connection_owner/protected_inputs/supply_evidence/slots.rs)にScanSlotsEvidence、ScanSlotInputs、ScanSlotsCheckedを追加した。**PolicyCaps→Slotsという全体の検査順は変えない**。今回はslot条件だけの独立評価片であり、ScanSlotsCheckedはPolicyCaps確認済み段階でもValidatedSupplyPartsでもない。ProtectedSupply/準備入口/通常strictへ変換するAPIはなく、欠落policyを合成の成功値で補わない。
+
+### 13.1 発行前提と同一性
+
+合成prepareはHeldEvidenceInputsと同issuerのHeldSourcesCheckedを値で受け取り、held moduleの型付きSlotBindingを得る。同budget/origin/session/started、未session開始・未generated/used、前段の発行/消費、immutable held owner/leaf origin/record・topology lineage/source stamp/BoundTargetを検査する。SlotBindingのfield/発行はheld moduleだけに閉じる。root/path文字列やコピーした番号の自己申告では結ばない。
+
+固定の合成factoryだけがInitial／BeforeM4／AfterM4の3sourceを作り、取得候補を検証してからScanSlotInputsを返す。外部から任意のScanOps、factory、model、開始済みsourceを渡すconstructorは設けない。sourceのmodelは試験専用`bp5-r2-evidence-synthetic-scan-0.1`で、本番collector/backendの承認を意味しない。
+
+各sourceは独自のidentityと開始状態を所有する。開始状態の検査traitはsealedで、実装はcfg(test)の合成backendだけ。本番実装・本番constructorはない。合成backendの実ScanOpsメソッド（open/ACL init/enum/read/metadata/cleanup）は失敗も含めて必ず開始を記録する。後からraw sourceをwrapperへ入れて「未開始」とする口や、test以外の状態resetはない。合成backendは成功handle/scan/cleanup証拠を作らない。
+
+取得・発行・消費時に、3slotが存在すること、固定round順、各sourceと取得時canonical identityの一致・相互の非alias、対応する固定model、source自身の未開始状態を照合する。slot入替え・roundだけの改変・別source・重複identityはBinding、欠落/未知modelはUnavailable。開始済みで失敗したsourceもBindingで拒否する。
+
+### 13.2 一度限りの発行・消費と停止
+
+同SharedBudgetのbridge claimへslots issued/usedを各1個追加した。発行/消費はworkより前にclaimを不可逆消費し、専用issuerのissued_hereも要求する。proofのdrop、失敗、値のmoveで再発行/再消費を回復しない。別budgetの場合は提示側と元claimを停止する。
+
+proofの同issuer/owner照合後、held bindingと固定3slot条件を再確認してScanSlotsCheckedへ進む。追加I/O・scan実行・再parseはなく、mutable sourceの取り出し口もない。返す型とopaque Debugは`independent_fragment_policy_unverified`である。未来の統合ではPolicyCapsCheckedを要求する段階契約が必要であり、現fragmentをその代替にしない。
+
+失敗はSupply(Slots)のInputRejectedに第一理由・検知位置を保持し、期限/取消/先行理由をBindingへ置換しない。独立fragmentのrelease/checkpoint観測はNotReached。所有field順は3slot→HeldEvidenceInputsの既存source/held/receipt順で、proof/checkedはidentityだけを保持し、backendやheld resourceを延命しない。型は非Clone/非Copy/非serde、Debugは固定opaqueである。
+
+### 13.3 費目と残課題
+
+合成prepareは1 work、取得検証・発行・消費はそれぞれ入口1＋slot guard3＝4 work、計13。各phaseで残work0〜4と課金直後の取消を検査した。既存Context/Records4・HeldSources2・run_creation17へ単純加算した全体上界ではなく、全体の費目統合とcap承認は未対応である。
+
+合成source identityのRc allocation3、slot issuer identity1、test用計数observer1を作る。SlotBindingは既存identity/origin/source/lineageのRc cloneと外部BoundTarget借用を保持する。source値・配列・部分所有・解放/observer保持量を無料にしない。ScanSlotsEvidenceは32 bytes以下、bridge claimは64 bytes以下を合成型契約で確認する。
+
+通常strictの固定3位置/owner/collector、3roundの資源会計、3decode・6record検証、既存停止gateは変更していない。本番backendの供給証拠、PolicyCaps/必要profileの供給順序、全体work/resource上界、準備Envelope・上位診断への接続は未対応。[ScanSlots合成検証記録](E2E_BEST_PRACTICE_R2_OL03_SCAN_SLOTS_EVIDENCE_SYNTHETIC_2026-10-23.md)を参照。

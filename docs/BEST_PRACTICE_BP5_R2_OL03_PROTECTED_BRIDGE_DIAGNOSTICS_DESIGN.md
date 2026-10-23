@@ -1,6 +1,6 @@
 # BP-5 R-2 OL-03：保護入力bridge・上位診断保持の詳細設計
 
-Version: draft-0.10 / Date: 2026-10-23 / Source baseline: `6dae716` / Status: §16まで内部実装。§17のContext/Records/HeldSourcesを独立合成subsetで実装、bridgeへ未接続。保護producer全体・通常strict差替えは未実装。
+Version: draft-0.11 / Date: 2026-10-23 / Source baseline: `52acb6c` / Status: §16まで内部実装。Context/Records/HeldSourcesと独立ScanSlots片を実装、PolicyCaps未確認・bridge未接続。保護producer全体・通常strict差替えは未実装。
 
 ## 1. 範囲と停止状態
 
@@ -310,6 +310,8 @@ SequenceReturnedはRustの固定drop列から戻った観測であり、OS FDの
 SharedBudget::stopは準備中もbridge claimへ第一理由を伝播する。新ownerでの再準備、放棄attempt、別budgetを拒否し、準備段階のslot放棄でも元理由を保持する。これは実producer全体・全体work/resource上界・運用承認ではない。[合成検証記録](E2E_BEST_PRACTICE_R2_OL03_PREPARATION_CLAIM_SYNTHETIC_2026-10-23.md)を参照。
 
 ## 17. 次の境界：発行元に結合した供給証拠
+
+[供給証拠設計draft-0.4 §13](BEST_PRACTICE_BP5_R2_OL03_SUPPLY_EVIDENCE_DESIGN.md)で固定3slotの合成issuer・証拠消費を追加した。型付きheld bindingで同owner/receipt/root/source系列へ結び、backend自身の開始状態を確認する。発行/消費各4 workは3slot guardを含む独立費で、既存17差分/通常strictは変更しない。PolicyCaps確認済み段階・供給公開・実行permitは作らない。[検証記録](E2E_BEST_PRACTICE_R2_OL03_SCAN_SLOTS_EVIDENCE_SYNTHETIC_2026-10-23.md)を参照。
 
 [供給証拠設計draft-0.3 §12](BEST_PRACTICE_BP5_R2_OL03_SUPPLY_EVIDENCE_DESIGN.md)でHeldSourcesEvidenceの合成issuerを追加した。取得時に既存attach系列・祖先/path再照合と同resourceのmetadata検証を通し、消費時は前段token・同owner/source/origin/lineage/BoundTargetを固定数照合する。source所有値は一式で移し、証拠だけでresourceを延命しない。合成取得費/管理量は全体上界未統合で、本番bridge/通常strict・停止gateは未変更。[検証記録](E2E_BEST_PRACTICE_R2_OL03_HELD_SOURCES_EVIDENCE_SYNTHETIC_2026-10-23.md)を参照。
 

@@ -16,6 +16,7 @@ mod protected_inputs;
 mod records_stage;
 mod result_owner;
 mod round_kernel;
+mod slots_evidence;
 mod supply_evidence;
 mod topology_adapter;
 

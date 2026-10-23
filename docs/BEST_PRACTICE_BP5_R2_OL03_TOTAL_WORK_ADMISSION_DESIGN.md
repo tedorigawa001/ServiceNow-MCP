@@ -1,8 +1,10 @@
 # BP-5 R-2 OL-03：record・scanを含む全体work上界と事前受付
 
-Version: draft-0.28 / Date: 2026-10-23 / Status: 準備claim入口1まで接続済み。Context/Records発行/消費4に続きHeldSourcesの2を合成計数、準備入口未接続。供給証拠全体費・全体受付・統合other上界・通常strict差替え・運用承認は未対応。以下の各段階の記録と現行状態を区別する。
+Version: draft-0.29 / Date: 2026-10-23 / Status: 準備claim入口1まで接続済み。Context/Records4・HeldSources2に続き独立ScanSlots片を合成計数、PolicyCaps未確認・準備入口未接続。供給証拠全体費・全体受付・統合other上界・通常strict差替え・運用承認は未対応。以下の各段階の記録と現行状態を区別する。
 
 ## 1. 範囲と停止状態
+
+[供給証拠設計draft-0.4 §13](BEST_PRACTICE_BP5_R2_OL03_SUPPLY_EVIDENCE_DESIGN.md)の独立ScanSlots片はprepare1、取得検証4、発行4、消費4＝13 work。各4は入口1＋固定3slot guard各1で、未知のcap/動的取得費を代表しない。§8の固定候補23へこの13を単純加算せず、将来の費目所有・統合順序を再設計する。PolicyCaps→Slotsの全体順序、既存17差分・3round/3decode・6record検証、全体受付無効を維持する。[検証記録](E2E_BEST_PRACTICE_R2_OL03_SCAN_SLOTS_EVIDENCE_SYNTHETIC_2026-10-23.md)を参照。
 
 [供給証拠設計draft-0.3 §12](BEST_PRACTICE_BP5_R2_OL03_SUPPLY_EVIDENCE_DESIGN.md)のHeldSources subsetは発行1＋消費1 workを先行計数した。合成取得dispatch1、二度の祖先/path再照合、同resourceのmetadata/ACL/xattr/FS取得とcleanupは別の取得費で、2/3を全体上界としない。K祖先の成功topology操作数は2×(3K+2)、payload読取0、共有予約/操作上限を維持する。動的work費・全体resource/cap統合は未対応で、既存17差分や通常strictの走査数は変えず全体受付を無効に保つ。[検証記録](E2E_BEST_PRACTICE_R2_OL03_HELD_SOURCES_EVIDENCE_SYNTHETIC_2026-10-23.md)を参照。
 
