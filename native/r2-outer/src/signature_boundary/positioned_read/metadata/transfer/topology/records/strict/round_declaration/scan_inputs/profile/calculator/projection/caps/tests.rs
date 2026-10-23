@@ -3,6 +3,7 @@ use super::super::super::super::tests::ready;
 use super::*;
 use std::{cell::Cell, time::Duration};
 mod draft;
+mod slot_mapping;
 
 #[test]
 fn scan_caps_comparison_is_partial_and_does_not_allocate_or_admit() {

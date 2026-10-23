@@ -128,7 +128,10 @@ pub(in super::super::super::super::super::super) fn compare<'a>(
 }
 
 mod allocation_view;
+pub(in super::super::super::super::super::super) use allocation_view::DraftCapMap;
 pub(in super::super::super::super::super::super) use allocation_view::ScanCapAllocationView;
+#[cfg(test)]
+pub(in super::super::super::super::super::super) use allocation_view::{MapFault, MapSnapshot};
 impl std::fmt::Debug for ScanResourceCaps {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.write_str("ScanResourceCaps(synthetic_snapshot_not_operating_cap)")

@@ -1,5 +1,9 @@
 //! Preserve the actual compared cap + scope + estimate-field borrows; never export raw cap arrays.
 use super::*;
+mod cap_map;
+pub(in super::super::super::super::super::super::super) use cap_map::DraftCapMap;
+#[cfg(test)]
+pub(in super::super::super::super::super::super::super) use cap_map::{MapFault, MapSnapshot};
 const VIEW_ID: &str = "bp5-r2-scan-cap-allocation-view-0.1";
 pub(in super::super::super::super::super::super::super) struct ScanCapAllocationView<'a> {
     proof: ScanCapsCompared<'a>,
@@ -79,7 +83,14 @@ impl<'a> ScanCapsCompared<'a> {
         b.checkpoint()
     }
 }
-impl ScanCapAllocationView<'_> {
+impl<'a> ScanCapAllocationView<'a> {
+    #[cfg(test)]
+    pub(in super::super::super::super::super::super::super) fn replace_cap_fixture(
+        &mut self,
+        caps: &'a ScanResourceCaps,
+    ) {
+        self.proof.caps = caps;
+    }
     #[cfg(test)]
     pub(in super::super::super::super::super::super::super) fn duplicate_fixture(&self) -> Self {
         let p = &self.proof;

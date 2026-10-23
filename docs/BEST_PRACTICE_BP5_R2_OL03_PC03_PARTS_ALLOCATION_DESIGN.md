@@ -1,10 +1,10 @@
 # BP-5 R-2 OL-03：PC-03 one-shot parts配賦・証拠消費の詳細設計
 
-Version: draft-0.2 / Date: 2026-10-23 / Source baseline: `ff71bc5` / Status: allocation view・非実行Draft・budget側claim・Unknownでfinalize拒否を合成実装。完成parts/論理slotキー/移譲/本番承認は未実装
+Version: draft-0.3 / Date: 2026-10-23 / Source baseline: `e230a7e` / Status: allocation view・非実行Draft・budget側claim・論理slotキー/非実行cap写像を合成実装。Unknown finalize拒否を維持。完成parts/実source結合/移譲/本番承認は未実装
 
 ## 1. 範囲と到達点
 
-[PolicyCaps設計draft-0.5](BEST_PRACTICE_BP5_R2_OL03_POLICY_CAPS_EVIDENCE_DESIGN.md)のPC-03を具体化する。§11で実装済みsubsetを区別し、それ以外の型名・入口・状態・費目は引き続き設計案である。PC-02のscan35項目の部分比較を、全体必要量の確認や実行権へ昇格しない。
+[PolicyCaps設計draft-0.6](BEST_PRACTICE_BP5_R2_OL03_POLICY_CAPS_EVIDENCE_DESIGN.md)のPC-03を具体化する。§11〜12で各段階の実装を区別し、それ以外の型名・入口・状態・費目は引き続き設計案である。PC-02のscan35項目の部分比較を、全体必要量の確認や実行権へ昇格しない。
 
 本番cap投入・全体受付・通常strict差替え・OS接続・実機操作・token発行・設定変更・permit発行を含めない。telemetry保留、APPROVED_REGISTRY=None、通常v2 Unavailable、gate92、DER/absence停止を維持する。本書の配賦は将来の内部資源上限の設定であり、MCP操作/OS実行のpermitではない。
 
@@ -200,4 +200,41 @@ SharedBudget::stopは配賦状態が非Freshなら元claimの第一理由とStop
 
 Draft Dropは元claimの先行理由を保ち、なければUnavailableを記録するだけ。source/FDやquota予約を所有せず、解放/Closed証拠を発行しない。完成経路がないため正常transfer用の空shellや部分移譲は今回実装していない。borrowは同with_round内で閉じ、PC-04の外側owner/Initial継続を先取りしない。
 
-[合成検証記録](E2E_BEST_PRACTICE_R2_OL03_PC03_DRAFT_SYNTHETIC_2026-10-23.md)を参照。次は論理slot/非実行の配賦写像と独立oracle、未導出項目/完全性issuer、PC-04借用接続の順に整理する。完成parts・通常strict・全体受付は引き続き停止する。
+[第1subset合成検証記録](E2E_BEST_PRACTICE_R2_OL03_PC03_DRAFT_SYNTHETIC_2026-10-23.md)を参照。上段model-0.1と作成5/finalize9・heapなしは当時の到達点であり、論理キー/写像追加後の現行費用は§12を使う。`e230a7e`のbegin_allocation（Stoppedを一時状態へも戻さない修正）を維持する。完成parts・通常strict・全体受付は引き続き停止する。
+
+## 12. 論理slotキー・非実行cap配賦写像
+
+Draft modelを`bp5-r2-scan-parts-draft-0.2`へ更新し、viewに加えて非実行の[DraftCapMap](../native/r2-outer/src/signature_boundary/positioned_read/metadata/transfer/topology/records/strict/round_declaration/scan_inputs/profile/calculator/projection/caps/allocation_view/cap_map.rs)と[論理キー3個](../native/r2-outer/src/signature_boundary/positioned_read/metadata/transfer/topology/records/strict/round_declaration/session/resources/draft/slots.rs)を保持する。map modelは`bp5-r2-inert-cap-map-0.1`、key modelは`bp5-r2-logical-slot-key-0.1`。旧calculator/resource/viewの算術・modelは変更しない。
+
+### 12.1 固定写像
+
+比較した実capオブジェクトからsession8項目・各round8項目（32 scalar）を写し、同roundのattempts5/live/namesをlocal案へ写す（21 scalar）。必要量からcapを生成したり、sessionを3等分したり、totalを分類別sumで置き換えたりしない。local案の型にtotalを入れず、元のsession/round totalを独立保持する。payload/retry/enumの残3項目はviewの共有枠照合のまま、未導出5項目もUnknownのままとする。
+
+mapのconstructorはallocation view専用module内だけ。生配列/診断snapshotからのruntime constructor、Quotas/ResourcePolicyへの変換、mutable getterはない。cap配列のcopyは配賦案の内部保持であって証拠の再入力ではない。mapは同capへのborrowも保持し、再照合ではviewの実scope/budget guard3・capオブジェクトのptr一致・model・53値の完全一致を要求する。同値の別capを拒否する。readonly snapshotと改変口はcfg(test)だけである。
+
+### 12.2 キーの発行・借用・照合
+
+既存budget側Draft claimを消費した固定create内だけで、一つのgroup identityと3つの固有nonce identityを発行する。順序はInitial/BeforeM4/AfterM4、ordinalは0/1/2。canonical nonceを保持し、キーのgroup/ordinal/Round/model/nonceと他キーとの非aliasを固定3回で照合する。Stoppedを上書きする経路や別issuerの再発行口は追加しない。
+
+logical_slotはDraftReadyと実view/map/全3キーを確認後、選択キーへのLogicalSlotRefを返す。require_slotは同じ確認と、該当slotの**canonicalキーオブジェクト参照・group field参照の一致**を要求する。キー値やnonceだけのcopyは代替にならない。borrowはDraftの移動/dropを制約し、borrow前のDraft移動は可能。異なる配賦groupのキーを渡すと提示先と元キーownerを停止する。
+
+これらは実scan source originでも実RoundScope/tokenでもなく、BeforeM4用の論理キーを取得してもそのroundを開始しない。現段階のview guardはInitialに固定する。実sourceの結合、後続fresh tokenへのattach、session configure/実boundaryへlocal quotaを渡す操作は未実装。キーやmapは非Clone/Copy/serde、Debugは固定opaqueである。
+
+### 12.3 費目・保持量・検証
+
+| 経路 | 現行work |
+|---|---:|
+| view生成 | 4（変更なし） |
+| Draft作成 | 62＝claim1＋view guard3＋cap写像53＋group/key発行4＋publication1 |
+| map再照合 | 57＝view guard3＋source/model1＋53値比較 |
+| DraftReady/全キー照合 | 61＝state/model1＋map再照合57＋キー3 |
+| キー借用/キー照合 | 各62＝上記61＋選択/参照照合1 |
+| finalize拒否 | 66＝claim/model1＋map再照合57＋キー3＋Unknown5 |
+
+view→Draft→Unknown拒否は132 work。53 scalarの写像/比較は固定長で、receipt/indexの再parse・profile再収集・resource計算・scanを行わない。この実計数を全体受付上界へ単純加算しない。
+
+map自体にheap allocationはないが、group1＋nonce3の**4個のRc identity allocation**をDraftごとに追加する。canonical anchorやキーは同じidentityのRc参照を保持する。全体allocation/FD/live保証ではなく、未導出の管理量を確認済みにしない。RustのRc::newを用いており、allocator OOMを型付きLimitで回収できると主張しない。途中のwork/取消失敗はローカル所有をdropし、OS cleanup証拠を発行しない。
+
+非対称なcap原票と、production mappingのindex計算やhelperを使わないliteral oracleでsession/round/localの全53 scalarを照合した。写像各値の改変、キー交換/nonce/group/ordinal/Round/model・canonical anchorと同時に偽造したalias、同値別cap、別配賦groupを拒否する。作成62/finalize66およびキー操作各62の全work境界でLimit/Cancelled/Deadlineを確認した。
+
+[論理slot/写像合成検証記録](E2E_BEST_PRACTICE_R2_OL03_PC03_SLOT_MAPPING_SYNTHETIC_2026-10-23.md)を参照。独立oracleは写像と参照結合の試験であり、capの人手承認/全体必要量・実backendの正当性を検証したものではない。未導出5項目はUnknown、finalizeは依然Infallibleを成功値とする発行不能の契約である。

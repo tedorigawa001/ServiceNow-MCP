@@ -29,7 +29,7 @@ fn allocation_view_and_draft_keep_five_unknown_and_never_finalize_or_start_anyth
                 "ScanCapAllocationView(borrowed_partial_not_policy_or_quota)"
             );
             let d = draft::create(view, scope, b)?;
-            assert_eq!(b.json_work - old, 9);
+            assert_eq!(b.json_work - old, 66);
             assert_eq!(d.unknown_count(), 5);
             assert_eq!(
                 format!("{d:?}"),
@@ -37,7 +37,7 @@ fn allocation_view_and_draft_keep_five_unknown_and_never_finalize_or_start_anyth
             );
             assert!(b.protected_bridge_claim.allocation.get() == AllocationState::DraftReady);
             assert_eq!(d.finalize(scope, b), Err(Failure::Unavailable));
-            assert_eq!(b.json_work - old, 18);
+            assert_eq!(b.json_work - old, 132);
             assert_eq!(
                 accounting,
                 (
@@ -147,7 +147,7 @@ fn allocation_view_create_and_finalize_refuse_foreign_budget_and_preserve_origin
 fn allocation_every_work_boundary_stops_with_limit_cancel_or_deadline_and_claim_observes_it() {
     for phase in 0..3 {
         for mode in 0..3 {
-            let cost = [4, 5, 9][phase];
+            let cost = [4, 62, 66][phase];
             for at in 1..=cost {
                 let s = setup();
                 let cancel = Rc::new(AtomicBool::new(false));
