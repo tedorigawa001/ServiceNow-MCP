@@ -1,6 +1,6 @@
 # BP-5 R-2 OL-03：保護producer生成入口・生成失敗の上位診断保持
 
-Version: draft-0.8 / Date: 2026-10-23 / Source baseline: `22d5757` / Status: §11まで内部実装/合成検証。Context/Records/HeldSourcesと独立ScanSlots片を実装。§13にPolicyCaps/Initial bootstrap案を追加（MDのみ）。全producer/準備接続・運用受付は未実装/未承認
+Version: draft-0.9 / Date: 2026-10-23 / Source baseline: `40ea16f` / Status: §11まで内部実装/合成検証。Context/Records/HeldSourcesと独立ScanSlots片、PolicyCapsのPC-01合成subsetを実装。§13の実cap/profile/Initial bootstrap接続は設計のみ。全producer/準備接続・運用受付は未実装/未承認
 
 ## 1. 範囲と停止状態
 
@@ -231,7 +231,7 @@ claimは同じRc allocation内の状態拡張で、サイズ上限64 bytesの回
 
 ## 13. PolicyCapsとInitial bootstrapの接続前提（設計のみ）
 
-[PolicyCapsEvidence詳細設計draft-0.1 §7](BEST_PRACTICE_BP5_R2_OL03_POLICY_CAPS_EVIDENCE_DESIGN.md)では、承認済み限定BootstrapCaps→既存Initial decode/保護profile→必要量とcapの照合→PolicyCaps→Slots→session configure→同Initial kernelの継続、という順序を提案した。未確認capを作ってscan実測から承認を得る循環は採らない。
+[PolicyCapsEvidence詳細設計draft-0.2 §7](BEST_PRACTICE_BP5_R2_OL03_POLICY_CAPS_EVIDENCE_DESIGN.md)では、承認済み限定BootstrapCaps→既存Initial decode/保護profile→必要量とcapの照合→PolicyCaps→Slots→session configure→同Initial kernelの継続、という順序を提案した。未確認capを作ってscan実測から承認を得る循環は採らない。§11のPC-01は固定合成issuerによる内部型・消費検査のみで、実cap/profile・準備Envelope・run_creationの接続を有効化しない。
 
 現行の値移譲型EvidenceInputs/PreparationEnvelopeは、receiptを借用するInitial declaration/profileを保持したままmoveできない。安定した外側receipt保持領域、borrowed準備計画、固定callerとInitial prechecked/declaration引継ぎの内部API設計/承認が必要。自己参照/unsafe・4回目decode・profile claim resetで回避しない。これは将来の変更案で、現行run_creationの17差分や所有/解放を変更しない。
 

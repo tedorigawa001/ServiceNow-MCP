@@ -4,6 +4,7 @@ use result_owner::SupplyStage;
 
 mod context;
 pub(in super::super::super) mod held;
+pub(in super::super::super) mod policy;
 mod records;
 pub(in super::super::super) mod slots;
 use context::ContextChecked;
@@ -136,6 +137,9 @@ mod contracts {
         opaque!(held::HeldEvidenceInputs<'static, (), (), ()>);
         opaque!(held::HeldSourcesEvidence<'static>);
         opaque!(held::HeldSourcesChecked);
+        opaque!(policy::PolicyInputs<'static, (), (), ()>);
+        opaque!(policy::PolicyCapsEvidence<'static>);
+        opaque!(policy::PolicyCapsChecked<'static>);
         opaque!(slots::ScanSlotInputs<'static, (), (), (), ()>);
         opaque!(slots::ScanSlotsEvidence<'static>);
         opaque!(slots::ScanSlotsChecked<'static>);
@@ -147,12 +151,14 @@ mod contracts {
     }
     #[test]
     fn evidence_issued_before_preparation_latches_later_budget_stops() {
-        for stage in 0..4 {
+        for stage in 0..5 {
             let cancel = std::sync::atomic::AtomicBool::new(false);
             let mut b = SharedBudget::new(Instant::now(), &cancel);
             let claim = b.protected_bridge_claim.clone();
             // Synthetic issuers have consumed only their issue flag; no preparation/generation yet.
-            if stage == 3 {
+            if stage == 4 {
+                claim.policy_evidence_issued.set(true);
+            } else if stage == 3 {
                 claim.slots_evidence_issued.set(true);
             } else if stage == 2 {
                 claim.held_evidence_issued.set(true);

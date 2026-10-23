@@ -1,12 +1,12 @@
 # BP-5 R-2 OL-03：PolicyCapsEvidence・詳細設計
 
-Version: draft-0.1 / Date: 2026-10-23 / Source baseline: `22d5757` / Status: MDのみ。内部型・cap承認・bootstrap統合・運用受付は未実装/未承認
+Version: draft-0.2 / Date: 2026-10-23 / Source baseline: `40ea16f` / Status: PC-01の内部型・合成issuer・消費検査を実装。本番cap承認・実profile導出・配賦・bootstrap統合・運用受付は未実装/未承認
 
 ## 1. 範囲と停止状態
 
 [供給証拠設計](BEST_PRACTICE_BP5_R2_OL03_SUPPLY_EVIDENCE_DESIGN.md)のPolicyCaps段階を具体化する。承認された上限、検証済み宣言から導出した必要量、実際に配賦するResourceInput/Quotasの3つを分離する。数量が小さいこと、model IDの一致、同じsealの存在だけをcap承認へ昇格しない。
 
-全体受付無効・telemetry保留・APPROVED_REGISTRY=None・通常v2 Unavailable・gate92・DER/absence停止を維持する。実装、通常strict差替え、OS接続、実機操作、token発行、設定変更、本番policy投入、permit発行を含めない。本書の型名/API名/追加費目は案であり、存在する実装の説明とは区別する。
+全体受付無効・telemetry保留・APPROVED_REGISTRY=None・通常v2 Unavailable・gate92・DER/absence停止を維持する。通常strict差替え、OS接続、実機操作、token発行、設定変更、本番policy投入、permit発行を含めない。§11の合成subset以外の型名/API名/追加費目は案であり、存在する実装の説明とは区別する。
 
 全体の消費順はContext→Records→HeldSources→**PolicyCaps→ScanSlots**→公開前checkpoint。先行実装のScanSlotsCheckedはPolicyCaps未確認の独立fragmentであり、本段階の入力や完了証拠の代わりにはしない。
 
@@ -168,3 +168,21 @@ claimへ先行理由をlatchしてから一時Witness/profile/estimate借用を�
 次の作業案は、PC-01（型/承認原票/ModelBundleの内部契約を合成issuerのみ）、PC-02（保護profile projectionと純粋cap比較器）、PC-03（one-shot parts配賦と証拠消費）、PC-04（bootstrapの寿命/固定caller再設計・compile-fail検証）、PC-05（PolicyCaps→Slots/Initialへの統合）とする。PC-01〜03の単独成功を運用受付成功にしない。
 
 承認待ち：capの責任者・全数値・固定build配布/失効手順、BootstrapCapsの強制と保持量上界、ModelBundle原票/係数版、必要dimensionの全体coverage、安定した外側所有者への内部API移行、全体work/resource受付、実backend。これらが確定するまで本番policyはNone、全体受付は無効のままとする。
+
+## 11. PC-01合成subsetの実装範囲
+
+[policy.rs](../native/r2-outer/src/signature_boundary/positioned_read/metadata/transfer/topology/records/strict/scan_ops/connection_owner/protected_inputs/supply_evidence/policy.rs)にApprovedCaps、ModelBundle、ResourceRequirementWitness、PolicyInputs、PolicyCapsEvidence/Checkedを追加した。全fieldはprivateで、非Clone/非Copy/非serde、固定opaque Debug。構築・発行はcfg(test)の固定[合成issuer](../native/r2-outer/src/signature_boundary/positioned_read/metadata/transfer/topology/records/strict/scan_ops/connection_owner/protected_inputs/supply_evidence/policy/synthetic.rs)だけである。raw cap、caller clock、summary、任意factoryを受け付ける入口はない。
+
+**このsubsetのApprovedCaps/Witnessは合成原票と模擬profileの契約試験であり、本番の承認証拠でも実ScanShapeProfileからのprojectionでもない。** build/係数digest・revision・roleはテスト専用固定値。12要素のmodel bundleは設計の組合せを試すsnapshotであり、全moduleの実artifact digestを検証する実装ではない。実cap registry、検証済みwall/mono clockの接続、BootstrapScope、実必要量導出とresource計算、PolicyAllocationParts/ResourceInput/Quotas発行は未実装。
+
+合成入力はHeldEvidenceInputsと同HeldSourcesCheckedを値で受け取り、既存held専用SlotBindingを再利用してreceipt/context/leaf/record/topologyの同系列と未session状態を確認する。binding型名にslotsとあるがPolicyCaps成功を表すものではない。issued/usedは元budgetのProtectedBridgeClaimへ置く。発行/消費試行の最初に消費し、途中失敗・drop・別issuerで回復しない。元budgetと提示budgetの両方へ停止を伝播し、InputRejectedのSupply(PolicyCaps)へ第一理由を保持する。
+
+比較項目は固定40個：sessionと各3roundの5分類attempts/total/live-cleanup/names（4×8）、payload/retry/enum bytes/outer owners/management allocation/bootstrap bytes-work-live（8）。各項目を独立比較し、sessionをroundの和にしたり、totalを分類別和にしたりしない。coverageの欠落・余分なbitはUnavailable。全体必要量の実導出/網羅性の証明ではなく、その比較契約の合成試験である。値はテスト専用有限範囲で、u64::MAXを無制限として受理しない。cap比較に足算・切詰め・飽和値は使わない。
+
+期限は合成monotonic clockで、valid_from≤now、expires>元started+10秒を発行/消費時に検査する。Instantのchecked_add失敗はLimit。実PDI/実clockの証明ではなく、元期限を延長せず全残時間を覆うという境界の試験である。
+
+Context→Records→HeldSourcesの実消費済みtokenを要求し、Slotsの発行/消費が先行するとBinding。成功のPolicyCapsCheckedは独立fragmentで、Slots/準備Envelope/ProtectedSupply/実行権へ変換するAPIはない。既存の独立ScanSlots経路を承認済みに変更せず、P0〜P6の統合は引き続き未対応。
+
+費目はprepare1＋発行44＋消費44＝89 work。各44は入口1、held binding1、固定model bundle1、承認/期限1、40個のdimension比較。acquisition済みのheld検査や実resource計算9行を再実行しない。モデル比較は固定12要素/固定長digestに限る。新規Rcは合成authority/profile/issuer identityの3個。proof/checkedはidentityのみを保持しheld資源を延命しない。保持量・drop・将来の実approval/projection/配賦費は全体上界へ未接続で、既存17や候補23へ単純加算しない。
+
+[合成検証記録](E2E_BEST_PRACTICE_R2_OL03_POLICY_CAPS_EVIDENCE_SYNTHETIC_2026-10-23.md)を参照。次はPC-02の保護profile projection・実必要量比較、PC-03のparts配賦、PC-04のbootstrap借用設計、PC-05の固定供給順統合が残る。

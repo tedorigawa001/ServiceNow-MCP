@@ -1,6 +1,6 @@
 # BP-5 R-2 OL-03：保護producerの供給証拠検査・詳細設計
 
-Version: draft-0.5 / Date: 2026-10-23 / Source baseline: `22d5757` / Status: Context/Records/HeldSourcesと独立ScanSlots片まで合成実装。§14にPolicyCaps詳細設計を追加（MDのみ）。PolicyCaps未確認・準備Envelope/通常strict未接続、本番issuer/運用承認なし
+Version: draft-0.6 / Date: 2026-10-23 / Source baseline: `40ea16f` / Status: Context/Records/HeldSourcesと独立ScanSlots片、PolicyCapsのPC-01合成subsetを実装。実profile/cap承認・準備Envelope/通常strict未接続、本番issuer/運用承認なし
 
 ## 1. 範囲と不変条件
 
@@ -250,10 +250,12 @@ proofの同issuer/owner照合後、held bindingと固定3slot条件を再確認�
 
 通常strictの固定3位置/owner/collector、3roundの資源会計、3decode・6record検証、既存停止gateは変更していない。本番backendの供給証拠、PolicyCaps/必要profileの供給順序、全体work/resource上界、準備Envelope・上位診断への接続は未対応。[ScanSlots合成検証記録](E2E_BEST_PRACTICE_R2_OL03_SCAN_SLOTS_EVIDENCE_SYNTHETIC_2026-10-23.md)を参照。
 
-## 14. PolicyCaps詳細設計（MDのみ）
+## 14. PolicyCaps詳細設計とPC-01合成subset
 
-[PolicyCapsEvidence詳細設計draft-0.1](BEST_PRACTICE_BP5_R2_OL03_POLICY_CAPS_EVIDENCE_DESIGN.md)では、ApprovedCaps、限定BootstrapScope、保護されたResourceRequirementWitness、PolicyCapsEvidence/CheckedとResourceInput/Quotas配賦partsを分けた。必要量がcap以内という算術結果だけで承認せず、同registry/build/model bundle・期限・receipt/held/source/初回profileへの結合を要求する。
+[PolicyCapsEvidence詳細設計draft-0.2](BEST_PRACTICE_BP5_R2_OL03_POLICY_CAPS_EVIDENCE_DESIGN.md)では、ApprovedCaps、限定BootstrapScope、保護されたResourceRequirementWitness、PolicyCapsEvidence/CheckedとResourceInput/Quotas配賦partsを分けた。必要量がcap以内という算術結果だけで承認せず、同registry/build/model bundle・期限・receipt/held/source/初回profileへの結合を要求する。
 
 profileは現行RoundScope内の借用型で、値移動するproducerへ持ち出せない。初回の既存decode/estimateを同scope内でpolicy確認→Initial kernelへ引き継ぐ案と、安定した外側receipt所有者/固定callerへの内部API移行を承認待ちとして明記した。4回目のdecode・profile claim reset・自己参照/unsafe・scan実測後のcap承認は採らない。
 
 同設計のP0〜P6は将来の順序案であって現行経路ではない。cap/BootstrapCapsの有限数値、全dimension、動的費/保持量、全体work/resource受付が確定しない場合は停止する。PolicyCaps→Slots順、独立ScanSlots片の未承認状態、既存17差分・3decode/6record検証・全体受付無効を維持する。
+
+PC-01はcfg(test)の固定合成issuerだけでApprovedCaps/模擬Witness/PolicyCapsEvidenceを発行し、同HeldSourcesChecked・budgetへの結合、承認/モデル/期限・40独立項目、不可逆issued/used、Slots先行拒否を確認する。prepare1＋issue44＋consume44の89 workは独立subsetの実計数であり、全体上界ではない。checkedから配賦/Slots/準備Envelopeへ進むAPIはない。実profile projection・本番cap registry・実clock・parts配賦・P0〜P6は未対応。[PolicyCaps合成検証記録](E2E_BEST_PRACTICE_R2_OL03_POLICY_CAPS_EVIDENCE_SYNTHETIC_2026-10-23.md)を参照。

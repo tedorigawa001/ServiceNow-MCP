@@ -12,6 +12,7 @@ mod held_evidence;
 mod outer_release;
 mod outer_result;
 mod owner_contract;
+mod policy_evidence;
 mod protected_inputs;
 mod records_stage;
 mod result_owner;
