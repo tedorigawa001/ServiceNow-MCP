@@ -99,7 +99,7 @@ B0の前提検査の循環対策は、信頼済み固定entryが限定BootstrapC
 
 - イベント数・同時block数・ID/domain・phase数・単発要求・集約値に、独立の有限構造上限を設け、処理/確保より前に検査する。数値は実装前に決め、運用capへ流用しない。
 - parserや巨大Vecの受領は導入せず、小さな型付き合成入力だけを扱う。borrow済みsliceでも計算器が上限検査なしに走査してよいとはしない。scratchには固定上限/容量戦略を用い、その初期化/探索/解放費を別計上する。
-- 固定長slot探索等、単純で監査可能な方式を優先し、worst-case比較回数を式に含める。任意IDのhashmapや未課金sortへ依存しない。
+- 固定長slot探索等、単純で監査可能な方式を優先し、worst-case比較回数を式に含める。任意IDのhashmapや未課金sortへ依存しない。固定長slot表を線形探索する場合、1イベントのID照合/空きslot探索は最悪で同時block数の構造上限`B_max`回に比例する。work式は「イベントごとに定数＋`B_max`に比例する比較費」をイベント数上限`E_max`分だけ見込む形（最悪`E_max × (c + B_max)`程度）とし、実際に見つかった位置までの比較数で課金して最悪値を過小に見積もらない。探索を早期に打ち切る実装でも、上界・事前予約は最悪ケースで行う。
 - 元SharedBudgetのwork/checkpoint/取消/期限を使う接続を設計し、計算の費用はモデル化されるallocation量とは別単位で課金する。初期化・各探索/イベント算術・結果公開の係数/式は未導出で、無償処理としない。
 - 試行開始は最初のfallible処理前に消費し、先行理由を保持する。MA-01の合成attempt内の再開は拒否するが、元budgetへ新しいproduction claim/issuerを先取りして追加しない。算術エラーはLimit、順序/identity不一致はBinding、未知model/未対応形状はUnavailable。Deadline/Cancelledは元理由を保持する。
 
@@ -109,7 +109,8 @@ B0の前提検査の循環対策は、信頼済み固定entryが限定BootstrapC
 2. carry-in8を保持して13を確保する部分区間は、attempts1/cumulative13/peak21/max13/carry-in8。初期8を累積へ再計上しない。grow失敗も試行/累積/maxを返さず、旧blockを保持する。
 3. 予約失敗/中断・二重解放・未知block・別phase・cap等号/1不足・overflow、上限件数/1超過を検査する。Grow途中の所有を落とさず、BXとS0の境界を区別する。
 4. production集約helper/係数/offsetを使わないoracleと照合し、peakを差分growに変える・failed試行を返す・carry-inを二重加算する変異で失敗する。
-5. 全work境界のLimit/Cancelled/Deadline、borrow/非Clone/serde/opaque出力、実確保/外部通信/scan/parts発行へ接続しないことを確認する。テストfixtureのraw traceを実証拠として発行しない。
+5. slot表が満杯近く（同時block数＝`B_max`）・探索対象が末尾/不在の最悪ケースで、実課金が§5.1の最悪式を超えず、かつ式が過小でないことを確認する。
+6. 全work境界のLimit/Cancelled/Deadline、borrow/非Clone/serde/opaque出力、実確保/外部通信/scan/parts発行へ接続しないことを確認する。テストfixtureのraw traceを実証拠として発行しない。
 
 MA-01の成功は「合成イベント算術の契約確認」だけ。次段階MA-02で固定moduleの実確保モデル/保護projection/同receipt-budget-profile結合と収集費を設計し、その後に初めて完全性coverageを議論する。5項目を確認済みにする順序ではない。
 
