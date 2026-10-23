@@ -1,6 +1,6 @@
 # BP-5 R-2 OL-03 PC-03：管理allocation複合契約・bootstrap境界・初回実装subset
 
-Version: draft-0.1 / Date: 2026-10-24 / Source baseline: `b25dba2` / Status: 設計案のみ。必要量モデル未実装・5項目Unknown
+Version: draft-0.2 / Date: 2026-10-24 / Source baseline: `ee77897` / Status: MA-01の非実行合成計算subsetを実装。実必要量・保護projection未対応、5項目Unknown
 
 ## 1. 範囲と契約の位置付け
 
@@ -120,4 +120,54 @@ MA-01の成功は「合成イベント算術の契約確認」だけ。次段階
 
 運用前：実layout/ABI/allocator・固定領域とnested coverage、信頼済みBootstrapCaps/clock、PC-04継続、全体payload/work/管理量・実強制、cap承認/失効、次版証拠/parts契約を別途満たす。旧scalar・PC-02 scan subset・合成MA-01を完全性へ昇格させない。
 
-今回は設計文書のみ。数値モデル・oracle・強制/実OSの検証は未実施で、全停止条件を維持する。
+§1〜§6の将来契約と、以下の先行実装を区別する。実強制/実OSの検証は未実施で、全停止条件を維持する。
+
+## 7. MA-01先行実装（非実行・合成traceのみ）
+
+[management.rs](../native/r2-outer/src/signature_boundary/positioned_read/metadata/transfer/topology/records/strict/round_declaration/session/resources/management.rs)をresources配下のprivate moduleとして追加した。modelは`bp5-r2-management-trace-0.1`。通常strict/OS/allocator/供給issuerに呼出しを追加せず、型付き合成入力についてだけ4軸を計算する。旧40項目・Draft/Unknown・finalizeの成功不能型を変えていない。
+
+### 7.1 有限構造上限とscratch
+
+| 項目 | MA-01の固定合成上限 |
+|---|---:|
+| events | 512（phase遷移・参照操作も含む） |
+| carry-in / block ID | 最大64件、IDは1〜64で一度退役したIDも再利用不可 |
+| 単発要求 | 1〜16 MiB（0要求のallocationイベントは受理しない） |
+| alignment | 1〜4096の2冪。要求bytesをalignment倍数へ丸めない |
+| 累積要求 / live要求 | 256 MiB / 128 MiB |
+| class / phase | Control・Declaration・Profile・Collector / B0〜B4・S0・BXの固定enum |
+
+数値は合成計算器のdomain制限で、本番cap/実メモリ許可値ではない。scratchは`[Slot;64]`の固定stack領域、IDをrange検査して直接index化する。heap確保・hashmap・sort・可変長走査はない。scratch型は対象buildで4096 bytes以下をテストするが、関数全体のstack/RSS上界の証明ではない。入力slice/テストfixtureの領域を管理全体から除外するものでもない。
+
+SlotはVacant/Pending/Owned/Retired。growはold→growerとnew→oldを保持し、pending中の旧block解放・重複growを拒否する。新要求が旧要求より大きく、class/alignmentも同じ場合だけ受理する。Commit/FailNoBlockでlinkを閉じるが、Commit後の旧block解放は別イベントで明示する。pendingやgrowerが残ったまま結果を発行しない。growth縮小/in-place/任意allocatorイベントの再現は対象外で、別モデルなしに流用しない。
+
+CloneRef/Borrow/Moveは最終参照数を実追跡するものではない。ReleaseConfirmedは「合成列が最終所有の終了を宣言した」イベントであり、実Rc/allocator解放の証明を発行しない。ReleaseUnconfirmedはliveを減らさずUnavailableで計算を停止し、結果を返さない。
+
+### 7.2 終端・one-shot・共有予算
+
+B0から隣接するB phaseだけを進み、B4→S0を成功handoffとして終端にする。S0後のイベントを拒否し、Ownedのcarry-outがある`SyntheticCarryOut`を返す。B0〜B4からBXへ遷移でき、BXでは新規Reserve/Growを拒否する。遅延した既存PendingのCommit/FailNoBlockは処理でき、全block解放後だけ`ClosedSyntheticTrace`を返す。BX→通常phase、S0→BXを拒否する。closedも実cleanup/strict ack証拠ではない。
+
+`Attempt`は元budget origin/startedを借用相当のRc参照で固定し、run冒頭のfallible処理前にローカルusedを消費する。失敗・成功後の同attempt再試行を拒否し、元SharedBudgetの第一理由・work/checkpointを使う。元budgetにproduction claimを追加しない。同budgetから別の合成Attemptを作ることは、権限を発行しない限り禁止する契約ではない。
+
+別budgetを渡した場合は提示budgetをBindingで停止し、attemptも使用済みとなる。元budgetへ自動停止を伝える新しい共有claimは設けず、元へ再提示すれば使用済みで拒否する。これは§3の将来の保護証拠発行/双方停止とは別の、authorityを持たない合成計算の境界である。
+
+### 7.3 work費用
+
+| 課金点 | work |
+|---|---:|
+| 入口claim・model/budget・slice envelope | 各1、計3 |
+| scratch初期化 | 固定64を初期化前にまとめてprecharge |
+| carry-in | 各4（header・ID・layout/算術・publication） |
+| Event | header1＋固定operation row1＋ID lookup数＋publication1 |
+| final scratch保存則 | 64 slotに各1 |
+| end/軸関係・結果publication | 各1、計2 |
+
+Advanceは3、通常1 ID操作は4、Grow/旧link付きCommit/FailNoBlockは5。まとめたoperation row内は可変走査を含まない固定数のchecked演算/代入で、CPU命令数の保証ではない。`C=carry-in数`、`E=event数`として、成功経路と拒否prefixを覆う保守的上界は`133 + 4C + 5E`、構造上限で2949 work。各構造検査/checked計算は既存row内に含め、追加の上界関数はwork予約/受付証拠を返さない。
+
+初期化64のprechargeは1回のwork呼出しで、取消/期限はその前後で確認する。64要素初期化中の個々の命令で停止する保証ではない。final走査は各slotを個別課金する。停止時scratchは論理情報だけを持つCopy領域としてscope終了で破棄し、実source/予約を所有しない。実cleanupを通常work失敗で省略する経路は追加していない。
+
+上界はrun呼出しのwork消費を対象にする。Attempt::newは既存originのRc clone/時刻値の固定だけでwork呼出しを持たず、新しいheap allocationを行わない。この固定setup・入力所有・stack解放等のCPU/管理量を全体coverageで無償と認証したものではない。
+
+4軸は**入力された合成traceの要求量**。計算器自身のstack・Attemptの既存Rc clone・テスト入力Vec等を4軸へ再帰計上しないが、これらは将来の全体管理coverageの別費目として残す。実管理必要量の保護projection・allocator layout・固定領域・全phase統合・cap承認が未対応なので、5項目Unknownと完成parts発行不能を維持する。
+
+[MA-01合成検証記録](E2E_BEST_PRACTICE_R2_OL03_MA01_MANAGEMENT_SYNTHETIC_2026-10-24.md)を参照。§5の実装案のうち合成enum/算術・ローカルattempt・元workへの課金を先行実装し、保護証拠/実接続は実装していない。

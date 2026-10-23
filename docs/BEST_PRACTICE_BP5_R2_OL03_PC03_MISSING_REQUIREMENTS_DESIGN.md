@@ -24,6 +24,8 @@ Version: draft-0.1 / Date: 2026-10-24 / Source baseline: `6a451f3` / Status: 設
 
 [管理allocation複合契約・bootstrap境界draft-0.1](BEST_PRACTICE_BP5_R2_OL03_PC03_MANAGEMENT_BOOTSTRAP_CONTRACT.md)で、4軸を独立比較する次版契約案、carry-in/out・growの旧新重複、B4/S0・BX境界と初回MA-01合成計算器の範囲を具体化した。旧scalar契約は変更せず、実layout/保護projection/完全性/運用承認は未対応のままとする。
 
+同設計の現行draft-0.2 §7でMA-01のprivate bounded合成計算器を実装した。512イベント/64 ID・固定stack scratch・要求量4軸・work上界`133+4C+5E`を合成検証するsubsetであり、実allocator/保護必要量/完全性へ接続しない。元5項目Unknown・全体受付無効は不変。[検証記録](E2E_BEST_PRACTICE_R2_OL03_MA01_MANAGEMENT_SYNTHETIC_2026-10-24.md)を参照。
+
 `bytes`（I/O成功量）、`requested allocation bytes`（確保要求）、`live allocation bytes`（同時保持）、`work unit`、`resource owner`、`OS FD`は別単位である。枠の振替を禁止する。RSS・allocatorの実消費・カーネル内部量・OS呼出しのhard停止は本モデルだけでは保証しない。
 
 ## 3. phase・寿命・受付境界

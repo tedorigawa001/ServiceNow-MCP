@@ -2,6 +2,7 @@
 use super::*;
 use std::cell::RefCell;
 pub(in super::super::super) mod draft;
+mod management;
 
 const MODEL: &str = "bp5-r2-session-allocation-0.1";
 #[derive(Clone, Copy)]
