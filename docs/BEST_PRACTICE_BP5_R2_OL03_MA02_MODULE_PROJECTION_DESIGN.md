@@ -104,7 +104,7 @@ MA-01を合成oracleとして使う場合も、その計算器のrun費`133+4C+5
 ## 7. 実装順と合成検証条件
 
 1. **MA-02A：固定recipe/coverage内部型**。3費目の由来と未立証layoutを表し、模擬layoutから実証拠へ昇格しない純粋検査を合成試験。全体Unknownを維持する。
-2. **MA-02B：同estimateへの部分projection**。元claim・receipt/budget/profile結合と収集費を先に固定し、追加N走査/再parseなしを計数。layout未立証のsiteはUnknown、成功しても部分型だけ。
+2. **MA-02B：同estimateへの部分projection**。**着手条件**：§4のVec方針（1：現行library/allocator境界の要求layout上界を実装ソースと容量規則から固定し更新時に再検証する／2：要求layoutが事前に決まる専用固定確保adapterへ変更する）のどちらを採るかを先にレビュー・承認する。未決のままMA-02Bへ進む場合、A-P/profile countsのsiteは`Unmodeled`（bytes/peakはUnknown）として扱い、暫定的に`n×size_of<u64>`を要求layoutとして使わない。A-K（Rc）も同様に制御領域を含むlayout証拠が承認されるまでUnknownのままとする。元claim・receipt/budget/profile結合と収集費を先に固定し、追加N走査/再parseなしを計数。layout未立証のsiteはUnknown、成功しても部分型だけ。
 3. **後続：実layout証拠/確保前強制**。対象build/容量方針と前提issuerを承認し、固定moduleの失敗prefixを満たした範囲だけモデル化。全体coverage・PC-04/全体受付とは別工程。
 
 独立テストに必要なもの：
@@ -119,6 +119,6 @@ MA-01を合成oracleとして使う場合も、その計算器のrun費`133+4C+5
 
 ## 8. 未対応・承認待ち
 
-実layoutの信頼元・toolchain/library/ABIの固定/更新規則、Vec容量方針/Rc内部layout、catch不能OOM、全module/不正入力prefix/nested/固定領域、B0〜B4/BXと3round全体、保護context/receipt producer・PC-04、claim格納/費用と停止伝播、layout schema/上限/係数、実cap/clock/失効・全体work/payload/resource強制は未対応である。
+実layoutの信頼元・toolchain/library/ABIの固定/更新規則、Vec容量方針（§4の1/2の選択。MA-02Bの着手条件、§7）/Rc内部layout、catch不能OOM、全module/不正入力prefix/nested/固定領域、B0〜B4/BXと3round全体、保護context/receipt producer・PC-04、claim格納/費用と停止伝播、layout schema/上限/係数、実cap/clock/失効・全体work/payload/resource強制は未対応である。
 
 本書の調査はローカルソース/設計の読み取り照合。Rust標準libraryの非公開layoutを公式に保証された値として採用したものでも、実allocator/実機検証を実施したものでもない。5項目Unknown・全体受付無効を維持し、完成partsの発行条件を緩めない。
