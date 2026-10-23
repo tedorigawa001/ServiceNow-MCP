@@ -22,6 +22,8 @@ Version: draft-0.3 / Date: 2026-10-23 / Source baseline: `e230a7e` / Status: all
 
 ## 2. 未導出5項目と発行禁止境界
 
+[未導出5項目の詳細設計draft-0.1](BEST_PRACTICE_BP5_R2_OL03_PC03_MISSING_REQUIREMENTS_DESIGN.md)で、単位・費目所有・B0〜B4/BXの寿命・保護された導出元・独立oracleの条件を具体化した。設計のみであり、管理allocationの内訳契約・係数/承認cap・PC-04の継続は未確定。以下の5項目は引き続きUnknownで、完成partsは発行しない。
+
 | 項目 | 現在の状態 | PC-03の扱い |
 |---|---|---|
 | 外側owner | scan peak5だけでは全FD/外側held量を表さない | 不明を維持。scan live capから自動生成しない |

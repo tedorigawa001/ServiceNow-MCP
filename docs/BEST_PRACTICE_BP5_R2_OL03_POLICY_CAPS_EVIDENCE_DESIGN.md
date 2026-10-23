@@ -207,6 +207,8 @@ projectionは同estimate/ScanInputs/receipt/context/Initial scope・token/元bud
 
 ## 13. PC-03 one-shot parts配賦・証拠消費
 
+[未導出5項目の必要量詳細設計draft-0.1](BEST_PRACTICE_BP5_R2_OL03_PC03_MISSING_REQUIREMENTS_DESIGN.md)を追加した。外側owner/管理allocation/bootstrap bytes-work-liveの単位と寿命、同receipt/budget/profile由来、独立検証条件を設計した段階であり、必要量の実導出・完全性issuer・cap承認は未対応。特に管理allocationの件数/累積要求bytes/同時保持bytesを旧1 scalarで確認済みにしない。Unknown・全体受付無効を維持する。
+
 [PC-03詳細設計draft-0.3](BEST_PRACTICE_BP5_R2_OL03_PC03_PARTS_ALLOCATION_DESIGN.md)で、同projection/比較元capを借用するallocation view、実quotaを含まないScanPartsDraft、完全性証拠が揃った後だけ発行できるPolicyAllocationPartsを分離した。§11の第1subsetに続き§12で論理slotキーとcapの非実行写像を追加したが、未導出5項目はUnknownのままfinalizeをUnavailableで拒否する。PC-01の模擬Witness/CheckedやPC-02の部分結果だけで実ResourceInput/Quotasを作らない。
 
 partsの論理slotキー3個を先に固定し、PolicyCaps消費後のSlotsで実source originへ対応付ける案とした。後続roundのfresh tokenは各session round開始で別に結合し、Initial tokenを再使用しない。正本one-shot claimはbudget側、完成partsは同receipt/lineage/budget/started/cap issuerへ結合し、固定移譲口からbinding付き値として一度moveする。session configure後はpre-session guardを再利用しない。

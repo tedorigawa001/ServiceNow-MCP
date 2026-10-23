@@ -143,6 +143,8 @@ indexの初回roundは途中まで実施済みなので、`3×U_index_round - W_
 
 ## 7. 独立resource受付と失敗時停止
 
+[未導出5項目の必要量詳細設計draft-0.1](BEST_PRACTICE_BP5_R2_OL03_PC03_MISSING_REQUIREMENTS_DESIGN.md)で、bootstrap work/bytesを元全体台帳のphase部分集合とし、累積量とpeak・確保要求とresource ownerを分離した。B0〜B4/BX・allocation/解放の所有表と独立oracle条件は設計案で、全体other/管理量の数値導出・受付/予約への接続は未実装。既存部分費の単純加算やUnknownの0埋めを禁止し、全体受付は無効のままとする。
+
 workだけでは受付しない。元10秒の共有期限、全成功read bytesの2GiB、topology 16,384、metadata/name/EINTR・FD・管理allocation・解放予定量について、別々の残上界と所有者が必要。short read/EOF/再読6cycle/scan3回/A・Bを重複なく全て含め、単位間の振替を禁止する。OS呼出しのhard停止やRSSは依然未証明で、外側host/監督の停止保証を代替しない。
 
 Deadline/Cancelled/Expired/既存sticky failureを維持する。work不足でBindingへ畳まない。profile結合不一致は既存のBinding/Changed、未知model/未対応sourceはUnavailableへ有限分類する。未知項があればscan開始前に停止し、scanの途中で別モデルへ切り替えない。全resourceと未使用予約を解放し、guardで成功へ戻さない。cleanupで新しい失敗が起きても最初の理由を上書きせず、解放未完了は外側の終了報告へ別に伝える設計を要求する。
