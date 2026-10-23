@@ -1,8 +1,12 @@
 # BP-5 R-2 OL-03：record・scanを含む全体work上界と事前受付
 
-Version: draft-0.29 / Date: 2026-10-23 / Status: 準備claim入口1まで接続済み。Context/Records4・HeldSources2に続き独立ScanSlots片を合成計数、PolicyCaps未確認・準備入口未接続。供給証拠全体費・全体受付・統合other上界・通常strict差替え・運用承認は未対応。以下の各段階の記録と現行状態を区別する。
+Version: draft-0.30 / Date: 2026-10-23 / Status: Context/Records/HeldSourcesと独立ScanSlots片まで合成実装。PolicyCapsのcap/profile/Initial bootstrapを後続MDで具体化（未実装/未承認）。供給証拠全体費・全体受付・統合other上界・通常strict差替えは未対応。以下の各段階の記録と現行状態を区別する。
 
 ## 1. 範囲と停止状態
+
+[PolicyCapsEvidence詳細設計draft-0.1](BEST_PRACTICE_BP5_R2_OL03_POLICY_CAPS_EVIDENCE_DESIGN.md)で、承認cap/ModelBundle、限定bootstrap、同profile由来の必要量、ResourceInput/Quotas配賦、失敗停止を分離した。必要量のresource計算9行をcap承認と扱わず、payload/retry/外側held・管理量など未対応dimensionがあれば停止する。新規認証/保護projection/比較/移譲/保持費は未導出で、既存13/17/23候補へ固定余裕を足して全体上界にしない。
+
+Initial既存scope/decode/profileを同継続内でpolicy検査からInitial kernelへ引き継ぐ案には、安定した外側receipt所有者とtyped prechecked引継ぎの内部API移行が必要。現行値移譲型をそのまま使えるとはしない。3decode/6record検証・shared budgetを維持する費目所有表と全体残予定量が確定するまで、capの承認だけで全体受付を有効化しない。大規模shapeのwork不足をresource capで救済せず、上限を緩めない。
 
 [供給証拠設計draft-0.4 §13](BEST_PRACTICE_BP5_R2_OL03_SUPPLY_EVIDENCE_DESIGN.md)の独立ScanSlots片はprepare1、取得検証4、発行4、消費4＝13 work。各4は入口1＋固定3slot guard各1で、未知のcap/動的取得費を代表しない。§8の固定候補23へこの13を単純加算せず、将来の費目所有・統合順序を再設計する。PolicyCaps→Slotsの全体順序、既存17差分・3round/3decode・6record検証、全体受付無効を維持する。[検証記録](E2E_BEST_PRACTICE_R2_OL03_SCAN_SLOTS_EVIDENCE_SYNTHETIC_2026-10-23.md)を参照。
 

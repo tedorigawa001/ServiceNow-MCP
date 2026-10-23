@@ -1,6 +1,6 @@
 # BP-5 R-2 OL-03：保護producer生成入口・生成失敗の上位診断保持
 
-Version: draft-0.7 / Date: 2026-10-23 / Source baseline: `52acb6c` / Status: §11まで内部実装/合成検証。Context/Records/HeldSourcesと独立ScanSlots片を実装、PolicyCaps未確認・準備入口未接続。全producer/8段階全体・運用受付は未実装/未承認
+Version: draft-0.8 / Date: 2026-10-23 / Source baseline: `22d5757` / Status: §11まで内部実装/合成検証。Context/Records/HeldSourcesと独立ScanSlots片を実装。§13にPolicyCaps/Initial bootstrap案を追加（MDのみ）。全producer/準備接続・運用受付は未実装/未承認
 
 ## 1. 範囲と停止状態
 
@@ -217,6 +217,8 @@ claimは同じRc allocation内の状態拡張で、サイズ上限64 bytesの回
 
 ## 12. 供給証拠検査の詳細設計と先行subset
 
+後続の[PolicyCapsEvidence詳細設計](BEST_PRACTICE_BP5_R2_OL03_POLICY_CAPS_EVIDENCE_DESIGN.md)と§13は、必要profileの供給前提を追加する将来案であり、現行run_creation/PreparationEnvelopeへ実装済みとはしない。
+
 [供給証拠設計draft-0.4 §13](BEST_PRACTICE_BP5_R2_OL03_SUPPLY_EVIDENCE_DESIGN.md)でScanSlotsEvidenceの独立合成fragmentを実装した。固定factoryが作る3sourceのInitial/BeforeM4/AfterM4順・同identity・model・source自身の未開始状態を検査する。返すScanSlotsCheckedはPolicyCaps未確認の検証片で、PolicyCaps→Slotsという全体順序やPreparedSupplyを代替しない。準備入口/通常strictへ未接続。[検証記録](E2E_BEST_PRACTICE_R2_OL03_SCAN_SLOTS_EVIDENCE_SYNTHETIC_2026-10-23.md)を参照。
 
 [供給証拠設計draft-0.3 §12](BEST_PRACTICE_BP5_R2_OL03_SUPPLY_EVIDENCE_DESIGN.md)でHeldSourcesEvidenceを追加した。同じ保持resourceの新metadata、祖先/pathを前後2回照合した合成所有領域へ結び、ContextRecordsCheckedを一度消費する。発行1＋消費1 workは取得費と別に計数し、既存17差分・通常strictは維持する。準備入口/本番issuer/PolicyCaps/Slotsは未接続。[HeldSources検証記録](E2E_BEST_PRACTICE_R2_OL03_HELD_SOURCES_EVIDENCE_SYNTHETIC_2026-10-23.md)を参照。
@@ -226,3 +228,11 @@ claimは同じRc allocation内の状態拡張で、サイズ上限64 bytesの回
 同設計§11でContext/Recordsだけの内部型・合成取得/検証issuer・一度限りの発行/消費を実装した。immutable所有領域へ結び、消費時の追加I/O/再parseはない。run_creation/PreparationEnvelopeへは未接続で、現行17 work差分を維持する。合成発行/消費4 workと別途取得費を区別し、本番context/安全取得/承認capの検証完了とは扱わない。[検証記録](E2E_BEST_PRACTICE_R2_OL03_CONTEXT_RECORDS_EVIDENCE_SYNTHETIC_2026-10-23.md)を参照。
 
 本案は現行complete1を段階別検査/公開へ置換する候補で、固定部分の比較は17−1＋7＝23。発行/動的費を含めず、未計数の23を全体上界や承認capにしない。cap契約・必要数量profile供給と初回decodeの順序は未確定であり、循環した生成/scanや余分なdecodeで補わない。証拠型/検査器の実装・全体受付の有効化は行っていない。
+
+## 13. PolicyCapsとInitial bootstrapの接続前提（設計のみ）
+
+[PolicyCapsEvidence詳細設計draft-0.1 §7](BEST_PRACTICE_BP5_R2_OL03_POLICY_CAPS_EVIDENCE_DESIGN.md)では、承認済み限定BootstrapCaps→既存Initial decode/保護profile→必要量とcapの照合→PolicyCaps→Slots→session configure→同Initial kernelの継続、という順序を提案した。未確認capを作ってscan実測から承認を得る循環は採らない。
+
+現行の値移譲型EvidenceInputs/PreparationEnvelopeは、receiptを借用するInitial declaration/profileを保持したままmoveできない。安定した外側receipt保持領域、borrowed準備計画、固定callerとInitial prechecked/declaration引継ぎの内部API設計/承認が必要。自己参照/unsafe・4回目decode・profile claim resetで回避しない。これは将来の変更案で、現行run_creationの17差分や所有/解放を変更しない。
+
+承認capの責任者・有限数値/失効/配布、BootstrapCapsの強制、全必要dimensionとwork/保持量、6record/3decodeの所有表が未確定なら停止を維持する。独立ScanSlots片の成功をPolicyCaps確認済み・供給公開・全体受付へ変換しない。

@@ -1,6 +1,6 @@
 # BP-5 R-2 OL-03：保護producerの供給証拠検査・詳細設計
 
-Version: draft-0.4 / Date: 2026-10-23 / Source baseline: `52acb6c` / Status: Context/Records/HeldSourcesに続き§13のScanSlotsを独立合成fragmentで実装。PolicyCaps未確認、準備Envelope・通常strictへ未接続、本番issuer/運用承認なし
+Version: draft-0.5 / Date: 2026-10-23 / Source baseline: `22d5757` / Status: Context/Records/HeldSourcesと独立ScanSlots片まで合成実装。§14にPolicyCaps詳細設計を追加（MDのみ）。PolicyCaps未確認・準備Envelope/通常strict未接続、本番issuer/運用承認なし
 
 ## 1. 範囲と不変条件
 
@@ -149,6 +149,8 @@ model候補を`bp5-r2-supply-evidence-0.1`とする。未知modelは固定regist
 
 ## 10. 次の実装範囲と承認待ち
 
+PolicyCapsの承認原票・ModelBundle・必要profile/Initial bootstrap供給順序・失敗停止は[詳細設計draft-0.1](BEST_PRACTICE_BP5_R2_OL03_POLICY_CAPS_EVIDENCE_DESIGN.md)で具体化した。固定build内cap原票と限定BootstrapCapsを信頼元候補とし、全cap値・失効/配布・所有者API移行は未承認。原票/Witness/消費器の実装はまだない。
+
 ContextEvidenceとRecordsEvidenceの内部型/発行前提/消費検査を§11、HeldSourcesを§12、独立したScanSlots検証片を§13で合成issuerだけ実装した。PolicyCapsは承認cap契約/全体profile供給順序と対で設計・接続する。それまでは全体成功を主張しない。検査順5/6を実装順に合わせて入れ替えない。
 
 本番issuerの配置/可視性と必要検証、sourceに対応する所有stampの発行方法、外部保持領域の構築、cap承認主体/配布/失効、profile供給と初回decodeの順序、発行claim/保持量、正確な動的費/上界は未承認・未検証である。既存seal・型名・同値hashだけを根拠にこれらを既成事実にしない。
@@ -247,3 +249,11 @@ proofの同issuer/owner照合後、held bindingと固定3slot条件を再確認�
 合成source identityのRc allocation3、slot issuer identity1、test用計数observer1を作る。SlotBindingは既存identity/origin/source/lineageのRc cloneと外部BoundTarget借用を保持する。source値・配列・部分所有・解放/observer保持量を無料にしない。ScanSlotsEvidenceは32 bytes以下、bridge claimは64 bytes以下を合成型契約で確認する。
 
 通常strictの固定3位置/owner/collector、3roundの資源会計、3decode・6record検証、既存停止gateは変更していない。本番backendの供給証拠、PolicyCaps/必要profileの供給順序、全体work/resource上界、準備Envelope・上位診断への接続は未対応。[ScanSlots合成検証記録](E2E_BEST_PRACTICE_R2_OL03_SCAN_SLOTS_EVIDENCE_SYNTHETIC_2026-10-23.md)を参照。
+
+## 14. PolicyCaps詳細設計（MDのみ）
+
+[PolicyCapsEvidence詳細設計draft-0.1](BEST_PRACTICE_BP5_R2_OL03_POLICY_CAPS_EVIDENCE_DESIGN.md)では、ApprovedCaps、限定BootstrapScope、保護されたResourceRequirementWitness、PolicyCapsEvidence/CheckedとResourceInput/Quotas配賦partsを分けた。必要量がcap以内という算術結果だけで承認せず、同registry/build/model bundle・期限・receipt/held/source/初回profileへの結合を要求する。
+
+profileは現行RoundScope内の借用型で、値移動するproducerへ持ち出せない。初回の既存decode/estimateを同scope内でpolicy確認→Initial kernelへ引き継ぐ案と、安定した外側receipt所有者/固定callerへの内部API移行を承認待ちとして明記した。4回目のdecode・profile claim reset・自己参照/unsafe・scan実測後のcap承認は採らない。
+
+同設計のP0〜P6は将来の順序案であって現行経路ではない。cap/BootstrapCapsの有限数値、全dimension、動的費/保持量、全体work/resource受付が確定しない場合は停止する。PolicyCaps→Slots順、独立ScanSlots片の未承認状態、既存17差分・3decode/6record検証・全体受付無効を維持する。
