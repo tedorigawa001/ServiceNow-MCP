@@ -1,12 +1,12 @@
 # BP-5 R-2 OL-03：保護producerの供給証拠検査・詳細設計
 
-Version: draft-0.1 / Date: 2026-10-23 / Source baseline: `55cdf64` / Status: MDのみ、証拠型/発行元/検査器は未実装・未検証・運用未承認
+Version: draft-0.2 / Date: 2026-10-23 / Source baseline: `8bf52cb` / Status: §11のContext/Records内部subsetを合成issuerで実装。準備Envelope・通常strictへ未接続、本番issuer/運用承認なし
 
 ## 1. 範囲と不変条件
 
 [生成入口設計](BEST_PRACTICE_BP5_R2_OL03_PRODUCER_CREATION_DIAGNOSTICS_DESIGN.md)§11の準備claim・owner確保・同budget結合に続き、context/records/held-source/policy/3slotの**供給証拠**を検査する境界を設計する。既存sealの由来確認と、上流で何を検証したかの証明を分ける。
 
-全体受付無効・telemetry保留・APPROVED_REGISTRY=None・通常v2 Unavailable・gate92・DER/absence停止を維持する。実装・OS接続・実機操作・token発行・設定変更・本番policy投入・permit発行を含めない。通常strictは差し替えない。証拠検査の成功は署名検証/実行許可や現在時点のファイル不変性を意味しない。
+全体受付無効・telemetry保留・APPROVED_REGISTRY=None・通常v2 Unavailable・gate92・DER/absence停止を維持する。§11の合成内部subset以外の実装、OS接続・実機操作・token発行・設定変更・本番policy投入・permit発行を含めない。通常strictは差し替えない。証拠検査の成功は署名検証/実行許可や現在時点のファイル不変性を意味しない。
 
 任意の値をprivate wrapperやRcに包むだけでは、承認済みregistry・実効groups・安全な取得・正しいcapの証拠にはならない。発行時の検証、発行元への到達経路、同じ所有値との結合を成立条件に含める。
 
@@ -20,7 +20,7 @@ Version: draft-0.1 / Date: 2026-10-23 / Source baseline: `55cdf64` / Status: MD�
 | [RecordReceipt/RecordSource](../native/r2-outer/src/signature_boundary/positioned_read/metadata/transfer/topology/records.rs) | pins・lineage・binding、同sourceでの再読/検証契約 | 初回の安全取得・厳密検証と、そのsource所有値の供給証拠を結ぶ |
 | [ResourcePolicy](../native/r2-outer/src/signature_boundary/positioned_read/metadata/transfer/topology/records/strict/round_declaration/session/resources.rs) | session/round会計、cleanup予約 | 数量上界と承認capを分離し、信頼できるpolicy発行を要求する |
 
-発行元はいずれも将来案である。既存の合成constructorや[InspectedV2Records](../native/r2-outer/src/records_v2.rs)から自動変換する口を作らない。後者だけではindex pins/held/source/3slotを含む一式の証明にならない。
+本番発行元はいずれも将来案である。Context/Recordsの合成issuerだけを§11で実装した。既存の合成constructorや[InspectedV2Records](../native/r2-outer/src/records_v2.rs)から自動変換する口を作らない。後者だけではindex pins/held/source/3slotを含む一式の証明にならない。
 
 ## 3. 証拠の型・発行元・発行前提
 
@@ -152,3 +152,33 @@ model候補を`bp5-r2-supply-evidence-0.1`とする。未知modelは固定regist
 最初はContextEvidenceとRecordsEvidenceの**内部型/発行前提/消費検査**を合成issuerだけで実装する案とする。次にHeldSources/Slotsへ広げ、PolicyCapsは承認cap契約/全体profile供給順序と対で設計・接続する。それまでは全体成功を主張しない。検査順5/6を実装順に合わせて入れ替えない。
 
 本番issuerの配置/可視性と必要検証、sourceに対応する所有stampの発行方法、外部保持領域の構築、cap承認主体/配布/失効、profile供給と初回decodeの順序、発行claim/保持量、正確な動的費/上界は未承認・未検証である。既存seal・型名・同値hashだけを根拠にこれらを既成事実にしない。
+
+## 11. Context/Recordsの合成内部subset
+
+[supply_evidence.rs](../native/r2-outer/src/signature_boundary/positioned_read/metadata/transfer/topology/records/strict/scan_ops/connection_owner/protected_inputs/supply_evidence.rs)と専用context/records moduleに、非Clone/非Copy/非serdeのContextEvidence、RecordsEvidenceと消費済み段階を置いた。fieldは各moduleだけが構築し、発行関数・取得factory・意図的な不正fixture生成はすべてcfg(test)。本番issuer・外部入力口・ProtectedSupplyへの変換はない。
+
+### 11.1 発行前提とimmutable所有値
+
+合成factoryはcontext/targetを外部借用し、receiptとRecordSourceを**値で所有するEvidenceInputs**を先に構成してから検査する。source stampとissuer identityはこの所有領域の取得時に作る。検査成功まで外へ返さない。非testでは所有領域のconstructor、変更口、source/receipt抽出口を設けない。
+
+- Context：固定の合成承認registryに実bytesで照合し、registryは64KiB以下、groupsは既存MAX_GROUPS以下。合成実効groups `[80]` とuid501/gid80を用いる。callerのapprovedフラグではないが、**OS実効contextや本番registry承認の証拠ではない**。
+- Records：同sourceで既存のvalidate_receipt→bounded reread_bytes→clock_check→hash-first verify_recordsを通す。activation/ledger/registryの厳密JSON・binding・時刻等を検証し、Initialのindex decode/Node照合も行う。任意sourceをstampだけで承認しない。
+- 取得はContext/Recordsをまとめた合成factoryであり、独立した本番取得段階ではない。検査済みのimmutable所有領域との結合なので、消費時には可変長bytesの比較や再parse/I/Oを行わない。所有containerのmove前のreceipt/sourceアドレスを保存しない。
+
+### 11.2 発行・消費claimと順序
+
+同SharedBudgetの既存ProtectedBridgeClaimにcontext/recordsのissued/usedを各1個追加した。発行・消費の試行はwork/checkpointより先に不可逆claimを消費する。proofのdrop/失敗で再発行せず、別issuerを作り直しても同budgetのclaimを迂回できない。proofは固定model、同inspection origin/bridge/session/started、session未開始・未generated/未usedへ結合する。
+
+発行はContext→Records。消費はContextEvidence→ContextCheckedを必須とし、RecordsEvidenceがそれを値で消費してContextRecordsCheckedへ進む。両proofの同issuer・context保持領域・receipt lineage・source stamp・外部BoundTargetの同一性を照合する。チェック済み段階は供給公開・Closed・ack・実行permitではない。
+
+失敗は元理由をstickyにし、Supply(Context/ReceiptTarget)のInputRejectedへ保持する。別budgetへの混入は提示側と元claimの双方を停止する。proofはresourceを所有せずidentity参照だけを保持する。EvidenceInputsの固定field順でsource→receiptを破棄する。本subsetの拒否時点では解放/checkpoint診断はNotReachedであり、固定準備ownerのdiscard観測を捏造しない。
+
+### 11.3 費目・限界
+
+合成発行2＋消費2は各1 work、計4。取得検証の費用は別で、既存record/index/json/hash/I/O費を共有budgetへそのまま課金する。合成contextの入口/上限確認1、bounded registry比較1、groupごと1、record取得dispatch1を追加した。実効contextのOS取得費や全体上界を確定したものではない。
+
+EvidenceInputsのidentity/source stampに新規Rc allocation各1個、既存budget claimへbool4個、proof/checked段階には既存identityのRc参照を保持する。receipt/sourceの所有量・外部contextのbytes/groupsは別に残る。固定guardの成功を管理memory/取得費0と扱わない。
+
+既存run_creationの17 work差分、固定評価セット、通常strictは変更していない。合成factory内の初回index decodeは単独の発行前提試験専用で、通常経路へ4回目のdecodeを追加していない。将来は既存検証の所有結果へ統合し、3decode/6record検証と二重課金しない順序・上界を別途設計する。§8の23候補や全体受付は未有効化。
+
+[合成検証記録](E2E_BEST_PRACTICE_R2_OL03_CONTEXT_RECORDS_EVIDENCE_SYNTHETIC_2026-10-23.md)を参照。HeldSources/PolicyCaps/ScanSlots、準備Envelopeへの証拠接続、上位ownerへの取得前失敗/解放観測の合流は未対応である。

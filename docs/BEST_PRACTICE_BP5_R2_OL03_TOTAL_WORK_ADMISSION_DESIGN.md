@@ -1,8 +1,10 @@
 # BP-5 R-2 OL-03：record・scanを含む全体work上界と事前受付
 
-Version: draft-0.26 / Date: 2026-10-23 / Status: 準備claim入口1まで先行実装。供給証拠の追加費目候補を後続MDへ分離したが未計数。全体受付・統合other上界・通常strict差替え・運用承認は未対応。以下の各段階の記録と現行状態を区別する。
+Version: draft-0.27 / Date: 2026-10-23 / Status: 準備claim入口1まで接続済み。Context/Records合成subsetの発行/消費4を別途計数、準備入口未接続。供給証拠全体費・全体受付・統合other上界・通常strict差替え・運用承認は未対応。以下の各段階の記録と現行状態を区別する。
 
 ## 1. 範囲と停止状態
+
+[供給証拠設計draft-0.2 §11](BEST_PRACTICE_BP5_R2_OL03_SUPPLY_EVIDENCE_DESIGN.md)の独立合成subsetで、Context/Recordsの発行各1・消費各1、計4 workを確認した。取得/初回検証のrecord/index/hash/I/O費は別であり、4を全体上界にしない。既存run_creationと17差分は未変更、合成取得内のInitial decodeを通常の3decodeへ追加していない。準備入口への接続・本番issuer・動的費/管理resourceの統合とcap承認は未対応で、全体受付は無効を維持する。[合成検証記録](E2E_BEST_PRACTICE_R2_OL03_CONTEXT_RECORDS_EVIDENCE_SYNTHETIC_2026-10-23.md)を参照。
 
 現行接続との対応は[外側設計§14](BEST_PRACTICE_BP5_R2_OL03_OUTER_STRICT_ORCHESTRATOR_DESIGN.md)、次の保護入力・上位結果境界は[対設計draft-0.1 §8](BEST_PRACTICE_BP5_R2_OL03_PROTECTED_BRIDGE_DIAGNOSTICS_DESIGN.md)を参照する。既存coupling35＋K、新guard10候補、未確定のprotected supply/bridge claim/result owner費を分離し、旧段階の「台帳未実装」等を現行の全体受付状況と混同しない。全文の歴史的費目/状態の棚卸しと最新R/I/S/Oへの統合は未実施であり、今回上界を認証したとは扱わない。
 

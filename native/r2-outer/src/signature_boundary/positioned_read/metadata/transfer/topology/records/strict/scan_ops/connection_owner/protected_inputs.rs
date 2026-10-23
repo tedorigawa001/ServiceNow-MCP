@@ -6,6 +6,7 @@ use result_owner::{
     CreateStage, InputLocation, InputRejected, InputStage, StrictBridgeFailure, StrictBridgeResult,
 };
 pub(in super::super) mod preparation;
+pub(in super::super) mod supply_evidence;
 
 pub(in super::super) const MODEL_ID: &str = "bp5-r2-protected-bridge-0.1";
 struct Tagged<T> {

@@ -1,6 +1,6 @@
 # BP-5 R-2 OL-03：保護producer生成入口・生成失敗の上位診断保持
 
-Version: draft-0.4 / Date: 2026-10-23 / Source baseline: `55cdf64` / Status: §11まで内部実装/合成検証。§12に供給証拠検査の後続詳細設計を追加（MDのみ）。全producer/8段階全体・運用受付は未実装/未承認
+Version: draft-0.5 / Date: 2026-10-23 / Source baseline: `8bf52cb` / Status: §11まで内部実装/合成検証。§12のContext/Recordsは独立合成subsetを実装、準備入口には未接続。全producer/8段階全体・運用受付は未実装/未承認
 
 ## 1. 範囲と停止状態
 
@@ -215,8 +215,10 @@ claimは同じRc allocation内の状態拡張で、サイズ上限64 bytesの回
 
 `complete`入口の`PreparationAttempt`照合のうち、origin/claim/session/startedの一致は、`run_creation`が`start_preparation`と`complete`へ同じbudgetを渡すため現行構造では常に成立する。後から別の呼出し元を追加した場合の防御として残す。実質的な検査は、fresh（準備claimの一度限り）、同供給系列、claimのgenerated/used状態、`inspection(seal, b)`が担う。
 
-## 12. 供給証拠検査の詳細設計（MDのみ）
+## 12. 供給証拠検査の詳細設計と先行subset
 
-[供給証拠検査draft-0.1](BEST_PRACTICE_BP5_R2_OL03_SUPPLY_EVIDENCE_DESIGN.md)に、発行元専用のContext/Records/HeldSources/PolicyCaps/ScanSlots証拠、payloadと外部保持領域への結合、証拠の一度限り消費、固定順検査・拒否分類・解放責務を整理した。既存sealや単なる型wrapper/Rcは検証済み供給元の代替にならず、本番issuer不在は停止する。
+[供給証拠検査draft-0.2](BEST_PRACTICE_BP5_R2_OL03_SUPPLY_EVIDENCE_DESIGN.md)に、発行元専用のContext/Records/HeldSources/PolicyCaps/ScanSlots証拠、payloadと外部保持領域への結合、証拠の一度限り消費、固定順検査・拒否分類・解放責務を整理した。既存sealや単なる型wrapper/Rcは検証済み供給元の代替にならず、本番issuer不在は停止する。
+
+同設計§11でContext/Recordsだけの内部型・合成取得/検証issuer・一度限りの発行/消費を実装した。immutable所有領域へ結び、消費時の追加I/O/再parseはない。run_creation/PreparationEnvelopeへは未接続で、現行17 work差分を維持する。合成発行/消費4 workと別途取得費を区別し、本番context/安全取得/承認capの検証完了とは扱わない。[検証記録](E2E_BEST_PRACTICE_R2_OL03_CONTEXT_RECORDS_EVIDENCE_SYNTHETIC_2026-10-23.md)を参照。
 
 本案は現行complete1を段階別検査/公開へ置換する候補で、固定部分の比較は17−1＋7＝23。発行/動的費を含めず、未計数の23を全体上界や承認capにしない。cap契約・必要数量profile供給と初回decodeの順序は未確定であり、循環した生成/scanや余分なdecodeで補わない。証拠型/検査器の実装・全体受付の有効化は行っていない。

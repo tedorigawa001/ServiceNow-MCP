@@ -15,6 +15,7 @@ mod protected_inputs;
 mod records_stage;
 mod result_owner;
 mod round_kernel;
+mod supply_evidence;
 mod topology_adapter;
 
 fn caps() -> ledger_test::Policy {

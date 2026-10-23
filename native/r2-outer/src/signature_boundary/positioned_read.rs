@@ -66,6 +66,10 @@ struct ScanSessionClaim {
 // Independent of session creation: preparation/packaging/use do not consume its claim.
 #[derive(Default)]
 struct ProtectedBridgeClaim {
+    context_evidence_issued: Cell<bool>,
+    records_evidence_issued: Cell<bool>,
+    context_evidence_used: Cell<bool>,
+    records_evidence_used: Cell<bool>,
     preparation_started: Cell<bool>,
     generated: Cell<bool>,
     used: Cell<bool>,
