@@ -16,6 +16,7 @@ const EINTR_RETRIES: u8 = 8;
 const WORK_LIMIT: u64 = 1_000_000;
 
 mod allocation_claim;
+mod management_claim;
 #[cfg(test)]
 mod work_audit;
 // Test instrumentation has no production state, work charge, reservation or authority.
@@ -69,6 +70,7 @@ struct ScanSessionClaim {
 #[derive(Default)]
 struct ProtectedBridgeClaim {
     allocation: Cell<allocation_claim::State>,
+    management_projection: Cell<management_claim::State>,
     context_evidence_issued: Cell<bool>,
     records_evidence_issued: Cell<bool>,
     context_evidence_used: Cell<bool>,
@@ -151,6 +153,11 @@ impl<'a> SharedBudget<'a> {
         self.failed = Some(reason);
         // Any started bridge phase, including evidence issued before preparation, must see stops.
         let claim = &self.protected_bridge_claim;
+        if claim.management_projection.get() != management_claim::State::Fresh {
+            claim
+                .management_projection
+                .set(management_claim::State::Stopped(reason));
+        }
         if claim.context_evidence_issued.get()
             || claim.records_evidence_issued.get()
             || claim.held_evidence_issued.get()
@@ -158,6 +165,7 @@ impl<'a> SharedBudget<'a> {
             || claim.slots_evidence_issued.get()
             || claim.preparation_started.get()
             || claim.generated.get()
+            || claim.management_projection.get() != management_claim::State::Fresh
             || claim.allocation.get() != allocation_claim::State::Fresh
         {
             self.protected_bridge_claim.stop_allocation(reason);

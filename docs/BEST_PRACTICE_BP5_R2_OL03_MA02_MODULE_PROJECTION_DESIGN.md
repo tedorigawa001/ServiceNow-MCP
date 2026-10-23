@@ -1,6 +1,6 @@
 # BP-5 R-2 OL-03 MA-02：固定module実確保モデル・保護必要量projection詳細設計
 
-Version: draft-0.2 / Date: 2026-10-24 / Source baseline: `433fe96` / Status: MA-02A固定recipe/coverage整合検査を合成実装。実layout証拠・保護projection未実装、5項目Unknown
+Version: draft-0.3 / Date: 2026-10-24 / Source baseline: `3927c4e` / Status: MA-02AとMA-02Bの同estimate部分projection/専用claimを合成実装。実layout・完全管理必要量・運用接続未対応、5項目Unknown
 
 ## 1. 範囲・参照した状態
 
@@ -8,7 +8,7 @@ Version: draft-0.2 / Date: 2026-10-24 / Source baseline: `433fe96` / Status: MA-
 
 基準`60f9268`にはMA-01のscratch初期化前のworst-case work残量事前検査が含まれる。既に消費した入口3 workを除いた上界を同じ元budgetへ照合するが、予約・layout認証・全体受付の証明ではない。今回はこの実装を変更しない。本書の新規型名/model/係数は案であり、現在のAPIの説明ではない。
 
-§1〜§8の将来設計と§9のMA-02A実装を区別する。Unknown・全体受付無効・telemetry保留、APPROVED_REGISTRY=None、通常v2 Unavailable/gate92、DER/absence停止を維持する。本番cap投入・完成parts発行・通常strict差替え・OS接続・実機操作・token発行・設定変更・permit発行を含めない。
+§1〜§8の将来設計と§9〜§10のMA-02A/B実装を区別する。Unknown・全体受付無効・telemetry保留、APPROVED_REGISTRY=None、通常v2 Unavailable/gate92、DER/absence停止を維持する。本番cap投入・完成parts発行・通常strict差替え・OS接続・実機操作・token発行・設定変更・permit発行を含めない。
 
 ## 2. 「実確保モデル」が証明する量と証明しない量
 
@@ -152,3 +152,38 @@ model/coverage不足・real/whole claimはUnavailable、descriptor identity/内�
 模擬fixtureのbytes・ABI相当条件はRust Vec/Rcの実layout値ではない。模擬関数は本番buildに存在せず、実registry/issuerも作っていない。MA-02Aには保護projection・専用one-shot claim・実moduleの数量導出は含めず、§5〜§7のMA-02B以降で別途対応する。
 
 [MA-02A合成検証記録](E2E_BEST_PRACTICE_R2_OL03_MA02A_RECIPE_SYNTHETIC_2026-10-24.md)を参照。固定catalogの整合性とUnknown維持を確認する試験で、layout/全体coverage/運用capの検証ではない。
+
+## 10. MA-02B：同estimateの部分projection・budget-owned claim
+
+[management_projection.rs](../native/r2-outer/src/signature_boundary/positioned_read/metadata/transfer/topology/records/strict/round_declaration/scan_inputs/profile/calculator/management_projection.rs)に`ManagementProjection`を追加した。modelは`bp5-r2-estimate-management-projection-0.1`。同ScanWorkEstimateを実borrowしてそのprofile/scope/receipt系列を維持し、layout不明のまま既知の部分形状だけを返す。通常strict/運用producer/collector dispatchには接続していない。
+
+### 10.1 専用claimと停止伝播
+
+[management_claim.rs](../native/r2-outer/src/signature_boundary/positioned_read/management_claim.rs)の状態を元ProtectedBridgeClaim内へ置く。Fresh→Started→Issued→Consuming→Consumed、任意失敗でStopped(first_reason)。生成/消費は最初のfallible work前に試行を消費し、begin入口が許す組はFresh→StartedとIssued→Consumingだけ。Stoppedを一時的にも上書きせず、reset/retry口を作らない。
+
+claimは値内部/estimateごとのboolではなく元budgetの正本に一つ。同budgetの別estimate・Drop/forget後・消費後も再生成できない。既存resource_projected、profile_started、session/bridge生成claimは共用/resetしない。resource projectionとの同時borrow・どちらを先に生成する順序も合成確認した。両borrowを閉じた後に元estimateをmoveできる。
+
+SharedBudget::stopはmanagement claimが非Freshなら同claimにも第一理由を保存する。他evidence/session未開始でも外部Deadline/Cancelled/HashMismatch等が元ownerへ見える。失敗合流は既存resource projectionと共通のstop_ownerを使い、別budget提示時には元ownerと提示budget双方を停止する。元allocation側のStopped記録は共通の失敗latchとしてのみ使い、成功時にはallocation/parts/sessionを開始しない。
+
+### 10.2 部分量とrecipeの保持
+
+MA-02Aの固定recipe検査23 workを実施し、追加1 workで`RecipeFacts`を所有値へ写す。同関数内のCatalog borrowを自己参照として持ち出さない。factsにはUnmodeled3件とmissing8件を保持し、模擬layoutのcfg(test)型との変換はない。facts再照合は固定1 work（3+8件の固定比較）で、実layout/buildを認証しない。
+
+同estimateのprofileからnormal entries nを読み、n<=100000の範囲でchecked `n×8`を**u64要素payload**として計算する。これはVecの要求capacity/allocator上界ではない。既知のキー確保site数4・inline scalar数53も保持するが、確保成功回数・Rc bytes・親owner/全体管理量には読み替えない。実4軸/ManagementRequirement/完全性証拠は返さず、全5項目Unknown・finalize拒否は不変。
+
+再decode・profile再収集・N件走査・新しいheap確保はない。固定facts/shapeはinline保持で、元ownerの既存Rcを利用する。追加claimの固定領域と保持量は将来の全体管理coverageへ残す。対象buildで既存ProtectedBridgeClaimの64 bytes以下の境界試験も維持したが、RSS/全メモリ保証ではない。
+
+### 10.3 binding・費目・消費
+
+既存require_estimateの6 workを再利用する。内訳はprofile.require5（同inputs/scope/origin/started/retry）、calculator/kernel model・Initial/未開始・同bridge owner1。profile/ScanInputsの既存guardが同receipt/lineage/target/context/元round tokenへ結合する。さらに消費時は元estimateのptr同一性とmodel・専用claimのConsumingを確認し、同値の別estimateでは代替できない。
+
+| 経路 | 実計数work |
+|---|---:|
+| 生成 | 35 = claim1＋既存guard6＋recipe facts24＋固定shape3＋publication1 |
+| 消費 | 13 = claim1＋既存guard6＋estimate/model/state1＋facts1＋shape3＋publication1 |
+
+消費はprojectionを値で受け取り、成功しても`()`だけを返す。部分検査の消費済みという意味で、証拠/parts/cleanup/permitではない。budget claimにより、テストで同じ値の偽wrapperを作っても二重消費を拒否する。shape/revision/元receipt/profile/budget不一致、model不明、retry変更、開始済み/後続round、期限/取消/先行停止は元のBinding/Unavailable/Changed/Deadline/Cancelled等で停止する。
+
+新固定費35/13を旧18/45や全体上界へ単純加算して受付を承認しない。既存MA-02A検査のread-only残量precheckは維持するが、MA-02B全体のwork予約/独立resource受付は追加していない。途中失敗は元budgetへlatchし、実resource/cleanup証拠は所有/発行しない。
+
+[MA-02B合成検証記録](E2E_BEST_PRACTICE_R2_OL03_MA02B_PROJECTION_SYNTHETIC_2026-10-24.md)を参照。実layout/完全coverage/承認cap・PC-04の安定owner/Initial継続・実producer接続は未対応。compile-failによる寿命境界の独立検証も未実施で、非Clone/serde試験や借用を閉じた後のmove成功と区別する。

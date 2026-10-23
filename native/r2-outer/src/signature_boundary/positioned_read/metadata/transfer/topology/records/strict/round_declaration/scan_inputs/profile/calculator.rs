@@ -1,6 +1,7 @@
 //! Pure fixed-row estimate; never a work reservation or scan/execution permit.
 use super::*;
 mod arithmetic;
+pub(in super::super::super::super) mod management_projection;
 pub(in super::super::super::super) mod projection;
 mod use_guard;
 use arithmetic::{add, mul, sub};

@@ -207,6 +207,60 @@ impl ModuleRecipeReview<'_, '_> {
     }
 }
 
+// Owned recipe facts only: no self-referential Catalog, layout proof or raw public constructor.
+pub(in super::super::super::super) struct RecipeFacts {
+    model: &'static str,
+    layouts: [LayoutKnowledge; 3],
+    missing: [Missing; 8],
+}
+pub(in super::super::super::super) fn inspect_fixed(
+    b: &mut SharedBudget<'_>,
+) -> Result<RecipeFacts, Failure> {
+    let entries = fixed_entries();
+    let catalog = Catalog {
+        model: RECIPE_MODEL,
+        entries: &entries,
+        claim: CoverageClaim {
+            recipe_sites: 7,
+            real_layout_sites: 0,
+            whole_management: false,
+        },
+    };
+    let result = review(&catalog, b)?;
+    work(b)?; // owned fixed facts publication; original 23-work review is unchanged
+    b.checkpoint()?;
+    Ok(RecipeFacts {
+        model: RECIPE_MODEL,
+        layouts: result.layouts,
+        missing: result.missing,
+    })
+}
+impl RecipeFacts {
+    pub(in super::super::super::super) fn require(
+        &self,
+        b: &mut SharedBudget<'_>,
+    ) -> Result<(), Failure> {
+        work(b)?; // bounded 3+8 fixed coverage checks, never a source/layout attestation
+        if self.model != RECIPE_MODEL
+            || self.layouts != [LayoutKnowledge::Unmodeled; 3]
+            || self.missing
+                != [
+                    Missing::CountsLayout,
+                    Missing::KeysLayout,
+                    Missing::InlineParent,
+                    Missing::ControlOwners,
+                    Missing::ParserNested,
+                    Missing::Collector,
+                    Missing::Discard,
+                    Missing::WholeLifetime,
+                ]
+        {
+            return b.stop(Failure::Unavailable);
+        }
+        b.checkpoint()
+    }
+}
+
 // Mock layout checks exist ONLY in tests, in a distinct type with no conversion to runtime review.
 #[cfg(test)]
 mod mock_layout {

@@ -1,7 +1,7 @@
 //! MA-01: bounded SYNTHETIC trace arithmetic only. Never requirement evidence or a permit.
 use super::*;
 use crate::json::shared::Budget;
-mod recipes;
+pub(in super::super::super) mod recipes;
 
 const MODEL: &str = "bp5-r2-management-trace-0.1";
 const MAX_EVENTS: usize = 512;

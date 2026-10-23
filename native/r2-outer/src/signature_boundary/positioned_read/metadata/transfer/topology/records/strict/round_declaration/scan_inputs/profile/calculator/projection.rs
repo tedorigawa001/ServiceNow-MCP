@@ -12,7 +12,7 @@ pub(in super::super::super::super::super) struct ScanResourceRequirements<'e, 'p
     model: &'static str,
     comparison_started: std::cell::Cell<bool>,
 }
-fn require_estimate(
+pub(super) fn require_estimate(
     e: &ScanWorkEstimate<'_, '_, '_, '_, '_>,
     inputs: &ScanInputs<'_, '_, '_, '_>,
     scope: &RoundScope<'_>,
@@ -45,7 +45,7 @@ fn finish<T>(
         Err(e) => Err(stop_owner(&estimate.resource_owner, e, b)),
     }
 }
-fn stop_owner(
+pub(super) fn stop_owner(
     owner: &crate::signature_boundary::positioned_read::ProtectedBridgeClaim,
     e: Failure,
     b: &mut SharedBudget<'_>,
@@ -56,7 +56,15 @@ fn stop_owner(
         .or(owner.allocation.get().failure())
         .unwrap_or(e);
     let reason = b.stop::<()>(reason).unwrap_err();
-    owner.stop_allocation(reason)
+    let reason = owner.stop_allocation(reason);
+    if owner.management_projection.get()
+        != crate::signature_boundary::positioned_read::management_claim::State::Fresh
+    {
+        owner.management_projection.set(
+            crate::signature_boundary::positioned_read::management_claim::State::Stopped(reason),
+        );
+    }
+    reason
 }
 pub(in super::super::super::super::super) fn project<'e, 'p, 'i, 'd, 's, 'r>(
     estimate: &'e ScanWorkEstimate<'p, 'i, 'd, 's, 'r>,
