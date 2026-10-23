@@ -53,7 +53,7 @@ struct ResourceRequirementWitness {
     coverage: u64,
     values: [u64; DIMENSIONS],
 }
-struct PolicyIdentity<'s> {
+pub(super) struct PolicyIdentity<'s> {
     binding: held::SlotBinding<'s>,
     model: &'static str,
     authority: Rc<()>,
@@ -71,6 +71,53 @@ pub(in super::super::super::super) struct PolicyCapsEvidence<'s> {
 }
 pub(in super::super::super::super) struct PolicyCapsChecked<'s> {
     _identity: Rc<PolicyIdentity<'s>>,
+}
+impl<'s> PolicyIdentity<'s> {
+    pub(super) fn binding(&self) -> &held::SlotBinding<'s> {
+        &self.binding
+    }
+}
+impl<'s> PolicyCapsChecked<'s> {
+    // Slots consumes this (never HeldSourcesChecked), so PolicyCaps -> Slots is the only order.
+    pub(super) fn into_identity(self) -> Rc<PolicyIdentity<'s>> {
+        self._identity
+    }
+    #[cfg(test)]
+    pub(in super::super::super::super) fn foreign_fixture(&self) -> Self {
+        let id = &self._identity;
+        Self {
+            _identity: Rc::new(PolicyIdentity {
+                binding: id.binding.duplicate_fixture(),
+                model: MODEL,
+                authority: id.authority.clone(),
+                profile: id.profile.clone(),
+                issued_here: std::cell::Cell::new(true),
+            }),
+        }
+    }
+}
+impl<'s, R: ResourceOrigin, T, S> PolicyInputs<'s, R, T, S> {
+    pub(super) fn owner(&self) -> &Rc<Identity> {
+        self.identity.binding.owner()
+    }
+    // Fixed identity check of a consumed PolicyCaps stage; no work and no cap re-validation.
+    pub(super) fn require_checked(
+        &self,
+        id: &Rc<PolicyIdentity<'s>>,
+        b: &mut SharedBudget<'_>,
+    ) -> Result<(), Failure> {
+        if !Rc::ptr_eq(id, &self.identity)
+            || !id.issued_here.get()
+            || !id.binding.owner().bridge.policy_evidence_used.get()
+        {
+            return Err(Failure::Binding);
+        }
+        id.binding.require(&self.held, b)
+    }
+    #[cfg(test)]
+    pub(super) fn held_mut(&mut self) -> &mut held::HeldEvidenceInputs<'s, R, T, S> {
+        &mut self.held
+    }
 }
 fn validate<R: ResourceOrigin, T, S>(
     p: &PolicyInputs<'_, R, T, S>,

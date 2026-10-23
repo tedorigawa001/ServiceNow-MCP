@@ -259,3 +259,9 @@ profileは現行RoundScope内の借用型で、値移動するproducerへ持ち�
 同設計のP0〜P6は将来の順序案であって現行経路ではない。cap/BootstrapCapsの有限数値、全dimension、動的費/保持量、全体work/resource受付が確定しない場合は停止する。PolicyCaps→Slots順、独立ScanSlots片の未承認状態、既存17差分・3decode/6record検証・全体受付無効を維持する。
 
 PC-01はcfg(test)の固定合成issuerだけでApprovedCaps/模擬Witness/PolicyCapsEvidenceを発行し、同HeldSourcesChecked・budgetへの結合、承認/モデル/期限・40独立項目、不可逆issued/used、Slots先行拒否を確認する。prepare1＋issue44＋consume44の89 workは独立subsetの実計数であり、全体上界ではない。checkedから配賦/Slots/準備Envelopeへ進むAPIはない。実profile projection・本番cap registry・実clock・parts配賦・P0〜P6は未対応。[PolicyCaps合成検証記録](E2E_BEST_PRACTICE_R2_OL03_POLICY_CAPS_EVIDENCE_SYNTHETIC_2026-10-23.md)を参照。
+
+## 15. PolicyCaps→Slotsの型による順序固定（レビュー後修正）
+
+§13のScanSlots片と§14のPolicyCaps片は、どちらも`bind_slots`で`HeldSourcesChecked`を消費していた。held消費はbudgetごとに一度のため両者は排他で、Policy→Slotsへつなげなかった。修正後、Slotsの準備入口は`HeldSourcesChecked`ではなく消費済みの`PolicyCapsChecked`を値で受け取り、`ScanSlotInputs`は`PolicyInputs`（held入力を含む）を所有する。Slots側に`HeldSourcesChecked`を受ける口はなく、Context→Records→HeldSources→PolicyCaps→Slotsだけが型で成立する。Policy側の「Slots先行ならBinding」も維持する。
+
+Slotsの準備・取得・発行・消費は、`PolicyInputs::require_checked`で同じPolicyIdentity（ptr一致）・発行済み・`policy_evidence_used`・held binding再照合を確認する。capの40次元比較は再実行しない（消費済み段階のidentity照合のみ）。新規workはなく、Slotsの費目（準備1＋取得4＋発行4＋消費4）は不変。`ScanSlotsChecked`のDebugは`after_policy_caps_not_supply_or_permit`へ変更した。PolicyAllocationParts/ResourceInput/Quotas発行、準備Envelope・通常strictへの接続、全体受付は引き続き未対応である。

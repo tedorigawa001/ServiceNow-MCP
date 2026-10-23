@@ -2,7 +2,9 @@ use super::*;
 use crate::signature_boundary::positioned_read::metadata::transfer::topology::{
     records::tests::Fake as RecordFake, tests as topo,
 };
-use scan_ops::connection_owner::protected_inputs::supply_evidence::{self as evidence, slots};
+use scan_ops::connection_owner::protected_inputs::supply_evidence::{
+    self as evidence, policy, slots,
+};
 use scan_ops::connection_owner::result_owner::{
     InputLocation, InputRejected, StrictBridgeFailure, SupplyStage,
 };
@@ -33,8 +35,11 @@ macro_rules! held_ready {
         let inputs=evidence::synthetic::acquire(&context,&bound,f.receipt,record_source,&mut $b).unwrap();
         let c=inputs.issue_context(&mut $b).unwrap(); let r=inputs.issue_records(&mut $b).unwrap();
         let c=c.consume(&inputs,&mut $b).unwrap(); let checked=r.consume(c,&inputs,&mut $b).unwrap();
-        let $held=evidence::held::acquire(inputs,attach(&bound,opened).unwrap(),topology,source,&mut $b).unwrap();
-        let $checked=$held.issue(&mut $b).unwrap().consume(checked,&$held,&mut $b).unwrap();
+        let held=evidence::held::acquire(inputs,attach(&bound,opened).unwrap(),topology,source,&mut $b).unwrap();
+        let checked=held.issue(&mut $b).unwrap().consume(checked,&held,&mut $b).unwrap();
+        // Slots now requires the consumed PolicyCaps stage: Context->Records->Held->Policy->Slots.
+        let $held=policy::synthetic::prepare(held,checked,&mut $b).unwrap();
+        let $checked=$held.issue(&mut $b).unwrap().consume(&$held,&mut $b).unwrap();
         $body
         assert!(state.borrow().trace.is_empty());
     }};
@@ -54,7 +59,7 @@ fn slots_evidence_validates_three_fixed_unstarted_sources_without_starting_scans
         let checked = p.consume(&inputs, &mut b).unwrap();
         assert_eq!(
             format!("{checked:?}"),
-            "ScanSlotsChecked(independent_fragment_policy_unverified)"
+            "ScanSlotsChecked(after_policy_caps_not_supply_or_permit)"
         );
         assert_eq!(audit.operations(), 0);
         assert_eq!(b.json_work - spent, 13);

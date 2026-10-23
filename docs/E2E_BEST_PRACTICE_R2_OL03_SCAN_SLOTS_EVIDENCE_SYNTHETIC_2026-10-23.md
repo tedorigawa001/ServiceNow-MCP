@@ -60,3 +60,7 @@ Rust全体 **951 passed / 5 suites**（baseline 943＋新規8）。Clippy警告�
 ## 5. 残課題
 
 PolicyCapsの承認主体・必要profile/初回decodeとの順序、本番backend/issuer、準備Envelope・上位診断の接続、全体work/resource上界・受付は未対応。全体受付無効・telemetry保留・APPROVED_REGISTRY=None・通常v2 Unavailable・gate92・DER/absence停止を維持する。OS接続・実機操作・token発行・設定変更・permit発行は本工程の対象外。
+
+## 6. 追補：PolicyCaps後段への付け替え（2026-10-23）
+
+Slots準備は`PolicyCapsChecked`を値で消費する形へ変更した（[供給証拠設計§15](BEST_PRACTICE_BP5_R2_OL03_SUPPLY_EVIDENCE_DESIGN.md)）。試験fixtureはContext→Records→HeldSources→PolicyCaps（発行・消費）を通してからSlotsへ入る。外部checked差替え試験は`PolicyCapsChecked`の別identity複製で行う。PolicyIdentityのptr照合を一時的に外す変異で同試験が失敗することを確認し、復元した。Slots固有の費目・境界試験は変更なしで全件成功。Rust全体963 passed（件数不変）。

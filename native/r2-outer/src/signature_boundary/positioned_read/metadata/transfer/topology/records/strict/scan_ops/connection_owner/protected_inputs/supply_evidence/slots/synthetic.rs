@@ -28,7 +28,7 @@ fn change<R: ResourceOrigin, T, S>(
             inputs.slots[i].as_mut().unwrap().source.origin = origin;
         }
         Fault::Model(i) => inputs.slots[i].as_mut().unwrap().source.model = "unknown",
-        Fault::Held(i) => inputs.held.corrupt_fixture(i),
+        Fault::Held(i) => inputs.policy.held_mut().corrupt_fixture(i),
         Fault::Unissued => inputs.identity.issued_here.set(false),
     }
 }
@@ -70,14 +70,15 @@ impl<R, T, S> std::fmt::Debug for Candidate<'_, R, T, S> {
     }
 }
 pub(in super::super::super::super::super) fn prepare<'s, R: ResourceOrigin, T, S>(
-    held: held::HeldEvidenceInputs<'s, R, T, S>,
-    checked: held::HeldSourcesChecked,
+    policy: policy::PolicyInputs<'s, R, T, S>,
+    checked: policy::PolicyCapsChecked<'s>,
     b: &mut SharedBudget<'_>,
 ) -> Result<Candidate<'s, R, T, S>, InputRejected> {
-    let owner = held.slot_owner().clone();
-    let binding = (|| {
-        work(b)?;
-        held.bind_slots(checked, b)
+    let owner = policy.owner().clone();
+    let checked = checked.into_identity();
+    (|| {
+        work(b)?; // O.slots_prepare: same consumed PolicyCaps stage; no cap re-validation.
+        policy.require_checked(&checked, b)
     })()
     .map_err(|e| rejected(&owner, SupplyStage::Slots, e, b))?;
     let audit = Audit::default();
@@ -89,7 +90,7 @@ pub(in super::super::super::super::super) fn prepare<'s, R: ResourceOrigin, T, S
     });
     let origins = std::array::from_fn(|i| slots[i].as_ref().unwrap().source.origin().clone());
     let identity = Rc::new(SlotIdentity {
-        binding,
+        policy: checked,
         origins,
         model: MODEL,
         issued_here: std::cell::Cell::new(false),
@@ -97,7 +98,7 @@ pub(in super::super::super::super::super) fn prepare<'s, R: ResourceOrigin, T, S
     Ok(Candidate {
         inputs: ScanSlotInputs {
             slots,
-            held,
+            policy,
             identity,
         },
         audit,
@@ -148,14 +149,14 @@ impl<'s, R: ResourceOrigin, T, S> ScanSlotInputs<'s, R, T, S, SyntheticBackend> 
         &self,
         b: &mut SharedBudget<'_>,
     ) -> Result<ScanSlotsEvidence<'s>, InputRejected> {
-        let claim = &self.identity.binding.owner().bridge;
+        let claim = &self.identity.binding().owner().bridge;
         let fresh = !claim.slots_evidence_issued.replace(true);
         if !Rc::ptr_eq(claim, &b.protected_bridge_claim) {
             b.protected_bridge_claim.slots_evidence_issued.set(true);
         }
         let result = (|| {
             work(b)?;
-            check_identity(self.identity.binding.owner(), b)?;
+            check_identity(self.identity.binding().owner(), b)?;
             if !fresh {
                 return Err(Failure::Binding);
             }

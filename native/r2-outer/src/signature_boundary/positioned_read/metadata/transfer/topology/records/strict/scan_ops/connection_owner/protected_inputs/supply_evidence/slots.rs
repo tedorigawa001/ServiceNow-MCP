@@ -1,4 +1,4 @@
-//! Independent slot-evidence fragment. PolicyCaps remains unverified; no supply publication.
+//! Slot evidence after a consumed PolicyCaps stage. No allocation parts or supply publication.
 use super::*;
 mod backend;
 use backend::Backend;
@@ -11,14 +11,14 @@ struct Slot<B> {
     round: Round,
 }
 struct SlotIdentity<'s> {
-    binding: held::SlotBinding<'s>,
+    policy: Rc<policy::PolicyIdentity<'s>>,
     origins: [Rc<()>; 3],
     model: &'static str,
     issued_here: std::cell::Cell<bool>,
 }
 pub(in super::super::super::super) struct ScanSlotInputs<'s, R, T, S, B> {
-    slots: [Option<Slot<B>>; 3], // Drop all inert scans before held/source/record owners.
-    held: held::HeldEvidenceInputs<'s, R, T, S>,
+    slots: [Option<Slot<B>>; 3], // Drop all inert scans before the policy/held owners.
+    policy: policy::PolicyInputs<'s, R, T, S>,
     identity: Rc<SlotIdentity<'s>>,
 }
 pub(in super::super::super::super) struct ScanSlotsEvidence<'s> {
@@ -26,6 +26,11 @@ pub(in super::super::super::super) struct ScanSlotsEvidence<'s> {
 }
 pub(in super::super::super::super) struct ScanSlotsChecked<'s> {
     _identity: Rc<SlotIdentity<'s>>,
+}
+impl<'s> SlotIdentity<'s> {
+    fn binding(&self) -> &held::SlotBinding<'s> {
+        self.policy.binding()
+    }
 }
 fn validate<R: ResourceOrigin, T, S, B: Backend>(
     inputs: &ScanSlotInputs<'_, R, T, S, B>,
@@ -35,7 +40,7 @@ fn validate<R: ResourceOrigin, T, S, B: Backend>(
     if id.model != MODEL {
         return Err(Failure::Unavailable);
     }
-    id.binding.require(&inputs.held, b)?;
+    inputs.policy.require_checked(&id.policy, b)?;
     for (i, round) in ORDER.iter().enumerate() {
         work(b)?; // O.slots_slot: exactly three fixed owned sources.
         let slot = inputs.slots[i].as_ref().ok_or(Failure::Unavailable)?;
@@ -53,7 +58,7 @@ fn validate<R: ResourceOrigin, T, S, B: Backend>(
     b.checkpoint()
 }
 fn reject(id: &SlotIdentity<'_>, reason: Failure, b: &mut SharedBudget<'_>) -> InputRejected {
-    rejected(id.binding.owner(), SupplyStage::Slots, reason, b)
+    rejected(id.binding().owner(), SupplyStage::Slots, reason, b)
 }
 impl<'s> ScanSlotsEvidence<'s> {
     pub(in super::super::super::super) fn consume<R: ResourceOrigin, T, S, B: Backend>(
@@ -61,14 +66,14 @@ impl<'s> ScanSlotsEvidence<'s> {
         inputs: &ScanSlotInputs<'_, R, T, S, B>,
         b: &mut SharedBudget<'_>,
     ) -> Result<ScanSlotsChecked<'s>, InputRejected> {
-        let claim = &self.identity.binding.owner().bridge;
+        let claim = &self.identity.binding().owner().bridge;
         let fresh = !claim.slots_evidence_used.replace(true);
         if !Rc::ptr_eq(claim, &b.protected_bridge_claim) {
             b.protected_bridge_claim.slots_evidence_used.set(true);
         }
         let result = (|| {
             work(b)?; // O.slots_consume entry. Plus three O.slots_slot guards = 4.
-            check_identity(self.identity.binding.owner(), b)?;
+            check_identity(self.identity.binding().owner(), b)?;
             if !fresh
                 || !self.identity.issued_here.get()
                 || !Rc::ptr_eq(&self.identity, &inputs.identity)
@@ -97,6 +102,6 @@ impl std::fmt::Debug for ScanSlotsEvidence<'_> {
 }
 impl std::fmt::Debug for ScanSlotsChecked<'_> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.write_str("ScanSlotsChecked(independent_fragment_policy_unverified)")
+        f.write_str("ScanSlotsChecked(after_policy_caps_not_supply_or_permit)")
     }
 }

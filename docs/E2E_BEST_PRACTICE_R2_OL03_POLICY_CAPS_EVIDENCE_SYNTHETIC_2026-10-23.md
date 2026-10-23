@@ -60,3 +60,7 @@ Rust全体 **963 passed / 5 suites**（baseline 951＋新規12）。Clippy警告
 実承認原票/配備registry・実clock・BootstrapScope・保護profile projection/実必要量・全dimensionの網羅性・PolicyAllocationParts/ResourceInput/Quotas発行・PolicyCaps→Slots統合・P0〜P6の安定借用/Initial継続・全体work/resource受付は未対応。合成cap/模擬Witnessだけでそれらを確認済みにしない。
 
 全体受付無効・telemetry保留・APPROVED_REGISTRY=None・通常v2 Unavailable・gate92・DER/absence停止を維持する。本番cap投入・通常strict差替え・OS接続・実機操作・token発行・設定変更・permit発行は行っていない。
+
+## 6. 追補：Slotsとの接続（2026-10-23）
+
+`PolicyCapsChecked`は次のSlots準備入口が値で消費する唯一の段階になった（[供給証拠設計§15](BEST_PRACTICE_BP5_R2_OL03_SUPPLY_EVIDENCE_DESIGN.md)）。Slotsは`HeldSourcesChecked`を受け取らないため、Policyを経ないSlotsは型上作れない。PolicyCaps自身の検査・費目（prepare1＋issue44＋consume44）は不変。

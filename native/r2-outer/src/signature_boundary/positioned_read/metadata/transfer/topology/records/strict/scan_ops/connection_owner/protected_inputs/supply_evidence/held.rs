@@ -53,6 +53,17 @@ pub(super) struct SlotBinding<'s> {
     bound: &'s BoundTarget<'s>,
 }
 impl SlotBinding<'_> {
+    #[cfg(test)]
+    pub(super) fn duplicate_fixture(&self) -> Self {
+        Self {
+            identity: self.identity.clone(),
+            leaf: self.leaf.clone(),
+            lineage: self.lineage.clone(),
+            record_origin: self.record_origin.clone(),
+            topology_origin: self.topology_origin.clone(),
+            bound: self.bound,
+        }
+    }
     pub(super) fn owner(&self) -> &Rc<Identity> {
         &self.identity.owner
     }
