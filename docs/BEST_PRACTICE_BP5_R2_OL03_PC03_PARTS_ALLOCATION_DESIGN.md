@@ -178,6 +178,8 @@ slot attach側もpre-sessionのcheck_identityを再利用せず、Transferred後
 
 ## 10. 実装順序案と未承認事項
 
+[管理allocation複合契約・bootstrap境界draft-0.1](BEST_PRACTICE_BP5_R2_OL03_PC03_MANAGEMENT_BOOTSTRAP_CONTRACT.md)で次の最小実装候補MA-01を定義した。有限合成イベントによる4軸の純粋計算に限り、実allocator/保護必要量/完成partsを発行しない。管理dimensionは独立比較を推奨し、B4のsession開始直前とS0/失敗BXを分離する。設計段階であり、5項目Unknown・finalize拒否を維持する。
+
 最初は**allocation view・非実行Draft・budget側one-shot claim・Unknownでfinalize拒否**だけを合成実装する案とする。続いて論理slot・parts照合の非実行模型と独立oracleを整備する。残5項目/全体必要量・cap/clock/費目所有・PC-04の安定借用が成立するまで、実ResourcePolicy/ResourceInput/Quotas constructorとconfigure接続は作らない。
 
 後の完成parts追加では、parts由来を要求しない旧PolicyCapsEvidenceモデルと同一IDにせず、`bp5-r2-policy-caps-evidence-0.2`、parts/BoundResourceInput/slot結合用の専用model等の次版契約を設計・承認する。具体的ID/係数は案で、現在のソースの定数を変更しない。古い合成証拠を新しい完成証拠として読み替えない。

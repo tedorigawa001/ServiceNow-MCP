@@ -22,6 +22,8 @@ Version: draft-0.1 / Date: 2026-10-24 / Source baseline: `6a451f3` / Status: 設
 
 管理allocationの旧40項目比較にある1 scalarは単位・coverageの実証ではない。上記内訳を1 scalarへ詰める変換は定義しない。次版の完全性契約では独立dimensionへ分離するか、全内訳の比較証拠を内部に保持するかを別途承認する。決まるまではUnknown。外側ownerにも種類別内訳を保持し、実backendが1 ownerを複数FDへ展開する場合は別のFD対応モデルを要求する。
 
+[管理allocation複合契約・bootstrap境界draft-0.1](BEST_PRACTICE_BP5_R2_OL03_PC03_MANAGEMENT_BOOTSTRAP_CONTRACT.md)で、4軸を独立比較する次版契約案、carry-in/out・growの旧新重複、B4/S0・BX境界と初回MA-01合成計算器の範囲を具体化した。旧scalar契約は変更せず、実layout/保護projection/完全性/運用承認は未対応のままとする。
+
 `bytes`（I/O成功量）、`requested allocation bytes`（確保要求）、`live allocation bytes`（同時保持）、`work unit`、`resource owner`、`OS FD`は別単位である。枠の振替を禁止する。RSS・allocatorの実消費・カーネル内部量・OS呼出しのhard停止は本モデルだけでは保証しない。
 
 ## 3. phase・寿命・受付境界
