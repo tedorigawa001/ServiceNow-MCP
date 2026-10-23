@@ -23,7 +23,7 @@ pub(in super::super::super::super) fn create<'a>(
     b: &mut SharedBudget<'_>,
 ) -> Result<ScanPartsDraft<'a>, Failure> {
     let owner = view.owner().clone();
-    let prior = owner.allocation.replace(AllocationState::DraftClaimed);
+    let prior = owner.begin_allocation(AllocationState::DraftClaimed);
     let result = (|| {
         work(b)?; // irreversible claim entry, before any fallible guard
         if prior != AllocationState::Fresh {
@@ -53,8 +53,7 @@ impl ScanPartsDraft<'_> {
     ) -> Result<std::convert::Infallible, Failure> {
         let prior = self
             .owner
-            .allocation
-            .replace(AllocationState::FinalizeClaimed);
+            .begin_allocation(AllocationState::FinalizeClaimed);
         let result = (|| {
             work(b)?; // finalization attempt is spent even if cancelled/expired
             if prior != AllocationState::DraftReady {

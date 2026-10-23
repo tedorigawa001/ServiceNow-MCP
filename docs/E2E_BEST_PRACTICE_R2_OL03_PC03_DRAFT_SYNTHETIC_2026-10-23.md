@@ -61,3 +61,7 @@ Rust全体 **987 passed / 5 suites**（baseline 978＋新規9）。Clippy警告�
 論理slotキー/非実行のcap配賦写像と独立oracle、未導出5項目の全体必要量/完全性issuer、実cap/clock、完成parts/証拠発行と固定移譲、PC-04の安定外側owner/Initial継続、全体work/resource受付は未対応。
 
 本番cap投入・全体受付・通常strict差替え・OS接続・実機操作・token発行・設定変更・permit発行を行っていない。telemetry保留、APPROVED_REGISTRY=None、通常v2 Unavailable、gate92、DER/absence停止を維持する。
+
+## 追補：Stopped状態の非上書き（2026-10-23）
+
+Draft作成・finalizeの試行開始は、`allocation.replace`の代わりに`ProtectedBridgeClaim::begin_allocation`を使う。直前状態が`Stopped(e)`ならDraftClaimed/FinalizeClaimedへ一時的に書き換えず、そのまま拒否する（従来もBinding拒否後に`stop_allocation`が`Stopped(e)`へ戻していたため最終状態は同じ）。Fresh/DraftReadyからの不可逆な試行消費は変更なし、work数（view4・Draft5・finalize9）も不変。新規1テスト`begin_allocation_never_overwrites_a_stopped_state`を追加し、Rust全体988 passed。
