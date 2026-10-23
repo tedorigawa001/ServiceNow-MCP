@@ -9,6 +9,7 @@ const MAX_REQUEST: u64 = 16 * 1024 * 1024;
 const MAX_CUMULATIVE: u64 = 256 * 1024 * 1024;
 const MAX_LIVE: u64 = 128 * 1024 * 1024;
 const MAX_ALIGNMENT: u32 = 4096;
+const ENTRY_WORK: u64 = 3;
 
 #[derive(Clone, Copy, PartialEq, Eq)]
 enum Class {
@@ -146,7 +147,12 @@ impl Attempt {
                 return Err(Failure::Binding);
             }
             work(b)?; // O(1) envelope before scratch/iteration
-            work_upper(carry.len(), events.len())?;
+            // Worst-case pre-check: never start scratch/iteration that cannot finish. The three
+            // entry units above are already spent and are part of the upper bound.
+            let upper = work_upper(carry.len(), events.len())?;
+            if !b.work_available(upper - ENTRY_WORK) {
+                return Err(Failure::Limit);
+            }
             b.work(SLOTS as u64)?; // precharge all 64 fixed slot initializations
             let mut slots = [Slot::EMPTY; SLOTS];
             let mut totals = Totals {

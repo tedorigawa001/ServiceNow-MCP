@@ -171,3 +171,7 @@ Advanceは3、通常1 ID操作は4、Grow/旧link付きCommit/FailNoBlockは5。
 4軸は**入力された合成traceの要求量**。計算器自身のstack・Attemptの既存Rc clone・テスト入力Vec等を4軸へ再帰計上しないが、これらは将来の全体管理coverageの別費目として残す。実管理必要量の保護projection・allocator layout・固定領域・全phase統合・cap承認が未対応なので、5項目Unknownと完成parts発行不能を維持する。
 
 [MA-01合成検証記録](E2E_BEST_PRACTICE_R2_OL03_MA01_MANAGEMENT_SYNTHETIC_2026-10-24.md)を参照。§5の実装案のうち合成enum/算術・ローカルattempt・元workへの課金を先行実装し、保護証拠/実接続は実装していない。
+
+### 7.4 最悪work上界の事前確認（レビュー後修正）
+
+`work_upper`の値（`133 + 4C + 5E`）は従来、構造上限の検査にしか使われず捨てられていた。修正後、入口3 workの後・64 slotのprecharge前に、残り（共有上限1,000,000 − 既消費）が`upper − 3`以上かを`SharedBudget::work_available`で読取専用に確認し、足りなければ追加課金なしでLimit停止する。完走できない計算をscratch初期化/イベント走査から始めない。これは§5.1の「上界・事前確認は最悪ケースで行う」の実装であり、予約台帳ではない（実消費は従来どおり各課金点で行い、上界との差は返却しない）。実消費が上界未満でも残りが上界に満たない場合は保守的に拒否する。

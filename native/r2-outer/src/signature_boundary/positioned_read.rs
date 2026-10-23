@@ -13,6 +13,7 @@ const MAX_HEADER: u64 = 1024 * 1024 + 32;
 const MAX_CHUNK: usize = 65536;
 const MAX_REQUESTS: u32 = 32768;
 const EINTR_RETRIES: u8 = 8;
+const WORK_LIMIT: u64 = 1_000_000;
 
 mod allocation_claim;
 #[cfg(test)]
@@ -134,6 +135,12 @@ impl<'a> SharedBudget<'a> {
             work_audit: None,
         }
     }
+    // Read-only pre-check against the same shared work limit; charges nothing.
+    fn work_available(&self, units: u64) -> bool {
+        self.json_work
+            .checked_add(units)
+            .is_some_and(|n| n <= WORK_LIMIT)
+    }
     fn stop<T>(&mut self, reason: Failure) -> Result<T, Failure> {
         let reason = self
             .failed
@@ -243,7 +250,7 @@ impl crate::json::shared::Budget for SharedBudget<'_> {
         let Some(total) = self
             .json_work
             .checked_add(units)
-            .filter(|n| *n <= 1_000_000)
+            .filter(|n| *n <= WORK_LIMIT)
         else {
             return self.stop(Failure::Limit);
         };

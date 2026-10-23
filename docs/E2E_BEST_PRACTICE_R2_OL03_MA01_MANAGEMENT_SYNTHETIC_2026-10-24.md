@@ -62,3 +62,7 @@ productionのwork上界helper・集約helper・係数/offsetをoracleの期待�
 実allocatorのlayout/capacity/ABI、Rc::new OOMの型付き回収、固定領域・nested/parse一時量・全phase coverage、保護profile/receiptからの実projection、全5項目・BootstrapCaps/全体work/payload受付・実cap承認・完成parts/通常strict/OS接続は未対応。raw合成trace/この結果をCompleteRequirementEvidenceへ変換する入口はない。
 
 同budgetから別の合成Attemptを作ることは許されるが、実resource/authorityを発行せず元budgetのworkを消費する。Drop/forgetで実資源の解放を証明しない。scratch/入力slice/Attempt自身の保持量は将来の独立費目であり、合成4軸を全管理量と呼ばない。
+
+## 追補：最悪work上界の事前確認（2026-10-24）
+
+[契約§7.4](BEST_PRACTICE_BP5_R2_OL03_PC03_MANAGEMENT_BOOTSTRAP_CONTRACT.md)のとおり、scratch初期化前に残りworkが`upper − 3`以上かを確認するようにした。新規1テスト`worst_case_work_is_checked_before_scratch_and_iteration`で、Advance(BX)1件（上界138・実消費136）について残り137ではLimitかつ消費は入口3だけ、残り138では成功・消費136を確認した。事前確認を無効化する一時変異で同テストが失敗することを確認し、復元した。既存の全work境界試験は変更なしで成功。Rust全体1009 passed。

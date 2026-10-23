@@ -512,6 +512,28 @@ fn all_work_units_stop_on_limit_cancellation_deadline_and_latch_attempt() {
 }
 
 #[test]
+fn worst_case_work_is_checked_before_scratch_and_iteration() {
+    // One Advance(BX) event: literal upper 133 + 5 = 138, actual spend 3 + 64 + 3 + 64 + 2 = 136.
+    let events = [Event::Advance(Phase::BX)];
+    for (remaining, ok) in [(137, false), (138, true)] {
+        let c = AtomicBool::new(false);
+        let mut b = SharedBudget::new(Instant::now(), &c);
+        b.json_work = 1_000_000 - remaining;
+        let before = b.json_work;
+        let result = Attempt::new(&b).run(&[], &events, End::Closed, MODEL, &mut b);
+        if ok {
+            assert!(result.is_ok());
+            assert_eq!(b.json_work - before, 136);
+        } else {
+            // Rejected after the three entry units, before the 64-slot precharge or any event.
+            assert_eq!(result.unwrap_err(), Failure::Limit);
+            assert_eq!(b.json_work - before, 3);
+            assert_eq!(b.checkpoint(), Err(Failure::Limit));
+        }
+    }
+}
+
+#[test]
 fn scratch_and_results_are_fixed_opaque_and_not_clone_copy_or_serde() {
     macro_rules! not_impl {
         ($t:ty,$bound:path) => {{
