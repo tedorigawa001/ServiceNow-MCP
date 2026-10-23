@@ -1,8 +1,10 @@
 # BP-5 R-2 OL-03：record・scanを含む全体work上界と事前受付
 
-Version: draft-0.27 / Date: 2026-10-23 / Status: 準備claim入口1まで接続済み。Context/Records合成subsetの発行/消費4を別途計数、準備入口未接続。供給証拠全体費・全体受付・統合other上界・通常strict差替え・運用承認は未対応。以下の各段階の記録と現行状態を区別する。
+Version: draft-0.28 / Date: 2026-10-23 / Status: 準備claim入口1まで接続済み。Context/Records発行/消費4に続きHeldSourcesの2を合成計数、準備入口未接続。供給証拠全体費・全体受付・統合other上界・通常strict差替え・運用承認は未対応。以下の各段階の記録と現行状態を区別する。
 
 ## 1. 範囲と停止状態
+
+[供給証拠設計draft-0.3 §12](BEST_PRACTICE_BP5_R2_OL03_SUPPLY_EVIDENCE_DESIGN.md)のHeldSources subsetは発行1＋消費1 workを先行計数した。合成取得dispatch1、二度の祖先/path再照合、同resourceのmetadata/ACL/xattr/FS取得とcleanupは別の取得費で、2/3を全体上界としない。K祖先の成功topology操作数は2×(3K+2)、payload読取0、共有予約/操作上限を維持する。動的work費・全体resource/cap統合は未対応で、既存17差分や通常strictの走査数は変えず全体受付を無効に保つ。[検証記録](E2E_BEST_PRACTICE_R2_OL03_HELD_SOURCES_EVIDENCE_SYNTHETIC_2026-10-23.md)を参照。
 
 [供給証拠設計draft-0.2 §11](BEST_PRACTICE_BP5_R2_OL03_SUPPLY_EVIDENCE_DESIGN.md)の独立合成subsetで、Context/Recordsの発行各1・消費各1、計4 workを確認した。取得/初回検証のrecord/index/hash/I/O費は別であり、4を全体上界にしない。既存run_creationと17差分は未変更、合成取得内のInitial decodeを通常の3decodeへ追加していない。準備入口への接続・本番issuer・動的費/管理resourceの統合とcap承認は未対応で、全体受付は無効を維持する。[合成検証記録](E2E_BEST_PRACTICE_R2_OL03_CONTEXT_RECORDS_EVIDENCE_SYNTHETIC_2026-10-23.md)を参照。
 

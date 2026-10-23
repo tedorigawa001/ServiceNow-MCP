@@ -8,6 +8,7 @@ mod completion;
 mod final_clock;
 mod final_index;
 mod fixed_caller;
+mod held_evidence;
 mod outer_release;
 mod outer_result;
 mod owner_contract;

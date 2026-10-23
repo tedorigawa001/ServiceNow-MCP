@@ -70,6 +70,8 @@ struct ProtectedBridgeClaim {
     records_evidence_issued: Cell<bool>,
     context_evidence_used: Cell<bool>,
     records_evidence_used: Cell<bool>,
+    held_evidence_issued: Cell<bool>,
+    held_evidence_used: Cell<bool>,
     preparation_started: Cell<bool>,
     generated: Cell<bool>,
     used: Cell<bool>,
@@ -137,6 +139,7 @@ impl<'a> SharedBudget<'a> {
         let claim = &self.protected_bridge_claim;
         if claim.context_evidence_issued.get()
             || claim.records_evidence_issued.get()
+            || claim.held_evidence_issued.get()
             || claim.preparation_started.get()
             || claim.generated.get()
         {

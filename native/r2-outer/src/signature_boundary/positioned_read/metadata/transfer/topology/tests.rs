@@ -23,6 +23,11 @@ pub(super) struct Counts {
     pub(super) adapter_swap_m4: Cell<bool>,
     pub(super) adapter_cancel_m4: RefCell<Option<Rc<AtomicBool>>>,
     pub(super) adapter_deadline_m4: RefCell<Option<(Rc<Cell<Instant>>, Instant)>>,
+    // Held evidence acquisition faults only; zero preserves all existing fixture behavior.
+    pub(super) evidence_metadata_fault: Cell<u8>,
+    pub(super) evidence_acl_made: Cell<usize>,
+    pub(super) evidence_acl_freed: Cell<usize>,
+    pub(super) evidence_cancel_acl: RefCell<Option<Rc<AtomicBool>>>,
 }
 pub(super) struct Resource {
     id: usize,
@@ -93,30 +98,67 @@ impl MetadataOps for Resource {
                 }
             }
         }
-        Ok(leaf_stat(self.bytes.len() as u64))
+        if self.c.evidence_metadata_fault.get() == 8 && matches!(point, StatPoint::After) {
+            return Err(OpFailure::Unavailable);
+        }
+        let mut stat = leaf_stat(self.bytes.len() as u64);
+        if self.c.evidence_metadata_fault.get() == 1 {
+            stat.inode += 1;
+        }
+        Ok(stat)
     }
     fn filesystem(&mut self, _: Phase) -> Result<FsObservation, OpFailure> {
         Ok(FsObservation {
             location: Filesystem::Local,
             apfs: true,
             ownership_ignored: false,
-            noexec: false,
+            noexec: self.c.evidence_metadata_fault.get() == 2,
         })
     }
     fn acl_init(&mut self, _: Phase) -> Result<(), OpFailure> {
+        self.c
+            .evidence_acl_made
+            .set(self.c.evidence_acl_made.get() + 1);
+        if let Some(cancel) = self.c.evidence_cancel_acl.borrow().as_ref() {
+            cancel.store(true, Ordering::Release);
+        }
         Ok(())
     }
     fn acl_stat(&mut self, _: Phase, _: &mut ()) -> Result<Stat, OpFailure> {
-        Ok(leaf_stat(self.bytes.len() as u64))
+        let mut stat = leaf_stat(self.bytes.len() as u64);
+        if self.c.evidence_metadata_fault.get() == 9 {
+            stat.inode += 1;
+        }
+        Ok(stat)
     }
     fn acl_query(&mut self, _: Phase, _: &mut ()) -> Result<i32, OpFailure> {
-        Ok(0)
+        match self.c.evidence_metadata_fault.get() {
+            3 => Ok(1),
+            4 => Ok(-1),
+            6 => Err(OpFailure::Unavailable),
+            _ => Ok(0),
+        }
     }
-    fn acl_free(&mut self, _: ()) {}
+    fn acl_free(&mut self, _: ()) {
+        self.c
+            .evidence_acl_freed
+            .set(self.c.evidence_acl_freed.get() + 1);
+    }
     fn names_size(&mut self, _: Phase) -> Result<i64, OpFailure> {
-        Ok(0)
+        Ok(if self.c.evidence_metadata_fault.get() == 5 {
+            2
+        } else {
+            0
+        })
     }
-    fn names_read(&mut self, _: Phase, _: &mut [u8]) -> Result<usize, OpFailure> {
+    fn names_read(&mut self, _: Phase, output: &mut [u8]) -> Result<usize, OpFailure> {
+        if self.c.evidence_metadata_fault.get() == 7 {
+            return Err(OpFailure::Range);
+        }
+        if self.c.evidence_metadata_fault.get() == 5 {
+            output[..2].copy_from_slice(b"x\0");
+            return Ok(2);
+        }
         Ok(0)
     }
 }

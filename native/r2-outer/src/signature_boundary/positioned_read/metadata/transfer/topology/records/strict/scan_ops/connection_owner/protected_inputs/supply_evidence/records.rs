@@ -9,6 +9,31 @@ pub(in super::super::super::super) struct RecordsEvidence<'s> {
 pub(in super::super::super::super) struct ContextRecordsChecked {
     _owner: Rc<Identity>,
 }
+impl ContextRecordsChecked {
+    #[cfg(test)]
+    pub(in super::super::super::super) fn duplicate_fixture(&self) -> Self {
+        Self {
+            _owner: self._owner.clone(),
+        }
+    }
+    #[cfg(test)]
+    pub(in super::super::super::super) fn foreign_fixture(&self) -> Self {
+        Self {
+            _owner: Rc::new(Identity {
+                model: MODEL,
+                origin: self._owner.origin.clone(),
+                bridge: self._owner.bridge.clone(),
+                session: self._owner.session.clone(),
+                started: self._owner.started,
+                context_issued_here: std::cell::Cell::new(true),
+                records_issued_here: std::cell::Cell::new(true),
+            }),
+        }
+    }
+    pub(super) fn same_issuer(&self, owner: &Rc<Identity>) -> bool {
+        Rc::ptr_eq(&self._owner, owner)
+    }
+}
 impl RecordsEvidence<'_> {
     #[cfg(test)]
     pub(in super::super::super::super) fn duplicate_fixture(&self) -> Self {

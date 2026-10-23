@@ -1,12 +1,12 @@
 # BP-5 R-2 OL-03：保護producerの供給証拠検査・詳細設計
 
-Version: draft-0.2 / Date: 2026-10-23 / Source baseline: `8bf52cb` / Status: §11のContext/Records内部subsetを合成issuerで実装。準備Envelope・通常strictへ未接続、本番issuer/運用承認なし
+Version: draft-0.3 / Date: 2026-10-23 / Source baseline: `6dae716` / Status: §11のContext/Recordsに続き§12のHeldSources内部subsetを合成issuerで実装。準備Envelope・通常strictへ未接続、本番issuer/運用承認なし
 
 ## 1. 範囲と不変条件
 
 [生成入口設計](BEST_PRACTICE_BP5_R2_OL03_PRODUCER_CREATION_DIAGNOSTICS_DESIGN.md)§11の準備claim・owner確保・同budget結合に続き、context/records/held-source/policy/3slotの**供給証拠**を検査する境界を設計する。既存sealの由来確認と、上流で何を検証したかの証明を分ける。
 
-全体受付無効・telemetry保留・APPROVED_REGISTRY=None・通常v2 Unavailable・gate92・DER/absence停止を維持する。§11の合成内部subset以外の実装、OS接続・実機操作・token発行・設定変更・本番policy投入・permit発行を含めない。通常strictは差し替えない。証拠検査の成功は署名検証/実行許可や現在時点のファイル不変性を意味しない。
+全体受付無効・telemetry保留・APPROVED_REGISTRY=None・通常v2 Unavailable・gate92・DER/absence停止を維持する。§11〜12の合成内部subset以外の実装、OS接続・実機操作・token発行・設定変更・本番policy投入・permit発行を含めない。通常strictは差し替えない。証拠検査の成功は署名検証/実行許可や現在時点のファイル不変性を意味しない。
 
 任意の値をprivate wrapperやRcに包むだけでは、承認済みregistry・実効groups・安全な取得・正しいcapの証拠にはならない。発行時の検証、発行元への到達経路、同じ所有値との結合を成立条件に含める。
 
@@ -20,7 +20,7 @@ Version: draft-0.2 / Date: 2026-10-23 / Source baseline: `8bf52cb` / Status: §1
 | [RecordReceipt/RecordSource](../native/r2-outer/src/signature_boundary/positioned_read/metadata/transfer/topology/records.rs) | pins・lineage・binding、同sourceでの再読/検証契約 | 初回の安全取得・厳密検証と、そのsource所有値の供給証拠を結ぶ |
 | [ResourcePolicy](../native/r2-outer/src/signature_boundary/positioned_read/metadata/transfer/topology/records/strict/round_declaration/session/resources.rs) | session/round会計、cleanup予約 | 数量上界と承認capを分離し、信頼できるpolicy発行を要求する |
 
-本番発行元はいずれも将来案である。Context/Recordsの合成issuerだけを§11で実装した。既存の合成constructorや[InspectedV2Records](../native/r2-outer/src/records_v2.rs)から自動変換する口を作らない。後者だけではindex pins/held/source/3slotを含む一式の証明にならない。
+本番発行元はいずれも将来案である。Context/Recordsの合成issuerを§11、HeldSourcesを§12で実装した。既存の合成constructorや[InspectedV2Records](../native/r2-outer/src/records_v2.rs)から自動変換する口を作らない。後者だけではindex pins/held/source/3slotを含む一式の証明にならない。
 
 ## 3. 証拠の型・発行元・発行前提
 
@@ -134,7 +134,7 @@ model候補を`bp5-r2-supply-evidence-0.1`とする。未知modelは固定regist
 
 [全体work設計](BEST_PRACTICE_BP5_R2_OL03_TOTAL_WORK_ADMISSION_DESIGN.md)の6 record検証・3 index decode・3scan・coupling35＋K/configure1・profile/算術/typed tailを維持する。未知項を0にせず、100万work・元10秒・payload2GiB等の既存上限も緩めない。独立resource上界とcap承認が未確定なら全体受付は無効のまま停止する。
 
-## 9. 合成検証の受入条件（未実施）
+## 9. 全体の合成検証受入条件（部分実施は§11〜12、全体は未達）
 
 1. test issuer以外のraw registry/groups、同値コピー、任意generic source/数量summaryから証拠を作れない。non-test issuer不在でUnavailableとなる。
 2. 型は非Clone/非Copy/非serde、opaque Debug。証拠のlookup/projectionから再発行/状態resetできない。
@@ -149,7 +149,7 @@ model候補を`bp5-r2-supply-evidence-0.1`とする。未知modelは固定regist
 
 ## 10. 次の実装範囲と承認待ち
 
-最初はContextEvidenceとRecordsEvidenceの**内部型/発行前提/消費検査**を合成issuerだけで実装する案とする。次にHeldSources/Slotsへ広げ、PolicyCapsは承認cap契約/全体profile供給順序と対で設計・接続する。それまでは全体成功を主張しない。検査順5/6を実装順に合わせて入れ替えない。
+ContextEvidenceとRecordsEvidenceの内部型/発行前提/消費検査を§11、HeldSourcesを§12で合成issuerだけ実装した。今後はSlotsへ広げ、PolicyCapsは承認cap契約/全体profile供給順序と対で設計・接続する。それまでは全体成功を主張しない。検査順5/6を実装順に合わせて入れ替えない。
 
 本番issuerの配置/可視性と必要検証、sourceに対応する所有stampの発行方法、外部保持領域の構築、cap承認主体/配布/失効、profile供給と初回decodeの順序、発行claim/保持量、正確な動的費/上界は未承認・未検証である。既存seal・型名・同値hashだけを根拠にこれらを既成事実にしない。
 
@@ -181,4 +181,39 @@ EvidenceInputsのidentity/source stampに新規Rc allocation各1個、既存budg
 
 既存run_creationの17 work差分、固定評価セット、通常strictは変更していない。合成factory内の初回index decodeは単独の発行前提試験専用で、通常経路へ4回目のdecodeを追加していない。将来は既存検証の所有結果へ統合し、3decode/6record検証と二重課金しない順序・上界を別途設計する。§8の23候補や全体受付は未有効化。
 
-[合成検証記録](E2E_BEST_PRACTICE_R2_OL03_CONTEXT_RECORDS_EVIDENCE_SYNTHETIC_2026-10-23.md)を参照。HeldSources/PolicyCaps/ScanSlots、準備Envelopeへの証拠接続、上位ownerへの取得前失敗/解放観測の合流は未対応である。
+[合成検証記録](E2E_BEST_PRACTICE_R2_OL03_CONTEXT_RECORDS_EVIDENCE_SYNTHETIC_2026-10-23.md)を参照。後続のHeldSourcesは§12、PolicyCaps/ScanSlots、準備Envelopeへの証拠接続、上位ownerへの取得前失敗/解放観測の合流は未対応である。
+
+## 12. HeldSourcesの合成内部subset
+
+[held.rs](../native/r2-outer/src/signature_boundary/positioned_read/metadata/transfer/topology/records/strict/scan_ops/connection_owner/protected_inputs/supply_evidence/held.rs)にHeldSourcesEvidenceとHeldSourcesCheckedを実装した。fieldは専用moduleが所有し、取得/発行・不正fixture生成はcfg(test)限定。非Clone/非Copy/非serde・固定opaque Debugを維持し、raw FD/pathや診断票から証拠を構築する口はない。
+
+### 12.1 発行前提
+
+合成opener/attach系列のHeldTargetScope、TopologyReceipt、TopologySourceと、§11のimmutable EvidenceInputsを値で受け取る。前段のContext/Recordsを発行・消費済みで、同budget/origin/session/started・未session開始・未generated/usedであることが前提。前段不適合はtopology/metadata操作より前に停止する。
+
+合成factoryはrecord source→topology source→held→topology receipt→record receiptの順で所有するHeldEvidenceInputsへ移す。後から任意のsourceへ承認stampだけを追加するのではなく、所有値を封じた領域を作り、次の検証をすべて通した場合だけ返す。
+
+1. 外部BoundTargetの同保持領域とleaf originを照合する。
+2. 既存recheckでrecord lineage/binding/target、各祖先origin・snapshot、固定anchorから全path edgeとleafのmetadataを照合する。
+3. 同じleaf resourceでMetadataOpsの新しいmetadataを取得する。ACL/xattr/FS、before/after stat、open時snapshotとの完全一致を既存collector/normalizeで検査する。Phase::M0という既存タグを使うが、A/B走査やComparedM0M4/完了証拠を作らない。
+4. leaf originを再確認し、同sourceのrecheckをもう一度行い、共有checkpointを通す。取得直後の値だけを返す。
+
+metadata取得時のReadScopeは既存A/B payload枠を一時予約するがpayloadは読まず、終了/失敗で予約を返却する。ACL handleの解放予約、metadata/topology操作上限、10秒・取消・既存work上限を共有し、別budgetへ分離しない。合成sourceはOS安全取得や本番backend承認の証拠ではなく、今回の証拠から現在以後の不変性も推論しない。
+
+### 12.2 一度限りの発行・消費
+
+既存ProtectedBridgeClaimへheld issued/usedのbool2個を追加した。発行/消費の試行はwork前に不可逆claimを消費する。発行済みは専用HeldIdentityのissued_hereにも記録し、budgetのflagだけから別issuerのproofを認めない。証拠段階からのstopも既存claimへlatchする。
+
+HeldSourcesEvidenceの消費には、同issuerのContextRecordsCheckedを値で必須とする。immutable所有領域、前段issuer、leaf origin/open origin、record/topology lineage、record source stamp、topology source stamp、BoundTargetを固定数のidentity照合で確認する。消費時は追加I/O・再parse・可変長binding比較をしない。move前のfieldアドレスを保存せず、containerのmoveを許す。
+
+失敗はSupply(HeldSources)のInputRejectedへ第一理由を保持し、別budgetなら提示側と元claimを停止する。前段tokenを消費し、同じ試行の再発行/再消費は不可。checked段階はPolicyCaps/Slots未確認のままで、ProtectedSupply・Closed・ack・permitへの変換はない。
+
+### 12.3 所有権・費目・未対応
+
+proof/checkedはidentity参照だけで、source/resourceを所有・複製しない。所有領域には非testのconstructor/変更/抽出APIがない。領域をdropすると固定field順でsource/held/receiptが破棄され、proofの生存でresourceを延命しない。拒否票のrelease/checkpointは独立subsetではNotReachedのまま。上位ownerの固定discard観測やOS close確認を捏造しない。
+
+発行1＋消費1＝2 workを独立計数する。取得dispatchは別途1 work。取得recheckの可変長binding/祖先/path照合、metadata/topology単発操作・ACL cleanup・予約等は**別の取得費**である。祖先数Kに対して成功時topology操作数は`2×(3K+2)`で、同じ上限を共有する。これらの動的取得費を2や3で代表させず、全体work/resourceモデルへの統合とcap承認は未対応として残す。
+
+新規Rc allocationはHeldIdentityとtopology source stampの各1個。既存のissuer/source/lineage/origin参照はRc cloneであり、FDの複製ではない。HeldSourcesEvidenceは64 bytes以下、既存claimは64 bytes以下を合成型契約で検査した。所有source/ancestor/receipt量や一時metadata/temporary/cleanup費を無料と扱わない。
+
+既存Context/Recordsの4 work、run_creationの17差分、通常strictの3round/3decode・6record検証、停止gateは未変更。準備Envelope・通常strictへの接続、本番opener/issuer、PolicyCaps/ScanSlots、上位診断の接続、全体受付は未対応である。[HeldSources合成検証記録](E2E_BEST_PRACTICE_R2_OL03_HELD_SOURCES_EVIDENCE_SYNTHETIC_2026-10-23.md)を参照。
