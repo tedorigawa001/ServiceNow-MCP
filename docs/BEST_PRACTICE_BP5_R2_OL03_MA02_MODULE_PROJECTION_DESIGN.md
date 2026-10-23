@@ -1,6 +1,6 @@
 # BP-5 R-2 OL-03 MA-02：固定module実確保モデル・保護必要量projection詳細設計
 
-Version: draft-0.1 / Date: 2026-10-24 / Source baseline: `60f9268` / Status: 設計のみ。module coverage・layout証拠・projection未実装、5項目Unknown
+Version: draft-0.2 / Date: 2026-10-24 / Source baseline: `433fe96` / Status: MA-02A固定recipe/coverage整合検査を合成実装。実layout証拠・保護projection未実装、5項目Unknown
 
 ## 1. 範囲・参照した状態
 
@@ -8,7 +8,7 @@ Version: draft-0.1 / Date: 2026-10-24 / Source baseline: `60f9268` / Status: 設
 
 基準`60f9268`にはMA-01のscratch初期化前のworst-case work残量事前検査が含まれる。既に消費した入口3 workを除いた上界を同じ元budgetへ照合するが、予約・layout認証・全体受付の証明ではない。今回はこの実装を変更しない。本書の新規型名/model/係数は案であり、現在のAPIの説明ではない。
 
-文書だけを更新する。Unknown・全体受付無効・telemetry保留、APPROVED_REGISTRY=None、通常v2 Unavailable/gate92、DER/absence停止を維持する。実装・本番cap投入・完成parts発行・通常strict差替え・OS接続・実機操作・token発行・設定変更・permit発行を含めない。
+§1〜§8の将来設計と§9のMA-02A実装を区別する。Unknown・全体受付無効・telemetry保留、APPROVED_REGISTRY=None、通常v2 Unavailable/gate92、DER/absence停止を維持する。本番cap投入・完成parts発行・通常strict差替え・OS接続・実機操作・token発行・設定変更・permit発行を含めない。
 
 ## 2. 「実確保モデル」が証明する量と証明しない量
 
@@ -122,3 +122,33 @@ MA-01を合成oracleとして使う場合も、その計算器のrun費`133+4C+5
 実layoutの信頼元・toolchain/library/ABIの固定/更新規則、Vec容量方針（§4の1/2の選択。MA-02Bの着手条件、§7）/Rc内部layout、catch不能OOM、全module/不正入力prefix/nested/固定領域、B0〜B4/BXと3round全体、保護context/receipt producer・PC-04、claim格納/費用と停止伝播、layout schema/上限/係数、実cap/clock/失効・全体work/payload/resource強制は未対応である。
 
 本書の調査はローカルソース/設計の読み取り照合。Rust標準libraryの非公開layoutを公式に保証された値として採用したものでも、実allocator/実機検証を実施したものでもない。5項目Unknown・全体受付無効を維持し、完成partsの発行条件を緩めない。
+
+## 9. MA-02A実装：固定recipe/coverageの非実行整合検査
+
+[recipes.rs](../native/r2-outer/src/signature_boundary/positioned_read/metadata/transfer/topology/records/strict/round_declaration/session/resources/management/recipes.rs)をMA-01配下のprivate moduleとして追加した。modelは`bp5-r2-module-recipe-review-0.1`で、§4の実layout model/projection IDとは異なる。固定3費目の内部descriptorを照合するだけであり、実source/build真正性・実layout/必要量を認証しない。sourceラベル一致を署名/閉包の証拠と呼ばない。
+
+### 9.1 型と固定coverage
+
+Recipeはsite/revision/source、Storage、Phase、Lifetime、allocation prefix、LayoutKnowledgeを保持する。StorageはCountsのnormal entries最大100000/u64、Keysのgroup1/nonce3、InlineMapのsession-round32/local21 scalar。prefixはCounts0〜1・Keys0〜4・Map0〜0。Countsの実nや必要bytesは入力せず、MA-02Bへ残す。
+
+Catalogはimmutableな3descriptorのsliceを保持する。固定順Counts→Keys→InlineMap、各revision/source/storage/phase/lifetime/prefixを照合し、欠落/余剰/重複/入替え/不一致を拒否する。全recipe maskは0b111だけを受け付けるが、実layout maskは0、whole-management claimはfalse以外を拒否する。これはsource統計の既知範囲を誇張しないための入力整合検査で、maskが発行権ではない。
+
+LayoutKnowledgeはUnmodeledだけでVerified/Real/Synthetic-success variantはない。結果`ModuleRecipeReview`はCatalogへの実borrow、Unmodeled3件と固定missing8件（CountsLayout/KeysLayout/InlineParent/ControlOwners/ParserNested/Collector/Discard/WholeLifetime）を保持する。inline mapのheap確保数が0でも親固定領域の未対応を消さない。`require_complete`は1 work後に必ずUnavailable、成功型Infallibleである。数値4軸・ManagementRequirement・CompleteRequirementEvidence・partsへの変換口はない。
+
+結果は非Clone/Copy/serde、Debugは固定opaque。Catalog借用はimmutable入力を保持するが、receipt/budget/profileを証明するborrowではない。呼出しは再実行可能な純粋整合検査で、元budgetのwork以外の台帳/claimを開始しない。同Catalogを別budgetで検査できることを、MA-02Bの結合成功と扱わない。
+
+### 9.2 有限費用・失敗
+
+検査はmodel1・exact件数1・coverage claim1、各descriptor固定6 row×3、missing coverage1・publication1、計23 work。入口3の後、同budgetの残work20をread-only事前検査する。予約/枠付与は行わない。各rowには固定数の比較だけを含め、N依存の走査・追加decode/profile収集・heap確保・汎用parser/式opcodeを導入しない。
+
+scratchは固定3descriptorと固定結果だけ。対象buildでdescriptor配列1024 bytes以下・結果128 bytes以下をテストするが、関数全体stack/RSSを保証するものではない。起点費3の後にwork不足ならdescriptorを走査せずLimitで停止する。元work/checkpointのDeadline/Cancelled・先行理由を保持する。
+
+model/coverage不足・real/whole claimはUnavailable、descriptor identity/内容/順序違いはBinding。構造はexact3のみで、長さ不一致はUnavailable。実消費workは返さず、純粋検査の失敗も提示budgetへlatchする。未取得resourceを解放済みとする処理はない。
+
+### 9.3 模擬layoutの隔離
+
+`cfg(test)` module内だけにMockLayout/MockCheckと有限layout算術の試験関数を置く。架空payload/overhead/alignmentとcapacity/nested/ownerの模擬条件を検査し、Rc overhead0・未知coverage・overflow等を拒否するが、MockCheckはruntimeのRecipe/Catalog/LayoutKnowledge/結果へ変換できない。模擬成功後も実layout3件はUnmodeled、missing8件・完全性拒否は不変である。
+
+模擬fixtureのbytes・ABI相当条件はRust Vec/Rcの実layout値ではない。模擬関数は本番buildに存在せず、実registry/issuerも作っていない。MA-02Aには保護projection・専用one-shot claim・実moduleの数量導出は含めず、§5〜§7のMA-02B以降で別途対応する。
+
+[MA-02A合成検証記録](E2E_BEST_PRACTICE_R2_OL03_MA02A_RECIPE_SYNTHETIC_2026-10-24.md)を参照。固定catalogの整合性とUnknown維持を確認する試験で、layout/全体coverage/運用capの検証ではない。

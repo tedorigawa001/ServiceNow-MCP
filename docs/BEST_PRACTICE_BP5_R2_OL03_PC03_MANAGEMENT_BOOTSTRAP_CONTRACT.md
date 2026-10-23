@@ -116,6 +116,8 @@ MA-01の成功は「合成イベント算術の契約確認」だけ。次段階
 
 [MA-02詳細設計draft-0.1](BEST_PRACTICE_BP5_R2_OL03_MA02_MODULE_PROJECTION_DESIGN.md)で、初期3費目（profile counts・Draft keys・inline map）の固定recipe、layout証拠と未対応coverage、同estimate/receipt/budgetへの部分projection・収集/検査費を具体化した。設計のみで実layout/issuer/projectionは未実装、5項目Unknownを維持する。
 
+後続draft-0.2 §9でMA-02Aの固定recipe/coverage整合検査だけを合成実装した。固定23 work・実layout3件Unmodeled・missing8件を保持し、模擬layoutはcfg(test)専用の別型に隔離する。実source/build認証・保護projection・管理必要量の完成は未対応で、Unknown/全体受付停止を変更しない。
+
 ## 6. 次の承認点と停止条件
 
 実装前：4軸の単位、carry-in/out、growの保守的旧新重複、B4/S0とBX境界、MA-01の有限構造上限・scratch方式/work式・one-shotの所在をレビューする。未決事項を実装者の既定値で埋めない。
