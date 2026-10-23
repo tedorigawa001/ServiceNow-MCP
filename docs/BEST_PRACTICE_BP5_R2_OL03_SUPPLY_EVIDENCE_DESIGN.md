@@ -1,6 +1,6 @@
 # BP-5 R-2 OL-03：保護producerの供給証拠検査・詳細設計
 
-Version: draft-0.6 / Date: 2026-10-23 / Source baseline: `40ea16f` / Status: Context/Records/HeldSourcesと独立ScanSlots片、PolicyCapsのPC-01合成subsetを実装。実profile/cap承認・準備Envelope/通常strict未接続、本番issuer/運用承認なし
+Version: draft-0.7 / Date: 2026-10-23 / Source baseline: `57ec28e` / Status: Context/Records/HeldSources・PolicyCaps→SlotsとPC-02の同estimate scan必要量projection/35項目比較を合成実装。全体必要量/cap承認・準備Envelope/通常strict未接続、本番issuer/運用承認なし
 
 ## 1. 範囲と不変条件
 
@@ -252,7 +252,7 @@ proofの同issuer/owner照合後、held bindingと固定3slot条件を再確認�
 
 ## 14. PolicyCaps詳細設計とPC-01合成subset
 
-[PolicyCapsEvidence詳細設計draft-0.2](BEST_PRACTICE_BP5_R2_OL03_POLICY_CAPS_EVIDENCE_DESIGN.md)では、ApprovedCaps、限定BootstrapScope、保護されたResourceRequirementWitness、PolicyCapsEvidence/CheckedとResourceInput/Quotas配賦partsを分けた。必要量がcap以内という算術結果だけで承認せず、同registry/build/model bundle・期限・receipt/held/source/初回profileへの結合を要求する。
+[PolicyCapsEvidence詳細設計draft-0.3](BEST_PRACTICE_BP5_R2_OL03_POLICY_CAPS_EVIDENCE_DESIGN.md)では、ApprovedCaps、限定BootstrapScope、保護されたResourceRequirementWitness、PolicyCapsEvidence/CheckedとResourceInput/Quotas配賦partsを分けた。必要量がcap以内という算術結果だけで承認せず、同registry/build/model bundle・期限・receipt/held/source/初回profileへの結合を要求する。
 
 profileは現行RoundScope内の借用型で、値移動するproducerへ持ち出せない。初回の既存decode/estimateを同scope内でpolicy確認→Initial kernelへ引き継ぐ案と、安定した外側receipt所有者/固定callerへの内部API移行を承認待ちとして明記した。4回目のdecode・profile claim reset・自己参照/unsafe・scan実測後のcap承認は採らない。
 
@@ -265,3 +265,9 @@ PC-01はcfg(test)の固定合成issuerだけでApprovedCaps/模擬Witness/Policy
 §13のScanSlots片と§14のPolicyCaps片は、どちらも`bind_slots`で`HeldSourcesChecked`を消費していた。held消費はbudgetごとに一度のため両者は排他で、Policy→Slotsへつなげなかった。修正後、Slotsの準備入口は`HeldSourcesChecked`ではなく消費済みの`PolicyCapsChecked`を値で受け取り、`ScanSlotInputs`は`PolicyInputs`（held入力を含む）を所有する。Slots側に`HeldSourcesChecked`を受ける口はなく、Context→Records→HeldSources→PolicyCaps→Slotsだけが型で成立する。Policy側の「Slots先行ならBinding」も維持する。
 
 Slotsの準備・取得・発行・消費は、`PolicyInputs::require_checked`で同じPolicyIdentity（ptr一致）・発行済み・`policy_evidence_used`・held binding再照合を確認する。capの40次元比較は再実行しない（消費済み段階のidentity照合のみ）。新規workはなく、Slotsの費目（準備1＋取得4＋発行4＋消費4）は不変。`ScanSlotsChecked`のDebugは`after_policy_caps_not_supply_or_permit`へ変更した。PolicyAllocationParts/ResourceInput/Quotas発行、準備Envelope・通常strictへの接続、全体受付は引き続き未対応である。
+
+## 16. PC-02：保護された同estimate必要量projection
+
+[詳細設計§12](BEST_PRACTICE_BP5_R2_OL03_POLICY_CAPS_EVIDENCE_DESIGN.md)のScanResourceRequirementsは同ScanWorkEstimateを借用し、その内側の実profileから既存resource-0.2の数量を導出する。Initial/同receipt・round・budget/未session・Fresh/retry snapshotを検査し、projectionと比較のclaimを不可逆消費する。既存decode/profileを追加しない。別budgetでの失敗は元claimにも保持する。
+
+合成capとの35項目比較はscan subsetだけの部分結果で、未導出の外側/管理量/bootstrap5項目の全体確認を求めるとUnavailable。PC-01の模擬Witnessを置換せず、§15のPolicyCaps→Slots順序も変更しない。ResourceInput/Quotas・準備Envelope・通常strictへ昇格する口はない。費目はprojection18＋比較45 workで全体上界には未接続。[PC-02検証記録](E2E_BEST_PRACTICE_R2_OL03_PC02_PROJECTION_SYNTHETIC_2026-10-23.md)を参照。

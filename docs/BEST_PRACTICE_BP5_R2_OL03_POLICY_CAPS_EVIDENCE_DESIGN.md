@@ -1,12 +1,12 @@
 # BP-5 R-2 OL-03：PolicyCapsEvidence・詳細設計
 
-Version: draft-0.2 / Date: 2026-10-23 / Source baseline: `40ea16f` / Status: PC-01の内部型・合成issuer・消費検査を実装。本番cap承認・実profile導出・配賦・bootstrap統合・運用受付は未実装/未承認
+Version: draft-0.3 / Date: 2026-10-23 / Source baseline: `57ec28e` / Status: PC-01とPolicy→Slots順序を合成実装。PC-02の同estimate借用projection・scan35項目比較を実装。全体必要量/本番cap承認・配賦・bootstrap統合・運用受付は未実装/未承認
 
 ## 1. 範囲と停止状態
 
 [供給証拠設計](BEST_PRACTICE_BP5_R2_OL03_SUPPLY_EVIDENCE_DESIGN.md)のPolicyCaps段階を具体化する。承認された上限、検証済み宣言から導出した必要量、実際に配賦するResourceInput/Quotasの3つを分離する。数量が小さいこと、model IDの一致、同じsealの存在だけをcap承認へ昇格しない。
 
-全体受付無効・telemetry保留・APPROVED_REGISTRY=None・通常v2 Unavailable・gate92・DER/absence停止を維持する。通常strict差替え、OS接続、実機操作、token発行、設定変更、本番policy投入、permit発行を含めない。§11の合成subset以外の型名/API名/追加費目は案であり、存在する実装の説明とは区別する。
+全体受付無効・telemetry保留・APPROVED_REGISTRY=None・通常v2 Unavailable・gate92・DER/absence停止を維持する。通常strict差替え、OS接続、実機操作、token発行、設定変更、本番policy投入、permit発行を含めない。§11〜12の内部subset以外の型名/API名/追加費目は案であり、存在する実装の説明とは区別する。
 
 全体の消費順はContext→Records→HeldSources→**PolicyCaps→ScanSlots**→公開前checkpoint。先行実装のScanSlotsCheckedはPolicyCaps未確認の独立fragmentであり、本段階の入力や完了証拠の代わりにはしない。
 
@@ -185,4 +185,22 @@ Context→Records→HeldSourcesの実消費済みtokenを要求し、Slotsの発
 
 費目はprepare1＋発行44＋消費44＝89 work。各44は入口1、held binding1、固定model bundle1、承認/期限1、40個のdimension比較。acquisition済みのheld検査や実resource計算9行を再実行しない。モデル比較は固定12要素/固定長digestに限る。新規Rcは合成authority/profile/issuer identityの3個。proof/checkedはidentityのみを保持しheld資源を延命しない。保持量・drop・将来の実approval/projection/配賦費は全体上界へ未接続で、既存17や候補23へ単純加算しない。
 
-[合成検証記録](E2E_BEST_PRACTICE_R2_OL03_POLICY_CAPS_EVIDENCE_SYNTHETIC_2026-10-23.md)を参照。次はPC-02の保護profile projection・実必要量比較、PC-03のparts配賦、PC-04のbootstrap借用設計、PC-05の固定供給順統合が残る。
+[PC-01合成検証記録](E2E_BEST_PRACTICE_R2_OL03_POLICY_CAPS_EVIDENCE_SYNTHETIC_2026-10-23.md)を参照。後続の`57ec28e`では、Slots準備が消費済みPolicyCapsCheckedと同PolicyInputsを要求するように順序を固定した。ただしPC-01の模擬Witnessを実profile由来へ置き換えたものではない。PC-02の現在の到達点は§12で区別する。
+
+## 12. PC-02：同estimateからの保護projection・scan subset比較
+
+[projection.rs](../native/r2-outer/src/signature_boundary/positioned_read/metadata/transfer/topology/records/strict/round_declaration/scan_inputs/profile/calculator/projection.rs)に、同ScanWorkEstimateへの借用を保持するScanResourceRequirementsを実装した。resource projection modelは`bp5-r2-estimate-resource-projection-0.1`。callerからShape/summary/quantitiesを受け取るconstructorはない。既存profileをclone/再buildせず、estimate内の同profileからe/f/d/h/k/c/lを固定対応でresource-0.2へ渡す。virtual indexと空fileも既存の検証済み統計に含まれる。旧Shape/Quantities/計算関数の可視性はstrict内部へだけ広げたが、それらは引き続き数量であり、保護されたprojectionやcap証拠の発行権にはならない。
+
+projectionは同estimate/ScanInputs/receipt/context/Initial scope・token/元budget claim・started/retry snapshot・Fresh状態へ結合する。session開始済み、bridge generated/used、別roundではBinding。estimateにresource_projected claimを置き、最初のfallible処理前に不可逆消費する。drop/取消/未知modelでも再発行不可。借用中にestimateをmoveできず、借用終了後は既存のconsume_for_collectorへ同じestimateを渡せる。collector向け利用guard・入口guardや旧15行算術は変更しない。
+
+元budget claimのRcをestimateに保持し、別budgetへのproject/compareで提示側だけでなく元検査も停止する。元claimの先行理由を保持し、追加workや新budgetによる再試行で回復しない。成功時はpayload/reservation/retry/metadata/topologyの会計を変更しない。projectionの18 workはclaim1＋既存profile guard5＋estimate model/状態1＋固定mapping1＋既存resource計算9＋publication1。decode・統計再走査・scan/外部操作はない。
+
+[caps.rs](../native/r2-outer/src/signature_boundary/positioned_read/metadata/transfer/topology/records/strict/round_declaration/scan_inputs/profile/calculator/projection/caps.rs)にScanResourceCapsと比較器を追加した。**cap発行元はcfg(test)の固定合成snapshotだけであり、本番承認ではない。** cap modelは`bp5-r2-projected-scan-caps-synthetic-0.1`。projection/resource/kernel/xattrの固定bundle、合成artifact identity、同budget/Initial token/started、元10秒期限を覆うexpiry、固定coverageを検査する。値は必要量からコピーしてcapへ昇格させず、独立した有限fixture値を使う。
+
+比較範囲はPC-01の40項目中35項目：session/3roundの5分類attempts・total・live-cleanup・xattr names（32）、scan payload・元共有retry・enum buffer bytes（3）。round total・session totalは各独立値。round側のtail余裕をsessionへ3倍配賦せず、resource-0.2の共有retry/tail/xattr上界をそのまま使う。payloadはcapだけでなく、元SharedBudgetのMAX_BYTES−used−reservedへのchecked減算でも検査する。A/Bやrecordの将来必要量まで全て導出したものではない。
+
+比較は45 work：不可逆comparison claim1＋projection同一性/guard7＋cap snapshot検査1＋固定35項目mapping/残payload検査1＋各比較35。結果は借用付きScanCapsComparedであり、**scan subsetだけの部分確認**。外側owner、管理allocation、bootstrap bytes/work/liveの5項目は未導出のまま（0や無制限で補わない）。require_completeは追加1 work後にUnavailableで元/提示budgetを停止する。別claimへ持ち込んだ場合も元停止を保持する。PC-01 ResourceRequirementWitness/PolicyCapsCheckedやResourceInput/Quotasへ変換するAPIは作っていない。
+
+新規allocationはprojection/比較のいずれにもなく、固定長の数量/配列をstackで保持する。estimateが元claimのRcを1つ保持し、部分比較結果もそのRcを1つ保持する。元資源/木/estimateの借用や保持量を無料とはせず、全体work/resource上界・bootstrap制限へはまだ接続しない。18＋45を既存89/17/23や全体上界へ単純加算しない。
+
+[PC-02合成検証記録](E2E_BEST_PRACTICE_R2_OL03_PC02_PROJECTION_SYNTHETIC_2026-10-23.md)を参照。実profileのscan統計からの必要量導出は到達したが、本番cap承認、残5項目と外側/A-B/recordを含む全体必要量、PC-01模擬Witnessの置換、parts配賦、P0〜P6の安定所有者/Initial継続への接続は未対応である。全体受付と通常strictは無効のままとする。

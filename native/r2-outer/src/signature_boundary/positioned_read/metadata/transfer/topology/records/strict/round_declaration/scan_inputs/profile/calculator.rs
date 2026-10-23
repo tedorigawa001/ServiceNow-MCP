@@ -1,6 +1,7 @@
 //! Pure fixed-row estimate; never a work reservation or scan/execution permit.
 use super::*;
 mod arithmetic;
+pub(in super::super::super::super) mod projection;
 mod use_guard;
 use arithmetic::{add, mul, sub};
 pub(in super::super::super::super) const CALCULATOR_ID: &str = "bp5-r2-collector-work-0.2";
@@ -16,6 +17,8 @@ pub(in super::super::super::super) struct ScanWorkEstimate<'p, 'i, 'd, 's, 'r> {
     profile_upper: u64,
     calculator_model: &'static str,
     kernel_model: &'static str,
+    resource_projected: std::cell::Cell<bool>,
+    resource_owner: Rc<crate::signature_boundary::positioned_read::ProtectedBridgeClaim>,
 }
 impl std::fmt::Debug for ScanWorkEstimate<'_, '_, '_, '_, '_> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -117,6 +120,8 @@ pub(in super::super::super::super) fn calculate<'p, 'i, 'd, 's, 'r>(
             profile_upper,
             calculator_model: CALCULATOR_ID,
             kernel_model: KERNEL_ID,
+            resource_projected: std::cell::Cell::new(false),
+            resource_owner: b.protected_bridge_claim.clone(),
         })
     })();
     stop(result, b)

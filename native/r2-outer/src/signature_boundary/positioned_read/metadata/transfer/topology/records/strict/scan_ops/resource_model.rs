@@ -4,28 +4,28 @@ use super::*;
 pub(in super::super) const MODEL_ID: &str = "bp5-r2-scan-resource-0.2";
 const KERNEL_ID: &str = "bp5-r2-collector-work-0.2";
 const XATTR_POLICY_ID: &str = "bp5-r2-scan-xattr-names-0.1";
-pub(super) struct Shape {
-    pub(super) entries: u64, // includes virtual index
-    pub(super) files: u64,
-    pub(super) directories: u64,
-    pub(super) root_depth: u64,
-    pub(super) edges: u64, // sum of relative component counts, including virtual index
-    pub(super) chunks: u64,
-    pub(super) bytes: u64,
+pub(in super::super) struct Shape {
+    pub(in super::super) entries: u64, // includes virtual index
+    pub(in super::super) files: u64,
+    pub(in super::super) directories: u64,
+    pub(in super::super) root_depth: u64,
+    pub(in super::super) edges: u64, // sum of relative component counts, including virtual index
+    pub(in super::super) chunks: u64,
+    pub(in super::super) bytes: u64,
 }
-pub(super) struct Quantities {
-    pub(super) base: [u64; 5], // Open, Enum, Read, Metadata (including ACL init), Cleanup
-    pub(super) round: [u64; 5],
-    pub(super) three: [u64; 5],
-    pub(super) round_total: u64,
-    pub(super) three_total: u64,
-    pub(super) snapshots: u64,
-    pub(super) xattr_round: u64,
-    pub(super) xattr_three: u64,
-    pub(super) enum_buffer_three: u64,
-    pub(super) payload_three: u64,
-    pub(super) peak_owners: u64,
-    pub(super) retries: u8,
+pub(in super::super) struct Quantities {
+    pub(in super::super) base: [u64; 5], // Open, Enum, Read, Metadata (including ACL init), Cleanup
+    pub(in super::super) round: [u64; 5],
+    pub(in super::super) three: [u64; 5],
+    pub(in super::super) round_total: u64,
+    pub(in super::super) three_total: u64,
+    pub(in super::super) snapshots: u64,
+    pub(in super::super) xattr_round: u64,
+    pub(in super::super) xattr_three: u64,
+    pub(in super::super) enum_buffer_three: u64,
+    pub(in super::super) payload_three: u64,
+    pub(in super::super) peak_owners: u64,
+    pub(in super::super) retries: u8,
 }
 impl std::fmt::Debug for Quantities {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -62,9 +62,10 @@ fn row<T>(
     b.checkpoint()?;
     Ok(value)
 }
-// Raw scalar input is NOT accepted-declaration evidence. Only synthetic callers exist.
-// A later protected profile/binding stage is required before resource policy can use this model.
-pub(super) fn calculate(
+// Raw scalar input is NOT accepted-declaration evidence. The protected estimate projection
+// calls this model without exporting its Shape as authority; legacy synthetic tests still use it.
+// No result is a resource policy, full-coverage proof or allocation constructor.
+pub(in super::super) fn calculate(
     s: &Shape,
     expected: &str,
     b: &mut SharedBudget<'_>,
