@@ -5,7 +5,9 @@ use crate::signature_boundary::positioned_read::management_claim::State;
 const MANAGEMENT_ID: &str = "bp5-r2-estimate-management-projection-0.1";
 struct PartialShape {
     normal_entries: u64,
-    element_payload_bytes: u64, // element payload ONLY; never the Vec allocation upper bound
+    // Element payload ONLY, never the Vec allocation upper bound. Deliberately no getter:
+    // used solely to re-bind the same estimate; layout must come from separate evidence.
+    element_payload_bytes: u64,
     key_allocation_sites: u8,
     inline_scalars: u8,
 }

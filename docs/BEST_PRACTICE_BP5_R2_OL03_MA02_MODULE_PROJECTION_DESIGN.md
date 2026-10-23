@@ -60,7 +60,7 @@ Vecへの対応は次のいずれかを、後続で証拠付き承認するま�
 |---|---|---|
 | ModuleAllocationProfile | 既存Initial profile buildと固定module recipeの狭い接続口。元inputs/scope/recipeへの実borrow | coverageと数量由来だけ。cap/実取得/全体管理量確認ではない |
 | ManagementProjection | 同estimateへのborrowとprofile由来、module別4軸/Unknown、layout/recipe/費目版へのborrow | 部分必要量。完全管理証拠/DraftのVerified化/partsへ変換不可 |
-| ManagementProjectionClaim | 元estimate/Initial系列に付く一度限りの独立claim案 | PC-02 resource_projectedやprofile_startedをreset/共用しない |
+| ManagementProjectionClaim | 元budget（ProtectedBridgeClaim）に一つだけ置く一度限りの独立claim。projectionはInitial estimateに限るため、実質的にInitial系列ごと一度（§10.1で実装） | PC-02 resource_projectedやprofile_startedをreset/共用しない |
 
 ### 5.1 固定順序
 
@@ -172,6 +172,8 @@ MA-02Aの固定recipe検査23 workを実施し、追加1 workで`RecipeFacts`を
 同estimateのprofileからnormal entries nを読み、n<=100000の範囲でchecked `n×8`を**u64要素payload**として計算する。これはVecの要求capacity/allocator上界ではない。既知のキー確保site数4・inline scalar数53も保持するが、確保成功回数・Rc bytes・親owner/全体管理量には読み替えない。実4軸/ManagementRequirement/完全性証拠は返さず、全5項目Unknown・finalize拒否は不変。
 
 再decode・profile再収集・N件走査・新しいheap確保はない。固定facts/shapeはinline保持で、元ownerの既存Rcを利用する。追加claimの固定領域と保持量は将来の全体管理coverageへ残す。対象buildで既存ProtectedBridgeClaimの64 bytes以下の境界試験も維持したが、RSS/全メモリ保証ではない。
+
+`element_payload_bytes`（n×8）はprivate fieldのまま保持し、読取口（getter/accessor/Debug出力）を設けない。用途は同estimateとの再照合だけで、Vecの要求layout・allocator上界・管理4軸の値へ読み替えない（§7のMA-02B着手条件：Vec方針承認前は`n×size_of<u64>`を要求layoutとして使わない）。後続段階でlayoutが必要になっても、この値から導出せず、承認されたlayout証拠を別に要求する。
 
 ### 10.3 binding・費目・消費
 
