@@ -111,7 +111,7 @@ bootstrap bytesは元payload台帳に属する同じreadの部分集合で、追
 
 証拠は同receipt owner/世代/target/context、budget origin/started/期限・元claim、Initial scope/profile/estimate、cap owner/revision/model bundleへ実borrow/型付きidentityで結ぶ。同値hash/summaryや同じslot番号だけでは代替しない。後続roundはfresh tokenを要求し、Initial tokenを使い回さない。
 
-発行は元budget側one-shot claimを最初のfallible処理より前に消費する案。claimを増やす場所・費用・状態表は実装前に別レビューする。各証拠は一度だけ完全性検査器に渡し、別budget/別owner提示では双方を停止する。失敗/Drop/forgetで再発行しない。部分導出成功をUnknown→Verified setterでDraftへ注入しない。
+発行は元budget側one-shot claimを最初のfallible処理より前に消費する案。claimを増やす場所・費用・状態表は実装前に別レビューする。その状態表では、必要量証拠の発行/消費が始まった後の状態（未開始以外）を`SharedBudget::stop`がbridge claimへ失敗を記録する条件へ必ず含める。含めないと、発行開始後の取消/期限/work不足が同budgetのsticky `failed`には残っても、claimを保持する証拠・Draft側からは見えない。準備（`55cdf64`）・証拠段階（`6dae716`）・配賦（`096e06a`）で同じ漏れを修正しており、各状態について「遷移後の停止がclaimへ記録され、先行理由を上書きしない」回帰試験を併せて追加する。各証拠は一度だけ完全性検査器に渡し、別budget/別owner提示では双方を停止する。失敗/Drop/forgetで再発行しない。部分導出成功をUnknown→Verified setterでDraftへ注入しない。
 
 全5項目の内訳・全体payload/work/列挙bytes等・実承認cap/clock/モデルのcoverageが揃い、比較・元残枠・実強制可能性を確認して初めて`CompleteRequirementEvidence`を設計できる。5 scalarの値があるだけでは発行しない。PC-01模擬Witness/旧40比較を完成証拠へ読み替えない。
 
@@ -137,7 +137,7 @@ oracleはproduction計算器の係数表・offset・集約helperを再利用し�
 | allocation | group/key4確保・途中失敗、Vec growの旧新重複・capacity余剰、空/上限/1超過・巨大文字列/escape・不正JSON、最終Rc参照drop。件数とbytesを別採点 |
 | bytes | 同buffer再hashは0 read、実再読は再計上、EOF/短読取/EINTR・予約返却、A/Bとrecord/scanの重複排除、停止後の遅延結果も元台帳の規則を保持 |
 | work | 各B phaseと拒否/取消prefix、収集/算術/guard/表示されないdiscard、実課金総和と費目別和の一致。bootstrap分を全体式へ二重加算しない |
-| binding | 同値別owner/bytes/cap、別budget/started/profile/receipt/slot/model、期限/世代変更、重複生成/消費・失敗後再開・Drop/forgetを拒否 |
+| binding | 同値別owner/bytes/cap、別budget/started/profile/receipt/slot/model、期限/世代変更、重複生成/消費・失敗後再開・Drop/forgetを拒否。必要量証拠の発行/消費開始後の停止がbridge claimへ記録され、claim保持側から見えることを状態ごとに確認 |
 | 受付 | 等号・1不足・overflow・未導出項・未知単位/モデル、B0以前の無制限取得拒否、全体payload/work残必要量不足。scan/cap発行に到達しない |
 | 感度 | owner寿命を1区間短縮、allocation grow旧buffer/キー確保を1つ除外、read/guardを1つ落とす、bootstrapを二重加算する変異で対応テストが失敗する |
 | 静的境界 | 同scope外持出し/borrow先move、Clone/serde/summaryから再構築を拒否。private名が見えないだけの失敗を寿命証明に数えない |
