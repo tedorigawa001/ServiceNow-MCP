@@ -1,6 +1,6 @@
 # BP-5 R-2 OL-03：PolicyCapsEvidence・詳細設計
 
-Version: draft-0.3 / Date: 2026-10-23 / Source baseline: `57ec28e` / Status: PC-01とPolicy→Slots順序を合成実装。PC-02の同estimate借用projection・scan35項目比較を実装。全体必要量/本番cap承認・配賦・bootstrap統合・運用受付は未実装/未承認
+Version: draft-0.4 / Date: 2026-10-23 / Source baseline: `e77f1ae` / Status: PC-01とPolicy→Slots、PC-02の同estimate借用projection・scan35項目比較を合成実装。PC-03のone-shot parts詳細設計を追加（MDのみ）。全体必要量/本番cap承認・配賦・bootstrap統合・運用受付は未実装/未承認
 
 ## 1. 範囲と停止状態
 
@@ -204,3 +204,11 @@ projectionは同estimate/ScanInputs/receipt/context/Initial scope・token/元bud
 新規allocationはprojection/比較のいずれにもなく、固定長の数量/配列をstackで保持する。estimateが元claimのRcを1つ保持し、部分比較結果もそのRcを1つ保持する。元資源/木/estimateの借用や保持量を無料とはせず、全体work/resource上界・bootstrap制限へはまだ接続しない。18＋45を既存89/17/23や全体上界へ単純加算しない。
 
 [PC-02合成検証記録](E2E_BEST_PRACTICE_R2_OL03_PC02_PROJECTION_SYNTHETIC_2026-10-23.md)を参照。実profileのscan統計からの必要量導出は到達したが、本番cap承認、残5項目と外側/A-B/recordを含む全体必要量、PC-01模擬Witnessの置換、parts配賦、P0〜P6の安定所有者/Initial継続への接続は未対応である。全体受付と通常strictは無効のままとする。
+
+## 13. PC-03 one-shot parts配賦・証拠消費（設計のみ）
+
+[PC-03詳細設計draft-0.1](BEST_PRACTICE_BP5_R2_OL03_PC03_PARTS_ALLOCATION_DESIGN.md)で、同projection/比較元capを借用するallocation view、実値を含まないScanPartsDraft、完全性証拠が揃った後だけ発行できるPolicyAllocationPartsを分離した。未導出5項目をUnknownのまま保持し、現状のfinalizeはUnavailableで停止する。PC-01の模擬Witness/CheckedやPC-02の部分結果だけで実ResourceInput/Quotasを作らない。
+
+partsの論理slotキー3個を先に固定し、PolicyCaps消費後のSlotsで実source originへ対応付ける案とした。後続roundのfresh tokenは各session round開始で別に結合し、Initial tokenを再使用しない。正本one-shot claimはbudget側、完成partsは同receipt/lineage/budget/started/cap issuerへ結合し、固定移譲口からbinding付き値として一度moveする。session configure後はpre-session guardを再利用しない。
+
+既存PC-02のborrowから値移動するproducerへ接続する問題はPC-04のままであり、自己参照/unsafe/追加decodeで回避しない。詳細設計は費目所有・拒否分類・固定discard・合成受入条件までのMD案で、実装/全体受付/本番cap投入/通常strict差替えは行わない。
