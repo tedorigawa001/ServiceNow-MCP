@@ -89,6 +89,8 @@ estimateやparts値だけのprivate boolでは、別issuerからの再生成を�
 
 これは設計用状態表であり、新しいstate setterを公開しない。各入口は期待prior stateを一度取り出して先に停止/試行済み側へ倒し、その後にwork/guardを行う。成功時だけ次の状態に進む。失敗・drop・生成途中のallocation失敗でもFreshへ戻さない。完成/移譲のclaimを最終checkpoint後に初めて取る設計にはしない。
 
+停止の伝播：`SharedBudget::stop`は、bridge claimの発行済み/開始済みフラグ（context/records/held/policy/slotsの各evidence issued、preparation_started、generated）が立っている場合だけclaimへ失敗を記録する。配賦状態を同claimへ置く以上、**状態がFresh以外（DraftClaimed以降、Stoppedを除く全状態）なら`stop`がclaimへ第一理由を記録する**ことを記録条件へ追加する。これを欠くと、配賦試行開始後の取消/期限/work不足が同budgetのstickyな`failed`には残っても、claimを保持するDraft/parts/view側からは見えない。準備（`55cdf64`）と証拠段階（`6dae716`）で同じ漏れを修正した経緯があり、実装時は各状態について「状態遷移後の停止がclaimへ記録され、先行理由を上書きしない」回帰試験を併せて追加する。
+
 未移譲のDraft/partsをabandonしたDropは元claimにUnavailable（先行理由があればそれ）を保持するだけであり、source解放やcleanup完了を証明しない。正常に次ownerへmoveした空shellはabandon扱いにしない。意図的に値をforgetしてもclaimが残り、次の発行は拒否される。
 
 ## 6. 配賦値の規則と証拠の消費順
@@ -165,7 +167,7 @@ slot attach側もpre-sessionのcheck_identityを再利用せず、Transferred後
 
 1. 同with_round・同estimate/比較元capのviewからのみ非実行Draftを発行。raw summary/同値cap/別receipt/別claim/期限切れは拒否。
 2. 残5項目をUnknownのまま保持し、完成parts発行の試行は必ずUnavailable。未知項の0埋め、模擬PolicyCapsCheckedでの昇格、実ResourceInput/Quotas/session configure到達がないことを確認。
-3. Draft/finalize/transferの全入口で二重試行・drop/forget後・別issuer再生成を拒否。各work境界のLimit/Cancelled/Deadlineと先行理由を保持。
+3. Draft/finalize/transferの全入口で二重試行・drop/forget後・別issuer再生成を拒否。各work境界のLimit/Cancelled/Deadlineと先行理由を保持。配賦状態がFresh以外になった後の`stop`がbridge claimへ記録され、claim保持側からも停止が見えることを状態ごとに確認する（§5）。
 4. 論理3slotの重複/交換/別group、実source alias/開始済み/別root/modelを拒否。PolicyCaps→Slots順と後続roundのfresh tokenを維持。
 5. 将来の完成経路ではsession/round/local capの対応値完全一致・total独立・retry/tail共有・cleanup予約の一度計上を別oracleで確認。完全性issuerがない間は非実行模型での配賦検査に限定する。
 6. proofだけ/partsだけの交換、発行後の別owner持込み、移譲途中の失敗を拒否。解放回数/first diagnostic/NotReachedとUnconfirmedを区別。
