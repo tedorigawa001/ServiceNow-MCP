@@ -50,12 +50,13 @@ fn stop_owner(
     e: Failure,
     b: &mut SharedBudget<'_>,
 ) -> Failure {
-    let reason = owner.failure.get().unwrap_or(e);
+    let reason = owner
+        .failure
+        .get()
+        .or(owner.allocation.get().failure())
+        .unwrap_or(e);
     let reason = b.stop::<()>(reason).unwrap_err();
-    if owner.failure.get().is_none() {
-        owner.failure.set(Some(reason));
-    }
-    owner.failure.get().unwrap()
+    owner.stop_allocation(reason)
 }
 pub(in super::super::super::super::super) fn project<'e, 'p, 'i, 'd, 's, 'r>(
     estimate: &'e ScanWorkEstimate<'p, 'i, 'd, 's, 'r>,

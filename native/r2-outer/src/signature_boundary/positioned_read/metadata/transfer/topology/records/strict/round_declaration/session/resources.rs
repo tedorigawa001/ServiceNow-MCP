@@ -1,6 +1,7 @@
 //! Internal accounting and fixed ScanOps hooks. No production policy constructor.
 use super::*;
 use std::cell::RefCell;
+pub(in super::super::super) mod draft;
 
 const MODEL: &str = "bp5-r2-session-allocation-0.1";
 #[derive(Clone, Copy)]

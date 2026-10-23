@@ -14,6 +14,7 @@ const MAX_CHUNK: usize = 65536;
 const MAX_REQUESTS: u32 = 32768;
 const EINTR_RETRIES: u8 = 8;
 
+mod allocation_claim;
 #[cfg(test)]
 mod work_audit;
 // Test instrumentation has no production state, work charge, reservation or authority.
@@ -66,6 +67,7 @@ struct ScanSessionClaim {
 // Independent of session creation: preparation/packaging/use do not consume its claim.
 #[derive(Default)]
 struct ProtectedBridgeClaim {
+    allocation: Cell<allocation_claim::State>,
     context_evidence_issued: Cell<bool>,
     records_evidence_issued: Cell<bool>,
     context_evidence_used: Cell<bool>,
@@ -137,6 +139,7 @@ impl<'a> SharedBudget<'a> {
             .failed
             .or(self.scan_session_claim.failure.get())
             .or(self.protected_bridge_claim.failure.get())
+            .or(self.protected_bridge_claim.allocation.get().failure())
             .unwrap_or(reason);
         self.failed = Some(reason);
         // Any started bridge phase, including evidence issued before preparation, must see stops.
@@ -148,8 +151,9 @@ impl<'a> SharedBudget<'a> {
             || claim.slots_evidence_issued.get()
             || claim.preparation_started.get()
             || claim.generated.get()
+            || claim.allocation.get() != allocation_claim::State::Fresh
         {
-            self.protected_bridge_claim.failure.set(Some(reason));
+            self.protected_bridge_claim.stop_allocation(reason);
         }
         if self.scan_session_claim.started.get() {
             self.scan_session_claim.failure.set(Some(reason));

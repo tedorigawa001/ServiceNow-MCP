@@ -1,12 +1,12 @@
 # BP-5 R-2 OL-03：record・scanを含む全体work上界と事前受付
 
-Version: draft-0.33 / Date: 2026-10-23 / Status: Context/Records/HeldSources・PolicyCaps→SlotsとPC-02の実profile scan必要量projection/部分比較まで実装。PC-03のparts配賦・証拠消費の詳細設計を追加（MDのみ）。実cap/全体必要量/Initial bootstrapは未実装/未承認。供給証拠全体費・全体受付・統合other上界・通常strict差替えは未対応。以下の各段階の記録と現行状態を区別する。
+Version: draft-0.34 / Date: 2026-10-23 / Status: PC-01/PC-02・PolicyCaps→SlotsとPC-03のview/非実行Draft/Unknown拒否まで合成実装。完成parts・実cap/全体必要量/Initial bootstrapは未実装/未承認。供給証拠全体費・全体受付・統合other上界・通常strict差替えは未対応。以下の各段階の記録と現行状態を区別する。
 
 ## 1. 範囲と停止状態
 
-[PolicyCapsEvidence詳細設計draft-0.4](BEST_PRACTICE_BP5_R2_OL03_POLICY_CAPS_EVIDENCE_DESIGN.md)で、承認cap/ModelBundle、限定bootstrap、同profile由来の必要量、ResourceInput/Quotas配賦、失敗停止を分離した。必要量のresource計算9行をcap承認と扱わず、未対応dimensionがあれば停止する。PC-01の89 workは合成の固定原票・模擬Witness・40比較の独立費。PC-02は同estimate借用projection18＋scan35項目の部分比較45 workを確認したが、実認証・残5項目/外側・record/A-B全体必要量・配賦/保持費は未導出。既存13/17/23候補へ単純加算して全体上界にしない。
+[PolicyCapsEvidence詳細設計draft-0.5](BEST_PRACTICE_BP5_R2_OL03_POLICY_CAPS_EVIDENCE_DESIGN.md)で、承認cap/ModelBundle、限定bootstrap、同profile由来の必要量、ResourceInput/Quotas配賦、失敗停止を分離した。必要量のresource計算9行をcap承認と扱わず、未対応dimensionがあれば停止する。PC-01の89 workは合成の固定原票・模擬Witness・40比較の独立費。PC-02は同estimate借用projection18＋scan35項目の部分比較45 workを確認したが、実認証・残5項目/外側・record/A-B全体必要量・配賦/保持費は未導出。既存13/17/23候補へ単純加算して全体上界にしない。
 
-[PC-03 parts配賦詳細設計draft-0.1](BEST_PRACTICE_BP5_R2_OL03_PC03_PARTS_ALLOCATION_DESIGN.md)では、非実行Draftと完全性前提の実partsを分離した。view/claim、固定cap写像、論理3slot、証拠発行/消費、値移譲、configure/local attach、discard/保持量を別費目とし、数値未導出のまま0扱いしない。未導出5項目や全体coverageが不明なら完成partsを発行せず停止し、全体受付は無効のまま維持する。
+[PC-03 parts配賦詳細設計draft-0.2](BEST_PRACTICE_BP5_R2_OL03_PC03_PARTS_ALLOCATION_DESIGN.md)では、非実行Draftと完全性前提の実partsを分離した。view4・Draft作成5・Unknownでのfinalize拒否9 workを第1subsetで合成計数したが、固定cap写像、論理3slot、証拠発行/消費、値移譲、configure/local attach、discard/保持量は別費目であり、未導出を0扱いしない。未導出5項目や全体coverageが不明なら完成partsを発行せず停止し、全体受付は無効のまま維持する。
 
 Initial既存scope/decode/profileを同継続内でpolicy検査からInitial kernelへ引き継ぐ案には、安定した外側receipt所有者とtyped prechecked引継ぎの内部API移行が必要。現行値移譲型をそのまま使えるとはしない。3decode/6record検証・shared budgetを維持する費目所有表と全体残予定量が確定するまで、capの承認だけで全体受付を有効化しない。大規模shapeのwork不足をresource capで救済せず、上限を緩めない。
 

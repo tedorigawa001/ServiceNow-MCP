@@ -26,6 +26,14 @@ pub(in super::super::super::super::super::super) struct ScanCapsCompared<'a> {
     // Borrow self + caps: their lifetime cannot escape or become an owned full-policy proof.
     _borrow: std::marker::PhantomData<&'a ()>,
     owner: Rc<crate::signature_boundary::positioned_read::ProtectedBridgeClaim>,
+    caps: &'a ScanResourceCaps,
+    scope: &'a RoundScope<'a>,
+    estimate_claim: &'a Cell<bool>,
+    projection_claim: &'a Cell<bool>,
+    session: Rc<crate::signature_boundary::positioned_read::ScanSessionClaim>,
+    started: Instant,
+    retries: u8,
+    payload: u64,
 }
 impl ScanCapsCompared<'_> {
     pub(in super::super::super::super::super::super) fn require_complete(
@@ -106,10 +114,21 @@ pub(in super::super::super::super::super::super) fn compare<'a>(
         Ok(ScanCapsCompared {
             _borrow: std::marker::PhantomData,
             owner: estimate.resource_owner.clone(),
+            caps,
+            scope: projection.estimate.profile.scope,
+            estimate_claim: &projection.estimate.resource_projected,
+            projection_claim: &projection.comparison_started,
+            session: b.scan_session_claim.clone(),
+            started: b.started,
+            retries: b.retries_left,
+            payload: projection.quantities.payload_three,
         })
     })();
     finish(projection.estimate, result, b)
 }
+
+mod allocation_view;
+pub(in super::super::super::super::super::super) use allocation_view::ScanCapAllocationView;
 impl std::fmt::Debug for ScanResourceCaps {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.write_str("ScanResourceCaps(synthetic_snapshot_not_operating_cap)")

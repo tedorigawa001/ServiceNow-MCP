@@ -1,12 +1,12 @@
 # BP-5 R-2 OL-03：PC-03 one-shot parts配賦・証拠消費の詳細設計
 
-Version: draft-0.1 / Date: 2026-10-23 / Source baseline: `e77f1ae` / Status: MDのみ。新規型・claim・発行/移譲・本番承認は未実装
+Version: draft-0.2 / Date: 2026-10-23 / Source baseline: `ff71bc5` / Status: allocation view・非実行Draft・budget側claim・Unknownでfinalize拒否を合成実装。完成parts/論理slotキー/移譲/本番承認は未実装
 
 ## 1. 範囲と到達点
 
-[PolicyCaps設計draft-0.4](BEST_PRACTICE_BP5_R2_OL03_POLICY_CAPS_EVIDENCE_DESIGN.md)のPC-03を具体化する。本書の型名・入口・状態・費目は設計案であり、既に存在するAPIではない。PC-02のscan35項目の部分比較を、全体必要量の確認や実行権へ昇格しない。
+[PolicyCaps設計draft-0.5](BEST_PRACTICE_BP5_R2_OL03_POLICY_CAPS_EVIDENCE_DESIGN.md)のPC-03を具体化する。§11で実装済みsubsetを区別し、それ以外の型名・入口・状態・費目は引き続き設計案である。PC-02のscan35項目の部分比較を、全体必要量の確認や実行権へ昇格しない。
 
-本番cap投入・全体受付・通常strict差替え・実装・OS接続・実機操作・token発行・設定変更・permit発行を含めない。telemetry保留、APPROVED_REGISTRY=None、通常v2 Unavailable、gate92、DER/absence停止を維持する。本書の配賦は将来の内部資源上限の設定であり、MCP操作/OS実行のpermitではない。
+本番cap投入・全体受付・通常strict差替え・OS接続・実機操作・token発行・設定変更・permit発行を含めない。telemetry保留、APPROVED_REGISTRY=None、通常v2 Unavailable、gate92、DER/absence停止を維持する。本書の配賦は将来の内部資源上限の設定であり、MCP操作/OS実行のpermitではない。
 
 ### 1.1 照合した現行ソース
 
@@ -181,3 +181,23 @@ slot attach側もpre-sessionのcheck_identityを再利用せず、Transferred後
 後の完成parts追加では、parts由来を要求しない旧PolicyCapsEvidenceモデルと同一IDにせず、`bp5-r2-policy-caps-evidence-0.2`、parts/BoundResourceInput/slot結合用の専用model等の次版契約を設計・承認する。具体的ID/係数は案で、現在のソースの定数を変更しない。古い合成証拠を新しい完成証拠として読み替えない。
 
 承認待ち：実capの全原票/信頼元・失効手順、完全性issuerと残5項目の導出/実強制、外側payload/work/保持量の全体coverage、借用継続と固定caller移行、型付きslot/配賦sealの接続先、全費目上界/モデル版、本番backend。これらが未解決ならUnknown/Unavailableのままとし、全体受付・実行経路は停止を維持する。
+
+## 11. 第1subsetの実装・合成確認
+
+[allocation_view.rs](../native/r2-outer/src/signature_boundary/positioned_read/metadata/transfer/topology/records/strict/round_declaration/scan_inputs/profile/calculator/projection/caps/allocation_view.rs)はScanCapsComparedを値で消費してScanCapAllocationViewを発行する。比較済みの実cap snapshot・Initial scopeへの参照と、同estimate/projectionのclaim fieldへのborrow、元bridge/session claim・started/retry/payloadを保持する。PhantomDataや診断配列だけで済ませず、同receipt/target/context/tokenへ実scopeの借用で結合する。生cap配列のgetter/再入力や任意view constructorはない。capは依然cfg(test)の固定syntheticだけである。
+
+view modelは`bp5-r2-scan-cap-allocation-view-0.1`。発行は入口1＋固定guard3の4 work。guard3は元owner/inspection・未開始、実scope/claimの同一性、immutable cap/model/期限・retry/残payloadを再確認する。PC-02の35項目比較やresource計算9行、profile収集/decodeは再実行しない。
+
+[resources/draft.rs](../native/r2-outer/src/signature_boundary/positioned_read/metadata/transfer/topology/records/strict/round_declaration/session/resources/draft.rs)にScanPartsDraftを実装した。modelは`bp5-r2-scan-parts-draft-0.1`。同viewを所有して保持するだけの非実行型であり、承認capの静的session/round/local配列写像や論理slotキー3個はまだ発行しない。実ResourcePolicy/ResourceInput/Quotas、完成parts、完全性証拠、供給/permitへの変換口はない。
+
+未導出5項目は固定順（外側owner・管理allocation・bootstrap bytes/work/live）のUnknownとして保持する。型にVerified variant、値の入力口、status setterはない。finalizeは値を消費し、戻り型を`Result<Infallible, Failure>`にして成功値を構築できない。5項目を検査後にUnavailableで停止する。scalarを0や上限値で埋めたり、PC-01の模擬Witnessへ昇格したりしない。
+
+[allocation_claim.rs](../native/r2-outer/src/signature_boundary/positioned_read/allocation_claim.rs)の正本stateは元ProtectedBridgeClaimのCellに置く。実装した状態はFresh/DraftClaimed/DraftReady/FinalizeClaimed/Stoppedだけ。完成parts/transfer用の未実装状態を先に追加しない。Draft作成はwork前にFreshをDraftClaimedへ置き換え、成功時だけDraftReadyとなる。finalizeもwork前にFinalizeClaimedを消費する。失敗・drop・forget・別issuerで再生成できない。
+
+SharedBudget::stopは配賦状態が非Freshなら元claimの第一理由とStoppedを記録する。別budgetを渡された場合はviewが保持する元claimにも停止を伝播する。§5で要求した、他のevidence/preparation flagがなくても配賦開始後の停止がclaim側に見える条件を追加した。実装済みの各active状態で外部stop→第一理由保持を直接テストした。
+
+費目はview4、Draft作成5（入口1＋view guard3＋publication1）、finalize拒否9（入口1＋view guard3＋Unknown5）。合計18 workは本subsetの正常Draft生成→拒否の実計数で、全体上界ではない。新しいheap allocationはなく、viewのborrowとRcの保持量、Draftの元claim参照を固定サイズで保持する。claim本体は64 bytes以下を確認。PC-02の比較結果も実scope/cap/claim借用とsession Rcを保持するようにしたが、旧比較45 workは不変である。
+
+Draft Dropは元claimの先行理由を保ち、なければUnavailableを記録するだけ。source/FDやquota予約を所有せず、解放/Closed証拠を発行しない。完成経路がないため正常transfer用の空shellや部分移譲は今回実装していない。borrowは同with_round内で閉じ、PC-04の外側owner/Initial継続を先取りしない。
+
+[合成検証記録](E2E_BEST_PRACTICE_R2_OL03_PC03_DRAFT_SYNTHETIC_2026-10-23.md)を参照。次は論理slot/非実行の配賦写像と独立oracle、未導出項目/完全性issuer、PC-04借用接続の順に整理する。完成parts・通常strict・全体受付は引き続き停止する。

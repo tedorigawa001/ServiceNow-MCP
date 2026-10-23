@@ -2,6 +2,7 @@ use super::super::super::super::super::tests::setup;
 use super::super::super::super::tests::ready;
 use super::*;
 use std::{cell::Cell, time::Duration};
+mod draft;
 
 #[test]
 fn scan_caps_comparison_is_partial_and_does_not_allocate_or_admit() {

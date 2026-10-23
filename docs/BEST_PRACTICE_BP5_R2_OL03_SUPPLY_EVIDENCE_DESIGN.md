@@ -1,6 +1,6 @@
 # BP-5 R-2 OL-03：保護producerの供給証拠検査・詳細設計
 
-Version: draft-0.8 / Date: 2026-10-23 / Source baseline: `e77f1ae` / Status: Context/Records/HeldSources・PolicyCaps→SlotsとPC-02の同estimate scan必要量projection/35項目比較を合成実装。PC-03のone-shot parts設計を追加（MDのみ）。全体必要量/cap承認・準備Envelope/通常strict未接続、本番issuer/運用承認なし
+Version: draft-0.9 / Date: 2026-10-23 / Source baseline: `ff71bc5` / Status: Context/Records/HeldSources・PolicyCaps→Slots・PC-02に加えPC-03のview/非実行Draft/Unknown拒否を合成実装。完成parts・全体必要量/cap承認・準備Envelope/通常strict未接続、本番issuer/運用承認なし
 
 ## 1. 範囲と不変条件
 
@@ -252,7 +252,7 @@ proofの同issuer/owner照合後、held bindingと固定3slot条件を再確認�
 
 ## 14. PolicyCaps詳細設計とPC-01合成subset
 
-[PolicyCapsEvidence詳細設計draft-0.4](BEST_PRACTICE_BP5_R2_OL03_POLICY_CAPS_EVIDENCE_DESIGN.md)では、ApprovedCaps、限定BootstrapScope、保護されたResourceRequirementWitness、PolicyCapsEvidence/CheckedとResourceInput/Quotas配賦partsを分けた。必要量がcap以内という算術結果だけで承認せず、同registry/build/model bundle・期限・receipt/held/source/初回profileへの結合を要求する。
+[PolicyCapsEvidence詳細設計draft-0.5](BEST_PRACTICE_BP5_R2_OL03_POLICY_CAPS_EVIDENCE_DESIGN.md)では、ApprovedCaps、限定BootstrapScope、保護されたResourceRequirementWitness、PolicyCapsEvidence/CheckedとResourceInput/Quotas配賦partsを分けた。必要量がcap以内という算術結果だけで承認せず、同registry/build/model bundle・期限・receipt/held/source/初回profileへの結合を要求する。
 
 profileは現行RoundScope内の借用型で、値移動するproducerへ持ち出せない。初回の既存decode/estimateを同scope内でpolicy確認→Initial kernelへ引き継ぐ案と、安定した外側receipt所有者/固定callerへの内部API移行を承認待ちとして明記した。4回目のdecode・profile claim reset・自己参照/unsafe・scan実測後のcap承認は採らない。
 
@@ -274,6 +274,6 @@ Slotsの準備・取得・発行・消費は、`PolicyInputs::require_checked`�
 
 ## 17. PC-03 parts配賦・証拠消費の詳細設計
 
-[PC-03詳細設計draft-0.1](BEST_PRACTICE_BP5_R2_OL03_PC03_PARTS_ALLOCATION_DESIGN.md)はMDのみ。非実行のScanPartsDraftと、実cap/完全性証拠を前提にする完成PolicyAllocationPartsを別型とし、未導出5項目やPC-02の部分結果を完成証拠へ読み替えない。budget側の不可逆claim、同receipt/issuer/model/budget/started、固定3論理slotと後の実source結合、未移譲partsとPolicyCaps証拠の同一性を要求する。
+[PC-03詳細設計draft-0.2](BEST_PRACTICE_BP5_R2_OL03_PC03_PARTS_ALLOCATION_DESIGN.md)は非実行のScanPartsDraftと、実cap/完全性証拠を前提にする完成PolicyAllocationPartsを分離する。§11の第1subsetはallocation view/非実行Draft・budget側不可逆claimを実装した。未導出5項目はUnknownのままで、finalizeは成功値を作れない戻り型でUnavailableを返す。完成partsの同receipt/issuer/model/budget/startedと固定3論理slotへの結合は引き続き設計であり、現部分結果から発行しない。
 
-PolicyCaps→Slots順序を保ち、parts/proofの交換・二重発行・異なるslot/sourceへの移譲で停止する。現状は完成parts発行不能で、最初の合成実装案もview/非実行DraftとUnknownでのfinalize拒否までに限定する。固定discard・上位診断保持・configure後の別guard・PC-04借用前提・費目所有を明記し、実ResourceInput/Quotas/通常strictへは接続しない。
+PolicyCaps→Slots順序を保ち、現subsetは同view/実scope/cap/元claimを検査して再生成を拒否する。非Fresh配賦状態のstopをclaimへ伝播し、先行診断を保持する。view4＋Draft5＋finalize拒否9 workは独立の合成実計数である。固定discard・上位診断保持・configure後の別guard・PC-04借用前提の完成経路は未接続で、実ResourceInput/Quotas/通常strictへ進まない。[PC-03合成検証記録](E2E_BEST_PRACTICE_R2_OL03_PC03_DRAFT_SYNTHETIC_2026-10-23.md)を参照。
