@@ -148,6 +148,8 @@ oracleはproduction計算器の係数表・offset・集約helperを再利用し�
 
 ## 9. 実装に進む前の決定順・承認待ち
 
+[MA-02固定module/保護projection詳細設計draft-0.1](BEST_PRACTICE_BP5_R2_OL03_MA02_MODULE_PROJECTION_DESIGN.md)で、最初のcoverageをprofile counts/Draft keys/inline mapに限定し、実要求layoutと要素payloadを分離した。保護された同receipt/budget/profile由来・独立claim・収集費/部分型の設計であり、全管理量/実allocator/5項目の確認済み証拠は追加しない。
+
 1. **費目所有/単位/phase境界をレビュー**：本表とPC-04のP0〜P6を整合させ、同じ処理を複数phaseへ置かない。管理allocationの複合dimension契約・backend/allocator対象を決める。
 2. **非実行の必要量モデルから実装**：保護されたshape/所有イベントへの結合、純粋checked計算器、独立oracle。部分結果は非実行型に留め、Unknownやfinalizeを変更しない。
 3. **PC-04の安定owner/Initial継続を設計・検証**：3decode/6record検証・同estimateを維持し、費目の責務移管・借用・途中失敗の解放を確認する。

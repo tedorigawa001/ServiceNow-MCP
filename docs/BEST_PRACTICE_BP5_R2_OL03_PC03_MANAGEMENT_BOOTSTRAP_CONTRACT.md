@@ -114,6 +114,8 @@ B0の前提検査の循環対策は、信頼済み固定entryが限定BootstrapC
 
 MA-01の成功は「合成イベント算術の契約確認」だけ。次段階MA-02で固定moduleの実確保モデル/保護projection/同receipt-budget-profile結合と収集費を設計し、その後に初めて完全性coverageを議論する。5項目を確認済みにする順序ではない。
 
+[MA-02詳細設計draft-0.1](BEST_PRACTICE_BP5_R2_OL03_MA02_MODULE_PROJECTION_DESIGN.md)で、初期3費目（profile counts・Draft keys・inline map）の固定recipe、layout証拠と未対応coverage、同estimate/receipt/budgetへの部分projection・収集/検査費を具体化した。設計のみで実layout/issuer/projectionは未実装、5項目Unknownを維持する。
+
 ## 6. 次の承認点と停止条件
 
 実装前：4軸の単位、carry-in/out、growの保守的旧新重複、B4/S0とBX境界、MA-01の有限構造上限・scratch方式/work式・one-shotの所在をレビューする。未決事項を実装者の既定値で埋めない。

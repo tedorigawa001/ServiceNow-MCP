@@ -182,6 +182,8 @@ slot attach側もpre-sessionのcheck_identityを再利用せず、Transferred後
 
 後続draft-0.2 §7でMA-01の非実行合成計算subsetを実装した。独立literal oracle、構造上限・同時/累積量・phase/ID・中断を確認するが、実必要量やcap比較済み証拠を発行しない。SyntheticCarryOut/ClosedSyntheticTraceはparts/cleanup証拠ではなく、既存Draft/Unknown/finalize契約を変更しない。
 
+[MA-02詳細設計draft-0.1](BEST_PRACTICE_BP5_R2_OL03_MA02_MODULE_PROJECTION_DESIGN.md)は、固定moduleのlayout/coverageと同estimateの部分必要量projectionを分離し、実装順・収集費・未対応範囲を定義する。実cap/実layout承認・完全管理証拠・完成partsは引き続き未対応であり、合成traceから昇格しない。
+
 最初は**allocation view・非実行Draft・budget側one-shot claim・Unknownでfinalize拒否**だけを合成実装する案とする。続いて論理slot・parts照合の非実行模型と独立oracleを整備する。残5項目/全体必要量・cap/clock/費目所有・PC-04の安定借用が成立するまで、実ResourcePolicy/ResourceInput/Quotas constructorとconfigure接続は作らない。
 
 後の完成parts追加では、parts由来を要求しない旧PolicyCapsEvidenceモデルと同一IDにせず、`bp5-r2-policy-caps-evidence-0.2`、parts/BoundResourceInput/slot結合用の専用model等の次版契約を設計・承認する。具体的ID/係数は案で、現在のソースの定数を変更しない。古い合成証拠を新しい完成証拠として読み替えない。
