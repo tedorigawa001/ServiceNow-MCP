@@ -62,6 +62,13 @@ bdo git -c core.fsmonitor=false diff --check
 
 Rust全体：**932 passed / 5 suites**（既存919＋新規13）。Clippy警告なし、release build成功。固定評価セットおよび通常strict本体は変更していない。
 
+### 4.1 レビュー後の修正
+
+- `SharedBudget::stop`がbridge claimへ失敗を記録する条件に、`context_evidence_issued`・`records_evidence_issued`を追加した。準備開始前に証拠を発行した段階の停止も、claimを保持する側から見える。従来も証拠側の`check_identity`は同budgetのcheckpointを先に通すため拒否はされていたが、準備/生成段階と同じ伝播規則へ揃えた。
+- 発行済み確認をContext/Recordsで揃えた。RecordsもIdentityごとの`records_issued_here`を発行時に立て、消費時はそれを確認する（従来はbudget側の`records_evidence_issued`）。同budgetでの発行は一度限りのため結果は変わらない。
+- 新規1テスト`evidence_issued_before_preparation_latches_later_budget_stops`を追加した。条件を元に戻す一時変異で失敗することを確認し、復元した。
+- Rust全体：**933 passed / 5 suites**（932＋新規1）。Clippy（all-targets/lib）、rustfmt、release build、diff check成功。
+
 ## 5. 未対応・停止状態
 
 本番issuer、HeldSources/PolicyCaps/ScanSlots証拠、準備Envelopeへの証拠接続、取得前失敗を上位ownerへ保持する接続、cap承認・profile供給順序・全体work/resource上界は未対応。全体受付は無効、telemetry保留、APPROVED_REGISTRY=None、通常v2 Unavailable、gate92、DER/absence停止を維持する。

@@ -33,7 +33,7 @@ impl RecordsEvidence<'_> {
             work(b)?; // O.evidence_records_consume 1; immutable owner, no whole-binding copy/compare.
             check_identity(&self.owner, b)?;
             if !fresh
-                || !self.owner.bridge.records_evidence_issued.get()
+                || !self.owner.records_issued_here.get()
                 || !context.same_issuer(&self.owner)
                 || !self.owner.bridge.context_evidence_used.get()
                 || !Rc::ptr_eq(&self.owner, &inputs.identity)
@@ -71,12 +71,15 @@ pub(super) fn issue<'s, S>(
         b.checkpoint()
     })();
     match result {
-        Ok(()) => Ok(RecordsEvidence {
-            owner: id.clone(),
-            lineage: inputs.receipt.lineage.clone(),
-            source: inputs.source_origin.clone(),
-            bound: inputs.bound,
-        }),
+        Ok(()) => {
+            id.records_issued_here.set(true);
+            Ok(RecordsEvidence {
+                owner: id.clone(),
+                lineage: inputs.receipt.lineage.clone(),
+                source: inputs.source_origin.clone(),
+                bound: inputs.bound,
+            })
+        }
         Err(e) => Err(rejected(id, SupplyStage::ReceiptTarget, e, b)),
     }
 }

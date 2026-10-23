@@ -133,8 +133,12 @@ impl<'a> SharedBudget<'a> {
             .or(self.protected_bridge_claim.failure.get())
             .unwrap_or(reason);
         self.failed = Some(reason);
-        if self.protected_bridge_claim.preparation_started.get()
-            || self.protected_bridge_claim.generated.get()
+        // Any started bridge phase, including evidence issued before preparation, must see stops.
+        let claim = &self.protected_bridge_claim;
+        if claim.context_evidence_issued.get()
+            || claim.records_evidence_issued.get()
+            || claim.preparation_started.get()
+            || claim.generated.get()
         {
             self.protected_bridge_claim.failure.set(Some(reason));
         }

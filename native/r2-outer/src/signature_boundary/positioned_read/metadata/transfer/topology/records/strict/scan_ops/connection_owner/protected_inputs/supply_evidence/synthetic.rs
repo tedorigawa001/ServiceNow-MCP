@@ -20,6 +20,7 @@ pub(in super::super::super::super) fn acquire<'s, S: RecordSource>(
             session: b.scan_session_claim.clone(),
             started: b.started,
             context_issued_here: std::cell::Cell::new(false),
+            records_issued_here: std::cell::Cell::new(false),
         }),
         source_origin: Rc::new(()), // Exists before acquisition checks, tied to this owned source.
     };

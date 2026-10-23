@@ -15,7 +15,9 @@ struct Identity {
     bridge: Rc<ProtectedBridgeClaim>,
     session: Rc<ScanSessionClaim>,
     started: Instant,
+    // Per-issuer flags: consume checks the identity it was issued from, for both proofs.
     context_issued_here: std::cell::Cell<bool>,
+    records_issued_here: std::cell::Cell<bool>,
 }
 // Immutable owned receipt/source pairing. No mutation/extraction API in non-test builds.
 // The only acquisition constructor is synthetic::acquire under cfg(test).
@@ -93,6 +95,7 @@ impl<'s, S> EvidenceInputs<'s, S> {
                     session: self.identity.session.clone(),
                     started: self.identity.started,
                     context_issued_here: std::cell::Cell::new(true),
+                    records_issued_here: std::cell::Cell::new(false),
                 })
             }
             _ => unreachable!(),
@@ -131,5 +134,24 @@ mod contracts {
         assert!(std::mem::size_of::<context::ContextEvidence<'static>>() <= 32);
         assert!(std::mem::size_of::<records::RecordsEvidence<'static>>() <= 64);
         assert!(std::mem::size_of::<ProtectedBridgeClaim>() <= 64);
+    }
+    #[test]
+    fn evidence_issued_before_preparation_latches_later_budget_stops() {
+        for records in [false, true] {
+            let cancel = std::sync::atomic::AtomicBool::new(false);
+            let mut b = SharedBudget::new(Instant::now(), &cancel);
+            let claim = b.protected_bridge_claim.clone();
+            // Synthetic issuers have consumed only their issue flag; no preparation/generation yet.
+            if records {
+                claim.records_evidence_issued.set(true);
+            } else {
+                claim.context_evidence_issued.set(true);
+            }
+            assert_eq!(b.stop::<()>(Failure::Deadline), Err(Failure::Deadline));
+            assert_eq!(claim.failure.get(), Some(Failure::Deadline));
+            assert!(!claim.preparation_started.get() && !claim.generated.get());
+            assert_eq!(b.stop::<()>(Failure::Binding), Err(Failure::Deadline));
+            assert_eq!(claim.failure.get(), Some(Failure::Deadline));
+        }
     }
 }
