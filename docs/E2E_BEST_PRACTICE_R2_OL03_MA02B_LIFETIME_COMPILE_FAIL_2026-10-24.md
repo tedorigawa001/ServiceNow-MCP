@@ -53,6 +53,11 @@ compileごとの90秒・stdout/stderr各8 MiB監視で、超過はkill/waitし�
 
 すべて指定の`bdo`経由で実行した。製品側sourceに変更を加えず、試験harness/fixture・文書だけを追加/更新している。ここでのcompiler子processはローカルoffline型検査であり、製品の実機OS接続の試験ではない。
 
+## 4.1 実行範囲・所要時間（レビュー後追記）
+
+- **CIでは実行されない**：`.github/workflows/`のjobはNode系のbuild/test/coverageだけで、`cargo`/`native/r2-outer`を実行しない（2026-10-24時点で確認）。本harnessを含むRust testはローカル検証でのみ動く。寿命境界の回帰は、`native/r2-outer`の変更時に`cargo test --offline --locked --manifest-path native/r2-outer/Cargo.toml`をローカルで実行して確認する。CIへのRust job追加は別途の判断事項で、本記録では行わない。
+- **所要時間**：レビュー時の実測では本harness 1件が約8秒（4ケース、専用target-dirでの依存crate再check込み）、Rust全体は約58秒だった。1ケース90秒の上限には十分な余裕がある。上限超過は「期待した借用拒否」ではなくpanicとして失敗させるため、高負荷/cold cacheで時間切れになった場合は再実行して区別する。所要時間は補助情報で、上限値の根拠や性能保証ではない。
+
 ## 5. 保証範囲と残課題
 
 実型を使う具体的な2寿命違反の回帰試験であり、全APIの寿命安全性・PC-04安定owner/Initial継続・実layout/全管理coverage・RSS/実OS停止の証明ではない。未来のcompilerで別の補助codeが出た場合、private失敗へ判定を緩めず原因確認する。
