@@ -16,7 +16,7 @@ const fetcher = async url => {
   const result = u.pathname.includes('/sys_update_set/') ? { sys_id: parent, state: 'in progress', application: 'global', ...version }
     : u.pathname.endsWith('/sys_cluster_state') ? [{ build_name: 'Australia' }]
       : u.searchParams.get('sysparm_fields').includes('payload') ? [{ ...selectedRow,
-        payload: `<record_update table="${table}"><${table} action="INSERT_OR_UPDATE"><sys_id>${id}</sys_id><when>${displayMode ? 'before_display' : abortMode ? 'before' : 'after'}</when><collection>global</collection><script>${uiPolicyMode ? 'function onLoad() { g_form.setMandatory("PACK_PRIVATE_UI", true); g_form.getReference("PACK_PRIVATE_LOOKUP", callback); }' : displayMode ? 'current.short_description = "PACK_PRIVATE_DISPLAY";' : abortMode ? 'current.setAbortAction(true); gs.addErrorMessage("PACK_PRIVATE_ABORT");' : "current.update(); var gr = new GlideRecord('incident'); gr.addQuery('x', 'LIKE', 'PACK_PRIVATE_QUERY');"}</script></${table}></record_update>` }]
+        payload: `<record_update table="${table}"><${table} action="INSERT_OR_UPDATE"><sys_id>${id}</sys_id><type>onChange</type><when>${displayMode ? 'before_display' : abortMode ? 'before' : 'after'}</when><collection>global</collection><script>${uiPolicyMode ? 'function onChange(c,o,n,isLoading) { g_form.setMandatory("PACK_PRIVATE_UI", true); g_form.getReference("PACK_PRIVATE_LOOKUP", callback); }' : displayMode ? 'current.short_description = "PACK_PRIVATE_DISPLAY";' : abortMode ? 'current.setAbortAction(true); gs.addErrorMessage("PACK_PRIVATE_ABORT");' : "current.update(); var gr = new GlideRecord('incident'); gr.addQuery('x', 'LIKE', 'PACK_PRIVATE_QUERY');"}</script></${table}></record_update>` }]
         : [{ ...selectedRow, type: 'Business Rule' }];
   return new Response(JSON.stringify({ result }));
 };
@@ -78,4 +78,11 @@ assert.equal(lookup.result.counts.findings, 1);
 assert.equal(lookup.result.versions.ruleset, 'bp3-0.10');
 assert(lookup.result.assets[0].result.findings[0].required_follow_up.includes('client_lookup_necessity_review'));
 assert(!JSON.stringify(lookup).includes('PACK_PRIVATE_LOOKUP'));
+const change = await reviewBoundedUpdateSet(selected, { update_set_sys_id: parent, selection_mode: 'review_targets',
+  requested_rule_ids: ['AU-CL-008'] }, { fetch: fetcher });
+assert.equal(change.isError, false);
+assert.equal(change.result.counts.findings, 1);
+assert.equal(change.result.versions.ruleset, 'bp3-0.11');
+assert(change.result.assets[0].result.findings[0].required_follow_up.includes('onchange_loading_intent_review'));
+assert(!JSON.stringify(change).includes('PACK_PRIVATE_LOOKUP'));
 console.log('Compiled worker default entry: analysis + aggregation PASS');

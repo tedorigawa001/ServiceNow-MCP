@@ -9,6 +9,7 @@ export const ABORT_FOLLOW_UP_PROFILE_VERSION = 'bp-followups-br005-0.1';
 export const DISPLAY_FOLLOW_UP_PROFILE_VERSION = 'bp-followups-br007-0.1';
 export const UI_POLICY_FOLLOW_UP_PROFILE_VERSION = 'bp-followups-cl006-0.1';
 export const CLIENT_LOOKUP_FOLLOW_UP_PROFILE_VERSION = 'bp-followups-cl002-0.1';
+export const ONCHANGE_FOLLOW_UP_PROFILE_VERSION = 'bp-followups-cl008-0.1';
 export const COMMON_FOLLOW_UP_CODES = ['source_approval', 'binding_and_reachability', 'exceptions_and_business_intent'] as const;
 export const RULE_SPECIFIC_FOLLOW_UP = {
   'AU-BR-001': 'workflow_suppression_review',
@@ -19,6 +20,7 @@ export const RULE_SPECIFIC_FOLLOW_UP = {
   'AU-BR-007': 'display_persistence_intent_review',
   'AU-CL-006': 'ui_policy_suitability_review',
   'AU-CL-002': 'client_lookup_necessity_review',
+  'AU-CL-008': 'onchange_loading_intent_review',
 } as const;
 export const FOLLOW_UP_CODES = [...COMMON_FOLLOW_UP_CODES, ...Object.values(RULE_SPECIFIC_FOLLOW_UP)] as const;
 export const followUpCodeSchema = z.enum(FOLLOW_UP_CODES);
@@ -38,6 +40,7 @@ export function requiredFollowUp(ruleId: string, context?: FollowUpContext): Fol
   if (ruleId === 'AU-BR-007') result.push(RULE_SPECIFIC_FOLLOW_UP[ruleId]);
   if (ruleId === 'AU-CL-006') result.push(RULE_SPECIFIC_FOLLOW_UP[ruleId]);
   if (ruleId === 'AU-CL-002') result.push(RULE_SPECIFIC_FOLLOW_UP[ruleId]);
+  if (ruleId === 'AU-CL-008') result.push(RULE_SPECIFIC_FOLLOW_UP[ruleId]);
   return result.filter(code => isFollowUpApplicable(code, ruleId));
 }
 
@@ -101,6 +104,12 @@ export const FOLLOW_UP_DEFINITIONS = {
     meaning: '照会頻度・必要列・既存データ・業務上の必要性・UI互換性と代替手段の適否を確認する。',
     attach_when: 'Client Scriptで受信側を確定したgetReferenceまたは限定的なGlideRecord get/query候補を検出した全件。',
     does_not_prove: '照会が不要、違反、実行済みであること、性能劣化、代替方式への自動移行の承認。',
+  },
+  onchange_loading_intent_review: {
+    kind: 'rule_intrinsic', applicable_rules: ['AU-CL-008'],
+    meaning: '読込時の照会が必要か、isLoading等のガード・処理順・業務意図を確認する。',
+    attach_when: 'onChangeのClient Scriptで、読込時を除外できない限定的な照会候補を検出した全件。',
+    does_not_prove: '処理が不要、ガードが無い、違反、読込時に実行済みであること。自動return追加を許可しない。',
   },
 } as const satisfies Record<FollowUpCode, Definition>;
 

@@ -21,7 +21,7 @@ type Row = ReturnType<typeof row>;
 const json = (result: unknown) => new Response(JSON.stringify({ result }));
 const client = () => new ServiceNowClient({ instanceUrl: 'https://example.service-now.com', authMode: 'per-user',
   perUserBearerToken: 'synthetic-selection-token', oauth: { clientId: '', clientSecret: '' } });
-function fixture(rows: Row[], script = 'current.update(); /* PRIVATE_SELECTION_BODY */', collection?: string, when = 'after') {
+function fixture(rows: Row[], script = 'current.update(); /* PRIVATE_SELECTION_BODY */', collection?: string, when = 'after', clientType?: string) {
   const fetcher = vi.fn<typeof fetch>(async url => {
     const u = new URL(String(url));
     if (u.pathname.includes('/sys_update_set/')) return json({ sys_id: parent, state: 'in progress', application: 'global', ...version });
@@ -31,7 +31,7 @@ function fixture(rows: Row[], script = 'current.update(); /* PRIVATE_SELECTION_B
       const r = rows.find(r => query.startsWith(`sys_id=${r.sys_id}^`))!;
       const table = r.name.slice(0, -33);
       const detail: Record<string, unknown> = { ...r }; delete detail.type;
-      return json([{ ...detail, payload: `<record_update table="${table}"><${table} action="INSERT_OR_UPDATE"><sys_id>${r.name.slice(-32)}</sys_id><sys_scope>global</sys_scope><when>${when}</when>${collection === undefined ? '' : `<collection>${collection}</collection>`}<script><![CDATA[${script}]]></script></${table}></record_update>` }]);
+      return json([{ ...detail, payload: `<record_update table="${table}"><${table} action="INSERT_OR_UPDATE"><sys_id>${r.name.slice(-32)}</sys_id><sys_scope>global</sys_scope><when>${when}</when>${clientType === undefined ? '' : `<type>${clientType}</type>`}${collection === undefined ? '' : `<collection>${collection}</collection>`}<script><![CDATA[${script}]]></script></${table}></record_update>` }]);
     }
     // Synthetic server boundary: apply the documented fixed AND predicates.
     const selected = rows.filter(r => query.split('^').every(term => {
@@ -58,6 +58,44 @@ afterEach(async () => {
 });
 const run = (rows: Row[], extra: Record<string, unknown> = {}, fetcher = fixture(rows)) => reviewBoundedUpdateSet(client(),
   { update_set_sys_id: parent, selection_mode: 'review_targets', ...extra }, { fetch: fetcher, workerFactory: sourceWorkerFactory });
+it('CL-008 uses payload event evidence, worker guard analysis and strict follow-ups', async () => {
+  const rows = [row(1, 'sys_script_client')];
+  const out = await run(rows, { requested_rule_ids: ['AU-CL-008'] }, fixture(rows,
+    'function onChange(c,o,n,isLoading){g_form.getReference("PRIVATE_ONCHANGE", cb);}', undefined, 'after', 'onChange'));
+  expect(out.isError).toBe(false); if (out.isError) throw Error(out.error.code);
+  expect(out.result).toMatchObject({ versions: { ruleset: 'bp3-0.11' }, counts: { findings: 1 } });
+  expect(aggregateReviewV3Schema.safeParse(out.result).success).toBe(true);
+  expect(JSON.stringify(out)).not.toMatch(/PRIVATE_ONCHANGE|synthetic-selection-token/);
+  for (const corrupt of ['event', 'followup']) {
+    const forged = structuredClone(out.result), asset = forged.assets[0];
+    if (asset.state !== 'reviewed') throw Error('Expected loading candidate');
+    if (corrupt === 'event') asset.result.limitations = asset.result.limitations.filter(x => x !== 'onchange_event_payload_onchange');
+    else asset.result.findings[0].required_follow_up = ['source_approval'];
+    expect(aggregateReviewV3Schema.safeParse(forged).success).toBe(false);
+  }
+});
+it('CL-008 metadata absence or unsupported flow never becomes complete analysis', async () => {
+  const rows = [row(1, 'sys_script_client')];
+  for (const type of [undefined, 'onLoad', 'onChange']) {
+    const out = await run(rows, { requested_rule_ids: ['AU-CL-008'] }, fixture(rows,
+      'function onChange(c,o,n,isLoading){while(ready)g_form.getReference("x");}', undefined, 'after', type));
+    expect(out.isError).toBe(false); if (out.isError) throw Error(out.error.code);
+    expect(out.result.coverage.analysis_complete).toBe(false);
+    const forged = structuredClone(out.result); forged.coverage.analysis_complete = true;
+    expect(aggregateReviewV3Schema.safeParse(forged).success).toBe(false);
+  }
+});
+it('CL-008 guarded calls remain distinct from CL-002 necessity candidates in the old 0.2 envelope', async () => {
+  const rows = [row(1, 'sys_script_client')];
+  const out = await run(rows, { requested_rule_ids: ['AU-CL-002', 'AU-CL-008'], selection_mode: undefined }, fixture(rows,
+    'function onChange(c,o,n,isLoading){if(isLoading)return;g_form.getReference("x");}', undefined, 'after', 'onChange'));
+  expect(out.isError).toBe(false); if (out.isError) throw Error(out.error.code);
+  expect(out.result).toMatchObject({ schema_version: 'bp-mcp-review-0.2', versions: { ruleset: 'bp3-0.11' }, counts: { findings: 1 } });
+  expect(aggregateReviewSchema.safeParse(out.result).success).toBe(true);
+  const asset = out.result.assets[0]; if (asset.state !== 'reviewed') throw Error('Expected review');
+  expect(asset.result.findings[0].rule_id).toBe('AU-CL-002');
+  expect(asset.result.limitations).toContain('onchange_lookup_loading_excluded');
+});
 it('explicit CL-002 selects Client Scripts and preserves necessity review through the worker', async () => {
   const rows = [row(1), row(2, 'sys_script_client')];
   const out = await run(rows, { requested_rule_ids: ['AU-CL-002'] }, fixture(rows, 'g_form.getReference("PRIVATE_LOOKUP", callback);'));
