@@ -91,6 +91,12 @@ esloggerは公式標準toolによるNOTIFYの予備調査候補だが、AUTH den
 
 公式ページの一部で本文取得制約があり、固定SDK header・対象OS実装との完全照合は未実施。各APIの全失敗順序、NEのfilter間順序/障害時挙動/loopback範囲、deny試行の永続log exportと完全性、guestでのactivation可否は未確認。本書はそれらを試験済み・承認済みにしない。
 
+### 6.1 優先1についての利用者回答（2026-10-24）
+
+V07の観測単位（現行の「全read・名前解決・IPCの各試行」を維持するか、OSの許可判断点へ限定する縮小案を別設計で比較するか、MA-02を保留するか）を利用者に確認し、回答は「希望なし」だった。
+
+既定として**現行要件を維持する**。観測単位を緩めず、縮小案の設計比較にも着手しない。現行要件を満たす公式経路は未確定のため、V07/V08は未適合・未検証、D4の合成隔離試験は開始不可のままとする（[選択肢文書](BEST_PRACTICE_BP5_R2_OL03_MA02_NO_TRUST_SAME_HOST_VM_OPTIONS.md)のO1保留継続と整合）。縮小案を検討する場合は、利用者の明示指示を受けてから別設計として扱い、採用には別途承認を要する。この回答は要件変更の承認でも、監視機構・VM・検証器の採用でもない。
+
 ## 7. 維持する停止状態
 
 未導出5項目はUnknown、全体受付無効、telemetry保留。APPROVED_REGISTRY=None、通常v2 Unavailable/gate92、DER/absence停止、完成parts/permit非発行を維持する。[チェックリスト](BEST_PRACTICE_BP5_R2_OL03_MA02_USER_INFORMATION_APPROVAL_CHECKLIST.md)はI01〜I05回答済み、E/A/T計20項目未チェックのまま。
