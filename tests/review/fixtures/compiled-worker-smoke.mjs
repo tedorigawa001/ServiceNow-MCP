@@ -8,13 +8,16 @@ const version = { sys_updated_on: '2026-10-17 00:00:00', sys_mod_count: '0' };
 const row = { sys_id: id, update_set: parent, name: `sys_script_${id}`, action: 'INSERT_OR_UPDATE', ...version };
 let abortMode = false;
 let displayMode = false;
+let uiPolicyMode = false;
 const fetcher = async url => {
   const u = new URL(String(url));
+  const table = uiPolicyMode ? 'sys_script_client' : 'sys_script';
+  const selectedRow = { ...row, name: `${table}_${id}` };
   const result = u.pathname.includes('/sys_update_set/') ? { sys_id: parent, state: 'in progress', application: 'global', ...version }
     : u.pathname.endsWith('/sys_cluster_state') ? [{ build_name: 'Australia' }]
-      : u.searchParams.get('sysparm_fields').includes('payload') ? [{ ...row,
-        payload: `<record_update table="sys_script"><sys_script action="INSERT_OR_UPDATE"><sys_id>${id}</sys_id><when>${displayMode ? 'before_display' : abortMode ? 'before' : 'after'}</when><collection>global</collection><script>${displayMode ? 'current.short_description = "PACK_PRIVATE_DISPLAY";' : abortMode ? 'current.setAbortAction(true); gs.addErrorMessage("PACK_PRIVATE_ABORT");' : "current.update(); var gr = new GlideRecord('incident'); gr.addQuery('x', 'LIKE', 'PACK_PRIVATE_QUERY');"}</script></sys_script></record_update>` }]
-        : [{ ...row, type: 'Business Rule' }];
+      : u.searchParams.get('sysparm_fields').includes('payload') ? [{ ...selectedRow,
+        payload: `<record_update table="${table}"><${table} action="INSERT_OR_UPDATE"><sys_id>${id}</sys_id><when>${displayMode ? 'before_display' : abortMode ? 'before' : 'after'}</when><collection>global</collection><script>${uiPolicyMode ? 'function onLoad() { g_form.setMandatory("PACK_PRIVATE_UI", true); }' : displayMode ? 'current.short_description = "PACK_PRIVATE_DISPLAY";' : abortMode ? 'current.setAbortAction(true); gs.addErrorMessage("PACK_PRIVATE_ABORT");' : "current.update(); var gr = new GlideRecord('incident'); gr.addQuery('x', 'LIKE', 'PACK_PRIVATE_QUERY');"}</script></${table}></record_update>` }]
+        : [{ ...selectedRow, type: 'Business Rule' }];
   return new Response(JSON.stringify({ result }));
 };
 const selected = new ServiceNowClient({ instanceUrl: 'https://example.service-now.com', authMode: 'per-user',
@@ -60,4 +63,12 @@ assert.equal(display.result.counts.findings, 1);
 assert.equal(display.result.versions.ruleset, 'bp3-0.8');
 assert(display.result.assets[0].result.findings[0].required_follow_up.includes('display_persistence_intent_review'));
 assert(!JSON.stringify(display).includes('PACK_PRIVATE_DISPLAY'));
+uiPolicyMode = true;
+const uiPolicy = await reviewBoundedUpdateSet(selected, { update_set_sys_id: parent, selection_mode: 'review_targets',
+  requested_rule_ids: ['AU-CL-006'] }, { fetch: fetcher });
+assert.equal(uiPolicy.isError, false);
+assert.equal(uiPolicy.result.counts.findings, 1);
+assert.equal(uiPolicy.result.versions.ruleset, 'bp3-0.9');
+assert(uiPolicy.result.assets[0].result.findings[0].required_follow_up.includes('ui_policy_suitability_review'));
+assert(!JSON.stringify(uiPolicy).includes('PACK_PRIVATE_UI'));
 console.log('Compiled worker default entry: analysis + aggregation PASS');

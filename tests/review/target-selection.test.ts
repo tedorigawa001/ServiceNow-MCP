@@ -58,6 +58,42 @@ afterEach(async () => {
 });
 const run = (rows: Row[], extra: Record<string, unknown> = {}, fetcher = fixture(rows)) => reviewBoundedUpdateSet(client(),
   { update_set_sys_id: parent, selection_mode: 'review_targets', ...extra }, { fetch: fetcher, workerFactory: sourceWorkerFactory });
+it('explicit CL-006 selects Client Scripts and retains UI Policy suitability through the worker', async () => {
+  const rows = [row(1), row(2, 'sys_script_client')];
+  const out = await run(rows, { requested_rule_ids: ['AU-CL-006'] },
+    fixture(rows, 'function onLoad() { g_form.setMandatory("PRIVATE_UI_FIELD", true); }'));
+  expect(out.isError).toBe(false);
+  if (out.isError) throw Error(out.error.code);
+  expect(out.result).toMatchObject({ versions: { ruleset: 'bp3-0.9' },
+    selection: { requested_asset_types: ['client_script'] }, counts: { reviewed: 1, findings: 1 } });
+  expect(aggregateReviewV3Schema.safeParse(out.result).success).toBe(true);
+  expect(JSON.stringify(out)).not.toMatch(/PRIVATE_UI_FIELD|synthetic-selection-token/);
+  const forged = structuredClone(out.result), asset = forged.assets[0];
+  if (asset.state !== 'reviewed') throw Error('Expected control candidate');
+  expect(asset.result.findings[0].required_follow_up).toContain('ui_policy_suitability_review');
+  asset.result.findings[0].required_follow_up = ['source_approval'];
+  expect(aggregateReviewV3Schema.safeParse(forged).success).toBe(false);
+});
+it('CL-006 unknown control evidence stays incomplete', async () => {
+  const rows = [row(1, 'sys_script_client')];
+  const out = await run(rows, { requested_rule_ids: ['AU-CL-006'] }, fixture(rows, 'g_form[method]("x", true);'));
+  expect(out.isError).toBe(false);
+  if (out.isError) throw Error(out.error.code);
+  expect(out.result.coverage.analysis_complete).toBe(false);
+  expect(aggregateReviewV3Schema.safeParse(out.result).success).toBe(true);
+  const forged = structuredClone(out.result); forged.coverage.analysis_complete = true;
+  expect(aggregateReviewV3Schema.safeParse(forged).success).toBe(false);
+});
+it('keeps per-asset versions when CL-006 and a BR rule share an aggregate', async () => {
+  const rows = [row(1), row(2, 'sys_script_client')];
+  const out = await run(rows, { requested_rule_ids: ['AU-BR-001', 'AU-CL-006'] },
+    fixture(rows, 'current.update(); g_form.setVisible("x", false);'));
+  expect(out.isError).toBe(false);
+  if (out.isError) throw Error(out.error.code);
+  expect(out.result).toMatchObject({ versions: { ruleset: 'bp3-0.9' }, counts: { reviewed: 2, findings: 2 } });
+  expect(out.result.assets[0]).toMatchObject({ state: 'reviewed', applicable_rule_ids: ['AU-BR-001'], result: { ruleset_version: 'bp3-0.4' } });
+  expect(out.result.assets[1]).toMatchObject({ state: 'reviewed', applicable_rule_ids: ['AU-CL-006'], result: { ruleset_version: 'bp3-0.9' } });
+});
 it('explicit BR-007 selects stored before_display and retains display intent through the worker', async () => {
   const rows = [row(1), row(2, 'sys_script_client')];
   const out = await run(rows, { requested_rule_ids: ['AU-BR-007'] },

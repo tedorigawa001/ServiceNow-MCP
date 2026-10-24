@@ -96,6 +96,11 @@ function reviewPayload(raw: unknown, mode: Profile, bp5 = false): Outcome<Review
   const bindingsEnabled = mode === 'constant' && assetType === 'business_rule' && input.requested_rule_ids.includes('AU-BR-004');
   const abortEnabled = mode === 'constant' && assetType === 'business_rule' && input.requested_rule_ids.includes('AU-BR-005');
   const displayEnabled = mode === 'constant' && assetType === 'business_rule' && input.requested_rule_ids.includes('AU-BR-007');
+  const uiPolicyEnabled = mode === 'constant' && assetType === 'client_script' && input.requested_rule_ids.includes('AU-CL-006');
+  if (uiPolicyEnabled) {
+    supported.add('AU-CL-006');
+    result.limitations.push('ui_policy_client_script_only', 'ui_policy_suitability_not_verified', 'ui_policy_ui_compatibility_not_verified', 'ui_policy_api_subset');
+  }
   if (displayEnabled) {
     supported.add('AU-BR-007');
     result.limitations.push('display_before_display_only', 'display_field_metadata_not_verified', 'display_persistence_not_verified');
@@ -116,6 +121,7 @@ function reviewPayload(raw: unknown, mode: Profile, bp5 = false): Outcome<Review
   }
   if (abortEnabled) result.ruleset_version = 'bp3-0.7';
   if (displayEnabled) result.ruleset_version = 'bp3-0.8';
+  if (uiPolicyEnabled) result.ruleset_version = 'bp3-0.9';
   // Normalize persisted BR choice values only on the current engine path.
   // Keep the historical engine's context contract unchanged for frozen baselines.
   const when = mode === 'legacy' ? asset.when
@@ -145,10 +151,11 @@ function reviewPayload(raw: unknown, mode: Profile, bp5 = false): Outcome<Review
         && !result.limitations.includes('synchronous_ajax_receiver_unresolved')) result.limitations.push('synchronous_ajax_receiver_unresolved');
       const rule = RULES.find(rule => rule.rule_id === ruleId)!;
       const source = SOURCES[rule.source_id as keyof typeof SOURCES];
-      result.findings.push({ rule_id: ruleId, category: ruleId === 'AU-BR-004' ? 'maintainability' : 'correctness', severity: 'info', confidence: 'low',
+      result.findings.push({ rule_id: ruleId, category: ruleId === 'AU-BR-004' || ruleId === 'AU-CL-006' ? 'maintainability' : 'correctness', severity: 'info', confidence: 'low',
         verification_status: 'candidate', field: 'script', line_start: entry.loc.start.line, line_end: entry.loc.end.line,
         issue: rule.title, impact: '構文上の候補。業務影響・到達可能性は未確認。', applicability: rule.applicability,
-        recommendation: ruleId === 'AU-BR-007' ? '表示目的の変更か、永続保存が必要かを確認する。表示用の書込み自体を違反と断定せず、自動update追加や変更削除はしない。'
+        recommendation: ruleId === 'AU-CL-006' ? 'UI Policyで表現できるか、複雑な処理・実行順・UI制約を確認する。スクリプトを一律違反と断定せず、自動移行や制御削除はしない。'
+          : ruleId === 'AU-BR-007' ? '表示目的の変更か、永続保存が必要かを確認する。表示用の書込み自体を違反と断定せず、自動update追加や変更削除はしない。'
           : ruleId === 'AU-BR-005' ? '中止後の処理が必要な後処理か、副作用を伴うかを確認する。継続を違反やreturn不足と断定せず、自動return追加はしない。'
           : ruleId === 'AU-BR-004' ? '関数内へ閉じる可否と、意図した共有・利用側との互換性・名前衝突を確認する。共有文脈でも自動除外や自動ラップはしない。'
           : '根拠節の適用条件・例外と、実行経路・受信オブジェクト・変数の束縛を確認する。',
@@ -189,6 +196,15 @@ function reviewPayload(raw: unknown, mode: Profile, bp5 = false): Outcome<Review
               appendFinding(entry, 'AU-BR-007');
               if (result.findings.length > 100) throw new ExtractionError('finding_limit');
             },
+          } } : {}),
+          ...(uiPolicyEnabled ? { uiPolicy: {
+            unresolved: () => { if (!result.limitations.includes('ui_policy_control_unresolved')) result.limitations.push('ui_policy_control_unresolved'); },
+            control: (entry: Ast, kind: string, dynamic?: boolean) => {
+              if (!result.limitations.includes(kind)) result.limitations.push(kind);
+              if (dynamic && !result.limitations.includes('ui_policy_dynamic_arguments')) result.limitations.push('ui_policy_dynamic_arguments');
+              appendFinding(entry, 'AU-CL-006');
+              if (result.findings.length > 100) throw new ExtractionError('finding_limit');
+            },
           } } : {}) });
       } catch (error) {
         return reject(error instanceof ExtractionError ? error.reason : error instanceof AnalysisLimitError ? 'analysis_limit' : 'analysis_failed');
@@ -224,7 +240,8 @@ function reviewPayload(raw: unknown, mode: Profile, bp5 = false): Outcome<Review
   }
   if (!result.coverage.skipped_rules.length && !result.limitations.includes('query_like_unresolved')
     && !result.limitations.includes('br_table_context_unknown') && !result.limitations.includes('br_dynamic_scope_unresolved')
-    && !result.limitations.includes('abort_flow_unresolved') && !result.limitations.includes('display_write_unresolved')) result.review_status = 'completed';
+    && !result.limitations.includes('abort_flow_unresolved') && !result.limitations.includes('display_write_unresolved')
+    && !result.limitations.includes('ui_policy_control_unresolved')) result.review_status = 'completed';
   const validated = reviewResultSchema.safeParse(result);
   return validated.success ? { poc_only: true, status: 'reviewed', result: validated.data } : reject('invalid_result_context');
 }

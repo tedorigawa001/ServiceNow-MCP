@@ -11,6 +11,7 @@ Status: **公式本文・Australia表示を照合した初版27項目／人に�
 [AU-BR-004の宣言候補・共有文脈の実装](BEST_PRACTICE_TOP_LEVEL_BINDINGS_BR.md)も後続で追加した。関数localを区別し、Global-table文脈でも共有意図や実際の衝突を確認済みにしない。
 [AU-BR-005のbefore限定・中止後処理候補](BEST_PRACTICE_ABORT_ACTION_BR.md)も追加した。必要な後処理を違反やreturn不足と断定せず、未対応の順序/受信側は未解決として返す。
 [AU-BR-007のbefore_display限定・current書込み候補](BEST_PRACTICE_DISPLAY_WRITE_BR.md)も追加した。表示目的の変更は違反と断定せず、永続化要件を確認事項にする。
+[AU-CL-006のClient Script限定・UI Policy検討候補](BEST_PRACTICE_UI_POLICY_CLIENT.md)も追加した。複雑な処理・UI制約や移行可能性をコードだけで承認/違反確定しない。
 
 ## 1. 確認方法と状態
 

@@ -7,6 +7,7 @@ export const FOLLOW_UP_CATALOG_VERSION = 'bp-followups-0.4';
 export const BINDING_FOLLOW_UP_PROFILE_VERSION = 'bp-followups-br004-0.1';
 export const ABORT_FOLLOW_UP_PROFILE_VERSION = 'bp-followups-br005-0.1';
 export const DISPLAY_FOLLOW_UP_PROFILE_VERSION = 'bp-followups-br007-0.1';
+export const UI_POLICY_FOLLOW_UP_PROFILE_VERSION = 'bp-followups-cl006-0.1';
 export const COMMON_FOLLOW_UP_CODES = ['source_approval', 'binding_and_reachability', 'exceptions_and_business_intent'] as const;
 export const RULE_SPECIFIC_FOLLOW_UP = {
   'AU-BR-001': 'workflow_suppression_review',
@@ -15,6 +16,7 @@ export const RULE_SPECIFIC_FOLLOW_UP = {
   'AU-BR-004': 'shared_binding_intent_review',
   'AU-BR-005': 'post_abort_processing_review',
   'AU-BR-007': 'display_persistence_intent_review',
+  'AU-CL-006': 'ui_policy_suitability_review',
 } as const;
 export const FOLLOW_UP_CODES = [...COMMON_FOLLOW_UP_CODES, ...Object.values(RULE_SPECIFIC_FOLLOW_UP)] as const;
 export const followUpCodeSchema = z.enum(FOLLOW_UP_CODES);
@@ -32,6 +34,7 @@ export function requiredFollowUp(ruleId: string, context?: FollowUpContext): Fol
   if (ruleId === 'AU-BR-004') result.push(RULE_SPECIFIC_FOLLOW_UP[ruleId]);
   if (ruleId === 'AU-BR-005') result.push(RULE_SPECIFIC_FOLLOW_UP[ruleId]);
   if (ruleId === 'AU-BR-007') result.push(RULE_SPECIFIC_FOLLOW_UP[ruleId]);
+  if (ruleId === 'AU-CL-006') result.push(RULE_SPECIFIC_FOLLOW_UP[ruleId]);
   return result.filter(code => isFollowUpApplicable(code, ruleId));
 }
 
@@ -83,6 +86,12 @@ export const FOLLOW_UP_DEFINITIONS = {
     meaning: '表示目的の変更か永続保存要件があるか、明示保存や他BRとの関係を確認する。',
     attach_when: '保存値before_displayのBRでcurrent由来の限定的な書込み候補を検出した場合。',
     does_not_prove: '表示目的の変更が違反であること、実際の永続化、update追加や変更削除が必要であること。',
+  },
+  ui_policy_suitability_review: {
+    kind: 'rule_intrinsic', applicable_rules: ['AU-CL-006'],
+    meaning: 'UI Policyでの表現可否、複雑な処理・実行順・UI/APIの制約と必要性を確認する。',
+    attach_when: 'Client Scriptでg_form由来の対象フィールド制御を候補検出した全件。',
+    does_not_prove: 'Client Scriptが違反、UI Policyへ必ず移せること、全UIでの動作、自動移行の承認。',
   },
 } as const satisfies Record<FollowUpCode, Definition>;
 

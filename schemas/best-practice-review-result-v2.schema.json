@@ -21,7 +21,8 @@
         "bp3-0.5",
         "bp3-0.6",
         "bp3-0.7",
-        "bp3-0.8"
+        "bp3-0.8",
+        "bp3-0.9"
       ]
     },
     "reviewed_at": {
@@ -366,7 +367,7 @@
       "properties": {
         "requested_rule_ids": {
           "minItems": 1,
-          "maxItems": 7,
+          "maxItems": 8,
           "type": "array",
           "items": {
             "type": "string",
@@ -377,12 +378,13 @@
               "AU-QRY-001",
               "AU-BR-004",
               "AU-BR-005",
-              "AU-BR-007"
+              "AU-BR-007",
+              "AU-CL-006"
             ]
           }
         },
         "evaluated_rule_ids": {
-          "maxItems": 7,
+          "maxItems": 8,
           "type": "array",
           "items": {
             "type": "string",
@@ -393,12 +395,13 @@
               "AU-QRY-001",
               "AU-BR-004",
               "AU-BR-005",
-              "AU-BR-007"
+              "AU-BR-007",
+              "AU-CL-006"
             ]
           }
         },
         "skipped_rules": {
-          "maxItems": 7,
+          "maxItems": 8,
           "type": "array",
           "items": {
             "type": "object",
@@ -412,7 +415,8 @@
                   "AU-QRY-001",
                   "AU-BR-004",
                   "AU-BR-005",
-                  "AU-BR-007"
+                  "AU-BR-007",
+                  "AU-CL-006"
                 ]
               },
               "reason": {
@@ -466,7 +470,8 @@
               "AU-QRY-001",
               "AU-BR-004",
               "AU-BR-005",
-              "AU-BR-007"
+              "AU-BR-007",
+              "AU-CL-006"
             ]
           },
           "category": {
@@ -540,7 +545,8 @@
                 "synchronous_ajax_review",
                 "shared_binding_intent_review",
                 "post_abort_processing_review",
-                "display_persistence_intent_review"
+                "display_persistence_intent_review",
+                "ui_policy_suitability_review"
               ]
             }
           },

@@ -13,6 +13,7 @@ export function staticMemberName(value: unknown): string | null {
 export class AnalysisLimitError extends Error {}
 const C = 1, P = 2, CF = 4, PF = 8, AJAX = 16, LOCAL = 32, UNKNOWN = 64, AJAX_CTOR = 128;
 const QUERY_RECORD = 256, QUERY_CTOR = 512;
+const FORM = 1024;
 type Origin = { flags: number; properties?: Map<string, Origin>; unknownProperties?: boolean };
 type Binding = { origin: Origin; functionId: number; entryFlags?: number; isConst?: boolean; constantWritten?: boolean; constant?: ConstantValue };
 type Scope = { parent?: Scope; functionId: number; functionScope: boolean; bindings: Map<string, Binding> };
@@ -25,12 +26,15 @@ const identifier = (value: unknown, name?: string): value is AstNode => isAstNod
 const functions = new Set(['FunctionDeclaration', 'FunctionExpression', 'ArrowFunctionExpression']);
 const blocks = new Set(['BlockStatement', 'CatchClause', 'ForStatement', 'ForInStatement', 'ForOfStatement', 'SwitchStatement']);
 const recordMethods = new Set(['update', 'getValue', 'getDisplayValue', 'setValue', 'setWorkflow', 'getUniqueValue', 'isValidRecord']);
+const formControls = new Map([['setMandatory', 'ui_policy_mandatory_control'], ['setVisible', 'ui_policy_visibility_control'],
+  ['setDisplay', 'ui_policy_visibility_control'], ['setReadOnly', 'ui_policy_readonly_control']]);
 
 export function analyzeScopedCandidates(ast: AstNode, when: string | null, emit: (entry: AstNode, rule: string, context?: FollowUpContext) => void,
   options: { allowDeclaredEntry: boolean; constants: boolean; query?: { unresolved: () => void };
     bindings?: { declared: (entry: AstNode) => void; dynamic: () => void };
     abort?: { effect: (entry: AstNode, effect: string) => void; unresolved: () => void };
-    display?: { write: (entry: AstNode, kind: string) => void; unresolved: () => void } } = { allowDeclaredEntry: false, constants: false }): void {
+    display?: { write: (entry: AstNode, kind: string) => void; unresolved: () => void };
+    uiPolicy?: { control: (entry: AstNode, kind: string, dynamic?: boolean) => void; unresolved: () => void } } = { allowDeclaredEntry: false, constants: false }): void {
   const root: Scope = { functionId: 0, functionScope: true, bindings: new Map() };
   const scopes = new WeakMap<AstNode, Scope>();
   const functionScopes = new WeakMap<AstNode, Scope>();
@@ -47,6 +51,8 @@ export function analyzeScopedCandidates(ast: AstNode, when: string | null, emit:
   const abortCalls = new WeakMap<AstNode, AbortCall>();
   let abortUnsafe = false;
   let displayUnsafe = false;
+  let uiPolicyUnsafe = false;
+  const uiPolicyCandidates: { entry: AstNode; kind: string; dynamic: boolean }[] = [];
   function budget(depth: number) {
     if (++visits > 100000 || depth > 256) throw new AnalysisLimitError('analysis_limit');
   }
@@ -123,6 +129,14 @@ export function analyzeScopedCandidates(ast: AstNode, when: string | null, emit:
       if (entry.type === 'ClassExpression' || entry.type === 'ClassDeclaration') declare(entry.id, scope);
     }
     scopes.set(entry, scope);
+    if (options.uiPolicy) {
+      const write = entry.type === 'AssignmentExpression' ? entry.left
+        : entry.type === 'UpdateExpression' || entry.type === 'UnaryExpression' && entry.operator === 'delete' ? entry.argument : null;
+      if (entry.type === 'WithStatement' || entry.type === 'CallExpression' && identifier(entry.callee, 'eval')
+        || isAstNode(write) && write.type === 'MemberExpression' && formControls.has(staticMemberName(write) ?? '')) {
+        uiPolicyUnsafe = true; options.uiPolicy.unresolved();
+      }
+    }
     if (options.display) {
       const write = entry.type === 'AssignmentExpression' ? entry.left
         : entry.type === 'UpdateExpression' || entry.type === 'UnaryExpression' && entry.operator === 'delete' ? entry.argument : null;
@@ -234,8 +248,8 @@ export function analyzeScopedCandidates(ast: AstNode, when: string | null, emit:
   function read(scope: Scope, name: string): Origin {
     const binding = find(scope, name);
     if (!binding) return origin(name === 'current' ? C : name === 'previous' ? P : name === 'GlideAjax' ? AJAX_CTOR
-      : options.display && name === 'g_scratchpad' ? LOCAL
-        : (options.query || options.abort || options.display) && ['GlideRecord', 'GlideRecordSecure'].includes(name) ? QUERY_CTOR : UNKNOWN);
+      : options.uiPolicy && name === 'g_form' ? FORM : options.display && name === 'g_scratchpad' ? LOCAL
+        : (options.query || options.abort || options.display || options.uiPolicy) && ['GlideRecord', 'GlideRecordSecure'].includes(name) ? QUERY_CTOR : UNKNOWN);
     if (binding.functionId !== scope.functionId) {
       // Direct lexical reference to the declared platform entry, not propagation of a user alias/call.
       if (binding.entryFlags) return origin(binding.entryFlags | UNKNOWN);
@@ -245,6 +259,13 @@ export function analyzeScopedCandidates(ast: AstNode, when: string | null, emit:
     return options.query && queryRebound.has(name) && binding.origin.flags & (QUERY_RECORD | QUERY_CTOR) ? unknown() : binding.origin;
   }
   const receivers = new WeakMap<AstNode, Origin>();
+  function uiPolicyWrite(target: unknown) {
+    if (!options.uiPolicy || !isAstNode(target) || target.type !== 'MemberExpression') return;
+    const receiver = receivers.get(target), key = memberKey(target);
+    if (receiver && receiver.flags & FORM && (key === null || formControls.has(key))) {
+      uiPolicyUnsafe = true; options.uiPolicy.unresolved();
+    }
+  }
   function displayWrite(target: unknown, site: AstNode, kind: string) {
     if (!options.display || !isAstNode(target) || target.type !== 'MemberExpression') return;
     const receiver = receivers.get(target) ?? unknown(), key = memberKey(target);
@@ -343,15 +364,36 @@ export function analyzeScopedCandidates(ast: AstNode, when: string | null, emit:
       case 'CallExpression': case 'NewExpression': {
         const calleeValue = visit(entry.callee);
         let displayArgumentCurrent = false;
+        let uiPolicyArgumentForm = false;
         for (const argument of entry.arguments as unknown[]) {
           const value = visit(argument);
           if (options.query && containsQueryRecord(value)) queryUnsafe = true;
           if (options.display && value.flags & (C | CF)) displayArgumentCurrent = true;
+          if (options.uiPolicy && value.flags & FORM) uiPolicyArgumentForm = true;
         }
         if (entry.type === 'NewExpression') return origin(calleeValue.flags & AJAX_CTOR ? AJAX
           : calleeValue.flags === QUERY_CTOR ? QUERY_RECORD : calleeValue.flags & UNKNOWN ? UNKNOWN : LOCAL);
         if (isAstNode(entry.callee) && entry.callee.type === 'MemberExpression') {
           const receiver = receivers.get(entry.callee) ?? unknown(), key = memberKey(entry.callee);
+          if (options.uiPolicy) {
+            if (uiPolicyArgumentForm && ['assign', 'defineProperty', 'defineProperties', 'setPrototypeOf'].includes(key ?? '')) {
+              uiPolicyUnsafe = true; options.uiPolicy.unresolved();
+            }
+            if (key === null && receiver.flags & FORM) options.uiPolicy.unresolved();
+            if (key !== null && formControls.has(key)) {
+              const args = entry.arguments as AstNode[];
+              const field = args.length === 2 ? primitive(args[0]) : UNKNOWN_CONSTANT;
+              const flag = args.length === 2 ? primitive(args[1]) : UNKNOWN_CONSTANT;
+              const valid = args.length === 2 && !args.some(a => a.type === 'SpreadElement')
+                && !(args[0].type === 'Literal' && typeof args[0].value !== 'string')
+                && !(args[1].type === 'Literal' && typeof args[1].value !== 'boolean')
+                && (field === UNKNOWN_CONSTANT || typeof field === 'string' && field.length > 0)
+                && (flag === UNKNOWN_CONSTANT || typeof flag === 'boolean');
+              if (receiver.flags === FORM && valid) uiPolicyCandidates.push({ entry, kind: formControls.get(key)!,
+                dynamic: field === UNKNOWN_CONSTANT || flag === UNKNOWN_CONSTANT });
+              else if (receiver.flags & (FORM | UNKNOWN)) options.uiPolicy.unresolved();
+            }
+          }
           if (options.display && displayArgumentCurrent && ['assign', 'defineProperty', 'defineProperties', 'setPrototypeOf'].includes(key ?? '')) options.display.unresolved();
           if (options.display && ['setValue', 'setDisplayValue'].includes(key ?? '')) {
             const args = entry.arguments as AstNode[];
@@ -396,15 +438,18 @@ export function analyzeScopedCandidates(ast: AstNode, when: string | null, emit:
         visit(entry.left);
         const value = visit(entry.right);
         displayWrite(entry.left, entry, 'display_direct_assignment');
+        uiPolicyWrite(entry.left);
         assign(entry.left, entry.operator === '=' ? value : unknown(), scope, conditional);
         return value;
       }
       case 'UpdateExpression':
         visit(entry.argument); displayWrite(entry.argument, entry, 'display_update_expression');
+        uiPolicyWrite(entry.argument);
         assign(entry.argument, local(), scope, conditional); return local();
       case 'UnaryExpression':
         visit(entry.argument);
         if (entry.operator === 'delete') displayWrite(entry.argument, entry, 'display_delete_property');
+        if (entry.operator === 'delete') uiPolicyWrite(entry.argument);
         return unknown();
       case 'IfStatement': visit(entry.test); visit(entry.consequent, true); visit(entry.alternate, true); return unknown();
       case 'ConditionalExpression': visit(entry.test); return join(visit(entry.consequent, true), visit(entry.alternate, true));
@@ -427,6 +472,11 @@ export function analyzeScopedCandidates(ast: AstNode, when: string | null, emit:
   }
   walk(ast);
   if (options.abort) analyzeAbortFlow(ast, abortCalls, budget, options.abort.effect, options.abort.unresolved);
+  for (const candidate of uiPolicyCandidates) {
+    budget(0);
+    if (uiPolicyUnsafe) options.uiPolicy!.unresolved();
+    else options.uiPolicy!.control(candidate.entry, candidate.kind, candidate.dynamic);
+  }
   for (const candidate of queryCandidates) {
     if (queryUnsafe) options.query!.unresolved();
     else emit(candidate, 'AU-QRY-001');

@@ -6,7 +6,7 @@ export const TARGET_LIMITATIONS = ['target_candidate_filter_only', 'non_candidat
   'acl_pre_limit_inventory_unknown', 'whole_update_set_not_reviewed'] as const;
 export function requestedAssetTypes(rules: readonly string[]): ('business_rule' | 'client_script')[] {
   return [...(rules.some(r => r === 'AU-BR-001' || r === 'AU-BR-002' || r === 'AU-QRY-001' || r === 'AU-BR-004' || r === 'AU-BR-005' || r === 'AU-BR-007') ? ['business_rule' as const] : []),
-    ...(rules.includes('AU-CL-004') ? ['client_script' as const] : [])];
+    ...(rules.includes('AU-CL-004') || rules.includes('AU-CL-006') ? ['client_script' as const] : [])];
 }
 export function targetSelection(rules: readonly string[]) {
   return { mode: 'review_targets' as const, filter_version: TARGET_FILTER_VERSION,
