@@ -5,7 +5,8 @@ export default defineConfig({
     globals: true,
     environment: 'node',
     setupFiles: ['./tests/setup.ts'],
-    exclude: ['node_modules/**', 'tests/e2e/**', 'tests/transport/**'],
+    // Nested agent worktrees hold separate checkouts; never collect their tests into this run.
+    exclude: ['node_modules/**', 'tests/e2e/**', 'tests/transport/**', '.claude/**'],
     coverage: {
       provider: 'v8',
       reporter: ['text', 'json', 'html'],
