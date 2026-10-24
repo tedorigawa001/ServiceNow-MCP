@@ -93,10 +93,16 @@ function reviewPayload(raw: unknown, mode: Profile, bp5 = false): Outcome<Review
   if (asset.active === 'false') result.limitations.push('inactive_asset');
   const supported = new Set(['AU-BR-001', 'AU-BR-002', 'AU-CL-004']);
   const queryEnabled = mode === 'constant' && assetType === 'business_rule' && input.requested_rule_ids.includes('AU-QRY-001');
+  const bindingsEnabled = mode === 'constant' && assetType === 'business_rule' && input.requested_rule_ids.includes('AU-BR-004');
+  if (bindingsEnabled) supported.add('AU-BR-004');
   if (queryEnabled) supported.add('AU-QRY-001');
   if (queryEnabled) {
     result.ruleset_version = 'bp3-0.5';
     result.limitations.push('query_like_br_only', 'query_like_literal_operator_only');
+  }
+  if (bindingsEnabled) {
+    result.ruleset_version = 'bp3-0.6';
+    result.limitations.push('br_declared_variables_only', 'br_cross_asset_collisions_not_verified');
   }
   // Normalize persisted BR choice values only on the current engine path.
   // Keep the historical engine's context contract unchanged for frozen baselines.
@@ -124,10 +130,11 @@ function reviewPayload(raw: unknown, mode: Profile, bp5 = false): Outcome<Review
         && !result.limitations.includes('synchronous_ajax_receiver_unresolved')) result.limitations.push('synchronous_ajax_receiver_unresolved');
       const rule = RULES.find(rule => rule.rule_id === ruleId)!;
       const source = SOURCES[rule.source_id as keyof typeof SOURCES];
-      result.findings.push({ rule_id: ruleId, category: 'correctness', severity: 'info', confidence: 'low',
+      result.findings.push({ rule_id: ruleId, category: ruleId === 'AU-BR-004' ? 'maintainability' : 'correctness', severity: 'info', confidence: 'low',
         verification_status: 'candidate', field: 'script', line_start: entry.loc.start.line, line_end: entry.loc.end.line,
         issue: rule.title, impact: '構文上の候補。業務影響・到達可能性は未確認。', applicability: rule.applicability,
-        recommendation: '根拠節の適用条件・例外と、実行経路・受信オブジェクト・変数の束縛を確認する。',
+        recommendation: ruleId === 'AU-BR-004' ? '関数内へ閉じる可否と、意図した共有・利用側との互換性・名前衝突を確認する。共有文脈でも自動除外や自動ラップはしない。'
+          : '根拠節の適用条件・例外と、実行経路・受信オブジェクト・変数の束縛を確認する。',
         required_follow_up: mode === 'contextual' || mode === 'constant' ? requiredFollowUp(ruleId, context) : [...COMMON_FOLLOW_UP_CODES],
         sources: [{ source_id: rule.source_id, title: source.title, url: source.url, section: rule.section,
           release: source.release, verified_on: source.verified_on, retrieved_at: null, content_hash: null,
@@ -141,6 +148,15 @@ function reviewPayload(raw: unknown, mode: Profile, bp5 = false): Outcome<Review
         }, { allowDeclaredEntry: assetType === 'business_rule', constants: mode === 'constant',
           ...(queryEnabled ? { query: { unresolved: () => {
             if (!result.limitations.includes('query_like_unresolved')) result.limitations.push('query_like_unresolved');
+          } } } : {}),
+          ...(bindingsEnabled ? { bindings: { declared: (entry: Ast) => {
+            const context = asset.collection === 'global' ? 'br_global_table_shared_context'
+              : asset.collection === null ? 'br_table_context_unknown' : 'br_non_global_table_context';
+            if (!result.limitations.includes(context)) result.limitations.push(context);
+            appendFinding(entry, 'AU-BR-004');
+            if (result.findings.length > 100) throw new ExtractionError('finding_limit');
+          }, dynamic: () => {
+            if (!result.limitations.includes('br_dynamic_scope_unresolved')) result.limitations.push('br_dynamic_scope_unresolved');
           } } } : {}) });
       } catch (error) {
         return reject(error instanceof ExtractionError ? error.reason : error instanceof AnalysisLimitError ? 'analysis_limit' : 'analysis_failed');
@@ -174,7 +190,8 @@ function reviewPayload(raw: unknown, mode: Profile, bp5 = false): Outcome<Review
       instance_binding: v2.instance_binding, review_status: 'partial' });
     return validated.success ? { poc_only: true, status: 'reviewed', result: validated.data } : reject('invalid_result_context');
   }
-  if (!result.coverage.skipped_rules.length && !result.limitations.includes('query_like_unresolved')) result.review_status = 'completed';
+  if (!result.coverage.skipped_rules.length && !result.limitations.includes('query_like_unresolved')
+    && !result.limitations.includes('br_table_context_unknown') && !result.limitations.includes('br_dynamic_scope_unresolved')) result.review_status = 'completed';
   const validated = reviewResultSchema.safeParse(result);
   return validated.success ? { poc_only: true, status: 'reviewed', result: validated.data } : reject('invalid_result_context');
 }

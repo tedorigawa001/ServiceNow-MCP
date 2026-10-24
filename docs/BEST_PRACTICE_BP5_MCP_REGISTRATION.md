@@ -2,6 +2,7 @@
 
 Version: bp5-mcp-registration-0.1 / Date: 2026-10-18。
 後続の[AU-QRY-001 BR限定実装](BEST_PRACTICE_QUERY_LIKE_BR.md)で明示指定ruleを1件追加した。以下の登録時点の3規則・件数記録は履歴で、既定3規則は維持する。
+さらに[AU-BR-004宣言候補・共有文脈](BEST_PRACTICE_TOP_LEVEL_BINDINGS_BR.md)を明示指定へ追加（最大5規則）。既定3規則・上限・本文非露出を維持し、意図的共有を自動承認しない。
 実装と合成検証の記録。実機操作・人手評価・製品品質/公開の承認は行っていない。
 ツールが呼べることと、規則/根拠の承認・独立した検出品質を区別する。
 後続の[opt-in対象選択・0.3契約の実装記録](BEST_PRACTICE_BP5_TARGET_SELECTION_IMPLEMENTATION.md)を参照。

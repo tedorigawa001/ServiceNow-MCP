@@ -38,7 +38,8 @@ export function finalizeAggregate(run: AggregateReview): AggregateReview {
     && (run.schema_version !== 'bp-mcp-review-0.3' || run.collection.selected > 0)
     && run.consistency === 'stable_observation' && run.release_match === 'matched' && !run.errors.length
     && run.assets.every(a => a.state === 'not_applicable' || a.state === 'skipped_deleted'
-      || a.state === 'reviewed' && !a.result.coverage.skipped_rules.length && !a.result.limitations.includes('query_like_unresolved'));
+      || a.state === 'reviewed' && !a.result.coverage.skipped_rules.length
+        && !['query_like_unresolved', 'br_table_context_unknown', 'br_dynamic_scope_unresolved'].some(x => a.result.limitations.includes(x)));
   while (Buffer.byteLength(JSON.stringify(run), 'utf8') > run.limits.max_response_bytes - 256) {
     let i = run.assets.length - 1;
     while (i >= 0 && run.assets[i].state !== 'reviewed') i--;

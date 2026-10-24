@@ -2844,15 +2844,16 @@ Get audit history for a system property (changes over time).
 
 ### review_update_set_best_practices
 
-Read-only **PoC** review of a local Update Set's stored `sys_update_xml.payload` snapshot. Available in `full` and `platform_developer`; does not require write/scripting flags. The selected ServiceNow client's ACLs still apply. Australia only: default AU-BR-001 / AU-BR-002 / AU-CL-004 (BR / Client Script), plus explicit BR-only AU-QRY-001 opt-in. This is not SCA or a security/compliance certification.
+Read-only **PoC** review of a local Update Set's stored `sys_update_xml.payload` snapshot. Available in `full` and `platform_developer`; does not require write/scripting flags. The selected ServiceNow client's ACLs still apply. Australia only: default AU-BR-001 / AU-BR-002 / AU-CL-004 (BR / Client Script), plus explicit BR-only AU-QRY-001 and AU-BR-004 opt-ins. This is not SCA or a security/compliance certification.
 
 - `update_set_sys_id` (required): exactly 32 lowercase hexadecimal characters; no name/URL/query lookup.
-- `requested_rule_ids`: unique subset of those four IDs, 1–4 values; defaults to the original three (without QRY-001).
+- `requested_rule_ids`: unique subset of those five IDs, 1–5 values; defaults to the original three (without QRY-001/BR-004).
 - `max_records`: integer 1–100, default 20; metadata row budget, not successful analysis count. One additional lookahead row is never analyzed.
 - `selection_mode`: optional `bounded_all` (also the omitted behavior) preserves the all-type window and 0.2 result; opt-in `review_targets` uses fixed name/action candidate filters and returns 0.3. Candidate contamination still consumes the same budget; there is no refill or extra paging.
 - `instance`: optional existing connection selector, consumed by the server rather than sent to the adapter.
 
 AU-QRY-001 detects bounded locally constructed GlideRecord/GlideRecordSecure receivers with exactly three `addQuery` arguments and a literal `LIKE` operator; encoded-query LIKE is not flagged. Unresolved receivers/operators return a limitation and prevent complete analysis. No Script Include/REST coverage is added. See [BR-only query rule and limitations](BEST_PRACTICE_QUERY_LIKE_BR.md).
+AU-BR-004 detects declared script-level variables, not function/block-local bindings. Global-table/ordinary/unknown table contexts are distinguished without approving intentional sharing; missing context/dynamic scope prevents complete analysis. See [declaration scope and intent review](BEST_PRACTICE_TOP_LEVEL_BINDINGS_BR.md).
 
 Unknown keys are rejected by JSON Schema and runtime validation. Code, payload, release assertions, arbitrary queries, actors and limits cannot be supplied.
 Returns compact JSON text: successful calls contain a `bp-mcp-review-0.2` or opt-in `bp-mcp-review-0.3` aggregate; fixed failures set MCP `isError=true` and return `{status:"failed",error:{stage,code}}`, optionally with a validated failed aggregate in `result`. Partial analysis is not a failed MCP call and must not be interpreted as safe/clear. Code and raw server diagnostics are never returned. If the full escaped MCP envelope exceeds 256KiB, returns fixed `response_limit` without a fragment.

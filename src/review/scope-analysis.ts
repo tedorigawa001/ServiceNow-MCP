@@ -26,7 +26,8 @@ const blocks = new Set(['BlockStatement', 'CatchClause', 'ForStatement', 'ForInS
 const recordMethods = new Set(['update', 'getValue', 'getDisplayValue', 'setValue', 'setWorkflow', 'getUniqueValue', 'isValidRecord']);
 
 export function analyzeScopedCandidates(ast: AstNode, when: string | null, emit: (entry: AstNode, rule: string, context?: FollowUpContext) => void,
-  options: { allowDeclaredEntry: boolean; constants: boolean; query?: { unresolved: () => void } } = { allowDeclaredEntry: false, constants: false }): void {
+  options: { allowDeclaredEntry: boolean; constants: boolean; query?: { unresolved: () => void };
+    bindings?: { declared: (entry: AstNode) => void; dynamic: () => void } } = { allowDeclaredEntry: false, constants: false }): void {
   const root: Scope = { functionId: 0, functionScope: true, bindings: new Map() };
   const scopes = new WeakMap<AstNode, Scope>();
   const functionScopes = new WeakMap<AstNode, Scope>();
@@ -39,6 +40,7 @@ export function analyzeScopedCandidates(ast: AstNode, when: string | null, emit:
   // Delay emission so later escapes/method replacement cannot certify a receiver.
   let queryUnsafe = false;
   const queryRebound = new Set<string>(), queryCandidates: AstNode[] = [];
+  const scriptBindings = new WeakSet<AstNode>();
   function budget(depth: number) {
     if (++visits > 100000 || depth > 256) throw new AnalysisLimitError('analysis_limit');
   }
@@ -115,6 +117,11 @@ export function analyzeScopedCandidates(ast: AstNode, when: string | null, emit:
       if (entry.type === 'ClassExpression' || entry.type === 'ClassDeclaration') declare(entry.id, scope);
     }
     scopes.set(entry, scope);
+    if (options.bindings) {
+      if (entry.type === 'VariableDeclaration' && scope.functionId === 0 && (entry.kind === 'var' || scope === root))
+        for (const declaration of entry.declarations as AstNode[]) scriptBindings.add(declaration);
+      if (entry.type === 'WithStatement' || entry.type === 'CallExpression' && identifier(entry.callee, 'eval')) options.bindings.dynamic();
+    }
     if (options.query) {
       if (entry.type === 'WithStatement' || entry.type === 'SpreadElement' || entry.type === 'TaggedTemplateExpression'
         || (entry.type === 'CallExpression' && identifier(entry.callee, 'eval'))) queryUnsafe = true;
@@ -242,6 +249,7 @@ export function analyzeScopedCandidates(ast: AstNode, when: string | null, emit:
       case 'Identifier': return read(scope, String(entry.name));
       case 'Literal': return local();
       case 'VariableDeclarator': {
+        if (scriptBindings.has(entry)) options.bindings!.declared(entry);
         const value = isAstNode(entry.init) ? visit(entry.init) : unknown();
         if (entry.init) assign(entry.id, value, scope, conditional);
         if (options.constants && identifier(entry.id)) {

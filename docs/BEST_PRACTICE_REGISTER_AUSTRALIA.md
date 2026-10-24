@@ -8,6 +8,7 @@ Status: **公式本文・Australia表示を照合した初版27項目／人に�
 設計契約は [BEST_PRACTICE_REVIEW_DESIGN.md](BEST_PRACTICE_REVIEW_DESIGN.md) を参照。
 
 本書の未実装表記はBP-1作成時点の履歴。[AU-QRY-001のBR限定実装](BEST_PRACTICE_QUERY_LIKE_BR.md)を後続で追加した。台帳の適用対象全体への対応や、人による規則採用承認を意味しない。
+[AU-BR-004の宣言候補・共有文脈の実装](BEST_PRACTICE_TOP_LEVEL_BINDINGS_BR.md)も後続で追加した。関数localを区別し、Global-table文脈でも共有意図や実際の衝突を確認済みにしない。
 
 ## 1. 確認方法と状態
 

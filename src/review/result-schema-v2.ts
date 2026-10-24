@@ -5,9 +5,10 @@ import { matchCatalogRelease, RULES, SOURCES } from './catalog.js';
 import { followUpCodeSchema, isFollowUpApplicable } from './follow-up-catalog.js';
 
 const hash = z.string().regex(/^[a-f0-9]{64}$/);
-export const bp5RuleIdSchema = z.enum(['AU-BR-001', 'AU-BR-002', 'AU-CL-004', 'AU-QRY-001']);
-export const bp5RuleIdsSchema = z.array(bp5RuleIdSchema).min(1).max(4);
-export const bp5RulesetFor = (rules: readonly string[]) => rules.includes('AU-QRY-001') ? 'bp3-0.5' as const : 'bp3-0.4' as const;
+export const bp5RuleIdSchema = z.enum(['AU-BR-001', 'AU-BR-002', 'AU-CL-004', 'AU-QRY-001', 'AU-BR-004']);
+export const bp5RuleIdsSchema = z.array(bp5RuleIdSchema).min(1).max(5);
+export const bp5RulesetFor = (rules: readonly string[]) => rules.includes('AU-BR-004') ? 'bp3-0.6' as const
+  : rules.includes('AU-QRY-001') ? 'bp3-0.5' as const : 'bp3-0.4' as const;
 const family = z.enum(['Australia', 'Brazil', 'Zurich', 'Yokohama', 'Xanadu']);
 const asserted = z.strictObject({
   source: z.literal('operator_config'), resolution_status: z.literal('asserted'),
@@ -53,7 +54,7 @@ export function checkReleaseEvidence(e: ReleaseEvidence, at: string, binding: st
 export const releaseMatchForEvidence = (e: ReleaseEvidence) => e.resolution_status === 'unknown' ? 'unknown' : matchCatalogRelease(e.family);
 export const reviewResultV2Structure = reviewResultStructure.extend({
   schema_version: z.literal('bp-review-0.2'),
-  ruleset_version: z.enum(['bp3-0.4', 'bp3-0.5']),
+  ruleset_version: z.enum(['bp3-0.4', 'bp3-0.5', 'bp3-0.6']),
   instance_binding: hash,
   target: reviewResultStructure.shape.target.options[0].extend({
     asset_type: z.enum(['business_rule', 'client_script']), asset_table: z.enum(['sys_script', 'sys_script_client']),
@@ -62,10 +63,10 @@ export const reviewResultV2Structure = reviewResultStructure.extend({
   instance_release: releaseEvidenceStructure,
   coverage: reviewResultStructure.shape.coverage.extend({
     requested_rule_ids: bp5RuleIdsSchema,
-    evaluated_rule_ids: z.array(bp5RuleIdSchema).max(4),
+    evaluated_rule_ids: z.array(bp5RuleIdSchema).max(5),
     skipped_rules: z.array(reviewResultStructure.shape.coverage.shape.skipped_rules.element.extend({
       rule_id: bp5RuleIdSchema,
-    })).max(4),
+    })).max(5),
   }),
   findings: z.array(reviewResultStructure.shape.findings.element.extend({
     rule_id: bp5RuleIdSchema, severity: z.literal('info'), confidence: z.literal('low'),
@@ -91,6 +92,11 @@ export const reviewResultV2Schema = reviewResultV2Structure.superRefine((r, ctx)
   if (release.source === 'operator_config' && r.review_status !== 'partial') fail('Asserted review must remain partial');
   const { requested_rule_ids: requested, evaluated_rule_ids: evaluated, skipped_rules: skipped } = r.coverage;
   if (r.ruleset_version !== bp5RulesetFor(requested)) fail('Ruleset version contradicts requested rules');
+  if (r.findings.some(f => f.rule_id === 'AU-BR-004')) {
+    const contexts = ['br_global_table_shared_context', 'br_non_global_table_context', 'br_table_context_unknown'];
+    if (contexts.filter(x => r.limitations.includes(x)).length !== 1 || !r.limitations.includes('br_declared_variables_only')
+      || !r.limitations.includes('br_cross_asset_collisions_not_verified')) fail('BR binding findings need bounded context');
+  }
   const accounted = [...evaluated, ...skipped.map(s => s.rule_id)];
   if (new Set(requested).size !== requested.length || new Set(accounted).size !== accounted.length
     || accounted.length !== requested.length || requested.some(id => !accounted.includes(id))) fail('Coverage must account for every rule exactly once');
@@ -99,6 +105,7 @@ export const reviewResultV2Schema = reviewResultV2Structure.superRefine((r, ctx)
   if (Date.parse(r.target.retrieved_at) > Date.parse(r.reviewed_at)) fail('Retrieval cannot follow review');
   if (r.review_status === 'failed' && r.findings.length) fail('Failed reviews cannot assert findings');
   for (const f of r.findings) {
+    if (f.rule_id === 'AU-BR-004' && !f.required_follow_up.includes('shared_binding_intent_review')) fail('BR binding candidates need intent review');
     if (!evaluated.includes(f.rule_id) || f.field !== r.target.field || f.line_end < f.line_start) fail('Invalid finding coverage/location');
     const rule = RULES.find(rule => rule.rule_id === f.rule_id)!;
     const source = SOURCES[rule.source_id as keyof typeof SOURCES];

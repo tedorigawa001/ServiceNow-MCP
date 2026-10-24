@@ -16,7 +16,7 @@ globalThis.fetch = async (url, init) => {
   const result = u.pathname.includes('/sys_update_set/') ? { sys_id: parent, state: 'in progress', application: 'global', ...version }
     : u.pathname.endsWith('/sys_cluster_state') ? [{ build_name: 'Australia' }]
       : u.searchParams.get('sysparm_fields').includes('payload') ? [{ ...row,
-        payload: `<record_update table="sys_script"><sys_script action="INSERT_OR_UPDATE"><sys_id>${id}</sys_id><when>after</when><script>current.update(); var gr = new GlideRecord('incident'); gr.addQuery('x', 'LIKE', 'PACK_PRIVATE_QUERY');</script></sys_script></record_update>` }]
+        payload: `<record_update table="sys_script"><sys_script action="INSERT_OR_UPDATE"><sys_id>${id}</sys_id><when>after</when><collection>global</collection><script>current.update(); var gr = new GlideRecord('incident'); gr.addQuery('x', 'LIKE', 'PACK_PRIVATE_QUERY');</script></sys_script></record_update>` }]
         : [{ ...row, type: 'Business Rule' }];
   return new Response(JSON.stringify({ result }));
 };
@@ -42,4 +42,12 @@ assert.equal(query.counts.findings, 1);
 assert.equal(query.versions.ruleset, 'bp3-0.5');
 assert.equal(query.assets[0].result.findings[0].rule_id, 'AU-QRY-001');
 assert(!JSON.stringify(queryResponse).includes('PACK_PRIVATE_QUERY'));
+const bindingResponse = await handleCallTool({ params: { name, arguments: { update_set_sys_id: parent,
+  selection_mode: 'review_targets', requested_rule_ids: ['AU-BR-004'] } } });
+assert.equal(bindingResponse.isError, false);
+const binding = JSON.parse(bindingResponse.content[0].text);
+assert.equal(binding.versions.ruleset, 'bp3-0.6');
+assert.equal(binding.counts.findings, 1);
+assert(binding.assets[0].result.findings[0].required_follow_up.includes('shared_binding_intent_review'));
+assert(!JSON.stringify(bindingResponse).includes('PACK_PRIVATE_QUERY'));
 console.log('Packaged MCP review: registration + dispatch + worker PASS');

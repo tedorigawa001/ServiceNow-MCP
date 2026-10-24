@@ -159,12 +159,12 @@ describe('safe Update Set XML extraction', () => {
 });
 
 describe('BP-3 offline candidate validation', () => {
-  it('keeps the synthetic CLI example valid with explicit unsupported coverage', () => {
+  it('keeps the synthetic CLI example valid while evaluating the added BR-004 rule', () => {
     const example = JSON.parse(readFileSync(new URL('../../examples/bp3-review-input.json', import.meta.url), 'utf8'));
     const result = reviewed(example);
     expect(result.findings.map(f => f.rule_id)).toEqual(['AU-BR-002', 'AU-BR-001']);
-    expect(result.coverage.skipped_rules).toEqual([{ rule_id: 'AU-BR-004', reason: 'unsupported' }]);
-    expect(result.review_status).toBe('partial');
+    expect(result.coverage.skipped_rules).toEqual([]);
+    expect(result.coverage.evaluated_rule_ids).toContain('AU-BR-004');
   });
   it('returns source-linked AST candidates, not code or claimed violations', () => {
     const result = reviewed(input(payload('<![CDATA[// secret_SENTINEL\ncurrent.update();]]>')));
@@ -218,8 +218,8 @@ describe('BP-3 offline candidate validation', () => {
     expect(result.review_status).toBe('partial');
   });
   it('reports unsupported rules and inactive metadata without silently dropping coverage', () => {
-    const result = reviewed(input(payload('<![CDATA[current.update();]]>', { extra: '<active>false</active>' }), ['AU-BR-001', 'AU-BR-004']));
-    expect(result.coverage.skipped_rules).toEqual([{ rule_id: 'AU-BR-004', reason: 'unsupported' }]);
+    const result = reviewed(input(payload('<![CDATA[current.update();]]>', { extra: '<active>false</active>' }), ['AU-BR-001', 'AU-BR-003']));
+    expect(result.coverage.skipped_rules).toEqual([{ rule_id: 'AU-BR-003', reason: 'unsupported' }]);
     expect(result.limitations).toContain('inactive_asset');
   });
   it('fails closed with sanitized reasons for input errors, bad JS and overflow', () => {

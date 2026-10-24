@@ -71,7 +71,9 @@ export function extractReviewXml(payload: string, expectedName: string) {
   if (!/^[a-f0-9]{32}$/.test(id) || expectedName !== `${table}_${id}`) reject('identity_mismatch');
   const scope = fields.get('sys_scope') || null;
   if (scope !== null && scope !== 'global' && !/^[a-f0-9]{32}$/.test(scope)) reject('invalid_scope');
+  const collection = fields.get('collection') ?? '';
   return { table, sys_id: id, sys_scope: scope, code: fields.get('script')!,
+    collection: /^[a-z][a-z0-9_]{0,79}$/.test(collection) ? collection : null,
     when: fields.get('when') ?? null, active: fields.get('active') ?? null,
     payload_hash: sha256(payload), code_hash: sha256(fields.get('script')!) };
 }

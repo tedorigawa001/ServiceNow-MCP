@@ -21,7 +21,7 @@ type Row = ReturnType<typeof row>;
 const json = (result: unknown) => new Response(JSON.stringify({ result }));
 const client = () => new ServiceNowClient({ instanceUrl: 'https://example.service-now.com', authMode: 'per-user',
   perUserBearerToken: 'synthetic-selection-token', oauth: { clientId: '', clientSecret: '' } });
-function fixture(rows: Row[], script = 'current.update(); /* PRIVATE_SELECTION_BODY */') {
+function fixture(rows: Row[], script = 'current.update(); /* PRIVATE_SELECTION_BODY */', collection?: string) {
   const fetcher = vi.fn<typeof fetch>(async url => {
     const u = new URL(String(url));
     if (u.pathname.includes('/sys_update_set/')) return json({ sys_id: parent, state: 'in progress', application: 'global', ...version });
@@ -31,7 +31,7 @@ function fixture(rows: Row[], script = 'current.update(); /* PRIVATE_SELECTION_B
       const r = rows.find(r => query.startsWith(`sys_id=${r.sys_id}^`))!;
       const table = r.name.slice(0, -33);
       const detail: Record<string, unknown> = { ...r }; delete detail.type;
-      return json([{ ...detail, payload: `<record_update table="${table}"><${table} action="INSERT_OR_UPDATE"><sys_id>${r.name.slice(-32)}</sys_id><sys_scope>global</sys_scope><when>after</when><script><![CDATA[${script}]]></script></${table}></record_update>` }]);
+      return json([{ ...detail, payload: `<record_update table="${table}"><${table} action="INSERT_OR_UPDATE"><sys_id>${r.name.slice(-32)}</sys_id><sys_scope>global</sys_scope><when>after</when>${collection === undefined ? '' : `<collection>${collection}</collection>`}<script><![CDATA[${script}]]></script></${table}></record_update>` }]);
     }
     // Synthetic server boundary: apply the documented fixed AND predicates.
     const selected = rows.filter(r => query.split('^').every(term => {
@@ -58,6 +58,43 @@ afterEach(async () => {
 });
 const run = (rows: Row[], extra: Record<string, unknown> = {}, fetcher = fixture(rows)) => reviewBoundedUpdateSet(client(),
   { update_set_sys_id: parent, selection_mode: 'review_targets', ...extra }, { fetch: fetcher, workerFactory: sourceWorkerFactory });
+it('explicit BR-004 reaches BR bindings with typed intent review through the worker', async () => {
+  const rows = [row(1), row(2, 'sys_script_client'), row(3, 'sys_script_include')];
+  const out = await run(rows, { requested_rule_ids: ['AU-BR-004'] }, fixture(rows, 'var PRIVATE_SHARED = 1;', 'global'));
+  expect(out.isError).toBe(false);
+  if (out.isError) throw Error(out.error.code);
+  expect(aggregateReviewV3Schema.safeParse(out.result).success).toBe(true);
+  expect(out.result).toMatchObject({ versions: { ruleset: 'bp3-0.6' },
+    selection: { requested_asset_types: ['business_rule'] }, counts: { reviewed: 1, findings: 1 } });
+  expect(out.result.assets[0]).toMatchObject({ state: 'reviewed', result: {
+    limitations: expect.arrayContaining(['br_global_table_shared_context']),
+    findings: [{ rule_id: 'AU-BR-004', required_follow_up: expect.arrayContaining(['shared_binding_intent_review']) }] } });
+  expect(JSON.stringify(out)).not.toMatch(/PRIVATE_SHARED|synthetic-selection-token/);
+  const forged = structuredClone(out.result);
+  const asset = forged.assets[0];
+  if (asset.state !== 'reviewed') throw Error('Expected binding candidate');
+  asset.result.findings[0].required_follow_up = ['source_approval'];
+  expect(aggregateReviewV3Schema.safeParse(forged).success).toBe(false);
+});
+it.each([undefined, 'global'])('BR-004 keeps unknown table/dynamic scope incomplete (%s)', async collection => {
+  const rows = [row(1)];
+  const out = await run(rows, { requested_rule_ids: ['AU-BR-004'] },
+    fixture(rows, collection ? 'eval(text);' : 'var top = 1;', collection));
+  expect(out.isError).toBe(false);
+  if (out.isError) throw Error(out.error.code);
+  expect(out.result.coverage.analysis_complete).toBe(false);
+  expect(aggregateReviewV3Schema.safeParse(out.result).success).toBe(true);
+});
+it('combines five opt-in rules without changing client applicability or default rules', async () => {
+  const rows = [row(1), row(2, 'sys_script_client')];
+  const out = await run(rows, { requested_rule_ids: ['AU-BR-001', 'AU-BR-002', 'AU-CL-004', 'AU-QRY-001', 'AU-BR-004'] },
+    fixture(rows, "var gr = new GlideRecord('incident'); gr.addQuery('x', 'LIKE', 'y');", 'incident'));
+  expect(out.isError).toBe(false);
+  if (out.isError) throw Error(out.error.code);
+  expect(out.result).toMatchObject({ versions: { ruleset: 'bp3-0.6' }, counts: { reviewed: 2, findings: 2 } });
+  expect(out.result.assets[1]).toMatchObject({ state: 'reviewed', applicable_rule_ids: ['AU-CL-004'],
+    result: { ruleset_version: 'bp3-0.4', findings: [] } });
+});
 it('explicit QRY-001 selects BR only and returns worker-validated candidates in 0.3 JSON', async () => {
   const rows = [row(1), row(2, 'sys_script_client'), row(3, 'sys_script_include')];
   const fetcher = fixture(rows, "var gr = new GlideRecord('incident'); gr.addQuery('x', 'LIKE', 'PRIVATE_QUERY_BODY');");

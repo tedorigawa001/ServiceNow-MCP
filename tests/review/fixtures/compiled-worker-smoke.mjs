@@ -11,7 +11,7 @@ const fetcher = async url => {
   const result = u.pathname.includes('/sys_update_set/') ? { sys_id: parent, state: 'in progress', application: 'global', ...version }
     : u.pathname.endsWith('/sys_cluster_state') ? [{ build_name: 'Australia' }]
       : u.searchParams.get('sysparm_fields').includes('payload') ? [{ ...row,
-        payload: `<record_update table="sys_script"><sys_script action="INSERT_OR_UPDATE"><sys_id>${id}</sys_id><when>after</when><script>current.update(); var gr = new GlideRecord('incident'); gr.addQuery('x', 'LIKE', 'PACK_PRIVATE_QUERY');</script></sys_script></record_update>` }]
+        payload: `<record_update table="sys_script"><sys_script action="INSERT_OR_UPDATE"><sys_id>${id}</sys_id><when>after</when><collection>global</collection><script>current.update(); var gr = new GlideRecord('incident'); gr.addQuery('x', 'LIKE', 'PACK_PRIVATE_QUERY');</script></sys_script></record_update>` }]
         : [{ ...row, type: 'Business Rule' }];
   return new Response(JSON.stringify({ result }));
 };
@@ -35,4 +35,11 @@ assert.equal(query.result.counts.findings, 1);
 assert.equal(query.result.versions.ruleset, 'bp3-0.5');
 assert.equal(query.result.assets[0].result.findings[0].rule_id, 'AU-QRY-001');
 assert(!JSON.stringify(query).includes('PACK_PRIVATE_QUERY'));
+const binding = await reviewBoundedUpdateSet(selected, { update_set_sys_id: parent, selection_mode: 'review_targets',
+  requested_rule_ids: ['AU-BR-004'] }, { fetch: fetcher });
+assert.equal(binding.isError, false);
+assert.equal(binding.result.counts.findings, 1);
+assert.equal(binding.result.versions.ruleset, 'bp3-0.6');
+assert(binding.result.assets[0].result.findings[0].required_follow_up.includes('shared_binding_intent_review'));
+assert(binding.result.assets[0].result.limitations.includes('br_global_table_shared_context'));
 console.log('Compiled worker default entry: analysis + aggregation PASS');

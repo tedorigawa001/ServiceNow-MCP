@@ -3,11 +3,14 @@ import { z } from 'zod';
 import { RULES } from './catalog.js';
 
 export const FOLLOW_UP_CATALOG_VERSION = 'bp-followups-0.4';
+// Additive BR-004 profile; the frozen three-rule evaluation profile above is unchanged.
+export const BINDING_FOLLOW_UP_PROFILE_VERSION = 'bp-followups-br004-0.1';
 export const COMMON_FOLLOW_UP_CODES = ['source_approval', 'binding_and_reachability', 'exceptions_and_business_intent'] as const;
 export const RULE_SPECIFIC_FOLLOW_UP = {
   'AU-BR-001': 'workflow_suppression_review',
   'AU-BR-002': 'async_dependency_review',
   'AU-CL-004': 'synchronous_ajax_review',
+  'AU-BR-004': 'shared_binding_intent_review',
 } as const;
 export const FOLLOW_UP_CODES = [...COMMON_FOLLOW_UP_CODES, ...Object.values(RULE_SPECIFIC_FOLLOW_UP)] as const;
 export const followUpCodeSchema = z.enum(FOLLOW_UP_CODES);
@@ -22,6 +25,7 @@ export function requiredFollowUp(ruleId: string, context?: FollowUpContext): Fol
   // Called only after a finding is detected: these checks are intrinsic, not exception classifiers.
   if (ruleId === 'AU-BR-002') result.push(RULE_SPECIFIC_FOLLOW_UP[ruleId]);
   if (ruleId === 'AU-CL-004') result.push(RULE_SPECIFIC_FOLLOW_UP[ruleId]);
+  if (ruleId === 'AU-BR-004') result.push(RULE_SPECIFIC_FOLLOW_UP[ruleId]);
   return result.filter(code => isFollowUpApplicable(code, ruleId));
 }
 
@@ -55,6 +59,12 @@ export const FOLLOW_UP_DEFINITIONS = {
     kind: 'rule_intrinsic', applicable_rules: ['AU-CL-004'], meaning: '同期AjaxのUI制約・必要性・非同期代替と互換要件を確認する。',
     attach_when: 'Client ScriptでAU-CL-004候補を検出した全件に付与する。互換性・try/catch等の有無を付与条件にしない。受信側未解決ならそれも併記する。',
     does_not_prove: '問題ありと例外の識別、例外承認、同名メソッドがGlideAjaxであること、互換性の説明の妥当性。',
+  },
+  shared_binding_intent_review: {
+    kind: 'rule_intrinsic', applicable_rules: ['AU-BR-004'],
+    meaning: 'トップレベル宣言の共有意図・他BRとの衝突・関数内へ閉じる可否と互換性を確認する。',
+    attach_when: 'AU-BR-004の宣言候補を検出した全件。collection=global、通常テーブル、不明の文脈を別制限で区別する。',
+    does_not_prove: '共有が承認済みであること、実際の衝突、sys_scope=globalがGlobal Business Ruleであること。',
   },
 } as const satisfies Record<FollowUpCode, Definition>;
 

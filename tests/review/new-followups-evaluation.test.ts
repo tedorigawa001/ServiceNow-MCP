@@ -97,7 +97,11 @@ describe('new, untuned followup evaluation', () => {
     expect(JSON.stringify(fixture)).toBe(before);
     for (const c of fixture.cases) expect(JSON.stringify(report)).not.toContain(JSON.stringify(c.code));
     expect(JSON.stringify(report)).not.toContain('"payload":');
-    expect(Object.values(RULE_SPECIFIC_FOLLOW_UP)).toHaveLength(3);
+    // This frozen evaluation covers the original three rules, not additive catalog extensions.
+    expect(['AU-BR-001', 'AU-BR-002', 'AU-CL-004'].map(rule =>
+      RULE_SPECIFIC_FOLLOW_UP[rule as keyof typeof RULE_SPECIFIC_FOLLOW_UP])).toEqual([
+      'workflow_suppression_review', 'async_dependency_review', 'synchronous_ajax_review',
+    ]);
   });
   it('counts unverified status promotion as unsafe and never grants quality approval', () => {
     const report = evaluateNewFollowups(fixture, mutate(r => {
