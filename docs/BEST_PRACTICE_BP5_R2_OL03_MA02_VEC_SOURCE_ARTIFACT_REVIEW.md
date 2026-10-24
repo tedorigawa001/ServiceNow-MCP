@@ -1,6 +1,6 @@
 # BP-5 R-2 OL-03 MA-02 A案：Vec固定source・標準library配布artifact対応調査
 
-Version: draft-0.1 / Date: 2026-10-24 / Source baseline: `a717fb8` / Status: 読み取り調査、条件付きsource導出のみ。artifact真正性・本番対応・方式承認は未完了
+Version: draft-0.2 / Date: 2026-10-24 / Source baseline: `3313c0d` / Status: 読み取り調査と未実施の真正性照合手順を分離。artifact真正性・本番対応・方式承認は未完了
 
 ## 1. 結論と範囲
 
@@ -109,6 +109,8 @@ archive自体は取得しておらず、この表はarchiveの実hash照合結�
 | 全管理必要量・事前強制 | 未証明 | B2前bootstrap、Rc/inline/nested/全phase/拒否prefix、PC-04、cap/全体work/resource |
 
 最優先は、archive/manifestの真正性をどのtrust rootで承認し、installed membersとの対応をどう確認するかの手順設計である。今回の自己観測hashをそのまま期待値registryに登録しない。A案はまだ採用承認しないが、source経路だけを理由に不可能とも結論しない。配布/build対応を証明できなければUnmodeledを維持し、B案の詳細設計と比較する。
+
+後続の[真正性検証・installed照合手順draft-0.1](BEST_PRACTICE_BP5_R2_OL03_MA02_ARTIFACT_AUTHENTICITY_PLAN.md)で、trust root承認・manifest原bytesの分離署名検証・archive hash・bounded member解釈・安定snapshotとの照合・失敗時停止を設計した。未実施の案で、対象署名/鍵の確認・archive取得/展開・installed照合を追加実施した記録ではない。
 
 ## 6. 文書検証と非実施事項
 
