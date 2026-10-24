@@ -5,9 +5,10 @@ import { matchCatalogRelease, RULES, SOURCES } from './catalog.js';
 import { followUpCodeSchema, isFollowUpApplicable } from './follow-up-catalog.js';
 
 const hash = z.string().regex(/^[a-f0-9]{64}$/);
-export const bp5RuleIdSchema = z.enum(['AU-BR-001', 'AU-BR-002', 'AU-CL-004', 'AU-QRY-001', 'AU-BR-004', 'AU-BR-005']);
-export const bp5RuleIdsSchema = z.array(bp5RuleIdSchema).min(1).max(6);
-export const bp5RulesetFor = (rules: readonly string[]) => rules.includes('AU-BR-005') ? 'bp3-0.7' as const
+export const bp5RuleIdSchema = z.enum(['AU-BR-001', 'AU-BR-002', 'AU-CL-004', 'AU-QRY-001', 'AU-BR-004', 'AU-BR-005', 'AU-BR-007']);
+export const bp5RuleIdsSchema = z.array(bp5RuleIdSchema).min(1).max(7);
+export const bp5RulesetFor = (rules: readonly string[]) => rules.includes('AU-BR-007') ? 'bp3-0.8' as const
+  : rules.includes('AU-BR-005') ? 'bp3-0.7' as const
   : rules.includes('AU-BR-004') ? 'bp3-0.6' as const
   : rules.includes('AU-QRY-001') ? 'bp3-0.5' as const : 'bp3-0.4' as const;
 const family = z.enum(['Australia', 'Brazil', 'Zurich', 'Yokohama', 'Xanadu']);
@@ -55,7 +56,7 @@ export function checkReleaseEvidence(e: ReleaseEvidence, at: string, binding: st
 export const releaseMatchForEvidence = (e: ReleaseEvidence) => e.resolution_status === 'unknown' ? 'unknown' : matchCatalogRelease(e.family);
 export const reviewResultV2Structure = reviewResultStructure.extend({
   schema_version: z.literal('bp-review-0.2'),
-  ruleset_version: z.enum(['bp3-0.4', 'bp3-0.5', 'bp3-0.6', 'bp3-0.7']),
+  ruleset_version: z.enum(['bp3-0.4', 'bp3-0.5', 'bp3-0.6', 'bp3-0.7', 'bp3-0.8']),
   instance_binding: hash,
   target: reviewResultStructure.shape.target.options[0].extend({
     asset_type: z.enum(['business_rule', 'client_script']), asset_table: z.enum(['sys_script', 'sys_script_client']),
@@ -64,10 +65,10 @@ export const reviewResultV2Structure = reviewResultStructure.extend({
   instance_release: releaseEvidenceStructure,
   coverage: reviewResultStructure.shape.coverage.extend({
     requested_rule_ids: bp5RuleIdsSchema,
-    evaluated_rule_ids: z.array(bp5RuleIdSchema).max(6),
+    evaluated_rule_ids: z.array(bp5RuleIdSchema).max(7),
     skipped_rules: z.array(reviewResultStructure.shape.coverage.shape.skipped_rules.element.extend({
       rule_id: bp5RuleIdSchema,
-    })).max(6),
+    })).max(7),
   }),
   findings: z.array(reviewResultStructure.shape.findings.element.extend({
     rule_id: bp5RuleIdSchema, severity: z.literal('info'), confidence: z.literal('low'),
@@ -106,6 +107,9 @@ export const reviewResultV2Schema = reviewResultV2Structure.superRefine((r, ctx)
   if (Date.parse(r.target.retrieved_at) > Date.parse(r.reviewed_at)) fail('Retrieval cannot follow review');
   if (r.review_status === 'failed' && r.findings.length) fail('Failed reviews cannot assert findings');
   for (const f of r.findings) {
+    if (f.rule_id === 'AU-BR-007' && (!f.required_follow_up.includes('display_persistence_intent_review')
+      || !['display_before_display_only', 'display_field_metadata_not_verified', 'display_persistence_not_verified'].every(x => r.limitations.includes(x))
+      || !['display_direct_assignment', 'display_update_expression', 'display_delete_property', 'display_field_setter'].some(x => r.limitations.includes(x)))) fail('Display candidates need bounded context and intent review');
     if (f.rule_id === 'AU-BR-005' && (!f.required_follow_up.includes('post_abort_processing_review')
       || !['abort_before_br_only', 'abort_bounded_order_analysis', 'abort_other_business_rules_not_analyzed'].every(x => r.limitations.includes(x))
       || !['abort_following_call_effect_unverified', 'abort_following_property_write'].some(x => r.limitations.includes(x)))) fail('Abort candidates need bounded context and intent review');

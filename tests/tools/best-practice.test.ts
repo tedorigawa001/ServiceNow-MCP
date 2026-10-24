@@ -18,8 +18,8 @@ it('registers one read-only non-destructive bounded review tool in full and plat
       required: ['update_set_sys_id'], properties: {
         update_set_sys_id: { type: 'string', pattern: '^[a-f0-9]{32}$' },
         max_records: { type: 'integer', minimum: 1, maximum: 100, default: 20 },
-        requested_rule_ids: { type: 'array', minItems: 1, maxItems: 6, uniqueItems: true,
-          items: { enum: ['AU-BR-001', 'AU-BR-002', 'AU-CL-004', 'AU-QRY-001', 'AU-BR-004', 'AU-BR-005'] } }, instance: { type: 'string' },
+        requested_rule_ids: { type: 'array', minItems: 1, maxItems: 7, uniqueItems: true,
+          items: { enum: ['AU-BR-001', 'AU-BR-002', 'AU-CL-004', 'AU-QRY-001', 'AU-BR-004', 'AU-BR-005', 'AU-BR-007'] } }, instance: { type: 'string' },
       } });
   }
   vi.stubEnv('MCP_TOOL_PACKAGE', 'service_desk');
@@ -60,6 +60,7 @@ it('advertises optional defaults and accepts the instance selector without treat
   expect(validate({ update_set_sys_id: '1'.repeat(32), requested_rule_ids: ['AU-QRY-001'], selection_mode: 'review_targets' }).valid).toBe(true);
   expect(validate({ update_set_sys_id: '1'.repeat(32), requested_rule_ids: ['AU-BR-004'], selection_mode: 'review_targets' }).valid).toBe(true);
   expect(validate({ update_set_sys_id: '1'.repeat(32), requested_rule_ids: ['AU-BR-005'], selection_mode: 'review_targets' }).valid).toBe(true);
+  expect(validate({ update_set_sys_id: '1'.repeat(32), requested_rule_ids: ['AU-BR-007'], selection_mode: 'review_targets' }).valid).toBe(true);
   expect(validate({ update_set_sys_id: '1'.repeat(32), max_records: 100, requested_rule_ids: ['AU-CL-004'], instance: 'red' }).valid).toBe(true);
   expect(validate({ update_set_sys_id: '1'.repeat(32), instance: 42 }).valid).toBe(false);
 });

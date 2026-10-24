@@ -29,7 +29,8 @@ const recordMethods = new Set(['update', 'getValue', 'getDisplayValue', 'setValu
 export function analyzeScopedCandidates(ast: AstNode, when: string | null, emit: (entry: AstNode, rule: string, context?: FollowUpContext) => void,
   options: { allowDeclaredEntry: boolean; constants: boolean; query?: { unresolved: () => void };
     bindings?: { declared: (entry: AstNode) => void; dynamic: () => void };
-    abort?: { effect: (entry: AstNode, effect: string) => void; unresolved: () => void } } = { allowDeclaredEntry: false, constants: false }): void {
+    abort?: { effect: (entry: AstNode, effect: string) => void; unresolved: () => void };
+    display?: { write: (entry: AstNode, kind: string) => void; unresolved: () => void } } = { allowDeclaredEntry: false, constants: false }): void {
   const root: Scope = { functionId: 0, functionScope: true, bindings: new Map() };
   const scopes = new WeakMap<AstNode, Scope>();
   const functionScopes = new WeakMap<AstNode, Scope>();
@@ -45,6 +46,7 @@ export function analyzeScopedCandidates(ast: AstNode, when: string | null, emit:
   const scriptBindings = new WeakSet<AstNode>();
   const abortCalls = new WeakMap<AstNode, AbortCall>();
   let abortUnsafe = false;
+  let displayUnsafe = false;
   function budget(depth: number) {
     if (++visits > 100000 || depth > 256) throw new AnalysisLimitError('analysis_limit');
   }
@@ -121,6 +123,17 @@ export function analyzeScopedCandidates(ast: AstNode, when: string | null, emit:
       if (entry.type === 'ClassExpression' || entry.type === 'ClassDeclaration') declare(entry.id, scope);
     }
     scopes.set(entry, scope);
+    if (options.display) {
+      const write = entry.type === 'AssignmentExpression' ? entry.left
+        : entry.type === 'UpdateExpression' || entry.type === 'UnaryExpression' && entry.operator === 'delete' ? entry.argument : null;
+      if (entry.type === 'WithStatement' || entry.type === 'CallExpression' && identifier(entry.callee, 'eval')
+        || isAstNode(write) && write.type === 'MemberExpression' && ['setValue', 'setDisplayValue'].includes(staticMemberName(write) ?? '')) {
+        displayUnsafe = true; options.display.unresolved();
+      }
+      if (isAstNode(write) && !['Identifier', 'MemberExpression'].includes(write.type)) options.display.unresolved();
+      if (['ForInStatement', 'ForOfStatement'].includes(entry.type) && isAstNode(entry.left)
+        && !['Identifier', 'VariableDeclaration'].includes(entry.left.type)) options.display.unresolved();
+    }
     if (options.abort) {
       const write = entry.type === 'AssignmentExpression' ? entry.left
         : entry.type === 'UpdateExpression' || entry.type === 'UnaryExpression' && entry.operator === 'delete' ? entry.argument : null;
@@ -221,7 +234,8 @@ export function analyzeScopedCandidates(ast: AstNode, when: string | null, emit:
   function read(scope: Scope, name: string): Origin {
     const binding = find(scope, name);
     if (!binding) return origin(name === 'current' ? C : name === 'previous' ? P : name === 'GlideAjax' ? AJAX_CTOR
-      : (options.query || options.abort) && ['GlideRecord', 'GlideRecordSecure'].includes(name) ? QUERY_CTOR : UNKNOWN);
+      : options.display && name === 'g_scratchpad' ? LOCAL
+        : (options.query || options.abort || options.display) && ['GlideRecord', 'GlideRecordSecure'].includes(name) ? QUERY_CTOR : UNKNOWN);
     if (binding.functionId !== scope.functionId) {
       // Direct lexical reference to the declared platform entry, not propagation of a user alias/call.
       if (binding.entryFlags) return origin(binding.entryFlags | UNKNOWN);
@@ -231,6 +245,12 @@ export function analyzeScopedCandidates(ast: AstNode, when: string | null, emit:
     return options.query && queryRebound.has(name) && binding.origin.flags & (QUERY_RECORD | QUERY_CTOR) ? unknown() : binding.origin;
   }
   const receivers = new WeakMap<AstNode, Origin>();
+  function displayWrite(target: unknown, site: AstNode, kind: string) {
+    if (!options.display || !isAstNode(target) || target.type !== 'MemberExpression') return;
+    const receiver = receivers.get(target) ?? unknown(), key = memberKey(target);
+    if (receiver.flags === C && key !== null && !recordMethods.has(key) && !displayUnsafe) options.display.write(site, kind);
+    else if (receiver.flags & (C | CF | UNKNOWN)) options.display.unresolved();
+  }
   function assign(pattern: unknown, value: Origin, scope: Scope, conditional: boolean): void {
     if (!isAstNode(pattern)) return;
     if (pattern.type === 'Identifier') {
@@ -322,14 +342,26 @@ export function analyzeScopedCandidates(ast: AstNode, when: string | null, emit:
       }
       case 'CallExpression': case 'NewExpression': {
         const calleeValue = visit(entry.callee);
+        let displayArgumentCurrent = false;
         for (const argument of entry.arguments as unknown[]) {
           const value = visit(argument);
           if (options.query && containsQueryRecord(value)) queryUnsafe = true;
+          if (options.display && value.flags & (C | CF)) displayArgumentCurrent = true;
         }
         if (entry.type === 'NewExpression') return origin(calleeValue.flags & AJAX_CTOR ? AJAX
           : calleeValue.flags === QUERY_CTOR ? QUERY_RECORD : calleeValue.flags & UNKNOWN ? UNKNOWN : LOCAL);
         if (isAstNode(entry.callee) && entry.callee.type === 'MemberExpression') {
           const receiver = receivers.get(entry.callee) ?? unknown(), key = memberKey(entry.callee);
+          if (options.display && displayArgumentCurrent && ['assign', 'defineProperty', 'defineProperties', 'setPrototypeOf'].includes(key ?? '')) options.display.unresolved();
+          if (options.display && ['setValue', 'setDisplayValue'].includes(key ?? '')) {
+            const args = entry.arguments as AstNode[];
+            const field = args.length === 2 ? primitive(args[0]) : UNKNOWN_CONSTANT;
+            const recordSetter = key === 'setValue' && receiver.flags === C && typeof field === 'string'
+              && /^[a-zA-Z_][a-zA-Z0-9_]*$/.test(field);
+            const elementSetter = receiver.flags === CF && args.length === 1;
+            if (!displayUnsafe && !args.some(a => a.type === 'SpreadElement') && (recordSetter || elementSetter)) options.display.write(entry, 'display_field_setter');
+            else if (receiver.flags & (C | CF | UNKNOWN)) options.display.unresolved();
+          }
           if (options.abort && key === null && receiver.flags & C) options.abort.unresolved();
           if (options.abort && key === 'setAbortAction') {
             const args = entry.arguments as AstNode[];
@@ -363,10 +395,17 @@ export function analyzeScopedCandidates(ast: AstNode, when: string | null, emit:
       case 'AssignmentExpression': {
         visit(entry.left);
         const value = visit(entry.right);
+        displayWrite(entry.left, entry, 'display_direct_assignment');
         assign(entry.left, entry.operator === '=' ? value : unknown(), scope, conditional);
         return value;
       }
-      case 'UpdateExpression': visit(entry.argument); assign(entry.argument, local(), scope, conditional); return local();
+      case 'UpdateExpression':
+        visit(entry.argument); displayWrite(entry.argument, entry, 'display_update_expression');
+        assign(entry.argument, local(), scope, conditional); return local();
+      case 'UnaryExpression':
+        visit(entry.argument);
+        if (entry.operator === 'delete') displayWrite(entry.argument, entry, 'display_delete_property');
+        return unknown();
       case 'IfStatement': visit(entry.test); visit(entry.consequent, true); visit(entry.alternate, true); return unknown();
       case 'ConditionalExpression': visit(entry.test); return join(visit(entry.consequent, true), visit(entry.alternate, true));
       case 'LogicalExpression': return join(visit(entry.left), visit(entry.right, true));

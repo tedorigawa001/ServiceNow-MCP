@@ -58,6 +58,33 @@ afterEach(async () => {
 });
 const run = (rows: Row[], extra: Record<string, unknown> = {}, fetcher = fixture(rows)) => reviewBoundedUpdateSet(client(),
   { update_set_sys_id: parent, selection_mode: 'review_targets', ...extra }, { fetch: fetcher, workerFactory: sourceWorkerFactory });
+it('explicit BR-007 selects stored before_display and retains display intent through the worker', async () => {
+  const rows = [row(1), row(2, 'sys_script_client')];
+  const out = await run(rows, { requested_rule_ids: ['AU-BR-007'] },
+    fixture(rows, 'current.short_description = "PRIVATE_DISPLAY";', undefined, 'before_display'));
+  expect(out.isError).toBe(false);
+  if (out.isError) throw Error(out.error.code);
+  expect(out.result).toMatchObject({ versions: { ruleset: 'bp3-0.8' },
+    selection: { requested_asset_types: ['business_rule'] }, counts: { reviewed: 1, findings: 1 } });
+  expect(aggregateReviewV3Schema.safeParse(out.result).success).toBe(true);
+  expect(JSON.stringify(out)).not.toMatch(/PRIVATE_DISPLAY|synthetic-selection-token/);
+  const forged = structuredClone(out.result), asset = forged.assets[0];
+  if (asset.state !== 'reviewed') throw Error('Expected display candidate');
+  expect(asset.result.findings[0].required_follow_up).toContain('display_persistence_intent_review');
+  asset.result.findings[0].required_follow_up = ['source_approval'];
+  expect(aggregateReviewV3Schema.safeParse(forged).success).toBe(false);
+});
+it('BR-007 unknown write evidence stays incomplete', async () => {
+  const rows = [row(1)];
+  const out = await run(rows, { requested_rule_ids: ['AU-BR-007'] },
+    fixture(rows, 'current[field] = 2;', undefined, 'before_display'));
+  expect(out.isError).toBe(false);
+  if (out.isError) throw Error(out.error.code);
+  expect(out.result.coverage.analysis_complete).toBe(false);
+  expect(aggregateReviewV3Schema.safeParse(out.result).success).toBe(true);
+  const forged = structuredClone(out.result); forged.coverage.analysis_complete = true;
+  expect(aggregateReviewV3Schema.safeParse(forged).success).toBe(false);
+});
 it('explicit BR-005 reaches before-only post-abort review with strict intent context through the worker', async () => {
   const rows = [row(1), row(2, 'sys_script_client')];
   const out = await run(rows, { requested_rule_ids: ['AU-BR-005'] },

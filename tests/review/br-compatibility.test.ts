@@ -32,11 +32,13 @@ describe('Australia choices and old BR entry compatibility: new synthetic envelo
       expect(result.findings[0].verification_status).toBe('candidate');
     }
   });
-  it('does not treat before_display as async, and does not implement display rule AU-BR-007', () => {
+  it('does not treat before_display as async, and separates display field writes from update calls', () => {
     expect(review('previous.state;', 'AU-BR-002', 'before_display').coverage.evaluated_rule_ids).toEqual(['AU-BR-002']);
     expect(review('previous.state;', 'AU-BR-002', 'before_display').findings).toEqual([]);
-    expect(review('current.update();', 'AU-BR-007', 'before_display').coverage.skipped_rules)
-      .toEqual([{ rule_id: 'AU-BR-007', reason: 'unsupported' }]);
+    const display = review('current.update();', 'AU-BR-007', 'before_display');
+    expect(display.coverage.evaluated_rule_ids).toEqual(['AU-BR-007']);
+    expect(display.findings).toEqual([]);
+    expect(review('current.state = 2;', 'AU-BR-007', 'before_display').findings).toHaveLength(1);
   });
   it.each([
     'onBefore(current, previous); function onBefore(current, previous) { current.update(); }',

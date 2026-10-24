@@ -29,6 +29,7 @@ Claude・Cursor・VS Code などの AI ツールから、ServiceNow のインシ
 
 ### 開発版（未リリース）
 
+- 明示指定の[AU-BR-007](docs/BEST_PRACTICE_DISPLAY_WRITE_BR.md)を追加。保存値before_displayのBRでcurrentへの直接書込み・限定setterを確認候補にします。表示目的の変更を違反と断定せず、永続化要件を確認項目として返します。既定3規則・上限は維持、合成検証のみです。
 - 明示指定の[AU-BR-005](docs/BEST_PRACTICE_ABORT_ACTION_BR.md)を追加。before BRの中止後の呼出し・プロパティ書込みを、受信側・順序・早期return・if分岐を区別して候補化します。必要な後処理を違反と断定せず、未対応経路は未解決。既定3規則・上限は維持し、合成検証のみです。
 - 明示指定の[AU-BR-004](docs/BEST_PRACTICE_TOP_LEVEL_BINDINGS_BR.md)を追加。BRのトップレベル変数候補を関数/ブロックlocalと区別し、共有の意図は確認項目として返します。Global-tableとglobal scopeを混同せず、自動除外や承認はしません。既定3規則は維持、今回の追加分は合成検証のみです。
 - `AU-QRY-001`を明示指定する[BR限定のaddQueryレビュー](docs/BEST_PRACTICE_QUERY_LIKE_BR.md)を追加。ローカルGlideRecord系の3引数・リテラル`LIKE`を候補化し、encoded queryのLIKEは対象外。未解決は制限として返します。既定3規則は維持し、今回の追加分は合成検証のみ・PDI未検証です。

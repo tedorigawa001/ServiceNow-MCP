@@ -10,6 +10,7 @@ const name = 'review_update_set_best_practices', parent = 'a'.repeat(32), id = '
 const version = { sys_updated_on: '2026-10-17 00:00:00', sys_mod_count: '0' };
 const row = { sys_id: id, update_set: parent, name: `sys_script_${id}`, action: 'INSERT_OR_UPDATE', ...version };
 let abortMode = false;
+let displayMode = false;
 globalThis.fetch = async (url, init) => {
   assert.equal(init.method, 'GET');
   const u = new URL(String(url));
@@ -17,7 +18,7 @@ globalThis.fetch = async (url, init) => {
   const result = u.pathname.includes('/sys_update_set/') ? { sys_id: parent, state: 'in progress', application: 'global', ...version }
     : u.pathname.endsWith('/sys_cluster_state') ? [{ build_name: 'Australia' }]
       : u.searchParams.get('sysparm_fields').includes('payload') ? [{ ...row,
-        payload: `<record_update table="sys_script"><sys_script action="INSERT_OR_UPDATE"><sys_id>${id}</sys_id><when>${abortMode ? 'before' : 'after'}</when><collection>global</collection><script>${abortMode ? 'current.setAbortAction(true); gs.addErrorMessage("PACK_PRIVATE_ABORT");' : "current.update(); var gr = new GlideRecord('incident'); gr.addQuery('x', 'LIKE', 'PACK_PRIVATE_QUERY');"}</script></sys_script></record_update>` }]
+        payload: `<record_update table="sys_script"><sys_script action="INSERT_OR_UPDATE"><sys_id>${id}</sys_id><when>${displayMode ? 'before_display' : abortMode ? 'before' : 'after'}</when><collection>global</collection><script>${displayMode ? 'current.short_description = "PACK_PRIVATE_DISPLAY";' : abortMode ? 'current.setAbortAction(true); gs.addErrorMessage("PACK_PRIVATE_ABORT");' : "current.update(); var gr = new GlideRecord('incident'); gr.addQuery('x', 'LIKE', 'PACK_PRIVATE_QUERY');"}</script></sys_script></record_update>` }]
         : [{ ...row, type: 'Business Rule' }];
   return new Response(JSON.stringify({ result }));
 };
@@ -60,4 +61,13 @@ assert.equal(abort.versions.ruleset, 'bp3-0.7');
 assert.equal(abort.counts.findings, 1);
 assert(abort.assets[0].result.findings[0].required_follow_up.includes('post_abort_processing_review'));
 assert(!JSON.stringify(abortResponse).includes('PACK_PRIVATE_ABORT'));
+displayMode = true;
+const displayResponse = await handleCallTool({ params: { name, arguments: { update_set_sys_id: parent,
+  selection_mode: 'review_targets', requested_rule_ids: ['AU-BR-007'] } } });
+assert.equal(displayResponse.isError, false);
+const display = JSON.parse(displayResponse.content[0].text);
+assert.equal(display.versions.ruleset, 'bp3-0.8');
+assert.equal(display.counts.findings, 1);
+assert(display.assets[0].result.findings[0].required_follow_up.includes('display_persistence_intent_review'));
+assert(!JSON.stringify(displayResponse).includes('PACK_PRIVATE_DISPLAY'));
 console.log('Packaged MCP review: registration + dispatch + worker PASS');

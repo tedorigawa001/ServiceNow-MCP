@@ -10,6 +10,7 @@ Status: **公式本文・Australia表示を照合した初版27項目／人に�
 本書の未実装表記はBP-1作成時点の履歴。[AU-QRY-001のBR限定実装](BEST_PRACTICE_QUERY_LIKE_BR.md)を後続で追加した。台帳の適用対象全体への対応や、人による規則採用承認を意味しない。
 [AU-BR-004の宣言候補・共有文脈の実装](BEST_PRACTICE_TOP_LEVEL_BINDINGS_BR.md)も後続で追加した。関数localを区別し、Global-table文脈でも共有意図や実際の衝突を確認済みにしない。
 [AU-BR-005のbefore限定・中止後処理候補](BEST_PRACTICE_ABORT_ACTION_BR.md)も追加した。必要な後処理を違反やreturn不足と断定せず、未対応の順序/受信側は未解決として返す。
+[AU-BR-007のbefore_display限定・current書込み候補](BEST_PRACTICE_DISPLAY_WRITE_BR.md)も追加した。表示目的の変更は違反と断定せず、永続化要件を確認事項にする。
 
 ## 1. 確認方法と状態
 
