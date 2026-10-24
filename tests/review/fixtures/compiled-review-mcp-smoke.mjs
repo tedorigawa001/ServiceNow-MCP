@@ -21,7 +21,7 @@ globalThis.fetch = async (url, init) => {
   const result = u.pathname.includes('/sys_update_set/') ? { sys_id: parent, state: 'in progress', application: 'global', ...version }
     : u.pathname.endsWith('/sys_cluster_state') ? [{ build_name: 'Australia' }]
       : u.searchParams.get('sysparm_fields').includes('payload') ? [{ ...selectedRow,
-        payload: `<record_update table="${table}"><${table} action="INSERT_OR_UPDATE"><sys_id>${id}</sys_id><when>${displayMode ? 'before_display' : abortMode ? 'before' : 'after'}</when><collection>global</collection><script>${uiPolicyMode ? 'function onLoad() { g_form.setMandatory("PACK_PRIVATE_UI", true); }' : displayMode ? 'current.short_description = "PACK_PRIVATE_DISPLAY";' : abortMode ? 'current.setAbortAction(true); gs.addErrorMessage("PACK_PRIVATE_ABORT");' : "current.update(); var gr = new GlideRecord('incident'); gr.addQuery('x', 'LIKE', 'PACK_PRIVATE_QUERY');"}</script></${table}></record_update>` }]
+        payload: `<record_update table="${table}"><${table} action="INSERT_OR_UPDATE"><sys_id>${id}</sys_id><when>${displayMode ? 'before_display' : abortMode ? 'before' : 'after'}</when><collection>global</collection><script>${uiPolicyMode ? 'function onLoad() { g_form.setMandatory("PACK_PRIVATE_UI", true); g_form.getReference("PACK_PRIVATE_LOOKUP", callback); }' : displayMode ? 'current.short_description = "PACK_PRIVATE_DISPLAY";' : abortMode ? 'current.setAbortAction(true); gs.addErrorMessage("PACK_PRIVATE_ABORT");' : "current.update(); var gr = new GlideRecord('incident'); gr.addQuery('x', 'LIKE', 'PACK_PRIVATE_QUERY');"}</script></${table}></record_update>` }]
         : [{ ...selectedRow, type: 'Business Rule' }];
   return new Response(JSON.stringify({ result }));
 };
@@ -82,4 +82,12 @@ assert.equal(uiPolicy.versions.ruleset, 'bp3-0.9');
 assert.equal(uiPolicy.counts.findings, 1);
 assert(uiPolicy.assets[0].result.findings[0].required_follow_up.includes('ui_policy_suitability_review'));
 assert(!JSON.stringify(uiPolicyResponse).includes('PACK_PRIVATE_UI'));
+const lookupResponse = await handleCallTool({ params: { name, arguments: { update_set_sys_id: parent,
+  selection_mode: 'review_targets', requested_rule_ids: ['AU-CL-002'] } } });
+assert.equal(lookupResponse.isError, false);
+const lookup = JSON.parse(lookupResponse.content[0].text);
+assert.equal(lookup.versions.ruleset, 'bp3-0.10');
+assert.equal(lookup.counts.findings, 1);
+assert(lookup.assets[0].result.findings[0].required_follow_up.includes('client_lookup_necessity_review'));
+assert(!JSON.stringify(lookupResponse).includes('PACK_PRIVATE_LOOKUP'));
 console.log('Packaged MCP review: registration + dispatch + worker PASS');

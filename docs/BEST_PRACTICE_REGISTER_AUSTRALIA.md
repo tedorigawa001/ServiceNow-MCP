@@ -12,6 +12,7 @@ Status: **公式本文・Australia表示を照合した初版27項目／人に�
 [AU-BR-005のbefore限定・中止後処理候補](BEST_PRACTICE_ABORT_ACTION_BR.md)も追加した。必要な後処理を違反やreturn不足と断定せず、未対応の順序/受信側は未解決として返す。
 [AU-BR-007のbefore_display限定・current書込み候補](BEST_PRACTICE_DISPLAY_WRITE_BR.md)も追加した。表示目的の変更は違反と断定せず、永続化要件を確認事項にする。
 [AU-CL-006のClient Script限定・UI Policy検討候補](BEST_PRACTICE_UI_POLICY_CLIENT.md)も追加した。複雑な処理・UI制約や移行可能性をコードだけで承認/違反確定しない。
+[AU-CL-002のClient Script限定・サーバー照会確認候補](BEST_PRACTICE_CLIENT_LOOKUPS.md)も追加した。受信側と照会APIを限定して区別し、不要な照会・実際の性能劣化と断定しない。
 
 ## 1. 確認方法と状態
 
