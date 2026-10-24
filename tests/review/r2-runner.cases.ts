@@ -372,7 +372,7 @@ it.each(['runner', 'host'] as const)('connects manifest, callback, identity, SDK
   expect(notices).toHaveLength(1); expect(notices[0].reason).toBe('completed');
   expect(notices[0].remainingMs).toBeGreaterThan(0); expect(notices[0].remainingMs).toBeLessThanOrEqual(3000);
   expect(getEventListeners(root.signal, 'abort')).toHaveLength(0);
-}, 15000);
+});
 
 it('preserves bounded_all 0.2 results through the same fixed SDK path', async () => {
   const value = JSON.parse(readFileSync(file, 'utf8')); value.review.selection_mode = 'bounded_all';
@@ -446,7 +446,7 @@ it.each(['exchange', 'identity', 'payload'] as const)('cancels non-cooperative %
   late(new Response(new ReadableStream({ cancel() { discarded = true; } })));
   await new Promise(r => setTimeout(r, 0)); expect(discarded).toBe(true);
   expect(base.paths.filter(v => v === '/oauth_token.do').length).toBe(stage === 'exchange' ? 0 : 1);
-}, 10000);
+});
 
 it('stops on identity mismatch and reports possible other-account issuance without reaching metadata', async () => {
   const base = boundary();
@@ -485,7 +485,7 @@ it('terminates an actual non-cooperative CPU worker on root cancellation before 
     } });
   expect(result).toMatchObject({ ok: false, code: 'cancelled', cleanup: 'complete', mcpListed: true });
   expect(exited).toBe(true);
-}, 10000);
+});
 
 it('returns cleanup_incomplete instead of a success/result if OS worker termination does not settle', async () => {
   const base = boundary(), root = new AbortController(); let terminate: (() => Promise<number>) | undefined;
@@ -502,7 +502,7 @@ it('returns cleanup_incomplete instead of a success/result if OS worker terminat
     expect(result).toMatchObject({ ok: false, code: 'cleanup_incomplete', cleanup: 'incomplete' });
     expect(result).not.toHaveProperty('result');
   } finally { await terminate?.(); }
-}, 10000);
+});
 
 it.each([0, -1, 385001, NaN, 1.5])('rejects total timeout %s before bind or network', async totalTimeoutMs => {
   const ready = vi.fn(), fetcher = vi.fn<typeof fetch>();
@@ -585,7 +585,7 @@ it.each(['SIGINT', 'SIGTERM'] as const)('handles actual %s in a dedicated synthe
   let timer: ReturnType<typeof setTimeout> | undefined;
   try {
     await new Promise<void>((resolve, reject) => {
-      timer = setTimeout(() => reject(Error('TEST_CHILD_TIMEOUT')), 8000);
+      timer = setTimeout(() => reject(Error('TEST_CHILD_TIMEOUT')), 25_000);
       child.on('message', value => {
         messages.push(value);
         if ((value as { ready?: boolean }).ready) { child.kill(signal); }
@@ -598,7 +598,7 @@ it.each(['SIGINT', 'SIGTERM'] as const)('handles actual %s in a dedicated synthe
       ok: false, code: 'interrupted', cleanup: 'complete', tokenMayHaveBeenIssued: false }) }]);
     expect(stdout).toBe(''); expect(stderr).toBe(''); expect(JSON.stringify(messages).includes('RUNNER_PRIVATE')).toBe(false);
   } finally { clearTimeout(timer); if (child.exitCode === null) child.kill('SIGKILL'); }
-}, 12000);
+});
 
 it.each([
   ['normal', 'SIGINT', 130], ['normal', 'SIGTERM', 143],
@@ -615,7 +615,7 @@ it.each([
     if (message.type === 'stopping' && mode === 'repeat') child.kill('SIGINT');
     if (message.type === 'finished') child.send({ type: 'finished_ack' });
   });
-  const timer = setTimeout(() => child.kill('SIGKILL'), 6000);
+  const timer = setTimeout(() => child.kill('SIGKILL'), 25_000);
   try {
     expect(await new Promise(resolve => child.on('close', resolve))).toBe(expected);
     expect(output).toBe('');
@@ -624,7 +624,7 @@ it.each([
     if (expected === 70 || expected === 71 || expected === 72) expect(messages.some(m => m.type === 'finished')).toBe(false);
     else expect(messages.find(m => m.type === 'finished')?.receipt).toMatchObject({ cleanup: 'complete', ok: false });
   } finally { clearTimeout(timer); if (child.exitCode === null) child.kill('SIGKILL'); }
-}, 8000);
+});
 
 it.each(['no-grant', 'duplicate-grant', 'unknown-message', 'oversize', 'disconnect', 'no-ack', 'force'] as const)(
   'dedicated host fails closed on %s', async mode => {
@@ -649,7 +649,7 @@ it.each(['no-grant', 'duplicate-grant', 'unknown-message', 'oversize', 'disconne
       else child.send({ type: mode === 'force' ? 'force' : 'stop' });
     }
   });
-  const timer = setTimeout(() => child.kill('SIGKILL'), 6000);
+  const timer = setTimeout(() => child.kill('SIGKILL'), 25_000);
   try {
     expect(await exited).toBe(
       mode === 'no-grant' ? 130 : mode === 'no-ack' ? 71 : mode === 'force' ? 72 : 10);
@@ -658,7 +658,7 @@ it.each(['no-grant', 'duplicate-grant', 'unknown-message', 'oversize', 'disconne
     if (['no-grant', 'unknown-message', 'oversize'].includes(mode)) expect(messages.some(m => m.type === 'ready')).toBe(false);
     if (mode === 'no-ack') expect(messages.some(m => m.type === 'finished')).toBe(true);
   } finally { clearTimeout(timer); if (child.exitCode === null) child.kill('SIGKILL'); }
-}, 8000);
+});
 
 it.each(['normal', 'slow-close'] as const)('supervises the actual runner host with %s cleanup', async mode => {
   const root = new AbortController();
@@ -678,7 +678,7 @@ it.each(['normal', 'slow-close'] as const)('supervises the actual runner host wi
   if (mode === 'normal') expect(result).toMatchObject({ terminal_reason: 'cancelled', cleanup: 'complete',
     token_issuance: 'not_attempted', runner_receipt: { ok: false, code: 'cancelled' } });
   else { expect(result.token_issuance).toBe('unknown'); expect(result).not.toHaveProperty('runner_receipt'); }
-}, 10000);
+});
 
 it('reproduces normal-host callback_unavailable with a controlled occupied port before ready', async () => {
   const occupied = createServer(socket => socket.end());
@@ -693,5 +693,5 @@ it('reproduces normal-host callback_unavailable with a controlled occupied port 
       token_issuance: 'not_attempted', runner_receipt: { ok: false, code: 'callback_unavailable', cleanup: 'complete' } });
     expect(occupied.listening).toBe(true);
   } finally { await new Promise<void>(r => occupied.close(() => r())); }
-}, 10000);
+});
 });

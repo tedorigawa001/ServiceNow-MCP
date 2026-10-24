@@ -1,8 +1,11 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { createHash } from 'node:crypto';
 import { spawnSync } from 'node:child_process';
 import { constantValidationSetSchema } from '../../src/review/evaluation-constants.js';
+
+// CLI-boundary cases spawn real tsx scripts, which can take seconds under parallel suite load.
+vi.setConfig({ testTimeout: 30_000 });
 
 const read = (path: string) => JSON.parse(readFileSync(new URL(path, import.meta.url), 'utf8'));
 const reports = Object.fromEntries(['v2', 'new36', 'policy24', 'unseen18'].map(name => [name, read(`../../docs/evaluation/constants-${name}.json`)]));

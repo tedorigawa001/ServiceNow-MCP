@@ -60,15 +60,19 @@ it('bounds a non-cooperative output without waiting forever or retrying', async 
   } finally { vi.useRealTimers(); }
 });
 it.each(['throw', 'callback', 'event', 'close', 'late'] as const)('stops on %s display failure and absorbs late native errors', async kind => {
+  let lateFailed!: () => void; const late = new Promise<void>(resolve => { lateFailed = resolve; });
   const output = Object.assign(new Writable({ write(_chunk, _encoding, callback) {
     if (kind === 'throw') throw Error('PRIVATE_STREAM');
     if (kind === 'callback') { callback(Error('PRIVATE_STREAM')); return; }
     if (kind === 'event') { this.emit('error', Error('PRIVATE_STREAM')); return; }
     if (kind === 'close') { this.emit('close'); return; }
-    setTimeout(() => callback(Error('PRIVATE_LATE_STREAM')), 40);
+    setTimeout(() => { callback(Error('PRIVATE_LATE_STREAM')); lateFailed(); }, 40);
   } }), { isTTY: true });
   expect(selectR2EntryExitCode(await runR2CheckPlanEntry([], { output, displayTimeoutMs: 10 }))).toBe(81);
-  await new Promise(resolve => setTimeout(resolve, 60));
+  // The error guard is released on the turn after the (possibly late) write callback; wait for
+  // that event rather than a wall-clock margin that a stalled timer phase can overtake.
+  if (kind === 'late') await late;
+  await new Promise(resolve => setImmediate(resolve));
   if (['throw', 'callback', 'late'].includes(kind)) expect(output.listenerCount('error')).toBe(0);
 });
 it('rejects display budget expansion before file access/spawn and releases its signal subscriptions', async () => {

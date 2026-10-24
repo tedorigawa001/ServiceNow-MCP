@@ -1,4 +1,4 @@
-import { afterAll, beforeAll, expect, it } from 'vitest';
+import { afterAll, beforeAll, expect, it, vi } from 'vitest';
 import { execFileSync, spawn } from 'node:child_process';
 import { copyFileSync, mkdirSync, mkdtempSync, realpathSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -6,6 +6,9 @@ import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { approvedPlanFixture } from './fixtures/r2-approved-plan.js';
 
+// Compiling the project and spawning compiled entries is real process work that can take far
+// longer than the default test timeout while the rest of the suite runs in parallel.
+vi.setConfig({ testTimeout: 30_000 });
 let dir: string, entry: string;
 beforeAll(() => {
   const repo = fileURLToPath(new URL('../../', import.meta.url));
@@ -13,9 +16,9 @@ beforeAll(() => {
   writeFileSync(join(dir, 'package.json'), '{"type":"module"}', { mode: 0o600 });
   symlinkSync(join(repo, 'node_modules'), join(dir, 'node_modules'), 'dir');
   execFileSync(process.execPath, [join(repo, 'node_modules/typescript/bin/tsc'), '-p', join(repo, 'tsconfig.json'),
-    '--outDir', join(dir, 'dist')], { timeout: 30000, stdio: 'pipe' });
+    '--outDir', join(dir, 'dist')], { timeout: 120_000, stdio: 'pipe' });
   entry = join(dir, 'dist/review/r2-launcher-entry.js');
-}, 35000);
+}, 150_000);
 afterAll(() => { if (dir) rmSync(dir, { recursive: true, force: true }); });
 async function run(args: string[], env: NodeJS.ProcessEnv = {}, finalSignal?: NodeJS.Signals) {
   const child = spawn(process.execPath, args, { env, stdio: ['ignore', 'pipe', 'pipe'] });
@@ -26,7 +29,7 @@ async function run(args: string[], env: NodeJS.ProcessEnv = {}, finalSignal?: No
     if (finalSignal && !sent && stderr.includes('R2_SUMMARY_PENDING\n')) { sent = child.kill(finalSignal); }
   });
   child.once('exit', (_code, signal) => { exitSignal = signal; });
-  const timer = setTimeout(() => child.kill('SIGKILL'), 10000);
+  const timer = setTimeout(() => child.kill('SIGKILL'), 25_000);
   try {
     const code = await new Promise<number | null>((resolve, reject) => { child.once('error', reject); child.once('close', resolve); });
     return { code, stdout, stderr, ...(finalSignal ? { sent, exitSignal } : {}) };

@@ -30,10 +30,18 @@ function fixture(onPayload?: (n: number, init?: RequestInit) => Promise<Response
   };
   return { fetcher, calls };
 }
-afterEach(() => vi.restoreAllMocks());
+// Booting the real tsx review worker can take seconds under suite load. A test that outlives the
+// default timeout keeps its bounded-read admission and fails the next ones with review_busy.
+vi.setConfig({ testTimeout: 30_000 });
+afterEach(() => { vi.useRealTimers(); vi.restoreAllMocks(); });
+// Run time advances only by the test's explicit jumps, never by how long the machine takes to
+// start workers, so a budget like "1000 ms left" means exactly that whatever the suite load.
+function frozenClock(spent: () => number) {
+  const base = performance.now();
+  vi.spyOn(performance, 'now').mockImplementation(() => base + spent());
+}
 it('preserves completed analysis and accounts for every remaining row at the internal acquisition deadline', async () => {
-  const now = performance.now.bind(performance); let spent = 0;
-  vi.spyOn(performance, 'now').mockImplementation(() => now() + spent);
+  let spent = 0; frozenClock(() => spent);
   const { fetcher, calls } = fixture(n => { if (n === 2) spent = 51000; return undefined; });
   const outcome = await reviewBoundedUpdateSet(client(), { update_set_sys_id: parent }, { fetch: fetcher });
   expect(outcome.isError).toBe(false);
@@ -46,11 +54,11 @@ it('preserves completed analysis and accounts for every remaining row at the int
   expect(calls.filter(url => new URL('https://example.com' + url).searchParams.get('sysparm_fields')?.includes('payload'))).toHaveLength(2);
 });
 it('terminates a blocked second analysis before starting finalization and retains only completed results', async () => {
-  const now = performance.now.bind(performance); let spent = 0;
-  vi.spyOn(performance, 'now').mockImplementation(() => now() + spent);
+  let spent = 0; frozenClock(() => spent);
   const { fetcher } = fixture(n => { if (n === 2) spent = 49000; return undefined; });
   const started = new SharedArrayBuffer(4), workers: Worker[] = [];
-  const outcome = await reviewBoundedUpdateSet(client(), { update_set_sys_id: parent }, { fetch: fetcher,
+  vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
+  const task = reviewBoundedUpdateSet(client(), { update_set_sys_id: parent }, { fetch: fetcher,
     workerFactory: (url, options) => {
       if (workers.length) expect(workers.every(w => w.threadId === -1)).toBe(true);
       const worker = workers.length ? sourceWorkerFactory(url, options)
@@ -58,6 +66,9 @@ it('terminates a blocked second analysis before starting finalization and retain
           { ...options, workerData: { blockKind: 'analyze', blockAfter: 2, started } });
       workers.push(worker); return worker;
     } });
+  while (!Atomics.load(new Int32Array(started), 0)) await new Promise(resolve => setImmediate(resolve)); // Now spinning.
+  await vi.advanceTimersByTimeAsync(1000); // Exactly the remaining analysis phase.
+  const outcome = await task;
   expect(Atomics.load(new Int32Array(started), 0)).toBe(1);
   expect(workers).toHaveLength(2);
   expect(workers.every(w => w.threadId === -1)).toBe(true);
@@ -68,16 +79,20 @@ it('terminates a blocked second analysis before starting finalization and retain
 });
 it.each(['fetch', 'body'] as const)('aborts a non-cooperative %s at the internal deadline and releases admission', async kind => {
   let requestSignal: AbortSignal | undefined, bodyCancelled = false;
-  let lateResolve: ((value: Response) => void) | undefined;
+  let lateResolve: ((value: Response) => void) | undefined, stuck!: () => void;
+  const requested = new Promise<void>(resolve => { stuck = resolve; });
+  frozenClock(() => 0); vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
   const { fetcher } = fixture((n, init) => {
     if (n !== 2) return undefined;
-    requestSignal = init?.signal ?? undefined;
+    requestSignal = init?.signal ?? undefined; stuck();
     return kind === 'fetch' ? new Promise<Response>(resolve => { lateResolve = resolve; }) : Promise.resolve(new Response(new ReadableStream({
       pull: () => new Promise(() => {}), cancel: () => { bodyCancelled = true; },
     })));
   });
-  const outcome = await reviewBoundedUpdateSet(client(), { update_set_sys_id: parent },
+  const task = reviewBoundedUpdateSet(client(), { update_set_sys_id: parent },
     { fetch: fetcher, limits: { deadlineMs: 3000 } });
+  await requested; await vi.advanceTimersByTimeAsync(2500); // 3000 ms run minus its 500 ms reserve.
+  const outcome = await task;
   expect(requestSignal?.aborted).toBe(true);
   expect(getEventListeners(requestSignal!, 'abort')).toHaveLength(0);
   if (kind === 'body') expect(bodyCancelled).toBe(true);
@@ -108,8 +123,7 @@ it('stops retry backoff at the phase boundary without retrying or poisoning fina
   } finally { session.close(); }
 });
 it('never returns saved findings if aggregation fails after an early cutoff', async () => {
-  const now = performance.now.bind(performance); let spent = 0;
-  vi.spyOn(performance, 'now').mockImplementation(() => now() + spent);
+  let spent = 0; frozenClock(() => spent);
   const base = fixture(n => { if (n === 2) spent = 51000; return undefined; });
   const outcome = await reviewBoundedUpdateSet(client(), { update_set_sys_id: parent }, { fetch: base.fetcher,
     workerFactory: (url, options) => {
@@ -123,8 +137,7 @@ it('never returns saved findings if aggregation fails after an early cutoff', as
   expect(outcome).toEqual({ isError: true, error: { stage: 'output', code: 'internal_review_error' } });
 });
 it('does not invent a stable observation when final verification exceeds its own reserve', async () => {
-  const now = performance.now.bind(performance); let spent = 0, parents = 0;
-  vi.spyOn(performance, 'now').mockImplementation(() => now() + spent);
+  let spent = 0, parents = 0; frozenClock(() => spent);
   const base = fixture();
   const fetcher: typeof fetch = async (url, init) => {
     if (new URL(String(url)).pathname.includes('/sys_update_set/') && ++parents === 2) spent = 56000;
@@ -140,9 +153,8 @@ it('does not invent a stable observation when final verification exceeds its own
   expect(aggregateReviewSchema.safeParse(outcome.result).success).toBe(true);
 });
 it.each(['hard', 'cancel', 'changed', 'denied'] as const)('handles %s during verification after soft cutoff without weakening the hard boundary', async mode => {
-  const now = performance.now.bind(performance); let spent = 0, parents = 0;
+  let spent = 0, parents = 0; frozenClock(() => spent);
   const controller = new AbortController();
-  vi.spyOn(performance, 'now').mockImplementation(() => now() + spent);
   const base = fixture(n => { if (n === 2) spent = 51000; return undefined; });
   const fetcher: typeof fetch = async (url, init) => {
     if (new URL(String(url)).pathname.includes('/sys_update_set/') && ++parents === 2) {
@@ -168,8 +180,7 @@ it.each(['hard', 'cancel', 'changed', 'denied'] as const)('handles %s during ver
   expect(getEventListeners(controller.signal, 'abort')).toHaveLength(0);
 });
 it('returns all known rows as unprocessed when the first payload hits the internal deadline', async () => {
-  const now = performance.now.bind(performance); let spent = 0;
-  vi.spyOn(performance, 'now').mockImplementation(() => now() + spent);
+  let spent = 0; frozenClock(() => spent);
   const base = fixture(n => { if (n === 1) spent = 51000; return undefined; });
   const outcome = await reviewBoundedUpdateSet(client(), { update_set_sys_id: parent }, { fetch: base.fetcher });
   expect(outcome.isError).toBe(false);
@@ -179,8 +190,7 @@ it('returns all known rows as unprocessed when the first payload hits the intern
   expect(aggregateReviewSchema.safeParse(outcome.result).success).toBe(true);
 });
 it('does not fabricate an empty successful list when metadata is interrupted before becoming known', async () => {
-  const now = performance.now.bind(performance); let spent = 0;
-  vi.spyOn(performance, 'now').mockImplementation(() => now() + spent);
+  let spent = 0; frozenClock(() => spent);
   const base = fixture();
   const fetcher: typeof fetch = async (url, init) => {
     const u = new URL(String(url));

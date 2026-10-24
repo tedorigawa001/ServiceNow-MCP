@@ -7,6 +7,10 @@ import { fileURLToPath } from 'node:url';
 import { approvedPlanFixture } from './fixtures/r2-approved-plan.js';
 import { runR2ApprovedEntry } from '../../src/review/r2-launcher-run.js';
 import { selectR2EntryExitCode } from '../../src/review/r2-entry-terminal.js';
+// Every run spawns the real tsx plan checker (and some the real bound host), which can take
+// several seconds under parallel suite load. A test that outlives the default timeout keeps
+// running and leaks its SIGINT handler into the next test's listener assertions.
+vi.setConfig({ testTimeout: 30_000 });
 const dirs: string[] = [];
 function plan() { const f = approvedPlanFixture(); dirs.push(f.dir); return f; }
 function tty(reply: string, beforeReply = () => {}) {

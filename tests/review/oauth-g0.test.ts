@@ -19,6 +19,7 @@ async function issuer(handler: (req: IncomingMessage, res: ServerResponse) => vo
   return `http://127.0.0.1:${address.port}`;
 }
 afterEach(async () => {
+  vi.useRealTimers();
   for (const cleanup of cleanups.splice(0).reverse()) await cleanup();
   vi.restoreAllMocks();
 });
@@ -133,6 +134,9 @@ it.each(['timeout', 'cancel'])('aborts the in-flight exchange on %s without retr
     res.write('{');
   });
   const controller = new AbortController();
+  // Only the harness deadlines are virtual: the exchange times out exactly when advanced below,
+  // never before the replay and never ahead of the cancellation, however slow the machine is.
+  vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
   const harness = await SyntheticOAuthHarness.start({ authorizationOrigin: origin, callbackPort: 0,
     exchangeTimeoutMs: mode === 'timeout' ? 40 : 1000, signal: controller.signal });
   cleanups.push(() => harness.dispose());
@@ -141,6 +145,7 @@ it.each(['timeout', 'cancel'])('aborts the in-flight exchange on %s without retr
   await upstreamStarted;
   expect(await raw(url)).toBe(400); // Replay while the first exchange is still running.
   if (mode === 'cancel') controller.abort();
+  else await vi.advanceTimersByTimeAsync(40);
   expect(await harness.completion).toEqual(mode === 'cancel' ? { status: 'cancelled' } : { status: 'failed', reason: 'exchange_timeout' });
   await harness.dispose();
   await upstreamClosed;

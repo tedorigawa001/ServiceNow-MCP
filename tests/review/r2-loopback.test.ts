@@ -1,11 +1,22 @@
-import { afterEach, expect, it, vi } from 'vitest';
+import { afterAll, afterEach, beforeAll, expect, it, vi } from 'vitest';
 import { request } from 'node:http';
 import { createConnection } from 'node:net';
 import { getEventListeners } from 'node:events';
 import { inspect } from 'node:util';
 import { createHash } from 'node:crypto';
 import { R2LoopbackListener, R2_START_URL } from '../../src/review/r2-loopback.js';
+import { acquireFixedPortLock } from '../helpers/fixed-port-lock.js';
 import './r2-runner.cases.js';
+
+// This file (with its runner cases) is the only one that binds 127.0.0.1:18765; wait out
+// another suite run on the same machine instead of failing with callback_unavailable.
+let unlock: (() => void) | undefined;
+beforeAll(async () => { unlock = await acquireFixedPortLock(240_000); }, 250_000);
+afterAll(() => unlock?.());
+// The runner cases start real tsx hosts, checkers and workers, which can take several seconds
+// under parallel suite load. A test that outlives the default timeout keeps running and still
+// owns the fixed port, failing the following tests with callback_unavailable.
+vi.setConfig({ testTimeout: 30_000 });
 
 const origin = 'https://loopback-fixture.service-now.com';
 const plan = () => ({ instanceUrl: origin, clientId: 'LOOP_PRIVATE_CLIENT', scopes: ['review_read'],
