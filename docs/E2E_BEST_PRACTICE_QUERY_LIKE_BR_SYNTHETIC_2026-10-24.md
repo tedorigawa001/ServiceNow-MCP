@@ -53,6 +53,12 @@ Date: 2026-10-24 / Source baseline: `3cbde44` / 種別: ローカル合成・回
 
 並列数制限は検証実行時だけの指定で、製品設定や保存済みテスト設定の変更ではない。初回の並列timing失敗を解決済みの製品不具合として扱わず、最終の低並列全体成功と区別する。全件成功は独立した品質承認を意味しない。
 
+## 5.1 レビュー後の修正（`f737e9d`）
+
+初版（`16d58f1`）では、receiverの由来が局所GlideRecordと他の値の結合になる場合（例：`cond ? new GlideRecord(t) : {}`）、originが`QUERY_RECORD|LOCAL`となり、3引数LIKEの判定で候補にも未解決にも該当しなかった。その結果、指摘0件・`query_like_unresolved`なし・`completed`となる黙った見逃しが生じた。
+
+修正後は、receiverが一部だけ局所record/constructorの場合（`QUERY_RECORD|QUERY_CTOR`を含むが純粋な`QUERY_RECORD`ではない）を`query_like_unresolved`とする。純粋な局所receiverの候補判定は変えていない。`query-like.test.ts`に条件演算子2件と`||`1件の回帰ケースを追加し、修正なしでは2件が失敗、修正後は41件全成功を確認した。`tests/review`全体（逐次実行）も成功した。
+
 ## 6. 保持する未確認事項
 
 合成テスト件数は独立品質/適合率/再現率の主張ではない。受信側の実行時型、全ての動的変更や関数間経路、フィールド型、queryの実機動作、Australia根拠の人による承認は未確認。型の推定が未解決なら制限を残し、0件を安全としない。
