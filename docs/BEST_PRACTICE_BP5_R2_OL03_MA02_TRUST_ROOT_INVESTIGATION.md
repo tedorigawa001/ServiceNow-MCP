@@ -1,6 +1,6 @@
 # BP-5 R-2 OL-03 MA-02：1.98.1 manifest署名・trust root確認経路調査
 
-Version: draft-0.1 / Date: 2026-10-24 / Source baseline: `304681d` / Status: 読み取り調査。署名blobの存在確認のみ、暗号検証・鍵の独立確認・承認は未実施
+Version: draft-0.2 / Date: 2026-10-24 / Source baseline: `f59668e` / Status: importしない抽出・独立経路の未実施設計を参照追加。暗号検証・鍵の独立確認・承認は未実施
 
 ## 1. 結論と非実施範囲
 
@@ -93,3 +93,5 @@ Version: draft-0.1 / Date: 2026-10-24 / Source baseline: `304681d` / Status: 読
 上記は信頼判定の承認（§5の承認票）とは別である。操作の承認を得ても、鍵・fingerprintの信頼承認やG0完了には読み替えない。
 
 次は「importしない候補fingerprint抽出の検証器/手順」と「実際に利用できる独立確認経路」を承認前の案として具体化する範囲が適切である。独立経路が用意できない場合はTrustUnavailableとして止め、HTTPS/key ID/hashだけで承認しない。今回の調査はG0完了ではなく、archive取得・全体受付・parts/permitへの許可を与えない。
+
+後続の[候補fingerprint抽出・独立経路設計draft-0.1](BEST_PRACTICE_BP5_R2_OL03_MA02_FINGERPRINT_EXTRACTION_PLAN.md)で、固定GnuPGのshow-keys候補・隔離/副作用検査・限定確認票と、公開経路への到達と独立確認の利用可否の区別を具体化した。抽出/試験・鍵承認/import・連絡は未実施で、現在独立確認済みとして使える経路は確認できていない。
