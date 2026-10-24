@@ -10,6 +10,8 @@ export const DISPLAY_FOLLOW_UP_PROFILE_VERSION = 'bp-followups-br007-0.1';
 export const UI_POLICY_FOLLOW_UP_PROFILE_VERSION = 'bp-followups-cl006-0.1';
 export const CLIENT_LOOKUP_FOLLOW_UP_PROFILE_VERSION = 'bp-followups-cl002-0.1';
 export const ONCHANGE_FOLLOW_UP_PROFILE_VERSION = 'bp-followups-cl008-0.1';
+export const ONLOAD_FOLLOW_UP_PROFILE_VERSION = 'bp-followups-cl003-0.1';
+export const ONLOAD_INPUT_FOLLOW_UP = { static: 'onload_static_inputs_review', runtime: 'onload_runtime_inputs_review', unknown: 'onload_unknown_inputs_review' } as const;
 export const COMMON_FOLLOW_UP_CODES = ['source_approval', 'binding_and_reachability', 'exceptions_and_business_intent'] as const;
 export const RULE_SPECIFIC_FOLLOW_UP = {
   'AU-BR-001': 'workflow_suppression_review',
@@ -21,13 +23,14 @@ export const RULE_SPECIFIC_FOLLOW_UP = {
   'AU-CL-006': 'ui_policy_suitability_review',
   'AU-CL-002': 'client_lookup_necessity_review',
   'AU-CL-008': 'onchange_loading_intent_review',
+  'AU-CL-003': 'onload_data_timing_review',
 } as const;
-export const FOLLOW_UP_CODES = [...COMMON_FOLLOW_UP_CODES, ...Object.values(RULE_SPECIFIC_FOLLOW_UP)] as const;
+export const FOLLOW_UP_CODES = [...COMMON_FOLLOW_UP_CODES, ...Object.values(RULE_SPECIFIC_FOLLOW_UP), ...Object.values(ONLOAD_INPUT_FOLLOW_UP)] as const;
 export const followUpCodeSchema = z.enum(FOLLOW_UP_CODES);
 export type FollowUpCode = z.infer<typeof followUpCodeSchema>;
 /** Detection signals, never exception classification, approval or execution-path proof. */
 export type FollowUpContext = { kind: 'workflow_suppression' } | { kind: 'async_dependency' }
-  | { kind: 'synchronous_ajax'; receiver_unresolved: boolean };
+  | { kind: 'synchronous_ajax'; receiver_unresolved: boolean } | { kind: 'onload_timing'; timing: keyof typeof ONLOAD_INPUT_FOLLOW_UP };
 
 export function requiredFollowUp(ruleId: string, context?: FollowUpContext): FollowUpCode[] {
   const result: FollowUpCode[] = [...COMMON_FOLLOW_UP_CODES];
@@ -41,6 +44,10 @@ export function requiredFollowUp(ruleId: string, context?: FollowUpContext): Fol
   if (ruleId === 'AU-CL-006') result.push(RULE_SPECIFIC_FOLLOW_UP[ruleId]);
   if (ruleId === 'AU-CL-002') result.push(RULE_SPECIFIC_FOLLOW_UP[ruleId]);
   if (ruleId === 'AU-CL-008') result.push(RULE_SPECIFIC_FOLLOW_UP[ruleId]);
+  if (ruleId === 'AU-CL-003') {
+    result.push(RULE_SPECIFIC_FOLLOW_UP[ruleId]);
+    result.push(ONLOAD_INPUT_FOLLOW_UP[context?.kind === 'onload_timing' ? context.timing : 'unknown']);
+  }
   return result.filter(code => isFollowUpApplicable(code, ruleId));
 }
 
@@ -110,6 +117,30 @@ export const FOLLOW_UP_DEFINITIONS = {
     meaning: '読込時の照会が必要か、isLoading等のガード・処理順・業務意図を確認する。',
     attach_when: 'onChangeのClient Scriptで、読込時を除外できない限定的な照会候補を検出した全件。',
     does_not_prove: '処理が不要、ガードが無い、違反、読込時に実行済みであること。自動return追加を許可しない。',
+  },
+  onload_data_timing_review: {
+    kind: 'rule_intrinsic', applicable_rules: ['AU-CL-003'],
+    meaning: '読込前の可用性・更新鮮度・業務上の必要性・クライアントへの公開範囲を確認する。',
+    attach_when: 'onLoadの照会タイミング確認候補を検出した全件に付与する。',
+    does_not_prove: 'scratchpadへの移行が適切、機密列を公開可能、結果が読込前に確定すること。',
+  },
+  onload_static_inputs_review: {
+    kind: 'context_specific', applicable_rules: ['AU-CL-003'],
+    meaning: '定数入力の照会で、必要情報を読込前に安全に用意できるかを確認する。',
+    attach_when: '限定解析で照会の入力が定数と分類された候補に付与する。',
+    does_not_prove: '結果データが不変、読込前に決まる、scratchpadへ移行すべきという結論。',
+  },
+  onload_runtime_inputs_review: {
+    kind: 'context_specific', applicable_rules: ['AU-CL-003'],
+    meaning: 'フォーム値などの実行時入力と鮮度要件を確認し、動的取得を維持する適否を検討する。',
+    attach_when: '限定解析でフォーム参照または実行時フォーム値への依存が確認された候補に付与する。',
+    does_not_prove: '移行不可、常に動的取得が必要、既存データがサーバーで利用不能という結論。',
+  },
+  onload_unknown_inputs_review: {
+    kind: 'context_specific', applicable_rules: ['AU-CL-003'],
+    meaning: '入力・設定経路・値の生成時点が不明なため、移行判断の前提証拠を追加確認する。',
+    attach_when: '既知の照会だが入力タイミングの分類が不明な候補に付与する。',
+    does_not_prove: '不明な入力が定数または動的であること、候補0件や移行判断の承認。',
   },
 } as const satisfies Record<FollowUpCode, Definition>;
 
