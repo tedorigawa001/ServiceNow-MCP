@@ -2,6 +2,7 @@
 import type { FollowUpContext } from './follow-up-catalog.js';
 import { constantValue, UNKNOWN_CONSTANT, type ConstantValue } from './constant-value.js';
 import { analyzeAbortFlow, type AbortCall } from './abort-flow.js';
+import { analyzeOnChangeFlow } from './onchange-flow.js';
 export type AstNode = { type: string; start: number; end: number; loc: { start: { line: number }; end: { line: number } }; [key: string]: unknown };
 export const isAstNode = (v: unknown): v is AstNode => !!v && typeof v === 'object' && 'type' in v;
 export function staticMemberName(value: unknown): string | null {
@@ -15,6 +16,7 @@ const C = 1, P = 2, CF = 4, PF = 8, AJAX = 16, LOCAL = 32, UNKNOWN = 64, AJAX_CT
 const QUERY_RECORD = 256, QUERY_CTOR = 512;
 const FORM = 1024;
 const CLIENT_RECORD = 2048, CLIENT_CTOR = 4096, LOOKUP_METHOD = 8192;
+const LOADING = 16384;
 type Origin = { flags: number; properties?: Map<string, Origin>; unknownProperties?: boolean };
 type Binding = { origin: Origin; functionId: number; entryFlags?: number; isConst?: boolean; constantWritten?: boolean; constant?: ConstantValue };
 type Scope = { parent?: Scope; functionId: number; functionScope: boolean; bindings: Map<string, Binding> };
@@ -36,7 +38,8 @@ export function analyzeScopedCandidates(ast: AstNode, when: string | null, emit:
     abort?: { effect: (entry: AstNode, effect: string) => void; unresolved: () => void };
     display?: { write: (entry: AstNode, kind: string) => void; unresolved: () => void };
     uiPolicy?: { control: (entry: AstNode, kind: string, dynamic?: boolean) => void; unresolved: () => void };
-    clientLookup?: { lookup: (entry: AstNode, kind: string) => void; unresolved: () => void } } = { allowDeclaredEntry: false, constants: false }): void {
+    clientLookup?: { lookup: (entry: AstNode, kind: string) => void; unresolved: () => void };
+    onChange?: { report: (entry: AstNode, kind: string, state: 'guarded' | 'possible' | 'unresolved') => void; unresolved: () => void } } = { allowDeclaredEntry: false, constants: false }): void {
   const root: Scope = { functionId: 0, functionScope: true, bindings: new Map() };
   const scopes = new WeakMap<AstNode, Scope>();
   const functionScopes = new WeakMap<AstNode, Scope>();
@@ -56,6 +59,8 @@ export function analyzeScopedCandidates(ast: AstNode, when: string | null, emit:
   let uiPolicyUnsafe = false;
   let lookupUnsafe = false;
   const lookupCandidates: { entry: AstNode; kind: string }[] = [];
+  const onChangeCalls = new Map<AstNode, string>(), loadingRefs = new WeakSet<AstNode>();
+  let onChangeUnsafe = false;
   const uiPolicyCandidates: { entry: AstNode; kind: string; dynamic: boolean }[] = [];
   function budget(depth: number) {
     if (++visits > 100000 || depth > 256) throw new AnalysisLimitError('analysis_limit');
@@ -133,6 +138,15 @@ export function analyzeScopedCandidates(ast: AstNode, when: string | null, emit:
       if (entry.type === 'ClassExpression' || entry.type === 'ClassDeclaration') declare(entry.id, scope);
     }
     scopes.set(entry, scope);
+    if (options.onChange) {
+      const write = entry.type === 'AssignmentExpression' ? entry.left
+        : entry.type === 'UpdateExpression' || entry.type === 'UnaryExpression' && entry.operator === 'delete' ? entry.argument : null;
+      if (entry.type === 'WithStatement' || entry.type === 'CallExpression' && identifier(entry.callee, 'eval')
+        || identifier(write, 'GlideAjax') || isAstNode(write) && write.type === 'MemberExpression'
+          && (staticMemberName(write) === null || ['getXML', 'getXMLAnswer', 'getXMLWait'].includes(staticMemberName(write)!))) {
+        onChangeUnsafe = true; options.onChange.unresolved();
+      }
+    }
     if (options.clientLookup) {
       const write = entry.type === 'AssignmentExpression' ? entry.left
         : entry.type === 'UpdateExpression' || entry.type === 'UnaryExpression' && entry.operator === 'delete' ? entry.argument
@@ -223,6 +237,15 @@ export function analyzeScopedCandidates(ast: AstNode, when: string | null, emit:
   // Syntactic ServiceNow entry binding only: a sole top-level (function(current, previous){...})(current, previous).
   // No general argument/return propagation or IIFE analysis.
   const statements = ast.body as AstNode[];
+  const changeEntries = statements.filter(s => s.type === 'FunctionDeclaration' && identifier(s.id, 'onChange'));
+  const changeEntry = options.onChange && changeEntries.length === 1 && !reboundNames.has('onChange') ? changeEntries[0] : undefined;
+  if (options.onChange) {
+    const param = changeEntry && (changeEntry.params as AstNode[])[3];
+    if (changeEntry && identifier(param) && !reboundNames.has(String(param.name))) {
+      const binding = functionScopes.get(changeEntry)!.bindings.get(String(param.name))!;
+      binding.origin = origin(LOADING); binding.entryFlags = LOADING;
+    } else options.onChange.unresolved();
+  }
   function bindEntry(fn: AstNode, args: AstNode[]): void {
     const params = fn.params as AstNode[];
     if (params.length !== 2 || args.length !== 2 || !identifier(params[0], 'current') || !identifier(params[1], 'previous')
@@ -314,7 +337,14 @@ export function analyzeScopedCandidates(ast: AstNode, when: string | null, emit:
     const scope = scopes.get(entry)!;
     const visit = (v: unknown, cond = conditional) => isAstNode(v) ? walk(v, depth + 1, cond) : unknown();
     switch (entry.type) {
-      case 'Identifier': return read(scope, String(entry.name));
+      case 'Identifier': {
+        const value = read(scope, String(entry.name));
+        if (options.onChange && value.flags === LOADING) {
+          if (find(scope, String(entry.name))?.constantWritten) options.onChange.unresolved();
+          else loadingRefs.add(entry);
+        }
+        return value;
+      }
       case 'Literal': return local();
       case 'VariableDeclarator': {
         if (scriptBindings.has(entry)) options.bindings!.declared(entry);
@@ -369,6 +399,7 @@ export function analyzeScopedCandidates(ast: AstNode, when: string | null, emit:
         const key = memberKey(entry);
         if (options.clientLookup && (receiver.flags === FORM && key === 'getReference'
           || receiver.flags === CLIENT_RECORD && ['query', 'get'].includes(key ?? ''))) return origin(LOOKUP_METHOD);
+        if (options.onChange && receiver.flags === AJAX && ['getXML', 'getXMLAnswer', 'getXMLWait'].includes(key ?? '')) return origin(LOOKUP_METHOD);
         if (when === 'async' && (receiver.flags & P)) emit(entry, 'AU-BR-002', { kind: 'async_dependency' });
         if (key === null) return unknown();
         const uncertain = receiver.unknownProperties ? UNKNOWN : 0;
@@ -388,6 +419,10 @@ export function analyzeScopedCandidates(ast: AstNode, when: string | null, emit:
           if (options.display && value.flags & (C | CF)) displayArgumentCurrent = true;
           if (options.uiPolicy && value.flags & FORM) uiPolicyArgumentForm = true;
           if (options.clientLookup && containsLookupReceiver(value)) { lookupUnsafe = true; options.clientLookup.unresolved(); }
+          if (options.onChange && containsLookupReceiver(value, new Set(), 0, AJAX | AJAX_CTOR)) {
+            onChangeUnsafe = true; options.onChange.unresolved();
+          }
+          if (options.onChange && value.flags & LOOKUP_METHOD) options.onChange.unresolved();
         }
         if (options.clientLookup && entry.type === 'NewExpression' && calleeValue.flags === CLIENT_CTOR) {
           const args = entry.arguments as AstNode[];
@@ -400,10 +435,27 @@ export function analyzeScopedCandidates(ast: AstNode, when: string | null, emit:
         if (options.clientLookup && entry.type === 'NewExpression' && calleeValue.flags & CLIENT_CTOR) {
           options.clientLookup.unresolved(); return unknown();
         }
+        if (options.onChange && entry.type === 'NewExpression' && calleeValue.flags & AJAX_CTOR) {
+          const args = entry.arguments as AstNode[];
+          if (calleeValue.flags !== AJAX_CTOR || args.length !== 1 || args[0].type === 'SpreadElement'
+            || args[0].type === 'Literal' && (typeof args[0].value !== 'string' || !args[0].value)) {
+            options.onChange.unresolved(); return unknown();
+          }
+        }
         if (entry.type === 'NewExpression') return origin(calleeValue.flags & AJAX_CTOR ? AJAX
           : calleeValue.flags === QUERY_CTOR ? QUERY_RECORD : calleeValue.flags & UNKNOWN ? UNKNOWN : LOCAL);
         if (isAstNode(entry.callee) && entry.callee.type === 'MemberExpression') {
           const receiver = receivers.get(entry.callee) ?? unknown(), key = memberKey(entry.callee);
+          if (options.onChange) {
+            if (key === null && receiver.flags & AJAX) options.onChange.unresolved();
+            if (['getXML', 'getXMLAnswer', 'getXMLWait'].includes(key ?? '')) {
+              const args = entry.arguments as AstNode[];
+              const valid = key === 'getXMLWait' ? args.length === 0
+                : args.length === 1 && !['Literal', 'SpreadElement'].includes(args[0].type);
+              if (receiver.flags === AJAX && valid) onChangeCalls.set(entry, 'onchange_lookup_glide_ajax');
+              else if (receiver.flags & (AJAX | UNKNOWN)) options.onChange.unresolved();
+            }
+          }
           if (options.clientLookup) {
             if (receiver.flags & LOOKUP_METHOD) options.clientLookup.unresolved();
             if (key === null && receiver.flags & (FORM | CLIENT_RECORD)) options.clientLookup.unresolved();
@@ -518,18 +570,25 @@ export function analyzeScopedCandidates(ast: AstNode, when: string | null, emit:
     if (value.flags & (QUERY_RECORD | QUERY_CTOR)) return true;
     return !!value.properties && [...value.properties.values()].some(v => containsQueryRecord(v, seen, depth + 1));
   }
-  function containsLookupReceiver(value: Origin, seen = new Set<Origin>(), depth = 0): boolean {
+  function containsLookupReceiver(value: Origin, seen = new Set<Origin>(), depth = 0, mask = FORM | CLIENT_RECORD | CLIENT_CTOR): boolean {
     budget(depth);
     if (seen.has(value)) return false;
     seen.add(value);
-    if (value.flags & (FORM | CLIENT_RECORD | CLIENT_CTOR)) return true;
-    return !!value.properties && [...value.properties.values()].some(v => containsLookupReceiver(v, seen, depth + 1));
+    if (value.flags & mask) return true;
+    return !!value.properties && [...value.properties.values()].some(v => containsLookupReceiver(v, seen, depth + 1, mask));
   }
   walk(ast);
   for (const candidate of lookupCandidates) {
     budget(0);
     if (lookupUnsafe) options.clientLookup!.unresolved();
-    else options.clientLookup!.lookup(candidate.entry, candidate.kind);
+    else {
+      options.clientLookup!.lookup(candidate.entry, candidate.kind);
+      if (options.onChange) onChangeCalls.set(candidate.entry, 'onchange_lookup_client_record_or_reference');
+    }
+  }
+  if (options.onChange) {
+    if (!changeEntry || onChangeUnsafe || lookupUnsafe) options.onChange.unresolved();
+    else analyzeOnChangeFlow(changeEntry.body as AstNode, onChangeCalls, loadingRefs, budget, options.onChange.report, options.onChange.unresolved);
   }
   if (options.abort) analyzeAbortFlow(ast, abortCalls, budget, options.abort.effect, options.abort.unresolved);
   for (const candidate of uiPolicyCandidates) {

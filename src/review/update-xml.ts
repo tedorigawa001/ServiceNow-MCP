@@ -74,6 +74,6 @@ export function extractReviewXml(payload: string, expectedName: string) {
   const collection = fields.get('collection') ?? '';
   return { table, sys_id: id, sys_scope: scope, code: fields.get('script')!,
     collection: /^[a-z][a-z0-9_]{0,79}$/.test(collection) ? collection : null,
-    when: fields.get('when') ?? null, active: fields.get('active') ?? null,
+    when: fields.get('when') ?? null, client_type: fields.get('type') ?? null, active: fields.get('active') ?? null,
     payload_hash: sha256(payload), code_hash: sha256(fields.get('script')!) };
 }
