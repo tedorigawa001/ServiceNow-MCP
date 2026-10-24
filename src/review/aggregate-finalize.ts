@@ -39,7 +39,7 @@ export function finalizeAggregate(run: AggregateReview): AggregateReview {
     && run.consistency === 'stable_observation' && run.release_match === 'matched' && !run.errors.length
     && run.assets.every(a => a.state === 'not_applicable' || a.state === 'skipped_deleted'
       || a.state === 'reviewed' && !a.result.coverage.skipped_rules.length
-        && !['query_like_unresolved', 'br_table_context_unknown', 'br_dynamic_scope_unresolved', 'abort_flow_unresolved', 'display_write_unresolved', 'ui_policy_control_unresolved', 'client_lookup_unresolved', 'onchange_loading_flow_unresolved'].some(x => a.result.limitations.includes(x)));
+        && !['query_like_unresolved', 'br_table_context_unknown', 'br_dynamic_scope_unresolved', 'abort_flow_unresolved', 'display_write_unresolved', 'ui_policy_control_unresolved', 'client_lookup_unresolved', 'onchange_loading_flow_unresolved', 'onload_data_flow_unresolved', 'onload_input_unknown'].some(x => a.result.limitations.includes(x)));
   while (Buffer.byteLength(JSON.stringify(run), 'utf8') > run.limits.max_response_bytes - 256) {
     let i = run.assets.length - 1;
     while (i >= 0 && run.assets[i].state !== 'reviewed') i--;

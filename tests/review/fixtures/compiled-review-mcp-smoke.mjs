@@ -12,6 +12,7 @@ const row = { sys_id: id, update_set: parent, name: `sys_script_${id}`, action: 
 let abortMode = false;
 let displayMode = false;
 let uiPolicyMode = false;
+let onLoadMode = false;
 globalThis.fetch = async (url, init) => {
   assert.equal(init.method, 'GET');
   const u = new URL(String(url));
@@ -21,7 +22,7 @@ globalThis.fetch = async (url, init) => {
   const result = u.pathname.includes('/sys_update_set/') ? { sys_id: parent, state: 'in progress', application: 'global', ...version }
     : u.pathname.endsWith('/sys_cluster_state') ? [{ build_name: 'Australia' }]
       : u.searchParams.get('sysparm_fields').includes('payload') ? [{ ...selectedRow,
-        payload: `<record_update table="${table}"><${table} action="INSERT_OR_UPDATE"><sys_id>${id}</sys_id><type>onChange</type><when>${displayMode ? 'before_display' : abortMode ? 'before' : 'after'}</when><collection>global</collection><script>${uiPolicyMode ? 'function onChange(c,o,n,isLoading) { g_form.setMandatory("PACK_PRIVATE_UI", true); g_form.getReference("PACK_PRIVATE_LOOKUP", callback); }' : displayMode ? 'current.short_description = "PACK_PRIVATE_DISPLAY";' : abortMode ? 'current.setAbortAction(true); gs.addErrorMessage("PACK_PRIVATE_ABORT");' : "current.update(); var gr = new GlideRecord('incident'); gr.addQuery('x', 'LIKE', 'PACK_PRIVATE_QUERY');"}</script></${table}></record_update>` }]
+        payload: `<record_update table="${table}"><${table} action="INSERT_OR_UPDATE"><sys_id>${id}</sys_id><type>${onLoadMode ? 'onLoad' : 'onChange'}</type><when>${displayMode ? 'before_display' : abortMode ? 'before' : 'after'}</when><collection>global</collection><script>${onLoadMode ? 'function onLoad(){var gr=new GlideRecord("PACK_PRIVATE_PRELOAD_TABLE");gr.get("PACK_PRIVATE_PRELOAD_ID");}' : uiPolicyMode ? 'function onChange(c,o,n,isLoading) { g_form.setMandatory("PACK_PRIVATE_UI", true); g_form.getReference("PACK_PRIVATE_LOOKUP", callback); }' : displayMode ? 'current.short_description = "PACK_PRIVATE_DISPLAY";' : abortMode ? 'current.setAbortAction(true); gs.addErrorMessage("PACK_PRIVATE_ABORT");' : "current.update(); var gr = new GlideRecord('incident'); gr.addQuery('x', 'LIKE', 'PACK_PRIVATE_QUERY');"}</script></${table}></record_update>` }]
         : [{ ...selectedRow, type: 'Business Rule' }];
   return new Response(JSON.stringify({ result }));
 };
@@ -98,4 +99,13 @@ assert.equal(change.versions.ruleset, 'bp3-0.11');
 assert.equal(change.counts.findings, 1);
 assert(change.assets[0].result.findings[0].required_follow_up.includes('onchange_loading_intent_review'));
 assert(!JSON.stringify(changeResponse).includes('PACK_PRIVATE_LOOKUP'));
+onLoadMode = true;
+const loadResponse = await handleCallTool({ params: { name, arguments: { update_set_sys_id: parent,
+  selection_mode: 'review_targets', requested_rule_ids: ['AU-CL-003'] } } });
+assert.equal(loadResponse.isError, false);
+const load = JSON.parse(loadResponse.content[0].text);
+assert.equal(load.versions.ruleset, 'bp3-0.12');
+assert.equal(load.counts.findings, 1);
+assert(load.assets[0].result.findings[0].required_follow_up.includes('onload_static_inputs_review'));
+assert(!JSON.stringify(loadResponse).includes('PACK_PRIVATE_PRELOAD'));
 console.log('Packaged MCP review: registration + dispatch + worker PASS');

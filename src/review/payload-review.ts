@@ -99,6 +99,12 @@ function reviewPayload(raw: unknown, mode: Profile, bp5 = false): Outcome<Review
   const uiPolicyEnabled = mode === 'constant' && assetType === 'client_script' && input.requested_rule_ids.includes('AU-CL-006');
   const lookupEnabled = mode === 'constant' && assetType === 'client_script' && input.requested_rule_ids.includes('AU-CL-002');
   const onChangeEnabled = mode === 'constant' && assetType === 'client_script' && input.requested_rule_ids.includes('AU-CL-008');
+  const onLoadEnabled = mode === 'constant' && assetType === 'client_script' && input.requested_rule_ids.includes('AU-CL-003');
+  if (onLoadEnabled) {
+    supported.add('AU-CL-003');
+    result.limitations.push('onload_client_script_only', 'onload_data_availability_not_verified', 'onload_data_exposure_not_verified', 'onload_input_analysis_subset');
+    if (asset.client_type === 'onLoad') result.limitations.push('onload_event_payload_onload');
+  }
   if (onChangeEnabled) {
     supported.add('AU-CL-008');
     result.limitations.push('onchange_client_script_only', 'onchange_loading_intent_not_verified', 'onchange_guard_subset', 'onchange_ui_compatibility_not_verified');
@@ -135,6 +141,7 @@ function reviewPayload(raw: unknown, mode: Profile, bp5 = false): Outcome<Review
   if (uiPolicyEnabled) result.ruleset_version = 'bp3-0.9';
   if (lookupEnabled) result.ruleset_version = 'bp3-0.10';
   if (onChangeEnabled) result.ruleset_version = 'bp3-0.11';
+  if (onLoadEnabled) result.ruleset_version = 'bp3-0.12';
   // Normalize persisted BR choice values only on the current engine path.
   // Keep the historical engine's context contract unchanged for frozen baselines.
   const when = mode === 'legacy' ? asset.when
@@ -147,7 +154,8 @@ function reviewPayload(raw: unknown, mode: Profile, bp5 = false): Outcome<Review
         : rule_id === 'AU-BR-002' && !['before', 'after', 'async', 'display'].includes(when ?? '') ? 'missing_context'
           : rule_id === 'AU-BR-005' && when !== 'before' ? 'missing_context'
             : rule_id === 'AU-BR-007' && asset.when !== 'before_display' ? 'missing_context'
-              : rule_id === 'AU-CL-008' && asset.client_type !== 'onChange' ? 'missing_context' : null;
+              : rule_id === 'AU-CL-008' && asset.client_type !== 'onChange' ? 'missing_context'
+                : rule_id === 'AU-CL-003' && asset.client_type !== 'onLoad' ? 'missing_context' : null;
     if (reason) result.coverage.skipped_rules.push({ rule_id, reason });
     else result.coverage.evaluated_rule_ids.push(rule_id);
   }
@@ -165,10 +173,18 @@ function reviewPayload(raw: unknown, mode: Profile, bp5 = false): Outcome<Review
         && !result.limitations.includes('synchronous_ajax_receiver_unresolved')) result.limitations.push('synchronous_ajax_receiver_unresolved');
       const rule = RULES.find(rule => rule.rule_id === ruleId)!;
       const source = SOURCES[rule.source_id as keyof typeof SOURCES];
-      result.findings.push({ rule_id: ruleId, category: ruleId === 'AU-CL-002' || ruleId === 'AU-CL-008' ? 'performance' : ruleId === 'AU-BR-004' || ruleId === 'AU-CL-006' ? 'maintainability' : 'correctness', severity: 'info', confidence: 'low',
+      result.findings.push({ rule_id: ruleId, category: ['AU-CL-002', 'AU-CL-008', 'AU-CL-003'].includes(ruleId) ? 'performance' : ruleId === 'AU-BR-004' || ruleId === 'AU-CL-006' ? 'maintainability' : 'correctness', severity: 'info', confidence: 'low',
         verification_status: 'candidate', field: 'script', line_start: entry.loc.start.line, line_end: entry.loc.end.line,
-        issue: rule.title, impact: '構文上の候補。業務影響・到達可能性は未確認。', applicability: rule.applicability,
-        recommendation: ruleId === 'AU-CL-008' ? 'フォーム読込時にも照会が必要か、isLoading等のガード・処理順・業務意図を確認する。必要な読込時処理を違反と断定せず、returnやガードを自動追加しない。'
+        issue: ruleId === 'AU-CL-003' ? context?.kind === 'onload_timing' && context.timing === 'static'
+          ? 'onLoad照会：定数入力のタイミング確認候補' : context?.kind === 'onload_timing' && context.timing === 'runtime'
+            ? 'onLoad照会：実行時入力への依存確認候補' : 'onLoad照会：入力情報不足の確認候補' : rule.title,
+        impact: '構文上の候補。業務影響・到達可能性は未確認。', applicability: rule.applicability,
+        recommendation: ruleId === 'AU-CL-003' ? context?.kind === 'onload_timing' && context.timing === 'static'
+          ? '入力は限定解析で定数と分類したが、結果の可用性・鮮度・業務意図と公開範囲を確認する。scratchpadへの移行を一律推奨せず、機密情報追加や自動移行はしない。'
+          : context?.kind === 'onload_timing' && context.timing === 'runtime'
+            ? 'フォーム等の実行時入力と鮮度要件を確認し、動的取得を維持する適否を検討する。scratchpad移行を一律推奨せず、機密情報追加や自動移行はしない。'
+            : '入力や設定経路の情報が不足している。可用性・鮮度・公開範囲を確認するまで、scratchpad移行や動的取得の必要性を断定しない。'
+          : ruleId === 'AU-CL-008' ? 'フォーム読込時にも照会が必要か、isLoading等のガード・処理順・業務意図を確認する。必要な読込時処理を違反と断定せず、returnやガードを自動追加しない。'
           : ruleId === 'AU-CL-002' ? '照会頻度・必要列・既存のクライアントデータ・業務上の必要性とUI制約を確認する。不要と断定せず、scratchpadや非同期GlideAjaxの適否を検討し、自動削除・置換や機密データ追加はしない。'
           : ruleId === 'AU-CL-006' ? 'UI Policyで表現できるか、複雑な処理・実行順・UI制約を確認する。スクリプトを一律違反と断定せず、自動移行や制御削除はしない。'
           : ruleId === 'AU-BR-007' ? '表示目的の変更か、永続保存が必要かを確認する。表示用の書込み自体を違反と断定せず、自動update追加や変更削除はしない。'
@@ -213,15 +229,24 @@ function reviewPayload(raw: unknown, mode: Profile, bp5 = false): Outcome<Review
               if (result.findings.length > 100) throw new ExtractionError('finding_limit');
             },
           } } : {}),
-          ...(lookupEnabled || onChangeEnabled && asset.client_type === 'onChange' ? { clientLookup: {
+          ...(lookupEnabled || onChangeEnabled && asset.client_type === 'onChange' || onLoadEnabled && asset.client_type === 'onLoad' ? { clientLookup: {
             unresolved: () => {
               if (lookupEnabled && !result.limitations.includes('client_lookup_unresolved')) result.limitations.push('client_lookup_unresolved');
               if (onChangeEnabled && !result.limitations.includes('onchange_loading_flow_unresolved')) result.limitations.push('onchange_loading_flow_unresolved');
+              if (onLoadEnabled && !result.limitations.includes('onload_data_flow_unresolved')) result.limitations.push('onload_data_flow_unresolved');
             },
             lookup: (entry: Ast, kind: string) => {
               if (!lookupEnabled) return;
               if (!result.limitations.includes(kind)) result.limitations.push(kind);
               appendFinding(entry, 'AU-CL-002');
+              if (result.findings.length > 100) throw new ExtractionError('finding_limit');
+            },
+          } } : {}),
+          ...(onLoadEnabled && asset.client_type === 'onLoad' ? { onLoad: {
+            unresolved: () => { if (!result.limitations.includes('onload_data_flow_unresolved')) result.limitations.push('onload_data_flow_unresolved'); },
+            report: (entry: Ast, kind: string, timing: 'static' | 'runtime' | 'unknown') => {
+              for (const flag of [kind, `onload_input_${timing}`]) if (!result.limitations.includes(flag)) result.limitations.push(flag);
+              appendFinding(entry, 'AU-CL-003', { kind: 'onload_timing', timing });
               if (result.findings.length > 100) throw new ExtractionError('finding_limit');
             },
           } } : {}),
@@ -281,7 +306,8 @@ function reviewPayload(raw: unknown, mode: Profile, bp5 = false): Outcome<Review
     && !result.limitations.includes('br_table_context_unknown') && !result.limitations.includes('br_dynamic_scope_unresolved')
     && !result.limitations.includes('abort_flow_unresolved') && !result.limitations.includes('display_write_unresolved')
     && !result.limitations.includes('ui_policy_control_unresolved') && !result.limitations.includes('client_lookup_unresolved')
-    && !result.limitations.includes('onchange_loading_flow_unresolved')) result.review_status = 'completed';
+    && !result.limitations.includes('onchange_loading_flow_unresolved') && !result.limitations.includes('onload_data_flow_unresolved')
+    && !result.limitations.includes('onload_input_unknown')) result.review_status = 'completed';
   const validated = reviewResultSchema.safeParse(result);
   return validated.success ? { poc_only: true, status: 'reviewed', result: validated.data } : reject('invalid_result_context');
 }

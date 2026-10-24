@@ -58,6 +58,38 @@ afterEach(async () => {
 });
 const run = (rows: Row[], extra: Record<string, unknown> = {}, fetcher = fixture(rows)) => reviewBoundedUpdateSet(client(),
   { update_set_sys_id: parent, selection_mode: 'review_targets', ...extra }, { fetch: fetcher, workerFactory: sourceWorkerFactory });
+it('CL-003 preserves per-finding input classes and exposure limits through the worker', async () => {
+  const rows=[row(1,'sys_script_client')];
+  const out=await run(rows,{requested_rule_ids:['AU-CL-003']},fixture(rows,
+    'function onLoad(){var gr=new GlideRecord("PRIVATE_PRELOAD_TABLE");gr.get("PRIVATE_PRELOAD_ID");g_form.getReference("x");}',undefined,'after','onLoad'));
+  expect(out.isError).toBe(false);if(out.isError)throw Error(out.error.code);
+  expect(out.result).toMatchObject({versions:{ruleset:'bp3-0.12'},counts:{findings:2}});
+  expect(aggregateReviewV3Schema.safeParse(out.result).success).toBe(true);
+  expect(JSON.stringify(out)).not.toMatch(/PRIVATE_PRELOAD|synthetic-selection-token/);
+  for(const corrupt of ['classification','exposure','event']){
+    const forged=structuredClone(out.result),asset=forged.assets[0];if(asset.state!=='reviewed')throw Error('Expected timing candidate');
+    if(corrupt==='classification')asset.result.findings[0].required_follow_up.push('onload_runtime_inputs_review');
+    else asset.result.limitations=asset.result.limitations.filter(x=>x!==(corrupt==='exposure'?'onload_data_exposure_not_verified':'onload_event_payload_onload'));
+    expect(aggregateReviewV3Schema.safeParse(forged).success).toBe(false);
+  }
+});
+it('CL-003 unknown inputs or missing event evidence cannot claim complete analysis', async () => {
+  const rows=[row(1,'sys_script_client')];
+  for(const type of ['onLoad','onChange',undefined]){
+    const out=await run(rows,{requested_rule_ids:['AU-CL-003']},fixture(rows,'function onLoad(){var gr=new GlideRecord("task");gr.get(compute());}',undefined,'after',type));
+    expect(out.isError).toBe(false);if(out.isError)throw Error(out.error.code);
+    expect(out.result.coverage.analysis_complete).toBe(false);
+    const forged=structuredClone(out.result);forged.coverage.analysis_complete=true;
+    expect(aggregateReviewV3Schema.safeParse(forged).success).toBe(false);
+  }
+});
+it('CL-003 preserves the old 0.2 envelope and distinct CL-002 necessity review', async () => {
+  const rows=[row(1,'sys_script_client')];
+  const out=await run(rows,{requested_rule_ids:['AU-CL-002','AU-CL-003'],selection_mode:undefined},fixture(rows,'function onLoad(){var gr=new GlideRecord("task");gr.get("fixed");}',undefined,'after','onLoad'));
+  expect(out.isError).toBe(false);if(out.isError)throw Error(out.error.code);
+  expect(out.result).toMatchObject({schema_version:'bp-mcp-review-0.2',versions:{ruleset:'bp3-0.12'},counts:{findings:2}});
+  expect(aggregateReviewSchema.safeParse(out.result).success).toBe(true);
+});
 it('CL-008 uses payload event evidence, worker guard analysis and strict follow-ups', async () => {
   const rows = [row(1, 'sys_script_client')];
   const out = await run(rows, { requested_rule_ids: ['AU-CL-008'] }, fixture(rows,

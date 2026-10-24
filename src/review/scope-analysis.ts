@@ -17,6 +17,8 @@ const QUERY_RECORD = 256, QUERY_CTOR = 512;
 const FORM = 1024;
 const CLIENT_RECORD = 2048, CLIENT_CTOR = 4096, LOOKUP_METHOD = 8192;
 const LOADING = 16384;
+const RUNTIME_INPUT = 32768;
+type InputTiming = 'static' | 'runtime' | 'unknown';
 type Origin = { flags: number; properties?: Map<string, Origin>; unknownProperties?: boolean };
 type Binding = { origin: Origin; functionId: number; entryFlags?: number; isConst?: boolean; constantWritten?: boolean; constant?: ConstantValue };
 type Scope = { parent?: Scope; functionId: number; functionScope: boolean; bindings: Map<string, Binding> };
@@ -39,7 +41,8 @@ export function analyzeScopedCandidates(ast: AstNode, when: string | null, emit:
     display?: { write: (entry: AstNode, kind: string) => void; unresolved: () => void };
     uiPolicy?: { control: (entry: AstNode, kind: string, dynamic?: boolean) => void; unresolved: () => void };
     clientLookup?: { lookup: (entry: AstNode, kind: string) => void; unresolved: () => void };
-    onChange?: { report: (entry: AstNode, kind: string, state: 'guarded' | 'possible' | 'unresolved') => void; unresolved: () => void } } = { allowDeclaredEntry: false, constants: false }): void {
+    onChange?: { report: (entry: AstNode, kind: string, state: 'guarded' | 'possible' | 'unresolved') => void; unresolved: () => void };
+    onLoad?: { report: (entry: AstNode, kind: string, timing: InputTiming) => void; unresolved: () => void } } = { allowDeclaredEntry: false, constants: false }): void {
   const root: Scope = { functionId: 0, functionScope: true, bindings: new Map() };
   const scopes = new WeakMap<AstNode, Scope>();
   const functionScopes = new WeakMap<AstNode, Scope>();
@@ -61,6 +64,17 @@ export function analyzeScopedCandidates(ast: AstNode, when: string | null, emit:
   const lookupCandidates: { entry: AstNode; kind: string }[] = [];
   const onChangeCalls = new Map<AstNode, string>(), loadingRefs = new WeakSet<AstNode>();
   let onChangeUnsafe = false;
+  let onLoadUnsafe = false;
+  const loadCalls = new Map<AstNode, { kind: string; timing: InputTiming }>();
+  const requestInputs = new WeakMap<Origin, { timing: InputTiming; method: boolean }>();
+  const loadTimings = new WeakMap<AstNode, InputTiming>();
+  const mergeTiming = (a: InputTiming, b: InputTiming): InputTiming => a === 'unknown' || b === 'unknown' ? 'unknown'
+    : a === 'runtime' || b === 'runtime' ? 'runtime' : 'static';
+  function inputTiming(entry: AstNode, value: Origin): InputTiming {
+    budget(0);
+    return primitive(entry) !== UNKNOWN_CONSTANT ? 'static' : value.flags & UNKNOWN ? 'unknown'
+      : value.flags & RUNTIME_INPUT ? 'runtime' : 'unknown';
+  }
   const uiPolicyCandidates: { entry: AstNode; kind: string; dynamic: boolean }[] = [];
   function budget(depth: number) {
     if (++visits > 100000 || depth > 256) throw new AnalysisLimitError('analysis_limit');
@@ -138,6 +152,14 @@ export function analyzeScopedCandidates(ast: AstNode, when: string | null, emit:
       if (entry.type === 'ClassExpression' || entry.type === 'ClassDeclaration') declare(entry.id, scope);
     }
     scopes.set(entry, scope);
+    if (options.onLoad) {
+      const write = entry.type === 'AssignmentExpression' ? entry.left
+        : entry.type === 'UpdateExpression' || entry.type === 'UnaryExpression' && entry.operator === 'delete' ? entry.argument : null;
+      if (entry.type === 'WithStatement' || entry.type === 'CallExpression' && identifier(entry.callee, 'eval')
+        || identifier(write, 'GlideAjax') || isAstNode(write) && write.type === 'MemberExpression') {
+        onLoadUnsafe = true; options.onLoad.unresolved();
+      }
+    }
     if (options.onChange) {
       const write = entry.type === 'AssignmentExpression' ? entry.left
         : entry.type === 'UpdateExpression' || entry.type === 'UnaryExpression' && entry.operator === 'delete' ? entry.argument : null;
@@ -237,6 +259,9 @@ export function analyzeScopedCandidates(ast: AstNode, when: string | null, emit:
   // Syntactic ServiceNow entry binding only: a sole top-level (function(current, previous){...})(current, previous).
   // No general argument/return propagation or IIFE analysis.
   const statements = ast.body as AstNode[];
+  const loadEntries = statements.filter(s => s.type === 'FunctionDeclaration' && identifier(s.id, 'onLoad'));
+  const loadEntry = options.onLoad && loadEntries.length === 1 && !reboundNames.has('onLoad')
+    && (loadEntries[0].params as AstNode[]).length === 0 ? loadEntries[0] : undefined;
   const changeEntries = statements.filter(s => s.type === 'FunctionDeclaration' && identifier(s.id, 'onChange'));
   const changeEntry = options.onChange && changeEntries.length === 1 && !reboundNames.has('onChange') ? changeEntries[0] : undefined;
   if (options.onChange) {
@@ -294,6 +319,7 @@ export function analyzeScopedCandidates(ast: AstNode, when: string | null, emit:
       // Lexical shadowing still applies across function boundaries, but aliases never cross them.
       return binding.origin.flags === LOCAL && !binding.origin.properties ? local() : unknown();
     }
+    if (options.onLoad && binding.constantWritten && binding.origin.flags & (RUNTIME_INPUT | AJAX | AJAX_CTOR | CLIENT_RECORD | CLIENT_CTOR)) return unknown();
     return options.query && queryRebound.has(name) && binding.origin.flags & (QUERY_RECORD | QUERY_CTOR) ? unknown() : binding.origin;
   }
   const receivers = new WeakMap<AstNode, Origin>();
@@ -399,7 +425,7 @@ export function analyzeScopedCandidates(ast: AstNode, when: string | null, emit:
         const key = memberKey(entry);
         if (options.clientLookup && (receiver.flags === FORM && key === 'getReference'
           || receiver.flags === CLIENT_RECORD && ['query', 'get'].includes(key ?? ''))) return origin(LOOKUP_METHOD);
-        if (options.onChange && receiver.flags === AJAX && ['getXML', 'getXMLAnswer', 'getXMLWait'].includes(key ?? '')) return origin(LOOKUP_METHOD);
+        if ((options.onChange || options.onLoad) && receiver.flags === AJAX && ['getXML', 'getXMLAnswer', 'getXMLWait'].includes(key ?? '')) return origin(LOOKUP_METHOD);
         if (when === 'async' && (receiver.flags & P)) emit(entry, 'AU-BR-002', { kind: 'async_dependency' });
         if (key === null) return unknown();
         const uncertain = receiver.unknownProperties ? UNKNOWN : 0;
@@ -413,8 +439,10 @@ export function analyzeScopedCandidates(ast: AstNode, when: string | null, emit:
         const calleeValue = visit(entry.callee);
         let displayArgumentCurrent = false;
         let uiPolicyArgumentForm = false;
+        const argValues: Origin[] = [];
         for (const argument of entry.arguments as unknown[]) {
           const value = visit(argument);
+          if (options.onLoad) argValues.push(value);
           if (options.query && containsQueryRecord(value)) queryUnsafe = true;
           if (options.display && value.flags & (C | CF)) displayArgumentCurrent = true;
           if (options.uiPolicy && value.flags & FORM) uiPolicyArgumentForm = true;
@@ -423,37 +451,69 @@ export function analyzeScopedCandidates(ast: AstNode, when: string | null, emit:
             onChangeUnsafe = true; options.onChange.unresolved();
           }
           if (options.onChange && value.flags & LOOKUP_METHOD) options.onChange.unresolved();
+          if (options.onLoad && containsLookupReceiver(value, new Set(), 0, AJAX | AJAX_CTOR | LOOKUP_METHOD)) {
+            onLoadUnsafe = true; options.onLoad.unresolved();
+          }
         }
         if (options.clientLookup && entry.type === 'NewExpression' && calleeValue.flags === CLIENT_CTOR) {
           const args = entry.arguments as AstNode[];
           const table = args.length === 1 ? primitive(args[0]) : UNKNOWN_CONSTANT;
           if (args.length === 1 && args[0].type !== 'SpreadElement'
             && !(args[0].type === 'Literal' && typeof args[0].value !== 'string')
-            && (table === UNKNOWN_CONSTANT || typeof table === 'string' && table.length > 0)) return origin(CLIENT_RECORD);
+            && (table === UNKNOWN_CONSTANT || typeof table === 'string' && table.length > 0)) {
+            const record = origin(CLIENT_RECORD);
+            if (options.onLoad) requestInputs.set(record, { timing: inputTiming(args[0], argValues[0]), method: false });
+            return record;
+          }
           options.clientLookup.unresolved(); return unknown();
         }
         if (options.clientLookup && entry.type === 'NewExpression' && calleeValue.flags & CLIENT_CTOR) {
           options.clientLookup.unresolved(); return unknown();
         }
-        if (options.onChange && entry.type === 'NewExpression' && calleeValue.flags & AJAX_CTOR) {
+        if ((options.onChange || options.onLoad) && entry.type === 'NewExpression' && calleeValue.flags & AJAX_CTOR) {
           const args = entry.arguments as AstNode[];
           if (calleeValue.flags !== AJAX_CTOR || args.length !== 1 || args[0].type === 'SpreadElement'
             || args[0].type === 'Literal' && (typeof args[0].value !== 'string' || !args[0].value)) {
-            options.onChange.unresolved(); return unknown();
+            options.onChange?.unresolved(); options.onLoad?.unresolved(); return unknown();
           }
+        }
+        if (options.onLoad && entry.type === 'NewExpression' && calleeValue.flags === AJAX_CTOR) {
+          const ajax = origin(AJAX), args = entry.arguments as AstNode[];
+          requestInputs.set(ajax, { timing: inputTiming(args[0], argValues[0]), method: false }); return ajax;
         }
         if (entry.type === 'NewExpression') return origin(calleeValue.flags & AJAX_CTOR ? AJAX
           : calleeValue.flags === QUERY_CTOR ? QUERY_RECORD : calleeValue.flags & UNKNOWN ? UNKNOWN : LOCAL);
         if (isAstNode(entry.callee) && entry.callee.type === 'MemberExpression') {
           const receiver = receivers.get(entry.callee) ?? unknown(), key = memberKey(entry.callee);
-          if (options.onChange) {
-            if (key === null && receiver.flags & AJAX) options.onChange.unresolved();
+          if (options.onChange || options.onLoad) {
+            if (key === null && receiver.flags & AJAX) { options.onChange?.unresolved(); options.onLoad?.unresolved(); }
             if (['getXML', 'getXMLAnswer', 'getXMLWait'].includes(key ?? '')) {
               const args = entry.arguments as AstNode[];
               const valid = key === 'getXMLWait' ? args.length === 0
                 : args.length === 1 && !['Literal', 'SpreadElement'].includes(args[0].type);
-              if (receiver.flags === AJAX && valid) onChangeCalls.set(entry, 'onchange_lookup_glide_ajax');
-              else if (receiver.flags & (AJAX | UNKNOWN)) options.onChange.unresolved();
+              if (receiver.flags === AJAX && valid) {
+                if (options.onChange) onChangeCalls.set(entry, 'onchange_lookup_glide_ajax');
+                if (options.onLoad) {
+                  const state = requestInputs.get(receiver);
+                  loadCalls.set(entry, { kind: 'onload_lookup_glide_ajax', timing: conditional || !state?.method ? 'unknown' : state.timing });
+                  requestInputs.set(receiver, { timing: 'unknown', method: false });
+                }
+              } else if (receiver.flags & (AJAX | UNKNOWN)) { options.onChange?.unresolved(); options.onLoad?.unresolved(); }
+            }
+          }
+          if (options.onLoad) {
+            const args = entry.arguments as AstNode[], state = requestInputs.get(receiver);
+            if (receiver.flags === FORM && ['getValue', 'getDisplayValue'].includes(key ?? '')) return origin(RUNTIME_INPUT);
+            if (key === 'addParam' || key === 'addQuery') {
+              if (state && (key === 'addParam' && receiver.flags === AJAX || key === 'addQuery' && receiver.flags === CLIENT_RECORD)) {
+                let timing: InputTiming = conditional || args.some(a => a.type === 'SpreadElement')
+                  || !(args.length === 2 || key === 'addQuery' && args.length === 3) ? 'unknown' : 'static';
+                for (let i = 0; i < args.length; i++) timing = mergeTiming(timing, inputTiming(args[i], argValues[i]));
+                state.timing = mergeTiming(state.timing, timing);
+                if (key === 'addParam' && args.length === 2 && primitive(args[0]) === 'sysparm_name') state.method = true;
+              } else if (receiver.flags & (AJAX | CLIENT_RECORD | UNKNOWN)) { onLoadUnsafe = true; options.onLoad.unresolved(); }
+            } else if (state && !['get', 'query', 'getXML', 'getXMLAnswer', 'getXMLWait'].includes(key ?? '')) {
+              state.timing = 'unknown';
             }
           }
           if (options.clientLookup) {
@@ -469,9 +529,15 @@ export function analyzeScopedCandidates(ast: AstNode, when: string | null, emit:
               const valid = !args.some(a => a.type === 'SpreadElement') && (reference
                 ? (args.length === 1 || args.length === 2 && callback(args[1])) && stringArg
                 : key === 'get' ? args.length === 1 && stringArg : args.length === 0 || args.length === 1 && callback(args[0]));
-              if (valid && (reference && receiver.flags === FORM || recordLookup && receiver.flags === CLIENT_RECORD))
+              if (valid && (reference && receiver.flags === FORM || recordLookup && receiver.flags === CLIENT_RECORD)) {
                 lookupCandidates.push({ entry, kind: reference ? 'client_lookup_get_reference' : key === 'get' ? 'client_lookup_record_get' : 'client_lookup_record_query' });
-              else if (receiver.flags & (FORM | CLIENT_RECORD | UNKNOWN)) options.clientLookup.unresolved();
+                if (options.onLoad) {
+                  const state = requestInputs.get(receiver);
+                  loadTimings.set(entry, conditional ? 'unknown' : reference ? 'runtime' : key === 'get'
+                    ? mergeTiming(state?.timing ?? 'unknown', inputTiming(args[0], argValues[0])) : state?.timing ?? 'unknown');
+                  if (state) state.timing = 'unknown';
+                }
+              } else if (receiver.flags & (FORM | CLIENT_RECORD | UNKNOWN)) options.clientLookup.unresolved();
             }
           }
           if (options.uiPolicy) {
@@ -584,11 +650,20 @@ export function analyzeScopedCandidates(ast: AstNode, when: string | null, emit:
     else {
       options.clientLookup!.lookup(candidate.entry, candidate.kind);
       if (options.onChange) onChangeCalls.set(candidate.entry, 'onchange_lookup_client_record_or_reference');
+      if (options.onLoad) loadCalls.set(candidate.entry, { kind: 'onload_lookup_client_record_or_reference', timing: loadTimings.get(candidate.entry) ?? 'unknown' });
     }
   }
   if (options.onChange) {
     if (!changeEntry || onChangeUnsafe || lookupUnsafe) options.onChange.unresolved();
     else analyzeOnChangeFlow(changeEntry.body as AstNode, onChangeCalls, loadingRefs, budget, options.onChange.report, options.onChange.unresolved);
+  }
+  if (options.onLoad) {
+    if (!loadEntry || onLoadUnsafe || lookupUnsafe) options.onLoad.unresolved();
+    else for (const [site, detail] of loadCalls) {
+      budget(0);
+      if (scopes.get(site)!.functionId !== functionScopes.get(loadEntry)!.functionId) options.onLoad.unresolved();
+      else options.onLoad.report(site, detail.kind, detail.timing);
+    }
   }
   if (options.abort) analyzeAbortFlow(ast, abortCalls, budget, options.abort.effect, options.abort.unresolved);
   for (const candidate of uiPolicyCandidates) {
