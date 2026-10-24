@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import type { InstanceContext } from '../../src/servicenow/instances.js';
 import { ServiceNowClient } from '../../src/servicenow/client.js';
+import { BoundedReadSession } from '../../src/servicenow/bounded-read.js';
 import { aggregateReviewSchema } from '../../src/review/aggregate-schema.js';
 import { logger } from '../../src/utils/logging.js';
 
@@ -141,8 +142,9 @@ it('cannot call the tool through a package that does not expose it', async () =>
   expect(context.getClient).not.toHaveBeenCalled(); expect(fetcher).not.toHaveBeenCalled();
 });
 it('returns soft-cutoff partial as a successful MCP call with explicit unprocessed reasons', async () => {
-  const now = performance.now.bind(performance); let spent = 0;
-  vi.spyOn(performance, 'now').mockImplementation(() => now() + spent);
+  // Frozen base: only the explicit jump moves run time, never how long the worker takes to start.
+  const frozen = performance.now(); let spent = 0;
+  vi.spyOn(performance, 'now').mockImplementation(() => frozen + spent);
   const base = fixture();
   vi.stubGlobal('fetch', async (url: URL, init: RequestInit) => {
     if (new URL(url).searchParams.get('sysparm_fields')?.includes('payload')) spent = 51000;
@@ -159,6 +161,7 @@ it('wires real MCP cancellation notifications to the bounded request through the
   const server = createServer(), mcpClient = new Client({ name: 'synthetic-bp5', version: '0.0.0' });
   let started!: () => void; const ready = new Promise<void>(resolve => { started = resolve; });
   let aborted!: () => void; const stopped = new Promise<void>(resolve => { aborted = resolve; });
+  let released!: () => void; const admissionReleased = new Promise<void>(resolve => { released = resolve; });
   const stalled = async (_url: URL, init: RequestInit) => {
     init.signal!.addEventListener('abort', aborted, { once: true }); started();
     return new Promise<Response>(() => {});
@@ -173,6 +176,12 @@ it('wires real MCP cancellation notifications to the bounded request through the
     if (success.content[0].type !== 'text') throw Error('Expected JSON text');
     expect(JSON.parse(success.content[0].text).counts.findings).toBe(1);
     vi.stubGlobal('fetch', stalled);
+    // Admission is released by the cancelled call's session close, which runs only after the
+    // server-side handler unwinds; observe it instead of polling on wall-clock time.
+    const close = BoundedReadSession.prototype.close;
+    vi.spyOn(BoundedReadSession.prototype, 'close').mockImplementation(function (this: BoundedReadSession) {
+      close.call(this); released();
+    });
     const controller = new AbortController();
     const job = mcpClient.callTool({ name, arguments: input }, CallToolResultSchema, { signal: controller.signal });
     const rejected = expect(job).rejects.toBeDefined();
@@ -180,11 +189,7 @@ it('wires real MCP cancellation notifications to the bounded request through the
   } finally { await mcpClient.close(); await server.close(); }
   vi.stubGlobal('fetch', fixture());
   // The cancelled call must release admission before the next review can run.
-  let response;
-  for (let i = 0; i < 20; i++) {
-    response = await handleCallTool({ params: { name, arguments: input } }, context as unknown as InstanceContext);
-    if (!response.isError) break;
-    await new Promise(resolve => setTimeout(resolve, 5));
-  }
-  expect(response?.isError).toBe(false);
+  await admissionReleased;
+  const response = await handleCallTool({ params: { name, arguments: input } }, context as unknown as InstanceContext);
+  expect(response.isError).toBe(false);
 });

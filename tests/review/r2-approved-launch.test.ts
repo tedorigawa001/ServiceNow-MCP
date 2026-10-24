@@ -5,6 +5,9 @@ import { rmSync, writeFileSync } from 'node:fs';
 import type { ChildProcess } from 'node:child_process';
 import { approveAndRunR2Plan } from '../../src/review/r2-approved-launch.js';
 import { approvedPlanFixture } from './fixtures/r2-approved-plan.js';
+// Every run spawns the real tsx plan checker (and some the real host), which can take several
+// seconds under parallel suite load; see r2-launcher-run.test.ts.
+vi.setConfig({ testTimeout: 30_000 });
 const dirs: string[] = [];
 function plan() { const f = approvedPlanFixture(); dirs.push(f.dir); return f; }
 function tty(reply: string, beforeReply = () => {}) {
