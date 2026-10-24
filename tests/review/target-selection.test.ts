@@ -21,7 +21,7 @@ type Row = ReturnType<typeof row>;
 const json = (result: unknown) => new Response(JSON.stringify({ result }));
 const client = () => new ServiceNowClient({ instanceUrl: 'https://example.service-now.com', authMode: 'per-user',
   perUserBearerToken: 'synthetic-selection-token', oauth: { clientId: '', clientSecret: '' } });
-function fixture(rows: Row[]) {
+function fixture(rows: Row[], script = 'current.update(); /* PRIVATE_SELECTION_BODY */') {
   const fetcher = vi.fn<typeof fetch>(async url => {
     const u = new URL(String(url));
     if (u.pathname.includes('/sys_update_set/')) return json({ sys_id: parent, state: 'in progress', application: 'global', ...version });
@@ -31,7 +31,7 @@ function fixture(rows: Row[]) {
       const r = rows.find(r => query.startsWith(`sys_id=${r.sys_id}^`))!;
       const table = r.name.slice(0, -33);
       const detail: Record<string, unknown> = { ...r }; delete detail.type;
-      return json([{ ...detail, payload: `<record_update table="${table}"><${table} action="INSERT_OR_UPDATE"><sys_id>${r.name.slice(-32)}</sys_id><sys_scope>global</sys_scope><when>after</when><script><![CDATA[current.update(); /* PRIVATE_SELECTION_BODY */]]></script></${table}></record_update>` }]);
+      return json([{ ...detail, payload: `<record_update table="${table}"><${table} action="INSERT_OR_UPDATE"><sys_id>${r.name.slice(-32)}</sys_id><sys_scope>global</sys_scope><when>after</when><script><![CDATA[${script}]]></script></${table}></record_update>` }]);
     }
     // Synthetic server boundary: apply the documented fixed AND predicates.
     const selected = rows.filter(r => query.split('^').every(term => {
@@ -58,6 +58,51 @@ afterEach(async () => {
 });
 const run = (rows: Row[], extra: Record<string, unknown> = {}, fetcher = fixture(rows)) => reviewBoundedUpdateSet(client(),
   { update_set_sys_id: parent, selection_mode: 'review_targets', ...extra }, { fetch: fetcher, workerFactory: sourceWorkerFactory });
+it('explicit QRY-001 selects BR only and returns worker-validated candidates in 0.3 JSON', async () => {
+  const rows = [row(1), row(2, 'sys_script_client'), row(3, 'sys_script_include')];
+  const fetcher = fixture(rows, "var gr = new GlideRecord('incident'); gr.addQuery('x', 'LIKE', 'PRIVATE_QUERY_BODY');");
+  const outcome = await run(rows, { requested_rule_ids: ['AU-QRY-001'] }, fetcher);
+  expect(outcome.isError).toBe(false);
+  if (outcome.isError) throw Error(outcome.error.code);
+  expect(aggregateReviewV3Schema.safeParse(outcome.result).success).toBe(true);
+  expect(outcome.result).toMatchObject({ schema_version: 'bp-mcp-review-0.3',
+    versions: { ruleset: 'bp3-0.5' }, selection: { requested_asset_types: ['business_rule'] },
+    counts: { reviewed: 1, findings: 1 } });
+  expect(outcome.result.assets[0]).toMatchObject({ state: 'reviewed', result: {
+    findings: [{ rule_id: 'AU-QRY-001' }] } });
+  const forged = structuredClone(outcome.result);
+  forged.versions.ruleset = 'bp3-0.4';
+  expect(aggregateReviewV3Schema.safeParse(forged).success).toBe(false);
+  const asset = outcome.result.assets[0];
+  if (asset.state !== 'reviewed') throw Error('Expected query result');
+  const wrongAsset = structuredClone(outcome.result);
+  const nested = wrongAsset.assets[0];
+  if (nested.state !== 'reviewed') throw Error('Expected query result');
+  nested.result.ruleset_version = 'bp3-0.4';
+  expect(aggregateReviewV3Schema.safeParse(wrongAsset).success).toBe(false);
+  expect(JSON.stringify(outcome)).not.toMatch(/PRIVATE_QUERY_BODY|synthetic-selection-token/);
+});
+it('unknown query receiver returns partial rather than a complete no-findings analysis', async () => {
+  const rows = [row(1)];
+  const outcome = await run(rows, { requested_rule_ids: ['AU-QRY-001'] },
+    fixture(rows, "unknown.addQuery('x', 'LIKE', 'y');"));
+  expect(outcome.isError).toBe(false);
+  if (outcome.isError) throw Error(outcome.error.code);
+  expect(outcome.result.coverage.analysis_complete).toBe(false);
+  expect(outcome.result.assets[0]).toMatchObject({ state: 'reviewed', result: {
+    limitations: expect.arrayContaining(['query_like_unresolved']), findings: [] } });
+});
+it('mixed old rules plus opt-in query preserve applicability and per-asset ruleset provenance', async () => {
+  const rows = [row(1), row(2, 'sys_script_client')];
+  const outcome = await run(rows, { requested_rule_ids: ['AU-BR-001', 'AU-BR-002', 'AU-CL-004', 'AU-QRY-001'] },
+    fixture(rows, "var gr = new GlideRecord('incident'); gr.addQuery('x', 'LIKE', 'y');"));
+  expect(outcome.isError).toBe(false);
+  if (outcome.isError) throw Error(outcome.error.code);
+  expect(aggregateReviewV3Schema.safeParse(outcome.result).success).toBe(true);
+  expect(outcome.result.counts).toMatchObject({ reviewed: 2, findings: 1 });
+  expect(outcome.result.assets[1]).toMatchObject({ state: 'reviewed', applicable_rule_ids: ['AU-CL-004'],
+    result: { ruleset_version: 'bp3-0.4', findings: [] } });
+});
 it('opt-in reaches an update behind 100 unsupported/deleted rows without expanding the candidate window', async () => {
   const rows = [...Array.from({ length: 120 }, (_, i) => row(i + 1, i % 2 ? 'sys_dictionary' : 'sys_script', i % 2 ? 'INSERT_OR_UPDATE' : 'DELETE')), row(200)];
   const fetcher = fixture(rows);

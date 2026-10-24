@@ -16,7 +16,10 @@
     },
     "ruleset_version": {
       "type": "string",
-      "const": "bp3-0.4"
+      "enum": [
+        "bp3-0.4",
+        "bp3-0.5"
+      ]
     },
     "reviewed_at": {
       "type": "string",
@@ -360,31 +363,33 @@
       "properties": {
         "requested_rule_ids": {
           "minItems": 1,
-          "maxItems": 3,
+          "maxItems": 4,
           "type": "array",
           "items": {
             "type": "string",
             "enum": [
               "AU-BR-001",
               "AU-BR-002",
-              "AU-CL-004"
+              "AU-CL-004",
+              "AU-QRY-001"
             ]
           }
         },
         "evaluated_rule_ids": {
-          "maxItems": 3,
+          "maxItems": 4,
           "type": "array",
           "items": {
             "type": "string",
             "enum": [
               "AU-BR-001",
               "AU-BR-002",
-              "AU-CL-004"
+              "AU-CL-004",
+              "AU-QRY-001"
             ]
           }
         },
         "skipped_rules": {
-          "maxItems": 3,
+          "maxItems": 4,
           "type": "array",
           "items": {
             "type": "object",
@@ -394,7 +399,8 @@
                 "enum": [
                   "AU-BR-001",
                   "AU-BR-002",
-                  "AU-CL-004"
+                  "AU-CL-004",
+                  "AU-QRY-001"
                 ]
               },
               "reason": {
@@ -444,7 +450,8 @@
             "enum": [
               "AU-BR-001",
               "AU-BR-002",
-              "AU-CL-004"
+              "AU-CL-004",
+              "AU-QRY-001"
             ]
           },
           "category": {

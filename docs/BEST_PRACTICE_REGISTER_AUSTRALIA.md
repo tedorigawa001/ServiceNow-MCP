@@ -7,6 +7,8 @@ Status: **公式本文・Australia表示を照合した初版27項目／人に�
 規則表引き＋キーワード検索は[BP-2のローカルPoC](BEST_PRACTICE_BP2_POC.md)を参照。
 設計契約は [BEST_PRACTICE_REVIEW_DESIGN.md](BEST_PRACTICE_REVIEW_DESIGN.md) を参照。
 
+本書の未実装表記はBP-1作成時点の履歴。[AU-QRY-001のBR限定実装](BEST_PRACTICE_QUERY_LIKE_BR.md)を後続で追加した。台帳の適用対象全体への対応や、人による規則採用承認を意味しない。
+
 ## 1. 確認方法と状態
 
 公式Docsのリリース選択でAustraliaへ切り替え、**本文とRelease versionの両方**を

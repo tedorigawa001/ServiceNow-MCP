@@ -5,8 +5,9 @@ import { matchCatalogRelease, RULES, SOURCES } from './catalog.js';
 import { followUpCodeSchema, isFollowUpApplicable } from './follow-up-catalog.js';
 
 const hash = z.string().regex(/^[a-f0-9]{64}$/);
-export const bp5RuleIdSchema = z.enum(['AU-BR-001', 'AU-BR-002', 'AU-CL-004']);
-export const bp5RuleIdsSchema = z.array(bp5RuleIdSchema).min(1).max(3);
+export const bp5RuleIdSchema = z.enum(['AU-BR-001', 'AU-BR-002', 'AU-CL-004', 'AU-QRY-001']);
+export const bp5RuleIdsSchema = z.array(bp5RuleIdSchema).min(1).max(4);
+export const bp5RulesetFor = (rules: readonly string[]) => rules.includes('AU-QRY-001') ? 'bp3-0.5' as const : 'bp3-0.4' as const;
 const family = z.enum(['Australia', 'Brazil', 'Zurich', 'Yokohama', 'Xanadu']);
 const asserted = z.strictObject({
   source: z.literal('operator_config'), resolution_status: z.literal('asserted'),
@@ -52,7 +53,7 @@ export function checkReleaseEvidence(e: ReleaseEvidence, at: string, binding: st
 export const releaseMatchForEvidence = (e: ReleaseEvidence) => e.resolution_status === 'unknown' ? 'unknown' : matchCatalogRelease(e.family);
 export const reviewResultV2Structure = reviewResultStructure.extend({
   schema_version: z.literal('bp-review-0.2'),
-  ruleset_version: z.literal('bp3-0.4'),
+  ruleset_version: z.enum(['bp3-0.4', 'bp3-0.5']),
   instance_binding: hash,
   target: reviewResultStructure.shape.target.options[0].extend({
     asset_type: z.enum(['business_rule', 'client_script']), asset_table: z.enum(['sys_script', 'sys_script_client']),
@@ -61,10 +62,10 @@ export const reviewResultV2Structure = reviewResultStructure.extend({
   instance_release: releaseEvidenceStructure,
   coverage: reviewResultStructure.shape.coverage.extend({
     requested_rule_ids: bp5RuleIdsSchema,
-    evaluated_rule_ids: z.array(bp5RuleIdSchema).max(3),
+    evaluated_rule_ids: z.array(bp5RuleIdSchema).max(4),
     skipped_rules: z.array(reviewResultStructure.shape.coverage.shape.skipped_rules.element.extend({
       rule_id: bp5RuleIdSchema,
-    })).max(3),
+    })).max(4),
   }),
   findings: z.array(reviewResultStructure.shape.findings.element.extend({
     rule_id: bp5RuleIdSchema, severity: z.literal('info'), confidence: z.literal('low'),
@@ -89,6 +90,7 @@ export const reviewResultV2Schema = reviewResultV2Structure.superRefine((r, ctx)
   }
   if (release.source === 'operator_config' && r.review_status !== 'partial') fail('Asserted review must remain partial');
   const { requested_rule_ids: requested, evaluated_rule_ids: evaluated, skipped_rules: skipped } = r.coverage;
+  if (r.ruleset_version !== bp5RulesetFor(requested)) fail('Ruleset version contradicts requested rules');
   const accounted = [...evaluated, ...skipped.map(s => s.rule_id)];
   if (new Set(requested).size !== requested.length || new Set(accounted).size !== accounted.length
     || accounted.length !== requested.length || requested.some(id => !accounted.includes(id))) fail('Coverage must account for every rule exactly once');

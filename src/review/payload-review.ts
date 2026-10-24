@@ -92,6 +92,12 @@ function reviewPayload(raw: unknown, mode: Profile, bp5 = false): Outcome<Review
   }
   if (asset.active === 'false') result.limitations.push('inactive_asset');
   const supported = new Set(['AU-BR-001', 'AU-BR-002', 'AU-CL-004']);
+  const queryEnabled = mode === 'constant' && assetType === 'business_rule' && input.requested_rule_ids.includes('AU-QRY-001');
+  if (queryEnabled) supported.add('AU-QRY-001');
+  if (queryEnabled) {
+    result.ruleset_version = 'bp3-0.5';
+    result.limitations.push('query_like_br_only', 'query_like_literal_operator_only');
+  }
   // Normalize persisted BR choice values only on the current engine path.
   // Keep the historical engine's context contract unchanged for frozen baselines.
   const when = mode === 'legacy' ? asset.when
@@ -132,7 +138,10 @@ function reviewPayload(raw: unknown, mode: Profile, bp5 = false): Outcome<Review
         analyzeScopedCandidates(ast, when, (entry, ruleId, context) => {
           appendFinding(entry, ruleId, context);
           if (result.findings.length > 100) throw new ExtractionError('finding_limit');
-        }, { allowDeclaredEntry: assetType === 'business_rule', constants: mode === 'constant' });
+        }, { allowDeclaredEntry: assetType === 'business_rule', constants: mode === 'constant',
+          ...(queryEnabled ? { query: { unresolved: () => {
+            if (!result.limitations.includes('query_like_unresolved')) result.limitations.push('query_like_unresolved');
+          } } } : {}) });
       } catch (error) {
         return reject(error instanceof ExtractionError ? error.reason : error instanceof AnalysisLimitError ? 'analysis_limit' : 'analysis_failed');
       }
@@ -165,7 +174,7 @@ function reviewPayload(raw: unknown, mode: Profile, bp5 = false): Outcome<Review
       instance_binding: v2.instance_binding, review_status: 'partial' });
     return validated.success ? { poc_only: true, status: 'reviewed', result: validated.data } : reject('invalid_result_context');
   }
-  if (!result.coverage.skipped_rules.length) result.review_status = 'completed';
+  if (!result.coverage.skipped_rules.length && !result.limitations.includes('query_like_unresolved')) result.review_status = 'completed';
   const validated = reviewResultSchema.safeParse(result);
   return validated.success ? { poc_only: true, status: 'reviewed', result: validated.data } : reject('invalid_result_context');
 }

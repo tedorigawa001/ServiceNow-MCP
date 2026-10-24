@@ -11,7 +11,7 @@ const fetcher = async url => {
   const result = u.pathname.includes('/sys_update_set/') ? { sys_id: parent, state: 'in progress', application: 'global', ...version }
     : u.pathname.endsWith('/sys_cluster_state') ? [{ build_name: 'Australia' }]
       : u.searchParams.get('sysparm_fields').includes('payload') ? [{ ...row,
-        payload: `<record_update table="sys_script"><sys_script action="INSERT_OR_UPDATE"><sys_id>${id}</sys_id><when>after</when><script>current.update();</script></sys_script></record_update>` }]
+        payload: `<record_update table="sys_script"><sys_script action="INSERT_OR_UPDATE"><sys_id>${id}</sys_id><when>after</when><script>current.update(); var gr = new GlideRecord('incident'); gr.addQuery('x', 'LIKE', 'PACK_PRIVATE_QUERY');</script></sys_script></record_update>` }]
         : [{ ...row, type: 'Business Rule' }];
   return new Response(JSON.stringify({ result }));
 };
@@ -28,4 +28,11 @@ assert.equal(optIn.result.schema_version, 'bp-mcp-review-0.3');
 assert.equal(optIn.result.counts.findings, 1);
 assert.equal(optIn.result.selection.filter_version, 'target-prefix-0.1');
 assert.equal(optIn.result.coverage.candidate_inventory_complete, false);
+const query = await reviewBoundedUpdateSet(selected, { update_set_sys_id: parent, selection_mode: 'review_targets',
+  requested_rule_ids: ['AU-QRY-001'] }, { fetch: fetcher });
+assert.equal(query.isError, false);
+assert.equal(query.result.counts.findings, 1);
+assert.equal(query.result.versions.ruleset, 'bp3-0.5');
+assert.equal(query.result.assets[0].result.findings[0].rule_id, 'AU-QRY-001');
+assert(!JSON.stringify(query).includes('PACK_PRIVATE_QUERY'));
 console.log('Compiled worker default entry: analysis + aggregation PASS');

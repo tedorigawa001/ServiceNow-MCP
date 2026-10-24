@@ -5,7 +5,7 @@ import { BoundedReadError, type BoundedReadOptions, type BoundedReadSession } fr
 import { BoundedUpdateSetSource, type ReviewMetadata } from './bounded-source.js';
 import type { AnyAggregateReview as AggregateReview } from './aggregate-schema.js';
 import { selectionModeSchema, targetSelection, TARGET_LIMITATIONS } from './target-selection.js';
-import { bp5RuleIdsSchema } from './result-schema-v2.js';
+import { bp5RuleIdsSchema, bp5RulesetFor } from './result-schema-v2.js';
 import { CATALOG_VERSION, RULES } from './catalog.js';
 import { ReviewWorker, ReviewWorkerError, type ReviewWorkerFactory } from './worker-supervisor.js';
 
@@ -95,7 +95,7 @@ async function executeReview(client: ServiceNowClient, raw: unknown, execution: 
         const legacy: Extract<AggregateReview, { schema_version: 'bp-mcp-review-0.2' }> = {
           schema_version: 'bp-mcp-review-0.2', poc_only: true, code_return_mode: 'none', status: 'partial',
           target: { update_set_sys_id: input.update_set_sys_id, target_version: 'update_set_payload', instance_binding: source.instanceBinding },
-          versions: { knowledge_base: CATALOG_VERSION, ruleset: 'bp3-0.4', asset_schema: 'bp-review-0.2' },
+          versions: { knowledge_base: CATALOG_VERSION, ruleset: bp5RulesetFor(input.requested_rule_ids), asset_schema: 'bp-review-0.2' },
           started_at: source.startedAt, ended_at: source.startedAt, instance_release: decision.instance_release,
           release_match: decision.release_match, principal: { auth_mode: source.authMode },
           collection: { scope: 'caller_acl_visible', status: 'not_started', metadata_seen: 0, selected: 0, truncated: false },

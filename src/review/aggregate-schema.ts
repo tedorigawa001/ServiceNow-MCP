@@ -3,7 +3,7 @@ import { z } from 'zod';
 import { CATALOG_VERSION, RULES } from './catalog.js';
 import { requestedAssetTypes, TARGET_FILTER_VERSION, TARGET_LIMITATIONS } from './target-selection.js';
 import { bp5RuleIdsSchema, bp5RuleIdSchema, releaseEvidenceStructure, reviewResultV2Structure,
-  reviewResultV2Schema, checkReleaseEvidence, releaseMatchForEvidence } from './result-schema-v2.js';
+  reviewResultV2Schema, checkReleaseEvidence, releaseMatchForEvidence, bp5RulesetFor } from './result-schema-v2.js';
 
 const id = z.string().regex(/^[a-f0-9]{32}$/);
 const hash = z.string().regex(/^[a-f0-9]{64}$/);
@@ -30,7 +30,7 @@ export const aggregateReviewStructure = z.strictObject({
   schema_version: z.literal('bp-mcp-review-0.2'), poc_only: z.literal(true), code_return_mode: z.literal('none'),
   status: z.enum(['completed', 'partial', 'failed']),
   target: z.strictObject({ update_set_sys_id: id, target_version: z.literal('update_set_payload'), instance_binding: hash }),
-  versions: z.strictObject({ knowledge_base: z.literal(CATALOG_VERSION), ruleset: z.literal('bp3-0.4'), asset_schema: z.literal('bp-review-0.2') }),
+  versions: z.strictObject({ knowledge_base: z.literal(CATALOG_VERSION), ruleset: z.enum(['bp3-0.4', 'bp3-0.5']), asset_schema: z.literal('bp-review-0.2') }),
   started_at: z.iso.datetime(), ended_at: z.iso.datetime(),
   instance_release: releaseEvidenceStructure, release_match: z.enum(['matched', 'mismatched', 'unknown']),
   principal: z.strictObject({ auth_mode: z.enum(['per-user', 'service-account']) }),
@@ -39,7 +39,7 @@ export const aggregateReviewStructure = z.strictObject({
   consistency: z.enum(['stable_observation', 'changed', 'unverified']),
   coverage: z.strictObject({ requested_rule_ids: bp5RuleIdsSchema,
     skipped_rules: z.array(z.strictObject({ rule_id: bp5RuleIdSchema,
-      reason: z.enum(['release_unknown', 'release_mismatch']) })).max(3), analysis_complete: z.boolean() }),
+      reason: z.enum(['release_unknown', 'release_mismatch']) })).max(4), analysis_complete: z.boolean() }),
   assets: z.array(assetOutcomeStructure).max(100),
   counts: z.strictObject({ reviewed: count, not_applicable: count, skipped_deleted: count, rejected: count,
     retrieval_failed: count, not_processed: count, result_omitted: count, findings: count }),
@@ -99,6 +99,7 @@ function checkAggregate(r: AnyAggregateReview, ctx: z.RefinementCtx) {
   if (!r.limitations.includes('source_approval_pending') || r.status === 'completed') fail('Current PoC is source-unapproved and cannot complete');
   if (startedAt > endedAt || endedAt - startedAt > r.limits.deadline_ms) fail('Invalid run time interval or deadline exceeded');
   if (new Set(r.coverage.requested_rule_ids).size !== r.coverage.requested_rule_ids.length) fail('Duplicate requested rules');
+  if (r.versions.ruleset !== bp5RulesetFor(r.coverage.requested_rule_ids)) fail('Ruleset version contradicts requested rules');
   if (r.collection.selected !== r.assets.length || new Set(r.assets.map(a => a.update_xml_sys_id)).size !== r.assets.length) fail('Selected rows must be accounted for exactly once');
   if (r.collection.status === 'complete') {
     if (r.collection.metadata_seen > r.limits.max_records + 1
@@ -126,12 +127,12 @@ function checkAggregate(r: AnyAggregateReview, ctx: z.RefinementCtx) {
       const applicable = r.coverage.requested_rule_ids.filter(id => RULES.find(rule => rule.rule_id === id)!.asset_types.includes(result.target.asset_type));
       if (!equalIds(asset.applicable_rule_ids, applicable) || !equalIds(result.coverage.requested_rule_ids, applicable)) fail('Nested rule applicability contradicts request');
       if (result.target.update_set_id !== r.target.update_set_sys_id || result.target.update_xml_sys_id !== asset.update_xml_sys_id
-        || result.instance_binding !== r.target.instance_binding || result.ruleset_version !== r.versions.ruleset
+        || result.instance_binding !== r.target.instance_binding || result.ruleset_version !== bp5RulesetFor(result.coverage.requested_rule_ids)
         || result.knowledge_base_version !== r.versions.knowledge_base || result.release_match !== r.release_match
         || JSON.stringify(result.instance_release) !== JSON.stringify(r.instance_release)) fail('Nested provenance contradicts run');
       if (Date.parse(result.reviewed_at) < Date.parse(r.started_at) || Date.parse(result.reviewed_at) > Date.parse(r.ended_at)) fail('Nested review is outside run interval');
       findings += result.findings.length;
-      incomplete ||= result.coverage.skipped_rules.length > 0 || result.review_status === 'failed';
+      incomplete ||= result.coverage.skipped_rules.length > 0 || result.review_status === 'failed' || result.limitations.includes('query_like_unresolved');
     } else if (asset.state === 'not_applicable') {
       const assetType = asset.asset_type;
       if (assetType === 'other') {

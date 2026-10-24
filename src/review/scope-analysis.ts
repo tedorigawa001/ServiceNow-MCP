@@ -11,6 +11,7 @@ export function staticMemberName(value: unknown): string | null {
 }
 export class AnalysisLimitError extends Error {}
 const C = 1, P = 2, CF = 4, PF = 8, AJAX = 16, LOCAL = 32, UNKNOWN = 64, AJAX_CTOR = 128;
+const QUERY_RECORD = 256, QUERY_CTOR = 512;
 type Origin = { flags: number; properties?: Map<string, Origin>; unknownProperties?: boolean };
 type Binding = { origin: Origin; functionId: number; entryFlags?: number; isConst?: boolean; constantWritten?: boolean; constant?: ConstantValue };
 type Scope = { parent?: Scope; functionId: number; functionScope: boolean; bindings: Map<string, Binding> };
@@ -25,7 +26,7 @@ const blocks = new Set(['BlockStatement', 'CatchClause', 'ForStatement', 'ForInS
 const recordMethods = new Set(['update', 'getValue', 'getDisplayValue', 'setValue', 'setWorkflow', 'getUniqueValue', 'isValidRecord']);
 
 export function analyzeScopedCandidates(ast: AstNode, when: string | null, emit: (entry: AstNode, rule: string, context?: FollowUpContext) => void,
-  options = { allowDeclaredEntry: false, constants: false }): void {
+  options: { allowDeclaredEntry: boolean; constants: boolean; query?: { unresolved: () => void } } = { allowDeclaredEntry: false, constants: false }): void {
   const root: Scope = { functionId: 0, functionScope: true, bindings: new Map() };
   const scopes = new WeakMap<AstNode, Scope>();
   const functionScopes = new WeakMap<AstNode, Scope>();
@@ -34,6 +35,10 @@ export function analyzeScopedCandidates(ast: AstNode, when: string | null, emit:
   const workflowSuppression = new Map<number, number>();
   const constantWrites: Array<{ pattern: unknown; scope: Scope }> = [];
   const unsafeConstantFunctions = new Set<number>();
+  // Query evidence is deliberately stricter than the historical candidate rules.
+  // Delay emission so later escapes/method replacement cannot certify a receiver.
+  let queryUnsafe = false;
+  const queryRebound = new Set<string>(), queryCandidates: AstNode[] = [];
   function budget(depth: number) {
     if (++visits > 100000 || depth > 256) throw new AnalysisLimitError('analysis_limit');
   }
@@ -110,6 +115,22 @@ export function analyzeScopedCandidates(ast: AstNode, when: string | null, emit:
       if (entry.type === 'ClassExpression' || entry.type === 'ClassDeclaration') declare(entry.id, scope);
     }
     scopes.set(entry, scope);
+    if (options.query) {
+      if (entry.type === 'WithStatement' || entry.type === 'SpreadElement' || entry.type === 'TaggedTemplateExpression'
+        || (entry.type === 'CallExpression' && identifier(entry.callee, 'eval'))) queryUnsafe = true;
+      if (entry.type === 'CallExpression' && isAstNode(entry.callee) && entry.callee.type === 'MemberExpression'
+        && ['defineProperty', 'defineProperties', 'setPrototypeOf', 'assign'].includes(staticMemberName(entry.callee) ?? '')) queryUnsafe = true;
+      const write = entry.type === 'AssignmentExpression' ? entry.left
+        : entry.type === 'UpdateExpression' || entry.type === 'UnaryExpression' && entry.operator === 'delete' ? entry.argument
+          : entry.type === 'ForInStatement' || entry.type === 'ForOfStatement' ? entry.left : null;
+      if (identifier(write)) {
+        queryRebound.add(String(write.name));
+        if (['GlideRecord', 'GlideRecordSecure'].includes(String(write.name))) queryUnsafe = true;
+      } else if (isAstNode(write) && write.type === 'MemberExpression'
+        && (staticMemberName(write) === null || ['addQuery', 'GlideRecord', 'GlideRecordSecure'].includes(staticMemberName(write)!))) queryUnsafe = true;
+      // Destructuring writes are not resolved by this bounded analysis.
+      else if (isAstNode(write)) queryUnsafe = true;
+    }
     if (options.constants) {
       if (entry.type === 'WithStatement' || (entry.type === 'CallExpression' && identifier(entry.callee, 'eval')))
         unsafeConstantFunctions.add(scope.functionId);
@@ -180,14 +201,15 @@ export function analyzeScopedCandidates(ast: AstNode, when: string | null, emit:
   }
   function read(scope: Scope, name: string): Origin {
     const binding = find(scope, name);
-    if (!binding) return origin(name === 'current' ? C : name === 'previous' ? P : name === 'GlideAjax' ? AJAX_CTOR : UNKNOWN);
+    if (!binding) return origin(name === 'current' ? C : name === 'previous' ? P : name === 'GlideAjax' ? AJAX_CTOR
+      : options.query && ['GlideRecord', 'GlideRecordSecure'].includes(name) ? QUERY_CTOR : UNKNOWN);
     if (binding.functionId !== scope.functionId) {
       // Direct lexical reference to the declared platform entry, not propagation of a user alias/call.
       if (binding.entryFlags) return origin(binding.entryFlags | UNKNOWN);
       // Lexical shadowing still applies across function boundaries, but aliases never cross them.
       return binding.origin.flags === LOCAL && !binding.origin.properties ? local() : unknown();
     }
-    return binding.origin;
+    return options.query && queryRebound.has(name) && binding.origin.flags & (QUERY_RECORD | QUERY_CTOR) ? unknown() : binding.origin;
   }
   const receivers = new WeakMap<AstNode, Origin>();
   function assign(pattern: unknown, value: Origin, scope: Scope, conditional: boolean): void {
@@ -280,10 +302,23 @@ export function analyzeScopedCandidates(ast: AstNode, when: string | null, emit:
       }
       case 'CallExpression': case 'NewExpression': {
         const calleeValue = visit(entry.callee);
-        for (const argument of entry.arguments as unknown[]) visit(argument);
-        if (entry.type === 'NewExpression') return origin(calleeValue.flags & AJAX_CTOR ? AJAX : calleeValue.flags & UNKNOWN ? UNKNOWN : LOCAL);
+        for (const argument of entry.arguments as unknown[]) {
+          const value = visit(argument);
+          if (options.query && containsQueryRecord(value)) queryUnsafe = true;
+        }
+        if (entry.type === 'NewExpression') return origin(calleeValue.flags & AJAX_CTOR ? AJAX
+          : calleeValue.flags === QUERY_CTOR ? QUERY_RECORD : calleeValue.flags & UNKNOWN ? UNKNOWN : LOCAL);
         if (isAstNode(entry.callee) && entry.callee.type === 'MemberExpression') {
           const receiver = receivers.get(entry.callee) ?? unknown(), key = memberKey(entry.callee);
+          if (options.query && key === null && receiver.flags & QUERY_RECORD) options.query.unresolved();
+          if (options.query && key === 'addQuery' && (entry.arguments as AstNode[]).some(a => a.type === 'SpreadElement')) options.query.unresolved();
+          if (options.query && key === 'addQuery' && (entry.arguments as AstNode[]).length === 3) {
+            const args = entry.arguments as AstNode[];
+            if (!args.some(a => a.type === 'SpreadElement') && args[1].type === 'Literal' && args[1].value === 'LIKE') {
+              if (receiver.flags === QUERY_RECORD) queryCandidates.push(entry);
+              else if (receiver.flags & (UNKNOWN | C | P)) options.query.unresolved();
+            } else if (args[1].type !== 'Literal' || args.some(a => a.type === 'SpreadElement')) options.query.unresolved();
+          }
           if (key === 'setWorkflow' && (receiver.flags & C) && (entry.arguments as unknown[]).length === 1) {
             const argument = (entry.arguments as unknown[])[0];
             if ((isAstNode(argument) && argument.type === 'Literal' && argument.value === false) || primitive(argument) === false)
@@ -316,5 +351,16 @@ export function analyzeScopedCandidates(ast: AstNode, when: string | null, emit:
         return unknown();
     }
   }
+  function containsQueryRecord(value: Origin, seen = new Set<Origin>(), depth = 0): boolean {
+    budget(depth);
+    if (seen.has(value)) return false;
+    seen.add(value);
+    if (value.flags & (QUERY_RECORD | QUERY_CTOR)) return true;
+    return !!value.properties && [...value.properties.values()].some(v => containsQueryRecord(v, seen, depth + 1));
+  }
   walk(ast);
+  for (const candidate of queryCandidates) {
+    if (queryUnsafe) options.query!.unresolved();
+    else emit(candidate, 'AU-QRY-001');
+  }
 }

@@ -29,6 +29,7 @@ Claude・Cursor・VS Code などの AI ツールから、ServiceNow のインシ
 
 ### 開発版（未リリース）
 
+- `AU-QRY-001`を明示指定する[BR限定のaddQueryレビュー](docs/BEST_PRACTICE_QUERY_LIKE_BR.md)を追加。ローカルGlideRecord系の3引数・リテラル`LIKE`を候補化し、encoded queryのLIKEは対象外。未解決は制限として返します。既定3規則は維持し、今回の追加分は合成検証のみ・PDI未検証です。
 - 読み取り専用PoC `review_update_set_best_practices` を登録。AustraliaのUpdate Set payloadを対象に、3規則の候補と公式根拠を本文なしのJSONで返します。BR/Client Scriptの規則を評価するときは`selection_mode=review_targets`を明示し、0.3 JSONの制限・取得範囲を確認してください。[PDI対象選択E2Eは5成功・0スキップ](docs/E2E_BEST_PRACTICE_TARGET_SELECTION_2026-10-18.md)：既存BR10件への解析到達と省略時の0.2互換性を確認しました。[非アクティブ合成Client ScriptのE2E](docs/E2E_BEST_PRACTICE_CLIENT_FIXTURE_2026-10-18.md)でもAU-CL-004の候補1件を確認しました。件数・受信量・全体60秒の上限は不変です。UI実行、人による規則承認・独立品質評価は未確認で、「安全」「違反確定」を意味しません。詳細は[利用例・制限](docs/BEST_PRACTICE_BP5_MCP_REGISTRATION.md)。
 
 ### v1.13 ハイライト

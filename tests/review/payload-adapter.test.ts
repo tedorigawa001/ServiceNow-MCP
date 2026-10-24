@@ -22,7 +22,7 @@ describe('BP-5 single payload adapter', () => {
     if (kind === 'missing_warning') input.release_limitations = [];
     if (kind === 'duplicate_rule') input.requested_rule_ids = ['AU-BR-001', 'AU-BR-001'];
     if (kind === 'untrusted_warning') input.release_limitations.push('SYNTHETIC_PRIVATE_BODY');
-    if (kind === 'unsupported_rule') input.requested_rule_ids = ['AU-QRY-001'];
+    if (kind === 'unsupported_rule') input.requested_rule_ids = ['AU-QRY-002'];
     expect(reviewUpdateSetPayloadV2(input)).toEqual({ poc_only: true, status: 'rejected', reason: 'invalid_input' });
   });
   it('keeps mismatched configured releases unevaluated without promoting their evidence', () => {
