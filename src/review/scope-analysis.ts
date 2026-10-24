@@ -316,7 +316,8 @@ export function analyzeScopedCandidates(ast: AstNode, when: string | null, emit:
             const args = entry.arguments as AstNode[];
             if (!args.some(a => a.type === 'SpreadElement') && args[1].type === 'Literal' && args[1].value === 'LIKE') {
               if (receiver.flags === QUERY_RECORD) queryCandidates.push(entry);
-              else if (receiver.flags & (UNKNOWN | C | P)) options.query.unresolved();
+              // A receiver that is only partly a local record (e.g. a conditional join) is not certified.
+              else if (receiver.flags & (UNKNOWN | C | P | QUERY_RECORD | QUERY_CTOR)) options.query.unresolved();
             } else if (args[1].type !== 'Literal' || args.some(a => a.type === 'SpreadElement')) options.query.unresolved();
           }
           if (key === 'setWorkflow' && (receiver.flags & C) && (entry.arguments as unknown[]).length === 1) {

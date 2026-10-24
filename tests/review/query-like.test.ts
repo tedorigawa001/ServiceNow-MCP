@@ -91,3 +91,13 @@ it('retains the fixed finding cap for query candidates', () => {
   expect(review("var gr = new GlideRecord('incident');" + "gr.addQuery('x', 'LIKE', 'y');".repeat(101)))
     .toEqual({ poc_only: true, status: 'rejected', reason: 'finding_limit' });
 });
+it.each([
+  "var gr = cond ? new GlideRecord('incident') : {}; gr.addQuery('x', 'LIKE', 'y');",
+  "var gr = cond ? {} : new GlideRecordSecure('incident'); gr.addQuery('x', 'LIKE', 'y');",
+  "var gr = new GlideRecord('incident') || other; gr.addQuery('x', 'LIKE', 'y');",
+])('never completes silently when the receiver is only partly a local record: %s', code => {
+  const value = result(code);
+  expect(value.findings).toEqual([]);
+  expect(value.limitations).toContain('query_like_unresolved');
+  expect(value.review_status).not.toBe('completed');
+});
