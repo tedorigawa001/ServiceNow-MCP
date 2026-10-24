@@ -15,6 +15,7 @@ import { approveAndRunR2Plan } from '../../src/review/r2-approved-launch.js';
 import { PassThrough, Writable } from 'node:stream';
 import { trustedTempRoot } from '../fixtures/trusted-temp-root.js';
 import { observeR2Listen } from './fixtures/r2-listen-diagnostics.js';
+import { withR2Stage } from './fixtures/r2-stage-scope.js';
 
 // Imported by r2-loopback.test.ts: all tests using the fixed port share one sequential file.
 describe('manifest runner integration', () => {
@@ -23,7 +24,9 @@ const token = 'RUNNER_PRIVATE_TOKEN', slot = 'r2-runner';
 let dir: string, file: string;
 let secretNeedles: string[];
 let diagnostics: ReturnType<typeof observeR2Listen>;
+let testSignal: AbortSignal;
 beforeEach(context => {
+  testSignal = context.signal;
   const observed = observeR2Listen(); diagnostics = observed;
   context.onTestFailed(() => { console.error('R2_SYNTHETIC_LISTEN', JSON.stringify(observed.snapshot())); });
   context.onTestFinished(() => {
@@ -434,18 +437,20 @@ it.each(['exchange', 'identity', 'payload'] as const)('cancels non-cooperative %
   void began.then(() => observed.mark('stage_entered'));
   const task = runR2ApprovalManifest(file, { fetch: fetcher, signal: root.signal, onReady: authorize });
   void task.then(result => observed.runner(result));
-  await began; observed.mark('root_abort'); root.abort(Error('RUNNER_PRIVATE_ABORT'));
-  const result = await task;
-  expect(result).toMatchObject({ ok: false, code: 'cancelled', cleanup: 'complete', tokenMayHaveBeenIssued: true });
-  const phases = observed.snapshot().events.map(e => e.kind);
-  expect(phases.indexOf('stage_entered')).toBeGreaterThanOrEqual(0);
-  expect(phases.indexOf('root_abort')).toBeGreaterThan(phases.indexOf('stage_entered'));
-  expect(phases.indexOf('runner_result')).toBeGreaterThan(phases.indexOf('root_abort'));
-  expect(result.mcpListed).toBe(stage === 'payload');
-  expect(requestSignal?.aborted).toBe(true); expect(getEventListeners(root.signal, 'abort')).toHaveLength(0);
-  late(new Response(new ReadableStream({ cancel() { discarded = true; } })));
-  await new Promise(r => setTimeout(r, 0)); expect(discarded).toBe(true);
-  expect(base.paths.filter(v => v === '/oauth_token.do').length).toBe(stage === 'exchange' ? 0 : 1);
+  await withR2Stage({ reached: began, root, task, signal: testSignal }, async () => {
+    observed.mark('root_abort'); root.abort(Error('RUNNER_PRIVATE_ABORT'));
+    const result = await task;
+    expect(result).toMatchObject({ ok: false, code: 'cancelled', cleanup: 'complete', tokenMayHaveBeenIssued: true });
+    const phases = observed.snapshot().events.map(e => e.kind);
+    expect(phases.indexOf('stage_entered')).toBeGreaterThanOrEqual(0);
+    expect(phases.indexOf('root_abort')).toBeGreaterThan(phases.indexOf('stage_entered'));
+    expect(phases.indexOf('runner_result')).toBeGreaterThan(phases.indexOf('root_abort'));
+    expect(result.mcpListed).toBe(stage === 'payload');
+    expect(requestSignal?.aborted).toBe(true); expect(getEventListeners(root.signal, 'abort')).toHaveLength(0);
+    late(new Response(new ReadableStream({ cancel() { discarded = true; } })));
+    await new Promise(r => setTimeout(r, 0)); expect(discarded).toBe(true);
+    expect(base.paths.filter(v => v === '/oauth_token.do').length).toBe(stage === 'exchange' ? 0 : 1);
+  });
 });
 
 it('stops on identity mismatch and reports possible other-account issuance without reaching metadata', async () => {
@@ -564,6 +569,38 @@ it('separates early callback failure from a still-pending non-cooperative exchan
     ]));
     expect(diagnostics.snapshot().listening).toBe(0);
   } finally { await new Promise<void>(r => occupied.close(() => r())); }
+});
+
+it('reports callback failure before exchange through the joined wait and finishes cleanup', async context => {
+  const occupied = createServer(socket => socket.end());
+  try {
+    await new Promise<void>((resolve, reject) => { occupied.once('error', reject); occupied.listen(18765, '127.0.0.1', resolve); });
+    const root = new AbortController(), fetcher = vi.fn<typeof fetch>(), body = vi.fn(async () => {});
+    const task = runR2ApprovalManifest(file, { signal: root.signal, fetch: fetcher, onReady: authorize });
+    await expect(withR2Stage({ root, task, signal: context.signal, reached: new Promise(() => {}) }, body))
+      .rejects.toMatchObject({ message: 'R2_STAGE_NOT_REACHED:callback_unavailable', cleanup: 'complete' });
+    expect(root.signal.aborted).toBe(true); expect(body).not.toHaveBeenCalled(); expect(fetcher).not.toHaveBeenCalled();
+    expect(getEventListeners(root.signal, 'abort')).toHaveLength(0);
+    expect(diagnostics.snapshot().listening).toBe(0); expect(occupied.listening).toBe(true);
+  } finally { await new Promise<void>(r => occupied.close(() => r())); }
+});
+
+it('cleans a real synthetic runner after an assertion failure at exchange entry', async context => {
+  const base = boundary(), root = new AbortController();
+  let enter!: () => void, requestSignal: AbortSignal | null | undefined;
+  const reached = new Promise<void>(resolve => { enter = resolve; });
+  const task = runR2ApprovalManifest(file, { signal: root.signal, onReady: authorize, fetch: async (url, init) => {
+    if (new URL(String(url)).pathname === '/oauth_token.do') {
+      requestSignal = init?.signal; enter(); return new Promise<Response>(() => {});
+    }
+    return base.fetcher(url, init);
+  } });
+  const assertion = Error('SYNTHETIC_ASSERTION_AT_EXCHANGE');
+  await expect(withR2Stage({ root, task, reached, signal: context.signal }, async () => { throw assertion; })).rejects.toBe(assertion);
+  expect(await task).toMatchObject({ ok: false, code: 'cancelled', cleanup: 'complete' });
+  expect(root.signal.aborted).toBe(true); expect(requestSignal?.aborted).toBe(true);
+  expect(getEventListeners(root.signal, 'abort')).toHaveLength(0);
+  expect(diagnostics.snapshot().listening).toBe(0);
 });
 
 it('bounds the synthetic diagnostic vocabulary and never records arbitrary error text', () => {

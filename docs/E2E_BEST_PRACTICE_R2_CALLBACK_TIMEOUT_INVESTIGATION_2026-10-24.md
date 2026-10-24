@@ -7,7 +7,7 @@ Status: 合成切り分け。自然失敗は今回未再現、過去3件の原�
 
 [CL-006検証記録](E2E_BEST_PRACTICE_UI_POLICY_CLIENT_SYNTHETIC_2026-10-24.md)に残したR2の3件を対象にした。
 
-- non-cooperative exchange I/Oの取消テスト：テスト上限10秒。
+- non-cooperative exchange I/Oの取消テスト：過去の失敗記録は上限10秒。現行はreal-hostプロジェクト既定30秒であり、後続の改善でも変更していない。
 - bearerを反映した結果の非露出テスト：callback_unavailableで期待段階に未到達。
 - normal host cleanupテスト：callback_unavailableでready未到達。
 
@@ -68,6 +68,8 @@ filterによる対象外はデータ不足のskipではなく、実行対象を�
 製品コード（`src/review`）・Vitest設定・既存host fixtureに差分はない。上記の監督テストは合成clock等による境界検証であり、過去の実負荷によるタイムアウト原因の確定ではない。
 
 ## 6. 結論と次の候補（未実装）
+
+以下は本切り分け時点の候補。後続の[段階到達待ち・finally後始末の改善](E2E_BEST_PRACTICE_R2_STAGE_WAIT_CLEANUP_2026-10-24.md)で、テスト専用helperへの接続と合成対照を実施した。過去の自然失敗原因が確定したという意味ではない。
 
 - callback_unavailableを出す**再現可能な条件の1つ**は固定ポート占有。元3件の自然失敗は今回再現せず、過去の実原因は未確定のまま。
 - 10秒タイムアウトは「exchange取消が遅い」と即断できない。到達前のrunner終端と、到達後の取消を別々に観測する必要がある。
