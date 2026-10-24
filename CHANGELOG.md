@@ -8,6 +8,14 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 ## [Unreleased]
 
+## [1.16.0] — 2026-10-25
+
+Adds the read-only best-practice review PoC and its explicit opt-in rules. The review is partial by design: it reports unverified, low-confidence candidates for a bounded subset of an Update Set, and zero or partial findings never establish safety or compliance. Includes the 1.15.1 security fixes.
+
+### Security
+
+- **Dependency updates.** `zod` 4.6.7 (memory exhaustion while validating oversized constrained collections, GHSA-mrhx-c7xc-m3w5), `body-parser` 2.4.0 (denial of service via trailing bytes after a compressed body, GHSA-27r3-jxmh-p828), `fast-uri` 3.1.9 and `ip-address` 10.7.4 (moderate). Development-only `vite` 8.3.5. `npm audit` reports no known vulnerabilities; the native `r2-outer` Cargo.lock has none per OSV.
+
 ### Changed
 
 - Package the best-practice review worker and its runtime modules. `acorn` and `saxes` are now production dependencies, with `xmlchars` installed transitively; all installations gain these dependencies and the package size increases. Development-only evaluation harnesses and the BP-2 search PoC are excluded.
