@@ -1,6 +1,6 @@
 # BP-5 R-2 OL-03 MA-02：importしない候補fingerprint抽出・独立確認経路
 
-Version: draft-0.1 / Date: 2026-10-24 / Source baseline: `f59668e` / Status: 未実施の手順案。検証器・隔離環境・独立経路・鍵は未承認
+Version: draft-0.2 / Date: 2026-10-24 / Source baseline: `fa99c35` / Status: 固定候補2.5.24・入手元・合成隔離試験計画を参照追加。検証器・環境・独立経路・鍵は未承認
 
 ## 1. 目的・境界
 
@@ -13,6 +13,8 @@ Version: draft-0.1 / Date: 2026-10-24 / Source baseline: `f59668e` / Status: 未
 ## 2. 検証器の選択案と公式根拠
 
 **第一候補は、信頼済み配備で版とdigestを固定したGnuPGの`--show-keys`。** 製品に組み込む選択ではなく、将来のoffline調査用である。採用するpatch版・配布元・実行binary/libraryの期待digestは未決で、PATH上の任意gpgを実行しない。前回PATHでgpg未検出のため、現端末で利用可能/導入済みとも扱わない。
+
+上記はdraft-0.1時点の選定状況。後続の[固定候補・入手元・合成隔離試験計画draft-0.1](BEST_PRACTICE_BP5_R2_OL03_MA02_GNUPG_BASELINE_ISOLATION_DESIGN.md)では版候補を2.5.24に絞り、公式source→既存の信頼済み検証環境→管理build/配布を優先案とした。binary/依存digest・信頼元・実行環境は未承認/未提示で、導入/起動やfixture試験は行っていない。show-keys出力だけで秘密packet混入を判別できるかも実施前の停止条件として残す。
 
 | 根拠URL・該当箇所 | 今回確認した意味と制限 |
 |---|---|

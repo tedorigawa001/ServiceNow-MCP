@@ -1,6 +1,6 @@
 # BP-5 R-2 OL-03 MA-02：公式manifest/archive真正性・installed artifact照合手順
 
-Version: draft-0.3 / Date: 2026-10-24 / Source baseline: `f59668e` / Status: 候補fingerprint抽出・独立経路設計を参照追加。検証手順未実施、鍵・検証環境・上限は未承認
+Version: draft-0.4 / Date: 2026-10-24 / Source baseline: `fa99c35` / Status: 抽出用検証器の固定候補・合成隔離試験計画を参照追加。検証手順未実施、鍵・環境・上限は未承認
 
 ## 1. 目的・今回の非実施範囲
 
@@ -40,6 +40,8 @@ Version: draft-0.3 / Date: 2026-10-24 / Source baseline: `f59668e` / Status: 候
 鍵の更新/失効/不明なsubkeyは新しい承認が必要。メールアドレス・短いkey ID・検索順位・初回表示の自動acceptで補わない。期限切れの旧署名を扱う歴史検証の例外は今回設けず、必要なら別設計とする。TOFUや「鍵を取れなければhashのみ」へのfallbackは禁止。
 
 [importしない候補fingerprint抽出・独立経路設計draft-0.1](BEST_PRACTICE_BP5_R2_OL03_MA02_FINGERPRINT_EXTRACTION_PLAN.md)で、未承認候補の表示とtrust root承認を分離し、検証器/隔離の実行前条件、record・確認票、独立経路の選択順を具体化した。候補抽出の実行・鍵承認/import・担当者への連絡・本G0の完了は未実施である。
+
+[GnuPG固定候補・合成隔離試験計画draft-0.1](BEST_PRACTICE_BP5_R2_OL03_MA02_GNUPG_BASELINE_ISOLATION_DESIGN.md)で2.5.24を試験版候補とし、検証器自身の循環認証を避ける入手元、fixture/oracle、アクセス/終了監視と失敗時停止を具体化した。取得・導入・起動・実装・試験は未実施で、trust rootやarchiveの検証成功を意味しない。
 
 ## 4. 固定順序と失敗時停止
 
