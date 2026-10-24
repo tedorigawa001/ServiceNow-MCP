@@ -73,3 +73,5 @@ D1は比較資料を追加した段階で、固定構成/全条件の審査完�
 未導出5項目はUnknown、全体受付は無効、telemetry調査は保留。APPROVED_REGISTRY=None、通常v2のUnavailable/gate92、DER/absence停止を維持する。本書は実layout・必要量projection・完成parts・permitの証拠を発行しない。本番cap投入、通常strict差替え、製品の採用/購入/導入/起動、環境操作、鍵承認、担当者連絡は行わない。
 
 [GnuPG固定候補・合成隔離試験計画](BEST_PRACTICE_BP5_R2_OL03_MA02_GNUPG_BASELINE_ISOLATION_DESIGN.md)の20ケースは未実施のまま。公式資料の読み取りとMD更新は試験成功・人の承認・信頼判断ではない。
+
+[V07/V08公式監視機構調査draft-0.1](BEST_PRACTICE_BP5_R2_OL03_MA02_V07_V08_OFFICIAL_MONITORING_RESEARCH.md)でES AUTH・NE flow/DNS制御、標準tool等の対応範囲と負の対照案を整理した。全拒否試行・file read・Mach/XPC・resolver cache等のcoverageは未確定で、VM候補のV07/V08は未適合/未検証のまま。実装・導入・権限/設定変更の承認にはしない。

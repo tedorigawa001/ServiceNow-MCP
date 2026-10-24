@@ -122,3 +122,5 @@ F04は重要な実施前確認点である。show-keysが秘密入力をpublic�
 [信頼元なし時の選択肢・同一端末VM条件draft-0.1](BEST_PRACTICE_BP5_R2_OL03_MA02_NO_TRUST_SAME_HOST_VM_OPTIONS.md)で回答後の不足と選択肢を整理した。同一端末VMは実行隔離の候補に限り、検証器の由来やRust鍵の独立確認を代替しない。既存の20ケース計画の開始条件を緩めず、環境操作/実行/信頼承認は未実施のまま維持する。
 
 [同一端末VM候補の公式仕様比較draft-0.1](BEST_PRACTICE_BP5_R2_OL03_MA02_SAME_HOST_VM_OFFICIAL_COMPARISON.md)に3候補のV01〜V11の条件・未確認事項を記録した。VM管理仕様だけで禁止操作の試行監視・負の対照・guest processの終了確認を満たしたとはしない。製品/固定版/構成は未選定、20ケース未実施、Unknown・全体受付無効・telemetry保留は不変。
+
+[V07/V08公式監視機構調査draft-0.1](BEST_PRACTICE_BP5_R2_OL03_MA02_V07_V08_OFFICIAL_MONITORING_RESEARCH.md)にI01/I06等へ対応する未実施の負の対照案とES/NEの制約を追加した。AUTHのcache/期限超過・通知欠落・対象外IPC/名前解決等を未解決として残し、既存20ケースの期待値・合格条件を緩めない。試験や監視器の起動許可を発行していない。
