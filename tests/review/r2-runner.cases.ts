@@ -14,6 +14,7 @@ import { checkR2PlanOffline } from '../../src/review/r2-plan-check.js';
 import { approveAndRunR2Plan } from '../../src/review/r2-approved-launch.js';
 import { PassThrough, Writable } from 'node:stream';
 import { trustedTempRoot } from '../fixtures/trusted-temp-root.js';
+import { observeR2Listen } from './fixtures/r2-listen-diagnostics.js';
 
 // Imported by r2-loopback.test.ts: all tests using the fixed port share one sequential file.
 describe('manifest runner integration', () => {
@@ -21,7 +22,13 @@ const origin = 'https://runner-fixture.service-now.com', user = '1'.repeat(32), 
 const token = 'RUNNER_PRIVATE_TOKEN', slot = 'r2-runner';
 let dir: string, file: string;
 let secretNeedles: string[];
-beforeEach(() => {
+let diagnostics: ReturnType<typeof observeR2Listen>;
+beforeEach(context => {
+  const observed = observeR2Listen(); diagnostics = observed;
+  context.onTestFailed(() => { console.error('R2_SYNTHETIC_LISTEN', JSON.stringify(observed.snapshot())); });
+  context.onTestFinished(() => {
+    Object.assign(context.task.meta, { r2_synthetic_listen: observed.snapshot() }); observed.close();
+  });
   secretNeedles = [token, 'RUNNER_PRIVATE_CLIENT', user, 'RUNNER_PRIVATE_BODY'];
   dir = mkdtempSync(join(trustedTempRoot(), 'r2-runner-'));
   chmodSync(dir, 0o700); file = join(dir, 'manifest.json');
@@ -423,10 +430,17 @@ it.each(['exchange', 'identity', 'payload'] as const)('cancels non-cooperative %
     }
     return base.fetcher(url, init);
   };
+  const observed = diagnostics;
+  void began.then(() => observed.mark('stage_entered'));
   const task = runR2ApprovalManifest(file, { fetch: fetcher, signal: root.signal, onReady: authorize });
-  await began; root.abort(Error('RUNNER_PRIVATE_ABORT'));
+  void task.then(result => observed.runner(result));
+  await began; observed.mark('root_abort'); root.abort(Error('RUNNER_PRIVATE_ABORT'));
   const result = await task;
   expect(result).toMatchObject({ ok: false, code: 'cancelled', cleanup: 'complete', tokenMayHaveBeenIssued: true });
+  const phases = observed.snapshot().events.map(e => e.kind);
+  expect(phases.indexOf('stage_entered')).toBeGreaterThanOrEqual(0);
+  expect(phases.indexOf('root_abort')).toBeGreaterThan(phases.indexOf('stage_entered'));
+  expect(phases.indexOf('runner_result')).toBeGreaterThan(phases.indexOf('root_abort'));
   expect(result.mcpListed).toBe(stage === 'payload');
   expect(requestSignal?.aborted).toBe(true); expect(getEventListeners(root.signal, 'abort')).toHaveLength(0);
   late(new Response(new ReadableStream({ cancel() { discarded = true; } })));
@@ -455,6 +469,7 @@ it('never emits credentials, code, identity or arbitrary errors through stdout/s
 it('rejects a result containing the actual bearer even when it is reflected through valid metadata', async () => {
   const base = boundary('c'.repeat(32));
   const result = await runR2ApprovalManifest(file, { onReady: authorize, fetch: base.fetcher });
+  diagnostics.runner(result);
   expect(result).toMatchObject({ ok: false, code: 'secret_output_detected', cleanup: 'complete', mcpListed: true });
   expect(result).not.toHaveProperty('result');
 });
@@ -516,7 +531,49 @@ it('does not fall back to another port or disturb a pre-existing listener', asyn
     expect(await runR2ApprovalManifest(file, { fetch: fetcher, onReady: ready }))
       .toMatchObject({ ok: false, code: 'callback_unavailable', cleanup: 'complete' });
     expect(occupied.listening).toBe(true); expect(fetcher).not.toHaveBeenCalled(); expect(ready).not.toHaveBeenCalled();
+    expect(diagnostics.snapshot().events).toEqual(expect.arrayContaining([
+      expect.objectContaining({ kind: 'listen_error', code: 'EADDRINUSE' }),
+    ]));
   } finally { await new Promise<void>(r => occupied.close(() => r())); }
+});
+
+it('separates early callback failure from a still-pending non-cooperative exchange stage gate', async () => {
+  const occupied = createServer(socket => socket.end());
+  await new Promise<void>(r => occupied.listen(18765, '127.0.0.1', r));
+  try {
+    let entered!: () => void, stageEntered = false;
+    const began = new Promise<void>(r => { entered = r; });
+    const fetcher = vi.fn<typeof fetch>(async () => {
+      stageEntered = true; entered(); return new Promise<Response>(() => {});
+    });
+    const task = runR2ApprovalManifest(file, { fetch: fetcher, onReady: authorize });
+    const first = await Promise.race([
+      began.then(() => ({ kind: 'stage' as const })),
+      task.then(result => ({ kind: 'terminal' as const, result })),
+    ]);
+    expect(first.kind).toBe('terminal');
+    if (first.kind !== 'terminal') throw Error('SYNTHETIC_STAGE_REACHED');
+    diagnostics.runner(first.result);
+    expect(first.result).toMatchObject({ ok: false, code: 'callback_unavailable', cleanup: 'complete', tokenMayHaveBeenIssued: false });
+    expect(stageEntered).toBe(false); expect(fetcher).not.toHaveBeenCalled();
+    let gateSettled = false; void began.then(() => { gateSettled = true; });
+    await Promise.resolve(); expect(gateSettled).toBe(false);
+    expect(diagnostics.snapshot().events).toEqual(expect.arrayContaining([
+      expect.objectContaining({ kind: 'listen_error', code: 'EADDRINUSE' }),
+      expect.objectContaining({ kind: 'runner_result', code: 'callback_unavailable', cleanup_complete: true }),
+    ]));
+    expect(diagnostics.snapshot().listening).toBe(0);
+  } finally { await new Promise<void>(r => occupied.close(() => r())); }
+});
+
+it('bounds the synthetic diagnostic vocabulary and never records arbitrary error text', () => {
+  diagnostics.runner({ ok: false, code: 'PRIVATE_DIAGNOSTIC_CODE', cleanup: 'PRIVATE_DIAGNOSTIC_STATE' });
+  for (let i = 0; i < 140; i++) diagnostics.mark('stage_entered');
+  const snapshot = diagnostics.snapshot();
+  expect(snapshot.events).toHaveLength(128); expect(snapshot.dropped).toBeGreaterThan(0);
+  expect(snapshot.events[0]).toMatchObject({ kind: 'runner_result', code: 'other', cleanup_complete: false });
+  expect(JSON.stringify(snapshot)).not.toContain('PRIVATE_DIAGNOSTIC');
+  expect(snapshot.events.every(e => Number.isInteger(e.at_ms) && e.at_ms >= 0)).toBe(true);
 });
 
 it.each(['SIGINT', 'SIGTERM'] as const)('handles actual %s in a dedicated synthetic child and exits without credentials or open handles', async signal => {
@@ -611,12 +668,30 @@ it.each(['normal', 'slow-close'] as const)('supervises the actual runner host wi
       expect(options.env).toEqual({}); expect(options.stdio).toEqual(['ignore', 'ignore', 'ignore', 'ipc']);
       expect(options.detached).toBe(true); expect(options.serialization).toBe('json'); expect(options.shell).toBe(false);
       expect(args.at(-2)).toMatch(/r2-host-entry\.ts$/);
-      return spawn(command, [...args.slice(0, -2), 'tests/review/fixtures/r2-host.mjs', mode, file], options);
+      const observed = diagnostics;
+      const child = spawn(command, [...args.slice(0, -2), 'tests/review/fixtures/r2-host.mjs', mode, file], options);
+      observed.mark('host_spawn'); child.once('exit', () => observed.mark('host_exit'));
+      return child;
     } });
   expect(result.process_termination).toBe('confirmed');
   expect(JSON.stringify(result)).not.toContain('RUNNER_PRIVATE');
   if (mode === 'normal') expect(result).toMatchObject({ terminal_reason: 'cancelled', cleanup: 'complete',
     token_issuance: 'not_attempted', runner_receipt: { ok: false, code: 'cancelled' } });
   else { expect(result.token_issuance).toBe('unknown'); expect(result).not.toHaveProperty('runner_receipt'); }
+}, 10000);
+
+it('reproduces normal-host callback_unavailable with a controlled occupied port before ready', async () => {
+  const occupied = createServer(socket => socket.end());
+  await new Promise<void>(r => occupied.listen(18765, '127.0.0.1', r));
+  try {
+    let ready = false;
+    const result = await superviseR2Host(file, { totalTimeoutMs: 4000, cleanupTimeoutMs: 500,
+      onReady: () => { ready = true; }, spawnHost: (command, args, options) =>
+        spawn(command, [...args.slice(0, -2), 'tests/review/fixtures/r2-host.mjs', 'normal', file], options) });
+    expect(ready).toBe(false);
+    expect(result).toMatchObject({ terminal_reason: 'review_failed', process_termination: 'confirmed', cleanup: 'complete',
+      token_issuance: 'not_attempted', runner_receipt: { ok: false, code: 'callback_unavailable', cleanup: 'complete' } });
+    expect(occupied.listening).toBe(true);
+  } finally { await new Promise<void>(r => occupied.close(() => r())); }
 }, 10000);
 });
