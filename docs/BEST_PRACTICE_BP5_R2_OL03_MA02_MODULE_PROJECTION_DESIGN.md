@@ -1,6 +1,6 @@
 # BP-5 R-2 OL-03 MA-02：固定module実確保モデル・保護必要量projection詳細設計
 
-Version: draft-0.4 / Date: 2026-10-24 / Source baseline: `6e64f5c` / Status: MA-02A/Bの合成実装と実型compile-fail寿命試験を確認。実layout・完全管理必要量・運用接続未対応、5項目Unknown
+Version: draft-0.5 / Date: 2026-10-24 / Source baseline: `b23c3ef` / Status: MA-02A/Bの合成実装と実型compile-fail寿命試験を確認。実layout根拠・更新方針の設計案を追加、実layout・完全管理必要量・運用接続未対応、5項目Unknown
 
 ## 1. 範囲・参照した状態
 
@@ -53,6 +53,8 @@ Vecへの対応は次のいずれかを、後続で証拠付き承認するま�
 2. 要求layoutが事前に決まる専用固定buffer/確保adapterへ将来変更する。ただし別途の実装許可・互換/失敗試験が必要で、今回の設計を根拠に置換しない。
 
 実行後capacity検査だけでの代替、過剰確保を任意marginで吸収、Rc payloadを制御領域なしの0 byteへ換算する方式は採らない。対象ABIのlayoutが不明ならKnownへ進めない。
+
+[実layout根拠・build固定・更新方針draft-0.1](BEST_PRACTICE_BP5_R2_OL03_MA02_LAYOUT_EVIDENCE_DESIGN.md)で、公式API保証と固定commit実装の区別、toolchain/std/artifact/ABIの証拠包、現行Vecモデルと専用確保adapterの比較、更新・失効・再検証条件を具体化した。方式選択・production tuple・実layout/issuerは未承認で、現行Unmodeled/Unknownを変更しない。
 
 ## 5. 保護projectionの型・借用・claim案
 
@@ -121,7 +123,7 @@ MA-01を合成oracleとして使う場合も、その計算器のrun費`133+4C+5
 
 実layoutの信頼元・toolchain/library/ABIの固定/更新規則、Vec容量方針（§4の1/2の選択。MA-02Bの着手条件、§7）/Rc内部layout、catch不能OOM、全module/不正入力prefix/nested/固定領域、B0〜B4/BXと3round全体、保護context/receipt producer・PC-04、claim格納/費用と停止伝播、layout schema/上限/係数、実cap/clock/失効・全体work/payload/resource強制は未対応である。
 
-本書の調査はローカルソース/設計の読み取り照合。Rust標準libraryの非公開layoutを公式に保証された値として採用したものでも、実allocator/実機検証を実施したものでもない。5項目Unknown・全体受付無効を維持し、完成partsの発行条件を緩めない。
+MA-02A/Bの調査はローカルソース/設計の読み取り照合。後続の§4参照先では公式資料と固定commit sourceも確認したが、Rust標準libraryの非公開layoutを公式に保証された値として採用したものでも、実allocator/実機検証を実施したものでもない。5項目Unknown・全体受付無効を維持し、完成partsの発行条件を緩めない。
 
 ## 9. MA-02A実装：固定recipe/coverageの非実行整合検査
 
