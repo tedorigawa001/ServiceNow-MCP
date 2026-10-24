@@ -97,6 +97,8 @@ V07の観測単位（現行の「全read・名前解決・IPCの各試行」を�
 
 既定として**現行要件を維持する**。観測単位を緩めず、縮小案の設計比較にも着手しない。現行要件を満たす公式経路は未確定のため、V07/V08は未適合・未検証、D4の合成隔離試験は開始不可のままとする（[選択肢文書](BEST_PRACTICE_BP5_R2_OL03_MA02_NO_TRUST_SAME_HOST_VM_OPTIONS.md)のO1保留継続と整合）。縮小案を検討する場合は、利用者の明示指示を受けてから別設計として扱い、採用には別途承認を要する。この回答は要件変更の承認でも、監視機構・VM・検証器の採用でもない。
 
+[V07観測単位・必須coverage表draft-0.1](BEST_PRACTICE_BP5_R2_OL03_MA02_V07_REQUIRED_COVERAGE_DESIGN.md)で現行要件を具体化した。API試行・syscall試行・OS判断点・結果・完全性を分け、20分類の必須coverageと未観測/未対応/未実施の停止条件を記載した。OS判断点だけへの縮小ではなく、全行未検証のまま。§4のNC群は未実施であり、早期拒否ではdeny応答が存在しない場合のA/S/R観測も同表で明確化している。
+
 ## 7. 維持する停止状態
 
 未導出5項目はUnknown、全体受付無効、telemetry保留。APPROVED_REGISTRY=None、通常v2 Unavailable/gate92、DER/absence停止、完成parts/permit非発行を維持する。[チェックリスト](BEST_PRACTICE_BP5_R2_OL03_MA02_USER_INFORMATION_APPROVAL_CHECKLIST.md)はI01〜I05回答済み、E/A/T計20項目未チェックのまま。
