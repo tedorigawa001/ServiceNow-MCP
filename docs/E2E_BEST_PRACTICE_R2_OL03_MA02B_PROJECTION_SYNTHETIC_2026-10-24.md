@@ -28,7 +28,7 @@ Date: 2026-10-24 / Source baseline: `3927c4e` / Scope: offline合成のみ。実
 5. 生成35/消費13の全work位置でLimit/Cancelled/Deadlineを注入し、再試行でspentが増えないことを確認。MA-02Aの残量precheckで複数位置が同guardで停止する場合を含む。
 6. 部分shape各値/modelの改変を拒否。結果は非Clone/Copy/serde・固定opaque Debug。rawコード/path/pointer/資格情報を出力する口を追加していない。
 
-compile-failによるscope外持出し等の独立試験は今回未実施。上の実borrow/不一致拒否・借用終了後move成功や型trait試験を、compile-fail試験済みと読み替えない。
+本記録の初回実装時点ではcompile-failによるscope外持出し等の独立試験は未実施だった。後続の[実型compile-fail記録](E2E_BEST_PRACTICE_R2_OL03_MA02B_LIFETIME_COMPILE_FAIL_2026-10-24.md)で正常/拒否の2組を追加した。上の実行時binding/型trait試験とは分け、初回からcompile-failを実施していたとは扱わない。
 
 ## 4. 実行結果・途中の問題
 

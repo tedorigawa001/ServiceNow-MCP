@@ -1,6 +1,6 @@
 # BP-5 R-2 OL-03 MA-02：固定module実確保モデル・保護必要量projection詳細設計
 
-Version: draft-0.3 / Date: 2026-10-24 / Source baseline: `3927c4e` / Status: MA-02AとMA-02Bの同estimate部分projection/専用claimを合成実装。実layout・完全管理必要量・運用接続未対応、5項目Unknown
+Version: draft-0.4 / Date: 2026-10-24 / Source baseline: `6e64f5c` / Status: MA-02A/Bの合成実装と実型compile-fail寿命試験を確認。実layout・完全管理必要量・運用接続未対応、5項目Unknown
 
 ## 1. 範囲・参照した状態
 
@@ -8,7 +8,7 @@ Version: draft-0.3 / Date: 2026-10-24 / Source baseline: `3927c4e` / Status: MA-
 
 基準`60f9268`にはMA-01のscratch初期化前のworst-case work残量事前検査が含まれる。既に消費した入口3 workを除いた上界を同じ元budgetへ照合するが、予約・layout認証・全体受付の証明ではない。今回はこの実装を変更しない。本書の新規型名/model/係数は案であり、現在のAPIの説明ではない。
 
-§1〜§8の将来設計と§9〜§10のMA-02A/B実装を区別する。Unknown・全体受付無効・telemetry保留、APPROVED_REGISTRY=None、通常v2 Unavailable/gate92、DER/absence停止を維持する。本番cap投入・完成parts発行・通常strict差替え・OS接続・実機操作・token発行・設定変更・permit発行を含めない。
+§1〜§8の将来設計と§9〜§11のMA-02A/B実装・試験を区別する。Unknown・全体受付無効・telemetry保留、APPROVED_REGISTRY=None、通常v2 Unavailable/gate92、DER/absence停止を維持する。本番cap投入・完成parts発行・通常strict差替え・OS接続・実機操作・token発行・設定変更・permit発行を含めない。
 
 ## 2. 「実確保モデル」が証明する量と証明しない量
 
@@ -188,4 +188,29 @@ MA-02Aの固定recipe検査23 workを実施し、追加1 workで`RecipeFacts`を
 
 新固定費35/13を旧18/45や全体上界へ単純加算して受付を承認しない。既存MA-02A検査のread-only残量precheckは維持するが、MA-02B全体のwork予約/独立resource受付は追加していない。途中失敗は元budgetへlatchし、実resource/cleanup証拠は所有/発行しない。
 
-[MA-02B合成検証記録](E2E_BEST_PRACTICE_R2_OL03_MA02B_PROJECTION_SYNTHETIC_2026-10-24.md)を参照。実layout/完全coverage/承認cap・PC-04の安定owner/Initial継続・実producer接続は未対応。compile-failによる寿命境界の独立検証も未実施で、非Clone/serde試験や借用を閉じた後のmove成功と区別する。
+[MA-02B合成検証記録](E2E_BEST_PRACTICE_R2_OL03_MA02B_PROJECTION_SYNTHETIC_2026-10-24.md)を参照。実layout/完全coverage/承認cap・PC-04の安定owner/Initial継続・実producer接続は未対応。後続§11で実型のcompile-fail寿命試験を追加した。非Clone/serde試験・実行時binding拒否とコンパイルによる寿命拒否は別の証拠として扱う。
+
+## 11. MA-02Bの実型compile-fail寿命試験
+
+[ma02b_lifetimes.rs](../native/r2-outer/tests/ma02b_lifetimes.rs)は、実srcの一時コピーのMA-02B private moduleへfixtureを`include!`し、同じCargo.toml/lockで`cargo check --offline --locked --lib`する。模擬structやpublicな代替型ではなく、実ManagementProjection/ScanWorkEstimateと実with_round/build/calculate/project/consumeを型検査する。製品側の可視性/型/停止条件は変更しない。
+
+| case | 意図 | 必須結果 |
+|---|---|---|
+| scope_pass | 実with_round内で宣言・inputs/profile/estimateを作り、同scope内で部分projectionを消費 | コンパイル成功、error診断0 |
+| scope_fail | 同じ実pipelineの部分projectionを外側Optionへ保存し、callback外へ持ち出す | E0521（borrowed data escapes outside closure）がfixture内primary span付きで存在 |
+| move_pass | 実projectionを消費してborrowを閉じてからestimateを固定consumerへmove | コンパイル成功、error診断0 |
+| move_fail | 実projectionを後で使用するまま、借用中のestimateを先にmove | E0505（cannot move out because borrowed）がfixture内primary span付きで存在 |
+
+scope_failでは同じlocal宣言等の寿命に付随するE0597/E0515も許容するが、E0521を必須にする。move_failはE0505だけを許容する。private/name解決/型違い等の別コード、空診断・compiler起動/依存失敗・timeoutは合格にしない。positive controlが成功するため、private名へアクセスできないだけの失敗を寿命証明に数えない。
+
+fixture関数は型検査されるだけで呼び出さず、実receipt/tokenの取得や製品consumerの実行はない。runtimeのUnknown/claim/work費用・全体受付を変更しない。これは2つの具体的寿命違反の回帰試験で、すべてのalias/unsafe/将来API変更やPC-04統合の安全性を証明するものではない。
+
+### 11.1 harnessの有限性と隔離
+
+- Unix向けのoffline compiler試験で、専用0700一時dirへsrcとCargo.toml/lockを複製する。sourceのsymlinkを拒否し、深さ64・files/directories合計4096・Rust source bytes合計16 MiB以下を要求する。
+- fixtureは固定4ファイルだけ。元sourceを書き換えず、copy側の一つのmoduleへ順に追加する。専用target-dirを使い、実行中の外側Cargoのtarget lockと分離する。
+- childはshellを経由しないCargo check。compiler wrapper/追加Rust flags等の環境overrideを除去し、offline/lockedで実施する。compiler/依存の通常ビルド以外の製品操作やfixture実行はしない。
+- 1 compile最大90秒、stdout/stderr各8 MiB上限を監視し、超過時はchildをkill/waitして不合格にする。診断はCargo JSONのcodeとfixtureのprimary spanを確認し、記録用表示はcase名/成否/codeだけ。
+- 一時dirはscope終了時に削除を試行し、compiler childもunwind時にkill/waitを試みる。これはtest helperのbest-effort後始末で、製品のcleanup完了証拠・実機OS backendの停止保証とは別物。
+
+[寿命compile-fail検証記録](E2E_BEST_PRACTICE_R2_OL03_MA02B_LIFETIME_COMPILE_FAIL_2026-10-24.md)に実compiler版・4ケース・全体検証を分離して記載する。
