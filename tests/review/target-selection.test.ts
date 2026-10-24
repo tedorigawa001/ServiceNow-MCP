@@ -58,6 +58,48 @@ afterEach(async () => {
 });
 const run = (rows: Row[], extra: Record<string, unknown> = {}, fetcher = fixture(rows)) => reviewBoundedUpdateSet(client(),
   { update_set_sys_id: parent, selection_mode: 'review_targets', ...extra }, { fetch: fetcher, workerFactory: sourceWorkerFactory });
+it('explicit CL-002 selects Client Scripts and preserves necessity review through the worker', async () => {
+  const rows = [row(1), row(2, 'sys_script_client')];
+  const out = await run(rows, { requested_rule_ids: ['AU-CL-002'] }, fixture(rows, 'g_form.getReference("PRIVATE_LOOKUP", callback);'));
+  expect(out.isError).toBe(false); if (out.isError) throw Error(out.error.code);
+  expect(out.result).toMatchObject({ versions: { ruleset: 'bp3-0.10' }, selection: { requested_asset_types: ['client_script'] }, counts: { reviewed: 1, findings: 1 } });
+  expect(aggregateReviewV3Schema.safeParse(out.result).success).toBe(true);
+  expect(JSON.stringify(out)).not.toMatch(/PRIVATE_LOOKUP|synthetic-selection-token/);
+  const forged = structuredClone(out.result), asset = forged.assets[0];
+  if (asset.state !== 'reviewed') throw Error('Expected lookup candidate');
+  expect(asset.result.findings[0].required_follow_up).toContain('client_lookup_necessity_review');
+  asset.result.findings[0].required_follow_up = ['source_approval'];
+  expect(aggregateReviewV3Schema.safeParse(forged).success).toBe(false);
+});
+it('CL-002 unknown receivers cannot claim complete aggregate analysis', async () => {
+  const rows = [row(1, 'sys_script_client')];
+  const out = await run(rows, { requested_rule_ids: ['AU-CL-002'] }, fixture(rows, 'function f(gr) { gr.query(); }'));
+  expect(out.isError).toBe(false); if (out.isError) throw Error(out.error.code);
+  expect(out.result.coverage.analysis_complete).toBe(false);
+  expect(aggregateReviewV3Schema.safeParse(out.result).success).toBe(true);
+  const forged = structuredClone(out.result); forged.coverage.analysis_complete = true;
+  expect(aggregateReviewV3Schema.safeParse(forged).success).toBe(false);
+});
+it('keeps historical per-asset rulesets when a BR rule and CL-002 share an aggregate', async () => {
+  const rows = [row(1), row(2, 'sys_script_client')];
+  const out = await run(rows, { requested_rule_ids: ['AU-BR-001', 'AU-CL-002'] }, fixture(rows, 'current.update(); g_form.getReference("x");'));
+  expect(out.isError).toBe(false); if (out.isError) throw Error(out.error.code);
+  expect(out.result).toMatchObject({ versions: { ruleset: 'bp3-0.10' }, counts: { reviewed: 2, findings: 2 } });
+  expect(out.result.assets[0]).toMatchObject({ state: 'reviewed', result: { ruleset_version: 'bp3-0.4' } });
+  expect(out.result.assets[1]).toMatchObject({ state: 'reviewed', result: { ruleset_version: 'bp3-0.10' } });
+});
+it('supports CL-002 in the legacy 0.2 envelope and combines client opt-ins without changing defaults', async () => {
+  const rows = [row(1, 'sys_script_client')];
+  const fetcher = fixture(rows, 'g_form.getReference("x"); g_form.setVisible("x", true);');
+  const out = await run(rows, { selection_mode: undefined, requested_rule_ids: ['AU-CL-002', 'AU-CL-006'] }, fetcher);
+  expect(out.isError).toBe(false); if (out.isError) throw Error(out.error.code);
+  expect(out.result).toMatchObject({ schema_version: 'bp-mcp-review-0.2', versions: { ruleset: 'bp3-0.10' }, counts: { findings: 2 } });
+  expect(aggregateReviewSchema.safeParse(out.result).success).toBe(true);
+  const forged = structuredClone(out.result), asset = forged.assets[0];
+  if (asset.state !== 'reviewed') throw Error('Expected lookup/control candidates');
+  asset.result.limitations = asset.result.limitations.filter(x => x !== 'client_lookup_api_subset');
+  expect(aggregateReviewSchema.safeParse(forged).success).toBe(false);
+});
 it('explicit CL-006 selects Client Scripts and retains UI Policy suitability through the worker', async () => {
   const rows = [row(1), row(2, 'sys_script_client')];
   const out = await run(rows, { requested_rule_ids: ['AU-CL-006'] },

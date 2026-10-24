@@ -14,6 +14,7 @@ export class AnalysisLimitError extends Error {}
 const C = 1, P = 2, CF = 4, PF = 8, AJAX = 16, LOCAL = 32, UNKNOWN = 64, AJAX_CTOR = 128;
 const QUERY_RECORD = 256, QUERY_CTOR = 512;
 const FORM = 1024;
+const CLIENT_RECORD = 2048, CLIENT_CTOR = 4096, LOOKUP_METHOD = 8192;
 type Origin = { flags: number; properties?: Map<string, Origin>; unknownProperties?: boolean };
 type Binding = { origin: Origin; functionId: number; entryFlags?: number; isConst?: boolean; constantWritten?: boolean; constant?: ConstantValue };
 type Scope = { parent?: Scope; functionId: number; functionScope: boolean; bindings: Map<string, Binding> };
@@ -34,7 +35,8 @@ export function analyzeScopedCandidates(ast: AstNode, when: string | null, emit:
     bindings?: { declared: (entry: AstNode) => void; dynamic: () => void };
     abort?: { effect: (entry: AstNode, effect: string) => void; unresolved: () => void };
     display?: { write: (entry: AstNode, kind: string) => void; unresolved: () => void };
-    uiPolicy?: { control: (entry: AstNode, kind: string, dynamic?: boolean) => void; unresolved: () => void } } = { allowDeclaredEntry: false, constants: false }): void {
+    uiPolicy?: { control: (entry: AstNode, kind: string, dynamic?: boolean) => void; unresolved: () => void };
+    clientLookup?: { lookup: (entry: AstNode, kind: string) => void; unresolved: () => void } } = { allowDeclaredEntry: false, constants: false }): void {
   const root: Scope = { functionId: 0, functionScope: true, bindings: new Map() };
   const scopes = new WeakMap<AstNode, Scope>();
   const functionScopes = new WeakMap<AstNode, Scope>();
@@ -52,6 +54,8 @@ export function analyzeScopedCandidates(ast: AstNode, when: string | null, emit:
   let abortUnsafe = false;
   let displayUnsafe = false;
   let uiPolicyUnsafe = false;
+  let lookupUnsafe = false;
+  const lookupCandidates: { entry: AstNode; kind: string }[] = [];
   const uiPolicyCandidates: { entry: AstNode; kind: string; dynamic: boolean }[] = [];
   function budget(depth: number) {
     if (++visits > 100000 || depth > 256) throw new AnalysisLimitError('analysis_limit');
@@ -129,6 +133,16 @@ export function analyzeScopedCandidates(ast: AstNode, when: string | null, emit:
       if (entry.type === 'ClassExpression' || entry.type === 'ClassDeclaration') declare(entry.id, scope);
     }
     scopes.set(entry, scope);
+    if (options.clientLookup) {
+      const write = entry.type === 'AssignmentExpression' ? entry.left
+        : entry.type === 'UpdateExpression' || entry.type === 'UnaryExpression' && entry.operator === 'delete' ? entry.argument
+          : entry.type === 'ForInStatement' || entry.type === 'ForOfStatement' ? entry.left : null;
+      if (entry.type === 'WithStatement' || entry.type === 'CallExpression' && identifier(entry.callee, 'eval')
+        || isAstNode(write) && write.type === 'MemberExpression' && (staticMemberName(write) === null || ['getReference', 'query', 'get'].includes(staticMemberName(write)!))
+        || identifier(write) && ['g_form', 'GlideRecord'].includes(String(write.name))) {
+        lookupUnsafe = true; options.clientLookup.unresolved();
+      }
+    }
     if (options.uiPolicy) {
       const write = entry.type === 'AssignmentExpression' ? entry.left
         : entry.type === 'UpdateExpression' || entry.type === 'UnaryExpression' && entry.operator === 'delete' ? entry.argument : null;
@@ -248,7 +262,8 @@ export function analyzeScopedCandidates(ast: AstNode, when: string | null, emit:
   function read(scope: Scope, name: string): Origin {
     const binding = find(scope, name);
     if (!binding) return origin(name === 'current' ? C : name === 'previous' ? P : name === 'GlideAjax' ? AJAX_CTOR
-      : options.uiPolicy && name === 'g_form' ? FORM : options.display && name === 'g_scratchpad' ? LOCAL
+      : (options.uiPolicy || options.clientLookup) && name === 'g_form' ? FORM
+        : options.clientLookup && name === 'GlideRecord' ? CLIENT_CTOR : options.display && name === 'g_scratchpad' ? LOCAL
         : (options.query || options.abort || options.display || options.uiPolicy) && ['GlideRecord', 'GlideRecordSecure'].includes(name) ? QUERY_CTOR : UNKNOWN);
     if (binding.functionId !== scope.functionId) {
       // Direct lexical reference to the declared platform entry, not propagation of a user alias/call.
@@ -352,6 +367,8 @@ export function analyzeScopedCandidates(ast: AstNode, when: string | null, emit:
         if (entry.computed) visit(entry.property);
         receivers.set(entry, receiver);
         const key = memberKey(entry);
+        if (options.clientLookup && (receiver.flags === FORM && key === 'getReference'
+          || receiver.flags === CLIENT_RECORD && ['query', 'get'].includes(key ?? ''))) return origin(LOOKUP_METHOD);
         if (when === 'async' && (receiver.flags & P)) emit(entry, 'AU-BR-002', { kind: 'async_dependency' });
         if (key === null) return unknown();
         const uncertain = receiver.unknownProperties ? UNKNOWN : 0;
@@ -370,11 +387,41 @@ export function analyzeScopedCandidates(ast: AstNode, when: string | null, emit:
           if (options.query && containsQueryRecord(value)) queryUnsafe = true;
           if (options.display && value.flags & (C | CF)) displayArgumentCurrent = true;
           if (options.uiPolicy && value.flags & FORM) uiPolicyArgumentForm = true;
+          if (options.clientLookup && containsLookupReceiver(value)) { lookupUnsafe = true; options.clientLookup.unresolved(); }
+        }
+        if (options.clientLookup && entry.type === 'NewExpression' && calleeValue.flags === CLIENT_CTOR) {
+          const args = entry.arguments as AstNode[];
+          const table = args.length === 1 ? primitive(args[0]) : UNKNOWN_CONSTANT;
+          if (args.length === 1 && args[0].type !== 'SpreadElement'
+            && !(args[0].type === 'Literal' && typeof args[0].value !== 'string')
+            && (table === UNKNOWN_CONSTANT || typeof table === 'string' && table.length > 0)) return origin(CLIENT_RECORD);
+          options.clientLookup.unresolved(); return unknown();
+        }
+        if (options.clientLookup && entry.type === 'NewExpression' && calleeValue.flags & CLIENT_CTOR) {
+          options.clientLookup.unresolved(); return unknown();
         }
         if (entry.type === 'NewExpression') return origin(calleeValue.flags & AJAX_CTOR ? AJAX
           : calleeValue.flags === QUERY_CTOR ? QUERY_RECORD : calleeValue.flags & UNKNOWN ? UNKNOWN : LOCAL);
         if (isAstNode(entry.callee) && entry.callee.type === 'MemberExpression') {
           const receiver = receivers.get(entry.callee) ?? unknown(), key = memberKey(entry.callee);
+          if (options.clientLookup) {
+            if (receiver.flags & LOOKUP_METHOD) options.clientLookup.unresolved();
+            if (key === null && receiver.flags & (FORM | CLIENT_RECORD)) options.clientLookup.unresolved();
+            const reference = key === 'getReference', recordLookup = key === 'get' || key === 'query';
+            if (reference || recordLookup) {
+              const args = entry.arguments as AstNode[];
+              const field = args.length ? primitive(args[0]) : UNKNOWN_CONSTANT;
+              const stringArg = args.length > 0 && !(args[0].type === 'Literal' && typeof args[0].value !== 'string')
+                && (field === UNKNOWN_CONSTANT || typeof field === 'string' && field.length > 0);
+              const callback = (a: AstNode | undefined) => !a || a.type !== 'Literal';
+              const valid = !args.some(a => a.type === 'SpreadElement') && (reference
+                ? (args.length === 1 || args.length === 2 && callback(args[1])) && stringArg
+                : key === 'get' ? args.length === 1 && stringArg : args.length === 0 || args.length === 1 && callback(args[0]));
+              if (valid && (reference && receiver.flags === FORM || recordLookup && receiver.flags === CLIENT_RECORD))
+                lookupCandidates.push({ entry, kind: reference ? 'client_lookup_get_reference' : key === 'get' ? 'client_lookup_record_get' : 'client_lookup_record_query' });
+              else if (receiver.flags & (FORM | CLIENT_RECORD | UNKNOWN)) options.clientLookup.unresolved();
+            }
+          }
           if (options.uiPolicy) {
             if (uiPolicyArgumentForm && ['assign', 'defineProperty', 'defineProperties', 'setPrototypeOf'].includes(key ?? '')) {
               uiPolicyUnsafe = true; options.uiPolicy.unresolved();
@@ -432,6 +479,7 @@ export function analyzeScopedCandidates(ast: AstNode, when: string | null, emit:
           if (key === 'getXMLWait' && (receiver.flags & (AJAX | UNKNOWN))) emit(entry, 'AU-CL-004',
             { kind: 'synchronous_ajax', receiver_unresolved: !!(receiver.flags & UNKNOWN) });
         }
+        else if (options.clientLookup && calleeValue.flags & LOOKUP_METHOD) options.clientLookup.unresolved();
         return unknown(); // No return-value or callable-alias propagation.
       }
       case 'AssignmentExpression': {
@@ -470,7 +518,19 @@ export function analyzeScopedCandidates(ast: AstNode, when: string | null, emit:
     if (value.flags & (QUERY_RECORD | QUERY_CTOR)) return true;
     return !!value.properties && [...value.properties.values()].some(v => containsQueryRecord(v, seen, depth + 1));
   }
+  function containsLookupReceiver(value: Origin, seen = new Set<Origin>(), depth = 0): boolean {
+    budget(depth);
+    if (seen.has(value)) return false;
+    seen.add(value);
+    if (value.flags & (FORM | CLIENT_RECORD | CLIENT_CTOR)) return true;
+    return !!value.properties && [...value.properties.values()].some(v => containsLookupReceiver(v, seen, depth + 1));
+  }
   walk(ast);
+  for (const candidate of lookupCandidates) {
+    budget(0);
+    if (lookupUnsafe) options.clientLookup!.unresolved();
+    else options.clientLookup!.lookup(candidate.entry, candidate.kind);
+  }
   if (options.abort) analyzeAbortFlow(ast, abortCalls, budget, options.abort.effect, options.abort.unresolved);
   for (const candidate of uiPolicyCandidates) {
     budget(0);

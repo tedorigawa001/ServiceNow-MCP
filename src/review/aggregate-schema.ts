@@ -30,7 +30,7 @@ export const aggregateReviewStructure = z.strictObject({
   schema_version: z.literal('bp-mcp-review-0.2'), poc_only: z.literal(true), code_return_mode: z.literal('none'),
   status: z.enum(['completed', 'partial', 'failed']),
   target: z.strictObject({ update_set_sys_id: id, target_version: z.literal('update_set_payload'), instance_binding: hash }),
-  versions: z.strictObject({ knowledge_base: z.literal(CATALOG_VERSION), ruleset: z.enum(['bp3-0.4', 'bp3-0.5', 'bp3-0.6', 'bp3-0.7', 'bp3-0.8', 'bp3-0.9']), asset_schema: z.literal('bp-review-0.2') }),
+  versions: z.strictObject({ knowledge_base: z.literal(CATALOG_VERSION), ruleset: z.enum(['bp3-0.4', 'bp3-0.5', 'bp3-0.6', 'bp3-0.7', 'bp3-0.8', 'bp3-0.9', 'bp3-0.10']), asset_schema: z.literal('bp-review-0.2') }),
   started_at: z.iso.datetime(), ended_at: z.iso.datetime(),
   instance_release: releaseEvidenceStructure, release_match: z.enum(['matched', 'mismatched', 'unknown']),
   principal: z.strictObject({ auth_mode: z.enum(['per-user', 'service-account']) }),
@@ -39,7 +39,7 @@ export const aggregateReviewStructure = z.strictObject({
   consistency: z.enum(['stable_observation', 'changed', 'unverified']),
   coverage: z.strictObject({ requested_rule_ids: bp5RuleIdsSchema,
     skipped_rules: z.array(z.strictObject({ rule_id: bp5RuleIdSchema,
-      reason: z.enum(['release_unknown', 'release_mismatch']) })).max(8), analysis_complete: z.boolean() }),
+      reason: z.enum(['release_unknown', 'release_mismatch']) })).max(9), analysis_complete: z.boolean() }),
   assets: z.array(assetOutcomeStructure).max(100),
   counts: z.strictObject({ reviewed: count, not_applicable: count, skipped_deleted: count, rejected: count,
     retrieval_failed: count, not_processed: count, result_omitted: count, findings: count }),
@@ -133,7 +133,7 @@ function checkAggregate(r: AnyAggregateReview, ctx: z.RefinementCtx) {
       if (Date.parse(result.reviewed_at) < Date.parse(r.started_at) || Date.parse(result.reviewed_at) > Date.parse(r.ended_at)) fail('Nested review is outside run interval');
       findings += result.findings.length;
       incomplete ||= result.coverage.skipped_rules.length > 0 || result.review_status === 'failed'
-        || ['query_like_unresolved', 'br_table_context_unknown', 'br_dynamic_scope_unresolved', 'abort_flow_unresolved', 'display_write_unresolved', 'ui_policy_control_unresolved'].some(x => result.limitations.includes(x));
+        || ['query_like_unresolved', 'br_table_context_unknown', 'br_dynamic_scope_unresolved', 'abort_flow_unresolved', 'display_write_unresolved', 'ui_policy_control_unresolved', 'client_lookup_unresolved'].some(x => result.limitations.includes(x));
     } else if (asset.state === 'not_applicable') {
       const assetType = asset.asset_type;
       if (assetType === 'other') {
