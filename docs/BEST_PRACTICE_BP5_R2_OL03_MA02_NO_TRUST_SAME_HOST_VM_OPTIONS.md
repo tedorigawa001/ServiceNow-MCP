@@ -81,3 +81,5 @@ I04のRust鍵の独立確認を合成fixture試験の前提へ循環させない
 3. 非公開記録の具体的保存先候補、保持期間、監査/確認者の不足をどう扱うか。方針の回答だけではfolderを作らない。
 
 本書は選択肢の整理まで。O案の採用、VM候補の選定、技術条件の適合確認、実施許可、鍵の信頼承認を記入していない。[操作別チェックリスト](BEST_PRACTICE_BP5_R2_OL03_MA02_USER_INFORMATION_APPROVAL_CHECKLIST.md)のI欄5項目回答済み/E・A・T20項目未チェックを変えず、Unknown・全体受付無効・telemetry保留を維持する。
+
+[同一端末VM候補の公式仕様比較draft-0.1](BEST_PRACTICE_BP5_R2_OL03_MA02_SAME_HOST_VM_OFFICIAL_COMPARISON.md)でUTM・Parallels Desktop・TartのV01〜V11に関する条件と未確認事項を整理した。D1の資料追加であり、固定構成の適合・製品採用・環境操作の承認ではない。試行監視/負の対照とprocess終了証拠は別途必要で、D2以降と停止状態を変更しない。

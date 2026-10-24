@@ -120,3 +120,5 @@ F04は重要な実施前確認点である。show-keysが秘密入力をpublic�
 [利用者提示情報・操作別承認チェックリストdraft-0.2](BEST_PRACTICE_BP5_R2_OL03_MA02_USER_INFORMATION_APPROVAL_CHECKLIST.md)にI01〜I05の利用者回答を記録した。既存信頼元/台帳/独立確認関係者はなし、既存の専用環境もなし。同じ端末のVMは候補だがソフト/隔離能力は未定/不明。操作承認/鍵信頼判断は利用者本人、証拠保管は非公開local/本人のみ/保持未定という方針。I欄のチェックは回答受領のみで、証拠・操作・鍵信頼のE/A/T欄は未チェック、全操作未承認のまま。保存/記入/コミットだけでは実行許可・鍵承認・Unknown解除にならない。
 
 [信頼元なし時の選択肢・同一端末VM条件draft-0.1](BEST_PRACTICE_BP5_R2_OL03_MA02_NO_TRUST_SAME_HOST_VM_OPTIONS.md)で回答後の不足と選択肢を整理した。同一端末VMは実行隔離の候補に限り、検証器の由来やRust鍵の独立確認を代替しない。既存の20ケース計画の開始条件を緩めず、環境操作/実行/信頼承認は未実施のまま維持する。
+
+[同一端末VM候補の公式仕様比較draft-0.1](BEST_PRACTICE_BP5_R2_OL03_MA02_SAME_HOST_VM_OFFICIAL_COMPARISON.md)に3候補のV01〜V11の条件・未確認事項を記録した。VM管理仕様だけで禁止操作の試行監視・負の対照・guest processの終了確認を満たしたとはしない。製品/固定版/構成は未選定、20ケース未実施、Unknown・全体受付無効・telemetry保留は不変。
