@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { extractReviewXml, sha256, XML_LIMITS } from '../../src/review/update-xml.js';
 import { reviewUpdateSetPayload } from '../../src/review/payload-review.js';
 import { reviewResultSchema } from '../../src/review/result-schema.js';
@@ -6,6 +6,9 @@ import { spawnSync } from 'node:child_process';
 import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+
+// CLI-boundary cases spawn real tsx scripts, which can take seconds under parallel suite load.
+vi.setConfig({ testTimeout: 30_000 });
 
 const sysId = '1'.repeat(32);
 function payload(script: string, options: { table?: string; when?: string; extra?: string; action?: string } = {}) {

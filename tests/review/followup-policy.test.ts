@@ -1,9 +1,12 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { createHash } from 'node:crypto';
 import { spawnSync } from 'node:child_process';
 import { evaluateFollowupPolicy, followupPolicySetSchema } from '../../src/review/evaluation-followups-policy.js';
 import { reviewUpdateSetPayloadContextual as reviewUpdateSetPayload } from '../../src/review/payload-review.js';
+
+// CLI-boundary cases spawn real tsx scripts, which can take seconds under parallel suite load.
+vi.setConfig({ testTimeout: 30_000 });
 
 const bytes = readFileSync(new URL('./evaluation/followups-policy-0.2.json', import.meta.url));
 const fixture = JSON.parse(bytes.toString('utf8'));
