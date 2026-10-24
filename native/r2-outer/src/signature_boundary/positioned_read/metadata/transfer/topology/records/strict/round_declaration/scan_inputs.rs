@@ -195,6 +195,9 @@ impl<'i, 'd, 's, 'r> ScanInputs<'i, 'd, 's, 'r> {
             entry: None,
         })
     }
+    // Test-only: linear scan of all declared entries per call. The production collector uses
+    // ChildGroups/canonical lookups; calling this per parent would reintroduce O(N*T) work.
+    #[cfg(test)]
     pub(in super::super) fn directory<'p>(
         &'p self,
         path: &str,
@@ -269,6 +272,8 @@ impl<'p, 'i, 'd, 's, 'r> ParentInput<'p, 'i, 'd, 's, 'r> {
     pub(in super::super) fn path(&self) -> &str {
         self.entry.map_or("", closure::Entry::path)
     }
+    // Test-only: two full passes over all entries per parent (see directory above).
+    #[cfg(test)]
     pub(in super::super) fn expected<'c>(
         &'c self,
         current: &RoundScope<'_>,
