@@ -8,6 +8,10 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 ## [Unreleased]
 
+### Added
+
+- Explicit Client-Script-only `AU-CL-002` review of bounded server lookups: `g_form.getReference` and client `GlideRecord` `get`/`query` on locally constructed receivers. Typed necessity follow-up keeps call frequency, needed columns, existing client data and UI constraints as human checks; candidates are not judged unnecessary, and no automatic removal or replacement is offered. Mixed, rebound or escaping receivers and dynamic members stay unresolved and prevent `analysis_complete`. Defaults/budgets stay unchanged; ruleset `bp3-0.10` only when requested; synthetic verification only.
+
 ## [1.16.0] — 2026-10-25
 
 Adds the read-only best-practice review PoC and its explicit opt-in rules. The review is partial by design: it reports unverified, low-confidence candidates for a bounded subset of an Update Set, and zero or partial findings never establish safety or compliance. Includes the 1.15.1 security fixes.
