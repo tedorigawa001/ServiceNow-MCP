@@ -1,12 +1,14 @@
 # BP-5 R-2 OL-03 MA-02：公式manifest/archive真正性・installed artifact照合手順
 
-Version: draft-0.1 / Date: 2026-10-24 / Source baseline: `3313c0d` / Status: 未実施の手順案。trust root・鍵・検証環境・上限は未承認
+Version: draft-0.2 / Date: 2026-10-24 / Source baseline: `304681d` / Status: trust root確認経路調査を参照追加。検証手順未実施、鍵・検証環境・上限は未承認
 
 ## 1. 目的・今回の非実施範囲
 
 [A案調査記録](BEST_PRACTICE_BP5_R2_OL03_MA02_VEC_SOURCE_ARTIFACT_REVIEW.md) §4〜§5の不足を埋めるための将来手順を設計する。「署名された公式配布情報→archiveの圧縮bytes→member→installed file」を順に結び、各段階の成功と対象build/layoutの承認を分離する。
 
 今回行ったのは公式の文書ページの参照とMD更新だけである。対象manifest/署名/鍵/archiveの新規取得・署名検証・展開・member照合は実施していない。archiveを取得/展開する以下の手順は**別途承認後に実施する案**で、実行用スクリプトではない。
+
+上記はdraft-0.1作成時点の非実施記録である。後続の[trust root確認経路調査draft-0.1](BEST_PRACTICE_BP5_R2_OL03_MA02_TRUST_ROOT_INVESTIGATION.md)では対象署名/公式公開鍵blobのメモリ内参照で存在・hashを確認し、公式な確認経路を整理した。鍵承認/import・暗号検証・独立fingerprint確認・archive取得/展開は行っておらず、G0完了や本手順の実施成功ではない。
 
 5項目Unknown、全体受付無効、telemetry保留、APPROVED_REGISTRY=None、通常v2 Unavailable/gate92、DER/absence停止を維持する。実装・本番cap投入・完成parts発行・通常strict差替え・OS接続・実機操作・token発行・設定変更・permit発行は行わない。既存toolchainの修復・更新・上書きも対象外。
 
@@ -102,7 +104,7 @@ stdのmember一致が得られてもcompiler/cargo/linker/SDK、features/cfg・�
 
 ## 8. 未確認・実施前の承認チェックリスト
 
-- 対象1.98.1 manifestの`.asc`の存在、署名者・primary/subkey fingerprint、現在の失効/期限/algorithmと信頼経路。
+- 対象1.98.1 manifestの`.asc`候補blobの存在は後続調査で確認済み。署名者・primary/subkey fingerprint、現在の失効/期限/algorithmと独立した信頼経路は未確認。
 - 使用するGnuPG等の検証器版/由来・完全なstatus判定仕様、鍵ring/検証環境/制限の承認。
 - 既存ローカルmanifest全体の差分原因。対象キー一致で差分を説明済みにしない。
 - 実archive形式・member layout・installer manifestの固定版/配置写像・安全な解釈subsetと上限適合性。
