@@ -1,6 +1,6 @@
 # BP-5 R-2 OL-03 MA-02：固定module実確保モデル・保護必要量projection詳細設計
 
-Version: draft-0.5 / Date: 2026-10-24 / Source baseline: `b23c3ef` / Status: MA-02A/Bの合成実装と実型compile-fail寿命試験を確認。実layout根拠・更新方針の設計案を追加、実layout・完全管理必要量・運用接続未対応、5項目Unknown
+Version: draft-0.6 / Date: 2026-10-24 / Source baseline: `a717fb8` / Status: MA-02A/Bの合成実装と実型compile-fail寿命試験を確認。A案source・配布artifact調査を参照追加、実layout・完全管理必要量・運用接続未対応、5項目Unknown
 
 ## 1. 範囲・参照した状態
 
@@ -54,7 +54,9 @@ Vecへの対応は次のいずれかを、後続で証拠付き承認するま�
 
 実行後capacity検査だけでの代替、過剰確保を任意marginで吸収、Rc payloadを制御領域なしの0 byteへ換算する方式は採らない。対象ABIのlayoutが不明ならKnownへ進めない。
 
-[実layout根拠・build固定・更新方針draft-0.1](BEST_PRACTICE_BP5_R2_OL03_MA02_LAYOUT_EVIDENCE_DESIGN.md)で、公式API保証と固定commit実装の区別、toolchain/std/artifact/ABIの証拠包、現行Vecモデルと専用確保adapterの比較、更新・失効・再検証条件を具体化した。方式選択・production tuple・実layout/issuerは未承認で、現行Unmodeled/Unknownを変更しない。
+[実layout根拠・build固定・更新方針draft-0.2](BEST_PRACTICE_BP5_R2_OL03_MA02_LAYOUT_EVIDENCE_DESIGN.md)で、公式API保証と固定commit実装の区別、toolchain/std/artifact/ABIの証拠包、現行Vecモデルと専用確保adapterの比較、更新・失効・再検証条件を具体化した。方式選択・production tuple・実layout/issuerは未承認で、現行Unmodeled/Unknownを変更しない。
+
+[A案の固定source・標準library配布artifact調査](BEST_PRACTICE_BP5_R2_OL03_MA02_VEC_SOURCE_ARTIFACT_REVIEW.md)で、source/docsのbyte一致と配布metadataの対象キー一致、countsのsource条件付き要求layoutと未確認のartifact/build対応を分離した。数値が要素payloadと一致しても、現行projectionをlayout証拠として使わず、Unmodeled/5項目Unknownを維持する。
 
 ## 5. 保護projectionの型・借用・claim案
 

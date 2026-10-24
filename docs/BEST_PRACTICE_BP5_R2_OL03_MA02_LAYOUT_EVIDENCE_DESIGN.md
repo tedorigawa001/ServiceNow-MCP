@@ -1,6 +1,6 @@
 # BP-5 R-2 OL-03 MA-02：実layoutの根拠・build固定・更新方針
 
-Version: draft-0.1 / Date: 2026-10-24 / Source baseline: `b23c3ef` / Status: 設計案、方式・実layout・production build未承認
+Version: draft-0.2 / Date: 2026-10-24 / Source baseline: `a717fb8` / Status: A案のsource/配布metadata調査を参照追加。方式・実layout・production build未承認
 
 ## 1. 範囲と停止条件
 
@@ -20,6 +20,8 @@ Version: draft-0.1 / Date: 2026-10-24 / Source baseline: `b23c3ef` / Status: 設
 | 対象module | countsは空Vecへtry_reserve_exact(n)後にn個push。keysはgroup1＋nonce3のRc生成。inline mapは固定scalarを保持 | Vec容量・Rc制御block・親owner全体の要求layoutの認証 |
 
 これらは開発時の観測で、production tupleや承認済み値として登録しない。全bodyの実装経路・allocatorまでの照合は未完了で、実layoutはUnmodeledのままとする。
+
+後続の[A案source・artifact対応調査draft-0.1](BEST_PRACTICE_BP5_R2_OL03_MA02_VEC_SOURCE_ARTIFACT_REVIEW.md)では、既存rust-docs内の3ソース表示と公式固定commit本文のbyte一致、公式/ローカル配布metadataの対象キー一致を確認した。source条件付きでcountsの要求経路を導出したが、archiveとinstalled artifact・対象buildの対応は未確認である。上表のrust-src未導入と、rust-docsにソース表示が存在することは両立する。後続調査を実layout認証へ昇格しない。
 
 ## 3. 根拠台帳：公開保証と実装依存を分離する
 
