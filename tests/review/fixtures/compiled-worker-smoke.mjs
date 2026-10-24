@@ -6,12 +6,13 @@ import { reviewBoundedUpdateSet } from '../../../dist/review/update-set-adapter.
 const parent = 'a'.repeat(32), id = '1'.repeat(32);
 const version = { sys_updated_on: '2026-10-17 00:00:00', sys_mod_count: '0' };
 const row = { sys_id: id, update_set: parent, name: `sys_script_${id}`, action: 'INSERT_OR_UPDATE', ...version };
+let abortMode = false;
 const fetcher = async url => {
   const u = new URL(String(url));
   const result = u.pathname.includes('/sys_update_set/') ? { sys_id: parent, state: 'in progress', application: 'global', ...version }
     : u.pathname.endsWith('/sys_cluster_state') ? [{ build_name: 'Australia' }]
       : u.searchParams.get('sysparm_fields').includes('payload') ? [{ ...row,
-        payload: `<record_update table="sys_script"><sys_script action="INSERT_OR_UPDATE"><sys_id>${id}</sys_id><when>after</when><collection>global</collection><script>current.update(); var gr = new GlideRecord('incident'); gr.addQuery('x', 'LIKE', 'PACK_PRIVATE_QUERY');</script></sys_script></record_update>` }]
+        payload: `<record_update table="sys_script"><sys_script action="INSERT_OR_UPDATE"><sys_id>${id}</sys_id><when>${abortMode ? 'before' : 'after'}</when><collection>global</collection><script>${abortMode ? 'current.setAbortAction(true); gs.addErrorMessage("PACK_PRIVATE_ABORT");' : "current.update(); var gr = new GlideRecord('incident'); gr.addQuery('x', 'LIKE', 'PACK_PRIVATE_QUERY');"}</script></sys_script></record_update>` }]
         : [{ ...row, type: 'Business Rule' }];
   return new Response(JSON.stringify({ result }));
 };
@@ -42,4 +43,12 @@ assert.equal(binding.result.counts.findings, 1);
 assert.equal(binding.result.versions.ruleset, 'bp3-0.6');
 assert(binding.result.assets[0].result.findings[0].required_follow_up.includes('shared_binding_intent_review'));
 assert(binding.result.assets[0].result.limitations.includes('br_global_table_shared_context'));
+abortMode = true;
+const abort = await reviewBoundedUpdateSet(selected, { update_set_sys_id: parent, selection_mode: 'review_targets',
+  requested_rule_ids: ['AU-BR-005'] }, { fetch: fetcher });
+assert.equal(abort.isError, false);
+assert.equal(abort.result.counts.findings, 1);
+assert.equal(abort.result.versions.ruleset, 'bp3-0.7');
+assert(abort.result.assets[0].result.findings[0].required_follow_up.includes('post_abort_processing_review'));
+assert(!JSON.stringify(abort).includes('PACK_PRIVATE_ABORT'));
 console.log('Compiled worker default entry: analysis + aggregation PASS');

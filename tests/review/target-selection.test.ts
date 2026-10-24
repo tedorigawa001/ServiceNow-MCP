@@ -21,7 +21,7 @@ type Row = ReturnType<typeof row>;
 const json = (result: unknown) => new Response(JSON.stringify({ result }));
 const client = () => new ServiceNowClient({ instanceUrl: 'https://example.service-now.com', authMode: 'per-user',
   perUserBearerToken: 'synthetic-selection-token', oauth: { clientId: '', clientSecret: '' } });
-function fixture(rows: Row[], script = 'current.update(); /* PRIVATE_SELECTION_BODY */', collection?: string) {
+function fixture(rows: Row[], script = 'current.update(); /* PRIVATE_SELECTION_BODY */', collection?: string, when = 'after') {
   const fetcher = vi.fn<typeof fetch>(async url => {
     const u = new URL(String(url));
     if (u.pathname.includes('/sys_update_set/')) return json({ sys_id: parent, state: 'in progress', application: 'global', ...version });
@@ -31,7 +31,7 @@ function fixture(rows: Row[], script = 'current.update(); /* PRIVATE_SELECTION_B
       const r = rows.find(r => query.startsWith(`sys_id=${r.sys_id}^`))!;
       const table = r.name.slice(0, -33);
       const detail: Record<string, unknown> = { ...r }; delete detail.type;
-      return json([{ ...detail, payload: `<record_update table="${table}"><${table} action="INSERT_OR_UPDATE"><sys_id>${r.name.slice(-32)}</sys_id><sys_scope>global</sys_scope><when>after</when>${collection === undefined ? '' : `<collection>${collection}</collection>`}<script><![CDATA[${script}]]></script></${table}></record_update>` }]);
+      return json([{ ...detail, payload: `<record_update table="${table}"><${table} action="INSERT_OR_UPDATE"><sys_id>${r.name.slice(-32)}</sys_id><sys_scope>global</sys_scope><when>${when}</when>${collection === undefined ? '' : `<collection>${collection}</collection>`}<script><![CDATA[${script}]]></script></${table}></record_update>` }]);
     }
     // Synthetic server boundary: apply the documented fixed AND predicates.
     const selected = rows.filter(r => query.split('^').every(term => {
@@ -58,6 +58,34 @@ afterEach(async () => {
 });
 const run = (rows: Row[], extra: Record<string, unknown> = {}, fetcher = fixture(rows)) => reviewBoundedUpdateSet(client(),
   { update_set_sys_id: parent, selection_mode: 'review_targets', ...extra }, { fetch: fetcher, workerFactory: sourceWorkerFactory });
+it('explicit BR-005 reaches before-only post-abort review with strict intent context through the worker', async () => {
+  const rows = [row(1), row(2, 'sys_script_client')];
+  const out = await run(rows, { requested_rule_ids: ['AU-BR-005'] },
+    fixture(rows, 'current.setAbortAction(true); gs.addErrorMessage("PRIVATE_ABORT");', undefined, 'before'));
+  expect(out.isError).toBe(false);
+  if (out.isError) throw Error(out.error.code);
+  expect(out.result).toMatchObject({ versions: { ruleset: 'bp3-0.7' },
+    selection: { requested_asset_types: ['business_rule'] }, counts: { reviewed: 1, findings: 1 } });
+  expect(aggregateReviewV3Schema.safeParse(out.result).success).toBe(true);
+  expect(JSON.stringify(out)).not.toMatch(/PRIVATE_ABORT|synthetic-selection-token/);
+  const forged = structuredClone(out.result);
+  const asset = forged.assets[0];
+  if (asset.state !== 'reviewed') throw Error('Expected abort candidate');
+  expect(asset.result.findings[0].required_follow_up).toContain('post_abort_processing_review');
+  asset.result.findings[0].required_follow_up = ['source_approval'];
+  expect(aggregateReviewV3Schema.safeParse(forged).success).toBe(false);
+});
+it('BR-005 unresolved order cannot be promoted to complete analysis', async () => {
+  const rows = [row(1)];
+  const out = await run(rows, { requested_rule_ids: ['AU-BR-005'] },
+    fixture(rows, 'current.setAbortAction(true); try { gs.info("x"); } finally {}', undefined, 'before'));
+  expect(out.isError).toBe(false);
+  if (out.isError) throw Error(out.error.code);
+  expect(out.result.coverage.analysis_complete).toBe(false);
+  expect(aggregateReviewV3Schema.safeParse(out.result).success).toBe(true);
+  const forged = structuredClone(out.result); forged.coverage.analysis_complete = true;
+  expect(aggregateReviewV3Schema.safeParse(forged).success).toBe(false);
+});
 it('explicit BR-004 reaches BR bindings with typed intent review through the worker', async () => {
   const rows = [row(1), row(2, 'sys_script_client'), row(3, 'sys_script_include')];
   const out = await run(rows, { requested_rule_ids: ['AU-BR-004'] }, fixture(rows, 'var PRIVATE_SHARED = 1;', 'global'));

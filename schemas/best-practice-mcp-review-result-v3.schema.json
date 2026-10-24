@@ -57,7 +57,8 @@
           "enum": [
             "bp3-0.4",
             "bp3-0.5",
-            "bp3-0.6"
+            "bp3-0.6",
+            "bp3-0.7"
           ]
         },
         "asset_schema": {
@@ -371,7 +372,7 @@
       "properties": {
         "requested_rule_ids": {
           "minItems": 1,
-          "maxItems": 5,
+          "maxItems": 6,
           "type": "array",
           "items": {
             "type": "string",
@@ -380,12 +381,13 @@
               "AU-BR-002",
               "AU-CL-004",
               "AU-QRY-001",
-              "AU-BR-004"
+              "AU-BR-004",
+              "AU-BR-005"
             ]
           }
         },
         "skipped_rules": {
-          "maxItems": 5,
+          "maxItems": 6,
           "type": "array",
           "items": {
             "type": "object",
@@ -397,7 +399,8 @@
                   "AU-BR-002",
                   "AU-CL-004",
                   "AU-QRY-001",
-                  "AU-BR-004"
+                  "AU-BR-004",
+                  "AU-BR-005"
                 ]
               },
               "reason": {
@@ -459,7 +462,7 @@
               },
               "applicable_rule_ids": {
                 "minItems": 1,
-                "maxItems": 5,
+                "maxItems": 6,
                 "type": "array",
                 "items": {
                   "type": "string",
@@ -468,7 +471,8 @@
                     "AU-BR-002",
                     "AU-CL-004",
                     "AU-QRY-001",
-                    "AU-BR-004"
+                    "AU-BR-004",
+                    "AU-BR-005"
                   ]
                 }
               },
@@ -492,7 +496,8 @@
                     "enum": [
                       "bp3-0.4",
                       "bp3-0.5",
-                      "bp3-0.6"
+                      "bp3-0.6",
+                      "bp3-0.7"
                     ]
                   },
                   "reviewed_at": {
@@ -837,7 +842,7 @@
                     "properties": {
                       "requested_rule_ids": {
                         "minItems": 1,
-                        "maxItems": 5,
+                        "maxItems": 6,
                         "type": "array",
                         "items": {
                           "type": "string",
@@ -846,12 +851,13 @@
                             "AU-BR-002",
                             "AU-CL-004",
                             "AU-QRY-001",
-                            "AU-BR-004"
+                            "AU-BR-004",
+                            "AU-BR-005"
                           ]
                         }
                       },
                       "evaluated_rule_ids": {
-                        "maxItems": 5,
+                        "maxItems": 6,
                         "type": "array",
                         "items": {
                           "type": "string",
@@ -860,12 +866,13 @@
                             "AU-BR-002",
                             "AU-CL-004",
                             "AU-QRY-001",
-                            "AU-BR-004"
+                            "AU-BR-004",
+                            "AU-BR-005"
                           ]
                         }
                       },
                       "skipped_rules": {
-                        "maxItems": 5,
+                        "maxItems": 6,
                         "type": "array",
                         "items": {
                           "type": "object",
@@ -877,7 +884,8 @@
                                 "AU-BR-002",
                                 "AU-CL-004",
                                 "AU-QRY-001",
-                                "AU-BR-004"
+                                "AU-BR-004",
+                                "AU-BR-005"
                               ]
                             },
                             "reason": {
@@ -929,7 +937,8 @@
                             "AU-BR-002",
                             "AU-CL-004",
                             "AU-QRY-001",
-                            "AU-BR-004"
+                            "AU-BR-004",
+                            "AU-BR-005"
                           ]
                         },
                         "category": {
@@ -1001,7 +1010,8 @@
                               "workflow_suppression_review",
                               "async_dependency_review",
                               "synchronous_ajax_review",
-                              "shared_binding_intent_review"
+                              "shared_binding_intent_review",
+                              "post_abort_processing_review"
                             ]
                           }
                         },

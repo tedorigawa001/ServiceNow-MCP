@@ -8,9 +8,9 @@ import { reviewUpdateSetPayloadLegacy } from '../../src/review/payload-review.js
 import { readFileSync } from 'node:fs';
 
 describe('shared followup vocabulary', () => {
-  it('defines all seven codes once with meaning, attachment context and limits', () => {
-    expect(FOLLOW_UP_CODES).toHaveLength(7);
-    expect(new Set(FOLLOW_UP_CODES).size).toBe(7);
+  it('defines all eight codes once with meaning, attachment context and limits', () => {
+    expect(FOLLOW_UP_CODES).toHaveLength(8);
+    expect(new Set(FOLLOW_UP_CODES).size).toBe(8);
     expect(Object.keys(FOLLOW_UP_DEFINITIONS).sort()).toEqual([...FOLLOW_UP_CODES].sort());
     for (const code of FOLLOW_UP_CODES) {
       expect(followUpCodeSchema.safeParse(code).success).toBe(true);

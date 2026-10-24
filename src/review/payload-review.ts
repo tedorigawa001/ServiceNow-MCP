@@ -94,6 +94,11 @@ function reviewPayload(raw: unknown, mode: Profile, bp5 = false): Outcome<Review
   const supported = new Set(['AU-BR-001', 'AU-BR-002', 'AU-CL-004']);
   const queryEnabled = mode === 'constant' && assetType === 'business_rule' && input.requested_rule_ids.includes('AU-QRY-001');
   const bindingsEnabled = mode === 'constant' && assetType === 'business_rule' && input.requested_rule_ids.includes('AU-BR-004');
+  const abortEnabled = mode === 'constant' && assetType === 'business_rule' && input.requested_rule_ids.includes('AU-BR-005');
+  if (abortEnabled) {
+    supported.add('AU-BR-005');
+    result.limitations.push('abort_before_br_only', 'abort_bounded_order_analysis', 'abort_other_business_rules_not_analyzed');
+  }
   if (bindingsEnabled) supported.add('AU-BR-004');
   if (queryEnabled) supported.add('AU-QRY-001');
   if (queryEnabled) {
@@ -104,6 +109,7 @@ function reviewPayload(raw: unknown, mode: Profile, bp5 = false): Outcome<Review
     result.ruleset_version = 'bp3-0.6';
     result.limitations.push('br_declared_variables_only', 'br_cross_asset_collisions_not_verified');
   }
+  if (abortEnabled) result.ruleset_version = 'bp3-0.7';
   // Normalize persisted BR choice values only on the current engine path.
   // Keep the historical engine's context contract unchanged for frozen baselines.
   const when = mode === 'legacy' ? asset.when
@@ -113,7 +119,8 @@ function reviewPayload(raw: unknown, mode: Profile, bp5 = false): Outcome<Review
   for (const rule_id of input.requested_rule_ids) {
     const reason = releaseMatch !== 'matched' ? releaseMatch === 'unknown' ? 'release_unknown' : 'release_mismatch'
       : !supported.has(rule_id) ? 'unsupported'
-        : rule_id === 'AU-BR-002' && !['before', 'after', 'async', 'display'].includes(when ?? '') ? 'missing_context' : null;
+        : rule_id === 'AU-BR-002' && !['before', 'after', 'async', 'display'].includes(when ?? '') ? 'missing_context'
+          : rule_id === 'AU-BR-005' && when !== 'before' ? 'missing_context' : null;
     if (reason) result.coverage.skipped_rules.push({ rule_id, reason });
     else result.coverage.evaluated_rule_ids.push(rule_id);
   }
@@ -122,6 +129,7 @@ function reviewPayload(raw: unknown, mode: Profile, bp5 = false): Outcome<Review
     let ast: Ast;
     try { ast = parse(asset.code, { ecmaVersion: 2022, sourceType: 'script', locations: true }) as unknown as Ast; }
     catch { return reject('javascript_parse_failed'); }
+    const reportedAborts = new WeakSet<Ast>();
     const appendFinding = (entry: Ast, ruleId: string, context?: FollowUpContext) => {
       if (!result.coverage.evaluated_rule_ids.includes(ruleId)) return;
       if ((mode === 'contextual' || mode === 'constant') && context?.kind === 'workflow_suppression'
@@ -133,7 +141,8 @@ function reviewPayload(raw: unknown, mode: Profile, bp5 = false): Outcome<Review
       result.findings.push({ rule_id: ruleId, category: ruleId === 'AU-BR-004' ? 'maintainability' : 'correctness', severity: 'info', confidence: 'low',
         verification_status: 'candidate', field: 'script', line_start: entry.loc.start.line, line_end: entry.loc.end.line,
         issue: rule.title, impact: '構文上の候補。業務影響・到達可能性は未確認。', applicability: rule.applicability,
-        recommendation: ruleId === 'AU-BR-004' ? '関数内へ閉じる可否と、意図した共有・利用側との互換性・名前衝突を確認する。共有文脈でも自動除外や自動ラップはしない。'
+        recommendation: ruleId === 'AU-BR-005' ? '中止後の処理が必要な後処理か、副作用を伴うかを確認する。継続を違反やreturn不足と断定せず、自動return追加はしない。'
+          : ruleId === 'AU-BR-004' ? '関数内へ閉じる可否と、意図した共有・利用側との互換性・名前衝突を確認する。共有文脈でも自動除外や自動ラップはしない。'
           : '根拠節の適用条件・例外と、実行経路・受信オブジェクト・変数の束縛を確認する。',
         required_follow_up: mode === 'contextual' || mode === 'constant' ? requiredFollowUp(ruleId, context) : [...COMMON_FOLLOW_UP_CODES],
         sources: [{ source_id: rule.source_id, title: source.title, url: source.url, section: rule.section,
@@ -157,6 +166,13 @@ function reviewPayload(raw: unknown, mode: Profile, bp5 = false): Outcome<Review
             if (result.findings.length > 100) throw new ExtractionError('finding_limit');
           }, dynamic: () => {
             if (!result.limitations.includes('br_dynamic_scope_unresolved')) result.limitations.push('br_dynamic_scope_unresolved');
+          } } } : {}),
+          ...(abortEnabled && when === 'before' ? { abort: { unresolved: () => {
+            if (!result.limitations.includes('abort_flow_unresolved')) result.limitations.push('abort_flow_unresolved');
+          }, effect: (entry: Ast, effect: string) => {
+            if (!result.limitations.includes(effect)) result.limitations.push(effect);
+            if (!reportedAborts.has(entry)) { reportedAborts.add(entry); appendFinding(entry, 'AU-BR-005'); }
+            if (result.findings.length > 100) throw new ExtractionError('finding_limit');
           } } } : {}) });
       } catch (error) {
         return reject(error instanceof ExtractionError ? error.reason : error instanceof AnalysisLimitError ? 'analysis_limit' : 'analysis_failed');
@@ -191,7 +207,8 @@ function reviewPayload(raw: unknown, mode: Profile, bp5 = false): Outcome<Review
     return validated.success ? { poc_only: true, status: 'reviewed', result: validated.data } : reject('invalid_result_context');
   }
   if (!result.coverage.skipped_rules.length && !result.limitations.includes('query_like_unresolved')
-    && !result.limitations.includes('br_table_context_unknown') && !result.limitations.includes('br_dynamic_scope_unresolved')) result.review_status = 'completed';
+    && !result.limitations.includes('br_table_context_unknown') && !result.limitations.includes('br_dynamic_scope_unresolved')
+    && !result.limitations.includes('abort_flow_unresolved')) result.review_status = 'completed';
   const validated = reviewResultSchema.safeParse(result);
   return validated.success ? { poc_only: true, status: 'reviewed', result: validated.data } : reject('invalid_result_context');
 }

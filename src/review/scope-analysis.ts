@@ -1,6 +1,7 @@
 /** Bounded syntactic analysis, NOT an interpreter, call graph or general JavaScript dataflow engine. */
 import type { FollowUpContext } from './follow-up-catalog.js';
 import { constantValue, UNKNOWN_CONSTANT, type ConstantValue } from './constant-value.js';
+import { analyzeAbortFlow, type AbortCall } from './abort-flow.js';
 export type AstNode = { type: string; start: number; end: number; loc: { start: { line: number }; end: { line: number } }; [key: string]: unknown };
 export const isAstNode = (v: unknown): v is AstNode => !!v && typeof v === 'object' && 'type' in v;
 export function staticMemberName(value: unknown): string | null {
@@ -27,7 +28,8 @@ const recordMethods = new Set(['update', 'getValue', 'getDisplayValue', 'setValu
 
 export function analyzeScopedCandidates(ast: AstNode, when: string | null, emit: (entry: AstNode, rule: string, context?: FollowUpContext) => void,
   options: { allowDeclaredEntry: boolean; constants: boolean; query?: { unresolved: () => void };
-    bindings?: { declared: (entry: AstNode) => void; dynamic: () => void } } = { allowDeclaredEntry: false, constants: false }): void {
+    bindings?: { declared: (entry: AstNode) => void; dynamic: () => void };
+    abort?: { effect: (entry: AstNode, effect: string) => void; unresolved: () => void } } = { allowDeclaredEntry: false, constants: false }): void {
   const root: Scope = { functionId: 0, functionScope: true, bindings: new Map() };
   const scopes = new WeakMap<AstNode, Scope>();
   const functionScopes = new WeakMap<AstNode, Scope>();
@@ -41,6 +43,8 @@ export function analyzeScopedCandidates(ast: AstNode, when: string | null, emit:
   let queryUnsafe = false;
   const queryRebound = new Set<string>(), queryCandidates: AstNode[] = [];
   const scriptBindings = new WeakSet<AstNode>();
+  const abortCalls = new WeakMap<AstNode, AbortCall>();
+  let abortUnsafe = false;
   function budget(depth: number) {
     if (++visits > 100000 || depth > 256) throw new AnalysisLimitError('analysis_limit');
   }
@@ -117,6 +121,14 @@ export function analyzeScopedCandidates(ast: AstNode, when: string | null, emit:
       if (entry.type === 'ClassExpression' || entry.type === 'ClassDeclaration') declare(entry.id, scope);
     }
     scopes.set(entry, scope);
+    if (options.abort) {
+      const write = entry.type === 'AssignmentExpression' ? entry.left
+        : entry.type === 'UpdateExpression' || entry.type === 'UnaryExpression' && entry.operator === 'delete' ? entry.argument : null;
+      if (entry.type === 'WithStatement' || entry.type === 'CallExpression' && identifier(entry.callee, 'eval')
+        || isAstNode(write) && write.type === 'MemberExpression' && staticMemberName(write) === 'setAbortAction') {
+        abortUnsafe = true; options.abort.unresolved();
+      }
+    }
     if (options.bindings) {
       if (entry.type === 'VariableDeclaration' && scope.functionId === 0 && (entry.kind === 'var' || scope === root))
         for (const declaration of entry.declarations as AstNode[]) scriptBindings.add(declaration);
@@ -209,7 +221,7 @@ export function analyzeScopedCandidates(ast: AstNode, when: string | null, emit:
   function read(scope: Scope, name: string): Origin {
     const binding = find(scope, name);
     if (!binding) return origin(name === 'current' ? C : name === 'previous' ? P : name === 'GlideAjax' ? AJAX_CTOR
-      : options.query && ['GlideRecord', 'GlideRecordSecure'].includes(name) ? QUERY_CTOR : UNKNOWN);
+      : (options.query || options.abort) && ['GlideRecord', 'GlideRecordSecure'].includes(name) ? QUERY_CTOR : UNKNOWN);
     if (binding.functionId !== scope.functionId) {
       // Direct lexical reference to the declared platform entry, not propagation of a user alias/call.
       if (binding.entryFlags) return origin(binding.entryFlags | UNKNOWN);
@@ -318,6 +330,13 @@ export function analyzeScopedCandidates(ast: AstNode, when: string | null, emit:
           : calleeValue.flags === QUERY_CTOR ? QUERY_RECORD : calleeValue.flags & UNKNOWN ? UNKNOWN : LOCAL);
         if (isAstNode(entry.callee) && entry.callee.type === 'MemberExpression') {
           const receiver = receivers.get(entry.callee) ?? unknown(), key = memberKey(entry.callee);
+          if (options.abort && key === null && receiver.flags & C) options.abort.unresolved();
+          if (options.abort && key === 'setAbortAction') {
+            const args = entry.arguments as AstNode[];
+            const value = args.length === 1 ? primitive(args[0]) : UNKNOWN_CONSTANT;
+            abortCalls.set(entry, { receiver: receiver.flags === C && !abortUnsafe ? 'current' : receiver.flags & (C | UNKNOWN) ? 'unknown' : 'other',
+              enabled: typeof value === 'boolean' ? value : null });
+          }
           if (options.query && key === null && receiver.flags & QUERY_RECORD) options.query.unresolved();
           if (options.query && key === 'addQuery' && (entry.arguments as AstNode[]).some(a => a.type === 'SpreadElement')) options.query.unresolved();
           if (options.query && key === 'addQuery' && (entry.arguments as AstNode[]).length === 3) {
@@ -368,6 +387,7 @@ export function analyzeScopedCandidates(ast: AstNode, when: string | null, emit:
     return !!value.properties && [...value.properties.values()].some(v => containsQueryRecord(v, seen, depth + 1));
   }
   walk(ast);
+  if (options.abort) analyzeAbortFlow(ast, abortCalls, budget, options.abort.effect, options.abort.unresolved);
   for (const candidate of queryCandidates) {
     if (queryUnsafe) options.query!.unresolved();
     else emit(candidate, 'AU-QRY-001');
