@@ -45,6 +45,14 @@ export function createSyntheticFixedSourceIssuer() {
     if(s.session!==i.session||s.permit!==i.permit)return fail(i,'evidence_binding_mismatch');
     return ok(true);
   }
+  // A fixture time inside the run interval and not before `notBefore`; no clock is read here.
+  function runTime(i:Issuer,raw:unknown,notBefore?:string):string|null{
+    const p=date.safeParse(raw);if(!p.success)return null;
+    const s=sessions.get(i.session)!,at=Date.parse(p.data),start=Date.parse(s.data.started_at);
+    return at<start||at>=start+s.data.deadline_ms||notBefore!==undefined&&at<Date.parse(notBefore)?null:p.data;
+  }
+  const notCollected=(phase:'initial'|'final',at:string):FixedSourceNormalized=>Object.freeze({source:'sys_db_object.current',
+    visibility_scope:'caller_acl',phase,observed_at:at,state:'unavailable',reason:'not_collected'});
   function normalize(name:string,phase:'initial'|'final',at:string,body:string|null,status:number):FixedSourceNormalized|'binding_error'{
     const header={source:'sys_db_object.current' as const,visibility_scope:'caller_acl' as const,phase,observed_at:at};
     const unavailable=(reason:Unavailable):FixedSourceNormalized=>Object.freeze({...header,state:'unavailable',reason});
@@ -101,7 +109,8 @@ export function createSyntheticFixedSourceIssuer() {
         if(i.tables.size>=8)return no('scope_evidence_limit');
         t={initialStarted:true,finalStarted:false,finalDone:false};i.tables.set(name,t);
       }else{
-        if(i.state!=='finalizing'||!t?.initial||t.finalStarted||Array.from(i.tables.keys())[i.cursor]!==name)return fail(i,'invalid_state');
+        // Only an available initial is re-read; an unavailable one ends through skipFinal without a GET.
+        if(i.state!=='finalizing'||t?.initial?.state!=='rows'||t.finalStarted||Array.from(i.tables.keys())[i.cursor]!==name)return fail(i,'invalid_state');
         t.finalStarted=true;
       }
       const ticket=handle<FixedSourceRead>();reads.set(ticket,{issuer,name,phase,used:false});i.pending=ticket;
@@ -128,9 +137,27 @@ export function createSyntheticFixedSourceIssuer() {
         const receipt=handle<FixedSourceObservation>();observations.set(receipt,{issuer,value});return ok(receipt);
       }catch{return fail(i,'evidence_invalid');}
     },
-    enterFinal(issuer:FixedSourceIssuer):Result<true>{
+    /** An initial GET still pending when the normal phase closes (e.g. aborted, so without an HTTP status) ends
+     * as not_collected at the explicit phase-close time; omitting that time keeps the pending read an error. */
+    enterFinal(issuer:FixedSourceIssuer,closedAt?:unknown):Result<true>{
       const i=issuers.get(issuer);if(!i)return no('evidence_binding_mismatch');const live=check(i);if(!live.ok)return live;
-      if(i.state!=='active'||i.pending)return fail(i,'invalid_state');i.state='finalizing';return ok(true);
+      if(i.state!=='active')return fail(i,'invalid_state');
+      if(i.pending){
+        if(closedAt===undefined)return fail(i,'invalid_state');
+        const at=runTime(i,closedAt);if(!at)return fail(i,'invalid_observation_time');
+        const read=reads.get(i.pending)!;read.used=true;i.pending=undefined;i.tables.get(read.name)!.initial=notCollected('initial',at);
+      }
+      i.state='finalizing';return ok(true);
+    },
+    /** Ends the next final in order without a GET when its initial is unavailable; never a stable observation. */
+    skipFinal(issuer:FixedSourceIssuer,name:unknown,at:unknown):Result<FixedSourceObservation>{
+      const i=issuers.get(issuer);if(!i)return no('evidence_binding_mismatch');const live=check(i);if(!live.ok)return live;
+      const t=typeof name==='string'?i.tables.get(name):undefined;
+      if(i.state!=='finalizing'||i.pending||!t||t.initial?.state!=='unavailable'||t.finalStarted
+        ||Array.from(i.tables.keys())[i.cursor]!==name)return fail(i,'invalid_state');
+      const time=runTime(i,at,t.initial.observed_at);if(!time)return fail(i,'invalid_observation_time');
+      t.finalStarted=true;t.finalDone=true;i.cursor++;
+      const receipt=handle<FixedSourceObservation>();observations.set(receipt,{issuer,value:notCollected('final',time)});return ok(receipt);
     },
     view(issuer:FixedSourceIssuer,receipt:FixedSourceObservation):Result<FixedSourceNormalized>{
       const i=issuers.get(issuer);if(!i)return no('evidence_binding_mismatch');const live=check(i);if(!live.ok)return live;

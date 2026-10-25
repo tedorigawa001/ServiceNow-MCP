@@ -118,6 +118,33 @@ it.each(['pending','final_before_phase','initial_after_final','wrong_final_order
   if(kind==='wrong_final_order'){initial(x);initial(x,frame([{...row(),name:'task'}]),'task');get(x.f.enterFinal(x.i));r=x.f.begin(x.i,'task','final');}
   expect(r).toEqual({ok:false,code:'invalid_state'});
 });
+it('ends an initial GET still pending at the normal phase close and refuses its late completion',()=>{
+  const x=setup();initial(x);const aborted=get(x.f.begin(x.i,'task','initial'));
+  get(x.f.enterFinal(x.i,'2026-10-25T00:00:50Z'));
+  expect(x.f.complete(x.i,aborted.ticket,frame([{...row(),name:'task'}]))).toEqual({ok:false,code:'invalid_state'});
+});
+it('does not re-read a not-collected initial in the final phase',()=>{
+  const x=setup();get(x.f.begin(x.i,'incident','initial'));
+  get(x.f.enterFinal(x.i,'2026-10-25T00:00:50Z'));
+  expect(x.f.begin(x.i,'incident','final')).toEqual({ok:false,code:'invalid_state'});
+});
+it('skips an unavailable initial final as not_collected and keeps the order to the next table',()=>{
+  const x=setup();initial(x,{...frame(),status:404,body_json:null,cleanup:'not_started'});
+  initial(x,frame([{...row(),name:'task'}]),'task');get(x.f.enterFinal(x.i));
+  const skipped=get(x.f.skipFinal(x.i,'incident','2026-10-25T00:00:51Z'));
+  expect(get(x.f.view(x.i,skipped))).toMatchObject({phase:'final',state:'unavailable',reason:'not_collected',observed_at:'2026-10-25T00:00:51Z'});
+  const b=get(x.f.begin(x.i,'task','final'));
+  expect(get(x.f.view(x.i,get(x.f.complete(x.i,b.ticket,frame([{...row(),name:'task'}],'final')))))).toMatchObject({state:'rows',phase:'final'});
+});
+it.each(['available','time_outside','time_before_initial','missing_close_time'] as const)('refuses an improper skip or close: %s',kind=>{
+  const x=setup();let r;
+  if(kind==='available'){initial(x);get(x.f.enterFinal(x.i));r=x.f.skipFinal(x.i,'incident','2026-10-25T00:00:51Z');
+    expect(r).toEqual({ok:false,code:'invalid_state'});return;}
+  if(kind==='missing_close_time'){get(x.f.begin(x.i,'incident','initial'));expect(x.f.enterFinal(x.i)).toEqual({ok:false,code:'invalid_state'});return;}
+  initial(x,{...frame(),status:404,body_json:null,cleanup:'not_started'});get(x.f.enterFinal(x.i));
+  r=x.f.skipFinal(x.i,'incident',kind==='time_outside'?'2026-10-25T00:01:00Z':'2026-10-25T00:00:01Z');
+  expect(r).toEqual({ok:false,code:'invalid_observation_time'});
+});
 it.each(['session','source','issuer'] as const)('invalidates old receipts at %s end',kind=>{
   const x=setup(),{receipt}=initial(x);if(kind==='session')x.f.closeSession(x.s);if(kind==='source')x.f.closeSource(x.source);if(kind==='issuer')x.f.closeIssuer(x.i);
   expect(x.f.view(x.i,receipt)).toEqual({ok:false,code:'closed'});expect(x.f.begin(x.i,'task','initial')).toEqual({ok:false,code:'closed'});
