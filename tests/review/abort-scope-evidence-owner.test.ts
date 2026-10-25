@@ -62,6 +62,17 @@ it('rejects forged receipts and preserves the first cancellation reason on close
   const x=setup();x.i.cancel(x.o);x.i.closeOwner(x.o);
   expect(x.i.reserve(x.o,x.j)).toEqual({ok:false,reason:'cancelled'});
 });
+it.each([
+  ['close_then_cancel','closed'],['exit_then_close','worker_exited'],
+  ['exit_then_session_close','worker_exited'],['exit_then_cancel','worker_exited'],
+] as const)('keeps the first terminal reason: %s',(kind,reason)=>{
+  const {i,s,w,j,o}=setup();
+  if(kind==='close_then_cancel'){i.closeOwner(o);i.cancel(o);}
+  if(kind==='exit_then_close'){i.exitWorker(w);i.closeOwner(o);i.closeSession(s);}
+  if(kind==='exit_then_session_close'){i.exitWorker(w);i.closeSession(s);i.cancel(o);}
+  if(kind==='exit_then_cancel'){i.exitWorker(w);i.cancel(o);i.closeOwner(o);}
+  expect(i.reserve(o,j)).toEqual({ok:false,reason});
+});
 it('bounds synthetic issued jobs at 100',()=>{
   const i=issuer(),s=i.issueSession(),w=unwrap(i.issueWorker(s));
   for(let n=0;n<100;n++)unwrap(i.issueJob(s,w,n.toString(16).padStart(32,'0')));

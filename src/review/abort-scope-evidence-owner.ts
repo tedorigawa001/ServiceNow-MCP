@@ -7,7 +7,8 @@ export type SyntheticScopeJob = Handle<'job'>;
 export type SyntheticScopeOwner = Handle<'owner'>;
 export type SyntheticScopeUse = Handle<'use'>;
 export type SyntheticScopeReceipt = Handle<'receipt'>;
-type Reason = 'invalid_session' | 'session_claimed' | 'binding_mismatch' | 'invalid_state' | 'limit' | 'cancelled' | 'worker_exited';
+type Reason = 'invalid_session' | 'session_claimed' | 'binding_mismatch' | 'invalid_state' | 'limit' | 'cancelled' | 'worker_exited'
+  | 'closed';
 type Result<T> = Readonly<{ ok: true; value: T } | { ok: false; reason: Reason }>;
 type State = 'active' | 'failed' | 'closed';
 const handle = <T>() => Object.freeze(Object.create(null)) as T;
@@ -28,16 +29,24 @@ export function createSyntheticScopeOwnerIssuer() {
   const owners = new WeakMap<SyntheticScopeOwner, Owner>();
   const uses = new WeakMap<SyntheticScopeUse, Use>();
   const receipts = new WeakMap<SyntheticScopeReceipt, { owner: SyntheticScopeOwner; used: boolean }>();
+  // A session close or worker exit that happened before the owner noticed is still the first cause.
+  function pending(owner: Owner): Reason | undefined {
+    if (sessions.get(owner.session)?.state !== 'active') return 'invalid_state';
+    return workers.get(owner.worker)?.active ? undefined : 'worker_exited';
+  }
+  // The primary reason is fixed by the first terminal event; later stops and closes never rewrite it.
   function stop(owner: Owner, reason: Reason): Result<never> {
-    owner.reason ??= reason;
-    if (owner.state === 'active') owner.state = 'failed';
-    return no(owner.reason);
+    if (owner.state === 'active') { owner.reason ??= pending(owner) ?? reason; owner.state = 'failed'; }
+    return no(owner.reason ?? 'invalid_state');
+  }
+  function close(owner: Owner): void {
+    if (owner.state === 'active') owner.reason ??= pending(owner) ?? 'closed';
+    owner.state = 'closed'; owner.assets.clear();
   }
   function check(owner: Owner): Result<true> {
     if (owner.state !== 'active') return no(owner.reason ?? 'invalid_state');
-    if (sessions.get(owner.session)?.state !== 'active') return stop(owner, 'invalid_state');
-    if (!workers.get(owner.worker)?.active) return stop(owner, 'worker_exited');
-    return ok(true);
+    const reason = pending(owner);
+    return reason ? stop(owner, reason) : ok(true);
   }
   return Object.freeze({
     issueSession(): SyntheticScopeSession {
@@ -99,10 +108,11 @@ export function createSyntheticScopeOwnerIssuer() {
       r.used = true; return ok(true);
     },
     cancel(owner: SyntheticScopeOwner): void { const o = owners.get(owner); if (o) stop(o, 'cancelled'); },
-    closeOwner(owner: SyntheticScopeOwner): void { const o = owners.get(owner); if (o) { o.state = 'closed'; o.assets.clear(); } },
+    closeOwner(owner: SyntheticScopeOwner): void { const o = owners.get(owner); if (o) close(o); },
     closeSession(session: SyntheticScopeSession): void {
       const s = sessions.get(session); if (!s) return;
-      s.state = 'closed'; if (s.owner) { s.owner.state = 'closed'; s.owner.assets.clear(); }
+      if (s.owner) close(s.owner); // Before the session state changes, so the owner records its own cause.
+      s.state = 'closed';
     },
     exitWorker(worker: SyntheticScopeWorker): void { const w = workers.get(worker); if (w) w.active = false; },
   });

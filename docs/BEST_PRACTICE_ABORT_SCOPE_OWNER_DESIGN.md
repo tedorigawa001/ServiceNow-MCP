@@ -148,7 +148,7 @@ run claimは1/session、asset jobは選択100行以内、構文計画は100候�
 
 ## 11. 今回の限定実装
 
-`abort-scope-evidence-owner.ts`は合成issuerごとに隔離したWeakMap台帳を持つ。sessionに唯一の生成claimを置き、worker結合検査より前に消費する。ownerは合成session・worker実体と結合し、jobは同じsession/workerと選択assetに結合する。別job番号で同assetを再登録しても拒否する。use/receiptの一度限りの消費と、失敗・取消・owner/session終了・worker終了後の受理拒否を実装した。closeはidempotentで先行理由を維持する。job発行/予約は100件以下。
+`abort-scope-evidence-owner.ts`は合成issuerごとに隔離したWeakMap台帳を持つ。sessionに唯一の生成claimを置き、worker結合検査より前に消費する。ownerは合成session・worker実体と結合し、jobは同じsession/workerと選択assetに結合する。別job番号で同assetを再登録しても拒否する。use/receiptの一度限りの消費と、失敗・取消・owner/session終了・worker終了後の受理拒否を実装した。closeはidempotentで、最初の終了事由（未検知のworker終了/session終了を含む）をprimary理由に固定し、後のclose/取消で書き換えない。job発行/予約は100件以下。
 
 これは状態機械の**基礎subset**であり、§5のprepare/初回/最終観測のphase、実時計/期限/signal、privateな実取得issuer、payload/hash/ReleasePermit結合、比較器・worker通信・実解放・上位結果ownerへの接続は未実装。合成receiptには比較結果もscope証明もなく、本番完了証拠ではない。合成issuerは呼出し側が自由に作れるため、実認証の証明には使えない。worker handleの差が合成の世代差を表し、実worker世代handshakeは行わない。新moduleも既存の`!dist/review/abort-scope-evidence*`によりnpm非同梱。
 
