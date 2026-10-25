@@ -15,6 +15,7 @@ export class AnalysisLimitError extends Error {}
 const C = 1, P = 2, CF = 4, PF = 8, AJAX = 16, LOCAL = 32, UNKNOWN = 64, AJAX_CTOR = 128;
 const QUERY_RECORD = 256, QUERY_CTOR = 512;
 const FORM = 1024;
+const FORM_SETTER = 2097152;
 const CLIENT_RECORD = 2048, CLIENT_CTOR = 4096, LOOKUP_METHOD = 8192;
 const LOADING = 16384;
 const RUNTIME_INPUT = 32768;
@@ -46,7 +47,8 @@ export function analyzeScopedCandidates(ast: AstNode, when: string | null, emit:
     clientLookup?: { lookup: (entry: AstNode, kind: string) => void; unresolved: () => void };
     onChange?: { report: (entry: AstNode, kind: string, state: 'guarded' | 'possible' | 'unresolved') => void; unresolved: () => void };
     onLoad?: { report: (entry: AstNode, kind: string, timing: InputTiming) => void; unresolved: () => void };
-    dom?: { report: (entry: AstNode, scope: 'document_scope' | 'created_subtree') => void; unresolved: () => void } } = { allowDeclaredEntry: false, constants: false }): void {
+    dom?: { report: (entry: AstNode, scope: 'document_scope' | 'created_subtree') => void; unresolved: () => void };
+    setValue?: { report: (entry: AstNode) => void; unresolved: () => void } } = { allowDeclaredEntry: false, constants: false }): void {
   const root: Scope = { functionId: 0, functionScope: true, bindings: new Map() };
   const scopes = new WeakMap<AstNode, Scope>();
   const functionScopes = new WeakMap<AstNode, Scope>();
@@ -71,6 +73,8 @@ export function analyzeScopedCandidates(ast: AstNode, when: string | null, emit:
   let onLoadUnsafe = false;
   let domUnsafe = false;
   const domCandidates: { entry: AstNode; scope: 'document_scope' | 'created_subtree' }[] = [];
+  let setValueUnsafe = false;
+  const setValueCandidates: AstNode[] = [];
   const loadCalls = new Map<AstNode, { kind: string; timing: InputTiming }>();
   const requestInputs = new WeakMap<Origin, { timing: InputTiming; method: boolean }>();
   const loadTimings = new WeakMap<AstNode, InputTiming>();
@@ -158,6 +162,17 @@ export function analyzeScopedCandidates(ast: AstNode, when: string | null, emit:
       if (entry.type === 'ClassExpression' || entry.type === 'ClassDeclaration') declare(entry.id, scope);
     }
     scopes.set(entry, scope);
+    if (options.setValue) {
+      const write = entry.type === 'AssignmentExpression' ? entry.left
+        : entry.type === 'UpdateExpression' || entry.type === 'UnaryExpression' && entry.operator === 'delete' ? entry.argument
+          : entry.type === 'ForInStatement' || entry.type === 'ForOfStatement' ? entry.left : null;
+      if (entry.type === 'WithStatement' || entry.type === 'CallExpression' && identifier(entry.callee, 'eval')
+        || isAstNode(write) && !['Identifier', 'MemberExpression', 'VariableDeclaration'].includes(write.type)
+        || identifier(write, 'g_form') || isAstNode(write) && write.type === 'MemberExpression'
+          && (staticMemberName(write) === null || staticMemberName(write) === 'setValue')) {
+        setValueUnsafe = true; options.setValue.unresolved();
+      }
+    }
     if (options.dom) {
       const write = entry.type === 'AssignmentExpression' ? entry.left
         : entry.type === 'UpdateExpression' || entry.type === 'UnaryExpression' && entry.operator === 'delete' ? entry.argument : null;
@@ -327,7 +342,7 @@ export function analyzeScopedCandidates(ast: AstNode, when: string | null, emit:
     const binding = find(scope, name);
     if (!binding) return origin(options.dom && name === 'document' ? DOCUMENT : options.dom && name === 'window' ? WINDOW
       : name === 'current' ? C : name === 'previous' ? P : name === 'GlideAjax' ? AJAX_CTOR
-      : (options.uiPolicy || options.clientLookup) && name === 'g_form' ? FORM
+      : (options.uiPolicy || options.clientLookup || options.setValue) && name === 'g_form' ? FORM
         : options.clientLookup && name === 'GlideRecord' ? CLIENT_CTOR : options.display && name === 'g_scratchpad' ? LOCAL
         : (options.query || options.abort || options.display || options.uiPolicy) && ['GlideRecord', 'GlideRecordSecure'].includes(name) ? QUERY_CTOR : UNKNOWN);
     if (binding.functionId !== scope.functionId) {
@@ -337,6 +352,7 @@ export function analyzeScopedCandidates(ast: AstNode, when: string | null, emit:
       return binding.origin.flags === LOCAL && !binding.origin.properties ? local() : unknown();
     }
     if (options.dom && binding.constantWritten && binding.origin.flags & (domReceivers | DOM_METHOD)) return unknown();
+    if (options.setValue && binding.constantWritten && binding.origin.flags & (FORM | FORM_SETTER)) return unknown();
     if (options.onLoad && binding.constantWritten && binding.origin.flags & (RUNTIME_INPUT | AJAX | AJAX_CTOR | CLIENT_RECORD | CLIENT_CTOR)) return unknown();
     return options.query && queryRebound.has(name) && binding.origin.flags & (QUERY_RECORD | QUERY_CTOR) ? unknown() : binding.origin;
   }
@@ -441,6 +457,10 @@ export function analyzeScopedCandidates(ast: AstNode, when: string | null, emit:
         if (entry.computed) visit(entry.property);
         receivers.set(entry, receiver);
         const key = memberKey(entry);
+        if (options.setValue) {
+          if (receiver.flags === FORM && key === 'setValue') return origin(FORM_SETTER);
+          if (receiver.flags & FORM && key === null) options.setValue.unresolved();
+        }
         if (options.dom) {
           if (receiver.flags === WINDOW && key === 'document') return origin(DOCUMENT);
           if (receiver.flags === DOCUMENT && ['body', 'documentElement'].includes(key ?? '')) return origin(DOCUMENT_ELEMENT);
@@ -466,6 +486,9 @@ export function analyzeScopedCandidates(ast: AstNode, when: string | null, emit:
         const argValues: Origin[] = [];
         for (const argument of entry.arguments as unknown[]) {
           const value = visit(argument);
+          if (options.setValue && containsLookupReceiver(value, new Set(), 0, FORM | FORM_SETTER)) {
+            setValueUnsafe = true; options.setValue.unresolved();
+          }
           if (options.dom && containsLookupReceiver(value, new Set(), 0, domReceivers | DOM_METHOD)) {
             domUnsafe = true; options.dom.unresolved();
           }
@@ -508,10 +531,25 @@ export function analyzeScopedCandidates(ast: AstNode, when: string | null, emit:
           const ajax = origin(AJAX), args = entry.arguments as AstNode[];
           requestInputs.set(ajax, { timing: inputTiming(args[0], argValues[0]), method: false }); return ajax;
         }
+        if (options.setValue && entry.type === 'NewExpression' && calleeValue.flags & FORM_SETTER) options.setValue.unresolved();
         if (entry.type === 'NewExpression') return origin(calleeValue.flags & AJAX_CTOR ? AJAX
           : calleeValue.flags === QUERY_CTOR ? QUERY_RECORD : calleeValue.flags & UNKNOWN ? UNKNOWN : LOCAL);
         if (isAstNode(entry.callee) && entry.callee.type === 'MemberExpression') {
           const receiver = receivers.get(entry.callee) ?? unknown(), key = memberKey(entry.callee);
+          if (options.setValue) {
+            if (receiver.flags & FORM_SETTER) options.setValue.unresolved();
+            if (key === 'setValue') {
+              const args = entry.arguments as AstNode[];
+              const field = args.length ? primitive(args[0]) : UNKNOWN_CONSTANT;
+              const shape = !entry.optional && !entry.callee.optional && !args.some(a => a.type === 'SpreadElement');
+              const valid = shape && args.length === 2
+                && !(args[0].type === 'Literal' && (typeof args[0].value !== 'string' || !args[0].value))
+                && (field === UNKNOWN_CONSTANT || typeof field === 'string' && field.length > 0);
+              if (receiver.flags === FORM && !setValueUnsafe && valid) setValueCandidates.push(entry);
+              // Three explicit arguments are outside this rule, not proof of a valid display value.
+              else if (receiver.flags & (FORM | UNKNOWN) && !(receiver.flags === FORM && !setValueUnsafe && shape && args.length === 3)) options.setValue.unresolved();
+            }
+          }
           if (options.dom && (domQueries.has(key ?? '') || key === 'createElement')) {
             const args = entry.arguments as AstNode[];
             const arg = args.length === 1 ? primitive(args[0]) : UNKNOWN_CONSTANT;
@@ -643,6 +681,7 @@ export function analyzeScopedCandidates(ast: AstNode, when: string | null, emit:
           if (key === 'getXMLWait' && (receiver.flags & (AJAX | UNKNOWN))) emit(entry, 'AU-CL-004',
             { kind: 'synchronous_ajax', receiver_unresolved: !!(receiver.flags & UNKNOWN) });
         }
+        else if (options.setValue && calleeValue.flags & FORM_SETTER) options.setValue.unresolved();
         else if (options.dom && calleeValue.flags & DOM_METHOD) options.dom.unresolved();
         else if (options.clientLookup && calleeValue.flags & LOOKUP_METHOD) options.clientLookup.unresolved();
         return unknown(); // No return-value or callable-alias propagation.
@@ -691,6 +730,11 @@ export function analyzeScopedCandidates(ast: AstNode, when: string | null, emit:
     return !!value.properties && [...value.properties.values()].some(v => containsLookupReceiver(v, seen, depth + 1, mask));
   }
   walk(ast);
+  for (const candidate of setValueCandidates) {
+    budget(0);
+    if (setValueUnsafe) options.setValue!.unresolved();
+    else options.setValue!.report(candidate);
+  }
   for (const candidate of domCandidates) {
     budget(0);
     if (domUnsafe) options.dom!.unresolved();

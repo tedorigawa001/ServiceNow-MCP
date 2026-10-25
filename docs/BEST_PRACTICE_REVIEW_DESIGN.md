@@ -2,7 +2,7 @@
 
 Status: **BP-1〜3 PoC・BP-4初回合成評価済み（品質目標未達）／製品MCP未統合（2026-10-17）**
 
-上記と本文の未実装表記は初版時点の履歴。後続の[MCP統合・明示規則の現状](BEST_PRACTICE_BP5_MCP_REGISTRATION.md)、[AU-CL-002のClient Script照会候補](BEST_PRACTICE_CLIENT_LOOKUPS.md)、[AU-CL-008のonChange読込時候補](BEST_PRACTICE_ONCHANGE_LOADING.md)、[AU-CL-003のonLoad取得入力候補](BEST_PRACTICE_ONLOAD_SCRATCHPAD.md)、[AU-CL-007のDOM依存確認候補](BEST_PRACTICE_DOM_CLIENT.md)を参照。2026-10-25時点で明示指定は12規則、既定は従来の3規則。候補検出・合成検証であり、人の採用承認・全適用対象への対応・品質保証ではない。
+上記と本文の未実装表記は初版時点の履歴。後続の[MCP統合・明示規則の現状](BEST_PRACTICE_BP5_MCP_REGISTRATION.md)、[AU-CL-002のClient Script照会候補](BEST_PRACTICE_CLIENT_LOOKUPS.md)、[AU-CL-008のonChange読込時候補](BEST_PRACTICE_ONCHANGE_LOADING.md)、[AU-CL-003のonLoad取得入力候補](BEST_PRACTICE_ONLOAD_SCRATCHPAD.md)、[AU-CL-007のDOM依存確認候補](BEST_PRACTICE_DOM_CLIENT.md)、[AU-CL-005の2引数setValue確認候補](BEST_PRACTICE_SETVALUE_CLIENT.md)を参照。2026-10-25時点で明示指定は13規則、既定は従来の3規則。候補検出・合成検証であり、人の採用承認・全適用対象への対応・品質保証ではない。
 
 本書はソースレビュー品質を高めるための収集・検索・報告方針を記録する。
 全文知識ベース、収集ジョブ、意味検索、レビュー用MCPツールはまだ実装していない。
