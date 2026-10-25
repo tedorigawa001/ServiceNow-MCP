@@ -6,6 +6,8 @@ Status: **合成channel限定のstrict schema・相関台帳・診断ownerを実
 
 HTTP側の証拠専用受信枠・最終再読の動的予約・停止分類は[bounded予算詳細設計draft-0.1](BEST_PRACTICE_ABORT_SCOPE_BOUNDED_BUDGET_DESIGN.md)を参照。予約台帳とstream課金/中断/oracleは合成実装したが、実transport/workerへの接続は未実施。合成channelのIPC枠と区別し、既存全体60秒/210試行は維持する。
 
+証拠の実発行元とprivateな受領物、同sourceのReleasePermit/選択payload/予算への結合、固定GETと最終sealは[固定source issuer詳細設計draft-0.1](BEST_PRACTICE_ABORT_SCOPE_FIXED_SOURCE_ISSUER_DESIGN.md)へ具体化した。実装・実接続・cap承認はまだ行っていない。
+
 ## 1. 対象と現状
 
 合成ownerはpayload/初回/最終handleを生成して純粋比較器へ接続済み。ただし合成callerがcontext/hash/時刻を与えられ、実取得の証明ではない。本書は実session/source/jobへの接続条件と、後工程で実装するstrictな内部契約を定義する。現行のready/analyze/finish、公開0.2/0.3、明示14/既定3規則、固定評価セットは変更しない。

@@ -4,6 +4,8 @@ Version: br006-bounded-budget-draft-0.1 / Date: 2026-10-25。
 Status: **純粋予約台帳・合成stream課金/中断・独立イベントoracleを実装。cap採用承認・実source/transport/worker接続は未実施**。
 親：[証拠取得設計](BEST_PRACTICE_ABORT_SCOPE_EVIDENCE_DESIGN.md)、[接続契約](BEST_PRACTICE_ABORT_SCOPE_CONNECTION_CONTRACT_DESIGN.md)。
 
+実session/ReleasePermitへの結合、固定GET/必要列射影、初回/最終受領物と既存verifyの統合は[固定source issuer詳細設計draft-0.1](BEST_PRACTICE_ABORT_SCOPE_FIXED_SOURCE_ISSUER_DESIGN.md)を参照。合成台帳/streamを本番発行元へ昇格させず、実接続は未実装のまま。
+
 ## 1. 現状と変更の境界
 
 現行`BoundedReadSession`は全体60秒、HTTP最大210試行、1応答4MiB/累計16MiB、payload単体2MiB/累計8MiBを持つ。実HTTPの前に試行を課金し、429/5xx/通信失敗等のupstream_unavailableだけ最大1retryする。通常取得から最終親/metadata用4試行を残し、固定sourceのverifyは親→一覧を再読する。実装の`get(path, final:boolean)`と固定予約4だけでは、本案のtable別予約・下位受信枠を保証できない。
