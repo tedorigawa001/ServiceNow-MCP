@@ -166,7 +166,7 @@ consumeは`ready_to_consume`だけを受理する。順序違反・二重開始/
 
 ## 13. 合成issuerから純粋比較器への接続
 
-`finishPrepareEvidence`は同owner/jobのprepare票を消費し、strict context/payload factoryを内部で呼ぶ。contextのassetを選択jobへ結び、payloadのasset/hash/code hashを同contextへ照合する。context/payload handleを外へ返さない。続く`finishInitialEvidence`/`finishFinalEvidence`は同じ利用台帳のcontextで観測handleを生成し、生データのphaseも固定phaseと照合する。入力スナップショットは既存factoryの正規化に従い、外側の観測fixtureを後で変更しても影響しない。
+`finishPrepareEvidence`は同owner/jobのprepare票を消費し、strict context/payload factoryを内部で呼ぶ。contextのassetを選択jobへ結び、payloadのasset/hash/code hashを同contextへ照合する。context/payload handleを外へ返さない。続く`finishInitialEvidence`/`finishFinalEvidence`は同じ利用台帳のcontextで観測handleを生成し、生データのphaseも固定phaseと照合する。context/観測の生入力は入口で一度だけ`structuredClone`し、asset/phaseの照合とfactoryの両方を同じスナップショットで行う。読むたびに値が変わるgetterでも、照合とfactoryに別の値を見せられない。Proxy・関数など複製できない入力は`evidence_invalid`で停止する。外側の観測fixtureを後で変更しても影響しない。
 
 これは**合成fixtureの構造/対応の検査だけ**。contextのinstance/update-set/update-xml/hash/時刻は合成callerの入力で、実session/sourceが実測/発行した証明ではない。実コード本文を取得せず、hashを本文から計算したとも主張しない。
 

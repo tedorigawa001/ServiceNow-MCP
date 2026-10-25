@@ -58,6 +58,22 @@ it.each(['asset','hash','context'] as const)('stops on prepare evidence mismatch
   expect(out.ok).toBe(false);expect(x.i.finishPrepareEvidence(x.o,ticket,x.j,context(),payload())).toEqual(out);
   expect(x.i.createOwner(x.s,x.w)).toEqual({ok:false,reason:'session_claimed'});
 });
+// Accessors that answer differently on each read: the owner check and the factory must see one snapshot.
+const flipping=<T extends object>(raw:T,key:string,first:unknown,then:unknown)=>{
+  let reads=0;const out={...raw} as Record<string,unknown>;
+  Object.defineProperty(out,key,{enumerable:true,get:()=>reads++===0?first:then});return out;
+};
+it('binds the context asset from one snapshot of an accessor-backed input',()=>{
+  const x=setup(),other='f'.repeat(32),ticket=get(x.i.beginPrepare(x.o,x.u,x.j));
+  expect(x.i.finishPrepareEvidence(x.o,ticket,x.j,flipping(context(),'asset_sys_id',other,asset),{...payload(),asset_sys_id:other}))
+    .toEqual({ok:false,reason:'evidence_binding_mismatch'});
+});
+it('reads the observation phase from one snapshot of an accessor-backed input',()=>{
+  const x=setup();prepare(x);
+  get(x.i.finishInitialEvidence(x.o,get(x.i.beginInitial(x.o,x.u,x.j)),x.j,flipping(observation('initial'),'phase','initial','final')));
+  get(x.i.finishFinalEvidence(x.o,get(x.i.beginFinal(x.o,x.u,x.j)),x.j,observation('final')));
+  expect(get(x.i.acceptComparison(x.o,get(x.i.compareAndConsume(x.o,x.u,x.j,at))))).toMatchObject({status:'compared'});
+});
 it.each(['initial','final'] as const)('rejects wrong raw phase: %s',phase=>{
   const x=setup();prepare(x);
   if(phase==='final')get(x.i.finishInitialEvidence(x.o,get(x.i.beginInitial(x.o,x.u,x.j)),x.j,observation('initial')));

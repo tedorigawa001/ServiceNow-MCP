@@ -14,16 +14,18 @@ Date: 2026-10-25。対象は[owner設計§13](BEST_PRACTICE_ABORT_SCOPE_OWNER_DE
 
 | 検証 | 結果 |
 |---|---|
-| `bdo npx vitest run tests/review/abort-scope-evidence-comparison-owner.test.ts tests/review/abort-scope-evidence-phases.test.ts tests/review/abort-scope-evidence-owner.test.ts tests/review/abort-scope-evidence.test.ts` | 4 files / 130 tests成功（比較接続26・phase26・owner22・比較器56） |
+| `bdo npx vitest run tests/review/abort-scope-evidence-comparison-owner.test.ts tests/review/abort-scope-evidence-phases.test.ts tests/review/abort-scope-evidence-owner.test.ts tests/review/abort-scope-evidence.test.ts` | 4 files / 132 tests成功（比較接続28・phase26・owner22・比較器56） |
 | `bdo npm run build` | 成功 |
 | 変更2ファイルへの`bdo npx eslint` | 問題なし |
+| `bdo npx vitest run`（全体、スナップショット修正後） | 139 files / 3915 tests成功 |
+| `npm run test:pack`（一時cacheを当該processの環境だけに指定） | 本番依存だけのinstall＋worker smoke成功、369 files |
 
-比較器spyで最初の比較1回・二重要求後も計1回を確認した。asset/hash不一致、context不正、初回/最終phase違い、停止理由のunavailable化拒否、宣言時刻の期限境界、table binding拒否、証拠欠落、他jobへの停止伝播、終了後の票拒否を確認した。mutable fixtureの変更で出力が変わらないこと、ネットワーク・実時計・timer・console.logを呼ばないことも合成試験した。
+比較器spyで最初の比較1回・二重要求後も計1回を確認した。asset/hash不一致、context不正、初回/最終phase違い、停止理由のunavailable化拒否、宣言時刻の期限境界、table binding拒否、証拠欠落、他jobへの停止伝播、終了後の票拒否を確認した。読むたびに値が変わるgetterでcontextのasset照合やobservationのphase照合をすり抜けられないこと（入口で一度だけ複製したスナップショットで照合）、mutable fixtureの変更で出力が変わらないこと、ネットワーク・実時計・timer・console.logを呼ばないことも合成試験した。
 
 ## 制限・未実施
 
 合成issuerは誰でも作成でき、自己申告したfixtureを検査するだけ。実認証・選択metadataの実取得・本文由来hashの証明にはならない。時刻は与えた値の整合検査で、実時計による停止保証ではない。実source/ReleasePermit/worker IPC/上位レビュー出力へは未接続。公開JSON・明示14/既定3規則・純粋比較器・固定評価セットに変更なし。
 
-全体合成テスト・梱包完全検証は今回未再実行。新moduleは既存の`!dist/review/abort-scope-evidence*`除外内。前回の梱包完全検証中断を解消済みとは扱わない。
+新moduleは既存の`!dist/review/abort-scope-evidence*`除外内。前回の梱包完全検証の中断は[元記録](E2E_BEST_PRACTICE_ABORT_SCOPE_OWNER_SYNTHETIC_2026-10-25.md)で解消済み。
 
 VM/監視/telemetry調査保留・Unknown・全体受付無効を維持。本番cap・完成parts・permitを発行せず、実機操作・トークン発行・設定変更は行っていない。

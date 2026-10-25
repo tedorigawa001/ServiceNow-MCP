@@ -118,10 +118,12 @@ export function createSyntheticScopeOwnerIssuer() {
     const o = owners.get(owner)!, p = phases.get(ticket)!, e = evidence.get(p.use);
     if (!e) return stop(o, 'evidence_missing');
     try {
+      // One snapshot for both checks: a getter must not show the phase check and the factory different values.
+      const snapshot: unknown = structuredClone(raw);
       // Do not accept the wrong observation phase even if its timestamp looks plausible.
-      if (!raw || typeof raw !== 'object' || !('phase' in raw) || raw.phase !== phase)
+      if (!snapshot || typeof snapshot !== 'object' || !('phase' in snapshot) || snapshot.phase !== phase)
         return stop(o, 'invalid_phase_order');
-      const obs = createTableScopeObservation(e.context, raw);
+      const obs = createTableScopeObservation(e.context, snapshot);
       if (!obs.ok) return stop(o, 'evidence_invalid');
       const active = check(o); if (!active.ok) return active;
       e[phase] = obs.value; return ok(true);
@@ -178,10 +180,12 @@ export function createSyntheticScopeOwnerIssuer() {
       const done = finish(owner, ticket, job, 'prepare', true); if (!done.ok) return done;
       const o = owners.get(owner)!, p = phases.get(ticket)!;
       try {
-        const c = createScopeEvidenceContext(rawContext);
+        // One snapshot for both checks: a getter must not bind the context to one asset and pass the job check with another.
+        const snapshot: unknown = structuredClone(rawContext);
+        const c = createScopeEvidenceContext(snapshot);
         if (!c.ok) return stop(o, 'evidence_invalid');
-        if (!rawContext || typeof rawContext !== 'object' || !('asset_sys_id' in rawContext)
-          || rawContext.asset_sys_id !== jobs.get(job)?.asset) return stop(o, 'evidence_binding_mismatch');
+        if (!snapshot || typeof snapshot !== 'object' || !('asset_sys_id' in snapshot)
+          || snapshot.asset_sys_id !== jobs.get(job)?.asset) return stop(o, 'evidence_binding_mismatch');
         const payload = createPayloadScopeEvidence(c.value, rawPayload);
         if (!payload.ok) return stop(o, payload.reason === 'evidence_binding_mismatch' ? payload.reason : 'evidence_invalid');
         const active = check(o); if (!active.ok) return active;
