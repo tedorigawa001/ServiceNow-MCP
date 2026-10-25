@@ -135,7 +135,7 @@ E枠だけの閉鎖は新証拠GETを止め、未処理table finalを未確認sk
 | 親/metadata/tableの版変更 | changed/unverifiedを保持。暫定候補を撤回し、別版の証拠へ差し替えない |
 | cleanup未確認・late response | 受領/構文受理だけで完了証拠を出さない。primaryを保持しcleanupをunconfirmedのまま上位へ渡す |
 
-新モードでcleanup未確認のbodyは、内部に暫定の検査結果があっても正常なTableReadReceipt/FinalSourceSealとして確定しない。先行失敗がなければ固定internal_review_errorで停止する保守的な案とする。現在の合成harnessはacceptedにcleanup状態を添えるだけなので、このissuer gateは追加実装が必要。実socket消失や物理メモリ消去の保証はしない。
+新モードでcleanup未確認のbodyは、内部に暫定の検査結果があっても正常なTableReadReceipt/FinalSourceSealとして確定しない。先行失敗がなければ固定internal_review_errorで停止する保守的な案とする。通常の合成runはacceptedにcleanup状態を添えるだけだが、§11〜§12の専用body receipt／compositionにはconfirmed必須のgateを実装した。実transport用gateは未接続。実socket消失や物理メモリ消去の保証はしない。
 
 停止/終了ではownerと用途permitを先に失効し、HTTP/read/retry/worker待機を中断する。late応答はcancelし、新receipt/sealを発行しない。slot/cache/本文/受領物への参照を解放し、同時実行枠/token snapshotは既存session.closeの所有責務で一度だけ解放する。pendingのworker終了は同じ残予算へ合流し、待ち終わらない場合にconfirmedと偽らない。
 
@@ -175,3 +175,54 @@ completeは同issuerのpending票を消費してから、合成frame（status/bo
 実source receipt/選択payload/worker planの発行元、同じ実C/G/E/R/時計への結合、HTTP retry/再読/解放、実ACL・予算会計、最終seal・公開JSONは未接続。合成のoperator_config/observed区分もリリース実測の証明ではない。実行permitを発行せず、実transportの許可先も変えていない。
 
 検証は[固定source基礎の合成記録](E2E_BEST_PRACTICE_ABORT_SCOPE_FIXED_SOURCE_SYNTHETIC_2026-10-25.md)。新moduleも既存`!dist/review/abort-scope-evidence*`の非同梱対象。VM/監視/telemetry保留・Unknown・全体受付無効を維持する。
+
+## 11. 初回観測の合成stream接続
+
+`abort-scope-evidence-source-stream.ts`は合成session/source/issuerとstream/予約台帳をprivateに所有する。初回接続時点の記録を本節、最終接続の追加仕様を§12に記す。fixtureのready/release前提は実証拠へ昇格しない。固定GET descriptorを合成callbackへ渡すが、fetch・時計・timer・実認証は導入しない。
+
+streamはEOF・UTF-8・JSON受理・cleanup confirmedの後だけ、同harness／table handleに結合したopaque body receiptを発行する。receiptは最大1件を保持し、同tableで一度だけ消費する。コピー・他harness・別table・再消費・未消費中の再発行を拒否し、停止／closeで保持bodyを破棄する。通常のrunInitial／ordinaryにはbody返却を追加しない。生bodyを返すconsumeBodyは合成境界であり、実source権限や上位向けAPIではない。
+
+compositionはread票／table handle／receiptを外へ公開せず、同じawaitの継続で受領bodyを消費して既存complete／viewへ渡す。statusは受理済み2xxを正規化用200として扱い、HTTP statusの実測証明は発行しない。必要5列のみの凍結観測を返し、余分な列やbodyは返さない。C/R/S/G/Eはstream／予約台帳だけが所有し、sourceの防御的文字列長検査・JSON正規化では再課金しない。失敗したretry bodyと超過chunkは返金しない。
+
+初回版はstream失敗でcomposition全体を停止していたが、§12で404・retry枯渇・不正JSON・下位枠超過を局所unavailableとして継続する方式へ更新した。JSONの形から正規化されたunavailable（0件・必要列不足等）もUnknownとして区別する。認証・binding矛盾・全体停止は格下げせず、first codeを保持してissuer/session/sourceとbodyを失効させる。cleanup不明は受理bodyがあってもinternal_review_errorで停止する。close／取消後のlate応答で観測を返さない。
+
+**残課題:** §12の合成最終接続を実source／選択metadata/payload／worker jobへ結合すること、同名cacheのjob別配送、上位診断ownerへの接続。本compositionを実sessionへ転用しない。60秒／210試行の実上限は変更せず、共有時計や実transportへの結合は未実装。公開規則・結果JSON・本番permitは変更しない。
+
+検証は[初回source／stream一体接続の合成記録](E2E_BEST_PRACTICE_ABORT_SCOPE_SOURCE_STREAM_SYNTHETIC_2026-10-26.md)。VM/監視/telemetry保留・Unknown・全体受付無効を維持する。
+
+## 12. 合成最終再読・局所継続・seal
+
+### 12.1 基準値と固定要求
+
+sealが必要な合成runは、table初回より先に`prepare`を一度だけ行う。同じstream／台帳の通常枠で親→metadataを読み、正規化した基準値をprivateに保持する。ready fixtureのbooleanだけを基準値へ昇格させない。従来の初回単独試験はprepareなしでも可能だが、prepare未実施ではfinalizeを拒否する。
+
+| 対象 | 固定条件・必要列・上限 |
+|---|---|
+| 親 | sys_update_set、sys_id完全一致＋ORDERBYsys_id、sys_id/sys_updated_on/sys_mod_count、limit=2、正常1件必須 |
+| metadata | sys_update_xml、update_set完全一致＋ORDERBYsys_id、sys_id/update_set/name/sys_updated_on/sys_mod_count、limit=101、正常0..100件 |
+
+offset=0、no_count=true、display_value=false、exclude_reference_link=trueを固定し、初回と最終で同じdescriptorを使う。metadataは順序の昇順・重複なし・update_set一致を要求し、101件はlookaheadのため不完全として扱う。payload/scriptは要求・保持・返却しない。余分な応答列は射影時に捨てる。これは**all-metadata最大100件の合成subset**であり、既存0.3のreview_targets選択を接続したものではない。
+
+### 12.2 最終順序と局所終端
+
+`finalize`の開始claimをawait前に消費し、streamとissuerをfinalizingへ移す。予約slotで親→metadata→受付順tableを一度だけ処理し、最後に全table終端・予約残0・confirmed cleanupと終了checkpointを検査する。親／metadataのchanged・局所失敗でも残slotを終端化するが、stableへ格上げしない。並行finalize・二重finalize・final後のinitialは全体停止する。
+
+404・retry枯渇・不正JSON・下位証拠capは固定unavailable理由と診断を保持する。HTTP成功を捏造せず、issuerの`completeUnavailable`がpending票を消費して局所観測を作る。正常200でも0件／不正scope等なら台帳の初回availableを一度だけunavailableへ下げ、final GETなしのskipを可能にする。初回不足のtableはissuer／台帳の両方をskip、E閉鎖のavailable tableは最終票を未収集として終端化する。いずれもCは増やさず、予約を一度だけ解放する。
+
+401/403、G・通常応答上限超過、取消／deadline通知、名前・source binding矛盾、順序違反、cleanup未確認は全体停止。局所理由を診断へ残していても全体停止を局所不足へ格下げしない。診断は固定stage/codeの組を重複排除し、繰り返し受付拒否で無制限に増やさない。close／stopで保持body・基準値・table・seal参照を破棄し、primaryを後続操作で上書きしない。
+
+### 12.3 sealの限定的な意味
+
+初回／最終の親とmetadataが完全・同一で、全tableのID/name/scope/版が同一、scopeが非null、全予約が終端・cleanup確認済みであり、受付拒否がなかった場合だけopaque `SyntheticScopeFinalSeal`を発行する。変更があればchanged、不足があればunverifiedを返し、sealはnullにする。changedと不足が同時にあればchangedを返すが、個別unverified診断も保持する。
+
+sealは同composition ownerのMapに結合し、`consumeSeal`は一度だけ消費して`synthetic:true`の限定summaryを返す。clone・他owner・未発行・二重消費・close/stop後は拒否する。issuerの`finish`／sealed状態は全tableの終端だけを示し、それ単独でstable sealを発行しない。raw body・認証・公開JSONへの投入口は設けない。
+
+sealは合成callerが受付したtableとこの固定metadata一覧の比較証拠であり、payload/jobとの対応、リリース実測、実認証、レビューの安全・網羅性、BR-006候補の確定を保証しない。実selectionのreceipt・worker delivery・上位completionとの結合は未実装。
+
+### 12.4 会計・時間・残課題
+
+C/R/G/Eはprepareから最終まで同じ所有者を使い、JSON正規化／比較／sealで再課金しない。既定1回成功・1tableはprepare2＋initial1＋final3＝6試行、2tableは8試行。retryは同slot最大2試行で、失敗body・超過chunkを返金しない。E閉鎖は親／metadataを止めず、G超過は停止する。
+
+合成時刻はISO区間内・非逆行を検査し、deadline通知／AbortSignalで待機を中断する。**実時計・50/55秒のphase watchdog・全体60秒の自動強制中断はこのmoduleにはない**。既存実経路の60秒／210試行を緩和したものではなく、そのownerへ接続するまでは合成試験専用とする。実transport／worker、選択payloadとの対応、job別配送、上位診断owner・公開結果への接続は引き続き残課題。
+
+検証：[最終source／stream合成記録](E2E_BEST_PRACTICE_ABORT_SCOPE_FINAL_STREAM_SYNTHETIC_2026-10-26.md)。VM/監視/telemetry保留・Unknown・全体受付無効・本番permit非発行を維持する。

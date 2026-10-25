@@ -106,6 +106,13 @@ export function createSyntheticScopeReservationLedger(raw: unknown) {
       if (primary) return failure(primary);
       const t = tables.get(table); return t ? ok(t.slot) : failure('evidence_binding_mismatch');
     },
+    markInitialUnavailable(table: ScopeBudgetTable): Result<true> {
+      if (primary) return failure(primary);
+      const t = tables.get(table);
+      if (!t) return failure('evidence_binding_mismatch');
+      if (phase !== 'normal' || active || current || t.initial !== 'available') return failure('invalid_state');
+      t.initial = 'unavailable'; return ok(true);
+    },
     startOrdinary(read: ScopeBudgetRead) { return start(read); },
     startInitial(table: ScopeBudgetTable) {
       if (primary) return failure(primary);

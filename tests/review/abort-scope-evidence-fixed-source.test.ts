@@ -191,3 +191,25 @@ it('does not touch real network, time, timers or logger',()=>{
   const clock=vi.spyOn(Date,'now').mockImplementation(f),timer=vi.spyOn(globalThis,'setTimeout').mockImplementation(f),log=vi.spyOn(console,'log').mockImplementation(f);
   try{const x=setup();initial(x);expect(f).not.toHaveBeenCalled();}finally{clock.mockRestore();timer.mockRestore();log.mockRestore();vi.unstubAllGlobals();}
 });
+it('local failure consumes the exact pending read without inventing an HTTP success',()=>{
+  const x=setup(),read=get(x.f.begin(x.i,'incident','initial'));
+  const receipt=get(x.f.completeUnavailable(x.i,read.ticket,'upstream_unavailable','2026-10-25T00:00:02Z'));
+  expect(get(x.f.view(x.i,receipt))).toMatchObject({state:'unavailable',reason:'upstream_unavailable',phase:'initial'});
+  expect(x.f.completeUnavailable(x.i,read.ticket,'not_collected','2026-10-25T00:00:03Z')).toEqual({ok:false,code:'invalid_state'});
+});
+it('cannot complete another issuer read as a local unavailable',()=>{
+  const x=setup(),y=setup(),read=get(y.f.begin(y.i,'incident','initial'));
+  expect(x.f.completeUnavailable(x.i,read.ticket,'not_collected','2026-10-25T00:00:02Z')).toEqual({ok:false,code:'evidence_binding_mismatch'});
+});
+it('invalid local reasons stop instead of becoming caller-controlled diagnostics',()=>{
+  const x=setup(),read=get(x.f.begin(x.i,'incident','initial'));
+  expect(x.f.completeUnavailable(x.i,read.ticket,'SECRET' as 'not_collected','2026-10-25T00:00:02Z')).toEqual({ok:false,code:'evidence_invalid'});
+  expect(JSON.stringify(x.f.diagnostic(x.i))).not.toContain('SECRET');
+});
+it('finish requires every final slot and is one-shot',()=>{
+  const x=setup();initial(x);get(x.f.enterFinal(x.i));
+  expect(x.f.finish(x.i)).toEqual({ok:false,code:'invalid_state'});
+  const y=setup();initial(y);get(y.f.enterFinal(y.i));const read=get(y.f.begin(y.i,'incident','final'));
+  get(y.f.complete(y.i,read.ticket,frame([row()],'final')));get(y.f.finish(y.i));
+  expect(y.f.diagnostic(y.i)).toEqual({state:'sealed',code:null});expect(y.f.finish(y.i)).toEqual({ok:false,code:'invalid_state'});
+});

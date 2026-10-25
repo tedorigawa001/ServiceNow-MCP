@@ -204,3 +204,13 @@ AbortSignalまたは合成stopをfetch/read待機へraceさせる。取消後の
 cancelは同じreaderに一度だけ要求し、そのPromiseの成功を限定的なmicrotask観測で確認する。reject/無応答/遅延応答はunconfirmedとして保持し、無期限に待たない。cleanupは後の成功でunconfirmedからconfirmedへ戻さない。この観測は実OS/network resourceの解放証拠ではなく、実transportへの適用には残時間・解放確認ownerの接続が必要。
 
 byte oracleはfixtureのdispatch/chunk/EOF/取消/cancel要求イベントからC/G/E/Sとcancel回数を独立再計算する。製品の会計型/関数/統計をoracle内部では使わない。詳細は[合成stream検証記録](E2E_BEST_PRACTICE_ABORT_SCOPE_STREAM_SYNTHETIC_2026-10-25.md)。実transport/worker・認証固定との結合・公開JSON・実観測生成は未接続のまま。
+
+### 11.1 初回観測の合成issuerとの接続
+
+同harness／tableに結合したone-shot body receiptを介して、合成固定sourceの正規化へ接続した。受信量と試行数は既存stream／台帳だけで課金し、正規化で再加算しない。receiptはcleanup confirmedを必要とし、コピー・別table・再消費・停止後を拒否する。初回接続の記録は[issuer設計§11](BEST_PRACTICE_ABORT_SCOPE_FIXED_SOURCE_ISSUER_DESIGN.md#11-初回観測の合成stream接続)と[検証記録](E2E_BEST_PRACTICE_ABORT_SCOPE_SOURCE_STREAM_SYNTHETIC_2026-10-26.md)。後続の局所継続・最終接続は§11.2を参照する。
+
+### 11.2 合成最終接続
+
+prepareの通常親／metadata読取から同台帳を維持し、固定順final親→metadata→tableまで接続した。body receiptはtargetだけでなくordinary/initial/finalへ結合する。JSON正規化で不足が判明した初回をmarkInitialUnavailableで台帳へ反映し、初回不足・E閉鎖時のfinal skipをC=0で終端化する。局所失敗で返金・予約流用をせず、認証／取消／G超過等の全体失敗は停止する。完全・不変・scope既知・全予約終端・cleanup確認済みの場合だけone-shotの合成sealを発行する。
+
+固定親／metadataの基準値、lookahead制限、sealの意味、未対応事項は[issuer設計§12](BEST_PRACTICE_ABORT_SCOPE_FIXED_SOURCE_ISSUER_DESIGN.md#12-合成最終再読局所継続seal)と[最終接続検証記録](E2E_BEST_PRACTICE_ABORT_SCOPE_FINAL_STREAM_SYNTHETIC_2026-10-26.md)に記載する。実transport／時計／worker／公開結果には未接続で、実60秒／210試行の上限変更はない。

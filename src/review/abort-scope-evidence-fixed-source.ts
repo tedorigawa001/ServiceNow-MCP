@@ -32,7 +32,7 @@ export function createSyntheticFixedSourceIssuer() {
   type Session={data:z.infer<typeof sessionSchema>;active:boolean;claimed:boolean;failure?:Code};
   type Source={session:FixedSourceSession;data:z.infer<typeof sourceSchema>;permit:FixedSourceReleasePermit|null;active:boolean;claimed:boolean};
   type Table={initial?:FixedSourceNormalized;initialStarted:boolean;finalStarted:boolean;finalDone:boolean};
-  type Issuer={session:FixedSourceSession;source:FixedSource;permit:FixedSourceReleasePermit;state:'active'|'finalizing'|'failed'|'closed';
+  type Issuer={session:FixedSourceSession;source:FixedSource;permit:FixedSourceReleasePermit;state:'active'|'finalizing'|'sealed'|'failed'|'closed';
     reason?:Code;tables:Map<string,Table>;pending?:FixedSourceRead;cursor:number};
   const sessions=new WeakMap<FixedSourceSession,Session>(),sources=new WeakMap<FixedSource,Source>(),issuers=new WeakMap<FixedSourceIssuer,Issuer>();
   const reads=new WeakMap<FixedSourceRead,{issuer:FixedSourceIssuer;name:string;phase:'initial'|'final';used:boolean}>();
@@ -137,6 +137,18 @@ export function createSyntheticFixedSourceIssuer() {
         const receipt=handle<FixedSourceObservation>();observations.set(receipt,{issuer,value});return ok(receipt);
       }catch{return fail(i,'evidence_invalid');}
     },
+    /** Local stream failure without a fabricated HTTP success/status. Synthetic issuer only. */
+    completeUnavailable(issuer:FixedSourceIssuer,ticket:FixedSourceRead,reason:Unavailable,at:unknown):Result<FixedSourceObservation>{
+      const i=issuers.get(issuer);if(!i)return no('evidence_binding_mismatch');const live=check(i);if(!live.ok)return live;
+      const read=reads.get(ticket);if(!read||read.issuer!==issuer)return fail(i,'evidence_binding_mismatch');
+      if(read.used||i.pending!==ticket)return fail(i,'invalid_state');read.used=true;i.pending=undefined;
+      if(!['not_found_or_not_visible','invalid_observation','field_unavailable','ambiguous_table','upstream_unavailable','not_collected'].includes(reason))return fail(i,'evidence_invalid');
+      const t=i.tables.get(read.name)!,time=runTime(i,at,read.phase==='final'?t.initial?.observed_at:undefined);
+      if(!time)return fail(i,'invalid_observation_time');
+      const value:FixedSourceNormalized=Object.freeze({...notCollected(read.phase,time),reason});
+      if(read.phase==='initial')t.initial=value;else{t.finalDone=true;i.cursor++;}
+      const receipt=handle<FixedSourceObservation>();observations.set(receipt,{issuer,value});return ok(receipt);
+    },
     /** An initial GET still pending when the normal phase closes (e.g. aborted, so without an HTTP status) ends
      * as not_collected at the explicit phase-close time; omitting that time keeps the pending read an error. */
     enterFinal(issuer:FixedSourceIssuer,closedAt?:unknown):Result<true>{
@@ -158,6 +170,11 @@ export function createSyntheticFixedSourceIssuer() {
       const time=runTime(i,at,t.initial.observed_at);if(!time)return fail(i,'invalid_observation_time');
       t.finalStarted=true;t.finalDone=true;i.cursor++;
       const receipt=handle<FixedSourceObservation>();observations.set(receipt,{issuer,value:notCollected('final',time)});return ok(receipt);
+    },
+    finish(issuer:FixedSourceIssuer):Result<true>{
+      const i=issuers.get(issuer);if(!i)return no('evidence_binding_mismatch');const live=check(i);if(!live.ok)return live;
+      if(i.state!=='finalizing'||i.pending||i.cursor!==i.tables.size||[...i.tables.values()].some(t=>!t.finalDone))return fail(i,'invalid_state');
+      i.state='sealed';return ok(true);
     },
     view(issuer:FixedSourceIssuer,receipt:FixedSourceObservation):Result<FixedSourceNormalized>{
       const i=issuers.get(issuer);if(!i)return no('evidence_binding_mismatch');const live=check(i);if(!live.ok)return live;
