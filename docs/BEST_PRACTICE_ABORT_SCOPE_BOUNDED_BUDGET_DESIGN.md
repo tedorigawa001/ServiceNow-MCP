@@ -1,7 +1,7 @@
 # AU-BR-006 bounded取得：証拠受信上限・動的最終予約
 
 Version: br006-bounded-budget-draft-0.1 / Date: 2026-10-25。
-Status: **純粋な予約台帳・試行費目型・独立イベントoracleを合成実装。stream課金・cap採用承認・実source/worker接続は未実施**。
+Status: **純粋予約台帳・合成stream課金/中断・独立イベントoracleを実装。cap採用承認・実source/transport/worker接続は未実施**。
 親：[証拠取得設計](BEST_PRACTICE_ABORT_SCOPE_EVIDENCE_DESIGN.md)、[接続契約](BEST_PRACTICE_ABORT_SCOPE_CONNECTION_CONTRACT_DESIGN.md)。
 
 ## 1. 現状と変更の境界
@@ -183,6 +183,22 @@ oracleは製品の予約/課金関数を再使用せず、合成fetch/readのイ
 
 独立oracleはtest fixture内だけに置き、製品型/会計関数をimportせず、イベントprefixからC/R/Tとslot残数/試行数を再構築する。32本の正常traceと拒否/中断trace、Q=210の境界で照合する。実fetchがないため、oracleのdispatchは**合成fetch開始イベント**であり実通信の測定ではない。
 
-G/E/Sのbyte課金・stream/EOF・下位受信cap・実clock/期限/signal・ReleasePermit/実source/実worker/上位ownerへの接続は未実装。取消/期限は合成のstop通知だけ。従来transportの固定4予約や60秒/210試行、公開0.2/0.3は変更しない。費目型の存在で実resource/終了証拠が得られたとは扱わない。byte oracleはstream工程で追加する。
+純粋台帳単体ではG/E/Sのbyte課金・stream/EOFを扱わない。§11の合成streamで下位枠/AbortSignal/byte oracleを追加したが、実clock/期限・ReleasePermit/実source/実worker/上位ownerへの接続は未実装。従来transportの固定4予約や60秒/210試行、公開0.2/0.3は変更しない。費目型の存在で実resource/終了証拠が得られたとは扱わない。
 
 検証は[純粋予約台帳・oracle記録](E2E_BEST_PRACTICE_ABORT_SCOPE_RESERVATIONS_SYNTHETIC_2026-10-25.md)を参照。新moduleも既存`!dist/review/abort-scope-evidence*`のnpm除外対象。運用cap承認・全体受付・本番permitは有効化せず、VM/監視/telemetry調査保留を維持する。
+
+## 11. 合成streamへの限定接続
+
+`abort-scope-evidence-stream.ts`は合成のresponse/readerを返すfixture関数だけを受ける。fetch/ReadableStream実transportを生成せず、実Workerも起動しない。内部で同じ予約台帳を持ち、start/settleによるC/R会計と初回/親/metadata/table最終の用途を一体で扱う。初期Cやbyte capは合成入力であり実sessionの受領証明ではない。
+
+S/G/Eをchunk.byteLengthで課金し、超過chunkを数えてから保持前に拒否する。成功responseだけ枠内chunkのコピーを保持し、EOF後にfatal UTF-8 decode/JSON.parseする。返すのはaccepted/body byte数/cleanup状態だけで、本文や解析JSONは公開しない。acceptedはbodyの構文受理であり、観測receipt・ACL/意味検証・OS解放成功ではない。
+
+retryは最大1回、同じlogical read/slotを使う。失敗statusのbodyも数え、SだけをresetしG/E/Cを戻さない。429/5xx/合成source/read失敗はretry対象、JSON不正・下位受信超過・404等は非retry。401/403はbodyを読まず全体停止する。上限ちょうどのEOFは受理し、次の試行から残量0を拒否する。同時に全体枠も超えた場合はreceive_budget_exceededを優先する。
+
+E枠の超過/残0は台帳の証拠受付を閉じる。親/metadataの通常受信はG枠内で続けられるが、未実施table finalは専用slotを一度だけskipしてCを増やさない。この用途のため台帳にdisableEvidenceを追加し、初回availableでも証拠枠閉鎖時は未確認skipを許す。枠を開き直す入口はない。active試行中のdisableは不正として拒否する。
+
+AbortSignalまたは合成stopをfetch/read待機へraceさせる。取消後のlate chunkは受理/課金せず、late responseのreaderにはcancelを一度だけ要求する。台帳の不正操作で停止した場合もcontrollerを直ちにabortする。一次理由を後のclose/取消で上書きせず、C/G/Eを返金しない。retry待ち時間や実60秒のwatchdogはこの単位では実装せず、期限は合成stop通知でだけ表現する。
+
+cancelは同じreaderに一度だけ要求し、そのPromiseの成功を限定的なmicrotask観測で確認する。reject/無応答/遅延応答はunconfirmedとして保持し、無期限に待たない。cleanupは後の成功でunconfirmedからconfirmedへ戻さない。この観測は実OS/network resourceの解放証拠ではなく、実transportへの適用には残時間・解放確認ownerの接続が必要。
+
+byte oracleはfixtureのdispatch/chunk/EOF/取消/cancel要求イベントからC/G/E/Sとcancel回数を独立再計算する。製品の会計型/関数/統計をoracle内部では使わない。詳細は[合成stream検証記録](E2E_BEST_PRACTICE_ABORT_SCOPE_STREAM_SYNTHETIC_2026-10-25.md)。実transport/worker・認証固定との結合・公開JSON・実観測生成は未接続のまま。

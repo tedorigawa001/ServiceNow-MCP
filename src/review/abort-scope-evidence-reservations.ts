@@ -13,7 +13,7 @@ export type ScopeReservationCost = Readonly<{ dimension: 'http_attempt'; lane: S
   attempt: 1 | 2; slot: number | null }>;
 export type ScopeReservationFailure = 'invalid_input' | 'invalid_state' | 'evidence_binding_mismatch'
   | 'scope_evidence_limit' | 'request_budget_exceeded' | 'cancelled' | 'deadline_exceeded'
-  | 'authentication_failed' | 'access_denied' | 'closed';
+  | 'authentication_failed' | 'access_denied' | 'closed' | 'receive_budget_exceeded' | 'internal_review_error';
 type Result<T> = Readonly<{ ok: true; value: T } | { ok: false; code: ScopeReservationFailure; terminal: boolean }>;
 const configSchema = z.strictObject({ requests: z.number().int().min(4).max(210), consumed: z.number().int().min(0).max(206) })
   .refine(x => x.consumed + 4 <= x.requests);
@@ -152,11 +152,22 @@ export function createSyntheticScopeReservationLedger(raw: unknown) {
       if (primary) return failure(primary);
       const t = tables.get(table), s = slotMap.get(slot);
       if (!t || !s || t.slot !== slot || s.table !== table) return failure('evidence_binding_mismatch');
-      if (phase !== 'final' || current || s !== order[cursor] || s.state !== 'idle' || t.initial !== 'unavailable') return failure('invalid_state');
+      if (phase !== 'final' || current || s !== order[cursor] || s.state !== 'idle'
+        || t.initial !== 'unavailable' && !evidenceClosed) return failure('invalid_state');
       s.remaining = 0; s.state = 'skipped'; cursor++; return ok(true);
     },
-    stop(code: 'cancelled' | 'deadline_exceeded' | 'authentication_failed' | 'access_denied') {
-      if (!['cancelled', 'deadline_exceeded', 'authentication_failed', 'access_denied'].includes(code)) return failure('invalid_input');
+    disableEvidence(): Result<true> {
+      if (primary) return failure(primary);
+      if (active) return failure('invalid_state');
+      evidenceClosed = true;
+      if (current) {
+        const read = reads.get(current)!;
+        if (read.table) { read.table.initial = 'unavailable'; read.state = 'done'; current = undefined; }
+      }
+      return ok(true);
+    },
+    stop(code: 'cancelled' | 'deadline_exceeded' | 'authentication_failed' | 'access_denied' | 'receive_budget_exceeded' | 'internal_review_error') {
+      if (!['cancelled', 'deadline_exceeded', 'authentication_failed', 'access_denied', 'receive_budget_exceeded', 'internal_review_error'].includes(code)) return failure('invalid_input');
       return failure(code);
     },
     close() { return failure('closed'); },
