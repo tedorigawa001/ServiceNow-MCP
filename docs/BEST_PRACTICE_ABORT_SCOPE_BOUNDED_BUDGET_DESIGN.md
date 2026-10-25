@@ -1,7 +1,7 @@
 # AU-BR-006 bounded取得：証拠受信上限・動的最終予約
 
 Version: br006-bounded-budget-draft-0.1 / Date: 2026-10-25。
-Status: **詳細設計のみ。実装・cap採用承認・実source/worker接続は未実施**。
+Status: **純粋な予約台帳・試行費目型・独立イベントoracleを合成実装。stream課金・cap採用承認・実source/worker接続は未実施**。
 親：[証拠取得設計](BEST_PRACTICE_ABORT_SCOPE_EVIDENCE_DESIGN.md)、[接続契約](BEST_PRACTICE_ABORT_SCOPE_CONNECTION_CONTRACT_DESIGN.md)。
 
 ## 1. 現状と変更の境界
@@ -170,3 +170,19 @@ oracleは製品の予約/課金関数を再使用せず、合成fetch/readのイ
 最初は**純粋な予約台帳・費目の内部型・合成イベントoracle**から実装し、次に合成stream/transportへ下位課金と中断を接続する。その後に固定source/実worker/上位JSONへ進む。先に汎用GETへsys_db_objectやfinal例外だけを追加しない。
 
 本工程は文書のみ。VM/監視/telemetry保留・Unknown・全体受付無効を維持し、実装・実worker接続・実機操作・トークン発行・設定変更・permit発行は行わない。
+
+## 10. 純粋台帳の限定実装
+
+`abort-scope-evidence-reservations.ts`は独立した合成台帳ごとにread/table/slot/attemptのopaque handleを発行する。Qと既存消費Cは合成fixtureとしてstrictに受け付け、Q<=210・C+4<=Qを受付条件とする。実sessionからの受領証明ではなく、新台帳を自由に作れるので本番の予算保護には使えない。
+
+初期予約は親/metadata各2。table受付はC+R+4とT<=8を検査して、slotと初回readの占有を一体で登録する。初回が終わるまで別通常readを差し込めない。cache hitは同じtable handleを返すが、初回readを再開始できない。受付不足はT/R/Cを変えず証拠受付を閉じ、通常枠不足は通常readを閉じる。これらは非terminalの固定拒否で、既存final予約を失効させない。
+
+費目型`ScopeReservationCost`は合成のHTTP試行1回・lane・論理read内の1/2回目・final slot番号を表す。`ScopeReservationDimensions`はC/R/Tを区別する。予約はCに数えず、dispatch相当のstartだけがCを増やす。retry待ちに移っても返金せず、同logical readは最大2試行。成功/非retry終端で残slotを0へ解放する。doneは論理処理の終端であり、HTTP成功や証拠安定の認定ではない。
+
+finalへは一方向に遷移し、親→metadata→受付table順で自身のslotだけを使える。別台帳/clone/別table/旧booleanの流用、二重開始/完了、3回目の試行はterminal停止。first primaryを保持して全未使用slotを失効させるが、Cは戻さない。初回unavailableのtableだけfinalを未実施でskipでき、final attempt=0・state=skippedを保持する。実観測receiptや安定性は発行しない。
+
+独立oracleはtest fixture内だけに置き、製品型/会計関数をimportせず、イベントprefixからC/R/Tとslot残数/試行数を再構築する。32本の正常traceと拒否/中断trace、Q=210の境界で照合する。実fetchがないため、oracleのdispatchは**合成fetch開始イベント**であり実通信の測定ではない。
+
+G/E/Sのbyte課金・stream/EOF・下位受信cap・実clock/期限/signal・ReleasePermit/実source/実worker/上位ownerへの接続は未実装。取消/期限は合成のstop通知だけ。従来transportの固定4予約や60秒/210試行、公開0.2/0.3は変更しない。費目型の存在で実resource/終了証拠が得られたとは扱わない。byte oracleはstream工程で追加する。
+
+検証は[純粋予約台帳・oracle記録](E2E_BEST_PRACTICE_ABORT_SCOPE_RESERVATIONS_SYNTHETIC_2026-10-25.md)を参照。新moduleも既存`!dist/review/abort-scope-evidence*`のnpm除外対象。運用cap承認・全体受付・本番permitは有効化せず、VM/監視/telemetry調査保留を維持する。

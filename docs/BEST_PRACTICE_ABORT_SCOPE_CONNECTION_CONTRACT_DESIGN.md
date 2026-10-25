@@ -4,7 +4,7 @@ Version: br006-connection-contract-draft-0.1 / Date: 2026-10-25。
 Status: **合成channel限定のstrict schema・相関台帳・診断ownerを実装。実worker IPC/実source issuer/公開結果契約は未接続・未承認**。
 親：[owner設計](BEST_PRACTICE_ABORT_SCOPE_OWNER_DESIGN.md)、[スコープ証拠・取得設計](BEST_PRACTICE_ABORT_SCOPE_EVIDENCE_DESIGN.md)。
 
-HTTP側の証拠専用受信枠・最終再読の動的予約・停止分類は[bounded予算詳細設計draft-0.1](BEST_PRACTICE_ABORT_SCOPE_BOUNDED_BUDGET_DESIGN.md)を参照。合成channelのIPC枠と区別し、全体60秒/210試行は維持する未実装案。
+HTTP側の証拠専用受信枠・最終再読の動的予約・停止分類は[bounded予算詳細設計draft-0.1](BEST_PRACTICE_ABORT_SCOPE_BOUNDED_BUDGET_DESIGN.md)を参照。純粋予約台帳/試行費目型/oracleを合成実装したが、stream課金・実接続は未実施。合成channelのIPC枠と区別し、既存全体60秒/210試行は維持する。
 
 ## 1. 対象と現状
 
