@@ -15,6 +15,7 @@ try {
   const files = new Set(packed.files.map(file => file.path));
   assert(files.has('dist/review/review-worker.js'), 'packed worker entry missing');
   assert(files.has('dist/tools/best-practice.js'), 'packed MCP review tool missing');
+  assert(files.has('dist/servicenow/review-evidence-lifecycle.js'), 'packed session lifecycle dependency missing');
   for (const path of ['worker-supervisor', 'payload-review', 'update-xml', 'aggregate-finalize', 'aggregate-schema',
     'result-schema', 'result-schema-v2', 'catalog', 'follow-up-catalog', 'scope-analysis', 'constant-value', 'update-set-adapter', 'bounded-source', 'target-selection']) {
     assert(files.has(`dist/review/${path}.js`), `packed runtime module missing: ${path}`);

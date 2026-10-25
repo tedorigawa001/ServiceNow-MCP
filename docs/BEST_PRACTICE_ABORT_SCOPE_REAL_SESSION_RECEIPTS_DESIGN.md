@@ -1,16 +1,18 @@
 # AU-BR-006 実session claim・private受領物・終了時失効の接続詳細設計
 
 Version: br006-real-session-receipts-draft-0.1 / Date: 2026-10-26。
-Status: **設計のみ・未実装・実接続未承認**。
+Status: **owner内部型・実session側claim基盤・認証identity／ready結合・同期revokeをfake依存で部分実装。正式receipt／実source／worker接続は未実装・未承認**。
 親：[固定source issuer](BEST_PRACTICE_ABORT_SCOPE_FIXED_SOURCE_ISSUER_DESIGN.md)、[接続契約](BEST_PRACTICE_ABORT_SCOPE_CONNECTION_CONTRACT_DESIGN.md)、[bounded予算](BEST_PRACTICE_ABORT_SCOPE_BOUNDED_BUDGET_DESIGN.md)。
 
 ## 1. 範囲と現行との差
 
-実BoundedReadSession側の一度限りのclaim、同sourceで選択されたmetadataと実取得payloadのprivate受領物、認証snapshot／ReleasePermitへの結合、停止／終了時の失効を定義する。名称は内部契約案であり、現行APIや公開schemaへ追加済みではない。
+実BoundedReadSession側の一度限りのclaim、同sourceで選択されたmetadataと実取得payloadのprivate受領物、認証snapshot／ReleasePermitへの結合、停止／終了時の失効を定義する。正式receiptは内部契約案で、公開API／schemaへ追加済みではない。部分実装した内部型の範囲は§11を参照する。
 
-本工程では文書だけを更新する。実装・取得許可先の追加・実worker接続・実機操作・トークン発行・設定変更・本番cap投入・公開規則登録・Pushは行わない。VM／監視／telemetryは保留、Unknown・全体受付無効を維持する。公開0.2/0.3、明示14／既定3規則、固定評価セットを変更しない。
+§1〜§10は詳細設計、後続の部分実装範囲は§11に記す。取得許可先の追加・実source／worker接続・実機操作・トークン発行・設定変更・本番cap投入・公開規則登録・Pushは行わない。VM／監視／telemetryは保留、Unknown・全体受付無効を維持する。公開0.2/0.3、明示14／既定3規則、固定評価セットを変更しない。
 
-| 現行コード | 確認した性質 | 不足する接続 |
+設計時点の差分は下表のとおり。後続のsession lifecycle部分実装は§11に記す。
+
+| 設計時点のコード | 確認した性質 | 必要な接続 |
 |---|---|---|
 | client.createBoundedReadSession | 設定／oauthをコピーしてsessionを生成 | receipt所有者とのprivate identity結合 |
 | BoundedReadSession | origin・認証snapshot・readyPromise・単調時計・C/G/payload会計を所有 | BR-006生成claimと同期的な失効連携 |
@@ -201,4 +203,22 @@ timer／external listener／同時実行枠はsession.closeが一度だけ解放
 
 未確定：private module配置、cleanup確認方式と残時間配賦、保持／IPC/control work上界、下位cap、実worker配送、次版公開診断、PDIのACL／field応答。本書だけで本番cap・実接続・実行permit・公開登録を承認しない。
 
-今回の確認は現行ソースとの照合と文書参照・差分確認のみ。実装・新規テスト作成／実行・実機操作は行わない。
+設計初回は現行ソースとの照合と文書確認だけを行った。後続の実装・合成検証は次節を参照する。
+
+## 11. prepared owner／session lifecycleの限定実装
+
+`src/servicenow/review-evidence-lifecycle.ts`にprivate module台帳、AuthSnapshotIdentity、AuthReadyGeneration、prepared owner内部型とsession側claimを実装した。実BoundedReadSessionのconstructorは孤立snapshot参照を登録し、同readyPromiseの成功を一度だけpinする。stopは最初の理由を固定した後、controller.abortより先に同期revokeし、closeもphase／controllerのabortより先に失効させる。revokeは外部callbackを呼ばず、owner binding・coreのsnapshot／ready参照を外す。owner失効は一度だけで、close後の認証完了でも復活しない。
+
+source発行元は`abort-scope-evidence-session-fixture.ts`のfake issuerだけ。runtime coreの`registerPreparedFixtureSource`は非権威の内部fixture portで、実BoundedUpdateSetSourceは呼ばない。fake source／permit／parent-ready／matchedは実取得・実ReleasePermitの証明ではない。core登録portを含め同process内の信頼コード向けの境界であり、悪意あるdeep importを隔離するものではない。
+
+既知の同sessionに属するfake sourceだけがclaimを開始でき、claim取得後の前提不成立でも消費済みを戻さない。未知／他sessionのsourceは無関係なsession claimを消費せず拒否する。重複生成では既存ownerを置換しない。auth identityとready世代の参照、fake permit、parent-ready、final未開始を照合する。release証拠の深いsnapshot、実source取得mode／claim、選択window、payload receiptはまだ未接続。
+
+返すownerはpreparedかrevokedだけで、active／receipt／sealへの昇格APIは存在しない。閉じた診断用gateは有効なprepared ownerにも必ずinvalid_stateを返し、`evidence_issuance:'disabled'`を維持する。型のbrand・handleのclone・他fake issuer・同値資格情報の新sessionでは受理しない。
+
+既存ReadFailureCodeは網羅的な固定一覧で保持し、未知値だけをinternal_review_errorへ落とす。通常phase cutoffはauth-ready済みowner全体を失効させず、hard期限／取消／受信超過等では同期revokeする。最初の認証がphase cutoff等で完了できなかった場合はready世代を発行せず、認証失敗の理由を保持して新owner生成を拒否する。phase別receipt発行permitは未実装なので、これで旧phaseのbody受領証拠が完成したとは扱わない。
+
+session getの認証完了通知とstop/closeだけを結び、HTTP許可先・origin・headers・retry・C/G/payload会計・時計／上限は変更していない。証拠専用transport、cleanup確認、real receipt、実worker／上位結果、公開規則登録は閉じたまま。session.closeの既存資格情報処理も変更せず、全秘密の物理破棄を保証しない。
+
+runtime lifecycleはbounded-readのimport先なのでnpmへ同梱する。fake issuerと既存合成証拠moduleは従来の`!dist/review/abort-scope-evidence*`で除外する。新依存パッケージは追加しない。梱包テストにruntime lifecycleの存在確認を加えた。
+
+検証は[session owner合成記録](E2E_BEST_PRACTICE_ABORT_SCOPE_SESSION_OWNER_SYNTHETIC_2026-10-26.md)。次は選択window／行receipt・payload開始／移譲claimの内部型を、正式発行を禁止したまま具体化する。

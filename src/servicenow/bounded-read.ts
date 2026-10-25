@@ -2,6 +2,7 @@
 import { createHash } from 'node:crypto';
 import type { ServiceNowConfig } from './types.js';
 import { pinReviewReleaseConfig } from './review-release-config.js';
+import { registerReviewEvidenceSession, markReviewEvidenceAuthReady, revokeReviewEvidenceSession } from './review-evidence-lifecycle.js';
 
 export const BOUNDED_LIMITS = Object.freeze({ responseBytes: 4 * 1024 * 1024, totalBytes: 16 * 1024 * 1024,
   payloadBytes: 2 * 1024 * 1024, totalPayloadBytes: 8 * 1024 * 1024,
@@ -76,6 +77,7 @@ export class BoundedReadSession {
       this.authMode === 'per-user' ? snapshot.perUserBearerToken : [snapshot.oauth.clientId, snapshot.oauth.username ?? '']])).digest('hex');
     if (active >= 2 || principals.has(this.principalKey)) throw new BoundedReadError('review_busy');
     active++; principals.add(this.principalKey);
+    registerReviewEvidenceSession(this, this.snapshot);
     this.fetcher = options.fetch ?? ((...args) => globalThis.fetch(...args));
     this.timer = setTimeout(() => this.stop('deadline_exceeded'), Math.max(0, this.limits.deadlineMs - (performance.now() - this.started)));
     const cancel = () => this.stop('cancelled');
@@ -102,6 +104,7 @@ export class BoundedReadSession {
   assertActive() { this.check(); }
   private stop(code: ReadFailureCode) {
     this.stopCode ??= code;
+    revokeReviewEvidenceSession(this, this.stopCode);
     this.controller.abort();
   }
   private check() {
@@ -132,6 +135,7 @@ export class BoundedReadSession {
   }
   close() {
     if (this.disposed) return;
+    revokeReviewEvidenceSession(this, this.stopCode ?? 'closed');
     this.disposed = true; clearTimeout(this.timer); clearTimeout(this.phaseTimer); this.removeExternal();
     this.phase.abort();
     this.controller.abort(); active--; principals.delete(this.principalKey);
@@ -248,7 +252,10 @@ export class BoundedReadSession {
     if (this.busy) throw new BoundedReadError('review_busy');
     this.busy = true;
     try {
-      this.readyPromise ??= this.authenticate();
+      this.readyPromise ??= this.authenticate().then(() => { markReviewEvidenceAuthReady(this); }, error => {
+        revokeReviewEvidenceSession(this, error instanceof BoundedReadError ? error.code : 'internal_review_error');
+        throw error;
+      });
       await this.readyPromise; this.check();
       return await this.request(path, { method: 'GET', headers: { Accept: 'application/json', Authorization: `Bearer ${this.token}` } }, final);
     } finally { this.busy = false; }
