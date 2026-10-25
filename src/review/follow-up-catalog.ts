@@ -13,6 +13,8 @@ export const ONCHANGE_FOLLOW_UP_PROFILE_VERSION = 'bp-followups-cl008-0.1';
 export const ONLOAD_FOLLOW_UP_PROFILE_VERSION = 'bp-followups-cl003-0.1';
 export const DOM_FOLLOW_UP_PROFILE_VERSION = 'bp-followups-cl007-0.1';
 export const SETVALUE_FOLLOW_UP_PROFILE_VERSION = 'bp-followups-cl005-0.1';
+export const FULLTEXT_FOLLOW_UP_PROFILE_VERSION = 'bp-followups-qry002-0.1';
+export const FULLTEXT_METHOD_FOLLOW_UP = { add_query: 'fulltext_add_query_review', encoded_query: 'fulltext_encoded_query_review' } as const;
 export const DOM_SCOPE_FOLLOW_UP = { document_scope: 'dom_document_scope_review', created_subtree: 'dom_created_subtree_review' } as const;
 export const ONLOAD_INPUT_FOLLOW_UP = { static: 'onload_static_inputs_review', runtime: 'onload_runtime_inputs_review', unknown: 'onload_unknown_inputs_review' } as const;
 export const COMMON_FOLLOW_UP_CODES = ['source_approval', 'binding_and_reachability', 'exceptions_and_business_intent'] as const;
@@ -29,14 +31,16 @@ export const RULE_SPECIFIC_FOLLOW_UP = {
   'AU-CL-003': 'onload_data_timing_review',
   'AU-CL-007': 'dom_dependency_review',
   'AU-CL-005': 'reference_display_value_review',
+  'AU-QRY-002': 'fulltext_index_configuration_review',
 } as const;
-export const FOLLOW_UP_CODES = [...COMMON_FOLLOW_UP_CODES, ...Object.values(RULE_SPECIFIC_FOLLOW_UP), ...Object.values(ONLOAD_INPUT_FOLLOW_UP), ...Object.values(DOM_SCOPE_FOLLOW_UP)] as const;
+export const FOLLOW_UP_CODES = [...COMMON_FOLLOW_UP_CODES, ...Object.values(RULE_SPECIFIC_FOLLOW_UP), ...Object.values(ONLOAD_INPUT_FOLLOW_UP), ...Object.values(DOM_SCOPE_FOLLOW_UP), ...Object.values(FULLTEXT_METHOD_FOLLOW_UP)] as const;
 export const followUpCodeSchema = z.enum(FOLLOW_UP_CODES);
 export type FollowUpCode = z.infer<typeof followUpCodeSchema>;
 /** Detection signals, never exception classification, approval or execution-path proof. */
 export type FollowUpContext = { kind: 'workflow_suppression' } | { kind: 'async_dependency' }
   | { kind: 'synchronous_ajax'; receiver_unresolved: boolean } | { kind: 'onload_timing'; timing: keyof typeof ONLOAD_INPUT_FOLLOW_UP }
-  | { kind: 'dom_scope'; scope: keyof typeof DOM_SCOPE_FOLLOW_UP };
+  | { kind: 'dom_scope'; scope: keyof typeof DOM_SCOPE_FOLLOW_UP }
+  | { kind: 'fulltext_query'; method: keyof typeof FULLTEXT_METHOD_FOLLOW_UP };
 
 export function requiredFollowUp(ruleId: string, context?: FollowUpContext): FollowUpCode[] {
   const result: FollowUpCode[] = [...COMMON_FOLLOW_UP_CODES];
@@ -51,6 +55,10 @@ export function requiredFollowUp(ruleId: string, context?: FollowUpContext): Fol
   if (ruleId === 'AU-CL-002') result.push(RULE_SPECIFIC_FOLLOW_UP[ruleId]);
   if (ruleId === 'AU-CL-008') result.push(RULE_SPECIFIC_FOLLOW_UP[ruleId]);
   if (ruleId === 'AU-CL-005') result.push(RULE_SPECIFIC_FOLLOW_UP[ruleId]);
+  if (ruleId === 'AU-QRY-002') {
+    result.push(RULE_SPECIFIC_FOLLOW_UP[ruleId]);
+    if (context?.kind === 'fulltext_query') result.push(FULLTEXT_METHOD_FOLLOW_UP[context.method]);
+  }
   if (ruleId === 'AU-CL-003') {
     result.push(RULE_SPECIFIC_FOLLOW_UP[ruleId]);
     result.push(ONLOAD_INPUT_FOLLOW_UP[context?.kind === 'onload_timing' ? context.timing : 'unknown']);
@@ -66,6 +74,18 @@ type Definition = { kind: 'generic' | 'context_specific' | 'rule_intrinsic'; app
   meaning: string; attach_when: string; does_not_prove: string };
 /** Policy is owned here, not by a dataset. Source adoption and expert adjudication remain pending. */
 export const FOLLOW_UP_DEFINITIONS = {
+  fulltext_index_configuration_review: {
+    kind: 'rule_intrinsic', applicable_rules: ['AU-QRY-002'], meaning: '対象テーブルの全文検索索引・検索設定・適用範囲と実際の検索要件を確認する。',
+    attach_when: 'BR限定の全文検索構文候補の全件。', does_not_prove: '索引が無い/有る、利用可能、検索成功/失敗、違反、検索結果や認可の正しさ。',
+  },
+  fulltext_add_query_review: {
+    kind: 'context_specific', applicable_rules: ['AU-QRY-002'], meaning: '2引数addQueryの予約名・受信側・対象テーブル・検索意図を確認する。',
+    attach_when: '第1引数が限定定数評価で123TEXTQUERY321と一致する2引数addQuery。', does_not_prove: '呼出し到達性・検索実行・索引設定。',
+  },
+  fulltext_encoded_query_review: {
+    kind: 'context_specific', applicable_rules: ['AU-QRY-002'], meaning: '固定encoded queryの予約名条件・全体構文と検索要件を確認する。',
+    attach_when: '1引数addEncodedQueryの固定文字列で、限定した条件境界に123TEXTQUERY321=値を検出。', does_not_prove: 'encoded query全体の妥当性、条件の有効性や索引設定。',
+  },
   reference_display_value_review: {
     kind: 'rule_intrinsic', applicable_rules: ['AU-CL-005'],
     meaning: '対象列が参照型か、既知で正しい表示値を利用できるか、クリア操作等の意図・追加通信・UI互換性を確認する。',

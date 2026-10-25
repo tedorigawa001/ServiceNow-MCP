@@ -58,6 +58,42 @@ afterEach(async () => {
 });
 const run = (rows: Row[], extra: Record<string, unknown> = {}, fetcher = fixture(rows)) => reviewBoundedUpdateSet(client(),
   { update_set_sys_id: parent, selection_mode: 'review_targets', ...extra }, { fetch: fetcher, workerFactory: sourceWorkerFactory });
+it('QRY-002 preserves per-finding construction and unverified indexing through worker in both envelopes', async () => {
+  const rows=[row(1)];
+  for(const mode of ['review_targets',undefined]) {
+    const out=await run(rows,{requested_rule_ids:['AU-QRY-002'],selection_mode:mode},fixture(rows,
+      'var gr=new GlideRecord("PRIVATE_TEXT_TABLE");gr.addQuery("123TEXTQUERY321","PRIVATE_SEARCH_A");gr.addEncodedQuery("active=true^123TEXTQUERY321=PRIVATE_SEARCH_B");'));
+    expect(out.isError).toBe(false);if(out.isError)throw Error(out.error.code);
+    const schema=mode?aggregateReviewV3Schema:aggregateReviewSchema;
+    expect(out.result).toMatchObject({schema_version:mode?'bp-mcp-review-0.3':'bp-mcp-review-0.2',versions:{ruleset:'bp3-0.15'},counts:{findings:2}});
+    expect(schema.safeParse(out.result).success).toBe(true);
+    expect(JSON.stringify(out)).not.toMatch(/PRIVATE_TEXT_TABLE|PRIVATE_SEARCH|synthetic-selection-token/);
+    for(const corrupt of ['method','index','followup']) {
+      const forged=structuredClone(out.result),asset=forged.assets[0];if(asset.state!=='reviewed')throw Error('Expected text query candidate');
+      if(corrupt==='method')asset.result.findings[0].required_follow_up.push('fulltext_encoded_query_review');
+      else if(corrupt==='index')asset.result.limitations=asset.result.limitations.filter(x=>x!=='fulltext_index_configuration_not_verified');
+      else asset.result.findings[0].required_follow_up=['source_approval'];
+      expect(schema.safeParse(forged).success).toBe(false);
+    }
+  }
+});
+it('QRY-002 dynamic encoded strings cannot claim complete analysis', async () => {
+  const rows=[row(1)];
+  const out=await run(rows,{requested_rule_ids:['AU-QRY-002']},fixture(rows,'var gr=new GlideRecord("task");gr.addEncodedQuery(input);'));
+  expect(out.isError).toBe(false);if(out.isError)throw Error(out.error.code);
+  expect(out.result.coverage.analysis_complete).toBe(false);
+  const forged=structuredClone(out.result);forged.coverage.analysis_complete=true;
+  expect(aggregateReviewV3Schema.safeParse(forged).success).toBe(false);
+});
+it('QRY-002 and QRY-001 remain independent when requested together', async () => {
+  const rows=[row(1)];
+  const out=await run(rows,{requested_rule_ids:['AU-QRY-001','AU-QRY-002']},fixture(rows,
+    'var gr=new GlideRecord("task");gr.addQuery("short_description","LIKE","word");gr.addEncodedQuery("short_descriptionLIKEword");gr.addQuery("123TEXTQUERY321","word");'));
+  expect(out.isError).toBe(false);if(out.isError)throw Error(out.error.code);
+  expect(out.result.counts.findings).toBe(2);
+  const asset=out.result.assets[0];if(asset.state!=='reviewed')throw Error('Expected query candidates');
+  expect(asset.result.findings.map(f=>f.rule_id).sort()).toEqual(['AU-QRY-001','AU-QRY-002']);
+});
 it('CL-005 reaches worker in both envelopes without certifying field type or display value', async () => {
   const rows=[row(1,'sys_script_client')];
   for(const mode of ['review_targets',undefined]) {

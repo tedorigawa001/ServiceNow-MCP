@@ -65,7 +65,8 @@
             "bp3-0.11",
             "bp3-0.12",
             "bp3-0.13",
-            "bp3-0.14"
+            "bp3-0.14",
+            "bp3-0.15"
           ]
         },
         "asset_schema": {
@@ -379,7 +380,7 @@
       "properties": {
         "requested_rule_ids": {
           "minItems": 1,
-          "maxItems": 13,
+          "maxItems": 14,
           "type": "array",
           "items": {
             "type": "string",
@@ -396,12 +397,13 @@
               "AU-CL-008",
               "AU-CL-003",
               "AU-CL-007",
-              "AU-CL-005"
+              "AU-CL-005",
+              "AU-QRY-002"
             ]
           }
         },
         "skipped_rules": {
-          "maxItems": 13,
+          "maxItems": 14,
           "type": "array",
           "items": {
             "type": "object",
@@ -421,7 +423,8 @@
                   "AU-CL-008",
                   "AU-CL-003",
                   "AU-CL-007",
-                  "AU-CL-005"
+                  "AU-CL-005",
+                  "AU-QRY-002"
                 ]
               },
               "reason": {
@@ -483,7 +486,7 @@
               },
               "applicable_rule_ids": {
                 "minItems": 1,
-                "maxItems": 13,
+                "maxItems": 14,
                 "type": "array",
                 "items": {
                   "type": "string",
@@ -500,7 +503,8 @@
                     "AU-CL-008",
                     "AU-CL-003",
                     "AU-CL-007",
-                    "AU-CL-005"
+                    "AU-CL-005",
+                    "AU-QRY-002"
                   ]
                 }
               },
@@ -532,7 +536,8 @@
                       "bp3-0.11",
                       "bp3-0.12",
                       "bp3-0.13",
-                      "bp3-0.14"
+                      "bp3-0.14",
+                      "bp3-0.15"
                     ]
                   },
                   "reviewed_at": {
@@ -877,7 +882,7 @@
                     "properties": {
                       "requested_rule_ids": {
                         "minItems": 1,
-                        "maxItems": 13,
+                        "maxItems": 14,
                         "type": "array",
                         "items": {
                           "type": "string",
@@ -894,12 +899,13 @@
                             "AU-CL-008",
                             "AU-CL-003",
                             "AU-CL-007",
-                            "AU-CL-005"
+                            "AU-CL-005",
+                            "AU-QRY-002"
                           ]
                         }
                       },
                       "evaluated_rule_ids": {
-                        "maxItems": 13,
+                        "maxItems": 14,
                         "type": "array",
                         "items": {
                           "type": "string",
@@ -916,12 +922,13 @@
                             "AU-CL-008",
                             "AU-CL-003",
                             "AU-CL-007",
-                            "AU-CL-005"
+                            "AU-CL-005",
+                            "AU-QRY-002"
                           ]
                         }
                       },
                       "skipped_rules": {
-                        "maxItems": 13,
+                        "maxItems": 14,
                         "type": "array",
                         "items": {
                           "type": "object",
@@ -941,7 +948,8 @@
                                 "AU-CL-008",
                                 "AU-CL-003",
                                 "AU-CL-007",
-                                "AU-CL-005"
+                                "AU-CL-005",
+                                "AU-QRY-002"
                               ]
                             },
                             "reason": {
@@ -1001,7 +1009,8 @@
                             "AU-CL-008",
                             "AU-CL-003",
                             "AU-CL-007",
-                            "AU-CL-005"
+                            "AU-CL-005",
+                            "AU-QRY-002"
                           ]
                         },
                         "category": {
@@ -1082,11 +1091,14 @@
                               "onload_data_timing_review",
                               "dom_dependency_review",
                               "reference_display_value_review",
+                              "fulltext_index_configuration_review",
                               "onload_static_inputs_review",
                               "onload_runtime_inputs_review",
                               "onload_unknown_inputs_review",
                               "dom_document_scope_review",
-                              "dom_created_subtree_review"
+                              "dom_created_subtree_review",
+                              "fulltext_add_query_review",
+                              "fulltext_encoded_query_review"
                             ]
                           }
                         },

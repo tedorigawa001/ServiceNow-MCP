@@ -2,7 +2,7 @@
 
 Version: bp-followups-0.4。2026-10-17。方針1を維持し、限定的な定数評価を付与条件に追加。
 人による採点・根拠資料の採用承認・本番品質の承認は別途必要。
-後続規則の追補profileを含む現行語彙は20項目。AU-CL-002は[Client Script照会候補](BEST_PRACTICE_CLIENT_LOOKUPS.md)、AU-CL-008は[onChange読込時候補](BEST_PRACTICE_ONCHANGE_LOADING.md)、AU-CL-003のタイミング確認と入力別3コードは[onLoad取得入力の確認候補](BEST_PRACTICE_ONLOAD_SCRATCHPAD.md)、AU-CL-007の共通DOM確認と由来別2コードは[DOM依存確認候補](BEST_PRACTICE_DOM_CLIENT.md)を参照。AU-CL-005の型・表示値の確認は[2引数setValue確認候補](BEST_PRACTICE_SETVALUE_CLIENT.md)を参照。固定3規則用の版・評価履歴は変更しない。
+後続規則の追補profileを含む現行語彙は23項目。AU-CL-002は[Client Script照会候補](BEST_PRACTICE_CLIENT_LOOKUPS.md)、AU-CL-008は[onChange読込時候補](BEST_PRACTICE_ONCHANGE_LOADING.md)、AU-CL-003のタイミング確認と入力別3コードは[onLoad取得入力の確認候補](BEST_PRACTICE_ONLOAD_SCRATCHPAD.md)、AU-CL-007の共通DOM確認と由来別2コードは[DOM依存確認候補](BEST_PRACTICE_DOM_CLIENT.md)を参照。AU-CL-005の型・表示値の確認は[2引数setValue確認候補](BEST_PRACTICE_SETVALUE_CLIENT.md)を参照。AU-QRY-002の索引前提・API別確認は[BR全文検索前提候補](BEST_PRACTICE_FULLTEXT_QUERY_BR.md)を参照。固定3規則用の版・評価履歴は変更しない。
 
 正本は[src/review/follow-up-catalog.ts](../src/review/follow-up-catalog.ts)。
 採点器だけのローカル語彙を製品仕様に昇格させず、まず意味・適用規則・付与文脈・

@@ -9,7 +9,7 @@ import { bp5RuleIdSchema } from '../../src/review/result-schema-v2.js';
 import { reviewUpdateSetInputSchema } from '../../src/review/update-set-adapter.js';
 
 const name = 'review_update_set_best_practices';
-it('accepts all thirteen explicit opt-ins while keeping the original default rules', () => {
+it('accepts all fourteen explicit opt-ins while keeping the original default rules', () => {
   vi.stubEnv('MCP_TOOL_PACKAGE', 'full');
   const input = { update_set_sys_id: '1'.repeat(32), requested_rule_ids: [...bp5RuleIdSchema.options] };
   const validate = new AjvJsonSchemaValidator().getValidator(getTools().find(tool => tool.name === name)!.inputSchema);
@@ -29,8 +29,8 @@ it('registers one read-only non-destructive bounded review tool in full and plat
       required: ['update_set_sys_id'], properties: {
         update_set_sys_id: { type: 'string', pattern: '^[a-f0-9]{32}$' },
         max_records: { type: 'integer', minimum: 1, maximum: 100, default: 20 },
-        requested_rule_ids: { type: 'array', minItems: 1, maxItems: 13, uniqueItems: true,
-          items: { enum: ['AU-BR-001', 'AU-BR-002', 'AU-CL-004', 'AU-QRY-001', 'AU-BR-004', 'AU-BR-005', 'AU-BR-007', 'AU-CL-006', 'AU-CL-002', 'AU-CL-008', 'AU-CL-003', 'AU-CL-007', 'AU-CL-005'] } }, instance: { type: 'string' },
+        requested_rule_ids: { type: 'array', minItems: 1, maxItems: 14, uniqueItems: true,
+          items: { enum: ['AU-BR-001', 'AU-BR-002', 'AU-CL-004', 'AU-QRY-001', 'AU-BR-004', 'AU-BR-005', 'AU-BR-007', 'AU-CL-006', 'AU-CL-002', 'AU-CL-008', 'AU-CL-003', 'AU-CL-007', 'AU-CL-005', 'AU-QRY-002'] } }, instance: { type: 'string' },
       } });
   }
   vi.stubEnv('MCP_TOOL_PACKAGE', 'service_desk');
