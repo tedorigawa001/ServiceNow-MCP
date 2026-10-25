@@ -6,7 +6,9 @@ Status: **合成channel限定のstrict schema・相関台帳・診断ownerを実
 
 HTTP側の証拠専用受信枠・最終再読の動的予約・停止分類は[bounded予算詳細設計draft-0.1](BEST_PRACTICE_ABORT_SCOPE_BOUNDED_BUDGET_DESIGN.md)を参照。予約台帳とstream課金/中断/oracleは合成実装したが、実transport/workerへの接続は未実施。合成channelのIPC枠と区別し、既存全体60秒/210試行は維持する。
 
-証拠の実発行元とprivateな受領物、同sourceのReleasePermit/選択payload/予算への結合、固定GETと最終sealは[固定source issuer詳細設計draft-0.1](BEST_PRACTICE_ABORT_SCOPE_FIXED_SOURCE_ISSUER_DESIGN.md)へ具体化した。合成issuerの基礎を実装したが、実接続・最終seal・cap承認はまだ行っていない。
+証拠の実発行元とprivateな受領物、同sourceのReleasePermit/選択payload/予算への結合、固定GETと最終sealは[固定source issuer詳細設計draft-0.1](BEST_PRACTICE_ABORT_SCOPE_FIXED_SOURCE_ISSUER_DESIGN.md)へ具体化した。合成の初回／最終接続・局所継続・sealは実装したが、実接続・本番seal・cap承認はまだ行っていない。
+
+実workerへ渡す前段の[実session claim・private受領物・終了時失効の詳細設計draft-0.1](BEST_PRACTICE_ABORT_SCOPE_REAL_SESSION_RECEIPTS_DESIGN.md)を追加した。選択window／payload開始・移譲claim、認証／permit結合、停止とphase世代の失効を扱い、実worker ownerが未接続の間は本文移譲口を有効化しない。
 
 ## 1. 対象と現状
 

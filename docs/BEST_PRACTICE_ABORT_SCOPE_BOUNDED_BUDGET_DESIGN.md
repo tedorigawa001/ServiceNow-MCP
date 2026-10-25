@@ -6,6 +6,8 @@ Status: **純粋予約台帳・合成stream課金/中断・独立イベントora
 
 実session/ReleasePermitへの結合、固定GET/必要列射影、初回/最終受領物と既存verifyの統合は[固定source issuer詳細設計draft-0.1](BEST_PRACTICE_ABORT_SCOPE_FIXED_SOURCE_ISSUER_DESIGN.md)を参照。合成issuerの型/生成claim/GET生成/正規化まで実装したが、合成台帳/streamを本番発行元へ昇格させず、実接続は未実施のまま。
 
+単一の実session／budget ownerと証拠発行を結ぶ前段は[実session claim・private受領物・終了時失効の詳細設計draft-0.1](BEST_PRACTICE_ABORT_SCOPE_REAL_SESSION_RECEIPTS_DESIGN.md)へ具体化した。既存getのJSON値・cancel要求だけをcleanup確認済み証拠へ昇格させず、typed transport未接続なら正式発行を止める。動的予約／下位受信枠／実cleanup証拠の実装やcap承認は別工程とする。
+
 ## 1. 現状と変更の境界
 
 現行`BoundedReadSession`は全体60秒、HTTP最大210試行、1応答4MiB/累計16MiB、payload単体2MiB/累計8MiBを持つ。実HTTPの前に試行を課金し、429/5xx/通信失敗等のupstream_unavailableだけ最大1retryする。通常取得から最終親/metadata用4試行を残し、固定sourceのverifyは親→一覧を再読する。実装の`get(path, final:boolean)`と固定予約4だけでは、本案のtable別予約・下位受信枠を保証できない。
