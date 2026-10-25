@@ -18,6 +18,9 @@ const FORM = 1024;
 const CLIENT_RECORD = 2048, CLIENT_CTOR = 4096, LOOKUP_METHOD = 8192;
 const LOADING = 16384;
 const RUNTIME_INPUT = 32768;
+const DOCUMENT = 65536, WINDOW = 131072, DOCUMENT_ELEMENT = 262144, CREATED_ELEMENT = 524288, DOM_METHOD = 1048576;
+const domReceivers = DOCUMENT | WINDOW | DOCUMENT_ELEMENT | CREATED_ELEMENT;
+const domQueries = new Set(['getElementById', 'querySelector', 'querySelectorAll']);
 type InputTiming = 'static' | 'runtime' | 'unknown';
 type Origin = { flags: number; properties?: Map<string, Origin>; unknownProperties?: boolean };
 type Binding = { origin: Origin; functionId: number; entryFlags?: number; isConst?: boolean; constantWritten?: boolean; constant?: ConstantValue };
@@ -42,7 +45,8 @@ export function analyzeScopedCandidates(ast: AstNode, when: string | null, emit:
     uiPolicy?: { control: (entry: AstNode, kind: string, dynamic?: boolean) => void; unresolved: () => void };
     clientLookup?: { lookup: (entry: AstNode, kind: string) => void; unresolved: () => void };
     onChange?: { report: (entry: AstNode, kind: string, state: 'guarded' | 'possible' | 'unresolved') => void; unresolved: () => void };
-    onLoad?: { report: (entry: AstNode, kind: string, timing: InputTiming) => void; unresolved: () => void } } = { allowDeclaredEntry: false, constants: false }): void {
+    onLoad?: { report: (entry: AstNode, kind: string, timing: InputTiming) => void; unresolved: () => void };
+    dom?: { report: (entry: AstNode, scope: 'document_scope' | 'created_subtree') => void; unresolved: () => void } } = { allowDeclaredEntry: false, constants: false }): void {
   const root: Scope = { functionId: 0, functionScope: true, bindings: new Map() };
   const scopes = new WeakMap<AstNode, Scope>();
   const functionScopes = new WeakMap<AstNode, Scope>();
@@ -65,6 +69,8 @@ export function analyzeScopedCandidates(ast: AstNode, when: string | null, emit:
   const onChangeCalls = new Map<AstNode, string>(), loadingRefs = new WeakSet<AstNode>();
   let onChangeUnsafe = false;
   let onLoadUnsafe = false;
+  let domUnsafe = false;
+  const domCandidates: { entry: AstNode; scope: 'document_scope' | 'created_subtree' }[] = [];
   const loadCalls = new Map<AstNode, { kind: string; timing: InputTiming }>();
   const requestInputs = new WeakMap<Origin, { timing: InputTiming; method: boolean }>();
   const loadTimings = new WeakMap<AstNode, InputTiming>();
@@ -152,6 +158,16 @@ export function analyzeScopedCandidates(ast: AstNode, when: string | null, emit:
       if (entry.type === 'ClassExpression' || entry.type === 'ClassDeclaration') declare(entry.id, scope);
     }
     scopes.set(entry, scope);
+    if (options.dom) {
+      const write = entry.type === 'AssignmentExpression' ? entry.left
+        : entry.type === 'UpdateExpression' || entry.type === 'UnaryExpression' && entry.operator === 'delete' ? entry.argument : null;
+      if (entry.type === 'WithStatement' || entry.type === 'CallExpression' && identifier(entry.callee, 'eval')
+        || identifier(write) && ['document', 'window'].includes(String(write.name))
+        || isAstNode(write) && write.type === 'MemberExpression'
+          && (staticMemberName(write) === null || ['document', 'body', 'documentElement', 'createElement', ...domQueries].includes(staticMemberName(write)!))) {
+        domUnsafe = true; options.dom.unresolved();
+      }
+    }
     if (options.onLoad) {
       const write = entry.type === 'AssignmentExpression' ? entry.left
         : entry.type === 'UpdateExpression' || entry.type === 'UnaryExpression' && entry.operator === 'delete' ? entry.argument : null;
@@ -309,7 +325,8 @@ export function analyzeScopedCandidates(ast: AstNode, when: string | null, emit:
   }
   function read(scope: Scope, name: string): Origin {
     const binding = find(scope, name);
-    if (!binding) return origin(name === 'current' ? C : name === 'previous' ? P : name === 'GlideAjax' ? AJAX_CTOR
+    if (!binding) return origin(options.dom && name === 'document' ? DOCUMENT : options.dom && name === 'window' ? WINDOW
+      : name === 'current' ? C : name === 'previous' ? P : name === 'GlideAjax' ? AJAX_CTOR
       : (options.uiPolicy || options.clientLookup) && name === 'g_form' ? FORM
         : options.clientLookup && name === 'GlideRecord' ? CLIENT_CTOR : options.display && name === 'g_scratchpad' ? LOCAL
         : (options.query || options.abort || options.display || options.uiPolicy) && ['GlideRecord', 'GlideRecordSecure'].includes(name) ? QUERY_CTOR : UNKNOWN);
@@ -319,6 +336,7 @@ export function analyzeScopedCandidates(ast: AstNode, when: string | null, emit:
       // Lexical shadowing still applies across function boundaries, but aliases never cross them.
       return binding.origin.flags === LOCAL && !binding.origin.properties ? local() : unknown();
     }
+    if (options.dom && binding.constantWritten && binding.origin.flags & (domReceivers | DOM_METHOD)) return unknown();
     if (options.onLoad && binding.constantWritten && binding.origin.flags & (RUNTIME_INPUT | AJAX | AJAX_CTOR | CLIENT_RECORD | CLIENT_CTOR)) return unknown();
     return options.query && queryRebound.has(name) && binding.origin.flags & (QUERY_RECORD | QUERY_CTOR) ? unknown() : binding.origin;
   }
@@ -423,6 +441,12 @@ export function analyzeScopedCandidates(ast: AstNode, when: string | null, emit:
         if (entry.computed) visit(entry.property);
         receivers.set(entry, receiver);
         const key = memberKey(entry);
+        if (options.dom) {
+          if (receiver.flags === WINDOW && key === 'document') return origin(DOCUMENT);
+          if (receiver.flags === DOCUMENT && ['body', 'documentElement'].includes(key ?? '')) return origin(DOCUMENT_ELEMENT);
+          if (receiver.flags & domReceivers && (domQueries.has(key ?? '') || key === 'createElement')) return origin(DOM_METHOD);
+          if (receiver.flags & domReceivers && key === null) options.dom.unresolved();
+        }
         if (options.clientLookup && (receiver.flags === FORM && key === 'getReference'
           || receiver.flags === CLIENT_RECORD && ['query', 'get'].includes(key ?? ''))) return origin(LOOKUP_METHOD);
         if ((options.onChange || options.onLoad) && receiver.flags === AJAX && ['getXML', 'getXMLAnswer', 'getXMLWait'].includes(key ?? '')) return origin(LOOKUP_METHOD);
@@ -442,6 +466,9 @@ export function analyzeScopedCandidates(ast: AstNode, when: string | null, emit:
         const argValues: Origin[] = [];
         for (const argument of entry.arguments as unknown[]) {
           const value = visit(argument);
+          if (options.dom && containsLookupReceiver(value, new Set(), 0, domReceivers | DOM_METHOD)) {
+            domUnsafe = true; options.dom.unresolved();
+          }
           if (options.onLoad) argValues.push(value);
           if (options.query && containsQueryRecord(value)) queryUnsafe = true;
           if (options.display && value.flags & (C | CF)) displayArgumentCurrent = true;
@@ -485,6 +512,25 @@ export function analyzeScopedCandidates(ast: AstNode, when: string | null, emit:
           : calleeValue.flags === QUERY_CTOR ? QUERY_RECORD : calleeValue.flags & UNKNOWN ? UNKNOWN : LOCAL);
         if (isAstNode(entry.callee) && entry.callee.type === 'MemberExpression') {
           const receiver = receivers.get(entry.callee) ?? unknown(), key = memberKey(entry.callee);
+          if (options.dom && (domQueries.has(key ?? '') || key === 'createElement')) {
+            const args = entry.arguments as AstNode[];
+            const arg = args.length === 1 ? primitive(args[0]) : UNKNOWN_CONSTANT;
+            const valid = args.length === 1 && args[0].type !== 'SpreadElement'
+              && !(args[0].type === 'Literal' && (typeof args[0].value !== 'string' || !args[0].value))
+              && (arg === UNKNOWN_CONSTANT || typeof arg === 'string' && arg.length > 0) && !entry.optional && !entry.callee.optional;
+            const document = receiver.flags === DOCUMENT, subtree = receiver.flags === CREATED_ELEMENT;
+            const known = document || subtree || receiver.flags === DOCUMENT_ELEMENT;
+            if (!domUnsafe && valid && known && (key !== 'getElementById' || document)) {
+              if (key === 'createElement') {
+                if (document) return origin(CREATED_ELEMENT);
+                options.dom.unresolved();
+              } else {
+                domCandidates.push({ entry, scope: subtree ? 'created_subtree' : 'document_scope' });
+                // querySelectorAll returns a collection, not an Element.
+                return key === 'querySelectorAll' ? unknown() : origin(subtree ? CREATED_ELEMENT : DOCUMENT_ELEMENT);
+              }
+            } else if (receiver.flags & (domReceivers | UNKNOWN)) options.dom.unresolved();
+          }
           if (options.onChange || options.onLoad) {
             if (key === null && receiver.flags & AJAX) { options.onChange?.unresolved(); options.onLoad?.unresolved(); }
             if (['getXML', 'getXMLAnswer', 'getXMLWait'].includes(key ?? '')) {
@@ -597,6 +643,7 @@ export function analyzeScopedCandidates(ast: AstNode, when: string | null, emit:
           if (key === 'getXMLWait' && (receiver.flags & (AJAX | UNKNOWN))) emit(entry, 'AU-CL-004',
             { kind: 'synchronous_ajax', receiver_unresolved: !!(receiver.flags & UNKNOWN) });
         }
+        else if (options.dom && calleeValue.flags & DOM_METHOD) options.dom.unresolved();
         else if (options.clientLookup && calleeValue.flags & LOOKUP_METHOD) options.clientLookup.unresolved();
         return unknown(); // No return-value or callable-alias propagation.
       }
@@ -644,6 +691,11 @@ export function analyzeScopedCandidates(ast: AstNode, when: string | null, emit:
     return !!value.properties && [...value.properties.values()].some(v => containsLookupReceiver(v, seen, depth + 1, mask));
   }
   walk(ast);
+  for (const candidate of domCandidates) {
+    budget(0);
+    if (domUnsafe) options.dom!.unresolved();
+    else options.dom!.report(candidate.entry, candidate.scope);
+  }
   for (const candidate of lookupCandidates) {
     budget(0);
     if (lookupUnsafe) options.clientLookup!.unresolved();

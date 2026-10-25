@@ -2,12 +2,13 @@
 import { z } from 'zod';
 import { reviewResultStructure } from './result-schema.js';
 import { matchCatalogRelease, RULES, SOURCES } from './catalog.js';
-import { followUpCodeSchema, isFollowUpApplicable, ONLOAD_INPUT_FOLLOW_UP } from './follow-up-catalog.js';
+import { followUpCodeSchema, isFollowUpApplicable, ONLOAD_INPUT_FOLLOW_UP, DOM_SCOPE_FOLLOW_UP } from './follow-up-catalog.js';
 
 const hash = z.string().regex(/^[a-f0-9]{64}$/);
-export const bp5RuleIdSchema = z.enum(['AU-BR-001', 'AU-BR-002', 'AU-CL-004', 'AU-QRY-001', 'AU-BR-004', 'AU-BR-005', 'AU-BR-007', 'AU-CL-006', 'AU-CL-002', 'AU-CL-008', 'AU-CL-003']);
-export const bp5RuleIdsSchema = z.array(bp5RuleIdSchema).min(1).max(11);
-export const bp5RulesetFor = (rules: readonly string[]) => rules.includes('AU-CL-003') ? 'bp3-0.12' as const
+export const bp5RuleIdSchema = z.enum(['AU-BR-001', 'AU-BR-002', 'AU-CL-004', 'AU-QRY-001', 'AU-BR-004', 'AU-BR-005', 'AU-BR-007', 'AU-CL-006', 'AU-CL-002', 'AU-CL-008', 'AU-CL-003', 'AU-CL-007']);
+export const bp5RuleIdsSchema = z.array(bp5RuleIdSchema).min(1).max(12);
+export const bp5RulesetFor = (rules: readonly string[]) => rules.includes('AU-CL-007') ? 'bp3-0.13' as const
+  : rules.includes('AU-CL-003') ? 'bp3-0.12' as const
   : rules.includes('AU-CL-008') ? 'bp3-0.11' as const
   : rules.includes('AU-CL-002') ? 'bp3-0.10' as const
   : rules.includes('AU-CL-006') ? 'bp3-0.9' as const
@@ -60,7 +61,7 @@ export function checkReleaseEvidence(e: ReleaseEvidence, at: string, binding: st
 export const releaseMatchForEvidence = (e: ReleaseEvidence) => e.resolution_status === 'unknown' ? 'unknown' : matchCatalogRelease(e.family);
 export const reviewResultV2Structure = reviewResultStructure.extend({
   schema_version: z.literal('bp-review-0.2'),
-  ruleset_version: z.enum(['bp3-0.4', 'bp3-0.5', 'bp3-0.6', 'bp3-0.7', 'bp3-0.8', 'bp3-0.9', 'bp3-0.10', 'bp3-0.11', 'bp3-0.12']),
+  ruleset_version: z.enum(['bp3-0.4', 'bp3-0.5', 'bp3-0.6', 'bp3-0.7', 'bp3-0.8', 'bp3-0.9', 'bp3-0.10', 'bp3-0.11', 'bp3-0.12', 'bp3-0.13']),
   instance_binding: hash,
   target: reviewResultStructure.shape.target.options[0].extend({
     asset_type: z.enum(['business_rule', 'client_script']), asset_table: z.enum(['sys_script', 'sys_script_client']),
@@ -69,10 +70,10 @@ export const reviewResultV2Structure = reviewResultStructure.extend({
   instance_release: releaseEvidenceStructure,
   coverage: reviewResultStructure.shape.coverage.extend({
     requested_rule_ids: bp5RuleIdsSchema,
-    evaluated_rule_ids: z.array(bp5RuleIdSchema).max(11),
+    evaluated_rule_ids: z.array(bp5RuleIdSchema).max(12),
     skipped_rules: z.array(reviewResultStructure.shape.coverage.shape.skipped_rules.element.extend({
       rule_id: bp5RuleIdSchema,
-    })).max(11),
+    })).max(12),
   }),
   findings: z.array(reviewResultStructure.shape.findings.element.extend({
     rule_id: bp5RuleIdSchema, severity: z.literal('info'), confidence: z.literal('low'),
@@ -113,6 +114,12 @@ export const reviewResultV2Schema = reviewResultV2Structure.superRefine((r, ctx)
   if (Date.parse(r.target.retrieved_at) > Date.parse(r.reviewed_at)) fail('Retrieval cannot follow review');
   if (r.review_status === 'failed' && r.findings.length) fail('Failed reviews cannot assert findings');
   for (const f of r.findings) {
+    if (f.rule_id === 'AU-CL-007') {
+      const states = Object.entries(DOM_SCOPE_FOLLOW_UP).filter(([, code]) => f.required_follow_up.includes(code));
+      if (states.length !== 1 || !r.limitations.includes(`dom_${states[0]?.[0]}`)
+        || !f.required_follow_up.includes('dom_dependency_review')
+        || !['dom_client_script_only', 'dom_api_subset', 'dom_standard_ui_ownership_not_verified', 'dom_ui_compatibility_not_verified'].every(x => r.limitations.includes(x))) fail('DOM candidates need provenance and ownership review');
+    }
     if (f.rule_id === 'AU-CL-003') {
       const states = Object.entries(ONLOAD_INPUT_FOLLOW_UP).filter(([, code]) => f.required_follow_up.includes(code));
       if (states.length !== 1 || !r.limitations.includes(`onload_input_${states[0]?.[0]}`)

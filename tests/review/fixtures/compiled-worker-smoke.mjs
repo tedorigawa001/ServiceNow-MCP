@@ -17,7 +17,7 @@ const fetcher = async url => {
   const result = u.pathname.includes('/sys_update_set/') ? { sys_id: parent, state: 'in progress', application: 'global', ...version }
     : u.pathname.endsWith('/sys_cluster_state') ? [{ build_name: 'Australia' }]
       : u.searchParams.get('sysparm_fields').includes('payload') ? [{ ...selectedRow,
-        payload: `<record_update table="${table}"><${table} action="INSERT_OR_UPDATE"><sys_id>${id}</sys_id><type>${onLoadMode ? 'onLoad' : 'onChange'}</type><when>${displayMode ? 'before_display' : abortMode ? 'before' : 'after'}</when><collection>global</collection><script>${onLoadMode ? 'function onLoad(){var gr=new GlideRecord("PACK_PRIVATE_PRELOAD_TABLE");gr.get("PACK_PRIVATE_PRELOAD_ID");}' : uiPolicyMode ? 'function onChange(c,o,n,isLoading) { g_form.setMandatory("PACK_PRIVATE_UI", true); g_form.getReference("PACK_PRIVATE_LOOKUP", callback); }' : displayMode ? 'current.short_description = "PACK_PRIVATE_DISPLAY";' : abortMode ? 'current.setAbortAction(true); gs.addErrorMessage("PACK_PRIVATE_ABORT");' : "current.update(); var gr = new GlideRecord('incident'); gr.addQuery('x', 'LIKE', 'PACK_PRIVATE_QUERY');"}</script></${table}></record_update>` }]
+        payload: `<record_update table="${table}"><${table} action="INSERT_OR_UPDATE"><sys_id>${id}</sys_id><type>${onLoadMode ? 'onLoad' : 'onChange'}</type><when>${displayMode ? 'before_display' : abortMode ? 'before' : 'after'}</when><collection>global</collection><script>${onLoadMode ? 'function onLoad(){var gr=new GlideRecord("PACK_PRIVATE_PRELOAD_TABLE");gr.get("PACK_PRIVATE_PRELOAD_ID");}' : uiPolicyMode ? 'function onChange(c,o,n,isLoading) { g_form.setMandatory("PACK_PRIVATE_UI", true); g_form.getReference("PACK_PRIVATE_LOOKUP", callback); document.querySelector("#PACK_PRIVATE_DOM");document.createElement("div").querySelector(".PACK_PRIVATE_CHILD"); }' : displayMode ? 'current.short_description = "PACK_PRIVATE_DISPLAY";' : abortMode ? 'current.setAbortAction(true); gs.addErrorMessage("PACK_PRIVATE_ABORT");' : "current.update(); var gr = new GlideRecord('incident'); gr.addQuery('x', 'LIKE', 'PACK_PRIVATE_QUERY');"}</script></${table}></record_update>` }]
         : [{ ...selectedRow, type: 'Business Rule' }];
   return new Response(JSON.stringify({ result }));
 };
@@ -94,4 +94,14 @@ assert.equal(load.result.counts.findings, 1);
 assert.equal(load.result.versions.ruleset, 'bp3-0.12');
 assert(load.result.assets[0].result.findings[0].required_follow_up.includes('onload_static_inputs_review'));
 assert(!JSON.stringify(load).includes('PACK_PRIVATE_PRELOAD'));
+onLoadMode = false;
+const dom = await reviewBoundedUpdateSet(selected, { update_set_sys_id: parent, selection_mode: 'review_targets',
+  requested_rule_ids: ['AU-CL-007'] }, { fetch: fetcher });
+assert.equal(dom.isError, false);
+assert.equal(dom.result.counts.findings, 2);
+assert.equal(dom.result.versions.ruleset, 'bp3-0.13');
+assert(dom.result.assets[0].result.findings[0].required_follow_up.includes('dom_document_scope_review'));
+assert(dom.result.assets[0].result.findings[1].required_follow_up.includes('dom_created_subtree_review'));
+assert(!JSON.stringify(dom).includes('PACK_PRIVATE_DOM'));
+assert(!JSON.stringify(dom).includes('PACK_PRIVATE_CHILD'));
 console.log('Compiled worker default entry: analysis + aggregation PASS');

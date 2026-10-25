@@ -8,6 +8,10 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 ## [Unreleased]
 
+### Added
+
+- Explicit Client-Script-only `AU-CL-007` bounded DOM lookup review (`getElementById`, `querySelector`, `querySelectorAll`). Document-derived receivers and locally `createElement`-derived subtrees have distinct typed follow-ups; selector names never establish standard UI ownership, and custom DOM is not automatically a violation. Shadowed/local same-name methods are excluded; unknown, mixed, mutated or escaping receivers remain unresolved. No automatic removal or replacement. Defaults and budgets remain unchanged; opt-in ruleset `bp3-0.13`; synthetic verification only.
+
 ## [1.16.2] — 2026-11-20
 
 Republishes 1.16.1 with the intended package contents. The source is identical to 1.16.1; only the version differs.
