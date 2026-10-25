@@ -14,6 +14,7 @@ export function staticMemberName(value: unknown): string | null {
 export class AnalysisLimitError extends Error {}
 const C = 1, P = 2, CF = 4, PF = 8, AJAX = 16, LOCAL = 32, UNKNOWN = 64, AJAX_CTOR = 128;
 const QUERY_RECORD = 256, QUERY_CTOR = 512;
+const QUERY_METHOD = 4194304;
 const FORM = 1024;
 const FORM_SETTER = 2097152;
 const CLIENT_RECORD = 2048, CLIENT_CTOR = 4096, LOOKUP_METHOD = 8192;
@@ -40,6 +41,7 @@ const formControls = new Map([['setMandatory', 'ui_policy_mandatory_control'], [
 
 export function analyzeScopedCandidates(ast: AstNode, when: string | null, emit: (entry: AstNode, rule: string, context?: FollowUpContext) => void,
   options: { allowDeclaredEntry: boolean; constants: boolean; query?: { unresolved: () => void };
+    fullText?: { report: (entry: AstNode, kind: 'add_query' | 'encoded_query') => void; unresolved: () => void };
     bindings?: { declared: (entry: AstNode) => void; dynamic: () => void };
     abort?: { effect: (entry: AstNode, effect: string) => void; unresolved: () => void };
     display?: { write: (entry: AstNode, kind: string) => void; unresolved: () => void };
@@ -61,6 +63,7 @@ export function analyzeScopedCandidates(ast: AstNode, when: string | null, emit:
   // Delay emission so later escapes/method replacement cannot certify a receiver.
   let queryUnsafe = false;
   const queryRebound = new Set<string>(), queryCandidates: AstNode[] = [];
+  const fullTextCandidates: { entry: AstNode; kind: 'add_query' | 'encoded_query' }[] = [];
   const scriptBindings = new WeakSet<AstNode>();
   const abortCalls = new WeakMap<AstNode, AbortCall>();
   let abortUnsafe = false;
@@ -242,7 +245,7 @@ export function analyzeScopedCandidates(ast: AstNode, when: string | null, emit:
         for (const declaration of entry.declarations as AstNode[]) scriptBindings.add(declaration);
       if (entry.type === 'WithStatement' || entry.type === 'CallExpression' && identifier(entry.callee, 'eval')) options.bindings.dynamic();
     }
-    if (options.query) {
+    if (options.query || options.fullText) {
       if (entry.type === 'WithStatement' || entry.type === 'SpreadElement' || entry.type === 'TaggedTemplateExpression'
         || (entry.type === 'CallExpression' && identifier(entry.callee, 'eval'))) queryUnsafe = true;
       if (entry.type === 'CallExpression' && isAstNode(entry.callee) && entry.callee.type === 'MemberExpression'
@@ -254,7 +257,8 @@ export function analyzeScopedCandidates(ast: AstNode, when: string | null, emit:
         queryRebound.add(String(write.name));
         if (['GlideRecord', 'GlideRecordSecure'].includes(String(write.name))) queryUnsafe = true;
       } else if (isAstNode(write) && write.type === 'MemberExpression'
-        && (staticMemberName(write) === null || ['addQuery', 'GlideRecord', 'GlideRecordSecure'].includes(staticMemberName(write)!))) queryUnsafe = true;
+        && (staticMemberName(write) === null || ['addQuery', 'GlideRecord', 'GlideRecordSecure',
+          ...(options.fullText ? ['addEncodedQuery', '__proto__', 'prototype'] : [])].includes(staticMemberName(write)!))) queryUnsafe = true;
       // Destructuring writes are not resolved by this bounded analysis.
       else if (isAstNode(write)) queryUnsafe = true;
     }
@@ -344,7 +348,7 @@ export function analyzeScopedCandidates(ast: AstNode, when: string | null, emit:
       : name === 'current' ? C : name === 'previous' ? P : name === 'GlideAjax' ? AJAX_CTOR
       : (options.uiPolicy || options.clientLookup || options.setValue) && name === 'g_form' ? FORM
         : options.clientLookup && name === 'GlideRecord' ? CLIENT_CTOR : options.display && name === 'g_scratchpad' ? LOCAL
-        : (options.query || options.abort || options.display || options.uiPolicy) && ['GlideRecord', 'GlideRecordSecure'].includes(name) ? QUERY_CTOR : UNKNOWN);
+        : (options.query || options.fullText || options.abort || options.display || options.uiPolicy) && ['GlideRecord', 'GlideRecordSecure'].includes(name) ? QUERY_CTOR : UNKNOWN);
     if (binding.functionId !== scope.functionId) {
       // Direct lexical reference to the declared platform entry, not propagation of a user alias/call.
       if (binding.entryFlags) return origin(binding.entryFlags | UNKNOWN);
@@ -354,7 +358,7 @@ export function analyzeScopedCandidates(ast: AstNode, when: string | null, emit:
     if (options.dom && binding.constantWritten && binding.origin.flags & (domReceivers | DOM_METHOD)) return unknown();
     if (options.setValue && binding.constantWritten && binding.origin.flags & (FORM | FORM_SETTER)) return unknown();
     if (options.onLoad && binding.constantWritten && binding.origin.flags & (RUNTIME_INPUT | AJAX | AJAX_CTOR | CLIENT_RECORD | CLIENT_CTOR)) return unknown();
-    return options.query && queryRebound.has(name) && binding.origin.flags & (QUERY_RECORD | QUERY_CTOR) ? unknown() : binding.origin;
+    return (options.query || options.fullText) && queryRebound.has(name) && binding.origin.flags & (QUERY_RECORD | QUERY_CTOR | QUERY_METHOD) ? unknown() : binding.origin;
   }
   const receivers = new WeakMap<AstNode, Origin>();
   function uiPolicyWrite(target: unknown) {
@@ -457,6 +461,7 @@ export function analyzeScopedCandidates(ast: AstNode, when: string | null, emit:
         if (entry.computed) visit(entry.property);
         receivers.set(entry, receiver);
         const key = memberKey(entry);
+        if (options.fullText && receiver.flags === QUERY_RECORD && ['addQuery', 'addEncodedQuery'].includes(key ?? '')) return origin(QUERY_METHOD);
         if (options.setValue) {
           if (receiver.flags === FORM && key === 'setValue') return origin(FORM_SETTER);
           if (receiver.flags & FORM && key === null) options.setValue.unresolved();
@@ -493,7 +498,8 @@ export function analyzeScopedCandidates(ast: AstNode, when: string | null, emit:
             domUnsafe = true; options.dom.unresolved();
           }
           if (options.onLoad) argValues.push(value);
-          if (options.query && containsQueryRecord(value)) queryUnsafe = true;
+          if ((options.query || options.fullText) && containsQueryRecord(value)) queryUnsafe = true;
+          if (options.fullText && containsLookupReceiver(value, new Set(), 0, QUERY_METHOD)) queryUnsafe = true;
           if (options.display && value.flags & (C | CF)) displayArgumentCurrent = true;
           if (options.uiPolicy && value.flags & FORM) uiPolicyArgumentForm = true;
           if (options.clientLookup && containsLookupReceiver(value)) { lookupUnsafe = true; options.clientLookup.unresolved(); }
@@ -531,11 +537,37 @@ export function analyzeScopedCandidates(ast: AstNode, when: string | null, emit:
           const ajax = origin(AJAX), args = entry.arguments as AstNode[];
           requestInputs.set(ajax, { timing: inputTiming(args[0], argValues[0]), method: false }); return ajax;
         }
+        if (options.fullText && entry.type === 'NewExpression' && calleeValue.flags & (QUERY_CTOR | QUERY_METHOD)) {
+          const args = entry.arguments as AstNode[];
+          if (calleeValue.flags !== QUERY_CTOR || args.length !== 1 || args[0].type === 'SpreadElement'
+            || args[0].type === 'Literal' && (typeof args[0].value !== 'string' || !args[0].value)) {
+            options.fullText.unresolved(); return unknown();
+          }
+        }
         if (options.setValue && entry.type === 'NewExpression' && calleeValue.flags & FORM_SETTER) options.setValue.unresolved();
         if (entry.type === 'NewExpression') return origin(calleeValue.flags & AJAX_CTOR ? AJAX
           : calleeValue.flags === QUERY_CTOR ? QUERY_RECORD : calleeValue.flags & UNKNOWN ? UNKNOWN : LOCAL);
         if (isAstNode(entry.callee) && entry.callee.type === 'MemberExpression') {
           const receiver = receivers.get(entry.callee) ?? unknown(), key = memberKey(entry.callee);
+          if (options.fullText) {
+            if (receiver.flags & QUERY_METHOD || key === null && receiver.flags & QUERY_RECORD) options.fullText.unresolved();
+            if (key === 'addQuery' || key === 'addEncodedQuery') {
+              const args = entry.arguments as AstNode[];
+              if (receiver.flags === QUERY_RECORD && !queryUnsafe && !entry.optional && !entry.callee.optional
+                && !args.some(a => a.type === 'SpreadElement')) {
+                const value = args.length ? primitive(args[0]) : UNKNOWN_CONSTANT;
+                if (key === 'addQuery') {
+                  if (typeof value !== 'string' || (args.length !== 2 && !(args.length === 3 && value !== '123TEXTQUERY321'))) options.fullText.unresolved();
+                  else if (value === '123TEXTQUERY321') fullTextCandidates.push({ entry, kind: 'add_query' });
+                } else if (args.length !== 1 || typeof value !== 'string') options.fullText.unresolved();
+                else {
+                  const state = fullTextEncoded(value);
+                  if (state === 'unknown') options.fullText.unresolved();
+                  else if (state === 'matched') fullTextCandidates.push({ entry, kind: 'encoded_query' });
+                }
+              } else if (receiver.flags & (QUERY_RECORD | QUERY_CTOR | UNKNOWN | C | P)) options.fullText.unresolved();
+            }
+          }
           if (options.setValue) {
             if (receiver.flags & FORM_SETTER) options.setValue.unresolved();
             if (key === 'setValue') {
@@ -681,6 +713,7 @@ export function analyzeScopedCandidates(ast: AstNode, when: string | null, emit:
           if (key === 'getXMLWait' && (receiver.flags & (AJAX | UNKNOWN))) emit(entry, 'AU-CL-004',
             { kind: 'synchronous_ajax', receiver_unresolved: !!(receiver.flags & UNKNOWN) });
         }
+        else if (options.fullText && calleeValue.flags & QUERY_METHOD) options.fullText.unresolved();
         else if (options.setValue && calleeValue.flags & FORM_SETTER) options.setValue.unresolved();
         else if (options.dom && calleeValue.flags & DOM_METHOD) options.dom.unresolved();
         else if (options.clientLookup && calleeValue.flags & LOOKUP_METHOD) options.clientLookup.unresolved();
@@ -722,6 +755,26 @@ export function analyzeScopedCandidates(ast: AstNode, when: string | null, emit:
     if (value.flags & (QUERY_RECORD | QUERY_CTOR)) return true;
     return !!value.properties && [...value.properties.values()].some(v => containsQueryRecord(v, seen, depth + 1));
   }
+  // Term-boundary recognizer only, never an encoded-query interpreter/validator.
+  function fullTextEncoded(value: string): 'matched' | 'clear' | 'unknown' {
+    budget(0);
+    if (!value || /[\\\r\n\u0000]|javascript:/i.test(value) || value.includes('^^')) return 'unknown';
+    const terms = value.split('^');
+    let found = false;
+    for (let i = 0; i < terms.length; i++) {
+      budget(0);
+      let term = terms[i];
+      if (term === 'EQ' && i === terms.length - 1 && i > 0) continue;
+      if (!term) return 'unknown';
+      if (i > 0 && /^(OR|NQ)/.test(term)) term = term.slice(2);
+      if (!term) return 'unknown';
+      if (term.startsWith('123TEXTQUERY321')) {
+        if (!term.startsWith('123TEXTQUERY321=') || term.length === '123TEXTQUERY321='.length) return 'unknown';
+        found = true;
+      }
+    }
+    return found ? 'matched' : 'clear';
+  }
   function containsLookupReceiver(value: Origin, seen = new Set<Origin>(), depth = 0, mask = FORM | CLIENT_RECORD | CLIENT_CTOR): boolean {
     budget(depth);
     if (seen.has(value)) return false;
@@ -730,6 +783,10 @@ export function analyzeScopedCandidates(ast: AstNode, when: string | null, emit:
     return !!value.properties && [...value.properties.values()].some(v => containsLookupReceiver(v, seen, depth + 1, mask));
   }
   walk(ast);
+  if (options.fullText) {
+    if (queryUnsafe) options.fullText.unresolved();
+    else for (const candidate of fullTextCandidates) { budget(0); options.fullText.report(candidate.entry, candidate.kind); }
+  }
   for (const candidate of setValueCandidates) {
     budget(0);
     if (setValueUnsafe) options.setValue!.unresolved();

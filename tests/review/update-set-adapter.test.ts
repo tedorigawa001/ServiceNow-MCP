@@ -253,7 +253,7 @@ describe('BP-5 bounded update-set adapter', () => {
   });
   it.each([
     { ...input, update_set_sys_id: parent + '^ORactive=true' },
-    { ...input, max_records: 101 }, { ...input, requested_rule_ids: ['AU-QRY-002'] },
+    { ...input, max_records: 101 }, { ...input, requested_rule_ids: ['AU-NOT-A-RULE'] },
     { ...input, requested_rule_ids: ['AU-BR-001', 'AU-BR-001'] }, { ...input, instance_release: 'Australia' },
     { ...input, code_return_mode: 'full' }, { ...input, requested_rule_ids: [] },
   ])('rejects unsupported input before I/O', async invalid => {
