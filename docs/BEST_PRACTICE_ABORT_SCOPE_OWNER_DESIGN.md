@@ -1,7 +1,7 @@
 # AU-BR-006：証拠生成owner・一度限りの消費の詳細設計
 
 Version: br006-scope-owner-draft-0.1 / Date: 2026-10-25。
-Status: **合成issuerのみのowner/session claim基礎を実装。実取得・worker/MCP接続・人による採用承認は未実施**。
+Status: **合成issuerのみのowner/session claim・prepare/初回/最終phase基礎を実装。実取得・worker/MCP接続・人による採用承認は未実施**。
 親は[スコープ証拠設計draft-0.2](BEST_PRACTICE_ABORT_SCOPE_EVIDENCE_DESIGN.md)。既存の内部型/純粋比較器は変更せず、明示14規則・既定3規則・公開JSON・取得先・運用設定を維持する。
 
 ## 1. 現状との差分・保証の範囲
@@ -150,6 +150,16 @@ run claimは1/session、asset jobは選択100行以内、構文計画は100候�
 
 `abort-scope-evidence-owner.ts`は合成issuerごとに隔離したWeakMap台帳を持つ。sessionに唯一の生成claimを置き、worker結合検査より前に消費する。ownerは合成session・worker実体と結合し、jobは同じsession/workerと選択assetに結合する。別job番号で同assetを再登録しても拒否する。use/receiptの一度限りの消費と、失敗・取消・owner/session終了・worker終了後の受理拒否を実装した。closeはidempotentで、最初の終了事由（未検知のworker終了/session終了を含む）をprimary理由に固定し、後のclose/取消で書き換えない。job発行/予約は100件以下。
 
-これは状態機械の**基礎subset**であり、§5のprepare/初回/最終観測のphase、実時計/期限/signal、privateな実取得issuer、payload/hash/ReleasePermit結合、比較器・worker通信・実解放・上位結果ownerへの接続は未実装。合成receiptには比較結果もscope証明もなく、本番完了証拠ではない。合成issuerは呼出し側が自由に作れるため、実認証の証明には使えない。worker handleの差が合成の世代差を表し、実worker世代handshakeは行わない。新moduleも既存の`!dist/review/abort-scope-evidence*`によりnpm非同梱。
+これは状態機械の**基礎subset**であり、実時計/期限/signal、privateな実取得issuer、payload/hash/ReleasePermit結合、比較器・worker通信・実解放・上位結果ownerへの接続は未実装。合成receiptには比較結果もscope証明もなく、本番完了証拠ではない。合成issuerは呼出し側が自由に作れるため、実認証の証明には使えない。worker handleの差が合成の世代差を表し、実worker世代handshakeは行わない。新moduleも既存の`!dist/review/abort-scope-evidence*`によりnpm非同梱。
 
 検証は[合成owner検証記録](E2E_BEST_PRACTICE_ABORT_SCOPE_OWNER_SYNTHETIC_2026-10-25.md)を参照。VM/監視調査保留・全体受付無効を維持する。
+
+## 12. 合成phase遷移の限定実装
+
+利用台帳に`reserved → preparing → prepared → initial_pending → initial_received → final_pending → ready_to_consume`を追加した。各phaseは固定begin/finish関数の対でのみ進む。beginは非同期作業を始める前にpendingを固定し、owner/use/job/phaseに結合した不透明な票を発行する。finishは票を消費してから残りのjob/phase整合を検査し、失敗しても戻さない。clone・別issuer・別job・違うphaseの票を拒否する。票は最大3枚/jobで、同asset100件上限を維持する。
+
+consumeは`ready_to_consume`だけを受理する。順序違反・二重開始/完了・早すぎるconsumeはownerをstickyに停止し、他の未完了jobも再開できない。`failPhase`は有効なpending票を一度だけ消費して`phase_failed`をprimaryに保持する。後のclose・取消・再試行でprimaryやsession claimを戻さない。終了後のlate finishも受理しない。
+
+finishは**合成phaseの完了通知だけ**で、観測値や成功/known scopeを証明しない。初回/最終のavailable/unavailableデータを検証する処理はまだない。401/403等をunavailableへ変換する実経路もなく、次工程で固定観測契約・issuerと接続する必要がある。readyになっても比較器や実認証の証拠は発行しない。実clock/signal・IPC世代handshakeは未接続のまま。
+
+検証は[phase検証記録](E2E_BEST_PRACTICE_ABORT_SCOPE_PHASES_SYNTHETIC_2026-10-25.md)を参照。

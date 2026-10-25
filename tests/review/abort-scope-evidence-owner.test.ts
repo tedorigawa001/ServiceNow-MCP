@@ -1,5 +1,12 @@
 import { expect, it, vi } from 'vitest';
 import { createSyntheticScopeOwnerIssuer as issuer } from '../../src/review/abort-scope-evidence-owner.js';
+import type { SyntheticScopeOwner, SyntheticScopeUse, SyntheticScopeJob } from '../../src/review/abort-scope-evidence-owner.js';
+function ready(i:ReturnType<typeof issuer>,o:SyntheticScopeOwner,u:SyntheticScopeUse,j:SyntheticScopeJob) {
+  unwrap(i.finishPrepare(o,unwrap(i.beginPrepare(o,u,j)),j));
+  unwrap(i.finishInitial(o,unwrap(i.beginInitial(o,u,j)),j));
+  unwrap(i.finishFinal(o,unwrap(i.beginFinal(o,u,j)),j));
+  return u;
+}
 function unwrap<T>(r: {ok:true;value:T}|{ok:false;reason:string}):T {
   if (!r.ok) throw Error(r.reason); return r.value;
 }
@@ -9,7 +16,7 @@ function setup() {
   return {i,s,w,j,o};
 }
 it('consumes a synthetic job and receipt once, without serializing identities',()=>{
-  const {i,s,w,j,o}=setup(),u=unwrap(i.reserve(o,j)),r=unwrap(i.consume(o,u,j));
+  const {i,s,w,j,o}=setup(),u=ready(i,o,unwrap(i.reserve(o,j)),j),r=unwrap(i.consume(o,u,j));
   expect(JSON.stringify([s,w,j,o,u,r])).toBe('[{},{},{},{},{},{}]');
   expect(i.accept(o,r)).toEqual({ok:true,value:true});
   expect(i.accept(o,r)).toEqual({ok:false,reason:'invalid_state'});
@@ -42,12 +49,12 @@ it('rejects a replacement job for the same selected asset',()=>{
   expect(i.reserve(o,unwrap(i.issueJob(s,w,'a'.repeat(32))))).toEqual({ok:false,reason:'invalid_state'});
 });
 it('rejects double consumption and revokes an unaccepted receipt',()=>{
-  const {i,j,o}=setup(),u=unwrap(i.reserve(o,j)),r=unwrap(i.consume(o,u,j));
+  const {i,j,o}=setup(),u=ready(i,o,unwrap(i.reserve(o,j)),j),r=unwrap(i.consume(o,u,j));
   expect(i.consume(o,u,j)).toEqual({ok:false,reason:'invalid_state'});
   expect(i.accept(o,r)).toEqual({ok:false,reason:'invalid_state'});
 });
 it.each(['cancel','owner_close','session_close','worker_exit'] as const)('revokes pending use and completion at %s',kind=>{
-  const {i,s,w,j,o}=setup(),u=unwrap(i.reserve(o,j)),r=unwrap(i.consume(o,u,j));
+  const {i,s,w,j,o}=setup(),u=ready(i,o,unwrap(i.reserve(o,j)),j),r=unwrap(i.consume(o,u,j));
   if(kind==='cancel')i.cancel(o);
   if(kind==='owner_close'){i.closeOwner(o);i.closeOwner(o);}
   if(kind==='session_close'){i.closeSession(s);i.closeSession(s);}
@@ -57,7 +64,7 @@ it.each(['cancel','owner_close','session_close','worker_exit'] as const)('revoke
 });
 function unwrapOrOld<T>(r:{ok:true;value:T}|{ok:false},fallback:T):T{return r.ok?r.value:fallback;}
 it('rejects forged receipts and preserves the first cancellation reason on close',()=>{
-  const {i,j,o}=setup(),u=unwrap(i.reserve(o,j)),r=unwrap(i.consume(o,u,j));
+  const {i,j,o}=setup(),u=ready(i,o,unwrap(i.reserve(o,j)),j),r=unwrap(i.consume(o,u,j));
   expect(i.accept(o,structuredClone(r))).toEqual({ok:false,reason:'binding_mismatch'});
   const x=setup();x.i.cancel(x.o);x.i.closeOwner(x.o);
   expect(x.i.reserve(x.o,x.j)).toEqual({ok:false,reason:'cancelled'});
@@ -84,7 +91,7 @@ it('rejects cloned session/owner/use handles and another owner receipt',()=>{
   expect(i.reserve(structuredClone(o),j)).toEqual({ok:false,reason:'binding_mismatch'});
   const u=unwrap(i.reserve(o,j));
   expect(i.consume(o,structuredClone(u),j)).toEqual({ok:false,reason:'binding_mismatch'});
-  const x=setup(),r=unwrap(x.i.consume(x.o,unwrap(x.i.reserve(x.o,x.j)),x.j));
+  const x=setup(),r=unwrap(x.i.consume(x.o,ready(x.i,x.o,unwrap(x.i.reserve(x.o,x.j)),x.j),x.j));
   const y=setup();expect(y.i.accept(y.o,r)).toEqual({ok:false,reason:'binding_mismatch'});
 });
 it('does not migrate a job to a replacement worker generation',()=>{
@@ -96,6 +103,6 @@ it('does not migrate a job to a replacement worker generation',()=>{
 it('does not call network, timers or clocks',()=>{
   const f=vi.fn(()=>{throw Error('forbidden');});vi.stubGlobal('fetch',f);
   const clock=vi.spyOn(Date,'now').mockImplementation(f),timer=vi.spyOn(globalThis,'setTimeout').mockImplementation(f);
-  try{const {i,j,o}=setup();unwrap(i.consume(o,unwrap(i.reserve(o,j)),j));expect(f).not.toHaveBeenCalled();}
+  try{const {i,j,o}=setup();unwrap(i.consume(o,ready(i,o,unwrap(i.reserve(o,j)),j),j));expect(f).not.toHaveBeenCalled();}
   finally{clock.mockRestore();timer.mockRestore();vi.unstubAllGlobals();}
 });
