@@ -1,7 +1,7 @@
 # AU-BR-006：スコープ証拠の取得・版・同一性の詳細設計
 
-Version: br006-scope-evidence-draft-0.1 / Date: 2026-10-25。
-Status: **設計案。未実装・実機未確認・人による採用未承認**。
+Version: br006-scope-evidence-draft-0.2 / Date: 2026-10-25。
+Status: **内部型・純粋比較器を合成検証。取得・真正性/one-shot所有者・MCP接続・実機確認・人による採用承認は未実施**。
 AU-BR-006は未登録のまま。明示14規則・既定3規則・現行JSON契約を本書では変更しない。
 
 ## 1. 根拠・既存境界・目的
@@ -153,4 +153,22 @@ scope証拠を現行のstrict JSONへ勝手に追加しない。次版の1件/�
 8. 最終証拠が不安定ならBR-006暫定候補を撤回し、他規則の既存結果・coverage・診断を矛盾なく保持すること。
 9. 原payload/現行応答/コード/秘密が出ないこと、旧要求の契約・固定評価・既定3規則が変わらないこと。
 
-本書作成では実装・schema生成・テストコード追加・環境/PDI操作・設定変更・Pushを行わない。VM/監視/telemetry調査は保留、Unknown・全体受付無効、本番cap/完成parts/permit非発行を維持する。
+draft-0.1は設計のみだった。draft-0.2で以下の内部型/比較器だけを実装した。取得/公開schema生成・環境/PDI操作・設定変更・Pushには進まない。VM/監視/telemetry調査は保留、Unknown・全体受付無効、本番cap/完成parts/permit非発行を維持する。
+
+## 10. 第1段階の実装範囲（draft-0.2）
+
+[abort-scope-evidence.ts](../src/review/abort-scope-evidence.ts)に以下を追加した。既存レビュー経路からはimportせず、npm配布対象からも除外し、梱包検査で非同梱を確認する。BR-006登録・公開JSON契約・ASTでの中止呼出し検出・Table API許可先・認証・受信/試行上限は変更していない。
+
+- normalizeScopeTokenはglobal_literal/scope_record_id/unknownへ分類するだけで、Global alias照会・大小文字変換・空値補完をしない。
+- contextはinstance binding、対象ID、payload/code hash、開始時刻・内部の期限値（1〜60,000ms）を構造検証して固定する。payload証拠と初回/最終の観測を、同じcontextオブジェクトに結合したopaque handleに保持する。同値の別context、handleのコピー/偽造は比較時に拒否する。外へJSON化しても内部metadataは出ない。
+- payloadと現行テーブルは別source/target_version。利用者の入力や現行BRへ差し替えない。payload ID/hash、宣言collectionと観測name、初回/最終phaseを照合する。
+- 行は配列長を先に0/1/2へ制限する。0件・2件・列欠落・形式不正・取得不能を固定理由で保持し、scope欠落同士を等価とは扱わない。認証/ACL・取消・全体期限の失敗をunavailable理由として受け入れず、上位停止を置換しない。
+- 比較結果はcompared/insufficient/changed/rejectedと観測上の比較区分だけ。候補・違反・analysis_complete・中止成功を発行しない。すべての結果で時点差・実テーブル/実行/中止未確認・観測非原子性を保持する。
+- supplied timestampが同runの開始/初回/最終/比較時刻の順序を満たし、比較時刻が開始+期限より厳密に前であることを検査する。同run内の共有table cacheを考慮し、初回テーブル観測が後続payload取得より先でもよいが、最終再読は両方より後でなければならない。
+- ID/name/scope/版の変化や最終取得不能では、初回だけでsame/differentを出さずunknownと固定理由に落とす。結果は固定列挙値と凍結したlimitationsのみで、生table名/ID・追加scope値・原エラーを返さない。
+
+**重要な未実装境界**：factoryは構造検証/スナップショットを行うが、渡されたデータが実際の認証session・worker/取得元から来たことを証明しない。contextの本番生成owner、権威あるissuer、終了時の失効/破棄、one-shot、workerをまたぐ受渡しは未接続。opaque handleはprocess/realmローカルで、structuredClone/JSONをworker間の証拠移送に流用できない。table cacheを複数資産で使う場合も、将来の所有者が同じrunの原観測を各対象contextへ再結合する必要がある。
+
+純粋比較は同じ入力で繰り返し可能であり、消費操作やpermit発行ではない。Date.now/タイマー/HTTPを呼ばず、入力時刻の整合を見るだけ。実際の60秒の中断、取消、受信ストリーム制限・予約会計は既存owner/transportに接続する後工程の課題で、今回達成したとは扱わない。
+
+候補となるsetAbortAction(true)の有無、before/receiver等はこの比較器の引数にも推論対象にもしていない。比較結果からルール候補を生成する前に、構文証拠・次版JSON契約・実取得証拠を結び付ける必要がある。[合成検証記録](E2E_BEST_PRACTICE_ABORT_SCOPE_EVIDENCE_SYNTHETIC_2026-10-25.md)を参照。

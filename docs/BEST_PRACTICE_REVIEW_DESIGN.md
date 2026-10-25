@@ -5,7 +5,7 @@ Status: **BP-1〜3 PoC・BP-4初回合成評価済み（品質目標未達）／
 上記と本文の未実装表記は初版時点の履歴。後続の[MCP統合・明示規則の現状](BEST_PRACTICE_BP5_MCP_REGISTRATION.md)、[AU-CL-002のClient Script照会候補](BEST_PRACTICE_CLIENT_LOOKUPS.md)、[AU-CL-008のonChange読込時候補](BEST_PRACTICE_ONCHANGE_LOADING.md)、[AU-CL-003のonLoad取得入力候補](BEST_PRACTICE_ONLOAD_SCRATCHPAD.md)、[AU-CL-007のDOM依存確認候補](BEST_PRACTICE_DOM_CLIENT.md)、[AU-CL-005の2引数setValue確認候補](BEST_PRACTICE_SETVALUE_CLIENT.md)、[AU-QRY-002のBR全文検索前提候補](BEST_PRACTICE_FULLTEXT_QUERY_BR.md)を参照。2026-10-25時点で明示指定は14規則、既定は従来の3規則。候補検出・合成検証であり、人の採用承認・全適用対象への対応・品質保証ではない。
 
 本書はソースレビュー品質を高めるための収集・検索・報告方針を記録する。
-[AU-BR-006のスコープ証拠設計案](BEST_PRACTICE_ABORT_SCOPE_EVIDENCE_DESIGN.md)は、payloadと現行テーブル設定の時点差・Global/IDの同一性・証拠不足・共通予算を具体化した未実装案。規則の登録数や承認状態は変更しない。
+[AU-BR-006のスコープ証拠設計案](BEST_PRACTICE_ABORT_SCOPE_EVIDENCE_DESIGN.md)は、payloadと現行テーブル設定の時点差・Global/IDの同一性・証拠不足・共通予算を具体化した。内部型・純粋比較器のみ合成検証済みで、実取得・真正性/one-shot所有者・MCP接続は未実装。規則の登録数や承認状態は変更しない。
 全文知識ベース、収集ジョブ、意味検索、レビュー用MCPツールはまだ実装していない。
 規則表引き＋キーワード検索と結果契約のローカルPoCは実装済み。
 [BP-2の範囲・契約・実行方法](BEST_PRACTICE_BP2_POC.md)を参照。
