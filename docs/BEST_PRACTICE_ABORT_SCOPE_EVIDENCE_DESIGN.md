@@ -169,7 +169,7 @@ draft-0.1は設計のみだった。draft-0.2で以下の内部型/比較器だ�
 
 **重要な未実装境界**：factoryは構造検証/スナップショットを行うが、渡されたデータが実際の認証session・worker/取得元から来たことを証明しない。contextの本番生成owner、権威あるissuer、終了時の失効/破棄、one-shot、workerをまたぐ受渡しは未接続。opaque handleはprocess/realmローカルで、structuredClone/JSONをworker間の証拠移送に流用できない。table cacheを複数資産で使う場合も、将来の所有者が同じrunの原観測を各対象contextへ再結合する必要がある。
 
-この境界を[証拠生成owner・一度限りの消費の詳細設計案](BEST_PRACTICE_ABORT_SCOPE_OWNER_DESIGN.md)へ具体化した。発行元限定、実session/worker世代・asset jobとの結合、状態遷移・失敗後再利用拒否・終了時の受理権限失効を対に設計する未実装案であり、本番の真正性を確認済みとは扱わない。
+この境界を[証拠生成owner・一度限りの消費の詳細設計案](BEST_PRACTICE_ABORT_SCOPE_OWNER_DESIGN.md)へ具体化した。合成issuerのみのowner/session claim基礎を実装したが、実session/worker通信・実取得は未接続。発行元限定、asset job結合、失敗後再利用拒否・終了時の受理権限失効を合成検証するもので、本番の真正性を確認済みとは扱わない。
 
 純粋比較は同じ入力で繰り返し可能であり、消費操作やpermit発行ではない。Date.now/タイマー/HTTPを呼ばず、入力時刻の整合を見るだけ。実際の60秒の中断、取消、受信ストリーム制限・予約会計は既存owner/transportに接続する後工程の課題で、今回達成したとは扱わない。
 

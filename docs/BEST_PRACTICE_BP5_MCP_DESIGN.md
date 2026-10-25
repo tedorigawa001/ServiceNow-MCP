@@ -6,7 +6,7 @@ Status: **1件/集約JSON契約、bounded取得・認証固定・C方式、設�
 契約の実装範囲・使い方・未実装境界は[第1段階の契約記録](BEST_PRACTICE_BP5_CONTRACTS.md)を参照。PDIへの書き込み・本試行ケース作成は行っていない。
 取得プリミティブの実装範囲・制限・検証は[bounded取得記録](BEST_PRACTICE_BP5_BOUNDED_ACQUISITION.md)を参照。
 追加規則AU-BR-006の[スコープ証拠詳細設計案](BEST_PRACTICE_ABORT_SCOPE_EVIDENCE_DESIGN.md)は内部型・純粋比較器だけ合成検証済み。固定用途のsys_db_object実取得、認証owner・one-shot・worker/MCP接続、全体60秒・受信/210試行内の追加費目/最終予約は未実装で、現行取得先・入力/結果契約は変更していない。
-[証拠生成owner・一度限りの消費の詳細設計案](BEST_PRACTICE_ABORT_SCOPE_OWNER_DESIGN.md)で、発行元・session/job結合、realm間bridge、状態遷移と終了時失効を具体化した。合成ownerも実取得/MCP接続も未実装のまま、純粋比較の結果だけを本番の完了証拠にしない。
+[証拠生成owner・一度限りの消費の詳細設計案](BEST_PRACTICE_ABORT_SCOPE_OWNER_DESIGN.md)で、発行元・session/job結合、realm間bridge、状態遷移と終了時失効を具体化した。合成issuerのみのowner/session claim基礎を実装したが、実取得/MCP接続は未実装で、純粋比較の結果だけを本番の完了証拠にしない。
 運用者設定の受け口・binding・期限・競合の実装は[C方式フォールバック記録](BEST_PRACTICE_BP5_OPERATOR_FALLBACK.md)を参照。
 運用者によるファイル設定・所有者/権限検査・補助コマンドは[設定導入記録](BEST_PRACTICE_BP5_OPERATOR_SETUP.md)を参照。
 bounded取得と既存解析器/結果契約の接続、失敗・省略の扱いは[解析/集約アダプター記録](BEST_PRACTICE_BP5_ADAPTERS.md)を参照。

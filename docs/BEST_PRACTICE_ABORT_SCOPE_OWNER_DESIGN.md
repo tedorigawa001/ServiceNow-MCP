@@ -1,7 +1,7 @@
 # AU-BR-006：証拠生成owner・一度限りの消費の詳細設計
 
 Version: br006-scope-owner-draft-0.1 / Date: 2026-10-25。
-Status: **未実装の設計案。合成owner/issuer・実取得・worker/MCP接続・人による採用承認は未実施**。
+Status: **合成issuerのみのowner/session claim基礎を実装。実取得・worker/MCP接続・人による採用承認は未実施**。
 親は[スコープ証拠設計draft-0.2](BEST_PRACTICE_ABORT_SCOPE_EVIDENCE_DESIGN.md)。既存の内部型/純粋比較器は変更せず、明示14規則・既定3規則・公開JSON・取得先・運用設定を維持する。
 
 ## 1. 現状との差分・保証の範囲
@@ -145,3 +145,11 @@ run claimは1/session、asset jobは選択100行以内、構文計画は100候�
 実装前の残決定：private factory/合成facadeの分離、workerのstrict envelope/世代handshake・段階schema、completionの上位保持契約、control費目/byte上限、終了未確認の表現。これらを決めずにboolのone-shotだけを追加して接続しない。
 
 その後にbounded取得の予約/下位受信上限、固定GET/再読、構文計画・次版JSONを順に接続する。実機確認は別途承認が必要。本書作成では実装・schema/fixture生成・実機操作・トークン発行・設定変更・Pushを行わない。VM/監視/telemetry調査は保留、Unknown・全体受付無効、本番cap/完成parts/permit非発行を維持する。
+
+## 11. 今回の限定実装
+
+`abort-scope-evidence-owner.ts`は合成issuerごとに隔離したWeakMap台帳を持つ。sessionに唯一の生成claimを置き、worker結合検査より前に消費する。ownerは合成session・worker実体と結合し、jobは同じsession/workerと選択assetに結合する。別job番号で同assetを再登録しても拒否する。use/receiptの一度限りの消費と、失敗・取消・owner/session終了・worker終了後の受理拒否を実装した。closeはidempotentで先行理由を維持する。job発行/予約は100件以下。
+
+これは状態機械の**基礎subset**であり、§5のprepare/初回/最終観測のphase、実時計/期限/signal、privateな実取得issuer、payload/hash/ReleasePermit結合、比較器・worker通信・実解放・上位結果ownerへの接続は未実装。合成receiptには比較結果もscope証明もなく、本番完了証拠ではない。合成issuerは呼出し側が自由に作れるため、実認証の証明には使えない。worker handleの差が合成の世代差を表し、実worker世代handshakeは行わない。新moduleも既存の`!dist/review/abort-scope-evidence*`によりnpm非同梱。
+
+検証は[合成owner検証記録](E2E_BEST_PRACTICE_ABORT_SCOPE_OWNER_SYNTHETIC_2026-10-25.md)を参照。VM/監視調査保留・全体受付無効を維持する。
