@@ -36,7 +36,7 @@ runtime coreの内部fixture登録portも同processの信頼コード向けで�
 - 最終npm run build成功、変更source3ファイル／新規test／梱包scriptのESLint成功、梱包scriptのnode --check成功。
 - npm pack --dry-run --json --ignore-scripts：373ファイル、runtime lifecycleあり、dist/review/abort-scope-evidence*は0件。新しいruntime dependencyの成果物4件分が同梱され、fake issuerは同梱されない。
 - 実tarballを一時展開し、既存node_modulesを利用してpacked bounded-readとlifecycleのimportを確認した。session生成・ネットワーク開始なし。新規のproduction-only npm ciを行った検証ではない。
-- 完全なpackage-worker.mjs（production-only installを含む）・全リポジトリ試験・実機試験は未実施。npm cacheはprocess限定の一時pathを指定し、設定ファイルを変更していない。
+- 上記時点では完全なpackage-worker.mjs（production-only installを含む）・全リポジトリ試験は未実施だった。その後のレビューで、全リポジトリ試験146 files / 4258 tests成功、`npm run test:pack`（一時cacheを当該processだけに指定）でproduction-only install＋worker smoke成功・373 files・runtime lifecycleの存在確認成功を確認した。実機試験は未実施。npm cacheはprocess限定の一時pathを指定し、設定ファイルを変更していない。
 - 更新3文書の相対リンク10件・末尾空白確認に問題なし。git diff --check成功。
 
 ## 6. 残課題
