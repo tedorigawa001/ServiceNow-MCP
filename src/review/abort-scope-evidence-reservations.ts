@@ -129,7 +129,13 @@ export function createSyntheticScopeReservationLedger(raw: unknown) {
     },
     enterFinal(): Result<true> {
       if (primary) return failure(primary);
-      if (phase !== 'normal' || current || active) return failure('invalid_state');
+      if (phase !== 'normal' || active) return failure('invalid_state');
+      // The normal phase can end while a read waits to start or to retry. End it unattempted (C is not
+      // refunded) so the final reservations survive; a table initial left this way is unavailable.
+      if (current) {
+        const read = reads.get(current)!; read.state = 'done'; current = undefined;
+        if (read.table) read.table.initial = 'unavailable';
+      }
       phase = 'final'; return ok(true);
     },
     startFinal(slot: ScopeBudgetSlot, target: 'parent' | 'metadata' | ScopeBudgetTable) {

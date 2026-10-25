@@ -179,7 +179,7 @@ oracleは製品の予約/課金関数を再使用せず、合成fetch/readのイ
 
 費目型`ScopeReservationCost`は合成のHTTP試行1回・lane・論理read内の1/2回目・final slot番号を表す。`ScopeReservationDimensions`はC/R/Tを区別する。予約はCに数えず、dispatch相当のstartだけがCを増やす。retry待ちに移っても返金せず、同logical readは最大2試行。成功/非retry終端で残slotを0へ解放する。doneは論理処理の終端であり、HTTP成功や証拠安定の認定ではない。
 
-finalへは一方向に遷移し、親→metadata→受付table順で自身のslotだけを使える。別台帳/clone/別table/旧booleanの流用、二重開始/完了、3回目の試行はterminal停止。first primaryを保持して全未使用slotを失効させるが、Cは戻さない。初回unavailableのtableだけfinalを未実施でskipでき、final attempt=0・state=skippedを保持する。実観測receiptや安定性は発行しない。
+通常phaseの終了（`enterFinal`）時に、開始前またはretry待ちのreadが残っていれば未実施のまま終端化してからfinalへ遷移する。消費済みCは返金せず、table初回ならunavailableとしてfinalをskip可能にする。final予約は失効させない。試行中（未settle）の試行が残る場合だけはsettleを必須とする。finalへは一方向に遷移し、親→metadata→受付table順で自身のslotだけを使える。別台帳/clone/別table/旧booleanの流用、二重開始/完了、3回目の試行はterminal停止。first primaryを保持して全未使用slotを失効させるが、Cは戻さない。初回unavailableのtableだけfinalを未実施でskipでき、final attempt=0・state=skippedを保持する。実観測receiptや安定性は発行しない。
 
 独立oracleはtest fixture内だけに置き、製品型/会計関数をimportせず、イベントprefixからC/R/Tとslot残数/試行数を再構築する。32本の正常traceと拒否/中断trace、Q=210の境界で照合する。実fetchがないため、oracleのdispatchは**合成fetch開始イベント**であり実通信の測定ではない。
 

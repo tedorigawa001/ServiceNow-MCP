@@ -31,6 +31,24 @@ it.each([202,203])('handles C+R+4 equality/one insufficient atomically: C=%i',co
     expect(l.stats()).toMatchObject({requests:before.requests,reserved:before.reserved,tables:before.tables});
     expect(l.admitTable('task')).toEqual(r);}
 });
+it.each(['ordinary_retry','initial_retry','opened_unstarted'] as const)('ends a waiting read at the normal phase end and keeps final reservations: %s',kind=>{
+  const l=setup(),events:ReservationEvent[]=[];let table;
+  if(kind==='ordinary_retry'){const r=get(l.openOrdinary('ordinary'));get(l.settle(get(l.startOrdinary(r)).attempt,'retryable'));events.push({kind:'dispatch',lane:'ordinary'});}
+  if(kind==='initial_retry'){table=get(l.admitTable('incident'));events.push({kind:'admit'});
+    get(l.settle(get(l.startInitial(table)).attempt,'retryable'));events.push({kind:'dispatch',lane:'initial'});}
+  if(kind==='opened_unstarted')get(l.openOrdinary('ordinary'));
+  get(l.enterFinal());events.push({kind:'final'});
+  const o=reservationOracle(0,210,events);
+  expect(l.stats()).toMatchObject({phase:'final',primary:null,requests:o.requests,reserved:o.reserved});
+  get(l.settle(get(l.startFinal(l.parent,'parent')).attempt,'success'));
+  get(l.settle(get(l.startFinal(l.metadata,'metadata')).attempt,'success'));
+  if(table){get(l.skipTableFinal(table,get(l.tableSlot(table))));expect(l.stats().slots[2]).toMatchObject({attempts:0,state:'skipped'});}
+  expect(l.stats().primary).toBe(null);
+});
+it('still requires an in-flight attempt to settle before the final phase',()=>{
+  const l=setup(),r=get(l.openOrdinary('ordinary'));get(l.startOrdinary(r));
+  expect(l.enterFinal()).toEqual({ok:false,code:'invalid_state',terminal:true});
+});
 it('preserves final reservations when ordinary capacity is exhausted',()=>{
   const l=setup(206),read=get(l.openOrdinary('ordinary'));
   expect(l.startOrdinary(read)).toEqual({ok:false,code:'request_budget_exceeded',terminal:false});
