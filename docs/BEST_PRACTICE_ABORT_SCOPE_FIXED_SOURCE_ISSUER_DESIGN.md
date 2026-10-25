@@ -1,7 +1,7 @@
 # AU-BR-006 固定source issuer：実session・取得・再読・予算結合
 
 Version: br006-fixed-source-issuer-draft-0.1 / Date: 2026-10-25。
-Status: **詳細設計のみ。issuer/実transport/実worker/上位結果への接続は未実装・未承認**。
+Status: **合成issuerの内部型/生成claim/固定GET/正規化を実装。実session/transport/worker/上位結果への接続は未実施・未承認**。
 親：[接続契約](BEST_PRACTICE_ABORT_SCOPE_CONNECTION_CONTRACT_DESIGN.md)、[bounded予算設計](BEST_PRACTICE_ABORT_SCOPE_BOUNDED_BUDGET_DESIGN.md)。
 
 ## 1. 現状と本設計の範囲
@@ -159,3 +159,19 @@ E枠だけの閉鎖は新証拠GETを止め、未処理table finalを未確認sk
 次の実装単位は、まず**issuerの内部型・同session/source/permit claim・固定要求生成/正規化・合成受領物**までとし、合成発行元だけで前提を検証する。実transport許可先の変更や実worker接続は同時に行わない。
 
 本工程は文書のみ。VM/監視/telemetry保留・Unknown・全体受付無効を維持し、実装・実transport/worker接続・実機操作・トークン発行・設定変更・実行permit発行は行わない。
+
+## 10. 合成issuerの限定実装
+
+`abort-scope-evidence-fixed-source.ts`はfactoryごとにsession/source/release permit/issuer/read/observationをprivateなWeakMapで認識する。いずれも合成handleで、実BoundedReadSession/ReleasePermitの受理口や互換castは作っていない。sourceのready/releaseの前提はfixtureにすぎず、実取得を証明しない。table版列の形式は検査するが、初回/最終の安定性比較や選択metadataの版結合は未接続。
+
+生成時は既知のactive sessionのclaimを先に消費し、同sessionのsourceとその内部permitとの参照一致・親/metadata前提を検査する。sourceのclaimも一度だけ。失敗はsessionに固定理由を残し、正しいpermit/別sourceを用意しても同sessionでは再生成しない。成功済みsessionでの二重生成はissuer_claimedで拒否する。未知session handleでは有効なsessionを特定できず、その未知値だけを拒否する。
+
+固定GETは§4.1のrelative path/paramsを生成するだけで送信しない。初回/最終の一度限りのread票、table最大8名、初回完了前のfinal開始拒否、最終table受付順を合成状態で検査する。初回不足時のfinal skip、同名cacheからのjob別配送、親/metadata最終再読とFinalSourceSealはまだ実装していない。再度beginして初回GETを作る操作は拒否する。
+
+completeは同issuerのpending票を消費してから、合成frame（status/body_json/observed_at/cleanup）を一度だけclone/検査する。JSON bodyを0/1/2件・必要5列に正規化し、scope不正/列不足/不可視をUnknownとして扱う。name混入、時刻矛盾、frame不正、401/403、cleanup未確認で停止し、修正frameの再投入でも再開しない。frameの16KiB検査はfixtureの防御的境界であり、ストリーム受信をここで実装したものではない。
+
+正規化receiptのviewは同issuerに限る合成検査用で、凍結した必要列だけを返す。繰返しview可能であり、上位結果へのone-shot delivery/completionではない。clone/他issuer/終了後を拒否し、raw bodyや余分な列を保持しない。session/source終了は次の操作で失効を検出する純粋モデルで、実I/Oを中断するhookではない。閉じたissuerのキャッシュは破棄するが、JS値の物理ゼロ化は保証しない。
+
+実source receipt/選択payload/worker planの発行元、同じ実C/G/E/R/時計への結合、HTTP retry/再読/解放、実ACL・予算会計、最終seal・公開JSONは未接続。合成のoperator_config/observed区分もリリース実測の証明ではない。実行permitを発行せず、実transportの許可先も変えていない。
+
+検証は[固定source基礎の合成記録](E2E_BEST_PRACTICE_ABORT_SCOPE_FIXED_SOURCE_SYNTHETIC_2026-10-25.md)。新moduleも既存`!dist/review/abort-scope-evidence*`の非同梱対象。VM/監視/telemetry保留・Unknown・全体受付無効を維持する。

@@ -4,7 +4,7 @@ Version: br006-bounded-budget-draft-0.1 / Date: 2026-10-25。
 Status: **純粋予約台帳・合成stream課金/中断・独立イベントoracleを実装。cap採用承認・実source/transport/worker接続は未実施**。
 親：[証拠取得設計](BEST_PRACTICE_ABORT_SCOPE_EVIDENCE_DESIGN.md)、[接続契約](BEST_PRACTICE_ABORT_SCOPE_CONNECTION_CONTRACT_DESIGN.md)。
 
-実session/ReleasePermitへの結合、固定GET/必要列射影、初回/最終受領物と既存verifyの統合は[固定source issuer詳細設計draft-0.1](BEST_PRACTICE_ABORT_SCOPE_FIXED_SOURCE_ISSUER_DESIGN.md)を参照。合成台帳/streamを本番発行元へ昇格させず、実接続は未実装のまま。
+実session/ReleasePermitへの結合、固定GET/必要列射影、初回/最終受領物と既存verifyの統合は[固定source issuer詳細設計draft-0.1](BEST_PRACTICE_ABORT_SCOPE_FIXED_SOURCE_ISSUER_DESIGN.md)を参照。合成issuerの型/生成claim/GET生成/正規化まで実装したが、合成台帳/streamを本番発行元へ昇格させず、実接続は未実施のまま。
 
 ## 1. 現状と変更の境界
 
