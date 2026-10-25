@@ -151,7 +151,7 @@ protocol_invalid等の新内部codeを現行公開errorsへそのまま渡さな
 
 workerでない親の認証/予算/取消codeを子が自己申告することはできない。未知codeやstageとkindの不一致はprotocol_invalid。既存抽出拒否codeとowner不整合を混ぜて「単なる不正asset」として続行しない。
 
-合成ownerの理由をwireへ移す際も固定対応を設ける。`binding_mismatch`/`session_claimed`/`invalid_session`は接続境界でevidence_binding_mismatch、`invalid_state`は同名、`phase_failed`は別途分類できる実source診断がなければinternal_review_errorとする。closed/cancelled/worker_exitedは親の実終了状態と照合して親停止へ渡し、子の自己申告だけで親状態を書き換えない。合成fixtureの任意reasonを本番errorの自由文字列にはしない。
+合成ownerの理由をwireへ移す際も固定対応を設ける。`binding_mismatch`/`session_claimed`/`invalid_session`は接続境界でevidence_binding_mismatch、`invalid_state`は同名、`phase_failed`は別途分類できる実source診断がなければinternal_review_errorとする。`limit`（job発行/予約の100件上限）は下位枠不足と同じ`scope_evidence_limit`へ対応させ、当該BR-006を未評価にする。closed/cancelled/worker_exitedは親の実終了状態と照合して親停止へ渡し、子の自己申告だけで親状態を書き換えない。合成fixtureの任意reasonを本番errorの自由文字列にはしない。
 
 ## 8. 上位レビュー結果への意味対応（次版の前提）
 
