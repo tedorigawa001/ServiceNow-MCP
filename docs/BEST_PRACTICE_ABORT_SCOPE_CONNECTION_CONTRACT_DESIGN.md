@@ -1,7 +1,7 @@
 # AU-BR-006 接続契約：worker計画・観測・比較応答・上位診断
 
 Version: br006-connection-contract-draft-0.1 / Date: 2026-10-25。
-Status: **設計案。schema/IPC/実source issuer/公開結果契約は未実装・未承認**。
+Status: **合成channel限定のstrict schema・相関台帳・診断ownerを実装。実worker IPC/実source issuer/公開結果契約は未接続・未承認**。
 親：[owner設計](BEST_PRACTICE_ABORT_SCOPE_OWNER_DESIGN.md)、[スコープ証拠・取得設計](BEST_PRACTICE_ABORT_SCOPE_EVIDENCE_DESIGN.md)。
 
 ## 1. 対象と現状
@@ -13,6 +13,8 @@ Status: **設計案。schema/IPC/実source issuer/公開結果契約は未実装
 ## 2. strict schemaの共通規約・境界
 
 以下の表はJSON契約の規範案。実行可能なschema定義ではない。**全objectを再帰的にstrict**にし、列挙していないキー・省略・型強制・default補完を拒否する。nullableは明記した箇所だけ。数値は有限のsafe integer。日時は既存と同じUTC ISO datetime、sys_idは小文字16進32桁、hashは同64桁。tableは`^[a-z][a-z0-9_]{0,79}$`。任意エラーメッセージ・stack・コード断片はfieldとして設けない。
+
+§10の合成実装ではこの構造をZodのstrict schemaとchannelの意味/状態検査へ具体化した。本書の表自体は設計記述であり、schemaの構造検査だけで相関/状態の検査を代用しない。
 
 親子のopaque handle/WeakMapは転送しない。送信側でサイズと構造を検証し、受信側もサイズ→構造→相関→状態→意味の順で検証する。structuredClone/postMessageは受信側検証より前に複製が起きるため、受信後の検査だけで複製メモリを防げるとは主張しない。固定送信者の送信前検査・既存workerメモリ上限を併用する。
 
@@ -176,3 +178,19 @@ workerでない親の認証/予算/取消codeを子が自己申告すること�
 必須合成試験：全kind/全fieldの追加・欠落・型/上限・nonce/job/hash/phase違い、重複/late/restart、prepareの安全XML/対象/AST判定、全観測unionと不正な停止理由混入、comparisonのcross-field矛盾、部分証拠/直接比較JSONのcompletion偽造、失効競合、最初の診断保持とcleanup未確認、50/55/60秒・取消・予約/下位byte枠、本文/秘密非出力、旧0.2/0.3と固定評価セットの互換性。
 
 次の実装単位は、まず**合成channelでのstrict envelope/body・相関・上位診断owner**までに限定する。その後、bounded下位予算/予約→固定source issuer→実worker/AST計画→次版上位JSONの順で接続する。本書作成では実装・実機操作・トークン発行・設定変更を行わない。VM/監視/telemetry保留・Unknown・全体受付無効・permit非発行を維持する。
+
+## 10. 合成channelの実装範囲
+
+`abort-scope-evidence-protocol.ts`で全5要求/6応答kindとnested body、比較結果のcross-field制約を実装。`abort-scope-evidence-channel.ts`は実Workerの代わりに、生成した不透明な合成peerの参照一致を検査する。nonce/世代は合成fixture入力で、実認証/実session/実workerの証明ではない。raw wireは文字列だけを受理し、UTF-8サイズ検査後にJSON.parse→strict schema→要求/世代/job/kind→状態/意味検査を行う。JSONの重複キー検出専用parserではなく、JSON.parseの通常の解釈を使う。
+
+beginは同時未解決1件・単調増加要求番号・hello/prepare/初回/最終/compareの進行を所有する。prepareのmetadata名とasset ID、時刻幅を検査し、最初のprepareのinstance/Update Set/開始時刻/期限幅へ後続jobを結合する。これは同じ合成scalarの固定であり、実source receiptの結合ではない。prepare応答のtarget、以後のhash/plan/観測phase/nameを照合する。job IDは1..100、同Update XMLの再prepareを拒否し、site累計100・plan応答累計256KiBを合成枠として適用する。既存他規則との候補残枠の共有はまだ接続していない。
+
+不正wire/未知code/重複/別peer/相関違いは停止し、未解決要求と計画を破棄する。先行stage/codeをprivateな診断ownerへ固定し、診断snapshotは凍結データだけを返す。失効後は遅延応答を受理せず、新世代での再開入口も作らない。cleanupは合成通知であり実OSの解放証明ではない。unconfirmedは後のconfirmedで上書きできず、primaryもclose相当の再通知で消さない。
+
+既存asset抽出/解析拒否はprepareに限りasset-localとして固定codeを最大100件保持する。後のrun停止でもその診断を消さない。他phaseで同じcodeを送るとprotocol_invalid。scope_evidence_limit等でこの合成channelが停止しても、実adapterの他14規則をどう保持するかは未接続であり、実runのpartial挙動を検証済みとはしない。
+
+§2.2のbyte枠は合成検証用定数として適用しただけで、本番運用capの承認ではない。pending prepareの本文は応答までの一時保持で、応答後の計画に本文/ASTを残さない。run内保持1MiBの実allocator会計やcontrol workの独立計数、HTTPの証拠専用枠/動的予約、50/55/60秒の実時間中断は未実装。
+
+現在のchannelはschema/相関/診断だけを確認し、XML/ASTを解析せず、比較器を実行せず、compare_okの比較データから上位レビュー結果や本番completionも発行しない。既存の合成証拠ownerとの一体接続、実ready受信/port、実source issuer、実worker/上位結果ownerの結合は次工程。準備計画のAST正当性や観測内容に対する比較の正しさは、wire構造検査だけでは証明できない。
+
+検証は[合成channel検証記録](E2E_BEST_PRACTICE_ABORT_SCOPE_CHANNEL_SYNTHETIC_2026-10-25.md)を参照。旧公開0.2/0.3・明示14/既定3規則とnpm非同梱を維持し、VM/監視/telemetry調査は保留のまま。

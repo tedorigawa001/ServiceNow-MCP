@@ -10,6 +10,7 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 ### Added
 
+- Development-only BR-006 synthetic channel with recursive strict request/response bodies, bounded wire parsing, peer/generation/request/job correlation and irreversible stop diagnostics. Preserves the first typed failure and sticky unconfirmed cleanup; asset-local parse rejections remain separate. No actual Worker/source connection, public result schema change or production authority.
 - Synthetic-only BR-006 payload/observation issuance connected to the existing pure comparator. Owner/job-bound evidence is required for a shared one-shot comparison claim; comparison receipts are separate from lifecycle receipts. Rejected comparisons preserve their fixed reason and stop the owner; unavailable/changed results remain unknown, without retries or live authority.
 - Synthetic-only BR-006 prepare/initial/final lifecycle with one-shot phase tickets bound to owner/job, separate start/completion, and consumption gated on final completion. Out-of-order, duplicate and failed phases stop the owner without reopening claims. No observed-data validation, live issuer or worker IPC integration.
 - Development-only synthetic BR-006 evidence owner/session claim with identity-bound worker jobs, sticky one-shot use and receipt acceptance, and terminal revocation. No live issuer, authentication proof, comparison/IPC integration or MCP registration; npm exclusion remains in place.
