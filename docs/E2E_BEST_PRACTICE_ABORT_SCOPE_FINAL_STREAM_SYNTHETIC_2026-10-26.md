@@ -11,7 +11,7 @@
 - prepareで同stream／台帳の通常枠を使い親→metadataの基準値を取得する。fixtureのready booleanだけではfinalizeできない。
 - 初回と最終の親／metadata GETは同条件。metadataはall-metadata固定subset、limit101/lookaheadで0..100件、順序・重複・接続先Update Setを検査。payloadは要求しない。review_targets実選択は未接続。
 - finalizing claimはawait前に一度だけ消費。親→metadata→table受付順で予約を使い、全slotを終端化する。
-- 404／retry枯渇／不正JSON／下位証拠capを局所unavailableとして継続する。completeUnavailableで票を消費し、HTTP200を捏造しない。JSON正規化で判明した初回不足も台帳へ反映し、最終GETなしでskipする。
+- 404／retry枯渇／不正JSON／下位証拠capを局所unavailableとして継続する。下位証拠cap（S超過・E累計超過・E閉鎖によるfinal skip）の観測理由は`evidence_limit`で、未取得を表す`not_collected`（初回不足によるfinal skip等）と区別する。completeUnavailableで票を消費し、HTTP200を捏造しない。JSON正規化で判明した初回不足も台帳へ反映し、最終GETなしでskipする。
 - E閉鎖でも親／metadataは通常G内で続行。未処理tableはCを増やさずskipし、予約を一度だけ解放。失敗body／超過chunkの受信量は返金しない。
 - 認証／binding／取消／deadline通知／G超過／cleanup不明は全体停止。primaryと先行の固定局所診断を保持し、body・cache・seal参照を失効する。
 - 親／一覧／全tableが完全かつ同一、scope非null、受付拒否なし、予約残0、cleanup確認済みの場合だけopaque synthetic sealを発行する。changed／unverifiedではseal=null。seal消費は同ownerで一度だけ、返却summaryはsynthetic:true。
@@ -40,7 +40,8 @@ fixtureの実callback呼出しイベントからCを、実readで返したchunk�
 - 関連10ファイル、443テスト成功。初回接続・issuer・stream・予約台帳・channel・比較owner等を含む。
 - npm run build成功、変更したsource4ファイルとtest3ファイルのESLint成功、git diff --check成功。
 - npm pack --dry-run --json --ignore-scripts：369ファイル、dist/review/abort-scope-evidence*は0件。一時cacheはprocess限定で指定し、npm設定ファイルは変更していない。実インストール検証ではない。
-- 全リポジトリ試験・実機試験・本番用worker実行は未実施。
+- 全リポジトリ試験（`evidence_limit`理由の修正後）：145 files / 4227 tests成功。`npm run test:pack`（一時cacheを当該processだけに指定）：本番依存だけのinstall＋worker smoke成功、369 files。
+- 実機試験・本番用worker実行は未実施。
 
 ## 5. 残課題
 

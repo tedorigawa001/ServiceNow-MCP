@@ -58,7 +58,7 @@ it.each(['rejected','pending'] as const)('cleanup %s cannot mint observations',a
 });
 it('charges an overshoot and preserves a local unknown without stopping the composition',async()=>{
   const x=setup({evidenceResponseBytes:1}),send=vi.fn(async()=>response());
-  expect(get(await x.initial('incident',at,send))).toMatchObject({state:'unavailable',reason:'not_collected'});
+  expect(get(await x.initial('incident',at,send))).toMatchObject({state:'unavailable',reason:'evidence_limit'});
   expect(x.stats().global_bytes).toBe(Buffer.byteLength(body()));
   await x.initial('problem',at,send);expect(send).toHaveBeenCalledTimes(2);
   expect(x.stats().composition_primary).toBeNull();

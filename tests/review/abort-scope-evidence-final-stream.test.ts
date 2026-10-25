@@ -89,6 +89,11 @@ it('initial E exhaustion leaves parent/metadata capacity and skips final evidenc
   expect(f.x.stats()).toMatchObject({...f.oracle(),reserved:0,evidence_closed:true});
   expect(f.x.stats().slots[2]).toMatchObject({attempts:0,state:'skipped'});
 });
+it('reports an initial read over the cumulative evidence cap as evidence_limit, not not_collected',async()=>{
+  const bytes=Buffer.byteLength(JSON.stringify({result:[row()]})),f=setup({evidenceBytes:bytes-1});get(await f.prepare());
+  expect(get(await f.initial())).toMatchObject({state:'unavailable',reason:'evidence_limit'});
+  expect(f.x.stats()).toMatchObject({composition_primary:null,evidence_closed:true});
+});
 it('final E exhaustion retains the first read and skips the remaining final table',async()=>{
   const bytes=Buffer.byteLength(JSON.stringify({result:[row()]}));
   const f=setup({evidenceBytes:bytes*3-1});await prepared(f,['incident','problem']);

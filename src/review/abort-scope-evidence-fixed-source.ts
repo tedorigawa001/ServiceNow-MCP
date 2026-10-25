@@ -21,7 +21,8 @@ const frameSchema=z.strictObject({status:z.number().int().min(100).max(599),body
 const rowSchema=z.strictObject({sys_id:id,name:z.string().regex(/^[a-z][a-z0-9_]{0,79}$/),
   sys_scope:z.union([z.literal('global'),id]).nullable(),sys_updated_on:z.string().min(1).max(40),sys_mod_count:z.string().regex(/^\d{1,20}$/)});
 type Row=Readonly<z.infer<typeof rowSchema>>;
-type Unavailable='not_found_or_not_visible'|'invalid_observation'|'field_unavailable'|'ambiguous_table'|'upstream_unavailable'|'not_collected';
+type Unavailable='not_found_or_not_visible'|'invalid_observation'|'field_unavailable'|'ambiguous_table'|'upstream_unavailable'|'not_collected'
+  |'evidence_limit';
 export type FixedSourceNormalized = Readonly<{source:'sys_db_object.current';visibility_scope:'caller_acl';phase:'initial'|'final';observed_at:string} &
   ({state:'rows';rows:readonly Row[]}|{state:'unavailable';reason:Unavailable})>;
 const handle=<T>()=>Object.freeze(Object.create(null)) as T;
@@ -142,7 +143,7 @@ export function createSyntheticFixedSourceIssuer() {
       const i=issuers.get(issuer);if(!i)return no('evidence_binding_mismatch');const live=check(i);if(!live.ok)return live;
       const read=reads.get(ticket);if(!read||read.issuer!==issuer)return fail(i,'evidence_binding_mismatch');
       if(read.used||i.pending!==ticket)return fail(i,'invalid_state');read.used=true;i.pending=undefined;
-      if(!['not_found_or_not_visible','invalid_observation','field_unavailable','ambiguous_table','upstream_unavailable','not_collected'].includes(reason))return fail(i,'evidence_invalid');
+      if(!['not_found_or_not_visible','invalid_observation','field_unavailable','ambiguous_table','upstream_unavailable','not_collected','evidence_limit'].includes(reason))return fail(i,'evidence_invalid');
       const t=i.tables.get(read.name)!,time=runTime(i,at,read.phase==='final'?t.initial?.observed_at:undefined);
       if(!time)return fail(i,'invalid_observation_time');
       const value:FixedSourceNormalized=Object.freeze({...notCollected(read.phase,time),reason});

@@ -88,9 +88,10 @@ export function createSyntheticScopeSourceStream(sessionFixture: unknown, source
     }
     return {ok:true as const,value:JSON.stringify(p.data)};
   }
+  // A lower evidence byte cap is evidence_limit, distinct from a read that was never collected.
   function localReason(code:string) {
     return code==='not_found_or_not_visible'?'not_found_or_not_visible' as const:code==='upstream_unavailable'?'upstream_unavailable' as const
-      :code==='invalid_response'?'invalid_observation' as const:'not_collected' as const;
+      :code==='invalid_response'?'invalid_observation' as const:code==='scope_evidence_limit'?'evidence_limit' as const:'not_collected' as const;
   }
   function normalized(receipt:ReturnType<typeof source.complete>) {
     if(!receipt.ok)return close(receipt.code);
