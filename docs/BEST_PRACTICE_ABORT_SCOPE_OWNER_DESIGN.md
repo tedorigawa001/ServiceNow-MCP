@@ -4,6 +4,8 @@ Version: br006-scope-owner-draft-0.1 / Date: 2026-10-25。
 Status: **合成issuerのみのowner/session claim・3phase・証拠生成/純粋比較器接続を実装。実取得・worker/MCP接続・人による採用承認は未実施**。
 親は[スコープ証拠設計draft-0.2](BEST_PRACTICE_ABORT_SCOPE_EVIDENCE_DESIGN.md)。既存の内部型/純粋比較器は変更せず、明示14規則・既定3規則・公開JSON・取得先・運用設定を維持する。
 
+実session/source/jobとの結合、workerのstrictなprepare/観測/比較messageと上位固定診断は[接続契約詳細設計draft-0.1](BEST_PRACTICE_ABORT_SCOPE_CONNECTION_CONTRACT_DESIGN.md)を参照。実接続・公開schemaは未実装で、新しいbyte/保持枠は未承認の提案。
+
 ## 1. 現状との差分・保証の範囲
 
 現行abort-scope-evidence.tsのfactoryは構造検証と同一contextへの結合を行うだけで、実認証session・worker・取得元を証明しない。純粋比較器は繰り返し可能で、終了/取消を自ら検出しない。JSON/structuredCloneしたhandleは別realmのWeakMapへ移せない。
