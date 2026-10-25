@@ -58,6 +58,32 @@ afterEach(async () => {
 });
 const run = (rows: Row[], extra: Record<string, unknown> = {}, fetcher = fixture(rows)) => reviewBoundedUpdateSet(client(),
   { update_set_sys_id: parent, selection_mode: 'review_targets', ...extra }, { fetch: fetcher, workerFactory: sourceWorkerFactory });
+it('CL-005 reaches worker in both envelopes without certifying field type or display value', async () => {
+  const rows=[row(1,'sys_script_client')];
+  for(const mode of ['review_targets',undefined]) {
+    const out=await run(rows,{requested_rule_ids:['AU-CL-005'],selection_mode:mode},fixture(rows,
+      'function onLoad(){g_form.setValue("PRIVATE_FIELD","PRIVATE_ID");g_form.setValue("PRIVATE_OTHER",id,display);var custom={setValue:function(){}};custom.setValue("x",id);}'));
+    expect(out.isError).toBe(false);if(out.isError)throw Error(out.error.code);
+    expect(out.result).toMatchObject({schema_version:mode?'bp-mcp-review-0.3':'bp-mcp-review-0.2',versions:{ruleset:'bp3-0.14'},counts:{findings:1}});
+    const schema=mode?aggregateReviewV3Schema:aggregateReviewSchema;
+    expect(schema.safeParse(out.result).success).toBe(true);
+    expect(JSON.stringify(out)).not.toMatch(/PRIVATE_FIELD|PRIVATE_ID|PRIVATE_OTHER|synthetic-selection-token/);
+    for(const corrupt of ['type','availability','followup']) {
+      const forged=structuredClone(out.result),asset=forged.assets[0];if(asset.state!=='reviewed')throw Error('Expected setter candidate');
+      if(corrupt==='followup')asset.result.findings[0].required_follow_up=['source_approval'];
+      else asset.result.limitations=asset.result.limitations.filter(x=>x!==(corrupt==='type'?'setvalue_reference_type_not_verified':'setvalue_display_value_availability_not_verified'));
+      expect(schema.safeParse(forged).success).toBe(false);
+    }
+  }
+});
+it('CL-005 unresolved receiver cannot claim complete analysis', async () => {
+  const rows=[row(1,'sys_script_client')];
+  const out=await run(rows,{requested_rule_ids:['AU-CL-005']},fixture(rows,'function onLoad(form){form.setValue("x",id);}'));
+  expect(out.isError).toBe(false);if(out.isError)throw Error(out.error.code);
+  expect(out.result.coverage.analysis_complete).toBe(false);
+  const forged=structuredClone(out.result);forged.coverage.analysis_complete=true;
+  expect(aggregateReviewV3Schema.safeParse(forged).success).toBe(false);
+});
 it('CL-007 preserves document/custom provenance through worker and rejects forged context', async () => {
   const rows=[row(1,'sys_script_client')];
   for(const mode of ['review_targets',undefined]) {

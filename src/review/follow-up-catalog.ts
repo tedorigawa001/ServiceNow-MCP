@@ -12,6 +12,7 @@ export const CLIENT_LOOKUP_FOLLOW_UP_PROFILE_VERSION = 'bp-followups-cl002-0.1';
 export const ONCHANGE_FOLLOW_UP_PROFILE_VERSION = 'bp-followups-cl008-0.1';
 export const ONLOAD_FOLLOW_UP_PROFILE_VERSION = 'bp-followups-cl003-0.1';
 export const DOM_FOLLOW_UP_PROFILE_VERSION = 'bp-followups-cl007-0.1';
+export const SETVALUE_FOLLOW_UP_PROFILE_VERSION = 'bp-followups-cl005-0.1';
 export const DOM_SCOPE_FOLLOW_UP = { document_scope: 'dom_document_scope_review', created_subtree: 'dom_created_subtree_review' } as const;
 export const ONLOAD_INPUT_FOLLOW_UP = { static: 'onload_static_inputs_review', runtime: 'onload_runtime_inputs_review', unknown: 'onload_unknown_inputs_review' } as const;
 export const COMMON_FOLLOW_UP_CODES = ['source_approval', 'binding_and_reachability', 'exceptions_and_business_intent'] as const;
@@ -27,6 +28,7 @@ export const RULE_SPECIFIC_FOLLOW_UP = {
   'AU-CL-008': 'onchange_loading_intent_review',
   'AU-CL-003': 'onload_data_timing_review',
   'AU-CL-007': 'dom_dependency_review',
+  'AU-CL-005': 'reference_display_value_review',
 } as const;
 export const FOLLOW_UP_CODES = [...COMMON_FOLLOW_UP_CODES, ...Object.values(RULE_SPECIFIC_FOLLOW_UP), ...Object.values(ONLOAD_INPUT_FOLLOW_UP), ...Object.values(DOM_SCOPE_FOLLOW_UP)] as const;
 export const followUpCodeSchema = z.enum(FOLLOW_UP_CODES);
@@ -48,6 +50,7 @@ export function requiredFollowUp(ruleId: string, context?: FollowUpContext): Fol
   if (ruleId === 'AU-CL-006') result.push(RULE_SPECIFIC_FOLLOW_UP[ruleId]);
   if (ruleId === 'AU-CL-002') result.push(RULE_SPECIFIC_FOLLOW_UP[ruleId]);
   if (ruleId === 'AU-CL-008') result.push(RULE_SPECIFIC_FOLLOW_UP[ruleId]);
+  if (ruleId === 'AU-CL-005') result.push(RULE_SPECIFIC_FOLLOW_UP[ruleId]);
   if (ruleId === 'AU-CL-003') {
     result.push(RULE_SPECIFIC_FOLLOW_UP[ruleId]);
     result.push(ONLOAD_INPUT_FOLLOW_UP[context?.kind === 'onload_timing' ? context.timing : 'unknown']);
@@ -63,6 +66,12 @@ type Definition = { kind: 'generic' | 'context_specific' | 'rule_intrinsic'; app
   meaning: string; attach_when: string; does_not_prove: string };
 /** Policy is owned here, not by a dataset. Source adoption and expert adjudication remain pending. */
 export const FOLLOW_UP_DEFINITIONS = {
+  reference_display_value_review: {
+    kind: 'rule_intrinsic', applicable_rules: ['AU-CL-005'],
+    meaning: '対象列が参照型か、既知で正しい表示値を利用できるか、クリア操作等の意図・追加通信・UI互換性を確認する。',
+    attach_when: 'Client Scriptでg_form由来の2引数setValueを限定解析で確認した全候補。',
+    does_not_prove: '参照型・表示値の可用性・追加通信や性能劣化・違反。表示値取得だけの照会追加や3引数への自動置換を承認しない。',
+  },
   dom_dependency_review: {
     kind: 'rule_intrinsic', applicable_rules: ['AU-CL-007'], meaning: 'DOM依存の必要性・対応UI・GlideForm等の公開APIで代替できるかを確認する。',
     attach_when: '限定したDOM検索候補の全件。', does_not_prove: '標準UIへの依存・違反・非互換性、または自動置換の安全性。',

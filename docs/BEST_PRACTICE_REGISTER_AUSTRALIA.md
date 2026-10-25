@@ -16,6 +16,7 @@ Status: **公式本文・Australia表示を照合した初版27項目／人に�
 [AU-CL-008のonChange限定・読込時ガード/照会候補](BEST_PRACTICE_ONCHANGE_LOADING.md)も追加した。isLoadingへの言及だけで除外せず、必要な読込時処理を一律違反としない。
 [AU-CL-003のonLoad限定・取得入力/公開範囲の確認候補](BEST_PRACTICE_ONLOAD_SCRATCHPAD.md)も追加した。定数入力を事前可用性の証明とせず、動的取得も一律scratchpad移行推奨へ変換しない。
 [AU-CL-007のClient Script限定・DOM依存確認候補](BEST_PRACTICE_DOM_CLIENT.md)も追加した。文書由来と作成部分木を分け、selector名から標準UI/自作UIを断定しない。
+[AU-CL-005のClient Script限定・2引数setValue確認候補](BEST_PRACTICE_SETVALUE_CLIENT.md)も追加した。参照型・表示値の可用性は未確認とし、3引数呼出しを確認済みとは扱わない。
 
 ## 1. 確認方法と状態
 

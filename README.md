@@ -34,6 +34,7 @@ Claude・Cursor・VS Code などの AI ツールから、ServiceNow のインシ
 - 明示指定の[AU-CL-008](docs/BEST_PRACTICE_ONCHANGE_LOADING.md)を追加。onChangeのClient Scriptで、読込フラグのガードと照会箇所を区別し、読込時にも必要かを確認する候補として返します。単なるisLoadingへの言及や別イベントを同一視せず、自動return追加はしません。合成検証のみです。
 - 明示指定の[AU-CL-003](docs/BEST_PRACTICE_ONLOAD_SCRATCHPAD.md)を追加。onLoadの取得入力を定数・実行時依存・情報不足に分け、可用性・鮮度・公開範囲の確認候補を返します。scratchpad移行を一律推奨せず、機密データ追加や自動移行は行いません。実PDI確認は未実施です。
 - 明示指定の[AU-CL-007](docs/BEST_PRACTICE_DOM_CLIENT.md)を追加。Client Scriptの文書由来とcreateElement由来のDOM検索を区別し、標準UIか自作DOMかを決めつけず確認候補を返します。同名の独自メソッドを除外し、受信側不明は未解決として残します。自動削除・置換や実PDI確認は行っていません。
+- 明示指定の[AU-CL-005](docs/BEST_PRACTICE_SETVALUE_CLIENT.md)を追加。Client Scriptのg_form由来の2引数setValueを、独自メソッド・3引数呼出しと区別して確認候補にします。参照列・表示値の可用性・追加通信を断定せず、照会追加や引数の自動挿入はしません。実PDI確認は未実施です。
 - 明示指定の[AU-BR-007](docs/BEST_PRACTICE_DISPLAY_WRITE_BR.md)を追加。保存値before_displayのBRでcurrentへの直接書込み・限定setterを確認候補にします。表示目的の変更を違反と断定せず、永続化要件を確認項目として返します。既定3規則・上限は維持、合成検証のみです。
 - 明示指定の[AU-BR-005](docs/BEST_PRACTICE_ABORT_ACTION_BR.md)を追加。before BRの中止後の呼出し・プロパティ書込みを、受信側・順序・早期return・if分岐を区別して候補化します。必要な後処理を違反と断定せず、未対応経路は未解決。既定3規則・上限は維持し、合成検証のみです。
 - 明示指定の[AU-BR-004](docs/BEST_PRACTICE_TOP_LEVEL_BINDINGS_BR.md)を追加。BRのトップレベル変数候補を関数/ブロックlocalと区別し、共有の意図は確認項目として返します。Global-tableとglobal scopeを混同せず、自動除外や承認はしません。既定3規則は維持、今回の追加分は合成検証のみです。
