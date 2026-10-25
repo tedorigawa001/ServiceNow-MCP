@@ -1,7 +1,7 @@
 # AU-BR-006：証拠生成owner・一度限りの消費の詳細設計
 
 Version: br006-scope-owner-draft-0.1 / Date: 2026-10-25。
-Status: **合成issuerのみのowner/session claim・prepare/初回/最終phase基礎を実装。実取得・worker/MCP接続・人による採用承認は未実施**。
+Status: **合成issuerのみのowner/session claim・3phase・証拠生成/純粋比較器接続を実装。実取得・worker/MCP接続・人による採用承認は未実施**。
 親は[スコープ証拠設計draft-0.2](BEST_PRACTICE_ABORT_SCOPE_EVIDENCE_DESIGN.md)。既存の内部型/純粋比較器は変更せず、明示14規則・既定3規則・公開JSON・取得先・運用設定を維持する。
 
 ## 1. 現状との差分・保証の範囲
@@ -150,7 +150,7 @@ run claimは1/session、asset jobは選択100行以内、構文計画は100候�
 
 `abort-scope-evidence-owner.ts`は合成issuerごとに隔離したWeakMap台帳を持つ。sessionに唯一の生成claimを置き、worker結合検査より前に消費する。ownerは合成session・worker実体と結合し、jobは同じsession/workerと選択assetに結合する。別job番号で同assetを再登録しても拒否する。use/receiptの一度限りの消費と、失敗・取消・owner/session終了・worker終了後の受理拒否を実装した。closeはidempotentで、最初の終了事由（未検知のworker終了/session終了を含む）をprimary理由に固定し、後のclose/取消で書き換えない。job発行/予約は100件以下。
 
-これは状態機械の**基礎subset**であり、実時計/期限/signal、privateな実取得issuer、payload/hash/ReleasePermit結合、比較器・worker通信・実解放・上位結果ownerへの接続は未実装。合成receiptには比較結果もscope証明もなく、本番完了証拠ではない。合成issuerは呼出し側が自由に作れるため、実認証の証明には使えない。worker handleの差が合成の世代差を表し、実worker世代handshakeは行わない。新moduleも既存の`!dist/review/abort-scope-evidence*`によりnpm非同梱。
+これは状態機械の**基礎subset**であり、実時計/期限/signal、privateな実取得issuer、実payload/hash/ReleasePermit結合、worker通信・実解放・上位結果ownerへの接続は未実装。従来の状態遷移用receiptには比較結果もscope証明もなく、本番完了証拠ではない。§13で別型の合成比較receiptを追加したが実認証の証明にはしない。合成issuerは呼出し側が自由に作れる。worker handleの差が合成の世代差を表し、実worker世代handshakeは行わない。新moduleも既存の`!dist/review/abort-scope-evidence*`によりnpm非同梱。
 
 検証は[合成owner検証記録](E2E_BEST_PRACTICE_ABORT_SCOPE_OWNER_SYNTHETIC_2026-10-25.md)を参照。VM/監視調査保留・全体受付無効を維持する。
 
@@ -160,6 +160,20 @@ run claimは1/session、asset jobは選択100行以内、構文計画は100候�
 
 consumeは`ready_to_consume`だけを受理する。順序違反・二重開始/完了・早すぎるconsumeはownerをstickyに停止し、他の未完了jobも再開できない。`failPhase`は有効なpending票を一度だけ消費して`phase_failed`をprimaryに保持する。後のclose・取消・再試行でprimaryやsession claimを戻さない。終了後のlate finishも受理しない。
 
-finishは**合成phaseの完了通知だけ**で、観測値や成功/known scopeを証明しない。初回/最終のavailable/unavailableデータを検証する処理はまだない。401/403等をunavailableへ変換する実経路もなく、次工程で固定観測契約・issuerと接続する必要がある。readyになっても比較器や実認証の証拠は発行しない。実clock/signal・IPC世代handshakeは未接続のまま。
+従来のphase-only finishは**合成phaseの完了通知だけ**で、観測値や成功/known scopeを証明しない。§13の証拠付きfinishとは区別し、phase-onlyのreadyだけで比較結果を発行しない。401/403等をunavailableへ変換する実経路もなく、実source/issuerとの接続は今後の課題。実clock/signal・IPC世代handshakeは未接続のまま。
 
 検証は[phase検証記録](E2E_BEST_PRACTICE_ABORT_SCOPE_PHASES_SYNTHETIC_2026-10-25.md)を参照。
+
+## 13. 合成issuerから純粋比較器への接続
+
+`finishPrepareEvidence`は同owner/jobのprepare票を消費し、strict context/payload factoryを内部で呼ぶ。contextのassetを選択jobへ結び、payloadのasset/hash/code hashを同contextへ照合する。context/payload handleを外へ返さない。続く`finishInitialEvidence`/`finishFinalEvidence`は同じ利用台帳のcontextで観測handleを生成し、生データのphaseも固定phaseと照合する。入力スナップショットは既存factoryの正規化に従い、外側の観測fixtureを後で変更しても影響しない。
+
+これは**合成fixtureの構造/対応の検査だけ**。contextのinstance/update-set/update-xml/hash/時刻は合成callerの入力で、実session/sourceが実測/発行した証明ではない。実コード本文を取得せず、hashを本文から計算したとも主張しない。
+
+`compareAndConsume`は従来consumeと同じuse claimを消費する。final完了とpayload/初回/最終の内部handleが揃わなければ停止し、比較器は呼ばない。成功時も不足/変更時も一度だけ比較し、別型`SyntheticScopeComparisonReceipt`を返す。`acceptComparison`は同owner/active/未消費を確認してから本文なしの凍結比較結果を一度返す。従来のreceipt・clone・直接比較のJSONは比較receiptとして受理しない。
+
+factory不正は`evidence_invalid`、証拠不足は`evidence_missing`、job/asset/hashの不一致は固定binding理由でowner全体を停止する。比較器の`rejected`はその固定reason（時刻/期限整合・table binding等）をprimaryに保持し、修正入力による再試行は拒否する。比較器の`insufficient`/`changed`は正常な一度の比較完了だがUnknownのまま。認証/ACL/取消/期限停止をunavailableへ変換する文字列は受け付けない。
+
+消費時は内部証拠を台帳から外し、失敗/close時もownerに属する証拠参照を削除する。後で票が残っていてもowner検査で受理しない。物理ゼロ化や実resource解放の証明ではなく、純粋handleの直接比較の性質も変更しない。実通信や実時間中断は未接続。
+
+検証は[合成比較接続記録](E2E_BEST_PRACTICE_ABORT_SCOPE_COMPARISON_OWNER_SYNTHETIC_2026-10-25.md)を参照。
