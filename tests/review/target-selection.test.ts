@@ -58,6 +58,32 @@ afterEach(async () => {
 });
 const run = (rows: Row[], extra: Record<string, unknown> = {}, fetcher = fixture(rows)) => reviewBoundedUpdateSet(client(),
   { update_set_sys_id: parent, selection_mode: 'review_targets', ...extra }, { fetch: fetcher, workerFactory: sourceWorkerFactory });
+it('CL-007 preserves document/custom provenance through worker and rejects forged context', async () => {
+  const rows=[row(1,'sys_script_client')];
+  for(const mode of ['review_targets',undefined]) {
+    const out=await run(rows,{requested_rule_ids:['AU-CL-007'],selection_mode:mode},fixture(rows,
+      'function onLoad(){document.getElementById("PRIVATE_DOM");document.createElement("div").querySelector(".PRIVATE_CHILD");}'));
+    expect(out.isError).toBe(false);if(out.isError)throw Error(out.error.code);
+    expect(out.result).toMatchObject({schema_version:mode?'bp-mcp-review-0.3':'bp-mcp-review-0.2',versions:{ruleset:'bp3-0.13'},counts:{findings:2}});
+    expect(aggregateReviewSchema.safeParse(out.result).success || aggregateReviewV3Schema.safeParse(out.result).success).toBe(true);
+    expect(JSON.stringify(out)).not.toMatch(/PRIVATE_DOM|PRIVATE_CHILD|synthetic-selection-token/);
+    for(const corrupt of ['scope','ownership','followup']) {
+      const forged=structuredClone(out.result),asset=forged.assets[0];if(asset.state!=='reviewed')throw Error('Expected DOM candidate');
+      if(corrupt==='scope')asset.result.findings[0].required_follow_up.push('dom_created_subtree_review');
+      else if(corrupt==='ownership')asset.result.limitations=asset.result.limitations.filter(x=>x!=='dom_standard_ui_ownership_not_verified');
+      else asset.result.findings[0].required_follow_up=asset.result.findings[0].required_follow_up.filter(x=>x!=='dom_dependency_review');
+      expect((mode?aggregateReviewV3Schema:aggregateReviewSchema).safeParse(forged).success).toBe(false);
+    }
+  }
+});
+it('CL-007 unknown receiver cannot become complete analysis', async () => {
+  const rows=[row(1,'sys_script_client')];
+  const out=await run(rows,{requested_rule_ids:['AU-CL-007']},fixture(rows,'function onLoad(el){el.querySelector("x");}'));
+  expect(out.isError).toBe(false);if(out.isError)throw Error(out.error.code);
+  expect(out.result.coverage.analysis_complete).toBe(false);
+  const forged=structuredClone(out.result);forged.coverage.analysis_complete=true;
+  expect(aggregateReviewV3Schema.safeParse(forged).success).toBe(false);
+});
 it('CL-003 preserves per-finding input classes and exposure limits through the worker', async () => {
   const rows=[row(1,'sys_script_client')];
   const out=await run(rows,{requested_rule_ids:['AU-CL-003']},fixture(rows,

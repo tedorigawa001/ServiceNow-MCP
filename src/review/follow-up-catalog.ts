@@ -11,6 +11,8 @@ export const UI_POLICY_FOLLOW_UP_PROFILE_VERSION = 'bp-followups-cl006-0.1';
 export const CLIENT_LOOKUP_FOLLOW_UP_PROFILE_VERSION = 'bp-followups-cl002-0.1';
 export const ONCHANGE_FOLLOW_UP_PROFILE_VERSION = 'bp-followups-cl008-0.1';
 export const ONLOAD_FOLLOW_UP_PROFILE_VERSION = 'bp-followups-cl003-0.1';
+export const DOM_FOLLOW_UP_PROFILE_VERSION = 'bp-followups-cl007-0.1';
+export const DOM_SCOPE_FOLLOW_UP = { document_scope: 'dom_document_scope_review', created_subtree: 'dom_created_subtree_review' } as const;
 export const ONLOAD_INPUT_FOLLOW_UP = { static: 'onload_static_inputs_review', runtime: 'onload_runtime_inputs_review', unknown: 'onload_unknown_inputs_review' } as const;
 export const COMMON_FOLLOW_UP_CODES = ['source_approval', 'binding_and_reachability', 'exceptions_and_business_intent'] as const;
 export const RULE_SPECIFIC_FOLLOW_UP = {
@@ -24,13 +26,15 @@ export const RULE_SPECIFIC_FOLLOW_UP = {
   'AU-CL-002': 'client_lookup_necessity_review',
   'AU-CL-008': 'onchange_loading_intent_review',
   'AU-CL-003': 'onload_data_timing_review',
+  'AU-CL-007': 'dom_dependency_review',
 } as const;
-export const FOLLOW_UP_CODES = [...COMMON_FOLLOW_UP_CODES, ...Object.values(RULE_SPECIFIC_FOLLOW_UP), ...Object.values(ONLOAD_INPUT_FOLLOW_UP)] as const;
+export const FOLLOW_UP_CODES = [...COMMON_FOLLOW_UP_CODES, ...Object.values(RULE_SPECIFIC_FOLLOW_UP), ...Object.values(ONLOAD_INPUT_FOLLOW_UP), ...Object.values(DOM_SCOPE_FOLLOW_UP)] as const;
 export const followUpCodeSchema = z.enum(FOLLOW_UP_CODES);
 export type FollowUpCode = z.infer<typeof followUpCodeSchema>;
 /** Detection signals, never exception classification, approval or execution-path proof. */
 export type FollowUpContext = { kind: 'workflow_suppression' } | { kind: 'async_dependency' }
-  | { kind: 'synchronous_ajax'; receiver_unresolved: boolean } | { kind: 'onload_timing'; timing: keyof typeof ONLOAD_INPUT_FOLLOW_UP };
+  | { kind: 'synchronous_ajax'; receiver_unresolved: boolean } | { kind: 'onload_timing'; timing: keyof typeof ONLOAD_INPUT_FOLLOW_UP }
+  | { kind: 'dom_scope'; scope: keyof typeof DOM_SCOPE_FOLLOW_UP };
 
 export function requiredFollowUp(ruleId: string, context?: FollowUpContext): FollowUpCode[] {
   const result: FollowUpCode[] = [...COMMON_FOLLOW_UP_CODES];
@@ -48,6 +52,10 @@ export function requiredFollowUp(ruleId: string, context?: FollowUpContext): Fol
     result.push(RULE_SPECIFIC_FOLLOW_UP[ruleId]);
     result.push(ONLOAD_INPUT_FOLLOW_UP[context?.kind === 'onload_timing' ? context.timing : 'unknown']);
   }
+  if (ruleId === 'AU-CL-007') {
+    result.push(RULE_SPECIFIC_FOLLOW_UP[ruleId]);
+    if (context?.kind === 'dom_scope') result.push(DOM_SCOPE_FOLLOW_UP[context.scope]);
+  }
   return result.filter(code => isFollowUpApplicable(code, ruleId));
 }
 
@@ -55,6 +63,18 @@ type Definition = { kind: 'generic' | 'context_specific' | 'rule_intrinsic'; app
   meaning: string; attach_when: string; does_not_prove: string };
 /** Policy is owned here, not by a dataset. Source adoption and expert adjudication remain pending. */
 export const FOLLOW_UP_DEFINITIONS = {
+  dom_dependency_review: {
+    kind: 'rule_intrinsic', applicable_rules: ['AU-CL-007'], meaning: 'DOM依存の必要性・対応UI・GlideForm等の公開APIで代替できるかを確認する。',
+    attach_when: '限定したDOM検索候補の全件。', does_not_prove: '標準UIへの依存・違反・非互換性、または自動置換の安全性。',
+  },
+  dom_document_scope_review: {
+    kind: 'context_specific', applicable_rules: ['AU-CL-007'], meaning: '文書全体またはその検索結果のDOMが標準UIか自作UIか、所有元と安定性を確認する。',
+    attach_when: 'document/body/documentElementまたは同由来の検索結果からの検索。', does_not_prove: 'セレクターの名前が標準UIを指すこと。',
+  },
+  dom_created_subtree_review: {
+    kind: 'context_specific', applicable_rules: ['AU-CL-007'], meaning: 'createElement由来の部分木の所有範囲・利用意図・UI互換性を確認する。',
+    attach_when: '同じ関数でdocument.createElementから得た要素またはその検索結果内の検索。', does_not_prove: '自作部分木の操作が違反であること、実際に挿入・実行されたこと、標準DOMが混入していないこと。',
+  },
   source_approval: {
     kind: 'generic', applicable_rules: 'all', meaning: '根拠資料の適用範囲・採用可否を人が確認する。',
     attach_when: '採用根拠がcandidate/未承認であると確認できた場合。', does_not_prove: '出典・規則が承認済み、または違反確認済みであること。',
