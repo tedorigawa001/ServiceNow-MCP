@@ -14,7 +14,7 @@ export type FakeTransportSlot=Handle<'slot'>;
 export type FakeTransportPurpose='oauth'|'parent_initial'|'release_rows'|'metadata_initial'|'payload'|'table_initial'|'parent_final'|'metadata_final'|'table_final';
 type Code='invalid_input'|'invalid_state'|'evidence_binding_mismatch'|'release_not_admitted'|'authentication_failed'|'access_denied'
   |'cancelled'|'closed'|'deadline_exceeded'|'phase_deadline_exceeded'|'attempt_deadline_exceeded'|'invalid_observation_time'|'internal_review_error'
-  |'request_budget_exceeded'|'receive_budget_exceeded'|'payload_budget_exceeded'|'payload_limit'|'scope_evidence_limit';
+  |'request_budget_exceeded'|'receive_budget_exceeded'|'payload_budget_exceeded'|'payload_limit'|'scope_evidence_limit'|'invalid_response';
 type Result<T>=Readonly<{ok:true;value:T}|{ok:false;code:Code}>;
 type Outcome='body'|'auth_only'|'upstream_unavailable'|'invalid_response'|'not_found_or_not_visible'|'access_denied'|'scope_evidence_limit'|'stopped';
 const configSchema=z.strictObject({deadline_ms:z.number().int().min(1).max(60000),request_timeout_ms:z.number().int().min(1).max(10000),
@@ -23,9 +23,10 @@ const configSchema=z.strictObject({deadline_ms:z.number().int().min(1).max(60000
 const purposes:readonly FakeTransportPurpose[]=['oauth','parent_initial','release_rows','metadata_initial','payload','table_initial','parent_final','metadata_final','table_final'];
 const observationSchema=z.strictObject({fetch:z.enum(['pending','rejected','fulfilled']),status:z.number().int().min(100).max(599).nullable(),
   body:z.enum(['none','reader','unlocked','unknown_lock']),pending_read:z.boolean(),eof:z.boolean(),
-  closed:z.enum(['pending','fulfilled','rejected']).nullable(),cancel:z.enum(['not_requested','pending','fulfilled','rejected'])}).superRefine((s,c)=>{
+  closed:z.enum(['pending','fulfilled','rejected']).nullable(),cancel:z.enum(['not_requested','pending','fulfilled','rejected']),read_failed:z.boolean().optional()}).superRefine((s,c)=>{
   if((s.fetch==='fulfilled')!==(s.status!==null)||s.fetch!=='fulfilled'&&s.body!=='none'
-    ||s.body!=='reader'&&(s.pending_read||s.eof||s.closed!==null)||s.body==='reader'&&s.closed===null||s.eof&&s.pending_read)c.addIssue({code:'custom',message:'invalid observation'});
+    ||s.body!=='reader'&&(s.pending_read||s.eof||s.closed!==null)||s.body==='reader'&&s.closed===null||s.eof&&s.pending_read
+    ||s.read_failed&&(s.body!=='reader'||s.pending_read||s.eof))c.addIssue({code:'custom',message:'invalid observation'});
 });
 export type FakeIoObservation=z.infer<typeof observationSchema>;
 export interface FakeAttemptIo {
@@ -35,7 +36,9 @@ export interface FakeAttemptIo {
   releaseLock():void;
   abort():void;
 }
-export interface FakeTransportIo { dispatch(request:Readonly<{purpose:FakeTransportPurpose;target?:string;ordinal:1|2;synthetic:true}>):FakeAttemptIo }
+export type FakeDispatchRequest=Readonly<{purpose:FakeTransportPurpose;target?:string;ordinal:1|2;synthetic:true}>;
+export type FakeAttemptTiming=Readonly<{io_deadline:number;deadline:number;response_cap:number;now:()=>number}>;
+export interface FakeTransportIo { dispatch(request:FakeDispatchRequest,timing:FakeAttemptTiming):FakeAttemptIo }
 type Cleanup=Readonly<{disposition:'confirmed'|'unconfirmed';kind:'eof'|'cancelled'|'no_response'|'no_body'|null;reason:string|null;synthetic:true}>;
 const opaque=<T>()=>Object.freeze(Object.create(null)) as T;
 const ok=<T>(value:T):Result<T>=>Object.freeze({ok:true,value});
@@ -50,7 +53,7 @@ export function createFakeTransportReceiptMachine(raw:unknown,clock:{now():numbe
   type Purpose={kind:FakeTransportPurpose;phase:FakeTransportPhase;target?:string;slot?:FakeTransportSlot;attempts:number;state:'issued'|'inflight'|'retryable'|'done'};
   type Attempt={permit:FakePurposePermit;p:Purpose;ordinal:1|2;deadline:number;ioDeadline:number;state:'io'|'cleanup'|'settled';
     resource?:FakeAttemptIo;dispatchRejected:boolean;cancelled:boolean;released:boolean;aborted:boolean;abortFailed:boolean;timedOut:boolean;
-    received:number;sequence:number;empty:number;hash:Hash;localFailure?:'scope_evidence_limit'|'payload_limit'};
+    received:number;sequence:number;empty:number;hash:Hash;localFailure?:'scope_evidence_limit'|'payload_limit'|'invalid_response'};
   type Body={permit:FakePurposePermit;data?:unknown;bytes:number;used:boolean};
   const slots=new WeakMap<FakeTransportSlot,Slot>(),slotNames=new Map<string,FakeTransportSlot>();
   const permits=new WeakMap<FakePurposePermit,Purpose>(),permitNames=new Set<string>(),attempts=new WeakMap<FakeAttemptClaim,Attempt>();
@@ -66,7 +69,7 @@ export function createFakeTransportReceiptMachine(raw:unknown,clock:{now():numbe
     return ['cancelled','closed','deadline_exceeded','authentication_failed','access_denied','request_budget_exceeded','receive_budget_exceeded','payload_budget_exceeded','payload_limit','scope_evidence_limit'].includes(code)?code as Code:'internal_review_error';
   }
   function now(allowStopped=false):number|null{
-    let n:number;try{budget?.check();n=clock.now();}catch(error){stop(budgetCode(error));return null;}
+    let n:number;try{if(!allowStopped)budget?.check();n=allowStopped&&budget?budget.observationNow():clock.now();}catch(error){stop(budgetCode(error));return null;}
     if(!Number.isFinite(n)||n<last){stop('invalid_observation_time');return null;}last=n;
     if(n>=hard)stop('deadline_exceeded');
     return primary&&!allowStopped?null:n;
@@ -136,7 +139,8 @@ export function createFakeTransportReceiptMachine(raw:unknown,clock:{now():numbe
       p.attempts++;p.state='inflight';const claim=opaque<FakeAttemptClaim>(),a:Attempt={permit,p,ordinal:p.attempts as 1|2,deadline,ioDeadline:deadline-reserve,
         state:'io',dispatchRejected:false,cancelled:false,released:false,aborted:false,abortFailed:false,timedOut:false,received:0,sequence:0,empty:0,hash:createHash('sha256')};attempts.set(claim,a);current=a;dispatches++;
       let resource:FakeAttemptIo|undefined;
-      try{resource=io.dispatch(Object.freeze({purpose:p.kind,target:p.target,ordinal:a.ordinal,synthetic:true}));}
+      try{resource=io.dispatch(Object.freeze({purpose:p.kind,target:p.target,ordinal:a.ordinal,synthetic:true}),
+        Object.freeze({io_deadline:a.ioDeadline,deadline:a.deadline,response_cap:Math.min(p.kind.startsWith('table_')?16384:4194304,budget?.responseBytes??4194304),now:()=>budget?budget.observationNow():clock.now()}));}
       catch{a.dispatchRejected=true;}
       if(!a.dispatchRejected){
         let valid=false;
@@ -155,7 +159,7 @@ export function createFakeTransportReceiptMachine(raw:unknown,clock:{now():numbe
       try{budget.chunk(bytes.byteLength);}catch(error){const code=budgetCode(error);
         if(code==='scope_evidence_limit'||code==='payload_limit'){a.localFailure=code;return no(code);}return fail(code);}
       a.hash.update(bytes);
-      a.empty=bytes.byteLength===0?a.empty+1:0;if(a.empty>16)return fail('internal_review_error');
+      if(bytes.byteLength===0)a.empty++;if(a.empty>16){a.localFailure='invalid_response';return no('invalid_response');}
       return ok(true);
     },
     poll(claim:FakeAttemptClaim){
@@ -169,8 +173,9 @@ export function createFakeTransportReceiptMachine(raw:unknown,clock:{now():numbe
       if(s.status===401||s.status===403&&a.p.kind!=='release_rows')stop(s.status===401?'authentication_failed':'access_denied');
       const terminal=s.status!==null&&(s.status<200||s.status>=300)&&s.status!==429&&s.status<500;
       if(a.state==='io'){
-        if(primary||a.localFailure||t>=a.ioDeadline){a.timedOut=true;a.state='cleanup';abort(a);s=observe(a);}
-        else if(s.fetch==='rejected'||s.fetch==='fulfilled'&&(terminal||s.body==='none'||s.eof))a.state='cleanup';
+        if(primary||t>=a.ioDeadline){a.timedOut=true;a.state='cleanup';abort(a);s=observe(a);}
+        else if(a.localFailure)a.state='cleanup';
+        else if(s.fetch==='rejected'||s.fetch==='fulfilled'&&(terminal||s.body==='none'||s.body==='unknown_lock'||s.eof||s.read_failed))a.state='cleanup';
         else return pending();
       }
       let reason:string|null=null,kind:Cleanup['kind']=null;
@@ -181,7 +186,7 @@ export function createFakeTransportReceiptMachine(raw:unknown,clock:{now():numbe
       else if(s.fetch==='pending')return pending();
       else if(s.body==='none')kind='no_body';
       else{
-        const natural=s.body==='reader'&&s.eof&&!a.timedOut&&!primary;
+        const natural=s.body==='reader'&&s.eof&&!s.read_failed&&!a.localFailure&&!a.timedOut&&!primary;
         if(!natural&&!a.cancelled){a.cancelled=true;try{a.resource!.cancel();}catch{reason='cancel_rejected';}s=observe(a);}
         if(!reason){
           if(!s)reason='observation_invalid';
@@ -193,7 +198,7 @@ export function createFakeTransportReceiptMachine(raw:unknown,clock:{now():numbe
       }
       const end=now(true);if(end===null||end>=a.deadline)reason??='cleanup_deadline';
       if(reason){const r=finish(a,'unconfirmed',null,reason,'stopped');return ok(Object.freeze({state:'settled' as const,cleanup:r.evidence,outcome:r.outcome,body:null}));}
-      let outcome:Outcome=primary?'stopped':a.localFailure?'scope_evidence_limit':a.timedOut||s?.fetch==='rejected'||s?.status===429||(s?.status??0)>=500?'upstream_unavailable'
+      let outcome:Outcome=primary?'stopped':a.localFailure==='invalid_response'?'invalid_response':a.localFailure?'scope_evidence_limit':a.timedOut||s?.read_failed||s?.fetch==='rejected'||s?.status===429||(s?.status??0)>=500?'upstream_unavailable'
         :s?.status===404?'not_found_or_not_visible':s?.status===403?'access_denied':terminal||kind!=='eof'?'invalid_response':'body';
       let data:unknown,bytes=0;
       if(outcome==='body')try{

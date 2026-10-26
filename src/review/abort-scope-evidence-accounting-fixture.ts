@@ -54,8 +54,9 @@ export class FixtureAccountingSession{
     const reads=new Map<string,{ordinal:number;retry:boolean}>();
     const fail=(code:ReadFailureCode):never=>{this.stop(code);throw new BoundedReadError(code);};
     const check=()=>this.check();
-    return Object.freeze({deadlineMs:this.limits.deadlineMs,requestTimeoutMs:this.limits.requestTimeoutMs,authMode:this.authMode,signal:this.controller.signal,
+    return Object.freeze({deadlineMs:this.limits.deadlineMs,requestTimeoutMs:this.limits.requestTimeoutMs,responseBytes:this.limits.responseBytes,authMode:this.authMode,signal:this.controller.signal,
       now:()=>{check();return performance.now()-this.started;},check,
+      observationNow:()=>performance.now()-this.started,
       dispatch:(purpose:string,target:string|undefined,ordinal:1|2)=>{
         check();if(active||final!==purpose.endsWith('_final'))return fail('invalid_input');
         if(this.receivedBytes>=this.limits.totalBytes)return fail('receive_budget_exceeded');

@@ -5,8 +5,11 @@ export type PreparedFinalSkip=Readonly<{state:'skipped';reason:'initial_unavaila
   initial_outcome:PreparedTransportOutcome|null;released_attempts:number;synthetic:true;evidence_issuance:'disabled'}>;
 export interface PreparedTransportBudget {
   now():number;
+  /** Clock-only observation for bounded cleanup after logical revocation; grants no active authority. */
+  observationNow():number;
   deadlineMs:number;
   requestTimeoutMs:number;
+  responseBytes:number;
   authMode:'per-user'|'service-account';
   signal:AbortSignal;
   dispatch(purpose:string,target:string|undefined,ordinal:1|2):void;

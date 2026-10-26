@@ -1,9 +1,9 @@
 # AU-BR-006 実transport：用途別body receipt・cleanup証拠・単一予算の接続詳細設計
 
-Version: br006-transport-receipts-draft-0.5 / Date: 2026-10-26。
-Status: **fixture登録・owner・claim・会計を実sessionから分離。合成state／final skipは開発専用sessionで検証。実transport接続・cap承認・正式発行は未実装／閉鎖**。
+Version: br006-transport-receipts-draft-0.6 / Date: 2026-10-26。
+Status: **fixture分離を維持し、注入Responseの実read／cleanup APIを開発専用sessionへ接続。実HTTP／本番sessionへの接続・cap承認・正式発行は未実装／閉鎖**。
 
-**現行実装の境界は§15を優先する。** §13のfixtureから実session会計へ接続する経路は廃止した。以前の検証記録は当時の実行記録であり、安全な本番接続の証拠として使わない。
+**現行実装の境界は§15・§16を優先する。** §13のfixtureから実session会計へ接続する経路は廃止した。以前の検証記録は当時の実行記録であり、安全な本番接続の証拠として使わない。
 親：[実session／private受領物](BEST_PRACTICE_ABORT_SCOPE_REAL_SESSION_RECEIPTS_DESIGN.md)、[bounded予算](BEST_PRACTICE_ABORT_SCOPE_BOUNDED_BUDGET_DESIGN.md)、[固定source issuer](BEST_PRACTICE_ABORT_SCOPE_FIXED_SOURCE_ISSUER_DESIGN.md)。
 
 ## 1. 範囲と不変条件
@@ -103,7 +103,7 @@ retryは同logical read最大1回。C/G/Eは保持し、Sとattempt-local scratc
 
 D_hard=t0+session.deadlineMsを固定する。通常／整合のcutoffは既存比例reserve（60秒時は50秒／55秒）を使い、残りは既存の集約／worker終了処理に充てる。evidence I/O・retry・cleanup・受領物発行後checkpointを同じ期限に含める。
 
-1試行のdispatch直前時刻をt、D_attempt=min(t+requestTimeoutMs,D_phase,D_hard)、L=D_attempt-tとする。新modeの候補policyは次のとおり。**採用・実装済みではない**。
+1試行のdispatch直前時刻をt、D_attempt=min(t+requestTimeoutMs,D_phase,D_hard)、L=D_attempt-tとする。新modeの候補policyは次のとおり。**本番での採用・実装は未実施。§16の開発専用経路だけで試験する**。
 
 - cleanup候補予約K=min(250ms,floor(L/4))。K<=0またはI/O残時間なしならCを消費せず開始しない。
 - D_io=D_attempt-Kでfetch/readを中断し、cleanupはD_attemptまでの残時間だけ待つ。
@@ -285,3 +285,21 @@ E閉鎖理由を優先し、初回outcomeは別列`initial_outcome`として保�
 - npm梱包後もfixture exportが無いこと、実sessionにtransport factoryが無いこと、通常のGET／payload課金／phase操作が動くことを合成依存で確認する。
 
 今後の本番接続には、実source／ReleasePermit／選択・payload／worker planから生成する専用issuerと非共有claim台帳が必要。現在はその生成口を作らず、正式な証拠発行口・全体受付は閉鎖／無効を維持する。VM／監視／telemetryは保留、実機操作・設定変更・有効化は行わない。
+
+## 16. 注入Responseの実Web Streams API接続（開発専用）
+
+`createFixtureWebStreamTransport`はfixture ownerだけを受け付け、固定用途descriptorとAbortSignalからResponseを返す注入関数を使う。global fetch・URL・認証header・実session登録は追加しない。実際のResponse／ReadableStreamDefaultReaderを操作するが、HTTP通信や実sourceの由来を検証したものではない。モジュールは既存の`abort-scope-evidence*`梱包除外を維持する。
+
+1. 同じstate machineがCを消費し、同期的にsourceを一度呼ぶ。io/attemptの絶対期限と同じ単調時計を第2内部引数で渡し、呼出側のdeadline申告は受け付けない。
+2. statusとbody参照をそれぞれ受領時に一度だけ捕捉し、後続のread／cancelでgetterを再評価しない。成功／429／5xxはreaderを一つだけ取得し、release前のclosed Promiseへ即座に両決着handlerを付ける。pending readは最大1件。401/403/404等は本文をreadせず捕捉したunlocked bodyをcancelする。
+3. read完了chunkを同attempt連番で一度だけ課金する。超過分も保持し、採用された成功bodyだけ通常4MiB／table16KiBとownerの低減responseBytesの小さい方を上限とするscratchへコピーする。容量は同ownerが固定した内部試行情報から受け取り、caller指定capへ置換しない。失敗statusのbodyは課金するが保持しない。Content-Lengthは代用しない。
+4. EOF後にfatal UTF-8 decodeし、state machineがcleanup／JSON／同byte数・digest／時刻を再検査してfake receiptを作る。decode失敗でもcleanupを先に確認する。返すのはopaque handleだけで本文は表示しない。
+5. 取消／全体失敗／D_io到達ではcontrollerを即abortする。局所的な下位枠不足や不正応答では先にcancel／closed／releaseを観測してからcontrollerを終端化し、不要なabortでcancelを失敗させない。reader所有中はreader.cancel、未取得なら捕捉したbody.cancelを一度だけ要求する。cancel fulfilled・pending read settled・closed fulfilled・release成功が揃わなければconfirmedにしない。待機timerは元のD_attemptを使い、新しい時間枠を作らない。
+6. revocation後はclock-onlyのobservationNowでcleanup時刻だけを観測できる。dispatch／chunk／consumeのactive検査は緩めず、取消後にbodyを発行しない。hard期限／attempt期限を越える終了は未確認とする。
+7. 未確認はsticky。late Responseのbodyを一度だけbest-effort cancelしても既存cleanup票を更新しない。終了後のlock解放は所有readerかつpending read決着後だけのbest effortであり、解放だけで成功証明にしない。例外message／stackを返さず、background pumpの拒否も観測して停止する。
+
+空readは非空readを挟んでも**1試行合計16回まで**とし、17回目は局所invalid_responseとしてcancel／cleanupへ進み、retryしない。従来の連続回数resetは廃止した。scratch／text参照はrun終端で外し、timerは一度だけ解除する。物理ゼロ化やfetch内部bufferの上限証明ではない。
+
+同じadapterで同時runを行わず、未消費bodyの次取得も既存state machineが拒否する。retryは同permitで明示的に行い、前回cleanup confirmedが必須。payloadはHTTP JSON bytesのG/Sとは別に、従来どおりsource境界のdecoded payload文字列を一度課金する。actual source／schemaとの結合は未接続のため、fixtureの文字列申告を本番のpayload証拠としない。
+
+検証：[実Web Streams接続の合成記録](E2E_BEST_PRACTICE_ABORT_SCOPE_WEB_STREAM_SYNTHETIC_2026-10-26.md)。実HTTP／最低対応Node 22.12／実worker／本番issuer・終了隔離policy／保持work全体上界は未確認であり、全体受付を有効化しない。

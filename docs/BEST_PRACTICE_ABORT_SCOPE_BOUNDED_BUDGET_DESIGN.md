@@ -8,7 +8,7 @@ Status: **純粋予約台帳・合成stream課金/中断・独立イベントora
 
 単一の実session／budget ownerと証拠発行を結ぶ前段は[実session claim・private受領物・終了時失効の詳細設計draft-0.1](BEST_PRACTICE_ABORT_SCOPE_REAL_SESSION_RECEIPTS_DESIGN.md)へ具体化した。既存getのJSON値・cancel要求だけをcleanup確認済み証拠へ昇格させず、typed transport未接続なら正式発行を止める。動的予約／下位受信枠／実cleanup証拠の実装やcap承認は別工程とする。
 
-次段の[実transportの用途別body receipt・cleanup証拠・単一予算詳細設計draft-0.5](BEST_PRACTICE_ABORT_SCOPE_TRANSPORT_RECEIPTS_DESIGN.md)で、dispatch／chunkの線形化点、用途permit、API観測上のcleanup confirmedと未確認、期限内のcleanup予約案を定義した。fixtureの登録・owner・claim・会計を実sessionから分離し、以前の実sessionへのfake会計接続は撤去した。final skip等は開発専用sessionで検証するが、本番の単一予算接続は未実装とする。cleanup最大250ms／残時間の1/4・empty read16回と証拠下位枠は未承認候補値であり、本番capの承認や既存上限の変更ではない。正式発行口は閉鎖を維持する。
+次段の[実transportの用途別body receipt・cleanup証拠・単一予算詳細設計draft-0.6](BEST_PRACTICE_ABORT_SCOPE_TRANSPORT_RECEIPTS_DESIGN.md)で、dispatch／chunkの線形化点、用途permit、API観測上のcleanup confirmedと未確認、期限内のcleanup予約案を定義した。fixtureの登録・owner・claim・会計を実sessionから分離し、以前の実sessionへのfake会計接続は撤去した。注入Responseの実read／cleanupとfinal skip等は開発専用sessionで検証するが、本番の単一予算接続は未実装とする。cleanup最大250ms／残時間の1/4・empty read合計16回と証拠下位枠は未承認候補値であり、本番capの承認や既存上限の変更ではない。正式発行口は閉鎖を維持する。
 
 ## 1. 現状と変更の境界
 

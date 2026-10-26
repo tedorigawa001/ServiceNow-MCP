@@ -4,7 +4,7 @@ Version: br006-real-session-receipts-draft-0.1 / Date: 2026-10-26。
 Status: **owner／session lifecycleに加え、選択window／行draftとpayload開始・移譲claimをfake依存で部分実装。正式receipt／実source／worker接続は未実装・未承認**。
 親：[固定source issuer](BEST_PRACTICE_ABORT_SCOPE_FIXED_SOURCE_ISSUER_DESIGN.md)、[接続契約](BEST_PRACTICE_ABORT_SCOPE_CONNECTION_CONTRACT_DESIGN.md)、[bounded予算](BEST_PRACTICE_ABORT_SCOPE_BOUNDED_BUDGET_DESIGN.md)。
 
-後続の[実transport受領物・cleanup・単一C/G/E/R/clockの詳細設計draft-0.5](BEST_PRACTICE_ABORT_SCOPE_TRANSPORT_RECEIPTS_DESIGN.md)の§15を優先する。fixtureから実session会計へ接続する旧経路は撤去し、fixture登録・owner・claim・会計は開発専用の別台帳へ移した。以降の合成検証は本番接続の証拠とせず、実sessionの専用issuer／claim接続・正式発行・有効化は未実装／閉鎖とする。
+後続の[実transport受領物・cleanup・単一C/G/E/R/clockの詳細設計draft-0.6](BEST_PRACTICE_ABORT_SCOPE_TRANSPORT_RECEIPTS_DESIGN.md)の§15・§16を優先する。fixtureから実session会計へ接続する旧経路は撤去し、fixture登録・owner・claim・会計は開発専用の別台帳へ移した。注入Responseの実Web Streams操作はそのfixtureにだけ接続する。以降の合成検証は本番接続の証拠とせず、実sessionの専用issuer／claim接続・正式発行・有効化は未実装／閉鎖とする。
 
 ## 1. 範囲と現行との差
 
