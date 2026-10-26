@@ -1,12 +1,12 @@
 # AU-BR-006 実transport：用途別body receipt・cleanup証拠・単一予算の接続詳細設計
 
-Version: br006-transport-receipts-draft-0.1 / Date: 2026-10-26。
-Status: **設計のみ・未実装・未承認。正式な証拠発行口は閉鎖を維持**。
+Version: br006-transport-receipts-draft-0.2 / Date: 2026-10-26。
+Status: **fake I/O／clock限定の内部型・状態遷移を実装。実transport接続・cap承認は未実施。正式な証拠発行口は閉鎖を維持**。
 親：[実session／private受領物](BEST_PRACTICE_ABORT_SCOPE_REAL_SESSION_RECEIPTS_DESIGN.md)、[bounded予算](BEST_PRACTICE_ABORT_SCOPE_BOUNDED_BUDGET_DESIGN.md)、[固定source issuer](BEST_PRACTICE_ABORT_SCOPE_FIXED_SOURCE_ISSUER_DESIGN.md)。
 
 ## 1. 範囲と不変条件
 
-実BoundedReadSessionの認証・受信・中断・cleanupに用途を結び、同じC/G/E/R/clockから一度だけ受領物を発行するための設計。既存prepared owner／draft／fake完了票は本番証拠に昇格させない。実装・実機操作・トークン発行・設定変更・cap投入・公開規則登録・Pushは行わない。VM／監視／telemetryは保留、Unknown・全体受付無効を維持する。
+実BoundedReadSessionの認証・受信・中断・cleanupに用途を結び、同じC/G/E/R/clockから一度だけ受領物を発行するための設計。既存prepared owner／draft／fake完了票は本番証拠に昇格させない。今回の実装範囲は§12のfake限定モデルだけで、実機操作・トークン発行・設定変更・cap投入・公開規則登録は行わない。VM／監視／telemetryは保留、Unknown・全体受付無効を維持する。
 
 - HTTP全210試行、全受信16MiB、通常1応答4MiB、payload単体2MiB／累計8MiB、全体60秒の既存上限を上げない。低減設定も尊重する。
 - 認証snapshot／originは同sessionで固定。per-userからservice-accountへ切り替えず、別client／sessionで予算や認証を作り直さない。
@@ -192,4 +192,29 @@ oracleは製品計数器を再利用せず、dispatch／accepted-read／cleanup�
 
 承認待ち：既存提案の8table／16KiB／256KiB、新提案のcleanup予約最大250ms／Lの1/4とempty read16回、実Node/fetchでのAPI終了観測、保持／control work上界、同期parseの期限保証、未確認resourceと次run受付の扱い、source/bootstrapと最終verifyのprivate境界。公式仕様はこれらの値やpolicyを推奨したものではない。
 
-今回の確認は現行ソース・設計・公式資料の読み取りと文書検証のみ。新規実装／テスト作成・実行／実機操作は行わない。
+draft-0.1時点は読み取り・文書検証のみ。draft-0.2では次の限定実装と合成試験を追加した。
+
+## 12. fake限定の内部型・状態遷移（実装済み範囲）
+
+`src/review/abort-scope-evidence-transport-state.ts`を独立した開発専用namespaceとして追加。既存の`abort-scope-evidence*`梱包除外を維持し、実BoundedReadSessionやworkerからimportしない。
+
+| 内部型／状態 | 限定実装 |
+|---|---|
+| FakePurposePermit | 同factoryのsource／phase／用途／target／final slotへ結合。issued → inflight → retryable／done。同論理用途の再生成を拒否し、retryは同permitの最大2attempt |
+| FakeAttemptClaim | dispatch前に一度だけ消費。io → cleanup → settled。別factory・clone・二重poll・同I/O resource再利用を拒否 |
+| FakeCleanupEvidence | confirmed／unconfirmedを別保持。eof／cancelled／no_response／no_bodyを区別し、要求だけで確認済みにしない。先行primaryとcleanup不明を別保持 |
+| FakeBodyReceipt | EOF・JSON受理・cleanup確認・終了後clock再検査後だけ生成。同permitへ一度だけconsume／discard。未消費最大1件、停止時はprivate参照を外す |
+
+handleは凍結した空objectと非公開WeakMapで認識する。fixtureのraw JSONや秘密、Response／readerを返さず、body消費はbyte数と`synthetic: true`／`evidence_issuance: disabled`だけ返す。OAuthはauth_onlyで一般body receiptを作らない。`issueEvidence()`は常に拒否する。参照解除は物理ゼロ化を保証しない。
+
+clockは注入した同期値を観測し、逆行・非有限値・throw・絶対期限到達を停止として保持する。D_attemptとD_io、cleanup予約最大250ms／残時間1/4、normal／final cutoffをfakeモデルで検証するが、実timerによる強制中断の証拠ではない。fake cancelの決着・pending read・closed・lock解放は別観測で、cancel要求だけ／EOFだけではconfirmedにしない。最後のabortで失敗・期限超過した場合も未確認とする。不正な返却resourceは通信開始throwによるno_responseと区別し、未確認で停止する。
+
+### 未接続・未保証
+
+- auth_ready／parent_ready／release_match／selection_ready／plan_readyは**呼出側のfixture値**であり、実認証・ReleasePermit・選択受領物・worker planの証拠ではない。
+- slot最大10・permit最大210はfake構造上限だけ。dispatch数はfakeイベント数で、実C/G/E/R課金・slot動的予約・final順序・同session予算の証明ではない。
+- bodyTextはfake文字列。通常4MiB／table16KiBの防御的parse上限はあるが、chunk課金、payload専用枠、空chunk、実UTF-8 stream、overshoot会計は未接続。既存合成stream会計とは別namespaceであり、統合済みとしない。
+- pollはfakeの観測値を検査するだけ。実Promiseの決着・reader所有・socket終了・待受解放は未確認。実transport／worker・source意味検査・上位結果への接続、公開失敗理由への写像は別工程。
+- 旧0.2／0.3、既存規則・認証・取得上限は変更しない。Unknown・全体受付無効・正式発行口閉鎖、VM／監視／telemetry保留を維持する。
+
+検証：[fake transport状態遷移の記録](E2E_BEST_PRACTICE_ABORT_SCOPE_TRANSPORT_STATE_SYNTHETIC_2026-10-26.md)。次は単一budget owner／実sessionへのbindingとdispatch・chunk会計をfake依存で接続する。fake factsや診断件数を正式発行証拠へ昇格させない。

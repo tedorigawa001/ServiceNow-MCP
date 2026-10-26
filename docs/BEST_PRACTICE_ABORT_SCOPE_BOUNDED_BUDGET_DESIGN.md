@@ -8,7 +8,7 @@ Status: **純粋予約台帳・合成stream課金/中断・独立イベントora
 
 単一の実session／budget ownerと証拠発行を結ぶ前段は[実session claim・private受領物・終了時失効の詳細設計draft-0.1](BEST_PRACTICE_ABORT_SCOPE_REAL_SESSION_RECEIPTS_DESIGN.md)へ具体化した。既存getのJSON値・cancel要求だけをcleanup確認済み証拠へ昇格させず、typed transport未接続なら正式発行を止める。動的予約／下位受信枠／実cleanup証拠の実装やcap承認は別工程とする。
 
-次段の[実transportの用途別body receipt・cleanup証拠・単一予算詳細設計draft-0.1](BEST_PRACTICE_ABORT_SCOPE_TRANSPORT_RECEIPTS_DESIGN.md)で、dispatch／chunkの線形化点、用途permit、同C/G/E/R/clock、API観測上のcleanup confirmedと未確認、期限内のcleanup予約案を定義した。cleanup最大250ms／残時間の1/4・empty read16回は追加の未承認候補値であり、本番設定や既存上限を変更したものではない。正式発行口は閉鎖を維持する。
+次段の[実transportの用途別body receipt・cleanup証拠・単一予算詳細設計draft-0.2](BEST_PRACTICE_ABORT_SCOPE_TRANSPORT_RECEIPTS_DESIGN.md)で、dispatch／chunkの線形化点、用途permit、同C/G/E/R/clock、API観測上のcleanup confirmedと未確認、期限内のcleanup予約案を定義した。fake I/O／clock限定の内部型・状態遷移まで実装したが、単一予算・実session・実Promiseへの接続は未実施。cleanup最大250ms／残時間の1/4・empty read16回は追加の未承認候補値であり、本番設定や既存上限を変更したものではない。正式発行口は閉鎖を維持する。
 
 ## 1. 現状と変更の境界
 
