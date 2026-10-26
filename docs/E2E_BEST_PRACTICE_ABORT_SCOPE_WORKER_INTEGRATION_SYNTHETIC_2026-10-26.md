@@ -31,6 +31,7 @@ native試験はreal-host群の既存少数worker実行へ追加し、テスト�
 - `bdo npm run build`：成功。
 - 関連3ファイル：60/60成功（新規32＋固定source28）。
 - `bdo npm test`：最終156ファイル／4,567件成功。PDI E2Eは含まない。
+- その後のレビューで、`current.setAbortAction`の間接使用（メソッド取出し・`.call`/`.apply`/`.bind`・カンマ演算子・`current`の分割代入（名前・computed・rest））が呼出しも未解決も残さず`no_target_call`になる見落としを修正した。接続契約§3.2のとおり`receiver_unresolved`に倒す。同じ見落としは公開済みのAU-BR-005（`options.abort`）にもあったため同時に未解決化した。BR-006だけは、`current`を解析対象外のコードへ渡す呼出し（executeRuleのインライン関数を除く）も未解決とする。回帰10件を追加し、旧実装で8件失敗を確認。全リポジトリ試験157ファイル／4,577件成功、`npm run test:pack`（一時cacheを当該processだけに指定）成功・377ファイル。
 - `bdo proxy node tests/review/fixtures/compiled-scope-worker.mjs`：固定 `.js` 経路／空env・execArgv／IPC／上位結果／worker終了確認が成功。
 - ESLint APIでsrc／tests：0 errors、既存374 warnings。
 - offline梱包検証 `tests/review/package-worker.mjs`：377ファイル、production-only install／worker解析・集約／MCP／fixture境界smoke成功。新worker・bootstrap・上位ownerを含む`dist/review/abort-scope-evidence*`は非同梱。

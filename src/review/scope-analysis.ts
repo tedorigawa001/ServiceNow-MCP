@@ -69,6 +69,9 @@ export function analyzeScopedCandidates(ast: AstNode, when: string | null, emit:
   const abortCalls = new WeakMap<AstNode, AbortCall>();
   let abortUnsafe = false;
   const scopeAbortCalls: Array<{entry:AstNode;call:AbortCall}>=[];
+  // Member expressions that are the direct callee of a call; any other read of setAbortAction escapes analysis.
+  const directCallees = new WeakSet<AstNode>();
+  const abortEscape = () => { options.abort?.unresolved(); options.abortScope?.unresolved(); };
   let displayUnsafe = false;
   let uiPolicyUnsafe = false;
   let lookupUnsafe = false;
@@ -396,6 +399,9 @@ export function analyzeScopedCandidates(ast: AstNode, when: string | null, emit:
         for (const [k, v] of receiver.properties) receiver.properties.set(k, join(v, unknown()));
       } else receiver.properties.set(key, conditional ? join(receiver.properties.get(key) ?? unknown(), value) : value);
     }
+    else if ((options.abort || options.abortScope) && pattern.type === 'ObjectPattern' && value.flags & (C | UNKNOWN)
+      && (pattern.properties as AstNode[]).some(p => p.type === 'RestElement' || p.computed
+        || isAstNode(p.key) && (p.key.type === 'Identifier' ? p.key.name : p.key.type === 'Literal' ? p.key.value : null) === 'setAbortAction')) abortEscape();
     // Destructuring bindings are declared, but their dataflow is deliberately not tracked.
   }
   function walk(entry: AstNode, depth = 0, conditional = false): Origin {
@@ -463,6 +469,9 @@ export function analyzeScopedCandidates(ast: AstNode, when: string | null, emit:
         if (entry.computed) visit(entry.property);
         receivers.set(entry, receiver);
         const key = memberKey(entry);
+        // Extracted, .call/.apply/.bind, comma or other indirect use of current.setAbortAction is not a resolved call.
+        if ((options.abort || options.abortScope) && key === 'setAbortAction' && receiver.flags & (C | UNKNOWN)
+          && !directCallees.has(entry)) abortEscape();
         if (options.fullText && receiver.flags === QUERY_RECORD && ['addQuery', 'addEncodedQuery'].includes(key ?? '')) return origin(QUERY_METHOD);
         if (options.setValue) {
           if (receiver.flags === FORM && key === 'setValue') return origin(FORM_SETTER);
@@ -487,12 +496,16 @@ export function analyzeScopedCandidates(ast: AstNode, when: string | null, emit:
         return origin(receiver.flags & UNKNOWN || uncertain ? UNKNOWN : LOCAL);
       }
       case 'CallExpression': case 'NewExpression': {
+        if (entry.type === 'CallExpression' && isAstNode(entry.callee)) directCallees.add(entry.callee);
         const calleeValue = visit(entry.callee);
         let displayArgumentCurrent = false;
         let uiPolicyArgumentForm = false;
         const argValues: Origin[] = [];
+        // BR-006 only: current handed to code outside this body may set the abort action there.
+        const inlineCallee = isAstNode(entry.callee) && ['FunctionExpression', 'ArrowFunctionExpression'].includes(entry.callee.type);
         for (const argument of entry.arguments as unknown[]) {
           const value = visit(argument);
+          if (options.abortScope && !inlineCallee && containsLookupReceiver(value, new Set(), 0, C)) options.abortScope.unresolved();
           if (options.setValue && containsLookupReceiver(value, new Set(), 0, FORM | FORM_SETTER)) {
             setValueUnsafe = true; options.setValue.unresolved();
           }
