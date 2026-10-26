@@ -110,7 +110,9 @@ export function createFakeTransportReceiptMachine(raw:unknown,clock:{now():numbe
       if(!p||p.phase!==phase)return fail('evidence_binding_mismatch');
       if(current||pendingBody||!['issued','retryable'].includes(p.state)||p.attempts>=2)return fail('invalid_state');
       const deadline=Math.min(t+facts.request_timeout_ms,cutoff(),hard),reserve=Math.min(250,Math.floor((deadline-t)/4));
-      if(reserve<=0)return fail('phase_deadline_exceeded');
+      // No time left in this phase: refuse to start (no dispatch, C or permit use) without stopping the run,
+      // so the normal phase can still move to its final reservations.
+      if(reserve<=0)return Object.freeze({ok:false as const,code:'phase_deadline_exceeded' as const});
       p.attempts++;p.state='inflight';const claim=opaque<FakeAttemptClaim>(),a:Attempt={permit,p,ordinal:p.attempts as 1|2,deadline,ioDeadline:deadline-reserve,
         state:'io',dispatchRejected:false,cancelled:false,released:false,aborted:false,abortFailed:false,timedOut:false};attempts.set(claim,a);current=a;dispatches++;
       let resource:FakeAttemptIo|undefined;

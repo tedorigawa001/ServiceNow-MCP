@@ -47,6 +47,8 @@ dispatch前はattempt／cleanup証拠を発行しない。dispatch後のconfirme
 
 全リポジトリの全合成テストや実機E2Eを実行したという主張ではない。製品／テストの既存期限・実予算は変更していない。
 
+その後のレビューで、cleanup予約が取れない（K<=0）時点の`begin`がprimaryを固定してrun全体を停止し、通常phase cutoff後にfinalへ進めない不整合を修正した。設計§6／§9どおり、開始だけをdispatch・C・permit消費なしで`phase_deadline_exceeded`拒否し、primaryは固定しない。回帰2件（cutoffでの開始拒否後にfinal予約のparent_finalへ進めること、hard deadlineでは従来どおり`deadline_exceeded`で停止すること）を追加し、本テストは57件成功。旧実装では前者が失敗することを確認した。全リポジトリ試験148 files / 4370 tests成功、`npm run test:pack`（一時cacheを当該processだけに指定）でproduction-only install＋worker smoke成功・373 files。実機E2Eは未実施。
+
 ## 5. 制限と次工程
 
 - fake snapshotの決着値を注入している。実read／cancel Promise／reader.closed／socket／TLS終了や実timerの強制中断は未検証。

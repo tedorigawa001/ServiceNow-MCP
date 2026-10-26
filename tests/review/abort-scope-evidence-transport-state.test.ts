@@ -170,3 +170,16 @@ it('does not call a returned but invalid resource a settled no-response dispatch
   expect(x.m.begin(permit(x))).toEqual({ok:false,code:'evidence_binding_mismatch'});
   expect(x.m.stats().cleanup_unconfirmed).toBe(true);
 });
+it('refuses a start at the normal cutoff without stopping, then reaches the final reservations',()=>{
+  const x=setup(),p=get(x.m.purpose('payload',{source:x.m.source,phase:x.m.phase(),target:'a'.repeat(32)}));
+  x.setTime(50000);expect(x.m.begin(p)).toEqual({ok:false,code:'phase_deadline_exceeded'});
+  expect(x.dispatch).not.toHaveBeenCalled();expect(x.m.stats()).toMatchObject({primary:null,dispatches:0});
+  const phase=get(x.m.enterFinal()),slot=get(x.m.slot('parent'));
+  const a=get(x.m.begin(get(x.m.purpose('parent_final',{source:x.m.source,phase,slot}))));
+  expect(settled(x,a).outcome).toBe('body');expect(x.m.stats()).toMatchObject({primary:null,phase:'final',dispatches:1});
+});
+it('still stops at the hard deadline instead of treating it as a phase refusal',()=>{
+  const x=setup(),p=permit(x);x.setTime(60000);
+  expect(x.m.begin(p)).toEqual({ok:false,code:'deadline_exceeded'});expect(x.m.enterFinal()).toEqual({ok:false,code:'deadline_exceeded'});
+  expect(x.dispatch).not.toHaveBeenCalled();
+});
