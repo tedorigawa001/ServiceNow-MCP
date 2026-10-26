@@ -8,6 +8,8 @@ Status: **合成issuerの内部型/生成claim/固定GET/正規化を実装。�
 
 後続では同詳細設計§11のprepared owner／実session lifecycleだけをfake source依存で部分実装した。実sourceの#permit／選択receipt／table取得への接続や正式発行口の有効化は未実施のまま。
 
+実body受領の後段条件は[実transport受領物・cleanup証拠・単一予算の詳細設計draft-0.1](BEST_PRACTICE_ABORT_SCOPE_TRANSPORT_RECEIPTS_DESIGN.md)へ具体化した。sourceは同用途／phaseのprivate bodyを一度だけ消費し、C/G/Eを再加算しない。cleanup未確認では正常受領物／sealを発行しない。実source／worker接続・本番capの承認は引き続き未実施。
+
 ## 1. 現状と本設計の範囲
 
 現行BoundedUpdateSetSourceは実sessionをprivateに保持し、matchedの場合だけsource固有のReleasePermitを発行する。listMetadata/readPayload/verifyは同permitの参照一致とsession.assertActiveを要求する。verifyはfinalStartedを一度だけ立て、親→metadataの再読を行う。
