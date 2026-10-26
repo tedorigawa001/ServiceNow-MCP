@@ -250,3 +250,5 @@ statusは取得時の捕捉値、`observed_ms`はcleanupと終端clock確認後�
 残課題：実認証snapshot／sourceのReleasePermit／selection・payload receipt／worker jobの結合、本番専用issuerと非共有claim台帳、最終sealと上位診断、cap承認、実HTTP cleanup保証・全体work上界。旧§11／§12のraw合成frameやsealを新経路の取得証明へ流用しない。新moduleも`!dist/review/abort-scope-evidence*`の非同梱対象。VM／監視／telemetry保留・Unknown・全体受付無効を維持する。
 
 検証：[固定source／Web Streams結合の合成記録](E2E_BEST_PRACTICE_ABORT_SCOPE_FIXED_WEB_SOURCE_SYNTHETIC_2026-10-26.md)。
+
+後続の[transport設計§17](BEST_PRACTICE_ABORT_SCOPE_TRANSPORT_RECEIPTS_DESIGN.md#17-未認証fixtureのoauth-bootstrapと固定失敗分類)は未認証fixtureのOAuth bootstrap・ready遷移と固定診断までを実装した。認証後の同transportを本固定sourceへ移譲する入口は未接続で、二度目のfactoryによる会計作り直しを認めない。実session／token／ReleasePermit／workerの取得証拠は引き続き未接続。

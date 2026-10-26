@@ -8,26 +8,30 @@ export class FixtureAccountingSession{
   private readonly started=performance.now();
   private readonly timer:ReturnType<typeof setTimeout>;
   private requests=0;private receivedBytes=0;private payloadBytes=0;private evidenceBytes=0;
-  private transportOwned=false;private busy=false;private disposed=false;private reason?:ReadFailureCode;
-  readonly authMode='per-user' as const;
-  constructor(raw:BoundedReadOptions['limits']={}){
+  private transportOwned=false;private busy=false;private disposed=false;private reason?:ReadFailureCode|'internal_review_error';
+  readonly authMode:'per-user'|'service-account';
+  private authenticated=false;
+  private readonly bootstrap:boolean;
+  constructor(raw:BoundedReadOptions['limits']={},options:Readonly<{oauthBootstrap?:true}>={}){
+    this.bootstrap=options.oauthBootstrap===true;this.authMode=this.bootstrap?'service-account':'per-user';
     this.limits={...BOUNDED_LIMITS};
     for(const [k,v] of Object.entries(raw)){
       if(!(k in BOUNDED_LIMITS)||!Number.isInteger(v)||v!<1||v!>BOUNDED_LIMITS[k as keyof typeof BOUNDED_LIMITS])throw Error('invalid_input');
       this.limits[k as keyof typeof BOUNDED_LIMITS]=v!;
     }
-    registerFixtureReviewSession(this,{},()=>this.claimTransportBudget());
+    registerFixtureReviewSession(this,{},()=>this.claimTransportBudget(),this.bootstrap?()=>this.claimTransportBudget():undefined);
     this.timer=setTimeout(()=>this.stop('deadline_exceeded'),this.limits.deadlineMs);
   }
   /** A synthetic baseline event, not stats copied from any real session. */
   async baseline(body:string,event:()=>unknown){
-    this.check();if(this.requests||this.transportOwned)throw Error('invalid_state');
-    this.requests++;this.receivedBytes+=Buffer.byteLength(body);await event();this.check();JSON.parse(body);markFixtureAuthReady(this);
+    this.check();if(this.bootstrap||this.requests||this.transportOwned)throw Error('invalid_state');
+    this.requests++;this.receivedBytes+=Buffer.byteLength(body);await event();this.check();JSON.parse(body);this.authenticated=true;markFixtureAuthReady(this);
   }
   stats(){return {requests:this.requests,received_bytes:this.receivedBytes,payload_bytes:this.payloadBytes};}
-  private stop(code:ReadFailureCode){this.reason??=code;revokeFixtureReviewSession(this,this.reason);this.controller.abort();}
+  private stop(code:ReadFailureCode|'internal_review_error'){this.reason??=code;revokeFixtureReviewSession(this,this.reason);this.controller.abort();}
   private check(){
     if(performance.now()-this.started>=this.limits.deadlineMs)this.stop('deadline_exceeded');
+    if(this.reason==='internal_review_error')throw Error(this.reason);
     if(this.reason)throw new BoundedReadError(this.reason);
     if(this.disposed)throw new BoundedReadError('closed');
   }
@@ -47,21 +51,24 @@ export class FixtureAccountingSession{
     this.transportOwned=true;
     let reserved=4,final=false,cursor=0,evidenceClosed=false,active:{purpose:string;key:string;size:number;ordinal:1|2}|undefined;
     // A successful payload attempt opens one payload charge at the source boundary; the next dispatch closes it.
-    let payloadReady=false;
+    let payloadReady=false,authReadyPending=false;
     const slots=new Map<string,number>([['parent_final',2],['metadata_final',2]]);
     type Table={state:'pending'|'retryable'|'available'|'unavailable'|'not_completed';outcome:PreparedTransportOutcome|null};
     const tables=new Map<string,Table>();
     const reads=new Map<string,{ordinal:number;retry:boolean}>();
     const fail=(code:ReadFailureCode):never=>{this.stop(code);throw new BoundedReadError(code);};
     const check=()=>this.check();
-    return Object.freeze({deadlineMs:this.limits.deadlineMs,requestTimeoutMs:this.limits.requestTimeoutMs,responseBytes:this.limits.responseBytes,authMode:this.authMode,signal:this.controller.signal,
+    return Object.freeze({deadlineMs:this.limits.deadlineMs,requestTimeoutMs:this.limits.requestTimeoutMs,responseBytes:this.limits.responseBytes,authMode:this.authMode,authReady:this.authenticated,signal:this.controller.signal,
+      authenticationReady:()=>{check();if(!this.bootstrap||this.authenticated||active||!authReadyPending)return fail('authentication_failed');
+        authReadyPending=false;this.authenticated=true;markFixtureAuthReady(this);},
       now:()=>{check();return performance.now()-this.started;},check,
       observationNow:()=>performance.now()-this.started,
       dispatch:(purpose:string,target:string|undefined,ordinal:1|2)=>{
         check();if(active||final!==purpose.endsWith('_final'))return fail('invalid_input');
+        if(purpose==='oauth'?(this.authMode!=='service-account'||this.authenticated):!this.authenticated)return fail('authentication_failed');
         if(this.receivedBytes>=this.limits.totalBytes)return fail('receive_budget_exceeded');
         if(purpose.startsWith('table_')&&evidenceClosed)throw Error('scope_evidence_limit');
-        if(!['parent_initial','release_rows','metadata_initial','payload','table_initial','parent_final','metadata_final','table_final'].includes(purpose)
+        if(!['oauth','parent_initial','release_rows','metadata_initial','payload','table_initial','parent_final','metadata_final','table_final'].includes(purpose)
           ||!([1,2] as number[]).includes(ordinal)||purpose.startsWith('table_')&&(!target||!/^[a-z][a-z0-9_]{0,79}$/.test(target)||target==='global'))return fail('invalid_input');
         const key=`${purpose}:${target??''}`,previous=reads.get(key);
         if(previous?ordinal!==previous.ordinal+1||!previous.retry:ordinal!==1)return fail('invalid_input');
@@ -92,6 +99,7 @@ export class FixtureAccountingSession{
         if(!active)return;
         const retry=result.retryable&&active.ordinal===1&&result.cleanup==='confirmed';
         payloadReady=active.purpose==='payload'&&result.outcome==='body'&&result.cleanup==='confirmed';
+        authReadyPending=active.purpose==='oauth'&&result.outcome==='auth_only'&&result.cleanup==='confirmed';
         reads.get(active.key)!.retry=retry;
         if(active.purpose==='table_initial'){
           const table=tables.get(active.key.slice('table_initial:'.length))!;table.outcome=result.outcome;
@@ -121,7 +129,7 @@ export class FixtureAccountingSession{
         check();if(typeof payload!=='string'||!payloadReady||active)return fail('invalid_input');
         payloadReady=false;this.chargePayloadBytes(payload);
       },
-      stop:(code:string)=>this.stop(['cancelled','closed','deadline_exceeded','authentication_failed','access_denied','receive_budget_exceeded','payload_budget_exceeded'].includes(code)?code as ReadFailureCode:'invalid_input'),
+      stop:(code:string)=>this.stop(['cancelled','closed','deadline_exceeded','phase_deadline_exceeded','request_budget_exceeded','authentication_failed','access_denied','receive_budget_exceeded','payload_budget_exceeded','upstream_unavailable','internal_review_error'].includes(code)?code as ReadFailureCode|'internal_review_error':'invalid_input'),
       stats:()=>Object.freeze({...this.stats(),evidence_bytes:this.evidenceBytes,reserved}),
     });
   }

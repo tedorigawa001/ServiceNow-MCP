@@ -11,6 +11,9 @@ export interface PreparedTransportBudget {
   requestTimeoutMs:number;
   responseBytes:number;
   authMode:'per-user'|'service-account';
+  readonly authReady?:boolean;
+  /** Fixture-only completion, callable after confirmed auth_only settlement. No secret argument. */
+  authenticationReady?():void;
   signal:AbortSignal;
   dispatch(purpose:string,target:string|undefined,ordinal:1|2):void;
   chunk(bytes:number):void;

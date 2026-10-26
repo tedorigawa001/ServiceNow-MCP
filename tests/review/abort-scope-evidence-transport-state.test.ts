@@ -37,7 +37,7 @@ it.each(['parent_initial','release_rows','metadata_initial','payload','table_ini
   expect(settled(x,a).outcome).toBe('body');expect(x.requests).toEqual([{purpose:kind,target,ordinal:1,synthetic:true}]);
 });
 it('keeps OAuth fake body private and never returns a general body receipt',()=>{
-  const x=setup([resource({},'{"access_token":"SECRET"}')],{auth_mode:'service-account',auth_ready:false}),p=permit(x,'oauth'),done=settled(x,get(x.m.begin(p)));
+  const x=setup([resource({},'{"access_token":"SECRET","expires_in":3600}')],{auth_mode:'service-account',auth_ready:false}),p=permit(x,'oauth'),done=settled(x,get(x.m.begin(p)));
   expect(done).toMatchObject({outcome:'auth_only',body:null});expect(JSON.stringify(done)).not.toContain('SECRET');expect(x.m.issueEvidence().ok).toBe(false);
 });
 it.each([

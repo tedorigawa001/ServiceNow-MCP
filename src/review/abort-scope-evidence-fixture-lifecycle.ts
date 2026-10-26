@@ -17,7 +17,7 @@ type Result<T> = Readonly<{ok:true;value:T}|{ok:false;code:PreparedOwnerFailure}
 type AuthSnapshotIdentity = object;
 type Session = { snapshot?:object; auth:AuthSnapshotIdentity; ready?:object; live:boolean;
   claim:'unclaimed'|'claimed'; failure?:PreparedOwnerFailure; owner?:Owner;
-  transport?:()=>PreparedTransportBudget;transportClaimed?:boolean };
+  transport?:()=>PreparedTransportBudget;bootstrap?:()=>PreparedTransportBudget;transportClaimed?:boolean };
 type FixtureSource = { session:object; auth:AuthSnapshotIdentity; ready?:object; permit:object|null;
   claimed:boolean; parentReady:boolean; finalStarted:boolean; matched:boolean };
 type Owner = { state:'prepared'|'revoked'; code?:PreparedOwnerFailure; revocations:number;
@@ -58,9 +58,25 @@ function revoke(owner:Owner,reason:PreparedOwnerFailure){
 }
 
 /** Explicit fixture registration only. Real BoundedReadSession objects are refused. */
-export function registerFixtureReviewSession(session:object,snapshot:object,transport?:()=>PreparedTransportBudget):void{
+export function registerFixtureReviewSession(session:object,snapshot:object,transport?:()=>PreparedTransportBudget,bootstrap?:()=>PreparedTransportBudget):void{
   if(session instanceof BoundedReadSession||sessions.has(session))throw new Error('invalid_state');
-  sessions.set(session,{snapshot,auth:opaque(),live:true,claim:'unclaimed',transport});
+  sessions.set(session,{snapshot,auth:opaque(),live:true,claim:'unclaimed',transport,bootstrap});
+}
+/** Pre-auth fixture claim, disjoint from real sessions and never issued from prepared scalar facts. */
+export function claimFixtureBootstrapTransport(session:object):Result<PreparedTransportBudget>{
+  const s=sessions.get(session);if(!s)return no('evidence_binding_mismatch');
+  if(!s.live)return no(s.failure??'closed');
+  if(s.ready||s.owner||s.transportClaimed||s.claim!=='unclaimed'||!s.bootstrap)return no('invalid_state');
+  s.transportClaimed=true;
+  try{
+    const port=s.bootstrap(),check=()=>{if(!s.live||s.failure)throw Error(s.failure??'closed');port.check();};
+    return ok(Object.freeze({...port,check,now(){check();return port.now();},
+      dispatch(p:string,t:string|undefined,n:1|2){check();port.dispatch(p,t,n);},chunk(n:number){check();port.chunk(n);},
+      chargePayload(payload:string){check();port.chargePayload(payload);},enterFinal(){check();port.enterFinal();},
+      skipFinal(target:string){check();return port.skipFinal(target);},
+      authenticationReady(){check();if(!port.authenticationReady)throw Error('authentication_failed');port.authenticationReady();check();},
+    }));
+  }catch{return no('invalid_state');}
 }
 /** Called after the pinned readyPromise succeeds; late auth completion cannot resurrect a session. */
 export function markFixtureAuthReady(session:object):void{

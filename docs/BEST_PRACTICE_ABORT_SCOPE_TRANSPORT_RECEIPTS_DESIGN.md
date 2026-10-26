@@ -1,9 +1,9 @@
 # AU-BR-006 実transport：用途別body receipt・cleanup証拠・単一予算の接続詳細設計
 
-Version: br006-transport-receipts-draft-0.7 / Date: 2026-10-26。
-Status: **fixture分離を維持し、注入Responseの実read／cleanup APIを開発専用sessionへ接続。実HTTP／本番sessionへの接続・cap承認・正式発行は未実装／閉鎖**。
+Version: br006-transport-receipts-draft-0.8 / Date: 2026-10-26。
+Status: **fixture分離を維持し、注入Responseのread／cleanupと未認証fixtureのOAuth bootstrap・固定診断を接続。実HTTP／本番sessionへの接続・cap承認・正式発行は未実装／閉鎖**。
 
-**現行実装の境界は§15・§16と[固定source設計§13](BEST_PRACTICE_ABORT_SCOPE_FIXED_SOURCE_ISSUER_DESIGN.md#13-固定sourceとweb-streams受領物の結合fixture限定)を優先する。** §13のfixtureから実session会計へ接続する経路は廃止した。以前の検証記録は当時の実行記録であり、安全な本番接続の証拠として使わない。
+**現行実装の境界は§15〜§17と[固定source設計§13](BEST_PRACTICE_ABORT_SCOPE_FIXED_SOURCE_ISSUER_DESIGN.md#13-固定sourceとweb-streams受領物の結合fixture限定)を優先する。** §13のfixtureから実session会計へ接続する経路は廃止した。以前の検証記録は当時の実行記録であり、安全な本番接続の証拠として使わない。
 親：[実session／private受領物](BEST_PRACTICE_ABORT_SCOPE_REAL_SESSION_RECEIPTS_DESIGN.md)、[bounded予算](BEST_PRACTICE_ABORT_SCOPE_BOUNDED_BUDGET_DESIGN.md)、[固定source issuer](BEST_PRACTICE_ABORT_SCOPE_FIXED_SOURCE_ISSUER_DESIGN.md)。
 
 ## 1. 範囲と不変条件
@@ -303,3 +303,30 @@ E閉鎖理由を優先し、初回outcomeは別列`initial_outcome`として保�
 同じadapterで同時runを行わず、未消費bodyの次取得も既存state machineが拒否する。retryは同permitで明示的に行い、前回cleanup confirmedが必須。payloadはHTTP JSON bytesのG/Sとは別に、従来どおりsource境界のdecoded payload文字列を一度課金する。actual source／schemaとの結合は未接続のため、fixtureの文字列申告を本番のpayload証拠としない。
 
 検証：[実Web Streams接続の合成記録](E2E_BEST_PRACTICE_ABORT_SCOPE_WEB_STREAM_SYNTHETIC_2026-10-26.md)。実HTTP／最低対応Node 22.12／実worker／本番issuer・終了隔離policy／保持work全体上界は未確認であり、全体受付を有効化しない。
+
+## 17. 未認証fixtureのOAuth bootstrapと固定失敗分類
+
+`FixtureAccountingSession`の明示的な`oauthBootstrap:true`は認証未完了・C/G=0から始まるservice-account専用fixture。従来のper-user baselineと混在させない。`claimFixtureBootstrapTransport`はfixture台帳の同session参照・active・未ready・未owner・未claimを要求し、prepared ownerとは別の未認証入口から**同じ一度限りのtransport claim**を消費する。providerがないper-user、既にready、実BoundedReadSession、clone／再生成／生成失敗後の再使用を拒否する。実台帳への登録やtype castによる昇格はない。
+
+`createFixtureOAuthBootstrap`はPOST `/oauth_token.do`・client_credentials・ordinalの凍結合成descriptorだけを注入Response供給関数へ渡す。credential／フォーム本文／endpoint引数・global fetchは持たない。実OAuth交換やcredentialの検査を実装したという意味ではない。低水準fixture adapterでは同machineを維持して後続の合成GETへ進め、C/G/R／開始時計を作り直さない。固定source compositionへownerとtransportを安全に移譲する入口は**未接続**。認証後に二つ目のtransport factoryを作って予算をリセットする方式は禁止する。
+
+OAuth JSONはEOF／受信枠／digest／cleanup確認後に、固定の純粋policyで検査する。access_tokenは非空・空白のみ不可・CR/LFなし・最大8,192文字、expires_inは有限の正数、寿命msが同runの全deadline_msより厳密に長いことを要求する。token_type省略は既存bounded経路と互換にし、指定時はstringのBearerを大小文字非区別で比較する。errorを持つ成功応答は拒否する。scope／ユーザー本人性／Table API権限を認定せず、R-2の認可code／PKCE／scope契約を変更しない。これらはfixtureの保守的policyで、本番policy承認ではない。
+
+token／refresh_token／error_description／余分な列は一般body receipt・戻り値・診断へ出さず、fixtureではtokenを保存・header利用しない。cleanup・終端clock確認済みのauth_only settlement後だけ、同予算portが同sessionのfixture AuthReadyGenerationを一度生成する。primaryが立った時点やcontroller終了中の再入closeではauth_onlyをstoppedへ落とし、readyへ進めない。token本文の参照を外すが、物理ゼロ化は保証しない。
+
+| 原因 | 固定結果と扱い |
+|---|---|
+| OAuthの400／401／403／404など非retry status | authentication_failed／oauth_http_error。token本文をreadせずcleanupし、per-userや別endpointへfallbackしない |
+| JSON／UTF-8／body必須／token必須項目不正 | authentication_failed／oauth_response_invalid。一般body receiptなし |
+| token寿命がrun枠以下 | authentication_failed／oauth_lifetime_insufficient。短縮deadlineでも等号を拒否 |
+| 429／5xx／fetch reject等でcleanup confirmed | 同permit内で最大2試行。費用を保持し、枯渇はupstream_unavailableとして固定。認証応答拒否と混同しない |
+| 試行枠不足／通常phase残不足／hard期限／G・S超過／取消 | 元のbounded codeを保持し、authentication_failedへ丸めない。開始前拒否ならC/Gを増やさない |
+| cleanup未確認、先行primaryなし | internal_review_error／cleanup_unconfirmed、全停止・readyなし |
+| primary後のcleanup未確認／close | primary／primary_detailを保持し、cleanup_unconfirmedを別軸でstickyに保持 |
+| 非OAuthの401／通常403／release_rows限定403 | 既存分類を維持。OAuthの403例外や認証済みへの昇格に流用しない |
+
+machineの`diagnostics()`は固定primary／primary_detail、最後の失敗試行snapshot、cleanup不明、fixture auth_readyだけを返す。last_failureのretryableは**そのsettlement時点の記録**であり、現時点の再試行permitではない。成功後も以前の上流障害を保持できるが、beginは同用途票／phase／期限／最大試行／cleanupを改めて検査する。OAuth枯渇や開始拒否の終端化も、実際に観測した同permitの状態からだけ導き、caller申告の失敗codeを採用しない。closeで先行上流障害を上書きしない。
+
+残課題は、認証後の固定sourceへのone-shot移譲、実source／選択payload／worker・ReleasePermitへの結合、実credential／tokenのprivate管理、実HTTP／本番専用claimとscope／権限検証。本module群は非同梱prefixを維持し、正式証拠発行口・全体受付は閉鎖／無効。VM／監視／telemetry保留を維持する。
+
+検証：[OAuth bootstrap・失敗分類の合成記録](E2E_BEST_PRACTICE_ABORT_SCOPE_OAUTH_BOOTSTRAP_SYNTHETIC_2026-10-26.md)。

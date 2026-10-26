@@ -1,13 +1,19 @@
 /** Development-only real Web Streams operations over an injected source. Never calls global fetch. */
-import { createSessionBoundFakeTransport } from './abort-scope-evidence-transport-budget.js';
+import { createSessionBoundFakeTransport,createBootstrapBoundFakeTransport } from './abort-scope-evidence-transport-budget.js';
 import type { PreparedEvidenceOwner } from './abort-scope-evidence-fixture-lifecycle.js';
-import type { FakeAttemptClaim,FakeAttemptIo,FakeIoObservation,FakePurposePermit,FakeDispatchRequest,FakeAttemptTiming } from './abort-scope-evidence-transport-state.js';
+import type { FakeAttemptClaim,FakeAttemptIo,FakeIoObservation,FakePurposePermit,FakeDispatchRequest,FakeAttemptTiming,FakeTransportIo } from './abort-scope-evidence-transport-state.js';
 export type FixtureStreamSource=(request:FakeDispatchRequest,signal:AbortSignal)=>Response|Promise<Response>;
 type Machine=Extract<ReturnType<typeof createSessionBoundFakeTransport>,{ok:true}>['value']['machine'];
 type Resource={state:FakeIoObservation;timing:FakeAttemptTiming;controller:AbortController;body?:ReadableStream<Uint8Array>|null;
   reader?:ReadableStreamDefaultReader<Uint8Array>;claim?:FakeAttemptClaim;version:number;wake?:()=>void;ended:boolean;
   cancelled:boolean;released:boolean;aborted:boolean;scratch?:Uint8Array;size:number;sequence:number;text?:string;decodeFailed:boolean;cap:number;capture:boolean};
 export function createFixtureWebStreamTransport(session:object,owner:PreparedEvidenceOwner,source:FixtureStreamSource){
+  return createWebStreamTransport(source,io=>createSessionBoundFakeTransport(session,owner,io));
+}
+export function createFixtureOAuthWebStreamTransport(session:object,source:FixtureStreamSource){
+  return createWebStreamTransport(source,io=>createBootstrapBoundFakeTransport(session,io));
+}
+function createWebStreamTransport(source:FixtureStreamSource,bind:(io:FakeTransportIo)=>ReturnType<typeof createSessionBoundFakeTransport>){
   if(typeof source!=='function')return {ok:false as const,code:'invalid_input'};
   let machine!:Machine,current:Resource|undefined,busy=false;
   const responses=new WeakSet<Response>(),streams=new WeakSet<ReadableStream>();
@@ -72,7 +78,7 @@ export function createFixtureWebStreamTransport(session:object,owner:PreparedEvi
       changed(r);void pump(r).catch(()=>{r.state.pending_read=false;r.state.read_failed=true;machine.stop('closed');changed(r);});
     }catch{r.state.body='unknown_lock';changed(r);}
   }
-  const bound=createSessionBoundFakeTransport(session,owner,{dispatch(request,timing):FakeAttemptIo{
+  const bound=bind({dispatch(request,timing):FakeAttemptIo{
     const r:Resource={state:{fetch:'pending',status:null,body:'none',pending_read:false,eof:false,closed:null,cancel:'not_requested'},
       timing,controller:new AbortController(),version:0,ended:false,cancelled:false,released:false,aborted:false,size:0,sequence:0,
       decodeFailed:false,cap:timing.response_cap,capture:true};current=r;
