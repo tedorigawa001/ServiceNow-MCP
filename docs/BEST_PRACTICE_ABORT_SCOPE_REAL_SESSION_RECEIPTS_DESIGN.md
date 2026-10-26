@@ -4,7 +4,7 @@ Version: br006-real-session-receipts-draft-0.1 / Date: 2026-10-26。
 Status: **owner／session lifecycleに加え、選択window／行draftとpayload開始・移譲claimをfake依存で部分実装。正式receipt／実source／worker接続は未実装・未承認**。
 親：[固定source issuer](BEST_PRACTICE_ABORT_SCOPE_FIXED_SOURCE_ISSUER_DESIGN.md)、[接続契約](BEST_PRACTICE_ABORT_SCOPE_CONNECTION_CONTRACT_DESIGN.md)、[bounded予算](BEST_PRACTICE_ABORT_SCOPE_BOUNDED_BUDGET_DESIGN.md)。
 
-後続の[実transport受領物・cleanup・単一C/G/E/R/clockの詳細設計draft-0.1](BEST_PRACTICE_ABORT_SCOPE_TRANSPORT_RECEIPTS_DESIGN.md)を追加した。prepared／fake完了票からの昇格を認めず、実受信・API終了確認・用途／phase結合を同じ実sessionで成立させる条件を定義する。実装・正式発行・有効化は未実施。
+後続の[実transport受領物・cleanup・単一C/G/E/R/clockの詳細設計draft-0.4](BEST_PRACTICE_ABORT_SCOPE_TRANSPORT_RECEIPTS_DESIGN.md)で条件を具体化した。fake I/Oの状態遷移、登録済みsessionへのone-shot会計binding、理由付きfinal skip／予約解放まで合成検証したが、prepared／fake完了票を正式証拠へ昇格させない。実transportの終了観測・正式発行・有効化は未実施。
 
 ## 1. 範囲と現行との差
 

@@ -2,6 +2,7 @@
 import type { ReadFailureCode } from './bounded-read.js';
 import { z } from 'zod';
 import { candidatePolicy } from '../review/target-selection.js';
+import type { PreparedTransportBudget, PreparedAttemptSettlement } from './review-transport-budget.js';
 export type PreparedOwnerFailure = ReadFailureCode | 'invalid_state' | 'evidence_binding_mismatch' | 'internal_review_error';
 declare const ownerBrand: unique symbol;
 export type PreparedEvidenceOwner = { readonly [ownerBrand]: true };
@@ -15,7 +16,8 @@ export type PreparedTransferClaim = DraftHandle<'transfer'>;
 type Result<T> = Readonly<{ok:true;value:T}|{ok:false;code:PreparedOwnerFailure}>;
 type AuthSnapshotIdentity = object;
 type Session = { snapshot?:object; auth:AuthSnapshotIdentity; ready?:object; live:boolean;
-  claim:'unclaimed'|'claimed'; failure?:PreparedOwnerFailure; owner?:Owner };
+  claim:'unclaimed'|'claimed'; failure?:PreparedOwnerFailure; owner?:Owner;
+  transport?:()=>PreparedTransportBudget;transportClaimed?:boolean };
 type FixtureSource = { session:object; auth:AuthSnapshotIdentity; ready?:object; permit:object|null;
   claimed:boolean; parentReady:boolean; finalStarted:boolean; matched:boolean };
 type Owner = { state:'prepared'|'revoked'; code?:PreparedOwnerFailure; revocations:number;
@@ -56,9 +58,9 @@ function revoke(owner:Owner,reason:PreparedOwnerFailure){
 }
 
 /** Called only by the real session constructor, with its isolated snapshot reference. */
-export function registerReviewEvidenceSession(session:object,snapshot:object):void{
+export function registerReviewEvidenceSession(session:object,snapshot:object,transport?:()=>PreparedTransportBudget):void{
   if(sessions.has(session))throw new Error('invalid_state');
-  sessions.set(session,{snapshot,auth:opaque(),live:true,claim:'unclaimed'});
+  sessions.set(session,{snapshot,auth:opaque(),live:true,claim:'unclaimed',transport});
 }
 /** Called after the pinned readyPromise succeeds; late auth completion cannot resurrect a session. */
 export function markReviewEvidenceAuthReady(session:object):void{
@@ -124,6 +126,25 @@ function boundOwner(owner:PreparedEvidenceOwner,session:object):Result<Owner>{
   const o=owners.get(owner)!;
   if(o.binding!.session!==sessions.get(session)){revoke(o,'evidence_binding_mismatch');return no(o.code!);}
   return ok(o);
+}
+/** Fake-dependency accounting only. No real source calls this, no production receipts. */
+export function claimPreparedTransportBudget(owner:PreparedEvidenceOwner,session:object):Result<PreparedTransportBudget>{
+  const bound=boundOwner(owner,session);if(!bound.ok)return bound;
+  const s=bound.value.binding!.session;
+  if(s.transportClaimed)return draftFailure(bound.value,'invalid_state');
+  s.transportClaimed=true;
+  try{
+    if(!s.transport)return draftFailure(bound.value,'invalid_state');
+    const port=s.transport();
+    const check=()=>{const live=boundOwner(owner,session);if(!live.ok)throw Error(live.code);port.check();};
+    return ok(Object.freeze({...port,
+      now(){check();return port.now();},check,
+      dispatch(p:string,t:string|undefined,n:1|2){check();port.dispatch(p,t,n);},
+      chunk(n:number){check();port.chunk(n);},settle(result:PreparedAttemptSettlement){port.settle(result);},
+      skipFinal(target:string){check();return port.skipFinal(target);},
+      enterFinal(){check();port.enterFinal();},
+    }));
+  }catch{return draftFailure(bound.value,'invalid_state');}
 }
 function draftFailure(owner:Owner,reason:PreparedOwnerFailure):Result<never>{revoke(owner,reason);return no(owner.code!);}
 function boundWindow(owner:Owner,window:PreparedSelectionWindow):Result<DraftWindow>{

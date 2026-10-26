@@ -3,6 +3,7 @@ import { createHash } from 'node:crypto';
 import type { ServiceNowConfig } from './types.js';
 import { pinReviewReleaseConfig } from './review-release-config.js';
 import { registerReviewEvidenceSession, markReviewEvidenceAuthReady, revokeReviewEvidenceSession } from './review-evidence-lifecycle.js';
+import type { PreparedTransportBudget, PreparedTransportOutcome, PreparedFinalSkip, PreparedAttemptSettlement } from './review-transport-budget.js';
 
 export const BOUNDED_LIMITS = Object.freeze({ responseBytes: 4 * 1024 * 1024, totalBytes: 16 * 1024 * 1024,
   payloadBytes: 2 * 1024 * 1024, totalPayloadBytes: 8 * 1024 * 1024,
@@ -48,6 +49,8 @@ export class BoundedReadSession {
   private requests = 0;
   private receivedBytes = 0;
   private payloadBytes = 0;
+  private transportOwned = false;
+  private evidenceBytes = 0;
   private readonly removeExternal: () => void;
   readonly releasePolicy: ReturnType<typeof pinReviewReleaseConfig>;
 
@@ -77,7 +80,7 @@ export class BoundedReadSession {
       this.authMode === 'per-user' ? snapshot.perUserBearerToken : [snapshot.oauth.clientId, snapshot.oauth.username ?? '']])).digest('hex');
     if (active >= 2 || principals.has(this.principalKey)) throw new BoundedReadError('review_busy');
     active++; principals.add(this.principalKey);
-    registerReviewEvidenceSession(this, this.snapshot);
+    registerReviewEvidenceSession(this, this.snapshot, () => this.claimTransportBudget());
     this.fetcher = options.fetch ?? ((...args) => globalThis.fetch(...args));
     this.timer = setTimeout(() => this.stop('deadline_exceeded'), Math.max(0, this.limits.deadlineMs - (performance.now() - this.started)));
     const cancel = () => this.stop('cancelled');
@@ -88,12 +91,86 @@ export class BoundedReadSession {
   }
 
   stats() { return { requests: this.requests, received_bytes: this.receivedBytes, payload_bytes: this.payloadBytes }; }
+  /** Only the prepared lifecycle can claim this one-shot, non-network accounting port. */
+  private claimTransportBudget():PreparedTransportBudget {
+    this.check();
+    if(this.transportOwned||this.busy)throw new BoundedReadError('invalid_input');
+    this.transportOwned=true;
+    let reserved=4,final=false,cursor=0,evidenceClosed=false,active:{purpose:string;key:string;size:number;ordinal:1|2}|undefined;
+    const slots=new Map<string,number>([['parent_final',2],['metadata_final',2]]);
+    type Table={state:'pending'|'retryable'|'available'|'unavailable'|'not_completed';outcome:PreparedTransportOutcome|null};
+    const tables=new Map<string,Table>();
+    const reads=new Map<string,{ordinal:number;retry:boolean}>();
+    const fail=(code:ReadFailureCode):never=>{this.stop(code);throw new BoundedReadError(code);};
+    const check=()=>this.check();
+    return Object.freeze({deadlineMs:this.limits.deadlineMs,requestTimeoutMs:this.limits.requestTimeoutMs,authMode:this.authMode,signal:this.controller.signal,
+      now:()=>{check();return performance.now()-this.started;},check,
+      dispatch:(purpose:string,target:string|undefined,ordinal:1|2)=>{
+        check();if(active||final!==purpose.endsWith('_final'))return fail('invalid_input');
+        if(this.receivedBytes>=this.limits.totalBytes)return fail('receive_budget_exceeded');
+        if(purpose.startsWith('table_')&&evidenceClosed)throw Error('scope_evidence_limit');
+        if(!['parent_initial','release_rows','metadata_initial','payload','table_initial','parent_final','metadata_final','table_final'].includes(purpose)
+          ||!([1,2] as number[]).includes(ordinal)||purpose.startsWith('table_')&&(!target||!/^[a-z][a-z0-9_]{0,79}$/.test(target)||target==='global'))return fail('invalid_input');
+        const key=`${purpose}:${target??''}`,previous=reads.get(key);
+        if(previous?ordinal!==previous.ordinal+1||!previous.retry:ordinal!==1)return fail('invalid_input');
+        if(purpose==='table_initial'&&!tables.has(target!)){
+          if(tables.size>=8||this.requests+reserved+4>this.limits.requests)throw Error('scope_evidence_limit');
+          tables.set(target!,{state:'pending',outcome:null});slots.set(`table_final:${target}`,2);reserved+=2;
+        }
+        const slot=purpose.startsWith('table_')?`table_final:${target}`:purpose;
+        if(final){
+          const keys=[...slots.keys()];if(keys[cursor]!==slot||(slots.get(slot)??0)<1)return fail('invalid_input');
+          if(purpose==='table_final'&&tables.get(target!)?.state!=='available')return fail('invalid_input');
+          slots.set(slot,slots.get(slot)!-1);reserved--;
+        }else if(this.requests+1+reserved>this.limits.requests)throw new BoundedReadError('request_budget_exceeded');
+        if(this.requests>=this.limits.requests)return fail('request_budget_exceeded');
+        this.requests++;reads.set(key,{ordinal,retry:false});active={purpose,key,size:0,ordinal};
+      },
+      chunk:(n:number)=>{
+        check();if(!active||!Number.isSafeInteger(n)||n<0)return fail('invalid_input');
+        const size=active.size+n,g=this.receivedBytes+n,p=this.payloadBytes+(active.purpose==='payload'?n:0),e=this.evidenceBytes+(active.purpose.startsWith('table_')?n:0);
+        if(![size,g,p,e].every(Number.isSafeInteger))return fail('receive_budget_exceeded');
+        active.size=size;this.receivedBytes=g;this.payloadBytes=p;this.evidenceBytes=e;
+        if(e>=262144)evidenceClosed=true;
+        if(g>this.limits.totalBytes||size>this.limits.responseBytes)return fail('receive_budget_exceeded');
+        if(p>this.limits.totalPayloadBytes)return fail('payload_budget_exceeded');
+        if(active.purpose==='payload'&&size>this.limits.payloadBytes)throw new BoundedReadError('payload_limit');
+        if(active.purpose.startsWith('table_')&&(size>16384||e>262144))throw Error('scope_evidence_limit');
+      },
+      settle:(result:PreparedAttemptSettlement)=>{
+        if(!active)return;
+        const retry=result.retryable&&active.ordinal===1&&result.cleanup==='confirmed';
+        reads.get(active.key)!.retry=retry;
+        if(active.purpose==='table_initial'){
+          const table=tables.get(active.key.slice('table_initial:'.length))!;table.outcome=result.outcome;
+          table.state=retry?'retryable':result.outcome==='body'&&result.cleanup==='confirmed'?'available':'unavailable';
+        }
+        if(final&&!retry){const key=active.purpose==='table_final'?`table_final:${active.key.slice('table_final:'.length)}`:active.purpose;
+          reserved-=slots.get(key)??0;slots.set(key,0);cursor++;}
+        active=undefined;
+      },
+      enterFinal:()=>{check();if(active||final)return fail('invalid_input');
+        for(const table of tables.values())if(table.state==='pending'||table.state==='retryable')table.state='not_completed';
+        final=true;},
+      skipFinal:(target:string):PreparedFinalSkip=>{
+        check();const key=`table_final:${target}`,table=tables.get(target),left=slots.get(key);
+        if(!final||active||!table||[...slots.keys()][cursor]!==key||!left)return fail('invalid_input');
+        if(table.state!=='unavailable'&&table.state!=='not_completed'&&!evidenceClosed)return fail('invalid_input');
+        const reason=evidenceClosed?'evidence_budget_exhausted':table.state==='not_completed'?'initial_not_completed':'initial_unavailable';
+        reserved-=left;slots.set(key,0);cursor++;const read=reads.get(`${key}`);if(read)read.retry=false;
+        return Object.freeze({state:'skipped',reason,initial_outcome:table.outcome,released_attempts:left,synthetic:true,evidence_issuance:'disabled'});
+      },
+      stop:(code:string)=>this.stop(['cancelled','closed','deadline_exceeded','authentication_failed','access_denied','receive_budget_exceeded','payload_budget_exceeded'].includes(code)?code as ReadFailureCode:'invalid_input'),
+      stats:()=>Object.freeze({...this.stats(),evidence_bytes:this.evidenceBytes,reserved}),
+    });
+  }
   /** Monotonic run budget, also usable for safe CPU finalization after an HTTP stop. */
   remainingMs() { return Math.max(0, this.limits.deadlineMs - (performance.now() - this.started)); }
   get deadlineMs() { return this.limits.deadlineMs; }
   phaseRemainingMs() { return Math.max(0, this.remainingMs() - this.reserveMs); }
   /** Internal phase boundary only. Never extends the original hard deadline. */
   setPhaseReserve(reserveMs: number) {
+    if(this.transportOwned)throw new BoundedReadError('invalid_input');
     if (!Number.isFinite(reserveMs) || reserveMs < 0 || reserveMs >= this.limits.deadlineMs || this.busy || this.disposed) {
       throw new BoundedReadError('invalid_input');
     }
@@ -248,6 +325,7 @@ export class BoundedReadSession {
   }
   async get(path: string, final = false): Promise<unknown> {
     this.check();
+    if(this.transportOwned)throw new BoundedReadError('invalid_input');
     if (!/^\/api\/now\/table\/(sys_update_set|sys_cluster_state|sys_update_xml)(\/[^/?]+)?\?/.test(path)) throw new BoundedReadError('invalid_input');
     if (this.busy) throw new BoundedReadError('review_busy');
     this.busy = true;
@@ -262,6 +340,7 @@ export class BoundedReadSession {
   }
   chargePayload(payload: string) {
     this.check();
+    if(this.transportOwned)throw new BoundedReadError('invalid_input');
     const bytes = Buffer.byteLength(payload, 'utf8');
     this.payloadBytes += bytes;
     if (this.payloadBytes > this.limits.totalPayloadBytes) { this.stop('payload_budget_exceeded'); this.check(); }

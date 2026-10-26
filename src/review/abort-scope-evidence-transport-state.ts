@@ -1,5 +1,7 @@
 /** Fake-only transport state machine. No actual session, fetch, stream, timer, budget or production evidence. */
 import { z } from 'zod';
+import { createHash, type Hash } from 'node:crypto';
+import type { PreparedTransportBudget, PreparedFinalSkip } from '../servicenow/review-transport-budget.js';
 declare const brand:unique symbol;
 type Handle<K extends string>={readonly [brand]:K};
 export type FakePurposePermit=Handle<'purpose'>;
@@ -11,7 +13,8 @@ export type FakeTransportPhase=Handle<'phase'>;
 export type FakeTransportSlot=Handle<'slot'>;
 export type FakeTransportPurpose='oauth'|'parent_initial'|'release_rows'|'metadata_initial'|'payload'|'table_initial'|'parent_final'|'metadata_final'|'table_final';
 type Code='invalid_input'|'invalid_state'|'evidence_binding_mismatch'|'release_not_admitted'|'authentication_failed'|'access_denied'
-  |'cancelled'|'closed'|'deadline_exceeded'|'phase_deadline_exceeded'|'attempt_deadline_exceeded'|'invalid_observation_time'|'internal_review_error';
+  |'cancelled'|'closed'|'deadline_exceeded'|'phase_deadline_exceeded'|'attempt_deadline_exceeded'|'invalid_observation_time'|'internal_review_error'
+  |'request_budget_exceeded'|'receive_budget_exceeded'|'payload_budget_exceeded'|'payload_limit'|'scope_evidence_limit';
 type Result<T>=Readonly<{ok:true;value:T}|{ok:false;code:Code}>;
 type Outcome='body'|'auth_only'|'upstream_unavailable'|'invalid_response'|'not_found_or_not_visible'|'access_denied'|'scope_evidence_limit'|'stopped';
 const configSchema=z.strictObject({deadline_ms:z.number().int().min(1).max(60000),request_timeout_ms:z.number().int().min(1).max(10000),
@@ -37,26 +40,33 @@ type Cleanup=Readonly<{disposition:'confirmed'|'unconfirmed';kind:'eof'|'cancell
 const opaque=<T>()=>Object.freeze(Object.create(null)) as T;
 const ok=<T>(value:T):Result<T>=>Object.freeze({ok:true,value});
 
-export function createFakeTransportReceiptMachine(raw:unknown,clock:{now():number},io:FakeTransportIo){
+export function createFakeTransportReceiptMachine(raw:unknown,clock:{now():number},io:FakeTransportIo,budget?:PreparedTransportBudget){
   let parsed:z.infer<typeof configSchema>,t0:number;
   try{parsed=configSchema.parse(structuredClone(raw));t0=clock.now();if(!Number.isFinite(t0)||t0<0||typeof io.dispatch!=='function')throw Error();}
   catch{return {ok:false as const,code:'invalid_input' as const};}
-  const facts=parsed,hard=t0+facts.deadline_ms,source=opaque<FakeTransportSource>();
+  const facts=parsed,hard=Math.min(t0+facts.deadline_ms,budget?.deadlineMs??Infinity),source=opaque<FakeTransportSource>();
   let phase=opaque<FakeTransportPhase>(),phaseName:'normal'|'final'='normal',last=t0,primary:Code|undefined;
-  type Slot={kind:'parent'|'metadata'|'table';target?:string};
+  type Slot={kind:'parent'|'metadata'|'table';target?:string;skipped?:boolean};
   type Purpose={kind:FakeTransportPurpose;phase:FakeTransportPhase;target?:string;slot?:FakeTransportSlot;attempts:number;state:'issued'|'inflight'|'retryable'|'done'};
   type Attempt={permit:FakePurposePermit;p:Purpose;ordinal:1|2;deadline:number;ioDeadline:number;state:'io'|'cleanup'|'settled';
-    resource?:FakeAttemptIo;dispatchRejected:boolean;cancelled:boolean;released:boolean;aborted:boolean;abortFailed:boolean;timedOut:boolean};
+    resource?:FakeAttemptIo;dispatchRejected:boolean;cancelled:boolean;released:boolean;aborted:boolean;abortFailed:boolean;timedOut:boolean;
+    received:number;sequence:number;empty:number;hash:Hash;localFailure?:'scope_evidence_limit'|'payload_limit'};
   type Body={permit:FakePurposePermit;data?:unknown;bytes:number;used:boolean};
   const slots=new WeakMap<FakeTransportSlot,Slot>(),slotNames=new Map<string,FakeTransportSlot>();
   const permits=new WeakMap<FakePurposePermit,Purpose>(),permitNames=new Set<string>(),attempts=new WeakMap<FakeAttemptClaim,Attempt>();
+  const purposeByName=new Map<string,Purpose>();
   const cleanups=new WeakMap<FakeCleanupEvidence,Cleanup>(),bodies=new WeakMap<FakeBodyReceipt,Body>(),resources=new WeakSet<object>();
   let current:Attempt|undefined,pendingBody:FakeBodyReceipt|undefined,dispatches=0,cleanupUnconfirmed=false;
+  let detach=()=>{};
   function no(code:Code):Result<never>{return Object.freeze({ok:false,code:primary??code});}
   function abort(a:Attempt){if(a.aborted||!a.resource)return;a.aborted=true;try{a.resource.abort();}catch{a.abortFailed=true;}}
-  function stop(code:Code){primary??=code;if(pendingBody){const b=bodies.get(pendingBody);if(b)b.data=undefined;pendingBody=undefined;}if(current)abort(current);return no(primary);}
+  function stop(code:Code){primary??=code;detach();if(pendingBody){const b=bodies.get(pendingBody);if(b)b.data=undefined;pendingBody=undefined;}if(current)abort(current);try{budget?.stop(primary);}catch{/* fixed reason */}return no(primary);}
+  function budgetCode(error:unknown):Code{
+    const code=error instanceof Error?error.message:'';
+    return ['cancelled','closed','deadline_exceeded','authentication_failed','access_denied','request_budget_exceeded','receive_budget_exceeded','payload_budget_exceeded','payload_limit','scope_evidence_limit'].includes(code)?code as Code:'internal_review_error';
+  }
   function now(allowStopped=false):number|null{
-    let n:number;try{n=clock.now();}catch{stop('internal_review_error');return null;}
+    let n:number;try{budget?.check();n=clock.now();}catch(error){stop(budgetCode(error));return null;}
     if(!Number.isFinite(n)||n<last){stop('invalid_observation_time');return null;}last=n;
     if(n>=hard)stop('deadline_exceeded');
     return primary&&!allowStopped?null:n;
@@ -76,9 +86,15 @@ export function createFakeTransportReceiptMachine(raw:unknown,clock:{now():numbe
     a.state='settled';a.p.state=outcome==='upstream_unavailable'&&a.ordinal===1&&disposition==='confirmed'&&!primary?'retryable':'done';
     if(current===a)current=undefined;
     if(disposition==='unconfirmed'){cleanupUnconfirmed=true;stop('internal_review_error');}
+    try{budget?.settle({retryable:a.p.state==='retryable',outcome,cleanup:disposition});}catch{stop('internal_review_error');outcome='stopped';}
     return {evidence,outcome};
   }
   function pending(){return ok(Object.freeze({state:'pending' as const}));}
+  if(budget){
+    const revoked=()=>{try{budget.check();stop('closed');}catch(error){stop(budgetCode(error));}};
+    detach=()=>budget.signal.removeEventListener('abort',revoked);
+    budget.signal.addEventListener('abort',revoked,{once:true});if(budget.signal.aborted)revoked();
+  }
   return {ok:true as const,value:Object.freeze({
     source,
     phase(){return phase;},
@@ -102,8 +118,10 @@ export function createFakeTransportReceiptMachine(raw:unknown,clock:{now():numbe
         ||kind==='payload'&&(!target||!/^[a-f0-9]{32}$/.test(target))||!kind.startsWith('table_')&&kind!=='payload'&&target!==undefined)return fail('invalid_input');
       const s=context.slot?slots.get(context.slot):undefined,expected=kind==='parent_final'?'parent':kind==='metadata_final'?'metadata':'table';
       if(final&&(!s||s.kind!==expected||s.target!==target)||!final&&context.slot!==undefined)return fail('evidence_binding_mismatch');
+      if(s?.skipped)return fail('invalid_state');
       const key=`${kind}:${target??''}`;if(permitNames.has(key)||permitNames.size>=210)return fail('invalid_state');permitNames.add(key);
-      const value=opaque<FakePurposePermit>();permits.set(value,{kind,phase,target,slot:context.slot,attempts:0,state:'issued'});return ok(value);
+      const value=opaque<FakePurposePermit>(),p:Purpose={kind,phase,target,slot:context.slot,attempts:0,state:'issued'};
+      permits.set(value,p);purposeByName.set(key,p);return ok(value);
     },
     begin(permit:FakePurposePermit):Result<FakeAttemptClaim>{
       const t=now();if(t===null)return no(primary!);const p=permits.get(permit);
@@ -113,8 +131,10 @@ export function createFakeTransportReceiptMachine(raw:unknown,clock:{now():numbe
       // No time left in this phase: refuse to start (no dispatch, C or permit use) without stopping the run,
       // so the normal phase can still move to its final reservations.
       if(reserve<=0)return Object.freeze({ok:false as const,code:'phase_deadline_exceeded' as const});
+      try{budget?.dispatch(p.kind,p.target,(p.attempts+1) as 1|2);}catch(error){const code=budgetCode(error);
+        if(code==='request_budget_exceeded'||code==='scope_evidence_limit'){p.state='done';return no(code);}return fail(code);}
       p.attempts++;p.state='inflight';const claim=opaque<FakeAttemptClaim>(),a:Attempt={permit,p,ordinal:p.attempts as 1|2,deadline,ioDeadline:deadline-reserve,
-        state:'io',dispatchRejected:false,cancelled:false,released:false,aborted:false,abortFailed:false,timedOut:false};attempts.set(claim,a);current=a;dispatches++;
+        state:'io',dispatchRejected:false,cancelled:false,released:false,aborted:false,abortFailed:false,timedOut:false,received:0,sequence:0,empty:0,hash:createHash('sha256')};attempts.set(claim,a);current=a;dispatches++;
       let resource:FakeAttemptIo|undefined;
       try{resource=io.dispatch(Object.freeze({purpose:p.kind,target:p.target,ordinal:a.ordinal,synthetic:true}));}
       catch{a.dispatchRejected=true;}
@@ -125,6 +145,18 @@ export function createFakeTransportReceiptMachine(raw:unknown,clock:{now():numbe
         resources.add(resource!);a.resource=resource;if(primary)abort(a);
       }
       if(now()===null){cleanupUnconfirmed=true;return no(primary!);}return ok(claim);
+    },
+    chunk(claim:FakeAttemptClaim,sequence:number,bytes:Uint8Array):Result<true>{
+      const t=now();if(t===null)return no(primary!);const a=attempts.get(claim);
+      if(!budget||!a||a!==current)return fail('evidence_binding_mismatch');
+      if(a.state!=='io'||a.localFailure||sequence!==a.sequence||!(bytes instanceof Uint8Array))return fail('invalid_state');
+      if(t>=a.ioDeadline){a.timedOut=true;a.state='cleanup';abort(a);return no('attempt_deadline_exceeded');}
+      a.sequence++;a.received+=bytes.byteLength;
+      try{budget.chunk(bytes.byteLength);}catch(error){const code=budgetCode(error);
+        if(code==='scope_evidence_limit'||code==='payload_limit'){a.localFailure=code;return no(code);}return fail(code);}
+      a.hash.update(bytes);
+      a.empty=bytes.byteLength===0?a.empty+1:0;if(a.empty>16)return fail('internal_review_error');
+      return ok(true);
     },
     poll(claim:FakeAttemptClaim){
       const a=attempts.get(claim);if(!a)return fail('evidence_binding_mismatch');
@@ -137,7 +169,7 @@ export function createFakeTransportReceiptMachine(raw:unknown,clock:{now():numbe
       if(s.status===401||s.status===403&&a.p.kind!=='release_rows')stop(s.status===401?'authentication_failed':'access_denied');
       const terminal=s.status!==null&&(s.status<200||s.status>=300)&&s.status!==429&&s.status<500;
       if(a.state==='io'){
-        if(primary||t>=a.ioDeadline){a.timedOut=true;a.state='cleanup';abort(a);s=observe(a);}
+        if(primary||a.localFailure||t>=a.ioDeadline){a.timedOut=true;a.state='cleanup';abort(a);s=observe(a);}
         else if(s.fetch==='rejected'||s.fetch==='fulfilled'&&(terminal||s.body==='none'||s.eof))a.state='cleanup';
         else return pending();
       }
@@ -161,13 +193,13 @@ export function createFakeTransportReceiptMachine(raw:unknown,clock:{now():numbe
       }
       const end=now(true);if(end===null||end>=a.deadline)reason??='cleanup_deadline';
       if(reason){const r=finish(a,'unconfirmed',null,reason,'stopped');return ok(Object.freeze({state:'settled' as const,cleanup:r.evidence,outcome:r.outcome,body:null}));}
-      let outcome:Outcome=primary?'stopped':a.timedOut||s?.fetch==='rejected'||s?.status===429||(s?.status??0)>=500?'upstream_unavailable'
+      let outcome:Outcome=primary?'stopped':a.localFailure?'scope_evidence_limit':a.timedOut||s?.fetch==='rejected'||s?.status===429||(s?.status??0)>=500?'upstream_unavailable'
         :s?.status===404?'not_found_or_not_visible':s?.status===403?'access_denied':terminal||kind!=='eof'?'invalid_response':'body';
       let data:unknown,bytes=0;
       if(outcome==='body')try{
         const text=a.resource!.bodyText(),cap=a.p.kind.startsWith('table_')?16384:4194304;
         if(typeof text!=='string'||text.length>cap||Buffer.byteLength(text)>cap)outcome=a.p.kind.startsWith('table_')?'scope_evidence_limit':'invalid_response';
-        else{bytes=Buffer.byteLength(text);data=JSON.parse(text);if(a.p.kind==='oauth'){outcome='auth_only';data=undefined;}}
+        else{bytes=Buffer.byteLength(text);if(budget&&(bytes!==a.received||createHash('sha256').update(text).digest('hex')!==a.hash.digest('hex')))throw Error();data=JSON.parse(text);if(a.p.kind==='oauth'){outcome='auth_only';data=undefined;}}
       }catch{outcome='invalid_response';}
       const at=now();if(at===null||at>=a.deadline||at>=cutoff()){if(!primary)stop(at!==null&&at>=a.deadline?'attempt_deadline_exceeded':'phase_deadline_exceeded');outcome='stopped';data=undefined;}
       const r=finish(a,'confirmed',kind,null,outcome);let body:FakeBodyReceipt|null=null;
@@ -183,7 +215,17 @@ export function createFakeTransportReceiptMachine(raw:unknown,clock:{now():numbe
     },
     enterFinal():Result<FakeTransportPhase>{
       if(now()===null)return no(primary!);if(phaseName!=='normal'||current||pendingBody)return fail('invalid_state');
+      try{budget?.enterFinal();}catch(error){return fail(budgetCode(error));}
       phaseName='final';phase=opaque<FakeTransportPhase>();return ok(phase);
+    },
+    skipFinal(slot:FakeTransportSlot,context:Readonly<{source:FakeTransportSource;phase:FakeTransportPhase;target:string}>):Result<PreparedFinalSkip>{
+      if(now()===null)return no(primary!);const s=slots.get(slot);
+      if(!budget||!s||s.kind!=='table'||s.target!==context.target||context.source!==source||context.phase!==phase)return fail('evidence_binding_mismatch');
+      if(phaseName!=='final'||current||pendingBody||s.skipped)return fail('invalid_state');
+      try{const result=budget.skipFinal(s.target!);s.skipped=true;
+        const p=purposeByName.get(`table_final:${s.target}`);if(p)p.state='done';
+        return ok(result);
+      }catch(error){return fail(budgetCode(error));}
     },
     issueEvidence():Result<never>{return primary?no(primary):no('invalid_state');},
     stop(code:'cancelled'|'closed'|'deadline_exceeded'){

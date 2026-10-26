@@ -1,7 +1,7 @@
 # AU-BR-006 実transport：用途別body receipt・cleanup証拠・単一予算の接続詳細設計
 
-Version: br006-transport-receipts-draft-0.2 / Date: 2026-10-26。
-Status: **fake I/O／clock限定の内部型・状態遷移を実装。実transport接続・cap承認は未実施。正式な証拠発行口は閉鎖を維持**。
+Version: br006-transport-receipts-draft-0.4 / Date: 2026-10-26。
+Status: **fake I/O状態遷移・実session単一会計・理由付きfinal skipと予約解放を合成検証。実transport接続・cap承認は未実施。正式な証拠発行口は閉鎖を維持**。
 親：[実session／private受領物](BEST_PRACTICE_ABORT_SCOPE_REAL_SESSION_RECEIPTS_DESIGN.md)、[bounded予算](BEST_PRACTICE_ABORT_SCOPE_BOUNDED_BUDGET_DESIGN.md)、[固定source issuer](BEST_PRACTICE_ABORT_SCOPE_FIXED_SOURCE_ISSUER_DESIGN.md)。
 
 ## 1. 範囲と不変条件
@@ -209,7 +209,7 @@ handleは凍結した空objectと非公開WeakMapで認識する。fixtureのraw
 
 clockは注入した同期値を観測し、逆行・非有限値・throw・絶対期限到達を停止として保持する。D_attemptとD_io、cleanup予約最大250ms／残時間1/4、normal／final cutoffをfakeモデルで検証するが、実timerによる強制中断の証拠ではない。fake cancelの決着・pending read・closed・lock解放は別観測で、cancel要求だけ／EOFだけではconfirmedにしない。最後のabortで失敗・期限超過した場合も未確認とする。不正な返却resourceは通信開始throwによるno_responseと区別し、未確認で停止する。
 
-### 未接続・未保証
+### 第1段階単体の未接続・未保証（第2段階との差分は§13）
 
 - auth_ready／parent_ready／release_match／selection_ready／plan_readyは**呼出側のfixture値**であり、実認証・ReleasePermit・選択受領物・worker planの証拠ではない。
 - slot最大10・permit最大210はfake構造上限だけ。dispatch数はfakeイベント数で、実C/G/E/R課金・slot動的予約・final順序・同session予算の証明ではない。
@@ -217,4 +217,55 @@ clockは注入した同期値を観測し、逆行・非有限値・throw・絶�
 - pollはfakeの観測値を検査するだけ。実Promiseの決着・reader所有・socket終了・待受解放は未確認。実transport／worker・source意味検査・上位結果への接続、公開失敗理由への写像は別工程。
 - 旧0.2／0.3、既存規則・認証・取得上限は変更しない。Unknown・全体受付無効・正式発行口閉鎖、VM／監視／telemetry保留を維持する。
 
-検証：[fake transport状態遷移の記録](E2E_BEST_PRACTICE_ABORT_SCOPE_TRANSPORT_STATE_SYNTHETIC_2026-10-26.md)。次は単一budget owner／実sessionへのbindingとdispatch・chunk会計をfake依存で接続する。fake factsや診断件数を正式発行証拠へ昇格させない。
+検証：[fake transport状態遷移の記録](E2E_BEST_PRACTICE_ABORT_SCOPE_TRANSPORT_STATE_SYNTHETIC_2026-10-26.md)。fake factsや診断件数を正式発行証拠へ昇格させない。
+
+## 13. 実session binding・単一会計のfake接続
+
+`createSessionBoundFakeTransport`は、登録済み実`BoundedReadSession`とprepared ownerを引数に取り、lifecycle内の同session／AuthSnapshotIdentity／ready世代／fake source・permit結合を検査する。同session側のtransport claimを先に一度だけ消費し、再生成や失敗後の再準備を拒否する。実source／ReleasePermitの証明へは昇格させない。
+
+sessionはprivate closureで会計portを生成する。**既存requests／receivedBytes／payloadBytesを直接使い、statsのコピーを新台帳へ移さない。** baselineの認証／親取得も同じ累計に残る。portは認証情報・URL・snapshotを返さない。claim後は従来getを拒否し、busy中のclaimも拒否する。MCP／実sourceから呼ぶ入口は追加しない。
+
+sessionの固定abort signalを同じ状態機械へ結び、取消／close／hard期限の通知で同期失効する。未消費fake本文参照を外し、signal listenerは停止時に解除する。これは物理ゼロ化や実I/O終了の証拠ではない。
+
+| 費目 | 今回の接続 |
+|---|---|
+| C | fake dispatch直前に1加算。同期throwも戻さず、同permitの最大2attempt。通常はC+1+R<=Q、全体Q<=210と低減設定を維持 |
+| R | 初期の親／metadata各2、table初回受付時に最終2を追加し初回2も含む空きを確認。最大8table。final順序は親→metadata→受付順table。最終試行開始で1消費し、retry不要なら残枠を解放 |
+| G／S | 同attemptの連番chunkを1回だけ線形化し、全受信・応答内受信へ加算後に超過を検査。等号は許可、overshootは戻さない。次dispatch時にGが満杯なら停止 |
+| payload | payload用途のchunkだけ既存payload累計へ加算。単体2MiB／累計8MiBと低減設定を維持 |
+| E | table用途をGの内数として加算。単体16KiB／累計256KiBはfake検証用の未承認候補値。E満杯後の新table dispatchを拒否 |
+| clock | portはsession開始からの単調経過と元のhard期限・request timeoutを使う。fake timersで実sessionの時計を進める。claim時に60秒を再設定しない |
+
+chunkは`chunk(attempt, sequence, Uint8Array)`としてfakeから供給する。0始まり連番、同current attempt、I/O cutoff前だけ採用。停止・clone・重複・順序飛びでは再課金しない。空chunkは連続16回までの候補制限。bytesは保持せずincremental SHA-256へ反映し、fake bodyTextのbyte数・digest一致をJSON構文受理前に確認する。同じ長さの別本文も受理しない。消費・parse・診断でC/G/Eを再加算しない。
+
+通常C枠不足／table受付不足は新dispatchを行わず、permitは再利用不可にしてfinal予約を残す。S/G・payload累計の全体失敗はsession側停止へ伝播。table下位枠／payload単体不足は当該attemptをcleanupへ進め、未確認なら全体停止する。cleanup後の局所outcomeは現状scope_evidence_limitへ保守的に集約し、payload専用の上位分類は未接続。
+
+### 維持する閉鎖と次工程
+
+- adapterはfake依存だけ。selection_ready／plan_ready等はfake前提であり、実選択receipt／worker planではない。実sessionでauth-readyでも実table GETは実装しない。
+- portの認証modeはsessionから取得する。OAuthはこのadapterの生成前に既存sessionで完了している前提で、未認証OAuth bootstrapのfake接続は次工程。既存OAuth費用をリセットしない。
+- 実read／Promiseとchunk発生源の証明、pending／cancel／reader.closed／lockの実観測は未接続。hash一致だけを実取得証拠にしない。
+- 局所失敗tableのfinal skipとR解放は§14のfake接続まで実装。実phase世代・動的cap承認、実sourceの固定plan／意味検査、worker／上位結果への接続は残課題。
+- 正式発行APIは常に拒否。公開0.2／0.3・規則登録・既存通常GETの未claim時挙動は維持する。VM／監視／telemetryは保留、Unknown・全体受付無効。
+
+検証：[単一会計・session bindingの合成記録](E2E_BEST_PRACTICE_ABORT_SCOPE_TRANSPORT_BUDGET_SYNTHETIC_2026-10-26.md)。
+
+## 14. 局所失敗tableのfinal skipと予約解放
+
+会計portのsettleをbooleanから`PreparedAttemptSettlement`へ変更し、retry可否・固定outcome・cleanup confirmed/unconfirmedを別々に渡す。table初回の状態はpending → retryable／available／unavailableとし、normal phase終了時のpending／retryableはnot_completedにする。availableは**transportの本文受領だけ**であり、tableの意味・scopeの整合確認済みを表さない。
+
+`skipFinal(slot, {source, phase, target})`は同factoryのtable slot・source・final phase・targetを照合してから同session会計ownerへ委譲する。理由を呼出側から受け取らず、ownerが保持する状態から次の固定値を導出する。
+
+| 理由 | 条件・保持する初回outcome |
+|---|---|
+| initial_unavailable | confirmed cleanup後の初回結果が本文受領でなかった。404・構文不正・下位枠不足・retry枯渇等の固定outcomeを保持 |
+| initial_not_completed | cleanup確認済みのretry待ちをnormal phase終了で打ち切った場合等。既に受信／試行した費用は保持 |
+| evidence_budget_exhausted | E累計枠が閉鎖済み。初回availableでも最終table読取を開始せず、不明のまま終了させる |
+
+E閉鎖理由を優先し、初回outcomeは別列`initial_outcome`として保持する。親・metadataはskip不可。final cursorにあるtableだけが対象で、未知table／未受付slot・順序違反・同slotの二重消費・通常phase・active I/O・未消費body・停止済みsessionを拒否する。cleanup未確認はowner停止のままで、skipへ格下げしない。
+
+成功時は残っているslot枠だけをRから引き、slotを終端化してcursorを一つ進める。通常は2、最終初回試行後にEが閉じretry待ちを打ち切る場合は1だけ解放する。C/G/E/payloadは一切返さず、skip中のdispatch・chunk課金はゼロ。発行済みのfinal permitもdoneにし、skip済みslotでの新規permit・retryを拒否する。後続tableの受付順は変えない。
+
+結果は`state: skipped`・固定reason・initial_outcome・released_attemptsと、`synthetic: true`／`evidence_issuance: disabled`だけの凍結診断票。本文・秘密・正式証拠・成功completionは発行しない。最終固定sourceからの自動skip、sourceの意味検査で初回をunavailableへ落とす経路、実worker／公開JSONへの写像は未接続である。
+
+検証：[final skip／予約解放の合成記録](E2E_BEST_PRACTICE_ABORT_SCOPE_FINAL_SKIP_SYNTHETIC_2026-10-26.md)。
