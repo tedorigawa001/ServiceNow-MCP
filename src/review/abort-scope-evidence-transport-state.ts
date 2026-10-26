@@ -1,6 +1,7 @@
 /** Fake-only transport state machine. No actual session, fetch, stream, timer, budget or production evidence. */
 import { z } from 'zod';
 import { createHash, type Hash } from 'node:crypto';
+import { normalizeFixedTableValue } from './abort-scope-evidence-fixed-source.js';
 import type { PreparedTransportBudget, PreparedFinalSkip } from '../servicenow/review-transport-budget.js';
 declare const brand:unique symbol;
 type Handle<K extends string>={readonly [brand]:K};
@@ -14,7 +15,7 @@ export type FakeTransportSlot=Handle<'slot'>;
 export type FakeTransportPurpose='oauth'|'parent_initial'|'release_rows'|'metadata_initial'|'payload'|'table_initial'|'parent_final'|'metadata_final'|'table_final';
 type Code='invalid_input'|'invalid_state'|'evidence_binding_mismatch'|'release_not_admitted'|'authentication_failed'|'access_denied'
   |'cancelled'|'closed'|'deadline_exceeded'|'phase_deadline_exceeded'|'attempt_deadline_exceeded'|'invalid_observation_time'|'internal_review_error'
-  |'request_budget_exceeded'|'receive_budget_exceeded'|'payload_budget_exceeded'|'payload_limit'|'scope_evidence_limit'|'invalid_response';
+  |'request_budget_exceeded'|'receive_budget_exceeded'|'payload_budget_exceeded'|'payload_limit'|'scope_evidence_limit'|'invalid_response'|'table_binding_mismatch';
 type Result<T>=Readonly<{ok:true;value:T}|{ok:false;code:Code}>;
 type Outcome='body'|'auth_only'|'upstream_unavailable'|'invalid_response'|'not_found_or_not_visible'|'access_denied'|'scope_evidence_limit'|'stopped';
 const configSchema=z.strictObject({deadline_ms:z.number().int().min(1).max(60000),request_timeout_ms:z.number().int().min(1).max(10000),
@@ -54,7 +55,7 @@ export function createFakeTransportReceiptMachine(raw:unknown,clock:{now():numbe
   type Attempt={permit:FakePurposePermit;p:Purpose;ordinal:1|2;deadline:number;ioDeadline:number;state:'io'|'cleanup'|'settled';
     resource?:FakeAttemptIo;dispatchRejected:boolean;cancelled:boolean;released:boolean;aborted:boolean;abortFailed:boolean;timedOut:boolean;
     received:number;sequence:number;empty:number;hash:Hash;localFailure?:'scope_evidence_limit'|'payload_limit'|'invalid_response'};
-  type Body={permit:FakePurposePermit;data?:unknown;bytes:number;used:boolean};
+  type Body={permit:FakePurposePermit;data?:unknown;bytes:number;used:boolean;status:number;observed:number};
   const slots=new WeakMap<FakeTransportSlot,Slot>(),slotNames=new Map<string,FakeTransportSlot>();
   const permits=new WeakMap<FakePurposePermit,Purpose>(),permitNames=new Set<string>(),attempts=new WeakMap<FakeAttemptClaim,Attempt>();
   const purposeByName=new Map<string,Purpose>();
@@ -93,6 +94,7 @@ export function createFakeTransportReceiptMachine(raw:unknown,clock:{now():numbe
     return {evidence,outcome};
   }
   function pending(){return ok(Object.freeze({state:'pending' as const}));}
+  function projected<T>(value:T):Result<T>{return now()===null?no(primary!):ok(value);}
   if(budget){
     const revoked=()=>{try{budget.check();stop('closed');}catch(error){stop(budgetCode(error));}};
     detach=()=>budget.signal.removeEventListener('abort',revoked);
@@ -208,7 +210,7 @@ export function createFakeTransportReceiptMachine(raw:unknown,clock:{now():numbe
       }catch{outcome='invalid_response';}
       const at=now();if(at===null||at>=a.deadline||at>=cutoff()){if(!primary)stop(at!==null&&at>=a.deadline?'attempt_deadline_exceeded':'phase_deadline_exceeded');outcome='stopped';data=undefined;}
       const r=finish(a,'confirmed',kind,null,outcome);let body:FakeBodyReceipt|null=null;
-      if(r.outcome==='body'&&!primary){body=opaque<FakeBodyReceipt>();bodies.set(body,{permit:a.permit,data,bytes,used:false});pendingBody=body;}
+      if(r.outcome==='body'&&!primary){body=opaque<FakeBodyReceipt>();bodies.set(body,{permit:a.permit,data,bytes,used:false,status:s!.status!,observed:last});pendingBody=body;}
       return ok(Object.freeze({state:'settled' as const,cleanup:r.evidence,outcome:r.outcome,body}));
     },
     cleanupInfo(value:FakeCleanupEvidence){const c=cleanups.get(value);return c?ok(c):fail('evidence_binding_mismatch');},
@@ -218,6 +220,40 @@ export function createFakeTransportReceiptMachine(raw:unknown,clock:{now():numbe
       b.used=true;b.data=undefined;pendingBody=undefined;
       return ok(Object.freeze({state:discard?'discarded' as const:'simulated_body' as const,bytes:b.bytes,synthetic:true,evidence_issuance:'disabled' as const}));
     },
+    /** Fixed source-only projections; no raw body getter or caller-supplied projector. Fixture authority only. */
+    consumeSourceBody(value:FakeBodyReceipt,permit:FakePurposePermit,updateSet:string){
+      if(now()===null)return no(primary!);const b=bodies.get(value),p=permits.get(permit);
+      if(!b||b.permit!==permit||!p||p.phase!==phase)return fail('evidence_binding_mismatch');
+      if(b.used||pendingBody!==value)return fail('invalid_state');
+      const data=b.data;b.used=true;b.data=undefined;pendingBody=undefined;
+      if(typeof updateSet!=='string'||!/^[a-f0-9]{32}$/.test(updateSet))return fail('invalid_input');
+      const base={status:b.status,observed_ms:b.observed,synthetic:true as const,evidence_issuance:'disabled' as const};
+      if(p.kind==='table_initial'||p.kind==='table_final'){
+        // ISO here uses the fixture elapsed-clock epoch, not a claimed production wall clock.
+        const observation=normalizeFixedTableValue(p.target!,p.kind==='table_initial'?'initial':'final',new Date(b.observed).toISOString(),data,b.status);
+        if(observation==='binding_error')return fail('table_binding_mismatch');
+        if(p.kind==='table_initial'&&observation.state==='unavailable'){
+          if(!budget?.rejectInitialTable)return fail('internal_review_error');
+          try{budget.rejectInitialTable(p.target!);}catch{return fail('internal_review_error');}
+        }
+        return projected(Object.freeze({...base,kind:'table' as const,observation}));
+      }
+      if(!['parent_initial','parent_final','metadata_initial','metadata_final'].includes(p.kind))return fail('invalid_state');
+      const parent=p.kind.startsWith('parent_'),id=z.string().regex(/^[a-f0-9]{32}$/);
+      const rawRows=data&&typeof data==='object'&&!Array.isArray(data)&&'result'in data?data.result:null;
+      // Refuse oversize arrays before schema traversal; .max alone bounds output, not validation work.
+      if(!Array.isArray(rawRows)||rawRows.length>(parent?2:101))return projected(Object.freeze({...base,kind:'baseline' as const,state:'unavailable' as const,reason:'invalid_observation' as const,rows:null}));
+      const version={sys_id:id,sys_updated_on:z.string().min(1).max(40),sys_mod_count:z.string().regex(/^\d{1,20}$/)};
+      const schema=parent?z.object(version):z.object({...version,update_set:z.literal(updateSet),name:z.string().min(1).max(256)});
+      const envelope=z.object({result:z.array(schema).max(parent?2:101)}).safeParse(data);
+      if(!envelope.success)return projected(Object.freeze({...base,kind:'baseline' as const,state:'unavailable' as const,reason:'invalid_observation' as const,rows:null}));
+      const rows=envelope.data.result;
+      if(parent?(rows.length!==1||rows[0].sys_id!==updateSet):rows.length>100||rows.some((r,i)=>i>0&&rows[i-1].sys_id>=r.sys_id)){
+        return projected(Object.freeze({...base,kind:'baseline' as const,state:'unavailable' as const,reason:'incomplete_or_mismatched' as const,rows:null}));
+      }
+      return projected(Object.freeze({...base,kind:'baseline' as const,state:'rows' as const,reason:null,rows:Object.freeze(rows.map(r=>Object.freeze(r)))}));
+    },
+    checkpoint():Result<true>{return now()===null?no(primary!):ok(true);},
     enterFinal():Result<FakeTransportPhase>{
       if(now()===null)return no(primary!);if(phaseName!=='normal'||current||pendingBody)return fail('invalid_state');
       try{budget?.enterFinal();}catch(error){return fail(budgetCode(error));}

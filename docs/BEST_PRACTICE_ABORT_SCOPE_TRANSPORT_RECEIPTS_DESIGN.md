@@ -1,9 +1,9 @@
 # AU-BR-006 実transport：用途別body receipt・cleanup証拠・単一予算の接続詳細設計
 
-Version: br006-transport-receipts-draft-0.6 / Date: 2026-10-26。
+Version: br006-transport-receipts-draft-0.7 / Date: 2026-10-26。
 Status: **fixture分離を維持し、注入Responseの実read／cleanup APIを開発専用sessionへ接続。実HTTP／本番sessionへの接続・cap承認・正式発行は未実装／閉鎖**。
 
-**現行実装の境界は§15・§16を優先する。** §13のfixtureから実session会計へ接続する経路は廃止した。以前の検証記録は当時の実行記録であり、安全な本番接続の証拠として使わない。
+**現行実装の境界は§15・§16と[固定source設計§13](BEST_PRACTICE_ABORT_SCOPE_FIXED_SOURCE_ISSUER_DESIGN.md#13-固定sourceとweb-streams受領物の結合fixture限定)を優先する。** §13のfixtureから実session会計へ接続する経路は廃止した。以前の検証記録は当時の実行記録であり、安全な本番接続の証拠として使わない。
 親：[実session／private受領物](BEST_PRACTICE_ABORT_SCOPE_REAL_SESSION_RECEIPTS_DESIGN.md)、[bounded予算](BEST_PRACTICE_ABORT_SCOPE_BOUNDED_BUDGET_DESIGN.md)、[固定source issuer](BEST_PRACTICE_ABORT_SCOPE_FIXED_SOURCE_ISSUER_DESIGN.md)。
 
 ## 1. 範囲と不変条件

@@ -29,6 +29,26 @@ const handle=<T>()=>Object.freeze(Object.create(null)) as T;
 const ok=<T>(value:T):Result<T>=>Object.freeze({ok:true,value});
 const no=(code:Code):Result<never>=>Object.freeze({ok:false,code});
 
+/** Pure fixture projection. Never exports the raw JSON or unvalidated column values. */
+export function normalizeFixedTableValue(name:string,phase:'initial'|'final',at:string,raw:unknown,status:number):FixedSourceNormalized|'binding_error'{
+  const header={source:'sys_db_object.current' as const,visibility_scope:'caller_acl' as const,phase,observed_at:at};
+  const unavailable=(reason:Unavailable):FixedSourceNormalized=>Object.freeze({...header,state:'unavailable',reason});
+  if(status===404)return unavailable('not_found_or_not_visible');
+  if(status===429||status>=500)return unavailable('upstream_unavailable');
+  if(status<200||status>=300||!raw||typeof raw!=='object'||Array.isArray(raw)||!('result'in raw)||!Array.isArray(raw.result)||raw.result.length>2)return unavailable('invalid_observation');
+  if(!raw.result.length)return unavailable('not_found_or_not_visible');
+  const rows:Row[]=[];
+  for(const value of raw.result){
+    if(!value||typeof value!=='object'||Array.isArray(value))return unavailable('invalid_observation');
+    if(typeof value.name==='string'&&value.name!==name)return 'binding_error';
+    if(['sys_id','name','sys_updated_on','sys_mod_count'].some(key=>!Object.hasOwn(value,key)))return unavailable('field_unavailable');
+    const row=rowSchema.safeParse({sys_id:value.sys_id,name:value.name,sys_scope:Object.hasOwn(value,'sys_scope')?value.sys_scope:null,
+      sys_updated_on:value.sys_updated_on,sys_mod_count:value.sys_mod_count});
+    if(!row.success)return unavailable('invalid_observation');rows.push(Object.freeze(row.data));
+  }
+  return rows.length===2?unavailable('ambiguous_table'):Object.freeze({...header,state:'rows',rows:Object.freeze(rows)});
+}
+
 export function createSyntheticFixedSourceIssuer() {
   type Session={data:z.infer<typeof sessionSchema>;active:boolean;claimed:boolean;failure?:Code};
   type Source={session:FixedSourceSession;data:z.infer<typeof sourceSchema>;permit:FixedSourceReleasePermit|null;active:boolean;claimed:boolean};
@@ -55,24 +75,8 @@ export function createSyntheticFixedSourceIssuer() {
   const notCollected=(phase:'initial'|'final',at:string):FixedSourceNormalized=>Object.freeze({source:'sys_db_object.current',
     visibility_scope:'caller_acl',phase,observed_at:at,state:'unavailable',reason:'not_collected'});
   function normalize(name:string,phase:'initial'|'final',at:string,body:string|null,status:number):FixedSourceNormalized|'binding_error'{
-    const header={source:'sys_db_object.current' as const,visibility_scope:'caller_acl' as const,phase,observed_at:at};
-    const unavailable=(reason:Unavailable):FixedSourceNormalized=>Object.freeze({...header,state:'unavailable',reason});
-    if(status===404)return unavailable('not_found_or_not_visible');
-    if(status===429||status>=500)return unavailable('upstream_unavailable');
-    if(status<200||status>=300||body===null)return unavailable('invalid_observation');
-    let raw:unknown;try{raw=JSON.parse(body);}catch{return unavailable('invalid_observation');}
-    if(!raw||typeof raw!=='object'||Array.isArray(raw)||!('result'in raw)||!Array.isArray(raw.result)||raw.result.length>2)return unavailable('invalid_observation');
-    if(!raw.result.length)return unavailable('not_found_or_not_visible');
-    const rows:Row[]=[];
-    for(const value of raw.result){
-      if(!value||typeof value!=='object'||Array.isArray(value))return unavailable('invalid_observation');
-      if(typeof value.name==='string'&&value.name!==name)return 'binding_error';
-      if(['sys_id','name','sys_updated_on','sys_mod_count'].some(key=>!Object.hasOwn(value,key)))return unavailable('field_unavailable');
-      const row=rowSchema.safeParse({sys_id:value.sys_id,name:value.name,sys_scope:Object.hasOwn(value,'sys_scope')?value.sys_scope:null,
-        sys_updated_on:value.sys_updated_on,sys_mod_count:value.sys_mod_count});
-      if(!row.success)return unavailable('invalid_observation');rows.push(Object.freeze(row.data));
-    }
-    return rows.length===2?unavailable('ambiguous_table'):Object.freeze({...header,state:'rows',rows:Object.freeze(rows)});
+    let raw:unknown;try{raw=body===null?null:JSON.parse(body);}catch{raw=null;}
+    return normalizeFixedTableValue(name,phase,at,raw,status);
   }
   return Object.freeze({
     issueSession(raw:unknown):Result<FixedSourceSession>{

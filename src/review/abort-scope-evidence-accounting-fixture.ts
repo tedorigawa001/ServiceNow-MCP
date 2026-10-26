@@ -104,6 +104,11 @@ export class FixtureAccountingSession{
       enterFinal:()=>{check();if(active||final)return fail('invalid_input');
         for(const table of tables.values())if(table.state==='pending'||table.state==='retryable')table.state='not_completed';
         final=true;},
+      rejectInitialTable:(target:string)=>{
+        check();const table=tables.get(target);
+        if(active||final||table?.state!=='available'||table.outcome!=='body')return fail('invalid_input');
+        table.state='unavailable';
+      },
       skipFinal:(target:string):PreparedFinalSkip=>{
         check();const key=`table_final:${target}`,table=tables.get(target),left=slots.get(key);
         if(!final||active||!table||[...slots.keys()][cursor]!==key||!left)return fail('invalid_input');

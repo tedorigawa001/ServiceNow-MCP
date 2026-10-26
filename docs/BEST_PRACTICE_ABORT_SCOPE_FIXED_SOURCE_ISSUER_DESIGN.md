@@ -1,6 +1,6 @@
 # AU-BR-006 固定source issuer：実session・取得・再読・予算結合
 
-Version: br006-fixed-source-issuer-draft-0.1 / Date: 2026-10-25。
+Version: br006-fixed-source-issuer-draft-0.2 / Date: 2026-10-26。
 Status: **合成issuerの内部型/生成claim/固定GET/正規化を実装。実session/transport/worker/上位結果への接続は未実施・未承認**。
 親：[接続契約](BEST_PRACTICE_ABORT_SCOPE_CONNECTION_CONTRACT_DESIGN.md)、[bounded予算設計](BEST_PRACTICE_ABORT_SCOPE_BOUNDED_BUDGET_DESIGN.md)。
 
@@ -232,3 +232,21 @@ C/R/G/Eはprepareから最終まで同じ所有者を使い、JSON正規化／�
 合成時刻はISO区間内・非逆行を検査し、deadline通知／AbortSignalで待機を中断する。**実時計・50/55秒のphase watchdog・全体60秒の自動強制中断はこのmoduleにはない**。既存実経路の60秒／210試行を緩和したものではなく、そのownerへ接続するまでは合成試験専用とする。実transport／worker、選択payloadとの対応、job別配送、上位診断owner・公開結果への接続は引き続き残課題。
 
 検証：[最終source／stream合成記録](E2E_BEST_PRACTICE_ABORT_SCOPE_FINAL_STREAM_SYNTHETIC_2026-10-26.md)。VM/監視/telemetry保留・Unknown・全体受付無効・本番permit非発行を維持する。
+
+## 13. 固定sourceとWeb Streams受領物の結合（fixture限定）
+
+`abort-scope-evidence-fixed-web-source.ts`は§12の親／all-metadata／table要求条件を、分離したfixture ownerと注入Web Streams adapterへ接続する。外部からURL・query・fields・HTTP status・観測時刻・raw body・用途permitを受け取らない。注入Response供給関数へ内部生成GET descriptorとAbortSignalだけを渡す。実HTTP／実sourceのReleasePermit／worker planへの接続ではない。
+
+`prepare`は親→metadataの基準値、`initial`はtable初回、`finalize`は親→metadata→table受付順の再読を行う。同名初回は凍結投影をcacheし、追加GET／課金をしない。並行開始・再finalize・終了／失効後のcache参照を拒否する。table名は合成callerの検証済み文字列であり、実workerの取得証拠ではない。metadataはall-metadata最大100件のsubsetで、実0.3 selection／payloadへの結合は未実装。
+
+`consumeSourceBody`は同machine／用途permit／phaseの未消費receiptだけを一度消費する。raw JSON値は外へ出さず固定schemaの必要列だけを新objectへ投影する。tableは既存issuerと共通の純粋normalizerで必要5列・0/1/2件・Global／null・name一致を検査する。parent／metadataはid・所属・版・昇順・最大100件を検査する。余分な列／外側キーを捨て、任意projector callbackやpayload取得口は作らない。コピー／別票／再消費／失効は固定理由で停止する。
+
+statusは取得時の捕捉値、`observed_ms`はcleanupと終端clock確認後の同予算の経過時計値をreceipt内部に保持する。caller申告の200／ISO時刻で代用しない。tableの`observed_at`は**1970-01-01を0とする経過時計の合成ISO表現**で、実wall-clock／PDI観測日時ではない。投影後と最終集約前にも同clockでcheckpointを行う。正式wall-clockへの結合は別工程。
+
+初回JSONの意味検査でunavailableになった時だけ、同receipt消費中に会計ownerのavailableをunavailableへ下げる。成功への昇格口はなく、finalはGETなしのslot skipで未使用Rだけを一度解放する。初回outcome=`body`は取得診断として保持し、意味検査の不足理由とは分ける。404／retry枯渇／構文不正／証拠cap不足は固定理由を保持して残slotを継続する。認証／binding矛盾／取消／全体停止／cleanup未確認は格下げしない。retry前にphase枠が尽きても受付済みslotを捨てず、final未実施終端へ残す。
+
+単一fixture ownerがC/G/E/R／retry／時計を所有する。投影・cache・比較は再課金せず、失敗body／超過chunkを返金しない。table最終取得前のE閉鎖もowner由来skipで残予約を解放する。親／metadataはskip不可。summaryはstable／changed／unverified・固定理由・`synthetic:true`・`evidence_issuance:disabled`・`seal:null`。親／metadata変更・不完全・scope nullでレビュー結果を確定しない。**stableでもseal／正式証拠／公開completionは発行しない。**
+
+残課題：実認証snapshot／sourceのReleasePermit／selection・payload receipt／worker jobの結合、本番専用issuerと非共有claim台帳、最終sealと上位診断、cap承認、実HTTP cleanup保証・全体work上界。旧§11／§12のraw合成frameやsealを新経路の取得証明へ流用しない。新moduleも`!dist/review/abort-scope-evidence*`の非同梱対象。VM／監視／telemetry保留・Unknown・全体受付無効を維持する。
+
+検証：[固定source／Web Streams結合の合成記録](E2E_BEST_PRACTICE_ABORT_SCOPE_FIXED_WEB_SOURCE_SYNTHETIC_2026-10-26.md)。
