@@ -331,4 +331,4 @@ machineの`diagnostics()`は固定primary／primary_detail、最後の失敗試�
 
 検証：[OAuth bootstrap・失敗分類の合成記録](E2E_BEST_PRACTICE_ABORT_SCOPE_OAUTH_BOOTSTRAP_SYNTHETIC_2026-10-26.md)。
 
-次段の[OAuth後の同transport→固定source移譲詳細設計draft-0.1](BEST_PRACTICE_ABORT_SCOPE_OAUTH_SOURCE_HANDOFF_DESIGN.md)で、単一run owner・固定dispatcher・session側handoff claim・認証世代とdestinationに結ぶlease移動を具体化した。設計のみで移譲口は未実装。counter／時計／transportを再生成せず、古いbootstrap facadeとroot取消の権限を分離する。
+次段の[OAuth後の同transport→固定source移譲詳細設計draft-0.2](BEST_PRACTICE_ABORT_SCOPE_OAUTH_SOURCE_HANDOFF_DESIGN.md)で、単一run owner・固定dispatcher・session側handoff claim・認証世代とdestinationに結ぶlease移動を具体化した。OH-01の内部型とclaimは独立合成issuer内だけに実装し、既存fixture／実sessionへの移譲口は未接続。counter／時計／transportを再生成せず、古いbootstrap facadeとroot取消の権限を分離する。

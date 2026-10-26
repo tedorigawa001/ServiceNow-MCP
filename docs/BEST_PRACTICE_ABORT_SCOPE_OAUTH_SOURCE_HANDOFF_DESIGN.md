@@ -1,7 +1,7 @@
 # AU-BR-006 OAuth後の同transport→固定source移譲 詳細設計
 
-Version: br006-oauth-source-handoff-draft-0.1 / Date: 2026-10-26。
-Status: **詳細設計のみ。移譲入口・lease・session側claimは未実装。fixture／実sessionの分離、正式発行口閉鎖、全体受付無効・Unknown、VM／監視／telemetry保留を維持**。
+Version: br006-oauth-source-handoff-draft-0.2 / Date: 2026-10-26。
+Status: **OH-01の内部型・session側claimを独立した合成issuer内に実装。既存fixture session／実sessionの移譲入口・dispatcher・source採用は未接続。正式発行口閉鎖、全体受付無効・Unknown、VM／監視／telemetry保留を維持**。
 
 親：[transport／OAuth bootstrap](BEST_PRACTICE_ABORT_SCOPE_TRANSPORT_RECEIPTS_DESIGN.md#17-未認証fixtureのoauth-bootstrapと固定失敗分類)、[固定source](BEST_PRACTICE_ABORT_SCOPE_FIXED_SOURCE_ISSUER_DESIGN.md#13-固定sourceとweb-streams受領物の結合fixture限定)。
 
@@ -151,3 +151,21 @@ primary・last_failure・cleanup dispositionは同run ownerの固定snapshotと�
 - **OH-03**：同transportを消費する固定source private入口へ接続。初回／最終・予約解放・fixture workerまでの会計oracle／終了検証を追加。
 
 名称／private API配置、追加管理allocationとcontrol費用、root制御facadeの具体的な公開範囲は実装前レビュー事項。本設計のlease権限分割はfixture内の限定方針で、本番のcredential／token管理・issuer承認ではない。実session／ReleasePermit／選択payload／worker jobの正式結合、公開BR-006契約、cap・全体work上界・本番終了policy・実機検証は未解決のまま。
+
+## 11. OH-01の限定実装と未接続範囲
+
+`abort-scope-evidence-handoff-model.ts`の`createSyntheticOAuthHandoffIssuer`は、factoryごとに分離した私有WeakMapを持つ純粋な合成モデル。session／root／destination／ticket／leaseを同realmから発行する。ここでのsession側claimは**合成Session record内**のrunClaimed／transportClaimed／handoffであり、既存`FixtureAccountingSession`や本番のlifecycleへ追加したclaimではない。実session objectやscalar copyは認識しない。OH-02以降の接続を確認済みと扱わない。
+
+createRunは既知sessionの生成claimを構成検査より先に消費し、失敗後の修正・別Update Setでの再生成を拒否する。認証modeはservice-accountだけ。Update Setをpinしたdestinationを内部生成し、model内のauth／adapter／budget／dispatcherのidentityを保持する。各identityは単なる合成opaque値で、実取得・実会計・注入I/Oを証明しない。
+
+completeOAuthの入力は合成outcomeとcleanupだけで、tokenやResponseを受けない。成功時の合成ready生成と、settleBootstrapが表すadapter-finally完了を分ける。offerは同model ready世代、identity、normal phase、idle・body／timer／scratchなし・OAuth以外未使用を要求する。ただしこれらの状態は合成issuerが与えるfixtureで、実OAuth summaryから本番ticketを発行する機構ではない。
+
+offer／adoptは各最大2回の同時計観測と固定数のidentity検査を行う。adoptは既知の同root ticketをconsumingにしてからdestination／readyを確認し、失敗後は再offerしない。最終clock callbackが再入でcancelやidentity差替えを起こしても、その後のlive／binding再検査でleaseを発行しない。通常phaseは元deadlineの5/6、hard期限は元deadlineの等号で拒否する。本modelにはtimer／中断処理や実時間保証はない。
+
+消費済みticket・stale bootstrap操作はinvalid_stateを返すだけで、成功済みsource leaseを止めない。root cancel／close／session revokeはleaseを失効させ、最初のprimaryを維持する。failed ticket再送は元のprimaryを返し、closed後のcancelでもclosed状態を維持する。未知のrevocation文字列はinternal_review_errorへ固定し、messageや秘密を保存・返却しない。
+
+敵対的fixture用のsimulateIdentityChangeはmodel recordだけを変更する。既存認証identityを読むgetter・本番登録口・任意adapter登録口・実token／権限変更の機能ではない。model内でも失効後の変更は拒否する。新moduleは既存`!dist/review/abort-scope-evidence*`の非同梱対象。
+
+合成41ケースで一意性・混入・失敗後再利用・stale操作／root取消・期限／clock再入を確認する。dispatch／chunk／payload／transport生成の呼出し口は存在せず、HTTPカウンタのコピーや再初期化も実装していない。したがって§7のC=7/8・G/E/R等の独立会計oracleや、実OAuth→固定source→workerの連続試験は**OH-03へ残る**。保持／allocator／control workの実上界は確認していない。
+
+検証：[OH-01内部型・session claimの合成記録](E2E_BEST_PRACTICE_ABORT_SCOPE_HANDOFF_OH01_SYNTHETIC_2026-10-26.md)。次はOH-02の固定dispatcherと既存adapterの所有者切替であり、今回の合成leaseを既存sourceへcastして接続しない。
