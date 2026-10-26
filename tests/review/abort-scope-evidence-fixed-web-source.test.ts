@@ -114,6 +114,7 @@ it('stops active source consumption on close with no late observation',async()=>
 it('does not claim a stable source when its parent changed even if the table stayed stable',async()=>{
   const x=await setup(r=>r.purpose==='parent_final'?new Response(JSON.stringify({result:[{sys_id:id,sys_updated_on:'2026-10-26',sys_mod_count:'2'}]})):response(r));
   get(await x.api.prepare());get(await x.api.initial('incident'));expect(get(await x.api.finalize())).toMatchObject({state:'changed',parent:'changed',seal:null});
+  expect(x.api.consumeObservations('incident')).toEqual({ok:false,code:'evidence_missing'});
 });
 it('releases exactly the unused final retry when E closes after a cleaned-up 503',async()=>{
   let finalAttempts=0;const x=await setup(r=>{

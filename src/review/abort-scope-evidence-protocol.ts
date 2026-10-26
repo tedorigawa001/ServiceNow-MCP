@@ -52,7 +52,7 @@ const workerCode = z.enum([...scopeAssetRejectionSchema.options, 'evidence_inval
   'invalid_observation_time', 'table_binding_mismatch', 'comparison_deadline_exceeded', 'internal_review_error']);
 export const scopeDiagnosticCodeSchema = z.enum([...workerCode.options, 'protocol_invalid', 'worker_unavailable',
   'worker_exited', 'authentication_failed', 'access_denied', 'deadline_exceeded', 'cancelled',
-  'request_budget_exceeded', 'receive_budget_exceeded', 'payload_budget_exceeded', 'scope_evidence_limit']);
+  'request_budget_exceeded', 'receive_budget_exceeded', 'payload_budget_exceeded', 'scope_evidence_limit', 'upstream_unavailable', 'phase_deadline_exceeded']);
 export const scopeDiagnosticStageSchema = z.enum(['owner', 'prepare', 'initial', 'final', 'compare', 'protocol', 'output']);
 export const scopeDiagnosticSchema = z.strictObject({ state: z.literal('stopped'), stage: scopeDiagnosticStageSchema,
   code: scopeDiagnosticCodeSchema, cleanup: z.enum(['not_started', 'confirmed', 'unconfirmed']) });

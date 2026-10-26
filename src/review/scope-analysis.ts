@@ -44,6 +44,7 @@ export function analyzeScopedCandidates(ast: AstNode, when: string | null, emit:
     fullText?: { report: (entry: AstNode, kind: 'add_query' | 'encoded_query') => void; unresolved: () => void };
     bindings?: { declared: (entry: AstNode) => void; dynamic: () => void };
     abort?: { effect: (entry: AstNode, effect: string) => void; unresolved: () => void };
+    abortScope?: { call: (entry: AstNode, call: AbortCall) => void; unresolved: () => void };
     display?: { write: (entry: AstNode, kind: string) => void; unresolved: () => void };
     uiPolicy?: { control: (entry: AstNode, kind: string, dynamic?: boolean) => void; unresolved: () => void };
     clientLookup?: { lookup: (entry: AstNode, kind: string) => void; unresolved: () => void };
@@ -67,6 +68,7 @@ export function analyzeScopedCandidates(ast: AstNode, when: string | null, emit:
   const scriptBindings = new WeakSet<AstNode>();
   const abortCalls = new WeakMap<AstNode, AbortCall>();
   let abortUnsafe = false;
+  const scopeAbortCalls: Array<{entry:AstNode;call:AbortCall}>=[];
   let displayUnsafe = false;
   let uiPolicyUnsafe = false;
   let lookupUnsafe = false;
@@ -232,12 +234,12 @@ export function analyzeScopedCandidates(ast: AstNode, when: string | null, emit:
       if (['ForInStatement', 'ForOfStatement'].includes(entry.type) && isAstNode(entry.left)
         && !['Identifier', 'VariableDeclaration'].includes(entry.left.type)) options.display.unresolved();
     }
-    if (options.abort) {
+    if (options.abort || options.abortScope) {
       const write = entry.type === 'AssignmentExpression' ? entry.left
         : entry.type === 'UpdateExpression' || entry.type === 'UnaryExpression' && entry.operator === 'delete' ? entry.argument : null;
       if (entry.type === 'WithStatement' || entry.type === 'CallExpression' && identifier(entry.callee, 'eval')
         || isAstNode(write) && write.type === 'MemberExpression' && staticMemberName(write) === 'setAbortAction') {
-        abortUnsafe = true; options.abort.unresolved();
+        abortUnsafe = true; options.abort?.unresolved(); options.abortScope?.unresolved();
       }
     }
     if (options.bindings) {
@@ -348,7 +350,7 @@ export function analyzeScopedCandidates(ast: AstNode, when: string | null, emit:
       : name === 'current' ? C : name === 'previous' ? P : name === 'GlideAjax' ? AJAX_CTOR
       : (options.uiPolicy || options.clientLookup || options.setValue) && name === 'g_form' ? FORM
         : options.clientLookup && name === 'GlideRecord' ? CLIENT_CTOR : options.display && name === 'g_scratchpad' ? LOCAL
-        : (options.query || options.fullText || options.abort || options.display || options.uiPolicy) && ['GlideRecord', 'GlideRecordSecure'].includes(name) ? QUERY_CTOR : UNKNOWN);
+        : (options.query || options.fullText || options.abort || options.abortScope || options.display || options.uiPolicy) && ['GlideRecord', 'GlideRecordSecure'].includes(name) ? QUERY_CTOR : UNKNOWN);
     if (binding.functionId !== scope.functionId) {
       // Direct lexical reference to the declared platform entry, not propagation of a user alias/call.
       if (binding.entryFlags) return origin(binding.entryFlags | UNKNOWN);
@@ -692,6 +694,13 @@ export function analyzeScopedCandidates(ast: AstNode, when: string | null, emit:
             abortCalls.set(entry, { receiver: receiver.flags === C && !abortUnsafe ? 'current' : receiver.flags & (C | UNKNOWN) ? 'unknown' : 'other',
               enabled: typeof value === 'boolean' ? value : null });
           }
+          if(options.abortScope){
+            if(key===null&&receiver.flags&C)options.abortScope.unresolved();
+            if(key==='setAbortAction'){
+              const args=entry.arguments as AstNode[],value=args.length===1&&!entry.optional&&!entry.callee.optional?primitive(args[0]):UNKNOWN_CONSTANT;
+              scopeAbortCalls.push({entry,call:{receiver:receiver.flags===C?'current':receiver.flags&(C|UNKNOWN)?'unknown':'other',enabled:typeof value==='boolean'?value:null}});
+            }
+          }
           if (options.query && key === null && receiver.flags & QUERY_RECORD) options.query.unresolved();
           if (options.query && key === 'addQuery' && (entry.arguments as AstNode[]).some(a => a.type === 'SpreadElement')) options.query.unresolved();
           if (options.query && key === 'addQuery' && (entry.arguments as AstNode[]).length === 3) {
@@ -819,6 +828,10 @@ export function analyzeScopedCandidates(ast: AstNode, when: string | null, emit:
     }
   }
   if (options.abort) analyzeAbortFlow(ast, abortCalls, budget, options.abort.effect, options.abort.unresolved);
+  if(options.abortScope){
+    if(abortUnsafe)options.abortScope.unresolved();
+    else for(const value of scopeAbortCalls){budget(0);options.abortScope.call(value.entry,value.call);}
+  }
   for (const candidate of uiPolicyCandidates) {
     budget(0);
     if (uiPolicyUnsafe) options.uiPolicy!.unresolved();

@@ -1,7 +1,7 @@
 # AU-BR-006 接続契約：worker計画・観測・比較応答・上位診断
 
-Version: br006-connection-contract-draft-0.1 / Date: 2026-10-25。
-Status: **合成channel限定のstrict schema・相関台帳・診断ownerを実装。実worker IPC/実source issuer/公開結果契約は未接続・未承認**。
+Version: br006-connection-contract-draft-0.2 / Date: 2026-10-26。
+Status: **非同梱の検証専用worker IPC・XML/AST計画・比較・fixture上位結果を接続。本番worker／実source issuer／公開結果への接続・承認は未実施**。
 親：[owner設計](BEST_PRACTICE_ABORT_SCOPE_OWNER_DESIGN.md)、[スコープ証拠・取得設計](BEST_PRACTICE_ABORT_SCOPE_EVIDENCE_DESIGN.md)。
 
 HTTP側の証拠専用受信枠・最終再読の動的予約・停止分類は[bounded予算詳細設計draft-0.1](BEST_PRACTICE_ABORT_SCOPE_BOUNDED_BUDGET_DESIGN.md)を参照。予約台帳とstream課金/中断/oracleは合成実装したが、実transport/workerへの接続は未実施。合成channelのIPC枠と区別し、既存全体60秒/210試行は維持する。
@@ -200,3 +200,21 @@ beginは同時未解決1件・単調増加要求番号・hello/prepare/初回/�
 現在のchannelはschema/相関/診断だけを確認し、XML/ASTを解析せず、比較器を実行せず、compare_okの比較データから上位レビュー結果や本番completionも発行しない。既存の合成証拠ownerとの一体接続、実ready受信/port、実source issuer、実worker/上位結果ownerの結合は次工程。準備計画のAST正当性や観測内容に対する比較の正しさは、wire構造検査だけでは証明できない。
 
 検証は[合成channel検証記録](E2E_BEST_PRACTICE_ABORT_SCOPE_CHANNEL_SYNTHETIC_2026-10-25.md)を参照。旧公開0.2/0.3・明示14/既定3規則とnpm非同梱を維持し、VM/監視/telemetry調査は保留のまま。
+
+## 11. 検証専用workerとfixture上位結果の接続
+
+§10のchannel単独検証に加え、`abort-scope-evidence-worker-core/entry/worker-review`とsource用bootstrapを非同梱prefix内に追加した。既存`review-worker.ts`やMCP dispatcherは変更しない。source実行では専用tsx bootstrap、compiled実行では固定`abort-scope-evidence-worker-entry.js`を選択する。env／argv／execArgvは空、既存worker同等のmemory/stack上限を適用。本文は信頼するworkerへの入力だけで、解析対象JavaScriptを実行しない。
+
+prepareは既存の安全XML抽出器でpayload／asset ID／BR型を検査し、実受領文字列と抽出scriptからhashを計算する。JavaScript parse失敗をunsupported_whenへ隠さない。既存の字句scope／受信側／限定定数解析へ任意optionのreport hookを追加し、before/current由来／1引数trueの位置だけを計画へ採用する。既存他規則のoption未指定経路は不変。false・独自同名method・別recordを候補にせず、未知receiver／引数・method差替えは未解決。runtimeで呼ばれることや中止の成否は証明しない。
+
+worker内部では同issuer/jobのpayload evidence・初回／最終phase・一度限りの比較claimを接続する。親と子の双方でstrict schema、run世代・要求番号・job・target・hash・phaseを照合し、同時未解決1件・job100・site累計100・計画256KiBを維持する。実Workerに結ばれたlistenerからの応答だけを受理するが、fixture入力とtrusted workerをTCBとする。nonce／hashを実source認証の証拠へ昇格させない。
+
+`FixtureScopeWorkerReview`は残時間callbackを起動／通信／終了確認へ伝播する。増加／非有限／例外は固定失敗へ正規化する。取消・不正応答・worker終了では新jobを再送せずterminateを要求し、元の残時間内だけ終了を待つ。terminateのPromiseが確認できなければcleanupをunconfirmedに固定し、先行primaryがなければoutput/internal_review_error、あればそのprimaryを保持する。late終了で結果を成功へ改めない。厳密なOS資源消失や強制終了の最悪時間上界を実証したものではない。
+
+上位は公開0.2／0.3ではなく`br006-fixture-result-0.1`という**検証専用strict契約**。provenance=fixture_input、synthetic=true、evidence_issuance=disabled、review_status=partial、analysis_complete=false、code_return_mode=noneを固定する。assetのnot_needed／rejected／comparison_only／not_completedと固定理由を分け、scope差候補数はcompared/different_referenceのsite数だけに対応させる。comparison_onlyは実中止失敗や正式findingを意味しない。停止／cleanup未確認後はcomparison_onlyをnot_completedに変更し、比較値と暫定候補数を撤回する。asset-local拒否は保持する。
+
+固定sourceの`consumeObservations`は、親／metadata／全tableのfinalがstableでR=0、同sourceがactiveな場合だけ、同tableの初回／最終正規化データを一度返す。コピーしたraw HTTP応答やcaller指定時刻を登録する口ではない。changed／unverified／失効／再消費を拒否し、closeで保持を外す。これはfixtureデータの合成接続で、実session／worker jobに結合した正式receiptやsealではない。実worker試験では固定GET→Web Streams会計→一度のdelivery→prepare/observe/compare→上位JSONまでを通し、C/Gが再課金されないことを確認した。
+
+本番の50/55/60秒・210試行を変更しない。本fixture workerは供給された残時間callbackを消費するだけで、実sessionのphase budget bindingは未実装。正式な認証snapshot／ReleasePermit／選択metadata・payload receipt／worker job、OAuth後の固定source移譲、公開BR-006語彙・coverage、全体work／保持上界・cap承認・実機検証は残る。したがって本番レビュー機能の最終完了／有効化とは扱わない。VM／監視／telemetry保留・Unknown・全体受付無効を維持する。
+
+検証：[worker・上位結果統合の合成記録](E2E_BEST_PRACTICE_ABORT_SCOPE_WORKER_INTEGRATION_SYNTHETIC_2026-10-26.md)。

@@ -4,6 +4,7 @@ import { defineConfig } from 'vitest/config';
 // 5 s preflight caps. Run them after the rest of the suite, on few workers, so the suite's own
 // parallel load does not eat that margin.
 const realHost = [
+  'tests/review/abort-scope-evidence-worker-native.test.ts',
   'tests/review/r2-loopback.test.ts', 'tests/review/r2-launcher-run.test.ts', 'tests/review/r2-approved-launch.test.ts',
   'tests/review/r2-launcher-entry.test.ts', 'tests/review/r2-plan-check.test.ts', 'tests/review/r2-launcher-check-plan.test.ts',
   'tests/review/r2-supervisor.test.ts', 'tests/review/r2-bound-host.test.ts',

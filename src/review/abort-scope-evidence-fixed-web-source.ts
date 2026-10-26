@@ -22,12 +22,14 @@ export function createFixtureFixedWebSource(session:object,owner:PreparedEvidenc
   const made=createFixtureWebStreamTransport(session,owner,(r,signal)=>source(descriptor(r),signal));
   if(!made.ok)return made;
   const api=made.value,m=api.machine,tables=new Map<string,Table>();
+  const deliveries=new Map<string,Readonly<{initial:FixedSourceNormalized;final:FixedSourceNormalized;synthetic:true;evidence_issuance:'disabled'}>>();
+  let deliverable=false;
   type Projection=Extract<ReturnType<typeof m.consumeSourceBody>,{ok:true}>['value'];
   let state:'new'|'normal'|'final'|'done'|'failed'='new',busy=false,primary:string|null=null;
   let parent:Projection|null=null,metadata:Projection|null=null;
   const diagnostics:Readonly<{stage:string;reason:string}>[]=[];
   const reject=(code:string)=>({ok:false as const,code:primary??code});
-  function fail(code:string){primary??=code;state='failed';parent=null;metadata=null;tables.clear();m.stop('closed');return reject(code);}
+  function fail(code:string){primary??=code;state='failed';parent=null;metadata=null;tables.clear();deliveries.clear();deliverable=false;m.stop('closed');return reject(code);}
   function permit(kind:FakeDispatchRequest['purpose'],target?:string,slot?:FakeTransportSlot){
     return m.purpose(kind,{source:m.source,phase:m.phase(),...(target?{target}:{}),...(slot?{slot}:{})});
   }
@@ -114,14 +116,22 @@ export function createFixtureFixedWebSource(session:object,owner:PreparedEvidenc
           }
           const value=final?.state==='rows'&&t.initial.rows[0].sys_scope!==null&&final.rows[0].sys_scope!==null
             ?JSON.stringify(t.initial.rows)===JSON.stringify(final.rows)?'stable':'changed':'unverified';
+          if(final)deliveries.set(name,Object.freeze({initial:t.initial,final,synthetic:true,evidence_issuance:'disabled'}));
           summaries.push(Object.freeze({name,state:value,reason:final?.state==='unavailable'?final.reason:r.value.reason??(value==='unverified'?'scope_unknown':null)}));
         }
         const end=m.checkpoint();if(!end.ok)return fail(end.code);
         if(api.stats().reserved!==0||m.stats().primary)return fail(m.stats().primary??'invalid_state');
         const states=[parentState,metadataState,...summaries.map(s=>s.state)],result=states.includes('changed')?'changed':states.includes('unverified')?'unverified':'stable';
+        deliverable=result==='stable';if(!deliverable)deliveries.clear();
         state='done';parent=null;metadata=null;tables.clear();
         return good(Object.freeze({state:result,parent:parentState,metadata:metadataState,tables:Object.freeze(summaries),diagnostics:Object.freeze([...diagnostics]),synthetic:true,evidence_issuance:'disabled',seal:null}));
       }finally{busy=false;}
+    },
+    /** One-shot normalized fixture data only, not a source receipt, worker job claim or production seal. */
+    consumeObservations(name:string){
+      const active=m.checkpoint();if(!active.ok)return fail(active.code);
+      if(state!=='done'||busy||!deliverable)return fail('evidence_missing');
+      const value=deliveries.get(name);if(!value)return fail('invalid_state');deliveries.delete(name);return good(value);
     },
     close(){return fail('closed');},
     stats:()=>Object.freeze({...api.stats(),state,primary:primary??m.stats().primary,evidence_issuance:'disabled' as const}),

@@ -252,3 +252,5 @@ statusは取得時の捕捉値、`observed_ms`はcleanupと終端clock確認後�
 検証：[固定source／Web Streams結合の合成記録](E2E_BEST_PRACTICE_ABORT_SCOPE_FIXED_WEB_SOURCE_SYNTHETIC_2026-10-26.md)。
 
 後続の[transport設計§17](BEST_PRACTICE_ABORT_SCOPE_TRANSPORT_RECEIPTS_DESIGN.md#17-未認証fixtureのoauth-bootstrapと固定失敗分類)は未認証fixtureのOAuth bootstrap・ready遷移と固定診断までを実装した。認証後の同transportを本固定sourceへ移譲する入口は未接続で、二度目のfactoryによる会計作り直しを認めない。実session／token／ReleasePermit／workerの取得証拠は引き続き未接続。
+
+[worker接続設計§11](BEST_PRACTICE_ABORT_SCOPE_CONNECTION_CONTRACT_DESIGN.md#11-検証専用workerとfixture上位結果の接続)では、stable final後の`consumeObservations`による一度限りの正規化データdeliveryを追加した。実worker threadとの合成結合までを検証し、changed／unverified／失効／再消費を拒否する。正式receipt／job binding／sealを発行したものではなく、本番発行口の閉鎖は維持する。
