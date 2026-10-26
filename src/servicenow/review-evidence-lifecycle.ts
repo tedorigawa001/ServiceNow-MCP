@@ -1,8 +1,16 @@
 /** Internal prepared-only lifecycle. No I/O, source evidence, receipt, permit or worker authority. */
 import type { ReadFailureCode } from './bounded-read.js';
+import { z } from 'zod';
 export type PreparedOwnerFailure = ReadFailureCode | 'invalid_state' | 'evidence_binding_mismatch' | 'internal_review_error';
 declare const ownerBrand: unique symbol;
 export type PreparedEvidenceOwner = { readonly [ownerBrand]: true };
+declare const draftBrand: unique symbol;
+type DraftHandle<K extends string> = { readonly [draftBrand]: K };
+export type PreparedSelectionWindow = DraftHandle<'window'>;
+export type PreparedSelectedRow = DraftHandle<'row'>;
+export type PreparedPayloadStart = DraftHandle<'payload_start'>;
+export type PreparedPayloadReady = DraftHandle<'payload_ready'>;
+export type PreparedTransferClaim = DraftHandle<'transfer'>;
 type Result<T> = Readonly<{ok:true;value:T}|{ok:false;code:PreparedOwnerFailure}>;
 type AuthSnapshotIdentity = object;
 type Session = { snapshot?:object; auth:AuthSnapshotIdentity; ready?:object; live:boolean;
@@ -10,7 +18,23 @@ type Session = { snapshot?:object; auth:AuthSnapshotIdentity; ready?:object; liv
 type FixtureSource = { session:object; auth:AuthSnapshotIdentity; ready?:object; permit:object|null;
   claimed:boolean; parentReady:boolean; finalStarted:boolean; matched:boolean };
 type Owner = { state:'prepared'|'revoked'; code?:PreparedOwnerFailure; revocations:number;
+  windowStarted?:boolean; window?:DraftWindow;
   binding?:{session:Session;source:FixtureSource;auth:AuthSnapshotIdentity;ready:object;permit:object} };
+const id=z.string().regex(/^[a-f0-9]{32}$/),version={sys_updated_on:z.string().min(1).max(40),sys_mod_count:z.string().regex(/^\d{1,20}$/)};
+const rowSchema=z.strictObject({sys_id:id,update_set:id,name:z.string().min(1).max(200),type:z.string().max(200),action:z.string().max(40),...version});
+const windowSchema=z.strictObject({parent:z.strictObject({sys_id:id,state:z.string().max(100),application:z.string().max(32),...version}),
+  selection_mode:z.enum(['bounded_all','review_targets']).optional(),max_records:z.number().int().min(1).max(100),
+  requested_rule_ids:z.tuple([z.literal('AU-BR-006')]),filter_version:z.literal('target-prefix-0.1').nullable().optional(),
+  rows:z.array(rowSchema).max(101)});
+type RowData=z.infer<typeof rowSchema>;
+type DraftWindow={owner:Owner;session?:Session;data?:z.infer<typeof windowSchema>;rows:DraftRow[]};
+type DraftRow={window:DraftWindow;handle:PreparedSelectedRow;ordinal:number;data?:Readonly<RowData>;start?:DraftStart};
+type DraftStart={row:DraftRow;state:'started'|'ready'|'unavailable'|'transferred';ready?:PreparedPayloadReady};
+type DraftReady={start:DraftStart;used:boolean};
+type DraftTransfer={start:DraftStart;used:boolean};
+const windows=new WeakMap<PreparedSelectionWindow,DraftWindow>(),rows=new WeakMap<PreparedSelectedRow,DraftRow>();
+const starts=new WeakMap<PreparedPayloadStart,DraftStart>(),readyTickets=new WeakMap<PreparedPayloadReady,DraftReady>();
+const transfers=new WeakMap<PreparedTransferClaim,DraftTransfer>();
 const sessions=new WeakMap<object,Session>(),sources=new WeakMap<object,FixtureSource>(),owners=new WeakMap<PreparedEvidenceOwner,Owner>();
 const opaque=()=>Object.freeze(Object.create(null)) as object;
 const ok=<T>(value:T):Result<T>=>Object.freeze({ok:true,value});
@@ -24,6 +48,9 @@ const codes=new Set<PreparedOwnerFailure>([...Object.keys(readCodes) as ReadFail
 function code(raw:unknown):PreparedOwnerFailure{return codes.has(raw as PreparedOwnerFailure)?raw as PreparedOwnerFailure:'internal_review_error';}
 function revoke(owner:Owner,reason:PreparedOwnerFailure){
   if(owner.state==='revoked')return;
+  if(owner.binding)owner.binding.session.failure??=reason;
+  if(owner.window){for(const row of owner.window.rows){row.data=undefined;row.start=undefined;}
+    owner.window.data=undefined;owner.window.session=undefined;owner.window.rows=[];owner.window=undefined;}
   owner.code??=reason;owner.state='revoked';owner.binding=undefined;owner.revocations++;
 }
 
@@ -89,4 +116,81 @@ export function assertPreparedOwner(owner:PreparedEvidenceOwner):Result<true>{
 /** A closed gate, not a receipt factory. Cannot produce a production-shaped success. */
 export function refusePreparedEvidenceIssuance(owner:PreparedEvidenceOwner):Result<never>{
   const live=assertPreparedOwner(owner);return live.ok?no('invalid_state'):live;
+}
+
+function boundOwner(owner:PreparedEvidenceOwner,session:object):Result<Owner>{
+  const checked=assertPreparedOwner(owner);if(!checked.ok)return checked;
+  const o=owners.get(owner)!;
+  if(o.binding!.session!==sessions.get(session)){revoke(o,'evidence_binding_mismatch');return no(o.code!);}
+  return ok(o);
+}
+function draftFailure(owner:Owner,reason:PreparedOwnerFailure):Result<never>{revoke(owner,reason);return no(owner.code!);}
+function boundWindow(owner:Owner,window:PreparedSelectionWindow):Result<DraftWindow>{
+  const w=windows.get(window);
+  return w?.owner===owner&&owner.window===w&&w.session===owner.binding?.session?ok(w):draftFailure(owner,'evidence_binding_mismatch');
+}
+function eligible(row:Readonly<RowData>){return row.action==='INSERT_OR_UPDATE'&&/^sys_script_[a-f0-9]{32}$/.test(row.name);}
+
+/** Non-authoritative fixture window. No real source/body/cleanup proof may be registered here. */
+export function createPreparedFixtureWindow(owner:PreparedEvidenceOwner,session:object,raw:unknown):Result<PreparedSelectionWindow>{
+  const bound=boundOwner(owner,session);if(!bound.ok)return bound;const o=bound.value;
+  if(o.windowStarted)return draftFailure(o,'invalid_state');o.windowStarted=true;
+  try{
+    const copy=structuredClone(raw),live=boundOwner(owner,session);if(!live.ok)return live;
+    const p=windowSchema.safeParse(copy);if(!p.success)return draftFailure(o,'invalid_input');
+    const d=p.data,mode=d.selection_mode??'bounded_all';
+    if(d.rows.length>d.max_records+1||(mode==='review_targets')!==(d.filter_version==='target-prefix-0.1'))return draftFailure(o,'invalid_input');
+    if(d.rows.some(r=>r.update_set!==d.parent.sys_id)||d.rows.some((r,n)=>n>0&&r.sys_id<=d.rows[n-1].sys_id))return draftFailure(o,'evidence_binding_mismatch');
+    if(mode==='review_targets'&&d.rows.some(r=>r.action!=='INSERT_OR_UPDATE'||!r.name.startsWith('sys_script_')
+      ||r.name.includes('sys_script_client_')||r.name.includes('sys_script_include_')))return draftFailure(o,'candidate_filter_violation');
+    const handle=opaque() as PreparedSelectionWindow,w:DraftWindow={owner:o,session:o.binding!.session,data:d,rows:[]};
+    for(const [ordinal,data] of d.rows.slice(0,d.max_records).entries()){
+      const rowHandle=opaque() as PreparedSelectedRow,row:DraftRow={window:w,handle:rowHandle,ordinal,data:Object.freeze({...data})};
+      rows.set(rowHandle,row);w.rows.push(row);
+    }
+    windows.set(handle,w);o.window=w;return ok(handle);
+  }catch{return draftFailure(o,'invalid_input');}
+}
+export function preparedWindowInfo(owner:PreparedEvidenceOwner,session:object,window:PreparedSelectionWindow){
+  const b=boundOwner(owner,session);if(!b.ok)return b;const w=boundWindow(b.value,window);if(!w.ok)return w;
+  const d=w.value.data!;
+  return ok(Object.freeze({state:'draft' as const,selection_mode:d.selection_mode??'bounded_all',mode_supplied:d.selection_mode!==undefined,
+    selected:w.value.rows.length,metadata_seen:d.rows.length,truncated:d.rows.length>d.max_records,evidence_issuance:'disabled' as const}));
+}
+export function preparedWindowRow(owner:PreparedEvidenceOwner,session:object,window:PreparedSelectionWindow,ordinal:number):Result<PreparedSelectedRow>{
+  const b=boundOwner(owner,session);if(!b.ok)return b;const w=boundWindow(b.value,window);if(!w.ok)return w;
+  if(!Number.isInteger(ordinal)||ordinal<0||ordinal>=w.value.rows.length)return draftFailure(b.value,'evidence_binding_mismatch');
+  return ok(w.value.rows[ordinal].handle);
+}
+export function beginPreparedPayload(owner:PreparedEvidenceOwner,session:object,window:PreparedSelectionWindow,row:PreparedSelectedRow):Result<PreparedPayloadStart>{
+  const b=boundOwner(owner,session);if(!b.ok)return b;const w=boundWindow(b.value,window);if(!w.ok)return w;
+  const r=rows.get(row);if(!r||r.window!==w.value)return draftFailure(b.value,'evidence_binding_mismatch');
+  if(r.start)return draftFailure(b.value,'invalid_state');
+  // Consume the row start even if this asset turns out to be ineligible; never repair/retry it.
+  const start:DraftStart={row:r,state:'started'};r.start=start;
+  if(!r.data||!eligible(r.data))return draftFailure(b.value,'invalid_state');
+  const ticket=opaque() as PreparedPayloadStart;starts.set(ticket,start);return ok(ticket);
+}
+/** Fake completion disposition only: carries no bytes, hashes, cleanup claims or real receipt. */
+export function settlePreparedPayload(owner:PreparedEvidenceOwner,session:object,ticket:PreparedPayloadStart,outcome:'ready'|'unavailable'):Result<PreparedPayloadReady|null>{
+  const b=boundOwner(owner,session);if(!b.ok)return b;const start=starts.get(ticket);
+  if(!start||start.row.window.owner!==b.value||start.row.window!==b.value.window)return draftFailure(b.value,'evidence_binding_mismatch');
+  if(start.state!=='started')return draftFailure(b.value,'invalid_state');
+  start.state='unavailable';
+  if(outcome==='unavailable')return ok(null);
+  if(outcome!=='ready')return draftFailure(b.value,'invalid_input');
+  start.state='ready';const ready=opaque() as PreparedPayloadReady;start.ready=ready;readyTickets.set(ready,{start,used:false});return ok(ready);
+}
+export function claimPreparedTransfer(owner:PreparedEvidenceOwner,session:object,row:PreparedSelectedRow,ready:PreparedPayloadReady):Result<PreparedTransferClaim>{
+  const b=boundOwner(owner,session);if(!b.ok)return b;const r=rows.get(row),ticket=readyTickets.get(ready);
+  if(!r||r.window.owner!==b.value||r.window!==b.value.window||!ticket||ticket.start.row!==r||r.start!==ticket.start)return draftFailure(b.value,'evidence_binding_mismatch');
+  if(ticket.used||ticket.start.state!=='ready'||ticket.start.ready!==ready)return draftFailure(b.value,'invalid_state');
+  ticket.used=true;ticket.start.state='transferred';
+  const transfer=opaque() as PreparedTransferClaim;transfers.set(transfer,{start:ticket.start,used:false});return ok(transfer);
+}
+export function consumePreparedTransfer(owner:PreparedEvidenceOwner,session:object,claim:PreparedTransferClaim){
+  const b=boundOwner(owner,session);if(!b.ok)return b;const t=transfers.get(claim);
+  if(!t||t.start.row.window.owner!==b.value||t.start.row.window!==b.value.window)return draftFailure(b.value,'evidence_binding_mismatch');
+  if(t.used)return draftFailure(b.value,'invalid_state');t.used=true;
+  return ok(Object.freeze({state:'simulated' as const,synthetic:true as const,evidence_issuance:'disabled' as const}));
 }

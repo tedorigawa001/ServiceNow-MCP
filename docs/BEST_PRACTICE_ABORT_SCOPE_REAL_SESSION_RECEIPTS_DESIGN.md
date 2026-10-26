@@ -1,7 +1,7 @@
 # AU-BR-006 実session claim・private受領物・終了時失効の接続詳細設計
 
 Version: br006-real-session-receipts-draft-0.1 / Date: 2026-10-26。
-Status: **owner内部型・実session側claim基盤・認証identity／ready結合・同期revokeをfake依存で部分実装。正式receipt／実source／worker接続は未実装・未承認**。
+Status: **owner／session lifecycleに加え、選択window／行draftとpayload開始・移譲claimをfake依存で部分実装。正式receipt／実source／worker接続は未実装・未承認**。
 親：[固定source issuer](BEST_PRACTICE_ABORT_SCOPE_FIXED_SOURCE_ISSUER_DESIGN.md)、[接続契約](BEST_PRACTICE_ABORT_SCOPE_CONNECTION_CONTRACT_DESIGN.md)、[bounded予算](BEST_PRACTICE_ABORT_SCOPE_BOUNDED_BUDGET_DESIGN.md)。
 
 ## 1. 範囲と現行との差
@@ -221,4 +221,41 @@ session getの認証完了通知とstop/closeだけを結び、HTTP許可先・o
 
 runtime lifecycleはbounded-readのimport先なのでnpmへ同梱する。fake issuerと既存合成証拠moduleは従来の`!dist/review/abort-scope-evidence*`で除外する。新依存パッケージは追加しない。梱包テストにruntime lifecycleの存在確認を加えた。
 
-検証は[session owner合成記録](E2E_BEST_PRACTICE_ABORT_SCOPE_SESSION_OWNER_SYNTHETIC_2026-10-26.md)。次は選択window／行receipt・payload開始／移譲claimの内部型を、正式発行を禁止したまま具体化する。
+検証は[session owner合成記録](E2E_BEST_PRACTICE_ABORT_SCOPE_SESSION_OWNER_SYNTHETIC_2026-10-26.md)。選択window／行receipt・payload開始／移譲claimの後続部分実装は次節に記す。
+
+## 12. 選択window／行draftとpayload claimの限定実装
+
+### 12.1 型と発行元
+
+同じruntime coreにPreparedSelectionWindow／PreparedSelectedRow／PreparedPayloadStart／PreparedPayloadReady／PreparedTransferClaimを追加した。すべて凍結opaque handleで、非公開WeakMapに同owner／session・window・行・開始票の参照を結合する。fake issuerのowned検査を通し、coreでもownerの認証／permit結合と失効を再検査する。raw record・同じ値・cloneでは受理しない。
+
+これはSelectionWindowReceipt／PayloadReadReceiptの本番発行実装ではない。登録口はfake issuerからfixtureを受けるだけで、実source／ReleasePermit／typed transport／cleanup／jobの真正性は未証明。ownerはpreparedのまま、正式な証拠発行gateは必ず拒否する。
+
+### 12.2 windowと選択範囲
+
+window開始claimをfixtureのclone／検査より前に消費する。fixtureを一度だけcloneし、その間のclose／再入を再検査する。不正入力で失敗しても修正fixtureによる再開始はできない。
+
+parentはsys_id/state/application/版、metadataはsys_id/update_set/name/type/action/版をstrict検査し、所属・昇順・重複なしを要求する。max_recordsは1..100、取得行はmax_records+1以下・最大101、先頭max_recordsだけに行draftを発行する。lookaheadはmetadata_seen／truncatedに残すが行draftを発行しない。空windowから行を補完しない。
+
+今回のfake recipeはrequested_rule_ids=['AU-BR-006']だけの限定subset。selection_mode省略はbounded_allとして省略状態を保持し、review_targetsはtarget-prefix-0.1を要求する。BR候補のaction/name prefixとclient/include除外を全取得行（lookaheadを含む）へ検査する。混在ruleset、実sourceのcandidatePolicy identity／選択windowとの結合は未接続であり、公開ルール選択や0.2/0.3を変更していない。
+
+行のreadonly lookupは同handleを繰返し返すだけで再取得権限を増やさない。外部へ返すwindow summaryはmode／省略有無／件数／truncated／disabledだけ。本文・metadataの全列・認証参照を返すgetterは作らない。
+
+### 12.3 開始・fake完了・移譲
+
+1. beginPreparedPayloadは同owner/session/window/行を検査して開始claimを一度だけ取得する。INSERT_OR_UPDATEかつ厳密なsys_script_<32桁>だけを対象とし、Client Script／Script Include／削除／不正名を拒否する。
+2. settlePreparedPayloadは開始票を一度だけreadyまたはunavailableへ終端化する。readyは**本文を持たないfake完了票**であり、HTTP成功・payload受信・版一致・cleanupを証明しない。unavailableからreadyへの修正や開始やり直しは拒否する。
+3. claimPreparedTransferは同じ行に対応するfake完了票を一度だけ消費し、移譲claimを発行する。別行／別ownerの完了票は混ぜられない。
+4. consumePreparedTransferは移譲claimを一度だけ消費し、state=simulated／synthetic=true／evidence_issuance=disabledだけを返す。本文出力・GET・postMessage・実job配送はない。実worker/port/jobへの結合は依然未実装。
+
+重複・混入・不正順序は対象ownerを失効させ、先行理由を保持する。無関係な他ownerの票は消費しない。ownerの同期revokeはwindowのsnapshot／session参照と全行のdata／start参照を外す。保持済みhandleからの全操作は元の停止理由で拒否される。機能的な失効と参照除去を実装したのであり、GC完了や物理ゼロ化を認定しない。
+
+### 12.4 有限構造と未対応
+
+owner当たりwindowは1つ、選択行は最大100、各行に開始票／fake完了票／移譲claimは各最大1。selection/claim handleは最大401（既存owner handleを除く）。snapshotは最大101行で、収集／失効はO(max_records)。本文は保持せず、C/G/payload会計やHTTP／timer／IPCを追加しない。これは実transport受信上限・IPC保持・全体work受付の承認ではない。
+
+今回のclaimはfake状態機械の検証に限定し、通常phaseへの実取得admissionやphase世代に結ぶ発行permitは未接続。ownerは通常cutoffだけでは失効しないため、prepared handleの存在を通常phaseのGET許可へ転用しない。hard deadline通知／取消／closeでのowner失効は継承する。
+
+残課題は実sourceの選択receipt／deep release snapshot・typed body／cleanup・同payloadの版／課金・phase admission・実worker job移譲・final seal／上位結果。これらの接続前にfake完了票やdraftを正式receiptへ昇格しない。
+
+検証：[selection／claim合成記録](E2E_BEST_PRACTICE_ABORT_SCOPE_SELECTION_CLAIMS_SYNTHETIC_2026-10-26.md)。VM／監視／telemetry保留、Unknown・全体受付無効・正式発行口閉鎖を維持する。

@@ -2,6 +2,9 @@
 import { z } from 'zod';
 import { registerPreparedFixtureSource, claimPreparedFixtureOwner, preparedOwnerStatus, assertPreparedOwner,
   refusePreparedEvidenceIssuance, type PreparedEvidenceOwner } from '../servicenow/review-evidence-lifecycle.js';
+import { createPreparedFixtureWindow,preparedWindowInfo,preparedWindowRow,beginPreparedPayload,settlePreparedPayload,
+  claimPreparedTransfer,consumePreparedTransfer,type PreparedSelectionWindow,type PreparedSelectedRow,
+  type PreparedPayloadStart,type PreparedPayloadReady,type PreparedTransferClaim } from '../servicenow/review-evidence-lifecycle.js';
 const schema=z.strictObject({parent_ready:z.boolean(),final_started:z.boolean(),release_match:z.enum(['matched','mismatched','unknown'])});
 export function createFakeSessionOwnerIssuer(){
   const known=new WeakSet<object>();
@@ -25,5 +28,12 @@ export function createFakeSessionOwnerIssuer(){
     status(owner:PreparedEvidenceOwner){return owned.has(owner)?preparedOwnerStatus(owner):{ok:false as const,code:'evidence_binding_mismatch'};},
     check(owner:PreparedEvidenceOwner){return owned.has(owner)?assertPreparedOwner(owner):{ok:false as const,code:'evidence_binding_mismatch'};},
     issue(owner:PreparedEvidenceOwner){return owned.has(owner)?refusePreparedEvidenceIssuance(owner):{ok:false as const,code:'evidence_binding_mismatch'};},
+    window(owner:PreparedEvidenceOwner,session:object,raw:unknown){return owned.has(owner)?createPreparedFixtureWindow(owner,session,raw):{ok:false as const,code:'evidence_binding_mismatch'};},
+    windowInfo(owner:PreparedEvidenceOwner,session:object,window:PreparedSelectionWindow){return owned.has(owner)?preparedWindowInfo(owner,session,window):{ok:false as const,code:'evidence_binding_mismatch'};},
+    row(owner:PreparedEvidenceOwner,session:object,window:PreparedSelectionWindow,ordinal:number){return owned.has(owner)?preparedWindowRow(owner,session,window,ordinal):{ok:false as const,code:'evidence_binding_mismatch'};},
+    begin(owner:PreparedEvidenceOwner,session:object,window:PreparedSelectionWindow,row:PreparedSelectedRow){return owned.has(owner)?beginPreparedPayload(owner,session,window,row):{ok:false as const,code:'evidence_binding_mismatch'};},
+    settle(owner:PreparedEvidenceOwner,session:object,start:PreparedPayloadStart,outcome:'ready'|'unavailable'){return owned.has(owner)?settlePreparedPayload(owner,session,start,outcome):{ok:false as const,code:'evidence_binding_mismatch'};},
+    transfer(owner:PreparedEvidenceOwner,session:object,row:PreparedSelectedRow,ready:PreparedPayloadReady){return owned.has(owner)?claimPreparedTransfer(owner,session,row,ready):{ok:false as const,code:'evidence_binding_mismatch'};},
+    consumeTransfer(owner:PreparedEvidenceOwner,session:object,claim:PreparedTransferClaim){return owned.has(owner)?consumePreparedTransfer(owner,session,claim):{ok:false as const,code:'evidence_binding_mismatch'};},
   });
 }
