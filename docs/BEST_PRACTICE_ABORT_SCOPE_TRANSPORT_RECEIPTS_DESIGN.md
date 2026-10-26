@@ -1,7 +1,9 @@
 # AU-BR-006 実transport：用途別body receipt・cleanup証拠・単一予算の接続詳細設計
 
-Version: br006-transport-receipts-draft-0.4 / Date: 2026-10-26。
-Status: **fake I/O状態遷移・実session単一会計・理由付きfinal skipと予約解放を合成検証。実transport接続・cap承認は未実施。正式な証拠発行口は閉鎖を維持**。
+Version: br006-transport-receipts-draft-0.5 / Date: 2026-10-26。
+Status: **fixture登録・owner・claim・会計を実sessionから分離。合成state／final skipは開発専用sessionで検証。実transport接続・cap承認・正式発行は未実装／閉鎖**。
+
+**現行実装の境界は§15を優先する。** §13のfixtureから実session会計へ接続する経路は廃止した。以前の検証記録は当時の実行記録であり、安全な本番接続の証拠として使わない。
 親：[実session／private受領物](BEST_PRACTICE_ABORT_SCOPE_REAL_SESSION_RECEIPTS_DESIGN.md)、[bounded予算](BEST_PRACTICE_ABORT_SCOPE_BOUNDED_BUDGET_DESIGN.md)、[固定source issuer](BEST_PRACTICE_ABORT_SCOPE_FIXED_SOURCE_ISSUER_DESIGN.md)。
 
 ## 1. 範囲と不変条件
@@ -219,7 +221,7 @@ clockは注入した同期値を観測し、逆行・非有限値・throw・絶�
 
 検証：[fake transport状態遷移の記録](E2E_BEST_PRACTICE_ABORT_SCOPE_TRANSPORT_STATE_SYNTHETIC_2026-10-26.md)。fake factsや診断件数を正式発行証拠へ昇格させない。
 
-## 13. 実session binding・単一会計のfake接続
+## 13. 実session binding・単一会計のfake接続（旧接続・廃止）
 
 `createSessionBoundFakeTransport`は、登録済み実`BoundedReadSession`とprepared ownerを引数に取り、lifecycle内の同session／AuthSnapshotIdentity／ready世代／fake source・permit結合を検査する。同session側のtransport claimを先に一度だけ消費し、再生成や失敗後の再準備を拒否する。実source／ReleasePermitの証明へは昇格させない。
 
@@ -269,3 +271,17 @@ E閉鎖理由を優先し、初回outcomeは別列`initial_outcome`として保�
 結果は`state: skipped`・固定reason・initial_outcome・released_attemptsと、`synthetic: true`／`evidence_issuance: disabled`だけの凍結診断票。本文・秘密・正式証拠・成功completionは発行しない。最終固定sourceからの自動skip、sourceの意味検査で初回をunavailableへ落とす経路、実worker／公開JSONへの写像は未接続である。
 
 検証：[final skip／予約解放の合成記録](E2E_BEST_PRACTICE_ABORT_SCOPE_FINAL_SKIP_SYNTHETIC_2026-10-26.md)。
+
+## 15. fixtureと実sessionの権限分離
+
+旧経路は、梱包対象のlifecycleにfixture登録口が残り、fixtureのfacts／permitから生成したownerで実sessionのtransport factoryを呼べた。wrapperの梱包除外だけではこのraw exportを防げなかった。同processで実session参照を持つコードからの経路であり、外部MCP入力からの到達やリモート悪用を実証したものではない。
+
+現行は登録・source・owner・draft・claimのWeakMapを`abort-scope-evidence-fixture-lifecycle.ts`へ移動し、既存prefixでnpm梱包から除外する。実sessionのlifecycleは別WeakMapで登録・auth-ready・失効だけを扱い、fixture登録・owner生成・transport claimのexportを持たない。実`BoundedReadSession`からtransport factory・transportOwned・fixture専用会計処理を撤去した。fixture ownerを渡すだけで実sessionのmode・counter・stop権限を得る入口はない。
+
+- `FixtureAccountingSession`は合成baselineイベントから始まる独立した台帳で、実sessionのstatsをコピーしない。C/G/E/payload/R・retry・final skip・期限・取消の実験はこのfixtureだけで行う。本番の単一budget owner接続は**未実装へ戻す**。
+- `FixtureReadSession`はテストで実GETのfake依存結果を観測するラッパー。ラッパー自身をfixture台帳へ登録し、内包する実sessionは登録しない。fixture失敗は実sessionのclaimやfailureを書き換えない。auth／cancel／deadline／payload累計失敗は観測用fixtureへ伝え、最初の失効理由を保持する。
+- fixture登録は生の`BoundedReadSession`を拒否する。fixture owner・clone・別sessionの混入で実sessionのGET・payload課金・phase操作を止めたり会計を変更したりしない。
+- 本番側に残るtransport契約の型宣言はfactoryや権限を持たない。fixtureと実用issuerの型cast・mode flag・環境変数による昇格口は設けない。
+- npm梱包後もfixture exportが無いこと、実sessionにtransport factoryが無いこと、通常のGET／payload課金／phase操作が動くことを合成依存で確認する。
+
+今後の本番接続には、実source／ReleasePermit／選択・payload／worker planから生成する専用issuerと非共有claim台帳が必要。現在はその生成口を作らず、正式な証拠発行口・全体受付は閉鎖／無効を維持する。VM／監視／telemetryは保留、実機操作・設定変更・有効化は行わない。

@@ -1,10 +1,10 @@
 /** Fake-source issuer ONLY. No live source/ReleasePermit acceptance or evidence issuance. */
 import { z } from 'zod';
 import { registerPreparedFixtureSource, claimPreparedFixtureOwner, preparedOwnerStatus, assertPreparedOwner,
-  refusePreparedEvidenceIssuance, type PreparedEvidenceOwner } from '../servicenow/review-evidence-lifecycle.js';
+  refusePreparedEvidenceIssuance, type PreparedEvidenceOwner } from './abort-scope-evidence-fixture-lifecycle.js';
 import { createPreparedFixtureWindow,preparedWindowInfo,preparedWindowRow,beginPreparedPayload,settlePreparedPayload,
   claimPreparedTransfer,consumePreparedTransfer,type PreparedSelectionWindow,type PreparedSelectedRow,
-  type PreparedPayloadStart,type PreparedPayloadReady,type PreparedTransferClaim } from '../servicenow/review-evidence-lifecycle.js';
+  type PreparedPayloadStart,type PreparedPayloadReady,type PreparedTransferClaim } from './abort-scope-evidence-fixture-lifecycle.js';
 const schema=z.strictObject({parent_ready:z.boolean(),final_started:z.boolean(),release_match:z.enum(['matched','mismatched','unknown'])});
 export function createFakeSessionOwnerIssuer(){
   const known=new WeakSet<object>();

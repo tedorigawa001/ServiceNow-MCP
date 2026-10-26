@@ -1,7 +1,7 @@
 import { afterEach, expect, it, vi } from 'vitest';
-import { BoundedReadSession } from '../../src/servicenow/bounded-read.js';
+import { FixtureReadSession as BoundedReadSession } from '../../src/review/abort-scope-evidence-read-fixture.js';
 import { createFakeSessionOwnerIssuer } from '../../src/review/abort-scope-evidence-session-fixture.js';
-import type { PreparedPayloadReady, PreparedTransferClaim } from '../../src/servicenow/review-evidence-lifecycle.js';
+import type { PreparedPayloadReady, PreparedTransferClaim } from '../../src/review/abort-scope-evidence-fixture-lifecycle.js';
 function get<T>(r:{ok:true;value:T}|{ok:false;code:string}):T{if(!r.ok)throw Error(r.code);return r.value;}
 const sessions=new Set<BoundedReadSession>();let serial=0;
 const updateSet='a'.repeat(32),stamp={sys_updated_on:'2026-10-26 00:00:00',sys_mod_count:'0'};

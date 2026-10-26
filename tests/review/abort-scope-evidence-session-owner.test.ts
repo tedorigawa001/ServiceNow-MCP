@@ -1,5 +1,6 @@
 import { afterEach, expect, it, vi } from 'vitest';
-import { BoundedReadSession, type BoundedReadOptions, type ReadSnapshot } from '../../src/servicenow/bounded-read.js';
+import { type BoundedReadOptions, type ReadSnapshot } from '../../src/servicenow/bounded-read.js';
+import { FixtureReadSession as BoundedReadSession } from '../../src/review/abort-scope-evidence-read-fixture.js';
 import { createFakeSessionOwnerIssuer } from '../../src/review/abort-scope-evidence-session-fixture.js';
 function get<T>(r:{ok:true;value:T}|{ok:false;code:string}):T{if(!r.ok)throw Error(r.code);return r.value;}
 const sessions=new Set<BoundedReadSession>();let serial=0;
@@ -15,7 +16,7 @@ async function setup(options:BoundedReadOptions={}){
   return {s,f,...issued};
 }
 afterEach(()=>{for(const s of sessions)s.close();sessions.clear();vi.restoreAllMocks();vi.useRealTimers();});
-it('binds a prepared owner to an authenticated real session without issuing evidence or additional HTTP',async()=>{
+it('binds a fixture owner to an authenticated observer wrapper without real claim authority',async()=>{
   const fetcher=vi.fn(async()=>new Response('{}')),x=await setup({fetch:fetcher});
   const before=x.s.stats(),o=get(x.f.claim(x.s,x.source,x.permit));
   expect(get(x.f.status(o))).toEqual({state:'prepared',code:null,evidence_issuance:'disabled',revocations:0});

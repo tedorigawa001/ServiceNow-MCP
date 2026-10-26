@@ -1,16 +1,17 @@
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
-import { BoundedReadSession, type BoundedReadOptions } from '../../src/servicenow/bounded-read.js';
+import { type BoundedReadOptions } from '../../src/servicenow/bounded-read.js';
+import { FixtureAccountingSession } from '../../src/review/abort-scope-evidence-accounting-fixture.js';
 import { createFakeSessionOwnerIssuer } from '../../src/review/abort-scope-evidence-session-fixture.js';
 import { createSessionBoundFakeTransport } from '../../src/review/abort-scope-evidence-transport-budget.js';
 import type { FakeTransportPurpose } from '../../src/review/abort-scope-evidence-transport-state.js';
 const get=<T>(r:{ok:true;value:T}|{ok:false;code:string}):T=>{if(!r.ok)throw Error(r.code);return r.value;};
-const sessions:BoundedReadSession[]=[];let serial=0;
+const sessions:FixtureAccountingSession[]=[];
 beforeEach(()=>vi.useFakeTimers());
 afterEach(()=>{sessions.forEach(s=>s.close());sessions.length=0;vi.useRealTimers();});
 async function setup(limits:BoundedReadOptions['limits']={}){
   const network=vi.fn(async()=>new Response('{}'));
-  const s=new BoundedReadSession({instanceUrl:'https://fixture.service-now.com',authMode:'per-user',perUserBearerToken:`SECRET_${serial++}`,oauth:{clientId:'',clientSecret:''}},{fetch:network,limits});sessions.push(s);
-  await s.get('/api/now/table/sys_update_set?sysparm_limit=1');
+  const s=new FixtureAccountingSession(limits);sessions.push(s);
+  await s.baseline('{}',network);
   const f=createFakeSessionOwnerIssuer(),source=get(f.source(s,{parent_ready:true,final_started:false,release_match:'matched'})),owner=get(f.claim(s,source.source,source.permit));
   let status=200,text='{}',cancel=0,releases=0;
   const dispatch=vi.fn(()=>{let cancelled=false;return {snapshot:()=>({fetch:'fulfilled',status,body:'reader',pending_read:false,eof:true,closed:'fulfilled',cancel:cancelled?'fulfilled':'not_requested'}),
@@ -23,7 +24,7 @@ async function setup(limits:BoundedReadOptions['limits']={}){
   return {s,f,owner,m,bound,network,dispatch,permit,setStatus:(n:number)=>{status=n;},setText:(t:string)=>{text=t;},counts:()=>({cancel,releases})};
 }
 const bytes=(s:string)=>Buffer.from(s);
-it('charges the real session once per fake dispatch/chunk, not on parse or consume',async()=>{
+it('charges the fixture session once per fake dispatch/chunk, not on parse or consume',async()=>{
   const x=await setup(),p=x.permit(),a=get(x.m.begin(p));
   expect(x.m.chunk(a,0,bytes('{')).ok).toBe(true);expect(x.m.chunk(a,1,bytes('}')).ok).toBe(true);
   const result=get(x.m.poll(a));if(result.state!=='settled'||!result.body)throw Error('no body');
@@ -69,7 +70,7 @@ it('does not let legacy GET bypass the claimed accounting owner',async()=>{
 it('rejects second owner generation and stops the existing bound machine',async()=>{
   const x=await setup(),p=x.permit();expect(createSessionBoundFakeTransport(x.s,x.owner,{dispatch:x.dispatch}).ok).toBe(false);expect(x.m.begin(p).ok).toBe(false);
 });
-it('rejects a foreign real session without consuming its own claim',async()=>{
+it('rejects a foreign fixture session without consuming its own claim',async()=>{
   const a=await setup(),b=await setup();expect(createSessionBoundFakeTransport(b.s,a.owner,{dispatch:a.dispatch}).ok).toBe(false);expect(b.bound.stats().requests).toBe(1);
 });
 it.each(['close','cancel','deadline'] as const)('does not charge late chunks after %s',async mode=>{
@@ -141,7 +142,7 @@ it('does not reset the original session hard deadline when claiming later',async
   const x=await setup(),p=x.permit();vi.advanceTimersByTime(59999);expect(x.m.begin(p).ok).toBe(false);
   vi.advanceTimersByTime(1);expect(x.m.issueEvidence().ok).toBe(false);expect(x.s.stats().requests).toBe(1);
 });
-it('synchronously drops a pending fake body when the real session closes',async()=>{
+it('synchronously drops a pending fake body when its fixture session closes',async()=>{
   const x=await setup(),p=x.permit(),a=get(x.m.begin(p));x.m.chunk(a,0,bytes('{}'));const r=get(x.m.poll(a));
   expect(x.m.stats().body_pending).toBe(true);x.s.close();expect(x.m.stats().body_pending).toBe(false);
   if(r.state==='settled'&&r.body)expect(x.m.consumeBody(r.body,p).ok).toBe(false);

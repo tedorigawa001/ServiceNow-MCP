@@ -8,6 +8,10 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 ## [Unreleased]
 
+### Security
+
+- Remove packaged fixture registration/owner/transport-claim exports and the real session's fixture transport factory. Fixture registries, claims, draft handles and synthetic accounting now live exclusively in package-excluded development modules, and reject raw real-session registration. Ordinary session GET/payload/phase behavior remains intact; packaged and source regression tests cover the former fixture-to-real-mode path. Production BR-006 evidence issuance remains unimplemented/closed.
+
 ### Added
 
 - Prepared-only BR-006 final table skips derived from retained initial outcomes or exhausted evidence capacity. Releases only unused reservations once, preserves charged attempts/bytes and continues in fixed table order; includes one-slot release after a final retry becomes unnecessary. Rejects arbitrary successful-table skips, foreign/replayed slots, active I/O, pending bodies and stopped sessions. Synthetic-only; no production evidence issuance or live transport/Worker connection.

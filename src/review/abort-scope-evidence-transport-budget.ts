@@ -1,5 +1,5 @@
 /** Fake I/O adapter bound to the registered session's one-shot accounting port. No live transport. */
-import { claimPreparedTransportBudget, type PreparedEvidenceOwner } from '../servicenow/review-evidence-lifecycle.js';
+import { claimPreparedTransportBudget, type PreparedEvidenceOwner } from './abort-scope-evidence-fixture-lifecycle.js';
 import { createFakeTransportReceiptMachine, type FakeTransportIo } from './abort-scope-evidence-transport-state.js';
 export function createSessionBoundFakeTransport(session:object,owner:PreparedEvidenceOwner,io:FakeTransportIo){
   const claimed=claimPreparedTransportBudget(owner,session);if(!claimed.ok)return claimed;

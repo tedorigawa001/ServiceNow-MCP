@@ -31,6 +31,9 @@ try {
     'unconnected BR-006 scope evidence must remain development-only');
   run('tar', ['-xzf', join(temporary, packed.filename), '-C', temporary]);
   const installed = join(temporary, 'package');
+  for(const name of ['registerPreparedFixtureSource','claimPreparedFixtureOwner','claimPreparedTransportBudget']){
+    assert(!readFileSync(join(installed,'dist/servicenow/review-evidence-lifecycle.js'),'utf8').includes(`export function ${name}(`),`packaged fixture authority: ${name}`);
+  }
   const manifest = JSON.parse(readFileSync(join(installed, 'package.json'), 'utf8'));
   for (const dependency of ['acorn', 'saxes', 'zod']) {
     assert(manifest.dependencies[dependency], `${dependency} must be a production dependency`);
@@ -49,6 +52,9 @@ try {
   const mcpOutput = execFileSync(process.execPath, [join(fixture, 'compiled-review-mcp-smoke.mjs')],
     { cwd: installed, env: {}, encoding: 'utf8', timeout: 15000 });
   assert.equal(mcpOutput.trim(), 'Packaged MCP review: registration + dispatch + worker PASS');
+  copyFileSync(join(root,'tests/review/fixtures/compiled-fixture-boundary.mjs'),join(fixture,'compiled-fixture-boundary.mjs'));
+  const boundaryOutput=execFileSync(process.execPath,[join(fixture,'compiled-fixture-boundary.mjs')],{cwd:installed,env:{},encoding:'utf8',timeout:15000});
+  assert.equal(boundaryOutput.trim(),'Packaged fixture boundary: isolated exports + real session unchanged PASS');
   for (const devDependency of ['tsx', 'typescript', 'vitest']) {
     assert.throws(() => readFileSync(join(installed, 'node_modules', devDependency, 'package.json')),
       { code: 'ENOENT' });
