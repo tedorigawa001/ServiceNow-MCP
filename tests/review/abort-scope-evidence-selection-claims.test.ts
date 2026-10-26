@@ -184,3 +184,12 @@ it('does not echo invalid fake completion outcomes and never accepts raw transfe
   expect(JSON.stringify(x.f.status(x.owner))).not.toContain('SECRET');x.s.close();
   const y=await setup();expect(y.f.consumeTransfer(y.owner,y.s,{} as PreparedTransferClaim)).toEqual({ok:false,code:'evidence_binding_mismatch'});
 });
+it('uses the real candidate policy for AU-BR-006: Business Rules only, never Client Scripts or Script Includes',async()=>{
+  const { candidatePolicy, requestedAssetTypes } = await import('../../src/review/target-selection.js');
+  expect(requestedAssetTypes(['AU-BR-006'])).toEqual(['business_rule']);
+  const policy=candidatePolicy(['AU-BR-006']),hex='a'.repeat(32);
+  expect(policy.query).toBe('^action=INSERT_OR_UPDATE^nameSTARTSWITHsys_script_^nameNOT LIKEsys_script_client_^nameNOT LIKEsys_script_include_');
+  expect(policy.accepts({name:`sys_script_${hex}`,action:'INSERT_OR_UPDATE'})).toBe(true);
+  for(const name of [`sys_script_client_${hex}`,`sys_script_include_${hex}`])expect(policy.accepts({name,action:'INSERT_OR_UPDATE'})).toBe(false);
+  expect(policy.accepts({name:`sys_script_${hex}`,action:'DELETE'})).toBe(false);
+});

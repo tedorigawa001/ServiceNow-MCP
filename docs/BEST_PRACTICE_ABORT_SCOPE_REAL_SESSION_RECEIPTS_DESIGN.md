@@ -237,7 +237,7 @@ window開始claimをfixtureのclone／検査より前に消費する。fixture�
 
 parentはsys_id/state/application/版、metadataはsys_id/update_set/name/type/action/版をstrict検査し、所属・昇順・重複なしを要求する。max_recordsは1..100、取得行はmax_records+1以下・最大101、先頭max_recordsだけに行draftを発行する。lookaheadはmetadata_seen／truncatedに残すが行draftを発行しない。空windowから行を補完しない。
 
-今回のfake recipeはrequested_rule_ids=['AU-BR-006']だけの限定subset。selection_mode省略はbounded_allとして省略状態を保持し、review_targetsはtarget-prefix-0.1を要求する。BR候補のaction/name prefixとclient/include除外を全取得行（lookaheadを含む）へ検査する。混在ruleset、実sourceのcandidatePolicy identity／選択windowとの結合は未接続であり、公開ルール選択や0.2/0.3を変更していない。
+今回のfake recipeはrequested_rule_ids=['AU-BR-006']だけの限定subset。selection_mode省略はbounded_allとして省略状態を保持し、review_targetsはtarget-prefix-0.1を要求する。BR候補の条件は実sourceと同じ`candidatePolicy(['AU-BR-006']).accepts`で全取得行（lookaheadを含む）へ検査する。`requestedAssetTypes`のBusiness Rule対象にAU-BR-006を加え、AU-BR-006単独のreview_targetsがClient Scriptを選ぶ不整合を解消した（AU-BR-006は公開規則未登録のため既存選択の挙動は不変）。混在ruleset、実source取得のpolicy identity／選択windowとの結合は未接続であり、公開ルール選択や0.2/0.3を変更していない。
 
 行のreadonly lookupは同handleを繰返し返すだけで再取得権限を増やさない。外部へ返すwindow summaryはmode／省略有無／件数／truncated／disabledだけ。本文・metadataの全列・認証参照を返すgetterは作らない。
 

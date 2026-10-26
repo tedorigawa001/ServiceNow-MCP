@@ -1,6 +1,7 @@
 /** Internal prepared-only lifecycle. No I/O, source evidence, receipt, permit or worker authority. */
 import type { ReadFailureCode } from './bounded-read.js';
 import { z } from 'zod';
+import { candidatePolicy } from '../review/target-selection.js';
 export type PreparedOwnerFailure = ReadFailureCode | 'invalid_state' | 'evidence_binding_mismatch' | 'internal_review_error';
 declare const ownerBrand: unique symbol;
 export type PreparedEvidenceOwner = { readonly [ownerBrand]: true };
@@ -141,8 +142,9 @@ export function createPreparedFixtureWindow(owner:PreparedEvidenceOwner,session:
     const d=p.data,mode=d.selection_mode??'bounded_all';
     if(d.rows.length>d.max_records+1||(mode==='review_targets')!==(d.filter_version==='target-prefix-0.1'))return draftFailure(o,'invalid_input');
     if(d.rows.some(r=>r.update_set!==d.parent.sys_id)||d.rows.some((r,n)=>n>0&&r.sys_id<=d.rows[n-1].sys_id))return draftFailure(o,'evidence_binding_mismatch');
-    if(mode==='review_targets'&&d.rows.some(r=>r.action!=='INSERT_OR_UPDATE'||!r.name.startsWith('sys_script_')
-      ||r.name.includes('sys_script_client_')||r.name.includes('sys_script_include_')))return draftFailure(o,'candidate_filter_violation');
+    // The same fixed policy the real source applies, not a local copy that could drift from it.
+    const policy=candidatePolicy(d.requested_rule_ids);
+    if(mode==='review_targets'&&d.rows.some(r=>!policy.accepts(r)))return draftFailure(o,'candidate_filter_violation');
     const handle=opaque() as PreparedSelectionWindow,w:DraftWindow={owner:o,session:o.binding!.session,data:d,rows:[]};
     for(const [ordinal,data] of d.rows.slice(0,d.max_records).entries()){
       const rowHandle=opaque() as PreparedSelectedRow,row:DraftRow={window:w,handle:rowHandle,ordinal,data:Object.freeze({...data})};
