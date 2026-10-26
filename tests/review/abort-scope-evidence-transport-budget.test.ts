@@ -88,8 +88,22 @@ it('keeps table E as a subset of G and makes per-table overflow local',async()=>
   expect(x.bound.stats()).toMatchObject({requests:2,received_bytes:16387,evidence_bytes:16385,reserved:6});
   const r=get(x.m.poll(a));expect(r.state==='settled'&&r.outcome).toBe('scope_evidence_limit');expect(x.m.stats().primary).toBe(null);
 });
-it('charges payload bytes independently and keeps local overflow charged',async()=>{
-  const x=await setup({payloadBytes:2}),a=get(x.m.begin(x.permit('payload','a'.repeat(32))));expect(x.m.chunk(a,0,bytes('{} '))).toEqual({ok:false,code:'payload_limit'});expect(x.s.stats().payload_bytes).toBe(3);
+it('charges the decoded payload string once at the source boundary, not the response body',async()=>{
+  const x=await setup({payloadBytes:4}),a=get(x.m.begin(x.permit('payload','a'.repeat(32))));
+  // The escaped JSON body exceeds the single payload cap, but only G/S count response bytes.
+  expect(x.m.chunk(a,0,bytes('{"payload":"<x\\"y/>"}')).ok).toBe(true);expect(x.s.stats().payload_bytes).toBe(0);
+  expect(x.bound.chargePayload('<a/>')).toEqual({ok:false,code:'invalid_input'});
+});
+it('accepts exactly one payload charge after a successful payload attempt',async()=>{
+  const x=await setup({payloadBytes:4}),p=x.permit('payload','a'.repeat(32)),a=get(x.m.begin(p));
+  expect(x.m.chunk(a,0,bytes('{}')).ok).toBe(true);const r=get(x.m.poll(a));if(r.state==='settled'&&r.body)get(x.m.consumeBody(r.body,p));
+  expect(get(x.bound.chargePayload('<a/>'))).toBe(true);expect(x.s.stats().payload_bytes).toBe(4);
+  expect(x.bound.chargePayload('<a/>')).toEqual({ok:false,code:'invalid_input'});
+});
+it('keeps the legacy single payload limit as a local payload_limit after charging',async()=>{
+  const x=await setup({payloadBytes:2}),p=x.permit('payload','a'.repeat(32)),a=get(x.m.begin(p));
+  expect(x.m.chunk(a,0,bytes('{}')).ok).toBe(true);const r=get(x.m.poll(a));if(r.state==='settled'&&r.body)get(x.m.consumeBody(r.body,p));
+  expect(x.bound.chargePayload('<a/>')).toEqual({ok:false,code:'payload_limit'});expect(x.s.stats().payload_bytes).toBe(4);
 });
 it('limits empty events even though they cost zero bytes',async()=>{
   const x=await setup(),a=get(x.m.begin(x.permit()));for(let i=0;i<16;i++)expect(x.m.chunk(a,i,new Uint8Array()).ok).toBe(true);
@@ -106,9 +120,10 @@ it('independently reconstructs C/G/E/payload and R from a fixed event trace',asy
   ] as const){
     if(kind==='table_initial')reserved+=2;
     const p=x.permit(kind,target),a=get(x.m.begin(p));c++;
-    for(const [seq,text] of parts.entries()){const n=Buffer.byteLength(text);g+=n;if(kind==='payload')payload+=n;if(kind==='table_initial')e+=n;
+    for(const [seq,text] of parts.entries()){const n=Buffer.byteLength(text);g+=n;if(kind==='table_initial')e+=n;
       expect(x.m.chunk(a,seq,bytes(text)).ok).toBe(true);expect(x.bound.stats()).toEqual({requests:c,received_bytes:g,payload_bytes:payload,evidence_bytes:e,reserved});}
     const r=get(x.m.poll(a));if(r.state==='settled'&&r.body)x.m.consumeBody(r.body,p);
+    if(kind==='payload'){get(x.bound.chargePayload('<xml/>'));payload+=6;expect(x.bound.stats()).toMatchObject({payload_bytes:payload});}
   }
 });
 it('rejects final slot order before dispatch and retains charged C',async()=>{

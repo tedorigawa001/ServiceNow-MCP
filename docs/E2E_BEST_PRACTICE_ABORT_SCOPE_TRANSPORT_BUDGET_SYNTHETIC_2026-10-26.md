@@ -10,7 +10,7 @@ Date: 2026-10-26 / fake I/O・fake timers限定。
 
 - lifecycleの同owner／session照合後、session側transport claimを一度だけ消費。重複・別session・失効・失敗後再生成を拒否し、秘密やsnapshotを返さない。
 - sessionのprivate requests／receivedBytes／payloadBytesを直接課金するclosureを渡す。baselineの費用を残し、statsから新台帳を再構築しない。
-- dispatch直前にCを消費、retry・同期throwでも返さない。G/S/payload/Eは同attempt連番chunkの採用時に一度課金し、超過分も保持する。
+- dispatch直前にCを消費、retry・同期throwでも返さない。G/S/Eは同attempt連番chunkの採用時に一度課金し、超過分も保持する。payloadは応答chunkではなく、成功したpayload試行の後にsource境界でデコード済みpayload文字列へ一度だけ課金する（従来chargePayloadと同じ計測）。
 - Rは親／metadata各2、table受付ごとに最終2追加。通常C+1+R<=Q、final固定順序、不要retry枠返却を確認する。table初回は初回2＋最終2の余裕を要求する。
 - claim後のlegacy GET・chargePayload・setPhaseReserveを拒否し、別経路による二重課金やphase変更を許さない。未claimの既存経路は変更しない。
 - 元のsession clock・deadline・request timeoutと低減設定を使用。late event／取消／close／期限切れは未採用で、未来の会計を止める。sessionの固定abort signalでfake状態機械も同期失効し、未消費本文参照を外す。
@@ -45,6 +45,8 @@ Date: 2026-10-26 / fake I/O・fake timers限定。
 | 差分・文書検査 | `git diff --check`成功。4文書・ローカルリンク24件の存在と末尾空白なしを確認 |
 
 実sessionの内部port契約は本体に含まれるが、fake adapter／状態機械／既存合成issuerは梱包除外。公開MCPツールや正式な証拠発行口には接続していない。全リポジトリの全テスト・実機E2Eを実行したという意味ではない。
+
+その後のレビューで、payloadを応答body全体のbyteで単体2MiB／累計8MiBに課金していた点を、設計§5.2と従来chargePayloadに合わせて修正した。応答chunkはG/Sだけ、payloadは成功したpayload試行の後に一度だけデコード済み文字列へ課金し、単体超過は局所`payload_limit`、累計超過は全体停止のまま。成功前・二重の課金は拒否する。本テストは50件成功（payload回帰を含む）。旧実装ではpayload関連4件が失敗することを確認した。全リポジトリ試験149 files / 4420 tests成功、`npm run test:pack`（一時cacheを当該processだけに指定）でproduction-only install＋worker smoke成功・377 files。実機E2Eは未実施。
 
 ## 5. 未接続・残課題
 

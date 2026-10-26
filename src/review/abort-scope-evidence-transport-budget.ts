@@ -7,5 +7,10 @@ export function createSessionBoundFakeTransport(session:object,owner:PreparedEvi
   const made=createFakeTransportReceiptMachine({deadline_ms:budget.deadlineMs,request_timeout_ms:budget.requestTimeoutMs,
     auth_mode:budget.authMode,auth_ready:true,parent_ready:true,release_match:'matched',selection_ready:true,plan_ready:true},budget,io,budget);
   if(!made.ok){budget.stop('invalid_input');return made;}
-  return {ok:true as const,value:Object.freeze({machine:made.value,stats:budget.stats})};
+  // Source-boundary payload charge: the decoded payload string, once after a successful payload attempt.
+  const chargePayload=(payload:string)=>{
+    try{budget.chargePayload(payload);return {ok:true as const,value:true as const};}
+    catch(error){const code=error instanceof Error?error.message:'internal_review_error';return {ok:false as const,code};}
+  };
+  return {ok:true as const,value:Object.freeze({machine:made.value,stats:budget.stats,chargePayload})};
 }

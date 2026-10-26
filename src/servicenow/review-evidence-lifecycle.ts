@@ -140,7 +140,7 @@ export function claimPreparedTransportBudget(owner:PreparedEvidenceOwner,session
     return ok(Object.freeze({...port,
       now(){check();return port.now();},check,
       dispatch(p:string,t:string|undefined,n:1|2){check();port.dispatch(p,t,n);},
-      chunk(n:number){check();port.chunk(n);},settle(result:PreparedAttemptSettlement){port.settle(result);},
+      chunk(n:number){check();port.chunk(n);},chargePayload(payload:string){check();port.chargePayload(payload);},settle(result:PreparedAttemptSettlement){port.settle(result);},
       skipFinal(target:string){check();return port.skipFinal(target);},
       enterFinal(){check();port.enterFinal();},
     }));

@@ -11,6 +11,8 @@ export interface PreparedTransportBudget {
   signal:AbortSignal;
   dispatch(purpose:string,target:string|undefined,ordinal:1|2):void;
   chunk(bytes:number):void;
+  /** Once per successful payload attempt: the decoded payload string, as the legacy source charges it. */
+  chargePayload(payload:string):void;
   settle(result:PreparedAttemptSettlement):void;
   skipFinal(target:string):PreparedFinalSkip;
   enterFinal():void;

@@ -97,6 +97,8 @@ export class BoundedReadSession {
     if(this.transportOwned||this.busy)throw new BoundedReadError('invalid_input');
     this.transportOwned=true;
     let reserved=4,final=false,cursor=0,evidenceClosed=false,active:{purpose:string;key:string;size:number;ordinal:1|2}|undefined;
+    // A successful payload attempt opens one payload charge at the source boundary; the next dispatch closes it.
+    let payloadReady=false;
     const slots=new Map<string,number>([['parent_final',2],['metadata_final',2]]);
     type Table={state:'pending'|'retryable'|'available'|'unavailable'|'not_completed';outcome:PreparedTransportOutcome|null};
     const tables=new Map<string,Table>();
@@ -124,22 +126,22 @@ export class BoundedReadSession {
           slots.set(slot,slots.get(slot)!-1);reserved--;
         }else if(this.requests+1+reserved>this.limits.requests)throw new BoundedReadError('request_budget_exceeded');
         if(this.requests>=this.limits.requests)return fail('request_budget_exceeded');
-        this.requests++;reads.set(key,{ordinal,retry:false});active={purpose,key,size:0,ordinal};
+        this.requests++;reads.set(key,{ordinal,retry:false});active={purpose,key,size:0,ordinal};payloadReady=false;
       },
       chunk:(n:number)=>{
         check();if(!active||!Number.isSafeInteger(n)||n<0)return fail('invalid_input');
-        const size=active.size+n,g=this.receivedBytes+n,p=this.payloadBytes+(active.purpose==='payload'?n:0),e=this.evidenceBytes+(active.purpose.startsWith('table_')?n:0);
-        if(![size,g,p,e].every(Number.isSafeInteger))return fail('receive_budget_exceeded');
-        active.size=size;this.receivedBytes=g;this.payloadBytes=p;this.evidenceBytes=e;
+        // Payload bytes are charged once on the decoded payload string (chargePayload), not on response chunks.
+        const size=active.size+n,g=this.receivedBytes+n,e=this.evidenceBytes+(active.purpose.startsWith('table_')?n:0);
+        if(![size,g,e].every(Number.isSafeInteger))return fail('receive_budget_exceeded');
+        active.size=size;this.receivedBytes=g;this.evidenceBytes=e;
         if(e>=262144)evidenceClosed=true;
         if(g>this.limits.totalBytes||size>this.limits.responseBytes)return fail('receive_budget_exceeded');
-        if(p>this.limits.totalPayloadBytes)return fail('payload_budget_exceeded');
-        if(active.purpose==='payload'&&size>this.limits.payloadBytes)throw new BoundedReadError('payload_limit');
         if(active.purpose.startsWith('table_')&&(size>16384||e>262144))throw Error('scope_evidence_limit');
       },
       settle:(result:PreparedAttemptSettlement)=>{
         if(!active)return;
         const retry=result.retryable&&active.ordinal===1&&result.cleanup==='confirmed';
+        payloadReady=active.purpose==='payload'&&result.outcome==='body'&&result.cleanup==='confirmed';
         reads.get(active.key)!.retry=retry;
         if(active.purpose==='table_initial'){
           const table=tables.get(active.key.slice('table_initial:'.length))!;table.outcome=result.outcome;
@@ -159,6 +161,10 @@ export class BoundedReadSession {
         const reason=evidenceClosed?'evidence_budget_exhausted':table.state==='not_completed'?'initial_not_completed':'initial_unavailable';
         reserved-=left;slots.set(key,0);cursor++;const read=reads.get(`${key}`);if(read)read.retry=false;
         return Object.freeze({state:'skipped',reason,initial_outcome:table.outcome,released_attempts:left,synthetic:true,evidence_issuance:'disabled'});
+      },
+      chargePayload:(payload:string)=>{
+        check();if(typeof payload!=='string'||!payloadReady||active)return fail('invalid_input');
+        payloadReady=false;this.chargePayloadBytes(payload);
       },
       stop:(code:string)=>this.stop(['cancelled','closed','deadline_exceeded','authentication_failed','access_denied','receive_budget_exceeded','payload_budget_exceeded'].includes(code)?code as ReadFailureCode:'invalid_input'),
       stats:()=>Object.freeze({...this.stats(),evidence_bytes:this.evidenceBytes,reserved}),
@@ -341,6 +347,10 @@ export class BoundedReadSession {
   chargePayload(payload: string) {
     this.check();
     if(this.transportOwned)throw new BoundedReadError('invalid_input');
+    this.chargePayloadBytes(payload);
+  }
+  /** One charge of a received payload string, shared by the legacy source and the transport port. */
+  private chargePayloadBytes(payload: string) {
     const bytes = Buffer.byteLength(payload, 'utf8');
     this.payloadBytes += bytes;
     if (this.payloadBytes > this.limits.totalPayloadBytes) { this.stop('payload_budget_exceeded'); this.check(); }

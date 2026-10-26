@@ -232,13 +232,13 @@ sessionの固定abort signalを同じ状態機械へ結び、取消／close／ha
 | C | fake dispatch直前に1加算。同期throwも戻さず、同permitの最大2attempt。通常はC+1+R<=Q、全体Q<=210と低減設定を維持 |
 | R | 初期の親／metadata各2、table初回受付時に最終2を追加し初回2も含む空きを確認。最大8table。final順序は親→metadata→受付順table。最終試行開始で1消費し、retry不要なら残枠を解放 |
 | G／S | 同attemptの連番chunkを1回だけ線形化し、全受信・応答内受信へ加算後に超過を検査。等号は許可、overshootは戻さない。次dispatch時にGが満杯なら停止 |
-| payload | payload用途のchunkだけ既存payload累計へ加算。単体2MiB／累計8MiBと低減設定を維持 |
+| payload | 応答chunkはG/Sだけに課金し、payload累計へは加算しない。成功したpayload試行の後に一度だけ、source境界でデコード済みpayload文字列を既存payload累計へ加算する（従来chargePayloadと同じ計測・単体2MiB／累計8MiB・低減設定）。次のdispatchで課金窓を閉じる |
 | E | table用途をGの内数として加算。単体16KiB／累計256KiBはfake検証用の未承認候補値。E満杯後の新table dispatchを拒否 |
 | clock | portはsession開始からの単調経過と元のhard期限・request timeoutを使う。fake timersで実sessionの時計を進める。claim時に60秒を再設定しない |
 
 chunkは`chunk(attempt, sequence, Uint8Array)`としてfakeから供給する。0始まり連番、同current attempt、I/O cutoff前だけ採用。停止・clone・重複・順序飛びでは再課金しない。空chunkは連続16回までの候補制限。bytesは保持せずincremental SHA-256へ反映し、fake bodyTextのbyte数・digest一致をJSON構文受理前に確認する。同じ長さの別本文も受理しない。消費・parse・診断でC/G/Eを再加算しない。
 
-通常C枠不足／table受付不足は新dispatchを行わず、permitは再利用不可にしてfinal予約を残す。S/G・payload累計の全体失敗はsession側停止へ伝播。table下位枠／payload単体不足は当該attemptをcleanupへ進め、未確認なら全体停止する。cleanup後の局所outcomeは現状scope_evidence_limitへ保守的に集約し、payload専用の上位分類は未接続。
+通常C枠不足／table受付不足は新dispatchを行わず、permitは再利用不可にしてfinal予約を残す。S/G・payload累計の全体失敗はsession側停止へ伝播。table下位枠の不足は当該attemptをcleanupへ進め、未確認なら全体停止する。payload単体超過はsource境界の課金時に従来どおり局所の`payload_limit`、累計超過は`payload_budget_exceeded`で全体停止する。cleanup後の局所outcomeは現状scope_evidence_limitへ保守的に集約し、payload専用の上位分類は未接続。
 
 ### 維持する閉鎖と次工程
 
