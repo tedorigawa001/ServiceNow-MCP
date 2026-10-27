@@ -116,8 +116,8 @@ export function createFakeRunTransportSession(clock:{now():number},io:FakeRunIo,
       // Native internal-slot access: no caller getter between stop check and charge.
       const length=Reflect.apply(typedByteLength,bytes,[]) as number;if(owner.failure())return no();
       a.next++;a.bytes+=length;received+=length;
-      if(received>config.total_bytes)return stop('receive_budget_exceeded');
-      if(a.bytes>config.response_bytes)return stop('invalid_response');
+      // Same as bounded-read: a single response over S stops the run with receive_budget_exceeded, like G.
+      if(received>config.total_bytes||a.bytes>config.response_bytes)return stop('receive_budget_exceeded');
       return ok(true);
     });},
     finishHttp,

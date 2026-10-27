@@ -79,7 +79,8 @@ it('resets only S on the next fake attempt and preserves cumulative G and C',()=
 });
 it('retains S overshoot in G but never dispatches again after response rejection',()=>{
   const {session,events}=setup({response_bytes:2}),t=get(session.claimTransport()),a=get(t.begin({kind:'parent_initial',ordinal:1}));
-  expect(t.chunk(a,0,new Uint8Array(3))).toEqual({ok:false,code:'invalid_response'});
+  expect(t.chunk(a,0,new Uint8Array(3))).toEqual({ok:false,code:'receive_budget_exceeded'});
+  expect(session.status().primary?.code).toBe('receive_budget_exceeded');
   t.begin({kind:'release_rows',ordinal:1});expect(events.filter(x=>x==='dispatch')).toHaveLength(1);
   expect(session.status().budget?.received_bytes).toBe(3);
 });

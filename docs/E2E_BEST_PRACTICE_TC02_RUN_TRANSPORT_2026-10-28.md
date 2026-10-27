@@ -63,3 +63,5 @@ Date: 2026-10-28 / 対象：[接続設計draft-0.3 §11](BEST_PRACTICE_ABORT_SCO
 - 次はTC-03：注入Web Streamsのread・cancel・closed・releaseLockから同attemptのtyped終端へ接続。実fetchは使わず、正式発行口は閉じたまま。
 
 Unknown・全体受付無効、VM／監視／telemetry調査保留を維持する。
+
+その後のレビューで、1応答上限（S）超過を`invalid_response`で停止していた点を、本番`bounded-read`（S／G超過とも`receive_budget_exceeded`で全体停止）と同じコードへ揃えた。該当試験の期待値を更新してprimaryも確認し、本試験51件・全体試験が成功した。

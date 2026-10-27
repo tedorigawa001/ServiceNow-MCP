@@ -226,7 +226,7 @@ TC-02のfake session内での単一state接続は§11を参照。このfake台�
 | readonly lease | 同じC/G/P・lastから保護viewを返し、既存run lifecycleが読む | stats再登録・copyからの別会計・leaseのcastはない |
 | E／R／T・retry受付 | **未接続** | TC-02で新しい台帳や予約を作らず、既存fixture側の値を正式値へ採用しない |
 
-設定でC<=210、G<=16MiB、S<=4MiB、P単体<=2MiB／累計<=8MiB、hard<=60秒を下げられるが上げられない。GとSが同時超過ならGの全体停止を優先する。S超過のfake分類はinvalid_responseとして停止するが、本番の局所分類を変更したものではない。
+設定でC<=210、G<=16MiB、S<=4MiB、P単体<=2MiB／累計<=8MiB、hard<=60秒を下げられるが上げられない。GとSが同時超過ならGの全体停止を優先する。S超過も本番`bounded-read`と同じく`receive_budget_exceeded`で全体停止する（G超過と同じコード）。
 
 `chargePayload`は**fakeの受理イベント**のモデルであり、文字列が実際のchunk由来であること、UTF-8 decode／JSON検証／版照合／source受領を証明しない。本文は保持・出力せず、正式なpayload receiptは作らない。未消費のpayload受理枠があれば次dispatch・final移行・正常finishを拒否する。discardはPを受理したことにはしない。
 
