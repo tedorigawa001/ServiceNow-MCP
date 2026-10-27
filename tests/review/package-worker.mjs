@@ -54,7 +54,7 @@ try {
   assert.equal(mcpOutput.trim(), 'Packaged MCP review: registration + dispatch + worker PASS');
   copyFileSync(join(root,'tests/review/fixtures/compiled-fixture-boundary.mjs'),join(fixture,'compiled-fixture-boundary.mjs'));
   const boundaryOutput=execFileSync(process.execPath,[join(fixture,'compiled-fixture-boundary.mjs')],{cwd:installed,env:{},encoding:'utf8',timeout:15000});
-  assert.equal(boundaryOutput.trim(),'Packaged fixture boundary: isolated exports + real session unchanged PASS');
+  assert.equal(boundaryOutput.trim(),'Packaged fixture boundary: isolated exports + private release binding PASS');
   for (const devDependency of ['tsx', 'typescript', 'vitest']) {
     assert.throws(() => readFileSync(join(installed, 'node_modules', devDependency, 'package.json')),
       { code: 'ENOENT' });

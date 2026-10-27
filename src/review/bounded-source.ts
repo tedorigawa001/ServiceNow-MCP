@@ -5,6 +5,7 @@ import { BoundedReadError, type BoundedReadOptions, type BoundedReadSession } fr
 import { releaseEvidenceStructure, releaseMatchForEvidence, type ReleaseEvidence } from './result-schema-v2.js';
 import { bp5RuleIdsSchema } from './result-schema-v2.js';
 import { candidatePolicy, selectionModeSchema } from './target-selection.js';
+import type {ReviewSourceReleasePort,ReviewSourceReleaseSnapshot} from '../servicenow/review-evidence-lifecycle.js';
 
 const id = z.string().regex(/^[a-f0-9]{32}$/);
 const inputSchema = z.strictObject({ update_set_sys_id: id, max_records: z.number().int().min(1).max(100).default(20),
@@ -31,14 +32,24 @@ export class BoundedUpdateSetSource {
   private releaseRead = false;
   #permit?: ReleasePermit;
   #decision?: Promise<ReleaseDecision>;
-  constructor(private readonly session: BoundedReadSession, private readonly input: z.infer<typeof inputSchema>) {}
-  get startedAt() { return this.session.startedAt; }
-  get authMode() { return this.session.authMode; }
-  get instanceBinding() { return this.session.releasePolicy.instanceBinding; }
-  stats() { return this.session.stats(); }
+  readonly #session:BoundedReadSession;
+  #releaseSnapshot?:ReviewSourceReleaseSnapshot;
+  #releasePort?:ReviewSourceReleasePort;
+  constructor(session: BoundedReadSession, private readonly input: z.infer<typeof inputSchema>) {this.#session=session;}
+  /** No raw registration. A copied/proxy/foreign source cannot satisfy the private-field check. */
+  static releasePortFor(source:unknown,session:BoundedReadSession,permit:object):ReviewSourceReleasePort|undefined{
+    if(!source||typeof source!=='object'||!(#session in source)||source.#session!==session||source.#permit!==permit)return undefined;
+    return source.#releasePort;
+  }
+  reviewReleaseStatus(permit:ReleasePermit){return this.#session.reviewReleaseSourceStatus(this,permit);}
+  get startedAt() { return this.#session.startedAt; }
+  get authMode() { return this.#session.authMode; }
+  get instanceBinding() { return this.#session.releasePolicy.instanceBinding; }
+  stats() { return this.#session.stats(); }
   #requirePermit(permit: ReleasePermit) {
-    this.session.assertActive();
+    this.#session.assertActive();
     if (!this.#permit || permit !== this.#permit) throw new BoundedReadError('release_not_admitted');
+    this.#session.reviewReleaseSourceStatus(this,permit);
   }
   private path(table: string, fields: string, query?: string, limit?: number, sysId?: string) {
     const params = new URLSearchParams({ sysparm_fields: fields, sysparm_display_value: 'false', sysparm_exclude_reference_link: 'true' });
@@ -47,13 +58,13 @@ export class BoundedUpdateSetSource {
     return `/api/now/table/${table}${sysId ? '/' + sysId : ''}?${params}`;
   }
   private async rows(path: string, max: number, final = false): Promise<unknown[]> {
-    const value = await this.session.get(path, final);
+    const value = await this.#session.get(path, final);
     if (!value || typeof value !== 'object' || !('result' in value) || !Array.isArray(value.result)
       || value.result.length > max) throw new BoundedReadError('invalid_response');
     return value.result;
   }
   private async fetchParent(final = false) {
-    const value = await this.session.get(this.path('sys_update_set', parentFields, undefined, undefined, this.input.update_set_sys_id), final);
+    const value = await this.#session.get(this.path('sys_update_set', parentFields, undefined, undefined, this.input.update_set_sys_id), final);
     const parsed = parentSchema.safeParse(value && typeof value === 'object' && 'result' in value ? value.result : null);
     if (!parsed.success || parsed.data.sys_id !== this.input.update_set_sys_id) throw new BoundedReadError('invalid_response');
     return parsed.data;
@@ -78,7 +89,7 @@ export class BoundedUpdateSetSource {
   }
   /** No release/family/matched arguments: evidence is collected by this exact pinned source. */
   async resolveRelease(): Promise<ReleaseDecision> {
-    this.session.assertActive();
+    this.#session.assertActive();
     if (!this.parent || this.finalStarted) throw new BoundedReadError('invalid_input');
     this.#decision ??= this.#observeRelease();
     return this.#decision;
@@ -88,7 +99,7 @@ export class BoundedUpdateSetSource {
       release_match: 'unknown', instance_release: { source: 'none', resolution_status: 'unknown', family: null,
         visibility_scope: 'unavailable', reason }, limitations: Object.freeze([reason, 'release_unknown']),
     });
-    const policy = this.session.releasePolicy;
+    const policy = this.#session.releasePolicy;
     if (policy.issue === 'config_binding_mismatch') return unknown(policy.issue);
     const fallback = (): ReleaseDecision => {
       if (policy.issue) return unknown(policy.issue);
@@ -105,7 +116,7 @@ export class BoundedUpdateSetSource {
       }
       throw error;
     }
-    this.session.assertActive();
+    this.#session.assertActive();
     if (rows.length > 20) return unknown('observation_limit');
     if (!rows.length || rows.every(row => !row.build_name?.trim())) return fallback();
     if (rows.some(row => !row.build_name?.trim())) return unknown('observation_incomplete');
@@ -131,6 +142,12 @@ export class BoundedUpdateSetSource {
     if (match !== 'matched') return Object.freeze({ release_match: match, instance_release: evidence,
       limitations: Object.freeze([...limitations, match === 'unknown' ? 'release_unknown' : 'release_mismatch']) });
     this.#permit = Object.freeze(Object.create(null)) as ReleasePermit;
+    const permit=this.#permit;
+    const snapshot:ReviewSourceReleaseSnapshot=Object.freeze({instance_release:Object.freeze(structuredClone(evidence)),limitations:Object.freeze([...limitations])});
+    this.#releaseSnapshot=snapshot;
+    this.#releasePort=Object.freeze({matches:()=>this.#permit===permit&&this.#releaseSnapshot===snapshot,
+      copyRelease:()=>Object.freeze({instance_release:Object.freeze(structuredClone(snapshot.instance_release)),limitations:Object.freeze([...snapshot.limitations])})});
+    this.#session.bindReviewReleaseSource(this,permit);
     return Object.freeze({ release_match: 'matched', instance_release: evidence,
       limitations: Object.freeze(limitations), permit: this.#permit });
   }
@@ -169,7 +186,7 @@ export class BoundedUpdateSetSource {
       `sys_id=${sysId}^update_set=${this.input.update_set_sys_id}`, 1), 1);
     if (rows.length !== 1) throw new BoundedReadError('not_found_or_not_visible');
     const raw = rows[0];
-    if (raw && typeof raw === 'object' && 'payload' in raw && typeof raw.payload === 'string') this.session.chargePayload(raw.payload);
+    if (raw && typeof raw === 'object' && 'payload' in raw && typeof raw.payload === 'string') this.#session.chargePayload(raw.payload);
     const parsed = metadataSchema.omit({ type: true }).extend({ payload: z.string() }).safeParse(rows[0]);
     if (!parsed.success) throw new BoundedReadError('invalid_response');
     for (const key of ['sys_id', 'update_set', 'name', 'action', 'sys_updated_on', 'sys_mod_count'] as const) {

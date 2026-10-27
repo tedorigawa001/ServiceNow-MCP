@@ -1,7 +1,7 @@
 # AU-BR-006 共通停止／予算owner・実session／ReleasePermit binding 詳細設計
 
-Version: br006-run-owner-binding-draft-0.3 / Date: 2026-10-27。
-Status: **独立合成モデルに加え、実session classのprivate run lifecycle・認証snapshot／ready世代・同期失効・readonly予算leaseをfake I/Oで検証。正式source／ReleasePermit・会計操作／実transportは未接続、正式証拠発行は閉鎖。Unknown・全体受付無効、VM／監視／telemetry保留を維持**。
+Version: br006-run-owner-binding-draft-0.4 / Date: 2026-10-27。
+Status: **実session private lifecycleに同sourceのReleasePermit／不変release snapshotをprepared-onlyで限定接続し、fake I/Oで検証。正式証拠receipt／worker・会計操作／実transportは未接続、正式証拠発行は閉鎖。Unknown・全体受付無効、VM／監視／telemetry保留を維持**。
 
 親：[実session／private受領物](BEST_PRACTICE_ABORT_SCOPE_REAL_SESSION_RECEIPTS_DESIGN.md)、[用途別transport受領物](BEST_PRACTICE_ABORT_SCOPE_TRANSPORT_RECEIPTS_DESIGN.md)、[worker接続契約](BEST_PRACTICE_ABORT_SCOPE_CONNECTION_CONTRACT_DESIGN.md)、[OAuth起点の合成接続](BEST_PRACTICE_ABORT_SCOPE_OAUTH_SOURCE_HANDOFF_DESIGN.md#14-oauth起点のworker上位結果までの連続合成e2e)。
 
@@ -12,7 +12,7 @@ Status: **独立合成モデルに加え、実session classのprivate run lifecy
 1. 同じ実sessionの時計・phase・C/G/Pと、将来のE/R・HTTP／worker停止・終了診断を所有する共通run owner。
 2. 同session／認証snapshot／ready世代／source／同sourceのReleasePermitと、不変な発行時release根拠へ結合するprepared source owner。
 
-§1〜§11は全体の内部契約案であり、全APIの接続済みを意味しない。§13の合成モデル、§14のprivate lifecycle限定接続と区別する。preparedはidentity確保だけを意味し、body receipt／payload receipt／FinalSourceSeal／正式findingを発行できない。証拠専用取得・cleanup証拠・選択payload・worker jobの正式bindingが揃うまで、発行gateは常に拒否する。
+§1〜§11は全体の内部契約案であり、全APIの接続済みを意味しない。§13の合成モデル、§14のprivate lifecycle、§15のprepared release限定接続と区別する。preparedはidentity確保だけを意味し、body receipt／payload receipt／FinalSourceSeal／正式findingを発行できない。証拠専用取得・cleanup証拠・選択payload・worker jobの正式bindingが揃うまで、発行gateは常に拒否する。
 
 公開MCP入力、公開0.2／0.3、明示14／既定3規則、既存release gate・selection_mode省略互換を変更しない。AU-BR-006の公開登録・証拠取得modeのツール引数追加・実sessionのfixture登録・実資格情報の取得は今回の範囲外。同processの侵害コードや侵害workerを隔離する仕組みではない。
 
@@ -21,8 +21,8 @@ Status: **独立合成モデルに加え、実session classのprivate run lifecy
 | 箇所 | 現在あるもの | 本設計で必要なもの／まだ無いもの |
 |---|---|---|
 | [bounded-read](../src/servicenow/bounded-read.ts) | snapshotコピー、単調開始時計、認証readyPromise、C/G/P、hard／phase停止、closeによる一度限りの枠解放 | 共通run identityと一度限りのclaim、保護された予算lease、正式source／workerへの停止伝播 |
-| [実lifecycle](../src/servicenow/review-evidence-lifecycle.ts) | private owner／snapshot identity／一世代ready／同期revoke／readonly予算lease、同session再登録拒否（§14） | 正式source claim／receipt、実ReleasePermit・worker結合。private lifecycle成立だけでは発行権限にならない |
-| [実source](../src/review/bounded-source.ts) | 同sourceの#permit参照、matched判定、選択行・payload版照合、最終親／一覧再読 | private生成入口、source claim、独立した不変release snapshot、型付き選択／body／payload受領物 |
+| [実lifecycle](../src/servicenow/review-evidence-lifecycle.ts) | private owner／snapshot identity／一世代ready／同期revoke／readonly予算lease、同session再登録拒否、prepared source claim（§14・§15） | 正式receipt／worker結合。private lifecycle・prepared release成立だけでは証拠発行権限にならない |
+| [実source](../src/review/bounded-source.ts) | private session／#permit／独立不変release snapshotとreadonly port、matched時のprepared結合、既存選択行・payload版照合、最終親／一覧再読 | 正式証拠発行入口、型付き選択／body／payload受領物、worker job結合 |
 | [実adapter](../src/review/update-set-adapter.ts) | sessionと通常workerの残時間・外部signalを接続し、finallyで終了処理 | BR-006用の正式bindingと、HTTP内部停止も含む共通診断／失効／終了owner |
 | [fixture worker](../src/review/abort-scope-evidence-worker-review.ts) | native IPC、厳密な相関検査、取消／terminate確認、fixture専用上位result | 本番source由来のjob・payload receiptとの結合。remainingMs／signalの引数自体は由来の証明ではない |
 | [連続E2Eの外側owner](../tests/review/fixtures/oauth-source-worker-run.ts) | 試験用の時計・取消合流、合成Responseからfixture上位結果までの動作確認 | 本番ownerではない。試験のpayload／instance_bindingを正式receiptへ昇格しない |
@@ -274,6 +274,34 @@ leaseは同sessionの既存requests／receivedBytes／payloadBytesと元の単�
 
 ### 14.4 残課題
 
-既存の`ReleasePermit`・固定source／選択payload／worker job・不変release根拠と正式に結合していない。§13の合成source bindingを実sessionへ昇格させず、formal source claim／証拠receipt／seal／findingを発行する口は閉じたままにする。予算leaseはreadonly観測subsetで、transportの用途別会計や停止ownerの全仕様が完了したわけではない。
+§14の段階では既存の`ReleasePermit`・不変release根拠は未結合だった。後続§15でprepared-onlyの結合を追加したが、§13の合成source bindingを実sessionへ昇格させたものではない。選択payload／worker jobとformal receipt／seal／findingを発行する口は閉じたままにする。予算leaseはreadonly観測subsetで、transportの用途別会計や停止ownerの全仕様が完了したわけではない。
 
 検証：[private lifecycle・ready・readonly leaseのfake I/O記録](E2E_BEST_PRACTICE_ABORT_SCOPE_RUN_OWNER_LIFECYCLE_2026-10-27.md)。実transport・実機操作・設定変更・本番cap／全体受付・Pushは実施しない。
+
+## 15. 同sourceのReleasePermit／不変release snapshot結合
+
+### 15.1 発行元・private境界
+
+`BoundedUpdateSetSource.#completeRelease`のmatched分岐だけが、既存の同source `#permit`と独立copy／freezeした`#releaseSnapshot`を作る。snapshotはmatchedであり得るobserved／operator_configの既知のflat構造とlimitations配列だけ。public ReleaseDecisionのinstance_releaseやlimitationsとはcanonical参照を共有せず、返却decisionの後書換えを採用しない。
+
+sourceのsession参照をECMAScript private fieldへ統一し、既存の取得・会計も同じsessionを使う。`releasePortFor(source, session, permit)`はprivate-field所有・同session・同permitを検査する固定verifierで、raw object登録口ではない。clone／Proxy／別source／別sessionは通らない。返す凍結portはcanonical snapshotを公開せず、構造的な同一性検査と独立した凍結release値のcopyだけを持つ。portを読めてもrun owner・予算lease・正式発行権限を取得できない。port.matchesは構造検査であり、live認定ではない。
+
+### 15.2 run ownerへの一度限りの採用
+
+source内部の発行継続がsessionの固定採用入口を呼ぶ。入口はcaller提出のmatched／release値を受けず、上記verifierで取得したportだけをprivate ownerへ渡す。ownerはsource claimをconsumingへ進め、同snapshot／lease／ready世代・portを検査し、独立した不変copyを保持して最後のclock／identity検査後にclaimedへcommitする。失敗はclaimをfailedにして同期停止し、作り直さない。
+
+同じsource／permitの二重採用要求は新しいbindingを作らず拒否し、健全な既存ownerは保持する。二つ目のsourceや別permitによる置換はbinding不整合として停止する。unknown／mismatched／conflictにはpermit／portを作らずsource claimは未消費。C方式は元の設定pin・binding／期限検証を維持し、asserted／未実測／陳腐化等のlimitationsを落とさない。
+
+### 15.3 readonly検査・失効・互換性
+
+`reviewReleaseStatus(permit)`はprepared_only・独立した凍結release値・limitations・`evidence_issuance=disabled`だけを返す。sessionの固定checkerは同run／source／permit／port／ready世代／leaseを照合する。mixed bindingなら要求先runの初回binding診断を保持して同期停止し、外国runのclaimや状態を変更しない。close／取消／元hard期限でcanonical bindingを失効させ、新GETや再発行には使えない。既に返した非秘密のrelease値copyを回収する機能ではない。
+
+通常cutoff後もreadonly確認は可能だが、GET権限を与えない。既存listMetadata／readPayload／verifyは従来のpermit／phase制御を通し、正しいpermitの場合だけ追加のowner照合を行う。従来のforeign permitの早期release_not_admittedは健全runを壊さない互換動作として維持する。一方、追加のprepared binding checkerへの混入は停止対象とする。
+
+### 15.4 費目・未対応
+
+同sessionのprepared bindingは最大1、sourceのpermit／canonical snapshot／portも各最大1。ownerは独立copyを1件保持する。採用時のlease観測は最大2回、readonly検査も最大2回。追加HTTP試行／受信／payload課金・timer・retry・E/R操作は0。copyは既存のboundedなreleaseフィールド・limitationsだけで、制御work／allocation全体の承認済み上界を意味しない。
+
+正式なsource evidence receipt／payload／worker job・typed transport／cleanup・上位結果へは未接続。既存ReleasePermitをscope証拠のpermitに読み替えず、formal receipt／seal／findingの発行口は存在しない。全体受付無効・Unknown・telemetry／VM／監視保留を維持する。
+
+検証：[同source release bindingのfake I/O記録](E2E_BEST_PRACTICE_ABORT_SCOPE_SOURCE_RELEASE_BINDING_2026-10-27.md)。

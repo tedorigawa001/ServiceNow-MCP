@@ -1,5 +1,6 @@
 /** Session-private run lifecycle. No lookup, fixture adoption, source claim or evidence activation API. */
 import type {ReadFailureCode} from './bounded-read.js';
+import type {ReleaseEvidence} from '../review/result-schema-v2.js';
 type Code=ReadFailureCode|'evidence_binding_mismatch'|'invalid_observation_time';
 const codes=new Set<Code>(['cancelled','closed','deadline_exceeded','authentication_failed','access_denied',
   'receive_budget_exceeded','payload_budget_exceeded','internal_review_error','evidence_binding_mismatch','invalid_observation_time',
@@ -9,6 +10,15 @@ const fixed=(reason:unknown):Code=>typeof reason==='string'&&codes.has(reason as
 export interface ReviewRunBudgetLease {
   /** Observation only. Never dispatches, charges, refunds or extends a deadline. */
   read():Readonly<{requests:number;received_bytes:number;payload_bytes:number;remaining_ms:number}>;
+}
+export interface ReviewSourceReleaseSnapshot {readonly instance_release:ReleaseEvidence;readonly limitations:readonly string[];}
+/** Only the concrete source's private verifier supplies this port to a real session. */
+export interface ReviewSourceReleasePort {
+  matches():boolean;
+  copyRelease():ReviewSourceReleaseSnapshot;
+}
+function copyRelease(value:ReviewSourceReleaseSnapshot):ReviewSourceReleaseSnapshot{
+  return Object.freeze({instance_release:Object.freeze(structuredClone(value.instance_release)),limitations:Object.freeze([...value.limitations])});
 }
 const registered=new WeakSet<object>();
 /** The closure stays in the creating session's ECMAScript-private field. Arbitrary objects cannot
@@ -23,8 +33,11 @@ export function registerReviewEvidenceSession(session:object,snapshot:object,lea
   let generation=0;
   let readyStarted=false;
   let lastBudget:ReturnType<ReviewRunBudgetLease['read']>|undefined;
+  let sourceClaim:'unclaimed'|'consuming'|'claimed'|'failed'='unclaimed';
+  let sourceBinding:{source:object;permit:object;port:ReviewSourceReleasePort;ready:object;release:ReviewSourceReleaseSnapshot}|undefined;
   function revoke(reason:unknown,stage:'authentication'|'owner'|'binding'='owner'){
     primary??=Object.freeze({stage,code:fixed(reason)});ready=undefined;pinnedSnapshot=undefined;
+    if(sourceClaim==='consuming')sourceClaim='failed';sourceBinding=undefined;
     if(state!=='closed')state='stopped';
   }
   function check(currentSnapshot:object,currentLease:ReviewRunBudgetLease){
@@ -52,6 +65,34 @@ export function registerReviewEvidenceSession(session:object,snapshot:object,lea
     },
     revoke,
     failure(){return primary?.code;},
+    rejectSource(){revoke('evidence_binding_mismatch','binding');},
+    bindSource(currentSnapshot:object,currentLease:ReviewRunBudgetLease,source:object,permit:object,port:ReviewSourceReleasePort){
+      if(primary)return false;
+      if(sourceClaim!=='unclaimed'){
+        if(!sourceBinding||sourceBinding.source!==source||sourceBinding.permit!==permit||sourceBinding.port!==port)revoke('evidence_binding_mismatch','binding');
+        return false;
+      }
+      sourceClaim='consuming';
+      try{
+        if(!check(currentSnapshot,currentLease)||!ready||!port.matches()){revoke('evidence_binding_mismatch','binding');return false;}
+        const release=copyRelease(port.copyRelease());
+        if(!check(currentSnapshot,currentLease)||!ready||!port.matches()){revoke('evidence_binding_mismatch','binding');return false;}
+        sourceBinding={source,permit,port,ready,release};sourceClaim='claimed';return true;
+      }catch{revoke('internal_review_error','binding');return false;}
+    },
+    inspectSource(currentSnapshot:object,currentLease:ReviewRunBudgetLease,source:object,permit:object,port:ReviewSourceReleasePort){
+      const b=sourceBinding;
+      try{
+        if(!check(currentSnapshot,currentLease))return null;
+        if(!b||sourceClaim!=='claimed'||source!==b.source||permit!==b.permit||port!==b.port||ready!==b.ready||!port.matches()){
+          revoke('evidence_binding_mismatch','binding');return null;
+        }
+        const release=copyRelease(b.release);
+        if(!check(currentSnapshot,currentLease))return null;
+        if(ready!==b.ready||!port.matches()){revoke('evidence_binding_mismatch','binding');return null;}
+        return Object.freeze({state:'prepared_only' as const,...release,evidence_issuance:'disabled' as const});
+      }catch{revoke('internal_review_error','binding');return null;}
+    },
     close(reason:unknown){revoke(reason);state='closed';},
     inspect(currentSnapshot:object,currentLease:ReviewRunBudgetLease){
       check(currentSnapshot,currentLease);
@@ -59,7 +100,7 @@ export function registerReviewEvidenceSession(session:object,snapshot:object,lea
       try{budget=observeBudget();}
       catch{revoke('internal_review_error');}
       if(!primary)check(currentSnapshot,currentLease);
-      return Object.freeze({state,auth_ready:!!ready,ready_generation:generation,primary,budget,evidence_issuance:'disabled' as const});
+      return Object.freeze({state,auth_ready:!!ready,ready_generation:generation,source_claim:sourceClaim,primary,budget,evidence_issuance:'disabled' as const});
     },
   });
 }

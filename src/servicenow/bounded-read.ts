@@ -3,6 +3,7 @@ import { createHash } from 'node:crypto';
 import type { ServiceNowConfig } from './types.js';
 import { pinReviewReleaseConfig } from './review-release-config.js';
 import { registerReviewEvidenceSession, type ReviewRunBudgetLease } from './review-evidence-lifecycle.js';
+import {BoundedUpdateSetSource} from '../review/bounded-source.js';
 
 export const BOUNDED_LIMITS = Object.freeze({ responseBytes: 4 * 1024 * 1024, totalBytes: 16 * 1024 * 1024,
   payloadBytes: 2 * 1024 * 1024, totalPayloadBytes: 8 * 1024 * 1024,
@@ -96,6 +97,19 @@ export class BoundedReadSession {
   reviewRunStatus() {
     const status=this.#runOwner.inspect(this.#snapshot,this.#runLease);
     this.#syncRunFailure();return status;
+  }
+  /** Prepared release binding only; the concrete source verifies its own private permit/port. */
+  bindReviewReleaseSource(source:BoundedUpdateSetSource,permit:object){
+    this.check();const port=BoundedUpdateSetSource.releasePortFor(source,this,permit);
+    if(!port){this.#runOwner.rejectSource();this.#syncRunFailure();throw new BoundedReadError(this.stopCode??'internal_review_error');}
+    const bound=this.#runOwner.bindSource(this.#snapshot,this.#runLease,source,permit,port);
+    this.#syncRunFailure();if(!bound)throw new BoundedReadError(this.stopCode??'internal_review_error');
+  }
+  reviewReleaseSourceStatus(source:BoundedUpdateSetSource,permit:object){
+    const port=BoundedUpdateSetSource.releasePortFor(source,this,permit);
+    if(!port)this.#runOwner.rejectSource();
+    const result=port?this.#runOwner.inspectSource(this.#snapshot,this.#runLease,source,permit,port):null;
+    this.#syncRunFailure();if(!result)throw new BoundedReadError(this.stopCode??(this.disposed?'closed':'internal_review_error'));return result;
   }
   #syncRunFailure(){
     const reason=this.#runOwner.failure();

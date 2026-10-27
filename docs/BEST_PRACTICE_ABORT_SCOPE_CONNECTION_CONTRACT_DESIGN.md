@@ -10,7 +10,7 @@ HTTP側の証拠専用受信枠・最終再読の動的予約・停止分類は[
 
 実workerへ渡す前段は[実session claim・private受領物・終了時失効の詳細設計draft-0.2](BEST_PRACTICE_ABORT_SCOPE_REAL_SESSION_RECEIPTS_DESIGN.md)を参照する。撤去前のruntime fixture接続を現行実装と解釈せず、選択window／payload開始・移譲claimはfixture専用であることを区別する。正式な実worker ownerが未接続の間は本文移譲口を有効化しない。
 
-次工程の[共通停止／予算owner・実session／ReleasePermit binding詳細設計draft-0.3](BEST_PRACTICE_ABORT_SCOPE_RUN_OWNER_BINDING_DESIGN.md)で、認証前のrun確保とmatched後のsource claim、予算lease・同期失効・上位診断を対で定義した。HTTP cleanupとworker cleanupを別軸で保持し、本fixture上位resultのcleanupを実HTTPの確認済み証拠へ拡大しない。独立合成モデルに加え、実session classのprivate lifecycle／readonly lease限定接続をfake I/Oで検証済み。worker／正式source結合と正式発行gateは閉じたまま。
+次工程の[共通停止／予算owner・実session／ReleasePermit binding詳細設計draft-0.4](BEST_PRACTICE_ABORT_SCOPE_RUN_OWNER_BINDING_DESIGN.md)で、認証前のrun確保とmatched後のsource claim、予算lease・同期失効・上位診断を対で定義した。HTTP cleanupとworker cleanupを別軸で保持し、本fixture上位resultのcleanupを実HTTPの確認済み証拠へ拡大しない。実session private lifecycle／readonly leaseと同sourceのReleasePermit／不変release snapshotのprepared結合をfake I/Oで検証済み。worker／正式証拠receiptの結合と正式発行gateは閉じたまま。
 
 ## 1. 対象と現状
 
