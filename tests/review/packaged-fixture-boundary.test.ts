@@ -3,7 +3,7 @@ import * as lifecycle from '../../src/servicenow/review-evidence-lifecycle.js';
 import { BoundedReadSession } from '../../src/servicenow/bounded-read.js';
 const sessions:BoundedReadSession[]=[];let n=0;
 afterEach(()=>sessions.splice(0).forEach(s=>s.close()));
-const removed=['registerPreparedFixtureSource','claimPreparedFixtureOwner','claimPreparedTransportBudget','createPreparedFixtureWindow','claimPreparedTransfer','consumePreparedTransfer'];
+const removed=['registerPreparedFixtureSource','claimPreparedFixtureOwner','claimPreparedTransportBudget','createPreparedFixtureWindow','claimPreparedTransfer','consumePreparedTransfer','markReviewEvidenceAuthReady','revokeReviewEvidenceSession'];
 it.each(removed)('does not export fixture authority from the packaged lifecycle: %s',name=>{
   expect(Reflect.has(lifecycle,name)).toBe(false);
 });
@@ -21,4 +21,5 @@ it('does not switch a real session through any previously exported fixture chain
   expect(session.stats()).toEqual(before);await session.get(path);session.chargePayload('<a/>');session.setPhaseReserve(0);
   expect(session.stats()).toEqual({requests:2,received_bytes:4,payload_bytes:4});expect(fetcher).toHaveBeenCalledTimes(2);
   expect(Reflect.has(session,'claimTransportBudget')).toBe(false);
+  expect(session.reviewRunStatus()).toMatchObject({state:'ready',ready_generation:1,evidence_issuance:'disabled',budget:{requests:2,received_bytes:4,payload_bytes:4}});
 });

@@ -2,14 +2,14 @@
 import { createHash } from 'node:crypto';
 import type { ServiceNowConfig } from './types.js';
 import { pinReviewReleaseConfig } from './review-release-config.js';
-import { registerReviewEvidenceSession, markReviewEvidenceAuthReady, revokeReviewEvidenceSession } from './review-evidence-lifecycle.js';
+import { registerReviewEvidenceSession, type ReviewRunBudgetLease } from './review-evidence-lifecycle.js';
 
 export const BOUNDED_LIMITS = Object.freeze({ responseBytes: 4 * 1024 * 1024, totalBytes: 16 * 1024 * 1024,
   payloadBytes: 2 * 1024 * 1024, totalPayloadBytes: 8 * 1024 * 1024,
   deadlineMs: 60000, requestTimeoutMs: 10000, requests: 210, retryDelayMs: 250 });
 export type ReadFailureCode = 'invalid_input' | 'authentication_failed' | 'access_denied' | 'not_found_or_not_visible'
   | 'upstream_unavailable' | 'deadline_exceeded' | 'receive_budget_exceeded' | 'request_budget_exceeded'
-  | 'payload_budget_exceeded' | 'payload_limit' | 'invalid_response' | 'review_busy' | 'cancelled' | 'closed' | 'changed_during_review' | 'release_not_admitted' | 'config_invalid' | 'phase_deadline_exceeded' | 'candidate_filter_violation';
+  | 'payload_budget_exceeded' | 'payload_limit' | 'invalid_response' | 'review_busy' | 'cancelled' | 'closed' | 'changed_during_review' | 'release_not_admitted' | 'config_invalid' | 'phase_deadline_exceeded' | 'candidate_filter_violation' | 'internal_review_error';
 export class BoundedReadError extends Error {
   constructor(readonly code: ReadFailureCode) { super(code); this.name = 'BoundedReadError'; }
 }
@@ -39,7 +39,9 @@ export class BoundedReadSession {
   private readonly started = performance.now();
   readonly startedAt = new Date().toISOString();
   readonly authMode: 'per-user' | 'service-account';
-  private readonly snapshot: ReadSnapshot;
+  readonly #snapshot: ReadSnapshot;
+  readonly #runLease: ReviewRunBudgetLease;
+  readonly #runOwner: ReturnType<typeof registerReviewEvidenceSession>;
   private token?: string;
   private readyPromise?: Promise<void>;
   private stopCode?: ReadFailureCode;
@@ -52,7 +54,7 @@ export class BoundedReadSession {
   readonly releasePolicy: ReturnType<typeof pinReviewReleaseConfig>;
 
   constructor(snapshot: ReadSnapshot, options: BoundedReadOptions = {}) {
-    this.snapshot = { ...snapshot, oauth: { ...snapshot.oauth } };
+    this.#snapshot = { ...snapshot, oauth: { ...snapshot.oauth } };
     this.limits = { ...BOUNDED_LIMITS };
     for (const [key, value] of Object.entries(options.limits ?? {})) {
       if (!(key in BOUNDED_LIMITS) || !Number.isInteger(value) || value! < 1 || value! > BOUNDED_LIMITS[key as keyof typeof BOUNDED_LIMITS]) {
@@ -77,7 +79,9 @@ export class BoundedReadSession {
       this.authMode === 'per-user' ? snapshot.perUserBearerToken : [snapshot.oauth.clientId, snapshot.oauth.username ?? '']])).digest('hex');
     if (active >= 2 || principals.has(this.principalKey)) throw new BoundedReadError('review_busy');
     active++; principals.add(this.principalKey);
-    registerReviewEvidenceSession(this, this.snapshot);
+    this.#runLease=Object.freeze({read:()=>Object.freeze({requests:this.requests,received_bytes:this.receivedBytes,
+      payload_bytes:this.payloadBytes,remaining_ms:Math.max(0,this.limits.deadlineMs-(performance.now()-this.started))})});
+    this.#runOwner=registerReviewEvidenceSession(this,this.#snapshot,this.#runLease);
     this.fetcher = options.fetch ?? ((...args) => globalThis.fetch(...args));
     this.timer = setTimeout(() => this.stop('deadline_exceeded'), Math.max(0, this.limits.deadlineMs - (performance.now() - this.started)));
     const cancel = () => this.stop('cancelled');
@@ -88,6 +92,15 @@ export class BoundedReadSession {
   }
 
   stats() { return { requests: this.requests, received_bytes: this.receivedBytes, payload_bytes: this.payloadBytes }; }
+  /** Fixed readonly diagnostics only: no handles, credentials, lease or activation authority. */
+  reviewRunStatus() {
+    const status=this.#runOwner.inspect(this.#snapshot,this.#runLease);
+    this.#syncRunFailure();return status;
+  }
+  #syncRunFailure(){
+    const reason=this.#runOwner.failure();
+    if(reason&&!this.stopCode&&!this.disposed)this.stop(reason==='evidence_binding_mismatch'||reason==='invalid_observation_time'?'internal_review_error':reason);
+  }
   /** Monotonic run budget, also usable for safe CPU finalization after an HTTP stop. */
   remainingMs() { return Math.max(0, this.limits.deadlineMs - (performance.now() - this.started)); }
   get deadlineMs() { return this.limits.deadlineMs; }
@@ -104,10 +117,11 @@ export class BoundedReadSession {
   assertActive() { this.check(); }
   private stop(code: ReadFailureCode) {
     this.stopCode ??= code;
-    revokeReviewEvidenceSession(this, this.stopCode);
+    this.#runOwner.revoke(this.stopCode);
     this.controller.abort();
   }
   private check() {
+    this.#syncRunFailure();
     if (performance.now() - this.started >= this.limits.deadlineMs) this.stop('deadline_exceeded');
     if (this.stopCode) throw new BoundedReadError(this.stopCode);
     if (this.disposed) throw new BoundedReadError('closed');
@@ -135,15 +149,15 @@ export class BoundedReadSession {
   }
   close() {
     if (this.disposed) return;
-    revokeReviewEvidenceSession(this, this.stopCode ?? 'closed');
+    this.#runOwner.close(this.stopCode ?? 'closed');
     this.disposed = true; clearTimeout(this.timer); clearTimeout(this.phaseTimer); this.removeExternal();
     this.phase.abort();
     this.controller.abort(); active--; principals.delete(this.principalKey);
     this.token = undefined;
     // A closed snapshot must not retain per-user credentials after its owner
     // revokes an R-2 session. This snapshot is an isolated copy, not user config.
-    this.snapshot.perUserBearerToken = undefined;
-    this.snapshot.accessToken = undefined;
+    this.#snapshot.perUserBearerToken = undefined;
+    this.#snapshot.accessToken = undefined;
   }
   private async attempt(path: string, init: RequestInit, final: boolean): Promise<{ status: number; value?: unknown }> {
     this.check();
@@ -229,11 +243,11 @@ export class BoundedReadSession {
     throw new BoundedReadError('upstream_unavailable');
   }
   private async authenticate() {
-    if (this.authMode === 'per-user') { this.token = this.snapshot.perUserBearerToken; return; }
-    if (this.snapshot.accessToken && (this.snapshot.tokenExpiry ?? 0) > Date.now() + this.limits.deadlineMs) {
-      this.token = this.snapshot.accessToken; return;
+    if (this.authMode === 'per-user') { this.token = this.#snapshot.perUserBearerToken; return; }
+    if (this.#snapshot.accessToken && (this.#snapshot.tokenExpiry ?? 0) > Date.now() + this.limits.deadlineMs) {
+      this.token = this.#snapshot.accessToken; return;
     }
-    const oauth = this.snapshot.oauth;
+    const oauth = this.#snapshot.oauth;
     if (!oauth.clientId || !oauth.clientSecret) throw new BoundedReadError('authentication_failed');
     const body = new URLSearchParams({ client_id: oauth.clientId, client_secret: oauth.clientSecret,
       grant_type: oauth.username && oauth.password ? 'password' : 'client_credentials' });
@@ -252,8 +266,10 @@ export class BoundedReadSession {
     if (this.busy) throw new BoundedReadError('review_busy');
     this.busy = true;
     try {
-      this.readyPromise ??= this.authenticate().then(() => { markReviewEvidenceAuthReady(this); }, error => {
-        revokeReviewEvidenceSession(this, error instanceof BoundedReadError ? error.code : 'internal_review_error');
+      this.readyPromise ??= this.authenticate().then(() => {
+        if(!this.#runOwner.markReady(this.#snapshot,this.#runLease)){this.#syncRunFailure();this.check();throw new BoundedReadError('internal_review_error');}
+      }, error => {
+        this.#runOwner.revoke(error instanceof BoundedReadError ? error.code : 'internal_review_error','authentication');
         throw error;
       });
       await this.readyPromise; this.check();

@@ -4,7 +4,7 @@ Version: br006-real-session-receipts-draft-0.2 / Date: 2026-10-27。
 Status: **正式receiptの設計案。撤去後の実lifecycleはlive／ready／snapshot／理由の管理だけで、prepared owner／draft／claimはfixture専用台帳へ分離済み。実sessionの専用issuer／claim・正式発行は未実装／閉鎖**。
 親：[固定source issuer](BEST_PRACTICE_ABORT_SCOPE_FIXED_SOURCE_ISSUER_DESIGN.md)、[接続契約](BEST_PRACTICE_ABORT_SCOPE_CONNECTION_CONTRACT_DESIGN.md)、[bounded予算](BEST_PRACTICE_ABORT_SCOPE_BOUNDED_BUDGET_DESIGN.md)。
 
-後続の[実transport受領物・cleanup・単一C/G/E/R/clock設計](BEST_PRACTICE_ABORT_SCOPE_TRANSPORT_RECEIPTS_DESIGN.md)のfixture分離境界と、[共通停止／予算owner・実session／ReleasePermit binding設計draft-0.2](BEST_PRACTICE_ABORT_SCOPE_RUN_OWNER_BINDING_DESIGN.md)を優先する。fixtureから実session会計へ接続する旧経路は撤去し、fixture登録・owner・claim・会計は開発専用の別台帳へ移した。注入Responseの実Web Streams操作はそのfixtureにだけ接続する。以降の合成検証は本番接続の証拠とせず、実sessionの専用issuer／claim接続・正式発行・有効化は未実装／閉鎖とする。
+後続の[実transport受領物・cleanup・単一C/G/E/R/clock設計](BEST_PRACTICE_ABORT_SCOPE_TRANSPORT_RECEIPTS_DESIGN.md)のfixture分離境界と、[共通停止／予算owner・実session／ReleasePermit binding設計draft-0.3](BEST_PRACTICE_ABORT_SCOPE_RUN_OWNER_BINDING_DESIGN.md)を優先する。fixtureから実session会計へ接続する旧経路は撤去し、fixture登録・owner・claim・会計は開発専用の別台帳へ移した。注入Responseの実Web Streams操作はそのfixtureにだけ接続する。実sessionのprivate run lifecycle／readonly予算leaseだけをfake I/Oで検証したが、正式source issuer／claim・証拠発行・有効化は未実装／閉鎖とする。
 
 ## 1. 範囲と現行との差
 

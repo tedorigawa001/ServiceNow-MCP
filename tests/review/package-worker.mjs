@@ -31,7 +31,7 @@ try {
     'unconnected BR-006 scope evidence must remain development-only');
   run('tar', ['-xzf', join(temporary, packed.filename), '-C', temporary]);
   const installed = join(temporary, 'package');
-  for(const name of ['registerPreparedFixtureSource','claimPreparedFixtureOwner','claimPreparedTransportBudget']){
+  for(const name of ['registerPreparedFixtureSource','claimPreparedFixtureOwner','claimPreparedTransportBudget','markReviewEvidenceAuthReady','revokeReviewEvidenceSession']){
     assert(!readFileSync(join(installed,'dist/servicenow/review-evidence-lifecycle.js'),'utf8').includes(`export function ${name}(`),`packaged fixture authority: ${name}`);
   }
   const manifest = JSON.parse(readFileSync(join(installed, 'package.json'), 'utf8'));

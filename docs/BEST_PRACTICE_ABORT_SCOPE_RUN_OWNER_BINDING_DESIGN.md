@@ -1,7 +1,7 @@
 # AU-BR-006 共通停止／予算owner・実session／ReleasePermit binding 詳細設計
 
-Version: br006-run-owner-binding-draft-0.2 / Date: 2026-10-27。
-Status: **独立合成issuer内でowner／診断slot／run・source claim／readonly bindingを限定実装。実session・実ReleasePermit・会計／停止通知・実transportは未接続、正式証拠発行は閉鎖。Unknown・全体受付無効、VM／監視／telemetry保留を維持**。
+Version: br006-run-owner-binding-draft-0.3 / Date: 2026-10-27。
+Status: **独立合成モデルに加え、実session classのprivate run lifecycle・認証snapshot／ready世代・同期失効・readonly予算leaseをfake I/Oで検証。正式source／ReleasePermit・会計操作／実transportは未接続、正式証拠発行は閉鎖。Unknown・全体受付無効、VM／監視／telemetry保留を維持**。
 
 親：[実session／private受領物](BEST_PRACTICE_ABORT_SCOPE_REAL_SESSION_RECEIPTS_DESIGN.md)、[用途別transport受領物](BEST_PRACTICE_ABORT_SCOPE_TRANSPORT_RECEIPTS_DESIGN.md)、[worker接続契約](BEST_PRACTICE_ABORT_SCOPE_CONNECTION_CONTRACT_DESIGN.md)、[OAuth起点の合成接続](BEST_PRACTICE_ABORT_SCOPE_OAUTH_SOURCE_HANDOFF_DESIGN.md#14-oauth起点のworker上位結果までの連続合成e2e)。
 
@@ -12,7 +12,7 @@ Status: **独立合成issuer内でowner／診断slot／run・source claim／read
 1. 同じ実sessionの時計・phase・C/G/Pと、将来のE/R・HTTP／worker停止・終了診断を所有する共通run owner。
 2. 同session／認証snapshot／ready世代／source／同sourceのReleasePermitと、不変な発行時release根拠へ結合するprepared source owner。
 
-§1〜§11の本番型・method名は内部契約案であり、実sessionへ接続済みのAPIではない。§13の合成実装と区別する。preparedはidentity確保だけを意味し、body receipt／payload receipt／FinalSourceSeal／正式findingを発行できない。証拠専用取得・cleanup証拠・選択payload・worker jobの正式bindingが揃うまで、発行gateは常に拒否する。
+§1〜§11は全体の内部契約案であり、全APIの接続済みを意味しない。§13の合成モデル、§14のprivate lifecycle限定接続と区別する。preparedはidentity確保だけを意味し、body receipt／payload receipt／FinalSourceSeal／正式findingを発行できない。証拠専用取得・cleanup証拠・選択payload・worker jobの正式bindingが揃うまで、発行gateは常に拒否する。
 
 公開MCP入力、公開0.2／0.3、明示14／既定3規則、既存release gate・selection_mode省略互換を変更しない。AU-BR-006の公開登録・証拠取得modeのツール引数追加・実sessionのfixture登録・実資格情報の取得は今回の範囲外。同processの侵害コードや侵害workerを隔離する仕組みではない。
 
@@ -21,7 +21,7 @@ Status: **独立合成issuer内でowner／診断slot／run・source claim／read
 | 箇所 | 現在あるもの | 本設計で必要なもの／まだ無いもの |
 |---|---|---|
 | [bounded-read](../src/servicenow/bounded-read.ts) | snapshotコピー、単調開始時計、認証readyPromise、C/G/P、hard／phase停止、closeによる一度限りの枠解放 | 共通run identityと一度限りのclaim、保護された予算lease、正式source／workerへの停止伝播 |
-| [実lifecycle](../src/servicenow/review-evidence-lifecycle.ts) | private WeakMapのlive／ready boolean／snapshot参照／理由、同期revoke | AuthSnapshotIdentity・AuthReadyGeneration・正式owner claim／receipt。現在の登録hookだけでは発行権限にならない |
+| [実lifecycle](../src/servicenow/review-evidence-lifecycle.ts) | private owner／snapshot identity／一世代ready／同期revoke／readonly予算lease、同session再登録拒否（§14） | 正式source claim／receipt、実ReleasePermit・worker結合。private lifecycle成立だけでは発行権限にならない |
 | [実source](../src/review/bounded-source.ts) | 同sourceの#permit参照、matched判定、選択行・payload版照合、最終親／一覧再読 | private生成入口、source claim、独立した不変release snapshot、型付き選択／body／payload受領物 |
 | [実adapter](../src/review/update-set-adapter.ts) | sessionと通常workerの残時間・外部signalを接続し、finallyで終了処理 | BR-006用の正式bindingと、HTTP内部停止も含む共通診断／失効／終了owner |
 | [fixture worker](../src/review/abort-scope-evidence-worker-review.ts) | native IPC、厳密な相関検査、取消／terminate確認、fixture専用上位result | 本番source由来のjob・payload receiptとの結合。remainingMs／signalの引数自体は由来の証明ではない |
@@ -246,6 +246,34 @@ replaceSyntheticIdentityは敵対的fixtureの前提を変更する専用操作�
 
 readonly検査は固定2回のclock検査と有限個の参照比較を行う。HTTP試行・chunk・payload・worker・timer操作は0で、C/G/P/E/Rは実装せず、budgetは参照identityだけ。実allocator容量、制御work上界、既存C/G/Pの引継ぎ、E/R配賦、child停止と診断合流は未確認のまま。合成通知／premiseから正式receiptや本番capを発行しない。
 
-次は本番専用のprivate生成元・実session lifecycle・予算leaseへの接続条件をfake I/Oで検証する工程であり、既存fixture台帳を実sessionへ再接続しない。選択payload／worker job・typed transport／cleanup・公開結果は後工程。Unknown・全体受付無効・正式発行口閉鎖・VM／監視／telemetry保留を維持する。
+この合成モデルからの次工程として、§14で実session lifecycle・readonly予算leaseへの接続をfake I/Oで検証した。既存fixture台帳は実sessionへ再接続しない。選択payload／worker job・typed transport／cleanup・公開結果は後工程。Unknown・全体受付無効・正式発行口閉鎖・VM／監視／telemetry保留を維持する。
 
 検証：[合成run owner・claim・readonly bindingの記録](E2E_BEST_PRACTICE_ABORT_SCOPE_RUN_OWNER_SYNTHETIC_2026-10-27.md)。
+
+## 14. 実session private lifecycle接続（fake I/O検証）
+
+### 14.1 生成元と所有権
+
+`BoundedReadSession`のconstructorは孤立した`#snapshot`、固定`#runLease`、`#runOwner`をECMAScript private fieldへ保持する。`registerReviewEvidenceSession`が返すclosureをconstructorが一度だけ取得し、readonly診断以外は外へ返さない。同session keyの再登録はWeakSetで拒否し、終了後も再登録できない。旧mark／revoke-by-session exportは削除し、sessionのprivate portだけが通知を行う。
+
+任意objectで同moduleの関数を呼んでも、別の孤立ownerができるだけで、実sessionのprivate owner取得・置換・ready操作はできない。この関数はsource／証拠発行の登録口ではない。§13の合成issuer・fixture台帳・claim・permitを採用する経路はない。
+
+### 14.2 認証と同期失効
+
+同constructorのsnapshot参照にAuthSnapshotIdentityを結合し、既存readyPromiseの認証成功継続だけがreadyを通知する。ready遷移claimはlease検査より前に消費し、再入／二重通知／失敗後の再認証で作り直さない。ready世代は0→1だけであり、per-user・OAuth cache・OAuth交換／retryとも同じrunを使う。
+
+stopは最初の理由を固定し、ownerのreadyとsnapshot参照を同期失効させてからAbortControllerをabortする。closeはownerを閉鎖してから既存timer／listener／同時実行枠を解放する。遅いOAuth応答、取消・認証失敗・close後の通知でreadyは復活しない。owner側の固定失敗も既存checkへ合流し、binding／観測不整合はtransport側ではinternal_review_errorとして停止する。先行owner診断は上書きしない。
+
+### 14.3 readonly leaseと診断
+
+leaseは同sessionの既存requests／receivedBytes／payloadBytesと元の単調開始時計・deadlineを読むだけ。公開stats／remainingMsの再提出やコピーをauthorityにせず、第二の会計・timer・dispatch・予約・課金・返金・上限更新APIを作らない。元の60秒・210試行・低減設定と4 final試行予約を変更しない。正常phase cutoffはhard停止と区別し、残るfinalization時間を新runに置き換えない。
+
+`reviewRunStatus()`は凍結したstate／ready boolean・世代番号／固定stage・code／有限数値の会計観測／`evidence_issuance=disabled`だけを返す内部診断。snapshot／token／principal／ready object／lease／source／permitを返さず、MCPの公開入力・結果schemaへ追加しない。観測の逆行・非有限値・counter減少・例外を固定理由で停止し、未知reason・Error本文は出力しない。診断取得には失敗時の停止副作用があり、稼働権限を返すpure queryではない。
+
+生成時のrun／診断slot／readonly leaseは各1、ready世代は最大1。markReadyのlease観測は最大1回、通常の診断は最大3回、停止後は最大1回で、C/G/Pを追加消費しない。これは制御work・実allocatorの上界や全体受付の承認ではない。E/R・typed cleanup・worker停止は未接続で、cleanup終了を確認済みにしない。
+
+### 14.4 残課題
+
+既存の`ReleasePermit`・固定source／選択payload／worker job・不変release根拠と正式に結合していない。§13の合成source bindingを実sessionへ昇格させず、formal source claim／証拠receipt／seal／findingを発行する口は閉じたままにする。予算leaseはreadonly観測subsetで、transportの用途別会計や停止ownerの全仕様が完了したわけではない。
+
+検証：[private lifecycle・ready・readonly leaseのfake I/O記録](E2E_BEST_PRACTICE_ABORT_SCOPE_RUN_OWNER_LIFECYCLE_2026-10-27.md)。実transport・実機操作・設定変更・本番cap／全体受付・Pushは実施しない。

@@ -45,7 +45,7 @@ const no=(code:PreparedOwnerFailure):Result<never>=>Object.freeze({ok:false,code
 const readCodes={invalid_input:true,authentication_failed:true,access_denied:true,not_found_or_not_visible:true,
   upstream_unavailable:true,deadline_exceeded:true,receive_budget_exceeded:true,request_budget_exceeded:true,
   payload_budget_exceeded:true,payload_limit:true,invalid_response:true,review_busy:true,cancelled:true,closed:true,
-  changed_during_review:true,release_not_admitted:true,config_invalid:true,phase_deadline_exceeded:true,candidate_filter_violation:true} satisfies Record<ReadFailureCode,true>;
+  changed_during_review:true,release_not_admitted:true,config_invalid:true,phase_deadline_exceeded:true,candidate_filter_violation:true,internal_review_error:true} satisfies Record<ReadFailureCode,true>;
 const codes=new Set<PreparedOwnerFailure>([...Object.keys(readCodes) as ReadFailureCode[],
   'invalid_state','evidence_binding_mismatch','internal_review_error']);
 function code(raw:unknown):PreparedOwnerFailure{return codes.has(raw as PreparedOwnerFailure)?raw as PreparedOwnerFailure:'internal_review_error';}
