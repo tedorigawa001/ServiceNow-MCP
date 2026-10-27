@@ -308,7 +308,7 @@ E閉鎖理由を優先し、初回outcomeは別列`initial_outcome`として保�
 
 `FixtureAccountingSession`の明示的な`oauthBootstrap:true`は認証未完了・C/G=0から始まるservice-account専用fixture。従来のper-user baselineと混在させない。`claimFixtureBootstrapTransport`はfixture台帳の同session参照・active・未ready・未owner・未claimを要求し、prepared ownerとは別の未認証入口から**同じ一度限りのtransport claim**を消費する。providerがないper-user、既にready、実BoundedReadSession、clone／再生成／生成失敗後の再使用を拒否する。実台帳への登録やtype castによる昇格はない。
 
-`createFixtureOAuthBootstrap`はPOST `/oauth_token.do`・client_credentials・ordinalの凍結合成descriptorだけを注入Response供給関数へ渡す。credential／フォーム本文／endpoint引数・global fetchは持たない。実OAuth交換やcredentialの検査を実装したという意味ではない。低水準fixture adapterでは同machineを維持して後続の合成GETへ進め、C/G/R／開始時計を作り直さない。固定source compositionへownerとtransportを安全に移譲する入口は**未接続**。認証後に二つ目のtransport factoryを作って予算をリセットする方式は禁止する。
+`createFixtureOAuthBootstrap`はPOST `/oauth_token.do`・client_credentials・ordinalの凍結合成descriptorだけを注入Response供給関数へ渡す。credential／フォーム本文／endpoint引数・global fetchは持たない。実OAuth交換やcredentialの検査を実装したという意味ではない。低水準fixture adapterでは同machineを維持して後続の合成GETへ進め、C/G/R／開始時計を作り直さない。OH-03の同transport採用は末尾の別compositionから行い、この独立bootstrapのsummaryを正式ticketへ昇格させない。認証後に二つ目のtransport factoryを作って予算をリセットする方式は禁止する。
 
 OAuth JSONはEOF／受信枠／digest／cleanup確認後に、固定の純粋policyで検査する。access_tokenは非空・空白のみ不可・CR/LFなし・最大8,192文字、expires_inは有限の正数、寿命msが同runの全deadline_msより厳密に長いことを要求する。token_type省略は既存bounded経路と互換にし、指定時はstringのBearerを大小文字非区別で比較する。errorを持つ成功応答は拒否する。scope／ユーザー本人性／Table API権限を認定せず、R-2の認可code／PKCE／scope契約を変更しない。これらはfixtureの保守的policyで、本番policy承認ではない。
 
@@ -327,8 +327,8 @@ token／refresh_token／error_description／余分な列は一般body receipt・
 
 machineの`diagnostics()`は固定primary／primary_detail、最後の失敗試行snapshot、cleanup不明、fixture auth_readyだけを返す。last_failureのretryableは**そのsettlement時点の記録**であり、現時点の再試行permitではない。成功後も以前の上流障害を保持できるが、beginは同用途票／phase／期限／最大試行／cleanupを改めて検査する。OAuth枯渇や開始拒否の終端化も、実際に観測した同permitの状態からだけ導き、caller申告の失敗codeを採用しない。closeで先行上流障害を上書きしない。
 
-残課題は、認証後の固定sourceへのone-shot移譲、実source／選択payload／worker・ReleasePermitへの結合、実credential／tokenのprivate管理、実HTTP／本番専用claimとscope／権限検証。本module群は非同梱prefixを維持し、正式証拠発行口・全体受付は閉鎖／無効。VM／監視／telemetry保留を維持する。
+残課題は、実source／選択payload／worker・ReleasePermitへの結合、実credential／tokenのprivate管理、実HTTP／本番専用claimとscope／権限検証。認証後の固定sourceへのone-shot移譲はOH-03でfixture限定に接続した。本module群は非同梱prefixを維持し、正式証拠発行口・全体受付は閉鎖／無効。VM／監視／telemetry保留を維持する。
 
 検証：[OAuth bootstrap・失敗分類の合成記録](E2E_BEST_PRACTICE_ABORT_SCOPE_OAUTH_BOOTSTRAP_SYNTHETIC_2026-10-26.md)。
 
-後続の[OAuth後の同transport→固定source移譲詳細設計draft-0.3](BEST_PRACTICE_ABORT_SCOPE_OAUTH_SOURCE_HANDOFF_DESIGN.md#12-oh-02固定dispatcherと既存adapterの所有者切替fixture限定)では、OH-02として同fixture sessionの生成claim、固定dispatcher、同じWeb Streams adapterの所有者切替を接続した。counter／時計／transportを再生成せず、古いbootstrap facadeとroot取消の権限を分離する。認証readyとadapter-finallyを別に検査し、Response／streamの再利用台帳も維持する。固定親probeまでの限定実装で、固定source全体の採用はOH-03、実session・正式証拠は未接続のまま。
+後続の[OAuth後の同transport→固定source移譲詳細設計draft-0.4 §13](BEST_PRACTICE_ABORT_SCOPE_OAUTH_SOURCE_HANDOFF_DESIGN.md#13-oh-03同transportの固定source-private採用初回最終と予約解放)では、OH-02の同fixture session生成claim・固定dispatcher・所有者切替に加え、OH-03の固定source private採用を接続した。counter／時計／transportを再生成せず、初回／最終観測・予約解放まで継続し、古いbootstrapとroot取消の権限を分離する。認証readyとadapter-finallyを別に検査し、Response／streamの再利用台帳も維持する。実session・正式証拠と、このOAuth起点のworker／上位結果連続E2Eは未接続／未確認のまま。

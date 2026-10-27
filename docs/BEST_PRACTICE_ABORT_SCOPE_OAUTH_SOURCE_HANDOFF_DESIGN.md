@@ -1,7 +1,7 @@
 # AU-BR-006 OAuth後の同transport→固定source移譲 詳細設計
 
-Version: br006-oauth-source-handoff-draft-0.3 / Date: 2026-10-27。
-Status: **OH-01の独立合成モデルに続き、OH-02の固定dispatcher・既存fixture adapterの所有者切替を実装。固定source全体の採用はOH-03へ残し、実sessionは未接続。正式発行口閉鎖、全体受付無効・Unknown、VM／監視／telemetry保留を維持**。
+Version: br006-oauth-source-handoff-draft-0.4 / Date: 2026-10-27。
+Status: **OH-03として同transportを固定sourceのprivate coreへ採用し、初回／最終観測・予約解放・会計継続を合成経路で接続。実sessionと、このOAuth起点からのworker／上位結果連続検証は未接続／未確認。正式発行口閉鎖、全体受付無効・Unknown、VM／監視／telemetry保留を維持**。
 
 親：[transport／OAuth bootstrap](BEST_PRACTICE_ABORT_SCOPE_TRANSPORT_RECEIPTS_DESIGN.md#17-未認証fixtureのoauth-bootstrapと固定失敗分類)、[固定source](BEST_PRACTICE_ABORT_SCOPE_FIXED_SOURCE_ISSUER_DESIGN.md#13-固定sourceとweb-streams受領物の結合fixture限定)。
 
@@ -11,7 +11,7 @@ Status: **OH-01の独立合成モデルに続き、OH-02の固定dispatcher・�
 
 成功summaryの`auth_ready`やstatsを受け取り、新session／machineを生成する方式は採らない。移譲によってsourceの親／release／selection／planが成立したとは扱わず、正式receipt・seal・公開findingも発行しない。
 
-## 2. ソース照合で確認した不足
+## 2. ソース照合で確認した不足（OH-02実装前の整理。現状は§12／§13）
 
 | 現行箇所 | 実装済み | 移譲に不足するもの |
 |---|---|---|
@@ -40,7 +40,7 @@ descriptor生成も固定内部関数に限定する。移譲時にURL／query�
 
 ### 3.2 二つ目のfactoryを作らない
 
-固定sourceの内部処理を「transport生成を伴う既存入口」と「既知の移譲capabilityを消費するprivate入口」に分ける案とする。後者は任意の`{machine, stats, run}` objectを受け取らず、同run ownerの私有台帳で認識したhandleだけを採用する。既存の独立fixture入口は維持できるが、同sessionでの混用は拒否する。
+固定sourceの内部処理を「transport生成を伴う既存入口」と「既知の移譲capabilityを消費するprivate入口」に分ける。§13でこの分離を実装した。後者は任意の`{machine, stats, run}` objectを受け取らず、同run ownerだけが認識するticketを採用する。既存の独立fixture入口は維持するが、同sessionでの混用は拒否する。
 
 移譲は再bind／再登録／再認証ではない。`claimPreparedTransportBudget`、`claimFixtureBootstrapTransport`、`claimTransportBudget`を再度呼ばず、C/G等のコピーから新portを作らない。Response／stream再利用検査のWeakSet、permit台帳、hash／cleanup状態、native reader管理も同じinstanceを保つ。
 
@@ -180,7 +180,7 @@ dispatcherの参照・注入関数・Update Set IDは同closureに固定する�
 
 rootのofferは同closureのopaque ticketを一度発行する。adoptは既知ticketを先に消費し、adopting→idle検査→ready再照合→同期source_owned commitへ進む。foreign／clone／既消費ticketや古いbootstrap facadeのrun／close／cancelは、新sourceを停止しない。root cancel／closeとsession失効は同machineの停止へ合流し、移譲後も次GETを拒否し、進行中I/Oのcleanupを一度だけ要求する。primaryとcleanup不明は別軸で保持し、終端でauth-readyへ戻らない。
 
-OH-02の採用laneは**固定親GETの一度限りの`probeParent`だけ**を持つ。既存`consumeSourceBody`で必要列へ投影して即破棄し、返すのは固定outcome／synthetic／evidence disabledのみ。raw body・rows・receipt・machine・permit・ready identityは返さない。これは所有者切替後のdispatchを検証する限定probeであり、固定sourceのprepare／table初回／最終／deliveryの採用入口ではない。probe済みadapterを後から固定sourceへ登録する迂回口も作らない。全体のprivate採用・親／metadata／table最終・予約R=0・workerはOH-03へ残す。
+OH-02の採用laneは**固定親GETの一度限りの`probeParent`だけ**を持つ。既存`consumeSourceBody`で必要列へ投影して即破棄し、返すのは固定outcome／synthetic／evidence disabledのみ。raw body・rows・receipt・machine・permit・ready identityは返さない。これは所有者切替後のdispatchを検証する限定probeであり、固定sourceのprepare／table初回／最終／deliveryの採用入口ではない。probe済みadapterを後から固定sourceへ登録する迂回口も作らない。後続OH-03の全体private採用は§13で別に接続する。
 
 | 費目／保持 | OH-02での所有者・検証範囲 |
 |---|---|
@@ -190,6 +190,30 @@ OH-02の採用laneは**固定親GETの一度限りの`probeParent`だけ**を持
 | 追加検査 | offer／adoptごとにlive checkpoint 1、machine handoff checkpoint 1、ready参照再照合1。各checkpoint内部のbudget確認も維持 |
 | 保留 | 実allocatorの確保数／容量、control全体work上界、ready／ReleasePermit／worker jobの本番由来は証明していない |
 
-親probeだけではR=4を最終解放しない。これはOH-03の全体C=7/8・R=0 oracleの代替ではない。実credential／tokenは保持・header利用せず、Response供給関数はfixture TCBであって実通信の認証証拠ではない。正式な証拠発行口は閉鎖、全体受付無効・Unknown・VM／監視／telemetry保留を維持する。
+親probeだけではR=4を最終解放しない。これは§13の全体C=7/8・R=0 oracleの代替ではない。実credential／tokenは保持・header利用せず、Response供給関数はfixture TCBであって実通信の認証証拠ではない。正式な証拠発行口は閉鎖、全体受付無効・Unknown・VM／監視／telemetry保留を維持する。
 
 検証：[OH-02固定dispatcher・所有者切替の合成記録](E2E_BEST_PRACTICE_ABORT_SCOPE_HANDOFF_OH02_SYNTHETIC_2026-10-27.md)。
+
+## 13. OH-03：同transportの固定source private採用・初回／最終と予約解放
+
+固定sourceの実処理を非exportの`fixedSourceOnTransport`へ分離し、既存の独立fixture constructorとOAuth ownerを同じ`abort-scope-evidence-fixed-web-source.ts`へ置いた。旧`abort-scope-evidence-oauth-handoff.ts`は互換re-exportだけを持つ。外部からadapter／machine／port／statsを受け取るconstructor、任意登録口、公開factory callbackは追加しない。
+
+rootの`adoptSource(ticket)`は、OH-02の`adopt(ticket)`と同じclaimTicket／commitを使う。既知ticketを一度消費してadoptingへ進め、同closureが保持する既存apiとpin済みUpdate Setだけでprivate coreを構築する。最後に同じidle／ready／clock検査を行い同期commitする。probeと固定sourceの両方を採用することや、probe実施後のsource昇格はできない。失敗したticketをofferedへ戻さず、別adapter／destination／I/Oへ修正する口もない。
+
+private coreは既存のprepare→親／metadata初回、table initial（同名cache）、finalize→親／metadata／受付順table最終、consumeObservationsを共用する。新しいprepared ownerやfake matched値をhandoff条件として生成せず、元transportのC/G/P/E/R／retry／同時計／50・55・60秒境界を維持する。基底fixture machineのparent／release／selection／plan定数は正式取得証拠へ昇格しない。adopt自体ではGET・課金・予約操作を行わない。
+
+全操作入口・awaitでの受信後・delivery前に同ownerのlive／ready参照を検査する。root失敗時はprivate discardを同期実行し、parent／metadata／table／未消費deliveryを破棄する。source失敗もrootへ固定理由を伝え、source／rootの一次診断を後続closeで上書きしない。discardは一度だけ、IO停止・abort／reader cleanupは同じmachine／adapterの経路へ合流する。session失効はmachineを同期停止し、以後のsource操作／stats検査でもデータを失効させる。参照破棄は物理ゼロ化の証明ではない。
+
+| 経路 | 会計・予約の確認 |
+|---|---|
+| OAuth初回成功＋1table初回／最終 | C=1+2+1+3=7。Rは4→table受付で6→final終端で0。cache・投影・比較・deliveryは課金なし |
+| OAuth 429／503→cleanup済みretry成功 | C=8。失敗bodyを含む読み取った全chunkをGへ保持。tableのchunkだけE、payloadなしP=0 |
+| table初回404／503枯渇／不正JSON／意味不足 | 局所unverifiedのまま親／metadata最終を継続。table final GETをせず未使用予約を一度解放。404本文はcancelのみでreadしない |
+| E=262144に達する最終503 | 不要になった最終retry 1枠だけ解放し、同slotを再dispatchしない。C/G/Eは返金しない |
+| 401／403・binding矛盾・取消・hard期限・cleanup未確認 | 全体停止。final／deliveryでstableへ救済しない。失敗経路でR=0を成功証明として捏造しない |
+
+成功summaryはfixture-onlyのstable／changed／unverifiedと`seal:null`、deliveryも既存の正規化観測／synthetic／evidence disabledだけ。root・sourceの一度限りの消費を維持し、本文／token／extra columnや正式receiptは出さない。
+
+今回の接続で既存workerへ渡せるnormalized deliveryまでは継続するが、**OAuth→固定source→worker→上位結果の新しい連続E2Eは未実施**。別起点の既存worker合成試験の成功を、この起点のjob／payload／実認証由来の証明に代用しない。実session／ReleasePermit／worker job binding・本番token管理・公開BR-006契約・cap承認・全体work／保持／終了保証・実機検証も残る。正式発行口閉鎖・全体受付無効・Unknown・VM／監視／telemetry保留を維持する。
+
+検証：[OH-03 private採用・初回／最終観測・会計継続の合成記録](E2E_BEST_PRACTICE_ABORT_SCOPE_HANDOFF_OH03_SYNTHETIC_2026-10-27.md)。
