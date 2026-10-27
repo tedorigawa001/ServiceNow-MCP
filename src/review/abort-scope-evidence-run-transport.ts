@@ -39,7 +39,7 @@ export function createFakeRunTransportSession(clock:{now():number},io:FakeRunIo,
   let initializing=true;
   const cleanup=createFakeCleanupContract({now:()=>{if(initializing)return origin;const n=observe();if(n===null)throw Error('invalid_observation_time');return n;}},{deadline_ms:config.deadline_ms,max_attempts:config.requests});
   initializing=false;
-  const attempts=new WeakMap<FakeCleanupAttempt,{next:number;bytes:number;kind:string;payloadUsed:boolean}>();
+  const attempts=new WeakMap<FakeCleanupAttempt,{next:number;bytes:number;kind:string;payloadUsed:boolean;deadline:number}>();
   let current:FakeCleanupAttempt|undefined;
   let worker:FakeCleanupWorker|undefined;
   let pendingPayload:FakeCleanupAttempt|undefined;
@@ -84,6 +84,7 @@ export function createFakeRunTransportSession(clock:{now():number},io:FakeRunIo,
     }finally{busy=false;}
   }
   const transport=Object.freeze({
+    attemptDeadline(attempt:FakeCleanupAttempt):Result<number>{const a=attempts.get(attempt);return a&&current===attempt?ok(a.deadline):stop('evidence_binding_mismatch');},
     enterFinal():Result<true>{return operation(()=>pendingPayload?stop('internal_review_error'):cleanup.beginFinal());},
     startWorker():Result<true>{return operation(()=>{
       const w=cleanup.issueWorker();if(!w.ok)return w;worker=w.value;return cleanup.startWorker(w.value);
@@ -96,16 +97,18 @@ export function createFakeRunTransportSession(clock:{now():number},io:FakeRunIo,
         const consumed=cleanup.consumeWorker(worker,r.value);sync();return consumed.ok&&!owner.failure()?ok(true):no();
       }finally{busy=false;}
     },
-    begin(raw:unknown):Result<FakeCleanupAttempt>{return operation(()=>{
+    begin(raw:unknown,timeoutMs?:number):Result<FakeCleanupAttempt>{return operation(()=>{
       if(!claimed||config.lane!=='typed')return stop('evidence_binding_mismatch');
       if(current||pendingPayload)return stop('internal_review_error');
       if(requests>=config.requests)return stop('request_budget_exceeded');
+      if(timeoutMs!==undefined&&(!Number.isInteger(timeoutMs)||timeoutMs<1||timeoutMs>10000))return stop('invalid_input');
+      const deadline=timeoutMs===undefined?hard:Math.min(hard,last+timeoutMs);
       const descriptor=purposeSchema.safeParse(structuredClone(raw));if(!descriptor.success)return stop('invalid_input');
       const p=cleanup.issueHttpPurpose(descriptor.data);if(!p.ok)return p;
-      const a=cleanup.beginHttp(p.value);if(!a.ok)return a;
+      const a=cleanup.beginHttp(p.value,deadline);if(!a.ok)return a;
       const started=cleanup.startHttp(a.value);if(!started.ok)return started;
       if(owner.failure())return no();
-      attempts.set(a.value,{next:0,bytes:0,kind:descriptor.data.kind,payloadUsed:false});current=a.value;
+      attempts.set(a.value,{next:0,bytes:0,kind:descriptor.data.kind,payloadUsed:false,deadline});current=a.value;
       requests++; // Single C commit, immediately before the fake dispatch. No await/callback gap.
       try{io.dispatch();}catch{stop('upstream_unavailable');}
       return owner.failure()?no():ok(a.value);
@@ -153,6 +156,12 @@ export function createFakeRunTransportSession(clock:{now():number},io:FakeRunIo,
       try{io.dispatch();}catch{return stop('upstream_unavailable');}return owner.failure()?no():ok(true);
     });},
     cancel(){return stop('cancelled');},
+    /** Observation-only shared clock for bounded cleanup; never extends or resets a deadline. */
+    observeTransportClock(){
+      if(busy){stop('internal_review_error');return Object.freeze({now:null,hard_deadline:hard,stopped:true,closed});}
+      let now:number|null=null;if(!closed){busy=true;try{now=observe();}finally{busy=false;}}
+      return Object.freeze({now,hard_deadline:hard,stopped:!!owner.failure(),closed});
+    },
     stop,
     finish():Result<true>{
       if(closed)return no('closed');if(busy)return stop('internal_review_error');busy=true;

@@ -35,7 +35,7 @@ export function createFakeCleanupContract(clock:{now():number},rawConfig:unknown
   let last=start,state:'active'|'stopped'|'closed'='active';
   let primary:Readonly<{stage:Stage;code:Code}>|null=null;
   type Purpose={phase:object;descriptor:Readonly<z.infer<typeof purposeSchema>>;used:boolean};
-  type Attempt={purpose:FakeCleanupPurpose;phase:object;state:'issued'|'started'|'settling'|'terminal';started:boolean;consumed:boolean};
+  type Attempt={purpose:FakeCleanupPurpose;phase:object;deadline:number;state:'issued'|'started'|'settling'|'terminal';started:boolean;consumed:boolean};
   type Report={attempt:FakeCleanupAttempt;value:HttpTerminal;used:boolean};
   type WorkerState={state:'issued'|'started'|'settling'|'terminal';started:boolean;consumed:boolean};
   let phase=opaque<object>(),finalPhase=false,purposeCount=0,attemptCount=0,startedCount=0,consumedStarted=0,httpUnconfirmed=false;
@@ -53,11 +53,11 @@ export function createFakeCleanupContract(clock:{now():number},rawConfig:unknown
   const closed=()=>state==='closed';
   function active(){if(state!=='active'||finalizing)return false;const now=time();return now!==null&&now<hard&&state==='active'&&!finalizing;}
   function binding(){return stop('evidence_binding_mismatch','binding');}
-  function classify(o:z.infer<typeof httpSchema>,started:boolean,now:number|null):HttpTerminal{
+  function classify(o:z.infer<typeof httpSchema>,started:boolean,now:number|null,deadline:number):HttpTerminal{
     const terminal=(disposition:Disposition,kind:HttpTerminal['kind'],reason:Reason|null):HttpTerminal=>Object.freeze({disposition,kind,reason,ended_at:now,synthetic:true});
     const unknown=(reason:Reason)=>terminal('unconfirmed',null,reason);
     if(!started)return o.fetch==='not_started'&&!o.abort_failed?terminal('not_started',null,null):unknown('cleanup_observation_invalid');
-    if(now===null)return unknown('cleanup_observation_invalid');if(now>=hard)return unknown('cleanup_deadline');
+    if(now===null)return unknown('cleanup_observation_invalid');if(now>=deadline)return unknown('cleanup_deadline');
     if(o.fetch==='not_started')return unknown('cleanup_observation_invalid');if(o.abort_failed)return unknown('abort_failed');
     if(o.fetch==='pending')return unknown('fetch_pending');if(o.fetch==='rejected')return terminal('confirmed','no_response',null);
     if(o.body==='unknown_lock')return unknown('reader_owner_unknown');if(o.pending_read)return unknown('read_pending');
@@ -79,14 +79,17 @@ export function createFakeCleanupContract(clock:{now():number},rawConfig:unknown
       if(!active())return no('closed');if(phase!==issuedPhase)return binding();if(purposeCount>=config.max_attempts)return stop('scope_evidence_limit');purposeCount++;
       const h=opaque<FakeCleanupPurpose>();purposes.set(h,{phase,descriptor:Object.freeze(descriptor),used:false});return ok(h);
     },
-    beginHttp(purpose:FakeCleanupPurpose):Result<FakeCleanupAttempt>{
+    beginHttp(purpose:FakeCleanupPurpose,upperDeadline:number=hard):Result<FakeCleanupAttempt>{
       if(!active())return no('closed');const p=purposes.get(purpose);if(!p||p.phase!==phase)return binding();
+      if(!Number.isFinite(upperDeadline)||upperDeadline>hard)return stop('invalid_input','binding');
+      if(upperDeadline<=last)return stop('deadline_exceeded');
       if(p.used||current)return stop('invalid_state','binding');p.used=true;
       if(attemptCount>=config.max_attempts)return stop('scope_evidence_limit');attemptCount++;
-      const h=opaque<FakeCleanupAttempt>();attempts.set(h,{purpose,phase,state:'issued',started:false,consumed:false});current=h;return ok(h);
+      const h=opaque<FakeCleanupAttempt>();attempts.set(h,{purpose,phase,deadline:upperDeadline,state:'issued',started:false,consumed:false});current=h;return ok(h);
     },
     startHttp(attempt:FakeCleanupAttempt):Result<true>{
       if(!active())return no('closed');const a=attempts.get(attempt);if(!a||current!==attempt||a.phase!==phase)return binding();
+      if(last>=a.deadline)return stop('deadline_exceeded');
       if(a.state!=='issued')return stop('invalid_state','binding');a.state='started';a.started=true;startedCount++;return ok(true);
     },
     finishHttp(attempt:FakeCleanupAttempt,raw:unknown):Result<FakeHttpCleanupReport>{
@@ -96,7 +99,7 @@ export function createFakeCleanupContract(clock:{now():number},rawConfig:unknown
       let observation:z.infer<typeof httpSchema>|undefined;
       try{const p=httpSchema.safeParse(structuredClone(raw));if(p.success)observation=p.data;}catch{/* fixed result */}
       const now=time();if(closed())return no('closed');let value:HttpTerminal;
-      if(observation)value=classify(observation,a.started,now);
+      if(observation)value=classify(observation,a.started,now,a.deadline);
       else{stop('invalid_input','cleanup');value=Object.freeze({disposition:'unconfirmed',kind:null,reason:'cleanup_observation_invalid',ended_at:now,synthetic:true});}
       if(value.disposition==='unconfirmed'){httpUnconfirmed=true;stop('internal_review_error','cleanup');}
       const h=opaque<FakeHttpCleanupReport>();reports.set(h,{attempt,value,used:false});a.state='terminal';return ok(h);

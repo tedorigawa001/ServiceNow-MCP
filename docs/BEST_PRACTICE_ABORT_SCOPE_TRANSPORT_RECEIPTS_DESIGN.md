@@ -6,7 +6,7 @@ Status: **fixtureのread／cleanup・OAuth bootstrap実装と、実session共通
 **現行実装の境界は§15〜§17と[固定source設計§13](BEST_PRACTICE_ABORT_SCOPE_FIXED_SOURCE_ISSUER_DESIGN.md#13-固定sourceとweb-streams受領物の結合fixture限定)を優先する。** §13のfixtureから実session会計へ接続する経路は廃止した。以前の検証記録は当時の実行記録であり、安全な本番接続の証拠として使わない。
 親：[実session／private受領物](BEST_PRACTICE_ABORT_SCOPE_REAL_SESSION_RECEIPTS_DESIGN.md)、[bounded予算](BEST_PRACTICE_ABORT_SCOPE_BOUNDED_BUDGET_DESIGN.md)、[固定source issuer](BEST_PRACTICE_ABORT_SCOPE_FIXED_SOURCE_ISSUER_DESIGN.md)。
 
-[共通run owner設計draft-0.4 §14・§15](BEST_PRACTICE_ABORT_SCOPE_RUN_OWNER_BINDING_DESIGN.md)では実session private lifecycle／readonly予算leaseと同sourceのReleasePermit／不変release snapshotをprepared-onlyで結合済み。[単一予算・停止・typed cleanup接続詳細設計draft-0.3](BEST_PRACTICE_ABORT_SCOPE_RUN_TRANSPORT_CLEANUP_DESIGN.md)で、更新portの生成元・費目所有・停止順を具体化し、TC-01の純粋契約とTC-02のfake session内の単一C/G/P・停止・cleanup接続を検証した。現行`PreparedTransportBudget`はfixture用で正式leaseではなく、cast・旧getとの二重受信／二重予約は禁止する。実sessionのtyped会計／cleanup接続と正式発行口は閉鎖したまま。
+[共通run owner設計draft-0.4 §14・§15](BEST_PRACTICE_ABORT_SCOPE_RUN_OWNER_BINDING_DESIGN.md)では実session private lifecycle／readonly予算leaseと同sourceのReleasePermit／不変release snapshotをprepared-onlyで結合済み。[単一予算・停止・typed cleanup接続詳細設計draft-0.4](BEST_PRACTICE_ABORT_SCOPE_RUN_TRANSPORT_CLEANUP_DESIGN.md)で、TC-01／TC-02に加え、TC-03の注入Web Streamsと同fake attemptのtyped終端接続を検証した。現行`PreparedTransportBudget`はfixture用で正式leaseではなく、cast・旧getとの二重受信／二重予約は禁止する。実sessionのtyped会計／cleanup接続と正式発行口は閉鎖したまま。
 
 ## 1. 範囲と不変条件
 

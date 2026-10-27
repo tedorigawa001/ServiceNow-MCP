@@ -212,3 +212,14 @@ it('uses the actual typed-array extent rather than a caller-controlled byteLengt
   const bytes=new Uint8Array(2);Object.defineProperty(bytes,'byteLength',{get(){reads++;session.cancel();return 999;}});
   get(t.chunk(a,0,bytes));expect(reads).toBe(0);expect(session.status()).toMatchObject({primary:null,budget:{received_bytes:2}});
 });
+it('binds a lowered attempt deadline to the same clock and refuses late cleanup even before the run hard limit',()=>{
+  const {session,time}=setup(),t=get(session.claimTransport()),a=get(t.begin({kind:'parent_initial',ordinal:1},100));
+  expect(get(t.attemptDeadline(a))).toBe(100);time(100);t.finishHttp(a,eof);session.finish();
+  expect(session.status()).toMatchObject({cleanup:{http:'unconfirmed'},cleanup_reasons:{http:'cleanup_deadline'},budget:{requests:1}});
+});
+it('does not recurse into the clock or release the outer busy guard during a nested cleanup-clock observation',()=>{
+  let calls=0,hook:(()=>void)|undefined,nested:unknown;let session:ReturnType<typeof createFakeRunTransportSession>;
+  session=createFakeRunTransportSession({now:()=>{calls++;const h=hook;hook=undefined;h?.();return 0;}},{dispatch(){},abort(){},stopWorker(){}});
+  hook=()=>{nested=session.observeTransportClock();};expect(session.claimTransport().ok).toBe(false);
+  expect(calls).toBe(2);expect(nested).toMatchObject({now:null,stopped:true});
+});

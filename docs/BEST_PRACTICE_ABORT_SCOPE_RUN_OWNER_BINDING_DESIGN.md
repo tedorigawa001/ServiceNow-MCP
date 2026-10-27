@@ -5,7 +5,7 @@ Status: **実session private lifecycleに同sourceのReleasePermit／不変relea
 
 親：[実session／private受領物](BEST_PRACTICE_ABORT_SCOPE_REAL_SESSION_RECEIPTS_DESIGN.md)、[用途別transport受領物](BEST_PRACTICE_ABORT_SCOPE_TRANSPORT_RECEIPTS_DESIGN.md)、[worker接続契約](BEST_PRACTICE_ABORT_SCOPE_CONNECTION_CONTRACT_DESIGN.md)、[OAuth起点の合成接続](BEST_PRACTICE_ABORT_SCOPE_OAUTH_SOURCE_HANDOFF_DESIGN.md#14-oauth起点のworker上位結果までの連続合成e2e)。
 
-接続設計：[単一予算・停止・typed cleanup接続詳細設計draft-0.3](BEST_PRACTICE_ABORT_SCOPE_RUN_TRANSPORT_CLEANUP_DESIGN.md)。TC-01の純粋契約に加え、TC-02は既存run lifecycleをfake sessionの単一C/G/P・時計・停止・typed cleanupへ限定接続した。実sessionの会計更新／transport／workerへは未接続で、正式発行は閉鎖したまま。
+接続設計：[単一予算・停止・typed cleanup接続詳細設計draft-0.4](BEST_PRACTICE_ABORT_SCOPE_RUN_TRANSPORT_CLEANUP_DESIGN.md)。TC-01／TC-02に加え、TC-03は注入Web Streamsのread・cancel・closed・releaseLockを同fake attemptの型付き終端へ限定接続した。実sessionの会計更新／実transport／workerへは未接続で、正式発行は閉鎖したまま。
 
 ## 1. 目的・境界
 

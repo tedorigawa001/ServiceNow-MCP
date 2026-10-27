@@ -1,7 +1,7 @@
 # AU-BR-006 単一予算・停止・typed cleanupと共通run ownerの接続
 
-Version: br006-run-transport-cleanup-draft-0.3 / Date: 2026-10-28。
-Status: **TC-01の純粋契約に加え、TC-02として既存run lifecycleと単一fake会計・停止・typed cleanupを限定接続。実sessionの会計更新／実transportは未接続、正式証拠発行・cap承認は未実施／閉鎖**。
+Version: br006-run-transport-cleanup-draft-0.4 / Date: 2026-10-28。
+Status: **TC-01／TC-02に加え、TC-03として注入Web Streamsのread・cancel・closed・releaseLockを同fake attemptへ接続。実sessionの会計更新／実transportは未接続、正式証拠発行・本番cap承認は未実施／閉鎖**。
 
 親：[共通run owner §14・§15](BEST_PRACTICE_ABORT_SCOPE_RUN_OWNER_BINDING_DESIGN.md)、[用途別transport／cleanup](BEST_PRACTICE_ABORT_SCOPE_TRANSPORT_RECEIPTS_DESIGN.md)、[bounded予算](BEST_PRACTICE_ABORT_SCOPE_BOUNDED_BUDGET_DESIGN.md)。
 後続：[選択／payload受領物](BEST_PRACTICE_ABORT_SCOPE_REAL_SESSION_RECEIPTS_DESIGN.md)、[worker接続契約](BEST_PRACTICE_ABORT_SCOPE_CONNECTION_CONTRACT_DESIGN.md)。
@@ -81,7 +81,7 @@ dispatchのcommitとfetch呼出しの間にawait・任意callbackを置かない
 
 ## 5. 絶対期限とtyped cleanup
 
-元のD_hardと通常／整合cutoff（60秒時50／55秒）を維持する。1試行は`D_attempt=min(t+requestTimeout,D_phase,D_hard)`、既存候補の`K=min(250ms,floor((D_attempt-t)/4))`をcleanupへ内側予約し、I/OをD_io=D_attempt-Kで止める案をfake試験する。K<=0ならdispatch前拒否。**250ms・empty read16回等は未承認のpolicy候補で、今回の採用・実装ではない**。
+元のD_hardと通常／整合cutoff（60秒時50／55秒）を維持する。設計上は`D_attempt=min(t+requestTimeout,D_phase,D_hard)`。TC-03のfake subset（§12）はphase cutoff未接続のため`min(t+requestTimeout,D_hard)`とし、既存候補の`K=min(250ms,floor((D_attempt-t)/4))`を内側予約し、I/OをD_io=D_attempt-Kで止める。K<=0ならdispatch前拒否。**250ms・empty read16回はfake検証専用の未承認候補で、本番policyの採用ではない**。
 
 cleanup開始から新しい待機時間を加算しない。既にabortしたI/O signalにcleanup待機を単純raceさせず、元の期限内だけ使う観測viewへ分離する。全await後と受領物commit前に時計・identityを再検査し、等号以降は正常受領物を作らない。
 
@@ -245,8 +245,41 @@ TC-02のfake session内での単一state接続は§11を参照。このfake台�
 
 51件の合成テストで、独立したイベント列（C=4／G=10／P=4）、上限等号／1超過、chunk replay、単体P局所拒否、claim再入、外国handle、停止callback、固定理由、時計不正・期限・二軸分離を確認。real fetch／Response／Web Streams／Worker／タイマーを操作せず、用途名・ordinalは引き続き合成ラベルである。
 
-次はTC-03：注入Web Streamsのread／cancel／closed／releaseLockと同attempt終端の接続。実session constructorでのlane選択とmutable port供給、認証／同sourceのReleasePermit・選択payload・worker jobへの正式binding、用途発行前提・retry／動的予約・E会計・50/55秒のphase cutoffは未接続。このモデルのfinal移行はTC-01の一方向phaseラベルだけで、元のhard期限・会計を再生成しない。
+TC-03の限定接続は§12を参照。実session constructorでのlane選択とmutable port供給、認証／同sourceのReleasePermit・選択payload・worker jobへの正式binding、用途発行前提・retry／動的予約・E会計・50/55秒のphase cutoffは未接続。このモデルのfinal移行はTC-01の一方向phaseラベルだけで、元のhard期限・会計を再生成しない。
 
 raw clone前のbyte枠、control work／allocation、empty-read policy、物理終了保証、未確認I/Oを抱える次runの許可は未証明。全体受付無効、Unknown、VM／監視／telemetry保留、正式発行口閉鎖を維持する。
 
 検証：[TC-02合成テスト・検証記録](E2E_BEST_PRACTICE_TC02_RUN_TRANSPORT_2026-10-28.md)。
+
+## 12. TC-03：注入Web Streamsと同attemptの終端結合（2026-10-28）
+
+実装：[run-stream](../src/review/abort-scope-evidence-run-stream.ts)、試験：[run-stream-cleanup](../tests/review/run-stream-cleanup.test.ts)。固定factoryがTC-02のfake sessionを自分で生成し、transport claimを1回だけ消費する。任意session／adapterの採用口は作らず、旧fixture transport registryも利用しない。sourceは`(AbortSignal) => Response | Promise<Response>`の信頼された注入依存で、URL・秘密・コードを渡さない。global fetch、実OAuth、実workerは呼ばない。
+
+### 12.1 読取と終了観測
+
+1. fake dispatchのC commit直後、同じcurrent resourceでsourceを1回呼ぶ。同期throw／Promise rejectはsettled no_responseとして区別する。
+2. Response／bodyの再利用をprivate WeakSetで拒否。既にlockedなら所有readerを奪わず、unknown_lockのまま停止。getReaderは1回だけ。
+3. 所有readerの`closed`をread／cancel／releaseより前に取り、fulfill／rejectの両handlerを即時登録。closed拒否はread拒否と競合してもinvalid_responseを先に保持する。
+4. pending readは最大1。完了後に同ownerのclock・停止を再検査し、採用できたUint8Arrayだけを同attempt・連番でG/Sへ課金する。超過chunkは1回課金、取消／期限後のchunkは不採用。本文のcopy／decode／JSON解析は行わない。
+5. EOF時は不要なcancelをせず、captured closedの決着とpending readなしを確認してreleaseLockを1回試行。中断時は所有reader.cancel、reader未取得かつunlockedのbodyだけbody.cancelを1回要求し、Promiseの決着を別に観測する。
+6. releaseLock成功はlock解放の事実だけ。cancel fulfilled／closed fulfilledの代用にしない。失敗・未知所有・未決着はTC-01のstrict primitive票へ渡し、同attemptで終端化・消費する。
+
+runは逐次1件だけ。例外・begin後の取消・終了競合もfinallyの一度限りの固定sectionで終端化する。遅着Responseへのcancel／所有readerの解放はbest-effortで行うが、確定済みのunconfirmedや診断を修復せず、counter・receiptも更新しない。worker軸は未接続のnot_startedを維持する。
+
+### 12.2 同じ期限と注入wait
+
+- TC-02に観測専用の`observeTransportClock`を追加。同じorigin／last／hardを読み、停止後のcleanupにも新しい起点を作らない。再入時は外側busy guardを解除せず固定拒否する。
+- `begin`の省略可能なtimeout（最大10,000ms）から同ownerが絶対attempt deadlineを計算し、TC-01のattemptに固定する。省略時は従来どおりrun hard deadline。typed確認はattempt deadlineの等号以降では成立しない。
+- adapterは最大10秒のrequest timeout、最大250msかつ残量の1/4のcleanup内側予約を**fake候補値**として検証する。予約不足はC=0のまま拒否。I/O cutoffでupstream_unavailableを保持して中断し、元のattempt deadlineまでだけ終了を観測する。新retryやsoft cutoffの本番分類は未接続。
+- waitは注入した`clock.schedule(absoluteDeadline, wake) => dispose`だけ。進捗・取消・期限のたびに解除し、終端後の待受timer数は0。scheduler／dispose失敗は固定internal_review_errorと未確認を保持して停止する。時計不正を古い時刻で代替しない。
+- 空readは連続数ではなく1 attemptの累計で最大16回という未承認fake候補。下げられるが上げられず、超過で停止する。native APIを呼べたことは制御work・allocation上界の証明ではない。
+
+### 12.3 結果・秘密・未対応
+
+外へ返すのは固定成功／失敗、readonly会計・診断、read/cancel/release/waitの有限な操作数だけ。reader、Response、body、text、chunk、資格情報、raw例外は返さない。payload用途のEOFもモデル枠を明示discardするだけでP=0、sourceの取得証拠・payload receiptにはしない。
+
+33件の注入Streams試験とTC-02追加2件で、独立操作oracle、cancel拒否／pending、閉鎖未確認、release失敗、stream再利用、locked reader、期限後read、予算超過、scheduler失敗、予約不足を確認した。counter／clock bindingはfake session内だけであり、実session・ReleasePermit・選択payload・worker jobへの正式bindingではない。
+
+次はTC-04の固定source bootstrap／release／用途descriptorとの結合。認証ready／権限／retry／E/R予約・soft cutoff・本番mutable portは未接続。遅着Promiseが保持するresourceの物理解放、悪意ある注入依存／動かないschedulerへの隔離保証、実OSの強制終了、全体work受付は未証明。正式発行口閉鎖、Unknown・全体受付無効、VM／監視／telemetry保留を維持する。
+
+検証：[TC-03合成Streams検証記録](E2E_BEST_PRACTICE_TC03_WEB_STREAMS_2026-10-28.md)。
