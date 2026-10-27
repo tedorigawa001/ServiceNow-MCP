@@ -1,18 +1,18 @@
 # AU-BR-006 実session claim・private受領物・終了時失効の接続詳細設計
 
-Version: br006-real-session-receipts-draft-0.1 / Date: 2026-10-26。
-Status: **owner／session lifecycleに加え、選択window／行draftとpayload開始・移譲claimをfake依存で部分実装。正式receipt／実source／worker接続は未実装・未承認**。
+Version: br006-real-session-receipts-draft-0.2 / Date: 2026-10-27。
+Status: **正式receiptの設計案。撤去後の実lifecycleはlive／ready／snapshot／理由の管理だけで、prepared owner／draft／claimはfixture専用台帳へ分離済み。実sessionの専用issuer／claim・正式発行は未実装／閉鎖**。
 親：[固定source issuer](BEST_PRACTICE_ABORT_SCOPE_FIXED_SOURCE_ISSUER_DESIGN.md)、[接続契約](BEST_PRACTICE_ABORT_SCOPE_CONNECTION_CONTRACT_DESIGN.md)、[bounded予算](BEST_PRACTICE_ABORT_SCOPE_BOUNDED_BUDGET_DESIGN.md)。
 
-後続の[実transport受領物・cleanup・単一C/G/E/R/clockの詳細設計draft-0.6](BEST_PRACTICE_ABORT_SCOPE_TRANSPORT_RECEIPTS_DESIGN.md)の§15・§16を優先する。fixtureから実session会計へ接続する旧経路は撤去し、fixture登録・owner・claim・会計は開発専用の別台帳へ移した。注入Responseの実Web Streams操作はそのfixtureにだけ接続する。以降の合成検証は本番接続の証拠とせず、実sessionの専用issuer／claim接続・正式発行・有効化は未実装／閉鎖とする。
+後続の[実transport受領物・cleanup・単一C/G/E/R/clock設計](BEST_PRACTICE_ABORT_SCOPE_TRANSPORT_RECEIPTS_DESIGN.md)のfixture分離境界と、[共通停止／予算owner・実session／ReleasePermit binding設計draft-0.1](BEST_PRACTICE_ABORT_SCOPE_RUN_OWNER_BINDING_DESIGN.md)を優先する。fixtureから実session会計へ接続する旧経路は撤去し、fixture登録・owner・claim・会計は開発専用の別台帳へ移した。注入Responseの実Web Streams操作はそのfixtureにだけ接続する。以降の合成検証は本番接続の証拠とせず、実sessionの専用issuer／claim接続・正式発行・有効化は未実装／閉鎖とする。
 
 ## 1. 範囲と現行との差
 
-実BoundedReadSession側の一度限りのclaim、同sourceで選択されたmetadataと実取得payloadのprivate受領物、認証snapshot／ReleasePermitへの結合、停止／終了時の失効を定義する。正式receiptは内部契約案で、公開API／schemaへ追加済みではない。部分実装した内部型の範囲は§11を参照する。
+実BoundedReadSession側の一度限りのclaim、同sourceで選択されたmetadataと実取得payloadのprivate受領物、認証snapshot／ReleasePermitへの結合、停止／終了時の失効を定義する。正式receiptは内部契約案で、公開API／schemaへ追加済みではない。撤去後の現行境界は§11、撤去前の実装履歴の対応は§12を参照する。
 
-§1〜§10は詳細設計、後続の部分実装範囲は§11に記す。取得許可先の追加・実source／worker接続・実機操作・トークン発行・設定変更・本番cap投入・公開規則登録・Pushは行わない。VM／監視／telemetryは保留、Unknown・全体受付無効を維持する。公開0.2/0.3、明示14／既定3規則、固定評価セットを変更しない。
+§1〜§10は詳細設計案であって実装済みの宣言ではない。§11／§12で現行と履歴を区別する。取得許可先の追加・実source／worker接続・実機操作・トークン発行・設定変更・本番cap投入・公開規則登録・Pushは行わない。VM／監視／telemetryは保留、Unknown・全体受付無効を維持する。公開0.2/0.3、明示14／既定3規則、固定評価セットを変更しない。
 
-設計時点の差分は下表のとおり。後続のsession lifecycle部分実装は§11に記す。
+設計時点の差分は下表のとおり。現在のruntime lifecycleに正式ownerがあるとは解釈せず、§11と新しい共通owner設計を併読する。
 
 | 設計時点のコード | 確認した性質 | 必要な接続 |
 |---|---|---|
@@ -144,7 +144,7 @@ phase世代を内部固定し、setPhaseReserveで新controllerを作っても�
 
 ### 7.2 hard stop・close
 
-hard stopでは最初のsession stopCode固定→private ownerを同期的にrevokedへ→発行permit／pending claim失効→controller abortの順にする。現行stopにこの接続があるとは扱わず、後工程で追加する。revokeはthrowせず、user callbackを呼ばず、再入しても一度だけ行う。
+hard stopでは最初のsession stopCode固定→private ownerを同期的にrevokedへ→発行permit／pending claim失効→controller abortの順にする。現行stopには基本lifecycleのrevoke通知があるが、正式owner／claim／receipt失効まで接続済みとは扱わず、後工程で追加する。revokeはthrowせず、user callbackを呼ばず、再入しても一度だけ行う。
 
 closeでも先に失効し、late HTTP／認証／worker応答が発行へ進めないようにする。すべてのawait後、receipt発行／移譲／completion直前でactive・owner・permit・phaseを再検査する。先行primaryをcloseで上書きしない。
 
@@ -207,57 +207,37 @@ timer／external listener／同時実行枠はsession.closeが一度だけ解放
 
 設計初回は現行ソースとの照合と文書確認だけを行った。後続の実装・合成検証は次節を参照する。
 
-## 11. prepared owner／session lifecycleの限定実装
+## 11. 撤去後の現行実装境界（2026-10-27）
 
-`src/servicenow/review-evidence-lifecycle.ts`にprivate module台帳、AuthSnapshotIdentity、AuthReadyGeneration、prepared owner内部型とsession側claimを実装した。実BoundedReadSessionのconstructorは孤立snapshot参照を登録し、同readyPromiseの成功を一度だけpinする。stopは最初の理由を固定した後、controller.abortより先に同期revokeし、closeもphase／controllerのabortより先に失効させる。revokeは外部callbackを呼ばず、owner binding・coreのsnapshot／ready参照を外す。owner失効は一度だけで、close後の認証完了でも復活しない。
+旧§11／§12が述べていたruntimeへのfixture owner／claim接続は撤去済みである。以下を現在の実装として扱い、撤去前の説明を生成手順に流用しない。
 
-source発行元は`abort-scope-evidence-session-fixture.ts`のfake issuerだけ。runtime coreの`registerPreparedFixtureSource`は非権威の内部fixture portで、実BoundedUpdateSetSourceは呼ばない。fake source／permit／parent-ready／matchedは実取得・実ReleasePermitの証明ではない。core登録portを含め同process内の信頼コード向けの境界であり、悪意あるdeep importを隔離するものではない。
+| 現在の配置 | 実装されている範囲 | 実装されていない範囲 |
+|---|---|---|
+| `src/servicenow/review-evidence-lifecycle.ts` | live／ready boolean／snapshot参照／理由をprivate WeakMapで保持し、stop／closeで失効 | AuthSnapshotIdentity／AuthReadyGenerationという正式な参照型、prepared owner／生成claim／selection draft／transport activationの発行API |
+| `src/servicenow/bounded-read.ts` | 孤立snapshotの登録、同readyPromise成功の通知、stop／closeの同期revoke、既存認証・C/G/P・時計・終了処理 | 証拠用E/R・typed body／cleanup・BR-006 source owner／workerへの正式binding |
+| `src/review/bounded-source.ts` | 同sourceのReleasePermit参照、matched gate、選択行・payload版の照合と課金、verify | 正式なSelectionWindowReceipt／PayloadReadReceipt・不変release snapshotを新ownerへ結ぶ入口 |
+| `src/review/abort-scope-evidence-fixture-lifecycle.ts` | fixture専用登録・AuthSnapshotIdentity／ready参照・prepared owner／claim／window／payload draft | 本番session台帳との共有・本番receipt発行。実BoundedReadSessionのfixture登録は拒否 |
+| fixture会計・固定source・worker群 | 分離された同fixture予算でOAuth→source初回／最終→native IPC→fixture上位結果まで合成検証 | 本番token／ReleasePermit／選択payload／worker jobの正式な由来・公開finding |
 
-既知の同sessionに属するfake sourceだけがclaimを開始でき、claim取得後の前提不成立でも消費済みを戻さない。未知／他sessionのsourceは無関係なsession claimを消費せず拒否する。重複生成では既存ownerを置換しない。auth identityとready世代の参照、fake permit、parent-ready、final未開始を照合する。release証拠の深いsnapshot、実source取得mode／claim、選択window、payload receiptはまだ未接続。
+実lifecycle moduleがnpmへ同梱されるのはbounded-readの既存import先だからであり、正式owner発行口の同梱を意味しない。fixture群は`!dist/review/abort-scope-evidence*`で非同梱のまま。登録hookが存在するというだけで、任意objectを本番ownerとして認識する新factoryを設けない。
 
-返すownerはpreparedかrevokedだけで、active／receipt／sealへの昇格APIは存在しない。閉じた診断用gateは有効なprepared ownerにも必ずinvalid_stateを返し、`evidence_issuance:'disabled'`を維持する。型のbrand・handleのclone・他fake issuer・同値資格情報の新sessionでは受理しない。
+共通停止／予算ownerと実source claimは[新しい詳細設計](BEST_PRACTICE_ABORT_SCOPE_RUN_OWNER_BINDING_DESIGN.md)に従い、fixture経路を復活させるのではなく、発行元を限定した本番専用の内部経路として後工程で検討する。preparedはidentity確保に留め、正式発行口は閉鎖する。
 
-既存ReadFailureCodeは網羅的な固定一覧で保持し、未知値だけをinternal_review_errorへ落とす。通常phase cutoffはauth-ready済みowner全体を失効させず、hard期限／取消／受信超過等では同期revokeする。最初の認証がphase cutoff等で完了できなかった場合はready世代を発行せず、認証失敗の理由を保持して新owner生成を拒否する。phase別receipt発行permitは未実装なので、これで旧phaseのbody受領証拠が完成したとは扱わない。
+## 12. 撤去前の履歴とfixture側への対応
 
-session getの認証完了通知とstop/closeだけを結び、HTTP許可先・origin・headers・retry・C/G/payload会計・時計／上限は変更していない。証拠専用transport、cleanup確認、real receipt、実worker／上位結果、公開規則登録は閉じたまま。session.closeの既存資格情報処理も変更せず、全秘密の物理破棄を保証しない。
+本節は過去の変更の所在を保つための整理であり、現行runtimeの実装説明ではない。過去の検証記録は当時の実行結果として残し、安全な本番bindingの証拠へ読み替えない。
 
-runtime lifecycleはbounded-readのimport先なのでnpmへ同梱する。fake issuerと既存合成証拠moduleは従来の`!dist/review/abort-scope-evidence*`で除外する。新依存パッケージは追加しない。梱包テストにruntime lifecycleの存在確認を加えた。
+| 撤去前の記述 | 現在の扱い |
+|---|---|
+| runtime coreの`registerPreparedFixtureSource`／prepared owner生成・session claim | 実lifecycleから撤去。fixture専用lifecycle／issuerへ分離。本番発行元には使わない |
+| runtimeのAuthSnapshotIdentity／AuthReadyGenerationとowner参照照合 | そのowner機構はfixture専用。実lifecycleは現在ready boolean等に留まり、正式な参照世代結合は設計課題 |
+| PreparedSelectionWindow／PreparedSelectedRow／payload開始・fake完了・移譲claim | fixture台帳内のdraftとして維持。fake readyは本文・HTTP成功・cleanup・worker jobを証明しない |
+| fake sourceのparent-ready／matched／permitを使う生成手順 | fixture検証だけ。本番は同source内部のReleasePermitと発行時release根拠を使い、scalar factoryを作らない |
+| 固定100行／BR-006単独のfixture選択・最大401 handleの構造 | 当該fixture subsetの性質。本番の混在ruleset・selection_mode・実取得・保持上界の確認済み値ではない |
+| fixture会計portを実sessionへ接続する旧transport factory | 撤去済み。実sessionの通常get経路との二重会計／mode切替口として再導入しない |
 
-検証は[session owner合成記録](E2E_BEST_PRACTICE_ABORT_SCOPE_SESSION_OWNER_SYNTHETIC_2026-10-26.md)。選択window／行receipt・payload開始／移譲claimの後続部分実装は次節に記す。
+過去の記録：[session owner合成検証](E2E_BEST_PRACTICE_ABORT_SCOPE_SESSION_OWNER_SYNTHETIC_2026-10-26.md)、[selection／claim合成検証](E2E_BEST_PRACTICE_ABORT_SCOPE_SELECTION_CLAIMS_SYNTHETIC_2026-10-26.md)。
 
-## 12. 選択window／行draftとpayload claimの限定実装
+後続のfixture分離境界は[transport設計](BEST_PRACTICE_ABORT_SCOPE_TRANSPORT_RECEIPTS_DESIGN.md)、OAuth起点の連続検証は[移譲設計§14](BEST_PRACTICE_ABORT_SCOPE_OAUTH_SOURCE_HANDOFF_DESIGN.md#14-oauth起点のworker上位結果までの連続合成e2e)を参照する。いずれも正式receipt・本番issuer・公開AU-BR-006の有効化を意味しない。
 
-### 12.1 型と発行元
-
-同じruntime coreにPreparedSelectionWindow／PreparedSelectedRow／PreparedPayloadStart／PreparedPayloadReady／PreparedTransferClaimを追加した。すべて凍結opaque handleで、非公開WeakMapに同owner／session・window・行・開始票の参照を結合する。fake issuerのowned検査を通し、coreでもownerの認証／permit結合と失効を再検査する。raw record・同じ値・cloneでは受理しない。
-
-これはSelectionWindowReceipt／PayloadReadReceiptの本番発行実装ではない。登録口はfake issuerからfixtureを受けるだけで、実source／ReleasePermit／typed transport／cleanup／jobの真正性は未証明。ownerはpreparedのまま、正式な証拠発行gateは必ず拒否する。
-
-### 12.2 windowと選択範囲
-
-window開始claimをfixtureのclone／検査より前に消費する。fixtureを一度だけcloneし、その間のclose／再入を再検査する。不正入力で失敗しても修正fixtureによる再開始はできない。
-
-parentはsys_id/state/application/版、metadataはsys_id/update_set/name/type/action/版をstrict検査し、所属・昇順・重複なしを要求する。max_recordsは1..100、取得行はmax_records+1以下・最大101、先頭max_recordsだけに行draftを発行する。lookaheadはmetadata_seen／truncatedに残すが行draftを発行しない。空windowから行を補完しない。
-
-今回のfake recipeはrequested_rule_ids=['AU-BR-006']だけの限定subset。selection_mode省略はbounded_allとして省略状態を保持し、review_targetsはtarget-prefix-0.1を要求する。BR候補の条件は実sourceと同じ`candidatePolicy(['AU-BR-006']).accepts`で全取得行（lookaheadを含む）へ検査する。`requestedAssetTypes`のBusiness Rule対象にAU-BR-006を加え、AU-BR-006単独のreview_targetsがClient Scriptを選ぶ不整合を解消した（AU-BR-006は公開規則未登録のため既存選択の挙動は不変）。混在ruleset、実source取得のpolicy identity／選択windowとの結合は未接続であり、公開ルール選択や0.2/0.3を変更していない。
-
-行のreadonly lookupは同handleを繰返し返すだけで再取得権限を増やさない。外部へ返すwindow summaryはmode／省略有無／件数／truncated／disabledだけ。本文・metadataの全列・認証参照を返すgetterは作らない。
-
-### 12.3 開始・fake完了・移譲
-
-1. beginPreparedPayloadは同owner/session/window/行を検査して開始claimを一度だけ取得する。INSERT_OR_UPDATEかつ厳密なsys_script_<32桁>だけを対象とし、Client Script／Script Include／削除／不正名を拒否する。
-2. settlePreparedPayloadは開始票を一度だけreadyまたはunavailableへ終端化する。readyは**本文を持たないfake完了票**であり、HTTP成功・payload受信・版一致・cleanupを証明しない。unavailableからreadyへの修正や開始やり直しは拒否する。
-3. claimPreparedTransferは同じ行に対応するfake完了票を一度だけ消費し、移譲claimを発行する。別行／別ownerの完了票は混ぜられない。
-4. consumePreparedTransferは移譲claimを一度だけ消費し、state=simulated／synthetic=true／evidence_issuance=disabledだけを返す。本文出力・GET・postMessage・実job配送はない。実worker/port/jobへの結合は依然未実装。
-
-重複・混入・不正順序は対象ownerを失効させ、先行理由を保持する。無関係な他ownerの票は消費しない。ownerの同期revokeはwindowのsnapshot／session参照と全行のdata／start参照を外す。保持済みhandleからの全操作は元の停止理由で拒否される。機能的な失効と参照除去を実装したのであり、GC完了や物理ゼロ化を認定しない。
-
-### 12.4 有限構造と未対応
-
-owner当たりwindowは1つ、選択行は最大100、各行に開始票／fake完了票／移譲claimは各最大1。selection/claim handleは最大401（既存owner handleを除く）。snapshotは最大101行で、収集／失効はO(max_records)。本文は保持せず、C/G/payload会計やHTTP／timer／IPCを追加しない。これは実transport受信上限・IPC保持・全体work受付の承認ではない。
-
-今回のclaimはfake状態機械の検証に限定し、通常phaseへの実取得admissionやphase世代に結ぶ発行permitは未接続。ownerは通常cutoffだけでは失効しないため、prepared handleの存在を通常phaseのGET許可へ転用しない。hard deadline通知／取消／closeでのowner失効は継承する。
-
-残課題は実sourceの選択receipt／deep release snapshot・typed body／cleanup・同payloadの版／課金・phase admission・実worker job移譲・final seal／上位結果。これらの接続前にfake完了票やdraftを正式receiptへ昇格しない。
-
-検証：[selection／claim合成記録](E2E_BEST_PRACTICE_ABORT_SCOPE_SELECTION_CLAIMS_SYNTHETIC_2026-10-26.md)。VM／監視／telemetry保留、Unknown・全体受付無効・正式発行口閉鎖を維持する。
+残課題は実sourceのprivate claim／不変release snapshot、typed body／cleanup、選択payload、正式worker job、final／上位結果、共通停止／予算と費目上界。Unknown・全体受付無効・正式発行口閉鎖・VM／監視／telemetry保留を維持する。

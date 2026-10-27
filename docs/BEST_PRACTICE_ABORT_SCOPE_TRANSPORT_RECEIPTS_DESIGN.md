@@ -6,6 +6,8 @@ Status: **fixture分離を維持し、注入Responseのread／cleanupと未認�
 **現行実装の境界は§15〜§17と[固定source設計§13](BEST_PRACTICE_ABORT_SCOPE_FIXED_SOURCE_ISSUER_DESIGN.md#13-固定sourceとweb-streams受領物の結合fixture限定)を優先する。** §13のfixtureから実session会計へ接続する経路は廃止した。以前の検証記録は当時の実行記録であり、安全な本番接続の証拠として使わない。
 親：[実session／private受領物](BEST_PRACTICE_ABORT_SCOPE_REAL_SESSION_RECEIPTS_DESIGN.md)、[bounded予算](BEST_PRACTICE_ABORT_SCOPE_BOUNDED_BUDGET_DESIGN.md)、[固定source issuer](BEST_PRACTICE_ABORT_SCOPE_FIXED_SOURCE_ISSUER_DESIGN.md)。
 
+次工程の[共通停止／予算owner・実session／ReleasePermit binding設計draft-0.1](BEST_PRACTICE_ABORT_SCOPE_RUN_OWNER_BINDING_DESIGN.md)で、同実sessionの唯一の会計と認証・source結合、停止／cleanup／診断の費目所有を具体化する。現行の`PreparedTransportBudget`は正式な本番leaseではなく、fixture portのcast・旧getとの二重受信・二重予約は禁止する。今回は設計のみで、正式発行口は閉鎖する。
+
 ## 1. 範囲と不変条件
 
 実BoundedReadSessionの認証・受信・中断・cleanupに用途を結び、同じC/G/E/R/clockから一度だけ受領物を発行するための設計。既存prepared owner／draft／fake完了票は本番証拠に昇格させない。今回の実装範囲は§12のfake限定モデルだけで、実機操作・トークン発行・設定変更・cap投入・公開規則登録は行わない。VM／監視／telemetryは保留、Unknown・全体受付無効を維持する。
@@ -18,7 +20,7 @@ Status: **fixture分離を維持し、注入Responseのread／cleanupと未認�
 
 ## 2. 現行差分と公式仕様の確認
 
-現行bounded-read.tsのattemptはCを消費してfetchし、readでS/Gを課金、JSON.parse後に値を返す。finallyはcancelをbest-effortで要求するだけで、完了確認／releaseLock／typed受領物を返さない。現行final=trueと固定4予約では用途別slotを証明できない。sessionのprepared lifecycle hookがあっても、この不足は解消済みではない。
+現行bounded-read.tsのattemptはCを消費してfetchし、readでS/Gを課金、JSON.parse後に値を返す。finallyはcancelをbest-effortで要求するだけで、完了確認／releaseLock／typed受領物を返さない。現行final=trueと固定4予約では用途別slotを証明できない。sessionにlive／ready等の基本lifecycle hookはあるが、正式prepared owner／claimは無く、この不足を解消したとは扱わない。
 
 公式資料のAI読み取り：2026-10-26。資料が述べるAPIの意味と、本書が追加する保守的policyを分ける。
 
