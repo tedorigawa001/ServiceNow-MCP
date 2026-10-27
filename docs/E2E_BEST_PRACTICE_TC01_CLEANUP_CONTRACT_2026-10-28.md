@@ -40,6 +40,7 @@
 ## 4. 検証結果
 
 - 新規単体合成：1ファイル・68件成功。
+- その後のレビューで、開始済みworkerのlistenerが一度も付いていない状態（`not_attached`）を`listeners_attached`と報告していた理由名を`listeners_not_attached`へ分離した（判定はunconfirmedのまま）。回帰1件を追加し69件成功、旧実装では当該1件が失敗することを確認した。
 - `npm run build`：成功。
 - 全体合成：`vitest run --maxWorkers=3`、165ファイル・4,863件成功、スキップ0件（30.47秒）。
 - src／testsのESLint：エラー0件、既存warning 374件。

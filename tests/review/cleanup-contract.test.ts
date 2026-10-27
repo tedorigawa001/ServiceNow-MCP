@@ -71,6 +71,7 @@ it.each([
   ['pending',{...terminated,termination:'pending'},'unconfirmed','termination_pending'],
   ['rejected',{...terminated,termination:'rejected'},'unconfirmed','termination_rejected'],
   ['listener retained',{...terminated,listeners:'attached'},'unconfirmed','listeners_attached'],
+  ['listener never attached',{...terminated,listeners:'not_attached'},'unconfirmed','listeners_not_attached'],
   ['stdout retained',{...terminated,stdout:'open'},'unconfirmed','stdout_open'],
   ['stderr retained',{...terminated,stderr:'open'},'unconfirmed','stderr_open'],
   ['raw confirmation',{...terminated,disposition:'confirmed'},'unconfirmed','cleanup_observation_invalid'],

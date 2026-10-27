@@ -13,7 +13,7 @@ type Result<T>=Readonly<{ok:true;value:T}|{ok:false;code:Code}>;
 type Reason='fetch_pending'|'read_pending'|'cancel_pending'|'cancel_rejected'|'closed_unconfirmed'|'closed_rejected'|'reader_owner_unknown'|'lock_release_failed'|'abort_failed'|'cleanup_deadline'|'cleanup_observation_invalid';
 type Disposition='not_started'|'confirmed'|'unconfirmed';
 type HttpTerminal=Readonly<{disposition:Disposition;kind:'eof'|'cancelled'|'no_response'|'no_body'|null;reason:Reason|null;ended_at:number|null;synthetic:true}>;
-type WorkerTerminal=Readonly<{disposition:Disposition;kind:'terminated'|null;reason:'termination_pending'|'termination_rejected'|'listeners_attached'|'stdout_open'|'stderr_open'|'cleanup_deadline'|'cleanup_observation_invalid'|null;ended_at:number|null;synthetic:true}>;
+type WorkerTerminal=Readonly<{disposition:Disposition;kind:'terminated'|null;reason:'termination_pending'|'termination_rejected'|'listeners_attached'|'listeners_not_attached'|'stdout_open'|'stderr_open'|'cleanup_deadline'|'cleanup_observation_invalid'|null;ended_at:number|null;synthetic:true}>;
 const workerSchema=z.strictObject({termination:z.enum(['not_started','pending','fulfilled','rejected']),listeners:z.enum(['not_attached','attached','detached']),stdout:z.enum(['not_created','open','closed']),stderr:z.enum(['not_created','open','closed'])});
 const purposeSchema=z.strictObject({kind:z.enum(['oauth','parent_initial','release_rows','metadata_initial','payload','table_initial','parent_final','metadata_final','table_final']),ordinal:z.union([z.literal(1),z.literal(2)])});
 const httpSchema=z.strictObject({fetch:z.enum(['not_started','pending','fulfilled','rejected']),body:z.enum(['none','unlocked','reader','unknown_lock']),
@@ -126,7 +126,9 @@ export function createFakeCleanupContract(clock:{now():number},rawConfig:unknown
       else if(!w.started){if(o.termination==='not_started'&&o.listeners==='not_attached'&&o.stdout==='not_created'&&o.stderr==='not_created')disposition='not_started';else reason='cleanup_observation_invalid';}
       else if(now===null)reason='cleanup_observation_invalid';else if(now>=hard)reason='cleanup_deadline';
       else if(o.termination==='pending')reason='termination_pending';else if(o.termination==='rejected')reason='termination_rejected';
-      else if(o.termination!=='fulfilled')reason='cleanup_observation_invalid';else if(o.listeners!=='detached')reason='listeners_attached';
+      else if(o.termination!=='fulfilled')reason='cleanup_observation_invalid';else if(o.listeners==='attached')reason='listeners_attached';
+      // A started worker whose listeners were never attached cannot show they were detached on termination.
+      else if(o.listeners==='not_attached')reason='listeners_not_attached';
       else if(o.stdout!=='closed')reason='stdout_open';else if(o.stderr!=='closed')reason='stderr_open';else{disposition='confirmed';kind='terminated';}
       if(disposition==='unconfirmed'){workerUnconfirmed=true;stop('internal_review_error','cleanup');}
       const h=opaque<FakeWorkerCleanupReport>();workerReports.set(h,{worker:handle,value:Object.freeze({disposition,kind,reason,ended_at:now,synthetic:true}),used:false});w.state='terminal';return ok(h);
