@@ -1,7 +1,7 @@
 # AU-BR-006 単一予算・停止・typed cleanupと共通run ownerの接続
 
-Version: br006-run-transport-cleanup-draft-0.1 / Date: 2026-10-27。
-Status: **詳細設計のみ。fake I/Oでの次期検証範囲を定義。実装・transport有効化・正式証拠発行・cap承認は未実施／閉鎖**。
+Version: br006-run-transport-cleanup-draft-0.2 / Date: 2026-10-28。
+Status: **TC-01の内部契約・typed cleanup終端・HTTP／worker二軸診断を独立した純粋fakeで限定実装。実session／実会計／transportは未接続、正式証拠発行・cap承認は未実施／閉鎖**。
 
 親：[共通run owner §14・§15](BEST_PRACTICE_ABORT_SCOPE_RUN_OWNER_BINDING_DESIGN.md)、[用途別transport／cleanup](BEST_PRACTICE_ABORT_SCOPE_TRANSPORT_RECEIPTS_DESIGN.md)、[bounded予算](BEST_PRACTICE_ABORT_SCOPE_BOUNDED_BUDGET_DESIGN.md)。
 後続：[選択／payload受領物](BEST_PRACTICE_ABORT_SCOPE_REAL_SESSION_RECEIPTS_DESIGN.md)、[worker接続契約](BEST_PRACTICE_ABORT_SCOPE_CONNECTION_CONTRACT_DESIGN.md)。
@@ -10,7 +10,7 @@ Status: **詳細設計のみ。fake I/Oでの次期検証範囲を定義。実�
 
 同sessionの既存C/G/P・単調時計・停止を唯一の所有物として維持し、用途／attempt／cleanupの型付き結果を共通run ownerへ接続する。**JSONが返ったこと、abortしたこと、slotを解放したことを、取得証拠や終了確認へ昇格させない**。
 
-次期実装の検証はfake fetch／注入Response・Web Streams／fake clockに限定する。global fetch、PDI、実OAuth発行、実worker job、公開MCP引数のmode追加、production cap投入は対象外。本書の型・method名は提案であり、現在利用できるexportではない。
+§1〜§8は後続接続を含む設計案であり、全体の実装済みを意味しない。§10のTC-01はprimitive観測とclockだけの純粋fakeで、fetch／Response／Web Streams自体も操作しない。後続検証はfake fetch／注入Response・Web Streams／fake clockに限定する。global fetch、PDI、実OAuth発行、実worker job、公開MCP引数のmode追加、production cap投入は対象外。提案型と§10の開発専用exportを区別する。
 
 正式なSourceRunEvidence／選択payload receipt／seal／findingの発行口は閉じたまま。将来の内部transport受領物と正式なscope証拠を区別し、次期試験で得た合成受領物を本番へ登録しない。Unknown・全体受付無効、VM／監視／telemetry保留を維持する。
 
@@ -161,3 +161,45 @@ oracleは製品計数器を再利用せず、fake dispatch開始／採用read／
 ## 9. 文書確認（2026-10-27）
 
 新規本書と親2文書の計3MDについて相対リンク39件の参照先を確認し、欠落なし。`git diff --check`の空白エラーなし。旧transport設計の「prepared ownerが無い」等の記述を現行private lifecycle／release bindingと区別し、fixture分離時の説明は履歴として残した。ソース・test・設定を変更していないためbuild／合成テストは実行せず、接続や終了保証の動作証明とは扱わない。
+
+上記はdraft-0.1文書作成時の記録。次のTC-01実装・合成検証と区別する。
+
+## 10. TC-01：独立した純粋fake契約（2026-10-28）
+
+### 10.1 内部型と発行境界
+
+`src/review/abort-scope-evidence-cleanup-contract.ts`の`createFakeCleanupContract(clock, config?)`はfactoryごとのprivate WeakMapでpurpose／attempt／HTTP report／worker slot／worker reportを認識する。handleは凍結opaque object。実session・共通run owner・既存fixture会計の登録口を呼ばず、互換castやauthorityの昇格口を持たない。既存`!dist/review/abort-scope-evidence*`により非同梱。
+
+purposeの受理値は固定用途名とordinal 1／2だけ。通常／finalの用途名とprivate phase identityを照合し、phase交換・clone・別realmを拒否する。one-shotはhandle単位であり、同じ用途名の論理GETの重複排除までは実装していない。ordinalは**fakeのラベル**で、実retryの受付・C/G/P/E/Rの会計・認証ready・ReleasePermit・選択payload／worker jobの由来を証明しない。TC-02以降の用途発行前提を実装したとは扱わない。
+
+### 10.2 HTTP終端・一度限りの合流
+
+`beginHttp`でモデル上のattemptを作り、`startHttp`でfake開始を記録する。`finishHttp`はsettlingを先に消費し、strict schemaのprimitive観測から終端を導出する。disposition／confirmedの直接指定や余分なpropertyを拒否する。
+
+EOF／closed fulfilled／pendingなし／lock releasedが揃う場合のconfirmed/eof、cancel fulfilled等が揃うconfirmed/cancelled、fetch rejectedのconfirmed/no_response、bodyなしのconfirmed/no_bodyを区別する。pending fetch/read/cancel、cancel拒否、closed未確認／拒否、unknown reader、lock／abort失敗、不整合はunconfirmed。内部理由に`cancel_pending`を具体化した。HTTP200／JSON／body本文を受ける機能はなく、成功body receiptは発行しない。
+
+`consumeHttp(attempt, report)`は同attemptの未消費票だけを一度合流する。clone／別attempt／別realm／worker票を拒否し、既知票の二重consumeはinvalid_state。票のreadonly検査は再利用可能だが、新しい開始権限ではない。未開始attemptの整合したnot_startedは、期限切れでも存在しないresourceをunconfirmedへ変えない。runの期限理由自体は別に保持する。
+
+### 10.3 worker軸とrun診断slot
+
+workerもfake slotだけを最大1つ作り、primitiveなtermination／listener／stdout／stderr状態から終端票を導出する。termination fulfilled・listeners detached・両stream closedが揃う場合だけconfirmed/terminated。未開始はnot_started、pending／拒否／未解放はunconfirmed。実Worker・terminate Promise・OS終了確認は扱わない。
+
+HTTPとworkerの票は異なる内部型／台帳で、cross-axis consumeを拒否する。runのprimaryは最初の固定stage／codeだけを保持し、後続cleanup・closeで上書きしない。未知reason／Errorは固定internal_review_errorへ正規化し、本文・資格情報・raw exception・内部identityを診断へ出さない。
+
+run確定前に開始済みresourceがある場合、軸は内部状態`in_progress`とし、将来の作業が可能なrunを終端confirmedとは表示しない。unconfirmedは直ちにsticky。`finishRun`で全開始票のconsumeを確認してからconfirmedへ確定する。pending／未消費の開始済みresourceはunconfirmedとし、未開始はnot_startedのままclaim不成立を診断に残す。worker未開始から終了確認を推定しない。in_progressは開発専用の内部語彙で、公開schemaへ追加していない。
+
+### 10.4 停止・clock・再入
+
+stop後は新しいpurpose／attempt開始を拒否し、元のclockでcleanup終端・票の合流だけを扱う。hard期限の等号以降に新しいconfirmed終端を作らない。既に期限内に確定した票を後でconsumeしても、その過去のcleanup事実は保持できるが、finalizeでは期限理由を記録し、新しい活動や正式発行を再開しない。
+
+clock例外・逆行・非有限値は固定理由で停止。primitive入力cloneやclock callback中の再入、phase交換、最終closeの競合後に票を新規commitしない。closed後の未知票・取消・late成功は確定済み診断を変えない。timerはなく、期限はモデル操作時だけ検査する。自動中断・実OSの終了保証ではない。
+
+### 10.5 有限枠と未対応
+
+fake purpose／attemptはそれぞれ最大210、worker slotは最大1、active HTTP attempt／未消費HTTP票は最大1。reportはHTTP各attemptに最大1、workerにも最大1。設定で枠と60秒のモデル期限を下げられるが上げられない。`model_counts`は合成handleの数だけで、実HTTPのCや実会計を更新・コピーしたものではない。
+
+受理される観測の形状は有限だが、不正raw入力のclone前byte制限・実allocation／control work上界は未実装。認証／session／source／lease個別の正式binding、retry順序、typed body、実Promise／cancel／lock操作、mutable会計port、予約枠、実worker job、上位公開結果は未接続。正式発行口閉鎖・Unknown・全体受付無効・telemetry／VM／監視保留を維持する。
+
+次工程はTC-02のprivate transport claimと同session単一stateへの結合であり、このfake台帳を本物へ登録・昇格させない。
+
+検証：[TC-01合成テスト・検証記録](E2E_BEST_PRACTICE_TC01_CLEANUP_CONTRACT_2026-10-28.md)。
