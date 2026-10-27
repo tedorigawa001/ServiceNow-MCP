@@ -5,6 +5,8 @@ Status: **実session private lifecycleに同sourceのReleasePermit／不変relea
 
 親：[実session／private受領物](BEST_PRACTICE_ABORT_SCOPE_REAL_SESSION_RECEIPTS_DESIGN.md)、[用途別transport受領物](BEST_PRACTICE_ABORT_SCOPE_TRANSPORT_RECEIPTS_DESIGN.md)、[worker接続契約](BEST_PRACTICE_ABORT_SCOPE_CONNECTION_CONTRACT_DESIGN.md)、[OAuth起点の合成接続](BEST_PRACTICE_ABORT_SCOPE_OAUTH_SOURCE_HANDOFF_DESIGN.md#14-oauth起点のworker上位結果までの連続合成e2e)。
 
+次工程：[単一予算・停止・typed cleanup接続詳細設計draft-0.1](BEST_PRACTICE_ABORT_SCOPE_RUN_TRANSPORT_CLEANUP_DESIGN.md)。fake I/Oの検証範囲・費目所有・失敗時停止だけを設計し、実装・正式発行は追加していない。
+
 ## 1. 目的・境界
 
 次の二つを対で定める。
@@ -20,7 +22,7 @@ Status: **実session private lifecycleに同sourceのReleasePermit／不変relea
 
 | 箇所 | 現在あるもの | 本設計で必要なもの／まだ無いもの |
 |---|---|---|
-| [bounded-read](../src/servicenow/bounded-read.ts) | snapshotコピー、単調開始時計、認証readyPromise、C/G/P、hard／phase停止、closeによる一度限りの枠解放 | 共通run identityと一度限りのclaim、保護された予算lease、正式source／workerへの停止伝播 |
+| [bounded-read](../src/servicenow/bounded-read.ts) | private snapshot／run owner／readonly lease、単調開始時計、認証readyPromise、C/G/P、hard／phase停止、closeによる一度限りの枠解放 | 唯一の会計更新port、typed transport／cleanup、正式受領物／workerへの停止伝播 |
 | [実lifecycle](../src/servicenow/review-evidence-lifecycle.ts) | private owner／snapshot identity／一世代ready／同期revoke／readonly予算lease、同session再登録拒否、prepared source claim（§14・§15） | 正式receipt／worker結合。private lifecycle・prepared release成立だけでは証拠発行権限にならない |
 | [実source](../src/review/bounded-source.ts) | private session／#permit／独立不変release snapshotとreadonly port、matched時のprepared結合、既存選択行・payload版照合、最終親／一覧再読 | 正式証拠発行入口、型付き選択／body／payload受領物、worker job結合 |
 | [実adapter](../src/review/update-set-adapter.ts) | sessionと通常workerの残時間・外部signalを接続し、finallyで終了処理 | BR-006用の正式bindingと、HTTP内部停止も含む共通診断／失効／終了owner |

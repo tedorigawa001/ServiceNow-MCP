@@ -1,16 +1,16 @@
 # AU-BR-006 実transport：用途別body receipt・cleanup証拠・単一予算の接続詳細設計
 
-Version: br006-transport-receipts-draft-0.8 / Date: 2026-10-26。
-Status: **fixture分離を維持し、注入Responseのread／cleanupと未認証fixtureのOAuth bootstrap・固定診断を接続。実HTTP／本番sessionへの接続・cap承認・正式発行は未実装／閉鎖**。
+Version: br006-transport-receipts-draft-0.9 / Date: 2026-10-27。
+Status: **fixtureのread／cleanup・OAuth bootstrap実装と、実session共通ownerへのtyped transport接続設計を区別。typed会計／cleanupの本番接続・cap承認・正式発行は未実装／閉鎖**。
 
 **現行実装の境界は§15〜§17と[固定source設計§13](BEST_PRACTICE_ABORT_SCOPE_FIXED_SOURCE_ISSUER_DESIGN.md#13-固定sourceとweb-streams受領物の結合fixture限定)を優先する。** §13のfixtureから実session会計へ接続する経路は廃止した。以前の検証記録は当時の実行記録であり、安全な本番接続の証拠として使わない。
 親：[実session／private受領物](BEST_PRACTICE_ABORT_SCOPE_REAL_SESSION_RECEIPTS_DESIGN.md)、[bounded予算](BEST_PRACTICE_ABORT_SCOPE_BOUNDED_BUDGET_DESIGN.md)、[固定source issuer](BEST_PRACTICE_ABORT_SCOPE_FIXED_SOURCE_ISSUER_DESIGN.md)。
 
-次工程の[共通停止／予算owner・実session／ReleasePermit binding設計draft-0.2](BEST_PRACTICE_ABORT_SCOPE_RUN_OWNER_BINDING_DESIGN.md)で、同実sessionの唯一の会計と認証・source結合、停止／cleanup／診断の費目所有を具体化する。現行の`PreparedTransportBudget`は正式な本番leaseではなく、fixture portのcast・旧getとの二重受信・二重予約は禁止する。独立した合成owner・claim・readonly検査だけを実装済みで、実transport会計への接続と正式発行口は閉鎖する。
+[共通run owner設計draft-0.4 §14・§15](BEST_PRACTICE_ABORT_SCOPE_RUN_OWNER_BINDING_DESIGN.md)では実session private lifecycle／readonly予算leaseと同sourceのReleasePermit／不変release snapshotをprepared-onlyで結合済み。次工程の[単一予算・停止・typed cleanup接続詳細設計draft-0.1](BEST_PRACTICE_ABORT_SCOPE_RUN_TRANSPORT_CLEANUP_DESIGN.md)で、更新portの生成元・費目所有・停止順・fake I/O条件を具体化する。現行`PreparedTransportBudget`はfixture用で正式leaseではなく、cast・旧getとの二重受信／二重予約は禁止する。typed会計／cleanupの接続と正式発行口は閉鎖したまま。
 
 ## 1. 範囲と不変条件
 
-実BoundedReadSessionの認証・受信・中断・cleanupに用途を結び、同じC/G/E/R/clockから一度だけ受領物を発行するための設計。既存prepared owner／draft／fake完了票は本番証拠に昇格させない。今回の実装範囲は§12のfake限定モデルだけで、実機操作・トークン発行・設定変更・cap投入・公開規則登録は行わない。VM／監視／telemetryは保留、Unknown・全体受付無効を維持する。
+実BoundedReadSessionの認証・受信・中断・cleanupに用途を結び、同じC/G/E/R/clockから一度だけ受領物を発行するための設計。既存prepared owner／draft／fake完了票は本番証拠に昇格させない。§12以降のfixture限定実装と、後続の共通owner接続設計を区別し、typed transportの本番接続済みとは扱わない。実機操作・トークン発行・設定変更・cap投入・公開規則登録は行わない。VM／監視／telemetryは保留、Unknown・全体受付無効を維持する。
 
 - HTTP全210試行、全受信16MiB、通常1応答4MiB、payload単体2MiB／累計8MiB、全体60秒の既存上限を上げない。低減設定も尊重する。
 - 認証snapshot／originは同sessionで固定。per-userからservice-accountへ切り替えず、別client／sessionで予算や認証を作り直さない。
@@ -20,7 +20,7 @@ Status: **fixture分離を維持し、注入Responseのread／cleanupと未認�
 
 ## 2. 現行差分と公式仕様の確認
 
-現行bounded-read.tsのattemptはCを消費してfetchし、readでS/Gを課金、JSON.parse後に値を返す。finallyはcancelをbest-effortで要求するだけで、完了確認／releaseLock／typed受領物を返さない。現行final=trueと固定4予約では用途別slotを証明できない。sessionにlive／ready等の基本lifecycle hookはあるが、正式prepared owner／claimは無く、この不足を解消したとは扱わない。
+現行bounded-read.tsのattemptはCを消費してfetchし、readでS/Gを課金、JSON.parse後に値を返す。finallyはcancelをbest-effortで要求するだけで、完了確認／releaseLock／typed受領物を返さない。現行final=trueと固定4予約では用途別slotを証明できない。private run owner／ready世代／readonly lease／prepared source claimは追加済みだが、会計更新port・typed cleanup・正式受領物の不足を解消したとは扱わない。
 
 公式資料のAI読み取り：2026-10-26。資料が述べるAPIの意味と、本書が追加する保守的policyを分ける。
 
@@ -278,7 +278,7 @@ E閉鎖理由を優先し、初回outcomeは別列`initial_outcome`として保�
 
 旧経路は、梱包対象のlifecycleにfixture登録口が残り、fixtureのfacts／permitから生成したownerで実sessionのtransport factoryを呼べた。wrapperの梱包除外だけではこのraw exportを防げなかった。同processで実session参照を持つコードからの経路であり、外部MCP入力からの到達やリモート悪用を実証したものではない。
 
-現行は登録・source・owner・draft・claimのWeakMapを`abort-scope-evidence-fixture-lifecycle.ts`へ移動し、既存prefixでnpm梱包から除外する。実sessionのlifecycleは別WeakMapで登録・auth-ready・失効だけを扱い、fixture登録・owner生成・transport claimのexportを持たない。実`BoundedReadSession`からtransport factory・transportOwned・fixture専用会計処理を撤去した。fixture ownerを渡すだけで実sessionのmode・counter・stop権限を得る入口はない。
+この分離時点では登録・source・owner・draft・claimのWeakMapを`abort-scope-evidence-fixture-lifecycle.ts`へ移動し、既存prefixでnpm梱包から除外した。当時の実session lifecycleは別WeakMapの通知だけだった。その後のprivate run owner／prepared release結合は上記共通owner設計§14・§15を参照する。実`BoundedReadSession`からfixture用transport factory・transportOwned・専用会計処理を撤去した境界は維持し、fixture ownerから実sessionのmode・counter・stop権限を得る入口は復活させない。
 
 - `FixtureAccountingSession`は合成baselineイベントから始まる独立した台帳で、実sessionのstatsをコピーしない。C/G/E/payload/R・retry・final skip・期限・取消の実験はこのfixtureだけで行う。本番の単一budget owner接続は**未実装へ戻す**。
 - `FixtureReadSession`はテストで実GETのfake依存結果を観測するラッパー。ラッパー自身をfixture台帳へ登録し、内包する実sessionは登録しない。fixture失敗は実sessionのclaimやfailureを書き換えない。auth／cancel／deadline／payload累計失敗は観測用fixtureへ伝え、最初の失効理由を保持する。
