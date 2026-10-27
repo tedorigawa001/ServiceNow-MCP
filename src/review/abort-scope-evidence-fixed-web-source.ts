@@ -3,23 +3,26 @@ import { createFixtureWebStreamTransport } from './abort-scope-evidence-web-stre
 import type { PreparedEvidenceOwner } from './abort-scope-evidence-fixture-lifecycle.js';
 import type { FakeDispatchRequest, FakePurposePermit, FakeTransportSlot } from './abort-scope-evidence-transport-state.js';
 import type { FixedSourceNormalized } from './abort-scope-evidence-fixed-source.js';
-type Request=Readonly<{method:'GET';path:string;purpose:FakeDispatchRequest['purpose'];ordinal:1|2;synthetic:true}>;
+export type FixtureFixedGetRequest=Readonly<{method:'GET';path:string;purpose:FakeDispatchRequest['purpose'];ordinal:1|2;synthetic:true}>;
 type Result<T>={ok:true;value:T}|{ok:false;code:string};
 type Table={slot:FakeTransportSlot;initial:FixedSourceNormalized|null;reason:string|null};
 const good=<T>(value:T):Result<T>=>({ok:true,value});
+/** One fixed descriptor builder shared by the independent source and the OH-02 dispatcher. */
+export function fixtureFixedGetRequest(updateSet:string,r:FakeDispatchRequest):FixtureFixedGetRequest{
+  if(!/^[a-f0-9]{32}$/.test(updateSet)||!['parent_initial','parent_final','metadata_initial','metadata_final','table_initial','table_final'].includes(r.purpose)
+    ||![1,2].includes(r.ordinal))throw Error('invalid_state');
+  const table=r.purpose.startsWith('table_'),parent=r.purpose.startsWith('parent_');
+  if(table?typeof r.target!=='string'||!/^[a-z][a-z0-9_]{0,79}$/.test(r.target)||r.target==='global':r.target!==undefined)throw Error('invalid_state');
+  const params=new URLSearchParams({sysparm_query:table?`name=${r.target}^ORDERBYsys_id`:parent?`sys_id=${updateSet}^ORDERBYsys_id`:`update_set=${updateSet}^ORDERBYsys_id`,
+    sysparm_fields:table?'sys_id,name,sys_scope,sys_updated_on,sys_mod_count':parent?'sys_id,sys_updated_on,sys_mod_count':'sys_id,update_set,name,sys_updated_on,sys_mod_count',
+    sysparm_limit:table||parent?'2':'101',sysparm_offset:'0',sysparm_no_count:'true',sysparm_display_value:'false',sysparm_exclude_reference_link:'true'});
+  return Object.freeze({method:'GET',path:`/api/now/table/${table?'sys_db_object':parent?'sys_update_set':'sys_update_xml'}?${params}`,
+    purpose:r.purpose,ordinal:r.ordinal,synthetic:true});
+}
 export function createFixtureFixedWebSource(session:object,owner:PreparedEvidenceOwner,updateSet:string,
-  source:(request:Request,signal:AbortSignal)=>Response|Promise<Response>){
+  source:(request:FixtureFixedGetRequest,signal:AbortSignal)=>Response|Promise<Response>){
   if(typeof updateSet!=='string'||!/^[a-f0-9]{32}$/.test(updateSet)||typeof source!=='function')return {ok:false as const,code:'invalid_input'};
-  function descriptor(r:FakeDispatchRequest):Request{
-    const table=r.purpose.startsWith('table_'),parent=r.purpose.startsWith('parent_');
-    if(!table&&!parent&&!r.purpose.startsWith('metadata_'))throw Error('invalid_state');
-    const params=new URLSearchParams({sysparm_query:table?`name=${r.target}^ORDERBYsys_id`:parent?`sys_id=${updateSet}^ORDERBYsys_id`:`update_set=${updateSet}^ORDERBYsys_id`,
-      sysparm_fields:table?'sys_id,name,sys_scope,sys_updated_on,sys_mod_count':parent?'sys_id,sys_updated_on,sys_mod_count':'sys_id,update_set,name,sys_updated_on,sys_mod_count',
-      sysparm_limit:table||parent?'2':'101',sysparm_offset:'0',sysparm_no_count:'true',sysparm_display_value:'false',sysparm_exclude_reference_link:'true'});
-    return Object.freeze({method:'GET',path:`/api/now/table/${table?'sys_db_object':parent?'sys_update_set':'sys_update_xml'}?${params}`,
-      purpose:r.purpose,ordinal:r.ordinal,synthetic:true});
-  }
-  const made=createFixtureWebStreamTransport(session,owner,(r,signal)=>source(descriptor(r),signal));
+  const made=createFixtureWebStreamTransport(session,owner,(r,signal)=>source(fixtureFixedGetRequest(updateSet,r),signal));
   if(!made.ok)return made;
   const api=made.value,m=api.machine,tables=new Map<string,Table>();
   const deliveries=new Map<string,Readonly<{initial:FixedSourceNormalized;final:FixedSourceNormalized;synthetic:true;evidence_issuance:'disabled'}>>();

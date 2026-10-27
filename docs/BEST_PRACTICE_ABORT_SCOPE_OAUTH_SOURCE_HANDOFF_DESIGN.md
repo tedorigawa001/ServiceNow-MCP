@@ -1,7 +1,7 @@
 # AU-BR-006 OAuth後の同transport→固定source移譲 詳細設計
 
-Version: br006-oauth-source-handoff-draft-0.2 / Date: 2026-10-26。
-Status: **OH-01の内部型・session側claimを独立した合成issuer内に実装。既存fixture session／実sessionの移譲入口・dispatcher・source採用は未接続。正式発行口閉鎖、全体受付無効・Unknown、VM／監視／telemetry保留を維持**。
+Version: br006-oauth-source-handoff-draft-0.3 / Date: 2026-10-27。
+Status: **OH-01の独立合成モデルに続き、OH-02の固定dispatcher・既存fixture adapterの所有者切替を実装。固定source全体の採用はOH-03へ残し、実sessionは未接続。正式発行口閉鎖、全体受付無効・Unknown、VM／監視／telemetry保留を維持**。
 
 親：[transport／OAuth bootstrap](BEST_PRACTICE_ABORT_SCOPE_TRANSPORT_RECEIPTS_DESIGN.md#17-未認証fixtureのoauth-bootstrapと固定失敗分類)、[固定source](BEST_PRACTICE_ABORT_SCOPE_FIXED_SOURCE_ISSUER_DESIGN.md#13-固定sourceとweb-streams受領物の結合fixture限定)。
 
@@ -168,4 +168,28 @@ offer／adoptは各最大2回の同時計観測と固定数のidentity検査を�
 
 合成41ケースで一意性・混入・失敗後再利用・stale操作／root取消・期限／clock再入を確認する。dispatch／chunk／payload／transport生成の呼出し口は存在せず、HTTPカウンタのコピーや再初期化も実装していない。したがって§7のC=7/8・G/E/R等の独立会計oracleや、実OAuth→固定source→workerの連続試験は**OH-03へ残る**。保持／allocator／control workの実上界は確認していない。
 
-検証：[OH-01内部型・session claimの合成記録](E2E_BEST_PRACTICE_ABORT_SCOPE_HANDOFF_OH01_SYNTHETIC_2026-10-26.md)。次はOH-02の固定dispatcherと既存adapterの所有者切替であり、今回の合成leaseを既存sourceへcastして接続しない。
+検証：[OH-01内部型・session claimの合成記録](E2E_BEST_PRACTICE_ABORT_SCOPE_HANDOFF_OH01_SYNTHETIC_2026-10-26.md)。OH-02は次節の独立fixture compositionとして接続し、この合成leaseを既存sourceへcastしない。
+
+## 12. OH-02：固定dispatcherと既存adapterの所有者切替（fixture限定）
+
+`createFixtureOAuthSourceTransport`は、同fixture sessionを`claimFixtureHandoffLifecycle`で一度claimしてから、固定Update Set IDと注入関数をpinし、`createFixtureOAuthWebStreamTransport`を一度だけ生成する。実session・per-user・既ready・transport claim済みは受け付けない。構成不正はfixture sessionを失効させ、修正後の再生成も拒否する。OH-01の合成Session／ticketを受け取る口はなく、既存fixture registryのAuthSnapshotIdentity／snapshot参照へ直接結合する。
+
+dispatcherの参照・注入関数・Update Set IDは同closureに固定する。bootstrap_ownedでは合成POST `/oauth_token.do`だけ、source_ownedでは共通の`fixtureFixedGetRequest`が認める親／metadata／tableの固定GETだけを生成する。auth_ready／offered／adopting／failed／closedで新dispatchしない。任意request／URL／fields／adapter／I/Oをadoptへ渡す口はない。GETの固定条件は既存sourceと共通化し、payload／release_rowsや不正table名を拒否する。
+
+認証成功のscalar summaryではなく、同budgetのOAuth settlementで実際に生成されたfixture ready参照をpinする。state machineの`handoffCheckpoint`は同時計・normal cutoff・auth ready・OAuth done・唯一の用途票・active attempt／pending bodyなしを検査する。adapter側はそのclock callbackの後にbusy／current resource／timer／sticky cleanup状態を再検査する。OAuth `api.run`のfinallyが返る前にofferしない。fixture registryのlive／AuthSnapshotIdentity／snapshot／ready参照をoffer・adopt・source操作でも再確認する。
+
+rootのofferは同closureのopaque ticketを一度発行する。adoptは既知ticketを先に消費し、adopting→idle検査→ready再照合→同期source_owned commitへ進む。foreign／clone／既消費ticketや古いbootstrap facadeのrun／close／cancelは、新sourceを停止しない。root cancel／closeとsession失効は同machineの停止へ合流し、移譲後も次GETを拒否し、進行中I/Oのcleanupを一度だけ要求する。primaryとcleanup不明は別軸で保持し、終端でauth-readyへ戻らない。
+
+OH-02の採用laneは**固定親GETの一度限りの`probeParent`だけ**を持つ。既存`consumeSourceBody`で必要列へ投影して即破棄し、返すのは固定outcome／synthetic／evidence disabledのみ。raw body・rows・receipt・machine・permit・ready identityは返さない。これは所有者切替後のdispatchを検証する限定probeであり、固定sourceのprepare／table初回／最終／deliveryの採用入口ではない。probe済みadapterを後から固定sourceへ登録する迂回口も作らない。全体のprivate採用・親／metadata／table最終・予約R=0・workerはOH-03へ残す。
+
+| 費目／保持 | OH-02での所有者・検証範囲 |
+|---|---|
+| C/G/P/E/R、retry、開始時計 | 既存fixture sessionの一つのport。offer／adoptはdispatch／chunk／payload課金なし、予約差分0 |
+| adapter／Response・stream WeakSet／reader／scratch／timer | 一つの既存adapter。移譲前後のResponse／stream再利用拒否を同台帳で検証 |
+| 管理record | sessionのhandoffClaimed、lifecycle closureとpin済み参照、run状態、ticket最大1、source lane最大1。無制限Mapやcallback差替えなし |
+| 追加検査 | offer／adoptごとにlive checkpoint 1、machine handoff checkpoint 1、ready参照再照合1。各checkpoint内部のbudget確認も維持 |
+| 保留 | 実allocatorの確保数／容量、control全体work上界、ready／ReleasePermit／worker jobの本番由来は証明していない |
+
+親probeだけではR=4を最終解放しない。これはOH-03の全体C=7/8・R=0 oracleの代替ではない。実credential／tokenは保持・header利用せず、Response供給関数はfixture TCBであって実通信の認証証拠ではない。正式な証拠発行口は閉鎖、全体受付無効・Unknown・VM／監視／telemetry保留を維持する。
+
+検証：[OH-02固定dispatcher・所有者切替の合成記録](E2E_BEST_PRACTICE_ABORT_SCOPE_HANDOFF_OH02_SYNTHETIC_2026-10-27.md)。

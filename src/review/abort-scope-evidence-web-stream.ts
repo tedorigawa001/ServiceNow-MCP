@@ -103,6 +103,11 @@ function createWebStreamTransport(source:FixtureStreamSource,bind:(io:FakeTransp
   }
   return {ok:true as const,value:Object.freeze({machine,chargePayload:bound.value.chargePayload,stats:()=>Object.freeze({...counts,active:busy,
     retained_bytes:current?.scratch?.byteLength??0,cleanup_unconfirmed:unconfirmed,...bound.value.stats()}),
+    handoffCheckpoint(){
+      const checked=machine.handoffCheckpoint();if(!checked.ok)return checked;
+      // Recheck actual adapter state after the clock callback; auth-ready alone is not finally completion.
+      return !busy&&!current&&!unconfirmed&&counts.timers===0?{ok:true as const,value:true as const}:{ok:false as const,code:'invalid_state' as const};
+    },
     async run(permit:FakePurposePermit){
       if(busy)return {ok:false as const,code:'invalid_state'};busy=true;let r:Resource|undefined;
       try{

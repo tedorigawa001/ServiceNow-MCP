@@ -270,6 +270,14 @@ export function createFakeTransportReceiptMachine(raw:unknown,clock:{now():numbe
       return projected(Object.freeze({...base,kind:'baseline' as const,state:'rows' as const,reason:null,rows:Object.freeze(rows.map(r=>Object.freeze(r)))}));
     },
     checkpoint():Result<true>{return now()===null?no(primary!):ok(true);},
+    /** Internal fixture handoff precondition, not a release/source evidence issuer. */
+    handoffCheckpoint():Result<true>{
+      const t=now();if(t===null)return no(primary!);
+      if(t>=cutoff())return no('phase_deadline_exceeded');
+      const oauth=purposeByName.get('oauth:');
+      return phaseName==='normal'&&authReady&&!current&&!pendingBody&&!cleanupUnconfirmed
+        &&permitNames.size===1&&oauth?.state==='done'?ok(true):no('invalid_state');
+    },
     enterFinal():Result<FakeTransportPhase>{
       if(now()===null)return no(primary!);if(phaseName!=='normal'||current||pendingBody)return fail('invalid_state');
       try{budget?.enterFinal();}catch(error){return fail(budgetCode(error));}

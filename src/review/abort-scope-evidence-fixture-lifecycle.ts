@@ -17,7 +17,7 @@ type Result<T> = Readonly<{ok:true;value:T}|{ok:false;code:PreparedOwnerFailure}
 type AuthSnapshotIdentity = object;
 type Session = { snapshot?:object; auth:AuthSnapshotIdentity; ready?:object; live:boolean;
   claim:'unclaimed'|'claimed'; failure?:PreparedOwnerFailure; owner?:Owner;
-  transport?:()=>PreparedTransportBudget;bootstrap?:()=>PreparedTransportBudget;transportClaimed?:boolean };
+  transport?:()=>PreparedTransportBudget;bootstrap?:()=>PreparedTransportBudget;transportClaimed?:boolean;handoffClaimed?:boolean };
 type FixtureSource = { session:object; auth:AuthSnapshotIdentity; ready?:object; permit:object|null;
   claimed:boolean; parentReady:boolean; finalStarted:boolean; matched:boolean };
 type Owner = { state:'prepared'|'revoked'; code?:PreparedOwnerFailure; revocations:number;
@@ -81,6 +81,26 @@ export function claimFixtureBootstrapTransport(session:object):Result<PreparedTr
 /** Called after the pinned readyPromise succeeds; late auth completion cannot resurrect a session. */
 export function markFixtureAuthReady(session:object):void{
   const s=sessions.get(session);if(s?.live&&!s.failure)s.ready??=opaque();
+}
+/** OH-02 fixture-only lifecycle authority. Never recognizes a real-session registry or scalar ready summary. */
+export function claimFixtureHandoffLifecycle(session:object){
+  const found=sessions.get(session);if(!found)return no('evidence_binding_mismatch');const s=found;
+  if(!s.live||s.failure)return no(s.failure??'closed');
+  if(s.handoffClaimed||s.transportClaimed||s.ready||s.owner||s.claim!=='unclaimed'||!s.bootstrap)return no('invalid_state');
+  s.handoffClaimed=true;
+  const auth=s.auth,snapshot=s.snapshot;let ready:object|undefined;
+  function check():Result<true>{
+    if(!s.live||s.failure)return no(s.failure??'closed');
+    if(s.auth!==auth||s.snapshot!==snapshot){revokeFixtureReviewSession(session,'evidence_binding_mismatch');return no('evidence_binding_mismatch');}
+    return ok(true);
+  }
+  return ok(Object.freeze({check,
+    pinReady():Result<true>{const live=check();if(!live.ok)return live;
+      if(ready||!s.ready||!s.transportClaimed)return no('invalid_state');ready=s.ready;return ok(true);},
+    checkReady():Result<true>{const live=check();if(!live.ok)return live;
+      return ready&&ready===s.ready&&s.transportClaimed?ok(true):no('evidence_binding_mismatch');},
+    fail(reason:PreparedOwnerFailure){revokeFixtureReviewSession(session,reason);},
+  }));
 }
 /** Synchronous, non-callback revocation must run before controller.abort(). */
 export function revokeFixtureReviewSession(session:object,raw:unknown):void{
