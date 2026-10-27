@@ -215,6 +215,16 @@ worker内部では同issuer/jobのpayload evidence・初回／最終phase・一�
 
 固定sourceの`consumeObservations`は、親／metadata／全tableのfinalがstableでR=0、同sourceがactiveな場合だけ、同tableの初回／最終正規化データを一度返す。コピーしたraw HTTP応答やcaller指定時刻を登録する口ではない。changed／unverified／失効／再消費を拒否し、closeで保持を外す。これはfixtureデータの合成接続で、実session／worker jobに結合した正式receiptやsealではない。実worker試験では固定GET→Web Streams会計→一度のdelivery→prepare/observe/compare→上位JSONまでを通し、C/Gが再課金されないことを確認した。
 
-本番の50/55/60秒・210試行を変更しない。本fixture workerは供給された残時間callbackを消費するだけで、実sessionのphase budget bindingは未実装。正式な認証snapshot／ReleasePermit／選択metadata・payload receipt／worker job、OAuth後の固定source移譲、公開BR-006語彙・coverage、全体work／保持上界・cap承認・実機検証は残る。したがって本番レビュー機能の最終完了／有効化とは扱わない。VM／監視／telemetry保留・Unknown・全体受付無効を維持する。
+本番の50/55/60秒・210試行を変更しない。本fixture workerは供給された残時間callbackを消費するだけで、実sessionのphase budget bindingは未実装。OAuth後の固定source移譲はOH-03でfixture限定に接続したが、正式な認証snapshot／ReleasePermit／選択metadata・payload receipt／worker job、公開BR-006語彙・coverage、全体work／保持上界・cap承認・実機検証は残る。したがって本番レビュー機能の最終完了／有効化とは扱わない。VM／監視／telemetry保留・Unknown・全体受付無効を維持する。
 
 検証：[worker・上位結果統合の合成記録](E2E_BEST_PRACTICE_ABORT_SCOPE_WORKER_INTEGRATION_SYNTHETIC_2026-10-26.md)。
+
+### 11.1 OAuth起点の連続検証（test-only owner）
+
+[移譲設計draft-0.5 §14](BEST_PRACTICE_ABORT_SCOPE_OAUTH_SOURCE_HANDOFF_DESIGN.md#14-oauth起点のworker上位結果までの連続合成e2e)で、同fixture sessionのOAuth→固定source→planに従うtable初回／最終→一度のdelivery→native worker.observe／compare→finishを通した。元の開始時刻からの残時間と一つの取消signalを試験専用ownerが渡し、会計はsourceから上位結果まで作り直さない。
+
+通常／OAuth retry、取消前・OAuth待機・table read・worker ready待機・比較後の取消、source changed／unverified、401／403、worker起動失敗を検証する。上位resultはpartial／analysis_complete=false／code_return_mode=none／fixture_input／evidence disabledと、従来の未接続limitationsを保つ。子Nodeのstdout／stderrも捕捉し、strict上位JSONだけを許可する。
+
+外側ownerはtests内だけであり、実MCP dispatcher・実sessionの共通停止／予算ownerを実装したものではない。payload／instance_bindingも架空入力なので、本番receipt／jobの認証・由来を保証しない。
+
+検証：[OAuth起点の連続合成E2E記録](E2E_BEST_PRACTICE_ABORT_SCOPE_OAUTH_WORKER_CHAIN_2026-10-27.md)。

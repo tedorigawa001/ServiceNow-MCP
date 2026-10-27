@@ -331,4 +331,6 @@ machineの`diagnostics()`は固定primary／primary_detail、最後の失敗試�
 
 検証：[OAuth bootstrap・失敗分類の合成記録](E2E_BEST_PRACTICE_ABORT_SCOPE_OAUTH_BOOTSTRAP_SYNTHETIC_2026-10-26.md)。
 
-後続の[OAuth後の同transport→固定source移譲詳細設計draft-0.4 §13](BEST_PRACTICE_ABORT_SCOPE_OAUTH_SOURCE_HANDOFF_DESIGN.md#13-oh-03同transportの固定source-private採用初回最終と予約解放)では、OH-02の同fixture session生成claim・固定dispatcher・所有者切替に加え、OH-03の固定source private採用を接続した。counter／時計／transportを再生成せず、初回／最終観測・予約解放まで継続し、古いbootstrapとroot取消の権限を分離する。認証readyとadapter-finallyを別に検査し、Response／streamの再利用台帳も維持する。実session・正式証拠と、このOAuth起点のworker／上位結果連続E2Eは未接続／未確認のまま。
+後続の[OAuth後の同transport→固定source移譲詳細設計draft-0.5 §13](BEST_PRACTICE_ABORT_SCOPE_OAUTH_SOURCE_HANDOFF_DESIGN.md#13-oh-03同transportの固定source-private採用初回最終と予約解放)では、OH-02の同fixture session生成claim・固定dispatcher・所有者切替に加え、OH-03の固定source private採用を接続した。counter／時計／transportを再生成せず、初回／最終観測・予約解放まで継続し、古いbootstrapとroot取消の権限を分離する。認証readyとadapter-finallyを別に検査し、Response／streamの再利用台帳も維持する。
+
+同設計[§14](BEST_PRACTICE_ABORT_SCOPE_OAUTH_SOURCE_HANDOFF_DESIGN.md#14-oauth起点のworker上位結果までの連続合成e2e)では、OAuth起点のworker／fixture上位結果までをtest-only外側ownerで連続検証した。通常C=7／OAuth retry C=8、G/Eの継続とR=0、取消・非露出を確認するが、実session・正式なsource／payload／job証拠の結合は未接続。公開tool／schema・実transport経路は変更しない。

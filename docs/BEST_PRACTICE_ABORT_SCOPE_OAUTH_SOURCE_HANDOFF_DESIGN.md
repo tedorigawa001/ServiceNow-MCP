@@ -1,7 +1,7 @@
 # AU-BR-006 OAuth後の同transport→固定source移譲 詳細設計
 
-Version: br006-oauth-source-handoff-draft-0.4 / Date: 2026-10-27。
-Status: **OH-03として同transportを固定sourceのprivate coreへ採用し、初回／最終観測・予約解放・会計継続を合成経路で接続。実sessionと、このOAuth起点からのworker／上位結果連続検証は未接続／未確認。正式発行口閉鎖、全体受付無効・Unknown、VM／監視／telemetry保留を維持**。
+Version: br006-oauth-source-handoff-draft-0.5 / Date: 2026-10-27。
+Status: **OH-03の同transport採用に続き、OAuth→固定source→native worker→fixture上位結果の連続E2Eを合成依存で確認。外側の取消／時計結合はtest-only ownerであり、本番実sessionへの接続ではない。正式発行口閉鎖、全体受付無効・Unknown、VM／監視／telemetry保留を維持**。
 
 親：[transport／OAuth bootstrap](BEST_PRACTICE_ABORT_SCOPE_TRANSPORT_RECEIPTS_DESIGN.md#17-未認証fixtureのoauth-bootstrapと固定失敗分類)、[固定source](BEST_PRACTICE_ABORT_SCOPE_FIXED_SOURCE_ISSUER_DESIGN.md#13-固定sourceとweb-streams受領物の結合fixture限定)。
 
@@ -214,6 +214,24 @@ private coreは既存のprepare→親／metadata初回、table initial（同名c
 
 成功summaryはfixture-onlyのstable／changed／unverifiedと`seal:null`、deliveryも既存の正規化観測／synthetic／evidence disabledだけ。root・sourceの一度限りの消費を維持し、本文／token／extra columnや正式receiptは出さない。
 
-今回の接続で既存workerへ渡せるnormalized deliveryまでは継続するが、**OAuth→固定source→worker→上位結果の新しい連続E2Eは未実施**。別起点の既存worker合成試験の成功を、この起点のjob／payload／実認証由来の証明に代用しない。実session／ReleasePermit／worker job binding・本番token管理・公開BR-006契約・cap承認・全体work／保持／終了保証・実機検証も残る。正式発行口閉鎖・全体受付無効・Unknown・VM／監視／telemetry保留を維持する。
+OH-03の接続段階ではnormalized deliveryまでを検証し、後続§14でOAuth→固定source→worker→上位結果の連続合成E2Eを追加した。これを正式なjob／payload／実認証由来の証明に代用しない。実session／ReleasePermit／worker job binding・本番token管理・公開BR-006契約・cap承認・全体work／保持／終了保証・実機検証も残る。正式発行口閉鎖・全体受付無効・Unknown・VM／監視／telemetry保留を維持する。
 
 検証：[OH-03 private採用・初回／最終観測・会計継続の合成記録](E2E_BEST_PRACTICE_ABORT_SCOPE_HANDOFF_OH03_SYNTHETIC_2026-10-27.md)。
+
+## 14. OAuth起点のworker／上位結果までの連続合成E2E
+
+`tests/review/fixtures/oauth-source-worker-run.ts`は**試験専用の外側owner**。同じfixture sessionでOAuth bootstrap→offer／adoptSource→source.prepare→実worker.prepare→planのcollectionへinitial→finalize→一度限りのdelivery→worker.observe初回／最終→compare→finishを順に呼ぶ。実装済みのsource／worker classをmockせず、HTTP相当の境界へだけ架空Responseを供給する。native worker threadとstrict IPC／fixture上位JSONの経路は実際に通す。本番source・公開MCP dispatcherへの新しい接続は追加しない。
+
+通常試験はsession constructorの最初のperformance.now観測値をsystem-clock spyで捕捉し、workerへ元開始時刻からの60秒残時間を渡す。OAuthやworker開始時に枠を作り直さない。source観測は同sessionの経過時計、fixtureのstarted／retrieved／comparedは1970-01-01起点の経過ISO表現で、実wall-clockの取得証拠ではない。子processのstdout試験では開始値をconstructor直前に置く保守的な予算とし、完全同一の開始値の検査とは区別する。
+
+外側ownerの一つのAbortControllerを、transport rootのcancel／session.closeとworkerのsignalへ結ぶ。取消前・OAuth待機・table read・worker ready待機・比較後の各位置を検証する。起動済みworkerはterminate完了とthreadId=-1を確認し、未起動はcleanup=not_startedとする。比較済みでも終了時取消ならcomparison_onlyをnot_completedへ落とし、comparison／候補数を撤回する。これは試験用callerの合流確認であって、本番の共通取消ownerを実装したものではない。
+
+Response側でC/G/Eを独立に集計し、通常C=7／OAuth retry C=8、R=0、payload入力は架空値なのでP=0を確認する。worker処理／finishの前後でも同会計値を保持する。source changed／unverifiedはtest callerがfinal/evidence_missingで停止し、初回401／403・OAuth拒否・worker起動失敗は固定の上位診断だけへ伝える。局所不足後の予約解放と、全体停止後の残予約を成功に見せない扱いは§13を維持する。
+
+待受点の観測はrunner終端と競合させ、5秒の試験用観測上限で打ち切る。未到達時は固定理由を返し、finallyで取消・runner待ち・closeを行う。製品期限や既存テストtimeoutは延長しない。
+
+秘密非出力は架空token／refresh／extra columnと、コード中のconsole.log canaryで検証する。worker stdout／stderrは捕捉し、本文が実行されず出力が空であることを確認する。さらにenv={}の子Nodeで同経路を実行し、親がstdoutをstrict上位JSONとして再検証、stderr空・canary／コード／nonce／hashの非露出を確認する。resultは従来どおり`br006-fixture-result-0.1`／fixture_input／partial／analysis_complete=false／code_return_mode=none／evidence disabledであり、正式findingではない。
+
+架空payloadとinstance_bindingは試験が直接与える。metadataのtarget／版は揃えるが、正式な選択payload receipt・AuthSnapshotIdentity・ReleasePermit・worker jobを結ぶ本番issuerの代用にしない。`source_receipt_binding_not_connected`／`public_review_integration_not_enabled`のlimitationsも残す。正式発行口閉鎖・Unknown・全体受付無効・VM／監視／telemetry保留を維持する。
+
+検証：[OAuth→source→worker→上位結果の連続合成E2E記録](E2E_BEST_PRACTICE_ABORT_SCOPE_OAUTH_WORKER_CHAIN_2026-10-27.md)。
