@@ -51,6 +51,8 @@ Date: 2026-10-27。対象：[移譲設計draft-0.5 §14](BEST_PRACTICE_ABORT_SCO
 
 TDDの小さな接続単位に沿って、正常1件→retry／取消まで8件→失敗伝播・時計・子processまで16件→観測点未到達の17件へ追加した。各段階は成功し、この作業では製品不具合による失敗やruntime修正はなかった。17件単独の最終実行は1.47秒。
 
+その後、本試験はnative workerと子processを起動するため、既存のworker-native試験と同じく`vitest.config.ts`のrealHostグループ（unitの後・最大3 worker・30秒timeout）へ移した。real-host project 10ファイル／315件、全体161ファイル／4,701件が成功し、unit projectからは除外されることを確認した。
+
 - `bdo npm run build`：成功。
 - `bdo proxy node node_modules/vitest/vitest.mjs run --maxWorkers=3`：161ファイル／4,701件成功（26.79秒）。合成内のローカルHTTP試験の待受を許可した。PDI E2Eは含まない。
 - ESLint APIでsrc／tests全体：0 errors／既存374 warnings。新規3試験ファイルの個別確認：0 errors／0 warnings。
