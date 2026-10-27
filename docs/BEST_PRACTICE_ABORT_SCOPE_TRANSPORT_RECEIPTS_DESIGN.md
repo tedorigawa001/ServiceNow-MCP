@@ -6,7 +6,7 @@ Status: **fixture分離を維持し、注入Responseのread／cleanupと未認�
 **現行実装の境界は§15〜§17と[固定source設計§13](BEST_PRACTICE_ABORT_SCOPE_FIXED_SOURCE_ISSUER_DESIGN.md#13-固定sourceとweb-streams受領物の結合fixture限定)を優先する。** §13のfixtureから実session会計へ接続する経路は廃止した。以前の検証記録は当時の実行記録であり、安全な本番接続の証拠として使わない。
 親：[実session／private受領物](BEST_PRACTICE_ABORT_SCOPE_REAL_SESSION_RECEIPTS_DESIGN.md)、[bounded予算](BEST_PRACTICE_ABORT_SCOPE_BOUNDED_BUDGET_DESIGN.md)、[固定source issuer](BEST_PRACTICE_ABORT_SCOPE_FIXED_SOURCE_ISSUER_DESIGN.md)。
 
-次工程の[共通停止／予算owner・実session／ReleasePermit binding設計draft-0.1](BEST_PRACTICE_ABORT_SCOPE_RUN_OWNER_BINDING_DESIGN.md)で、同実sessionの唯一の会計と認証・source結合、停止／cleanup／診断の費目所有を具体化する。現行の`PreparedTransportBudget`は正式な本番leaseではなく、fixture portのcast・旧getとの二重受信・二重予約は禁止する。今回は設計のみで、正式発行口は閉鎖する。
+次工程の[共通停止／予算owner・実session／ReleasePermit binding設計draft-0.2](BEST_PRACTICE_ABORT_SCOPE_RUN_OWNER_BINDING_DESIGN.md)で、同実sessionの唯一の会計と認証・source結合、停止／cleanup／診断の費目所有を具体化する。現行の`PreparedTransportBudget`は正式な本番leaseではなく、fixture portのcast・旧getとの二重受信・二重予約は禁止する。独立した合成owner・claim・readonly検査だけを実装済みで、実transport会計への接続と正式発行口は閉鎖する。
 
 ## 1. 範囲と不変条件
 

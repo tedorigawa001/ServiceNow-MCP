@@ -1,7 +1,7 @@
 # AU-BR-006 共通停止／予算owner・実session／ReleasePermit binding 詳細設計
 
-Version: br006-run-owner-binding-draft-0.1 / Date: 2026-10-27。
-Status: **設計案のみ。実装・正式証拠発行・実transport接続・本番cap投入は未実施／閉鎖。Unknown・全体受付無効、VM／監視／telemetry保留を維持**。
+Version: br006-run-owner-binding-draft-0.2 / Date: 2026-10-27。
+Status: **独立合成issuer内でowner／診断slot／run・source claim／readonly bindingを限定実装。実session・実ReleasePermit・会計／停止通知・実transportは未接続、正式証拠発行は閉鎖。Unknown・全体受付無効、VM／監視／telemetry保留を維持**。
 
 親：[実session／private受領物](BEST_PRACTICE_ABORT_SCOPE_REAL_SESSION_RECEIPTS_DESIGN.md)、[用途別transport受領物](BEST_PRACTICE_ABORT_SCOPE_TRANSPORT_RECEIPTS_DESIGN.md)、[worker接続契約](BEST_PRACTICE_ABORT_SCOPE_CONNECTION_CONTRACT_DESIGN.md)、[OAuth起点の合成接続](BEST_PRACTICE_ABORT_SCOPE_OAUTH_SOURCE_HANDOFF_DESIGN.md#14-oauth起点のworker上位結果までの連続合成e2e)。
 
@@ -12,7 +12,7 @@ Status: **設計案のみ。実装・正式証拠発行・実transport接続・�
 1. 同じ実sessionの時計・phase・C/G/Pと、将来のE/R・HTTP／worker停止・終了診断を所有する共通run owner。
 2. 同session／認証snapshot／ready世代／source／同sourceのReleasePermitと、不変な発行時release根拠へ結合するprepared source owner。
 
-本書の型・method名は内部契約案であり、存在するexportや呼出可能なAPIではない。preparedはidentity確保だけを意味し、body receipt／payload receipt／FinalSourceSeal／正式findingを発行できない。証拠専用取得・cleanup証拠・選択payload・worker jobの正式bindingが揃うまで、発行gateは常に拒否する。
+§1〜§11の本番型・method名は内部契約案であり、実sessionへ接続済みのAPIではない。§13の合成実装と区別する。preparedはidentity確保だけを意味し、body receipt／payload receipt／FinalSourceSeal／正式findingを発行できない。証拠専用取得・cleanup証拠・選択payload・worker jobの正式bindingが揃うまで、発行gateは常に拒否する。
 
 公開MCP入力、公開0.2／0.3、明示14／既定3規則、既存release gate・selection_mode省略互換を変更しない。AU-BR-006の公開登録・証拠取得modeのツール引数追加・実sessionのfixture登録・実資格情報の取得は今回の範囲外。同processの侵害コードや侵害workerを隔離する仕組みではない。
 
@@ -207,10 +207,45 @@ Rは費用の返金ではなく未使用試行の予約。将来の同一台帳�
 
 未承認：private配置・mode固定の実装方式、内部診断の次版契約、実transport cleanupの確認方式、E/R運用cap、work／保持上界、worker終了policy、公開AU-BR-006語彙・coverage、実ACL／field応答。
 
-今回はローカルソースと既存設計の照合・MD更新だけ。テスト実行による新しい動作証明、実装・本番cap投入・正式receipt／permit発行・実transport／実機操作・トークン発行・設定変更・Pushは行わない。既存ReleasePermitの存在と、閉鎖中の正式なBR-006証拠発行権限を混同しない。
+draft-0.1の作成時はローカルソースと既存設計の照合・MD更新だけを行った。後続の合成限定実装は§13を参照する。本番cap投入・正式receipt／証拠permit発行・実session／実transport接続・実機操作・トークン発行・設定変更・Pushは行わない。既存ReleasePermitの存在と、閉鎖中の正式なBR-006証拠発行権限を混同しない。
 
 ## 12. 文書確認（2026-10-27）
 
 新規本書と関連6文書の計7MDを確認し、相対参照75件の参照先に欠落なし。`git diff --check`の空白エラーなし。旧実session設計§11／§12の撤去前説明を現行境界と履歴へ分離し、旧版draftへの関連参照も更新した。過去の検証記録そのものは書き換えていない。
 
-ソース・テスト・package・設定は変更していないため、build／合成テストは実行していない。本確認は文書の参照・差分検査であり、新ownerや正式bindingの実装／動作確認ではない。
+このdraft-0.1文書確認時点ではソース・テスト・package・設定を変更せず、build／合成テストを実行していない。後続§13の限定実装・検証と混同しない。
+
+## 13. 合成依存に限定した内部モデル
+
+`src/review/abort-scope-evidence-run-owner.ts`の`createSyntheticRunOwnerIssuer(clock)`は、factoryごとに分離したprivate WeakMapでsession／診断slot／run／source／permit／readonly bindingを管理する。すべて凍結opaque handleで、実lifecycle・既存fixture台帳にも登録しない。実sessionや既存ReleasePermitを受け取る口はなく、scalar copy／clone／別realmは認識しない。moduleは既存`!dist/review/abort-scope-evidence*`の非同梱対象。
+
+### 13.1 生成とbinding
+
+- allocateDiagnosticでowner生成前のslotを作る。rejectBeforeRunは固定input診断だけを一度記録し、後のrunへ付け替えない。実session生成を呼ぶ機能はなく、合成session生成失敗をslotへ合流させる責務は合成callerが持つ。
+- issueSessionはauth modeと1..60000msの期限だけを受ける。token／origin／credentialsを入力せず、auth／snapshot／budgetをmodel内の新opaque identityにする。これは実認証・RunBudgetLeaseではない。
+- createRunは既知sessionのrun claimをconfig検査より先に消費し、同sessionのsourceをpinする。失敗後も再生成不可。別slotでの重複要求は新要求の診断だけへ記録し、健全な既存ownerを置換しない。
+- completeAuthentication／completeReleaseの入力は**合成前提**。auth readyは一世代だけ、releaseはsource内部recordへ独立copy／freezeする。release前提はobserved／operator_config／none、familyはAustralia／Zurich／nullの限定subsetで、実ReleaseEvidence・設定期限・C方式全体の検証器ではない。
+- bindSourceはmatchedの場合だけsession／source claimを先にconsumingへ進め、parent-ready・同permit・auth／snapshot／ready／budget・最終clockを再検査してprepared_onlyへcommitする。unknown／mismatchedにはpermitを発行せず、source claim前に拒否する。foreign source／permitを混ぜても外国runのclaimや状態を変更しない。
+- checkBindingは同run／source／permit／generation／private release snapshot／ready／budgetを再確認する。成功を繰返せてもclaimを作り直さず、refuseEvidenceは成功bindingにも必ずinvalid_stateを返す。正式発行への昇格口はない。
+
+operator_configの合成前提はasserted／未実測／陳腐化のlimitationsを必須にして保持し、入力objectの後の書換えを切り離す。ただし、設定ファイル・署名・接続先binding・expires_atを読む実装ではない。実ReleasePermitや返却decisionの真正性は証明しない。
+
+### 13.2 停止・診断・clock
+
+cancel／close／revokeSessionはmodelのliveとreadyを失効させ、進行中claimをfailedにする。primaryは固定stage／codeの最初の一件を保持し、未知のreasonやErrorはinternal_review_errorへ正規化する。closed後の取消でもclosedを維持する。同期的なmodel失効であり、実controller／worker／readerへの停止通知や解放処理は存在しない。
+
+HTTP／workerのcleanupは別軸で、observeCleanupへ渡す合成通知だけを記録する。unconfirmedはsticky、先行primaryをclose／後続cleanupで上書きしない。最初のconfirmed通知は同じ単調clockで残時間を検査し、hard期限の等号以降・clock例外／逆行ではunconfirmedにする。既に期限内に確定した同一confirmedの再通知は冪等であり、新しいactive権限を与えない。取消後も期限内の観測専用clockで合成cleanupを記録できるが、bindingは復活しない。これはresource／OSの終了確認ではない。
+
+通常cutoff後もreadonly identity検査は可能とするが、GET／prepare／finalを開始するAPIを持たない。hard期限は検査時に拒否するだけで、自動timerやリアルタイム中断は未実装。clock callbackの再入による取消・参照差替えを、最後の検査後に再確認する。
+
+replaceSyntheticIdentityは敵対的fixtureの前提を変更する専用操作で、auth／snapshot／budget／ready／source世代／permit／release snapshotのmodel参照だけを置き換える。実sessionや本番identityの読取・書換え機能ではなく、停止後は拒否する。
+
+### 13.3 費目と未対応範囲
+
+一つのmodel sessionにつきrun／source／permit／bindingは各最大1。runの診断slotは1で、初回primaryとHTTP／workerの固定cleanupだけを保持する。未知入力・重複要求の新slotは合成caller側のものとして区別する。factory全体のsession／slot数に本番admission上限を実装したわけではない。
+
+readonly検査は固定2回のclock検査と有限個の参照比較を行う。HTTP試行・chunk・payload・worker・timer操作は0で、C/G/P/E/Rは実装せず、budgetは参照identityだけ。実allocator容量、制御work上界、既存C/G/Pの引継ぎ、E/R配賦、child停止と診断合流は未確認のまま。合成通知／premiseから正式receiptや本番capを発行しない。
+
+次は本番専用のprivate生成元・実session lifecycle・予算leaseへの接続条件をfake I/Oで検証する工程であり、既存fixture台帳を実sessionへ再接続しない。選択payload／worker job・typed transport／cleanup・公開結果は後工程。Unknown・全体受付無効・正式発行口閉鎖・VM／監視／telemetry保留を維持する。
+
+検証：[合成run owner・claim・readonly bindingの記録](E2E_BEST_PRACTICE_ABORT_SCOPE_RUN_OWNER_SYNTHETIC_2026-10-27.md)。

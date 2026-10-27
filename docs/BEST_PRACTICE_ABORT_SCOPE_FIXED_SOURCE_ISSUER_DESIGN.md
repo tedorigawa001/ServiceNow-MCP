@@ -4,7 +4,7 @@ Version: br006-fixed-source-issuer-draft-0.2 / Date: 2026-10-26。
 Status: **合成issuerの内部型/生成claim/固定GET/正規化を実装。実session/transport/worker/上位結果への接続は未実施・未承認**。
 親：[接続契約](BEST_PRACTICE_ABORT_SCOPE_CONNECTION_CONTRACT_DESIGN.md)、[bounded予算設計](BEST_PRACTICE_ABORT_SCOPE_BOUNDED_BUDGET_DESIGN.md)。
 
-次段の[実session claim・private受領物・終了時失効の詳細設計draft-0.2](BEST_PRACTICE_ABORT_SCOPE_REAL_SESSION_RECEIPTS_DESIGN.md)で、認証snapshot／ReleasePermit／実選択条件への結合を具体化し、撤去後のruntimeとfixtureを区別した。さらに[共通停止／予算owner・正式binding設計draft-0.1](BEST_PRACTICE_ABORT_SCOPE_RUN_OWNER_BINDING_DESIGN.md)で、認証前のrun確保とmatched後のsource claim、不変release snapshot、生成失敗からの診断保持を定める。typed transportとcleanup証拠が未接続ならpreparedに留めて正式receiptを発行しない。正式証拠経路の実装・有効化は未実施。
+次段の[実session claim・private受領物・終了時失効の詳細設計draft-0.2](BEST_PRACTICE_ABORT_SCOPE_REAL_SESSION_RECEIPTS_DESIGN.md)で、認証snapshot／ReleasePermit／実選択条件への結合を具体化し、撤去後のruntimeとfixtureを区別した。さらに[共通停止／予算owner・正式binding設計draft-0.2](BEST_PRACTICE_ABORT_SCOPE_RUN_OWNER_BINDING_DESIGN.md)で、認証前のrun確保とmatched後のsource claim、不変release snapshot、生成失敗からの診断保持を定める。typed transportとcleanup証拠が未接続ならpreparedに留めて正式receiptを発行しない。正式証拠経路の実装・有効化は未実施。
 
 後続では同詳細設計§11のprepared owner／実session lifecycleだけをfake source依存で部分実装した。実sourceの#permit／選択receipt／table取得への接続や正式発行口の有効化は未実施のまま。
 

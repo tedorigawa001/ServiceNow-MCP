@@ -6,7 +6,7 @@ Status: **純粋予約台帳・合成stream課金/中断・独立イベントora
 
 実session/ReleasePermitへの結合、固定GET/必要列射影、初回/最終受領物と既存verifyの統合は[固定source issuer詳細設計draft-0.1](BEST_PRACTICE_ABORT_SCOPE_FIXED_SOURCE_ISSUER_DESIGN.md)を参照。合成issuerの型/生成claim/GET生成/正規化まで実装したが、合成台帳/streamを本番発行元へ昇格させず、実接続は未実施のまま。
 
-単一の実session／budget ownerと証拠発行を結ぶ前段は[実session claim・private受領物・終了時失効の詳細設計draft-0.2](BEST_PRACTICE_ABORT_SCOPE_REAL_SESSION_RECEIPTS_DESIGN.md)を参照する。[共通停止／予算owner・正式binding設計draft-0.1](BEST_PRACTICE_ABORT_SCOPE_RUN_OWNER_BINDING_DESIGN.md)では、元のC/G/Pへの保護leaseと将来のE/R、既存固定4予約との二重積み防止、phase／終了処理の費目所有を対で定義した。既存getのJSON値・cancel要求だけをcleanup確認済み証拠へ昇格させず、typed transport未接続なら正式発行を止める。動的予約／下位受信枠／実cleanup証拠の実装やcap承認は別工程とする。
+単一の実session／budget ownerと証拠発行を結ぶ前段は[実session claim・private受領物・終了時失効の詳細設計draft-0.2](BEST_PRACTICE_ABORT_SCOPE_REAL_SESSION_RECEIPTS_DESIGN.md)を参照する。[共通停止／予算owner・正式binding設計draft-0.2](BEST_PRACTICE_ABORT_SCOPE_RUN_OWNER_BINDING_DESIGN.md)では、元のC/G/Pへの保護leaseと将来のE/R、既存固定4予約との二重積み防止、phase／終了処理の費目所有を対で定義した。既存getのJSON値・cancel要求だけをcleanup確認済み証拠へ昇格させず、typed transport未接続なら正式発行を止める。動的予約／下位受信枠／実cleanup証拠の実装やcap承認は別工程とする。
 
 次段の[実transportの用途別body receipt・cleanup証拠・単一予算詳細設計draft-0.6](BEST_PRACTICE_ABORT_SCOPE_TRANSPORT_RECEIPTS_DESIGN.md)で、dispatch／chunkの線形化点、用途permit、API観測上のcleanup confirmedと未確認、期限内のcleanup予約案を定義した。fixtureの登録・owner・claim・会計を実sessionから分離し、以前の実sessionへのfake会計接続は撤去した。注入Responseの実read／cleanupとfinal skip等は開発専用sessionで検証するが、本番の単一予算接続は未実装とする。cleanup最大250ms／残時間の1/4・empty read合計16回と証拠下位枠は未承認候補値であり、本番capの承認や既存上限の変更ではない。正式発行口は閉鎖を維持する。
 

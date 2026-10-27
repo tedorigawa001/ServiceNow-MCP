@@ -5,7 +5,7 @@ Status: **OH-03の同transport採用に続き、OAuth→固定source→native wo
 
 親：[transport／OAuth bootstrap](BEST_PRACTICE_ABORT_SCOPE_TRANSPORT_RECEIPTS_DESIGN.md#17-未認証fixtureのoauth-bootstrapと固定失敗分類)、[固定source](BEST_PRACTICE_ABORT_SCOPE_FIXED_SOURCE_ISSUER_DESIGN.md#13-固定sourceとweb-streams受領物の結合fixture限定)。
 
-合成接続後の正式bindingは、[共通停止／予算owner・実session／ReleasePermit binding詳細設計draft-0.1](BEST_PRACTICE_ABORT_SCOPE_RUN_OWNER_BINDING_DESIGN.md)へ分離する。fixture run ownerをそのまま本番へ移すのではなく、認証前の実run claim・同sourceのmatched permit・不変release根拠・同予算leaseから専用のprepared bindingを設計する。正式発行口は引き続き閉鎖する。
+合成接続後の正式bindingは、[共通停止／予算owner・実session／ReleasePermit binding詳細設計draft-0.2](BEST_PRACTICE_ABORT_SCOPE_RUN_OWNER_BINDING_DESIGN.md)へ分離する。fixture run ownerをそのまま本番へ移すのではなく、認証前の実run claim・同sourceのmatched permit・不変release根拠・同予算leaseから専用のprepared bindingを設計する。正式発行口は引き続き閉鎖する。
 
 ## 1. 目的・今回の境界
 
