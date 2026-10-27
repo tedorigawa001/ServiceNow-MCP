@@ -1,7 +1,7 @@
 # AU-BR-006 単一予算・停止・typed cleanupと共通run ownerの接続
 
-Version: br006-run-transport-cleanup-draft-0.2 / Date: 2026-10-28。
-Status: **TC-01の内部契約・typed cleanup終端・HTTP／worker二軸診断を独立した純粋fakeで限定実装。実session／実会計／transportは未接続、正式証拠発行・cap承認は未実施／閉鎖**。
+Version: br006-run-transport-cleanup-draft-0.3 / Date: 2026-10-28。
+Status: **TC-01の純粋契約に加え、TC-02として既存run lifecycleと単一fake会計・停止・typed cleanupを限定接続。実sessionの会計更新／実transportは未接続、正式証拠発行・cap承認は未実施／閉鎖**。
 
 親：[共通run owner §14・§15](BEST_PRACTICE_ABORT_SCOPE_RUN_OWNER_BINDING_DESIGN.md)、[用途別transport／cleanup](BEST_PRACTICE_ABORT_SCOPE_TRANSPORT_RECEIPTS_DESIGN.md)、[bounded予算](BEST_PRACTICE_ABORT_SCOPE_BOUNDED_BUDGET_DESIGN.md)。
 後続：[選択／payload受領物](BEST_PRACTICE_ABORT_SCOPE_REAL_SESSION_RECEIPTS_DESIGN.md)、[worker接続契約](BEST_PRACTICE_ABORT_SCOPE_CONNECTION_CONTRACT_DESIGN.md)。
@@ -200,6 +200,53 @@ fake purpose／attemptはそれぞれ最大210、worker slotは最大1、active 
 
 受理される観測の形状は有限だが、不正raw入力のclone前byte制限・実allocation／control work上界は未実装。認証／session／source／lease個別の正式binding、retry順序、typed body、実Promise／cancel／lock操作、mutable会計port、予約枠、実worker job、上位公開結果は未接続。正式発行口閉鎖・Unknown・全体受付無効・telemetry／VM／監視保留を維持する。
 
-次工程はTC-02のprivate transport claimと同session単一stateへの結合であり、このfake台帳を本物へ登録・昇格させない。
+TC-02のfake session内での単一state接続は§11を参照。このfake台帳を本物へ登録・昇格させない。
 
 検証：[TC-01合成テスト・検証記録](E2E_BEST_PRACTICE_TC01_CLEANUP_CONTRACT_2026-10-28.md)。
+
+## 11. TC-02：共通lifecycle・単一fake会計・停止の接続（2026-10-28）
+
+実装：[run-transport](../src/review/abort-scope-evidence-run-transport.ts)、試験：[run-transport-cleanup](../tests/review/run-transport-cleanup.test.ts)。`createFakeRunTransportSession`は新しいfake sessionとsnapshotを自分のclosure内だけで生成する。既存の`registerReviewEvidenceSession`の実装をこのfake sessionで利用し、TC-01のcleanup分類器を合成する。**実際のBoundedReadSessionを生成・登録・採用したり、そのcounterを変更する接続ではない**。production lifecycle・bounded-read・既存fixture registry／portは変更しない。
+
+### 11.1 所有権・claim・lane
+
+- laneはstrict設定の`typed`（既定）／`legacy`から生成時に固定。session／snapshot／lease／counterを引数で受けず、外へも返さない。任意のsessionを後付け登録するexportはない。
+- `claimTransport`はclock等の依存を呼ぶ**前**にclaimを消費し、1回だけ固定transport facadeを返す。二重生成・失敗後の再準備・legacyとの混用は受信側ownerを停止する。
+- `legacyDispatch`はfakeの混用拒否・開始観測用probeだけ。実legacy GETの再実装ではない。legacy probeを開始してもtyped終端を示す入口はないので、終了時はHTTP unconfirmedで止まり、confirmedへ推定しない。
+- handleの所属は同cleanup realmとprivate WeakMap、active slotで確認する。外国attemptは受信側だけ停止し、外国owner・会計は不変。
+
+### 11.2 費目所有と原子的操作
+
+| 費目 | TC-02の唯一の所有・更新点 | 拒否時の扱い |
+|---|---|---|
+| C | closureのrequests。active／用途形状／同slot／上限確認後、fake dispatch直前に1増加 | 同期throw・callback内取消・post-dispatch期限でも保持。未dispatchは0 |
+| G／S | 同attempt・連番のfake chunk採用。native typed-array内部長を一度取得して、GとSを同期加算 | 超過chunkも1回加算後に停止。重複連番・外国attempt・停止後は加算しない |
+| P | 同payload attemptのconfirmed EOFを消費した後、モデル上のpayload受理／discardを一度だけ選択 | UTF-8 byte数を1回加算。単体上限はlocal payload_limit、累計超過は全体停止。返金なし |
+| clock | 初期origin・last・hardを同closureで保持 | cleanup初期化は同originを使う。逆行・非有限・例外はstickyで、復旧した値から確認済みへ戻さない |
+| readonly lease | 同じC/G/P・lastから保護viewを返し、既存run lifecycleが読む | stats再登録・copyからの別会計・leaseのcastはない |
+| E／R／T・retry受付 | **未接続** | TC-02で新しい台帳や予約を作らず、既存fixture側の値を正式値へ採用しない |
+
+設定でC<=210、G<=16MiB、S<=4MiB、P単体<=2MiB／累計<=8MiB、hard<=60秒を下げられるが上げられない。GとSが同時超過ならGの全体停止を優先する。S超過のfake分類はinvalid_responseとして停止するが、本番の局所分類を変更したものではない。
+
+`chargePayload`は**fakeの受理イベント**のモデルであり、文字列が実際のchunk由来であること、UTF-8 decode／JSON検証／版照合／source受領を証明しない。本文は保持・出力せず、正式なpayload receiptは作らない。未消費のpayload受理枠があれば次dispatch・final移行・正常finishを拒否する。discardはPを受理したことにはしない。
+
+### 11.3 停止・cleanup・診断
+
+1. 最初の固定primaryを共通ownerへ保持し、ownerを同期revokeする。
+2. cleanupモデルのactive入口も同期停止。戻したtransport facadeは同ownerの失敗を毎回確認し、再開しない。
+3. 保持中のHTTP／workerに対するfake abort／stopを最大1回要求する。callback例外のmessage・stackは採用しない。
+4. 停止後も同current slotの`finishHttp`／`finishActiveHttp`、workerの型付き終端観測・消費だけを許す。開始失敗がhandleを返さなくても、private current slotを経由してcleanupできる。cleanup要求を完了証拠へ昇格させない。
+
+内部状態違反は共通ownerでinternal_review_error、TC-01のhandle上限はrequest_budget_exceededへ固定化する。primaryとHTTP／workerのcleanup disposition・固定reasonは別slotで保持する。明示票がないまま終了したstarted resourceはunconfirmed／terminal_not_consumedであり、先行取消・認証・G/P理由を上書きしない。終了後の遅着・再claim・再cleanupでも診断は変わらない。
+
+`finish`成功はfake契約が完了したことだけ。共通lifecycleが持つprimaryを消して成功へ戻さず、cleanなfake facade終了にはclosedという失敗を新造しない。HTTP成功・実worker終了・実sessionの解放・正式evidence発行の意味ではない。`status`は最後に観測したclockによるreadonly表示で、単独で新しいclock取得やタイマー停止を行わない。
+
+### 11.4 確認範囲と残課題
+
+51件の合成テストで、独立したイベント列（C=4／G=10／P=4）、上限等号／1超過、chunk replay、単体P局所拒否、claim再入、外国handle、停止callback、固定理由、時計不正・期限・二軸分離を確認。real fetch／Response／Web Streams／Worker／タイマーを操作せず、用途名・ordinalは引き続き合成ラベルである。
+
+次はTC-03：注入Web Streamsのread／cancel／closed／releaseLockと同attempt終端の接続。実session constructorでのlane選択とmutable port供給、認証／同sourceのReleasePermit・選択payload・worker jobへの正式binding、用途発行前提・retry／動的予約・E会計・50/55秒のphase cutoffは未接続。このモデルのfinal移行はTC-01の一方向phaseラベルだけで、元のhard期限・会計を再生成しない。
+
+raw clone前のbyte枠、control work／allocation、empty-read policy、物理終了保証、未確認I/Oを抱える次runの許可は未証明。全体受付無効、Unknown、VM／監視／telemetry保留、正式発行口閉鎖を維持する。
+
+検証：[TC-02合成テスト・検証記録](E2E_BEST_PRACTICE_TC02_RUN_TRANSPORT_2026-10-28.md)。
