@@ -1,7 +1,7 @@
 # AU-BR-006：閉鎖dispatcher・中断signal・Response受領の詳細設計
 
-Version: br006-closed-dispatch-signal-draft-0.2 / Date: 2026-10-28。
-Status: **§10のCD-01と§11のCD-02を合成実装。同attemptの固定親GET／context／Response待機・signal・破棄cleanupを検証。readerへの本文採用と正式body発行は未接続。正式発行口閉鎖・全体受付無効・Unknownを維持。実transportの採用承認ではない**。
+Version: br006-closed-dispatch-signal-draft-0.3 / Date: 2026-10-28。
+Status: **§10〜§12のCD-01〜CD-03を合成実装。同attemptの固定親GET／context／Response待機からnative reader・private bytes解析へ接続。正式body発行・実session bindingは未接続。正式発行口閉鎖・全体受付無効・Unknownを維持。実transportの採用承認ではない**。
 
 親：[session／transport／body境界 §17・§18](BEST_PRACTICE_ABORT_SCOPE_SESSION_TRANSPORT_BODY_BINDING_DESIGN.md#18-draft-06注入native-web-streamsの合成接続)、[共通run owner](BEST_PRACTICE_ABORT_SCOPE_RUN_OWNER_BINDING_DESIGN.md)。
 参照：[用途別受領物](BEST_PRACTICE_ABORT_SCOPE_TRANSPORT_RECEIPTS_DESIGN.md)、[固定source](BEST_PRACTICE_ABORT_SCOPE_FIXED_SOURCE_ISSUER_DESIGN.md)、[OAuth移譲](BEST_PRACTICE_ABORT_SCOPE_OAUTH_SOURCE_HANDOFF_DESIGN.md)。
@@ -126,7 +126,7 @@ native Response／Streamsはメモリ内で生成する。global fetch・実toke
 2. 同signalとResponse待機を既存監督へ接続。read前の取消・never-settle・late応答とcleanup診断を試験する。
 3. private Response／body採用から既存native reader監督へ一体接続。retry・会計・秘密非出力・既存42＋25件の互換を検証する。
 
-draft-0.1設計作成時は全て未実装。§10のCD-01時点では1の限定subsetだけを接続した。後続§11で2のResponse待機・破棄cleanupを接続し、3の本文採用は未接続。既存stream-only入口の互換を保ち、新compositionから生stream採用口を外へ公開しない。実session／ReleasePermitへの採用、OAuth秘密のprivate引渡し、HTTP status全表、正式window／payload／worker binding、全体work・heap・本番cap、実host強制終了は別途確認が必要。
+draft-0.1設計作成時は全て未実装。§10のCD-01で1の限定subset、§11のCD-02で2のResponse待機・破棄cleanup、§12のCD-03で3のnative readerへの本文採用を合成接続した。既存stream-only入口の互換を保ち、新compositionから生stream採用口を外へ公開しない。実session／ReleasePermitへの採用、OAuth秘密のprivate引渡し、HTTP status全表、正式window／payload／worker binding、全体work・heap・本番cap、実host強制終了は別途確認が必要。
 
 draft-0.1設計作成段階は文書のみで、実装は対象外だった。後続の限定実装は§10と区別する。正式発行口の開放・全体受付の有効化・本番policy承認は行わない。Unknown、VM／監視／telemetry調査保留を維持し、実transport・実機操作・設定変更・Pushは対象外のままとする。
 
@@ -183,6 +183,32 @@ Response到着時（または先行停止時）にcleanup deadlineを固定す�
 
 ### 11.4 継続範囲
 
-CD-01の同期口と既存stream-only入口は互換維持。正式なResponse→native reader→同bytes採用はCD-03で接続する。実認証snapshot／ReleasePermit／選択window・payload／worker job、公開JSON、全体work／保持上界、本番capと実時間host終了は未接続／未承認。
+CD-02時点ではCD-01の同期口と既存stream-only入口を互換維持し、Response→native reader→同bytes採用をCD-03へ残した。後続の合成接続は§12を参照。正式な実認証snapshot／ReleasePermit／選択window・payload／worker job、公開JSON、全体work／保持上界、本番capと実時間host終了は未接続／未承認。
 
 正式発行口閉鎖・全体受付無効・Unknown、VM／監視／telemetry保留を維持する。global fetch・実transport・実機操作・token発行・設定変更・Pushは行わない。
+
+## 12. CD-03：同Responseからnative reader・同bytes解析への接続
+
+2026-10-28追加。[実装](../src/review/abort-scope-evidence-closed-attempt-supervisor.ts)、[追加30件](../tests/review/closed-response-reader.test.ts)、[検証記録](E2E_BEST_PRACTICE_CLOSED_RESPONSE_READER_2026-10-28.md)を参照。新factory`createInjectedClosedParentResponseReader`は固定親GETのinitial／final／readだけを公開し、Response・stream・reader・body候補の登録／返却口を設けない。
+
+### 12.1 一つのattemptのまま採用する
+
+CD-02と同じprivate待機継続で、native Responseのstatus／URL／body所有・使用状態を検査する。status=200・bodyあり・live・D_ioより前だけ、同bodyのnative default readerとclosed Promiseを一度捕捉する。fixture専用のResponse／stream claimを共用し、別factory・再利用・外国lockを拒否する。
+
+本文開始時にport.dispatchやattemptWindowを再実行せず、待機中に確定したattempt参照・元deadline／ioDeadline／reserve・同controllerを渡す。Response到着をEOF／cleanup開始と誤認せず、正常な本文読取には到着から250msの別制限を付けない。閉鎖core内の共通superviseBodyが既存pump・terminal・body.finish／consumeを使い、Cの再加算・Gの二重課金・別予算生成をしない。
+
+同private copyから一度だけ課金・hash・固定解析を行う。固定要求の対象sys_idをprivate resourceへ渡し、親result.sys_idとの不一致はinvalid_responseで拒否する。対象はconstructorの検証済み値であり、callerによるexpected ID差替えや返却rowの再登録を認めない。既存の対象ID未指定の合成parser入口は互換維持する。
+
+### 12.2 停止・cleanup・切替境界
+
+本文中の取消／timeoutは同signalをabortし、同reader.cancel・pending read・捕捉済みclosed・releaseLockを監督する。EOFは確認済み正常終端だけ。cancel完了とreader解放を同一視せず、pending／reject・期限等号では候補を消費しない。cleanup確認済み局所timeoutだけ同purposeの2回目を許し、元のG・Cを残し、別Response／body／signalと同URL／auth contextを使う。
+
+Response到着時に待機タイマーのdisposerが失敗する場合も、旧待機resourceのscheduler／clock／abort失敗・revoked・cleanupDeadlineを本文resourceへ引き継ぐ。primaryを保持し、未確認をconfirmedへ格上げしない。既にabortを通知した状態も引き継ぎ、同signalを二重通知しない。late Responseの不採用・自ownerだけのbest-effort破棄はCD-02のまま。
+
+### 12.3 固定結果と未接続範囲
+
+返却は件数・受信byte・digest等の既存固定合成summaryと診断だけ。本文・親sys_id・URL・auth context・reader・正式receiptは返さない。公開MCPの0.2／0.3契約やAU-BR-006の登録は変更しない。親最終readも同じtarget／URL／auth contextと所定slotで実行するが、初回と最終のstate／application／更新世代の安定性を認定するParentSnapshotや正式source証拠は発行しない。
+
+対象sys_idを結合したこの経路では、本文を本番`bounded-source`の`parentSchema`と同じstrictな5列（sys_id／state／application／sys_updated_on／sys_mod_count）で解析し、固定GETが要求するfieldsの応答をそのまま受理する。sys_idだけ・余剰列・欠落列・不正な更新世代は`invalid_response`。対象ID未指定の既存合成parser入口はresult.sys_idの射影のまま互換維持する。表示値差・配列形・実Table APIの実応答との互換は未検証。200以外のHTTP分類拡張、実auth snapshot／ReleasePermit／選択metadata・payload／worker job・上位正式JSON、全体work／保持上界・本番cap・OSの実時間終了は後工程。
+
+CD-01・CD-02・stream-only入口の合成互換を維持し、既存package除外prefixから外さない。正式発行口閉鎖・Unknown・全体受付無効、VM／監視／telemetry保留を維持。実transport・実機操作・token発行・設定変更・Pushは行わない。

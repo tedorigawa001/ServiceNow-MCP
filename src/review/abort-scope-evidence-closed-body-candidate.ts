@@ -13,6 +13,8 @@ const sysId=z.string().regex(/^[a-f0-9]{32}$/),row=z.strictObject({sys_id:sysId}
 const rows=z.strictObject({result:z.array(row).max(101)}),parent=z.strictObject({result:row});
 const release=z.strictObject({result:z.array(z.strictObject({build_name:z.string().min(1).max(80)})).max(101)});
 const payload=z.strictObject({result:z.strictObject({payload:z.string()})});
+// Same strict fields as production bounded-source parentSchema; used when the fixed parent GET target is bound.
+const targetParent=z.strictObject({result:z.strictObject({sys_id:sysId,state:z.string().max(100),application:z.string().max(32),sys_updated_on:z.string().min(1).max(40),sys_mod_count:z.string().regex(/^\d{1,20}$/)})});
 const typed=Object.getPrototypeOf(Uint8Array.prototype),byteLength=Object.getOwnPropertyDescriptor(typed,'byteLength')!.get!,buffer=Object.getOwnPropertyDescriptor(typed,'buffer')!.get!;
 const arrayBufferLength=Object.getOwnPropertyDescriptor(ArrayBuffer.prototype,'byteLength')!.get!,set=Uint8Array.prototype.set;
 const typedName=Object.getOwnPropertyDescriptor(typed,Symbol.toStringTag)!.get!;
@@ -76,7 +78,7 @@ export function createClosedBodyLane(hooks:{
       const candidate=opaque<ClosedBodyCandidate>();r.state='pending';candidates.set(candidate,r);
       return ok(Object.freeze({terminal:r.terminal,candidate}));
     });},
-    consume(candidate:ClosedBodyCandidate){return hooks.guard(()=>{
+    consume(candidate:ClosedBodyCandidate,expectedParentId?:string){return hooks.guard(()=>{
       const r=candidates.get(candidate);if(!r||r!==current)return hooks.stop('evidence_binding_mismatch');
       if(r.state!=='pending'||r.cleanup?.disposition!=='confirmed'||r.cleanup.kind!=='eof')return hooks.stop('invalid_state');
       r.state='consuming';consumes++; // claim before decode/schema work; failure never restores it.
@@ -85,7 +87,7 @@ export function createClosedBodyLane(hooks:{
         const bytes=new Uint8Array(r.size);let offset=0;for(const chunk of r.chunks){bytes.set(chunk,offset);offset+=chunk.byteLength;}
         const json:unknown=JSON.parse(new TextDecoder('utf-8',{fatal:true}).decode(bytes));let count=0,payloadSize=0;
         if(r.kind==='payload')payloadSize=Buffer.byteLength(payload.parse(json).result.payload,'utf8');
-        else if(r.kind==='parent_initial'||r.kind==='parent_final'){parent.parse(json);count=1;}
+        else if(r.kind==='parent_initial'||r.kind==='parent_final'){const sys_id=expectedParentId===undefined?parent.parse(json).result.sys_id:targetParent.parse(json).result.sys_id;if(expectedParentId!==undefined&&sys_id!==expectedParentId)throw Error();count=1;}
         else if(r.kind==='release_rows')count=release.parse(json).result.length;
         else count=rows.parse(json).result.length;
         summary=Object.freeze({records:count,received_bytes:bytes.byteLength,payload_bytes:payloadSize,sha256:createHash('sha256').update(bytes).digest('hex'),synthetic:true,evidence_issuance:'disabled'});
