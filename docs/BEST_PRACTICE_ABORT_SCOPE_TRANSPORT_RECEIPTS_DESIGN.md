@@ -8,6 +8,8 @@ Status: **fixtureのread／cleanup・OAuth bootstrap実装と、実session共通
 
 [共通run owner設計draft-0.4 §14・§15](BEST_PRACTICE_ABORT_SCOPE_RUN_OWNER_BINDING_DESIGN.md)では実session private lifecycle／readonly予算leaseと同sourceのReleasePermit／不変release snapshotをprepared-onlyで結合済み。[単一予算・停止・typed cleanup接続詳細設計draft-0.5](BEST_PRACTICE_ABORT_SCOPE_RUN_TRANSPORT_CLEANUP_DESIGN.md)ではTC-04までの同fake transport・固定source接続を検証した。現行`PreparedTransportBudget`はfixture用で正式leaseではなく、cast・旧getとの二重受信／二重予約は禁止する。実sessionのtyped会計／cleanup接続と正式発行口は閉鎖したまま。
 
+実sessionへの生成元・唯一の更新port・用途／attempt claimと正式bodyの発行／消費境界は[後続のsession・transport・body binding設計draft-0.1](BEST_PRACTICE_ABORT_SCOPE_SESSION_TRANSPORT_BODY_BINDING_DESIGN.md)で対に具体化した。bootstrap用候補とmatched後のbody receiptを区別し、現在のJSON戻り値やfixture票を正式受領物へ昇格させない。後続案の作成だけでは実装・cap承認・発行を有効化しない。
+
 ## 1. 範囲と不変条件
 
 実BoundedReadSessionの認証・受信・中断・cleanupに用途を結び、同じC/G/E/R/clockから一度だけ受領物を発行するための設計。既存prepared owner／draft／fake完了票は本番証拠に昇格させない。§12以降のfixture限定実装と、後続の共通owner接続設計を区別し、typed transportの本番接続済みとは扱わない。実機操作・トークン発行・設定変更・cap投入・公開規則登録は行わない。VM／監視／telemetryは保留、Unknown・全体受付無効を維持する。

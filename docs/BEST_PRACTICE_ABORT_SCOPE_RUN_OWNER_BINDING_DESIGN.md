@@ -7,6 +7,8 @@ Status: **実session private lifecycleに同sourceのReleasePermit／不変relea
 
 接続設計：[単一予算・停止・typed cleanup接続詳細設計draft-0.5](BEST_PRACTICE_ABORT_SCOPE_RUN_TRANSPORT_CLEANUP_DESIGN.md)。TC-01〜TC-03に加え、TC-04は固定sourceのbootstrap・release・用途descriptorを同fake transportへ限定接続した。fake認証ready／permitと実証拠を区別し、実sessionの会計更新／実transport／workerへは未接続、正式発行は閉鎖したまま。
 
+TC-04後の①実session／ReleasePermitと②正式body受領境界を対にした後続案は[session・単一transport・body binding詳細設計draft-0.1](BEST_PRACTICE_ABORT_SCOPE_SESSION_TRANSPORT_BODY_BINDING_DESIGN.md)。constructor由来の生成・claim、bootstrapとの循環回避、単一会計・予約、同期失効・失敗分類を具体化した文書のみで、正式発行・接続を有効化しない。
+
 ## 1. 目的・境界
 
 次の二つを対で定める。

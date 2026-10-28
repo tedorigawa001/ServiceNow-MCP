@@ -334,6 +334,6 @@ capture／strict UTF-8 decode／JSON projectionは同module private継続だけ�
 
 実session／AuthSnapshotIdentity・実source ReleasePermit・選択payload／worker jobへの正式binding、retry（今回はordinal=1だけ）、E/R/T予約、50/55秒のphase cutoff、本人性確認・実OAuth・production cap投入は未接続。fixed workflowのCはper-user／cachedで通常3＋final2、exchangeで1増えるだけであり、210試行／G16MiB／hard60秒等を増やさない。
 
-次はこのprivate fixed sourceと実session／ReleasePermit／選択window・worker planとの結合条件を整理する。今回のfake permitやprojectionを本番へ登録・採用せず、必要な証拠の正式発行前提を別工程で検証する。allocation／同期JSON parse・全体work上界、未決着resourceの物理解放、実OS期限保証は引き続き未証明。正式発行口閉鎖、Unknown・全体受付無効、VM／監視／telemetry保留を維持する。
+TC-04後の①実session／ReleasePermitと②単一transport・正式body受領境界は[後続の詳細設計draft-0.1](BEST_PRACTICE_ABORT_SCOPE_SESSION_TRANSPORT_BODY_BINDING_DESIGN.md)へ整理した。選択window・payload receipt・worker planの正式bindingはさらに後工程。今回のfake permitやprojectionを本番へ登録・採用せず、必要な証拠の正式発行前提を別工程で検証する。allocation／同期JSON parse・全体work上界、未決着resourceの物理解放、実OS期限保証は引き続き未証明。正式発行口閉鎖、Unknown・全体受付無効、VM／監視／telemetry保留を維持する。
 
 検証：[TC-04固定source合成検証記録](E2E_BEST_PRACTICE_TC04_FIXED_SOURCE_2026-10-28.md)。

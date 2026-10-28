@@ -1,10 +1,12 @@
 # AU-BR-006 実session claim・private受領物・終了時失効の接続詳細設計
 
-Version: br006-real-session-receipts-draft-0.2 / Date: 2026-10-27。
-Status: **正式receiptの設計案。撤去後の実lifecycleはlive／ready／snapshot／理由の管理だけで、prepared owner／draft／claimはfixture専用台帳へ分離済み。実sessionの専用issuer／claim・正式発行は未実装／閉鎖**。
+Version: br006-real-session-receipts-draft-0.3 / Date: 2026-10-28。
+Status: **正式receiptの設計案。実lifecycleのsnapshot／readonly leaseと同sourceのReleasePermit／不変release snapshotはprepared結合済み。選択window／payloadのdraft・開始／移譲claimはfixture専用で、正式issuer／receipt発行は未実装／閉鎖**。
 親：[固定source issuer](BEST_PRACTICE_ABORT_SCOPE_FIXED_SOURCE_ISSUER_DESIGN.md)、[接続契約](BEST_PRACTICE_ABORT_SCOPE_CONNECTION_CONTRACT_DESIGN.md)、[bounded予算](BEST_PRACTICE_ABORT_SCOPE_BOUNDED_BUDGET_DESIGN.md)。
 
 後続の[実transport受領物・cleanup・単一C/G/E/R/clock設計](BEST_PRACTICE_ABORT_SCOPE_TRANSPORT_RECEIPTS_DESIGN.md)のfixture分離境界と、[共通停止／予算owner・実session／ReleasePermit binding設計draft-0.4](BEST_PRACTICE_ABORT_SCOPE_RUN_OWNER_BINDING_DESIGN.md)を優先する。fixtureから実session会計へ接続する旧経路は撤去し、fixture登録・owner・claim・会計は開発専用の別台帳へ移した。注入Responseの実Web Streams操作はそのfixtureにだけ接続する。private run lifecycle／readonly予算leaseと同sourceのReleasePermit／不変release snapshotのprepared結合をfake I/Oで検証したが、正式証拠issuer／receipt・有効化は未実装／閉鎖とする。
+
+①実session bindingと②単一transport・正式body受領境界の具体化は[後続設計draft-0.1](BEST_PRACTICE_ABORT_SCOPE_SESSION_TRANSPORT_BODY_BINDING_DESIGN.md)を参照。§11／§12の撤去時点の境界・履歴と、現在のprepared結合を区別する。選択windowは将来の同取得bodyから発行するもので、legacy JSONやTC-04の合成summaryを後付け登録しない。本文移譲口・正式発行口は閉鎖したまま。
 
 ## 1. 範囲と現行との差
 
