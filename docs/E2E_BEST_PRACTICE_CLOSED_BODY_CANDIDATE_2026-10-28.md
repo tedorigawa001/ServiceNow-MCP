@@ -4,7 +4,7 @@ Date: 2026-10-28 / Scope: fake依存限定、正式発行口閉鎖。
 
 設計：[draft-0.4 §16](BEST_PRACTICE_ABORT_SCOPE_SESSION_TRANSPORT_BODY_BINDING_DESIGN.md#16-draft-04同attemptのprivate-bytes候補とtyped-cleanup)。
 実装：[body lane](../src/review/abort-scope-evidence-closed-body-candidate.ts)、[同ReadState](../src/review/abort-scope-evidence-closed-read-state.ts)、[閉鎖gate](../src/review/abort-scope-evidence-closed-body-gate.ts)。
-試験：[追加46件](../tests/review/closed-body-candidate.test.ts)（初回45件＋レビュー境界回帰1件）。
+試験：[追加50件](../tests/review/closed-body-candidate.test.ts)（初回45件＋レビュー境界回帰1件＋§7の4件）。
 
 ## 1. 接続した範囲
 
@@ -69,3 +69,11 @@ byte captureはSと4096 nonempty chunksで有限だが、同期JSON.parse／sche
 - 既存の4097番目の非empty chunkは、Gへ一度加算後に`body_limit`で停止し、保持参照を破棄する試験を維持。
 - 関連3 files／138 tests成功（body46＋ReadState52＋gate40）。`npm run build`と変更実装・試験のESLintも成功。
 - 全体`vitest run --maxWorkers=3`は171 files／5,150 tests成功、29.85秒。実transportを使わないローカル合成検証。
+
+## 7. レビュー修正：cancel後のretryとUint8Array検査（2026-10-28）
+
+本番[`bounded-read`](../src/servicenow/bounded-read.ts)の`attempt()`と照合し、2点を修正した。
+
+- cleanup confirmed/cancelledの終端は、`outcome`を一律`unavailable`へ書き換えていた。本番では試行timeoutのlocal abortが`upstream_unavailable`として1回retryされるため、`retryable`は維持し、`success`申告だけを`unavailable`へ落とす。候補は従来どおり作らず、table下位枠超過後は`unavailable`のまま。
+- `instanceof Uint8Array`はprototype chainの判定で、prototypeを偽装した`Int16Array`等を受理していた。`set`の要素変換により課金長とprivate copyの内容が元bytesと一致しなかった。`%TypedArray%.prototype[Symbol.toStringTag]`のgetterで内部slotの`Uint8Array`を確認し、Proxyもcaller trapを呼ばず拒否する。
+- 追加4件（cancel後retry＋success申告は候補なし・retry不可、偽装prototypeのInt16／Float64／Uint8Clamped）。旧実装では4件とも失敗。関連3 files／142 tests成功（body50＋ReadState52＋gate40）。

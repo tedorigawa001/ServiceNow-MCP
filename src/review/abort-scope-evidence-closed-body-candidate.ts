@@ -15,6 +15,7 @@ const release=z.strictObject({result:z.array(z.strictObject({build_name:z.string
 const payload=z.strictObject({result:z.strictObject({payload:z.string()})});
 const typed=Object.getPrototypeOf(Uint8Array.prototype),byteLength=Object.getOwnPropertyDescriptor(typed,'byteLength')!.get!,buffer=Object.getOwnPropertyDescriptor(typed,'buffer')!.get!;
 const arrayBufferLength=Object.getOwnPropertyDescriptor(ArrayBuffer.prototype,'byteLength')!.get!,set=Uint8Array.prototype.set;
+const typedName=Object.getOwnPropertyDescriptor(typed,Symbol.toStringTag)!.get!;
 const opaque=<T>()=>Object.freeze(Object.create(null)) as T;
 const ok=<T>(value:T):ClosedAccountingResult<T>=>Object.freeze({ok:true,value});
 export function createClosedBodyLane(hooks:{
@@ -47,7 +48,8 @@ export function createClosedBodyLane(hooks:{
       let length:number,copy:Uint8Array|undefined;
       try{
         // Native internal slots; no caller species/iterator/buffer getter. Shared memory is not a snapshot.
-        if(!(bytes instanceof Uint8Array))return hooks.stop('invalid_input');
+        // [[TypedArrayName]], not the prototype chain: a forged prototype must not convert elements into a fake snapshot.
+        if(Reflect.apply(typedName,bytes,[])!=='Uint8Array')return hooks.stop('invalid_input');
         length=Reflect.apply(byteLength,bytes,[]) as number;Reflect.apply(arrayBufferLength,Reflect.apply(buffer,bytes,[]),[]);
         if(length<=hooks.responseLimit){copy=new Uint8Array(length);Reflect.apply(set,copy,[bytes]);}
       }catch{return hooks.stop('invalid_input');}
@@ -64,7 +66,8 @@ export function createClosedBodyLane(hooks:{
       const cp=hooks.checkpoint();if(!cp.ok)return cp;
       const report=classify(parsed.data);r.cleanup=report;last=report;r.terminal=opaque<ClosedBodyTerminal>();
       if(report.disposition!=='confirmed'){drop(r);return hooks.stop('cleanup_unconfirmed');}
-      const outcome=r.rejected||report.kind!=='eof'?'unavailable':parsed.data.outcome;
+      // A confirmed cancel (e.g. request timeout) is never a body, but stays retryable like production's upstream_unavailable.
+      const outcome=r.rejected||report.kind!=='eof'&&parsed.data.outcome==='success'?'unavailable':parsed.data.outcome;
       const settled=hooks.settle(a,{outcome,cleanup:'confirmed'});if(!settled.ok)return settled;
       if(outcome!=='success'){r.state='done';drop(r);current=undefined;return ok(Object.freeze({terminal:r.terminal,candidate:null}));}
       // OAuth needs its dedicated authentication consumer, never this general fake JSON projection.

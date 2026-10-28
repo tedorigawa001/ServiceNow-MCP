@@ -139,3 +139,16 @@ it('does not open the next final slot while a final body still awaits consume/di
   get(port.enterFinal());const f=get(port.openFinal(port.parentFinal)),b=get(port.dispatch(f));get(body.append(b,0,new TextEncoder().encode(JSON.stringify({result:{sys_id:id}}))));get(body.finish(b,clean));
   expect(port.skipFinal(port.metadataFinal)).toEqual({ok:false,code:'invalid_state'});expect(body.diagnostic().retained_bytes).toBe(0);
 });
+it('keeps a confirmed cancel retryable without a candidate, while success after cancel stays unavailable',()=>{
+  const {port,body,gate}=setup(),p=get(port.openPurpose({kind:'metadata_initial'})),a=get(port.dispatch(p));get(body.append(a,0,new TextEncoder().encode('PRIVATE_PART')));
+  expect(get(body.finish(a,{...clean,outcome:'retryable',eof:false,cancel:'fulfilled'})).candidate).toBeNull();expect(body.diagnostic()).toMatchObject({retained_bytes:0,cleanup:{disposition:'confirmed',kind:'cancelled'}});
+  const b=get(port.dispatch(p));get(body.append(b,0,new TextEncoder().encode(text)));expect(get(body.consume(get(body.finish(b,clean)).candidate!)).records).toBe(1);
+  expect(gate.diagnostic().primary).toBeNull();expect(port.stats().requests).toBe(2);
+  const other=setup(),q=get(other.port.openPurpose({kind:'metadata_initial'})),c=get(other.port.dispatch(q));
+  expect(get(other.body.finish(c,{...clean,eof:false,cancel:'fulfilled'})).candidate).toBeNull();expect(other.port.dispatch(q).ok).toBe(false);
+});
+it.each(['Int16Array','Float64Array','Uint8ClampedArray'] as const)('rejects a %s with a forged Uint8Array prototype before charging',name=>{
+  const {port,body}=setup(),p=get(port.openPurpose({kind:'metadata_initial'})),a=get(port.dispatch(p)),forged=new globalThis[name](4);
+  Object.setPrototypeOf(forged,Uint8Array.prototype);
+  expect(body.append(a,0,forged as unknown as Uint8Array)).toEqual({ok:false,code:'invalid_input'});expect(port.stats().received_bytes).toBe(0);expect(body.diagnostic().retained_bytes).toBe(0);
+});

@@ -274,13 +274,13 @@ draft-0.3のfake I/Oは同期の`dispatch()`通知だけ。長さモードの`cl
 
 ## 16. draft-0.4：同attemptのprivate bytes候補とtyped cleanup
 
-[body lane](../src/review/abort-scope-evidence-closed-body-candidate.ts)を同fake ReadStateへprivate接続した。[合成試験46件](../tests/review/closed-body-candidate.test.ts)、[検証記録](E2E_BEST_PRACTICE_CLOSED_BODY_CANDIDATE_2026-10-28.md)を参照。
+[body lane](../src/review/abort-scope-evidence-closed-body-candidate.ts)を同fake ReadStateへprivate接続した。[合成試験50件](../tests/review/closed-body-candidate.test.ts)、[検証記録](E2E_BEST_PRACTICE_CLOSED_BODY_CANDIDATE_2026-10-28.md)を参照。
 
 ### 16.1 生成・単一会計・所有権
 
 `accounting.body_mode=bytes`だけがbody portを持つ。既定は`length`で既存の合成event契約を維持する。laneはconstructorで固定し、実sessionやTC-04 transportを採用しない。bytesモードでは公開scalar `chunk / settle / chargePayload / discardPayload`を拒否し、同ReadStateのprivate coreだけをbody laneから呼ぶ。C/G/S/P/E/R/Tとclockは追加台帳へcopyしない。
 
-同dispatch commitで同attemptのbody所有部を作る。`append(attempt, sequence, bytes)`はnative内部slotでUint8Arrayを検査し、shared memory／Proxy／detached bufferを拒否する。species・iterator・callerのbuffer／byteLength getterを呼ばず、有界なprivate copyをclock callbackより前に採る。課金はそのcopyの長さ、解析／hashはそのcopyの連結から行う。受信済みchunkの書換えで後続本文を差し替えない。
+同dispatch commitで同attemptのbody所有部を作る。`append(attempt, sequence, bytes)`はprototype chainではなく内部slotの[[TypedArrayName]]で`Uint8Array`を検査し（prototypeを偽装した他のTypedArrayは課金前に拒否）、shared memory／Proxy／detached bufferを拒否する。species・iterator・callerのbuffer／byteLength getterを呼ばず、有界なprivate copyをclock callbackより前に採る。課金はそのcopyの長さ、解析／hashはそのcopyの連結から行う。受信済みchunkの書換えで後続本文を差し替えない。
 
 既知の単体S超過chunkは保持せず、観測長を同G/S/Eへ一度課金して停止する。累計超過も返金しない。table下位枠超過は保持参照を破棄してcleanup待ちとし、その後の成功body候補にしない。保持中の非empty chunkは最大4096、超過chunkも受信課金後に`body_limit`でglobal stopする。空chunkは保持数を増やさないため、4096個保持中でも連番検査・0 byte課金を経て受理し、本文を破棄しない。これはfakeの制御費上限で、本番cap承認ではない。empty-readの実監督は未実装。
 
@@ -288,7 +288,7 @@ draft-0.3のfake I/Oは同期の`dispatch()`通知だけ。長さモードの`cl
 
 `finish(attempt, observation)`はstrictなprimitive観測だけを受け、`pending_read / cancel / closed / lock / eof`から固定のcleanup分類を作る。`confirmed`という結果値自体を入力しない。pending read、cancel pending／rejected、closed pending／rejected、lock未解放／不明、EOFもcancel完了も無い場合はunconfirmedとして固定理由を保持し、共通ownerを停止する。後の成功申告でも修復しない。
 
-同attemptの不透明`ClosedBodyTerminal`と、それをprivate参照する`ClosedBodyCandidate`はfake realm限定。cleanup confirmed/eof＋成功outcome＋枠内受信だけが候補へ進む。cancelledはcleanup確認済みでも候補なし。retryable／unavailableは参照を破棄し、既存の同purpose retry／予約契約へ戻す。OAuth成功bodyは専用認証consumerが未接続なので一般候補を作らず停止する。
+同attemptの不透明`ClosedBodyTerminal`と、それをprivate参照する`ClosedBodyCandidate`はfake realm限定。cleanup confirmed/eof＋成功outcome＋枠内受信だけが候補へ進む。cancelledはcleanup確認済みでも候補なし。ただし本番の試行timeout（local abort→`upstream_unavailable`→1回retry）と同様に`retryable`は維持し、`success`申告だけを`unavailable`へ落とす。retryable／unavailableは参照を破棄し、既存の同purpose retry／予約契約へ戻す。OAuth成功bodyは専用認証consumerが未接続なので一般候補を作らず停止する。
 
 観測はfake依存の入力であり、実reader.closedやreleaseLockを実行・証明したものではない。rootの実HTTP／workerはnot_startedを維持し、fake cleanupは`accounting.body.cleanup`に分けて表示する。
 
