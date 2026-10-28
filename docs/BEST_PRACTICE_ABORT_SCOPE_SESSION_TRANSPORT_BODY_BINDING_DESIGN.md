@@ -375,9 +375,9 @@ NodeではProxyでもnative locked getterを通ることを最小再現で確認
 
 ### 18.2 同readerの固定操作
 
-取得するのはnative default readerだけ。read／cancel／releaseLockとclosed getterはmodule内で固定し、reader・controller・raw bytesを外へ返さない。reader.closedは最初のread／cancel／releaseより前に一度捕捉し、元のPromiseの両settlementを監督する。release後のclosed getterを取り直さない。byte streamもdefault readerで扱い、BYOBの別所有経路は作らない。
+取得するのはnative default readerだけ。read／cancel／releaseLockとclosed getterはmodule内で固定し、reader・raw bytesを外へ返さない。reader.closedは最初のread／cancel／releaseより前に一度捕捉し、元のPromiseの両settlementを監督する。release後のclosed getterを取り直さない。byte streamもdefault readerで扱い、BYOBの別所有経路は作らない。
 
-native read結果を同supervisorの固定read eventへ写像し、そのまま同body laneでprivate copy・C/G/S/P/E・解析へ結合する。Gをadapterで再課金しない。private AbortControllerは固定の取消通知に使うが、fetchへは接続しない。native cancelは同readerに対して一度だけ行い、pending read／closed／cancel Promiseを別々に確認してから終端を判断する。
+native read結果を同supervisorの固定read eventへ写像し、そのまま同body laneでprivate copy・C/G/S/P/E・解析へ結合する。Gをadapterで再課金しない。接続先のfetch／signalが無いため、adapterの`abort`は要求回数の記録だけで何も中断しない。実際の中断はnative cancelだけが担う。native cancelは同readerに対して一度だけ行い、pending read／closed／cancel Promiseを別々に確認してから終端を判断する。
 
 native cancelはreader.closedとpending readを決着させても、underlying sourceのcancel Promiseがpending／rejectedのことがある。これをconfirmedに格上げしない。errored streamではread・closed・cancelがいずれもrejectし得る。最初のprimaryは保持し、cleanup理由は既存の固定優先順（cancel_rejectedがclosed_rejectedより先）で選ぶ。
 

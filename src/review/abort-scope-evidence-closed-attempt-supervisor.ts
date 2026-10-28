@@ -129,13 +129,14 @@ export function createInjectedClosedStreamSupervisor(clock:ClosedAttemptClock,ra
       if(nodeTypes.isProxy(stream))return Object.freeze({ok:false,code:'invalid_input'});
       const locked=Reflect.apply(nativeLocked,stream,[]) as boolean;
       if(locked||claimedStreams.has(stream))return Object.freeze({ok:false,code:'evidence_binding_mismatch'});
-      const controller=new AbortController();claimedStreams.add(stream);
+      claimedStreams.add(stream);
       const reader=Reflect.apply(nativeGetReader,stream,[]) as ReadableStreamDefaultReader<Uint8Array>;counts.claims++;counts.active_readers++;
       const closed=Reflect.apply(nativeClosed,reader,[]) as Promise<void>;counts.closed_captures++;
       return Object.freeze({ok:true,value:Object.freeze({
         read(){counts.reads++;return (Reflect.apply(nativeRead,reader,[]) as Promise<ReadableStreamReadResult<Uint8Array>>).then(item=>item.done?{done:true}:{done:false,bytes:item.value});},
         cancel(){counts.cancels++;return Reflect.apply(nativeCancel,reader,[]) as Promise<void>;},closed,
-        abort(){counts.aborts++;controller.abort();},
+        // No fetch/signal is connected here: native reader.cancel is the only interruption; abort only records the request.
+        abort(){counts.aborts++;},
         release(){counts.releases++;Reflect.apply(nativeRelease,reader,[]);counts.active_readers--;},
       })});
     }catch{return Object.freeze({ok:false,code:'invalid_input'});}

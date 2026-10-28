@@ -10,7 +10,7 @@ Date: 2026-10-28 / Scope: メモリ内native Web Streams・fake clock／schedule
 
 同じprivate coreがdispatch・window確認を済ませた後だけstreamを取得する。fixture専用WeakSetで一度だけclaimし、locked・再利用・Proxy・偽receiverを拒否する。soft cutoffでdispatch前に停止した場合はreaderを取得しない。dispatch後の取得拒否で試行数Cを返金しない。
 
-captured native intrinsicによるdefault readerのread／cancel／releaseLockと、一度だけ取得したclosedを同attemptへ接続した。stream側の同名overrideは呼ばない。元のReadState・時計・予約・会計を維持し、課金と解析には同じprivate bytes snapshotを使う。reader・controller・本文・正式receiptは返さない。新しいfactoryも開発専用で梱包除外範囲内にある。
+captured native intrinsicによるdefault readerのread／cancel／releaseLockと、一度だけ取得したclosedを同attemptへ接続した。stream側の同名overrideは呼ばない。元のReadState・時計・予約・会計を維持し、課金と解析には同じprivate bytes snapshotを使う。reader・本文・正式receiptは返さない。新しいfactoryも開発専用で梱包除外範囲内にある。
 
 ## 2. RED→GREENと調査結果
 
@@ -51,6 +51,10 @@ captured native intrinsicによるdefault readerのread／cancel／releaseLock�
 
 コミット分割時に、HEAD＋前工程＋今回分だけの一時コピーでbuild・ESLint・全体173 files／5,221 tests成功（39.18秒）とoffline package-worker smoke（377 files）を再確認した。無関係な作業中ファイルはコピーへ含めていない。
 
-native Web Streams操作の確認であり、HTTPの出所や認証sessionへの結合の証明ではない。private AbortControllerは中断通知だけで、実fetchへは接続していない。clock／schedulerはfake依存で、未決着Promiseの強制決着・非協力的OS処理やevent loop停止の実時間終了は保証しない。native release失敗の注入は既存fake監督試験で扱う。
+native Web Streams操作の確認であり、HTTPの出所や認証sessionへの結合の証明ではない。adapterの`abort`は要求回数の記録だけで、fetch／signalへは接続していない（中断はnative cancelのみ）。clock／schedulerはfake依存で、未決着Promiseの強制決着・非協力的OS処理やevent loop停止の実時間終了は保証しない。native release失敗の注入は既存fake監督試験で扱う。
 
 実session・ReleasePermit・固定source・選択payload・worker jobとの正式binding、全体work／heap上界、本番cap承認は未接続。正式発行口閉鎖、Unknown・全体受付無効、VM／監視／telemetry保留を維持する。実transport・実機操作・設定変更は行わない。
+
+## 6. レビュー修正：未接続AbortControllerの削除（2026-10-28）
+
+adapter内の`AbortController`はsignalをどこにも渡さず、`abort()`は何も中断していなかった。§18.2／§5の「取消通知」「中断通知」という記述と実態が合わないため、controllerを削除し、`abort`を要求回数の記録だけと明記した。中断はnative cancelだけが担い、挙動・counter・試験結果は変わらない。関連5 files／209 tests、build、ESLint、全体試験を再確認。
