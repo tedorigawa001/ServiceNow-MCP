@@ -54,3 +54,12 @@ Date: 2026-10-28 / 対象：[接続設計draft-0.5 §13](BEST_PRACTICE_ABORT_SCO
 - captureはOAuth／親／release 16KiB、metadata 1MiBに限定。解析前後に期限を確認するが、同期JSON処理を物理的に中断する保証・allocation／control workの全体上界は未証明。
 - scratch参照破棄は物理zero化やsource-owned Response／未決着Promiseの解放証明ではない。実OSでの終了保証も未証明。
 - 次は正式binding・必要な選択／worker証拠の発行前提を整理する。正式発行口閉鎖、Unknown・全体受付無効、VM／監視／telemetry保留を維持する。
+
+## 5. レビュー修正（2026-10-28）
+
+本番`bounded-source`の`#observeRelease`／`bounded-read`の`request()`と照合し、release局所の失敗がfakeだけrun全体停止になっていた差を修正した。
+
+- release request timeout：I/O cutoffで同attemptだけをlocal abort＋cancelし、cleanup confirmed後に設定assertionへfallback。fetch段・本文読取段の両方で確認。fetchが決着しない場合はcleanup_deadlineのunconfirmedでfallbackしない。
+- release 400／405／本文なし204：全体停止ではなくobservation_incompleteのunknown（permitなし）。release 302は本番の`redirect:'error'`相当としてfallback。
+- release以外：404→not_found_or_not_visible、その他4xx→invalid_response、3xx／5xx→upstream_unavailableへ本番と同じコードに揃えた。
+- 追加11件（run-fixed-source計62件）。旧実装では8件が失敗（未決着fetch・親503・親302は旧実装でも同結果）。関連4ファイル217件、`bdo npm run build`、ESLint、全体合成を再確認。

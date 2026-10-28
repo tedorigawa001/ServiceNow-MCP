@@ -164,3 +164,31 @@ it.each(['schema','json'] as const)('keeps incomplete %s release unknown without
   get(await run.bootstrap());get(await run.readParent());const r=get(await run.resolveRelease());expect(r).toMatchObject({release_match:'unknown',source:'none',permit:null,limitations:expect.arrayContaining(['observation_incomplete'])});
   expect(run.status().primary).toBeNull();run.finish();expect(run.status().budget?.requests).toBe(2);
 });
+it.each(['fetch','body'] as const)('ends only the release observation at a %s request timeout and falls back after confirmed cleanup',async stage=>{
+  const c=clock(),run=createFakeRunFixedSource(c,(r,signal)=>{if(r.purpose!=='release_rows')return Response.json(parent);
+    if(stage==='fetch')return new Promise<Response>((_,reject)=>signal.addEventListener('abort',()=>reject(Error('PRIVATE_ABORT'))));
+    return new Response(new ReadableStream({start(s){s.enqueue(new Uint8Array(Buffer.from('{"result":[')));}}));},{update_set_sys_id:id,operator_config:assertion()});
+  get(await run.bootstrap());get(await run.readParent());const pending=run.resolveRelease();await vi.advanceTimersByTimeAsync(10000);
+  expect(get(await pending)).toMatchObject({release_match:'matched',source:'operator_config',limitations:expect.arrayContaining(['release_observation_unavailable'])});run.finish();
+  expect(run.status()).toMatchObject({primary:null,budget:{requests:2},cleanup:{http:'confirmed'}});expect(run.operations()).toMatchObject({aborts:1,timers:0});
+});
+it('does not fall back when a timed-out release fetch never settles',async()=>{
+  const c=clock(),run=createFakeRunFixedSource(c,r=>r.purpose==='release_rows'?new Promise<Response>(()=>{}):Response.json(parent),{update_set_sys_id:id,operator_config:assertion()});
+  get(await run.bootstrap());get(await run.readParent());const pending=run.resolveRelease();await vi.advanceTimersByTimeAsync(10000);
+  expect((await pending).ok).toBe(false);run.finish();expect(run.status()).toMatchObject({cleanup:{http:'unconfirmed'},cleanup_reasons:{http:'cleanup_deadline'}});
+});
+it.each([[400,'body'],[405,'body'],[204,null]] as const)('classifies release HTTP %i (%s) as observation_incomplete like bounded-source, without fallback or a run stop',async(status,body)=>{
+  const c=clock(),run=createFakeRunFixedSource(c,r=>r.purpose==='release_rows'?new Response(body,{status}):Response.json(parent),{update_set_sys_id:id,operator_config:assertion()});
+  get(await run.bootstrap());get(await run.readParent());
+  expect(get(await run.resolveRelease())).toMatchObject({release_match:'unknown',source:'none',permit:null,limitations:['observation_incomplete','release_unknown']});
+  run.finish();expect(run.status()).toMatchObject({primary:null,cleanup:{http:'confirmed'}});
+});
+it('treats a release redirect like the redirect:error transport failure and falls back',async()=>{
+  const c=clock(),run=createFakeRunFixedSource(c,r=>r.purpose==='release_rows'?new Response(null,{status:302}):Response.json(parent),{update_set_sys_id:id,operator_config:assertion()});
+  get(await run.bootstrap());get(await run.readParent());expect(get(await run.resolveRelease())).toMatchObject({release_match:'matched',source:'operator_config'});run.finish();
+});
+it.each([[404,'not_found_or_not_visible'],[400,'invalid_response'],[302,'upstream_unavailable'],[503,'upstream_unavailable']] as const)('stops a parent HTTP %i with the bounded-read code %s',async(status,code)=>{
+  const c=clock(),run=createFakeRunFixedSource(c,()=>new Response(null,{status}),{update_set_sys_id:id});
+  get(await run.bootstrap());expect(await run.readParent()).toMatchObject({ok:false,code});run.finish();
+  expect(run.status()).toMatchObject({primary:{code},cleanup:{http:'confirmed'}});
+});

@@ -320,7 +320,10 @@ capture／strict UTF-8 decode／JSON projectionは同module private継続だけ�
 
 既存`pinReviewReleaseConfig`を再利用し、constructor時の設定snapshot・canonical origin／instance_id binding・hard期限全体の有効性を照合する。実設定ファイル読み込みやtrust承認を今回実行したことにはしない。
 
-- release-onlyの403／404／429／5xx、settled no_response、空観測は、**cleanup confirmed後だけ**有効な設定assertionへfallbackできる。401と他用途の403は従来どおり全体停止。
+- release-onlyの3xx（本番`redirect:'error'`の転送失敗相当）／403／404／429／5xx、settled no_response、request timeout、空観測は、**cleanup confirmed後だけ**有効な設定assertionへfallbackできる。401と他用途の403は従来どおり全体停止。
+- releaseのrequest timeoutは本番`bounded-source`と同じくrelease観測だけを終える。I/O cutoffで同attemptのcontrollerだけをabortしてbodyをcancelし、run全体は停止しない（中断後の本文は課金のみで解析しない）。fetch未決着・closed拒否などcleanup未確認なら従来どおりfallbackせず全体停止。
+- releaseのその他4xx（400／405等）と本文なし2xxは、本番と同じく全体停止せずobservation_incompleteのunknownとする。
+- release以外の非2xxは本番`bounded-read`と同じコードで全体停止する：401→authentication_failed、403→access_denied、404→not_found_or_not_visible、3xx／429／5xx→upstream_unavailable、その他4xx→invalid_response。read拒否のinvalid_response（§12）は本番（upstream_unavailable）と異なる意図的なfake分類として維持する。
 - config binding不一致はrelease GET前にunknown。期限切れ／残有効時間不足はfallback不可。実測と設定・複数nodeのfamily衝突、未知family、欠落・不正・20node超はunknown、既知の非対象familyはmismatched。
 - bounded bodyがcleanup済みだがJSON／行の形が不完全ならobservation_incompleteのunknownとし、assertionで補わない。受信cap超過・時計・取消・cleanup未確認等の全体停止をfallbackへ格下げしない。
 - matchedの判定はcatalogを参照。observedはrelease_visible_nodes_only、assertedはrelease_operator_asserted／release_not_observed／release_config_may_be_stale／release_observation_unavailableを保持する。

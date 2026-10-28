@@ -15,8 +15,10 @@ type Observation={fetch:'not_started'|'pending'|'fulfilled'|'rejected';body:'non
 type CapturePolicy={cap:number;allowUnavailable?:boolean;accept(value:unknown,status:number):void};
 type Resource={state:Observation;controller:AbortController;reader?:ReadableStreamDefaultReader<Uint8Array>;body?:ReadableStream<Uint8Array>|null;
   attempt?:FakeCleanupAttempt;deadline:number;ioDeadline:number;dispatched:boolean;ended:boolean;cancelled:boolean;released:boolean;
-  aborted:boolean;finalized:boolean;sequence:number;empty:number;version:number;wake?:()=>void;policy?:CapturePolicy;status:number;scratch?:Uint8Array;size:number};
+  aborted:boolean;local:boolean;finalized:boolean;sequence:number;empty:number;version:number;wake?:()=>void;policy?:CapturePolicy;status:number;scratch?:Uint8Array;size:number};
 const get=<T>(r:{ok:true;value:T}|{ok:false;code:string}):T=>{if(!r.ok)throw Error(r.code);return r.value;};
+// Same status codes as bounded-read request(); redirect:'error' turns 3xx into a transport failure there.
+const statusCode=(s:number)=>s===401?'authentication_failed':s===403?'access_denied':s===404?'not_found_or_not_visible':s===429||s>=500||s>=300&&s<400?'upstream_unavailable':'invalid_response';
 export function createFakeRunStreamSession(clock:FakeStreamClock,source:FakeStreamSource,rawOptions:unknown={}){
   return createRunStreamCore(clock,source,rawOptions).api;
 }
@@ -48,18 +50,22 @@ function createRunStreamCore(clock:FakeStreamClock,source:FakeStreamSource,rawOp
     try{r.reader.releaseLock();r.state.lock='released';}catch{r.state.lock='failed';}changed(r);
   }
   function lateCleanup(r:Resource){cancel(r);release(r);}
+  // Release-only, like bounded-source: a request timeout ends only this observation; the fallback still needs confirmed cleanup.
+  function localAbort(r:Resource){if(r.aborted)return;r.aborted=true;r.local=true;counts.aborts++;
+    try{r.controller.abort();}catch{r.state.abort_failed=true;}cancel(r);changed(r);}
   function checkpoint(r:Resource){
     const v=root.observeTransportClock();if(v.now===null){r.state.abort_failed=true;return v;}
-    if(!v.stopped&&v.now>=r.ioDeadline)root.stop('upstream_unavailable');return v;
+    if(!v.stopped&&v.now>=r.ioDeadline){if(r.policy?.allowUnavailable)localAbort(r);else root.stop('upstream_unavailable');}return v;
   }
   async function pump(r:Resource){
     while(!r.ended&&!r.aborted&&!r.cancelled){
       const before=checkpoint(r);if(before.now===null||root.status().primary)return;
       let item:ReadableStreamReadResult<Uint8Array>;
       try{r.state.pending_read=true;counts.reads++;changed(r);item=await r.reader!.read();}
-      catch{r.state.pending_read=false;if(!r.ended)root.stop('invalid_response');changed(r);return;}
+      catch{r.state.pending_read=false;if(!r.ended&&!r.local)root.stop('invalid_response');changed(r);return;}
       r.state.pending_read=false;if(r.ended){changed(r);return;}
       const after=checkpoint(r);if(after.now===null||root.status().primary){changed(r);return;}
+      if(r.local){if(item.done)r.state.eof=true;else if(item.value instanceof Uint8Array)transport.chunk(r.attempt!,r.sequence++,item.value);changed(r);return;}
       if(item.done){r.state.eof=true;changed(r);return;}
       if(!(item.value instanceof Uint8Array)){root.stop('invalid_response');changed(r);return;}
       if(Reflect.apply(typedLength,item.value,[])===0&&++r.empty>options.max_empty_reads){root.stop('invalid_response');changed(r);return;}
@@ -76,19 +82,19 @@ function createRunStreamCore(clock:FakeStreamClock,source:FakeStreamSource,rawOp
     try{
       r.state.fetch='fulfilled';if(!(response instanceof Response))throw Error();
       const body=response.body;r.body=body;r.status=response.status;
+      // Release rows: every status except 401 is classified by releaseValue (fallback or observation_incomplete), as in bounded-source.
+      const releaseLocal=r.policy?.allowUnavailable&&r.status!==401;
       if(responses.has(response)||body&&streams.has(body)){r.state.body='unknown_lock';r.state.lock='unknown';changed(r);return;}
       responses.add(response);if(body)streams.add(body);
       if(!body){r.state.body='none';
-        const rejected=r.status<200||r.status>=300,unavailable=r.policy?.allowUnavailable&&(r.status===403||r.status===404||r.status===429||r.status>=500);
-        if(!r.ended&&!unavailable)root.stop(rejected?(r.status===401?'authentication_failed':r.status===403?'access_denied':'upstream_unavailable'):'invalid_response');changed(r);return;}
+        if(!r.ended&&!releaseLocal)root.stop(r.status>=200&&r.status<300?'invalid_response':statusCode(r.status));changed(r);return;}
       if(body.locked){r.state.body='unknown_lock';r.state.lock='unknown';changed(r);return;}
       r.state.body='unlocked';if(r.ended||r.aborted){cancel(r);changed(r);return;}
       if(r.status<200||r.status>=300){
-        const unavailable=r.policy?.allowUnavailable&&(r.status===403||r.status===404||r.status===429||r.status>=500);
-        if(!unavailable)root.stop(r.status===401?'authentication_failed':r.status===403?'access_denied':'upstream_unavailable');cancel(r);changed(r);return;}
+        if(!releaseLocal)root.stop(statusCode(r.status));cancel(r);changed(r);return;}
       r.reader=body.getReader();r.state.body='reader';r.state.lock='held';r.state.closed='pending';
       // Capture before read/cancel/release and immediately observe both settlement paths.
-      void r.reader.closed.then(()=>{r.state.closed='fulfilled';changed(r);},()=>{r.state.closed='rejected';if(!r.ended)root.stop('invalid_response');changed(r);});
+      void r.reader.closed.then(()=>{r.state.closed='fulfilled';changed(r);},()=>{r.state.closed='rejected';if(!r.ended&&!r.local)root.stop('invalid_response');changed(r);});
       changed(r);void pump(r).catch(()=>{if(!r.ended)root.stop('internal_review_error');r.state.pending_read=false;changed(r);});
     }catch{r.state.fetch='fulfilled';r.state.body='unknown_lock';r.state.lock='unknown';if(!r.ended)root.stop('invalid_response');changed(r);}
   }
@@ -113,7 +119,7 @@ function createRunStreamCore(clock:FakeStreamClock,source:FakeStreamSource,rawOp
     async function run(descriptor:unknown,policy?:CapturePolicy){
       if(busy){root.stop('internal_review_error');return {ok:false as const,code:'internal_review_error'};}busy=true;
       const r:Resource={state:{fetch:'not_started',body:'none',pending_read:false,eof:false,closed:null,cancel:'not_requested',lock:'not_owned',abort_failed:false},
-        controller:new AbortController(),deadline:0,ioDeadline:Infinity,dispatched:false,ended:false,cancelled:false,released:false,aborted:false,finalized:false,sequence:0,empty:0,version:0,policy,status:0,size:0};current=r;
+        controller:new AbortController(),deadline:0,ioDeadline:Infinity,dispatched:false,ended:false,cancelled:false,released:false,aborted:false,local:false,finalized:false,sequence:0,empty:0,version:0,policy,status:0,size:0};current=r;
       try{
         const initial=root.observeTransportClock();if(initial.now===null||initial.stopped)return {ok:false as const,code:root.status().primary?.code??'closed'};
         const remaining=Math.min(options.request_timeout_ms,initial.hard_deadline-initial.now),reserve=Math.min(options.cleanup_reserve_ms,Math.floor(remaining/4));
@@ -125,10 +131,10 @@ function createRunStreamCore(clock:FakeStreamClock,source:FakeStreamSource,rawOp
         r.finalized=true;transport.finishHttp(r.attempt,{...r.state});
         if(policy&&!root.status().primary){
           const before=root.observeTransportClock();if(before.now===null||before.stopped||before.now>=r.deadline)root.stop('deadline_exceeded');
-          else{try{let raw:unknown=null;if(r.status>=200&&r.status<300){
+          else{try{let raw:unknown=null;const status=r.local?0:r.status;if(status>=200&&status<300){
                 try{raw=JSON.parse(new TextDecoder('utf-8',{fatal:true}).decode(r.scratch?.subarray(0,r.size)??new Uint8Array()));}
                 catch{if(!policy.allowUnavailable)throw Error();}}
-              policy.accept(raw,r.status);}catch{root.stop('invalid_response');}
+              policy.accept(raw,status);}catch{root.stop('invalid_response');}
             const after=root.observeTransportClock();if(after.now===null||after.stopped||after.now>=r.deadline)root.stop('deadline_exceeded');}
         }
         // No body capture/provenance is claimed; successful modeled payloads are discarded.
@@ -201,7 +207,7 @@ export function createFakeRunFixedSource(clock:FakeStreamClock,source:(request:F
     const unavailable=(reason:string)=>({family:null,source:'none' as const,limitations:[reason]});
     const fallback=()=>policy.issue?unavailable(policy.issue):policy.assertion?{family:policy.assertion.family,source:'operator_config' as const,
       limitations:['release_operator_asserted','release_not_observed','release_config_may_be_stale','release_observation_unavailable']}:unavailable('observation_unavailable');
-    if(status===0||status===403||status===404||status===429||status>=500)return fallback();
+    if(status===0||status>=300&&status<400||status===403||status===404||status===429||status>=500)return fallback();
     const parsed=z.object({result:z.array(z.object({build_name:z.string().max(40).nullable().optional()})).max(21)}).safeParse(raw);
     if(!parsed.success)return unavailable('observation_incomplete');const rows=parsed.data.result;
     if(rows.length>20)return unavailable('observation_limit');if(!rows.length||rows.every(r=>!r.build_name?.trim()))return fallback();
