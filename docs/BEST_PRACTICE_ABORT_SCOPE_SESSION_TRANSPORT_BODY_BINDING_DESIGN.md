@@ -234,7 +234,7 @@ draft-0.1作成時はローカル文書編集だけを行った。後続のfake�
 
 ### 15.1 生成・binding・停止の唯一性
 
-fake constructorのstrict設定`accounting`を明示した時だけ同sessionにReadStateを置く。省略時は従来のidentity-onlyで、会計portを取得できない。`claimAccounting(session, run, transport)`は同じprivate台帳と共通clock／停止検査に通し、一度だけportを返す。成功済みの重複claimは新要求だけ拒否する。混入・消費中再入・失敗はcommon primaryを保持して停止し、再生成しない。
+fake constructorのstrict設定`accounting`を明示した時だけ同sessionにReadStateを置く。省略時は従来のidentity-onlyで、会計portを取得できない。`claimAccounting(session, run, transport)`は同じprivate台帳と共通clock／停止検査に通し、一度だけportを返す。成功済みの重複claimは新要求だけ拒否する。外国sessionは§14と同じく自ownerが無いので拒否だけで停止せず、claimも消費しない。自sessionへのrun／transport混入・消費中再入・失敗はcommon primaryを保持して停止し、再生成しない。
 
 ReadStateがC/G/P/Eと用途／attempt／slotを唯一保持する。Sはattempt内、Rは最大10個のslotの残数の合計、Tは最大8 table名の数であり、ownerへ別counterをcopyしない。portとgateの診断は同じ`stats()`の固定射影を読む。`budget_authority=fake_single_state`は合成会計の表示で、実予算leaseではない。
 

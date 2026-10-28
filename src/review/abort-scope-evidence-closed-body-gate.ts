@@ -112,6 +112,8 @@ export function createFakeClosedBodyGate(clock:{now():number},fakeIo:{dispatch()
       const b=binding(session,run,transport);return b.ok?ok(Object.freeze({...closedGate,state:'identity_only' as const})):b;
     });},
     claimAccounting(session:FakeClosedSession,run:FakeClosedRun,transport:FakeClosedTransport){
+      // A foreign session has no own owner here: refuse only, like the other claims, before consuming this claim.
+      if(!sessions.has(session))return reject('accounting','evidence_binding_mismatch');
       if(claims.accounting==='claimed')return reject('accounting','invalid_state');
       if(claims.accounting==='consuming')return stop('accounting','invalid_state');
       return use('accounting',()=>{

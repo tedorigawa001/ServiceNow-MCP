@@ -53,3 +53,10 @@ Date: 2026-10-28 / Scope: fake依存限定、正式発行口閉鎖。
 長さ・outcome・cleanupは合成eventであり、実bytesやcleanupを検証した証拠ではない。実HTTP／workerは未開始。同期fake dispatch以外のread／cancel／closed／releaseLock、実body候補・decode／consume、実認証順序、実source／ReleasePermit／選択payload／worker jobには接続していない。進行中attemptのphase切れはこのmodelではglobal stopであり、実streamを取り消してfinalへ継続する処理の検証ではない。
 
 per-attempt 10秒・empty-read・cleanup予約の実監督、allocation／同期parse／全体work上界、物理的な強制中断は未対応。Eのfake cap、Qの低減帯を承認済み本番policyにしていない。正式発行口閉鎖、Unknown・全体受付無効、VM／監視／telemetry保留を維持。実transport・実機操作・トークン発行・設定変更・本番cap投入は行っていない。
+
+## 6. レビュー修正（2026-10-28）
+
+`claimAccounting`が外国sessionでもclaimを`consuming`にしてから停止し、受信ownerのprimaryを`evidence_binding_mismatch`、会計claimを`failed`にしていた。§14（`claimRun`／`claimTransport`／`checkBinding`／`refuseBody`）と同じく、外国sessionはclaim消費前に拒否だけとし、停止・claim消費をしないよう修正した。自sessionへの外国run／transport混入は従来どおり停止（primary stageは`binding`）。
+
+- 追加2件（会計52件、gate回帰40件）。旧実装では外国session拒否の1件が失敗。
+- `npm run build`、ESLint、`vitest run --maxWorkers=3`で170 files／5,104 tests成功。

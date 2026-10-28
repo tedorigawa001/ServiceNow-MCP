@@ -216,3 +216,15 @@ it('retains one accounting claim and rejects its stale port after common close',
   const p=get(port.openPurpose({kind:'oauth'}));gate.close();const d=gate.diagnostic();expect(port.dispatch(p)).toEqual({ok:false,code:'closed'});expect(gate.diagnostic()).toEqual(d);
   expect(Object.isFrozen(port.stats())).toBe(true);expect(Object.isFrozen(port.stats().slots)).toBe(true);expect(Reflect.has(port,'issueBody')).toBe(false);
 });
+it('only refuses a foreign session on the accounting claim and keeps the own claim available',()=>{
+  const make=()=>{const g=createFakeClosedBodyGate({now:()=>0}),s=get(g.construct({accounting:{}})),r=get(g.claimRun(s));return {g,s,r,t:get(g.claimTransport(s,r))};};
+  const a=make(),b=make(),before=b.g.diagnostic();
+  expect(a.g.claimAccounting(b.s,b.r,b.t)).toEqual({ok:false,code:'evidence_binding_mismatch'});
+  expect(a.g.diagnostic()).toMatchObject({primary:null,refusal:{stage:'accounting',code:'evidence_binding_mismatch'},claims:{accounting:'unclaimed'}});expect(b.g.diagnostic()).toEqual(before);
+  get(a.g.claimAccounting(a.s,a.r,a.t));expect(a.g.diagnostic()).toMatchObject({primary:null,claims:{accounting:'claimed'}});
+});
+it('still stops the own owner when its session is mixed with a foreign run/transport on the accounting claim',()=>{
+  const make=()=>{const g=createFakeClosedBodyGate({now:()=>0}),s=get(g.construct({accounting:{}})),r=get(g.claimRun(s));return {g,s,r,t:get(g.claimTransport(s,r))};};
+  const a=make(),b=make();expect(a.g.claimAccounting(a.s,b.r,b.t)).toEqual({ok:false,code:'evidence_binding_mismatch'});
+  expect(a.g.diagnostic()).toMatchObject({primary:{stage:'binding',code:'evidence_binding_mismatch'},claims:{accounting:'failed'}});expect(b.g.diagnostic().primary).toBeNull();
+});
