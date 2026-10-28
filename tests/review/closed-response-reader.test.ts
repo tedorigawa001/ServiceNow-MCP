@@ -86,7 +86,7 @@ it.each(['proxy','forged','plain'] as const)('refuses %s Response without runnin
 });
 it.each([204,302,429,500])('refuses status %i without adopting body bytes or following a redirect',async status=>{
   let cancels=0;const response=new Response(status===204?null:new ReadableStream({cancel(){cancels++;}}),{status}),run=createInjectedClosedParentResponseReader(clock(),()=>response,{update_set_sys_id:id});
-  expect(await run.read(get(run.initial()))).toEqual({ok:false,code:'invalid_response'});expect(run.status()).toMatchObject({requests:1,received_bytes:0,operations:{reads:0,releases:0}});expect(cancels).toBe(status===204?0:1);
+  expect(await run.read(get(run.initial()))).toEqual({ok:false,code:status===429||status>=500?'upstream_unavailable':'invalid_response'});expect(run.status()).toMatchObject({requests:1,received_bytes:0,operations:{reads:0,releases:0}});expect(cancels).toBe(status===204?0:1);
 });
 it('rejects a secret malformed JSON body after charging once, with no parser details in the result',async()=>{
   const bytes=new TextEncoder().encode('PRIVATE_JSON_BODY'),run=createInjectedClosedParentResponseReader(clock(),()=>new Response(bytes),{update_set_sys_id:id});

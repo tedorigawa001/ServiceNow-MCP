@@ -1,7 +1,7 @@
 # AU-BR-006：閉鎖dispatcher・中断signal・Response受領の詳細設計
 
-Version: br006-closed-dispatch-signal-draft-0.3 / Date: 2026-10-28。
-Status: **§10〜§12のCD-01〜CD-03を合成実装。同attemptの固定親GET／context／Response待機からnative reader・private bytes解析へ接続。正式body発行・実session bindingは未接続。正式発行口閉鎖・全体受付無効・Unknownを維持。実transportの採用承認ではない**。
+Version: br006-closed-dispatch-signal-draft-0.4 / Date: 2026-10-28。
+Status: **§10〜§13のCD-01〜CD-04を合成実装。同attemptのResponse-reader接続にHTTP分類・cleanup後の限定retryを追加。正式body発行・実session bindingは未接続。正式発行口閉鎖・全体受付無効・Unknownを維持。実transportの採用承認ではない**。
 
 親：[session／transport／body境界 §17・§18](BEST_PRACTICE_ABORT_SCOPE_SESSION_TRANSPORT_BODY_BINDING_DESIGN.md#18-draft-06注入native-web-streamsの合成接続)、[共通run owner](BEST_PRACTICE_ABORT_SCOPE_RUN_OWNER_BINDING_DESIGN.md)。
 参照：[用途別受領物](BEST_PRACTICE_ABORT_SCOPE_TRANSPORT_RECEIPTS_DESIGN.md)、[固定source](BEST_PRACTICE_ABORT_SCOPE_FIXED_SOURCE_ISSUER_DESIGN.md)、[OAuth移譲](BEST_PRACTICE_ABORT_SCOPE_OAUTH_SOURCE_HANDOFF_DESIGN.md)。
@@ -97,11 +97,11 @@ abort listenerからclose／cancelへ再入してもclaim・C・abort・cancel�
 失敗は既存の固定codeへ写像し、秘密の例外本文・header・token・URLを返さない。
 
 - 不正入力：`invalid_input`。known owner内の用途／URL／auth／attempt混入：`evidence_binding_mismatch`。外国ownerには作用しない。
-- dispatch reject／同期throw：`upstream_unavailable`。不正Response：`invalid_response`。本番[`bounded-read`](../src/servicenow/bounded-read.ts)の`request()`はtimeoutに限らず`upstream_unavailable`（fetch reject・429・5xx）を1回retryする。dispatch reject後のretryは429／5xxと同じく未確定とし、受理前に追加試験で確定する。それまでは成功・retry済みへfallbackしない。3xx等のHTTP分類は旧fixtureの規則を参照するが、新coreへ移す前に互換表と試験を確定する。
+- dispatch reject／同期throw：`upstream_unavailable`。不正Response：`invalid_response`。本番[`bounded-read`](../src/servicenow/bounded-read.ts)の`request()`はtimeoutに限らず`upstream_unavailable`（fetch reject・429・5xx）を1回retryする。CD-04ではResponse-reader経路の429／5xxだけをcleanup確認後の限定retryへ接続した（§13）。dispatch reject後のretryと本番の固定backoff移植は未接続のまま。それまでは成功・retry済みへfallbackしない。
 - 局所timeout：`attempt_deadline_exceeded`を保持。cleanup確認済みで既存retry条件が成立した場合だけ同purposeの2回目へ進む。
 - global取消／期限／累積上限は従来code。cleanup不成立は`cleanup_unconfirmed`を別軸に保持し、先行timeout／dispatch失敗を消さない。
 
-HTTP status分類の移植は新しいcounterや第二のstate machineを作らず、同core内の固定分岐にする。初期成功試験は200＋bounded JSONに限定し、429／5xx・null body・204の意味とretryは受理前に追加試験で確定する。未確定statusを成功へfallbackしない。
+HTTP status分類は同core内の固定分岐とし、counterや第二のstate machineを追加しない。初期の200＋bounded JSON subsetに続き、§13で429／5xx・401／403・redirect等を切り分けた。200以外の成功statusを成功本文へfallbackしない。CD-02の破棄専用経路は初期subsetのまま維持する。
 
 ## 8. 合成試験・独立oracle
 
@@ -115,7 +115,7 @@ native Response／Streamsはメモリ内で生成する。global fetch・実toke
 | 待機の期限 | Response未到達でD_io取消、本文到着後も元deadline。cleanup等号でconfirmedにしない |
 | 取消 | Response前／reader前／read pending／EOF後、同期再入、abort後resolve／reject、never-settleを別々に検証 |
 | cleanup | dispatch pendingとcancel pendingを区別。late応答の自resourceだけ解放、foreign resource未操作、二重処理なし |
-| retry | 現時点で受理するのは確認済み局所timeoutの同purpose 2回目だけ（dispatch reject／429／5xxのretryは§7の未確定事項）。新controller／新Response、同run／auth／台帳、旧断片なし、C/G返金なし |
+| retry | 確認済み局所timeout、CD-04のResponse-reader経路ではcleanup確認済み429／5xxだけ同purposeの2回目。dispatch rejectのretryは未接続。新controller／新Response、同run／auth／台帳、旧断片なし、C/G返金なし |
 | bytes | private snapshotから一度課金・解析。非成功status／late本文を成功projectionに使わない |
 | 失敗／非露出 | dispatcher throw／reject、getter不適合、clock／scheduler失敗、秘密sentinelのログ／結果非露出 |
 | 閉鎖 | global fetch sentinel、正式発行拒否、package除外、実session台帳がfixture handleを認識しない |
@@ -209,6 +209,46 @@ Response到着時に待機タイマーのdisposerが失敗する場合も、旧�
 
 返却は件数・受信byte・digest等の既存固定合成summaryと診断だけ。本文・親sys_id・URL・auth context・reader・正式receiptは返さない。公開MCPの0.2／0.3契約やAU-BR-006の登録は変更しない。親最終readも同じtarget／URL／auth contextと所定slotで実行するが、初回と最終のstate／application／更新世代の安定性を認定するParentSnapshotや正式source証拠は発行しない。
 
-対象sys_idを結合したこの経路では、本文を本番`bounded-source`の`parentSchema`と同じstrictな5列（sys_id／state／application／sys_updated_on／sys_mod_count）で解析し、固定GETが要求するfieldsの応答をそのまま受理する。sys_idだけ・余剰列・欠落列・不正な更新世代は`invalid_response`。対象ID未指定の既存合成parser入口はresult.sys_idの射影のまま互換維持する。表示値差・配列形・実Table APIの実応答との互換は未検証。200以外のHTTP分類拡張、実auth snapshot／ReleasePermit／選択metadata・payload／worker job・上位正式JSON、全体work／保持上界・本番cap・OSの実時間終了は後工程。
+対象sys_idを結合したこの経路では、本文を本番`bounded-source`の`parentSchema`と同じstrictな5列（sys_id／state／application／sys_updated_on／sys_mod_count）で解析し、固定GETが要求するfieldsの応答をそのまま受理する。sys_idだけ・余剰列・欠落列・不正な更新世代は`invalid_response`。対象ID未指定の既存合成parser入口はresult.sys_idの射影のまま互換維持する。表示値差・配列形・実Table APIの実応答との互換は未検証。HTTP分類は後続§13を参照。実auth snapshot／ReleasePermit／選択metadata・payload／worker job・上位正式JSON、全体work／保持上界・本番cap・OSの実時間終了は後工程。
 
 CD-01・CD-02・stream-only入口の合成互換を維持し、既存package除外prefixから外さない。正式発行口閉鎖・Unknown・全体受付無効、VM／監視／telemetry保留を維持。実transport・実機操作・token発行・設定変更・Pushは行わない。
+
+## 13. CD-04：HTTP失敗分類・cleanup確認後の同purpose retry
+
+2026-10-28追加。[同coreの固定分類](../src/review/abort-scope-evidence-closed-attempt-supervisor.ts)、[追加39件](../tests/review/closed-http-status.test.ts)、[検証記録](E2E_BEST_PRACTICE_CLOSED_HTTP_STATUS_2026-10-28.md)を参照。対象はCD-03のResponse-reader経路だけ。CD-02のwait/discard・CD-01の同期fake I/O・stream-onlyの振舞いは維持する。
+
+### 13.1 固定分類表
+
+| native HTTP status | 内部code | 固定classification | retry |
+|---|---|---|---|
+| 200 | 成功本文へ進む（body・所有・schemaは別検査） | 記録なし | 本文側の既存規則 |
+| 429 | upstream_unavailable | rate_limited | cleanup確認後だけ、同purpose通算2試行以内 |
+| 500〜599 | upstream_unavailable | server_error | 同上 |
+| 401 | authentication_failed | unauthorized | run停止。再認証／別tokenへの切替なし |
+| 403 | access_denied | forbidden | run停止。権限追加／別主体への切替なし |
+| 300〜399 | invalid_response | redirect | run停止。Locationを読まず追跡しない |
+| 200以外の2xx | invalid_response | unsupported_success | run停止。204/nullを成功parentへ変換しない |
+| その他4xx | invalid_response | client_error | run停止。404の存在／不可視を断定しない |
+| その他（Response.errorの0等） | invalid_response | invalid_status | run停止 |
+
+認定にはnative Responseのgetter値だけを使い、callerのstatus・headers overrideを呼ばない。分類は外国lock／使用済み／再利用を拒否する所有権検査の後だけ行い、所有不明の応答は`evidence_binding_mismatch`としてstatusを記録しない。URL／live検査に失敗した応答やlate応答を、新しい認証／HTTP障害の証拠にしない。
+
+### 13.2 終端とretryの条件
+
+非200はreaderへ渡さず、自ownerと確認できたbodyをnative cancelで破棄する。HTTP失敗をまず固定分類し、401／403等はbody取消がpendingでも直ちにprimaryへ確定する。待ち続ける401 bodyを局所timeoutとしてretryさせない。HTTP transientは局所attempt_failureへ記録し、cleanupが確認できるまで新要求を開始しない。
+
+cancel pending／reject・foreign lock／再利用等の所有不明・clock／scheduler失敗・期限等号はunconfirmed／global停止で、retryを認めない。cleanup確認済み429／5xxだけ、同ReadStateのfinishUnopenedをretryableで終端化する。null bodyのtransientも、dispatcher決着と必要resourceなしを確認できれば対象とする。EOF／reader release／本文候補の事実は作らない。
+
+retryは自動再送ではなく、同じopaque request handleの2回目readを許可する方式。timeoutとHTTP transientを合わせて通算2試行で、新purposeや新factoryへ内部で逃がさない。C/G・元t0／phase期限・final予約枠を引き継ぎ、retryでも同URL／auth context・新Response／signal／ordinalを使う。final readも同slotの残枠だけを消費する。
+
+Retry-After・Location・任意error bodyを読まず、待機時間やdeadlineを延長しない。新しいbackoff timerは追加しない。本番bounded-readの自動retry／固定250ms backoff・dispatch rejectの再試行まで同等化したとは扱わない。これらは将来の実transport接続前の別検証対象。
+
+error bodyはread・decodeしないためG/Sへ未読量やContent-Lengthを見積り加算せず、既に計上した受信量・Cを返金／resetしない。これはfetch内部bufferや実ネットワークの全byteを監視できるという証明ではない。実transportの受信・保持上界は引き続き未証明。
+
+### 13.3 診断と閉鎖条件
+
+http_failureは最初、last_http_failureは直近のHTTP失敗を凍結し、status／classification／code／syntheticだけを保持する。retry後の403等でも先行429を消さない。attempt_failureは最初の局所失敗、primaryは最初のglobal停止、cleanupは別軸であり、HTTP履歴を新しいretry権限として再登録しない。publicなretryable=trueは出さず、実際の受付は同requestの状態・通算回数・primary・cleanup／予算で決める。
+
+追加codeはpackage除外の閉鎖gate／ReadState内部語彙だけ。公開MCP入力・0.2／0.3結果・AU-BR-006登録・正式発行口を変更しない。秘密のerror本文・URL・header・token・raw exceptionは診断へ出さない。
+
+正式発行口閉鎖・Unknown・全体受付無効、VM／監視／telemetry保留を維持。実auth snapshot／ReleasePermit／固定source・選択payload／worker job・上位JSONへの正式binding、本番cap／全体work・heap・OS終了保証は未接続／未承認。実transport・実機操作・token発行・設定変更・Pushは行わない。

@@ -12,6 +12,13 @@ const typedName=Object.getOwnPropertyDescriptor(Object.getPrototypeOf(Uint8Array
 const event=z.strictObject({done:z.boolean(),bytes:z.custom<Uint8Array>(value=>{try{return Reflect.apply(typedName,value,[])==='Uint8Array';}catch{return false;}}).optional()}).refine(x=>x.done?x.bytes===undefined:x.bytes!==undefined);
 type Cleanup=Readonly<{disposition:'not_started'|'in_progress'|'confirmed'|'unconfirmed';kind:'eof'|'cancelled'|null;reason:'read_pending'|'cancel_pending'|'cancel_rejected'|'closed_pending'|'closed_rejected'|'release_failed'|'abort_failed'|'cleanup_deadline'|'scheduler_failed'|'observation_invalid'|'dispatch_pending'|'response_cancel_pending'|'response_cancel_rejected'|'response_ownership_unknown'|null;synthetic:true}>;
 const get=<T>(r:ClosedAccountingResult<T>)=>{if(!r.ok)throw Error(r.code);return r.value;};
+type HttpFailure=Readonly<{status:number;classification:'rate_limited'|'server_error'|'unauthorized'|'forbidden'|'redirect'|'unsupported_success'|'client_error'|'invalid_status';code:'upstream_unavailable'|'authentication_failed'|'access_denied'|'invalid_response';synthetic:true}>;
+function classifyHttp(status:number):HttpFailure|null{
+  if(status===200)return null;
+  const classification:HttpFailure['classification']=status===429?'rate_limited':status>=500&&status<=599?'server_error':status===401?'unauthorized':status===403?'forbidden':status>=300&&status<400?'redirect':status>=200&&status<300?'unsupported_success':status>=400&&status<500?'client_error':'invalid_status';
+  const code:HttpFailure['code']=classification==='rate_limited'||classification==='server_error'?'upstream_unavailable':classification==='unauthorized'?'authentication_failed':classification==='forbidden'?'access_denied':'invalid_response';
+  return Object.freeze({status,classification,code,synthetic:true});
+}
 export function createFakeClosedAttemptSupervisor(clock:ClosedAttemptClock,raw:unknown={}){
   return createClosedAttemptCore(clock,raw).api;
 }
@@ -22,9 +29,10 @@ function createClosedAttemptCore(clock:ClosedAttemptClock,raw:unknown={}){
     readPending:boolean;closed:'pending'|'fulfilled'|'rejected';cancel:'not_requested'|'pending'|'fulfilled'|'rejected';eof:boolean;aborted:boolean;abortFailed:boolean;released:boolean;releaseFailed:boolean;schedulerFailed:boolean;clockFailed:boolean;sequence:number;version:number;wake?:()=>void;expectedParentId?:string};
   type ResponseResource={deadline:number;ioDeadline:number;reserve:number;cleanupDeadline?:number;failure?:ClosedStateCode;revoked:boolean;ended:boolean;
     controller:AbortController;started:boolean;pending:boolean;cancel:'not_requested'|'pending'|'fulfilled'|'rejected';unknown:boolean;
-    aborted:boolean;abortFailed:boolean;schedulerFailed:boolean;clockFailed:boolean;version:number;wake?:()=>void;adopted?:Resource};
+    aborted:boolean;abortFailed:boolean;schedulerFailed:boolean;clockFailed:boolean;version:number;wake?:()=>void;adopted?:Resource;httpRetryable:boolean};
   let current:Resource|ResponseResource|undefined,busy=false,closing=false,attemptFailure:ClosedStateCode|null=null;
   let cleanup:Cleanup=Object.freeze({disposition:'not_started',kind:null,reason:null,synthetic:true});
+  let httpFailure:HttpFailure|null=null,lastHttpFailure:HttpFailure|null=null;
   const counts={reads:0,cancels:0,aborts:0,releases:0,timers:0};
   const no=(fallback:ClosedStateCode):ClosedAccountingResult<never>=>Object.freeze({ok:false,code:gate.diagnostic().primary?.code??fallback});
   const observe=()=>gate.observeCleanupClock();
@@ -125,7 +133,7 @@ function createClosedAttemptCore(clock:ClosedAttemptClock,raw:unknown={}){
       const controller=new AbortController(),a=port.dispatch(purpose);if(!a.ok)return a;
       const w=port.attemptWindow(a.value);if(!w.ok)return w;
       x={controller,deadline:w.value.deadline,ioDeadline:w.value.io_deadline,reserve:w.value.deadline-w.value.io_deadline,
-        revoked:false,ended:false,started:false,pending:false,cancel:'not_requested',unknown:false,aborted:false,abortFailed:false,schedulerFailed:false,clockFailed:false,version:0};
+        revoked:false,ended:false,started:false,pending:false,cancel:'not_requested',unknown:false,aborted:false,abortFailed:false,schedulerFailed:false,clockFailed:false,version:0,httpRetryable:false};
       current=x;const owned=x;cleanup=Object.freeze({disposition:'in_progress',kind:null,reason:null,synthetic:true});
       const check=()=>{const v=observe();if(v.now===null){owned.clockFailed=true;failResponse(owned,'internal_review_error');}
         else if(v.primary&&!owned.revoked)failResponse(owned,v.primary);
@@ -138,9 +146,14 @@ function createClosedAttemptCore(clock:ClosedAttemptClock,raw:unknown={}){
           if(!raw||nodeTypes.isProxy(raw))throw Error();
           const status=Reflect.apply(responseStatus,raw,[]) as number,body=Reflect.apply(responseBody,raw,[]) as ReadableStream<Uint8Array>|null;
           const used=Reflect.apply(responseUsed,raw,[]) as boolean,url=Reflect.apply(responseUrl,raw,[]) as string;
+          // Ownership first: a foreign, replayed or used Response must not become HTTP or auth evidence.
           if(claimedResponses.has(raw as Response)||used||body&&(Reflect.apply(nativeLocked,body,[])||claimedStreams.has(body))){owned.unknown=true;if(!owned.ended)failResponse(owned,'evidence_binding_mismatch');return;}
           claimedResponses.add(raw as Response);if(body)claimedStreams.add(body);
-          if(!owned.revoked&&!owned.ended&&(status!==200||url!==''&&url!==expectedUrl||!body))failResponse(owned,'invalid_response');
+          if(!owned.revoked&&!owned.ended){
+            if(url!==''&&url!==expectedUrl)failResponse(owned,'invalid_response');
+            else if(adoptBody){const http=classifyHttp(status);if(http){httpFailure??=http;lastHttpFailure=http;owned.httpRetryable=http.code==='upstream_unavailable';failResponse(owned,http.code,!owned.httpRetryable);}else if(!body)failResponse(owned,'invalid_response');}
+            else if(status!==200||!body)failResponse(owned,'invalid_response');
+          }
           if(!body)return;
           if(adoptBody&&!owned.revoked&&!owned.ended){
             const reader=Reflect.apply(nativeGetReader,body,[]) as ReadableStreamDefaultReader<Uint8Array>;
@@ -176,7 +189,7 @@ function createClosedAttemptCore(clock:ClosedAttemptClock,raw:unknown={}){
         if(!owned.pending&&owned.cancel!=='pending'){
           cleanup=Object.freeze({disposition:owned.started?'confirmed':'not_started',kind:owned.cancel==='fulfilled'?'cancelled':null,reason:null,synthetic:true});
           if(gate.diagnostic().primary)return no(owned.failure??'invalid_response');
-          const settled=port.finishUnopened(a.value,owned.failure==='attempt_deadline_exceeded'?'retryable':'unavailable');if(!settled.ok)return settled;
+          const settled=port.finishUnopened(a.value,owned.failure==='attempt_deadline_exceeded'||owned.httpRetryable?'retryable':'unavailable');if(!settled.ok)return settled;
           if(owned.failure)return no(owned.failure);
           return Object.freeze({ok:true as const,value:Object.freeze({response_wait_completed:true as const,body_adopted:false as const,synthetic:true as const,evidence_issuance:'disabled' as const})});
         }
@@ -190,7 +203,7 @@ function createClosedAttemptCore(clock:ClosedAttemptClock,raw:unknown={}){
     finalSlots:()=>Object.freeze({parent:port.parentFinal,metadata:port.metadataFinal}),
     enterFinal:()=>delegate(()=>port.enterFinal()),openFinal:(slot:Parameters<typeof port.openFinal>[0])=>delegate(()=>port.openFinal(slot)),skipFinal:(slot:Parameters<typeof port.skipFinal>[0])=>delegate(()=>port.skipFinal(slot)),
     cancel(){stop('cancelled');},close(){closing=true;stop('closed');if(!busy)gate.close();},
-    status(){return Object.freeze({...port.stats(),active:busy,cleanup,attempt_failure:attemptFailure,operations:Object.freeze({...counts}),primary:gate.diagnostic().primary,formal_issuance:'disabled' as const});},
+    status(){return Object.freeze({...port.stats(),active:busy,cleanup,attempt_failure:attemptFailure,http_failure:httpFailure,last_http_failure:lastHttpFailure,operations:Object.freeze({...counts}),primary:gate.diagnostic().primary,formal_issuance:'disabled' as const});},
   });
   type BodySummary=Extract<ReturnType<typeof body.consume>,{ok:true}>['value'];
   type WaitSummary=Readonly<{response_wait_completed:true;body_adopted:false;synthetic:true;evidence_issuance:'disabled'}>;
@@ -282,7 +295,7 @@ export function createInjectedClosedParentResponseReader(clock:ClosedAttemptCloc
       if(r.state!=='ready'||r.attempts>=2)return core.reject('invalid_state');r.state='running';
       const request:FakeClosedParentGet=Object.freeze({method:'GET',url,purpose:r.kind,ordinal:(r.attempts+1) as 1|2,synthetic:true});
       const result=await core.readResponseUsing(r.purpose,signal=>{r.attempts++;dispatches++;return dispatcher(request,signal,authContext);},url,config.update_set_sys_id);
-      const status=core.api.status();r.state=!result.ok&&result.code==='attempt_deadline_exceeded'&&!status.primary&&status.cleanup.disposition==='confirmed'?'ready':'done';return result;
+      const status=core.api.status();r.state=!result.ok&&(result.code==='attempt_deadline_exceeded'||result.code==='upstream_unavailable')&&r.attempts<2&&!status.primary&&status.cleanup.disposition==='confirmed'?'ready':'done';return result;
     },cancel:()=>core.api.cancel(),close:()=>core.api.close(),status:()=>Object.freeze({...core.api.status(),dispatches}),
   });
 }

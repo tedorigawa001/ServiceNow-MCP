@@ -8,7 +8,7 @@ export type ClosedReadAttempt=Handle<'closed_read_attempt'>;
 export type ClosedFinalSlot=Handle<'closed_final_slot'>;
 export type ClosedAccountingCode='invalid_input'|'invalid_state'|'evidence_binding_mismatch'|'request_budget_exceeded'
   |'receive_budget_exceeded'|'payload_budget_exceeded'|'payload_limit'|'scope_evidence_limit'
-  |'phase_deadline_exceeded'|'upstream_unavailable'|'cleanup_unconfirmed'|'invalid_response'|'body_limit'|'attempt_deadline_exceeded';
+  |'phase_deadline_exceeded'|'upstream_unavailable'|'cleanup_unconfirmed'|'invalid_response'|'body_limit'|'attempt_deadline_exceeded'|'authentication_failed'|'access_denied';
 export type ClosedStateCode=ClosedAccountingCode|'invalid_observation_time'|'deadline_exceeded'|'cancelled'|'closed'|'internal_review_error'|'issuance_disabled';
 export type ClosedAccountingResult<T>=Readonly<{ok:true;value:T}|{ok:false;code:ClosedStateCode}>;
 export const closedAttemptPolicySchema=z.strictObject({timeout_ms:z.number().int().min(1).max(10000).default(10000),cleanup_reserve_ms:z.number().int().min(1).max(250).default(250),max_empty_reads:z.number().int().min(1).max(16).default(16)});
