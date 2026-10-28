@@ -1,5 +1,7 @@
 # AU-BR-006 実transport：用途別body receipt・cleanup証拠・単一予算の接続詳細設計
 
+後続：[閉鎖gate draft-0.2 §14](BEST_PRACTICE_ABORT_SCOPE_SESSION_TRANSPORT_BODY_BINDING_DESIGN.md#14-draft-02閉鎖gateの最初の合成実装)。private生成継続をfake限定で実装したが、実会計更新port・transport・body receiptは発行しない。
+
 Version: br006-transport-receipts-draft-0.9 / Date: 2026-10-27。
 Status: **fixtureのread／cleanup・OAuth bootstrap実装と、実session共通ownerへのtyped transport接続設計を区別。typed会計／cleanupの本番接続・cap承認・正式発行は未実装／閉鎖**。
 

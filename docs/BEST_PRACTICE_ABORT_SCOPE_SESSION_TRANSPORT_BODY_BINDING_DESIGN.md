@@ -1,7 +1,7 @@
 # AU-BR-006 実session／ReleasePermit・単一transport・body受領境界の詳細設計
 
-Version: br006-session-transport-body-binding-draft-0.1 / Date: 2026-10-28。
-Status: **設計のみ。正式body receipt／証拠発行gateは閉鎖。実装・実transport接続・本番cap投入の承認ではない**。
+Version: br006-session-transport-body-binding-draft-0.2 / Date: 2026-10-28。
+Status: **§14の閉鎖gateだけfake限定で実装。正式body receipt／証拠発行gateは閉鎖。実session・実transport接続・本番cap投入の承認ではない**。
 
 親：[共通run owner](BEST_PRACTICE_ABORT_SCOPE_RUN_OWNER_BINDING_DESIGN.md)、[TC-01〜TC-04と現行境界](BEST_PRACTICE_ABORT_SCOPE_RUN_TRANSPORT_CLEANUP_DESIGN.md)、[用途別受領物](BEST_PRACTICE_ABORT_SCOPE_TRANSPORT_RECEIPTS_DESIGN.md)。
 後続：[選択window／payload受領物](BEST_PRACTICE_ABORT_SCOPE_REAL_SESSION_RECEIPTS_DESIGN.md)、[worker接続契約](BEST_PRACTICE_ABORT_SCOPE_CONNECTION_CONTRACT_DESIGN.md)。
@@ -208,8 +208,22 @@ oracleは製品の課金関数を再利用せず、dispatch／採用chunk／payl
 
 承認待ち：private配置／lane生成方式、typed laneの受付下限Q（§7.1）、用途capture／E/R・cleanup／empty-read policy、全体work・保持上界、未確認resourceの再受付／終了policy、公開結果への診断写像。正式gateが閉じている間はdeny-onlyを維持し、文書承認やテスト成功だけで実行権限が発生する仕組みにしない。
 
-本書作成はローカル文書編集だけ。実装・ソース／テスト変更・build／合成試験・実transport・実機操作・token発行・設定変更・本番cap投入を行わず、正式発行口閉鎖を維持する。
+draft-0.1作成時はローカル文書編集だけを行った。後続のfake限定実装は§14を参照。実transport・実機操作・token発行・設定変更・本番cap投入を行わず、正式発行口閉鎖を維持する。
 
 ## 13. 文書確認（2026-10-28）
 
 新規本書と関連4文書の計5MDを確認し、相対リンク72件の参照先欠落なし。全5MDの行末空白検査と`git diff --check`も問題なし。現行sourceのprepared binding、legacy固定4予約、phase reserve式、TC-04のfake境界と照合した文書検証であり、build／合成テスト／実接続の成功記録ではない。
+
+## 14. draft-0.2：閉鎖gateの最初の合成実装
+
+[内部型とprivate生成継続](../src/review/abort-scope-evidence-closed-body-gate.ts)と[36件の合成試験](../tests/review/closed-body-gate.test.ts)を追加した。§2〜§12の将来の実接続とは区別する。検証結果は[今回の記録](E2E_BEST_PRACTICE_CLOSED_BODY_GATE_2026-10-28.md)を参照。
+
+- 1 harnessにつきfake sessionは最大1件。constructor→run→transportの継続は同moduleのprivate closureだけで生成し、callerからfactoryを受け取らず、継続自体も返さない。
+- 不透明handleをprivate WeakMapへ登録し、snapshot／auth／budget／generationの同一参照に結合する。これは合成identityであり、実認証・ready世代・ReleasePermitの証明ではない。実session台帳・fixture登録口への接続はない。
+- 各claimは`unclaimed→consuming→claimed`、途中停止なら`failed`。claimをclock callbackより先に消費し、再入／取消後にhandleを公開しない。使用済みclaimへの通常の重複要求は新要求だけ拒否し、既存の正常bindingを壊さない。既知ownerに別run／transportを混ぜる矛盾は受信ownerを停止し、外国ownerを変更しない。
+- `checkBinding`はreadonlyなidentity検査だけ。`refuseBody`は常に拒否し、正常bindingでも`issuance_disabled`。会計更新port・用途permit・body candidate／receipt・window／payload／worker jobは存在しない。診断の`receipts_issued=0`はこの閉鎖modelの定数であり実会計の集計ではない。
+- 最初のterminal primaryと、最初の非terminal要求拒否を別slotで保持する。raw Errorは固定codeへ正規化し、秘密・本文・identityを返さない。停止後のclaimは由来として残るが権限は失効し、close後の遅い要求も診断を変更しない。
+- fake clockの単調性・非有限・例外・hard期限等号をcheckpointで拒否する。timer／watchdogはないため、無操作中の自動終了や実OS期限保証を意味しない。fake期限は最大60秒、低減のみ許可する。
+- `cleanup.http/worker=not_started`はI/O未実施のmodel表示であり物理解放の証明ではない。診断は固定長slot・freeze済みのviewで、会計更新や再開の権限を持たない。
+
+新moduleは既存の`!dist/review/abort-scope-evidence*`で梱包対象外。実ReadState、C/G/S/P/E/R、承認cap、Q下限、ReleasePermit、正式body受領境界への接続は次工程。Unknown・全体受付無効、VM／監視／telemetry保留を維持する。

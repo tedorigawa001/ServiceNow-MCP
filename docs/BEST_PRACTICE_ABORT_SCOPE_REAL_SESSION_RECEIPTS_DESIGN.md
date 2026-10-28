@@ -1,5 +1,7 @@
 # AU-BR-006 実session claim・private受領物・終了時失効の接続詳細設計
 
+後続：[閉鎖gate draft-0.2 §14](BEST_PRACTICE_ABORT_SCOPE_SESSION_TRANSPORT_BODY_BINDING_DESIGN.md#14-draft-02閉鎖gateの最初の合成実装)。fake内部型・claimの試験に限り、本書の実session・選択window／payload receiptへは未接続。正式発行口は閉鎖。
+
 Version: br006-real-session-receipts-draft-0.3 / Date: 2026-10-28。
 Status: **正式receiptの設計案。実lifecycleのsnapshot／readonly leaseと同sourceのReleasePermit／不変release snapshotはprepared結合済み。選択window／payloadのdraft・開始／移譲claimはfixture専用で、正式issuer／receipt発行は未実装／閉鎖**。
 親：[固定source issuer](BEST_PRACTICE_ABORT_SCOPE_FIXED_SOURCE_ISSUER_DESIGN.md)、[接続契約](BEST_PRACTICE_ABORT_SCOPE_CONNECTION_CONTRACT_DESIGN.md)、[bounded予算](BEST_PRACTICE_ABORT_SCOPE_BOUNDED_BUDGET_DESIGN.md)。
