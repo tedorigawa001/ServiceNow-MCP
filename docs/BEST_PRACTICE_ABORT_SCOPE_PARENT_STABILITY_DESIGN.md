@@ -84,6 +84,7 @@ async readの返却後に起きた取消との関係はcommit時点をlinearizat
 | initial_pending | 同logical readの既存retry、またはsnapshot受理 | 二重初回、未受理のままfinal、別attemptのdraft混入 |
 | initial_observed | final workflow claimを一度消費 | 初回再取得・baseline差替え |
 | final_pending | 同final logical readの既存retry、または固定比較 | 新final生成、比較二重開始、別slot／owner混入 |
+| comparison_pending | 比較draft（差分field名のみ、両record破棄済み）の最終guard後の一度限りの確定 | 二重確定・record再参照・未確定のままstable／changedとして利用 |
 | stable_observation | 診断参照だけ | 再比較・snapshot持出し・未承認の正式発行 |
 | changed | 固定診断を保持しrun停止（閉鎖経路のfail-closed選択。§7） | baseline更新・最終値への置換・自動再読による救済 |
 | not_verified／revoked | 固定理由を保持し参照破棄 | 再準備・復活・retry権限の再発行 |
@@ -168,7 +169,7 @@ factoryのissueSessionは対象ID・最大60000msの**合成**deadlineからpriv
 
 Owner・Use・Draft・Snapshot・Comparisonはissuer内の非export型。外へ出すのは中身のない凍結handleだけで、同issuerのprivate WeakMapによる参照検査を必須とする。initial／finalは異なるrequest・attempt・slot identityを持ち、同owner／Contextへ結合する。snapshotのrecord値を返すAPIはない。
 
-beginInitial→issueDraft→acceptInitial→beginFinal→issueDraft→prepareComparison→commitComparisonの順序を固定する。draft発行・consume・比較handleの確定は一度だけ。外国handleは受信ownerを拒否し外国ownerを変えず、自ownerの消費済みhandleはinvalid_stateとする。
+beginInitial→issueDraft→acceptInitial→beginFinal→issueDraft→prepareComparison→commitComparisonの順序を固定する。prepareComparisonの後はcomparison_pending（§6）で、commitComparisonだけがstable_observation／changedへ確定する。draft発行・consume・比較handleの確定は一度だけ。外国handleは受信ownerを拒否し外国ownerを変えず、自ownerの消費済みhandleはinvalid_stateとする。
 
 ### 11.2 guard・比較・非露出
 
