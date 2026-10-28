@@ -1,7 +1,7 @@
 # AU-BR-006 実session／ReleasePermit・単一transport・body受領境界の詳細設計
 
-Version: br006-session-transport-body-binding-draft-0.4 / Date: 2026-10-28。
-Status: **§14の閉鎖gate・§15の同ReadState会計に、§16の同attempt bytes候補・typed cleanup・一度限りconsumeをfake限定で接続。正式body receipt／証拠発行gateは閉鎖。実session・実transport接続・本番cap投入の承認ではない**。
+Version: br006-session-transport-body-binding-draft-0.5 / Date: 2026-10-28。
+Status: **§14〜§17の閉鎖gate・同ReadState・fake試行監督を合成接続。正式body receipt／証拠発行gateは閉鎖。実session・実transport接続・本番cap投入の承認ではない**。
 
 親：[共通run owner](BEST_PRACTICE_ABORT_SCOPE_RUN_OWNER_BINDING_DESIGN.md)、[TC-01〜TC-04と現行境界](BEST_PRACTICE_ABORT_SCOPE_RUN_TRANSPORT_CLEANUP_DESIGN.md)、[用途別受領物](BEST_PRACTICE_ABORT_SCOPE_TRANSPORT_RECEIPTS_DESIGN.md)。
 後続：[選択window／payload受領物](BEST_PRACTICE_ABORT_SCOPE_REAL_SESSION_RECEIPTS_DESIGN.md)、[worker接続契約](BEST_PRACTICE_ABORT_SCOPE_CONNECTION_CONTRACT_DESIGN.md)。
@@ -313,4 +313,50 @@ decode／schema失敗は固定`invalid_response`で停止し、raw Errorや本�
 
 ### 16.4 残る閉鎖条件
 
-`refuseBody`は引き続きdeny-only。候補／終端／summaryは正式receipt、AuthReadyGeneration、ReleasePermit、window／payload receipt、worker job、SourceRunEvidenceではなく、実台帳へ登録する口もない。実stream API、試行10秒・cleanup予約・empty-read監督、実認証／source binding、公開JSONへの写像、本番cap・全体work／保持上界の承認は未接続。全体受付無効、VM／監視／telemetry保留を維持する。
+`refuseBody`は引き続きdeny-only。候補／終端／summaryは正式receipt、AuthReadyGeneration、ReleasePermit、window／payload receipt、worker job、SourceRunEvidenceではなく、実台帳へ登録する口もない。draft-0.4では試行監督が未接続だったが、§17でfake依存の監督を追加した。実stream API、実認証／source binding、公開JSONへの写像、本番cap・全体work／保持上界の承認は引き続き未接続。全体受付無効、VM／監視／telemetry保留を維持する。
+
+## 17. draft-0.5：fake試行期限・中断・終了確認
+
+[専用fake supervisor](../src/review/abort-scope-evidence-closed-attempt-supervisor.ts)がprivateに閉鎖gate／同ReadState／body laneを一度生成する。[追加42件](../tests/review/closed-attempt-supervisor.test.ts)、[検証記録](E2E_BEST_PRACTICE_CLOSED_ATTEMPT_SUPERVISOR_2026-10-28.md)を参照。既存session・transportを登録する口は設けず、attempt／candidate／生本文のhandleも返さない。返せるのは既存の固定summary、固定失敗code、readonly診断、同台帳が生成済みのpurpose／slotだけ。
+
+### 17.1 単一policyとdispatch時の固定window
+
+ReadStateの明示`attempt_policy`はbytesモード限定・既定無効。専用supervisorは最初からbytesモードとpolicyを設定して一度だけclaimし、既存の長さ／未監督bytes試験を変更しない。supervisorの設定入口はtop-level `policy`だけとし、`session.accounting.attempt_policy`との二重設定は拒否する。低減値を別defaultで上書きしない。
+
+| 項目 | fake policy／導出 |
+|---|---|
+| timeout_ms | 1〜10000、既定10000 |
+| cleanup_reserve_ms | 1〜250、既定250 |
+| max_empty_reads | 1〜16、既定16。各attemptの総empty数で非emptyではresetしない |
+| D_attempt | 同dispatch checkpointのnow＋timeoutと元のphase期限の小さい方。phase期限は既に元hard以内 |
+| reserve | `min(cleanup_reserve_ms, (D_attempt - dispatch_now)/4)` |
+| D_io | `D_attempt - reserve` |
+| D_cleanup | 最初の取消／停止またはEOF観測時に`min(D_attempt, now + reserve)`で固定。継続taskが再開した時刻を起点にしない |
+
+windowは同ReadStateの同attemptへprivateに格納し、候補にも同deadlineを結合する。guardは操作開始時のdeadlineを保持し、body参照を破棄した後の最終checkpointでも等号以降の成功を拒否する。全体のt0／60秒、通常50秒・整合55秒（低減時は同reserve式）を再起動しない。
+
+### 17.2 fake依存とone-shot所有
+
+依存は`clock.now / schedule(absoluteDeadline, wake)`と、fake `read / cancel / closed promise / abort / release`だけ。Web Streams・Response・fetch・実timer・OS I/Oを呼ばない。各methodとclosed通知は一度だけcaptureし、同resourceに固定する。bytes種別は最新body laneと同じnative内部slotで確認し、prototype／realmで誤分類しない。
+
+closed promiseの両settlementをreadより先に観測し、同時にpending readは最大1。D_io、全体取消、global失敗では先に採用権限を失効し、abort／cancelを一度だけ要求する。read完了後も同clock／liveを検査し、失効後のbytesは課金・保存・decodeへ渡さない。C/G/P/Eは返金せず、retryでも同台帳・同時計を維持する。
+
+cleanupはpending readの決着、cancel完了、closed通知、release結果を別に保持する。releaseはpending readなし・closed決着後に一度だけ行い、callback後の時計でも再検査する。cancel要求やPromise消去だけでconfirmedにしない。期限等号、pending／rejected、abort／release失敗、scheduler／clock不成立は固定理由でunconfirmed。
+
+待機はversion通知と単一のscheduler登録を合流し、起床／終了時にdisposerを一度呼ぶ。schedulerのthrow・早すぎる発火・disposer失敗は停止する。遅れたcallbackは採用や新attemptを開始できない。disposer失敗時に物理的timer消失を保証したとは扱わない。
+
+### 17.3 retry・診断・終了
+
+I/O timeoutはまず局所`attempt_deadline_exceeded`として採用を止める。cleanup confirmed/cancelledかつ元の試行期限内なら、既存body laneへ`outcome=retryable`を渡し、同purposeの2回目だけを許す。上限2回を使い切っても新purposeで回避しない。table下位枠超過はcleanup確認後に取得不能として既存のfinal skipへ進める。
+
+cleanup未確認はglobal `cleanup_unconfirmed`、外部取消・whole/phase期限・受信累計超過等は既存のglobal失敗で止める。最初の局所失敗を`attempt_failure`、global理由を共通ownerのprimaryへ別々に保持する。cleanupが未確認でも以前の局所timeoutを消さず、global理由を局所へ格下げしない。EOF後にrunを取り消しても、reader.cancelを呼んでいなければcleanup kindはeofのままで、runの取消と終了事実を混同しない。
+
+supervisorのcleanupは本fake依存の最終観測。停止時のbody laneは保守的なowner_stopped診断を保持するため、supervisorの後続確認をbody候補の復活に使わない。late settlementでbest-effort releaseできても、既に返したunconfirmed終端をconfirmedへ修復せず、C/G・summaryを増やさない。停止済みrunの再呼び出しでも終端診断を消去しない。
+
+closeは受付を閉じて先に取消し、active cleanupは同予約内で待つ。確認不能なら未確認のまま返し、pending Promiseの強制決着を保証しない。後の実host／非協力的I/O終了policyは未接続。
+
+### 17.4 維持する閉鎖条件
+
+§17はfake scheduler／Promise依存上の合成検証。native Web Streamsのread/cancel/reader.closed/releaseLock、実HTTP status、OAuth／fixed source／ReleasePermit、選択payload／worker jobの正式binding、公開JSONへの写像は未接続。同期JSON.parse／hashの途中を強制中断したり、event loopやOSが停止しても実時間60秒で必ず終了すると証明したものではない。
+
+上限値は合成profileのまま本番capへ昇格させない。全体work／allocation／保持上界・低減Qの承認、正式発行、全体受付は有効化しない。新moduleも`!dist/review/abort-scope-evidence*`で梱包除外。VM／監視／telemetry保留、実transport・実機操作・設定変更なしを維持する。

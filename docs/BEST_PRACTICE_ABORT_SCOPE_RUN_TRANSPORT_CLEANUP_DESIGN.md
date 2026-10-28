@@ -6,6 +6,8 @@
 
 追加：[draft-0.4 §16の同attempt bytes候補・typed cleanup・consume](BEST_PRACTICE_ABORT_SCOPE_SESSION_TRANSPORT_BODY_BINDING_DESIGN.md#16-draft-04同attemptのprivate-bytes候補とtyped-cleanup)。同bytesからの課金・固定解析をfakeで検証。cleanup primitiveの実API観測、TC-04 transport採用、正式body発行は未接続。
 
+追加：[draft-0.5 §17のfake試行監督](BEST_PRACTICE_ABORT_SCOPE_SESSION_TRANSPORT_BODY_BINDING_DESIGN.md#17-draft-05fake試行期限中断終了確認)。fake Promise／schedulerで試行10秒・cleanup予約・empty-read総数と終了確認を検証。実Web Streams adapterへの接続と正式発行は未実施。
+
 Version: br006-run-transport-cleanup-draft-0.5 / Date: 2026-10-28。
 Status: **TC-01〜TC-03に加え、TC-04の固定source bootstrap・release・用途descriptorを同fake transportへ接続。実sessionの会計更新／実transportは未接続、正式証拠発行・本番cap承認は未実施／閉鎖**。
 

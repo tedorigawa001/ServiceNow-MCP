@@ -8,17 +8,19 @@ export type ClosedReadAttempt=Handle<'closed_read_attempt'>;
 export type ClosedFinalSlot=Handle<'closed_final_slot'>;
 export type ClosedAccountingCode='invalid_input'|'invalid_state'|'evidence_binding_mismatch'|'request_budget_exceeded'
   |'receive_budget_exceeded'|'payload_budget_exceeded'|'payload_limit'|'scope_evidence_limit'
-  |'phase_deadline_exceeded'|'upstream_unavailable'|'cleanup_unconfirmed'|'invalid_response'|'body_limit';
+  |'phase_deadline_exceeded'|'upstream_unavailable'|'cleanup_unconfirmed'|'invalid_response'|'body_limit'|'attempt_deadline_exceeded';
 export type ClosedStateCode=ClosedAccountingCode|'invalid_observation_time'|'deadline_exceeded'|'cancelled'|'closed'|'internal_review_error'|'issuance_disabled';
 export type ClosedAccountingResult<T>=Readonly<{ok:true;value:T}|{ok:false;code:ClosedStateCode}>;
+export const closedAttemptPolicySchema=z.strictObject({timeout_ms:z.number().int().min(1).max(10000).default(10000),cleanup_reserve_ms:z.number().int().min(1).max(250).default(250),max_empty_reads:z.number().int().min(1).max(16).default(16)});
 export const closedAccountingSchema=z.strictObject({
   body_mode:z.enum(['length','bytes']).default('length'),
+  attempt_policy:closedAttemptPolicySchema.optional(),
   requests:z.number().int().min(4).max(210).default(210),
   total_bytes:z.number().int().min(1).max(16*1024*1024).default(16*1024*1024),
   response_bytes:z.number().int().min(1).max(4*1024*1024).default(4*1024*1024),
   payload_bytes:z.number().int().min(1).max(2*1024*1024).default(2*1024*1024),
   total_payload_bytes:z.number().int().min(1).max(8*1024*1024).default(8*1024*1024),
-});
+}).refine(x=>!x.attempt_policy||x.body_mode==='bytes');
 type Config=z.infer<typeof closedAccountingSchema>;
 type Kind='oauth'|'parent_initial'|'release_rows'|'metadata_initial'|'payload'|'parent_final'|'metadata_final'|'table_initial'|'table_final';
 const purposeSchema=z.strictObject({kind:z.enum(['oauth','parent_initial','release_rows','metadata_initial','payload'])});
@@ -36,7 +38,7 @@ export function createClosedReadState(config:Config,hooks:{
   normalDeadline:number;finalDeadline:number;
 }){
   type Purpose={kind:Kind;attempts:number;state:'ready'|'inflight'|'done';slot?:Slot;table?:Slot};
-  type Attempt={purpose:Purpose;bytes:number;sequence:number;settled:boolean;limited?:boolean};
+  type Attempt={purpose:Purpose;bytes:number;sequence:number;settled:boolean;empty:number;limited?:boolean;window?:Readonly<{deadline:number;io_deadline:number;max_empty_reads:number}>};
   type Slot={handle:ClosedFinalSlot;kind:'parent'|'metadata'|'table';remaining:number;state:'idle'|'done'|'skipped'|'invalidated';initial?:'success'|'unavailable';skipReason?:'not_collected'|'initial_unavailable'|'evidence_disabled'};
   const purposes=new WeakMap<ClosedReadPurpose,Purpose>(),attempts=new WeakMap<ClosedReadAttempt,Attempt>();
   const slots:Slot[]=(['parent','metadata'] as const).map(kind=>({handle:opaque<ClosedFinalSlot>(),kind,remaining:2,state:'idle'}));
@@ -49,12 +51,16 @@ export function createClosedReadState(config:Config,hooks:{
   function checkpoint():ClosedAccountingResult<number>{
     const cp=hooks.checkpoint();if(!cp.ok)return cp;
     if(phase==='final'&&cp.value>=hooks.finalDeadline||active&&phase==='normal'&&cp.value>=hooks.normalDeadline)return hooks.stop('phase_deadline_exceeded');
+    const deadline=active?attempts.get(active)?.window?.deadline:bodies?.deadline();
+    if(deadline!==undefined&&cp.value>=deadline)return hooks.stop('attempt_deadline_exceeded');
     if(phase==='normal'&&(pendingPayload||bodies?.pending())&&cp.value>=hooks.normalDeadline)return hooks.refuse(closeOrdinary().code);
     return cp;
   }
   function guard<T>(body:()=>ClosedAccountingResult<T>):ClosedAccountingResult<T>{return hooks.guard(()=>{
+    const operationDeadline=active?attempts.get(active)?.window?.deadline:bodies?.deadline();
     const cp=checkpoint();if(!cp.ok)return cp;
     const result=body(),after=checkpoint();if(!after.ok)return after;
+    if(operationDeadline!==undefined&&after.value>=operationDeadline)return hooks.stop('attempt_deadline_exceeded');
     if(phase==='normal'&&after.value>=hooks.normalDeadline)return hooks.refuse(closeOrdinary().code);
     return result.ok?result:hooks.refuse(result.code);
   });}
@@ -72,6 +78,7 @@ export function createClosedReadState(config:Config,hooks:{
     if(!Number.isSafeInteger(sequence)||sequence!==a.sequence||!Number.isSafeInteger(length)||length<0||length>0xffffffff)return hooks.stop('invalid_input');
     const cp=checkpoint();if(!cp.ok)return cp;
     a.sequence++;a.bytes+=length;received+=length;if(a.purpose.table)evidence+=length;
+    if(length===0&&a.window&&++a.empty>a.window.max_empty_reads)return hooks.stop('invalid_response');
     if(a.bytes>config.response_bytes||received>config.total_bytes)return hooks.stop('receive_budget_exceeded');
     if(a.purpose.table&&(a.bytes>16*1024||evidence>256*1024)){a.limited=true;evidenceClosed=true;return Object.freeze({ok:false,code:'scope_evidence_limit'});}
     return ok(true);
@@ -102,6 +109,10 @@ export function createClosedReadState(config:Config,hooks:{
   const port=Object.freeze({
     body:bodies?.port??null,
     parentFinal:slots[0]!.handle,metadataFinal:slots[1]!.handle,
+    attemptWindow(handle:ClosedReadAttempt){return guard(()=>{
+      const a=attempts.get(handle);if(!a||active!==handle)return hooks.stop('evidence_binding_mismatch');
+      return a.window?ok(a.window):hooks.stop('invalid_state');
+    });},
     admitTable(raw:unknown):ClosedAccountingResult<Readonly<{initial:ClosedReadPurpose;final:ClosedFinalSlot}>>{return guard(()=>{
       if(typeof raw!=='string'||!/^[a-z][a-z0-9_]{0,79}$/.test(raw)||raw==='global')return hooks.stop('invalid_input');
       if(phase!=='normal'||current||pendingPayload||bodies?.pending()||tableNames.has(raw))return hooks.stop('invalid_state');
@@ -133,9 +144,13 @@ export function createClosedReadState(config:Config,hooks:{
       }
       if(p.slot){if(phase!=='final'||p.slot!==slots[cursor]||p.slot.remaining<1)return hooks.stop('invalid_state');p.slot.remaining--;}
       else if(phase!=='normal')return hooks.stop('invalid_state');
-      const a=opaque<ClosedReadAttempt>();attempts.set(a,{purpose:p,bytes:0,sequence:0,settled:false});
+      let window:Attempt['window'];if(config.attempt_policy){
+        const deadline=Math.min(cp.value+config.attempt_policy.timeout_ms,p.slot?hooks.finalDeadline:hooks.normalDeadline);
+        window=Object.freeze({deadline,io_deadline:deadline-Math.min(config.attempt_policy.cleanup_reserve_ms,(deadline-cp.value)/4),max_empty_reads:config.attempt_policy.max_empty_reads});
+      }
+      const a=opaque<ClosedReadAttempt>();attempts.set(a,{purpose:p,bytes:0,sequence:0,settled:false,empty:0,window});
       requests++;p.attempts++;p.state='inflight';active=a;
-      bodies?.start(a,p.kind);
+      bodies?.start(a,p.kind,window?.deadline);
       try{hooks.dispatch();}catch{return hooks.stop('upstream_unavailable');}return ok(a);
     });},
     chunk(handle:ClosedReadAttempt,sequence:number,length:number):ClosedAccountingResult<true>{return guard(()=>{

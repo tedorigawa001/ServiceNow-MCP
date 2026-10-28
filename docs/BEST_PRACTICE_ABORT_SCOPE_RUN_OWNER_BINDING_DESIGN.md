@@ -6,6 +6,8 @@
 
 追加：[draft-0.4 §16の同attempt bytes候補・typed cleanup・consume](BEST_PRACTICE_ABORT_SCOPE_SESSION_TRANSPORT_BODY_BINDING_DESIGN.md#16-draft-04同attemptのprivate-bytes候補とtyped-cleanup)。共通fake ownerの同期失効へ接続。正式receiptや実source／workerの権限へは昇格しない。
 
+追加：[draft-0.5 §17のfake試行監督](BEST_PRACTICE_ABORT_SCOPE_SESSION_TRANSPORT_BODY_BINDING_DESIGN.md#17-draft-05fake試行期限中断終了確認)。同ReadStateのwindowと停止後の観測専用clockを結合。実session登録・正式issuer・実transportは閉じたまま。
+
 Version: br006-run-owner-binding-draft-0.4 / Date: 2026-10-27。
 Status: **実session private lifecycleに同sourceのReleasePermit／不変release snapshotをprepared-onlyで限定接続し、fake I/Oで検証。正式証拠receipt／worker・会計操作／実transportは未接続、正式証拠発行は閉鎖。Unknown・全体受付無効、VM／監視／telemetry保留を維持**。
 

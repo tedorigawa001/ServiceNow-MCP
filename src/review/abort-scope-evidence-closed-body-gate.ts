@@ -9,7 +9,7 @@ export type FakeClosedTransport=Handle<'closed_transport_identity'>;
 type Claim='unclaimed'|'consuming'|'claimed'|'failed';
 type State='empty'|'constructing'|'created'|'run_bound'|'transport_bound'|'stopped'|'closed';
 type Stage='input'|'construct'|'run_claim'|'transport_claim'|'binding'|'gate'|'owner'|'accounting';
-const codeSchema=z.enum(['invalid_input','invalid_state','evidence_binding_mismatch','invalid_observation_time','deadline_exceeded','cancelled','closed','internal_review_error','issuance_disabled','request_budget_exceeded','receive_budget_exceeded','payload_budget_exceeded','payload_limit','scope_evidence_limit','phase_deadline_exceeded','upstream_unavailable','cleanup_unconfirmed','invalid_response','body_limit']);
+const codeSchema=z.enum(['invalid_input','invalid_state','evidence_binding_mismatch','invalid_observation_time','deadline_exceeded','cancelled','closed','internal_review_error','issuance_disabled','request_budget_exceeded','receive_budget_exceeded','payload_budget_exceeded','payload_limit','scope_evidence_limit','phase_deadline_exceeded','upstream_unavailable','cleanup_unconfirmed','invalid_response','body_limit','attempt_deadline_exceeded']);
 type Code=z.infer<typeof codeSchema>;
 type Diagnostic=Readonly<{stage:Stage;code:Code}>;
 type Result<T>=Readonly<{ok:true;value:T}|{ok:false;code:Code}>;
@@ -27,7 +27,7 @@ export function createFakeClosedBodyGate(clock:{now():number},fakeIo:{dispatch()
   type Run={session:Session;identities:Identities;continueTransport:()=>FakeClosedTransport};
   type Transport={run:Run;session:Session;identities:Identities};
   const sessions=new WeakMap<FakeClosedSession,Session>(),runs=new WeakMap<FakeClosedRun,Run>(),transports=new WeakMap<FakeClosedTransport,Transport>();
-  let context:Session|undefined,state:State='empty',primary:Diagnostic|null=null,refusal:Diagnostic|null=null,busy=false;
+  let context:Session|undefined,state:State='empty',primary:Diagnostic|null=null,refusal:Diagnostic|null=null,busy=false,observing=false;
   const claims:{constructor:Claim;run:Claim;transport:Claim;accounting:Claim}={constructor:'unclaimed',run:'unclaimed',transport:'unclaimed',accounting:'unclaimed'};
   const no=(code:Code):Result<never>=>Object.freeze({ok:false,code:primary?.code??code});
   const closed=()=>state==='closed';
@@ -74,6 +74,17 @@ export function createFakeClosedBodyGate(clock:{now():number},fakeIo:{dispatch()
     return claims.run==='claimed'&&claims.transport==='claimed'?ok(true):stop('binding','invalid_state');
   }
   return Object.freeze({
+    /** Read-only cleanup clock after stop. Never renews a deadline or grants accounting/body authority. */
+    observeCleanupClock(){
+      let n:number|null=null;
+      if(context&&!closed()){
+        if(busy||observing)stop('accounting','invalid_state');
+        else{observing=true;try{const value=clock.now();if(!Number.isFinite(value)||value<context.last)stop('accounting','invalid_observation_time');
+          else{context.last=value;n=value;if(value>=context.hard)stop('accounting','deadline_exceeded');}}
+          catch{stop('accounting','internal_review_error');}finally{observing=false;}}
+      }
+      return Object.freeze({now:n,hard_deadline:context?.hard??null,primary:primary?.code??null,closed:closed()});
+    },
     construct(raw:unknown={}):Result<FakeClosedSession>{
       if(claims.constructor==='claimed')return reject('construct','invalid_state');
       if(claims.constructor==='consuming')return stop('construct','invalid_state');
