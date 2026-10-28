@@ -112,7 +112,7 @@ TC-04の16KiB（OAuth／親／release）・1MiB（metadata）captureはfake prof
 
 ### 7.1 予約とretry
 
-typed laneの受付時に親／metadata final各2、R=4を同台帳で確保し、`C+R<=Q`を維持する。既存legacy固定4検査はlegacyだけに残し、typed側へ重ねない。Q<4は受付不能、Q=4等で通常余裕が無ければbootstrapもdispatch前に拒否する。
+typed laneの受付時に親／metadata final各2、R=4を同台帳で確保し、`C+R<=Q`を維持する。既存legacy固定4検査はlegacyだけに残し、typed側へ重ねない。Q<4は受付不能、Q=4等で通常余裕が無ければbootstrapもdispatch前に拒否する。R=4では`C+1+R<=Q`によりQ<=4は通常dispatchが1回もできず、固定workflowの完遂には通常3（exchangeは4）＋R=4でQ>=7（8）が要る。受付はするが何も実行できないQ帯を残すか、受付下限を固定workflowの必要量へ揃えるかは承認待ち（§12）。
 
 - 通常／OAuth／初回は`C+1+R<=Q`を満たす時だけdispatch。
 - 将来の新tableは`C+R+2(initial allowance)+2(final reservation)<=Q`で受付。初回余裕2はCの前払いではない。T／slotを同じcommitで確保する。
@@ -125,7 +125,7 @@ typed laneの受付時に親／metadata final各2、R=4を同台帳で確保し�
 
 t0とD_hardはsessionの単調時計で固定。wall-clock ISOは証跡表示用で、残時間の起点を作らない。既存のreserve=`min(10,000ms, deadline_ms/6)`を使い、通常cutoffはD_hard−reserve、整合cutoffはD_hard−reserve/2。60秒時50／55／60秒、低減時も延長しない。
 
-試行期限は`D_attempt=min(now+requestTimeout, D_phase, D_hard)`。最大10秒を維持し、retry待ち・decode／source検査・発行／consumeまで同期限で確認する。cleanup内側予約250ms／残量1/4、empty read合計16回は未承認候補のまま。本番policyに採用しない限り正式gateの成立条件にしない。
+試行期限は`D_attempt=min(now+requestTimeout, D_phase, D_hard)`。最大10秒を維持し、retry待ち・decode／source検査・発行／consumeまで同期限で確認する。cleanup内側予約250ms／残量1/4、empty read 1試行あたり合計16回は未承認候補のまま。本番policyに採用しない限り正式gateの成立条件にしない。
 
 通常cutoffは新payload／prepare／通常用途を失効させ、finalへ一方向に進める範囲を残す。全体stopとは別に扱う。整合cutoff後はfinal／compareを未確認とし、残りは集約・終了確認だけに使う。phase controller交換で期限を延長せず、旧世代のlate応答を新世代へ移さない。
 
@@ -206,7 +206,7 @@ oracleは製品の課金関数を再利用せず、dispatch／採用chunk／payl
 
 次の実装は別承認後、(a) 閉鎖gateの内部型・private生成継続／claim・診断、(b) 同ReadStateの会計・用途／予約接続、(c) fake I/Oでのbody候補・cleanup・一度限りのconsume、の順に小さく分ける。正式receipt発行を先に実装して後からbindingを埋めない。選択window／payload receipt／実worker jobと上位正式結果はさらに後工程。
 
-承認待ち：private配置／lane生成方式、用途capture／E/R・cleanup／empty-read policy、全体work・保持上界、未確認resourceの再受付／終了policy、公開結果への診断写像。正式gateが閉じている間はdeny-onlyを維持し、文書承認やテスト成功だけで実行権限が発生する仕組みにしない。
+承認待ち：private配置／lane生成方式、typed laneの受付下限Q（§7.1）、用途capture／E/R・cleanup／empty-read policy、全体work・保持上界、未確認resourceの再受付／終了policy、公開結果への診断写像。正式gateが閉じている間はdeny-onlyを維持し、文書承認やテスト成功だけで実行権限が発生する仕組みにしない。
 
 本書作成はローカル文書編集だけ。実装・ソース／テスト変更・build／合成試験・実transport・実機操作・token発行・設定変更・本番cap投入を行わず、正式発行口閉鎖を維持する。
 
