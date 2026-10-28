@@ -90,3 +90,17 @@ it('provides opaque identity-only handles and no continuation, real-session regi
   gate.stop(Error('PRIVATE_TOKEN_OR_BODY'));expect(gate.diagnostic()).toMatchObject({budget_authority:'identity_only',auth_ready:false,source_binding:'not_connected',primary:{code:'internal_review_error'}});
   expect(JSON.stringify(gate.diagnostic())).not.toContain('PRIVATE');
 });
+it.each(['session','run','transport'] as const)('reports the own hard deadline before a mixed %s handle once time has expired',kind=>{
+  let now=0;const a=createFakeClosedBodyGate({now:()=>now}),b=createFakeClosedBodyGate({now:()=>now});
+  const s=get(a.construct({})),r=get(a.claimRun(s)),t=get(a.claimTransport(s,r)),sb=get(b.construct({})),rb=get(b.claimRun(sb)),tb=get(b.claimTransport(sb,rb));now=60000;
+  const result=a.refuseBody(kind==='session'?sb:s,kind==='run'?rb:r,kind==='transport'?tb:t);
+  // A foreign session is only refused (no own owner is known); a mixed run/transport on the own owner reports the deadline first.
+  if(kind==='session'){expect(result).toEqual({ok:false,code:'evidence_binding_mismatch'});expect(a.diagnostic().primary).toBeNull();}
+  else{expect(result).toEqual({ok:false,code:'deadline_exceeded'});expect(a.diagnostic().primary).toEqual({stage:'binding',code:'deadline_exceeded'});}
+});
+it('reports the own hard deadline before a mixed run on the transport claim',()=>{
+  let now=0;const a=createFakeClosedBodyGate({now:()=>now}),b=createFakeClosedBodyGate({now:()=>now});
+  const s=get(a.construct({})),rb=get(b.claimRun(get(b.construct({}))));get(a.claimRun(s));now=60000;
+  expect(a.claimTransport(s,rb)).toEqual({ok:false,code:'deadline_exceeded'});expect(a.diagnostic()).toMatchObject({primary:{stage:'transport_claim',code:'deadline_exceeded'},claims:{transport:'unclaimed'}});
+  now=1;const c=createFakeClosedBodyGate({now:()=>now}),sc=get(c.construct({}));get(c.claimRun(sc));expect(c.claimTransport(sc,rb)).toEqual({ok:false,code:'evidence_binding_mismatch'});
+});

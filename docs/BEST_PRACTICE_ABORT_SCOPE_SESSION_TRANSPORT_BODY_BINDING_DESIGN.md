@@ -223,7 +223,7 @@ draft-0.1作成時はローカル文書編集だけを行った。後続のfake�
 - 各claimは`unclaimed→consuming→claimed`、途中停止なら`failed`。claimをclock callbackより先に消費し、再入／取消後にhandleを公開しない。使用済みclaimへの通常の重複要求は新要求だけ拒否し、既存の正常bindingを壊さない。既知ownerに別run／transportを混ぜる矛盾は受信ownerを停止し、外国ownerを変更しない。
 - `checkBinding`はreadonlyなidentity検査だけ。`refuseBody`は常に拒否し、正常bindingでも`issuance_disabled`。会計更新port・用途permit・body candidate／receipt・window／payload／worker jobは存在しない。診断の`receipts_issued=0`はこの閉鎖modelの定数であり実会計の集計ではない。
 - 最初のterminal primaryと、最初の非terminal要求拒否を別slotで保持する。raw Errorは固定codeへ正規化し、秘密・本文・identityを返さない。停止後のclaimは由来として残るが権限は失効し、close後の遅い要求も診断を変更しない。
-- fake clockの単調性・非有限・例外・hard期限等号をcheckpointで拒否する。timer／watchdogはないため、無操作中の自動終了や実OS期限保証を意味しない。fake期限は最大60秒、低減のみ許可する。
+- fake clockの単調性・非有限・例外・hard期限等号をcheckpointで拒否する。timer／watchdogはないため、無操作中の自動終了や実OS期限保証を意味しない。fake期限は最大60秒、低減のみ許可する。自sessionと確認できた後は、run／transportの混入照合より前に同checkpointを行い、期限後の混入もdeadline_exceededをprimaryにする（TC-01の`active()`・本番`check()`と同順）。外国sessionは自ownerが無いので拒否だけで停止しない。
 - `cleanup.http/worker=not_started`はI/O未実施のmodel表示であり物理解放の証明ではない。診断は固定長slot・freeze済みのviewで、会計更新や再開の権限を持たない。
 
 新moduleは既存の`!dist/review/abort-scope-evidence*`で梱包対象外。実ReadState、C/G/S/P/E/R、承認cap、Q下限、ReleasePermit、正式body受領境界への接続は次工程。Unknown・全体受付無効、VM／監視／telemetry保留を維持する。

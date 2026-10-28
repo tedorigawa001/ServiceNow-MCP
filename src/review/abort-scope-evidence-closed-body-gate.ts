@@ -57,9 +57,10 @@ export function createFakeClosedBodyGate(clock:{now():number}){
   }
   function binding(session:FakeClosedSession,run:FakeClosedRun,transport:FakeClosedTransport):Result<true>{
     const s=sessions.get(session);if(!s)return reject('binding','evidence_binding_mismatch');
+    // Same order as TC-01 active()/bounded-read check(): an expired own owner reports the deadline before any mixed handle.
+    const cp=now('binding');if(!cp.ok)return cp;
     const r=runs.get(run),t=transports.get(transport);
     if(s!==context||!r||!t||r.session!==s||t.run!==r||t.session!==s||!same(s.identities,r.identities)||!same(s.identities,t.identities))return stop('binding','evidence_binding_mismatch');
-    const cp=now('binding');if(!cp.ok)return cp;
     return claims.run==='claimed'&&claims.transport==='claimed'?ok(true):stop('binding','invalid_state');
   }
   return Object.freeze({
@@ -87,7 +88,7 @@ export function createFakeClosedBodyGate(clock:{now():number}){
     },
     claimTransport(session:FakeClosedSession,run:FakeClosedRun):Result<FakeClosedTransport>{
       const s=sessions.get(session);if(!s)return reject('transport_claim','evidence_binding_mismatch');
-      const r=runs.get(run);if(!r||r.session!==s)return stop('transport_claim','evidence_binding_mismatch');
+      const r=runs.get(run);if(!r||r.session!==s){const cp=use('transport_claim',()=>now('transport_claim'));return cp.ok?stop('transport_claim','evidence_binding_mismatch'):cp;}
       if(claims.transport==='claimed')return reject('transport_claim','invalid_state');
       if(claims.transport==='consuming')return stop('transport_claim','invalid_state');
       return use('transport_claim',()=>{

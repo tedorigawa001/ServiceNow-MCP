@@ -35,3 +35,10 @@ constructor→run→transportのprivate継続はfake realm内だけで生成す�
 このmodelのsnapshot／auth／budget／generationはfake identityで、本人確認や実release証拠を示さない。期限確認は同期checkpointだけで、timerによる自動停止や実OS期限保証はない。cleanupのnot_startedはI/O未実施の表示で、物理解放の証明ではない。実session constructorへの接続、単一会計・用途／予約・body候補／cleanupの消費は次工程。
 
 cap／Q下限・全体work上界の承認を行っていない。正式発行口閉鎖、Unknown・全体受付無効、VM／監視／telemetry保留を維持。実transport・実機操作・token発行・設定変更・本番cap投入は行っていない。
+
+## 5. レビュー修正（2026-10-28）
+
+`binding()`と`claimTransport`がrun／transportの混入照合を時刻checkpointより先に行い、hard期限後の混入でprimaryが`evidence_binding_mismatch`になっていた（テスト名「before binding checks」と不一致）。自sessionを確認した後に同checkpointを先に行い、期限後はdeadline_exceededをprimaryとするよう修正した。期限内の混入は従来どおりevidence_binding_mismatchで受信ownerを停止し、外国sessionは拒否だけで停止しない。
+
+- 追加4件（計40件）。旧実装では期限後のrun／transport混入（refuseBody）と`claimTransport`の3件が失敗。
+- `npm run build`、ESLint、`vitest run --maxWorkers=3`で169 files／5,052 tests成功。
