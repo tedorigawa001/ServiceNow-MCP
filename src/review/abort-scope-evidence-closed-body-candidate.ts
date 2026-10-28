@@ -1,7 +1,8 @@
 /** Fake byte lane only. Candidates/terminals are NOT production receipts or source evidence. */
 import {createHash} from 'node:crypto';
 import {z} from 'zod';
-import type {ClosedAccountingCode,ClosedAccountingResult,ClosedReadAttempt} from './abort-scope-evidence-closed-read-state.js';
+import {createSyntheticParentStabilityIssuer,type SyntheticParentDraft} from './abort-scope-evidence-parent-stability.js';
+import type {ClosedAccountingCode,ClosedStateCode,ClosedAccountingResult,ClosedReadAttempt} from './abort-scope-evidence-closed-read-state.js';
 declare const brand:unique symbol;
 export type ClosedBodyCandidate={readonly [brand]:'closed_body_candidate'};
 export type ClosedBodyTerminal={readonly [brand]:'closed_body_terminal'};
@@ -20,7 +21,7 @@ const arrayBufferLength=Object.getOwnPropertyDescriptor(ArrayBuffer.prototype,'b
 const typedName=Object.getOwnPropertyDescriptor(typed,Symbol.toStringTag)!.get!;
 const opaque=<T>()=>Object.freeze(Object.create(null)) as T;
 const ok=<T>(value:T):ClosedAccountingResult<T>=>Object.freeze({ok:true,value});
-export function createClosedBodyLane(hooks:{
+type BodyHooks={
   guard<T>(work:()=>ClosedAccountingResult<T>):ClosedAccountingResult<T>;
   checkpoint():ClosedAccountingResult<number>;
   stop(code:ClosedAccountingCode):ClosedAccountingResult<never>;
@@ -29,7 +30,18 @@ export function createClosedBodyLane(hooks:{
   payload(a:ClosedReadAttempt,length:number):ClosedAccountingResult<true>;
   discardPayload(a:ClosedReadAttempt):ClosedAccountingResult<true>;
   responseLimit:number;
-}){
+};
+type ParentProjection={issuer:ReturnType<typeof createSyntheticParentStabilityIssuer>;owner:Parameters<ReturnType<typeof createSyntheticParentStabilityIssuer>['beginInitial']>[0];session:Parameters<ReturnType<typeof createSyntheticParentStabilityIssuer>['close']>[0];target:string;stop(code:ClosedStateCode|'changed_during_review'):ClosedAccountingResult<never>};
+export function createClosedBodyLane(hooks:BodyHooks){return createBodyLane(hooks);}
+/** Fake-only fixed continuation: no caller projector, record getter, real session or formal authority. */
+export function createSyntheticParentProjectionLane(hooks:BodyHooks&{stopProjection(code:ClosedStateCode):ClosedAccountingResult<never>},target:string){
+  let failure:ClosedStateCode|undefined;
+  const issuer=createSyntheticParentStabilityIssuer({now(){const cp=hooks.checkpoint();if(!cp.ok){failure=cp.code;throw Error();}return cp.value;}});
+  const session=issuer.issueSession({update_set_sys_id:target});if(!session.ok)throw Error('invalid_input');
+  const owner=issuer.claimOwner(session.value);if(!owner.ok)throw Error('invalid_input');
+  return createBodyLane(hooks,{issuer,owner:owner.value,session:session.value,target,stop:code=>hooks.stopProjection(failure??(code==='changed_during_review'?'invalid_state':code))});
+}
+function createBodyLane(hooks:BodyHooks,projection?:ParentProjection){
   type Record={attempt:ClosedReadAttempt;kind:Kind;state:'open'|'pending'|'consuming'|'done'|'failed';chunks:Uint8Array[];size:number;appends:number;rejected:boolean;terminal?:ClosedBodyTerminal;cleanup?:Cleanup;deadline?:number};
   const attempts=new WeakMap<ClosedReadAttempt,Record>(),candidates=new WeakMap<ClosedBodyCandidate,Record>();
   let current:Record|undefined,last:Cleanup|null=null,consumes=0;
@@ -78,7 +90,9 @@ export function createClosedBodyLane(hooks:{
       const candidate=opaque<ClosedBodyCandidate>();r.state='pending';candidates.set(candidate,r);
       return ok(Object.freeze({terminal:r.terminal,candidate}));
     });},
-    consume(candidate:ClosedBodyCandidate,expectedParentId?:string){return hooks.guard(()=>{
+    consume(candidate:ClosedBodyCandidate,expectedParentId?:string){
+      let draft:SyntheticParentDraft|undefined,role:'initial'|'final'|undefined;
+      const result=hooks.guard(()=>{
       const r=candidates.get(candidate);if(!r||r!==current)return hooks.stop('evidence_binding_mismatch');
       if(r.state!=='pending'||r.cleanup?.disposition!=='confirmed'||r.cleanup.kind!=='eof')return hooks.stop('invalid_state');
       r.state='consuming';consumes++; // claim before decode/schema work; failure never restores it.
@@ -87,7 +101,19 @@ export function createClosedBodyLane(hooks:{
         const bytes=new Uint8Array(r.size);let offset=0;for(const chunk of r.chunks){bytes.set(chunk,offset);offset+=chunk.byteLength;}
         const json:unknown=JSON.parse(new TextDecoder('utf-8',{fatal:true}).decode(bytes));let count=0,payloadSize=0;
         if(r.kind==='payload')payloadSize=Buffer.byteLength(payload.parse(json).result.payload,'utf8');
-        else if(r.kind==='parent_initial'||r.kind==='parent_final'){const sys_id=expectedParentId===undefined?parent.parse(json).result.sys_id:targetParent.parse(json).result.sys_id;if(expectedParentId!==undefined&&sys_id!==expectedParentId)throw Error();count=1;}
+        else if(r.kind==='parent_initial'||r.kind==='parent_final'){
+          if(projection){
+            if(expectedParentId!==undefined&&expectedParentId!==projection.target)throw Error();
+            const record=targetParent.parse(json).result;if(record.sys_id!==projection.target)throw Error();
+            role=r.kind==='parent_initial'?'initial':'final';
+            const use=role==='initial'?projection.issuer.beginInitial(projection.owner):projection.issuer.beginFinal(projection.owner);
+            if(!use.ok)return projection.stop(use.code);
+            const prepared=projection.issuer.issueDraft(projection.owner,use.value,record);
+            if(!prepared.ok)return projection.stop(prepared.code);
+            draft=prepared.value;
+          }else{const sys_id=expectedParentId===undefined?parent.parse(json).result.sys_id:targetParent.parse(json).result.sys_id;if(expectedParentId!==undefined&&sys_id!==expectedParentId)throw Error();}
+          count=1;
+        }
         else if(r.kind==='release_rows')count=release.parse(json).result.length;
         else count=rows.parse(json).result.length;
         summary=Object.freeze({records:count,received_bytes:bytes.byteLength,payload_bytes:payloadSize,sha256:createHash('sha256').update(bytes).digest('hex'),synthetic:true,evidence_issuance:'disabled'});
@@ -95,12 +121,21 @@ export function createClosedBodyLane(hooks:{
       const cp=hooks.checkpoint();if(!cp.ok)return cp;
       if(r.kind==='payload'){const charged=hooks.payload(r.attempt,summary.payload_bytes);if(!charged.ok){drop(r);r.state='done';current=undefined;return charged;}}
       drop(r);r.state='done';current=undefined;return ok(summary);
-    });},
+      });
+      // The body guard has completed its post-check; only now may a private draft be accepted.
+      if(!result.ok){if(current){drop(current);current.state='failed';current=undefined;}if(projection)projection.issuer.close(projection.session);return result;}
+      if(projection&&draft){
+        const accepted=role==='initial'?projection.issuer.acceptInitial(projection.owner,draft):projection.issuer.prepareComparison(projection.owner,draft);
+        if(!accepted.ok){projection.issuer.close(projection.session);return projection.stop(accepted.code);}
+      }
+      return result;
+    },
     discard(candidate:ClosedBodyCandidate):ClosedAccountingResult<true>{return hooks.guard(()=>{
       const r=candidates.get(candidate);if(!r||r!==current)return hooks.stop('evidence_binding_mismatch');if(r.state!=='pending')return hooks.stop('invalid_state');
       r.state='done';drop(r);current=undefined;return r.kind==='payload'?hooks.discardPayload(r.attempt):ok(true);
     });},
-    diagnostic(){return Object.freeze({cleanup:last,retained_bytes:current?.size??0,pending:current?.state==='pending',consumes,synthetic:true,evidence_issuance:'disabled' as const});},
+    diagnostic(){return Object.freeze({cleanup:last,retained_bytes:current?.size??0,pending:current?.state==='pending',consumes,synthetic:true,evidence_issuance:'disabled' as const,
+      ...(projection?{parent:projection.issuer.status(projection.owner)}:{})});},
   });
   return Object.freeze({port,abandonUnopened(a:ClosedReadAttempt,outcome:'unavailable'|'retryable'):ClosedAccountingResult<true>{return hooks.guard(()=>{
     const r=attempts.get(a);if(!r||r!==current)return hooks.stop('evidence_binding_mismatch');
@@ -109,5 +144,5 @@ export function createClosedBodyLane(hooks:{
     // No reader existed: do not manufacture EOF, a released lock, or a body terminal/candidate.
     last=Object.freeze({disposition:'confirmed',kind:null,reason:null,synthetic:true});drop(r);r.state='done';current=undefined;return ok(true);
   });},start(a:ClosedReadAttempt,kind:Kind,deadline?:number){const r:Record={attempt:a,kind,state:'open',chunks:[],size:0,appends:0,rejected:false,deadline};attempts.set(a,r);current=r;},deadline:()=>current?.deadline,
-    pending:()=>current?.state==='pending'||current?.state==='consuming',revoke(){if(current){if(current.state==='open'&&!current.cleanup)last=Object.freeze({disposition:'unconfirmed',kind:null,reason:'owner_stopped',synthetic:true});drop(current);current.state='failed';current=undefined;}}});
+    pending:()=>current?.state==='pending'||current?.state==='consuming',revoke(){if(projection)projection.issuer.close(projection.session);if(current){if(current.state==='open'&&!current.cleanup)last=Object.freeze({disposition:'unconfirmed',kind:null,reason:'owner_stopped',synthetic:true});drop(current);current.state='failed';current=undefined;}}});
 }

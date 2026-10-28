@@ -1,14 +1,14 @@
 # AU-BR-006：親レコードprivate snapshot・初回／最終安定性の詳細設計
 
-Version: br006-parent-stability-draft-0.2 / Date: 2026-10-29。
-Status: **§11の合成issuer限定モデルを実装。private型・一度限りの生成／消費・5列比較・停止を合成検証。既存bytes parser／CD-03〜04・実sourceへの接続と正式snapshot発行は未実施。正式発行口閉鎖・Unknown・全体受付無効を維持する**。
+Version: br006-parent-stability-draft-0.3 / Date: 2026-10-29。
+Status: **§11の合成モデルに加え、§12の同bytes解析・private projection・post-guard受理をfake依存で接続。CD-03〜04・実sourceへの接続と正式snapshot発行は未実施。正式発行口閉鎖・Unknown・全体受付無効を維持する**。
 
 親：[CD-01〜CD-04の固定dispatcher設計](BEST_PRACTICE_ABORT_SCOPE_CLOSED_DISPATCH_SIGNAL_DESIGN.md)、[session／transport／body境界](BEST_PRACTICE_ABORT_SCOPE_SESSION_TRANSPORT_BODY_BINDING_DESIGN.md)。
 参照：[共通run owner](BEST_PRACTICE_ABORT_SCOPE_RUN_OWNER_BINDING_DESIGN.md)、[選択window／payload受領物](BEST_PRACTICE_ABORT_SCOPE_REAL_SESSION_RECEIPTS_DESIGN.md)、[CD-03検証](E2E_BEST_PRACTICE_CLOSED_RESPONSE_READER_2026-10-28.md)、[CD-04検証](E2E_BEST_PRACTICE_CLOSED_HTTP_STATUS_2026-10-28.md)。
 
 ## 1. 現状と差分
 
-[body lane](../src/review/abort-scope-evidence-closed-body-candidate.ts)の対象ID付きparent解析は、strictな5列schemaと要求sys_id一致を検査する。private bytesから課金・digest・JSON解析を行い、最後は本文参照を捨てて固定summaryだけを返す。現状のsummaryからstate等を復元したり、初回／最終が同じrecord世代だったと証明したりすることはできない。
+[body lane](../src/review/abort-scope-evidence-closed-body-candidate.ts)の既存projectionなし経路の対象ID付きparent解析は、strictな5列schemaと要求sys_id一致を検査する。private bytesから課金・digest・JSON解析を行い、最後は本文参照を捨てて固定summaryだけを返す。このsummaryからstate等を復元したり、初回／最終が同じrecord世代だったと証明したりすることはできない。§12の新規fake限定経路は、summaryを変更せずprivate継続を追加する。
 
 [closed supervisor](../src/review/abort-scope-evidence-closed-attempt-supervisor.ts)はinitial／finalを同URL／fixture auth context・所定slotへ結ぶが、5列の初回／最終比較は未接続。[本番bounded-source](../src/review/bounded-source.ts)のreadParent／verifyには既存の親保存と比較があるが、これは実source／ReleasePermit／metadata検証を含む別経路。verifyは不一致を例外にせず`consistency:'changed'`を返し、[update-set-adapter](../src/review/update-set-adapter.ts)は`provisional_results`／`changed_during_review`を記録して暫定結果を返す（run停止ではない）。本設計で差し替えず、閉鎖fixtureの結果をそこへ登録しない。
 
@@ -155,7 +155,7 @@ privateな参照保持の検証方法は、内部test-only計数／状態の限�
 2. 同bytesの既存consumeから固定private projectionを供給し、最終guard後だけ初回受理／final比較へcommitする。summaryやcaller callbackへのrecord流出を拒否する。
 3. CD-03／CD-04のinitial／final・停止処理へownerを接続し、安定／変更／未検証の全経路、追加費目、非露出・既存互換を検証する。
 
-1の合成モデル実装は§11を参照。2・3は未接続。閉鎖gate／ReadStateの内部enumへのchanged_during_review追加、transport側へのexact status写像、projectionのprivate接続手段と費目の実測は接続実装前に確定する。実sourceでは既存verifyが親とmetadataをまとめて評価するため、親だけの結果を全体stableとして公開しない。後続のmetadata／payload／worker binding・上位JSONへの写像は別設計とする。
+1の合成モデル実装は§11、2のfake依存限定接続は§12を参照。3は未接続。閉鎖gate／ReadStateの内部enumへのchanged_during_review追加、transport側へのexact status写像と費目の実測はCD接続前に確定する。実sourceでは既存verifyが親とmetadataをまとめて評価するため、親だけの結果を全体stableとして公開しない。後続のmetadata／payload／worker binding・上位JSONへの写像は別設計とする。
 
 draft-0.1作成時はMD整理のみ。後続の合成モデルは次節と区別する。実AuthSnapshotIdentity／ReleasePermit・固定sourceへの正式接続、本番cap・全体work／heap上界・OSの実時間終了保証は未接続／未承認。正式発行口閉鎖・Unknown・全体受付無効、VM／監視／telemetry調査保留を維持し、実通信・実機操作・token発行・設定変更・Pushは行わない。
 
@@ -187,4 +187,39 @@ drafts_issued／drafts_consumed／snapshots_accepted／comparisons_prepared／co
 
 raw JS fixtureのown key列挙前のallocation上界、Zod／engine内部費用、全体heap／workの受付は未証明。合成deadlineも操作時の検査だけで、実timer／HTTP attempt／50・55秒phase・共有C/Gへは未接続。未観測のHTTP cleanupをconfirmedと申告するAPIや、実body／sourceからの正式生成口はない。
 
-次段階は既存consumeの同bytes由来projectionとpost-guard受理への固定接続、その後にCD-03／CD-04のowner停止・final slotへ結ぶ工程。formal issuance／全体受付を有効化せず、Unknown・VM／監視／telemetry保留を維持する。実通信・実機操作・設定変更・Pushは行わない。
+同bytes由来projectionのfake接続は§12を参照。次段階はCD-03／CD-04のowner停止・final slotへ結ぶ工程。formal issuance／全体受付を有効化せず、Unknown・VM／監視／telemetry保留を維持する。実通信・実機操作・設定変更・Pushは行わない。
+
+## 12. 同body bytesのprivate projection・post-guard受理（fake依存限定）
+
+[body lane](../src/review/abort-scope-evidence-closed-body-candidate.ts)の共有内部coreへ、専用の`createSyntheticParentProjectionLane`を追加する。既存`createClosedBodyLane`はprojectionなしで呼び、既存ReadState・CD-03／04の生成経路は変更しない。任意のprojector／onParsed callbackやrecord getterを追加しない。専用factoryは合成issuerを内部生成し、そのsession／owner／draft／comparison handleは返さない。
+
+### 12.1 固定継続と所有権
+
+1. append時にprivateコピーした同attemptのchunksを一度結合する。chunk課金は既存hookだけが所有し、projectionで再課金しない。
+2. confirmed EOF・closed・lock解放を確認済みのcandidateだけを一度consumeする。同bytesからUTF-8 decode／JSON.parseを1回行い、strict envelopeと5列schema・固定target一致を検査する。hashも同bytesから計算する。
+3. そのparse内の固定継続で5列を合成issuerのprivate draftへコピーする。issuer側のprimitive検査は残すが、JSONを再parseしない。summaryから復元しない。
+4. body内checkpointで失敗せず、body全体guardのpost-checkが成功した後にだけ、初回はacceptInitial、最終はprepareComparisonを呼ぶ。issuer自身のpre／post-guardも同じcheckpointへ戻し、最後の時計観測で取消・期限切れになったdraftを受理しない。最後のguardとsnapshot commitの間に任意callback／awaitはない。
+5. 公開結果は従来と同じ件数・bytes・digestのsummaryだけ。最終観測はcomparison_pendingまでで止め、stable／changed確定・上位返却はまだ行わない。
+
+factoryのcheckpointはfake側の単一停止／時計を参照する。別の実budget・HTTP・認証snapshot・timerは生成しない。合成issuerの60秒上限は外側checkpointを越える権限にならず、元の取消・phase／attempt期限等が先に失敗すれば固定理由を保つ。body会計用の狭いstop契約を広げず、合成factory専用stopProjectionがsession全体の固定理由を扱う。
+
+### 12.2 失敗・解放・診断
+
+body guardの失敗時は残ったbytesとprivate draft／baselineを破棄し、issuerをcloseする。snapshot受理側のguard失敗も同様に外側停止へ返す。revokeはbodyとissuerの双方を失効させる。自己candidateのreplay、外国／コピーcandidate、final先行、target上書き、strict schema違反を拒否しclaimを戻さない。外国laneの状態は変更しない。
+
+body診断には合成issuerの固定statusだけを追加する。record・対象ID・認証・URLは出さず、retained_records等の論理計数だけを保持する。body側が先に止まった場合、issuerの局所理由はclosedになり得るが、外側の元のprimaryを置き換えない。既存projectionなしlaneの診断形状は変えない。
+
+### 12.3 費目と未接続範囲
+
+| 費目 | 所有・検証 |
+|---|---|
+| chunk／受信bytes／settle | 同attemptの既存hook。retry分も累積、破棄で巻き戻さない |
+| UTF-8・JSON・hash | 既存consumeの同bytes。試験でJSON.parse1回・独立hash・元buffer変更後の不変性を確認 |
+| schema／projection／guard | strict5列＋issuer再検査・追加checkpoint。既存費用に包含済みと認定しない |
+| private保持／比較 | 初回1・最終draftと最大2 record、比較準備で0。最終は5比較だけを計上し確定しない |
+
+これはfake hookと合成issuerの内部接続であり、実session／ReleasePermit／正式body receiptの由来や物理HTTP cleanupを証明しない。CD-03／04のResponse read・final slot・共通primary・changed結果写像は未接続。全体work／heap受付・本番capは無効、正式発行口閉鎖・Unknown・調査保留を維持する。
+
+CD-03／04接続前に確定する事項：①現在の`stopProjection`は、未接続の`commitComparison`由来の`changed_during_review`を型の都合で`invalid_state`へ写像している。確定を接続する際はClosedStateCodeへ`changed_during_review`を加え、§7どおりの理由で停止させる。②合成issuerは時計checkpointの失敗を全て終端として扱い`failure`を保持する。ReadStateのnormal期限による`refuse`（ordinary close）はfinal phaseへの進行を許すため、そのまま接続すると予約済みfinal親readまでrunごと止め得る。ordinary closeとsession停止を区別する写像を接続時に設計・試験する。
+
+検証：[同bytes projection・post-guard受理記録](E2E_BEST_PRACTICE_PARENT_BODY_PROJECTION_2026-10-29.md)。
