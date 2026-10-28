@@ -1,5 +1,6 @@
-/** Closed-gate fake accounting only. No real session, body bytes, transport or receipt issuer. */
+/** Closed-gate fake ReadState with an optional private synthetic byte lane; no real session/transport/receipt issuer. */
 import {z} from 'zod';
+import {createClosedBodyLane} from './abort-scope-evidence-closed-body-candidate.js';
 declare const brand:unique symbol;
 type Handle<K extends string>={readonly [brand]:K};
 export type ClosedReadPurpose=Handle<'closed_read_purpose'>;
@@ -7,10 +8,11 @@ export type ClosedReadAttempt=Handle<'closed_read_attempt'>;
 export type ClosedFinalSlot=Handle<'closed_final_slot'>;
 export type ClosedAccountingCode='invalid_input'|'invalid_state'|'evidence_binding_mismatch'|'request_budget_exceeded'
   |'receive_budget_exceeded'|'payload_budget_exceeded'|'payload_limit'|'scope_evidence_limit'
-  |'phase_deadline_exceeded'|'upstream_unavailable'|'cleanup_unconfirmed';
+  |'phase_deadline_exceeded'|'upstream_unavailable'|'cleanup_unconfirmed'|'invalid_response'|'body_limit';
 export type ClosedStateCode=ClosedAccountingCode|'invalid_observation_time'|'deadline_exceeded'|'cancelled'|'closed'|'internal_review_error'|'issuance_disabled';
 export type ClosedAccountingResult<T>=Readonly<{ok:true;value:T}|{ok:false;code:ClosedStateCode}>;
 export const closedAccountingSchema=z.strictObject({
+  body_mode:z.enum(['length','bytes']).default('length'),
   requests:z.number().int().min(4).max(210).default(210),
   total_bytes:z.number().int().min(1).max(16*1024*1024).default(16*1024*1024),
   response_bytes:z.number().int().min(1).max(4*1024*1024).default(4*1024*1024),
@@ -43,10 +45,11 @@ export function createClosedReadState(config:Config,hooks:{
   let current:Purpose|undefined,active:ClosedReadAttempt|undefined,pendingPayload:ClosedReadAttempt|undefined;
   const initial=new Map<string,'success'|'unavailable'>();
   const ordinarySeen=new Set<Kind>();let payloadPurposes=0;
+  let bodies:ReturnType<typeof createClosedBodyLane>|undefined;
   function checkpoint():ClosedAccountingResult<number>{
     const cp=hooks.checkpoint();if(!cp.ok)return cp;
     if(phase==='final'&&cp.value>=hooks.finalDeadline||active&&phase==='normal'&&cp.value>=hooks.normalDeadline)return hooks.stop('phase_deadline_exceeded');
-    if(phase==='normal'&&pendingPayload&&cp.value>=hooks.normalDeadline)return hooks.refuse(closeOrdinary().code);
+    if(phase==='normal'&&(pendingPayload||bodies?.pending())&&cp.value>=hooks.normalDeadline)return hooks.refuse(closeOrdinary().code);
     return cp;
   }
   function guard<T>(body:()=>ClosedAccountingResult<T>):ClosedAccountingResult<T>{return hooks.guard(()=>{
@@ -57,16 +60,51 @@ export function createClosedReadState(config:Config,hooks:{
   });}
   function closeOrdinary(){ordinaryClosed=true;ordinaryReason='phase_deadline_exceeded';
     pendingPayload=undefined;
+    bodies?.revoke();
     if(current){current.state='done';initial.set(current.kind,'unavailable');if(current.table)current.table.initial='unavailable';current=undefined;}
     return Object.freeze({ok:false as const,code:ordinaryReason});
   }
   const reserved=()=>slots.reduce((n,s)=>n+s.remaining,0);
   function make(kind:Kind,slot?:Slot,table?:Slot){const h=opaque<ClosedReadPurpose>();current={kind,slot,table,attempts:0,state:'ready'};purposes.set(h,current);return h;}
+  function chunkCore(handle:ClosedReadAttempt,sequence:number,length:number):ClosedAccountingResult<true>{
+    const a=attempts.get(handle);if(!a||active!==handle)return hooks.stop('evidence_binding_mismatch');
+    if(a.limited)return Object.freeze({ok:false,code:'scope_evidence_limit'});
+    if(!Number.isSafeInteger(sequence)||sequence!==a.sequence||!Number.isSafeInteger(length)||length<0||length>0xffffffff)return hooks.stop('invalid_input');
+    const cp=checkpoint();if(!cp.ok)return cp;
+    a.sequence++;a.bytes+=length;received+=length;if(a.purpose.table)evidence+=length;
+    if(a.bytes>config.response_bytes||received>config.total_bytes)return hooks.stop('receive_budget_exceeded');
+    if(a.purpose.table&&(a.bytes>16*1024||evidence>256*1024)){a.limited=true;evidenceClosed=true;return Object.freeze({ok:false,code:'scope_evidence_limit'});}
+    return ok(true);
+  }
+  function settleCore(handle:ClosedReadAttempt,raw:unknown):ClosedAccountingResult<true>{
+    const a=attempts.get(handle);if(!a||active!==handle)return hooks.stop('evidence_binding_mismatch');
+    const p=settlementSchema.safeParse(structuredClone(raw));if(!p.success)return hooks.stop('invalid_input');
+    const cp=checkpoint();if(!cp.ok)return cp;a.settled=true;active=undefined;
+    if(p.data.cleanup!=='confirmed')return hooks.stop('cleanup_unconfirmed');
+    if(!a.limited&&p.data.outcome==='retryable'&&a.purpose.attempts<2){a.purpose.state='ready';return ok(true);}
+    a.purpose.state='done';initial.set(a.purpose.kind,p.data.outcome==='success'?'success':'unavailable');
+    if(a.purpose.table&&a.purpose.kind==='table_initial')a.purpose.table.initial=!a.limited&&p.data.outcome==='success'?'success':'unavailable';
+    if(a.purpose.slot){a.purpose.slot.remaining=0;a.purpose.slot.state='done';cursor++;}
+    if(a.purpose.kind==='payload'&&p.data.outcome==='success')pendingPayload=handle;
+    current=undefined;return ok(true);
+  }
+  function payloadCore(handle:ClosedReadAttempt,length:number):ClosedAccountingResult<true>{
+    const a=attempts.get(handle);if(!a||pendingPayload!==handle||!a.settled)return hooks.stop('evidence_binding_mismatch');
+    if(!Number.isSafeInteger(length)||length<0||length>0xffffffff)return hooks.stop('invalid_input');
+    const cp=checkpoint();if(!cp.ok)return cp;pendingPayload=undefined;payload+=length;
+    if(payload>config.total_payload_bytes)return hooks.stop('payload_budget_exceeded');
+    return length>config.payload_bytes?Object.freeze({ok:false,code:'payload_limit'}):ok(true);
+  }
+  function discardPayloadCore(handle:ClosedReadAttempt):ClosedAccountingResult<true>{
+    if(pendingPayload!==handle)return hooks.stop('evidence_binding_mismatch');pendingPayload=undefined;return ok(true);
+  }
+  if(config.body_mode==='bytes')bodies=createClosedBodyLane({guard,checkpoint,stop:hooks.stop,chunk:chunkCore,settle:settleCore,payload:payloadCore,discardPayload:discardPayloadCore,responseLimit:config.response_bytes});
   const port=Object.freeze({
+    body:bodies?.port??null,
     parentFinal:slots[0]!.handle,metadataFinal:slots[1]!.handle,
     admitTable(raw:unknown):ClosedAccountingResult<Readonly<{initial:ClosedReadPurpose;final:ClosedFinalSlot}>>{return guard(()=>{
       if(typeof raw!=='string'||!/^[a-z][a-z0-9_]{0,79}$/.test(raw)||raw==='global')return hooks.stop('invalid_input');
-      if(phase!=='normal'||current||pendingPayload||tableNames.has(raw))return hooks.stop('invalid_state');
+      if(phase!=='normal'||current||pendingPayload||bodies?.pending()||tableNames.has(raw))return hooks.stop('invalid_state');
       const cp=checkpoint();if(!cp.ok)return cp;
       if(cp.value>=hooks.normalDeadline)return closeOrdinary();
       if(evidenceClosed||ordinaryClosed||tableNames.size>=8||requests+reserved()+4>config.requests){evidenceClosed=true;return Object.freeze({ok:false,code:'scope_evidence_limit'});}
@@ -75,7 +113,7 @@ export function createClosedReadState(config:Config,hooks:{
     });},
     openPurpose(raw:unknown):ClosedAccountingResult<ClosedReadPurpose>{return guard(()=>{
       const p=purposeSchema.safeParse(structuredClone(raw));if(!p.success)return hooks.stop('invalid_input');
-      if(current||pendingPayload||phase!=='normal')return hooks.stop('invalid_state');
+      if(current||pendingPayload||bodies?.pending()||phase!=='normal')return hooks.stop('invalid_state');
       const cp=checkpoint();if(!cp.ok)return cp;
       if(cp.value>=hooks.normalDeadline)return closeOrdinary();
       if(ordinaryClosed)return Object.freeze({ok:false,code:ordinaryReason});
@@ -97,66 +135,45 @@ export function createClosedReadState(config:Config,hooks:{
       else if(phase!=='normal')return hooks.stop('invalid_state');
       const a=opaque<ClosedReadAttempt>();attempts.set(a,{purpose:p,bytes:0,sequence:0,settled:false});
       requests++;p.attempts++;p.state='inflight';active=a;
+      bodies?.start(a,p.kind);
       try{hooks.dispatch();}catch{return hooks.stop('upstream_unavailable');}return ok(a);
     });},
     chunk(handle:ClosedReadAttempt,sequence:number,length:number):ClosedAccountingResult<true>{return guard(()=>{
-      const a=attempts.get(handle);if(!a||active!==handle)return hooks.stop('evidence_binding_mismatch');
-      if(a.limited)return Object.freeze({ok:false,code:'scope_evidence_limit'});
-      if(!Number.isSafeInteger(sequence)||sequence!==a.sequence||!Number.isSafeInteger(length)||length<0||length>0xffffffff)return hooks.stop('invalid_input');
-      const cp=checkpoint();if(!cp.ok)return cp;
-      a.sequence++;a.bytes+=length;received+=length;
-      if(a.purpose.table)evidence+=length;
-      if(a.bytes>config.response_bytes||received>config.total_bytes)return hooks.stop('receive_budget_exceeded');
-      if(a.purpose.table&&(a.bytes>16*1024||evidence>256*1024)){a.limited=true;evidenceClosed=true;return Object.freeze({ok:false,code:'scope_evidence_limit'});}
-      return ok(true);
+      return bodies?hooks.stop('invalid_state'):chunkCore(handle,sequence,length);
     });},
     settle(handle:ClosedReadAttempt,raw:unknown):ClosedAccountingResult<true>{return guard(()=>{
-      const a=attempts.get(handle);if(!a||active!==handle)return hooks.stop('evidence_binding_mismatch');
-      const p=settlementSchema.safeParse(structuredClone(raw));if(!p.success)return hooks.stop('invalid_input');
-      const cp=checkpoint();if(!cp.ok)return cp;
-      a.settled=true;active=undefined;
-      if(p.data.cleanup!=='confirmed')return hooks.stop('cleanup_unconfirmed');
-      if(!a.limited&&p.data.outcome==='retryable'&&a.purpose.attempts<2){a.purpose.state='ready';return ok(true);}
-      a.purpose.state='done';initial.set(a.purpose.kind,p.data.outcome==='success'?'success':'unavailable');
-      if(a.purpose.table&&a.purpose.kind==='table_initial')a.purpose.table.initial=!a.limited&&p.data.outcome==='success'?'success':'unavailable';
-      if(a.purpose.slot){a.purpose.slot.remaining=0;a.purpose.slot.state='done';cursor++;}
-      if(a.purpose.kind==='payload'&&p.data.outcome==='success')pendingPayload=handle;
-      current=undefined;return ok(true);
+      return bodies?hooks.stop('invalid_state'):settleCore(handle,raw);
     });},
     /** Synthetic length event only. No body/provenance is accepted or certified by this port. */
     chargePayload(handle:ClosedReadAttempt,length:number):ClosedAccountingResult<true>{return guard(()=>{
-      const a=attempts.get(handle);if(!a||pendingPayload!==handle||!a.settled)return hooks.stop('evidence_binding_mismatch');
-      if(!Number.isSafeInteger(length)||length<0||length>0xffffffff)return hooks.stop('invalid_input');
-      const cp=checkpoint();if(!cp.ok)return cp;
-      pendingPayload=undefined;payload+=length;
-      if(payload>config.total_payload_bytes)return hooks.stop('payload_budget_exceeded');
-      return length>config.payload_bytes?Object.freeze({ok:false,code:'payload_limit'}):ok(true);
+      return bodies?hooks.stop('invalid_state'):payloadCore(handle,length);
     });},
     discardPayload(handle:ClosedReadAttempt):ClosedAccountingResult<true>{return guard(()=>{
-      if(pendingPayload!==handle)return hooks.stop('evidence_binding_mismatch');pendingPayload=undefined;return ok(true);
+      return bodies?hooks.stop('invalid_state'):discardPayloadCore(handle);
     });},
     enterFinal():ClosedAccountingResult<true>{return guard(()=>{
-      if(phase!=='normal'||active||pendingPayload)return hooks.stop('invalid_state');
+      if(phase!=='normal'||active||pendingPayload||bodies?.pending())return hooks.stop('invalid_state');
       const cp=checkpoint();if(!cp.ok)return cp;if(cp.value>=hooks.finalDeadline)return hooks.stop('phase_deadline_exceeded');
       if(current){current.state='done';initial.set(current.kind,'unavailable');if(current.table)current.table.initial='unavailable';current=undefined;}
       phase='final';return ok(true);
     });},
     openFinal(handle:ClosedFinalSlot):ClosedAccountingResult<ClosedReadPurpose>{return guard(()=>{
       const s=slots[cursor];if(!s||handle!==s.handle)return hooks.stop('evidence_binding_mismatch');
-      if(phase!=='final'||current||s.state!=='idle')return hooks.stop('invalid_state');
+      if(phase!=='final'||current||bodies?.pending()||s.state!=='idle')return hooks.stop('invalid_state');
       if(s.kind==='table'&&evidenceClosed)return Object.freeze({ok:false,code:'scope_evidence_limit'});
       if((s.kind==='table'?s.initial:initial.get(s.kind+'_initial'))!=='success')return hooks.stop('invalid_state');
       return ok(make(s.kind==='parent'?'parent_final':s.kind==='metadata'?'metadata_final':'table_final',s,s.kind==='table'?s:undefined));
     });},
     skipFinal(handle:ClosedFinalSlot):ClosedAccountingResult<true>{return guard(()=>{
       const s=slots[cursor];if(!s||handle!==s.handle)return hooks.stop('evidence_binding_mismatch');
-      if(phase!=='final'||current||s.state!=='idle'||(s.kind==='table'?s.initial==='success'&&!evidenceClosed:initial.get(s.kind+'_initial')==='success'))return hooks.stop('invalid_state');
+      if(phase!=='final'||current||bodies?.pending()||s.state!=='idle'||(s.kind==='table'?s.initial==='success'&&!evidenceClosed:initial.get(s.kind+'_initial')==='success'))return hooks.stop('invalid_state');
       const outcome=s.kind==='table'?s.initial:initial.get(s.kind+'_initial');
       s.skipReason=outcome==='success'?'evidence_disabled':outcome==='unavailable'?'initial_unavailable':'not_collected';
       s.remaining=0;s.state='skipped';cursor++;return ok(true);
     });},
     stats(){return Object.freeze({requests,received_bytes:received,payload_bytes:payload,evidence_bytes:evidence,tables:tableNames.size,evidence_closed:evidenceClosed,ordinary_closed:ordinaryClosed,reserved:reserved(),phase,
+      body:bodies?.port.diagnostic()??null,
       slots:Object.freeze(slots.map(s=>Object.freeze({kind:s.kind,remaining:s.remaining,state:s.state,skip_reason:s.skipReason??null}))) });},
   });
-  return Object.freeze({port,revoke(){phase='stopped';current=undefined;active=undefined;pendingPayload=undefined;for(const s of slots){s.remaining=0;if(s.state==='idle')s.state='invalidated';}}});
+  return Object.freeze({port,revoke(){bodies?.revoke();phase='stopped';current=undefined;active=undefined;pendingPayload=undefined;for(const s of slots){s.remaining=0;if(s.state==='idle')s.state='invalidated';}}});
 }

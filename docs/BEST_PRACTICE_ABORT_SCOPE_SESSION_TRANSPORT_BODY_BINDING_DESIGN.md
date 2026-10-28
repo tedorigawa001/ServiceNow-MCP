@@ -1,7 +1,7 @@
 # AU-BR-006 実session／ReleasePermit・単一transport・body受領境界の詳細設計
 
-Version: br006-session-transport-body-binding-draft-0.3 / Date: 2026-10-28。
-Status: **§14の閉鎖gateと§15の同ReadState会計・用途／予約をfake限定で実装。正式body receipt／証拠発行gateは閉鎖。実session・実transport接続・本番cap投入の承認ではない**。
+Version: br006-session-transport-body-binding-draft-0.4 / Date: 2026-10-28。
+Status: **§14の閉鎖gate・§15の同ReadState会計に、§16の同attempt bytes候補・typed cleanup・一度限りconsumeをfake限定で接続。正式body receipt／証拠発行gateは閉鎖。実session・実transport接続・本番cap投入の承認ではない**。
 
 親：[共通run owner](BEST_PRACTICE_ABORT_SCOPE_RUN_OWNER_BINDING_DESIGN.md)、[TC-01〜TC-04と現行境界](BEST_PRACTICE_ABORT_SCOPE_RUN_TRANSPORT_CLEANUP_DESIGN.md)、[用途別受領物](BEST_PRACTICE_ABORT_SCOPE_TRANSPORT_RECEIPTS_DESIGN.md)。
 後続：[選択window／payload受領物](BEST_PRACTICE_ABORT_SCOPE_REAL_SESSION_RECEIPTS_DESIGN.md)、[worker接続契約](BEST_PRACTICE_ABORT_SCOPE_CONNECTION_CONTRACT_DESIGN.md)。
@@ -268,6 +268,49 @@ Q=4〜6等の利用不能帯を本番で受付するかは§7.1の承認待ち�
 
 fake cleanup後に保留中のpayloadがsoft cutoffへ達した場合は、P受領commit前に破棄し、localなphase拒否を保持する。C/Gは返金せず、pending handleがfinal移行を妨げないように失効させる。期限直前に既にcommitした費目は保持する。
 
-fake I/Oは同期の`dispatch()`通知だけ。read／cancel／closed／releaseLock、実cleanup証拠、pending readの終了待ち、試行10秒／empty-read・cleanup予約の実監督は未接続。引数の`cleanup=confirmed`は合成eventで、診断上の実HTTP／workerは引き続きnot_started。次工程のbody候補／cleanup／一度限りconsumeで由来を結合する必要がある。
+draft-0.3のfake I/Oは同期の`dispatch()`通知だけ。長さモードの`cleanup=confirmed`は合成eventで、実HTTP／workerはnot_started。次の§16では別の明示bytesモードでbody候補／typed cleanup／一度限りconsumeを結合した。read／cancel／closed／releaseLockの実API観測、pending readの終了待ち、試行10秒／empty-read・cleanup予約の実監督は引き続き未接続。
 
 実session／ReleasePermit／選択payload／worker jobの正式binding、bootstrap順序の実認証、cap承認、allocation／同期parse／全体work上界、全体受付、OS期限保証は未実施。正式body gateは常に閉鎖。新moduleも既存wildcardで梱包除外し、VM／監視／telemetryは保留。
+
+## 16. draft-0.4：同attemptのprivate bytes候補とtyped cleanup
+
+[body lane](../src/review/abort-scope-evidence-closed-body-candidate.ts)を同fake ReadStateへprivate接続した。[合成試験46件](../tests/review/closed-body-candidate.test.ts)、[検証記録](E2E_BEST_PRACTICE_CLOSED_BODY_CANDIDATE_2026-10-28.md)を参照。
+
+### 16.1 生成・単一会計・所有権
+
+`accounting.body_mode=bytes`だけがbody portを持つ。既定は`length`で既存の合成event契約を維持する。laneはconstructorで固定し、実sessionやTC-04 transportを採用しない。bytesモードでは公開scalar `chunk / settle / chargePayload / discardPayload`を拒否し、同ReadStateのprivate coreだけをbody laneから呼ぶ。C/G/S/P/E/R/Tとclockは追加台帳へcopyしない。
+
+同dispatch commitで同attemptのbody所有部を作る。`append(attempt, sequence, bytes)`はnative内部slotでUint8Arrayを検査し、shared memory／Proxy／detached bufferを拒否する。species・iterator・callerのbuffer／byteLength getterを呼ばず、有界なprivate copyをclock callbackより前に採る。課金はそのcopyの長さ、解析／hashはそのcopyの連結から行う。受信済みchunkの書換えで後続本文を差し替えない。
+
+既知の単体S超過chunkは保持せず、観測長を同G/S/Eへ一度課金して停止する。累計超過も返金しない。table下位枠超過は保持参照を破棄してcleanup待ちとし、その後の成功body候補にしない。保持中の非empty chunkは最大4096、超過chunkも受信課金後に`body_limit`でglobal stopする。空chunkは保持数を増やさないため、4096個保持中でも連番検査・0 byte課金を経て受理し、本文を破棄しない。これはfakeの制御費上限で、本番cap承認ではない。empty-readの実監督は未実装。
+
+### 16.2 typed終端と候補
+
+`finish(attempt, observation)`はstrictなprimitive観測だけを受け、`pending_read / cancel / closed / lock / eof`から固定のcleanup分類を作る。`confirmed`という結果値自体を入力しない。pending read、cancel pending／rejected、closed pending／rejected、lock未解放／不明、EOFもcancel完了も無い場合はunconfirmedとして固定理由を保持し、共通ownerを停止する。後の成功申告でも修復しない。
+
+同attemptの不透明`ClosedBodyTerminal`と、それをprivate参照する`ClosedBodyCandidate`はfake realm限定。cleanup confirmed/eof＋成功outcome＋枠内受信だけが候補へ進む。cancelledはcleanup確認済みでも候補なし。retryable／unavailableは参照を破棄し、既存の同purpose retry／予約契約へ戻す。OAuth成功bodyは専用認証consumerが未接続なので一般候補を作らず停止する。
+
+観測はfake依存の入力であり、実reader.closedやreleaseLockを実行・証明したものではない。rootの実HTTP／workerはnot_startedを維持し、fake cleanupは`accounting.body.cleanup`に分けて表示する。
+
+### 16.3 固定consumeと一度限りの破棄
+
+候補は最大1件。未消費候補がある間はordinary/table受付、final移行、次finalのopen／skipを拒否する。candidate／attempt／terminalは同値JSONやclone、別owner、別用途へ交換できない。
+
+`consume(candidate)`はdecodeより前にclaimを`consuming`へ移す。fatal UTF-8→JSON.parse→用途ごとの固定strict schema→同private bytesのSHA-256を行い、元のclock／liveを再検査する。任意callbackへ本文を渡さない。返すのはfreeze済みrecords数・受信byte数・payload byte数・digest・synthetic／disabledの印だけ。
+
+| fake consumer | 受理する合成JSON |
+|---|---|
+| parent initial／final | `result`が`sys_id`だけのrecord |
+| metadata／table initial／final | `result`が`sys_id`だけのrecord配列、最大101件 |
+| release | `result`が長さ1〜80の`build_name`だけのrecord配列、最大101件 |
+| payload | `result.payload`文字列だけ |
+
+上のschemaは合成の固定射影であり、ServiceNowの実record全体・所属・版・scope・release適合を証明しない。payloadは同JSONから得た文字列のUTF-8長だけを同Pへ一度課金し、Gを再課金しない。単体payload超過はlocal、累計超過はglobalという既存契約を維持する。
+
+decode／schema失敗は固定`invalid_response`で停止し、raw Errorや本文を出さず、再consumeを許さない。成功／失敗／固定`discard`／同期revokeで保持参照を破棄する。取消・phase/hard期限前後のcheckpointに失敗すればsummaryを公開せず、期限後のP課金をしない。非payload候補もsoft cutoffでdecode前に破棄する。確認済みcleanup事実は解析失敗や取消でunconfirmedへ書き換えず、未決着のcleanupは後のfinishでconfirmedに戻さない。
+
+連結bytesは最大S、保持chunkと連結bufferの重複を含む有界なbyte captureである。ただしJSON.parse／schema／文字列／hashのheap・同期時間の全体上界は未証明。参照破棄は物理zero化を意味しない。
+
+### 16.4 残る閉鎖条件
+
+`refuseBody`は引き続きdeny-only。候補／終端／summaryは正式receipt、AuthReadyGeneration、ReleasePermit、window／payload receipt、worker job、SourceRunEvidenceではなく、実台帳へ登録する口もない。実stream API、試行10秒・cleanup予約・empty-read監督、実認証／source binding、公開JSONへの写像、本番cap・全体work／保持上界の承認は未接続。全体受付無効、VM／監視／telemetry保留を維持する。

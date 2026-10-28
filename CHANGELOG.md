@@ -10,6 +10,8 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 ### Fixed
 
+- Development-only closed body capture now applies its 4096-chunk retention limit only to nonempty additions. Empty chunks at the exact limit keep sequence validation and zero-byte accounting without discarding a valid body; the 4097th nonempty chunk is still charged then rejected. Includes a RED/GREEN boundary regression through EOF, parsing and digest comparison; formal issuance and production behavior remain unchanged.
+
 - AU-BR-005 no longer treats indirect use of `current.setAbortAction` as "no abort call". Extracted method references, `.call`/`.apply`/`.bind`, comma-operator calls and destructuring (named, computed or rest) of `current` now mark the abort analysis unresolved, so the review cannot complete as clear. The same rules apply to the development-only BR-006 scope plan, which additionally treats `current` passed to code outside the analyzed body as receiver-unresolved instead of `no_target_call`. Direct `current.setAbortAction(...)` calls and ordinary field reads are unchanged.
 
 ### Changed
@@ -21,6 +23,8 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 - Remove packaged fixture registration/owner/transport-claim exports and the real session's fixture transport factory. Fixture registries, claims, draft handles and synthetic accounting now live exclusively in package-excluded development modules, and reject raw real-session registration. Ordinary session GET/payload/phase behavior remains intact; packaged and source regression tests cover the former fixture-to-real-mode path. Production BR-006 evidence issuance remains unimplemented/closed.
 
 ### Added
+
+- Development-only byte mode for the closed fake ReadState binds private body candidates and typed cleanup terminals to the same attempt/accounting owner. Received bytes are privately copied before adoption and the same snapshot is charged, hashed and parsed once by fixed synthetic projections; only counts/digest are returned. Unconfirmed cleanup, replay/mixed handles, cancellation and expiry reject consumption and release retained references. Scalar accounting/confirmation bypasses are disabled in this mode; default length-event tests remain compatible. Formal body receipts, real transport/source/worker authority and production caps remain closed/unchanged; all new modules remain package-excluded.
 
 - Development-only opt-in accounting on the closed fake body gate: one constructor-owned ReadState supplies C/G/S/P/E and ordered final reservations, with a one-shot session/run/transport-bound accounting claim. Synthetic events cover bounded purpose/retry use, atomic table reservations, overshoot/no-refund accounting, independent event/token oracles, cutoff/cancellation/reentrancy and fixed first diagnostics. Ordinary/evidence exhaustion preserves eligible reasoned final skips; global failures synchronously revoke retained ports. These are modeled length/cleanup events, not body provenance or actual I/O; formal receipt issuance, real sessions/transports and production caps remain disabled/unchanged. Both modules stay package-excluded.
 
