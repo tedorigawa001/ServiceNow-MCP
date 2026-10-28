@@ -10,7 +10,7 @@ Status: **設計のみ。固定親GETの合成経路に向けた案で、実装�
 
 [body lane](../src/review/abort-scope-evidence-closed-body-candidate.ts)の対象ID付きparent解析は、strictな5列schemaと要求sys_id一致を検査する。private bytesから課金・digest・JSON解析を行い、最後は本文参照を捨てて固定summaryだけを返す。現状のsummaryからstate等を復元したり、初回／最終が同じrecord世代だったと証明したりすることはできない。
 
-[closed supervisor](../src/review/abort-scope-evidence-closed-attempt-supervisor.ts)はinitial／finalを同URL／fixture auth context・所定slotへ結ぶが、5列の初回／最終比較は未接続。[本番bounded-source](../src/review/bounded-source.ts)のreadParent／verifyには既存の親保存と比較があるが、これは実source／ReleasePermit／metadata検証を含む別経路。本設計で差し替えず、閉鎖fixtureの結果をそこへ登録しない。
+[closed supervisor](../src/review/abort-scope-evidence-closed-attempt-supervisor.ts)はinitial／finalを同URL／fixture auth context・所定slotへ結ぶが、5列の初回／最終比較は未接続。[本番bounded-source](../src/review/bounded-source.ts)のreadParent／verifyには既存の親保存と比較があるが、これは実source／ReleasePermit／metadata検証を含む別経路。verifyは不一致を例外にせず`consistency:'changed'`を返し、[update-set-adapter](../src/review/update-set-adapter.ts)は`provisional_results`／`changed_during_review`を記録して暫定結果を返す（run停止ではない）。本設計で差し替えず、閉鎖fixtureの結果をそこへ登録しない。
 
 本設計は、既存の単一受信・単一解析から**内部だけの親snapshotを生成し、同workflowで一度比較する**ためのもの。比較対象はparentだけで、metadata／payload／ルール結果／Update Set全体の整合性まで認定しない。
 
@@ -85,7 +85,7 @@ async readの返却後に起きた取消との関係はcommit時点をlinearizat
 | initial_observed | final workflow claimを一度消費 | 初回再取得・baseline差替え |
 | final_pending | 同final logical readの既存retry、または固定比較 | 新final生成、比較二重開始、別slot／owner混入 |
 | stable_observation | 診断参照だけ | 再比較・snapshot持出し・未承認の正式発行 |
-| changed | 固定診断を保持しrun停止 | baseline更新・最終値への置換・自動再読による救済 |
+| changed | 固定診断を保持しrun停止（閉鎖経路のfail-closed選択。§7） | baseline更新・最終値への置換・自動再読による救済 |
 | not_verified／revoked | 固定理由を保持し参照破棄 | 再準備・復活・retry権限の再発行 |
 
 pendingはlogical readの進行を表し、HTTP attemptが常にactiveという意味ではない。cleanup確認済みtransientで次attemptを待つ間も同logical readに属する。final開始claimと各attempt claimは別であり、transport retryによって前者を二重消費しない。
@@ -96,9 +96,11 @@ baselineやfinal draftを別ownerへ渡すテスト用の本番登録口を作�
 
 比較差分と取得／証拠不足を区別する。既存の本番bounded-source.verifyのconsistency返却は変更しない。下記の追加語彙は**閉鎖経路の提案**であり、まだenumや公開JSONへ実装しない。
 
+本番との写像：stable_observationは本番`stable_observation`、changedは本番`changed`（暫定結果＋`changed_during_review`）、not_verifiedは本番`unverified`（`consistency_unverified`）に対応する。本番はchangedを正当な観測結果として暫定結果まで返すが、閉鎖経路は正式発行口を閉じたまま観測を証拠へ昇格しないため、changedでもrunを停止するfail-closedを選ぶ。将来本番へ接続するときは、この停止をchanged＝失敗と読み替えず、本番の暫定結果の扱いに合わせて再設計する。
+
 | 事象 | workflowの結論 | 停止／診断方針 |
 |---|---|---|
-| 有効な5列のstate／application／更新世代が不一致 | changed | 新内部code候補parent_changedでrun停止。再取得しない |
+| 有効な5列のstate／application／更新世代が不一致 | changed | 既存語彙`changed_during_review`を閉鎖gate内部codeとして再利用しrun停止。新しい別名は作らない。再取得しない |
 | 対象ID不一致、欠落／余剰列、型・schema不正 | not_verified | 既存invalid_response。changedと採点しない |
 | 同owner／budget／role／slot等のbinding不一致 | not_verified | evidence_binding_mismatch。外国ownerは操作しない |
 | 二重開始・二重consume・順序違反 | not_verified | invalid_state。claimは戻さない |
@@ -108,7 +110,7 @@ baselineやfinal draftを別ownerへ渡すテスト用の本番登録口を作�
 
 changed_fieldsは固定順のfield名だけを最大5件保持する。sys_idの不一致は受付段階で拒否するため、通常の意味差分は残り4 field。初回／最終の値、差分値、対象ID、URL、auth context、raw errorは出さない。件数だけで十分な公開境界にはfield名も渡さない。
 
-比較処理を開始する前に停止していれば既存primaryを保持し、parent_changedで上書きしない。compare draft作成後の最終guardでcancel／期限切れを検出した場合も、stable／changedのcommitをせずnot_verifiedにする。changed確定後はその診断をlate応答やcloseで消さず、resource解放の状態とは別軸に保つ。
+比較処理を開始する前に停止していれば既存primaryを保持し、changed_during_reviewで上書きしない。compare draft作成後の最終guardでcancel／期限切れを検出した場合も、stable／changedのcommitをせずnot_verifiedにする。changed確定後はその診断をlate応答やcloseで消さず、resource解放の状態とは別軸に保つ。
 
 安定性診断と停止の確定は同owner内の固定sectionで行う。任意callerがconsistency=stable_observationを申告して受付を継続する口や、digestだけを再提出する比較口は設けない。
 
@@ -152,6 +154,6 @@ privateな参照保持の検証方法は、内部test-only計数／状態の限�
 2. 同bytesの既存consumeから固定private projectionを供給し、最終guard後だけ初回受理／final比較へcommitする。summaryやcaller callbackへのrecord流出を拒否する。
 3. CD-03／CD-04のinitial／final・停止処理へownerを接続し、安定／変更／未検証の全経路、追加費目、非露出・既存互換を検証する。
 
-parent_changed等の内部enum追加、fixed status表示のexact schema、projectionのprivate接続手段と費目の実測は実装前に確定する。実sourceでは既存verifyが親とmetadataをまとめて評価するため、親だけの結果を全体stableとして公開しない。後続のmetadata／payload／worker binding・上位JSONへの写像は別設計とする。
+閉鎖gate／ReadStateの内部enumへの`changed_during_review`追加、fixed status表示のexact schema、projectionのprivate接続手段と費目の実測は実装前に確定する。実sourceでは既存verifyが親とmetadataをまとめて評価するため、親だけの結果を全体stableとして公開しない。後続のmetadata／payload／worker binding・上位JSONへの写像は別設計とする。
 
 実AuthSnapshotIdentity／ReleasePermit・固定sourceへの正式接続、本番cap・全体work／heap上界・OSの実時間終了保証は未接続／未承認。正式発行口閉鎖・Unknown・全体受付無効、VM／監視／telemetry調査保留を維持する。今回の作業はMD整理だけで、実装・実通信・実機操作・token発行・設定変更・Pushは行わない。
