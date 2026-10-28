@@ -1,7 +1,7 @@
 # AU-BR-006 単一予算・停止・typed cleanupと共通run ownerの接続
 
-Version: br006-run-transport-cleanup-draft-0.4 / Date: 2026-10-28。
-Status: **TC-01／TC-02に加え、TC-03として注入Web Streamsのread・cancel・closed・releaseLockを同fake attemptへ接続。実sessionの会計更新／実transportは未接続、正式証拠発行・本番cap承認は未実施／閉鎖**。
+Version: br006-run-transport-cleanup-draft-0.5 / Date: 2026-10-28。
+Status: **TC-01〜TC-03に加え、TC-04の固定source bootstrap・release・用途descriptorを同fake transportへ接続。実sessionの会計更新／実transportは未接続、正式証拠発行・本番cap承認は未実施／閉鎖**。
 
 親：[共通run owner §14・§15](BEST_PRACTICE_ABORT_SCOPE_RUN_OWNER_BINDING_DESIGN.md)、[用途別transport／cleanup](BEST_PRACTICE_ABORT_SCOPE_TRANSPORT_RECEIPTS_DESIGN.md)、[bounded予算](BEST_PRACTICE_ABORT_SCOPE_BOUNDED_BUDGET_DESIGN.md)。
 後続：[選択／payload受領物](BEST_PRACTICE_ABORT_SCOPE_REAL_SESSION_RECEIPTS_DESIGN.md)、[worker接続契約](BEST_PRACTICE_ABORT_SCOPE_CONNECTION_CONTRACT_DESIGN.md)。
@@ -280,6 +280,57 @@ runは逐次1件だけ。例外・begin後の取消・終了競合もfinallyの�
 
 33件の注入Streams試験とTC-02追加2件で、独立操作oracle、cancel拒否／pending、閉鎖未確認、release失敗、stream再利用、locked reader、期限後read、予算超過、scheduler失敗、予約不足を確認した。counter／clock bindingはfake session内だけであり、実session・ReleasePermit・選択payload・worker jobへの正式bindingではない。
 
-次はTC-04の固定source bootstrap／release／用途descriptorとの結合。認証ready／権限／retry／E/R予約・soft cutoff・本番mutable portは未接続。遅着Promiseが保持するresourceの物理解放、悪意ある注入依存／動かないschedulerへの隔離保証、実OSの強制終了、全体work受付は未証明。正式発行口閉鎖、Unknown・全体受付無効、VM／監視／telemetry保留を維持する。
+TC-04のfake固定source接続は§13を参照。実認証ready／権限／retry／E/R予約・soft cutoff・本番mutable portは未接続。遅着Promiseが保持するresourceの物理解放、悪意ある注入依存／動かないschedulerへの隔離保証、実OSの強制終了、全体work受付は未証明。正式発行口閉鎖、Unknown・全体受付無効、VM／監視／telemetry保留を維持する。
 
 検証：[TC-03合成Streams検証記録](E2E_BEST_PRACTICE_TC03_WEB_STREAMS_2026-10-28.md)。
+
+## 13. TC-04：固定sourceのbootstrap・release・用途descriptor（2026-10-28）
+
+実装は[run-stream](../src/review/abort-scope-evidence-run-stream.ts)の同module private coreと`createFakeRunFixedSource`、試験は[run-fixed-source](../tests/review/run-fixed-source.test.ts)。旧fixture adapter／registryを登録・昇格させず、新しいfake sessionのtransport claimを1回だけ消費する。同じcoreをsource-ownedのまま使い続け、bootstrap後にcounter・起点・cleanup ownerを交換しない。
+
+### 13.1 固定入口・発行順
+
+| 入口 | private前提と一度限りの遷移 | 外部へ返すもの |
+|---|---|---|
+| bootstrap | created→authenticating→authenticated。per-user／service-account-cachedは生成時のfake premise、exchangeは同transportでPOSTを1回 | fake auth_readyとdisabledのみ |
+| readParent | authenticated→parent_ready。同じUpdate Set IDの単一recordを要求 | parent_readyだけ。recordはprivate |
+| resolveRelease | parent_ready→matched／unmatched。同じinstance bindingと設定snapshotで判定 | 固定family・source分類・制限と、matched時だけopaqueなfake permit |
+| listMetadata | 同sourceのpermit参照とmatchedを要求。1回だけmetadata_readyへ | 件数・selected・truncatedだけ。行やpayloadなし |
+| recheck | 同permit／metadata_readyからfinalへ一方向移行。親→metadataを同transportで再読 | normalized観測のstable_observation／changed。sealやscope比較結果ではない |
+| cancel／finish | 同ownerを停止しprivate permit／保持recordを失効・破棄 | 先行primaryとHTTP／worker診断を維持 |
+
+全await後、source結果をcommitする直前に同clock・停止・予定stageを再検査する。read側の成功とsource側commitの間のmicrotaskで取消が届いても、matched permitやready状態を発行しない。二重bootstrap／親／release、順序違反、foreign／clone permitは受信側だけ停止し、失敗後にclaimを復元しない。
+
+TC-02のfake認証ready遷移は同private snapshot／readonly leaseから1回だけ行い、ready_generationは1のまま。これは**実tokenの本人性・認証済み主体を証明する入口ではない**。production lifecycleの呼出元・実session constructor・公開MCP入力は変更しない。
+
+### 13.2 用途descriptorと受信
+
+source callbackへ渡すdescriptorは同module内だけで構築しfreezeする。callerからmethod・path・fields・query・ordinalを受ける汎用read口はない。
+
+- exchange：`POST /oauth_token.do`、grant_type=client_credentials、ordinal=1という**合成ラベル**のみ。資格情報は渡さず、実token発行をしない。
+- parent initial/final：固定sys_idの`sys_update_set/<id>`、fieldsはsys_id/state/application/sys_updated_on/sys_mod_countだけ。
+- release_rows：`sys_cluster_state`、`fields=build_name`だけ、limit=21。20超はunknown。内部address／certificate等の余分な列は保持・出力しない。
+- metadata initial/final：`sys_update_xml`、queryは固定Update Set ID＋ORDERBYsys_id、fieldsはsys_id/update_set/name/type/actionと版だけ。max_records+1（最大101）のsentinelを守り、別Update Set・重複／順序不正を拒否する。選択modeはこのsubsetではbounded_allだけ。
+
+OAuth／親／releaseはprivate captureを16KiB、metadataは1MiBに限定する。C/G/S上限は既存の単一stateを使い、cap超過chunkも1回課金して停止する。正常採用分は**同じprivate byte snapshotを課金と後続解析に使う**。注入clockが元chunkを書き換えても、会計後に別内容を解析しない。scratchは1つ、終端で参照を破棄し、保持byte数は0へ戻す。物理zero化の証明ではない。
+
+capture／strict UTF-8 decode／JSON projectionは同module private継続だけ。TC-03の公開fake Streams facadeは引き続き本文非capture／非返却で、任意projectorやrunProjectedを公開しない。typed cleanup確認と期限検査の後でしかprojectionせず、解析後も期限を再検査する。OAuth token/type/lifetimeの検証結果はbooleanだけで、tokenは継続・一般body receiptへ渡さない。
+
+### 13.3 C方式のfake判定と停止
+
+既存`pinReviewReleaseConfig`を再利用し、constructor時の設定snapshot・canonical origin／instance_id binding・hard期限全体の有効性を照合する。実設定ファイル読み込みやtrust承認を今回実行したことにはしない。
+
+- release-onlyの403／404／429／5xx、settled no_response、空観測は、**cleanup confirmed後だけ**有効な設定assertionへfallbackできる。401と他用途の403は従来どおり全体停止。
+- config binding不一致はrelease GET前にunknown。期限切れ／残有効時間不足はfallback不可。実測と設定・複数nodeのfamily衝突、未知family、欠落・不正・20node超はunknown、既知の非対象familyはmismatched。
+- bounded bodyがcleanup済みだがJSON／行の形が不完全ならobservation_incompleteのunknownとし、assertionで補わない。受信cap超過・時計・取消・cleanup未確認等の全体停止をfallbackへ格下げしない。
+- matchedの判定はcatalogを参照。observedはrelease_visible_nodes_only、assertedはrelease_operator_asserted／release_not_observed／release_config_may_be_stale／release_observation_unavailableを保持する。
+
+`FakeFixedReleasePermit`は同factoryのprivate参照とstageにだけ結合した合成handleで、本物のReleasePermit／SourceRunEvidence／選択receiptにはならない。出力summaryにはsynthetic=true・evidence_issuance=disabledを付ける。metadataはcount-onlyであり、コード／payload／tableの取得入口やworker job発行口は作らない。
+
+### 13.4 未対応・次工程
+
+実session／AuthSnapshotIdentity・実source ReleasePermit・選択payload／worker jobへの正式binding、retry（今回はordinal=1だけ）、E/R/T予約、50/55秒のphase cutoff、本人性確認・実OAuth・production cap投入は未接続。fixed workflowのCはper-user／cachedで通常3＋final2、exchangeで1増えるだけであり、210試行／G16MiB／hard60秒等を増やさない。
+
+次はこのprivate fixed sourceと実session／ReleasePermit／選択window・worker planとの結合条件を整理する。今回のfake permitやprojectionを本番へ登録・採用せず、必要な証拠の正式発行前提を別工程で検証する。allocation／同期JSON parse・全体work上界、未決着resourceの物理解放、実OS期限保証は引き続き未証明。正式発行口閉鎖、Unknown・全体受付無効、VM／監視／telemetry保留を維持する。
+
+検証：[TC-04固定source合成検証記録](E2E_BEST_PRACTICE_TC04_FIXED_SOURCE_2026-10-28.md)。

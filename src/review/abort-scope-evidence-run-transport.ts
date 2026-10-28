@@ -142,6 +142,8 @@ export function createFakeRunTransportSession(clock:{now():number},io:FakeRunIo,
     finishActiveHttp(raw:unknown):Result<true>{return current?finishHttp(current,raw):stop('internal_review_error');},
   });
   return Object.freeze({
+    /** Fake premise only. Called by the private TC-04 bootstrap continuation, never a real auth issuer. */
+    markFakeAuthenticationReady():Result<true>{return operation(()=>owner.markReady(snapshot,lease)?ok(true):stop('authentication_failed'));},
     claimTransport():Result<typeof transport>{
       // Consume the claim BEFORE any dependency may re-enter. Failure never restores it.
       if(claimed)return stop('internal_review_error');claimed=true;
@@ -175,6 +177,7 @@ export function createFakeRunTransportSession(clock:{now():number},io:FakeRunIo,
     status(){
       const view=owner.inspect(snapshot,lease),terminal=cleanup.diagnostic();
       return Object.freeze({state:closed?'closed':view.state,primary:view.primary,budget:view.budget,
+        auth_ready:!closed&&view.auth_ready,ready_generation:view.ready_generation,
         cleanup:terminal.cleanup,cleanup_reasons:Object.freeze({http:httpReason,worker:workerReason}),lane:config.lane,transport_claim:claimed?'consumed':'unclaimed',synthetic:true,evidence_issuance:'disabled' as const});
     },
   });
