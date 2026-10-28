@@ -111,7 +111,56 @@ function createClosedAttemptCore(clock:ClosedAttemptClock,raw:unknown={}){
     cancel(){stop('cancelled');},close(){closing=true;stop('closed');if(!busy)gate.close();},
     status(){return Object.freeze({...port.stats(),active:busy,cleanup,attempt_failure:attemptFailure,operations:Object.freeze({...counts}),primary:gate.diagnostic().primary,formal_issuance:'disabled' as const});},
   });
-  return Object.freeze({api,readUsing});
+  return Object.freeze({api,readUsing,reject:(code:ClosedStateCode)=>{stop(code);return no(code);}});
+}
+
+declare const parentRequestBrand:unique symbol;
+export type FakeClosedParentRequest={readonly [parentRequestBrand]:'fake_closed_parent_request'};
+export type FakeClosedParentGet=Readonly<{method:'GET';url:string;purpose:'parent_initial'|'parent_final';ordinal:1|2;synthetic:true}>;
+/** CD-01: fixture-only synchronous dispatcher; not a Response/fetch adoption interface. */
+export function createFakeClosedParentDispatcher(clock:ClosedAttemptClock,
+  dispatcher:(request:FakeClosedParentGet,signal:AbortSignal,authContext:object)=>FakeClosedAttemptIo,raw:unknown){
+  const schema=z.strictObject({update_set_sys_id:z.string().regex(/^[a-f0-9]{32}$/),session:options.shape.session.optional(),policy:closedAttemptPolicySchema.optional()});
+  let config:z.infer<typeof schema>;try{config=schema.parse(structuredClone(raw));if(typeof dispatcher!=='function')throw Error();}catch{throw Error('invalid_input');}
+  // Same single-record parent read as production bounded-source fetchParent and TC-04; not the old fixture list query.
+  const query=new URLSearchParams({sysparm_fields:'sys_id,state,application,sys_updated_on,sys_mod_count',sysparm_display_value:'false',sysparm_exclude_reference_link:'true'});
+  const url=`https://closed-dispatch.invalid/api/now/table/sys_update_set/${config.update_set_sys_id}?${query}`;
+  const core=createClosedAttemptCore(clock,{session:config.session,policy:config.policy});
+  const authContext=Object.freeze(Object.create(null)) as object;
+  type Request={purpose:ClosedReadPurpose;kind:FakeClosedParentGet['purpose'];state:'ready'|'running'|'done';attempts:number};
+  const requests=new WeakMap<FakeClosedParentRequest,Request>();let dispatches=0;
+  const make=(purpose:ClosedReadPurpose,kind:Request['kind'])=>{const h=Object.freeze(Object.create(null)) as FakeClosedParentRequest;requests.set(h,{purpose,kind,state:'ready',attempts:0});return Object.freeze({ok:true as const,value:h});};
+  const reject=(code:ClosedStateCode)=>core.reject(code);
+  return Object.freeze({
+    initial(){const p=core.api.openPurpose({kind:'parent_initial'});return p.ok?make(p.value,'parent_initial'):p;},
+    final(){const entered=core.api.enterFinal();if(!entered.ok)return entered;const p=core.api.openFinal(core.api.finalSlots().parent);return p.ok?make(p.value,'parent_final'):p;},
+    async read(handle:FakeClosedParentRequest){
+      const r=requests.get(handle);if(!r)return reject('evidence_binding_mismatch');if(r.state!=='ready')return reject('invalid_state');
+      if(r.attempts>=2){r.state='done';return reject('invalid_state');}
+      r.state='running';let controller:AbortController;
+      try{controller=new AbortController();}catch{r.state='done';return reject('internal_review_error');}
+      const request:FakeClosedParentGet=Object.freeze({method:'GET',url,purpose:r.kind,ordinal:(r.attempts+1) as 1|2,synthetic:true});
+      const result=await core.readUsing(r.purpose,()=>{
+        r.attempts++;
+        dispatches++;let io:FakeClosedAttemptIo;
+        try{io=dispatcher(request,controller.signal,authContext);}catch{return Object.freeze({ok:false,code:'upstream_unavailable'});}
+        if(!io||nodeTypes.isProxy(io))return Object.freeze({ok:false,code:'invalid_input'});
+        if(nodeTypes.isPromise(io)){void Reflect.apply(Promise.prototype.then,io,[()=>{},()=>{}]);return Object.freeze({ok:false,code:'invalid_input'});}
+        const field=(key:keyof FakeClosedAttemptIo)=>{const d=Object.getOwnPropertyDescriptor(io,key);return d&&'value' in d?d.value:undefined;};
+        const read=field('read'),cancel=field('cancel'),abort=field('abort'),release=field('release'),closed=field('closed');
+        if(typeof read!=='function'||typeof cancel!=='function'||typeof abort!=='function'||typeof release!=='function'||!nodeTypes.isPromise(closed)){
+          if(nodeTypes.isPromise(closed))void Reflect.apply(Promise.prototype.then,closed,[()=>{},()=>{}]);
+          return Object.freeze({ok:false,code:'invalid_input'});
+        }
+        // Fulfillment payloads are validated by the existing pump; cleanup only observes promise settlement.
+        return Object.freeze({ok:true,value:Object.freeze({read:()=>Reflect.apply(read,io,[]) as ReturnType<FakeClosedAttemptIo['read']>,cancel:()=>Reflect.apply(cancel,io,[]) as Promise<void>,closed:closed as Promise<void>,
+          abort(){controller.abort();Reflect.apply(abort,io,[]);},release(){Reflect.apply(release,io,[]);}})});
+      });
+      if(!result.ok&&!controller.signal.aborted)controller.abort();
+      const status=core.api.status();r.state=!result.ok&&result.code==='attempt_deadline_exceeded'&&!status.primary&&status.cleanup.disposition==='confirmed'?'ready':'done';return result;
+    },
+    cancel:()=>core.api.cancel(),close:()=>core.api.close(),status:()=>Object.freeze({...core.api.status(),dispatches}),
+  });
 }
 
 // Fixture-only ownership registry; never shared with production session/transport claims.

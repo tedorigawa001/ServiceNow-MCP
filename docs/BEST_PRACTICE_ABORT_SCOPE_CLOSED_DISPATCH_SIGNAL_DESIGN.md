@@ -1,7 +1,7 @@
 # AU-BR-006：閉鎖dispatcher・中断signal・Response受領の詳細設計
 
 Version: br006-closed-dispatch-signal-draft-0.1 / Date: 2026-10-28。
-Status: **設計のみ。fake dispatcher・注入Response／Streamsでの後続合成検証案。正式発行口閉鎖・全体受付無効・Unknownを維持。実transportの採用承認ではない**。
+Status: **§10のCD-01だけ合成実装。同期fake dispatcherの固定親GET／private context／attempt結合を検証。Response待機・正式body採用は未接続。正式発行口閉鎖・全体受付無効・Unknownを維持。実transportの採用承認ではない**。
 
 親：[session／transport／body境界 §17・§18](BEST_PRACTICE_ABORT_SCOPE_SESSION_TRANSPORT_BODY_BINDING_DESIGN.md#18-draft-06注入native-web-streamsの合成接続)、[共通run owner](BEST_PRACTICE_ABORT_SCOPE_RUN_OWNER_BINDING_DESIGN.md)。
 参照：[用途別受領物](BEST_PRACTICE_ABORT_SCOPE_TRANSPORT_RECEIPTS_DESIGN.md)、[固定source](BEST_PRACTICE_ABORT_SCOPE_FIXED_SOURCE_ISSUER_DESIGN.md)、[OAuth移譲](BEST_PRACTICE_ABORT_SCOPE_OAUTH_SOURCE_HANDOFF_DESIGN.md)。
@@ -126,6 +126,29 @@ native Response／Streamsはメモリ内で生成する。global fetch・実toke
 2. 同signalとResponse待機を既存監督へ接続。read前の取消・never-settle・late応答とcleanup診断を試験する。
 3. private Response／body採用から既存native reader監督へ一体接続。retry・会計・秘密非出力・既存42＋25件の互換を検証する。
 
-いずれも今回未実装。既存stream-only入口の互換を保ち、新compositionから生stream採用口を外へ公開しない。実session／ReleasePermitへの採用、OAuth秘密のprivate引渡し、HTTP status全表、正式window／payload／worker binding、全体work・heap・本番cap、実host強制終了は別途確認が必要。
+draft-0.1設計作成時は全て未実装。後続の§10で1の限定subsetを接続し、2・3は未接続のままとした。既存stream-only入口の互換を保ち、新compositionから生stream採用口を外へ公開しない。実session／ReleasePermitへの採用、OAuth秘密のprivate引渡し、HTTP status全表、正式window／payload／worker binding、全体work・heap・本番cap、実host強制終了は別途確認が必要。
 
-文書を作成しただけで、正式発行口の開放・全体受付の有効化・本番policy承認は行わない。Unknown、VM／監視／telemetry調査保留を維持する。実装・実transport・実機操作・設定変更・Pushは対象外。
+draft-0.1設計作成段階は文書のみで、実装は対象外だった。後続の限定実装は§10と区別する。正式発行口の開放・全体受付の有効化・本番policy承認は行わない。Unknown、VM／監視／telemetry調査保留を維持し、実transport・実機操作・設定変更・Pushは対象外のままとする。
+
+## 10. CD-01：固定親GET・同期fake dispatcherの最初の接続
+
+2026-10-28追加。[同module内factory](../src/review/abort-scope-evidence-closed-attempt-supervisor.ts)と[21件の合成試験](../tests/review/closed-parent-dispatcher.test.ts)、[検証記録](E2E_BEST_PRACTICE_CLOSED_PARENT_DISPATCHER_2026-10-28.md)を参照。新compositionが同coreを一度生成し、fixture専用private request台帳から同ReadStateのparent_initial／parent_finalへ進む。
+
+### 10.1 今回成立する結合
+
+- constructorの固定Update Setから§4の単一record取得（`sys_update_set/<sys_id>`、fields 5列、query／limitなし）の架空HTTPS URLを生成し、caller URL／origin／purpose／auth上書きをstrict schemaで拒否する。URL生成はdispatch commitより前。
+- request handleは凍結null-prototype objectとprivate WeakMapで識別する。表示用descriptor・auth handle・コピー・外国factoryのhandleは権限ではなく、C=0／dispatcher未呼出しで拒否する。外国factoryの台帳や停止状態には作用しない。
+- auth contextはconstructor生成の不変fixture identity一つに固定し、初回／retry／最終で同じ参照を渡す。秘密を含まず、snapshot／readyの交換口もない。ただし実AuthSnapshotIdentity／ready世代の証明ではなく、独立した世代変更を扱う正式lifecycleへの接続は後工程。
+- private acquire継続を同ReadStateのdispatch／window成立後だけ呼ぶ。Cはcoreが一度だけ増やし、fake dispatcher内の独立観測でもC=1を確認する。dispatcherの同期throwも返金しない。
+- 同logical request内の2回目はcleanup確認済み局所timeoutだけ。URL／context／予算を変えず、新しいcontroller／signalとordinalを渡す。3回目・完了handleの再利用・finalの順序違反を拒否する。
+- 同signalをfake dispatcherへ渡し、同attemptの中断でabortを一度通知する。返却不適合でも一次診断を確定した後にsignalを失効させる。abort listenerからcancelへ再入しても一次診断・Cを変えない。
+
+### 10.2 採用しないもの
+
+今回のdependencyは**同期でFakeClosedAttemptIoを返す試験専用関数**だけ。own data propertyのread／cancel／abort／releaseとnative Promiseのclosedをpinし、Proxy・accessorを呼ばない。Promiseを返すdispatcherやResponse／thenableは拒否し、Response本文を読まない。返されたnative Promiseや、不正I/Oの既知closed Promiseのrejectは直ちに観測して未処理例外を防ぐが、成功結果へ採用しない。
+
+これは§5〜§6のResponse待機を実装したものではない。async dispatcher・Response待機・late Responseの物理解放・HTTP status／url検査は未接続。拒否したResponseの所有を主張せず、cleanupのnot_startedは「本文I/O未採用」を意味し、dispatcher未呼出しやHTTPの終了確認と読み替えない。
+
+bodyの正常経路は既存fake pumpの固定合成projectionを使う。実Table APIの余剰列や配列形との互換性・sourceの意味検査を証明しない。実transport向けに本factoryの同期返却を汎用asyncへ緩めるのでなく、次段階で同resourceにdispatch pendingを追加し、単一監督へ接続する。
+
+正式発行口閉鎖・Unknown・全体受付無効、VM／監視／telemetry保留を維持。実session登録、実token、global fetch、実transport、実機操作、設定変更、本番cap投入は追加しない。既存梱包除外prefixを維持する。
