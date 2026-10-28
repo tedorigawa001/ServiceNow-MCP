@@ -4,6 +4,7 @@ Version: br006-closed-dispatch-signal-draft-0.4 / Date: 2026-10-28。
 Status: **§10〜§13のCD-01〜CD-04を合成実装。同attemptのResponse-reader接続にHTTP分類・cleanup後の限定retryを追加。正式body発行・実session bindingは未接続。正式発行口閉鎖・全体受付無効・Unknownを維持。実transportの採用承認ではない**。
 
 親：[session／transport／body境界 §17・§18](BEST_PRACTICE_ABORT_SCOPE_SESSION_TRANSPORT_BODY_BINDING_DESIGN.md#18-draft-06注入native-web-streamsの合成接続)、[共通run owner](BEST_PRACTICE_ABORT_SCOPE_RUN_OWNER_BINDING_DESIGN.md)。
+CD-04後の設計：[親private snapshot・初回／最終安定性draft-0.1](BEST_PRACTICE_ABORT_SCOPE_PARENT_STABILITY_DESIGN.md)。同bytes由来の5列、private所有・最終guard後の受理、比較差分と未検証の区別を具体化した文書のみで、安定性比較や正式発行を有効化しない。
 参照：[用途別受領物](BEST_PRACTICE_ABORT_SCOPE_TRANSPORT_RECEIPTS_DESIGN.md)、[固定source](BEST_PRACTICE_ABORT_SCOPE_FIXED_SOURCE_ISSUER_DESIGN.md)、[OAuth移譲](BEST_PRACTICE_ABORT_SCOPE_OAUTH_SOURCE_HANDOFF_DESIGN.md)。
 
 ## 1. 現状と今回の境界

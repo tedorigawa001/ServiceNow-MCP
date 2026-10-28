@@ -1,0 +1,157 @@
+# AU-BR-006：親レコードprivate snapshot・初回／最終安定性の詳細設計
+
+Version: br006-parent-stability-draft-0.1 / Date: 2026-10-29。
+Status: **設計のみ。固定親GETの合成経路に向けた案で、実装・正式snapshot発行・実source採用は未実施。正式発行口閉鎖・Unknown・全体受付無効を維持する**。
+
+親：[CD-01〜CD-04の固定dispatcher設計](BEST_PRACTICE_ABORT_SCOPE_CLOSED_DISPATCH_SIGNAL_DESIGN.md)、[session／transport／body境界](BEST_PRACTICE_ABORT_SCOPE_SESSION_TRANSPORT_BODY_BINDING_DESIGN.md)。
+参照：[共通run owner](BEST_PRACTICE_ABORT_SCOPE_RUN_OWNER_BINDING_DESIGN.md)、[選択window／payload受領物](BEST_PRACTICE_ABORT_SCOPE_REAL_SESSION_RECEIPTS_DESIGN.md)、[CD-03検証](E2E_BEST_PRACTICE_CLOSED_RESPONSE_READER_2026-10-28.md)、[CD-04検証](E2E_BEST_PRACTICE_CLOSED_HTTP_STATUS_2026-10-28.md)。
+
+## 1. 現状と差分
+
+[body lane](../src/review/abort-scope-evidence-closed-body-candidate.ts)の対象ID付きparent解析は、strictな5列schemaと要求sys_id一致を検査する。private bytesから課金・digest・JSON解析を行い、最後は本文参照を捨てて固定summaryだけを返す。現状のsummaryからstate等を復元したり、初回／最終が同じrecord世代だったと証明したりすることはできない。
+
+[closed supervisor](../src/review/abort-scope-evidence-closed-attempt-supervisor.ts)はinitial／finalを同URL／fixture auth context・所定slotへ結ぶが、5列の初回／最終比較は未接続。[本番bounded-source](../src/review/bounded-source.ts)のreadParent／verifyには既存の親保存と比較があるが、これは実source／ReleasePermit／metadata検証を含む別経路。本設計で差し替えず、閉鎖fixtureの結果をそこへ登録しない。
+
+本設計は、既存の単一受信・単一解析から**内部だけの親snapshotを生成し、同workflowで一度比較する**ためのもの。比較対象はparentだけで、metadata／payload／ルール結果／Update Set全体の整合性まで認定しない。
+
+## 2. 維持する不変条件
+
+1. snapshotは同attemptのprivate bytesを解析した固定継続だけが作る。返却row・summary・hash・caller JSONからの再登録、汎用issuer／setter／getterは追加しない。
+2. HTTP 200、所有・live・時刻、EOF／cleanup、schema、要求ID、最終checkpointが全て成立して初めて受理する。transport上の成功だけでは初回baselineを有効にしない。
+3. 同constructorのworkflow／core／budget／target／固定descriptor／fixture auth contextへ参照結合する。コピーや同値IDだけで外国snapshotを採用しない。
+4. 初回と最終のrequest／attemptは別物である。それぞれのroleと発行元を検査し、同attempt参照であることを要求しない。一方、owner／budget／target／contextは同じでなければならない。
+5. 比較に失敗してもbaselineを最終値へ置き換えず、run／時刻／claimを作り直さない。retryは既存HTTP／timeout規則の同logical read最大2試行だけ。
+6. stable_observationは2時点の親観測が一致したことだけ。DB lock、transaction snapshot、観測間の無変更、読取ACL、実認証、正式source証拠を意味しない。
+
+## 3. 保護入力とprivate型（提案）
+
+型名は設計案で、既存exportを示すものではない。最初はpackage除外の合成composition内だけに実装する。
+
+| 内部型／owner | 生成・binding | 所有権・権限 |
+|---|---|---|
+| ParentWorkflowOwner | 同constructorがcoreとともに一度生成 | 初回baseline、final利用claim、診断、live世代を唯一所有。外部ownerの採用口なし |
+| ParentParseDraft | 同body candidateの一度限りconsume継続 | strict解析後の5列とprivate発行元。最終guard前は未受理、status・worker・callerへ返さない |
+| InitialParentSnapshot | 初回の固定受理継続 | 初回request／成功attempt・同owner／budget／target／contextへ結合。immutable、baselineとして1件だけ保持 |
+| FinalParentObservation | 同final logical readの固定受理継続 | 所定final slot・request／成功attemptを記録。比較へ一度だけ移譲し、別runや初回roleとして使用不可 |
+| ParentCompareDraft | 同owner内の固定比較器 | field一致／差分名だけを仮置き。最終checkpointが成功するまで安定性を確定しない |
+| ParentConsistencyDiagnostic | 同ownerの固定終端処理 | 固定state／code・差分field名のみ。raw値・URL・対象ID・body・authを保持／公開しない |
+
+snapshotのデータは凍結した5つのprimitive stringに射影し、JSON全体・Response・reader・headers・raw bytes・callbackを保持しない。発行元の認証にはprivate台帳／所有関係を使い、TypeScript brand・Object.freeze・hashだけをauthorityとしない。
+
+現在のdispatcher authContextはfixture identityであり、closed gate内の認証identityや実AuthSnapshotIdentity／ready世代と同一だと認定済みではない。本段階で結合するのは**同じ閉鎖composition由来の参照**まで。実session／sourceへの接続時は既存の正式issuer・ReleasePermit bindingへ別途結ぶ。bootstrapの初回親GETに、まだ存在しないmatched permitを要求する循環も作らない。
+
+## 4. 比較項目と正規化しない方針
+
+本番parentSchema／CD-03のstrict 5列schemaを維持し、初回／最終の両方に適用する。余剰列・欠落列・型不一致を捨てて比較続行せずinvalid_responseとする。
+
+| field | 受付条件（現行互換） | 比較 |
+|---|---|---|
+| sys_id | 小文字hex32桁、constructorで固定した対象IDと一致 | 同じ対象であることを双方で検査。不一致はchangedではなくinvalid_response |
+| state | string、最大100 code units | 完全一致。空文字を勝手に補完しない。状態の業務的な許可判定は別 |
+| application | string、最大32 code units | 完全一致。空文字／global／sys_id風の値を同一視せず、scope情報へ昇格しない |
+| sys_updated_on | 非空string、最大40 code units | 完全一致。Date.parse・timezone変換・trimはしない |
+| sys_mod_count | 1〜20桁の数字string | 完全一致。Numberへ変換せず、精度損失・先頭ゼロの同一視を避ける |
+
+sys_updated_onだけ、またはsys_mod_countだけが違ってもchanged。state／applicationが違えば更新世代が同じでもchanged。カウンターの増減や時刻の新旧を推測せず、巻戻りも含め不一致は全て不安定とする。
+
+比較は固定順の5 fieldを明示的に行う。JSON key順・空白・chunk分割・本文長・digestの違いは、5列が同じならchangedの根拠にしない。raw bytesのhashは診断用で、snapshot identityや意味比較の代用品ではない。
+
+## 5. 生成・commit順序
+
+1. 固定factoryのconstructorで、workflow owner・診断slot・初回／最終claimを同coreへ結ぶ。getterや外部callbackで後から交換できないようにする。
+2. 初回logical readを一度開始する。HTTP／timeout retryは同read内で行い、失敗attemptからsnapshotを作らない。
+3. 同private candidateを一度consumeし、既存のJSON解析の中で5列を検査してParentParseDraftへ射影する。summaryからの復元・2回目のJSON.parse・追加GETはしない。
+4. EOF／cleanup証拠、owner／request／attempt／role／target／context、live、元のphase／attempt期限を再検査する。最後の成功guardの後、同じ同期継続で初回snapshotをcommitする。前段でdraftが作れても、後段のguard失敗なら破棄する。
+5. final開始前に独立した「初回snapshot受理済み」を検査し、final workflow claimを一度消費する。その後に所定slotでfinal logical readへ進む。transportのinitial成功mapだけを根拠にしない。
+6. finalも同じ経路でprivate observationを生成し、同ownerの初回snapshotと比較する。final retryは同logical read／slot内だけで、新しいfinal claimを作らない。
+7. 比較結果をdraftへ置き、元の時計・停止・identityを再検査する。成功した固定同期継続で一度だけstable_observationまたはchangedを確定し、両方のrecord参照を破棄する。
+
+publicなbody.consumeの結果へrecordを追加したり、任意のonParsed(row) callbackを渡したりしない。新しい固定parent-consume継続は閉鎖core／body laneの内部接続へ限定する。既存の汎用summary入口・CD-01／CD-02／stream-onlyを、本番snapshotの発行元として扱わない。
+
+### 5.1 現行の成功判定との関係
+
+現行body.finishは解析前にtransport側をsettleし、parent_initial成功をReadStateへ記録できる。その後にparseや最終guardが失敗すればrunは停止するが、このmapだけでは新snapshotの受理証拠に足りない。
+
+したがってParentWorkflowOwner自身が、最終guardを通過した初回snapshotの受理状態を別に所有する。finalの入口でReadStateの順序・slot条件とownerの受理状態を両方要求する。将来の実装でguardの中から早期sink callbackを呼び、後段で停止してもsnapshotが残る構造を採らない。
+
+async readの返却後に起きた取消との関係はcommit時点をlinearization pointとする。commit前の取消／期限切れなら成功を出さない。commit後の停止では観測診断を履歴として保持できるがlive権限を失効し、後続の証拠発行／利用には毎回有効性検査を要求する。Promiseがcallerへ届いたこと自体を利用権限にしない。
+
+## 6. workflow状態と一度限りの消費
+
+| 状態 | 許可する進行 | 拒否／停止 |
+|---|---|---|
+| new | 初回logical readの開始 | final・比較・外国handle |
+| initial_pending | 同logical readの既存retry、またはsnapshot受理 | 二重初回、未受理のままfinal、別attemptのdraft混入 |
+| initial_observed | final workflow claimを一度消費 | 初回再取得・baseline差替え |
+| final_pending | 同final logical readの既存retry、または固定比較 | 新final生成、比較二重開始、別slot／owner混入 |
+| stable_observation | 診断参照だけ | 再比較・snapshot持出し・未承認の正式発行 |
+| changed | 固定診断を保持しrun停止 | baseline更新・最終値への置換・自動再読による救済 |
+| not_verified／revoked | 固定理由を保持し参照破棄 | 再準備・復活・retry権限の再発行 |
+
+pendingはlogical readの進行を表し、HTTP attemptが常にactiveという意味ではない。cleanup確認済みtransientで次attemptを待つ間も同logical readに属する。final開始claimと各attempt claimは別であり、transport retryによって前者を二重消費しない。
+
+baselineやfinal draftを別ownerへ渡すテスト用の本番登録口を作らない。foreign handleは自owner側で拒否し、外国ownerのclaim・診断・参照を変更しない。自owner内のbinding矛盾・二重消費は、そのownerを停止し再利用不能にする。
+
+## 7. 失敗分類・停止・診断
+
+比較差分と取得／証拠不足を区別する。既存の本番bounded-source.verifyのconsistency返却は変更しない。下記の追加語彙は**閉鎖経路の提案**であり、まだenumや公開JSONへ実装しない。
+
+| 事象 | workflowの結論 | 停止／診断方針 |
+|---|---|---|
+| 有効な5列のstate／application／更新世代が不一致 | changed | 新内部code候補parent_changedでrun停止。再取得しない |
+| 対象ID不一致、欠落／余剰列、型・schema不正 | not_verified | 既存invalid_response。changedと採点しない |
+| 同owner／budget／role／slot等のbinding不一致 | not_verified | evidence_binding_mismatch。外国ownerは操作しない |
+| 二重開始・二重consume・順序違反 | not_verified | invalid_state。claimは戻さない |
+| finalを取得できない／HTTP retry上限／予算不足 | not_verified | 既存HTTP／予算理由を保持。final欠落をstableにしない |
+| cancel／close／phase・全体・attempt期限、clock失敗 | not_verified／revoked | 既存の最初の停止codeを優先し、参照を同期失効 |
+| cleanup未確認 | not_verified | 既存primary・attempt／HTTP診断と別にcleanupを保持。snapshotを受理しない |
+
+changed_fieldsは固定順のfield名だけを最大5件保持する。sys_idの不一致は受付段階で拒否するため、通常の意味差分は残り4 field。初回／最終の値、差分値、対象ID、URL、auth context、raw errorは出さない。件数だけで十分な公開境界にはfield名も渡さない。
+
+比較処理を開始する前に停止していれば既存primaryを保持し、parent_changedで上書きしない。compare draft作成後の最終guardでcancel／期限切れを検出した場合も、stable／changedのcommitをせずnot_verifiedにする。changed確定後はその診断をlate応答やcloseで消さず、resource解放の状態とは別軸に保つ。
+
+安定性診断と停止の確定は同owner内の固定sectionで行う。任意callerがconsistency=stable_observationを申告して受付を継続する口や、digestだけを再提出する比較口は設けない。
+
+## 8. 所有権・寿命・費目
+
+初回snapshotは受理から最終比較／停止／closeまで。final observationは最終受理から固定比較の終了までだけ保持する。設計上の保持record数は初回1件＋final draft／observation1件の最大2件とし、初回／最終それぞれのdraftとcommitted copyを同時に別保存しない。retry失敗はrecordを増やさず、未受理draftを破棄する。
+
+5列の長さ上限の合計は1 record最大224 UTF-16 code units、2 record最大448。ただしJSON解析中のobject・string backing storage・engine overhead・受信bufferは別費目であり、この値を実heap byte上界と扱わない。秘密参照のdropは到達可能性を減らす操作で、JSの即時GC／物理メモリ消去を保証しない。
+
+| 費目 | 所有者・計上方針 |
+|---|---|
+| HTTP C／G／S・final予約・retry | 既存の単一ReadState。snapshot生成・比較で再加算／返金しない |
+| 元t0／60秒・50／55秒・attempt window・cleanup | 既存core。比較前後にもcheckpointし、比較用の新期限を作らない |
+| JSON decode／strict schema／digest | 既存consumeを一度だけ使用。比較のために本文を再parse／再取得しない |
+| private projection | 同consumeの固定継続。最大5 bounded stringと発行元bindingの保持費用 |
+| owner／claim／比較guard | 固定owner。状態・同一性・一度限り消費の費用を追加費目として明示する |
+| 意味比較 | 固定5 fieldのbounded文字列比較。順序固定・早期差分打切りの有無にかかわらず全fieldの上界で評価 |
+| 解放 | 同owner。停止時の参照破棄は一度だけ、既存HTTP cleanupを二重実行しない |
+
+追加の計算量は有限でも、既存全体work／heapモデルへ課金済みとは認定しない。実装時はprojection・guard・比較・参照破棄の費目所有と、成功／拒否／取消経路の独立計数を確認する。Rust側のwork unit等と無根拠に換算せず、本番cap／全体受付は無効のままにする。
+
+## 9. 合成試験・独立oracleの条件
+
+実通信を使わず、既存fake dispatcher・clock／schedulerと注入Response／Streamsで確認する。製品parser／比較器を期待値生成へ流用せず、試験側の固定5列と差分名一覧から判定する。
+
+- 同じ5列でJSON key順・空白・chunk分割・digestが異なる場合もstable。逆に同じ更新世代でもstate／application差分はchanged。
+- 各比較fieldの単独変更、複数変更、全変更と固定順のchanged_fieldsを確認する。sys_id差分はinvalid_response、他4 fieldの非空変更組合せ15通りを独立oracleで確認する。
+- カウンター20桁、桁落ちが起こる値、先頭ゼロ差、時刻表記差・巻戻り、空state／applicationの同値と相違を、数値／日付／scopeへ正規化せず判定する。
+- sys_idだけの本文・余剰／欠落列・型不正、別target／owner／budget／role／slot／attempt由来、コピーhandle・summary／hashの再登録を拒否する。
+- 初回／最終のprivate projection発行後から最終guardまでに取消・期限切れ・clock再入を起こし、未受理draftがbaseline／stableとして残らないことを確認する。
+- 初回timeout／429後の成功で、最初の成功受理からだけbaselineを作る。final transient後のretry成功でも初回baselineを再設定しない。
+- final HTTP恒久失敗・retry上限・予算不足・cleanup未確認・未実行はnot_verified。changed確定後の再取得、二重final、二重比較、停止後の再準備は拒否する。
+- source chunkの改変や返却summaryの改変でsnapshotが変わらないこと、停止／比較終了後にrecord参照を保持しないこと、secret sentinelがstatus／ログ／結果へ出ないことを検証する。
+- 同C/G・final枠・元の時計を維持し、追加GET／2回目parse／別budgetがないこと、foreign owner不変、CD-01〜CD-04と既存MCP／梱包契約の互換を確認する。
+
+privateな参照保持の検証方法は、内部test-only計数／状態の限定観測で具体化し、生snapshotを返すtest issuerや本番台帳操作口を追加しない。heapの実測やWeakRef／GC待ちだけで解放を証明したと扱わない。
+
+## 10. 次の実装単位と未確認事項
+
+1. private snapshot／draft・workflow ownerの内部型、固定5列比較器、生成・消費順序を合成issuerだけで実装する。本番issuer・実sessionは採用しない。
+2. 同bytesの既存consumeから固定private projectionを供給し、最終guard後だけ初回受理／final比較へcommitする。summaryやcaller callbackへのrecord流出を拒否する。
+3. CD-03／CD-04のinitial／final・停止処理へownerを接続し、安定／変更／未検証の全経路、追加費目、非露出・既存互換を検証する。
+
+parent_changed等の内部enum追加、fixed status表示のexact schema、projectionのprivate接続手段と費目の実測は実装前に確定する。実sourceでは既存verifyが親とmetadataをまとめて評価するため、親だけの結果を全体stableとして公開しない。後続のmetadata／payload／worker binding・上位JSONへの写像は別設計とする。
+
+実AuthSnapshotIdentity／ReleasePermit・固定sourceへの正式接続、本番cap・全体work／heap上界・OSの実時間終了保証は未接続／未承認。正式発行口閉鎖・Unknown・全体受付無効、VM／監視／telemetry調査保留を維持する。今回の作業はMD整理だけで、実装・実通信・実機操作・token発行・設定変更・Pushは行わない。

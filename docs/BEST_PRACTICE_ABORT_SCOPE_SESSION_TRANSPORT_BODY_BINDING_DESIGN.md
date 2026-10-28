@@ -6,6 +6,7 @@ Status: **§14〜§17の閉鎖gate・同ReadState・試行監督へ、§18の注
 親：[共通run owner](BEST_PRACTICE_ABORT_SCOPE_RUN_OWNER_BINDING_DESIGN.md)、[TC-01〜TC-04と現行境界](BEST_PRACTICE_ABORT_SCOPE_RUN_TRANSPORT_CLEANUP_DESIGN.md)、[用途別受領物](BEST_PRACTICE_ABORT_SCOPE_TRANSPORT_RECEIPTS_DESIGN.md)。
 §18後の設計：[固定dispatcher・中断signal・Response受領draft-0.4](BEST_PRACTICE_ABORT_SCOPE_CLOSED_DISPATCH_SIGNAL_DESIGN.md)。CD-03のreader接続に続き§13のCD-04でHTTP失敗分類・cleanup確認後の限定retryを合成接続。実auth snapshot／sourceへの正式結合は未接続であり正式発行口は開かない。
 後続：[選択window／payload受領物](BEST_PRACTICE_ABORT_SCOPE_REAL_SESSION_RECEIPTS_DESIGN.md)、[worker接続契約](BEST_PRACTICE_ABORT_SCOPE_CONNECTION_CONTRACT_DESIGN.md)。
+親観測の後続案：[private snapshot・初回／最終安定性draft-0.1](BEST_PRACTICE_ABORT_SCOPE_PARENT_STABILITY_DESIGN.md)。固定5列比較・owner／claim・最終guard・失敗時停止の設計だけを整理し、実sourceのverifyや正式受領物へは未接続。
 本書はTC-04後の①実session／ReleasePermit bindingと②単一会計・正式body受領境界を対で具体化する。①②の後続設計として本書を優先し、既存文書の実装履歴や検証済み範囲を書き換えない。型名・port名・状態はすべて提案で、現在存在するexportとは限らない。
 
 ## 1. 現在あるものと、まだ無いもの
