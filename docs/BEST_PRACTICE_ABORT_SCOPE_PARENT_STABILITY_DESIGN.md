@@ -1,7 +1,7 @@
 # AU-BR-006：親レコードprivate snapshot・初回／最終安定性の詳細設計
 
-Version: br006-parent-stability-draft-0.1 / Date: 2026-10-29。
-Status: **設計のみ。固定親GETの合成経路に向けた案で、実装・正式snapshot発行・実source採用は未実施。正式発行口閉鎖・Unknown・全体受付無効を維持する**。
+Version: br006-parent-stability-draft-0.2 / Date: 2026-10-29。
+Status: **§11の合成issuer限定モデルを実装。private型・一度限りの生成／消費・5列比較・停止を合成検証。既存bytes parser／CD-03〜04・実sourceへの接続と正式snapshot発行は未実施。正式発行口閉鎖・Unknown・全体受付無効を維持する**。
 
 親：[CD-01〜CD-04の固定dispatcher設計](BEST_PRACTICE_ABORT_SCOPE_CLOSED_DISPATCH_SIGNAL_DESIGN.md)、[session／transport／body境界](BEST_PRACTICE_ABORT_SCOPE_SESSION_TRANSPORT_BODY_BINDING_DESIGN.md)。
 参照：[共通run owner](BEST_PRACTICE_ABORT_SCOPE_RUN_OWNER_BINDING_DESIGN.md)、[選択window／payload受領物](BEST_PRACTICE_ABORT_SCOPE_REAL_SESSION_RECEIPTS_DESIGN.md)、[CD-03検証](E2E_BEST_PRACTICE_CLOSED_RESPONSE_READER_2026-10-28.md)、[CD-04検証](E2E_BEST_PRACTICE_CLOSED_HTTP_STATUS_2026-10-28.md)。
@@ -25,7 +25,7 @@ Status: **設計のみ。固定親GETの合成経路に向けた案で、実装�
 
 ## 3. 保護入力とprivate型（提案）
 
-型名は設計案で、既存exportを示すものではない。最初はpackage除外の合成composition内だけに実装する。
+型名は当初の設計案で、既存exportと同じとは限らない。§11の初期実装はpackage除外の独立した合成issuer内だけで、実parser／transportの発行継続ではない。
 
 | 内部型／owner | 生成・binding | 所有権・権限 |
 |---|---|---|
@@ -94,7 +94,7 @@ baselineやfinal draftを別ownerへ渡すテスト用の本番登録口を作�
 
 ## 7. 失敗分類・停止・診断
 
-比較差分と取得／証拠不足を区別する。既存の本番bounded-source.verifyのconsistency返却は変更しない。下記の追加語彙は**閉鎖経路の提案**であり、まだenumや公開JSONへ実装しない。
+比較差分と取得／証拠不足を区別する。既存の本番bounded-source.verifyのconsistency返却は変更しない。下記の語彙は§11の合成モデル内部で使うが、既存closed gate／ReadStateや公開JSONには追加しない。
 
 本番との写像：stable_observationは本番`stable_observation`、changedは本番`changed`（暫定結果＋`changed_during_review`）、not_verifiedは本番`unverified`（`consistency_unverified`）に対応する。本番はchangedを正当な観測結果として暫定結果まで返すが、閉鎖経路は正式発行口を閉じたまま観測を証拠へ昇格しないため、changedでもrunを停止するfail-closedを選ぶ。将来本番へ接続するときは、この停止をchanged＝失敗と読み替えず、本番の暫定結果の扱いに合わせて再設計する。
 
@@ -110,7 +110,7 @@ baselineやfinal draftを別ownerへ渡すテスト用の本番登録口を作�
 
 changed_fieldsは固定順のfield名だけを最大5件保持する。sys_idの不一致は受付段階で拒否するため、通常の意味差分は残り4 field。初回／最終の値、差分値、対象ID、URL、auth context、raw errorは出さない。件数だけで十分な公開境界にはfield名も渡さない。
 
-比較処理を開始する前に停止していれば既存primaryを保持し、changed_during_reviewで上書きしない。compare draft作成後の最終guardでcancel／期限切れを検出した場合も、stable／changedのcommitをせずnot_verifiedにする。changed確定後はその診断をlate応答やcloseで消さず、resource解放の状態とは別軸に保つ。
+比較処理を開始する前に停止していれば既存primaryを保持し、changed_during_reviewで上書きしない。compare draft作成後の最終guardでcancel／期限切れを検出した場合も、stable／changedのcommitをせずnot_verified／revokedにする。changed確定後はその診断をlate応答やcloseで消さず、resource解放の状態とは別軸に保つ。
 
 安定性診断と停止の確定は同owner内の固定sectionで行う。任意callerがconsistency=stable_observationを申告して受付を継続する口や、digestだけを再提出する比較口は設けない。
 
@@ -154,6 +154,36 @@ privateな参照保持の検証方法は、内部test-only計数／状態の限�
 2. 同bytesの既存consumeから固定private projectionを供給し、最終guard後だけ初回受理／final比較へcommitする。summaryやcaller callbackへのrecord流出を拒否する。
 3. CD-03／CD-04のinitial／final・停止処理へownerを接続し、安定／変更／未検証の全経路、追加費目、非露出・既存互換を検証する。
 
-閉鎖gate／ReadStateの内部enumへの`changed_during_review`追加、fixed status表示のexact schema、projectionのprivate接続手段と費目の実測は実装前に確定する。実sourceでは既存verifyが親とmetadataをまとめて評価するため、親だけの結果を全体stableとして公開しない。後続のmetadata／payload／worker binding・上位JSONへの写像は別設計とする。
+1の合成モデル実装は§11を参照。2・3は未接続。閉鎖gate／ReadStateの内部enumへのchanged_during_review追加、transport側へのexact status写像、projectionのprivate接続手段と費目の実測は接続実装前に確定する。実sourceでは既存verifyが親とmetadataをまとめて評価するため、親だけの結果を全体stableとして公開しない。後続のmetadata／payload／worker binding・上位JSONへの写像は別設計とする。
 
-実AuthSnapshotIdentity／ReleasePermit・固定sourceへの正式接続、本番cap・全体work／heap上界・OSの実時間終了保証は未接続／未承認。正式発行口閉鎖・Unknown・全体受付無効、VM／監視／telemetry調査保留を維持する。今回の作業はMD整理だけで、実装・実通信・実機操作・token発行・設定変更・Pushは行わない。
+draft-0.1作成時はMD整理のみ。後続の合成モデルは次節と区別する。実AuthSnapshotIdentity／ReleasePermit・固定sourceへの正式接続、本番cap・全体work／heap上界・OSの実時間終了保証は未接続／未承認。正式発行口閉鎖・Unknown・全体受付無効、VM／監視／telemetry調査保留を維持し、実通信・実機操作・token発行・設定変更・Pushは行わない。
+
+## 11. 合成issuer限定：内部型・固定比較器・one-shot初期実装
+
+2026-10-29追加。[実装](../src/review/abort-scope-evidence-parent-stability.ts)、[65件の合成試験](../tests/review/parent-stability-model.test.ts)、[検証記録](E2E_BEST_PRACTICE_PARENT_STABILITY_MODEL_2026-10-29.md)を参照。既存のbody lane・supervisor・本番sourceを変更せず、独立したsynthetic issuer内で生成・消費契約を検証する。
+
+### 11.1 内部所有と状態
+
+factoryのissueSessionは対象ID・最大60000msの**合成**deadlineからprivate Context（core／budget／auth／generationの不透明identity）を生成する。実sessionや既存Readonly leaseの登録は受け付けない。session側claimをclock検査前に消費し、claimOwnerは一度だけ。重複／失敗／close後に別ownerを作り直せない。
+
+Owner・Use・Draft・Snapshot・Comparisonはissuer内の非export型。外へ出すのは中身のない凍結handleだけで、同issuerのprivate WeakMapによる参照検査を必須とする。initial／finalは異なるrequest・attempt・slot identityを持ち、同owner／Contextへ結合する。snapshotのrecord値を返すAPIはない。
+
+beginInitial→issueDraft→acceptInitial→beginFinal→issueDraft→prepareComparison→commitComparisonの順序を固定する。draft発行・consume・比較handleの確定は一度だけ。外国handleは受信ownerを拒否し外国ownerを変えず、自ownerの消費済みhandleはinvalid_stateとする。
+
+### 11.2 guard・比較・非露出
+
+各操作はpre-guard→private prepare／claim消費→post-guard→固定同期commitの順。初回snapshot受理とstable／changedの確定はpost-guardの後だけで、任意callback・awaitを挟まない。clock再入・取消・期限切れでdraftができても受理しない。比較準備後は両recordを捨て、field名だけの比較draftを保持して最後に確定する。
+
+strictな5列をown data propertyからbounded primitive projectionへコピーし、Proxy・accessor・余剰／欠落列・型不正・対象ID不一致を拒否する。5列の比較はprivate純粋関数で全fieldを固定順に完全一致検査し、Date／Number／scopeの正規化をしない。比較器自体をraw recordを受け取る公開関数としてexportしない。
+
+changedでは本番と異なる閉鎖モデルのfail-closed選択に従いchanged_during_reviewで停止し、値を置き換えない。statusはstate／liveの最終観測・最初のprimary・field名だけのchanged_fields・有限な操作計数を返す。stable／changed確定後のcloseや後続拒否でも観測履歴を保持し、利用権限は失効する。readonly statusはclockを進めず、現時点の有効性証明ではない。
+
+### 11.3 保持・計数と未証明の範囲
+
+初回recordとfinal draftの保持は最大2件。比較準備・停止・closeでrecord参照を破棄し、stale handleのWeakMap entryにもrecord値を残さない。保持数は論理recordの計数であり、GC／物理消去や実heap byte上界の証明ではない。
+
+drafts_issued／drafts_consumed／snapshots_accepted／comparisons_prepared／comparisons_committedを分離する。field_comparisonsは比較準備ごとに固定5で、後段guardが失敗しても実施した比較費用を消さない。これらは限定した操作数であり、全体work unitや費目受付へ接続したものではない。
+
+raw JS fixtureのown key列挙前のallocation上界、Zod／engine内部費用、全体heap／workの受付は未証明。合成deadlineも操作時の検査だけで、実timer／HTTP attempt／50・55秒phase・共有C/Gへは未接続。未観測のHTTP cleanupをconfirmedと申告するAPIや、実body／sourceからの正式生成口はない。
+
+次段階は既存consumeの同bytes由来projectionとpost-guard受理への固定接続、その後にCD-03／CD-04のowner停止・final slotへ結ぶ工程。formal issuance／全体受付を有効化せず、Unknown・VM／監視／telemetry保留を維持する。実通信・実機操作・設定変更・Pushは行わない。
