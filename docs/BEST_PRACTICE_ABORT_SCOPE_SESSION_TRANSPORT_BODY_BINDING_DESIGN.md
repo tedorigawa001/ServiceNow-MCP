@@ -4,6 +4,7 @@ Version: br006-session-transport-body-binding-draft-0.6 / Date: 2026-10-28。
 Status: **§14〜§17の閉鎖gate・同ReadState・試行監督へ、§18の注入native Web Streamsを合成接続。正式body receipt／証拠発行gateは閉鎖。実session・実transport接続・本番cap投入の承認ではない**。
 
 親：[共通run owner](BEST_PRACTICE_ABORT_SCOPE_RUN_OWNER_BINDING_DESIGN.md)、[TC-01〜TC-04と現行境界](BEST_PRACTICE_ABORT_SCOPE_RUN_TRANSPORT_CLEANUP_DESIGN.md)、[用途別受領物](BEST_PRACTICE_ABORT_SCOPE_TRANSPORT_RECEIPTS_DESIGN.md)。
+§18後の設計：[固定dispatcher・中断signal・Response受領draft-0.1](BEST_PRACTICE_ABORT_SCOPE_CLOSED_DISPATCH_SIGNAL_DESIGN.md)。fake依存で同attemptの用途／URL／auth snapshotとResponse待機を結ぶ案。未実装であり正式発行口は開かない。
 後続：[選択window／payload受領物](BEST_PRACTICE_ABORT_SCOPE_REAL_SESSION_RECEIPTS_DESIGN.md)、[worker接続契約](BEST_PRACTICE_ABORT_SCOPE_CONNECTION_CONTRACT_DESIGN.md)。
 本書はTC-04後の①実session／ReleasePermit bindingと②単一会計・正式body受領境界を対で具体化する。①②の後続設計として本書を優先し、既存文書の実装履歴や検証済み範囲を書き換えない。型名・port名・状態はすべて提案で、現在存在するexportとは限らない。
 
