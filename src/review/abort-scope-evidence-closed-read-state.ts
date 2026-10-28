@@ -108,6 +108,8 @@ export function createClosedReadState(config:Config,hooks:{
   if(config.body_mode==='bytes')bodies=createClosedBodyLane({guard,checkpoint,stop:hooks.stop,chunk:chunkCore,settle:settleCore,payload:payloadCore,discardPayload:discardPayloadCore,responseLimit:config.response_bytes});
   const port=Object.freeze({
     body:bodies?.port??null,
+    /** Closed fixture wait-only path: never accepts success and never issues a body candidate. */
+    finishUnopened(handle:ClosedReadAttempt,outcome:'unavailable'|'retryable'):ClosedAccountingResult<true>{return bodies?bodies.abandonUnopened(handle,outcome):hooks.stop('invalid_state');},
     parentFinal:slots[0]!.handle,metadataFinal:slots[1]!.handle,
     attemptWindow(handle:ClosedReadAttempt){return guard(()=>{
       const a=attempts.get(handle);if(!a||active!==handle)return hooks.stop('evidence_binding_mismatch');

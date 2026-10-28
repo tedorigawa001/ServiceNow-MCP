@@ -10,7 +10,7 @@
 
 追加：[draft-0.6 §18の注入native Web Streams](BEST_PRACTICE_ABORT_SCOPE_SESSION_TRANSPORT_BODY_BINDING_DESIGN.md#18-draft-06注入native-web-streamsの合成接続)。同private監督へread／cancel／closed／releaseLockを接続し、実API操作をメモリ内で検証。実HTTP・正式source binding・証拠発行は閉じたまま。
 
-後続設計：[閉鎖dispatcher・中断signal・Response受領draft-0.1](BEST_PRACTICE_ABORT_SCOPE_CLOSED_DISPATCH_SIGNAL_DESIGN.md)。§10のCD-01は同attemptの固定親GET／不変fixture contextを同期fake I/Oへ接続。Response待機・実auth snapshot／owner接続・正式発行は未接続／無効のまま。
+後続設計：[閉鎖dispatcher・中断signal・Response受領draft-0.2](BEST_PRACTICE_ABORT_SCOPE_CLOSED_DISPATCH_SIGNAL_DESIGN.md)。§10のCD-01に加え§11のCD-02でResponse待機・同signal・破棄cleanupを同coreへ接続。本文採用・実auth snapshot／owner接続・正式発行は未接続／無効のまま。
 
 Version: br006-run-owner-binding-draft-0.4 / Date: 2026-10-27。
 Status: **実session private lifecycleに同sourceのReleasePermit／不変release snapshotをprepared-onlyで限定接続し、fake I/Oで検証。正式証拠receipt／worker・会計操作／実transportは未接続、正式証拠発行は閉鎖。Unknown・全体受付無効、VM／監視／telemetry保留を維持**。

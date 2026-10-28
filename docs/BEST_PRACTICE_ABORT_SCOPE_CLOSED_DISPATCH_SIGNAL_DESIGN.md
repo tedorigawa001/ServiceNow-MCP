@@ -1,7 +1,7 @@
 # AU-BR-006：閉鎖dispatcher・中断signal・Response受領の詳細設計
 
-Version: br006-closed-dispatch-signal-draft-0.1 / Date: 2026-10-28。
-Status: **§10のCD-01だけ合成実装。同期fake dispatcherの固定親GET／private context／attempt結合を検証。Response待機・正式body採用は未接続。正式発行口閉鎖・全体受付無効・Unknownを維持。実transportの採用承認ではない**。
+Version: br006-closed-dispatch-signal-draft-0.2 / Date: 2026-10-28。
+Status: **§10のCD-01と§11のCD-02を合成実装。同attemptの固定親GET／context／Response待機・signal・破棄cleanupを検証。readerへの本文採用と正式body発行は未接続。正式発行口閉鎖・全体受付無効・Unknownを維持。実transportの採用承認ではない**。
 
 親：[session／transport／body境界 §17・§18](BEST_PRACTICE_ABORT_SCOPE_SESSION_TRANSPORT_BODY_BINDING_DESIGN.md#18-draft-06注入native-web-streamsの合成接続)、[共通run owner](BEST_PRACTICE_ABORT_SCOPE_RUN_OWNER_BINDING_DESIGN.md)。
 参照：[用途別受領物](BEST_PRACTICE_ABORT_SCOPE_TRANSPORT_RECEIPTS_DESIGN.md)、[固定source](BEST_PRACTICE_ABORT_SCOPE_FIXED_SOURCE_ISSUER_DESIGN.md)、[OAuth移譲](BEST_PRACTICE_ABORT_SCOPE_OAUTH_SOURCE_HANDOFF_DESIGN.md)。
@@ -126,7 +126,7 @@ native Response／Streamsはメモリ内で生成する。global fetch・実toke
 2. 同signalとResponse待機を既存監督へ接続。read前の取消・never-settle・late応答とcleanup診断を試験する。
 3. private Response／body採用から既存native reader監督へ一体接続。retry・会計・秘密非出力・既存42＋25件の互換を検証する。
 
-draft-0.1設計作成時は全て未実装。後続の§10で1の限定subsetを接続し、2・3は未接続のままとした。既存stream-only入口の互換を保ち、新compositionから生stream採用口を外へ公開しない。実session／ReleasePermitへの採用、OAuth秘密のprivate引渡し、HTTP status全表、正式window／payload／worker binding、全体work・heap・本番cap、実host強制終了は別途確認が必要。
+draft-0.1設計作成時は全て未実装。§10のCD-01時点では1の限定subsetだけを接続した。後続§11で2のResponse待機・破棄cleanupを接続し、3の本文採用は未接続。既存stream-only入口の互換を保ち、新compositionから生stream採用口を外へ公開しない。実session／ReleasePermitへの採用、OAuth秘密のprivate引渡し、HTTP status全表、正式window／payload／worker binding、全体work・heap・本番cap、実host強制終了は別途確認が必要。
 
 draft-0.1設計作成段階は文書のみで、実装は対象外だった。後続の限定実装は§10と区別する。正式発行口の開放・全体受付の有効化・本番policy承認は行わない。Unknown、VM／監視／telemetry調査保留を維持し、実transport・実機操作・設定変更・Pushは対象外のままとする。
 
@@ -152,3 +152,37 @@ draft-0.1設計作成段階は文書のみで、実装は対象外だった。�
 bodyの正常経路は既存fake pumpの固定合成projectionを使う。実Table APIの余剰列や配列形との互換性・sourceの意味検査を証明しない。実transport向けに本factoryの同期返却を汎用asyncへ緩めるのでなく、次段階で同resourceにdispatch pendingを追加し、単一監督へ接続する。
 
 正式発行口閉鎖・Unknown・全体受付無効、VM／監視／telemetry保留を維持。実session登録、実token、global fetch、実transport、実機操作、設定変更、本番cap投入は追加しない。既存梱包除外prefixを維持する。
+
+## 11. CD-02：同attemptのResponse待機・signal・破棄cleanup
+
+2026-10-28追加。[実装](../src/review/abort-scope-evidence-closed-attempt-supervisor.ts)、[32件の合成試験](../tests/review/closed-response-wait.test.ts)、[検証記録](E2E_BEST_PRACTICE_CLOSED_RESPONSE_WAIT_2026-10-28.md)を参照。§10の同期fake口を緩めず、別の閉鎖compositionでResponse待機だけを検証する。どちらも生成するcore／ReadStateは1個で、同時にactiveなbody操作とResponse待機は1つに制限する。
+
+### 11.1 開始・時間・停止
+
+`createInjectedClosedParentResponseWait`は同じ固定親GET builder・不変fixture auth context・private request台帳を使う。`initial`と`wait`だけを公開し、Response／body／readerを返さない。親最終観測はまだ成功証拠を持たないため公開しない。
+
+同ReadStateのdispatch／window成立後だけdependencyへ同signalを渡す。coreはdispatch Promise pendingをresourceに保持し、元のD_ioで採用を失効してabortを一度通知する。cleanupはその瞬間から元のreserve内、元のD_attemptまで。Response待機に別の10秒や60秒を追加しない。
+
+native PromiseだけをpinnedなPromise.prototype.thenで観測し、callerのthen／thenableを実行しない。同期Responseは同private受領継続へ直行する。同期throw／自発rejectはupstream_unavailable。timeout／取消による失効後のrejectは終了事実だけに使い、先行の局所timeoutを新しいglobal通信失敗へ上書きしない。
+
+### 11.2 Response所有と本文不採用
+
+Proxyを先に拒否し、native Response getterでstatus／body／bodyUsed／urlを捕捉する。callerのgetter overrideは読まない。fixture専用WeakSetでResponseとstreamを一度だけclaimし、既使用・foreign lock・既claimのbodyはcancel／unlockしない。Response.urlが空でない場合は固定URLとの一致を補助的に検査するが、同値URLを出所の証明へ昇格しない。
+
+今回のsubsetはstatus=200かつbodyありだけ。その他status・null bodyはinvalid_responseで拒否し、所有確認できたbodyだけnative stream.cancelで破棄する。429／5xxの通信retry分類やreaderへの採用は未接続。bytesのread・text/json decode・G/P/E課金・body候補発行を行わず、`response_wait_completed=true, body_adopted=false`の固定合成summaryだけを返す。成功summaryはレビュー／親record検証の成功ではない。
+
+### 11.3 cleanupと未開始bodyの終端
+
+Response pendingはdispatch_pending、所有確認後のcancel pending／rejectはresponse_cancel_pending／response_cancel_rejected、foreign／不正で所有が不明なものはresponse_ownership_unknownとして保持する。confirmedは、dispatcherが決着し、必要な自owner body取消が完了した場合だけ。readerを取得していないのでEOF・closed・releaseLockの架空の事実を作らない。
+
+Response到着時（または先行停止時）にcleanup deadlineを固定する。期限等号・未決着・時計／scheduler失敗はunconfirmed。遅れたPromise決着やlate bodyのbest-effort破棄で返却済みの診断を修復しない。late継続は古いresourceだけを参照し、新しいattemptや外国ownerを操作しない。
+
+同ReadStateの`finishUnopened`はbody laneのstate=open・append試行数0を検査し、unavailable／retryableだけを一度終端化する。successや、ゼロbyte appendを含む読取後の適用を拒否する。body terminal／candidateを発行せず、cleanup.kind=nullで「readerなし」を維持する。この操作自体が物理cleanupを証明するものではなく、閉鎖coreの先行確認後にだけ呼ぶfixture内部操作であり、本番authorityとして採用しない。
+
+局所timeoutでdispatchがabortに応答して決着し、cleanupが期限内に確認できた場合だけ同purposeの2回目を認める。新signal・ordinal、同URL／auth context／予算を維持し、3回目・二重wait・foreign／copy handleは拒否。未確認cleanupではglobal停止し、先行attempt_failureを残す。
+
+### 11.4 継続範囲
+
+CD-01の同期口と既存stream-only入口は互換維持。正式なResponse→native reader→同bytes採用はCD-03で接続する。実認証snapshot／ReleasePermit／選択window・payload／worker job、公開JSON、全体work／保持上界、本番capと実時間host終了は未接続／未承認。
+
+正式発行口閉鎖・全体受付無効・Unknown、VM／監視／telemetry保留を維持する。global fetch・実transport・実機操作・token発行・設定変更・Pushは行わない。

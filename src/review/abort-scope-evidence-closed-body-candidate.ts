@@ -28,7 +28,7 @@ export function createClosedBodyLane(hooks:{
   discardPayload(a:ClosedReadAttempt):ClosedAccountingResult<true>;
   responseLimit:number;
 }){
-  type Record={attempt:ClosedReadAttempt;kind:Kind;state:'open'|'pending'|'consuming'|'done'|'failed';chunks:Uint8Array[];size:number;rejected:boolean;terminal?:ClosedBodyTerminal;cleanup?:Cleanup;deadline?:number};
+  type Record={attempt:ClosedReadAttempt;kind:Kind;state:'open'|'pending'|'consuming'|'done'|'failed';chunks:Uint8Array[];size:number;appends:number;rejected:boolean;terminal?:ClosedBodyTerminal;cleanup?:Cleanup;deadline?:number};
   const attempts=new WeakMap<ClosedReadAttempt,Record>(),candidates=new WeakMap<ClosedBodyCandidate,Record>();
   let current:Record|undefined,last:Cleanup|null=null,consumes=0;
   function drop(r:Record){r.chunks=[];r.size=0;}
@@ -45,6 +45,7 @@ export function createClosedBodyLane(hooks:{
     append(a:ClosedReadAttempt,sequence:number,bytes:Uint8Array):ClosedAccountingResult<true>{return hooks.guard(()=>{
       const r=attempts.get(a);if(!r||r!==current)return hooks.stop('evidence_binding_mismatch');
       if(r.state!=='open')return hooks.stop('invalid_state');
+      r.appends++;
       let length:number,copy:Uint8Array|undefined;
       try{
         // Native internal slots; no caller species/iterator/buffer getter. Shared memory is not a snapshot.
@@ -99,6 +100,12 @@ export function createClosedBodyLane(hooks:{
     });},
     diagnostic(){return Object.freeze({cleanup:last,retained_bytes:current?.size??0,pending:current?.state==='pending',consumes,synthetic:true,evidence_issuance:'disabled' as const});},
   });
-  return Object.freeze({port,start(a:ClosedReadAttempt,kind:Kind,deadline?:number){const r:Record={attempt:a,kind,state:'open',chunks:[],size:0,rejected:false,deadline};attempts.set(a,r);current=r;},deadline:()=>current?.deadline,
+  return Object.freeze({port,abandonUnopened(a:ClosedReadAttempt,outcome:'unavailable'|'retryable'):ClosedAccountingResult<true>{return hooks.guard(()=>{
+    const r=attempts.get(a);if(!r||r!==current)return hooks.stop('evidence_binding_mismatch');
+    if(r.state!=='open'||r.appends!==0||outcome!=='unavailable'&&outcome!=='retryable')return hooks.stop('invalid_state');
+    const settled=hooks.settle(a,{outcome,cleanup:'confirmed'});if(!settled.ok)return settled;
+    // No reader existed: do not manufacture EOF, a released lock, or a body terminal/candidate.
+    last=Object.freeze({disposition:'confirmed',kind:null,reason:null,synthetic:true});drop(r);r.state='done';current=undefined;return ok(true);
+  });},start(a:ClosedReadAttempt,kind:Kind,deadline?:number){const r:Record={attempt:a,kind,state:'open',chunks:[],size:0,appends:0,rejected:false,deadline};attempts.set(a,r);current=r;},deadline:()=>current?.deadline,
     pending:()=>current?.state==='pending'||current?.state==='consuming',revoke(){if(current){if(current.state==='open'&&!current.cleanup)last=Object.freeze({disposition:'unconfirmed',kind:null,reason:'owner_stopped',synthetic:true});drop(current);current.state='failed';current=undefined;}}});
 }
