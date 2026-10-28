@@ -1,7 +1,7 @@
 # AU-BR-006 実session／ReleasePermit・単一transport・body受領境界の詳細設計
 
-Version: br006-session-transport-body-binding-draft-0.2 / Date: 2026-10-28。
-Status: **§14の閉鎖gateだけfake限定で実装。正式body receipt／証拠発行gateは閉鎖。実session・実transport接続・本番cap投入の承認ではない**。
+Version: br006-session-transport-body-binding-draft-0.3 / Date: 2026-10-28。
+Status: **§14の閉鎖gateと§15の同ReadState会計・用途／予約をfake限定で実装。正式body receipt／証拠発行gateは閉鎖。実session・実transport接続・本番cap投入の承認ではない**。
 
 親：[共通run owner](BEST_PRACTICE_ABORT_SCOPE_RUN_OWNER_BINDING_DESIGN.md)、[TC-01〜TC-04と現行境界](BEST_PRACTICE_ABORT_SCOPE_RUN_TRANSPORT_CLEANUP_DESIGN.md)、[用途別受領物](BEST_PRACTICE_ABORT_SCOPE_TRANSPORT_RECEIPTS_DESIGN.md)。
 後続：[選択window／payload受領物](BEST_PRACTICE_ABORT_SCOPE_REAL_SESSION_RECEIPTS_DESIGN.md)、[worker接続契約](BEST_PRACTICE_ABORT_SCOPE_CONNECTION_CONTRACT_DESIGN.md)。
@@ -226,4 +226,48 @@ draft-0.1作成時はローカル文書編集だけを行った。後続のfake�
 - fake clockの単調性・非有限・例外・hard期限等号をcheckpointで拒否する。timer／watchdogはないため、無操作中の自動終了や実OS期限保証を意味しない。fake期限は最大60秒、低減のみ許可する。自sessionと確認できた後は、run／transportの混入照合より前に同checkpointを行い、期限後の混入もdeadline_exceededをprimaryにする（TC-01の`active()`・本番`check()`と同順）。外国sessionは自ownerが無いので拒否だけで停止しない。
 - `cleanup.http/worker=not_started`はI/O未実施のmodel表示であり物理解放の証明ではない。診断は固定長slot・freeze済みのviewで、会計更新や再開の権限を持たない。
 
-新moduleは既存の`!dist/review/abort-scope-evidence*`で梱包対象外。実ReadState、C/G/S/P/E/R、承認cap、Q下限、ReleasePermit、正式body受領境界への接続は次工程。Unknown・全体受付無効、VM／監視／telemetry保留を維持する。
+新moduleは既存の`!dist/review/abort-scope-evidence*`で梱包対象外。draft-0.2時点で会計は未接続。次の§15でfake ReadStateだけを接続した。実ReadState、承認cap、Q下限、ReleasePermit、正式body受領境界への接続は未実施。Unknown・全体受付無効、VM／監視／telemetry保留を維持する。
+
+## 15. draft-0.3：同fake ReadStateの会計・用途／予約
+
+[ReadState内部型](../src/review/abort-scope-evidence-closed-read-state.ts)を§14のprivate constructorから一度だけ生成する。[合成試験50件](../tests/review/closed-read-state.test.ts)、[検証記録](E2E_BEST_PRACTICE_CLOSED_READ_STATE_2026-10-28.md)を参照。実`BoundedReadSession`・既存TC-02〜04の台帳／adapterを登録・採用するものではない。
+
+### 15.1 生成・binding・停止の唯一性
+
+fake constructorのstrict設定`accounting`を明示した時だけ同sessionにReadStateを置く。省略時は従来のidentity-onlyで、会計portを取得できない。`claimAccounting(session, run, transport)`は同じprivate台帳と共通clock／停止検査に通し、一度だけportを返す。成功済みの重複claimは新要求だけ拒否する。混入・消費中再入・失敗はcommon primaryを保持して停止し、再生成しない。
+
+ReadStateがC/G/P/Eと用途／attempt／slotを唯一保持する。Sはattempt内、Rは最大10個のslotの残数の合計、Tは最大8 table名の数であり、ownerへ別counterをcopyしない。portとgateの診断は同じ`stats()`の固定射影を読む。`budget_authority=fake_single_state`は合成会計の表示で、実予算leaseではない。
+
+すべてのport操作は同ownerのbinding／busy guardと元のclockを通る。global stop／closeではcallbackやawaitより前にReadStateを同期revokeし、current／active／pending payloadを失効、未完slotをinvalidatedにしてRを解放する。C/G/P/Eは戻さない。retained portも再開できず、最初のprimary／非terminal refusalを別slotで保持する。
+
+### 15.2 費目所有とfake event
+
+| 費目 | model内の唯一の更新点 | 合成上限・扱い |
+|---|---|---|
+| C | `dispatch`の同期commit | Q<=210。fake callbackがthrow／取消でもcommit済みの1を保持 |
+| G/S | 同attemptの連番`chunk` | scalar lengthだけ。G<=16MiB、S<=4MiB。超過chunkも一度加算後にglobal stop |
+| P | 成功・fake cleanup confirmed後の`chargePayload` | scalar lengthだけ。単体2MiB／累計8MiB、低減可。単体超過はlocal、累計超過はglobal。受信Gへ再加算しない |
+| E | table initial／finalの同じchunk commit | Gの内数。fake profileの16KiB／累計256KiBだけ。超過を保持し、そのattemptは後続chunkを採用せずcleanup待ち。以後のtable受付／final readを閉じる |
+| R/T | 同ReadStateのslot追加・final dispatch・settle／skip | 親／metadata各2で初期R=4、最大8 tableに各2を追加 |
+
+各scalar lengthは整数0〜2^32−1だけを受け付け、単一超過後の停止により加算値はsafe integer内に留まる。実bytes・token・本文は受け取らず、長さやcleanup結果の自己申告から正式な証拠を発行しない。payload受領済みmodelは一度だけchargeまたはdiscardするまで次用途／final移行を拒否する。
+
+### 15.3 用途・予約・retry
+
+- ordinary purposeはOAuth／parent initial／release／metadata initialを各一度、payloadを最大100回だけ生成。内部でordinalを管理し、同logical readのretryは2試行まで。外部ordinalや新purposeでretry上限を回避しない。
+- ordinary dispatchは`C+1+R<=Q`、table受付は`C+R+4<=Q`を検査し、初回用2件はCの前払いをしない。受付時にtable final用2件だけを原子的に予約する。
+- final phaseへは一方向。親→metadata→table受付順のslotに限り、自分のfinal dispatchで`C+=1、r_i-=1`。成功／retry不要終端で残りを一度解放する。初回成功なしのfinal readは拒否する。
+- ordinary枠不足は新通常用途を閉じ、予約は残す。table枠／E不足はtable受付を閉じる。初回未実施／取得不能、または証拠枠閉鎖が既知のtableだけを理由付きでskipし、Cは0、残予約だけを解放する。理由は`not_collected / initial_unavailable / evidence_disabled`。成功した親／metadataを任意skipできない。
+- retry可能というfake結果と同attemptのcleanup confirmedを受けた時だけ同purposeを再利用できる。cleanup unconfirmed・不正結果はglobal stop。予約返却でordinary phaseを再開しない。
+
+Q=4〜6等の利用不能帯を本番で受付するかは§7.1の承認待ちを維持する。このmodelはQ>=4を合成入力として試し、R=4で通常dispatch不能ならC=0で拒否するだけで、本番Q方針を変更しない。E上限も承認済みcapへ昇格させない。
+
+### 15.4 時間と未接続範囲
+
+起点はfake constructorの同t0、hardは最大60秒の同期限。reserve=`min(10000, deadline_ms/6)`から通常／整合cutoff（60秒なら50／55秒）を固定し、会計claimやfinal移行で時計を再起動しない。無活動の通常用途はsoft cutoffで新dispatchを拒否しfinal枠を残す。進行中attemptがphase期限を越えた場合、この段階のmodelはglobal stopで閉じる（実streamを取り消してfinalへ継続する処理ではない）。整合cutoff・hard等号以降は成功handleを返さない。
+
+fake cleanup後に保留中のpayloadがsoft cutoffへ達した場合は、P受領commit前に破棄し、localなphase拒否を保持する。C/Gは返金せず、pending handleがfinal移行を妨げないように失効させる。期限直前に既にcommitした費目は保持する。
+
+fake I/Oは同期の`dispatch()`通知だけ。read／cancel／closed／releaseLock、実cleanup証拠、pending readの終了待ち、試行10秒／empty-read・cleanup予約の実監督は未接続。引数の`cleanup=confirmed`は合成eventで、診断上の実HTTP／workerは引き続きnot_started。次工程のbody候補／cleanup／一度限りconsumeで由来を結合する必要がある。
+
+実session／ReleasePermit／選択payload／worker jobの正式binding、bootstrap順序の実認証、cap承認、allocation／同期parse／全体work上界、全体受付、OS期限保証は未実施。正式body gateは常に閉鎖。新moduleも既存wildcardで梱包除外し、VM／監視／telemetryは保留。

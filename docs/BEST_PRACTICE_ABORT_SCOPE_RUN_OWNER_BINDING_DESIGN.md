@@ -2,6 +2,8 @@
 
 後続：[閉鎖gate draft-0.2 §14](BEST_PRACTICE_ABORT_SCOPE_SESSION_TRANSPORT_BODY_BINDING_DESIGN.md#14-draft-02閉鎖gateの最初の合成実装)。fake生成継続・claim・診断だけを実装し、本書の実ownerへは未接続。正式発行口は閉鎖。
 
+追加：[draft-0.3 §15の同fake ReadState会計・用途／予約](BEST_PRACTICE_ABORT_SCOPE_SESSION_TRANSPORT_BODY_BINDING_DESIGN.md#15-draft-03同fake-readstateの会計用途予約)。同fake ownerのone-shot portと停止を接続したが、実予算lease・実session／ReleasePermit・正式receiptには未接続。
+
 Version: br006-run-owner-binding-draft-0.4 / Date: 2026-10-27。
 Status: **実session private lifecycleに同sourceのReleasePermit／不変release snapshotをprepared-onlyで限定接続し、fake I/Oで検証。正式証拠receipt／worker・会計操作／実transportは未接続、正式証拠発行は閉鎖。Unknown・全体受付無効、VM／監視／telemetry保留を維持**。
 

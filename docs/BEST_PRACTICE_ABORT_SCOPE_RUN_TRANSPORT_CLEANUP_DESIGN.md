@@ -2,6 +2,8 @@
 
 後続：[閉鎖gate draft-0.2 §14](BEST_PRACTICE_ABORT_SCOPE_SESSION_TRANSPORT_BODY_BINDING_DESIGN.md#14-draft-02閉鎖gateの最初の合成実装)。TC-04のtransportとは別のfake identity-only modelであり、会計・cleanup・bodyの採用入口を追加しない。
 
+追加：[draft-0.3 §15の同fake ReadState会計・用途／予約](BEST_PRACTICE_ABORT_SCOPE_SESSION_TRANSPORT_BODY_BINDING_DESIGN.md#15-draft-03同fake-readstateの会計用途予約)。単一C/G/S/P/Eと予約の合成eventを閉鎖gateへ接続した。TC-04 transportの登録／採用・実stream cleanup・正式body発行は行わない。
+
 Version: br006-run-transport-cleanup-draft-0.5 / Date: 2026-10-28。
 Status: **TC-01〜TC-03に加え、TC-04の固定source bootstrap・release・用途descriptorを同fake transportへ接続。実sessionの会計更新／実transportは未接続、正式証拠発行・本番cap承認は未実施／閉鎖**。
 
