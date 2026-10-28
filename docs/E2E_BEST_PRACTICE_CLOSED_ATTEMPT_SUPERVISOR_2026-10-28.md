@@ -62,7 +62,7 @@ fake policyはtimeout最大10000ms、cleanup予約最大250msかつ試行残量�
 
 コミット分割時にも、HEAD＋前工程だけの一時コピーでbuild・ESLint・全体172 files／5,196 tests成功（55.39秒）を再確認した。最初の制限付き実行はローカル待受を含む試験の終了待ちとなり中断（130）。ローカル合成通信を許可した再実行が上記の成功結果であり、期限は変更していない。
 
-fake schedulerとfake Promiseの契約に基づく検証であり、実Web Streamsのread/cancel/reader.closed/releaseLock接続は未実装。body laneの保守的owner_stopped診断は保持し、supervisorが観測した後続cleanupを候補復活の根拠にしない。
+このdraft-0.5の検証はfake schedulerとfake Promiseの契約に限定した。後続の[注入Web Streams検証](E2E_BEST_PRACTICE_CLOSED_STREAM_ADAPTER_2026-10-28.md)でnative read/cancel/reader.closed/releaseLockを接続したが、実HTTP transportは未接続。body laneの保守的owner_stopped診断は保持し、supervisorが観測した後続cleanupを候補復活の根拠にしない。
 
 未決着Promiseの強制決着や、event loop停止・非協力的OS I/Oの実時間終了を証明していない。disposer失敗時の外部timer消失も保証しない。同期JSON.parse／hashを途中で強制中断する機能、全体work／heap上界、実host終了policyは未接続。これらを監督上の固定失敗・未確認として扱い、正常receiptや受付継続へ格下げしない。
 

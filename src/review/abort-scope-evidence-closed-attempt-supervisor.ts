@@ -1,5 +1,6 @@
-/** Closed fake attempt supervisor. No real transport, session adoption or formal issuer. */
+/** Closed synthetic supervisor with optional injected native Web Streams. No fetch, real session adoption or formal issuer. */
 import {z} from 'zod';
+import {types as nodeTypes} from 'node:util';
 import {createFakeClosedBodyGate} from './abort-scope-evidence-closed-body-gate.js';
 import {closedAccountingSchema,closedAttemptPolicySchema,type ClosedReadPurpose,type ClosedStateCode,type ClosedAccountingResult} from './abort-scope-evidence-closed-read-state.js';
 export interface ClosedAttemptClock{now():number;schedule(deadline:number,wake:()=>void):()=>void;}
@@ -12,7 +13,9 @@ const event=z.strictObject({done:z.boolean(),bytes:z.custom<Uint8Array>(value=>{
 type Cleanup=Readonly<{disposition:'not_started'|'in_progress'|'confirmed'|'unconfirmed';kind:'eof'|'cancelled'|null;reason:'read_pending'|'cancel_pending'|'cancel_rejected'|'closed_pending'|'closed_rejected'|'release_failed'|'abort_failed'|'cleanup_deadline'|'scheduler_failed'|'observation_invalid'|null;synthetic:true}>;
 const get=<T>(r:ClosedAccountingResult<T>)=>{if(!r.ok)throw Error(r.code);return r.value;};
 export function createFakeClosedAttemptSupervisor(clock:ClosedAttemptClock,raw:unknown={}){
-
+  return createClosedAttemptCore(clock,raw).api;
+}
+function createClosedAttemptCore(clock:ClosedAttemptClock,raw:unknown={}){
   let config:z.infer<typeof options>;try{config=options.parse(structuredClone(raw));if(typeof clock.schedule!=='function')throw Error();}catch{throw Error('invalid_input');}
   const gate=createFakeClosedBodyGate(clock),s=get(gate.construct({...config.session,accounting:{...config.session.accounting,body_mode:'bytes',attempt_policy:config.policy}})),r=get(gate.claimRun(s)),t=get(gate.claimTransport(s,r)),port=get(gate.claimAccounting(s,r,t)),body=port.body!;
   type Resource={io:FakeClosedAttemptIo;deadline:number;ioDeadline:number;reserve:number;cleanupDeadline?:number;failure?:ClosedStateCode;revoked:boolean;ended:boolean;
@@ -77,11 +80,12 @@ export function createFakeClosedAttemptSupervisor(clock:ClosedAttemptClock,raw:u
     if(x.released&&(x.eof||x.cancel==='fulfilled'))return result('confirmed',x.cancel==='fulfilled'?'cancelled':'eof',null);
     return null;
   }
-  async function read(purpose:ClosedReadPurpose,io:FakeClosedAttemptIo){
+  async function readUsing(purpose:ClosedReadPurpose,acquire:()=>ClosedAccountingResult<FakeClosedAttemptIo>){
     const existing=gate.diagnostic().primary;if(existing)return no(existing.code);
     if(busy){stop('invalid_state');return no('invalid_state');}if(closing)return no('closed');busy=true;let x:Resource|undefined;
     try{
       const a=port.dispatch(purpose);if(!a.ok)return a;cleanup=Object.freeze({disposition:'not_started',kind:null,reason:null,synthetic:true});const w=port.attemptWindow(a.value);if(!w.ok)return w;
+      const acquired=acquire();if(!acquired.ok){gate.stop(acquired.code);return no(acquired.code);}const io=acquired.value;
       if(!io){gate.stop('invalid_input');return no('invalid_input');}
       const readFn=io.read,cancelFn=io.cancel,abortFn=io.abort,releaseFn=io.release,closedWork=io.closed;
       if(typeof readFn!=='function'||typeof cancelFn!=='function'||typeof abortFn!=='function'||typeof releaseFn!=='function'||!closedWork){gate.stop('invalid_input');return no('invalid_input');}
@@ -101,10 +105,42 @@ export function createFakeClosedAttemptSupervisor(clock:ClosedAttemptClock,raw:u
     finally{if(x){x.ended=true;x.wake?.();release(x);}current=undefined;busy=false;if(closing)gate.close();}
   }
   const delegate=<T>(work:()=>ClosedAccountingResult<T>)=>{const v=work();const p=gate.diagnostic().primary;if(p&&current)fail(current,p.code);return v;};
-  return Object.freeze({read,openPurpose:(raw:unknown)=>delegate(()=>port.openPurpose(raw)),admitTable:(raw:unknown)=>delegate(()=>port.admitTable(raw)),
+  const api=Object.freeze({read:(purpose:ClosedReadPurpose,io:FakeClosedAttemptIo)=>readUsing(purpose,()=>Object.freeze({ok:true,value:io})),openPurpose:(raw:unknown)=>delegate(()=>port.openPurpose(raw)),admitTable:(raw:unknown)=>delegate(()=>port.admitTable(raw)),
     finalSlots:()=>Object.freeze({parent:port.parentFinal,metadata:port.metadataFinal}),
     enterFinal:()=>delegate(()=>port.enterFinal()),openFinal:(slot:Parameters<typeof port.openFinal>[0])=>delegate(()=>port.openFinal(slot)),skipFinal:(slot:Parameters<typeof port.skipFinal>[0])=>delegate(()=>port.skipFinal(slot)),
     cancel(){stop('cancelled');},close(){closing=true;stop('closed');if(!busy)gate.close();},
     status(){return Object.freeze({...port.stats(),active:busy,cleanup,attempt_failure:attemptFailure,operations:Object.freeze({...counts}),primary:gate.diagnostic().primary,formal_issuance:'disabled' as const});},
+  });
+  return Object.freeze({api,readUsing});
+}
+
+// Fixture-only ownership registry; never shared with production session/transport claims.
+const claimedStreams=new WeakSet<object>();
+const nativeLocked=Object.getOwnPropertyDescriptor(ReadableStream.prototype,'locked')!.get!,nativeGetReader=ReadableStream.prototype.getReader;
+const nativeRead=ReadableStreamDefaultReader.prototype.read,nativeCancel=ReadableStreamDefaultReader.prototype.cancel,nativeRelease=ReadableStreamDefaultReader.prototype.releaseLock;
+const nativeClosed=Object.getOwnPropertyDescriptor(ReadableStreamDefaultReader.prototype,'closed')!.get!;
+
+/** Only injected streams are accepted. Acquisition happens in the same private post-dispatch continuation. */
+export function createInjectedClosedStreamSupervisor(clock:ClosedAttemptClock,raw:unknown={}){
+  const core=createClosedAttemptCore(clock,raw),counts={claims:0,reads:0,cancels:0,releases:0,closed_captures:0,aborts:0,active_readers:0};
+  function acquire(stream:ReadableStream<Uint8Array>):ClosedAccountingResult<FakeClosedAttemptIo>{
+    try{
+      // Native brand/lock checks do not invoke caller getters or getReader overrides.
+      if(nodeTypes.isProxy(stream))return Object.freeze({ok:false,code:'invalid_input'});
+      const locked=Reflect.apply(nativeLocked,stream,[]) as boolean;
+      if(locked||claimedStreams.has(stream))return Object.freeze({ok:false,code:'evidence_binding_mismatch'});
+      const controller=new AbortController();claimedStreams.add(stream);
+      const reader=Reflect.apply(nativeGetReader,stream,[]) as ReadableStreamDefaultReader<Uint8Array>;counts.claims++;counts.active_readers++;
+      const closed=Reflect.apply(nativeClosed,reader,[]) as Promise<void>;counts.closed_captures++;
+      return Object.freeze({ok:true,value:Object.freeze({
+        read(){counts.reads++;return (Reflect.apply(nativeRead,reader,[]) as Promise<ReadableStreamReadResult<Uint8Array>>).then(item=>item.done?{done:true}:{done:false,bytes:item.value});},
+        cancel(){counts.cancels++;return Reflect.apply(nativeCancel,reader,[]) as Promise<void>;},closed,
+        abort(){counts.aborts++;controller.abort();},
+        release(){counts.releases++;Reflect.apply(nativeRelease,reader,[]);counts.active_readers--;},
+      })});
+    }catch{return Object.freeze({ok:false,code:'invalid_input'});}
+  }
+  return Object.freeze({...core.api,read:(purpose:ClosedReadPurpose,stream:ReadableStream<Uint8Array>)=>core.readUsing(purpose,()=>acquire(stream)),
+    status(){return Object.freeze({...core.api.status(),streams:Object.freeze({...counts})});},
   });
 }

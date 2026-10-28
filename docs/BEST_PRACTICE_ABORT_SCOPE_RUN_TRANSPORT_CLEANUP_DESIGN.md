@@ -8,6 +8,8 @@
 
 追加：[draft-0.5 §17のfake試行監督](BEST_PRACTICE_ABORT_SCOPE_SESSION_TRANSPORT_BODY_BINDING_DESIGN.md#17-draft-05fake試行期限中断終了確認)。fake Promise／schedulerで試行10秒・cleanup予約・empty-read総数と終了確認を検証。実Web Streams adapterへの接続と正式発行は未実施。
 
+追加：[draft-0.6 §18の注入native Web Streams](BEST_PRACTICE_ABORT_SCOPE_SESSION_TRANSPORT_BODY_BINDING_DESIGN.md#18-draft-06注入native-web-streamsの合成接続)。前項の未接続はdraft-0.5時点の状態。native read／cancel／closed／releaseLockを同attemptへメモリ内で接続した。実HTTP transportと正式発行は未接続。
+
 Version: br006-run-transport-cleanup-draft-0.5 / Date: 2026-10-28。
 Status: **TC-01〜TC-03に加え、TC-04の固定source bootstrap・release・用途descriptorを同fake transportへ接続。実sessionの会計更新／実transportは未接続、正式証拠発行・本番cap承認は未実施／閉鎖**。
 

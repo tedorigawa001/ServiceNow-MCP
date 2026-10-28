@@ -1,7 +1,7 @@
 # AU-BR-006 実session／ReleasePermit・単一transport・body受領境界の詳細設計
 
-Version: br006-session-transport-body-binding-draft-0.5 / Date: 2026-10-28。
-Status: **§14〜§17の閉鎖gate・同ReadState・fake試行監督を合成接続。正式body receipt／証拠発行gateは閉鎖。実session・実transport接続・本番cap投入の承認ではない**。
+Version: br006-session-transport-body-binding-draft-0.6 / Date: 2026-10-28。
+Status: **§14〜§17の閉鎖gate・同ReadState・試行監督へ、§18の注入native Web Streamsを合成接続。正式body receipt／証拠発行gateは閉鎖。実session・実transport接続・本番cap投入の承認ではない**。
 
 親：[共通run owner](BEST_PRACTICE_ABORT_SCOPE_RUN_OWNER_BINDING_DESIGN.md)、[TC-01〜TC-04と現行境界](BEST_PRACTICE_ABORT_SCOPE_RUN_TRANSPORT_CLEANUP_DESIGN.md)、[用途別受領物](BEST_PRACTICE_ABORT_SCOPE_TRANSPORT_RECEIPTS_DESIGN.md)。
 後続：[選択window／payload受領物](BEST_PRACTICE_ABORT_SCOPE_REAL_SESSION_RECEIPTS_DESIGN.md)、[worker接続契約](BEST_PRACTICE_ABORT_SCOPE_CONNECTION_CONTRACT_DESIGN.md)。
@@ -357,6 +357,36 @@ closeは受付を閉じて先に取消し、active cleanupは同予約内で待�
 
 ### 17.4 維持する閉鎖条件
 
-§17はfake scheduler／Promise依存上の合成検証。native Web Streamsのread/cancel/reader.closed/releaseLock、実HTTP status、OAuth／fixed source／ReleasePermit、選択payload／worker jobの正式binding、公開JSONへの写像は未接続。同期JSON.parse／hashの途中を強制中断したり、event loopやOSが停止しても実時間60秒で必ず終了すると証明したものではない。
+§17はfake scheduler／Promise依存上の合成検証。次の§18でnative Web Streamsのread/cancel/reader.closed/releaseLockを注入接続した。実HTTP status、OAuth／fixed source／ReleasePermit、選択payload／worker jobの正式binding、公開JSONへの写像は未接続。同期JSON.parse／hashの途中を強制中断したり、event loopやOSが停止しても実時間60秒で必ず終了すると証明したものではない。
 
 上限値は合成profileのまま本番capへ昇格させない。全体work／allocation／保持上界・低減Qの承認、正式発行、全体受付は有効化しない。新moduleも`!dist/review/abort-scope-evidence*`で梱包除外。VM／監視／telemetry保留、実transport・実機操作・設定変更なしを維持する。
+
+## 18. draft-0.6：注入native Web Streamsの合成接続
+
+[同moduleの固定adapter](../src/review/abort-scope-evidence-closed-attempt-supervisor.ts)と[追加25件](../tests/review/closed-stream-adapter.test.ts)を接続した。[検証記録](E2E_BEST_PRACTICE_CLOSED_STREAM_ADAPTER_2026-10-28.md)を参照。in-memory ReadableStreamのnative APIを使うが、fetch／Response／ServiceNow接続は使わない。
+
+### 18.1 private取得継続とstream所有
+
+従来のfake Promise entryは維持し、共通coreだけをsame-module private関数へ分離する。注入streamの取得継続は外へ返さず、dispatchと同ReadStateのattempt windowが成立した後だけ実行する。soft cutoff拒否ならC=0・reader未取得。stream不適合や所有権不明はdispatch済みCを返金せず、自ownerだけを停止する。
+
+fixture専用WeakSetでstreamの一度限りclaimを保持する。locked stream、既にclaimしたstreamはgetReader前に拒否し、外国readerをcancel／releaseしない。別factoryでも同moduleの消費済みstreamを再取得しない。これは実session台帳と分離したfixture所有権であり、HTTP本文の出所や認証を証明しない。
+
+NodeではProxyでもnative locked getterを通ることを最小再現で確認したため、`node:util.types.isProxy`で先に拒否する。残りはnative APIのreceiver／lock検査を使い、callerのlocked getter・getReader overrideを呼ばない。prototype-forged objectや非streamも固定拒否する。Node runtime自体は信頼前提で、任意のJS objectから実HTTP originを認証する仕組みではない。
+
+### 18.2 同readerの固定操作
+
+取得するのはnative default readerだけ。read／cancel／releaseLockとclosed getterはmodule内で固定し、reader・controller・raw bytesを外へ返さない。reader.closedは最初のread／cancel／releaseより前に一度捕捉し、元のPromiseの両settlementを監督する。release後のclosed getterを取り直さない。byte streamもdefault readerで扱い、BYOBの別所有経路は作らない。
+
+native read結果を同supervisorの固定read eventへ写像し、そのまま同body laneでprivate copy・C/G/S/P/E・解析へ結合する。Gをadapterで再課金しない。private AbortControllerは固定の取消通知に使うが、fetchへは接続しない。native cancelは同readerに対して一度だけ行い、pending read／closed／cancel Promiseを別々に確認してから終端を判断する。
+
+native cancelはreader.closedとpending readを決着させても、underlying sourceのcancel Promiseがpending／rejectedのことがある。これをconfirmedに格上げしない。errored streamではread・closed・cancelがいずれもrejectし得る。最初のprimaryは保持し、cleanup理由は既存の固定優先順（cancel_rejectedがclosed_rejectedより先）で選ぶ。
+
+native releaseLockが成功した時だけadapterのactive_readersを減らす。reader解放とunderlying sourceの全終了は別の事実。cleanupが未確認でもreaderだけ解放できる場合があるため、active_readers=0を正常終端の証拠にしない。late callbackで既に返したunconfirmed結果や候補を修復しない。
+
+### 18.3 合成検証と継続範囲
+
+EOF成功、timeout→cancel確認済みretry、cancel pending／rejected、native reader error、lock／再利用、empty-read総数、byte stream、native内部slotによるchunk種別、入力chunk改変、payload会計、table局所失敗のfinal skip、underlying cancelからcloseへの再入、取消後のlate enqueueを検証した。
+
+global fetchを拒否するsentinel下でも成功し、network経路がないことを確認する。上限・元の全体時計・cleanup予約・正式発行口閉鎖は§17のままで、adapterから別session／予算／timerを生成しない。
+
+実認証snapshot／ReleasePermit／fixed source／選択payload／worker jobの正式binding、公開JSONへの写像、実transport／PDI E2E、本番cap／全体work・保持上界は未接続・未承認。これらを満たす前に正式receiptを発行せず、全体受付無効・VM／監視／telemetry保留を維持する。
