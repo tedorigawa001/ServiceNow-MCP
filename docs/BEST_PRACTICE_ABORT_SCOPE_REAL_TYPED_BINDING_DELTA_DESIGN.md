@@ -7,7 +7,7 @@ Status: **§10〜12のRT-B01／02／03をconstructor固定fake依存で検証。
 後工程：[選択window／payload受領物](BEST_PRACTICE_ABORT_SCOPE_REAL_SESSION_RECEIPTS_DESIGN.md)、[worker接続契約](BEST_PRACTICE_ABORT_SCOPE_CONNECTION_CONTRACT_DESIGN.md)。
 RT-B03後の次工程：[native adapter詳細設計draft-0.4](BEST_PRACTICE_ABORT_SCOPE_NATIVE_ADAPTER_DESIGN.md)。§13〜14のNA-01／02に加え、§15のNA-03で注入native終端証拠を同bytes課金・解析・ackへ接続。fixture台帳は共有せず、実session接続・正式発行は未実装のまま。
 
-NA-03後の移行案：[canonical会計・private生成位置の差分設計draft-0.3](BEST_PRACTICE_ABORT_SCOPE_CANONICAL_SESSION_MIGRATION_DESIGN.md)。CM-01の内部coreに続き、CM-02でlegacy C/G/P・readonly leaseを単一会計へ移行した。typed dispatch計上の精密化とnative/typed実session採用は未開始。
+NA-03後の移行案：[canonical会計・private生成位置の差分設計draft-0.4](BEST_PRACTICE_ABORT_SCOPE_CANONICAL_SESSION_MIGRATION_DESIGN.md)。CM-02のlegacy単一会計に加え、CM-03で新規canonical予算と注入native/typedのdispatch直前C計上を接続した。native/typed実session採用・private compositionは未開始。
 
 ## 1. 目的と非対象
 

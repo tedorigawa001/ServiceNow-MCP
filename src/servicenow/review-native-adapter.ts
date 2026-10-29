@@ -2,7 +2,14 @@
 import { types } from 'node:util';
 import { ReadableStream as NativeStream, ReadableStreamDefaultReader as NativeReader } from 'node:stream/web';
 import { z } from 'zod';
-type Code = 'invalid_input' | 'invalid_state' | 'invalid_response' | 'evidence_binding_mismatch' | 'invalid_observation_time' | 'deadline_exceeded' | 'attempt_deadline_exceeded' | 'upstream_unavailable' | 'cancelled' | 'closed' | 'internal_review_error';
+import type { BootstrapBodyCode } from './review-bootstrap-body.js';
+type Code = BootstrapBodyCode | 'attempt_deadline_exceeded';
+const commitCodes = new Set<string>(['invalid_input', 'authentication_failed', 'access_denied', 'not_found_or_not_visible', 'upstream_unavailable', 'deadline_exceeded', 'receive_budget_exceeded', 'request_budget_exceeded', 'payload_budget_exceeded', 'payload_limit', 'invalid_response', 'review_busy', 'cancelled', 'closed', 'changed_during_review', 'release_not_admitted', 'config_invalid', 'phase_deadline_exceeded', 'candidate_filter_violation', 'internal_review_error', 'invalid_state', 'invalid_observation_time', 'evidence_binding_mismatch', 'attempt_deadline_exceeded']);
+/** Fixed internal error for a rejected pre-dispatch commit, never an upstream response. */
+export class NativeDispatchCommitError extends Error {
+    readonly code: Code;
+    constructor(code: Code) { super('dispatch_commit_rejected'); this.code = typeof code === 'string' && commitCodes.has(code) ? code : 'internal_review_error'; Object.freeze(this); }
+}
 type Result<T> = Readonly<{
     ok: true;
     value: T;
@@ -65,9 +72,12 @@ export function createInjectedNativeReaderOwner(input: {
     dispatch(request: Readonly<Descriptor & {
         synthetic: true;
     }>, signal: AbortSignal): unknown;
+    beforeDispatch?(request: Readonly<Descriptor & {
+        synthetic: true;
+    }>): void;
     schedule(delay: number, wake: () => void): () => void;
 }) {
-    const fakeIo = input.fake_io, deadline = input.deadline_ms, readBudget = input.budget.read.bind(input.budget), dispatch = input.dispatch, schedule = input.schedule;
+    const fakeIo = input.fake_io, deadline = input.deadline_ms, readBudget = input.budget.read.bind(input.budget), dispatch = input.dispatch, schedule = input.schedule, beforeDispatch = input.beforeDispatch;
     const owner = Object.freeze({}), controller = new AbortController(), records = new WeakMap<Handle, R>(), ends = new WeakMap<EndEvidence, R>();
     type R = {
         descriptor: Readonly<Descriptor>;
@@ -252,10 +262,18 @@ export function createInjectedNativeReaderOwner(input: {
                     throw new Failure('invalid_input');
                 if (++attempts > 210)
                     throw new Failure('invalid_state');
+                const request = Object.freeze({ ...d, synthetic: true as const }), signal = controller.signal;
+                try {
+                    beforeDispatch?.(request);
+                }
+                catch (error) {
+                    throw new Failure(error instanceof NativeDispatchCommitError ? error.code : 'internal_review_error');
+                }
+                // No observation, getter or await between the successful C commit and dispatch.
                 let result: unknown;
                 try {
                     invoked = true;
-                    result = dispatch(Object.freeze({ ...d, synthetic: true }), controller.signal);
+                    result = dispatch(request, signal);
                 }
                 catch {
                     settled = true;

@@ -3,6 +3,8 @@ import {z} from 'zod';
 import {types} from 'node:util';
 import {createBootstrapBodyLane,BootstrapBodyFailure,type BootstrapBodyResource} from './review-bootstrap-body.js';
 import {createInjectedNativeBodyLane} from './review-native-body.js';
+import {NativeDispatchCommitError} from './review-native-adapter.js';
+import {CanonicalBudgetError} from './review-canonical-budget.js';
 import {releaseEvidenceStructure,releaseMatchForEvidence} from '../review/result-schema-v2.js';
 import type {ReadFailureCode} from './bounded-read.js';
 import type {ReviewRunBudgetLease,ReviewSourceReleasePort,ReviewSourceReleaseSnapshot} from './review-evidence-lifecycle.js';
@@ -15,7 +17,7 @@ export interface ReviewBootstrapDependencies{
   readonly fake_io:true;readonly lease:ReviewRunBudgetLease;readonly source:object;readonly target:string;
   readonly auth:'per-user'|'cached'|'exchange';
   readonly limits:{requests:number;total_bytes:number;response_bytes:number;deadline_ms:number};
-  readonly accounting:{reserve():void;reserved():number;dispatch():void;chunk(length:number):void;release():void};
+  readonly accounting:{reserve():void;reserved():number;dispatch(floor_ms?:number):void;chunk(length:number):void;release():void};
   dispatch(request:Readonly<{purpose:BootstrapPurpose;method:'POST'|'GET';synthetic:true}>,signal:AbortSignal):Promise<{status:number;bytes:Uint8Array}|{status:number;body:BootstrapBodyResource}|Response>;
   resolveRelease(response:Readonly<{status:number;value:unknown}>):{source:object;permit:object;port:ReviewSourceReleasePort}|null;
   schedule(delayMs:number,wake:()=>void):()=>void;
@@ -39,6 +41,7 @@ export function createReviewBootstrapContract<H>(hooks:Hooks<H>,input:ReviewBoot
   let state:'unstarted'|'running'|'prepared'|'ordinary_closed'|'failed'|'revoked'='unstarted',reason:Code|null=null;
   let controller:AbortController|undefined,reservationStarted=false,reservationReleased=false,activeFloor:number|undefined;
   let current:{handle:H;snapshot:object;lease:ReviewRunBudgetLease}|undefined;
+  let pendingDispatchCheck:ReturnType<ReviewRunBudgetLease['read']>|undefined;
   const no=(code:Code):Result<never>=>Object.freeze({ok:false,code:hooks.failure()??reason??code});
   function release(){if(!reservationStarted||reservationReleased)return;reservationReleased=true;try{deps.accounting.release();}catch{reason??='internal_review_error';hooks.stop('internal_review_error');}}
   function revoke(){reason??=hooks.failure()??'closed';if(state!=='failed'&&state!=='ordinary_closed')state='revoked';current=undefined;body.revoke();nativeBody?.revoke();release();controller?.abort();}
@@ -50,6 +53,7 @@ export function createReviewBootstrapContract<H>(hooks:Hooks<H>,input:ReviewBoot
     if(b.remaining_ms<=0)throw new Failure('deadline_exceeded');
     if(b.remaining_ms<=Math.min(10000,deps.limits.deadline_ms/6))throw new Failure('phase_deadline_exceeded');
     if(activeFloor!==undefined&&b.remaining_ms<=activeFloor)throw new Failure('upstream_unavailable');
+    if(pendingDispatchCheck){const p=pendingDispatchCheck;pendingDispatchCheck=undefined;if(b.requests!==p.requests+1||b.received_bytes!==p.received_bytes||b.payload_bytes!==p.payload_bytes)throw new Failure('internal_review_error');}
     return b;
   }
   async function wait<T>(work:Promise<T>,delay:number,cutoff=activeFloor):Promise<T>{
@@ -66,9 +70,15 @@ export function createReviewBootstrapContract<H>(hooks:Hooks<H>,input:ReviewBoot
     const b=sample();let dispose:(()=>void)|undefined;
     try{const result=await Promise.race([work,new Promise<never>((_resolve,reject)=>{dispose=deps.schedule(b.remaining_ms-activeFloor!,()=>reject(new Failure('upstream_unavailable')));})]);sample();return result;}finally{dispose?.();}
   }
-  function charge(n:number){const prior=observe();deps.accounting.chunk(n);const charged=observe();if(charged.received_bytes!==prior.received_bytes+n||charged.requests!==prior.requests||charged.payload_bytes!==prior.payload_bytes)throw new Failure('internal_review_error');if(charged.received_bytes>deps.limits.total_bytes)throw new Failure('receive_budget_exceeded');}
+  function charge(n:number){const prior=observe();try{deps.accounting.chunk(n);}catch(error){if(error instanceof CanonicalBudgetError)throw new Failure(error.code);throw error;}const charged=observe();if(charged.received_bytes!==prior.received_bytes+n||charged.requests!==prior.requests||charged.payload_bytes!==prior.payload_bytes)throw new Failure('internal_review_error');if(charged.received_bytes>deps.limits.total_bytes)throw new Failure('receive_budget_exceeded');}
   const body=createBootstrapBodyLane({check:()=>{observe();},charge,stop:code=>hooks.stop(code),responseLimit:deps.limits.response_bytes});
-  const nativeBody=deps.native_body?createInjectedNativeBodyLane({fake_io:deps.fake_io,deadline_ms:deps.limits.deadline_ms,budget:{read:()=>{const b=hooks.sample();if(!b)throw new Failure('invalid_observation_time');return b;}},dispatch:(request,signal)=>deps.dispatch(Object.freeze({purpose:request.purpose,method:request.purpose==='authentication'?'POST':'GET',synthetic:true}),signal),schedule:deps.schedule}, {check:()=>{observe();},charge,stop:code=>hooks.stop(code),responseLimit:deps.limits.response_bytes}):undefined;
+  let nativeRequest:Readonly<{purpose:BootstrapPurpose;method:'POST'|'GET';synthetic:true}>;
+  function commitNativeDispatch(request:{purpose:BootstrapPurpose;io_floor_ms:number}){
+    nativeRequest=Object.freeze({purpose:request.purpose,method:request.purpose==='authentication'?'POST':'GET',synthetic:true});
+    try{const r=deps.accounting.reserved(),prior=observe();if(r!==4)throw new Failure('internal_review_error');if(prior.remaining_ms<=request.io_floor_ms)throw new Failure('upstream_unavailable');if(prior.requests+1+r>deps.limits.requests)throw new Failure('request_budget_exceeded');deps.accounting.dispatch(request.io_floor_ms);pendingDispatchCheck=prior;}
+    catch(error){throw new NativeDispatchCommitError(error instanceof BootstrapBodyFailure||error instanceof CanonicalBudgetError?error.code:'internal_review_error');}
+  }
+  const nativeBody=deps.native_body?createInjectedNativeBodyLane({fake_io:deps.fake_io,deadline_ms:deps.limits.deadline_ms,budget:{read:()=>{const b=hooks.sample();if(!b)throw new Failure('invalid_observation_time');return b;}},beforeDispatch:commitNativeDispatch,dispatch:(_request,signal)=>deps.dispatch(nativeRequest,signal),schedule:deps.schedule}, {check:()=>{observe();},charge,stop:code=>hooks.stop(code),responseLimit:deps.limits.response_bytes}):undefined;
   async function request(purpose:BootstrapPurpose){
     for(let ordinal=1;ordinal<=2;ordinal++){
       const before=observe(),r=deps.accounting.reserved();
@@ -78,13 +88,13 @@ export function createReviewBootstrapContract<H>(hooks:Hooks<H>,input:ReviewBoot
       const ioFloor=deps.typed_body?activeFloor+Math.min(250,(before.remaining_ms-activeFloor)/4):activeFloor;
       let settled=false,completed=false,adopted=false,retryableStatus=false,ended=false,invoked=false,delivered:Awaited<ReturnType<ReviewBootstrapDependencies['dispatch']>>|undefined;
       try{
-        deps.accounting.dispatch();const after=observe();
-        if(after.requests!==before.requests+1||after.received_bytes!==before.received_bytes||after.payload_bytes!==before.payload_bytes)throw new Failure('internal_review_error');
         if(nativeBody){
           const accepted=await nativeBody.read({purpose,ordinal,io_floor_ms:ioFloor,cleanup_floor_ms:activeFloor,window_origin_ms:before.remaining_ms});settled=true;adopted=true;
           if(accepted.status===401)throw new Failure('authentication_failed');if(accepted.status===403&&purpose!=='release')throw new Failure('access_denied');if(accepted.status===429||accepted.status>=500){retryableStatus=true;throw new Failure('upstream_unavailable');}if(accepted.status!==200&&!(accepted.status===403&&purpose==='release'))throw new Failure('invalid_response');
           observe();completed=true;return Object.freeze({status:accepted.status,value:accepted.value});
         }
+        deps.accounting.dispatch();const after=observe();
+        if(after.requests!==before.requests+1||after.received_bytes!==before.received_bytes||after.payload_bytes!==before.payload_bytes)throw new Failure('internal_review_error');
         let work:ReturnType<ReviewBootstrapDependencies['dispatch']>;
         try{invoked=true;work=deps.dispatch(Object.freeze({purpose,method:purpose==='authentication'?'POST':'GET',synthetic:true}),controller!.signal);}catch{settled=true;throw new Failure('upstream_unavailable');}
         const response=await wait(Promise.resolve(work).then(value=>{settled=true;delivered=value;const late=ended&&deps.typed_body?bodyOf(value):undefined;if(late)body.discardLate(late);return value;},()=>{settled=true;throw new Failure('upstream_unavailable');}),after.remaining_ms-ioFloor,ioFloor) as {status:number;bytes:Uint8Array}|{status:number;body:BootstrapBodyResource};
@@ -110,9 +120,9 @@ export function createReviewBootstrapContract<H>(hooks:Hooks<H>,input:ReviewBoot
         if(response.status===200){try{value=JSON.parse(new TextDecoder('utf-8',{fatal:true}).decode(copy));}catch{throw new Failure('invalid_response');}}
         observe();completed=true;return Object.freeze({status:response.status,value});
       }catch(error){
-        const code=error instanceof Failure||error instanceof BootstrapBodyFailure?error.code:'internal_review_error';
+        const code=error instanceof Failure||error instanceof BootstrapBodyFailure||error instanceof CanonicalBudgetError?error.code:'internal_review_error';
         if(code!=='upstream_unavailable'||!settled||ordinal===2||hooks.failure()||deps.typed_body&&adopted&&!retryableStatus)throw new Failure(hooks.failure()??code);
-      }finally{ended=true;if(deps.typed_body&&!deps.native_body&&!adopted){body.unopened(!invoked?'not_started':delivered?'unadopted_response':settled?'no_response':'fetch_pending');const unadopted=bodyOf(delivered);if(unadopted)body.discardLate(unadopted);}if(!completed)activeFloor=undefined;}
+      }finally{ended=true;pendingDispatchCheck=undefined;if(deps.typed_body&&!deps.native_body&&!adopted){body.unopened(!invoked?'not_started':delivered?'unadopted_response':settled?'no_response':'fetch_pending');const unadopted=bodyOf(delivered);if(unadopted)body.discardLate(unadopted);}if(!completed)activeFloor=undefined;}
     }
     throw new Failure('upstream_unavailable');
   }
@@ -139,7 +149,7 @@ export function createReviewBootstrapContract<H>(hooks:Hooks<H>,input:ReviewBoot
         observe();const prepared=hooks.prepared(handle,snapshot,lease,deps.source,binding.permit,binding.port);if(!prepared.ok)throw new Failure(prepared.code);
         observe();state='prepared';current=undefined;activeFloor=undefined;return Object.freeze({ok:true,value:prepared.value});
       }catch(error){
-        reason??=hooks.failure()??(error instanceof Failure||error instanceof BootstrapBodyFailure?error.code:'internal_review_error');
+        reason??=hooks.failure()??(error instanceof Failure||error instanceof BootstrapBodyFailure||error instanceof CanonicalBudgetError?error.code:'internal_review_error');
         // A typed read failure already stopped the owner; that is not an ordinary close.
         if((reason==='phase_deadline_exceeded'||reason==='request_budget_exceeded')&&!hooks.failure()){state='ordinary_closed';current=undefined;release();controller?.abort();}
         else{state='failed';hooks.stop(reason);revoke();}

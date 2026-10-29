@@ -1,7 +1,7 @@
 # AU-BR-006 canonical会計とprivate生成位置の差分設計
 
-Version: br006-canonical-session-migration-draft-0.3 / Date: 2026-10-29。
-Status: §9のCM-01に加え、§10でCM-02のlegacy単一会計移行を注入fetchで検証。CM-03以降・native/typed実session採用・実通信は未実施。正式発行口閉鎖・Unknown・全体受付無効・VM／監視／telemetry調査保留を維持する。実通信・実機操作・設定変更・Pushの承認ではない。
+Version: br006-canonical-session-migration-draft-0.4 / Date: 2026-10-29。
+Status: §9〜10のCM-01／02に加え、§11のCM-03で注入native/typedのdispatch直前C計上を単一予算へ接続。native/typed実session採用・実通信は未実施。正式発行口閉鎖・Unknown・全体受付無効・VM／監視／telemetry調査保留を維持する。実通信・実機操作・設定変更・Pushの承認ではない。
 
 目的は、NA-03の注入native経路を将来接続する前に、会計・停止・時計の唯一の所有者と移行順を決めることである。readonly leaseを更新portに昇格させず、稼働中のlegacy sessionをtypedへ切り替えない。
 
@@ -97,7 +97,7 @@ session constructorはsourceより先に呼ばれるため、存在しないsour
 3. **CM-03 typed dispatchの精密な計上境界**。NA-03と同更新portを結び、C commitの単一所有・予約・同期失効をfake I/Oで検証する。実通信は有効化しない。
 4. **CM-04 private compositionと固定source採用の詳細設計**。実認証snapshot／source初期identity／既存permitの発行元を結ぶ。配置・試験境界を承認後に小さく実装する。
 
-CM-01の限定実装は§9、CM-02のlegacy単一会計移行は§10を参照。CM-03以降は別依頼で開始し、合成成功から自動的にnative/typed実sessionを有効化しない。
+CM-01／02は§9〜10、CM-03の注入経路は§11を参照。CM-04以降は別依頼で開始し、合成成功から自動的にnative/typed実sessionを有効化しない。
 
 ## 8 未確定事項と維持する停止状態
 
@@ -150,4 +150,46 @@ canonical operationのcommit guardでも同じ元時計を観測するため、�
 
 試験：[canonical-session-migration.test.ts](../tests/review/canonical-session-migration.test.ts)の21件（レビュー修正で更新境界の内部理由保持2件を追加）。うち15件のlegacy oracleを移行前HEADと移行後で同じ入力・固定期待値により実行した。旧counter名のshadow代入を採用しない試験、readonly leaseで先に観測したhard期限のabort伝播、内部理由保持は追加回帰として区別する。[検証記録](E2E_BEST_PRACTICE_CANONICAL_SESSION_MIGRATION_2026-10-29.md)を参照。
 
-HTTP terminal bodyの早期取消、404、cluster 403 fallback、retry delay、phase controller、busy判定、認証readyPromiseの発行点は既存legacyのままである。typed予約台帳・dispatch直前C commit・正式body receipt・source／worker採用は未接続で、CM-02の成功から許可しない。
+HTTP terminal bodyの早期取消、404、cluster 403 fallback、retry delay、phase controller、busy判定、認証readyPromiseの発行点は既存legacyのままである。実sessionのtyped予約・dispatch採用・正式body receipt・source／worker採用は未接続で、CM-02の成功から許可しない。注入経路だけのCM-03を§11に分ける。
+
+## 11 CM-03 注入typed dispatchと単一予算
+
+実装：[bootstrap budget](../src/servicenow/review-canonical-bootstrap-budget.ts)、[canonical core](../src/servicenow/review-canonical-budget.ts)、[bootstrap](../src/servicenow/review-bootstrap-contract.ts)、[native owner](../src/servicenow/review-native-adapter.ts)。試験と実行結果は[CM-03検証記録](E2E_BEST_PRACTICE_TYPED_DISPATCH_ACCOUNTING_2026-10-29.md)を参照。
+
+### 11.1 生成と更新権限
+
+createCanonicalBootstrapBudgetは新しいゼロ初期化canonical coreを生成し、同じlease・limitsとconstructor用accountingを返す。既存session／core／snapshot／初期statsは受け取らず、lookupや既存runの付替えを行わない。clockと低減limitsはdata propertyとして一度captureし、fixture台帳をimport／共有しない。
+
+accountingはreserve一回→reserved→releaseという一方向で、解放後は再予約・dispatch・chunk更新を拒否する。C/G/Pは同coreだけが持ち、Rはbootstrap用の既存final4枠を表す状態である。bootstrapのC+R検査とcoreの同4枠検査は同じ条件の再確認であり、Rを8枠として差し引かない。releaseはRを0にして更新権限を閉じるだけで、C/Gを返金しない。final slotの実消費／sourceへの移譲や一般的な動的R配賦は対象外。
+
+### 11.2 dispatch直前の順序
+
+native/typed経路だけ、外側の先行accounting.dispatchを撤去した。NA-02はstrict descriptor・発行originの形状・元floor・利用状態を確認した後、固定requestとsignalを先に用意する。constructorでpinしたbeforeDispatchが次を行う。
+
+1. sourceへ渡す固定purpose／method／synthetic descriptorを凍結する。
+2. Rと同runのlive／予算を再確認し、元I/O floor以下ならC計上前に拒否する。
+3. 同canonical coreのdispatchAt(floor)で、同一観測によるlive・attempt floor・C+4・G余裕を検査してCを一度更新する。
+4. scalar状態の保存だけを行い、await・時計再観測・入力getter・任意observerを挟まず固定dispatcherを呼ぶ。
+
+dispatchAtはattempt floor等号をupstream_unavailable、hard期限を既存deadline_exceededとして扱う。C上限・G上限・失効でも更新前に拒否する。通常legacyのdispatch(final)は変更せず、CM-02のC位置は維持する。既存fake操作body／untyped bootstrapの計上位置も変えない。
+
+### 11.3 失敗と費用保持
+
+| 状況 | C | native終端・継続 |
+|---|---:|---|
+| shape／origin／利用状態の不正、C/R不足、期限・取消のpreflight拒否 | 0 | 未dispatch。commit到達前の拒否はnot_started、reader取得なし |
+| canonical commitの拒否 | 0 | 有限NativeDispatchCommitErrorで理由保持。raw例外／未知理由はinternal_review_error |
+| 実dispatcher内の同期throw／Promise reject | 1 | no_responseと固定upstream_unavailable。返金・native retryなし |
+| dispatcherへ到達してから取消 | 1 | 同run失効、late Responseは既存best effortだけ。Cを戻さない |
+| 応答採用・body拒否 | 1/attempt | 同bytesのGを一度課金。candidate／ack／hashでC/Gを増やさない |
+| confirmed EOF／ack後の429／5xx retry | 各1 | 最大同用途2試行。累積C/G・元期限・Rを維持 |
+
+計上後のC/G/P整合検査はactual dispatcherの後、body bytes採用前に行う。readerを既に取得していれば同ownerでcleanupする。Cの直後にobserverを呼ぶ旧native順序へ戻さない。commit拒否はupstream throwと別のtry境界で捕捉するため、未dispatchをno_responseと認定しない。
+
+この保証は固定bootstrap継続と同期canonical accountingの組合せについて検証したものである。constructorへ任意の「加算後にthrowするcallback」を与えて同じ保証を主張しない。callbackは外部入力・MCP設定ではなくtrusted依存であり、標準のCM-03 factoryはcommit後に任意callbackを呼ばない。
+
+### 11.4 未接続の権限
+
+CM-03 factoryは実sessionのprivate writerを取得せず、実BoundedReadSessionは引き続きnative/typed依存を渡さない。ReleasePermit／選択payload／worker jobへの正式binding、固定sourceのprivate composition、正式receipt／sealはCM-04以降に残す。Pの更新portもbootstrap factoryにはない。
+
+全体60秒・210試行・G16MiB／S4MiB・final4枠と低減のみの原則を維持する。追加guard／台帳のworkやnative buffer全heap上界、最低Node版、実ACL、未確認cleanupの運用を承認済みにせず、全体受付は無効のままとする。

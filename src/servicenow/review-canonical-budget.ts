@@ -19,9 +19,15 @@ export function createCanonicalReviewBudget(input: {
     if (!input || typeof input !== 'object' || Reflect.ownKeys(input).some(k => k !== 'clock' && k !== 'limits'))
         throw new CanonicalBudgetError('invalid_input');
     // Read each dependency once as a data property: a getter could swap it after validation.
-    const field = (key: 'clock' | 'limits'): unknown => { const d = Object.getOwnPropertyDescriptor(input, key); if (d && !Object.hasOwn(d, 'value'))
-        throw new CanonicalBudgetError('invalid_input'); return d?.value; };
-    const source = field('clock') as { remainingMs(): number } | undefined, reduced = field('limits') as Partial<Limits> | undefined;
+    const field = (key: 'clock' | 'limits'): unknown => {
+        const d = Object.getOwnPropertyDescriptor(input, key);
+        if (d && !Object.hasOwn(d, 'value'))
+            throw new CanonicalBudgetError('invalid_input');
+        return d?.value;
+    };
+    const source = field('clock') as {
+        remainingMs(): number;
+    } | undefined, reduced = field('limits') as Partial<Limits> | undefined;
     if (!source || typeof source !== 'object' || ![Object.prototype, null].includes(Object.getPrototypeOf(source)) || Reflect.ownKeys(source).some(k => k !== 'remainingMs'))
         throw new CanonicalBudgetError('invalid_input');
     const operation = Object.getOwnPropertyDescriptor(source, 'remainingMs')?.value;
@@ -63,21 +69,57 @@ export function createCanonicalReviewBudget(input: {
             observing = false;
         }
     }
-    function check() { read(); if (primary)
-        throw new CanonicalBudgetError(primary.public); if (closed)
-        throw new CanonicalBudgetError('closed'); }
-    function sum(before: number, n: number) { if (!Number.isSafeInteger(n) || n < 0 || !Number.isSafeInteger(before + n))
-        return fail('invalid_input'); return before + n; }
+    function check() {
+        const sampled = read();
+        if (primary)
+            throw new CanonicalBudgetError(primary.public);
+        if (closed)
+            throw new CanonicalBudgetError('closed');
+        return sampled.remaining_ms;
+    }
+    function sum(before: number, n: number) {
+        if (!Number.isSafeInteger(n) || n < 0 || !Number.isSafeInteger(before + n))
+            return fail('invalid_input');
+        return before + n;
+    }
     const writer = Object.freeze({
-        dispatch(final = false) { check(); if (typeof final !== 'boolean')
-            return fail('invalid_input'); if (requests >= limits.requests - (final ? 0 : 4))
-            throw new CanonicalBudgetError('request_budget_exceeded'); requests++; },
-        chunk(n: number) { check(); received = sum(received, n); if (received > limits.totalBytes)
-            return fail('receive_budget_exceeded'); },
-        payload(value: string) { check(); if (typeof value !== 'string')
-            return fail('invalid_input'); const n = Buffer.byteLength(value, 'utf8'); payload = sum(payload, n); if (payload > limits.totalPayloadBytes)
-            return fail('payload_budget_exceeded'); if (n > limits.payloadBytes)
-            throw new CanonicalBudgetError('payload_limit'); },
+        dispatchAt(floor: number) {
+            if (!Number.isFinite(floor) || floor < 0 || floor >= limits.deadlineMs)
+                return fail('invalid_input');
+            const remaining = check();
+            if (remaining <= floor)
+                throw new CanonicalBudgetError('upstream_unavailable');
+            if (requests >= limits.requests - 4)
+                throw new CanonicalBudgetError('request_budget_exceeded');
+            if (received >= limits.totalBytes)
+                return fail('receive_budget_exceeded');
+            requests++;
+        },
+        dispatch(final = false) {
+            check();
+            if (typeof final !== 'boolean')
+                return fail('invalid_input');
+            if (requests >= limits.requests - (final ? 0 : 4))
+                throw new CanonicalBudgetError('request_budget_exceeded');
+            requests++;
+        },
+        chunk(n: number) {
+            check();
+            received = sum(received, n);
+            if (received > limits.totalBytes)
+                return fail('receive_budget_exceeded');
+        },
+        payload(value: string) {
+            check();
+            if (typeof value !== 'string')
+                return fail('invalid_input');
+            const n = Buffer.byteLength(value, 'utf8');
+            payload = sum(payload, n);
+            if (payload > limits.totalPayloadBytes)
+                return fail('payload_budget_exceeded');
+            if (n > limits.payloadBytes)
+                throw new CanonicalBudgetError('payload_limit');
+        },
         stop,
         close() { closed = true; },
     });

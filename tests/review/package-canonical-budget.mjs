@@ -7,7 +7,7 @@ import {fileURLToPath} from 'node:url';
 const root=fileURLToPath(new URL('../../',import.meta.url));
 const output=execFileSync('npm',['pack','--dry-run','--ignore-scripts','--offline','--json'],{cwd:root,encoding:'utf8',maxBuffer:8*1024*1024,env:{...process.env,npm_config_cache:join(tmpdir(),'servicenow-mcp-owner-pack-cache')},stdio:['ignore','pipe','pipe']});
 const [pack]=JSON.parse(output),files=new Set(pack.files.map(f=>f.path));
-for(const suffix of ['.js','.js.map','.d.ts','.d.ts.map'])assert(files.has('dist/servicenow/review-canonical-budget'+suffix));
+for(const name of ['review-canonical-budget','review-canonical-bootstrap-budget'])for(const suffix of ['.js','.js.map','.d.ts','.d.ts.map'])assert(files.has('dist/servicenow/'+name+suffix));
 assert(![...files].some(f=>f.startsWith('tests/')||f.startsWith('dist/review/abort-scope-evidence')));
 const compiled=readFileSync(new URL('../../dist/servicenow/review-canonical-budget.js',import.meta.url),'utf8');
 assert(!/^import\s/m.test(compiled),'pure core must not import session, native or fixture modules');
@@ -16,4 +16,7 @@ const session=readFileSync(new URL('../../dist/servicenow/bounded-read.js',impor
 assert(session.includes("from './review-canonical-budget.js'"));
 for(const field of ['this.requests','this.receivedBytes','this.payloadBytes'])assert(!session.includes(field),'legacy mutable counter remains: '+field);
 execFileSync(process.execPath,[fileURLToPath(new URL('fixtures/compiled-canonical-session.mjs',import.meta.url))],{cwd:root,stdio:'inherit'});
-console.log('CM-01/02 offline pack PASS ('+files.size+' files)');
+const binding=readFileSync(new URL('../../dist/servicenow/review-canonical-bootstrap-budget.js',import.meta.url),'utf8');
+for(const forbidden of ['abort-scope-evidence','review-evidence-lifecycle','bounded-read.js'])assert(!binding.includes(forbidden),'bootstrap budget must not adopt a session');
+execFileSync(process.execPath,[fileURLToPath(new URL('fixtures/compiled-typed-dispatch.mjs',import.meta.url))],{cwd:root,stdio:'inherit'});
+console.log('CM-01/02/03 offline pack PASS ('+files.size+' files)');

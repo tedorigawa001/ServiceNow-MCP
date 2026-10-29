@@ -182,7 +182,7 @@ oracleは試験側のunderlying sourceイベント・入力byte列・独立hash�
 1. **NA-01：内部契約**。§13で合成identity限定のResponseDelivery／owner／専用台帳・pre-release／一度限りend evidenceを実装・検証。native操作や実sessionは採用しない。
 2. **NA-02：native取得と操作固定**。注入Response／Streamsだけでbrand／ownership／同readerの取得・操作・途中cleanupを検証。fixture台帳をimportしない。
 3. **NA-03：RT-B03接続**。finish前のnative end evidence照合、同bytes／ack、late Response分岐を対にして検証。正式gateは閉鎖したまま。
-4. その後、[canonical会計・private生成位置の差分設計draft-0.3](BEST_PRACTICE_ABORT_SCOPE_CANONICAL_SESSION_MIGRATION_DESIGN.md)に従い、内部契約→legacy更新点の中立移行→typed dispatch計上→private compositionを別工程で進める。CM-02までのlegacy単一会計を実装し、native/typed実session採用・実通信の承認はさらに別とする。
+4. その後、[canonical会計・private生成位置の差分設計draft-0.4](BEST_PRACTICE_ABORT_SCOPE_CANONICAL_SESSION_MIGRATION_DESIGN.md)に従う。CM-03で注入native/typedのdispatch直前C計上まで接続し、private composition・native/typed実session採用・実通信は後工程とする。
 
 承認待ち：標準prototype限定subsetと対象Node版、Response intrinsicsの公式実装照合、native no_body内部区分、private domainの生成配置・試験境界、取得失敗／再入時の正確な写像、失敗注入の配置、追加制御費・停止後未確認resourceの運用扱い。Unknownや本番capを合成結果で埋めない。
 
