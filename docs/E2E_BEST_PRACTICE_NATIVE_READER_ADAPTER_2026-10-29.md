@@ -55,6 +55,11 @@ fault injectionはisolated module評価前の標準prototype差替えで取得�
 
 コミット前の独立再確認：HEAD＋今回の9ファイルだけをindexから一時作業領域へ展開し、既存のnode_modulesのみを依存として参照した。他の作業中ファイルは含めず、build・変更対象ESLint・全体186 files／5,671 tests（37.45秒）・NA-01／NA-02のoffline梱包／compiled確認がすべてPASS。梱包は双方393 filesで、実通信・実session接続は行っていない。
 
+### 4.1 レビュー修正（2026-10-29）
+
+- pending read中にfinishを呼ぶと、finishのreader.cancelでreadが`{done:true}`に決着し、未closeの本文がEOF成功・finishもconfirmed／cancelledで成功していた。finishはpending read中を`invalid_state`で拒否し、owner停止→同reader cleanupへ合流する。readは停止で失敗し、本文をEOFとして返さない。
+- 回帰試験を1件追加（NA-02は32件）。修正前の実装ではこの試験だけが失敗することを確認した。修正後はNA-01／NA-02／RT-B02／RT-B03の4 files／143 tests、全体186 files／5,672 tests、tsc・ESLint・git diff --checkがPASS。上表の31件・142 tests・5,671 testsは修正前の記録として残す。
+
 ## 5. 残課題
 
 NA-03としてRT-B03の同bytes課金・copy／parse／hash・candidate／ackにnative終端を結合する必要がある。このmodule単独の終端を正式body receiptへ昇格させない。C/G/Pの実更新、source認証／URL binding、実session、選択payload、worker jobは未接続である。全Fetch仕様本文の再照合と最低Node／cross-realmの互換性も未確認とする。

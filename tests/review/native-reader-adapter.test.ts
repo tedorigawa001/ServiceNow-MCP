@@ -247,3 +247,12 @@ it('refuses release completion at the original cleanup deadline and retains that
     expect(await owner.finish(handle)).toEqual({ ok: false, code: 'attempt_deadline_exceeded' });
     expect(owner.status().cleanup).toMatchObject({ disposition: 'unconfirmed', reason: 'cleanup_deadline' });
 });
+it('refuses finish during a pending read so the cancel-resolved read is not reported as EOF', async () => {
+    const stream = new ReadableStream<Uint8Array>({ start(c) { c.enqueue(bytes); } }), owner = setup(() => new Response(stream)), { handle } = get(await owner.acquire(window));
+    get(await owner.read(handle));
+    const [pending, finished] = await Promise.all([owner.read(handle), owner.finish(handle)]);
+    expect(finished).toEqual({ ok: false, code: 'invalid_state' });
+    expect(pending).toEqual({ ok: false, code: 'invalid_state' });
+    expect(owner.status()).toMatchObject({ primary: 'invalid_state', active: false, operations: { cancels: 1, releases: 1 } });
+    expect(stream.locked).toBe(false);
+});

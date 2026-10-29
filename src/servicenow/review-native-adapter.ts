@@ -334,7 +334,8 @@ export function createInjectedNativeReaderOwner(input: {
         },
         async finish(handle: Handle) { try {
             const r = lookup(handle);
-            if (r.finishClaimed)
+            // A finish during a pending read would let the cancel-resolved read look like EOF.
+            if (r.finishClaimed || r.reading)
                 throw new Failure('invalid_state');
             r.finishClaimed = true;
             await clean(r);
