@@ -11,11 +11,15 @@ const s=new BoundedReadSession({instanceUrl:'https://fixture.service-now.com',au
   {fetch:async()=>{calls++;return new Response('{}');}});
 try{
   assert.equal(Reflect.has(s,'claimTransportBudget'),false);
+  assert.equal(Reflect.has(s,'transportConstructor'),false);
+  assert.equal(Reflect.has(s,'claimReviewTransport'),false);
+  assert.equal(s.reviewRunStatus().transport_claim,'unclaimed');
   const path='/api/now/table/sys_update_set?sysparm_limit=1';await s.get(path);await s.get(path);
   s.chargePayload('<a/>');s.setPhaseReserve(0);
   assert.deepEqual(s.stats(),{requests:2,received_bytes:4,payload_bytes:4});assert.equal(calls,2);
   const status=s.reviewRunStatus();assert.equal(status.state,'ready');assert.equal(status.ready_generation,1);
   assert.equal(status.evidence_issuance,'disabled');assert.equal(Object.isFrozen(status.budget),true);
+  assert.equal(status.transport_claim,'unclaimed');assert.equal(status.transport_state,'unclaimed');
   assert.throws(()=>lifecycle.registerReviewEvidenceSession(s,{},{}),/invalid_state/);
 }finally{s.close();}
 const parent='a'.repeat(32);

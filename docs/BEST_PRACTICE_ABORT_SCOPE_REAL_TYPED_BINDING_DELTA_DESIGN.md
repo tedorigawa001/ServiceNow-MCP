@@ -1,7 +1,7 @@
 # AU-BR-006：実session／ReleasePermitとtyped取得の接続差分・fake I/O受入条件
 
-Version: br006-real-typed-binding-delta-draft-0.1 / Date: 2026-10-29。
-Status: **設計のみ。正式発行口閉鎖・Unknown・全体受付無効、VM／監視／telemetry調査保留を維持する。実装・実通信・実機操作・設定変更・Pushの承認ではない**。
+Version: br006-real-typed-binding-delta-draft-0.2 / Date: 2026-10-29。
+Status: **§10のRT-B01内部contractだけをfake依存で実装・検証。typed lane／更新port／bootstrap／cleanup実接続は未実装。正式発行口閉鎖・Unknown・全体受付無効、VM／監視／telemetry調査保留を維持する。実通信・実機操作・設定変更・Pushの承認ではない**。
 
 基準：[session／transport／body境界](BEST_PRACTICE_ABORT_SCOPE_SESSION_TRANSPORT_BODY_BINDING_DESIGN.md)、[実run lifecycle・ReleasePermitのprepared結合§14〜15](BEST_PRACTICE_ABORT_SCOPE_RUN_OWNER_BINDING_DESIGN.md#14-実session-private-lifecycle接続fake-io検証)、[CD-03／04の親workflow接続§13](BEST_PRACTICE_ABORT_SCOPE_PARENT_STABILITY_DESIGN.md#13-cd-03cd-04private-owner停止final-slot接続fake依存)。
 後工程：[選択window／payload受領物](BEST_PRACTICE_ABORT_SCOPE_REAL_SESSION_RECEIPTS_DESIGN.md)、[worker接続契約](BEST_PRACTICE_ABORT_SCOPE_CONNECTION_CONTRACT_DESIGN.md)。
@@ -148,15 +148,49 @@ oracleは製品counter／課金関数から期待値を逆算せず、試験側�
 
 本書からの次工程は小さく分け、各工程でも正式gateを閉じたままにする。
 
-1. **RT-B01：constructor継続・transport claim・診断の内部契約**。実ownerを再登録せず、既存prepared bindingを参照する。fake I/Oではまだdispatchしない試験から始める。
+1. **RT-B01：constructor継続・transport claim・診断の内部契約**。§10で非dispatchの内部型／継続を実装し、既存prepared bindingの検査を再利用した。実ownerを再登録・採用せず、typed laneはまだ生成しない。
 2. **RT-B02：同canonical予算・停止・bootstrap継続**。既存更新点とtyped用途／予約を一つに結び、fake認証→親→release→preparedを確認。正式body・metadata消費は開かない。
 3. **RT-B03：typed cleanup・同bytes candidate・ack**。同resourceの終了確認とpost-guard受理をfakeで検証。正式receiptはdeny-onlyのまま。
 4. 選択window／payload／worker job・final統合と公開結果は別設計・別承認。正式発行有効化・本番cap・実機検証も別の判断とする。
 
 承認待ち／未確認：private module／試験境界の配置、canonical stateへの移行方法と失敗時rollbackではなく停止する責務、Q受付下限、用途capture／E/R・cleanup／empty-read profile、追加work／heap・IPC・終了保証、未確認resourceの再受付policy、typed内部理由の公開写像、本番changedの統合、実ACL／field応答。これらをUnknownのまま扱い、合成profileで承認済みに埋めない。
 
-今回実施したのは既存ソース・設計との読み取り照合とMD更新だけ。build・合成テストの新規実行や実装の成功記録ではない。正式発行口閉鎖・全体受付無効・調査保留を維持する。
+draft-0.1で実施したのは既存ソース・設計との読み取り照合とMD更新だけ。後続のRT-B01実装・検証は§10と区別する。正式発行口閉鎖・全体受付無効・調査保留を維持する。
 
-## 9. 文書確認（2026-10-29）
+## 9. draft-0.1文書確認（2026-10-29）
 
-新規本書と参照更新した既存3文書の計4MDについて、相対参照76件の参照先存在・行末空白なし、RT-A01〜RT-A16の16受入条件の重複なしを確認した。見出しanchorの自動検証ではない。`git diff --check`成功。変更対象はMD4ファイルのみで、ソース・テスト・package・設定は変更していない。
+draft-0.1作成時、新規本書と参照更新した既存3文書の計4MDについて、相対参照76件の参照先存在・行末空白なし、RT-A01〜RT-A16の16受入条件の重複なしを確認した。見出しanchorの自動検証ではない。`git diff --check`成功。当時の変更対象はMD4ファイルのみで、ソース・テスト・package・設定は変更していない。
+
+## 10. RT-B01：constructor transport内部contract（fake依存限定）
+
+[既存lifecycle](../src/servicenow/review-evidence-lifecycle.ts)に内部型ConstructorTransportHandleとtransportConstructor継続を追加した。[新規35件](../tests/review/real-typed-constructor-contract.test.ts)、[検証記録](E2E_BEST_PRACTICE_REAL_TYPED_CONSTRUCTOR_CONTRACT_2026-10-29.md)を参照する。§2〜§8のtyped取得全体が完成したという意味ではない。
+
+### 10.1 生成元・一度限りのclaim
+
+実sessionはconstructorで既存registerReviewEvidenceSessionを一度だけ呼び、その返却closureを従来どおり#runOwnerへ保持する。新継続もそのclosure内に留まり、sessionのgetter／mode引数／登録exportは追加しない。既存sessionの再登録は従来のWeakSetで拒否する。
+
+claim(snapshot, lease)は同constructorのsnapshot／readonly leaseの参照を検査し、認証ready開始前・state=created・source未claim・既存C/G/P=0だけで受理する。claimを先にconsumingへ進め、lease観測の前後で検査し、最後のguard後に空の凍結handleを一つだけcommitする。通常の同binding重複は新要求の固定refusalだけ記録して既存ownerを保持し、別snapshot／leaseの重複はbinding不整合として要求先ownerを停止する。
+
+途中失敗はfailed、成功後stop／closeはclaimedという由来を残してstate=revoked・handle参照なしにする。再生成・再利用・close後の再登録で救済しない。依存からのclaim／inspect再入はbusy／consumingで拒否し、lease callbackから停止された後に成功handleやviewを返さない。
+
+### 10.2 prepared bindingの再利用・診断
+
+inspectは同ownerのhandle／snapshot／leaseと元の観測予算を検査するだけで、identity_only／dispatch=unavailable／evidence_issuance=disabledの固定viewを返す。inspectPreparedは新しいsource claimを生成せず、既存inspectSourceを共通private関数として再利用する。同source／permit／port／ready世代／不変release snapshotを従来どおり照合し、最後にtransport失効をcallbackなしで再検査してprepared_onlyの独立copyだけを返す。
+
+新規fake試験は既存登録関数の**孤立したテスト用contextとlease／source port**を使う。偽のmatched portを実sourceの#permitと認定する試験ではない。実classのconstructor確認ではfetch spyを一度も呼ばず、継続が公開されないこと・再登録できないこと・同期失効だけを検証する。既存の実source verifierを迂回するfactoryやfixture台帳への実session登録を追加していない。
+
+最初のprimaryと、通常重複要求のrefusalを別slotに保持する。transport_claim／transport_stateを既存の内部readonly診断へ追加するが、handle・snapshot・lease・source・permit・tokenは返さない。diagnosticは最後の状態を読むだけでclockを更新せず、有効性確認のauthorityではない。
+
+内部invalid_stateは固定診断として保持し、実sessionの既存#syncRunFailureではinternal_review_errorへ写像する。ReadFailureCode・公開JSONのcode列挙・MCP schemaは増やさない。binding／観測不整合の従来の写像と先行primary保持を維持する。
+
+### 10.3 dispatchなし・同梱境界・費目
+
+継続のoperationはclaim／inspect／inspectPrepared／diagnosticのみ。dispatch・fetch・chunk・予算更新・予約・body・cleanup・receipt／job発行のoperationは存在しない。readonly leaseを更新portへ変換せず、C/G/Pは変更しない。HTTP／workerを開始していない本contractを、他のlegacy経路のHTTP cleanup=confirmedという意味にしない。
+
+実BoundedReadSessionの公開legacy経路は継続を呼ばない。transport_claimはunclaimedのまま、typed laneへのswitchはなく、legacy GETを始めたsessionを後から採用できない。claimがready開始前とC/G/P=0を要求するのもそのためであり、RT-B02でconstructorからの固定使用継続を別に接続する。
+
+lifecycle moduleは既存runtime依存としてnpm同梱済みであり、新内部contractも同じファイル内に含まれる。一方、sessionのprivate継続を得る公開口はない。既存abort-scope-evidence fixture群の非同梱方針は変更せず、[梱包fixture](../tests/review/fixtures/compiled-fixture-boundary.mjs)でsessionの取得口がなくlegacy前後とも未claimであることを確認する。非同梱の合成issuerから実ownerを採用しない。
+
+claim成功はlease最大2観測、inspectは最大2、inspectPreparedはtransport2＋既存source2の最大4観測と既存bounded release copy1件。通常重複claimは追加観測0。handle最大1・refusal最大1・busy stateを保持し、失効でcanonical handle参照を捨てる。これらは追加制御費であって、全体work／heap上界の証明・物理消去・自動タイマー／OS終了保証ではない。
+
+RT-A01／02／06／11／15／16の関連部分を限定検証しただけで、16受入条件全体の合格とはしない。RT-B02のcanonical予算・bootstrap、RT-B03の実resource cleanup・同bytes受理／ack、選択payload／worker job・formal receiptは未接続。正式発行口閉鎖・Unknown・全体受付無効・調査保留を維持する。

@@ -113,7 +113,7 @@ export class BoundedReadSession {
   }
   #syncRunFailure(){
     const reason=this.#runOwner.failure();
-    if(reason&&!this.stopCode&&!this.disposed)this.stop(reason==='evidence_binding_mismatch'||reason==='invalid_observation_time'?'internal_review_error':reason);
+    if(reason&&!this.stopCode&&!this.disposed)this.stop(reason==='evidence_binding_mismatch'||reason==='invalid_observation_time'||reason==='invalid_state'?'internal_review_error':reason);
   }
   /** Monotonic run budget, also usable for safe CPU finalization after an HTTP stop. */
   remainingMs() { return Math.max(0, this.limits.deadlineMs - (performance.now() - this.started)); }

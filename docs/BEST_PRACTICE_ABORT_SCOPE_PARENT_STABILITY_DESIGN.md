@@ -260,4 +260,4 @@ CD-01、CD-02、stream-only、projectionなしfactoryと独立合成factoryの�
 
 実session／ReleasePermit／選択payload／worker jobとの正式binding・実通信・本番へ移す際のchangedの暫定結果写像は引き続き未接続。正式発行口閉鎖・Unknown・全体受付無効・VM／監視／telemetry保留を維持する。
 
-次の設計差分：[実session／ReleasePermitとtyped取得draft-0.1](BEST_PRACTICE_ABORT_SCOPE_REAL_TYPED_BINDING_DELTA_DESIGN.md)。同予算・同期失効・bootstrapと正式bodyの区別、fake I/O受入条件を具体化する。CDの合成owner／台帳を実sessionへ登録せず、正式発行口を開かない。
+次の設計差分：[実session／ReleasePermitとtyped取得draft-0.2](BEST_PRACTICE_ABORT_SCOPE_REAL_TYPED_BINDING_DELTA_DESIGN.md)。§10で非dispatchのRT-B01内部継続・claim・既存prepared検査再利用をfake依存で検証。CDの合成owner／台帳を実sessionへ登録せず、単一予算・bootstrap／cleanup実接続と正式発行は未実施。
