@@ -67,6 +67,11 @@ static packはoffline／ignore-scriptsで一覧を検査し、純粋compiled fix
 
 2026-10-29、HEAD（8fb30a1）へ今回の9ファイルだけを重ねた一時snapshotで確認した。無関係な`.vscode/`・`CLAUDE.md`は含めていない。build・新規49 tests・変更実装／試験／pack script／compiled fixtureのESLint・static pack（389 files）とcompiled contract（native calls=0）が成功した。関連4文書の相対参照71件・行末空白とgit diff --checkも成功。全体native試験・package-worker smoke・実通信は実行していない。検証後はこの結果の文書追記だけで、検証した実装・試験・依存設定は変更していない。
 
+### 4.1 レビュー修正（2026-10-29）
+
+- `package-native-contract.mjs`が個人環境のCLI wrapper経由で`npm pack`とcompiled fixtureを起動しており、wrapperの無い環境では`spawnSync ENOENT`で失敗した。既存`package-worker.mjs`と同じく`npm`・`process.execPath`を直接起動し、npm cacheを`os.tmpdir()`配下へ変更した。
+- wrapperをPATHから外した環境で修正前の失敗（ENOENT）と修正後の成功（static pack 389 files、compiled contract native calls=0）を確認。契約module・合成試験は変更していない。
+
 ## 5. 未接続・維持する停止
 
 native Response／streamのbrand・prototype・intrinsic capture、getReader／read／cancel／closed／releaseLock、pre-releaseの実観測生成部は未実装。synthetic issuerの観測値をnativeの事実へ昇格させない。
