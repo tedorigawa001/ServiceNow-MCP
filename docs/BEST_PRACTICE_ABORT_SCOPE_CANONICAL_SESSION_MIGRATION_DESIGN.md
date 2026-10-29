@@ -1,7 +1,7 @@
 # AU-BR-006 canonical会計とprivate生成位置の差分設計
 
-Version: br006-canonical-session-migration-draft-0.1 / Date: 2026-10-29。
-Status: 設計案。実装・実session接続・実通信は対象外。正式発行口閉鎖・Unknown・全体受付無効・VM／監視／telemetry調査保留を維持する。実通信・実機操作・設定変更・Pushの承認ではない。
+Version: br006-canonical-session-migration-draft-0.2 / Date: 2026-10-29。
+Status: §9のCM-01内部契約だけを純粋fake依存で実装。CM-02以降・実class置換・実session接続・実通信は未実施。正式発行口閉鎖・Unknown・全体受付無効・VM／監視／telemetry調査保留を維持する。実通信・実機操作・設定変更・Pushの承認ではない。
 
 目的は、NA-03の注入native経路を将来接続する前に、会計・停止・時計の唯一の所有者と移行順を決めることである。readonly leaseを更新portに昇格させず、稼働中のlegacy sessionをtypedへ切り替えない。
 
@@ -97,7 +97,7 @@ session constructorはsourceより先に呼ばれるため、存在しないsour
 3. **CM-03 typed dispatchの精密な計上境界**。NA-03と同更新portを結び、C commitの単一所有・予約・同期失効をfake I/Oで検証する。実通信は有効化しない。
 4. **CM-04 private compositionと固定source採用の詳細設計**。実認証snapshot／source初期identity／既存permitの発行元を結ぶ。配置・試験境界を承認後に小さく実装する。
 
-各工程の実装は別依頼で開始する。現在の変更はMDだけで、CM-01の内部型も未実装である。
+CM-01の限定実装は§9を参照。CM-02以降は別依頼で開始し、CM-01の合成成功から自動的に接続しない。
 
 ## 8 未確定事項と維持する停止状態
 
@@ -106,3 +106,27 @@ legacyとtypedで異なるHTTP terminal body・404・403 fallback・dispatch ret
 固定compositionのmodule配置、最低受付Q、native subset／Node最低版、cleanup未確認resourceの運用、追加guard／copy／台帳のwork／heap上界は未確定のままとする。既存100万work等の別モデルで承認済みと見なさず、全体受付は無効を維持する。
 
 本番cap、正式body receipt、選択payload／worker job、実transportの採用、実PDI検証、VM／監視／telemetry調査の再開はこの設計の対象外である。
+
+## 9 CM-01の内部契約と純粋fake検証
+
+実装：[review-canonical-budget.ts](../src/servicenow/review-canonical-budget.ts)。試験：[canonical-budget.test.ts](../tests/review/canonical-budget.test.ts)。詳細な実行結果：[CM-01検証記録](E2E_BEST_PRACTICE_CANONICAL_BUDGET_2026-10-29.md)。
+
+createCanonicalReviewBudgetはゼロ会計と、更新用writer／観測用viewを一組生成する。初期stats・session・snapshot・leaseを受け取る引数はない。constructorはclockと低減limitsだけを許し、clockはremainingMs関数だけを持つplain objectに限定する。実sessionのようなclass instanceをclockとして採用しない。trusted clock関数は固定して借用し、新しいt0／timerを作らない。
+
+| 内部port | CM-01の挙動 |
+|---|---|
+| writer.dispatch(final=false) | Cを一回加算。legacyの固定4枠差引きだけを再現し、typed予約は未実装。上限拒否はrequest_budget_exceededで、first stopを設定せずfinalを残す |
+| writer.chunk(n) | 非負safe integerのGを加算。overflowは加算前拒否、総量超過は費用を残してreceive_budget_exceeded停止 |
+| writer.payload(string) | 同文字列のUTF-8長をPへ一回加算。総量超過は停止、単体超過は既存payload_limitの局所エラーでfirst stopを設定しない |
+| writer.stop(reason) | 最初の内部理由と公開理由を固定。未知理由はraw値を保持せずinternal_review_errorへ正規化 |
+| writer.close | idempotentな採用停止だけ。実timer・token・同時実行枠の解放は実行しない |
+| view.stats／lease.read | frozen copy。leaseはreadだけを持ち、writer・reset・refund・登録／発行口を返さない。停止後も会計の観測は可能 |
+| view.failure／diagnostic | 公開理由と内部診断を分離。内部専用3理由は公開側でinternal_review_error、内部側では元の値。evidence_issuance=disabled |
+
+clockは有限・非負・deadline以下・非増加で、hard等号ではdeadline_exceededを固定する。異常値は内部invalid_observation_time、取得throwはinternal_review_error、clockからの会計再入は内部invalid_stateとして停止する。観測callbackが停止しても、その後の更新は通らない。停止後もclock自体が読めない場合は固定エラーとなり、callbackなしのstats／diagnosticは保持する。
+
+CM-01のlimitsはC／G／P単体／P総量／deadlineの5費目だけを扱う。S・chunk数・attempt window／phase・typed Rは既存owner側に残し、このcoreで検査済みとしない。低減値をcopyし、既存BOUNDED_LIMITSに対応する上限を増やさない。CM-02の接続時に定数の対応と既存更新順を再検証し、現時点で二重counterを実sessionへ導入しない。
+
+legacyのattempt前G>=cap拒否、phase／busy・認証チェックも実session側に残る。CM-01のdispatch単独を完全なHTTP受付判定として使わず、CM-02でこれらの既存順序を保存する。
+
+新moduleの4artifactは梱包するが、実session／native／sourceからimportしない。fixture台帳・合成issuerも参照しない。CM-A01／02／08／10の内部会計・写像部分と、legacy固定枠／元残時間の部分試験であり、CM-A03〜12全体やactual cleanupを証明したものではない。

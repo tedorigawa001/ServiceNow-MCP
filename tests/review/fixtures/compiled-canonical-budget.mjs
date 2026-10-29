@@ -1,0 +1,15 @@
+import assert from 'node:assert/strict';
+globalThis.fetch=()=>{throw Error('I/O forbidden');};
+globalThis.Response=class{constructor(){throw Error('native Response forbidden');}};
+globalThis.ReadableStream=class{constructor(){throw Error('native Streams forbidden');}};
+const {createCanonicalReviewBudget}=await import('../../../dist/servicenow/review-canonical-budget.js');
+const {writer,view}=createCanonicalReviewBudget({clock:{remainingMs:()=>60000}});
+writer.dispatch();writer.chunk(7);writer.payload('日本');
+assert.deepEqual(view.stats(),{requests:1,received_bytes:7,payload_bytes:6});
+assert.deepEqual(view.lease.read(),{requests:1,received_bytes:7,payload_bytes:6,remaining_ms:60000});
+writer.stop('evidence_binding_mismatch');writer.stop('cancelled');
+assert.equal(view.failure(),'internal_review_error');
+assert.equal(view.diagnostic().primary.internal,'evidence_binding_mismatch');
+assert.equal(view.diagnostic().evidence_issuance,'disabled');
+assert.deepEqual(Object.keys(view.lease),['read']);
+console.log('CM-01 compiled pure accounting PASS');
