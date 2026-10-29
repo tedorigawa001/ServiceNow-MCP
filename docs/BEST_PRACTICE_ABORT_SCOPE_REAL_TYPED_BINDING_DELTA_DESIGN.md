@@ -9,7 +9,7 @@ RT-B03後の次工程：[native adapter詳細設計draft-0.4](BEST_PRACTICE_ABOR
 
 NA-03後の移行案：[canonical会計・private生成位置の差分設計draft-0.4](BEST_PRACTICE_ABORT_SCOPE_CANONICAL_SESSION_MIGRATION_DESIGN.md)。CM-02のlegacy単一会計に加え、CM-03で新規canonical予算と注入native/typedのdispatch直前C計上を接続した。native/typed実session採用・private compositionは未開始。
 
-次の設計：[private composition・固定source採用draft-0.2](BEST_PRACTICE_ABORT_SCOPE_PRIVATE_COMPOSITION_DESIGN.md)。CM-03のfresh factoryを既存sessionへ追加せず、同coreからのaccounting供給と、新規runだけの認証／親／release結合を段階化する。設計のみで接続は未実装。
+次の設計：[private composition・固定source採用draft-0.3](BEST_PRACTICE_ABORT_SCOPE_PRIVATE_COMPOSITION_DESIGN.md)。CM-04-01で同core accounting供給のみ実装した。CM-03のfresh factoryを既存sessionへ追加せず、新規runだけの認証／親／release結合は後続CM-04-02以降とする。実session接続は未実装。
 
 ## 1. 目的と非対象
 

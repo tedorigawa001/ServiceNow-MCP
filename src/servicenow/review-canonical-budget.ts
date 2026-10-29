@@ -38,6 +38,8 @@ export function createCanonicalReviewBudget(input: {
         if (!Object.hasOwn(ceilings, key) || !Number.isSafeInteger(value) || value < 1 || value > ceilings[key as keyof Limits])
             throw new CanonicalBudgetError('invalid_input');
     let requests = 0, received = 0, payload = 0, closed = false, last: number | undefined, observing = false;
+    let legacyStarted = false, claim: 'unclaimed' | 'consuming' | 'claimed' | 'failed' = 'unclaimed';
+    let reservation: 'unclaimed' | 'reserving' | 'reserved' | 'failed' | 'released' = 'unclaimed';
     let primary: Readonly<{
         internal: InternalCode;
         public: ReadFailureCode;
@@ -82,47 +84,115 @@ export function createCanonicalReviewBudget(input: {
             return fail('invalid_input');
         return before + n;
     }
+    function dispatchAt(floor: number) {
+        if (!Number.isFinite(floor) || floor < 0 || floor >= limits.deadlineMs)
+            return fail('invalid_input');
+        const remaining = check();
+        if (remaining <= floor)
+            throw new CanonicalBudgetError('upstream_unavailable');
+        if (requests >= limits.requests - 4)
+            throw new CanonicalBudgetError('request_budget_exceeded');
+        if (received >= limits.totalBytes)
+            return fail('receive_budget_exceeded');
+        requests++;
+    }
+    function dispatch(final = false) {
+        check();
+        if (typeof final !== 'boolean')
+            return fail('invalid_input');
+        if (requests >= limits.requests - (final ? 0 : 4))
+            throw new CanonicalBudgetError('request_budget_exceeded');
+        requests++;
+    }
+    function chunk(n: number) {
+        check();
+        received = sum(received, n);
+        if (received > limits.totalBytes)
+            return fail('receive_budget_exceeded');
+    }
+    function chargePayload(value: string) {
+        check();
+        if (typeof value !== 'string')
+            return fail('invalid_input');
+        const n = Buffer.byteLength(value, 'utf8');
+        payload = sum(payload, n);
+        if (payload > limits.totalPayloadBytes)
+            return fail('payload_budget_exceeded');
+        if (n > limits.payloadBytes)
+            throw new CanonicalBudgetError('payload_limit');
+    }
+    function selectLegacy() { if (claim !== 'unclaimed')
+        return fail('invalid_state'); legacyStarted = true; }
+    const accounting = Object.freeze({
+        reserve() {
+            if (claim !== 'claimed' || reservation !== 'unclaimed')
+                return fail('invalid_state');
+            reservation = 'reserving';
+            try {
+                check();
+                if (requests || received || payload)
+                    return fail('invalid_state');
+                reservation = 'reserved';
+            }
+            catch (error) {
+                reservation = 'failed';
+                if (error instanceof CanonicalBudgetError) {
+                    stop(error.code);
+                    throw error;
+                }
+                return fail('internal_review_error');
+            }
+        },
+        reserved: () => reservation === 'reserved' ? 4 : 0,
+        dispatch(floor?: number) { if (claim !== 'claimed' || reservation !== 'reserved')
+            return fail('invalid_state'); if (floor === undefined)
+            dispatch();
+        else
+            dispatchAt(floor); },
+        chunk(n: number) { if (claim !== 'claimed' || reservation !== 'reserved')
+            return fail('invalid_state'); chunk(n); },
+        release() { if (reservation === 'released')
+            return; reservation = 'released'; closed = true; },
+    });
+    const construction = Object.freeze({
+        takeBootstrapAccounting(...args: never[]) {
+            if (claim !== 'unclaimed') {
+                claim = 'failed';
+                return fail('invalid_state');
+            }
+            claim = 'consuming';
+            try {
+                if (args.length)
+                    return fail('invalid_input');
+                if (limits.requests < 4)
+                    return fail('invalid_input');
+                if (legacyStarted)
+                    return fail('invalid_state');
+                check();
+                if (requests || received || payload)
+                    return fail('invalid_state');
+                claim = 'claimed';
+                return accounting;
+            }
+            catch (error) {
+                claim = 'failed';
+                if (error instanceof CanonicalBudgetError) {
+                    stop(error.code);
+                    throw error;
+                }
+                return fail('internal_review_error');
+            }
+        },
+        status: () => Object.freeze({ claim, reservation, reserved: accounting.reserved() }),
+    });
     const writer = Object.freeze({
-        dispatchAt(floor: number) {
-            if (!Number.isFinite(floor) || floor < 0 || floor >= limits.deadlineMs)
-                return fail('invalid_input');
-            const remaining = check();
-            if (remaining <= floor)
-                throw new CanonicalBudgetError('upstream_unavailable');
-            if (requests >= limits.requests - 4)
-                throw new CanonicalBudgetError('request_budget_exceeded');
-            if (received >= limits.totalBytes)
-                return fail('receive_budget_exceeded');
-            requests++;
-        },
-        dispatch(final = false) {
-            check();
-            if (typeof final !== 'boolean')
-                return fail('invalid_input');
-            if (requests >= limits.requests - (final ? 0 : 4))
-                throw new CanonicalBudgetError('request_budget_exceeded');
-            requests++;
-        },
-        chunk(n: number) {
-            check();
-            received = sum(received, n);
-            if (received > limits.totalBytes)
-                return fail('receive_budget_exceeded');
-        },
-        payload(value: string) {
-            check();
-            if (typeof value !== 'string')
-                return fail('invalid_input');
-            const n = Buffer.byteLength(value, 'utf8');
-            payload = sum(payload, n);
-            if (payload > limits.totalPayloadBytes)
-                return fail('payload_budget_exceeded');
-            if (n > limits.payloadBytes)
-                throw new CanonicalBudgetError('payload_limit');
-        },
+        dispatchAt(floor: number) { selectLegacy(); dispatchAt(floor); },
+        dispatch(final = false) { selectLegacy(); dispatch(final); },
+        chunk(n: number) { selectLegacy(); chunk(n); },
+        payload(value: string) { selectLegacy(); chargePayload(value); },
         stop,
         close() { closed = true; },
     });
     const view = Object.freeze({ stats, lease: Object.freeze({ read }), failure: () => primary?.public ?? null, diagnostic: () => Object.freeze({ primary, closed, evidence_issuance: 'disabled' as const }) });
-    return Object.freeze({ writer, view });
+    return Object.freeze({ writer, view, construction });
 }

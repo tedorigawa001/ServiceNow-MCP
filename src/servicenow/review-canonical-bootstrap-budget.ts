@@ -12,8 +12,12 @@ export function createCanonicalBootstrapBudget(input: {
 }) {
     if (!input || typeof input !== 'object' || Reflect.ownKeys(input).some(k => k !== 'clock' && k !== 'limits'))
         throw new CanonicalBudgetError('invalid_input');
-    const field = (key: 'clock' | 'limits') => { const d = Object.getOwnPropertyDescriptor(input, key); if (d && !Object.hasOwn(d, 'value'))
-        throw new CanonicalBudgetError('invalid_input'); return d?.value; };
+    const field = (key: 'clock' | 'limits') => {
+        const d = Object.getOwnPropertyDescriptor(input, key);
+        if (d && !Object.hasOwn(d, 'value'))
+            throw new CanonicalBudgetError('invalid_input');
+        return d?.value;
+    };
     const clock = field('clock') as {
         remainingMs(): number;
     }, reduced = field('limits') as Partial<Limits> | undefined;
@@ -26,22 +30,22 @@ export function createCanonicalBootstrapBudget(input: {
     if (limits.requests < 4)
         throw new CanonicalBudgetError('invalid_input');
     const core = createCanonicalReviewBudget({ clock, limits: { requests: limits.requests, totalBytes: limits.total_bytes, deadlineMs: limits.deadline_ms } });
-    let state: 'unclaimed' | 'reserved' | 'released' = 'unclaimed';
+    let port: ReturnType<typeof core.construction.takeBootstrapAccounting> | undefined;
+    let released = false;
     function refuse(): never { core.writer.stop('invalid_state'); throw new CanonicalBudgetError(core.view.failure()!); }
     const accounting = Object.freeze({
-        reserve() { if (state !== 'unclaimed')
-            return refuse(); const b = core.view.lease.read(); if (core.view.failure() || b.requests || b.received_bytes || b.payload_bytes)
-            return refuse(); state = 'reserved'; },
-        reserved: () => state === 'reserved' ? 4 : 0,
-        dispatch(floor?: number) { if (state !== 'reserved')
-            return refuse(); if (floor === undefined)
-            core.writer.dispatch();
+        reserve() { if (released || port)
+            return refuse(); port = core.construction.takeBootstrapAccounting(); port.reserve(); },
+        reserved: () => port?.reserved() ?? 0,
+        dispatch(floor?: number) { if (released || !port)
+            return refuse(); port.dispatch(floor); },
+        chunk(n: number) { if (released || !port)
+            return refuse(); port.chunk(n); },
+        release() { if (released)
+            return; released = true; if (port)
+            port.release();
         else
-            core.writer.dispatchAt(floor); },
-        chunk(n: number) { if (state !== 'reserved')
-            return refuse(); core.writer.chunk(n); },
-        release() { if (state === 'released')
-            return; state = 'released'; core.writer.close(); },
+            core.writer.close(); },
     });
-    return Object.freeze({ lease: core.view.lease, limits, accounting, diagnostic: () => Object.freeze({ ...core.view.diagnostic(), reservation: state, reserved: accounting.reserved(), budget: core.view.stats() }) });
+    return Object.freeze({ lease: core.view.lease, limits, accounting, diagnostic: () => Object.freeze({ ...core.view.diagnostic(), reservation: released ? 'released' : core.construction.status().reservation, reserved: accounting.reserved(), budget: core.view.stats() }) });
 }

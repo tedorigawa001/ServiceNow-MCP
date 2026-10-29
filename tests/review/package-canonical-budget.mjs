@@ -19,4 +19,4 @@ execFileSync(process.execPath,[fileURLToPath(new URL('fixtures/compiled-canonica
 const binding=readFileSync(new URL('../../dist/servicenow/review-canonical-bootstrap-budget.js',import.meta.url),'utf8');
 for(const forbidden of ['abort-scope-evidence','review-evidence-lifecycle','bounded-read.js'])assert(!binding.includes(forbidden),'bootstrap budget must not adopt a session');
 execFileSync(process.execPath,[fileURLToPath(new URL('fixtures/compiled-typed-dispatch.mjs',import.meta.url))],{cwd:root,stdio:'inherit'});
-console.log('CM-01/02/03 offline pack PASS ('+files.size+' files)');
+console.log('CM-01/02/03/04-01 offline pack PASS ('+files.size+' files)');

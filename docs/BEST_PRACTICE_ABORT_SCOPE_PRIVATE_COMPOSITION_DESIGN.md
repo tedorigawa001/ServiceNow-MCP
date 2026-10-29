@@ -1,7 +1,7 @@
 # AU-BR-006 新規runのprivate compositionとsource採用設計
 
-Version: br006-private-composition-draft-0.2 / Date: 2026-10-29。
-Status: CM-04の設計案。実装・native/typed実session採用・実通信は未実施。正式発行口閉鎖・Unknown・全体受付無効・VM／監視／telemetry調査保留を維持する。
+Version: br006-private-composition-draft-0.3 / Date: 2026-10-29。
+Status: CM-04-01の同core accounting供給のみ実装。native/typed実session採用・実通信は未実施。正式発行口閉鎖・Unknown・全体受付無効・VM／監視／telemetry調査保留を維持する。
 
 CM-04は、新規runだけを対象に、同じ予算・認証snapshot・source・ReleasePermitを結ぶ。最初の実装は予算生成とaccounting供給の分離までとし、既存sessionの後付け切替やMCP設定による有効化は行わない。
 
@@ -133,4 +133,16 @@ oracleはfake dispatcherの到達数、固定入力byte列の独立長／hash、
 2. **CM-04-02 新規run compositionの内部接続**。module間の生成継続と更新port非公開をレビュー後、認証／I/O前の固定source結合をfake依存で実装する。既存公開entryはlegacyのまま。
 3. **CM-04-03 private ack consumerと既存release判定**。固定200の親・releaseを同sourceへ一度受理し、prepared限定summaryまで確認する。HTTP差分・final移譲・payload／workerの採用は追加設計を要する。
 
-この文書ではソース・テスト・依存・設定を変更しない。次の実装依頼はCM-04-01が対象となる。
+CM-04-01の実装範囲は§10を参照。次の接続範囲はCM-04-02であり、本段階では実sessionのlaneを変更しない。
+
+## 10 CM-04-01 同core accounting供給
+
+canonical生成rootだけが`construction.takeBootstrapAccounting()`を保持する。sessionや外部coreを引数に採用せず、同closureのC/G/Pとclockを使う。readonly view／leaseからはconstructionもwriterも取得できず、accounting取得は第二leaseを返さない。実sessionは従来どおりprivate budgetを保持し、新しい取得口を呼ばない。
+
+取得claimは`unclaimed → consuming → claimed`、拒否時は`failed`。callback前にconsumingを記録し、二重取得・再入・失敗後再取得を拒否する。legacyのdispatch／dispatchAt／chunk／payloadは検査前にlegacy利用開始を固定するため、ゼロbyteやquota拒否でC/G/Pが0でも後付け取得はできない。stop／close・不正clock・外来引数も拒否する。低減C上限が4未満なら予約を発行しない。
+
+予約は`unclaimed → reserving → reserved`、失敗は`failed`、cleanupは一度限りの`released`。releaseは会計を返金せずcoreを閉じる。既存CM-03 factoryは生成時にclockを読まず、reserve時に同coreの取得継続へ委譲する。factoryに第二counter／session registryは置かない。CM-03のC直前計上・G課金・4枠・上限は維持する。
+
+合成試験は同coreの観測一致、legacy利用後拒否、再入、期限・取消・失効、readonly権限非露出、fresh factory互換を対象とする。実sessionのready／source claim、owner登録leaseとbootstrapの参照一致、source private受理は未接続であり、PC-A01〜A14全体を完了扱いにしない。
+
+検証記録：[CM-04-01](E2E_BEST_PRACTICE_CONSTRUCTION_ACCOUNTING_2026-10-29.md)。
