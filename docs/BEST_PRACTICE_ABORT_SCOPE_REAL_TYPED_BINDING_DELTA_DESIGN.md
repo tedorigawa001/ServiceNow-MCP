@@ -5,6 +5,7 @@ Status: **§10のRT-B01・§11のRT-B02に加え、§12のRT-B03 typed cleanup�
 
 基準：[session／transport／body境界](BEST_PRACTICE_ABORT_SCOPE_SESSION_TRANSPORT_BODY_BINDING_DESIGN.md)、[実run lifecycle・ReleasePermitのprepared結合§14〜15](BEST_PRACTICE_ABORT_SCOPE_RUN_OWNER_BINDING_DESIGN.md#14-実session-private-lifecycle接続fake-io検証)、[CD-03／04の親workflow接続§13](BEST_PRACTICE_ABORT_SCOPE_PARENT_STABILITY_DESIGN.md#13-cd-03cd-04private-owner停止final-slot接続fake依存)。
 後工程：[選択window／payload受領物](BEST_PRACTICE_ABORT_SCOPE_REAL_SESSION_RECEIPTS_DESIGN.md)、[worker接続契約](BEST_PRACTICE_ABORT_SCOPE_CONNECTION_CONTRACT_DESIGN.md)。
+RT-B03後の次工程：[native adapter詳細設計draft-0.1](BEST_PRACTICE_ABORT_SCOPE_NATIVE_ADAPTER_DESIGN.md)。同readerの所有権・操作capture・runtime専用台帳・pre-release証拠を具体化する設計案。fixture台帳は移植せず、native adapter／実session接続は未実装のまま。
 
 ## 1. 目的と非対象
 
@@ -275,5 +276,7 @@ read timeout／read失敗後はcleanupの結果にかかわらず当bootstrapを
 ### 12.5 未接続・未証明
 
 fake操作のPromise観測をnative Web Streamsの実API証拠に読み替えない。native default-readerのpin・Response／stream所有権・getReader失敗、実認証header／URL・実classのcanonical更新点移行と固定sourceへのprivate caller、実C方式設定／ReleasePermit起源、選択payload／worker jobの正式bindingは後工程。
+
+このうちnative取得・同readerの操作・release前の観測固定・RT-B03のfinish前の証拠照合は、[native adapter詳細設計§3〜§8](BEST_PRACTICE_ABORT_SCOPE_NATIVE_ADAPTER_DESIGN.md#3-対応subsetと固定する操作)へ分離した。release自身がpending readを決着させた場合にunconfirmedを修復しないことを追加受入条件とする。設計の具体化であり実装済み範囲を増やすものではない。
 
 raw byteの保持参照を消すことと、GC／OSからの物理消去は別。同期JSON.parse／hashの途中強制中断、allocator／IPCを含む全体work／heap上界、非協力的I/Oの実時間終了も未証明。正式発行口閉鎖・Unknown・全体受付無効・VM／監視／telemetry調査保留を維持し、本番cap・実通信・実機操作・設定変更を有効化しない。
