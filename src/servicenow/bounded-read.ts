@@ -1,5 +1,6 @@
 /** Isolated, read-only transport. Never uses the legacy client's retries, logging or body readers. */
 import { createHash } from 'node:crypto';
+import { types } from 'node:util';
 import type { ServiceNowConfig } from './types.js';
 import { pinReviewReleaseConfig } from './review-release-config.js';
 import { registerReviewEvidenceSession, type ReviewRunBudgetLease } from './review-evidence-lifecycle.js';
@@ -27,6 +28,19 @@ export interface BoundedReadOptions {
 }
 let active = 0;
 const principals = new Set<string>();
+const snapshotKeys = new Set(['instanceUrl', 'authMode', 'perUserBearerToken', 'oauth', 'accessToken', 'tokenExpiry', 'reviewReleaseConfig', 'reviewReleaseConfigProvider']);
+const oauthKeys = new Set(['clientId', 'clientSecret', 'username', 'password']);
+/** Copy a caller-supplied object once from plain data properties: a getter or proxy could answer validation and storage differently. */
+function pinDataObject(raw: unknown, keys: Set<string>): Record<string, unknown> {
+  if (!raw || typeof raw !== 'object' || types.isProxy(raw) || ![Object.prototype, null].includes(Object.getPrototypeOf(raw))) throw new BoundedReadError('invalid_input');
+  const fields = Object.getOwnPropertyDescriptors(raw), pinned: Record<string, unknown> = {};
+  for (const key of Reflect.ownKeys(fields)) {
+    const field = Reflect.get(fields, key) as PropertyDescriptor;
+    if (typeof key !== 'string' || !keys.has(key) || !Object.hasOwn(field, 'value')) throw new BoundedReadError('invalid_input');
+    pinned[key] = field.value;
+  }
+  return pinned;
+}
 
 export class BoundedReadSession {
   private readonly controller = new AbortController();
@@ -71,9 +85,11 @@ export class BoundedReadSession {
           Reflect.apply(Object.getOwnPropertyDescriptor(AbortSignal.prototype,'aborted')!.get!,signal,[]);
         }catch{throw new BoundedReadError('invalid_input');}
       }
+      const pinned=pinDataObject(snapshot,snapshotKeys);
+      const fixed=Object.freeze({...pinned,oauth:Object.freeze(pinDataObject(pinned.oauth,oauthKeys))}) as unknown as ReadSnapshot;
       const parsed=parseBoundedSourceInput(input);
       // The class and source are fixed, not caller-supplied factories. No later mode switch or registry lookup.
-      session=new BoundedReadSession(snapshot,{signal,limits,fetch:()=>{throw new BoundedReadError('internal_review_error');}});
+      session=new BoundedReadSession(fixed,{signal,limits,fetch:()=>{throw new BoundedReadError('internal_review_error');}});
       const bound=session.#prepareComposition(parsed);
       session.#close();
       return Object.freeze({...bound,reserved:0 as const,cleanup:'closed' as const});
@@ -120,21 +136,23 @@ export class BoundedReadSession {
       }
       this.limits[key as keyof typeof BOUNDED_LIMITS] = value!;
     }
+    // Validate and key the stored copy, never the caller's object again.
+    const copy = this.#snapshot;
     let url: URL;
-    try { url = new URL(snapshot.instanceUrl); } catch { throw new BoundedReadError('invalid_input'); }
+    try { url = new URL(copy.instanceUrl); } catch { throw new BoundedReadError('invalid_input'); }
     if (url.protocol !== 'https:' || url.username || url.password || url.search || url.hash || !['', '/'].includes(url.pathname)) {
       throw new BoundedReadError('invalid_input');
     }
     this.baseUrl = url.origin;
-    try { this.releasePolicy = pinReviewReleaseConfig(snapshot.reviewReleaseConfigProvider
-      ? snapshot.reviewReleaseConfigProvider() : snapshot.reviewReleaseConfig, this.baseUrl, this.startedAt, this.limits.deadlineMs); }
+    try { this.releasePolicy = pinReviewReleaseConfig(copy.reviewReleaseConfigProvider
+      ? copy.reviewReleaseConfigProvider() : copy.reviewReleaseConfig, this.baseUrl, this.startedAt, this.limits.deadlineMs); }
     catch { throw new BoundedReadError('config_invalid'); }
-    if (snapshot.authMode === 'impersonation') throw new BoundedReadError('authentication_failed');
-    this.authMode = snapshot.authMode === 'per-user' ? 'per-user' : 'service-account';
-    if (this.authMode === 'per-user' && !snapshot.perUserBearerToken) throw new BoundedReadError('authentication_failed');
+    if (copy.authMode === 'impersonation') throw new BoundedReadError('authentication_failed');
+    this.authMode = copy.authMode === 'per-user' ? 'per-user' : 'service-account';
+    if (this.authMode === 'per-user' && !copy.perUserBearerToken) throw new BoundedReadError('authentication_failed');
     // Credential-key admission, not a stable user ID: rotated per-user tokens count as distinct keys.
     this.principalKey = createHash('sha256').update(JSON.stringify([this.baseUrl, this.authMode,
-      this.authMode === 'per-user' ? snapshot.perUserBearerToken : [snapshot.oauth.clientId, snapshot.oauth.username ?? '']])).digest('hex');
+      this.authMode === 'per-user' ? copy.perUserBearerToken : [copy.oauth.clientId, copy.oauth.username ?? '']])).digest('hex');
     if (active >= 2 || principals.has(this.principalKey)) throw new BoundedReadError('review_busy');
     this.#budget=createCanonicalReviewBudget({clock:{remainingMs:()=>Math.max(0,this.limits.deadlineMs-(performance.now()-this.started))},limits:{requests:this.limits.requests,totalBytes:this.limits.totalBytes,payloadBytes:this.limits.payloadBytes,totalPayloadBytes:this.limits.totalPayloadBytes,deadlineMs:this.limits.deadlineMs}});
     active++; principals.add(this.principalKey);

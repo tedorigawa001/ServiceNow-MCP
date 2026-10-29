@@ -97,3 +97,19 @@ it('uses its fixed private cleanup rather than a replaced public close method',(
  vi.useFakeTimers();const close=vi.spyOn(BoundedReadSession.prototype,'close').mockImplementation(()=>{});
  expect(BoundedReadSession.prepareNewReviewComposition(snapshot(),input).cleanup).toBe('closed');expect(close).not.toHaveBeenCalled();expect(vi.getTimerCount()).toBe(0);
 });
+it.each(['perUserBearerToken','instanceUrl','authMode','oauth'] as const)('rejects an accessor snapshot %s without reading it, so validation and storage cannot diverge',key=>{
+ vi.useFakeTimers();let reads=0;const s=snapshot() as unknown as Record<string,unknown>,value=s[key];
+ Object.defineProperty(s,key,{enumerable:true,get(){reads++;return value;}});
+ expect(()=>BoundedReadSession.prepareNewReviewComposition(s as never,input)).toThrow('invalid_input');
+ expect(reads).toBe(0);expect(vi.getTimerCount()).toBe(0);
+ expect(BoundedReadSession.prepareNewReviewComposition(snapshot(),input).cleanup).toBe('closed');
+});
+it.each([
+ ['proxy snapshot',()=>new Proxy(snapshot(),{})],
+ ['class snapshot',()=>Object.assign(Object.create({inherited:true}),snapshot())],
+ ['unknown snapshot key',()=>({...snapshot(),fetch:()=>{}})],
+ ['accessor oauth field',()=>({...snapshot(),oauth:Object.defineProperty({},'clientId',{enumerable:true,get(){throw Error('PRIVATE_GETTER');}})})],
+ ['unknown oauth key',()=>({...snapshot(),oauth:{clientId:'u',extra:1}})],
+] as const)('rejects a %s before allocating a run',(_name,make)=>{
+ vi.useFakeTimers();expect(()=>BoundedReadSession.prepareNewReviewComposition(make() as never,input)).toThrow('invalid_input');expect(vi.getTimerCount()).toBe(0);
+});

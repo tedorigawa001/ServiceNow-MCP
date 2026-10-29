@@ -1,6 +1,6 @@
 # AU-BR-006 新規runのprivate compositionとsource採用設計
 
-Version: br006-private-composition-draft-0.4 / Date: 2026-10-30。
+Version: br006-private-composition-draft-0.5 / Date: 2026-10-30。
 Status: CM-04-01の同core accounting供給とCM-04-02の認証／I/O前の固定compositionを実装。native/typedの実session I/O採用・実通信は未実施。正式発行口閉鎖・Unknown・全体受付無効・VM／監視／telemetry調査保留を維持する。
 
 CM-04は、新規runだけを対象に、同じ予算・認証snapshot・source・ReleasePermitを結ぶ。最初の実装は予算生成とaccounting供給の分離までとし、既存sessionの後付け切替やMCP設定による有効化は行わない。
@@ -153,7 +153,7 @@ canonical生成rootだけが`construction.takeBootstrapAccounting()`を保持す
 
 固定入口は`BoundedReadSession.prepareNewReviewComposition(snapshot, input, {signal?, limits?})`とする。MCP／設定への登録はしない。これは内部moduleの新規生成入口であり、任意の既存sessionを受け取るgetter／mode setterではない。session／source factory、work callback、dispatcher、release値は受け取らない。既存constructor・client・adapter・R-2の生成経路からは呼ばない。
 
-1. strictな既存source inputを検証する。optionsはsignal／低減limitsのdata propertyだけを一度pinする。不正signal・proxy／別realm／独自prototype・signalの操作差替えは生成前に拒否する。同一realmのnative AbortSignalだけをこの入口の対象とする。
+1. 認証snapshotは、Object.prototype／null prototypeの非proxy objectから既知keyのdata propertyだけを一度copyし、oauthも同様に既知keyだけをcopyしてfreezeする。getter・proxy・独自prototype・未知keyは読まずに`invalid_input`で拒否する。constructorの検証・principal key・保存値は同じcopyだけを読み、呼出し元objectを再読しない。strictな既存source inputを検証する。optionsはsignal／低減limitsのdata propertyだけを一度pinする。不正signal・proxy／別realm／独自prototype・signalの操作差替えは生成前に拒否する。同一realmのnative AbortSignalだけをこの入口の対象とする。
 2. 固定classから新しいsessionを作る。constructorが認証snapshot、canonical core、owner登録済み`#runLease`を生成する。fetchは固定拒否関数であり、デフォルトfetchへfallbackしない。
 3. private `#prepareComposition`が一度限りのclaimを先に消費し、同sessionと検証済みinputで固定`BoundedUpdateSetSource`を一つ生成する。同ownerのtransport claim→`bindInitialSource`へ、同じsnapshot／登録済みlease／handleを渡す。
 4. 初期source bindingは`unclaimed → consuming → claimed`。callback前にconsumingを固定し、再入・別identity・二重利用・ready後・失効後を拒否する。初期binding後の別sourceのReleasePermit bindingも拒否する。既存legacy ownerで初期bindingがない場合の振る舞いは維持する。

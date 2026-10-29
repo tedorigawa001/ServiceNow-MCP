@@ -38,6 +38,13 @@ Git indexの11ファイル＋HEADだけから一時copyを作り、既存node_mo
 
 全体試験の製品期限・試験期限は緩めていない。今回の最終全体実行に失敗・skipはない。開発中のRED／構文・型検査失敗は上記のとおり保持する。
 
+## レビュー修正（2026-10-30）
+
+- 指摘：固定入口は呼出し元snapshotをそのままconstructorへ渡し、constructorはcopyを保存した後に元objectを再読してURL・authMode・token有無・principal keyを検証していた。tokenのgetterが読取ごとに別値を返すと、保存token（要求に使用）と検査・principal keyの値が分かれたまま`constructor_bound`になった。現段階はI/Oなしで即closeするため実害はないが、CM-04-03で同入口に認証／I/Oを加えると同principal admissionの迂回や検査値と使用値の不一致につながる。
+- 修正：入口でsnapshotとoauthを既知keyのdata propertyだけから一度copyしてfreezeし、getter・proxy・独自prototype・未知keyは読まずに`invalid_input`で拒否する。constructorの検証・principal keyは保存copyだけを読むようにし、legacy経路でも元objectを再読しない（plain objectでは値・挙動は不変）。
+- 回帰試験：accessor snapshot（token／instanceUrl／authMode／oauth）4件と、proxy・class prototype・未知key・oauth accessor・oauth未知key 5件を追加（getter読取0・timer 0）。修正前実装へ戻すとこの9件だけが失敗する。
+- 再検証：tsc・変更対象ESLint・build・全体193 files／5,839 tests PASS、CM-01〜CM-04-02 offline梱包・compiled smoke PASS（405 files）、`git diff --check` PASS。上記の最終結果は修正前の記録として残す。
+
 ## 未接続／未実施
 
 CM-04-03のprivate ack／親／release判定、native/typed実session I/O、正式body receipt／選択payload／worker job、final予約移譲・P更新portは後続。実通信・実機操作・設定変更・permit発行・Pushは行わない。
