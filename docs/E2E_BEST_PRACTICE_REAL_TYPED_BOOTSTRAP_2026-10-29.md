@@ -4,7 +4,7 @@ Date: 2026-10-29 / Scope: constructor固定の孤立fake context・会計owner�
 
 設計：[接続差分draft-0.3 §11](BEST_PRACTICE_ABORT_SCOPE_REAL_TYPED_BINDING_DELTA_DESIGN.md#11-rt-b02同canonical予算停止とbootstrap継続fake-io限定)。
 実装：[bootstrap contract](../src/servicenow/review-bootstrap-contract.ts)、[lifecycle](../src/servicenow/review-evidence-lifecycle.ts)。
-試験：[新規37件](../tests/review/real-typed-bootstrap.test.ts)、[既存B01](../tests/review/real-typed-constructor-contract.test.ts)、[梱包境界](../tests/review/fixtures/compiled-fixture-boundary.mjs)。
+試験：[新規38件](../tests/review/real-typed-bootstrap.test.ts)、[既存B01](../tests/review/real-typed-constructor-contract.test.ts)、[梱包境界](../tests/review/fixtures/compiled-fixture-boundary.mjs)。
 
 ## 1. 実施範囲と境界
 
@@ -29,7 +29,7 @@ fake応答は一つのstatus／Uint8Array完了イベント。private copyをG�
 | exchange経路 | authentication POST→parent GET→release GET、C=3、ready世代1、P=0、R=4、preparedのみ |
 | per-user／cached | OAuth I/Oなし、parent→release、C=2、同lease／ready世代1 |
 | Gのoracle | fake dispatchが返した応答byte長のイベント合計とcanonical Gが一致。製品counterから期待値を作らない |
-| retry | settled 503は同用途最大2試行。失敗C/Gは残る。pending timeoutは第二dispatchなし |
+| retry | settled 503は同用途最大2試行。失敗C/Gは残る。pending timeoutは第二dispatchなし。決着済み200の処理中に元attempt窓を越えた場合もsettled扱いで再送し、両attemptのC/Gを残す |
 | 予約 | 全dispatchでC+1+R≤Q。Q=4ではC=0、Q=5ではC=1で理由付き停止。R解放一度、C/G返金なし |
 | S／G超過 | 5 byteを4 byte capへ投入し、G=5を保持して拒否。payload／source未開始 |
 | 会計混入 | C二重加算／G余分加算／P変更をinternal_review_errorで停止。別counterに切り替えない |
@@ -47,7 +47,7 @@ fake応答は一つのstatus／Uint8Array完了イベント。private copyをG�
 
 | 確認 | 結果 |
 |---|---|
-| RT-B02新規試験 | 37 tests成功 |
+| RT-B02新規試験 | 38 tests成功（レビュー修正後、§4.1） |
 | RT-B02＋既存RT-B01 | 2 files／72 tests成功 |
 | 全体 `vitest run --maxWorkers=3`（型修正後） | 182 files／5,541 tests成功、30.54秒、skipなし |
 | `npm run build`（型修正後） | 成功 |
@@ -57,6 +57,10 @@ fake応答は一つのstatus／Uint8Array完了イベント。private copyをG�
 | `git diff --check` | 成功 |
 
 全体回帰には既存のローカル合成待受・fake I/O・worker試験を含む。外部ServiceNow／実OAuthへの通信ではない。`.vscode/`と`CLAUDE.md`の無関係な作業中ファイルは変更していない。途中の失敗を§2へ保持し、未実施・未接続を成功に含めない。
+
+### 4.1 レビュー修正（2026-10-29）
+
+決着済み200の課金callback中に元attempt窓（残50,000ms）へ達した場合、parentを再送してC=3で成功する既存挙動を固定する試験を1件追加した（実装変更なし）。設計§11.3へ、この再試行規則と、release 404／非200 2xx／retry枯渇5xxを本番`bounded-source`のfallback／Unknownではなく停止とする狭い分類を明記した。修正後はRT-B02 38 tests、RT-B02＋RT-B01 2 files／73 tests、全体182 files／5,542 testsが成功。下表と次節の5,541件は修正前の記録として残す。
 
 ### コミット対象のみの再検証
 

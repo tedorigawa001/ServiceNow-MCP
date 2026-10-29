@@ -43,6 +43,10 @@ it('retries a settled synthetic 503 once without resetting C/G, source claim or 
   const s=setup();let call=0;s.respond(async purpose=>++call===1?{status:503,bytes:encode({error:'DUMMY'})}:{status:200,bytes:encode(purpose==='parent'?{result:parent}:{result:[{build_name:'Australia'}]})});
   get(await s.run());expect(s.events.map(e=>e.purpose)).toEqual(['parent','parent','release']);expect(s.counters).toEqual({requests:3,received_bytes:s.events.reduce((n,e)=>n+(e.bytes??0),0),payload_bytes:0});expect(s.reserved()).toBe(4);s.owner.close('closed');expect(s.releaseCount()).toBe(1);
 });
+it('retries a settled 200 whose local processing crosses its attempt window, charging both attempts',async()=>{
+  const s=setup();let first=true;s.onCharge(()=>{if(first){first=false;s.now(10000);}});
+  get(await s.run());expect(s.events.map(e=>e.purpose)).toEqual(['parent','parent','release']);expect(s.counters).toEqual({requests:3,received_bytes:s.events.reduce((n,e)=>n+(e.bytes??0),0),payload_bytes:0});expect(s.pending()).toBe(0);s.owner.close('closed');
+});
 it.each(['authentication','parent','release'] as const)('exhausts at most two settled retries for %s and never continues to metadata',async failing=>{
   const s=setup(failing==='authentication'?'exchange':'per-user');s.respond(async purpose=>purpose===failing?{status:503,bytes:new Uint8Array()}:{status:200,bytes:encode({result:parent})});
   expect(await s.run()).toEqual({ok:false,code:'upstream_unavailable'});expect(s.events.filter(e=>e.purpose===failing)).toHaveLength(2);expect(s.events.some(e=>e.purpose==='metadata')).toBe(false);expect(s.reserved()).toBe(0);expect(s.releaseCount()).toBe(1);expect(s.pending()).toBe(0);

@@ -197,7 +197,7 @@ RT-A01／02／06／11／15／16の関連部分を限定検証しただけで、1
 
 ## 11. RT-B02：同canonical予算・停止とbootstrap継続（fake I/O限定）
 
-[内部bootstrap contract](../src/servicenow/review-bootstrap-contract.ts)、[37件の合成テスト](../tests/review/real-typed-bootstrap.test.ts)、[検証記録](E2E_BEST_PRACTICE_REAL_TYPED_BOOTSTRAP_2026-10-29.md)を追加した。§10.3の「dispatchなし」はRT-B01単体の範囲であり、本節は新規のconstructor依存を与えた孤立contextに限る追加段階である。
+[内部bootstrap contract](../src/servicenow/review-bootstrap-contract.ts)、[38件の合成テスト](../tests/review/real-typed-bootstrap.test.ts)、[検証記録](E2E_BEST_PRACTICE_REAL_TYPED_BOOTSTRAP_2026-10-29.md)を追加した。§10.3の「dispatchなし」はRT-B01単体の範囲であり、本節は新規のconstructor依存を与えた孤立contextに限る追加段階である。
 
 ### 11.1 生成・canonical会計・停止の所有
 
@@ -223,7 +223,9 @@ fake descriptorはpurpose／固定method／synthetic=trueのみで、利用者UR
 
 Q≤210、G≤16MiB、S≤4MiB、deadline≤60秒。R=4に対する受付下限Q=4は予約可能だがbootstrap一件もdispatchできず理由付き停止となる。各attemptは元leaseの残時間を基準に最大10秒、通常phaseは元の全体期限よりmin(10秒, deadline/6)早く止める。独自の開始時刻を設定せず、fake schedulerが元残予算の境界で起こし、guardで再検査する。上限を緩めない。
 
-fake応答はstatusと単一Uint8Arrayの完了イベント。private copyを会計callbackの前に作り、同copyを一度JSON decodeする。S/G超過byteもGに一度課金して停止する。429／5xx・settled fake失敗だけ同用途最大2試行、未決着attemptのtimeoutは再試行せず停止する。**settledは合成モデル上の前提であり、HTTP body cancel／closed／releaseLockの確認ではない**。cleanup軸は常にnot_observed。本段階から実transportにこのretry規則を流用してはならない。
+fake応答はstatusと単一Uint8Arrayの完了イベント。private copyを会計callbackの前に作り、同copyを一度JSON decodeする。S/G超過byteもGに一度課金して停止する。429／5xx・settled fake失敗だけ同用途最大2試行、未決着attemptのtimeoutは再試行せず停止する。決着済み応答（200を含む）の課金・解析中に元attempt窓を越えた場合も、settledのupstream_unavailableとして同じ最大2試行に数え、両attemptのC/Gを残す。**settledは合成モデル上の前提であり、HTTP body cancel／closed／releaseLockの確認ではない**。cleanup軸は常にnot_observed。本段階から実transportにこのretry規則を流用してはならない。
+
+HTTP分類も本番より狭い。本番の`bounded-source`はrelease読取りの403・404・retry後の`upstream_unavailable`・空rowsをfallback（assertedまたはUnknown）へ、`invalid_response`をUnknownへ進めて停止しないが、本contractはrelease 200／403だけをresolverへ渡し、404・200以外の2xx・retry枯渇5xxは停止する。parentでも本番の404→`not_found_or_not_visible`・任意2xx成功ではなく、既存closed fake（CD-04）と同じく200以外を`invalid_response`等で停止する。fail-closed側の差であり、本番写像の置換・承認ではない。
 
 通常phase／request枠枯渇はordinary_closedとして予約を解放し、主ownerのglobal primaryを設定せず当bootstrapの再開を拒否する。hard期限／取消／混入／不正応答／G超過は同ownerを停止する。成功はRを維持したままpreparedへ進み、close／stopでRを一度解放する。metadata／payload／final再読は未開始なので、R保持をfinal完遂・typed cleanup確認と解釈しない。
 
