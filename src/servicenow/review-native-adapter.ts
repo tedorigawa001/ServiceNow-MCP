@@ -14,6 +14,9 @@ declare const brand: unique symbol;
 type Handle = {
     readonly [brand]: 'injected_native_reader';
 };
+type EndEvidence = {
+    readonly [brand]: 'injected_native_end';
+};
 type Outcome = Readonly<{
     ok: true;
     value: unknown;
@@ -65,7 +68,7 @@ export function createInjectedNativeReaderOwner(input: {
     schedule(delay: number, wake: () => void): () => void;
 }) {
     const fakeIo = input.fake_io, deadline = input.deadline_ms, readBudget = input.budget.read.bind(input.budget), dispatch = input.dispatch, schedule = input.schedule;
-    const owner = Object.freeze({}), controller = new AbortController(), records = new WeakMap<Handle, R>();
+    const owner = Object.freeze({}), controller = new AbortController(), records = new WeakMap<Handle, R>(), ends = new WeakMap<EndEvidence, R>();
     type R = {
         descriptor: Readonly<Descriptor>;
         handle: Handle;
@@ -82,33 +85,41 @@ export function createInjectedNativeReaderOwner(input: {
         finishClaimed: boolean;
         cleanup?: Cleanup;
         cleanupWork?: Promise<void>;
+        endConsumed?: boolean;
     };
     let current: R | undefined, busy = false, closed = false, primary: Code | null = null, last: number | undefined, lastCleanup: Cleanup | null = null, attempts = 0;
     const operations = { claims: 0, reads: 0, cancels: 0, releases: 0, closed_captures: 0 };
     const no = (code: Code): Result<never> => Object.freeze({ ok: false, code: primary ?? code });
     function stop(code: Code) { primary ??= code; controller.abort(); }
-    function sample() { try {
-        const n = readBudget().remaining_ms;
-        if (!Number.isFinite(n) || n > deadline || last !== undefined && n > last) {
-            stop('invalid_observation_time');
-            throw new Failure('invalid_observation_time');
+    function sample() {
+        try {
+            const n = readBudget().remaining_ms;
+            if (!Number.isFinite(n) || n > deadline || last !== undefined && n > last) {
+                stop('invalid_observation_time');
+                throw new Failure('invalid_observation_time');
+            }
+            last = n;
+            if (n <= 0) {
+                stop('deadline_exceeded');
+                throw new Failure('deadline_exceeded');
+            }
+            return n;
         }
-        last = n;
-        if (n <= 0) {
-            stop('deadline_exceeded');
-            throw new Failure('deadline_exceeded');
+        catch (error) {
+            if (error instanceof Failure)
+                throw error;
+            stop('internal_review_error');
+            throw new Failure('internal_review_error');
         }
+    }
+    function check(floor: number, cleanup = false) {
+        const n = sample();
+        if (!cleanup && (primary || closed))
+            throw new Failure(primary ?? 'closed');
+        if (n <= floor)
+            throw new Failure('attempt_deadline_exceeded');
         return n;
     }
-    catch (error) {
-        if (error instanceof Failure)
-            throw error;
-        stop('internal_review_error');
-        throw new Failure('internal_review_error');
-    } }
-    function check(floor: number, cleanup = false) { const n = sample(); if (!cleanup && (primary || closed))
-        throw new Failure(primary ?? 'closed'); if (n <= floor)
-        throw new Failure('attempt_deadline_exceeded'); return n; }
     async function wait<T>(work: Promise<T>, floor: number, cleanup = false): Promise<T> {
         const n = check(floor, cleanup);
         let dispose: (() => void) | undefined, abort = () => { };
@@ -121,13 +132,15 @@ export function createInjectedNativeReaderOwner(input: {
                     return;
                 }
             }
-            dispose = schedule(n - floor, () => { try {
-                check(floor, cleanup);
-                reject(new Failure('internal_review_error'));
-            }
-            catch (error) {
-                reject(error);
-            } });
+            dispose = schedule(n - floor, () => {
+                try {
+                    check(floor, cleanup);
+                    reject(new Failure('internal_review_error'));
+                }
+                catch (error) {
+                    reject(error);
+                }
+            });
         });
         try {
             const result = await Reflect.apply(pRace, P, [[work, boundary]]) as T;
@@ -140,10 +153,14 @@ export function createInjectedNativeReaderOwner(input: {
         }
     }
     function report(r: R, value: Cleanup) { r.cleanup = lastCleanup = Object.freeze(value); }
-    function lookup(handle: Handle) { const r = records.get(handle); if (!r || r !== current) {
-        stop('evidence_binding_mismatch');
-        throw new Failure('evidence_binding_mismatch');
-    } return r; }
+    function lookup(handle: Handle) {
+        const r = records.get(handle);
+        if (!r || r !== current) {
+            stop('evidence_binding_mismatch');
+            throw new Failure('evidence_binding_mismatch');
+        }
+        return r;
+    }
     function discardLate(response: unknown) {
         try {
             if (!native || !response || typeof response !== 'object' || types.isProxy(response) || Object.getPrototypeOf(response) !== native.rp || responseClaims.has(response))
@@ -244,11 +261,16 @@ export function createInjectedNativeReaderOwner(input: {
                     rejected = true;
                     throw new Failure('upstream_unavailable');
                 }
-                const work = (types.isPromise(result) ? observe(result) : P.resolve({ ok: true as const, value: result })).then(outcome => { settled = true; rejected = !outcome.ok; if (outcome.ok) {
-                    deliveredValue = outcome.value;
-                    if (ended)
-                        discardLate(outcome.value);
-                } return outcome; });
+                const work = (types.isPromise(result) ? observe(result) : P.resolve({ ok: true as const, value: result })).then(outcome => {
+                    settled = true;
+                    rejected = !outcome.ok;
+                    if (outcome.ok) {
+                        deliveredValue = outcome.value;
+                        if (ended)
+                            discardLate(outcome.value);
+                    }
+                    return outcome;
+                });
                 const delivered = await wait(work, d.io_floor_ms);
                 if (!delivered.ok)
                     throw new Failure('upstream_unavailable');
@@ -332,27 +354,57 @@ export function createInjectedNativeReaderOwner(input: {
                 return no('invalid_response');
             }
         },
-        async finish(handle: Handle) { try {
-            const r = lookup(handle);
-            // A finish during a pending read would let the cancel-resolved read look like EOF.
-            if (r.finishClaimed || r.reading)
-                throw new Failure('invalid_state');
-            r.finishClaimed = true;
-            await clean(r);
-            if (primary)
-                return no(primary);
-            return ok(Object.freeze({ state: 'native_end_only' as const, cleanup: r.cleanup!, body_eligible: false as const, evidence_issuance: 'disabled' as const }));
-        }
-        catch (error) {
-            stop(error instanceof Failure ? error.code : 'internal_review_error');
-            if (current)
-                await clean(current);
-            return no('internal_review_error');
-        } },
-        stop(code: 'cancelled' | 'closed') { stop(code === 'cancelled' || code === 'closed' ? code : 'invalid_input'); if (current && !current.cleanup)
-            void clean(current); },
-        close() { closed = true; stop('closed'); if (current && !current.cleanup)
-            void clean(current); },
+        async finish(handle: Handle) {
+            try {
+                const r = lookup(handle);
+                // A finish during a pending read would let the cancel-resolved read look like EOF.
+                if (r.finishClaimed || r.reading)
+                    throw new Failure('invalid_state');
+                r.finishClaimed = true;
+                await clean(r);
+                if (primary)
+                    return no(primary);
+                const evidence = Object.freeze(Object.create(null)) as EndEvidence;
+                ends.set(evidence, r);
+                return ok(Object.freeze({ state: 'native_end_only' as const, cleanup: r.cleanup!, evidence, body_eligible: false as const, evidence_issuance: 'disabled' as const }));
+            }
+            catch (error) {
+                stop(error instanceof Failure ? error.code : 'internal_review_error');
+                if (current)
+                    await clean(current);
+                return no('internal_review_error');
+            }
+        },
+        consumeEnd(handle: Handle, evidence: EndEvidence) {
+            try {
+                const r = lookup(handle);
+                check(r.descriptor.cleanup_floor_ms);
+                if (ends.get(evidence) !== r)
+                    throw new Failure('evidence_binding_mismatch');
+                if (r.endConsumed)
+                    throw new Failure('invalid_state');
+                r.endConsumed = true;
+                if (!r.finishClaimed || r.cleanup?.disposition !== 'confirmed' || r.release !== 'succeeded')
+                    throw new Failure('internal_review_error');
+                check(r.descriptor.cleanup_floor_ms);
+                return ok(r.cleanup);
+            }
+            catch (error) {
+                stop(error instanceof Failure ? error.code : 'internal_review_error');
+                return no('internal_review_error');
+            }
+        },
+        stop(code: 'cancelled' | 'closed') {
+            stop(code === 'cancelled' || code === 'closed' ? code : 'invalid_input');
+            if (current && !current.cleanup)
+                void clean(current);
+        },
+        close() {
+            closed = true;
+            stop('closed');
+            if (current && !current.cleanup)
+                void clean(current);
+        },
         status() { return Object.freeze({ primary, cleanup: lastCleanup, operations: Object.freeze({ ...operations }), active: busy || !!current && !current.cleanup, evidence_issuance: 'disabled' as const }); },
     });
 }

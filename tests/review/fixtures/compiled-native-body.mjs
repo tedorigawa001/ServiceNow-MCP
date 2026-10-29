@@ -1,0 +1,14 @@
+import assert from 'node:assert/strict';
+import {createHash} from 'node:crypto';
+import {createInjectedNativeBodyLane} from '../../../dist/servicenow/review-native-body.js';
+globalThis.fetch=()=>{throw new Error('Network forbidden');};
+const raw=new TextEncoder().encode('{"result":"日本語"}');let charged=0;
+const lane=createInjectedNativeBodyLane({fake_io:true,deadline_ms:60000,budget:{read:()=>({remaining_ms:60000})},dispatch:()=>new Response(new ReadableStream({start(c){c.enqueue(raw.slice(0,13));c.enqueue(raw.slice(13));c.close();}})),schedule(ms,wake){const t=setTimeout(wake,ms);return()=>clearTimeout(t);}}, {check(){},charge(n){charged+=n;},stop(){},responseLimit:4194304});
+const result=await lane.read({purpose:'parent',ordinal:1,io_floor_ms:50250,cleanup_floor_ms:50000});
+assert.deepEqual(result.value,{result:'日本語'});
+assert.equal(result.sha256,createHash('sha256').update(raw).digest('hex'));
+assert.equal(charged,raw.length);
+assert.equal(lane.diagnostic().proofs_consumed,1);
+assert.equal(lane.diagnostic().acknowledgements,1);
+assert.equal(lane.diagnostic().evidence_issuance,'disabled');
+console.log('NA-03 compiled native proof / same-byte decode / ack PASS');

@@ -1,7 +1,7 @@
 # AU-BR-006：RT-B03後のnative Response／reader adapter詳細設計
 
-Version: br006-native-adapter-draft-0.3 / Date: 2026-10-29。
-Status: **§13のNA-01合成契約に加え、§14のNA-02を注入Response／メモリ内Streamsとfake dispatcher／clockだけで実装・検証。RT-B03 native証拠消費・実session接続は未実装。正式発行口閉鎖・Unknown・全体受付無効・VM／監視／telemetry調査保留を維持する。実通信・実機操作・設定変更の承認ではない**。
+Version: br006-native-adapter-draft-0.4 / Date: 2026-10-29。
+Status: **§13〜14のNA-01／02に加え、§15のNA-03で注入native終端証拠をRT-B03の同bytes課金・解析・ackへ接続。fake dispatcher／clockだけで検証し、実session接続は未実装。正式発行口閉鎖・Unknown・全体受付無効・VM／監視／telemetry調査保留を維持する。実通信・実機操作・設定変更の承認ではない**。
 
 親：[接続差分draft-0.4 §12](BEST_PRACTICE_ABORT_SCOPE_REAL_TYPED_BINDING_DELTA_DESIGN.md#12-rt-b03typed-cleanup同bytes-candidate一度限りのackfake-io限定)、[session／transport／body境界](BEST_PRACTICE_ABORT_SCOPE_SESSION_TRANSPORT_BODY_BINDING_DESIGN.md)。
 現行：[bootstrap](../src/servicenow/review-bootstrap-contract.ts)、[RT-B03 body lane](../src/servicenow/review-bootstrap-body.ts)、[実session](../src/servicenow/bounded-read.ts)、[実source](../src/review/bounded-source.ts)。
@@ -150,7 +150,7 @@ late Responseは、元dispatchのcleanup-only deliveryとして認識できる�
 
 既存byte保持に加わるのはidentity／定数個の状態・Promise observer・pre-release証拠の制御費。native内部buffer・allocator・IPC・runtime全体のheap／work上界は未証明。取得途中・失敗時も費用を返金しない。上表は受付有効化や本番cap承認の根拠ではない。
 
-## 11. native合成受入条件（NA-02以降は未実施）
+## 11. native合成受入条件（全体計画。実施範囲は§14〜15と各検証記録を参照）
 
 すべて固定fake dispatcher、注入new Response／メモリ内ReadableStream、fake clock／schedulerで行う。global fetchは呼ばれると失敗するspyとし、PDI・実OAuth・OS待受・実workerを開始しない。native操作の失敗注入は孤立した信頼済み試験境界だけに置き、runtimeに任意操作の置換setterを公開しない。
 
@@ -230,7 +230,7 @@ pre-releaseでpending read／cancel／closedの不足を固定し、後続releas
 
 同ownerのattempt制御枠は最大210、delivery各1、同時resource各1、各resourceのpre／end各1。生成countはCではなく追加制御費で、HTTPをdispatchせずC/G/P/Rを更新しない。同じdomain内の別owner・close後にもidentityのclaimを削除しない。WeakMapの合成token上界は実native buffer／heap／workの証明ではなく、全体受付は無効のまま。
 
-NA-01のmoduleと宣言等4artifactはnpmへ同梱するが、実session／bootstrap／sourceから呼び出していない。fixture moduleは非同梱を維持。NA-01時点ではnative禁止のため純粋合成・static pack／compiled確認だけを実施した。NA-02で追加した限定native取得・操作は§14を参照。RT-B03のfinish前のnative証拠照合・実session／source bindingは依然未実装で、NA-A01〜18全体の合格とはしない。
+NA-01のmoduleと宣言等4artifactはnpmへ同梱するが、実session／bootstrap／sourceから呼び出していない。fixture moduleは非同梱を維持。NA-01時点ではnative禁止のため純粋合成・static pack／compiled確認だけを実施した。NA-02の限定native取得・操作は§14、NA-03のRT-B03終端証拠接続は§15を参照。実session／source bindingは依然未実装で、NA-A01〜18全体の合格とはしない。
 
 ## 14. NA-02：注入native取得・操作固定
 
@@ -254,8 +254,47 @@ readは同readerに限定し、並行read・EOF後read・foreign handle・finish
 
 ### 14.3 秘密非出力と未接続
 
-statusは固定理由・操作数・既記録cleanupのみで、Response／reader／認証／raw例外を出さない。内部readのbytesは次工程の会計・解析接続用であり、公開結果ではない。NA-02ではbyte copy・受信量課金・JSON decode・hash・candidateを生成しない。同bytesからの課金／解析とRT-B03終端の照合はNA-03で接続する必要がある。
+statusは固定理由・操作数・既記録cleanupのみで、Response／reader／認証／raw例外を出さない。内部readのbytesは会計・解析接続用であり、公開結果ではない。NA-02単独ではbyte copy・受信量課金・JSON decode・hash・candidateを生成しない。同bytesからの課金／解析とRT-B03終端の照合を接続したNA-03は§15に分ける。
 
 返却終端はnative_end_only、body_eligible=false、evidence_issuance=disabledを固定する。実session、ReleasePermit、選択payload、worker jobへの正式bindingも未接続。Unknown・正式発行口閉鎖・全体受付無効・VM／監視／telemetry保留は変更しない。
 
 Node v24.18.0で注入native APIを検証した。最低対応Node 22.12.0の実行互換性、全Fetch仕様の本文照合、cross-realmは未確認であり、承認済みにしない。試験のcapture失敗はisolated module評価前に標準prototypeを差し替えるfault injectionで、runtime setterを追加していない。
+
+## 15. NA-03：native終端証拠とRT-B03の同bytes接続
+
+実装：[native body継続](../src/servicenow/review-native-body.ts)、[bootstrap](../src/servicenow/review-bootstrap-contract.ts)。試験・限界：[NA-03検証記録](E2E_BEST_PRACTICE_NATIVE_BODY_BOOTSTRAP_2026-10-29.md)。§7の計画を注入fake依存の範囲だけで接続し、実session／実transportへの採用には進まない。
+
+### 15.1 不透明な終端証拠
+
+NA-02のfinishは、保持readerのcleanupを完了し、先行停止がなければprivate WeakMapへopaque end evidenceを一度登録する。証拠は同ownerのhandle／record、元descriptorのattempt／window、release前観測、release結果に結合する。cleanup viewのcopyやJSONは証拠ではなく、NA-01合成token／fixtureの完成形も受け付けない。
+
+consumeEndは同ownerのcurrent handleとprivate evidenceを照合し、元cleanup floor・live状態・未消費・confirmed終端・release成功を確認する。一度の成功消費後は再利用不可で、foreign／copy／replay／失効で要求先を停止する。foreign ownerの証拠claimは変更しない。取消・期限切れで消費を拒否しても、過去のconfirmed cleanup事実は診断へ保持する。既存のpending read中finish拒否も維持する。
+
+### 15.2 固定継続と同bytes
+
+native body継続は内部でNA-02 ownerと既存BootstrapBodyLaneを生成・保持する。callerからraw reader／resource／証拠／終端booleanを受け取るportは作らない。固定順序は次のとおり。
+
+```text
+native acquire → 同readerの逐次read
+  → RT-B03 append（同chunkのprivate copy・G課金を一度ずつ）
+  → native finish → 同owner／attemptのend evidence消費
+  → confirmed/eofだけRT-B03 finish → candidate
+  → 既存consume（JSON decode／SHA-256各一回）
+  → async handoff → 既存ack（post-guard・一度限り）
+```
+
+終端証拠の消費・EOF確認より前にcandidateは生成しない。非EOF・native取得／read／cleanup失敗では保持bytesを破棄し、解析・ackへ進まない。body上限超過でも到着したchunkを一度課金した後に同readerをcancel／releaseする。空16／非空4096、UTF-8／JSON、SharedArrayBuffer拒否、response／total cap、copy-before-accountingの既存契約を再利用し、adapterへ第二の課金／parser／hashを追加しない。
+
+### 15.3 bootstrap・予算・停止
+
+constructor依存のnative_body=trueかつtyped_body=trueを明示したfake laneだけを接続する。dispatchは既存の固定purpose／method／synthetic descriptorを使い、注入ResponseをNA-02へ渡す。native floorは同requestで算出したI/O／cleanup座標、時計は同leaseのsample、C/G/Rは既存accountingの一系統である。全体60秒・210試行・G16MiB／S4MiB・R=4を変更しない。実BoundedReadSessionはこの依存を供給せず、新しい公開getter／MCP引数／設定切替はない。
+
+revokeは同期にbody採用権限を失効し、同native ownerを停止する。native cleanupは停止後も元floor内の確認だけを続け、bootstrapの既存first primaryを置き換えない。nativeのattempt_deadline_exceededは内部で既存upstream_unavailableへ写像し、公開enumを増やさない。診断は固定primaryとnative cleanup／操作数／証拠消費数／保持量を分離し、opaque proof・本文・token・raw例外を出さない。
+
+confirmed EOF→consume→ack済みの429／5xxだけ、既存の同用途2試行までretryする。native dispatch reject／未解決・body read・cleanup・ack失敗ではretryしない。releaseの403のみ既存のrelease解決処理へ渡し、parentの403はaccess_denied、401はauthentication_failed、404はinvalid_responseを維持する。no_bodyはEOFへ変換せずinvalid_response。一般的なno_body／403 fallback経路を拡張したものではない。
+
+### 15.4 未接続と承認境界
+
+proofはnative cleanupの限定的な内部証拠で、BoundedBodyReceipt／SourceRunEvidence／ReleasePermit／選択window／payload receipt／worker job／sealではない。実sessionのcanonical更新点・実transportの認証／URL binding・固定sourceのprivate callerは後工程。fixture台帳はimport／共有せず、正式発行口閉鎖・Unknown・全体受付無効・調査保留を維持する。
+
+同realm・Node v24.18.0のメモリ内試験に限定し、最低Node 22.12.0・cross-realm・全Fetch仕様本文・同期parse／hashの強制中断・native bufferのheap上界は未確認のままとする。§11の全条件が一括で合格したとは主張しない。

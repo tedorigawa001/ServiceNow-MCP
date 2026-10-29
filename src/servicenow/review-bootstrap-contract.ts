@@ -2,6 +2,7 @@
 import {z} from 'zod';
 import {types} from 'node:util';
 import {createBootstrapBodyLane,BootstrapBodyFailure,type BootstrapBodyResource} from './review-bootstrap-body.js';
+import {createInjectedNativeBodyLane} from './review-native-body.js';
 import {releaseEvidenceStructure,releaseMatchForEvidence} from '../review/result-schema-v2.js';
 import type {ReadFailureCode} from './bounded-read.js';
 import type {ReviewRunBudgetLease,ReviewSourceReleasePort,ReviewSourceReleaseSnapshot} from './review-evidence-lifecycle.js';
@@ -10,11 +11,12 @@ type Result<T>=Readonly<{ok:true;value:T}|{ok:false;code:Code}>;
 export type BootstrapPurpose='authentication'|'parent'|'release';
 export interface ReviewBootstrapDependencies{
   readonly typed_body?:true;
+  readonly native_body?:true;
   readonly fake_io:true;readonly lease:ReviewRunBudgetLease;readonly source:object;readonly target:string;
   readonly auth:'per-user'|'cached'|'exchange';
   readonly limits:{requests:number;total_bytes:number;response_bytes:number;deadline_ms:number};
   readonly accounting:{reserve():void;reserved():number;dispatch():void;chunk(length:number):void;release():void};
-  dispatch(request:Readonly<{purpose:BootstrapPurpose;method:'POST'|'GET';synthetic:true}>,signal:AbortSignal):Promise<{status:number;bytes:Uint8Array}|{status:number;body:BootstrapBodyResource}>;
+  dispatch(request:Readonly<{purpose:BootstrapPurpose;method:'POST'|'GET';synthetic:true}>,signal:AbortSignal):Promise<{status:number;bytes:Uint8Array}|{status:number;body:BootstrapBodyResource}|Response>;
   resolveRelease(response:Readonly<{status:number;value:unknown}>):{source:object;permit:object;port:ReviewSourceReleasePort}|null;
   schedule(delayMs:number,wake:()=>void):()=>void;
 }
@@ -39,7 +41,7 @@ export function createReviewBootstrapContract<H>(hooks:Hooks<H>,input:ReviewBoot
   let current:{handle:H;snapshot:object;lease:ReviewRunBudgetLease}|undefined;
   const no=(code:Code):Result<never>=>Object.freeze({ok:false,code:hooks.failure()??reason??code});
   function release(){if(!reservationStarted||reservationReleased)return;reservationReleased=true;try{deps.accounting.release();}catch{reason??='internal_review_error';hooks.stop('internal_review_error');}}
-  function revoke(){reason??=hooks.failure()??'closed';if(state!=='failed'&&state!=='ordinary_closed')state='revoked';current=undefined;body.revoke();release();controller?.abort();}
+  function revoke(){reason??=hooks.failure()??'closed';if(state!=='failed'&&state!=='ordinary_closed')state='revoked';current=undefined;body.revoke();nativeBody?.revoke();release();controller?.abort();}
   function observe(){
     if(!current)throw new Failure(hooks.failure()??reason??'invalid_state');
     const checked=hooks.check(current.handle,current.snapshot,current.lease);if(!checked.ok)throw new Failure(checked.code);
@@ -66,6 +68,7 @@ export function createReviewBootstrapContract<H>(hooks:Hooks<H>,input:ReviewBoot
   }
   function charge(n:number){const prior=observe();deps.accounting.chunk(n);const charged=observe();if(charged.received_bytes!==prior.received_bytes+n||charged.requests!==prior.requests||charged.payload_bytes!==prior.payload_bytes)throw new Failure('internal_review_error');if(charged.received_bytes>deps.limits.total_bytes)throw new Failure('receive_budget_exceeded');}
   const body=createBootstrapBodyLane({check:()=>{observe();},charge,stop:code=>hooks.stop(code),responseLimit:deps.limits.response_bytes});
+  const nativeBody=deps.native_body?createInjectedNativeBodyLane({fake_io:deps.fake_io,deadline_ms:deps.limits.deadline_ms,budget:{read:()=>{const b=hooks.sample();if(!b)throw new Failure('invalid_observation_time');return b;}},dispatch:(request,signal)=>deps.dispatch(Object.freeze({purpose:request.purpose,method:request.purpose==='authentication'?'POST':'GET',synthetic:true}),signal),schedule:deps.schedule}, {check:()=>{observe();},charge,stop:code=>hooks.stop(code),responseLimit:deps.limits.response_bytes}):undefined;
   async function request(purpose:BootstrapPurpose){
     for(let ordinal=1;ordinal<=2;ordinal++){
       const before=observe(),r=deps.accounting.reserved();
@@ -77,9 +80,14 @@ export function createReviewBootstrapContract<H>(hooks:Hooks<H>,input:ReviewBoot
       try{
         deps.accounting.dispatch();const after=observe();
         if(after.requests!==before.requests+1||after.received_bytes!==before.received_bytes||after.payload_bytes!==before.payload_bytes)throw new Failure('internal_review_error');
+        if(nativeBody){
+          const accepted=await nativeBody.read({purpose,ordinal,io_floor_ms:ioFloor,cleanup_floor_ms:activeFloor});settled=true;adopted=true;
+          if(accepted.status===401)throw new Failure('authentication_failed');if(accepted.status===403&&purpose!=='release')throw new Failure('access_denied');if(accepted.status===429||accepted.status>=500){retryableStatus=true;throw new Failure('upstream_unavailable');}if(accepted.status!==200&&!(accepted.status===403&&purpose==='release'))throw new Failure('invalid_response');
+          observe();completed=true;return Object.freeze({status:accepted.status,value:accepted.value});
+        }
         let work:ReturnType<ReviewBootstrapDependencies['dispatch']>;
         try{invoked=true;work=deps.dispatch(Object.freeze({purpose,method:purpose==='authentication'?'POST':'GET',synthetic:true}),controller!.signal);}catch{settled=true;throw new Failure('upstream_unavailable');}
-        const response=await wait(Promise.resolve(work).then(value=>{settled=true;delivered=value;const late=ended&&deps.typed_body?bodyOf(value):undefined;if(late)body.discardLate(late);return value;},()=>{settled=true;throw new Failure('upstream_unavailable');}),after.remaining_ms-ioFloor,ioFloor);
+        const response=await wait(Promise.resolve(work).then(value=>{settled=true;delivered=value;const late=ended&&deps.typed_body?bodyOf(value):undefined;if(late)body.discardLate(late);return value;},()=>{settled=true;throw new Failure('upstream_unavailable');}),after.remaining_ms-ioFloor,ioFloor) as {status:number;bytes:Uint8Array}|{status:number;body:BootstrapBodyResource};
         observe();if(!response||!Number.isInteger(response.status)||response.status<100||response.status>599)throw new Failure('invalid_response');
         if(deps.typed_body){
           if(!('body' in response))throw new Failure('invalid_response');const attempt=Object.freeze({});body.open(attempt,response.status);adopted=true;
@@ -104,7 +112,7 @@ export function createReviewBootstrapContract<H>(hooks:Hooks<H>,input:ReviewBoot
       }catch(error){
         const code=error instanceof Failure||error instanceof BootstrapBodyFailure?error.code:'internal_review_error';
         if(code!=='upstream_unavailable'||!settled||ordinal===2||hooks.failure()||deps.typed_body&&adopted&&!retryableStatus)throw new Failure(hooks.failure()??code);
-      }finally{ended=true;if(deps.typed_body&&!adopted){body.unopened(!invoked?'not_started':delivered?'unadopted_response':settled?'no_response':'fetch_pending');const unadopted=bodyOf(delivered);if(unadopted)body.discardLate(unadopted);}if(!completed)activeFloor=undefined;}
+      }finally{ended=true;if(deps.typed_body&&!deps.native_body&&!adopted){body.unopened(!invoked?'not_started':delivered?'unadopted_response':settled?'no_response':'fetch_pending');const unadopted=bodyOf(delivered);if(unadopted)body.discardLate(unadopted);}if(!completed)activeFloor=undefined;}
     }
     throw new Failure('upstream_unavailable');
   }
@@ -113,7 +121,7 @@ export function createReviewBootstrapContract<H>(hooks:Hooks<H>,input:ReviewBoot
       if(state!=='unstarted'){if(state==='running'){hooks.stop('invalid_state');revoke();}return no('invalid_state');}
       state='running';current={handle,snapshot,lease};
       try{
-        if(deps.fake_io!==true||deps.lease!==hooks.lease||lease!==hooks.lease||!limitsSchema.safeParse(deps.limits).success||!/^[a-f0-9]{32}$/.test(deps.target)||!['per-user','cached','exchange'].includes(deps.auth))throw new Failure('evidence_binding_mismatch');
+        if(deps.fake_io!==true||deps.native_body&&!deps.typed_body||deps.lease!==hooks.lease||lease!==hooks.lease||!limitsSchema.safeParse(deps.limits).success||!/^[a-f0-9]{32}$/.test(deps.target)||!['per-user','cached','exchange'].includes(deps.auth))throw new Failure('evidence_binding_mismatch');
         controller=new AbortController();const b=observe();if(b.requests||b.received_bytes||b.payload_bytes)throw new Failure('invalid_state');
         reservationStarted=true;deps.accounting.reserve();observe();if(deps.accounting.reserved()!==4)throw new Failure('internal_review_error');
         if(deps.auth==='exchange'){
@@ -139,6 +147,6 @@ export function createReviewBootstrapContract<H>(hooks:Hooks<H>,input:ReviewBoot
       }
     },
     revoke,
-    diagnostic(){return Object.freeze({state,reason,started:reservationStarted,reservation_released:reservationReleased,formal_issuance:'disabled' as const,cleanup:deps.typed_body?body.diagnostic().cleanup?.disposition??'not_started':'not_observed',fake_io:true as const,...(deps.typed_body?{body:body.diagnostic()}: {})});},
+    diagnostic(){const d=nativeBody?nativeBody.diagnostic():body.diagnostic();return Object.freeze({state,reason,started:reservationStarted,reservation_released:reservationReleased,formal_issuance:'disabled' as const,cleanup:deps.typed_body?d.cleanup?.disposition??'not_started':'not_observed',fake_io:true as const,...(deps.typed_body?{body:d}: {})});},
   });
 }
