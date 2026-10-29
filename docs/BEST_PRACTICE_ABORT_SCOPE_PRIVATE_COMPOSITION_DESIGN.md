@@ -143,6 +143,8 @@ canonical生成rootだけが`construction.takeBootstrapAccounting()`を保持す
 
 予約は`unclaimed → reserving → reserved`、失敗は`failed`、cleanupは一度限りの`released`。releaseは会計を返金せずcoreを閉じる。既存CM-03 factoryは生成時にclockを読まず、reserve時に同coreの取得継続へ委譲する。factoryに第二counter／session registryは置かない。CM-03のC直前計上・G課金・4枠・上限は維持する。
 
+取得後はlegacy writerのdispatch／dispatchAt／chunk／payloadが`invalid_state`で停止し、accounting.releaseはcore全体を閉じる。このため、同coreを共有する将来のtyped sessionでは、bootstrap releaseの時点でrun全体の会計更新が終わる。prepared後のmetadata・final検証・Pを計上するには、R移譲（§6）と同時に設計する新しい更新portが必要であり、legacy writerの再開やrelease後の再openで代用しない。CM-04-02はこの制約を前提に、bootstrap終了までの接続に限る。
+
 合成試験は同coreの観測一致、legacy利用後拒否、再入、期限・取消・失効、readonly権限非露出、fresh factory互換を対象とする。実sessionのready／source claim、owner登録leaseとbootstrapの参照一致、source private受理は未接続であり、PC-A01〜A14全体を完了扱いにしない。
 
 検証記録：[CM-04-01](E2E_BEST_PRACTICE_CONSTRUCTION_ACCOUNTING_2026-10-29.md)。
