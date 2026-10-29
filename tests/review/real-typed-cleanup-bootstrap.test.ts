@@ -76,3 +76,12 @@ it('does not retry if the consumed draft expires during the async acknowledgemen
 it('allows one HTTP 503 retry only after the same body has confirmed cleanup and ack, without resetting G or C',async()=>{
   const s=setup();let count=0;s.setDispatch(async request=>{const result=await s.defaultDispatch(request);return {...result,status:++count===1?503:200};});expect(await s.run()).toMatchObject({ok:true});expect(s.ops).toEqual({dispatch:3,read:6,cancel:0,release:3});expect(s.counters.requests).toBe(3);expect(s.owner.transportConstructor.diagnostic().bootstrap).toMatchObject({body:{cleanup:{disposition:'confirmed'},consumes:3,acknowledgements:3,retained_bytes:0}});s.owner.close('closed');
 });
+it('reports a typed-read phase cutoff as a stopped bootstrap, not an ordinary close',async()=>{
+  const s=setup();let i=0;s.setBody(()=>({read:async()=>{s.ops.read++;if(i++===0){vi.setSystemTime(Date.now()+50001);return {done:false,value:new Uint8Array(1)};}return {done:true};},closed:Promise.resolve(),cancel:async()=>{s.ops.cancel++;},release(){s.ops.release++;}}));
+  expect(await s.run()).toEqual({ok:false,code:'phase_deadline_exceeded'});const d=s.owner.transportConstructor.diagnostic();
+  expect(d).toMatchObject({primary:{code:'phase_deadline_exceeded'},bootstrap:{state:'failed',reservation_released:true,body:{cleanup:{disposition:'unconfirmed'},consumes:0}}});expect(s.ops).toEqual({dispatch:1,read:1,cancel:1,release:1});
+});
+it.each([5,'PRIVATE'])('keeps invalid_response for a primitive delivery %j instead of a probe error',async value=>{
+  const s=setup();s.setDispatch((async()=>value) as never);expect(await s.run()).toEqual({ok:false,code:'invalid_response'});
+  expect(s.owner.transportConstructor.diagnostic()).toMatchObject({primary:{code:'invalid_response'},bootstrap:{body:{cleanup:{disposition:'unconfirmed',reason:'reader_owner_unknown'}}}});expect(s.ops).toEqual({dispatch:1,read:0,cancel:0,release:0});
+});

@@ -29,6 +29,8 @@ const tokenSchema=z.object({access_token:z.string().min(1).refine(x=>!/[\r\n]/.t
 class Failure extends BootstrapBodyFailure{}
 const typed=Object.getPrototypeOf(Uint8Array.prototype),getBuffer=Object.getOwnPropertyDescriptor(typed,'buffer')!.get!,getLength=Object.getOwnPropertyDescriptor(typed,'byteLength')!.get!,set=Uint8Array.prototype.set;
 const bufferLength=Object.getOwnPropertyDescriptor(ArrayBuffer.prototype,'byteLength')!.get!;
+// Late or malformed deliveries may be primitives; `in` must not replace the original failure.
+const bodyOf=(value:unknown)=>value!==null&&typeof value==='object'&&'body' in value?(value as {body:BootstrapBodyResource}).body:undefined;
 export function createReviewBootstrapContract<H>(hooks:Hooks<H>,input:ReviewBootstrapDependencies){
   // Trusted constructor dependencies only. Pin operations, never re-read a mutable injection object in an await continuation.
   const deps={...input,accounting:{...input.accounting},limits:{...input.limits}};
@@ -77,7 +79,7 @@ export function createReviewBootstrapContract<H>(hooks:Hooks<H>,input:ReviewBoot
         if(after.requests!==before.requests+1||after.received_bytes!==before.received_bytes||after.payload_bytes!==before.payload_bytes)throw new Failure('internal_review_error');
         let work:ReturnType<ReviewBootstrapDependencies['dispatch']>;
         try{invoked=true;work=deps.dispatch(Object.freeze({purpose,method:purpose==='authentication'?'POST':'GET',synthetic:true}),controller!.signal);}catch{settled=true;throw new Failure('upstream_unavailable');}
-        const response=await wait(Promise.resolve(work).then(value=>{settled=true;delivered=value;if(ended&&deps.typed_body&&'body' in value)body.discardLate(value.body);return value;},()=>{settled=true;throw new Failure('upstream_unavailable');}),after.remaining_ms-ioFloor,ioFloor);
+        const response=await wait(Promise.resolve(work).then(value=>{settled=true;delivered=value;const late=ended&&deps.typed_body?bodyOf(value):undefined;if(late)body.discardLate(late);return value;},()=>{settled=true;throw new Failure('upstream_unavailable');}),after.remaining_ms-ioFloor,ioFloor);
         observe();if(!response||!Number.isInteger(response.status)||response.status<100||response.status>599)throw new Failure('invalid_response');
         if(deps.typed_body){
           if(!('body' in response))throw new Failure('invalid_response');const attempt=Object.freeze({});body.open(attempt,response.status);adopted=true;
@@ -102,7 +104,7 @@ export function createReviewBootstrapContract<H>(hooks:Hooks<H>,input:ReviewBoot
       }catch(error){
         const code=error instanceof Failure||error instanceof BootstrapBodyFailure?error.code:'internal_review_error';
         if(code!=='upstream_unavailable'||!settled||ordinal===2||hooks.failure()||deps.typed_body&&adopted&&!retryableStatus)throw new Failure(hooks.failure()??code);
-      }finally{ended=true;if(deps.typed_body&&!adopted){body.unopened(!invoked?'not_started':delivered?'unadopted_response':settled?'no_response':'fetch_pending');if(delivered&&'body' in delivered)body.discardLate(delivered.body);}if(!completed)activeFloor=undefined;}
+      }finally{ended=true;if(deps.typed_body&&!adopted){body.unopened(!invoked?'not_started':delivered?'unadopted_response':settled?'no_response':'fetch_pending');const unadopted=bodyOf(delivered);if(unadopted)body.discardLate(unadopted);}if(!completed)activeFloor=undefined;}
     }
     throw new Failure('upstream_unavailable');
   }
@@ -130,7 +132,8 @@ export function createReviewBootstrapContract<H>(hooks:Hooks<H>,input:ReviewBoot
         observe();state='prepared';current=undefined;activeFloor=undefined;return Object.freeze({ok:true,value:prepared.value});
       }catch(error){
         reason??=hooks.failure()??(error instanceof Failure||error instanceof BootstrapBodyFailure?error.code:'internal_review_error');
-        if(reason==='phase_deadline_exceeded'||reason==='request_budget_exceeded'){state='ordinary_closed';current=undefined;release();controller?.abort();}
+        // A typed read failure already stopped the owner; that is not an ordinary close.
+        if((reason==='phase_deadline_exceeded'||reason==='request_budget_exceeded')&&!hooks.failure()){state='ordinary_closed';current=undefined;release();controller?.abort();}
         else{state='failed';hooks.stop(reason);revoke();}
         return no(reason);
       }

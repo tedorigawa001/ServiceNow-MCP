@@ -270,7 +270,7 @@ dispatch未実行はnot_started、fake dispatch拒否かつ応答なしはconfir
 
 同bodyの非空保持chunkは4096、空readは合計16を上限とする。超過chunkもGへ一度課金してから拒否し、S超過のprivate copyは確保しない。4097番目の非空chunk・17番目の空readは失敗。全体G枠・同source Rの費目は新laneで二重計上しない。
 
-read timeout／read失敗後はcleanupの結果にかかわらず当bootstrapを停止する。HTTP 429／5xxの完了bodyだけは、confirmed EOF cleanup・ack後に既存の同用途最大2試行規則へ戻れる。未決着・cleanup不明・global stopはretryしない。通常／hard cutoffや予約を延ばさない。
+read timeout／read失敗後はcleanupの結果にかかわらず当bootstrapを停止する。typed read中に通常phase cutoffへ達した場合も、cleanup窓は元attempt期限の内側にしか無いため同ownerを停止し、bootstrap診断をordinary_closedではなくfailedとする（§11.3のordinary_closedはglobal primaryが無い場合だけ）。dispatchが数値・文字列等のprimitiveを返した場合は、late／未採用body判定で例外を出さずinvalid_responseを保持する。HTTP 429／5xxの完了bodyだけは、confirmed EOF cleanup・ack後に既存の同用途最大2試行規則へ戻れる。未決着・cleanup不明・global stopはretryしない。通常／hard cutoffや予約を延ばさない。
 
 ### 12.5 未接続・未証明
 

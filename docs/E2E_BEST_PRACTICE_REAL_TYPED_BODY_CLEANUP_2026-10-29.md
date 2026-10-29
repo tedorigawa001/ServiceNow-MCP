@@ -63,6 +63,12 @@ HTTP cleanup診断と最初の停止理由を分離し、cancelledだがcleanup 
 
 全体回帰には既存のローカル合成待受・fake I/O・worker試験を含むが、外部ServiceNow／実OAuthへの通信ではない。無関係な`.vscode/`・`CLAUDE.md`は変更していない。新規の検証コードは実資格情報を使わない。RT-A01〜16の全体合格・実PDI検証完了を意味しない。
 
+### 4.1 レビュー修正（2026-10-29）
+
+- typed read中に通常phase cutoff（残50,000ms超過）へ達すると、bodyのread失敗として同ownerのprimary=phase_deadline_exceededで停止する一方、bootstrap診断がordinary_closedと表示される不一致を再現した。runの通常close判定をglobal primary未設定時に限定し、failed・予約解放一度とした。
+- dispatchがprimitive（5、文字列）を返すと、finallyの`'body' in`がTypeErrorとなりinvalid_responseをinternal_review_errorへ置換していた。late／未採用bodyの取り出しをobject判定付きにして元理由を保持した。`null`は従来どおりno_response／confirmedで変更しない。
+- 回帰テスト3件を連続bootstrap試験へ追加。修正前実装では3件とも失敗。修正後は連続bootstrap 24 tests、RT-B03 2 files／49 tests、全体184 files／5,591 testsが成功。上表と次節の件数は修正前の記録として残す。
+
 ### コミット対象のみの再検証
 
 2026-10-29、HEAD（f10d225）へ今回の11ファイルだけを重ねた一時snapshotで確認した。無関係な`.vscode/`・`CLAUDE.md`は除外した。build・変更実装／新規試験／梱包fixtureのESLint・全体184 files／5,588 tests（32.61秒、skipなし）・offline package-worker smoke（385 files）が成功。関連5文書の相対参照94件と行末空白検査も成功した。検証後はこの結果の文書追記だけで、検証した実装・試験・依存設定は変更していない。
