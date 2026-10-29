@@ -111,7 +111,7 @@ legacyとtypedで異なるHTTP terminal body・404・403 fallback・dispatch ret
 
 実装：[review-canonical-budget.ts](../src/servicenow/review-canonical-budget.ts)。試験：[canonical-budget.test.ts](../tests/review/canonical-budget.test.ts)。詳細な実行結果：[CM-01検証記録](E2E_BEST_PRACTICE_CANONICAL_BUDGET_2026-10-29.md)。
 
-createCanonicalReviewBudgetはゼロ会計と、更新用writer／観測用viewを一組生成する。初期stats・session・snapshot・leaseを受け取る引数はない。constructorはclockと低減limitsだけを許し、clockはremainingMs関数だけを持つplain objectに限定する。実sessionのようなclass instanceをclockとして採用しない。trusted clock関数は固定して借用し、新しいt0／timerを作らない。
+createCanonicalReviewBudgetはゼロ会計と、更新用writer／観測用viewを一組生成する。初期stats・session・snapshot・leaseを受け取る引数はない。constructorはclockと低減limitsだけを許し、clockはremainingMs関数だけを持つplain objectに限定する。実sessionのようなclass instanceをclockとして採用しない。clock／limitsは入力objectのdata propertyとして一度だけ読み、getterは評価せずinvalid_inputで拒否する。検査後に別objectへ差し替えられない。trusted clock関数は固定して借用し、新しいt0／timerを作らない。
 
 | 内部port | CM-01の挙動 |
 |---|---|

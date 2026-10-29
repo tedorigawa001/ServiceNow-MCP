@@ -50,6 +50,12 @@ Node v24.18.0。製品・テスト期限は変更していない。既存全体�
 
 コミット前再確認：HEAD＋今回の9ファイルだけをindexから一時領域へ展開し、既存node_modulesのみを依存として参照した。build・変更対象ESLint・全体188 files／5,734 tests（34.70秒）・CM-01とNA-02／NA-03のoffline梱包／compiled確認がすべてPASS。梱包は401 filesで、他の作業中ファイル・実session接続・実通信は含めていない。
 
+### 4.1 レビュー修正（2026-10-29）
+
+- constructorが`input.clock`を検査・`remainingMs`取得・bindで別々に読んでおり、getterを持つ入力では検査済みplain objectと異なるobject（class instance等）をclockとして採用できた。limitsも検査と展開で二度読んでいた。
+- clock／limitsを入力objectのdata propertyとして一度だけ読み、accessorはgetterを評価せずinvalid_inputで拒否するよう修正した。回帰試験を1件追加（CM-01は33件）。修正前の実装ではこの試験だけが失敗することを確認した。
+- 修正後は全体188 files／5,735 tests、tsc・変更対象ESLint・offline梱包（401 files）・compiled smoke・git diff --checkがPASS。上表の32 tests・5,734 testsは修正前の記録として残す。
+
 ## 5 残課題
 
 次はCM-02でlegacyの更新順・stats／#runLeaseを同coreへ中立移行する。現行G>=capのattempt前拒否、phase／busy・認証チェック、payload_limitの局所性、最初の内部理由と公開理由の写像を維持する必要がある。CM-01の単独dispatchを完全なHTTP受付判定とは扱わない。

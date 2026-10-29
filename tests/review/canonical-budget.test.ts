@@ -164,3 +164,13 @@ it('uses one zero-initialized state for stats and a frozen readonly lease', () =
     expect(Object.keys(view.lease)).toEqual(['read']);
     expect('writer' in view).toBe(false);
 });
+it('refuses accessor dependencies so a validated clock or limits cannot be swapped afterwards', () => {
+    let clockReads = 0, limitReads = 0;
+    class Session { remainingMs() { return 60000; } }
+    const plain = { remainingMs: () => 60000 };
+    const swappingClock = { get clock() { return clockReads++ === 0 ? plain : new Session(); } };
+    const swappingLimits = { clock: plain, get limits() { return limitReads++ === 0 ? { requests: 10 } : { requests: 999 }; } };
+    for (const input of [swappingClock, swappingLimits])
+        expect(() => createCanonicalReviewBudget(input as never)).toThrow(expect.objectContaining({ code: 'invalid_input' }));
+    expect(clockReads + limitReads).toBe(0);
+});

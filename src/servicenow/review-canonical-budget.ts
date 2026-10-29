@@ -16,12 +16,18 @@ export function createCanonicalReviewBudget(input: {
     };
     limits?: Partial<Limits>;
 }) {
-    if (!input || typeof input !== 'object' || Reflect.ownKeys(input).some(k => k !== 'clock' && k !== 'limits') || !input.clock || ![Object.prototype, null].includes(Object.getPrototypeOf(input.clock)) || Reflect.ownKeys(input.clock).some(k => k !== 'remainingMs'))
+    if (!input || typeof input !== 'object' || Reflect.ownKeys(input).some(k => k !== 'clock' && k !== 'limits'))
         throw new CanonicalBudgetError('invalid_input');
-    const operation = Object.getOwnPropertyDescriptor(input.clock, 'remainingMs')?.value;
-    if (typeof operation !== 'function' || input.limits !== undefined && (!input.limits || typeof input.limits !== 'object' || Array.isArray(input.limits) || Reflect.ownKeys(input.limits).some(k => typeof k !== 'string' || !Object.hasOwn(ceilings, k))))
+    // Read each dependency once as a data property: a getter could swap it after validation.
+    const field = (key: 'clock' | 'limits'): unknown => { const d = Object.getOwnPropertyDescriptor(input, key); if (d && !Object.hasOwn(d, 'value'))
+        throw new CanonicalBudgetError('invalid_input'); return d?.value; };
+    const source = field('clock') as { remainingMs(): number } | undefined, reduced = field('limits') as Partial<Limits> | undefined;
+    if (!source || typeof source !== 'object' || ![Object.prototype, null].includes(Object.getPrototypeOf(source)) || Reflect.ownKeys(source).some(k => k !== 'remainingMs'))
         throw new CanonicalBudgetError('invalid_input');
-    const limits = { ...ceilings, ...input.limits }, clock = Function.prototype.bind.call(operation, input.clock) as () => number;
+    const operation = Object.getOwnPropertyDescriptor(source, 'remainingMs')?.value;
+    if (typeof operation !== 'function' || reduced !== undefined && (!reduced || typeof reduced !== 'object' || Array.isArray(reduced) || Reflect.ownKeys(reduced).some(k => typeof k !== 'string' || !Object.hasOwn(ceilings, k))))
+        throw new CanonicalBudgetError('invalid_input');
+    const limits = { ...ceilings, ...reduced }, clock = Function.prototype.bind.call(operation, source) as () => number;
     for (const [key, value] of Object.entries(limits))
         if (!Object.hasOwn(ceilings, key) || !Number.isSafeInteger(value) || value < 1 || value > ceilings[key as keyof Limits])
             throw new CanonicalBudgetError('invalid_input');
