@@ -143,11 +143,11 @@ legacyのattempt前G>=cap拒否、phase／busy・認証チェックも実session
 | error境界 | CanonicalBudgetErrorを既存BoundedReadErrorへ写像。request側のretry／HTTP分類は変更しない |
 | readonly時計 | public remainingMs／statsを参照せず、元startedとlimitsから残時間を計算。新t0・timerは生成しない |
 | 停止伝播 | canonicalの公開理由をprivate stopCode getterで読む。最初の理由を二重保存せず、#stopPropagatedでowner失効→abortを一度伝播 |
-| lease観測失敗 | coreの内部理由をownerへ先に記録し、既存公開理由をsessionへ反映。owner側までinternal_review_errorへ潰さない |
+| core観測失敗 | lease・dispatch・chunk・payloadのどの境界でcoreが先に停止しても、同じprivate写像でcoreの内部理由をownerへ先に記録し、既存公開理由をsessionへ反映。owner側までinternal_review_errorへ潰さない |
 | close | owner close→canonical close→既存timer／listener／admission／credential解放。会計coreは外部resourceを解放しない |
 
 canonical operationのcommit guardでも同じ元時計を観測するため、観測回数を移行前と一致させるものではない。元期限へ達したcommitを採用せず、新しい期限は作らない。固定fake時刻と到達イベントによる比較では、C/G/P・拒否理由・retry順が一致することを確認した。
 
-試験：[canonical-session-migration.test.ts](../tests/review/canonical-session-migration.test.ts)の19件。うち15件のlegacy oracleを移行前HEADと移行後で同じ入力・固定期待値により実行した。旧counter名のshadow代入を採用しない試験、readonly leaseで先に観測したhard期限のabort伝播、内部理由保持は追加回帰として区別する。[検証記録](E2E_BEST_PRACTICE_CANONICAL_SESSION_MIGRATION_2026-10-29.md)を参照。
+試験：[canonical-session-migration.test.ts](../tests/review/canonical-session-migration.test.ts)の21件（レビュー修正で更新境界の内部理由保持2件を追加）。うち15件のlegacy oracleを移行前HEADと移行後で同じ入力・固定期待値により実行した。旧counter名のshadow代入を採用しない試験、readonly leaseで先に観測したhard期限のabort伝播、内部理由保持は追加回帰として区別する。[検証記録](E2E_BEST_PRACTICE_CANONICAL_SESSION_MIGRATION_2026-10-29.md)を参照。
 
 HTTP terminal bodyの早期取消、404、cluster 403 fallback、retry delay、phase controller、busy判定、認証readyPromiseの発行点は既存legacyのままである。typed予約台帳・dispatch直前C commit・正式body receipt・source／worker採用は未接続で、CM-02の成功から許可しない。

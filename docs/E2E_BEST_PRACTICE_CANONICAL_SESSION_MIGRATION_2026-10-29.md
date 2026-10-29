@@ -53,6 +53,13 @@ Node v24.18.0。既存試験のローカル待受だけを許可し、外部Serv
 
 コミット前再確認：HEAD＋今回の9ファイルだけをindexから一時領域へ展開し、既存node_modulesのみを依存として参照した。build・変更対象ESLint・全体189 files／5,754 tests（37.44秒）・CM-01／CM-02とNA-02／NA-03のoffline梱包／compiled確認がすべてPASS。梱包は401 filesで、他の作業中ファイル・実通信は含めていない。
 
+### 4.1 レビュー修正（2026-10-29）
+
+- 指摘：時計逆行を最初に観測したのがreadonly leaseならownerは`invalid_observation_time`を保持したが、`chargePayload`・次の`get`（dispatch）など更新境界が先に観測すると、`#account`が公開理由だけで停止し、ownerのprimaryまで`internal_review_error`へ潰れていた。移行前は更新側が時計を観測せず、owner自身のlease読取で`invalid_observation_time`が残っていたため、診断の後退だった。
+- 修正：lease境界と更新境界のcatchを1つのprivate写像`#adopt`へ統合した。coreのprimaryがあれば内部理由をownerへ先に記録（ownerはfirst-wins）し、その後に公開理由でsessionを一度だけ停止する。HTTP分類・retry・停止順は変更しない。
+- 回帰試験：payload経由とdispatch経由の2件を追加（CM-02試験21件）。修正前実装へ戻すとこの2件だけが失敗することを確認した。
+- 再検証：tsc・変更対象ESLint・build・全体189 files／5,756 tests PASS、CM-01／CM-02 offline梱包・compiled smoke PASS（401 files）、`git diff --check` PASS。§4の19件／5,754 testsは修正前の記録として残す。
+
 ## 5 未接続範囲
 
 CM-03のtyped dispatch到達直前C commit・動的予約と、CM-04のprivate composition／source採用は未実装。native終端証拠を実sessionのHTTPへ採用したものではなく、legacy finallyのcancel要求をtyped cleanup証拠へ昇格させていない。

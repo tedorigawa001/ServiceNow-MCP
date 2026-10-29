@@ -82,9 +82,7 @@ export class BoundedReadSession {
     this.#budget=createCanonicalReviewBudget({clock:{remainingMs:()=>Math.max(0,this.limits.deadlineMs-(performance.now()-this.started))},limits:{requests:this.limits.requests,totalBytes:this.limits.totalBytes,payloadBytes:this.limits.payloadBytes,totalPayloadBytes:this.limits.totalPayloadBytes,deadlineMs:this.limits.deadlineMs}});
     active++; principals.add(this.principalKey);
     this.#runLease=Object.freeze({read:()=>{
-      try{return this.#budget.view.lease.read();}catch(error){
-        if(error instanceof CanonicalBudgetError){this.#runOwner.revoke(this.#budget.view.diagnostic().primary?.internal??'internal_review_error');this.stop(this.#budget.view.failure()??'internal_review_error');throw new BoundedReadError(error.code);}throw error;
-      }
+      try{return this.#budget.view.lease.read();}catch(error){throw this.#adopt(error,'internal_review_error');}
     }});
     this.#runOwner=registerReviewEvidenceSession(this,this.#snapshot,this.#runLease);
     this.fetcher = options.fetch ?? ((...args) => globalThis.fetch(...args));
@@ -98,7 +96,16 @@ export class BoundedReadSession {
 
   stats() { return {...this.#budget.view.stats()}; }
   #account(operation:()=>void){
-    try{operation();}catch(error){if(error instanceof CanonicalBudgetError){const reason=this.#budget.view.failure();if(reason)this.stop(reason);throw new BoundedReadError(error.code);}throw error;}
+    try{operation();}catch(error){throw this.#adopt(error);}
+  }
+  /** Core stops reach the owner with their internal reason first; only the session sees the public mapping. */
+  #adopt(error:unknown,fallback?:ReadFailureCode){
+    if(!(error instanceof CanonicalBudgetError))return error;
+    const primary=this.#budget.view.diagnostic().primary;
+    if(primary)this.#runOwner.revoke(primary.internal);
+    const reason=this.#budget.view.failure()??fallback;
+    if(reason)this.stop(reason);
+    return new BoundedReadError(error.code);
   }
   /** Fixed readonly diagnostics only: no handles, credentials, lease or activation authority. */
   reviewRunStatus() {

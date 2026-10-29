@@ -11,6 +11,19 @@ it('retains owner invalid_observation_time while mapping the session failure to 
     expect(s.reviewRunStatus()).toMatchObject({ primary: { code: 'invalid_observation_time' } });
     expect(() => s.assertActive()).toThrow('internal_review_error');
 });
+it.each(['payload', 'dispatch'] as const)('retains owner invalid_observation_time when the %s update observes the clock first', async (via) => {
+    let elapsed = 0;
+    vi.spyOn(performance, 'now').mockImplementation(() => elapsed);
+    const s = session((async () => new Response('{}')) as typeof fetch);
+    await s.get(path);
+    elapsed = -1;
+    if (via === 'payload')
+        expect(() => s.chargePayload('x')).toThrow('internal_review_error');
+    else
+        await expect(s.get(path)).rejects.toMatchObject({ code: 'internal_review_error' });
+    expect(s.reviewRunStatus()).toMatchObject({ primary: { code: 'invalid_observation_time' } });
+    expect(() => s.assertActive()).toThrow('internal_review_error');
+});
 it('propagates a deadline first observed through the readonly lease to the active abort signal', async () => {
     let elapsed = 0;
     vi.spyOn(performance, 'now').mockImplementation(() => elapsed);
