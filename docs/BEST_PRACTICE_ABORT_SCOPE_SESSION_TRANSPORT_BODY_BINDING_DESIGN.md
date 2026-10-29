@@ -8,7 +8,7 @@ Status: **§14〜§17の閉鎖gate・同ReadState・試行監督へ、§18の注
 後続：[選択window／payload受領物](BEST_PRACTICE_ABORT_SCOPE_REAL_SESSION_RECEIPTS_DESIGN.md)、[worker接続契約](BEST_PRACTICE_ABORT_SCOPE_CONNECTION_CONTRACT_DESIGN.md)。
 親観測の接続：[private snapshot・初回／最終安定性draft-0.4](BEST_PRACTICE_ABORT_SCOPE_PARENT_STABILITY_DESIGN.md)。§13でCD-03／04の同ReadState・private owner・停止・final slot・返却前ackをfake依存で接続。実transport・実sourceのverifyや正式受領物へは未接続。
 CD接続後の差分：[実session／ReleasePermitとtyped取得の接続差分draft-0.4](BEST_PRACTICE_ABORT_SCOPE_REAL_TYPED_BINDING_DELTA_DESIGN.md)。§10〜11の内部継続・fake bootstrapに加え、§12で同fake resourceのtyped cleanup・同bytes candidate・一度限りackを接続。実class更新点の移行・native adapter・正式receiptは未接続。正式gateは閉鎖、全体受付は無効のまま。
-次の詳細：[native adapter詳細設計draft-0.2](BEST_PRACTICE_ABORT_SCOPE_NATIVE_ADAPTER_DESIGN.md)。§13でNA-01のResponseDelivery・owner・専用台帳とpre-release／一度限り終端証拠を合成identityで検証。native取得・操作・RT-B03のnative証拠照合は未実装で、実session採用・正式発行は行っていない。
+次の詳細：[native adapter詳細設計draft-0.3](BEST_PRACTICE_ABORT_SCOPE_NATIVE_ADAPTER_DESIGN.md)。§13のNA-01合成契約に加え、§14でNA-02の注入Response／Streams取得・同reader操作・cleanupを検証。RT-B03のnative証拠照合は未実装で、実session採用・正式発行は行っていない。
 本書はTC-04後の①実session／ReleasePermit bindingと②単一会計・正式body受領境界を対で具体化する。①②の後続設計として本書を優先し、既存文書の実装履歴や検証済み範囲を書き換えない。型名・port名・状態はすべて提案で、現在存在するexportとは限らない。
 
 ## 1. 現在あるものと、まだ無いもの
