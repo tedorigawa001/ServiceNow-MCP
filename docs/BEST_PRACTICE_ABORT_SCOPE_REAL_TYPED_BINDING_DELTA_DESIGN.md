@@ -171,7 +171,7 @@ draft-0.1作成時、新規本書と参照更新した既存3文書の計4MDに�
 
 claim(snapshot, lease)は同constructorのsnapshot／readonly leaseの参照を検査し、認証ready開始前・state=created・source未claim・既存C/G/P=0だけで受理する。claimを先にconsumingへ進め、lease観測の前後で検査し、最後のguard後に空の凍結handleを一つだけcommitする。通常の同binding重複は新要求の固定refusalだけ記録して既存ownerを保持し、別snapshot／leaseの重複はbinding不整合として要求先ownerを停止する。
 
-途中失敗はfailed、成功後stop／closeはclaimedという由来を残してstate=revoked・handle参照なしにする。再生成・再利用・close後の再登録で救済しない。依存からのclaim／inspect再入はbusy／consumingで拒否し、lease callbackから停止された後に成功handleやviewを返さない。
+途中失敗はfailed、成功後stop／closeはclaimedという由来を残してstate=revoked・handle参照なしにする。一度もclaimしないままstop／closeした場合もclaim=unclaimedのままstate=revokedとなり、以後のclaimは先行primaryで拒否する（unclaimed＋revokedは「未使用のまま失効」を表し、claim成功の痕跡ではない）。再生成・再利用・close後の再登録で救済しない。依存からのclaim／inspect再入はbusy／consumingで拒否し、lease callbackから停止された後に成功handleやviewを返さない。
 
 ### 10.2 prepared bindingの再利用・診断
 

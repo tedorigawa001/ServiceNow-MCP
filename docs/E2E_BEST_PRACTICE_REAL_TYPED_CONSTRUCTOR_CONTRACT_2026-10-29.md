@@ -10,7 +10,7 @@ Date: 2026-10-29 / Scope: 既存lifecycle＋孤立fake context／lease／source 
 
 既存registerReviewEvidenceSessionの返却closure内にtransportConstructorを置き、実BoundedReadSessionでは従来の#runOwnerから外へ出さない。新しいsession採用・owner lookup・fixture登録exportやpublic methodを設けていない。registerを任意objectで呼ぶ既存機能は孤立ownerしか作らず、登録済み実sessionの再登録は引き続き拒否する。
 
-claimはsnapshot／readonly leaseの参照・認証ready未開始・created状態・source未claim・既存C/G/P=0を検査する。観測callback前にconsumingを取り、前後の検査後だけ空の凍結handleを一つ返す。同bindingの通常重複はrefusalのみ、別snapshot／leaseの重複はbinding矛盾で停止する。失敗claimは戻さず、stop／closeではcanonical handleを同期失効する。
+claimはsnapshot／readonly leaseの参照・認証ready未開始・created状態・source未claim・既存C/G/P=0を検査する。観測callback前にconsumingを取り、前後の検査後だけ空の凍結handleを一つ返す。同bindingの通常重複はrefusalのみ、別snapshot／leaseの重複はbinding矛盾で停止する。失敗claimは戻さず、stop／closeではcanonical handleを同期失効する。未claimのまま停止したownerもtransport_state=revoked（claim=unclaimed）となり、後からclaimできない。
 
 inspectPreparedは新source claimを作らず、既存inspectSourceを共通private関数として再利用する。同source／permit／port／ready世代と不変release copyを照合し、最後にtransport失効をcallbackなしで再確認する。handle・token・lease・source等をviewに含めず、dispatch=unavailable／evidence_issuance=disabledのままとする。
 
