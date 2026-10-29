@@ -260,4 +260,4 @@ CD-01、CD-02、stream-only、projectionなしfactoryと独立合成factoryの�
 
 実session／ReleasePermit／選択payload／worker jobとの正式binding・実通信・本番へ移す際のchangedの暫定結果写像は引き続き未接続。正式発行口閉鎖・Unknown・全体受付無効・VM／監視／telemetry保留を維持する。
 
-次の設計差分：[実session／ReleasePermitとtyped取得draft-0.2](BEST_PRACTICE_ABORT_SCOPE_REAL_TYPED_BINDING_DELTA_DESIGN.md)。§10で非dispatchのRT-B01内部継続・claim・既存prepared検査再利用をfake依存で検証。CDの合成owner／台帳を実sessionへ登録せず、単一予算・bootstrap／cleanup実接続と正式発行は未実施。
+次の設計差分：[実session／ReleasePermitとtyped取得draft-0.3](BEST_PRACTICE_ABORT_SCOPE_REAL_TYPED_BINDING_DELTA_DESIGN.md)。§10のRT-B01に加え、§11でconstructor固定fake依存の認証→5列parent→release→preparedを同lease／停止で検証。parentは局所判定のみで、本書の安定性証拠を発行しない。CDの合成owner／台帳を実sessionへ登録せず、実class更新点移行・cleanup実接続と正式発行は未実施。

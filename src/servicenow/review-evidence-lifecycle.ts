@@ -1,6 +1,7 @@
 /** Session-private run lifecycle. No lookup, fixture adoption, transport dispatch or evidence activation API. */
 import type {ReadFailureCode} from './bounded-read.js';
 import type {ReleaseEvidence} from '../review/result-schema-v2.js';
+import {createReviewBootstrapContract,type ReviewBootstrapDependencies} from './review-bootstrap-contract.js';
 type Code=ReadFailureCode|'evidence_binding_mismatch'|'invalid_observation_time'|'invalid_state';
 type Stage='authentication'|'owner'|'binding'|'transport_claim'|'transport_binding';
 declare const transportBrand:unique symbol;
@@ -27,7 +28,7 @@ function copyRelease(value:ReviewSourceReleaseSnapshot):ReviewSourceReleaseSnaps
 const registered=new WeakSet<object>();
 /** The closure stays in the creating session's ECMAScript-private field. Arbitrary objects cannot
  * replace an existing session's owner. No exported mark/revoke/lookup-by-session operation exists. */
-export function registerReviewEvidenceSession(session:object,snapshot:object,lease:ReviewRunBudgetLease){
+export function registerReviewEvidenceSession(session:object,snapshot:object,lease:ReviewRunBudgetLease,bootstrapDependencies?:ReviewBootstrapDependencies){
   if(registered.has(session))throw new Error('invalid_state');
   registered.add(session);
   const authIdentity=Object.freeze({});const budgetIdentity=Object.freeze({});
@@ -44,11 +45,13 @@ export function registerReviewEvidenceSession(session:object,snapshot:object,lea
   let transportHandle:ConstructorTransportHandle|undefined;
   let transportBusy=false;
   let transportRefusal:Readonly<{stage:'transport_claim';code:'invalid_state'}>|null=null;
+  let bootstrap:ReturnType<typeof createReviewBootstrapContract<ConstructorTransportHandle>>|undefined;
   function revoke(reason:unknown,stage:Stage='owner'){
     primary??=Object.freeze({stage,code:fixed(reason)});ready=undefined;pinnedSnapshot=undefined;
     if(sourceClaim==='consuming')sourceClaim='failed';sourceBinding=undefined;
     if(transportClaim==='consuming')transportClaim='failed';transportState='revoked';transportHandle=undefined;
     if(state!=='closed')state='stopped';
+    bootstrap?.revoke();
   }
   function check(currentSnapshot:object,currentLease:ReviewRunBudgetLease){
     if(primary)return false;
@@ -127,10 +130,11 @@ export function registerReviewEvidenceSession(session:object,snapshot:object,lea
       return transportOk(Object.freeze({...prepared,dispatch:'unavailable' as const}));
       });
     },
-    diagnostic(){return Object.freeze({state:transportState,claim:transportClaim,primary,refusal:transportRefusal,evidence_issuance:'disabled' as const,dispatch:'unavailable' as const});},
+    bootstrap(handle:ConstructorTransportHandle,currentSnapshot:object,currentLease:ReviewRunBudgetLease){return bootstrap?bootstrap.run(handle,currentSnapshot,currentLease):Promise.resolve(transportNo());},
+    diagnostic(){return Object.freeze({state:transportState,claim:transportClaim,primary,refusal:transportRefusal,bootstrap:bootstrap?.diagnostic()??null,evidence_issuance:'disabled' as const,dispatch:'unavailable' as const});},
   });
-  return Object.freeze({
-    // Kept only in the actual session's #runOwner. No public session getter or dispatch operation.
+  const owner=Object.freeze({
+    // Actual sessions keep this in #runOwner and supply no fake bootstrap dependencies or public getter.
     transportConstructor,
     markReady(currentSnapshot:object,currentLease:ReviewRunBudgetLease){
       if(readyStarted||state!=='created')return false;readyStarted=true;
@@ -165,4 +169,8 @@ export function registerReviewEvidenceSession(session:object,snapshot:object,lea
       return Object.freeze({state,auth_ready:!!ready,ready_generation:generation,source_claim:sourceClaim,transport_claim:transportClaim,transport_state:transportState,primary,budget,evidence_issuance:'disabled' as const});
     },
   });
+  if(bootstrapDependencies)bootstrap=createReviewBootstrapContract({lease,sample:observeBudget,check:(h,s,l)=>transportConstructor.inspect(h,s,l),
+    ready:()=>owner.markReady(snapshot,lease),bind:(s,p,port)=>owner.bindSource(snapshot,lease,s,p,port),
+    prepared:(h,s,l,source,p,port)=>transportConstructor.inspectPrepared(h,s,l,source,p,port),stop:code=>revoke(code),failure:()=>primary?.code},bootstrapDependencies);
+  return owner;
 }

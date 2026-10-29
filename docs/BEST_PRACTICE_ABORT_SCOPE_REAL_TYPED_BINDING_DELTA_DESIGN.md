@@ -1,7 +1,7 @@
 # AU-BR-006：実session／ReleasePermitとtyped取得の接続差分・fake I/O受入条件
 
-Version: br006-real-typed-binding-delta-draft-0.2 / Date: 2026-10-29。
-Status: **§10のRT-B01内部contractだけをfake依存で実装・検証。typed lane／更新port／bootstrap／cleanup実接続は未実装。正式発行口閉鎖・Unknown・全体受付無効、VM／監視／telemetry調査保留を維持する。実通信・実機操作・設定変更・Pushの承認ではない**。
+Version: br006-real-typed-binding-delta-draft-0.3 / Date: 2026-10-29。
+Status: **§10のRT-B01と§11のRT-B02 bootstrap内部contractをfake依存で実装・検証。実classのcanonical更新点移行・typed lane／cleanup実接続は未実装。正式発行口閉鎖・Unknown・全体受付無効、VM／監視／telemetry調査保留を維持する。実通信・実機操作・設定変更・Pushの承認ではない**。
 
 基準：[session／transport／body境界](BEST_PRACTICE_ABORT_SCOPE_SESSION_TRANSPORT_BODY_BINDING_DESIGN.md)、[実run lifecycle・ReleasePermitのprepared結合§14〜15](BEST_PRACTICE_ABORT_SCOPE_RUN_OWNER_BINDING_DESIGN.md#14-実session-private-lifecycle接続fake-io検証)、[CD-03／04の親workflow接続§13](BEST_PRACTICE_ABORT_SCOPE_PARENT_STABILITY_DESIGN.md#13-cd-03cd-04private-owner停止final-slot接続fake依存)。
 後工程：[選択window／payload受領物](BEST_PRACTICE_ABORT_SCOPE_REAL_SESSION_RECEIPTS_DESIGN.md)、[worker接続契約](BEST_PRACTICE_ABORT_SCOPE_CONNECTION_CONTRACT_DESIGN.md)。
@@ -149,7 +149,7 @@ oracleは製品counter／課金関数から期待値を逆算せず、試験側�
 本書からの次工程は小さく分け、各工程でも正式gateを閉じたままにする。
 
 1. **RT-B01：constructor継続・transport claim・診断の内部契約**。§10で非dispatchの内部型／継続を実装し、既存prepared bindingの検査を再利用した。実ownerを再登録・採用せず、typed laneはまだ生成しない。
-2. **RT-B02：同canonical予算・停止・bootstrap継続**。既存更新点とtyped用途／予約を一つに結び、fake認証→親→release→preparedを確認。正式body・metadata消費は開かない。
+2. **RT-B02：同canonical予算・停止・bootstrap継続**。§11で同lifecycleのreadonly leaseとconstructor固定のfake会計更新点を結び、fake認証→親→release→preparedを確認した。実classの更新点移行と正式body・metadata消費は開かない。
 3. **RT-B03：typed cleanup・同bytes candidate・ack**。同resourceの終了確認とpost-guard受理をfakeで検証。正式receiptはdeny-onlyのまま。
 4. 選択window／payload／worker job・final統合と公開結果は別設計・別承認。正式発行有効化・本番cap・実機検証も別の判断とする。
 
@@ -193,4 +193,42 @@ lifecycle moduleは既存runtime依存としてnpm同梱済みであり、新内
 
 claim成功はlease最大2観測、inspectは最大2、inspectPreparedはtransport2＋既存source2の最大4観測と既存bounded release copy1件。通常重複claimは追加観測0。handle最大1・refusal最大1・busy stateを保持し、失効でcanonical handle参照を捨てる。これらは追加制御費であって、全体work／heap上界の証明・物理消去・自動タイマー／OS終了保証ではない。
 
-RT-A01／02／06／11／15／16の関連部分を限定検証しただけで、16受入条件全体の合格とはしない。RT-B02のcanonical予算・bootstrap、RT-B03の実resource cleanup・同bytes受理／ack、選択payload／worker job・formal receiptは未接続。正式発行口閉鎖・Unknown・全体受付無効・調査保留を維持する。
+RT-A01／02／06／11／15／16の関連部分を限定検証しただけで、16受入条件全体の合格とはしない。後続のfake bootstrapは§11を参照。RT-B03の実resource cleanup・同bytes受理／ack、選択payload／worker job・formal receiptは未接続。正式発行口閉鎖・Unknown・全体受付無効・調査保留を維持する。
+
+## 11. RT-B02：同canonical予算・停止とbootstrap継続（fake I/O限定）
+
+[内部bootstrap contract](../src/servicenow/review-bootstrap-contract.ts)、[37件の合成テスト](../tests/review/real-typed-bootstrap.test.ts)、[検証記録](E2E_BEST_PRACTICE_REAL_TYPED_BOOTSTRAP_2026-10-29.md)を追加した。§10.3の「dispatchなし」はRT-B01単体の範囲であり、本節は新規のconstructor依存を与えた孤立contextに限る追加段階である。
+
+### 11.1 生成・canonical会計・停止の所有
+
+既存registerReviewEvidenceSessionの新規context作成時にだけ、任意の第四引数としてfake_io=trueの依存を固定する。依存は同readonly lease・source・target、認証方式、Q/G/S/deadline上限、会計更新callback、fake dispatch、fake release resolver、fake scheduler。callbackと上限値を生成時にpinし、await後に注入objectの差替えを採用しない。
+
+実BoundedReadSessionのconstructorは従来の3引数登録のままで依存を渡さず、private #runOwnerを公開しない。そのため実sessionにはbootstrap実行経路がなく、既存sessionの再登録／後付け採用も拒否される。新しいfixture登録台帳や実session用mode切替を追加しない。lifecycleから参照する新moduleはnpmに同梱される内部contractであり、非同梱PoCとの誤記はしない。
+
+孤立contextではfake会計ownerがC/G/Pを一つだけ保持し、既存lifecycleとbootstrapが同じleaseで読む。更新はconstructor固定のdispatch／chunk callbackだけで、readonly lease自体を更新authorityへ昇格しない。callback前後でC+1・G+chunk長・他軸不変を検査する。全sampleを既存lifecycleのobserveBudgetへ通し、負数・counter巻戻り・残時間延長の診断を共有する。別の費用counterや開始時計で救済しない。
+
+停止は同lifecycleのfirst primaryを保持し、ready／source／transportを同期失効させてからbootstrapのAbortControllerへ通知する。予約解放は一度だけ。失効後の遅い成功は追加G課金・source bind・ready復活を起こさない。diagnosticは固定state／reason／予約状態だけで、token・親本文・source／permit／snapshot／leaseを返さない。
+
+### 11.2 固定順序とprepared境界
+
+1. B01 handle／snapshot／leaseを検査し、bootstrapをrunningへ一度だけ進める。同時二重開始は停止、終了後の再呼出しは拒否する。
+2. C/G/P=0からfinal用R=4を予約。全dispatchでC+1+R≤Qを検査し、失敗分C/Gを返金しない。
+3. per-user／cachedはOAuth I/Oなし。exchangeはfake authentication POST一回から開始し、token形・期限・大文字小文字を区別しないBearerを検査する。同snapshotのready世代0→1を一度だけ進める。tokenは認証判定後に保持しない。
+4. 固定parent GETを解析し、sys_id／state／application／sys_updated_on／sys_mod_countの5列とtarget一致を検査する。本段階の親projectionは局所判定のみで、CDの初回／最終安定性証拠や正式snapshotを発行しない。
+5. 固定release GETの200／指定cluster403をconstructor固定のfake resolverへ渡す。resolverが返すsource参照もconstructor sourceと一致必須。不明・非matchedは停止。既存bindSource／inspectPreparedで同source／permit／port・ready世代・不変release copyを再検査し、prepared_only／dispatch=unavailable／evidence_issuance=disabledのviewだけ返す。
+
+fake descriptorはpurpose／固定method／synthetic=trueのみで、利用者URL・header・認証overrideやglobal fetch fallbackを持たない。実URL／Authorization snapshotの捕捉、実sourceの#permit発行元とC方式設定のbinding・期限・競合検査は本段階の証明対象ではない。asserted releaseのlimitationsを保持する試験は信頼済みfake resolverの結果伝播であり、運用者設定を実際に承認した意味ではない。
+
+### 11.3 上限・再試行・中断と未確認cleanup
+
+Q≤210、G≤16MiB、S≤4MiB、deadline≤60秒。R=4に対する受付下限Q=4は予約可能だがbootstrap一件もdispatchできず理由付き停止となる。各attemptは元leaseの残時間を基準に最大10秒、通常phaseは元の全体期限よりmin(10秒, deadline/6)早く止める。独自の開始時刻を設定せず、fake schedulerが元残予算の境界で起こし、guardで再検査する。上限を緩めない。
+
+fake応答はstatusと単一Uint8Arrayの完了イベント。private copyを会計callbackの前に作り、同copyを一度JSON decodeする。S/G超過byteもGに一度課金して停止する。429／5xx・settled fake失敗だけ同用途最大2試行、未決着attemptのtimeoutは再試行せず停止する。**settledは合成モデル上の前提であり、HTTP body cancel／closed／releaseLockの確認ではない**。cleanup軸は常にnot_observed。本段階から実transportにこのretry規則を流用してはならない。
+
+通常phase／request枠枯渇はordinary_closedとして予約を解放し、主ownerのglobal primaryを設定せず当bootstrapの再開を拒否する。hard期限／取消／混入／不正応答／G超過は同ownerを停止する。成功はRを維持したままpreparedへ進み、close／stopでRを一度解放する。metadata／payload／final再読は未開始なので、R保持をfinal完遂・typed cleanup確認と解釈しない。
+
+### 11.4 費目と残課題
+
+追加制御状態はbootstrap一つ・AbortController一つ・一度限りの予約状態・進行中timer最大一つ・private body copy最大S、JSON decode一回／200応答。失敗の超過chunkは保持せず課金する。これは追加制御費の記述であり、全体work／heap上界・物理秘密消去・OS終了保証の証明ではない。
+
+RT-B03へ残すもの：native Response／Streamsのread・cancel・closed・releaseLockとtyped cleanup、同attempt candidate／ack、partial chunks／empty quota／retry cleanup、終了後のprivate bytes解放証拠。さらに実BoundedReadSessionのcanonical更新点の移行・固定source bootstrapへのprivate接続、実認証snapshot／ReleasePermitの発行元照合、選択window／payload／worker jobへの正式bindingは未接続。正式発行口閉鎖・Unknown・全体受付無効・VM／監視／telemetry調査保留を維持する。
