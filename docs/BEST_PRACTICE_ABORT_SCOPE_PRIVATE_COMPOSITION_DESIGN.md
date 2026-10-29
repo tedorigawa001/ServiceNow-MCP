@@ -1,7 +1,7 @@
 # AU-BR-006 新規runのprivate compositionとsource採用設計
 
-Version: br006-private-composition-draft-0.3 / Date: 2026-10-29。
-Status: CM-04-01の同core accounting供給のみ実装。native/typed実session採用・実通信は未実施。正式発行口閉鎖・Unknown・全体受付無効・VM／監視／telemetry調査保留を維持する。
+Version: br006-private-composition-draft-0.4 / Date: 2026-10-30。
+Status: CM-04-01の同core accounting供給とCM-04-02の認証／I/O前の固定compositionを実装。native/typedの実session I/O採用・実通信は未実施。正式発行口閉鎖・Unknown・全体受付無効・VM／監視／telemetry調査保留を維持する。
 
 CM-04は、新規runだけを対象に、同じ予算・認証snapshot・source・ReleasePermitを結ぶ。最初の実装は予算生成とaccounting供給の分離までとし、既存sessionの後付け切替やMCP設定による有効化は行わない。
 
@@ -47,7 +47,7 @@ CはCM-03のdispatchAt、Gは同coreのchunk、Pは既存source境界を使う�
 
 固定compositionの起点はbounded-sourceの新規run生成経路、予算・credential・stopの根はBoundedReadSessionとする。実装時には、session constructorがtyped生成の内部継続を持ち、compositionのローカルscopeからsourceを一つだけ生成・結合する。
 
-次の制約を満たすprivate constructor継続を採る。具体的なmethod名とmodule間の受渡しAPIは、CM-04-02の実装前レビューで確定する。
+次の制約を満たすprivate constructor継続を採る。CM-04-02で確定した入口と寿命は§11を参照する。
 
 - 開始済みsessionを受け取る汎用factory、lookup-by-session、session登録／mode setterを作らない。
 - 生成前に同target・低減limits・認証snapshot・laneを固定し、認証／I/O後に別sourceへ付け替えない。
@@ -133,7 +133,7 @@ oracleはfake dispatcherの到達数、固定入力byte列の独立長／hash、
 2. **CM-04-02 新規run compositionの内部接続**。module間の生成継続と更新port非公開をレビュー後、認証／I/O前の固定source結合をfake依存で実装する。既存公開entryはlegacyのまま。
 3. **CM-04-03 private ack consumerと既存release判定**。固定200の親・releaseを同sourceへ一度受理し、prepared限定summaryまで確認する。HTTP差分・final移譲・payload／workerの採用は追加設計を要する。
 
-CM-04-01の実装範囲は§10を参照。次の接続範囲はCM-04-02であり、本段階では実sessionのlaneを変更しない。
+CM-04-01は§10、CM-04-02は§11を参照。次の接続範囲はCM-04-03であり、既存の実session I/O経路のlaneは変更しない。
 
 ## 10 CM-04-01 同core accounting供給
 
@@ -148,3 +148,20 @@ canonical生成rootだけが`construction.takeBootstrapAccounting()`を保持す
 合成試験は同coreの観測一致、legacy利用後拒否、再入、期限・取消・失効、readonly権限非露出、fresh factory互換を対象とする。実sessionのready／source claim、owner登録leaseとbootstrapの参照一致、source private受理は未接続であり、PC-A01〜A14全体を完了扱いにしない。
 
 検証記録：[CM-04-01](E2E_BEST_PRACTICE_CONSTRUCTION_ACCOUNTING_2026-10-29.md)。
+
+## 11 CM-04-02 新規runのpre-I/O composition
+
+固定入口は`BoundedReadSession.prepareNewReviewComposition(snapshot, input, {signal?, limits?})`とする。MCP／設定への登録はしない。これは内部moduleの新規生成入口であり、任意の既存sessionを受け取るgetter／mode setterではない。session／source factory、work callback、dispatcher、release値は受け取らない。既存constructor・client・adapter・R-2の生成経路からは呼ばない。
+
+1. strictな既存source inputを検証する。optionsはsignal／低減limitsのdata propertyだけを一度pinする。不正signal・proxy／別realm／独自prototype・signalの操作差替えは生成前に拒否する。同一realmのnative AbortSignalだけをこの入口の対象とする。
+2. 固定classから新しいsessionを作る。constructorが認証snapshot、canonical core、owner登録済み`#runLease`を生成する。fetchは固定拒否関数であり、デフォルトfetchへfallbackしない。
+3. private `#prepareComposition`が一度限りのclaimを先に消費し、同sessionと検証済みinputで固定`BoundedUpdateSetSource`を一つ生成する。同ownerのtransport claim→`bindInitialSource`へ、同じsnapshot／登録済みlease／handleを渡す。
+4. 初期source bindingは`unclaimed → consuming → claimed`。callback前にconsumingを固定し、再入・別identity・二重利用・ready後・失効後を拒否する。初期binding後の別sourceのReleasePermit bindingも拒否する。既存legacy ownerで初期bindingがない場合の振る舞いは維持する。
+5. 同coreからaccountingを一度取得し、4枠を予約する。private leaseだけで停止／期限を検査し、公開stats／remainingMsの差替えを権限に使わない。phase reserveはsession側で一度決める。この段階はI/Oを開始しないので、hard timer以外のphase timerはarmしない。
+6. accountingをreleaseして同coreを閉じ、sessionの固定private `#close`がowner・timer・外部abort listener・同時実行枠・credential参照を閉じる。公開closeの差替えを固定解放として採用しない。既存公開closeは同じprivate本体へ委譲する。成功時も解放後のfrozen限定summaryだけを返す。session／source／lease／handle／writer／accounting／permitは返さない。部分失敗も同じfinallyで閉じ、例外は固定BoundedReadErrorのcodeだけにする。
+
+この段階の成功は`constructor_bound`であり、`prepared_only`／ReleasePermit発行／認証readyではない。C/G/P=0、ready世代0、正式発行disabled、dispatch unavailableのままである。初期bindingは対象identityだけで、release証拠の代用品にはならない。
+
+CM-04-03では、同じ固定入口のprivate scope内に認証→親→releaseの継続を追加する。今回の公開summaryを再提出して再開する方式、accounting.release後の再open、外部のraw JSON／fake permitの採用は認めない。固定200のprivate ack consumer・既存release判定、HTTP差分とfinal移譲は本段階では未接続。PC-A01〜A14全体の完了や実機検証済みとは主張しない。
+
+検証記録：[CM-04-02](E2E_BEST_PRACTICE_PRIVATE_COMPOSITION_2026-10-30.md)。

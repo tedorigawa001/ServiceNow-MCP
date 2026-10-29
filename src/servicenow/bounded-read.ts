@@ -3,7 +3,7 @@ import { createHash } from 'node:crypto';
 import type { ServiceNowConfig } from './types.js';
 import { pinReviewReleaseConfig } from './review-release-config.js';
 import { registerReviewEvidenceSession, type ReviewRunBudgetLease } from './review-evidence-lifecycle.js';
-import {BoundedUpdateSetSource} from '../review/bounded-source.js';
+import {BoundedUpdateSetSource,parseBoundedSourceInput} from '../review/bounded-source.js';
 import {createCanonicalReviewBudget,CanonicalBudgetError} from './review-canonical-budget.js';
 
 export const BOUNDED_LIMITS = Object.freeze({ responseBytes: 4 * 1024 * 1024, totalBytes: 16 * 1024 * 1024,
@@ -48,11 +48,68 @@ export class BoundedReadSession {
   private readyPromise?: Promise<void>;
   readonly #budget:ReturnType<typeof createCanonicalReviewBudget>;
   #stopPropagated=false;
+  #compositionStarted=false;
   private get stopCode(){return this.#budget.view.failure()??undefined;}
   private disposed = false;
   private busy = false;
   private readonly removeExternal: () => void;
   readonly releasePolicy: ReturnType<typeof pinReviewReleaseConfig>;
+
+  /** CM-04-02 fixed new-run boundary only. No existing-session argument, callback, I/O or returned authority. */
+  static prepareNewReviewComposition(snapshot:ReadSnapshot,input:unknown,options:Pick<BoundedReadOptions,'signal'|'limits'>={}){
+    let session:BoundedReadSession|undefined;
+    try{
+      if(!options||typeof options!=='object')throw new BoundedReadError('invalid_input');
+      const fields=Object.getOwnPropertyDescriptors(options);
+      if(Reflect.ownKeys(fields).some(k=>k!=='signal'&&k!=='limits'||!Object.hasOwn(Reflect.get(fields,k)!,'value')))
+        throw new BoundedReadError('invalid_input');
+      const signal=fields.signal?.value as AbortSignal|undefined,limits=fields.limits?.value as BoundedReadOptions['limits'];
+      if(signal!==undefined){
+        try{
+          // Reject signal-shaped callbacks before the ordinary constructor allocates admission/timers.
+          if(Object.getPrototypeOf(signal)!==AbortSignal.prototype||['addEventListener','removeEventListener','aborted'].some(k=>Object.hasOwn(signal,k)))throw Error();
+          Reflect.apply(Object.getOwnPropertyDescriptor(AbortSignal.prototype,'aborted')!.get!,signal,[]);
+        }catch{throw new BoundedReadError('invalid_input');}
+      }
+      const parsed=parseBoundedSourceInput(input);
+      // The class and source are fixed, not caller-supplied factories. No later mode switch or registry lookup.
+      session=new BoundedReadSession(snapshot,{signal,limits,fetch:()=>{throw new BoundedReadError('internal_review_error');}});
+      const bound=session.#prepareComposition(parsed);
+      session.#close();
+      return Object.freeze({...bound,reserved:0 as const,cleanup:'closed' as const});
+    }catch(error){
+      throw error instanceof BoundedReadError?error:new BoundedReadError('internal_review_error');
+    }finally{if(session)session.#close();}
+  }
+
+  #prepareComposition(input:ReturnType<typeof parseBoundedSourceInput>){
+    if(this.#compositionStarted)throw new BoundedReadError('internal_review_error');
+    this.#compositionStarted=true;
+    let accounting:ReturnType<ReturnType<typeof createCanonicalReviewBudget>['construction']['takeBootstrapAccounting']>|undefined;
+    try{
+      this.#checkComposition();
+      // One phase value, not a second bootstrap cutoff. No I/O phase timer is armed in this stage.
+      this.reserveMs=Math.min(10000,this.limits.deadlineMs/6);
+      const source=new BoundedUpdateSetSource(this,input);
+      const claim=this.#runOwner.transportConstructor.claim(this.#snapshot,this.#runLease);
+      if(!claim.ok){this.#syncRunFailure();throw new BoundedReadError(this.stopCode??'internal_review_error');}
+      const bound=this.#runOwner.transportConstructor.bindInitialSource(claim.value,this.#snapshot,this.#runLease,source);
+      if(!bound.ok){this.#syncRunFailure();throw new BoundedReadError(this.stopCode??'internal_review_error');}
+      accounting=this.#budget.construction.takeBootstrapAccounting();
+      accounting.reserve();this.#checkComposition();
+      const status=this.#runOwner.inspect(this.#snapshot,this.#runLease);this.#checkComposition();
+      return Object.freeze({...bound.value,auth_ready:status.auth_ready,ready_generation:status.ready_generation,
+        transport_claim:status.transport_claim,budget:this.#budget.view.stats(),phase_reserve_ms:this.reserveMs,dispatch:'unavailable' as const});
+    }catch(error){throw this.#adopt(error);}
+    finally{accounting?.release();}
+  }
+  #checkComposition(){
+    this.#syncRunFailure();
+    const sample=this.#runLease.read(),failure=this.#budget.view.failure();
+    if(failure)throw this.#adopt(new CanonicalBudgetError(failure));
+    if(this.disposed)throw new BoundedReadError('closed');
+    if(sample.remaining_ms<=this.reserveMs)throw new BoundedReadError('phase_deadline_exceeded');
+  }
 
   constructor(snapshot: ReadSnapshot, options: BoundedReadOptions = {}) {
     this.#snapshot = { ...snapshot, oauth: { ...snapshot.oauth } };
@@ -178,6 +235,9 @@ export class BoundedReadSession {
     finally { this.close(); }
   }
   close() {
+    this.#close();
+  }
+  #close() {
     if (this.disposed) return;
     this.#runOwner.close(this.stopCode ?? 'closed');
     this.#budget.writer.close();

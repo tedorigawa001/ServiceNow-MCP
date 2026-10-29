@@ -40,6 +40,8 @@ export function registerReviewEvidenceSession(session:object,snapshot:object,lea
   let lastBudget:ReturnType<ReviewRunBudgetLease['read']>|undefined;
   let sourceClaim:'unclaimed'|'consuming'|'claimed'|'failed'='unclaimed';
   let sourceBinding:{source:object;permit:object;port:ReviewSourceReleasePort;ready:object;release:ReviewSourceReleaseSnapshot}|undefined;
+  let initialSourceClaim:'unclaimed'|'consuming'|'claimed'|'failed'='unclaimed';
+  let initialSource:object|undefined;
   let transportClaim:'unclaimed'|'consuming'|'claimed'|'failed'='unclaimed';
   let transportState:'unclaimed'|'claiming'|'identity_only'|'revoked'='unclaimed';
   let transportHandle:ConstructorTransportHandle|undefined;
@@ -49,6 +51,7 @@ export function registerReviewEvidenceSession(session:object,snapshot:object,lea
   function revoke(reason:unknown,stage:Stage='owner'){
     primary??=Object.freeze({stage,code:fixed(reason)});ready=undefined;pinnedSnapshot=undefined;
     if(sourceClaim==='consuming')sourceClaim='failed';sourceBinding=undefined;
+    if(initialSourceClaim==='consuming')initialSourceClaim='failed';initialSource=undefined;
     if(transportClaim==='consuming')transportClaim='failed';transportState='revoked';transportHandle=undefined;
     if(state!=='closed')state='stopped';
     bootstrap?.revoke();
@@ -100,6 +103,24 @@ export function registerReviewEvidenceSession(session:object,snapshot:object,lea
     try{return work();}catch{revoke('internal_review_error','transport_binding');return transportNo();}finally{transportBusy=false;}
   }
   const transportConstructor=Object.freeze({
+    /** Creator-owned pre-I/O binding, distinct from the post-ready ReleasePermit binding. */
+    bindInitialSource(handle:ConstructorTransportHandle,currentSnapshot:object,currentLease:ReviewRunBudgetLease,source:object){
+      return useTransport(()=>{
+        if(initialSourceClaim!=='unclaimed'){revoke('invalid_state','transport_binding');return transportNo();}
+        initialSourceClaim='consuming';
+        if(!checkTransport(handle,currentSnapshot,currentLease))return transportNo();
+        if(readyStarted||state!=='created'||sourceClaim!=='unclaimed'||!idleBudget()||!source||typeof source!=='object'){
+          revoke('invalid_state','transport_binding');return transportNo();
+        }
+        initialSource=source;
+        if(!checkTransport(handle,currentSnapshot,currentLease))return transportNo();
+        if(initialSourceClaim!=='consuming'||initialSource!==source||readyStarted||!idleBudget()){
+          revoke('invalid_state','transport_binding');return transportNo();
+        }
+        initialSourceClaim='claimed';
+        return transportOk(Object.freeze({state:'constructor_bound' as const,initial_source:'bound' as const,evidence_issuance:'disabled' as const}));
+      });
+    },
     claim(currentSnapshot:object,currentLease:ReviewRunBudgetLease):TransportResult<ConstructorTransportHandle>{
       if(primary)return transportNo();
       if(transportClaim==='claimed'){
@@ -146,6 +167,9 @@ export function registerReviewEvidenceSession(session:object,snapshot:object,lea
     rejectSource(){revoke('evidence_binding_mismatch','binding');},
     bindSource(currentSnapshot:object,currentLease:ReviewRunBudgetLease,source:object,permit:object,port:ReviewSourceReleasePort){
       if(primary)return false;
+      if(initialSourceClaim!=='unclaimed'&&(initialSourceClaim!=='claimed'||source!==initialSource)){
+        revoke('evidence_binding_mismatch','binding');return false;
+      }
       if(sourceClaim!=='unclaimed'){
         if(!sourceBinding||sourceBinding.source!==source||sourceBinding.permit!==permit||sourceBinding.port!==port)revoke('evidence_binding_mismatch','binding');
         return false;

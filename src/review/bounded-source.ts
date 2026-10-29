@@ -10,6 +10,12 @@ import type {ReviewSourceReleasePort,ReviewSourceReleaseSnapshot} from '../servi
 const id = z.string().regex(/^[a-f0-9]{32}$/);
 const inputSchema = z.strictObject({ update_set_sys_id: id, max_records: z.number().int().min(1).max(100).default(20),
   selection_mode: selectionModeSchema.optional(), requested_rule_ids: bp5RuleIdsSchema.optional() });
+/** Pure validation only; returns no session, permit or mutable source consumer. */
+export function parseBoundedSourceInput(input:unknown){
+  const parsed=inputSchema.safeParse(input);
+  if(!parsed.success)throw new BoundedReadError('invalid_input');
+  return parsed.data;
+}
 const version = { sys_updated_on: z.string().min(1).max(40), sys_mod_count: z.string().regex(/^\d{1,20}$/) };
 const parentSchema = z.strictObject({ sys_id: id, state: z.string().max(100), application: z.string().max(32), ...version });
 const metadataSchema = z.strictObject({ sys_id: id, update_set: id, name: z.string().min(1).max(200),
