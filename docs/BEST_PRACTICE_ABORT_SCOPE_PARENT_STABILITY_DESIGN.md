@@ -1,7 +1,7 @@
 # AU-BR-006：親レコードprivate snapshot・初回／最終安定性の詳細設計
 
-Version: br006-parent-stability-draft-0.3 / Date: 2026-10-29。
-Status: **§11の合成モデルに加え、§12の同bytes解析・private projection・post-guard受理をfake依存で接続。CD-03〜04・実sourceへの接続と正式snapshot発行は未実施。正式発行口閉鎖・Unknown・全体受付無効を維持する**。
+Version: br006-parent-stability-draft-0.4 / Date: 2026-10-29。
+Status: **§13でCD-03／04の注入Response・ReadState・初回／final slot・private workflow ownerをfake依存で接続。実sourceへの接続と正式snapshot発行は未実施。正式発行口閉鎖・Unknown・全体受付無効を維持する**。
 
 親：[CD-01〜CD-04の固定dispatcher設計](BEST_PRACTICE_ABORT_SCOPE_CLOSED_DISPATCH_SIGNAL_DESIGN.md)、[session／transport／body境界](BEST_PRACTICE_ABORT_SCOPE_SESSION_TRANSPORT_BODY_BINDING_DESIGN.md)。
 参照：[共通run owner](BEST_PRACTICE_ABORT_SCOPE_RUN_OWNER_BINDING_DESIGN.md)、[選択window／payload受領物](BEST_PRACTICE_ABORT_SCOPE_REAL_SESSION_RECEIPTS_DESIGN.md)、[CD-03検証](E2E_BEST_PRACTICE_CLOSED_RESPONSE_READER_2026-10-28.md)、[CD-04検証](E2E_BEST_PRACTICE_CLOSED_HTTP_STATUS_2026-10-28.md)。
@@ -10,7 +10,7 @@ Status: **§11の合成モデルに加え、§12の同bytes解析・private proj
 
 [body lane](../src/review/abort-scope-evidence-closed-body-candidate.ts)の既存projectionなし経路の対象ID付きparent解析は、strictな5列schemaと要求sys_id一致を検査する。private bytesから課金・digest・JSON解析を行い、最後は本文参照を捨てて固定summaryだけを返す。このsummaryからstate等を復元したり、初回／最終が同じrecord世代だったと証明したりすることはできない。§12の新規fake限定経路は、summaryを変更せずprivate継続を追加する。
 
-[closed supervisor](../src/review/abort-scope-evidence-closed-attempt-supervisor.ts)はinitial／finalを同URL／fixture auth context・所定slotへ結ぶが、5列の初回／最終比較は未接続。[本番bounded-source](../src/review/bounded-source.ts)のreadParent／verifyには既存の親保存と比較があるが、これは実source／ReleasePermit／metadata検証を含む別経路。verifyは不一致を例外にせず`consistency:'changed'`を返し、[update-set-adapter](../src/review/update-set-adapter.ts)は`provisional_results`／`changed_during_review`を記録して暫定結果を返す（run停止ではない）。本設計で差し替えず、閉鎖fixtureの結果をそこへ登録しない。
+[closed supervisor](../src/review/abort-scope-evidence-closed-attempt-supervisor.ts)はinitial／finalを同URL／fixture auth context・所定slotへ結び、§13で5列の初回／最終比較をfake依存に限り接続した。[本番bounded-source](../src/review/bounded-source.ts)のreadParent／verifyには既存の親保存と比較があるが、これは実source／ReleasePermit／metadata検証を含む別経路。verifyは不一致を例外にせず`consistency:'changed'`を返し、[update-set-adapter](../src/review/update-set-adapter.ts)は`provisional_results`／`changed_during_review`を記録して暫定結果を返す（run停止ではない）。本設計で差し替えず、閉鎖fixtureの結果をそこへ登録しない。
 
 本設計は、既存の単一受信・単一解析から**内部だけの親snapshotを生成し、同workflowで一度比較する**ためのもの。比較対象はparentだけで、metadata／payload／ルール結果／Update Set全体の整合性まで認定しない。
 
@@ -95,7 +95,7 @@ baselineやfinal draftを別ownerへ渡すテスト用の本番登録口を作�
 
 ## 7. 失敗分類・停止・診断
 
-比較差分と取得／証拠不足を区別する。既存の本番bounded-source.verifyのconsistency返却は変更しない。下記の語彙は§11の合成モデル内部で使うが、既存closed gate／ReadStateや公開JSONには追加しない。
+比較差分と取得／証拠不足を区別する。既存の本番bounded-source.verifyのconsistency返却は変更しない。§13で`changed_during_review`を合成closed gate／ReadStateの固定停止理由にも追加したが、公開レビューJSON契約や本番の停止語彙は変更しない。
 
 本番との写像：stable_observationは本番`stable_observation`、changedは本番`changed`（暫定結果＋`changed_during_review`）、not_verifiedは本番`unverified`（`consistency_unverified`）に対応する。本番はchangedを正当な観測結果として暫定結果まで返すが、閉鎖経路は正式発行口を閉じたまま観測を証拠へ昇格しないため、changedでもrunを停止するfail-closedを選ぶ。将来本番へ接続するときは、この停止をchanged＝失敗と読み替えず、本番の暫定結果の扱いに合わせて再設計する。
 
@@ -155,7 +155,7 @@ privateな参照保持の検証方法は、内部test-only計数／状態の限�
 2. 同bytesの既存consumeから固定private projectionを供給し、最終guard後だけ初回受理／final比較へcommitする。summaryやcaller callbackへのrecord流出を拒否する。
 3. CD-03／CD-04のinitial／final・停止処理へownerを接続し、安定／変更／未検証の全経路、追加費目、非露出・既存互換を検証する。
 
-1の合成モデル実装は§11、2のfake依存限定接続は§12を参照。3は未接続。閉鎖gate／ReadStateの内部enumへのchanged_during_review追加、transport側へのexact status写像と費目の実測はCD接続前に確定する。実sourceでは既存verifyが親とmetadataをまとめて評価するため、親だけの結果を全体stableとして公開しない。後続のmetadata／payload／worker binding・上位JSONへの写像は別設計とする。
+1の合成モデル実装は§11、2のfake依存限定接続は§12、3のCD-03／04接続は§13を参照。追加費目は§13で所有を示すが、全体work／heap上界へ包含済みとは認定しない。実sourceでは既存verifyが親とmetadataをまとめて評価するため、親だけの結果を全体stableとして公開しない。後続のmetadata／payload／worker binding・上位JSONへの写像は別設計とする。
 
 draft-0.1作成時はMD整理のみ。後続の合成モデルは次節と区別する。実AuthSnapshotIdentity／ReleasePermit・固定sourceへの正式接続、本番cap・全体work／heap上界・OSの実時間終了保証は未接続／未承認。正式発行口閉鎖・Unknown・全体受付無効、VM／監視／telemetry調査保留を維持し、実通信・実機操作・token発行・設定変更・Pushは行わない。
 
@@ -187,11 +187,11 @@ drafts_issued／drafts_consumed／snapshots_accepted／comparisons_prepared／co
 
 raw JS fixtureのown key列挙前のallocation上界、Zod／engine内部費用、全体heap／workの受付は未証明。合成deadlineも操作時の検査だけで、実timer／HTTP attempt／50・55秒phase・共有C/Gへは未接続。未観測のHTTP cleanupをconfirmedと申告するAPIや、実body／sourceからの正式生成口はない。
 
-同bytes由来projectionのfake接続は§12を参照。次段階はCD-03／CD-04のowner停止・final slotへ結ぶ工程。formal issuance／全体受付を有効化せず、Unknown・VM／監視／telemetry保留を維持する。実通信・実機操作・設定変更・Pushは行わない。
+同bytes由来projectionのfake接続は§12、CD-03／CD-04のowner停止・final slot接続は§13を参照。formal issuance／全体受付を有効化せず、Unknown・VM／監視／telemetry保留を維持する。実通信・実機操作・設定変更・Pushは行わない。
 
 ## 12. 同body bytesのprivate projection・post-guard受理（fake依存限定）
 
-[body lane](../src/review/abort-scope-evidence-closed-body-candidate.ts)の共有内部coreへ、専用の`createSyntheticParentProjectionLane`を追加する。既存`createClosedBodyLane`はprojectionなしで呼び、既存ReadState・CD-03／04の生成経路は変更しない。任意のprojector／onParsed callbackやrecord getterを追加しない。専用factoryは合成issuerを内部生成し、そのsession／owner／draft／comparison handleは返さない。
+[body lane](../src/review/abort-scope-evidence-closed-body-candidate.ts)の共有内部coreへ、専用の`createSyntheticParentProjectionLane`を追加した初期段階。projectionなしfactoryと、comparison_pendingまでの既定の合成factoryを維持する。§13のCD-03／04だけが内部のfinal確定を有効にする。任意のprojector／onParsed callbackやrecord getterを追加しない。専用factoryは合成issuerを内部生成し、そのsession／owner／draft／comparison handleは返さない。
 
 ### 12.1 固定継続と所有権
 
@@ -199,7 +199,7 @@ raw JS fixtureのown key列挙前のallocation上界、Zod／engine内部費用�
 2. confirmed EOF・closed・lock解放を確認済みのcandidateだけを一度consumeする。同bytesからUTF-8 decode／JSON.parseを1回行い、strict envelopeと5列schema・固定target一致を検査する。hashも同bytesから計算する。
 3. そのparse内の固定継続で5列を合成issuerのprivate draftへコピーする。issuer側のprimitive検査は残すが、JSONを再parseしない。summaryから復元しない。
 4. body内checkpointで失敗せず、body全体guardのpost-checkが成功した後にだけ、初回はacceptInitial、最終はprepareComparisonを呼ぶ。issuer自身のpre／post-guardも同じcheckpointへ戻し、最後の時計観測で取消・期限切れになったdraftを受理しない。最後のguardとsnapshot commitの間に任意callback／awaitはない。
-5. 公開結果は従来と同じ件数・bytes・digestのsummaryだけ。最終観測はcomparison_pendingまでで止め、stable／changed確定・上位返却はまだ行わない。
+5. 公開結果は従来と同じ件数・bytes・digestのsummaryだけ。独立合成factoryの既定はcomparison_pendingまで。§13のCD接続だけはそのprivate比較を確定するが、正式受領物・公開レビュー結果へは昇格させない。
 
 factoryのcheckpointはfake側の単一停止／時計を参照する。別の実budget・HTTP・認証snapshot・timerは生成しない。合成issuerの60秒上限は外側checkpointを越える権限にならず、元の取消・phase／attempt期限等が先に失敗すれば固定理由を保つ。body会計用の狭いstop契約を広げず、合成factory専用stopProjectionがsession全体の固定理由を扱う。
 
@@ -218,8 +218,44 @@ body診断には合成issuerの固定statusだけを追加する。record・対�
 | schema／projection／guard | strict5列＋issuer再検査・追加checkpoint。既存費用に包含済みと認定しない |
 | private保持／比較 | 初回1・最終draftと最大2 record、比較準備で0。最終は5比較だけを計上し確定しない |
 
-これはfake hookと合成issuerの内部接続であり、実session／ReleasePermit／正式body receiptの由来や物理HTTP cleanupを証明しない。CD-03／04のResponse read・final slot・共通primary・changed結果写像は未接続。全体work／heap受付・本番capは無効、正式発行口閉鎖・Unknown・調査保留を維持する。
+これはfake hookと合成issuerの内部接続であり、実session／ReleasePermit／正式body receiptの由来や実通信でのcleanupを証明しない。CD-03／04の注入Response read・final slot・共通primary・changed結果写像は§13で接続する。全体work／heap受付・本番capは無効、正式発行口閉鎖・Unknown・調査保留を維持する。
 
-CD-03／04接続前に確定する事項：①現在の`stopProjection`は、未接続の`commitComparison`由来の`changed_during_review`を型の都合で`invalid_state`へ写像している。確定を接続する際はClosedStateCodeへ`changed_during_review`を加え、§7どおりの理由で停止させる。②合成issuerは時計checkpointの失敗を全て終端として扱い`failure`を保持する。ReadStateのnormal期限による`refuse`（ordinary close）はfinal phaseへの進行を許すため、そのまま接続すると予約済みfinal親readまでrunごと止め得る。ordinary closeとsession停止を区別する写像を接続時に設計・試験する。
+接続前の2課題は§13で対処した。①changed_during_review→invalid_stateの仮写像を撤去し、合成gateの元の停止理由を保持する。②ReadStateのordinary closeは終端revokeと分離し、受理済みbaselineを予約済みfinalへ残す。snapshotの時計検査にはordinary refuseを渡さず、同時計のsession／phase／保持したattempt期限だけを検査する。
 
 検証：[同bytes projection・post-guard受理記録](E2E_BEST_PRACTICE_PARENT_BODY_PROJECTION_2026-10-29.md)。
+
+## 13. CD-03／CD-04：private owner・停止・final slot接続（fake依存）
+
+[40件の接続試験](../tests/review/closed-parent-workflow.test.ts)、[検証記録](E2E_BEST_PRACTICE_CLOSED_PARENT_WORKFLOW_2026-10-29.md)を参照。
+
+### 13.1 発行元と同一性
+
+`createInjectedClosedParentResponseReader`の固定targetを、同じprivate supervisor core→fake gate→ReadState→専用body factoryへ渡す。bodyが内部生成したworkflow ownerはこのlane専用で、snapshotやhandleの持出し・再登録を受け付けない。初回／最終のtarget・URL・fixture auth context、単一C/G台帳・停止・時計は同coreに属する。実AuthSnapshotIdentity／ReleasePermitの証明とは区別する。
+
+同ReadStateがdispatchしたattemptの成功bodyだけをcandidateにし、その同bytesからdraftを作る。初回transport settleのsuccess mapだけではfinalを開けず、private初回snapshotが受理済みであることも要求する。破棄した初回bodyはinitial_unavailableとしてfinalをskipできるが、baselineへ昇格しない。
+
+finalは既存のparent slotを一度openし、retryもそのlogical request／slot内の最大2試行だけ。HTTP 429／5xxのcleanup確認済み失敗ではbaselineを残し、別ownerやfinal claimを生成しない。成功した最終bodyはprepareComparison→commitComparisonへ固定接続する。一致は親だけのstable_observation診断、不一致はchanged_during_reviewで閉鎖runを停止し、追加取得・baseline差替えをしない。最終retryを使い切った場合も元のHTTP／timeout理由で停止・baseline破棄する。
+
+slotのdoneはtransport試行・予約消費の履歴であり、単独で検証成功の証拠にはしない。初回snapshot・比較状態・acknowledgementを別に確認する。停止でidle slotはinvalidated、残予約は0になるが、既にdoneになったslotの履歴は保持する。
+
+### 13.2 同期失効・ordinary close・時計
+
+終端のcancel／close／認証失敗／schema不正／cleanup未確認／期限切れは同gateの最初のprimaryを保持し、ReadState経由でbody bytesとissuer内recordを同期失効する。issuerの局所closed理由が先行の外側primaryを上書きしない。stable／changed確定後の停止では観測履歴だけを残し、liveはfalseとなる。
+
+normal取得のordinary closeは終端revokeと別操作とする。未受理のordinary body／draftは破棄する一方、受理済み初回baselineは生かし、元の50秒境界を越えた予約済みfinal観測を55秒境界までに行える。snapshot用checkpointは同gateの時計／停止・final phase期限・attempt期限を検査し、ordinary refuseをsessionの終端へ変換しない。全体60秒、phase、attempt、cleanup reserveとC/G上限は変更しない。
+
+body consume中は同attemptのdeadlineとpending状態を、raw bytes破棄後からsnapshot／比較commitの終了まで保持する。bodyのcurrentを消したことによって期限検査や再入拒否が抜け落ちないようにする。
+
+### 13.3 非同期返却のacknowledgement
+
+本文受理後にもasync returnの継続があるため、private coreはその成功attemptだけを一時保持し、Readerが返す直前に一度だけ消費する。ReadStateのacknowledgeParentは同attemptの所属・settle済み・親の固定role・受理／比較状態、finalなら同parent slotのdoneを検査する。保存した同attempt windowをguardの前後で検査し、元の取消・session／phase期限も再検査する。新しい期限・GET・課金は作らない。
+
+その間に取消・期限切れが起きたら成功summaryを返さず、元の固定停止理由を返す。snapshotやstable観測がすでにcommitされた場合は過去の観測履歴として残し、現在の権限とは扱わない。ackの二重消費・外国attemptは拒否し、外国ownerを変えない。最後のguard後からReader返却までは任意callback／awaitを挟まない。
+
+### 13.4 費目・互換性・未対応
+
+追加費目はprivate owner生成・固定5列projection／比較・同checkpointの追加観測、consume中の期限保持、1attemptにつき1ack claim／guardと参照破棄。C/G／payload課金・final予約は既存ReadStateだけが所有し、再課金・返金しない。全体work／heap上界への包含や本番cap受付は未証明。
+
+CD-01、CD-02、stream-only、projectionなしfactoryと独立合成factoryの既定comparison_pendingは維持する。固定停止語彙の追加はpackage除外済みの合成module内だけで、公開JSON・MCP登録・本番sourceは変更しない。親一致をmetadata／payload／workerやUpdate Set全体のstableへ拡張しない。
+
+実session／ReleasePermit／選択payload／worker jobとの正式binding・実通信・本番へ移す際のchangedの暫定結果写像は引き続き未接続。正式発行口閉鎖・Unknown・全体受付無効・VM／監視／telemetry保留を維持する。

@@ -1,6 +1,6 @@
 /** Closed-gate fake ReadState with an optional private synthetic byte lane; no real session/transport/receipt issuer. */
 import {z} from 'zod';
-import {createClosedBodyLane} from './abort-scope-evidence-closed-body-candidate.js';
+import {createClosedBodyLane,createSyntheticParentProjectionLane} from './abort-scope-evidence-closed-body-candidate.js';
 declare const brand:unique symbol;
 type Handle<K extends string>={readonly [brand]:K};
 export type ClosedReadPurpose=Handle<'closed_read_purpose'>;
@@ -9,7 +9,7 @@ export type ClosedFinalSlot=Handle<'closed_final_slot'>;
 export type ClosedAccountingCode='invalid_input'|'invalid_state'|'evidence_binding_mismatch'|'request_budget_exceeded'
   |'receive_budget_exceeded'|'payload_budget_exceeded'|'payload_limit'|'scope_evidence_limit'
   |'phase_deadline_exceeded'|'upstream_unavailable'|'cleanup_unconfirmed'|'invalid_response'|'body_limit'|'attempt_deadline_exceeded'|'authentication_failed'|'access_denied';
-export type ClosedStateCode=ClosedAccountingCode|'invalid_observation_time'|'deadline_exceeded'|'cancelled'|'closed'|'internal_review_error'|'issuance_disabled';
+export type ClosedStateCode=ClosedAccountingCode|'invalid_observation_time'|'deadline_exceeded'|'cancelled'|'closed'|'internal_review_error'|'issuance_disabled'|'changed_during_review';
 export type ClosedAccountingResult<T>=Readonly<{ok:true;value:T}|{ok:false;code:ClosedStateCode}>;
 export const closedAttemptPolicySchema=z.strictObject({timeout_ms:z.number().int().min(1).max(10000).default(10000),cleanup_reserve_ms:z.number().int().min(1).max(250).default(250),max_empty_reads:z.number().int().min(1).max(16).default(16)});
 export const closedAccountingSchema=z.strictObject({
@@ -33,12 +33,13 @@ export function createClosedReadState(config:Config,hooks:{
   guard<T>(body:()=>ClosedAccountingResult<T>):ClosedAccountingResult<T>;
   checkpoint():ClosedAccountingResult<number>;
   stop(code:ClosedAccountingCode):ClosedAccountingResult<never>;
+  stopParent(code:ClosedStateCode):ClosedAccountingResult<never>;
   refuse(code:ClosedStateCode):ClosedAccountingResult<never>;
   dispatch():void;
   normalDeadline:number;finalDeadline:number;
-}){
+},parentTarget?:string){
   type Purpose={kind:Kind;attempts:number;state:'ready'|'inflight'|'done';slot?:Slot;table?:Slot};
-  type Attempt={purpose:Purpose;bytes:number;sequence:number;settled:boolean;empty:number;limited?:boolean;window?:Readonly<{deadline:number;io_deadline:number;max_empty_reads:number}>};
+  type Attempt={purpose:Purpose;bytes:number;sequence:number;settled:boolean;empty:number;parentAcknowledged?:boolean;limited?:boolean;window?:Readonly<{deadline:number;io_deadline:number;max_empty_reads:number}>};
   type Slot={handle:ClosedFinalSlot;kind:'parent'|'metadata'|'table';remaining:number;state:'idle'|'done'|'skipped'|'invalidated';initial?:'success'|'unavailable';skipReason?:'not_collected'|'initial_unavailable'|'evidence_disabled'};
   const purposes=new WeakMap<ClosedReadPurpose,Purpose>(),attempts=new WeakMap<ClosedReadAttempt,Attempt>();
   const slots:Slot[]=(['parent','metadata'] as const).map(kind=>({handle:opaque<ClosedFinalSlot>(),kind,remaining:2,state:'idle'}));
@@ -56,9 +57,10 @@ export function createClosedReadState(config:Config,hooks:{
     if(phase==='normal'&&(pendingPayload||bodies?.pending())&&cp.value>=hooks.normalDeadline)return hooks.refuse(closeOrdinary().code);
     return cp;
   }
-  function guard<T>(body:()=>ClosedAccountingResult<T>):ClosedAccountingResult<T>{return hooks.guard(()=>{
-    const operationDeadline=active?attempts.get(active)?.window?.deadline:bodies?.deadline();
+  function guard<T>(body:()=>ClosedAccountingResult<T>,fixedDeadline?:number):ClosedAccountingResult<T>{return hooks.guard(()=>{
+    const operationDeadline=fixedDeadline??(active?attempts.get(active)?.window?.deadline:bodies?.deadline());
     const cp=checkpoint();if(!cp.ok)return cp;
+    if(operationDeadline!==undefined&&cp.value>=operationDeadline)return hooks.stop('attempt_deadline_exceeded');
     const result=body(),after=checkpoint();if(!after.ok)return after;
     if(operationDeadline!==undefined&&after.value>=operationDeadline)return hooks.stop('attempt_deadline_exceeded');
     if(phase==='normal'&&after.value>=hooks.normalDeadline)return hooks.refuse(closeOrdinary().code);
@@ -66,11 +68,12 @@ export function createClosedReadState(config:Config,hooks:{
   });}
   function closeOrdinary(){ordinaryClosed=true;ordinaryReason='phase_deadline_exceeded';
     pendingPayload=undefined;
-    bodies?.revoke();
+    bodies?.closeOrdinary();
     if(current){current.state='done';initial.set(current.kind,'unavailable');if(current.table)current.table.initial='unavailable';current=undefined;}
     return Object.freeze({ok:false as const,code:ordinaryReason});
   }
   const reserved=()=>slots.reduce((n,s)=>n+s.remaining,0);
+  const initialOutcome=(s:Slot)=>s.kind==='table'?s.initial:s.kind==='parent'&&parentTarget!==undefined&&initial.get('parent_initial')==='success'&&!bodies?.parentAccepted()?'unavailable':initial.get(s.kind+'_initial');
   function make(kind:Kind,slot?:Slot,table?:Slot){const h=opaque<ClosedReadPurpose>();current={kind,slot,table,attempts:0,state:'ready'};purposes.set(h,current);return h;}
   function chunkCore(handle:ClosedReadAttempt,sequence:number,length:number):ClosedAccountingResult<true>{
     const a=attempts.get(handle);if(!a||active!==handle)return hooks.stop('evidence_binding_mismatch');
@@ -105,9 +108,28 @@ export function createClosedReadState(config:Config,hooks:{
   function discardPayloadCore(handle:ClosedReadAttempt):ClosedAccountingResult<true>{
     if(pendingPayload!==handle)return hooks.stop('evidence_binding_mismatch');pendingPayload=undefined;return ok(true);
   }
-  if(config.body_mode==='bytes')bodies=createClosedBodyLane({guard,checkpoint,stop:hooks.stop,chunk:chunkCore,settle:settleCore,payload:payloadCore,discardPayload:discardPayloadCore,responseLimit:config.response_bytes});
+  if(config.body_mode==='bytes'){
+    const bodyHooks={guard,checkpoint,stop:hooks.stop,chunk:chunkCore,settle:settleCore,payload:payloadCore,discardPayload:discardPayloadCore,responseLimit:config.response_bytes};
+    // Owner lifetime checks must not turn ordinary-close refusal into a terminal session stop.
+    const snapshotCheckpoint=():ClosedAccountingResult<number>=>{
+      const cp=hooks.checkpoint();if(!cp.ok)return cp;
+      if(phase==='final'&&cp.value>=hooks.finalDeadline)return hooks.stop('phase_deadline_exceeded');
+      const deadline=active?attempts.get(active)?.window?.deadline:bodies?.deadline();
+      return deadline!==undefined&&cp.value>=deadline?hooks.stop('attempt_deadline_exceeded'):cp;
+    };
+    bodies=parentTarget===undefined?createClosedBodyLane(bodyHooks):createSyntheticParentProjectionLane({...bodyHooks,stopProjection:hooks.stopParent,snapshotCheckpoint},parentTarget,true);
+  }
   const port=Object.freeze({
     body:bodies?.port??null,
+    /** Same-attempt, one-shot acknowledgement after the async Response/body handoff. Fake parent path only. */
+    acknowledgeParent(handle:ClosedReadAttempt):ClosedAccountingResult<true>{
+      const a=attempts.get(handle);if(!a||parentTarget===undefined)return hooks.stop('evidence_binding_mismatch');
+      if(a.parentAcknowledged)return hooks.stop('invalid_state');a.parentAcknowledged=true;
+      return guard(()=>{
+        if(!a.settled||a.purpose.state!=='done'||(a.purpose.kind==='parent_initial'?!bodies?.parentAccepted():a.purpose.kind==='parent_final'?!bodies?.parentFinalAccepted()||a.purpose.slot!==slots[0]||slots[0]?.state!=='done':true))return hooks.stop('invalid_state');
+        return ok(true);
+      },a.window?.deadline);
+    },
     /** Closed fixture wait-only path: never accepts success and never issues a body candidate. */
     finishUnopened(handle:ClosedReadAttempt,outcome:'unavailable'|'retryable'):ClosedAccountingResult<true>{return bodies?bodies.abandonUnopened(handle,outcome):hooks.stop('invalid_state');},
     parentFinal:slots[0]!.handle,metadataFinal:slots[1]!.handle,
@@ -178,13 +200,13 @@ export function createClosedReadState(config:Config,hooks:{
       const s=slots[cursor];if(!s||handle!==s.handle)return hooks.stop('evidence_binding_mismatch');
       if(phase!=='final'||current||bodies?.pending()||s.state!=='idle')return hooks.stop('invalid_state');
       if(s.kind==='table'&&evidenceClosed)return Object.freeze({ok:false,code:'scope_evidence_limit'});
-      if((s.kind==='table'?s.initial:initial.get(s.kind+'_initial'))!=='success')return hooks.stop('invalid_state');
+      if(initialOutcome(s)!=='success')return hooks.stop('invalid_state');
       return ok(make(s.kind==='parent'?'parent_final':s.kind==='metadata'?'metadata_final':'table_final',s,s.kind==='table'?s:undefined));
     });},
     skipFinal(handle:ClosedFinalSlot):ClosedAccountingResult<true>{return guard(()=>{
       const s=slots[cursor];if(!s||handle!==s.handle)return hooks.stop('evidence_binding_mismatch');
-      if(phase!=='final'||current||bodies?.pending()||s.state!=='idle'||(s.kind==='table'?s.initial==='success'&&!evidenceClosed:initial.get(s.kind+'_initial')==='success'))return hooks.stop('invalid_state');
-      const outcome=s.kind==='table'?s.initial:initial.get(s.kind+'_initial');
+      if(phase!=='final'||current||bodies?.pending()||s.state!=='idle'||(s.kind==='table'?s.initial==='success'&&!evidenceClosed:initialOutcome(s)==='success'))return hooks.stop('invalid_state');
+      const outcome=initialOutcome(s);
       s.skipReason=outcome==='success'?'evidence_disabled':outcome==='unavailable'?'initial_unavailable':'not_collected';
       s.remaining=0;s.state='skipped';cursor++;return ok(true);
     });},

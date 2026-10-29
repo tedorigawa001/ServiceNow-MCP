@@ -31,20 +31,21 @@ type BodyHooks={
   discardPayload(a:ClosedReadAttempt):ClosedAccountingResult<true>;
   responseLimit:number;
 };
-type ParentProjection={issuer:ReturnType<typeof createSyntheticParentStabilityIssuer>;owner:Parameters<ReturnType<typeof createSyntheticParentStabilityIssuer>['beginInitial']>[0];session:Parameters<ReturnType<typeof createSyntheticParentStabilityIssuer>['close']>[0];target:string;stop(code:ClosedStateCode|'changed_during_review'):ClosedAccountingResult<never>};
+type ParentProjection={issuer:ReturnType<typeof createSyntheticParentStabilityIssuer>;owner:Parameters<ReturnType<typeof createSyntheticParentStabilityIssuer>['beginInitial']>[0];session:Parameters<ReturnType<typeof createSyntheticParentStabilityIssuer>['close']>[0];target:string;completeFinal:boolean;stop(code:ClosedStateCode):ClosedAccountingResult<never>};
 export function createClosedBodyLane(hooks:BodyHooks){return createBodyLane(hooks);}
 /** Fake-only fixed continuation: no caller projector, record getter, real session or formal authority. */
-export function createSyntheticParentProjectionLane(hooks:BodyHooks&{stopProjection(code:ClosedStateCode):ClosedAccountingResult<never>},target:string){
+export function createSyntheticParentProjectionLane(hooks:BodyHooks&{stopProjection(code:ClosedStateCode):ClosedAccountingResult<never>;snapshotCheckpoint?():ClosedAccountingResult<number>},target:string,completeFinal=false){
   let failure:ClosedStateCode|undefined;
-  const issuer=createSyntheticParentStabilityIssuer({now(){const cp=hooks.checkpoint();if(!cp.ok){failure=cp.code;throw Error();}return cp.value;}});
+  const issuer=createSyntheticParentStabilityIssuer({now(){const cp=(hooks.snapshotCheckpoint??hooks.checkpoint)();if(!cp.ok){failure=cp.code;throw Error();}return cp.value;}});
   const session=issuer.issueSession({update_set_sys_id:target});if(!session.ok)throw Error('invalid_input');
   const owner=issuer.claimOwner(session.value);if(!owner.ok)throw Error('invalid_input');
-  return createBodyLane(hooks,{issuer,owner:owner.value,session:session.value,target,stop:code=>hooks.stopProjection(failure??(code==='changed_during_review'?'invalid_state':code))});
+  return createBodyLane(hooks,{issuer,owner:owner.value,session:session.value,target,completeFinal,stop:code=>hooks.stopProjection(failure??code)});
 }
 function createBodyLane(hooks:BodyHooks,projection?:ParentProjection){
   type Record={attempt:ClosedReadAttempt;kind:Kind;state:'open'|'pending'|'consuming'|'done'|'failed';chunks:Uint8Array[];size:number;appends:number;rejected:boolean;terminal?:ClosedBodyTerminal;cleanup?:Cleanup;deadline?:number};
   const attempts=new WeakMap<ClosedReadAttempt,Record>(),candidates=new WeakMap<ClosedBodyCandidate,Record>();
-  let current:Record|undefined,last:Cleanup|null=null,consumes=0;
+  let current:Record|undefined,last:Cleanup|null=null,consumes=0,consuming=false,consumeDeadline:number|undefined,ordinaryClosed=false;
+  const parentAccepted=()=>{if(!projection)return false;const s=projection.issuer.status(projection.owner);return s.ok&&s.value.live&&s.value.state==='initial_observed';};
   function drop(r:Record){r.chunks=[];r.size=0;}
   function classify(o:z.infer<typeof observation>):Cleanup{
     const unconfirmed=(reason:Cleanup['reason']):Cleanup=>Object.freeze({disposition:'unconfirmed',kind:null,reason,synthetic:true});
@@ -91,6 +92,8 @@ function createBodyLane(hooks:BodyHooks,projection?:ParentProjection){
       return ok(Object.freeze({terminal:r.terminal,candidate}));
     });},
     consume(candidate:ClosedBodyCandidate,expectedParentId?:string){
+      if(consuming)return hooks.stop('invalid_state');consuming=true;consumeDeadline=candidates.get(candidate)?.deadline;
+      try{
       let draft:SyntheticParentDraft|undefined,role:'initial'|'final'|undefined;
       const result=hooks.guard(()=>{
       const r=candidates.get(candidate);if(!r||r!==current)return hooks.stop('evidence_binding_mismatch');
@@ -123,12 +126,20 @@ function createBodyLane(hooks:BodyHooks,projection?:ParentProjection){
       drop(r);r.state='done';current=undefined;return ok(summary);
       });
       // The body guard has completed its post-check; only now may a private draft be accepted.
-      if(!result.ok){if(current){drop(current);current.state='failed';current=undefined;}if(projection)projection.issuer.close(projection.session);return result;}
+      if(!result.ok){if(current){drop(current);current.state='failed';current=undefined;}
+        if(projection&&!(ordinaryClosed&&parentAccepted()&&(result.code==='phase_deadline_exceeded'||result.code==='request_budget_exceeded')))projection.issuer.close(projection.session);return result;}
       if(projection&&draft){
-        const accepted=role==='initial'?projection.issuer.acceptInitial(projection.owner,draft):projection.issuer.prepareComparison(projection.owner,draft);
-        if(!accepted.ok){projection.issuer.close(projection.session);return projection.stop(accepted.code);}
+        if(role==='initial'){
+          const accepted=projection.issuer.acceptInitial(projection.owner,draft);
+          if(!accepted.ok){projection.issuer.close(projection.session);return projection.stop(accepted.code);}
+        }else{
+          const compared=projection.issuer.prepareComparison(projection.owner,draft);
+          if(!compared.ok){projection.issuer.close(projection.session);return projection.stop(compared.code);}
+          if(projection.completeFinal){const committed=projection.issuer.commitComparison(projection.owner,compared.value);if(!committed.ok)return projection.stop(committed.code);}
+        }
       }
       return result;
+      }finally{consuming=false;consumeDeadline=undefined;}
     },
     discard(candidate:ClosedBodyCandidate):ClosedAccountingResult<true>{return hooks.guard(()=>{
       const r=candidates.get(candidate);if(!r||r!==current)return hooks.stop('evidence_binding_mismatch');if(r.state!=='pending')return hooks.stop('invalid_state');
@@ -143,6 +154,9 @@ function createBodyLane(hooks:BodyHooks,projection?:ParentProjection){
     const settled=hooks.settle(a,{outcome,cleanup:'confirmed'});if(!settled.ok)return settled;
     // No reader existed: do not manufacture EOF, a released lock, or a body terminal/candidate.
     last=Object.freeze({disposition:'confirmed',kind:null,reason:null,synthetic:true});drop(r);r.state='done';current=undefined;return ok(true);
-  });},start(a:ClosedReadAttempt,kind:Kind,deadline?:number){const r:Record={attempt:a,kind,state:'open',chunks:[],size:0,appends:0,rejected:false,deadline};attempts.set(a,r);current=r;},deadline:()=>current?.deadline,
-    pending:()=>current?.state==='pending'||current?.state==='consuming',revoke(){if(projection)projection.issuer.close(projection.session);if(current){if(current.state==='open'&&!current.cleanup)last=Object.freeze({disposition:'unconfirmed',kind:null,reason:'owner_stopped',synthetic:true});drop(current);current.state='failed';current=undefined;}}});
+  });},start(a:ClosedReadAttempt,kind:Kind,deadline?:number){const r:Record={attempt:a,kind,state:'open',chunks:[],size:0,appends:0,rejected:false,deadline};attempts.set(a,r);current=r;},deadline:()=>consumeDeadline??current?.deadline,
+    parentAccepted,
+    parentFinalAccepted(){if(!projection)return false;const s=projection.issuer.status(projection.owner);return s.ok&&s.value.live&&s.value.state==='stable_observation'&&s.value.comparisons_committed===1;},
+    closeOrdinary(){ordinaryClosed=true;if(projection&&!parentAccepted())projection.issuer.close(projection.session);if(current){drop(current);current.state='failed';current=undefined;}},
+    pending:()=>consuming||current?.state==='pending'||current?.state==='consuming',revoke(){if(projection)projection.issuer.close(projection.session);if(current){if(current.state==='open'&&!current.cleanup)last=Object.freeze({disposition:'unconfirmed',kind:null,reason:'owner_stopped',synthetic:true});drop(current);current.state='failed';current=undefined;}}});
 }

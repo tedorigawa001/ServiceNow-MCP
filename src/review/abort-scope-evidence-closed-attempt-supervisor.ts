@@ -22,15 +22,16 @@ function classifyHttp(status:number):HttpFailure|null{
 export function createFakeClosedAttemptSupervisor(clock:ClosedAttemptClock,raw:unknown={}){
   return createClosedAttemptCore(clock,raw).api;
 }
-function createClosedAttemptCore(clock:ClosedAttemptClock,raw:unknown={}){
+function createClosedAttemptCore(clock:ClosedAttemptClock,raw:unknown={},parentTarget?:string){
   let config:z.infer<typeof options>;try{config=options.parse(structuredClone(raw));if(typeof clock.schedule!=='function')throw Error();}catch{throw Error('invalid_input');}
-  const gate=createFakeClosedBodyGate(clock),s=get(gate.construct({...config.session,accounting:{...config.session.accounting,body_mode:'bytes',attempt_policy:config.policy}})),r=get(gate.claimRun(s)),t=get(gate.claimTransport(s,r)),port=get(gate.claimAccounting(s,r,t)),body=port.body!;
+  const gate=createFakeClosedBodyGate(clock,{dispatch(){}},parentTarget),s=get(gate.construct({...config.session,accounting:{...config.session.accounting,body_mode:'bytes',attempt_policy:config.policy}})),r=get(gate.claimRun(s)),t=get(gate.claimTransport(s,r)),port=get(gate.claimAccounting(s,r,t)),body=port.body!;
   type Resource={io:FakeClosedAttemptIo;deadline:number;ioDeadline:number;reserve:number;cleanupDeadline?:number;failure?:ClosedStateCode;revoked:boolean;ended:boolean;
     readPending:boolean;closed:'pending'|'fulfilled'|'rejected';cancel:'not_requested'|'pending'|'fulfilled'|'rejected';eof:boolean;aborted:boolean;abortFailed:boolean;released:boolean;releaseFailed:boolean;schedulerFailed:boolean;clockFailed:boolean;sequence:number;version:number;wake?:()=>void;expectedParentId?:string};
   type ResponseResource={deadline:number;ioDeadline:number;reserve:number;cleanupDeadline?:number;failure?:ClosedStateCode;revoked:boolean;ended:boolean;
     controller:AbortController;started:boolean;pending:boolean;cancel:'not_requested'|'pending'|'fulfilled'|'rejected';unknown:boolean;
     aborted:boolean;abortFailed:boolean;schedulerFailed:boolean;clockFailed:boolean;version:number;wake?:()=>void;adopted?:Resource;httpRetryable:boolean};
   let current:Resource|ResponseResource|undefined,busy=false,closing=false,attemptFailure:ClosedStateCode|null=null;
+  let parentAcknowledgement:Parameters<typeof port.acknowledgeParent>[0]|undefined;
   let cleanup:Cleanup=Object.freeze({disposition:'not_started',kind:null,reason:null,synthetic:true});
   let httpFailure:HttpFailure|null=null,lastHttpFailure:HttpFailure|null=null;
   const counts={reads:0,cancels:0,aborts:0,releases:0,timers:0};
@@ -179,7 +180,9 @@ function createClosedAttemptCore(clock:ClosedAttemptClock,raw:unknown={}){
       for(;;){if(owned.adopted){
           const adopted=owned.adopted;adopted.schedulerFailed||=owned.schedulerFailed;adopted.clockFailed||=owned.clockFailed;adopted.abortFailed||=owned.abortFailed;adopted.aborted||=owned.aborted;
           if(owned.revoked){adopted.cleanupDeadline??=owned.cleanupDeadline;fail(adopted,owned.failure??'internal_review_error');}
-          return await superviseBody(adopted,a.value);
+          const result=await superviseBody(adopted,a.value);
+          if(result.ok&&parentTarget!==undefined)parentAcknowledgement=a.value;
+          return result;
         }
         const now=check(),version=owned.version;let reason:Cleanup['reason']=null;
         if(owned.schedulerFailed)reason='scheduler_failed';else if(owned.clockFailed)reason='observation_invalid';else if(owned.abortFailed)reason='abort_failed';
@@ -208,6 +211,7 @@ function createClosedAttemptCore(clock:ClosedAttemptClock,raw:unknown={}){
   type BodySummary=Extract<ReturnType<typeof body.consume>,{ok:true}>['value'];
   type WaitSummary=Readonly<{response_wait_completed:true;body_adopted:false;synthetic:true;evidence_issuance:'disabled'}>;
   return Object.freeze({api,readUsing,
+    acknowledgeParent(){const a=parentAcknowledgement;parentAcknowledgement=undefined;return a?port.acknowledgeParent(a):no('invalid_state');},
     waitResponseUsing:async(p:ClosedReadPurpose,start:(signal:AbortSignal)=>Response|Promise<Response>,url:string)=>await responseUsing(p,start,url,false) as ClosedAccountingResult<WaitSummary>,
     readResponseUsing:async(p:ClosedReadPurpose,start:(signal:AbortSignal)=>Response|Promise<Response>,url:string,parentId:string)=>await responseUsing(p,start,url,true,parentId) as ClosedAccountingResult<BodySummary>,
     reject:(code:ClosedStateCode)=>{stop(code);return no(code);}});
@@ -286,7 +290,7 @@ export function createInjectedClosedParentResponseReader(clock:ClosedAttemptCloc
   dispatcher:(request:FakeClosedParentGet,signal:AbortSignal,authContext:object)=>Response|Promise<Response>,raw:unknown){
   let config:z.infer<typeof parentOptions>;try{config=parentOptions.parse(structuredClone(raw));if(typeof dispatcher!=='function')throw Error();}catch{throw Error('invalid_input');}
   const url=fixedParentUrl(config.update_set_sys_id),authContext=Object.freeze(Object.create(null)) as object;
-  const core=createClosedAttemptCore(clock,{session:config.session,policy:config.policy});
+  const core=createClosedAttemptCore(clock,{session:config.session,policy:config.policy},config.update_set_sys_id);
   const requests=new WeakMap<FakeClosedParentRequest,{purpose:ClosedReadPurpose;kind:FakeClosedParentGet['purpose'];attempts:number;state:'ready'|'running'|'done'}>();let dispatches=0;
   const make=(purpose:ClosedReadPurpose,kind:FakeClosedParentGet['purpose'])=>{const h=Object.freeze(Object.create(null)) as FakeClosedParentRequest;requests.set(h,{purpose,kind,attempts:0,state:'ready'});return Object.freeze({ok:true as const,value:h});};
   return Object.freeze({initial(){const p=core.api.openPurpose({kind:'parent_initial'});return p.ok?make(p.value,'parent_initial'):p;},
@@ -295,7 +299,10 @@ export function createInjectedClosedParentResponseReader(clock:ClosedAttemptCloc
       if(r.state!=='ready'||r.attempts>=2)return core.reject('invalid_state');r.state='running';
       const request:FakeClosedParentGet=Object.freeze({method:'GET',url,purpose:r.kind,ordinal:(r.attempts+1) as 1|2,synthetic:true});
       const result=await core.readResponseUsing(r.purpose,signal=>{r.attempts++;dispatches++;return dispatcher(request,signal,authContext);},url,config.update_set_sys_id);
-      const status=core.api.status();r.state=!result.ok&&(result.code==='attempt_deadline_exceeded'||result.code==='upstream_unavailable')&&r.attempts<2&&!status.primary&&status.cleanup.disposition==='confirmed'?'ready':'done';return result;
+      if(result.ok){const acknowledgement=core.acknowledgeParent();if(!acknowledgement.ok){r.state='done';return acknowledgement;}}
+      const status=core.api.status();r.state=!result.ok&&(result.code==='attempt_deadline_exceeded'||result.code==='upstream_unavailable')&&r.attempts<2&&!status.primary&&status.cleanup.disposition==='confirmed'?'ready':'done';
+      if(!result.ok&&r.kind==='parent_final'&&r.state==='done'&&!status.primary)return core.reject(result.code);
+      return result;
     },cancel:()=>core.api.cancel(),close:()=>core.api.close(),status:()=>Object.freeze({...core.api.status(),dispatches}),
   });
 }

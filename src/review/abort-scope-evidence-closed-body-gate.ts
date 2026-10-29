@@ -9,7 +9,7 @@ export type FakeClosedTransport=Handle<'closed_transport_identity'>;
 type Claim='unclaimed'|'consuming'|'claimed'|'failed';
 type State='empty'|'constructing'|'created'|'run_bound'|'transport_bound'|'stopped'|'closed';
 type Stage='input'|'construct'|'run_claim'|'transport_claim'|'binding'|'gate'|'owner'|'accounting';
-const codeSchema=z.enum(['invalid_input','invalid_state','evidence_binding_mismatch','invalid_observation_time','deadline_exceeded','cancelled','closed','internal_review_error','issuance_disabled','request_budget_exceeded','receive_budget_exceeded','payload_budget_exceeded','payload_limit','scope_evidence_limit','phase_deadline_exceeded','upstream_unavailable','cleanup_unconfirmed','invalid_response','body_limit','attempt_deadline_exceeded','authentication_failed','access_denied']);
+const codeSchema=z.enum(['invalid_input','invalid_state','evidence_binding_mismatch','invalid_observation_time','deadline_exceeded','cancelled','closed','internal_review_error','issuance_disabled','request_budget_exceeded','receive_budget_exceeded','payload_budget_exceeded','payload_limit','scope_evidence_limit','phase_deadline_exceeded','upstream_unavailable','cleanup_unconfirmed','invalid_response','body_limit','attempt_deadline_exceeded','authentication_failed','access_denied','changed_during_review']);
 type Code=z.infer<typeof codeSchema>;
 type Diagnostic=Readonly<{stage:Stage;code:Code}>;
 type Result<T>=Readonly<{ok:true;value:T}|{ok:false;code:Code}>;
@@ -20,7 +20,7 @@ const ok=<T>(value:T):Result<T>=>Object.freeze({ok:true,value});
 const closedGate:ClosedGate=Object.freeze({body_gate:'closed',evidence_issuance:'disabled',synthetic:true});
 
 /** One finite fake session per harness. Constructor continuations are never returned or caller supplied. */
-export function createFakeClosedBodyGate(clock:{now():number},fakeIo:{dispatch():void}={dispatch(){}}){
+export function createFakeClosedBodyGate(clock:{now():number},fakeIo:{dispatch():void}={dispatch(){}},parentTarget?:string){
   type Identities={snapshot:object;auth:object;budget:object;generation:object};
   type Session={key:FakeClosedSession;identities:Identities;lane:'typed'|'legacy';start:number;last:number;hard:number;continueRun:()=>FakeClosedRun;
     readState?:ReturnType<typeof createClosedReadState>;accountingRun?:FakeClosedRun;accountingTransport?:FakeClosedTransport};
@@ -56,13 +56,14 @@ export function createFakeClosedBodyGate(clock:{now():number},fakeIo:{dispatch()
       const run:Run={session:s,identities,continueTransport(){const t=opaque<FakeClosedTransport>();transports.set(t,{run,session:s,identities});return t;}};
       runs.set(handle,run);return handle;
     }};
+    context=s;
     if(config.accounting)s.readState=createClosedReadState(config.accounting,{
       guard:body=>use('accounting',()=>{
         const b=binding(key,s.accountingRun!,s.accountingTransport!);if(!b.ok)return b;
         const result=body();return primary||closed()?no('closed'):result;
-      }),checkpoint:()=>now('accounting'),stop:code=>stop('accounting',code),refuse:code=>reject('accounting',code),dispatch:()=>fakeIo.dispatch(),
+      }),checkpoint:()=>now('accounting'),stop:code=>stop('accounting',code),stopParent:code=>stop('accounting',code),refuse:code=>reject('accounting',code),dispatch:()=>fakeIo.dispatch(),
       normalDeadline:s.hard-Math.min(10000,config.deadline_ms/6),finalDeadline:s.hard-Math.min(10000,config.deadline_ms/6)/2,
-    });
+    },parentTarget);
     context=s;sessions.set(key,s);return key;
   }
   function binding(session:FakeClosedSession,run:FakeClosedRun,transport:FakeClosedTransport):Result<true>{
