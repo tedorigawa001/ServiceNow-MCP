@@ -256,3 +256,13 @@ it('refuses finish during a pending read so the cancel-resolved read is not repo
     expect(owner.status()).toMatchObject({ primary: 'invalid_state', active: false, operations: { cancels: 1, releases: 1 } });
     expect(stream.locked).toBe(false);
 });
+it('checks the window shape at its declared origin and refuses an origin later than the current sample', async () => {
+    const stream = () => new ReadableStream<Uint8Array>({ start(c) { c.close(); } });
+    const shaped = { ...window, io_floor_ms: 50150, cleanup_floor_ms: 50000, window_origin_ms: 50600 };
+    const narrowed = setup(() => new Response(stream()));
+    vi.setSystemTime(Date.now() + 9405);
+    expect(get(await narrowed.acquire(shaped)).status).toBe(200);
+    const later = setup(() => new Response(stream()));
+    expect(await later.acquire({ ...window, window_origin_ms: 59999 })).toEqual({ ok: false, code: 'invalid_input' });
+    expect(later.status().operations.claims).toBe(0);
+});

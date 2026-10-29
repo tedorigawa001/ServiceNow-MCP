@@ -61,6 +61,12 @@ native release失敗の注入はisolated module評価前の標準prototype差替
 
 コミット前再確認：HEAD＋今回の11ファイルだけをindexから一時領域へ展開し、既存node_modulesのみを依存として参照した。他の作業中ファイルを含めず、build・変更対象ESLint・全体187 files／5,700 tests（36.94秒）・NA-01／NA-02／NA-03のoffline梱包／compiled確認がすべてPASS。梱包は397 files、実session／実通信は未使用。
 
+### 4.1 レビュー修正（2026-10-29）
+
+- bootstrapは`before.remaining_ms`からioFloorを決める一方、NA-02 acquireは自前の再観測値でwindow形状（reserve≤min(250, span/4)）を検査していた。phase cutoff約1秒手前で両観測の間に時間が進むと、正しいdescriptorがinvalid_inputとなり、HTTP未送信のままCを1消費してbootstrapがfailedになった（残10,600ms・dispatch計上時+5msで再現）。
+- bootstrapはattempt発行時の残時間を`window_origin_ms`として渡し、NA-02は形状をそのoriginで検査する。後の観測値は期限判定（floor以下でattempt_deadline_exceeded）だけに使う。originが現在の観測より後、またはdeadline超過ならinvalid_input。origin未指定のNA-02単体呼出しは従来どおり。
+- 回帰試験をNA-03に1件・NA-02に1件追加。修正前の実装ではこの2件だけが失敗することを確認した。修正後は関連5 files／173 tests、全体187 files／5,702 tests、tsc・ESLint・offline梱包（397 files）・compiled smoke・git diff --checkがPASS。上表の171 tests・5,700 testsは修正前の記録として残す。
+
 ## 5. 残課題と主張しない範囲
 
 - native laneはfake依存だけで、実session／ReleasePermit、選択window／payload receipt、worker jobの正式bindingは未接続。

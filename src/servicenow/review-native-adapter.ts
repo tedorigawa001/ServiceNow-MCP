@@ -30,7 +30,7 @@ type Cleanup = Readonly<{
     reason: CleanupReason | null;
     scope: 'injected_native';
 }>;
-const shape = z.strictObject({ purpose: z.enum(['authentication', 'parent', 'release']), ordinal: z.union([z.literal(1), z.literal(2)]), io_floor_ms: z.number().finite().nonnegative(), cleanup_floor_ms: z.number().finite().nonnegative() });
+const shape = z.strictObject({ purpose: z.enum(['authentication', 'parent', 'release']), ordinal: z.union([z.literal(1), z.literal(2)]), io_floor_ms: z.number().finite().nonnegative(), cleanup_floor_ms: z.number().finite().nonnegative(), window_origin_ms: z.number().finite().nonnegative().optional() });
 type Descriptor = z.infer<typeof shape>;
 const P = Promise, pThen = P.prototype.then, pRace = P.race;
 const responseClaims = new WeakMap<object, object>(), streamClaims = new WeakMap<object, object>();
@@ -246,8 +246,9 @@ export function createInjectedNativeReaderOwner(input: {
                 const parsed = shape.safeParse(raw);
                 if (!parsed.success)
                     throw new Failure('invalid_input');
-                const d = parsed.data, n = check(d.io_floor_ms), span = n - d.cleanup_floor_ms, reserve = d.io_floor_ms - d.cleanup_floor_ms;
-                if (span <= 0 || span > 10000 || d.cleanup_floor_ms < Math.min(10000, deadline / 6) || reserve <= 0 || reserve > Math.min(250, span / 4))
+                // The window shape is fixed where the caller issued it; later samples only test the deadline.
+                const d = parsed.data, n = check(d.io_floor_ms), origin = d.window_origin_ms ?? n, span = origin - d.cleanup_floor_ms, reserve = d.io_floor_ms - d.cleanup_floor_ms;
+                if (origin < n || origin > deadline || span <= 0 || span > 10000 || d.cleanup_floor_ms < Math.min(10000, deadline / 6) || reserve <= 0 || reserve > Math.min(250, span / 4))
                     throw new Failure('invalid_input');
                 if (++attempts > 210)
                     throw new Failure('invalid_state');

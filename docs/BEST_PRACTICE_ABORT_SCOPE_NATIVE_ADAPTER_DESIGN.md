@@ -238,7 +238,7 @@ NA-01のmoduleと宣言等4artifactはnpmへ同梱するが、実session／boots
 
 ### 14.1 生成元・所有権・操作subset
 
-`createInjectedNativeReaderOwner`はconstructor注入したfake dispatcher・元budgetの残時間読取・schedulerだけを固定する。`fake_io: true`が必須で、fetch fallbackやsession採用口はない。用途・ordinal・元I/O／cleanup floorをstrict検査し、元window内で最大210 attempt、同時resourceは一つに限定する。これは制御上限であり、C/G/Pの実課金や全体受付ではない。
+`createInjectedNativeReaderOwner`はconstructor注入したfake dispatcher・元budgetの残時間読取・schedulerだけを固定する。`fake_io: true`が必須で、fetch fallbackやsession採用口はない。用途・ordinal・元I/O／cleanup floorをstrict検査し（任意の`window_origin_ms`があればwindow形状はその発行時点の残時間で検査し、後の観測値は期限判定だけに使う。originが現在の観測より後・deadline超過ならinvalid_input）、元window内で最大210 attempt、同時resourceは一つに限定する。これは制御上限であり、C/G/Pの実課金や全体受付ではない。
 
 同moduleのprivate WeakMapに実Response／streamのidentityを登録し、owner終了後もclaimを削除しない。fixture台帳・NA-01合成台帳はimportも共有もしない。同値copy・Proxy・偽object・subclass・使用済みbody・既lock・再採用を拒否する。foreign lockを解除しない。受け付けるsubsetは同realmの標準Response、Node標準ReadableStreamとdefault readerで、cross-realm／subclassへの対応は主張しない。
 

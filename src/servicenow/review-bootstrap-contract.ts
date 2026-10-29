@@ -81,7 +81,7 @@ export function createReviewBootstrapContract<H>(hooks:Hooks<H>,input:ReviewBoot
         deps.accounting.dispatch();const after=observe();
         if(after.requests!==before.requests+1||after.received_bytes!==before.received_bytes||after.payload_bytes!==before.payload_bytes)throw new Failure('internal_review_error');
         if(nativeBody){
-          const accepted=await nativeBody.read({purpose,ordinal,io_floor_ms:ioFloor,cleanup_floor_ms:activeFloor});settled=true;adopted=true;
+          const accepted=await nativeBody.read({purpose,ordinal,io_floor_ms:ioFloor,cleanup_floor_ms:activeFloor,window_origin_ms:before.remaining_ms});settled=true;adopted=true;
           if(accepted.status===401)throw new Failure('authentication_failed');if(accepted.status===403&&purpose!=='release')throw new Failure('access_denied');if(accepted.status===429||accepted.status>=500){retryableStatus=true;throw new Failure('upstream_unavailable');}if(accepted.status!==200&&!(accepted.status===403&&purpose==='release'))throw new Failure('invalid_response');
           observe();completed=true;return Object.freeze({status:accepted.status,value:accepted.value});
         }

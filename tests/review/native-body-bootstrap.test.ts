@@ -82,7 +82,7 @@ function bootstrap(auth: 'per-user' | 'exchange' = 'per-user', limits: Partial<{
     total_bytes: number;
     response_bytes: number;
     deadline_ms: number;
-}> = {}) {
+}> = {}, onDispatchCharge = () => { }) {
     vi.useFakeTimers();
     const start = Date.now(), id = 'a'.repeat(32), snapshot = {}, source = {}, permit = {}, counters = { requests: 0, received_bytes: 0, payload_bytes: 0 };
     let reserved = 0, bytes = 0;
@@ -96,7 +96,7 @@ function bootstrap(auth: 'per-user' | 'exchange' = 'per-user', limits: Partial<{
         bytes += raw.length;
         return new Response(raw);
     };
-    const deps = { fake_io: true as const, typed_body: true as const, native_body: true as const, lease, source, target: id, auth, limits: { requests: 210, total_bytes: 16777216, response_bytes: 4194304, deadline_ms: 60000, ...limits }, accounting: { reserve() { reserved = 4; }, reserved: () => reserved, dispatch() { counters.requests++; }, chunk(n: number) { counters.received_bytes += n; }, release() { reserved = 0; } }, dispatch: async (request: {
+    const deps = { fake_io: true as const, typed_body: true as const, native_body: true as const, lease, source, target: id, auth, limits: { requests: 210, total_bytes: 16777216, response_bytes: 4194304, deadline_ms: 60000, ...limits }, accounting: { reserve() { reserved = 4; }, reserved: () => reserved, dispatch() { counters.requests++; onDispatchCharge(); }, chunk(n: number) { counters.received_bytes += n; }, release() { reserved = 0; } }, dispatch: async (request: {
             purpose: string;
         }) => dispatch(request), resolveRelease: () => ({ source, permit, port }), schedule(ms: number, wake: () => void) { const t = setTimeout(wake, ms); return () => clearTimeout(t); } };
     const owner = registerReviewEvidenceSession({}, snapshot, lease, deps), claimed = owner.transportConstructor.claim(snapshot, lease);
@@ -298,4 +298,11 @@ it('charges the same split UTF-8 bytes once and acknowledges only after native E
     expect(stream.locked).toBe(false);
     expect(lane.diagnostic()).toMatchObject({ cleanup: { disposition: 'confirmed', kind: 'eof' }, consumes: 1, acknowledgements: 1, proofs_consumed: 1, retained_bytes: 0, evidence_issuance: 'disabled' });
     expect(vi.getTimerCount()).toBe(0);
+});
+it('keeps a near-cutoff attempt window valid when time passes between the bootstrap and native samples', async () => {
+    const s = bootstrap('per-user', {}, () => { vi.setSystemTime(Date.now() + 5); });
+    vi.setSystemTime(Date.now() + 49400);
+    expect(await s.run()).toMatchObject({ ok: true, value: { state: 'prepared_only' } });
+    expect(s.counters).toEqual({ requests: 2, received_bytes: s.bytes(), payload_bytes: 0 });
+    s.owner.close('closed');
 });
