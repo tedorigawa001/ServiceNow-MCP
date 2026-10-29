@@ -296,7 +296,7 @@ leaseは同sessionの既存requests／receivedBytes／payloadBytesと元の単�
 
 ## 15. 同sourceのReleasePermit／不変release snapshot結合
 
-後続差分：[実session／ReleasePermitとtyped取得の接続差分draft-0.3](BEST_PRACTICE_ABORT_SCOPE_REAL_TYPED_BINDING_DELTA_DESIGN.md)。§10のRT-B01は既存prepared検査を再利用。§11のRT-B02はconstructor固定fake依存・同lease／停止でbootstrapを検証し、実sessionの公開legacy経路は変更しない。実class更新点の移行・typed cleanupは未接続で、正式発行・実接続の承認ではない。
+後続差分：[実session／ReleasePermitとtyped取得の接続差分draft-0.4](BEST_PRACTICE_ABORT_SCOPE_REAL_TYPED_BINDING_DELTA_DESIGN.md)。§10〜11のprepared再利用・fake bootstrapに加え、§12で同lease／停止によるtyped cleanup・同bytes candidate／ackをfake resourceで検証。実sessionの公開legacy経路は変更せず、実class更新点移行・native adapter・正式発行は未接続。実接続の承認ではない。
 
 ### 15.1 発行元・private境界
 

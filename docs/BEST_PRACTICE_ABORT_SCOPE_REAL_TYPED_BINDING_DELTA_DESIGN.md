@@ -1,7 +1,7 @@
 # AU-BR-006：実session／ReleasePermitとtyped取得の接続差分・fake I/O受入条件
 
-Version: br006-real-typed-binding-delta-draft-0.3 / Date: 2026-10-29。
-Status: **§10のRT-B01と§11のRT-B02 bootstrap内部contractをfake依存で実装・検証。実classのcanonical更新点移行・typed lane／cleanup実接続は未実装。正式発行口閉鎖・Unknown・全体受付無効、VM／監視／telemetry調査保留を維持する。実通信・実機操作・設定変更・Pushの承認ではない**。
+Version: br006-real-typed-binding-delta-draft-0.4 / Date: 2026-10-29。
+Status: **§10のRT-B01・§11のRT-B02に加え、§12のRT-B03 typed cleanup／同bytes candidate／ackをconstructor固定fake依存で実装・検証。実class更新点の移行・native transport／Streams adapter実接続は未実装。正式発行口閉鎖・Unknown・全体受付無効、VM／監視／telemetry調査保留を維持する。実通信・実機操作・設定変更・Pushの承認ではない**。
 
 基準：[session／transport／body境界](BEST_PRACTICE_ABORT_SCOPE_SESSION_TRANSPORT_BODY_BINDING_DESIGN.md)、[実run lifecycle・ReleasePermitのprepared結合§14〜15](BEST_PRACTICE_ABORT_SCOPE_RUN_OWNER_BINDING_DESIGN.md#14-実session-private-lifecycle接続fake-io検証)、[CD-03／04の親workflow接続§13](BEST_PRACTICE_ABORT_SCOPE_PARENT_STABILITY_DESIGN.md#13-cd-03cd-04private-owner停止final-slot接続fake依存)。
 後工程：[選択window／payload受領物](BEST_PRACTICE_ABORT_SCOPE_REAL_SESSION_RECEIPTS_DESIGN.md)、[worker接続契約](BEST_PRACTICE_ABORT_SCOPE_CONNECTION_CONTRACT_DESIGN.md)。
@@ -150,7 +150,7 @@ oracleは製品counter／課金関数から期待値を逆算せず、試験側�
 
 1. **RT-B01：constructor継続・transport claim・診断の内部契約**。§10で非dispatchの内部型／継続を実装し、既存prepared bindingの検査を再利用した。実ownerを再登録・採用せず、typed laneはまだ生成しない。
 2. **RT-B02：同canonical予算・停止・bootstrap継続**。§11で同lifecycleのreadonly leaseとconstructor固定のfake会計更新点を結び、fake認証→親→release→preparedを確認した。実classの更新点移行と正式body・metadata消費は開かない。
-3. **RT-B03：typed cleanup・同bytes candidate・ack**。同resourceの終了確認とpost-guard受理をfakeで検証。正式receiptはdeny-onlyのまま。
+3. **RT-B03：typed cleanup・同bytes candidate・ack**。§12で同fake resourceの終了確認とpost-guard受理を検証した。実native adapter・正式receiptは未接続／deny-onlyのまま。
 4. 選択window／payload／worker job・final統合と公開結果は別設計・別承認。正式発行有効化・本番cap・実機検証も別の判断とする。
 
 承認待ち／未確認：private module／試験境界の配置、canonical stateへの移行方法と失敗時rollbackではなく停止する責務、Q受付下限、用途capture／E/R・cleanup／empty-read profile、追加work／heap・IPC・終了保証、未確認resourceの再受付policy、typed内部理由の公開写像、本番changedの統合、実ACL／field応答。これらをUnknownのまま扱い、合成profileで承認済みに埋めない。
@@ -193,7 +193,7 @@ lifecycle moduleは既存runtime依存としてnpm同梱済みであり、新内
 
 claim成功はlease最大2観測、inspectは最大2、inspectPreparedはtransport2＋既存source2の最大4観測と既存bounded release copy1件。通常重複claimは追加観測0。handle最大1・refusal最大1・busy stateを保持し、失効でcanonical handle参照を捨てる。これらは追加制御費であって、全体work／heap上界の証明・物理消去・自動タイマー／OS終了保証ではない。
 
-RT-A01／02／06／11／15／16の関連部分を限定検証しただけで、16受入条件全体の合格とはしない。後続のfake bootstrapは§11を参照。RT-B03の実resource cleanup・同bytes受理／ack、選択payload／worker job・formal receiptは未接続。正式発行口閉鎖・Unknown・全体受付無効・調査保留を維持する。
+RT-A01／02／06／11／15／16の関連部分を限定検証しただけで、16受入条件全体の合格とはしない。後続のfake bootstrapは§11、fake body／cleanup／ackは§12を参照。実native adapter・選択payload／worker job・formal receiptは未接続。正式発行口閉鎖・Unknown・全体受付無効・調査保留を維持する。
 
 ## 11. RT-B02：同canonical予算・停止とbootstrap継続（fake I/O限定）
 
@@ -233,4 +233,47 @@ HTTP分類も本番より狭い。本番の`bounded-source`はrelease読取り�
 
 追加制御状態はbootstrap一つ・AbortController一つ・一度限りの予約状態・進行中timer最大一つ・private body copy最大S、JSON decode一回／200応答。失敗の超過chunkは保持せず課金する。これは追加制御費の記述であり、全体work／heap上界・物理秘密消去・OS終了保証の証明ではない。
 
-RT-B03へ残すもの：native Response／Streamsのread・cancel・closed・releaseLockとtyped cleanup、同attempt candidate／ack、partial chunks／empty quota／retry cleanup、終了後のprivate bytes解放証拠。さらに実BoundedReadSessionのcanonical更新点の移行・固定source bootstrapへのprivate接続、実認証snapshot／ReleasePermitの発行元照合、選択window／payload／worker jobへの正式bindingは未接続。正式発行口閉鎖・Unknown・全体受付無効・VM／監視／telemetry調査保留を維持する。
+RT-B02時点で未対応だったtyped cleanup・同attempt candidate／ack・chunk quotaのfake接続は§12を参照。native Response／Streams adapter、実BoundedReadSessionのcanonical更新点の移行・固定source bootstrapへのprivate接続、実認証snapshot／ReleasePermitの発行元照合、選択window／payload／worker jobへの正式bindingは未接続。正式発行口閉鎖・Unknown・全体受付無効・VM／監視／telemetry調査保留を維持する。
+
+## 12. RT-B03：typed cleanup・同bytes candidate・一度限りのack（fake I/O限定）
+
+[fake body lane](../src/servicenow/review-bootstrap-body.ts)を[bootstrap](../src/servicenow/review-bootstrap-contract.ts)へopt-inで接続した。[body契約試験](../tests/review/real-typed-body.test.ts)、[bootstrap連続試験](../tests/review/real-typed-cleanup-bootstrap.test.ts)、[検証記録](E2E_BEST_PRACTICE_REAL_TYPED_BODY_CLEANUP_2026-10-29.md)を参照。
+
+### 12.1 境界と所有権
+
+新規の孤立context作成時に固定するtyped_body=trueだけが新経路を使う。既定は§11の単一完了イベントであり、そのcleanup=not_observedを確認済みへ昇格しない。実BoundedReadSessionは依存自体を渡さず、session getter／mode切替・既存sessionの採用口は増やさない。moduleはruntime依存としてnpm同梱する内部contractで、公開MCP・ReadFailureCode・レビューJSON契約は変更しない。
+
+fake dispatchの応答bodyは、同resource objectのread／cancel／closed Promise／release操作。採用時に操作をpinし、同resource参照の再取得・再releaseを拒否する。これは信頼済みconstructor依存上の**fake resource同一性**であり、別wrapperが同じnative streamを隠す場合の検出やnative readerの所有権を証明していない。従来の非同梱CD／TC fixture台帳をruntimeへ取り込まず、実sessionの会計台帳へ登録しない。
+
+### 12.2 同attempt・同bytes・一度限りの遷移
+
+認証／parent／releaseの各dispatchにprivate attemptを一つ作り、body laneのWeakMapでcandidate／draftをそのattemptへ結び付ける。外部へ返す候補は空の不透明handleで、JSON・byte列・source／permit・leaseを列挙しない。
+
+1. open→read：同runのcheckとlease、C/G/Pを再利用。chunkはnative Uint8Arrayの内部slotから長さを読み、SharedArrayBufferを拒否。species／caller buffer getterを使わずprivate copyを作ってから同Gへ一度課金する。
+2. read→terminal：EOFまたは取消、pending read、cancel Promise、closed Promise、release一試行と元期限を組み合わせ、typed cleanupを固定する。EOF・pendingなし・closed fulfilled・release成功・期限内だけがcandidateへ進む。確認済みcancelはbody候補を作らない。
+3. candidate→draft：同attemptのcandidateを先に消費状態へ移し、同private bytesを連結してUTF-8／JSON decodeとSHA-256を一度だけ行う。200以外はJSONをdecodeせずstatus分類へ進める。二重consume・foreign candidate／attemptは停止して参照を破棄する。
+4. draft→ack：async handoffを一度挟み、同attempt／draft・元の時計／停止ownerをpre/post検査する。一度だけのack後にbootstrap内の固定認証／親／release処理へ値を渡す。ack直前／最後のguardの取消・期限切れ・closeは成功を返さず、parsed value・chunks・digestの保持参照を落とす。失敗後にclaimを戻さない。
+
+candidate／draft／hash／ackはBoundedBodyReceipt、ReleasePermit、AuthSnapshotIdentity、SourceRunEvidenceではない。正式発行・window／payload receipt・worker job／sealを作らず、結果は従来のprepared_only／evidence_issuance=disabledまで。
+
+### 12.3 typed cleanupと停止理由の分離
+
+cleanupはnot_started／confirmed／unconfirmedの固定区分、kindはeof／cancelled／no_response／null。reasonはread_pending、cancel_pending／rejected、closed_pending／rejected、lock_release_failed、reader_owner_unknown、fetch_pending、cleanup_deadline、observation_invalidの有限語彙とする。直近attemptのterminalと消費／ack数・保持量だけを診断に出し、raw例外・token・bodyを返さない。
+
+read失敗／取消の先行primaryとcleanup診断を別に保持する。cancelledでもcleanupがconfirmedになる場合、元の上限超過を保持したままcancel cleanupを確認できる場合を区別する。cleanup不明を成功／retryへ戻さない。closedが無いことやcancelがPromiseを返さないことは完了の証拠にならない。失効は従来どおり同期で先に行い、cleanupの記録だけは停止後も終端まで進める。
+
+dispatch未実行はnot_started、fake dispatch拒否かつ応答なしはconfirmed/no_response、未決着dispatchはunconfirmed/fetch_pending、未採用の不正応答はunconfirmed/reader_owner_unknownとする。遅れて来たbodyはread／G課金／解析せず、cancelとreleaseをbest effortで各一試行だけ行う。late成功で固定terminalを書き換えない。best effortは終了確認・物理解放の保証ではない。
+
+### 12.4 元期限・予約・上限
+
+§11のQ≤210、G≤16MiB、S≤4MiB、全体≤60秒、R=4・通常phase cutoffを維持。typed経路では元attempt最大10秒の内側からcleanup用min(250ms, attempt残量/4)を確保し、その手前で新read／応答待ちを止める。cleanupは別の開始時計を作らず、同leaseの元attempt／phase期限まで待つ。取消済みでも時計検査を継続し、release後にも元期限を再検査する。等号での確認は拒否する。
+
+同bodyの非空保持chunkは4096、空readは合計16を上限とする。超過chunkもGへ一度課金してから拒否し、S超過のprivate copyは確保しない。4097番目の非空chunk・17番目の空readは失敗。全体G枠・同source Rの費目は新laneで二重計上しない。
+
+read timeout／read失敗後はcleanupの結果にかかわらず当bootstrapを停止する。HTTP 429／5xxの完了bodyだけは、confirmed EOF cleanup・ack後に既存の同用途最大2試行規則へ戻れる。未決着・cleanup不明・global stopはretryしない。通常／hard cutoffや予約を延ばさない。
+
+### 12.5 未接続・未証明
+
+fake操作のPromise観測をnative Web Streamsの実API証拠に読み替えない。native default-readerのpin・Response／stream所有権・getReader失敗、実認証header／URL・実classのcanonical更新点移行と固定sourceへのprivate caller、実C方式設定／ReleasePermit起源、選択payload／worker jobの正式bindingは後工程。
+
+raw byteの保持参照を消すことと、GC／OSからの物理消去は別。同期JSON.parse／hashの途中強制中断、allocator／IPCを含む全体work／heap上界、非協力的I/Oの実時間終了も未証明。正式発行口閉鎖・Unknown・全体受付無効・VM／監視／telemetry調査保留を維持し、本番cap・実通信・実機操作・設定変更を有効化しない。

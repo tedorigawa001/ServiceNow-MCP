@@ -15,6 +15,8 @@ try{
   assert.equal(Reflect.has(s,'claimReviewTransport'),false);
   assert.equal(Reflect.has(s,'bootstrap'),false);
   assert.equal(Reflect.has(s,'runTypedBootstrap'),false);
+  assert.equal(Reflect.has(s,'consumeBootstrapBody'),false);
+  assert.equal(Reflect.has(s,'acknowledgeBootstrapBody'),false);
   assert.equal(s.reviewRunStatus().transport_claim,'unclaimed');
   const path='/api/now/table/sys_update_set?sysparm_limit=1';await s.get(path);await s.get(path);
   s.chargePayload('<a/>');s.setPhaseReserve(0);
