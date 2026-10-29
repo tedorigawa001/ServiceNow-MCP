@@ -1,7 +1,7 @@
 # AU-BR-006 canonical会計とprivate生成位置の差分設計
 
-Version: br006-canonical-session-migration-draft-0.2 / Date: 2026-10-29。
-Status: §9のCM-01内部契約だけを純粋fake依存で実装。CM-02以降・実class置換・実session接続・実通信は未実施。正式発行口閉鎖・Unknown・全体受付無効・VM／監視／telemetry調査保留を維持する。実通信・実機操作・設定変更・Pushの承認ではない。
+Version: br006-canonical-session-migration-draft-0.3 / Date: 2026-10-29。
+Status: §9のCM-01に加え、§10でCM-02のlegacy単一会計移行を注入fetchで検証。CM-03以降・native/typed実session採用・実通信は未実施。正式発行口閉鎖・Unknown・全体受付無効・VM／監視／telemetry調査保留を維持する。実通信・実機操作・設定変更・Pushの承認ではない。
 
 目的は、NA-03の注入native経路を将来接続する前に、会計・停止・時計の唯一の所有者と移行順を決めることである。readonly leaseを更新portに昇格させず、稼働中のlegacy sessionをtypedへ切り替えない。
 
@@ -97,7 +97,7 @@ session constructorはsourceより先に呼ばれるため、存在しないsour
 3. **CM-03 typed dispatchの精密な計上境界**。NA-03と同更新portを結び、C commitの単一所有・予約・同期失効をfake I/Oで検証する。実通信は有効化しない。
 4. **CM-04 private compositionと固定source採用の詳細設計**。実認証snapshot／source初期identity／既存permitの発行元を結ぶ。配置・試験境界を承認後に小さく実装する。
 
-CM-01の限定実装は§9を参照。CM-02以降は別依頼で開始し、CM-01の合成成功から自動的に接続しない。
+CM-01の限定実装は§9、CM-02のlegacy単一会計移行は§10を参照。CM-03以降は別依頼で開始し、合成成功から自動的にnative/typed実sessionを有効化しない。
 
 ## 8 未確定事項と維持する停止状態
 
@@ -130,3 +130,24 @@ CM-01のlimitsはC／G／P単体／P総量／deadlineの5費目だけを扱う�
 legacyのattempt前G>=cap拒否、phase／busy・認証チェックも実session側に残る。CM-01のdispatch単独を完全なHTTP受付判定として使わず、CM-02でこれらの既存順序を保存する。
 
 新moduleの4artifactは梱包するが、実session／native／sourceからimportしない。fixture台帳・合成issuerも参照しない。CM-A01／02／08／10の内部会計・写像部分と、legacy固定枠／元残時間の部分試験であり、CM-A03〜12全体やactual cleanupを証明したものではない。
+
+## 10 CM-02 legacy単一会計への移行
+
+[BoundedReadSession](../src/servicenow/bounded-read.ts)のrequests／receivedBytes／payloadBytes fieldを撤去し、constructor内の#budgetへ置き換えた。初期statsのcopyや並行更新はなく、statsは同coreのcopy、#runLeaseは同coreのreadonly readを包む固定closureである。CM-01時点の「実sessionからimportしない」は当時の境界で、CM-02ではlegacy会計だけがcoreを採用する。native/typed bootstrap依存は供給しない。
+
+| 点 | 維持する順序と責務 |
+|---|---|
+| C | session.check→通常／final枠確認→G>=cap事前拒否→canonical dispatch→controller／timer→fetch。C位置の精密化はCM-03へ残す |
+| G／S | read後check→局所size加算→canonical G加算→S超過停止。超過費用は保持し、成功bodyだけを既存bufferへ渡す |
+| P | session.check後にcanonical payload。単体payload_limitは局所拒否、総量超過はrun停止 |
+| error境界 | CanonicalBudgetErrorを既存BoundedReadErrorへ写像。request側のretry／HTTP分類は変更しない |
+| readonly時計 | public remainingMs／statsを参照せず、元startedとlimitsから残時間を計算。新t0・timerは生成しない |
+| 停止伝播 | canonicalの公開理由をprivate stopCode getterで読む。最初の理由を二重保存せず、#stopPropagatedでowner失効→abortを一度伝播 |
+| lease観測失敗 | coreの内部理由をownerへ先に記録し、既存公開理由をsessionへ反映。owner側までinternal_review_errorへ潰さない |
+| close | owner close→canonical close→既存timer／listener／admission／credential解放。会計coreは外部resourceを解放しない |
+
+canonical operationのcommit guardでも同じ元時計を観測するため、観測回数を移行前と一致させるものではない。元期限へ達したcommitを採用せず、新しい期限は作らない。固定fake時刻と到達イベントによる比較では、C/G/P・拒否理由・retry順が一致することを確認した。
+
+試験：[canonical-session-migration.test.ts](../tests/review/canonical-session-migration.test.ts)の19件。うち15件のlegacy oracleを移行前HEADと移行後で同じ入力・固定期待値により実行した。旧counter名のshadow代入を採用しない試験、readonly leaseで先に観測したhard期限のabort伝播、内部理由保持は追加回帰として区別する。[検証記録](E2E_BEST_PRACTICE_CANONICAL_SESSION_MIGRATION_2026-10-29.md)を参照。
+
+HTTP terminal bodyの早期取消、404、cluster 403 fallback、retry delay、phase controller、busy判定、認証readyPromiseの発行点は既存legacyのままである。typed予約台帳・dispatch直前C commit・正式body receipt・source／worker採用は未接続で、CM-02の成功から許可しない。

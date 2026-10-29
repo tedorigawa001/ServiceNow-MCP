@@ -4,6 +4,7 @@ import type { ServiceNowConfig } from './types.js';
 import { pinReviewReleaseConfig } from './review-release-config.js';
 import { registerReviewEvidenceSession, type ReviewRunBudgetLease } from './review-evidence-lifecycle.js';
 import {BoundedUpdateSetSource} from '../review/bounded-source.js';
+import {createCanonicalReviewBudget,CanonicalBudgetError} from './review-canonical-budget.js';
 
 export const BOUNDED_LIMITS = Object.freeze({ responseBytes: 4 * 1024 * 1024, totalBytes: 16 * 1024 * 1024,
   payloadBytes: 2 * 1024 * 1024, totalPayloadBytes: 8 * 1024 * 1024,
@@ -45,12 +46,11 @@ export class BoundedReadSession {
   readonly #runOwner: ReturnType<typeof registerReviewEvidenceSession>;
   private token?: string;
   private readyPromise?: Promise<void>;
-  private stopCode?: ReadFailureCode;
+  readonly #budget:ReturnType<typeof createCanonicalReviewBudget>;
+  #stopPropagated=false;
+  private get stopCode(){return this.#budget.view.failure()??undefined;}
   private disposed = false;
   private busy = false;
-  private requests = 0;
-  private receivedBytes = 0;
-  private payloadBytes = 0;
   private readonly removeExternal: () => void;
   readonly releasePolicy: ReturnType<typeof pinReviewReleaseConfig>;
 
@@ -79,9 +79,13 @@ export class BoundedReadSession {
     this.principalKey = createHash('sha256').update(JSON.stringify([this.baseUrl, this.authMode,
       this.authMode === 'per-user' ? snapshot.perUserBearerToken : [snapshot.oauth.clientId, snapshot.oauth.username ?? '']])).digest('hex');
     if (active >= 2 || principals.has(this.principalKey)) throw new BoundedReadError('review_busy');
+    this.#budget=createCanonicalReviewBudget({clock:{remainingMs:()=>Math.max(0,this.limits.deadlineMs-(performance.now()-this.started))},limits:{requests:this.limits.requests,totalBytes:this.limits.totalBytes,payloadBytes:this.limits.payloadBytes,totalPayloadBytes:this.limits.totalPayloadBytes,deadlineMs:this.limits.deadlineMs}});
     active++; principals.add(this.principalKey);
-    this.#runLease=Object.freeze({read:()=>Object.freeze({requests:this.requests,received_bytes:this.receivedBytes,
-      payload_bytes:this.payloadBytes,remaining_ms:Math.max(0,this.limits.deadlineMs-(performance.now()-this.started))})});
+    this.#runLease=Object.freeze({read:()=>{
+      try{return this.#budget.view.lease.read();}catch(error){
+        if(error instanceof CanonicalBudgetError){this.#runOwner.revoke(this.#budget.view.diagnostic().primary?.internal??'internal_review_error');this.stop(this.#budget.view.failure()??'internal_review_error');throw new BoundedReadError(error.code);}throw error;
+      }
+    }});
     this.#runOwner=registerReviewEvidenceSession(this,this.#snapshot,this.#runLease);
     this.fetcher = options.fetch ?? ((...args) => globalThis.fetch(...args));
     this.timer = setTimeout(() => this.stop('deadline_exceeded'), Math.max(0, this.limits.deadlineMs - (performance.now() - this.started)));
@@ -92,7 +96,10 @@ export class BoundedReadSession {
     if (external?.aborted) cancel();
   }
 
-  stats() { return { requests: this.requests, received_bytes: this.receivedBytes, payload_bytes: this.payloadBytes }; }
+  stats() { return {...this.#budget.view.stats()}; }
+  #account(operation:()=>void){
+    try{operation();}catch(error){if(error instanceof CanonicalBudgetError){const reason=this.#budget.view.failure();if(reason)this.stop(reason);throw new BoundedReadError(error.code);}throw error;}
+  }
   /** Fixed readonly diagnostics only: no handles, credentials, lease or activation authority. */
   reviewRunStatus() {
     const status=this.#runOwner.inspect(this.#snapshot,this.#runLease);
@@ -113,7 +120,7 @@ export class BoundedReadSession {
   }
   #syncRunFailure(){
     const reason=this.#runOwner.failure();
-    if(reason&&!this.stopCode&&!this.disposed)this.stop(reason==='evidence_binding_mismatch'||reason==='invalid_observation_time'||reason==='invalid_state'?'internal_review_error':reason);
+    if(reason&&!this.#stopPropagated&&!this.disposed){this.#budget.writer.stop(reason);this.stop(this.stopCode!);}
   }
   /** Monotonic run budget, also usable for safe CPU finalization after an HTTP stop. */
   remainingMs() { return Math.max(0, this.limits.deadlineMs - (performance.now() - this.started)); }
@@ -130,8 +137,10 @@ export class BoundedReadSession {
   }
   assertActive() { this.check(); }
   private stop(code: ReadFailureCode) {
-    this.stopCode ??= code;
-    this.#runOwner.revoke(this.stopCode);
+    this.#budget.writer.stop(code);
+    if(this.#stopPropagated)return;
+    this.#stopPropagated=true;
+    this.#runOwner.revoke(this.stopCode!);
     this.controller.abort();
   }
   private check() {
@@ -164,6 +173,7 @@ export class BoundedReadSession {
   close() {
     if (this.disposed) return;
     this.#runOwner.close(this.stopCode ?? 'closed');
+    this.#budget.writer.close();
     this.disposed = true; clearTimeout(this.timer); clearTimeout(this.phaseTimer); this.removeExternal();
     this.phase.abort();
     this.controller.abort(); active--; principals.delete(this.principalKey);
@@ -176,9 +186,10 @@ export class BoundedReadSession {
   private async attempt(path: string, init: RequestInit, final: boolean): Promise<{ status: number; value?: unknown }> {
     this.check();
     // Four attempts remain reserved for final parent + metadata verification (including retries).
-    if (this.requests >= this.limits.requests - (final ? 0 : 4)) throw new BoundedReadError('request_budget_exceeded');
-    if (this.receivedBytes >= this.limits.totalBytes) { this.stop('receive_budget_exceeded'); this.check(); }
-    this.requests++;
+    const prior=this.#budget.view.stats();
+    if (prior.requests >= this.limits.requests - (final ? 0 : 4)) throw new BoundedReadError('request_budget_exceeded');
+    if (prior.received_bytes >= this.limits.totalBytes) { this.stop('receive_budget_exceeded'); this.check(); }
+    this.#account(()=>this.#budget.writer.dispatch(final));
     const controller = new AbortController();
     const onStop = () => controller.abort();
     this.controller.signal.addEventListener('abort', onStop, { once: true });
@@ -204,8 +215,8 @@ export class BoundedReadSession {
         this.check();
         if (chunk.done) break;
         size += chunk.value.byteLength;
-        this.receivedBytes += chunk.value.byteLength;
-        if (size > this.limits.responseBytes || this.receivedBytes > this.limits.totalBytes) {
+        this.#account(()=>this.#budget.writer.chunk(chunk.value.byteLength));
+        if (size > this.limits.responseBytes) {
           this.stop('receive_budget_exceeded'); this.check();
         }
         if (response.ok) chunks.push(chunk.value);
@@ -296,9 +307,6 @@ export class BoundedReadSession {
   }
   /** One charge of a received payload string at the source boundary. */
   private chargePayloadBytes(payload: string) {
-    const bytes = Buffer.byteLength(payload, 'utf8');
-    this.payloadBytes += bytes;
-    if (this.payloadBytes > this.limits.totalPayloadBytes) { this.stop('payload_budget_exceeded'); this.check(); }
-    if (bytes > this.limits.payloadBytes) throw new BoundedReadError('payload_limit');
+    this.#account(()=>this.#budget.writer.payload(payload));
   }
 }

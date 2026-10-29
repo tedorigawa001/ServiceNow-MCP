@@ -12,4 +12,8 @@ assert(![...files].some(f=>f.startsWith('tests/')||f.startsWith('dist/review/abo
 const compiled=readFileSync(new URL('../../dist/servicenow/review-canonical-budget.js',import.meta.url),'utf8');
 assert(!/^import\s/m.test(compiled),'pure core must not import session, native or fixture modules');
 execFileSync(process.execPath,[fileURLToPath(new URL('fixtures/compiled-canonical-budget.mjs',import.meta.url))],{cwd:root,stdio:'inherit'});
-console.log('CM-01 offline pack PASS ('+files.size+' files)');
+const session=readFileSync(new URL('../../dist/servicenow/bounded-read.js',import.meta.url),'utf8');
+assert(session.includes("from './review-canonical-budget.js'"));
+for(const field of ['this.requests','this.receivedBytes','this.payloadBytes'])assert(!session.includes(field),'legacy mutable counter remains: '+field);
+execFileSync(process.execPath,[fileURLToPath(new URL('fixtures/compiled-canonical-session.mjs',import.meta.url))],{cwd:root,stdio:'inherit'});
+console.log('CM-01/02 offline pack PASS ('+files.size+' files)');

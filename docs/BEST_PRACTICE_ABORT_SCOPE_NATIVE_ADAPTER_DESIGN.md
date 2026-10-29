@@ -11,7 +11,7 @@ Status: **§13〜14のNA-01／02に加え、§15のNA-03で注入native終端証
 
 RT-B03のfake操作objectを、固定dispatcherから受け取ったnative Responseと**同じ一つのdefault reader**の観測へ結び付ける。第一段階は注入Response／メモリ内ReadableStream＋fake dispatcher／clockだけで検証し、global fetch・PDI・実OAuth・実workerを呼ばない。
 
-§1〜12の型名・port名・状態は内部契約案で、NA-01の限定実装は§13、NA-02は§14に分ける。既存sessionを受け取る採用factory、公開MCP引数、typed mode設定、body／reader getterは追加しない。実BoundedReadSessionのconstructorは現状のまま依存を渡さず、実classのC/G/P更新点移行・固定sourceのprivate callerは後工程とする。
+§1〜12の型名・port名・状態は内部契約案で、NA-01〜03の限定実装は§13〜15に分ける。既存sessionを受け取る採用factory、公開MCP引数、typed mode設定、body／reader getterは追加しない。CM-02でlegacyのC/G/Pを単一会計へ移したが、実BoundedReadSessionのconstructorはnative/typed依存を渡さず、固定sourceのprivate callerは後工程とする。
 
 adapterの採用と正式証拠発行は別である。native観測が成功しても、BoundedBodyReceipt／SourceRunEvidence／選択window／payload receipt／worker job／sealを発行しない。AU-BR-006の公開規則登録・公開JSON・既存0.2／0.3の変更は非対象。
 
@@ -182,7 +182,7 @@ oracleは試験側のunderlying sourceイベント・入力byte列・独立hash�
 1. **NA-01：内部契約**。§13で合成identity限定のResponseDelivery／owner／専用台帳・pre-release／一度限りend evidenceを実装・検証。native操作や実sessionは採用しない。
 2. **NA-02：native取得と操作固定**。注入Response／Streamsだけでbrand／ownership／同readerの取得・操作・途中cleanupを検証。fixture台帳をimportしない。
 3. **NA-03：RT-B03接続**。finish前のnative end evidence照合、同bytes／ack、late Response分岐を対にして検証。正式gateは閉鎖したまま。
-4. その後、[canonical会計・private生成位置の差分設計draft-0.2](BEST_PRACTICE_ABORT_SCOPE_CANONICAL_SESSION_MIGRATION_DESIGN.md)に従い、内部契約→legacy更新点の中立移行→typed dispatch計上→private compositionを別工程で進める。CM-01の純粋coreだけを実装し、実session接続・実通信の承認はさらに別とする。
+4. その後、[canonical会計・private生成位置の差分設計draft-0.3](BEST_PRACTICE_ABORT_SCOPE_CANONICAL_SESSION_MIGRATION_DESIGN.md)に従い、内部契約→legacy更新点の中立移行→typed dispatch計上→private compositionを別工程で進める。CM-02までのlegacy単一会計を実装し、native/typed実session採用・実通信の承認はさらに別とする。
 
 承認待ち：標準prototype限定subsetと対象Node版、Response intrinsicsの公式実装照合、native no_body内部区分、private domainの生成配置・試験境界、取得失敗／再入時の正確な写像、失敗注入の配置、追加制御費・停止後未確認resourceの運用扱い。Unknownや本番capを合成結果で埋めない。
 
@@ -295,6 +295,6 @@ confirmed EOF→consume→ack済みの429／5xxだけ、既存の同用途2試�
 
 ### 15.4 未接続と承認境界
 
-proofはnative cleanupの限定的な内部証拠で、BoundedBodyReceipt／SourceRunEvidence／ReleasePermit／選択window／payload receipt／worker job／sealではない。実sessionのcanonical更新点・実transportの認証／URL binding・固定sourceのprivate callerは後工程。fixture台帳はimport／共有せず、正式発行口閉鎖・Unknown・全体受付無効・調査保留を維持する。
+proofはnative cleanupの限定的な内部証拠で、BoundedBodyReceipt／SourceRunEvidence／ReleasePermit／選択window／payload receipt／worker job／sealではない。CM-02のlegacy単一会計をnative/typedへ採用する更新点、実transportの認証／URL binding・固定sourceのprivate callerは後工程。fixture台帳はimport／共有せず、正式発行口閉鎖・Unknown・全体受付無効・調査保留を維持する。
 
 同realm・Node v24.18.0のメモリ内試験に限定し、最低Node 22.12.0・cross-realm・全Fetch仕様本文・同期parse／hashの強制中断・native bufferのheap上界は未確認のままとする。§11の全条件が一括で合格したとは主張しない。

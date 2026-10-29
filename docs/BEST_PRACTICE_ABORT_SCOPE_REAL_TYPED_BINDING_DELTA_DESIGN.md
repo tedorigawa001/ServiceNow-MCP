@@ -1,13 +1,13 @@
 # AU-BR-006：実session／ReleasePermitとtyped取得の接続差分・fake I/O受入条件
 
 Version: br006-real-typed-binding-delta-draft-0.4 / Date: 2026-10-29。
-Status: **§10のRT-B01・§11のRT-B02に加え、§12のRT-B03 typed cleanup／同bytes candidate／ackをconstructor固定fake依存で実装・検証。実class更新点の移行・native transport／Streams adapter実接続は未実装。正式発行口閉鎖・Unknown・全体受付無効、VM／監視／telemetry調査保留を維持する。実通信・実機操作・設定変更・Pushの承認ではない**。
+Status: **§10〜12のRT-B01／02／03をconstructor固定fake依存で検証。後続CM-02でlegacyの単一会計だけを移行し、native transport／Streams adapterの実session採用は未実装。正式発行口閉鎖・Unknown・全体受付無効、VM／監視／telemetry調査保留を維持する。実通信・実機操作・設定変更・Pushの承認ではない**。
 
 基準：[session／transport／body境界](BEST_PRACTICE_ABORT_SCOPE_SESSION_TRANSPORT_BODY_BINDING_DESIGN.md)、[実run lifecycle・ReleasePermitのprepared結合§14〜15](BEST_PRACTICE_ABORT_SCOPE_RUN_OWNER_BINDING_DESIGN.md#14-実session-private-lifecycle接続fake-io検証)、[CD-03／04の親workflow接続§13](BEST_PRACTICE_ABORT_SCOPE_PARENT_STABILITY_DESIGN.md#13-cd-03cd-04private-owner停止final-slot接続fake依存)。
 後工程：[選択window／payload受領物](BEST_PRACTICE_ABORT_SCOPE_REAL_SESSION_RECEIPTS_DESIGN.md)、[worker接続契約](BEST_PRACTICE_ABORT_SCOPE_CONNECTION_CONTRACT_DESIGN.md)。
 RT-B03後の次工程：[native adapter詳細設計draft-0.4](BEST_PRACTICE_ABORT_SCOPE_NATIVE_ADAPTER_DESIGN.md)。§13〜14のNA-01／02に加え、§15のNA-03で注入native終端証拠を同bytes課金・解析・ackへ接続。fixture台帳は共有せず、実session接続・正式発行は未実装のまま。
 
-NA-03後の移行案：[canonical会計・private生成位置の差分設計draft-0.2](BEST_PRACTICE_ABORT_SCOPE_CANONICAL_SESSION_MIGRATION_DESIGN.md)。更新点を二重化しない段階移行と、legacy挙動保存／typed dispatch計上精密化の分離を定義する。CM-01の内部coreだけを純粋fakeで実装し、実class置換・実session接続は未開始。
+NA-03後の移行案：[canonical会計・private生成位置の差分設計draft-0.3](BEST_PRACTICE_ABORT_SCOPE_CANONICAL_SESSION_MIGRATION_DESIGN.md)。CM-01の内部coreに続き、CM-02でlegacy C/G/P・readonly leaseを単一会計へ移行した。typed dispatch計上の精密化とnative/typed実session採用は未開始。
 
 ## 1. 目的と非対象
 
@@ -236,7 +236,7 @@ HTTP分類も本番より狭い。本番の`bounded-source`はrelease読取り�
 
 追加制御状態はbootstrap一つ・AbortController一つ・一度限りの予約状態・進行中timer最大一つ・private body copy最大S、JSON decode一回／200応答。失敗の超過chunkは保持せず課金する。これは追加制御費の記述であり、全体work／heap上界・物理秘密消去・OS終了保証の証明ではない。
 
-RT-B02時点で未対応だったtyped cleanup・同attempt candidate／ack・chunk quotaのfake接続は§12を参照。native Response／Streams adapter、実BoundedReadSessionのcanonical更新点の移行・固定source bootstrapへのprivate接続、実認証snapshot／ReleasePermitの発行元照合、選択window／payload／worker jobへの正式bindingは未接続。正式発行口閉鎖・Unknown・全体受付無効・VM／監視／telemetry調査保留を維持する。
+RT-B02時点で未対応だったtyped cleanup・同attempt candidate／ack・chunk quotaのfake接続は§12、後続の注入native接続はNA-03を参照。CM-02でlegacy会計だけを移行したが、native/typed実session採用・固定source bootstrapへのprivate接続、実認証snapshot／ReleasePermitの発行元照合、選択window／payload／worker jobへの正式bindingは未接続。正式発行口閉鎖・Unknown・全体受付無効・VM／監視／telemetry調査保留を維持する。
 
 ## 12. RT-B03：typed cleanup・同bytes candidate・一度限りのack（fake I/O限定）
 
@@ -277,7 +277,7 @@ read timeout／read失敗後はcleanupの結果にかかわらず当bootstrapを
 
 ### 12.5 未接続・未証明
 
-fake操作のPromise観測をnative Web Streamsの実API証拠に読み替えない。native default-readerのpin・Response／stream所有権・getReader失敗、実認証header／URL・実classのcanonical更新点移行と固定sourceへのprivate caller、実C方式設定／ReleasePermit起源、選択payload／worker jobの正式bindingは後工程。
+fake操作のPromise観測をnative Web Streamsの実API証拠に読み替えない。注入native default-readerのpin・所有権・getReader失敗は後続NA-02／03で検証し、legacyのcanonical更新点移行はCM-02を参照。実認証header／URL・native/typed実session採用と固定sourceへのprivate caller、実C方式設定／ReleasePermit起源、選択payload／worker jobの正式bindingは後工程。
 
 このうちnative取得・同readerの操作・release前の観測固定・RT-B03のfinish前の証拠照合は、[native adapter詳細設計§3〜§8](BEST_PRACTICE_ABORT_SCOPE_NATIVE_ADAPTER_DESIGN.md#3-対応subsetと固定する操作)へ分離した。release自身がpending readを決着させた場合にunconfirmedを修復しないことを追加受入条件とする。設計の具体化であり実装済み範囲を増やすものではない。
 

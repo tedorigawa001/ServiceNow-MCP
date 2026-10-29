@@ -16,6 +16,8 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 ### Changed
 
+- CM-02 moves legacy bounded-session C/G/P accounting and its readonly lease onto the CM-01 canonical state, removing duplicate mutable counter fields. Dispatch placement, four final slots, retry/status handling and local payload-limit behavior remain unchanged. A private clock preserves the original run origin; core errors are translated to existing bounded errors, with owner diagnostics retained before one-shot abort propagation. Includes before/after synthetic event oracles and compiled packaging checks. Native/typed activation, formal issuance and whole-run admission remain disabled/unconnected.
+
 - A bounded review session now stops once its first authentication attempt fails. Previously the session stayed active after a failed OAuth/token step: later `get` calls failed with the same code, but `assertActive()` and other session checks still passed. Now the authentication failure code (for example `invalid_response` or `upstream_unavailable`) becomes the session stop code, so every later check fails with that code. Review outcomes are unchanged, because authentication runs on the first parent read and that failure already ended the review.
 
 ### Security
