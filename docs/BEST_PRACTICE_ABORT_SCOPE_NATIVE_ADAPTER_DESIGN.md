@@ -1,7 +1,7 @@
 # AU-BR-006：RT-B03後のnative Response／reader adapter詳細設計
 
-Version: br006-native-adapter-draft-0.1 / Date: 2026-10-29。
-Status: **設計案のみ。adapter・新しい発行口・実session接続は未実装。正式発行口閉鎖・Unknown・全体受付無効・VM／監視／telemetry調査保留を維持する。実通信・実機操作・設定変更・Pushの承認ではない**。
+Version: br006-native-adapter-draft-0.2 / Date: 2026-10-29。
+Status: **§13のNA-01内部契約だけを合成依存で実装・検証。native取得・操作・RT-B03 native証拠消費・実session接続は未実装。正式発行口閉鎖・Unknown・全体受付無効・VM／監視／telemetry調査保留を維持する。native操作・実通信・実機操作・設定変更・Pushの承認ではない**。
 
 親：[接続差分draft-0.4 §12](BEST_PRACTICE_ABORT_SCOPE_REAL_TYPED_BINDING_DELTA_DESIGN.md#12-rt-b03typed-cleanup同bytes-candidate一度限りのackfake-io限定)、[session／transport／body境界](BEST_PRACTICE_ABORT_SCOPE_SESSION_TRANSPORT_BODY_BINDING_DESIGN.md)。
 現行：[bootstrap](../src/servicenow/review-bootstrap-contract.ts)、[RT-B03 body lane](../src/servicenow/review-bootstrap-body.ts)、[実session](../src/servicenow/bounded-read.ts)、[実source](../src/review/bounded-source.ts)。
@@ -11,7 +11,7 @@ Status: **設計案のみ。adapter・新しい発行口・実session接続は�
 
 RT-B03のfake操作objectを、固定dispatcherから受け取ったnative Responseと**同じ一つのdefault reader**の観測へ結び付ける。第一段階は注入Response／メモリ内ReadableStream＋fake dispatcher／clockだけで検証し、global fetch・PDI・実OAuth・実workerを呼ばない。
 
-本書の型名・port名・状態は内部契約案で、現存するexportではない。既存sessionを受け取る採用factory、公開MCP引数、typed mode設定、body／reader getterは追加しない。実BoundedReadSessionのconstructorは現状のまま依存を渡さず、実classのC/G/P更新点移行・固定sourceのprivate callerは後工程とする。
+§1〜12の型名・port名・状態は内部契約案で、NA-01として実装した限定名は§13に分ける。既存sessionを受け取る採用factory、公開MCP引数、typed mode設定、body／reader getterは追加しない。実BoundedReadSessionのconstructorは現状のまま依存を渡さず、実classのC/G/P更新点移行・固定sourceのprivate callerは後工程とする。
 
 adapterの採用と正式証拠発行は別である。native観測が成功しても、BoundedBodyReceipt／SourceRunEvidence／選択window／payload receipt／worker job／sealを発行しない。AU-BR-006の公開規則登録・公開JSON・既存0.2／0.3の変更は非対象。
 
@@ -150,7 +150,7 @@ late Responseは、元dispatchのcleanup-only deliveryとして認識できる�
 
 既存byte保持に加わるのはidentity／定数個の状態・Promise observer・pre-release証拠の制御費。native内部buffer・allocator・IPC・runtime全体のheap／work上界は未証明。取得途中・失敗時も費用を返金しない。上表は受付有効化や本番cap承認の根拠ではない。
 
-## 11. 合成受入条件（未実施）
+## 11. native合成受入条件（NA-02以降は未実施）
 
 すべて固定fake dispatcher、注入new Response／メモリ内ReadableStream、fake clock／schedulerで行う。global fetchは呼ばれると失敗するspyとし、PDI・実OAuth・OS待受・実workerを開始しない。native操作の失敗注入は孤立した信頼済み試験境界だけに置き、runtimeに任意操作の置換setterを公開しない。
 
@@ -179,11 +179,55 @@ oracleは試験側のunderlying sourceイベント・入力byte列・独立hash�
 
 ## 12. 次工程・承認待ち・今回の文書確認
 
-1. **NA-01：内部契約**。ResponseDelivery／owner／runtime専用identity台帳、同attempt・元window、pre-release／一度限りend evidenceを設計どおり合成検査。native操作や実sessionをまだ採用しない。
+1. **NA-01：内部契約**。§13で合成identity限定のResponseDelivery／owner／専用台帳・pre-release／一度限りend evidenceを実装・検証。native操作や実sessionは採用しない。
 2. **NA-02：native取得と操作固定**。注入Response／Streamsだけでbrand／ownership／同readerの取得・操作・途中cleanupを検証。fixture台帳をimportしない。
 3. **NA-03：RT-B03接続**。finish前のnative end evidence照合、同bytes／ack、late Response分岐を対にして検証。正式gateは閉鎖したまま。
 4. その後、実sessionのcanonical更新点と固定sourceのprivate callerを別設計・別工程で接続する。実通信の承認はさらに別とする。
 
 承認待ち：標準prototype限定subsetと対象Node版、Response intrinsicsの公式実装照合、native no_body内部区分、private domainの生成配置・試験境界、取得失敗／再入時の正確な写像、失敗注入の配置、追加制御費・停止後未確認resourceの運用扱い。Unknownや本番capを合成結果で埋めない。
 
-今回はMDの詳細設計・親参照更新と読み取り照合のみ。ソース・テスト・依存設定は変更せず、native操作・合成テストも実行していない。新規本書と親2文書の計3MDについて、相対参照61件の参照先存在・行末空白なし・NA-A01〜18の18項目の重複なしを確認した（見出しanchorの自動検証ではない）。git diff --checkも成功。正式発行口閉鎖・全体受付無効・調査保留を維持する。
+draft-0.1作成時はMDの詳細設計・親参照更新と読み取り照合のみで、ソース・テスト・依存設定やnative操作を変更・実行していない。当時は新規本書と親2文書の計3MDについて相対参照61件・行末空白なし・NA-A01〜18の18項目の重複なしを確認した（見出しanchorの自動検証ではない）。git diff --checkも成功。後続実装は§13・検証記録と区別する。
+
+## 13. NA-01：合成identity限定の内部契約
+
+[review-native-contract](../src/servicenow/review-native-contract.ts)、[合成試験](../tests/review/native-ownership-contract.test.ts)、[検証記録](E2E_BEST_PRACTICE_NATIVE_OWNERSHIP_CONTRACT_2026-10-29.md)を追加した。[梱包確認](../tests/review/package-native-contract.mjs)はstatic packと[純粋なcompiled fixture](../tests/review/fixtures/compiled-native-ownership-contract.mjs)だけを実行する。
+
+### 13.1 domain・発行元・実物を受け付けない境界
+
+現存するexportはcreateSyntheticNativeContractDomainだけ。新しいdomainごとにrun／signal／response／stream／readerの不透明identityを発行し、同domainのtokenだけを内部WeakMapで認識する。raw session・Response・stream・reader・fixture handleや、同値copyを登録する入口はない。runとsignalもdomain発行tokenが必須で、実session objectをrun欄へ渡しても採用できない。
+
+runtime契約module内に新しいprivate Response／stream／reader claim台帳を設けたが、NA-01で保持するkeyは合成tokenのみ。native objectの登録生成部や本番のruntime domainはまだ存在しない。旧fixtureのregistry／claim／counterはimport・共有せず、domain間でもidentity・proofを相互採用できない。NA-02でnative生成部を設ける際も、本factoryのtokenをnativeの来歴として認定してはならない。
+
+createOwnerは同run一度だけ。constructor時にrun／signal／元budget参照・deadlineと観測関数をpinする。生成claimはbudget関数capture前に消費し、capture失敗でも再生成しない。unknown run／signalはbudget getterを呼ぶ前に拒否する。元budgetは残時間の観測のみで、C/G/P・予約・実signalのabort状態を読取／更新しない。signalはidentity結合だけで、実AbortSignalのlistener接続は後工程である。
+
+### 13.2 内部portと状態
+
+| 内部operation | 固定契約 |
+|---|---|
+| issuer.attempt | purpose／ordinalとremaining-time座標の元I/O／cleanup floorからopaque attempt／windowを発行。最大210の制御上限、dispatch許可ではない |
+| issuer.delivery | 同ownerのattempt／windowと同domainのresponse／stream identity。一attempt一発行、stream=nullはreaderなし |
+| owner.claim | deliveryをcallback前に一度消費し、Response→stream順で専用台帳をclaim。失敗claimはtombstoneとして残し、他ownerのclaimは触らない |
+| issuer.reader | 同resourceにreader identityを一回結合。同じreaderの別ownerへの再採用やstream=nullでのreader申告を拒否 |
+| issuer.preRelease | strict観測のprivate copy・元cleanup windowの時点を固定。一resource一回、後から元objectを変更しても更新しない |
+| issuer.end | 同resourceのpre-release proofを先に消費し、release結果・元時計で一度だけ終端を固定。release後の修復用観測は入力できない |
+| issuer.endNoBody | readerを作らない別経路。confirmed/no_bodyをEOFと分け、RT-B03の現在の型や公開schemaにはまだ追加しない |
+| owner.consume | 同attempt／window／resourceの終端proofを一度だけ消費。元cleanup floorを最後まで検査し、失効後は成功viewを返さない |
+| owner.stop／close／status | 固定first primaryと直近cleanupを分離。statusはcallbackなしの既記録viewで、live権限ではない |
+
+resourceはowned→reader→pre→ended→consumed、no_bodyはowned→ended→consumed。delivery／pre／endの使用済みclaimは失敗・closeでも戻さない。close後も既に所有したresourceのcleanup記録は可能だが、生成・採用・成功消費は復活しない。未確認終端は固定停止となり、次resource／再試行を許可しない。
+
+生成・採用・証拠operationをbusy guardで囲み、budget／strict入力のcallback再入では二重生成しない。stop／closeはそのcallback中でも同期失効でき、statusは観測callbackを呼ばない。生成／採用／reader結合／消費のpost-checkにも同じfloorを使い、最後の観測で取消・期限到達した場合は成功handle／viewを返さない。foreign proofの失敗は要求先だけを止め、外国proofの使用済みflagを消費しない。
+
+### 13.3 期限・終端・診断の限定
+
+元budgetの残時間は有限・最大deadline以下・非増加、hard等号で拒否。deadline≤60000ms、attempt幅≤10000ms、cleanup reserve≤min(250ms, attempt幅/4)、通常phase reserve以上のcleanup floorを検査する。新時計・timer・deadline延長を作らない。内部attempt_deadline_exceededは本moduleの固定理由で、既存公開ReadFailureCode／MCP JSONのenumを拡張していない。
+
+pre-releaseでpending read／cancel／closedの不足を固定し、後続release=succeededでもconfirmedへ修復しない。未確認・release失敗は停止し、既存cancelled／closed／観測不整合・期限のprimaryを上書きしない。終端が期限内に記録されていても、消費時の元windowが切れていれば失敗する。過去のcleanup事実は診断へ保持する。
+
+返却viewは常にend_verified_only／synthetic=trueのcleanup、native_operations=unavailable、evidence_issuance=disabled、body_eligible=false。これは合成入力の整合性確認で、native終了証拠ではない。owner statusもtoken／budget／signal／reader／本文／raw例外を返さず、外部stopの未知文字列を固定invalid_inputにする。
+
+### 13.4 費目・未接続
+
+同ownerのattempt制御枠は最大210、delivery各1、同時resource各1、各resourceのpre／end各1。生成countはCではなく追加制御費で、HTTPをdispatchせずC/G/P/Rを更新しない。同じdomain内の別owner・close後にもidentityのclaimを削除しない。WeakMapの合成token上界は実native buffer／heap／workの証明ではなく、全体受付は無効のまま。
+
+新moduleと宣言等4artifactはnpmへ同梱するが、実session／bootstrap／sourceから呼び出していない。fixture moduleは非同梱を維持。native採用・intrinsic capture・操作・RT-B03のfinish前のnative証拠照合・実session／source bindingは未実装で、NA-A01〜18全体の合格とはしない。今回はnative禁止を守るため、新規の純粋合成テスト・static pack／compiled確認だけを実行し、既存native Streams試験を含む全体再実行は保留する。

@@ -5,7 +5,7 @@ Status: **§10のRT-B01・§11のRT-B02に加え、§12のRT-B03 typed cleanup�
 
 基準：[session／transport／body境界](BEST_PRACTICE_ABORT_SCOPE_SESSION_TRANSPORT_BODY_BINDING_DESIGN.md)、[実run lifecycle・ReleasePermitのprepared結合§14〜15](BEST_PRACTICE_ABORT_SCOPE_RUN_OWNER_BINDING_DESIGN.md#14-実session-private-lifecycle接続fake-io検証)、[CD-03／04の親workflow接続§13](BEST_PRACTICE_ABORT_SCOPE_PARENT_STABILITY_DESIGN.md#13-cd-03cd-04private-owner停止final-slot接続fake依存)。
 後工程：[選択window／payload受領物](BEST_PRACTICE_ABORT_SCOPE_REAL_SESSION_RECEIPTS_DESIGN.md)、[worker接続契約](BEST_PRACTICE_ABORT_SCOPE_CONNECTION_CONTRACT_DESIGN.md)。
-RT-B03後の次工程：[native adapter詳細設計draft-0.1](BEST_PRACTICE_ABORT_SCOPE_NATIVE_ADAPTER_DESIGN.md)。同readerの所有権・操作capture・runtime専用台帳・pre-release証拠を具体化する設計案。fixture台帳は移植せず、native adapter／実session接続は未実装のまま。
+RT-B03後の次工程：[native adapter詳細設計draft-0.2](BEST_PRACTICE_ABORT_SCOPE_NATIVE_ADAPTER_DESIGN.md)。§13のNA-01内部契約・専用identity台帳・pre-release／終端証拠を合成token限定で実装。fixture台帳は共有せず、native取得・操作・RT-B03 native証拠消費・実session接続は未実装のまま。
 
 ## 1. 目的と非対象
 
