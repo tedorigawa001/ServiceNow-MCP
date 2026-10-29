@@ -58,6 +58,11 @@ Node v24.18.0。製品／試験期限は変更していない。全体合成の�
 
 コミット前再確認：HEAD＋今回の13ファイルだけをindexから一時領域へ展開し、既存node_modulesのみを依存として参照した。build・変更対象ESLint・全体191 files／5,783 tests（34.85秒）・CM-01／02／03とNA-02／03のoffline梱包／compiled確認がすべてPASS。梱包は405 filesで、他の作業中ファイル・実通信は含めていない。
 
+### 4.1 レビュー追記（2026-10-29）
+
+- 確認：native経路のdispatch後C/G/P整合検査（`pendingDispatchCheck`）は、次のbootstrap再観測で実行される遅延検査である。dispatcherの同期throw／reject、chunk課金前の401等で再観測がないattemptでは、finallyで未実行のまま破棄される。CM-03前はdispatch直後に毎回検査していた。
+- 判断：標準factoryの同期canonical accountingではC=1が保持され、これらの経路は再試行しないため追加試行の余地はない。コードは変更せず、[設計§11.3](BEST_PRACTICE_ABORT_SCOPE_CANONICAL_SESSION_MIGRATION_DESIGN.md#113-失敗と費用保持)に検査の適用範囲を明記した（文書のみ）。§4の実行記録は変更しない。
+
 ## 5 残課題
 
 実sessionのprivate writerへの採用、実sourceのReleasePermit／認証snapshot、final slotの消費・移譲、選択payload／worker jobの正式bindingはCM-04以降に残す。CM-03 factoryは新規予算を生成するだけで、実sessionに第二予算を増設していない。

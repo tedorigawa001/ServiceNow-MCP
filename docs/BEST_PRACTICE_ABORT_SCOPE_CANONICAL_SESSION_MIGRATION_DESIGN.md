@@ -184,7 +184,7 @@ dispatchAtはattempt floor等号をupstream_unavailable、hard期限を既存dea
 | 応答採用・body拒否 | 1/attempt | 同bytesのGを一度課金。candidate／ack／hashでC/Gを増やさない |
 | confirmed EOF／ack後の429／5xx retry | 各1 | 最大同用途2試行。累積C/G・元期限・Rを維持 |
 
-計上後のC/G/P整合検査はactual dispatcherの後、body bytes採用前に行う。readerを既に取得していれば同ownerでcleanupする。Cの直後にobserverを呼ぶ旧native順序へ戻さない。commit拒否はupstream throwと別のtry境界で捕捉するため、未dispatchをno_responseと認定しない。
+計上後のC/G/P整合検査はactual dispatcherの後、body bytes採用前に行う。この検査はdispatch後に同attemptで予算を再観測する経路（body chunk課金・成功応答の採用）だけで実行される。dispatcherの同期throw／reject、chunk課金前の401等で再観測なく終わるattemptでは、finallyで未実行のまま破棄する。これらは再試行しない終端であり、標準factoryの同期canonical accountingではC=1が保持されるが、任意accountingの加算漏れをこの経路で検出するとは主張しない。readerを既に取得していれば同ownerでcleanupする。Cの直後にobserverを呼ぶ旧native順序へ戻さない。commit拒否はupstream throwと別のtry境界で捕捉するため、未dispatchをno_responseと認定しない。
 
 この保証は固定bootstrap継続と同期canonical accountingの組合せについて検証したものである。constructorへ任意の「加算後にthrowするcallback」を与えて同じ保証を主張しない。callbackは外部入力・MCP設定ではなくtrusted依存であり、標準のCM-03 factoryはcommit後に任意callbackを呼ばない。
 
