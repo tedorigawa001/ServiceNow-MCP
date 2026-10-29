@@ -259,3 +259,5 @@ body consume中は同attemptのdeadlineとpending状態を、raw bytes破棄後�
 CD-01、CD-02、stream-only、projectionなしfactoryと独立合成factoryの既定comparison_pendingは維持する。固定停止語彙の追加はpackage除外済みの合成module内だけで、公開JSON・MCP登録・本番sourceは変更しない。親一致をmetadata／payload／workerやUpdate Set全体のstableへ拡張しない。
 
 実session／ReleasePermit／選択payload／worker jobとの正式binding・実通信・本番へ移す際のchangedの暫定結果写像は引き続き未接続。正式発行口閉鎖・Unknown・全体受付無効・VM／監視／telemetry保留を維持する。
+
+次の設計差分：[実session／ReleasePermitとtyped取得draft-0.1](BEST_PRACTICE_ABORT_SCOPE_REAL_TYPED_BINDING_DELTA_DESIGN.md)。同予算・同期失効・bootstrapと正式bodyの区別、fake I/O受入条件を具体化する。CDの合成owner／台帳を実sessionへ登録せず、正式発行口を開かない。

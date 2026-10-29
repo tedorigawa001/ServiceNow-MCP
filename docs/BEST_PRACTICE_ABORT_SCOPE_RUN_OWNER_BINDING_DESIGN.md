@@ -296,6 +296,8 @@ leaseは同sessionの既存requests／receivedBytes／payloadBytesと元の単�
 
 ## 15. 同sourceのReleasePermit／不変release snapshot結合
 
+後続差分：[実session／ReleasePermitとtyped取得の接続差分draft-0.1](BEST_PRACTICE_ABORT_SCOPE_REAL_TYPED_BINDING_DELTA_DESIGN.md)。本節のprepared bindingを再実装せず、同constructor由来のtransport・単一予算・同期失効・typed cleanupへ接続する契約とfake受入条件を定義する。設計のみで、正式発行・実接続の承認ではない。
+
 ### 15.1 発行元・private境界
 
 `BoundedUpdateSetSource.#completeRelease`のmatched分岐だけが、既存の同source `#permit`と独立copy／freezeした`#releaseSnapshot`を作る。snapshotはmatchedであり得るobserved／operator_configの既知のflat構造とlimitations配列だけ。public ReleaseDecisionのinstance_releaseやlimitationsとはcanonical参照を共有せず、返却decisionの後書換えを採用しない。
