@@ -19,11 +19,12 @@ export interface ReviewBootstrapDependencies{
   readonly limits:{requests:number;total_bytes:number;response_bytes:number;deadline_ms:number};
   readonly accounting:{reserve():void;reserved():number;dispatch(floor_ms?:number):void;chunk(length:number):void;release():void};
   dispatch(request:Readonly<{purpose:BootstrapPurpose;method:'POST'|'GET';synthetic:true}>,signal:AbortSignal):Promise<{status:number;bytes:Uint8Array}|{status:number;body:BootstrapBodyResource}|Response>;
-  resolveRelease(response:Readonly<{status:number;value:unknown}>):{source:object;permit:object;port:ReviewSourceReleasePort}|null;
+  resolveRelease(response:Readonly<{status:number;value:unknown}>):{source:object;permit:object;port:ReviewSourceReleasePort}|null|Promise<{source:object;permit:object;port:ReviewSourceReleasePort}|null>;
   schedule(delayMs:number,wake:()=>void):()=>void;
 }
 type Prepared=Readonly<ReviewSourceReleaseSnapshot&{state:'prepared_only';evidence_issuance:'disabled';dispatch:'unavailable'}>;
-type Hooks<H>={lease:ReviewRunBudgetLease;sample():ReturnType<ReviewRunBudgetLease['read']>|null;check(handle:H,snapshot:object,lease:ReviewRunBudgetLease):Result<unknown>;
+type Hooks<H>={lease:ReviewRunBudgetLease;phaseReserveMs?:number;sample():ReturnType<ReviewRunBudgetLease['read']>|null;check(handle:H,snapshot:object,lease:ReviewRunBudgetLease):Result<unknown>;
+  acceptParent?(response:Readonly<{status:number;value:unknown}>):void;
   ready():boolean;bind(source:object,permit:object,port:ReviewSourceReleasePort):boolean;
   prepared(handle:H,snapshot:object,lease:ReviewRunBudgetLease,source:object,permit:object,port:ReviewSourceReleasePort):Result<Prepared>;
   stop(code:Code):void;failure():Code|undefined;};
@@ -38,6 +39,7 @@ const bodyOf=(value:unknown)=>value!==null&&typeof value==='object'&&'body' in v
 export function createReviewBootstrapContract<H>(hooks:Hooks<H>,input:ReviewBootstrapDependencies){
   // Trusted constructor dependencies only. Pin operations, never re-read a mutable injection object in an await continuation.
   const deps={...input,accounting:{...input.accounting},limits:{...input.limits}};
+  const phaseReserve=hooks.phaseReserveMs??Math.min(10000,deps.limits.deadline_ms/6);
   let state:'unstarted'|'running'|'prepared'|'ordinary_closed'|'failed'|'revoked'='unstarted',reason:Code|null=null;
   let controller:AbortController|undefined,reservationStarted=false,reservationReleased=false,activeFloor:number|undefined;
   let current:{handle:H;snapshot:object;lease:ReviewRunBudgetLease}|undefined;
@@ -51,7 +53,7 @@ export function createReviewBootstrapContract<H>(hooks:Hooks<H>,input:ReviewBoot
     const b=hooks.sample();if(hooks.failure())throw new Failure(hooks.failure()!);if(!b)throw new Failure('invalid_observation_time');
     if(!Number.isFinite(b.remaining_ms)||!Number.isSafeInteger(b.requests)||!Number.isSafeInteger(b.received_bytes)||!Number.isSafeInteger(b.payload_bytes))throw new Failure('invalid_observation_time');
     if(b.remaining_ms<=0)throw new Failure('deadline_exceeded');
-    if(b.remaining_ms<=Math.min(10000,deps.limits.deadline_ms/6))throw new Failure('phase_deadline_exceeded');
+    if(b.remaining_ms<=phaseReserve)throw new Failure('phase_deadline_exceeded');
     if(activeFloor!==undefined&&b.remaining_ms<=activeFloor)throw new Failure('upstream_unavailable');
     if(pendingDispatchCheck){const p=pendingDispatchCheck;pendingDispatchCheck=undefined;if(b.requests!==p.requests+1||b.received_bytes!==p.received_bytes||b.payload_bytes!==p.payload_bytes)throw new Failure('internal_review_error');}
     return b;
@@ -84,7 +86,7 @@ export function createReviewBootstrapContract<H>(hooks:Hooks<H>,input:ReviewBoot
       const before=observe(),r=deps.accounting.reserved();
       if(!Number.isSafeInteger(r)||r!==4)throw new Failure('internal_review_error');
       if(before.requests+1+r>deps.limits.requests)throw new Failure('request_budget_exceeded');
-      activeFloor=Math.max(Math.min(10000,deps.limits.deadline_ms/6),before.remaining_ms-10000);
+      activeFloor=Math.max(phaseReserve,before.remaining_ms-10000);
       const ioFloor=deps.typed_body?activeFloor+Math.min(250,(before.remaining_ms-activeFloor)/4):activeFloor;
       let settled=false,completed=false,adopted=false,retryableStatus=false,ended=false,invoked=false,delivered:Awaited<ReturnType<ReviewBootstrapDependencies['dispatch']>>|undefined;
       try{
@@ -132,6 +134,7 @@ export function createReviewBootstrapContract<H>(hooks:Hooks<H>,input:ReviewBoot
       state='running';current={handle,snapshot,lease};
       try{
         if(deps.fake_io!==true||deps.native_body&&!deps.typed_body||deps.lease!==hooks.lease||lease!==hooks.lease||!limitsSchema.safeParse(deps.limits).success||!/^[a-f0-9]{32}$/.test(deps.target)||!['per-user','cached','exchange'].includes(deps.auth))throw new Failure('evidence_binding_mismatch');
+        if(!Number.isFinite(phaseReserve)||phaseReserve<0||phaseReserve>=deps.limits.deadline_ms)throw new Failure('invalid_input');
         controller=new AbortController();const b=observe();if(b.requests||b.received_bytes||b.payload_bytes)throw new Failure('invalid_state');
         reservationStarted=true;deps.accounting.reserve();observe();if(deps.accounting.reserved()!==4)throw new Failure('internal_review_error');
         if(deps.auth==='exchange'){
@@ -140,8 +143,8 @@ export function createReviewBootstrapContract<H>(hooks:Hooks<H>,input:ReviewBoot
           observe();activeFloor=undefined;
         }
         observe();if(!hooks.ready())throw new Failure(hooks.failure()??'authentication_failed');observe();
-        const parent=parentSchema.safeParse((await request('parent')).value);if(!parent.success||parent.data.result.sys_id!==deps.target)throw new Failure('invalid_response');observe();activeFloor=undefined;
-        const response=await request('release');observe();const binding=deps.resolveRelease(response);observe();
+        const parentResponse=await request('parent'),parent=parentSchema.safeParse(parentResponse.value);if(!parent.success||parent.data.result.sys_id!==deps.target)throw new Failure('invalid_response');observe();hooks.acceptParent?.(parentResponse);observe();activeFloor=undefined;
+        const response=await request('release');observe();const binding=await deps.resolveRelease(response);observe();
         if(!binding)throw new Failure('release_not_admitted');
         if(binding.source!==deps.source)throw new Failure('evidence_binding_mismatch');
         const evidence=binding.port.copyRelease();if(!releaseEvidenceStructure.safeParse(evidence.instance_release).success||releaseMatchForEvidence(evidence.instance_release)!=='matched')throw new Failure('release_not_admitted');

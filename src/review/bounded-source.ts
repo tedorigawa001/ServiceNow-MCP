@@ -1,7 +1,7 @@
 /** Fixed BP-5 acquisition with C-mode release admission; no analysis or MCP registration. */
 import { z } from 'zod';
 import type { ServiceNowClient } from '../servicenow/client.js';
-import { BoundedReadError, type BoundedReadOptions, type BoundedReadSession } from '../servicenow/bounded-read.js';
+import { BoundedReadError, claimPrivateCompositionSource, type BoundedReadSession, type BoundedReadOptions } from '../servicenow/bounded-read.js';
 import { releaseEvidenceStructure, releaseMatchForEvidence, type ReleaseEvidence } from './result-schema-v2.js';
 import { bp5RuleIdsSchema } from './result-schema-v2.js';
 import { candidatePolicy, selectionModeSchema } from './target-selection.js';
@@ -29,6 +29,11 @@ export type ReleasePermit = { readonly [permitBrand]: true };
 export type ReleaseDecision = { instance_release: ReleaseEvidence; limitations: readonly string[] } & (
   { release_match: 'matched'; permit: ReleasePermit } | { release_match: 'unknown' | 'mismatched'; permit?: never }
 );
+/** A creator-only continuation, authenticated by the fresh session's private construction key. */
+export interface CompositionSourceConstruction {
+ readonly key:object;check():void;take(ack:object,purpose:'parent'|'release'):unknown;
+ capture(consumer:Readonly<{parent(ack:object):void;release(ack:object):Promise<ReleaseDecision>;revoke():void}>):void;
+}
 
 export class BoundedUpdateSetSource {
   private parent?: z.infer<typeof parentSchema>;
@@ -41,7 +46,31 @@ export class BoundedUpdateSetSource {
   readonly #session:BoundedReadSession;
   #releaseSnapshot?:ReviewSourceReleaseSnapshot;
   #releasePort?:ReviewSourceReleasePort;
-  constructor(session: BoundedReadSession, private readonly input: z.infer<typeof inputSchema>) {this.#session=session;}
+  constructor(session: BoundedReadSession, private readonly input: z.infer<typeof inputSchema>,creation?:CompositionSourceConstruction) {
+    this.#session=session;
+    if(creation){
+      if(!claimPrivateCompositionSource(session,creation.key,this))throw new BoundedReadError('invalid_input');
+      const check=creation.check,take=creation.take;let state:'parent'|'release'|'consuming'|'done'|'closed'='parent';
+      const requireState=(expected:typeof state)=>{check();if(state!==expected)throw new BoundedReadError('internal_review_error');state='consuming';};
+      creation.capture(Object.freeze({
+        parent:(ack:object)=>{
+          requireState('parent');const value=take(ack,'parent');
+          const parsed=parentSchema.safeParse(value&&typeof value==='object'&&'result' in value?value.result:null);
+          if(!parsed.success||parsed.data.sys_id!==input.update_set_sys_id)throw new BoundedReadError('invalid_response');
+          check();this.parent=structuredClone(parsed.data);state='release';
+        },
+        release:async(ack:object)=>{
+          requireState('release');const value=take(ack,'release');this.releaseRead=true;
+          this.#decision=this.#observeRelease(async()=>{
+            if(!value||typeof value!=='object'||!('result' in value)||!Array.isArray(value.result)||value.result.length>21)throw new BoundedReadError('invalid_response');
+            return this.#projectReleaseRows(value.result);
+          },check);
+          const decision=await this.#decision;check();state='done';return decision;
+        },
+        revoke:()=>{state='closed';this.parent=undefined;this.#permit=undefined;this.#releaseSnapshot=undefined;this.#releasePort=undefined;this.#decision=undefined;},
+      }));
+    }
+  }
   /** No raw registration. A copied/proxy/foreign source cannot satisfy the private-field check. */
   static releasePortFor(source:unknown,session:BoundedReadSession,permit:object):ReviewSourceReleasePort|undefined{
     if(!source||typeof source!=='object'||!(#session in source)||source.#session!==session||source.#permit!==permit)return undefined;
@@ -86,6 +115,9 @@ export class BoundedUpdateSetSource {
     this.releaseRead = true;
     const rows = await this.rows(this.path('sys_cluster_state', 'build_name', undefined, 21), 21);
     // Never retain unexpected internal addresses/certificates, even if a server ignores fields.
+    return this.#projectReleaseRows(rows);
+  }
+  #projectReleaseRows(rows:unknown[]){
     return rows.map(row => {
       if (!row || typeof row !== 'object' || Array.isArray(row)) throw new BoundedReadError('invalid_response');
       const value = 'build_name' in row ? row.build_name : null;
@@ -100,7 +132,7 @@ export class BoundedUpdateSetSource {
     this.#decision ??= this.#observeRelease();
     return this.#decision;
   }
-  async #observeRelease(): Promise<ReleaseDecision> {
+  async #observeRelease(readRows=()=>this.#readReleaseRows(),guard=()=>this.#session.assertActive()): Promise<ReleaseDecision> {
     const unknown = (reason: Extract<ReleaseEvidence, { source: 'none' }>['reason']): ReleaseDecision => Object.freeze<ReleaseDecision>({
       release_match: 'unknown', instance_release: { source: 'none', resolution_status: 'unknown', family: null,
         visibility_scope: 'unavailable', reason }, limitations: Object.freeze([reason, 'release_unknown']),
@@ -114,7 +146,7 @@ export class BoundedUpdateSetSource {
         'release_config_may_be_stale', 'release_observation_unavailable']);
     };
     let rows: { build_name: string | null }[];
-    try { rows = await this.#readReleaseRows(); }
+    try { rows = await readRows(); }
     catch (error) {
       if (error instanceof BoundedReadError) {
         if (['access_denied', 'not_found_or_not_visible', 'upstream_unavailable'].includes(error.code)) return fallback();
@@ -122,7 +154,7 @@ export class BoundedUpdateSetSource {
       }
       throw error;
     }
-    this.#session.assertActive();
+    guard();
     if (rows.length > 20) return unknown('observation_limit');
     if (!rows.length || rows.every(row => !row.build_name?.trim())) return fallback();
     if (rows.some(row => !row.build_name?.trim())) return unknown('observation_incomplete');

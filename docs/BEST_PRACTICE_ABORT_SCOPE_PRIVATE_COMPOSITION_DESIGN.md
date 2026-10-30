@@ -1,7 +1,7 @@
 # AU-BR-006 新規runのprivate compositionとsource採用設計
 
-Version: br006-private-composition-draft-0.5 / Date: 2026-10-30。
-Status: CM-04-01の同core accounting供給とCM-04-02の認証／I/O前の固定compositionを実装。native/typedの実session I/O採用・実通信は未実施。正式発行口閉鎖・Unknown・全体受付無効・VM／監視／telemetry調査保留を維持する。
+Version: br006-private-composition-draft-0.6 / Date: 2026-10-31。
+Status: CM-04-01／02に加え、CM-04-03の固定200・fake依存によるprivate ack受理／既存release判定を実装。実transport採用・実通信は未実施。正式発行口閉鎖・Unknown・全体受付無効・VM／監視／telemetry調査保留を維持する。
 
 CM-04は、新規runだけを対象に、同じ予算・認証snapshot・source・ReleasePermitを結ぶ。最初の実装は予算生成とaccounting供給の分離までとし、既存sessionの後付け切替やMCP設定による有効化は行わない。
 
@@ -133,7 +133,7 @@ oracleはfake dispatcherの到達数、固定入力byte列の独立長／hash、
 2. **CM-04-02 新規run compositionの内部接続**。module間の生成継続と更新port非公開をレビュー後、認証／I/O前の固定source結合をfake依存で実装する。既存公開entryはlegacyのまま。
 3. **CM-04-03 private ack consumerと既存release判定**。固定200の親・releaseを同sourceへ一度受理し、prepared限定summaryまで確認する。HTTP差分・final移譲・payload／workerの採用は追加設計を要する。
 
-CM-04-01は§10、CM-04-02は§11を参照。次の接続範囲はCM-04-03であり、既存の実session I/O経路のlaneは変更しない。
+CM-04-01は§10、CM-04-02は§11、CM-04-03は§12を参照。既存の実session I/O経路のlaneは変更しない。
 
 ## 10 CM-04-01 同core accounting供給
 
@@ -145,7 +145,7 @@ canonical生成rootだけが`construction.takeBootstrapAccounting()`を保持す
 
 取得後はlegacy writerのdispatch／dispatchAt／chunk／payloadが`invalid_state`で停止し、accounting.releaseはcore全体を閉じる。このため、同coreを共有する将来のtyped sessionでは、bootstrap releaseの時点でrun全体の会計更新が終わる。prepared後のmetadata・final検証・Pを計上するには、R移譲（§6）と同時に設計する新しい更新portが必要であり、legacy writerの再開やrelease後の再openで代用しない。CM-04-02はこの制約を前提に、bootstrap終了までの接続に限る。
 
-合成試験は同coreの観測一致、legacy利用後拒否、再入、期限・取消・失効、readonly権限非露出、fresh factory互換を対象とする。実sessionのready／source claim、owner登録leaseとbootstrapの参照一致、source private受理は未接続であり、PC-A01〜A14全体を完了扱いにしない。
+CM-04-01の合成試験は同coreの観測一致、legacy利用後拒否、再入、期限・取消・失効、readonly権限非露出、fresh factory互換を対象とする。同段階で未接続だったready／source claim・登録lease・source private受理は、§12でfake依存だけを接続した。PC-A01〜A14全体を完了扱いにしない。
 
 検証記録：[CM-04-01](E2E_BEST_PRACTICE_CONSTRUCTION_ACCOUNTING_2026-10-29.md)。
 
@@ -162,6 +162,44 @@ canonical生成rootだけが`construction.takeBootstrapAccounting()`を保持す
 
 この段階の成功は`constructor_bound`であり、`prepared_only`／ReleasePermit発行／認証readyではない。C/G/P=0、ready世代0、正式発行disabled、dispatch unavailableのままである。初期bindingは対象identityだけで、release証拠の代用品にはならない。
 
-CM-04-03では、同じ固定入口のprivate scope内に認証→親→releaseの継続を追加する。今回の公開summaryを再提出して再開する方式、accounting.release後の再open、外部のraw JSON／fake permitの採用は認めない。固定200のprivate ack consumer・既存release判定、HTTP差分とfinal移譲は本段階では未接続。PC-A01〜A14全体の完了や実機検証済みとは主張しない。
+CM-04-03の同じ固定入口のprivate継続は§12を参照。CM-04-02の公開summaryを再提出して再開する方式、accounting.release後の再open、外部のraw JSON／fake permitの採用は認めない。HTTP差分とfinal移譲は未接続。PC-A01〜A14全体の完了や実機検証済みとは主張しない。
 
 検証記録：[CM-04-02](E2E_BEST_PRACTICE_PRIVATE_COMPOSITION_2026-10-30.md)。
+
+## 12 CM-04-03 固定200 fake bytesからのprivate ack受理
+
+同じ`prepareNewReviewComposition`の内部呼出しで、`synthetic_io: { responses: [...] }`を明示したときだけ非同期継続へ進む。省略時は従来の同期`constructor_bound`／解放を維持する。MCP引数・instances設定・通常BoundedReadOptionsへflagは追加しない。
+
+### 12.1 fake依存の上限と非通信性
+
+transcriptはdata propertyだけのplain／null-prototype objectと通常array、非共有Uint8Arrayから生成前にcopyする。proxy／getter／未知key／holeを拒否する。各行は`purpose`・`bytes`・任意`delay_ms`だけ。並びはparent→release、またはauthentication→parent→releaseの固定2／3行、1行4MiB以下、遅延0〜10,000ms。status・URL・Authorization・dispatcher／fetch callback・source／permit／ackを注入する欄はない。200以外は未対応として拒否する。
+
+固定fake adapterはcopy済みbyte列だけから新規のin-memory Response／Streamsを作り、既存NA-03 native cleanup→同bytes JSON／hash→一度限りackへ通す。ネットワーク関数を呼ばず、default fetchへfallbackしない。fake入力copy（最大12MiB）は合成依存準備であり、C/Gは実際にfake dispatch／readへ到達したときだけ同canonical coreへ計上する。caller bufferの後続変更を読むことはない。
+
+### 12.2 private source consumerの供給と消費
+
+sessionは新規scopeにECMAScript-privateな生成keyを作る。source constructorの内部継続は、module-private handlerが同sessionのprivate key・未消費・未失効を確認し、同sourceを一度claimしてからだけconsumerをcaptureする。検査口`claimPrivateCompositionSource`は不変のESM関数でbooleanだけを返し、staticプロパティの差替えやraw session登録から権限を作れない。key／consumerは外へ返さず、fixture台帳も共有しない。
+
+固定bootstrapのparent callback／release resolverだけが、native同bytes ack後の値からrun-localなopaque ackを作る。同keyのconsumerはpurposeを照合し、WeakMapから消してから受理する。consumerはparent→release→done（失敗／終了時closed）の順序だけを認める。raw JSON・別key・形の同じtoken・公開summaryから再開する口はない。
+
+parentは既存固定5列・target同一性を確認しprivate snapshotへcopyする。releaseは既存のbuild_name射影と`#observeRelease`／`#completeRelease`を使う。実source自身が既存private ReleasePermit／portを生成して同ownerへbindし、bootstrapはその既存bindingを再検証する。二度目のsource claimを発行しない。公開readParent／resolveRelease／session.getを呼び戻さないため、重複認証・二重GET・循環がない。
+
+既存C方式の空200観測時fallback・設定期限／binding・実測競合・複数node・21件sentinelを維持する。403 fallbackを含む非200のHTTP意味差は採用しない。unknown／mismatched／conflict等は`release_not_admitted`で停止し、metadataは取得しない。
+
+### 12.3 会計・停止・返却
+
+| 費目 | この接続の所有点 |
+|---|---|
+| C | 同coreのdispatchAt。per-user／有効cacheは2、合成OAuth交換時は3。native dispatch直前に一度だけ計上 |
+| G | 同coreのchunk。認証を含む同bytesを各一度課金、拒否分を返金しない |
+| P | 未接続、0のまま |
+| R | bootstrap開始時の4枠を一度予約し、終了時release。同coreを閉じ、補充・移譲・再openしない |
+| clock／phase | 元t0・60秒を維持。sessionが一度決めたreserveをbootstrapへ渡し、native attempt／cleanupにも同leaseを使用 |
+
+per-user／cache／exchangeは固定snapshotだけから選び、呼出し側のauth自己申告を受けない。合成OAuth tokenは実通信に使わず出力しない。readyは同ownerへ一度だけmarkする。
+
+停止時はowner失効→private key／consumer失効→同contractのrevokeとabortへ進み、first primaryを上書きしない。native cleanup完了・post-guard後だけ親／releaseを受理する。finallyでconsumer・accounting・sessionのtimer／listener／同時実行枠・token参照を閉じ、fake byte copyも消去する。
+
+成功は`fake_io: true`を含むfrozen `prepared_only`限定summaryで、release evidence／limitations・ready世代・C/G/Pのcopyだけを返す。これは合成観測でありPDI実測ではない。source／permit／lease／writer／accounting／token／本文／node内部情報は返さない。正式発行disabled・dispatch unavailableを維持し、metadata／payload／worker／sealの権限は付与しない。失敗は固定BoundedReadError codeのみ。
+
+検証記録：[CM-04-03](E2E_BEST_PRACTICE_PRIVATE_ACK_2026-10-31.md)。実transport／非200差分／final枠移譲・P更新port／正式body・job bindingは後続の別設計・承認が必要。

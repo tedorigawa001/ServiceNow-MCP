@@ -1,0 +1,13 @@
+import assert from 'node:assert/strict';
+globalThis.fetch=()=>{throw Error('Network forbidden');};
+const {BoundedReadSession}=await import('../../../dist/servicenow/bounded-read.js');
+const id='a'.repeat(32),encode=x=>new TextEncoder().encode(JSON.stringify(x));
+const snapshot={instanceUrl:'https://synthetic.invalid',authMode:'per-user',perUserBearerToken:'PRIVATE_TOKEN',oauth:{clientId:'unused'}};
+const responses=[{purpose:'parent',bytes:encode({result:{sys_id:id,state:'in progress',application:'global',sys_updated_on:'2026-10-31',sys_mod_count:'0'}})},{purpose:'release',bytes:encode({result:[{build_name:'Australia'}]})}];
+const result=await BoundedReadSession.prepareNewReviewComposition(snapshot,{update_set_sys_id:id},{synthetic_io:{responses}});
+assert.equal(result.state,'prepared_only');assert.equal(result.fake_io,true);assert.equal(result.ready_generation,1);assert.equal(result.cleanup,'closed');assert.equal(result.reserved,0);
+assert.equal(result.instance_release.family,'Australia');assert.equal(result.evidence_issuance,'disabled');assert.equal(result.dispatch,'unavailable');
+assert.deepEqual(result.budget,{requests:2,received_bytes:responses.reduce((n,r)=>n+r.bytes.length,0),payload_bytes:0});
+for(const key of ['source','permit','lease','accounting','token'])assert(!Object.hasOwn(result,key));
+assert(!JSON.stringify(result).includes('PRIVATE'));
+console.log('CM-04-03 compiled private parent/release ack / same-budget / closed PASS');
