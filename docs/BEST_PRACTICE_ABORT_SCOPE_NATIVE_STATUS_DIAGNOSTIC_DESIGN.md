@@ -1,7 +1,7 @@
 # AU-BR-006：native status証拠の発行元・上位診断ownerの対設計
 
-Version: br006-native-status-diagnostic-draft-0.2 / Date: 2026-10-31。
-Status: **詳細設計案のみ。実装・fallback有効化・実sessionへのnative採用・実接続・実通信は行わない。正式発行口閉鎖・Unknown・全体受付無効・VM／監視／telemetry調査保留を維持する。**
+Version: br006-native-status-diagnostic-draft-0.3 / Date: 2026-10-31。
+Status: **ND-01の診断ownerを純粋fakeだけで実装。native証拠・実sessionへの採用は未接続。fallback有効化・実接続・実通信は行わない。正式発行口閉鎖・Unknown・全体受付無効・VM／監視／telemetry調査保留を維持する。**
 
 基準：[SA-02と後続差分](BEST_PRACTICE_ABORT_SCOPE_STATUS_SOURCE_ACCEPTANCE_DELTA_DESIGN.md)、[ST-03の注入owner](BEST_PRACTICE_ABORT_SCOPE_STATUS_TERMINAL_CONNECTION_DESIGN.md)、[単一予算・停止owner](BEST_PRACTICE_ABORT_SCOPE_STATUS_SESSION_BINDING_DELTA_DESIGN.md)、[非200の承認比較](BEST_PRACTICE_ABORT_SCOPE_NON200_APPROVAL_COMPARISON.md)。型名・stage・操作名は内部契約案で、実装済みAPIや公開JSON enumではない。
 
@@ -150,4 +150,18 @@ cleanup用readonly観測は停止後も認めるが、authorityの生存を復�
 
 SA-03へ進む前には[比較資料](BEST_PRACTICE_ABORT_SCOPE_NON200_APPROVAL_COMPARISON.md)のD1（未確認cleanupなら停止）、D2（確認済みrelease403／404だけ同sourceへ）と関連A／ST-A／STC-Aの条件を明示承認する必要がある。D3 retryは独立した別判断とし、retry枯渇fallback・bodyなし429／5xxは最小SA-03に含めない。承認だけでgateを自動解除しない。
 
-本書は①native発行元と②上位診断ownerを対にした設計のみ。200限定guard・正式発行口閉鎖・Unknown・全体受付無効・調査保留を維持し、fallback有効化・実接続・実通信・実機操作・設定変更・Pushを承認しない。
+本書は①native発行元と②上位診断ownerを対にした設計と、次節のND-01限定実装記録である。200限定guard・正式発行口閉鎖・Unknown・全体受付無効・調査保留を維持し、fallback有効化・実接続・実通信・実機操作・設定変更・Pushを承認しない。
+
+## 11 ND-01：純粋fakeの診断owner
+
+[内部model](../src/review/abort-scope-evidence-native-diagnostic.ts)はpackage除外済みの`abort-scope-evidence*`配下に配置した。唯一のexportは固定case名のdata-only fixtureであり、owner／writer／binding／attemptを取得・登録・供給する口はない。実sessionのclaim台帳は共有しない。
+
+- constructorで固定3slotを確保し、clock／callback／I/Oは一切呼ばない。bindingは同creatorのimmutable binding objectへの参照一致で一度だけ行い、失敗後の再bindingを拒否する。既存実sessionやReleasePermitの証明ではない。
+- purpose別header／cleanup／acceptance writerとrun停止／teardown writerはprivate closure。ordinal1のHTTP／cleanup／受理履歴を保持し、後続attemptは件数と最初の失敗理由だけを更新する。固定3個のcurrent参照・観測bit・body有無・cleanup進行状態で重複を拒否し、可変長履歴を持たない。現在attemptのcleanup確認前に次attemptへ進めず、後続cleanupの失敗／pending終端も停止・最初の理由へ反映する。順序付きordinalは最大210の防御上限であり、retry承認・C計上ではない。
+- first primary（内部／公開code）・local・refusalを分け、診断拒否は同期で停止／受理状態を失効する。停止後に既存attemptのHTTPやcleanupが到着しても先行primaryは置換しない。新規attempt／受理継続は拒否する。
+- cleanupはnot_started→pending→confirmed／unconfirmed。body有無とkind／reasonの矛盾・二重終端を拒否する。seal時のpendingはwindow_ended／unconfirmed、解放中はunconfirmedに固定する。終端済みを昇格しない。seal後は全writerと二重sealがlate_ignoredで同じcopyを維持する。
+- sealは新しい権限を生成せず、受理のfirst terminalと消費数0／1を残したまま最新phaseをrevokedへ移す。返却は再帰的freezeした限定copyのみ、全7permissionはfalse。
+
+本段階のcleanupは内部で組み立てた合成事実であり、reader操作・操作数・pre-release facts・typed native terminalの証明ではない。受理stageも診断model内の非実行遷移で、source消費やfallbackには接続しない。停止・期限は固定codeの合成イベントとして検証し、clockやcanonical budgetを新設／更新しない。ND-T02／03／06／10の実操作・元window・会計確認はND-02以降に残る。
+
+[合成テスト](../tests/review/native-status-diagnostic.test.ts)、[compiled fixture](../tests/review/fixtures/compiled-native-status-diagnostic.mjs)、[検証記録](E2E_BEST_PRACTICE_NATIVE_DIAGNOSTIC_ND01_2026-10-31.md)を参照。ND-02のnative issuer接続とND-03の実class連続fakeは未実装。

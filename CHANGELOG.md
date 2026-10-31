@@ -32,6 +32,8 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 ### Added
 
+- ND-01 adds a package-excluded, pure-fake upper diagnostic owner with fixed authentication/parent/release slots, creator-only writers, one-shot identity binding and seal. First run/local/refusal reasons remain separate from HTTP/cleanup and acceptance history; pending cleanup seals as unconfirmed, late writes cannot upgrade it, and later attempts cannot overwrite ordinal-1 facts. Fixed-case tests and compiled/offline packaging checks return frozen non-authoritative copies only. Native evidence, session/source adoption, fallback, formal issuance and whole-run admission remain unconnected/disabled.
+
 - Moves the SA-02 status-acceptance probe entry and its fake profile into a package-excluded development module. The runtime keeps only a one-shot internal friend that pins the fake object and normalizes its outputs; the static method is removed from `BoundedReadSession`.
 
 - Fixes the SA-02 probe so a failed ready transition reports the earlier stop reason (or `internal_review_error`) instead of `authentication_failed`, since the probe performs no authentication.
