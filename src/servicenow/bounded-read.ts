@@ -52,10 +52,24 @@ let sourceConstructionClaim:(session:unknown,key:object,source:BoundedUpdateSetS
 export function claimPrivateCompositionSource(session:unknown,key:object,source:BoundedUpdateSetSource){return sourceConstructionClaim(session,key,source);}
 type StatusObservation=Readonly<{purpose:'release';status:403|404;cleanup:'cancelled'|'no_body'|'unconfirmed'}>;
 type StatusProbeFake=Readonly<{parent():Uint8Array;observe(signal:AbortSignal):Promise<StatusObservation>;dispose():void}>;
+/** Fresh closed-gate fake composition only. Identities below are opaque aliases, never raw session/core/source ports. */
+export type NativeStatusProbeScope=Readonly<{binding:object;deadline_ms:number;budget:Readonly<{read():{remaining_ms:number}}>;
+  check(binding:object):ReadFailureCode|null;accept(binding:object,value:unknown):ReadFailureCode|null;stop(code:ReadFailureCode):void}>;
+type NativeStatusDriver=Readonly<{parent():Uint8Array;begin(scope:NativeStatusProbeScope):void;
+  run(window:Readonly<{purpose:'release';ordinal:1;window_origin_ms:number;cleanup_floor_ms:number}>):Promise<void>;
+  stop(code:ReadFailureCode):void;close():Promise<void>;dispose():void}>;
 export type StatusAcceptanceSummary=StatusAcceptanceDraft&Readonly<{accepted_before_close:true;consumptions:1;ready_generation:1;
   budget:Readonly<{requests:number;received_bytes:number;payload_bytes:number}>;fake_io:true;cleanup:'closed';reserved:0}>;
 export type StatusAcceptanceProbe=(snapshot:ReadSnapshot,input:unknown,options:CompositionOptions&{fake:unknown})=>Promise<StatusAcceptanceSummary>;
 let statusProbe:StatusAcceptanceProbe|undefined;
+export type NativeStatusCompositionResult=Readonly<{ok:boolean;code:ReadFailureCode|null;fake_io:true;draft:StatusAcceptanceDraft|null;consumptions:number;
+  accepted_before_close:boolean;binding:Readonly<{same_core:boolean;same_source:boolean}>;run_diagnostic:Readonly<{internal:string|null;public:ReadFailureCode|null}>;budget:Readonly<{requests:number;received_bytes:number;payload_bytes:number}>;cleanup:'closed';reserved:0}>;
+type NativeStatusProbe=(snapshot:ReadSnapshot,input:unknown,options:CompositionOptions&{driver:unknown})=>Promise<NativeStatusCompositionResult>;
+let nativeStatusProbe:NativeStatusProbe|undefined;
+/** One-shot development friend; it can only create a fresh fake run with network fixed to throw. */
+export function takeNativeStatusCompositionProbe():NativeStatusProbe{
+  const probe=nativeStatusProbe;nativeStatusProbe=undefined;if(!probe)throw new BoundedReadError('internal_review_error');return probe;
+}
 /** SA-02 friend for the package-excluded development module: handed out once, never re-registered or replaced. */
 export function takeStatusAcceptanceProbe():StatusAcceptanceProbe{
   const probe=statusProbe;statusProbe=undefined;
@@ -113,6 +127,29 @@ export class BoundedReadSession {
   private readonly removeExternal: () => void;
   readonly releasePolicy: ReturnType<typeof pinReviewReleaseConfig>;
 
+  static async #runNativeStatusProbe(snapshot:ReadSnapshot,input:unknown,options:CompositionOptions&{driver:unknown}):Promise<NativeStatusCompositionResult>{
+    let session:BoundedReadSession|undefined,driver:NativeStatusDriver|undefined,value:(StatusAcceptanceDraft&{consumptions:1})|undefined;
+    let code:ReadFailureCode|null=null;
+    const progress={bound:false,consumptions:0};let runDiagnostic:NativeStatusCompositionResult['run_diagnostic']=Object.freeze({internal:null,public:null});
+    try{
+      const fields=pinDataObject(options,new Set(['signal','limits','driver']));
+      const methods=pinDataObject(fields.driver,new Set(['parent','begin','run','stop','close','dispose']));
+      if(Object.keys(methods).length!==6||Object.values(methods).some(f=>typeof f!=='function'||types.isProxy(f)))throw new BoundedReadError('invalid_input');
+      driver=Object.freeze(Object.fromEntries(Object.entries(methods).map(([k,f])=>[k,(...args:unknown[])=>Reflect.apply(f as (...a:unknown[])=>unknown,fields.driver,args)]))) as NativeStatusDriver;
+      const signal=fields.signal as AbortSignal|undefined;
+      if(signal!==undefined){if(types.isProxy(signal)||Object.getPrototypeOf(signal)!==AbortSignal.prototype||['aborted','addEventListener','removeEventListener'].some(k=>Object.hasOwn(signal,k)))throw new BoundedReadError('invalid_input');Reflect.apply(Object.getOwnPropertyDescriptor(AbortSignal.prototype,'aborted')!.get!,signal,[]);}
+      const pinned=pinDataObject(snapshot,snapshotKeys),fixed=Object.freeze({...pinned,oauth:Object.freeze(pinDataObject(pinned.oauth,oauthKeys))}) as unknown as ReadSnapshot;
+      if(fixed.authMode!=='per-user')throw new BoundedReadError('invalid_input');
+      const parsed=parseBoundedSourceInput(input);
+      session=new BoundedReadSession(fixed,{signal,limits:fields.limits as BoundedReadOptions['limits'],fetch:()=>{throw new BoundedReadError('internal_review_error');}});
+      value=await session.#probeStatusAcceptance(parsed,driver,progress);session.#checkComposition();
+    }catch(error){code=error instanceof BoundedReadError?error.code:session?'internal_review_error':'invalid_input';session?.stop(code);driver?.stop(code);}
+    finally{try{await driver?.close();}catch{code??='internal_review_error';session?.stop(code);}finally{try{driver?.dispose();}catch{code??='internal_review_error';}finally{if(session){runDiagnostic=Object.freeze({internal:session.#runOwner.failure()??null,public:session.#budget.view.failure()});session.#close();}}}}
+    return Object.freeze({ok:code===null,code,fake_io:true,draft:code===null?value??null:null,consumptions:progress.consumptions,
+      accepted_before_close:code===null&&value!==undefined,binding:Object.freeze({same_core:progress.bound,same_source:progress.bound}),run_diagnostic:runDiagnostic,
+      budget:Object.freeze(session?.stats()??{requests:0,received_bytes:0,payload_bytes:0}),cleanup:'closed',reserved:0});
+  }
+
   /** Fresh fake-only SA-02 probe, reachable only through the one-shot friend. No existing-session adoption or activation flag. */
   static async #runStatusAcceptanceProbe(snapshot:ReadSnapshot,input:unknown,options:CompositionOptions&{fake:unknown}){
     let session:BoundedReadSession|undefined,fake:StatusProbeFake|undefined;
@@ -140,7 +177,8 @@ export class BoundedReadSession {
     finally{fake?.dispose();if(session)session.#close();}
   }
 
-  async #probeStatusAcceptance(input:ReturnType<typeof parseBoundedSourceInput>,fake:StatusProbeFake){
+  async #probeStatusAcceptance(input:ReturnType<typeof parseBoundedSourceInput>,fake:StatusProbeFake|NativeStatusDriver,progress?:{bound:boolean;consumptions:number}){
+    const native='begin' in fake?fake:undefined;
     const key=Object.freeze({});this.#compositionKey=key;
     let consumer:Parameters<CompositionSourceConstruction['capture']>[0]|undefined,consumptions=0;
     const parents=new WeakMap<object,unknown>();
@@ -162,15 +200,30 @@ export class BoundedReadSession {
         const checked=scope.statusBinding.inspect(scope.handle,this.#snapshot,this.#runLease,scope.source);guard();
         if(!checked.ok||checked.value.ready_generation!==1)throw new BoundedReadError('internal_review_error');
         if(this.#runLease.read().remaining_ms<=value.window.floor)throw new BoundedReadError('upstream_unavailable');
-        consumptions++;return value.value;
+        consumptions++;if(progress)progress.consumptions=consumptions;return value.value;
       },rejectStatus,capture:c=>{if(consumer)throw new BoundedReadError('internal_review_error');consumer=c;}});
     const attempt=Object.freeze({});
-    this.#compositionRevoke=()=>{this.#compositionKey=undefined;if(terminal)terminals.delete(terminal);terminal=undefined;consumer?.revoke();};
+    this.#compositionRevoke=()=>{this.#compositionKey=undefined;if(terminal)terminals.delete(terminal);terminal=undefined;consumer?.revoke();native?.stop(this.stopCode??'closed');};
     try{
       guard();if(!consumer||this.#compositionSource!==scope.source)throw new BoundedReadError('internal_review_error');
+      if(progress)progress.bound=true;
+      const nativeBinding=Object.freeze({});let nativeDraft:StatusAcceptanceDraft|undefined,nativeRunning=false;
+      const checked=()=>{guard();if(this.#compositionSource!==scope.source)throw new BoundedReadError('internal_review_error');
+        const r=scope.statusBinding.inspect(scope.handle,this.#snapshot,this.#runLease,scope.source);guard();if(!r.ok||r.value.ready_generation!==1)throw new BoundedReadError('internal_review_error');};
+      const reject=(error:unknown):ReadFailureCode=>{const c=error instanceof BoundedReadError?error.code:'internal_review_error';this.stop(c);return this.stopCode??c;};
+      native?.begin(Object.freeze({binding:nativeBinding,deadline_ms:this.limits.deadlineMs,budget:Object.freeze({read:()=>({remaining_ms:this.#runLease.read().remaining_ms})}),
+        check:(binding:object)=>{try{if(binding!==nativeBinding)rejectStatus('evidence_binding_mismatch');checked();return null;}catch(e){return reject(e);}},
+        accept:(binding:object,raw:unknown)=>{try{
+          if(binding!==nativeBinding)rejectStatus('evidence_binding_mismatch');checked();if(!nativeRunning||nativeDraft)rejectStatus('invalid_state');
+          const v=pinDataObject(raw,new Set(['purpose','status','cleanup']));
+          if(v.purpose!=='release'||(v.status!==403&&v.status!==404)||!['cancelled','no_body'].includes(v.cleanup as string))throw new BoundedReadError('invalid_response');
+          terminal=Object.freeze({});terminals.set(terminal,{source:scope.source,snapshot:this.#snapshot,lease:this.#runLease,core:this.#budget,attempt,window:{floor:activeFloor!},value:v as StatusObservation});
+          nativeDraft=consumer!.status(terminal);checked();return null;
+        }catch(e){return reject(e);}},stop:(code:ReadFailureCode)=>this.stop(code)}));
       scope.accounting.reserve();guard();
       // Ready can only fail after a run stop or misuse; this probe performs no authentication to blame.
       if(!this.#runOwner.markReady(this.#snapshot,this.#runLease)){this.#syncRunFailure();throw new BoundedReadError(this.stopCode??'internal_review_error');}
+      if(native)checked();
       scope.accounting.dispatch(this.reserveMs);const bytes=fake.parent();scope.accounting.chunk(bytes.byteLength);
       if(bytes.byteLength>this.limits.responseBytes)throw new BoundedReadError('receive_budget_exceeded');
       let parent:unknown;try{parent=JSON.parse(new TextDecoder('utf-8',{fatal:true}).decode(bytes));}catch{throw new BoundedReadError('invalid_response');}
@@ -178,11 +231,14 @@ export class BoundedReadSession {
       const window=Object.freeze({floor:Math.max(this.reserveMs,this.#runLease.read().remaining_ms-10000)});
       activeFloor=window.floor;
       scope.accounting.dispatch(window.floor);
-      const value=await this.guarded(fake.observe(this.controller.signal),this.controller.signal);guard();
+      let value:StatusObservation|undefined;
+      if(native){nativeRunning=true;try{await this.guarded(native.run(Object.freeze({purpose:'release',ordinal:1,window_origin_ms:this.#runLease.read().remaining_ms,cleanup_floor_ms:window.floor})),this.controller.signal);}finally{nativeRunning=false;}}
+      else value=await this.guarded((fake as StatusProbeFake).observe(this.controller.signal),this.controller.signal);guard();
       if(this.#runLease.read().remaining_ms<=window.floor)throw new BoundedReadError('upstream_unavailable');
-      if(value.cleanup==='unconfirmed')throw new BoundedReadError('internal_review_error');
-      terminal=Object.freeze({});terminals.set(terminal,{source:scope.source,snapshot:this.#snapshot,lease:this.#runLease,core:this.#budget,attempt,window,value});
-      const draft=consumer.status(terminal);guard();
+      let draft:StatusAcceptanceDraft;
+      if(native){if(!nativeDraft)throw new BoundedReadError('internal_review_error');draft=nativeDraft;}
+      else{if(!value||value.cleanup==='unconfirmed')throw new BoundedReadError('internal_review_error');
+        terminal=Object.freeze({});terminals.set(terminal,{source:scope.source,snapshot:this.#snapshot,lease:this.#runLease,core:this.#budget,attempt,window,value});draft=consumer.status(terminal);}guard();
       if(consumptions!==1)throw new BoundedReadError('internal_review_error');
       const result=Object.freeze({...draft,accepted_before_close:true as const,consumptions:1 as const,ready_generation:1 as const,budget:this.#budget.view.stats()});
       guard();return result;
@@ -229,6 +285,7 @@ export class BoundedReadSession {
   }
 
   static {
+    nativeStatusProbe=(snapshot,input,options)=>BoundedReadSession.#runNativeStatusProbe(snapshot,input,options);
     statusProbe=(snapshot,input,options)=>BoundedReadSession.#runStatusAcceptanceProbe(snapshot,input,options);
     sourceConstructionClaim=(session:unknown,key:object,source:BoundedUpdateSetSource):boolean=>{
     if(!key||typeof key!=='object'||!session||typeof session!=='object'||types.isProxy(session)||!(#compositionKey in session)||!session.#compositionKey||session.#compositionKey!==key||session.#compositionSource||!session.#compositionStarted||session.disposed||session.#stopPropagated)return false;

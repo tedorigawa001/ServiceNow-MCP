@@ -1,12 +1,13 @@
 /** ND-01: pure, package-excluded diagnostic model. No runtime registration or native operations. */
 import { types } from 'node:util';
 import { ReadableStream as Stream, ReadableStreamDefaultReader as Reader } from 'node:stream/web';
+import { BoundedReadError, takeNativeStatusCompositionProbe, type NativeStatusProbeScope, type ReadSnapshot, type BoundedReadOptions } from '../servicenow/bounded-read.js';
 
 type Purpose = 'authentication' | 'parent' | 'release';
 type Stage = 'binding' | 'header' | 'cleanup' | 'acceptance' | 'stop' | 'teardown' | 'seal';
 type Code = 'invalid_state' | 'evidence_binding_mismatch' | 'authentication_failed' | 'access_denied' |
     'not_found_or_not_visible' | 'internal_review_error' | 'cancelled' | 'deadline_exceeded' | 'upstream_unavailable' | 'invalid_response' |
-    'closed' | 'invalid_input' | 'invalid_observation_time';
+    'closed' | 'invalid_input' | 'invalid_observation_time' | 'receive_budget_exceeded' | 'request_budget_exceeded' | 'phase_deadline_exceeded';
 type NativeReason = 'reader_owner_unknown' | 'cancel_pending' | 'cancel_rejected' | 'closed_pending' | 'closed_rejected' |
     'lock_release_failed' | 'cleanup_deadline' | 'observation_invalid';
 type NativeFacts = Readonly<{ reader_owned: boolean; closed_captured: boolean; read_started: false; read_pending: false;
@@ -197,7 +198,7 @@ function data(raw: unknown, keys: readonly string[]): Record<string, unknown> | 
 
 type NativeFault = 'copy_terminal' | 'foreign_terminal' | 'copy_cleanup' | 'foreign_anchor' | 'consume_twice';
 /** Private faults are reachable only from fixed-case fixtures, never the injected constructor input. */
-function constructInjectedNativeDiagnosticWorkflow(raw: NativeInput, fault?: NativeFault) {
+function constructInjectedNativeDiagnosticWorkflow(raw: NativeInput, fault?: NativeFault, bridge?: NativeStatusProbeScope) {
     // Bind the upper owner before inspecting injected dependencies or observing Response/clock/native state.
     const binding = makeBinding(), upper = construct(binding); upper.bind(binding);
     const writer = upper.writers('release');
@@ -219,12 +220,18 @@ function constructInjectedNativeDiagnosticWorkflow(raw: NativeInput, fault?: Nat
     let primary: Code | null = null, revoked = false, started = false, sealed = false, sampling = false;
     let issueClaim = false, consumeClaim = false, live: Terminal | undefined, current: Record | undefined;
     let foreignUnchanged = true;
+    let notifying = false;
     let last: number | undefined, runWork: Promise<ReturnType<typeof snapshot>> | undefined;
     function stop(code: Code = 'cancelled', stage: Stage = 'stop') {
         if (sealed) return;
         primary ??= code; upper.stop(primary, stage);
         // Authority is revoked synchronously; a pending cleanup keeps its read-only wait until the original floor.
         revoked = true; if (live) terminals.delete(live); live = undefined;
+        if (bridge && !notifying) {
+            notifying = true;
+            try { bridge.stop(primary === 'invalid_state' || primary === 'invalid_observation_time' || primary === 'evidence_binding_mismatch' ? 'internal_review_error' : primary); }
+            finally { notifying = false; }
+        }
     }
     function fail(code: Code, stage: Stage) { upper.reject(code, stage); stop(code, stage); }
     if (!validInput) fail('invalid_input', 'binding');
@@ -307,6 +314,7 @@ function constructInjectedNativeDiagnosticWorkflow(raw: NativeInput, fault?: Nat
             c.kind === 'no_body' && f.cancel === 'not_applicable' && f.closed === 'not_applicable' && f.release === 'not_applicable' && Object.values(operations).every(n => n === 0);
     }
     function guard(r: Record): boolean {
+        if (bridge) { const error = bridge.check(bridge.binding); if (error) { stop(error as Code); return false; } }
         return !revoked && !primary && current === r && r.anchor.binding === binding && eligible(r);
     }
     function consume(r: Record, token: Terminal) {
@@ -320,7 +328,13 @@ function constructInjectedNativeDiagnosticWorkflow(raw: NativeInput, fault?: Nat
         phase = 'pre_guard';
         if (!guard(r) || sample(r.anchor.window.cleanup_floor_ms) || !guard(r) || writer.acceptance(r.anchor.attempt, 'consuming') !== 'recorded') return;
         phase = 'post_guard';
-        if (sample(r.anchor.window.cleanup_floor_ms) || !guard(r) || writer.acceptance(r.anchor.attempt, 'accepted') !== 'recorded') return;
+        if (sample(r.anchor.window.cleanup_floor_ms) || !guard(r)) return;
+        if (bridge) {
+            const error = bridge.accept(bridge.binding, Object.freeze({ purpose: 'release', status: r.anchor.header.status, cleanup: r.cleanup!.kind }));
+            if (error) { stop(error as Code, 'acceptance'); return; }
+            if (sample(r.anchor.window.cleanup_floor_ms) || !guard(r)) return;
+        }
+        if (writer.acceptance(r.anchor.attempt, 'accepted') !== 'recorded') return;
         counts.consumed++; phase = 'consumed';
     }
     function issue(r: Record) {
@@ -363,6 +377,7 @@ function constructInjectedNativeDiagnosticWorkflow(raw: NativeInput, fault?: Nat
                 const window = Object.freeze({ ...w }) as NativeWindow;
                 const attempt = upper.open('release')!;
                 phase = 'acquiring'; if (sample(window.cleanup_floor_ms) || revoked) return;
+                if (bridge) { const error = bridge.check(bridge.binding); if (error) { stop(error as Code); return; } }
                 if (last! > window.window_origin_ms || !response || typeof response !== 'object' || types.isProxy(response) ||
                     Object.getPrototypeOf(response) !== pinned.rp || injectedResponses.has(response)) { fail('invalid_response', 'header'); return; }
                 const status = Reflect.apply(pinned.status, response, []) as number;
@@ -400,11 +415,54 @@ function constructInjectedNativeDiagnosticWorkflow(raw: NativeInput, fault?: Nat
         return runWork;
     }
     async function close() { if (!sealed) stop('closed'); if (runWork) return runWork; upper.seal(); sealed = true; phase = 'closed'; return snapshot(); }
-    return Object.freeze({ execute, stop: () => stop(), close, diagnostics: snapshot });
+    return Object.freeze({ execute, stop: (code: Code = 'cancelled') => stop(code), close, diagnostics: snapshot });
 }
 
 /** ND-02 injection-only entry: strict fake dependencies, no caller-controlled evidence or consumer. */
-export function createInjectedNativeDiagnosticWorkflow(raw: NativeInput) { return constructInjectedNativeDiagnosticWorkflow(raw); }
+export function createInjectedNativeDiagnosticWorkflow(raw: NativeInput) {
+    const owner = constructInjectedNativeDiagnosticWorkflow(raw);
+    return Object.freeze({ execute: owner.execute, stop: () => owner.stop(), close: owner.close, diagnostics: owner.diagnostics });
+}
+
+const nativeCompositionProbe = takeNativeStatusCompositionProbe();
+const typedArrayPrototype = Object.getPrototypeOf(Uint8Array.prototype), byteLengthGetter = Object.getOwnPropertyDescriptor(typedArrayPrototype, 'byteLength')!.get!,
+    arrayBufferGetter = Object.getOwnPropertyDescriptor(typedArrayPrototype, 'buffer')!.get!, arrayBufferLength = Object.getOwnPropertyDescriptor(ArrayBuffer.prototype, 'byteLength')!.get!,
+    typedCopy = Uint8Array.prototype.set;
+/** ND-03 fresh real-class/fake-I/O composition; no existing session, callback or diagnostic adoption. */
+export async function probeNativeStatusComposition(snapshot: ReadSnapshot, input: unknown,
+    raw: Pick<BoundedReadOptions, 'signal' | 'limits'> & { parent_bytes: Uint8Array; response: Response }) {
+    if (!raw || typeof raw !== 'object' || types.isProxy(raw)) throw new BoundedReadError('invalid_input');
+    const fields = data(raw, Reflect.ownKeys(raw).filter(k => typeof k === 'string') as string[]);
+    if (!fields || Reflect.ownKeys(fields).some(k => !['signal', 'limits', 'parent_bytes', 'response'].includes(k as string)) ||
+        !types.isUint8Array(fields.parent_bytes) || types.isProxy(fields.parent_bytes))
+        throw new BoundedReadError('invalid_input');
+    let bytes: Uint8Array;
+    try {
+        const n = Reflect.apply(byteLengthGetter, fields.parent_bytes, []) as number;
+        Reflect.apply(arrayBufferLength, Reflect.apply(arrayBufferGetter, fields.parent_bytes, []), []);
+        if (n > 4194304) throw Error('limit');
+        bytes = new Uint8Array(n); Reflect.apply(typedCopy, bytes, [fields.parent_bytes]);
+    } catch { throw new BoundedReadError('invalid_input'); }
+    const response = fields.response;
+    let owner: ReturnType<typeof constructInjectedNativeDiagnosticWorkflow> | undefined, started = false, read = false, disposed = false;
+    const driver = Object.freeze({
+        parent() { if (read || disposed) throw new BoundedReadError('internal_review_error'); read = true; return bytes; },
+        begin(scope: NativeStatusProbeScope) {
+            if (started || disposed) throw new BoundedReadError('internal_review_error'); started = true;
+            owner = constructInjectedNativeDiagnosticWorkflow({ fake_io: true, deadline_ms: scope.deadline_ms, budget: scope.budget,
+                schedule(ms, wake) { const timer = setTimeout(wake, ms); return () => clearTimeout(timer); } }, undefined, scope);
+        },
+        async run(window: NativeWindow) { if (!owner || disposed) throw new BoundedReadError('internal_review_error'); await owner.execute(response, window); },
+        stop(code: Code) { owner?.stop(code); },
+        async close() { await owner?.close(); },
+        dispose() { disposed = true; bytes.fill(0); },
+    });
+    try {
+        const result = await nativeCompositionProbe(snapshot, input, { ...(Object.hasOwn(fields, 'signal') ? { signal: fields.signal as AbortSignal } : {}),
+            ...(Object.hasOwn(fields, 'limits') ? { limits: fields.limits as BoundedReadOptions['limits'] } : {}), driver });
+        return Object.freeze({ ...result, native: owner?.diagnostics() ?? null });
+    } finally { await driver.close(); driver.dispose(); }
+}
 
 /** Private-provenance negative controls return only sealed diagnostics, never a terminal or mutable port. */
 export async function runNativeDiagnosticFaultFixture(raw: unknown) {

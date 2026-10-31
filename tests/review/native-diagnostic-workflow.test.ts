@@ -206,6 +206,11 @@ it.each(['budget', 'scheduler'] as const)('handles a rejected Promise returned b
     const r = await createInjectedNativeDiagnosticWorkflow(input as never).execute(new Response(new ReadableStream(), { status: 403 }), window);
     expect(r.counts.issued).toBe(0); expect(r.upper.primary).not.toBeNull(); expect(JSON.stringify(r)).not.toContain('PRIVATE');
 });
+it('keeps public stop fixed to cancellation rather than accepting an injected reason', async () => {
+    const owner = setup(); Reflect.apply(owner.stop, undefined, ['PRIVATE_STOP_REASON']);
+    const r = await owner.execute(new Response(null, { status: 403 }), window);
+    expect(r.upper.primary?.code).toBe('cancelled'); expect(JSON.stringify(r)).not.toContain('PRIVATE');
+});
 it('keeps waiting after stop and confirms a cleanup that settles inside the original floor, without issuance', async () => {
     let resolve!: () => void;
     const stream = new ReadableStream({ cancel() { return new Promise<void>(r => { resolve = r; }); } }), owner = setup();

@@ -1,7 +1,7 @@
 # AU-BR-006：native status証拠の発行元・上位診断ownerの対設計
 
-Version: br006-native-status-diagnostic-draft-0.6 / Date: 2026-10-31。
-Status: **ND-01の純粋fake診断ownerとND-02の注入Response／Streamsだけのnative発行・唯一consumerを実装。実session／sourceへの採用は未接続。fallback有効化・実接続・実通信は行わない。正式発行口閉鎖・Unknown・全体受付無効・VM／監視／telemetry調査保留を維持する。**
+Version: br006-native-status-diagnostic-draft-0.7 / Date: 2026-10-31。
+Status: **ND-01／02と、ND-03の実session／source class＋注入resourceの新規fake-run試験を実装。既存runtime経路への採用・実認証／URL由来の証明は未接続。fallback有効化・実接続・実通信は行わない。正式発行口閉鎖・Unknown・全体受付無効・VM／監視／telemetry調査保留を維持する。**
 
 基準：[SA-02と後続差分](BEST_PRACTICE_ABORT_SCOPE_STATUS_SOURCE_ACCEPTANCE_DELTA_DESIGN.md)、[ST-03の注入owner](BEST_PRACTICE_ABORT_SCOPE_STATUS_TERMINAL_CONNECTION_DESIGN.md)、[単一予算・停止owner](BEST_PRACTICE_ABORT_SCOPE_STATUS_SESSION_BINDING_DELTA_DESIGN.md)、[非200の承認比較](BEST_PRACTICE_ABORT_SCOPE_NON200_APPROVAL_COMPARISON.md)。型名・stage・操作名は内部契約案で、実装済みAPIや公開JSON enumではない。
 
@@ -181,6 +181,22 @@ draft-0.6のレビュー修正：停止・closeで待機を即時に打ち切り
 - 正常終了もterminal authorityを失効して診断をsealする。再executeは固定request_rejected=invalid_stateを返すが、既存のseal済み診断を変更しない。全7permissionはfalseであり、消費成功はsource採用／fallback許可ではない。
 - 返却診断やST-03Cのconsumptionを入力として採用する口はない。注入factoryはfault／session／consumer等の余剰指定を拒否する。private provenanceの負の対照は、別exportの固定case名fixtureだけから実施し、token／writer／任意callbackを外へ返さない。外国tokenの台帳は共有・変更しない。
 
-ND-01の純粋fixtureとND-02の注入factory／負の対照だけがexportされ、module全体は引き続き非同梱。実session／source private継続・canonical C/G/P/R・実dispatcher／認証／URLとのbinding、close前の実source受理はND-03以降であり未接続。ND-01のordinal2診断は維持するが、このnative laneはretryを行わない。
+ND-01／02時点のexportに加え、次節のND-03 entryを追加した。module全体は引き続き非同梱。実dispatcher／認証／URL由来のbindingは未接続。ND-01のordinal2診断は維持するが、このnative laneはretryを行わない。
 
 [ND-02試験](../tests/review/native-diagnostic-workflow.test.ts)、[compiled fixture](../tests/review/fixtures/compiled-native-diagnostic-workflow.mjs)、[検証記録](E2E_BEST_PRACTICE_NATIVE_DIAGNOSTIC_ND02_2026-10-31.md)を参照。正式発行口閉鎖・Unknown・全体受付無効・調査保留・既存200guardを維持する。
+
+## 13 ND-03：実class＋注入resourceの連続fake試験
+
+開発専用`probeNativeStatusComposition`は、親bytesをbounded copyし、注入Responseと共に新規fake runだけを作る。`BoundedReadSession`は固定throwのfetchとper-user形式の合成snapshotで生成し、既存SA-02のprivate生成継続・`BoundedUpdateSetSource`の固定consumer・canonical会計を再利用する。既存sessionのlookup／登録／mode切替はない。
+
+- 同constructor keyでsourceを一度だけ生成し、native開始前に上位ownerを結合する。親bytes／native操作より前にdriver.beginを行い、ready世代は実登録ownerの1を確認する。dummy readyを成功と偽装しても、親／releaseのdispatch前に拒否する。認証の実行・本人性の証明ではない。
+- native側へ渡すのはopaqueなbinding alias・同leaseのreadonly残時間・固定check／accept／stopだけ。raw session／source／core／snapshot／登録ownerを渡さない。class側は同source／snapshot／lease／core／transport handle／attemptと元floorをprivate receiptで照合し、aliasコピー・別sourceのreceipt・再消費を拒否する。
+- 親は同canonical会計でC=1／G=bytes長、releaseはC=1／read=0・G=0とする。R4予約・210試行・受信量・60秒の上限は変更しない。nativeのclockは同leaseから得る残時間だけで、新しい起点を作らない。
+- sole native consumerのpre／post guard内でprivate source受理まで行い、その後に元floor／失効を再検査する。公開diagnosticからreceiptを作らない。nativeとsourceで同terminalを二重に消費せず、source境界のreceiptは同class生成元の一度限りhandoffとする。
+- session停止はsource consumerとnative ownerを同期失効する。停止後もND-02と同じ元floorまでcleanupをjoinし、固定解放・session close後のsummaryだけを返す。native HTTP／cleanupとsession内部／公開理由を別々に残し、失敗時の未公開draftは破棄する。seal後の成功履歴を再び継続へ使わない。
+
+**制約**：一度限りの内部friendはSA-02同様に配布物からdeep importされ得る。取得先は新規fake runと固定throw fetchだけだが、trustedなfake driver callbackを受ける試験境界である。任意のdriverをnative issuerの証明に使える本番境界ではない。公開entryはdriver／callback／cleanup指定を拒否し、正式発行口・既存MCP／legacy経路に接続しない。
+
+ND-03でいう観測前owner結合は、親bytes／注入resourceの観測前を意味する。既存session constructorのclock／timer／listenerの初期化はその前にあり、constructor以前のowner予約を変更していない。生成前の失敗ではnative診断はnull、固定session理由だけを保持する。§3のconstructor最初期までのowner確保と、実認証・実URL・ReleasePermit・選択payload／workerへのruntime接続は引き続き別工程。
+
+[連続試験](../tests/review/native-session-composition.test.ts)、[private境界試験](../tests/review/native-session-boundary.test.ts)、[compiled fixture](../tests/review/fixtures/compiled-native-session-composition.mjs)、[検証記録](E2E_BEST_PRACTICE_NATIVE_DIAGNOSTIC_ND03_2026-10-31.md)を参照。fallback・正式発行口・全体受付は有効化しない。

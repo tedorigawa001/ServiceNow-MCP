@@ -84,7 +84,7 @@ it('has no I/O, clock, native or registration capability and exposes only fixed-
     const fetch = vi.fn(() => { throw Error('PRIVATE_FETCH'); }), now = vi.spyOn(Date, 'now').mockImplementation(() => { throw Error('PRIVATE_CLOCK'); });
     vi.stubGlobal('fetch', fetch);
     try {
-        expect(Object.keys(module)).toEqual(['createInjectedNativeDiagnosticWorkflow', 'runNativeDiagnosticFaultFixture', 'runSyntheticNativeDiagnosticFixture']);
+        expect(Object.keys(module)).toEqual(['createInjectedNativeDiagnosticWorkflow', 'probeNativeStatusComposition', 'runNativeDiagnosticFaultFixture', 'runSyntheticNativeDiagnosticFixture']);
         const r = result('sealed_writes');
         expect(fetch).not.toHaveBeenCalled(); expect(now).not.toHaveBeenCalled();
         expect(JSON.stringify(r)).not.toMatch(/PRIVATE|token|credential|snapshot|writer|window/);
