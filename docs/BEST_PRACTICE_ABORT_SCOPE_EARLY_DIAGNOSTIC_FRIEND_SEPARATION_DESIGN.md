@@ -176,7 +176,7 @@ shellは固定3purpose slot・固定reason／resource／claim slotのみで、�
 
 1. **EF-01**：純粋shell・固定resource状態・core／sourceの別one-shot claimを合成依存で実装。登録／runtime配布にはまだ接続しない。
 2. **EF-02（限定実装済み、§13）**：field副作用を保護区間へ移し、部分生成rollbackと失敗copyの固定回収へ接続。busy／認証エラーの優先順位、元clock、API互換を合成依存で確認。
-3. **EF-03（詳細設計のみ）**：[共通kernel・本番／開発root分離詳細設計draft-0.1](BEST_PRACTICE_ABORT_SCOPE_KERNEL_ROOT_SEPARATION_EF03_DESIGN.md)。source callback branch・synthetic_ioを含む撤去閉包、別assemblyの保証対応表、空build／tarballの負の対照、EF-03A〜Dの分割を具体化。撤去・試験移行・build変更は未実施。
+3. **EF-03（詳細設計のみ）**：[共通kernel・本番／開発root分離詳細設計draft-0.2](BEST_PRACTICE_ABORT_SCOPE_KERNEL_ROOT_SEPARATION_EF03_DESIGN.md)。source callback branch・synthetic_ioを含む撤去閉包、別assemblyの保証対応表、空build／tarballの負の対照、EF-03A〜Dの分割を具体化。撤去・試験移行・build変更は未実施。
 4. **後続③**：固定本番bindingとexact class注入E2Eを設計・接続する。別承認まで正式発行口・fallback・実通信は閉鎖。
 
 実装前に、E5〜E7のadmission／登録順、直接newの失敗診断配送、部分登録が不明な場合の終了写像、開発assemblyで変わる保証とexact class試験の回復方法を承認する必要がある。D1／D2のruntime採用・SA-03承認とは別であり、本書の合意だけでいずれのgateも開かない。

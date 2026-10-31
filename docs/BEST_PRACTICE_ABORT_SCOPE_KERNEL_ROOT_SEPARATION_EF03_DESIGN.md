@@ -1,6 +1,6 @@
 # AU-BR-006 EF-03：共通kernel・本番／開発root分離・fake friend撤去
 
-Version: br006-kernel-root-separation-ef03-draft-0.1 / Date: 2026-11-01。
+Version: br006-kernel-root-separation-ef03-draft-0.2 / Date: 2026-11-01。
 Status: **詳細設計案。実装・ビルド設定変更・friend撤去・試験移行は未実施。正式発行口閉鎖・Unknown・全体受付無効・VM／監視／telemetry調査保留を維持する。実接続・実通信・実機操作・設定変更・Pushは行わない。**
 
 基準：`e6f9abc`（EF-02後のrun停止／construction診断分離）、[親設計§7〜§13](BEST_PRACTICE_ABORT_SCOPE_EARLY_DIAGNOSTIC_FRIEND_SEPARATION_DESIGN.md)、[ND設計§13](BEST_PRACTICE_ABORT_SCOPE_NATIVE_STATUS_DIAGNOSTIC_DESIGN.md)。配置・型名・build手順は提案であり、新しい公開APIや承認済み本番bindingではない。
@@ -57,13 +57,13 @@ kernelが返す可変portは自分が生成した新規状態専用とし、prod
 
 ## 5 build／配布境界
 
-配布buildは`src`の本番rootとその必要kernelだけを入力とする。開発rootは別の専用build出力（例：`.test-build/ef03/`）へ出し、`dist`へは出さない。設定名・出力名は案であり、この作業では作成しない。
+EF-03の境界は§1の閉包（friend・callback branch・`synthetic_io`・fake I/O・2つの開発probe module）と新設する共通kernel／開発rootに限る。現行の単一`tsconfig.json`は`src`全体を`dist`へ出し、`abort-scope-evidence*`・`r2-*`・`evaluation*`等の既存非同梱moduleは`package.json.files`で除外している。これら無関係なmoduleのbuild構成はEF-03で変えず、本番rootから到達しないことを依存閉包検査で別途確認する。EF-03対象の配布buildは本番rootとその必要kernelだけを入力とし、開発rootは別の専用build出力（例：`.test-build/ef03/`）へ出し、`dist`へは出さない。設定名・出力名は案であり、この作業では作成しない。
 
 `exclude: tests`や`package.json.files`だけを境界の証明にしない。import先は推移的に確認し、再export・barrel・require・dynamic import・型参照・宣言／mapも対象とする。本番から開発root／開発shimへ辿るedgeはbuildまたは配布検査で拒否する。既存workerの固定動的読込等は個別の許可根拠を記録し、解決不能な動的edgeを一括無視しない。
 
 検証は空の生成先でbuildし、offline packの一覧に加え、生成tarballを新規の空directoryへ展開して実体を検査する計画とする。依存の再install／通信やnpm公開は不要。`sourcesContent`に古いfriendが残るmap、古い`.d.ts`、削除済みfake moduleのstale出力も拒否する。pack除外でruntimeの必要importを欠落させた場合も失敗とし、動かないことでfriendが使えない状態を成功にしない。
 
-現行の[canonical梱包検査](../tests/review/package-canonical-budget.mjs)はfake I/O moduleの同梱を期待し、[status梱包検査](../tests/review/package-http-classification.mjs)はfriendを呼ぶcompiled fixtureを実行する。移行時に前者の期待を非同梱へ反転し、後者を本番artifact検査と開発assemblyのcompiled試験に分ける必要がある。現行検査の成功をEF-03完了の証拠にはしない。
+現行の[canonical梱包検査](../tests/review/package-canonical-budget.mjs)はfake I/O moduleの同梱を期待し、同じscriptから`synthetic_io`付きで配布版`prepareNewReviewComposition`を呼ぶ[compiled ack fixture](../tests/review/fixtures/compiled-private-composition-ack.mjs)も実行する。[status梱包検査](../tests/review/package-http-classification.mjs)はfriendを呼ぶcompiled fixtureを実行する。移行時に前者の同梱期待を非同梱へ反転し、ack fixtureを開発assemblyのcompiled試験へ移す（本番artifact側には`synthetic_io`が副作用前に`invalid_input`となる確認だけを残す）。後者も本番artifact検査と開発assemblyのcompiled試験に分ける必要がある。現行検査の成功をEF-03完了の証拠にはしない。
 
 ## 6 試験保証の移行表
 
@@ -104,3 +104,5 @@ kernelが返す可変portは自分が生成した新規状態専用とし、prod
 承認待ち：kernelの最小抽出範囲、source callback branchの移設境界、開発assemblyの別brand化によるcoverage低下、synthetic overload削除、build出力・依存検査の配置。固定本番native接続・正式発行・SA-03／fallback・全体受付・本番cap・実通信は別承認とする。
 
 次の最小実装範囲はEF-03A（construction状態・理由写像の純粋部分と既存classの接続回帰）を提案する。EF-03Aでnative orchestration／認証／source発行をまとめて共通化しない。本書は設計であり、実装完了・試験実行・配布物からの撤去完了を示す記録ではない。
+
+draft-0.2のレビュー修正：canonical梱包検査が`synthetic_io`付きのcompiled ack fixtureも実行しており、EF-03Cの拒否で失敗するため、開発assemblyへの移設を§5に明記した。§5の配布build入力をEF-03対象の閉包に限定し、既存非同梱moduleのbuild構成は変えないことを明記した。
