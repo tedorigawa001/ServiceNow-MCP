@@ -1,6 +1,6 @@
 # AU-BR-006：ST-03C後の実session binding・単一予算・停止owner接続差分
 
-Version: br006-status-session-binding-delta-draft-0.4 / Date: 2026-10-31。
+Version: br006-status-session-binding-delta-draft-0.5 / Date: 2026-10-31。
 Status: **§10〜11の内部binding・同canonical accountingに加え、§12の同attempt status終端／typed cleanup連続接続を開発専用fake構成で実装。status終端の実接続は未実装。正式発行口閉鎖・Unknown・全体受付無効・VM／監視／telemetry調査保留を維持する。実sessionへのstatus transport採用・実通信・実機操作・設定変更の承認ではない。**
 
 基準：[ST-03接続設計の§12](BEST_PRACTICE_ABORT_SCOPE_STATUS_TERMINAL_CONNECTION_DESIGN.md)、[private composition設計](BEST_PRACTICE_ABORT_SCOPE_PRIVATE_COMPOSITION_DESIGN.md)、[実session差分設計](BEST_PRACTICE_ABORT_SCOPE_REAL_TYPED_BINDING_DELTA_DESIGN.md)。本書の段階名・検査表は内部契約案であり、新しいexport・権限・実装済み機能を意味しない。
@@ -165,6 +165,8 @@ canonical constructionの一度限りstop-owner継続を同portに結合し、co
 Response以降のopaque handle・anchor・cleanup・terminal・consumerは既存ST-03Cのprivate closureが保持する。新構成は当該ownerのacquire／finishだけを呼び、外部の診断copyを再提出してtokenを発行する口を持たない。上位の返却は**合成履歴**であり、`consumed`をbody ack／EOF／source採用権限へ昇格しない。release403／404でもfallbackを呼ばず、7権限はすべてfalseである。
 
 leaseは同coreの元clockを読むだけで、native owner独自のcounter／deadlineを追加しない。停止後もcleanupのためのreadonly観測は許すが、同canonical stop→run owner→native stopが同期的にissue／consume claimを失効させる。cleanup後のbinding post-guardを満たさなければ成功履歴を新規確定しない。模擬dispatch前の取消／期限／descriptor拒否はC=0、取得開始はC=1、read=0なのでG/P=0。実socket受信量・固定URL／認証の証明ではない。
+
+draft-0.5のレビュー修正：descriptor検査には注入ownerと同じ窓条件（origin−floorが10,000ms以下、floorが10,000ms以上、同leaseの残り時間がorigin以下）を含め、予約・模擬dispatch前に拒否してC=0とする。lifecycleの停止codeはnative ownerへ写し、通常closeは`closed`、それ以外は`cancelled`として記録する。
 
 HTTP事実・native primary・typed cleanup・binding primary／first terminalを別々に返す。hard401／auth・parent403は先行HTTP理由をownerへ反映してからcleanupを完了させる。parent404は候補消費なしの診断専用。cleanup未確認・late settleは昇格しない。close／stop／finishは同cleanupへ合流し、予約releaseは一度だけ。閉鎖時のbinding理由と、既に消費した履歴は分けて保持する。再runは`run_refusal=invalid_state`を記録し、過去の消費回数を増やさない。
 

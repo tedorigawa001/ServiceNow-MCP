@@ -1,6 +1,6 @@
 # 同attempt status-only終端・typed cleanupとstatus binding：連続fake検証
 
-Date: 2026-10-31。対象：[差分設計§12](BEST_PRACTICE_ABORT_SCOPE_STATUS_SESSION_BINDING_DELTA_DESIGN.md)。実session／実transportへの接続ではない。
+Date: 2026-10-31。対象：[差分設計draft-0.5 §12](BEST_PRACTICE_ABORT_SCOPE_STATUS_SESSION_BINDING_DELTA_DESIGN.md)。実session／実transportへの接続ではない。
 
 ## 1 実装と境界
 
@@ -34,7 +34,15 @@ Date: 2026-10-31。対象：[差分設計§12](BEST_PRACTICE_ABORT_SCOPE_STATUS_
 
 依存再取得を伴うpackage-workerテストは[前工程の環境制約](E2E_BEST_PRACTICE_STATUS_CONSTRUCTOR_BINDING_2026-10-31.md)を継承し、再実行しない。
 
-## 4 未実施・残課題
+## 4 レビュー修正（2026-10-31）
+
+- 注入ownerが`acquire`内で拒否する窓（origin−floor＞10,000ms、floor＜10,000ms、同leaseの残り時間＞origin）が、模擬dispatch後に`invalid_input`となりC=1を計上していた。同条件を予約・模擬dispatch前の検査へ加え、C=0・reader取得0・予約0で拒否する。4窓の負の対照を追加。
+- lifecycleの停止codeがnative ownerへ渡らず、通常closeでも`native.primary`が`cancelled`だった。`closed`はそのまま、それ以外は`cancelled`として渡し、成功試験で`closed`を検査する。
+- 変異確認：停止code写像を戻すと2件、窓検査全体を戻すと4件、残り時間条件だけを戻すと1件失敗（確認後に復元）。
+- 全体`npm test`：205ファイル・9,266テスト成功（専用31テスト）。初回実行で無関係な`tests/utils/xlsx.test.ts`の子process境界試験が1件失敗したが、単独再実行と全体再実行で成功。`npm run build`、新source／専用testのESLint、`node tests/review/package-http-classification.mjs`（409ファイル）成功。
+- 上記§3の件数（9,262テスト・専用27テスト）は修正前の記録として残す。
+
+## 5 未実施・残課題
 
 runtime status issuer／実session採用、固定dispatcherの実URL・認証snapshot結合、固定sourceの非200受理、fallback有効化、正式receipt／payload／worker・最終予約移譲は未実施。合成消費履歴から権限を復元する設計を採らない。
 

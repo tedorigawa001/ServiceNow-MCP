@@ -13,7 +13,7 @@ NA-03後の移行案：[canonical会計・private生成位置の差分設計draf
 
 ## 1. 目的と非対象
 
-ST-03C後の追加差分は[実session binding・単一予算・停止owner設計draft-0.4](BEST_PRACTICE_ABORT_SCOPE_STATUS_SESSION_BINDING_DELTA_DESIGN.md)を参照。§10〜12の内部binding・会計・停止と開発専用fake構成の同attempt終端／cleanupを接続した。status終端のruntime採用・正式発行・実接続は未実施のまま。
+ST-03C後の追加差分は[実session binding・単一予算・停止owner設計draft-0.5](BEST_PRACTICE_ABORT_SCOPE_STATUS_SESSION_BINDING_DELTA_DESIGN.md)を参照。§10〜12の内部binding・会計・停止と開発専用fake構成の同attempt終端／cleanupを接続した。status終端のruntime採用・正式発行・実接続は未実施のまま。
 
 既存のprepared bindingを再実装せず、**実sessionが所有する同じ認証・予算・停止・時計から、typed取得のprivate継続を生成するための差分**を定義する。次工程の試験は実class＋fake I/Oに限り、正常bindingでもprepared／検証用candidateまでに留め、正式BoundedBodyReceipt・SourceRunEvidenceを発行しない。
 

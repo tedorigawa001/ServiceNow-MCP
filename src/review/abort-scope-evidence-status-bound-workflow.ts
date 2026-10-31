@@ -7,6 +7,8 @@ import {createInjectedStatusWorkflowOwner} from './abort-scope-evidence-status-c
 
 const descriptor=z.strictObject({purpose:z.enum(['authentication','parent','release']),ordinal:z.literal(1),
     window_origin_ms:z.number().finite().positive().max(60000),cleanup_floor_ms:z.number().finite().nonnegative()});
+// Same fixed window as the injected ST-03C owner; its descriptor limits are checked again before simulated dispatch.
+const deadlineMs=60000,maxCleanupGapMs=10000,minCleanupFloorMs=Math.min(10000,deadlineMs/6);
 type Input={fake_io:true;clock:{remainingMs():number};schedule(delay:number,wake:()=>void):()=>void};
 function data(raw:unknown,keys:readonly string[]){
     if(!raw||typeof raw!=='object'||types.isProxy(raw)||![Object.prototype,null].includes(Object.getPrototypeOf(raw)))throw Error('invalid_input');
@@ -23,7 +25,7 @@ export function createSyntheticBoundStatusWorkflow(raw:Input){
     const core=createCanonicalReviewBudget({clock:{remainingMs:remaining}}),snapshot=Object.freeze({}),source=Object.freeze({});
     const lease:ReviewRunBudgetLease=Object.freeze({read:()=>core.view.lease.read()});
     let native:ReturnType<typeof createInjectedStatusWorkflowOwner>|undefined;
-    const owner=registerReviewEvidenceSession({},snapshot,lease,undefined,{core,stop:()=>native?.stop()});
+    const owner=registerReviewEvidenceSession({},snapshot,lease,undefined,{core,stop:code=>native?.stop(code==='closed'?'closed':'cancelled')});
     const claimed=owner.transportConstructor.claim(snapshot,lease);if(!claimed.ok)throw Error(claimed.code);
     const handle=claimed.value,initial=owner.transportConstructor.bindInitialSource(handle,snapshot,lease,source);
     if(!initial.ok)throw Error(initial.code);
@@ -37,7 +39,7 @@ export function createSyntheticBoundStatusWorkflow(raw:Input){
         const checked=binding.value.inspect(handle,snapshot,lease,source);
         if(!checked.ok)throw Error(checked.code);
     };
-    native=createInjectedStatusWorkflowOwner({fake_io:true,deadline_ms:60000,
+    native=createInjectedStatusWorkflowOwner({fake_io:true,deadline_ms:deadlineMs,
         // Observation remains available for cleanup after stop; native claims are already revoked synchronously.
         budget:{read:()=>lease.read()},schedule});
     const readerOwner=native;
@@ -60,7 +62,11 @@ export function createSyntheticBoundStatusWorkflow(raw:Input){
             const d=data(rawDescriptor,['purpose','ordinal','window_origin_ms','cleanup_floor_ms']);
             const parsed=descriptor.safeParse(d);
             if(!parsed.success||parsed.data.cleanup_floor_ms>=parsed.data.window_origin_ms)throw Error('invalid_input');
-            guard();accounting.reserve();guard();
+            guard();
+            // Reject every descriptor the ST-03C owner would refuse before C is charged.
+            const gap=parsed.data.window_origin_ms-parsed.data.cleanup_floor_ms;
+            if(gap>maxCleanupGapMs||parsed.data.cleanup_floor_ms<minCleanupFloorMs||lease.read().remaining_ms>parsed.data.window_origin_ms)throw Error('invalid_input');
+            accounting.reserve();guard();
             if(parsed.data.purpose!=='authentication'&&!owner.markReady(snapshot,lease))throw Error('internal_review_error');
             // A simulated dispatch only: one C, no fetch, no URL/auth/ReleasePermit assertion.
             accounting.dispatch(parsed.data.cleanup_floor_ms);

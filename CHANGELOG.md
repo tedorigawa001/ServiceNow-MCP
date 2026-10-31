@@ -32,6 +32,8 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 ### Added
 
+- Fixes the fake bound status workflow so descriptors the injected owner would refuse are rejected before reservation and simulated dispatch (C=0), and maps the lifecycle stop code to the native owner so an ordinary close is recorded as `closed`.
+
 - Adds a package-excluded fake composition connecting the existing canonical/status binding to ST-03C's injected Response, same-reader typed cleanup and one-shot private consumption. A fresh local constructor owns all identities; no existing session/binding/terminal or external cleanup diagnostic can be adopted. Simulated dispatch uses the same C budget, status-only reads remain zero/G=0, synchronous stop revokes native claims, and HTTP/cleanup/history remain separate. Includes replay, cancellation, pending/late cleanup, no-body, hard/local HTTP, input-mixing and compiled packaging tests. All seven permissions remain false; fallback, formal issuance, whole-run admission and real transport adoption stay disabled.
 
 - Connects the constructor status binding to the same canonical accounting and fixed stop owner in the fake composition lane. Creator-owned accounting identity is checked once; C/G operations delegate without duplicate counters, and first-stop notification synchronously invalidates the binding while preserving internal/public diagnostics. Reservation release invalidates only that binding, without replacing an earlier ordinary cutoff with `closed`. Includes independent fake event-oracle, overshoot, mixed-port, reentry, cancellation and replay tests. Formal status issuance, whole-run admission and real transport adoption remain disabled.

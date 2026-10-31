@@ -17,6 +17,7 @@ it.each([403,404])('connects release %i to same-reader cleanup and one private c
  expect(r).toMatchObject({scope:'synthetic_bound_status_only',outcome:'consumed',http:{purpose:'release',status},cleanup:{disposition:'confirmed',kind:'cancelled'},
   native:{operations:{get_reader:1,read:0,cancel:1,closed:1,release_lock:1},workflow:{counts:{issued:1,consume_attempts:1,consumed:1}}},
   budget:{requests:1,received_bytes:0,payload_bytes:0},reservation:0,formal_issuance:'disabled',fallback:'disabled'});
+ expect(r.native.primary).toBe('closed');
  expect(Object.values(r.permissions)).toEqual(Array(7).fill(false));expect(network).not.toHaveBeenCalled();expect(stream.locked).toBe(false);
  expect(JSON.stringify(r)).not.toContain('PRIVATE');expect(vi.getTimerCount()).toBe(0);
  const second=await f.owner.run(new Response(null,{status}),window);expect(second.run_refusal).toBe('invalid_state');expect(second.native.workflow?.counts.consumed).toBe(1);expect(second.budget.requests).toBe(1);
@@ -72,6 +73,10 @@ it('rejects replay/reentry without additional C and keeps the first terminal dia
 it('rejects invalid descriptors and close-before-start before any simulated dispatch',async()=>{
  const a=setup();expect((await a.owner.run(new Response(null,{status:403}),{...window,extra:'PRIVATE'})).budget.requests).toBe(0);
  const b=setup();const closing=b.owner.close();expect((await b.owner.run(new Response(null,{status:403}),window)).budget.requests).toBe(0);await closing;
+});
+it.each([[60000,0],[60000,30000],[30000,25000],[60000,9999]])('rejects owner-invalid window %i/%i before reserve or simulated dispatch',async(origin,floor)=>{
+ const f=setup(),r=await f.owner.run(new Response(new ReadableStream(),{status:403}),{...window,window_origin_ms:origin,cleanup_floor_ms:floor});
+ expect(r).toMatchObject({outcome:'failed',budget:{requests:0},reservation:0,native:{operations:{get_reader:0}}});expect(r.binding.first_terminal).toBe('invalid_input');
 });
 it.each(['session','binding','registry','terminal','cleanup','consumer'])('rejects caller-provided %s at the fake root',key=>{
  expect(()=>createSyntheticBoundStatusWorkflow({fake_io:true,clock:{remainingMs:()=>60000},schedule:()=>()=>{},[key]:{}})).toThrow('invalid_input');
