@@ -262,6 +262,7 @@ export async function withBoundedUpdateSetSource<T>(client: ServiceNowClient, in
   work: (source: BoundedUpdateSetSource) => Promise<T>, options?: BoundedReadOptions): Promise<T> {
   const parsed = inputSchema.safeParse(input);
   if (!parsed.success) throw new BoundedReadError('invalid_input');
-  const session = client.createBoundedReadSession(options);
+  // Preserve this wrapper's legacy ignored-extra-options behavior without forwarding assertions.
+  const session = client.createBoundedReadSession({fetch:options?.fetch,signal:options?.signal,limits:options?.limits});
   return session.run(() => work(new BoundedUpdateSetSource(session, parsed.data)));
 }

@@ -83,7 +83,8 @@ async function executeReview(client: ServiceNowClient, raw: unknown, execution: 
   };
   let progress: { run: AggregateReview; rows: ReviewMetadata[]; verify?: () => Promise<{ consistency: 'stable_observation' | 'changed' }> } | undefined;
   try {
-    execution.session = client.createBoundedReadSession(options);
+    // Worker-only dependencies must not cross the session's data-only constructor boundary.
+    execution.session = client.createBoundedReadSession({fetch:options?.fetch,signal:options?.signal,limits:options?.limits});
     reserveMs = Math.min(10000, execution.session.deadlineMs / 6);
     execution.session.setPhaseReserve(reserveMs);
     const source = new BoundedUpdateSetSource(execution.session,

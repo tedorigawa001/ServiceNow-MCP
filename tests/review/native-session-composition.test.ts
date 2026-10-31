@@ -6,6 +6,15 @@ afterEach(() => { vi.restoreAllMocks(); vi.useRealTimers(); });
 const id = 'a'.repeat(32), parent = () => new TextEncoder().encode(JSON.stringify({ result: { sys_id: id, state: 'in progress', application: 'global', sys_updated_on: '2026-10-31', sys_mod_count: '0' } }));
 const snapshot = (): ReadSnapshot => ({ instanceUrl: 'https://synthetic.invalid', authMode: 'per-user', perUserBearerToken: 'PRIVATE_TOKEN', oauth: {} });
 const probe = (response = new Response(null, { status: 403 }), options: Record<string, unknown> = {}) => probeNativeStatusComposition(snapshot(), { update_set_sys_id: id }, { parent_bytes: parent(), response, ...options });
+it('retains the sealed construction failure before the native owner is created', async () => {
+    vi.spyOn(performance, 'now').mockImplementationOnce(() => { throw Error('PRIVATE_CONSTRUCTION_CLOCK'); });
+    const r = await probe();
+    expect(r).toMatchObject({ ok: false, code: 'internal_review_error', native: null, consumptions: 0,
+        binding: { same_core: false, same_source: false }, budget: { requests: 0, received_bytes: 0, payload_bytes: 0 },
+        run_diagnostic: { internal: 'internal_review_error', public: 'internal_review_error' },
+        constructor_diagnostic: { state: 'closed', sealed: true, primary: { stage: 'clock' }, teardown: 'confirmed' } });
+    expect(JSON.stringify(r)).not.toContain('PRIVATE'); expect((await probe()).ok).toBe(true);
+});
 it('connects native cleanup and the sole consumer to a fresh real-class session/source before close', async () => {
     const fetch = vi.spyOn(globalThis, 'fetch').mockImplementation(() => { throw Error('PRIVATE_NETWORK_FORBIDDEN'); });
     const get = vi.spyOn(BoundedReadSession.prototype, 'get'), resolve = vi.spyOn(BoundedUpdateSetSource.prototype, 'resolveRelease');

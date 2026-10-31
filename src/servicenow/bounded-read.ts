@@ -18,6 +18,43 @@ export type ReadFailureCode = 'invalid_input' | 'authentication_failed' | 'acces
 export class BoundedReadError extends Error {
   constructor(readonly code: ReadFailureCode) { super(code); this.name = 'BoundedReadError'; }
 }
+type ConstructionStage='input'|'clock'|'config'|'authentication'|'admission'|'core'|'owner'|'controllers'|'timer'|'listener'|'commit'|'source_binding'|'stop'|'close';
+const constructionResources=['snapshot','core','registered_owner','admission','controller','phase_controller','deadline_timer','phase_timer','abort_listener','source_transport'] as const;
+type ConstructionResource=typeof constructionResources[number];
+type ConstructionInternalCode=ReadFailureCode|'invalid_state'|'invalid_observation_time'|'evidence_binding_mismatch';
+const constructionCodes=new Set<ConstructionInternalCode>(['invalid_input','authentication_failed','access_denied','not_found_or_not_visible','upstream_unavailable','deadline_exceeded','receive_budget_exceeded','request_budget_exceeded','payload_budget_exceeded','payload_limit','invalid_response','review_busy','cancelled','closed','changed_during_review','release_not_admitted','config_invalid','phase_deadline_exceeded','candidate_filter_violation','internal_review_error','invalid_state','invalid_observation_time','evidence_binding_mismatch']);
+const constructionCode=(value:unknown):ConstructionInternalCode=>typeof value==='string'&&constructionCodes.has(value as ConstructionInternalCode)?value as ConstructionInternalCode:'internal_review_error';
+const constructionPublic=(code:ConstructionInternalCode):ReadFailureCode=>code==='invalid_state'||code==='invalid_observation_time'||code==='evidence_binding_mismatch'?'internal_review_error':code;
+/** Pure first-field allocation. No dependencies, callbacks, clocks or live-resource registration. */
+function createConstructionShell(){
+  type Slot={state:'absent'|'pending'|'held'|'released'|'unconfirmed';release_claim:0|1;releases:0|1};
+  const resources=Object.fromEntries(constructionResources.map(k=>[k,{state:'absent',release_claim:0,releases:0}])) as Record<ConstructionResource,Slot>;
+  let state:'pending'|'ready'|'failed'|'closed'='pending',sealed=false,coreClaim=false,sourceClaim=false;
+  let primary:Readonly<{stage:ConstructionStage;code:ConstructionInternalCode;public_code:ReadFailureCode}>|null=null;
+  let core:Readonly<{session:object;snapshot:object;core:object;lease:object;owner:object}>|undefined;
+  let source:object|undefined,coreBound=false,sourceBound=false;
+  function fail(stage:ConstructionStage,reason:unknown){if(sealed)return;const code=constructionCode(reason);primary??=Object.freeze({stage,code,public_code:constructionPublic(code)});state='failed';}
+  function copy(){return Object.freeze({scope:'construction_only' as const,state,sealed,primary,core_bound:coreBound,source_bound:sourceBound,
+    purposes:Object.freeze({authentication:false,parent:false,release:false}),
+    resources:Object.freeze(Object.fromEntries(constructionResources.map(k=>[k,Object.freeze({...resources[k]})])) as Record<ConstructionResource,Readonly<Slot>>),
+    teardown:state!=='closed'?'not_started' as const:constructionResources.some(k=>!['absent','released'].includes(resources[k].state))?'unconfirmed' as const:'confirmed' as const});}
+  return Object.freeze({
+    attempt(k:ConstructionResource){if(!sealed&&resources[k].state==='absent')resources[k].state='pending';},
+    held(k:ConstructionResource){if(!sealed&&resources[k].state==='pending')resources[k].state='held';},
+    release(k:ConstructionResource,confirmed:boolean,attempted:boolean){const r=resources[k];if(sealed||r.state==='absent'||r.release_claim)return;r.release_claim=1;r.releases=attempted?1:0;r.state=confirmed?'released':'unconfirmed';},
+    needed(k:ConstructionResource){return !['absent','released'].includes(resources[k].state);},
+    bindCore(value:NonNullable<typeof core>){if(coreClaim||primary||sealed){fail('core','invalid_state');return false;}coreClaim=true;core=Object.freeze({...value});coreBound=true;return true;},
+    bindSource(value:NonNullable<typeof core>,next:object){if(sourceClaim||!core||primary||sealed){fail('source_binding','invalid_state');return false;}sourceClaim=true;
+      if(value.session!==core.session||value.snapshot!==core.snapshot||value.core!==core.core||value.lease!==core.lease||value.owner!==core.owner){fail('source_binding','evidence_binding_mismatch');return false;}
+      source=next;sourceBound=source===next;return sourceBound;},
+    commit(){if(primary||!core||sealed){fail('commit','invalid_state');return false;}state='ready';return true;},
+    fail,failure:()=>primary,
+    seal(){if(sealed)return;for(const k of constructionResources)if(['held','pending'].includes(resources[k].state))resources[k].state='unconfirmed';core=undefined;source=undefined;state='closed';sealed=true;},
+    copy,
+  });
+}
+export type ConstructionDiagnostic=ReturnType<ReturnType<typeof createConstructionShell>['copy']>;
+const constructionFailures=new WeakMap<object,ConstructionDiagnostic>();
 export interface ReadSnapshot {
   instanceUrl: string; authMode: ServiceNowConfig['authMode']; perUserBearerToken?: string;
   oauth: ServiceNowConfig['oauth']; accessToken?: string; tokenExpiry?: number;
@@ -63,7 +100,7 @@ export type StatusAcceptanceSummary=StatusAcceptanceDraft&Readonly<{accepted_bef
 export type StatusAcceptanceProbe=(snapshot:ReadSnapshot,input:unknown,options:CompositionOptions&{fake:unknown})=>Promise<StatusAcceptanceSummary>;
 let statusProbe:StatusAcceptanceProbe|undefined;
 export type NativeStatusCompositionResult=Readonly<{ok:boolean;code:ReadFailureCode|null;fake_io:true;draft:StatusAcceptanceDraft|null;consumptions:number;
-  accepted_before_close:boolean;binding:Readonly<{same_core:boolean;same_source:boolean}>;run_diagnostic:Readonly<{internal:string|null;public:ReadFailureCode|null}>;budget:Readonly<{requests:number;received_bytes:number;payload_bytes:number}>;cleanup:'closed';reserved:0}>;
+  accepted_before_close:boolean;binding:Readonly<{same_core:boolean;same_source:boolean}>;run_diagnostic:Readonly<{internal:string|null;public:ReadFailureCode|null}>;constructor_diagnostic:ConstructionDiagnostic|null;budget:Readonly<{requests:number;received_bytes:number;payload_bytes:number}>;cleanup:'closed';reserved:0}>;
 type NativeStatusProbe=(snapshot:ReadSnapshot,input:unknown,options:CompositionOptions&{driver:unknown})=>Promise<NativeStatusCompositionResult>;
 let nativeStatusProbe:NativeStatusProbe|undefined;
 /** One-shot development friend; it can only create a fresh fake run with network fixed to throw. */
@@ -98,24 +135,29 @@ function pinStatusProbeFake(raw:unknown):StatusProbeFake{
 }
 
 export class BoundedReadSession {
-  private readonly controller = new AbortController();
-  private phase = new AbortController();
+  readonly #construction=createConstructionShell();
+  #constructing=true;
+  #constructionStopping=false;
+  #constructionStage:ConstructionStage='input';
+  #admitted=false;
+  private controller!:AbortController;
+  private phase!:AbortController;
   private phaseTimer?: ReturnType<typeof setTimeout>;
   private reserveMs = 0;
-  private readonly limits: Record<keyof typeof BOUNDED_LIMITS, number>;
-  private readonly baseUrl: string;
-  private readonly principalKey: string;
-  private readonly fetcher: typeof fetch;
-  private readonly timer: ReturnType<typeof setTimeout>;
-  private readonly started = performance.now();
-  readonly startedAt = new Date().toISOString();
-  readonly authMode: 'per-user' | 'service-account';
-  readonly #snapshot: ReadSnapshot;
-  readonly #runLease: ReviewRunBudgetLease;
-  readonly #runOwner: ReturnType<typeof registerReviewEvidenceSession>;
+  private readonly limits!: Record<keyof typeof BOUNDED_LIMITS, number>;
+  private readonly baseUrl!: string;
+  private readonly principalKey!: string;
+  private fetcher!: typeof fetch;
+  private readonly timer?: ReturnType<typeof setTimeout>;
+  private readonly started!:number;
+  readonly startedAt!:string;
+  readonly authMode!: 'per-user' | 'service-account';
+  readonly #snapshot!: ReadSnapshot;
+  readonly #runLease!: ReviewRunBudgetLease;
+  readonly #runOwner!: ReturnType<typeof registerReviewEvidenceSession>;
   private token?: string;
   private readyPromise?: Promise<void>;
-  readonly #budget:ReturnType<typeof createCanonicalReviewBudget>;
+  readonly #budget!:ReturnType<typeof createCanonicalReviewBudget>;
   #stopPropagated=false;
   #compositionStarted=false;
   #compositionKey?:object;
@@ -124,12 +166,26 @@ export class BoundedReadSession {
   private get stopCode(){return this.#budget.view.failure()??undefined;}
   private disposed = false;
   private busy = false;
-  private readonly removeExternal: () => void;
-  readonly releasePolicy: ReturnType<typeof pinReviewReleaseConfig>;
+  private readonly removeExternal?: () => void;
+  readonly releasePolicy!: ReturnType<typeof pinReviewReleaseConfig>;
+
+  /** Fixed fresh construction and one-shot failure-copy recovery; no existing session/seed/owner input. */
+  static create(snapshot:ReadSnapshot,options:BoundedReadOptions={}):Readonly<{ok:true;session:BoundedReadSession;construction:ConstructionDiagnostic}|{ok:false;code:ReadFailureCode;construction:ConstructionDiagnostic|null}>{
+    let session:BoundedReadSession|undefined;
+    try{session=new BoundedReadSession(snapshot,options);
+      const stopped=session.#construction.failure();if(stopped){session.#close();return Object.freeze({ok:false,code:stopped.public_code,construction:session.#construction.copy()});}
+      return Object.freeze({ok:true,session,construction:session.#construction.copy()});}
+    catch(error){let copy=error&&typeof error==='object'?constructionFailures.get(error):undefined;
+      if(error&&typeof error==='object')constructionFailures.delete(error);
+      if(session){session.#construction.fail('commit','internal_review_error');session.#close();try{copy=session.#construction.copy();}catch{/* fixed fallback if a copy cannot be allocated */}}
+      return Object.freeze({ok:false,code:copy?.primary?.public_code??'internal_review_error',construction:copy??null});}
+  }
+  constructionStatus(){return this.#construction.copy();}
 
   static async #runNativeStatusProbe(snapshot:ReadSnapshot,input:unknown,options:CompositionOptions&{driver:unknown}):Promise<NativeStatusCompositionResult>{
     let session:BoundedReadSession|undefined,driver:NativeStatusDriver|undefined,value:(StatusAcceptanceDraft&{consumptions:1})|undefined;
     let code:ReadFailureCode|null=null;
+    let construction:ConstructionDiagnostic|null=null;
     const progress={bound:false,consumptions:0};let runDiagnostic:NativeStatusCompositionResult['run_diagnostic']=Object.freeze({internal:null,public:null});
     try{
       const fields=pinDataObject(options,new Set(['signal','limits','driver']));
@@ -141,12 +197,15 @@ export class BoundedReadSession {
       const pinned=pinDataObject(snapshot,snapshotKeys),fixed=Object.freeze({...pinned,oauth:Object.freeze(pinDataObject(pinned.oauth,oauthKeys))}) as unknown as ReadSnapshot;
       if(fixed.authMode!=='per-user')throw new BoundedReadError('invalid_input');
       const parsed=parseBoundedSourceInput(input);
-      session=new BoundedReadSession(fixed,{signal,limits:fields.limits as BoundedReadOptions['limits'],fetch:()=>{throw new BoundedReadError('internal_review_error');}});
+      const created=BoundedReadSession.create(fixed,{signal,limits:fields.limits as BoundedReadOptions['limits'],fetch:()=>{throw new BoundedReadError('internal_review_error');}});
+      construction=created.construction;
+      if(!created.ok){if(construction?.primary)runDiagnostic=Object.freeze({internal:construction.primary.code,public:created.code});throw new BoundedReadError(created.code);}
+      session=created.session;
       value=await session.#probeStatusAcceptance(parsed,driver,progress);session.#checkComposition();
     }catch(error){code=error instanceof BoundedReadError?error.code:session?'internal_review_error':'invalid_input';session?.stop(code);driver?.stop(code);}
-    finally{try{await driver?.close();}catch{code??='internal_review_error';session?.stop(code);}finally{try{driver?.dispose();}catch{code??='internal_review_error';}finally{if(session){runDiagnostic=Object.freeze({internal:session.#runOwner.failure()??null,public:session.#budget.view.failure()});session.#close();}}}}
+    finally{try{await driver?.close();}catch{code??='internal_review_error';session?.stop(code);}finally{try{driver?.dispose();}catch{code??='internal_review_error';}finally{if(session){runDiagnostic=Object.freeze({internal:session.#runOwner.failure()??null,public:session.#budget.view.failure()});session.#close();construction=session.#construction.copy();}}}}
     return Object.freeze({ok:code===null,code,fake_io:true,draft:code===null?value??null:null,consumptions:progress.consumptions,
-      accepted_before_close:code===null&&value!==undefined,binding:Object.freeze({same_core:progress.bound,same_source:progress.bound}),run_diagnostic:runDiagnostic,
+      accepted_before_close:code===null&&value!==undefined,binding:Object.freeze({same_core:progress.bound,same_source:progress.bound}),run_diagnostic:runDiagnostic,constructor_diagnostic:construction,
       budget:Object.freeze(session?.stats()??{requests:0,received_bytes:0,payload_bytes:0}),cleanup:'closed',reserved:0});
   }
 
@@ -324,6 +383,9 @@ export class BoundedReadSession {
       const connected=statusBinding.value.connectAccounting(accounting);
       if(!connected.ok){this.#syncRunFailure();throw new BoundedReadError(this.stopCode??'internal_review_error');}
       accounting=connected.value;
+      if(!this.#construction.bindSource({session:this,snapshot:this.#snapshot,core:this.#budget,lease:this.#runLease,owner:this.#runOwner},source)){
+        this.stop('internal_review_error');throw new BoundedReadError('internal_review_error');
+      }
       return {source,handle:claim.value,accounting,bound:bound.value,statusBinding:statusBinding.value};
     }catch(error){accounting?.release();throw this.#adopt(error);}
   }
@@ -368,14 +430,29 @@ export class BoundedReadSession {
   }
 
   constructor(snapshot: ReadSnapshot, options: BoundedReadOptions = {}) {
-    this.#snapshot = { ...snapshot, oauth: { ...snapshot.oauth } };
+   try{
+    const pinned=pinDataObject(snapshot,snapshotKeys),fields=pinDataObject(options,new Set(['limits','fetch','signal']));
+    this.#snapshot = { ...pinned, oauth: { ...pinDataObject(pinned.oauth,oauthKeys) } } as unknown as ReadSnapshot;
+    this.#construction.attempt('snapshot');this.#construction.held('snapshot');
+    const signal=fields.signal as AbortSignal|undefined;
+    if(signal!==undefined){
+      if(types.isProxy(signal)||Object.getPrototypeOf(signal)!==AbortSignal.prototype||['aborted','addEventListener','removeEventListener'].some(k=>Object.hasOwn(signal,k)))throw new BoundedReadError('invalid_input');
+      Reflect.apply(Object.getOwnPropertyDescriptor(AbortSignal.prototype,'aborted')!.get!,signal,[]);
+    }
+    if(fields.fetch!==undefined&&(typeof fields.fetch!=='function'||types.isProxy(fields.fetch)))throw new BoundedReadError('invalid_input');
     this.limits = { ...BOUNDED_LIMITS };
-    for (const [key, value] of Object.entries(options.limits ?? {})) {
-      if (!(key in BOUNDED_LIMITS) || !Number.isInteger(value) || value! < 1 || value! > BOUNDED_LIMITS[key as keyof typeof BOUNDED_LIMITS]) {
+    const reduced=fields.limits===undefined?{}:pinDataObject(fields.limits,new Set(Object.keys(BOUNDED_LIMITS)));
+    for (const [key, value] of Object.entries(reduced)) {
+      if (!(key in BOUNDED_LIMITS) || typeof value!=='number' || !Number.isInteger(value) || value < 1 || value > BOUNDED_LIMITS[key as keyof typeof BOUNDED_LIMITS]) {
         throw new BoundedReadError('invalid_input');
       }
-      this.limits[key as keyof typeof BOUNDED_LIMITS] = value!;
+      this.limits[key as keyof typeof BOUNDED_LIMITS] = value as number;
     }
+    this.#constructionStage='clock';
+    this.started=performance.now();
+    if(!Number.isFinite(this.started)||this.started<0){this.#construction.fail('clock','invalid_observation_time');throw new BoundedReadError('internal_review_error');}
+    this.startedAt=new Date().toISOString();
+    this.#constructionStage='input';
     // Validate and key the stored copy, never the caller's object again.
     const copy = this.#snapshot;
     let url: URL;
@@ -384,30 +461,84 @@ export class BoundedReadSession {
       throw new BoundedReadError('invalid_input');
     }
     this.baseUrl = url.origin;
+    this.#constructionStage='config';
     try { this.releasePolicy = pinReviewReleaseConfig(copy.reviewReleaseConfigProvider
       ? copy.reviewReleaseConfigProvider() : copy.reviewReleaseConfig, this.baseUrl, this.startedAt, this.limits.deadlineMs); }
     catch { throw new BoundedReadError('config_invalid'); }
+    this.#constructionStage='authentication';
     if (copy.authMode === 'impersonation') throw new BoundedReadError('authentication_failed');
     this.authMode = copy.authMode === 'per-user' ? 'per-user' : 'service-account';
     if (this.authMode === 'per-user' && !copy.perUserBearerToken) throw new BoundedReadError('authentication_failed');
     // Credential-key admission, not a stable user ID: rotated per-user tokens count as distinct keys.
     this.principalKey = createHash('sha256').update(JSON.stringify([this.baseUrl, this.authMode,
       this.authMode === 'per-user' ? copy.perUserBearerToken : [copy.oauth.clientId, copy.oauth.username ?? '']])).digest('hex');
+    this.#constructionStage='admission';
     if (active >= 2 || principals.has(this.principalKey)) throw new BoundedReadError('review_busy');
+    // Keep the existing busy/authentication precedence; do not move admission ahead of validation.
+    this.#constructionStage='core';this.#construction.attempt('core');
     this.#budget=createCanonicalReviewBudget({clock:{remainingMs:()=>Math.max(0,this.limits.deadlineMs-(performance.now()-this.started))},limits:{requests:this.limits.requests,totalBytes:this.limits.totalBytes,payloadBytes:this.limits.payloadBytes,totalPayloadBytes:this.limits.totalPayloadBytes,deadlineMs:this.limits.deadlineMs}});
+    this.#construction.held('core');this.#checkConstruction();
+    this.#constructionStage='admission';this.#construction.attempt('admission');
     active++; principals.add(this.principalKey);
+    this.#admitted=true;this.#construction.held('admission');this.#checkConstruction();
     this.#runLease=Object.freeze({read:()=>{
       try{return this.#budget.view.lease.read();}catch(error){throw this.#adopt(error,'internal_review_error');}
     }});
+    this.#constructionStage='owner';this.#construction.attempt('registered_owner');
     this.#runOwner=registerReviewEvidenceSession(this,this.#snapshot,this.#runLease,undefined,
       {core:this.#budget,stop:code=>this.stop(this.#budget.view.failure()??(code as ReadFailureCode))});
-    this.fetcher = options.fetch ?? ((...args) => globalThis.fetch(...args));
+    this.#construction.held('registered_owner');this.#checkConstruction();
+    if(!this.#construction.bindCore({session:this,snapshot:this.#snapshot,core:this.#budget,lease:this.#runLease,owner:this.#runOwner}))this.#checkConstruction();
+    this.fetcher = fields.fetch as typeof fetch??((...args) => globalThis.fetch(...args));
+    this.#constructionStage='controllers';this.#construction.attempt('controller');
+    this.controller=new AbortController();this.#construction.held('controller');this.#checkConstruction();
+    this.#construction.attempt('phase_controller');this.phase=new AbortController();this.#construction.held('phase_controller');this.#checkConstruction();
+    this.#constructionStage='timer';this.#construction.attempt('deadline_timer');
     this.timer = setTimeout(() => this.stop('deadline_exceeded'), Math.max(0, this.limits.deadlineMs - (performance.now() - this.started)));
+    if(this.timer===undefined||this.timer===null)throw new BoundedReadError('internal_review_error');
+    this.#construction.held('deadline_timer');this.#checkConstruction();
     const cancel = () => this.stop('cancelled');
-    const external = options.signal;
-    external?.addEventListener('abort', cancel, { once: true });
-    this.removeExternal = () => external?.removeEventListener('abort', cancel);
-    if (external?.aborted) cancel();
+    if(signal){
+      const add=signal.addEventListener,remove=signal.removeEventListener;
+      this.removeExternal=()=>Reflect.apply(remove,signal,['abort',cancel]);
+      this.#constructionStage='listener';this.#construction.attempt('abort_listener');
+      Reflect.apply(add,signal,['abort',cancel,{once:true}]);this.#construction.held('abort_listener');
+      this.#checkConstruction();
+    }
+    this.#constructionStage='commit';if(!this.#construction.commit())this.#checkConstruction();
+    this.#constructing=false;
+    // Preserve direct-new compatibility: a pre-aborted signal returns a stopped instance, never usable authority.
+    if(signal?.aborted)cancel();
+   }catch(error){
+    const descriptor=error&&typeof error==='object'&&!types.isProxy(error)?Object.getOwnPropertyDescriptor(error,'code'):undefined;
+    const reason=descriptor&&'value' in descriptor?constructionCode(descriptor.value):'internal_review_error';
+    this.#construction.fail(this.#constructionStage,reason);this.#rollbackConstruction();
+    const failure=new BoundedReadError(this.#construction.failure()!.public_code);constructionFailures.set(failure,this.#construction.copy());throw failure;
+   }
+  }
+
+  #checkConstruction(){const failure=this.#construction.failure();if(failure)throw new BoundedReadError(failure.public_code);}
+  /** Fixed slot order, not a stack of caller-provided callbacks. Safe for partial initialization. */
+  #rollbackConstruction(){
+    if(this.disposed)return;this.disposed=true;
+    const release=(k:ConstructionResource,operation:(()=>void)|undefined)=>{
+      if(!this.#construction.needed(k))return;
+      let confirmed=false;try{if(operation){operation();confirmed=true;}}catch{/* retain fixed state; never exception text */}
+      this.#construction.release(k,confirmed,operation!==undefined);
+      if(!confirmed)this.#construction.fail('close','internal_review_error');
+    };
+    release('source_transport',this.#compositionRevoke);this.#compositionRevoke=undefined;this.#compositionKey=undefined;this.#compositionSource=undefined;
+    release('registered_owner',this.#runOwner?()=>this.#runOwner.close(this.#construction.failure()?.code??'closed'):undefined);
+    release('core',this.#budget?()=>this.#budget.writer.close():undefined);
+    release('abort_listener',this.removeExternal);
+    release('deadline_timer',this.timer!==undefined?()=>clearTimeout(this.timer):undefined);
+    release('phase_timer',this.phaseTimer!==undefined?()=>clearTimeout(this.phaseTimer):undefined);
+    release('phase_controller',this.phase?()=>this.phase.abort():undefined);
+    release('controller',this.controller?()=>this.controller.abort():undefined);
+    release('admission',this.#admitted?()=>{this.#admitted=false;active--;principals.delete(this.principalKey);}:undefined);
+    release('snapshot',this.#snapshot?()=>{this.token=undefined;this.#snapshot.perUserBearerToken=undefined;this.#snapshot.accessToken=undefined;this.#snapshot.oauth={clientId:'',clientSecret:''};this.#snapshot.reviewReleaseConfigProvider=undefined;}:undefined);
+    this.fetcher=()=>{throw new BoundedReadError('closed');};
+    this.#construction.seal();this.#constructing=false;
   }
 
   stats() { return {...this.#budget.view.stats()}; }
@@ -418,7 +549,7 @@ export class BoundedReadSession {
   #adopt(error:unknown,fallback?:ReadFailureCode){
     if(!(error instanceof CanonicalBudgetError))return error;
     const primary=this.#budget.view.diagnostic().primary;
-    if(primary)this.#runOwner.revoke(primary.internal);
+    if(primary){this.#construction.fail(this.#constructing?this.#constructionStage:'stop',primary.internal);if(this.#runOwner)this.#runOwner.revoke(primary.internal);}
     const reason=this.#budget.view.failure()??fallback;
     if(reason)this.stop(reason);
     return new BoundedReadError(error.code);
@@ -460,6 +591,13 @@ export class BoundedReadSession {
   }
   assertActive() { this.check(); }
   private stop(code: ReadFailureCode) {
+    if(this.disposed)return;
+    this.#construction.fail(this.#constructing?this.#constructionStage:'stop',code);
+    if(this.#constructing){
+      if(this.#constructionStopping)return;this.#constructionStopping=true;
+      try{if(this.#budget)this.#budget.writer.stop(code);if(this.#runOwner)this.#runOwner.revoke(code);}finally{this.#constructionStopping=false;}
+      return;
+    }
     this.#budget.writer.stop(code);
     if(this.#stopPropagated)return;
     this.#stopPropagated=true;
@@ -500,17 +638,10 @@ export class BoundedReadSession {
   }
   #close() {
     if (this.disposed) return;
-    this.#compositionRevoke?.();this.#compositionKey=undefined;this.#compositionSource=undefined;
-    this.#runOwner.close(this.stopCode ?? 'closed');
-    this.#budget.writer.close();
-    this.disposed = true; clearTimeout(this.timer); clearTimeout(this.phaseTimer); this.removeExternal();
-    this.phase.abort();
-    this.controller.abort(); active--; principals.delete(this.principalKey);
-    this.token = undefined;
-    // A closed snapshot must not retain per-user credentials after its owner
-    // revokes an R-2 session. This snapshot is an isolated copy, not user config.
-    this.#snapshot.perUserBearerToken = undefined;
-    this.#snapshot.accessToken = undefined;
+    if(this.#constructing){this.stop('closed');return;}
+    if(this.#compositionRevoke){this.#construction.attempt('source_transport');this.#construction.held('source_transport');}
+    if(this.phaseTimer!==undefined){this.#construction.attempt('phase_timer');this.#construction.held('phase_timer');}
+    this.#rollbackConstruction();
   }
   private async attempt(path: string, init: RequestInit, final: boolean): Promise<{ status: number; value?: unknown }> {
     this.check();

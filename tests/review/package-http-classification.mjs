@@ -22,4 +22,5 @@ execFileSync(process.execPath,[fileURLToPath(new URL('fixtures/compiled-native-s
 execFileSync(process.execPath,[fileURLToPath(new URL('fixtures/compiled-native-diagnostic-workflow.mjs',import.meta.url))],{cwd:root,stdio:'inherit'});
 execFileSync(process.execPath,[fileURLToPath(new URL('fixtures/compiled-native-session-composition.mjs',import.meta.url))],{cwd:root,stdio:'inherit'});
 execFileSync(process.execPath,[fileURLToPath(new URL('fixtures/compiled-construction-shell.mjs',import.meta.url))],{cwd:root,stdio:'inherit'});
+execFileSync(process.execPath,[fileURLToPath(new URL('fixtures/compiled-construction-transaction.mjs',import.meta.url))],{cwd:root,stdio:'inherit'});
 console.log('HTTP classification/status terminal/cleanup/context excluded; runtime unconnected; fixture/oracle excluded PASS ('+pack.files.length+' files)');

@@ -1,13 +1,13 @@
 # AU-BR-006：constructor最初期の診断owner・fake friend分離
 
-Version: br006-early-diagnostic-friend-separation-draft-0.4 / Date: 2026-10-31。
-Status: **EF-01の純粋shell／resource状態／bindingを合成issuerだけで実装。constructor接続・ビルド設定変更・friend撤去は未実施。正式発行口閉鎖・Unknown・全体受付無効・VM／監視／telemetry調査保留を維持する。実接続・実通信・実機操作・設定変更・Pushは行わない。**
+Version: br006-early-diagnostic-friend-separation-draft-0.5 / Date: 2026-10-31。
+Status: **EF-01の合成modelに加え、EF-02の実class constructor保護区間・固定rollback・失敗copy回収を実装し合成依存で検証。ビルド設定変更・friend撤去は未実施。正式発行口閉鎖・Unknown・全体受付無効・VM／監視／telemetry調査保留を維持する。実接続・実通信・実機操作・設定変更・Pushは行わない。**
 
 基準：`134248b`、[ND設計§3・§13](BEST_PRACTICE_ABORT_SCOPE_NATIVE_STATUS_DIAGNOSTIC_DESIGN.md)、[ND-03検証§5・§6](E2E_BEST_PRACTICE_NATIVE_DIAGNOSTIC_ND03_2026-10-31.md)、[source受理設計](BEST_PRACTICE_ABORT_SCOPE_STATUS_SOURCE_ACCEPTANCE_DELTA_DESIGN.md)。以下の型名・配置は内部契約案で、公開API／JSONの追加や承認済み実装ではない。
 
 ## 1 目的と現在の差分
 
-[現session](../src/servicenow/bounded-read.ts)はclass fieldでAbortController・`performance.now()`・日時を評価し、その後constructorで設定provider・canonical core・admission・登録owner・timer・外部abort listenerを生成する。ND-03のnative診断ownerは、それらより後のdriver.beginで生成される。
+[EF-02前のsession](../src/servicenow/bounded-read.ts)はclass fieldでAbortController・`performance.now()`・日時を評価し、その後constructorで設定provider・canonical core・admission・登録owner・timer・外部abort listenerを生成していた。EF-02では最初のfieldに純粋shellを置き、それらを保護区間内へ移した（§13）。ND-03のnative診断owner自体は、引き続きdriver.beginで生成される。
 
 また、`takeNativeStatusCompositionProbe`／`takeStatusAcceptanceProbe`のexportだけでなく、そのclosure・static private probe・driver型・static初期化が配布対象の同ファイルに残る。開発moduleが非同梱でも、このfriendはdeep importで取得し得る。one-shotは重複防止であり、取得者の真正性を証明しない。加えて、公開static `BoundedReadSession.prepareNewReviewComposition`は`synthetic_io`指定時にdata-onlyのfake byte列を受けるlane（`#prepareCompositionIO`、`fake_io:true`のsummary）を持ち、その依存`review-composition-fake-io`も`dist/servicenow`へ同梱される。callbackは受けず一度限りでもないが、配布classに残るfake分岐である。
 
@@ -175,7 +175,7 @@ shellは固定3purpose slot・固定reason／resource／claim slotのみで、�
 ## 11 実装の分割と承認待ち
 
 1. **EF-01**：純粋shell・固定resource状態・core／sourceの別one-shot claimを合成依存で実装。登録／runtime配布にはまだ接続しない。
-2. **EF-02**：field副作用を保護区間へ移し、部分生成rollbackと失敗copyの固定回収へ接続。busy／認証エラーの優先順位、元clock、API互換を確認する。
+2. **EF-02（限定実装済み、§13）**：field副作用を保護区間へ移し、部分生成rollbackと失敗copyの固定回収へ接続。busy／認証エラーの優先順位、元clock、API互換を合成依存で確認。
 3. **EF-03**：共通kernel・本番／開発rootの分離と試験保証の移行。配布物からSA-02／ND-03 friend本体を除去し、artifact負の対照を追加する。
 4. **後続③**：固定本番bindingとexact class注入E2Eを設計・接続する。別承認まで正式発行口・fallback・実通信は閉鎖。
 
@@ -198,6 +198,20 @@ draft-0.4のレビュー修正：未開始・解放済み（owner=none）のslot
 
 resourceの取得／解放は**合成metadata**であり、OS操作・実resource handle・rollback callback・固定解放sectionの実行証明ではない。EF-01では移譲・sealの状態modelまでを確認し、実際のconstructor field順変更、停止相互通知、失敗copyの搬送・take、admission返却・credential破棄、実cleanupはEF-02以降に残す。実装の確保量・Rust work単位への導出も行っていない。
 
-EF-T03の参照結合・二重利用、EF-T05／06の純粋状態、EF-T12のcopy非権限性だけを限定確認した。EF-T01の実class field順、EF-T02／04／07／08のcallback／constructor失敗、EF-T09／10のfriend本体撤去、EF-T11／13の移行後runtime保証は未達。新moduleの非同梱確認を、既存friend撤去済みと取り違えない。
+EF-01時点ではEF-T03の参照結合・二重利用、EF-T05／06の純粋状態、EF-T12のcopy非権限性だけを限定確認した。EF-T01の実class field順、EF-T02／04／07／08のcallback／constructor失敗は後続EF-02（§13）で合成確認を追加した。EF-T09／10のfriend本体撤去、EF-T13のassembly移行後runtime保証は未達。新moduleの非同梱確認を、既存friend撤去済みと取り違えない。
 
 [合成テスト](../tests/review/construction-shell.test.ts)、[compiled fixture](../tests/review/fixtures/compiled-construction-shell.mjs)、[検証記録](E2E_BEST_PRACTICE_CONSTRUCTION_SHELL_EF01_2026-10-31.md)を参照。正式発行口閉鎖・Unknown・全体受付無効・調査保留は維持する。
+
+## 13 EF-02：実constructorの保護区間・固定回収
+
+runtimeの同一class内に純粋shellを置き、EF-01の開発moduleはimportしない。snapshot／optionsをdata-onlyで固定し、clock・設定provider・認証・busy検査・core・admission・登録owner・controller・timer・listener・commitを保護区間で行う。既存の設定→認証→busyの優先順位と元run clockを維持する。core生成後にadmissionを取り、登録ownerと同session／snapshot／core／leaseの参照を結合する。source結合は既存private生成継続内で別claimとして行う。
+
+固定rollbackはsource継続失効→登録owner→core→listener→deadline timer→phase timer→phase controller→controller→admission→snapshotの順。disposedを先に立て、相互通知による再入・未初期化field参照を抑止する。取得未開始は操作0、取得済みは解放試行1。handleが返る前のthrowや解除throwはunconfirmedとし、残りのslotの解放を継続する。admissionはこのinstanceが取得した場合だけ返す。credential／provider／fetch参照を切り、借用元snapshotは変更しない。文字列のメモリ消去・強制GCは保証しない。
+
+固定factory `BoundedReadSession.create`は常に新しい同classを生成し、constructorが作った固定例外に私有WeakMapで結合したsealed copyを一度取得・削除する。外部error・seed・shellを受けるtake口はない。成功時は新sessionを返すが、失敗時にはsession／writer／lease／snapshot／URL／例外本文を返さない。copyはconstruction-onlyでpurpose3個は常に未観測、historical bindingはlive authorityではない。shell確保・copy確保自体ができない場合、可能な境界で固定internal_review_errorとnullを返し、詳細診断の存在は主張しない。
+
+直接`new`は既存の固定code例外を維持し、事前abort時も従来どおり停止済みinstanceを返す。factoryはその停止を検出してcloseし失敗copyへ変える。ND-03の固定入口だけをfactory回収へ接続し、constructor_diagnosticに保持した。通常MCP／R2等の直接new上位callerすべてへの詳細copy配送は未接続であり、正式JSON契約は変更しない。copy生成時の失敗でも、返却前の新sessionを固定解放する。
+
+本shellはconstructorとclose時点の固定10slotを記録するもので、全HTTP試行・phase timer世代の履歴やnative reader cleanupの証明を代替しない。同期解除APIの戻りを待つasync cleanup契約ではない。EF-03のfriend／synthetic_io撤去、assembly分離、artifact負の対照は未実施。既存friendが配布物に残る事実は変更しない。
+
+[合成テスト](../tests/review/construction-transaction.test.ts)、[compiled fixture](../tests/review/fixtures/compiled-construction-transaction.mjs)、[検証記録](E2E_BEST_PRACTICE_CONSTRUCTION_TRANSACTION_EF02_2026-10-31.md)を参照。正式発行口閉鎖・全体受付無効・調査保留を維持する。
