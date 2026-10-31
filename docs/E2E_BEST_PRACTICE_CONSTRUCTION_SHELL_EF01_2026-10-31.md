@@ -38,7 +38,15 @@ sealは実解除を行わず、未解決slotをunconfirmedに固定するだけ�
 - `bdo node tests/review/package-http-classification.mjs`：[compiled fixture](../tests/review/fixtures/compiled-construction-shell.mjs)と既存status各段階が成功。offline・ignore-scriptsのpack dry-runは409ファイル。新module／fixtureの非同梱、配布runtimeから新moduleへの参照なしを確認。
 - `bdo npm test`最終再実行：214ファイル・9,576テスト成功、未処理拒否なし（27.01秒）。変更source／test／compiled fixture／梱包scriptのESLintは警告・エラー0。依存再取得を伴うworker梱包試験は行っていない。
 
-## 5 未接続・保証しないこと
+## 5 レビュー修正（2026-10-31）
+
+- 指摘：`release()`の正当な申告者を`owner === 'session'`だけで決めていたため、owner=none（未開始・解放済み）のslotは、commit後も旧owner（run）だけが申告できた。commit後に新ownerが未開始`phase_timer`を申告すると`evidence_binding_mismatch`でshellが停止し、旧ownerの申告は`not_needed`で通った。新ownerによる解放済み`core`の再申告も、重複（`invalid_state`）ではなく外国owner扱いになっていた。fixtureの後始末がheldだけを解放するため、既存試験では未到達だった。
+- 修正：owner=noneのslotは、commit後なら新owner、commit前なら旧ownerを正当な申告者とする。
+- 試験：commit後の新owner未開始申告（`not_needed`・refusalなし・teardown confirmed）、旧owner未開始申告の拒否、新owner再解放の`invalid_state`を固定case 3件・テスト2件で追加（専用55件）。
+- mutation：判定を元に戻すと追加2件が失敗し、復元後に成功。
+- 再検証：build成功、全体214ファイル・9,578テスト成功・未処理拒否なし。梱包検査は409ファイルで成功、変更ファイルのESLintは0件。設計をdraft-0.4へ更新し、親設計2件のリンクも更新した。§4の数値は修正前の記録として残す。
+
+## 6 未接続・保証しないこと
 
 実constructorのfield初期化順は未変更。純粋modelのslotを実際のOS取得／解除の証拠にしない。EF-02のrollback section／callback相互停止／失敗copyの搬送・一度限りtake／admission返却・credential参照破棄は未実装で、unknownな実resourceを解放できたとは主張しない。
 

@@ -57,6 +57,17 @@ it('records a handle returned after synchronous stop for cleanup, without revivi
     expect(d.primary?.code).toBe('cancelled'); expect(d.resources.controller).toMatchObject({ attempts: 1, acquisitions: 1, releases: 1, state: 'released' });
     expect(d.counts.commits).toBe(0); expect(d.teardown).toBe('confirmed');
 });
+it('lets only the new owner report an unstarted slot as not needed after commit', () => {
+    const d = result('session_release_unstarted').diagnostic;
+    expect(d.refusal).toBeNull(); expect(d.primary).toBeNull(); expect(d.teardown).toBe('confirmed');
+    expect(d.resources.phase_timer).toMatchObject({ state: 'unstarted', owner: 'none', attempts: 0, releases: 0 });
+    const old = result('run_release_unstarted').diagnostic;
+    expect(old.refusal?.code).toBe('evidence_binding_mismatch'); expect(old.resources.phase_timer.releases).toBe(0);
+});
+it('classifies a repeated new-owner release as a duplicate, not a foreign owner', () => {
+    const d = result('session_duplicate_release').diagnostic;
+    expect(d.refusal?.code).toBe('invalid_state'); expect(d.resources.core).toMatchObject({ state: 'released', owner: 'none', releases: 1 });
+});
 it.each(['duplicate_acquire', 'duplicate_release', 'unknown_confirmed', 'foreign_resource'])('rejects %s without duplicating an operation', scenario => {
     const d = result(scenario).diagnostic;
     expect(d.refusal).not.toBeNull();

@@ -62,7 +62,8 @@ function constructShell() {
     }
     function release(k: ResourceName, operator: object, disposition: 'confirmed' | 'unconfirmed') {
         if (sealed) return 'late_ignored';
-        const r = resources[k], expected = r.owner === 'session' ? core.session : core.run;
+        // An unowned slot (never started or already released) belongs to whoever owns the shell's resources now.
+        const r = resources[k], expected = r.owner === 'session' || r.owner === 'none' && counts.commits ? core.session : core.run;
         if (operator !== expected) return reject('evidence_binding_mismatch', 'resource');
         if (r.state === 'unstarted') return 'not_needed';
         if (r.releases || !['held', 'unknown', 'attempted'].includes(r.state) || disposition === 'confirmed' && r.state !== 'held')
@@ -127,7 +128,7 @@ export function runConstructionShellFixture(raw: unknown) {
         'foreign_core', 'copy_core', 'core_run', 'core_session', 'core_snapshot', 'core_core', 'core_lease', 'core_registered_owner',
         'foreign_source', 'copy_source', 'source_core_binding', 'source_key', 'source_source', 'source_handle', 'first_reason', 'late_resource',
         'duplicate_acquire', 'duplicate_release', 'unknown_confirmed', 'foreign_resource', 'seal_pending', 'sealed_late', 'timer_before_core',
-        'commit_after_release', 'source_after_release'];
+        'commit_after_release', 'source_after_release', 'session_release_unstarted', 'session_duplicate_release', 'run_release_unstarted'];
     if (keys.length !== 1 || keys[0] !== 'scenario' || !field || !('value' in field) || typeof field.value !== 'string' || !cases.includes(field.value)) return invalid();
     const scenario = field.value, shell = constructShell(), foreign = constructShell(), before = JSON.stringify(foreign.diagnostic());
     const late: string[] = [];
@@ -158,6 +159,13 @@ export function runConstructionShellFixture(raw: unknown) {
             shell.commit(); shell.acquire('source_transport', shell.tokens.source_transport); shell.release('core', shell.core.session, 'confirmed'); shell.bindSource(shell.source);
         }
         else if (scenario === 'source_before_commit') shell.bindSource(shell.source);
+        else if (['session_release_unstarted', 'session_duplicate_release', 'run_release_unstarted'].includes(scenario)) {
+            shell.commit();
+            if (scenario === 'session_release_unstarted') shell.release('phase_timer', shell.core.session, 'confirmed');
+            if (scenario === 'run_release_unstarted') shell.release('phase_timer', shell.core.run, 'confirmed');
+            if (scenario === 'session_duplicate_release') { shell.release('core', shell.core.session, 'confirmed'); shell.release('core', shell.core.session, 'confirmed'); }
+            cleanup(); shell.seal();
+        }
         else if (['bind_after_stop', 'commit_after_stop', 'resource_after_stop'].includes(scenario)) {
             shell.stop('cancelled', 'stop');
             if (scenario === 'bind_after_stop') shell.bindCore(shell.core);

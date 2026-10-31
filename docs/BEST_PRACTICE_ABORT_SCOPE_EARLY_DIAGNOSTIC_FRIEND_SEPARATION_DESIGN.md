@@ -1,6 +1,6 @@
 # AU-BR-006：constructor最初期の診断owner・fake friend分離
 
-Version: br006-early-diagnostic-friend-separation-draft-0.3 / Date: 2026-10-31。
+Version: br006-early-diagnostic-friend-separation-draft-0.4 / Date: 2026-10-31。
 Status: **EF-01の純粋shell／resource状態／bindingを合成issuerだけで実装。constructor接続・ビルド設定変更・friend撤去は未実施。正式発行口閉鎖・Unknown・全体受付無効・VM／監視／telemetry調査保留を維持する。実接続・実通信・実機操作・設定変更・Pushは行わない。**
 
 基準：`134248b`、[ND設計§3・§13](BEST_PRACTICE_ABORT_SCOPE_NATIVE_STATUS_DIAGNOSTIC_DESIGN.md)、[ND-03検証§5・§6](E2E_BEST_PRACTICE_NATIVE_DIAGNOSTIC_ND03_2026-10-31.md)、[source受理設計](BEST_PRACTICE_ABORT_SCOPE_STATUS_SOURCE_ACCEPTANCE_DELTA_DESIGN.md)。以下の型名・配置は内部契約案で、公開API／JSONの追加や承認済み実装ではない。
@@ -193,6 +193,8 @@ shellは固定3purpose slot・固定reason／resource／claim slotのみで、�
 - commitは合成resourceの所有者ラベルをshell→sessionへ一度移すだけで、実行permitや実classへの移譲証拠を発行しない。古いownerの解放申告を拒否しても、新ownerの必要な後始末を妨げない。解放状態の更新は同合成ownerだけが一度行う。
 - 未取得resourceは返却0。unknownをconfirmedへ上げず、sealもrelease成功を捏造しない。未解決slotはunconfirmed、first reason／refusalは別保持、seal後の更新・二重sealはlate_ignoredとなる。公開copyは再帰freezeし全7permission=false。
 - snapshot／core／登録owner／source継続の解放記録はbindingを即時inactiveにし、その後のcommit／source bindingを拒否する。解放済みcoreにhistorical boundが残ることを、live authorityとみなさない。
+
+draft-0.4のレビュー修正：未開始・解放済み（owner=none）のslotの解放申告者をcommit有無にかかわらず旧ownerとしていたため、commit後は新ownerの未開始slot申告が外国owner扱いで停止し、旧ownerの申告がnot_neededとして通っていた。owner=noneのslotはcommit後は新ownerだけを正当な申告者とし、新ownerの再解放はinvalid_state（重複）として分類する。
 
 resourceの取得／解放は**合成metadata**であり、OS操作・実resource handle・rollback callback・固定解放sectionの実行証明ではない。EF-01では移譲・sealの状態modelまでを確認し、実際のconstructor field順変更、停止相互通知、失敗copyの搬送・take、admission返却・credential破棄、実cleanupはEF-02以降に残す。実装の確保量・Rust work単位への導出も行っていない。
 

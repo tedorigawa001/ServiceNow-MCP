@@ -32,6 +32,8 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 ### Added
 
+- Fixes EF-01 so, after commit, only the new owner may report an unowned (never-started or already-released) slot: its not-needed report no longer fails the shell, the old owner's report is refused, and a repeated new-owner release is classified as a duplicate.
+
 - EF-01 adds a package-excluded pure construction-shell model: three unobserved purpose slots, ten fixed resource slots, separate one-shot core/source bindings and a non-executable ownership-transfer model. Synthetic tests cover foreign/copy binding rejection, first-failure retention, partial/unknown acquisition, owner-specific one-shot release metadata and immutable sealing. No clock, controller, timer, listener, session registration or real cleanup is invoked. Constructor integration, diagnostic failure-copy delivery, fake-friend removal, formal issuance and whole-run admission remain unconnected/disabled. Includes compiled/offline packaging checks.
 
 - Fixes ND-03 so a native cleanup-floor stop reaches the session as `upstream_unavailable` (matching the SA-02 floor check) while the canonical run deadline is not reached; the native diagnostic keeps its own `deadline_exceeded`/`cleanup_deadline`.
