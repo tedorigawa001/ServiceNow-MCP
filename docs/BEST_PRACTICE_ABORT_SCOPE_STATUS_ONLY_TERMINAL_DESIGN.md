@@ -1,7 +1,7 @@
 # AU-BR-006 同attemptのstatus-only終端・cancel-only cleanup詳細設計
 
-Version: br006-status-only-terminal-draft-0.3 / Date: 2026-10-31。
-Status: ST-01として§10の合成issuer限定内部契約だけを実装。native操作・正式証拠・runtime採用と承認は未実施。§8の受入条件は後続native段階を含み、全件確認済みではない。正式発行口閉鎖・Unknown・全体受付無効・VM／監視／telemetry調査保留を維持する。
+Version: br006-status-only-terminal-draft-0.4 / Date: 2026-10-31。
+Status: ST-01の§10合成issuer内部契約と、ST-02の§11注入Response／Streamsによるcleanup操作を開発専用に実装。正式証拠・runtime採用と承認は未実施。§8の受入条件は後続接続段階を含み、全件確認済みではない。正式発行口閉鎖・Unknown・全体受付無効・VM／監視／telemetry調査保留を維持する。
 
 親：[非200 HTTP対応設計](BEST_PRACTICE_ABORT_SCOPE_NON200_HTTP_DESIGN.md) §4／8。既存実装の照合元は[native adapter](../src/servicenow/review-native-adapter.ts)、[body lane](../src/servicenow/review-native-body.ts)、[説明用分類器](../src/review/abort-scope-evidence-http-classification.ts)。本書は実通信での確認記録ではない。
 
@@ -179,3 +179,28 @@ draft-0.1は設計と参照更新だけ。後続ST-01の実装範囲と未対応
 nativeのread／cancel／closed／releaseLock、cleanup promiseへの合流、late delivery破棄、C/G更新、Response真正性、同reader／attempt実結合、上位終了codeは未接続。ST-T01〜ST-T20全てを確認済みにせず、ST-A01〜ST-A07と親A01〜A07も未承認のまま。正式発行口・既存200限定guardを変更しない。
 
 [合成テスト](../tests/review/status-terminal.test.ts)と[検証記録](E2E_BEST_PRACTICE_STATUS_TERMINAL_ST01_2026-10-31.md)を参照。既存梱包除外`abort-scope-evidence*`を維持し、[梱包確認](../tests/review/package-http-classification.mjs)でruntime依存なし・fixture非同梱・compiled単独動作を検査する。
+
+## 11 ST-02：注入Response／Streamsのcancel-only cleanup
+
+[実装](../src/review/abort-scope-evidence-status-cleanup.ts)は開発専用の別owner。dispatch関数・URL・認証・session・ReleasePermit・ST-01への証拠発行口を受け取らず、注入されたResponseを最大1 attemptとして採用する。opaque handleとprivate台帳で同owner／同attemptを照合する。これは実session／source／認証snapshot／元のHTTP要求への正式bindingではない。fixture登録台帳は共有しない。
+
+### 11.1 操作と所有権
+
+- Response／stream／readerのnative prototypeとgetter／操作をmodule初期化時に固定する。proxy・偽造・subclass・使用済みResponse・再使用・locked／foreign streamは拒否し、foreign readerを奪わない。
+- 同streamからreaderを1回取得し、そのreaderのclosed promiseをcancel前に1回captureする。readを公開も呼出しもせず、操作数は常にread=0。
+- stop／close／finishより前に共通cleanup promiseを設置する。cancelとreleaseLockは各操作の前に状態・試行数を更新し、同期throw／rejectでも再試行しない。明示的なfinish claimも一度限り。
+- cancelとclosedのsettleを元のcleanup floorまで観測し、releaseLock直前の事実をcopyする。同readerのreleaseを1回試行後、元clockでpost-guardする。release自身によるclosed変化や遅いcancel完了で終端を修復しない。
+- no_bodyは固定native getterのnullだけ。reader操作は全て0回、cancel／closed／releaseはnot_applicable、EOFやJSON成功ではない。
+- reader取得失敗はreader_owner_unknownで止め、二つ目のreaderを探さない。closed取得失敗後は保持readerをcancel／releaseするが、確認済みにしない。releaseが実際にunlockせずthrowした場合も再試行せず、解放未確認を残す。
+
+操作数はnative操作の**試行数**。closed getterがthrowしてもclosed=1／closed_captured=false、getReaderがthrowしてもget_reader=1／reader_owned=falseとなる。bodyの既存prefetchやsocket受信量はread=0の主張に含まない。
+
+### 11.2 停止・時間・返却
+
+注入readonly budgetのremainingを元deadline（最大60秒）と単調非増加で照合する。固定window originとcleanup floorの幅は最大10秒、floorは既存の最低予約境界以上。開始時も各待機も`remaining > floor`が必要で、別clock・新しい期限は作らない。floor到達・時計異常では追加待機せず、保持resourceへの未実施cancel／releaseをbest effortで各1回だけ試す。確認失敗はHTTPとは別のcleanup理由とwait_issueへ保持する。
+
+401／auth・parent403の先行primary、取消・closed、時刻・混入の先行失敗を上書きしない。取得の取消／拒否状態はprimaryと別のrevoked flagで保持し、hard HTTP診断が先行していても取得完了前の取消を見落とさない。明示stop_reasonも固定slotに残す。このflag自体は実sessionの失効証拠ではない。finishのokは**診断が確定した**という意味だけで、HTTP／cleanup成功の意味ではない。kind=cleanup_diagnostic_only、全7権限=falseで、terminal／consume／body ack／EOF証拠を返さない。cleanup不成立時は必ず非nullのprimaryを残す。
+
+ST-01の合成terminalへnative結果を昇格する接続、実session／leaseとの結合、C/G更新、retry／fallback、公開終了codeへの接続は未実装。既存200限定body adapterとruntime生成口は変更しない。runtimeのfixture claim台帳にも触れない。ST-T17aのrun停止条件を承認済み・接続済みにせず、このownerではread API自体を持たせない。
+
+[合成試験](../tests/review/status-cleanup.test.ts)はnative操作の同reader identity・順序・試行数を外側から観測し、製品の理由判定helperを使わない期待値と照合する。[ST-02検証記録](E2E_BEST_PRACTICE_STATUS_CLEANUP_ST02_2026-10-31.md)に初回の試験組立て失敗と修正も記録した。全体受付無効・調査保留と全承認待ちは継続する。
