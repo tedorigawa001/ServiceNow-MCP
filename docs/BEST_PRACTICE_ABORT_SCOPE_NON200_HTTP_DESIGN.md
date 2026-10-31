@@ -236,6 +236,6 @@ BoundedReadSession・bootstrap・native adapter・source・MCP／設定・既存
 
 ## 10 status-only終端・cancel-only cleanupの詳細化
 
-第2段階の[同attempt終端詳細設計draft-0.2](BEST_PRACTICE_ABORT_SCOPE_STATUS_ONLY_TERMINAL_DESIGN.md)で、同readerの所有権・一度限りのfinish／consume・HTTPとcleanupの二軸診断を具体化した。停止後に残るcleanup所有権と、同期失効する業務継続権限を分離し、hard HTTP停止後はcleanupが成功しても診断専用とする案である。
+第2段階の[同attempt終端詳細設計draft-0.3](BEST_PRACTICE_ABORT_SCOPE_STATUS_ONLY_TERMINAL_DESIGN.md)で、同readerの所有権・一度限りのfinish／consume・HTTPとcleanupの二軸診断を具体化した。停止後に残るcleanup所有権と、同期失効する業務継続権限を分離し、hard HTTP停止後はcleanupが成功しても診断専用とする案である。
 
 ST-01で合成issuer限定の内部型・claim・診断保持だけを実装した。nativeの操作・同reader確認・単一会計への接続はまだなく、ST-T01〜ST-T20全体を確認済みにしない。ST-A01〜ST-A07／A01〜A07の承認、runtime採用、retry／fallback、正式発行を意味しない。現行200限定guard・全体受付無効・調査保留を維持する。

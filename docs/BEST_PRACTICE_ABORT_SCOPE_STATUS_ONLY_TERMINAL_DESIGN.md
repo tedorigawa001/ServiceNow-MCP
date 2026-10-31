@@ -1,6 +1,6 @@
 # AU-BR-006 同attemptのstatus-only終端・cancel-only cleanup詳細設計
 
-Version: br006-status-only-terminal-draft-0.2 / Date: 2026-10-31。
+Version: br006-status-only-terminal-draft-0.3 / Date: 2026-10-31。
 Status: ST-01として§10の合成issuer限定内部契約だけを実装。native操作・正式証拠・runtime採用と承認は未実施。§8の受入条件は後続native段階を含み、全件確認済みではない。正式発行口閉鎖・Unknown・全体受付無効・VM／監視／telemetry調査保留を維持する。
 
 親：[非200 HTTP対応設計](BEST_PRACTICE_ABORT_SCOPE_NON200_HTTP_DESIGN.md) §4／8。既存実装の照合元は[native adapter](../src/servicenow/review-native-adapter.ts)、[body lane](../src/servicenow/review-native-body.ts)、[説明用分類器](../src/review/abort-scope-evidence-http-classification.ts)。本書は実通信での確認記録ではない。
@@ -141,6 +141,7 @@ mode／binding／二重消費は適格性・消費拒否理由であり、cleanu
 | ST-T15 | clock逆行／throw | 固定理由、追加待機なし、best effortで成功に昇格しない |
 | ST-T16 | pending readがcancelでdoneになる | EOFでなく、status証拠不適格とcleanup事実を分離 |
 | ST-T17 | HTTPとcleanupの複合失敗・先行primary | 2軸と最初のprimaryを保持、上書きなし |
+| ST-T17a | read開始違反（read≠0）をrunへ接続 | 拒否slotの非nullだけでもrun ownerは停止する（または内部primaryとして記録する）。primaryがnullであることを継続可能の根拠にしない。cleanup事実は保持し、terminal・retry・fallbackなし |
 | ST-T18 | 会計境界・coreの寿命 | C/G返金なし、cleanupで予算coreを閉じない |
 | ST-T19 | 分類器copy／fixture証拠の投入 | runtime証拠として拒否、台帳非共有 |
 | ST-T20 | 既存200・固定評価セット・梱包 | body lane不変、正式口閉鎖、fixture非同梱を回帰確認 |
@@ -172,7 +173,7 @@ draft-0.1は設計と参照更新だけ。後続ST-01の実装範囲と未対応
 - issue／finish／consumeのclaimはcallback前に消費。失敗後の再生成・二重finish・別binding／owner／attempt／証拠copyを拒否する。時計の再入や取消で状態を復活させない。
 - 401とauth／parentの403はhard主診断を固定し、cleanup後も診断専用。parent404もlocal診断専用。release403／404のliveな成功は合成terminalだけを返し、その一度限りの消費も診断copyを返すだけで全7権限=false。
 - stopは先行primaryを保持して未消費terminalを同期失効。取得済み合成attemptでは停止後もfinishからcleanup事実を格納できるが、継続権限を発行しない。
-- cleanup理由とHTTP主診断を分離。read開始違反でも確認済みcleanup事実は保持し、別の拒否slotでstatus不適格を表す。no_bodyは全操作not_applicableを必須とし、EOFに変換しない。
+- cleanup理由とHTTP主診断を分離。read開始違反でも確認済みcleanup事実は保持し、別の拒否slotでstatus不適格を表す。ST-01ではこの違反をprimaryへ記録しないため、後続のnative／run接続ではprimaryだけを停止判定に使わず、拒否slotの非nullでも停止させる（ST-T17a）。no_bodyは全操作not_applicableを必須とし、EOFに変換しない。
 - 元remaining観測は上限60秒・単調非増加・元floorへの厳密な`>`を要求。期限・clock例外・再入で証拠を出さず、秘密の例外文字列を保存しない。実canonical budgetや時間待機には接続しない。
 
 nativeのread／cancel／closed／releaseLock、cleanup promiseへの合流、late delivery破棄、C/G更新、Response真正性、同reader／attempt実結合、上位終了codeは未接続。ST-T01〜ST-T20全てを確認済みにせず、ST-A01〜ST-A07と親A01〜A07も未承認のまま。正式発行口・既存200限定guardを変更しない。

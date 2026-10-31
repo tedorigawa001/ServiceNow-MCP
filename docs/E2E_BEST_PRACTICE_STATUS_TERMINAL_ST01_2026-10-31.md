@@ -28,6 +28,12 @@ issue→finish→consumeは最大1回ずつ。コピー・別owner／binding／a
 - read開始済みのstatus不適格とcleanup確認事実の分離、no_bodyを成功操作やEOFで偽装しないこと。
 - accessor／proxy／追加key拒否、例外秘密の非保存、global native／timer呼出しなし。
 
+## レビュー追記（2026-10-31）
+
+- 確認：body読取が始まった報告（`read_started: true`）では、ST-01は`refusal: 'invalid_state'`だけを記録し、`primary`は`null`のまま、cleanupを`confirmed`として`finished`になる。試験で意図された挙動であり、ST-01は継続権限を発行しないため現段階の欠陥ではない。
+- 残リスク：後続のnative／run接続でrun ownerが`primary`だけを停止判定に使うと、status-only終端の「read=0」違反を見落とす。
+- 対応：コードは変更せず、[詳細設計](BEST_PRACTICE_ABORT_SCOPE_STATUS_ONLY_TERMINAL_DESIGN.md)をdraft-0.3とし、§10に接続時の停止条件を明記し、§8に受入条件ST-T17a（拒否slotの非nullでもrun停止または内部primary記録、cleanup事実は保持）を追加した（文書のみ）。§2の実行結果は変更しない。
+
 ## 4 未確認・未接続
 
 cleanupの操作数・同reader・操作順・promise合流は今回の合成申告から証明しない。注入Response／Streams、実attempt／leaseのbinding、実会計、late delivery、native cleanupの強制期限、runtime consumer、公開終了codeは後続工程。全体合成テスト一式は今回再実行していない。
