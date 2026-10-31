@@ -236,8 +236,8 @@ BoundedReadSession・bootstrap・native adapter・source・MCP／設定・既存
 
 ## 10 status-only終端・cancel-only cleanupの詳細化
 
-第2段階の[同attempt終端詳細設計draft-0.6](BEST_PRACTICE_ABORT_SCOPE_STATUS_ONLY_TERMINAL_DESIGN.md)で、同readerの所有権・一度限りのfinish／consume・HTTPとcleanupの二軸診断を具体化した。停止後に残るcleanup所有権と、同期失効する業務継続権限を分離し、hard HTTP停止後はcleanupが成功しても診断専用とする案である。
+第2段階の[同attempt終端詳細設計draft-0.7](BEST_PRACTICE_ABORT_SCOPE_STATUS_ONLY_TERMINAL_DESIGN.md)で、同readerの所有権・一度限りのfinish／consume・HTTPとcleanupの二軸診断を具体化した。停止後に残るcleanup所有権と、同期失効する業務継続権限を分離し、hard HTTP停止後はcleanupが成功しても診断専用とする案である。
 
 ST-01で合成issuer限定の内部型・claim・診断保持、ST-02で注入Response／Streamsだけの同reader cleanupを実装した。正式terminal／単一会計／実sessionへの接続はまだなく、ST-T01〜ST-T20全体を確認済みにしない。ST-A01〜ST-A07／A01〜A07の承認、runtime採用、retry／fallback、正式発行を意味しない。現行200限定guard・全体受付無効・調査保留を維持する。
 
-次の[ST-03接続詳細設計draft-0.1](BEST_PRACTICE_ABORT_SCOPE_STATUS_TERMINAL_CONNECTION_DESIGN.md)では、ST-02内部recordからのprivate発行・一度限り消費・発行後失効を注入試験内で結合する案を定めた。実装・承認は未実施。診断copyや合成申告を正式証拠へ昇格せず、sourceへのfallback採用も別工程とする。
+次の[ST-03接続詳細設計draft-0.2](BEST_PRACTICE_ABORT_SCOPE_STATUS_TERMINAL_CONNECTION_DESIGN.md)では、ST-02内部recordからのprivate発行・一度限り消費・発行後失効を注入試験内で結合する案を定めた。ST-03Aは閉鎖合成fixtureのprivate context／anchor／発行claim・診断保持だけを実装し、native record採用・消費・runtime承認は未実施。診断copyや合成申告を正式証拠へ昇格せず、sourceへのfallback採用も別工程とする。

@@ -1,6 +1,6 @@
 # AU-BR-006 同attemptのstatus-only終端・cancel-only cleanup詳細設計
 
-Version: br006-status-only-terminal-draft-0.6 / Date: 2026-10-31。
+Version: br006-status-only-terminal-draft-0.7 / Date: 2026-10-31。
 Status: ST-01の§10合成issuer内部契約と、ST-02の§11注入Response／Streamsによるcleanup操作を開発専用に実装。正式証拠・runtime採用と承認は未実施。§8の受入条件は後続接続段階を含み、全件確認済みではない。正式発行口閉鎖・Unknown・全体受付無効・VM／監視／telemetry調査保留を維持する。
 
 親：[非200 HTTP対応設計](BEST_PRACTICE_ABORT_SCOPE_NON200_HTTP_DESIGN.md) §4／8。既存実装の照合元は[native adapter](../src/servicenow/review-native-adapter.ts)、[body lane](../src/servicenow/review-native-body.ts)、[説明用分類器](../src/review/abort-scope-evidence-http-classification.ts)。本書は実通信での確認記録ではない。
@@ -207,6 +207,6 @@ ST-01の合成terminalへnative結果を昇格する接続、実session／lease�
 
 ## 12 ST-02後の接続設計（未実装）
 
-[ST-03接続詳細設計draft-0.1](BEST_PRACTICE_ABORT_SCOPE_STATUS_TERMINAL_CONNECTION_DESIGN.md)で、同attemptのprivate status-only終端・一度限りの消費・発行後失効と診断保持を一体化した。ST-02内部recordを唯一の発行元とし、外部診断copyをST-01へ渡して証拠に昇格する方式は採らない。
+[ST-03接続詳細設計draft-0.2](BEST_PRACTICE_ABORT_SCOPE_STATUS_TERMINAL_CONNECTION_DESIGN.md)で、同attemptのprivate status-only終端・一度限りの消費・発行後失効と診断保持を一体化した。ST-02内部recordを唯一の発行元とし、外部診断copyをST-01へ渡して証拠に昇格する方式は採らない。
 
-同owner／anchor／元window／注入budget・固定clockへの結合、clock callback前のclaim消費と直後のpost-guard、同期失効、HTTP／cleanup事実と別拒否slotの保持を定めた案。ST-03A〜Cは未実装、STC-A01〜A05と親の全承認は未実施。注入専用tokenもruntime／fallback等の許可ではなく、正式発行口閉鎖・Unknown・全体受付無効・調査保留を維持する。
+同owner／anchor／元window／注入budget・固定clockへの結合、clock callback前のclaim消費と直後のpost-guard、同期失効、HTTP／cleanup事実と別拒否slotの保持を定めた案。ST-03Aの合成内部契約だけを実装し、非実行draftは外へ出さない。ST-03B／Cとnative record接続は未実装、STC-A01〜A05と親のruntime承認は未実施。runtime／fallback等の許可ではなく、正式発行口閉鎖・Unknown・全体受付無効・調査保留を維持する。
