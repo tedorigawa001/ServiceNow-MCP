@@ -1,7 +1,7 @@
 # AU-BR-006 ST-03：private status-only終端・一度限り消費・失効の接続詳細設計
 
-Version: br006-status-terminal-connection-draft-0.5 / Date: 2026-10-31。
-Status: ST-03Aの§10合成内部契約とST-03Bの§11合成consumerを実装。ST-02のnative recordからのprivate発行・消費の連続接続とruntime承認は未実施。正式発行口閉鎖・Unknown・全体受付無効・VM／監視／telemetry調査保留を維持する。
+Version: br006-status-terminal-connection-draft-0.6 / Date: 2026-10-31。
+Status: ST-03A／Bの§10〜11合成契約と、ST-03Cの§12注入Response／Streamsからのprivate発行・消費を実装。実session／実transportへの接続とruntime承認は未実施。正式発行口閉鎖・Unknown・全体受付無効・VM／監視／telemetry調査保留を維持する。
 
 親：[status-only終端詳細設計](BEST_PRACTICE_ABORT_SCOPE_STATUS_ONLY_TERMINAL_DESIGN.md) §4／9〜11、[非200 HTTP設計](BEST_PRACTICE_ABORT_SCOPE_NON200_HTTP_DESIGN.md) §8／10。
 基準：[ST-01](../src/review/abort-scope-evidence-status-terminal.ts)、[ST-02](../src/review/abort-scope-evidence-status-cleanup.ts)、[ST-02検証記録](E2E_BEST_PRACTICE_STATUS_CLEANUP_ST02_2026-10-31.md)。Promise固定の追加修正`e277e88`を含む現行ソースを読み取り照合した。実通信や実sessionの検証記録ではない。
@@ -20,7 +20,7 @@ ST-02は同readerのcancel-only cleanupを実行できるが、finishはcleanup_
 
 ## 2 接続の形：private recordが唯一の発行元
 
-将来の実装では、同じ固定生成経路の中でST-02 ownerと固定consumerを一緒に生成する案とする。private constructor継続はその生成経路だけが捕捉し、外から任意callback／consumer／既存owner／registryを渡す引数を作らない。
+ST-03C（§12）では、同じ固定生成経路の中でST-02 ownerと固定consumerを一緒に生成する。private constructor継続はその生成経路だけが捕捉し、外から任意callback／consumer／既存owner／registryを渡す引数を作らない。実session／実transportの採用は別工程とする。
 
 外側の診断APIは従来どおりcopyを返し、終端tokenの取得APIを追加しない。固定consumerへ渡すのはclosure内のopaque tokenだけ。内部で複数moduleに分ける場合もconstructor keyと発行元を限定し、公開exportでのraw登録・採用を禁止する。
 
@@ -128,7 +128,9 @@ HTTP軸（native header／用途／status）とcleanup軸（confirmed／unconfir
 
 表の理由は内部接続案であり、既存MCP JSONへ新しいenumや優先codeを追加したという意味ではない。公開終了code・sourceへの写像はST-A03／ST-A05等の承認と後続接続を要する。
 
-## 8 合成受入条件（計画・未実行）
+## 8 合成受入条件（段階別・全条件の達成は未確認）
+
+ST-03A〜Cで実行した試験は§10〜12と各検証記録を参照。本表は実session等の後続bindingも含むため、注入経路の成功から全条件を確認済みへ変更しない。
 
 既存ST-01／ST-02試験を維持し、追加の注入専用試験ではprivate recordの経路を通す。負の対照のためのprivate fixtureは開発専用に閉じ、runtime登録口を追加しない。期待値は製品の発行適格性helperをimportしない手書き表・イベント観測で照合し、件数と各ケースの実行を検査する。
 
@@ -169,7 +171,7 @@ STC-T07等の不可能な内部状態の負の対照は、test専用の限定fix
 | STC-A04 | 同期失効・拒否slot・HTTP／cleanup診断の保持と停止判定 | ST-A03／ST-A05、A01 |
 | STC-A05 | 注入試験／private負の対照・梱包除外とruntime非採用 | ST-A06／ST-A07、A07 |
 
-実装の段階は以下の順序。ST-03A／Bの合成内部契約を§10〜11まで実装し、native接続段階のST-03Cを実装済みにしない。
+実装の段階は以下の順序。ST-03A／Bの合成内部契約とST-03Cの注入native連続接続を§10〜12まで実装したが、実session／実transportへの接続済みとはしない。
 
 1. **ST-03A**：同constructorのprivate context／anchor／発行claimと診断保持の内部契約。合成負の対照で混入・重複生成を先に検査し、外部診断からの昇格口は作らない。
 2. **ST-03B**：一度限りconsumerと発行後失効を同じ状態機械へ接続。pre／post-guard・再入・取消・期限・first diagnostic保持をfake clockで検査する。
@@ -219,4 +221,38 @@ HTTP／cleanupのimmutable事実、first primary／refusal／stage、stop_reason
 
 [consumer試験](../tests/review/status-consumer.test.ts)は製品のcase一覧／guard helperを使わない42ケースの期待表と詳細確認を含む60件。既存ST-03Aの71件を維持し、pre／post再入・取消・close・例外・期限・逆行、foreign／copy／JSON診断、二重消費／再発行、失敗後再試行、first diagnosticと成功履歴の保持を確認する。[ST-03B検証記録](E2E_BEST_PRACTICE_STATUS_CONSUMER_ST03B_2026-10-31.md)を参照。
 
-これは固定presetの合成recordからの消費である。注入Response→同reader cleanup→private発行→消費の連続接続はST-03C、実session／認証snapshot／source／ReleasePermit／canonical予算へのbinding・runtime採用はさらに別工程。正式発行口閉鎖・Unknown・全体受付無効・調査保留とSTC-A01〜A05／親のruntime承認待ちを維持する。
+ST-03Bは固定presetの合成recordからの消費である。注入Response→同reader cleanup→private発行→消費はST-03Cの§12へ進め、実session／認証snapshot／source／ReleasePermit／canonical予算へのbinding・runtime採用はさらに別工程。正式発行口閉鎖・Unknown・全体受付無効・調査保留とSTC-A01〜A05／親のruntime承認待ちを維持する。
+
+## 12 ST-03C：同native constructorでの連続接続
+
+[実装](../src/review/abort-scope-evidence-status-cleanup.ts)のprivate constructorへ固定issuer／consumerを結合した。既存`createInjectedStatusCleanupOwner`は従来の診断専用、追加の`createInjectedStatusWorkflowOwner`だけが同recordのcleanup後にprivate発行・消費を行う。modeは固定wrapperが決め、callerのmode／record／callback／consumer／registry／session設定では切り替えない。両entryとも開発専用でruntime非同梱。
+
+ST-03A／Bは閉鎖合成モデルとして回帰用に維持する。そこへnative診断を再入力したりmutable issuerをexportしたりせず、ST-03Bで検査したguard契約をST-02の同private closureへ適用する。共有するのは契約であり、ST-03Bの合成presetを実recordに昇格する接続ではない。今後の契約変更では、合成参照モデルとnative固定経路の両方を回帰確認する。
+
+### 12.1 生成・所有権・元clock
+
+reader取得前にowner／local世代identity・元deadline・readonly budget参照・固定したbudget readをcontextへ保持する。同native Responseから得たprivate header、固定window／handle、同contextをanchorへ結合する。外部へ返す診断からではなく、同Record／anchor／header／cleanup参照をissuerとconsumerが直接使用する。
+
+新entryのconstructor入力はfake_io／deadline_ms／budget／scheduleのdata-only固定4項目、budgetはdata-onlyのread関数だけ。proxy／accessor／余分なrecord・consumer・session等は採用せず、最初のacquireをI/O前にinvalid_inputで拒否する。clock／schedulerは合成I/Oの信頼済み依存であり、業務consumerを渡す口ではない。取得後のread method差替えや外側の入力deadline変更は、固定済み観測元を置換しない。
+
+nativeのacquire・cleanup・issue・consumeは**同じsample関数とlast値**を継続する。元windowのcleanup floorへの厳密な`>`、最大60秒の元deadline、元の最大10秒windowを維持し、発行・消費用の新clock／timer／猶予は作らない。これは注入依存での論理期限検査であり、任意の同期callbackをOSレベルで強制中断する実装ではない。
+
+### 12.2 private発行・固定消費
+
+finishの一度限りclaim→同cleanup promiseの完了→private issue→固定consumeの順で進む。bodyありはread=0、同reader所有・closed取得・cancel／closed fulfilled・release成功と各操作1回を要求する。no_bodyは真正なnative null・全操作0・not_applicableを要求し、どちらもconfirmed／reason=null／wait_issue=nullだけを受け付ける。
+
+同owner／record／anchor／context／元windowとrelease403／404を確認し、issue claimをclock前に開始する。観測直後にも未失効・primary／refusalなし・claim／phase／同一性を検査してからopaque tokenを最大1個だけprivate WeakMapへ登録する。issue claimをspentにしてから、await／任意callbackを挟まず同constructorの固定consumerへ渡す。
+
+consumerはprivate tokenと保持recordを照合し、消費claimを開始・live tokenを除去してからpre／postの元clockと直後guardを検査する。取消・close・再入・期限・時刻異常では成功commitせず、claimをspentのままにする。lookup／native取得拒否等で未開始のclaimが残る場合も、停止時にspentとして再利用を拒否する。tokenとconsume APIは外へ公開しない。
+
+結果はworkflow.consumptionのkind=injected_status_consumed、scope=injected_onlyで、用途release・status403／404・body_modeと全7権限=falseだけ。body ack／EOF・retry／fallback・ReleasePermit・prepared・実sourceへの採用を許可しない。外側finishのokは診断の確定であり、consumption=nullやHTTP失敗もあり得る。
+
+### 12.3 停止と診断
+
+同じrevoked・first primary／refusal／stop_reasonでnative取得とissue／consumeを停止する。hard HTTPは診断専用、未確認cleanupはprivate発行なし。stop／close／二重finish／foreign handleは所有resourceのcleanupへ一度だけ合流し、foreign ownerを変更しない。既存診断専用entryで取得・解放したResponse／handleも、新workflowへ再採用しない。
+
+HTTPとcleanupのimmutable事実は消費失敗でも変更しない。phaseは最新状態、first_terminalは最初の終端として保持する。成功後のstop／二重finishでもfirst_terminal=consumedと限定された成功履歴を残すだけで、再発行・再消費・権限復活はない。遅いcancel／closed settleやrelease後のclosed変化で終端を格上げしない。
+
+[連続合成テスト](../tests/review/status-workflow.test.ts)の49件と[ST-03C検証記録](E2E_BEST_PRACTICE_STATUS_WORKFLOW_ST03C_2026-10-31.md)を参照。初回の型エラーも記録した。STC-T07の実source／認証等のbindingやSTC-T11等の実dispatch費目は今回証明しておらず、全受入条件・runtime承認の完了とは主張しない。
+
+実session／認証snapshot／source／ReleasePermit／canonical C/G/P/R予算の正式bindingと実transport採用は未接続。正式発行口閉鎖・Unknown・全体受付無効・VM／監視／telemetry調査保留、STC-A01〜A05／親のruntime承認待ちを維持する。

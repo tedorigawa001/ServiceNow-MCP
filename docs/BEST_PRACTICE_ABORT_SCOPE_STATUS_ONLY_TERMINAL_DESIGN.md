@@ -1,6 +1,6 @@
 # AU-BR-006 同attemptのstatus-only終端・cancel-only cleanup詳細設計
 
-Version: br006-status-only-terminal-draft-0.8 / Date: 2026-10-31。
+Version: br006-status-only-terminal-draft-0.9 / Date: 2026-10-31。
 Status: ST-01の§10合成issuer内部契約と、ST-02の§11注入Response／Streamsによるcleanup操作を開発専用に実装。正式証拠・runtime採用と承認は未実施。§8の受入条件は後続接続段階を含み、全件確認済みではない。正式発行口閉鎖・Unknown・全体受付無効・VM／監視／telemetry調査保留を維持する。
 
 親：[非200 HTTP対応設計](BEST_PRACTICE_ABORT_SCOPE_NON200_HTTP_DESIGN.md) §4／8。既存実装の照合元は[native adapter](../src/servicenow/review-native-adapter.ts)、[body lane](../src/servicenow/review-native-body.ts)、[説明用分類器](../src/review/abort-scope-evidence-http-classification.ts)。本書は実通信での確認記録ではない。
@@ -13,7 +13,7 @@ authentication／parent／releaseの同attemptにおいて、真正なResponse�
 - 純粋分類器の構造一致・raw status・例外codeは証拠にならない。分類器の全permissions=falseも変更しない。
 - 同session／認証snapshot／ready世代／source／ReleasePermit binding／canonical lease・元t0に結合する。C上限210、G累計16MiB／1応答4MiB、全体60秒、bootstrap P=0、既存final予約を維持する。
 - fixtureの登録・owner・claim台帳はruntimeと共有しない。正式body receipt／ReleasePermitの発行口、現行200限定guard、通常生成経路を開かない。
-- 実装・実通信・実機操作・設定変更は対象外。後述の試験は受入条件であり、今回実行済みの試験ではない。
+- §1〜9は設計契約と受入条件、段階別の実装・実行範囲は§10以降と各検証記録に分ける。実session接続・実通信・実機操作・設定変更は対象外で、全受入条件を確認済みにはしない。
 
 ## 2 現行との差分と権限の分離
 
@@ -118,7 +118,7 @@ mode／binding／二重消費は適格性・消費拒否理由であり、cleanu
 
 ΔG=0はアプリがreaderから受領したchunkの会計であり、socketのprefetch／ネットワーク受信が0だったという主張ではない。実transportでの検証は未実施。未確認cleanupは新attemptや予約解放の根拠にしない。
 
-## 8 合成受入条件（未実行）
+## 8 合成受入条件（段階別・全条件の達成は未確認）
 
 独立oracleは製品のcleanup分類helperを使わず、イベント列と手書き期待表で、要求数と実native操作数・同reader・pre-release順序・C/G差分を照合する。各行の比較件数も検査し、空のfixtureで成功させない。
 
@@ -205,8 +205,8 @@ ST-01の合成terminalへnative結果を昇格する接続、実session／lease�
 
 [合成試験](../tests/review/status-cleanup.test.ts)はnative操作の同reader identity・順序・試行数を外側から観測し、製品の理由判定helperを使わない期待値と照合する。[ST-02検証記録](E2E_BEST_PRACTICE_STATUS_CLEANUP_ST02_2026-10-31.md)に初回の試験組立て失敗と修正も記録した。全体受付無効・調査保留と全承認待ちは継続する。
 
-## 12 ST-02後の接続設計（未実装）
+## 12 ST-02後の接続設計・注入経路
 
-[ST-03接続詳細設計draft-0.5](BEST_PRACTICE_ABORT_SCOPE_STATUS_TERMINAL_CONNECTION_DESIGN.md)で、同attemptのprivate status-only終端・一度限りの消費・発行後失効と診断保持を一体化した。ST-02内部recordを唯一の発行元とし、外部診断copyをST-01へ渡して証拠に昇格する方式は採らない。
+[ST-03接続詳細設計draft-0.6](BEST_PRACTICE_ABORT_SCOPE_STATUS_TERMINAL_CONNECTION_DESIGN.md)で、同attemptのprivate status-only終端・一度限りの消費・発行後失効と診断保持を一体化した。ST-02内部recordを唯一の発行元とし、外部診断copyをST-01へ渡して証拠に昇格する方式は採らない。
 
-同owner／anchor／元window／注入budget・固定clockへの結合、clock callback前のclaim消費と直後のpost-guard、同期失効、HTTP／cleanup事実と別拒否slotの保持を定めた案。ST-03Aの合成内部契約とST-03Bの一度限りconsumerを実装し、token／非実行draftは外へ出さない。ST-03Cのnative record連続接続とSTC-A01〜A05／親のruntime承認は未実施。合成消費もruntime／fallback等の許可ではなく、正式発行口閉鎖・Unknown・全体受付無効・調査保留を維持する。
+同owner／anchor／元window／注入budget・固定clockへの結合、clock callback前のclaim消費と直後のpost-guard、同期失効、HTTP／cleanup事実と別拒否slotの保持を定めた案。ST-03A／Bの合成契約に加え、ST-03Cで注入Response→同reader cleanup→private発行→消費を同native constructor内へ接続した。token／mutable portは外へ出さず、実session／実transport接続とSTC-A01〜A05／親のruntime承認は未実施。注入消費もruntime／fallback等の許可ではなく、正式発行口閉鎖・Unknown・全体受付無効・調査保留を維持する。

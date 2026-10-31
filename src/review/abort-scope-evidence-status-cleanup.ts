@@ -1,4 +1,4 @@
-/** ST-02: injected Response/Streams only. Diagnostic-only; no dispatch, body reader API or runtime adoption. */
+/** ST-02/03C: injected Response/Streams only. No dispatch, public token/consumer or runtime adoption. */
 import { types } from 'node:util';
 import { ReadableStream as Stream, ReadableStreamDefaultReader as Reader } from 'node:stream/web';
 import { z } from 'zod';
@@ -14,11 +14,19 @@ type Handle = { readonly [brand]: 'injected_status_cleanup_attempt' };
 const shape = z.strictObject({ purpose: z.enum(['authentication', 'parent', 'release']), ordinal: z.literal(1),
     window_origin_ms: z.number().finite().nonnegative(), cleanup_floor_ms: z.number().finite().nonnegative() });
 type Window = Readonly<z.infer<typeof shape>>;
+type Header = Readonly<{ purpose: Window['purpose']; status: number; body_present: boolean }>;
 type State = 'pending' | 'fulfilled' | 'rejected' | 'not_applicable';
 type Facts = Readonly<{ reader_owned: boolean; closed_captured: boolean; read_started: false; read_pending: false;
     cancel: State | 'not_requested'; closed: State; release: 'not_started' | 'succeeded' | 'failed' | 'not_applicable' }>;
 type Cleanup = Readonly<{ disposition: 'confirmed' | 'unconfirmed'; kind: 'cancelled' | 'no_body' | null;
     reason: Reason | null; wait_issue: Reason | null; facts: Facts }>;
+type OwnerInput = { fake_io: true; deadline_ms: number; budget: { read(): { remaining_ms: number } };
+    schedule(delay: number, wake: () => void): () => void };
+type WPhase = 'prepared' | 'cleanup_running' | 'issuing' | 'issued' | 'consuming_pre' | 'consuming_post' | 'consumed' | 'diagnostic_only' | 'failed' | 'revoked';
+type WStage = 'native' | 'issue' | 'lookup' | 'pre_guard' | 'post_guard';
+type Claim = 'available' | 'started' | 'spent';
+type Consumption = Readonly<{ kind: 'injected_status_consumed'; scope: 'injected_only'; purpose: 'release'; status: 403 | 404;
+    body_mode: 'cancelled' | 'no_body'; permissions: typeof permissions }>;
 const permissions = Object.freeze({ dispatch: false, read_body: false, retry: false, fallback: false,
     body_ack: false, release_permit: false, formal_issuance: false } as const);
 const P = Promise, then = P.prototype.then, race = P.race, all = P.all, resolved = P.resolve;
@@ -55,24 +63,44 @@ function descriptor(raw: unknown): Window | null {
     return parsed.success ? Object.freeze(parsed.data) : null;
 }
 
-export function createInjectedStatusCleanupOwner(input: {
-    fake_io: true; deadline_ms: number; budget: { read(): { remaining_ms: number } };
-    schedule(delay: number, wake: () => void): () => void;
-}) {
+function constructStatusOwner(input: OwnerInput, workflow: boolean) {
     const fake = input.fake_io, deadline = input.deadline_ms, readBudget = input.budget.read.bind(input.budget), schedule = input.schedule;
-    type Record = { handle: Handle; window: Window; body: boolean; reader?: object; owned: boolean;
+    // Created before acquisition; never derived from an externally returned diagnostic.
+    const context = Object.freeze({ owner: Object.freeze({}), generation: Object.freeze({}), budget: input.budget, clock: readBudget, deadline });
+    type Anchor = Readonly<{ context: typeof context; window: Window; handle: Handle; header: Header }>;
+    type Record = { handle: Handle; window: Window; anchor: Anchor; header: Header; body: boolean; reader?: object; owned: boolean;
         captured: boolean; closed: State; closedWork?: Promise<void>; cancel: Facts['cancel']; release: Facts['release'];
         finishClaimed: boolean; cleanup?: Cleanup; cleanupWork?: Promise<void> };
     const handles = new WeakMap<object, Record>();
     let started = false, primary: Code | null = null, refusal: Code | null = null, current: Record | undefined;
-    let http: Readonly<{ purpose: Window['purpose']; status: number; body_present: boolean }> | null = null;
+    let http: Header | null = null;
     let last: number | undefined, sampling = false;
     let revoked = false, stopReason: 'cancelled' | 'closed' | null = null;
+    let wPhase: WPhase = 'prepared', firstTerminal: 'consumed' | 'diagnostic_only' | 'failed' | 'revoked' | null = null;
+    let activeStage: WStage = 'native', refusalStage: WStage | null = null;
+    let issueClaim: Claim = 'available', consumeClaim: Claim = 'available';
+    let liveToken: object | undefined, issuedToken: object | undefined, consumption: Consumption | null = null;
+    const counts = { issued: 0, consume_attempts: 0, consumed: 0 };
+    type Held = Readonly<{ context: typeof context; record: Record; anchor: Anchor; header: Header; cleanup: Cleanup; window: Window }>;
+    const known = new WeakMap<object, Held>();
     const ops = { get_reader: 0, read: 0, cancel: 0, closed: 0, release_lock: 0 };
-    const fail = (code: Code): Result<never> => { revoked = true; primary ??= code; refusal ??= code; return Object.freeze({ ok: false, code: primary }); };
+    function revokeWorkflow(terminal: 'failed' | 'revoked') {
+        if (!workflow) return;
+        liveToken = undefined; wPhase = terminal; firstTerminal ??= terminal;
+        if (issueClaim === 'available') issueClaim = 'spent';
+        if (consumeClaim === 'available') consumeClaim = 'spent';
+    }
+    const fail = (code: Code, stage: WStage = activeStage): Result<never> => {
+        revoked = true; primary ??= code; refusal ??= code;
+        if (workflow) refusalStage ??= stage;
+        revokeWorkflow('failed'); return Object.freeze({ ok: false, code: primary });
+    };
     function status() {
-        return Object.freeze({ kind: 'cleanup_diagnostic_only' as const, scope: 'injected_status_cleanup' as const,
-            http, primary, refusal, revoked, stop_reason: stopReason, cleanup: current?.cleanup ?? null, operations: Object.freeze({ ...ops }), permissions });
+        return Object.freeze({ kind: workflow ? 'injected_status_workflow' as const : 'cleanup_diagnostic_only' as const, scope: 'injected_status_cleanup' as const,
+            http, primary, refusal, revoked, stop_reason: stopReason, cleanup: current?.cleanup ?? null, operations: Object.freeze({ ...ops }), permissions,
+            ...(workflow ? { workflow: Object.freeze({ scope: 'injected_only' as const, phase: wPhase, first_terminal: firstTerminal,
+                refusal_stage: refusalStage, claims: Object.freeze({ issue: issueClaim, consume: consumeClaim }),
+                counts: Object.freeze({ ...counts }), token_held: liveToken !== undefined, consumption, permissions }) } : {}) });
     }
     function sample(floor: number): { n: number; issue: Reason | null } {
         if (sampling) { fail('invalid_state'); return { n: 0, issue: 'observation_invalid' }; }
@@ -103,6 +131,7 @@ export function createInjectedStatusCleanupOwner(input: {
         if (r.cleanupWork) return r.cleanupWork;
         // Install the join point before any clock/native/scheduler callback can reenter.
         r.cleanupWork = after(done(), async () => {
+            if (workflow && !revoked) wPhase = 'cleanup_running';
             let issue = sample(r.window.cleanup_floor_ms).issue;
             let cancelling = done();
             if (r.reader && r.cancel === 'not_requested') {
@@ -130,12 +159,13 @@ export function createInjectedStatusCleanupOwner(input: {
                 r.release !== 'succeeded' ? 'lock_release_failed' : issue;
             r.cleanup = Object.freeze({ disposition: why ? 'unconfirmed' : 'confirmed', kind: why ? null : r.body ? 'cancelled' : 'no_body',
                 reason: why, wait_issue: issue, facts });
-            if (why) primary ??= 'internal_review_error';
+            if (why) { primary ??= 'internal_review_error'; if (workflow) { revoked = true; revokeWorkflow('failed'); } }
         });
         return r.cleanupWork;
     }
     function stop(code: 'cancelled' | 'closed' = 'cancelled') {
         revoked = true;
+        revokeWorkflow('revoked');
         if (code === 'cancelled' || code === 'closed') stopReason ??= code;
         primary ??= code === 'cancelled' || code === 'closed' ? code : 'internal_review_error';
         if (current) void clean(current);
@@ -160,7 +190,8 @@ export function createInjectedStatusCleanupOwner(input: {
             if (statusCode === 401) primary ??= 'authentication_failed';
             else if (statusCode === 403 && d.purpose !== 'release') primary ??= 'access_denied';
             const handle = Object.freeze(Object.create(null)) as Handle;
-            const r: Record = { handle, window: d, body: stream !== null, owned: false, captured: false,
+            const anchor: Anchor = Object.freeze({ context, window: d, handle, header: http });
+            const r: Record = { handle, window: d, anchor, header: http, body: stream !== null, owned: false, captured: false,
                 closed: stream === null ? 'not_applicable' : 'pending', cancel: stream === null ? 'not_applicable' : 'not_requested',
                 release: stream === null ? 'not_applicable' : 'not_started', finishClaimed: false };
             current = r; handles.set(handle, r);
@@ -184,14 +215,100 @@ export function createInjectedStatusCleanupOwner(input: {
             return ok(Object.freeze({ handle, status: statusCode }));
         } catch { fail('invalid_response'); if (current) await clean(current); return fail('invalid_response'); }
     }
+    function sameRecord(r: Record): boolean {
+        return current === r && handles.get(r.handle) === r && r.anchor.context === context && r.anchor.window === r.window &&
+            r.anchor.handle === r.handle && r.anchor.header === r.header && r.header === http && context.budget === input.budget && context.clock === readBudget;
+    }
+    function eligible(r: Record): boolean {
+        const c = r.cleanup;
+        if (!c || c.disposition !== 'confirmed' || c.reason !== null || c.wait_issue !== null || r.header.purpose !== 'release' ||
+            ![403, 404].includes(r.header.status) || ops.read !== 0 || c.facts.read_started || c.facts.read_pending || r.reader) return false;
+        return r.body ? c.kind === 'cancelled' && c.facts.reader_owned && c.facts.closed_captured && c.facts.cancel === 'fulfilled' &&
+            c.facts.closed === 'fulfilled' && c.facts.release === 'succeeded' && ops.get_reader === 1 && ops.closed === 1 && ops.cancel === 1 && ops.release_lock === 1 :
+            c.kind === 'no_body' && !c.facts.reader_owned && !c.facts.closed_captured && c.facts.cancel === 'not_applicable' &&
+            c.facts.closed === 'not_applicable' && c.facts.release === 'not_applicable' && Object.values(ops).every(n => n === 0);
+    }
+    function continuation(r: Record, stage: WStage): boolean {
+        if (revoked || primary || refusal) { fail(primary ?? refusal ?? 'invalid_state', stage); return false; }
+        if (!sameRecord(r)) { fail('evidence_binding_mismatch', stage); return false; }
+        if (!eligible(r)) { fail('invalid_state', stage); return false; }
+        return true;
+    }
+    function consumeFixed(r: Record, token: object) {
+        const held = known.get(token);
+        activeStage = 'lookup';
+        if (!held || token !== issuedToken || held.context !== context || held.record !== r || held.anchor !== r.anchor ||
+            held.header !== r.header || held.cleanup !== r.cleanup || held.window !== r.window || !sameRecord(r)) {
+            fail('evidence_binding_mismatch'); activeStage = 'native'; return;
+        }
+        if (consumeClaim !== 'available') { fail('invalid_state'); activeStage = 'native'; return; }
+        consumeClaim = 'started'; liveToken = undefined; counts.consume_attempts++;
+        try {
+            activeStage = 'pre_guard'; wPhase = 'consuming_pre';
+            if (!continuation(r, 'pre_guard')) return;
+            const pre = sample(r.window.cleanup_floor_ms);
+            if (pre.issue || !continuation(r, 'pre_guard') || consumeClaim !== 'started' || wPhase !== 'consuming_pre') {
+                fail(primary ?? 'invalid_state', 'pre_guard'); return;
+            }
+            activeStage = 'post_guard'; wPhase = 'consuming_post';
+            const post = sample(r.window.cleanup_floor_ms);
+            if (post.issue || !continuation(r, 'post_guard') || consumeClaim !== 'started' || wPhase !== 'consuming_post') {
+                fail(primary ?? 'invalid_state', 'post_guard'); return;
+            }
+            // The fixed continuation commits without an intervening await/caller getter/callback.
+            consumption = Object.freeze({ kind: 'injected_status_consumed', scope: 'injected_only', purpose: 'release',
+                status: r.header.status as 403 | 404, body_mode: r.body ? 'cancelled' : 'no_body', permissions });
+            counts.consumed++; wPhase = 'consumed'; firstTerminal ??= 'consumed';
+        } finally { consumeClaim = 'spent'; activeStage = 'native'; }
+    }
+    function issueAndConsume(r: Record) {
+        if (!workflow || revoked) return;
+        if (issueClaim !== 'available') { fail('invalid_state', 'issue'); return; }
+        issueClaim = 'started'; activeStage = 'issue'; wPhase = 'issuing';
+        let token: object | undefined;
+        try {
+            if (!sameRecord(r)) { fail('evidence_binding_mismatch'); return; }
+            if (primary || refusal || !eligible(r)) {
+                wPhase = 'diagnostic_only'; firstTerminal ??= 'diagnostic_only'; consumeClaim = 'spent'; return;
+            }
+            const at = sample(r.window.cleanup_floor_ms);
+            if (at.issue || !continuation(r, 'issue') || issueClaim !== 'started' || wPhase !== 'issuing') {
+                fail(primary ?? 'invalid_state', 'issue'); return;
+            }
+            const minted: object = Object.freeze(Object.create(null)); token = minted; issuedToken = liveToken = minted;
+            known.set(minted, Object.freeze({ context, record: r, anchor: r.anchor, header: r.header, cleanup: r.cleanup!, window: r.window }));
+            counts.issued++; wPhase = 'issued';
+        } finally { issueClaim = 'spent'; activeStage = 'native'; }
+        if (token) consumeFixed(r, token);
+    }
     async function finish(handle: Handle) {
         const r = typeof handle === 'object' && handle !== null ? handles.get(handle) : undefined;
         if (!r || r !== current) { fail('evidence_binding_mismatch'); if (current) await clean(current); return fail('evidence_binding_mismatch'); }
         if (r.finishClaimed) { fail('invalid_state'); await clean(r); return fail('invalid_state'); }
         r.finishClaimed = true;
         await clean(r);
+        issueAndConsume(r);
         return ok(status());
     }
     async function close() { stop('closed'); if (current) await clean(current); return status(); }
     return Object.freeze({ acquire, finish, stop, close, diagnostics: status });
+}
+
+/** Legacy ST-02 entry retains its diagnostic-only behavior. */
+export function createInjectedStatusCleanupOwner(input: OwnerInput) { return constructStatusOwner(input, false); }
+
+/** ST-03C fixed constructor. Only fake I/O dependencies, never caller-supplied records/consumers/sessions. */
+export function createInjectedStatusWorkflowOwner(raw: OwnerInput) {
+    const data = (v: unknown, keys: readonly string[]): { [key: string]: unknown } | null => {
+        if (!v || typeof v !== 'object' || types.isProxy(v) || ![Object.prototype, null].includes(Object.getPrototypeOf(v))) return null;
+        const actual = Reflect.ownKeys(v); if (actual.length !== keys.length || actual.some(k => typeof k !== 'string' || !keys.includes(k))) return null;
+        const copy = Object.create(null);
+        for (const key of keys) { const d = Object.getOwnPropertyDescriptor(v, key)!; if (!Object.hasOwn(d, 'value')) return null; copy[key] = d.value; }
+        return copy;
+    };
+    const d = data(raw, ['fake_io', 'deadline_ms', 'budget', 'schedule']), b = data(d?.budget, ['read']);
+    if (!d || !b || d.fake_io !== true || typeof d.schedule !== 'function' || typeof b.read !== 'function')
+        return constructStatusOwner({ fake_io: true, deadline_ms: 0, budget: { read: () => ({ remaining_ms: 0 }) }, schedule: () => () => {} }, true);
+    // Preserve the original readonly budget identity and pin its method once in the same constructor.
+    return constructStatusOwner({ fake_io: true, deadline_ms: d.deadline_ms as number, budget: d.budget as OwnerInput['budget'], schedule: d.schedule as OwnerInput['schedule'] }, true);
 }
