@@ -104,7 +104,7 @@ bootstrapのprepared成功だけでwork(source)へ任意のmetadata／payload取
 
 [同attemptのstatus-only終端・cancel-only cleanup詳細設計](BEST_PRACTICE_ABORT_SCOPE_STATUS_ONLY_TERMINAL_DESIGN.md)は、停止後のcleanup所有権と業務継続権限の分離・二軸診断・一度限りの消費を具体化した案。ST-01の合成issuer内部契約とST-02の注入Response／Streams cleanupだけを実装し、正式終端・runtime接続は未実装／未承認。正式発行口閉鎖・全体受付無効・調査保留を維持する。
 
-[ST-03接続詳細設計draft-0.4](BEST_PRACTICE_ABORT_SCOPE_STATUS_TERMINAL_CONNECTION_DESIGN.md)は、同attemptのprivate終端・一度限り消費・失効後の診断保持を対にした案。ST-03A／Bの合成context／anchor／発行claim・診断保持・一度限りconsumerを実装し、native接続は未実装。実session／source／ReleasePermitのbindingではなく、正式発行口と通常経路は開かない。
+[ST-03接続詳細設計draft-0.5](BEST_PRACTICE_ABORT_SCOPE_STATUS_TERMINAL_CONNECTION_DESIGN.md)は、同attemptのprivate終端・一度限り消費・失効後の診断保持を対にした案。ST-03A／Bの合成context／anchor／発行claim・診断保持・一度限りconsumerを実装し、native接続は未実装。実session／source／ReleasePermitのbindingではなく、正式発行口と通常経路は開かない。
 
 ## 7 停止と終了責務
 

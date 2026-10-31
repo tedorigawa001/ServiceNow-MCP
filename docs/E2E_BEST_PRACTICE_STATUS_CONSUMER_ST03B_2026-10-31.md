@@ -39,6 +39,13 @@ Date: 2026-10-31 / Scope: 閉鎖された合成依存。ST-02のnative record／
 
 同ケースでも2回目に例外を出すようfixtureの分岐1箇所を修正し、131件成功、その後の全体201ファイル・9,153件成功を確認した。consumerのguard・claim・期限やテストtimeoutは緩和していない。
 
+## レビュー修正（2026-10-31）
+
+- 指摘：lookup失敗はclaim前に起きるため、ownerは`revoked`になる一方、診断の`claims.consume`は`available`のまま残った。正規tokenで再試行してもpre-guardで拒否されるため成功は不可能だが、診断が停止状態と食い違っていた。
+- 修正：lookup失敗時に未使用の`consume` claimを`spent`へ進める（消費中の再入では`started`のまま触らない）。foreign ownerのclaimは変更しない。成功経路・guard順序は変更しない。
+- 試験：独立期待表のclaim期待を「全scenarioで`spent`」へ更新し、`consume_foreign_then_retry`の`consume_attempts`を1→0へ変更（正規token再試行がclaim前に拒否されるため）。lookup失敗後の再試行がclaimを開始しないことを確認する1件を追加（ST-03B試験61件）。修正前実装ではlookup失敗系の17件が失敗する。
+- 再検証：tsc・変更対象ESLint・全体201 files／9,154 tests PASS、build後の梱包確認PASS（409 files）、`git diff --check` PASS。§2の実行結果は修正前の記録として残す。
+
 ## 5 未接続・閉鎖
 
 recordは固定presetの合成事実。注入Response→同reader cleanup→private record→発行→消費の連続接続はST-03Cに残る。実session／認証snapshot／source／ReleasePermit／canonical予算へのbinding、C/G更新、retry／fallback、runtime採用・公開終了codeの写像は未実装。

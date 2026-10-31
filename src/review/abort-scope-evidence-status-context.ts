@@ -139,7 +139,11 @@ function construct() {
     /** Called only by the constructor's fixed synthetic continuation, never an exported adoption API. */
     function consume(e: Envelope, token: unknown): boolean {
         const held = token && typeof token === 'object' ? known.get(token) : undefined;
-        if (!held || token !== issuedToken || !matches(e) || !matches(held.envelope)) return fail('evidence_binding_mismatch', 'lookup');
+        if (!held || token !== issuedToken || !matches(e) || !matches(held.envelope)) {
+            // The owner is stopped by the failed lookup; mark the unused claim spent so diagnostics match its dead state.
+            if (claims.consume === 'available') claims.consume = 'spent';
+            return fail('evidence_binding_mismatch', 'lookup');
+        }
         if (!claim('consume')) return false;
         // Retain identity history in known, not live authority. The sole live draft is removed BEFORE any callback.
         counts.consume_attempts++; draft = undefined; phase = 'consuming';

@@ -1,6 +1,6 @@
 # AU-BR-006 ST-03：private status-only終端・一度限り消費・失効の接続詳細設計
 
-Version: br006-status-terminal-connection-draft-0.4 / Date: 2026-10-31。
+Version: br006-status-terminal-connection-draft-0.5 / Date: 2026-10-31。
 Status: ST-03Aの§10合成内部契約とST-03Bの§11合成consumerを実装。ST-02のnative recordからのprivate発行・消費の連続接続とruntime承認は未実施。正式発行口閉鎖・Unknown・全体受付無効・VM／監視／telemetry調査保留を維持する。
 
 親：[status-only終端詳細設計](BEST_PRACTICE_ABORT_SCOPE_STATUS_ONLY_TERMINAL_DESIGN.md) §4／9〜11、[非200 HTTP設計](BEST_PRACTICE_ABORT_SCOPE_NON200_HTTP_DESIGN.md) §8／10。
@@ -203,7 +203,7 @@ fixtureのrecordは固定presetによる**合成事実**であり、ST-02のnati
 
 発行時はopaque identity→private draftの結合を自ownerのWeakMapへ1件だけ記録する。この表は**発行identityの履歴**であり、liveな消費権限ではない。live draftは別slotに保持し、stop／失敗／消費開始で直ちに落とす。履歴が残っていてもrevoked／claim／元clockの検査を省けず、再発行もできない。
 
-consumerは自registryのopaque identityと期待context／anchor／record／local世代／budget／clock／windowを照合してから、claimをavailable→startedへ同期変更し、live draftを外す。foreign／コピー／診断を渡したlookup失敗では自ownerだけを停止し、foreign claimは変更しない。自claimはlookup後の全失敗でfinallyからspentへ進め、再試行・巻戻しを認めない。
+consumerは自registryのopaque identityと期待context／anchor／record／local世代／budget／clock／windowを照合してから、claimをavailable→startedへ同期変更し、live draftを外す。foreign／コピー／診断を渡したlookup失敗では自ownerだけを停止し、未使用の自claimもspentとして診断と停止状態を一致させる（以後の正規token再試行もclaim前に拒否）。foreign claimは変更しない。自claimはlookup後の全失敗でfinallyからspentへ進め、再試行・巻戻しを認めない。
 
 pre-guardでは未失効・primary／refusalなし・同一性・issue claim済み・consuming状態・record適格性を確認し、元clockを観測した**直後にも**同条件を再検査する。post-guardでも元clockと直後の条件を検査し、その後の成功commitまでawait／任意callback／caller getterを挟まない。record／発行／消費は同じ単調remainingと元floorを共有し、境界は厳密な`>`、等号は拒否とする。
 

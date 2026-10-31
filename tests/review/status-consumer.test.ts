@@ -28,7 +28,7 @@ const cases = [
     ['consume_retry_after_failure', 'failed', 'internal_review_error', 'failed', 1, 0],
     ['consume_post_retry_after_failure', 'failed', 'internal_review_error', 'failed', 1, 0],
     ['consume_foreign_token', 'failed', 'evidence_binding_mismatch', 'failed', 0, 0],
-    ['consume_foreign_then_retry', 'failed', 'evidence_binding_mismatch', 'failed', 1, 0],
+    ['consume_foreign_then_retry', 'failed', 'evidence_binding_mismatch', 'failed', 0, 0],
     ['consume_token_copy', 'failed', 'evidence_binding_mismatch', 'failed', 0, 0],
     ['consume_diagnostic_token', 'failed', 'evidence_binding_mismatch', 'failed', 0, 0],
     ['consume_json_result', 'failed', 'evidence_binding_mismatch', 'consumed', 1, 1],
@@ -49,7 +49,8 @@ it.each(cases)('enforces private one-shot consumption: %s', (name, phase, primar
     expect(r.foreign_unchanged).toBe(true); expect(Object.values(d.permissions)).toEqual(Array(7).fill(false));
     expect(Object.values(r.permissions)).toEqual(Array(7).fill(false));
     for (const n of Object.values(d.counts)) expect(n).toBeLessThanOrEqual(1);
-    expect(d.claims.consume).toBe(attempts ? 'spent' : 'available');
+    // Every scenario calls consume; a failed lookup also spends the claim, so it never reads as usable.
+    expect(d.claims.consume).toBe('spent');
     expect(d.consumption === null).toBe(consumes === 0);
     expect(JSON.stringify(r)).not.toContain('PRIVATE');
 });
@@ -93,4 +94,9 @@ it('runs every consumer path with native/network/timer operations forbidden', ()
     for (const name of ['fetch', 'Response', 'ReadableStream', 'setTimeout', 'setInterval']) vi.stubGlobal(name, forbidden);
     try { for (const [name] of cases) expect(result(name).ok).toBe(true); }
     finally { vi.unstubAllGlobals(); }
+});
+it('spends the consume claim on a failed lookup so a later real-token retry never starts', () => {
+    const d = result('consume_foreign_then_retry').diagnostic;
+    expect(d).toMatchObject({ primary: 'evidence_binding_mismatch', refusal_stage: 'lookup', claims: { consume: 'spent' },
+        counts: { consume_attempts: 0, consumes: 0 }, consumption: null, revoked: true });
 });
