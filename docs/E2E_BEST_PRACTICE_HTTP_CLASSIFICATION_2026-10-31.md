@@ -56,6 +56,14 @@ Git indexの今回分11ファイル＋HEADから独立copyを作り、既存node
 - 文書ローカル参照74件、NH行20・承認行7、Markdownとstaged diffのwhitespace確認で問題なし。
 - この再検証後の追記は本記録だけで、実装・試験・承認状態は変更していない。
 
+## レビュー追加：legacy実装との差分照合（2026-10-31）
+
+- 確認：独立oracleは分類器から独立しているが、legacy欄は分類器と同じソース読取から書かれており、読み違いを共有し得る。legacy欄を実装に対して検証する試験がなかった。
+- 追加：[http-classification-legacy.test.ts](../tests/review/http-classification-legacy.test.ts)。実`BoundedReadSession`へ注入fetchを与え、parent／release GET × status 200〜599 × bodyあり／なし（Responseがbodyを持てない204／205／304のbodyありを除く、各797件・計1,594件）について、分類器legacy欄から導く期待値（公開code、body読取の有無、試行回数）と実挙動を比較する。bodyは`highWaterMark:0`の遅延streamとし、pullの有無で実際の読取を判定する。fake timerで250ms backoffを進める。
+- 範囲外：authentication用途はauthenticate内のPOSTで200 bodyをtoken解析するため、このGET比較に含めない。1xxは実Responseを構成できないため対象外。cleanup完了やlate応答など操作順の正当性は扱わない。
+- 結果：不一致0件。分類器legacy欄の429／5xx bodyなしを`retry_candidate`へ変えるとこの2件が失敗することを確認した（変更は戻し済み）。
+- 再検証：tsc・追加試験のESLint・全体197 files／8,927 tests PASS、build後のHTTP分類梱包確認PASS（409 files、分類器・oracle・fixture非同梱）。上記の最終結果は追加前の記録として残す。
+
 ## 次段階
 
 型付きstatus-only終端／cancel-only cleanupは未実装。retryの局所状態、共有budget・clock、source fallback、final予約移譲、実transport／正式発行も未接続。本分類結果やそのcopyを証拠・承認・permitとして受理する口は追加しない。
