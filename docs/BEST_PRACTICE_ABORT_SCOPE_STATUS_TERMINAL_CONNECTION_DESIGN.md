@@ -1,7 +1,7 @@
 # AU-BR-006 ST-03：private status-only終端・一度限り消費・失効の接続詳細設計
 
-Version: br006-status-terminal-connection-draft-0.3 / Date: 2026-10-31。
-Status: ST-03Aの§10合成内部契約だけを実装。実recordからのprivate発行・消費経路・連続試験とruntime承認は未実施。正式発行口閉鎖・Unknown・全体受付無効・VM／監視／telemetry調査保留を維持する。
+Version: br006-status-terminal-connection-draft-0.4 / Date: 2026-10-31。
+Status: ST-03Aの§10合成内部契約とST-03Bの§11合成consumerを実装。ST-02のnative recordからのprivate発行・消費の連続接続とruntime承認は未実施。正式発行口閉鎖・Unknown・全体受付無効・VM／監視／telemetry調査保留を維持する。
 
 親：[status-only終端詳細設計](BEST_PRACTICE_ABORT_SCOPE_STATUS_ONLY_TERMINAL_DESIGN.md) §4／9〜11、[非200 HTTP設計](BEST_PRACTICE_ABORT_SCOPE_NON200_HTTP_DESIGN.md) §8／10。
 基準：[ST-01](../src/review/abort-scope-evidence-status-terminal.ts)、[ST-02](../src/review/abort-scope-evidence-status-cleanup.ts)、[ST-02検証記録](E2E_BEST_PRACTICE_STATUS_CLEANUP_ST02_2026-10-31.md)。Promise固定の追加修正`e277e88`を含む現行ソースを読み取り照合した。実通信や実sessionの検証記録ではない。
@@ -169,7 +169,7 @@ STC-T07等の不可能な内部状態の負の対照は、test専用の限定fix
 | STC-A04 | 同期失効・拒否slot・HTTP／cleanup診断の保持と停止判定 | ST-A03／ST-A05、A01 |
 | STC-A05 | 注入試験／private負の対照・梱包除外とruntime非採用 | ST-A06／ST-A07、A07 |
 
-実装の段階は以下の順序。ST-03Aの合成内部契約だけを§10まで実装し、他の段階を実装済みにしない。
+実装の段階は以下の順序。ST-03A／Bの合成内部契約を§10〜11まで実装し、native接続段階のST-03Cを実装済みにしない。
 
 1. **ST-03A**：同constructorのprivate context／anchor／発行claimと診断保持の内部契約。合成負の対照で混入・重複生成を先に検査し、外部診断からの昇格口は作らない。
 2. **ST-03B**：一度限りconsumerと発行後失効を同じ状態機械へ接続。pre／post-guard・再入・取消・期限・first diagnostic保持をfake clockで検査する。
@@ -179,7 +179,7 @@ STC-T07等の不可能な内部状態の負の対照は、test専用の限定fix
 
 ## 10 ST-03A：合成依存限定の内部契約
 
-[実装](../src/review/abort-scope-evidence-status-context.ts)は既存ST-01／ST-02とは別の開発専用module。private constructorでcontext／owner・local世代／readonly budget／固定clock／元windowを生成し、同じclosureでanchor・合成record・発行claim・診断slotを保持する。context／anchor／record／発行claimは各1回、発行draftは最大1個。consumer slotは同constructorで予約するだけで、消費操作は実装しない。
+[実装](../src/review/abort-scope-evidence-status-context.ts)は既存ST-01／ST-02とは別の開発専用module。private constructorでcontext／owner・local世代／readonly budget／固定clock／元windowを生成し、同じclosureでanchor・合成record・発行claim・診断slotを保持する。context／anchor／record／発行claimは各1回、発行draftは最大1個。ST-03A時点ではconsumer slotは予約だけで、消費操作は後続ST-03B（§11）に分けた。
 
 外にexportするのは固定scenario名1項目だけを受け付ける閉鎖合成fixture。外部callback・consumer・既存owner・raw context／anchor／record・診断・session・registryを受け取る口はない。成功時もprivate identity／draft／token／更新portは返さず、scope=synthetic_contract_onlyのfreezeした限定診断・有限件数・全7権限=falseだけを返す。native用の発行口ではない。
 
@@ -191,6 +191,32 @@ fixtureの別呼出しは独立した合成事例であり、失敗した実run�
 - 合成recordにおけるrelease403／404の適格な状態は、privateな**非実行draft**としてだけ保持する。hard401・local parent404・未確認cleanupは診断専用。read開始違反はprimaryが未設定でもrefusalから停止させ、cleanup確認事実は保持する。
 - HTTP／cleanupはrecord内のimmutable参照を保持し、発行拒否・停止で書き換えない。first primaryとfirst refusal／stageを有限slotに残す。phaseは最後に書いた状態を示すだけなので、最初の終端状態（diagnostic_only／failed／revoked）を`first_terminal`としてfirst-winsで別に保持し、§6のFailed／Revoked区別はphaseではなくこのslotとprimary／revokedで判定する。stopはdraftを落とし、診断と過去の発行件数を残すが、復活・再発行しない。
 
-fixtureのrecordは固定presetによる**合成事実**であり、ST-02のnative header／cleanupを受領した記録ではない。consumerのpre／post-guard・一度限り消費・発行後失効の統合はST-03B、注入Responseからのprivate record連続受領はST-03Cに残る。local budget／世代を実canonical lease／source／ReleasePermitの証拠に昇格せず、§8の20条件全体の達成とも主張しない。
+fixtureのrecordは固定presetによる**合成事実**であり、ST-02のnative header／cleanupを受領した記録ではない。consumerのpre／post-guard・一度限り消費・発行後失効はST-03Bの§11へ進め、注入Responseからのprivate record連続受領はST-03Cに残る。local budget／世代を実canonical lease／source／ReleasePermitの証拠に昇格せず、§8の20条件全体の達成とも主張しない。
 
 [合成テスト](../tests/review/status-context.test.ts)は製品のscenario一覧・適格性helperを使わない34ケースの期待表と、invalid／getter／proxy／権限／native非呼出し等、最初の終端状態保持6件を含む71件。[ST-03A検証記録](E2E_BEST_PRACTICE_STATUS_CONTEXT_ST03A_2026-10-31.md)と[梱包確認](../tests/review/package-http-classification.mjs)を参照。runtimeの発行前提・STC-A01〜A05／親承認は未承認のままとする。
+
+## 11 ST-03B：合成consumer・発行後失効
+
+同じprivate constructor内の`claims.consume`を消費slotとし、最大1回の消費を追加した。外部exportは従来と同じscenario名だけの閉鎖fixtureで、consume／token取得／registry提出口を増やさない。ST-03Aの発行試験ではdraft保持まで、追加の`consume_*`固定事例だけが内部の固定consumerを呼ぶ。
+
+### 11.1 identityと消費順序
+
+発行時はopaque identity→private draftの結合を自ownerのWeakMapへ1件だけ記録する。この表は**発行identityの履歴**であり、liveな消費権限ではない。live draftは別slotに保持し、stop／失敗／消費開始で直ちに落とす。履歴が残っていてもrevoked／claim／元clockの検査を省けず、再発行もできない。
+
+consumerは自registryのopaque identityと期待context／anchor／record／local世代／budget／clock／windowを照合してから、claimをavailable→startedへ同期変更し、live draftを外す。foreign／コピー／診断を渡したlookup失敗では自ownerだけを停止し、foreign claimは変更しない。自claimはlookup後の全失敗でfinallyからspentへ進め、再試行・巻戻しを認めない。
+
+pre-guardでは未失効・primary／refusalなし・同一性・issue claim済み・consuming状態・record適格性を確認し、元clockを観測した**直後にも**同条件を再検査する。post-guardでも元clockと直後の条件を検査し、その後の成功commitまでawait／任意callback／caller getterを挟まない。record／発行／消費は同じ単調remainingと元floorを共有し、境界は厳密な`>`、等号は拒否とする。
+
+### 11.2 失効と診断
+
+stop／close相当の内部停止はrevokedを先に立て、live draftを落とす。既知の発行identityで消費を試しても、消費前やclock callback後のguardが拒否する。再入の消費もstarted claimを見て失敗し、外側の消費が成功へ戻ることはない。
+
+HTTP／cleanupのimmutable事実、first primary／refusal／stage、stop_reason、first_terminalを保持する。`phase`は最新状態、`first_terminal`は最初の終端状態として独立に維持し、Consumed後の二重消費／停止でも最初のconsumedを消さない。拒否slotがある場合、primaryのnullだけを根拠に継続しない。
+
+成功はkind=synthetic_status_consumed、scope=synthetic_contract_onlyの限定されたimmutable履歴を1件だけ残す。用途release・status403／404・body_mode cancelled／no_bodyと全7権限=falseだけで、token・identity・resource・source consumerは返さない。後から失敗／停止した場合も成功履歴は過去の事実として保持するが、再入力は拒否する。no_bodyをEOF／body ackへ変換しない。
+
+### 11.3 合成確認と残課題
+
+[consumer試験](../tests/review/status-consumer.test.ts)は製品のcase一覧／guard helperを使わない42ケースの期待表と詳細確認を含む60件。既存ST-03Aの71件を維持し、pre／post再入・取消・close・例外・期限・逆行、foreign／copy／JSON診断、二重消費／再発行、失敗後再試行、first diagnosticと成功履歴の保持を確認する。[ST-03B検証記録](E2E_BEST_PRACTICE_STATUS_CONSUMER_ST03B_2026-10-31.md)を参照。
+
+これは固定presetの合成recordからの消費である。注入Response→同reader cleanup→private発行→消費の連続接続はST-03C、実session／認証snapshot／source／ReleasePermit／canonical予算へのbinding・runtime採用はさらに別工程。正式発行口閉鎖・Unknown・全体受付無効・調査保留とSTC-A01〜A05／親のruntime承認待ちを維持する。

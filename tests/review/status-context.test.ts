@@ -30,7 +30,7 @@ it.each(cases)('enforces the private contract: %s', (name, phase, primary, draft
     expect(d.phase).toBe(phase); expect(d.primary).toBe(primary); expect(d.counts.drafts).toBe(drafts);
     expect(r.foreign_unchanged).toBe(true); expect(d.counts.contexts).toBe(1);
     for (const value of Object.values(d.counts)) expect(value).toBeLessThanOrEqual(1);
-    expect(d.consumer_implemented).toBe(false); expect(d.consumer_reserved).toBe(true);
+    expect(d.consumer_implemented).toBe(true); expect(d.consumer_reserved).toBe(true);
     expect(Object.values(d.permissions)).toEqual(Array(7).fill(false)); expect(Object.values(r.permissions)).toEqual(Array(7).fill(false));
     expect(JSON.stringify(r)).not.toContain('PRIVATE');
 });
@@ -39,7 +39,7 @@ it.each(['body', 'no_body'])('holds %s draft privately with no consumable token 
     expect(r.diagnostic.draft_held).toBe(true);
     expect(Object.keys(r)).toEqual(['ok', 'kind', 'diagnostic', 'foreign_unchanged', 'permissions']);
     for (const key of ['token', 'context', 'anchor', 'record', 'consume', 'issue', 'registry', 'clock', 'budget']) expect(r).not.toHaveProperty(key);
-    expect(r.diagnostic.claims).toEqual({ context: 'spent', anchor: 'spent', record: 'spent', issue: 'spent' });
+    expect(r.diagnostic.claims).toEqual({ context: 'spent', anchor: 'spent', record: 'spent', issue: 'spent', consume: 'available' });
 });
 it('keeps HTTP and cleanup facts when duplicate issue revokes the draft', () => {
     const before = result('body').diagnostic, after = result('duplicate_issue').diagnostic;
