@@ -28,7 +28,17 @@ Date: 2026-10-31。対象：[詳細設計§11](BEST_PRACTICE_ABORT_SCOPE_NATIVE_
 - `bdo npm test`最終再実行：210ファイル・9,421テスト成功（41.61秒、専用52件を含む）。その後、seal直後のcopyをlate writerより前に捕捉するfixtureの観測順だけを整理し、buildと専用52件を再確認した。期限・上限・設定は変更していない。
 - build後の依存再インストールを伴うworker梱包試験は実行しない。offline pack確認の成功を、その試験や実環境検証の成功に置き換えない。
 
-## 4 未接続・閉鎖
+## 4 レビュー修正（2026-10-31）
+
+- 後続attemptの最初の理由が、429／5xxでも`internal_review_error`となっていた。既存contract（[review-bootstrap-contract.ts](../src/servicenow/review-bootstrap-contract.ts)）はこれを`upstream_unavailable`としてretryするため、同じ分類（429／5xxは`upstream_unavailable`、その他の200以外は`invalid_response`）に揃えた。後続cleanup失敗のテストは、先に観測した503の理由を保持する期待値へ変更した。
+- 既存contractは、dispatchの同期throw／fetch rejectでheaderなしに終わったattemptもretryするが、ownerは次ordinalの開始を拒否していた。headerなし終了のwriterを追加し、cleanupを`not_applicable`として次ordinalを開始できるようにした。ordinal1のHTTP slotはnullのまま、後続では件数と`upstream_unavailable`を記録。同attemptへの後着headerは拒否する。
+- テスト3件を追加（後続302の`invalid_response`、headerなし→retry→200、headerなし後のheader拒否）、既存2件の期待値を変更。専用55件。
+- 変異確認：理由の分類を戻すと3件、headerなし終了を次ordinalの条件から外すと1件、headerなし後のheader拒否を外すと1件失敗（確認後に復元）。
+- 全体`npm test`：210ファイル・9,424テスト成功。`npm run build`、変更source／testのESLint、`node tests/review/package-http-classification.mjs`（409ファイル）成功。
+- 親文書3件の本書へのlinkが修正前のdraft-0.2のままだったため、draft-0.4へ更新した。
+- 上記§3の件数（専用52件・9,421テスト）は修正前の記録として残す。
+
+## 5 未接続・閉鎖
 
 native Response／reader・typed cleanup証拠の発行・source consumer・既存実session／ReleasePermit／canonical予算へのbindingは未接続。合成cleanup enumや返却diagnosticから正式証拠を発行できない。acceptanceは診断model上の非実行遷移に限る。
 

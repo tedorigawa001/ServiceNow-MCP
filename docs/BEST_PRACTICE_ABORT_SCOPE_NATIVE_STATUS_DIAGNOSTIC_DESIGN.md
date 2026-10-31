@@ -1,6 +1,6 @@
 # AU-BR-006：native status証拠の発行元・上位診断ownerの対設計
 
-Version: br006-native-status-diagnostic-draft-0.3 / Date: 2026-10-31。
+Version: br006-native-status-diagnostic-draft-0.4 / Date: 2026-10-31。
 Status: **ND-01の診断ownerを純粋fakeだけで実装。native証拠・実sessionへの採用は未接続。fallback有効化・実接続・実通信は行わない。正式発行口閉鎖・Unknown・全体受付無効・VM／監視／telemetry調査保留を維持する。**
 
 基準：[SA-02と後続差分](BEST_PRACTICE_ABORT_SCOPE_STATUS_SOURCE_ACCEPTANCE_DELTA_DESIGN.md)、[ST-03の注入owner](BEST_PRACTICE_ABORT_SCOPE_STATUS_TERMINAL_CONNECTION_DESIGN.md)、[単一予算・停止owner](BEST_PRACTICE_ABORT_SCOPE_STATUS_SESSION_BINDING_DELTA_DESIGN.md)、[非200の承認比較](BEST_PRACTICE_ABORT_SCOPE_NON200_APPROVAL_COMPARISON.md)。型名・stage・操作名は内部契約案で、実装済みAPIや公開JSON enumではない。
@@ -163,5 +163,7 @@ SA-03へ進む前には[比較資料](BEST_PRACTICE_ABORT_SCOPE_NON200_APPROVAL_
 - sealは新しい権限を生成せず、受理のfirst terminalと消費数0／1を残したまま最新phaseをrevokedへ移す。返却は再帰的freezeした限定copyのみ、全7permissionはfalse。
 
 本段階のcleanupは内部で組み立てた合成事実であり、reader操作・操作数・pre-release facts・typed native terminalの証明ではない。受理stageも診断model内の非実行遷移で、source消費やfallbackには接続しない。停止・期限は固定codeの合成イベントとして検証し、clockやcanonical budgetを新設／更新しない。ND-T02／03／06／10の実操作・元window・会計確認はND-02以降に残る。
+
+draft-0.4のレビュー修正：後続attemptの最初の理由を既存contractと同じ分類にした（429／5xxは`upstream_unavailable`、その他の200以外は`invalid_response`）。また、dispatch／fetch失敗でheaderなしに終わったattemptを`not_applicable`のcleanupとして終了でき、次のordinalを開始できるようにした。ordinal1ではHTTP slotをnullのまま残し、後続では件数と`upstream_unavailable`を記録する。同attemptへの後着headerは拒否する。
 
 [合成テスト](../tests/review/native-status-diagnostic.test.ts)、[compiled fixture](../tests/review/fixtures/compiled-native-status-diagnostic.mjs)、[検証記録](E2E_BEST_PRACTICE_NATIVE_DIAGNOSTIC_ND01_2026-10-31.md)を参照。ND-02のnative issuer接続とND-03の実class連続fakeは未実装。

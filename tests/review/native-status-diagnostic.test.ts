@@ -72,7 +72,7 @@ it('ignores every writer and a second seal after sealing without altering the re
 });
 it('preserves ordinal1 while later503/200 observations are counted separately', () => {
     const r = result('later_attempts'), s = r.diagnostic.slots.release;
-    expect(s.http?.status).toBe(503); expect(s.later_attempts).toBe(2); expect(s.later_reason).toBe('internal_review_error');
+    expect(s.http?.status).toBe(503); expect(s.later_attempts).toBe(2); expect(s.later_reason).toBe('upstream_unavailable');
     expect(s.cleanup.phase).toBe('confirmed'); expect(r.diagnostic.refusal).toBeNull();
 });
 it.each(['duplicate_later', 'ordinal_gap', 'ordinal_limit'])('rejects %s without rewriting ordinal1', scenario => {
@@ -113,11 +113,26 @@ it('retains later-attempt cleanup failure and stops without altering ordinal1 fa
     const d = result('later_cleanup_failure').diagnostic;
     expect(d.primary?.code).toBe('internal_review_error');
     expect(d.slots.release.cleanup.phase).toBe('confirmed');
-    expect(d.slots.release.later_reason).toBe('internal_review_error');
+    // The later attempt's first reason is its 503, observed before the cleanup failure stopped the run.
+    expect(d.slots.release.later_reason).toBe('upstream_unavailable');
 });
 it('refuses to replace an attempt whose cleanup is still pending', () => {
     const d = result('advance_pending_attempt').diagnostic;
     expect(d.refusal?.code).toBe('invalid_state');
     expect(d.slots.release.later_attempts).toBe(0);
     expect(d.slots.release.cleanup.phase).toBe('unconfirmed');
+});
+it('records a later non-retryable status as invalid_response, matching the contract', () => {
+    const s = result('later_redirect').diagnostic.slots.release;
+    expect(s.http?.status).toBe(503); expect(s.later_attempts).toBe(2); expect(s.later_reason).toBe('invalid_response');
+});
+it('lets a no-response attempt end and be retried without a header or cleanup claim', () => {
+    const d = result('no_response_retry').diagnostic, s = d.slots.release;
+    expect(d.refusal).toBeNull(); expect(d.primary).toBeNull();
+    expect(s.http).toBeNull(); expect(s.cleanup).toEqual({ phase: 'not_applicable', kind: null, reason: null });
+    expect(s.later_attempts).toBe(1); expect(s.later_reason).toBeNull(); expect(s.acceptance.consumes).toBe(0);
+});
+it('refuses a header after the same attempt ended without a response', () => {
+    const d = result('no_response_then_header').diagnostic;
+    expect(d.refusal?.code).toBe('invalid_state'); expect(d.slots.release.http).toBeNull();
 });

@@ -4,13 +4,13 @@ import { types } from 'node:util';
 type Purpose = 'authentication' | 'parent' | 'release';
 type Stage = 'binding' | 'header' | 'cleanup' | 'acceptance' | 'stop' | 'teardown' | 'seal';
 type Code = 'invalid_state' | 'evidence_binding_mismatch' | 'authentication_failed' | 'access_denied' |
-    'not_found_or_not_visible' | 'internal_review_error' | 'cancelled' | 'deadline_exceeded';
+    'not_found_or_not_visible' | 'internal_review_error' | 'cancelled' | 'deadline_exceeded' | 'upstream_unavailable' | 'invalid_response';
 type Reason = Readonly<{ code: Code; stage: Stage }>;
 type Binding = Readonly<{ run: object; session: object; snapshot: object; lease: object; core: object;
     source: object; constructor: object; transport: object }>;
 type Attempt = Readonly<{ binding: Binding; purpose: Purpose; ordinal: number; window: object }>;
 type Http = Readonly<{ status: number; body_present: boolean; classification: 'hard' | 'local' | 'recovery_candidate' | 'other' }>;
-type Cleanup = Readonly<{ phase: 'not_started' | 'pending' | 'confirmed' | 'unconfirmed';
+type Cleanup = Readonly<{ phase: 'not_started' | 'pending' | 'confirmed' | 'unconfirmed' | 'not_applicable';
     kind: 'cancelled' | 'no_body' | null; reason: 'cancel_rejected' | 'window_ended' | null }>;
 type Acceptance = { phase: 'not_started' | 'consuming' | 'accepted' | 'rejected' | 'revoked';
     first_terminal: 'accepted' | 'rejected' | 'revoked' | null; consumes: 0 | 1 };
@@ -32,7 +32,7 @@ function construct(expected: Binding) {
     let primary: (Reason & { public_code: Code }) | null = null, local: Reason | null = null, refusal: Reason | null = null;
     let teardown: 'not_started' | 'releasing' | 'confirmed' | 'unconfirmed' = 'not_started';
     // Fixed three entries, no event history. Attempt identities are fixed by the synthetic creator.
-    const active = () => ({ current: null as Attempt | null, observed: false, body: false, cleanup: emptyCleanup() });
+    const active = () => ({ current: null as Attempt | null, observed: false, noResponse: false, body: false, cleanup: emptyCleanup() });
     const attempts = { authentication: active(), parent: active(), release: active() };
     function revoke() {
         stopped = true;
@@ -60,11 +60,13 @@ function construct(expected: Binding) {
         if (sealed) return null;
         if (binding !== 'bound' || stopped) { reject('invalid_state', 'header'); return null; }
         const a = attempts[purpose];
-        if (ordinal !== (a.current?.ordinal ?? 0) + 1 || ordinal > 210 || a.current && (!a.observed || a.cleanup.phase !== 'confirmed')) {
+        // The existing contract also retries after a dispatch/fetch failure, which ends an attempt without any header.
+        const ended = a.noResponse || a.observed && a.cleanup.phase === 'confirmed';
+        if (ordinal !== (a.current?.ordinal ?? 0) + 1 || ordinal > 210 || a.current && !ended) {
             reject('invalid_state', 'header'); return null;
         }
         const attempt = Object.freeze({ binding: expected, purpose, ordinal, window: id() });
-        a.current = attempt; a.observed = false; a.body = false; a.cleanup = emptyCleanup(); return attempt;
+        a.current = attempt; a.observed = false; a.noResponse = false; a.body = false; a.cleanup = emptyCleanup(); return attempt;
     }
     function valid(a: Attempt, purpose: Purpose, stage: Stage): boolean {
         if (binding !== 'bound' || a.binding !== expected || a.purpose !== purpose || attempts[purpose].current !== a) {
@@ -77,7 +79,7 @@ function construct(expected: Binding) {
         function header(a: Attempt, status: number, body_present: boolean) {
             if (sealed) return 'late_ignored';
             if (!valid(a, purpose, 'header') || refusal) return 'rejected';
-            if (attempts[purpose].observed) return reject('invalid_state', 'header');
+            if (attempts[purpose].observed || attempts[purpose].noResponse) return reject('invalid_state', 'header');
             if (!Number.isSafeInteger(status) || status < 100 || status > 599) return reject('invalid_state', 'header');
             attempts[purpose].observed = true;
             attempts[purpose].body = body_present;
@@ -85,7 +87,8 @@ function construct(expected: Binding) {
                 status === 404 && purpose === 'parent' ? 'local' : purpose === 'release' && [403, 404].includes(status) ? 'recovery_candidate' : 'other';
             const code = status === 401 ? 'authentication_failed' : status === 403 ? 'access_denied' : status === 404 ? 'not_found_or_not_visible' : null;
             if (a.ordinal === 1) slots[purpose].http = Object.freeze({ status, body_present, classification });
-            else { slots[purpose].later_attempts++; slots[purpose].later_reason ??= code ?? (status >= 400 ? 'internal_review_error' : null); }
+            // Same reason as the existing contract: 429/5xx are upstream_unavailable, any other non-200 is invalid_response.
+            else { slots[purpose].later_attempts++; slots[purpose].later_reason ??= code ?? (status === 429 || status >= 500 ? 'upstream_unavailable' : status !== 200 ? 'invalid_response' : null); }
             if (classification === 'hard') stop(code!, 'header');
             if (classification === 'local') local ??= Object.freeze({ code: code!, stage: 'header' });
             return 'recorded';
@@ -107,6 +110,18 @@ function construct(expected: Binding) {
             }
             return 'recorded';
         }
+        function noResponse(a: Attempt) {
+            if (sealed) return 'late_ignored';
+            if (!valid(a, purpose, 'header') || refusal) return 'rejected';
+            const current = attempts[purpose];
+            if (current.observed || current.noResponse || current.cleanup.phase !== 'not_started') return reject('invalid_state', 'header');
+            current.noResponse = true;
+            current.cleanup = Object.freeze({ phase: 'not_applicable', kind: null, reason: null });
+            // Ordinal 1 keeps http=null; only the cleanup slot shows that no resource was ever owned.
+            if (a.ordinal === 1) slots[purpose].cleanup = current.cleanup;
+            else { slots[purpose].later_attempts++; slots[purpose].later_reason ??= 'upstream_unavailable'; }
+            return 'recorded';
+        }
         function acceptance(a: Attempt, phase: 'consuming' | 'accepted' | 'rejected') {
             if (sealed) return 'late_ignored';
             if (!valid(a, purpose, 'acceptance')) return 'rejected';
@@ -120,7 +135,7 @@ function construct(expected: Binding) {
             if (phase === 'rejected') reject('invalid_state', 'acceptance');
             return 'recorded';
         }
-        return Object.freeze({ header, cleanup, acceptance });
+        return Object.freeze({ header, noResponse, cleanup, acceptance });
     }
     function release(phase: 'releasing' | 'confirmed' | 'unconfirmed') {
         if (sealed) return 'late_ignored';
@@ -166,7 +181,7 @@ export function runSyntheticNativeDiagnosticFixture(input: unknown) {
         'duplicate_teardown', 'pending_seal', 'pending_late_success', 'unconfirmed_late_success', 'sealed_writes',
         'later_attempts', 'duplicate_later', 'ordinal_gap', 'ordinal_limit',
         'cleanup_body_mismatch', 'cleanup_reason_mismatch', 'cleanup_kind_mismatch', 'pending_with_kind',
-        'later_cleanup_failure', 'advance_pending_attempt'] as const;
+        'later_cleanup_failure', 'advance_pending_attempt', 'no_response_retry', 'no_response_then_header', 'later_redirect'] as const;
     if (!d || !('value' in d) || typeof d.value !== 'string' || !(scenarios as readonly string[]).includes(d.value)) return invalid();
     const scenario = d.value;
     const expected = makeBinding(), owner = construct(expected), foreignBinding = makeBinding(), foreign = construct(foreignBinding);
@@ -189,8 +204,12 @@ export function runSyntheticNativeDiagnosticFixture(input: unknown) {
             else w.header(supplied, 403, true);
             if (scenario === 'retry_after_refusal') w.header(a, 403, true);
         } else if (scenario === 'cleanup_before_header') w.cleanup(a, 'pending');
-        else {
-            const later = ['later_attempts', 'duplicate_later', 'ordinal_gap', 'ordinal_limit', 'later_cleanup_failure'].includes(scenario);
+        else if (scenario === 'no_response_retry' || scenario === 'no_response_then_header') {
+            w.noResponse(a);
+            if (scenario === 'no_response_then_header') w.header(a, 200, false);
+            else { const next = owner.open(purpose, 2)!; w.header(next, 200, false); w.cleanup(next, 'pending'); w.cleanup(next, 'confirmed', 'no_body'); }
+        } else {
+            const later = ['later_attempts', 'duplicate_later', 'ordinal_gap', 'ordinal_limit', 'later_cleanup_failure', 'later_redirect'].includes(scenario);
             w.header(a, later ? 503 : ['hard_cleanup', 'cancel_then_header', 'deadline_then_header'].includes(scenario) ? 401 :
                 scenario === 'release_404' || scenario === 'parent_404' ? 404 : 403, scenario !== 'no_body');
             if (scenario === 'duplicate_header') w.header(a, 404, false);
@@ -220,7 +239,7 @@ export function runSyntheticNativeDiagnosticFixture(input: unknown) {
                         }
                         owner.open(purpose, 211);
                     } else {
-                        const next = owner.open(purpose, 2)!; w.header(next, 503, false); w.cleanup(next, 'pending');
+                        const next = owner.open(purpose, 2)!; w.header(next, scenario === 'later_redirect' ? 302 : 503, false); w.cleanup(next, 'pending');
                         if (scenario === 'later_cleanup_failure') w.cleanup(next, 'unconfirmed', null, 'cancel_rejected');
                         else if (scenario === 'duplicate_later') w.header(next, 200, false);
                         else {
