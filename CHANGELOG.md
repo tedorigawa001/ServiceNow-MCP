@@ -32,6 +32,8 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 ### Added
 
+- Fixes ND-03 so a native cleanup-floor stop reaches the session as `upstream_unavailable` (matching the SA-02 floor check) while the canonical run deadline is not reached; the native diagnostic keeps its own `deadline_exceeded`/`cleanup_deadline`.
+
 - ND-03 adds a package-excluded, fresh fake-only composition of the actual bounded session/source classes and injected native status cleanup. The sole native consumer calls the creator-bound closed-gate source continuation before closure; canonical C/G counters, registered ready generation, source/core receipt checks and the original attempt window are shared. Failure results retain native HTTP/cleanup and session internal/public diagnostics after revocation and release. Includes replay/mixed-source/private-boundary, caps, cancellation, frozen-copy and compiled/offline tests. The new one-shot development friend never adopts an existing session or performs network I/O; real authentication/URL provenance, fallback, permits, formal issuance and whole-run admission remain disabled/unconnected.
 
 - Fixes ND-02 so stop/close no longer cut a pending reader cleanup short (it keeps its read-only wait until the original floor, as ST-03C does), and teardown reflects only the lane's own releases instead of mirroring reader cleanup failures.

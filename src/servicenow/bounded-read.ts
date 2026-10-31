@@ -219,7 +219,9 @@ export class BoundedReadSession {
           if(v.purpose!=='release'||(v.status!==403&&v.status!==404)||!['cancelled','no_body'].includes(v.cleanup as string))throw new BoundedReadError('invalid_response');
           terminal=Object.freeze({});terminals.set(terminal,{source:scope.source,snapshot:this.#snapshot,lease:this.#runLease,core:this.#budget,attempt,window:{floor:activeFloor!},value:v as StatusObservation});
           nativeDraft=consumer!.status(terminal);checked();return null;
-        }catch(e){return reject(e);}},stop:(code:ReadFailureCode)=>this.stop(code)}));
+        }catch(e){return reject(e);}},
+        // A native floor stop is the attempt window, not the run deadline: classify it like the SA-02 floor check.
+        stop:(code:ReadFailureCode)=>this.stop(code==='deadline_exceeded'&&this.#runLease.read().remaining_ms>0?'upstream_unavailable':code)}));
       scope.accounting.reserve();guard();
       // Ready can only fail after a run stop or misuse; this probe performs no authentication to blame.
       if(!this.#runOwner.markReady(this.#snapshot,this.#runLease)){this.#syncRunFailure();throw new BoundedReadError(this.stopCode??'internal_review_error');}

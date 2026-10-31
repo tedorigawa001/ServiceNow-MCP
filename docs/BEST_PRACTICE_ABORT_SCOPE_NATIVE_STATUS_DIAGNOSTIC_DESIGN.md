@@ -1,6 +1,6 @@
 # AU-BR-006：native status証拠の発行元・上位診断ownerの対設計
 
-Version: br006-native-status-diagnostic-draft-0.7 / Date: 2026-10-31。
+Version: br006-native-status-diagnostic-draft-0.8 / Date: 2026-10-31。
 Status: **ND-01／02と、ND-03の実session／source class＋注入resourceの新規fake-run試験を実装。既存runtime経路への採用・実認証／URL由来の証明は未接続。fallback有効化・実接続・実通信は行わない。正式発行口閉鎖・Unknown・全体受付無効・VM／監視／telemetry調査保留を維持する。**
 
 基準：[SA-02と後続差分](BEST_PRACTICE_ABORT_SCOPE_STATUS_SOURCE_ACCEPTANCE_DELTA_DESIGN.md)、[ST-03の注入owner](BEST_PRACTICE_ABORT_SCOPE_STATUS_TERMINAL_CONNECTION_DESIGN.md)、[単一予算・停止owner](BEST_PRACTICE_ABORT_SCOPE_STATUS_SESSION_BINDING_DELTA_DESIGN.md)、[非200の承認比較](BEST_PRACTICE_ABORT_SCOPE_NON200_APPROVAL_COMPARISON.md)。型名・stage・操作名は内部契約案で、実装済みAPIや公開JSON enumではない。
@@ -194,6 +194,8 @@ ND-01／02時点のexportに加え、次節のND-03 entryを追加した。modul
 - 親は同canonical会計でC=1／G=bytes長、releaseはC=1／read=0・G=0とする。R4予約・210試行・受信量・60秒の上限は変更しない。nativeのclockは同leaseから得る残時間だけで、新しい起点を作らない。
 - sole native consumerのpre／post guard内でprivate source受理まで行い、その後に元floor／失効を再検査する。公開diagnosticからreceiptを作らない。nativeとsourceで同terminalを二重に消費せず、source境界のreceiptは同class生成元の一度限りhandoffとする。
 - session停止はsource consumerとnative ownerを同期失効する。停止後もND-02と同じ元floorまでcleanupをjoinし、固定解放・session close後のsummaryだけを返す。native HTTP／cleanupとsession内部／公開理由を別々に残し、失敗時の未公開draftは破棄する。seal後の成功履歴を再び継続へ使わない。
+
+draft-0.8のレビュー修正：native側のcleanup floor到達（`deadline_exceeded`／`cleanup_deadline`）を、そのままsessionの公開理由にしていた。floorは試行窓の下限で全体60秒期限ではないため、canonical残時間が0でない限りsessionへは`upstream_unavailable`として渡し、SA-02のfloor検査と同じ分類にした。native上位診断の`deadline_exceeded`は別層としてそのまま残す。canonical期限そのものに到達した場合は従来どおり`deadline_exceeded`。
 
 **制約**：一度限りの内部friendはSA-02同様に配布物からdeep importされ得る。取得先は新規fake runと固定throw fetchだけだが、trustedなfake driver callbackを受ける試験境界である。任意のdriverをnative issuerの証明に使える本番境界ではない。公開entryはdriver／callback／cleanup指定を拒否し、正式発行口・既存MCP／legacy経路に接続しない。
 

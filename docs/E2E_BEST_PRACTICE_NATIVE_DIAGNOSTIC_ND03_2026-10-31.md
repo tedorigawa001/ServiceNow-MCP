@@ -38,7 +38,15 @@ Date: 2026-10-31。対象：[詳細設計§13](BEST_PRACTICE_ABORT_SCOPE_NATIVE_
 - `bdo node tests/review/package-http-classification.mjs`：ND-03のcompiled試験と既存各段階が成功。offline・ignore-scriptsのpack dry-runは409ファイル。開発module／fixtureの非同梱と配布runtimeからの非参照を維持した。
 - `bdo npm test`最終再実行：213ファイル・9,522テスト成功、未処理拒否なし（49.61秒）。依存再取得を伴うworker梱包試験は行っていない。
 
-## 5 制約・未接続
+## 5 レビュー修正（2026-10-31）
+
+- 指摘：native側がcleanup floor到達で出す`deadline_exceeded`を、bridge経由でそのままsessionの内部／公開理由にしていた。fake clockで解放cancel中に10,000ms進めると、残り50秒でも`code`／`run_diagnostic`が`deadline_exceeded`になった。同条件のSA-02（`remaining_ms<=window.floor`）は`upstream_unavailable`で、承認比較のrelease行の分類と食い違っていた。
+- 修正：session側のscope.stopで、canonical残時間が0より大きい`deadline_exceeded`を`upstream_unavailable`へ変換する。native上位診断のprimary `deadline_exceeded`／`cleanup_deadline`は変更しない。
+- 試験：既存「canonical clock」試験に`code`と`run_diagnostic`の確認を追加し、canonical期限（60,000ms）到達では`deadline_exceeded`を保持する試験を1件追加（連続試験29件、計37件）。
+- mutation：変換を外すと既存試験1件が失敗した。残時間条件を外す変異は生存した。残時間0ではcanonical側が先に`deadline_exceeded`で停止し、先行理由が保持されるため。条件は防御として残す。
+- 再検証：build成功、全体213ファイル・9,523テスト成功・未処理拒否なし。梱包検査は409ファイルで成功し、変更ファイルのESLintは0件。親設計3件のリンクをdraft-0.8へ更新した。§4の数値は修正前の記録として残す。
+
+## 6 制約・未接続
 
 内部friendは配布物からdeep importされ得る。新規fake run・固定throw fetch・非実行draftに限るが、trusted fake driverを受ける試験用境界であり、本番native provenanceの証明ではない。公開entryは任意driverやcleanup申告を拒否する。このfriendをMCPや既存sessionの正式発行経路へ接続してはならない。
 

@@ -63,8 +63,15 @@ it('uses the canonical clock and does not create a fresh cleanup deadline', asyn
     const stream = new ReadableStream({ cancel() { elapsed = 10000; } });
     const r = await probe(new Response(stream, { status: 403 }));
     expect(r.ok).toBe(false); expect(r.native?.counts.issued).toBe(0);
+    expect(r.code).toBe('upstream_unavailable'); expect(r.run_diagnostic).toEqual({ internal: 'upstream_unavailable', public: 'upstream_unavailable' });
     expect(r.native?.upper.primary?.code).toBe('deadline_exceeded'); expect(r.native?.upper.slots.release.cleanup.phase).toBe('unconfirmed');
     expect(vi.getTimerCount()).toBe(0);
+});
+it('keeps deadline_exceeded only when the canonical run deadline itself is reached', async () => {
+    vi.useFakeTimers(); let elapsed = 0;
+    vi.spyOn(performance, 'now').mockImplementation(() => elapsed);
+    const r = await probe(new Response(new ReadableStream({ cancel() { elapsed = 60000; } }), { status: 403 }));
+    expect(r.code).toBe('deadline_exceeded'); expect(r.run_diagnostic.public).toBe('deadline_exceeded'); expect(r.native?.counts.issued).toBe(0);
 });
 it('rejects reuse of the injected Response across fresh actual-class runs', async () => {
     const response = new Response(null, { status: 403 }), a = await probe(response), saved = JSON.stringify(a), b = await probe(response);
