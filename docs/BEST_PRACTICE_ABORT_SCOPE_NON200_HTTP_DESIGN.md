@@ -1,7 +1,7 @@
 # AU-BR-006 非200 HTTP対応：legacy差分・状態遷移・合成受入条件
 
 Version: br006-non200-http-draft-0.3 / Date: 2026-10-31。
-Status: §9の純粋分類契約・独立oracleのみ開発専用moduleで実装。非200のruntime挙動変更・操作／終端契約の実装・A01〜A07の承認は未実施。正式発行口閉鎖・Unknown・全体受付無効・VM／監視／telemetry調査保留を維持する。
+Status: §9の純粋分類契約・独立oracleと§10のST-01合成内部契約を開発専用moduleで実装。非200のruntime挙動変更・native操作／終端接続・A01〜A07の承認は未実施。正式発行口閉鎖・Unknown・全体受付無効・VM／監視／telemetry調査保留を維持する。
 
 親：[private composition設計](BEST_PRACTICE_ABORT_SCOPE_PRIVATE_COMPOSITION_DESIGN.md) §6／12。
 基準commit：`6a1fcd1`（CM-04-03のsession hook code保持・非200受理拒否を含む）。本書の現行欄はソースの読み取り照合であり、実機で確認した挙動ではない。
@@ -236,6 +236,6 @@ BoundedReadSession・bootstrap・native adapter・source・MCP／設定・既存
 
 ## 10 status-only終端・cancel-only cleanupの詳細化
 
-第2段階の[同attempt終端詳細設計draft-0.1](BEST_PRACTICE_ABORT_SCOPE_STATUS_ONLY_TERMINAL_DESIGN.md)で、同readerの所有権・一度限りのfinish／consume・HTTPとcleanupの二軸診断を具体化した。停止後に残るcleanup所有権と、同期失効する業務継続権限を分離し、hard HTTP停止後はcleanupが成功しても診断専用とする案である。
+第2段階の[同attempt終端詳細設計draft-0.2](BEST_PRACTICE_ABORT_SCOPE_STATUS_ONLY_TERMINAL_DESIGN.md)で、同readerの所有権・一度限りのfinish／consume・HTTPとcleanupの二軸診断を具体化した。停止後に残るcleanup所有権と、同期失効する業務継続権限を分離し、hard HTTP停止後はcleanupが成功しても診断専用とする案である。
 
-詳細設計・ST-T01〜ST-T20の受入条件・ST-A01〜ST-A07は未実装／未承認。A01〜A07の承認、runtime採用、retry／fallback、正式発行を意味しない。現行200限定guard・全体受付無効・調査保留を維持する。
+ST-01で合成issuer限定の内部型・claim・診断保持だけを実装した。nativeの操作・同reader確認・単一会計への接続はまだなく、ST-T01〜ST-T20全体を確認済みにしない。ST-A01〜ST-A07／A01〜A07の承認、runtime採用、retry／fallback、正式発行を意味しない。現行200限定guard・全体受付無効・調査保留を維持する。

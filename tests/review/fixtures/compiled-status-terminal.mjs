@@ -1,0 +1,12 @@
+import assert from 'node:assert/strict';
+const forbidden=()=>{throw Error('native or timer operation forbidden');};
+for(const key of ['fetch','Response','ReadableStream','setTimeout','setInterval'])globalThis[key]=forbidden;
+const {createSyntheticStatusTerminalIssuer}=await import('../../../dist/review/abort-scope-evidence-status-terminal.js');
+const owner=createSyntheticStatusTerminalIssuer({fake_io:true,remaining:()=>1000,deadline_ms:1000,cleanup_floor_ms:20});
+const a=owner.issue(owner.binding,{purpose:'release',status:403,body_present:false});assert(a.ok);
+const f=owner.finish(a.value,{reader_owned:false,closed_captured:false,read_started:false,read_pending:false,cancel:'not_applicable',closed:'not_applicable',release:'not_applicable'});
+assert(f.ok&&f.value.terminal);assert.equal(f.value.diagnostic.scope,'synthetic_only');assert.equal(f.value.diagnostic.cleanup.kind,'no_body');
+const c=owner.consume(owner.binding,a.value,f.value.terminal);assert(c.ok);assert(Object.values(c.value.permissions).every(v=>v===false));
+assert(!owner.consume(owner.binding,a.value,f.value.terminal).ok);
+assert.equal(owner.diagnostics().cleanup.kind,'no_body');
+console.log('compiled synthetic status terminal: no native I/O, one-shot, no authority PASS');
