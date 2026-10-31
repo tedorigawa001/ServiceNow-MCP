@@ -1,6 +1,6 @@
 # AU-BR-006：native status証拠の発行元・上位診断ownerの対設計
 
-Version: br006-native-status-diagnostic-draft-0.1 / Date: 2026-10-31。
+Version: br006-native-status-diagnostic-draft-0.2 / Date: 2026-10-31。
 Status: **詳細設計案のみ。実装・fallback有効化・実sessionへのnative採用・実接続・実通信は行わない。正式発行口閉鎖・Unknown・全体受付無効・VM／監視／telemetry調査保留を維持する。**
 
 基準：[SA-02と後続差分](BEST_PRACTICE_ABORT_SCOPE_STATUS_SOURCE_ACCEPTANCE_DELTA_DESIGN.md)、[ST-03の注入owner](BEST_PRACTICE_ABORT_SCOPE_STATUS_TERMINAL_CONNECTION_DESIGN.md)、[単一予算・停止owner](BEST_PRACTICE_ABORT_SCOPE_STATUS_SESSION_BINDING_DELTA_DESIGN.md)、[非200の承認比較](BEST_PRACTICE_ABORT_SCOPE_NON200_APPROVAL_COMPARISON.md)。型名・stage・操作名は内部契約案で、実装済みAPIや公開JSON enumではない。
@@ -32,6 +32,10 @@ Status: **詳細設計案のみ。実装・fallback有効化・実sessionへのn
 4. 結合claimはcallbackより先に消費する。診断ownerを別source／leaseへ付け替えず、失敗・close後に再生成しない。readonly observerやsource公開methodへwriterを返さない。
 
 ownerはrun全体で1個。用途slotはauthentication／parent／releaseの固定3個を上限とし、各slotはこの段階ではordinal1だけ。未使用のslotを観測済みとして埋めない。最初のnative接続はrelease slotだけとし、auth／parentのnative接続を暗黙に完了扱いにしない。
+
+既存contractは同用途でordinal2まで進み得る（確認済み429／5xxの1回retry、[review-bootstrap-contract.ts](../src/servicenow/review-bootstrap-contract.ts)）。ownerはrun全体を対象とするため、ordinal2以降の観測で失敗・上書きしてはならない。各用途slotはordinal1の事実だけを保持し、後続attemptでは書き換えない。後続attemptは用途別の固定件数`later_attempts`と、その最初の理由だけを記録する。既存3Aのretry挙動はこの設計で変更しない。
+
+draft-0.2のレビュー修正：既存contractのordinal2観測に対するslotの扱い（ordinal1固定・後続は件数と最初の理由だけ）を明記し、ND-T12を追加した。
 
 writerは固定生成元ごとに権限を分ける。run ownerは停止理由、取得元はheader事実、同reader ownerはcleanup事実、固定consumerは受理stage／拒否だけを確定する。別用途・別attemptのwriterやreadonly copyによる書込みは拒否し、外国ownerを変更しない。
 
@@ -132,6 +136,7 @@ cleanup用readonly観測は停止後も認めるが、authorityの生存を復�
 | ND-T09 | 欠落header・ownership不明・診断writer不正 | 推定status／cleanup成功なし、先行理由保持・fail closed |
 | ND-T10 | 二重close・予約release・時計／counter比較 | 解放各一度、C/G/P一重計上、R補充なし |
 | ND-T11 | compiled／梱包・秘密marker・固定200回帰 | fixture非共有／非同梱、本文／秘密非出力、旧guard維持 |
+| ND-T12 | 同用途の確認済み503→200等、既存contractのordinal2観測 | ordinal1のslot事実は不変。`later_attempts`と最初の理由だけを保持し、既存retry回数・C/G計上は変えない |
 
 期待値は独立した操作イベント・固定status表・参照比較・元clock境界から作る。製品counterや公開diagnosticを証拠の代用にしない。注入試験の成功を実HTTP・実認証・実PDI確認済みとしない。
 

@@ -161,7 +161,7 @@ STC-T07等の不可能な内部状態の負の対照は、test専用の限定fix
 
 ## 9 承認待ち・次の実装単位
 
-SA-02後のnative由来証拠・上位診断への接続案は[発行元と診断ownerの対設計draft-0.1](BEST_PRACTICE_ABORT_SCOPE_NATIVE_STATUS_DIAGNOSTIC_DESIGN.md)を参照。同readerのprivate記録と固定consumerを結び、返却diagnostic／consumptionの再採用を禁止する。runtime承認やfallback有効化ではない。
+SA-02後のnative由来証拠・上位診断への接続案は[発行元と診断ownerの対設計draft-0.2](BEST_PRACTICE_ABORT_SCOPE_NATIVE_STATUS_DIAGNOSTIC_DESIGN.md)を参照。同readerのprivate記録と固定consumerを結び、返却diagnostic／consumptionの再採用を禁止する。runtime承認やfallback有効化ではない。
 
 本書への記載は承認そのものではない。親ST-A01〜ST-A07／A01〜A07は未承認のまま。
 
