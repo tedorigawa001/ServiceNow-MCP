@@ -9,7 +9,7 @@ RT-B03後の次工程：[native adapter詳細設計draft-0.4](BEST_PRACTICE_ABOR
 
 NA-03後の移行案：[canonical会計・private生成位置の差分設計draft-0.4](BEST_PRACTICE_ABORT_SCOPE_CANONICAL_SESSION_MIGRATION_DESIGN.md)。CM-02のlegacy単一会計に加え、CM-03で新規canonical予算と注入native/typedのdispatch直前C計上を接続した。CM-04-02で認証／I/O前のprivate compositionを追加したが、native/typedの実session I/O採用は未開始。
 
-次の設計：[private composition・固定source採用draft-0.7](BEST_PRACTICE_ABORT_SCOPE_PRIVATE_COMPOSITION_DESIGN.md)。CM-04-01／02に加え、CM-04-03で同じ固定入口のfake bytes→private ack→既存release判定を接続した。CM-03 fresh factoryを既存sessionへ追加しない。省略時はconstructor_bound、合成観測だけがfake_io付きprepared_onlyとなる。実transport／選択payload／workerの正式bindingは未接続。
+次の設計：[private composition・固定source採用draft-0.8](BEST_PRACTICE_ABORT_SCOPE_PRIVATE_COMPOSITION_DESIGN.md)。CM-04-01／02に加え、CM-04-03で同じ固定入口のfake bytes→private ack→既存release判定を接続した。CM-03 fresh factoryを既存sessionへ追加しない。省略時はconstructor_bound、合成観測だけがfake_io付きprepared_onlyとなる。実transport／選択payload／workerの正式bindingは未接続。次段階の[非200 HTTP設計draft-0.1](BEST_PRACTICE_ABORT_SCOPE_NON200_HTTP_DESIGN.md)は承認待ちであり、現在の200限定受理は変更しない。
 
 ## 1. 目的と非対象
 

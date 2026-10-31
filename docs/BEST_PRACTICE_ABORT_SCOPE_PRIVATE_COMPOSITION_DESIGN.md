@@ -1,6 +1,6 @@
 # AU-BR-006 新規runのprivate compositionとsource採用設計
 
-Version: br006-private-composition-draft-0.7 / Date: 2026-10-31。
+Version: br006-private-composition-draft-0.8 / Date: 2026-10-31。
 Status: CM-04-01／02に加え、CM-04-03の固定200・fake依存によるprivate ack受理／既存release判定を実装。実transport採用・実通信は未実施。正式発行口閉鎖・Unknown・全体受付無効・VM／監視／telemetry調査保留を維持する。
 
 CM-04は、新規runだけを対象に、同じ予算・認証snapshot・source・ReleasePermitを結ぶ。最初の実装は予算生成とaccounting供給の分離までとし、既存sessionの後付け切替やMCP設定による有効化は行わない。
@@ -99,6 +99,8 @@ legacyとNA-03には、404の理由、terminal bodyを読むかどうか、no_bo
 最初のcomposition試験は固定200応答の親・releaseと、取消／期限／混入拒否に限定する。一般HTTP失敗やC方式fallbackの実source採用は、既存legacy契約との比較表と承認後に追加する。特にbodyなし403をinvalid_responseへ変えて、既存の運用者設定fallbackが使えなくなる問題を未確認のまま進めない。
 
 bootstrapのprepared成功だけでwork(source)へ任意のmetadata／payload取得権限を返さない。最小実装の返却は限定summaryまでとする。final親・metadata各2の予約移譲／消費、普通cutoffからfinalへ残すbaseline、Pの更新点は後続条件であり、Rを解放して新しく4枠補充する方式は拒否する。
+
+非200の次段階は[HTTP差分・状態遷移・合成受入条件draft-0.1](BEST_PRACTICE_ABORT_SCOPE_NON200_HTTP_DESIGN.md)を参照。legacyの取消要求とtyped cleanup確認、release403／404／upstream枯渇の回復候補、attempt-local retryとrun停止を分けた設計案である。承認・実装は未実施で、現行固定200 guardを緩めるものではない。
 
 ## 7 停止と終了責務
 
