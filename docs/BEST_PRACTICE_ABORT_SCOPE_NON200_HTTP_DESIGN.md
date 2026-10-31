@@ -1,7 +1,7 @@
 # AU-BR-006 非200 HTTP対応：legacy差分・状態遷移・合成受入条件
 
-Version: br006-non200-http-draft-0.1 / Date: 2026-10-31。
-Status: 設計案。挙動変更の承認・実装・新規試験の実行は未実施。正式発行口閉鎖・Unknown・全体受付無効・VM／監視／telemetry調査保留を維持する。
+Version: br006-non200-http-draft-0.2 / Date: 2026-10-31。
+Status: §9の純粋分類契約・独立oracleのみ開発専用moduleで実装。非200のruntime挙動変更・操作／終端契約の実装・A01〜A07の承認は未実施。正式発行口閉鎖・Unknown・全体受付無効・VM／監視／telemetry調査保留を維持する。
 
 親：[private composition設計](BEST_PRACTICE_ABORT_SCOPE_PRIVATE_COMPOSITION_DESIGN.md) §6／12。
 基準commit：`6a1fcd1`（CM-04-03のsession hook code保持・非200受理拒否を含む）。本書の現行欄はソースの読み取り照合であり、実機で確認した挙動ではない。
@@ -139,7 +139,7 @@ CModeDecision → matchedだけPreparedOnly、他はNotAdmitted → 固定close
 
 生のterminal bodyを既存parent／releaseの200 ack consumerへ送らず、確認済みstatus用のprivate受理を別にする。source内のprivate permit生成と同ownerへの既存binding／再検証は引き続き必要。fake fixtureからpermit／family／matchedを直接渡さない。
 
-## 7 合成テストの受入条件（未実装・未実行）
+## 7 合成テストの受入条件（§9の分類照合以外の操作・終端試験は未実装）
 
 oracleは製品statsのcopyではなく、fake dispatcherの到達数、独立byte長、reader操作履歴、fake clock／schedulerの実イベントから作る。status用途、body有無、EOF／拒否／pending、cleanup各操作、低減capと境界を交差させる。通常成功だけでなく、拒否・中断でも下記を満たす。
 
@@ -184,9 +184,52 @@ fake入力を拡張する場合も現行固定200 transcriptの暗黙拡張に�
 
 実装を開始する場合の順序案：
 
-1. 純粋なpurpose×status×body有無の分類契約と独立oracle。I/O・証拠発行なし。
+1. 純粋なpurpose×status×body有無の分類契約と独立oracle。§9で実装。I/O・証拠発行・runtime接続なし。
 2. 同attemptのstatus-only終端／cancel-only cleanup。注入Response／Streamsで所有権と消費を確認する。
 3. retry候補の局所終端・固定backoffを同予算／停止へ結合する。G drain、no-response／timeoutの負の対照を先に確認する。
 4. private sourceの限定status受理と既存C方式へ接続し、固定入口の合成E2E・compiled／梱包・全体回帰を行う。
 
 各段階でも正式発行口閉鎖・全体受付無効・調査保留を維持する。final予約枠移譲、P更新port、実transport、実機E2E、設定変更は別設計・別の明示依頼が必要。本書だけを根拠にソース・試験・runtime gateを変更しない。
+
+## 9 純粋分類契約と独立oracle（第1段階のみ）
+
+実装：[開発専用classifier](../src/review/abort-scope-evidence-http-classification.ts)。試験：[分類試験](../tests/review/http-classification.test.ts)、[独立表oracle](../tests/review/fixtures/http-classification-oracle.ts)。model_idは`br006-http-classification-v1`。HTTP policyのIDや承認票ではない。意味を変更する場合は契約版とoracleを別々にレビューする。
+
+### 9.1 入力と非権限の結果
+
+入力はplain／null-prototype objectのdata property3項目だけとする。
+
+| 項目 | 列挙・範囲 | 注意 |
+|---|---|---|
+| purpose | authentication／parent／release | metadata等や任意文字列は拒否 |
+| status | 整数100〜599 | 文字列・NaN・Infinity・範囲外・boxed numberは拒否 |
+| body_present | booleanのみ | 0／1・文字列・boxed booleanからの変換なし |
+
+欠落・未知key（approval／enabled／body等も含む）・symbol key・getter・proxy・独自prototypeを固定`invalid_input`で拒否する。getter／valueOfを実行せず、値をcoerceしない。失敗結果にraw inputや例外messageを写さない。
+
+成功・失敗とも`kind=classification_only`、`observation_source=unverified_input`を持つ。入力3項目は呼出し側の申告にすぎず、authentic Response・bodyの所有権・schema・時点・cleanup確認を意味しない。100〜599とbody有無の全組合せをモデル化するが、実在するnative Responseで得られる組合せとは限らない。statusだけでbody有無を推測・補正しない。
+
+| 結果 | 意味 |
+|---|---|
+| observation | 検証済みの列挙／数値／boolのcopy。実HTTPの証拠ではない |
+| legacy | HTTP分岐を説明するcategory／候補code／body処理／release回復候補の記述。JSON／schema結果やownerの停止状態は未評価 |
+| proposal | 承認前設計の候補category／候補code／body処理案と関連A番号。実行指示・承認済みという意味ではない |
+| permissions | dispatch／read_body／retry／fallback／body_ack／release_permit／formal_issuanceの7項目が全入力でfalse |
+
+legacyのbody=noneはbody不在時の説明であり、cancelしたと記録しない。429／5xx＋no_bodyはlegacy側invalid_response／回復候補なし、proposal側retry_status_candidateとA01／A03／A04／A05を並べ、差を隠さない。parent／authの404はlocal_http_candidateとし、分類だけでrun primaryを固定しない。200＋bodyもbody_candidateであり、受理・JSON解析・body ackの許可ではない。
+
+結果・observation・legacy・proposal・承認参照配列・permissionsをfreezeする。入力は変更せず、同じ値の再分類は同じ記述を返すだけ。成功結果のcopy／JSONを入力へ再提出しても、unknown keyとして拒否する。counter／claim／clock／owner／leaseを持たず、consumer／証拠／permitを発行しない。
+
+### 9.2 oracleと確認範囲
+
+oracleは製品のenum・helper・分類結果をimportしない。製品が条件分岐を使うのに対し、oracleは100〜599のdense tableを先に埋め、2xxの範囲と401／403／404／429／5xxの手書き行で上書きする。3用途×500 status×2 body有無=3,000組を一度ずつ照合し、総数・重複・各層500件も検査する。表の欠落を無比較成功にしない。
+
+これは実装ロジックを共有しないoracleであり、人手による独立作問・ブラインド評価ではない。有限分類の一致は、NH-01〜NH-20の全てが実行済み、またはcleanup／retry／fallbackが安全に実行可能という証明ではない。操作数・C/G・停止／期限・実transport等の試験は後続の第2〜4段階に残る。既存固定規則評価セットは変更しない。
+
+### 9.3 閉鎖と梱包
+
+classifierは既存の`abort-scope-evidence*`開発専用除外に置く。npm梱包にはJS／map／型宣言を含めず、fixture／oracleも非同梱。pack内のruntime JSがclassifierに依存していないことを[梱包試験](../tests/review/package-http-classification.mjs)で検査する。compiled単独試験ではfetch／Response／Streams／timerを禁止して全3,000組を照合する。
+
+BoundedReadSession・bootstrap・native adapter・source・MCP／設定・既存fake transcriptのschemaは変更しない。非200を拒否するCM-04-03のguardも保持する。A01〜A07は全て承認待ちで、純粋な説明用分類が動くことからretry／fallback／受理を有効化しない。
+
+検証記録：[純粋分類契約・oracle検証](E2E_BEST_PRACTICE_HTTP_CLASSIFICATION_2026-10-31.md)。
