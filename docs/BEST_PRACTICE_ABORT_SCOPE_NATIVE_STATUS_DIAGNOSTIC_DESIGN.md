@@ -1,6 +1,6 @@
 # AU-BR-006：native status証拠の発行元・上位診断ownerの対設計
 
-Version: br006-native-status-diagnostic-draft-0.8 / Date: 2026-10-31。
+Version: br006-native-status-diagnostic-draft-0.9 / Date: 2026-11-01。
 Status: **ND-01／02と、ND-03の実session／source class＋注入resourceの新規fake-run試験を実装。既存runtime経路への採用・実認証／URL由来の証明は未接続。fallback有効化・実接続・実通信は行わない。正式発行口閉鎖・Unknown・全体受付無効・VM／監視／telemetry調査保留を維持する。**
 
 基準：[SA-02と後続差分](BEST_PRACTICE_ABORT_SCOPE_STATUS_SOURCE_ACCEPTANCE_DELTA_DESIGN.md)、[ST-03の注入owner](BEST_PRACTICE_ABORT_SCOPE_STATUS_TERMINAL_CONNECTION_DESIGN.md)、[単一予算・停止owner](BEST_PRACTICE_ABORT_SCOPE_STATUS_SESSION_BINDING_DELTA_DESIGN.md)、[非200の承認比較](BEST_PRACTICE_ABORT_SCOPE_NON200_APPROVAL_COMPARISON.md)。型名・stage・操作名は内部契約案で、実装済みAPIや公開JSON enumではない。
@@ -187,7 +187,7 @@ ND-01／02時点のexportに加え、次節のND-03 entryを追加した。modul
 
 ## 13 ND-03：実class＋注入resourceの連続fake試験
 
-後続①・②の対設計は[constructor最初期の診断owner・fake friend分離draft-0.6](BEST_PRACTICE_ABORT_SCOPE_EARLY_DIAGNOSTIC_FRIEND_SEPARATION_DESIGN.md)を参照。field初期化順、pending shellと別one-shot binding、部分生成rollback、配布物からのfriend本体除去、試験保証の移行条件を整理した案であり、実装・撤去・gate解除ではない。
+後続①・②の対設計は[constructor最初期の診断owner・fake friend分離draft-0.7](BEST_PRACTICE_ABORT_SCOPE_EARLY_DIAGNOSTIC_FRIEND_SEPARATION_DESIGN.md)を参照。EF-02のconstructor保護区間・失敗copy回収は実装済み。EF-03の[共通kernel・本番／開発root分離詳細設計draft-0.1](BEST_PRACTICE_ABORT_SCOPE_KERNEL_ROOT_SEPARATION_EF03_DESIGN.md)では、friend／synthetic_io撤去閉包、試験保証の移行と保留coverage、配布物の負の対照を具体化した。分離・撤去・build変更・gate解除は未実施。
 
 開発専用`probeNativeStatusComposition`は、親bytesをbounded copyし、注入Responseと共に新規fake runだけを作る。`BoundedReadSession`は固定throwのfetchとper-user形式の合成snapshotで生成し、既存SA-02のprivate生成継続・`BoundedUpdateSetSource`の固定consumer・canonical会計を再利用する。既存sessionのlookup／登録／mode切替はない。
 
@@ -201,6 +201,6 @@ draft-0.8のレビュー修正：native側のcleanup floor到達（`deadline_exc
 
 **制約**：一度限りの内部friendはSA-02同様に配布物からdeep importされ得る。取得先は新規fake runと固定throw fetchだけだが、trustedなfake driver callbackを受ける試験境界である。任意のdriverをnative issuerの証明に使える本番境界ではない。公開entryはdriver／callback／cleanup指定を拒否し、正式発行口・既存MCP／legacy経路に接続しない。
 
-ND-03でいう観測前owner結合は、親bytes／注入resourceの観測前を意味する。既存session constructorのclock／timer／listenerの初期化はその前にあり、constructor以前のowner予約を変更していない。生成前の失敗ではnative診断はnull、固定session理由だけを保持する。§3のconstructor最初期までのowner確保と、実認証・実URL・ReleasePermit・選択payload／workerへのruntime接続は引き続き別工程。
+ND-03でいう観測前owner結合は、親bytes／注入resourceの観測前を意味する。ND-03時点ではconstructor以前のowner予約を変更していなかった。後続EF-02で純粋construction shell・保護区間と失敗copy回収を追加し、生成前の失敗はnative診断nullのままconstructor_diagnosticへ保持する。commit後のrun停止をconstruction failureへ混ぜない。EF-03の開発assemblyへ移した後もND-03の実class保証をそのまま継承したとは報告しない。実認証・実URL・ReleasePermit・選択payload／workerへのruntime接続は引き続き別工程。
 
 [連続試験](../tests/review/native-session-composition.test.ts)、[private境界試験](../tests/review/native-session-boundary.test.ts)、[compiled fixture](../tests/review/fixtures/compiled-native-session-composition.mjs)、[検証記録](E2E_BEST_PRACTICE_NATIVE_DIAGNOSTIC_ND03_2026-10-31.md)を参照。fallback・正式発行口・全体受付は有効化しない。
