@@ -1,0 +1,14 @@
+import assert from 'node:assert/strict';
+import {BoundedReadSession} from '../../../dist/servicenow/bounded-read.js';
+let calls=0;globalThis.fetch=()=>{calls++;throw Error('NETWORK_FORBIDDEN');};
+const id='a'.repeat(32),parentBytes=new TextEncoder().encode(JSON.stringify({result:{sys_id:id,state:'in progress',application:'global',sys_updated_on:'2026-10-31',sys_mod_count:'0'}}));
+const snapshot={instanceUrl:'https://synthetic.invalid',authMode:'per-user',perUserBearerToken:'PRIVATE_TOKEN',oauth:{clientId:'unused'}};
+const r=await BoundedReadSession.probeNewStatusAcceptance(snapshot,{update_set_sys_id:id},{synthetic_status:{parent_bytes:parentBytes,release_status:403,cleanup:'cancelled'}});
+assert.equal(r.state,'status_accepted_closed_gate');assert.equal(r.consumptions,1);assert.equal(r.accepted_before_close,true);
+assert.equal(r.fake_io,true);assert.equal(r.cleanup,'closed');assert.equal(r.reserved,0);
+assert.equal(r.fallback,'disabled');assert.equal(r.release_permit,'unavailable');assert.equal(r.evidence_issuance,'disabled');
+assert(Object.values(r.permissions).every(v=>v===false));
+assert.deepEqual(r.budget,{requests:2,received_bytes:parentBytes.length,payload_bytes:0});
+assert(!JSON.stringify(r).includes('PRIVATE'));assert.equal(calls,0);
+await assert.rejects(BoundedReadSession.probeNewStatusAcceptance(snapshot,{update_set_sys_id:id},{synthetic_status:{parent_bytes:parentBytes,release_status:404,cleanup:'unconfirmed'}}),{code:'internal_review_error'});
+console.log('compiled SA-02: real source/session private binding + fake I/O + close-before-return; no fallback/permit PASS');

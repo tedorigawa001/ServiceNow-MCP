@@ -80,7 +80,7 @@ per-user／有効cacheではtoken交換を追加せず、交換が必要なら�
 
 ## 5 sourceのprivate受理と同一性
 
-status-onlyの後続差分は[固定source status private受理・実session binding・close前消費draft-0.4](BEST_PRACTICE_ABORT_SCOPE_STATUS_SOURCE_ACCEPTANCE_DELTA_DESIGN.md)を参照。§10のSA-01は合成issuer限定の受理claim・非実行draft・close前消費を実装。実class接続はSA-02のまま、現行200限定guard・新status経路のfallback閉鎖を維持し、legacyの既存fallback挙動は変えない。
+status-onlyの後続差分は[固定source status private受理・実session binding・close前消費draft-0.5](BEST_PRACTICE_ABORT_SCOPE_STATUS_SOURCE_ACCEPTANCE_DELTA_DESIGN.md)を参照。SA-01に加え、§11のSA-02は実source／session classのprivate継続を別の固定fake probeへ接続した。現行200限定guard・新status経路のfallback閉鎖を維持し、legacyの既存fallback挙動は変えない。
 
 sourceの更新継続は、固定compositionで生成した同sourceだけに結合する。受理前提は同session／認証snapshot・ready世代・canonical lease・native owner・attempt／window・targetの一致と、同bytesからの一度限りackである。
 

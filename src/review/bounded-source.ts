@@ -29,10 +29,14 @@ export type ReleasePermit = { readonly [permitBrand]: true };
 export type ReleaseDecision = { instance_release: ReleaseEvidence; limitations: readonly string[] } & (
   { release_match: 'matched'; permit: ReleasePermit } | { release_match: 'unknown' | 'mismatched'; permit?: never }
 );
+const statusPermissions=Object.freeze({dispatch:false,read_body:false,retry:false,fallback:false,body_ack:false,release_permit:false,formal_issuance:false} as const);
+export type StatusAcceptanceDraft=Readonly<{state:'status_accepted_closed_gate';status:403|404;cleanup_kind:'cancelled'|'no_body';fallback:'disabled';evidence_issuance:'disabled';release_permit:'unavailable';permissions:typeof statusPermissions}>;
 /** A creator-only continuation, authenticated by the fresh session's private construction key. */
 export interface CompositionSourceConstruction {
  readonly key:object;check():void;take(ack:object,purpose:'parent'|'release'):unknown;
- capture(consumer:Readonly<{parent(ack:object):void;release(ack:object):Promise<ReleaseDecision>;revoke():void}>):void;
+ takeStatus?(terminal:object):unknown;
+ rejectStatus?(code:'invalid_state'|'evidence_binding_mismatch'):never;
+ capture(consumer:Readonly<{parent(ack:object):void;release(ack:object):Promise<ReleaseDecision>;status(terminal:object):StatusAcceptanceDraft;revoke():void}>):void;
 }
 
 export class BoundedUpdateSetSource {
@@ -50,7 +54,7 @@ export class BoundedUpdateSetSource {
     this.#session=session;
     if(creation){
       if(!claimPrivateCompositionSource(session,creation.key,this))throw new BoundedReadError('invalid_input');
-      const check=creation.check,take=creation.take;let state:'parent'|'release'|'consuming'|'done'|'closed'='parent';
+      const check=creation.check,take=creation.take,takeStatus=creation.takeStatus;let state:'parent'|'release'|'consuming'|'done'|'accepted_status'|'closed'='parent';
       const requireState=(expected:typeof state)=>{check();if(state!==expected)throw new BoundedReadError('internal_review_error');state='consuming';};
       creation.capture(Object.freeze({
         parent:(ack:object)=>{
@@ -66,6 +70,16 @@ export class BoundedUpdateSetSource {
             return this.#projectReleaseRows(value.result);
           },check);
           const decision=await this.#decision;check();state='done';return decision;
+        },
+        status:(terminal:object)=>{
+          check();if(state!=='release')creation.rejectStatus?.('invalid_state');
+          requireState('release');
+          if(!takeStatus)throw new BoundedReadError('invalid_input');
+          const parsed=z.strictObject({purpose:z.literal('release'),status:z.union([z.literal(403),z.literal(404)]),cleanup:z.enum(['cancelled','no_body'])}).safeParse(takeStatus(terminal));
+          if(!parsed.success)throw new BoundedReadError('invalid_response');
+          const draft:StatusAcceptanceDraft=Object.freeze({state:'status_accepted_closed_gate',status:parsed.data.status,cleanup_kind:parsed.data.cleanup,
+            fallback:'disabled',evidence_issuance:'disabled',release_permit:'unavailable',permissions:statusPermissions});
+          check();this.releaseRead=true;state='accepted_status';return draft;
         },
         revoke:()=>{state='closed';this.parent=undefined;this.#permit=undefined;this.#releaseSnapshot=undefined;this.#releasePort=undefined;this.#decision=undefined;},
       }));

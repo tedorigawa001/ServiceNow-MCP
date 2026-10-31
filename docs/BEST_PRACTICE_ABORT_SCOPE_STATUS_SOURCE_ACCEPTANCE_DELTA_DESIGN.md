@@ -1,7 +1,7 @@
 # AU-BR-006：固定sourceのstatus private受理・実session binding・close前消費の接続差分
 
-Version: br006-status-source-acceptance-delta-draft-0.4 / Date: 2026-10-31。
-Status: **§10のSA-01を合成issuer限定で実装。実class接続のSA-02・承認後のSA-03は未実装。fallback有効化・実session採用・実接続・実通信は行わない。正式発行口閉鎖・Unknown・全体受付無効・VM／監視／telemetry調査保留を維持する。**
+Version: br006-status-source-acceptance-delta-draft-0.5 / Date: 2026-10-31。
+Status: **§10のSA-01に加え、§11のSA-02を実session／source class＋固定fake I/Oで実装。承認後のSA-03・実transport採用は未実装。fallback有効化・実接続・実通信は行わない。正式発行口閉鎖・Unknown・全体受付無効・VM／監視／telemetry調査保留を維持する。**
 
 基準：[session binding差分draft-0.5](BEST_PRACTICE_ABORT_SCOPE_STATUS_SESSION_BINDING_DELTA_DESIGN.md)、[private composition](BEST_PRACTICE_ABORT_SCOPE_PRIVATE_COMPOSITION_DESIGN.md)、[実session／typed取得差分](BEST_PRACTICE_ABORT_SCOPE_REAL_TYPED_BINDING_DELTA_DESIGN.md)、[承認判断用の比較資料](BEST_PRACTICE_ABORT_SCOPE_NON200_APPROVAL_COMPARISON.md)。以下の型名・stage・操作名は内部契約案であり、既存exportや承認済みAPIではない。
 
@@ -9,7 +9,7 @@ Status: **§10のSA-01を合成issuer限定で実装。実class接続のSA-02・
 
 [開発専用fake構成](../src/review/abort-scope-evidence-status-bound-workflow.ts)は自分でsnapshot・source identity・canonical core・binding・注入ownerを生成し、模擬dispatch→cleanup→private消費を終え、closeしてから限定履歴を返す。実`BoundedUpdateSetSource`・認証snapshot・固定URLに由来する証拠ではない。返却した`consumed`は生存中の権限ではなく、7権限はすべてfalseである。
 
-[実source](../src/review/bounded-source.ts)の既存creator継続は親／releaseのbody ackだけをprivate受理する。[session](../src/servicenow/bounded-read.ts)の固定compositionはparent／release hookの200限定guardを持つ。status終端をこの経路へ正式bindingする処理は未接続である。
+[実source](../src/review/bounded-source.ts)の固定200経路は従来どおり親／releaseのbody ackをprivate受理する。[session](../src/servicenow/bounded-read.ts)の既存compositionはparent／release hookの200限定guardを維持する。§11のSA-02は別の新規fake-only probeでstatusの非実行受理を検証するもので、実transport由来のstatus終端の正式bindingではない。
 
 本書は、固定source用受理契約と生存中の消費・終了契約を対で設計する。runtime gateの解除、公開MCP入力／JSON変更、legacyの非200挙動変更、retry、運用者設定fallbackの実行、metadata／payload／worker、final予約移譲は非対象。承認資料の推奨案を採用済みと扱わない。
 
@@ -140,7 +140,7 @@ oracleは固定sourceの受理イベント順、独立したfake dispatch件数�
 ## 9 次の実装単位・承認待ち
 
 1. **SA-01（§10に実装記録）**：固定生成元・source用受理claim・非実行draft・close前消費の内部契約を合成issuerだけで実装。fallbackやpermitは発行しない。
-2. **SA-02**：同constructorの実source class／session private継続へのbindingをfake I/Oで検証。200 guardは維持し、status用非実行分岐の検証を実通信と分ける。runtimeへのfixture採用口を作らない。
+2. **SA-02（§11に実装記録）**：同constructorの実source class／session private継続へのbindingをfake I/Oで検証。200 guardは維持し、status用非実行分岐の検証を実通信と分ける。既存sessionへのfixture採用口を作らない。
 3. **SA-03（承認後の別段階）**：D1／D2と関連A／ST-A／STC-Aの条件確定後に、同消費処理からのC方式判定を検討。承認だけで自動有効化せず、新規run限定で設計・実装・回帰確認する。
 
 唯一のconsumerのmodule配置・opaque終端の表現・body/status競合claimの既存stateへの組込みは実装前レビュー事項。現在のST-03C自動consumerをruntimeへimportしないこと、停止時の部分source状態撤去と上位診断寿命を先に確認する。
@@ -163,4 +163,24 @@ terminalは最大1個で、private WeakMapとlive slotに保持する。consumer
 
 draft-0.4のレビュー修正：ready・親受理の前提消失はpre／post guardのどちらでも`invalid_state`とし、`evidence_binding_mismatch`は参照の不一致だけに使う。pre-guard側の負の対照を追加した。
 
-[60件の合成テスト](../tests/review/source-status-acceptance.test.ts)、[compiled fixture](../tests/review/fixtures/compiled-source-status-acceptance.mjs)、[検証記録](E2E_BEST_PRACTICE_SOURCE_STATUS_ACCEPTANCE_SA01_2026-10-31.md)を参照。§8のSA-T01の実class接続、SA-T02の実認証／URL binding、SA-T03の実source受理、SA-T09の実session resource解放は未確認であり、合成成功から全受入条件達成としない。SA-02／03、fallback／permit／正式発行・全体受付は引き続き未実装／無効のままとする。
+[60件の合成テスト](../tests/review/source-status-acceptance.test.ts)、[compiled fixture](../tests/review/fixtures/compiled-source-status-acceptance.mjs)、[検証記録](E2E_BEST_PRACTICE_SOURCE_STATUS_ACCEPTANCE_SA01_2026-10-31.md)を参照。SA-01時点では§8の実class接続・実認証／URL binding・実source受理・実session resource解放は未確認であった。後続SA-02の確認範囲は§11に分け、全runtime受入条件達成とはしない。SA-03、fallback／permit／正式発行・全体受付は未実装／無効のままとする。
+
+## 11 SA-02：実classの同constructor binding・非実行private受理（fake I/O）
+
+`BoundedReadSession.probeNewStatusAcceptance`は**新規runだけ**を生成する別の固定fake-only入口である。既存session・source・fetch・consumerを引数に取らず、同snapshot／低減limits／AbortSignalとdata-onlyの`synthetic_status`だけをpinする。per-user snapshotに限定し、認証readyはfake前提で一度立てる。OAuth交換・本人性確認を実施した証拠ではない。公開MCP tool／optionsのlaneを変更せず、constructor内のfetchは固定throwとする。
+
+fake profileの項目は親のUTF-8 JSON bytes、release403／404、cleanup enum（cancelled／no_body／unconfirmed）、0〜10,000msの任意delayだけ。bytesはawait前にcopyし、accessor／proxy／余剰項目を拒否する。これは合成I/Oの台本であり、callerがnative cleanup診断を正式証拠として提出する口ではない。従来の`synthetic_io` schemaと200限定hookは変更しない。
+
+同`#openComposition`を再利用して、実sourceをcreator keyで一度結合し、同`#budget`のaccountingを取得する。ready世代1・親5列のprivate受理後、同scopeのstatus issuerがopaque受領物を1個だけ生成する。private記録は実source／snapshot／登録lease／core／attempt／元windowを保持し、take時にkeyの生存とstatus binding・ready世代を再照合する。live slotをlookup時に先に除去し、受領物を再発行しない。SA-01合成issuer／fixture台帳はruntimeへimportしない。
+
+実sourceの`CompositionSourceConstruction`へoptionalな`takeStatus`／固定拒否継続を追加し、captured consumerの`status`だけが使う。親→release→consuming→accepted_statusの状態はbody releaseと共有する。二重呼出しは内部`invalid_state`、未知／copy／外国受領物は内部`evidence_binding_mismatch`としてownerへ同期伝播し、公開codeは既存`internal_review_error`へ写像する。first reasonはclose後も保持する。
+
+source consumerは受領物を一度takeしてrelease用途・403／404・cleanup kindをstrict検査し、7権限falseのdraftを構築した後にpost-guardを行う。source post-guardとprivate summary構築後にも元attempt floorを再検査する。private処理から戻るawait境界の後、外側closeの前にもsession停止／期限を再検査し、受理中／直後の取消では結果を公開せず撤去する。`#observeRelease`／`#completeRelease`を呼ばず、`#permit`／release snapshotを発行しない。body ackやraw例外・空観測への変換も行わない。
+
+返却はfake_io付きの`status_accepted_closed_gate`履歴、消費1件、close前受理、C/G/P、限定status／cleanup kindだけ。consumer revoke・accounting release・session closeを終えてから返し、fallback／formal issuanceはdisabled、permitはunavailable。秘密・親本文・credential・source／session／terminal参照を返さない。
+
+親I/OはC=1と同bytesのG、status模擬観測はC=1／readなしG=0。全体60秒・最大210試行・4MiB／16MiBと予約4枠を維持し、phase／attempt floorの等号、hard deadline、取消で停止する。終了時は受領物とsource一時状態を同期失効し、fake delayのtimer／listenerとsession admissionを一度解放する。
+
+[専用合成テスト](../tests/review/source-status-binding.test.ts)、[テスト専用境界](../tests/review/source-status-binding-boundary.test.ts)、[compiled fixture](../tests/review/fixtures/compiled-source-status-binding.mjs)、[検証記録](E2E_BEST_PRACTICE_SOURCE_STATUS_BINDING_SA02_2026-10-31.md)を参照。境界置換はtests内だけに置き、製品へsetter／registryを追加しない。
+
+この段階はreal class＋fake I/Oであり、実URL／認証とResponseの由来、native readerのcleanup確認からこの受領物への接続、HTTP／cleanup上位診断の完全な配送を証明しない。SA-T01〜10の全runtime条件を達成したとはしない。SA-03のC方式判定・fallback、実transport、metadata／payload／worker、final移譲、正式発行・全体受付は未実装／無効のままである。

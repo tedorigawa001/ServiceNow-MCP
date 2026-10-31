@@ -32,6 +32,8 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 ### Added
 
+- SA-02 adds a fresh fake-I/O-only probe connecting the actual bounded session and source creator continuation to one-shot, closed-gate status acceptance before close. Parent bytes use the same canonical C/G budget; private status receipts bind the pinned snapshot, registered lease/core, concrete source, ready generation and attempt. Copy/foreign/replayed receipts, unconfirmed cleanup, cancellation and expired windows fail closed with first diagnostics retained. Only a frozen fake-marked summary with all seven permissions false is returned. Existing fixed-200 composition/MCP workflows, fallback, permits, whole-run admission and real communication remain unchanged/disabled. Includes synthetic boundary tests and compiled/offline checks.
+
 - Fixes SA-01 so a lost ready/parent prerequisite is reported as `invalid_state` at both the pre- and post-guard; `evidence_binding_mismatch` is reserved for reference drift.
 
 - SA-01 adds a package-excluded synthetic source-status acceptance contract with a creator-owned issuer, a shared one-shot body/status release claim, non-executable drafts and acceptance before close. Fixed case-name fixtures verify identity mixing, foreign-token claim spending, pre/post cancellation/expiry/reentry, body/status conflicts and immutable history without exporting any token or consumer. All seven permissions remain false; no native/session/source adoption, fallback, permit, whole-run admission or real communication is enabled. Includes RED/GREEN synthetic tests and compiled/offline packaging checks.
