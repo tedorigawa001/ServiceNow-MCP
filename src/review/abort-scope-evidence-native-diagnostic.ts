@@ -1,17 +1,26 @@
 /** ND-01: pure, package-excluded diagnostic model. No runtime registration or native operations. */
 import { types } from 'node:util';
+import { ReadableStream as Stream, ReadableStreamDefaultReader as Reader } from 'node:stream/web';
 
 type Purpose = 'authentication' | 'parent' | 'release';
 type Stage = 'binding' | 'header' | 'cleanup' | 'acceptance' | 'stop' | 'teardown' | 'seal';
 type Code = 'invalid_state' | 'evidence_binding_mismatch' | 'authentication_failed' | 'access_denied' |
-    'not_found_or_not_visible' | 'internal_review_error' | 'cancelled' | 'deadline_exceeded' | 'upstream_unavailable' | 'invalid_response';
+    'not_found_or_not_visible' | 'internal_review_error' | 'cancelled' | 'deadline_exceeded' | 'upstream_unavailable' | 'invalid_response' |
+    'closed' | 'invalid_input' | 'invalid_observation_time';
+type NativeReason = 'reader_owner_unknown' | 'cancel_pending' | 'cancel_rejected' | 'closed_pending' | 'closed_rejected' |
+    'lock_release_failed' | 'cleanup_deadline' | 'observation_invalid';
+type NativeFacts = Readonly<{ reader_owned: boolean; closed_captured: boolean; read_started: false; read_pending: false;
+    cancel: 'not_requested' | 'pending' | 'fulfilled' | 'rejected' | 'not_applicable';
+    closed: 'pending' | 'fulfilled' | 'rejected' | 'not_applicable'; release: 'not_started' | 'succeeded' | 'failed' | 'not_applicable' }>;
+type NativeCleanup = Readonly<{ disposition: 'confirmed' | 'unconfirmed'; kind: 'cancelled' | 'no_body' | null;
+    reason: NativeReason | null; wait_issue: NativeReason | null; facts: NativeFacts }>;
 type Reason = Readonly<{ code: Code; stage: Stage }>;
 type Binding = Readonly<{ run: object; session: object; snapshot: object; lease: object; core: object;
     source: object; constructor: object; transport: object }>;
 type Attempt = Readonly<{ binding: Binding; purpose: Purpose; ordinal: number; window: object }>;
 type Http = Readonly<{ status: number; body_present: boolean; classification: 'hard' | 'local' | 'recovery_candidate' | 'other' }>;
 type Cleanup = Readonly<{ phase: 'not_started' | 'pending' | 'confirmed' | 'unconfirmed' | 'not_applicable';
-    kind: 'cancelled' | 'no_body' | null; reason: 'cancel_rejected' | 'window_ended' | null }>;
+    kind: 'cancelled' | 'no_body' | null; reason: NativeReason | 'window_ended' | null; native?: NativeCleanup }>;
 type Acceptance = { phase: 'not_started' | 'consuming' | 'accepted' | 'rejected' | 'revoked';
     first_terminal: 'accepted' | 'rejected' | 'revoked' | null; consumes: 0 | 1 };
 type Slot = { http: Http | null; cleanup: Cleanup; acceptance: Acceptance; later_attempts: number; later_reason: Code | null };
@@ -94,7 +103,7 @@ function construct(expected: Binding) {
             return 'recorded';
         }
         function cleanup(a: Attempt, phase: 'pending' | 'confirmed' | 'unconfirmed', kind: Cleanup['kind'] = null,
-            reason: Cleanup['reason'] = null) {
+            reason: Cleanup['reason'] = null, native?: NativeCleanup) {
             if (sealed) return 'late_ignored';
             if (!valid(a, purpose, 'cleanup')) return 'rejected';
             const s = slots[purpose], current = attempts[purpose];
@@ -102,7 +111,7 @@ function construct(expected: Binding) {
                 phase === 'pending' && (kind !== null || reason !== null) ||
                 phase === 'confirmed' && (kind !== (current.body ? 'cancelled' : 'no_body') || reason !== null) ||
                 phase === 'unconfirmed' && (kind !== null || reason === null)) return reject('invalid_state', 'cleanup');
-            current.cleanup = Object.freeze({ phase, kind, reason });
+            current.cleanup = Object.freeze({ phase, kind, reason, ...(native ? { native } : {}) });
             if (a.ordinal === 1) s.cleanup = current.cleanup;
             if (phase === 'unconfirmed') {
                 if (a.ordinal !== 1) s.later_reason ??= 'internal_review_error';
@@ -162,7 +171,252 @@ function construct(expected: Binding) {
         if (teardown === 'releasing') { teardown = 'unconfirmed'; stop('internal_review_error', 'teardown'); }
         revoke(); sealed = true; sealedCopy = snapshot(); return 'sealed';
     }
-    return { bind, stop, open, writers, release, seal, snapshot: () => sealedCopy ?? snapshot() };
+    return { bind, stop, reject, open, writers, release, seal, snapshot: () => sealedCopy ?? snapshot() };
+}
+
+type NativeInput = { fake_io: true; deadline_ms: number; budget: { read(): { remaining_ms: number } };
+    schedule(delay: number, wake: () => void): () => void };
+type NativeWindow = Readonly<{ purpose: 'release'; ordinal: 1; window_origin_ms: number; cleanup_floor_ms: number }>;
+declare const terminalBrand: unique symbol;
+const P = Promise, promiseThen = P.prototype.then, promiseRace = P.race, promiseAll = P.all, enqueue = queueMicrotask;
+const pinned = (() => {
+    const rp = Response.prototype, sp = Stream.prototype, dp = Reader.prototype;
+    const getter = (p: object, key: string) => Object.getOwnPropertyDescriptor(p, key)!.get!;
+    return Object.freeze({ rp, sp, dp, status: getter(rp, 'status'), body: getter(rp, 'body'), used: getter(rp, 'bodyUsed'),
+        locked: getter(sp, 'locked'), reader: sp.getReader, closed: getter(dp, 'closed'), cancel: dp.cancel, release: dp.releaseLock });
+})();
+const injectedResponses = new WeakSet<object>(), injectedStreams = new WeakSet<object>();
+function data(raw: unknown, keys: readonly string[]): Record<string, unknown> | null {
+    if (!raw || typeof raw !== 'object' || types.isProxy(raw) || ![Object.prototype, null].includes(Object.getPrototypeOf(raw))) return null;
+    const actual = Reflect.ownKeys(raw);
+    if (actual.length !== keys.length || actual.some(k => typeof k !== 'string' || !keys.includes(k))) return null;
+    const out = Object.create(null);
+    for (const key of keys) { const d = Object.getOwnPropertyDescriptor(raw, key)!; if (!('value' in d)) return null; out[key] = d.value; }
+    return out;
+}
+
+type NativeFault = 'copy_terminal' | 'foreign_terminal' | 'copy_cleanup' | 'foreign_anchor' | 'consume_twice';
+/** Private faults are reachable only from fixed-case fixtures, never the injected constructor input. */
+function constructInjectedNativeDiagnosticWorkflow(raw: NativeInput, fault?: NativeFault) {
+    // Bind the upper owner before inspecting injected dependencies or observing Response/clock/native state.
+    const binding = makeBinding(), upper = construct(binding); upper.bind(binding);
+    const writer = upper.writers('release');
+    const d = data(raw, ['fake_io', 'deadline_ms', 'budget', 'schedule']), b = data(d?.budget, ['read']);
+    const deadline = d?.deadline_ms;
+    const validInput = !!d && !!b && d.fake_io === true && Number.isInteger(deadline) && Number(deadline) > 0 && Number(deadline) <= 60000 &&
+        typeof d.schedule === 'function' && !types.isProxy(d.schedule) && typeof b.read === 'function' && !types.isProxy(b.read);
+    const readBudget = b?.read, schedule = d?.schedule;
+    const operations = { get_reader: 0, closed: 0, cancel: 0, release_lock: 0, read: 0 };
+    const counts = { issued: 0, consume_attempts: 0, consumed: 0 };
+    type Anchor = Readonly<{ binding: Binding; attempt: Attempt; window: NativeWindow; response: object; header: Http }>;
+    type Record = { anchor: Anchor; stream: object | null; reader?: object; readerIdentity?: object; captured: boolean; owned: boolean;
+        cancel: NativeFacts['cancel']; closed: NativeFacts['closed']; release: NativeFacts['release']; closedWork?: Promise<void>;
+        cleanup?: NativeCleanup; cleanupWork?: Promise<void> };
+    type Terminal = { readonly [terminalBrand]: 'native_status_terminal' };
+    type Held = Readonly<{ anchor: Anchor; record: Record; cleanup: NativeCleanup; reader: object | undefined }>;
+    const terminals = new WeakMap<object, Held>();
+    let phase: 'prepared' | 'acquiring' | 'cleanup' | 'issue' | 'pre_guard' | 'post_guard' | 'consumed' | 'closed' = 'prepared';
+    let primary: Code | null = null, revoked = false, started = false, sealed = false, sampling = false;
+    let issueClaim = false, consumeClaim = false, live: Terminal | undefined, current: Record | undefined;
+    let foreignUnchanged = true;
+    let last: number | undefined, runWork: Promise<ReturnType<typeof snapshot>> | undefined;
+    let stopWake!: () => void;
+    const stopping = new P<void>(resolve => { stopWake = resolve; });
+    function stop(code: Code = 'cancelled', stage: Stage = 'stop') {
+        if (sealed) return;
+        primary ??= code; upper.stop(primary, stage);
+        revoked = true; if (live) terminals.delete(live); live = undefined;
+        if (code === 'cancelled' || code === 'closed') stopWake();
+    }
+    function fail(code: Code, stage: Stage) { upper.reject(code, stage); stop(code, stage); }
+    if (!validInput) fail('invalid_input', 'binding');
+    function sample(floor: number): NativeReason | null {
+        if (sampling) { fail('invalid_state', 'stop'); return 'observation_invalid'; }
+        sampling = true;
+        try {
+            const observation = Reflect.apply(readBudget as () => unknown, d!.budget, []) as { remaining_ms: unknown };
+            // A malformed synchronous boundary may return a native rejected Promise: observe it without accepting its value.
+            if (types.isPromise(observation)) { void observe(observation, () => {}); stop('invalid_observation_time'); return 'observation_invalid'; }
+            const value = data(observation, ['remaining_ms'])?.remaining_ms;
+            if (typeof value !== 'number' || !Number.isFinite(value) || value < 0 || value > Number(deadline) || last !== undefined && value > last) {
+                stop('invalid_observation_time'); return 'observation_invalid';
+            }
+            last = value;
+            if (value <= floor) { stop('deadline_exceeded'); return 'cleanup_deadline'; }
+            return null;
+        } catch { stop('internal_review_error'); return 'observation_invalid'; }
+        finally { sampling = false; }
+    }
+    function observe(work: unknown, settled: (yes: boolean) => void): Promise<void> {
+        if (types.isProxy(work) || !types.isPromise(work) || Object.getPrototypeOf(work) !== P.prototype || Object.hasOwn(work, 'constructor') ||
+            Object.getOwnPropertyDescriptor(P.prototype, 'constructor')?.value !== P) throw Error('invalid_promise');
+        return new P(resolve => { Reflect.apply(promiseThen, work, [() => { settled(true); resolve(); }, () => { settled(false); resolve(); }]); });
+    }
+    async function wait(work: Promise<unknown>, floor: number): Promise<NativeReason | null> {
+        const start = sample(floor); if (start) return start;
+        let dispose: unknown, issue: NativeReason | null = null;
+        try {
+            const boundary = new P<NativeReason>(resolve => {
+                try { dispose = Reflect.apply(schedule as NativeInput['schedule'], undefined, [last! - floor, () => resolve('cleanup_deadline')]); }
+                catch { resolve('observation_invalid'); }
+            });
+            if (types.isPromise(dispose)) { void observe(dispose, () => {}); throw Error('invalid_dispose'); }
+            if (typeof dispose !== 'function' || types.isProxy(dispose)) throw Error('invalid_dispose');
+            issue = await Reflect.apply(promiseRace, P, [[
+                new P<null>(resolve => { Reflect.apply(promiseThen, work, [() => resolve(null)]); }), boundary,
+                new P<NativeReason>(resolve => { Reflect.apply(promiseThen, stopping, [() => resolve('observation_invalid')]); })]]) as NativeReason | null;
+        } catch { issue = 'observation_invalid'; }
+        finally { try { if (typeof dispose === 'function') Reflect.apply(dispose, undefined, []); } catch { issue ??= 'observation_invalid'; } }
+        return issue ?? sample(floor);
+    }
+    function clean(r: Record): Promise<void> {
+        if (r.cleanupWork) return r.cleanupWork;
+        // Join is installed before any injected budget, scheduler or native operation can reenter.
+        r.cleanupWork = new P<void>(resolve => { enqueue(() => { const work = (async () => {
+            phase = 'cleanup'; writer.cleanup(r.anchor.attempt, 'pending');
+            let issue = sample(r.anchor.window.cleanup_floor_ms);
+            let cancelling = new P<void>(resolve => resolve());
+            if (r.reader && r.cancel === 'not_requested') {
+                r.cancel = 'pending'; operations.cancel++;
+                try { cancelling = observe(Reflect.apply(pinned.cancel, r.reader, []), yes => { r.cancel = yes ? 'fulfilled' : 'rejected'; }); }
+                catch { r.cancel = 'rejected'; }
+            }
+            if (r.reader && !issue) issue = await wait(Reflect.apply(promiseAll, P, [[r.closedWork ?? new P<void>(resolve => resolve()), cancelling]]), r.anchor.window.cleanup_floor_ms);
+            const before = { reader_owned: r.owned, closed_captured: r.captured, read_started: false as const, read_pending: false as const,
+                cancel: r.cancel, closed: r.closed };
+            if (r.reader && r.release === 'not_started') {
+                operations.release_lock++; r.release = 'failed';
+                try { Reflect.apply(pinned.release, r.reader, []); r.release = 'succeeded'; } catch { /* no exception text */ }
+                r.reader = undefined;
+            }
+            issue ??= sample(r.anchor.window.cleanup_floor_ms);
+            const reason: NativeReason | null = !r.stream ? issue : !before.reader_owned || !before.closed_captured ? 'reader_owner_unknown' :
+                before.cancel === 'pending' || before.cancel === 'not_requested' ? 'cancel_pending' : before.cancel === 'rejected' ? 'cancel_rejected' :
+                before.closed !== 'fulfilled' ? before.closed === 'rejected' ? 'closed_rejected' : 'closed_pending' :
+                r.release !== 'succeeded' ? 'lock_release_failed' : issue;
+            r.cleanup = Object.freeze({ disposition: reason ? 'unconfirmed' : 'confirmed', kind: reason ? null : r.stream ? 'cancelled' : 'no_body',
+                reason, wait_issue: issue, facts: Object.freeze({ ...before, release: r.release }) });
+            writer.cleanup(r.anchor.attempt, reason ? 'unconfirmed' : 'confirmed', r.cleanup.kind, reason, r.cleanup);
+            if (reason) stop('internal_review_error', 'cleanup');
+        })(); Reflect.apply(promiseThen, work, [resolve, () => { fail('internal_review_error', 'cleanup'); resolve(); }]); }); });
+        return r.cleanupWork;
+    }
+    function eligible(r: Record): boolean {
+        const c = r.cleanup, f = c?.facts;
+        if (!c || !f || c.disposition !== 'confirmed' || c.reason || c.wait_issue || operations.read !== 0 || r.reader ||
+            ![403, 404].includes(r.anchor.header.status) || r.anchor.binding !== binding) return false;
+        return r.stream ? c.kind === 'cancelled' && f.reader_owned && f.closed_captured && f.cancel === 'fulfilled' && f.closed === 'fulfilled' &&
+            f.release === 'succeeded' && operations.get_reader === 1 && operations.closed === 1 && operations.cancel === 1 && operations.release_lock === 1 :
+            c.kind === 'no_body' && f.cancel === 'not_applicable' && f.closed === 'not_applicable' && f.release === 'not_applicable' && Object.values(operations).every(n => n === 0);
+    }
+    function guard(r: Record): boolean {
+        return !revoked && !primary && current === r && r.anchor.binding === binding && eligible(r);
+    }
+    function consume(r: Record, token: Terminal) {
+        if (consumeClaim) { fail('invalid_state', 'acceptance'); return; }
+        consumeClaim = true; const own = live; live = undefined; counts.consume_attempts++;
+        const held = own ? terminals.get(own) : undefined;
+        if (own) terminals.delete(own); // Spend only this issuer's slot; never look up or consume a foreign map.
+        if (!held || own !== token || held.anchor !== r.anchor || held.record !== r || held.cleanup !== r.cleanup || held.reader !== r.readerIdentity) {
+            fail('evidence_binding_mismatch', 'acceptance'); return;
+        }
+        phase = 'pre_guard';
+        if (!guard(r) || sample(r.anchor.window.cleanup_floor_ms) || !guard(r) || writer.acceptance(r.anchor.attempt, 'consuming') !== 'recorded') return;
+        phase = 'post_guard';
+        if (sample(r.anchor.window.cleanup_floor_ms) || !guard(r) || writer.acceptance(r.anchor.attempt, 'accepted') !== 'recorded') return;
+        counts.consumed++; phase = 'consumed';
+    }
+    function issue(r: Record) {
+        if (issueClaim || !guard(r)) return;
+        issueClaim = true; phase = 'issue';
+        if (sample(r.anchor.window.cleanup_floor_ms) || !guard(r)) return;
+        const token = Object.freeze(Object.create(null)) as Terminal;
+        live = token; terminals.set(token, Object.freeze({ anchor: fault === 'foreign_anchor' ? Object.freeze({ ...r.anchor, binding: makeBinding() }) : r.anchor,
+            record: r, cleanup: fault === 'copy_cleanup' ? Object.freeze({ ...r.cleanup! }) : r.cleanup!, reader: r.readerIdentity })); counts.issued++;
+        // Negative controls never publish a handle or allow caller-chosen corruption of a real workflow.
+        if (fault === 'foreign_terminal') {
+            const foreign = new WeakMap<object, boolean>(), foreignToken = Object.freeze(Object.create(null)) as Terminal;
+            foreign.set(foreignToken, true); consume(r, foreignToken); foreignUnchanged = foreign.has(foreignToken);
+        } else consume(r, fault === 'copy_terminal' ? Object.freeze({ ...token }) as Terminal : token);
+        if (fault === 'consume_twice') consume(r, token);
+    }
+    function snapshot() {
+        return Object.freeze({ kind: 'injected_native_diagnostic_workflow' as const, scope: 'injected_only' as const, phase,
+            upper: upper.snapshot(), operations: Object.freeze({ ...operations }), counts: Object.freeze({ ...counts }), token_held: !!live,
+            request_rejected: null as 'invalid_state' | null, foreign_unchanged: foreignUnchanged, permissions });
+    }
+    function execute(response: unknown, descriptor: unknown) {
+        if (started || sealed) {
+            if (!sealed) fail('invalid_state', 'acceptance');
+            return new P<ReturnType<typeof snapshot>>(resolve => {
+                const rejected = (r: ReturnType<typeof snapshot>) => resolve(Object.freeze({ ...r, request_rejected: 'invalid_state' }));
+                if (runWork) Reflect.apply(promiseThen, runWork, [rejected]); else rejected(snapshot());
+            });
+        }
+        started = true;
+        runWork = new P<ReturnType<typeof snapshot>>(resolve => { enqueue(() => { const work = (async () => {
+            try {
+                if (revoked || !validInput) return;
+                const w = data(descriptor, ['purpose', 'ordinal', 'window_origin_ms', 'cleanup_floor_ms']);
+                if (!w || w.purpose !== 'release' || w.ordinal !== 1 || !Number.isFinite(w.window_origin_ms) || !Number.isFinite(w.cleanup_floor_ms) ||
+                    Number(w.window_origin_ms) > Number(deadline) || Number(w.cleanup_floor_ms) < Math.min(10000, Number(deadline) / 6) ||
+                    Number(w.window_origin_ms) - Number(w.cleanup_floor_ms) <= 0 || Number(w.window_origin_ms) - Number(w.cleanup_floor_ms) > 10000) {
+                    fail('invalid_input', 'binding'); return;
+                }
+                const window = Object.freeze({ ...w }) as NativeWindow;
+                const attempt = upper.open('release')!;
+                phase = 'acquiring'; if (sample(window.cleanup_floor_ms) || revoked) return;
+                if (last! > window.window_origin_ms || !response || typeof response !== 'object' || types.isProxy(response) ||
+                    Object.getPrototypeOf(response) !== pinned.rp || injectedResponses.has(response)) { fail('invalid_response', 'header'); return; }
+                const status = Reflect.apply(pinned.status, response, []) as number;
+                const stream = Reflect.apply(pinned.body, response, []) as object | null;
+                if (Reflect.apply(pinned.used, response, []) || !Number.isInteger(status) || status < 100 || status > 599) { fail('invalid_response', 'header'); return; }
+                injectedResponses.add(response);
+                const header: Http = Object.freeze({ status, body_present: stream !== null, classification: 'other' });
+                writer.header(attempt, status, stream !== null);
+                const anchor: Anchor = Object.freeze({ binding, attempt, window, response, header });
+                const r: Record = { anchor, stream, owned: false, captured: false, cancel: stream ? 'not_requested' : 'not_applicable',
+                    closed: stream ? 'pending' : 'not_applicable', release: stream ? 'not_started' : 'not_applicable' };
+                current = r;
+                if (status === 401) stop('authentication_failed', 'header');
+                if (stream !== null) {
+                    if (types.isProxy(stream) || Object.getPrototypeOf(stream) !== pinned.sp || injectedStreams.has(stream) || Reflect.apply(pinned.locked, stream, [])) {
+                        fail('invalid_response', 'header'); return;
+                    }
+                    injectedStreams.add(stream); operations.get_reader++;
+                    r.reader = Reflect.apply(pinned.reader, stream, []) as object; r.readerIdentity = r.reader;
+                    if (types.isProxy(r.reader) || Object.getPrototypeOf(r.reader) !== pinned.dp) { fail('invalid_response', 'header'); return; }
+                    r.owned = true; operations.closed++;
+                    r.closedWork = observe(Reflect.apply(pinned.closed, r.reader, []), yes => { r.closed = yes ? 'fulfilled' : 'rejected'; }); r.captured = true;
+                }
+                if (![401, 403, 404].includes(status)) fail('invalid_response', 'header');
+                await clean(r); issue(r);
+            } catch { fail('invalid_response', 'header'); }
+            finally {
+                if (current) await clean(current);
+                upper.release('releasing'); revoked = true; if (live) terminals.delete(live); live = undefined;
+                upper.release(current && current.cleanup?.disposition !== 'confirmed' ? 'unconfirmed' : 'confirmed');
+                upper.seal(); sealed = true; phase = 'closed';
+            }
+        })(); Reflect.apply(promiseThen, work, [() => resolve(snapshot()), () => { stop('internal_review_error'); upper.seal(); sealed = true; phase = 'closed'; resolve(snapshot()); }]); }); });
+        return runWork;
+    }
+    async function close() { if (!sealed) stop('closed'); if (runWork) return runWork; upper.seal(); sealed = true; phase = 'closed'; return snapshot(); }
+    return Object.freeze({ execute, stop: () => stop(), close, diagnostics: snapshot });
+}
+
+/** ND-02 injection-only entry: strict fake dependencies, no caller-controlled evidence or consumer. */
+export function createInjectedNativeDiagnosticWorkflow(raw: NativeInput) { return constructInjectedNativeDiagnosticWorkflow(raw); }
+
+/** Private-provenance negative controls return only sealed diagnostics, never a terminal or mutable port. */
+export async function runNativeDiagnosticFaultFixture(raw: unknown) {
+    const d = data(raw, ['scenario']), cases: readonly NativeFault[] = ['copy_terminal', 'foreign_terminal', 'copy_cleanup', 'foreign_anchor', 'consume_twice'];
+    if (!d || !cases.includes(d.scenario as NativeFault)) return Object.freeze({ ok: false as const, code: 'invalid_input' as const, permissions });
+    const owner = constructInjectedNativeDiagnosticWorkflow({ fake_io: true, deadline_ms: 60000, budget: { read: () => ({ remaining_ms: 60000 }) },
+        schedule: () => () => {} }, d.scenario as NativeFault);
+    const diagnostic = await owner.execute(new Response(null, { status: 403 }),
+        { purpose: 'release', ordinal: 1, window_origin_ms: 60000, cleanup_floor_ms: 50000 });
+    return Object.freeze({ ok: true as const, diagnostic, permissions });
 }
 
 /** Data-only fixtures cannot supply identities, writers, observations, callbacks or existing sessions. */

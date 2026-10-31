@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import * as module from '../../../dist/review/abort-scope-evidence-native-diagnostic.js';
-assert.deepEqual(Object.keys(module), ['runSyntheticNativeDiagnosticFixture']);
+assert.deepEqual(Object.keys(module), ['createInjectedNativeDiagnosticWorkflow', 'runNativeDiagnosticFaultFixture', 'runSyntheticNativeDiagnosticFixture']);
 const run = module.runSyntheticNativeDiagnosticFixture;
 for (const scenario of ['unobserved', 'release_403', 'no_body', 'hard_cleanup', 'pending_late_success', 'sealed_writes', 'later_attempts', 'foreign_attempt']) {
     const r = run({ scenario });

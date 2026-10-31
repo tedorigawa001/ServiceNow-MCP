@@ -1,7 +1,7 @@
 # AU-BR-006：native status証拠の発行元・上位診断ownerの対設計
 
-Version: br006-native-status-diagnostic-draft-0.4 / Date: 2026-10-31。
-Status: **ND-01の診断ownerを純粋fakeだけで実装。native証拠・実sessionへの採用は未接続。fallback有効化・実接続・実通信は行わない。正式発行口閉鎖・Unknown・全体受付無効・VM／監視／telemetry調査保留を維持する。**
+Version: br006-native-status-diagnostic-draft-0.5 / Date: 2026-10-31。
+Status: **ND-01の純粋fake診断ownerとND-02の注入Response／Streamsだけのnative発行・唯一consumerを実装。実session／sourceへの採用は未接続。fallback有効化・実接続・実通信は行わない。正式発行口閉鎖・Unknown・全体受付無効・VM／監視／telemetry調査保留を維持する。**
 
 基準：[SA-02と後続差分](BEST_PRACTICE_ABORT_SCOPE_STATUS_SOURCE_ACCEPTANCE_DELTA_DESIGN.md)、[ST-03の注入owner](BEST_PRACTICE_ABORT_SCOPE_STATUS_TERMINAL_CONNECTION_DESIGN.md)、[単一予算・停止owner](BEST_PRACTICE_ABORT_SCOPE_STATUS_SESSION_BINDING_DELTA_DESIGN.md)、[非200の承認比較](BEST_PRACTICE_ABORT_SCOPE_NON200_APPROVAL_COMPARISON.md)。型名・stage・操作名は内部契約案で、実装済みAPIや公開JSON enumではない。
 
@@ -154,7 +154,7 @@ SA-03へ進む前には[比較資料](BEST_PRACTICE_ABORT_SCOPE_NON200_APPROVAL_
 
 ## 11 ND-01：純粋fakeの診断owner
 
-[内部model](../src/review/abort-scope-evidence-native-diagnostic.ts)はpackage除外済みの`abort-scope-evidence*`配下に配置した。唯一のexportは固定case名のdata-only fixtureであり、owner／writer／binding／attemptを取得・登録・供給する口はない。実sessionのclaim台帳は共有しない。
+[内部model](../src/review/abort-scope-evidence-native-diagnostic.ts)はpackage除外済みの`abort-scope-evidence*`配下に配置した。ND-01のexportは固定case名のdata-only fixtureであり、owner／writer／binding／attemptを取得・登録・供給する口はない。実sessionのclaim台帳は共有しない。ND-02で追加した注入専用factory／固定fault fixtureは次節を参照。
 
 - constructorで固定3slotを確保し、clock／callback／I/Oは一切呼ばない。bindingは同creatorのimmutable binding objectへの参照一致で一度だけ行い、失敗後の再bindingを拒否する。既存実sessionやReleasePermitの証明ではない。
 - purpose別header／cleanup／acceptance writerとrun停止／teardown writerはprivate closure。ordinal1のHTTP／cleanup／受理履歴を保持し、後続attemptは件数と最初の失敗理由だけを更新する。固定3個のcurrent参照・観測bit・body有無・cleanup進行状態で重複を拒否し、可変長履歴を持たない。現在attemptのcleanup確認前に次attemptへ進めず、後続cleanupの失敗／pending終端も停止・最初の理由へ反映する。順序付きordinalは最大210の防御上限であり、retry承認・C計上ではない。
@@ -166,4 +166,19 @@ SA-03へ進む前には[比較資料](BEST_PRACTICE_ABORT_SCOPE_NON200_APPROVAL_
 
 draft-0.4のレビュー修正：後続attemptの最初の理由を既存contractと同じ分類にした（429／5xxは`upstream_unavailable`、その他の200以外は`invalid_response`）。また、dispatch／fetch失敗でheaderなしに終わったattemptを`not_applicable`のcleanupとして終了でき、次のordinalを開始できるようにした。ordinal1ではHTTP slotをnullのまま残し、後続では件数と`upstream_unavailable`を記録する。同attemptへの後着headerは拒否する。
 
-[合成テスト](../tests/review/native-status-diagnostic.test.ts)、[compiled fixture](../tests/review/fixtures/compiled-native-status-diagnostic.mjs)、[検証記録](E2E_BEST_PRACTICE_NATIVE_DIAGNOSTIC_ND01_2026-10-31.md)を参照。ND-02のnative issuer接続とND-03の実class連続fakeは未実装。
+[合成テスト](../tests/review/native-status-diagnostic.test.ts)、[compiled fixture](../tests/review/fixtures/compiled-native-status-diagnostic.mjs)、[検証記録](E2E_BEST_PRACTICE_NATIVE_DIAGNOSTIC_ND01_2026-10-31.md)を参照。ND-01単独の記録であり、後続の接続は次節に分離する。
+
+## 12 ND-02：注入native issuer・唯一consumer・上位診断への連続接続
+
+同じ開発専用moduleの`createInjectedNativeDiagnosticWorkflow`が、新規fake bindingとND-01 ownerを先に生成・結合する。その後にdata-property限定の入力をpinし、注入Responseを一度だけ取得する。用途はrelease／ordinal1に限定する。認証／親のslotは未観測であり、認証済み／親受理済みや実URL・実ReleasePermitの証明ではない。
+
+- private anchorは同生成元のbinding／attempt／元window／Response／headerに結合する。同readerのgetReader・closed捕捉・cancel・releaseLockは各最大1回、readは0。native body getterのnullだけをno_bodyとし、EOFに変換しない。
+- cleanup joinをclock／native callbackより先に確保し、固定Promise／native操作と同budgetの単調な残時間を使う。元floorの等号で停止する。release前のcancel／closed事実をfreezeし、release後の効果から成功を作らない。全体60秒を超える入力や元windowを広げるdescriptorは拒否する。
+- 同private recordのconfirmed cleanup・headerだけからopaque typed terminalを最大1個発行する。固定consumerは自分のclaimとlive tokenをlookup前に消費し、同anchor／record／cleanup／reader identityを照合する。pre／post guardと元floorを通った場合だけ、診断modelの非実行acceptanceを確定する。source consumerやC方式判定は呼ばない。
+- HTTP／cleanupの型付き事実・操作数・first primary／refusal・受理履歴は別々に残す。停止時は先行理由を記録して同期失効し、pending cleanupへ合流する。未確認cleanupのまま実行が終わる場合はteardownもunconfirmedとしてsealし、遅延settleによる昇格を禁止する。
+- 正常終了もterminal authorityを失効して診断をsealする。再executeは固定request_rejected=invalid_stateを返すが、既存のseal済み診断を変更しない。全7permissionはfalseであり、消費成功はsource採用／fallback許可ではない。
+- 返却診断やST-03Cのconsumptionを入力として採用する口はない。注入factoryはfault／session／consumer等の余剰指定を拒否する。private provenanceの負の対照は、別exportの固定case名fixtureだけから実施し、token／writer／任意callbackを外へ返さない。外国tokenの台帳は共有・変更しない。
+
+ND-01の純粋fixtureとND-02の注入factory／負の対照だけがexportされ、module全体は引き続き非同梱。実session／source private継続・canonical C/G/P/R・実dispatcher／認証／URLとのbinding、close前の実source受理はND-03以降であり未接続。ND-01のordinal2診断は維持するが、このnative laneはretryを行わない。
+
+[ND-02試験](../tests/review/native-diagnostic-workflow.test.ts)、[compiled fixture](../tests/review/fixtures/compiled-native-diagnostic-workflow.mjs)、[検証記録](E2E_BEST_PRACTICE_NATIVE_DIAGNOSTIC_ND02_2026-10-31.md)を参照。正式発行口閉鎖・Unknown・全体受付無効・調査保留・既存200guardを維持する。

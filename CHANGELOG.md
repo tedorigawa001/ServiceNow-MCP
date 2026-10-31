@@ -32,6 +32,8 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 ### Added
 
+- ND-02 connects the package-excluded diagnostic owner, bound before observation, to a creator-private native status anchor/cleanup terminal and a sole one-shot consumer using injected Response/Streams only. Same-reader cancel/closed/release facts are frozen before release effects can rewrite them; cleanup, first-stop and acceptance diagnostics survive closure. Includes original-window guards, pending/late cleanup, native failures, replay/reentry, provenance negative controls and compiled/offline packaging tests. No diagnostic-to-evidence adoption, real session/source integration, transport, fallback, formal issuance or whole-run admission is enabled.
+
 - Fixes ND-01 later-attempt reasons to match the bootstrap contract (`upstream_unavailable` for 429/5xx, `invalid_response` otherwise) and lets an attempt that ended without a response be retried, keeping the ordinal-1 HTTP slot null.
 
 - ND-01 adds a package-excluded, pure-fake upper diagnostic owner with fixed authentication/parent/release slots, creator-only writers, one-shot identity binding and seal. First run/local/refusal reasons remain separate from HTTP/cleanup and acceptance history; pending cleanup seals as unconfirmed, late writes cannot upgrade it, and later attempts cannot overwrite ordinal-1 facts. Fixed-case tests and compiled/offline packaging checks return frozen non-authoritative copies only. Native evidence, session/source adoption, fallback, formal issuance and whole-run admission remain unconnected/disabled.
