@@ -1,6 +1,5 @@
 import { crc32, deflateRawSync } from 'node:zlib';
-import { execFile } from 'node:child_process';
-import { promisify } from 'node:util';
+import { spawn } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import { describe, it, expect } from 'vitest';
 import { isDateFormatCode, readXlsxSheet, scanXml } from '../../src/utils/xlsx.js';
@@ -198,6 +197,39 @@ describe('readXlsxSheet — hostile input', () => {
   });
 });
 
+/**
+ * Runs the import-boundary fixture under separate clocks. node + tsx startup and process teardown
+ * both slow down badly under a parallel suite, so they get a generous clock; the parse alone, from
+ * the child's "ready" line to its result line, gets a tight one. Any clock expiring SIGKILLs the
+ * child, so a non-terminating parse still fails within BOUNDARY_PARSE_MS.
+ */
+const BOUNDARY_SLOW_MS = 30_000;
+const BOUNDARY_PARSE_MS = 2_000;
+function runImportBoundary(base64: string): Promise<{ stdout: string; code: number | null; signal: NodeJS.Signals | null; timedOut?: string }> {
+  return new Promise((resolve, reject) => {
+    const child = spawn(process.execPath, [
+      '--import', 'tsx', fileURLToPath(new URL('../fixtures/xlsx-import-boundary.mjs', import.meta.url)), base64,
+    ], { stdio: ['ignore', 'pipe', 'inherit'] });
+    let stdout = '';
+    let lines = 0;
+    let timedOut: string | undefined;
+    const expire = (phase: string) => () => { timedOut = phase; child.kill('SIGKILL'); };
+    const phases = [`startup (${BOUNDARY_SLOW_MS} ms)`, `parse (${BOUNDARY_PARSE_MS} ms)`, `exit (${BOUNDARY_SLOW_MS} ms)`];
+    let timer = setTimeout(expire(phases[0]), BOUNDARY_SLOW_MS);
+    child.stdout.setEncoding('utf8').on('data', (chunk: string) => {
+      stdout += chunk;
+      if (stdout.length > 64 * 1024) return expire('output limit')();
+      // Each completed line ("ready", then the result) moves the child into its next phase.
+      for (const seen = Math.min(stdout.split('\n').length - 1, 2); lines < seen; lines++) {
+        clearTimeout(timer);
+        timer = setTimeout(expire(phases[lines + 1]), lines === 0 ? BOUNDARY_PARSE_MS : BOUNDARY_SLOW_MS);
+      }
+    });
+    child.on('error', error => { clearTimeout(timer); reject(error); });
+    child.on('close', (code, signal) => { clearTimeout(timer); resolve({ stdout, code, signal, timedOut }); });
+  });
+}
+
 describe('sparse XLSX import traversal', () => {
   const header = '<row r="1"><c r="A1" t="inlineStr"><is><t>name</t></is></c></row>';
   const row = (r: number, value: string) => `<row r="${r}"><c r="A${r}" t="inlineStr"><is><t>${value}</t></is></c></row>`;
@@ -233,12 +265,11 @@ describe('sparse XLSX import traversal', () => {
     '<row r="100000000000000000000"><c><v>1</v></c></row>',
     `<row r="2"><c r="A${'9'.repeat(400)}"><v>1</v></c></row>`,
   ])('rejects the former non-progressing-loop input in a bounded child process (%#)', async data => {
-    const { stdout } = await promisify(execFile)(process.execPath, [
-      '--import', 'tsx', fileURLToPath(new URL('../fixtures/xlsx-import-boundary.mjs', import.meta.url)),
-      book(sheetXml(header + data)).toString('base64'),
-    ], { timeout: 5000, maxBuffer: 64 * 1024 });
-    expect(stdout).toContain('xlsx-rejected');
-  }, 10_000);
+    const result = await runImportBoundary(book(sheetXml(header + data)).toString('base64'));
+    expect(result).toMatchObject({ code: 0, signal: null, timedOut: undefined });
+    const [, parseMs] = result.stdout.match(/^ready\nxlsx-rejected (\d+)\n$/) ?? [];
+    expect(Number(parseMs)).toBeLessThan(BOUNDARY_PARSE_MS);
+  }, 2 * BOUNDARY_SLOW_MS + BOUNDARY_PARSE_MS + 5_000);
 });
 
 describe('isDateFormatCode', () => {
