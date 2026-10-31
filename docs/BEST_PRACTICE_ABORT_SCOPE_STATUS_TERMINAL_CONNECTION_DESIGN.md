@@ -171,6 +171,8 @@ STC-T07等の不可能な内部状態の負の対照は、test専用の限定fix
 | STC-A04 | 同期失効・拒否slot・HTTP／cleanup診断の保持と停止判定 | ST-A03／ST-A05、A01 |
 | STC-A05 | 注入試験／private負の対照・梱包除外とruntime非採用 | ST-A06／ST-A07、A07 |
 
+判断材料：[承認判断用の比較資料](BEST_PRACTICE_ABORT_SCOPE_NON200_APPROVAL_COMPARISON.md)は、本表を含むA01〜A07／ST-A01〜A07／STC-A01〜A05を3つの判断（cleanup未確認時の扱い・release403／404のC方式fallback・attempt-local retry）に整理し、選択肢・既存試験への影響・承認記入欄を示す。比較資料は承認ではない。
+
 実装の段階は以下の順序。ST-03A／Bの合成内部契約とST-03Cの注入native連続接続を§10〜12まで実装したが、実session／実transportへの接続済みとはしない。
 
 1. **ST-03A**：同constructorのprivate context／anchor／発行claimと診断保持の内部契約。合成負の対照で混入・重複生成を先に検査し、外部診断からの昇格口は作らない。

@@ -127,6 +127,7 @@ binding不一致・二重消費・取消・期限切れを単なるcleanup失敗
 - status terminal専用のprivate受理形と、既存body ackとの共通identityの実装表現は未決。外部mutable port／fixture registryを導入しないことをレビューする。
 - accountingの閉鎖と将来のfinal予約移譲の寿命は未接続。今回のprepared成功を予約移譲・選択payload・worker jobの完了にしない。
 - 同固定URL／認証snapshot／実dispatchと注入Responseの発行元bindingは未検証。合成成功から実transport接続済みと主張しない。
+- 上記の承認待ちの判断材料は[承認判断用の比較資料](BEST_PRACTICE_ABORT_SCOPE_NON200_APPROVAL_COMPARISON.md)を参照。3つの判断に整理した比較であり、承認ではない。
 - §1〜9は設計契約、§10はfake依存の内部契約実装である。正式発行口閉鎖・Unknown・全体受付無効・調査保留を変更しない。
 
 ## 10 同constructor内部契約のfake実装

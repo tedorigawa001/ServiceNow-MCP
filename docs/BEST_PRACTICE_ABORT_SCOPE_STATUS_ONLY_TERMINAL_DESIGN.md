@@ -160,6 +160,8 @@ mode／binding／二重消費は適格性・消費拒否理由であり、cleanu
 | ST-A06 | 合成issuerとruntimeの分離、注入native試験profileの閉鎖境界 | A07 |
 | ST-A07 | 既存入口へ採用する条件とretry／drain等の後続工程の分離 | A01〜A07 |
 
+判断材料：[承認判断用の比較資料](BEST_PRACTICE_ABORT_SCOPE_NON200_APPROVAL_COMPARISON.md)は、本表を含むA01〜A07／ST-A01〜A07／STC-A01〜A05を3つの判断（cleanup未確認時の扱い・release403／404のC方式fallback・attempt-local retry）に整理し、選択肢・既存試験への影響・承認記入欄を示す。比較資料は承認ではない。
+
 最初の実装候補は、別台帳の合成issuerに限定した型・claim・診断専用終端・消費拒否検査とする。次に注入Response／Streamsだけで同readerのread=0・cancel-onlyを検証する。これらの実装許可は、実session接続・実通信・fallback／retry・正式証拠発行の許可ではない。
 
 draft-0.1は設計と参照更新だけ。後続ST-01の実装範囲と未対応範囲は§10に分け、承認前のruntime分岐は追加しない。

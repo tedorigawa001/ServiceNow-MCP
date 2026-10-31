@@ -182,6 +182,8 @@ fake入力を拡張する場合も現行固定200 transcriptの暗黙拡張に�
 | A06 | 200以外の成功statusとredirectの扱い | 初版は200のみ。3xx追従なし、他2xxの成功許可は別承認 |
 | A07 | 合成fixtureの拡張・公開summaryの互換性 | bounded・版別のclosed試験profile。正式発行口や通常設定を広げない |
 
+判断材料：[承認判断用の比較資料](BEST_PRACTICE_ABORT_SCOPE_NON200_APPROVAL_COMPARISON.md)は、本表を含むA01〜A07／ST-A01〜A07／STC-A01〜A05を3つの判断（cleanup未確認時の扱い・release403／404のC方式fallback・attempt-local retry）に整理し、選択肢・既存試験への影響・承認記入欄を示す。比較資料は承認ではない。
+
 実装を開始する場合の順序案：
 
 1. 純粋なpurpose×status×body有無の分類契約と独立oracle。§9で実装。I/O・証拠発行・runtime接続なし。
