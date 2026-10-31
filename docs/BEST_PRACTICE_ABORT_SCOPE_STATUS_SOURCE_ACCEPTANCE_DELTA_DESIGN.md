@@ -7,6 +7,8 @@ Status: **§10のSA-01に加え、§11のSA-02を実session／source class＋固
 
 ## 1 現状と非対象
 
+ND-03後の診断owner最初期化とfake friend撤去の対設計は[詳細設計draft-0.1](BEST_PRACTICE_ABORT_SCOPE_EARLY_DIAGNOSTIC_FRIEND_SEPARATION_DESIGN.md)を参照。SA-02のfake friendも配布物からの除去対象とし、既存session採用口や互換shimへ置き換えない。今回は設計案のみで、SA-03／正式発行口は閉鎖を維持する。
+
 [開発専用fake構成](../src/review/abort-scope-evidence-status-bound-workflow.ts)は自分でsnapshot・source identity・canonical core・binding・注入ownerを生成し、模擬dispatch→cleanup→private消費を終え、closeしてから限定履歴を返す。実`BoundedUpdateSetSource`・認証snapshot・固定URLに由来する証拠ではない。返却した`consumed`は生存中の権限ではなく、7権限はすべてfalseである。
 
 [実source](../src/review/bounded-source.ts)の固定200経路は従来どおり親／releaseのbody ackをprivate受理する。[session](../src/servicenow/bounded-read.ts)の既存compositionはparent／release hookの200限定guardを維持する。§11のSA-02は別の新規fake-only probeでstatusの非実行受理を検証するもので、実transport由来のstatus終端の正式bindingではない。
