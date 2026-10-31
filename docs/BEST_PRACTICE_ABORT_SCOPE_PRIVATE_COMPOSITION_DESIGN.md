@@ -80,6 +80,8 @@ per-user／有効cacheではtoken交換を追加せず、交換が必要なら�
 
 ## 5 sourceのprivate受理と同一性
 
+status-onlyの後続差分は[固定source status private受理・実session binding・close前消費draft-0.1](BEST_PRACTICE_ABORT_SCOPE_STATUS_SOURCE_ACCEPTANCE_DELTA_DESIGN.md)を参照。close済みの合成履歴を再採用せず、同constructorの生存中に一度消費する非実行契約案。現行200限定guard・新status経路のfallback閉鎖を維持し、legacyの既存fallback挙動は変えない。
+
 sourceの更新継続は、固定compositionで生成した同sourceだけに結合する。受理前提は同session／認証snapshot・ready世代・canonical lease・native owner・attempt／window・targetの一致と、同bytesからの一度限りackである。
 
 | 受理対象 | 固定consumerと拒否条件 |
