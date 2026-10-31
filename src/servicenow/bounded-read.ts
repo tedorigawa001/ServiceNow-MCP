@@ -8,52 +8,31 @@ import {BoundedUpdateSetSource,parseBoundedSourceInput,type CompositionSourceCon
 import {createCanonicalReviewBudget,CanonicalBudgetError} from './review-canonical-budget.js';
 import {createReviewBootstrapContract} from './review-bootstrap-contract.js';
 import {pinCompositionFakeIO,type CompositionFakeIO} from './review-composition-fake-io.js';
+import {createConstructionState,normalizeConstructionReason as constructionCode,type ConstructionPublicCode,type ConstructionStage,type ConstructionResource,type ConstructionDiagnostic} from './review-kernel/construction-state.js';
 
 export const BOUNDED_LIMITS = Object.freeze({ responseBytes: 4 * 1024 * 1024, totalBytes: 16 * 1024 * 1024,
   payloadBytes: 2 * 1024 * 1024, totalPayloadBytes: 8 * 1024 * 1024,
   deadlineMs: 60000, requestTimeoutMs: 10000, requests: 210, retryDelayMs: 250 });
-export type ReadFailureCode = 'invalid_input' | 'authentication_failed' | 'access_denied' | 'not_found_or_not_visible'
-  | 'upstream_unavailable' | 'deadline_exceeded' | 'receive_budget_exceeded' | 'request_budget_exceeded'
-  | 'payload_budget_exceeded' | 'payload_limit' | 'invalid_response' | 'review_busy' | 'cancelled' | 'closed' | 'changed_during_review' | 'release_not_admitted' | 'config_invalid' | 'phase_deadline_exceeded' | 'candidate_filter_violation' | 'internal_review_error';
+export type ReadFailureCode = ConstructionPublicCode;
 export class BoundedReadError extends Error {
   constructor(readonly code: ReadFailureCode) { super(code); this.name = 'BoundedReadError'; }
 }
-type ConstructionStage='input'|'clock'|'config'|'authentication'|'admission'|'core'|'owner'|'controllers'|'timer'|'listener'|'commit'|'source_binding'|'stop'|'close';
-const constructionResources=['snapshot','core','registered_owner','admission','controller','phase_controller','deadline_timer','phase_timer','abort_listener','source_transport'] as const;
-type ConstructionResource=typeof constructionResources[number];
-type ConstructionInternalCode=ReadFailureCode|'invalid_state'|'invalid_observation_time'|'evidence_binding_mismatch';
-const constructionCodes=new Set<ConstructionInternalCode>(['invalid_input','authentication_failed','access_denied','not_found_or_not_visible','upstream_unavailable','deadline_exceeded','receive_budget_exceeded','request_budget_exceeded','payload_budget_exceeded','payload_limit','invalid_response','review_busy','cancelled','closed','changed_during_review','release_not_admitted','config_invalid','phase_deadline_exceeded','candidate_filter_violation','internal_review_error','invalid_state','invalid_observation_time','evidence_binding_mismatch']);
-const constructionCode=(value:unknown):ConstructionInternalCode=>typeof value==='string'&&constructionCodes.has(value as ConstructionInternalCode)?value as ConstructionInternalCode:'internal_review_error';
-const constructionPublic=(code:ConstructionInternalCode):ReadFailureCode=>code==='invalid_state'||code==='invalid_observation_time'||code==='evidence_binding_mismatch'?'internal_review_error':code;
-/** Pure first-field allocation. No dependencies, callbacks, clocks or live-resource registration. */
+/** Pure first-field allocation. Live identity checks and claims remain private to this root. */
 function createConstructionShell(){
-  type Slot={state:'absent'|'pending'|'held'|'released'|'unconfirmed';release_claim:0|1;releases:0|1};
-  const resources=Object.fromEntries(constructionResources.map(k=>[k,{state:'absent',release_claim:0,releases:0}])) as Record<ConstructionResource,Slot>;
-  let state:'pending'|'ready'|'failed'|'closed'='pending',sealed=false,coreClaim=false,sourceClaim=false;
-  let primary:Readonly<{stage:ConstructionStage;code:ConstructionInternalCode;public_code:ReadFailureCode}>|null=null;
+  const state=createConstructionState();let coreClaim=false,sourceClaim=false;
   let core:Readonly<{session:object;snapshot:object;core:object;lease:object;owner:object}>|undefined;
-  let source:object|undefined,coreBound=false,sourceBound=false;
-  function fail(stage:ConstructionStage,reason:unknown){if(sealed)return;const code=constructionCode(reason);primary??=Object.freeze({stage,code,public_code:constructionPublic(code)});state='failed';}
-  function copy(){return Object.freeze({scope:'construction_only' as const,state,sealed,primary,core_bound:coreBound,source_bound:sourceBound,
-    purposes:Object.freeze({authentication:false,parent:false,release:false}),
-    resources:Object.freeze(Object.fromEntries(constructionResources.map(k=>[k,Object.freeze({...resources[k]})])) as Record<ConstructionResource,Readonly<Slot>>),
-    teardown:state!=='closed'?'not_started' as const:constructionResources.some(k=>!['absent','released'].includes(resources[k].state))?'unconfirmed' as const:'confirmed' as const});}
+  let source:object|undefined;
   return Object.freeze({
-    attempt(k:ConstructionResource){if(!sealed&&resources[k].state==='absent')resources[k].state='pending';},
-    held(k:ConstructionResource){if(!sealed&&resources[k].state==='pending')resources[k].state='held';},
-    release(k:ConstructionResource,confirmed:boolean,attempted:boolean){const r=resources[k];if(sealed||r.state==='absent'||r.release_claim)return;r.release_claim=1;r.releases=attempted?1:0;r.state=confirmed?'released':'unconfirmed';},
-    needed(k:ConstructionResource){return !['absent','released'].includes(resources[k].state);},
-    bindCore(value:NonNullable<typeof core>){if(coreClaim||primary||sealed){fail('core','invalid_state');return false;}coreClaim=true;core=Object.freeze({...value});coreBound=true;return true;},
-    bindSource(value:NonNullable<typeof core>,next:object){if(sourceClaim||!core||primary||sealed){fail('source_binding','invalid_state');return false;}sourceClaim=true;
-      if(value.session!==core.session||value.snapshot!==core.snapshot||value.core!==core.core||value.lease!==core.lease||value.owner!==core.owner){fail('source_binding','evidence_binding_mismatch');return false;}
-      source=next;sourceBound=source===next;return sourceBound;},
-    commit(){if(primary||!core||sealed){fail('commit','invalid_state');return false;}state='ready';return true;},
-    fail,failure:()=>primary,
-    seal(){if(sealed)return;for(const k of constructionResources)if(['held','pending'].includes(resources[k].state))resources[k].state='unconfirmed';core=undefined;source=undefined;state='closed';sealed=true;},
-    copy,
+    attempt:state.attempt,held:state.held,release:state.release,needed:state.needed,fail:state.fail,failure:state.failure,copy:state.copy,
+    bindCore(value:NonNullable<typeof core>){if(coreClaim||state.failure()||state.isSealed()){state.fail('core','invalid_state');return false;}coreClaim=true;core=Object.freeze({...value});state.recordBinding('core');return true;},
+    bindSource(value:NonNullable<typeof core>,next:object){if(sourceClaim||!core||state.failure()||state.isSealed()){state.fail('source_binding','invalid_state');return false;}sourceClaim=true;
+      if(value.session!==core.session||value.snapshot!==core.snapshot||value.core!==core.core||value.lease!==core.lease||value.owner!==core.owner){state.fail('source_binding','evidence_binding_mismatch');return false;}
+      source=next;state.recordBinding('source');return source===next;},
+    commit(){if(!core){state.fail('commit','invalid_state');return false;}return state.commit();},
+    seal(){core=undefined;source=undefined;state.seal();},
   });
 }
-export type ConstructionDiagnostic=ReturnType<ReturnType<typeof createConstructionShell>['copy']>;
+export type {ConstructionDiagnostic} from './review-kernel/construction-state.js';
 const constructionFailures=new WeakMap<object,ConstructionDiagnostic>();
 export interface ReadSnapshot {
   instanceUrl: string; authMode: ServiceNowConfig['authMode']; perUserBearerToken?: string;

@@ -1,7 +1,7 @@
 # AU-BR-006 EF-03：共通kernel・本番／開発root分離・fake friend撤去
 
-Version: br006-kernel-root-separation-ef03-draft-0.2 / Date: 2026-11-01。
-Status: **詳細設計案。実装・ビルド設定変更・friend撤去・試験移行は未実施。正式発行口閉鎖・Unknown・全体受付無効・VM／監視／telemetry調査保留を維持する。実接続・実通信・実機操作・設定変更・Pushは行わない。**
+Version: br006-kernel-root-separation-ef03-draft-0.3 / Date: 2026-11-01。
+Status: **EF-03Aのconstruction状態・理由写像の純粋kernel抽出と既存class接続を実装。開発root分離・ビルド設定変更・friend撤去・試験移行は未実施。正式発行口閉鎖・Unknown・全体受付無効・VM／監視／telemetry調査保留を維持する。実接続・実通信・実機操作・設定変更・Pushは行わない。**
 
 基準：`e6f9abc`（EF-02後のrun停止／construction診断分離）、[親設計§7〜§13](BEST_PRACTICE_ABORT_SCOPE_EARLY_DIAGNOSTIC_FRIEND_SEPARATION_DESIGN.md)、[ND設計§13](BEST_PRACTICE_ABORT_SCOPE_NATIVE_STATUS_DIAGNOSTIC_DESIGN.md)。配置・型名・build手順は提案であり、新しい公開APIや承認済み本番bindingではない。
 
@@ -96,13 +96,25 @@ EF-03の境界は§1の閉包（friend・callback branch・`synthetic_io`・fake
 
 ## 8 実装の分割・承認待ち
 
-1. **EF-03A：純粋kernel抽出**。EF-02とrun／construction理由分離を保持し、本番classの回帰を維持。fake rootはまだ撤去済みとしない。writer／singletonの共有を導入しない。
+1. **EF-03A（限定実装済み、§9）：純粋kernel抽出**。EF-02とrun／construction理由分離を保持し、既存classへ接続。fake rootは撤去していない。writer／singletonの共有は導入しない。
 2. **EF-03B：開発assembly作成と試験移行**。同kernel・別root／brand／admission台帳でケースを移す。保証対応表と保留coverageを先に確定。別assembly保証への変更は承認待ち。
 3. **EF-03C：本番friend／callback lane撤去**。§1の閉包をまとめて切り、省略時summaryを維持。`synthetic_io`削除の互換性変更をCHANGELOGに明記。半分撤去して使われないfriend本体を残さない。
 4. **EF-03D：空build・tarball・負の対照**。production／developmentのcompiled試験を別実行し、正常・変異双方の検査結果と本番class未確認範囲を記録する。
 
 承認待ち：kernelの最小抽出範囲、source callback branchの移設境界、開発assemblyの別brand化によるcoverage低下、synthetic overload削除、build出力・依存検査の配置。固定本番native接続・正式発行・SA-03／fallback・全体受付・本番cap・実通信は別承認とする。
 
-次の最小実装範囲はEF-03A（construction状態・理由写像の純粋部分と既存classの接続回帰）を提案する。EF-03Aでnative orchestration／認証／source発行をまとめて共通化しない。本書は設計であり、実装完了・試験実行・配布物からの撤去完了を示す記録ではない。
+EF-03Aではnative orchestration／認証／source発行をまとめて共通化しない。限定実装の実績は§9と別の検証記録で分ける。EF-03全体の分離・配布物からの撤去完了を示す記録ではない。
+
+## 9 EF-03A：純粋construction状態と既存classの接続
+
+[construction-state kernel](../src/servicenow/review-kernel/construction-state.ts)へ固定10resourceの状態、固定理由の正規化／公開写像、first reason、commit・copy・sealを抽出した。importは0、factoryは引数なしで自分の新規状態だけを生成する。clock／日時／controller／timer／I/O・session登録・実handle・credentialは持たない。内部3理由は公開internal_review_errorへ写像し、未知の値は読取／文字列化せず固定理由へ正規化する。既存ReadFailureCodeは同じunionの型aliasで維持する。
+
+実session／snapshot／core／lease／owner／sourceの参照、core／sourceのone-shot claimは[既存classのprivate wrapper](../src/servicenow/bounded-read.ts)に残す。参照検査成功後にkernelへ渡すrecordBindingは履歴ラベルだけであり、kernel自身は実bindingを証明しない。deep importで同じラベルを作っても既存session・登録台帳へ採用される口はない。failure WeakMapとfactory回収、admission、元clock、固定rollback、停止coordinatorもroot所有のまま。
+
+class最初のfieldはwrapper→純粋kernel生成だけを行う。構築中／事前abortの理由だけをconstruction側に書き、commit後の取消・HTTP失敗はrun側へ残す既存分離を維持した。解除throwは従来どおりconstruction teardownにも残る。resource受領・解除の会計／callbackはkernelへ移していないため、C/G/P/Rの更新所有者は増えない。
+
+費目：kernel状態用resource10slot・固定reason1slot・binding履歴2bool・固定purpose3項目を保持する。private wrapperのclaim2bool／参照束は従来のroot所有で、委譲用の固定writer objectが1つ、instanceごとのmethod closureが差分で4つ増える。copyごとの固定10slot copy・map用一時配列等は従来と同様であり、可変長traceは追加しない。byte layout／Rust work単位や全体受付用の必要量は未導出のままとする。
+
+[kernel合成試験](../tests/review/construction-kernel.test.ts)、既存EF-02／ND-03回帰、[compiled fixture](../tests/review/fixtures/compiled-construction-kernel.mjs)と[検証記録](E2E_BEST_PRACTICE_CONSTRUCTION_KERNEL_EF03A_2026-11-01.md)を参照。現行pack検査へkernel4artifactの同梱・compiled JSに依存importがないことを確認する限定検査を追加した。EF3-N01〜N09の全変異試験、tarball展開検査、別assembly移行、fake friend撤去は未実施である。
 
 draft-0.2のレビュー修正：canonical梱包検査が`synthetic_io`付きのcompiled ack fixtureも実行しており、EF-03Cの拒否で失敗するため、開発assemblyへの移設を§5に明記した。§5の配布build入力をEF-03対象の閉包に限定し、既存非同梱moduleのbuild構成は変えないことを明記した。

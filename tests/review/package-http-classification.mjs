@@ -4,9 +4,17 @@ import {readFileSync} from 'node:fs';
 import {tmpdir} from 'node:os';
 import {join} from 'node:path';
 import {fileURLToPath} from 'node:url';
+import {parse} from 'acorn';
 const root=fileURLToPath(new URL('../../',import.meta.url)),moduleNames=['abort-scope-evidence-http-classification','abort-scope-evidence-status-terminal','abort-scope-evidence-status-cleanup','abort-scope-evidence-status-context','abort-scope-evidence-status-bound-workflow','abort-scope-evidence-source-status-acceptance','abort-scope-evidence-source-status-probe','abort-scope-evidence-native-diagnostic','abort-scope-evidence-construction-shell'];
 const output=execFileSync('npm',['pack','--dry-run','--ignore-scripts','--offline','--json'],{cwd:root,encoding:'utf8',maxBuffer:8*1024*1024,env:{...process.env,npm_config_cache:join(tmpdir(),'servicenow-mcp-owner-pack-cache')},stdio:['ignore','pipe','pipe']});
 const [pack]=JSON.parse(output);
+const kernel='dist/servicenow/review-kernel/construction-state';
+for(const suffix of ['.js','.js.map','.d.ts','.d.ts.map'])assert(pack.files.some(f=>f.path===kernel+suffix),'required construction kernel missing: '+suffix);
+const ast=parse(readFileSync(join(root,kernel+'.js'),'utf8'),{ecmaVersion:'latest',sourceType:'module'}),nodes=[ast];
+while(nodes.length){const n=nodes.pop();assert(!['ImportDeclaration','ImportExpression','ExportAllDeclaration'].includes(n.type),'pure kernel must not import roots or dependencies');
+  assert(!(n.type==='ExportNamedDeclaration'&&n.source),'pure kernel must not re-export a root');
+  assert(!(n.type==='CallExpression'&&n.callee?.name==='require'),'pure kernel must not require a dependency');
+  for(const v of Object.values(n)){if(Array.isArray(v))nodes.push(...v.filter(x=>x&&typeof x.type==='string'));else if(v&&typeof v==='object'&&typeof v.type==='string')nodes.push(v);}}
 for(const moduleName of moduleNames)for(const suffix of ['.js','.js.map','.d.ts','.d.ts.map'])assert(!pack.files.some(f=>f.path==='dist/review/'+moduleName+suffix));
 assert(!pack.files.some(f=>f.path.startsWith('tests/')));
 for(const f of pack.files.filter(f=>f.path.startsWith('dist/')&&f.path.endsWith('.js')))for(const moduleName of moduleNames)assert(!readFileSync(join(root,f.path),'utf8').includes(moduleName),'packaged runtime depends on development model: '+f.path);
@@ -23,4 +31,5 @@ execFileSync(process.execPath,[fileURLToPath(new URL('fixtures/compiled-native-d
 execFileSync(process.execPath,[fileURLToPath(new URL('fixtures/compiled-native-session-composition.mjs',import.meta.url))],{cwd:root,stdio:'inherit'});
 execFileSync(process.execPath,[fileURLToPath(new URL('fixtures/compiled-construction-shell.mjs',import.meta.url))],{cwd:root,stdio:'inherit'});
 execFileSync(process.execPath,[fileURLToPath(new URL('fixtures/compiled-construction-transaction.mjs',import.meta.url))],{cwd:root,stdio:'inherit'});
+execFileSync(process.execPath,[fileURLToPath(new URL('fixtures/compiled-construction-kernel.mjs',import.meta.url))],{cwd:root,stdio:'inherit'});
 console.log('HTTP classification/status terminal/cleanup/context excluded; runtime unconnected; fixture/oracle excluded PASS ('+pack.files.length+' files)');
