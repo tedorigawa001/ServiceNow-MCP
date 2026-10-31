@@ -6,7 +6,7 @@ Status: CM-04-01／02に加え、CM-04-03の固定200・fake依存によるpriva
 CM-04は、新規runだけを対象に、同じ予算・認証snapshot・source・ReleasePermitを結ぶ。最初の実装は予算生成とaccounting供給の分離までとし、既存sessionの後付け切替やMCP設定による有効化は行わない。
 
 基準：[canonical移行設計 §11](BEST_PRACTICE_ABORT_SCOPE_CANONICAL_SESSION_MIGRATION_DESIGN.md#11-cm-03-注入typed-dispatchと単一予算)、[native設計](BEST_PRACTICE_ABORT_SCOPE_NATIVE_ADAPTER_DESIGN.md)、[実session差分設計](BEST_PRACTICE_ABORT_SCOPE_REAL_TYPED_BINDING_DELTA_DESIGN.md)。
-ST-03C後の接続差分：[実session binding・単一予算・停止owner設計draft-0.3](BEST_PRACTICE_ABORT_SCOPE_STATUS_SESSION_BINDING_DELTA_DESIGN.md)。§10〜11で内部bindingと同canonical accounting・停止ownerをfake依存で接続。status native終端・正式発行・実接続は未実施。
+ST-03C後の接続差分：[実session binding・単一予算・停止owner設計draft-0.4](BEST_PRACTICE_ABORT_SCOPE_STATUS_SESSION_BINDING_DELTA_DESIGN.md)。§10〜12で内部binding・同canonical accounting・停止ownerと、開発専用fake構成の同attempt status終端／cleanupを接続。runtime採用・正式発行・実接続は未実施。
 現行：[session](../src/servicenow/bounded-read.ts)、[source](../src/review/bounded-source.ts)、[clientのsnapshot生成](../src/servicenow/client.ts)、[lifecycle](../src/servicenow/review-evidence-lifecycle.ts)、[CM-03予算factory](../src/servicenow/review-canonical-bootstrap-budget.ts)。
 
 ## 1 現行の生成順と接続上の制約

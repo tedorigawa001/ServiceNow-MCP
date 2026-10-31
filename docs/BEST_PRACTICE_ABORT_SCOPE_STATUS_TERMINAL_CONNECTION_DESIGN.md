@@ -181,7 +181,7 @@ STC-T07等の不可能な内部状態の負の対照は、test専用の限定fix
 
 実session／ReleasePermit／単一予算／固定sourceへの正式binding、status consumerのsource採用、retry／fallback、実通信はその後の別工程。正式発行口閉鎖・全体受付無効・調査保留を維持する。
 
-ST-03C後の次工程は[実session binding・単一予算・停止owner接続差分draft-0.3](BEST_PRACTICE_ABORT_SCOPE_STATUS_SESSION_BINDING_DELTA_DESIGN.md)を参照。§10〜11の内部binding・同canonical accounting・停止ownerをfake依存で接続。注入token／診断の正式権限への昇格やruntime承認は行わない。
+ST-03C後の次工程は[実session binding・単一予算・停止owner接続差分draft-0.4](BEST_PRACTICE_ABORT_SCOPE_STATUS_SESSION_BINDING_DELTA_DESIGN.md)を参照。§10〜12で内部binding・会計・停止と開発専用fake構成の同attempt終端／cleanupを接続。注入token／診断の正式権限への昇格やruntime承認は行わない。
 
 ## 10 ST-03A：合成依存限定の内部契約
 
