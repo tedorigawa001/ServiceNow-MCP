@@ -1,6 +1,6 @@
 # AU-BR-006 新規runのprivate compositionとsource採用設計
 
-Version: br006-private-composition-draft-0.6 / Date: 2026-10-31。
+Version: br006-private-composition-draft-0.7 / Date: 2026-10-31。
 Status: CM-04-01／02に加え、CM-04-03の固定200・fake依存によるprivate ack受理／既存release判定を実装。実transport採用・実通信は未実施。正式発行口閉鎖・Unknown・全体受付無効・VM／監視／telemetry調査保留を維持する。
 
 CM-04は、新規runだけを対象に、同じ予算・認証snapshot・source・ReleasePermitを結ぶ。最初の実装は予算生成とaccounting供給の分離までとし、既存sessionの後付け切替やMCP設定による有効化は行わない。
@@ -172,7 +172,7 @@ CM-04-03の同じ固定入口のprivate継続は§12を参照。CM-04-02の公�
 
 ### 12.1 fake依存の上限と非通信性
 
-transcriptはdata propertyだけのplain／null-prototype objectと通常array、非共有Uint8Arrayから生成前にcopyする。proxy／getter／未知key／holeを拒否する。各行は`purpose`・`bytes`・任意`delay_ms`だけ。並びはparent→release、またはauthentication→parent→releaseの固定2／3行、1行4MiB以下、遅延0〜10,000ms。status・URL・Authorization・dispatcher／fetch callback・source／permit／ackを注入する欄はない。200以外は未対応として拒否する。
+transcriptはdata propertyだけのplain／null-prototype objectと通常array、非共有Uint8Arrayから生成前にcopyする。proxy／getter／未知key／holeを拒否する。各行は`purpose`・`bytes`・任意`delay_ms`だけ。並びはparent→release、またはauthentication→parent→releaseの固定2／3行、1行4MiB以下、遅延0〜10,000ms。status・URL・Authorization・dispatcher／fetch callback・source／permit／ackを注入する欄はない。200以外は未対応として拒否する。transcriptの固定200に頼らず、session側のparent受理・release判定hookでもstatus 200以外を`invalid_response`で拒否し、bodyなし403が既存C方式fallbackや観測扱いへ流れないようにする。bootstrap contractはsession hookが投げた`BoundedReadError`の固定codeを保持し、停止しないphase cutoff等を`internal_review_error`へ潰さない。
 
 固定fake adapterはcopy済みbyte列だけから新規のin-memory Response／Streamsを作り、既存NA-03 native cleanup→同bytes JSON／hash→一度限りackへ通す。ネットワーク関数を呼ばず、default fetchへfallbackしない。fake入力copy（最大12MiB）は合成依存準備であり、C/Gは実際にfake dispatch／readへ到達したときだけ同canonical coreへ計上する。caller bufferの後続変更を読むことはない。
 

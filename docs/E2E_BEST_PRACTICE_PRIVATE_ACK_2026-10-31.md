@@ -47,6 +47,14 @@ Git indexのCM-04-03関連12ファイル＋HEADから独立した一時copyを�
 - offline pack：409ファイル、必要artifact同梱・fixture非同梱を確認。
 - staged diffのwhitespace検査で問題なし。この再検証後の追記は本記録のみで、実装・テストは変更していない。
 
+## レビュー修正（2026-10-31）
+
+- 指摘1：bootstrap contractのrun catchは`Failure`／`BootstrapBodyFailure`／`CanonicalBudgetError`だけからcodeを取り出し、session hook（parent受理・release判定内の`guard()`）が投げる`BoundedReadError`を`internal_review_error`へ潰していた。停止を伴うcodeはowner failureが優先されるため影響しないが、停止しないphase cutoffが`ordinary_closed`ではなく`failed`／`internal_review_error`になった。
+- 指摘2：parent受理・release判定hookはresponseの`status`を見ずに`value`だけをsourceへ渡していた。現行transcriptは固定200で到達不能だが、status欄が加われば、bodyなし403が`invalid_response`→`unknown('observation_incomplete')`へ流れ、legacyの403 fallbackと黙って異なる結果になる。
+- 修正：contractのrun catchに`BoundedReadError`を加え、固定codeを保持する（request内のcatchはsession hookを呼ばないため変更なし）。session側の両hookでstatus 200以外を`invalid_response`で拒否する。
+- 回帰試験：[private-composition-boundary.test.ts](../tests/review/private-composition-boundary.test.ts)の2件。parent受理直後のguardで初めてphase境界に達する場合に`phase_deadline_exceeded`となること、fake transcriptをmoduleごと包んでrelease 403を返す場合に`invalid_response`となることを確認する。修正前実装ではそれぞれ`internal_review_error`、`release_not_admitted`で失敗する。
+- 再検証：tsc・変更対象ESLint・build・全体195 files／5,878 tests PASS、CM-01〜CM-04-03 offline梱包・compiled smoke PASS（409 files）、`git diff --check` PASS。上記の最終結果は修正前の記録として残す。
+
 ## 未確認・残課題
 
 PDI実測、実URL／HTTP認証によるtransport binding、非200 terminal／403 fallback等の意味差、final予約枠の移譲・P更新port、選択window／payload／worker jobの正式bindingは未接続。合成成功を実運用可・独立人手評価済み・正式証拠発行可とは扱わない。

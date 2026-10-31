@@ -95,7 +95,7 @@ session constructorはsourceより先に呼ばれるため、存在しないsour
 1. **CM-01 canonical状態の内部契約と純粋fake試験**。限度・加算・first stop・readonly viewの同一所有を確認する。稼働sessionから値を取り込む口は作らず、実classはまだ置換しない。
 2. **CM-02 legacy更新点の中立移行**。旧counterを撤去し、stats／lease／legacy操作を同canonical状態へ移す。native lane、public option、retry／HTTP分類は変えない。
 3. **CM-03 typed dispatchの精密な計上境界**。NA-03と同更新portを結び、C commitの単一所有・予約・同期失効をfake I/Oで検証する。実通信は有効化しない。
-4. **CM-04 private compositionと固定source採用**。[詳細案draft-0.6](BEST_PRACTICE_ABORT_SCOPE_PRIVATE_COMPOSITION_DESIGN.md)で、CM-04-01／02とCM-04-03の固定200 fake bytes→private ack受理→既存release判定を実装した。現行3生成経路はlegacy固定で、実transport・非200差分・final枠移譲・正式発行は未接続。
+4. **CM-04 private compositionと固定source採用**。[詳細案draft-0.7](BEST_PRACTICE_ABORT_SCOPE_PRIVATE_COMPOSITION_DESIGN.md)で、CM-04-01／02とCM-04-03の固定200 fake bytes→private ack受理→既存release判定を実装した。現行3生成経路はlegacy固定で、実transport・非200差分・final枠移譲・正式発行は未接続。
 
 CM-01／02は§9〜10、CM-03の注入経路は§11を参照。CM-04以降は別依頼で開始し、合成成功から自動的にnative/typed実sessionを有効化しない。
 

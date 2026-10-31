@@ -165,13 +165,15 @@ export class BoundedReadSession {
       if(!fake.matches(auth==='exchange'))throw new BoundedReadError('invalid_input');
       const stop=(code:unknown)=>{this.#runOwner.revoke(code);this.#budget.writer.stop(code);this.stop(this.stopCode??'internal_review_error');};
       contract=createReviewBootstrapContract({lease:this.#runLease,phaseReserveMs:this.reserveMs,sample:()=>this.#runLease.read(),check:(h,s,l)=>this.#runOwner.transportConstructor.inspect(h,s,l),
-        ready:()=>this.#runOwner.markReady(this.#snapshot,this.#runLease),acceptParent:r=>{guard();consumer!.parent(mint('parent',r.value));guard();},
+        ready:()=>this.#runOwner.markReady(this.#snapshot,this.#runLease),acceptParent:r=>{guard();if(r.status!==200)throw new BoundedReadError('invalid_response');consumer!.parent(mint('parent',r.value));guard();},
         bind:(s,p,port)=>this.#runOwner.inspectSource(this.#snapshot,this.#runLease,s,p,port)!==null,
         prepared:(h,s,l,source,p,port)=>this.#runOwner.transportConstructor.inspectPrepared(h,s,l,source,p,port),stop,failure:()=>this.#runOwner.failure(),
       },{fake_io:true,typed_body:true,native_body:true,lease:this.#runLease,source:scope.source,target:input.update_set_sys_id,auth,
         limits:{requests:this.limits.requests,total_bytes:this.limits.totalBytes,response_bytes:this.limits.responseBytes,deadline_ms:this.limits.deadlineMs},accounting:scope.accounting,
         dispatch:(r,signal)=>fake.dispatch(r,signal),schedule:(ms,wake)=>{const timer=setTimeout(wake,ms);return ()=>clearTimeout(timer);},
-        resolveRelease:async r=>{guard();const decision=await consumer!.release(mint('release',r.value));guard();if(decision.release_match!=='matched')return null;const port=BoundedUpdateSetSource.releasePortFor(scope.source,this,decision.permit);if(!port)throw new BoundedReadError('internal_review_error');return {source:scope.source,permit:decision.permit,port};},
+        resolveRelease:async r=>{guard();
+          // Only the fixed-200 transcript is adopted; a 403 must never reach the C-mode fallback through a missing body.
+          if(r.status!==200)throw new BoundedReadError('invalid_response');const decision=await consumer!.release(mint('release',r.value));guard();if(decision.release_match!=='matched')return null;const port=BoundedUpdateSetSource.releasePortFor(scope.source,this,decision.permit);if(!port)throw new BoundedReadError('internal_review_error');return {source:scope.source,permit:decision.permit,port};},
       });
       this.#compositionRevoke=()=>{this.#compositionKey=undefined;consumer?.revoke();contract?.revoke();};
       const result=await contract.run(scope.handle,this.#snapshot,this.#runLease);

@@ -6,7 +6,7 @@ import {createInjectedNativeBodyLane} from './review-native-body.js';
 import {NativeDispatchCommitError} from './review-native-adapter.js';
 import {CanonicalBudgetError} from './review-canonical-budget.js';
 import {releaseEvidenceStructure,releaseMatchForEvidence} from '../review/result-schema-v2.js';
-import type {ReadFailureCode} from './bounded-read.js';
+import {BoundedReadError,type ReadFailureCode} from './bounded-read.js';
 import type {ReviewRunBudgetLease,ReviewSourceReleasePort,ReviewSourceReleaseSnapshot} from './review-evidence-lifecycle.js';
 type Code=ReadFailureCode|'invalid_state'|'evidence_binding_mismatch'|'invalid_observation_time';
 type Result<T>=Readonly<{ok:true;value:T}|{ok:false;code:Code}>;
@@ -152,7 +152,8 @@ export function createReviewBootstrapContract<H>(hooks:Hooks<H>,input:ReviewBoot
         observe();const prepared=hooks.prepared(handle,snapshot,lease,deps.source,binding.permit,binding.port);if(!prepared.ok)throw new Failure(prepared.code);
         observe();state='prepared';current=undefined;activeFloor=undefined;return Object.freeze({ok:true,value:prepared.value});
       }catch(error){
-        reason??=hooks.failure()??(error instanceof Failure||error instanceof BootstrapBodyFailure||error instanceof CanonicalBudgetError?error.code:'internal_review_error');
+        // Session hooks raise BoundedReadError; keep its fixed code (e.g. a non-stopping phase cutoff) rather than collapsing it.
+        reason??=hooks.failure()??(error instanceof Failure||error instanceof BootstrapBodyFailure||error instanceof CanonicalBudgetError||error instanceof BoundedReadError?error.code:'internal_review_error');
         // A typed read failure already stopped the owner; that is not an ordinary close.
         if((reason==='phase_deadline_exceeded'||reason==='request_budget_exceeded')&&!hooks.failure()){state='ordinary_closed';current=undefined;release();controller?.abort();}
         else{state='failed';hooks.stop(reason);revoke();}
