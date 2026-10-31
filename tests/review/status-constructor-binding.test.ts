@@ -16,7 +16,7 @@ it('binds the existing constructor before ready without a permit or issuance aut
  const f=bound();expect(f.b.inspect(f.handle,f.snapshot,f.lease,f.source)).toMatchObject({ok:true,value:{ready_generation:0,evidence_issuance:'disabled',dispatch:'unavailable'}});
  expect(f.owner.markReady(f.snapshot,f.lease)).toBe(true);
  expect(f.b.inspect(f.handle,f.snapshot,f.lease,f.source)).toMatchObject({ok:true,value:{ready_generation:1}});
- expect(Object.keys(f.b).sort()).toEqual(['diagnostic','inspect']);
+ expect(Object.keys(f.b).sort()).toEqual(['connectAccounting','diagnostic','inspect']);
 });
 it.each(['handle','snapshot','lease','source'] as const)('rejects foreign %s and cannot restart after failure',key=>{
  const f=bound(),other=bound();

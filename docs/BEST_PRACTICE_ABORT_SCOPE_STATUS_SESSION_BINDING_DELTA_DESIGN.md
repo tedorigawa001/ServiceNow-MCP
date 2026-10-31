@@ -1,7 +1,7 @@
 # AU-BR-006：ST-03C後の実session binding・単一予算・停止owner接続差分
 
-Version: br006-status-session-binding-delta-draft-0.2 / Date: 2026-10-31。
-Status: **§10の同constructor内部binding・同期失効・診断保持をfake依存で実装。status終端の実接続は未実装。正式発行口閉鎖・Unknown・全体受付無効・VM／監視／telemetry調査保留を維持する。実sessionへのstatus transport採用・実通信・実機操作・設定変更の承認ではない。**
+Version: br006-status-session-binding-delta-draft-0.3 / Date: 2026-10-31。
+Status: **§10の内部bindingに加え、§11の同canonical accounting・停止owner接続をfake依存で実装。status終端の実接続は未実装。正式発行口閉鎖・Unknown・全体受付無効・VM／監視／telemetry調査保留を維持する。実sessionへのstatus transport採用・実通信・実機操作・設定変更の承認ではない。**
 
 基準：[ST-03接続設計の§12](BEST_PRACTICE_ABORT_SCOPE_STATUS_TERMINAL_CONNECTION_DESIGN.md)、[private composition設計](BEST_PRACTICE_ABORT_SCOPE_PRIVATE_COMPOSITION_DESIGN.md)、[実session差分設計](BEST_PRACTICE_ABORT_SCOPE_REAL_TYPED_BINDING_DELTA_DESIGN.md)。本書の段階名・検査表は内部契約案であり、新しいexport・権限・実装済み機能を意味しない。
 
@@ -128,7 +128,7 @@ binding不一致・二重消費・取消・期限切れを単なるcleanup失敗
 - accountingの閉鎖と将来のfinal予約移譲の寿命は未接続。今回のprepared成功を予約移譲・選択payload・worker jobの完了にしない。
 - 同固定URL／認証snapshot／実dispatchと注入Responseの発行元bindingは未検証。合成成功から実transport接続済みと主張しない。
 - 上記の承認待ちの判断材料は[承認判断用の比較資料](BEST_PRACTICE_ABORT_SCOPE_NON200_APPROVAL_COMPARISON.md)を参照。3つの判断に整理した比較であり、承認ではない。
-- §1〜9は設計契約、§10はfake依存の内部契約実装である。正式発行口閉鎖・Unknown・全体受付無効・調査保留を変更しない。
+- §1〜9は設計契約、§10〜11はfake依存の内部契約実装である。正式発行口閉鎖・Unknown・全体受付無効・調査保留を変更しない。
 
 ## 10 同constructor内部契約のfake実装
 
@@ -141,3 +141,17 @@ binding不一致・二重消費・取消・期限切れを単なるcleanup失敗
 [session](../src/servicenow/bounded-read.ts)の`#openComposition`が同claimを取得し、既存fake compositionが認証前にinspectする。既存private生成継続と同`#runOwner`を再利用し、第二budget・lease・clockは生成しない。公開summaryへcontextやその診断を返さず、既存公開legacy経路は切り替えない。
 
 [合成テスト](../tests/review/status-constructor-binding.test.ts)と[検証記録](E2E_BEST_PRACTICE_STATUS_CONSTRUCTOR_BINDING_2026-10-31.md)を参照。単一会計へのstatus終端接続、同reader cleanup／private発行のruntime採用、固定sourceの非200受理、matched後の予約移譲／payload／workerは未実装である。承認待ちと正式発行口閉鎖・全体受付無効・調査保留を維持する。
+
+## 11 同canonical accounting・停止ownerのfake接続
+
+§10の内部contextへ一度限りの`connectAccounting`を追加した。session constructorが既存lifecycleへ同`#budget`と固定stop継続を捕捉させ、`#openComposition`の既存accounting取得直後に接続する。任意sessionを再登録する入口や新core／lease／clockを作らない。canonical依存はtrusted constructor用であり、外部データやfixture台帳から既存sessionへ設定できない。
+
+`ownsBootstrapAccounting`は同coreの実port参照・取得済み・未release／未closeを検査するbooleanだけで、portのlookup／登録／返却をしない。copy／別coreのportは拒否し、接続claimはconsuming→claimedまたはfailedとして復元しない。生のwriterはsourceや公開summaryへ渡さない。
+
+接続後のprivate wrapperはreserve／reserved／dispatch／chunk／releaseを既存portへ委譲する。各更新のpre／postで同contextを検査するが、counterは追加しない。Cは固定dispatch直前、Gは取得chunkで一度だけ増え、超過chunkも返金しない。P・Rの再配賦・final移譲は追加しない。status-onlyのread／cleanup／発行はまだこのwrapperへ接続しない。
+
+canonical constructionの一度限りstop-owner継続を同portに結合し、coreの最初のstopは内部理由を確定してからlifecycleを同期失効させる。逆方向のowner停止も同coreへ反映し、固定session stopへの通知は再入防止だけでなく**run中一度限り**とする。`CanonicalBudgetError`の公開写像で内部binding理由を消さず、context診断にfirst primary／terminalとcanonicalのinternal／publicを保持する。
+
+予約の`release`はrun失敗ではない。元portを一度だけreleaseしてcontextを失効させるが、新しい`closed` primaryを発行しない。これにより、bootstrapの通常打切り（request／phase等）の先行理由を後片付けで上書きしない。release後の新規更新・再接続は拒否し、会計を復元／返金しない。
+
+[独立fakeイベントoracleのテスト](../tests/review/status-canonical-accounting.test.ts)と[検証記録](E2E_BEST_PRACTICE_STATUS_CANONICAL_ACCOUNTING_2026-10-31.md)を参照。実transport・同readerのstatus終端・固定source非200受理・正式receipt／payload／workerへの採用、全体受付は引き続き無効／未接続である。

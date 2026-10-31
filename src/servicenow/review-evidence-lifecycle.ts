@@ -2,6 +2,9 @@
 import type {ReadFailureCode} from './bounded-read.js';
 import type {ReleaseEvidence} from '../review/result-schema-v2.js';
 import {createReviewBootstrapContract,type ReviewBootstrapDependencies} from './review-bootstrap-contract.js';
+import {CanonicalBudgetError,type createCanonicalReviewBudget} from './review-canonical-budget.js';
+type CanonicalCore=ReturnType<typeof createCanonicalReviewBudget>;
+type ConstructorAccounting=ReturnType<CanonicalCore['construction']['takeBootstrapAccounting']>;
 type Code=ReadFailureCode|'evidence_binding_mismatch'|'invalid_observation_time'|'invalid_state';
 type Stage='authentication'|'owner'|'binding'|'transport_claim'|'transport_binding';
 declare const transportBrand:unique symbol;
@@ -28,7 +31,8 @@ function copyRelease(value:ReviewSourceReleaseSnapshot):ReviewSourceReleaseSnaps
 const registered=new WeakSet<object>();
 /** The closure stays in the creating session's ECMAScript-private field. Arbitrary objects cannot
  * replace an existing session's owner. No exported mark/revoke/lookup-by-session operation exists. */
-export function registerReviewEvidenceSession(session:object,snapshot:object,lease:ReviewRunBudgetLease,bootstrapDependencies?:ReviewBootstrapDependencies){
+export function registerReviewEvidenceSession(session:object,snapshot:object,lease:ReviewRunBudgetLease,bootstrapDependencies?:ReviewBootstrapDependencies,
+  canonical?:Readonly<{core:CanonicalCore;stop(code:Code):void}>){
   if(registered.has(session))throw new Error('invalid_state');
   registered.add(session);
   const authIdentity=Object.freeze({});const budgetIdentity=Object.freeze({});
@@ -48,6 +52,7 @@ export function registerReviewEvidenceSession(session:object,snapshot:object,lea
   let transportBusy=false;
   let statusClaim:'unclaimed'|'consuming'|'claimed'|'failed'='unclaimed';
   let statusRevoke:(()=>void)|undefined;
+  let canonicalConnected=false,stopNotified=false;
   let transportRefusal:Readonly<{stage:'transport_claim';code:'invalid_state'}>|null=null;
   let bootstrap:ReturnType<typeof createReviewBootstrapContract<ConstructorTransportHandle>>|undefined;
   function revoke(reason:unknown,stage:Stage='owner'){
@@ -58,6 +63,10 @@ export function registerReviewEvidenceSession(session:object,snapshot:object,lea
     if(transportClaim==='consuming')transportClaim='failed';transportState='revoked';transportHandle=undefined;
     if(state!=='closed')state='stopped';
     statusRevoke?.();
+    if(canonicalConnected&&canonical&&!stopNotified){
+      stopNotified=true;
+      canonical.core.writer.stop(primary.code);canonical.stop(primary.code);
+    }
     bootstrap?.revoke();
   }
   function check(currentSnapshot:object,currentLease:ReviewRunBudgetLease){
@@ -116,9 +125,12 @@ export function registerReviewEvidenceSession(session:object,snapshot:object,lea
         if(initialSourceClaim!=='claimed'||initialSource!==source){revoke('evidence_binding_mismatch','transport_binding');return transportNo();}
         if(readyStarted||!idleBudget()){revoke('invalid_state','transport_binding');return transportNo();}
         let live=true,firstTerminal:Code|null=null,refusal:Code|null=null;
+        let accountingClaim:'unclaimed'|'consuming'|'claimed'|'failed'='unclaimed',released=false;
         statusRevoke=()=>{live=false;firstTerminal??=primary?.code??'closed';if(statusClaim==='consuming')statusClaim='failed';};
         const diagnostic=()=>Object.freeze({state:live?'bound' as const:'revoked' as const,claim:statusClaim,
-          first_terminal:firstTerminal,refusal,primary,evidence_issuance:'disabled' as const,dispatch:'unavailable' as const});
+          first_terminal:firstTerminal,refusal,primary,accounting_claim:accountingClaim,
+          budget_primary:canonicalConnected?canonical!.core.view.diagnostic().primary:null,
+          evidence_issuance:'disabled' as const,dispatch:'unavailable' as const});
         const inspect=(h:ConstructorTransportHandle,s:object,l:ReviewRunBudgetLease,src:object)=>useTransport(()=>{
           if(!live||statusClaim!=='claimed'){refusal??=primary?.code??'invalid_state';return transportNo();}
           if(h!==handle||s!==currentSnapshot||l!==currentLease||src!==source){
@@ -128,11 +140,41 @@ export function registerReviewEvidenceSession(session:object,snapshot:object,lea
           if(!live||initialSource!==source){revoke('evidence_binding_mismatch','transport_binding');return transportNo();}
           return transportOk(Object.freeze({state:'constructor_bound' as const,ready_generation:generation,evidence_issuance:'disabled' as const,dispatch:'unavailable' as const}));
         });
+        const connectAccounting=(port:ConstructorAccounting)=>useTransport(()=>{
+          if(accountingClaim!=='unclaimed'){revoke('invalid_state','transport_binding');return transportNo();}
+          accountingClaim='consuming';
+          if(!canonical||!canonical.core.construction.ownsBootstrapAccounting(port)){
+            accountingClaim='failed';revoke('evidence_binding_mismatch','transport_binding');return transportNo();
+          }
+          canonicalConnected=true;
+          canonical.core.construction.connectStopOwner(port,code=>revoke(code,'transport_binding'));
+          if(!live||!checkTransport(handle,currentSnapshot,currentLease)||accountingClaim!=='consuming'){
+            accountingClaim='failed';return transportNo();
+          }
+          accountingClaim='claimed';
+          const adopt=(error:unknown):never=>{
+            const reason=canonical.core.view.diagnostic().primary?.internal??(error instanceof CanonicalBudgetError?error.code:'internal_review_error');
+            revoke(reason,'transport_binding');throw new CanonicalBudgetError(canonical.core.view.failure()??'internal_review_error');
+          };
+          const run=(operation:()=>void)=>{
+            if(released||!inspect(handle,currentSnapshot,currentLease,source).ok)return adopt(new CanonicalBudgetError('closed'));
+            try{
+              operation();
+              if(!inspect(handle,currentSnapshot,currentLease,source).ok)return adopt(new CanonicalBudgetError('closed'));
+            }catch(error){return adopt(error);}
+          };
+          return transportOk(Object.freeze({
+            reserve:()=>run(()=>port.reserve()),reserved:()=>port.reserved(),
+            dispatch:(floor?:number)=>run(()=>port.dispatch(floor)),chunk:(n:number)=>run(()=>port.chunk(n)),
+            // Reservation teardown is not a new run failure; preserve an ordinary cutoff's reason.
+            release:()=>{if(released)return;released=true;port.release();statusRevoke?.();},
+          }));
+        });
         // Recheck after lease callbacks; reentry/stop may have spent the claim.
         if(!checkTransport(handle,currentSnapshot,currentLease)||!live||statusClaim!=='consuming')return transportNo();
         if(readyStarted||!idleBudget()){revoke('invalid_state','transport_binding');return transportNo();}
         statusClaim='claimed';
-        return transportOk(Object.freeze({inspect,diagnostic}));
+        return transportOk(Object.freeze({inspect,diagnostic,connectAccounting}));
       });
     },
     /** Creator-owned pre-I/O binding, distinct from the post-ready ReleasePermit binding. */

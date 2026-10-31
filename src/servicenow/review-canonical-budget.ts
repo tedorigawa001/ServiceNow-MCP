@@ -40,13 +40,15 @@ export function createCanonicalReviewBudget(input: {
     let requests = 0, received = 0, payload = 0, closed = false, last: number | undefined, observing = false;
     let legacyStarted = false, claim: 'unclaimed' | 'consuming' | 'claimed' | 'failed' = 'unclaimed';
     let reservation: 'unclaimed' | 'reserving' | 'reserved' | 'failed' | 'released' = 'unclaimed';
+    let stopOwner:((code:InternalCode)=>void)|undefined;
     let primary: Readonly<{
         internal: InternalCode;
         public: ReadFailureCode;
     }> | null = null;
     const stats = () => Object.freeze({ requests, received_bytes: received, payload_bytes: payload });
     const publicCode = (code: InternalCode): ReadFailureCode => code === 'invalid_state' || code === 'invalid_observation_time' || code === 'evidence_binding_mismatch' ? 'internal_review_error' : code;
-    function stop(raw: unknown) { const code: InternalCode = typeof raw === 'string' && reasons.has(raw) ? raw as InternalCode : 'internal_review_error'; primary ??= Object.freeze({ internal: code, public: publicCode(code) }); }
+    function stop(raw: unknown) { const code: InternalCode = typeof raw === 'string' && reasons.has(raw) ? raw as InternalCode : 'internal_review_error';
+        if(primary)return;primary=Object.freeze({internal:code,public:publicCode(code)});stopOwner?.(code); }
     function fail(code: InternalCode): never { stop(code); throw new CanonicalBudgetError(primary!.public); }
     function read() {
         if (observing)
@@ -155,6 +157,13 @@ export function createCanonicalReviewBudget(input: {
             return; reservation = 'released'; closed = true; },
     });
     const construction = Object.freeze({
+        /** Creator-only identity check; never returns or registers a foreign update port. */
+        ownsBootstrapAccounting(candidate: unknown) { return candidate === accounting && claim === 'claimed' && reservation !== 'released' && !closed; },
+        connectStopOwner(candidate:unknown,notify:(code:InternalCode)=>void) {
+            if(candidate!==accounting||claim!=='claimed'||closed||stopOwner||typeof notify!=='function')return fail('invalid_state');
+            stopOwner=notify;
+            if(primary)notify(primary.internal);
+        },
         takeBootstrapAccounting(...args: never[]) {
             if (claim !== 'unclaimed') {
                 claim = 'failed';

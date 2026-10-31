@@ -151,6 +151,9 @@ export class BoundedReadSession {
       const statusBinding=this.#runOwner.transportConstructor.claimStatusBinding(claim.value,this.#snapshot,this.#runLease,source);
       if(!statusBinding.ok){this.#syncRunFailure();throw new BoundedReadError(this.stopCode??'internal_review_error');}
       accounting=this.#budget.construction.takeBootstrapAccounting();
+      const connected=statusBinding.value.connectAccounting(accounting);
+      if(!connected.ok){this.#syncRunFailure();throw new BoundedReadError(this.stopCode??'internal_review_error');}
+      accounting=connected.value;
       return {source,handle:claim.value,accounting,bound:bound.value,statusBinding:statusBinding.value};
     }catch(error){accounting?.release();throw this.#adopt(error);}
   }
@@ -226,7 +229,8 @@ export class BoundedReadSession {
     this.#runLease=Object.freeze({read:()=>{
       try{return this.#budget.view.lease.read();}catch(error){throw this.#adopt(error,'internal_review_error');}
     }});
-    this.#runOwner=registerReviewEvidenceSession(this,this.#snapshot,this.#runLease);
+    this.#runOwner=registerReviewEvidenceSession(this,this.#snapshot,this.#runLease,undefined,
+      {core:this.#budget,stop:code=>this.stop(this.#budget.view.failure()??(code as ReadFailureCode))});
     this.fetcher = options.fetch ?? ((...args) => globalThis.fetch(...args));
     this.timer = setTimeout(() => this.stop('deadline_exceeded'), Math.max(0, this.limits.deadlineMs - (performance.now() - this.started)));
     const cancel = () => this.stop('cancelled');
