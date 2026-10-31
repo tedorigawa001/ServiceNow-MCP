@@ -1,15 +1,16 @@
 import {afterEach,expect,it,vi} from 'vitest';
 import {BoundedReadSession,claimPrivateCompositionSource,type ReadSnapshot,type BoundedReadOptions} from '../../src/servicenow/bounded-read.js';
 import {BoundedUpdateSetSource,parseBoundedSourceInput} from '../../src/review/bounded-source.js';
+import {probeNewStatusAcceptance} from '../../src/review/abort-scope-evidence-source-status-probe.js';
 const id='a'.repeat(32),parent={sys_id:id,state:'in progress',application:'global',sys_updated_on:'2026-10-31',sys_mod_count:'0'};
 const encode=(v:unknown)=>new TextEncoder().encode(JSON.stringify(v));
 const snapshot=():ReadSnapshot=>({instanceUrl:'https://synthetic.invalid',authMode:'per-user',perUserBearerToken:'PRIVATE_TOKEN',oauth:{clientId:'unused'}});
 const profile=()=>({parent_bytes:encode({result:parent}),release_status:403 as const,cleanup:'cancelled' as const});
-const probe=(change:Record<string,unknown>={},options:Pick<BoundedReadOptions,'signal'|'limits'>={})=>BoundedReadSession.probeNewStatusAcceptance(snapshot(),{update_set_sys_id:id},{...options,synthetic_status:{...profile(),...change} as never});
+const probe=(change:Record<string,unknown>={},options:Pick<BoundedReadOptions,'signal'|'limits'>={})=>probeNewStatusAcceptance(snapshot(),{update_set_sys_id:id},{...options,synthetic_status:{...profile(),...change} as never});
 afterEach(()=>{vi.restoreAllMocks();vi.useRealTimers();});
 it('binds the real source and session continuation before close, without a permit or fallback',async()=>{
  const fetch=vi.spyOn(globalThis,'fetch').mockImplementation(()=>{throw Error('NETWORK_FORBIDDEN');});
- const r=await BoundedReadSession.probeNewStatusAcceptance(snapshot(),{update_set_sys_id:id},
+ const r=await probeNewStatusAcceptance(snapshot(),{update_set_sys_id:id},
   {synthetic_status:{parent_bytes:encode({result:parent}),release_status:403,cleanup:'cancelled'}});
  expect(r).toMatchObject({state:'status_accepted_closed_gate',fake_io:true,accepted_before_close:true,consumptions:1,ready_generation:1,
   status:403,cleanup_kind:'cancelled',fallback:'disabled',evidence_issuance:'disabled',release_permit:'unavailable',cleanup:'closed',reserved:0,
@@ -71,4 +72,9 @@ it('cannot attach a private status consumer to an existing session with a guesse
   expect(()=>new BoundedUpdateSetSource(s,parseBoundedSourceInput({update_set_sys_id:id}),{key:{},check:()=>{},take:()=>({result:parent}),takeStatus:()=>({purpose:'release',status:403,cleanup:'cancelled'}),capture})).toThrow('invalid_input');
   expect(capture).not.toHaveBeenCalled();expect(s.stats().requests).toBe(0);
  }finally{s.close();}
+});
+it('keeps the probe out of the runtime class and hands the friend out only once',async()=>{
+ expect(Object.hasOwn(BoundedReadSession,'probeNewStatusAcceptance')).toBe(false);
+ const {takeStatusAcceptanceProbe}=await import('../../src/servicenow/bounded-read.js');
+ expect(()=>takeStatusAcceptanceProbe()).toThrow('internal_review_error');
 });

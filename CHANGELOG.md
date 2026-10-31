@@ -32,6 +32,8 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 ### Added
 
+- Moves the SA-02 status-acceptance probe entry and its fake profile into a package-excluded development module. The runtime keeps only a one-shot internal friend that pins the fake object and normalizes its outputs; the static method is removed from `BoundedReadSession`.
+
 - Fixes the SA-02 probe so a failed ready transition reports the earlier stop reason (or `internal_review_error`) instead of `authentication_failed`, since the probe performs no authentication.
 
 - SA-02 adds a fresh fake-I/O-only probe connecting the actual bounded session and source creator continuation to one-shot, closed-gate status acceptance before close. Parent bytes use the same canonical C/G budget; private status receipts bind the pinned snapshot, registered lease/core, concrete source, ready generation and attempt. Copy/foreign/replayed receipts, unconfirmed cleanup, cancellation and expired windows fail closed with first diagnostics retained. Only a frozen fake-marked summary with all seven permissions false is returned. Existing fixed-200 composition/MCP workflows, fallback, permits, whole-run admission and real communication remain unchanged/disabled. Includes synthetic boundary tests and compiled/offline checks.

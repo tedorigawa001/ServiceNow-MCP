@@ -4,10 +4,10 @@ import { types } from 'node:util';
 import type { ServiceNowConfig } from './types.js';
 import { pinReviewReleaseConfig } from './review-release-config.js';
 import { registerReviewEvidenceSession, type ReviewRunBudgetLease, type ReviewSourceReleaseSnapshot } from './review-evidence-lifecycle.js';
-import {BoundedUpdateSetSource,parseBoundedSourceInput,type CompositionSourceConstruction} from '../review/bounded-source.js';
+import {BoundedUpdateSetSource,parseBoundedSourceInput,type CompositionSourceConstruction,type StatusAcceptanceDraft} from '../review/bounded-source.js';
 import {createCanonicalReviewBudget,CanonicalBudgetError} from './review-canonical-budget.js';
 import {createReviewBootstrapContract} from './review-bootstrap-contract.js';
-import {pinCompositionFakeIO,pinStatusAcceptanceFakeIO,type CompositionFakeIO,type StatusAcceptanceFakeIO} from './review-composition-fake-io.js';
+import {pinCompositionFakeIO,type CompositionFakeIO} from './review-composition-fake-io.js';
 
 export const BOUNDED_LIMITS = Object.freeze({ responseBytes: 4 * 1024 * 1024, totalBytes: 16 * 1024 * 1024,
   payloadBytes: 2 * 1024 * 1024, totalPayloadBytes: 8 * 1024 * 1024,
@@ -50,6 +50,38 @@ function pinDataObject(raw: unknown, keys: Set<string>): Record<string, unknown>
 let sourceConstructionClaim:(session:unknown,key:object,source:BoundedUpdateSetSource)=>boolean=()=>false;
 /** Immutable ESM friend function: boolean consumption only, never a registration or mutable-port getter. */
 export function claimPrivateCompositionSource(session:unknown,key:object,source:BoundedUpdateSetSource){return sourceConstructionClaim(session,key,source);}
+type StatusObservation=Readonly<{purpose:'release';status:403|404;cleanup:'cancelled'|'no_body'|'unconfirmed'}>;
+type StatusProbeFake=Readonly<{parent():Uint8Array;observe(signal:AbortSignal):Promise<StatusObservation>;dispose():void}>;
+export type StatusAcceptanceSummary=StatusAcceptanceDraft&Readonly<{accepted_before_close:true;consumptions:1;ready_generation:1;
+  budget:Readonly<{requests:number;received_bytes:number;payload_bytes:number}>;fake_io:true;cleanup:'closed';reserved:0}>;
+export type StatusAcceptanceProbe=(snapshot:ReadSnapshot,input:unknown,options:CompositionOptions&{fake:unknown})=>Promise<StatusAcceptanceSummary>;
+let statusProbe:StatusAcceptanceProbe|undefined;
+/** SA-02 friend for the package-excluded development module: handed out once, never re-registered or replaced. */
+export function takeStatusAcceptanceProbe():StatusAcceptanceProbe{
+  const probe=statusProbe;statusProbe=undefined;
+  if(!probe)throw new BoundedReadError('internal_review_error');
+  return probe;
+}
+const typedLength=Object.getOwnPropertyDescriptor(Object.getPrototypeOf(Uint8Array.prototype),'byteLength')!.get!,typedSet=Uint8Array.prototype.set;
+/** The friend is reachable from the package, so the fake object is pinned and every output is copied/validated here. */
+function pinStatusProbeFake(raw:unknown):StatusProbeFake{
+  const f=pinDataObject(raw,new Set(['parent','observe','dispose']));
+  const parent=f.parent,observe=f.observe,dispose=f.dispose;
+  if(typeof parent!=='function'||typeof observe!=='function'||typeof dispose!=='function')throw new BoundedReadError('invalid_input');
+  return Object.freeze({
+    parent(){
+      const b=Reflect.apply(parent,raw,[]);
+      if(!types.isUint8Array(b)||types.isProxy(b))throw new BoundedReadError('invalid_response');
+      const copy=new Uint8Array(Reflect.apply(typedLength,b,[]) as number);Reflect.apply(typedSet,copy,[b]);return copy;
+    },
+    async observe(signal:AbortSignal){
+      const v=pinDataObject(await Reflect.apply(observe,raw,[signal]),new Set(['purpose','status','cleanup']));
+      if(v.purpose!=='release'||(v.status!==403&&v.status!==404)||!['cancelled','no_body','unconfirmed'].includes(v.cleanup as string))throw new BoundedReadError('invalid_response');
+      return Object.freeze({purpose:'release' as const,status:v.status,cleanup:v.cleanup as StatusObservation['cleanup']});
+    },
+    dispose(){Reflect.apply(dispose,raw,[]);},
+  });
+}
 
 export class BoundedReadSession {
   private readonly controller = new AbortController();
@@ -81,12 +113,12 @@ export class BoundedReadSession {
   private readonly removeExternal: () => void;
   readonly releasePolicy: ReturnType<typeof pinReviewReleaseConfig>;
 
-  /** Fresh fake-only probe. No existing-session adoption, transport injection or activation flag. */
-  static async probeNewStatusAcceptance(snapshot:ReadSnapshot,input:unknown,options:CompositionOptions&{synthetic_status:StatusAcceptanceFakeIO}){
-    let session:BoundedReadSession|undefined,fake:ReturnType<typeof pinStatusAcceptanceFakeIO>|undefined;
+  /** Fresh fake-only SA-02 probe, reachable only through the one-shot friend. No existing-session adoption or activation flag. */
+  static async #runStatusAcceptanceProbe(snapshot:ReadSnapshot,input:unknown,options:CompositionOptions&{fake:unknown}){
+    let session:BoundedReadSession|undefined,fake:StatusProbeFake|undefined;
     try{
-      const fields=pinDataObject(options,new Set(['signal','limits','synthetic_status']));
-      fake=pinStatusAcceptanceFakeIO(fields.synthetic_status);
+      const fields=pinDataObject(options,new Set(['signal','limits','fake']));
+      fake=pinStatusProbeFake(fields.fake);
       const signal=fields.signal as AbortSignal|undefined;
       if(signal!==undefined){
         if(Object.getPrototypeOf(signal)!==AbortSignal.prototype||['addEventListener','removeEventListener','aborted'].some(k=>Object.hasOwn(signal,k)))throw new BoundedReadError('invalid_input');
@@ -108,7 +140,7 @@ export class BoundedReadSession {
     finally{fake?.dispose();if(session)session.#close();}
   }
 
-  async #probeStatusAcceptance(input:ReturnType<typeof parseBoundedSourceInput>,fake:ReturnType<typeof pinStatusAcceptanceFakeIO>){
+  async #probeStatusAcceptance(input:ReturnType<typeof parseBoundedSourceInput>,fake:StatusProbeFake){
     const key=Object.freeze({});this.#compositionKey=key;
     let consumer:Parameters<CompositionSourceConstruction['capture']>[0]|undefined,consumptions=0;
     const parents=new WeakMap<object,unknown>();
@@ -197,6 +229,7 @@ export class BoundedReadSession {
   }
 
   static {
+    statusProbe=(snapshot,input,options)=>BoundedReadSession.#runStatusAcceptanceProbe(snapshot,input,options);
     sourceConstructionClaim=(session:unknown,key:object,source:BoundedUpdateSetSource):boolean=>{
     if(!key||typeof key!=='object'||!session||typeof session!=='object'||types.isProxy(session)||!(#compositionKey in session)||!session.#compositionKey||session.#compositionKey!==key||session.#compositionSource||!session.#compositionStarted||session.disposed||session.#stopPropagated)return false;
     session.#compositionSource=source;return true;

@@ -29,11 +29,12 @@ vi.mock('../../src/review/bounded-source.js',async original=>{
   }
  }};
 });
-import {BoundedReadSession,type ReadSnapshot} from '../../src/servicenow/bounded-read.js';
+import {type ReadSnapshot} from '../../src/servicenow/bounded-read.js';
+import {probeNewStatusAcceptance} from '../../src/review/abort-scope-evidence-source-status-probe.js';
 import {BoundedUpdateSetSource} from '../../src/review/bounded-source.js';
 const id='a'.repeat(32),encode=(v:unknown)=>new TextEncoder().encode(JSON.stringify(v));
 const snap=():ReadSnapshot=>({instanceUrl:'https://synthetic.invalid',authMode:'per-user',perUserBearerToken:'PRIVATE_TOKEN',oauth:{clientId:'unused'}});
-const probe=(signal?:AbortSignal)=>BoundedReadSession.probeNewStatusAcceptance(snap(),{update_set_sys_id:id},{signal,synthetic_status:{parent_bytes:encode({result:{sys_id:id,state:'in progress',application:'global',sys_updated_on:'2026-10-31',sys_mod_count:'0'}}),release_status:403,cleanup:'cancelled'}});
+const probe=(signal?:AbortSignal)=>probeNewStatusAcceptance(snap(),{update_set_sys_id:id},{signal,synthetic_status:{parent_bytes:encode({result:{sys_id:id,state:'in progress',application:'global',sys_updated_on:'2026-10-31',sys_mod_count:'0'}}),release_status:403,cleanup:'cancelled'}});
 afterEach(()=>{control.mode='save';control.abort=()=>{};control.tokens.length=0;control.consumers.length=0;control.sources.length=0;control.diagnostics.length=0;vi.restoreAllMocks();});
 it('refuses a terminal from another closed constructor without changing its history',async()=>{
  const first=await probe(),before=JSON.stringify(first);control.mode='foreign';

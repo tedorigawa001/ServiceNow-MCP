@@ -44,7 +44,16 @@ sourceのprivate status consumerは一度限りのopaque受領物をtakeし、cl
 - 全体`npm test`：208ファイル・9,362テスト成功（専用36テスト）。`npm run build`、変更sourceのESLint、`node tests/review/package-http-classification.mjs`（409ファイル）成功。
 - 上記§4の記録は修正前の結果として残す。
 
-## 6 未確認と閉鎖
+## 6 パッケージ境界の変更（2026-10-31）
+
+- 公開static`BoundedReadSession.probeNewStatusAcceptance`と`pinStatusAcceptanceFakeIO`を、非同梱の[開発専用module](../src/review/abort-scope-evidence-source-status-probe.ts)へ移した。runtime classに同名staticは残らない。
+- private処理（`#probeStatusAcceptance`）は実sessionのprivate fieldに依存するためruntimeに残る。到達口はmodule読込時に一度だけ取得できる内部friend`takeStatusAcceptanceProbe`のみで、開発専用moduleが読込時に取得する。二度目の取得は`internal_review_error`。
+- package.jsonにexports制限がないため、friendは配布物からdeep importで取得し得る（開発専用moduleが読み込まれていない場合）。完全な除去ではない。friend側で、fake objectをdata propertyだけでpin、親bytesをcopy、観測結果を固定3項目・release／403／404／既知cleanupだけに正規化する。
+- [friend境界テスト](../tests/review/source-status-probe-friend.test.ts)を追加（6件）：一度限りの取得、method欠落・非byte親・余剰項目・候補外status・accessorの拒否。既存2ファイルは開発専用入口へ切替え、runtime classにstaticがないこと・friendの再取得拒否を1件追加。compiled fixtureも開発専用moduleから呼び、同2点を検査する。
+- 変異確認：friendの一度限り消去を外すと2件、観測結果のpinを外すと2件失敗（確認後に復元）。observeのpurpose／status検査だけを外した変異は、source側のstrict検査が同入力を拒否するため検出されない（多重防御）。
+- 全体`npm test`：209ファイル・9,369テスト成功。`npm run build`、変更source／testのESLint、`node tests/review/package-http-classification.mjs`（新moduleの非同梱・配布runtimeからの非参照を含む、409ファイル）成功。
+
+## 7 未確認と閉鎖
 
 実認証／本人性、固定URLからResponseへのbinding、native reader cleanupから本受領物への接続、HTTP／cleanup診断の上位完全配送は未確認。SA-03の承認後C方式判定・fallback、実transport・選択payload／worker・final予約移譲も未実装。
 

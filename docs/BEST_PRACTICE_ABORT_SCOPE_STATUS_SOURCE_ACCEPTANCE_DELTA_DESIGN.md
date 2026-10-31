@@ -1,6 +1,6 @@
 # AU-BR-006：固定sourceのstatus private受理・実session binding・close前消費の接続差分
 
-Version: br006-status-source-acceptance-delta-draft-0.6 / Date: 2026-10-31。
+Version: br006-status-source-acceptance-delta-draft-0.7 / Date: 2026-10-31。
 Status: **§10のSA-01に加え、§11のSA-02を実session／source class＋固定fake I/Oで実装。承認後のSA-03・実transport採用は未実装。fallback有効化・実接続・実通信は行わない。正式発行口閉鎖・Unknown・全体受付無効・VM／監視／telemetry調査保留を維持する。**
 
 基準：[session binding差分draft-0.5](BEST_PRACTICE_ABORT_SCOPE_STATUS_SESSION_BINDING_DELTA_DESIGN.md)、[private composition](BEST_PRACTICE_ABORT_SCOPE_PRIVATE_COMPOSITION_DESIGN.md)、[実session／typed取得差分](BEST_PRACTICE_ABORT_SCOPE_REAL_TYPED_BINDING_DELTA_DESIGN.md)、[承認判断用の比較資料](BEST_PRACTICE_ABORT_SCOPE_NON200_APPROVAL_COMPARISON.md)。以下の型名・stage・操作名は内部契約案であり、既存exportや承認済みAPIではない。
@@ -169,7 +169,7 @@ draft-0.4のレビュー修正：ready・親受理の前提消失はpre／post g
 
 ## 11 SA-02：実classの同constructor binding・非実行private受理（fake I/O）
 
-`BoundedReadSession.probeNewStatusAcceptance`は**新規runだけ**を生成する別の固定fake-only入口である。既存session・source・fetch・consumerを引数に取らず、同snapshot／低減limits／AbortSignalとdata-onlyの`synthetic_status`だけをpinする。per-user snapshotに限定し、認証readyはfake前提で一度立てる。OAuth交換・本人性確認を実施した証拠ではない。公開MCP tool／optionsのlaneを変更せず、constructor内のfetchは固定throwとする。
+開発専用の[`probeNewStatusAcceptance`](../src/review/abort-scope-evidence-source-status-probe.ts)は**新規runだけ**を生成する別の固定fake-only入口である。既存session・source・fetch・consumerを引数に取らず、同snapshot／低減limits／AbortSignalとdata-onlyの`synthetic_status`だけをpinする。per-user snapshotに限定し、認証readyはfake前提で一度立てる。OAuth交換・本人性確認を実施した証拠ではない。公開MCP tool／optionsのlaneを変更せず、constructor内のfetchは固定throwとする。
 
 fake profileの項目は親のUTF-8 JSON bytes、release403／404、cleanup enum（cancelled／no_body／unconfirmed）、0〜10,000msの任意delayだけ。bytesはawait前にcopyし、accessor／proxy／余剰項目を拒否する。これは合成I/Oの台本であり、callerがnative cleanup診断を正式証拠として提出する口ではない。従来の`synthetic_io` schemaと200限定hookは変更しない。
 
@@ -185,6 +185,8 @@ source consumerは受領物を一度takeしてrelease用途・403／404・cleanu
 
 draft-0.6のレビュー修正：probeの認証ready失敗を`authentication_failed`と表示せず、先行停止理由（なければ`internal_review_error`）を返す。このprobeは認証を実施しないため、認証失敗と表示しない。
 
-[専用合成テスト](../tests/review/source-status-binding.test.ts)、[テスト専用境界](../tests/review/source-status-binding-boundary.test.ts)、[compiled fixture](../tests/review/fixtures/compiled-source-status-binding.mjs)、[検証記録](E2E_BEST_PRACTICE_SOURCE_STATUS_BINDING_SA02_2026-10-31.md)を参照。境界置換はtests内だけに置き、製品へsetter／registryを追加しない。
+draft-0.7のパッケージ境界変更：公開static入口と`synthetic_status` profileのpinを、非同梱の開発専用moduleへ移した。private処理は実sessionのprivate fieldに依存するためruntimeに残し、module読込時に一度だけ取得できる内部friend（`takeStatusAcceptanceProbe`）だけで到達させる。package.jsonにexports制限がないため、このfriendは配布物からdeep importで呼べ得る。完全な除去ではなく到達経路の縮小であり、friendは渡されたfake objectをdata propertyだけでpinし、親bytesをcopy、観測結果を固定3項目・候補値だけに正規化する。二度目の取得は`internal_review_error`で拒否する。
+
+[専用合成テスト](../tests/review/source-status-binding.test.ts)、[friend境界テスト](../tests/review/source-status-probe-friend.test.ts)、[テスト専用境界](../tests/review/source-status-binding-boundary.test.ts)、[compiled fixture](../tests/review/fixtures/compiled-source-status-binding.mjs)、[検証記録](E2E_BEST_PRACTICE_SOURCE_STATUS_BINDING_SA02_2026-10-31.md)を参照。境界置換はtests内だけに置き、製品へsetter／registryを追加しない。
 
 この段階はreal class＋fake I/Oであり、実URL／認証とResponseの由来、native readerのcleanup確認からこの受領物への接続、HTTP／cleanup上位診断の完全な配送を証明しない。SA-T01〜10の全runtime条件を達成したとはしない。SA-03のC方式判定・fallback、実transport、metadata／payload／worker、final移譲、正式発行・全体受付は未実装／無効のままである。
