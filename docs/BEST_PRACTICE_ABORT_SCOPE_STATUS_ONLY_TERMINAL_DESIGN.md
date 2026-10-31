@@ -207,6 +207,6 @@ ST-01の合成terminalへnative結果を昇格する接続、実session／lease�
 
 ## 12 ST-02後の接続設計（未実装）
 
-[ST-03接続詳細設計draft-0.2](BEST_PRACTICE_ABORT_SCOPE_STATUS_TERMINAL_CONNECTION_DESIGN.md)で、同attemptのprivate status-only終端・一度限りの消費・発行後失効と診断保持を一体化した。ST-02内部recordを唯一の発行元とし、外部診断copyをST-01へ渡して証拠に昇格する方式は採らない。
+[ST-03接続詳細設計draft-0.3](BEST_PRACTICE_ABORT_SCOPE_STATUS_TERMINAL_CONNECTION_DESIGN.md)で、同attemptのprivate status-only終端・一度限りの消費・発行後失効と診断保持を一体化した。ST-02内部recordを唯一の発行元とし、外部診断copyをST-01へ渡して証拠に昇格する方式は採らない。
 
 同owner／anchor／元window／注入budget・固定clockへの結合、clock callback前のclaim消費と直後のpost-guard、同期失効、HTTP／cleanup事実と別拒否slotの保持を定めた案。ST-03Aの合成内部契約だけを実装し、非実行draftは外へ出さない。ST-03B／Cとnative record接続は未実装、STC-A01〜A05と親のruntime承認は未実施。runtime／fallback等の許可ではなく、正式発行口閉鎖・Unknown・全体受付無効・調査保留を維持する。

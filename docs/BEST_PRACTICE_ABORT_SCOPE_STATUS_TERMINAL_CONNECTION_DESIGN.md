@@ -1,6 +1,6 @@
 # AU-BR-006 ST-03：private status-only終端・一度限り消費・失効の接続詳細設計
 
-Version: br006-status-terminal-connection-draft-0.2 / Date: 2026-10-31。
+Version: br006-status-terminal-connection-draft-0.3 / Date: 2026-10-31。
 Status: ST-03Aの§10合成内部契約だけを実装。実recordからのprivate発行・消費経路・連続試験とruntime承認は未実施。正式発行口閉鎖・Unknown・全体受付無効・VM／監視／telemetry調査保留を維持する。
 
 親：[status-only終端詳細設計](BEST_PRACTICE_ABORT_SCOPE_STATUS_ONLY_TERMINAL_DESIGN.md) §4／9〜11、[非200 HTTP設計](BEST_PRACTICE_ABORT_SCOPE_NON200_HTTP_DESIGN.md) §8／10。
@@ -189,8 +189,8 @@ fixtureの別呼出しは独立した合成事例であり、失敗した実run�
 - context／anchor／record／発行claimをcallback前にstartedへ進め、終了時はspentとする。重複生成・混入・再入は停止し、失敗後の発行再試行でもclaimを戻さない。foreign ownerのclaim・診断は変更しない。
 - 記録生成と発行は同じ単調remainingを使い、元floorの等号・期限切れ・逆行・clock throwで拒否する。発行clock中の取消・再入の後にもrevoked／first primary／refusal／同一性を検査する。
 - 合成recordにおけるrelease403／404の適格な状態は、privateな**非実行draft**としてだけ保持する。hard401・local parent404・未確認cleanupは診断専用。read開始違反はprimaryが未設定でもrefusalから停止させ、cleanup確認事実は保持する。
-- HTTP／cleanupはrecord内のimmutable参照を保持し、発行拒否・停止で書き換えない。first primaryとfirst refusal／stageを有限slotに残す。stopはdraftを落とし、診断と過去の発行件数を残すが、復活・再発行しない。
+- HTTP／cleanupはrecord内のimmutable参照を保持し、発行拒否・停止で書き換えない。first primaryとfirst refusal／stageを有限slotに残す。phaseは最後に書いた状態を示すだけなので、最初の終端状態（diagnostic_only／failed／revoked）を`first_terminal`としてfirst-winsで別に保持し、§6のFailed／Revoked区別はphaseではなくこのslotとprimary／revokedで判定する。stopはdraftを落とし、診断と過去の発行件数を残すが、復活・再発行しない。
 
 fixtureのrecordは固定presetによる**合成事実**であり、ST-02のnative header／cleanupを受領した記録ではない。consumerのpre／post-guard・一度限り消費・発行後失効の統合はST-03B、注入Responseからのprivate record連続受領はST-03Cに残る。local budget／世代を実canonical lease／source／ReleasePermitの証拠に昇格せず、§8の20条件全体の達成とも主張しない。
 
-[合成テスト](../tests/review/status-context.test.ts)は製品のscenario一覧・適格性helperを使わない33ケースの期待表と、invalid／getter／proxy／権限／native非呼出し等を含む64件。[ST-03A検証記録](E2E_BEST_PRACTICE_STATUS_CONTEXT_ST03A_2026-10-31.md)と[梱包確認](../tests/review/package-http-classification.mjs)を参照。runtimeの発行前提・STC-A01〜A05／親承認は未承認のままとする。
+[合成テスト](../tests/review/status-context.test.ts)は製品のscenario一覧・適格性helperを使わない34ケースの期待表と、invalid／getter／proxy／権限／native非呼出し等、最初の終端状態保持6件を含む71件。[ST-03A検証記録](E2E_BEST_PRACTICE_STATUS_CONTEXT_ST03A_2026-10-31.md)と[梱包確認](../tests/review/package-http-classification.mjs)を参照。runtimeの発行前提・STC-A01〜A05／親承認は未承認のままとする。

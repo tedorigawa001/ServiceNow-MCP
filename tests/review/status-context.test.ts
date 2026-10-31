@@ -18,9 +18,10 @@ const cases = [
     ['stop_after_issue', 'revoked', 'closed', 1], ['expired', 'failed', 'deadline_exceeded', 0],
     ['reverse_clock', 'failed', 'invalid_observation_time', 0], ['clock_rewind', 'failed', 'invalid_observation_time', 0],
     ['clock_throw', 'failed', 'internal_review_error', 0], ['retry_after_failure', 'failed', 'evidence_binding_mismatch', 0],
+    ['stop_after_failure', 'revoked', 'evidence_binding_mismatch', 0],
 ] as const;
-it('has 33 distinct independent expectations and exports no private ports', () => {
-    expect(cases).toHaveLength(33); expect(new Set(cases.map(c => c[0])).size).toBe(33);
+it('has 34 distinct independent expectations and exports no private ports', () => {
+    expect(cases).toHaveLength(34); expect(new Set(cases.map(c => c[0])).size).toBe(34);
     expect(Object.keys(module)).toEqual(['runSyntheticStatusContextFixture']);
 });
 it.each(cases)('enforces the private contract: %s', (name, phase, primary, drafts) => {
@@ -105,4 +106,11 @@ it('runs without native, network, timers or external callbacks', () => {
     for (const name of ['fetch', 'Response', 'ReadableStream', 'setTimeout', 'setInterval']) vi.stubGlobal(name, forbidden);
     try { for (const [name] of cases) expect(result(name).ok).toBe(true); }
     finally { vi.unstubAllGlobals(); }
+});
+it.each([
+    ['stop_before_issue', 'failed', 'revoked'], ['stop_after_failure', 'revoked', 'failed'], ['cancel_during_issue', 'revoked', 'revoked'],
+    ['hard', 'diagnostic_only', 'diagnostic_only'], ['stop_after_issue', 'revoked', 'revoked'], ['body', 'draft_held', null],
+] as const)('keeps the first terminal state for %s even when phase is overwritten later', (name, phase, first) => {
+    const d = result(name).diagnostic;
+    expect(d.phase).toBe(phase); expect(d.first_terminal).toBe(first);
 });

@@ -35,10 +35,12 @@ function construct() {
     let context: Context | undefined, anchor: Anchor | undefined, record: Record | undefined, draft: Draft | undefined;
     let phase: Phase = 'context_bound', primary: Code | null = null, refusal: Code | null = null;
     let refusedAt: 'context' | 'anchor' | 'record' | 'issue' | null = null, revoked = false;
+    // phase is the latest state; the first terminal state is kept separately, first-wins like primary.
+    let terminal: 'diagnostic_only' | 'failed' | 'revoked' | null = null;
     let stopReason: 'cancelled' | 'closed' | null = null, last: number | undefined, sampling = false;
     function fail(code: Code, stage: NonNullable<typeof refusedAt>): false {
         primary ??= code; refusal ??= code; refusedAt ??= stage;
-        revoked = true; draft = undefined; phase = 'failed'; return false;
+        revoked = true; draft = undefined; phase = 'failed'; terminal ??= 'failed'; return false;
     }
     function sample(stage: NonNullable<typeof refusedAt>): boolean {
         if (sampling) return fail('invalid_state', stage);
@@ -108,7 +110,7 @@ function construct() {
             if (revoked) return fail(primary ?? 'invalid_state', 'issue');
             if (primary || refusal || !record || record.header.purpose !== 'release' || ![403, 404].includes(record.header.status) ||
                 record.cleanup.disposition !== 'confirmed' || record.cleanup.read_started || record.cleanup.read !== 0) {
-                draft = undefined; phase = 'diagnostic_only';
+                draft = undefined; phase = 'diagnostic_only'; terminal ??= 'diagnostic_only';
                 // A refusal alone is a stop, even when the inherited primary was null (ST-T17a).
                 if (refusal) return fail(primary ?? refusal, 'issue');
                 return false;
@@ -120,10 +122,10 @@ function construct() {
         } finally { claims.issue = 'spent'; }
     }
     function stop(code: 'cancelled' | 'closed' = 'cancelled') {
-        revoked = true; draft = undefined; stopReason ??= code; primary ??= code; phase = 'revoked';
+        revoked = true; draft = undefined; stopReason ??= code; primary ??= code; phase = 'revoked'; terminal ??= 'revoked';
     }
     function diagnostics() {
-        return Object.freeze({ scope: 'synthetic_contract_only' as const, phase, primary, refusal, refusal_stage: refusedAt,
+        return Object.freeze({ scope: 'synthetic_contract_only' as const, phase, first_terminal: terminal, primary, refusal, refusal_stage: refusedAt,
             revoked, stop_reason: stopReason, http: record?.header ?? null, cleanup: record?.cleanup ?? null,
             claims: Object.freeze({ ...claims }), counts: Object.freeze({ ...counts }), draft_held: draft !== undefined,
             consumer_reserved: !!consumeSlot, consumer_implemented: false as const, permissions });
@@ -138,7 +140,7 @@ const scenarios = [
     'foreign_context', 'foreign_anchor', 'foreign_record', 'foreign_generation', 'foreign_budget', 'foreign_clock', 'foreign_window',
     'record_copy', 'external_diagnostic', 'json_diagnostic', 'duplicate_context', 'duplicate_anchor', 'duplicate_record', 'duplicate_issue',
     'anchor_context_mismatch', 'record_anchor_mismatch', 'issue_reentry', 'cancel_during_issue', 'stop_before_issue', 'stop_after_issue',
-    'expired', 'reverse_clock', 'clock_rewind', 'clock_throw', 'retry_after_failure',
+    'expired', 'reverse_clock', 'clock_rewind', 'clock_throw', 'retry_after_failure', 'stop_after_failure',
 ] as const;
 type Scenario = typeof scenarios[number];
 function scenario(raw: unknown): Scenario | null {
@@ -182,10 +184,10 @@ export function runSyntheticStatusContextFixture(raw: unknown) {
         if (selected === 'issue_reentry') owner.fake.action = () => { owner.issue(bound); };
         if (selected === 'cancel_during_issue') owner.fake.action = () => { owner.stop(); };
         if (selected === 'stop_before_issue') owner.stop();
-        if (selected === 'retry_after_failure') requested = Object.freeze({ ...bound, record: Object.freeze({ ...bound.record }) });
+        if (selected === 'retry_after_failure' || selected === 'stop_after_failure') requested = Object.freeze({ ...bound, record: Object.freeze({ ...bound.record }) });
         owner.issue(requested);
         if (selected === 'duplicate_issue' || selected === 'retry_after_failure') owner.issue(bound);
-        if (selected === 'stop_after_issue') owner.stop('closed');
+        if (selected === 'stop_after_issue' || selected === 'stop_after_failure') owner.stop('closed');
     }
     return Object.freeze({ ok: true as const, kind: 'status_context_contract_fixture' as const, diagnostic: owner.diagnostics(),
         foreign_unchanged: !other || JSON.stringify(other.diagnostics()) === JSON.stringify(foreignBefore), permissions });

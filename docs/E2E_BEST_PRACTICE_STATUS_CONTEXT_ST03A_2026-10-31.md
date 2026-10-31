@@ -33,6 +33,13 @@ ST-01／ST-02・実session・runtimeの台帳／生成口は変更しない。re
 
 初回の新規63件は成功。その後release404の固定ケースを追加し、最終64件・関連8ファイルを再確認した。この実装工程でテスト失敗は発生していない。
 
+## レビュー修正（2026-10-31）
+
+- 指摘：`primary`は最初の失敗を保持するが、`phase`は最後に書いた状態を示す。例えば停止後の発行拒否では`phase: 'failed'`、失敗後の停止では`'revoked'`となり、phaseだけでは§6のFailed／Revokedの先後を判別できない。現fixtureでは`primary`／`refusal_stage`／`stop_reason`から読めるため欠陥ではないが、ST-03Bでconsumerを接続する前に区別を固定する。
+- 修正：最初の終端状態（diagnostic_only／failed／revoked）をfirst-winsの`first_terminal`として保持し、診断に追加した。phaseの意味は変更しない。失敗後に停止する固定scenario `stop_after_failure`を追加した（34ケース）。
+- 回帰試験：stop_before_issue（phase=failed／first=revoked）、stop_after_failure（phase=revoked／first=failed）、cancel_during_issue、hard、stop_after_issue、body（null）の6件。`first_terminal`を最後に書いた値で上書きする実装へ変えると、先後が逆になる2件だけが失敗する。
+- 再検証：tsc・変更対象ESLint・全体200 files／9,093 tests PASS、build後の梱包確認PASS（409 files）、`git diff --check` PASS。§2の実行結果は修正前の記録として残す。
+
 ## 4 残課題と閉鎖
 
 ST-03Bの一度限りconsumer・発行後失効の統合、ST-03Cの注入Response→ST-02同reader cleanup→private record→消費は未実装。ST-03Aのdraft保持・stop時破棄は、これらの連続接続や実session／source／ReleasePermit／canonical予算へのbindingを証明しない。
