@@ -32,6 +32,8 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 ### Added
 
+- SA-01 adds a package-excluded synthetic source-status acceptance contract with a creator-owned issuer, a shared one-shot body/status release claim, non-executable drafts and acceptance before close. Fixed case-name fixtures verify identity mixing, foreign-token claim spending, pre/post cancellation/expiry/reentry, body/status conflicts and immutable history without exporting any token or consumer. All seven permissions remain false; no native/session/source adoption, fallback, permit, whole-run admission or real communication is enabled. Includes RED/GREEN synthetic tests and compiled/offline packaging checks.
+
 - Fixes the fake bound status workflow so descriptors the injected owner would refuse are rejected before reservation and simulated dispatch (C=0), and maps the lifecycle stop code to the native owner so an ordinary close is recorded as `closed`.
 
 - Adds a package-excluded fake composition connecting the existing canonical/status binding to ST-03C's injected Response, same-reader typed cleanup and one-shot private consumption. A fresh local constructor owns all identities; no existing session/binding/terminal or external cleanup diagnostic can be adopted. Simulated dispatch uses the same C budget, status-only reads remain zero/G=0, synchronous stop revokes native claims, and HTTP/cleanup/history remain separate. Includes replay, cancellation, pending/late cleanup, no-body, hard/local HTTP, input-mixing and compiled packaging tests. All seven permissions remain false; fallback, formal issuance, whole-run admission and real transport adoption stay disabled.

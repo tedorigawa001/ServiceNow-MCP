@@ -1,7 +1,7 @@
 # AU-BR-006：固定sourceのstatus private受理・実session binding・close前消費の接続差分
 
-Version: br006-status-source-acceptance-delta-draft-0.2 / Date: 2026-10-31。
-Status: **詳細設計案のみ。実装・fallback有効化・実session採用・実接続・実通信は行わない。正式発行口閉鎖・Unknown・全体受付無効・VM／監視／telemetry調査保留を維持する。**
+Version: br006-status-source-acceptance-delta-draft-0.3 / Date: 2026-10-31。
+Status: **§10のSA-01を合成issuer限定で実装。実class接続のSA-02・承認後のSA-03は未実装。fallback有効化・実session採用・実接続・実通信は行わない。正式発行口閉鎖・Unknown・全体受付無効・VM／監視／telemetry調査保留を維持する。**
 
 基準：[session binding差分draft-0.5](BEST_PRACTICE_ABORT_SCOPE_STATUS_SESSION_BINDING_DELTA_DESIGN.md)、[private composition](BEST_PRACTICE_ABORT_SCOPE_PRIVATE_COMPOSITION_DESIGN.md)、[実session／typed取得差分](BEST_PRACTICE_ABORT_SCOPE_REAL_TYPED_BINDING_DELTA_DESIGN.md)、[承認判断用の比較資料](BEST_PRACTICE_ABORT_SCOPE_NON200_APPROVAL_COMPARISON.md)。以下の型名・stage・操作名は内部契約案であり、既存exportや承認済みAPIではない。
 
@@ -139,10 +139,26 @@ oracleは固定sourceの受理イベント順、独立したfake dispatch件数�
 
 ## 9 次の実装単位・承認待ち
 
-1. **SA-01**：固定生成元・source用受理claim・非実行draft・close前消費の内部契約を合成issuerだけで実装。fallbackやpermitは発行しない。
+1. **SA-01（§10に実装記録）**：固定生成元・source用受理claim・非実行draft・close前消費の内部契約を合成issuerだけで実装。fallbackやpermitは発行しない。
 2. **SA-02**：同constructorの実source class／session private継続へのbindingをfake I/Oで検証。200 guardは維持し、status用非実行分岐の検証を実通信と分ける。runtimeへのfixture採用口を作らない。
 3. **SA-03（承認後の別段階）**：D1／D2と関連A／ST-A／STC-Aの条件確定後に、同消費処理からのC方式判定を検討。承認だけで自動有効化せず、新規run限定で設計・実装・回帰確認する。
 
 唯一のconsumerのmodule配置・opaque終端の表現・body/status競合claimの既存stateへの組込みは実装前レビュー事項。現在のST-03C自動consumerをruntimeへimportしないこと、停止時の部分source状態撤去と上位診断寿命を先に確認する。
 
 fallback有効化・retry枯渇fallback・実transport採用・実通信・metadata／payload／worker・final移譲は本書で承認しない。正式発行口閉鎖・Unknown・全体受付無効・調査保留を維持する。
+
+## 10 SA-01：合成issuer限定の内部契約
+
+[実装](../src/review/abort-scope-evidence-source-status-acceptance.ts)のprivate constructorが、合成frame・issuer・source受理claim・terminal記録・唯一のconsumerを一緒に生成する。外部exportは**固定case名だけ**を受けるfixture関数で、raw terminal／identity／consumer／callback／sessionは受け取らず、private portやtokenを返さない。module全体は既存の開発専用除外patternで非同梱となる。
+
+frameの15参照はsession／constructor key／snapshot／lease／core／source／target／ready／generation／parent／transport／attempt／method／URL／windowの合成identityである。これは実認証・URL・予算・source classの証拠ではない。ready・親受理の前提はprivate fixture内の有限状態でのみ操作する。
+
+terminalは最大1個で、private WeakMapとlive slotに保持する。consumerはcallback前にrelease-use claimをstartedにし、自分のlive slotを外してlookupを一度行う。誤ったtokenでも自分のclaimはspentとなり、外国issuerのmapを変更しない。pre-guard→非実行draft→post-guardの後だけ`AcceptedClosedGate`を確定する。body分岐の合成markerも同claimを消費するため、statusとの二重成功はない。
+
+ここでのcleanupはsynthetic記録で、同readerのOS／native操作の実証ではない。release403／404・確認済み・read0だけが候補で、no_bodyは別kindとして保持する。hard401／parent403、parent404、未確認cleanup、read開始、retry枯渇は候補を発行しない。raw例外・診断copy・空JSONを受理する公開操作はない。
+
+取消／close／期限切れ／clock例外／再入／identity混入時はprivate slotとdraftを破棄する。claimを復元せず、復旧したclockやreadyから再試行できない。close前の受理成功は限定履歴として保持し、その後の失敗やcloseで書き換えない。返却時には必ずclose済み、live terminal／draftなし、権限7項目falseである。C/G/Pは0で、会計処理やI/Oを新設しない。
+
+費用は固定15参照照合、最大1個のterminal／draft、有限case内の固定回数のclock検査・lookup・closeに限る。無制限retry・履歴探索・外部callback登録はない。body側は200解析ではなくclaim競合を試す非実行markerであり、正式body ackではない。
+
+[59件の合成テスト](../tests/review/source-status-acceptance.test.ts)、[compiled fixture](../tests/review/fixtures/compiled-source-status-acceptance.mjs)、[検証記録](E2E_BEST_PRACTICE_SOURCE_STATUS_ACCEPTANCE_SA01_2026-10-31.md)を参照。§8のSA-T01の実class接続、SA-T02の実認証／URL binding、SA-T03の実source受理、SA-T09の実session resource解放は未確認であり、合成成功から全受入条件達成としない。SA-02／03、fallback／permit／正式発行・全体受付は引き続き未実装／無効のままとする。
