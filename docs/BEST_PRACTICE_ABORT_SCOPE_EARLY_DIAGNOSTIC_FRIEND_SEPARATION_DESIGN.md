@@ -1,6 +1,6 @@
 # AU-BR-006：constructor最初期の診断owner・fake friend分離
 
-Version: br006-early-diagnostic-friend-separation-draft-0.1 / Date: 2026-10-31。
+Version: br006-early-diagnostic-friend-separation-draft-0.2 / Date: 2026-10-31。
 Status: **詳細設計案。実装・ビルド設定変更・friend撤去は未実施。正式発行口閉鎖・Unknown・全体受付無効・VM／監視／telemetry調査保留を維持する。実接続・実通信・実機操作・設定変更・Pushは行わない。**
 
 基準：`134248b`、[ND設計§3・§13](BEST_PRACTICE_ABORT_SCOPE_NATIVE_STATUS_DIAGNOSTIC_DESIGN.md)、[ND-03検証§5・§6](E2E_BEST_PRACTICE_NATIVE_DIAGNOSTIC_ND03_2026-10-31.md)、[source受理設計](BEST_PRACTICE_ABORT_SCOPE_STATUS_SOURCE_ACCEPTANCE_DELTA_DESIGN.md)。以下の型名・配置は内部契約案で、公開API／JSONの追加や承認済み実装ではない。
@@ -9,7 +9,7 @@ Status: **詳細設計案。実装・ビルド設定変更・friend撤去は未�
 
 [現session](../src/servicenow/bounded-read.ts)はclass fieldでAbortController・`performance.now()`・日時を評価し、その後constructorで設定provider・canonical core・admission・登録owner・timer・外部abort listenerを生成する。ND-03のnative診断ownerは、それらより後のdriver.beginで生成される。
 
-また、`takeNativeStatusCompositionProbe`／`takeStatusAcceptanceProbe`のexportだけでなく、そのclosure・static private probe・driver型・static初期化が配布対象の同ファイルに残る。開発moduleが非同梱でも、このfriendはdeep importで取得し得る。one-shotは重複防止であり、取得者の真正性を証明しない。
+また、`takeNativeStatusCompositionProbe`／`takeStatusAcceptanceProbe`のexportだけでなく、そのclosure・static private probe・driver型・static初期化が配布対象の同ファイルに残る。開発moduleが非同梱でも、このfriendはdeep importで取得し得る。one-shotは重複防止であり、取得者の真正性を証明しない。加えて、公開static `BoundedReadSession.prepareNewReviewComposition`は`synthetic_io`指定時にdata-onlyのfake byte列を受けるlane（`#prepareCompositionIO`、`fake_io:true`のsummary）を持ち、その依存`review-composition-fake-io`も`dist/servicenow`へ同梱される。callbackは受けず一度限りでもないが、配布classに残るfake分岐である。
 
 目標は次の2点を同時に満たすこと。
 
@@ -17,6 +17,8 @@ Status: **詳細設計案。実装・ビルド設定変更・friend撤去は未�
 2. **本番生成継続とfake orchestrationを物理的に分離**し、任意fake driverを受けるfriend本体を配布物からなくす。
 
 本番binding、認証・URL由来の証明、ReleasePermit発行、SA-03／fallback、選択payload／workerの採用は非対象。既存200 guardを維持し、本書の完了をgate解除条件に読み替えない。
+
+draft-0.2のレビュー修正：撤去対象からSA-01の`synthetic_io` laneと同梱fake I/O moduleが漏れていた点を§1・§7.2・§7.3・EF-T09へ追加し、§6のrollback順を現行`#close()`と同じowner／core先行へ揃えた。
 
 ## 2 採用案と代替案
 
@@ -94,7 +96,7 @@ resource台帳は可変長callback stackではなく、下表の固定slotと取
 | external abort listener | target／固定callback／登録試行を事前記録 | 登録throwでも同callbackのremoveを試みる。元からabortedのケースを前後検査 |
 | source／transport継続 | private creatorで捕捉後 | 同creatorのrevokeを一度。terminal／draftのlive slotを失効 |
 
-rollbackは、authority失効→listener除去→timer clear→controller abort→owner／core close→admission返却→credential参照解除→診断sealを基本の固定順とする。解除中のcallbackもfirst reasonを変更しない。個別解除の失敗で後続slotの解放を省略しない。
+rollbackは、authority失効→owner／core close→listener除去→timer clear→controller abort→admission返却→credential参照解除→診断sealを基本の固定順とする。現行`#close()`（composition失効→登録owner close→core writer close→timer／listener解除→phase／controller abort→admission返却）と同じく、abortで起動するcallbackが生きたowner／coreへ停止を書けない順にする。部分生成では未取得slotを飛ばすだけで順序を入れ替えない。解除中のcallbackもfirst reasonを変更しない。個別解除の失敗で後続slotの解放を省略しない。
 
 constructor段階にはreader／workerがまだ存在しない。後段の非同期cleanupを同期constructor rollbackに混ぜず、元run／cleanup floorへ結合した別のjoinを使う。新しい60秒のcleanup予算を作らない。解除不明・解除throwはteardown=unconfirmedとして残し、元のprimaryと別軸に保持する。
 
@@ -117,6 +119,7 @@ constructor段階にはreader／workerがまだ存在しない。後段の非同
 - `takeNativeStatusCompositionProbe`、`nativeStatusProbe`保存slot、`#runNativeStatusProbe`とそのstatic登録。
 - SA-02の`takeStatusAcceptanceProbe`、`statusProbe`、`#runStatusAcceptanceProbe`、fake driver／profile pinとstatic登録。
 - `NativeStatusProbeScope`／fake driver・非実行probe summary等の試験専用型、および共通method中のfake専用分岐。
+- SA-01の`prepareNewReviewComposition`の`synthetic_io` lane：overload・`#prepareCompositionIO`・`fake_io:true`のprepared summary、`pinCompositionFakeIO`／`CompositionFakeIO`と`review-composition-fake-io`の配布物。data-onlyでcallbackを受けないことは残置理由にしない。`synthetic_io`省略時の固定生成summary（CM-04-02互換）は通常経路の範囲として別に扱い、fake laneと一緒に残さない。
 
 private source consumerのうち本番の固定bindingに必要な部分は、任意driverを受け取らない固定kernelへ残すか、③本番bindingの設計で置換する。名前を変えてfriendを残す、`undefined`初期値にして後から登録する、hidden symbol／secretで再開する方式は不可。
 
@@ -124,7 +127,7 @@ private source consumerのうち本番の固定bindingに必要な部分は、�
 
 通常の`src`→`dist`を配布用とし、開発rootのcompiled試験は別の専用出力先（例：.test-build）へ出す。出力先・tsconfigは案であり、今回は作成・変更しない。配布ビルドはtest rootを入力に含めず、JS／.d.ts／map／dynamic-import先を含む依存閉包にfake orchestrationを残さない。
 
-`package.json.files`の除外だけでは、同梱`dist/servicenow/bounded-read.js`内のfriend本体を除去できない。将来の梱包試験では、非同梱確認に加え、配布ファイルの禁止export／probe本体／任意driver受付／登録slotの不在を確認する。文字列検査は補助とし、module export・構文／依存関係の検査と実際の配布物からの負の対照を組み合わせる。
+`package.json.files`の除外だけでは、同梱`dist/servicenow/bounded-read.js`内のfriend本体や`synthetic_io` lane、`dist/servicenow/review-composition-fake-io.js`を除去できない。将来の梱包試験では、非同梱確認に加え、配布ファイルの禁止export／probe本体／任意driver受付／登録slotの不在を確認する。文字列検査は補助とし、module export・構文／依存関係の検査と実際の配布物からの負の対照を組み合わせる。
 
 古いdist／test出力の混入を避け、空の検証先でbuild・packする。取り除いたfriendの後方互換shimは同梱しない。runtimeの通常機能に必要な依存ファイルまで除外して壊す方式も不可。
 
@@ -161,7 +164,7 @@ shellは固定3purpose slot・固定reason／resource／claim slotのみで、�
 | EF-T06 | timer／listenerの部分登録、解除throw | 可能な解除を全slotで実施。unknownをcompleteにしない |
 | EF-T07 | constructor throwでinstanceを返さない | 固定factoryが失敗copyを一度回収。raw error／秘密出力0 |
 | EF-T08 | shell確保自体の失敗 | 外部操作0、可能な上位境界で固定code。詳細診断ありと偽らない |
-| EF-T09 | 配布artifactのdeep import／export／JS・宣言・map検査 | 両fake friend・登録slot・probe・driver受付が不存在 |
+| EF-T09 | 配布artifactのdeep import／export／JS・宣言・map検査 | 両fake friend・登録slot・probe・driver受付、`synthetic_io` lane・`review-composition-fake-io`・`fake_io` summaryが不存在 |
 | EF-T10 | 開発rootを配布rootから参照する負の対照 | build／pack検査を失敗させる。単なる除外で参照切れを隠さない |
 | EF-T11 | 旧0.2／0.3結果・固定200・通常MCP経路 | 契約・code・上限・認証固定を維持。新native／fallbackは有効化0 |
 | EF-T12 | 開発claimを本番rootへ混入、sealed copyの再提出 | 既存sessionへ採用不可、formal issuance／permit／worker開始0 |
