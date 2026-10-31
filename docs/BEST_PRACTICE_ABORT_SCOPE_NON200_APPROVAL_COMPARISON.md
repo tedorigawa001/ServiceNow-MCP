@@ -1,9 +1,9 @@
 # AU-BR-006 非200／status終端：承認判断用の比較資料
 
-Version: br006-non200-approval-comparison-draft-0.1 / Date: 2026-10-31。
+Version: br006-non200-approval-comparison-draft-0.2 / Date: 2026-10-31。
 Status: 判断材料のみ。本書は承認ではなく、ソース・試験・runtime gateを変更しない。正式発行口閉鎖・Unknown・全体受付無効・VM／監視／telemetry調査保留を維持する。実通信・実機操作・設定変更・Pushの承認でもない。
 
-基準commit：`9afbcc1`。対象設計：[非200 HTTP設計](BEST_PRACTICE_ABORT_SCOPE_NON200_HTTP_DESIGN.md) §8（A01〜A07）、[status-only終端設計](BEST_PRACTICE_ABORT_SCOPE_STATUS_ONLY_TERMINAL_DESIGN.md) §9（ST-A01〜A07）、[ST-03接続設計](BEST_PRACTICE_ABORT_SCOPE_STATUS_TERMINAL_CONNECTION_DESIGN.md) §9（STC-A01〜A05）、[session binding差分設計](BEST_PRACTICE_ABORT_SCOPE_STATUS_SESSION_BINDING_DELTA_DESIGN.md) §9。
+基準commit：`9afbcc1`（draft-0.2で`f53a0ca`までの進捗を§8へ反映）。対象設計：[非200 HTTP設計](BEST_PRACTICE_ABORT_SCOPE_NON200_HTTP_DESIGN.md) §8（A01〜A07）、[status-only終端設計](BEST_PRACTICE_ABORT_SCOPE_STATUS_ONLY_TERMINAL_DESIGN.md) §9（ST-A01〜A07）、[ST-03接続設計](BEST_PRACTICE_ABORT_SCOPE_STATUS_TERMINAL_CONNECTION_DESIGN.md) §9（STC-A01〜A05）、[session binding差分設計](BEST_PRACTICE_ABORT_SCOPE_STATUS_SESSION_BINDING_DELTA_DESIGN.md) §9、[固定source status受理差分設計](BEST_PRACTICE_ABORT_SCOPE_STATUS_SOURCE_ACCEPTANCE_DELTA_DESIGN.md) §9。
 
 ## 1 結論の要約
 
@@ -133,10 +133,12 @@ legacyでは、releaseの読取が2回とも`upstream_unavailable`で終わっ�
 
 ## 8 承認された場合に進める実装と、閉じたままのもの
 
+開発専用fake構成・非実行の内部契約は承認を待たずに進め、承認はruntime採用とC方式判定への接続だけを開く。既に、status binding・単一会計・停止owner（`6695baa`）と同attempt終端／cleanupの連続fake接続（`53c1586`）を実装済み。固定sourceの非実行private受理（[SA-01／02](BEST_PRACTICE_ABORT_SCOPE_STATUS_SOURCE_ACCEPTANCE_DELTA_DESIGN.md)）も承認前の段階として設計されている。これらはfallback・permit・正式発行を生まない。
+
 | 承認 | 進められる実装 | 引き続き閉鎖 |
 |---|---|---|
-| D1（1B） | session binding §8の段階(2)：status終端と単一会計・停止の接続 | 実transport、実通信 |
-| D2（2B） | 同sourceのstatus用private consumerとC方式判定の接続、fixed入口の合成E2E | metadata／payload／worker、final予約移譲、正式発行 |
+| D1（1B） | 確認済みcleanupを条件とするstatus終端のruntime採用（fake接続は実装済み） | 実transport、実通信 |
+| D2（2B） | SA-03：同消費処理からのC方式判定、fixed入口の合成E2E（非実行受理のSA-01／02は承認前） | metadata／payload／worker、final予約移譲、正式発行 |
 | D3（3B） | attempt-local終端型、sticky stopの分離、250ms待機の結合 | bodyなし429／5xxのretry、retry枯渇fallback（別承認） |
 
 どの組合せでも、全体受付無効・正式発行口閉鎖・Unknown・調査保留は変更しない。

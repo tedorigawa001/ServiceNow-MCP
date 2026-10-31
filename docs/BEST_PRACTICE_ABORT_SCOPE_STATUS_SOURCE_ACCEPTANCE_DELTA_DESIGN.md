@@ -1,6 +1,6 @@
 # AU-BR-006：固定sourceのstatus private受理・実session binding・close前消費の接続差分
 
-Version: br006-status-source-acceptance-delta-draft-0.1 / Date: 2026-10-31。
+Version: br006-status-source-acceptance-delta-draft-0.2 / Date: 2026-10-31。
 Status: **詳細設計案のみ。実装・fallback有効化・実session採用・実接続・実通信は行わない。正式発行口閉鎖・Unknown・全体受付無効・VM／監視／telemetry調査保留を維持する。**
 
 基準：[session binding差分draft-0.5](BEST_PRACTICE_ABORT_SCOPE_STATUS_SESSION_BINDING_DELTA_DESIGN.md)、[private composition](BEST_PRACTICE_ABORT_SCOPE_PRIVATE_COMPOSITION_DESIGN.md)、[実session／typed取得差分](BEST_PRACTICE_ABORT_SCOPE_REAL_TYPED_BINDING_DELTA_DESIGN.md)、[承認判断用の比較資料](BEST_PRACTICE_ABORT_SCOPE_NON200_APPROVAL_COMPARISON.md)。以下の型名・stage・操作名は内部契約案であり、既存exportや承認済みAPIではない。
@@ -77,8 +77,11 @@ lookup開始時に当該要求のclaimを先に消費し、tokenはlive slotか�
 | release403／404＋未確認cleanup | 診断保持・停止、token／draftなし | late settleによる再受理、fallback |
 | 401／auth・parent403 | 既存hard primary保持、cleanupだけ継続 | release回復候補への付替え |
 | parent404 | 親のlocal失敗として診断、source受理候補なし | release404への変換 |
+| release upstream_unavailable（retry枯渇を含む） | 候補外。診断保持・停止 | C方式fallback（legacyは進むが、本経路では[比較資料§6](BEST_PRACTICE_ABORT_SCOPE_NON200_APPROVAL_COMPARISON.md#6-d2とd3の連動)どおり別承認） |
 | 200 body ack | 既存固定200経路を維持 | status-only分岐への二重受理 |
 | その他status・不正body・quota／phase停止 | 既存固定分類・診断を維持 | 403相当への変換、retry／fallbackの自動追加 |
+
+draft-0.2のレビュー修正：retry枯渇のrelease失敗を受入候補外として表へ明示し、比較資料§8を本書の段階（SA-01／02は承認前の非実行、SA-03は承認後）に合わせた。
 
 既存`#observeRelease`は特定の`BoundedReadError`をcatchするとfallbackへ進む。status受理をその例外codeへ変換して接続してはならない。また、`{result:[]}`を偽造して既存の空観測fallbackへ入れない。
 
