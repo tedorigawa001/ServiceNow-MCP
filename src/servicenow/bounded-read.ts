@@ -137,7 +137,8 @@ export class BoundedReadSession {
     try{
       guard();if(!consumer||this.#compositionSource!==scope.source)throw new BoundedReadError('internal_review_error');
       scope.accounting.reserve();guard();
-      if(!this.#runOwner.markReady(this.#snapshot,this.#runLease))throw new BoundedReadError('authentication_failed');
+      // Ready can only fail after a run stop or misuse; this probe performs no authentication to blame.
+      if(!this.#runOwner.markReady(this.#snapshot,this.#runLease)){this.#syncRunFailure();throw new BoundedReadError(this.stopCode??'internal_review_error');}
       scope.accounting.dispatch(this.reserveMs);const bytes=fake.parent();scope.accounting.chunk(bytes.byteLength);
       if(bytes.byteLength>this.limits.responseBytes)throw new BoundedReadError('receive_budget_exceeded');
       let parent:unknown;try{parent=JSON.parse(new TextDecoder('utf-8',{fatal:true}).decode(bytes));}catch{throw new BoundedReadError('invalid_response');}

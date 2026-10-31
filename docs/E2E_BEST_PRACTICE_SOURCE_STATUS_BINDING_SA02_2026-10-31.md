@@ -37,7 +37,14 @@ sourceのprivate status consumerは一度限りのopaque受領物をtakeし、cl
 - 関連MDの参照先83件と差分の空白検査を確認。
 - 依存再取得を伴うpackage-worker試験は[前工程の環境制約](E2E_BEST_PRACTICE_STATUS_CONSTRUCTOR_BINDING_2026-10-31.md)を継承し、再実行していない。依存インストール後worker smokeの成功は主張しない。
 
-## 5 未確認と閉鎖
+## 5 レビュー修正（2026-10-31）
+
+- probeの`markReady`失敗を`authentication_failed`として送出していた。このprobeは認証を実施しないため、run失敗を同期してから先行停止理由（なければ`internal_review_error`）を送出するよう変更した。
+- 現行lifecycleでは`markReady`の失敗は先行revoke後にのみ起こり、公開codeは従来も先行停止理由だった。単独で到達する経路がないため、この変更の変異確認は行えず、外部挙動は不変。
+- 全体`npm test`：208ファイル・9,362テスト成功（専用36テスト）。`npm run build`、変更sourceのESLint、`node tests/review/package-http-classification.mjs`（409ファイル）成功。
+- 上記§4の記録は修正前の結果として残す。
+
+## 6 未確認と閉鎖
 
 実認証／本人性、固定URLからResponseへのbinding、native reader cleanupから本受領物への接続、HTTP／cleanup診断の上位完全配送は未確認。SA-03の承認後C方式判定・fallback、実transport・選択payload／worker・final予約移譲も未実装。
 

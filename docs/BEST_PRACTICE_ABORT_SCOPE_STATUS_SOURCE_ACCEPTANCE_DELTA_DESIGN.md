@@ -1,6 +1,6 @@
 # AU-BR-006：固定sourceのstatus private受理・実session binding・close前消費の接続差分
 
-Version: br006-status-source-acceptance-delta-draft-0.5 / Date: 2026-10-31。
+Version: br006-status-source-acceptance-delta-draft-0.6 / Date: 2026-10-31。
 Status: **§10のSA-01に加え、§11のSA-02を実session／source class＋固定fake I/Oで実装。承認後のSA-03・実transport採用は未実装。fallback有効化・実接続・実通信は行わない。正式発行口閉鎖・Unknown・全体受付無効・VM／監視／telemetry調査保留を維持する。**
 
 基準：[session binding差分draft-0.5](BEST_PRACTICE_ABORT_SCOPE_STATUS_SESSION_BINDING_DELTA_DESIGN.md)、[private composition](BEST_PRACTICE_ABORT_SCOPE_PRIVATE_COMPOSITION_DESIGN.md)、[実session／typed取得差分](BEST_PRACTICE_ABORT_SCOPE_REAL_TYPED_BINDING_DELTA_DESIGN.md)、[承認判断用の比較資料](BEST_PRACTICE_ABORT_SCOPE_NON200_APPROVAL_COMPARISON.md)。以下の型名・stage・操作名は内部契約案であり、既存exportや承認済みAPIではない。
@@ -182,6 +182,8 @@ source consumerは受領物を一度takeしてrelease用途・403／404・cleanu
 返却はfake_io付きの`status_accepted_closed_gate`履歴、消費1件、close前受理、C/G/P、限定status／cleanup kindだけ。consumer revoke・accounting release・session closeを終えてから返し、fallback／formal issuanceはdisabled、permitはunavailable。秘密・親本文・credential・source／session／terminal参照を返さない。
 
 親I/OはC=1と同bytesのG、status模擬観測はC=1／readなしG=0。全体60秒・最大210試行・4MiB／16MiBと予約4枠を維持し、phase／attempt floorの等号、hard deadline、取消で停止する。終了時は受領物とsource一時状態を同期失効し、fake delayのtimer／listenerとsession admissionを一度解放する。
+
+draft-0.6のレビュー修正：probeの認証ready失敗を`authentication_failed`と表示せず、先行停止理由（なければ`internal_review_error`）を返す。このprobeは認証を実施しないため、認証失敗と表示しない。
 
 [専用合成テスト](../tests/review/source-status-binding.test.ts)、[テスト専用境界](../tests/review/source-status-binding-boundary.test.ts)、[compiled fixture](../tests/review/fixtures/compiled-source-status-binding.mjs)、[検証記録](E2E_BEST_PRACTICE_SOURCE_STATUS_BINDING_SA02_2026-10-31.md)を参照。境界置換はtests内だけに置き、製品へsetter／registryを追加しない。
 
