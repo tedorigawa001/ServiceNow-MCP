@@ -187,7 +187,7 @@ ND-01／02時点のexportに加え、次節のND-03 entryを追加した。modul
 
 ## 13 ND-03：実class＋注入resourceの連続fake試験
 
-後続①・②の対設計は[constructor最初期の診断owner・fake friend分離draft-0.4](BEST_PRACTICE_ABORT_SCOPE_EARLY_DIAGNOSTIC_FRIEND_SEPARATION_DESIGN.md)を参照。field初期化順、pending shellと別one-shot binding、部分生成rollback、配布物からのfriend本体除去、試験保証の移行条件を整理した案であり、実装・撤去・gate解除ではない。
+後続①・②の対設計は[constructor最初期の診断owner・fake friend分離draft-0.6](BEST_PRACTICE_ABORT_SCOPE_EARLY_DIAGNOSTIC_FRIEND_SEPARATION_DESIGN.md)を参照。field初期化順、pending shellと別one-shot binding、部分生成rollback、配布物からのfriend本体除去、試験保証の移行条件を整理した案であり、実装・撤去・gate解除ではない。
 
 開発専用`probeNativeStatusComposition`は、親bytesをbounded copyし、注入Responseと共に新規fake runだけを作る。`BoundedReadSession`は固定throwのfetchとper-user形式の合成snapshotで生成し、既存SA-02のprivate生成継続・`BoundedUpdateSetSource`の固定consumer・canonical会計を再利用する。既存sessionのlookup／登録／mode切替はない。
 

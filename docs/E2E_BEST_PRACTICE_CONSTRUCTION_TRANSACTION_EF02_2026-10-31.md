@@ -39,7 +39,15 @@ offline梱包確認は409ファイルで成功し、EF-02 compiled fixtureを含
 
 [compiled fixture](../tests/review/fixtures/compiled-construction-transaction.mjs)はclock失敗copy・新session生成／close・二重close・次run・借用元credential不変を配布対象JSで検査する。fetchを呼ばず、archive取得・依存再installをしない。既存の[offline梱包検査](../tests/review/package-http-classification.mjs)へ追加した。
 
-## 4 残課題・維持する停止状態
+## 4 レビュー修正（2026-10-31）
+
+- 指摘：`stop()`／`#adopt`が構築後もshellへ`stage=stop`で理由を書き、stateを`failed`にしていた。factoryが`ok:true`を返した後の外部取消で`constructionStatus()`が`failed`／`cancelled`になり、ND-03で構築成功・release 401のrunも`constructor_diagnostic.primary`が`authentication_failed`となって、生成前失敗と区別できなかった。登録ownerのclose理由も従来のstopCodeからshellのprimaryへ変わっていた。
+- 修正：shellへの理由記録を構築中に限定した。constructor末尾の事前abortは`stage=commit`の構築事実として記録してから停止し、直接newの停止済みinstance・factoryの失敗copy変換を維持した。登録ownerのcloseは`stopCode`→shell primary→`closed`の順に戻した。close時の解除失敗はteardown記録として残す。
+- 試験：factory成功後の外部取消でshellが`ready`／primary=nullのまま、close後も`closed`／primary=null／teardown=confirmedとなる1件を追加。事前abort試験に`stage=commit`を、ND-03のHTTP 401／403＋cancel拒否試験に`constructor_diagnostic.primary=null`を追加した（専用25件、ND-03 30件）。
+- mutation：構築後もshellへ書く旧動作に戻すと6件、事前abortの記録を外すと1件が失敗した。owner close理由の順序を戻す変異は生存した。構築後の停止では登録ownerが`stop()`内で先にrevokeされ、最初の理由が保持されるため。防御として残す。
+- 再検証：build成功、全体215ファイル・9,604テスト成功・未処理拒否なし。梱包検査409ファイル成功、変更ファイルのESLint 0件。設計をdraft-0.6へ更新し、親設計2件のリンクも更新した。§3の数値は修正前の記録として残す。
+
+## 5 残課題・維持する停止状態
 
 - EF-03のfriend／synthetic_io本体撤去、開発／本番assembly分離は未実施。本検証をfriend撤去済み・正式binding完了と解釈しない。
 - ND-03以外の直接new上位callerへの詳細copy配送は未接続。公開codeの互換性だけを維持し、全callerが新診断を受け取るとは主張しない。

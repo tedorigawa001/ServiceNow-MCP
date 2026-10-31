@@ -112,7 +112,15 @@ it('keeps direct-new pre-aborted compatibility while the factory returns a relea
     vi.useFakeTimers(); const controller = new AbortController(); controller.abort();
     const direct = new BoundedReadSession(snapshot(), { signal: controller.signal }); expect(direct.reviewRunStatus().primary?.code).toBe('cancelled'); direct.close();
     const r = failure(BoundedReadSession.create(snapshot(), { signal: controller.signal }));
-    expect(r.code).toBe('cancelled'); expect(r.construction?.teardown).toBe('confirmed'); expect(vi.getTimerCount()).toBe(0); nextCloses();
+    expect(r.code).toBe('cancelled'); expect(r.construction?.teardown).toBe('confirmed'); expect(r.construction?.primary).toMatchObject({ stage: 'commit', code: 'cancelled' });
+    expect(vi.getTimerCount()).toBe(0); nextCloses();
+});
+it('keeps runtime stops after a successful factory hand-off out of the construction diagnostic', () => {
+    vi.useFakeTimers(); const controller = new AbortController(), r = BoundedReadSession.create(snapshot(), { signal: controller.signal }); if (!r.ok) throw Error('create');
+    controller.abort(); expect(r.session.reviewRunStatus().primary?.code).toBe('cancelled');
+    expect(r.session.constructionStatus()).toMatchObject({ state: 'ready', primary: null });
+    r.session.close(); expect(r.session.constructionStatus()).toMatchObject({ state: 'closed', primary: null, teardown: 'confirmed' });
+    expect(vi.getTimerCount()).toBe(0); nextCloses();
 });
 it('reports shell-unavailable without pretending to have a diagnostic owner', () => {
     vi.spyOn(Object, 'fromEntries').mockImplementationOnce(() => { throw Error('PRIVATE_ALLOCATION'); });

@@ -1,6 +1,6 @@
 # AU-BR-006：constructor最初期の診断owner・fake friend分離
 
-Version: br006-early-diagnostic-friend-separation-draft-0.5 / Date: 2026-10-31。
+Version: br006-early-diagnostic-friend-separation-draft-0.6 / Date: 2026-10-31。
 Status: **EF-01の合成modelに加え、EF-02の実class constructor保護区間・固定rollback・失敗copy回収を実装し合成依存で検証。ビルド設定変更・friend撤去は未実施。正式発行口閉鎖・Unknown・全体受付無効・VM／監視／telemetry調査保留を維持する。実接続・実通信・実機操作・設定変更・Pushは行わない。**
 
 基準：`134248b`、[ND設計§3・§13](BEST_PRACTICE_ABORT_SCOPE_NATIVE_STATUS_DIAGNOSTIC_DESIGN.md)、[ND-03検証§5・§6](E2E_BEST_PRACTICE_NATIVE_DIAGNOSTIC_ND03_2026-10-31.md)、[source受理設計](BEST_PRACTICE_ABORT_SCOPE_STATUS_SOURCE_ACCEPTANCE_DELTA_DESIGN.md)。以下の型名・配置は内部契約案で、公開API／JSONの追加や承認済み実装ではない。
@@ -211,6 +211,8 @@ runtimeの同一class内に純粋shellを置き、EF-01の開発moduleはimport�
 固定factory `BoundedReadSession.create`は常に新しい同classを生成し、constructorが作った固定例外に私有WeakMapで結合したsealed copyを一度取得・削除する。外部error・seed・shellを受けるtake口はない。成功時は新sessionを返すが、失敗時にはsession／writer／lease／snapshot／URL／例外本文を返さない。copyはconstruction-onlyでpurpose3個は常に未観測、historical bindingはlive authorityではない。shell確保・copy確保自体ができない場合、可能な境界で固定internal_review_errorとnullを返し、詳細診断の存在は主張しない。
 
 直接`new`は既存の固定code例外を維持し、事前abort時も従来どおり停止済みinstanceを返す。factoryはその停止を検出してcloseし失敗copyへ変える。ND-03の固定入口だけをfactory回収へ接続し、constructor_diagnosticに保持した。通常MCP／R2等の直接new上位callerすべてへの詳細copy配送は未接続であり、正式JSON契約は変更しない。copy生成時の失敗でも、返却前の新sessionを固定解放する。
+
+draft-0.6のレビュー修正：commit後のsession停止（外部取消・release時のHTTP失敗等）もshellのprimaryへstage=stopで書き込み、state=failedにしていたため、構築成功後のrun失敗が構築失敗と区別できなかった。shellへの理由記録は構築中と、constructor末尾で検出した事前abort（stage=commit）に限り、構築後の停止はsession／登録owner／nativeの各層だけに残す。登録ownerのclose理由は従来どおりsessionのstopCodeを優先する。close時の解除失敗はteardownの記録として引き続きshellへ残る。
 
 本shellはconstructorとclose時点の固定10slotを記録するもので、全HTTP試行・phase timer世代の履歴やnative reader cleanupの証明を代替しない。同期解除APIの戻りを待つasync cleanup契約ではない。EF-03のfriend／synthetic_io撤去、assembly分離、artifact負の対照は未実施。既存friendが配布物に残る事実は変更しない。
 

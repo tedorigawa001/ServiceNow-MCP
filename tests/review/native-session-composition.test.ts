@@ -36,6 +36,7 @@ it.each([401, 403])('preserves HTTP %i and rejected cleanup through actual sessi
     expect(r.ok).toBe(false); expect(r.code).toBe(status === 401 ? 'authentication_failed' : 'internal_review_error');
     expect(r.native?.upper.slots.release).toMatchObject({ http: { status }, cleanup: { phase: 'unconfirmed', reason: 'cancel_rejected' } });
     expect(r.native?.counts.issued).toBe(0); expect(r.draft).toBeNull(); expect(r.binding).toEqual({ same_core: true, same_source: true });
+    expect(r.constructor_diagnostic).toMatchObject({ state: 'closed', primary: null, teardown: 'confirmed' });
     expect(JSON.stringify(r)).not.toContain('PRIVATE'); expect((await probe()).ok).toBe(true);
 });
 it.each(['responseBytes', 'totalBytes'] as const)('keeps canonical %s cap and diagnostics before native acquisition', async cap => {

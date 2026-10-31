@@ -34,6 +34,8 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 ### Added
 
+- Fixes EF-02 so the construction shell records only construction-time failures (plus a pre-abort detected at commit): runtime stops after a successful hand-off no longer mark the construction as failed, and the registered owner again closes with the session stop code first.
+
 - Fixes EF-01 so, after commit, only the new owner may report an unowned (never-started or already-released) slot: its not-needed report no longer fails the shell, the old owner's report is refused, and a repeated new-owner release is classified as a duplicate.
 
 - EF-01 adds a package-excluded pure construction-shell model: three unobserved purpose slots, ten fixed resource slots, separate one-shot core/source bindings and a non-executable ownership-transfer model. Synthetic tests cover foreign/copy binding rejection, first-failure retention, partial/unknown acquisition, owner-specific one-shot release metadata and immutable sealing. No clock, controller, timer, listener, session registration or real cleanup is invoked. Constructor integration, diagnostic failure-copy delivery, fake-friend removal, formal issuance and whole-run admission remain unconnected/disabled. Includes compiled/offline packaging checks.

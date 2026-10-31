@@ -508,7 +508,8 @@ export class BoundedReadSession {
     this.#constructionStage='commit';if(!this.#construction.commit())this.#checkConstruction();
     this.#constructing=false;
     // Preserve direct-new compatibility: a pre-aborted signal returns a stopped instance, never usable authority.
-    if(signal?.aborted)cancel();
+    // The pre-abort is the last construction fact; later stops belong to the session/owner layers only.
+    if(signal?.aborted){this.#construction.fail('commit','cancelled');cancel();}
    }catch(error){
     const descriptor=error&&typeof error==='object'&&!types.isProxy(error)?Object.getOwnPropertyDescriptor(error,'code'):undefined;
     const reason=descriptor&&'value' in descriptor?constructionCode(descriptor.value):'internal_review_error';
@@ -528,7 +529,7 @@ export class BoundedReadSession {
       if(!confirmed)this.#construction.fail('close','internal_review_error');
     };
     release('source_transport',this.#compositionRevoke);this.#compositionRevoke=undefined;this.#compositionKey=undefined;this.#compositionSource=undefined;
-    release('registered_owner',this.#runOwner?()=>this.#runOwner.close(this.#construction.failure()?.code??'closed'):undefined);
+    release('registered_owner',this.#runOwner?()=>this.#runOwner.close(this.stopCode??this.#construction.failure()?.code??'closed'):undefined);
     release('core',this.#budget?()=>this.#budget.writer.close():undefined);
     release('abort_listener',this.removeExternal);
     release('deadline_timer',this.timer!==undefined?()=>clearTimeout(this.timer):undefined);
@@ -549,7 +550,7 @@ export class BoundedReadSession {
   #adopt(error:unknown,fallback?:ReadFailureCode){
     if(!(error instanceof CanonicalBudgetError))return error;
     const primary=this.#budget.view.diagnostic().primary;
-    if(primary){this.#construction.fail(this.#constructing?this.#constructionStage:'stop',primary.internal);if(this.#runOwner)this.#runOwner.revoke(primary.internal);}
+    if(primary){if(this.#constructing)this.#construction.fail(this.#constructionStage,primary.internal);if(this.#runOwner)this.#runOwner.revoke(primary.internal);}
     const reason=this.#budget.view.failure()??fallback;
     if(reason)this.stop(reason);
     return new BoundedReadError(error.code);
@@ -592,8 +593,8 @@ export class BoundedReadSession {
   assertActive() { this.check(); }
   private stop(code: ReadFailureCode) {
     if(this.disposed)return;
-    this.#construction.fail(this.#constructing?this.#constructionStage:'stop',code);
     if(this.#constructing){
+      this.#construction.fail(this.#constructionStage,code);
       if(this.#constructionStopping)return;this.#constructionStopping=true;
       try{if(this.#budget)this.#budget.writer.stop(code);if(this.#runOwner)this.#runOwner.revoke(code);}finally{this.#constructionStopping=false;}
       return;
