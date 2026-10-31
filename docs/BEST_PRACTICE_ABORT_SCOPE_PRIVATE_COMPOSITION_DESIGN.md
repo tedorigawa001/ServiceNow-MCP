@@ -100,7 +100,9 @@ legacyとNA-03には、404の理由、terminal bodyを読むかどうか、no_bo
 
 bootstrapのprepared成功だけでwork(source)へ任意のmetadata／payload取得権限を返さない。最小実装の返却は限定summaryまでとする。final親・metadata各2の予約移譲／消費、普通cutoffからfinalへ残すbaseline、Pの更新点は後続条件であり、Rを解放して新しく4枠補充する方式は拒否する。
 
-非200の次段階は[HTTP差分・状態遷移・合成受入条件draft-0.2](BEST_PRACTICE_ABORT_SCOPE_NON200_HTTP_DESIGN.md)を参照。purpose×status×body有無の純粋分類と独立oracleだけを開発専用moduleへ実装した。legacyの取消要求とtyped cleanup確認、release403／404／upstream枯渇の回復候補、attempt-local retryとrun停止の挙動変更は承認待ち・runtime未接続で、現行固定200 guardを緩めるものではない。
+非200の次段階は[HTTP差分・状態遷移・合成受入条件draft-0.3](BEST_PRACTICE_ABORT_SCOPE_NON200_HTTP_DESIGN.md)を参照。purpose×status×body有無の純粋分類と独立oracleだけを開発専用moduleへ実装した。legacyの取消要求とtyped cleanup確認、release403／404／upstream枯渇の回復候補、attempt-local retryとrun停止の挙動変更は承認待ち・runtime未接続で、現行固定200 guardを緩めるものではない。
+
+[同attemptのstatus-only終端・cancel-only cleanup詳細設計](BEST_PRACTICE_ABORT_SCOPE_STATUS_ONLY_TERMINAL_DESIGN.md)は、停止後のcleanup所有権と業務継続権限の分離・二軸診断・一度限りの消費を具体化した未実装／未承認案。正式発行口閉鎖・全体受付無効・調査保留を維持する。
 
 ## 7 停止と終了責務
 

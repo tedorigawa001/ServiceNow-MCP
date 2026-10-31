@@ -1,6 +1,6 @@
 # AU-BR-006 非200 HTTP対応：legacy差分・状態遷移・合成受入条件
 
-Version: br006-non200-http-draft-0.2 / Date: 2026-10-31。
+Version: br006-non200-http-draft-0.3 / Date: 2026-10-31。
 Status: §9の純粋分類契約・独立oracleのみ開発専用moduleで実装。非200のruntime挙動変更・操作／終端契約の実装・A01〜A07の承認は未実施。正式発行口閉鎖・Unknown・全体受付無効・VM／監視／telemetry調査保留を維持する。
 
 親：[private composition設計](BEST_PRACTICE_ABORT_SCOPE_PRIVATE_COMPOSITION_DESIGN.md) §6／12。
@@ -233,3 +233,9 @@ classifierは既存の`abort-scope-evidence*`開発専用除外に置く。npm�
 BoundedReadSession・bootstrap・native adapter・source・MCP／設定・既存fake transcriptのschemaは変更しない。非200を拒否するCM-04-03のguardも保持する。A01〜A07は全て承認待ちで、純粋な説明用分類が動くことからretry／fallback／受理を有効化しない。
 
 検証記録：[純粋分類契約・oracle検証](E2E_BEST_PRACTICE_HTTP_CLASSIFICATION_2026-10-31.md)。
+
+## 10 status-only終端・cancel-only cleanupの詳細化
+
+第2段階の[同attempt終端詳細設計draft-0.1](BEST_PRACTICE_ABORT_SCOPE_STATUS_ONLY_TERMINAL_DESIGN.md)で、同readerの所有権・一度限りのfinish／consume・HTTPとcleanupの二軸診断を具体化した。停止後に残るcleanup所有権と、同期失効する業務継続権限を分離し、hard HTTP停止後はcleanupが成功しても診断専用とする案である。
+
+詳細設計・ST-T01〜ST-T20の受入条件・ST-A01〜ST-A07は未実装／未承認。A01〜A07の承認、runtime採用、retry／fallback、正式発行を意味しない。現行200限定guard・全体受付無効・調査保留を維持する。
