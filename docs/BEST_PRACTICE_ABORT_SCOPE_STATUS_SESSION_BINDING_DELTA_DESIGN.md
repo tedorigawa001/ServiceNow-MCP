@@ -1,7 +1,7 @@
 # AU-BR-006：ST-03C後の実session binding・単一予算・停止owner接続差分
 
-Version: br006-status-session-binding-delta-draft-0.1 / Date: 2026-10-31。
-Status: **詳細設計案のみ。正式発行口閉鎖・Unknown・全体受付無効・VM／監視／telemetry調査保留を維持する。実装・実session接続・実transport採用・実通信・実機操作・設定変更の承認ではない。**
+Version: br006-status-session-binding-delta-draft-0.2 / Date: 2026-10-31。
+Status: **§10の同constructor内部binding・同期失効・診断保持をfake依存で実装。status終端の実接続は未実装。正式発行口閉鎖・Unknown・全体受付無効・VM／監視／telemetry調査保留を維持する。実sessionへのstatus transport採用・実通信・実機操作・設定変更の承認ではない。**
 
 基準：[ST-03接続設計の§12](BEST_PRACTICE_ABORT_SCOPE_STATUS_TERMINAL_CONNECTION_DESIGN.md)、[private composition設計](BEST_PRACTICE_ABORT_SCOPE_PRIVATE_COMPOSITION_DESIGN.md)、[実session差分設計](BEST_PRACTICE_ABORT_SCOPE_REAL_TYPED_BINDING_DELTA_DESIGN.md)。本書の段階名・検査表は内部契約案であり、新しいexport・権限・実装済み機能を意味しない。
 
@@ -127,4 +127,16 @@ binding不一致・二重消費・取消・期限切れを単なるcleanup失敗
 - status terminal専用のprivate受理形と、既存body ackとの共通identityの実装表現は未決。外部mutable port／fixture registryを導入しないことをレビューする。
 - accountingの閉鎖と将来のfinal予約移譲の寿命は未接続。今回のprepared成功を予約移譲・選択payload・worker jobの完了にしない。
 - 同固定URL／認証snapshot／実dispatchと注入Responseの発行元bindingは未検証。合成成功から実transport接続済みと主張しない。
-- 本書はMDの差分設計だけ。正式発行口閉鎖・Unknown・全体受付無効・調査保留を変更しない。
+- §1〜9は設計契約、§10はfake依存の内部契約実装である。正式発行口閉鎖・Unknown・全体受付無効・調査保留を変更しない。
+
+## 10 同constructor内部契約のfake実装
+
+[lifecycle](../src/servicenow/review-evidence-lifecycle.ts)の既存`transportConstructor`へ`claimStatusBinding`を追加した。別registry／session登録口は作らず、既存transport handle・同snapshot／lease・初期source claimを使う。生成claimはcallback前にconsumingとなり、lease観測後にも同一性・ready未開始・ゼロ会計・claim未変更を再検査する。生成中失敗はfailed、生成済みの重複要求はrun停止となり、初回contextの交換や再生成を認めない。
+
+返すprivate closureは`inspect`と`diagnostic`だけ。body／status token・consumer・writer・dispatch・permit発行口は持たない。inspectは同handle／snapshot／lease／sourceをpre／post検査し、ready世代0→1は既存ownerだけが管理する。別ownerの参照は当該runで拒否し、外国ownerを変更しない。
+
+既存`revoke`の同期sectionでcontextを失効させ、最初の終端理由・primary・拒否理由を保持する。closeや後発失敗で上書きせず、lease取得失敗後に値が回復しても復帰しない。ここではHTTP／cleanup終端を新規生成しないため、二軸診断の輸送は後続工程のままである。
+
+[session](../src/servicenow/bounded-read.ts)の`#openComposition`が同claimを取得し、既存fake compositionが認証前にinspectする。既存private生成継続と同`#runOwner`を再利用し、第二budget・lease・clockは生成しない。公開summaryへcontextやその診断を返さず、既存公開legacy経路は切り替えない。
+
+[合成テスト](../tests/review/status-constructor-binding.test.ts)と[検証記録](E2E_BEST_PRACTICE_STATUS_CONSTRUCTOR_BINDING_2026-10-31.md)を参照。単一会計へのstatus終端接続、同reader cleanup／private発行のruntime採用、固定sourceの非200受理、matched後の予約移譲／payload／workerは未実装である。承認待ちと正式発行口閉鎖・全体受付無効・調査保留を維持する。

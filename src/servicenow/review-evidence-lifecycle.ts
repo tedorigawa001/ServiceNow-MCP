@@ -46,14 +46,18 @@ export function registerReviewEvidenceSession(session:object,snapshot:object,lea
   let transportState:'unclaimed'|'claiming'|'identity_only'|'revoked'='unclaimed';
   let transportHandle:ConstructorTransportHandle|undefined;
   let transportBusy=false;
+  let statusClaim:'unclaimed'|'consuming'|'claimed'|'failed'='unclaimed';
+  let statusRevoke:(()=>void)|undefined;
   let transportRefusal:Readonly<{stage:'transport_claim';code:'invalid_state'}>|null=null;
   let bootstrap:ReturnType<typeof createReviewBootstrapContract<ConstructorTransportHandle>>|undefined;
   function revoke(reason:unknown,stage:Stage='owner'){
     primary??=Object.freeze({stage,code:fixed(reason)});ready=undefined;pinnedSnapshot=undefined;
+    if(statusClaim==='consuming')statusClaim='failed';
     if(sourceClaim==='consuming')sourceClaim='failed';sourceBinding=undefined;
     if(initialSourceClaim==='consuming')initialSourceClaim='failed';initialSource=undefined;
     if(transportClaim==='consuming')transportClaim='failed';transportState='revoked';transportHandle=undefined;
     if(state!=='closed')state='stopped';
+    statusRevoke?.();
     bootstrap?.revoke();
   }
   function check(currentSnapshot:object,currentLease:ReviewRunBudgetLease){
@@ -103,6 +107,34 @@ export function registerReviewEvidenceSession(session:object,snapshot:object,lea
     try{return work();}catch{revoke('internal_review_error','transport_binding');return transportNo();}finally{transportBusy=false;}
   }
   const transportConstructor=Object.freeze({
+    /** Internal creator continuation only. Identity/diagnostics, never body/status issuance authority. */
+    claimStatusBinding(handle:ConstructorTransportHandle,currentSnapshot:object,currentLease:ReviewRunBudgetLease,source:object){
+      return useTransport(()=>{
+        if(statusClaim!=='unclaimed'){revoke('invalid_state','transport_binding');return transportNo();}
+        statusClaim='consuming';
+        if(!checkTransport(handle,currentSnapshot,currentLease))return transportNo();
+        if(initialSourceClaim!=='claimed'||initialSource!==source){revoke('evidence_binding_mismatch','transport_binding');return transportNo();}
+        if(readyStarted||!idleBudget()){revoke('invalid_state','transport_binding');return transportNo();}
+        let live=true,firstTerminal:Code|null=null,refusal:Code|null=null;
+        statusRevoke=()=>{live=false;firstTerminal??=primary?.code??'closed';if(statusClaim==='consuming')statusClaim='failed';};
+        const diagnostic=()=>Object.freeze({state:live?'bound' as const:'revoked' as const,claim:statusClaim,
+          first_terminal:firstTerminal,refusal,primary,evidence_issuance:'disabled' as const,dispatch:'unavailable' as const});
+        const inspect=(h:ConstructorTransportHandle,s:object,l:ReviewRunBudgetLease,src:object)=>useTransport(()=>{
+          if(!live||statusClaim!=='claimed'){refusal??=primary?.code??'invalid_state';return transportNo();}
+          if(h!==handle||s!==currentSnapshot||l!==currentLease||src!==source){
+            refusal??='evidence_binding_mismatch';revoke('evidence_binding_mismatch','transport_binding');return transportNo();
+          }
+          if(!checkTransport(h,s,l))return transportNo();
+          if(!live||initialSource!==source){revoke('evidence_binding_mismatch','transport_binding');return transportNo();}
+          return transportOk(Object.freeze({state:'constructor_bound' as const,ready_generation:generation,evidence_issuance:'disabled' as const,dispatch:'unavailable' as const}));
+        });
+        // Recheck after lease callbacks; reentry/stop may have spent the claim.
+        if(!checkTransport(handle,currentSnapshot,currentLease)||!live||statusClaim!=='consuming')return transportNo();
+        if(readyStarted||!idleBudget()){revoke('invalid_state','transport_binding');return transportNo();}
+        statusClaim='claimed';
+        return transportOk(Object.freeze({inspect,diagnostic}));
+      });
+    },
     /** Creator-owned pre-I/O binding, distinct from the post-ready ReleasePermit binding. */
     bindInitialSource(handle:ConstructorTransportHandle,currentSnapshot:object,currentLease:ReviewRunBudgetLease,source:object){
       return useTransport(()=>{

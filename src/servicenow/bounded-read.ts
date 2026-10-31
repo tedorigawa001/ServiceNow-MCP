@@ -148,8 +148,10 @@ export class BoundedReadSession {
       if(!claim.ok){this.#syncRunFailure();throw new BoundedReadError(this.stopCode??'internal_review_error');}
       const bound=this.#runOwner.transportConstructor.bindInitialSource(claim.value,this.#snapshot,this.#runLease,source);
       if(!bound.ok){this.#syncRunFailure();throw new BoundedReadError(this.stopCode??'internal_review_error');}
+      const statusBinding=this.#runOwner.transportConstructor.claimStatusBinding(claim.value,this.#snapshot,this.#runLease,source);
+      if(!statusBinding.ok){this.#syncRunFailure();throw new BoundedReadError(this.stopCode??'internal_review_error');}
       accounting=this.#budget.construction.takeBootstrapAccounting();
-      return {source,handle:claim.value,accounting,bound:bound.value};
+      return {source,handle:claim.value,accounting,bound:bound.value,statusBinding:statusBinding.value};
     }catch(error){accounting?.release();throw this.#adopt(error);}
   }
   async #prepareCompositionIO(input:ReturnType<typeof parseBoundedSourceInput>,fake:ReturnType<typeof pinCompositionFakeIO>){
@@ -161,6 +163,8 @@ export class BoundedReadSession {
     let contract:ReturnType<typeof createReviewBootstrapContract<typeof scope.handle>>|undefined;
     try{
       guard();if(!consumer||this.#compositionSource!==scope.source)throw new BoundedReadError('internal_review_error');
+      const statusContext=scope.statusBinding.inspect(scope.handle,this.#snapshot,this.#runLease,scope.source);
+      if(!statusContext.ok){this.#syncRunFailure();throw new BoundedReadError(this.stopCode??'internal_review_error');}
       const auth=this.authMode==='per-user'?'per-user':this.#snapshot.accessToken&&(this.#snapshot.tokenExpiry??0)>Date.now()+this.limits.deadlineMs?'cached':'exchange';
       if(!fake.matches(auth==='exchange'))throw new BoundedReadError('invalid_input');
       const stop=(code:unknown)=>{this.#runOwner.revoke(code);this.#budget.writer.stop(code);this.stop(this.stopCode??'internal_review_error');};
