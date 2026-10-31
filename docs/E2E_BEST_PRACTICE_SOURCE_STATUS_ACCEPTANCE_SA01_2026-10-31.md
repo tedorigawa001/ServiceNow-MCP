@@ -44,7 +44,15 @@ claimはlookup／clockより前に消費開始し、外国tokenを拒否して�
 - 差分の空白検査と関連MDの参照先検査を実施。
 - 依存再取得を伴うpackage-workerは[前工程の環境制約](E2E_BEST_PRACTICE_STATUS_CONSTRUCTOR_BINDING_2026-10-31.md)を継承し、再実行していない。依存インストール後のworker smokeの成功を主張しない。
 
-## 5 残課題と停止状態
+## 5 レビュー修正（2026-10-31）
+
+- ready消失がpre-guardでは`invalid_state`、post-guardでは`evidence_binding_mismatch`となり、同じ前提消失の理由が段階で異なっていた。post-guardの前提検査を参照照合から分け、両guardとも`invalid_state`とした。`evidence_binding_mismatch`は参照の不一致に限る。
+- pre-guard側の`pre_ready_lost`を固定caseへ追加し、post側の期待値を`invalid_state`へ変更。専用テストは60件。
+- 変異確認：post-guardの前提検査を外すとready消失後に受理され1件失敗（確認後に復元）。
+- 全体`npm test`：206ファイル・9,326テスト成功。`npm run build`、新source／専用testのESLint、`node tests/review/package-http-classification.mjs`（409ファイル）成功。
+- 上記§4の件数（9,325テスト・専用59テスト）は修正前の記録として残す。
+
+## 6 残課題と停止状態
 
 合成frameは実認証snapshot・固定URL・実予算・`BoundedUpdateSetSource`の証明ではない。cleanupは合成記録、body分岐は非実行markerでありnative cleanupや200 body解析の再検証ではない。SA-02の実class／private継続へのfake接続、SA-03の承認後C方式判定は未実装。
 

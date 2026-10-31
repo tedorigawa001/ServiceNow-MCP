@@ -13,7 +13,7 @@ NA-03後の移行案：[canonical会計・private生成位置の差分設計draf
 
 ## 1. 目的と非対象
 
-固定source受理までの次差分は[status private受理・実session binding・close前消費draft-0.3](BEST_PRACTICE_ABORT_SCOPE_STATUS_SOURCE_ACCEPTANCE_DELTA_DESIGN.md)を参照。SA-01の内部契約は合成issuer限定で実装。実class接続のSA-02・fallback有効化・実接続は未実施。
+固定source受理までの次差分は[status private受理・実session binding・close前消費draft-0.4](BEST_PRACTICE_ABORT_SCOPE_STATUS_SOURCE_ACCEPTANCE_DELTA_DESIGN.md)を参照。SA-01の内部契約は合成issuer限定で実装。実class接続のSA-02・fallback有効化・実接続は未実施。
 
 ST-03C後の追加差分は[実session binding・単一予算・停止owner設計draft-0.5](BEST_PRACTICE_ABORT_SCOPE_STATUS_SESSION_BINDING_DELTA_DESIGN.md)を参照。§10〜12の内部binding・会計・停止と開発専用fake構成の同attempt終端／cleanupを接続した。status終端のruntime採用・正式発行・実接続は未実施のまま。
 

@@ -123,7 +123,7 @@ binding不一致・二重消費・取消・期限切れを単なるcleanup失敗
 
 ## 9 承認待ち・未確認事項
 
-§12後の接続差分は[固定source status private受理・実session binding・close前消費draft-0.3](BEST_PRACTICE_ABORT_SCOPE_STATUS_SOURCE_ACCEPTANCE_DELTA_DESIGN.md)を参照。SA-01の唯一のconsumer・受理claim・非実行draftを合成issuer限定で実装。SA-02の実class接続は未実施で、fallbackやruntime採用を承認しない。
+§12後の接続差分は[固定source status private受理・実session binding・close前消費draft-0.4](BEST_PRACTICE_ABORT_SCOPE_STATUS_SOURCE_ACCEPTANCE_DELTA_DESIGN.md)を参照。SA-01の唯一のconsumer・受理claim・非実行draftを合成issuer限定で実装。SA-02の実class接続は未実施で、fallbackやruntime採用を承認しない。
 
 - STC-A01〜A05／親ST-A01〜A07／非200設計A01〜A07のruntime承認は未完了。とくにrelease403／404のsource採用、attempt-local retryとrun停止、cleanup確認不能時の扱いを先に確定する。
 - status terminal専用のprivate受理形と、既存body ackとの共通identityの実装表現は未決。外部mutable port／fixture registryを導入しないことをレビューする。

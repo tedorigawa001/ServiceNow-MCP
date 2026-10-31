@@ -79,7 +79,9 @@ function construct(){
             draft=Object.freeze({kind:'non_executable_status_acceptance',status:held.http.status as 403|404,body_mode:held.cleanup.kind!,permissions});events.push('draft');
             try{fake.action('draft');}catch{return fail('internal_review_error','draft');}
             events.push('post_guard');if(!sample('post_guard')||phase!=='ConsumingStatus'||claim!=='started'||!draft)return false;
-            if(!fake.ready||!fake.parent||!matches(expected)||!matches(held.frame))return fail('evidence_binding_mismatch','post_guard');
+            // A lost prerequisite is a state failure at either guard; only reference drift is a binding mismatch.
+            if(!fake.ready||!fake.parent)return fail('invalid_state','post_guard');
+            if(!matches(expected)||!matches(held.frame))return fail('evidence_binding_mismatch','post_guard');
             history=draft;draft=undefined;counts.accepts++;phase='AcceptedClosedGate';firstTerminal??=phase;events.push('accept_closed_gate');return true;
         }finally{claim='spent';draft=undefined;}
     }
@@ -100,7 +102,7 @@ export function runSyntheticSourceStatusAcceptanceFixture(raw:unknown){
     if(!raw||typeof raw!=='object'||types.isProxy(raw)||![Object.prototype,null].includes(Object.getPrototypeOf(raw)))return Object.freeze({ok:false as const,code:'invalid_input' as const,permissions});
     const fields=Object.getOwnPropertyDescriptors(raw);
     const interrupts=['pre_cancel','post_cancel','draft_cancel','pre_close','post_close','draft_close'];
-    const faults=['pre_reentry','post_reentry','pre_expired','post_expired','pre_throw','post_throw','clock_rewind','post_ready_lost'];
+    const faults=['pre_reentry','post_reentry','pre_expired','post_expired','pre_throw','post_throw','clock_rewind','pre_ready_lost','post_ready_lost'];
     const controls=['token_copy','diagnostic_token','json_token','missing_ready','missing_parent','duplicate_mint','close_before_consume','stop_before_consume'];
     const kinds:Kind[]=['release_403_body','release_404_body','release_403_no_body','release_404_no_body','hard_401','parent_403','parent_404','unconfirmed','read_started','upstream_exhausted'];
     const allowed=[...kinds,'duplicate_consume','foreign_token_then_retry','body_then_status','status_then_body',...keys.map(k=>'foreign_'+k),...interrupts,...faults,...controls];
@@ -123,7 +125,7 @@ export function runSyntheticSourceStatusAcceptanceFixture(raw:unknown){
         if(selected.endsWith('reentry'))owner.consume(owner.frame,owner.token());
         if(selected.endsWith('expired'))owner.fake.time=50000;
         if(selected.endsWith('throw'))owner.fake.throws=true;
-        if(selected==='post_ready_lost')owner.fake.ready=false;
+        if(selected.endsWith('ready_lost'))owner.fake.ready=false;
     };
     const expected=other&&selected!=='foreign_token_then_retry'?Object.freeze({...owner.frame,[selected.slice(8)]:other.frame[selected.slice(8) as keyof Frame]}):owner.frame;
     const token=selected==='foreign_token_then_retry'?other!.token():selected==='token_copy'?Object.freeze({...owner.token()}):

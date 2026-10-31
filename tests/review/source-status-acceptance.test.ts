@@ -29,7 +29,7 @@ it.each([['release_404_body',404,'cancelled'],['release_403_no_body',403,'no_bod
 it.each([['hard_401','authentication_failed'],['parent_403','access_denied'],['parent_404','closed'],['unconfirmed','internal_review_error'],['read_started','invalid_state']] as const)('does not mint a candidate for %s', (scenario,primary)=>{
  expect(run({scenario})).toMatchObject({ok:true,diagnostic:{primary,counts:{minted:0,consumes:0,accepts:0},history:null}});
 });
-it.each([['pre_reentry','invalid_state'],['post_reentry','invalid_state'],['pre_expired','deadline_exceeded'],['post_expired','deadline_exceeded'],['pre_throw','internal_review_error'],['post_throw','internal_review_error'],['clock_rewind','invalid_observation_time'],['post_ready_lost','evidence_binding_mismatch']] as const)('fails closed at %s without accepting a draft', (scenario,primary)=>{
+it.each([['pre_reentry','invalid_state'],['post_reentry','invalid_state'],['pre_expired','deadline_exceeded'],['post_expired','deadline_exceeded'],['pre_throw','internal_review_error'],['post_throw','internal_review_error'],['clock_rewind','invalid_observation_time'],['pre_ready_lost','invalid_state'],['post_ready_lost','invalid_state']] as const)('fails closed at %s without accepting a draft', (scenario,primary)=>{
  expect(run({scenario})).toMatchObject({ok:true,diagnostic:{primary,claim:'spent',counts:{accepts:0},draft_held:false,live_terminal:false,history:null}});
 });
 it.each(['token_copy','diagnostic_token','json_token'])('does not adopt %s as evidence',scenario=>{

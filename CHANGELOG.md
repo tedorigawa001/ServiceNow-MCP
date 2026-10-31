@@ -32,6 +32,8 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 ### Added
 
+- Fixes SA-01 so a lost ready/parent prerequisite is reported as `invalid_state` at both the pre- and post-guard; `evidence_binding_mismatch` is reserved for reference drift.
+
 - SA-01 adds a package-excluded synthetic source-status acceptance contract with a creator-owned issuer, a shared one-shot body/status release claim, non-executable drafts and acceptance before close. Fixed case-name fixtures verify identity mixing, foreign-token claim spending, pre/post cancellation/expiry/reentry, body/status conflicts and immutable history without exporting any token or consumer. All seven permissions remain false; no native/session/source adoption, fallback, permit, whole-run admission or real communication is enabled. Includes RED/GREEN synthetic tests and compiled/offline packaging checks.
 
 - Fixes the fake bound status workflow so descriptors the injected owner would refuse are rejected before reservation and simulated dispatch (C=0), and maps the lifecycle stop code to the native owner so an ordinary close is recorded as `closed`.

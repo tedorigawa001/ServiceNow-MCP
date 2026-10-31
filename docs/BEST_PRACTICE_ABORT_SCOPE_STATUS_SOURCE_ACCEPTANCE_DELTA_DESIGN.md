@@ -1,6 +1,6 @@
 # AU-BR-006：固定sourceのstatus private受理・実session binding・close前消費の接続差分
 
-Version: br006-status-source-acceptance-delta-draft-0.3 / Date: 2026-10-31。
+Version: br006-status-source-acceptance-delta-draft-0.4 / Date: 2026-10-31。
 Status: **§10のSA-01を合成issuer限定で実装。実class接続のSA-02・承認後のSA-03は未実装。fallback有効化・実session採用・実接続・実通信は行わない。正式発行口閉鎖・Unknown・全体受付無効・VM／監視／telemetry調査保留を維持する。**
 
 基準：[session binding差分draft-0.5](BEST_PRACTICE_ABORT_SCOPE_STATUS_SESSION_BINDING_DELTA_DESIGN.md)、[private composition](BEST_PRACTICE_ABORT_SCOPE_PRIVATE_COMPOSITION_DESIGN.md)、[実session／typed取得差分](BEST_PRACTICE_ABORT_SCOPE_REAL_TYPED_BINDING_DELTA_DESIGN.md)、[承認判断用の比較資料](BEST_PRACTICE_ABORT_SCOPE_NON200_APPROVAL_COMPARISON.md)。以下の型名・stage・操作名は内部契約案であり、既存exportや承認済みAPIではない。
@@ -161,4 +161,6 @@ terminalは最大1個で、private WeakMapとlive slotに保持する。consumer
 
 費用は固定15参照照合、最大1個のterminal／draft、有限case内の固定回数のclock検査・lookup・closeに限る。無制限retry・履歴探索・外部callback登録はない。body側は200解析ではなくclaim競合を試す非実行markerであり、正式body ackではない。
 
-[59件の合成テスト](../tests/review/source-status-acceptance.test.ts)、[compiled fixture](../tests/review/fixtures/compiled-source-status-acceptance.mjs)、[検証記録](E2E_BEST_PRACTICE_SOURCE_STATUS_ACCEPTANCE_SA01_2026-10-31.md)を参照。§8のSA-T01の実class接続、SA-T02の実認証／URL binding、SA-T03の実source受理、SA-T09の実session resource解放は未確認であり、合成成功から全受入条件達成としない。SA-02／03、fallback／permit／正式発行・全体受付は引き続き未実装／無効のままとする。
+draft-0.4のレビュー修正：ready・親受理の前提消失はpre／post guardのどちらでも`invalid_state`とし、`evidence_binding_mismatch`は参照の不一致だけに使う。pre-guard側の負の対照を追加した。
+
+[60件の合成テスト](../tests/review/source-status-acceptance.test.ts)、[compiled fixture](../tests/review/fixtures/compiled-source-status-acceptance.mjs)、[検証記録](E2E_BEST_PRACTICE_SOURCE_STATUS_ACCEPTANCE_SA01_2026-10-31.md)を参照。§8のSA-T01の実class接続、SA-T02の実認証／URL binding、SA-T03の実source受理、SA-T09の実session resource解放は未確認であり、合成成功から全受入条件達成としない。SA-02／03、fallback／permit／正式発行・全体受付は引き続き未実装／無効のままとする。
