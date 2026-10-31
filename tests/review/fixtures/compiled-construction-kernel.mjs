@@ -16,7 +16,11 @@ const control=new AbortController();
 const r=BoundedReadSession.create({instanceUrl:'https://synthetic.invalid',authMode:'per-user',perUserBearerToken:'PRIVATE',oauth:{}},{signal:control.signal});
 assert.equal(r.ok,true);
 try{
-  first.fail('stop','cancelled');assert.equal(r.session.constructionStatus().primary,null);
+  // An unsealed local state takes a failure and seals; the live session's construction copy must not move.
+  const before=r.session.constructionStatus(),local=createConstructionState();
+  local.attempt('admission');local.held('admission');local.fail('stop','cancelled');local.seal();
+  assert.equal(local.copy().primary.code,'cancelled');assert.deepEqual(r.session.constructionStatus(),before);
+  assert.equal(before.primary,null);
   control.abort();assert.equal(r.session.reviewRunStatus().primary.code,'cancelled');
   assert.equal(r.session.constructionStatus().primary,null);
 }finally{r.session.close();}

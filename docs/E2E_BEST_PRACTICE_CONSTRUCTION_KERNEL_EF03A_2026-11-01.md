@@ -37,7 +37,13 @@ Date: 2026-11-01 / Baseline: `7d82842` / Scope: 合成依存・既存class回帰
 
 [compiled fixture](../tests/review/fixtures/compiled-construction-kernel.mjs)は配布対象kernelと既存classを使い、独立状態・固定理由・seal・run取消後もconstruction primaryがnullであることを確認する。外部通信をしない。[pack検査](../tests/review/package-http-classification.mjs)はkernelのJS／map／宣言／宣言map同梱を要求し、compiled ASTでimport／再export元／dynamic import／requireがないことを確認する。新moduleは必要な本番依存なので梱包除外しない。
 
-## 4 費目と未対応
+## 4 レビュー修正（2026-11-01）
+
+[compiled fixture](../tests/review/fixtures/compiled-construction-kernel.mjs)の「ローカル状態が実sessionへ影響しない」確認は、seal済みで無関係の`first`へ`fail`しており、no-opのため何も検証していなかった。未seal・admission保持中の新規ローカル状態へ`fail('stop')`・sealを行い、そのprimaryが`cancelled`になる一方で実sessionの`constructionStatus()`がfail前のcopyと完全一致（primaryはnull）することを比較する形へ置き換えた。
+
+変異確認：compiled kernelへ「stop理由を他の全生成状態へ配る」module共有台帳を一時注入すると、新fixtureは比較行で失敗（exit 1）し、旧fixtureは成功した。生成物は退避copyから復元し`cmp`で一致を確認した。§3の件数は修正前の記録として残す。
+
+## 5 費目と未対応
 
 診断状態は固定10resource・first reason1・履歴binding2・固定purpose3。rootの参照／claimを複製したrun台帳はなく、kernel委譲の固定writer object1と差分method closure4を追加した。kernelのrecord／copyはdispatch C=0・受信G/P=0・予約Rの更新0。実際の計上・解放callbackは従来rootだけが行う。byte量・Rust work上界・全体受付モデルへの昇格は行っていない。
 

@@ -1,6 +1,6 @@
 # AU-BR-006 EF-03：共通kernel・本番／開発root分離・fake friend撤去
 
-Version: br006-kernel-root-separation-ef03-draft-0.3 / Date: 2026-11-01。
+Version: br006-kernel-root-separation-ef03-draft-0.4 / Date: 2026-11-01。
 Status: **EF-03Aのconstruction状態・理由写像の純粋kernel抽出と既存class接続を実装。開発root分離・ビルド設定変更・friend撤去・試験移行は未実施。正式発行口閉鎖・Unknown・全体受付無効・VM／監視／telemetry調査保留を維持する。実接続・実通信・実機操作・設定変更・Pushは行わない。**
 
 基準：`e6f9abc`（EF-02後のrun停止／construction診断分離）、[親設計§7〜§13](BEST_PRACTICE_ABORT_SCOPE_EARLY_DIAGNOSTIC_FRIEND_SEPARATION_DESIGN.md)、[ND設計§13](BEST_PRACTICE_ABORT_SCOPE_NATIVE_STATUS_DIAGNOSTIC_DESIGN.md)。配置・型名・build手順は提案であり、新しい公開APIや承認済み本番bindingではない。
@@ -118,3 +118,5 @@ class最初のfieldはwrapper→純粋kernel生成だけを行う。構築中／
 [kernel合成試験](../tests/review/construction-kernel.test.ts)、既存EF-02／ND-03回帰、[compiled fixture](../tests/review/fixtures/compiled-construction-kernel.mjs)と[検証記録](E2E_BEST_PRACTICE_CONSTRUCTION_KERNEL_EF03A_2026-11-01.md)を参照。現行pack検査へkernel4artifactの同梱・compiled JSに依存importがないことを確認する限定検査を追加した。EF3-N01〜N09の全変異試験、tarball展開検査、別assembly移行、fake friend撤去は未実施である。
 
 draft-0.2のレビュー修正：canonical梱包検査が`synthetic_io`付きのcompiled ack fixtureも実行しており、EF-03Cの拒否で失敗するため、開発assemblyへの移設を§5に明記した。§5の配布build入力をEF-03対象の閉包に限定し、既存非同梱moduleのbuild構成は変えないことを明記した。
+
+draft-0.4のレビュー修正：EF-03Aのcompiled fixtureでseal済み・無関係のローカル状態へ`fail`していた空の確認を、未seal・resource保持中のローカル状態をfail／sealしても実sessionのconstruction copyが不変であることの比較へ置き換えた。上位設計からの版数リンクも更新した。
