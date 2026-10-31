@@ -1,7 +1,7 @@
 # AU-BR-006：constructor最初期の診断owner・fake friend分離
 
-Version: br006-early-diagnostic-friend-separation-draft-0.2 / Date: 2026-10-31。
-Status: **詳細設計案。実装・ビルド設定変更・friend撤去は未実施。正式発行口閉鎖・Unknown・全体受付無効・VM／監視／telemetry調査保留を維持する。実接続・実通信・実機操作・設定変更・Pushは行わない。**
+Version: br006-early-diagnostic-friend-separation-draft-0.3 / Date: 2026-10-31。
+Status: **EF-01の純粋shell／resource状態／bindingを合成issuerだけで実装。constructor接続・ビルド設定変更・friend撤去は未実施。正式発行口閉鎖・Unknown・全体受付無効・VM／監視／telemetry調査保留を維持する。実接続・実通信・実機操作・設定変更・Pushは行わない。**
 
 基準：`134248b`、[ND設計§3・§13](BEST_PRACTICE_ABORT_SCOPE_NATIVE_STATUS_DIAGNOSTIC_DESIGN.md)、[ND-03検証§5・§6](E2E_BEST_PRACTICE_NATIVE_DIAGNOSTIC_ND03_2026-10-31.md)、[source受理設計](BEST_PRACTICE_ABORT_SCOPE_STATUS_SOURCE_ACCEPTANCE_DELTA_DESIGN.md)。以下の型名・配置は内部契約案で、公開API／JSONの追加や承認済み実装ではない。
 
@@ -152,7 +152,7 @@ shellは固定3purpose slot・固定reason／resource／claim slotのみで、�
 
 失敗copy／readonly projectionにはstage・固定code・取得／解放状態・固定件数だけを含める。token／snapshot内容／principal hash／URL／source・lease・writer参照／error causeは出さない。seal後にcopyからauthorityを復元しない。
 
-## 10 合成受入条件（未実施）
+## 10 合成受入条件（EF-01の限定確認は§12）
 
 | ID | 条件 | 必須結果 |
 |---|---|---|
@@ -181,4 +181,21 @@ shellは固定3purpose slot・固定reason／resource／claim slotのみで、�
 
 実装前に、E5〜E7のadmission／登録順、直接newの失敗診断配送、部分登録が不明な場合の終了写像、開発assemblyで変わる保証とexact class試験の回復方法を承認する必要がある。D1／D2のruntime採用・SA-03承認とは別であり、本書の合意だけでいずれのgateも開かない。
 
-今回は設計文書だけを追加する。実装・設定・ビルド／配布物・実機状態を変更しない。
+本設計の合意だけではruntime変更・実機操作を認めない。限定実装の実績は次節で分ける。
+
+## 12 EF-01：純粋shell・合成resource状態・別one-shot binding
+
+[開発専用module](../src/review/abort-scope-evidence-construction-shell.ts)にprivate型と純粋creatorを実装した。exportは固定case名runnerだけで、shell／writer／context／resource tokenを取得・供給する口はない。既存session／実coreの登録台帳を共有せず、module全体を非同梱とする。
+
+- 固定purpose3個は常に未観測。resourceはsnapshot、core、登録owner、admission、controller2個、timer2個、abort listener、source／transportの10slot。純粋生成とbindingでclock・日時・controller・timer・fetch・listenerを起動しない。
+- CoreBinding／SourceBindingは同合成creatorのimmutable参照だけに結合する。各claimは照合前に消費し、失敗・停止・二重開始後も戻さない。coreはsnapshot／core／登録ownerの合成取得が揃ってから、sourceはcore bindingと非実行commit後に結合する。
+- attempt／受領／不明を分け、attempts・acquisitions・releasesは各0／1。timer／listenerの取得試行はcore binding後だけ。停止中に返った同resourceの合成handleは後始末用に記録できるが、初期化は再開しない。
+- commitは合成resourceの所有者ラベルをshell→sessionへ一度移すだけで、実行permitや実classへの移譲証拠を発行しない。古いownerの解放申告を拒否しても、新ownerの必要な後始末を妨げない。解放状態の更新は同合成ownerだけが一度行う。
+- 未取得resourceは返却0。unknownをconfirmedへ上げず、sealもrelease成功を捏造しない。未解決slotはunconfirmed、first reason／refusalは別保持、seal後の更新・二重sealはlate_ignoredとなる。公開copyは再帰freezeし全7permission=false。
+- snapshot／core／登録owner／source継続の解放記録はbindingを即時inactiveにし、その後のcommit／source bindingを拒否する。解放済みcoreにhistorical boundが残ることを、live authorityとみなさない。
+
+resourceの取得／解放は**合成metadata**であり、OS操作・実resource handle・rollback callback・固定解放sectionの実行証明ではない。EF-01では移譲・sealの状態modelまでを確認し、実際のconstructor field順変更、停止相互通知、失敗copyの搬送・take、admission返却・credential破棄、実cleanupはEF-02以降に残す。実装の確保量・Rust work単位への導出も行っていない。
+
+EF-T03の参照結合・二重利用、EF-T05／06の純粋状態、EF-T12のcopy非権限性だけを限定確認した。EF-T01の実class field順、EF-T02／04／07／08のcallback／constructor失敗、EF-T09／10のfriend本体撤去、EF-T11／13の移行後runtime保証は未達。新moduleの非同梱確認を、既存friend撤去済みと取り違えない。
+
+[合成テスト](../tests/review/construction-shell.test.ts)、[compiled fixture](../tests/review/fixtures/compiled-construction-shell.mjs)、[検証記録](E2E_BEST_PRACTICE_CONSTRUCTION_SHELL_EF01_2026-10-31.md)を参照。正式発行口閉鎖・Unknown・全体受付無効・調査保留は維持する。
