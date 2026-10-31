@@ -1,6 +1,6 @@
 # AU-BR-006：native status証拠の発行元・上位診断ownerの対設計
 
-Version: br006-native-status-diagnostic-draft-0.5 / Date: 2026-10-31。
+Version: br006-native-status-diagnostic-draft-0.6 / Date: 2026-10-31。
 Status: **ND-01の純粋fake診断ownerとND-02の注入Response／Streamsだけのnative発行・唯一consumerを実装。実session／sourceへの採用は未接続。fallback有効化・実接続・実通信は行わない。正式発行口閉鎖・Unknown・全体受付無効・VM／監視／telemetry調査保留を維持する。**
 
 基準：[SA-02と後続差分](BEST_PRACTICE_ABORT_SCOPE_STATUS_SOURCE_ACCEPTANCE_DELTA_DESIGN.md)、[ST-03の注入owner](BEST_PRACTICE_ABORT_SCOPE_STATUS_TERMINAL_CONNECTION_DESIGN.md)、[単一予算・停止owner](BEST_PRACTICE_ABORT_SCOPE_STATUS_SESSION_BINDING_DELTA_DESIGN.md)、[非200の承認比較](BEST_PRACTICE_ABORT_SCOPE_NON200_APPROVAL_COMPARISON.md)。型名・stage・操作名は内部契約案で、実装済みAPIや公開JSON enumではない。
@@ -175,7 +175,9 @@ draft-0.4のレビュー修正：後続attemptの最初の理由を既存contrac
 - private anchorは同生成元のbinding／attempt／元window／Response／headerに結合する。同readerのgetReader・closed捕捉・cancel・releaseLockは各最大1回、readは0。native body getterのnullだけをno_bodyとし、EOFに変換しない。
 - cleanup joinをclock／native callbackより先に確保し、固定Promise／native操作と同budgetの単調な残時間を使う。元floorの等号で停止する。release前のcancel／closed事実をfreezeし、release後の効果から成功を作らない。全体60秒を超える入力や元windowを広げるdescriptorは拒否する。
 - 同private recordのconfirmed cleanup・headerだけからopaque typed terminalを最大1個発行する。固定consumerは自分のclaimとlive tokenをlookup前に消費し、同anchor／record／cleanup／reader identityを照合する。pre／post guardと元floorを通った場合だけ、診断modelの非実行acceptanceを確定する。source consumerやC方式判定は呼ばない。
-- HTTP／cleanupの型付き事実・操作数・first primary／refusal・受理履歴は別々に残す。停止時は先行理由を記録して同期失効し、pending cleanupへ合流する。未確認cleanupのまま実行が終わる場合はteardownもunconfirmedとしてsealし、遅延settleによる昇格を禁止する。
+- HTTP／cleanupの型付き事実・操作数・first primary／refusal・受理履歴は別々に残す。停止時は先行理由を記録して同期失効し、pending cleanupへ合流する。停止・closeはcleanupの待機を打ち切らず、元cleanup floorまでreadonly観測を続ける（ST-03Cと同じ）。未確認cleanupは同slotとprimaryにだけ残し、teardownは本laneのtoken／claim解放だけを表す（§6）。遅延settleによる昇格を禁止する。
+
+draft-0.6のレビュー修正：停止・closeで待機を即時に打ち切り`observation_invalid`と記録していた点と、reader cleanupの未確認をteardownへ写していた点を上記のとおり修正した。
 - 正常終了もterminal authorityを失効して診断をsealする。再executeは固定request_rejected=invalid_stateを返すが、既存のseal済み診断を変更しない。全7permissionはfalseであり、消費成功はsource採用／fallback許可ではない。
 - 返却診断やST-03Cのconsumptionを入力として採用する口はない。注入factoryはfault／session／consumer等の余剰指定を拒否する。private provenanceの負の対照は、別exportの固定case名fixtureだけから実施し、token／writer／任意callbackを外へ返さない。外国tokenの台帳は共有・変更しない。
 

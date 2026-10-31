@@ -111,7 +111,7 @@ it.each(['reader', 'closed', 'release', 'closed_rejected'] as const)('retains na
     const { createInjectedNativeDiagnosticWorkflow: factory } = await import('../../src/review/abort-scope-evidence-native-diagnostic.js');
     const stream = new ReadableStream(), r = await setup(factory).execute(new Response(stream, { status: 403 }), window);
     expect(r.upper.slots.release.http?.status).toBe(403); expect(r.upper.slots.release.cleanup.phase).toBe('unconfirmed');
-    expect(r.upper.teardown).toBe('unconfirmed'); expect(r.counts.issued).toBe(0);
+    expect(r.upper.teardown).toBe('confirmed'); expect(r.counts.issued).toBe(0);
     expect(r.operations.release_lock).toBe(mode === 'reader' ? 0 : 1); expect(stream.locked).toBe(false);
     expect(JSON.stringify(r)).not.toContain('PRIVATE'); expect(vi.getTimerCount()).toBe(0);
 });
@@ -120,8 +120,11 @@ it('joins cancel/close with pending native cleanup and freezes an unconfirmed te
     const stream = new ReadableStream({ cancel() { calls++; return new Promise<void>(r => { resolve = r; }); } }), owner = setup();
     const pending = owner.execute(new Response(stream, { status: 403 }), window);
     await vi.advanceTimersByTimeAsync(0); owner.stop(); const closing = owner.close();
+    // Stop/close do not cut the wait short; it ends at the original cleanup floor.
+    await vi.advanceTimersByTimeAsync(10000);
     const r = await pending; expect(await closing).toEqual(r); expect(calls).toBe(1);
-    expect(r.upper.primary?.code).toBe('cancelled'); expect(r.upper.slots.release.cleanup.phase).toBe('unconfirmed');
+    expect(r.upper.primary?.code).toBe('cancelled');
+    expect(r.upper.slots.release.cleanup).toMatchObject({ phase: 'unconfirmed', reason: 'cancel_pending', native: { wait_issue: 'cleanup_deadline' } });
     expect(r.operations).toMatchObject({ cancel: 1, release_lock: 1, read: 0 }); expect(r.counts.issued).toBe(0);
     resolve(); await vi.advanceTimersByTimeAsync(0); expect(owner.diagnostics()).toEqual(r); expect(vi.getTimerCount()).toBe(0);
 });
@@ -202,4 +205,14 @@ it.each(['budget', 'scheduler'] as const)('handles a rejected Promise returned b
         schedule: mode === 'scheduler' ? () => Promise.reject(Error('PRIVATE_ASYNC_SCHEDULER')) : () => () => {} };
     const r = await createInjectedNativeDiagnosticWorkflow(input as never).execute(new Response(new ReadableStream(), { status: 403 }), window);
     expect(r.counts.issued).toBe(0); expect(r.upper.primary).not.toBeNull(); expect(JSON.stringify(r)).not.toContain('PRIVATE');
+});
+it('keeps waiting after stop and confirms a cleanup that settles inside the original floor, without issuance', async () => {
+    let resolve!: () => void;
+    const stream = new ReadableStream({ cancel() { return new Promise<void>(r => { resolve = r; }); } }), owner = setup();
+    const pending = owner.execute(new Response(stream, { status: 403 }), window);
+    await vi.advanceTimersByTimeAsync(0); owner.stop(); await vi.advanceTimersByTimeAsync(1); resolve();
+    const r = await pending;
+    expect(r.upper.primary?.code).toBe('cancelled'); expect(r.upper.teardown).toBe('confirmed');
+    expect(r.upper.slots.release.cleanup).toMatchObject({ phase: 'confirmed', kind: 'cancelled', native: { wait_issue: null } });
+    expect(r.counts).toEqual({ issued: 0, consume_attempts: 0, consumed: 0 }); expect(stream.locked).toBe(false); expect(vi.getTimerCount()).toBe(0);
 });

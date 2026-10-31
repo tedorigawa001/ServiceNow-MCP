@@ -139,7 +139,7 @@ oracleは固定sourceの受理イベント順、独立したfake dispatch件数�
 
 ## 9 次の実装単位・承認待ち
 
-SA-02後のnative証拠と上位診断の対設計は[発行元・診断owner詳細設計draft-0.4](BEST_PRACTICE_ABORT_SCOPE_NATIVE_STATUS_DIAGNOSTIC_DESIGN.md)を参照。観測前owner・同reader由来のprivate終端・唯一の消費・seal後の診断copyを具体化する設計案で、実装・SA-03承認・有効化ではない。
+SA-02後のnative証拠と上位診断の対設計は[発行元・診断owner詳細設計draft-0.6](BEST_PRACTICE_ABORT_SCOPE_NATIVE_STATUS_DIAGNOSTIC_DESIGN.md)を参照。観測前owner・同reader由来のprivate終端・唯一の消費・seal後の診断copyを具体化する設計案で、実装・SA-03承認・有効化ではない。
 
 1. **SA-01（§10に実装記録）**：固定生成元・source用受理claim・非実行draft・close前消費の内部契約を合成issuerだけで実装。fallbackやpermitは発行しない。
 2. **SA-02（§11に実装記録）**：同constructorの実source class／session private継続へのbindingをfake I/Oで検証。200 guardは維持し、status用非実行分岐の検証を実通信と分ける。既存sessionへのfixture採用口を作らない。

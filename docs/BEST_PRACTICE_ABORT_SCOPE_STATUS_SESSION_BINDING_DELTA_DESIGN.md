@@ -123,7 +123,7 @@ binding不一致・二重消費・取消・期限切れを単なるcleanup失敗
 
 ## 9 承認待ち・未確認事項
 
-SA-02後の次差分は[native status発行元・上位診断ownerの対設計draft-0.4](BEST_PRACTICE_ABORT_SCOPE_NATIVE_STATUS_DIAGNOSTIC_DESIGN.md)を参照。診断ownerを観測前に確保し、同canonical停止・private終端と結合する案。現在の合成cleanup記録を正式証拠へ昇格しない。
+SA-02後の次差分は[native status発行元・上位診断ownerの対設計draft-0.6](BEST_PRACTICE_ABORT_SCOPE_NATIVE_STATUS_DIAGNOSTIC_DESIGN.md)を参照。診断ownerを観測前に確保し、同canonical停止・private終端と結合する案。現在の合成cleanup記録を正式証拠へ昇格しない。
 
 §12後の接続差分は[固定source status private受理・実session binding・close前消費draft-0.7](BEST_PRACTICE_ABORT_SCOPE_STATUS_SOURCE_ACCEPTANCE_DELTA_DESIGN.md)を参照。SA-01に加え、SA-02は実classのprivate継続を固定fake probeへ接続した。fallbackや実transport採用を承認しない。
 

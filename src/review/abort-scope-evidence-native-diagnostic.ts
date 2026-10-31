@@ -220,13 +220,11 @@ function constructInjectedNativeDiagnosticWorkflow(raw: NativeInput, fault?: Nat
     let issueClaim = false, consumeClaim = false, live: Terminal | undefined, current: Record | undefined;
     let foreignUnchanged = true;
     let last: number | undefined, runWork: Promise<ReturnType<typeof snapshot>> | undefined;
-    let stopWake!: () => void;
-    const stopping = new P<void>(resolve => { stopWake = resolve; });
     function stop(code: Code = 'cancelled', stage: Stage = 'stop') {
         if (sealed) return;
         primary ??= code; upper.stop(primary, stage);
+        // Authority is revoked synchronously; a pending cleanup keeps its read-only wait until the original floor.
         revoked = true; if (live) terminals.delete(live); live = undefined;
-        if (code === 'cancelled' || code === 'closed') stopWake();
     }
     function fail(code: Code, stage: Stage) { upper.reject(code, stage); stop(code, stage); }
     if (!validInput) fail('invalid_input', 'binding');
@@ -263,8 +261,7 @@ function constructInjectedNativeDiagnosticWorkflow(raw: NativeInput, fault?: Nat
             if (types.isPromise(dispose)) { void observe(dispose, () => {}); throw Error('invalid_dispose'); }
             if (typeof dispose !== 'function' || types.isProxy(dispose)) throw Error('invalid_dispose');
             issue = await Reflect.apply(promiseRace, P, [[
-                new P<null>(resolve => { Reflect.apply(promiseThen, work, [() => resolve(null)]); }), boundary,
-                new P<NativeReason>(resolve => { Reflect.apply(promiseThen, stopping, [() => resolve('observation_invalid')]); })]]) as NativeReason | null;
+                new P<null>(resolve => { Reflect.apply(promiseThen, work, [() => resolve(null)]); }), boundary]]) as NativeReason | null;
         } catch { issue = 'observation_invalid'; }
         finally { try { if (typeof dispose === 'function') Reflect.apply(dispose, undefined, []); } catch { issue ??= 'observation_invalid'; } }
         return issue ?? sample(floor);
@@ -395,7 +392,8 @@ function constructInjectedNativeDiagnosticWorkflow(raw: NativeInput, fault?: Nat
             finally {
                 if (current) await clean(current);
                 upper.release('releasing'); revoked = true; if (live) terminals.delete(live); live = undefined;
-                upper.release(current && current.cleanup?.disposition !== 'confirmed' ? 'unconfirmed' : 'confirmed');
+                // Teardown covers only this lane's own token/claim release; reader cleanup failures stay in the cleanup slot and primary.
+                upper.release('confirmed');
                 upper.seal(); sealed = true; phase = 'closed';
             }
         })(); Reflect.apply(promiseThen, work, [() => resolve(snapshot()), () => { stop('internal_review_error'); upper.seal(); sealed = true; phase = 'closed'; resolve(snapshot()); }]); }); });

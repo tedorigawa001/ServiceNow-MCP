@@ -32,6 +32,8 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 ### Added
 
+- Fixes ND-02 so stop/close no longer cut a pending reader cleanup short (it keeps its read-only wait until the original floor, as ST-03C does), and teardown reflects only the lane's own releases instead of mirroring reader cleanup failures.
+
 - ND-02 connects the package-excluded diagnostic owner, bound before observation, to a creator-private native status anchor/cleanup terminal and a sole one-shot consumer using injected Response/Streams only. Same-reader cancel/closed/release facts are frozen before release effects can rewrite them; cleanup, first-stop and acceptance diagnostics survive closure. Includes original-window guards, pending/late cleanup, native failures, replay/reentry, provenance negative controls and compiled/offline packaging tests. No diagnostic-to-evidence adoption, real session/source integration, transport, fallback, formal issuance or whole-run admission is enabled.
 
 - Fixes ND-01 later-attempt reasons to match the bootstrap contract (`upstream_unavailable` for 429/5xx, `invalid_response` otherwise) and lets an attempt that ended without a response be retried, keeping the ordinal-1 HTTP slot null.

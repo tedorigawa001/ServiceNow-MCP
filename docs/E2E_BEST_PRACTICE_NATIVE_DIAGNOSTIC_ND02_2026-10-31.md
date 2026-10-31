@@ -36,7 +36,16 @@ Date: 2026-10-31。対象：[詳細設計§12](BEST_PRACTICE_ABORT_SCOPE_NATIVE_
 - `bdo node tests/review/package-http-classification.mjs`：ND-01／ND-02と既存status各段階のcompiled試験成功。offline・ignore-scriptsのpack dry-runは409ファイル。開発module／fixtureの非同梱、配布runtimeからの非参照を維持。
 - `bdo npm test`最終再実行：211ファイル・9,484テスト成功、未処理拒否なし（43.95秒）。依存再取得を伴うworker梱包試験や実環境検証の成功は主張しない。
 
-## 5 未接続と停止状態
+## 5 レビュー修正（2026-10-31）
+
+- 停止・closeが待機raceへ参加し、pending cleanupを即時に打ち切って`wait_issue='observation_invalid'`としていた。stop直後1msでcancelが決着する同条件で、ST-03Cは`confirmed`、ND-02は`unconfirmed`となることをprobeで確認した。停止用Promiseを待機から外し、停止は権限の同期失効だけとして、cleanupは元floorまでreadonly観測を続けるよう修正した。
+- reader cleanupの未確認をteardownの`unconfirmed`へ写していた。teardownは本laneのtoken／claim解放だけを表すようにし、cleanup失敗はcleanup slotとprimaryにだけ残す（設計§6）。
+- 既存テスト2件を変更（native失敗時のteardownは`confirmed`、pending中のstop／closeは元floorまで進めて`cleanup_deadline`）、stop後1msで決着したcleanupを`confirmed`とし発行0を保つテストを追加。専用61件。
+- 変異確認：teardownの写像を戻すと4件、停止用Promiseを待機raceへ戻すと2件失敗（確認後に復元）。
+- 全体`npm test`：211ファイル・9,485テスト成功、未処理拒否なし。`npm run build`、変更source／testのESLint、`node tests/review/package-http-classification.mjs`（409ファイル）成功。
+- 上記§4の件数（専用60件・9,484テスト）は修正前の記録として残す。
+
+## 6 未接続と停止状態
 
 実session／ReleasePermit／認証snapshot／ready世代・実source consumer・canonical C/G/P/Rとのbinding、固定dispatcher／URLからの証明、認証／親のnative観測は未接続。ND-02のfake budgetはreadonly残時間だけで、実会計を新設・更新しない。ND-03の実class連続fake、SA-03の承認後判定は別工程。
 
