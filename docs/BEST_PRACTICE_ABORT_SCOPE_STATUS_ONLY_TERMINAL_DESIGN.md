@@ -1,6 +1,6 @@
 # AU-BR-006 同attemptのstatus-only終端・cancel-only cleanup詳細設計
 
-Version: br006-status-only-terminal-draft-0.4 / Date: 2026-10-31。
+Version: br006-status-only-terminal-draft-0.5 / Date: 2026-10-31。
 Status: ST-01の§10合成issuer内部契約と、ST-02の§11注入Response／Streamsによるcleanup操作を開発専用に実装。正式証拠・runtime採用と承認は未実施。§8の受入条件は後続接続段階を含み、全件確認済みではない。正式発行口閉鎖・Unknown・全体受付無効・VM／監視／telemetry調査保留を維持する。
 
 親：[非200 HTTP対応設計](BEST_PRACTICE_ABORT_SCOPE_NON200_HTTP_DESIGN.md) §4／8。既存実装の照合元は[native adapter](../src/servicenow/review-native-adapter.ts)、[body lane](../src/servicenow/review-native-body.ts)、[説明用分類器](../src/review/abort-scope-evidence-http-classification.ts)。本書は実通信での確認記録ではない。
@@ -186,7 +186,7 @@ nativeのread／cancel／closed／releaseLock、cleanup promiseへの合流、la
 
 ### 11.1 操作と所有権
 
-- Response／stream／readerのnative prototypeとgetter／操作をmodule初期化時に固定する。proxy・偽造・subclass・使用済みResponse・再使用・locked／foreign streamは拒否し、foreign readerを奪わない。
+- Response／stream／readerのnative prototypeとgetter／操作、およびcleanup待機に使うPromiseの`then`／`race`／`all`／`resolve`をmodule初期化時に固定する（NA-02と同じ方針）。後からglobal Promiseを差し替えても待機の短縮・置換は起きない。proxy・偽造・subclass・使用済みResponse・再使用・locked／foreign streamは拒否し、foreign readerを奪わない。
 - 同streamからreaderを1回取得し、そのreaderのclosed promiseをcancel前に1回captureする。readを公開も呼出しもせず、操作数は常にread=0。
 - stop／close／finishより前に共通cleanup promiseを設置する。cancelとreleaseLockは各操作の前に状態・試行数を更新し、同期throw／rejectでも再試行しない。明示的なfinish claimも一度限り。
 - cancelとclosedのsettleを元のcleanup floorまで観測し、releaseLock直前の事実をcopyする。同readerのreleaseを1回試行後、元clockでpost-guardする。release自身によるclosed変化や遅いcancel完了で終端を修復しない。

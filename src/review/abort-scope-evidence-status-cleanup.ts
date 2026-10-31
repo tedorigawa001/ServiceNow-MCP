@@ -21,7 +21,10 @@ type Cleanup = Readonly<{ disposition: 'confirmed' | 'unconfirmed'; kind: 'cance
     reason: Reason | null; wait_issue: Reason | null; facts: Facts }>;
 const permissions = Object.freeze({ dispatch: false, read_body: false, retry: false, fallback: false,
     body_ack: false, release_permit: false, formal_issuance: false } as const);
-const P = Promise, then = P.prototype.then, race = P.race;
+const P = Promise, then = P.prototype.then, race = P.race, all = P.all, resolved = P.resolve;
+// Pinned like NA-02: a later global Promise patch must not shorten or replace the cleanup wait.
+const done = (): Promise<void> => Reflect.apply(resolved, P, []) as Promise<void>;
+const after = <T, U>(p: Promise<T>, next: (value: T) => U): Promise<Awaited<U>> => Reflect.apply(then, p, [next]) as Promise<Awaited<U>>;
 // This isolated development lane does not register/adopt real sessions or share fixture identity tables.
 const responses = new WeakSet<object>(), streams = new WeakSet<object>();
 const native = (() => {
@@ -90,7 +93,7 @@ export function createInjectedStatusCleanupOwner(input: {
         let dispose: (() => void) | undefined, issue: Reason | null = null;
         try {
             const boundary = new P<Reason>(resolve => { dispose = schedule(start.n - floor, () => resolve('cleanup_deadline')); });
-            issue = await Reflect.apply(race, P, [[work.then(() => null), boundary]]) as Reason | null;
+            issue = await Reflect.apply(race, P, [[after(work, () => null), boundary]]) as Reason | null;
         } catch { issue = 'observation_invalid'; }
         finally { try { dispose?.(); } catch { issue ??= 'observation_invalid'; } }
         const end = sample(floor);
@@ -99,16 +102,16 @@ export function createInjectedStatusCleanupOwner(input: {
     function clean(r: Record): Promise<void> {
         if (r.cleanupWork) return r.cleanupWork;
         // Install the join point before any clock/native/scheduler callback can reenter.
-        r.cleanupWork = P.resolve().then(async () => {
+        r.cleanupWork = after(done(), async () => {
             let issue = sample(r.window.cleanup_floor_ms).issue;
-            let cancelling = P.resolve();
+            let cancelling = done();
             if (r.reader && r.cancel === 'not_requested') {
                 r.cancel = 'pending'; ops.cancel++;
                 try { cancelling = observe(Reflect.apply(native!.cancel, r.reader, []), yes => { r.cancel = yes ? 'fulfilled' : 'rejected'; }); }
                 catch { r.cancel = 'rejected'; }
             }
             if (r.body && r.reader && !issue)
-                issue = await bounded(P.all([r.closedWork ?? P.resolve(), cancelling]).then(() => {}), r.window.cleanup_floor_ms);
+                issue = await bounded(after(Reflect.apply(all, P, [[r.closedWork ?? done(), cancelling]]) as Promise<unknown>, () => {}), r.window.cleanup_floor_ms);
             // releaseLock can change closed. Freeze its observed state BEFORE releasing this same reader.
             const before = { reader_owned: r.owned, closed_captured: r.captured, read_started: false as const, read_pending: false as const,
                 cancel: r.cancel, closed: r.closed };

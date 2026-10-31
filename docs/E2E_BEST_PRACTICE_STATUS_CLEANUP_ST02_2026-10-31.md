@@ -38,6 +38,13 @@ stop／close／finishは同cleanup promiseへ合流し、明示finishは一度�
 - hard HTTP診断とcleanup失敗、取消・close・finishの合流、二重finish／取得／foreign handle、使用済み／proxy／偽造／locked／subclass／再使用を確認。
 - 真正no_bodyでは操作0・not_applicableを確認。200／429／500は採用せず所有resourceだけ片付け、既存のbody／retry分岐は有効化しない。
 
+## レビュー修正（2026-10-31）
+
+- 指摘：NA-02は`then`／`race`を固定していたが、ST-02はcleanup待機の`Promise.all`・`Promise.resolve()`とその戻り値の`.then`を呼出し時に参照していた。事実（cancel／closed）は固定`then`経由のsettle callbackだけで設定されるため、差替えで偽の`confirmed`は作れない（確認probe：決着しないcancelと即時解決する`Promise.all`差替えでも`unconfirmed`／`cancel_pending`）。影響は待機の短縮・置換に限られる。
+- 修正：`all`／`resolve`もmodule初期化時に固定し、`then`は固定値を`Reflect.apply`で適用する。待機の意味・操作順・診断は変更しない。
+- 回帰試験：`Promise.all`をthrowする差替えのまま非同期cleanup全体を実行し、同期join点で`Promise.resolve`／`Promise.prototype.then`を呼ばないことと、確認済みcancel cleanupになることを確認する（1件、ST-02試験42件）。修正前実装、および`Promise.all`だけを未固定に戻した実装ではこの1件だけが失敗する。`Promise.resolve`の差替えはNode stream内部にも影響するため、同期区間の観測に限定した。
+- 再検証：tsc・変更対象ESLint・全体199 files／9,022 tests PASS、build後の梱包確認PASS（409 files）、`git diff --check` PASS。§2の実行結果は修正前の記録として残す。
+
 ## 5 未確認と停止状態
 
 実HTTP要求／認証snapshot／session／source／ReleasePermit／canonical予算への正式binding、C/G更新、status terminalの一度限りconsumeへの接続、公開終了code、retry／fallbackは未実装。read=0はreader呼出しの会計であり、prefetchやネットワーク受信量0の証明ではない。

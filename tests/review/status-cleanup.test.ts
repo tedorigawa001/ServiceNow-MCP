@@ -225,3 +225,18 @@ it('refuses descriptor replay/second acquire and cleans the original reader befo
     expect(await owner.acquire(new Response(null, { status: 403 }), window)).toMatchObject({ ok: false, code: 'invalid_state' });
     expect(owner.diagnostics().operations).toMatchObject({ get_reader: 1, cancel: 1, release_lock: 1, read: 0 }); expect(stream.locked).toBe(false);
 });
+it('keeps the cleanup wait on pinned Promise intrinsics after a later global patch', async () => {
+    const owner = setup();
+    const a = get(await owner.acquire(new Response(new ReadableStream<Uint8Array>({ cancel() { } }), { status: 403 }), window));
+    // Promise.all stays patched across the asynchronous cleanup. resolve/then are only spied on the synchronous join point,
+    // because Node stream internals may use the global Promise statics themselves.
+    const all = vi.spyOn(Promise, 'all').mockImplementation(() => { throw Error('PATCHED_ALL'); });
+    const resolve = vi.spyOn(Promise, 'resolve'), then = vi.spyOn(Promise.prototype, 'then');
+    const pending = owner.finish(a.handle);
+    const sync = { resolve: resolve.mock.calls.length, then: then.mock.calls.length };
+    resolve.mockRestore(); then.mockRestore();
+    let result: unknown;
+    try { result = await pending; } finally { all.mockRestore(); }
+    expect(sync).toEqual({ resolve: 0, then: 0 }); expect(all).not.toHaveBeenCalled();
+    expect(result).toMatchObject({ ok: true, value: { primary: null, cleanup: { disposition: 'confirmed', kind: 'cancelled' } } });
+});
