@@ -57,6 +57,7 @@ describe('RC-02 pure release comparison', () => {
     expect(compareRelease(input(values))).toEqual(unavailable(reason));
   });
   it('keeps invalid observations distinct from empty completed observations', () => {
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
     const {observed_at: _observed, ...timing} = input().timing;
     expect(compareRelease({...input(), timing, observation: {kind: 'invalid_observation'}})).toEqual(unavailable('observation_incomplete'));
   });
@@ -91,6 +92,7 @@ describe('RC-02 pure release comparison', () => {
   it('gives a consistent binding issue priority over every observation kind', () => {
     const policy = {...input().policy, assertion: {...assertion(), instance_binding: 'c'.repeat(64), expires_at: '2026-10-31T00:00:00.000Z'}, issue: 'config_binding_mismatch'};
     expect(compareRelease({...input(Array(21).fill(null)), policy})).toEqual(unavailable('config_binding_mismatch'));
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
     const {observed_at: _observed, ...timing} = input().timing;
     for (const kind of ['not_requested', 'invalid_observation']) {
       expect(compareRelease({...input(), policy, timing, observation: {kind}})).toEqual(unavailable('config_binding_mismatch'));
@@ -126,6 +128,7 @@ describe('RC-02 pure release comparison', () => {
     ['insufficient', '2026-11-01T00:01:00.000Z', 'config_validity_insufficient'],
   ])('does not rescue invalid/incomplete/unknown/limited observations with %s config', (_name, expires_at, issue) => {
     const policy = {...input().policy, assertion: {...assertion(), expires_at}, ...(issue ? {issue} : {})};
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
     const {observed_at: _observed, ...timing} = input().timing;
     expect(compareRelease({...input(), policy, timing, observation: {kind: 'invalid_observation'}})).toEqual(unavailable('observation_incomplete'));
     expect(compareRelease({...input(['UNRECOGNIZED_SECRET', null]), policy})).toEqual(unavailable('observation_incomplete'));

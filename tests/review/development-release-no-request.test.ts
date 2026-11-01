@@ -142,6 +142,7 @@ it.each([
 ])('retains a release dispatch for a same-binding $source decision ($family/$match)',async expected=>{
   const script=transcript(),raw=conditions();
   raw.policy.assertion.instance_binding=raw.policy.instanceBinding;raw.policy.assertion.family=expected.family;
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   const {issue,...policy}=raw.policy;
   const release=encode({result:expected.rows});script.responses[1]={purpose:'release',bytes:release,outcome:'ok'};
   const result=await createDevelopmentRoot({clock:()=>0}).run({principal:'same_binding',transcript:script,release_comparison:{...raw,policy}});

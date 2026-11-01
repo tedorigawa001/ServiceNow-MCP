@@ -37,6 +37,7 @@ describe('RC-01 strict value input', () => {
   });
   it('requires observation timestamps only for complete_200 and bounds row values', () => {
     const original = input();
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
     const {observed_at: _observed, ...timing} = original.timing;
     expect(parseReleaseComparisonInput({...original, timing})).toEqual({ok: false, code: 'invalid_input'});
     for (const observation of [{kind: 'invalid_observation'}, {kind: 'not_requested'}]) {
@@ -91,6 +92,7 @@ describe('RC-01 strict value input', () => {
     }
   });
   it('accepts a no-request binding-mismatch value without issuing authority', () => {
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
     const {observed_at: _observed, ...timing} = input().timing;
     const value = {...input(), timing, policy: {...input().policy, assertion: {...assertion(), instance_binding: 'c'.repeat(64)}, issue: 'config_binding_mismatch'}, observation: {kind: 'not_requested'}};
     expect(parseReleaseComparisonInput(value).ok).toBe(true);

@@ -19,6 +19,7 @@ it('stops the fake continuation when the getter differs from the full deadline u
 const actualDeadline=Object.getOwnPropertyDescriptor(BoundedReadSession.prototype,'deadlineMs')!.get!;
 it.each([60000,10000])('reads the existing getter once for the same pinned session at full L=%i',async deadline=>{
   let owner:BoundedReadSession|undefined;
+  // eslint-disable-next-line @typescript-eslint/no-this-alias
   const getter=vi.spyOn(BoundedReadSession.prototype,'deadlineMs','get').mockImplementation(function(this:BoundedReadSession){owner=this;return actualDeadline.call(this);});
   const result=await run({}, {deadlineMs:deadline});
   expect(getter).toHaveBeenCalledTimes(1);expect(actualDeadline.call(owner)).toBe(deadline);
@@ -37,6 +38,7 @@ it.each(['throw','cancel','deadline'] as const)('keeps fixed stop and no release
   vi.useFakeTimers();let owner:BoundedReadSession|undefined;
   const controller=new AbortController();
   vi.spyOn(BoundedReadSession.prototype,'deadlineMs','get').mockImplementation(function(this:BoundedReadSession){
+    // eslint-disable-next-line @typescript-eslint/no-this-alias
     owner=this;if(fault==='cancel')controller.abort(Error('PRIVATE_REASON'));
     if(fault==='deadline')vi.spyOn(performance,'now').mockReturnValue(performance.now()+60000);
     if(fault==='throw')throw Error('PRIVATE_GETTER');return actualDeadline.call(this);
@@ -50,6 +52,7 @@ it.each(['throw','cancel','deadline'] as const)('keeps fixed stop and no release
 it.each(['startedAt','policy','deadline'] as const)('refuses corrupted %s at capture with no release I/O',field=>{
   let owner:BoundedReadSession|undefined;
   vi.spyOn(BoundedReadSession.prototype,'deadlineMs','get').mockImplementation(function(this:BoundedReadSession){
+    // eslint-disable-next-line @typescript-eslint/no-this-alias
     owner=this;
     if(field==='startedAt')Object.defineProperty(this,'startedAt',{value:'2026-10-01T00:00:00.000Z'});
     if(field==='policy')Object.defineProperty(this,'releasePolicy',{value:Object.freeze({...this.releasePolicy})});
@@ -59,6 +62,7 @@ it.each(['startedAt','policy','deadline'] as const)('refuses corrupted %s at cap
 });
 it.each(['startedAt','policy'] as const)('refuses %s replacement after capture but before consumption',async field=>{
   vi.useFakeTimers();let owner:BoundedReadSession|undefined;
+  // eslint-disable-next-line @typescript-eslint/no-this-alias
   vi.spyOn(BoundedReadSession.prototype,'deadlineMs','get').mockImplementation(function(this:BoundedReadSession){owner=this;return actualDeadline.call(this);});
   const io=script();const pending=BoundedReadSession.prepareNewReviewComposition(snapshot(),{update_set_sys_id:id},{synthetic_io:{responses:io.responses.map((row,i)=>({...row,delay_ms:i===1?1000:0}))}});
   const checked=expect(pending).rejects.toMatchObject({code:'internal_review_error'});await vi.advanceTimersByTimeAsync(1);
@@ -67,6 +71,7 @@ it.each(['startedAt','policy'] as const)('refuses %s replacement after capture b
 });
 it('rejects equal-valued policy from a different session rather than treating values as identity',async()=>{
   let foreign:BoundedReadSession|undefined;
+  // eslint-disable-next-line @typescript-eslint/no-this-alias
   const getter=vi.spyOn(BoundedReadSession.prototype,'deadlineMs','get').mockImplementation(function(this:BoundedReadSession){foreign=this;return actualDeadline.call(this);});
   await run();const policy=foreign!.releasePolicy;
   getter.mockImplementation(function(this:BoundedReadSession){Object.defineProperty(this,'releasePolicy',{value:policy});return actualDeadline.call(this);});
@@ -76,6 +81,7 @@ it.each([-1,0,1])('keeps the configuration pin boundary E=S+L%+i while using the
   vi.useFakeTimers();vi.setSystemTime(new Date('2026-11-01T00:00:00.000Z'));
   const start=Date.now(),deadline=10000;let owner:BoundedReadSession|undefined;
   const provider=vi.fn(()=>({instance_id:'test',assertion:{family:'Australia',instance_binding:createReviewInstanceBinding('test',origin),asserted_at:new Date(start-1000).toISOString(),expires_at:new Date(start+deadline+delta).toISOString()}}));
+  // eslint-disable-next-line @typescript-eslint/no-this-alias
   vi.spyOn(BoundedReadSession.prototype,'deadlineMs','get').mockImplementation(function(this:BoundedReadSession){owner=this;return actualDeadline.call(this);});
   const result=await run({reviewReleaseConfigProvider:provider},{deadlineMs:deadline});
   expect(provider).toHaveBeenCalledTimes(1);expect(owner!.startedAt).toBe(new Date(start).toISOString());
@@ -107,6 +113,7 @@ it('does not let a getter exception replace an earlier cancellation',async()=>{
 });
 it('refuses the pending value after session close and releases all timers',async()=>{
   vi.useFakeTimers();let owner:BoundedReadSession|undefined;
+  // eslint-disable-next-line @typescript-eslint/no-this-alias
   vi.spyOn(BoundedReadSession.prototype,'deadlineMs','get').mockImplementation(function(this:BoundedReadSession){owner=this;return actualDeadline.call(this);});
   const io=script(),pending=BoundedReadSession.prepareNewReviewComposition(snapshot(),{update_set_sys_id:id},{synthetic_io:{responses:io.responses.map((row,i)=>({...row,delay_ms:i===1?1000:0}))}});
   const checked=expect(pending).rejects.toMatchObject({code:'closed'});await vi.advanceTimersByTimeAsync(1);owner!.close();await checked;
