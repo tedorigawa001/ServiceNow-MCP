@@ -1,6 +1,6 @@
 # RC-03：release比較器の固定採用境界・接続差分設計
 
-Version: br006-release-adoption-rc03-draft-0.7 / Date: 2026-11-01。
+Version: br006-release-adoption-rc03-draft-0.8 / Date: 2026-11-01。
 Status: **RC3-D01／D02／D03を開発assemblyだけに限定実装。同sourceの200行ackの固定比較、またはdispatch前binding不一致のnot_requestedから、guard・seal後の非実行summaryへ接続。R差替えは未実装／未承認。旧試験・正式発行口閉鎖・Unknown・全体受付無効・VM／監視／telemetry調査保留を維持する。実Permit発行・実接続・実通信・実機操作・設定変更・friend撤去・Pushは行わない。**
 
 基準：`a61d90a`。[純粋比較器設計draft-0.6](BEST_PRACTICE_ABORT_SCOPE_RELEASE_COMPARATOR_DESIGN.md)のRC-03を具体化する。以下の追加field・状態・試験ID・分割単位は案であり、存在するAPIや検証済み保証ではない。
@@ -10,7 +10,7 @@ Status: **RC3-D01／D02／D03を開発assemblyだけに限定実装。同source�
 | 経路 | 現在の供給／消費 | RC-03で必要になる差分 |
 |---|---|---|
 | [実source](../src/review/bounded-source.ts) | `resolveRelease`／private release consumer→`#observeRelease`→既存値判定→`#completeRelease` | 同source内部で比較入力を組み立て、比較後guardを通った値だけを固定分岐へ渡す。公開draftの採用口は作らない |
-| [実session](../src/servicenow/bounded-read.ts) | public readonlyの`startedAt`、pin済み`releasePolicy`、`assertActive`、private生成継続の`check`。全deadlineは`private readonly limits.deadlineMs`にあり、sourceから読む口は**現在ない** | 同sessionからの時刻／policy／停止を再利用する。別sessionのprojectionや残時間によるdeadline再計算は禁止 |
+| [実session](../src/servicenow/bounded-read.ts) | readonlyの`startedAt`、pin済み`releasePolicy`、既存`get deadlineMs()`、`assertActive`、private生成継続の`check`。getterは設定pinと同じ`limits.deadlineMs`を返す | getterを新設せず、同sessionの開始UTC／全deadline／policyを比較器へ結合する（未接続）。別session値や残時間による再計算は禁止 |
 | [開発source](../tests/support/review/ef03/source.ts) | 同realmのcontext・private ackをissue／consume。D02 opt-inだけ同じrelease projectionを一度退避し、private取得後に破棄 | 通常profileは従来どおり破棄。実source証拠への昇格は禁止 |
 | [開発assembly](../tests/support/review/ef03/assembly.ts) | contextはrun identity／snapshot／canonical lease。D01の固定UTC／policyにD02の固定比較・guard・seal後summary、D03のdispatch前no-requestを接続 | monotonic clockをUTCとして解釈しない。Rは未接続 |
 | [開発bootstrap](../tests/support/review/ef03/bootstrap.ts) | 同coreでC/G/P、final4予約、固定200 bytes→decode→accept。release_matchはnot_evaluated | opt-inの比較結果は別の非実行summaryとして公開する。省略時の既存結果・予約／cleanupは不変 |
@@ -29,7 +29,7 @@ Status: **RC3-D01／D02／D03を開発assemblyだけに限定実装。同source�
 
 | 値／権限 | Dの供給元・所有者 | Rでの固定供給元 | 禁止する代替 |
 |---|---|---|---|
-| run開始UTC・全deadline | rootが開始前に固定したtest-only値／実際のroot deadline_ms | 同`#session.startedAt`と、構築時に`releasePolicy`のpinと同じ`limits.deadlineMs`から固定するreadonly deadline値（**未実装の差分**） | 観測時刻・remaining_ms・callerの新deadline |
+| run開始UTC・全deadline | rootが開始前に固定したtest-only値／実際のroot deadline_ms | 同`#session.startedAt`と既存`#session.deadlineMs` getter。設定pinと同じ元の全durationを使う（比較器への結合・検証は未実施） | 観測時刻・remaining_ms・callerの新deadline |
 | policy projection | rootがstrict copyした模擬値。実設定の真正性は主張しない | 同sessionのpin済み`releasePolicy` | raw設定・providerの再実行・別session policy |
 | complete_200の観測 | 同sourceが消費するrelease ack内の同bytes由来projection | `#readReleaseRows`、または同constructorの`take(ack,'release')` | 別source ack・公開rows／draftの再投入 |
 | 観測UTC | rootの固定test-only観測文字列 | 同ownerがguard後に一度採取するUTC値 | 比較器の現在時計、monotonic値のISO変換 |
@@ -62,6 +62,8 @@ summary案は`release_comparison`という非実行の区分を追加し、固�
 Rを後日実装する場合も、public `resolveRelease`にrows／policy／draft等の新引数は追加しない。通常取得とprivate ack取得の両方が、同sourceの固定private処理へ集まる構造を維持する。
 
 固定順序案：既存入口guard／parent検査→同sessionのtiming・policy固定参照→binding不一致ならnot_requested（GET=0）→同sourceの200取得／projection→取得後guard→観測UTCの一度だけの採取→pure compare→比較後guard→private採用直前guard→既存結果生成。
+
+timing供給は[既存deadlineMs getter再利用契約draft-0.1](BEST_PRACTICE_ABORT_SCOPE_RELEASE_DEADLINE_REUSE_DESIGN.md)に従う。構築時の設定pinと同じstartedAt／全deadlineを使い、同sessionのpin済みpolicyと対にして一度採取する。getter新設・残時間からのL再計算・設定provider再呼出しは行わない。getterの存在／setterなしを生存・identity・実行時改変耐性の証明にはしない。
 
 通常経路のguardとprivate生成継続のguardを入れ替えない。callerが任意guard／時計／comparatorを渡す新公開APIを作らず、既存の生成継続とテスト用外部I/O注入だけを用いる。`releaseRead`、private consumerのconsuming、`#decision`のcached promiseを維持し、取消や失敗後の再試行で別の結果を採用しない。
 
@@ -138,12 +140,12 @@ ordinary unknownはrun stopとは別である。正常な比較値で先行HTTP�
 | Rのcomplete_200 UTC採取位置・空観測時の追加採取 | fake試験・承認待ち。D固定値で代替しない |
 | Rのtrusted入力矛盾の停止owner・bind中失敗の無効化／解放 | 既存private lifecycleとの追跡が未完了。公開新入口で代替しない |
 | Dの条件profile／非実行summary追加 | 本書の提案。省略時互換、package除外を実装時に検証 |
-| Rの全deadline供給口（session構築時に固定したreadonly値。`pinReviewReleaseConfig`へ渡す`limits.deadlineMs`と同値） | 未実装・承認待ち。private `limits`の公開・残時間からの再計算・callerによる指定で代替しない |
+| Rの全deadline再利用契約（既存getterと、`pinReviewReleaseConfig`へ渡す`limits.deadlineMs`の同値性） | getterは実在。再利用詳細設計を別紙へ整理したが、比較器への結合・同session動的検証は未実装／未実施。private `limits`の公開・残時間再計算・caller指定で代替しない |
 | 本番値判定差替え・実Permit経路・非200移行 | 未承認。現状を維持 |
 
 この設計の作成を実装・採用・鍵／設定・通信の承認へ読み替えない。調査保留と正式発行口閉鎖を維持する。
 
-draft-0.2のレビュー修正：実sessionの現在の供給元に`deadlineMs`を挙げていたが、全deadlineは`private readonly limits.deadlineMs`にあり、sourceから読む口はない。§1を現状に合わせ、§3のRの供給元と§10の承認待ちに、構築時に固定するreadonly deadline値を未実装の差分として明記した。上位設計からの版数リンクも更新した。
+draft-0.2では供給口を未実装と訂正したが、このAPI不在の説明は誤認だった。draft-0.8の静的再照合で既存`get deadlineMs()`を確認し、§1／§3／§10を再訂正した。未実装差分はgetterの新設ではなく、同sessionのstartedAt／pin済みpolicyと組にして比較器へ結合・検証すること。[再利用契約draft-0.1](BEST_PRACTICE_ABORT_SCOPE_RELEASE_DEADLINE_REUSE_DESIGN.md)に現状根拠・残時間との区別・未実施の受入条件を記録する。R切替の承認状態や過去の試験履歴は変更しない。
 
 ## 11 RC3-D01の限定実装
 
@@ -153,7 +155,7 @@ draft-0.2のレビュー修正：実sessionの現在の供給元に`deadlineMs`�
 
 rootはsource生成後にbindし、同じready継続の直後にclaimする。停止・finallyで参照を破棄し、summaryには条件・owner・claim・比較draftを追加しない。省略時だけでなくD01 opt-in時も旧source／transcript summaryとdeep equalになることを確認した。nativeとの併用はdeliveryをpin／消費するより前に拒否し、そのdeliveryは元の旧native profileで引き続き使用可能とする。
 
-`compareRelease`は呼ばず、release行は従来どおり消費して破棄する。条件を保持することと、設定の真正性・比較結果・本番bindingの証明を区別する。C/G/P・final4予約／返却は元ownerのまま。[D01検証記録](E2E_BEST_PRACTICE_RELEASE_CONDITIONS_D01_2026-11-01.md)に新規31件、既存回帰、型／梱包／全体確認を記録する。実sessionのreadonly deadline供給差分を含むR側の保留は解消していない。
+`compareRelease`は呼ばず、release行は従来どおり消費して破棄する。条件を保持することと、設定の真正性・比較結果・本番bindingの証明を区別する。C/G/P・final4予約／返却は元ownerのまま。[D01検証記録](E2E_BEST_PRACTICE_RELEASE_CONDITIONS_D01_2026-11-01.md)に新規31件、既存回帰、型／梱包／全体確認を記録する。実sessionの既存deadline getterの比較器への結合を含むR側の保留は解消していない。
 
 ## 12 RC3-D02：同sourceの行ackからseal後summaryへ
 
@@ -171,7 +173,7 @@ rootはsource生成後にbindし、同じready継続の直後にclaimする。�
 
 会計・final4予約／返却・native cleanupは既存ownerから動かさず、比較のための再dispatch／再課金をしない。native／status-onlyとbinding不一致no-requestは引き続き未対応profileとしてI/O前に拒否する。空200の設定代替は純粋な値判定であり、実HTTP fallbackを有効化したものではない。
 
-[D02検証記録](E2E_BEST_PRACTICE_RELEASE_ADOPTION_D02_2026-11-01.md)に新規44件と既存を含む関連202件、型／梱包／全体結果を記録する。D01のopt-in互換4ケースは「新fieldを除く既存部分のdeep equality＋新fieldの固定値確認」へ明示的に更新し、旧profileの期待を緩めていない。専用開発compiled保証・実class正式binding・Rのreadonly deadline供給差分・日時長cap承認待ちは残す。
+[D02検証記録](E2E_BEST_PRACTICE_RELEASE_ADOPTION_D02_2026-11-01.md)に新規44件と既存を含む関連202件、型／梱包／全体結果を記録する。D01のopt-in互換4ケースは「新fieldを除く既存部分のdeep equality＋新fieldの固定値確認」へ明示的に更新し、旧profileの期待を緩めていない。専用開発compiled保証・実class正式binding・Rの既存deadline getterの結合・日時長cap承認待ちは残す。
 
 draft-0.5のレビュー修正：cleanup後の時計・取消・期限の再確認が候補の破棄に加えてrunの`stopped`／`run_primary`を設定し、teardown確定済みで本体が正常終了したrunを`cancelled`等へ書き換えていた。§12-5の「候補を捨てる」と「後の値で消さない」に合わせ、候補の破棄と固定の`release_comparison_withheld`だけに限定した。上位設計からの版数リンクも更新した。
 
