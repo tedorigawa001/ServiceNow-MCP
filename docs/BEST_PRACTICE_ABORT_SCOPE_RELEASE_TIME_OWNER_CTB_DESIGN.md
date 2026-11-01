@@ -1,6 +1,6 @@
 # CT-B前半：上位時刻owner・一度限りの終端移譲
 
-Version: br006-release-time-owner-ctb-draft-0.6 / Date: 2026-11-01。
+Version: br006-release-time-owner-ctb-draft-0.7 / Date: 2026-11-01。
 Status: **TB-Aの値scopeに加え、TB-BのCT-A accepted／元run失効との結合・正常source cleanupとの区別を既存classの固定fake経路だけに限定実装（§10）。worker job・T_i／E・通常実source採用は未実装。正式発行口閉鎖・Unknown・全体受付無効・VM／監視／telemetry調査保留を維持する。実source差替え・実接続・実通信・実機操作・設定変更・Permit発行・Pushの承認ではない。**
 
 基準はCT-Aコミット`d32a412`。[接続契約](BEST_PRACTICE_ABORT_SCOPE_RELEASE_COMPARISON_TIME_BINDING_DESIGN.md)§4〜6のうち、時刻のprivate保持・正常終端移譲だけを具体化する。worker job、T_i／Eの実応答照合はCT-B後半、連続fake試験はCT-C、専用開発compiled保証はB-03に残す。
@@ -112,4 +112,4 @@ TB-Bは新たなworker終端を作らず、上位値は固定fake準備処理の
 
 ## 11 CT-B後半の設計参照
 
-[worker job binding・T_i／E詳細設計draft-0.4](BEST_PRACTICE_ABORT_SCOPE_WORKER_TIME_BINDING_DESIGN.md)で、同run／sourceの時刻leaseと、ready済みworker世代・input receipt・job claimの役割を分けた。WJ-Aはtests/supportの合成issuerだけでbinding・generation／input／job claimを限定実装し、TB-B／実worker／runtime台帳と接続しない。T_i受理とjob発行の実結合、U／E照合、soft回復とWJ-B〜Dは未実装。現prepared-onlyのdiscardを削除する指示ではない。TB-Bレビューで残ったfinally継続の観測不足を、rollback救済と区別する受入条件も維持する。B-03・実接続・正式発行・全体受付は別工程のままとする。
+[worker job binding・T_i／E詳細設計draft-0.5](BEST_PRACTICE_ABORT_SCOPE_WORKER_TIME_BINDING_DESIGN.md)で、同run／sourceの時刻leaseと、ready済みworker世代・input receipt・job claimの役割を分けた。WJ-Aはtests/supportの合成issuerだけでbinding・generation／input／job claimを限定実装し、WJ-Bは別合成ownerでT_iの一度限り受理・U保持・同jobのanalyze期待値照合を追加した。TB-B／実worker／runtime台帳とは接続せず、実供給元、finishのE照合、soft回復とWJ-C／Dは未実装。異常停止後のUは再開不能な終端UTCデータだけで、固定discardで破棄する。現prepared-onlyのdiscardを削除する指示ではない。TB-Bレビューで残ったfinally継続の観測不足を、rollback救済と区別する受入条件も維持する。B-03・実接続・正式発行・全体受付は別工程のままとする。

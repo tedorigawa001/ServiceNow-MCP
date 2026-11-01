@@ -1,7 +1,7 @@
 # CT-B後半：worker job binding・T_i／E整合の詳細設計
 
-Version: br006-worker-time-binding-draft-0.4 / Date: 2026-11-01。
-Status: **WJ-Aの内部binding・generation／input／job claim・one-shot／失効だけを配布対象外の合成issuerで限定実装（§11）。runtime／実worker・T_i／U／Eの結果整合・WJ-B〜Dは未接続／未実装。正式発行口閉鎖・Unknown・全体受付無効・VM／監視／telemetry調査保留を維持する。実source差替え・実接続・実通信・設定変更・Permit発行・Pushの承認ではない。**
+Version: br006-worker-time-binding-draft-0.5 / Date: 2026-11-01。
+Status: **WJ-Aの内部claim（§11）とWJ-BのT_i／U・analyze期待値照合（§12）を、配布対象外の合成issuerで限定実装。runtime／実worker・finishのE照合・WJ-C／Dは未接続／未実装。正式発行口閉鎖・Unknown・全体受付無効・VM／監視／telemetry調査保留を維持する。実source差替え・実接続・実通信・設定変更・Permit発行・Pushの承認ではない。**
 
 基準HEAD: `099dedf`。[上位接続契約](BEST_PRACTICE_ABORT_SCOPE_RELEASE_COMPARISON_TIME_BINDING_DESIGN.md)§4〜7と[CT-B前半](BEST_PRACTICE_ABORT_SCOPE_RELEASE_TIME_OWNER_CTB_DESIGN.md)の差分設計。TB-Bの固定fake準備処理内のdiscardを、既にworkerまで継続できる移譲と取り違えない。通常adapterへの切替・B-03・friend撤去は別工程。
 
@@ -44,7 +44,7 @@ private identityは親processに残し、workerへstructured cloneしない。wi
 
 production sourceに独立したclose APIがあるとは仮定しない。ここでの正常source解放はTB-Bのprivate protocolを一般化した役割で、実際のclass配置・正常終端のcleanup証拠とsession.closeの対応はWJ-D前のレビュー事項。sessionを閉じた後に新jobを作ること、異常closeを正常な証拠移譲に読み替えることは禁止する。
 
-正常資源解放とrun取消／異常closeは別イベント。後者はsource用hookの有無にかかわらず全lease／pending job／候補を同期失効させる。source／session close後にraw参照から再発行しない。終端でS／L／O／U・identity・job参照を消し、固定理由／phaseの診断copyだけ残す。
+正常資源解放とrun取消／異常closeは別イベント。後者はsource用hookの有無にかかわらず全lease／pending job／候補を同期失効させる。source／session close後にraw参照から再発行しない。正常終端でS／L／O／U・identity・job参照を消す。異常停止では§4の巻戻し禁止のため、固定終端ownerがUTC値だけを診断用に保持し、固定discard時に消すことを許す。live identity・claim・再開権限は残さず、外部copy／heap物理消去の保証とはしない（合成WJ-Bの配置は§12）。
 
 ## 4 T_i受理とworker準備完了の分離
 
@@ -146,7 +146,7 @@ TB-Bレビューで判明したfinally継続の未保証は[TB-B記録§6](E2E_B
 ## 10 推奨実装分割と非目標
 
 1. **WJ-A（限定実装済み）**：合成issuerだけの内部binding・generation／input／job claim・one-shot／失効を純粋fakeで実装。時計値比較は元S／L／Oへの固定値入力とし、実worker／runtimeには接続しない。scope内の保証と未実装の全体保証は§11に分離する。
-2. **WJ-B**：同input receiptのT_i受理、U保持とanalyze応答の期待値比較器を独立oracleで確認。startup・送信失敗、omitted、pre/post guardを含める。
+2. **WJ-B（合成issuerだけ限定実装）**：同input receiptのT_i受理、U保持とanalyze応答の期待値比較器を独立oracleで確認。startup・送信失敗、omitted、pre/post guardを含める。§12参照。runtimeへの供給／bindingは未実装。
 3. **WJ-C**：finishのE／対象集合・soft partial世代交換・終了候補の一度限り消費を合成応答で確認。取得済みUを消さない。
 4. **WJ-D／CT-C**：私有の固定生成元・監督／注入channel・上位終端への連続fake接続を別承認で行う。現在のpublic prepared-onlyと通常adapterを維持する。
 5. **B-03**：旧case対応表の未代替実class保証を残し、専用開発build／compiled・配布負の対照を別設計／別集計で確定する。今回の441ファイルの梱包成功で代替しない。
@@ -169,6 +169,20 @@ analyzeは同ready generationと未消費inputを結合し、idの正のsafe int
 
 合成モデル内の固定枠はgeneration最大2、input最大100、jobはinput一度ずつ＋finish一度の最大101、同時pending1。これは純粋試験を有限にする局所枠で、本番cap・§8の全既存分岐の導出済み上界ではない。公開handleを返せた生成数・post-guard後のconsume成功数をcounterに記録し、失敗試行の全費目を計数したとは主張しない。独立イベント列では100 input／100 analyze／1 finishとguard 610回を照合する。
 
-新規[157件の合成試験](../tests/review/synthetic-worker-job.test.ts)、型・lint・配布負の対照・初回REDは[WJ-A検証記録](E2E_BEST_PRACTICE_WORKER_JOB_CLAIMS_WJA_2026-11-01.md)へ記録する。issuerは配布物に含めず、既存distへimport／宣言／mapが混入しないことも確認する。依存検査はI/O／timer／時計／worker系globalへの参照（呼出し形に限らない）・`Date.now`の値参照・`Date`のcomputed参照／生成を拒否し、意図的な混入を拒否する負の対照を持つ。字句検査であり、間接的なglobal取得を網羅した証明ではない。compiledされた開発assemblyの保証ではなく、B-03とは別。WJ-B／C／D・soft回復claim・停止後部分finishは変更せず、既存の2種類のsoft移行・部分集約を維持する。
+新規[157件の合成試験](../tests/review/synthetic-worker-job.test.ts)、型・lint・配布負の対照・初回REDは[WJ-A検証記録](E2E_BEST_PRACTICE_WORKER_JOB_CLAIMS_WJA_2026-11-01.md)へ記録する。issuerは配布物に含めず、既存distへimport／宣言／mapが混入しないことも確認する。依存検査はI/O／timer／時計／worker系globalへの参照（呼出し形に限らない）・`Date.now`の値参照・`Date`のcomputed参照／生成を拒否し、意図的な混入を拒否する負の対照を持つ。字句検査であり、間接的なglobal取得を網羅した証明ではない。compiledされた開発assemblyの保証ではなく、B-03とは別。WJ-A自体の挙動は変更せず、WJ-Bは別owner（§12）、WJ-C／D・soft回復claim・停止後部分finishは未接続で、既存の2種類のsoft移行・部分集約を維持する。
 
 draft-0.4のレビュー修正：WJ-Aの捕捉再入試験はguard内のbindだけを呼び、bindは状態で必ず拒否されるため、busy claimを外しても153件が通っていた。また依存検査は名前による直接呼出しだけを拒否し、`globalThis.setTimeout`・`queueMicrotask`・`Date.now`の値参照・`performance.now.call`を見逃し、検査自体の負の対照もなかった。正当な操作の再入試験4件と、参照単位の依存検査・混入負の対照を追加し、§11の件数・保証範囲と上位設計からの版数リンクを更新した。
+
+## 12 WJ-B：同inputのT_i受理・U保持とanalyze比較（合成限定）
+
+[WJ-B owner](../tests/support/review/synthetic-worker-time.ts)が非公開のWJ-A issuerを一つ所有する。runtimeのsession／source／workerはimportしない。公開面にWJ-Aの汎用consumeを再exportせず、analyzeは同inputに保存した期待値を必ず経由する。任意fake値は実sessionの証拠ではなく、正式供給元の唯一性・本番bindingを証明しない。
+
+- 同じ10項目のseedをdescriptorでpinし、追加のpre/post guardでも同reference／値を確認する。Oを初期Uとし、`U <= T_i <= S+L`を検査し、**最後のpost-guard成功後だけ**Uを進める。等号を許す。input handleはorigin／target一度のWJ-A claimへ結合し、ready前に受理できる。時刻の採取・残時間からの再計算はない。
+- inputは合成issuerの期待context（record_updated_at、instance binding、release証拠、rule集合、必要limitations）をdescriptor-copyする。時刻だけのreceiptも試験可能だが、analyzeには期待context付きreceiptを要求する。同jobへ結合する際に一度消費する。応答のpendingは**最初のguard前**に取り外し、WJ-Aの同generation／supervisor／worker／id／kind／target照合の後、同receiptの値を比較する。
+- reviewedは§5.2の対象・T_i完全一致、target_version、元record_updated_at、instance binding、要求／applicable rule集合（重複拒否）、schema正規化したrelease contextの完全一致、必要limitationsの包含を検査する。追加engine limitationは許す。rejected／result_omittedは既存の理由契約と同targetだけを検査し、新しい時刻を作らない。state不正・時刻不整合をomittedへ救済しない。
+- 既存値schemaだけを再利用し、findings等の全結果を親で再検証／copyしない。必要fieldのgetter／Proxyは拒否し、関係しないfindings getterは実行しない。full schema／262144-byte wire envelope検査は既存workerの責務で、WJ-Bが実wire検証したとはしない。必要contextの局所copyは深さ8・100配列要素・30object項目・10,000訪問node・保守的文字費262144以下。これは合成値projectionの枠で、本番日時長cap・全体メモリ上界の承認ではない。
+- 比較エラーを候補状態として捕捉し、post-guardの取消／期限を優先してから固定理由で停止する。全guard成功後だけauthority:noneの凍結dataを返す。結果を正式review結果やPermitへ昇格しない。startup失敗・同期throw／reject相当のsend失敗・revokeでは全identity／input／pendingを失効させ、**受理済みS／L／O／Uのデータだけ**保持する。失敗後の再生成／再消費は拒否し、最初の固定code／phaseを残す。`discardTerminalTime`でUTCを破棄しても再開しない。正常closeでは時刻も破棄する。
+
+[63件の試験](../tests/review/synthetic-worker-time.test.ts)は、独立したfield差替え表・100 inputの非減少UTC oracle、input全5guard／応答全6guard、startup／send失敗・取消・再入・混入・一度限り消費を確認する。配布負の対照はWJ-Bの関数・path・runtime import／clock参照の混入を拒否する。WJ-Aの157件を維持する。実施結果・初回失敗は[WJ-B検証記録](E2E_BEST_PRACTICE_WORKER_TIME_WJB_2026-11-01.md)を参照する。
+
+finish／E、soft世代移行、上位への本番候補移譲・全体受付・exact layout／全費目は未実装／Unknown。WJ-C／D・B-03・CT-Cを完了とは数えず、従来のproduction adapter・停止後部分finishを変更しない。
