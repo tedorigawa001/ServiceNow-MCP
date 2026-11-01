@@ -3,7 +3,7 @@
 Date: 2026-11-02 / 基準HEAD: `cadcad5`。
 Status: **配布対象外の合成依存だけ。実worker／runtime・実sessionとは未接続。**
 
-[詳細設計draft-0.7](BEST_PRACTICE_ABORT_SCOPE_WORKER_TIME_BINDING_DESIGN.md)§13、[上位接続契約draft-0.9](BEST_PRACTICE_ABORT_SCOPE_RELEASE_COMPARISON_TIME_BINDING_DESIGN.md)を参照。正式発行口閉鎖・Unknown・全体受付無効・VM／監視／telemetry調査保留を維持する。
+[詳細設計draft-0.8](BEST_PRACTICE_ABORT_SCOPE_WORKER_TIME_BINDING_DESIGN.md)§13、[上位接続契約draft-0.9](BEST_PRACTICE_ABORT_SCOPE_RELEASE_COMPARISON_TIME_BINDING_DESIGN.md)を参照。正式発行口閉鎖・Unknown・全体受付無効・VM／監視／telemetry調査保留を維持する。
 
 ## 1 実装と保証範囲
 
@@ -60,7 +60,31 @@ analyzeの受理後に同receipt・T_i・state／reasonを保持する。finish�
 
 全体JSONはローカル一時領域`/private/tmp/servicenow-wjc-tests-20261102.json`。ファイル数はtestResults.lengthで集計した。梱包のcompiled fixtureは既存値／開発経路の回帰で、新WJ-C ownerの専用compiled保証やB-03完了には数えない。
 
-## 5 残課題・未実施
+## 5 レビュー修正（2026-11-02）
+
+§2・§4の76件／10,478件と、ESLintを変更ファイルだけに対して実行した結果は、修正前の記録として残す。レビューで、owner実装にある次の判定をそれぞれ外す変異でも76件が成功することが判明した。
+
+| 判定 | 外した場合の影響 | 追加試験 |
+|---|---|---|
+| 返却集合の`seen`照合 | 期待{A,B}に対する[A,A]のように、長さを保った重複が欠落idを隠して受理される。既存の重複試験は件数照合で落ちていた | 同じ長さの重複応答を拒否し、候補を残さない |
+| 送信前headerと受理済みinputの期待context | 受理済みinputと異なるinstance_binding／releaseのheaderでfinishを発行できる。rejected行は個別比較を受けないため、ここだけが歯止め | 期待contextと異なるbindingのfinish発行を拒否し、Uを保持 |
+| analyze済みrejected／result_omittedの理由保持 | `invalid_xml`のrejectedが送信前集合で別理由へ書き換わっても受理される | 理由を変えた送信前集合を拒否 |
+| 親側omissionの許可 | 判定を外すと、finding上限で親が既にresponse_limitによりomitしたreviewed（既存adapterの経路）を拒否する | そのomissionを受理し、Uと候補を保持 |
+| `checkReleaseEvidence`の再利用 | 観測時刻がEより後のrelease、0 inputで必要limitationがない応答が受理される | 2件で各々拒否し、候補を残さない |
+
+各変異では対応する追加試験だけが失敗し（`checkReleaseEvidence`では追加2件）、復元後に`cmp`一致を確認した。「T_i<=E」の判定はE>=U>=T_iから常に成り立つ。consumeTerminalのgeneration参照とgeneration_statusも、片方を外しても他方で同じく拒否される。このため、これらの変異は試験で区別できない等価変異として扱い、追加試験の対象にしていない。owner実装・WJ-A・runtime sourceは変更していない。
+
+修正後の結果：
+
+| 検証 | 結果 |
+|---|---|
+| WJ-C合成 | 1ファイル／82件成功（WJ-Bと合わせて148件） |
+| ESLint | `npm run lint`（repo全体）exit 0、errors 0 |
+| 全体合成 | maxWorkers=3、238ファイル／10,484件成功、失敗0・pending 0。JSON内の開始〜最終試験終了は約34.3秒 |
+
+詳細設計はdraft-0.8へ更新し、§13の件数・保証範囲と上位設計・本書からの版数リンクを直した。
+
+## 6 残課題・未実施
 
 今回のWJ-Cは**通常finishだけ**。worker期限型／phase期限型のprivate soft回復claim・世代移行、停止後finish、元CT-A／TB-Bからの正式供給、実選択集合・ReleasePermit／worker jobのbinding、外側の実cleanup／最終checkpoint、WJ-D／CT-C・B-03は未実装／未実施。既存の2種類のsoft移行・停止後部分集約はそのまま維持する。
 

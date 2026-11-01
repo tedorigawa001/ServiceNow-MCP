@@ -1,6 +1,6 @@
 # CT-B後半：worker job binding・T_i／E整合の詳細設計
 
-Version: br006-worker-time-binding-draft-0.7 / Date: 2026-11-02。
+Version: br006-worker-time-binding-draft-0.8 / Date: 2026-11-02。
 Status: **WJ-Aの内部claim（§11）、WJ-BのT_i／U・analyze比較（§12）、WJ-Cの通常finishのE／集合・終了候補消費（§13）を、配布対象外の合成issuerで限定実装。runtime／実worker・soft回復claim・WJ-Dは未接続／未実装。正式発行口閉鎖・Unknown・全体受付無効・VM／監視／telemetry調査保留を維持する。実source差替え・実接続・実通信・設定変更・Permit発行・Pushの承認ではない。**
 
 基準HEAD: `099dedf`。[上位接続契約](BEST_PRACTICE_ABORT_SCOPE_RELEASE_COMPARISON_TIME_BINDING_DESIGN.md)§4〜7と[CT-B前半](BEST_PRACTICE_ABORT_SCOPE_RELEASE_TIME_OWNER_CTB_DESIGN.md)の差分設計。TB-Bの固定fake準備処理内のdiscardを、既にworkerまで継続できる移譲と取り違えない。通常adapterへの切替・B-03・friend撤去は別工程。
@@ -219,4 +219,6 @@ pendingを最初のguard前に取り外し、同finish jobを一度消費する�
 
 このsource／worker／root closeは**合成lifecycle状態の確認**であり、実OS終了・実session cleanupの証明ではない。上位へ正式結果を公開する口は作らず、実cleanupと外側の最終checkpointを連結する保証はWJ-D／CT-Cに残す。WJ-Cのsoft回復claim・世代交換も未実装で、hard失敗後のfinish再開を追加しない。既存productionの2種類のsoft移行・停止後部分集約は変更しない。
 
-[76件の合成試験](../tests/review/synthetic-worker-finish.test.ts)は独立E／field／集合oracle、100件境界、issue全4guard・応答全6guard・終端全4guard、混入・再入・取消・解放不足・設定期限を確認する。既存WJ-A 157件／WJ-B 66件を維持する。初回RED・型検査の未使用fixture定数・最終検証は[WJ-C検証記録](E2E_BEST_PRACTICE_WORKER_FINISH_WJC_2026-11-02.md)へ記録する。
+[82件の合成試験](../tests/review/synthetic-worker-finish.test.ts)は独立E／field／集合oracle、100件境界、長さを保った重複による欠落の隠蔽、送信前集合とanalyze記録（期待context・rejected理由・親側のresponse_limit omission）の照合、`checkReleaseEvidence`による観測時刻／必要limitationの拒否、issue全4guard・応答全6guard・終端全4guard、混入・再入・取消・解放不足・設定期限を確認する。既存WJ-A 157件／WJ-B 66件を維持する。初回RED・型検査の未使用fixture定数・最終検証は[WJ-C検証記録](E2E_BEST_PRACTICE_WORKER_FINISH_WJC_2026-11-02.md)へ記録する。
+
+draft-0.7のレビュー修正：WJ-Cの次の判定は、各判定を外す変異でも76件が通っていた。返却集合の`seen`照合（同じ長さで重複idが欠落idを隠す応答）、送信前集合のheaderと受理済みinputの期待contextの照合、analyze済みrejected／result_omittedの理由保持、親側で既にresponse_limitによりomitされたreviewedの受理、`checkReleaseEvidence`の再利用（観測時刻がEより後、0 inputで必要limitationなし）。6件の試験を追加し、§13の件数・保証範囲と上位設計・検証記録からの版数リンクを更新した。

@@ -92,6 +92,30 @@ it('preserves non-analysis states/reasons and allows set order changes without a
   const f=fixture(),v=aggregate();v.assets=[{state:'not_applicable',update_xml_sys_id:asset,asset_type:'other',reason:'asset_type_unsupported'},{state:'skipped_deleted',update_xml_sys_id:'c'.repeat(32),reason:'deleted_asset'}];
   const job=f.owner.finish(f.b,f.g,2,v);f.owner.consumeFinish(f.b,job,f.context(),{...v,assets:[...v.assets].reverse()});expect(f.owner.inspect().candidate_retained).toBe(true);
 });
+// A same-length reply would otherwise let one duplicated id stand in for a missing fixed id.
+it('rejects a same-length duplicate that hides a missing fixed id',()=>{
+  const f=fixture(),other='c'.repeat(32),rejected={state:'rejected',update_xml_sys_id:other,reason:'invalid_xml'};
+  for(const [id,n,value] of [[asset,2,reviewed()],[other,3,rejected]] as const){const i=f.owner.input(f.b,{},id,T,inputContext()),j=f.owner.analyze(f.b,f.g,i,n);f.owner.consumeAnalyze(f.b,j,{...f.context(n),kind:'analyze',update_xml_sys_id:id},value);}
+  const v={...aggregate(),assets:[reviewed(),rejected]},job=f.owner.finish(f.b,f.g,4,v);
+  expect(()=>f.owner.consumeFinish(f.b,job,f.context(4),{...v,assets:[reviewed(),reviewed()]})).toThrow('internal_review_error');expect(f.owner.inspect().candidate_retained).toBe(false);
+});
+it('refuses a finish header that differs from the accepted input context',()=>{
+  const f=analyzed('rejected');f.run.target.instance_binding='e'.repeat(64);expect(()=>f.owner.finish(f.b,f.g,3,f.run)).toThrow('internal_review_error');expect(f.owner.inspect().upper_utc).toBe(T);
+});
+it('refuses a changed reason for an analyzed rejection at finish issue',()=>{
+  const f=analyzed('rejected');f.run.assets=[{state:'rejected',update_xml_sys_id:asset,reason:'payload_limit'}];expect(()=>f.owner.finish(f.b,f.g,3,f.run)).toThrow('internal_review_error');
+});
+it('accepts a parent-side response_limit omission of an accepted reviewed input and keeps U',()=>{
+  const f=analyzed();f.run.assets=[{state:'result_omitted',update_xml_sys_id:asset,reason:'response_limit'}];f.run.limitations=['release_visible_nodes_only','response_truncated'];
+  const job=f.owner.finish(f.b,f.g,3,f.run);f.owner.consumeFinish(f.b,job,f.context(3),f.run);expect(f.owner.inspect()).toMatchObject({upper_utc:T,candidate_retained:true});
+});
+it.each([
+  ['an observation after E',(v:ReturnType<typeof aggregate>)=>{v.instance_release.observed_at='2026-11-02T00:00:04.000Z';}],
+  ['a missing release limitation on a zero-input run',(v:ReturnType<typeof aggregate>)=>{v.limitations=[];}],
+] as const)('reuses release evidence validation and rejects %s',(_name,change)=>{
+  const f=fixture(),v=aggregate();change(v);const job=f.owner.finish(f.b,f.g,2,v);
+  expect(()=>f.owner.consumeFinish(f.b,job,f.context(),v)).toThrow('internal_review_error');expect(f.owner.inspect().candidate_retained).toBe(false);
+});
 it.each(Array.from({length:4},(_,i)=>i+1))('stops at finish-issue guard %i',at=>{
   const f=fixture();let n=0;f.arm(()=>++n===at?'cancelled':undefined);expect(()=>f.owner.finish(f.b,f.g,2,aggregate())).toThrow('cancelled');expect(f.owner.inspect()).toMatchObject({candidate_retained:false,upper_utc:O});
 });

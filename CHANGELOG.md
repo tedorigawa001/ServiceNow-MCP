@@ -70,6 +70,8 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 ### Added
 
+- Adds six WJ-C synthetic finish tests for five checks that earlier tests did not distinguish: a same-length reply whose duplicate id hides a missing fixed id, a finish header that differs from the accepted input context, a changed reason for an analyzed rejection, acceptance of a parent-side response_limit omission of an accepted reviewed input, and reused release-evidence validation (observation after E, missing required limitation on a zero-input run).
+
 - Adds WJ-B synthetic time-owner coverage for three preconditions that earlier tests did not distinguish: analyze refuses a time-only receipt (which would otherwise accept rejected/omitted replies without the same-input expectation), terminal UTC discard is refused on an active or normally closed owner, and a startup failure is refused for a ready generation.
 
 - Adds WJ-A synthetic issuer coverage for caught reentry of otherwise valid input, source-close, analyze and finish calls from analyze/consume guards, which the earlier bind-only reentry cases could not distinguish from state refusal. The package check now audits the issuer for references to I/O, timer, clock and worker globals rather than direct calls only, rejects `Date.now` value reads and computed `Date` access, and proves the audit with seeded-leak negative controls. It remains a lexical audit, not proof against indirect global access.
