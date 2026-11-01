@@ -1,0 +1,157 @@
+# WJ-C残工程：soft回復claim・世代移行の詳細設計
+
+Version: br006-soft-recovery-claim-draft-0.1 / Date: 2026-11-02。
+Status: **設計案のみ。型・issuer・状態遷移・試験は未実装。正式発行口閉鎖・Unknown・全体受付無効・VM／監視／telemetry調査保留を維持する。**
+
+基準HEAD: `2804af5`。[親設計](BEST_PRACTICE_ABORT_SCOPE_WORKER_TIME_BINDING_DESIGN.md)§7・13の差分。WJ-Cの通常finish限定実装を変更せず、次の合成実装範囲を定める。実worker／runtime接続、実通信・実機操作、設定変更、本番cap／Permit投入・Pushの承認ではない。
+
+## 1 現行根拠と適用範囲
+
+| 根拠 | 現行挙動 | 設計に必要な区別 |
+|---|---|---|
+| [adapter](../src/review/update-set-adapter.ts)のsoft分岐 | BoundedReadErrorのphase_deadline_exceeded、またはanalysis段階のReviewWorkerErrorのdeadline_exceededを扱う。progress・元remaining・取消を検査する | コード文字列だけで回復を認めない。元の型・phase・生成元・run状態の証拠を必要とする |
+| 同adapterのcpu／finish | workerは遅延生成。phase期限ではcpuを閉じず、worker期限ではclose後にcpu参照を外す | phase期限時にworkerが未起動ならfinish用の初回起動。既存workerがある場合は同世代維持。両者を交換と混同しない |
+| [監督](../src/review/worker-supervisor.ts)のrequest／exchange | ready待ちにも元phase remainingのtimerを使う。request失敗時はcloseをawaitする | analysis呼出し中のready期限もadapterのsoft分岐に入り得る。未送信analyzeのjob id／pendingを捏造しない |
+| 同監督のclose | terminate Promiseを一度保持し、成功後に固定listener／stream処理を行う | エラーを受けた事実だけでは終了確認にならない。成功した同世代の固定close継続だけを証拠発行元にする |
+| [合成job issuer](../tests/support/review/synthetic-worker-job.ts)／[時刻owner](../tests/support/review/synthetic-worker-time.ts) | fail／revokeでidentity・pendingを消す。未消費inputやpendingがあれば通常finishを拒否する | 失敗済みownerの復活では実装できない。hard停止とは別のsoft遷移・input終端化が必要 |
+
+対象は元runが健全な間の**通常処理から一度だけのsoft打切り→finish**。Oを持つ既存合成範囲を維持する。Oなし・release不一致／不明、hard停止後の部分finishは新ownerの対象外とし、既存productionの挙動は変えない。
+
+本書の型名・状態名は内部役割案で、現在存在するAPIではない。最初の実装は配布対象外の独立合成issuerのみとし、fixtureのbrand／登録台帳をruntimeへ共有しない。inspect値・外部JSON・任意例外・callerのboolから証拠を作る口は設けない。
+
+## 2 不変条件
+
+1. 同run／session／source／key／origin／canonical budget、pin済みrelease context、S／全L／Oを継承する。新しいroot・予算・開始時刻を作らない。Uは最後の受理済みT_iのまま下げない。
+2. 回復開始claimはrunごとに一度。soft後は新analyze・payload取得・T_i受理を禁止し、既存のconsistency処理と一度のfinish、固定cleanupだけを許す。
+3. hard失敗／取消／全体期限／run失効／source正常解放後から回復を開始しない。soft観測はhard診断ではなく、回復権限でもない。
+4. 同時pendingは1、旧workerと新workerを重ねない。finishはrunごとに最大1。finish／readyの失敗から再び回復claimを発行しない。
+5. 解析に至らなかったinputも同target／T_iを保持し、U・対象集合から消さない。再解析・時刻の再採取・omittedへの偽装をしない。
+6. 既存の全体60秒・実効L、C/G/P・予約／retry、JSONのdeadline=60000・設定期限検査は元ownerのまま。soft後に予算を再充填しない。新しいUTC時計を足さない。
+
+## 3 証拠の役割・発行元・所有権
+
+すべて非公開opaque handleとowner内slotの対応で識別する。同じid／日時／hashだけでは通さない。参照は親processに留め、workerへ送るwireは既存data-only契約のまま。
+
+| 内部役割案 | 固定発行元・発行前提 | binding・消費／解放 |
+|---|---|---|
+| SoftObservation | phase期限は同ReadStateの期限確定継続、worker期限は同監督のanalysis呼出し中のtimer終端継続 | 同run／budget、元phase、観測serial。worker側はgeneration・worker／監督とready待ち／analyze送信後を区別する。例外classのinstanceofだけでは代替しない |
+| RecoveryStartClaim | 同時刻ownerがSoftObservationを受け、未使用のrun側recovery slotを先に占有した固定継続 | 同owner／run／budgetと観測handle。ready待ちなら同inputと未送信状態、送信後なら同analyze jobに結合。一度消費して返却不能 |
+| RunHealthWitness | 元canonical ownerの固定guard継続 | 元予算identity・生存状態・全体remaining>0・取消なしを確認。保存した数値remainingだけを再利用しない。各非同期境界後にも元guardで確認する |
+| TimedOutInputRecord | 同input／job ownerの固定soft終端化継続 | 同target・T_i・元期待contextを保持。issued inputまたはpending analyzeを一度terminalへ進め、遅延応答は拒否。ready段階では存在しないjobを作らない |
+| GenerationClosedEvidence | 同監督の同世代close成功後の固定継続 | 同run／監督／worker／generation、close試行identity、terminate成功と固定後始末完了。別世代・未知／失敗／caller申告を拒否。新世代許可へ一度消費する |
+| FinishRouteClaim | 観測kindに対応する固定回復継続 | phase型は既存世代維持／未起動から初回起動、worker型は旧世代終了後の新世代、というrouteを固定。任意factoryへ渡さない |
+| RecoveryFinishPlan | 同routeと同集合ownerの固定継続 | 元S／全L／O／U・release・選択集合、完了済みstate・未処理理由を封じる。同finishへ一度移譲。通常finish用のraw manifest受付だけで未完了inputを迂回しない |
+
+Rootのclaimは型の値移動だけでなくowner側状態でも消費を記録する。binding検査・guard・注入依存の呼出しより前に消費し、失敗時に戻さない。hard失敗は未消費観測・route・plan・候補を同期失効する。hard停止後は固定cleanupと終端データ破棄だけで、新しい能力を発行しない。
+
+実source／監督へprivate発行継続を置く位置、canonical guardとの正確な接続、read期限通知の発行元は実接続前のレビュー事項。合成issuerでの発行をその証明へ流用しない。
+
+## 4 共通の検査順と状態
+
+| 状態 | 進める処理 | 禁止／失敗 |
+|---|---|---|
+| active | 元処理または回復開始slotの一度消費 | 既にfinish発行済み、source解放済み、hard停止済みなら拒否 |
+| recovery_claimed | pre-guard→同観測／phase／input／世代の照合→post-guard | 再入・混入・二重開始でhard停止。activeへ戻さない |
+| quiescing | 必要な旧input／job終端化とworker終了確認 | 新job／新workerと並行させない。遅延ready／解析応答を採用しない |
+| route_ready | 元run guard、固定consistency継続、集合封印 | hard失効後は進めない。source再登録や新payload取得は不可 |
+| finish_only | 同routeでready済みworkerへ一度finish | analyze再開、2回目の回復、2回目のfinishは禁止 |
+| candidate | WJ-CのE／集合照合後、固定終端だけ | cleanup未確認／取消／期限では候補を破棄 |
+| failed／closed | 固定cleanup・診断回収／データ破棄だけ | 復活・再prepare・新世代／HTTP／finishは禁止 |
+
+claim占有後は、元run pre-guard→生成元・identity／kind／phaseの検査→対応する終端処理→元run post-guardの順とする。worker終了待ち／ready待ち／verifyなどをawaitするたびに、同継続へ戻った後のguardと証拠照合を行う。post-guardが失敗すれば、値の境界が正しくても候補やrouteを公開しない。
+
+phase予算を消費済みであることと、run全体が失効したことを分ける。phase期限の再検査を回復用guardへ無条件に持ち込んで自己拒否せず、逆に全体期限／取消を無視する「skip guard」も作らない。既存のsetPhaseReserve（consistency時の配賦／finish前の0化）は同canonical ownerの既存操作として扱い、S／L・総容量のリセットではないことを試験する。
+
+## 5 phase期限型：既存世代維持／未起動の初回起動
+
+1. 同ReadStateでphase_deadline_exceededが確定し、元progress／選択windowがあり、元runが生存して全体remaining>0・取消なしであることを確認する。phaseはmetadata／payload／consistencyを区別して保持する。
+2. worker／世代／analyze pendingの状態を固定する。phase型の通常順序ではCPU pendingはない。pendingがあれば、worker期限型へ勝手に読み替えず内部矛盾として停止する。
+3. ready済みworkerがあれば**同worker・同generation**を使う。まだworkerがなければ、finish用の初回起動routeだけを予約する。旧世代の終了証拠は要求せず、未起動を終了済みと偽装しない。starting／closing／failed等の中間状態をready扱いしない。
+4. 未処理集合の確定と§7のconsistency継続を行う。finish前に元runを再確認し、未起動routeではこの時点で初めてworkerを起動しreadyを待つ。その後、同routeで一度だけfinishへ進む。既存のverify→遅延CPU起動の順序を変えず、不要なHTTP／worker並行区間を作らない。初回workerの起動／ready失敗はhard停止とし、別workerでの再試行はしない。
+
+phase型の「世代を増やさない」は、**既にある世代を交換しない**という意味である。workerなしなら世代数0→1の初回起動が必要で、既存親設計の「常に同世代」という表記をこの区別で訂正する。
+
+## 6 worker期限型：送信後／ready待ちを区別して旧世代を閉じる
+
+### 6.1 analyze送信後
+
+同監督が同generationのanalyze応答期限を確定した場合だけ、同jobを応答受付不可のterminalへ一度進める。未完了inputのtarget／T_iをTimedOutInputRecordへ残し、pending listener／timer等の固定終了処理を監督が所有する。WJ-B/Cの汎用fail／revokeを実行してidentityを消した後に、新rootで再開する設計にはしない。
+
+同旧workerのterminate成功と固定後始末完了からGenerationClosedEvidenceを得るまで新workerを起動しない。終了後の元run guardを通し、§7の集合確定／必要verifyを先に行う。その後の元run guardで生存を再確認し、保持した同終了証拠とrouteを一度消費して新generationを作り、同新workerのready後にfinishだけを許す。既存の旧終了→verify→新CPU起動の順序を維持する。verify中の失効では終了証拠も失効し、旧generation・同数値idの遅延応答は候補へ戻さない。
+
+### 6.2 最初のanalyze呼出し中のready期限
+
+現adapterはstage=analysisの間に最初のcpu.analyzeを呼び、監督はその内部でreadyを待つ。したがってready timerのdeadline_exceededも既存soft分岐へ到達し得る。これをworker_unavailableへ一律変更したり、存在しないanalyze jobへ結合したりしない。
+
+観測には「analysis呼出し中・ready待ち・analyze未送信」を固定する。同inputのT_i／Uは受理済みのまま残し、未送信inputを一度未処理へ確定する。起動済み旧workerの終了確認後にだけ新世代へ進む。analyze idは存在しないままとし、readyが消費する既存sequenceをanalyze idへ転用しない。worker生成失敗・module／ready不正・通常のworker_unavailableは、この期限観測とは別のhard失敗のまま。
+
+### 6.3 終了確認の境界
+
+closeを要求しただけ、workerのerror／exit通知を見ただけ、terminate Promiseが存在するだけでは証拠を発行しない。close Promiseがreject／未settled、固定後始末がthrow、途中で取消／全体期限が発生した場合は新世代へ進まない。既存close Promiseの再awaitを新たなterminate試行として数えない。
+
+最初の合成試験では未開始・要求済み・成功・失敗・未確認を別イベントで表す。fake confirmClosedはこのモデル上の前提にすぎず、実OSの終了保証ではない。実監督への証拠発行接続と失敗時の外側強制終了は別工程で設計する。
+
+## 7 対象集合・保持Uとconsistency
+
+受理済みreviewed／rejected／result_omittedは同target／T_i・state／reasonのまま継承する。softで完了しなかったinputと、同選択windowで未処理の行は、既存adapter同様にnot_processed／deadline_exceededへ一度確定する。T_iが未採取の行には日時を作らず、採取済みinputのT_i／Uは失わない。metadataが不完全ならcollection失敗・未完了の制限を保持し、未取得行やUpdate Set全体の完全性を捏造しない。
+
+通常finishの「未完了inputがあれば拒否」を単に削除しない。RecoveryFinishPlanにより同inputの終端化と集合への一度限りの組込みが成立した場合だけ、回復用の固定受付を通す。raw manifest・callerのnot_processed申告から未完了inputを消せないようにする。集合は元source／選択windowへのbindingを必要とし、その正式供給口は未接続のまま。
+
+consistency段階に入る前のsoftで既存verify継続があれば、同source／ReleasePermit・同予算のverifyを**一度だけ**行う。既にconsistency段階でsoftになった場合は繰り返さない。verify継続が存在しない場合もGETを追加しない。verify未実施を成功扱いせず、changed／unverified・provisional_resultsと既存errorを保持する。GET・chunk・予約／retryは元HTTP ownerに課金し、回復claim側では二重計上しない。
+
+verifyで受信予算超過等が発生し元runが失効する場合は、新回復ownerのfinish_onlyへ進めない。ただし既存adapterにはこの後も部分／失敗集約をfinishする経路がある。この停止後finishは親設計§7の**初期対象外**のまま残し、既存経路を新ownerのguardで包んで破壊しない。将来の接続方針は別レビューとし、現在のproductionは変更しない。その経路を新時刻契約で検証済みとは数えない。
+
+## 8 診断・失敗・解放責務
+
+| slot | 保持する事実 | 方針 |
+|---|---|---|
+| soft observation | 種類・元phase・ready／送信後、既存deadline理由 | hard停止slotと分離し、回復中も消さない。raw例外・source・秘密・stackは持たない |
+| hard stop | 最初の固定cancelled／deadline_exceeded／worker_unavailable／internal_review_error等の既存分類 | 一度だけ格納。soft理由で先行hardを上書きしない。混入・重複・状態矛盾はinternal_review_error |
+| cleanup | 同旧／新世代の要求・成功／失敗／未確認 | hard理由と別に保持。先行理由がcancelledでも終了未確認を隠さず、結果公開・再起動を拒否 |
+| terminal data | 元S／L／O／Uと固定phase診断 | hard停止後は能力を残さない。固定discardでUTC値を消す。正常終端では参照・時刻を破棄 |
+
+soft観測後にhard停止が確定したら全claim／plan／終了候補を同期失効する。先行したsoft理由は診断事実として保持するが、「最初の失敗だから」という理由でhard停止を無視しない。cleanup失敗からsoft成功へ戻さず、後続のEが正常でも解放失敗を帳消しにしない。公開failure codeやJSONの追加はしない。複数のhard失敗があるときは先行固定理由を保持しつつ、cleanup未確認の事実は別slotへ残す。
+
+job・listener・timer・worker／stdioは監督owner、HTTP・認証・予約は元session／transport owner、input／時刻／集合は時刻ownerが解放する。失敗後も固定cleanup sectionを通す責務を保ち、最後のrollbackで数が0になったことだけを全section実行の証明にしない。cleanup中の取消でも開始済み解放の終了待ち／固定診断回収を省略しない。実待機の時間上限・外側監督との結合は未確定で、今回新しい実timeoutを導入しない。
+
+## 9 費目所有・上界の未確定部分
+
+| 費目 | 所有者 | 本書での制約 |
+|---|---|---|
+| 観測・claim・guard／失効 | 回復owner | runにつき開始1、route1、finish1。失敗試行も将来oracleで数える |
+| input終端化・集合封印 | 同時刻／集合owner | 最大100 targetの既存局所枠。T_i／Uを再採取しない。payload／findingsを再copyしない |
+| 世代生成・ready／id・終了 | 同監督 | phase既存世代は交換0、未起動は初回1。worker期限型は旧終了後の新世代1だけ。readyはjobと別 |
+| consistency GET・受信／retry・予約返却 | 元source／transport／session | 必要な既存verifyは最大1、追加GETなし。元C/G/P・全体期限を共有 |
+| E採取・全schema・finalize omission | 同finish worker | 既存の一度採取／一度finishを維持。親は同E／集合を検査するだけ |
+| 固定終端・解放後checkpoint | 外側owner（後工程） | worker→session→元取消／期限の対応を別途設計。合成closeから実証拠を発行しない |
+
+上記の回数はモデル案で、運用cap・受付可否の証拠ではない。追加slot／snapshotの実layout、work・allocation、全経路のretry／cleanup費用はUnknown。全体受付を有効化せず、既存60000msやテスト期限を緩めない。
+
+## 10 合成受入条件（未実施）
+
+| ID | 独立に確認する条件 |
+|---|---|
+| SR-01 | 同run／budget／source／input／世代へのbinding。copy・別issuer・文字列だけのsoft観測を拒否し他runは不変 |
+| SR-02 | claimは最初のguard前に一度消費。二重生成・消費・捕捉再入・失敗後の再prepareを拒否 |
+| SR-03 | phase型：既存worker同一性を維持。workerなしは初回起動だけ。starting／pending／closingを誤受理しない |
+| SR-04 | worker型：旧job終端化→旧終了成功→新世代ready→finishの順序。旧／新worker重複0、古い同id応答は拒否 |
+| SR-05 | ready期限：同input／T_iを保持し、未発行analyze idやjobを作らない。worker_unavailable／不正readyと混同しない |
+| SR-06 | terminate未確認／reject／後始末throw・取消／全体期限では新世代・候補を発行しない |
+| SR-07 | 全境界のpre/post guardとawait後の失効。phase期限と全体期限を区別し、S／全L／O／Uは固定 |
+| SR-08 | 未完了inputは同targetのnot_processedへ一度確定。U保持、元完了state維持、集合追加／欠落・reviewed昇格を拒否 |
+| SR-09 | verify要否を元stage／継続へ結合。既存GET最大1・consistency再試行0・C/G/P二重課金0を別イベントoracleで確認 |
+| SR-10 | verify中のrun失効・停止後finishを対象外と明示し、既存部分集約の回帰を維持 |
+| SR-11 | finish／ready／送信失敗で再回復しない。finishは1回、候補は1回消費。終了未確認とhard診断を別slotに保持 |
+| SR-12 | 固定cleanup section各区間の観測、失敗後の継続と診断回収。rollback結果だけで代替しない |
+| SR-13 | 0 input／空200、100 target、各中断位置と全成功／拒否経路を独立oracleで計数。full schema／compiled／実classの保証は別集計 |
+
+最初の実装では純粋fake issuer・fake clock／予算観測・fake closeイベントだけを用い、実workerを生成しない。旧WJ-A／B／通常WJ-C試験を残す。配布物にissuer／fixtureがないことと、runtime・I/O・clockへの漏れを負の対照で確認する。
+
+## 11 推奨実装分割・承認／レビュー待ち
+
+1. **SR-A**：内部discriminant・同ownerの観測／回復slotとone-shot検査、soft／hard／cleanup診断分離を合成issuerだけで実装する。
+2. **SR-B**：phase型の同世代維持／未起動分岐、未処理集合・必要verifyのfakeイベント会計を接続する。
+3. **SR-C**：worker型の送信後／ready待ち区別、旧世代終了証拠・新世代routeをfake依存で接続する。
+4. **SR-D**：通常WJ-CのE／固定集合・候補消費へ接続し、全guardと独立oracleを確認する。実session／監督・外側cleanup接続は行わない。
+
+各段階の実装は別の依頼後に行う。実生成継続のclass／module配置、private終了証拠の実発行条件、停止後finishとの接続互換性、実cleanup上限・外側checkpoint／診断写像、実選択windowと集合証拠、全費目上界はレビュー待ち。人の承認・実装・試験済みとはしない。本書はローカルコード照合とMD設計だけで、テスト・実通信・環境操作を実施した記録ではない。
