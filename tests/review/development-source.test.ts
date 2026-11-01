@@ -136,7 +136,12 @@ it('keeps closed source facts immutable after caller mutation and allows a disti
   expect((await root.run({principal:'same',source:profile})).code).toBe('invalid_response');
   expect((await root.run({principal:'same',source:{target,parent,release:{result:[]}}})).ok).toBe(true);
 });
-it.each([Array.from({length:22},()=>({build_name:'Australia'})),[{build_name:'x'.repeat(65537)}]].map(result=>({result})))('pins bounded source shapes before constructing a core %#',async({result})=>{
+it('classifies 22 release rows through the assembly like production, as invalid_response',async()=>{
+  const root=createDevelopmentRoot(),result=await root.run({principal:'rows',source:{target,parent,release:{result:Array.from({length:22},()=>({build_name:'Australia'}))}}});
+  expect(result).toMatchObject({code:'invalid_response',run_primary:{code:'invalid_response'},source:{parent_consumptions:1,release_consumptions:0}});
+  expect(root.inspect().active).toBe(0);
+});
+it.each([Array.from({length:64},()=>({build_name:'Australia'})),[{build_name:'x'.repeat(65537)}]].map(result=>({result})))('pins bounded source shapes before constructing a core %#',async({result})=>{
   const root=createDevelopmentRoot({clock:()=>{throw Error('CLOCK_MUST_NOT_RUN');}});
   expect((await root.run({principal:'bound',source:{target,parent,release:{result}}})).code).toBe('invalid_input');
   expect(root.inspect().active).toBe(0);
@@ -145,7 +150,8 @@ it('does not revive a lifecycle revoked during a guard callback',()=>{
   const context=binding();let calls=0,source:ReturnType<ReturnType<typeof createDevelopmentSourceRealm>['create']>;
   source=createDevelopmentSourceRealm().create(context,target,()=>{if(++calls===2)source.revoke();return null;});
   expect(()=>source.prepare(context)).toThrow('closed');
-  expect(source.inspect()).toMatchObject({ready_generation:0,parent_consumptions:0});
+  expect(source.inspect()).toMatchObject({state:'closed',ready_generation:0,parent_consumptions:0});
+  source.seal();expect(source.inspect()).toMatchObject({state:'closed',sealed:true});
 });
 it('runs source values only inside a fresh assembly and returns a closed non-executable summary',async()=>{
   const root=createDevelopmentRoot();

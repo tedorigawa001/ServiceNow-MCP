@@ -97,7 +97,7 @@ EF-03の境界は§1の閉包（friend・callback branch・`synthetic_io`・fake
 ## 8 実装の分割・承認待ち
 
 1. **EF-03A（限定実装済み、§9）：純粋kernel抽出**。EF-02とrun／construction理由分離を保持し、既存classへ接続。fake rootは撤去していない。writer／singletonの共有は導入しない。
-2. **EF-03B（B-01／B-02-01を限定実装）**：[開発rootと試験保証の移行計画draft-0.5](BEST_PRACTICE_ABORT_SCOPE_DEVELOPMENT_ROOT_EF03B_DESIGN.md)。独立生成root・別brand／台帳・固定cleanupを旧試験併存で追加。本番の状態／枠不変を合成確認。[B-02の移行範囲・共通化境界draft-0.2](BEST_PRACTICE_ABORT_SCOPE_DEVELOPMENT_MIGRATION_B02_DESIGN.md)の§7に値検査最小抽出・開発lifecycleの限定実装を記録。会計／native移行、開発compiled保証の移行、旧試験の別assembly保証への置換は未実施／承認待ち。
+2. **EF-03B（B-01／B-02-01を限定実装）**：[開発rootと試験保証の移行計画draft-0.5](BEST_PRACTICE_ABORT_SCOPE_DEVELOPMENT_ROOT_EF03B_DESIGN.md)。独立生成root・別brand／台帳・固定cleanupを旧試験併存で追加。本番の状態／枠不変を合成確認。[B-02の移行範囲・共通化境界draft-0.3](BEST_PRACTICE_ABORT_SCOPE_DEVELOPMENT_MIGRATION_B02_DESIGN.md)の§7に値検査最小抽出・開発lifecycleの限定実装を記録。会計／native移行、開発compiled保証の移行、旧試験の別assembly保証への置換は未実施／承認待ち。
 3. **EF-03C：本番friend／callback lane撤去**。§1の閉包をまとめて切り、省略時summaryを維持。`synthetic_io`削除の互換性変更をCHANGELOGに明記。半分撤去して使われないfriend本体を残さない。
 4. **EF-03D：空build・tarball・負の対照**。production／developmentのcompiled試験を別実行し、正常・変異双方の検査結果と本番class未確認範囲を記録する。
 

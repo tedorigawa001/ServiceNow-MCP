@@ -22,7 +22,8 @@ export function pinDevelopmentSourceProfile(raw:unknown){
     const keys=Reflect.ownKeys(value);
     if(keys.length>64)throw new DevelopmentSourceError('invalid_input');
     if(array){
-      if(value.length>21||keys.length!==value.length+1)throw new DevelopmentSourceError('invalid_input');
+      // Resource bound only (key cap above); the 21-row release limit stays a value check -> invalid_response.
+      if(keys.length!==value.length+1)throw new DevelopmentSourceError('invalid_input');
       return Object.freeze(Array.from({length:value.length},(_,i)=>{
         const d=Object.getOwnPropertyDescriptor(value,String(i));
         if(!d||!Object.hasOwn(d,'value'))throw new DevelopmentSourceError('invalid_input');return pin(d.value,depth+1);
@@ -58,7 +59,7 @@ export function createDevelopmentSourceRealm(){
     function reject(raw:unknown):never{
       const internal=normalizeConstructionReason(raw);
       const code=internal==='invalid_state'||internal==='invalid_observation_time'||internal==='evidence_binding_mismatch'?'internal_review_error':internal;
-      if(!sealed){primary??=Object.freeze({code:internal,public_code:code});state='failed';acks.clear();}
+      if(!sealed){primary??=Object.freeze({code:internal,public_code:code});if(state!=='closed')state='failed';acks.clear();} // Revocation is terminal.
       throw new DevelopmentSourceError(primary?.public_code??code,primary?.code??internal);
     }
     function check(){

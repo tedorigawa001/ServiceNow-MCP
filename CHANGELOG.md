@@ -40,6 +40,8 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 ### Added
 
+- Fixes the EF-03B B-02-01 development source: the profile pin capped every array at 21 elements, so a 22-row release through the development assembly was rejected as `invalid_input` instead of reaching the shared value check (`invalid_response`, as in production). The pin now applies only the 64-key resource bound. A revoked development lifecycle also stays `closed` when a later rejection is recorded, so sealing it no longer fails. Tests cover both; design version links are updated. Test-only; no runtime behaviour changes.
+
 - Fixes the EF-03B B-01 development root's construction order to match the production session: busy pre-check, then core, admission and registered owner. Previously the owner was registered before admission, so a busy claimant registered and rolled back on a path production never takes. A new test checks that a busy claimant allocates no core/admission/owner slot and that an admission fault leaves the owner unregistered; live registrations are now bounded by the two admission slots. Test-only; no runtime behaviour changes.
 
 - Fixes the EF-03A compiled construction-kernel fixture: the "local state cannot affect the live session" check previously failed an already-sealed, unrelated state (a no-op). It now fails and seals a fresh, unsealed local state holding a resource and compares the live session's construction copy before and after; a temporary cross-instance leak injected into the compiled kernel is now detected. Design version links are updated. No runtime behaviour changes.

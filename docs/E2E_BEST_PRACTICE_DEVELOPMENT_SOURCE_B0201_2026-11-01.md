@@ -28,3 +28,10 @@ Date: 2026-11-01（JST）。設計基準：`146ddfc`、[B-02設計§7](BEST_PRAC
 - コミット前確認：対象14ファイルを明示stageし、indexだけを`/tmp/servicenow-b0201-commit-20261101/`へ取り出して既存node_modulesを参照。build・standalone型検査・関連8ファイル183件・offline梱包417ファイルを順次再実行し、すべてexit 0。無関係な未追跡ファイルはこのコピーに含めていない。全体9,703件の再実行ではなく、上記の全体結果とは区別する。
 
 ネットワークを使う依存再導入や全梱包系の再実行は行っていない。通常の実class試験は合成I/Oであり、PDIの確認済みとはしない。byte layout・全体work／必要量は未導出で、受付へ昇格させない。
+
+## 4 レビュー修正（2026-11-01）
+
+- 開発profileのpinが全配列を21要素へ制限していたため、開発assembly経由の22行releaseが値検査へ届かず`invalid_input`となり、本番の`invalid_response`と一致しなかった。pinの配列上限はobjectと同じ64 keyの資源境界とし、21行上限は共通値検査だけで判定する。assembly経由の22行が`invalid_response`（親消費1・release消費0）となる試験を追加し、pin上限の試験は64行に変更した。
+- 開発sourceの`reject()`がrevoke済みの`closed`を`failed`へ上書きし、その後の直接`seal()`が`invalid_state`で失敗し得た。revokeを終端状態として保持し、guard callback中のrevoke後も`closed`のままsealできることを試験に追加した。
+- 開発source試験は32件、関連3ファイル（source-values・development-source・development-root）72件が成功。変異確認として、pinの21要素上限を戻すと22行試験が、`closed`上書きを戻すとrevoke試験が各1件失敗した。退避copyから復元し`cmp`で一致を確認した。§3の件数は修正前の記録として残す。
+- ND設計とsource受理設計の版数リンク（EF draft-0.11・EF-03 draft-0.8）と、B-02設計へのリンク（draft-0.3）を更新した。
