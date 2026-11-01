@@ -1,6 +1,6 @@
 # CT-B前半：上位時刻owner・一度限りの終端移譲
 
-Version: br006-release-time-owner-ctb-draft-0.4 / Date: 2026-11-01。
+Version: br006-release-time-owner-ctb-draft-0.5 / Date: 2026-11-01。
 Status: **TB-Aの値scopeに加え、TB-BのCT-A accepted／元run失効との結合・正常source cleanupとの区別を既存classの固定fake経路だけに限定実装（§10）。worker job・T_i／E・通常実source採用は未実装。正式発行口閉鎖・Unknown・全体受付無効・VM／監視／telemetry調査保留を維持する。実source差替え・実接続・実通信・実機操作・設定変更・Permit発行・Pushの承認ではない。**
 
 基準はCT-Aコミット`d32a412`。[接続契約](BEST_PRACTICE_ABORT_SCOPE_RELEASE_COMPARISON_TIME_BINDING_DESIGN.md)§4〜6のうち、時刻のprivate保持・正常終端移譲だけを具体化する。worker job、T_i／Eの実応答照合はCT-B後半、連続fake試験はCT-C、専用開発compiled保証はB-03に残す。
@@ -109,3 +109,7 @@ finallyは固定順序の全解放sectionを試み、先行失敗を保持する
 TB-Bは新たなworker終端を作らず、上位値は固定fake準備処理の正常source cleanup後まで保持してからdiscardする。T_i／E・worker世代／job・closeしたsessionを越える外部ownerへの移譲は未接続。値bridgeのinspect試験と、private値を公開しない実classの出力／会計／取消／終了回帰は別保証で、runtime上位Oを返却summaryから直接検査したとは主張しない。
 
 新たな費目はaccepted消費、固定bridge／binding・context、追加guard、上位診断copy、固定cleanup合流。新GET／時計採取／rows decode・受信再課金・新budget／期限更新はない。値／classの合成試験、compiled fake fixture、初回失敗は[TB-B検証記録](E2E_BEST_PRACTICE_RELEASE_TIME_HANDOFF_TBB_2026-11-01.md)へ記録する。専用開発buildのB-03保証・正式発行の承認には流用しない。
+
+## 11 CT-B後半の設計参照
+
+[worker job binding・T_i／E詳細設計draft-0.1](BEST_PRACTICE_ABORT_SCOPE_WORKER_TIME_BINDING_DESIGN.md)で、同run／sourceの時刻leaseと、ready済みworker世代・input receipt・job claimの役割を分けた。T_iの受理はstartup前にも起こるためjob発行と分離し、正常source解放後は新jobを作らず既発行jobの終端だけを扱う。元S／全Lと空200のO・omission後のUを維持する。WJ-A〜Dは未実装で、現prepared-onlyのdiscardを削除する指示ではない。TB-Bレビューで残ったfinally継続の観測不足を、rollback救済と区別する受入条件も置く。B-03・実接続・正式発行・全体受付は別工程のままとする。
