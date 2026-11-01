@@ -1,7 +1,7 @@
 # AU-BR-006：constructor最初期の診断owner・fake friend分離
 
-Version: br006-early-diagnostic-friend-separation-draft-0.16 / Date: 2026-11-01。
-Status: **EF-01／02、EF-03Aに加え、EF-03B B-01／B-02-01〜03を限定実装し合成検証。開発同reader cleanup／source受理までを追加し、旧試験の置換・全case／release判断移行・ビルド設定変更・friend撤去は未実施。正式発行口閉鎖・Unknown・全体受付無効・VM／監視／telemetry調査保留を維持する。実接続・実通信・実機操作・設定変更・Pushは行わない。**
+Version: br006-early-diagnostic-friend-separation-draft-0.17 / Date: 2026-11-01。
+Status: **EF-01／02、EF-03Aに加え、EF-03B B-01／B-02-01〜03を限定実装し合成検証。開発同reader cleanup／source受理とRC-01／02のrelease純粋値契約・比較を追加し、旧試験の置換・全case／release判断のsource移行・ビルド設定変更・friend撤去は未実施。正式発行口閉鎖・Unknown・全体受付無効・VM／監視／telemetry調査保留を維持する。実接続・実通信・実機操作・設定変更・Pushは行わない。**
 
 基準：`134248b`、[ND設計§3・§13](BEST_PRACTICE_ABORT_SCOPE_NATIVE_STATUS_DIAGNOSTIC_DESIGN.md)、[ND-03検証§5・§6](E2E_BEST_PRACTICE_NATIVE_DIAGNOSTIC_ND03_2026-10-31.md)、[source受理設計](BEST_PRACTICE_ABORT_SCOPE_STATUS_SOURCE_ACCEPTANCE_DELTA_DESIGN.md)。以下の型名・配置は内部契約案で、公開API／JSONの追加や承認済み実装ではない。
 
@@ -176,7 +176,7 @@ shellは固定3purpose slot・固定reason／resource／claim slotのみで、�
 
 1. **EF-01**：純粋shell・固定resource状態・core／sourceの別one-shot claimを合成依存で実装。登録／runtime配布にはまだ接続しない。
 2. **EF-02（限定実装済み、§13）**：field副作用を保護区間へ移し、部分生成rollbackと失敗copyの固定回収へ接続。busy／認証エラーの優先順位、元clock、API互換を合成依存で確認。
-3. **EF-03（A・B-01・B-02-01〜03を限定実装）**：[共通kernel・本番／開発root分離詳細設計draft-0.13](BEST_PRACTICE_ABORT_SCOPE_KERNEL_ROOT_SEPARATION_EF03_DESIGN.md)。純粋construction kernel、独立生成root、値検査・開発lifecycle・同core会計／固定200 transcript・同reader cleanupを追加。旧試験を残し実classの状態／枠不変を合成確認。移行範囲・限定実装・旧case対応表・release純粋比較器設計とRC-01限定実装は同設計の参照先へ分離し、実class保証と別assembly保証を区別する。全case／release判断移行・friend撤去・build設定変更は未実施。
+3. **EF-03（A・B-01・B-02-01〜03を限定実装）**：[共通kernel・本番／開発root分離詳細設計draft-0.14](BEST_PRACTICE_ABORT_SCOPE_KERNEL_ROOT_SEPARATION_EF03_DESIGN.md)。純粋construction kernel、独立生成root、値検査・開発lifecycle・同core会計／固定200 transcript・同reader cleanupを追加。旧試験を残し実classの状態／枠不変を合成確認。移行範囲・限定実装・旧case対応表・release純粋比較器設計とRC-01／02の純粋値実装は同設計の参照先へ分離し、実class保証と別assembly保証を区別する。全case／release判断のsource移行・friend撤去・build設定変更は未実施。
 4. **後続③**：固定本番bindingとexact class注入E2Eを設計・接続する。別承認まで正式発行口・fallback・実通信は閉鎖。
 
 実装前に、E5〜E7のadmission／登録順、直接newの失敗診断配送、部分登録が不明な場合の終了写像、開発assemblyで変わる保証とexact class試験の回復方法を承認する必要がある。D1／D2のruntime採用・SA-03承認とは別であり、本書の合意だけでいずれのgateも開かない。

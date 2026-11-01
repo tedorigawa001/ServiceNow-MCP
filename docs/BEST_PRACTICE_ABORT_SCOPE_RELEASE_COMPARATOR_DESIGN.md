@@ -1,9 +1,9 @@
 # AU-BR-006／EF-03B：release純粋比較器の詳細設計
 
-Version: br006-release-comparator-draft-0.2 / Date: 2026-11-01。
-Status: **RC-01のstrict構造入力・非実行draft内部型・family最小共有境界だけを実装。意味比較・draft値生成・実sourceへの採用は未実装。実Permit発行・friend撤去・実接続の承認ではない。旧試験、正式発行口閉鎖・Unknown・全体受付無効・VM／監視／telemetry調査保留を維持する。実通信・実機操作・設定変更・Pushは行わない。**
+Version: br006-release-comparator-draft-0.3 / Date: 2026-11-01。
+Status: **RC-01の構造入力・型・family境界に加え、RC-02のpolicy整合・優先順・limitations・非実行draft生成を純粋値として実装。実sourceへの採用は未実装。実Permit発行・friend撤去・実接続の承認ではない。旧試験、正式発行口閉鎖・Unknown・全体受付無効・VM／監視／telemetry調査保留を維持する。実通信・実機操作・設定変更・Pushは行わない。**
 
-基準：設計は`183b540`、RC-01実装前は`39a3225`。[旧case対応表](BEST_PRACTICE_ABORT_SCOPE_OLD_CASE_CROSSWALK_B02_DESIGN.md)のACK-08〜16等と、[移行設計](BEST_PRACTICE_ABORT_SCOPE_DEVELOPMENT_MIGRATION_B02_DESIGN.md)の残差を具体化する。§11で明示するRC-01以外の型・手順・試験IDは引き続き案である。
+基準：設計は`183b540`、RC-01実装前は`39a3225`、RC-02実装前は`439c4ec`。[旧case対応表](BEST_PRACTICE_ABORT_SCOPE_OLD_CASE_CROSSWALK_B02_DESIGN.md)のACK-08〜16等と、[移行設計](BEST_PRACTICE_ABORT_SCOPE_DEVELOPMENT_MIGRATION_B02_DESIGN.md)の残差を具体化する。§11／12の実装記録と、未接続の生成owner／実source採用手順の案を区別する。
 
 ## 1 現行の責務と分離先
 
@@ -60,7 +60,7 @@ owner生成のstarted_at／observed_atは現行toISOStringの形を対象に最�
 
 - 成功：`ok:true`、固定`kind:release_comparison_draft`、`model_id`、`decision:{release_match, instance_release, limitations}`。instance_releaseは既存ReleaseEvidenceと同じ値形、limitationsは固定順のreadonly文字列配列。全階層をfresh copy／freezeする。
 - 拒否：`ok:false`、固定`code:invalid_input`だけ。例外本文・raw値・内部参照は返さない。これはsourceが観測から正常にunknownを得た結果とは異なる。
-- 両者とも権限は常にfalse：`formal_issuance`、`release_permit`、`dispatch`、`fallback_activation`。`permit` property・source／lease／owner／consumer・採用用tokenを持たない。
+- 成功draftの権限は常にfalse：`formal_issuance`、`release_permit`、`dispatch`、`fallback_activation`。拒否は上記の固定2fieldだけで権限fieldを返さない。どちらも`permit` property・source／lease／owner／consumer・採用用tokenを持たない。
 
 matchedを返してもReleasePermitではない。matchedならpermitが必須となる既存ReleaseDecision型を流用せず、別の値型にする。公開draftやそのJSON／copyを実sourceが採用する入口を作らない。
 
@@ -176,7 +176,7 @@ limitsのmaxやfamily集合が変わる場合はmodel_id／対応表を再レビ
 ## 10 実装順の提案と未確認事項
 
 1. **RC-01（限定実装済み、§11）**：strict構造入力／非実行draftの内部型・family値の最小共有境界。owner・clock・I/Oなしで独立oracleを作る。意味比較は含めない。
-2. **RC-02**：本書の順序・limitationsを同期比較器に実装。policy自己整合・構造拒否とordinary unknownを分ける。新規合成試験を追加し旧試験を残す。
+2. **RC-02（純粋値として実装済み、§12）**：本書の順序・limitationsを同期比較器に実装。policy自己整合・構造拒否とordinary unknownを分ける。新規合成試験を追加し旧試験を残す。
 3. **RC-03（別承認）**：200値を得る実source／開発sourceそれぞれの固定継続へ接続し、生成元・pre/post guard・上位停止・既存permit block不変を確認する。legacy非200 catchは同時に移さない。
 4. **B-03**：旧case対応表の更新、専用開発build／compiled連続試験と本番compiled回帰を別集計。実Permit結合の未代替保証を明記したままにする。
 
@@ -194,4 +194,18 @@ inputはown data descriptorだけから一度copyする。Node標準`node:util`�
 
 `release-family.ts`はimportなしのcanonical5値・whole-string正規化／matchだけを持つ。catalog公開関数はwrapperのまま意味を維持し、設定schema・結果schemaも同じtupleを参照する。比較入力kernelのruntime importはzod・node:util・familyだけ。draftが参照する既存ReleaseEvidenceはtype-onlyで、生成JSから消える。sourceのrelease判断・非200 catch・実Permit block・公開decisionの可変性は変更しない。
 
-[RC-01検証記録](E2E_BEST_PRACTICE_RELEASE_CONTRACT_RC01_2026-11-01.md)にRED/GREEN、合成入力、型の負の試験、既存回帰、compiled／梱包確認を記録する。旧case対応表の分類・件数は変更せず、B-03 compiled保証やrelease判断移行の完了とは数えない。次はRC-02のpolicy整合・優先順・limitationsとfresh draft値生成を独立oracleで実装する。
+[RC-01検証記録](E2E_BEST_PRACTICE_RELEASE_CONTRACT_RC01_2026-11-01.md)にRED/GREEN、合成入力、型の負の試験、既存回帰、compiled／梱包確認を記録する。旧case対応表の分類・件数は変更せず、B-03 compiled保証やrelease判断移行の完了とは数えない。RC-01時点の意味比較未実装という残差は、次節のRC-02で純粋値についてのみ対応した。
+
+## 12 RC-02純粋比較と非実行draft生成
+
+同moduleの`compareRelease(unknown)`はRC-01の構造copy／freezeを必ず経由し、§2のpolicy日時・issue自己整合を確認した後に§5〜7の固定順で判定する。`parseReleaseComparisonInput`は互換性のため構造検査のままとし、policy意味検証済みの証拠へ昇格させない。
+
+asserted_atの未来・expires_at≦asserted_atを拒否し、binding不一致→expires≦start→expires≦start＋deadline→issueなしの順でpin済みissueとexact照合する。issueの欠落・付替えで期限を救済しない。observed_atや現在時刻はpolicy期限を動かさず、observed_at≧started_atという新制約も追加しない。設定日時文字数の上限は引き続き承認待ちで、長い小数秒を元の表現のまま返す。全入力byte／work上界のUnknownは解消しない。
+
+構造／policy不整合はfrozenな`{ok:false,code:invalid_input}`、ordinary unknown・mismatchedはok=trueの非実行draftとする。binding不一致の優先、invalid観測、21行sentinel、全空欄の値代替、一部欠落、未知family、複数観測／設定競合、実測の順を維持する。設定がexpired／insufficientでもfamily相違の競合から捨てず、競合limitationsにはそのissueを追加しない。unique familyは初出順、実測raw_buildnameは最初のtrim済みcaseを保つ。
+
+正常draftは毎回freshな入力copyから生成し、decision・evidence・配列・permissionsまでdeep freezeする。権限4項目は常にfalse、Permit／owner／consumer／採用tokenは持たない。draftのJSON／copyを比較入力として渡しても拒否される。拒否出力に権限fieldはなく、authorityを返さないという既存の固定拒否契約を維持する。
+
+[RC-02検証記録](E2E_BEST_PRACTICE_RELEASE_COMPARISON_RC02_2026-11-01.md)では、旧関数の返値をoracleにせず、固定表からevidence全体とlimitations順序を独立に期待する70件を追加。既知familyの5×5組合せ・期限の等号／+1ms・優先関係・秘密非出力・fresh freezeを含む。compiled fixtureと梱包の純粋import／時計・timer・fetch不在検査も拡張する。
+
+既存BoundedUpdateSetSource／設定pin／認証・会計・private Permit blockは変更しない。旧試験と対応表の分類は維持し、純粋値の成功を実class bindingや別assembly移行の完了には数えない。次はRC-03の採用差分設計・生成元とpre/post guard・上位停止保持の受入条件であり、本変更では接続・fallback有効化を行わない。

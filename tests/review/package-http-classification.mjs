@@ -17,6 +17,11 @@ for(const name of ['release-family','release-comparison']) {
   const allowed=name==='release-family'?[]:['zod','node:util','./release-family.js'];
   while(pending.length){const n=pending.pop();
     if(n.type==='ImportDeclaration')assert(allowed.includes(n.source.value),'release value contract imports a root: '+n.source.value);
+    assert(!(n.type==='NewExpression'&&n.callee?.name==='Date'),'release value contract reads wall clock');
+    if(n.type==='CallExpression'){
+      assert(!['fetch','setTimeout','setInterval'].includes(n.callee?.name),'release value contract performs I/O/timer');
+      assert(!(n.callee?.type==='MemberExpression'&&n.callee.object?.name==='Date'&&n.callee.property?.name==='now'),'release value contract reads wall clock');
+    }
     assert(n.type!=='ImportExpression'&&n.type!=='ExportAllDeclaration'&&!(n.type==='ExportNamedDeclaration'&&n.source),'release value contract reexports/imports a root');
     assert(!(n.type==='CallExpression'&&n.callee?.name==='require'),'release value contract requires a root');
     for(const v of Object.values(n)){if(Array.isArray(v))pending.push(...v.filter(x=>x&&typeof x.type==='string'));else if(v&&typeof v==='object'&&typeof v.type==='string')pending.push(v);}

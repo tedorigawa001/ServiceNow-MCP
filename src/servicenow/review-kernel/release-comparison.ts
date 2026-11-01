@@ -1,7 +1,8 @@
-/** RC-01 value contracts only. No comparison, admission or Permit issuance. */
+/** Pure release values only. No source admission or Permit issuance. */
 import {z} from 'zod';
 import {types} from 'node:util';
-import {RELEASE_FAMILIES} from './release-family.js';
+import {RELEASE_FAMILIES, normalizeReleaseFamily, matchReleaseFamily} from './release-family.js';
+import type {ReleaseFamily} from './release-family.js';
 import type {ReleaseEvidence} from '../../review/result-schema-v2.js';
 
 export const RELEASE_COMPARISON_MODEL = 'release-comparison-v1' as const;
@@ -92,8 +93,8 @@ function copyData(value: unknown, depth = 0, count = {nodes: 0}): unknown {
 }
 
 /**
- * RC-01 structure only: policy expiry/issue consistency and release decisions
- * remain RC-02. Success conveys no source/session authority or admission.
+ * RC-01 structure-only entry retained for compatibility. compareRelease adds
+ * policy consistency and value decisions; neither entry conveys live authority.
  */
 export function parseReleaseComparisonInput(value: unknown): {readonly ok: true; readonly input: ReleaseComparisonInput} | {readonly ok: false; readonly code: 'invalid_input'} {
   try {
@@ -101,4 +102,64 @@ export function parseReleaseComparisonInput(value: unknown): {readonly ok: true;
     if (parsed.success) return freeze({ok: true as const, input: parsed.data});
   } catch { /* fixed rejection, never return caller values or exceptions */ }
   return Object.freeze({ok: false, code: 'invalid_input'});
+}
+
+function makeDraft(decision: ReleaseComparisonDraft['decision']): ReleaseComparisonDraft {
+  return freeze({ok: true, kind: 'release_comparison_draft', model_id: RELEASE_COMPARISON_MODEL, decision,
+    permissions: {formal_issuance: false, release_permit: false, dispatch: false, fallback_activation: false}});
+}
+
+function policyIsConsistent(input: ReleaseComparisonInput): boolean {
+  const {assertion, instanceBinding, issue} = input.policy;
+  if (!assertion) return issue === undefined;
+  const start = Date.parse(input.timing.started_at);
+  const asserted = Date.parse(assertion.asserted_at), expires = Date.parse(assertion.expires_at);
+  if (asserted > start || expires <= asserted) return false;
+  const expected = assertion.instance_binding !== instanceBinding ? 'config_binding_mismatch'
+    : expires <= start ? 'config_expired'
+      : expires <= start + input.timing.deadline_ms ? 'config_validity_insufficient' : undefined;
+  return issue === expected;
+}
+
+type UnavailableReason = Exclude<Extract<ReleaseEvidence, {source: 'none'}>['reason'], 'not_configured'>;
+function unavailable(reason: UnavailableReason): ReleaseComparisonDraft {
+  return makeDraft({release_match: 'unknown', instance_release: {source: 'none', resolution_status: 'unknown', family: null,
+    visibility_scope: 'unavailable', reason}, limitations: [reason, 'release_unknown']});
+}
+
+/** Unknown input is copied before comparing; a draft never carries live authority. */
+export function compareRelease(value: unknown): ReleaseComparisonResult {
+  const parsed = parseReleaseComparisonInput(value);
+  if (!parsed.ok) return parsed;
+  const input = parsed.input;
+  if (!policyIsConsistent(input)) return Object.freeze({ok: false, code: 'invalid_input'});
+  const {assertion, issue} = input.policy;
+  if (issue === 'config_binding_mismatch') return unavailable(issue);
+  if (input.observation.kind === 'invalid_observation') return unavailable('observation_incomplete');
+  if (input.observation.kind !== 'complete_200') return Object.freeze({ok: false, code: 'invalid_input'});
+  const rows = input.observation.rows;
+  if (rows.length === 21) return unavailable('observation_limit');
+  const names = rows.map(row => row.build_name?.trim() ?? '');
+  if (names.every(name => !name)) {
+    if (issue) return unavailable(issue);
+    if (!assertion) return unavailable('observation_unavailable');
+    const match = matchReleaseFamily(assertion.family);
+    return makeDraft({release_match: match, instance_release: assertion, limitations: [
+      'release_operator_asserted', 'release_not_observed', 'release_config_may_be_stale', 'release_observation_unavailable',
+      ...(match === 'mismatched' ? ['release_mismatch'] : [])]});
+  }
+  if (names.some(name => !name)) return unavailable('observation_incomplete');
+  const values = names.map(normalizeReleaseFamily);
+  if (values.some(family => family === null)) return unavailable('observation_inconsistent');
+  const families = [...new Set(values.filter((family): family is ReleaseFamily => family !== null))];
+  if (families.length > 1 || (assertion && assertion.family !== families[0])) {
+    return makeDraft({release_match: 'unknown', instance_release: {source: 'conflict', resolution_status: 'unknown', family: null,
+      visibility_scope: 'caller_acl', observed_families: families, configured_family: assertion?.family ?? null,
+      observed_at: input.timing.observed_at!}, limitations: ['release_evidence_conflict', 'release_unknown']});
+  }
+  const raw = names[0];
+  const family = families[0];
+  return makeDraft({release_match: matchReleaseFamily(family), instance_release: {source: 'sys_cluster_state.build_name',
+    resolution_status: 'resolved', family, raw_buildname: raw, observed_at: input.timing.observed_at!, visibility_scope: 'caller_acl'},
+  limitations: ['release_visible_nodes_only', ...(issue ? [issue] : []), ...(family === 'Australia' ? [] : ['release_mismatch'])]});
 }

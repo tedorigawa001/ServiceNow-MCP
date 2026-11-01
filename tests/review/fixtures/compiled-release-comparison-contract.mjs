@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import {parseReleaseComparisonInput} from '../../../dist/servicenow/review-kernel/release-comparison.js';
+import {parseReleaseComparisonInput, compareRelease} from '../../../dist/servicenow/review-kernel/release-comparison.js';
 import {RELEASE_FAMILIES, matchReleaseFamily} from '../../../dist/servicenow/review-kernel/release-family.js';
 const input = {model_id:'release-comparison-v1', timing:{started_at:'2026-11-01T00:00:00.000Z',deadline_ms:60000,observed_at:'2026-11-01T00:00:01.000Z'},policy:{instanceBinding:'a'.repeat(64)},observation:{kind:'complete_200',rows:[{build_name:'Australia'}]}};
 const parsed=parseReleaseComparisonInput(input);
@@ -15,3 +15,20 @@ assert.deepEqual(RELEASE_FAMILIES,['Australia','Brazil','Zurich','Yokohama','Xan
 assert.equal(matchReleaseFamily(' AUSTRALIA '),'matched');
 assert.equal(matchReleaseFamily('Australia Patch 1'),'unknown');
 console.log('RC-01 compiled value contracts PASS; no release admission or Permit');
+input.observation.rows[0].build_name='Australia';
+const assertion={source:'operator_config',resolution_status:'asserted',visibility_scope:'operator_configured',family:'Zurich',instance_binding:'a'.repeat(64),config_version:'b'.repeat(64),asserted_at:'2026-10-01T00:00:00.000Z',expires_at:'2026-10-31T00:00:00.000Z'};
+const policy={...input.policy,assertion,issue:'config_expired'};
+const clock=Date.now;
+try {
+  Date.now=()=>{throw Error('wall clock forbidden');};
+  const result=compareRelease({...input,policy});
+  assert.equal(result.ok,true);
+  assert.deepEqual(result.decision,{release_match:'unknown',instance_release:{source:'conflict',resolution_status:'unknown',family:null,visibility_scope:'caller_acl',observed_families:['Australia'],configured_family:'Zurich',observed_at:input.timing.observed_at},limitations:['release_evidence_conflict','release_unknown']});
+  assert.deepEqual(result.permissions,{formal_issuance:false,release_permit:false,dispatch:false,fallback_activation:false});
+  assert(!('permit' in result));
+  assert(Object.isFrozen(result.decision.instance_release.observed_families));
+  assert.deepEqual(compareRelease({...input,policy:{...input.policy,assertion}}),{ok:false,code:'invalid_input'});
+  assert.equal(compareRelease({...input,observation:{kind:'complete_200',rows:Array(21).fill({build_name:null})}}).decision.instance_release.reason,'observation_limit');
+  assert.deepEqual(compareRelease(JSON.parse(JSON.stringify(result))),{ok:false,code:'invalid_input'});
+} finally {Date.now=clock;}
+console.log('RC-02 compiled policy/priority/non-executable draft PASS; not source adoption');
