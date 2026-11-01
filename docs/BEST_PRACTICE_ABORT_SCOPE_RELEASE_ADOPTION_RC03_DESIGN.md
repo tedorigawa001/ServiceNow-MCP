@@ -1,9 +1,9 @@
 # RC-03：release比較器の固定採用境界・接続差分設計
 
-Version: br006-release-adoption-rc03-draft-0.2 / Date: 2026-11-01。
-Status: **設計のみ・未実装。実source／開発sourceの接続・本番切替の承認ではない。旧試験・正式発行口閉鎖・Unknown・全体受付無効・VM／監視／telemetry調査保留を維持する。実Permit発行・実接続・実通信・実機操作・設定変更・friend撤去・Pushは行わない。**
+Version: br006-release-adoption-rc03-draft-0.3 / Date: 2026-11-01。
+Status: **RC3-D01のtest-only条件・private binding・一度限りclaimだけを限定実装。比較実行・結果公開・D02以降・R差替えは未実装／未承認。旧試験・正式発行口閉鎖・Unknown・全体受付無効・VM／監視／telemetry調査保留を維持する。実Permit発行・実接続・実通信・実機操作・設定変更・friend撤去・Pushは行わない。**
 
-基準：`a61d90a`。[純粋比較器設計draft-0.4](BEST_PRACTICE_ABORT_SCOPE_RELEASE_COMPARATOR_DESIGN.md)のRC-03を具体化する。以下の追加field・状態・試験ID・分割単位は案であり、存在するAPIや検証済み保証ではない。
+基準：`a61d90a`。[純粋比較器設計draft-0.5](BEST_PRACTICE_ABORT_SCOPE_RELEASE_COMPARATOR_DESIGN.md)のRC-03を具体化する。以下の追加field・状態・試験ID・分割単位は案であり、存在するAPIや検証済み保証ではない。
 
 ## 1 現在の接続点と不足
 
@@ -12,7 +12,7 @@ Status: **設計のみ・未実装。実source／開発sourceの接続・本番�
 | [実source](../src/review/bounded-source.ts) | `resolveRelease`／private release consumer→`#observeRelease`→既存値判定→`#completeRelease` | 同source内部で比較入力を組み立て、比較後guardを通った値だけを固定分岐へ渡す。公開draftの採用口は作らない |
 | [実session](../src/servicenow/bounded-read.ts) | public readonlyの`startedAt`、pin済み`releasePolicy`、`assertActive`、private生成継続の`check`。全deadlineは`private readonly limits.deadlineMs`にあり、sourceから読む口は**現在ない** | 同sessionからの時刻／policy／停止を再利用する。別sessionのprojectionや残時間によるdeadline再計算は禁止 |
 | [開発source](../tests/support/review/ef03/source.ts) | 同realmのcontext・private ackをissue／consumeし、release値を破棄してdone | release行をprivateに保持する短い区間と、同contextに束縛した比較条件が必要。現状は比較器を呼んでいない |
-| [開発assembly](../tests/support/review/ef03/assembly.ts) | contextはrun identity／snapshot／canonical lease。clockは経過時間用 | 固定UTC文字列・policyのtest-only供給が未実装。monotonic clockをUTCとして解釈しない |
+| [開発assembly](../tests/support/review/ef03/assembly.ts) | contextはrun identity／snapshot／canonical lease。clockは経過時間用。D01で固定UTC・policy条件のprivate供給だけを追加 | 比較・結果公開はD02以降。monotonic clockをUTCとして解釈しない |
 | [開発bootstrap](../tests/support/review/ef03/bootstrap.ts) | 同coreでC/G/P、final4予約、固定200 bytes→decode→accept。release_matchはnot_evaluated | opt-inの比較結果は別の非実行summaryとして公開する。省略時の既存結果・予約／cleanupは不変 |
 
 純粋比較器の成功は値の整合だけで、同sessionの真正な証拠ではない。hex binding、JSON、family文字列、公開summary、draftの形が一致しても生成元の証明へ昇格しない。
@@ -125,7 +125,7 @@ ordinary unknownはrun stopとは別である。正常な比較値で先行HTTP�
 
 ## 10 次の分割単位と承認待ち
 
-1. **RC3-D01（次の最小実装候補）**：同rootのtest-only時刻／policy条件・private bindingと一度限りclaimを追加。まだ比較結果を公開せず、旧profile・summary不変と混入／失敗停止を確認。
+1. **RC3-D01（限定実装済み、§11）**：同rootのtest-only時刻／policy条件・private bindingと一度限りclaimを追加。まだ比較を実行／公開せず、旧profile・summary不変と混入／失敗停止を確認。
 2. **RC3-D02**：同sourceの200行ack→固定比較→pre/post guard→非実行summaryを接続。会計／予約／cleanupの継続を確認。status-onlyは除外。
 3. **RC3-D03**：no-requestのbinding不一致分岐を固定transcriptのdispatch前へ接続し、release GET=0・予約返却を確認。設定代替・競合の連続caseを追加。
 4. **RC3-R01（別承認）**：実source採用差分のfake-I/O試験を先行。下表の保留が解決するまで通常入口へ切り替えない。
@@ -144,3 +144,13 @@ ordinary unknownはrun stopとは別である。正常な比較値で先行HTTP�
 この設計の作成を実装・採用・鍵／設定・通信の承認へ読み替えない。調査保留と正式発行口閉鎖を維持する。
 
 draft-0.2のレビュー修正：実sessionの現在の供給元に`deadlineMs`を挙げていたが、全deadlineは`private readonly limits.deadlineMs`にあり、sourceから読む口はない。§1を現状に合わせ、§3のRの供給元と§10の承認待ちに、構築時に固定するreadonly deadline値を未実装の差分として明記した。上位設計からの版数リンクも更新した。
+
+## 11 RC3-D01の限定実装
+
+基準`44ab4de`。[開発条件module](../tests/support/review/ef03/release-conditions.ts)はrootごとのWeakMap／WeakSetを持ち、`release_comparison`の固定3field（started_at／observed_at／policy）をRC-01構造parserでfresh copyする。deadlineはrootの既存deadline_msだけから取る。条件handleはopaqueで、bind前に一度限り消費する。日時長capは追加せず、policy期限／issueの意味比較はD02へ残す。binding値の相違、またはbinding不一致issueのprofileは開始前に拒否する。
+
+同じ開発source realmのprivate WeakMapに登録されたsource／contextだけを認め、context内のrun／snapshot／lease、元deadlineを結合する。bindはsourceのnew／世代0、claimはready後のparent／世代1を要求し、claimingをguard前に立てて再入を拒否する。成功も失敗もclaim・handle・run世代を再利用せず、元の固定診断を保持する。別realm／copy／Proxy／別source／別lease混入は認めない。新たなruntime registryやfriendは作らない。
+
+rootはsource生成後にbindし、同じready継続の直後にclaimする。停止・finallyで参照を破棄し、summaryには条件・owner・claim・比較draftを追加しない。省略時だけでなくD01 opt-in時も旧source／transcript summaryとdeep equalになることを確認した。nativeとの併用はdeliveryをpin／消費するより前に拒否し、そのdeliveryは元の旧native profileで引き続き使用可能とする。
+
+`compareRelease`は呼ばず、release行は従来どおり消費して破棄する。条件を保持することと、設定の真正性・比較結果・本番bindingの証明を区別する。C/G/P・final4予約／返却は元ownerのまま。[D01検証記録](E2E_BEST_PRACTICE_RELEASE_CONDITIONS_D01_2026-11-01.md)に新規31件、既存回帰、型／梱包／全体確認を記録する。実sessionのreadonly deadline供給差分を含むR側の保留は解消していない。

@@ -5,6 +5,7 @@ import {createCanonicalReviewBudget,CanonicalBudgetError} from '../../../../src/
 import {createDevelopmentSourceRealm,pinDevelopmentSourceProfile,DevelopmentSourceError} from './source.js';
 import {pinDevelopmentTranscript} from './bootstrap.js';
 import {pinDevelopmentNative} from './native.js';
+import {createDevelopmentReleaseConditionsRealm} from './release-conditions.js';
 
 const faults=['after_admission','after_registration','duplicate_registration','foreign_registration','after_controller','after_timer','after_listener','after_commit'] as const;
 type Fault=typeof faults[number];
@@ -37,6 +38,7 @@ export function createDevelopmentRoot(dependencies:Readonly<{clock?:()=>number;w
   const wait=d.wait as ((signal:AbortSignal)=>Promise<void>)|undefined??(async()=>{});
   const realm=Object.freeze({}),registered=new WeakSet<object>(),live=new Set<object>(),principals=new Set<string>();
   const sourceRealm=createDevelopmentSourceRealm();
+  const conditionsRealm=createDevelopmentReleaseConditionsRealm(sourceRealm);
   let active=0,starting=false;
   const inspect=()=>Object.freeze({active,registered:live.size,principal_keys:principals.size});
   function requireUnregistered(identity:object){
@@ -58,10 +60,12 @@ export function createDevelopmentRoot(dependencies:Readonly<{clock?:()=>number;w
     let source:ReturnType<typeof sourceRealm.create>|undefined;
     let transcript:ReturnType<typeof pinDevelopmentTranscript>|undefined;
     let nativeRun:ReturnType<typeof pinDevelopmentNative>|undefined;
+    let conditionsHandle:object|undefined,conditionsOwner:ReturnType<typeof conditionsRealm.bind>|undefined;
     let runPrimary:Readonly<{code:ConstructionPublicCode}>|null=null,stopped:ConstructionPublicCode|null=null;
     const stop=(code:ConstructionPublicCode)=>{
       if(closed)return;
       stopped??=code;
+      conditionsOwner?.revoke();
       source?.revoke();
       nativeRun?.stop(code);
       if(constructing)construction.fail(stage,code);else runPrimary??=Object.freeze({code});
@@ -77,11 +81,12 @@ export function createDevelopmentRoot(dependencies:Readonly<{clock?:()=>number;w
     try{
       if(starting)throw new Rejection('review_busy');
       starting=true;ownsStart=true;
-      const p=data(raw,['principal','deadline_ms','fault','source','transcript','native']),o=data(options,['signal']);
+      const p=data(raw,['principal','deadline_ms','fault','source','transcript','native','release_comparison']),o=data(options,['signal']);
       if(typeof p.principal!=='string'||!/^[A-Za-z0-9_-]{1,64}$/.test(p.principal))throw new Rejection('invalid_input');
       if(p.deadline_ms!==undefined&&(!Number.isInteger(p.deadline_ms)||Number(p.deadline_ms)<1||Number(p.deadline_ms)>60000))throw new Rejection('invalid_input');
       if(p.fault!==undefined&&!faults.includes(p.fault as Fault))throw new Rejection('invalid_input');
       principal=p.principal;fault=p.fault as Fault|undefined;deadline=p.deadline_ms as number??60000;
+      if(Object.hasOwn(p,'release_comparison')&&(Object.hasOwn(p,'native')||!Object.hasOwn(p,'source')&&!Object.hasOwn(p,'transcript')))throw new Rejection('invalid_input');
       if(Object.hasOwn(p,'source'))sourceProfile=pinDevelopmentSourceProfile(p.source);
       if(Object.hasOwn(p,'transcript')){
         if(sourceProfile)throw new Rejection('invalid_input');
@@ -90,6 +95,10 @@ export function createDevelopmentRoot(dependencies:Readonly<{clock?:()=>number;w
       if(Object.hasOwn(p,'native')){
         if(sourceProfile||transcript)throw new Rejection('invalid_input');
         nativeRun=pinDevelopmentNative(p.native);transcript=nativeRun.transcript;
+      }
+      if(Object.hasOwn(p,'release_comparison')){
+        if(nativeRun||!sourceProfile&&!transcript)throw new Rejection('invalid_input');
+        conditionsHandle=conditionsRealm.pin(p.release_comparison,deadline);
       }
       construction.attempt('snapshot');construction.held('snapshot');
       const signal=o.signal as AbortSignal|undefined;
@@ -129,7 +138,9 @@ export function createDevelopmentRoot(dependencies:Readonly<{clock?:()=>number;w
       if(sourceProfile){
         const context=Object.freeze({run:identity,snapshot:sourceProfile,lease:core.view.lease});
         source=sourceRealm.create(context,sourceProfile.target,()=>{try{guard();return null;}catch{return stopped??'internal_review_error';}});
+        if(conditionsHandle)conditionsOwner=conditionsRealm.bind(conditionsHandle,context,source,deadline,()=>{try{guard();return null;}catch{return stopped??'internal_review_error';}});
         source.prepare(context);source.ready(context);
+        conditionsOwner?.claim(context,source);
         source.consume(source.issue('parent',sourceProfile.parent),'parent',context);
         source.consume(source.issue('release',sourceProfile.release),'release',context);guard();
       }
@@ -138,8 +149,9 @@ export function createDevelopmentRoot(dependencies:Readonly<{clock?:()=>number;w
         const nativeOwner=nativeRun?.createOwner({fake_io:true,deadline_ms:deadline,budget:{read:()=>({remaining_ms:core!.view.lease.read().remaining_ms})},
           schedule:(ms,wake)=>{const timer=setTimeout(wake,ms);return ()=>clearTimeout(timer);}});
         source=sourceRealm.create(context,transcript.target,()=>{try{guard();return null;}catch{return stopped??'internal_review_error';}},nativeOwner);
+        if(conditionsHandle)conditionsOwner=conditionsRealm.bind(conditionsHandle,context,source,deadline,()=>{try{guard();return null;}catch{return stopped??'internal_review_error';}});
         source.prepare(context);
-        await transcript.run(core,controller.signal,deadline,{check:guard,stop,ready:()=>source!.ready(context),
+        await transcript.run(core,controller.signal,deadline,{check:guard,stop,ready:()=>{source!.ready(context);conditionsOwner?.claim(context,source!);},
           accept:(purpose,value)=>source!.consume(source!.issue(purpose,value),purpose,context),
           ...(nativeRun?{nativeRelease:(window:Readonly<{purpose:'release';ordinal:1;window_origin_ms:number;cleanup_floor_ms:number}>)=>
             nativeRun!.execute(window,(proof,original)=>source!.consumeStatus(proof,original,context))}:{}),});guard();
@@ -159,6 +171,7 @@ export function createDevelopmentRoot(dependencies:Readonly<{clock?:()=>number;w
       closed=true;
       await nativeRun?.close();
       transcript?.dispose();
+      conditionsOwner?.revoke();conditionsOwner=undefined;conditionsHandle=undefined;
       source?.revoke();source?.seal();sourceProfile=undefined;
       const release=(slot:ConstructionResource,operation:(()=>void)|undefined)=>{
         if(!construction.needed(slot))return;

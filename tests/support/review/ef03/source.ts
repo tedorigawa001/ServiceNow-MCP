@@ -49,6 +49,7 @@ export function pinDevelopmentSourceProfile(raw:unknown){
 /** Trusted development assembly creates contexts. Handles never cross the root's summary boundary. */
 export function createDevelopmentSourceRealm(){
   const created=new WeakSet<object>();
+  const sources=new WeakMap<object,Context>();
   function create(context:Context,target:string,guard:()=>ConstructionPublicCode|null,nativeOwner?:object){
     if(created.has(context.run))throw new DevelopmentSourceError('internal_review_error','invalid_state');
     created.add(context.run); // Key the originating run, not its copyable context wrapper.
@@ -77,7 +78,7 @@ export function createDevelopmentSourceRealm(){
     function inspect(){return Object.freeze({assembly:'ef03-development' as const,state,sealed,ready_generation:generation,
       parent_consumptions:parentCount,release_consumptions:releaseCount,status_consumptions:statusCount,primary,
       permissions:Object.freeze({formal_issuance:false,release_permit:false,fallback:false} as const)});}
-    return Object.freeze({
+    const source=Object.freeze({
       prepare(candidate:Context){enter(candidate,'new','preparing');check();state='prepared';},
       ready(candidate:Context){enter(candidate,'prepared','readying');check();generation=1;state='parent';},
       issue(purpose:Purpose,value:unknown){
@@ -118,6 +119,7 @@ export function createDevelopmentSourceRealm(){
       seal(){if(sealed)return;if(state!=='closed')reject('invalid_state');sealed=true;},
       inspect,
     });
+    sources.set(source,context);return source;
   }
-  return Object.freeze({create});
+  return Object.freeze({create,matches:(source:object,context:Context)=>sources.get(source)===context});
 }

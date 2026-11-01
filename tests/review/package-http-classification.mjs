@@ -45,6 +45,8 @@ assert(!pack.files.some(f=>f.path.startsWith('tests/')));
 for(const f of pack.files.filter(f=>f.path.startsWith('dist/')&&/\.(?:js|ts|map)$/.test(f.path))){const s=readFileSync(join(root,f.path),'utf8');
   assert(!s.includes('tests/support/review/ef03')&&!s.includes('ef03-development'),'development root leaked into package: '+f.path);}
 for(const f of pack.files.filter(f=>f.path.startsWith('dist/')&&/\.(?:js|ts|map)$/.test(f.path))){const s=readFileSync(join(root,f.path),'utf8');
+  assert(!s.includes('createDevelopmentReleaseConditionsRealm')&&!s.includes('ef03/release-conditions'),'RC3-D01 private development conditions leaked into package: '+f.path);}
+for(const f of pack.files.filter(f=>f.path.startsWith('dist/')&&/\.(?:js|ts|map)$/.test(f.path))){const s=readFileSync(join(root,f.path),'utf8');
   assert(!s.includes('pinDevelopmentTranscript')&&!s.includes('bootstrap_transcript_only'),'development transcript leaked into package: '+f.path);
   assert(!s.includes('createDevelopmentResponseDelivery')&&!s.includes('native_cleanup_only')&&!s.includes('consumeSourceCleanupProof'),'development native lane leaked into package: '+f.path);}
 for(const f of pack.files.filter(f=>f.path.startsWith('dist/')&&f.path.endsWith('.js')))for(const moduleName of moduleNames)assert(!readFileSync(join(root,f.path),'utf8').includes(moduleName),'packaged runtime depends on development model: '+f.path);
