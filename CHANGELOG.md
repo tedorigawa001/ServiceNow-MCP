@@ -62,6 +62,8 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 ### Added
 
+- Fixes the TB-A release time scope: once a held value has been discarded normally, a stray later call (accept/issue/discard/allocate/observe) is refused without rewriting the terminal `discarded` state to `failed` or adding an `internal_review_error` diagnostic, matching the existing `revoke` behaviour. A test covers all five calls.
+
 - Extends the offline package check to the OU-01 `release-observation` kernel: besides the four artifacts, its compiled JS must import only `zod` and must not read the wall clock (`new Date`/`Date.now`), use fetch/timers, or re-export/require a root, so time is read only through the injected clock. Test-only; no runtime behaviour changes.
 
 - Tightens the RC3-D02/D03 development release-conditions owner: comparison may now start only after `beforeRelease` decided to request the release, not directly from the claimed state. The D02 unit fixture calls `beforeRelease`, and a test confirms that skipping the decision is refused. Test-only; no runtime behaviour changes.

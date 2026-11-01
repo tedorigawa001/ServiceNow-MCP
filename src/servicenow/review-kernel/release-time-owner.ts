@@ -31,7 +31,11 @@ export function createReleaseTimeScope(binding: ReleaseTimeBinding, check: () =>
   const stop = (phase: Phase, code: ReleaseTimeStop = 'internal_review_error') => {
     diagnostic ??= Object.freeze({code, phase}); state = 'failed'; clear();
   };
-  const fail = (phase: Phase, code?: ReleaseTimeStop): never => { stop(phase, code); throw Error(diagnostic!.code); };
+  const fail = (phase: Phase, code?: ReleaseTimeStop): never => {
+    // A completed discard is terminal: a stray later call is refused without rewriting it as a failure.
+    if (state === 'discarded') throw Error('internal_review_error');
+    stop(phase, code); throw Error(diagnostic!.code);
+  };
   const requireState = (expected: State, phase: Phase) => { if (state !== expected) fail(phase); };
   const guard = (phase: Phase, value: ReleaseTimeBinding, expected: State) => {
     let code: ReleaseTimeStop | undefined;

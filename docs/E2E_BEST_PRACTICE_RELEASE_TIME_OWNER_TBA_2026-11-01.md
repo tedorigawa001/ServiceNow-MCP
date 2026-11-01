@@ -53,7 +53,13 @@ inspectは凍結非実行dataだけで、consumerの証拠に戻せない。call
 
 コミット前確認：候補13ファイルを含むindex全体を一時コピーへ展開し、既存node_modulesだけを参照してbuild・関連8ファイル220件・新規試験のstandalone TypeScript・437ファイルのオフライン梱包を再確認し、すべて成功した。候補13ファイルのbytes一致と、無関係な`.vscode/`・`CLAUDE.md`がコピーに含まれないことも確認した。全体10,138件はこのコミット前確認では再実行せず、上表の実装時結果と区別する。確認後の追加変更は本段落だけで、実装・試験は変更していない。
 
-## 5 残課題
+## 5 レビュー修正（2026-11-01）
+
+正常に`discard`を終えたscopeへ`accept`・`issue`・`discard`等を後から誤って呼ぶと、`fail`→`stop`が無条件に`state='failed'`と診断`internal_review_error`を書き込み、正常終端が失敗へ書き換わっていた。`revoke`だけは`discarded`を保っており扱いが不一致だった。`fail`はdiscarded中なら状態・診断を変えずに例外だけを投げるよう修正した。held中の二重acceptで保持値を破棄する既存のfail-closed動作は設計§4-6どおりで変更しない。
+
+試験1件を追加：discard後の5操作がすべて拒否され、revoke後も`{state:'discarded',time:null,diagnostic:null}`のまま。TB-A試験は72件成功。変異確認として修正前の実装へ戻すと追加試験だけが失敗（1件）し、退避copyから復元して`cmp`で一致を確認した。§2・§4の件数は修正前の記録として残す。
+
+## 6 残課題
 
 次はTB-B。実run側の唯一の生成claim、CT-A accepted値のprivate移譲元、正常source資源解放と取消／異常closeの識別、失効hookと診断ownerへの接続をfake I/Oで検証する。現finallyを弱めてOを残さない。
 

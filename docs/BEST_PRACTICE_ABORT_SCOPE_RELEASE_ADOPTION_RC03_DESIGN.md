@@ -77,7 +77,7 @@ pure比較の途中にawaitはなく、JSイベントループの取消を同期
 
 ### 比較器入力・上位時刻の結合
 
-CT-B前半は[上位時刻owner・終端移譲詳細設計draft-0.2](BEST_PRACTICE_ABORT_SCOPE_RELEASE_TIME_OWNER_CTB_DESIGN.md)へ分離した。同runの正常継続だけでS／全L／空200を含むOを一度移譲し、正常source解放と元run失効を区別する案。TB-Aは純粋な値scope／claim／discardだけを限定実装した。TB-BのCT-A／実sessionへの接続・worker job結合は未実装で、実source採用・正式発行を有効化しない。
+CT-B前半は[上位時刻owner・終端移譲詳細設計draft-0.3](BEST_PRACTICE_ABORT_SCOPE_RELEASE_TIME_OWNER_CTB_DESIGN.md)へ分離した。同runの正常継続だけでS／全L／空200を含むOを一度移譲し、正常source解放と元run失効を区別する案。TB-Aは純粋な値scope／claim／discardだけを限定実装した。TB-BのCT-A／実sessionへの接続・worker job結合は未実装で、実source採用・正式発行を有効化しない。
 
 CT-Aで、この契約の同projection／元ack／sourceのrows・O受領物→固定比較器→一度限りのprivate非実行候補受理だけをfixed fake継続へ限定実装した。空200のOも候補ownerに保持するが、cleanupで破棄し、TimeOwner／worker jobへの上位移譲は未実装。通常実source・legacy結果・Permitへ候補を採用しない。詳細・初回失敗と試験保証の区別は接続契約§10と[CT-A検証記録](E2E_BEST_PRACTICE_RELEASE_COMPARISON_CTA_2026-11-01.md)へ分離する。
 

@@ -1,6 +1,6 @@
 # CT-B前半：上位時刻owner・一度限りの終端移譲
 
-Version: br006-release-time-owner-ctb-draft-0.2 / Date: 2026-11-01。
+Version: br006-release-time-owner-ctb-draft-0.3 / Date: 2026-11-01。
 Status: **TB-Aの非実行値scope・内部型・一度限りの移譲claim／discardだけを純粋fakeで限定実装（§9）。TB-BのCT-A／session接続・正常cleanupと元run失効の実結合は未実装。正式発行口閉鎖・Unknown・全体受付無効・VM／監視／telemetry調査保留を維持する。実source差替え・実接続・実通信・実機操作・設定変更・Permit発行・Pushの承認ではない。**
 
 基準はCT-Aコミット`d32a412`。[接続契約](BEST_PRACTICE_ABORT_SCOPE_RELEASE_COMPARISON_TIME_BINDING_DESIGN.md)§4〜6のうち、時刻のprivate保持・正常終端移譲だけを具体化する。worker job、T_i／Eの実応答照合はCT-B後半、連続fake試験はCT-C、専用開発compiled保証はB-03に残す。
@@ -90,6 +90,8 @@ scopeは同binding objectとrun／session／source／key／origin／budget・S�
 
 allocate→observe→issue→accept→discardを固定順序で消費する。observeは合成値のOだけを受け、S<=O<=S+L、U=Oを固定する。rows／policy／比較draftは受けないため、空200・非空200の由来は認定しない。issueでdonor値を取り外し、opaque handleとpendingへ移す。acceptはhandle／pendingを先に取り外してreceivingへ進め、同identityとpre/post guard成功後だけupper値を保持する。inspectは凍結された非実行dataだけで、移譲証拠へ戻せない。
 
-全操作の開始claimはguardより前に消費し、guard中の捕捉された再入・同期revokeでも復帰しない。失敗は最初の固定code／phaseを保持し、後続失敗で上書きしない。discard／失敗でdonor・pending・upper・handle・binding／pin参照を消す。外部が既に取得したinspect copyや注入checkの内部参照、heapの物理消去まで保証しない。revokeは純粋な明示イベントで、実runへのhookは未接続。
+全操作の開始claimはguardより前に消費し、guard中の捕捉された再入・同期revokeでも復帰しない。失敗は最初の固定code／phaseを保持し、後続失敗で上書きしない。正常にdiscardを終えたscopeはrevokeと同じく終端のまま保ち、後から誤って呼ばれた操作は拒否するがdiscardedを失敗へ書き換えず診断も追加しない。discard／失敗でdonor・pending・upper・handle・binding／pin参照を消す。外部が既に取得したinspect copyや注入checkの内部参照、heapの物理消去まで保証しない。revokeは純粋な明示イベントで、実runへのhookは未接続。
 
 費目は固定8fieldのdescriptor収集・照合、生成時1回／各pre/post guardの一時copy、最大1つずつのdonor／pending／upper位置（同時に値を所有する位置は1つ）、handle、固定診断。新たなGET／時計／rows decode・C/G/P再課金はない。exact layout／workは引き続きUnknown。試験・型・compiled値fixtureと初回失敗は[TB-A検証記録](E2E_BEST_PRACTICE_RELEASE_TIME_OWNER_TBA_2026-11-01.md)を参照。TB-B／worker job・T_i／E・CT-C・B-03は未実施。
+
+draft-0.3のレビュー修正：正常discard後のscopeに対し、accept／issue／discard等を後から誤って1回呼ぶだけで`state`が`failed`、診断が`internal_review_error`へ書き換わっていた（revokeだけは`discarded`を保っていた）。discard後の呼出しは拒否するだけで終端状態と診断を変えないよう統一した。上位設計からの版数リンクも更新した。

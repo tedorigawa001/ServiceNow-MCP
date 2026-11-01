@@ -148,3 +148,12 @@ it('exposes only frozen non-authoritative data, never identity or a transfer han
   const copy = structuredClone(data); scope.discard(b);
   expect(() => scope.accept(b, copy)).toThrow('internal_review_error'); expect(scope.inspect().time).toBeNull();
 });
+it('keeps a completed discard terminal when later calls are refused', () => {
+  const S = '2026-11-01T00:00:00.000Z', b = Object.freeze({run: {}, session: {}, source: {}, key: {}, origin: {}, budget: {}, started_at: S, deadline_ms: 60000});
+  const scope = createReleaseTimeScope(b, () => undefined);
+  scope.allocate(b); scope.observe(b, S); const handle = scope.issue(b); scope.accept(b, handle); scope.discard(b);
+  for (const call of [() => scope.accept(b, handle), () => scope.issue(b), () => scope.discard(b), () => scope.allocate(b), () => scope.observe(b, S)])
+    expect(call).toThrow('internal_review_error');
+  scope.revoke('cancelled');
+  expect(scope.inspect()).toEqual({state: 'discarded', time: null, diagnostic: null});
+});
