@@ -95,7 +95,8 @@ export function createDevelopmentReleaseConditionsRealm(sources:Sources){
       },
       compare(candidate:Context,selected:Source){
         if(primary)reject(primary.code);
-        if(state!=='claimed'&&state!=='requested')reject(state==='closed'?'closed':'invalid_state');
+        // Only after beforeRelease decided to request the release (design §12 order).
+        if(state!=='requested')reject(state==='closed'?'closed':'invalid_state');
         state='comparing';requireBinding(candidate,selected);check();
         if(live!.value.policy.issue==='config_binding_mismatch')reject('invalid_state');
         requireCompleted(selected);

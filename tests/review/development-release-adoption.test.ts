@@ -25,6 +25,7 @@ function fixture(raw:unknown=conditions()){
   source.prepare(context);source.ready(context);owner.claim(context,source);
   return {sources,realm,context,source,owner,consume:(rows:unknown=[{build_name:'Australia'}])=>{
     source.consume(source.issue('parent',parent),'parent',context);
+    owner.beforeRelease(context,source);
     source.consume(source.issue('release',{result:rows}),'release',context);
   },stop:(value:typeof code)=>{code=value;},armOwner:(action:()=>void)=>{ownerAction=action;},armSource:(action:()=>void)=>{sourceAction=action;}};
 }
@@ -39,7 +40,9 @@ it('takes the same consumed projection once, not a caller-supplied replacement',
 });
 it('cannot compare before a completed release ack or retry after the failure',()=>{
   const f=fixture();expect(()=>f.owner.compare(f.context,f.source)).toThrow('internal_review_error');
-  f.consume();expect(()=>f.owner.compare(f.context,f.source)).toThrow('internal_review_error');
+  // The failed owner cannot decide the release request; complete the source directly and confirm no retry.
+  f.source.consume(f.source.issue('parent',parent),'parent',f.context);f.source.consume(f.source.issue('release',{result:[{build_name:'Australia'}]}),'release',f.context);
+  expect(()=>f.owner.compare(f.context,f.source)).toThrow('internal_review_error');
   expect(()=>f.owner.takeForClose(f.context,f.source)).toThrow();
 });
 it('rejects duplicate comparison and discards the prior unpublished candidate',()=>{
@@ -211,4 +214,10 @@ it('leaves the base summary identical to a non-opted run when a late abort withh
   root=createDevelopmentRoot({clock:()=>{if(armed&&root.inspect().active===0)controller.abort();return 0;},wait:async()=>{armed=true;}});
   const {release_comparison_withheld,...base}=await root.run(profile(),{signal:controller.signal});
   expect(release_comparison_withheld).toBe('cancelled');expect(base).toEqual(plain);
+});
+it('refuses comparison when the release request decision was skipped',()=>{
+  const f=fixture();f.source.consume(f.source.issue('parent',parent),'parent',f.context);
+  f.source.consume(f.source.issue('release',{result:[{build_name:'Australia'}]}),'release',f.context);
+  expect(()=>f.owner.compare(f.context,f.source)).toThrow('internal_review_error');
+  expect(f.owner.inspect()).toMatchObject({state:'failed',has_conditions:false,primary:{code:'invalid_state'}});
 });

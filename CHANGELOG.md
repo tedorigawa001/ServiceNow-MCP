@@ -54,6 +54,8 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 ### Added
 
+- Tightens the RC3-D02/D03 development release-conditions owner: comparison may now start only after `beforeRelease` decided to request the release, not directly from the claimed state. The D02 unit fixture calls `beforeRelease`, and a test confirms that skipping the decision is refused. Test-only; no runtime behaviour changes.
+
 - Fixes the RC3-D02 development release comparison: the final post-cleanup clock/cancel/deadline re-check now only withholds the comparison candidate (recording a fixed `release_comparison_withheld` reason) instead of rewriting a run whose teardown was already confirmed to `cancelled`/`deadline_exceeded`/`internal_review_error`. Opting in no longer changes the existing summary; a test compares the base summary with a non-opted run. Test-only; no runtime behaviour changes.
 
 - Fixes the EF-03B B-02-02 development bootstrap: like the production bootstrap contract, it now checks after each chunk that received bytes grew by exactly that chunk and that request/payload counters did not change, failing closed with `internal_review_error` otherwise. A test substitutes a port that over-charges by one byte. Design version links are updated. Test-only; no runtime behaviour changes.

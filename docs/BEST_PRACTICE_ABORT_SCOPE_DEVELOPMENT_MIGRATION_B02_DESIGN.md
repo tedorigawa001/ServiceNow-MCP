@@ -165,7 +165,7 @@ draft-0.5のレビュー修正：開発bootstrapはdispatch後のC差分だけ�
 
 ## 12 RC-03採用境界の差分設計
 
-[固定採用境界・接続差分draft-0.6](BEST_PRACTICE_ABORT_SCOPE_RELEASE_ADOPTION_RC03_DESIGN.md)に、Dのtest-only時刻／policy binding・同ackのconsume・pre/post guardと非実行summary、Rの同session条件・公開copy／private snapshot・失敗owner／解放を分離した。Dの最初の候補はRC3-D01（条件とclaimのみ）で、比較公開はD02、GET前のbinding不一致はD03とする。R差替え・実Permit経路・非200移行は未承認。旧case分類・件数・旧試験・全体受付無効・正式発行口閉鎖は変更しない。
+[固定採用境界・接続差分draft-0.7](BEST_PRACTICE_ABORT_SCOPE_RELEASE_ADOPTION_RC03_DESIGN.md)に、Dのtest-only時刻／policy binding・同ackのconsume・pre/post guardと非実行summary、Rの同session条件・公開copy／private snapshot・失敗owner／解放を分離した。Dの最初の候補はRC3-D01（条件とclaimのみ）で、比較公開はD02、GET前のbinding不一致はD03とする。R差替え・実Permit経路・非200移行は未承認。旧case分類・件数・旧試験・全体受付無効・正式発行口閉鎖は変更しない。
 
 RC3-D01の条件とclaimだけを限定実装した。開発rootごとの条件handle／run生成枠と同realm source照合を追加し、旧summary・会計・final4枠は不変。比較結果は公開せず、次はD02である。[D01検証記録](E2E_BEST_PRACTICE_RELEASE_CONDITIONS_D01_2026-11-01.md)参照。実classの正式bindingや旧case移行完了へ読み替えない。
 

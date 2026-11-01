@@ -1,6 +1,6 @@
 # RC-03：release比較器の固定採用境界・接続差分設計
 
-Version: br006-release-adoption-rc03-draft-0.6 / Date: 2026-11-01。
+Version: br006-release-adoption-rc03-draft-0.7 / Date: 2026-11-01。
 Status: **RC3-D01／D02／D03を開発assemblyだけに限定実装。同sourceの200行ackの固定比較、またはdispatch前binding不一致のnot_requestedから、guard・seal後の非実行summaryへ接続。R差替えは未実装／未承認。旧試験・正式発行口閉鎖・Unknown・全体受付無効・VM／監視／telemetry調査保留を維持する。実Permit発行・実接続・実通信・実機操作・設定変更・friend撤去・Pushは行わない。**
 
 基準：`a61d90a`。[純粋比較器設計draft-0.6](BEST_PRACTICE_ABORT_SCOPE_RELEASE_COMPARATOR_DESIGN.md)のRC-03を具体化する。以下の追加field・状態・試験ID・分割単位は案であり、存在するAPIや検証済み保証ではない。
@@ -187,3 +187,5 @@ draft-0.5のレビュー修正：cleanup後の時計・取消・期限の再確�
 6. rootへの一度限りtakeForClose、同leaseのcleanup直前残時間、固定cleanup・source seal、最終公開guardはD02のまま。cleanup後の失敗は`0f14dc4`どおり候補だけをwithheldにし、確定済みrun診断を書き換えない。結果はunknown／config_binding_mismatchの非実行summaryだけで、権限4項目はfalse。
 
 同じbindingの設定代替・実測／設定競合はreleaseを取得してから従来の比較を行う。別のbindingなのに「実測が一致すれば救済する」処理はない。[D03検証記録](E2E_BEST_PRACTICE_RELEASE_NO_REQUEST_D03_2026-11-01.md)に独立会計oracle・停止／再入／混入・上限と予約返却を記録する。実source／session・Permit・本番fallbackの移行、B-03専用compiled保証、日時長cap・work上界の承認は残す。
+
+draft-0.7のレビュー修正：条件ownerの`compare`が`requested`に加えて`claimed`からも開始でき、`beforeRelease`のrelease要求判断を経ずに比較できる余地が残っていた。開始状態を`requested`だけに限定し、claimed→deciding→requested→comparingの順序を固定した。

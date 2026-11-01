@@ -54,7 +54,11 @@ profileのstarted_at／observed_at／policyの3fieldとstrict copyは維持す�
 
 コミット前確認：候補12ファイルを含むindex全体を一時ディレクトリへ書き出し、既存node_modulesだけを参照して再検証した。候補ファイルのbytes一致、無関係な`.vscode/`・`CLAUDE.md`の不在を確認。そこでbuild・関連7ファイル231件・standalone TypeScript・425ファイルのオフライン梱包がすべて成功した。この再確認では全体9,974件は再実行せず、上表の実装時の結果と区別する。検証後の追加はこの記録だけで、実装・試験内容を変更していない。
 
-## 5 残課題
+## 5 レビュー修正（2026-11-01）
+
+条件ownerの`compare`は`requested`だけでなく`claimed`からも開始でき、`beforeRelease`のrelease要求判断を経ない比較が型上は可能だった（assemblyは常に`beforeRelease`を通すため実経路への影響はない）。開始状態を`requested`に限定した。D02単体試験のfixtureは親消費後に`beforeRelease`を呼ぶ形へ更新し、失敗後の再試行拒否の試験はsourceを直接完了させる形にして期待を緩めていない。`beforeRelease`を省いた比較が`invalid_state`で拒否される試験を1件追加した。関連3ファイル105件成功。変異確認として修正前のownerへ戻すと追加試験1件だけが失敗し、退避copyから復元して`cmp`で一致を確認した。§3・§4の件数は修正前の記録として残す。
+
+## 6 残課題
 
 Rの実source差替え・構築時readonly全deadline供給・実session／Permit binding・非200/native移行は未実装／未承認。B-03の旧case保証整理／開発assembly専用compiled保証、friend撤去・日時長cap・全体work／byte／同期解析上界も残す。今回のpackage内既存compiled fixture成功は、開発assemblyの専用compiled保証の代替ではない。
 
