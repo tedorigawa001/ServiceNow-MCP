@@ -6,6 +6,7 @@ import { releaseEvidenceStructure, releaseMatchForEvidence, type ReleaseEvidence
 import { bp5RuleIdsSchema } from './result-schema-v2.js';
 import { candidatePolicy, selectionModeSchema } from './target-selection.js';
 import type {ReviewSourceReleasePort,ReviewSourceReleaseSnapshot} from '../servicenow/review-evidence-lifecycle.js';
+import {parseSourceParent,projectSourceReleaseRows,SourceValueError} from '../servicenow/review-kernel/source-values.js';
 
 const id = z.string().regex(/^[a-f0-9]{32}$/);
 const inputSchema = z.strictObject({ update_set_sys_id: id, max_records: z.number().int().min(1).max(100).default(20),
@@ -17,7 +18,9 @@ export function parseBoundedSourceInput(input:unknown){
   return parsed.data;
 }
 const version = { sys_updated_on: z.string().min(1).max(40), sys_mod_count: z.string().regex(/^\d{1,20}$/) };
-const parentSchema = z.strictObject({ sys_id: id, state: z.string().max(100), application: z.string().max(32), ...version });
+function checkedParent(value:unknown,target:string){
+  try{return parseSourceParent(value,target);}catch(error){if(error instanceof SourceValueError)throw new BoundedReadError(error.code);throw error;}
+}
 const metadataSchema = z.strictObject({ sys_id: id, update_set: id, name: z.string().min(1).max(200),
   type: z.string().max(200), action: z.string().max(40), ...version });
 export type ReviewMetadata = z.infer<typeof metadataSchema>;
@@ -40,7 +43,7 @@ export interface CompositionSourceConstruction {
 }
 
 export class BoundedUpdateSetSource {
-  private parent?: z.infer<typeof parentSchema>;
+  private parent?: ReturnType<typeof parseSourceParent>;
   private metadata?: ReviewMetadata[];
   private readonly attempted = new Set<string>();
   private finalStarted = false;
@@ -59,9 +62,8 @@ export class BoundedUpdateSetSource {
       creation.capture(Object.freeze({
         parent:(ack:object)=>{
           requireState('parent');const value=take(ack,'parent');
-          const parsed=parentSchema.safeParse(value&&typeof value==='object'&&'result' in value?value.result:null);
-          if(!parsed.success||parsed.data.sys_id!==input.update_set_sys_id)throw new BoundedReadError('invalid_response');
-          check();this.parent=structuredClone(parsed.data);state='release';
+          const parent=checkedParent(value,input.update_set_sys_id);
+          check();this.parent=structuredClone(parent);state='release';
         },
         release:async(ack:object)=>{
           requireState('release');const value=take(ack,'release');this.releaseRead=true;
@@ -114,9 +116,7 @@ export class BoundedUpdateSetSource {
   }
   private async fetchParent(final = false) {
     const value = await this.#session.get(this.path('sys_update_set', parentFields, undefined, undefined, this.input.update_set_sys_id), final);
-    const parsed = parentSchema.safeParse(value && typeof value === 'object' && 'result' in value ? value.result : null);
-    if (!parsed.success || parsed.data.sys_id !== this.input.update_set_sys_id) throw new BoundedReadError('invalid_response');
-    return parsed.data;
+    return checkedParent(value,this.input.update_set_sys_id);
   }
   async readParent() {
     if (this.parent || this.finalStarted) throw new BoundedReadError('invalid_input');
@@ -132,12 +132,7 @@ export class BoundedUpdateSetSource {
     return this.#projectReleaseRows(rows);
   }
   #projectReleaseRows(rows:unknown[]){
-    return rows.map(row => {
-      if (!row || typeof row !== 'object' || Array.isArray(row)) throw new BoundedReadError('invalid_response');
-      const value = 'build_name' in row ? row.build_name : null;
-      if (value !== null && (typeof value !== 'string' || value.length > 40)) throw new BoundedReadError('invalid_response');
-      return { build_name: value };
-    });
+    try{return projectSourceReleaseRows(rows);}catch(error){if(error instanceof SourceValueError)throw new BoundedReadError(error.code);throw error;}
   }
   /** No release/family/matched arguments: evidence is collected by this exact pinned source. */
   async resolveRelease(): Promise<ReleaseDecision> {

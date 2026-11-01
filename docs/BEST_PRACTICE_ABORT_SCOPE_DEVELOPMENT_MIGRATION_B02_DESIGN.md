@@ -1,9 +1,9 @@
 # EF-03B B-02：source・会計・nativeの移行範囲と共通化境界
 
-Version: br006-development-migration-b02-draft-0.1 / Date: 2026-11-01。
-Status: **設計のみ。旧試験をすべて残す。正式発行口閉鎖・Unknown・全体受付無効・VM／監視／telemetry調査保留を維持する。実装・friend撤去・実接続・実通信・実機操作・設定変更・Pushは行わない。**
+Version: br006-development-migration-b02-draft-0.2 / Date: 2026-11-01。
+Status: **B-02-01の値検査最小抽出・開発lifecycleを限定実装（§7）。旧試験をすべて残す。B-02-02／03、friend撤去・実接続は未実施。正式発行口閉鎖・Unknown・全体受付無効・VM／監視／telemetry調査保留を維持する。実通信・実機操作・設定変更・Pushは行わない。**
 
-基準：`5e79b21`。B-01の生成順はbusy事前判定→core→admission→登録ownerに修正済みであり、その前の順序へ戻さない。[移行親設計](BEST_PRACTICE_ABORT_SCOPE_DEVELOPMENT_ROOT_EF03B_DESIGN.md)のB-02を細分化する。以下の型名・配置・試験は提案であって実装済みではない。
+設計基準：`5e79b21`。B-01の生成順はbusy事前判定→core→admission→登録ownerに修正済みであり、その前の順序へ戻さない。[移行親設計](BEST_PRACTICE_ABORT_SCOPE_DEVELOPMENT_ROOT_EF03B_DESIGN.md)のB-02を細分化する。§1〜6は初版の計画・受入条件、限定実装と未対応の区分は§7を参照する。
 
 ## 1 現在地と今回の境界
 
@@ -93,4 +93,18 @@ typed cleanupのconfirmed終端だけを同sourceの唯一consumerがclose前に
 
 B-02の各段階で対象typecheck・新旧関連回帰・必要な本番buildを順次確認する。全体試験は重複起動せず、失敗時は元期限のまま記録して切り分ける。専用開発build／compiled保証はB-03、配布friend撤去はEF-03C、artifact負の対照はEF-03Dに残す。現行のcompiled ackがsynthetic_ioを使う依存を先に切らない。
 
-実装前に確認する事項は、最小共有schema／native kernelの抽出閉包、factory越えのresource再使用拒否、固定cleanupの挿入順と未確認時のjoin、全旧caseの対応である。これらを満たす設計がなくても旧試験を消して先へ進まない。次の最初の実装候補は**B-02-01の値検査と開発lifecycle**であり、本書は実装開始・保証削減・本番bindingの承認ではない。
+初版で実装前確認事項としたのは、最小共有schema／native kernelの抽出閉包、factory越えのresource再使用拒否、固定cleanupの挿入順と未確認時のjoin、全旧caseの対応である。これらを満たす設計がなくても旧試験を消して先へ進まない。本書は保証削減・本番bindingの承認ではない。
+
+## 7 B-02-01の限定実装と保証範囲
+
+[source-values kernel](../src/servicenow/review-kernel/source-values.ts)へ、親5列strict schema・target一致とbuild_nameだけのprojectionを抽出した。runtime importはzodのみで、session・登録・friend・consumerを参照しない。[実source](../src/review/bounded-source.ts)のprivate受理と通常の親取得／最終再読で同じ検査を使い、固定invalid_responseを既存BoundedReadErrorへ写像する。親余剰列拒否、releaseの余剰node列破棄、欠落build_name→null、既存呼出し元の件数上限を維持する。release行数・envelope検査は呼出し元所有であり、projection単独にbounded取得全体の保証はない。C方式判断・実permit発行部分は抽出／変更していない。
+
+[開発source](../tests/support/review/ef03/source.ts)はfactoryごとの生成WeakSetを持ち、wrapperでなくrun identityをキーに一度だけ生成する。bindingはroot内部で固定した同run／snapshot／leaseのcontext参照。prepare→ready世代1→親→releaseの順、pending ack最大1個、private Mapの同ack／purpose、一度限りの削除・pre／post guardで検査する。guardの再入や最終callback内失効でも状態を復活させない。失敗後の再prepare・同run再生成を拒否する。別run／rootの台帳や実登録singletonへ触れない。
+
+開発assemblyの任意`source` profileはtarget・parent・releaseのdata-only値に限定し、待機前にpinする。深さ5、node512、文字・key合計65,536、object最大64 key、array最大21要素で拒否する。getter／proxy／特殊prototype／sparse array／外部consumer等は採用しない。この開発profileの有限上限は実transportの受信枠ではない。生成するcontext／ack／guardはroot内部だけにあり、runの返値は`source_values_only`と解放後の固定summary。開発helperのtrusted生成引数を、本番sessionを採用する入口と扱わない。
+
+sourceはcommit後に開始し、取消時は同期revoke、finallyではrevoke→sealを先に行ってからB-01の固定解放へ進む。construction primaryとrun primaryを分け、sourceの最初の固定理由と消費数はseal後も保持する。値はprivate ack消費で破棄し、contextの参照はrun終了で手放す。公開診断には値／ack／source／leaseを返さない。sourceの状態は開発realmの事実であり、constructionのhistorical source_boundや実classのsource結合へ昇格させない。
+
+保証はshared-kernel単体、development-assembly、旧production-class-fake-I/O回帰の3区分。旧試験は無変更・併存し、移行完了数へ加算しない。B-SAの順序／混入／consumeに対応する限定試験を追加したが、旧fullName対応表全体・B-ACKの会計／C方式連続試験・B-NDの同reader試験は未移行。C/G/P=0・R未予約、readyは合成世代であって認証証明ではない。native・Response台帳・実ReleasePermit・選択payload／workerは未接続。
+
+[新source試験](../tests/review/development-source.test.ts)、[共通値試験](../tests/review/source-values.test.ts)、[compiled値fixture](../tests/review/fixtures/compiled-source-values.mjs)、[検証記録](E2E_BEST_PRACTICE_DEVELOPMENT_SOURCE_B0201_2026-11-01.md)を参照。compiled fixtureは共通値検査だけであり、開発assemblyのcompiled保証はB-03に残す。次はB-02-02の同core bootstrap会計・固定200 transcriptで、全体受付や正式発行は開かない。

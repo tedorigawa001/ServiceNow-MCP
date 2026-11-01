@@ -2,6 +2,7 @@
 import {types} from 'node:util';
 import {createConstructionState,type ConstructionResource,type ConstructionStage,type ConstructionPublicCode} from '../../../../src/servicenow/review-kernel/construction-state.js';
 import {createCanonicalReviewBudget,CanonicalBudgetError} from '../../../../src/servicenow/review-canonical-budget.js';
+import {createDevelopmentSourceRealm,pinDevelopmentSourceProfile,DevelopmentSourceError} from './source.js';
 
 const faults=['after_admission','after_registration','duplicate_registration','foreign_registration','after_controller','after_timer','after_listener','after_commit'] as const;
 type Fault=typeof faults[number];
@@ -33,6 +34,7 @@ export function createDevelopmentRoot(dependencies:Readonly<{clock?:()=>number;w
   const clock=d.clock as (()=>number)|undefined??(()=>performance.now());
   const wait=d.wait as ((signal:AbortSignal)=>Promise<void>)|undefined??(async()=>{});
   const realm=Object.freeze({}),registered=new WeakSet<object>(),live=new Set<object>(),principals=new Set<string>();
+  const sourceRealm=createDevelopmentSourceRealm();
   let active=0,starting=false;
   const inspect=()=>Object.freeze({active,registered:live.size,principal_keys:principals.size});
   function requireUnregistered(identity:object){
@@ -50,10 +52,13 @@ export function createDevelopmentRoot(dependencies:Readonly<{clock?:()=>number;w
     let principal='',fault:Fault|undefined,deadline=60000;
     let core:ReturnType<typeof createCanonicalReviewBudget>|undefined,controller:AbortController|undefined;
     let timer:ReturnType<typeof setTimeout>|undefined,removeExternal:(()=>void)|undefined;
+    let sourceProfile:ReturnType<typeof pinDevelopmentSourceProfile>|undefined;
+    let source:ReturnType<typeof sourceRealm.create>|undefined;
     let runPrimary:Readonly<{code:ConstructionPublicCode}>|null=null,stopped:ConstructionPublicCode|null=null;
     const stop=(code:ConstructionPublicCode)=>{
       if(closed)return;
       stopped??=code;
+      source?.revoke();
       if(constructing)construction.fail(stage,code);else runPrimary??=Object.freeze({code});
       core?.writer.stop(code);controller?.abort();
     };
@@ -67,11 +72,12 @@ export function createDevelopmentRoot(dependencies:Readonly<{clock?:()=>number;w
     try{
       if(starting)throw new Rejection('review_busy');
       starting=true;ownsStart=true;
-      const p=data(raw,['principal','deadline_ms','fault']),o=data(options,['signal']);
+      const p=data(raw,['principal','deadline_ms','fault','source']),o=data(options,['signal']);
       if(typeof p.principal!=='string'||!/^[A-Za-z0-9_-]{1,64}$/.test(p.principal))throw new Rejection('invalid_input');
       if(p.deadline_ms!==undefined&&(!Number.isInteger(p.deadline_ms)||Number(p.deadline_ms)<1||Number(p.deadline_ms)>60000))throw new Rejection('invalid_input');
       if(p.fault!==undefined&&!faults.includes(p.fault as Fault))throw new Rejection('invalid_input');
       principal=p.principal;fault=p.fault as Fault|undefined;deadline=p.deadline_ms as number??60000;
+      if(Object.hasOwn(p,'source'))sourceProfile=pinDevelopmentSourceProfile(p.source);
       construction.attempt('snapshot');construction.held('snapshot');
       const signal=o.signal as AbortSignal|undefined;
       if(signal!==undefined){
@@ -106,6 +112,13 @@ export function createDevelopmentRoot(dependencies:Readonly<{clock?:()=>number;w
       if(!construction.commit())throw new Rejection('internal_review_error');
       if(signal?.aborted){stop('cancelled');guard();}
       constructing=false;starting=false;ownsStart=false;inject('after_commit');
+      if(sourceProfile){
+        const context=Object.freeze({run:identity,snapshot:sourceProfile,lease:core.view.lease});
+        source=sourceRealm.create(context,sourceProfile.target,()=>{try{guard();return null;}catch{return stopped??'internal_review_error';}});
+        source.prepare(context);source.ready(context);
+        source.consume(source.issue('parent',sourceProfile.parent),'parent',context);
+        source.consume(source.issue('release',sourceProfile.release),'release',context);guard();
+      }
       let removeWait=()=>{};
       try{
         const signal=controller.signal;
@@ -113,12 +126,13 @@ export function createDevelopmentRoot(dependencies:Readonly<{clock?:()=>number;w
         guard();await Promise.race([Promise.resolve().then(()=>{guard();return wait(signal);}),abort]);guard();
       }finally{removeWait();}
     }catch(error){
-      const code=stopped??(error instanceof Rejection||error instanceof CanonicalBudgetError?error.code:'internal_review_error');
-      if(constructing)construction.fail(stage,error instanceof Rejection?error.internal:error instanceof CanonicalBudgetError?core?.view.diagnostic().primary?.internal??code:code);
+      const code=stopped??(error instanceof Rejection||error instanceof CanonicalBudgetError||error instanceof DevelopmentSourceError?error.code:'internal_review_error');
+      if(constructing)construction.fail(stage,error instanceof Rejection||error instanceof DevelopmentSourceError?error.internal:error instanceof CanonicalBudgetError?core?.view.diagnostic().primary?.internal??code:code);
       else runPrimary??=Object.freeze({code});
       stopped??=code;
     }finally{
       closed=true;
+      source?.revoke();source?.seal();sourceProfile=undefined;
       const release=(slot:ConstructionResource,operation:(()=>void)|undefined)=>{
         if(!construction.needed(slot))return;
         let confirmed=false;try{if(operation){operation();confirmed=true;}}catch{/* fixed diagnostic only */}
@@ -136,7 +150,8 @@ export function createDevelopmentRoot(dependencies:Readonly<{clock?:()=>number;w
     }
     const diagnostic=construction.copy(),code=stopped??diagnostic.primary?.public_code??null;
     const budget=Object.freeze(core?.view.stats()??{requests:0,received_bytes:0,payload_bytes:0});core=undefined;
-    return Object.freeze({assembly:'ef03-development' as const,scope:'construction_only' as const,ok:code===null,code,construction:diagnostic,run_primary:runPrimary,budget,permissions});
+    return Object.freeze({assembly:'ef03-development' as const,scope:source?'source_values_only' as const:'construction_only' as const,ok:code===null,code,construction:diagnostic,run_primary:runPrimary,budget,permissions,
+      ...(source?{source:source.inspect()}:{}),});
   }
   return Object.freeze({run,inspect});
 }
