@@ -1,9 +1,9 @@
 # RC-03：release比較器の固定採用境界・接続差分設計
 
-Version: br006-release-adoption-rc03-draft-0.3 / Date: 2026-11-01。
-Status: **RC3-D01のtest-only条件・private binding・一度限りclaimだけを限定実装。比較実行・結果公開・D02以降・R差替えは未実装／未承認。旧試験・正式発行口閉鎖・Unknown・全体受付無効・VM／監視／telemetry調査保留を維持する。実Permit発行・実接続・実通信・実機操作・設定変更・friend撤去・Pushは行わない。**
+Version: br006-release-adoption-rc03-draft-0.4 / Date: 2026-11-01。
+Status: **RC3-D01／D02を開発assemblyだけに限定実装。同sourceの200行ackから固定比較・guard・seal後の非実行summaryへ接続。D03以降・R差替えは未実装／未承認。旧試験・正式発行口閉鎖・Unknown・全体受付無効・VM／監視／telemetry調査保留を維持する。実Permit発行・実接続・実通信・実機操作・設定変更・friend撤去・Pushは行わない。**
 
-基準：`a61d90a`。[純粋比較器設計draft-0.5](BEST_PRACTICE_ABORT_SCOPE_RELEASE_COMPARATOR_DESIGN.md)のRC-03を具体化する。以下の追加field・状態・試験ID・分割単位は案であり、存在するAPIや検証済み保証ではない。
+基準：`a61d90a`。[純粋比較器設計draft-0.6](BEST_PRACTICE_ABORT_SCOPE_RELEASE_COMPARATOR_DESIGN.md)のRC-03を具体化する。以下の追加field・状態・試験ID・分割単位は案であり、存在するAPIや検証済み保証ではない。
 
 ## 1 現在の接続点と不足
 
@@ -11,8 +11,8 @@ Status: **RC3-D01のtest-only条件・private binding・一度限りclaimだけ�
 |---|---|---|
 | [実source](../src/review/bounded-source.ts) | `resolveRelease`／private release consumer→`#observeRelease`→既存値判定→`#completeRelease` | 同source内部で比較入力を組み立て、比較後guardを通った値だけを固定分岐へ渡す。公開draftの採用口は作らない |
 | [実session](../src/servicenow/bounded-read.ts) | public readonlyの`startedAt`、pin済み`releasePolicy`、`assertActive`、private生成継続の`check`。全deadlineは`private readonly limits.deadlineMs`にあり、sourceから読む口は**現在ない** | 同sessionからの時刻／policy／停止を再利用する。別sessionのprojectionや残時間によるdeadline再計算は禁止 |
-| [開発source](../tests/support/review/ef03/source.ts) | 同realmのcontext・private ackをissue／consumeし、release値を破棄してdone | release行をprivateに保持する短い区間と、同contextに束縛した比較条件が必要。現状は比較器を呼んでいない |
-| [開発assembly](../tests/support/review/ef03/assembly.ts) | contextはrun identity／snapshot／canonical lease。clockは経過時間用。D01で固定UTC・policy条件のprivate供給だけを追加 | 比較・結果公開はD02以降。monotonic clockをUTCとして解釈しない |
+| [開発source](../tests/support/review/ef03/source.ts) | 同realmのcontext・private ackをissue／consume。D02 opt-inだけ同じrelease projectionを一度退避し、private取得後に破棄 | 通常profileは従来どおり破棄。実source証拠への昇格は禁止 |
+| [開発assembly](../tests/support/review/ef03/assembly.ts) | contextはrun identity／snapshot／canonical lease。D01の固定UTC／policyにD02の固定比較・guard・seal後summaryを接続 | monotonic clockをUTCとして解釈しない。D03／Rは未接続 |
 | [開発bootstrap](../tests/support/review/ef03/bootstrap.ts) | 同coreでC/G/P、final4予約、固定200 bytes→decode→accept。release_matchはnot_evaluated | opt-inの比較結果は別の非実行summaryとして公開する。省略時の既存結果・予約／cleanupは不変 |
 
 純粋比較器の成功は値の整合だけで、同sessionの真正な証拠ではない。hex binding、JSON、family文字列、公開summary、draftの形が一致しても生成元の証明へ昇格しない。
@@ -126,7 +126,7 @@ ordinary unknownはrun stopとは別である。正常な比較値で先行HTTP�
 ## 10 次の分割単位と承認待ち
 
 1. **RC3-D01（限定実装済み、§11）**：同rootのtest-only時刻／policy条件・private bindingと一度限りclaimを追加。まだ比較を実行／公開せず、旧profile・summary不変と混入／失敗停止を確認。
-2. **RC3-D02**：同sourceの200行ack→固定比較→pre/post guard→非実行summaryを接続。会計／予約／cleanupの継続を確認。status-onlyは除外。
+2. **RC3-D02（限定実装済み、§12）**：同sourceの200行ack→固定比較→pre/post guard→非実行summaryを接続。会計／予約／cleanupの継続を確認。status-onlyは除外。
 3. **RC3-D03**：no-requestのbinding不一致分岐を固定transcriptのdispatch前へ接続し、release GET=0・予約返却を確認。設定代替・競合の連続caseを追加。
 4. **RC3-R01（別承認）**：実source採用差分のfake-I/O試験を先行。下表の保留が解決するまで通常入口へ切り替えない。
 5. **B-03**：保証表と専用開発compiled試験を別工程で確定。friend撤去・本番切替・実通信は別承認。
@@ -154,3 +154,21 @@ draft-0.2のレビュー修正：実sessionの現在の供給元に`deadlineMs`�
 rootはsource生成後にbindし、同じready継続の直後にclaimする。停止・finallyで参照を破棄し、summaryには条件・owner・claim・比較draftを追加しない。省略時だけでなくD01 opt-in時も旧source／transcript summaryとdeep equalになることを確認した。nativeとの併用はdeliveryをpin／消費するより前に拒否し、そのdeliveryは元の旧native profileで引き続き使用可能とする。
 
 `compareRelease`は呼ばず、release行は従来どおり消費して破棄する。条件を保持することと、設定の真正性・比較結果・本番bindingの証明を区別する。C/G/P・final4予約／返却は元ownerのまま。[D01検証記録](E2E_BEST_PRACTICE_RELEASE_CONDITIONS_D01_2026-11-01.md)に新規31件、既存回帰、型／梱包／全体確認を記録する。実sessionのreadonly deadline供給差分を含むR側の保留は解消していない。
+
+## 12 RC3-D02：同sourceの行ackからseal後summaryへ
+
+基準`6c3d8f3`。§11はD01時点の履歴であり、D02では明示opt-inに限って次を追加した。通常profileのsummaryやsourceのrow破棄動作は維持する。
+
+1. 同realm／contextにbindする際、sourceのprivate観測slotを一度armする。元release ackは従来どおりguard前に消費し、その同じprojectionだけをslotへ退避する。callerのrows／draftを比較引数として受けない。
+2. 同sourceのrelease consume完了・世代1・停止なしを確認してownerをcomparingへ遷移させる。観測slotはguard前に一度消費し、固定`compareRelease`を呼ぶ。取得後・比較後にもownerとsourceの失効／先行primaryを再確認する。post-guardがsourceだけをrevokeしても採用しない。
+3. pure不正入力はinternal_review_errorとして停止する。ただしpost-guardの取消等が先行すれば、その理由を優先する。ordinary unknown／mismatchedは非実行値として受理する。UTF-8／JSON／projection不正は従来のinvalid_responseで停止し、値unknownへ格下げしない。
+4. rootの正常body完了時、ownerのtakeForCloseを一度だけ消費してfresh deep-frozenのdata-only候補をroot内slotへ退避する。source／ownerのrevokeで行・条件・元draftを破棄する。別source・再入・二重compare／transfer・失敗後再開は認めない。
+5. sourceのclosed／sealed、constructionのcleanup confirmed、先行失敗なしを必要とする。cleanup直前の同canonical leaseの残時間を保持し、cleanup後は元のmonotonic開始・全deadlineと外部signalを再確認する。残時間が最後の観測より増える逆行（開始時刻より後でも）、時計失敗・期限切れ・取消なら候補を捨てる。時計callback中の取消も再確認する。既存primaryを後の値で消さない。
+
+実際の状態所有は、sourceのrelease→consuming→done→closed→sealedと、条件ownerのclaimed→comparing→compared→transferring→transferred→closedに分離した。比較器・時計provider・cleanup stackを新たにprofileから注入する口はない。既存のtest-only clock／waitだけで境界試験する。
+
+成功時だけroot summaryに`release_comparison`を追加する。scopeは固定release_value_comparison_only、kindはrelease_comparison_draft、権限4項目はfalseで、全階層freezeする。rootの既存scope／permissions、bootstrap.release_match=not_evaluatedは変えない。省略時は新field自体がない。matchedやok=trueもレビュー開始可能・実Permitを意味しない。
+
+会計・final4予約／返却・native cleanupは既存ownerから動かさず、比較のための再dispatch／再課金をしない。native／status-onlyとbinding不一致no-requestは引き続き未対応profileとしてI/O前に拒否する。空200の設定代替は純粋な値判定であり、実HTTP fallbackを有効化したものではない。
+
+[D02検証記録](E2E_BEST_PRACTICE_RELEASE_ADOPTION_D02_2026-11-01.md)に新規44件と既存を含む関連202件、型／梱包／全体結果を記録する。D01のopt-in互換4ケースは「新fieldを除く既存部分のdeep equality＋新fieldの固定値確認」へ明示的に更新し、旧profileの期待を緩めていない。専用開発compiled保証・実class正式binding・Rのreadonly deadline供給差分・日時長cap承認待ちは残す。

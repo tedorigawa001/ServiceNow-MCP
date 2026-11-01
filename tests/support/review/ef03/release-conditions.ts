@@ -1,12 +1,17 @@
-/** RC3-D01 development-only conditions/claim. No comparison, draft publication or runtime registry. */
+/** Development-only conditions and fixed same-source comparison. No runtime registry or Permit. */
 import {types} from 'node:util';
-import {parseReleaseComparisonInput,type ReleaseComparisonInput} from '../../../../src/servicenow/review-kernel/release-comparison.js';
+import {parseReleaseComparisonInput,compareRelease,type ReleaseComparisonInput,type ReleaseComparisonDraft} from '../../../../src/servicenow/review-kernel/release-comparison.js';
 import {normalizeConstructionReason,type ConstructionPublicCode} from '../../../../src/servicenow/review-kernel/construction-state.js';
 import {DevelopmentSourceError,type createDevelopmentSourceRealm} from './source.js';
 type Sources=ReturnType<typeof createDevelopmentSourceRealm>;
 type Source=ReturnType<Sources['create']>;
 type Context=Readonly<{run:object;snapshot:object;lease:object}>;
-type Phase='bound'|'claiming'|'claimed'|'failed'|'closed';
+type Phase='bound'|'claiming'|'claimed'|'comparing'|'compared'|'transferring'|'transferred'|'failed'|'closed';
+function frozenCopy<T>(value:T):T{
+  const copy=structuredClone(value);
+  function freeze(item:unknown){if(item&&typeof item==='object'){Object.values(item).forEach(freeze);Object.freeze(item);}}
+  freeze(copy);return copy;
+}
 
 export function createDevelopmentReleaseConditionsRealm(sources:Sources){
   const handles=new WeakMap<object,ReleaseComparisonInput>(),runs=new WeakSet<object>();
@@ -35,10 +40,11 @@ export function createDevelopmentReleaseConditionsRealm(sources:Sources){
     runs.add(context.run);
     let state:Phase='bound',live:Readonly<{value:ReleaseComparisonInput;context:Context;source:Source}>|undefined={value,context,source};
     let primary:Readonly<{code:string;public_code:ConstructionPublicCode}>|null=null;
+    let draft:ReleaseComparisonDraft|undefined;
     const reject=(raw:unknown):never=>{
       const code=normalizeConstructionReason(raw);
       const public_code:ConstructionPublicCode=code==='invalid_state'||code==='invalid_observation_time'||code==='evidence_binding_mismatch'?'internal_review_error':code;
-      primary??=Object.freeze({code,public_code});if(state!=='closed')state='failed';live=undefined;
+      primary??=Object.freeze({code,public_code});if(state!=='closed')state='failed';live=undefined;draft=undefined;
       throw new DevelopmentSourceError(primary.public_code,primary.code);
     };
     const check=()=>{
@@ -47,6 +53,16 @@ export function createDevelopmentReleaseConditionsRealm(sources:Sources){
     };
     if(value.timing.deadline_ms!==deadline||!sources.matches(source,context))reject('evidence_binding_mismatch');
     check();if(source.inspect().state!=='new'||source.inspect().ready_generation!==0)reject('invalid_state');check();
+    sources.armReleaseObservation(source,context);
+    function requireBinding(candidate:Context,selected:Source){
+      if(!live||candidate!==live.context||selected!==live.source||!sources.matches(selected,candidate))reject('evidence_binding_mismatch');
+    }
+    function requireCompleted(selected:Source){
+      const facts=selected.inspect();
+      if(facts.primary)reject(facts.primary.code);
+      if(facts.sealed||facts.state==='closed')reject('closed');
+      if(facts.ready_generation!==1||facts.state!=='done')reject('invalid_state');
+    }
     return Object.freeze({
       claim(candidate:Context,selected:Source){
         if(primary)reject(primary.code);
@@ -57,7 +73,29 @@ export function createDevelopmentReleaseConditionsRealm(sources:Sources){
         if(facts.ready_generation!==1||facts.state!=='parent')reject('invalid_state');
         check();state='claimed';
       },
-      revoke(){state='closed';live=undefined;},
+      compare(candidate:Context,selected:Source){
+        if(primary)reject(primary.code);
+        if(state!=='claimed')reject(state==='closed'?'closed':'invalid_state');
+        state='comparing';requireBinding(candidate,selected);check();
+        requireCompleted(selected);
+        let rows:unknown;
+        try{rows=sources.takeReleaseObservation(selected,candidate);}catch(error){return reject(error instanceof DevelopmentSourceError?error.internal:'internal_review_error');}
+        check(); // Acquisition guards may have synchronously revoked this owner.
+        requireCompleted(selected);
+        const result=compareRelease({...live!.value,observation:{kind:'complete_200',rows}});
+        check(); // Stop wins even when the comparison itself returned invalid_input.
+        requireCompleted(selected);
+        if(!result.ok)return reject('internal_review_error');
+        draft=result;state='compared';
+      },
+      takeForClose(candidate:Context,selected:Source):ReleaseComparisonDraft{
+        if(primary)reject(primary.code);
+        if(state!=='compared')reject(state==='closed'?'closed':'invalid_state');
+        state='transferring';requireBinding(candidate,selected);check();
+        requireCompleted(selected);if(!draft)reject('invalid_state');
+        const copy=frozenCopy(draft!);check();requireCompleted(selected);draft=undefined;state='transferred';return copy;
+      },
+      revoke(){state='closed';live=undefined;draft=undefined;},
       inspect(){return Object.freeze({state,has_conditions:live!==undefined,primary});},
     });
   }

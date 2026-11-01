@@ -7,11 +7,13 @@ import {createDevelopmentResponseDelivery} from '../support/review/ef03/native.j
 const target='a'.repeat(32),parent={result:{sys_id:target,state:'complete',application:'global',sys_updated_on:'2026-11-01',sys_mod_count:'1'}};
 const conditions=()=>({started_at:'2026-11-01T00:00:00.000Z',observed_at:'2026-11-01T00:00:01.000Z',policy:{instanceBinding:'a'.repeat(64)}});
 const profile=()=>({principal:'conditions',source:{target,parent,release:{result:[{build_name:'Australia'}]}}});
-it('binds and claims test-only conditions without changing the existing summary or publishing comparison',async()=>{
+it('keeps the existing summary fields unchanged and adds only the opted-in D02 value summary',async()=>{
   const root=createDevelopmentRoot({clock:()=>0});
   const old=await root.run(profile()),current=await root.run({...profile(),release_comparison:conditions()});
-  expect(current.ok).toBe(true);expect(current).toEqual(old);
-  expect(current).not.toHaveProperty('release_comparison');expect(current).not.toHaveProperty('decision');
+  const {release_comparison,...base}=current;
+  expect(current.ok).toBe(true);expect(base).toEqual(old);
+  expect(old).not.toHaveProperty('release_comparison');expect(current).not.toHaveProperty('decision');
+  expect(release_comparison).toMatchObject({scope:'release_value_comparison_only',decision:{release_match:'matched'},permissions:{formal_issuance:false,release_permit:false}});
   expect(root.inspect()).toEqual({active:0,registered:0,principal_keys:0});
 });
 function fixture(){
@@ -128,7 +130,9 @@ it.each(['per-user','cached','exchange'] as const)('keeps %s transcript accounti
   const root=createDevelopmentRoot({clock:()=>0}),script=transcript(auth);
   const old=await root.run({principal:'transcript',transcript:script});
   const value=await root.run({principal:'transcript',transcript:transcript(auth),release_comparison:conditions()});
-  expect(value.ok).toBe(true);expect(value).toEqual(old);
+  const {release_comparison,...base}=value;
+  expect(value.ok).toBe(true);expect(base).toEqual(old);
+  expect(old).not.toHaveProperty('release_comparison');expect(release_comparison?.decision.release_match).toBe('matched');
   expect(value.bootstrap).toMatchObject({reserved:0,release_attempts:1,release_match:'not_evaluated'});
   expect(value.budget).toEqual({requests:auth==='exchange'?3:2,received_bytes:script.responses.reduce((n,r)=>n+r.bytes.length,0),payload_bytes:0});
   expect(JSON.stringify(value)).not.toContain('SYNTHETIC_SECRET');

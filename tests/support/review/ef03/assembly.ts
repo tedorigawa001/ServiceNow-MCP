@@ -6,6 +6,7 @@ import {createDevelopmentSourceRealm,pinDevelopmentSourceProfile,DevelopmentSour
 import {pinDevelopmentTranscript} from './bootstrap.js';
 import {pinDevelopmentNative} from './native.js';
 import {createDevelopmentReleaseConditionsRealm} from './release-conditions.js';
+import type {ReleaseComparisonDraft} from '../../../../src/servicenow/review-kernel/release-comparison.js';
 
 const faults=['after_admission','after_registration','duplicate_registration','foreign_registration','after_controller','after_timer','after_listener','after_commit'] as const;
 type Fault=typeof faults[number];
@@ -61,10 +62,13 @@ export function createDevelopmentRoot(dependencies:Readonly<{clock?:()=>number;w
     let transcript:ReturnType<typeof pinDevelopmentTranscript>|undefined;
     let nativeRun:ReturnType<typeof pinDevelopmentNative>|undefined;
     let conditionsHandle:object|undefined,conditionsOwner:ReturnType<typeof conditionsRealm.bind>|undefined;
+    let conditionsContext:Readonly<{run:object;snapshot:object;lease:object}>|undefined,releaseCandidate:ReleaseComparisonDraft|undefined;
+    let originalStart:number|undefined,closingRemaining:number|undefined,externalSignal:AbortSignal|undefined;
     let runPrimary:Readonly<{code:ConstructionPublicCode}>|null=null,stopped:ConstructionPublicCode|null=null;
     const stop=(code:ConstructionPublicCode)=>{
       if(closed)return;
       stopped??=code;
+      releaseCandidate=undefined;
       conditionsOwner?.revoke();
       source?.revoke();
       nativeRun?.stop(code);
@@ -106,7 +110,9 @@ export function createDevelopmentRoot(dependencies:Readonly<{clock?:()=>number;w
         if(types.isProxy(signal)||Object.getPrototypeOf(signal)!==AbortSignal.prototype||['aborted','addEventListener','removeEventListener'].some(k=>Object.hasOwn(signal,k)))throw new Rejection('invalid_input');
         Reflect.apply(Object.getOwnPropertyDescriptor(AbortSignal.prototype,'aborted')!.get!,signal,[]);
       }
+      externalSignal=signal;
       stage='clock';const start=clock();
+      originalStart=start;
       if(!Number.isFinite(start)||start<0)throw new Rejection('internal_review_error','invalid_observation_time');
       // Same order as the production root: busy pre-check, then core -> admission -> registered owner.
       stage='admission';
@@ -137,22 +143,25 @@ export function createDevelopmentRoot(dependencies:Readonly<{clock?:()=>number;w
       constructing=false;starting=false;ownsStart=false;inject('after_commit');
       if(sourceProfile){
         const context=Object.freeze({run:identity,snapshot:sourceProfile,lease:core.view.lease});
+        conditionsContext=context;
         source=sourceRealm.create(context,sourceProfile.target,()=>{try{guard();return null;}catch{return stopped??'internal_review_error';}});
         if(conditionsHandle)conditionsOwner=conditionsRealm.bind(conditionsHandle,context,source,deadline,()=>{try{guard();return null;}catch{return stopped??'internal_review_error';}});
         source.prepare(context);source.ready(context);
         conditionsOwner?.claim(context,source);
         source.consume(source.issue('parent',sourceProfile.parent),'parent',context);
         source.consume(source.issue('release',sourceProfile.release),'release',context);guard();
+        conditionsOwner?.compare(context,source);
       }
       if(transcript){
         const context=Object.freeze({run:identity,snapshot:transcript,lease:core.view.lease});
+        conditionsContext=context;
         const nativeOwner=nativeRun?.createOwner({fake_io:true,deadline_ms:deadline,budget:{read:()=>({remaining_ms:core!.view.lease.read().remaining_ms})},
           schedule:(ms,wake)=>{const timer=setTimeout(wake,ms);return ()=>clearTimeout(timer);}});
         source=sourceRealm.create(context,transcript.target,()=>{try{guard();return null;}catch{return stopped??'internal_review_error';}},nativeOwner);
         if(conditionsHandle)conditionsOwner=conditionsRealm.bind(conditionsHandle,context,source,deadline,()=>{try{guard();return null;}catch{return stopped??'internal_review_error';}});
         source.prepare(context);
         await transcript.run(core,controller.signal,deadline,{check:guard,stop,ready:()=>{source!.ready(context);conditionsOwner?.claim(context,source!);},
-          accept:(purpose,value)=>source!.consume(source!.issue(purpose,value),purpose,context),
+          accept:(purpose,value)=>{source!.consume(source!.issue(purpose,value),purpose,context);if(purpose==='release')conditionsOwner?.compare(context,source!);},
           ...(nativeRun?{nativeRelease:(window:Readonly<{purpose:'release';ordinal:1;window_origin_ms:number;cleanup_floor_ms:number}>)=>
             nativeRun!.execute(window,(proof,original)=>source!.consumeStatus(proof,original,context))}:{}),});guard();
       }
@@ -168,10 +177,24 @@ export function createDevelopmentRoot(dependencies:Readonly<{clock?:()=>number;w
       else runPrimary??=Object.freeze({code});
       stopped??=code;
     }finally{
+      if(!stopped&&conditionsOwner&&conditionsContext&&source){
+        try{
+          releaseCandidate=conditionsOwner.takeForClose(conditionsContext,source);
+          const sample=core!.view.lease.read(),failure=core!.view.failure();
+          if(stopped)throw new Rejection(stopped);
+          if(failure)throw new Rejection(failure);
+          if(sample.remaining_ms<=0)throw new Rejection('deadline_exceeded');
+          closingRemaining=sample.remaining_ms;
+        }catch(error){
+          const code=stopped??(error instanceof DevelopmentSourceError||error instanceof CanonicalBudgetError||error instanceof Rejection?error.code:'internal_review_error');
+          stopped??=code;runPrimary??=Object.freeze({code});releaseCandidate=undefined;
+        }
+      }
       closed=true;
       await nativeRun?.close();
       transcript?.dispose();
       conditionsOwner?.revoke();conditionsOwner=undefined;conditionsHandle=undefined;
+      conditionsContext=undefined;
       source?.revoke();source?.seal();sourceProfile=undefined;
       const release=(slot:ConstructionResource,operation:(()=>void)|undefined)=>{
         if(!construction.needed(slot))return;
@@ -188,11 +211,21 @@ export function createDevelopmentRoot(dependencies:Readonly<{clock?:()=>number;w
       release('snapshot',()=>{principal='';});construction.seal();
       if(ownsStart){starting=false;ownsStart=false;}
     }
+    if(releaseCandidate&&!stopped){
+      let code:ConstructionPublicCode|null=null;
+      try{
+        if(externalSignal?.aborted)code='cancelled';
+        else {const now=clock();if(!Number.isFinite(now)||originalStart===undefined||closingRemaining===undefined||now<originalStart||Math.max(0,deadline-(now-originalStart))>closingRemaining)code='internal_review_error';else if(now-originalStart>=deadline)code='deadline_exceeded';}
+      }catch{code=externalSignal?.aborted?'cancelled':'internal_review_error';}
+      if(externalSignal?.aborted)code='cancelled';
+      if(code){stopped=code;runPrimary??=Object.freeze({code});releaseCandidate=undefined;}
+    }
     const diagnostic=construction.copy(),code=stopped??diagnostic.primary?.public_code??null;
     const budget=Object.freeze(core?.view.stats()??{requests:0,received_bytes:0,payload_bytes:0});core=undefined;
     return Object.freeze({assembly:'ef03-development' as const,scope:nativeRun?'native_cleanup_only' as const:transcript?'bootstrap_transcript_only' as const:source?'source_values_only' as const:'construction_only' as const,ok:code===null,code,construction:diagnostic,run_primary:runPrimary,budget,permissions,
       ...(nativeRun?{native:nativeRun.diagnostic()}:{}),
       ...(transcript?{bootstrap:transcript.diagnostic()}:{}),
+      ...(releaseCandidate&&code===null&&diagnostic.teardown==='confirmed'&&source?.inspect().sealed?{release_comparison:Object.freeze({scope:'release_value_comparison_only' as const,...releaseCandidate})}:{}),
       ...(source?{source:source.inspect()}:{}),});
   }
   return Object.freeze({run,inspect});

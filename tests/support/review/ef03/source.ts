@@ -49,19 +49,20 @@ export function pinDevelopmentSourceProfile(raw:unknown){
 /** Trusted development assembly creates contexts. Handles never cross the root's summary boundary. */
 export function createDevelopmentSourceRealm(){
   const created=new WeakSet<object>();
-  const sources=new WeakMap<object,Context>();
+  const sources=new WeakMap<object,{context:Context;arm():void;take():unknown}>();
   function create(context:Context,target:string,guard:()=>ConstructionPublicCode|null,nativeOwner?:object){
     if(created.has(context.run))throw new DevelopmentSourceError('internal_review_error','invalid_state');
     created.add(context.run); // Key the originating run, not its copyable context wrapper.
     let state:State='new',sealed=false,generation=0,parentCount=0,releaseCount=0,statusCount=0;
     let primary:Readonly<{code:string;public_code:ConstructionPublicCode}>|null=null;
     const acks=new Map<object,{purpose:Purpose;value:unknown}>();
+    let observationArmed=false,observationAvailable=false,releaseObservation:unknown;
     const inactive=()=>sealed||state==='closed';
     const failure=()=>primary;
     function reject(raw:unknown):never{
       const internal=normalizeConstructionReason(raw);
       const code=internal==='invalid_state'||internal==='invalid_observation_time'||internal==='evidence_binding_mismatch'?'internal_review_error':internal;
-      if(!sealed){primary??=Object.freeze({code:internal,public_code:code});if(state!=='closed')state='failed';acks.clear();} // Revocation is terminal.
+      if(!sealed){primary??=Object.freeze({code:internal,public_code:code});if(state!=='closed')state='failed';acks.clear();releaseObservation=undefined;observationAvailable=false;} // Revocation is terminal.
       throw new DevelopmentSourceError(primary?.public_code??code,primary?.code??internal);
     }
     function check(){
@@ -99,8 +100,11 @@ export function createDevelopmentSourceRealm(){
         const value=acks.get(ack);acks.delete(ack); // One-shot even if pre/post guard rejects.
         if(!value||value.purpose!==purpose)reject('evidence_binding_mismatch');
         enter(candidate,purpose==='parent'?'parent':'release','consuming');check();
-        // Parsed values are discarded here: no runtime permit or public ack is produced.
-        if(purpose==='parent'){parentCount=1;state='release';}else{releaseCount=1;state='done';}
+        // Only an explicitly bound development owner retains the same consumed projection.
+        if(purpose==='parent'){parentCount=1;state='release';}else{
+          if(observationArmed){releaseObservation=value.value;observationAvailable=true;}
+          releaseCount=1;state='done';
+        }
       },
       consumeStatus(proof:object,window:object,candidate:Context){
         if(!nativeOwner)reject('evidence_binding_mismatch');
@@ -115,11 +119,30 @@ export function createDevelopmentSourceRealm(){
         if(!consumed.ok)reject(consumed.code);
         check();statusCount=1;state='done';
       },
-      revoke(){if(sealed)return;acks.clear();state='closed';},
+      revoke(){if(sealed)return;acks.clear();releaseObservation=undefined;observationAvailable=false;state='closed';},
       seal(){if(sealed)return;if(state!=='closed')reject('invalid_state');sealed=true;},
       inspect,
     });
-    sources.set(source,context);return source;
+    sources.set(source,{context,
+      arm(){
+        if(observationArmed||state!=='new')reject('invalid_state');
+        observationArmed=true;check();check();
+      },
+      take(){
+        const available=observationAvailable,value=releaseObservation;
+        observationAvailable=false;releaseObservation=undefined; // Spend before callbacks, even on failure.
+        if(!observationArmed||!available||state!=='done')reject('invalid_state');
+        check();check();return value;
+      },
+    });return source;
   }
-  return Object.freeze({create,matches:(source:object,context:Context)=>sources.get(source)===context});
+  function record(source:object,context:Context){
+    const value=sources.get(source);
+    if(!value||value.context!==context)throw new DevelopmentSourceError('internal_review_error','evidence_binding_mismatch');
+    return value;
+  }
+  return Object.freeze({create,matches:(source:object,context:Context)=>sources.get(source)?.context===context,
+    armReleaseObservation:(source:object,context:Context)=>record(source,context).arm(),
+    takeReleaseObservation:(source:object,context:Context)=>record(source,context).take(),
+  });
 }

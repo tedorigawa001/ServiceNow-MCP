@@ -1,6 +1,6 @@
 # EF-03B 開発rootと試験保証の移行計画
 
-Version: br006-development-root-ef03b-draft-0.13 / Date: 2026-11-01。
+Version: br006-development-root-ef03b-draft-0.14 / Date: 2026-11-01。
 Status: **B-01とB-02-01〜03の値検査・同core会計・注入同reader cleanup／source受理を限定実装し、RC-01／02のrelease純粋値契約・比較を追加。全case／release判断のsource移行・既存試験の置換・保証変更の承認は未実施。正式発行口閉鎖・Unknown・全体受付無効・VM／監視／telemetry調査保留を維持する。**
 
 基準：`d6412eb`。EF-03Aのconstruction kernelは既存classへ接続済み。次に作る開発assemblyは別constructor・別brand・別登録台帳を持つため、その成功を実classのprivate継続の成功へ読み替えない。[EF-03親設計](BEST_PRACTICE_ABORT_SCOPE_KERNEL_ROOT_SEPARATION_EF03_DESIGN.md)のEF-03Bを、本書の実装単位と対応表に分ける。
@@ -76,7 +76,7 @@ compiled試験はproduction／developmentを別プロセスで走らせる。前
 ## 6 次の実装単位と承認条件
 
 1. **B-01（限定実装済み、§7）：生成入口と独立realm**。同じconstruction kernelを使う新規root、別brand／登録／admission、固定cleanupを追加。旧試験は置換せず、実classとの状態不変・枠不変を試験する。
-2. **B-02：source・会計・nativeの移行**。[移行範囲・共通化境界draft-0.12](BEST_PRACTICE_ABORT_SCOPE_DEVELOPMENT_MIGRATION_B02_DESIGN.md)で、値検査と開発lifecycle→同core会計・固定200 transcript→同reader cleanupの順へ分ける。B-02-01〜03を限定実装し旧試験を併存。case単位対応表・RC-01／02の純粋値実装に加え、§12にRC-03のD先行／R別承認の採用差分設計を追加した。実class保証と別assembly保証を別集計し、全旧case／release判断のsource移行は未実施。既存の大きな本番classを開発用に丸ごとcopyしない。必要な追加共通化は最小の純粋部分として別差分でレビューする。
+2. **B-02：source・会計・nativeの移行**。[移行範囲・共通化境界draft-0.13](BEST_PRACTICE_ABORT_SCOPE_DEVELOPMENT_MIGRATION_B02_DESIGN.md)で、値検査と開発lifecycle→同core会計・固定200 transcript→同reader cleanupの順へ分ける。B-02-01〜03を限定実装し旧試験を併存。case単位対応表・RC-01／02の純粋値実装に加え、§12にRC-03のD先行／R別承認の採用差分設計を追加した。実class保証と別assembly保証を別集計し、全旧case／release判断のsource移行は未実施。既存の大きな本番classを開発用に丸ごとcopyしない。必要な追加共通化は最小の純粋部分として別差分でレビューする。
 3. **B-03：compiled・保証表の確定**。新版と本番回帰を別実行し、各caseを「維持」「別assemblyへ移行」「本番側未確認」「入口廃止検査へ変更」で確定する。
 
 承認対象は、PC-01〜04を別rootの試験では満たせないまま切り分けること、旧friend取得成功を廃止すること、専用build出力・追加共通化の範囲である。**本書の作成やEF-03Bへの着手を、既存実class試験をすべて削除してよいという承認にはしない。** まずB-01を旧試験併存で実装する案を推奨する。
