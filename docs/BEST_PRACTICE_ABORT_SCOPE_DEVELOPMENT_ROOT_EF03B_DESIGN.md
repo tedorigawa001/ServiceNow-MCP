@@ -74,7 +74,7 @@ compiled試験はproduction／developmentを別プロセスで走らせる。前
 ## 6 次の実装単位と承認条件
 
 1. **B-01（限定実装済み、§7）：生成入口と独立realm**。同じconstruction kernelを使う新規root、別brand／登録／admission、固定cleanupを追加。旧試験は置換せず、実classとの状態不変・枠不変を試験する。
-2. **B-02：source・会計・nativeの移行**。[移行範囲・共通化境界draft-0.4](BEST_PRACTICE_ABORT_SCOPE_DEVELOPMENT_MIGRATION_B02_DESIGN.md)で、値検査と開発lifecycle→同core会計・固定200 transcript→同reader cleanupの順へ分ける。B-02-01／02を限定実装し旧試験を併存。実class保証と別assembly保証を別集計し、native／release判断移行は未実施。既存の大きな本番classを開発用に丸ごとcopyしない。必要な追加共通化は最小の純粋部分として別差分でレビューする。
+2. **B-02：source・会計・nativeの移行**。[移行範囲・共通化境界draft-0.5](BEST_PRACTICE_ABORT_SCOPE_DEVELOPMENT_MIGRATION_B02_DESIGN.md)で、値検査と開発lifecycle→同core会計・固定200 transcript→同reader cleanupの順へ分ける。B-02-01／02を限定実装し旧試験を併存。実class保証と別assembly保証を別集計し、native／release判断移行は未実施。既存の大きな本番classを開発用に丸ごとcopyしない。必要な追加共通化は最小の純粋部分として別差分でレビューする。
 3. **B-03：compiled・保証表の確定**。新版と本番回帰を別実行し、各caseを「維持」「別assemblyへ移行」「本番側未確認」「入口廃止検査へ変更」で確定する。
 
 承認対象は、PC-01〜04を別rootの試験では満たせないまま切り分けること、旧friend取得成功を廃止すること、専用build出力・追加共通化の範囲である。**本書の作成やEF-03Bへの着手を、既存実class試験をすべて削除してよいという承認にはしない。** まずB-01を旧試験併存で実装する案を推奨する。

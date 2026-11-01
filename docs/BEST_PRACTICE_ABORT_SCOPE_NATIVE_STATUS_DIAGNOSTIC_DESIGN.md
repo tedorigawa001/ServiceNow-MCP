@@ -187,7 +187,7 @@ ND-01／02時点のexportに加え、次節のND-03 entryを追加した。modul
 
 ## 13 ND-03：実class＋注入resourceの連続fake試験
 
-後続①・②の対設計は[constructor最初期の診断owner・fake friend分離draft-0.11](BEST_PRACTICE_ABORT_SCOPE_EARLY_DIAGNOSTIC_FRIEND_SEPARATION_DESIGN.md)を参照。EF-02のconstructor保護区間・失敗copy回収は実装済み。EF-03の[共通kernel・本番／開発root分離詳細設計draft-0.8](BEST_PRACTICE_ABORT_SCOPE_KERNEL_ROOT_SEPARATION_EF03_DESIGN.md)では、friend／synthetic_io撤去閉包、試験保証の移行と保留coverage、配布物の負の対照を具体化した。EF-03Aとしてconstruction状態・理由写像の純粋kernelだけを抽出し既存classへ接続した（参照照合・claim・停止／解放はroot所有）。開発root分離・撤去・build変更・gate解除は未実施。
+後続①・②の対設計は[constructor最初期の診断owner・fake friend分離draft-0.12](BEST_PRACTICE_ABORT_SCOPE_EARLY_DIAGNOSTIC_FRIEND_SEPARATION_DESIGN.md)を参照。EF-02のconstructor保護区間・失敗copy回収は実装済み。EF-03の[共通kernel・本番／開発root分離詳細設計draft-0.9](BEST_PRACTICE_ABORT_SCOPE_KERNEL_ROOT_SEPARATION_EF03_DESIGN.md)では、friend／synthetic_io撤去閉包、試験保証の移行と保留coverage、配布物の負の対照を具体化した。EF-03Aとしてconstruction状態・理由写像の純粋kernelだけを抽出し既存classへ接続した（参照照合・claim・停止／解放はroot所有）。開発root分離・撤去・build変更・gate解除は未実施。
 
 開発専用`probeNativeStatusComposition`は、親bytesをbounded copyし、注入Responseと共に新規fake runだけを作る。`BoundedReadSession`は固定throwのfetchとper-user形式の合成snapshotで生成し、既存SA-02のprivate生成継続・`BoundedUpdateSetSource`の固定consumer・canonical会計を再利用する。既存sessionのlookup／登録／mode切替はない。
 

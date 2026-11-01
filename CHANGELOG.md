@@ -42,6 +42,8 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 ### Added
 
+- Fixes the EF-03B B-02-02 development bootstrap: like the production bootstrap contract, it now checks after each chunk that received bytes grew by exactly that chunk and that request/payload counters did not change, failing closed with `internal_review_error` otherwise. A test substitutes a port that over-charges by one byte. Design version links are updated. Test-only; no runtime behaviour changes.
+
 - Fixes the EF-03B B-02-01 development source: the profile pin capped every array at 21 elements, so a 22-row release through the development assembly was rejected as `invalid_input` instead of reaching the shared value check (`invalid_response`, as in production). The pin now applies only the 64-key resource bound. A revoked development lifecycle also stays `closed` when a later rejection is recorded, so sealing it no longer fails. Tests cover both; design version links are updated. Test-only; no runtime behaviour changes.
 
 - Fixes the EF-03B B-01 development root's construction order to match the production session: busy pre-check, then core, admission and registered owner. Previously the owner was registered before admission, so a busy claimant registered and rolled back on a path production never takes. A new test checks that a busy claimant allocates no core/admission/owner slot and that an admission fault leaves the owner unregistered; live registrations are now bounded by the two admission slots. Test-only; no runtime behaviour changes.

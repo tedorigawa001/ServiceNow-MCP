@@ -30,3 +30,10 @@ Date: 2026-11-01（JST）。基準：`a154b1d`。[詳細設計§8](BEST_PRACTICE
 - コミット前再検証：対象10ファイルを明示stageし、indexだけを`/tmp/servicenow-b0202-commit-20261101/`へ取り出して既存node_modulesを参照。build・standalone型検査・offline梱包417ファイル・文書リンク71件が成功。その後に全体テストを単独実行し、`/tmp/servicenow-b0202-commit-test-20261101.json`で220ファイル・9,742件成功、失敗0・保留0・success=true、exit 0を確認した。無関係な未追跡ファイルは検証コピーに含めていない。
 
 新しいpackage依存・ビルド設定・登録口は追加しない。コピーbytesは最大12MiB、timerはroot期限と同時試行のdelivery／cutoff各1個、listenerは同時試行1個の有限構造。正確なlayout・全体work・必要量projectionはUnknownであり、全体受付には使用しない。
+
+## 4 レビュー修正（2026-11-01）
+
+- 本番bootstrap契約（`review-bootstrap-contract.ts`）はchunk後にGがbytes長だけ増えC/Pが不変であることを確認するが、開発bootstrapはdispatch後のC差分だけを確認していた。同じchunk後の差分確認を追加し、不一致は`internal_review_error`とする。
+- 試験1件を追加：実coreのbootstrap portを、chunkで1byte多く課金するportへ差し替えると`internal_review_error`で停止し、source受理は0回、dispatch1・予約0・release試行1となる。bootstrap試験は39件成功。変異確認として差分確認を除くと追加試験が失敗（1件）し、他38件は成功した。退避copyから復元し`cmp`で一致を確認した。§2・§3の件数は修正前の記録として残す。
+- 修正後の全体テスト：1回目は既存`new-followups-evaluation.test.ts`のCLIを起動するcaseが5,000msでtimeout（1件失敗、本修正と無関係のファイル）。同ファイルの単独実行は9件成功、直後の全体再実行は220ファイル・9,743件成功。期限・期待値は変更していない。
+- ND設計とsource受理設計の版数リンク（EF draft-0.12・EF-03 draft-0.9）と、B-02設計へのリンク（draft-0.5）を更新した。

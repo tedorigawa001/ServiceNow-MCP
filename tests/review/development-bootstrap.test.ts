@@ -134,3 +134,13 @@ it('refuses pre-abort without acquiring accounting, dispatching, or reserving',a
   expect(await createDevelopmentRoot().run({principal:'pre',transcript:transcript()},{signal:controller.signal}))
     .toMatchObject({code:'cancelled',budget:{requests:0,received_bytes:0},bootstrap:{claimed:false,reserved_peak:0,release_attempts:0}});
 });
+it('fails closed when a chunk does not move G by exactly its own bytes',async()=>{
+  const pinned=pinDevelopmentTranscript(transcript()),core=createCanonicalReviewBudget({clock:{remainingMs:()=>60000}});
+  let real:ReturnType<typeof core.construction.takeBootstrapAccounting>|undefined;
+  const skewed={view:core.view,construction:{
+    takeBootstrapAccounting:()=>{real=core.construction.takeBootstrapAccounting();return Object.freeze({...real,chunk:(n:number)=>real!.chunk(n+1)});},
+    connectStopOwner:(_:unknown,notify:(code:string)=>void)=>core.construction.connectStopOwner(real,notify)}};
+  const accept=vi.fn();
+  await expect(pinned.run(skewed as never,new AbortController().signal,60000,{check:()=>{},stop:()=>{},ready:()=>{},accept})).rejects.toThrow('internal_review_error');
+  expect(accept).not.toHaveBeenCalled();expect(pinned.diagnostic()).toMatchObject({dispatches:1,reserved:0,release_attempts:1});
+});

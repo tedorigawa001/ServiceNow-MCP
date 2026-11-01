@@ -93,7 +93,9 @@ export function pinDevelopmentTranscript(raw:unknown){
           try{delivery=deliver();}catch(error){delivery=Promise.reject(error);}
           bytes=await Promise.race([delivery,cancelled]);
         }finally{remove();if(responseTimer!==undefined)clearTimeout(responseTimer);if(cutoff!==undefined)clearTimeout(cutoff);}
-        observe(floor);accounting.chunk(bytes.byteLength);observe(floor);
+        const prior=observe(floor);accounting.chunk(bytes.byteLength);const charged=observe(floor);
+        // Same delta check as the production bootstrap contract: G grows by exactly this chunk, C/P stay fixed.
+        if(charged.received_bytes!==prior.received_bytes+bytes.byteLength||charged.requests!==prior.requests||charged.payload_bytes!==prior.payload_bytes)failure('internal_review_error');
         if(bytes.byteLength>limits.response_bytes)failure('receive_budget_exceeded');
         let value:unknown;try{value=JSON.parse(new TextDecoder('utf-8',{fatal:true}).decode(bytes));}catch{failure('invalid_response');}
         observe(floor);

@@ -7,7 +7,7 @@ Status: **§10のSA-01に加え、§11のSA-02を実session／source class＋固
 
 ## 1 現状と非対象
 
-ND-03後の診断owner最初期化とfake friend撤去の対設計は[詳細設計draft-0.11](BEST_PRACTICE_ABORT_SCOPE_EARLY_DIAGNOSTIC_FRIEND_SEPARATION_DESIGN.md)、共通kernel・本番／開発root分離と撤去閉包は[EF-03詳細設計draft-0.8](BEST_PRACTICE_ABORT_SCOPE_KERNEL_ROOT_SEPARATION_EF03_DESIGN.md)を参照。SA-02のfake friendとSA-01の`synthetic_io` laneも配布物からの除去対象とし、既存session採用口や互換shimへ置き換えない。今回は設計案のみで、SA-03／正式発行口は閉鎖を維持する。
+ND-03後の診断owner最初期化とfake friend撤去の対設計は[詳細設計draft-0.12](BEST_PRACTICE_ABORT_SCOPE_EARLY_DIAGNOSTIC_FRIEND_SEPARATION_DESIGN.md)、共通kernel・本番／開発root分離と撤去閉包は[EF-03詳細設計draft-0.9](BEST_PRACTICE_ABORT_SCOPE_KERNEL_ROOT_SEPARATION_EF03_DESIGN.md)を参照。SA-02のfake friendとSA-01の`synthetic_io` laneも配布物からの除去対象とし、既存session採用口や互換shimへ置き換えない。今回は設計案のみで、SA-03／正式発行口は閉鎖を維持する。
 
 [開発専用fake構成](../src/review/abort-scope-evidence-status-bound-workflow.ts)は自分でsnapshot・source identity・canonical core・binding・注入ownerを生成し、模擬dispatch→cleanup→private消費を終え、closeしてから限定履歴を返す。実`BoundedUpdateSetSource`・認証snapshot・固定URLに由来する証拠ではない。返却した`consumed`は生存中の権限ではなく、7権限はすべてfalseである。
 

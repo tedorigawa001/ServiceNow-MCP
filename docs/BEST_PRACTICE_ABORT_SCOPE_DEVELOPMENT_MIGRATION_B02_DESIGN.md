@@ -1,6 +1,6 @@
 # EF-03B B-02：source・会計・nativeの移行範囲と共通化境界
 
-Version: br006-development-migration-b02-draft-0.4 / Date: 2026-11-01。
+Version: br006-development-migration-b02-draft-0.5 / Date: 2026-11-01。
 Status: **B-02-01（§7）とB-02-02の同core会計・固定200 transcript（§8）を限定実装。旧試験をすべて残す。native移行・release判断移行・friend撤去・実接続は未実施。正式発行口閉鎖・Unknown・全体受付無効・VM／監視／telemetry調査保留を維持する。実通信・実機操作・設定変更・Pushは行わない。**
 
 設計基準：`5e79b21`。B-01の生成順はbusy事前判定→core→admission→登録ownerに修正済みであり、その前の順序へ戻さない。[移行親設計](BEST_PRACTICE_ABORT_SCOPE_DEVELOPMENT_ROOT_EF03B_DESIGN.md)のB-02を細分化する。§1〜6は初版の計画・受入条件、限定実装と未対応の区分は§7〜8を参照する。
@@ -117,7 +117,7 @@ draft-0.3のレビュー修正：開発profileのpinが全配列を21要素に�
 
 bytesはnative accessorで長さ・bufferを検査し待機前に別Uint8Arrayへコピーする。getter／proxy／sparse／SharedArrayBufferを拒否する。1応答4MiB、最大3応答、最大コピー12MiBの有限上限。requestsは4〜210、total_bytesは1〜16MiB、response_bytesは1〜4MiBの低減のみ。profileの既定上限は実transportを動かす権限ではない。入力への参照を診断closureへ残さず、終了時は保有bytesをzero-fillして破棄する。呼出し元のbytesは変更しない。
 
-rootの既存canonical coreから一度だけbootstrap portを取り、同portへstop ownerを結合しfinal4枠を予約する。counter seed／別core／別leaseは受け付けない。dispatch直前にCを計上し、拒否はC=0、同期throw／rejectはC=1でretryなし。受領した同bytesをGへ一度課金してからUTF-8／JSON解析し、B-02-01のprivate ackへ渡す。受信上限超過chunkも既存coreと同順に課金し、bootstrapではP=0を維持する。各試行のC差分1・G/P不変を観測して確認する。
+rootの既存canonical coreから一度だけbootstrap portを取り、同portへstop ownerを結合しfinal4枠を予約する。counter seed／別core／別leaseは受け付けない。dispatch直前にCを計上し、拒否はC=0、同期throw／rejectはC=1でretryなし。受領した同bytesをGへ一度課金してからUTF-8／JSON解析し、B-02-01のprivate ackへ渡す。受信上限超過chunkも既存coreと同順に課金し、bootstrapではP=0を維持する。各試行のC差分1・G/P不変を観測して確認し、chunk後もGがそのbytes長だけ増えC/Pが不変であることを本番bootstrap契約と同じく確認する（不一致は`internal_review_error`）。
 
 合成exchangeだけauthentication→親→release、他modeは親→release。合成tokenはaccess_token・expires_in・token_typeを既存条件に合わせて検査し、run全期限を覆う有効時間とBearerの大小文字を確認した後にready世代1へ進む。これは合成modeの試験であり、実認証snapshotの由来／cached token期限の実証拠ではない。token・parsed値・ackを返さない。
 
@@ -128,3 +128,5 @@ port取得後は成功・失敗・取消のfinallyでreleaseを一度だけ試�
 releaseは固定envelope／projectionまでを消費し、結果は明示的に`release_match: not_evaluated`とする。Australia以外や空の有効行を受理しても、それは値検査の成功だけ。既存C方式のrelease判断・operator config・permit／prepared結合はまだ移行していない。B-ACK全caseの移行完了とは数えず、旧実class試験を残す。native移行はB-02-03、開発compiled保証はB-03、friend撤去はEF-03Cへ残す。
 
 [新規bootstrap試験](../tests/review/development-bootstrap.test.ts)と[検証記録](E2E_BEST_PRACTICE_DEVELOPMENT_BOOTSTRAP_B0202_2026-11-01.md)を参照。実class保証と別assembly保証を分け、Unknown・全体受付無効・正式発行口閉鎖を維持する。
+
+draft-0.5のレビュー修正：開発bootstrapはdispatch後のC差分だけを確認し、本番bootstrap契約が行うchunk後のG差分（＝bytes長）とC/P不変の確認がなかったため追加した。上位設計からの版数リンクも更新した。
