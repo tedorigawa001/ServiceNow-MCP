@@ -14,11 +14,12 @@ for(const privateName of ['ReleaseInputProjection','ReleaseInputOrigin','capture
   assert(!sessionDeclarations.includes(privateName),'private release timing projection leaked into declarations: '+privateName);
 const kernel='dist/servicenow/review-kernel/construction-state';
 const sourceKernel='dist/servicenow/review-kernel/source-values';
-for(const name of ['release-family','release-comparison']) {
+for(const name of ['release-family','release-comparison','release-observation']) {
   const path='dist/servicenow/review-kernel/'+name;
   for(const suffix of ['.js','.js.map','.d.ts','.d.ts.map'])assert(pack.files.some(f=>f.path===path+suffix),'required release value contract missing: '+name+suffix);
   const tree=parse(readFileSync(join(root,path+'.js'),'utf8'),{ecmaVersion:'latest',sourceType:'module'}),pending=[tree];
-  const allowed=name==='release-family'?[]:['zod','node:util','./release-family.js'];
+  // release-observation reads time only through its injected clock dependency.
+  const allowed=name==='release-family'?[]:name==='release-observation'?['zod']:['zod','node:util','./release-family.js'];
   while(pending.length){const n=pending.pop();
     if(n.type==='ImportDeclaration')assert(allowed.includes(n.source.value),'release value contract imports a root: '+n.source.value);
     assert(!(n.type==='NewExpression'&&n.callee?.name==='Date'),'release value contract reads wall clock');

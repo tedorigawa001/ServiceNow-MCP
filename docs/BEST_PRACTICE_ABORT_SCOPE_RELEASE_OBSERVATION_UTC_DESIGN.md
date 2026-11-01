@@ -1,6 +1,6 @@
 # RC-03：観測UTCの採取・失敗・上位時刻の契約
 
-Version: br006-release-observation-utc-draft-0.2 / Date: 2026-11-01。
+Version: br006-release-observation-utc-draft-0.3 / Date: 2026-11-01。
 Status: **OU-01の一度限り採取・pre/post guardを既存fixed fake-200継続だけに限定実装（§9）。通常実source差替え・比較器入力化・上位時刻結合は未実施。実接続・実通信・実機操作・設定変更・実Permit発行・Pushは行わない。正式発行口閉鎖・Unknown・全体受付無効・VM／監視／telemetry調査保留を維持する。**
 
 設計基準`cd14e20`、OU-01基準`d95faca`。[RC-03親設計](BEST_PRACTICE_ABORT_SCOPE_RELEASE_ADOPTION_RC03_DESIGN.md)と[deadline再利用契約](BEST_PRACTICE_ABORT_SCOPE_RELEASE_DEADLINE_REUSE_DESIGN.md)の観測UTCに関する残差を具体化する。RP-01の同session projectionへOU-01の限定採取を追加したが、比較器接続・上位整合検査は未実装／未検証。本書を本番切替の承認にしない。
@@ -120,3 +120,5 @@ draft-0.1作成時はソース／schema／設計の読取とMD更新・文書参
 §7のUTC-01〜06のうち採取順・空200・初回逆行／上界・時計障害・guard・一度限り失敗／closeの部分を新規合成試験で確認する。全受入条件の完了、通常sourceの時計保証、上位T_i／E・空200のprivate UTC保持／worker照合、比較器入力化は未実施。Oは既存fake実測結果には反映するが、空200では後続watermarkとして保持する実装はまだない。[OU-01検証記録](E2E_BEST_PRACTICE_RELEASE_OBSERVATION_OU01_2026-11-01.md)参照。
 
 追加確保は固定採取状態とclosure、1つのDateとISO文字列・固定比較。timer・受信bytes・C/G/P・予約ownerは増やさない。layout／全体work・同期時間の上界は引き続きUnknown。入力・上位時刻の未解決事項を今回の部分成功で確認済みにしない。
+
+draft-0.3のレビュー修正：OU-01の配布検査は`release-observation`の4成果物の存在だけを確認し、他の値kernelと同じ依存・壁時計のAST検査に含めていなかった。importをzodだけに限定し、`new Date`・`Date.now`・fetch／timerを拒否する同じ検査へ追加し、時計は注入依存からだけ読むことを配布物でも確認する。上位設計からの版数リンクも更新した。

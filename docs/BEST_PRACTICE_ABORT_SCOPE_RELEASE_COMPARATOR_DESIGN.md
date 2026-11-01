@@ -222,4 +222,4 @@ RC3-D03では同ownerのdispatch前判断を追加し、整合したbinding不�
 
 Rの全deadlineは既存のsession.deadlineMs getterを再利用する。[再利用契約draft-0.4](BEST_PRACTICE_ABORT_SCOPE_RELEASE_DEADLINE_REUSE_DESIGN.md)で、設定pinと同じ開始UTC／全duration・policyの結合と受入条件を整理した。RP-01で固定fake継続のprivate projectionだけを限定接続し、比較器への入力化・通常source差替えを残課題とする。残時間からの再計算や観測時点での設定再pinは行わない。
 
-[観測UTC契約draft-0.2](BEST_PRACTICE_ABORT_SCOPE_RELEASE_OBSERVATION_UTC_DESIGN.md)のOU-01で、空200を含む一度限り採取・pre/post guardだけを固定fake継続へ限定追加した。比較器は時計を読まず、S／全L／policyを変更しない。上位private UTC保持・上位検査と通常source差替えは未実装であり、pure比較器の成功を時計保証としない。
+[観測UTC契約draft-0.3](BEST_PRACTICE_ABORT_SCOPE_RELEASE_OBSERVATION_UTC_DESIGN.md)のOU-01で、空200を含む一度限り採取・pre/post guardだけを固定fake継続へ限定追加した。比較器は時計を読まず、S／全L／policyを変更しない。上位private UTC保持・上位検査と通常source差替えは未実装であり、pure比較器の成功を時計保証としない。

@@ -60,7 +60,13 @@ constructorのS採取と観測Oの回数は別集計。新規runtime試験のtoI
 
 コミット前確認：候補13ファイルを含むindex全体を一時コピーへ書き出し、既存node_modulesだけを参照した。候補のbytes一致と無関係な`.vscode/`・`CLAUDE.md`の不在を確認し、そのコピーでbuild・関連5ファイル109件・standalone TypeScript・429ファイルのオフライン梱包が成功した。全体10,027件は再実行せず、上表の実装時結果と区別する。検証後の追加はこの記録だけで、実装・試験内容は変更していない。
 
-## 6 保持する限界
+## 6 レビュー修正（2026-11-01）
+
+[オフライン梱包検査](../tests/review/package-http-classification.mjs)は`release-observation`のJS／宣言／map4成果物の同梱だけを確認し、`release-family`／`release-comparison`と同じ依存・壁時計のAST検査に含めていなかった。同ループへ追加し、importはzodだけ、`new Date`・`Date.now`・fetch／timer・動的import・re-export・requireを拒否する。時計は注入された依存からだけ読むことを配布物でも確認する。
+
+build後の梱包検査は429ファイルで成功。変異確認として生成済みJSへ`Date.now()`を一時注入すると「reads wall clock」で失敗し、退避copyから復元して`cmp`で一致を確認した。§3・§5の件数は修正前の記録として残す。
+
+## 7 保持する限界
 
 本部品が判定する逆行はSに対する観測点の値。点の間の一時的な時計変動や、今後の上位T_i／Eの順序を検証済みとはしない。空200のOを公開shapeに出さないまま上位へ安全に結合する仕組みは後続工程。比較器入力化・UTC全受入条件・低減Lと出力宣言deadlineの差・設定日時長cap・全体work上界・実source採用は残す。
 

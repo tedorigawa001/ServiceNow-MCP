@@ -175,4 +175,4 @@ RC3-D02では、同sourceの200行ack・固定比較・guard・seal後の非実�
 
 [既存deadline getter再利用契約draft-0.4](BEST_PRACTICE_ABORT_SCOPE_RELEASE_DEADLINE_REUSE_DESIGN.md)に、Rの設定pin／比較器への同startedAt・元全deadline供給を整理した。getterは既存であり、新設待ちという旧記述は誤認。RP-01の固定fake継続にprivate projection生成／消費を限定追加したが、比較器への入力化・通常source差替えは未実施で、残時間再計算・provider再呼出しはしない。B-03の専用compiled保証・旧case対応表とは別に検証する。
 
-[観測UTC契約draft-0.2](BEST_PRACTICE_ABORT_SCOPE_RELEASE_OBSERVATION_UTC_DESIGN.md)のOU-01で、固定fake継続の取得後guard・一度限り採取・空200・時計例外／逆行を部分確認した。D固定UTCの試験結果をRの時計保証へ流用せず、通常sourceの切替・reviewed_at／ended_atへの上位結合は未実装／未検証のままとする。
+[観測UTC契約draft-0.3](BEST_PRACTICE_ABORT_SCOPE_RELEASE_OBSERVATION_UTC_DESIGN.md)のOU-01で、固定fake継続の取得後guard・一度限り採取・空200・時計例外／逆行を部分確認した。D固定UTCの試験結果をRの時計保証へ流用せず、通常sourceの切替・reviewed_at／ended_atへの上位結合は未実装／未検証のままとする。
