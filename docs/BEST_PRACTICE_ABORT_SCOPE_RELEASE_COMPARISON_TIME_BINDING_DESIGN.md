@@ -123,7 +123,7 @@ GETのC、同bytesのG／P、final予約／返却、retry、native cleanup、wor
 ## 9 推奨分割と未解決事項
 
 1. **CT-A（限定実装済み、§10）**：同projection・同sourceのrows／O receiptと比較器入力生成、非実行private候補の一度限り受理をfake依存で確認。上位owner用Oを失わない内部保持契約も同時に置く。
-2. **CT-B（設計案）**：TimeOwnerと親側job claimを合成worker応答へ接続し、T_i／E・空200・omission・世代混入／遅延を検証。通常実source／adapter切替はしない。
+2. **CT-B（設計案）**：TimeOwnerと親側job claimを合成worker応答へ接続し、T_i／E・空200・omission・世代混入／遅延を検証。通常実source／adapter切替はしない。前半の[上位時刻owner・一度限りの終端移譲draft-0.1](BEST_PRACTICE_ABORT_SCOPE_RELEASE_TIME_OWNER_CTB_DESIGN.md)では、TB-Aの純粋内部型とTB-Bの固定fake継続接続に分け、正常source解放と元run失効を区別する。両段階とも未実装。
 3. **CT-C（設計案）**：固定継続の連続fake試験・診断合流／解放を確認する。B-03のcompiled保証とは別集計にする。
 
 上位への終端移譲・ownerとjob claimの正確な配置、低減Lと出力宣言の互換方針、全体費目／日時長capは未確定。今回の型役割・分割名は実在APIではない。実source判定／Permit採用・非200/native移行・friend撤去・全体受付の有効化は別承認。
