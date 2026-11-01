@@ -1,7 +1,7 @@
 # CT-B後半：worker job binding・T_i／E整合の詳細設計
 
-Version: br006-worker-time-binding-draft-0.2 / Date: 2026-11-01。
-Status: **設計案のみ。以下の内部型・job claim・時刻照合・合成受入試験は未実装／未実施。正式発行口閉鎖・Unknown・全体受付無効・VM／監視／telemetry調査保留を維持する。実source差替え・実接続・実通信・設定変更・Permit発行・Pushの承認ではない。**
+Version: br006-worker-time-binding-draft-0.3 / Date: 2026-11-01。
+Status: **WJ-Aの内部binding・generation／input／job claim・one-shot／失効だけを配布対象外の合成issuerで限定実装（§11）。runtime／実worker・T_i／U／Eの結果整合・WJ-B〜Dは未接続／未実装。正式発行口閉鎖・Unknown・全体受付無効・VM／監視／telemetry調査保留を維持する。実source差替え・実接続・実通信・設定変更・Permit発行・Pushの承認ではない。**
 
 基準HEAD: `099dedf`。[上位接続契約](BEST_PRACTICE_ABORT_SCOPE_RELEASE_COMPARISON_TIME_BINDING_DESIGN.md)§4〜7と[CT-B前半](BEST_PRACTICE_ABORT_SCOPE_RELEASE_TIME_OWNER_CTB_DESIGN.md)の差分設計。TB-Bの固定fake準備処理内のdiscardを、既にworkerまで継続できる移譲と取り違えない。通常adapterへの切替・B-03・friend撤去は別工程。
 
@@ -123,7 +123,7 @@ soft以外にも、停止後に途中結果をfinishする既存分岐がある�
 
 claim／期待値copy・guard・失効・終了合流のexact layout／work上界はUnknown。日時長cap、低減LとJSON宣言deadlineの互換、選択payload／releaseの正式供給境界、終端ownerの正確な配置も承認／レビュー待ち。
 
-## 9 合成受入条件（未実施）
+## 9 合成受入条件（WJ-Aの部分確認は§11、全体の受入は未実施）
 
 | ID | 独立に確認する条件 |
 |---|---|
@@ -145,12 +145,28 @@ TB-Bレビューで判明したfinally継続の未保証は[TB-B記録§6](E2E_B
 
 ## 10 推奨実装分割と非目標
 
-1. **WJ-A**：合成issuerだけの内部binding・generation／input／job claim・one-shot／失効を純粋fakeで実装。時計値比較は元S／L／Oへの固定値入力とし、実worker／runtimeには接続しない。
+1. **WJ-A（限定実装済み）**：合成issuerだけの内部binding・generation／input／job claim・one-shot／失効を純粋fakeで実装。時計値比較は元S／L／Oへの固定値入力とし、実worker／runtimeには接続しない。scope内の保証と未実装の全体保証は§11に分離する。
 2. **WJ-B**：同input receiptのT_i受理、U保持とanalyze応答の期待値比較器を独立oracleで確認。startup・送信失敗、omitted、pre/post guardを含める。
 3. **WJ-C**：finishのE／対象集合・soft partial世代交換・終了候補の一度限り消費を合成応答で確認。取得済みUを消さない。
 4. **WJ-D／CT-C**：私有の固定生成元・監督／注入channel・上位終端への連続fake接続を別承認で行う。現在のpublic prepared-onlyと通常adapterを維持する。
 5. **B-03**：旧case対応表の未代替実class保証を残し、専用開発build／compiled・配布負の対照を別設計／別集計で確定する。今回の441ファイルの梱包成功で代替しない。
 
-実Permit採用・正式発行・全体受付・本番cap・production adapter差替え、非200 fallback・friend撤去・実通信は非目標。本文は実装／試験実施記録ではなく、MDと参照／差分検査だけを更新する。
+実Permit採用・正式発行・全体受付・本番cap・production adapter差替え、非200 fallback・friend撤去・実通信は非目標。draft-0.1／0.2は設計・文書検査のみ。draft-0.3のWJ-A限定実装と実施記録は次節へ分離する。
 
 draft-0.2のレビュー修正：現adapterのsoft移行のうちphase期限型（同generationのままfinish、soft後verifyのGETあり）と、run停止後に部分集約をfinishする既存分岐（受信予算超過ではsession停止後も部分集約を返す）が抜けており、finish前後の元run guardをそのまま適用すると既存の部分集約を失敗へ変える設計になっていた。§1・§7・§8・WJ-08を2種類のsoft移行に分け、停止後の部分finishを初期範囲の対象外とするWJ-13を追加し、上位設計からの版数リンクも更新した。
+
+## 11 WJ-Aの合成issuer限定実装・保証範囲
+
+[合成issuer](../tests/support/review/synthetic-worker-job.ts)をtests/supportに置いた。runtimeのsession／registration／source／worker supervisorをimportせず、実classのclaim台帳とも共有しない。任意fakeのrun／session／source／key／origin／budgetと固定S／全L／O、Update Set idをdescriptorでpinし、各pre/post guardで同じ値・referenceを確認する。opaque handleは空の凍結objectで、発行元内のpointer／slot対応で消費する。copy・別issuer／世代・idだけの一致では通らない。
+
+issuerあたりbindingは一度だけ。同じseedから別issuerを作ること自体は可能な非実行モデルであり、実sessionごとの唯一の生成証拠ではない。generationはstarting→ready→closing→closedをモデル化し、合成のconfirmClosedだけで前世代を解放する。この確認をOS terminate証拠と呼ばない。worker／supervisorは不透明なfake identityで、メソッドを呼ばない。閉じたworker identityは弱いtombstoneで再利用を拒否する。
+
+inputはready前にも発行でき、同origin／targetを一度だけ登録する。時刻は固定のO <= T_i <= S+L、ISOミリ秒UTCだけを検査し、値を採取しない。WJ-AではinputのT_iをprivateに保持するだけで、連続T_iの非減少・U更新・結果のreviewed_at／Eとの一致はまだ検査しない。WJ-02／05〜08の全保証とは数えない。
+
+analyzeは同ready generationと未消費inputを結合し、idの正のsafe integer・同世代内単調増加を検査する。finishは一度だけ。pending slotはguard前に占有し、consumeではguard前に取り外す。合成の返却contextは同generation／supervisor／worker／id／kind／targetをdescriptorで照合するが、実wire envelopeや結果JSONのparserではない。返る値はauthority:noneの凍結dataだけで、ReleasePermitや受理済み解析結果へ昇格しない。
+
+24か所のライフサイクルpre/post guardで停止・捕捉再入・同期revokeを確認する。失敗後は元binding／generation／input／pendingと時刻参照を消し、最初の固定code／phaseと数値counterだけを残す。正常source close後は新しいinput／generation／ready／jobを拒否し、既存pendingのconsumeと固定解放だけを許す。正常root close後の誤操作は拒否するがclosedや診断を書換えない。heapの物理消去やcallerが保存したcopyの破棄は主張しない。
+
+合成モデル内の固定枠はgeneration最大2、input最大100、jobはinput一度ずつ＋finish一度の最大101、同時pending1。これは純粋試験を有限にする局所枠で、本番cap・§8の全既存分岐の導出済み上界ではない。公開handleを返せた生成数・post-guard後のconsume成功数をcounterに記録し、失敗試行の全費目を計数したとは主張しない。独立イベント列では100 input／100 analyze／1 finishとguard 610回を照合する。
+
+新規[153件の合成試験](../tests/review/synthetic-worker-job.test.ts)、型・lint・配布負の対照・初回REDは[WJ-A検証記録](E2E_BEST_PRACTICE_WORKER_JOB_CLAIMS_WJA_2026-11-01.md)へ記録する。issuerは配布物に含めず、既存distへimport／宣言／mapが混入しないことも確認する。compiledされた開発assemblyの保証ではなく、B-03とは別。WJ-B／C／D・soft回復claim・停止後部分finishは変更せず、既存の2種類のsoft移行・部分集約を維持する。

@@ -214,7 +214,7 @@ asserted_atの未来・expires_at≦asserted_atを拒否し、binding不一致�
 
 CT-Aで固定fake継続の同projection・source・元ackに結合したrows／O receiptと固定比較器への入力化、一度限りの非実行候補受理を限定実装した。公開legacy結果やPermitへの採用はしない。CT-A時点では空200のOもcloseまで内部保持して破棄した。TB-A／Bで固定fake継続だけ上位時刻slotへの一度限りの移譲を接続したが、worker job／T_i／Eとの結合は未実装。接続契約§10と[CT-A検証記録](E2E_BEST_PRACTICE_RELEASE_COMPARISON_CTA_2026-11-01.md)参照。
 
-[比較器入力・上位時刻の接続契約draft-0.6](BEST_PRACTICE_ABORT_SCOPE_RELEASE_COMPARISON_TIME_BINDING_DESIGN.md)を追加した。同projectionのS／全L／P、同sourceのrows／O、同worker世代／jobをprivateに結合し、非実行比較候補と空200のUTC保持・返却時刻検査を対にする。pure値入力の成功は発行元・job identityの証明ではない。CT-A／TB-A／Bは固定fake継続だけに限定接続し、worker jobを含む全体接続・試験は未実施。通常source／Permit経路は差し替えない。
+[比較器入力・上位時刻の接続契約draft-0.7](BEST_PRACTICE_ABORT_SCOPE_RELEASE_COMPARISON_TIME_BINDING_DESIGN.md)を追加した。同projectionのS／全L／P、同sourceのrows／O、同worker世代／jobをprivateに結合し、非実行比較候補と空200のUTC保持・返却時刻検査を対にする。pure値入力の成功は発行元・job identityの証明ではない。CT-A／TB-A／Bは固定fake継続だけに限定接続し、worker jobを含む全体接続・試験は未実施。通常source／Permit経路は差し替えない。
 
 [RC-03詳細設計draft-0.16](BEST_PRACTICE_ABORT_SCOPE_RELEASE_ADOPTION_RC03_DESIGN.md)を追加した。初版時点の開発sourceにはUTC／policy条件がなくrelease値も破棄されていたため、test-onlyの同context bindingから先行した。実sourceでは既存`#completeRelease`への非matched draft再投入によるwarning二重追加を避け、公開可変copyとprivate snapshotを分離する。Rの時刻採取位置・失敗owner／解放と同期処理の上界は承認／確認待ちで、本番差替えは行わない。開発Dの限定実装は旧case移行済み・実class保証を意味せず、正式発行口閉鎖・全体受付無効・調査保留を維持する。
 

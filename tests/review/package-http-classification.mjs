@@ -5,9 +5,28 @@ import {tmpdir} from 'node:os';
 import {join} from 'node:path';
 import {fileURLToPath} from 'node:url';
 import {parse} from 'acorn';
+import ts from 'typescript';
 const root=fileURLToPath(new URL('../../',import.meta.url)),moduleNames=['abort-scope-evidence-http-classification','abort-scope-evidence-status-terminal','abort-scope-evidence-status-cleanup','abort-scope-evidence-status-context','abort-scope-evidence-status-bound-workflow','abort-scope-evidence-source-status-acceptance','abort-scope-evidence-source-status-probe','abort-scope-evidence-native-diagnostic','abort-scope-evidence-construction-shell'];
 const output=execFileSync('npm',['pack','--dry-run','--ignore-scripts','--offline','--json'],{cwd:root,encoding:'utf8',maxBuffer:8*1024*1024,env:{...process.env,npm_config_cache:join(tmpdir(),'servicenow-mcp-owner-pack-cache')},stdio:['ignore','pipe','pipe']});
 const [pack]=JSON.parse(output);
+// WJ-A remains a separate synthetic issuer, not a distributed registration/claim entry point.
+const noSyntheticJobIssuer=text=>assert(!text.includes('createSyntheticWorkerJobIssuer')&&!text.includes('synthetic-worker-job'),'WJ-A synthetic issuer leaked into runtime');
+assert.throws(()=>noSyntheticJobIssuer('export function createSyntheticWorkerJobIssuer() {}'));
+assert(!pack.files.some(f=>f.path.includes('synthetic-worker-job')));
+for(const f of pack.files.filter(f=>f.path.startsWith('dist/')&&/\.(?:js|ts|map)$/.test(f.path)))noSyntheticJobIssuer(readFileSync(join(root,f.path),'utf8'));
+const syntheticText=readFileSync(join(root,'tests/support/review/synthetic-worker-job.ts'),'utf8');
+const syntheticAst=parse(ts.transpileModule(syntheticText,{compilerOptions:{target:ts.ScriptTarget.ES2022,module:ts.ModuleKind.ESNext}}).outputText,{ecmaVersion:'latest',sourceType:'module'}),syntheticNodes=[syntheticAst];
+while(syntheticNodes.length){const n=syntheticNodes.pop();
+  if(n.type==='ImportDeclaration')assert(['node:util','zod'].includes(n.source.value),'synthetic job issuer imports runtime or I/O');
+  assert(n.type!=='ImportExpression'&&n.type!=='ExportAllDeclaration'&&!(n.type==='ExportNamedDeclaration'&&n.source),'synthetic job issuer dynamically imports/reexports a root');
+  if(n.type==='CallExpression'){
+    assert(!['fetch','setTimeout','setInterval','require'].includes(n.callee?.name),'synthetic job issuer performs I/O/timer');
+    assert(!(n.callee?.type==='MemberExpression'&&['Date','performance'].includes(n.callee.object?.name)&&n.callee.property?.name==='now'),'synthetic job issuer reads a clock');
+  }
+  assert(!(n.type==='NewExpression'&&['Worker','Date'].includes(n.callee?.name)),'synthetic job issuer starts worker/clock');
+  for(const v of Object.values(n)){if(Array.isArray(v))syntheticNodes.push(...v.filter(x=>x&&typeof x.type==='string'));else if(v&&typeof v==='object'&&typeof v.type==='string')syntheticNodes.push(v);}
+}
+console.log('WJ-A synthetic issuer excluded; negative control + no runtime/I/O/worker/clock imports PASS');
 for(const suffix of ['.js','.js.map','.d.ts','.d.ts.map'])assert(pack.files.some(f=>f.path==='dist/servicenow/review-kernel/release-observation'+suffix),'required one-shot UTC value helper missing: '+suffix);
 const sessionDeclarations=readFileSync(join(root,'dist/servicenow/bounded-read.d.ts'),'utf8');
 const sessionAst=parse(readFileSync(join(root,'dist/servicenow/bounded-read.js'),'utf8'),{ecmaVersion:'latest',sourceType:'module'});
