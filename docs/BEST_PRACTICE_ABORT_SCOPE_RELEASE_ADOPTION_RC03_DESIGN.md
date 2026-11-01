@@ -1,6 +1,6 @@
 # RC-03：release比較器の固定採用境界・接続差分設計
 
-Version: br006-release-adoption-rc03-draft-0.4 / Date: 2026-11-01。
+Version: br006-release-adoption-rc03-draft-0.5 / Date: 2026-11-01。
 Status: **RC3-D01／D02を開発assemblyだけに限定実装。同sourceの200行ackから固定比較・guard・seal後の非実行summaryへ接続。D03以降・R差替えは未実装／未承認。旧試験・正式発行口閉鎖・Unknown・全体受付無効・VM／監視／telemetry調査保留を維持する。実Permit発行・実接続・実通信・実機操作・設定変更・friend撤去・Pushは行わない。**
 
 基準：`a61d90a`。[純粋比較器設計draft-0.6](BEST_PRACTICE_ABORT_SCOPE_RELEASE_COMPARATOR_DESIGN.md)のRC-03を具体化する。以下の追加field・状態・試験ID・分割単位は案であり、存在するAPIや検証済み保証ではない。
@@ -163,7 +163,7 @@ rootはsource生成後にbindし、同じready継続の直後にclaimする。�
 2. 同sourceのrelease consume完了・世代1・停止なしを確認してownerをcomparingへ遷移させる。観測slotはguard前に一度消費し、固定`compareRelease`を呼ぶ。取得後・比較後にもownerとsourceの失効／先行primaryを再確認する。post-guardがsourceだけをrevokeしても採用しない。
 3. pure不正入力はinternal_review_errorとして停止する。ただしpost-guardの取消等が先行すれば、その理由を優先する。ordinary unknown／mismatchedは非実行値として受理する。UTF-8／JSON／projection不正は従来のinvalid_responseで停止し、値unknownへ格下げしない。
 4. rootの正常body完了時、ownerのtakeForCloseを一度だけ消費してfresh deep-frozenのdata-only候補をroot内slotへ退避する。source／ownerのrevokeで行・条件・元draftを破棄する。別source・再入・二重compare／transfer・失敗後再開は認めない。
-5. sourceのclosed／sealed、constructionのcleanup confirmed、先行失敗なしを必要とする。cleanup直前の同canonical leaseの残時間を保持し、cleanup後は元のmonotonic開始・全deadlineと外部signalを再確認する。残時間が最後の観測より増える逆行（開始時刻より後でも）、時計失敗・期限切れ・取消なら候補を捨てる。時計callback中の取消も再確認する。既存primaryを後の値で消さない。
+5. sourceのclosed／sealed、constructionのcleanup confirmed、先行失敗なしを必要とする。cleanup直前の同canonical leaseの残時間を保持し、cleanup後は元のmonotonic開始・全deadlineと外部signalを再確認する。残時間が最後の観測より増える逆行（開始時刻より後でも）、時計失敗・期限切れ・取消なら候補を捨てる。時計callback中の取消も再確認する。既存primaryを後の値で消さない。cleanup後の再確認はteardown確定後なので、候補を捨てて固定の`release_comparison_withheld`理由を付けるだけとし、run全体のok・code・run_primaryを書き換えない（opt-inの有無で既存summaryが変わらない）。
 
 実際の状態所有は、sourceのrelease→consuming→done→closed→sealedと、条件ownerのclaimed→comparing→compared→transferring→transferred→closedに分離した。比較器・時計provider・cleanup stackを新たにprofileから注入する口はない。既存のtest-only clock／waitだけで境界試験する。
 
@@ -172,3 +172,5 @@ rootはsource生成後にbindし、同じready継続の直後にclaimする。�
 会計・final4予約／返却・native cleanupは既存ownerから動かさず、比較のための再dispatch／再課金をしない。native／status-onlyとbinding不一致no-requestは引き続き未対応profileとしてI/O前に拒否する。空200の設定代替は純粋な値判定であり、実HTTP fallbackを有効化したものではない。
 
 [D02検証記録](E2E_BEST_PRACTICE_RELEASE_ADOPTION_D02_2026-11-01.md)に新規44件と既存を含む関連202件、型／梱包／全体結果を記録する。D01のopt-in互換4ケースは「新fieldを除く既存部分のdeep equality＋新fieldの固定値確認」へ明示的に更新し、旧profileの期待を緩めていない。専用開発compiled保証・実class正式binding・Rのreadonly deadline供給差分・日時長cap承認待ちは残す。
+
+draft-0.5のレビュー修正：cleanup後の時計・取消・期限の再確認が候補の破棄に加えてrunの`stopped`／`run_primary`を設定し、teardown確定済みで本体が正常終了したrunを`cancelled`等へ書き換えていた。§12-5の「候補を捨てる」と「後の値で消さない」に合わせ、候補の破棄と固定の`release_comparison_withheld`だけに限定した。上位設計からの版数リンクも更新した。

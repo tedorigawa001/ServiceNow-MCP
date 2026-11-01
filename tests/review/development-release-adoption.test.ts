@@ -82,7 +82,9 @@ it.each(['cancel','deadline','throw','backwards'] as const)('refuses publication
     return 0;
   },wait:async()=>{armed=true;}});
   return root.run(profile(),{signal:controller.signal}).then(result=>{
-    expect(result.code).toBe(fault==='cancel'?'cancelled':fault==='deadline'?'deadline_exceeded':'internal_review_error');
+    // Teardown already finished: only the candidate is withheld; the run result is not rewritten.
+    expect(result).toMatchObject({ok:true,code:null,run_primary:null,construction:{primary:null,teardown:'confirmed'},
+      release_comparison_withheld:fault==='cancel'?'cancelled':fault==='deadline'?'deadline_exceeded':'internal_review_error'});
     expect(result).not.toHaveProperty('release_comparison');expect(result.source).toMatchObject({state:'closed',sealed:true});
     expect(JSON.stringify(result)).not.toContain('SECRET_CLOCK');expect(root.inspect().active).toBe(0);
   });
@@ -200,5 +202,13 @@ it('rejects a post-cleanup clock rewind even when it stays after the original st
   let bodyDone=false,root!:ReturnType<typeof createDevelopmentRoot>;
   root=createDevelopmentRoot({clock:()=>bodyDone?(root.inspect().active===0?500:1000):0,wait:async()=>{bodyDone=true;}});
   const result=await root.run(profile());
-  expect(result.code).toBe('internal_review_error');expect(result).not.toHaveProperty('release_comparison');
+  expect(result).toMatchObject({ok:true,code:null,run_primary:null,release_comparison_withheld:'internal_review_error'});
+  expect(result).not.toHaveProperty('release_comparison');
+});
+it('leaves the base summary identical to a non-opted run when a late abort withholds the candidate',async()=>{
+  const plain=await createDevelopmentRoot({clock:()=>0}).run({principal:'release',source:profile().source},{signal:new AbortController().signal});
+  const controller=new AbortController();let armed=false,root!:ReturnType<typeof createDevelopmentRoot>;
+  root=createDevelopmentRoot({clock:()=>{if(armed&&root.inspect().active===0)controller.abort();return 0;},wait:async()=>{armed=true;}});
+  const {release_comparison_withheld,...base}=await root.run(profile(),{signal:controller.signal});
+  expect(release_comparison_withheld).toBe('cancelled');expect(base).toEqual(plain);
 });

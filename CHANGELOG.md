@@ -52,6 +52,8 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 ### Added
 
+- Fixes the RC3-D02 development release comparison: the final post-cleanup clock/cancel/deadline re-check now only withholds the comparison candidate (recording a fixed `release_comparison_withheld` reason) instead of rewriting a run whose teardown was already confirmed to `cancelled`/`deadline_exceeded`/`internal_review_error`. Opting in no longer changes the existing summary; a test compares the base summary with a non-opted run. Test-only; no runtime behaviour changes.
+
 - Fixes the EF-03B B-02-02 development bootstrap: like the production bootstrap contract, it now checks after each chunk that received bytes grew by exactly that chunk and that request/payload counters did not change, failing closed with `internal_review_error` otherwise. A test substitutes a port that over-charges by one byte. Design version links are updated. Test-only; no runtime behaviour changes.
 
 - Fixes the EF-03B B-02-01 development source: the profile pin capped every array at 21 elements, so a 22-row release through the development assembly was rejected as `invalid_input` instead of reaching the shared value check (`invalid_response`, as in production). The pin now applies only the 64-key resource bound. A revoked development lifecycle also stays `closed` when a later rejection is recorded, so sealing it no longer fails. Tests cover both; design version links are updated. Test-only; no runtime behaviour changes.

@@ -63,7 +63,13 @@ D01の4つのopt-in互換caseだけは、D02で新fieldを追加するという�
 
 最終確認時に別の`package-worker.mjs`も実行したが、既定npmキャッシュへの書込みがEPERMとなり失敗した。一時キャッシュを指定した再試行も、依存再インストールがnpm registryへ取得を試み、DNS解決ENOTFOUNDで失敗した。この補助試験はオフライン条件に適さず、再試行しない。PDIへの接続・キャッシュ所有権／永続設定の変更はない。本変更の梱包保証は、専用の`node tests/review/package-http-classification.mjs`によるオフライン検査（425ファイル・既存compiled fixture成功）で確認したものであり、この補助コマンドの成功を主張しない。
 
-## 5 残課題・非主張
+## 5 レビュー修正（2026-11-01）
+
+cleanup後の最終再確認（外部取消・元deadline到達・時計失敗・逆行）が、候補の破棄に加えてrunの`stopped`／`run_primary`を設定していた。admission返却・construction seal・source sealが済みteardownがconfirmedのrunでも、opt-inしただけで`ok:false`・`cancelled`等へ変わり、時計を読まない通常profileとは結果が分かれた。probeで、最後の時計callback内のabortにより`code:'cancelled'`・`run_primary:{code:'cancelled'}`・teardown confirmedとなることを確認した。
+
+再確認は候補の破棄と固定の`release_comparison_withheld`（cancelled／deadline_exceeded／internal_review_error）だけに限定し、ok・code・run_primaryを書き換えない。cleanup前の`takeForClose`区間の失敗は従来どおりrun停止とする。既存の再確認試験5件（4種＋開始後の逆行）の期待を「run成功・候補非公開・withheld理由」へ変更し、遅延abort時に`release_comparison_withheld`を除くsummaryが同signal付きの非opt-in runと完全一致する試験を1件追加した。D02試験は45件成功。変異確認として修正前のassemblyへ戻すと6件が失敗し、退避copyから復元して`cmp`で一致を確認した。§2・§4の件数は修正前の記録として残す。
+
+## 6 残課題・非主張
 
 次はD03のbinding不一致no-requestをdispatch前へ接続し、release GET=0・予約返却を確認する工程。Rの実source差替え・構築時readonly deadline供給・実Permit結合・native/status-only移行・B-03の保証表／専用compiled・friend撤去は未実装／未承認。
 

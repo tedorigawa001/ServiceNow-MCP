@@ -64,6 +64,7 @@ export function createDevelopmentRoot(dependencies:Readonly<{clock?:()=>number;w
     let conditionsHandle:object|undefined,conditionsOwner:ReturnType<typeof conditionsRealm.bind>|undefined;
     let conditionsContext:Readonly<{run:object;snapshot:object;lease:object}>|undefined,releaseCandidate:ReleaseComparisonDraft|undefined;
     let originalStart:number|undefined,closingRemaining:number|undefined,externalSignal:AbortSignal|undefined;
+    let releaseWithheld:ConstructionPublicCode|undefined;
     let runPrimary:Readonly<{code:ConstructionPublicCode}>|null=null,stopped:ConstructionPublicCode|null=null;
     const stop=(code:ConstructionPublicCode)=>{
       if(closed)return;
@@ -218,7 +219,8 @@ export function createDevelopmentRoot(dependencies:Readonly<{clock?:()=>number;w
         else {const now=clock();if(!Number.isFinite(now)||originalStart===undefined||closingRemaining===undefined||now<originalStart||Math.max(0,deadline-(now-originalStart))>closingRemaining)code='internal_review_error';else if(now-originalStart>=deadline)code='deadline_exceeded';}
       }catch{code=externalSignal?.aborted?'cancelled':'internal_review_error';}
       if(externalSignal?.aborted)code='cancelled';
-      if(code){stopped=code;runPrimary??=Object.freeze({code});releaseCandidate=undefined;}
+      // Teardown is already confirmed: a late fact only withholds the candidate, never rewrites the run result.
+      if(code){releaseWithheld=code;releaseCandidate=undefined;}
     }
     const diagnostic=construction.copy(),code=stopped??diagnostic.primary?.public_code??null;
     const budget=Object.freeze(core?.view.stats()??{requests:0,received_bytes:0,payload_bytes:0});core=undefined;
@@ -226,6 +228,7 @@ export function createDevelopmentRoot(dependencies:Readonly<{clock?:()=>number;w
       ...(nativeRun?{native:nativeRun.diagnostic()}:{}),
       ...(transcript?{bootstrap:transcript.diagnostic()}:{}),
       ...(releaseCandidate&&code===null&&diagnostic.teardown==='confirmed'&&source?.inspect().sealed?{release_comparison:Object.freeze({scope:'release_value_comparison_only' as const,...releaseCandidate})}:{}),
+      ...(releaseWithheld?{release_comparison_withheld:releaseWithheld}:{}),
       ...(source?{source:source.inspect()}:{}),});
   }
   return Object.freeze({run,inspect});
