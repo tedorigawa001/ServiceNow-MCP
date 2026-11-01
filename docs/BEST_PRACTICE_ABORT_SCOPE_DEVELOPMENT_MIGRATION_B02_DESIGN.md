@@ -1,13 +1,13 @@
 # EF-03B B-02：source・会計・nativeの移行範囲と共通化境界
 
-Version: br006-development-migration-b02-draft-0.5 / Date: 2026-11-01。
-Status: **B-02-01（§7）とB-02-02の同core会計・固定200 transcript（§8）を限定実装。旧試験をすべて残す。native移行・release判断移行・friend撤去・実接続は未実施。正式発行口閉鎖・Unknown・全体受付無効・VM／監視／telemetry調査保留を維持する。実通信・実機操作・設定変更・Pushは行わない。**
+Version: br006-development-migration-b02-draft-0.6 / Date: 2026-11-01。
+Status: **B-02-01〜03の値検査・同core会計・注入同reader cleanup／source受理を限定実装（§7〜9）。旧試験をすべて残す。全case移行・release判断移行・friend撤去・実接続は未実施。正式発行口閉鎖・Unknown・全体受付無効・VM／監視／telemetry調査保留を維持する。実通信・実機操作・設定変更・Pushは行わない。**
 
-設計基準：`5e79b21`。B-01の生成順はbusy事前判定→core→admission→登録ownerに修正済みであり、その前の順序へ戻さない。[移行親設計](BEST_PRACTICE_ABORT_SCOPE_DEVELOPMENT_ROOT_EF03B_DESIGN.md)のB-02を細分化する。§1〜6は初版の計画・受入条件、限定実装と未対応の区分は§7〜8を参照する。
+設計基準：`5e79b21`。B-01の生成順はbusy事前判定→core→admission→登録ownerに修正済みであり、その前の順序へ戻さない。[移行親設計](BEST_PRACTICE_ABORT_SCOPE_DEVELOPMENT_ROOT_EF03B_DESIGN.md)のB-02を細分化する。§1〜6は初版の計画・受入条件、限定実装と未対応の区分は§7〜9を参照する。
 
 ## 1 現在地と今回の境界
 
-[開発assembly](../tests/support/review/ef03/assembly.ts)はconstruction-onlyで、共有construction kernelと新規canonical coreを使うが、source・ready世代・ReleasePermit・readerを持たない。C/G/P=0、final予約も未実施である。B-02はこれを新規開発runの内部で拡張し、既存実sessionの採用機能を追加する工程ではない。
+B-01時点の[開発assembly](../tests/support/review/ef03/assembly.ts)はconstruction-onlyで、共有construction kernelと新規canonical coreを使うが、source・ready世代・ReleasePermit・readerを持たない。C/G/P=0、final予約も未実施だった。B-02はこれを新規開発runの内部で拡張し、既存実sessionの採用機能を追加する工程ではない。
 
 現在の依存は次のように分かれている。
 
@@ -107,7 +107,7 @@ sourceはcommit後に開始し、取消時は同期revoke、finallyではrevoke�
 
 保証はshared-kernel単体、development-assembly、旧production-class-fake-I/O回帰の3区分。旧試験は無変更・併存し、移行完了数へ加算しない。B-SAの順序／混入／consumeに対応する限定試験を追加したが、旧fullName対応表全体・B-ACKの会計／C方式連続試験・B-NDの同reader試験は未移行。C/G/P=0・R未予約、readyは合成世代であって認証証明ではない。native・Response台帳・実ReleasePermit・選択payload／workerは未接続。
 
-[新source試験](../tests/review/development-source.test.ts)、[共通値試験](../tests/review/source-values.test.ts)、[compiled値fixture](../tests/review/fixtures/compiled-source-values.mjs)、[検証記録](E2E_BEST_PRACTICE_DEVELOPMENT_SOURCE_B0201_2026-11-01.md)を参照。compiled fixtureは共通値検査だけであり、開発assemblyのcompiled保証はB-03に残す。次はB-02-02の同core bootstrap会計・固定200 transcriptで、全体受付や正式発行は開かない。
+[新source試験](../tests/review/development-source.test.ts)、[共通値試験](../tests/review/source-values.test.ts)、[compiled値fixture](../tests/review/fixtures/compiled-source-values.mjs)、[検証記録](E2E_BEST_PRACTICE_DEVELOPMENT_SOURCE_B0201_2026-11-01.md)を参照。compiled fixtureは共通値検査だけであり、開発assemblyのcompiled保証はB-03に残す。後続のB-02-02は§8、B-02-03は§9に分離し、全体受付や正式発行は開かない。
 
 draft-0.3のレビュー修正：開発profileのpinが全配列を21要素に制限しており、22行のreleaseが値検査へ届かず`invalid_input`となって本番の`invalid_response`と一致しなかった。pinの配列上限をkey上限の資源境界へ戻し、21行上限は共通値検査だけで判定する。また開発sourceの`reject()`がrevoke済みの`closed`を`failed`へ上書きし、その後の`seal()`が`invalid_state`で失敗し得たため、revokeを終端状態として保持するよう修正した。上位設計からの版数リンクも更新した。
 
@@ -125,8 +125,28 @@ rootの既存canonical coreから一度だけbootstrap portを取り、同port�
 
 port取得後は成功・失敗・取消のfinallyでreleaseを一度だけ試行し、sourceを同期失効してからB-01の固定解放へ進む。summaryは`bootstrap_transcript_only`、C/G/P、claim・予約peak・残予約・release試行数・dispatch数の固定copyだけ。bootstrapのfinallyでportが閉じた後の外側waitは会計操作を行わず、取消と最終解放だけを扱う。省略時とsource値専用経路はC/G/P=0・R未予約のまま維持する。
 
-releaseは固定envelope／projectionまでを消費し、結果は明示的に`release_match: not_evaluated`とする。Australia以外や空の有効行を受理しても、それは値検査の成功だけ。既存C方式のrelease判断・operator config・permit／prepared結合はまだ移行していない。B-ACK全caseの移行完了とは数えず、旧実class試験を残す。native移行はB-02-03、開発compiled保証はB-03、friend撤去はEF-03Cへ残す。
+releaseは固定envelope／projectionまでを消費し、結果は明示的に`release_match: not_evaluated`とする。Australia以外や空の有効行を受理しても、それは値検査の成功だけ。既存C方式のrelease判断・operator config・permit／prepared結合はまだ移行していない。B-ACK全caseの移行完了とは数えず、旧実class試験を残す。注入nativeの限定接続はB-02-03（§9）、開発compiled保証はB-03、friend撤去はEF-03Cへ分離する。
 
 [新規bootstrap試験](../tests/review/development-bootstrap.test.ts)と[検証記録](E2E_BEST_PRACTICE_DEVELOPMENT_BOOTSTRAP_B0202_2026-11-01.md)を参照。実class保証と別assembly保証を分け、Unknown・全体受付無効・正式発行口閉鎖を維持する。
+
+## 9 B-02-03：注入Responseの同reader cleanupとprivate source受理
+
+[開発native境界](../tests/support/review/ef03/native.ts)は実ResponseからEF-03専用のopaque deliveryを発行する。同Responseの二重登録を拒否し、pin時のtakeでdeliveryを消費する。raw Response／proxy／コピー／診断はrootのdeliveryとして受け付けない。profileはtarget・parent_bytes・deliveryの3項目だけで、source値／通常transcriptとの併用を拒否する。delivery登録はreader所有の証明ではなく、reader所有は後段の取得成功から始まる。
+
+[既存cleanup部品](../src/review/abort-scope-evidence-status-cleanup.ts)の操作・事実収集を再利用する。新しい開発専用realmはResponse／streamのWeakSetを別生成し、EF-03の複数root間で再使用を拒否する。ST-02／ST-03の既存台帳や、実session／runtimeの登録台帳とは共有しない。この開発moduleの依存はnodeのStreams／utilとzodで、import時friend取得を行うND moduleは読み込まない。旧cleanup／workflow入口は元の公開method集合を維持し、新proof methodを露出しない。
+
+root生成の同core・同leaseからnative ownerをparent取得前に確保し、同sourceのprivate生成継続へ参照を渡す。B-02-02の同portで親C=1・G=parent bytes長、releaseの注入試行C=1を計上する。release bodyはread=0でcancel-onlyにし、Gへ未読bytesを足さない。内部の空release bytesはこの分岐では解析・ack化しない。final4枠はcleanup join後にbootstrapのfinallyで1回返却する。
+
+native操作は捕捉したprototype操作だけで、同readerのgetReader→closed取得→cancel→元floor内join→releaseLock。readerが分かる取得途中失敗ではそのreaderを回収し、handleが返る前のthrow／closed取得不能／解除throwはunconfirmedにする。callerが既にlockを所有するstreamを勝手に解除しない。bodyなしは操作0・no_bodyであり、EOF／body ackを意味しない。許容受理はreleaseの403／404だけで、401はhard HTTP、その他は本subsetではinvalid_responseの診断対象。一般HTTP意味論の変更ではない。
+
+proofは同owner内のrecord／anchor／header／cleanup／元window参照に私有Mapで結合する。発行claim・消費claimは各1回。元windowのboundsは解析時のimmutable copy、相関は元descriptor参照で確認する。sourceは固定生成時に保持したownerだけを使い、開始状態とproofをguardより前に消費するため、pre／post guard拒否後も再利用できない。外部診断をproofへ変換する関数、任意consumer／verifierをrootへ渡す口はない。成功してもsourceのstatus_consumptions=1だけで、release_consumptions／permit／fallbackは増やさない。
+
+取消はsourceとnative発行継続を同期失効するが、既に所有したreaderのcleanupは同lease・元floorまでjoinする。signalやcleanupの時点で期限を更新しない。source受理はclose前だけ、closeで未消費proofを失効し、reader処理は同じjoinを再使用する。native側のcancelledという制御理由と実runの期限／先行理由は別なので、summaryのrun_stopへ実run理由を保持する。HTTP、cleanup facts、source拒否、construction teardownを相互に上書きしない。
+
+native summaryは解放後のclosed／revoked=true、固定HTTP／操作数／cleanup factsとclose前の先行理由を保持する。正常closeのclosed理由で先行観測を置換せず、construction teardownがconfirmedでもnative cleanup未確認をconfirmedと解釈しない。元floorで待機を打ち切った後のPromise settleはcleanup copyを昇格させない。基になるPromiseの強制停止・GCや、返らなかった未知readerの物理解放まで保証するものではない。
+
+追加費目はrun当たりnative owner1、delivery1、Response／stream各1のweak登録、proof最大1、同reader1と固定facts、cleanup timer最大1。既存のdefault開発ownerにもprivate proof用の固定状態が増えるが、本番配布closureは変えない。正確なbyte layout／work／必要量はUnknownのまま。新規[28試験](../tests/review/development-native.test.ts)と[検証記録](E2E_BEST_PRACTICE_DEVELOPMENT_NATIVE_B0203_2026-11-01.md)を参照する。
+
+これはdevelopment-assemblyの連続保証であり、旧実class試験は削除・skip・緩和しない。全旧caseの対応表、実classの正式binding、release判断、開発compiled保証（B-03）、friend撤去（EF-03C）・artifact変異（EF-03D）は未完了。正式発行口・全体受付を開かず、調査保留を維持する。
 
 draft-0.5のレビュー修正：開発bootstrapはdispatch後のC差分だけを確認し、本番bootstrap契約が行うchunk後のG差分（＝bytes長）とC/P不変の確認がなかったため追加した。上位設計からの版数リンクも更新した。

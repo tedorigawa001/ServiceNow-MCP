@@ -2,6 +2,7 @@
 import {types} from 'node:util';
 import {parseSourceParent,projectSourceReleaseRows,SourceValueError} from '../../../../src/servicenow/review-kernel/source-values.js';
 import {normalizeConstructionReason,type ConstructionPublicCode} from '../../../../src/servicenow/review-kernel/construction-state.js';
+import {consumeSourceCleanupProof} from '../../../../src/review/abort-scope-evidence-status-cleanup.js';
 
 type Context=Readonly<{run:object;snapshot:object;lease:object}>;
 type Purpose='parent'|'release';
@@ -48,10 +49,10 @@ export function pinDevelopmentSourceProfile(raw:unknown){
 /** Trusted development assembly creates contexts. Handles never cross the root's summary boundary. */
 export function createDevelopmentSourceRealm(){
   const created=new WeakSet<object>();
-  function create(context:Context,target:string,guard:()=>ConstructionPublicCode|null){
+  function create(context:Context,target:string,guard:()=>ConstructionPublicCode|null,nativeOwner?:object){
     if(created.has(context.run))throw new DevelopmentSourceError('internal_review_error','invalid_state');
     created.add(context.run); // Key the originating run, not its copyable context wrapper.
-    let state:State='new',sealed=false,generation=0,parentCount=0,releaseCount=0;
+    let state:State='new',sealed=false,generation=0,parentCount=0,releaseCount=0,statusCount=0;
     let primary:Readonly<{code:string;public_code:ConstructionPublicCode}>|null=null;
     const acks=new Map<object,{purpose:Purpose;value:unknown}>();
     const inactive=()=>sealed||state==='closed';
@@ -74,7 +75,7 @@ export function createDevelopmentSourceRealm(){
       state=next;check(); // Claim before callbacks: reentry cannot repeat the transition.
     }
     function inspect(){return Object.freeze({assembly:'ef03-development' as const,state,sealed,ready_generation:generation,
-      parent_consumptions:parentCount,release_consumptions:releaseCount,primary,
+      parent_consumptions:parentCount,release_consumptions:releaseCount,status_consumptions:statusCount,primary,
       permissions:Object.freeze({formal_issuance:false,release_permit:false,fallback:false} as const)});}
     return Object.freeze({
       prepare(candidate:Context){enter(candidate,'new','preparing');check();state='prepared';},
@@ -99,6 +100,19 @@ export function createDevelopmentSourceRealm(){
         enter(candidate,purpose==='parent'?'parent':'release','consuming');check();
         // Parsed values are discarded here: no runtime permit or public ack is produced.
         if(purpose==='parent'){parentCount=1;state='release';}else{releaseCount=1;state='done';}
+      },
+      consumeStatus(proof:object,window:object,candidate:Context){
+        if(!nativeOwner)reject('evidence_binding_mismatch');
+        // Spend the proof even when source pre-guard refuses, like deleting a body ack before enter().
+        const prior=state;
+        if(!inactive()&&state==='release')state='consuming';
+        const consumed=consumeSourceCleanupProof(nativeOwner,proof,window);
+        if(inactive())reject('closed');
+        if(candidate!==context)reject('evidence_binding_mismatch');
+        if(prior!=='release'||acks.size)reject('invalid_state');
+        check();
+        if(!consumed.ok)reject(consumed.code);
+        check();statusCount=1;state='done';
       },
       revoke(){if(sealed)return;acks.clear();state='closed';},
       seal(){if(sealed)return;if(state!=='closed')reject('invalid_state');sealed=true;},

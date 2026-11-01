@@ -51,6 +51,7 @@ export function pinDevelopmentTranscript(raw:unknown){
   const dispose=()=>{if(disposed)return;disposed=true;for(const row of records)row.bytes.fill(0);records.length=0;};
   async function run(core:Core,signal:AbortSignal,deadline:number,hooks:Readonly<{
     check():void;stop(code:ConstructionPublicCode):void;ready():void;accept(purpose:'parent'|'release',value:unknown):void;
+    nativeRelease?:(window:Readonly<{purpose:'release';ordinal:1;window_origin_ms:number;cleanup_floor_ms:number}>)=>Promise<void>;
   }>){
     if(started||disposed)throw new DevelopmentSourceError('internal_review_error','invalid_state');
     started=true;let accounting:ReturnType<Core['construction']['takeBootstrapAccounting']>|undefined;
@@ -73,6 +74,10 @@ export function pinDevelopmentTranscript(raw:unknown){
         accounting.dispatch(floor);dispatches++;
         const committed=observe(floor);
         if(committed.requests!==before.requests+1||committed.received_bytes!==before.received_bytes||committed.payload_bytes!==0)failure('internal_review_error');
+        if(row.purpose==='release'&&hooks.nativeRelease){
+          await hooks.nativeRelease(Object.freeze({purpose:'release',ordinal:1,window_origin_ms:before.remaining_ms,cleanup_floor_ms:floor}));
+          observe(floor);continue;
+        }
         let responseTimer:ReturnType<typeof setTimeout>|undefined,cutoff:ReturnType<typeof setTimeout>|undefined,remove=()=>{};
         let bytes:Uint8Array;
         try{

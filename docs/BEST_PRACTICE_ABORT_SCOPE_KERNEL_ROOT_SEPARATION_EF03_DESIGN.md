@@ -1,7 +1,7 @@
 # AU-BR-006 EF-03：共通kernel・本番／開発root分離・fake friend撤去
 
-Version: br006-kernel-root-separation-ef03-draft-0.9 / Date: 2026-11-01。
-Status: **EF-03A、EF-03B B-01／B-02-01／02を限定実装。開発会計・固定200 transcriptまでを追加し、native／release判断移行・ビルド設定変更・friend撤去・旧試験置換は未実施。正式発行口閉鎖・Unknown・全体受付無効・VM／監視／telemetry調査保留を維持する。実接続・実通信・実機操作・設定変更・Pushは行わない。**
+Version: br006-kernel-root-separation-ef03-draft-0.10 / Date: 2026-11-01。
+Status: **EF-03A、EF-03B B-01／B-02-01〜03を限定実装。開発同reader cleanup／source受理までを追加し、全case／release判断移行・ビルド設定変更・friend撤去・旧試験置換は未実施。正式発行口閉鎖・Unknown・全体受付無効・VM／監視／telemetry調査保留を維持する。実接続・実通信・実機操作・設定変更・Pushは行わない。**
 
 基準：`e6f9abc`（EF-02後のrun停止／construction診断分離）、[親設計§7〜§13](BEST_PRACTICE_ABORT_SCOPE_EARLY_DIAGNOSTIC_FRIEND_SEPARATION_DESIGN.md)、[ND設計§13](BEST_PRACTICE_ABORT_SCOPE_NATIVE_STATUS_DIAGNOSTIC_DESIGN.md)。配置・型名・build手順は提案であり、新しい公開APIや承認済み本番bindingではない。
 
@@ -97,7 +97,7 @@ EF-03の境界は§1の閉包（friend・callback branch・`synthetic_io`・fake
 ## 8 実装の分割・承認待ち
 
 1. **EF-03A（限定実装済み、§9）：純粋kernel抽出**。EF-02とrun／construction理由分離を保持し、既存classへ接続。fake rootは撤去していない。writer／singletonの共有は導入しない。
-2. **EF-03B（B-01／B-02-01／02を限定実装）**：[開発rootと試験保証の移行計画draft-0.6](BEST_PRACTICE_ABORT_SCOPE_DEVELOPMENT_ROOT_EF03B_DESIGN.md)。独立生成root・別brand／台帳・固定cleanupを旧試験併存で追加。本番の状態／枠不変を合成確認。[B-02の移行範囲・共通化境界draft-0.5](BEST_PRACTICE_ABORT_SCOPE_DEVELOPMENT_MIGRATION_B02_DESIGN.md)の§7〜8に値検査・開発lifecycle・同core会計／固定200 transcriptの限定実装を記録。native／release判断移行、開発compiled保証の移行、旧試験の別assembly保証への置換は未実施／承認待ち。
+2. **EF-03B（B-01／B-02-01〜03を限定実装）**：[開発rootと試験保証の移行計画draft-0.7](BEST_PRACTICE_ABORT_SCOPE_DEVELOPMENT_ROOT_EF03B_DESIGN.md)。独立生成root・別brand／台帳・固定cleanupを旧試験併存で追加。本番の状態／枠不変を合成確認。[B-02の移行範囲・共通化境界draft-0.6](BEST_PRACTICE_ABORT_SCOPE_DEVELOPMENT_MIGRATION_B02_DESIGN.md)の§7〜9に値検査・開発lifecycle・同core会計／固定200 transcript・同reader cleanupの限定実装を記録。全case／release判断移行、開発compiled保証の移行、旧試験の別assembly保証への置換は未実施／承認待ち。
 3. **EF-03C：本番friend／callback lane撤去**。§1の閉包をまとめて切り、省略時summaryを維持。`synthetic_io`削除の互換性変更をCHANGELOGに明記。半分撤去して使われないfriend本体を残さない。
 4. **EF-03D：空build・tarball・負の対照**。production／developmentのcompiled試験を別実行し、正常・変異双方の検査結果と本番class未確認範囲を記録する。
 

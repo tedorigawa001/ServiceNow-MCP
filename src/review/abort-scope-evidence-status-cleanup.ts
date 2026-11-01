@@ -63,7 +63,9 @@ function descriptor(raw: unknown): Window | null {
     return parsed.success ? Object.freeze(parsed.data) : null;
 }
 
-function constructStatusOwner(input: OwnerInput, workflow: boolean) {
+type ResourceRealm={responses:WeakSet<object>;streams:WeakSet<object>};
+const sourceOwners=new WeakMap<object,{consume(token:object,window:object):Result<Readonly<{status:403|404;cleanup:'cancelled'|'no_body'}>>}>();
+function constructStatusOwner(input: OwnerInput, workflow: boolean, realm:ResourceRealm={responses,streams}) {
     const fake = input.fake_io, deadline = input.deadline_ms, readBudget = input.budget.read.bind(input.budget), schedule = input.schedule;
     // Created before acquisition; never derived from an externally returned diagnostic.
     const context = Object.freeze({ owner: Object.freeze({}), generation: Object.freeze({}), budget: input.budget, clock: readBudget, deadline });
@@ -72,6 +74,8 @@ function constructStatusOwner(input: OwnerInput, workflow: boolean) {
         captured: boolean; closed: State; closedWork?: Promise<void>; cancel: Facts['cancel']; release: Facts['release'];
         finishClaimed: boolean; cleanup?: Cleanup; cleanupWork?: Promise<void> };
     const handles = new WeakMap<object, Record>();
+    const sourceProofs=new Map<object,{record:Record;origin:object}>();
+    let sourceIssueClaim=false,sourceConsumeClaim=false,originWindow:object|undefined;
     let started = false, primary: Code | null = null, refusal: Code | null = null, current: Record | undefined;
     let http: Header | null = null;
     let last: number | undefined, sampling = false;
@@ -164,6 +168,7 @@ function constructStatusOwner(input: OwnerInput, workflow: boolean) {
         return r.cleanupWork;
     }
     function stop(code: 'cancelled' | 'closed' = 'cancelled') {
+        sourceProofs.clear();
         revoked = true;
         revokeWorkflow('revoked');
         if (code === 'cancelled' || code === 'closed') stopReason ??= code;
@@ -173,6 +178,7 @@ function constructStatusOwner(input: OwnerInput, workflow: boolean) {
     async function acquire(response: unknown, raw: unknown): Promise<Result<Readonly<{ handle: Handle; status: number }>>> {
         if (started || primary || revoked) { fail('invalid_state'); if (current) await clean(current); return fail('invalid_state'); }
         started = true;
+        originWindow=raw!==null&&typeof raw==='object'?raw:undefined;
         const d = descriptor(raw);
         if (fake !== true || !native || !d || !Number.isInteger(deadline) || deadline < 1 || deadline > 60_000 ||
             d.window_origin_ms > deadline || d.window_origin_ms - d.cleanup_floor_ms <= 0 ||
@@ -181,11 +187,11 @@ function constructStatusOwner(input: OwnerInput, workflow: boolean) {
         if (at.issue || primary) return fail(primary ?? 'invalid_state');
         if (at.n > d.window_origin_ms) return fail('invalid_input');
         try {
-            if (!response || typeof response !== 'object' || types.isProxy(response) || Object.getPrototypeOf(response) !== native.rp || responses.has(response)) return fail('invalid_response');
+            if (!response || typeof response !== 'object' || types.isProxy(response) || Object.getPrototypeOf(response) !== native.rp || realm.responses.has(response)) return fail('invalid_response');
             const statusCode = Reflect.apply(native.status!, response, []) as number;
             const used = Reflect.apply(native.used!, response, []) as boolean, stream = Reflect.apply(native.body!, response, []) as object | null;
             if (!Number.isInteger(statusCode) || statusCode < 100 || statusCode > 599 || used) return fail('invalid_response');
-            responses.add(response);
+            realm.responses.add(response);
             http = Object.freeze({ purpose: d.purpose, status: statusCode, body_present: stream !== null });
             if (statusCode === 401) primary ??= 'authentication_failed';
             else if (statusCode === 403 && d.purpose !== 'release') primary ??= 'access_denied';
@@ -196,10 +202,10 @@ function constructStatusOwner(input: OwnerInput, workflow: boolean) {
                 release: stream === null ? 'not_applicable' : 'not_started', finishClaimed: false };
             current = r; handles.set(handle, r);
             if (stream !== null) {
-                if (!stream || types.isProxy(stream) || Object.getPrototypeOf(stream) !== native.sp || streams.has(stream) || Reflect.apply(native.locked!, stream, [])) {
+                if (!stream || types.isProxy(stream) || Object.getPrototypeOf(stream) !== native.sp || realm.streams.has(stream) || Reflect.apply(native.locked!, stream, [])) {
                     fail('invalid_response'); await clean(r); return fail('invalid_response');
                 }
-                streams.add(stream); ops.get_reader++;
+                realm.streams.add(stream); ops.get_reader++;
                 r.reader = Reflect.apply(native.getReader, stream, []) as object;
                 if (!r.reader || types.isProxy(r.reader) || Object.getPrototypeOf(r.reader) !== native.dp) throw Error('reader_invalid');
                 r.owned = true; ops.closed++;
@@ -291,11 +297,36 @@ function constructStatusOwner(input: OwnerInput, workflow: boolean) {
         return ok(status());
     }
     async function close() { stop('closed'); if (current) await clean(current); return status(); }
-    return Object.freeze({ acquire, finish, stop, close, diagnostics: status });
+    async function finishSource(handle:Handle):Promise<Result<object>>{
+        if(sourceIssueClaim)return fail('invalid_state');sourceIssueClaim=true;
+        const r=handles.get(handle);
+        if(!r||r!==current)return fail('evidence_binding_mismatch');
+        if(r.finishClaimed)return fail('invalid_state');r.finishClaimed=true;
+        await clean(r);
+        if(revoked||primary||!sameRecord(r)||!eligible(r)||!originWindow)return fail(primary??'invalid_state');
+        const checked=sample(r.window.cleanup_floor_ms);
+        if(checked.issue||revoked||primary)return fail(primary??'invalid_state');
+        const token=Object.freeze(Object.create(null));sourceProofs.set(token,{record:r,origin:originWindow});return ok(token);
+    }
+    function consumeSource(token:object,window:object):Result<Readonly<{status:403|404;cleanup:'cancelled'|'no_body'}>>{
+        const held=sourceProofs.get(token);sourceProofs.delete(token);
+        if(sourceConsumeClaim)return fail('invalid_state');sourceConsumeClaim=true;
+        if(!held||held.record!==current||held.origin!==window||!sameRecord(held.record))return fail('evidence_binding_mismatch');
+        const r=held.record;
+        if(revoked||primary||!eligible(r))return fail(primary??'invalid_state');
+        const pre=sample(r.window.cleanup_floor_ms),post=sample(r.window.cleanup_floor_ms);
+        if(pre.issue||post.issue||revoked||primary||!eligible(r))return fail(primary??'invalid_state');
+        return ok(Object.freeze({status:r.header.status as 403|404,cleanup:r.cleanup!.kind as 'cancelled'|'no_body'}));
+    }
+    return Object.freeze({ acquire, finish, stop, close, diagnostics: status, source:Object.freeze({finishSource,consumeSource}) });
+}
+
+function publicOwner(owner:ReturnType<typeof constructStatusOwner>){
+    return Object.freeze({acquire:owner.acquire,finish:owner.finish,stop:owner.stop,close:owner.close,diagnostics:owner.diagnostics});
 }
 
 /** Legacy ST-02 entry retains its diagnostic-only behavior. */
-export function createInjectedStatusCleanupOwner(input: OwnerInput) { return constructStatusOwner(input, false); }
+export function createInjectedStatusCleanupOwner(input: OwnerInput) { return publicOwner(constructStatusOwner(input, false)); }
 
 /** ST-03C fixed constructor. Only fake I/O dependencies, never caller-supplied records/consumers/sessions. */
 export function createInjectedStatusWorkflowOwner(raw: OwnerInput) {
@@ -308,7 +339,21 @@ export function createInjectedStatusWorkflowOwner(raw: OwnerInput) {
     };
     const d = data(raw, ['fake_io', 'deadline_ms', 'budget', 'schedule']), b = data(d?.budget, ['read']);
     if (!d || !b || d.fake_io !== true || typeof d.schedule !== 'function' || typeof b.read !== 'function')
-        return constructStatusOwner({ fake_io: true, deadline_ms: 0, budget: { read: () => ({ remaining_ms: 0 }) }, schedule: () => () => {} }, true);
+        return publicOwner(constructStatusOwner({ fake_io: true, deadline_ms: 0, budget: { read: () => ({ remaining_ms: 0 }) }, schedule: () => () => {} }, true));
     // Preserve the original readonly budget identity and pin its method once in the same constructor.
-    return constructStatusOwner({ fake_io: true, deadline_ms: d.deadline_ms as number, budget: d.budget as OwnerInput['budget'], schedule: d.schedule as OwnerInput['schedule'] }, true);
+    return publicOwner(constructStatusOwner({ fake_io: true, deadline_ms: d.deadline_ms as number, budget: d.budget as OwnerInput['budget'], schedule: d.schedule as OwnerInput['schedule'] }, true));
+}
+
+/** Separate development realm: never shares old fixture or runtime resource tables. */
+export function createIsolatedStatusCleanupRealm(){
+    const realm:ResourceRealm={responses:new WeakSet(),streams:new WeakSet()};
+    return Object.freeze({create(input:OwnerInput){
+        const owner=constructStatusOwner(input,false,realm);
+        const value=Object.freeze({...publicOwner(owner),finishSource:owner.source.finishSource});
+        sourceOwners.set(value,{consume:owner.source.consumeSource});return value;
+    }});
+}
+/** Only known private proofs are consumable. No diagnostic setter or value-to-proof conversion. */
+export function consumeSourceCleanupProof(owner:object,token:object,window:object){
+    return sourceOwners.get(owner)?.consume(token,window)??Object.freeze({ok:false as const,code:'evidence_binding_mismatch' as const});
 }
