@@ -1,9 +1,9 @@
 # RC-03 R前提：既存deadlineMs getterの再利用契約
 
-Version: br006-release-deadline-reuse-draft-0.1 / Date: 2026-11-01。
-Status: **設計・ソースの読み取り照合のみ。実装・実接続・実通信・実機操作・設定変更・実Permit発行・Pushは行わない。正式発行口閉鎖・Unknown・全体受付無効・VM／監視／telemetry調査保留を維持する。**
+Version: br006-release-deadline-reuse-draft-0.2 / Date: 2026-11-01。
+Status: **RP-01のprivate projectionを既存の固定fake-200継続だけに限定実装（§8）。実sourceの値判定・比較器接続は未実施。実接続・実通信・実機操作・設定変更・実Permit発行・Pushは行わない。正式発行口閉鎖・Unknown・全体受付無効・VM／監視／telemetry調査保留を維持する。**
 
-基準`2e4e841`。[RC-03親設計](BEST_PRACTICE_ABORT_SCOPE_RELEASE_ADOPTION_RC03_DESIGN.md)のR前提を訂正・具体化する。D01〜D03の合成保証を実source／sessionの保証へ昇格させず、既存のgetterを重複追加しない。本書の受入条件は未実行で、R差替えの承認でもない。
+設計基準`2e4e841`、RP-01基準`9de9c6a`。[RC-03親設計](BEST_PRACTICE_ABORT_SCOPE_RELEASE_ADOPTION_RC03_DESIGN.md)のR前提を訂正・具体化する。D01〜D03の合成保証を実source／sessionの保証へ昇格させず、既存のgetterを重複追加しない。§5は将来の全体受入条件で、今回の限定実装・検証範囲と残差は§8へ分離する。R差替えの承認ではない。
 
 ## 1 現状と訂正
 
@@ -77,10 +77,24 @@ getter再利用・局所値採取自体でC/G/P・予約・retry・timer・clean
 
 ## 6 次工程・承認待ち
 
-既存getterの存在と現在の参照元は静的照合済み。Rへのprojection接続・同session不変条件の動的保証・上表の合成試験は未実装／未実施である。次はこの再利用契約の承認後に最小のfake検証範囲を決める。新getterや独立deadline設定の追加を先行しない。
+既存getterの存在と現在の参照元は静的照合済み。RP-01で固定fake継続のprojection生成／消費と一部の動的検証を追加したが、通常実sourceへの接続・比較器への入力化・§5全項目の完了は未実施である。新getterや独立deadline設定の追加を先行しない。
 
 B-03の開発専用build／compiled保証・旧case対応表は別工程。既存production compiled試験の成功をD01〜D03の専用compiled保証へ数えない。設定日時長cap・同期比較／全入力work上界・UTC採取方針・実source／Permit切替・friend撤去は依然未承認／Unknown。正式発行口・全体受付は開かず、調査保留を維持する。
 
-## 7 今回の確認範囲
+## 7 draft-0.1作成時の確認範囲
 
 ソース・現在の設計書・git履歴の読み取り照合とMD更新のみ。getter新設、limitsのfreeze、比較器接続、テスト追加／実行、build、外部資料取得・通信は行っていない。文書の参照・差分検査は別途実施し、その結果だけを報告する。
+
+## 8 RP-01の限定実装・費目・残差
+
+[BoundedReadSession](../src/servicenow/bounded-read.ts)内部に非exportの型と`#private`状態を追加した。constructorの設定pin直後に同this・startedAt・元limits.deadlineMs・pin済みpolicyをoriginとして保持する。既存getterそのものは変更しない。originは通常sessionにも確保するが、通常GET／実sourceの判定からは生成／消費を呼ばない。
+
+既存`prepareNewReviewComposition`の固定fake-200継続で、親ack受理後にfresh→capturingを先に消費し、同sessionの既存getterを一度だけ読む。元origin／同source／composition keyと照合し、guard後の現状態も再確認してからpendingへ進める。projectionは凍結したtiming（S／L）と同policy参照、this／source／keyだけを保持する。getter実行中のstartedAt／policy変更もrelease dispatch前に拒否する。
+
+同継続のrelease-200受理直前にはprojectionをslotから先に取り除いてconsumingへ進み、同this／source／key・origin・現状態を再照合し、guard後にconsumedとする。今回の生成値は整合検査後に破棄し、比較器・実source判定には渡さない。通常のprivate release consumerは従来の判定を使う。新しい公開生成口・friend・projection取得口・summary field・registryはない。
+
+失敗時はprojectionを破棄してclosedにし、同canonical停止ownerへ固定理由を渡す。先行する取消／close／deadlineを内部エラーで上書きしない。同期失効・finally・constructor rollback／closeでもslotを消し、originはcloseで解放する。失敗後に状態やclaimをfreshへ戻さない。固定private継続以外から生成・二重消費を直接起動する試験用入口は追加していない。
+
+追加費目はconstructor origin1個、fake継続のprojectionとtiming各1個、固定参照比較・guardであり、raw設定・policy・bytesの新たなdeep copyはない。C/G/P・final4予約・cleanupは元ownerのまま。allocationの正確なlayout／work／同期時間上界は未導出で、全体受付の根拠にしない。
+
+[RP-01検証記録](E2E_BEST_PRACTICE_RELEASE_SESSION_PROJECTION_RP01_2026-11-01.md)に合成試験・初回RED／補強時の失敗・型検査・梱包確認を記録する。§5のうちgetter／pin一致、低減値、options copy、残時間置換、policy混入、guardと停止の一部を実class＋fake依存で確認する。比較器への実入力・取得45秒後のpolicy照合・観測UTCと上位時刻・全§5の保証／B-03専用compiledは残課題。故障注入に使うprototype getter置換は本番の供給口・権限にはならず、任意のローカルコード改変に対する完全防御を主張しない。

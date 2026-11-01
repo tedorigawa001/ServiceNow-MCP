@@ -165,7 +165,7 @@ draft-0.5のレビュー修正：開発bootstrapはdispatch後のC差分だけ�
 
 ## 12 RC-03採用境界の差分設計
 
-[固定採用境界・接続差分draft-0.8](BEST_PRACTICE_ABORT_SCOPE_RELEASE_ADOPTION_RC03_DESIGN.md)に、Dのtest-only時刻／policy binding・同ackのconsume・pre/post guardと非実行summary、Rの同session条件・公開copy／private snapshot・失敗owner／解放を分離した。Dの最初の候補はRC3-D01（条件とclaimのみ）で、比較公開はD02、GET前のbinding不一致はD03とする。R差替え・実Permit経路・非200移行は未承認。旧case分類・件数・旧試験・全体受付無効・正式発行口閉鎖は変更しない。
+[固定採用境界・接続差分draft-0.9](BEST_PRACTICE_ABORT_SCOPE_RELEASE_ADOPTION_RC03_DESIGN.md)に、Dのtest-only時刻／policy binding・同ackのconsume・pre/post guardと非実行summary、Rの同session条件・公開copy／private snapshot・失敗owner／解放を分離した。Dの最初の候補はRC3-D01（条件とclaimのみ）で、比較公開はD02、GET前のbinding不一致はD03とする。R差替え・実Permit経路・非200移行は未承認。旧case分類・件数・旧試験・全体受付無効・正式発行口閉鎖は変更しない。
 
 RC3-D01の条件とclaimだけを限定実装した。開発rootごとの条件handle／run生成枠と同realm source照合を追加し、旧summary・会計・final4枠は不変。比較結果は公開せず、次はD02である。[D01検証記録](E2E_BEST_PRACTICE_RELEASE_CONDITIONS_D01_2026-11-01.md)参照。実classの正式bindingや旧case移行完了へ読み替えない。
 
@@ -173,4 +173,4 @@ RC3-D02では、同sourceの200行ack・固定比較・guard・seal後の非実�
 
 後続RC3-D03で、同source／条件ownerの一度限りdispatch前判断とnot_requestedを限定接続した。整合したbinding不一致は認証・親の受理後にrelease GET=0で値unknownを返し、同canonical会計・final4予約返却を維持する。[D03検証記録](E2E_BEST_PRACTICE_RELEASE_NO_REQUEST_D03_2026-11-01.md)参照。R差替え・実Permit・native/status-only・正式発行は未実施／閉鎖を維持する。
 
-[既存deadline getter再利用契約draft-0.1](BEST_PRACTICE_ABORT_SCOPE_RELEASE_DEADLINE_REUSE_DESIGN.md)に、Rの設定pin／比較器への同startedAt・元全deadline供給を整理した。getterは既存であり、新設待ちという旧記述は誤認。比較器への結合・動的検証は未実施で、残時間の再計算・provider再呼出しはしない。B-03の専用compiled保証・旧case対応表とは別に検証する。
+[既存deadline getter再利用契約draft-0.2](BEST_PRACTICE_ABORT_SCOPE_RELEASE_DEADLINE_REUSE_DESIGN.md)に、Rの設定pin／比較器への同startedAt・元全deadline供給を整理した。getterは既存であり、新設待ちという旧記述は誤認。RP-01の固定fake継続にprivate projection生成／消費を限定追加したが、比較器への入力化・通常source差替えは未実施で、残時間再計算・provider再呼出しはしない。B-03の専用compiled保証・旧case対応表とは別に検証する。

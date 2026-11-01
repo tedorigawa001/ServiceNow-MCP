@@ -8,6 +8,9 @@ import {parse} from 'acorn';
 const root=fileURLToPath(new URL('../../',import.meta.url)),moduleNames=['abort-scope-evidence-http-classification','abort-scope-evidence-status-terminal','abort-scope-evidence-status-cleanup','abort-scope-evidence-status-context','abort-scope-evidence-status-bound-workflow','abort-scope-evidence-source-status-acceptance','abort-scope-evidence-source-status-probe','abort-scope-evidence-native-diagnostic','abort-scope-evidence-construction-shell'];
 const output=execFileSync('npm',['pack','--dry-run','--ignore-scripts','--offline','--json'],{cwd:root,encoding:'utf8',maxBuffer:8*1024*1024,env:{...process.env,npm_config_cache:join(tmpdir(),'servicenow-mcp-owner-pack-cache')},stdio:['ignore','pipe','pipe']});
 const [pack]=JSON.parse(output);
+const sessionDeclarations=readFileSync(join(root,'dist/servicenow/bounded-read.d.ts'),'utf8');
+for(const privateName of ['ReleaseInputProjection','ReleaseInputOrigin','captureReleaseInput','consumeReleaseInput'])
+  assert(!sessionDeclarations.includes(privateName),'private release timing projection leaked into declarations: '+privateName);
 const kernel='dist/servicenow/review-kernel/construction-state';
 const sourceKernel='dist/servicenow/review-kernel/source-values';
 for(const name of ['release-family','release-comparison']) {

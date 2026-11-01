@@ -48,6 +48,9 @@ type CompositionOptions=Pick<BoundedReadOptions,'signal'|'limits'>;
 type CompositionSummary=Readonly<{auth_ready:boolean;ready_generation:number;budget:Readonly<{requests:number;received_bytes:number;payload_bytes:number}>;phase_reserve_ms:number;dispatch:'unavailable';evidence_issuance:'disabled';reserved:0;cleanup:'closed'}>;
 type ConstructorSummary=CompositionSummary&Readonly<{state:'constructor_bound';initial_source:'bound';transport_claim:'claimed'}>;
 type PreparedSummary=CompositionSummary&ReviewSourceReleaseSnapshot&Readonly<{state:'prepared_only';fake_io:true}>;
+type ReleaseInputOrigin=Readonly<{session:BoundedReadSession;startedAt:string;deadlineMs:number;policy:ReturnType<typeof pinReviewReleaseConfig>}>;
+type ReleaseInputProjection=Readonly<{session:BoundedReadSession;source:BoundedUpdateSetSource;key:object;
+  timing:Readonly<{started_at:string;deadline_ms:number}>;policy:ReturnType<typeof pinReviewReleaseConfig>}>;
 let active = 0;
 const principals = new Set<string>();
 const snapshotKeys = new Set(['instanceUrl', 'authMode', 'perUserBearerToken', 'oauth', 'accessToken', 'tokenExpiry', 'reviewReleaseConfig', 'reviewReleaseConfigProvider']);
@@ -142,6 +145,9 @@ export class BoundedReadSession {
   #compositionKey?:object;
   #compositionSource?:BoundedUpdateSetSource;
   #compositionRevoke?:()=>void;
+  #releaseInputOrigin?:ReleaseInputOrigin;
+  #releaseInputProjection?:ReleaseInputProjection;
+  #releaseInputState:'fresh'|'capturing'|'pending'|'consuming'|'consumed'|'closed'='fresh';
   private get stopCode(){return this.#budget.view.failure()??undefined;}
   private disposed = false;
   private busy = false;
@@ -383,7 +389,7 @@ export class BoundedReadSession {
       if(!fake.matches(auth==='exchange'))throw new BoundedReadError('invalid_input');
       const stop=(code:unknown)=>{this.#runOwner.revoke(code);this.#budget.writer.stop(code);this.stop(this.stopCode??'internal_review_error');};
       contract=createReviewBootstrapContract({lease:this.#runLease,phaseReserveMs:this.reserveMs,sample:()=>this.#runLease.read(),check:(h,s,l)=>this.#runOwner.transportConstructor.inspect(h,s,l),
-        ready:()=>this.#runOwner.markReady(this.#snapshot,this.#runLease),acceptParent:r=>{guard();if(r.status!==200)throw new BoundedReadError('invalid_response');consumer!.parent(mint('parent',r.value));guard();},
+        ready:()=>this.#runOwner.markReady(this.#snapshot,this.#runLease),acceptParent:r=>{guard();if(r.status!==200)throw new BoundedReadError('invalid_response');consumer!.parent(mint('parent',r.value));guard();this.#captureReleaseInput(scope.source,key,guard);},
         bind:(s,p,port)=>this.#runOwner.inspectSource(this.#snapshot,this.#runLease,s,p,port)!==null,
         prepared:(h,s,l,source,p,port)=>this.#runOwner.transportConstructor.inspectPrepared(h,s,l,source,p,port),stop,failure:()=>this.#runOwner.failure(),
       },{fake_io:true,typed_body:true,native_body:true,lease:this.#runLease,source:scope.source,target:input.update_set_sys_id,auth,
@@ -391,14 +397,45 @@ export class BoundedReadSession {
         dispatch:(r,signal)=>fake.dispatch(r,signal),schedule:(ms,wake)=>{const timer=setTimeout(wake,ms);return ()=>clearTimeout(timer);},
         resolveRelease:async r=>{guard();
           // Only the fixed-200 transcript is adopted; a 403 must never reach the C-mode fallback through a missing body.
-          if(r.status!==200)throw new BoundedReadError('invalid_response');const decision=await consumer!.release(mint('release',r.value));guard();if(decision.release_match!=='matched')return null;const port=BoundedUpdateSetSource.releasePortFor(scope.source,this,decision.permit);if(!port)throw new BoundedReadError('internal_review_error');return {source:scope.source,permit:decision.permit,port};},
+          if(r.status!==200)throw new BoundedReadError('invalid_response');this.#consumeReleaseInput(scope.source,key,guard);const decision=await consumer!.release(mint('release',r.value));guard();if(decision.release_match!=='matched')return null;const port=BoundedUpdateSetSource.releasePortFor(scope.source,this,decision.permit);if(!port)throw new BoundedReadError('internal_review_error');return {source:scope.source,permit:decision.permit,port};},
       });
-      this.#compositionRevoke=()=>{this.#compositionKey=undefined;consumer?.revoke();contract?.revoke();};
+      this.#compositionRevoke=()=>{this.#releaseInputProjection=undefined;this.#releaseInputState='closed';this.#compositionKey=undefined;consumer?.revoke();contract?.revoke();};
       const result=await contract.run(scope.handle,this.#snapshot,this.#runLease);
       if(!result.ok)throw new BoundedReadError(this.stopCode??(['invalid_state','invalid_observation_time','evidence_binding_mismatch'].includes(result.code)?'internal_review_error':result.code as ReadFailureCode));
       guard();const status=this.#runOwner.inspect(this.#snapshot,this.#runLease);guard();
       return Object.freeze({...result.value,fake_io:true as const,auth_ready:status.auth_ready,ready_generation:status.ready_generation,budget:this.#budget.view.stats(),phase_reserve_ms:this.reserveMs});
-    }finally{this.#compositionKey=undefined;consumer?.revoke();contract?.revoke();scope.accounting.release();this.#compositionRevoke=undefined;}
+    }finally{this.#releaseInputProjection=undefined;this.#releaseInputState='closed';this.#compositionKey=undefined;consumer?.revoke();contract?.revoke();scope.accounting.release();this.#compositionRevoke=undefined;}
+  }
+  /** Private fake-200 continuation only. This value is neither evidence nor a Permit. */
+  #captureReleaseInput(source:BoundedUpdateSetSource,key:object,guard:()=>void){
+    try{
+      if(this.#releaseInputState!=='fresh')throw new BoundedReadError('internal_review_error');
+      this.#releaseInputState='capturing';guard();
+      const origin=this.#releaseInputOrigin,startedAt=this.startedAt,deadlineMs=this.deadlineMs,policy=this.releasePolicy;
+      guard();
+      if(this.#releaseInputState!=='capturing'||!origin||origin.session!==this||source!==this.#compositionSource||key!==this.#compositionKey||
+        startedAt!==origin.startedAt||deadlineMs!==origin.deadlineMs||policy!==origin.policy||
+        this.startedAt!==origin.startedAt||this.limits.deadlineMs!==origin.deadlineMs||this.releasePolicy!==origin.policy)throw new BoundedReadError('internal_review_error');
+      this.#releaseInputProjection=Object.freeze({session:this,source,key,timing:Object.freeze({started_at:startedAt,deadline_ms:deadlineMs}),policy});
+      this.#releaseInputState='pending';
+    }catch(error){this.#failReleaseInput(error);}
+  }
+  #consumeReleaseInput(source:BoundedUpdateSetSource,key:object,guard:()=>void):ReleaseInputProjection{
+    const value=this.#releaseInputProjection;this.#releaseInputProjection=undefined;
+    try{
+      if(this.#releaseInputState!=='pending')throw new BoundedReadError('internal_review_error');
+      this.#releaseInputState='consuming';guard();const origin=this.#releaseInputOrigin;
+      if(!value||!origin||value.session!==this||source!==value.source||source!==this.#compositionSource||key!==value.key||key!==this.#compositionKey||
+        value.timing.started_at!==origin.startedAt||value.timing.deadline_ms!==origin.deadlineMs||value.policy!==origin.policy||
+        this.startedAt!==origin.startedAt||this.limits.deadlineMs!==origin.deadlineMs||this.releasePolicy!==origin.policy)throw new BoundedReadError('internal_review_error');
+      guard();if(this.#releaseInputState!=='consuming')throw new BoundedReadError('internal_review_error');
+      this.#releaseInputState='consumed';return value;
+    }catch(error){return this.#failReleaseInput(error);}
+  }
+  #failReleaseInput(error:unknown):never{
+    this.#releaseInputProjection=undefined;this.#releaseInputState='closed';
+    const reason=this.stopCode??(this.disposed?'closed':error instanceof BoundedReadError||error instanceof CanonicalBudgetError?error.code:'internal_review_error');
+    this.stop(reason);throw new BoundedReadError(this.stopCode??reason);
   }
   #checkComposition(){
     this.#syncRunFailure();
@@ -444,6 +481,7 @@ export class BoundedReadSession {
     try { this.releasePolicy = pinReviewReleaseConfig(copy.reviewReleaseConfigProvider
       ? copy.reviewReleaseConfigProvider() : copy.reviewReleaseConfig, this.baseUrl, this.startedAt, this.limits.deadlineMs); }
     catch { throw new BoundedReadError('config_invalid'); }
+    this.#releaseInputOrigin=Object.freeze({session:this,startedAt:this.startedAt,deadlineMs:this.limits.deadlineMs,policy:this.releasePolicy});
     this.#constructionStage='authentication';
     if (copy.authMode === 'impersonation') throw new BoundedReadError('authentication_failed');
     this.authMode = copy.authMode === 'per-user' ? 'per-user' : 'service-account';
@@ -508,6 +546,7 @@ export class BoundedReadSession {
       if(!confirmed)this.#construction.fail('close','internal_review_error');
     };
     release('source_transport',this.#compositionRevoke);this.#compositionRevoke=undefined;this.#compositionKey=undefined;this.#compositionSource=undefined;
+    this.#releaseInputProjection=undefined;this.#releaseInputOrigin=undefined;this.#releaseInputState='closed';
     release('registered_owner',this.#runOwner?()=>this.#runOwner.close(this.stopCode??this.#construction.failure()?.code??'closed'):undefined);
     release('core',this.#budget?()=>this.#budget.writer.close():undefined);
     release('abort_listener',this.removeExternal);
