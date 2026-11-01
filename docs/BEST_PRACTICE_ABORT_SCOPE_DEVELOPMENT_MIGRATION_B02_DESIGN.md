@@ -1,6 +1,6 @@
 # EF-03B B-02：source・会計・nativeの移行範囲と共通化境界
 
-Version: br006-development-migration-b02-draft-0.7 / Date: 2026-11-01。
+Version: br006-development-migration-b02-draft-0.8 / Date: 2026-11-01。
 Status: **B-02-01〜03の値検査・同core会計・注入同reader cleanup／source受理を限定実装（§7〜9）。旧試験をすべて残す。全case移行・release判断移行・friend撤去・実接続は未実施。正式発行口閉鎖・Unknown・全体受付無効・VM／監視／telemetry調査保留を維持する。実通信・実機操作・設定変更・Pushは行わない。**
 
 設計基準：`5e79b21`。B-01の生成順はbusy事前判定→core→admission→登録ownerに修正済みであり、その前の順序へ戻さない。[移行親設計](BEST_PRACTICE_ABORT_SCOPE_DEVELOPMENT_ROOT_EF03B_DESIGN.md)のB-02を細分化する。§1〜6は初版の計画・受入条件、限定実装と未対応の区分は§7〜9を参照する。
@@ -154,5 +154,11 @@ native summaryは解放後のclosed／revoked=true、固定HTTP／操作数／cl
 [旧case対応表draft-0.1](BEST_PRACTICE_ABORT_SCOPE_OLD_CASE_CROSSWALK_B02_DESIGN.md)は、既存JSONと基準sourceから旧330件・新139件のfullNameを記録し、同名パラメーターを条件で識別する。「維持」148は旧位置の継続、「部分対応」109は一部assertionの相当試験、「未対応」73は同条件の新caseなし／差分比較のみ。全旧試験を維持し、未対応を実装不在とも、部分対応を実class保証の代替とも即断しない。新しいテスト実行・実装・削除承認を本表から推認しない。
 
 優先する残差はrelease判断、draft公開直前の取消／最終guard、native各点の期限・再入・特定入力である。B-03はこの対応表の残差と実class保証を別に保持したまま専用compiled試験を設計する。現在の全体テスト／梱包成功を別assemblyのcompiled保証へ読み替えない。
+
+## 11 release純粋比較器の設計案
+
+[release比較器詳細設計draft-0.1](BEST_PRACTICE_ABORT_SCOPE_RELEASE_COMPARATOR_DESIGN.md)に、family判定、空／不完全／21行sentinelとraw応答上限の区別、期限切れ設定を保持した競合判定、固定limitations順序を整理した。比較器は値draftだけを返し、実Permit・private snapshot／port・採用claimは生成しない。既存の非200 legacy catchと、bootstrapのdecode／cleanup失敗は同時に移さない。
+
+入力の設定日時文字列長、最小のfamily共有閉包、壁時計逆行等は実装前確認・承認待ちとして残す。RC-01〜03は提案段階で、新case／対応済みへ数えない。旧試験・対応表の分類、not_evaluated、正式発行口閉鎖・全体受付無効・調査保留を維持する。
 
 draft-0.5のレビュー修正：開発bootstrapはdispatch後のC差分だけを確認し、本番bootstrap契約が行うchunk後のG差分（＝bytes長）とC/P不変の確認がなかったため追加した。上位設計からの版数リンクも更新した。
