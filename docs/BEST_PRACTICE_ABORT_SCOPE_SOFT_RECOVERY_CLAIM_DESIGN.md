@@ -1,6 +1,6 @@
 # WJ-C残工程：soft回復claim・世代移行の詳細設計
 
-Version: br006-soft-recovery-claim-draft-0.1 / Date: 2026-11-02。
+Version: br006-soft-recovery-claim-draft-0.2 / Date: 2026-11-02。
 Status: **設計案のみ。型・issuer・状態遷移・試験は未実装。正式発行口閉鎖・Unknown・全体受付無効・VM／監視／telemetry調査保留を維持する。**
 
 基準HEAD: `2804af5`。[親設計](BEST_PRACTICE_ABORT_SCOPE_WORKER_TIME_BINDING_DESIGN.md)§7・13の差分。WJ-Cの通常finish限定実装を変更せず、次の合成実装範囲を定める。実worker／runtime接続、実通信・実機操作、設定変更、本番cap／Permit投入・Pushの承認ではない。
@@ -34,7 +34,7 @@ Status: **設計案のみ。型・issuer・状態遷移・試験は未実装。�
 
 | 内部役割案 | 固定発行元・発行前提 | binding・消費／解放 |
 |---|---|---|
-| SoftObservation | phase期限は同ReadStateの期限確定継続、worker期限は同監督のanalysis呼出し中のtimer終端継続 | 同run／budget、元phase、観測serial。worker側はgeneration・worker／監督とready待ち／analyze送信後を区別する。例外classのinstanceofだけでは代替しない |
+| SoftObservation | phase期限は同ReadStateの期限確定継続、worker期限は同監督のanalysis呼出し中の期限判定継続（timer終端に限らず§6.0の全発生点） | 同run／budget、元phase、観測serial。worker側は§6.0の発生点の種類とgeneration・worker／監督（未起動ならその事実）を区別する。例外classのinstanceofだけでは代替しない |
 | RecoveryStartClaim | 同時刻ownerがSoftObservationを受け、未使用のrun側recovery slotを先に占有した固定継続 | 同owner／run／budgetと観測handle。ready待ちなら同inputと未送信状態、送信後なら同analyze jobに結合。一度消費して返却不能 |
 | RunHealthWitness | 元canonical ownerの固定guard継続 | 元予算identity・生存状態・全体remaining>0・取消なしを確認。保存した数値remainingだけを再利用しない。各非同期境界後にも元guardで確認する |
 | TimedOutInputRecord | 同input／job ownerの固定soft終端化継続 | 同target・T_i・元期待contextを保持。issued inputまたはpending analyzeを一度terminalへ進め、遅延応答は拒否。ready段階では存在しないjobを作らない |
@@ -71,7 +71,22 @@ phase予算を消費済みであることと、run全体が失効したことを
 
 phase型の「世代を増やさない」は、**既にある世代を交換しない**という意味である。workerなしなら世代数0→1の初回起動が必要で、既存親設計の「常に同世代」という表記をこの区別で訂正する。
 
-## 6 worker期限型：送信後／ready待ちを区別して旧世代を閉じる
+## 6 worker期限型：発生点を区別して旧世代を閉じる
+
+### 6.0 期限観測の発生点
+
+現監督は同じ`ReviewWorkerError(deadline_exceeded)`をtimer以外からも投げ、adapterのsoft分岐はそれらを区別せず受け付ける（[監督](../src/review/worker-supervisor.ts)のrequest／exchange）。phase予約がある限り、いずれも到達可能な経路として扱う。
+
+| 発生点 | worker／id／送信の状態 | 必要な証拠と後続 |
+|---|---|---|
+| requestの冒頭`check()` | 最初のanalyzeならworker未起動・世代なし・id未消費。既存workerがあれば同世代・未送信 | 未起動なら「起動していない」ことを固定監督が記録した事実を終了証拠の代わりにする（close呼出しの即時resolveを終了証拠と数えない）。既存workerならそのclose成功が必要。同inputは未送信 |
+| ready待ちのtimer | 起動済み・未ready・analyze id未消費 | §6.2 |
+| ready応答処理内の`check()` | 応答到着後に期限切れとして破棄。未ready扱い・analyze id未消費 | §6.2と同じ。到着したready応答をready済みとして採用しない |
+| exchangeの送信直前`check()` | ready済み・analyze idは`++sequence`で消費済み・未送信 | 同idのjobを送信済みとして扱わず、遅延応答も存在しない前提で同inputを未送信のまま終端化。消費済みidの再利用はしない。旧workerのclose成功が必要 |
+| analyze応答待ちのtimer | 送信済み・応答なし | §6.1 |
+| analyze応答処理内の`check()` | 送信済み・応答到着後に破棄 | §6.1と同じ。破棄した応答を候補へ採用しない |
+
+発生点の種類はSoftObservationを発行する監督継続が固定し、例外本文・stage文字列・callerから推定しない。種類が判定できない場合はhard停止とし、softへ救済しない。
 
 ### 6.1 analyze送信後
 
@@ -99,7 +114,16 @@ closeを要求しただけ、workerのerror／exit通知を見ただけ、termin
 
 consistency段階に入る前のsoftで既存verify継続があれば、同source／ReleasePermit・同予算のverifyを**一度だけ**行う。既にconsistency段階でsoftになった場合は繰り返さない。verify継続が存在しない場合もGETを追加しない。verify未実施を成功扱いせず、changed／unverified・provisional_resultsと既存errorを保持する。GET・chunk・予約／retryは元HTTP ownerに課金し、回復claim側では二重計上しない。
 
-verifyで受信予算超過等が発生し元runが失効する場合は、新回復ownerのfinish_onlyへ進めない。ただし既存adapterにはこの後も部分／失敗集約をfinishする経路がある。この停止後finishは親設計§7の**初期対象外**のまま残し、既存経路を新ownerのguardで包んで破壊しない。将来の接続方針は別レビューとし、現在のproductionは変更しない。その経路を新時刻契約で検証済みとは数えない。
+soft後verifyの失敗は、既存adapter（[adapter](../src/review/update-set-adapter.ts)のsoft分岐内のverify catch）の分類を変えない。
+
+| verify失敗 | 既存adapterの挙動 | 回復ownerでの扱い |
+|---|---|---|
+| phase_deadline_exceeded（元run生存）・invalid_response・not_found_or_not_visible・authentication_failed・access_denied・upstream_unavailable・request_budget_exceeded・payload_budget_exceeded・candidate_filter_violation | consistency=unverified、既存errorを記録してfinish | hard停止ではない。同routeのfinish_onlyへ進む。元run guard（取消・全体期限・失効）は従来通り先に確認する |
+| receive_budget_exceeded | sessionを停止したうえで、同じsoft分岐内でunverifiedとしてfinish | 元runが失効しているため回復ownerのfinish_onlyへは進めない。既存のfinishは**初期対象外**として変更せず、新時刻契約で検証済みとは数えない |
+| cancelled・全体期限（remaining<=0） | failで停止 | hard停止。全claim／route／planを同期失効 |
+| BoundedReadError以外・上記以外のcode | internal_review_errorで停止 | hard停止 |
+
+これは親設計§7の別分岐（run停止後に部分／失敗集約をfinishする経路）とは別のsoft内経路である。どちらも既存経路を新ownerのguardで包んで破壊せず、将来の接続方針は別レビューとし、現在のproductionは変更しない。
 
 ## 8 診断・失敗・解放責務
 
@@ -135,12 +159,12 @@ job・listener・timer・worker／stdioは監督owner、HTTP・認証・予約�
 | SR-02 | claimは最初のguard前に一度消費。二重生成・消費・捕捉再入・失敗後の再prepareを拒否 |
 | SR-03 | phase型：既存worker同一性を維持。workerなしは初回起動だけ。starting／pending／closingを誤受理しない |
 | SR-04 | worker型：旧job終端化→旧終了成功→新世代ready→finishの順序。旧／新worker重複0、古い同id応答は拒否 |
-| SR-05 | ready期限：同input／T_iを保持し、未発行analyze idやjobを作らない。worker_unavailable／不正readyと混同しない |
+| SR-05 | §6.0の全発生点：未起動／ready待ち／ready応答破棄／id消費済み未送信／送信後／応答破棄を区別。同input／T_iを保持し、未発行analyze idやjobを作らない。未起動を終了済みと偽装せず、worker_unavailable／不正readyと混同しない |
 | SR-06 | terminate未確認／reject／後始末throw・取消／全体期限では新世代・候補を発行しない |
 | SR-07 | 全境界のpre/post guardとawait後の失効。phase期限と全体期限を区別し、S／全L／O／Uは固定 |
 | SR-08 | 未完了inputは同targetのnot_processedへ一度確定。U保持、元完了state維持、集合追加／欠落・reviewed昇格を拒否 |
-| SR-09 | verify要否を元stage／継続へ結合。既存GET最大1・consistency再試行0・C/G/P二重課金0を別イベントoracleで確認 |
-| SR-10 | verify中のrun失効・停止後finishを対象外と明示し、既存部分集約の回帰を維持 |
+| SR-09 | verify要否を元stage／継続へ結合。既存GET最大1・consistency再試行0・C/G/P二重課金0を別イベントoracleで確認。§7の続行対象のverify失敗ごとにunverified＋finishへ進むことを確認 |
+| SR-10 | verify中のreceive_budget_exceededによるrun失効・取消・全体期限でfinish_onlyへ進まないこと、対象外の既存finish・停止後finishの回帰を維持 |
 | SR-11 | finish／ready／送信失敗で再回復しない。finishは1回、候補は1回消費。終了未確認とhard診断を別slotに保持 |
 | SR-12 | 固定cleanup section各区間の観測、失敗後の継続と診断回収。rollback結果だけで代替しない |
 | SR-13 | 0 input／空200、100 target、各中断位置と全成功／拒否経路を独立oracleで計数。full schema／compiled／実classの保証は別集計 |
@@ -155,3 +179,5 @@ job・listener・timer・worker／stdioは監督owner、HTTP・認証・予約�
 4. **SR-D**：通常WJ-CのE／固定集合・候補消費へ接続し、全guardと独立oracleを確認する。実session／監督・外側cleanup接続は行わない。
 
 各段階の実装は別の依頼後に行う。実生成継続のclass／module配置、private終了証拠の実発行条件、停止後finishとの接続互換性、実cleanup上限・外側checkpoint／診断写像、実選択windowと集合証拠、全費目上界はレビュー待ち。人の承認・実装・試験済みとはしない。本書はローカルコード照合とMD設計だけで、テスト・実通信・環境操作を実施した記録ではない。
+
+draft-0.1のレビュー修正：worker期限型の観測をtimer終端と「送信後／ready待ち」だけに限っていたが、現監督はrequest冒頭（worker未起動のこともある）・ready／応答処理内・送信直前（id消費済み未送信）の`check()`からも同じdeadline_exceededを投げ、adapterはそれらをsoftとして受け付ける。未起動の場合に旧worker終了証拠を要求すると既存soft partialが回復不能になるため、§6.0に発生点の表を追加し、§3・SR-05を合わせた。またsoft後verifyの失敗分類が未記載で、既存adapterが続行してfinishする失敗をhard停止と誤実装し得たため、§7に既存分類との対応表を追加し、SR-09／10を合わせた。
