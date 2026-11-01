@@ -10,16 +10,20 @@ const output=execFileSync('npm',['pack','--dry-run','--ignore-scripts','--offlin
 const [pack]=JSON.parse(output);
 for(const suffix of ['.js','.js.map','.d.ts','.d.ts.map'])assert(pack.files.some(f=>f.path==='dist/servicenow/review-kernel/release-observation'+suffix),'required one-shot UTC value helper missing: '+suffix);
 const sessionDeclarations=readFileSync(join(root,'dist/servicenow/bounded-read.d.ts'),'utf8');
-for(const privateName of ['ReleaseInputProjection','ReleaseInputOrigin','captureReleaseInput','consumeReleaseInput','releaseComparisonProjection','clearReleaseComparison'])
+const sessionAst=parse(readFileSync(join(root,'dist/servicenow/bounded-read.js'),'utf8'),{ecmaVersion:'latest',sourceType:'module'});
+const sessionClass=sessionAst.body.find(n=>n.type==='ExportNamedDeclaration'&&n.declaration?.type==='ClassDeclaration'&&n.declaration.id?.name==='BoundedReadSession')?.declaration;
+const stopBody=sessionClass?.body.body.find(n=>n.type==='MethodDefinition'&&n.key.name==='stop')?.value.body.body;
+assert(stopBody?.some(n=>n.type==='ExpressionStatement'&&n.expression.type==='CallExpression'&&n.expression.callee.type==='MemberExpression'&&n.expression.callee.property.type==='PrivateIdentifier'&&n.expression.callee.property.name==='clearReleaseComparison'),'run stop must directly revoke upper time after ordinary source hook removal');
+for(const privateName of ['ReleaseInputProjection','ReleaseInputOrigin','captureReleaseInput','consumeReleaseInput','releaseComparisonProjection','clearReleaseComparison','finishCompositionTime','releaseTimeDiagnostic','createReleaseTimeHandoff'])
   assert(!sessionDeclarations.includes(privateName),'private release timing projection leaked into declarations: '+privateName);
 const kernel='dist/servicenow/review-kernel/construction-state';
 const sourceKernel='dist/servicenow/review-kernel/source-values';
-for(const name of ['release-family','release-comparison','release-observation','release-comparison-receipt','release-time-owner']) {
+for(const name of ['release-family','release-comparison','release-observation','release-comparison-receipt','release-time-owner','release-time-handoff']) {
   const path='dist/servicenow/review-kernel/'+name;
   for(const suffix of ['.js','.js.map','.d.ts','.d.ts.map'])assert(pack.files.some(f=>f.path===path+suffix),'required release value contract missing: '+name+suffix);
   const tree=parse(readFileSync(join(root,path+'.js'),'utf8'),{ecmaVersion:'latest',sourceType:'module'}),pending=[tree];
   // release-observation reads time only through its injected clock dependency.
-  const allowed=name==='release-family'?[]:['release-observation','release-time-owner'].includes(name)?['zod']:name==='release-comparison-receipt'?['./release-comparison.js']:['zod','node:util','./release-family.js'];
+  const allowed=name==='release-family'?[]:['release-observation','release-time-owner'].includes(name)?['zod']:name==='release-comparison-receipt'?['./release-comparison.js']:name==='release-time-handoff'?['./release-comparison-receipt.js','./release-time-owner.js']:['zod','node:util','./release-family.js'];
   while(pending.length){const n=pending.pop();
     if(n.type==='ImportDeclaration')assert(allowed.includes(n.source.value),'release value contract imports a root: '+n.source.value);
     assert(!(n.type==='NewExpression'&&n.callee?.name==='Date'),'release value contract reads wall clock');
@@ -72,4 +76,5 @@ execFileSync(process.execPath,[fileURLToPath(new URL('fixtures/compiled-construc
 execFileSync(process.execPath,[fileURLToPath(new URL('fixtures/compiled-source-values.mjs',import.meta.url))],{cwd:root,stdio:'inherit'});
 execFileSync(process.execPath,[fileURLToPath(new URL('fixtures/compiled-release-comparison-contract.mjs',import.meta.url))],{cwd:root,stdio:'inherit'});
 execFileSync(process.execPath,[fileURLToPath(new URL('fixtures/compiled-release-time-owner.mjs',import.meta.url))],{cwd:root,stdio:'inherit'});
-console.log('HTTP classification/status terminal/cleanup/context excluded; runtime unconnected; fixture/oracle excluded PASS ('+pack.files.length+' files)');
+execFileSync(process.execPath,[fileURLToPath(new URL('fixtures/compiled-release-time-handoff.mjs',import.meta.url))],{cwd:root,stdio:'inherit'});
+console.log('HTTP classification/status terminal/cleanup/context excluded; formal/production adoption disabled; fixture/oracle excluded PASS ('+pack.files.length+' files)');

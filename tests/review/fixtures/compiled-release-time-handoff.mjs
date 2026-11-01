@@ -1,0 +1,17 @@
+import assert from 'node:assert/strict';
+import {createReleaseTimeHandoff} from '../../../dist/servicenow/review-kernel/release-time-handoff.js';
+import {BoundedReadSession} from '../../../dist/servicenow/bounded-read.js';
+const S='2026-11-01T00:00:00.000Z',O='2026-11-01T00:00:01.000Z';
+const p=Object.freeze({session:{},source:{},key:{},timing:{started_at:S,deadline_ms:60000},policy:{instanceBinding:'a'.repeat(64)}}),ack={};
+let sourceGone=false;
+const bridge=createReleaseTimeHandoff(p,ack,{run:{},budget:{},origin:{}},{checkSource:()=>{assert(!sourceGone);},checkRun:()=>{},reject:()=>{throw Error('internal_review_error');}});
+bridge.accept(p,bridge.compare(p,bridge.issue(p,ack,[],O)));bridge.handoff(p);bridge.sourceClosed();sourceGone=true;
+assert.equal(bridge.inspect().upper.time.observed_at,O);assert.equal(bridge.inspect().comparison,null);
+bridge.discard();assert.equal(bridge.inspect().upper.time,null);assert.throws(()=>bridge.handoff(p),/internal_review_error/);
+const id='a'.repeat(32),encode=v=>new TextEncoder().encode(JSON.stringify(v));
+const io={responses:[{purpose:'parent',bytes:encode({result:{sys_id:id,state:'in progress',application:'global',sys_updated_on:'2026-11-01',sys_mod_count:'0'}})},{purpose:'release',bytes:encode({result:[{build_name:'Australia'}]})}]};
+const expected=io.responses.reduce((n,r)=>n+r.bytes.length,0);
+const result=await BoundedReadSession.prepareNewReviewComposition({instanceUrl:'https://synthetic.invalid',authMode:'per-user',perUserBearerToken:'PRIVATE_SYNTHETIC_TOKEN',oauth:{clientId:'unused',clientSecret:''}},{update_set_sys_id:id},{synthetic_io:io});
+assert.equal(result.state,'prepared_only');assert.equal(result.cleanup,'closed');assert.equal(result.reserved,0);assert.equal(result.evidence_issuance,'disabled');
+assert.deepEqual(result.budget,{requests:2,received_bytes:expected,payload_bytes:0});assert(!/PRIVATE|upper|handoff|Time|projection|comparison/.test(JSON.stringify(result)));
+console.log('TB-B compiled fixed handoff + class fake I/O: normal cleanup/discard, no public time/issuance authority PASS');

@@ -1,6 +1,6 @@
 # RC-03：release比較器の固定採用境界・接続差分設計
 
-Version: br006-release-adoption-rc03-draft-0.15 / Date: 2026-11-01。
+Version: br006-release-adoption-rc03-draft-0.16 / Date: 2026-11-01。
 Status: **RC3-D01／D02／D03を開発assemblyだけに限定実装。同sourceの200行ackの固定比較、またはdispatch前binding不一致のnot_requestedから、guard・seal後の非実行summaryへ接続。R差替えは未実装／未承認。旧試験・正式発行口閉鎖・Unknown・全体受付無効・VM／監視／telemetry調査保留を維持する。実Permit発行・実接続・実通信・実機操作・設定変更・friend撤去・Pushは行わない。**
 
 基準：`a61d90a`。[純粋比較器設計draft-0.6](BEST_PRACTICE_ABORT_SCOPE_RELEASE_COMPARATOR_DESIGN.md)のRC-03を具体化する。以下の追加field・状態・試験ID・分割単位は案であり、存在するAPIや検証済み保証ではない。
@@ -77,11 +77,11 @@ pure比較の途中にawaitはなく、JSイベントループの取消を同期
 
 ### 比較器入力・上位時刻の結合
 
-CT-B前半は[上位時刻owner・終端移譲詳細設計draft-0.3](BEST_PRACTICE_ABORT_SCOPE_RELEASE_TIME_OWNER_CTB_DESIGN.md)へ分離した。同runの正常継続だけでS／全L／空200を含むOを一度移譲し、正常source解放と元run失効を区別する案。TB-Aは純粋な値scope／claim／discardだけを限定実装した。TB-BのCT-A／実sessionへの接続・worker job結合は未実装で、実source採用・正式発行を有効化しない。
+CT-B前半は[上位時刻owner・終端移譲詳細設計draft-0.4](BEST_PRACTICE_ABORT_SCOPE_RELEASE_TIME_OWNER_CTB_DESIGN.md)へ分離した。TB-A／Bで同runの固定fake継続だけのS／全L／空200を含むOの一度限り移譲、正常source解放と元run失効の区別・固定discardを接続した。worker job結合・通常実source採用・正式発行は有効化しない。
 
-CT-Aで、この契約の同projection／元ack／sourceのrows・O受領物→固定比較器→一度限りのprivate非実行候補受理だけをfixed fake継続へ限定実装した。空200のOも候補ownerに保持するが、cleanupで破棄し、TimeOwner／worker jobへの上位移譲は未実装。通常実source・legacy結果・Permitへ候補を採用しない。詳細・初回失敗と試験保証の区別は接続契約§10と[CT-A検証記録](E2E_BEST_PRACTICE_RELEASE_COMPARISON_CTA_2026-11-01.md)へ分離する。
+CT-Aで、この契約の同projection／元ack／sourceのrows・O受領物→固定比較器→一度限りのprivate非実行候補受理だけをfixed fake継続へ限定実装した。CT-A時点は空200のOもcleanupで破棄したが、TB-Bでは同accepted値を正常source解放後の固定discardまで移譲する。worker jobへの継続は未実装で、通常実source・legacy結果・Permitへ候補を採用しない。CT-Aの初回失敗と当時の保証は[CT-A検証記録](E2E_BEST_PRACTICE_RELEASE_COMPARISON_CTA_2026-11-01.md)へ分離する。
 
-[接続契約draft-0.4](BEST_PRACTICE_ABORT_SCOPE_RELEASE_COMPARISON_TIME_BINDING_DESIGN.md)で、同projection／sourceのrows・O受領物と、一度限りの固定比較、空200のprivate UTC保持、同worker世代／jobのT_i・E照合を対にした。現状のUTC文字列hookやworker数値idだけで同一性を認めず、親側のprivate claim・固定継続に結合する。TB-Aの値scope以外の上位owner実結合・job claimとCT-Cは未実装。legacy／Permit採用・通常source差替えを行わず、soft partialとhardなbinding／時刻失敗を分ける。
+[接続契約draft-0.5](BEST_PRACTICE_ABORT_SCOPE_RELEASE_COMPARISON_TIME_BINDING_DESIGN.md)で、同projection／sourceのrows・O受領物と、一度限りの固定比較、空200のprivate UTC保持、同worker世代／jobのT_i・E照合を対にした。UTC文字列やworker数値idだけで同一性を認めず、固定fake継続のTB-Bでは同run／source／origin／budgetに結合する。job claim・T_i／E・CT-Cは未実装。legacy／Permit採用・通常source差替えを行わず、soft partialとhardなbinding／時刻失敗を分ける。
 
 ## 6 draftから既存結果への変換――二重warningとPermitの境界
 

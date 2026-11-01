@@ -7,7 +7,7 @@ export function createReleaseComparisonReceiptOwner(projection:ReleaseComparison
   dependencies:Readonly<{check():void;reject():never}>){
   const {session,source,key,timing,policy}=projection,started=timing.started_at,duration=timing.deadline_ms;
   const check=dependencies.check,reject=dependencies.reject;
-  let state:'bound'|'issuing'|'issued'|'comparing'|'compared'|'accepting'|'accepted'|'failed'|'closed'='bound';
+  let state:'bound'|'issuing'|'issued'|'comparing'|'compared'|'accepting'|'accepted'|'transferring'|'transferred'|'failed'|'closed'='bound';
   const receipts=new Map<object,ReleaseComparisonInput>(),candidates=new Map<object,{draft:ReleaseComparisonDraft;observed:string}>();
   let accepted:{draft:ReleaseComparisonDraft;observed:string}|undefined;
   const fail=():never=>{receipts.clear();candidates.clear();accepted=undefined;if(state!=='closed')state='failed';return reject();};
@@ -48,6 +48,15 @@ export function createReleaseComparisonReceiptOwner(projection:ReleaseComparison
         check();binding(value);if(!result)throw Error('candidate');
         check();binding(value);if(state!=='accepting')throw Error('state');
         accepted=result;state='accepted';
+      }catch{return fail();}
+    },
+    takeAcceptedTime(value:ReleaseComparisonProjection):string{
+      const result=accepted;accepted=undefined;
+      if(state!=='accepted')return fail();state='transferring';
+      try{
+        check();binding(value);if(!result)throw Error('accepted');
+        check();binding(value);if(state!=='transferring')throw Error('state');
+        state='transferred';return result.observed;
       }catch{return fail();}
     },
     close(){receipts.clear();candidates.clear();accepted=undefined;state='closed';},

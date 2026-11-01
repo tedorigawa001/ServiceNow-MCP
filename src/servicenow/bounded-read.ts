@@ -10,7 +10,7 @@ import {createReviewBootstrapContract} from './review-bootstrap-contract.js';
 import {pinCompositionFakeIO,type CompositionFakeIO} from './review-composition-fake-io.js';
 import {createConstructionState,normalizeConstructionReason as constructionCode,type ConstructionPublicCode,type ConstructionStage,type ConstructionResource,type ConstructionDiagnostic} from './review-kernel/construction-state.js';
 import {createReleaseObservation} from './review-kernel/release-observation.js';
-import {createReleaseComparisonReceiptOwner} from './review-kernel/release-comparison-receipt.js';
+import {createReleaseTimeHandoff} from './review-kernel/release-time-handoff.js';
 
 export const BOUNDED_LIMITS = Object.freeze({ responseBytes: 4 * 1024 * 1024, totalBytes: 16 * 1024 * 1024,
   payloadBytes: 2 * 1024 * 1024, totalPayloadBytes: 8 * 1024 * 1024,
@@ -151,8 +151,9 @@ export class BoundedReadSession {
   #releaseInputProjection?:ReleaseInputProjection;
   #releaseInputState:'fresh'|'capturing'|'pending'|'consuming'|'consumed'|'closed'='fresh';
   #releaseObservation?:ReturnType<typeof createReleaseObservation>;
-  #releaseComparison?:ReturnType<typeof createReleaseComparisonReceiptOwner>;
+  #releaseComparison?:ReturnType<typeof createReleaseTimeHandoff>;
   #releaseComparisonProjection?:ReleaseInputProjection;
+  #releaseTimeDiagnostic:ReturnType<ReturnType<typeof createReleaseTimeHandoff>['inspect']>['upper']['diagnostic']=null;
   private get stopCode(){return this.#budget.view.failure()??undefined;}
   private disposed = false;
   private busy = false;
@@ -325,7 +326,7 @@ export class BoundedReadSession {
       session=new BoundedReadSession(fixed,{signal,limits,fetch:()=>{throw new BoundedReadError('internal_review_error');}});
       if(fake){
         const owned=session,io=fake;session=undefined;fake=undefined;
-        return owned.#prepareCompositionIO(parsed,io).then(value=>{owned.#close();return Object.freeze({...value,reserved:0 as const,cleanup:'closed' as const});},error=>{throw error instanceof BoundedReadError?error:new BoundedReadError('internal_review_error');}).finally(()=>{io.dispose();owned.#close();});
+        return owned.#prepareCompositionIO(parsed,io).then(value=>{owned.#finishCompositionTime();owned.#close();return Object.freeze({...value,reserved:0 as const,cleanup:'closed' as const});},error=>{throw error instanceof BoundedReadError?error:new BoundedReadError('internal_review_error');}).finally(()=>{io.dispose();owned.#close();});
       }
       const bound=session.#prepareComposition(parsed);
       session.#close();
@@ -389,6 +390,7 @@ export class BoundedReadSession {
         const receipt=owner.issue(projection,ack,rows,observedAt),candidate=owner.compare(projection,receipt);owner.accept(projection,candidate);guard();},
       capture:c=>{if(consumer)throw new BoundedReadError('internal_review_error');consumer=c;}});
     let contract:ReturnType<typeof createReviewBootstrapContract<typeof scope.handle>>|undefined;
+    let timeTransferred=false;
     try{
       guard();if(!consumer||this.#compositionSource!==scope.source)throw new BoundedReadError('internal_review_error');
       const statusContext=scope.statusBinding.inspect(scope.handle,this.#snapshot,this.#runLease,scope.source);
@@ -412,20 +414,46 @@ export class BoundedReadSession {
               projection.policy!==pinned.policy||this.releasePolicy!==pinned.policy||this.startedAt!==pinned.startedAt||this.limits.deadlineMs!==pinned.deadlineMs)throw new BoundedReadError('internal_review_error');
           },reject:()=>this.#failReleaseInput(new BoundedReadError('internal_review_error'))});
           const ack=mint('release',r.value);this.#releaseComparisonProjection=projection;
-          this.#releaseComparison=createReleaseComparisonReceiptOwner(projection,ack,{check:()=>{guard();const origin=this.#releaseInputOrigin;
+          const timeOrigin=this.#releaseInputOrigin;if(!timeOrigin)throw new BoundedReadError('internal_review_error');
+          this.#releaseComparison=createReleaseTimeHandoff(projection,ack,{run:this.#runOwner,budget:this.#budget,origin:timeOrigin},{checkSource:()=>{guard();const origin=this.#releaseInputOrigin;
             if(!origin||this.#releaseInputState!=='consumed'||projection!==this.#releaseComparisonProjection||projection.session!==this||projection.source!==scope.source||this.#compositionSource!==scope.source||projection.key!==key||this.#compositionKey!==key||
               projection.policy!==origin.policy||this.releasePolicy!==origin.policy||this.startedAt!==origin.startedAt||this.limits.deadlineMs!==origin.deadlineMs)throw new BoundedReadError('internal_review_error');
-          },reject:()=>this.#failReleaseInput(new BoundedReadError('internal_review_error'))});
+          },checkRun:()=>{this.#checkComposition();if(this.#releaseInputOrigin!==timeOrigin||this.#compositionSource!==scope.source||this.startedAt!==timeOrigin.startedAt||this.limits.deadlineMs!==timeOrigin.deadlineMs)throw new BoundedReadError('internal_review_error');},
+          reject:error=>this.#failReleaseInput(error instanceof BoundedReadError?error:new BoundedReadError('internal_review_error'))});
           const decision=await consumer!.release(ack);guard();if(decision.release_match!=='matched')return null;const port=BoundedUpdateSetSource.releasePortFor(scope.source,this,decision.permit);if(!port)throw new BoundedReadError('internal_review_error');return {source:scope.source,permit:decision.permit,port};},
       });
       this.#compositionRevoke=()=>{this.#clearReleaseComparison();this.#releaseObservation?.close();this.#releaseObservation=undefined;this.#releaseInputProjection=undefined;this.#releaseInputState='closed';this.#compositionKey=undefined;consumer?.revoke();contract?.revoke();};
       const result=await contract.run(scope.handle,this.#snapshot,this.#runLease);
       if(!result.ok)throw new BoundedReadError(this.stopCode??(['invalid_state','invalid_observation_time','evidence_binding_mismatch'].includes(result.code)?'internal_review_error':result.code as ReadFailureCode));
       guard();const status=this.#runOwner.inspect(this.#snapshot,this.#runLease);guard();
+      if(!this.#releaseComparison||!this.#releaseComparisonProjection)throw new BoundedReadError('internal_review_error');
+      this.#releaseComparison.handoff(this.#releaseComparisonProjection);timeTransferred=true;guard();
       return Object.freeze({...result.value,fake_io:true as const,auth_ready:status.auth_ready,ready_generation:status.ready_generation,budget:this.#budget.view.stats(),phase_reserve_ms:this.reserveMs});
-    }finally{this.#clearReleaseComparison();this.#releaseObservation?.close();this.#releaseObservation=undefined;this.#releaseInputProjection=undefined;this.#releaseInputState='closed';this.#compositionKey=undefined;consumer?.revoke();contract?.revoke();scope.accounting.release();this.#compositionRevoke=undefined;}
+    }finally{
+      let cleanupFailure:BoundedReadError|undefined;
+      const release=(operation:()=>void)=>{try{operation();}catch(error){
+        const adopted=this.#adopt(error),reason=this.stopCode??(adopted instanceof BoundedReadError?adopted.code:'internal_review_error');
+        this.stop(reason);cleanupFailure??=new BoundedReadError(this.stopCode??reason);
+      }};
+      release(()=>{
+        if(timeTransferred){if(!this.#releaseComparison)throw new BoundedReadError(this.stopCode??'internal_review_error');this.#releaseComparison.sourceClosed();}else this.#clearReleaseComparison();
+      });
+      release(()=>{this.#releaseObservation?.close();this.#releaseObservation=undefined;});
+      this.#releaseComparisonProjection=undefined;this.#releaseInputProjection=undefined;this.#releaseInputState='closed';this.#compositionKey=undefined;
+      release(()=>consumer?.revoke());release(()=>contract?.revoke());release(()=>scope.accounting.release());
+      this.#compositionRevoke=undefined;
+      if(cleanupFailure){this.#clearReleaseComparison();throw cleanupFailure;}
+    }
   }
-  #clearReleaseComparison(){this.#releaseComparison?.close();this.#releaseComparison=undefined;this.#releaseComparisonProjection=undefined;}
+  #clearReleaseComparison(){
+    this.#releaseComparison?.revoke(this.stopCode??'closed');
+    this.#releaseTimeDiagnostic??=this.#releaseComparison?.inspect().upper.diagnostic??null;
+    this.#releaseComparison=undefined;this.#releaseComparisonProjection=undefined;
+  }
+  #finishCompositionTime(){
+    try{if(!this.#releaseComparison)throw new BoundedReadError(this.stopCode??'internal_review_error');this.#releaseComparison.discard();}
+    finally{this.#clearReleaseComparison();}
+  }
   /** Private fake-200 continuation only. This value is neither evidence nor a Permit. */
   #captureReleaseInput(source:BoundedUpdateSetSource,key:object,guard:()=>void){
     try{
@@ -642,6 +670,8 @@ export class BoundedReadSession {
     this.#budget.writer.stop(code);
     if(this.#stopPropagated)return;
     this.#stopPropagated=true;
+    // The upper time slot outlives ordinary source cleanup, not the run's stop signal.
+    this.#clearReleaseComparison();
     this.#runOwner.revoke(this.stopCode!);
     this.#compositionRevoke?.();
     this.controller.abort();
