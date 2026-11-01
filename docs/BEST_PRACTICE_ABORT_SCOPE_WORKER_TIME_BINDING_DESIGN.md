@@ -1,6 +1,6 @@
 # CT-B後半：worker job binding・T_i／E整合の詳細設計
 
-Version: br006-worker-time-binding-draft-0.3 / Date: 2026-11-01。
+Version: br006-worker-time-binding-draft-0.4 / Date: 2026-11-01。
 Status: **WJ-Aの内部binding・generation／input／job claim・one-shot／失効だけを配布対象外の合成issuerで限定実装（§11）。runtime／実worker・T_i／U／Eの結果整合・WJ-B〜Dは未接続／未実装。正式発行口閉鎖・Unknown・全体受付無効・VM／監視／telemetry調査保留を維持する。実source差替え・実接続・実通信・設定変更・Permit発行・Pushの承認ではない。**
 
 基準HEAD: `099dedf`。[上位接続契約](BEST_PRACTICE_ABORT_SCOPE_RELEASE_COMPARISON_TIME_BINDING_DESIGN.md)§4〜7と[CT-B前半](BEST_PRACTICE_ABORT_SCOPE_RELEASE_TIME_OWNER_CTB_DESIGN.md)の差分設計。TB-Bの固定fake準備処理内のdiscardを、既にworkerまで継続できる移譲と取り違えない。通常adapterへの切替・B-03・friend撤去は別工程。
@@ -165,8 +165,10 @@ inputはready前にも発行でき、同origin／targetを一度だけ登録す�
 
 analyzeは同ready generationと未消費inputを結合し、idの正のsafe integer・同世代内単調増加を検査する。finishは一度だけ。pending slotはguard前に占有し、consumeではguard前に取り外す。合成の返却contextは同generation／supervisor／worker／id／kind／targetをdescriptorで照合するが、実wire envelopeや結果JSONのparserではない。返る値はauthority:noneの凍結dataだけで、ReleasePermitや受理済み解析結果へ昇格しない。
 
-24か所のライフサイクルpre/post guardで停止・捕捉再入・同期revokeを確認する。失敗後は元binding／generation／input／pendingと時刻参照を消し、最初の固定code／phaseと数値counterだけを残す。正常source close後は新しいinput／generation／ready／jobを拒否し、既存pendingのconsumeと固定解放だけを許す。正常root close後の誤操作は拒否するがclosedや診断を書換えない。heapの物理消去やcallerが保存したcopyの破棄は主張しない。
+24か所のライフサイクルpre/post guardで停止・捕捉再入・同期revokeを確認する。再入は、状態で既に拒否されるbindだけでなく、busy claimがなければ成功するinput／closeSource／analyze／finishをanalyze・consumeのguard内から呼んでも拒否し、新claimを公開しないことを別に確認する。失敗後は元binding／generation／input／pendingと時刻参照を消し、最初の固定code／phaseと数値counterだけを残す。正常source close後は新しいinput／generation／ready／jobを拒否し、既存pendingのconsumeと固定解放だけを許す。正常root close後の誤操作は拒否するがclosedや診断を書換えない。heapの物理消去やcallerが保存したcopyの破棄は主張しない。
 
 合成モデル内の固定枠はgeneration最大2、input最大100、jobはinput一度ずつ＋finish一度の最大101、同時pending1。これは純粋試験を有限にする局所枠で、本番cap・§8の全既存分岐の導出済み上界ではない。公開handleを返せた生成数・post-guard後のconsume成功数をcounterに記録し、失敗試行の全費目を計数したとは主張しない。独立イベント列では100 input／100 analyze／1 finishとguard 610回を照合する。
 
-新規[153件の合成試験](../tests/review/synthetic-worker-job.test.ts)、型・lint・配布負の対照・初回REDは[WJ-A検証記録](E2E_BEST_PRACTICE_WORKER_JOB_CLAIMS_WJA_2026-11-01.md)へ記録する。issuerは配布物に含めず、既存distへimport／宣言／mapが混入しないことも確認する。compiledされた開発assemblyの保証ではなく、B-03とは別。WJ-B／C／D・soft回復claim・停止後部分finishは変更せず、既存の2種類のsoft移行・部分集約を維持する。
+新規[157件の合成試験](../tests/review/synthetic-worker-job.test.ts)、型・lint・配布負の対照・初回REDは[WJ-A検証記録](E2E_BEST_PRACTICE_WORKER_JOB_CLAIMS_WJA_2026-11-01.md)へ記録する。issuerは配布物に含めず、既存distへimport／宣言／mapが混入しないことも確認する。依存検査はI/O／timer／時計／worker系globalへの参照（呼出し形に限らない）・`Date.now`の値参照・`Date`のcomputed参照／生成を拒否し、意図的な混入を拒否する負の対照を持つ。字句検査であり、間接的なglobal取得を網羅した証明ではない。compiledされた開発assemblyの保証ではなく、B-03とは別。WJ-B／C／D・soft回復claim・停止後部分finishは変更せず、既存の2種類のsoft移行・部分集約を維持する。
+
+draft-0.4のレビュー修正：WJ-Aの捕捉再入試験はguard内のbindだけを呼び、bindは状態で必ず拒否されるため、busy claimを外しても153件が通っていた。また依存検査は名前による直接呼出しだけを拒否し、`globalThis.setTimeout`・`queueMicrotask`・`Date.now`の値参照・`performance.now.call`を見逃し、検査自体の負の対照もなかった。正当な操作の再入試験4件と、参照単位の依存検査・混入負の対照を追加し、§11の件数・保証範囲と上位設計からの版数リンクを更新した。

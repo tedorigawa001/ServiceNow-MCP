@@ -82,6 +82,19 @@ it.each(Array.from({length:24},(_,i)=>i+1))('rejects caught reentry at lifecycle
   let n=0;const p=pipeline(issuer=>{if(++n===at){try{issuer.bind(seed());}catch{}}return undefined;});
   expect(p.run).toThrow('internal_review_error');expect(p.issuer.inspect()).toMatchObject({state:'failed',pending:false,held_time:null});
 });
+// A reentrant bind is already refused by state; these inner operations would succeed without the busy claim.
+it.each([['analyze','input'],['analyze','closeSource'],['consume','analyze'],['consume','finish']] as const)('rejects a caught legitimate reentry during %s into %s without publishing a claim',(outer,inner)=>{
+  const f=fixture(),spare=f.issuer.input(f.b,{},'c'.repeat(32),T),job=outer==='consume'?f.job():undefined;let tried=false,innerError:unknown;
+  f.arm(()=>{if(!tried){tried=true;try{
+    if(inner==='input')f.issuer.input(f.b,{},'d'.repeat(32),T);
+    if(inner==='closeSource')f.issuer.closeSource(f.b);
+    if(inner==='analyze')f.issuer.analyze(f.b,f.g,spare,3);
+    if(inner==='finish')f.issuer.finish(f.b,f.g,3);
+  }catch(error){innerError=error;}}return undefined;});
+  expect(()=>outer==='analyze'?f.job():f.issuer.consume(f.b,job!,f.reply())).toThrow('internal_review_error');
+  expect(tried).toBe(true);expect(innerError).toMatchObject({code:'internal_review_error'});
+  expect(f.issuer.inspect()).toMatchObject({state:'failed',source_closed:false,jobs_issued:outer==='consume'?1:0,jobs_consumed:0,pending:false,inputs_retained:0});
+});
 it.each(Array.from({length:24},(_,i)=>i+1))('observes synchronous revoke at lifecycle guard %i even if the guard returns',at=>{
   let n=0;const p=pipeline(issuer=>{if(++n===at)issuer.revoke('cancelled');return undefined;});
   expect(p.run).toThrow('cancelled');expect(p.issuer.inspect()).toMatchObject({state:'failed',diagnostic:{code:'cancelled'},pending:false});

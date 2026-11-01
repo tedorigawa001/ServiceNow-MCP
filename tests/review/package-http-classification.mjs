@@ -14,19 +14,25 @@ const noSyntheticJobIssuer=text=>assert(!text.includes('createSyntheticWorkerJob
 assert.throws(()=>noSyntheticJobIssuer('export function createSyntheticWorkerJobIssuer() {}'));
 assert(!pack.files.some(f=>f.path.includes('synthetic-worker-job')));
 for(const f of pack.files.filter(f=>f.path.startsWith('dist/')&&/\.(?:js|ts|map)$/.test(f.path)))noSyntheticJobIssuer(readFileSync(join(root,f.path),'utf8'));
-const syntheticText=readFileSync(join(root,'tests/support/review/synthetic-worker-job.ts'),'utf8');
-const syntheticAst=parse(ts.transpileModule(syntheticText,{compilerOptions:{target:ts.ScriptTarget.ES2022,module:ts.ModuleKind.ESNext}}).outputText,{ecmaVersion:'latest',sourceType:'module'}),syntheticNodes=[syntheticAst];
-while(syntheticNodes.length){const n=syntheticNodes.pop();
-  if(n.type==='ImportDeclaration')assert(['node:util','zod'].includes(n.source.value),'synthetic job issuer imports runtime or I/O');
-  assert(n.type!=='ImportExpression'&&n.type!=='ExportAllDeclaration'&&!(n.type==='ExportNamedDeclaration'&&n.source),'synthetic job issuer dynamically imports/reexports a root');
-  if(n.type==='CallExpression'){
-    assert(!['fetch','setTimeout','setInterval','require'].includes(n.callee?.name),'synthetic job issuer performs I/O/timer');
-    assert(!(n.callee?.type==='MemberExpression'&&['Date','performance'].includes(n.callee.object?.name)&&n.callee.property?.name==='now'),'synthetic job issuer reads a clock');
+// Names are denied as references, not as object keys or member property names; the same audit must reject seeded leaks.
+const syntheticDenied=new Set(['globalThis','global','window','self','process','performance','fetch','setTimeout','setInterval','setImmediate','queueMicrotask','require','Worker','SharedArrayBuffer','Atomics','XMLHttpRequest','WebSocket','eval','Function']);
+const auditSyntheticIssuer=text=>{
+  const nodes=[[parse(ts.transpileModule(text,{compilerOptions:{target:ts.ScriptTarget.ES2022,module:ts.ModuleKind.ESNext}}).outputText,{ecmaVersion:'latest',sourceType:'module'}),null,null]];
+  while(nodes.length){const [n,parent,field]=nodes.pop();
+    if(n.type==='ImportDeclaration')assert(['node:util','zod'].includes(n.source.value),'synthetic job issuer imports runtime or I/O');
+    assert(n.type!=='ImportExpression'&&n.type!=='ExportAllDeclaration'&&!(n.type==='ExportNamedDeclaration'&&n.source),'synthetic job issuer dynamically imports/reexports a root');
+    const name=n.type==='Identifier'&&!(parent?.type==='MemberExpression'&&field==='property'&&!parent.computed)&&!(parent?.type==='Property'&&field==='key'&&!parent.computed)?n.name:undefined;
+    assert(!syntheticDenied.has(name),'synthetic job issuer references an I/O/timer/clock/worker global: '+name);
+    assert(!(n.type==='MemberExpression'&&n.object?.type==='Identifier'&&n.object.name==='Date'&&(n.computed||n.property?.name==='now')),'synthetic job issuer reads a clock');
+    assert(!((n.type==='NewExpression'||n.type==='CallExpression')&&n.callee?.type==='Identifier'&&n.callee.name==='Date'),'synthetic job issuer starts a clock');
+    for(const [k,v] of Object.entries(n)){if(Array.isArray(v))nodes.push(...v.filter(x=>x&&typeof x.type==='string').map(x=>[x,n,k]));else if(v&&typeof v==='object'&&typeof v.type==='string')nodes.push([v,n,k]);}
   }
-  assert(!(n.type==='NewExpression'&&['Worker','Date'].includes(n.callee?.name)),'synthetic job issuer starts worker/clock');
-  for(const v of Object.values(n)){if(Array.isArray(v))syntheticNodes.push(...v.filter(x=>x&&typeof x.type==='string'));else if(v&&typeof v==='object'&&typeof v.type==='string')syntheticNodes.push(v);}
-}
-console.log('WJ-A synthetic issuer excluded; negative control + no runtime/I/O/worker/clock imports PASS');
+};
+const syntheticText=readFileSync(join(root,'tests/support/review/synthetic-worker-job.ts'),'utf8');
+auditSyntheticIssuer(syntheticText);
+for(const leak of ['globalThis.setTimeout(()=>{},0);','queueMicrotask(()=>{});','const zzNow=Date.now;','performance.now.call(performance);',"Date['now']();",'new Date();','new Worker(\'x\');',"import('node:fs');","export * from 'node:fs';","import {readFileSync as zzRead} from 'node:fs';zzRead('x');"])
+  assert.throws(()=>auditSyntheticIssuer(syntheticText+'\n'+leak),assert.AssertionError,'synthetic issuer audit missed seeded leak: '+leak);
+console.log('WJ-A synthetic issuer excluded; leak and dependency-audit negative controls + no runtime/I/O/worker/clock references PASS');
 for(const suffix of ['.js','.js.map','.d.ts','.d.ts.map'])assert(pack.files.some(f=>f.path==='dist/servicenow/review-kernel/release-observation'+suffix),'required one-shot UTC value helper missing: '+suffix);
 const sessionDeclarations=readFileSync(join(root,'dist/servicenow/bounded-read.d.ts'),'utf8');
 const sessionAst=parse(readFileSync(join(root,'dist/servicenow/bounded-read.js'),'utf8'),{ecmaVersion:'latest',sourceType:'module'});

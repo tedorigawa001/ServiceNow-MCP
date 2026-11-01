@@ -66,6 +66,8 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 ### Added
 
+- Adds WJ-A synthetic issuer coverage for caught reentry of otherwise valid input, source-close, analyze and finish calls from analyze/consume guards, which the earlier bind-only reentry cases could not distinguish from state refusal. The package check now audits the issuer for references to I/O, timer, clock and worker globals rather than direct calls only, rejects `Date.now` value reads and computed `Date` access, and proves the audit with seeded-leak negative controls. It remains a lexical audit, not proof against indirect global access.
+
 - Adds TB-B real-class fake coverage for synchronous cancellation at every post-observation clock boundary, including the handoff, source-close and discard guards that the earlier late-boundary targets never reached. The record now states that continuing all fixed release sections after a handoff guard failure is not externally observable or test-confirmed, and the comparator/observation-UTC designs no longer describe the upper time handoff as unimplemented.
 
 - Fixes the TB-A release time scope: once a held value has been discarded normally, a stray later call (accept/issue/discard/allocate/observe) is refused without rewriting the terminal `discarded` state to `failed` or adding an `internal_review_error` diagnostic, matching the existing `revoke` behaviour. A test covers all five calls.
