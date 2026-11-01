@@ -1,6 +1,6 @@
 # AU-BR-006／EF-03B：release純粋比較器の詳細設計
 
-Version: br006-release-comparator-draft-0.3 / Date: 2026-11-01。
+Version: br006-release-comparator-draft-0.4 / Date: 2026-11-01。
 Status: **RC-01の構造入力・型・family境界に加え、RC-02のpolicy整合・優先順・limitations・非実行draft生成を純粋値として実装。実sourceへの採用は未実装。実Permit発行・friend撤去・実接続の承認ではない。旧試験、正式発行口閉鎖・Unknown・全体受付無効・VM／監視／telemetry調査保留を維持する。実通信・実機操作・設定変更・Pushは行わない。**
 
 基準：設計は`183b540`、RC-01実装前は`39a3225`、RC-02実装前は`439c4ec`。[旧case対応表](BEST_PRACTICE_ABORT_SCOPE_OLD_CASE_CROSSWALK_B02_DESIGN.md)のACK-08〜16等と、[移行設計](BEST_PRACTICE_ABORT_SCOPE_DEVELOPMENT_MIGRATION_B02_DESIGN.md)の残差を具体化する。§11／12の実装記録と、未接続の生成owner／実source採用手順の案を区別する。
@@ -177,7 +177,7 @@ limitsのmaxやfamily集合が変わる場合はmodel_id／対応表を再レビ
 
 1. **RC-01（限定実装済み、§11）**：strict構造入力／非実行draftの内部型・family値の最小共有境界。owner・clock・I/Oなしで独立oracleを作る。意味比較は含めない。
 2. **RC-02（純粋値として実装済み、§12）**：本書の順序・limitationsを同期比較器に実装。policy自己整合・構造拒否とordinary unknownを分ける。新規合成試験を追加し旧試験を残す。
-3. **RC-03（別承認）**：200値を得る実source／開発sourceそれぞれの固定継続へ接続し、生成元・pre/post guard・上位停止・既存permit block不変を確認する。legacy非200 catchは同時に移さない。
+3. **RC-03（差分設計のみ、実装・切替は別承認）**：[固定採用境界・接続差分draft-0.1](BEST_PRACTICE_ABORT_SCOPE_RELEASE_ADOPTION_RC03_DESIGN.md)で、開発D先行と実source Rを分離した。200値の固定継続・生成元・pre/post guard・上位停止・既存Permit block不変を具体化する。legacy非200 catchは同時に移さない。
 4. **B-03**：旧case対応表の更新、専用開発build／compiled連続試験と本番compiled回帰を別集計。実Permit結合の未代替保証を明記したままにする。
 
 未確認事項：壁時計逆行を含む最終結果時刻との整合、legacy catchを後日移すときの固定failure分類、実classのprivate採用点でのguard位置、費目の正確なlayout／全体work。family定義の最小import閉包だけはRC-01で確認した（§11）。残る事項を本書だけで確認済みにせず、旧caseの分類は引き続きnot_evaluated／未対応のままで、正式発行口・全体受付は無効とする。
@@ -209,3 +209,7 @@ asserted_atの未来・expires_at≦asserted_atを拒否し、binding不一致�
 [RC-02検証記録](E2E_BEST_PRACTICE_RELEASE_COMPARISON_RC02_2026-11-01.md)では、旧関数の返値をoracleにせず、固定表からevidence全体とlimitations順序を独立に期待する70件を追加。既知familyの5×5組合せ・期限の等号／+1ms・優先関係・秘密非出力・fresh freezeを含む。compiled fixtureと梱包の純粋import／時計・timer・fetch不在検査も拡張する。
 
 既存BoundedUpdateSetSource／設定pin／認証・会計・private Permit blockは変更しない。旧試験と対応表の分類は維持し、純粋値の成功を実class bindingや別assembly移行の完了には数えない。次はRC-03の採用差分設計・生成元とpre/post guard・上位停止保持の受入条件であり、本変更では接続・fallback有効化を行わない。
+
+## 13 RC-03の接続差分設計
+
+[RC-03詳細設計draft-0.1](BEST_PRACTICE_ABORT_SCOPE_RELEASE_ADOPTION_RC03_DESIGN.md)を追加した。開発sourceには現状UTC／policy条件がなくrelease値も破棄されるため、test-onlyの同context bindingから先行する。実sourceでは既存`#completeRelease`への非matched draft再投入によるwarning二重追加を避け、公開可変copyとprivate snapshotを分離する。Rの時刻採取位置・失敗owner／解放と同期処理の上界は承認／確認待ちで、本番差替えは行わない。新設計は実装済み・旧case移行済みを意味せず、正式発行口閉鎖・全体受付無効・調査保留を維持する。

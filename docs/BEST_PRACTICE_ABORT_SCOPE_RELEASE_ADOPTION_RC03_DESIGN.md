@@ -1,0 +1,143 @@
+# RC-03：release比較器の固定採用境界・接続差分設計
+
+Version: br006-release-adoption-rc03-draft-0.1 / Date: 2026-11-01。
+Status: **設計のみ・未実装。実source／開発sourceの接続・本番切替の承認ではない。旧試験・正式発行口閉鎖・Unknown・全体受付無効・VM／監視／telemetry調査保留を維持する。実Permit発行・実接続・実通信・実機操作・設定変更・friend撤去・Pushは行わない。**
+
+基準：`a61d90a`。[純粋比較器設計draft-0.4](BEST_PRACTICE_ABORT_SCOPE_RELEASE_COMPARATOR_DESIGN.md)のRC-03を具体化する。以下の追加field・状態・試験ID・分割単位は案であり、存在するAPIや検証済み保証ではない。
+
+## 1 現在の接続点と不足
+
+| 経路 | 現在の供給／消費 | RC-03で必要になる差分 |
+|---|---|---|
+| [実source](../src/review/bounded-source.ts) | `resolveRelease`／private release consumer→`#observeRelease`→既存値判定→`#completeRelease` | 同source内部で比較入力を組み立て、比較後guardを通った値だけを固定分岐へ渡す。公開draftの採用口は作らない |
+| [実session](../src/servicenow/bounded-read.ts) | `startedAt`、`deadlineMs`、pin済み`releasePolicy`、`assertActive`、private生成継続の`check` | 同sessionからの時刻／policy／停止を再利用する。別sessionのprojectionや残時間によるdeadline再計算は禁止 |
+| [開発source](../tests/support/review/ef03/source.ts) | 同realmのcontext・private ackをissue／consumeし、release値を破棄してdone | release行をprivateに保持する短い区間と、同contextに束縛した比較条件が必要。現状は比較器を呼んでいない |
+| [開発assembly](../tests/support/review/ef03/assembly.ts) | contextはrun identity／snapshot／canonical lease。clockは経過時間用 | 固定UTC文字列・policyのtest-only供給が未実装。monotonic clockをUTCとして解釈しない |
+| [開発bootstrap](../tests/support/review/ef03/bootstrap.ts) | 同coreでC/G/P、final4予約、固定200 bytes→decode→accept。release_matchはnot_evaluated | opt-inの比較結果は別の非実行summaryとして公開する。省略時の既存結果・予約／cleanupは不変 |
+
+純粋比較器の成功は値の整合だけで、同sessionの真正な証拠ではない。hex binding、JSON、family文字列、公開summary、draftの形が一致しても生成元の証明へ昇格しない。
+
+## 2 二つの接続を分離する
+
+**D：開発assemblyの追加試験を先行**する。package-excluded root／別brand／別台帳の中だけで、同coreの固定200 transcriptと比較器を接続する。実class保証・本番admission・Permit発行を回復したとは数えない。旧profile／summaryは互換のまま残す。
+
+**R：実sourceの値判定差替えは別承認**とする。既存classの通常private継続にfake fetch／Responseを注入する回帰で設計を確認する案だが、実装・本番切替・実通信は本書では行わない。D用のcontext・claim・fake時計・policy供給口をruntimeへ移植せず、新friendも作らない。
+
+本番cap投入・入力上界が未確定のままRを有効化しない。D／Rの結果と件数は別集計し、B-03の保証表確定、EF-03C/Dのfriend撤去・配布負の対照を先取りしない。
+
+## 3 供給元・所有権・identity
+
+| 値／権限 | Dの供給元・所有者 | Rでの固定供給元 | 禁止する代替 |
+|---|---|---|---|
+| run開始UTC・全deadline | rootが開始前に固定したtest-only値／実際のroot deadline_ms | 同`#session.startedAt`／`#session.deadlineMs` | 観測時刻・remaining_ms・callerの新deadline |
+| policy projection | rootがstrict copyした模擬値。実設定の真正性は主張しない | 同sessionのpin済み`releasePolicy` | raw設定・providerの再実行・別session policy |
+| complete_200の観測 | 同sourceが消費するrelease ack内の同bytes由来projection | `#readReleaseRows`、または同constructorの`take(ack,'release')` | 別source ack・公開rows／draftの再投入 |
+| 観測UTC | rootの固定test-only観測文字列 | 同ownerがguard後に一度採取するUTC値 | 比較器の現在時計、monotonic値のISO変換 |
+| 停止／予算 | context内の同run／lease、既存guard／stop | 通常は`assertActive`、private生成継続では既存`check` | 新budget・新timer・外部summaryのprimary |
+| 採用claim | source固有のrelease consume状態。ackをguard前に消費 | 既存private consumerのstate／releaseRead／cached promise | draft内boolや公開claim、D/R共通registry |
+
+追加D条件はroot内で同じrun・source・snapshot・lease・ready世代へ一度だけ束縛する。wrapper objectの一致だけでなく、それを作ったrootが所有する各identityを確認し、copy／proxy／別realmを拒否する。値copy自体をidentity tokenにしない。
+
+## 4 Dの追加条件と状態遷移案
+
+test-only profileに明示opt-inの`release_comparison`を追加する案とする。内容は固定`started_at`、`observed_at`、policy projectionだけ。`deadline_ms`は既存rootの実値から取り、profileに重複fieldを設けない。comparison modelも実装の固定値を使い、callerのmatched／draft／Permit／callbackは受けない。
+
+既存`source`／固定200`transcript`経路のみを対象にする。`native`の403／404 status-only laneと併用したprofileは開始前にinvalid_inputで拒否し、status終端を空200へ変換しない。binding不一致でGETを開始しない試験は、後続の専用no-request分岐で追加する。D01／D02ではbinding不一致の条件は未対応profileとしてI/O前にinvalid_inputで拒否し、D03でno-requestを扱う。誤って固定transcriptのrelease dispatchを行ってからnot_requestedにする経路を作らない。本番policyの判定変更ではなく、開発opt-inの段階的な対象制限である。
+
+現在の`pinDevelopmentSourceProfile`の65,536文字枠を、新しいpolicy日時の承認済み上限として流用しない。比較条件は別のstrict data-only copyで固定し、getter／Proxy／特殊prototype・余剰keyを拒否する。日時長の未承認問題は残し、開発成功から本番のbounded入力を認定しない。
+
+状態案：`release`→`consuming`→`comparing`→`value_accepted`→`done`→`closed`→`sealed`。
+
+1. 元ackをMapから削除してからcontext／状態／guardを確認する。失敗してもackを戻さない。
+2. 同sourceの行と束縛済み条件だけからRC-01入力を作る。比較前guardを行う。
+3. 固定`compareRelease`を同期呼出しする。比較器・判定済みdraftを引数注入する口は作らない。
+4. 比較後guardを行い、返値がinvalid_inputなら固定内部失敗として停止する。post-guardの停止理由があれば、その先行primaryを上書きしない。
+5. 正常値だけをprivateに格納し、doneへ進む。同じack／contextで二度目のconsume・別sourceへの採用を拒否する。
+6. 正常doneの候補は、rootの一度限りの診断slotへdata-only copyとして退避する。sourceのrevoke／closeではacks・rows・比較条件・元draft参照を無効化する。退避値は採用handleではなく、cleanupと終端結果が確定した後のsealでだけ公開する。停止・解放未確認ならslotの候補も破棄し固定診断だけを残す。closeで消した参照から後で値を復元する設計にはしない。
+
+summary案は`release_comparison`という非実行の区分を追加し、固定scopeと権限falseを表示する。省略時の旧summary／bootstrap.release_match=not_evaluatedは変更しない。unknown／mismatchedも値比較の成功であり、このD経路のok=trueはレビュー開始可能を意味しない。prepared要求を設ける工程では別にrelease_not_admittedへ停止する必要がある。
+
+## 5 Rのprivate入力生成とguard配置案
+
+Rを後日実装する場合も、public `resolveRelease`にrows／policy／draft等の新引数は追加しない。通常取得とprivate ack取得の両方が、同sourceの固定private処理へ集まる構造を維持する。
+
+固定順序案：既存入口guard／parent検査→同sessionのtiming・policy固定参照→binding不一致ならnot_requested（GET=0）→同sourceの200取得／projection→取得後guard→観測UTCの一度だけの採取→pure compare→比較後guard→private採用直前guard→既存結果生成。
+
+通常経路のguardとprivate生成継続のguardを入れ替えない。callerが任意guard／時計／comparatorを渡す新公開APIを作らず、既存の生成継続とテスト用外部I/O注入だけを用いる。`releaseRead`、private consumerのconsuming、`#decision`のcached promiseを維持し、取消や失敗後の再試行で別の結果を採用しない。
+
+### 同期処理と時計の限界
+
+pure比較の途中にawaitはなく、JSイベントループの取消を同期計算の途中で強制実行できるとは主張しない。fake guard／元clockが進む境界でpre/post検査を試験する。設定日時長／総work上界が未確定なので、長い同期処理が全体60秒に必ず収まる証明にもならない。R有効化前の判断事項として残す。
+
+現在の実sourceはresolved／conflict分岐でUTCを採取し、空値fallbackでは採取しない。一方、RC-01入力はcomplete_200なら空値でもobserved_atが必要である。R案では取得後guardと比較の間で一度採取するが、この追加採取・採取位置の差を無変更と偽らない。戻り値の時刻、壁時計逆行と上位reviewed_atの整合、時計失敗時の固定分類をfake試験で確認し、切替前に承認する。Dは固定UTC値を使うため、このR保証の代替ではない。
+
+## 6 draftから既存結果への変換――二重warningとPermitの境界
+
+| 比較結果 | D | Rの将来案 |
+|---|---|---|
+| invalid_input | guardの先行理由を保持し、それがなければ固定内部失敗。draft非公開 | trustedな内部projectionの矛盾として停止。通常のunknownへ格下げしない |
+| ok／unknown・mismatched | 権限なしの値summaryだけ | evidenceをfresh clone、limitationsを新規copyして既存の非matched公開decisionを返す。`#completeRelease`へ再投入しない |
+| ok／matched | 同様に非実行。Permit生成・実source登録なし | freshなevidence／warning copyを既存private`#completeRelease`へ渡す案。Permit blockは既存class内だけで、別承認前にこの分岐を有効化しない |
+
+既存`#completeRelease`は非matchedでrelease_unknown／release_mismatchを追記する。比較器の完成済みlimitationsを丸ごとこの分岐へ渡すとwarningが重複するため禁止する。単なる文字列の包括的な削除／sortで補正する方式も禁止し、上表の固定分岐で順序を保存する。
+
+pure draftはdeep freezeされているが、既存公開ReleaseDecisionのevidenceは可変のまま独立したprivate snapshotを持つ。Rではpure値→公開用fresh clone→既存private snapshotを分離する。[旧snapshot試験](../tests/review/source-release-binding.test.ts)の公開raw_buildname変更がthrowするような凍結強化を混ぜない。
+
+matchedのprivate生成中・bind直後の失敗も、返却前に同session停止で権限を無効化し、未公開結果を返さない必要がある。既存binding側のcheck・同期revoke・closeとprivate fieldsの解放を追跡し、対応不能ならRを有効化しない。新しいpublic revoke／draft adoption／friendで穴を埋めない。cached promiseが拒否された後に新Permitを作り直す救済も行わない。
+
+## 7 失敗層・診断の保持
+
+| 元の事実 | 本設計での扱い |
+|---|---|
+| Dの不正profile／条件の構造不正 | 開始前invalid_input。入出力にraw値を出さない |
+| identity混入・二重consume・内部policy矛盾 | D内部は順にevidence_binding_mismatch／invalid_state／internal_review_error、公開codeはいずれもinternal_review_error。Rは既存run ownerの先行診断を保持してinternal_review_errorへ停止。新たな公開codeを増やさない |
+| ownerのUTC採取失敗／非有限clock | D内部invalid_observation_time→公開internal_review_error。Rの停止ownerへの結合は切替前の確認事項。一般のinvalid_observationにしない |
+| cancel／closed／deadline／phase deadline／receive cap／auth | 元の固定停止理由を保持。invalid_observationやfallbackへ変換しない |
+| R legacy readRows／projectionのinvalid_response | 既存の限定catch境界でのみinvalid_observation→observation_incomplete案。raw22行と有効21行sentinelを区別 |
+| D旧profileでの不正projection／bootstrapのUTF-8／JSON不正 | 既存どおりinvalid_responseで停止。比較器まで届く値に勝手に変換しない |
+| legacy非200のaccess_denied等 | 現在のcatch／設定代替を据置き。RC-03の200値移行へ混ぜない |
+| native status-only／cleanup未確認 | 既存status／cleanup二軸を保持。200・空配列・invalid_observationに偽装しない |
+
+ordinary unknownはrun stopとは別である。正常な比較値で先行HTTP／cleanup／run primaryを消さず、post-guard失敗なら計算済みdraftより停止を優先する。revoke・解放後に診断の固定copyだけを残し、資格情報・raw bytes・例外本文・identity handleをsummaryへ出さない。
+
+## 8 費目所有と上限
+
+既存GETのC、同bytesのG／P、final4予約、retry、reader cleanupは既存ownerのまま。pure比較・値採用のためにdispatch／chunk／reserve／releaseを追加実行しない。D固定200のparent／releaseは従来どおりC=2、exchangeがあればC=3、P=0、Gは実際の受信bytesの合計とする。最終予約は成功・拒否・取消で一度だけ返却し、新たに取り直さない。
+
+観測rows最大21・build_name最大40・既知family最大5・limitations最大5はRC-01／02どおり。比較入力copy・結果copy・guard費用と設定日時の未承認長を、未実装の全体work／allocationモデルへ確認済みとして加えない。最初のD試験で会計不変を検証しても、本番の受信量／同期実行時間上界の証明にはしない。
+
+## 9 fake I/O受入条件案
+
+| ID | 独立に期待する条件 | D／Rと残る限界 |
+|---|---|---|
+| RC3-INPUT | 同run開始・全deadline・policyが途中で置換されず、残時間でexpiry判定を変えない | D固定値／R同sessionを別集計 |
+| RC3-IDENTITY | foreign run／source／lease／snapshot／世代、copy／Proxy、公開draft混入を拒否。別rootの状態不変 | D成功だけでR保証にしない |
+| RC3-ONCE | 同ack二度・consume再入・失敗後再開・close後採用を拒否。claim復活なし | 比較器自体の反復可能性とsource採用claimを区別 |
+| RC3-GUARD | 取得後・比較前／後・公開直前の取消／元deadline／closeでdraft非公開、先行理由を保持 | 同期関数の強制preemptionは主張しない |
+| RC3-VALUES | 5family、空／不完全／未知／21／raw22、期限切れ競合、全limitations順序を固定期待値で確認 | 新旧同じ関数の差分比較だけをoracleにしない |
+| RC3-CLOCK | UTC採取回数・採取失敗・逆行を確認。観測時刻でpolicy期限を延ばさない | Rの新採取位置は未承認 |
+| RC3-BOUNDARY | body decode／projection／非200／cleanupの原因層を区別。設定で取消等を救済しない | 非200の挙動変更は対象外 |
+| RC3-ACCOUNT | 同coreのC/G/P・final4予約／返却・cleanup回数が比較追加で増減しない | D／Rの元入力／retry条件ごとに期待値を独立記述 |
+| RC3-OUTPUT | Dはseal後の非実行summaryのみ。Rの公開可変copyとprivate immutable snapshotを分離。warning二重付与なし | 実Permit結合は別承認 |
+| RC3-PACK | dev root／claim／fake時計が本番import・宣言・mapへ混入せず、旧compiled回帰も維持 | 専用開発compiled保証はB-03 |
+
+旧試験は削除／skip／期待緩和しない。旧caseの対応表は新しい実在caseと未代替保証を確認してから更新し、本書だけで分類・件数を変更しない。期限やACL要件を緩めず、全体テストの重複起動も避ける。
+
+## 10 次の分割単位と承認待ち
+
+1. **RC3-D01（次の最小実装候補）**：同rootのtest-only時刻／policy条件・private bindingと一度限りclaimを追加。まだ比較結果を公開せず、旧profile・summary不変と混入／失敗停止を確認。
+2. **RC3-D02**：同sourceの200行ack→固定比較→pre/post guard→非実行summaryを接続。会計／予約／cleanupの継続を確認。status-onlyは除外。
+3. **RC3-D03**：no-requestのbinding不一致分岐を固定transcriptのdispatch前へ接続し、release GET=0・予約返却を確認。設定代替・競合の連続caseを追加。
+4. **RC3-R01（別承認）**：実source採用差分のfake-I/O試験を先行。下表の保留が解決するまで通常入口へ切り替えない。
+5. **B-03**：保証表と専用開発compiled試験を別工程で確定。friend撤去・本番切替・実通信は別承認。
+
+| 承認／未確認項目 | 現在の扱い |
+|---|---|
+| 設定日時文字数の有限上限／長い小数秒の互換方針 | 承認待ち。Dでも本番上限を認定せず、新capを投入しない |
+| 全入力byte／work・同期比較の時間上界 | Unknown。全体受付・R有効化の根拠にしない |
+| Rのcomplete_200 UTC採取位置・空観測時の追加採取 | fake試験・承認待ち。D固定値で代替しない |
+| Rのtrusted入力矛盾の停止owner・bind中失敗の無効化／解放 | 既存private lifecycleとの追跡が未完了。公開新入口で代替しない |
+| Dの条件profile／非実行summary追加 | 本書の提案。省略時互換、package除外を実装時に検証 |
+| 本番値判定差替え・実Permit経路・非200移行 | 未承認。現状を維持 |
+
+この設計の作成を実装・採用・鍵／設定・通信の承認へ読み替えない。調査保留と正式発行口閉鎖を維持する。

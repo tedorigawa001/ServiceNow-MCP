@@ -1,6 +1,6 @@
 # EF-03B B-02：source・会計・nativeの移行範囲と共通化境界
 
-Version: br006-development-migration-b02-draft-0.10 / Date: 2026-11-01。
+Version: br006-development-migration-b02-draft-0.11 / Date: 2026-11-01。
 Status: **B-02-01〜03の値検査・同core会計・注入同reader cleanup／source受理を限定実装（§7〜9）。RC-01／02のrelease純粋値契約・比較を追加（§11）。旧試験をすべて残す。全case移行・release判断のsource移行・friend撤去・実接続は未実施。正式発行口閉鎖・Unknown・全体受付無効・VM／監視／telemetry調査保留を維持する。実通信・実機操作・設定変更・Pushは行わない。**
 
 設計基準：`5e79b21`。B-01の生成順はbusy事前判定→core→admission→登録ownerに修正済みであり、その前の順序へ戻さない。[移行親設計](BEST_PRACTICE_ABORT_SCOPE_DEVELOPMENT_ROOT_EF03B_DESIGN.md)のB-02を細分化する。§1〜6は初版の計画・受入条件、限定実装と未対応の区分は§7〜9を参照する。
@@ -157,8 +157,12 @@ native summaryは解放後のclosed／revoked=true、固定HTTP／操作数／cl
 
 ## 11 release純粋比較器の設計案
 
-[release比較器詳細設計draft-0.3](BEST_PRACTICE_ABORT_SCOPE_RELEASE_COMPARATOR_DESIGN.md)に、family判定、空／不完全／21行sentinelとraw応答上限の区別、期限切れ設定を保持した競合判定、固定limitations順序を整理した。RC-01の構造入力・型・family境界に加え、RC-02のpolicy整合・意味比較・非実行draft生成を純粋値として実装した。実source／開発sourceへの採用は未接続で、実Permit・private snapshot／port・採用claimは生成しない。既存の非200 legacy catchと、bootstrapのdecode／cleanup失敗は同時に移さない。
+[release比較器詳細設計draft-0.4](BEST_PRACTICE_ABORT_SCOPE_RELEASE_COMPARATOR_DESIGN.md)に、family判定、空／不完全／21行sentinelとraw応答上限の区別、期限切れ設定を保持した競合判定、固定limitations順序を整理した。RC-01の構造入力・型・family境界に加え、RC-02のpolicy整合・意味比較・非実行draft生成を純粋値として実装した。実source／開発sourceへの採用は未接続で、実Permit・private snapshot／port・採用claimは生成しない。既存の非200 legacy catchと、bootstrapのdecode／cleanup失敗は同時に移さない。
 
 設定日時文字列長の上限は承認待ちで新制限を加えず、壁時計逆行等は未確認とする。family閉包はimportなしの値moduleへ限定し、比較器はrootをimportしない。RC-03は未実装で、RC-01／02の合成／compiled確認を旧release判断caseの対応済みへ数えない。旧試験・対応表の分類、not_evaluated、正式発行口閉鎖・全体受付無効・調査保留を維持する。[RC-01検証記録](E2E_BEST_PRACTICE_RELEASE_CONTRACT_RC01_2026-11-01.md)・[RC-02検証記録](E2E_BEST_PRACTICE_RELEASE_COMPARISON_RC02_2026-11-01.md)参照。
 
 draft-0.5のレビュー修正：開発bootstrapはdispatch後のC差分だけを確認し、本番bootstrap契約が行うchunk後のG差分（＝bytes長）とC/P不変の確認がなかったため追加した。上位設計からの版数リンクも更新した。
+
+## 12 RC-03採用境界の差分設計
+
+[固定採用境界・接続差分draft-0.1](BEST_PRACTICE_ABORT_SCOPE_RELEASE_ADOPTION_RC03_DESIGN.md)に、Dのtest-only時刻／policy binding・同ackのconsume・pre/post guardと非実行summary、Rの同session条件・公開copy／private snapshot・失敗owner／解放を分離した。Dの最初の候補はRC3-D01（条件とclaimのみ）で、比較公開はD02、GET前のbinding不一致はD03とする。R差替え・実Permit経路・非200移行は未承認。旧case分類・件数・旧試験・全体受付無効・正式発行口閉鎖は変更しない。
