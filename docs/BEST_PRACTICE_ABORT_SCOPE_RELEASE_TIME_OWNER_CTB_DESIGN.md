@@ -112,4 +112,4 @@ TB-Bは新たなworker終端を作らず、上位値は固定fake準備処理の
 
 ## 11 CT-B後半の設計参照
 
-[worker job binding・T_i／E詳細設計draft-0.1](BEST_PRACTICE_ABORT_SCOPE_WORKER_TIME_BINDING_DESIGN.md)で、同run／sourceの時刻leaseと、ready済みworker世代・input receipt・job claimの役割を分けた。T_iの受理はstartup前にも起こるためjob発行と分離し、正常source解放後は新jobを作らず既発行jobの終端だけを扱う。元S／全Lと空200のO・omission後のUを維持する。WJ-A〜Dは未実装で、現prepared-onlyのdiscardを削除する指示ではない。TB-Bレビューで残ったfinally継続の観測不足を、rollback救済と区別する受入条件も置く。B-03・実接続・正式発行・全体受付は別工程のままとする。
+[worker job binding・T_i／E詳細設計draft-0.2](BEST_PRACTICE_ABORT_SCOPE_WORKER_TIME_BINDING_DESIGN.md)で、同run／sourceの時刻leaseと、ready済みworker世代・input receipt・job claimの役割を分けた。T_iの受理はstartup前にも起こるためjob発行と分離し、正常source解放後は新jobを作らず既発行jobの終端だけを扱う。元S／全Lと空200のO・omission後のUを維持する。WJ-A〜Dは未実装で、現prepared-onlyのdiscardを削除する指示ではない。TB-Bレビューで残ったfinally継続の観測不足を、rollback救済と区別する受入条件も置く。B-03・実接続・正式発行・全体受付は別工程のままとする。
