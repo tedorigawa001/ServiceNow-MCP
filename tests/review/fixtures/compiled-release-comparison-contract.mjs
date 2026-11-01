@@ -1,0 +1,17 @@
+import assert from 'node:assert/strict';
+import {parseReleaseComparisonInput} from '../../../dist/servicenow/review-kernel/release-comparison.js';
+import {RELEASE_FAMILIES, matchReleaseFamily} from '../../../dist/servicenow/review-kernel/release-family.js';
+const input = {model_id:'release-comparison-v1', timing:{started_at:'2026-11-01T00:00:00.000Z',deadline_ms:60000,observed_at:'2026-11-01T00:00:01.000Z'},policy:{instanceBinding:'a'.repeat(64)},observation:{kind:'complete_200',rows:[{build_name:'Australia'}]}};
+const parsed=parseReleaseComparisonInput(input);
+assert.equal(parsed.ok,true);
+assert(!('permit' in parsed)&&!('decision' in parsed));
+input.observation.rows[0].build_name='Zurich';
+assert.equal(parsed.input.observation.rows[0].build_name,'Australia');
+assert(Object.isFrozen(parsed.input.observation.rows[0]));
+let traps=0;
+assert.deepEqual(parseReleaseComparisonInput(new Proxy(input,{ownKeys(){traps++;throw Error('secret');}})),{ok:false,code:'invalid_input'});
+assert.equal(traps,0);
+assert.deepEqual(RELEASE_FAMILIES,['Australia','Brazil','Zurich','Yokohama','Xanadu']);
+assert.equal(matchReleaseFamily(' AUSTRALIA '),'matched');
+assert.equal(matchReleaseFamily('Australia Patch 1'),'unknown');
+console.log('RC-01 compiled value contracts PASS; no release admission or Permit');

@@ -1,5 +1,6 @@
 /** Versioned BP-5 data contracts only. No fetching, release resolution or engine invocation. */
 import { z } from 'zod';
+import { RELEASE_FAMILIES } from '../servicenow/review-kernel/release-family.js';
 import { reviewResultStructure } from './result-schema.js';
 import { matchCatalogRelease, RULES, SOURCES } from './catalog.js';
 import { followUpCodeSchema, isFollowUpApplicable, ONLOAD_INPUT_FOLLOW_UP, DOM_SCOPE_FOLLOW_UP, FULLTEXT_METHOD_FOLLOW_UP } from './follow-up-catalog.js';
@@ -18,7 +19,7 @@ export const bp5RulesetFor = (rules: readonly string[]) => rules.includes('AU-QR
   : rules.includes('AU-BR-005') ? 'bp3-0.7' as const
   : rules.includes('AU-BR-004') ? 'bp3-0.6' as const
   : rules.includes('AU-QRY-001') ? 'bp3-0.5' as const : 'bp3-0.4' as const;
-const family = z.enum(['Australia', 'Brazil', 'Zurich', 'Yokohama', 'Xanadu']);
+const family = z.enum(RELEASE_FAMILIES);
 const asserted = z.strictObject({
   source: z.literal('operator_config'), resolution_status: z.literal('asserted'),
   family, visibility_scope: z.literal('operator_configured'),

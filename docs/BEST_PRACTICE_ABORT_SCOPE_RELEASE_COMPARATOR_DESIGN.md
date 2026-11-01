@@ -1,9 +1,9 @@
 # AU-BR-006／EF-03B：release純粋比較器の詳細設計
 
-Version: br006-release-comparator-draft-0.1 / Date: 2026-11-01。
-Status: **設計のみ。既存release判断の値部分を移す案であり、実Permit発行・移行実装・friend撤去・実接続の承認ではない。旧試験、正式発行口閉鎖・Unknown・全体受付無効・VM／監視／telemetry調査保留を維持する。実装・実通信・実機操作・設定変更・Pushは行わない。**
+Version: br006-release-comparator-draft-0.2 / Date: 2026-11-01。
+Status: **RC-01のstrict構造入力・非実行draft内部型・family最小共有境界だけを実装。意味比較・draft値生成・実sourceへの採用は未実装。実Permit発行・friend撤去・実接続の承認ではない。旧試験、正式発行口閉鎖・Unknown・全体受付無効・VM／監視／telemetry調査保留を維持する。実通信・実機操作・設定変更・Pushは行わない。**
 
-基準：`183b540`。[旧case対応表](BEST_PRACTICE_ABORT_SCOPE_OLD_CASE_CROSSWALK_B02_DESIGN.md)のACK-08〜16等と、[移行設計](BEST_PRACTICE_ABORT_SCOPE_DEVELOPMENT_MIGRATION_B02_DESIGN.md)の残差を具体化する。以下の型名・file名・試験IDは案であって実装済みではない。
+基準：設計は`183b540`、RC-01実装前は`39a3225`。[旧case対応表](BEST_PRACTICE_ABORT_SCOPE_OLD_CASE_CROSSWALK_B02_DESIGN.md)のACK-08〜16等と、[移行設計](BEST_PRACTICE_ABORT_SCOPE_DEVELOPMENT_MIGRATION_B02_DESIGN.md)の残差を具体化する。§11で明示するRC-01以外の型・手順・試験IDは引き続き案である。
 
 ## 1 現行の責務と分離先
 
@@ -175,9 +175,23 @@ limitsのmaxやfamily集合が変わる場合はmodel_id／対応表を再レビ
 
 ## 10 実装順の提案と未確認事項
 
-1. **RC-01**：strict入力／非実行draftの内部型・family値の最小共有境界。owner・clock・I/Oなしで独立oracleを作る。
+1. **RC-01（限定実装済み、§11）**：strict構造入力／非実行draftの内部型・family値の最小共有境界。owner・clock・I/Oなしで独立oracleを作る。意味比較は含めない。
 2. **RC-02**：本書の順序・limitationsを同期比較器に実装。policy自己整合・構造拒否とordinary unknownを分ける。新規合成試験を追加し旧試験を残す。
 3. **RC-03（別承認）**：200値を得る実source／開発sourceそれぞれの固定継続へ接続し、生成元・pre/post guard・上位停止・既存permit block不変を確認する。legacy非200 catchは同時に移さない。
 4. **B-03**：旧case対応表の更新、専用開発build／compiled連続試験と本番compiled回帰を別集計。実Permit結合の未代替保証を明記したままにする。
 
-未確認事項：family定義の共有に必要な最小import閉包、壁時計逆行を含む最終結果時刻との整合、legacy catchを後日移すときの固定failure分類、実classのprivate採用点でのguard位置、費目の正確なlayout／全体work。これらを本書だけで確認済みにしない。実装前の分類は引き続きnot_evaluated／未対応のままで、正式発行口・全体受付は無効とする。
+未確認事項：壁時計逆行を含む最終結果時刻との整合、legacy catchを後日移すときの固定failure分類、実classのprivate採用点でのguard位置、費目の正確なlayout／全体work。family定義の最小import閉包だけはRC-01で確認した（§11）。残る事項を本書だけで確認済みにせず、旧caseの分類は引き続きnot_evaluated／未対応のままで、正式発行口・全体受付は無効とする。
+
+## 11 RC-01限定実装と残差
+
+`src/servicenow/review-kernel/release-comparison.ts`に`parseReleaseComparisonInput`、readonly入力型、`ReleaseComparisonDraft`／結果型を追加した。parser成功は`{ok:true,input}`であり、comparison draftやmatched判定ではない。draftの権限4項目は型上もfalse固定で、Permit property・draft生成関数・公開draft採用口は追加しない。
+
+構造検査は、固定model、strict key／tag、lowercase hash、canonical設定family、rows最大21／build_name最大40、owner日時最大40／有限epoch、deadline整数1〜60000／安全加算を扱う。complete_200だけobserved_atを要求し、not_requestedはassertionのbinding不一致と対応issueを必要とする。assertionなしのissueは拒否する。その他のpolicy期限・issue自己整合と§5〜7の意味比較はRC-02の責務であり、構造受理を意味検証済み・取得開始可能へ昇格させない。observed_at≧started_atの新制約は追加しない。
+
+inputはown data descriptorだけから一度copyする。Node標準`node:util`の`types.isProxy`を反射操作より先に使用し、revokedを含むProxyのtrap、getterを実行しない。特殊prototype・symbol・非enumerable field・undefined・関数・Promise・buffer・循環／深すぎる構造・疎配列・余剰array keyを固定invalid_inputで拒否する。内部copyには深さ4、値node128、object key10、array要素21の構造枠を置く。受理値はfresh deep freezeし、エラー本文／入力値は返さない。
+
+**設定asserted_at／expires_atの文字数上限は承認待ちのまま**。既存ISO検査を維持し、長い小数秒を切詰め・正規化しない。長い設定日時の既存schema／新parser双方の受理を合成確認する。したがって入力全体のbyte／workの有限上界は未確定。ownKeys等の列挙前allocationも含め、これをbounded transportや全体受付の証明とは扱わない。
+
+`release-family.ts`はimportなしのcanonical5値・whole-string正規化／matchだけを持つ。catalog公開関数はwrapperのまま意味を維持し、設定schema・結果schemaも同じtupleを参照する。比較入力kernelのruntime importはzod・node:util・familyだけ。draftが参照する既存ReleaseEvidenceはtype-onlyで、生成JSから消える。sourceのrelease判断・非200 catch・実Permit block・公開decisionの可変性は変更しない。
+
+[RC-01検証記録](E2E_BEST_PRACTICE_RELEASE_CONTRACT_RC01_2026-11-01.md)にRED/GREEN、合成入力、型の負の試験、既存回帰、compiled／梱包確認を記録する。旧case対応表の分類・件数は変更せず、B-03 compiled保証やrelease判断移行の完了とは数えない。次はRC-02のpolicy整合・優先順・limitationsとfresh draft値生成を独立oracleで実装する。

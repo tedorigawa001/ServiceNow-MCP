@@ -1,9 +1,10 @@
 /** Server-owned BP-5 settings only. No file loading, request arguments or network I/O. */
 import { createHash } from 'node:crypto';
 import { z } from 'zod';
+import { RELEASE_FAMILIES } from './review-kernel/release-family.js';
 
 const instanceId = z.string().regex(/^[a-z][a-z0-9_-]{0,63}$/);
-const family = z.enum(['Australia', 'Brazil', 'Zurich', 'Yokohama', 'Xanadu']);
+const family = z.enum(RELEASE_FAMILIES);
 export const operatorReleaseConfigSchema = z.strictObject({ instance_id: instanceId,
   assertion: z.strictObject({ family, instance_binding: z.string().regex(/^[a-f0-9]{64}$/),
     asserted_at: z.iso.datetime(), expires_at: z.iso.datetime(),

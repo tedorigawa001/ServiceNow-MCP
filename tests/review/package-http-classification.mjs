@@ -10,6 +10,18 @@ const output=execFileSync('npm',['pack','--dry-run','--ignore-scripts','--offlin
 const [pack]=JSON.parse(output);
 const kernel='dist/servicenow/review-kernel/construction-state';
 const sourceKernel='dist/servicenow/review-kernel/source-values';
+for(const name of ['release-family','release-comparison']) {
+  const path='dist/servicenow/review-kernel/'+name;
+  for(const suffix of ['.js','.js.map','.d.ts','.d.ts.map'])assert(pack.files.some(f=>f.path===path+suffix),'required release value contract missing: '+name+suffix);
+  const tree=parse(readFileSync(join(root,path+'.js'),'utf8'),{ecmaVersion:'latest',sourceType:'module'}),pending=[tree];
+  const allowed=name==='release-family'?[]:['zod','node:util','./release-family.js'];
+  while(pending.length){const n=pending.pop();
+    if(n.type==='ImportDeclaration')assert(allowed.includes(n.source.value),'release value contract imports a root: '+n.source.value);
+    assert(n.type!=='ImportExpression'&&n.type!=='ExportAllDeclaration'&&!(n.type==='ExportNamedDeclaration'&&n.source),'release value contract reexports/imports a root');
+    assert(!(n.type==='CallExpression'&&n.callee?.name==='require'),'release value contract requires a root');
+    for(const v of Object.values(n)){if(Array.isArray(v))pending.push(...v.filter(x=>x&&typeof x.type==='string'));else if(v&&typeof v==='object'&&typeof v.type==='string')pending.push(v);}
+  }
+}
 for(const suffix of ['.js','.js.map','.d.ts','.d.ts.map'])assert(pack.files.some(f=>f.path===sourceKernel+suffix),'required source value kernel missing: '+suffix);
 const sourceAst=parse(readFileSync(join(root,sourceKernel+'.js'),'utf8'),{ecmaVersion:'latest',sourceType:'module'}),sourceNodes=[sourceAst];
 while(sourceNodes.length){const n=sourceNodes.pop();
@@ -46,4 +58,5 @@ execFileSync(process.execPath,[fileURLToPath(new URL('fixtures/compiled-construc
 execFileSync(process.execPath,[fileURLToPath(new URL('fixtures/compiled-construction-transaction.mjs',import.meta.url))],{cwd:root,stdio:'inherit'});
 execFileSync(process.execPath,[fileURLToPath(new URL('fixtures/compiled-construction-kernel.mjs',import.meta.url))],{cwd:root,stdio:'inherit'});
 execFileSync(process.execPath,[fileURLToPath(new URL('fixtures/compiled-source-values.mjs',import.meta.url))],{cwd:root,stdio:'inherit'});
+execFileSync(process.execPath,[fileURLToPath(new URL('fixtures/compiled-release-comparison-contract.mjs',import.meta.url))],{cwd:root,stdio:'inherit'});
 console.log('HTTP classification/status terminal/cleanup/context excluded; runtime unconnected; fixture/oracle excluded PASS ('+pack.files.length+' files)');

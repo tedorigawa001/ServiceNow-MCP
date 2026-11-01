@@ -1,10 +1,9 @@
 /** Curated register summaries. No vendor document bodies or network retrieval. */
+import {matchReleaseFamily} from '../servicenow/review-kernel/release-family.js';
 export const CATALOG_VERSION = 'au-register-0.1';
 /** Conservative family recognition for this PoC; not a live platform release detector. */
 export function matchCatalogRelease(release: string | null): 'matched' | 'mismatched' | 'unknown' {
-  const normalized = release?.trim().toLowerCase();
-  if (normalized === 'australia') return 'matched';
-  return normalized && ['brazil', 'zurich', 'yokohama', 'xanadu'].includes(normalized) ? 'mismatched' : 'unknown';
+  return matchReleaseFamily(release);
 }
 export type AssetType = 'business_rule' | 'client_script' | 'script_include' | 'scripted_rest_resource' | 'server_script';
 export interface BestPracticeRule {
