@@ -3,6 +3,7 @@ import {types} from 'node:util';
 import {createConstructionState,type ConstructionResource,type ConstructionStage,type ConstructionPublicCode} from '../../../../src/servicenow/review-kernel/construction-state.js';
 import {createCanonicalReviewBudget,CanonicalBudgetError} from '../../../../src/servicenow/review-canonical-budget.js';
 import {createDevelopmentSourceRealm,pinDevelopmentSourceProfile,DevelopmentSourceError} from './source.js';
+import {pinDevelopmentTranscript} from './bootstrap.js';
 
 const faults=['after_admission','after_registration','duplicate_registration','foreign_registration','after_controller','after_timer','after_listener','after_commit'] as const;
 type Fault=typeof faults[number];
@@ -54,6 +55,7 @@ export function createDevelopmentRoot(dependencies:Readonly<{clock?:()=>number;w
     let timer:ReturnType<typeof setTimeout>|undefined,removeExternal:(()=>void)|undefined;
     let sourceProfile:ReturnType<typeof pinDevelopmentSourceProfile>|undefined;
     let source:ReturnType<typeof sourceRealm.create>|undefined;
+    let transcript:ReturnType<typeof pinDevelopmentTranscript>|undefined;
     let runPrimary:Readonly<{code:ConstructionPublicCode}>|null=null,stopped:ConstructionPublicCode|null=null;
     const stop=(code:ConstructionPublicCode)=>{
       if(closed)return;
@@ -72,12 +74,16 @@ export function createDevelopmentRoot(dependencies:Readonly<{clock?:()=>number;w
     try{
       if(starting)throw new Rejection('review_busy');
       starting=true;ownsStart=true;
-      const p=data(raw,['principal','deadline_ms','fault','source']),o=data(options,['signal']);
+      const p=data(raw,['principal','deadline_ms','fault','source','transcript']),o=data(options,['signal']);
       if(typeof p.principal!=='string'||!/^[A-Za-z0-9_-]{1,64}$/.test(p.principal))throw new Rejection('invalid_input');
       if(p.deadline_ms!==undefined&&(!Number.isInteger(p.deadline_ms)||Number(p.deadline_ms)<1||Number(p.deadline_ms)>60000))throw new Rejection('invalid_input');
       if(p.fault!==undefined&&!faults.includes(p.fault as Fault))throw new Rejection('invalid_input');
       principal=p.principal;fault=p.fault as Fault|undefined;deadline=p.deadline_ms as number??60000;
       if(Object.hasOwn(p,'source'))sourceProfile=pinDevelopmentSourceProfile(p.source);
+      if(Object.hasOwn(p,'transcript')){
+        if(sourceProfile)throw new Rejection('invalid_input');
+        transcript=pinDevelopmentTranscript(p.transcript);
+      }
       construction.attempt('snapshot');construction.held('snapshot');
       const signal=o.signal as AbortSignal|undefined;
       if(signal!==undefined){
@@ -90,7 +96,8 @@ export function createDevelopmentRoot(dependencies:Readonly<{clock?:()=>number;w
       stage='admission';
       if(active>=2||principals.has(principal))throw new Rejection('review_busy');
       stage='core';construction.attempt('core');
-      core=createCanonicalReviewBudget({clock:{remainingMs:()=>Math.max(0,deadline-(clock()-start))},limits:{deadlineMs:deadline}});
+      core=createCanonicalReviewBudget({clock:{remainingMs:()=>Math.max(0,deadline-(clock()-start))},limits:{deadlineMs:deadline,
+        ...(transcript?{requests:transcript.limits.requests,totalBytes:transcript.limits.total_bytes}:{}),}});
       construction.held('core');guard();
       stage='admission';construction.attempt('admission');active++;admitted=true;principals.add(principal);construction.held('admission');inject('after_admission');
       stage='owner';const candidate=fault==='foreign_registration'?new DevelopmentIdentity(Object.freeze({})):identity;
@@ -119,6 +126,13 @@ export function createDevelopmentRoot(dependencies:Readonly<{clock?:()=>number;w
         source.consume(source.issue('parent',sourceProfile.parent),'parent',context);
         source.consume(source.issue('release',sourceProfile.release),'release',context);guard();
       }
+      if(transcript){
+        const context=Object.freeze({run:identity,snapshot:transcript,lease:core.view.lease});
+        source=sourceRealm.create(context,transcript.target,()=>{try{guard();return null;}catch{return stopped??'internal_review_error';}});
+        source.prepare(context);
+        await transcript.run(core,controller.signal,deadline,{check:guard,stop,ready:()=>source!.ready(context),
+          accept:(purpose,value)=>source!.consume(source!.issue(purpose,value),purpose,context)});guard();
+      }
       let removeWait=()=>{};
       try{
         const signal=controller.signal;
@@ -132,6 +146,7 @@ export function createDevelopmentRoot(dependencies:Readonly<{clock?:()=>number;w
       stopped??=code;
     }finally{
       closed=true;
+      transcript?.dispose();
       source?.revoke();source?.seal();sourceProfile=undefined;
       const release=(slot:ConstructionResource,operation:(()=>void)|undefined)=>{
         if(!construction.needed(slot))return;
@@ -150,7 +165,8 @@ export function createDevelopmentRoot(dependencies:Readonly<{clock?:()=>number;w
     }
     const diagnostic=construction.copy(),code=stopped??diagnostic.primary?.public_code??null;
     const budget=Object.freeze(core?.view.stats()??{requests:0,received_bytes:0,payload_bytes:0});core=undefined;
-    return Object.freeze({assembly:'ef03-development' as const,scope:source?'source_values_only' as const:'construction_only' as const,ok:code===null,code,construction:diagnostic,run_primary:runPrimary,budget,permissions,
+    return Object.freeze({assembly:'ef03-development' as const,scope:transcript?'bootstrap_transcript_only' as const:source?'source_values_only' as const:'construction_only' as const,ok:code===null,code,construction:diagnostic,run_primary:runPrimary,budget,permissions,
+      ...(transcript?{bootstrap:transcript.diagnostic()}:{}),
       ...(source?{source:source.inspect()}:{}),});
   }
   return Object.freeze({run,inspect});

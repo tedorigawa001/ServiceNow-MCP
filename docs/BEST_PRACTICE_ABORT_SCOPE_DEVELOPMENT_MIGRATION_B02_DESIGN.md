@@ -1,9 +1,9 @@
 # EF-03B B-02：source・会計・nativeの移行範囲と共通化境界
 
-Version: br006-development-migration-b02-draft-0.3 / Date: 2026-11-01。
-Status: **B-02-01の値検査最小抽出・開発lifecycleを限定実装（§7）。旧試験をすべて残す。B-02-02／03、friend撤去・実接続は未実施。正式発行口閉鎖・Unknown・全体受付無効・VM／監視／telemetry調査保留を維持する。実通信・実機操作・設定変更・Pushは行わない。**
+Version: br006-development-migration-b02-draft-0.4 / Date: 2026-11-01。
+Status: **B-02-01（§7）とB-02-02の同core会計・固定200 transcript（§8）を限定実装。旧試験をすべて残す。native移行・release判断移行・friend撤去・実接続は未実施。正式発行口閉鎖・Unknown・全体受付無効・VM／監視／telemetry調査保留を維持する。実通信・実機操作・設定変更・Pushは行わない。**
 
-設計基準：`5e79b21`。B-01の生成順はbusy事前判定→core→admission→登録ownerに修正済みであり、その前の順序へ戻さない。[移行親設計](BEST_PRACTICE_ABORT_SCOPE_DEVELOPMENT_ROOT_EF03B_DESIGN.md)のB-02を細分化する。§1〜6は初版の計画・受入条件、限定実装と未対応の区分は§7を参照する。
+設計基準：`5e79b21`。B-01の生成順はbusy事前判定→core→admission→登録ownerに修正済みであり、その前の順序へ戻さない。[移行親設計](BEST_PRACTICE_ABORT_SCOPE_DEVELOPMENT_ROOT_EF03B_DESIGN.md)のB-02を細分化する。§1〜6は初版の計画・受入条件、限定実装と未対応の区分は§7〜8を参照する。
 
 ## 1 現在地と今回の境界
 
@@ -110,3 +110,21 @@ sourceはcommit後に開始し、取消時は同期revoke、finallyではrevoke�
 [新source試験](../tests/review/development-source.test.ts)、[共通値試験](../tests/review/source-values.test.ts)、[compiled値fixture](../tests/review/fixtures/compiled-source-values.mjs)、[検証記録](E2E_BEST_PRACTICE_DEVELOPMENT_SOURCE_B0201_2026-11-01.md)を参照。compiled fixtureは共通値検査だけであり、開発assemblyのcompiled保証はB-03に残す。次はB-02-02の同core bootstrap会計・固定200 transcriptで、全体受付や正式発行は開かない。
 
 draft-0.3のレビュー修正：開発profileのpinが全配列を21要素に制限しており、22行のreleaseが値検査へ届かず`invalid_input`となって本番の`invalid_response`と一致しなかった。pinの配列上限をkey上限の資源境界へ戻し、21行上限は共通値検査だけで判定する。また開発sourceの`reject()`がrevoke済みの`closed`を`failed`へ上書きし、その後の`seal()`が`invalid_state`で失敗し得たため、revokeを終端状態として保持するよう修正した。上位設計からの版数リンクも更新した。
+
+## 8 B-02-02：同core bootstrap会計と固定200 transcript
+
+[開発bootstrap](../tests/support/review/ef03/bootstrap.ts)を開発root内部でpin・実行する。profileはtarget、合成auth（per-user／cached／exchange）、固定順の2〜3 response、低減limitsだけ。responseはpurpose・bytes・delay_ms（0〜10,000）・固定outcome（ok／throw／reject）を受け、status／URL／fetch／core／writer等の入力は拒否する。すべて成功応答を200相当として扱い、throw／rejectは通信を行わないdispatch失敗の負の対照である。source値profileとの併用を拒否する。
+
+bytesはnative accessorで長さ・bufferを検査し待機前に別Uint8Arrayへコピーする。getter／proxy／sparse／SharedArrayBufferを拒否する。1応答4MiB、最大3応答、最大コピー12MiBの有限上限。requestsは4〜210、total_bytesは1〜16MiB、response_bytesは1〜4MiBの低減のみ。profileの既定上限は実transportを動かす権限ではない。入力への参照を診断closureへ残さず、終了時は保有bytesをzero-fillして破棄する。呼出し元のbytesは変更しない。
+
+rootの既存canonical coreから一度だけbootstrap portを取り、同portへstop ownerを結合しfinal4枠を予約する。counter seed／別core／別leaseは受け付けない。dispatch直前にCを計上し、拒否はC=0、同期throw／rejectはC=1でretryなし。受領した同bytesをGへ一度課金してからUTF-8／JSON解析し、B-02-01のprivate ackへ渡す。受信上限超過chunkも既存coreと同順に課金し、bootstrapではP=0を維持する。各試行のC差分1・G/P不変を観測して確認する。
+
+合成exchangeだけauthentication→親→release、他modeは親→release。合成tokenはaccess_token・expires_in・token_typeを既存条件に合わせて検査し、run全期限を覆う有効時間とBearerの大小文字を確認した後にready世代1へ進む。これは合成modeの試験であり、実認証snapshotの由来／cached token期限の実証拠ではない。token・parsed値・ackを返さない。
+
+元deadline（最大60秒）と同leaseを使用し、phase予約はmin(10秒, deadline/6)、試行floorはmax(phase予約, 試行開始時remaining−10秒)。run期限→phase期限→試行floorの順で固定理由を保持する。delay待機は元floorのtimerと同signalへ結合し、取消・拒否でもtimer／listenerを解除する。新しいclock起点やcleanup猶予は作らない。native cleanupの証明ではない。
+
+port取得後は成功・失敗・取消のfinallyでreleaseを一度だけ試行し、sourceを同期失効してからB-01の固定解放へ進む。summaryは`bootstrap_transcript_only`、C/G/P、claim・予約peak・残予約・release試行数・dispatch数の固定copyだけ。bootstrapのfinallyでportが閉じた後の外側waitは会計操作を行わず、取消と最終解放だけを扱う。省略時とsource値専用経路はC/G/P=0・R未予約のまま維持する。
+
+releaseは固定envelope／projectionまでを消費し、結果は明示的に`release_match: not_evaluated`とする。Australia以外や空の有効行を受理しても、それは値検査の成功だけ。既存C方式のrelease判断・operator config・permit／prepared結合はまだ移行していない。B-ACK全caseの移行完了とは数えず、旧実class試験を残す。native移行はB-02-03、開発compiled保証はB-03、friend撤去はEF-03Cへ残す。
+
+[新規bootstrap試験](../tests/review/development-bootstrap.test.ts)と[検証記録](E2E_BEST_PRACTICE_DEVELOPMENT_BOOTSTRAP_B0202_2026-11-01.md)を参照。実class保証と別assembly保証を分け、Unknown・全体受付無効・正式発行口閉鎖を維持する。

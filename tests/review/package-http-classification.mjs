@@ -27,6 +27,8 @@ for(const moduleName of moduleNames)for(const suffix of ['.js','.js.map','.d.ts'
 assert(!pack.files.some(f=>f.path.startsWith('tests/')));
 for(const f of pack.files.filter(f=>f.path.startsWith('dist/')&&/\.(?:js|ts|map)$/.test(f.path))){const s=readFileSync(join(root,f.path),'utf8');
   assert(!s.includes('tests/support/review/ef03')&&!s.includes('ef03-development'),'development root leaked into package: '+f.path);}
+for(const f of pack.files.filter(f=>f.path.startsWith('dist/')&&/\.(?:js|ts|map)$/.test(f.path))){const s=readFileSync(join(root,f.path),'utf8');
+  assert(!s.includes('pinDevelopmentTranscript')&&!s.includes('bootstrap_transcript_only'),'development transcript leaked into package: '+f.path);}
 for(const f of pack.files.filter(f=>f.path.startsWith('dist/')&&f.path.endsWith('.js')))for(const moduleName of moduleNames)assert(!readFileSync(join(root,f.path),'utf8').includes(moduleName),'packaged runtime depends on development model: '+f.path);
 execFileSync(process.execPath,[fileURLToPath(new URL('fixtures/compiled-http-classification.mjs',import.meta.url))],{cwd:root,stdio:'inherit'});
 execFileSync(process.execPath,[fileURLToPath(new URL('fixtures/compiled-status-terminal.mjs',import.meta.url))],{cwd:root,stdio:'inherit'});

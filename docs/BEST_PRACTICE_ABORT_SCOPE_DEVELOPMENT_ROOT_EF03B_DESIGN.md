@@ -1,7 +1,7 @@
 # EF-03B 開発rootと試験保証の移行計画
 
-Version: br006-development-root-ef03b-draft-0.5 / Date: 2026-11-01。
-Status: **B-01とB-02-01の値検査最小抽出・開発lifecycleを限定実装。会計／native移行・既存試験の置換・保証変更の承認は未実施。正式発行口閉鎖・Unknown・全体受付無効・VM／監視／telemetry調査保留を維持する。**
+Version: br006-development-root-ef03b-draft-0.6 / Date: 2026-11-01。
+Status: **B-01、B-02-01とB-02-02の同core会計・固定200 transcriptを限定実装。native／release判断移行・既存試験の置換・保証変更の承認は未実施。正式発行口閉鎖・Unknown・全体受付無効・VM／監視／telemetry調査保留を維持する。**
 
 基準：`d6412eb`。EF-03Aのconstruction kernelは既存classへ接続済み。次に作る開発assemblyは別constructor・別brand・別登録台帳を持つため、その成功を実classのprivate継続の成功へ読み替えない。[EF-03親設計](BEST_PRACTICE_ABORT_SCOPE_KERNEL_ROOT_SEPARATION_EF03_DESIGN.md)のEF-03Bを、本書の実装単位と対応表に分ける。
 
@@ -74,7 +74,7 @@ compiled試験はproduction／developmentを別プロセスで走らせる。前
 ## 6 次の実装単位と承認条件
 
 1. **B-01（限定実装済み、§7）：生成入口と独立realm**。同じconstruction kernelを使う新規root、別brand／登録／admission、固定cleanupを追加。旧試験は置換せず、実classとの状態不変・枠不変を試験する。
-2. **B-02：source・会計・nativeの移行**。[移行範囲・共通化境界draft-0.3](BEST_PRACTICE_ABORT_SCOPE_DEVELOPMENT_MIGRATION_B02_DESIGN.md)で、値検査と開発lifecycle→同core会計・固定200 transcript→同reader cleanupの順へ分ける。B-02-01だけ限定実装し旧試験を併存。実class保証と別assembly保証を別集計し、会計／native移行は未実施。既存の大きな本番classを開発用に丸ごとcopyしない。必要な追加共通化は最小の純粋部分として別差分でレビューする。
+2. **B-02：source・会計・nativeの移行**。[移行範囲・共通化境界draft-0.4](BEST_PRACTICE_ABORT_SCOPE_DEVELOPMENT_MIGRATION_B02_DESIGN.md)で、値検査と開発lifecycle→同core会計・固定200 transcript→同reader cleanupの順へ分ける。B-02-01／02を限定実装し旧試験を併存。実class保証と別assembly保証を別集計し、native／release判断移行は未実施。既存の大きな本番classを開発用に丸ごとcopyしない。必要な追加共通化は最小の純粋部分として別差分でレビューする。
 3. **B-03：compiled・保証表の確定**。新版と本番回帰を別実行し、各caseを「維持」「別assemblyへ移行」「本番側未確認」「入口廃止検査へ変更」で確定する。
 
 承認対象は、PC-01〜04を別rootの試験では満たせないまま切り分けること、旧friend取得成功を廃止すること、専用build出力・追加共通化の範囲である。**本書の作成やEF-03Bへの着手を、既存実class試験をすべて削除してよいという承認にはしない。** まずB-01を旧試験併存で実装する案を推奨する。
@@ -91,7 +91,7 @@ compiled試験はproduction／developmentを別プロセスで走らせる。前
 
 固定cleanupはclosed化→live登録失効→core close→外部listener除去→timer clear→controller abort→自分のadmission返却→principal参照解除→construction seal→生成claim解放。解除失敗でも後続slotを実行し、解放未確認をconfirmedへ昇格させない。事前abortはcommit段階のconstruction失敗、commit後の取消／wait失敗はrun側に残す。late waitのsettleで終了summaryを書き換えない。
 
-B-01の省略時経路はconstruction-onlyでありsource受理・native reader・ready世代・ReleasePermitを実装しない。後続B-02-01の任意source profile経路は前掲の差分設計§7へ分離する。両経路ともcanonicalのC/G/Pは0、R予約も未実施。元60秒を低減できるが拡張はできず、期限で非協調的なwaitから停止・解放する。これをB-02のHTTP会計／final予約・native cleanupの検証へ流用しない。
+B-01の省略時経路はconstruction-onlyでありsource受理・native reader・ready世代・ReleasePermitを実装しない。後続B-02-01の任意source profile経路は前掲の差分設計§7、B-02-02のtranscript経路は§8へ分離する。省略時とsource値専用経路のcanonical C/G/Pは0、R予約も未実施。元60秒を低減できるが拡張はできず、期限で非協調的なwaitから停止・解放する。B-01の試験をB-02のHTTP会計／final予約・native cleanupの検証へ流用しない。
 
 既存試験はすべて残し、[新規28件](../tests/review/development-root.test.ts)を追加した。本番2枠を保持した状態、開発2枠を保持した状態、取消・各部分失敗、別realmで、実classのconstruction／run primary／会計と本番のbusy判定が不変であることを確認する。詳細は[検証記録](E2E_BEST_PRACTICE_DEVELOPMENT_ROOT_B01_2026-11-01.md)を参照。専用build・compiled保証の移行はB-03、friend撤去はEF-03Cへ残す。
 
