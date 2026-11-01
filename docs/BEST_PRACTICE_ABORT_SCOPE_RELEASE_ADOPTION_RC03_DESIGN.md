@@ -1,6 +1,6 @@
 # RC-03：release比較器の固定採用境界・接続差分設計
 
-Version: br006-release-adoption-rc03-draft-0.9 / Date: 2026-11-01。
+Version: br006-release-adoption-rc03-draft-0.10 / Date: 2026-11-01。
 Status: **RC3-D01／D02／D03を開発assemblyだけに限定実装。同sourceの200行ackの固定比較、またはdispatch前binding不一致のnot_requestedから、guard・seal後の非実行summaryへ接続。R差替えは未実装／未承認。旧試験・正式発行口閉鎖・Unknown・全体受付無効・VM／監視／telemetry調査保留を維持する。実Permit発行・実接続・実通信・実機操作・設定変更・friend撤去・Pushは行わない。**
 
 基準：`a61d90a`。[純粋比較器設計draft-0.6](BEST_PRACTICE_ABORT_SCOPE_RELEASE_COMPARATOR_DESIGN.md)のRC-03を具体化する。以下の追加field・状態・試験ID・分割単位は案であり、存在するAPIや検証済み保証ではない。
@@ -63,7 +63,7 @@ Rを後日実装する場合も、public `resolveRelease`にrows／policy／draf
 
 固定順序案：既存入口guard／parent検査→同sessionのtiming・policy固定参照→binding不一致ならnot_requested（GET=0）→同sourceの200取得／projection→取得後guard→観測UTCの一度だけの採取→pure compare→比較後guard→private採用直前guard→既存結果生成。
 
-timing供給は[既存deadlineMs getter再利用契約draft-0.2](BEST_PRACTICE_ABORT_SCOPE_RELEASE_DEADLINE_REUSE_DESIGN.md)に従う。構築時の設定pinと同じstartedAt／全deadlineを使い、同sessionのpin済みpolicyと対にして一度採取する。getter新設・残時間からのL再計算・設定provider再呼出しは行わない。getterの存在／setterなしを生存・identity・実行時改変耐性の証明にはしない。RP-01では既存固定fake-200継続のprivate projection生成／消費だけを限定実装し、比較器への入力化・通常実source差替えは行っていない。
+timing供給は[既存deadlineMs getter再利用契約draft-0.3](BEST_PRACTICE_ABORT_SCOPE_RELEASE_DEADLINE_REUSE_DESIGN.md)に従う。構築時の設定pinと同じstartedAt／全deadlineを使い、同sessionのpin済みpolicyと対にして一度採取する。getter新設・残時間からのL再計算・設定provider再呼出しは行わない。getterの存在／setterなしを生存・identity・実行時改変耐性の証明にはしない。RP-01では既存固定fake-200継続のprivate projection生成／消費だけを限定実装し、比較器への入力化・通常実source差替えは行っていない。
 
 通常経路のguardとprivate生成継続のguardを入れ替えない。callerが任意guard／時計／comparatorを渡す新公開APIを作らず、既存の生成継続とテスト用外部I/O注入だけを用いる。`releaseRead`、private consumerのconsuming、`#decision`のcached promiseを維持し、取消や失敗後の再試行で別の結果を採用しない。
 
@@ -72,6 +72,8 @@ timing供給は[既存deadlineMs getter再利用契約draft-0.2](BEST_PRACTICE_A
 pure比較の途中にawaitはなく、JSイベントループの取消を同期計算の途中で強制実行できるとは主張しない。fake guard／元clockが進む境界でpre/post検査を試験する。設定日時長／総work上界が未確定なので、長い同期処理が全体60秒に必ず収まる証明にもならない。R有効化前の判断事項として残す。
 
 現在の実sourceはresolved／conflict分岐でUTCを採取し、空値fallbackでは採取しない。一方、RC-01入力はcomplete_200なら空値でもobserved_atが必要である。R案では取得後guardと比較の間で一度採取するが、この追加採取・採取位置の差を無変更と偽らない。戻り値の時刻、壁時計逆行と上位reviewed_atの整合、時計失敗時の固定分類をfake試験で確認し、切替前に承認する。Dは固定UTC値を使うため、このR保証の代替ではない。
+
+[観測UTC契約draft-0.1](BEST_PRACTICE_ABORT_SCOPE_RELEASE_OBSERVATION_UTC_DESIGN.md)に具体化した。complete_200は空200も含めprojection・取得後guardの後にOを一度採取し、再guardを通す。not_requested等でOを捏造しない。S／全L／policyは不変。時計例外・検出した逆行は先行停止を保持した固定内部失敗とし、上位T_i／Eとの順序を時刻補正や証拠削除で救済しない。現行reviewed_atは取得時刻、ended_atはworker集約時刻であること、および低減LとJSON宣言deadlineの差も明記した。private UTC保持・上位結合と試験は未実装／未実施で、本番差替えの承認ではない。
 
 ## 6 draftから既存結果への変換――二重warningとPermitの境界
 
@@ -137,7 +139,7 @@ ordinary unknownはrun stopとは別である。正常な比較値で先行HTTP�
 |---|---|
 | 設定日時文字数の有限上限／長い小数秒の互換方針 | 承認待ち。Dでも本番上限を認定せず、新capを投入しない |
 | 全入力byte／work・同期比較の時間上界 | Unknown。全体受付・R有効化の根拠にしない |
-| Rのcomplete_200 UTC採取位置・空観測時の追加採取 | fake試験・承認待ち。D固定値で代替しない |
+| Rのcomplete_200 UTC採取位置・空観測時の追加採取 | 観測UTC契約draft-0.1に位置・逆行／上位整合を整理。実装・fake試験・採用は未実施／承認待ち。D固定値で代替しない |
 | Rのtrusted入力矛盾の停止owner・bind中失敗の無効化／解放 | 既存private lifecycleとの追跡が未完了。公開新入口で代替しない |
 | Dの条件profile／非実行summary追加 | 本書の提案。省略時互換、package除外を実装時に検証 |
 | Rの全deadline再利用契約（既存getterと、`pinReviewReleaseConfig`へ渡す`limits.deadlineMs`の同値性） | getterは実在。RP-01で同sessionのprivate projectionと固定fake継続の一部動的検証を追加。比較器への結合・通常実source差替え・全受入条件の完了は未実施。private `limits`の公開・残時間再計算・caller指定で代替しない |
@@ -145,7 +147,7 @@ ordinary unknownはrun stopとは別である。正常な比較値で先行HTTP�
 
 この設計の作成を実装・採用・鍵／設定・通信の承認へ読み替えない。調査保留と正式発行口閉鎖を維持する。
 
-draft-0.2では供給口を未実装と訂正したが、このAPI不在の説明は誤認だった。draft-0.8の静的再照合で既存`get deadlineMs()`を確認し、§1／§3／§10を再訂正した。未実装差分はgetterの新設ではなく、同sessionのstartedAt／pin済みpolicyと組にして比較器へ結合・検証すること。[再利用契約draft-0.2](BEST_PRACTICE_ABORT_SCOPE_RELEASE_DEADLINE_REUSE_DESIGN.md)に現状根拠・残時間との区別・受入条件とRP-01の限定実装範囲を記録する。R切替の承認状態や過去の試験履歴は変更しない。
+draft-0.2では供給口を未実装と訂正したが、このAPI不在の説明は誤認だった。draft-0.8の静的再照合で既存`get deadlineMs()`を確認し、§1／§3／§10を再訂正した。未実装差分はgetterの新設ではなく、同sessionのstartedAt／pin済みpolicyと組にして比較器へ結合・検証すること。[再利用契約draft-0.3](BEST_PRACTICE_ABORT_SCOPE_RELEASE_DEADLINE_REUSE_DESIGN.md)に現状根拠・残時間との区別・受入条件とRP-01の限定実装範囲を記録する。R切替の承認状態や過去の試験履歴は変更しない。
 
 ## 11 RC3-D01の限定実装
 
