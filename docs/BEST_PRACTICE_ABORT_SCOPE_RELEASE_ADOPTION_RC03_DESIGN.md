@@ -1,6 +1,6 @@
 # RC-03：release比較器の固定採用境界・接続差分設計
 
-Version: br006-release-adoption-rc03-draft-0.1 / Date: 2026-11-01。
+Version: br006-release-adoption-rc03-draft-0.2 / Date: 2026-11-01。
 Status: **設計のみ・未実装。実source／開発sourceの接続・本番切替の承認ではない。旧試験・正式発行口閉鎖・Unknown・全体受付無効・VM／監視／telemetry調査保留を維持する。実Permit発行・実接続・実通信・実機操作・設定変更・friend撤去・Pushは行わない。**
 
 基準：`a61d90a`。[純粋比較器設計draft-0.4](BEST_PRACTICE_ABORT_SCOPE_RELEASE_COMPARATOR_DESIGN.md)のRC-03を具体化する。以下の追加field・状態・試験ID・分割単位は案であり、存在するAPIや検証済み保証ではない。
@@ -10,7 +10,7 @@ Status: **設計のみ・未実装。実source／開発sourceの接続・本番�
 | 経路 | 現在の供給／消費 | RC-03で必要になる差分 |
 |---|---|---|
 | [実source](../src/review/bounded-source.ts) | `resolveRelease`／private release consumer→`#observeRelease`→既存値判定→`#completeRelease` | 同source内部で比較入力を組み立て、比較後guardを通った値だけを固定分岐へ渡す。公開draftの採用口は作らない |
-| [実session](../src/servicenow/bounded-read.ts) | `startedAt`、`deadlineMs`、pin済み`releasePolicy`、`assertActive`、private生成継続の`check` | 同sessionからの時刻／policy／停止を再利用する。別sessionのprojectionや残時間によるdeadline再計算は禁止 |
+| [実session](../src/servicenow/bounded-read.ts) | public readonlyの`startedAt`、pin済み`releasePolicy`、`assertActive`、private生成継続の`check`。全deadlineは`private readonly limits.deadlineMs`にあり、sourceから読む口は**現在ない** | 同sessionからの時刻／policy／停止を再利用する。別sessionのprojectionや残時間によるdeadline再計算は禁止 |
 | [開発source](../tests/support/review/ef03/source.ts) | 同realmのcontext・private ackをissue／consumeし、release値を破棄してdone | release行をprivateに保持する短い区間と、同contextに束縛した比較条件が必要。現状は比較器を呼んでいない |
 | [開発assembly](../tests/support/review/ef03/assembly.ts) | contextはrun identity／snapshot／canonical lease。clockは経過時間用 | 固定UTC文字列・policyのtest-only供給が未実装。monotonic clockをUTCとして解釈しない |
 | [開発bootstrap](../tests/support/review/ef03/bootstrap.ts) | 同coreでC/G/P、final4予約、固定200 bytes→decode→accept。release_matchはnot_evaluated | opt-inの比較結果は別の非実行summaryとして公開する。省略時の既存結果・予約／cleanupは不変 |
@@ -29,7 +29,7 @@ Status: **設計のみ・未実装。実source／開発sourceの接続・本番�
 
 | 値／権限 | Dの供給元・所有者 | Rでの固定供給元 | 禁止する代替 |
 |---|---|---|---|
-| run開始UTC・全deadline | rootが開始前に固定したtest-only値／実際のroot deadline_ms | 同`#session.startedAt`／`#session.deadlineMs` | 観測時刻・remaining_ms・callerの新deadline |
+| run開始UTC・全deadline | rootが開始前に固定したtest-only値／実際のroot deadline_ms | 同`#session.startedAt`と、構築時に`releasePolicy`のpinと同じ`limits.deadlineMs`から固定するreadonly deadline値（**未実装の差分**） | 観測時刻・remaining_ms・callerの新deadline |
 | policy projection | rootがstrict copyした模擬値。実設定の真正性は主張しない | 同sessionのpin済み`releasePolicy` | raw設定・providerの再実行・別session policy |
 | complete_200の観測 | 同sourceが消費するrelease ack内の同bytes由来projection | `#readReleaseRows`、または同constructorの`take(ack,'release')` | 別source ack・公開rows／draftの再投入 |
 | 観測UTC | rootの固定test-only観測文字列 | 同ownerがguard後に一度採取するUTC値 | 比較器の現在時計、monotonic値のISO変換 |
@@ -138,6 +138,9 @@ ordinary unknownはrun stopとは別である。正常な比較値で先行HTTP�
 | Rのcomplete_200 UTC採取位置・空観測時の追加採取 | fake試験・承認待ち。D固定値で代替しない |
 | Rのtrusted入力矛盾の停止owner・bind中失敗の無効化／解放 | 既存private lifecycleとの追跡が未完了。公開新入口で代替しない |
 | Dの条件profile／非実行summary追加 | 本書の提案。省略時互換、package除外を実装時に検証 |
+| Rの全deadline供給口（session構築時に固定したreadonly値。`pinReviewReleaseConfig`へ渡す`limits.deadlineMs`と同値） | 未実装・承認待ち。private `limits`の公開・残時間からの再計算・callerによる指定で代替しない |
 | 本番値判定差替え・実Permit経路・非200移行 | 未承認。現状を維持 |
 
 この設計の作成を実装・採用・鍵／設定・通信の承認へ読み替えない。調査保留と正式発行口閉鎖を維持する。
+
+draft-0.2のレビュー修正：実sessionの現在の供給元に`deadlineMs`を挙げていたが、全deadlineは`private readonly limits.deadlineMs`にあり、sourceから読む口はない。§1を現状に合わせ、§3のRの供給元と§10の承認待ちに、構築時に固定するreadonly deadline値を未実装の差分として明記した。上位設計からの版数リンクも更新した。
