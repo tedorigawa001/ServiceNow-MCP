@@ -1,7 +1,7 @@
 # RC-03：観測UTCの採取・失敗・上位時刻の契約
 
-Version: br006-release-observation-utc-draft-0.4 / Date: 2026-11-01。
-Status: **OU-01の一度限り採取・pre/post guardを既存fixed fake-200継続だけに限定実装（§9）。通常実source差替え・比較器入力化・上位時刻結合は未実施。実接続・実通信・実機操作・設定変更・実Permit発行・Pushは行わない。正式発行口閉鎖・Unknown・全体受付無効・VM／監視／telemetry調査保留を維持する。**
+Version: br006-release-observation-utc-draft-0.5 / Date: 2026-11-01。
+Status: **OU-01の一度限り採取・pre/post guardを既存fixed fake-200継続だけに限定実装（§9）。CT-Aで入力化／内部候補保持を限定追加したが、通常実source差替え・上位時刻結合は未実施。実接続・実通信・実機操作・設定変更・実Permit発行・Pushは行わない。正式発行口閉鎖・Unknown・全体受付無効・VM／監視／telemetry調査保留を維持する。**
 
 設計基準`cd14e20`、OU-01基準`d95faca`。[RC-03親設計](BEST_PRACTICE_ABORT_SCOPE_RELEASE_ADOPTION_RC03_DESIGN.md)と[deadline再利用契約](BEST_PRACTICE_ABORT_SCOPE_RELEASE_DEADLINE_REUSE_DESIGN.md)の観測UTCに関する残差を具体化する。RP-01の同session projectionへOU-01の限定採取を追加したが、比較器接続・上位整合検査は未実装／未検証。本書を本番切替の承認にしない。
 
@@ -86,7 +86,9 @@ workerの最終Eは集約生成時の値であり、終了処理後のUTCでは�
 
 ### 同projection・source・worker jobとの接続
 
-[接続契約draft-0.1](BEST_PRACTICE_ABORT_SCOPE_RELEASE_COMPARISON_TIME_BINDING_DESIGN.md)は、Oを同rows／projectionのprivate受領物として比較器へ渡すことと、空200で公開Oがなくても上位ownerへ一度だけ移譲してT_i／Eを検査することを対にした。worker object／世代・親側claimと期待id／target／T_iを結合し、omissionでも最後のUTCを消さない。現応答にkind echoがあるとは仮定せず、新しいwire fieldも追加しない。これらのowner／受領物／job claimは未実装で、OU-01の採取成功だけでは成立しない。
+CT-Aでは同projection／sourceのrows・O受領物と固定比較・候補受理までを限定追加した。空200のOはprivate候補ownerが失敗／closeまで保持する。上位TimeOwner／job／T_i／Eへの結合と終端移譲は依然未実装であり、OU-01の採取やCT-A内部保持だけで§6の全体順序を満たしたとは数えない。
+
+[接続契約draft-0.2](BEST_PRACTICE_ABORT_SCOPE_RELEASE_COMPARISON_TIME_BINDING_DESIGN.md)は、Oを同rows／projectionのprivate受領物として比較器へ渡すことと、空200で公開Oがなくても上位ownerへ一度だけ移譲してT_i／Eを検査することを対にした。worker object／世代・親側claimと期待id／target／T_iを結合し、omissionでも最後のUTCを消さない。現応答にkind echoがあるとは仮定せず、新しいwire fieldも追加しない。これらのowner／受領物／job claimは未実装で、OU-01の採取成功だけでは成立しない。
 
 ## 7 fake依存の全体受入条件（OU-01の部分確認は§9）
 
@@ -121,7 +123,7 @@ draft-0.1作成時はソース／schema／設計の読取とMD更新・文書参
 
 今回のnot_requested側はOを新設しない。既存実classのfixed fake transcriptはbinding不一致でもrelease bodyをdispatch済みであり、D03の別開発assemblyのGET=0をこのlaneの保証へ転用しない。raw22／不正行projectionは既存legacy分類（release_not_admitted等）を保ち採取0回。body／cleanup不正はhookへ到達しない。
 
-§7のUTC-01〜06のうち採取順・空200・初回逆行／上界・時計障害・guard・一度限り失敗／closeの部分を新規合成試験で確認する。全受入条件の完了、通常sourceの時計保証、上位T_i／E・空200のprivate UTC保持／worker照合、比較器入力化は未実施。Oは既存fake実測結果には反映するが、空200では後続watermarkとして保持する実装はまだない。[OU-01検証記録](E2E_BEST_PRACTICE_RELEASE_OBSERVATION_OU01_2026-11-01.md)参照。
+OU-01時点では、§7のUTC-01〜06のうち採取順・空200・初回逆行／上界・時計障害・guard・一度限り失敗／closeの部分を新規合成試験で確認する。全受入条件の完了、通常sourceの時計保証、上位T_i／E・空200のprivate UTC保持／worker照合、比較器入力化は未実施。Oは既存fake実測結果には反映するが、空200では後続watermarkとして保持する実装はまだない。[OU-01検証記録](E2E_BEST_PRACTICE_RELEASE_OBSERVATION_OU01_2026-11-01.md)参照。
 
 追加確保は固定採取状態とclosure、1つのDateとISO文字列・固定比較。timer・受信bytes・C/G/P・予約ownerは増やさない。layout／全体work・同期時間の上界は引き続きUnknown。入力・上位時刻の未解決事項を今回の部分成功で確認済みにしない。
 

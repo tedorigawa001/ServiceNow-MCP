@@ -40,6 +40,7 @@ export interface CompositionSourceConstruction {
  takeStatus?(terminal:object):unknown;
  rejectStatus?(code:'invalid_state'|'evidence_binding_mismatch'):never;
  observeReleaseUtc?():string;
+ acceptReleaseObservation?(ack:object,rows:readonly {build_name:string|null}[],observedAt:string):void;
  capture(consumer:Readonly<{parent(ack:object):void;release(ack:object):Promise<ReleaseDecision>;status(terminal:object):StatusAcceptanceDraft;revoke():void}>):void;
 }
 
@@ -58,7 +59,7 @@ export class BoundedUpdateSetSource {
     this.#session=session;
     if(creation){
       if(!claimPrivateCompositionSource(session,creation.key,this))throw new BoundedReadError('invalid_input');
-      const check=creation.check,take=creation.take,takeStatus=creation.takeStatus;let state:'parent'|'release'|'consuming'|'done'|'accepted_status'|'closed'='parent';
+      const check=creation.check,take=creation.take,takeStatus=creation.takeStatus,acceptObservation=creation.acceptReleaseObservation;let state:'parent'|'release'|'consuming'|'done'|'accepted_status'|'closed'='parent';
       const requireState=(expected:typeof state)=>{check();if(state!==expected)throw new BoundedReadError('internal_review_error');state='consuming';};
       creation.capture(Object.freeze({
         parent:(ack:object)=>{
@@ -71,7 +72,7 @@ export class BoundedUpdateSetSource {
           this.#decision=this.#observeRelease(async()=>{
             if(!value||typeof value!=='object'||!('result' in value)||!Array.isArray(value.result)||value.result.length>21)throw new BoundedReadError('invalid_response');
             return this.#projectReleaseRows(value.result);
-          },check,creation.observeReleaseUtc);
+          },check,creation.observeReleaseUtc,acceptObservation?(rows,observedAt)=>acceptObservation(ack,rows,observedAt):undefined);
           const decision=await this.#decision;check();state='done';return decision;
         },
         status:(terminal:object)=>{
@@ -142,7 +143,8 @@ export class BoundedUpdateSetSource {
     this.#decision ??= this.#observeRelease();
     return this.#decision;
   }
-  async #observeRelease(readRows=()=>this.#readReleaseRows(),guard=()=>this.#session.assertActive(),observeUtc?:()=>string): Promise<ReleaseDecision> {
+  async #observeRelease(readRows=()=>this.#readReleaseRows(),guard=()=>this.#session.assertActive(),observeUtc?:()=>string,
+    acceptObservation?:(rows:readonly {build_name:string|null}[],observedAt:string)=>void): Promise<ReleaseDecision> {
     const unknown = (reason: Extract<ReleaseEvidence, { source: 'none' }>['reason']): ReleaseDecision => Object.freeze<ReleaseDecision>({
       release_match: 'unknown', instance_release: { source: 'none', resolution_status: 'unknown', family: null,
         visibility_scope: 'unavailable', reason }, limitations: Object.freeze([reason, 'release_unknown']),
@@ -167,6 +169,7 @@ export class BoundedUpdateSetSource {
     guard();
     const observedAt=observeUtc?.();
     if(observeUtc)guard();
+    if(acceptObservation){if(observedAt===undefined)throw new BoundedReadError('internal_review_error');acceptObservation(rows,observedAt);guard();}
     if (rows.length > 20) return unknown('observation_limit');
     if (!rows.length || rows.every(row => !row.build_name?.trim())) return fallback();
     if (rows.some(row => !row.build_name?.trim())) return unknown('observation_incomplete');

@@ -1,17 +1,17 @@
 # RC-03：比較器入力化・上位時刻整合の接続契約
 
-Version: br006-release-comparison-time-binding-draft-0.1 / Date: 2026-11-01。
-Status: **設計案のみ。正式発行口閉鎖・Unknown・全体受付無効・VM／監視／telemetry調査保留を維持する。実装・実source差替え・実接続・実通信・実機操作・設定変更・実Permit発行・Pushは行わない。**
+Version: br006-release-comparison-time-binding-draft-0.2 / Date: 2026-11-01。
+Status: **CT-Aの受領物・固定入力化・一度限りの非実行候補受理をfixed fake継続だけに限定実装（§10）。CT-B／C・比較候補の実source採用は未実施。正式発行口閉鎖・Unknown・全体受付無効・VM／監視／telemetry調査保留を維持する。実source差替え・実接続・実通信・実機操作・設定変更・実Permit発行・Pushは行わない。**
 
-基準`01ac88d`。[RC-03親設計](BEST_PRACTICE_ABORT_SCOPE_RELEASE_ADOPTION_RC03_DESIGN.md)、[deadline再利用契約](BEST_PRACTICE_ABORT_SCOPE_RELEASE_DEADLINE_REUSE_DESIGN.md)、[観測UTC契約](BEST_PRACTICE_ABORT_SCOPE_RELEASE_OBSERVATION_UTC_DESIGN.md)の次段階を対にする。①同projection／sourceの値から固定比較器入力を作る、②空200を含むOを保持し同worker jobのT_i／Eを照合する。片方だけの成功で上位まで結合済みとは数えない。
+設計基準`01ac88d`、CT-A基準`4c691ed`。[RC-03親設計](BEST_PRACTICE_ABORT_SCOPE_RELEASE_ADOPTION_RC03_DESIGN.md)、[deadline再利用契約](BEST_PRACTICE_ABORT_SCOPE_RELEASE_DEADLINE_REUSE_DESIGN.md)、[観測UTC契約](BEST_PRACTICE_ABORT_SCOPE_RELEASE_OBSERVATION_UTC_DESIGN.md)の次段階を対にする。①同projection／sourceの値から固定比較器入力を作る、②空200を含むOを保持し同worker jobのT_i／Eを照合する。CT-Aの限定範囲は§10に分離し、片方だけの成功で上位まで結合済みとは数えない。
 
 ## 1 現在あるもの・不足するもの
 
-| 根拠 | 現状 | 本契約の未実装差分 |
+| 根拠 | 現状 | CT-Aの範囲と残る差分 |
 |---|---|---|
-| [session](../src/servicenow/bounded-read.ts)のRP-01 | 同this／source／composition key・originに結合したS／全L／pin済みPを一度生成・消費 | 消費済みprojectionを同受領物・比較・上位時刻ownerへ安全に継続する |
-| [source](../src/review/bounded-source.ts)とOU-01 | 同rows projection後のguardからUTCを一度採取し、fakeの既存分岐で再利用。hookの戻り値はUTC文字列だけ | 同rows／Oを一体のprivate受領物に結合。現在の文字列hookだけで「同projectionの比較入力」とは認定しない |
-| [純粋比較器](../src/servicenow/review-kernel/release-comparison.ts) | strict値入力・固定判断・凍結非実行draft。時計／session／Permitなし | trusted入力生成元を結合し、guard後の結果を一度だけprivate受理する |
+| [session](../src/servicenow/bounded-read.ts)のRP-01 | 同this／source／composition key・originに結合したS／全L／pin済みPを一度生成・消費 | CT-Aで同受領物・比較候補まで限定継続。上位時刻ownerへの移譲は未実装 |
+| [source](../src/review/bounded-source.ts)とOU-01 | 同rows projection後のguardからUTCを一度採取し、fakeの既存分岐で再利用 | CT-Aで元ack・同rows／Oを渡すprivate hookと一体のreceiptを追加。OU-01のUTC文字列だけを同一性証拠にはしない |
+| [純粋比較器](../src/servicenow/review-kernel/release-comparison.ts) | strict値入力・固定判断・凍結非実行draft。時計／session／Permitなし | CT-Aで固定入力化とprivate候補受理のみ接続。legacy判定・実Permitへの採用は未実施 |
 | [worker監督](../src/review/worker-supervisor.ts) | workerごとの連番id・1要求ずつの処理・同workerのlistener・最大262144 byte・元残時間／取消・失敗時close | 親側のrun／source／projectionとworker世代／job claimの結合、返却時刻と期待assetの照合 |
 | [adapter](../src/review/update-set-adapter.ts)／[集約finalize](../src/review/aggregate-finalize.ts) | payload取得UTCをreviewed_atに使用。workerがEを採りschema検証 | 空200の非公開Oと最後のT_iを親側に保持し、同jobの返却前後で検査 |
 
@@ -122,10 +122,24 @@ GETのC、同bytesのG／P、final予約／返却、retry、native cleanup、wor
 
 ## 9 推奨分割と未解決事項
 
-1. **CT-A（設計案）**：同projection・同sourceのrows／O receiptと比較器入力生成、非実行private候補の一度限り受理をfake依存で確認。上位owner用Oを失わない内部保持契約も同時に置く。
+1. **CT-A（限定実装済み、§10）**：同projection・同sourceのrows／O receiptと比較器入力生成、非実行private候補の一度限り受理をfake依存で確認。上位owner用Oを失わない内部保持契約も同時に置く。
 2. **CT-B（設計案）**：TimeOwnerと親側job claimを合成worker応答へ接続し、T_i／E・空200・omission・世代混入／遅延を検証。通常実source／adapter切替はしない。
 3. **CT-C（設計案）**：固定継続の連続fake試験・診断合流／解放を確認する。B-03のcompiled保証とは別集計にする。
 
-既存継続からrows／Oをどう一体移譲するか、上位owner・job claimの正確な配置、低減Lと出力宣言の互換方針、全体費目／日時長capは未確定。今回の型役割・分割名は実在APIではない。実source判定／Permit採用・非200/native移行・friend撤去・全体受付の有効化は別承認。
+上位への終端移譲・ownerとjob claimの正確な配置、低減Lと出力宣言の互換方針、全体費目／日時長capは未確定。今回の型役割・分割名は実在APIではない。実source判定／Permit採用・非200/native移行・friend撤去・全体受付の有効化は別承認。
 
-今回行うのは既存コード・設計の読取とMD更新・参照／差分検査のみ。実装・build／test実行・worker protocol／公開JSONの変更は行わず、RP-01／OU-01やD01〜03の過去件数をCT保証へ流用しない。
+draft-0.1作成時は既存コード・設計の読取とMD更新・参照／差分検査のみ。RP-01／OU-01やD01〜03の過去件数をCT保証へ流用しない。CT-Aでもworker protocol／公開JSONは変更しない。
+
+## 10 CT-Aの限定実装・試験保証の区別
+
+[値専用receipt owner](../src/servicenow/review-kernel/release-comparison-receipt.ts)を追加した。生成時に同projection referenceとS／L／P・session／source／key、元ack identity、check／rejectを固定する。issueはpre-guard前に発行claimを消費し、同projection／ackだけのrows／Oからstrict値入力をcopyしてopaque receiptを発行する。compareはreceiptを先にMapから削除し固定compareReleaseだけを呼ぶ。acceptもcandidateを先に消費し、post-guard後にだけ凍結された非実行draftとOを保持する。二度目・混入・再入・順序違い・失敗後再開を拒否し、失敗／closeでrows／O／draftを破棄する。
+
+pin済みPは元のidentityのまま保持するが、比較の値projectionではassertion／issueがundefinedのときだけ当該optional keyを省略する。pin関数が有効設定にもown issue:undefinedを持つため必要な構造正規化であり、policyの意味再判定・元object変更ではない。未知fieldを選別して捨てたり、strict parserを緩めたりしない。
+
+[source](../src/review/bounded-source.ts)の既存creator-only継続にoptionalなacceptReleaseObservationを追加し、元ack・同project済みrows・OU-01の同Oを、post-guard後に同sessionの固定callbackへ渡す。[session](../src/servicenow/bounded-read.ts)は元mint済みackと消費済みprojectionに結合したownerをprivate fieldで保持し、同origin／source／keyと生存を各段階で再検査する。callback内でissue→compare→acceptを固定接続する。新public getter／friend／caller入力／registryはなく、通常GETにはこのhookを渡さない。
+
+accepted Oは空200でも同owner内に保持する。公開assertion／source:noneへobserved_atを追加せず、candidateもsession summaryへ出さない。既存legacyの値判定・内部Permit・prepared結果を比較候補で置換しない。legacy非admittedでrunが止まる場合も含め、同期失効／finally／rollback／closeではownerをcloseしてprojection参照を消す。CT-B用の終端移譲・TimeOwner・worker job結合はまだなく、cleanup後にOを復元することはできない。
+
+値ownerは任意のfake objectでも作成可能な内部値部品で、それ自体は実sessionの真正性を認定しない。unitの.inspectは非実行dataだけを返し、runtimeのprivate fieldは公開されない。unitで一度限り／混入／候補値を確認する保証と、実classの固定hook接続・既存結果／会計維持の保証を分ける。runtime候補を直接取り出す新friendは追加していないため、返却summaryから内部draftを読めたという主張もしない。
+
+[CT-A検証記録](E2E_BEST_PRACTICE_RELEASE_COMPARISON_CTA_2026-11-01.md)に新規40件・初回10件失敗と正規化修正・回帰／型／梱包／全体結果を記録する。rows／入力／結果copy・Map最大各1枠・O保持とguardが追加費目で、C/G/P・予約／cleanupの再課金はしない。exact layout／全体workはUnknown。CT-B／C・B-03・日時長cap・通常実source採用は引き続き未実装／未承認。

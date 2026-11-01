@@ -10,16 +10,16 @@ const output=execFileSync('npm',['pack','--dry-run','--ignore-scripts','--offlin
 const [pack]=JSON.parse(output);
 for(const suffix of ['.js','.js.map','.d.ts','.d.ts.map'])assert(pack.files.some(f=>f.path==='dist/servicenow/review-kernel/release-observation'+suffix),'required one-shot UTC value helper missing: '+suffix);
 const sessionDeclarations=readFileSync(join(root,'dist/servicenow/bounded-read.d.ts'),'utf8');
-for(const privateName of ['ReleaseInputProjection','ReleaseInputOrigin','captureReleaseInput','consumeReleaseInput'])
+for(const privateName of ['ReleaseInputProjection','ReleaseInputOrigin','captureReleaseInput','consumeReleaseInput','releaseComparisonProjection','clearReleaseComparison'])
   assert(!sessionDeclarations.includes(privateName),'private release timing projection leaked into declarations: '+privateName);
 const kernel='dist/servicenow/review-kernel/construction-state';
 const sourceKernel='dist/servicenow/review-kernel/source-values';
-for(const name of ['release-family','release-comparison','release-observation']) {
+for(const name of ['release-family','release-comparison','release-observation','release-comparison-receipt']) {
   const path='dist/servicenow/review-kernel/'+name;
   for(const suffix of ['.js','.js.map','.d.ts','.d.ts.map'])assert(pack.files.some(f=>f.path===path+suffix),'required release value contract missing: '+name+suffix);
   const tree=parse(readFileSync(join(root,path+'.js'),'utf8'),{ecmaVersion:'latest',sourceType:'module'}),pending=[tree];
   // release-observation reads time only through its injected clock dependency.
-  const allowed=name==='release-family'?[]:name==='release-observation'?['zod']:['zod','node:util','./release-family.js'];
+  const allowed=name==='release-family'?[]:name==='release-observation'?['zod']:name==='release-comparison-receipt'?['./release-comparison.js']:['zod','node:util','./release-family.js'];
   while(pending.length){const n=pending.pop();
     if(n.type==='ImportDeclaration')assert(allowed.includes(n.source.value),'release value contract imports a root: '+n.source.value);
     assert(!(n.type==='NewExpression'&&n.callee?.name==='Date'),'release value contract reads wall clock');
