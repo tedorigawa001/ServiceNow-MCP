@@ -50,7 +50,7 @@ it('uses separate realms across development roots without sharing registration o
   }finally{g.release();await Promise.all([a,b]);}
   expect(left.inspect().registered).toBe(0);expect(right.inspect().registered).toBe(0);
 });
-it.each(['after_registration','duplicate_registration','foreign_registration','after_admission','after_controller','after_timer','after_listener','after_commit'] as const)('rolls back %s once and permits a distinct new identity',async fault=>{
+it.each(['after_admission','after_registration','duplicate_registration','foreign_registration','after_controller','after_timer','after_listener','after_commit'] as const)('rolls back %s once and permits a distinct new identity',async fault=>{
   vi.useFakeTimers();const real=new BoundedReadSession(snapshot('same')),other=new BoundedReadSession(snapshot('other'));
   const before=[realState(real),realState(other)];const root=createDevelopmentRoot();
   try{const r=await root.run({principal:'same',fault});
@@ -157,4 +157,17 @@ it('does not resume or mutate a sealed result when a cancelled wait rejects late
   const pending=root.run({principal:'same'},{signal:external.signal});await started.promise;external.abort();
   const r=await pending,before=JSON.stringify(r);reject(Error('PRIVATE_LATE'));await Promise.resolve();
   expect(JSON.stringify(r)).toBe(before);expect(r.code).toBe('cancelled');expect(root.inspect().registered).toBe(0);
+});
+it('follows the production order: a busy claimant allocates nothing and admission precedes registration',async()=>{
+  const g=gate(),root=createDevelopmentRoot({wait:()=>g.promise}),a=root.run({principal:'one'}),b=root.run({principal:'two'});
+  try{
+    const busy=await root.run({principal:'three'});
+    expect(busy).toMatchObject({code:'review_busy',construction:{primary:{stage:'admission',code:'review_busy'}}});
+    for(const slot of ['core','admission','registered_owner'] as const)expect(busy.construction.resources[slot].state).toBe('absent');
+    expect(root.inspect()).toEqual({active:2,registered:2,principal_keys:2});
+  }finally{g.release();await Promise.all([a,b]);}
+  const r=await root.run({principal:'same',fault:'after_admission'});
+  expect(r.construction.primary?.stage).toBe('admission');
+  expect(r.construction.resources.admission).toEqual({state:'released',release_claim:1,releases:1});
+  expect(r.construction.resources.registered_owner.state).toBe('absent');
 });

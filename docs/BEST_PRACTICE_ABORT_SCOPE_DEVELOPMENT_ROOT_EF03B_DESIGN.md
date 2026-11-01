@@ -1,6 +1,6 @@
 # EF-03B 開発rootと試験保証の移行計画
 
-Version: br006-development-root-ef03b-draft-0.2 / Date: 2026-11-01。
+Version: br006-development-root-ef03b-draft-0.3 / Date: 2026-11-01。
 Status: **B-01の独立生成root・別brand・登録／admission・固定cleanupを限定実装。source／native移行・既存試験の置換・保証変更の承認は未実施。正式発行口閉鎖・Unknown・全体受付無効・VM／監視／telemetry調査保留を維持する。**
 
 基準：`d6412eb`。EF-03Aのconstruction kernelは既存classへ接続済み。次に作る開発assemblyは別constructor・別brand・別登録台帳を持つため、その成功を実classのprivate継続の成功へ読み替えない。[EF-03親設計](BEST_PRACTICE_ABORT_SCOPE_KERNEL_ROOT_SEPARATION_EF03_DESIGN.md)のEF-03Bを、本書の実装単位と対応表に分ける。
@@ -87,10 +87,12 @@ compiled試験はproduction／developmentを別プロセスで走らせる。前
 
 入力は合成principalラベル（ASCII最大64文字）、元deadlineの低減値、固定fault名のみ。依存注入はclockと合成wait境界、run optionsは標準AbortSignalだけとする。waitへ渡すのは自分のsignalであり、identity／core／owner／consumerは渡さない。rootはrunと固定件数inspectだけを返し、runはseal後のreadonly summaryだけを返す。任意session等の追加field、getter／proxy、他runのsummaryを拒否する。
 
-一度登録したidentityを再登録せず、foreign realmを登録操作の開始前に拒否する。同期生成claimはclock等のcallbackより前に取得し、再入で第二登録を作らない。admissionは同rootで2runまで、同principalの重複を拒否する。構築試行中のlive登録は最大でactive2＋生成中1。取得しなかった枠を返却せず、失敗・終了後も元identityの登録claimは復元しない。新しいidentityによる別runは開始できる。
+一度登録したidentityを再登録せず、foreign realmを登録操作の開始前に拒否する。同期生成claimはclock等のcallbackより前に取得し、再入で第二登録を作らない。生成順は本番rootと同じくbusy事前判定→core→admission→登録ownerとし、busyの呼出しはcore／admission／登録を一切確保しない。admissionは同rootで2runまで、同principalの重複を拒否する。登録はadmission取得後だけなので、live登録はactive枠の2を超えない。取得しなかった枠を返却せず、失敗・終了後も元identityの登録claimは復元しない。新しいidentityによる別runは開始できる。
 
 固定cleanupはclosed化→live登録失効→core close→外部listener除去→timer clear→controller abort→自分のadmission返却→principal参照解除→construction seal→生成claim解放。解除失敗でも後続slotを実行し、解放未確認をconfirmedへ昇格させない。事前abortはcommit段階のconstruction失敗、commit後の取消／wait失敗はrun側に残す。late waitのsettleで終了summaryを書き換えない。
 
 B-01はconstruction-onlyでありsource受理・native reader・ready世代・ReleasePermitを実装しない。canonicalのC/G/Pは0、R予約も未実施。元60秒を低減できるが拡張はできず、期限で非協調的なwaitから停止・解放する。これをB-02のHTTP会計／final予約・native cleanupの検証へ流用しない。
 
-既存試験はすべて残し、[新規27件](../tests/review/development-root.test.ts)を追加した。本番2枠を保持した状態、開発2枠を保持した状態、取消・各部分失敗、別realmで、実classのconstruction／run primary／会計と本番のbusy判定が不変であることを確認する。詳細は[検証記録](E2E_BEST_PRACTICE_DEVELOPMENT_ROOT_B01_2026-11-01.md)を参照。専用build・compiled保証の移行はB-03、friend撤去はEF-03Cへ残す。
+既存試験はすべて残し、[新規28件](../tests/review/development-root.test.ts)を追加した。本番2枠を保持した状態、開発2枠を保持した状態、取消・各部分失敗、別realmで、実classのconstruction／run primary／会計と本番のbusy判定が不変であることを確認する。詳細は[検証記録](E2E_BEST_PRACTICE_DEVELOPMENT_ROOT_B01_2026-11-01.md)を参照。専用build・compiled保証の移行はB-03、friend撤去はEF-03Cへ残す。
+
+draft-0.3のレビュー修正：B-01の開発rootがcore→登録owner→admission（busy判定は登録後）の順で、本番のbusy事前判定→core→admission→登録ownerと異なり、busyの呼出しが登録してから巻き戻す本番にない経路を通っていた。本番と同順へ揃え、fault順・試験・live登録の上界（3→2）を更新した。

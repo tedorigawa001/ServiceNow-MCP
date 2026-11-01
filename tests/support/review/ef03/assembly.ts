@@ -3,7 +3,7 @@ import {types} from 'node:util';
 import {createConstructionState,type ConstructionResource,type ConstructionStage,type ConstructionPublicCode} from '../../../../src/servicenow/review-kernel/construction-state.js';
 import {createCanonicalReviewBudget,CanonicalBudgetError} from '../../../../src/servicenow/review-canonical-budget.js';
 
-const faults=['after_registration','duplicate_registration','foreign_registration','after_admission','after_controller','after_timer','after_listener','after_commit'] as const;
+const faults=['after_admission','after_registration','duplicate_registration','foreign_registration','after_controller','after_timer','after_listener','after_commit'] as const;
 type Fault=typeof faults[number];
 class Rejection extends Error {
   constructor(readonly code:ConstructionPublicCode,readonly internal:string=code){super(code);}
@@ -80,17 +80,18 @@ export function createDevelopmentRoot(dependencies:Readonly<{clock?:()=>number;w
       }
       stage='clock';const start=clock();
       if(!Number.isFinite(start)||start<0)throw new Rejection('internal_review_error','invalid_observation_time');
+      // Same order as the production root: busy pre-check, then core -> admission -> registered owner.
+      stage='admission';
+      if(active>=2||principals.has(principal))throw new Rejection('review_busy');
       stage='core';construction.attempt('core');
       core=createCanonicalReviewBudget({clock:{remainingMs:()=>Math.max(0,deadline-(clock()-start))},limits:{deadlineMs:deadline}});
       construction.held('core');guard();
+      stage='admission';construction.attempt('admission');active++;admitted=true;principals.add(principal);construction.held('admission');inject('after_admission');
       stage='owner';const candidate=fault==='foreign_registration'?new DevelopmentIdentity(Object.freeze({})):identity;
       requireUnregistered(candidate);construction.attempt('registered_owner');register(candidate);
       registeredHere=true;construction.held('registered_owner');
       if(fault==='duplicate_registration')register(identity);
       inject('after_registration');
-      stage='admission';
-      if(active>=2||principals.has(principal))throw new Rejection('review_busy');
-      construction.attempt('admission');active++;admitted=true;principals.add(principal);construction.held('admission');inject('after_admission');
       construction.recordBinding('core');
       stage='controllers';construction.attempt('controller');controller=new AbortController();construction.held('controller');inject('after_controller');
       stage='timer';construction.attempt('deadline_timer');timer=setTimeout(()=>stop('deadline_exceeded'),Math.max(0,deadline-(clock()-start)));

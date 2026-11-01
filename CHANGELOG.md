@@ -38,6 +38,8 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 ### Added
 
+- Fixes the EF-03B B-01 development root's construction order to match the production session: busy pre-check, then core, admission and registered owner. Previously the owner was registered before admission, so a busy claimant registered and rolled back on a path production never takes. A new test checks that a busy claimant allocates no core/admission/owner slot and that an admission fault leaves the owner unregistered; live registrations are now bounded by the two admission slots. Test-only; no runtime behaviour changes.
+
 - Fixes the EF-03A compiled construction-kernel fixture: the "local state cannot affect the live session" check previously failed an already-sealed, unrelated state (a no-op). It now fails and seals a fresh, unsealed local state holding a resource and compares the live session's construction copy before and after; a temporary cross-instance leak injected into the compiled kernel is now detected. Design version links are updated. No runtime behaviour changes.
 
 - Fixes EF-02 so the construction shell records only construction-time failures (plus a pre-abort detected at commit): runtime stops after a successful hand-off no longer mark the construction as failed, and the registered owner again closes with the session stop code first.

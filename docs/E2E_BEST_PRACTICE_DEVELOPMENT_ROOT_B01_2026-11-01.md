@@ -37,9 +37,15 @@ tests配下は本番tsconfigの入力でないため、本番buildだけで開�
 
 pack検査には、配布JS／宣言／mapに新rootのpathやassembly markerが混入しない限定確認を追加した。旧friend／synthetic_ioの撤去やEF-03Dの全依存閉包／変異試験を完了した意味ではない。
 
-## 4 会計と残課題
+## 4 レビュー修正（2026-11-01）
 
-root別のactive枠は2、同期生成claimは1、live登録の上界はactive＋生成中で3。登録WeakSetはidentityを再利用させず、live登録・principal keyは固定finallyで返す。各runのconstruction診断は固定10slot、実際に取得するのはsnapshot・core・登録owner・admission・controller・timer・任意listener。未使用phase／source slotは未開始のままである。
+開発rootの生成順がcore→登録owner→admission（busy判定は登録後）で、本番`BoundedReadSession`のbusy事前判定→core→admission→登録ownerと異なっていた。busyの呼出しが一度登録して巻き戻す本番にない経路を通り、B-02以降で旧caseを移すと別のrollback／busy経路を検証することになるため、本番と同順へ揃えた。fault順は`after_admission`を`after_registration`より前へ移した。
+
+追加試験1件：開発2枠保持中のbusy呼出しはstage `admission`の`review_busy`で、core／admission／登録ownerのslotがすべてabsent。`after_admission`故障ではadmissionが1回解放され、登録ownerは未取得のまま。専用試験は28件成功。変異確認として旧順序のassemblyへ戻すと追加試験が失敗（1件）し、他27件は成功した。退避copyから復元し`cmp`で一致を確認した。§3の件数は修正前の記録として残す。下記§5のlive登録の上界は修正後の値。
+
+## 5 会計と残課題
+
+root別のactive枠は2、同期生成claimは1、live登録はadmission取得後だけなので上界はactive枠の2（修正前はbusy呼出しの一時登録を含め3）。登録WeakSetはidentityを再利用させず、live登録・principal keyは固定finallyで返す。各runのconstruction診断は固定10slot、実際に取得するのはsnapshot・core・登録owner・admission・controller・timer・任意listener。未使用phase／source slotは未開始のままである。
 
 clockと待機は同runの元起点・canonical coreに結合し、C/G/P=0、R予約は未実施。計上callbackを本番から移譲したとは主張しない。B-02のsource受理・ready世代・HTTP／native・final予約・ReleasePermitと、B-03の試験保証移行が残る。回復不能な確保失敗時にsealed copyが必ず生成できる保証、JS文字列の物理消去保証はない。
 
