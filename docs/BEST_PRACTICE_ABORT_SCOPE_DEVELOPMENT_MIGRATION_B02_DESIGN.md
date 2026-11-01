@@ -157,7 +157,7 @@ native summaryは解放後のclosed／revoked=true、固定HTTP／操作数／cl
 
 ## 11 release純粋比較器の設計案
 
-[release比較器詳細設計draft-0.6](BEST_PRACTICE_ABORT_SCOPE_RELEASE_COMPARATOR_DESIGN.md)に、family判定、空／不完全／21行sentinelとraw応答上限の区別、期限切れ設定を保持した競合判定、固定limitations順序を整理した。RC-01の構造入力・型・family境界に加え、RC-02のpolicy整合・意味比較・非実行draft生成を純粋値として実装した。実source／開発sourceへの採用は未接続で、実Permit・private snapshot／port・採用claimは生成しない。既存の非200 legacy catchと、bootstrapのdecode／cleanup失敗は同時に移さない。
+[release比較器詳細設計draft-0.7](BEST_PRACTICE_ABORT_SCOPE_RELEASE_COMPARATOR_DESIGN.md)に、family判定、空／不完全／21行sentinelとraw応答上限の区別、期限切れ設定を保持した競合判定、固定limitations順序を整理した。RC-01の構造入力・型・family境界に加え、RC-02のpolicy整合・意味比較・非実行draft生成を純粋値として実装した。実source／開発sourceへの採用は未接続で、実Permit・private snapshot／port・採用claimは生成しない。既存の非200 legacy catchと、bootstrapのdecode／cleanup失敗は同時に移さない。
 
 設定日時文字列長の上限は承認待ちで新制限を加えず、壁時計逆行等は未確認とする。family閉包はimportなしの値moduleへ限定し、比較器はrootをimportしない。RC-03は未実装で、RC-01／02の合成／compiled確認を旧release判断caseの対応済みへ数えない。旧試験・対応表の分類、not_evaluated、正式発行口閉鎖・全体受付無効・調査保留を維持する。[RC-01検証記録](E2E_BEST_PRACTICE_RELEASE_CONTRACT_RC01_2026-11-01.md)・[RC-02検証記録](E2E_BEST_PRACTICE_RELEASE_COMPARISON_RC02_2026-11-01.md)参照。
 
@@ -179,4 +179,4 @@ RC3-D02では、同sourceの200行ack・固定比較・guard・seal後の非実�
 
 [既存deadline getter再利用契約draft-0.6](BEST_PRACTICE_ABORT_SCOPE_RELEASE_DEADLINE_REUSE_DESIGN.md)に、Rの設定pin／比較器への同startedAt・元全deadline供給を整理した。getterは既存であり、新設待ちという旧記述は誤認。RP-01時点では固定fake継続にprivate projection生成／消費を限定追加したが、比較器への入力化・通常source差替えは未実施で、残時間再計算・provider再呼出しはしない。B-03の専用compiled保証・旧case対応表とは別に検証する。
 
-[観測UTC契約draft-0.5](BEST_PRACTICE_ABORT_SCOPE_RELEASE_OBSERVATION_UTC_DESIGN.md)のOU-01で、固定fake継続の取得後guard・一度限り採取・空200・時計例外／逆行を部分確認した。D固定UTCの試験結果をRの時計保証へ流用せず、通常sourceの切替・reviewed_at／ended_atへの上位結合は未実装／未検証のままとする。
+[観測UTC契約draft-0.6](BEST_PRACTICE_ABORT_SCOPE_RELEASE_OBSERVATION_UTC_DESIGN.md)のOU-01で、固定fake継続の取得後guard・一度限り採取・空200・時計例外／逆行を部分確認した。D固定UTCの試験結果をRの時計保証へ流用せず、通常sourceの切替・reviewed_at／ended_atへの上位結合は未実装／未検証のままとする。

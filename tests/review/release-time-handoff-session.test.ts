@@ -37,3 +37,20 @@ it.each(['sync','queued'] as const)('stops at late injected monotonic-clock boun
   }
   expect(Object.getOwnPropertyNames(BoundedReadSession.prototype).some(name=>/Time|Handoff|Accepted/.test(name))).toBe(false);
 });
+it('stops synchronously at every post-O clock boundary, including the handoff, source-close and discard guards',async()=>{
+  vi.useFakeTimers();vi.setSystemTime(new Date(S));
+  const isoNative=Date.prototype.toISOString;let observations=0,afterO=0;
+  vi.spyOn(Date.prototype,'toISOString').mockImplementation(function(this:Date){observations++;return Reflect.apply(isoNative,this,[]);});
+  const clock=vi.spyOn(performance,'now').mockImplementation(()=>{if(observations>=2)afterO++;return 0;});
+  await BoundedReadSession.prepareNewReviewComposition(snapshot(),{update_set_sys_id:id},{synthetic_io:io()});
+  const total=afterO;expect(total).toBeGreaterThan(30);
+  // The fixed upper-time steps take the last post-O boundaries, so the sweep must reach the final read.
+  for(let target=1;target<=total;target++){
+    observations=0;afterO=0;const controller=new AbortController();let fired=false;
+    clock.mockImplementation(()=>{if(observations>=2&&++afterO===target){fired=true;controller.abort();}return 0;});
+    await expect(BoundedReadSession.prepareNewReviewComposition(snapshot(),{update_set_sys_id:id},{signal:controller.signal,synthetic_io:io()})).rejects.toMatchObject({code:'cancelled'});
+    expect(fired).toBe(true);expect(vi.getTimerCount()).toBe(0);
+    clock.mockReturnValue(0);observations=0;
+    expect(await BoundedReadSession.prepareNewReviewComposition(snapshot(),{update_set_sys_id:id},{synthetic_io:io()})).toMatchObject({cleanup:'closed'});
+  }
+});

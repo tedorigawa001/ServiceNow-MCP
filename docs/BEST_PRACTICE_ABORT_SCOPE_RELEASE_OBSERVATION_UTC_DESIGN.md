@@ -1,7 +1,7 @@
 # RC-03：観測UTCの採取・失敗・上位時刻の契約
 
-Version: br006-release-observation-utc-draft-0.5 / Date: 2026-11-01。
-Status: **OU-01の一度限り採取・pre/post guardを既存fixed fake-200継続だけに限定実装（§9）。CT-Aで入力化／内部候補保持を限定追加したが、通常実source差替え・上位時刻結合は未実施。実接続・実通信・実機操作・設定変更・実Permit発行・Pushは行わない。正式発行口閉鎖・Unknown・全体受付無効・VM／監視／telemetry調査保留を維持する。**
+Version: br006-release-observation-utc-draft-0.6 / Date: 2026-11-01。
+Status: **OU-01の一度限り採取・pre/post guardを既存fixed fake-200継続だけに限定実装（§9）。CT-Aで入力化／内部候補保持、TB-A／Bで固定fake継続だけの上位時刻slot移譲を限定追加したが、通常実source差替え・worker job／T_i／Eとの結合は未実施。実接続・実通信・実機操作・設定変更・実Permit発行・Pushは行わない。正式発行口閉鎖・Unknown・全体受付無効・VM／監視／telemetry調査保留を維持する。**
 
 設計基準`cd14e20`、OU-01基準`d95faca`。[RC-03親設計](BEST_PRACTICE_ABORT_SCOPE_RELEASE_ADOPTION_RC03_DESIGN.md)と[deadline再利用契約](BEST_PRACTICE_ABORT_SCOPE_RELEASE_DEADLINE_REUSE_DESIGN.md)の観測UTCに関する残差を具体化する。RP-01の同session projectionへOU-01の限定採取を追加したが、比較器接続・上位整合検査は未実装／未検証。本書を本番切替の承認にしない。
 
@@ -86,7 +86,7 @@ workerの最終Eは集約生成時の値であり、終了処理後のUTCでは�
 
 ### 同projection・source・worker jobとの接続
 
-CT-Aでは同projection／sourceのrows・O受領物と固定比較・候補受理までを限定追加した。空200のOはprivate候補ownerが失敗／closeまで保持する。上位TimeOwner／job／T_i／Eへの結合と終端移譲は依然未実装であり、OU-01の採取やCT-A内部保持だけで§6の全体順序を満たしたとは数えない。
+CT-Aでは同projection／sourceのrows・O受領物と固定比較・候補受理までを限定追加した。CT-A時点では空200のOをprivate候補ownerが失敗／closeまで保持して破棄した。TB-A／Bで固定fake継続だけ上位時刻slotへの一度限りの移譲を接続したが、worker job／T_i／Eへの結合は依然未実装であり、OU-01の採取やCT-A内部保持だけで§6の全体順序を満たしたとは数えない。
 
 [接続契約draft-0.5](BEST_PRACTICE_ABORT_SCOPE_RELEASE_COMPARISON_TIME_BINDING_DESIGN.md)は、Oを同rows／projectionのprivate受領物として比較器へ渡すことと、空200で公開Oがなくても上位ownerへ一度だけ移譲してT_i／Eを検査することを対にした。worker object／世代・親側claimと期待id／target／T_iを結合し、omissionでも最後のUTCを消さない。現応答にkind echoがあるとは仮定せず、新しいwire fieldも追加しない。CT-A／TB-A／Bは固定fake継続だけに限定接続したが、worker job／T_i／Eは未実装で、OU-01の採取成功だけでは成立しない。
 
@@ -128,3 +128,5 @@ OU-01時点では、§7のUTC-01〜06のうち採取順・空200・初回逆行�
 追加確保は固定採取状態とclosure、1つのDateとISO文字列・固定比較。timer・受信bytes・C/G/P・予約ownerは増やさない。layout／全体work・同期時間の上界は引き続きUnknown。入力・上位時刻の未解決事項を今回の部分成功で確認済みにしない。
 
 draft-0.3のレビュー修正：OU-01の配布検査は`release-observation`の4成果物の存在だけを確認し、他の値kernelと同じ依存・壁時計のAST検査に含めていなかった。importをzodだけに限定し、`new Date`・`Date.now`・fetch／timerを拒否する同じ検査へ追加し、時計は注入依存からだけ読むことを配布物でも確認する。上位設計からの版数リンクも更新した。
+
+draft-0.6のレビュー修正：TB-B接続後も、Statusと§6のCT-A段落が上位TimeOwnerへの結合・終端移譲を未実装と記載したままで、直後の接続契約段落（TB-A／B限定接続）と矛盾していた。CT-A時点の破棄とTB-A／Bの固定fake移譲を分けて記載し、上位設計からの版数リンクも更新した。

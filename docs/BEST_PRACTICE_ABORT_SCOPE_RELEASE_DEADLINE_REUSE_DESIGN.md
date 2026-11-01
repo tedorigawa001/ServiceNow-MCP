@@ -70,7 +70,7 @@ getter再利用・局所値採取自体でC/G/P・予約・retry・timer・clean
 | DL-05 | L=10000の別sessionを作っても、L=60000のsourceへ混ぜない。値だけ同じ別sessionも採用元としない。同source／通常200とprivate ackの入力一致を、それぞれ独立期待値で確認 |
 | DL-06 | 親後・採取前／後・取得後・比較後・採用前の取消／close／deadlineを確認。getterがまだ読めても採用しない。先行理由、cached failure、解放・予約返却を保持 |
 | DL-07 | binding不一致でrelease GET=0、通常200は追加GET=0、C/G/Pは比較なし経路の独立期待値と一致。reservation／cleanupは一度だけ。同一bytesの再課金なし |
-| DL-08 | complete_200のO採取はS／Lを変更しない。[観測UTC契約draft-0.5](BEST_PRACTICE_ABORT_SCOPE_RELEASE_OBSERVATION_UTC_DESIGN.md)のOU-01で固定fake継続の一度限り採取／guardだけを部分確認。通常source／上位reviewed_at／ended_atのR-CLOCK保証は未実施／承認待ち。not_requestedでOを捏造しない |
+| DL-08 | complete_200のO採取はS／Lを変更しない。[観測UTC契約draft-0.6](BEST_PRACTICE_ABORT_SCOPE_RELEASE_OBSERVATION_UTC_DESIGN.md)のOU-01で固定fake継続の一度限り採取／guardだけを部分確認。通常source／上位reviewed_at／ended_atのR-CLOCK保証は未実施／承認待ち。not_requestedでOを捏造しない |
 | DL-09 | 旧0.2／0.3出力、公開可変copyとprivate snapshot、limitationsの順序、native/status-only・非200の既存挙動を変えない。D用root／claim／fake時刻が本番packageに入らない |
 
 試験は元期限を緩めず、実通信・実設定を使わない。D固定値の成功と実classのfake-I/O保証を別集計する。上表は実装・実行前の受入案で、完了件数に加えない。
@@ -103,4 +103,4 @@ B-03の開発専用build／compiled保証・旧case対応表は別工程。既�
 
 RP-01時点の記録として、[RP-01検証記録](E2E_BEST_PRACTICE_RELEASE_SESSION_PROJECTION_RP01_2026-11-01.md)に合成試験・初回RED／補強時の失敗・型検査・梱包確認を記録する。§5のうちgetter／pin一致、低減値、options copy、残時間置換、policy混入、guardと停止の一部を実class＋fake依存で確認する。比較器への実入力・取得45秒後のpolicy照合・観測UTCと上位時刻・全§5の保証／B-03専用compiledは残課題。故障注入に使うprototype getter置換は本番の供給口・権限にはならず、任意のローカルコード改変に対する完全防御を主張しない。
 
-draft-0.3では[観測UTC契約draft-0.5](BEST_PRACTICE_ABORT_SCOPE_RELEASE_OBSERVATION_UTC_DESIGN.md)への参照を追加した。取得後guardの後に一度採るOと、構築時のS／全Lは別物。時計失敗・逆行・上位時刻の不整合を時刻補正やpolicy再pinで救済しない。draft-0.4時点ではOU-01の固定fake継続の採取／guardを限定追加したが、上位private UTC保持・比較器入力化・上位結合は未実装で、RP-01に実装済みとは数えない。
+draft-0.3では[観測UTC契約draft-0.6](BEST_PRACTICE_ABORT_SCOPE_RELEASE_OBSERVATION_UTC_DESIGN.md)への参照を追加した。取得後guardの後に一度採るOと、構築時のS／全Lは別物。時計失敗・逆行・上位時刻の不整合を時刻補正やpolicy再pinで救済しない。draft-0.4時点ではOU-01の固定fake継続の採取／guardを限定追加したが、上位private UTC保持・比較器入力化・上位結合は未実装で、RP-01に実装済みとは数えない。

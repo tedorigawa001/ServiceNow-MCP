@@ -64,6 +64,8 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 ### Added
 
+- Adds TB-B real-class fake coverage for synchronous cancellation at every post-observation clock boundary, including the handoff, source-close and discard guards that the earlier late-boundary targets never reached. The record now states that continuing all fixed release sections after a handoff guard failure is not externally observable or test-confirmed, and the comparator/observation-UTC designs no longer describe the upper time handoff as unimplemented.
+
 - Fixes the TB-A release time scope: once a held value has been discarded normally, a stray later call (accept/issue/discard/allocate/observe) is refused without rewriting the terminal `discarded` state to `failed` or adding an `internal_review_error` diagnostic, matching the existing `revoke` behaviour. A test covers all five calls.
 
 - Extends the offline package check to the OU-01 `release-observation` kernel: besides the four artifacts, its compiled JS must import only `zod` and must not read the wall clock (`new Date`/`Date.now`), use fetch/timers, or re-export/require a root, so time is read only through the injected clock. Test-only; no runtime behaviour changes.

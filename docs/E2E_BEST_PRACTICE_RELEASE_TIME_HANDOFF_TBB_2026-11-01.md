@@ -59,7 +59,15 @@ finallyの解放sectionは固定数・固定順序で全て試み、移譲側gua
 
 コミット前確認：候補16ファイルを含むindex全体を一時コピーへ展開し、既存node_modulesだけを参照してbuild・関連12ファイル313件・新規2試験のstandalone TypeScript・441ファイルのオフライン梱包を再確認し、すべて成功した。候補16ファイルのbytes一致と、無関係な`.vscode/`・`CLAUDE.md`がコピーに含まれないことも確認した。全体10,178件はこのコミット前確認では再実行せず、上表の実装時結果と区別する。確認後の追加変更は本段落だけで、実装・試験は変更していない。
 
-## 6 残課題・非主張
+## 6 レビュー修正（2026-11-01）
+
+- 実class fake試験の同期取消は、O後の単調clock読取り54回中の#24／#27／#39だけを対象としていた。TB-Bで追加したhandoff（#40〜49）・sourceClosed（#51〜52）・discard（#53〜54）のguardは後半にあるため、同期取消では一度も到達していなかった（microtask取消は#39から#52で発火し、sourceClosed後〜discard前の保持区間だけを通過）。O後の全境界を最終読取りまで同期取消する試験を1件追加し、各境界で`cancelled`・timer 0・同principalの再実行成功を確認した。実class fake試験は5件から6件、TB-Bの新規試験は39件から40件。
+- 変異確認：`#finishCompositionTime`でbridge存在時のdiscard失敗を握り潰す変更に戻すと、追加試験だけが失敗した（既存のsync／queued試験は成功のまま）。確認後に退避copyから復元し、`cmp`で一致を確認した。
+- finallyの全解放section継続（移譲／sourceClosed guard失敗後もconsumer・contract・予約枠の解放を試みること）は、先頭失敗で後続sectionを飛ばす変更でも全試験が成功する。session closeのrollbackが同じ資源を再解放するため外部出力からは区別できず、本記録はこの継続を試験で確認済みとは主張しない。
+- [比較器設計draft-0.7](BEST_PRACTICE_ABORT_SCOPE_RELEASE_COMPARATOR_DESIGN.md)と[観測UTC契約draft-0.6](BEST_PRACTICE_ABORT_SCOPE_RELEASE_OBSERVATION_UTC_DESIGN.md)で、CT-A段落・Statusに残っていた「上位時刻結合／終端移譲は未実装」をCT-A時点の破棄とTB-A／Bの固定fake移譲に分けて修正した。
+- §3／§5の件数は修正前の記録として残す。修正後の全体結果は235ファイル／10,179件（試験は既存ファイルへ追加）で、`--maxWorkers=3`で成功した。梱包検査441ファイル・build・変更試験のESLintも成功。
+
+## 7 残課題・非主張
 
 CT-B後半の同worker世代／job claim・T_i／E、CT-C、B-03、元Lと出力宣言deadlineの整合、日時長cap・追加work／全体上界は未解決。TB-Bのupperは固定fake準備処理内でdiscardし、closeしたsessionを越えるworker終端ownerへは渡さない。比較候補を既存release decision／Permitへ採用せず、非200 fallbackも有効化しない。
 

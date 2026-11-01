@@ -3,7 +3,7 @@
 Version: br006-release-adoption-rc03-draft-0.16 / Date: 2026-11-01。
 Status: **RC3-D01／D02／D03を開発assemblyだけに限定実装。同sourceの200行ackの固定比較、またはdispatch前binding不一致のnot_requestedから、guard・seal後の非実行summaryへ接続。R差替えは未実装／未承認。旧試験・正式発行口閉鎖・Unknown・全体受付無効・VM／監視／telemetry調査保留を維持する。実Permit発行・実接続・実通信・実機操作・設定変更・friend撤去・Pushは行わない。**
 
-基準：`a61d90a`。[純粋比較器設計draft-0.6](BEST_PRACTICE_ABORT_SCOPE_RELEASE_COMPARATOR_DESIGN.md)のRC-03を具体化する。以下の追加field・状態・試験ID・分割単位は案であり、存在するAPIや検証済み保証ではない。
+基準：`a61d90a`。[純粋比較器設計draft-0.7](BEST_PRACTICE_ABORT_SCOPE_RELEASE_COMPARATOR_DESIGN.md)のRC-03を具体化する。以下の追加field・状態・試験ID・分割単位は案であり、存在するAPIや検証済み保証ではない。
 
 ## 1 現在の接続点と不足
 
@@ -73,7 +73,7 @@ pure比較の途中にawaitはなく、JSイベントループの取消を同期
 
 現在の実sourceはresolved／conflict分岐でUTCを採取し、空値fallbackでは採取しない。一方、RC-01入力はcomplete_200なら空値でもobserved_atが必要である。R案では取得後guardと比較の間で一度採取するが、この追加採取・採取位置の差を無変更と偽らない。戻り値の時刻、壁時計逆行と上位reviewed_atの整合、時計失敗時の固定分類をfake試験で確認し、切替前に承認する。Dは固定UTC値を使うため、このR保証の代替ではない。
 
-[観測UTC契約draft-0.5](BEST_PRACTICE_ABORT_SCOPE_RELEASE_OBSERVATION_UTC_DESIGN.md)に具体化した。complete_200は空200も含めprojection・取得後guardの後にOを一度採取し、再guardを通す。OU-01でこの部分を固定fake継続だけに限定実装した。not_requested等でOを捏造しない。S／全L／policyは不変。時計例外・検出した逆行は先行停止を保持した固定内部失敗とし、上位T_i／Eとの順序を時刻補正や証拠削除で救済しない。現行reviewed_atは取得時刻、ended_atはworker集約時刻であること、および低減LとJSON宣言deadlineの差も明記した。上位private UTC保持・上位結合とその試験は未実装／未実施で、本番差替えの承認ではない。
+[観測UTC契約draft-0.6](BEST_PRACTICE_ABORT_SCOPE_RELEASE_OBSERVATION_UTC_DESIGN.md)に具体化した。complete_200は空200も含めprojection・取得後guardの後にOを一度採取し、再guardを通す。OU-01でこの部分を固定fake継続だけに限定実装した。not_requested等でOを捏造しない。S／全L／policyは不変。時計例外・検出した逆行は先行停止を保持した固定内部失敗とし、上位T_i／Eとの順序を時刻補正や証拠削除で救済しない。現行reviewed_atは取得時刻、ended_atはworker集約時刻であること、および低減LとJSON宣言deadlineの差も明記した。上位private UTC保持・上位結合とその試験は未実装／未実施で、本番差替えの承認ではない。
 
 ### 比較器入力・上位時刻の結合
 

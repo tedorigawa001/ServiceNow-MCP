@@ -1,6 +1,6 @@
 # AU-BR-006／EF-03B：release純粋比較器の詳細設計
 
-Version: br006-release-comparator-draft-0.6 / Date: 2026-11-01。
+Version: br006-release-comparator-draft-0.7 / Date: 2026-11-01。
 Status: **RC-01の構造入力・型・family境界に加え、RC-02のpolicy整合・優先順・limitations・非実行draft生成を純粋値として実装。実sourceへの採用は未実装。実Permit発行・friend撤去・実接続の承認ではない。旧試験、正式発行口閉鎖・Unknown・全体受付無効・VM／監視／telemetry調査保留を維持する。実通信・実機操作・設定変更・Pushは行わない。**
 
 基準：設計は`183b540`、RC-01実装前は`39a3225`、RC-02実装前は`439c4ec`。[旧case対応表](BEST_PRACTICE_ABORT_SCOPE_OLD_CASE_CROSSWALK_B02_DESIGN.md)のACK-08〜16等と、[移行設計](BEST_PRACTICE_ABORT_SCOPE_DEVELOPMENT_MIGRATION_B02_DESIGN.md)の残差を具体化する。§11／12の実装記録と、未接続の生成owner／実source採用手順の案を区別する。
@@ -212,7 +212,7 @@ asserted_atの未来・expires_at≦asserted_atを拒否し、binding不一致�
 
 ## 13 RC-03の接続差分設計
 
-CT-Aで固定fake継続の同projection・source・元ackに結合したrows／O receiptと固定比較器への入力化、一度限りの非実行候補受理を限定実装した。公開legacy結果やPermitへの採用はしない。空200のOはcloseまで内部保持し、上位job／時刻結合は未実装。接続契約§10と[CT-A検証記録](E2E_BEST_PRACTICE_RELEASE_COMPARISON_CTA_2026-11-01.md)参照。
+CT-Aで固定fake継続の同projection・source・元ackに結合したrows／O receiptと固定比較器への入力化、一度限りの非実行候補受理を限定実装した。公開legacy結果やPermitへの採用はしない。CT-A時点では空200のOもcloseまで内部保持して破棄した。TB-A／Bで固定fake継続だけ上位時刻slotへの一度限りの移譲を接続したが、worker job／T_i／Eとの結合は未実装。接続契約§10と[CT-A検証記録](E2E_BEST_PRACTICE_RELEASE_COMPARISON_CTA_2026-11-01.md)参照。
 
 [比較器入力・上位時刻の接続契約draft-0.5](BEST_PRACTICE_ABORT_SCOPE_RELEASE_COMPARISON_TIME_BINDING_DESIGN.md)を追加した。同projectionのS／全L／P、同sourceのrows／O、同worker世代／jobをprivateに結合し、非実行比較候補と空200のUTC保持・返却時刻検査を対にする。pure値入力の成功は発行元・job identityの証明ではない。CT-A／TB-A／Bは固定fake継続だけに限定接続し、worker jobを含む全体接続・試験は未実施。通常source／Permit経路は差し替えない。
 
@@ -226,4 +226,6 @@ RC3-D03では同ownerのdispatch前判断を追加し、整合したbinding不�
 
 Rの全deadlineは既存のsession.deadlineMs getterを再利用する。[再利用契約draft-0.6](BEST_PRACTICE_ABORT_SCOPE_RELEASE_DEADLINE_REUSE_DESIGN.md)で、設定pinと同じ開始UTC／全duration・policyの結合と受入条件を整理した。RP-01で固定fake継続のprivate projectionだけを限定接続し、比較器への入力化・通常source差替えを残課題とする。残時間からの再計算や観測時点での設定再pinは行わない。
 
-[観測UTC契約draft-0.5](BEST_PRACTICE_ABORT_SCOPE_RELEASE_OBSERVATION_UTC_DESIGN.md)のOU-01で、空200を含む一度限り採取・pre/post guardだけを固定fake継続へ限定追加した。比較器は時計を読まず、S／全L／policyを変更しない。上位private UTC保持・上位検査と通常source差替えは未実装であり、pure比較器の成功を時計保証としない。
+[観測UTC契約draft-0.6](BEST_PRACTICE_ABORT_SCOPE_RELEASE_OBSERVATION_UTC_DESIGN.md)のOU-01で、空200を含む一度限り採取・pre/post guardだけを固定fake継続へ限定追加した。比較器は時計を読まず、S／全L／policyを変更しない。上位private UTC保持・上位検査と通常source差替えは未実装であり、pure比較器の成功を時計保証としない。
+
+draft-0.7のレビュー修正：TB-B接続後も、CT-A段落が空200のOをcloseまで保持し上位時刻結合は未実装と記載したままで、直後のTB-A／B限定接続の記述と矛盾していた。CT-A時点の破棄とTB-A／Bの固定fake移譲を分けて記載し、上位設計からの版数リンクも更新した。
