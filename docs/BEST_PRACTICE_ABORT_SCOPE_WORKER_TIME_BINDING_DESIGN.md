@@ -1,6 +1,6 @@
 # CT-B後半：worker job binding・T_i／E整合の詳細設計
 
-Version: br006-worker-time-binding-draft-0.5 / Date: 2026-11-01。
+Version: br006-worker-time-binding-draft-0.6 / Date: 2026-11-01。
 Status: **WJ-Aの内部claim（§11）とWJ-BのT_i／U・analyze期待値照合（§12）を、配布対象外の合成issuerで限定実装。runtime／実worker・finishのE照合・WJ-C／Dは未接続／未実装。正式発行口閉鎖・Unknown・全体受付無効・VM／監視／telemetry調査保留を維持する。実source差替え・実接続・実通信・設定変更・Permit発行・Pushの承認ではない。**
 
 基準HEAD: `099dedf`。[上位接続契約](BEST_PRACTICE_ABORT_SCOPE_RELEASE_COMPARISON_TIME_BINDING_DESIGN.md)§4〜7と[CT-B前半](BEST_PRACTICE_ABORT_SCOPE_RELEASE_TIME_OWNER_CTB_DESIGN.md)の差分設計。TB-Bの固定fake準備処理内のdiscardを、既にworkerまで継続できる移譲と取り違えない。通常adapterへの切替・B-03・friend撤去は別工程。
@@ -183,6 +183,8 @@ draft-0.4のレビュー修正：WJ-Aの捕捉再入試験はguard内のbindだ�
 - 既存値schemaだけを再利用し、findings等の全結果を親で再検証／copyしない。必要fieldのgetter／Proxyは拒否し、関係しないfindings getterは実行しない。full schema／262144-byte wire envelope検査は既存workerの責務で、WJ-Bが実wire検証したとはしない。必要contextの局所copyは深さ8・100配列要素・30object項目・10,000訪問node・保守的文字費262144以下。これは合成値projectionの枠で、本番日時長cap・全体メモリ上界の承認ではない。
 - 比較エラーを候補状態として捕捉し、post-guardの取消／期限を優先してから固定理由で停止する。全guard成功後だけauthority:noneの凍結dataを返す。結果を正式review結果やPermitへ昇格しない。startup失敗・同期throw／reject相当のsend失敗・revokeでは全identity／input／pendingを失効させ、**受理済みS／L／O／Uのデータだけ**保持する。失敗後の再生成／再消費は拒否し、最初の固定code／phaseを残す。`discardTerminalTime`でUTCを破棄しても再開しない。正常closeでは時刻も破棄する。
 
-[63件の試験](../tests/review/synthetic-worker-time.test.ts)は、独立したfield差替え表・100 inputの非減少UTC oracle、input全5guard／応答全6guard、startup／send失敗・取消・再入・混入・一度限り消費を確認する。配布負の対照はWJ-Bの関数・path・runtime import／clock参照の混入を拒否する。WJ-Aの157件を維持する。実施結果・初回失敗は[WJ-B検証記録](E2E_BEST_PRACTICE_WORKER_TIME_WJB_2026-11-01.md)を参照する。
+[66件の試験](../tests/review/synthetic-worker-time.test.ts)は、独立したfield差替え表・100 inputの非減少UTC oracle、input全5guard／応答全6guard、startup／send失敗・取消・再入・混入・一度限り消費を確認する。時刻だけのreceiptからのanalyze発行、稼働中／正常close後の`discardTerminalTime`、ready済み世代への`startupFailure`は、それぞれ拒否されることを別に確認する。配布負の対照はWJ-Bの関数・path・runtime import／clock参照の混入を拒否する。WJ-Aの157件を維持する。実施結果・初回失敗は[WJ-B検証記録](E2E_BEST_PRACTICE_WORKER_TIME_WJB_2026-11-01.md)を参照する。
 
 finish／E、soft世代移行、上位への本番候補移譲・全体受付・exact layout／全費目は未実装／Unknown。WJ-C／D・B-03・CT-Cを完了とは数えず、従来のproduction adapter・停止後部分finishを変更しない。
+
+draft-0.6のレビュー修正：WJ-Bの前提条件のうち、analyzeが期待context付きreceiptを要求すること、`discardTerminalTime`が停止後だけ許されること、`startupFailure`がstarting中の世代だけに適用されることの3点は、各判定を外す変異でも63件が通っていた。時刻だけのreceiptではrejected／result_omitted応答が同input期待値を経ずに受理され得た。3件の試験を追加し、§12の件数・保証範囲と上位設計からの版数リンクを更新した。

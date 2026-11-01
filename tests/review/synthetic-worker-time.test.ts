@@ -152,6 +152,23 @@ it('removes the wrapper pending slot before any response guard can observe it',(
   const f=fixture(),job=f.job(),seen:boolean[]=[];f.arm(()=>{seen.push(f.owner.inspect().pending);return undefined;});
   f.owner.consumeAnalyze(f.b,job,f.context,outcome());expect(seen).toEqual([false,false,false,false,false,false]);
 });
+// A time-only receipt would otherwise accept rejected/omitted replies without any same-input expectation.
+it('refuses an analyze job for a time-only receipt before issuing a claim',()=>{
+  const s=seed(),owner=createSyntheticWorkerTimeIssuer(s),b=owner.bind(s),input=owner.input(b,{},asset,T),g=owner.startGeneration(b,{},{});owner.ready(b,g);
+  expect(()=>owner.analyze(b,g,input,2)).toThrow('internal_review_error');
+  expect(owner.inspect()).toMatchObject({state:'failed',pending:false,inputs_retained:0,upper_utc:T,diagnostic:{code:'internal_review_error',phase:'analyze'}});
+});
+it('refuses terminal UTC discard on an active or normally closed owner',()=>{
+  const s=seed(),owner=createSyntheticWorkerTimeIssuer(s),b=owner.bind(s);owner.input(b,{},asset,T);
+  expect(()=>owner.discardTerminalTime()).toThrow('internal_review_error');
+  expect(owner.inspect()).toMatchObject({state:'failed',upper_utc:T,held_time:{started_at:S,deadline_ms:60000,observed_at:O},diagnostic:{phase:'discard'}});
+  const f=fixture();f.owner.consumeAnalyze(f.b,f.job(),f.context,outcome());f.owner.closeGeneration(f.b,f.g);f.owner.confirmClosed(f.b,f.g);f.owner.close(f.b);
+  expect(()=>f.owner.discardTerminalTime()).toThrow('internal_review_error');expect(f.owner.inspect()).toMatchObject({state:'closed',upper_utc:null,held_time:null,diagnostic:null});
+});
+it('refuses a startup failure for a ready generation',()=>{
+  const f=fixture();expect(()=>f.owner.startupFailure(f.b,f.g,'worker_unavailable')).toThrow('internal_review_error');
+  expect(f.owner.inspect()).toMatchObject({state:'failed',upper_utc:T,pending:false,diagnostic:{code:'internal_review_error',phase:'startup_failure'}});
+});
 it('does not treat an omitted binding as constructor permission on a failure event',()=>{
   const s=seed(),owner=createSyntheticWorkerTimeIssuer(s),b=owner.bind(s);owner.input(b,{},asset,T,expected());const g=owner.startGeneration(b,{},{});
   expect(()=>owner.startupFailure(undefined as unknown as object,g,'cancelled')).toThrow('internal_review_error');

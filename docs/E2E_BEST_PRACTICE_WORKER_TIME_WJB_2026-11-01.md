@@ -3,7 +3,7 @@
 Date: 2026-11-01 / 基準HEAD: `654730a`。
 Status: **配布対象外の合成issuerのみ。実worker／runtime・実sessionとは未接続。**
 
-[詳細設計draft-0.5](BEST_PRACTICE_ABORT_SCOPE_WORKER_TIME_BINDING_DESIGN.md)§12と[接続契約draft-0.8](BEST_PRACTICE_ABORT_SCOPE_RELEASE_COMPARISON_TIME_BINDING_DESIGN.md)を参照。正式発行口閉鎖・Unknown・全体受付無効・VM／監視／telemetry調査保留を維持する。
+[詳細設計draft-0.6](BEST_PRACTICE_ABORT_SCOPE_WORKER_TIME_BINDING_DESIGN.md)§12と[接続契約draft-0.8](BEST_PRACTICE_ABORT_SCOPE_RELEASE_COMPARISON_TIME_BINDING_DESIGN.md)を参照。正式発行口閉鎖・Unknown・全体受付無効・VM／監視／telemetry調査保留を維持する。
 
 ## 1 実装範囲
 
@@ -62,7 +62,29 @@ Oで初期化したUは同receiptのT_iについて非減少を検査し、最�
 
 全体JSONはローカル一時領域の`/tmp/servicenow-wjb-tests-final-20261101.json`。時間はJSONの開始〜最終試験終了。numTotalTestSuitesはdescribe節を含むため、ファイル数はtestResults.lengthで数えた。合成testはローカルだけで、PDIや本物の資格情報は使用していない。
 
-## 5 未実施・残課題
+## 5 レビュー修正（2026-11-02）
+
+§2・§4の63件／10,399件は修正前の記録として残す。レビューで、owner実装にある次の3判定をそれぞれ外す変異でも63件が成功することが判明した。
+
+| 判定 | 外した場合の影響 | 追加試験 |
+|---|---|---|
+| analyzeは期待context付きreceiptを要求 | 時刻だけのreceiptでjobを発行でき、rejected／result_omitted応答が同input期待値を経ずにcandidateとして受理され得る | 時刻だけのreceiptのanalyzeが`internal_review_error`／phase=analyzeで停止し、pending・inputを残さずUを保持 |
+| `discardTerminalTime`は停止後だけ | 稼働中runのS／L／O／Uを消したまま継続する | 稼働中は拒否して停止し、Uとheld timeを保持。正常close後はclosed・診断なしのまま拒否 |
+| `startupFailure`はstarting中の世代だけ | ready済み世代の失敗をstartup失敗の理由で記録する | ready済み世代では`internal_review_error`／phase=startup_failureで停止し、Uを保持 |
+
+各変異では対応する追加試験1件だけが失敗し、復元後に`cmp`一致を確認した。owner実装・WJ-A・runtime sourceは変更していない。
+
+修正後の結果：
+
+| 検証 | 結果 |
+|---|---|
+| WJ-B合成 | 1ファイル／66件成功 |
+| ESLint | `npm run lint`（repo全体）exit 0、errors 0 |
+| 全体合成 | maxWorkers=3、237ファイル／10,402件成功、失敗0・pending 0。JSON内の開始〜最終試験終了は約50.4秒 |
+
+詳細設計はdraft-0.6へ更新し、§12の件数・保証範囲と上位設計・本書からの版数リンクを直した。
+
+## 6 未実施・残課題
 
 finishのE／対象集合・soft世代移行・WJ-C／D、TB-B／CT-Aからの正式供給／上位移譲、実worker／runtime接続、CT-C・B-03 compiled保証は未実施。固定seedが実sessionと一致することや本番唯一性は証明しない。配置／全work・exact layout・本番capはUnknownのまま。
 

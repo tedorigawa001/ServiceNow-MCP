@@ -123,7 +123,7 @@ GETのC、同bytesのG／P、final予約／返却、retry、native cleanup、wor
 ## 9 推奨分割と未解決事項
 
 1. **CT-A（限定実装済み、§10）**：同projection・同sourceのrows／O receiptと比較器入力生成、非実行private候補の一度限り受理をfake依存で確認。上位owner用Oを失わない内部保持契約も同時に置く。
-2. **CT-B（前半だけruntime classのfake経路へ限定接続）**：TimeOwnerと親側job claimを合成worker応答へ接続し、T_i／E・空200・omission・世代混入／遅延を検証。通常実source／adapter切替はしない。前半の[上位時刻owner・一度限りの終端移譲draft-0.7](BEST_PRACTICE_ABORT_SCOPE_RELEASE_TIME_OWNER_CTB_DESIGN.md)でTB-A／Bを限定実装し、固定fake継続のCT-A accepted消費・正常source cleanupと元run失効・固定discardを接続した。後半は[worker job binding・T_i／E詳細設計draft-0.5](BEST_PRACTICE_ABORT_SCOPE_WORKER_TIME_BINDING_DESIGN.md)へ分離した。WJ-Aの内部claimとWJ-BのT_i／U・analyze期待値照合を配布対象外の合成issuerだけで限定実装し、実worker／runtime台帳には未接続。WJ-C／DとCT-Cは未実装／未実施。
+2. **CT-B（前半だけruntime classのfake経路へ限定接続）**：TimeOwnerと親側job claimを合成worker応答へ接続し、T_i／E・空200・omission・世代混入／遅延を検証。通常実source／adapter切替はしない。前半の[上位時刻owner・一度限りの終端移譲draft-0.7](BEST_PRACTICE_ABORT_SCOPE_RELEASE_TIME_OWNER_CTB_DESIGN.md)でTB-A／Bを限定実装し、固定fake継続のCT-A accepted消費・正常source cleanupと元run失効・固定discardを接続した。後半は[worker job binding・T_i／E詳細設計draft-0.6](BEST_PRACTICE_ABORT_SCOPE_WORKER_TIME_BINDING_DESIGN.md)へ分離した。WJ-Aの内部claimとWJ-BのT_i／U・analyze期待値照合を配布対象外の合成issuerだけで限定実装し、実worker／runtime台帳には未接続。WJ-C／DとCT-Cは未実装／未実施。
 3. **CT-C（設計案）**：固定継続の連続fake試験・診断合流／解放を確認する。B-03のcompiled保証とは別集計にする。
 
 上位への終端移譲・ownerとjob claimの正確な配置、低減Lと出力宣言の互換方針、全体費目／日時長capは未確定。今回の型役割・分割名は実在APIではない。実source判定／Permit採用・非200/native移行・friend撤去・全体受付の有効化は別承認。
