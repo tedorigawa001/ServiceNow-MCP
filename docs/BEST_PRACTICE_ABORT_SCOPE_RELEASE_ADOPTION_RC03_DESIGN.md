@@ -1,6 +1,6 @@
 # RC-03：release比較器の固定採用境界・接続差分設計
 
-Version: br006-release-adoption-rc03-draft-0.13 / Date: 2026-11-01。
+Version: br006-release-adoption-rc03-draft-0.14 / Date: 2026-11-01。
 Status: **RC3-D01／D02／D03を開発assemblyだけに限定実装。同sourceの200行ackの固定比較、またはdispatch前binding不一致のnot_requestedから、guard・seal後の非実行summaryへ接続。R差替えは未実装／未承認。旧試験・正式発行口閉鎖・Unknown・全体受付無効・VM／監視／telemetry調査保留を維持する。実Permit発行・実接続・実通信・実機操作・設定変更・friend撤去・Pushは行わない。**
 
 基準：`a61d90a`。[純粋比較器設計draft-0.6](BEST_PRACTICE_ABORT_SCOPE_RELEASE_COMPARATOR_DESIGN.md)のRC-03を具体化する。以下の追加field・状態・試験ID・分割単位は案であり、存在するAPIや検証済み保証ではない。
@@ -81,7 +81,7 @@ CT-B前半は[上位時刻owner・終端移譲詳細設計draft-0.1](BEST_PRACTI
 
 CT-Aで、この契約の同projection／元ack／sourceのrows・O受領物→固定比較器→一度限りのprivate非実行候補受理だけをfixed fake継続へ限定実装した。空200のOも候補ownerに保持するが、cleanupで破棄し、TimeOwner／worker jobへの上位移譲は未実装。通常実source・legacy結果・Permitへ候補を採用しない。詳細・初回失敗と試験保証の区別は接続契約§10と[CT-A検証記録](E2E_BEST_PRACTICE_RELEASE_COMPARISON_CTA_2026-11-01.md)へ分離する。
 
-[接続契約draft-0.2](BEST_PRACTICE_ABORT_SCOPE_RELEASE_COMPARISON_TIME_BINDING_DESIGN.md)で、同projection／sourceのrows・O受領物と、一度限りの固定比較、空200のprivate UTC保持、同worker世代／jobのT_i・E照合を対にした。現状のUTC文字列hookやworker数値idだけで同一性を認めず、親側のprivate claim・固定継続に結合する。役割型の全体結合とCT-B／Cは設計案で、上位owner・job claimは未実装。legacy／Permit採用・通常source差替えを行わず、soft partialとhardなbinding／時刻失敗を分ける。
+[接続契約draft-0.3](BEST_PRACTICE_ABORT_SCOPE_RELEASE_COMPARISON_TIME_BINDING_DESIGN.md)で、同projection／sourceのrows・O受領物と、一度限りの固定比較、空200のprivate UTC保持、同worker世代／jobのT_i・E照合を対にした。現状のUTC文字列hookやworker数値idだけで同一性を認めず、親側のprivate claim・固定継続に結合する。役割型の全体結合とCT-B／Cは設計案で、上位owner・job claimは未実装。legacy／Permit採用・通常source差替えを行わず、soft partialとhardなbinding／時刻失敗を分ける。
 
 ## 6 draftから既存結果への変換――二重warningとPermitの境界
 
@@ -201,3 +201,5 @@ draft-0.5のレビュー修正：cleanup後の時計・取消・期限の再確�
 同じbindingの設定代替・実測／設定競合はreleaseを取得してから従来の比較を行う。別のbindingなのに「実測が一致すれば救済する」処理はない。[D03検証記録](E2E_BEST_PRACTICE_RELEASE_NO_REQUEST_D03_2026-11-01.md)に独立会計oracle・停止／再入／混入・上限と予約返却を記録する。実source／session・Permit・本番fallbackの移行、B-03専用compiled保証、日時長cap・work上界の承認は残す。
 
 draft-0.7のレビュー修正：条件ownerの`compare`が`requested`に加えて`claimed`からも開始でき、`beforeRelease`のrelease要求判断を経ずに比較できる余地が残っていた。開始状態を`requested`だけに限定し、claimed→deciding→requested→comparingの順序を固定した。
+
+draft-0.14の版数整理：CT-B前半の[上位時刻owner設計](BEST_PRACTICE_ABORT_SCOPE_RELEASE_TIME_OWNER_CTB_DESIGN.md)への参照を本文へ追加した変更で版数を上げていなかったため、版を上げ参照元のリンクを更新した。

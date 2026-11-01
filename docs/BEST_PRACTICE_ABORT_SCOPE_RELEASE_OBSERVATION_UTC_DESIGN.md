@@ -88,7 +88,7 @@ workerの最終Eは集約生成時の値であり、終了処理後のUTCでは�
 
 CT-Aでは同projection／sourceのrows・O受領物と固定比較・候補受理までを限定追加した。空200のOはprivate候補ownerが失敗／closeまで保持する。上位TimeOwner／job／T_i／Eへの結合と終端移譲は依然未実装であり、OU-01の採取やCT-A内部保持だけで§6の全体順序を満たしたとは数えない。
 
-[接続契約draft-0.2](BEST_PRACTICE_ABORT_SCOPE_RELEASE_COMPARISON_TIME_BINDING_DESIGN.md)は、Oを同rows／projectionのprivate受領物として比較器へ渡すことと、空200で公開Oがなくても上位ownerへ一度だけ移譲してT_i／Eを検査することを対にした。worker object／世代・親側claimと期待id／target／T_iを結合し、omissionでも最後のUTCを消さない。現応答にkind echoがあるとは仮定せず、新しいwire fieldも追加しない。これらのowner／受領物／job claimは未実装で、OU-01の採取成功だけでは成立しない。
+[接続契約draft-0.3](BEST_PRACTICE_ABORT_SCOPE_RELEASE_COMPARISON_TIME_BINDING_DESIGN.md)は、Oを同rows／projectionのprivate受領物として比較器へ渡すことと、空200で公開Oがなくても上位ownerへ一度だけ移譲してT_i／Eを検査することを対にした。worker object／世代・親側claimと期待id／target／T_iを結合し、omissionでも最後のUTCを消さない。現応答にkind echoがあるとは仮定せず、新しいwire fieldも追加しない。これらのowner／受領物／job claimは未実装で、OU-01の採取成功だけでは成立しない。
 
 ## 7 fake依存の全体受入条件（OU-01の部分確認は§9）
 

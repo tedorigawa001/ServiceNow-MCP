@@ -1,6 +1,6 @@
 # RC-03：比較器入力化・上位時刻整合の接続契約
 
-Version: br006-release-comparison-time-binding-draft-0.2 / Date: 2026-11-01。
+Version: br006-release-comparison-time-binding-draft-0.3 / Date: 2026-11-01。
 Status: **CT-Aの受領物・固定入力化・一度限りの非実行候補受理をfixed fake継続だけに限定実装（§10）。CT-B／C・比較候補の実source採用は未実施。正式発行口閉鎖・Unknown・全体受付無効・VM／監視／telemetry調査保留を維持する。実source差替え・実接続・実通信・実機操作・設定変更・実Permit発行・Pushは行わない。**
 
 設計基準`01ac88d`、CT-A基準`4c691ed`。[RC-03親設計](BEST_PRACTICE_ABORT_SCOPE_RELEASE_ADOPTION_RC03_DESIGN.md)、[deadline再利用契約](BEST_PRACTICE_ABORT_SCOPE_RELEASE_DEADLINE_REUSE_DESIGN.md)、[観測UTC契約](BEST_PRACTICE_ABORT_SCOPE_RELEASE_OBSERVATION_UTC_DESIGN.md)の次段階を対にする。①同projection／sourceの値から固定比較器入力を作る、②空200を含むOを保持し同worker jobのT_i／Eを照合する。CT-Aの限定範囲は§10に分離し、片方だけの成功で上位まで結合済みとは数えない。
@@ -143,3 +143,5 @@ accepted Oは空200でも同owner内に保持する。公開assertion／source:n
 値ownerは任意のfake objectでも作成可能な内部値部品で、それ自体は実sessionの真正性を認定しない。unitの.inspectは非実行dataだけを返し、runtimeのprivate fieldは公開されない。unitで一度限り／混入／候補値を確認する保証と、実classの固定hook接続・既存結果／会計維持の保証を分ける。runtime候補を直接取り出す新friendは追加していないため、返却summaryから内部draftを読めたという主張もしない。
 
 [CT-A検証記録](E2E_BEST_PRACTICE_RELEASE_COMPARISON_CTA_2026-11-01.md)に新規40件・初回10件失敗と正規化修正・回帰／型／梱包／全体結果を記録する。rows／入力／結果copy・Map最大各1枠・O保持とguardが追加費目で、C/G/P・予約／cleanupの再課金はしない。exact layout／全体workはUnknown。CT-B／C・B-03・日時長cap・通常実source採用は引き続き未実装／未承認。
+
+draft-0.3の版数整理：CT-B前半の[上位時刻owner設計](BEST_PRACTICE_ABORT_SCOPE_RELEASE_TIME_OWNER_CTB_DESIGN.md)への参照を本文へ追加した変更で版数を上げていなかったため、版を上げ参照元のリンクを更新した。
