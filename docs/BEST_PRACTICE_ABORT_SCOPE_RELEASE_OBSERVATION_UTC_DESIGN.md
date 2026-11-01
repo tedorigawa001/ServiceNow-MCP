@@ -1,9 +1,9 @@
 # RC-03：観測UTCの採取・失敗・上位時刻の契約
 
-Version: br006-release-observation-utc-draft-0.1 / Date: 2026-11-01。
-Status: **設計案のみ。実装・実source差替え・実接続・実通信・実機操作・設定変更・実Permit発行・Pushは行わない。正式発行口閉鎖・Unknown・全体受付無効・VM／監視／telemetry調査保留を維持する。**
+Version: br006-release-observation-utc-draft-0.2 / Date: 2026-11-01。
+Status: **OU-01の一度限り採取・pre/post guardを既存fixed fake-200継続だけに限定実装（§9）。通常実source差替え・比較器入力化・上位時刻結合は未実施。実接続・実通信・実機操作・設定変更・実Permit発行・Pushは行わない。正式発行口閉鎖・Unknown・全体受付無効・VM／監視／telemetry調査保留を維持する。**
 
-基準`cd14e20`。[RC-03親設計](BEST_PRACTICE_ABORT_SCOPE_RELEASE_ADOPTION_RC03_DESIGN.md)と[deadline再利用契約](BEST_PRACTICE_ABORT_SCOPE_RELEASE_DEADLINE_REUSE_DESIGN.md)の観測UTCに関する残差を具体化する。RP-01は同sessionのprivate projectionを検査して破棄する段階で、今回の時計採取・比較器接続・上位整合検査は未実装／未検証。本書を本番切替の承認にしない。
+設計基準`cd14e20`、OU-01基準`d95faca`。[RC-03親設計](BEST_PRACTICE_ABORT_SCOPE_RELEASE_ADOPTION_RC03_DESIGN.md)と[deadline再利用契約](BEST_PRACTICE_ABORT_SCOPE_RELEASE_DEADLINE_REUSE_DESIGN.md)の観測UTCに関する残差を具体化する。RP-01の同session projectionへOU-01の限定採取を追加したが、比較器接続・上位整合検査は未実装／未検証。本書を本番切替の承認にしない。
 
 ## 1 現状と今回の差分
 
@@ -84,7 +84,7 @@ workerの最終Eは集約生成時の値であり、終了処理後のUTCでは�
 
 実効Lと出力JSONの宣言deadlineは現状同一とは限らない。将来の接続でも同projectionの実効Lによる検査と既存schemaの宣言値による検査を両方満たす必要があり、宣言値が大きいことを実効期限の延長に使わない。operator_configの集約有効性は既存schemaが宣言値を使う点も含めて別途照合する。fieldの供給統一・互換方針は後続レビューに残し、本書ではfield変更・schema緩和・時刻補正を承認しない。
 
-## 7 fake依存の受入条件（全て未実施）
+## 7 fake依存の全体受入条件（OU-01の部分確認は§9）
 
 | ID | 独立に期待する観測 |
 |---|---|
@@ -103,6 +103,20 @@ workerの最終Eは集約生成時の値であり、終了処理後のUTCでは�
 
 ## 8 承認待ち・今回の確認範囲
 
-本書は時計採取の位置と失敗方針の案。新しい採取をfake継続へ組み込む範囲、上位private UTC保持の所有者／worker境界、観測UTC追加の互換性、全体費目、実source切替は後続レビュー対象。実装承認・本番採用・実通信の承認ではない。
+上位private UTC保持の所有者／worker境界、観測UTC追加の通常source互換性、全体費目、実source切替は後続レビュー対象。OU-01のfake継続への限定実装は次節へ分離し、本番採用・実通信の承認ではない。
 
-今回行うのはソース／schema／設計の読取とMD更新・文書参照／差分検査のみ。新しいテスト・build・clock helper・worker message・JSON field・公開failure codeは追加しない。RP-01やD01〜03の過去試験結果を本書の受入条件の完了数へ流用しない。
+draft-0.1作成時はソース／schema／設計の読取とMD更新・文書参照／差分検査のみだった。RP-01やD01〜03の過去試験結果を本書の受入条件の完了数へ流用しない。worker message・JSON field・公開failure codeはOU-01でも変更しない。
+
+## 9 OU-01の限定実装
+
+[値専用の採取部品](../src/servicenow/review-kernel/release-observation.ts)を追加した。初回状態とS／全L・trusted clock／check／reject参照を生成時に固定し、fresh→samplingをpre-guard前に消費する。guard→同Dateの1読取・epoch／ISO／S〜S+L照合→post-guard→sampledの順とし、失敗はfailed、closeはclosed。失敗後／二度目・caught reentryでもUTCを再読しない。部品自体は値状態だけで、任意のfake依存で作れても実sessionの証拠・Permitにはならない。
+
+[session](../src/servicenow/bounded-read.ts)は既存fixed fake-200継続でRP-01 projectionを一度消費した後だけ採取部品を生成し、時計は固定の`()=>new Date()`とする。checkは同session／source／key・originのS／L／policyと現在値を再照合し、失敗を元停止ownerへ渡す。通常のoptions／tool inputへclock設定口は追加しない。同期失効・finally・rollback／closeで採取部品をcloseして参照を破棄する。
+
+[source](../src/review/bounded-source.ts)の既存creator-only継続へ任意の`observeReleaseUtc` hookを追加した。これは既存private construction keyによる同session生成継続にだけ渡すもので、新friendや公開supplierではない。通常GET／他のstatus継続には渡さない。fakeの同rows projection後のguardに続けてhookを一度呼び、再guard後の既存分岐へ進む。実測／競合は同Oを使い、従来の`new Date()`を追加実行しない。空200・不完全・未知・21行もOを1回採るが、公開evidenceのshapeは変更しない。通常source判定・native／非200の分岐を差し替えたものではない。
+
+今回のnot_requested側はOを新設しない。既存実classのfixed fake transcriptはbinding不一致でもrelease bodyをdispatch済みであり、D03の別開発assemblyのGET=0をこのlaneの保証へ転用しない。raw22／不正行projectionは既存legacy分類（release_not_admitted等）を保ち採取0回。body／cleanup不正はhookへ到達しない。
+
+§7のUTC-01〜06のうち採取順・空200・初回逆行／上界・時計障害・guard・一度限り失敗／closeの部分を新規合成試験で確認する。全受入条件の完了、通常sourceの時計保証、上位T_i／E・空200のprivate UTC保持／worker照合、比較器入力化は未実施。Oは既存fake実測結果には反映するが、空200では後続watermarkとして保持する実装はまだない。[OU-01検証記録](E2E_BEST_PRACTICE_RELEASE_OBSERVATION_OU01_2026-11-01.md)参照。
+
+追加確保は固定採取状態とclosure、1つのDateとISO文字列・固定比較。timer・受信bytes・C/G/P・予約ownerは増やさない。layout／全体work・同期時間の上界は引き続きUnknown。入力・上位時刻の未解決事項を今回の部分成功で確認済みにしない。

@@ -39,6 +39,7 @@ export interface CompositionSourceConstruction {
  readonly key:object;check():void;take(ack:object,purpose:'parent'|'release'):unknown;
  takeStatus?(terminal:object):unknown;
  rejectStatus?(code:'invalid_state'|'evidence_binding_mismatch'):never;
+ observeReleaseUtc?():string;
  capture(consumer:Readonly<{parent(ack:object):void;release(ack:object):Promise<ReleaseDecision>;status(terminal:object):StatusAcceptanceDraft;revoke():void}>):void;
 }
 
@@ -70,7 +71,7 @@ export class BoundedUpdateSetSource {
           this.#decision=this.#observeRelease(async()=>{
             if(!value||typeof value!=='object'||!('result' in value)||!Array.isArray(value.result)||value.result.length>21)throw new BoundedReadError('invalid_response');
             return this.#projectReleaseRows(value.result);
-          },check);
+          },check,creation.observeReleaseUtc);
           const decision=await this.#decision;check();state='done';return decision;
         },
         status:(terminal:object)=>{
@@ -141,7 +142,7 @@ export class BoundedUpdateSetSource {
     this.#decision ??= this.#observeRelease();
     return this.#decision;
   }
-  async #observeRelease(readRows=()=>this.#readReleaseRows(),guard=()=>this.#session.assertActive()): Promise<ReleaseDecision> {
+  async #observeRelease(readRows=()=>this.#readReleaseRows(),guard=()=>this.#session.assertActive(),observeUtc?:()=>string): Promise<ReleaseDecision> {
     const unknown = (reason: Extract<ReleaseEvidence, { source: 'none' }>['reason']): ReleaseDecision => Object.freeze<ReleaseDecision>({
       release_match: 'unknown', instance_release: { source: 'none', resolution_status: 'unknown', family: null,
         visibility_scope: 'unavailable', reason }, limitations: Object.freeze([reason, 'release_unknown']),
@@ -164,6 +165,8 @@ export class BoundedUpdateSetSource {
       throw error;
     }
     guard();
+    const observedAt=observeUtc?.();
+    if(observeUtc)guard();
     if (rows.length > 20) return unknown('observation_limit');
     if (!rows.length || rows.every(row => !row.build_name?.trim())) return fallback();
     if (rows.some(row => !row.build_name?.trim())) return unknown('observation_incomplete');
@@ -173,15 +176,15 @@ export class BoundedUpdateSetSource {
     const families = [...new Set(values.filter(f => f !== undefined))];
     if (families.length > 1) return Object.freeze<ReleaseDecision>({ release_match: 'unknown', instance_release: {
       source: 'conflict', resolution_status: 'unknown', family: null, visibility_scope: 'caller_acl',
-      observed_families: families, configured_family: policy.assertion?.family ?? null, observed_at: new Date().toISOString(),
+      observed_families: families, configured_family: policy.assertion?.family ?? null, observed_at: observedAt??new Date().toISOString(),
     }, limitations: Object.freeze(['release_evidence_conflict', 'release_unknown']) });
     if (policy.assertion && policy.assertion.family !== families[0]) return Object.freeze<ReleaseDecision>({
       release_match: 'unknown', instance_release: { source: 'conflict', resolution_status: 'unknown', family: null,
         visibility_scope: 'caller_acl', observed_families: families, configured_family: policy.assertion.family,
-        observed_at: new Date().toISOString() }, limitations: Object.freeze(['release_evidence_conflict', 'release_unknown']),
+        observed_at: observedAt??new Date().toISOString() }, limitations: Object.freeze(['release_evidence_conflict', 'release_unknown']),
     });
     const evidence: ReleaseEvidence = { source: 'sys_cluster_state.build_name', resolution_status: 'resolved',
-      family: families[0], raw_buildname: rows[0].build_name!.trim(), visibility_scope: 'caller_acl', observed_at: new Date().toISOString() };
+      family: families[0], raw_buildname: rows[0].build_name!.trim(), visibility_scope: 'caller_acl', observed_at: observedAt??new Date().toISOString() };
     return this.#completeRelease(evidence, ['release_visible_nodes_only', ...(policy.issue ? [policy.issue] : [])]);
   }
   #completeRelease(evidence: ReleaseEvidence, limitations: string[]): ReleaseDecision {
