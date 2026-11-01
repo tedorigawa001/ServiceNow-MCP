@@ -49,7 +49,7 @@ export function pinDevelopmentSourceProfile(raw:unknown){
 /** Trusted development assembly creates contexts. Handles never cross the root's summary boundary. */
 export function createDevelopmentSourceRealm(){
   const created=new WeakSet<object>();
-  const sources=new WeakMap<object,{context:Context;arm():void;take():unknown}>();
+  const sources=new WeakMap<object,{context:Context;arm():void;take():unknown;finishUnrequested():void}>();
   function create(context:Context,target:string,guard:()=>ConstructionPublicCode|null,nativeOwner?:object){
     if(created.has(context.run))throw new DevelopmentSourceError('internal_review_error','invalid_state');
     created.add(context.run); // Key the originating run, not its copyable context wrapper.
@@ -134,6 +134,10 @@ export function createDevelopmentSourceRealm(){
         if(!observationArmed||!available||state!=='done')reject('invalid_state');
         check();check();return value;
       },
+      finishUnrequested(){
+        if(!observationArmed||acks.size||parentCount!==1||releaseCount!==0)reject('invalid_state');
+        enter(context,'release','consuming');check();state='done';
+      },
     });return source;
   }
   function record(source:object,context:Context){
@@ -144,5 +148,6 @@ export function createDevelopmentSourceRealm(){
   return Object.freeze({create,matches:(source:object,context:Context)=>sources.get(source)?.context===context,
     armReleaseObservation:(source:object,context:Context)=>record(source,context).arm(),
     takeReleaseObservation:(source:object,context:Context)=>record(source,context).take(),
+    finishUnrequested:(source:object,context:Context)=>record(source,context).finishUnrequested(),
   });
 }

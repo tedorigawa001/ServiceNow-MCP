@@ -51,6 +51,7 @@ export function pinDevelopmentTranscript(raw:unknown){
   const dispose=()=>{if(disposed)return;disposed=true;for(const row of records)row.bytes.fill(0);records.length=0;};
   async function run(core:Core,signal:AbortSignal,deadline:number,hooks:Readonly<{
     check():void;stop(code:ConstructionPublicCode):void;ready():void;accept(purpose:'parent'|'release',value:unknown):void;
+    releaseRequested?():boolean;
     nativeRelease?:(window:Readonly<{purpose:'release';ordinal:1;window_origin_ms:number;cleanup_floor_ms:number}>)=>Promise<void>;
   }>){
     if(started||disposed)throw new DevelopmentSourceError('internal_review_error','invalid_state');
@@ -70,6 +71,7 @@ export function pinDevelopmentTranscript(raw:unknown){
       if(reserved!==4)failure('internal_review_error');
       if(pinned.auth!=='exchange')hooks.ready();
       for(const row of records){
+        if(row.purpose==='release'&&hooks.releaseRequested?.()===false){observe();continue;}
         const before=observe(),floor=Math.max(reserveMs,before.remaining_ms-10000);
         accounting.dispatch(floor);dispatches++;
         const committed=observe(floor);

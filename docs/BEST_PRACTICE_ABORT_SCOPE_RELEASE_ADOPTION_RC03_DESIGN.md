@@ -1,7 +1,7 @@
 # RC-03：release比較器の固定採用境界・接続差分設計
 
-Version: br006-release-adoption-rc03-draft-0.5 / Date: 2026-11-01。
-Status: **RC3-D01／D02を開発assemblyだけに限定実装。同sourceの200行ackから固定比較・guard・seal後の非実行summaryへ接続。D03以降・R差替えは未実装／未承認。旧試験・正式発行口閉鎖・Unknown・全体受付無効・VM／監視／telemetry調査保留を維持する。実Permit発行・実接続・実通信・実機操作・設定変更・friend撤去・Pushは行わない。**
+Version: br006-release-adoption-rc03-draft-0.6 / Date: 2026-11-01。
+Status: **RC3-D01／D02／D03を開発assemblyだけに限定実装。同sourceの200行ackの固定比較、またはdispatch前binding不一致のnot_requestedから、guard・seal後の非実行summaryへ接続。R差替えは未実装／未承認。旧試験・正式発行口閉鎖・Unknown・全体受付無効・VM／監視／telemetry調査保留を維持する。実Permit発行・実接続・実通信・実機操作・設定変更・friend撤去・Pushは行わない。**
 
 基準：`a61d90a`。[純粋比較器設計draft-0.6](BEST_PRACTICE_ABORT_SCOPE_RELEASE_COMPARATOR_DESIGN.md)のRC-03を具体化する。以下の追加field・状態・試験ID・分割単位は案であり、存在するAPIや検証済み保証ではない。
 
@@ -12,7 +12,7 @@ Status: **RC3-D01／D02を開発assemblyだけに限定実装。同sourceの200�
 | [実source](../src/review/bounded-source.ts) | `resolveRelease`／private release consumer→`#observeRelease`→既存値判定→`#completeRelease` | 同source内部で比較入力を組み立て、比較後guardを通った値だけを固定分岐へ渡す。公開draftの採用口は作らない |
 | [実session](../src/servicenow/bounded-read.ts) | public readonlyの`startedAt`、pin済み`releasePolicy`、`assertActive`、private生成継続の`check`。全deadlineは`private readonly limits.deadlineMs`にあり、sourceから読む口は**現在ない** | 同sessionからの時刻／policy／停止を再利用する。別sessionのprojectionや残時間によるdeadline再計算は禁止 |
 | [開発source](../tests/support/review/ef03/source.ts) | 同realmのcontext・private ackをissue／consume。D02 opt-inだけ同じrelease projectionを一度退避し、private取得後に破棄 | 通常profileは従来どおり破棄。実source証拠への昇格は禁止 |
-| [開発assembly](../tests/support/review/ef03/assembly.ts) | contextはrun identity／snapshot／canonical lease。D01の固定UTC／policyにD02の固定比較・guard・seal後summaryを接続 | monotonic clockをUTCとして解釈しない。D03／Rは未接続 |
+| [開発assembly](../tests/support/review/ef03/assembly.ts) | contextはrun identity／snapshot／canonical lease。D01の固定UTC／policyにD02の固定比較・guard・seal後summary、D03のdispatch前no-requestを接続 | monotonic clockをUTCとして解釈しない。Rは未接続 |
 | [開発bootstrap](../tests/support/review/ef03/bootstrap.ts) | 同coreでC/G/P、final4予約、固定200 bytes→decode→accept。release_matchはnot_evaluated | opt-inの比較結果は別の非実行summaryとして公開する。省略時の既存結果・予約／cleanupは不変 |
 
 純粋比較器の成功は値の整合だけで、同sessionの真正な証拠ではない。hex binding、JSON、family文字列、公開summary、draftの形が一致しても生成元の証明へ昇格しない。
@@ -42,7 +42,7 @@ Status: **RC3-D01／D02を開発assemblyだけに限定実装。同sourceの200�
 
 test-only profileに明示opt-inの`release_comparison`を追加する案とする。内容は固定`started_at`、`observed_at`、policy projectionだけ。`deadline_ms`は既存rootの実値から取り、profileに重複fieldを設けない。comparison modelも実装の固定値を使い、callerのmatched／draft／Permit／callbackは受けない。
 
-既存`source`／固定200`transcript`経路のみを対象にする。`native`の403／404 status-only laneと併用したprofileは開始前にinvalid_inputで拒否し、status終端を空200へ変換しない。binding不一致でGETを開始しない試験は、後続の専用no-request分岐で追加する。D01／D02ではbinding不一致の条件は未対応profileとしてI/O前にinvalid_inputで拒否し、D03でno-requestを扱う。誤って固定transcriptのrelease dispatchを行ってからnot_requestedにする経路を作らない。本番policyの判定変更ではなく、開発opt-inの段階的な対象制限である。
+既存`source`／固定200`transcript`経路のみを対象にする。`native`の403／404 status-only laneと併用したprofileは開始前にinvalid_inputで拒否し、status終端を空200へ変換しない。D01／D02時点ではbinding不一致profileを開始前に拒否したが、D03では§13の専用no-request分岐へ限定接続した。矛盾したissue指定は引き続き開始前にinvalid_inputとする。誤って固定transcriptのrelease dispatchを行ってからnot_requestedにする経路を作らない。本番policyの判定変更ではなく、開発opt-inの段階的な対象制限である。
 
 現在の`pinDevelopmentSourceProfile`の65,536文字枠を、新しいpolicy日時の承認済み上限として流用しない。比較条件は別のstrict data-only copyで固定し、getter／Proxy／特殊prototype・余剰keyを拒否する。日時長の未承認問題は残し、開発成功から本番のbounded入力を認定しない。
 
@@ -127,7 +127,7 @@ ordinary unknownはrun stopとは別である。正常な比較値で先行HTTP�
 
 1. **RC3-D01（限定実装済み、§11）**：同rootのtest-only時刻／policy条件・private bindingと一度限りclaimを追加。まだ比較を実行／公開せず、旧profile・summary不変と混入／失敗停止を確認。
 2. **RC3-D02（限定実装済み、§12）**：同sourceの200行ack→固定比較→pre/post guard→非実行summaryを接続。会計／予約／cleanupの継続を確認。status-onlyは除外。
-3. **RC3-D03**：no-requestのbinding不一致分岐を固定transcriptのdispatch前へ接続し、release GET=0・予約返却を確認。設定代替・競合の連続caseを追加。
+3. **RC3-D03（限定実装済み、§13）**：no-requestのbinding不一致分岐を固定transcriptのdispatch前へ接続し、release GET=0・予約返却を確認。設定代替・競合の連続caseを追加。
 4. **RC3-R01（別承認）**：実source採用差分のfake-I/O試験を先行。下表の保留が解決するまで通常入口へ切り替えない。
 5. **B-03**：保証表と専用開発compiled試験を別工程で確定。friend撤去・本番切替・実通信は別承認。
 
@@ -174,3 +174,16 @@ rootはsource生成後にbindし、同じready継続の直後にclaimする。�
 [D02検証記録](E2E_BEST_PRACTICE_RELEASE_ADOPTION_D02_2026-11-01.md)に新規44件と既存を含む関連202件、型／梱包／全体結果を記録する。D01のopt-in互換4ケースは「新fieldを除く既存部分のdeep equality＋新fieldの固定値確認」へ明示的に更新し、旧profileの期待を緩めていない。専用開発compiled保証・実class正式binding・Rのreadonly deadline供給差分・日時長cap承認待ちは残す。
 
 draft-0.5のレビュー修正：cleanup後の時計・取消・期限の再確認が候補の破棄に加えてrunの`stopped`／`run_primary`を設定し、teardown確定済みで本体が正常終了したrunを`cancelled`等へ書き換えていた。§12-5の「候補を捨てる」と「後の値で消さない」に合わせ、候補の破棄と固定の`release_comparison_withheld`だけに限定した。上位設計からの版数リンクも更新した。
+
+## 13 RC3-D03の限定実装：dispatch前no-request
+
+基準`0f14dc4`。D01／D02のprivate条件ownerへ`beforeRelease`を追加し、同context／source／lease・ready世代・親consume済み／release未開始を確認する。claim済み→decidingをguard前に消費し、通常経路はrequestedへ、不一致経路はcomparedへ進む。二重判断・再入・別source／context・失敗後再開は拒否する。比較器や結果の注入口を追加しない。
+
+1. profileの3field・日時形式・strict copyは維持する。assertionのbinding値不一致と`issue=config_binding_mismatch`が同時に成立するものだけがno-request対象。値とissueの矛盾（不一致だがissueなし等）は従来どおりclock／I/O前にinvalid_inputとする。profileの`observed_at`は互換のため引き続き必要・形式検査対象だが、この分岐では比較入力・出力に入れず、観測したと主張しない。
+2. per-user／cachedの既存ready、またはexchangeの認証受理→ready、親200の同bytes課金／private consumeを完了してから固定入口で判断する。認証・親の失敗や先行停止をbinding不一致で隠さない。
+3. 不一致なら元started_at／全deadline／policyと`observation:{kind:not_requested}`を固定比較器へ渡す。pre/post guardとpolicy日時整合は維持する。sourceの同realm専用終端でrelease未consumeのままdoneへ進め、完了後guardを確認してからprivate候補を保持する。空200・実測・status-onlyの証拠にはしない。
+4. transcriptのrelease行の`observe→dispatch→C増加`より前にfalseを返し、delivery・timer・chunk課金・decode・projectionを実施しない。C/G/Pは認証／親だけの実績、release GET=0。source値profileでもrelease projectionを省略するが、profile全体の安全なpinは省略しない。未使用bytesは既存disposeで破棄する。
+5. 既存bootstrap会計ownerのfinallyがfinal4予約を一度だけ返し、reserved=0にする。`bootstrap.release_attempts`は予約返却試行の既存名称であり、release GETの回数ではない。予約・cleanupの別ownerや予算を追加しない。
+6. rootへの一度限りtakeForClose、同leaseのcleanup直前残時間、固定cleanup・source seal、最終公開guardはD02のまま。cleanup後の失敗は`0f14dc4`どおり候補だけをwithheldにし、確定済みrun診断を書き換えない。結果はunknown／config_binding_mismatchの非実行summaryだけで、権限4項目はfalse。
+
+同じbindingの設定代替・実測／設定競合はreleaseを取得してから従来の比較を行う。別のbindingなのに「実測が一致すれば救済する」処理はない。[D03検証記録](E2E_BEST_PRACTICE_RELEASE_NO_REQUEST_D03_2026-11-01.md)に独立会計oracle・停止／再入／混入・上限と予約返却を記録する。実source／session・Permit・本番fallbackの移行、B-03専用compiled保証、日時長cap・work上界の承認は残す。

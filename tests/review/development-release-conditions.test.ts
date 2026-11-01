@@ -77,10 +77,10 @@ it('retains a post-guard cancellation without accepting the claim',()=>{
   expect(f.owner.inspect()).toMatchObject({state:'failed',has_conditions:false,primary:{code:'cancelled'}});
 });
 const assertion=()=>({source:'operator_config',resolution_status:'asserted',visibility_scope:'operator_configured',family:'Australia',instance_binding:'a'.repeat(64),config_version:'b'.repeat(64),asserted_at:'2026-10-01T00:00:00.000Z',expires_at:'2026-12-01T00:00:00.000Z'});
-it('refuses binding-mismatch conditions before clock or synthetic dispatch, including contradictory issue labels',async()=>{
+it('refuses contradictory binding issue labels before clock or synthetic dispatch',async()=>{
   let clocks=0;const root=createDevelopmentRoot({clock:()=>{clocks++;return 0;}});
   for(const policy of [
-    {instanceBinding:'a'.repeat(64),assertion:{...assertion(),instance_binding:'c'.repeat(64)},issue:'config_binding_mismatch'},
+    {instanceBinding:'a'.repeat(64),assertion:{...assertion(),instance_binding:'c'.repeat(64)}},
     {instanceBinding:'a'.repeat(64),assertion:assertion(),issue:'config_binding_mismatch'},
   ]){
     const result=await root.run({...profile(),release_comparison:{...conditions(),policy}});

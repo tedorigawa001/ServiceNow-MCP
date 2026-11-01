@@ -6,7 +6,7 @@ import {DevelopmentSourceError,type createDevelopmentSourceRealm} from './source
 type Sources=ReturnType<typeof createDevelopmentSourceRealm>;
 type Source=ReturnType<Sources['create']>;
 type Context=Readonly<{run:object;snapshot:object;lease:object}>;
-type Phase='bound'|'claiming'|'claimed'|'comparing'|'compared'|'transferring'|'transferred'|'failed'|'closed';
+type Phase='bound'|'claiming'|'claimed'|'deciding'|'requested'|'comparing'|'compared'|'transferring'|'transferred'|'failed'|'closed';
 function frozenCopy<T>(value:T):T{
   const copy=structuredClone(value);
   function freeze(item:unknown){if(item&&typeof item==='object'){Object.values(item).forEach(freeze);Object.freeze(item);}}
@@ -26,7 +26,9 @@ export function createDevelopmentReleaseConditionsRealm(sources:Sources){
     }
     const parsed=parseReleaseComparisonInput({model_id:'release-comparison-v1',timing:{started_at:fields.started_at,observed_at:fields.observed_at,deadline_ms:deadline},
       policy:fields.policy,observation:{kind:'complete_200',rows:[]}});
-    if(!parsed.ok||parsed.input.policy.issue==='config_binding_mismatch'||parsed.input.policy.assertion&&parsed.input.policy.assertion.instance_binding!==parsed.input.policy.instanceBinding)throw new DevelopmentSourceError('invalid_input');
+    if(!parsed.ok)throw new DevelopmentSourceError('invalid_input');
+    const mismatch=!!parsed.input.policy.assertion&&parsed.input.policy.assertion.instance_binding!==parsed.input.policy.instanceBinding;
+    if(mismatch!==(parsed.input.policy.issue==='config_binding_mismatch'))throw new DevelopmentSourceError('invalid_input');
     const handle=Object.freeze(Object.create(null));handles.set(handle,parsed.input);return handle;
   }
   function bind(handle:object,context:Context,source:Source,deadline:number,guard:()=>ConstructionPublicCode|null){
@@ -73,10 +75,29 @@ export function createDevelopmentReleaseConditionsRealm(sources:Sources){
         if(facts.ready_generation!==1||facts.state!=='parent')reject('invalid_state');
         check();state='claimed';
       },
-      compare(candidate:Context,selected:Source){
+      beforeRelease(candidate:Context,selected:Source):boolean{
         if(primary)reject(primary.code);
         if(state!=='claimed')reject(state==='closed'?'closed':'invalid_state');
+        state='deciding';requireBinding(candidate,selected);check();
+        const facts=selected.inspect();
+        if(facts.primary)reject(facts.primary.code);
+        if(facts.sealed||facts.state==='closed')reject('closed');
+        if(facts.state!=='release'||facts.ready_generation!==1||facts.parent_consumptions!==1||facts.release_consumptions!==0)reject('invalid_state');
+        if(live!.value.policy.issue!=='config_binding_mismatch'){
+          check();if(selected.inspect().state!=='release')reject('invalid_state');state='requested';return true;
+        }
+        // No observed_at/rows: this branch runs before dispatch and has no HTTP proof.
+        const {started_at,deadline_ms}=live!.value.timing;
+        const result=compareRelease({...live!.value,timing:{started_at,deadline_ms},observation:{kind:'not_requested'}});
+        check();if(!result.ok)return reject('internal_review_error');
+        try{sources.finishUnrequested(selected,candidate);}catch(error){return reject(error instanceof DevelopmentSourceError?error.internal:'internal_review_error');}
+        check();requireCompleted(selected);draft=result;state='compared';return false;
+      },
+      compare(candidate:Context,selected:Source){
+        if(primary)reject(primary.code);
+        if(state!=='claimed'&&state!=='requested')reject(state==='closed'?'closed':'invalid_state');
         state='comparing';requireBinding(candidate,selected);check();
+        if(live!.value.policy.issue==='config_binding_mismatch')reject('invalid_state');
         requireCompleted(selected);
         let rows:unknown;
         try{rows=sources.takeReleaseObservation(selected,candidate);}catch(error){return reject(error instanceof DevelopmentSourceError?error.internal:'internal_review_error');}

@@ -150,8 +150,10 @@ export function createDevelopmentRoot(dependencies:Readonly<{clock?:()=>number;w
         source.prepare(context);source.ready(context);
         conditionsOwner?.claim(context,source);
         source.consume(source.issue('parent',sourceProfile.parent),'parent',context);
-        source.consume(source.issue('release',sourceProfile.release),'release',context);guard();
-        conditionsOwner?.compare(context,source);
+        if(!conditionsOwner||conditionsOwner.beforeRelease(context,source)){
+          source.consume(source.issue('release',sourceProfile.release),'release',context);guard();
+          conditionsOwner?.compare(context,source);
+        }
       }
       if(transcript){
         const context=Object.freeze({run:identity,snapshot:transcript,lease:core.view.lease});
@@ -162,6 +164,7 @@ export function createDevelopmentRoot(dependencies:Readonly<{clock?:()=>number;w
         if(conditionsHandle)conditionsOwner=conditionsRealm.bind(conditionsHandle,context,source,deadline,()=>{try{guard();return null;}catch{return stopped??'internal_review_error';}});
         source.prepare(context);
         await transcript.run(core,controller.signal,deadline,{check:guard,stop,ready:()=>{source!.ready(context);conditionsOwner?.claim(context,source!);},
+          ...(conditionsOwner?{releaseRequested:()=>conditionsOwner!.beforeRelease(context,source!)}:{}),
           accept:(purpose,value)=>{source!.consume(source!.issue(purpose,value),purpose,context);if(purpose==='release')conditionsOwner?.compare(context,source!);},
           ...(nativeRun?{nativeRelease:(window:Readonly<{purpose:'release';ordinal:1;window_origin_ms:number;cleanup_floor_ms:number}>)=>
             nativeRun!.execute(window,(proof,original)=>source!.consumeStatus(proof,original,context))}:{}),});guard();
