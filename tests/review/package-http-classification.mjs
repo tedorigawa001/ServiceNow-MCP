@@ -14,12 +14,12 @@ for(const privateName of ['ReleaseInputProjection','ReleaseInputOrigin','capture
   assert(!sessionDeclarations.includes(privateName),'private release timing projection leaked into declarations: '+privateName);
 const kernel='dist/servicenow/review-kernel/construction-state';
 const sourceKernel='dist/servicenow/review-kernel/source-values';
-for(const name of ['release-family','release-comparison','release-observation','release-comparison-receipt']) {
+for(const name of ['release-family','release-comparison','release-observation','release-comparison-receipt','release-time-owner']) {
   const path='dist/servicenow/review-kernel/'+name;
   for(const suffix of ['.js','.js.map','.d.ts','.d.ts.map'])assert(pack.files.some(f=>f.path===path+suffix),'required release value contract missing: '+name+suffix);
   const tree=parse(readFileSync(join(root,path+'.js'),'utf8'),{ecmaVersion:'latest',sourceType:'module'}),pending=[tree];
   // release-observation reads time only through its injected clock dependency.
-  const allowed=name==='release-family'?[]:name==='release-observation'?['zod']:name==='release-comparison-receipt'?['./release-comparison.js']:['zod','node:util','./release-family.js'];
+  const allowed=name==='release-family'?[]:['release-observation','release-time-owner'].includes(name)?['zod']:name==='release-comparison-receipt'?['./release-comparison.js']:['zod','node:util','./release-family.js'];
   while(pending.length){const n=pending.pop();
     if(n.type==='ImportDeclaration')assert(allowed.includes(n.source.value),'release value contract imports a root: '+n.source.value);
     assert(!(n.type==='NewExpression'&&n.callee?.name==='Date'),'release value contract reads wall clock');
@@ -71,4 +71,5 @@ execFileSync(process.execPath,[fileURLToPath(new URL('fixtures/compiled-construc
 execFileSync(process.execPath,[fileURLToPath(new URL('fixtures/compiled-construction-kernel.mjs',import.meta.url))],{cwd:root,stdio:'inherit'});
 execFileSync(process.execPath,[fileURLToPath(new URL('fixtures/compiled-source-values.mjs',import.meta.url))],{cwd:root,stdio:'inherit'});
 execFileSync(process.execPath,[fileURLToPath(new URL('fixtures/compiled-release-comparison-contract.mjs',import.meta.url))],{cwd:root,stdio:'inherit'});
+execFileSync(process.execPath,[fileURLToPath(new URL('fixtures/compiled-release-time-owner.mjs',import.meta.url))],{cwd:root,stdio:'inherit'});
 console.log('HTTP classification/status terminal/cleanup/context excluded; runtime unconnected; fixture/oracle excluded PASS ('+pack.files.length+' files)');

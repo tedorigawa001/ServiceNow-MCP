@@ -1,7 +1,7 @@
 # CT-B前半：上位時刻owner・一度限りの終端移譲
 
-Version: br006-release-time-owner-ctb-draft-0.1 / Date: 2026-11-01。
-Status: **詳細設計案のみ。内部型・移譲・試験は未実装／未実施。正式発行口閉鎖・Unknown・全体受付無効・VM／監視／telemetry調査保留を維持する。実source差替え・実接続・実通信・実機操作・設定変更・Permit発行・Pushの承認ではない。**
+Version: br006-release-time-owner-ctb-draft-0.2 / Date: 2026-11-01。
+Status: **TB-Aの非実行値scope・内部型・一度限りの移譲claim／discardだけを純粋fakeで限定実装（§9）。TB-BのCT-A／session接続・正常cleanupと元run失効の実結合は未実装。正式発行口閉鎖・Unknown・全体受付無効・VM／監視／telemetry調査保留を維持する。実source差替え・実接続・実通信・実機操作・設定変更・Permit発行・Pushの承認ではない。**
 
 基準はCT-Aコミット`d32a412`。[接続契約](BEST_PRACTICE_ABORT_SCOPE_RELEASE_COMPARISON_TIME_BINDING_DESIGN.md)§4〜6のうち、時刻のprivate保持・正常終端移譲だけを具体化する。worker job、T_i／Eの実応答照合はCT-B後半、連続fake試験はCT-C、専用開発compiled保証はB-03に残す。
 
@@ -59,7 +59,7 @@ heldは新しい解析／dispatchの権限ではなく、将来の同jobの終�
 
 元60秒・210試行・既存受信上限を変更しない。exact layout・work単価／全体上界はUnknownで、有限slot数だけを全体受付の根拠にしない。
 
-## 7 合成受入条件（未実施）
+## 7 合成受入条件（TB-Aの値／状態境界だけ確認、実class保証は未実施）
 
 | ID | 独立に確認する期待 |
 |---|---|
@@ -76,8 +76,20 @@ heldは新しい解析／dispatchの権限ではなく、将来の同jobの終�
 
 ## 8 推奨実装分割・承認待ち
 
-1. **TB-A**：内部binding・上位owner／slot・one-shot移譲claimと固定discardを純粋fakeで実装。TB-01〜05／08の値・状態境界を確認。
+1. **TB-A（限定実装済み）**：内部binding・上位owner／slot・one-shot移譲claimと固定discardを純粋fakeで実装。TB-01〜05／08の値・状態境界だけを確認（§9）。空200由来・元run・HTTP／cleanup診断との真正な接続はまだ保証しない。
 2. **TB-B**：CT-A accepted slotのprivate生成継続と元run失効へ接続し、正常cleanupとの区別・失敗時両側解放をfake I/Oで確認。TB-06／07と旧回帰を検証。
 3. その後にCT-B後半のworker世代／job claim・T_i／E、CT-Cの連続試験へ進む。B-03専用build／compiled・friend撤去は別工程。
 
-正確な型配置、正常資源解放とrun失効のprivateイベント境界、上位失効hookの固定所有者、追加work上界は実装前／実装レビューの確認事項。低減LとJSON宣言deadline、日時長cap、本番採用も未解決。今回は設計文書のみで、合成試験の実施記録ではない。
+正常資源解放とrun失効のprivateイベント境界、上位失効hookの固定所有者、追加work上界はTB-B以降の実装レビューの確認事項。低減LとJSON宣言deadline、日時長cap、本番採用も未解決。draft-0.1は設計文書のみ、draft-0.2の限定実装・試験結果は次節と検証記録に分離する。
+
+## 9 TB-Aの限定実装と保証範囲
+
+[release-time-owner](../src/servicenow/review-kernel/release-time-owner.ts)はrootをimportしない非実行の値scope。任意のfake identityから生成可能であり、実session／CT-A acceptedの証拠ではない。生成を一度に制限するclaimは各scope内のallocate状態で、同じbindingから別scopeを作る行為を実runの重複生成拒否と取り違えない。実run側の唯一の生成継続／claimとの接続はTB-Bに残す。runtime登録台帳を共有・追加せず、既存classからも呼ばない。
+
+scopeは同binding objectとrun／session／source／key／origin／budget・S／全Lをdescriptorでpinし、各guardで再照合する。getterは実行せず拒否し、取得例外は固定内部失敗にする。private入力のdata契約であり、Proxy trapを無副作用で阻止できるとの保証はしない。開始／観測UTCは元のISOミリ秒UTC形式、Lは正整数1〜60000として値検査し、時計採取は行わない。
+
+allocate→observe→issue→accept→discardを固定順序で消費する。observeは合成値のOだけを受け、S<=O<=S+L、U=Oを固定する。rows／policy／比較draftは受けないため、空200・非空200の由来は認定しない。issueでdonor値を取り外し、opaque handleとpendingへ移す。acceptはhandle／pendingを先に取り外してreceivingへ進め、同identityとpre/post guard成功後だけupper値を保持する。inspectは凍結された非実行dataだけで、移譲証拠へ戻せない。
+
+全操作の開始claimはguardより前に消費し、guard中の捕捉された再入・同期revokeでも復帰しない。失敗は最初の固定code／phaseを保持し、後続失敗で上書きしない。discard／失敗でdonor・pending・upper・handle・binding／pin参照を消す。外部が既に取得したinspect copyや注入checkの内部参照、heapの物理消去まで保証しない。revokeは純粋な明示イベントで、実runへのhookは未接続。
+
+費目は固定8fieldのdescriptor収集・照合、生成時1回／各pre/post guardの一時copy、最大1つずつのdonor／pending／upper位置（同時に値を所有する位置は1つ）、handle、固定診断。新たなGET／時計／rows decode・C/G/P再課金はない。exact layout／workは引き続きUnknown。試験・型・compiled値fixtureと初回失敗は[TB-A検証記録](E2E_BEST_PRACTICE_RELEASE_TIME_OWNER_TBA_2026-11-01.md)を参照。TB-B／worker job・T_i／E・CT-C・B-03は未実施。

@@ -1,0 +1,12 @@
+import assert from 'node:assert/strict';
+import {createReleaseTimeScope} from '../../../dist/servicenow/review-kernel/release-time-owner.js';
+const started_at='2026-11-01T00:00:00.000Z',observed_at='2026-11-01T00:00:01.000Z';
+const b=Object.freeze({run:{},session:{},source:{},key:{},origin:{},budget:{},started_at,deadline_ms:60000});
+const scope=createReleaseTimeScope(b,()=>undefined);
+scope.allocate(b);scope.observe(b,observed_at);const transfer=scope.issue(b);scope.accept(b,transfer);
+assert.deepEqual(scope.inspect().time,{started_at,deadline_ms:60000,observed_at,last_utc:observed_at});
+scope.discard(b);assert.equal(scope.inspect().time,null);assert.throws(()=>scope.accept(b,transfer),/internal_review_error/);
+const cancelled=createReleaseTimeScope(b,()=> 'cancelled');
+assert.throws(()=>cancelled.allocate(b),/cancelled/);assert.equal(cancelled.inspect().diagnostic.code,'cancelled');
+assert.equal(cancelled.inspect().time,null);
+console.log('TB-A compiled pure time scope: one-shot transfer/discard and first-stop; not session/job authority PASS');

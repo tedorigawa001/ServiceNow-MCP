@@ -1,7 +1,7 @@
 # RC-03：比較器入力化・上位時刻整合の接続契約
 
-Version: br006-release-comparison-time-binding-draft-0.3 / Date: 2026-11-01。
-Status: **CT-Aの受領物・固定入力化・一度限りの非実行候補受理をfixed fake継続だけに限定実装（§10）。CT-B／C・比較候補の実source採用は未実施。正式発行口閉鎖・Unknown・全体受付無効・VM／監視／telemetry調査保留を維持する。実source差替え・実接続・実通信・実機操作・設定変更・実Permit発行・Pushは行わない。**
+Version: br006-release-comparison-time-binding-draft-0.4 / Date: 2026-11-01。
+Status: **CT-Aの受領物・固定入力化・一度限りの非実行候補受理をfixed fake継続だけに限定実装（§10）。TB-Aの上位時刻値scopeだけを追加したが、CT-Bの実結合／C・比較候補の実source採用は未実施。正式発行口閉鎖・Unknown・全体受付無効・VM／監視／telemetry調査保留を維持する。実source差替え・実接続・実通信・実機操作・設定変更・実Permit発行・Pushは行わない。**
 
 設計基準`01ac88d`、CT-A基準`4c691ed`。[RC-03親設計](BEST_PRACTICE_ABORT_SCOPE_RELEASE_ADOPTION_RC03_DESIGN.md)、[deadline再利用契約](BEST_PRACTICE_ABORT_SCOPE_RELEASE_DEADLINE_REUSE_DESIGN.md)、[観測UTC契約](BEST_PRACTICE_ABORT_SCOPE_RELEASE_OBSERVATION_UTC_DESIGN.md)の次段階を対にする。①同projection／sourceの値から固定比較器入力を作る、②空200を含むOを保持し同worker jobのT_i／Eを照合する。CT-Aの限定範囲は§10に分離し、片方だけの成功で上位まで結合済みとは数えない。
 
@@ -123,7 +123,7 @@ GETのC、同bytesのG／P、final予約／返却、retry、native cleanup、wor
 ## 9 推奨分割と未解決事項
 
 1. **CT-A（限定実装済み、§10）**：同projection・同sourceのrows／O receiptと比較器入力生成、非実行private候補の一度限り受理をfake依存で確認。上位owner用Oを失わない内部保持契約も同時に置く。
-2. **CT-B（設計案）**：TimeOwnerと親側job claimを合成worker応答へ接続し、T_i／E・空200・omission・世代混入／遅延を検証。通常実source／adapter切替はしない。前半の[上位時刻owner・一度限りの終端移譲draft-0.1](BEST_PRACTICE_ABORT_SCOPE_RELEASE_TIME_OWNER_CTB_DESIGN.md)では、TB-Aの純粋内部型とTB-Bの固定fake継続接続に分け、正常source解放と元run失効を区別する。両段階とも未実装。
+2. **CT-B（未接続の段階案）**：TimeOwnerと親側job claimを合成worker応答へ接続し、T_i／E・空200・omission・世代混入／遅延を検証。通常実source／adapter切替はしない。前半の[上位時刻owner・一度限りの終端移譲draft-0.2](BEST_PRACTICE_ABORT_SCOPE_RELEASE_TIME_OWNER_CTB_DESIGN.md)では、TB-Aの純粋内部型とTB-Bの固定fake継続接続に分け、正常source解放と元run失効を区別する。TB-Aの値scopeのみ限定実装したが、CT-A／元runへの真正な接続・上位移譲とTB-B以降は未実装。
 3. **CT-C（設計案）**：固定継続の連続fake試験・診断合流／解放を確認する。B-03のcompiled保証とは別集計にする。
 
 上位への終端移譲・ownerとjob claimの正確な配置、低減Lと出力宣言の互換方針、全体費目／日時長capは未確定。今回の型役割・分割名は実在APIではない。実source判定／Permit採用・非200/native移行・friend撤去・全体受付の有効化は別承認。

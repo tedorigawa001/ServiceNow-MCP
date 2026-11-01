@@ -167,9 +167,9 @@ draft-0.5のレビュー修正：開発bootstrapはdispatch後のC差分だけ�
 
 CT-Aの値receipt ownerと実classの固定fake継続を限定接続した。unitの混入／one-shot／候補値保証と、実classのprivate hook・既存結果／会計維持の保証を別に扱う。通常source採用・CT-B／C・B-03は未実施のまま、[CT-A検証記録](E2E_BEST_PRACTICE_RELEASE_COMPARISON_CTA_2026-11-01.md)へ結果を記録する。
 
-[比較器入力・上位時刻の接続契約draft-0.3](BEST_PRACTICE_ABORT_SCOPE_RELEASE_COMPARISON_TIME_BINDING_DESIGN.md)へ、同projection／source／job結合、一度限り受領物・空200のUTC保持と終端移譲、失敗時の停止を分離した。CT-Aは限定実装済みで、CT-B／Cは未実装の段階案。旧実class保証・Dの別assembly保証・B-03専用compiledは別集計し、本番差替えやfriend撤去の承認としない。
+[比較器入力・上位時刻の接続契約draft-0.4](BEST_PRACTICE_ABORT_SCOPE_RELEASE_COMPARISON_TIME_BINDING_DESIGN.md)へ、同projection／source／job結合、一度限り受領物・空200のUTC保持と終端移譲、失敗時の停止を分離した。CT-AとTB-Aの非実行値scopeは限定実装済みで、CT-Bの実結合／Cは未実装の段階案。旧実class保証・Dの別assembly保証・B-03専用compiledは別集計し、本番差替えやfriend撤去の承認としない。
 
-[固定採用境界・接続差分draft-0.14](BEST_PRACTICE_ABORT_SCOPE_RELEASE_ADOPTION_RC03_DESIGN.md)に、Dのtest-only時刻／policy binding・同ackのconsume・pre/post guardと非実行summary、Rの同session条件・公開copy／private snapshot・失敗owner／解放を分離した。Dの最初の候補はRC3-D01（条件とclaimのみ）で、比較公開はD02、GET前のbinding不一致はD03とする。R差替え・実Permit経路・非200移行は未承認。旧case分類・件数・旧試験・全体受付無効・正式発行口閉鎖は変更しない。
+[固定採用境界・接続差分draft-0.15](BEST_PRACTICE_ABORT_SCOPE_RELEASE_ADOPTION_RC03_DESIGN.md)に、Dのtest-only時刻／policy binding・同ackのconsume・pre/post guardと非実行summary、Rの同session条件・公開copy／private snapshot・失敗owner／解放を分離した。Dの最初の候補はRC3-D01（条件とclaimのみ）で、比較公開はD02、GET前のbinding不一致はD03とする。R差替え・実Permit経路・非200移行は未承認。旧case分類・件数・旧試験・全体受付無効・正式発行口閉鎖は変更しない。
 
 RC3-D01の条件とclaimだけを限定実装した。開発rootごとの条件handle／run生成枠と同realm source照合を追加し、旧summary・会計・final4枠は不変。比較結果は公開せず、次はD02である。[D01検証記録](E2E_BEST_PRACTICE_RELEASE_CONDITIONS_D01_2026-11-01.md)参照。実classの正式bindingや旧case移行完了へ読み替えない。
 
