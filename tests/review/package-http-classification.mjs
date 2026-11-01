@@ -10,10 +10,11 @@ const root=fileURLToPath(new URL('../../',import.meta.url)),moduleNames=['abort-
 const output=execFileSync('npm',['pack','--dry-run','--ignore-scripts','--offline','--json'],{cwd:root,encoding:'utf8',maxBuffer:8*1024*1024,env:{...process.env,npm_config_cache:join(tmpdir(),'servicenow-mcp-owner-pack-cache')},stdio:['ignore','pipe','pipe']});
 const [pack]=JSON.parse(output);
 // WJ-A remains a separate synthetic issuer, not a distributed registration/claim entry point.
-const noSyntheticJobIssuer=text=>assert(!['createSyntheticWorkerJobIssuer','synthetic-worker-job','createSyntheticWorkerTimeIssuer','synthetic-worker-time'].some(x=>text.includes(x)),'WJ synthetic issuer leaked into runtime');
+const noSyntheticJobIssuer=text=>assert(!['createSyntheticWorkerJobIssuer','synthetic-worker-job','createSyntheticWorkerTimeIssuer','synthetic-worker-time','synthetic_finish_terminal'].some(x=>text.includes(x)),'WJ synthetic issuer leaked into runtime');
 assert.throws(()=>noSyntheticJobIssuer('export function createSyntheticWorkerJobIssuer() {}'));
 assert.throws(()=>noSyntheticJobIssuer('export function createSyntheticWorkerTimeIssuer() {}'));
-assert(!pack.files.some(f=>/synthetic-worker-(?:job|time)/.test(f.path)));
+assert.throws(()=>noSyntheticJobIssuer('export const scope="synthetic_finish_terminal";'));
+assert(!pack.files.some(f=>/synthetic-worker-(?:job|time|finish)/.test(f.path)));
 for(const f of pack.files.filter(f=>f.path.startsWith('dist/')&&/\.(?:js|ts|map)$/.test(f.path)))noSyntheticJobIssuer(readFileSync(join(root,f.path),'utf8'));
 // Names are denied as references, not as object keys or member property names; the same audit must reject seeded leaks.
 const syntheticDenied=new Set(['globalThis','global','window','self','process','performance','fetch','setTimeout','setInterval','setImmediate','queueMicrotask','require','Worker','SharedArrayBuffer','Atomics','XMLHttpRequest','WebSocket','eval','Function']);
@@ -38,7 +39,7 @@ const timeText=readFileSync(join(root,'tests/support/review/synthetic-worker-tim
 auditSyntheticIssuer(timeText,timeImports);
 for(const leak of ['globalThis.setTimeout(()=>{},0);','queueMicrotask(()=>{});','const zzNow=Date.now;','performance.now.call(performance);',"Date['now']();",'new Date();',"import('node:fs');","import {BoundedReadSession} from '../../../src/servicenow/bounded-read.js';const zzRoot=BoundedReadSession;"])
   assert.throws(()=>auditSyntheticIssuer(timeText+'\n'+leak,timeImports),assert.AssertionError,'WJ-B audit missed seeded leak: '+leak);
-console.log('WJ-B time owner excluded; fixed pure-data imports, no runtime/I/O/clock references + negative controls PASS');
+console.log('WJ-B/C time/finish owner excluded; fixed pure-data imports, no runtime/I/O/clock references + negative controls PASS');
 for(const suffix of ['.js','.js.map','.d.ts','.d.ts.map'])assert(pack.files.some(f=>f.path==='dist/servicenow/review-kernel/release-observation'+suffix),'required one-shot UTC value helper missing: '+suffix);
 const sessionDeclarations=readFileSync(join(root,'dist/servicenow/bounded-read.d.ts'),'utf8');
 const sessionAst=parse(readFileSync(join(root,'dist/servicenow/bounded-read.js'),'utf8'),{ecmaVersion:'latest',sourceType:'module'});

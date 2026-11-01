@@ -83,7 +83,7 @@ CT-Aで元S／全L／pin済みPを同rows／Oのstrict比較入力へ結合し�
 
 B-03の開発専用build／compiled保証・旧case対応表は別工程。既存production compiled試験の成功をD01〜D03の専用compiled保証へ数えない。設定日時長cap・同期比較／全入力work上界・UTC採取方針・実source／Permit切替・friend撤去は依然未承認／Unknown。正式発行口・全体受付は開かず、調査保留を維持する。
 
-[比較器入力・上位時刻の接続契約draft-0.8](BEST_PRACTICE_ABORT_SCOPE_RELEASE_COMPARISON_TIME_BINDING_DESIGN.md)に、消費済みの同projectionを同sourceのrows／O受領物・上位TimeOwner・各worker jobへ結合する案を整理した。S／全L／Pを採り直さず、空200でもOを保持する。TB-A／Bは固定fake継続の移譲／消費と元run停止だけを限定接続する。独立合成issuerのWJ-A／Bでclaim・T_i／U・analyze比較を限定実装したが、実worker／runtimeとの結合とEは未実装。RP-01／OU-01の部分保証を全体接続へ流用しない。
+[比較器入力・上位時刻の接続契約draft-0.9](BEST_PRACTICE_ABORT_SCOPE_RELEASE_COMPARISON_TIME_BINDING_DESIGN.md)に、消費済みの同projectionを同sourceのrows／O受領物・上位TimeOwner・各worker jobへ結合する案を整理した。S／全L／Pを採り直さず、空200でもOを保持する。TB-A／Bは固定fake継続の移譲／消費と元run停止だけを限定接続する。独立合成issuerのWJ-A／BとWJ-Cの通常finishでT_i／U／Eを限定検査するが、実worker／runtimeとの結合・soft回復claim・実cleanup連結は未実装。RP-01／OU-01の部分保証を全体接続へ流用しない。
 
 ## 7 draft-0.1作成時の確認範囲
 

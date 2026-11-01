@@ -1,13 +1,16 @@
-/** WJ-B test-only owner; no live worker or runtime authority. */
+/** WJ-B/C test-only owner; no live worker or runtime authority. */
 import {types} from 'node:util';
 import {z} from 'zod';
-import {bp5RuleIdsSchema,releaseEvidenceStructure} from '../../../src/review/result-schema-v2.js';
+import {bp5RuleIdsSchema,releaseEvidenceStructure,checkReleaseEvidence} from '../../../src/review/result-schema-v2.js';
 import {assetOutcomeStructure} from '../../../src/review/aggregate-schema.js';
 import {createSyntheticWorkerJobIssuer,type SyntheticJobBinding} from './synthetic-worker-job.js';
 type Reply=Parameters<ReturnType<typeof createSyntheticWorkerJobIssuer>['consume']>[2];
 type Expected=Readonly<{record_updated_at:string;instance_binding:string;instance_release:unknown;requested_rule_ids:readonly string[];release_limitations:readonly string[]}>;
 type Receipt={target:string;time:string;expected?:Expected};
 type Diagnostic=Readonly<{code:string;phase:string}>;
+type FinishHeader=Readonly<{schema:string;binding:string;release:ReturnType<typeof releaseEvidenceStructure.parse>;rules:readonly string[];limitations:readonly string[]}>;
+type Completed={receipt:Receipt;state:'reviewed'|'rejected'|'result_omitted';reason?:string};
+type FinishAsset=Readonly<{id:string;state:string;data?:unknown;receipt?:Receipt}>;
 // Local retained projection bound, not a new runtime wire/config date policy.
 const MAX_PROJECTION=262144;
 function object(value:unknown):Record<string,unknown>{
@@ -58,7 +61,57 @@ function compare(receipt:Receipt,updateSet:string,outcome:unknown):'reviewed'|'r
   if(JSON.stringify(release)!==JSON.stringify(e.instance_release))throw Error();
   const limits=warnings(field(r,'limitations'));if(!e.release_limitations.every(x=>limits.includes(x)))throw Error();return 'reviewed';
 }
-/** Owns only synthetic identities. No finish/E validation or production issuer. */
+function header(value:unknown,updateSet:string,start:string):FinishHeader{
+  const target=field(value,'target'),schema=z.enum(['bp-mcp-review-0.2','bp-mcp-review-0.3']).parse(field(value,'schema_version'));
+  if(field(target,'update_set_sys_id')!==updateSet||field(target,'target_version')!=='update_set_payload'||field(value,'started_at')!==start||field(field(value,'limits'),'deadline_ms')!==60000)throw Error();
+  return Object.freeze({schema,binding:z.string().regex(/^[a-f0-9]{64}$/).parse(field(target,'instance_binding')),
+    release:releaseEvidenceStructure.parse(copy(field(value,'instance_release'))),rules:rules(field(field(value,'coverage'),'requested_rule_ids')),limitations:warnings(field(value,'limitations'))});
+}
+function finishTime(value:unknown,expected:FinishHeader,updateSet:string,time:NonNullable<ReturnType<ReturnType<typeof createSyntheticWorkerJobIssuer>['inspect']>['held_time']>,upper:string){
+  const h=header(value,updateSet,time.started_at),end=z.iso.datetime({precision:3}).parse(field(value,'ended_at'));
+  if(h.schema!==expected.schema||h.binding!==expected.binding||JSON.stringify(h.release)!==JSON.stringify(expected.release)||!sameRules(h.rules,expected.rules)||!expected.limitations.every(x=>h.limitations.includes(x))||
+    Date.parse(end)<Date.parse(upper)||Date.parse(end)>Date.parse(time.started_at)+time.deadline_ms||
+    checkReleaseEvidence(h.release,h.release.source==='operator_config'?time.started_at:end,h.binding,[...h.limitations]).length||
+    h.release.source==='operator_config'&&Date.parse(h.release.expires_at)<=Date.parse(time.started_at)+60000)throw Error();
+  return end;
+}
+function list(value:unknown):readonly unknown[]{
+  if(!Array.isArray(value)||types.isProxy(value)||value.length>100||Reflect.ownKeys(value).length!==value.length+1)throw Error();
+  return Object.freeze(Array.from({length:value.length},(_,i)=>{const d=Object.getOwnPropertyDescriptor(value,String(i));if(!d||!Object.hasOwn(d,'value'))throw Error();return d.value;}));
+}
+function manifest(value:unknown,h:FinishHeader,updateSet:string,completed:ReadonlyMap<string,Completed>):ReadonlyMap<string,FinishAsset>{
+  const out=new Map<string,FinishAsset>();
+  for(const raw of list(field(value,'assets'))){
+    const id=z.string().regex(/^[a-f0-9]{32}$/).parse(field(raw,'update_xml_sys_id')),state=field(raw,'state'),c=completed.get(id);
+    if(out.has(id))throw Error();
+    if(c){
+      const e=c.receipt.expected!;
+      if(e.instance_binding!==h.binding||JSON.stringify(e.instance_release)!==JSON.stringify(h.release)||!e.requested_rule_ids.every(x=>h.rules.includes(x))||!e.release_limitations.every(x=>h.limitations.includes(x)))throw Error();
+      if(state!==c.state&&!(c.state==='reviewed'&&state==='result_omitted'))throw Error();
+    }
+    if(state==='reviewed'){
+      if(!c||c.state!=='reviewed')throw Error();compare(c.receipt,updateSet,raw);out.set(id,Object.freeze({id,state,receipt:c.receipt}));
+    }else{
+      const data=assetOutcomeStructure.parse(copy(raw));if(c&&c.state!=='reviewed'&&field(data,'reason')!==c.reason)throw Error();
+      out.set(id,Object.freeze({id,state:data.state,data}));
+    }
+  }
+  for(const id of completed.keys())if(!out.has(id))throw Error();return out;
+}
+function compareAssets(value:unknown,expected:ReadonlyMap<string,FinishAsset>,updateSet:string,end:string){
+  const rows=list(field(value,'assets'));if(rows.length!==expected.size)throw Error();const seen=new Set<string>();
+  for(const raw of rows){
+    const id=field(raw,'update_xml_sys_id');if(typeof id!=='string'||seen.has(id))throw Error();seen.add(id);
+    const e=expected.get(id);if(!e)throw Error();const state=field(raw,'state');
+    if(e.state==='reviewed'){
+      if(state==='reviewed'){compare(e.receipt!,updateSet,raw);if(Date.parse(e.receipt!.time)>Date.parse(end))throw Error();}
+      else{
+        const data=assetOutcomeStructure.parse(copy(raw));if(data.state!=='result_omitted'||!warnings(field(value,'limitations')).includes('response_truncated'))throw Error();
+      }
+    }else if(JSON.stringify(assetOutcomeStructure.parse(copy(raw)))!==JSON.stringify(e.data))throw Error();
+  }
+}
+/** Owns only synthetic identities; finish candidates never confer production authority. */
 export function createSyntheticWorkerTimeIssuer(seed:SyntheticJobBinding,check:()=>string|undefined=()=>undefined){
   const jobs=createSyntheticWorkerJobIssuer(seed,check);
   const seedKeys=['run','session','source','key','origin','budget','update_set_sys_id','started_at','deadline_ms','observed_at'];
@@ -67,12 +120,14 @@ export function createSyntheticWorkerTimeIssuer(seed:SyntheticJobBinding,check:(
   let upper:string|null=null,held:Readonly<{started_at:string;deadline_ms:number;observed_at:string}>|null=null;
   let binding:object|undefined,updateSet='',generation:object|undefined,starting=false,busy=false,accepted=0;
   let diagnostic:Diagnostic|null=null,pending:{handle:object;receipt:Receipt}|undefined;
+  let finishPending:{handle:object;header:FinishHeader;assets:ReadonlyMap<string,FinishAsset>}|undefined,candidate:Readonly<{handle:object;end:string;assets:number}>|undefined,terminalConsumed=false;
   const receipts=new Map<object,Receipt>();
+  const completed=new Map<string,Completed>();
   function stop(phase:string,raw?:unknown):never{
     if(jobs.inspect().state==='closed')throw Error('internal_review_error');
     const d=raw&&typeof raw==='object'&&!types.isProxy(raw)?Object.getOwnPropertyDescriptor(raw,'code')?.value:raw;
     const code=d==='cancelled'||d==='deadline_exceeded'||d==='worker_unavailable'?d:'internal_review_error';
-    diagnostic??=Object.freeze({code,phase});jobs.revoke(diagnostic.code);binding=generation=seedRef=undefined;pinnedSeed=undefined;starting=false;pending=undefined;receipts.clear();updateSet='';
+    diagnostic??=Object.freeze({code,phase});jobs.revoke(diagnostic.code);binding=generation=seedRef=undefined;pinnedSeed=undefined;starting=false;pending=finishPending=candidate=undefined;receipts.clear();completed.clear();updateSet='';
     throw Object.assign(Error(diagnostic.code),{code:diagnostic.code});
   }
   function guard(){
@@ -100,23 +155,36 @@ export function createSyntheticWorkerTimeIssuer(seed:SyntheticJobBinding,check:(
       const receipt=receipts.get(input);receipts.delete(input);if(!receipt?.expected)stop('analyze');
       const h=jobs.analyze(value,g,input,id);pending={handle:h,receipt:receipt!};return h;
     });},
-    consumeAnalyze(value:object,job:object,context:Reply,outcome:unknown){let p:typeof pending;return act('consume',value,()=>{
+    consumeAnalyze(value:object,job:object,context:Reply,outcome:unknown){let p:typeof pending,record:Completed|undefined;return act('consume',value,()=>{
       jobs.consume(value,job,context);guard();
       // Comparison errors do not hide a subsequent cancellation/deadline.
       let state:'reviewed'|'rejected'|'result_omitted'|undefined;
-      try{state=compare(p!.receipt,updateSet,outcome);}catch{/* fixed error after post-guard */}
+      try{state=compare(p!.receipt,updateSet,outcome);record={receipt:p!.receipt,state,...(state==='reviewed'?{}:{reason:field(outcome,'reason') as string})};}catch{state=undefined;/* fixed error after post-guard */}
       guard();if(!state)stop('compare');
       return Object.freeze({scope:'synthetic_analyze_candidate' as const,state,authority:'none' as const});
-    },()=>{accepted++;},()=>{p=pending;pending=undefined;if(!p||p.handle!==job)stop('consume');});},
+    },()=>{accepted++;completed.set(p!.receipt.target,record!);},()=>{p=pending;pending=undefined;if(!p||p.handle!==job)stop('consume');});},
     startupFailure(value:object,g:object,reason:unknown){return act('startup_failure',value,()=>{if(g!==generation||!starting)stop('startup_failure');return stop('startup_failure',reason);});},
-    sendFailure(value:object,job:object,reason:unknown){return act('send_failure',value,()=>{const p=pending;pending=undefined;if(!p||p.handle!==job)stop('send_failure');return stop('send_failure',reason);});},
+    finish(value:object,g:object,id:number,expected:unknown):object{return act('finish',value,()=>{
+      if(receipts.size)stop('finish');const h=header(expected,updateSet,held!.started_at),assets=manifest(expected,h,updateSet,completed),job=jobs.finish(value,g,id);finishPending={handle:job,header:h,assets};return job;
+    });},
+    consumeFinish(value:object,job:object,context:Reply,outcome:unknown):object{let p:typeof finishPending,end:string|undefined;return act('finish_consume',value,()=>{
+      jobs.consume(value,job,context);guard();
+      try{end=finishTime(outcome,p!.header,updateSet,held!,upper!);compareAssets(outcome,p!.assets,updateSet,end);}catch{end=undefined;/* post-guard has priority */}
+      guard();if(!end)stop('finish_compare');return Object.freeze(Object.create(null)) as object;
+    },handle=>{candidate=Object.freeze({handle,end:end!,assets:p!.assets.size});},()=>{p=finishPending;finishPending=undefined;if(!p||p.handle!==job)stop('finish_consume');});},
+    consumeTerminal(value:object,handle:object){let c:typeof candidate;return act('terminal_consume',value,()=>{
+      const state=jobs.inspect();if(!state.source_closed||generation||state.generation_status!=='closed')stop('terminal_consume');
+      return Object.freeze({scope:'synthetic_finish_terminal' as const,ended_at:c!.end,assets:c!.assets,authority:'none' as const});
+    },()=>{jobs.close(value);upper=held=null;binding=generation=seedRef=undefined;pinnedSeed=undefined;pending=finishPending=undefined;receipts.clear();completed.clear();updateSet='';terminalConsumed=true;},
+    ()=>{c=candidate;candidate=undefined;if(!c||c.handle!==handle)stop('terminal_consume');});},
+    sendFailure(value:object,job:object,reason:unknown){return act('send_failure',value,()=>{const p=pending??finishPending;pending=finishPending=undefined;if(!p||p.handle!==job)stop('send_failure');return stop('send_failure',reason);});},
     closeSource(value:object){return act('source_close',value,()=>jobs.closeSource(value));},
     closeGeneration(value:object,g:object){return act('generation_close',value,()=>jobs.closeGeneration(value,g));},
     confirmClosed(value:object,g:object){return act('generation_closed',value,()=>{jobs.confirmClosed(value,g);generation=undefined;starting=false;});},
-    close(value:object){return act('close',value,()=>{},()=>{jobs.close(value);upper=held=null;binding=generation=seedRef=undefined;pinnedSeed=undefined;pending=undefined;receipts.clear();updateSet='';});},
+    close(value:object){return act('close',value,()=>{},()=>{jobs.close(value);upper=held=null;binding=generation=seedRef=undefined;pinnedSeed=undefined;pending=finishPending=candidate=undefined;receipts.clear();completed.clear();updateSet='';});},
     revoke(reason:unknown){if(jobs.inspect().state==='closed')return;try{stop('revoke',reason);}catch{/* synchronous invalidation; no raw exception */}},
     discardTerminalTime(){if(busy||!diagnostic||held===null)return stop('discard');upper=held=null;},
-    inspect(){return Object.freeze({scope:'synthetic_worker_time_only' as const,state:jobs.inspect().state,upper_utc:upper,held_time:held,diagnostic,pending:!!pending,
-      inputs_retained:receipts.size,analyze_accepted:accepted,permissions:Object.freeze({formal_issuance:false,dispatch:false,source_acceptance:false})});},
+    inspect(){return Object.freeze({scope:'synthetic_worker_time_only' as const,state:jobs.inspect().state,upper_utc:upper,held_time:held,diagnostic,pending:!!pending||!!finishPending,
+      inputs_retained:receipts.size,analyze_accepted:accepted,candidate_retained:!!candidate,terminal_consumed:terminalConsumed,permissions:Object.freeze({formal_issuance:false,dispatch:false,source_acceptance:false})});},
   });
 }

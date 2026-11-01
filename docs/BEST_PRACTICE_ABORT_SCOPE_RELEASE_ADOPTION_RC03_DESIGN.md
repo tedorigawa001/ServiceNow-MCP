@@ -77,11 +77,11 @@ pure比較の途中にawaitはなく、JSイベントループの取消を同期
 
 ### 比較器入力・上位時刻の結合
 
-CT-B前半は[上位時刻owner・終端移譲詳細設計draft-0.7](BEST_PRACTICE_ABORT_SCOPE_RELEASE_TIME_OWNER_CTB_DESIGN.md)へ分離した。TB-A／Bで同runの固定fake継続だけのS／全L／空200を含むOの一度限り移譲、正常source解放と元run失効の区別・固定discardを接続した。worker job結合・通常実source採用・正式発行は有効化しない。
+CT-B前半は[上位時刻owner・終端移譲詳細設計draft-0.8](BEST_PRACTICE_ABORT_SCOPE_RELEASE_TIME_OWNER_CTB_DESIGN.md)へ分離した。TB-A／Bで同runの固定fake継続だけのS／全L／空200を含むOの一度限り移譲、正常source解放と元run失効の区別・固定discardを接続した。worker job結合・通常実source採用・正式発行は有効化しない。
 
 CT-Aで、この契約の同projection／元ack／sourceのrows・O受領物→固定比較器→一度限りのprivate非実行候補受理だけをfixed fake継続へ限定実装した。CT-A時点は空200のOもcleanupで破棄したが、TB-Bでは同accepted値を正常source解放後の固定discardまで移譲する。worker jobへの継続は未実装で、通常実source・legacy結果・Permitへ候補を採用しない。CT-Aの初回失敗と当時の保証は[CT-A検証記録](E2E_BEST_PRACTICE_RELEASE_COMPARISON_CTA_2026-11-01.md)へ分離する。
 
-[接続契約draft-0.8](BEST_PRACTICE_ABORT_SCOPE_RELEASE_COMPARISON_TIME_BINDING_DESIGN.md)で、同projection／sourceのrows・O受領物と、一度限りの固定比較、空200のprivate UTC保持、同worker世代／jobのT_i・E照合を対にした。UTC文字列やworker数値idだけで同一性を認めず、固定fake継続のTB-Bでは同run／source／origin／budgetに結合する。WJ-A／Bは独立合成issuerのclaim・T_i／U・analyze比較だけを限定実装し、runtimeとの結合・E・CT-Cは未実装。legacy／Permit採用・通常source差替えを行わず、soft partialとhardなbinding／時刻失敗を分ける。
+[接続契約draft-0.9](BEST_PRACTICE_ABORT_SCOPE_RELEASE_COMPARISON_TIME_BINDING_DESIGN.md)で、同projection／sourceのrows・O受領物と、一度限りの固定比較、空200のprivate UTC保持、同worker世代／jobのT_i・E照合を対にした。UTC文字列やworker数値idだけで同一性を認めず、固定fake継続のTB-Bでは同run／source／origin／budgetに結合する。WJ-A／BとWJ-Cの通常finishは独立合成issuerだけで限定実装し、runtimeとの結合・soft回復claim・実cleanup連結・CT-Cは未実装。legacy／Permit採用・通常source差替えを行わず、soft partialとhardなbinding／時刻失敗を分ける。
 
 ## 6 draftから既存結果への変換――二重warningとPermitの境界
 
