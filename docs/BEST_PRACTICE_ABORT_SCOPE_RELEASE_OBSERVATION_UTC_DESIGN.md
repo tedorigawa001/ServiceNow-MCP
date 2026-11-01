@@ -1,6 +1,6 @@
 # RC-03：観測UTCの採取・失敗・上位時刻の契約
 
-Version: br006-release-observation-utc-draft-0.3 / Date: 2026-11-01。
+Version: br006-release-observation-utc-draft-0.4 / Date: 2026-11-01。
 Status: **OU-01の一度限り採取・pre/post guardを既存fixed fake-200継続だけに限定実装（§9）。通常実source差替え・比較器入力化・上位時刻結合は未実施。実接続・実通信・実機操作・設定変更・実Permit発行・Pushは行わない。正式発行口閉鎖・Unknown・全体受付無効・VM／監視／telemetry調査保留を維持する。**
 
 設計基準`cd14e20`、OU-01基準`d95faca`。[RC-03親設計](BEST_PRACTICE_ABORT_SCOPE_RELEASE_ADOPTION_RC03_DESIGN.md)と[deadline再利用契約](BEST_PRACTICE_ABORT_SCOPE_RELEASE_DEADLINE_REUSE_DESIGN.md)の観測UTCに関する残差を具体化する。RP-01の同session projectionへOU-01の限定採取を追加したが、比較器接続・上位整合検査は未実装／未検証。本書を本番切替の承認にしない。
@@ -83,6 +83,10 @@ payload取得UTCを採った後は、既存のreviewed_atの生成規則を維�
 workerの最終Eは集約生成時の値であり、終了処理後のUTCではない。worker終了・session cleanupまでの元monotonic期限検査をこれで置換しない。D02のteardown確定後に非実行候補だけをwithheldとする挙動と、Rの正式結果を検証前に止める契約も混同しない。
 
 実効Lと出力JSONの宣言deadlineは現状同一とは限らない。将来の接続でも同projectionの実効Lによる検査と既存schemaの宣言値による検査を両方満たす必要があり、宣言値が大きいことを実効期限の延長に使わない。operator_configの集約有効性は既存schemaが宣言値を使う点も含めて別途照合する。fieldの供給統一・互換方針は後続レビューに残し、本書ではfield変更・schema緩和・時刻補正を承認しない。
+
+### 同projection・source・worker jobとの接続
+
+[接続契約draft-0.1](BEST_PRACTICE_ABORT_SCOPE_RELEASE_COMPARISON_TIME_BINDING_DESIGN.md)は、Oを同rows／projectionのprivate受領物として比較器へ渡すことと、空200で公開Oがなくても上位ownerへ一度だけ移譲してT_i／Eを検査することを対にした。worker object／世代・親側claimと期待id／target／T_iを結合し、omissionでも最後のUTCを消さない。現応答にkind echoがあるとは仮定せず、新しいwire fieldも追加しない。これらのowner／受領物／job claimは未実装で、OU-01の採取成功だけでは成立しない。
 
 ## 7 fake依存の全体受入条件（OU-01の部分確認は§9）
 

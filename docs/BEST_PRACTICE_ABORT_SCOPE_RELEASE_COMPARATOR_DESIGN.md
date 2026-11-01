@@ -177,7 +177,7 @@ limitsのmaxやfamily集合が変わる場合はmodel_id／対応表を再レビ
 
 1. **RC-01（限定実装済み、§11）**：strict構造入力／非実行draftの内部型・family値の最小共有境界。owner・clock・I/Oなしで独立oracleを作る。意味比較は含めない。
 2. **RC-02（純粋値として実装済み、§12）**：本書の順序・limitationsを同期比較器に実装。policy自己整合・構造拒否とordinary unknownを分ける。新規合成試験を追加し旧試験を残す。
-3. **RC-03（開発D限定実装、R切替は別承認）**：[固定採用境界・接続差分draft-0.11](BEST_PRACTICE_ABORT_SCOPE_RELEASE_ADOPTION_RC03_DESIGN.md)で、開発D先行と実source Rを分離した。200値の固定継続・生成元・pre/post guard・上位停止・既存Permit block不変を具体化する。legacy非200 catchは同時に移さない。
+3. **RC-03（開発D限定実装、R切替は別承認）**：[固定採用境界・接続差分draft-0.12](BEST_PRACTICE_ABORT_SCOPE_RELEASE_ADOPTION_RC03_DESIGN.md)で、開発D先行と実source Rを分離した。200値の固定継続・生成元・pre/post guard・上位停止・既存Permit block不変を具体化する。legacy非200 catchは同時に移さない。
 4. **B-03**：旧case対応表の更新、専用開発build／compiled連続試験と本番compiled回帰を別集計。実Permit結合の未代替保証を明記したままにする。
 
 未確認事項：壁時計逆行を含む最終結果時刻との整合、legacy catchを後日移すときの固定failure分類、実classのprivate採用点でのguard位置、費目の正確なlayout／全体work。family定義の最小import閉包だけはRC-01で確認した（§11）。残る事項を本書だけで確認済みにせず、旧caseの分類は引き続きnot_evaluated／未対応のままで、正式発行口・全体受付は無効とする。
@@ -212,7 +212,9 @@ asserted_atの未来・expires_at≦asserted_atを拒否し、binding不一致�
 
 ## 13 RC-03の接続差分設計
 
-[RC-03詳細設計draft-0.11](BEST_PRACTICE_ABORT_SCOPE_RELEASE_ADOPTION_RC03_DESIGN.md)を追加した。初版時点の開発sourceにはUTC／policy条件がなくrelease値も破棄されていたため、test-onlyの同context bindingから先行した。実sourceでは既存`#completeRelease`への非matched draft再投入によるwarning二重追加を避け、公開可変copyとprivate snapshotを分離する。Rの時刻採取位置・失敗owner／解放と同期処理の上界は承認／確認待ちで、本番差替えは行わない。開発Dの限定実装は旧case移行済み・実class保証を意味せず、正式発行口閉鎖・全体受付無効・調査保留を維持する。
+[比較器入力・上位時刻の接続契約draft-0.1](BEST_PRACTICE_ABORT_SCOPE_RELEASE_COMPARISON_TIME_BINDING_DESIGN.md)を追加した。同projectionのS／全L／P、同sourceのrows／O、同worker世代／jobをprivateに結合し、非実行比較候補と空200のUTC保持・返却時刻検査を対にする。pure値入力の成功は発行元・job identityの証明ではない。接続・試験は未実施で、通常source／Permit経路は差し替えない。
+
+[RC-03詳細設計draft-0.12](BEST_PRACTICE_ABORT_SCOPE_RELEASE_ADOPTION_RC03_DESIGN.md)を追加した。初版時点の開発sourceにはUTC／policy条件がなくrelease値も破棄されていたため、test-onlyの同context bindingから先行した。実sourceでは既存`#completeRelease`への非matched draft再投入によるwarning二重追加を避け、公開可変copyとprivate snapshotを分離する。Rの時刻採取位置・失敗owner／解放と同期処理の上界は承認／確認待ちで、本番差替えは行わない。開発Dの限定実装は旧case移行済み・実class保証を意味せず、正式発行口閉鎖・全体受付無効・調査保留を維持する。
 
 後続RC3-D01で、同開発rootの固定UTC／policy条件・private binding・一度限りclaimだけを限定実装した（同設計§11）。比較実行／結果公開・D02以降・R差替えは未実施。旧profile／summary、root分離、日時長上限承認待ちを維持する。
 
@@ -220,6 +222,6 @@ asserted_atの未来・expires_at≦asserted_atを拒否し、binding不一致�
 
 RC3-D03では同ownerのdispatch前判断を追加し、整合したbinding不一致をnot_requestedへ限定接続した（同設計§13）。release GET／受信／projectionは0、認証・親会計とfinal4返却は継続する。同bindingの設定代替／競合は200取得を維持する。[D03検証記録](E2E_BEST_PRACTICE_RELEASE_NO_REQUEST_D03_2026-11-01.md)参照。実Permit・実接続・R差替えは未実施。
 
-Rの全deadlineは既存のsession.deadlineMs getterを再利用する。[再利用契約draft-0.4](BEST_PRACTICE_ABORT_SCOPE_RELEASE_DEADLINE_REUSE_DESIGN.md)で、設定pinと同じ開始UTC／全duration・policyの結合と受入条件を整理した。RP-01で固定fake継続のprivate projectionだけを限定接続し、比較器への入力化・通常source差替えを残課題とする。残時間からの再計算や観測時点での設定再pinは行わない。
+Rの全deadlineは既存のsession.deadlineMs getterを再利用する。[再利用契約draft-0.5](BEST_PRACTICE_ABORT_SCOPE_RELEASE_DEADLINE_REUSE_DESIGN.md)で、設定pinと同じ開始UTC／全duration・policyの結合と受入条件を整理した。RP-01で固定fake継続のprivate projectionだけを限定接続し、比較器への入力化・通常source差替えを残課題とする。残時間からの再計算や観測時点での設定再pinは行わない。
 
-[観測UTC契約draft-0.3](BEST_PRACTICE_ABORT_SCOPE_RELEASE_OBSERVATION_UTC_DESIGN.md)のOU-01で、空200を含む一度限り採取・pre/post guardだけを固定fake継続へ限定追加した。比較器は時計を読まず、S／全L／policyを変更しない。上位private UTC保持・上位検査と通常source差替えは未実装であり、pure比較器の成功を時計保証としない。
+[観測UTC契約draft-0.4](BEST_PRACTICE_ABORT_SCOPE_RELEASE_OBSERVATION_UTC_DESIGN.md)のOU-01で、空200を含む一度限り採取・pre/post guardだけを固定fake継続へ限定追加した。比較器は時計を読まず、S／全L／policyを変更しない。上位private UTC保持・上位検査と通常source差替えは未実装であり、pure比較器の成功を時計保証としない。
