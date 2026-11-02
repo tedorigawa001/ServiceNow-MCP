@@ -64,8 +64,8 @@ it.each(['cancelled','deadline_exceeded'] as const)('retains first %s after issu
 it('does not hide an issued receiver under normal close or use the unbound discard branch',()=>{
   for(const step of ['close','unbound']){const f=setup();f.root.issueFinishContext(f.b,f.handoff);if(step==='unbound')closeResources(f);expect(()=>step==='close'?f.root.close(f.b):f.root.discardUnboundRecoveryPlan(f.b,f.handoff)).toThrow('internal_review_error');expect(f.root.inspect().finish_issue).toMatchObject({state:'failed',pending:false});}
 });
-it('has no RA-03 consumer or promotion path, and keeps UTC/identity/body out of diagnostics',()=>{
-  const f=setup(),before=f.root.inspect().preparation?.accounting,e=f.root.issueFinishContext(f.b,f.handoff);expect(f.root).not.toHaveProperty('acceptRecoveryFinishContext');
+it('does not accept merely by issuing, and keeps UTC/identity/body out of diagnostics',()=>{
+  const f=setup(),before=f.root.inspect().preparation?.accounting,e=f.root.issueFinishContext(f.b,f.handoff);expect(f.root.inspect().finish_accept).toMatchObject({started:false,accepts:0,route_spent:false,pending:false});
   expect(f.root.inspect().preparation?.accounting).toEqual(before);const text=JSON.stringify({e,state:f.root.inspect()});for(const value of [S,O,U,id(1),id(10),'raw_buildname','snapshot','ready_origin_identity'])expect(text).not.toContain(value);expect(f.root.inspect().permissions).toEqual({formal_issuance:false,dispatch:false,recovery_route:false});
 });
 it.each(['pin','header','route','source','callback'])('refuses extra %s injection without invoking caller code',kind=>{

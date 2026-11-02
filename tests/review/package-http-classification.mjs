@@ -47,7 +47,7 @@ auditSyntheticIssuer(recoveryText,recoveryImports);
 for(const leak of ['globalThis.setTimeout(()=>{},0);','queueMicrotask(()=>{});','const zzNow=Date.now;','performance.now.call(performance);',"Date['now']();",'new Date();','new Worker(\'x\');',"import('node:fs');","import {BoundedReadSession} from '../../../src/servicenow/bounded-read.js';const zzRoot=BoundedReadSession;"])
   assert.throws(()=>auditSyntheticIssuer(recoveryText+'\n'+leak,recoveryImports),assert.AssertionError,'SR-A audit missed seeded leak: '+leak);
 console.log('SR-A/C1 separate synthetic issuer/closure contracts excluded; no runtime/I/O/clock/worker imports or references + negative controls PASS');
-const rootKernelText=readFileSync(join(root,'tests/support/review/synthetic-recovery-kernel.ts'),'utf8'),rootKernelImports=['node:util','zod','./synthetic-phase-recovery.js','./synthetic-worker-recovery-input.js','./synthetic-worker-recovery-verify.js','./synthetic-finish-plan-binding.js'];
+const rootKernelText=readFileSync(join(root,'tests/support/review/synthetic-recovery-kernel.ts'),'utf8'),rootKernelImports=['node:util','zod','./synthetic-phase-recovery.js','./synthetic-worker-recovery-input.js','./synthetic-worker-recovery-verify.js','./synthetic-finish-plan-binding.js','./synthetic-finish-context-values.js'];
 const finishRootText=readFileSync(join(root,'tests/support/review/synthetic-finish-recovery-root.ts'),'utf8'),finishRootImports=['node:util','zod','./synthetic-recovery-kernel.js'];
 auditSyntheticIssuer(rootKernelText,rootKernelImports);auditSyntheticIssuer(finishRootText,finishRootImports);
 const rootMarkers=['synthetic-recovery-kernel','createSyntheticRecoveryKernel','createSyntheticLifecycleRecoveryKernel','createSyntheticFinishBindingKernel','synthetic-recovery-lifecycle','synthetic-finish-recovery-root','createSyntheticFinishRecoveryRoot','synthetic_finish_recovery_root','synthetic_finish_recovery_binding','synthetic_finish_recovery_observation','synthetic_finish_recovery_claim'];
@@ -131,7 +131,7 @@ for(const [text,imports] of [[pinText,pinImports],[pinnedRootText,pinnedRootImpo
 console.log('RB-B private pin supplier/root excluded; pure dependency graphs + seeded runtime/I/O/clock/worker/leak controls PASS');
 const bindingText=readFileSync(join(root,'tests/support/review/synthetic-finish-plan-binding.ts'),'utf8'),bindingImports=['./synthetic-finish-context-values.js'];
 auditSyntheticIssuer(bindingText,bindingImports);
-const bindingMarkers=['synthetic-finish-plan-binding','projectSyntheticFinishPlanBinding','SyntheticFinishPlanView','SyntheticFinishRouteView','synthetic_finish_plan_projection','synthetic-recovery-plan-binding','synthetic-finish-issue','SyntheticIssuedFinishContext','synthetic_issued_finish_context','issueFinishContext'];
+const bindingMarkers=['synthetic-finish-plan-binding','projectSyntheticFinishPlanBinding','SyntheticFinishPlanView','SyntheticFinishRouteView','synthetic_finish_plan_projection','synthetic-recovery-plan-binding','synthetic-finish-issue','SyntheticIssuedFinishContext','synthetic_issued_finish_context','issueFinishContext','synthetic-finish-accept','SyntheticAcceptedFinishContext','synthetic_accepted_finish_context','acceptRecoveryFinishContext'];
 const noFinishBinding=text=>assert(!bindingMarkers.some(x=>text.includes(x)),'RB-D binding projection leaked into runtime');
 for(const marker of bindingMarkers)assert.throws(()=>noFinishBinding(marker));
 assert(!pack.files.some(f=>/synthetic-finish-plan-binding|synthetic-recovery-plan-binding/.test(f.path)));

@@ -16,6 +16,8 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 ### Changed
 
+- RA-03-A adds package-excluded synthetic acceptance of the same recovery handoff, issued context and one-shot route claim in one protected section. Consumed slots are never restored; bounded revalidation and comparison complete before a separately branded non-executable accepted handle is published. Live invalidation drops expectations while preserving terminal-only ownership, which blocks normal close until the separate RA-03-B discard path exists. No production issuance, finish execution, runtime connection or whole-run admission is enabled.
+
 - RA-02④-A adds a package-excluded, synthetic-only finish issue slot in the same recovery kernel. A one-shot claim revalidates private pins and the live route, publishes an empty branded handle only after the post guard, and revokes it synchronously on source close, cleanup start or hard stop. Fixed receiver discard also clears issued state. Legacy roots remain unchanged; no RA-03 consumer, production issuance, runtime connection or whole-run admission is enabled.
 
 - RB-D binds the same synthetic recovery plan/handoff once to constructor-pinned values and the live private route. Mixed handles, competing branches, revocation and failed reuse stop while retaining diagnostics; source close and cleanup start invalidate the binding. Bounded value projection retains the original frame and exposes counts only. No finish evidence, real connection or whole-run admission is enabled.
