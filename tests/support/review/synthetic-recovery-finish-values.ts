@@ -1,13 +1,15 @@
-/** RD-B01: strict bounded structure-only values. No owner, issuer, comparison or dispatch. */
+/** RD-B01/03: bounded local values/comparison only. No owner, evidence or dispatch. */
 import {types} from 'node:util';
 import {z} from 'zod';
 import {aggregateReviewStructure,aggregateReviewV3Structure,assetOutcomeStructure} from '../../../src/review/aggregate-schema.js';
-import {bp5RuleIdsSchema,releaseEvidenceStructure} from '../../../src/review/result-schema-v2.js';
+import {bp5RuleIdsSchema,releaseEvidenceStructure,bp5RulesetFor,checkReleaseEvidence,releaseMatchForEvidence} from '../../../src/review/result-schema-v2.js';
+import {requestedAssetTypes,TARGET_LIMITATIONS} from '../../../src/review/target-selection.js';
+import {finishEndOutsideBounds,sameFinishRuleSet,sameFinishReleaseEncoding} from './synthetic-finish-scalars.js';
 export const RECOVERY_FINISH_VALUE_LIMITS=Object.freeze({depth:8,array:100,object_keys:30,nodes:10000,character_units:262144});
-export class RecoveryFinishValueError extends Error{readonly code='internal_review_error';constructor(readonly reason:'shape'|'limit'){super('internal_review_error');}}
-const bad=(reason:'shape'|'limit'='shape'):never=>{throw new RecoveryFinishValueError(reason);};
+export class RecoveryFinishValueError extends Error{readonly code='internal_review_error';constructor(readonly reason:'shape'|'limit'|'mismatch'){super('internal_review_error');}}
+const bad=(reason:'shape'|'limit'|'mismatch'='shape'):never=>{throw new RecoveryFinishValueError(reason);};
 const expectationBrand=Symbol('synthetic_recovery_finish_expectation_value_only'),replyBrand=Symbol('synthetic_recovery_finish_reply_value_only');
-declare const checkBrand:unique symbol;
+const checkBrand=Symbol('synthetic_recovery_finish_comparison_value_only');
 const unverified=Object.freeze(['binding_provenance','context_and_manifest','time_consistency','original_body','full_schema','wire'] as const);
 const contentEvidence=z.strictObject({original_body:z.literal('unknown'),full_schema:z.literal('unverified'),wire:z.literal('unverified')});
 const reference=z.custom<object>(v=>!!v&&typeof v==='object'&&!types.isProxy(v));
@@ -68,11 +70,93 @@ type DeepValue<T>=T extends readonly(infer E)[]?readonly DeepValue<E>[]:T extend
 type Usage=ReturnType<Budget['usage']>;
 export type SyntheticRecoveryFinishExpectationValues=Readonly<{scope:'synthetic_recovery_finish_expectation_values';authority:'none';validation_scope:'structure_only';unverified:typeof unverified;value:DeepValue<z.infer<typeof expectationSchema>>;usage:Usage;[expectationBrand]:'expectation_value_only'}>;
 export type SyntheticRecoveryFinishReplyValues=Readonly<{scope:'synthetic_recovery_finish_reply_values';authority:'none';validation_scope:'structure_only';unverified:typeof unverified;value:DeepValue<z.infer<typeof replySchema>>;usage:Usage;[replyBrand]:'reply_value_only'}>;
-/** Reserved contract for RD-B03; no constructor/issuer exists in RD-B01. */
+/** Local context/manifest comparison only; never proof of original body or provenance. */
 export type SyntheticRecoveryFinishValueCheck=Readonly<{scope:'synthetic_recovery_finish_value_check';authority:'none';checked_scope:'context_and_manifest_only';matches:boolean;unverified:readonly['binding_provenance','original_body','full_schema','wire'];usage:Usage;[checkBrand]:'comparison_value_only'}>;
 export function projectRecoveryFinishExpectation(raw:unknown):SyntheticRecoveryFinishExpectationValues{
   try{const budget=new Budget(),p=expectationSchema.safeParse(collect(raw,budget,true));if(!p.success)bad();return Object.freeze({scope:'synthetic_recovery_finish_expectation_values',authority:'none',validation_scope:'structure_only',unverified,value:freeze(p.data,true) as DeepValue<z.infer<typeof expectationSchema>>,usage:budget.usage(),[expectationBrand]:'expectation_value_only' as const});}catch(error){if(error instanceof RecoveryFinishValueError)throw error;return bad();}
 }
 export function projectRecoveryFinishReply(raw:unknown):SyntheticRecoveryFinishReplyValues{
   try{const budget=new Budget(),p=replySchema.safeParse(collect(raw,budget,false));if(!p.success)bad();return Object.freeze({scope:'synthetic_recovery_finish_reply_values',authority:'none',validation_scope:'structure_only',unverified,value:freeze(p.data,false) as DeepValue<z.infer<typeof replySchema>>,usage:budget.usage(),[replyBrand]:'reply_value_only' as const});}catch(error){if(error instanceof RecoveryFinishValueError)throw error;return bad();}
+}
+type ExpectedValues=z.infer<typeof expectationSchema>;
+type ReplyValues=z.infer<typeof replySchema>;
+const unique=<T>(values:readonly T[])=>{if(new Set(values).size!==values.length)bad('mismatch');};
+function equalData(a:unknown,b:unknown):boolean{
+  if(a===b)return true;
+  if(!a||!b||typeof a!=='object'||typeof b!=='object'||Array.isArray(a)!==Array.isArray(b))return false;
+  const x=Object.keys(a).sort(),y=Object.keys(b).sort();
+  return x.length===y.length&&x.every((k,i)=>k===y[i]&&equalData((a as Record<string,unknown>)[k],(b as Record<string,unknown>)[k]));
+}
+function compareManifest(a:ExpectedValues,b:ReplyValues){
+  unique(a.selected);unique(a.inputs.map(i=>i.update_xml_sys_id));unique(a.inputs.map(i=>i.receipt));
+  unique(a.outcomes.map(i=>i.update_xml_sys_id));unique(b.assets.map(i=>i.update_xml_sys_id));
+  if(a.selected.some((id,i)=>i>0&&a.selected[i-1]>=id)||a.outcomes.length!==a.selected.length||a.outcomes.some((r,i)=>r.update_xml_sys_id!==a.selected[i])||b.assets.length!==a.selected.length)bad('mismatch');
+  const rows=new Map(a.outcomes.map(r=>[r.update_xml_sys_id,r])),inputs=new Map(a.inputs.map(i=>[i.update_xml_sys_id,i]));
+  const accepted=new Set<object>();let upper=Date.parse(a.time.observed_at),unfinished=0;
+  for(const i of a.inputs){
+    const row=rows.get(i.update_xml_sys_id),t=Date.parse(i.retrieved_at);
+    if(!row||t<upper||t>Date.parse(a.time.upper_utc)||(i.state==='not_processed')!==(row.state==='not_processed'))bad('mismatch');
+    upper=t;if(i.state==='not_processed')unfinished++;
+    const ex=i.expected_context;
+    if(ex){
+      unique(ex.requested_rule_ids);unique(ex.release_limitations);
+      if(ex.instance_binding!==a.header.target.instance_binding||!sameFinishReleaseEncoding(JSON.stringify(ex.instance_release),JSON.stringify(a.header.instance_release))||ex.requested_rule_ids.some(r=>!a.header.coverage.requested_rule_ids.includes(r))||ex.release_limitations.some(x=>!a.header.limitations.includes(x))||checkReleaseEvidence(ex.instance_release,i.retrieved_at,ex.instance_binding,ex.release_limitations).length)bad('mismatch');
+    }
+  }
+  if(!unfinished||upper!==Date.parse(a.time.upper_utc))bad('mismatch');
+  for(const row of a.outcomes){
+    const input=inputs.get(row.update_xml_sys_id);
+    const origin=row.state==='reviewed'?row:row.state==='result_omitted'?row.reviewed_origin:null;
+    if(row.state==='result_omitted'&&(!input||input.state!=='completed'))bad('mismatch');
+    if(origin){if(!input||input.state!=='completed'||!input.expected_context||origin.receipt!==input.receipt||accepted.has(origin.accepted_outcome))bad('mismatch');accepted.add(origin.accepted_outcome);}
+  }
+  for(const actual of b.assets){
+    const expected=rows.get(actual.update_xml_sys_id);if(!expected)bad('mismatch');
+    if(expected!.state==='reviewed'){
+      if(actual.state==='result_omitted'){if(!b.header.limitations.includes('response_truncated'))bad('mismatch');continue;}
+      if(actual.state!=='reviewed')return bad('mismatch');
+      const input=inputs.get(actual.update_xml_sys_id)!,context=input.expected_context!,r=actual.result,t=r.target;
+      unique(actual.applicable_rule_ids);unique(r.coverage.requested_rule_ids);unique(r.limitations);
+      if(r.reviewed_at!==input.retrieved_at||t.retrieved_at!==input.retrieved_at||t.update_set_id!==a.header.target.update_set_sys_id||t.update_xml_sys_id!==input.update_xml_sys_id||t.record_updated_at!==context.record_updated_at||r.instance_binding!==context.instance_binding||
+        !sameFinishRuleSet(actual.applicable_rule_ids,context.requested_rule_ids)||!sameFinishRuleSet(r.coverage.requested_rule_ids,context.requested_rule_ids)||!sameFinishReleaseEncoding(JSON.stringify(r.instance_release),JSON.stringify(context.instance_release))||context.release_limitations.some(x=>!r.limitations.includes(x)))bad('mismatch');
+    }else if(expected!.state==='result_omitted'){
+      if(actual.state!=='result_omitted'||actual.reason!==expected!.reason)bad('mismatch');
+    }else if(!equalData(expected,actual))bad('mismatch');
+  }
+}
+function compareHeaderAndTime(a:ExpectedValues,b:ReplyValues){
+  const h=a.header,r=b.header,t=a.time,S=Date.parse(t.started_at),O=Date.parse(t.observed_at),U=Date.parse(t.upper_utc);
+  if(S>O||O>U||U>S+t.deadline_ms||h.started_at!==t.started_at||h.collection.selected!==a.selected.length||a.run_status!==(h.collection.status==='failed'?'failed':'partial')||b.run_status!==a.run_status||b.consistency!==a.consistency)bad('mismatch');
+  const seen=h.collection.metadata_seen,max=h.limits.max_records;
+  // An initial failed collection cannot supply the nonempty active-input contract.
+  if(h.collection.status==='failed'&&(seen||h.collection.selected||h.collection.truncated||a.consistency!=='unverified'))bad('mismatch');
+  if(seen>max+1||h.collection.selected!==Math.min(seen,max)||h.collection.truncated!==(seen>max)||h.collection.truncated&&!h.limitations.includes('metadata_truncated'))bad('mismatch');
+  unique(h.coverage.requested_rule_ids);unique(r.coverage.requested_rule_ids);unique(h.limitations);unique(r.limitations);
+  if(h.coverage.skipped_rules.length||h.versions.ruleset!==bp5RulesetFor(h.coverage.requested_rule_ids)||releaseMatchForEvidence(h.instance_release)!=='matched')bad('mismatch');
+  if(!sameFinishRuleSet(h.coverage.requested_rule_ids,r.coverage.requested_rule_ids)||h.limitations.some(x=>!r.limitations.includes(x))||!sameFinishReleaseEncoding(JSON.stringify(h.instance_release),JSON.stringify(r.instance_release)))bad('mismatch');
+  // All fixed header facts remain exact; only requested-rule order and added warnings vary.
+  for(const key of Object.keys(h) as (keyof typeof h)[]){
+    if(key==='coverage'||key==='limitations'||key==='instance_release')continue;
+    if(!equalData(h[key],r[key]))bad('mismatch');
+  }
+  if(!equalData({...h.coverage,requested_rule_ids:[]},{...r.coverage,requested_rule_ids:[]}))bad('mismatch');
+  const release=h.instance_release;
+  if(release.source==='sys_cluster_state.build_name'&&checkReleaseEvidence(release,t.observed_at,h.target.instance_binding,h.limitations).length)bad('mismatch');
+  if(checkReleaseEvidence(release,release.source==='operator_config'?t.started_at:b.ended_at,h.target.instance_binding,r.limitations).length||release.source==='operator_config'&&Date.parse(release.expires_at)<=S+60000)bad('mismatch');
+  if(h.schema_version==='bp-mcp-review-0.3'){
+    if(!equalData(h.selection.requested_asset_types,requestedAssetTypes(h.coverage.requested_rule_ids))||TARGET_LIMITATIONS.some(x=>!h.limitations.includes(x))||a.outcomes.some(x=>x.state==='skipped_deleted'))bad('mismatch');
+    for(const error of h.errors.filter(e=>e.code==='candidate_filter_violation'))if(error.update_xml_sys_id||a.consistency!=='unverified'||!['metadata','consistency'].includes(error.stage)||error.stage==='metadata'&&h.collection.status!=='failed'||error.stage==='consistency'&&h.collection.status!=='complete')bad('mismatch');
+  }
+}
+export function compareRecoveryFinishValues(rawExpectation:unknown,rawReply:unknown):SyntheticRecoveryFinishValueCheck{
+  try{
+    const budget=new Budget(),a=expectationSchema.safeParse(collect(rawExpectation,budget,true));if(!a.success)bad();
+    const b=replySchema.safeParse(collect(rawReply,budget,false));if(!b.success)bad();
+    const expected=a.data!,reply=b.data!,t=expected.time;
+    if(finishEndOutsideBounds(Date.parse(reply.ended_at),Date.parse(t.upper_utc),Date.parse(t.started_at),t.deadline_ms))bad('mismatch');
+    compareHeaderAndTime(expected,reply);
+    compareManifest(expected,reply);
+    return Object.freeze({scope:'synthetic_recovery_finish_value_check',authority:'none',checked_scope:'context_and_manifest_only',matches:true,
+      unverified:Object.freeze(['binding_provenance','original_body','full_schema','wire'] as const),usage:budget.usage(),[checkBrand]:'comparison_value_only' as const});
+  }catch(error){if(error instanceof RecoveryFinishValueError)throw error;return bad();}
 }

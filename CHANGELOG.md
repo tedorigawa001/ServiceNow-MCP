@@ -16,6 +16,8 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 ### Changed
 
+- RD-B03 adds a package-excluded, synthetic-only recovery finish comparison with one shared two-input projection budget. It checks the fixed manifest, receipt origins, reviewed context, retained timestamps and header facts while preserving required diagnostics and omission limits. Its separately branded result is non-executable and explicitly leaves provenance, original body, full-schema and wire guarantees unverified; no sealing, job or runtime authority is enabled.
+
 - RD-B02 extracts package-excluded scalar predicates for validated rule sets, unchanged release JSON encodings and inclusive finish-time bounds, and reconnects the ordinary synthetic WJ-C checks without moving parsing, guards or ownership. Independent oracles and regressions preserve duplicate-rule and unresolved-receipt rejection; recovery comparison, sealing and runtime authority remain disabled.
 
 - RD-B01 adds package-excluded, separately branded structure-only recovery finish expectation/reply projections with strict variants and shared per-projection depth, array, key, node and character-unit limits. Opaque references are preserved without traversal or authority; original-body, origin, semantic time/set matching, full-schema and wire guarantees remain explicitly unverified. The comparison-result type has no constructor yet. No owner, seal, job, candidate or runtime connection is enabled.

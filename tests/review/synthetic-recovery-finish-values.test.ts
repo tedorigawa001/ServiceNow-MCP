@@ -81,7 +81,7 @@ it('accepts explicit null-prototype data containers and preserves structural-onl
   const raw=reply();Object.setPrototypeOf(raw,null);Object.setPrototypeOf(raw.header.target,null);expect(projectRecoveryFinishReply(raw).validation_scope).toBe('structure_only');
 });
 it('has no owner/issuer/candidate/clock/transport entry and does not claim full body verification',async()=>{
-  const api=await import('../support/review/synthetic-recovery-finish-values.js');expect(Object.keys(api).sort()).toEqual(['RECOVERY_FINISH_VALUE_LIMITS','RecoveryFinishValueError','projectRecoveryFinishExpectation','projectRecoveryFinishReply'].sort());
+  const api=await import('../support/review/synthetic-recovery-finish-values.js');expect(Object.keys(api).sort()).toEqual(['RECOVERY_FINISH_VALUE_LIMITS','RecoveryFinishValueError','projectRecoveryFinishExpectation','projectRecoveryFinishReply','compareRecoveryFinishValues'].sort());
   for(const p of [projectRecoveryFinishExpectation(expectation()),projectRecoveryFinishReply(reply())]){expect(p.value.content_evidence).toEqual(evidence());expect(p.unverified).toEqual(['binding_provenance','context_and_manifest','time_consistency','original_body','full_schema','wire']);expect(p).not.toHaveProperty('candidate');}
 });
 it('rejects invalid per-state field combinations instead of stripping them',()=>{

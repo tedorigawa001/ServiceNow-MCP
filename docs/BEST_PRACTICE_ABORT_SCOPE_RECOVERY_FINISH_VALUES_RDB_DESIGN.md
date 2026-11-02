@@ -1,7 +1,7 @@
 # RD-B 回復finish期待値封印・集合／時刻比較 詳細設計
 
-Version: br006-recovery-finish-values-rdb-draft-0.3 / Date: 2026-11-02。
-Status: **RD-B01のstrict構造projectionとRD-B02の最小scalar共有・通常WJ-C接続まで合成限定実装。RD-B03〜04は未実装。正式発行口閉鎖・全体受付無効・Unknown・VM／監視／telemetry調査保留を維持する。**
+Version: br006-recovery-finish-values-rdb-draft-0.4 / Date: 2026-11-02。
+Status: **RD-B01〜03のstrict構造projection・最小scalar共有・回復用局所値比較まで合成限定実装。RD-B04の同accepted封印・owner接続は未実装。正式発行口閉鎖・全体受付無効・Unknown・VM／監視／telemetry調査保留を維持する。**
 
 基準HEAD: `4653cd2`。[SR-D](BEST_PRACTICE_ABORT_SCOPE_RECOVERY_FINISH_SRD_DESIGN.md)§2〜5・8のRD-Bと、[RA-03-A／B](BEST_PRACTICE_ABORT_SCOPE_FINISH_ISSUE_ACCEPT_DESIGN.md)§10〜11の間の差分。実装・証拠発行・fake finish dispatch・実接続・実通信・設定変更・Pushの承認ではない。
 
@@ -118,7 +118,7 @@ full worker応答をこの局所projectionへそのままparseしてfull schema�
 | --- | --- |
 | RD-B01（合成実装済み） | 別brandのstrict期待値／応答projectionと、発行関数のない比較結果型。structure-onlyの純粋bounded値層。不足列・未知state・余分key・総量超過を拒否。本文／意味比較Unknownを明示 |
 | RD-B02（合成実装済み） | 小さなscalar predicateの最小抽出と通常WJ-C接続。全旧試験と未完了receipt拒否を維持。独立field差替え・集合／E oracleで新旧の責務を分離 |
-| RD-B03 | 回復manifest／T_i・U・E・header比較の純粋接続。state遷移表と0.2／0.3・operator境界の独立oracle。本文不足でfull検証／候補に昇格しない |
+| RD-B03（合成実装済み） | 回復manifest／T_i・U・E・header比較の純粋接続。state遷移表と0.2／0.3・operator境界の独立oracle。本文不足でfull検証／候補に昇格しない |
 | RD-B04 | 同acceptedからの一度限り封印・同owner／frameへのbindingとRA-03-Bのsealed破棄連結。両guard・再入・混入・失効・競合を合成検査。job送信はしない |
 
 期待値を応答から生成して同じ関数同士で比較するだけの試験にしない。正本fixtureと独立したID／state表・UTC算術・必要制限のoracleを用意し、追加／欠落／同長重複、未取得行と取得済み未処理、active T_i≠U、Eの両端±1ms、短いL、設定expiry境界、reviewed→omittedと不正昇格を確認する。
@@ -135,7 +135,7 @@ source／cleanup開始後のseal、summary／copy／別root、二重seal、seal�
 - 実verify・実session／ReleasePermit／payload／workerの正式binding、実clock／OS終了・外側監督との連結は対象外。
 - 追加work／allocationモデル・本番cap・全体受付は未承認／Unknown。設定日時長の新capやruntime規則を追加しない。
 
-draft-0.1はMDだけを作成した。後続の合成実装は§11〜12。回復用意味比較・封印はRD-B03〜04へ残す。新たな合成証拠／候補発行・実接続・実機操作・設定変更・Pushは行わない。
+draft-0.1はMDだけを作成した。後続の合成実装は§11〜13。同accepted封印・owner接続はRD-B04へ残す。新たな合成証拠／候補発行・実接続・実機操作・設定変更・Pushは行わない。
 
 ## 11 RD-B01の実装契約
 
@@ -156,13 +156,13 @@ headerはRA-01相当の0.2／0.3 strict列、matched release・complete／failed
 
 content_evidenceはoriginal_body=unknown／full_schema=unverified／wire=unverifiedのstrict固定3項目。project結果はauthority:none／validation_scope:structure_onlyと別々のprivate Symbol brandを持つ。unverifiedはbinding_provenance, context_and_manifest, time_consistency, original_body, full_schema, wireの固定6項目で、stateに応じて勝手に消さない。usageはnodes／character_unitsだけ。
 
-`SyntheticRecoveryFinishValueCheck`はRD-B03向けの別brand型だけ定義し、constructor／factoryは実装しない。projectionにはmatches・成功候補・実行権を付けない。重複集合・時刻逆行・header不整合を型として読めても意味比較済みとはならない。後続consumerがstructure-onlyを比較成功として受理することを禁止する。
+RD-B01では`SyntheticRecoveryFinishValueCheck`を別brand型だけ定義した。RD-B03で§13の局所比較関数からだけ生成するが、従来projectionにはmatches・成功候補・実行権を付けない。重複集合・時刻逆行・header不整合を型として読めても意味比較済みとはならない。後続consumerがstructure-onlyを比較成功として受理することを禁止する。
 
 collectorは入力全体で深さ8・配列100・object項目30・訪問10,000・文字費262144を共有する。文字列とobject keyはUTF-16 length×3を課金し、配列index keyとlengthは文字費に数えない。opaque参照は1 nodeとして型／非Proxyだけを検査し、内部を読まず、freezeもしない。frame等のdata containerはcopyして深くfreezeする。node／文字費にZod内部copy・出力metadata・opaque graphの保持メモリ・ownKeys等のnative処理費は含めず、実メモリ／work／wireの上界はUnknownのまま。
 
-不正shapeと局所limit超過は型付き`RecoveryFinishValueError`で区別するが、message／codeは常にinternal_review_error。raw値・Zod issue・例外causeを返さない。二入力共有予算を使う実比較はまだ存在しないため、その保証はRD-B03で接続・検証する。
+不正shapeと局所limit超過は型付き`RecoveryFinishValueError`で区別するが、message／codeは常にinternal_review_error。raw値・Zod issue・例外causeを返さない。RD-B03ではmismatchを追加し、二入力共有枠を§13で接続・検証する。既存の単独projectionのshape／limit契約は維持する。
 
-[RD-B01合成検証記録](E2E_BEST_PRACTICE_RECOVERY_FINISH_VALUES_RDB01_2026-11-02.md)参照。RD-B02は§12。RD-B03の集合／時刻／context比較・RD-B04の同accepted封印とRA-03-B破棄接続は未実装。
+[RD-B01合成検証記録](E2E_BEST_PRACTICE_RECOVERY_FINISH_VALUES_RDB01_2026-11-02.md)参照。RD-B02は§12、RD-B03は§13。RD-B04の同accepted封印とRA-03-B破棄接続は未実装。
 
 ## 12 RD-B02の最小scalar共有
 
@@ -173,3 +173,21 @@ collectorは入力全体で深さ8・配列100・object項目30・訪問10,000�
 - `finishEndOutsideBounds`：検査済みUTC epochと実効Lに対しE<UまたはE>S+Lだけを返す。両端はinclusive。有限値・UTC構文の検査やoperator_configのS+60000厳密expiry判定は既存callerの責務を維持する。target／T_iのfield読取・比較は抽出せず既存位置に残す。
 
 通常ownerの`receipts.size > 0`拒否を維持し、allow_pending・新claim・回復owner接続は追加しない。通常WJ-Cの既存82件は抽出前後でfullName集合と成功を比較した。独立集合／UTC oracle・重複rule拒否・未完了receiptの負の対照は[RD-B02検証記録](E2E_BEST_PRACTICE_RECOVERY_FINISH_SCALARS_RDB02_2026-11-02.md)参照。既存局所枠の受付範囲・公開JSON／MCP・実Permitは変更しない。追加work／allocationはUnknownで、全体受付は有効化しない。
+
+## 13 RD-B03の回復用局所値比較
+
+`compareRecoveryFinishValues(rawExpectation, rawReply)`は二つのraw値だけを受ける純粋関数。同moduleのBudgetを一つだけ生成し、期待値のcollect／strict parse、応答のcollect／strict parseを順に行う。各入力を別枠でprojectして比較へ流す入口は設けない。既存projection wrapperや比較summaryはraw schemaに適合せず拒否する。単独projectionの構造専用APIは維持する。
+
+成功時だけ別Symbol brandの`SyntheticRecoveryFinishValueCheck`を返す。authority:none、checked_scope:context_and_manifest_only、matches:true、二入力合算のusage、固定unverified（binding_provenance／original_body／full_schema／wire）のみ。期待値・opaque参照・raw本文を返さず、候補・発行claim・一度限りの権限を持たない。純粋関数の反復呼出しは可能で、RD-B04のowner消費の代わりにはならない。失敗はshape／limit／mismatch、公開code／messageはinternal_review_errorに固定する。
+
+検査順はE区間、期待header／時刻・固定header比較、期待manifest／input台帳、応答asset比較。S≤O≤T_i≤U≤E≤S+Lを全inputに適用し、input順はT_i非減少・最後の値がU、少なくとも一つの取得済みnot_processedを要求する。active T_iから過去のreviewed T_iを作り直さない。sys_cluster_stateのrelease観測は元Oまでに存在することも確認し、E時点だけの妥当性で救済しない。operator_configのexpiryは実効LやEではなくS+60000より厳密に後であることを確認する。
+
+selectedは重複なしの昇順、期待outcomeは同じ順で各ID一度。入力のID／receiptも一度で、応答assetの追加・欠落・重複・同長差替えを拒否する。応答順のみ変更可。completed／not_processedの対応、reviewedの同receipt／expected_context、accepted_outcome参照の重複利用、omittedのcompleted inputとreviewed_origin参照を検査する。ただしこれらはraw値内の局所同一性であり、実owner由来の証明ではない。
+
+reviewedのtarget／T_i／release／rule／必要limitationsを比較する。reviewed→result_omittedだけはreason=response_limitと応答response_truncatedを要求する。元omittedからreviewedへの復帰や、他state・reason・asset_typeの置換は不可。未取得not_processedにはinputや時刻を補わない。元omittedのreviewed_origin=nullはUnknownを保持し、本文証拠にしない。
+
+headerのtarget・versions・開始UTC・principal・collection・limits・errors・0.3 selectionは固定一致。requested ruleは重複を拒否して順序差だけ許し、coverageの他列は固定。必要limitationsを削除せず、応答の追加警告は許す。元run_status／consistencyも固定し、collection failedならfailed、その他はpartialを要求する。ruleset導出、release matched、skipped_rules空、0.3の対象種別／inventory制限／candidate_filter_violationと削除行の制限を検査する。
+
+**停止境界の明確化：** 初回metadata collection failedは既存aggregateと同じく件数0・truncated=false・consistency=unverifiedが必要だが、本段階の回復契約は非空selected／active inputを必須にする。この組合せを矛盾なく供給できないため、failed初回collectionの回復比較は拒否し、ゼロ件やreceiptを合成して救済しない。構造projectionがfailedを読めることと、意味比較が受理することを区別する。RA-01や通常WJ-Cの挙動は変更しない。
+
+[RD-B03検証記録](E2E_BEST_PRACTICE_RECOVERY_FINISH_COMPARE_RDB03_2026-11-02.md)参照。二入力合算のnode／文字費は確認するが、Zod copy・比較work・allocation・実wire費用はUnknown。取消／期限切れのpost-guard優先・同期失効・一度限りのsealはowner接続の別責務であり、本純粋関数が実行したとは主張しない。元結果本文／findingsの内容保証・full集約schemaは未接続のまま。
