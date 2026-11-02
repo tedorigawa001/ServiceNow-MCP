@@ -1,7 +1,7 @@
 # RD-A FinishContextEvidenceの詳細型・private発行契約
 
-Version: br006-finish-context-rda-draft-0.13 / Date: 2026-11-02。
-Status: **RA-01・RA-02①②・RB-A〜D・RA-02④-AとRA-03-Aの原子的受理まで合成限定実装。RA-03-Bは未実装。正式発行口閉鎖・Unknown・全体受付無効・VM／監視／telemetry調査保留を維持する。**
+Version: br006-finish-context-rda-draft-0.14 / Date: 2026-11-02。
+Status: **RA-01・RA-02①②・RB-A〜D・RA-02④-AとRA-03-A／Bの受理／固定discardまで合成限定実装。正式発行口閉鎖・Unknown・全体受付無効・VM／監視／telemetry調査保留を維持する。**
 
 基準HEAD: `a62c897`。[SR-D接続設計](BEST_PRACTICE_ABORT_SCOPE_RECOVERY_FINISH_SRD_DESIGN.md)§1〜3・9のRD-Aを具体化する。[SC2-D](BEST_PRACTICE_ABORT_SCOPE_WORKER_RECOVERY_CONTINUATION_DESIGN.md)と[通常WJ-C](BEST_PRACTICE_ABORT_SCOPE_WORKER_TIME_BINDING_DESIGN.md)の既存契約は維持する。コード・公開JSON／MCP・設定を変更する指示ではなく、実接続・実通信・本番cap／Permit投入の承認ではない。
 
@@ -139,7 +139,7 @@ cleanup_originは同新frameのprivate cleanup lifecycle identityと開始serial
 
 ## 5 発行・一度限りの受理・状態
 
-RB-D実装後の具体的なslot移譲・discard競合・失効／解放責務は、[発行・RA-03受理接続差分draft-0.3](BEST_PRACTICE_ABORT_SCOPE_FINISH_ISSUE_ACCEPT_DESIGN.md)で補足する。同設計§9〜10のRA-02④-A／RA-03-Aまで合成実装済み。正式発行口閉鎖・非実行の制限は維持する。
+RB-D実装後の具体的なslot移譲・discard競合・失効／解放責務は、[発行・RA-03受理接続差分draft-0.4](BEST_PRACTICE_ABORT_SCOPE_FINISH_ISSUE_ACCEPT_DESIGN.md)で補足する。同設計§9〜11のRA-02④-A／RA-03-A／Bまで合成実装済み。正式発行口閉鎖・非実行の制限は維持する。
 
 issueとacceptは同ownerのguard／busy／hardを共有する。先にbusy／hard／bindingを検査し、他ownerのslotを検索・消費しない。その後は自分のslotを先に占有するため、不一致handleによる失敗でも自ownerのclaimを戻さない。
 
@@ -182,7 +182,7 @@ headerと全receipt／outcome projectionを合わせ、一つの収集予算で�
 |---|---|
 | RA-01（値層実装済み） | 別brand・strict値型とbounded projection／比較。不足項目・不正variant・総量超過を拒否。発行や実行能力なし |
 | RA-02（合成一度限り発行まで実装） | ①②・RB-A〜Dと④-Aの同kernel issue／同期失効／固定discard接続。元analyze受理capture・正式発行は未実装。旧factory／SC2-Dを維持、外部owner登録・responseからの昇格なし |
-| RA-03-A（合成実装済み） | 同handoff／証拠／routeの原子的消費・post後の非実行accepted、同期失効と終端専用slot保持。正常discardはRA-03-Bに残す |
+| RA-03-A／B（合成実装済み） | 同handoff／証拠／routeの原子的消費・非実行accepted、同期失効と終端専用slot、同source／新frame完了受領情報による一度限りの固定discard。finish能力は返さない |
 
 RD-B/C/Dへ進む前に各段階の実コード配置・抽出範囲を確認する。通常WJ-Cの未完了receipt拒否、full schemaの責務、公開JSON／MCP、実transport／workerは変更しない。新しい本番capやconfig日時長policyを入れない。
 
@@ -198,7 +198,7 @@ RD-B/C/Dへ進む前に各段階の実コード配置・抽出範囲を確認す
 - 新analyze／input／HTTP／E採取／finishは0、同C/G/Pを保持。hard後のcleanup診断回収と能力復活0、元UTCの終端保持、秘密非出力を確認する。
 - 既存SC2-A〜D・SR-A/B/C①・通常WJ-A/B/Cを維持し、関数／brand／scope／path／宣言／mapの非同梱、I/O／時計／worker依存と漏出の負の対照を別確認する。compiled保証／B-03は別工程。
 
-private lifecycle・発行・原子的受理はRB-C／D・RA-02④-A／RA-03-Aの合成状態だけ実装した。元analyze受理のcapture hook／immutable結果の由来とaccepted固定discardは未実装。RA-01や合成counterだけで確認済みにしない。full結果／wire比較・Eと候補はRD-B/C、正常source／新cleanup能力と一度候補消費はRD-Dへ残す。phase型・実session／ReleasePermit／payload／worker jobの正式binding、実finish／runtime・実通信・設定変更は対象外。
+private lifecycle・発行・受理・固定discardはRB-C／D・RA-02④-A／RA-03-A／Bの合成状態だけ実装した。元analyze受理のcapture hook／immutable結果の由来は未実装。RA-01や合成counterだけで確認済みにしない。full結果／wire比較・Eと候補はRD-B/C、正常source／新cleanup能力と一度候補消費はRD-Dへ残す。RA-03-Bの完了受領情報はdiscard専用であり、RD-D能力の代替ではない。phase型・実session／ReleasePermit／payload／worker jobの正式binding、実finish／runtime・実通信・設定変更は対象外。
 
 ## 9 RA-01実装範囲と制限
 
@@ -242,6 +242,6 @@ seed copyは深さ8・object項目30・配列100・訪問10,000・文字費26214
 
 [RA-02①②検証記録](E2E_BEST_PRACTICE_FINISH_ASSEMBLY_RA02_2026-11-02.md)を参照。このdata-only assembly自体はSourceLifecycleSlot／NewFrameRouteSlotを持たないまま維持する。後続の同kernel発行slotとRA-03-Aの原子的受理は新固定入口だけに追加した。本来のanalyze受理captureは未実装で、準備成功だけをFinishContextEvidenceへ昇格しない。
 
-次段の[RA-02③接続差分設計draft-0.9](BEST_PRACTICE_ABORT_SCOPE_FINISH_ASSEMBLY_RA02_BINDING_DESIGN.md)では、別ownerの外部登録を避ける共通kernel生成境界、同receipt／handoffとlive routeの結合、worker起動とcleanup開始serialの分離を整理した。RB-A〜Dの結合に続く合成発行・受理は[RA-02④-A／RA-03-A](BEST_PRACTICE_ABORT_SCOPE_FINISH_ISSUE_ACCEPT_DESIGN.md)へ分離する。共通pin生成・data-only assemblyの状態機械は維持する。実source／workerの生存や正常終端能力は引き続きUnknown。
+次段の[RA-02③接続差分設計draft-0.10](BEST_PRACTICE_ABORT_SCOPE_FINISH_ASSEMBLY_RA02_BINDING_DESIGN.md)では、別ownerの外部登録を避ける共通kernel生成境界、同receipt／handoffとlive routeの結合、worker起動とcleanup開始serialの分離を整理した。RB-A〜Dの結合に続く合成発行・受理・固定discardは[RA-02④-A／RA-03-A／B](BEST_PRACTICE_ABORT_SCOPE_FINISH_ISSUE_ACCEPT_DESIGN.md)へ分離する。共通pin生成・data-only assemblyの状態機械は維持する。実source／workerの生存や正常終端能力は引き続きUnknown。
 
 draft-0.5のレビュー修正：RA-02の`act`の再入拒否（busy判定）は、既存の再入試験がbind／prepareへの再入だけでclaim一度限り・state判定が先に止めるため、外す変異でも86件が通っていた。外すとprepareのpost-guard内から`close`へ再入でき、closeが成功したうえで外側prepareも成功する。また、bound／preparedへの遷移がwork内にあり、post-guard中の`inspect()`に先行公開されていた。遷移を最後のpost-guard後のcommitへ移し（試験helperの実装修正、`88ed8e9`）、close再入と公開順序の試験を追加した（86件→89件）。SR-D設計を指す3文書の版数リンクも現行版へ直した。

@@ -71,7 +71,7 @@ it('keeps accepted, issued and handoff brands distinct and cannot promote the ac
 });
 it('does not disclose expectation, frame, UTC or identifiers through its handle or diagnostic fields',()=>{
   const f=setup(),a=f.root.acceptRecoveryFinishContext(f.b,f.handoff,f.evidence),text=JSON.stringify({a,state:f.root.inspect()});for(const value of [S,O,U,id(1),id(10),'snapshot','expected_context','raw_buildname','source_identity'])expect(text).not.toContain(value);
-  for(const key of ['acceptedFinish','acceptedTermination','finishPins','frame','core','discardAcceptedFinishContext'])expect(Object.hasOwn(f.root,key)).toBe(false);expect(f.root.inspect().permissions).toEqual({formal_issuance:false,dispatch:false,recovery_route:false});f.root.revoke('cancelled');cleanupAfterFailure(f);
+  for(const key of ['acceptedFinish','acceptedTermination','finishPins','frame','core'])expect(Object.hasOwn(f.root,key)).toBe(false);expect(f.root.inspect().permissions).toEqual({formal_issuance:false,dispatch:false,recovery_route:false});f.root.revoke('cancelled');cleanupAfterFailure(f);
 });
 it('does not add accept methods, diagnostic fields or phases to legacy and lifecycle-only roots',()=>{
   const seed={run:{},session:{},source:{},key:{},origin:{},budget:{},release:{},...fixture().finish.time},facts={kind:'phase_deadline',point:'phase_guard',phase:'metadata',worker_state:'none'} as const;

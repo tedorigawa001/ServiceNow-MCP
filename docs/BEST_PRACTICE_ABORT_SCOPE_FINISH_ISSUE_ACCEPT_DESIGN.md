@@ -1,7 +1,7 @@
 # RB-D後のfinish証拠発行・RA-03受理 接続差分設計
 
-Version: br006-finish-issue-accept-draft-0.3 / Date: 2026-11-02。
-Status: **RA-02④-Aの発行とRA-03-Aの原子的受理まで合成限定実装。RA-03-Bのaccepted固定discardは未実装。正式発行口閉鎖・全体受付無効・Unknown・VM／監視／telemetry調査保留を維持する。**
+Version: br006-finish-issue-accept-draft-0.4 / Date: 2026-11-02。
+Status: **RA-02④-Aの発行・RA-03-Aの原子的受理・RA-03-Bのaccepted固定discardまで合成限定実装。正式発行口閉鎖・全体受付無効・Unknown・VM／監視／telemetry調査保留を維持する。実finish／候補・正常終端能力への接続ではない。**
 
 基準HEAD: `6021339`。対象は[RA-02③](BEST_PRACTICE_ABORT_SCOPE_FINISH_ASSEMBLY_RA02_BINDING_DESIGN.md)§11と[RD-A](BEST_PRACTICE_ABORT_SCOPE_FINISH_CONTEXT_RDA_DESIGN.md)§5〜7との差分。実装・証拠発行・実接続・実通信・設定変更・Pushの承認ではない。
 
@@ -60,7 +60,7 @@ acceptedは合成期待値を所有するだけで、実finish送信・E採取�
 
 source close開始・新cleanup開始は依存呼出し前に単調更新し、bound／issued／acceptedの実行利用を同期失効する。ただし受理前の元receiver、受理後の固定discard token、cleanup sinkを失効処理で先に捨てて後始末不能にしない。実行権と終端責務を別slotにする。hard時は利用可能な参照を落とし、診断回収責務だけを残す。
 
-acceptedのdiscardは一度claimを占有し、期待値を実行不可にする。成功には同source正常終端と同新frame cleanup確認の両方を要求する。未確認ならhard停止し、正常closeで隠さない。sink confirmedからRD-Dの正常cleanup能力を発行しない。元UTC／会計は既存終端規則でのみ破棄し、再採取・再課金しない。
+acceptedのdiscardは一度claimを占有し、期待値を実行不可にする。成功には、事前に同source正常終端と同新frame cleanup確認の両方を固定継続で受領していることを要求する。未確認なら待機・cleanup再起動をせずhard停止し、正常closeで隠さない。sink confirmedからRD-Dの正常cleanup能力を発行しない。元UTC／会計は既存終端規則でのみ破棄し、再採取・再課金しない。
 
 診断はissue／acceptの開始・commit・失効・discard状態と件数、最初の固定hard code／phaseに限定する。元soft、旧cleanup、新cleanup、source終端は別軸を維持。ID／UTC／snapshot／結果本文／identityを公開しない。guard取消・期限切れは既存分類を保持し、後続internalエラーで上書きしない。
 
@@ -74,6 +74,8 @@ RA-01の共有枠（深さ8・配列100・object項目30・訪問10,000・保守
 | accept／route claim・元slotの取り外し・再照合・期待値slot／handle | accept |
 | source／cleanup開始による失効 | 各開始境界。診断recordで重複計上しない |
 | receiverまたはacceptedの消費・参照破棄・終端確認 | 対応する固定discard |
+| 同accepted終端slotへのsource完了受領 | source closeのpost-guard後commit。一度だけ |
+| 同accepted frame／sinkのcleanup完了受領 | 同cleanup開始・recordの健康な固定終端継続。一度だけ |
 | guard・固定診断 | 各操作。pre／postを別イベントで計数 |
 
 新analyze／HTTP／finish／E採取は0、C/G/P・retry prefixとS／全L／O／T_i／Uを維持する。ただし追加work／allocation・exact layout・全体上界・本番capはUnknown。今回の設計ではモデルや全体受付を有効化しない。
@@ -84,7 +86,7 @@ RA-01の共有枠（深さ8・配列100・object項目30・訪問10,000・保守
 2. **RA-03-A**：同handoff／evidence／routeの原子的消費とpost後の非実行accepted公開。別brand・コピー・別root・部分失敗・再入を検査。
 3. **RA-03-B**：accepted固定discard、source／新cleanupの独立診断、issue→accept→終端の連続合成検査。
 
-RA-02④-A・RA-03-Aのみ合成実装済み。RA-03-Bの正常discard継続・正常終端能力は別指示まで追加しない。
+RA-02④-A・RA-03-A／Bまで合成実装済み。RD-Dの正常終端能力・finish候補・実接続は追加しない。
 
 必須の負の対照は、別rootの不変、二重issue／accept、summaryからの昇格、issue直前／直後・accept両guard中の取消／期限切れ／source close／cleanup開始、吞み込まれた再入例外、issue後discardとの競合、片側だけの解放確認、失効後の再発行／再準備である。成功対照でもpermissionsをfinish実行可にしない。
 
@@ -96,7 +98,7 @@ RA-02④-A・RA-03-Aのみ合成実装済み。RA-03-Bの正常discard継続・�
 
 別brandの`SyntheticIssuedFinishContext`は空・凍結・null-prototypeで、外部へsnapshotを返さない。RA-01に残る発行機能のないplaceholder型とは別であり、値projectionや旧handleをcastして発行しない。RA-03-Aはこのprivate slotのidentityを受ける唯一consumerとして接続した。
 
-issue状態はunused／issuing／issued／invalidated／discarded／failed、診断はstate／started／issues／pendingだけ。issuesはcommit済み履歴0または1で、失効・破棄後も履歴を保持する。source close・cleanup開始ではhandle対応とsnapshot参照を落とすが、元receiverとcleanup sinkは残す。同receiverの固定discardが両解放確認後にhandoffとissue slotを終端化する。hard後に診断confirmedを回収しても発行権は戻らない。
+issue状態はunused／issuing／issued／consumed／invalidated／discarded／failed、診断はstate／started／issues／pendingだけ。issuesはcommit済み履歴0または1で、失効・破棄後も履歴を保持する。source close・cleanup開始ではhandle対応とsnapshot参照を落とすが、元receiverとcleanup sinkは残す。同receiverの固定discardが両解放確認後にhandoffとissue slotを終端化する。hard後に診断confirmedを回収しても発行権は戻らない。
 
 legacy／lifecycle専用factoryには新method・診断field・phase型を公開しない。旧pin／lifecycle／RB-D試験の「発行methodが存在しない」という時点依存の期待3箇所だけを新段階に合わせ、秘密非露出・結合のみ発行0の検査は維持した。現在の公開合成経路はverify=nullのまま、実結果の由来・元analyze capture・E／finish／候補は未接続。
 
@@ -110,8 +112,24 @@ legacy／lifecycle専用factoryには新method・診断field・phase型を公開
 
 発行slotはconsume時にpending=false・state=consumedとなり、issues=1の履歴は維持する。新しいfinish_accept診断はstate／started／accepts／route_spent／pending／terminal_pendingだけ。accepted期待値と、同handle／frame／source／cleanup／sinkを保持する終端専用slotを分離する。source close・cleanup開始は期待値を同期破棄するが、終端専用slotは残す。hard時は両方を破棄し、既存の発行済みcleanup sinkによる固定診断回収は維持する。元handoff discard／summary／issueへの復帰口はない。
 
-RA-03-Bは未実装で、終端専用slotを正常消費するAPIはまだない。そのためaccepted後は、source closeと新cleanupを合成確認してもnormal closeは拒否する。確認済みcounterを正常終端能力へ読み替えず、現段階ではhard終端と診断回収だけを検査する。実finish／E／候補発行は0、permissionsは全てfalse。これは段階的な非実行境界であり、運用可能なfinish処理の完成ではない。
+RA-03-A段階では終端専用slotを正常消費するAPIがなく、両解放確認後もnormal closeを拒否していた。後続RA-03-B（§11）で固定discardを追加したが、discardを通らないnormal closeの拒否は維持する。実finish／E／候補発行は0、permissionsは全てfalse。これは段階的な非実行境界であり、運用可能なfinish処理の完成ではない。
 
 legacy／lifecycle専用factoryは新method・診断field・phase型を除外する。RA-02④-A試験の「RA-03 method不在」の期待だけを「issueのみでは受理0」へ更新し、秘密非露出・会計prefix不変の検査を維持する。追加の取り外し・再projection・二入力比較・handle／終端slot保持・guard／失効のworkとallocationは未導出でUnknown。
 
 [RA-03-A合成検証記録](E2E_BEST_PRACTICE_FINISH_ACCEPT_RA03A_2026-11-02.md)参照。
+
+## 11 RA-03-B実装範囲
+
+同kernel／facadeの`discardAcceptedFinishContext(binding, accepted)`を合成限定で追加した。accepted開始claimとは別のdiscard開始claimを外部guardより前に占有し、同accepted終端slotと二つのprivate完了受領情報をまとめて局所pendingへ移す。期待値参照も同時に破棄する。引数は元bindingと空opaque accepted handleのみで、raw proof・bool・公開診断・callbackの追加を拒否する。
+
+完了受領情報は同じimmutable終端slotの参照で結合する。source側は同source identityのclose開始・closed受理を通り、同guardのpost後commitでだけ生成する。cleanup側は同frame／cleanup identity／sinkを開始境界・record時に照合し、started・confirmedの健康な固定終端継続からだけ生成する。record後に消えるframe／sinkを公開counterで補完しない。旧世代のcleanup completeや、hard後のconfirmed診断は受領情報にならない。両者は別slotであり、片側の完了で他方を満たさない。
+
+discardのpre/post guardは既存期限・取消を共有するが、source closed・cleanup settledの処理であるためopen／readyを要求しない専用phaseを使う。workでは依存呼出し・I/O・再確保・再取得を行わず、post後に同acceptedと両受領情報の同一性、同sourceのclosed／開始済み／completion=closed、同cleanupのsettled／serial=1、未回収sinkなしを照合する。不一致を先にhard化せず、post側の取消／期限切れを優先する。成功はundefined返却・discard履歴1・state=discardedだけで、新しい能力は返さない。元issue／accept／route利用の履歴は維持する。
+
+同source／新frameの解放順はどちらでもよい。両方を確認してもdiscardを通るまではnormal closeを拒否する。成功discard後だけ既存normal closeへ進み、元UTC／private pinは既存close規則で破棄する。重複・混入・未確認・guard失敗・再入ではslotを戻さずhard停止する。取得済みsinkの固定診断回収と最初のhard理由を維持し、失敗後に正常discardを再開しない。
+
+新診断`finish_accepted_discard`はstarted／discards／source_confirmed／cleanup_confirmedの4項目だけ。受領情報はclaim時に取り外すのでguard中のconfirmedはfalse、discardsはcommitまで0である。normal closeは終端slotだけでなく孤立した受領情報が残る場合も拒否する。legacy／lifecycle専用factoryのAPI・診断型・phase型へは追加しない。RA-03-Aのmethod不在期待だけを更新し、両確認だけでcloseしない検査は維持する。
+
+合成の正常discardはRD-DのSourceClosed／NewCleanupConfirmedや終了候補を発行する能力ではない。source／cleanupの実処理・OS終了・実workerの真正性は未検証。受領情報の保持・確認・消費・guard／破棄の追加work／allocation上界はUnknownのまま、全体受付は無効とする。
+
+[RA-03-B合成検証記録](E2E_BEST_PRACTICE_FINISH_DISCARD_RA03B_2026-11-02.md)参照。

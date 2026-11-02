@@ -16,6 +16,8 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 ### Changed
 
+- RA-03-B adds package-excluded fixed discard for synthetic accepted finish contexts. The same-owner accepted slot and private source/new-frame completion receipts are spent once; only both healthy fixed terminal paths permit discard followed by normal close. Missing/mixed confirmations, replay, reentry and guard stops fail without restoring authority, while prior diagnostics remain available. No finish candidate, production capability, real connection or whole-run admission is enabled.
+
 - RA-03-A adds package-excluded synthetic acceptance of the same recovery handoff, issued context and one-shot route claim in one protected section. Consumed slots are never restored; bounded revalidation and comparison complete before a separately branded non-executable accepted handle is published. Live invalidation drops expectations while preserving terminal-only ownership, which blocks normal close until the separate RA-03-B discard path exists. No production issuance, finish execution, runtime connection or whole-run admission is enabled.
 
 - RA-02④-A adds a package-excluded, synthetic-only finish issue slot in the same recovery kernel. A one-shot claim revalidates private pins and the live route, publishes an empty branded handle only after the post guard, and revokes it synchronously on source close, cleanup start or hard stop. Fixed receiver discard also clears issued state. Legacy roots remain unchanged; no RA-03 consumer, production issuance, runtime connection or whole-run admission is enabled.
