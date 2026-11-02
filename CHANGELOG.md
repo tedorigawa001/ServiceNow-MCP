@@ -16,6 +16,8 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 ### Changed
 
+- RD-B04 adds a package-excluded, synthetic-only one-shot seal from the same private accepted finish slot. It rechecks pinned data and the live source/frame before publishing an empty, separately branded handle; source/cleanup start, hard stops and fixed accepted discard explicitly erase the sealed expectations. Original accepted ownership remains cleanup-only, legacy roots keep their prior surface, and no finish job, candidate, runtime authority or whole-run admission is enabled.
+
 - RD-B03 adds a package-excluded, synthetic-only recovery finish comparison with one shared two-input projection budget. It checks the fixed manifest, receipt origins, reviewed context, retained timestamps and header facts while preserving required diagnostics and omission limits. Its separately branded result is non-executable and explicitly leaves provenance, original body, full-schema and wire guarantees unverified; no sealing, job or runtime authority is enabled.
 
 - RD-B02 extracts package-excluded scalar predicates for validated rule sets, unchanged release JSON encodings and inclusive finish-time bounds, and reconnects the ordinary synthetic WJ-C checks without moving parsing, guards or ownership. Independent oracles and regressions preserve duplicate-rule and unresolved-receipt rejection; recovery comparison, sealing and runtime authority remain disabled.

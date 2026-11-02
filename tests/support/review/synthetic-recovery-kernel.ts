@@ -6,6 +6,7 @@ import {prepareSyntheticWorkerRecoveryInputs} from './synthetic-worker-recovery-
 import {createSyntheticWorkerVerify} from './synthetic-worker-recovery-verify.js';
 import {projectSyntheticFinishPlanBinding} from './synthetic-finish-plan-binding.js';
 import {compareSyntheticFinishValues} from './synthetic-finish-context-values.js';
+import {projectRecoveryFinishExpectation} from './synthetic-recovery-finish-values.js';
 import type {SyntheticFinishPins} from './synthetic-finish-pins.js';
 type ReadPhase='metadata'|'payload'|'consistency';
 type WorkerRefs=Readonly<{generation:object;worker:object}>;
@@ -20,7 +21,7 @@ export type SyntheticSoftFacts=
     |{point:'analyze_timer'|'analyze_reply_check';worker_state:'ready';job:object;id:number}&WorkerRefs)>;
 export type SyntheticRecoverySeed=Readonly<{run:object;session:object;source:object;key:object;origin:object;budget:object;release:object;started_at:string;deadline_ms:number;observed_at:string;upper_utc:string}>;
 type Code='cancelled'|'deadline_exceeded'|'worker_unavailable'|'internal_review_error'|'receive_budget_exceeded'|'authentication_failed'|'access_denied'|'request_budget_exceeded'|'payload_budget_exceeded';
-type Phase='binding'|'observation'|'recovery_claim'|'recovery_consume'|'cleanup_lease'|'cleanup_record'|'revoke'|'close'|'discard'|'phase_prepare'|'phase_verify'|'phase_chunk'|'phase_retry'|'phase_worker'|'phase_ready'|'phase_consume'|'worker_closure_begin'|'worker_closure_settle'|'worker_closure_consume'|'worker_prepare'|'worker_prepare_discard'|'worker_verify'|'generation_claim'|'generation_start'|'generation_ready'|'generation_cleanup'|'generation_discard'|'worker_plan'|'source_lifecycle'|'finish_binding'|'finish_discard'|'finish_issue'|'finish_accept'|'finish_accepted_discard';
+type Phase='binding'|'observation'|'recovery_claim'|'recovery_consume'|'cleanup_lease'|'cleanup_record'|'revoke'|'close'|'discard'|'phase_prepare'|'phase_verify'|'phase_chunk'|'phase_retry'|'phase_worker'|'phase_ready'|'phase_consume'|'worker_closure_begin'|'worker_closure_settle'|'worker_closure_consume'|'worker_prepare'|'worker_prepare_discard'|'worker_verify'|'generation_claim'|'generation_start'|'generation_ready'|'generation_cleanup'|'generation_discard'|'worker_plan'|'source_lifecycle'|'finish_binding'|'finish_discard'|'finish_issue'|'finish_accept'|'finish_accepted_discard'|'finish_seal';
 type State='fresh'|'binding'|'active'|'observing'|'observed'|'claiming'|'claimed'|'consuming'|'consumed'|'failed'|'closed'|'phase_planning'|'phase_planned'|'phase_consuming'|'worker_closing'|'worker_closed'|'worker_preparing'|'worker_prepared'|'generation_claiming'|'generation_claimed'|'generation_starting'|'generation_waiting'|'generation_ready'|'plan_sealed'|'plan_transferred';
 type ClosureDiagnostic=Readonly<{close_requests:0|1;input_state:'unsent'|'sent_terminal';id_state:'absent'|'allocated_unsent'|'sent_terminal';termination:'not_required'|'requested'|'confirmed'|'rejected'|'unconfirmed';cleanup:'not_required'|'not_started'|'complete'|'failed'|'unconfirmed'}>;
 type SoftDiagnostic=Readonly<Pick<SyntheticSoftFacts,'kind'|'phase'|'point'|'worker_state'>>;
@@ -47,6 +48,8 @@ declare const finishEvidenceBrand:unique symbol;
 type SyntheticIssuedFinishContext=Readonly<{[finishEvidenceBrand]:'synthetic_issued_finish_context'}>;
 declare const acceptedFinishBrand:unique symbol;
 type SyntheticAcceptedFinishContext=Readonly<{[acceptedFinishBrand]:'synthetic_accepted_finish_context'}>;
+declare const finishExpectationBrand:unique symbol;
+type SealedRecoveryFinishExpectation=Readonly<{[finishExpectationBrand]:'synthetic_sealed_recovery_finish_expectation'}>;
 type SealedRecoveryPlan=Readonly<{owner:OwnerBinding;seed:SyntheticRecoverySeed;frame:object;inputs:HeldClosure['inputs'];time:Readonly<Pick<SyntheticRecoverySeed,'started_at'|'deadline_ms'|'observed_at'|'upper_utc'>>;verify:ReturnType<ReturnType<typeof createSyntheticWorkerVerify>['inspect']>}>;
 const seedKeys=['run','session','source','key','origin','budget','release','started_at','deadline_ms','observed_at','upper_utc'];
 const referenceKeys=['run','session','source','key','origin','budget','release','input','request','supervisor','worker','generation','allocation','job'];
@@ -125,23 +128,27 @@ function createRecoveryKernel(seed:SyntheticRecoverySeed,expected:SyntheticSoftF
   let liveCleanup:{frame:object|undefined;identity:object|undefined;sink:object|undefined;started:boolean;serial:0|1;settled:boolean}|undefined;
   let readyOrigin:Readonly<{owner:object;frame:object;lease:object;event:object;source:object;cleanup:object}>|undefined;
   const hasFinish=providedPins!==undefined;let finishPins=providedPins,finishStarted=false,finishDiscards=false,finishBindings=0;
-  let finishState:'unused'|'checking'|'bound'|'accepting'|'accepted'|'invalidated'|'discarding'|'discarded'|'failed'='unused';
+  let finishState:'unused'|'checking'|'bound'|'accepting'|'accepted'|'sealed'|'invalidated'|'discarding'|'discarded'|'failed'='unused';
   let finishStats:ReturnType<typeof projectSyntheticFinishPlanBinding>['stats']|null=null;
   let finishBound:Readonly<{plan:SealedRecoveryPlan;handoff:object;origin:object;source:object;cleanup:object;projection:ReturnType<typeof projectSyntheticFinishPlanBinding>}>|undefined;
   let issueStarted=false,issueCount=0;
   let issueState:'unused'|'issuing'|'issued'|'consumed'|'invalidated'|'discarded'|'failed'='unused';
   let issuedFinish:Readonly<{handle:SyntheticIssuedFinishContext;bound:NonNullable<typeof finishBound>;projection:ReturnType<typeof projectSyntheticFinishPlanBinding>}>|undefined;
   let acceptStarted=false,acceptCount=0,routeSpent=false;
-  let acceptState:'unused'|'accepting'|'accepted'|'invalidated'|'discarding'|'discarded'|'failed'='unused';
+  let acceptState:'unused'|'accepting'|'accepted'|'sealed'|'invalidated'|'discarding'|'discarded'|'failed'='unused';
   let acceptedFinish:Readonly<{handle:SyntheticAcceptedFinishContext;projection:ReturnType<typeof projectSyntheticFinishPlanBinding>;bound:NonNullable<typeof finishBound>}>|undefined;
   // Terminal-only ownership survives live-route invalidation; only fixed accepted discard consumes it.
   let acceptedTermination:Readonly<{handle:SyntheticAcceptedFinishContext;frame:object;source:object;cleanup:object;sink:object}>|undefined;
   let acceptedSourceClosed:typeof acceptedTermination,acceptedCleanupConfirmed:typeof acceptedTermination;
   let acceptedDiscardStarted=false,acceptedDiscards=0;
+  let sealStarted=false,sealCount=0;
+  let sealState:'unused'|'sealing'|'sealed'|'invalidated'|'discarding'|'discarded'|'failed'='unused';
+  let sealedFinish:Readonly<{handle:SealedRecoveryFinishExpectation;accepted:SyntheticAcceptedFinishContext;bound:NonNullable<typeof finishBound>;expectation:ReturnType<typeof projectRecoveryFinishExpectation>}>|undefined;
+  let sealUsage:ReturnType<typeof projectRecoveryFinishExpectation>['usage']|null=null;
   type AcceptPending=Readonly<{plan:SealedRecoveryPlan|undefined;handoff:RecoveryPlanHandoff|undefined;bound:typeof finishBound;issue:typeof issuedFinish;route_used:boolean}>;
-  function invalidateFinish(){finishBound=undefined;issuedFinish=undefined;acceptedFinish=undefined;if(acceptState==='accepted')acceptState='invalidated';if(issueState==='issued')issueState='invalidated';if(hasFinish&&(finishState==='bound'||finishState==='accepted'))finishState='invalidated';}
+  function invalidateFinish(){finishBound=undefined;issuedFinish=undefined;acceptedFinish=undefined;sealedFinish=undefined;if(sealState==='sealed')sealState='invalidated';if(acceptState==='accepted'||acceptState==='sealed')acceptState='invalidated';if(issueState==='issued')issueState='invalidated';if(hasFinish&&(finishState==='bound'||finishState==='accepted'||finishState==='sealed'))finishState='invalidated';}
   function readyUsable(){return !!(tracked&&readyOrigin&&binding===readyOrigin.owner&&source?.status==='open'&&source.reference===pinned?.source&&source.identity===readyOrigin.source&&liveCleanup?.identity===readyOrigin.cleanup&&liveCleanup.frame===readyOrigin.frame&&!liveCleanup.started&&!liveCleanup.settled&&generationCleanupToken===liveCleanup.sink&&generationCleanupContext?.frame===readyOrigin.frame);}
-  function clear(){finishBound=undefined;finishPins=undefined;issuedFinish=undefined;acceptedFinish=undefined;acceptedTermination=acceptedSourceClosed=acceptedCleanupConfirmed=undefined;if(hasFinish&&state==='failed'){finishState='failed';issueState='failed';acceptState='failed';}if(source){source.status=state==='failed'?'failed':'closed';source.reference=source.identity=undefined;readyOrigin=undefined;}if(phaseModel){phaseModel.dispose();phaseDiagnostic=phaseModel.inspect();phaseModel=undefined;}if(workerVerify){workerVerify.dispose();verifyDiagnostic=workerVerify.inspect();workerVerify=undefined;}sealedPlan=transferredPlan=undefined;planHandle=handoffHandle=undefined;generationStart=generationLease=generationDiscard=undefined;generationEvent=generationFrame=generationInputs=undefined;if(!generationTicketPublished&&!generationStarts){generationCleanupToken=generationCleanupContext=undefined;}if(liveCleanup&&!generationCleanupToken)liveCleanup.frame=liveCleanup.identity=liveCleanup.sink=undefined;heldClosure=undefined;preparationHandle=undefined;phaseHandle=closureLease=closureEvidence=undefined;binding=observation=recovery=seedRef=expectedRef=undefined;pinned=facts=undefined;}
+  function clear(){finishBound=undefined;finishPins=undefined;issuedFinish=undefined;acceptedFinish=undefined;sealedFinish=undefined;acceptedTermination=acceptedSourceClosed=acceptedCleanupConfirmed=undefined;if(hasFinish&&state==='failed'){finishState='failed';issueState='failed';acceptState='failed';sealState='failed';}if(source){source.status=state==='failed'?'failed':'closed';source.reference=source.identity=undefined;readyOrigin=undefined;}if(phaseModel){phaseModel.dispose();phaseDiagnostic=phaseModel.inspect();phaseModel=undefined;}if(workerVerify){workerVerify.dispose();verifyDiagnostic=workerVerify.inspect();workerVerify=undefined;}sealedPlan=transferredPlan=undefined;planHandle=handoffHandle=undefined;generationStart=generationLease=generationDiscard=undefined;generationEvent=generationFrame=generationInputs=undefined;if(!generationTicketPublished&&!generationStarts){generationCleanupToken=generationCleanupContext=undefined;}if(liveCleanup&&!generationCleanupToken)liveCleanup.frame=liveCleanup.identity=liveCleanup.sink=undefined;heldClosure=undefined;preparationHandle=undefined;phaseHandle=closureLease=closureEvidence=undefined;binding=observation=recovery=seedRef=expectedRef=undefined;pinned=facts=undefined;}
   function fail(phase:Phase,raw?:unknown):never{
     if(state==='closed')throw Error('internal_review_error');hard??=Object.freeze({code:code(raw),phase});state='failed';clear();throw Object.assign(Error(hard.code),{code:hard.code});
   }
@@ -150,7 +157,7 @@ function createRecoveryKernel(seed:SyntheticRecoverySeed,expected:SyntheticSoftF
     if(!seedRef||!expectedRef||!pinned||!facts||!equal(pinSeed(seedRef),pinned)||!equal(pinFacts(expectedRef),facts))fail(phase);
     if(tracked){
       if(source?.status!=='open'&&!['source_lifecycle','generation_cleanup','generation_discard','worker_prepare_discard','finish_discard','finish_accepted_discard','close','discard'].includes(phase))fail(phase);
-      if(['generation_claim','generation_start','generation_ready','worker_plan','finish_binding','finish_issue','finish_accept'].includes(phase)&&liveCleanup?.started)fail(phase);
+      if(['generation_claim','generation_start','generation_ready','worker_plan','finish_binding','finish_issue','finish_accept','finish_seal'].includes(phase)&&liveCleanup?.started)fail(phase);
     }
   }
   function model(handle:object,phase:Phase){if(!phaseModel||handle!==phaseHandle)fail(phase);return phaseModel!;}
@@ -176,15 +183,37 @@ function createRecoveryKernel(seed:SyntheticRecoverySeed,expected:SyntheticSoftF
   function acceptPendingOk(p:AcceptPending,handoff:object,evidence:object){
     return !!(p.plan&&p.handoff&&p.bound&&p.issue&&!p.route_used&&p.handoff===handoff&&p.bound.handoff===handoff&&p.issue.handle===evidence&&p.issue.bound===p.bound&&p.plan===p.bound.plan&&p.issue.projection.snapshot.plan===p.plan&&planOk(p.plan)&&readyUsable()&&readyOrigin===p.bound.origin&&source?.identity===p.bound.source&&liveCleanup?.identity===p.bound.cleanup&&readyOrigin?.frame===p.plan.frame);
   }
+  function sealPendingOk(own:typeof acceptedFinish,accepted:object){
+    return !!(own&&own.handle===accepted&&own.projection.snapshot.plan===own.bound.plan&&acceptCount===1&&routeSpent&&acceptState==='accepted'&&finishState==='accepted'&&planOk(own.bound.plan)&&readyUsable()&&readyOrigin===own.bound.origin&&readyOrigin?.frame===own.bound.plan.frame&&source?.identity===own.bound.source&&liveCleanup?.identity===own.bound.cleanup&&liveCleanup.serial===0&&acceptedTermination?.handle===own.handle&&acceptedTermination.frame===own.bound.plan.frame&&acceptedTermination.source===own.bound.source&&acceptedTermination.cleanup===own.bound.cleanup&&acceptedTermination.sink===generationCleanupToken);
+  }
   return Object.freeze({
+    sealRecoveryFinishExpectation(b:object,accepted:object){let own:typeof acceptedFinish,expectation:ReturnType<typeof projectRecoveryFinishExpectation>|undefined,mismatch=false;return act('finish_seal',b,()=>{
+      const used=sealStarted;sealStarted=true;sealState='sealing';own=acceptedFinish;acceptedFinish=undefined;
+      if(!hasFinish||used||acceptCount!==1||state!=='consumed')fail('finish_seal');
+    },()=>{
+      if(!sealPendingOk(own,accepted)||!finishPins||!source?.identity||!liveCleanup?.identity||!generationCleanupToken)mismatch=true;
+      else try{
+        const projection=projectSyntheticFinishPlanBinding(finishPins,own!.bound.plan,{owner:binding!,frame:own!.bound.plan.frame,source:source.reference!,source_identity:source.identity,cleanup_identity:liveCleanup.identity,sink:generationCleanupToken,ready_origin:readyOrigin!,serial:0});
+        compareSyntheticFinishValues(projection.snapshot,own!.projection.snapshot);
+        const s=projection.snapshot,c=s.run_context;
+        if(s.selected.some((id,n)=>n>0&&s.selected[n-1]>=id))throw Error();
+        expectation=projectRecoveryFinishExpectation({kind:'synthetic_recovery_finish_expectation_v1',binding:{owner:s.owner,plan:s.plan,run:c.run,session:c.session,source:c.source,key:c.key,origin:c.origin,budget:c.budget,release:c.release,window:c.window,frame:s.route.frame,accepted_origin:own!.handle},
+          time:{started_at:c.started_at,deadline_ms:c.deadline_ms,observed_at:c.observed_at,upper_utc:c.upper_utc},header:s.header,selected:s.selected,inputs:s.inputs,outcomes:s.outcomes,run_status:s.header.collection.status==='failed'?'failed':'partial',consistency:own!.bound.plan.verify.consistency,
+          content_evidence:{original_body:'unknown',full_schema:'unverified',wire:'unverified'}});
+      }catch{mismatch=true;}
+      return opaque<SealedRecoveryFinishExpectation>();
+    },handle=>{
+      if(mismatch||!expectation||!sealPendingOk(own,accepted))fail('finish_seal');
+      sealedFinish=Object.freeze({handle,accepted:own!.handle,bound:own!.bound,expectation:expectation!});sealUsage=expectation!.usage;sealCount=1;sealState='sealed';acceptState='sealed';finishState='sealed';
+    });},
     discardAcceptedFinishContext(b:object,accepted:object){let own:typeof acceptedTermination,sourceProof:typeof acceptedTermination,cleanupProof:typeof acceptedTermination;
       const valid=()=>!!(own&&own.handle===accepted&&sourceProof===own&&cleanupProof===own&&source?.identity===own.source&&source.reference===pinned?.source&&source.close_started&&source.status==='closed'&&source.completion==='closed'&&!generationCleanupToken&&!generationCleanupContext&&generationCleanup?.status==='confirmed'&&liveCleanup?.started&&liveCleanup.serial===1&&liveCleanup.settled);
       return act('finish_accepted_discard',b,()=>{
         const used=acceptedDiscardStarted;acceptedDiscardStarted=true;own=acceptedTermination;sourceProof=acceptedSourceClosed;cleanupProof=acceptedCleanupConfirmed;
-        acceptedTermination=acceptedSourceClosed=acceptedCleanupConfirmed=undefined;acceptedFinish=undefined;acceptState='discarding';finishState='discarding';
+        acceptedTermination=acceptedSourceClosed=acceptedCleanupConfirmed=undefined;acceptedFinish=undefined;sealedFinish=undefined;if(sealStarted)sealState='discarding';acceptState='discarding';finishState='discarding';
         if(!hasFinish||used||acceptCount!==1||state!=='consumed')fail('finish_accepted_discard');
       },()=>{ /* No hard mismatch before post-guard; commit rechecks the fixed terminal receipts. */ },()=>{
-        if(!valid())fail('finish_accepted_discard');acceptedDiscards=1;acceptState='discarded';finishState='discarded';
+        if(!valid())fail('finish_accepted_discard');acceptedDiscards=1;acceptState='discarded';finishState='discarded';if(sealStarted)sealState='discarded';
       });
     },
     acceptRecoveryFinishContext(b:object,handoff:object,evidence:object){let own:AcceptPending,projection:ReturnType<typeof projectSyntheticFinishPlanBinding>|undefined,projectionFailed=false;return act('finish_accept',b,()=>{
@@ -373,13 +402,14 @@ function createRecoveryKernel(seed:SyntheticRecoverySeed,expected:SyntheticSoftF
       cleanup=Object.freeze({scope:'synthetic_cleanup_snapshot',status:valid?status as CleanupStatus:'unconfirmed'});
       if(!valid||status!=='confirmed'&&status!=='not_required')fail('cleanup_record');
     },
-    close(b:object){return act('close',b,()=>{},()=>{if(cleanupToken||phaseModel?.inFlight()||closureLease||closureEvidence||heldClosure||preparationHandle||generationCleanupToken||generationInputs||generationFrame||sealedPlan||transferredPlan||issuedFinish||acceptedFinish||acceptedTermination||acceptedSourceClosed||acceptedCleanupConfirmed||source?.status==='closing')fail('close');},()=>{clear();time=null;state='closed';});},
+    close(b:object){return act('close',b,()=>{},()=>{if(cleanupToken||phaseModel?.inFlight()||closureLease||closureEvidence||heldClosure||preparationHandle||generationCleanupToken||generationInputs||generationFrame||sealedPlan||transferredPlan||issuedFinish||acceptedFinish||sealedFinish||acceptedTermination||acceptedSourceClosed||acceptedCleanupConfirmed||source?.status==='closing')fail('close');},()=>{clear();time=null;state='closed';});},
     discardTerminalTime(){if(busy||state!=='failed'||time===null)return fail('discard',hard?.code);time=null;},
     inspect(){return Object.freeze({scope:'synthetic_soft_recovery_only' as const,state,time,observation_pending:!!observation,recovery_pending:!!recovery,cleanup_pending:!!cleanupToken,
       ...(hasFinish?{finish_binding:Object.freeze({state:finishState,started:finishStarted,bindings:finishBindings,active:!!finishBound&&readyUsable(),discard_started:finishDiscards,...finishStats})}:{}),
       ...(hasFinish?{finish_issue:Object.freeze({state:issueState,started:issueStarted,issues:issueCount,pending:!!issuedFinish})}:{}),
       ...(hasFinish?{finish_accept:Object.freeze({state:acceptState,started:acceptStarted,accepts:acceptCount,route_spent:routeSpent,pending:!!acceptedFinish,terminal_pending:!!acceptedTermination})}:{}),
       ...(hasFinish?{finish_accepted_discard:Object.freeze({started:acceptedDiscardStarted,discards:acceptedDiscards,source_confirmed:!!acceptedSourceClosed,cleanup_confirmed:!!acceptedCleanupConfirmed})}:{}),
+      ...(hasFinish?{finish_seal:Object.freeze({state:sealState,started:sealStarted,seals:sealCount,pending:!!sealedFinish,usage:sealUsage})}:{}),
       ...(tracked?{lifecycle:Object.freeze({source:source!.status,source_close_started:source!.close_started,source_completion:source!.completion,worker_started:generationStarts===1,cleanup_started:liveCleanup?.started??false,cleanup_serial:liveCleanup?.serial??0,cleanup_settled:liveCleanup?.settled??false,ready_origin:!!readyOrigin,ready_usable:readyUsable()})}:{}),
       new_generation:generationClaimed?Object.freeze({claim_started:true,starts:generationStarts,ready_events:generationReadyEvents,cleanup:generationCleanup,cleanup_pending:!!generationCleanupToken}):null,
       worker_plan:planStarted?Object.freeze({...planCounts,seal_started:true,seals:planSeals,transfers:planTransfers,summaries:planSummaries,sealed_pending:!!sealedPlan,transferred_pending:!!transferredPlan,finish_calls:0}):null,
@@ -389,18 +419,18 @@ function createRecoveryKernel(seed:SyntheticRecoverySeed,expected:SyntheticSoftF
 }
 /** Legacy/RB-A roots retain exactly their original method surface and behavior. */
 export function createSyntheticRecoveryKernel(seed:SyntheticRecoverySeed,expected:SyntheticSoftFacts,check:()=>string|undefined=()=>undefined){
-  const {beginSourceClose,settleSourceClose,checkWorkerGenerationReady,beginWorkerGenerationCleanup,bindRecoveryPlan,checkBoundRecoveryPlan,discardBoundRecoveryPlan,issueFinishContext,acceptRecoveryFinishContext,discardAcceptedFinishContext,...legacy}=createRecoveryKernel(seed,expected,check,false);
+  const {beginSourceClose,settleSourceClose,checkWorkerGenerationReady,beginWorkerGenerationCleanup,bindRecoveryPlan,checkBoundRecoveryPlan,discardBoundRecoveryPlan,issueFinishContext,acceptRecoveryFinishContext,discardAcceptedFinishContext,sealRecoveryFinishExpectation,...legacy}=createRecoveryKernel(seed,expected,check,false);
   void beginSourceClose;void settleSourceClose;void checkWorkerGenerationReady;void beginWorkerGenerationCleanup;
-  void bindRecoveryPlan;void checkBoundRecoveryPlan;void discardBoundRecoveryPlan;void issueFinishContext;void acceptRecoveryFinishContext;void discardAcceptedFinishContext;
+  void bindRecoveryPlan;void checkBoundRecoveryPlan;void discardBoundRecoveryPlan;void issueFinishContext;void acceptRecoveryFinishContext;void discardAcceptedFinishContext;void sealRecoveryFinishExpectation;
   type Snapshot=ReturnType<typeof legacy.inspect>;type Hard=NonNullable<Snapshot['diagnostics']['hard']>;
-  type LegacySnapshot=Readonly<Omit<Snapshot,'lifecycle'|'finish_binding'|'finish_issue'|'finish_accept'|'finish_accepted_discard'|'diagnostics'>&{diagnostics:Readonly<Omit<Snapshot['diagnostics'],'hard'>&{hard:Readonly<Omit<Hard,'phase'>&{phase:Exclude<Phase,'source_lifecycle'|'finish_binding'|'finish_discard'|'finish_issue'|'finish_accept'|'finish_accepted_discard'>}>|null}>}>;
+  type LegacySnapshot=Readonly<Omit<Snapshot,'lifecycle'|'finish_binding'|'finish_issue'|'finish_accept'|'finish_accepted_discard'|'finish_seal'|'diagnostics'>&{diagnostics:Readonly<Omit<Snapshot['diagnostics'],'hard'>&{hard:Readonly<Omit<Hard,'phase'>&{phase:Exclude<Phase,'source_lifecycle'|'finish_binding'|'finish_discard'|'finish_issue'|'finish_accept'|'finish_accepted_discard'|'finish_seal'>}>|null}>}>;
   return Object.freeze(legacy) as Omit<typeof legacy,'inspect'>&{inspect():LegacySnapshot};
 }
 /** Fresh tracked root only; no existing kernel, owner or mutable mode can be supplied. */
 export function createSyntheticLifecycleRecoveryKernel(seed:SyntheticRecoverySeed,expected:SyntheticSoftFacts,check:()=>string|undefined=()=>undefined){
-  const {bindRecoveryPlan,checkBoundRecoveryPlan,discardBoundRecoveryPlan,issueFinishContext,acceptRecoveryFinishContext,discardAcceptedFinishContext,...lifecycle}=createRecoveryKernel(seed,expected,check,true);void bindRecoveryPlan;void checkBoundRecoveryPlan;void discardBoundRecoveryPlan;void issueFinishContext;void acceptRecoveryFinishContext;void discardAcceptedFinishContext;
+  const {bindRecoveryPlan,checkBoundRecoveryPlan,discardBoundRecoveryPlan,issueFinishContext,acceptRecoveryFinishContext,discardAcceptedFinishContext,sealRecoveryFinishExpectation,...lifecycle}=createRecoveryKernel(seed,expected,check,true);void bindRecoveryPlan;void checkBoundRecoveryPlan;void discardBoundRecoveryPlan;void issueFinishContext;void acceptRecoveryFinishContext;void discardAcceptedFinishContext;void sealRecoveryFinishExpectation;
   type Snapshot=ReturnType<typeof lifecycle.inspect>;type Hard=NonNullable<Snapshot['diagnostics']['hard']>;
-  type LifecycleSnapshot=Readonly<Omit<Snapshot,'finish_binding'|'finish_issue'|'finish_accept'|'finish_accepted_discard'|'diagnostics'>&{diagnostics:Readonly<Omit<Snapshot['diagnostics'],'hard'>&{hard:Readonly<Omit<Hard,'phase'>&{phase:Exclude<Phase,'finish_binding'|'finish_discard'|'finish_issue'|'finish_accept'|'finish_accepted_discard'>}>|null}>}>;
+  type LifecycleSnapshot=Readonly<Omit<Snapshot,'finish_binding'|'finish_issue'|'finish_accept'|'finish_accepted_discard'|'finish_seal'|'diagnostics'>&{diagnostics:Readonly<Omit<Snapshot['diagnostics'],'hard'>&{hard:Readonly<Omit<Hard,'phase'>&{phase:Exclude<Phase,'finish_binding'|'finish_discard'|'finish_issue'|'finish_accept'|'finish_accepted_discard'|'finish_seal'>}>|null}>}>;
   return Object.freeze(lifecycle) as Omit<typeof lifecycle,'inspect'>&{inspect():LifecycleSnapshot};
 }
 /** Constructor-only pin supply; never accepts an existing owner/kernel or registration callback. */

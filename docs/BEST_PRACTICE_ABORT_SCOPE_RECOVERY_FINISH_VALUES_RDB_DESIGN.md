@@ -1,7 +1,7 @@
 # RD-B 回復finish期待値封印・集合／時刻比較 詳細設計
 
-Version: br006-recovery-finish-values-rdb-draft-0.5 / Date: 2026-11-02。
-Status: **RD-B01〜03のstrict構造projection・最小scalar共有・回復用局所値比較まで合成限定実装。RD-B04の同accepted封印・owner接続は未実装。正式発行口閉鎖・全体受付無効・Unknown・VM／監視／telemetry調査保留を維持する。**
+Version: br006-recovery-finish-values-rdb-draft-0.6 / Date: 2026-11-02。
+Status: **RD-B01〜04の構造projection・局所比較・同acceptedの一度限り封印と固定discard接続まで合成限定実装。finish job／応答／候補への接続は未実装。正式発行口閉鎖・全体受付無効・Unknown・VM／監視／telemetry調査保留を維持する。**
 
 基準HEAD: `4653cd2`。[SR-D](BEST_PRACTICE_ABORT_SCOPE_RECOVERY_FINISH_SRD_DESIGN.md)§2〜5・8のRD-Bと、[RA-03-A／B](BEST_PRACTICE_ABORT_SCOPE_FINISH_ISSUE_ACCEPT_DESIGN.md)§10〜11の間の差分。実装・証拠発行・fake finish dispatch・実接続・実通信・設定変更・Pushの承認ではない。
 
@@ -9,7 +9,7 @@ Status: **RD-B01〜03のstrict構造projection・最小scalar共有・回復用�
 
 | 現行実装 | 使える根拠 | 今回も証明しないこと |
 | --- | --- | --- |
-| [回復kernel](../tests/support/review/synthetic-recovery-kernel.ts)のacceptedFinish | 同ownerの発行・受理後に保持する元plan／frameとprivate projection。元集合・receipt／S・全L・O・T_i・Uを保持 | finish job・応答・E・候補とのbindingはない |
+| [回復kernel](../tests/support/review/synthetic-recovery-kernel.ts)のacceptedFinish／sealedFinish | 同ownerの元plan／frame・private projectionから一度だけ期待値を封印。元集合・receipt／S・全L・O・T_i・Uを保持し、失効・固定discardで破棄 | finish job・応答・E・候補とのbindingはない |
 | acceptedTerminationとRA-03-B | 同source／新frameの固定discard責務を一度消費。解放後の正常closeまで合成確認済み | finish候補用SourceClosed／NewCleanupConfirmedの発行ではない |
 | [finish pin生成](../tests/support/review/synthetic-finish-pins.ts) | reviewedの合成参照はID・T_i・expected_contextに固定。omittedにはreviewed_originの有無を保持 | **元review結果本文・findingsのsnapshot／digestは持たない。実analyzeのpost-guard受理captureでもない** |
 | [通常WJ-C値比較](../tests/support/review/synthetic-worker-time.ts) | header・release／rule・T_i／E・asset state／集合の局所比較 | reviewed結果本文全体の一致・full集約schema・実wire上限の保証ではない |
@@ -32,7 +32,7 @@ Status: **RD-B01〜03のstrict構造projection・最小scalar共有・回復用�
 
 ## 3 同acceptedからの一度限り封印
 
-操作案`sealRecoveryFinishExpectation(binding, accepted)`は同kernelのprivate acceptedFinishだけを読む。raw header・manifest・receipt・E・frame・任意getter callbackを引数にしない。
+合成実装`sealRecoveryFinishExpectation(binding, accepted)`は同kernelのprivate acceptedFinishだけを読む。raw header・manifest・receipt・E・frame・任意getter callbackを引数にしない。具体的な入口・状態は§14。
 
 1. 既存owner／busy／hard／bindingを検査後、自ownerのseal開始claimを外部guard前に占有する。同accepted期待値slotを局所pendingへ取り外し、失敗でも戻さない。
 2. 同accepted handle・元plan／run／source／window／release・新frame／ready origin・cleanup未開始を再検査する。RA-03-Aでroute利用claimは既に消費済みなので、新しいunused routeや世代を作らず、その同じ所有権の継続として移す。
@@ -119,7 +119,7 @@ full worker応答をこの局所projectionへそのままparseしてfull schema�
 | RD-B01（合成実装済み） | 別brandのstrict期待値／応答projectionと、発行関数のない比較結果型。structure-onlyの純粋bounded値層。不足列・未知state・余分key・総量超過を拒否。本文／意味比較Unknownを明示 |
 | RD-B02（合成実装済み） | 小さなscalar predicateの最小抽出と通常WJ-C接続。全旧試験と未完了receipt拒否を維持。独立field差替え・集合／E oracleで新旧の責務を分離 |
 | RD-B03（合成実装済み） | 回復manifest／T_i・U・E・header比較の純粋接続。state遷移表と0.2／0.3・operator境界の独立oracle。本文不足でfull検証／候補に昇格しない |
-| RD-B04 | 同acceptedからの一度限り封印・同owner／frameへのbindingとRA-03-Bのsealed破棄連結。両guard・再入・混入・失効・競合を合成検査。job送信はしない |
+| RD-B04（合成実装済み） | 同acceptedからの一度限り封印・同owner／frameへのbindingとRA-03-Bのsealed破棄連結。両guard・再入・混入・失効・競合を合成検査。job送信はしない |
 
 期待値を応答から生成して同じ関数同士で比較するだけの試験にしない。正本fixtureと独立したID／state表・UTC算術・必要制限のoracleを用意し、追加／欠落／同長重複、未取得行と取得済み未処理、active T_i≠U、Eの両端±1ms、短いL、設定expiry境界、reviewed→omittedと不正昇格を確認する。
 
@@ -135,11 +135,11 @@ source／cleanup開始後のseal、summary／copy／別root、二重seal、seal�
 - 実verify・実session／ReleasePermit／payload／workerの正式binding、実clock／OS終了・外側監督との連結は対象外。
 - 追加work／allocationモデル・本番cap・全体受付は未承認／Unknown。設定日時長の新capやruntime規則を追加しない。
 
-draft-0.1はMDだけを作成した。後続の合成実装は§11〜13。同accepted封印・owner接続はRD-B04へ残す。新たな合成証拠／候補発行・実接続・実機操作・設定変更・Pushは行わない。
+draft-0.1はMDだけを作成した。後続の合成実装は§11〜14。同accepted封印までを実装したが、finish job／応答／候補の連結は後続へ残す。実接続・実機操作・設定変更・Pushは行わない。
 
 ## 11 RD-B01の実装契約
 
-[純粋値層](../tests/support/review/synthetic-recovery-finish-values.ts)は`projectRecoveryFinishExpectation(raw)`と`projectRecoveryFinishReply(raw)`の二つだけをprojection入口にする。比較・seal・owner／claim登録・ready／job／candidateの発行口はない。既存RA-01・WJ-C・回復kernelは変更しない。
+[純粋値層](../tests/support/review/synthetic-recovery-finish-values.ts)は`projectRecoveryFinishExpectation(raw)`と`projectRecoveryFinishReply(raw)`の二つを構造projection入口にする。RD-B01単体では比較・seal・owner接続は追加しなかった。後続比較は§13、kernel内の封印は§14で扱い、純粋値層にはowner／claim登録・ready／job／candidateの発行口を設けない。既存RA-01・通常WJ-Cは変更しない。
 
 | strict top-level | exact keys |
 | --- | --- |
@@ -162,7 +162,7 @@ collectorは入力全体で深さ8・配列100・object項目30・訪問10,000�
 
 不正shapeと局所limit超過は型付き`RecoveryFinishValueError`で区別するが、message／codeは常にinternal_review_error。raw値・Zod issue・例外causeを返さない。RD-B03ではmismatchを追加し、二入力共有枠を§13で接続・検証する。既存の単独projectionのshape／limit契約は維持する。
 
-[RD-B01合成検証記録](E2E_BEST_PRACTICE_RECOVERY_FINISH_VALUES_RDB01_2026-11-02.md)参照。RD-B02は§12、RD-B03は§13。RD-B04の同accepted封印とRA-03-B破棄接続は未実装。
+[RD-B01合成検証記録](E2E_BEST_PRACTICE_RECOVERY_FINISH_VALUES_RDB01_2026-11-02.md)参照。RD-B02は§12、RD-B03は§13、RD-B04の同accepted封印とRA-03-B破棄接続は§14。
 
 ## 12 RD-B02の最小scalar共有
 
@@ -193,3 +193,20 @@ headerのtarget・versions・開始UTC・principal・collection・limits・0.3 s
 [RD-B03検証記録](E2E_BEST_PRACTICE_RECOVERY_FINISH_COMPARE_RDB03_2026-11-02.md)参照。二入力合算のnode／文字費は確認するが、Zod copy・比較work・allocation・実wire費用はUnknown。取消／期限切れのpost-guard優先・同期失効・一度限りのsealはowner接続の別責務であり、本純粋関数が実行したとは主張しない。元結果本文／findingsの内容保証・full集約schemaは未接続のまま。
 
 draft-0.4のレビュー修正：RD-B03はheaderのerrorsを完全一致で比較していたため、既存`finalizeAggregate`がreviewedをomitするときに追加する`output/response_limit`のerrorを含む正当な応答を不一致として拒否していた。errorsを「期待の先頭一致＋finalize由来のomission errorだけ追加可（errors満杯時はerror_details_truncated）」に改めた（試験helperの実装修正）。あわせて、応答assetの重複拒否、期待limitationsの保持、coverageの非rule列の固定一致が、外す変異でも通っていたため個別の試験を追加した。
+
+## 14 RD-B04の同accepted封印・固定discard接続
+
+[同kernel](../tests/support/review/synthetic-recovery-kernel.ts)に`sealRecoveryFinishExpectation(binding, accepted)`を追加し、[pinned root](../tests/support/review/synthetic-pinned-recovery-root.ts)が固定引数だけを転送する。raw期待値・任意callback・frame／receipt等の追加引数は拒否する。legacy／lifecycle-only rootからはmethod・診断field・hard phaseをruntime／型の双方で除外する。
+
+1. 共通actのowner／busy／hard／binding検査後、guard前にsealStartedを占有する。acceptedFinishを局所pendingへ取り外し、再試行でも戻さない。inspectでは両guard中にaccepted pending=false、seal pending=false／seals=0となる。
+2. 同accepted handle・元plan／owner／seed／time・ready origin・source identity／参照・cleanup identity／未開始serial・同frameとsink・acceptedTerminationをpre/postで照合する。routeSpentは元acceptのままで、routeやreadyを再発行しない。
+3. 元finishPinsから固定plan projectionを再検証し、元accepted projectionと既存RA-01で比較する。元canonical selected順も確認した後、RD-B01のstrict bounded projectionへ固定mappingする。bindingには元owner／plan／run／session／source／key／origin／budget／release／window・新frameの同参照・元accepted handleを保持する。S／全L／O／T_i／Uとheader／manifestは元private snapshot由来で、応答・現在時刻・Eを受けない。
+4. projection失敗やhandle／live不一致は局所flagへ保持し、post guardの取消／期限切れ・先行hardを優先する。post guard後の再照合が通ったときだけ、sealedFinishと別brandの空・frozen opaque handleを公開する。finish_accept／finish_bindingはsealed、finish_sealはsealed／seals=1へ遷移する。
+
+封印slotはexpectationの構造専用projection・元bound plan・元acceptedをprivateに保持する。元結果本文・真正な実analyze captureは依然Unknownで、封印だけでRD-B03の意味比較済みやfull schema／wire保証にしない。返却handleやinspectには期待値・UTC・ID・frame・originを出さない。inspectのfinish_sealはstate／started／seals／pendingと新projectionの有限枠usageだけ。getter・比較器・consumer・finish job／候補発行口は追加しない。
+
+source close開始／cleanup開始／hard stopはsealedFinishを同期破棄する。healthyな失効ではsealState=invalidatedかつacceptedTerminationをcleanup用に保持する。RA-03-Bのdiscard claimはsealedFinishを明示破棄してdiscarding、同source／新frameの両終端確認とpost guard成功後だけdiscardedにする。元accepted handleはこのcleanup責務用にだけ使い、sealed handleで代用できない。normal closeはsealed／accepted terminalの残存中には拒否する。封印とdiscard／close等は同busy境界で排他とし、catchで再入例外を飲み込んでも外側commitはしない。
+
+費目は固定のplan再projection、RA-01二入力比較、新期待値projection、guard／同一性検査、opaque handle／slotと保持data、失効／discardに分ける。各projection／比較の既存有限枠は維持するが、seal全体を単一Budgetとして計測したとは主張しない。finish_seal.usageは**最後の新期待値projectionだけ**で、再検証・比較・Zod copy・work／allocationの総費用はUnknown。新HTTP／retry／verify／input／analyze／generation／finish dispatch・E採取は0、元会計prefixは不変。
+
+[RD-B04検証記録](E2E_BEST_PRACTICE_RECOVERY_FINISH_SEAL_RDB04_2026-11-02.md)参照。以後はRD-Cでの封印slotの一度限りjob消費・応答相関・RD-B03比較接続、その後の候補／終端契約が残る。正式発行口閉鎖・全体受付無効・調査保留を維持し、実session／runtimeには接続しない。
