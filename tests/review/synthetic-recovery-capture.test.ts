@@ -186,6 +186,50 @@ it('rejects a Proxy guard function before it can be invoked',()=>{
   const f=fixture(),guard=new Proxy(()=>{},{apply(){throw new Error('secret');}});
   rejection(()=>createSyntheticRecoveryCaptureAssembly([f.context],{guard}),'shape');
 });
+it.each(['target_id','applicable_duplicate','requested_duplicate'] as const)('rejects internally inconsistent context %s at construction, which CG-A alone would accept',kind=>{
+  const f=fixture();
+  if(kind==='target_id')f.context.target.update_xml_sys_id='9'.repeat(32);
+  if(kind==='applicable_duplicate')f.context.applicable_rule_ids=['AU-BR-001','AU-BR-001'];
+  if(kind==='requested_duplicate')f.context.requested_rule_ids=['AU-BR-001','AU-BR-001'];
+  rejection(()=>createSyntheticRecoveryCaptureAssembly([f.context],{guard:()=>{}}),'shape');
+});
+function counting<T extends object>(target:T){
+  const calls:string[]=[];
+  const proxy=new Proxy(target,{ownKeys:t=>{calls.push('ownKeys');return Reflect.ownKeys(t);},getOwnPropertyDescriptor:(t,k)=>{calls.push('descriptor');return Reflect.getOwnPropertyDescriptor(t,k);},
+    getPrototypeOf:t=>{calls.push('prototype');return Reflect.getPrototypeOf(t);},get:(t,k,r)=>{calls.push('get');return Reflect.get(t,k,r);},has:(t,k)=>{calls.push('has');return Reflect.has(t,k);}});
+  return {calls,proxy};
+}
+it.each(['envelope','dependencies','context'] as const)('rejects an otherwise valid transparent %s Proxy without invoking any trap',kind=>{
+  const f=fixture();
+  if(kind==='envelope'){
+    const root=createSyntheticRecoveryCaptureAssembly([f.context],{guard:()=>{}}),{calls,proxy}=counting({id:1,ok:true,json:JSON.stringify(f.asset)});
+    rejection(()=>root.deliver(root.inputs[0],proxy),'shape');expect(calls).toEqual([]);
+  }
+  if(kind==='dependencies'){
+    const {calls,proxy}=counting({guard:()=>{}});rejection(()=>createSyntheticRecoveryCaptureAssembly([f.context],proxy),'shape');expect(calls).toEqual([]);
+  }
+  if(kind==='context'){
+    const {calls,proxy}=counting(f.context);rejection(()=>createSyntheticRecoveryCaptureAssembly([proxy],{guard:()=>{}}),'shape');expect(calls).toEqual([]);
+  }
+});
+it.each(['accept','transfer'] as const)('refuses discard reentry from the %s guard and publishes neither capture nor manifest',operation=>{
+  const f=fixture();let root:ReturnType<typeof createSyntheticRecoveryCaptureAssembly>;
+  root=createSyntheticRecoveryCaptureAssembly([f.context],{guard:(p,op)=>{if(op===operation&&p==='pre')try{root.discard();}catch{ /* first hard must survive */ }}});
+  const wire=root.deliver(root.inputs[0],{id:1,ok:true,json:JSON.stringify(f.asset)});
+  if(operation==='accept')rejection(()=>root.accept(wire),'reentrant');
+  else{root.accept(wire);rejection(()=>root.transfer(),'reentrant');}
+  expect(root.summary()).toMatchObject({state:'failed',first_failure:'reentrant',captures:0,manifests:0});
+});
+it('reports discardManifest reentry from a transfer guard as reentrant, not as a binding miss',()=>{
+  const f=fixture();let root:ReturnType<typeof createSyntheticRecoveryCaptureAssembly>;
+  root=createSyntheticRecoveryCaptureAssembly([f.context],{guard:(p,op)=>{if(op==='transfer'&&p==='pre')try{root.discardManifest({} as CaptureManifest);}catch{ /* first hard must survive */ }}});
+  root.accept(root.deliver(root.inputs[0],{id:1,ok:true,json:JSON.stringify(f.asset)}));
+  rejection(()=>root.transfer(),'reentrant');expect(root.summary()).toMatchObject({first_failure:'reentrant',manifests:0});
+});
+it('maps an invalid explicit stop reason to internal instead of recording caller text',()=>{
+  const root=createSyntheticRecoveryCaptureAssembly([fixture().context],{guard:()=>{}});
+  rejection(()=>root.stop('caller_reason' as never),'internal');expect(root.summary().first_failure).toBe('internal');
+});
 // Compile-time brands do not let a descriptor/summary or a different resource become a wire/capture/manifest.
 function staticBrands(input:CaptureInput,wire:CaptureWire,manifest:CaptureManifest){
   // @ts-expect-error A job/input is not a delivery.

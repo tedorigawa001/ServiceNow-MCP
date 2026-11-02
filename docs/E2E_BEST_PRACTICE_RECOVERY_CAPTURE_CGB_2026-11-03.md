@@ -41,7 +41,22 @@ strict型検査の初回は14件のエラー。localなnever-returning fail関�
 
 全体回帰には既存のlocalhost合成待受試験だけを許可し、外部サービスへ接続していない。CG-B自体は注入同期guardだけを使い、native worker／transport／時計／timerを呼ばない。旧試験は削除していない。
 
-## 4 費用・寿命・残課題
+## 4 レビュー修正（2026-11-03）
+
+§3の56件・12,588件は修正前の記録として残す。レビュー時にrepo全体のlint（error 0・warning 374）、build、梱包441ファイル、全体合成260ファイル／12,588件成功・失敗0を再確認した。
+
+レビューでcapture層の28変異を確認し、次の判定は外しても既存56件がすべて通過した。実装はprobeで正しく動作しており（Proxy trap呼出し0回、guard中のdiscard再入は`reentrant`で停止）、試験だけの不足である。
+
+- 構築時のcontext整合（`target.update_xml_sys_id`と受理IDの一致、applicable／requested ruleの重複拒否）。CG-Aの値検証はresult target IDとasset IDの不一致やapplicable rule重複を受理するため、この判定が唯一の防御で、外すとID不整合のcaptureが発行される。各々を構築時`shape`で拒否する3件を追加した。
+- envelope・依存・contextの`types.isProxy`判定。既存試験は理由だけを見ており、Proxyも`get` trapしか持たなかった。ownKeys／descriptor／prototype／get／hasを数える透過Proxyで、正当な値を包んでも拒否され、trap呼出しが0回であることを3件追加した。
+- `discard`のbusy判定。外すとguard中のdiscard後もacceptがcapture、transferがmanifestを返す。accept／transfer各guardからの再入が`reentrant`で停止し何も公開しない2件、`discardManifest`の再入が`binding`ではなく`reentrant`になる1件を追加した。
+- `stop`の理由検査。不正な理由が`internal`へ写像されることを1件追加した。
+
+上記10変異はそれぞれ追加した試験だけを失敗させた（discardのbusy判定はaccept／transfer両方の追加試験を失敗させる）。移譲時の`wires.size`判定（全件受理済みならwireは必ず0件）、受理後の`accepted／started`再確認（順序判定とwire存在で常に成立）、`Object.is`→`===`（contextに数値項目がない）、`held.clear`（外から観測不能）は等価変異として扱う。schema前copyの深さ8／array100／key30／node10,000／文字費262144も、strict context schemaが受理する値はすべてこの枠内に収まり、超過値はschemaでも同じ`shape`拒否になるため、結果では区別できない。schema前のwork上界としての防御判定で、等価変異として扱う。helperは変更せず、新規合成試験は66件。修正後も全体合成260ファイル／12,598件成功・失敗0。
+
+[RDB設計](BEST_PRACTICE_ABORT_SCOPE_RECOVERY_FINISH_VALUES_RDB_DESIGN.md)の後続節に残っていたRD-C／内容gateのdraft-0.3表記を0.4へ揃え、CG-Bの実装状態を追記した（リンク表記のみで版数は変更しない）。
+
+## 5 費用・寿命・残課題
 
 1件の期待context収集・schema copy、wireごとのCG-A decode／schema copy／freeze、最大100件のcapture索引、移譲時のMap索引複製とguard／clearを別費目にする。本文graphの追加cloneはしないが、元wire・decoded tree・Zod正規化値・期待contextの同時保持を無料とは扱わない。wire長の理論和だけでも100×262144 byteになり得る。全体CPU／heap／work上界と元60秒の中断粒度は未証明、既存C/G/P会計にも加算していない。
 
