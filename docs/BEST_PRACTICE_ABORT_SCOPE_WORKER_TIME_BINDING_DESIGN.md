@@ -1,6 +1,6 @@
 # CT-B後半：worker job binding・T_i／E整合の詳細設計
 
-Version: br006-worker-time-binding-draft-0.12 / Date: 2026-11-02。
+Version: br006-worker-time-binding-draft-0.13 / Date: 2026-11-02。
 Status: **WJ-Aの内部claim（§11）、WJ-BのT_i／U・analyze比較（§12）、WJ-Cの通常finish（§13）、SR-A／BとSR-C①の旧世代終了／世代なし証拠・one-shot消費（別設計§12〜14）を、配布対象外の合成issuerで限定実装。runtime／実worker・実回復route／新世代・WJ-Dは未接続／未実装。正式発行口閉鎖・Unknown・全体受付無効・VM／監視／telemetry調査保留を維持する。実source差替え・実接続・実通信・設定変更・Permit発行・Pushの承認ではない。**
 
 基準HEAD: `099dedf`。[上位接続契約](BEST_PRACTICE_ABORT_SCOPE_RELEASE_COMPARISON_TIME_BINDING_DESIGN.md)§4〜7と[CT-B前半](BEST_PRACTICE_ABORT_SCOPE_RELEASE_TIME_OWNER_CTB_DESIGN.md)の差分設計。TB-Bの固定fake準備処理内のdiscardを、既にworkerまで継続できる移譲と取り違えない。通常adapterへの切替・B-03・friend撤去は別工程。
@@ -109,7 +109,7 @@ binding／時計矛盾は既存internal_review_errorへ写像し、worker_unavai
 - **worker期限型**：analysis段階の`ReviewWorkerError(deadline_exceeded)`。analyze送信後は旧jobをterminalにし、ready待ち中なら同inputを未送信のまま終端化する。旧workerのterminate／固定後始末完了を確認し、元runが健全で元残時間がある場合だけ新generationのfinishを許す。ready待ちに存在しないanalyze idを作らない。
 - **phase期限型**：`BoundedReadError(phase_deadline_exceeded)`。metadata／payload／consistency等の段階を問わず、既存workerがあれば閉じず同generationを維持し、worker未起動ならfinish用の初回起動へ進む。consistency前かつ既存verify継続がある場合はsoft後に論理`verify()`を1回行う（親→metadataの2 GET、各最大1 retryで物理最大4試行。旧「GET1回」は訂正）。既にconsistencyなら再実行しない。旧generationの終了証拠は要求せず、pendingなし・元runの健全性／全体残時間を確認する。verifyは既存HTTP owner・費目のままで、追加の論理verifyや時計再採取として数えない。Uと元S／Lは引き継ぐ。hardな時計／binding不整合、取消、全体期限、終了未確認をsoft timeoutへ格下げしない。終端検査専用ownerや正常source解放後のownerは、新generation／finishを発行しない。
 
-soft移行を公開のdeadline_exceededという文字列だけで認めない。生成元・phase／ready待ちか送信後か・世代状態と同runの健全な元予算観測を結合したprivateな回復claimを一度消費する。[soft回復claim詳細設計draft-0.8](BEST_PRACTICE_ABORT_SCOPE_SOFT_RECOVERY_CLAIM_DESIGN.md)に全発生点・失敗分類とSR-A〜Dを分離した。SR-A／Bに加えSR-C①の旧世代終了／世代なし証拠とone-shot消費を独立合成issuerで限定実装し、実生成元・実回復route・新世代・SR-C後半／Dは未実装。現fail／revoke後のidentityを復活させず、終端済みrunやcallerの「soft」申告から生成しない。
+soft移行を公開のdeadline_exceededという文字列だけで認めない。生成元・phase／ready待ちか送信後か・世代状態と同runの健全な元予算観測を結合したprivateな回復claimを一度消費する。[soft回復claim詳細設計draft-0.9](BEST_PRACTICE_ABORT_SCOPE_SOFT_RECOVERY_CLAIM_DESIGN.md)に全発生点・失敗分類とSR-A〜Dを分離した。SR-A／Bに加えSR-C①の旧世代終了／世代なし証拠とone-shot消費を独立合成issuerで限定実装し、実生成元・実回復route・新世代・SR-C後半／Dは未実装。現fail／revoke後のidentityを復活させず、終端済みrunやcallerの「soft」申告から生成しない。
 
 [SR-C後半の接続契約draft-0.1](BEST_PRACTICE_ABORT_SCOPE_WORKER_RECOVERY_CONTINUATION_DESIGN.md)は、同ownerの未消費終了証拠をprivate継続へ移す差分設計である。公開の非実行consumer結果を再利用せず、旧終了→必要verify→新世代readyの順序を維持する。SC2-A〜Dに分割し、WJ-Cのfinish／E接続はSR-Dへ残す。設計のみで、正式発行口・全体受付・実接続の状態を変えない。
 
@@ -149,7 +149,7 @@ TB-Bレビューで判明したfinally継続の未保証は[TB-B記録§6](E2E_B
 
 1. **WJ-A（限定実装済み）**：合成issuerだけの内部binding・generation／input／job claim・one-shot／失効を純粋fakeで実装。時計値比較は元S／L／Oへの固定値入力とし、実worker／runtimeには接続しない。scope内の保証と未実装の全体保証は§11に分離する。
 2. **WJ-B（合成issuerだけ限定実装）**：同input receiptのT_i受理、U保持とanalyze応答の期待値比較器を独立oracleで確認。startup・送信失敗、omitted、pre/post guardを含める。§12参照。runtimeへの供給／bindingは未実装。
-3. **WJ-C（通常finishだけ限定実装）**：finishのE／対象集合・終了候補の一度限り消費を合成応答で確認（§13）。取得済みUを消さない。soft partialは[別の詳細設計draft-0.8](BEST_PRACTICE_ABORT_SCOPE_SOFT_RECOVERY_CLAIM_DESIGN.md)へ分け、SR-A／B・SR-C①の内部証拠消費を独立合成実装した。SR-C後半／Dの新世代・実接続は未実装である。
+3. **WJ-C（通常finishだけ限定実装）**：finishのE／対象集合・終了候補の一度限り消費を合成応答で確認（§13）。取得済みUを消さない。soft partialは[別の詳細設計draft-0.9](BEST_PRACTICE_ABORT_SCOPE_SOFT_RECOVERY_CLAIM_DESIGN.md)へ分け、SR-A／B・SR-C①の内部証拠消費を独立合成実装した。SR-C後半／Dの新世代・実接続は未実装である。
 4. **WJ-D／CT-C**：私有の固定生成元・監督／注入channel・上位終端への連続fake接続を別承認で行う。現在のpublic prepared-onlyと通常adapterを維持する。
 5. **B-03**：旧case対応表の未代替実class保証を残し、専用開発build／compiled・配布負の対照を別設計／別集計で確定する。今回の441ファイルの梱包成功で代替しない。
 
@@ -224,3 +224,5 @@ pendingを最初のguard前に取り外し、同finish jobを一度消費する�
 [82件の合成試験](../tests/review/synthetic-worker-finish.test.ts)は独立E／field／集合oracle、100件境界、長さを保った重複による欠落の隠蔽、送信前集合とanalyze記録（期待context・rejected理由・親側のresponse_limit omission）の照合、`checkReleaseEvidence`による観測時刻／必要limitationの拒否、issue全4guard・応答全6guard・終端全4guard、混入・再入・取消・解放不足・設定期限を確認する。既存WJ-A 157件／WJ-B 66件を維持する。初回RED・型検査の未使用fixture定数・最終検証は[WJ-C検証記録](E2E_BEST_PRACTICE_WORKER_FINISH_WJC_2026-11-02.md)へ記録する。
 
 draft-0.7のレビュー修正：WJ-Cの次の判定は、各判定を外す変異でも76件が通っていた。返却集合の`seen`照合（同じ長さで重複idが欠落idを隠す応答）、送信前集合のheaderと受理済みinputの期待contextの照合、analyze済みrejected／result_omittedの理由保持、親側で既にresponse_limitによりomitされたreviewedの受理、`checkReleaseEvidence`の再利用（観測時刻がEより後、0 inputで必要limitationなし）。6件の試験を追加し、§13の件数・保証範囲と上位設計・検証記録からの版数リンクを更新した。
+
+draft-0.13の変更：§7にSR-C後半の接続契約（未消費の終了証拠のprivate移譲、旧終了→必要verify→新世代readyの順序、SC2-A〜Dの分割）への案内を追加し、soft回復claim設計への版数リンクを更新した。設計の案内のみで、実装・試験・既存の保証範囲は変更していない。

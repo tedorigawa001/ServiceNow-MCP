@@ -112,4 +112,4 @@ TB-Bは新たなworker終端を作らず、上位値は固定fake準備処理の
 
 ## 11 CT-B後半の設計参照
 
-[worker job binding・T_i／E詳細設計draft-0.12](BEST_PRACTICE_ABORT_SCOPE_WORKER_TIME_BINDING_DESIGN.md)で、同run／sourceの時刻leaseと、ready済みworker世代・input receipt・job claimの役割を分けた。WJ-A／B、通常WJ-Cに加えSR-A／BとSR-C①の旧世代終了／世代なし証拠のone-shot消費を独立合成issuerで限定実装した。TB-B／実worker／runtime台帳とは接続せず、実供給元、実回復route・新世代・実cleanup連結とWJ-Dは未実装。合成の終了確認を実OS終了や本番session cleanupと数えない。異常停止後のUは再開不能な終端UTCデータだけで、固定discardで破棄する。現prepared-onlyのdiscardを削除する指示ではない。TB-Bレビューで残ったfinally継続の観測不足を、rollback救済と区別する受入条件も維持する。B-03・実接続・正式発行・全体受付は別工程のままとする。
+[worker job binding・T_i／E詳細設計draft-0.13](BEST_PRACTICE_ABORT_SCOPE_WORKER_TIME_BINDING_DESIGN.md)で、同run／sourceの時刻leaseと、ready済みworker世代・input receipt・job claimの役割を分けた。WJ-A／B、通常WJ-Cに加えSR-A／BとSR-C①の旧世代終了／世代なし証拠のone-shot消費を独立合成issuerで限定実装した。TB-B／実worker／runtime台帳とは接続せず、実供給元、実回復route・新世代・実cleanup連結とWJ-Dは未実装。合成の終了確認を実OS終了や本番session cleanupと数えない。異常停止後のUは再開不能な終端UTCデータだけで、固定discardで破棄する。現prepared-onlyのdiscardを削除する指示ではない。TB-Bレビューで残ったfinally継続の観測不足を、rollback救済と区別する受入条件も維持する。B-03・実接続・正式発行・全体受付は別工程のままとする。
