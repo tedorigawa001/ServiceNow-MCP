@@ -1,7 +1,7 @@
 # WJ-C残工程：soft回復claim・世代移行の詳細設計
 
-Version: br006-soft-recovery-claim-draft-0.2 / Date: 2026-11-02。
-Status: **設計案のみ。型・issuer・状態遷移・試験は未実装。正式発行口閉鎖・Unknown・全体受付無効・VM／監視／telemetry調査保留を維持する。**
+Version: br006-soft-recovery-claim-draft-0.3 / Date: 2026-11-02。
+Status: **SR-Aの内部型・同ownerの観測／回復slot消費・診断分離だけを独立合成issuerで限定実装（§12）。回復route・世代移行・実生成元／cleanup接続・SR-B〜Dは未実装。正式発行口閉鎖・Unknown・全体受付無効・VM／監視／telemetry調査保留を維持する。**
 
 基準HEAD: `2804af5`。[親設計](BEST_PRACTICE_ABORT_SCOPE_WORKER_TIME_BINDING_DESIGN.md)§7・13の差分。WJ-Cの通常finish限定実装を変更せず、次の合成実装範囲を定める。実worker／runtime接続、実通信・実機操作、設定変更、本番cap／Permit投入・Pushの承認ではない。
 
@@ -17,7 +17,7 @@ Status: **設計案のみ。型・issuer・状態遷移・試験は未実装。�
 
 対象は元runが健全な間の**通常処理から一度だけのsoft打切り→finish**。Oを持つ既存合成範囲を維持する。Oなし・release不一致／不明、hard停止後の部分finishは新ownerの対象外とし、既存productionの挙動は変えない。
 
-本書の型名・状態名は内部役割案で、現在存在するAPIではない。最初の実装は配布対象外の独立合成issuerのみとし、fixtureのbrand／登録台帳をruntimeへ共有しない。inspect値・外部JSON・任意例外・callerのboolから証拠を作る口は設けない。
+本書§3の型名・状態名は全体の内部役割案で、実在するruntime APIではない。SR-Aの局所型／handleは§12へ分ける。実装は配布対象外の独立合成issuerのみとし、fixtureのbrand／登録台帳をruntimeへ共有しない。inspect値・外部JSON・任意例外・callerのboolから実証拠を作る口は設けない。
 
 ## 2 不変条件
 
@@ -151,7 +151,7 @@ job・listener・timer・worker／stdioは監督owner、HTTP・認証・予約�
 
 上記の回数はモデル案で、運用cap・受付可否の証拠ではない。追加slot／snapshotの実layout、work・allocation、全経路のretry／cleanup費用はUnknown。全体受付を有効化せず、既存60000msやテスト期限を緩めない。
 
-## 10 合成受入条件（未実施）
+## 10 合成受入条件（SR-Aの部分確認は§12、全体は未実施）
 
 | ID | 独立に確認する条件 |
 |---|---|
@@ -173,11 +173,48 @@ job・listener・timer・worker／stdioは監督owner、HTTP・認証・予約�
 
 ## 11 推奨実装分割・承認／レビュー待ち
 
-1. **SR-A**：内部discriminant・同ownerの観測／回復slotとone-shot検査、soft／hard／cleanup診断分離を合成issuerだけで実装する。
+1. **SR-A（合成限定実装）**：内部discriminant・同ownerの観測／回復slotとone-shot検査、soft／hard／cleanup診断分離を独立合成issuerだけで実装した。§12参照。route／世代移行や実cleanup証拠は発行しない。
 2. **SR-B**：phase型の同世代維持／未起動分岐、未処理集合・必要verifyのfakeイベント会計を接続する。
 3. **SR-C**：worker型の送信後／ready待ち区別、旧世代終了証拠・新世代routeをfake依存で接続する。
 4. **SR-D**：通常WJ-CのE／固定集合・候補消費へ接続し、全guardと独立oracleを確認する。実session／監督・外側cleanup接続は行わない。
 
-各段階の実装は別の依頼後に行う。実生成継続のclass／module配置、private終了証拠の実発行条件、停止後finishとの接続互換性、実cleanup上限・外側checkpoint／診断写像、実選択windowと集合証拠、全費目上界はレビュー待ち。人の承認・実装・試験済みとはしない。本書はローカルコード照合とMD設計だけで、テスト・実通信・環境操作を実施した記録ではない。
+SR-B以降の実装は別の依頼後に行う。実生成継続のclass／module配置、private終了証拠の実発行条件、停止後finishとの接続互換性、実cleanup上限・外側checkpoint／診断写像、実選択windowと集合証拠、全費目上界はレビュー待ちで、人の承認済みとはしない。draft-0.1／0.2はコード照合とMD設計のみ。SR-Aの実施済み範囲・試験記録を次節へ分離し、実通信・環境設定操作を実施したことにはしない。
 
 draft-0.1のレビュー修正：worker期限型の観測をtimer終端と「送信後／ready待ち」だけに限っていたが、現監督はrequest冒頭（worker未起動のこともある）・ready／応答処理内・送信直前（id消費済み未送信）の`check()`からも同じdeadline_exceededを投げ、adapterはそれらをsoftとして受け付ける。未起動の場合に旧worker終了証拠を要求すると既存soft partialが回復不能になるため、§6.0に発生点の表を追加し、§3・SR-05を合わせた。またsoft後verifyの失敗分類が未記載で、既存adapterが続行してfinishする失敗をhard停止と誤実装し得たため、§7に既存分類との対応表を追加し、SR-09／10を合わせた。
+
+## 12 SR-A：独立合成issuerの内部契約・診断分離
+
+[合成issuer](../tests/support/review/synthetic-soft-recovery.ts)をtests/supportに追加した。importsはnode:util／zodだけで、WJ-A／B／Cのowner・runtime class・登録／claim台帳を共有しない。実source・canonical budget・監督の正式発行継続へは未接続である。
+
+### 12.1 型・値境界と同owner binding
+
+SyntheticRecoverySeedはrun／session／source／key／origin／budget／releaseの7つのopaque参照とS／全L／O／Uの計11項目を、own data descriptorで構築時にpinする。S<=O<=U<=S+L、ISOミリ秒UTC、1<=L<=60000を確認し、全pre/post guardでも同値・同参照を再検査する。releaseは**fake contextのidentityだけ**で、内容や実ReleasePermitの有効性を検査したとはしない。新しいUTC時計や本物のremainingを読む口はなく、元run guardは注入したfake checkで表す。
+
+SyntheticSoftFactsはphase型（metadata／payload／consistency、workerなし／ready）とworker型の7発生点を区別する。request_checkは未起動／既存を分け、ready timer／reply、送信直前check、analyze timer／replyを別pointにする。未起動にはworker／generationを置かず、ready中はanalyze idを置かない。送信直前は消費済みidとallocation identityだけを持ち、送信済みjobと混同しない。送信後だけjob identity／idを要求する。全variantは追加field・矛盾するworker_state・不正id・getter／Proxyを拒否する。
+
+constructorに渡す期待topology自体がfake fixtureである。observeの値は同owner bindingの固定期待値・同input／request／監督／worker／世代／allocation／jobへ照合し、外部形状の一致を実sourceの証明にしない。root値は最大11項目、factsは最大11項目、局所読取は最大16 own propertyに制限するが、これを任意JS objectの反射コストを含むメモリ／work上界の証明とはしない。
+
+### 12.2 一度限りのslot・失効
+
+owner binding／observation／recovery／cleanup診断には別の内部brandを置き、実体は空の凍結handleとして同issuer内のslotへ対応させる。runtimeのbrand・台帳へは共有しない。公開fixture境界では不正なobjectも拒否試験できるが、同owner内pointer以外では消費できない。
+
+observeは発行claimを最初のguard前に占有し、最後のpost-guard後だけ観測をpublishする。claimRecoveryは同観測をguard前に取り外し、回復開始bitを一度消費する。consumeRecoveryも同回復slotをguard前に取り外し、全guard後だけauthority:noneの限定dataを返す。コピー／別owner／二重操作・捕捉再入・identity変更・取消／期限はhard停止し、失敗後に再生成しない。
+
+ここでのconsumedは**SR-Aの非実行結果を消費しただけ**で、§4のquiescing／route_ready／finish_onlyへの遷移ではない。新世代、HTTP、analyze、finish、対象集合の封印、未完了inputの終端化、回復権限を発行しない。SR-B〜Dで固定producerと対にした接続が必要となる。
+
+### 12.3 soft／hard／cleanupの分離
+
+- soft slotは受理済みkind／phase／point／worker_stateだけを保持し、hard停止後も残す。元identity・source・例外本文は含めない。
+- hard slotは最初の固定code／phaseを保持し、後続cleanupで上書きしない。SR-Aで直接扱うcodeはcancelled／deadline_exceeded／worker_unavailable／internal_review_error。未知理由は内部エラーへ固定する。verify失敗のHTTP分類はSR-B以降で、現在のadapterを変更しない。
+- cleanupLeaseは元ownerが生存する間に一度だけ発行する**診断専用sink**。失敗後に新sinkを作れず、既に発行したsinkだけはhard停止後もrecordCleanupで一度sealできる。これはrun guardを呼ばず、失効したrunを正常化しない。capabilityは診断記録だけで、worker／HTTP操作や回復を許可しない。
+- cleanupはSR-Aでは一つのimmutableなsnapshotであり、実closeの要求→settle処理ではない。workerなしはnot_requiredだけ、workerありはnot_started／requested／confirmed／failed／unconfirmedを区別する。confirmed以外の未完了／失敗はhard停止を要求し、無効なsnapshotはunconfirmedへ固定する。未確認を記録した後、遅れてconfirmedへ上書きしない。先行cancelledと後続cleanup failedは両方保持する。
+
+recordCleanupのstatusはfixtureが渡す合成イベントで、GenerationClosedEvidenceへ昇格する口ではない。closeの実発行元・終了確認・新世代許可はSR-Cの未実装範囲である。normal closeはclaim／identity／UTCを破棄するが、未sealのcleanup sinkがあれば拒否して事実回収を残す。hard停止ではroot能力を失効し、S／L／O／Uのdataだけを固定discardまで保持する。外部copyやheapの物理消去は保証しない。
+
+### 12.4 試験・非実装範囲
+
+[119件の試験](../tests/review/synthetic-soft-recovery.test.ts)でSR-01／02、SR-05のvariant値・identity、SR-07の同期guard、SR-11の診断分離の一部を確認した。最後のpost-guard内の期待世代差替え、S=O=U／O=U／U=S+Lの値境界、fake health checkの理由文字列だけからsoftへ昇格しないことも確認する。実ReadStateの期限通知・await・terminate・終了待ち・元sessionの失効連携は確認していない。
+
+独立oracleは、全9 topology（phase payloadのworker有／無＋worker7発生点）の各一度のbind／cleanup lease／observe／claim／consume／close、計12 guardを確認する。phase3種は別にworker有／無を検査する。回数は局所fakeモデルのイベント数で、actual work／cap・全体受付の根拠ではない。旧WJ-A 157／WJ-B 66／通常WJ-C 82件を維持し、初回RED・最終検証は[SR-A検証記録](E2E_BEST_PRACTICE_SOFT_RECOVERY_SRA_2026-11-02.md)へ分離する。
+
+issuer・試験は配布物に含めず、dist JS／宣言／mapの関数／path混入とruntime／I/O／timer／clock／worker依存を負の対照付きで検査する。これは字句・依存先の局所検査であり、間接global取得等の網羅的証明ではない。専用compiled／B-03・実class保証へ流用しない。正式発行口閉鎖・全体受付無効・Unknown・調査保留を維持する。

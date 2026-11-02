@@ -1,7 +1,7 @@
 # CT-B後半：worker job binding・T_i／E整合の詳細設計
 
-Version: br006-worker-time-binding-draft-0.9 / Date: 2026-11-02。
-Status: **WJ-Aの内部claim（§11）、WJ-BのT_i／U・analyze比較（§12）、WJ-Cの通常finishのE／集合・終了候補消費（§13）を、配布対象外の合成issuerで限定実装。runtime／実worker・soft回復claim・WJ-Dは未接続／未実装。正式発行口閉鎖・Unknown・全体受付無効・VM／監視／telemetry調査保留を維持する。実source差替え・実接続・実通信・設定変更・Permit発行・Pushの承認ではない。**
+Version: br006-worker-time-binding-draft-0.10 / Date: 2026-11-02。
+Status: **WJ-Aの内部claim（§11）、WJ-BのT_i／U・analyze比較（§12）、WJ-Cの通常finish（§13）、SR-Aの観測／回復slot消費・診断分離（別設計§12）を、配布対象外の合成issuerで限定実装。runtime／実worker・回復route／世代移行・WJ-Dは未接続／未実装。正式発行口閉鎖・Unknown・全体受付無効・VM／監視／telemetry調査保留を維持する。実source差替え・実接続・実通信・設定変更・Permit発行・Pushの承認ではない。**
 
 基準HEAD: `099dedf`。[上位接続契約](BEST_PRACTICE_ABORT_SCOPE_RELEASE_COMPARISON_TIME_BINDING_DESIGN.md)§4〜7と[CT-B前半](BEST_PRACTICE_ABORT_SCOPE_RELEASE_TIME_OWNER_CTB_DESIGN.md)の差分設計。TB-Bの固定fake準備処理内のdiscardを、既にworkerまで継続できる移譲と取り違えない。通常adapterへの切替・B-03・friend撤去は別工程。
 
@@ -109,7 +109,7 @@ binding／時計矛盾は既存internal_review_errorへ写像し、worker_unavai
 - **worker期限型**：analysis段階の`ReviewWorkerError(deadline_exceeded)`。analyze送信後は旧jobをterminalにし、ready待ち中なら同inputを未送信のまま終端化する。旧workerのterminate／固定後始末完了を確認し、元runが健全で元残時間がある場合だけ新generationのfinishを許す。ready待ちに存在しないanalyze idを作らない。
 - **phase期限型**：`BoundedReadError(phase_deadline_exceeded)`。metadata／payload／consistency等の段階を問わず、既存workerがあれば閉じず同generationを維持し、worker未起動ならfinish用の初回起動へ進む。consistency前かつ既存verify継続がある場合はsoft後に`verify()`のGETを1回行う。既にconsistencyなら再実行しない。旧generationの終了証拠は要求せず、pendingなし・元runの健全性／全体残時間を確認する。verify GETは既存HTTP owner・費目のままで、新GETや再採取として数えない。Uと元S／Lは引き継ぐ。hardな時計／binding不整合、取消、全体期限、終了未確認をsoft timeoutへ格下げしない。終端検査専用ownerや正常source解放後のownerは、新generation／finishを発行しない。
 
-soft移行を公開のdeadline_exceededという文字列だけで認めない。生成元・phase／ready待ちか送信後か・世代状態と同runの健全な元予算観測を結合したprivateな回復claimを一度消費する。[soft回復claim詳細設計draft-0.2](BEST_PRACTICE_ABORT_SCOPE_SOFT_RECOVERY_CLAIM_DESIGN.md)に内部役割・状態遷移・失敗分類・SR-A〜Dの分割案を整理した。設計だけで未実装。現fail／revoke後のidentityを復活させず、終端済みrunやcallerの「soft」申告から生成しない。
+soft移行を公開のdeadline_exceededという文字列だけで認めない。生成元・phase／ready待ちか送信後か・世代状態と同runの健全な元予算観測を結合したprivateな回復claimを一度消費する。[soft回復claim詳細設計draft-0.3](BEST_PRACTICE_ABORT_SCOPE_SOFT_RECOVERY_CLAIM_DESIGN.md)に全発生点・失敗分類とSR-A〜Dを分離した。SR-Aの観測／回復slotと診断分離だけを独立合成issuerで限定実装し、実生成元・回復route・世代移行・SR-B〜Dは未実装。現fail／revoke後のidentityを復活させず、終端済みrunやcallerの「soft」申告から生成しない。
 
 soft以外にも、停止後に途中結果をfinishする既存分岐がある。metadata段階の失敗と、payload／consistency段階のaccess_denied・upstream_unavailable・予算超過等では、未処理行を記録した部分集約／失敗集約をfinishで返す。receive_budget_exceededではsession自体が先に停止しており、その後も部分集約を返すことを既存試験（[adapter試験](../tests/review/update-set-adapter.test.ts)の累積予算試験）が保証する。この経路で§6の元run guardを要求すると既存の部分集約を失敗へ変えるため、初期範囲（WJ-A〜D）では新時刻契約の対象外とし、従来の部分finish・失敗集約を変更しない。停止済みrunでもO／U・T_iとEを照合する場合は、先行停止理由を固定保持し新job／generation・新GETを作らない停止後finish専用claimを別設計／別承認とする。対象外経路の集約を時刻検証済み・正常完了とは数えない。
 
@@ -147,7 +147,7 @@ TB-Bレビューで判明したfinally継続の未保証は[TB-B記録§6](E2E_B
 
 1. **WJ-A（限定実装済み）**：合成issuerだけの内部binding・generation／input／job claim・one-shot／失効を純粋fakeで実装。時計値比較は元S／L／Oへの固定値入力とし、実worker／runtimeには接続しない。scope内の保証と未実装の全体保証は§11に分離する。
 2. **WJ-B（合成issuerだけ限定実装）**：同input receiptのT_i受理、U保持とanalyze応答の期待値比較器を独立oracleで確認。startup・送信失敗、omitted、pre/post guardを含める。§12参照。runtimeへの供給／bindingは未実装。
-3. **WJ-C（通常finishだけ限定実装）**：finishのE／対象集合・終了候補の一度限り消費を合成応答で確認（§13）。取得済みUを消さない。soft partial世代交換／回復claimは[別の詳細設計draft-0.2](BEST_PRACTICE_ABORT_SCOPE_SOFT_RECOVERY_CLAIM_DESIGN.md)のSR-A〜Dへ分け、未実装のまま残す。
+3. **WJ-C（通常finishだけ限定実装）**：finishのE／対象集合・終了候補の一度限り消費を合成応答で確認（§13）。取得済みUを消さない。soft partialは[別の詳細設計draft-0.3](BEST_PRACTICE_ABORT_SCOPE_SOFT_RECOVERY_CLAIM_DESIGN.md)へ分け、SR-Aの内部claim／診断だけを独立合成実装した。SR-B〜Dのroute／世代移行・実接続は未実装である。
 4. **WJ-D／CT-C**：私有の固定生成元・監督／注入channel・上位終端への連続fake接続を別承認で行う。現在のpublic prepared-onlyと通常adapterを維持する。
 5. **B-03**：旧case対応表の未代替実class保証を残し、専用開発build／compiled・配布負の対照を別設計／別集計で確定する。今回の441ファイルの梱包成功で代替しない。
 
@@ -217,7 +217,7 @@ pendingを最初のguard前に取り外し、同finish jobを一度消費する�
 
 `consumeTerminal`は候補をguard前に一度消費し、同ownerの正常source close・generation close開始とconfirmClosedが成立した場合だけ進む。固定pre/post guard後、WJ-Aのroot close（そのpre/post guardを含む）を完了させ、時刻・identity・集合を破棄してからauthority:noneの限定summary（同E・集合件数だけ）を返す。解放未確認・取消・再入・別owner／copy・二重消費では返さない。通常の`close`で未消費候補を捨てることもできる。
 
-このsource／worker／root closeは**合成lifecycle状態の確認**であり、実OS終了・実session cleanupの証明ではない。上位へ正式結果を公開する口は作らず、実cleanupと外側の最終checkpointを連結する保証はWJ-D／CT-Cに残す。WJ-Cのsoft回復claim・世代交換も未実装で、hard失敗後のfinish再開を追加しない。既存productionの2種類のsoft移行・停止後部分集約は変更しない。
+このsource／worker／root closeは**合成lifecycle状態の確認**であり、実OS終了・実session cleanupの証明ではない。上位へ正式結果を公開する口は作らず、実cleanupと外側の最終checkpointを連結する保証はWJ-D／CT-Cに残す。SR-Aは別の独立合成issuerで内部観測／回復slotと診断だけを限定実装し、WJ-C ownerへ回復route・世代交換を接続していない。hard失敗後のfinish再開は追加せず、既存productionの2種類のsoft移行・停止後部分集約は変更しない。
 
 [82件の合成試験](../tests/review/synthetic-worker-finish.test.ts)は独立E／field／集合oracle、100件境界、長さを保った重複による欠落の隠蔽、送信前集合とanalyze記録（期待context・rejected理由・親側のresponse_limit omission）の照合、`checkReleaseEvidence`による観測時刻／必要limitationの拒否、issue全4guard・応答全6guard・終端全4guard、混入・再入・取消・解放不足・設定期限を確認する。既存WJ-A 157件／WJ-B 66件を維持する。初回RED・型検査の未使用fixture定数・最終検証は[WJ-C検証記録](E2E_BEST_PRACTICE_WORKER_FINISH_WJC_2026-11-02.md)へ記録する。
 
