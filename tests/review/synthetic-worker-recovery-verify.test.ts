@@ -141,3 +141,14 @@ it('cannot recover from synchronous guard reentry and does not spend C twice',()
   const f=fixture(),p=f.prepare();f.owner.beginWorkerVerify(f.b,p);let once=false;f.arm(()=>{if(!once){once=true;try{f.owner.workerVerifyAttempt(f.b,p,'parent');}catch{/* outer must still stop */}}return undefined;});
   expect(()=>f.owner.workerVerifyAttempt(f.b,p,'parent')).toThrow('internal_review_error');expect(f.owner.inspect().worker_preparation?.accounting?.requests).toBe(10);
 });
+it('hard-stops on a non-boolean verify change flag instead of treating it as changed',()=>{
+  const f=fixture(),p=f.prepare();f.owner.beginWorkerVerify(f.b,p);const a=f.owner.workerVerifyAttempt(f.b,p,'parent')!;
+  expect(()=>f.owner.workerVerifyOutcome(f.b,p,a,{kind:'success',changed:'no'})).toThrow('internal_review_error');
+  expect(f.owner.inspect()).toMatchObject({state:'failed',diagnostics:{hard:{code:'internal_review_error'}},worker_preparation:{held:false}});
+});
+// Chunk identities are WeakSet keys; reject primitives/proxies deliberately rather than via a WeakSet TypeError.
+it.each(['string','proxy'] as const)('rejects a %s chunk identity without charging',kind=>{
+  const f=fixture(),p=f.prepare();f.owner.beginWorkerVerify(f.b,p);const a=f.owner.workerVerifyAttempt(f.b,p,'parent')!;
+  const identity=(kind==='string'?'chunk-1':new Proxy({},{})) as object;
+  expect(()=>f.owner.workerVerifyChunk(f.b,p,a,identity,7)).toThrow('internal_review_error');expect(f.owner.inspect().worker_preparation?.accounting?.received_bytes).toBe(20);
+});

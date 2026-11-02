@@ -80,6 +80,8 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 ### Added
 
+- Adds three SC2-B synthetic worker-verify tests for checks that earlier tests did not distinguish: a non-boolean verify change flag hard-stops instead of counting as changed, and string or proxy chunk identities are refused without charging received bytes.
+
 - Adds three SC2-A synthetic preparation tests: unknown `collection_status` and `consistency` values are refused, and a generalized unfinished-input set (another retained input besides the active receipt, active receipt not at U) is shown to be accepted. The design now states that the adapter's sequential order (only the active input unfinished, with T_i equal to U; none for phase deadlines) is not guaranteed by the SC2-A/SR-B synthetic contracts.
 
 - The three R2 runner budget tests in `tests/review/r2-runner.cases.ts` (host remaining budget pinning, host-budget waiting timer, default 385-second budget) now race their `onReady` wait against the runner task settling, so a refused local listen (e.g. `listen EPERM` in a restricted sandbox) fails immediately with the runner's actual receipt (such as `callback_unavailable`) instead of waiting for the 30000ms test timeout. Assertions after ready, the existing abort-and-await `finally`, fake timers, product code and test timeouts are unchanged; no tests are skipped (see `docs/E2E_BEST_PRACTICE_WORKER_CLOSURE_SRC1_2026-11-02.md` §7.3).

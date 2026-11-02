@@ -5,7 +5,7 @@ Status: 合成依存限定の実装・検証。正式発行口閉鎖・Unknown�
 
 ## 1 範囲
 
-[接続契約draft-0.4](BEST_PRACTICE_ABORT_SCOPE_WORKER_RECOVERY_CONTINUATION_DESIGN.md)§11に従い、SC2-AのHeldClosure・準備handleから必要verifyへ進む局所経路を追加した。変更はtests配下の合成issuer／純粋ledger／試験／梱包監査、CHANGELOGと設計書のみで、srcのruntime経路は変更していない。
+[接続契約draft-0.5](BEST_PRACTICE_ABORT_SCOPE_WORKER_RECOVERY_CONTINUATION_DESIGN.md)§11に従い、SC2-AのHeldClosure・準備handleから必要verifyへ進む局所経路を追加した。変更はtests配下の合成issuer／純粋ledger／試験／梱包監査、CHANGELOGと設計書のみで、srcのruntime経路は変更していない。
 
 - 同ownerの準備handleを要求し、verify開始claimを最初のguard前に一度占有する。旧終了証拠はHeldClosureのまま保持し、世代使用は0。
 - private継続なしは論理0／GET0・元consistency保持。継続ありは親→metadata、各upstream_unavailableのretry最大1、論理1／物理最大4。
@@ -63,7 +63,28 @@ SHA-256: `7ef7c4139373b4108aa69f1649648031a4e591183afaf721abe86f94781144f9`。
 初回JSON: `/private/tmp/servicenow-sc2b-full-20261102.json`、SHA-256: `eab8c5f8b2f4a2c780ab96d6b2e30e5cf4b01cf5df92eb29d49d8b11fef8d085`。
 一時artifactの永続保持は保証しない。
 
-## 5 未対応・保証しないこと
+## 5 レビュー修正（2026-11-02）
+
+§3・§4の86件／11,051件と、ESLintを対象ファイルだけに対して実行した結果は、修正前の記録として残す。レビューで、ledgerの次の判定をそれぞれ外す変異でも、SC2-B／SC2-Aの206件が成功することが判明した。
+
+| 判定 | 外した場合の影響 | 追加試験 |
+|---|---|---|
+| success結果のchange flagのboolean検査 | `changed:'no'`のような文字列が真としてchangedになる（SR-Bでfbbd844に追加したのと同じ型の抜け） | 非booleanのflagでhard停止（internal_review_error）、HeldClosureを失効 |
+| chunk identityのobject・非Proxy検査 | Proxyのchunk identityで受信量を課金できる。文字列は`WeakSet.add`の型エラーで止まるが、意図した拒否ではない | 文字列／Proxyのchunk identityを拒否し、受信量を課金しない（2件） |
+
+各変異で失敗するのは対応する追加試験だけで、復元後に`cmp`一致を確認した。chunk identityの変異で失敗するのはProxyの1件で、文字列の1件は上記の型エラーで止まるため変異を区別しない（期待どおりの拒否の確認として残す）。ledger・issuerの実装は変更していない。
+
+修正後の結果：
+
+| 検証 | 結果 |
+|---|---|
+| SC2-B合成 | 1ファイル／89件成功 |
+| ESLint | `npm run lint`（repo全体）exit 0 |
+| 全体合成 | maxWorkers=3、243ファイル／11,054件成功、失敗0・pending 0、exit 0。JSON内の開始〜最終試験終了は約51.8秒 |
+
+接続契約はdraft-0.5へ更新し、親設計・soft回復claim設計・本書からの版数リンクを直した。
+
+## 6 未対応・保証しないこと
 
 今回の会計は、同budget identityへ結合した合成prefixのイベントモデルであり、実canonical writer／実final予約台帳を更新しない。chunk identity／サイズは合成イベントで、実readerのbody bytes受領証拠ではない。SR-Bのphase variantへworker factsを偽装せず、既存phase model・旧試験は維持した。
 

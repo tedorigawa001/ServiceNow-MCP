@@ -1,6 +1,6 @@
 # SR-C後半の終了証拠とverifyと新世代readyの接続契約
 
-Version: br006-worker-recovery-continuation-draft-0.4 / Date: 2026-11-02。
+Version: br006-worker-recovery-continuation-draft-0.5 / Date: 2026-11-02。
 Status: **SC2-Aの内部証拠移譲・HeldClosure・strict準備入力（§10）と、SC2-Bの必要verify・同prefixのfake会計（§11）を独立合成issuerで限定実装。SC2-C〜D・正式bindingは未実装で、人による正式bindingの承認未実施。正式発行口閉鎖・Unknown・全体受付無効・VM／監視／telemetry調査保留を維持する。**
 
 基準HEADは`07e7631`。[soft回復claim設計](BEST_PRACTICE_ABORT_SCOPE_SOFT_RECOVERY_CLAIM_DESIGN.md)§6・7・14と[worker時刻設計](BEST_PRACTICE_ABORT_SCOPE_WORKER_TIME_BINDING_DESIGN.md)の差分として、旧世代終了後に同ownerのまま必要verifyと新世代readyへ進む内部境界を定める。既存の非実行consumerを回復権限へ昇格させず、通常WJ-C・runtime／実worker・実sourceを変更しない。
@@ -144,6 +144,8 @@ private verify継続がnullなら論理0・物理0でverifiedとなり、元cons
 
 診断はworker_preparation.verifyに、必要性・論理回数・物理回数・retry数・stage・consistency・固定error／limitations・累積C/G/Pを示す。準備時のcollection／consistencyは元snapshotのまま、verify後のconsistencyはこの子診断で区別する。失敗時はattempt／chunk台帳／HeldClosure／handleを同期破棄し、固定scalar会計・先行soft・最初のhard・旧cleanup診断を保持する。正常discardもledgerを破棄して会計を保持するが、pending／settling／retry_wait中のdiscardは拒否する。保持中HeldClosureをnormal closeで隠すことも拒否する。
 
-[合成試験](../tests/review/synthetic-worker-recovery-verify.test.ts)は実装helperを使わない有限イベント式から期待C/G/P・retryを求める。retryなし成功・最大4試行・枠途中消尽・等号／超過・混入／二重イベント・18箇所のguard取消を確認し、旧SR-BとSC2-Aの試験も維持する。SR-Bのrootやphase factsをworker factsへ偽装して再利用せず、既存phase modelは変更しない。重複するverify意味規則の追随は両系列の試験で確認する。梱包監査に関数／module混入とI/O／時計／worker依存の負の対照を追加した。[SC2-B検証記録](E2E_BEST_PRACTICE_WORKER_RECOVERY_SC2B_2026-11-02.md)参照。
+[合成試験](../tests/review/synthetic-worker-recovery-verify.test.ts)は実装helperを使わない有限イベント式から期待C/G/P・retryを求める。retryなし成功・最大4試行・枠途中消尽・等号／超過・混入／二重イベント・18箇所のguard取消を確認し、旧SR-BとSC2-Aの試験も維持する。SR-Bのrootやphase factsをworker factsへ偽装して再利用せず、既存phase modelは変更しない。重複するverify意味規則の追随は両系列の試験で確認する。梱包監査に関数／module混入とI/O／時計／worker依存の負の対照を追加した。[SC2-B検証記録](E2E_BEST_PRACTICE_WORKER_RECOVERY_SC2B_2026-11-02.md)参照。 レビュー修正で、非booleanのchange flagのhard停止と、文字列／Proxyのchunk identityの拒否を個別に確認する試験を追加した（89件）。
 
 SC2-Cの世代使用／新ready／新cleanup、SC2-Dのplan封印、実canonical writer・final予約・実transport／worker・実選択順序・B-03 compiled保証は未対応。追加work／allocation・全体上界はUnknownで、全体受付を有効化しない。正式発行口閉鎖・調査保留を維持する。
+
+draft-0.4のレビュー修正：SC2-B ledgerのsuccess結果のchange flagのboolean検査と、chunk identityのobject・非Proxy検査は、各判定を外す変異でも86件が通っていた。前者を外すと`changed:'no'`のような値がchangedとして扱われ、後者を外すとProxyのchunk identityで課金できる（文字列は`WeakSet`の型エラーで偶然止まるだけ）。3件の試験を追加し、§11の件数と親設計・soft回復claim設計・検証記録からの版数リンクを更新した。
