@@ -7,7 +7,15 @@ const server = createHttpServer({
   host: '127.0.0.1', port: 0, path: '/mcp', corsOrigin: '*',
   authToken: 'synthetic-test-only', maxBodyBytes: 1024, maxSessions: 1, sessionIdleTimeoutMs: 1000,
 });
-await new Promise(resolve => server.listen(0, '127.0.0.1', resolve));
+try {
+  await new Promise((resolve, reject) => {
+    server.once('error', reject);
+    server.listen(0, '127.0.0.1', () => { server.off('error', reject); resolve(); });
+  });
+} catch (error) {
+  await new Promise(resolve => server.close(() => resolve()));
+  throw error;
+}
 const port = server.address().port;
 const request = (path, host) => new Promise((resolve, reject) => {
   const req = http.request({ host: '127.0.0.1', port, path, method: 'GET', headers: { Host: host } }, res => {

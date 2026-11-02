@@ -8,6 +8,10 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 ## [Unreleased]
 
+### Added
+
+- Loopback test fixtures (`tests/review/oauth-g0.test.ts` issuer helper, `tests/review/fixtures/oauth-g0-smoke.ts`, `tests/fixtures/http-host-survival.mjs`) now reject their listen wait on the server `error` event and close the already-created server on failure, so a refused local listen (e.g. `listen EPERM` in a restricted sandbox) fails fast instead of stalling until the Vitest timeout. Test-only; no product code, timeouts or skips changed.
+
 ### Fixed
 
 - Development-only closed body capture now applies its 4096-chunk retention limit only to nonempty additions. Empty chunks at the exact limit keep sequence validation and zero-byte accounting without discarding a valid body; the 4097th nonempty chunk is still charged then rejected. Includes a RED/GREEN boundary regression through EOF, parsing and digest comparison; formal issuance and production behavior remain unchanged.

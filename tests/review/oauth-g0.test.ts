@@ -9,13 +9,17 @@ import { SyntheticOAuthHarness } from '../helpers/bp5-oauth-harness.js';
 const cleanups: Array<() => Promise<void>> = [];
 async function issuer(handler: (req: IncomingMessage, res: ServerResponse) => void) {
   const server = createServer(handler);
-  await new Promise<void>(resolve => server.listen(0, '127.0.0.1', resolve));
-  const address = server.address();
-  if (!address || typeof address === 'string') throw Error('test_setup');
+  // Registered before listen so a refused listen (e.g. EPERM) still closes the server.
   cleanups.push(async () => {
     server.closeAllConnections();
     await new Promise<void>(resolve => server.close(() => resolve()));
   });
+  await new Promise<void>((resolve, reject) => {
+    server.once('error', reject);
+    server.listen(0, '127.0.0.1', () => { server.off('error', reject); resolve(); });
+  });
+  const address = server.address();
+  if (!address || typeof address === 'string') throw Error('test_setup');
   return `http://127.0.0.1:${address.port}`;
 }
 afterEach(async () => {
