@@ -1,6 +1,6 @@
 # 回復finish 本文capture・full schema・同bytes検証gate 詳細設計
 
-Version: br006-recovery-finish-content-draft-0.1 / Date: 2026-11-03。
+Version: br006-recovery-finish-content-draft-0.2 / Date: 2026-11-03。
 Status: **設計のみ。capture／full応答gate／候補発行は未実装。合成依存限定、正式発行口閉鎖・全体受付無効・Unknown・VM／監視／telemetry保留を維持する。**
 
 基準HEAD: `43223b9`。[RD-C](BEST_PRACTICE_ABORT_SCOPE_RECOVERY_FINISH_JOB_RDC_DESIGN.md)§5・7・10〜11の内容gateを具体化する。以下の型・操作・数値モデルは未実装の内部案で、本番cap・通常経路の受付変更・実通信・実機操作・設定変更・Pushの承認ではない。
@@ -13,7 +13,7 @@ Status: **設計のみ。capture／full応答gate／候補発行は未実装。�
 | --- | --- | --- |
 | [finish pins](../tests/support/review/synthetic-finish-pins.ts) | 同ID／T_i／expected_contextを持つdescriptor参照 | 元result／findings本文のsnapshotではない。名前のaccepted／originalだけで本文証拠にしない |
 | [RD-B03](../tests/support/review/synthetic-recovery-finish-values.ts) | 局所context・集合・時刻・omission時のerror差分 | 本文の改変、full集約schema、同wireからの検証は未接続 |
-| [実worker](../src/review/review-worker.ts) | analyze時の構造parse、finish時のfinalizeとfull集約検証、json文字列のbyte長確認 | 同親ownerのpost-guard受理captureではない。analyzeのassetOutcomeStructureだけではreviewResultV2Schemaのrefinementを全実行しない |
+| [実worker](../src/review/review-worker.ts) | analyze時は[payload-review](../src/review/payload-review.ts)がreviewResultV2Schemaを実行した後にassetOutcomeStructureで構造parse、finish時のfinalizeとfull集約検証、json文字列のbyte長確認 | worker内の検証であり、親が受信wireへfull検証を再実行するものではない。同親ownerのpost-guard受理captureでもなく、受理本文の証拠にしない |
 | [実監督](../src/review/worker-supervisor.ts) | messageのid／ok／jsonとbyte長、parse後の限定的なprotocol拒否 | 親でのfull結果検証・duplicate member検出・capture台帳はない |
 | [集約schema](../src/review/aggregate-schema.ts) | nested refinement・出典／rule適用・counts／selection／provenance／制限／再serialize上限 | 元analyzeと同じ本文であること、raw jsonの元長、受信originは別証拠 |
 
@@ -31,7 +31,7 @@ schema適合・本文不変性・同job由来・実生存・findingの正しさ�
 
 full schemaのparseがcopyを作る費用は隠さない。その出力をcaptureの唯一のowned値とし、追加のJSON round-trip／任意deep cloneを重ねない。private graphを深くfreezeし、外側へ渡すのは別brandの空handleだけ。内部のrun組立ても同ownerの固定継続がreadonly viewを借りる方式とし、capture getterやpublic登録口を作らない。
 
-これは旧親設計の「親でfindingsを複製しない」を、**任意の複製はしないが、保護された正規化copyの初期費用は必要**と具体化する設計差分である。既存mutable値を無条件にimmutableと呼ぶことで費用を0にしない。総メモリ・work受付の承認までは実経路へ投入しない。
+これは[worker時刻束縛設計](BEST_PRACTICE_ABORT_SCOPE_WORKER_TIME_BINDING_DESIGN.md)と[WJ-B記録](E2E_BEST_PRACTICE_WORKER_TIME_WJB_2026-11-01.md)の「findings等の全結果を親で再検証／copyしない」に対し、**回復用の内容gateに限り、親での受信wireのfull schema再検証と保護された正規化copyの両方を導入する**設計差分である。任意の複製はしない。通常経路の旧契約は変更しない。既存mutable値を無条件にimmutableと呼ぶことで費用を0にしない。総メモリ・work受付の承認までは実経路へ投入しない。
 
 ## 3 内部型・発行元・一度限りの移譲
 
@@ -154,5 +154,7 @@ captureとwireの一度限り消費は別claimで管理する。captureは受理
 名前・上界モデル・copy方式は設計案。まずCG-Aのschema形状上界と同bytes境界から、別途指示を受けて実装する。現在のRD-B04 handle／pin／content_evidenceのUnknownをそのままverifiedへ書換えない。
 
 未確認事項はschema全variantからの形状証明、既存JSON.stringify出力とのdecoder互換性、元bodyの保持／cloneピーク、checkpointの配置と同期schema検証の中断粒度、omissionのserialize総費用、body／job／終端ownerの同時寿命、本番cap／全体work上界。これらを未導出のまま実経路や候補gateを開かない。
+
+draft-0.2のレビュー修正：§1の実worker行は、analyze時にworker内でreviewResultV2Schemaが実行済みであることを欠き、refinementが一度も実行されないように読めたため、不足を「親による受信wireの再検証がない」ことへ訂正した。§2の旧設計引用は出典がなく、再検証の変更を含んでいなかったため、出典リンクと再検証・copy両方の差分範囲を明記した。設計判断・数値モデル・未承認事項は変更しない。
 
 本書はMDのみ。正式発行口閉鎖・全体受付無効・Unknown・調査保留を維持し、実装・worker起動・実通信・実機操作・トークン発行・設定変更・Permit／候補発行・Pushは行わない。

@@ -102,7 +102,7 @@ RD-Cの局所検査を終えた非実行経路では、元accepted handleの固�
 
 ## 7 本文／full schema／wire不足による候補発行停止
 
-保護capture・所有権・同bytes・full schema・三つのomissionの差分は[内容gate詳細設計draft-0.1](BEST_PRACTICE_ABORT_SCOPE_RECOVERY_FINISH_CONTENT_GATE_DESIGN.md)で具体化する。MD案であり、以下のgateはまだ成立していない。
+保護capture・所有権・同bytes・full schema・三つのomissionの差分は[内容gate詳細設計draft-0.2](BEST_PRACTICE_ABORT_SCOPE_RECOVERY_FINISH_CONTENT_GATE_DESIGN.md)で具体化する。MD案であり、以下のgateはまだ成立していない。
 
 現`synthetic_original_outcome_pin`はdescriptorとcontextの参照で、受理済み元結果本文／findingsのcaptureやdigestではない。RD-B04の封印とRD-B03のmatches:trueを足しても、本文改変を検出できる証拠にはならない。
 
