@@ -3,7 +3,7 @@
 Date: 2026-11-02 / 基準HEAD: `fbbd844`。
 Status: **独立合成issuerだけの内部契約。実worker／runtime・実終了確認・新世代／finishへ未接続。**
 
-全体回帰の最新状況：§4の初回未完了は履歴として保持する。§5のレビュー後成功に加え、§6の同一HEAD比較でも241ファイル／10,845件成功を確認した。制限環境ではローカルlistenのEPERMとfixtureの待ち方により未完了を再現した。実回復経路が有効になったという意味ではない。
+全体回帰の最新状況：§4〜6は初回未完了・レビュー・環境切分けの履歴として保持する。listen失敗対策後の§7でも、待受可能な条件で241ファイル／10,845件成功を確認した。制限環境は最終reportまで終了したが125件失敗で、readyだけを待つ既存R2試験の30秒timeoutが3件残る。実回復経路が有効になったという意味ではない。
 
 [soft回復claim設計draft-0.8](BEST_PRACTICE_ABORT_SCOPE_SOFT_RECOVERY_CLAIM_DESIGN.md)§14と[親設計draft-0.12](BEST_PRACTICE_ABORT_SCOPE_WORKER_TIME_BINDING_DESIGN.md)を参照。正式発行口閉鎖・Unknown・全体受付無効・VM／監視／telemetry調査保留を維持する。
 
@@ -132,7 +132,7 @@ G0試験とharnessはSR-C①前の`fbbd844`と現在でGit blobが同一だっ�
 
 §4の過去の150秒打切り時にはOSエラー／環境状態を回収していないため、過去の全実行が今回と同一原因だったとまでは断定しない。§5で挙げた負荷・並行実行の可能性は当時の未確定仮説として残すが、今回の再現を単なる負荷だけで説明しない。
 
-今後の対策候補は、ローカルlisten能力を事前確認し、fixtureのlisten失敗を即時rejectして固定cleanupへ進めること。同じresolveだけを待つlistenは`tests/review/fixtures/oauth-g0-smoke.ts`と`tests/fixtures/http-host-survival.mjs`にも残る（`oauth-g0.test.ts`のport probe、`bp5-oauth-harness.ts`、`r2-runner.cases.ts`はerrorでrejectする）。これは診断性・失敗時の終了を改善する別変更であり、今回実装していない。制限環境でtestをskip／成功へ変えることや、期限を延長する対応は行わない。今回の未完了切分けは完了とし、SR-C後半などの未実装課題は§7のままとする。
+この切分け時点の対策候補は、ローカルlisten能力を事前確認し、fixtureのlisten失敗を即時rejectして固定cleanupへ進めること。同じresolveだけを待つlistenは`tests/review/fixtures/oauth-g0-smoke.ts`と`tests/fixtures/http-host-survival.mjs`にも残っていた（`oauth-g0.test.ts`のport probe、`bp5-oauth-harness.ts`、`r2-runner.cases.ts`はerrorでrejectする）。この時点では実装せず、後の修正と確認は§7へ分離する。制限環境でtestをskip／成功へ変えることや、期限を延長する対応は行わない。今回の未完了切分けは完了とし、SR-C後半などの未実装課題は§8のままとする。
 
 ### 6.4 証拠と変更範囲
 
@@ -142,7 +142,60 @@ G0試験とharnessはSR-C①前の`fbbd844`と現在でGit blobが同一だっ�
 
 変更は本検証記録のみ。ソース・試験・設定・CHANGELOG・正式発行口・全体受付は変更していない。正式発行口閉鎖・Unknown・全体受付無効・VM／監視／telemetry調査保留を維持し、切分け作業中は実worker／runtimeへの新接続・実機操作・実通信・設定変更・Pushを行わず、ソース・試験・設定の変更をコミットしていない（本記録だけを後からコミットした）。既存合成試験のローカルworker／HTTPの実行を、実PDI接続や正式発行口の開放とは数えない。
 
-## 7 未実施・残課題
+## 7 listen失敗対策後の全体回帰（2026-11-02）
+
+対象HEADは`2ee58c1`。`116e23c`はG0 issuer／smoke／HTTP survival fixtureにlisten error→rejectと失敗時closeを追加し、`06125d0`はR2の固定port probe／占有fixtureにも接続した。`2ee58c1`はCHANGELOG整理のみ。今回これらを変更せず、検証と本記録更新だけを行った。`24cd4ec..HEAD`の`src/`と`vitest.config.ts`の差分は0で、製品実装・期限・実行順序の変更ではない。
+
+### 7.1 条件と手順
+
+環境は§6と同じNode v24.18.0／Vitest v5.0.3／darwin arm64、OS release 27.2.0、availableParallelism=10。`npm run build`はexit 0。制限環境のG0単独試験→制限環境の全体→ローカル待受可能な実行権限の全体の順に実行し、二つの全体実行は重ねなかった。
+
+全体は`node node_modules/vitest/vitest.mjs run --maxWorkers=3 --reporter=verbose --reporter=json --outputFile.json=<ローカル一時領域> --silent`。10秒ごとの進捗観測と外側150000msの打切りを維持した。製品60秒・各test timeout・worker起動上限・unit→real-host順序・E2E／transport除外は変更なし。実行権限の追加は各コマンドだけで、PDIや恒久設定を変更していない。
+
+### 7.2 結果
+
+| 条件 | 件数・終了 | 時間・観測 |
+|---|---|---|
+| 制限環境・G0の保持期限試験1件だけ | 1 failed／41非選択、exit 1 | test本体約4.08msでlisten EPERMを返す。従来の5000ms timeoutではない。全コマンドのreport内時間は約3.13秒 |
+| 制限環境・全体 | 241 file／10,720 passed／125 failed／pending 0、success=false、exit 1 | 約142.97秒で最終JSONまで生成。outer_stop=false。G0で足止めされずreal-host groupへ到達したが、環境制約と未改善の待ち方による失敗が残る |
+| ローカル待受可能な条件・全体 | **241 file／10,845 passed／failed 0／pending 0、success=true、exit 0** | 約32.47秒。outer_stop=false。名前／fileフィルター・追加skipなし |
+
+単独試験は`-t '^does not extend token availability past its local retention deadline$' --maxWorkers=1`で切り出しただけで、41件の非選択を全体成功へ加算していない。test本体4.08msとコマンド全体3.13秒は別の値である。以前のtest本体約5008msと比べ、listen拒否を速やかに通常の失敗として返すことは確認できたが、待受自体が可能になったわけではない。全体の所要時間の差を性能改善の主張には使わない。
+
+### 7.3 環境制約・残る待ち方と退行の区別
+
+制限環境の失敗は4 fileに限られた。
+
+| file | failed | 主な証拠・限界 |
+|---|---:|---|
+| `tests/review/oauth-g0.test.ts` | 36 | 33件はfailure本文にEPERM。残りはcallback／子プロセスsummaryの不一致。従来の5000ms timeoutは0件 |
+| `tests/review/r2-loopback.test.ts`（runner casesを含む） | 87 | 23件で既存の固定観測metaにlisten_error=EPERM。callback_unavailableの不一致等もある。ready待ちの30000ms timeoutが3件 |
+| `tests/http-host-survival.test.ts` | 1 | failure本文にEPERM。fixtureが拒否を返し、待受成功を前提とする試験は不合格 |
+| `tests/server-stdio.test.ts` | 1 | 20秒以内のstdout未取得。別の固定文字列だけを出すtsx CLI probeも、実行本文へ到達前にlisten EPERMでexit 1。元stdio childのstderr自体はこのJSONから回収できず、個別原因の直接同定は未完了 |
+
+上記125件すべての個別原因をEPERMと断定しない。固定観測metaのEPERMとfailure本文のEPERMは重なることがあるため、件数を足し合わせない。対応する同一HEAD全体は待受可能な条件で成功しており、今回の変更による製品／通常合成経路の退行は観測していない。
+
+R2で残るtimeoutは次の3件（test本体は各約30.01〜30.02秒）。
+
+1. `pins the host remaining budget before bind and reserves cleanup inside that same budget`
+2. `arms the waiting timer from the host budget rather than the runner default`
+3. `enforces the default 385-second budget with three seconds reserved for cleanup`
+
+3件とも`meta.r2_synthetic_listen`にlisten_attempt→listen_error(EPERM)→close、listening=0が残った。[runner cases](../tests/review/r2-runner.cases.ts)は`onReady`だけがresolveする`began`を待ち、runnerの終了とraceしていない。listen拒否ではonReadyへ進めないため、listen Promise自体を即時rejectにしてもこの待ち方は解消しない。[runner](../src/review/r2-runner.ts)はstart成功後だけonReadyを呼び、callback_unavailableを固定理由へ写像する。この3件の30秒は製品が30秒後まで終了不能だった証拠ではなく、test側のready到達待ちである。metaのat_msはfake timerの影響で負値を含むため、時間の根拠にはせずイベント順とcodeだけを使用した。
+
+従って「listen失敗の即時伝播・cleanup対策は機能する」「制限環境でも全体の最終reportを回収できた」「すべての環境依存の待ちが解消した、とは言えない」を区別する。今後の候補は、この3件のready到達待ちをrunner終端と合流し、finallyで取消・終了待ちを保証すること。今回は診断のみで、試験・製品の修正や期限延長・環境非対応のskip／成功扱いは行っていない。
+
+§4／6の過去の打切りに関する未確定事項は保持する。今回の最終reportが得られたことから過去のすべての原因を同定したとはしない。固定port lockの読み取り専用確認では、制限環境のsignal 0はEPERM、その後の追加権限による確認時にはlockが既に存在しなかった。死んだownerやlock滞留の証拠にはならず、lockは削除していない。
+
+### 7.4 証拠と変更範囲
+
+全体成功JSON：`/private/tmp/servicenow-listenfix-full-allowed.json`、SHA-256：`a32dd836c07d067cdacb6f36869038609ad662aa5b2ce11a44e8f93bf434fa67`。
+
+制限環境の全体JSON：`/private/tmp/servicenow-listenfix-full-restricted.json`、SHA-256：`10ebef3e5126d9100239b8b563d004c96e6e451d3c0190e056e1966708b0472d`。単独JSON：`/private/tmp/servicenow-listenfix-g0-restricted.json`、SHA-256：`2b50932c748bc12402dc8c07924d39d0f49479ef66297c4bbe8b385e26cba091`。
+
+raw JSONはローカル一時領域にだけ置き、リポジトリには追加しない。件数・時刻はJSONから確認し、今回の変更は本記録だけ。正式発行口閉鎖・Unknown・全体受付無効・VM／監視／telemetry調査保留を維持し、PDIへの実接続・実通信・実機操作・トークン発行・設定変更・Pushは行っていない。既存合成試験のローカルHTTP／workerの実行は実接続や正式発行口の開放とは区別する。
+
+## 8 未実施・残課題
 
 終了証拠→必要verify→新世代ready、元選択集合／input receipt／保持Uとの接続はSR-C後半。WJ-Cのfinish／E・候補消費、実cleanup・外側checkpoint連結はSR-D以降。実発行元、全費目上界、本番cap、正式発行・全体受付は未完了。合成の成功を実終了保証や人の承認へ昇格しない。
 
