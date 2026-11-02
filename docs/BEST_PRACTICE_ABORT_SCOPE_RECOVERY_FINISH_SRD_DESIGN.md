@@ -26,7 +26,7 @@ Status: **SR-D finish接続は未実装。前提のRA-01／RA-02①②・RB-A〜
 
 WJ-Cの純粋なheader／E／asset比較をtest-only coreへ最小抽出して再利用することを検討する。共有は値比較だけで、通常WJ-Cのjob claim・未完了receipt拒否・候補／cleanup台帳を緩めない。抽出と通常WJ-C互換試験を独立工程にし、共有しただけで実class／compiled保証が成立したとはしない。
 
-RA-03-B後の[RD-B詳細設計draft-0.2](BEST_PRACTICE_ABORT_SCOPE_RECOVERY_FINISH_VALUES_RDB_DESIGN.md)で、RD-B01の別brand・strict構造projection・有限枠だけ合成実装した。scalar共有・集合／context／時刻比較・同accepted封印はRD-B02〜04へ残す。現reviewed pinは本文ではなくdescriptor由来のcontext参照であり、本文一致・full schema／wire保証はUnknownのまま分離する。
+RA-03-B後の[RD-B詳細設計draft-0.3](BEST_PRACTICE_ABORT_SCOPE_RECOVERY_FINISH_VALUES_RDB_DESIGN.md)で、RD-B01の別brand・strict構造projection・有限枠と、RD-B02の最小scalar共有・通常WJ-C接続まで合成実装した。回復集合／context／時刻比較・同accepted封印はRD-B03〜04へ残す。現reviewed pinは本文ではなくdescriptor由来のcontext参照であり、本文一致・full schema／wire保証はUnknownのまま分離する。
 
 | 内部役割案 | 固定発行元・保持内容 | 消費・拒否 |
 |---|---|---|

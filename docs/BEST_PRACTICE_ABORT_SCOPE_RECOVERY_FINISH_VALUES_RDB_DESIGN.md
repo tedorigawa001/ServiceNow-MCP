@@ -1,7 +1,7 @@
 # RD-B 回復finish期待値封印・集合／時刻比較 詳細設計
 
-Version: br006-recovery-finish-values-rdb-draft-0.2 / Date: 2026-11-02。
-Status: **RD-B01のstrict構造projection・別brand・有限枠まで合成限定実装。RD-B02〜04は未実装。正式発行口閉鎖・全体受付無効・Unknown・VM／監視／telemetry調査保留を維持する。**
+Version: br006-recovery-finish-values-rdb-draft-0.3 / Date: 2026-11-02。
+Status: **RD-B01のstrict構造projectionとRD-B02の最小scalar共有・通常WJ-C接続まで合成限定実装。RD-B03〜04は未実装。正式発行口閉鎖・全体受付無効・Unknown・VM／監視／telemetry調査保留を維持する。**
 
 基準HEAD: `4653cd2`。[SR-D](BEST_PRACTICE_ABORT_SCOPE_RECOVERY_FINISH_SRD_DESIGN.md)§2〜5・8のRD-Bと、[RA-03-A／B](BEST_PRACTICE_ABORT_SCOPE_FINISH_ISSUE_ACCEPT_DESIGN.md)§10〜11の間の差分。実装・証拠発行・fake finish dispatch・実接続・実通信・設定変更・Pushの承認ではない。
 
@@ -117,7 +117,7 @@ full worker応答をこの局所projectionへそのままparseしてfull schema�
 | 分割案 | 実装範囲・受入条件 |
 | --- | --- |
 | RD-B01（合成実装済み） | 別brandのstrict期待値／応答projectionと、発行関数のない比較結果型。structure-onlyの純粋bounded値層。不足列・未知state・余分key・総量超過を拒否。本文／意味比較Unknownを明示 |
-| RD-B02 | 小さなscalar predicateの最小抽出と通常WJ-C接続。全旧試験と未完了receipt拒否を維持。独立field差替え・集合／E oracleで新旧の責務を分離 |
+| RD-B02（合成実装済み） | 小さなscalar predicateの最小抽出と通常WJ-C接続。全旧試験と未完了receipt拒否を維持。独立field差替え・集合／E oracleで新旧の責務を分離 |
 | RD-B03 | 回復manifest／T_i・U・E・header比較の純粋接続。state遷移表と0.2／0.3・operator境界の独立oracle。本文不足でfull検証／候補に昇格しない |
 | RD-B04 | 同acceptedからの一度限り封印・同owner／frameへのbindingとRA-03-Bのsealed破棄連結。両guard・再入・混入・失効・競合を合成検査。job送信はしない |
 
@@ -135,7 +135,7 @@ source／cleanup開始後のseal、summary／copy／別root、二重seal、seal�
 - 実verify・実session／ReleasePermit／payload／workerの正式binding、実clock／OS終了・外側監督との連結は対象外。
 - 追加work／allocationモデル・本番cap・全体受付は未承認／Unknown。設定日時長の新capやruntime規則を追加しない。
 
-draft-0.1はMDだけを作成した。後続RD-B01の合成実装は§11。通常WJ-C共有・意味比較・封印はRD-B02〜04として改めて指示を受けて進める。合成証拠／候補発行・実接続・実機操作・設定変更・Pushは行わない。
+draft-0.1はMDだけを作成した。後続の合成実装は§11〜12。回復用意味比較・封印はRD-B03〜04へ残す。新たな合成証拠／候補発行・実接続・実機操作・設定変更・Pushは行わない。
 
 ## 11 RD-B01の実装契約
 
@@ -162,4 +162,14 @@ collectorは入力全体で深さ8・配列100・object項目30・訪問10,000�
 
 不正shapeと局所limit超過は型付き`RecoveryFinishValueError`で区別するが、message／codeは常にinternal_review_error。raw値・Zod issue・例外causeを返さない。二入力共有予算を使う実比較はまだ存在しないため、その保証はRD-B03で接続・検証する。
 
-[RD-B01合成検証記録](E2E_BEST_PRACTICE_RECOVERY_FINISH_VALUES_RDB01_2026-11-02.md)参照。RD-B02のscalar共有・RD-B03の集合／時刻／context比較・RD-B04の同accepted封印とRA-03-B破棄接続は未実装。
+[RD-B01合成検証記録](E2E_BEST_PRACTICE_RECOVERY_FINISH_VALUES_RDB01_2026-11-02.md)参照。RD-B02は§12。RD-B03の集合／時刻／context比較・RD-B04の同accepted封印とRA-03-B破棄接続は未実装。
+
+## 12 RD-B02の最小scalar共有
+
+[開発専用predicate](../tests/support/review/synthetic-finish-scalars.ts)を通常WJ-Cのcompare／finishTime／manifestへ接続した。import・clock・I/O・owner状態を持たず、入力がstrict検査済みであることを前提にする。parser／budget／guard／receipt・completed・job・candidate／cleanupは移動しない。
+
+- `sameFinishRuleSet`：既存のlength一致＋every/includesをそのまま保持。上位rules parserが有限枠と重複拒否を担当する。predicate単独は重複の検証器ではなく、未検査配列を渡して集合検証済みとしない。
+- `sameFinishReleaseEncoding`：呼出側で既存の構造検査・copy後にJSON.stringifyした表現を厳密一致で比較する。JSON key順を正規化せず、意味的release同値を新設しない。旧式の結果型に合わせundefinedも受けるが、単独の一致はrelease妥当性の証拠ではない。
+- `finishEndOutsideBounds`：検査済みUTC epochと実効Lに対しE<UまたはE>S+Lだけを返す。両端はinclusive。有限値・UTC構文の検査やoperator_configのS+60000厳密expiry判定は既存callerの責務を維持する。target／T_iのfield読取・比較は抽出せず既存位置に残す。
+
+通常ownerの`receipts.size > 0`拒否を維持し、allow_pending・新claim・回復owner接続は追加しない。通常WJ-Cの既存82件は抽出前後でfullName集合と成功を比較した。独立集合／UTC oracle・重複rule拒否・未完了receiptの負の対照は[RD-B02検証記録](E2E_BEST_PRACTICE_RECOVERY_FINISH_SCALARS_RDB02_2026-11-02.md)参照。既存局所枠の受付範囲・公開JSON／MCP・実Permitは変更しない。追加work／allocationはUnknownで、全体受付は有効化しない。

@@ -16,6 +16,8 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 ### Changed
 
+- RD-B02 extracts package-excluded scalar predicates for validated rule sets, unchanged release JSON encodings and inclusive finish-time bounds, and reconnects the ordinary synthetic WJ-C checks without moving parsing, guards or ownership. Independent oracles and regressions preserve duplicate-rule and unresolved-receipt rejection; recovery comparison, sealing and runtime authority remain disabled.
+
 - RD-B01 adds package-excluded, separately branded structure-only recovery finish expectation/reply projections with strict variants and shared per-projection depth, array, key, node and character-unit limits. Opaque references are preserved without traversal or authority; original-body, origin, semantic time/set matching, full-schema and wire guarantees remain explicitly unverified. The comparison-result type has no constructor yet. No owner, seal, job, candidate or runtime connection is enabled.
 
 - RA-03-B adds package-excluded fixed discard for synthetic accepted finish contexts. The same-owner accepted slot and private source/new-frame completion receipts are spent once; only both healthy fixed terminal paths permit discard followed by normal close. Missing/mixed confirmations, replay, reentry and guard stops fail without restoring authority, while prior diagnostics remain available. No finish candidate, production capability, real connection or whole-run admission is enabled.

@@ -134,4 +134,4 @@ discardのpre/post guardは既存期限・取消を共有するが、source clos
 
 [RA-03-B合成検証記録](E2E_BEST_PRACTICE_FINISH_DISCARD_RA03B_2026-11-02.md)参照。
 
-後続の[RD-B期待値封印・値比較詳細設計draft-0.2](BEST_PRACTICE_ABORT_SCOPE_RECOVERY_FINISH_VALUES_RDB_DESIGN.md)で、RD-B01の構造専用値層だけ合成実装した。同accepted seal／finish jobは未実装。新sealed slotをRA-03-Bのdiscard／失効へ明示接続する必要があり、現行discardが将来slotを自動で消すとは仮定しない。構造projectionからownerや証拠を生成しない。
+後続の[RD-B期待値封印・値比較詳細設計draft-0.3](BEST_PRACTICE_ABORT_SCOPE_RECOVERY_FINISH_VALUES_RDB_DESIGN.md)で、RD-B01の構造専用値層とRD-B02の最小scalar共有・通常WJ-C接続まで合成実装した。同accepted seal／finish jobは未実装。新sealed slotをRA-03-Bのdiscard／失効へ明示接続する必要があり、現行discardが将来slotを自動で消すとは仮定しない。構造projectionからownerや証拠を生成しない。

@@ -4,6 +4,7 @@ import {z} from 'zod';
 import {bp5RuleIdsSchema,releaseEvidenceStructure,checkReleaseEvidence} from '../../../src/review/result-schema-v2.js';
 import {assetOutcomeStructure} from '../../../src/review/aggregate-schema.js';
 import {createSyntheticWorkerJobIssuer,type SyntheticJobBinding} from './synthetic-worker-job.js';
+import {sameFinishRuleSet,sameFinishReleaseEncoding,finishEndOutsideBounds} from './synthetic-finish-scalars.js';
 type Reply=Parameters<ReturnType<typeof createSyntheticWorkerJobIssuer>['consume']>[2];
 type Expected=Readonly<{record_updated_at:string;instance_binding:string;instance_release:unknown;requested_rule_ids:readonly string[];release_limitations:readonly string[]}>;
 type Receipt={target:string;time:string;expected?:Expected};
@@ -44,7 +45,6 @@ function pinExpected(value:Expected):Expected{
     instance_release:Object.freeze(releaseEvidenceStructure.parse(copy(field(value,'instance_release')))),
     requested_rule_ids:rules(field(value,'requested_rule_ids')),release_limitations:warnings(field(value,'release_limitations'))});
 }
-const sameRules=(a:readonly string[],b:readonly string[])=>a.length===b.length&&a.every(x=>b.includes(x));
 function compare(receipt:Receipt,updateSet:string,outcome:unknown):'reviewed'|'rejected'|'result_omitted'{
   if(field(outcome,'update_xml_sys_id')!==receipt.target)throw Error();
   const state=field(outcome,'state');
@@ -55,10 +55,10 @@ function compare(receipt:Receipt,updateSet:string,outcome:unknown):'reviewed'|'r
   const e=receipt.expected,r=field(outcome,'result'),t=field(r,'target');
   if(field(r,'reviewed_at')!==receipt.time||field(t,'retrieved_at')!==receipt.time||field(t,'update_set_id')!==updateSet||
     field(t,'update_xml_sys_id')!==receipt.target||field(t,'target_version')!=='update_set_payload'||field(t,'record_updated_at')!==e.record_updated_at||
-    field(r,'instance_binding')!==e.instance_binding||!sameRules(rules(field(outcome,'applicable_rule_ids')),e.requested_rule_ids)||
-    !sameRules(rules(field(field(r,'coverage'),'requested_rule_ids')),e.requested_rule_ids))throw Error();
+    field(r,'instance_binding')!==e.instance_binding||!sameFinishRuleSet(rules(field(outcome,'applicable_rule_ids')),e.requested_rule_ids)||
+    !sameFinishRuleSet(rules(field(field(r,'coverage'),'requested_rule_ids')),e.requested_rule_ids))throw Error();
   const release=releaseEvidenceStructure.parse(copy(field(r,'instance_release')));
-  if(JSON.stringify(release)!==JSON.stringify(e.instance_release))throw Error();
+  if(!sameFinishReleaseEncoding(JSON.stringify(release),JSON.stringify(e.instance_release)))throw Error();
   const limits=warnings(field(r,'limitations'));if(!e.release_limitations.every(x=>limits.includes(x)))throw Error();return 'reviewed';
 }
 function header(value:unknown,updateSet:string,start:string):FinishHeader{
@@ -69,8 +69,8 @@ function header(value:unknown,updateSet:string,start:string):FinishHeader{
 }
 function finishTime(value:unknown,expected:FinishHeader,updateSet:string,time:NonNullable<ReturnType<ReturnType<typeof createSyntheticWorkerJobIssuer>['inspect']>['held_time']>,upper:string){
   const h=header(value,updateSet,time.started_at),end=z.iso.datetime({precision:3}).parse(field(value,'ended_at'));
-  if(h.schema!==expected.schema||h.binding!==expected.binding||JSON.stringify(h.release)!==JSON.stringify(expected.release)||!sameRules(h.rules,expected.rules)||!expected.limitations.every(x=>h.limitations.includes(x))||
-    Date.parse(end)<Date.parse(upper)||Date.parse(end)>Date.parse(time.started_at)+time.deadline_ms||
+  if(h.schema!==expected.schema||h.binding!==expected.binding||!sameFinishReleaseEncoding(JSON.stringify(h.release),JSON.stringify(expected.release))||!sameFinishRuleSet(h.rules,expected.rules)||!expected.limitations.every(x=>h.limitations.includes(x))||
+    finishEndOutsideBounds(Date.parse(end),Date.parse(upper),Date.parse(time.started_at),time.deadline_ms)||
     checkReleaseEvidence(h.release,h.release.source==='operator_config'?time.started_at:end,h.binding,[...h.limitations]).length||
     h.release.source==='operator_config'&&Date.parse(h.release.expires_at)<=Date.parse(time.started_at)+60000)throw Error();
   return end;
@@ -86,7 +86,7 @@ function manifest(value:unknown,h:FinishHeader,updateSet:string,completed:Readon
     if(out.has(id))throw Error();
     if(c){
       const e=c.receipt.expected!;
-      if(e.instance_binding!==h.binding||JSON.stringify(e.instance_release)!==JSON.stringify(h.release)||!e.requested_rule_ids.every(x=>h.rules.includes(x))||!e.release_limitations.every(x=>h.limitations.includes(x)))throw Error();
+      if(e.instance_binding!==h.binding||!sameFinishReleaseEncoding(JSON.stringify(e.instance_release),JSON.stringify(h.release))||!e.requested_rule_ids.every(x=>h.rules.includes(x))||!e.release_limitations.every(x=>h.limitations.includes(x)))throw Error();
       if(state!==c.state&&!(c.state==='reviewed'&&state==='result_omitted'))throw Error();
     }
     if(state==='reviewed'){

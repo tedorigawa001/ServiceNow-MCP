@@ -37,11 +37,21 @@ auditSyntheticIssuer(syntheticText);
 for(const leak of ['globalThis.setTimeout(()=>{},0);','queueMicrotask(()=>{});','const zzNow=Date.now;','performance.now.call(performance);',"Date['now']();",'new Date();','new Worker(\'x\');',"import('node:fs');","export * from 'node:fs';","import {readFileSync as zzRead} from 'node:fs';zzRead('x');"])
   assert.throws(()=>auditSyntheticIssuer(syntheticText+'\n'+leak),assert.AssertionError,'synthetic issuer audit missed seeded leak: '+leak);
 console.log('WJ-A synthetic issuer excluded; leak and dependency-audit negative controls + no runtime/I/O/worker/clock references PASS');
-const timeText=readFileSync(join(root,'tests/support/review/synthetic-worker-time.ts'),'utf8'),timeImports=['node:util','zod','./synthetic-worker-job.js','../../../src/review/result-schema-v2.js','../../../src/review/aggregate-schema.js'];
+const timeText=readFileSync(join(root,'tests/support/review/synthetic-worker-time.ts'),'utf8'),timeImports=['node:util','zod','./synthetic-worker-job.js','./synthetic-finish-scalars.js','../../../src/review/result-schema-v2.js','../../../src/review/aggregate-schema.js'];
 auditSyntheticIssuer(timeText,timeImports);
 for(const leak of ['globalThis.setTimeout(()=>{},0);','queueMicrotask(()=>{});','const zzNow=Date.now;','performance.now.call(performance);',"Date['now']();",'new Date();',"import('node:fs');","import {BoundedReadSession} from '../../../src/servicenow/bounded-read.js';const zzRoot=BoundedReadSession;"])
   assert.throws(()=>auditSyntheticIssuer(timeText+'\n'+leak,timeImports),assert.AssertionError,'WJ-B audit missed seeded leak: '+leak);
 console.log('WJ-B/C time/finish owner excluded; fixed pure-data imports, no runtime/I/O/clock references + negative controls PASS');
+const scalarText=readFileSync(join(root,'tests/support/review/synthetic-finish-scalars.ts'),'utf8');
+auditSyntheticIssuer(scalarText,[]);
+const scalarMarkers=['synthetic-finish-scalars','sameFinishRuleSet','sameFinishReleaseEncoding','finishEndOutsideBounds'];
+const noFinishScalars=text=>assert(!scalarMarkers.some(x=>text.includes(x)),'RD-B02 scalar predicates leaked into runtime');
+for(const marker of scalarMarkers)assert.throws(()=>noFinishScalars(marker));
+assert(!pack.files.some(f=>f.path.includes('synthetic-finish-scalars')));
+for(const f of pack.files.filter(f=>f.path.startsWith('dist/')&&/\.(?:js|ts|map)$/.test(f.path)))noFinishScalars(readFileSync(join(root,f.path),'utf8'));
+for(const leak of ['fetch("x");','Date.now();','new Date();','new Worker("x");',"import('node:fs');","import {BoundedReadSession} from '../../../src/servicenow/bounded-read.js';const zzRoot=BoundedReadSession;"])
+  assert.throws(()=>auditSyntheticIssuer(scalarText+'\n'+leak,[]),assert.AssertionError,'RD-B02 audit missed seeded leak: '+leak);
+console.log('RD-B02 scalar predicates excluded; no imports/I/O/clock/worker references + seeded negative controls PASS');
 const recoveryText=readFileSync(join(root,'tests/support/review/synthetic-soft-recovery.ts'),'utf8'),recoveryImports=['./synthetic-recovery-kernel.js'];
 auditSyntheticIssuer(recoveryText,recoveryImports);
 for(const leak of ['globalThis.setTimeout(()=>{},0);','queueMicrotask(()=>{});','const zzNow=Date.now;','performance.now.call(performance);',"Date['now']();",'new Date();','new Worker(\'x\');',"import('node:fs');","import {BoundedReadSession} from '../../../src/servicenow/bounded-read.js';const zzRoot=BoundedReadSession;"])
