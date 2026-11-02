@@ -1,6 +1,6 @@
 # SR-D 回復planからfinish検証・終端候補への接続設計
 
-Version: br006-recovery-finish-srd-draft-0.1 / Date: 2026-11-02。
+Version: br006-recovery-finish-srd-draft-0.2 / Date: 2026-11-02。
 Status: **MD設計のみ。合成依存限定・実装未着手。正式発行口閉鎖・Unknown・全体受付無効・VM／監視／telemetry調査保留を維持する。実finish／runtime接続・実通信・設定変更・本番cap／Permit投入の承認ではない。**
 
 基準HEAD: `31cff06`。[SC2-D接続契約](BEST_PRACTICE_ABORT_SCOPE_WORKER_RECOVERY_CONTINUATION_DESIGN.md)§13、[soft回復設計](BEST_PRACTICE_ABORT_SCOPE_SOFT_RECOVERY_CLAIM_DESIGN.md)§2〜9・11、[通常WJ-C](BEST_PRACTICE_ABORT_SCOPE_WORKER_TIME_BINDING_DESIGN.md)§13との差分を定める。本書の型・操作名は内部役割案で、実在するAPIや実装済み保証ではない。
@@ -44,7 +44,7 @@ FinishContextEvidenceの合成発行口は配布対象外の独立assemblyに留
 3. soft終端化時に未完了receiptをnot_processedへ移す。完了済み記録を消した後に再生成しない。SC2-Aで確定した集合とreceipt対応をFinishContextEvidence側の記録へ照合する。
 4. 同SC2-D planと追加証拠がすべて揃い、元guardが生きている場合だけ受理する。欠けた列を空値・現在時刻・別release・再解析で補完しない。
 
-各追加値のstrict schema／private発行slotは未実装。既存のローカルprojection上限（深さ8・配列100・object項目30・訪問10,000・保守的文字費262144）を超えない形を最初に検証する。これは合成projectionの有限枠であり、新たな本番日時長cap・実メモリ上界を承認するものではない。
+各追加値のstrict schema／private発行slotは未実装。[RD-A詳細型・発行契約draft-0.1](BEST_PRACTICE_ABORT_SCOPE_FINISH_CONTEXT_RDA_DESIGN.md)で、10項目の内部snapshot、header／receipt／outcomeのstrict variant、新assemblyのprivate slot、ready／cleanup開始serial、一度限りのissue／acceptをMD案に具体化した。既存のローカルprojection上限（深さ8・配列100・object項目30・訪問10,000・保守的文字費262144）を全projection共通で超えない形を最初に検証する。これは合成projectionの有限枠であり、新たな本番日時長cap・実メモリ上界を承認するものではない。
 
 ## 3 固定状態遷移と一度限りのclaim
 
@@ -135,7 +135,7 @@ source解放・worker cleanupは別軸で、片方の成功や最終resource数0
 
 | 段階案 | 範囲 | 必須試験 |
 |---|---|---|
-| RD-A | 不足値のprivate証拠契約・同owner受理・期待値封印。実装開始前に詳細型を確認 | 足りないheader／reviewed context／source lifecycleはUnknown・拒否。summary／raw manifest／別rootからの昇格0。元SC2-D互換 |
+| RD-A（詳細MD案あり・未実装） | [詳細型・発行契約](BEST_PRACTICE_ABORT_SCOPE_FINISH_CONTEXT_RDA_DESIGN.md)のRA-01〜03：strict projection、private slot／発行、同owner受理・期待値封印 | 足りないheader／reviewed context／source lifecycleはUnknown・拒否。summary／raw manifest／別rootからの昇格0。元SC2-D互換 |
 | RD-B | 通常WJ-C値比較の最小抽出と回復集合／T_i／U／E比較器 | 通常WJ-C82件維持、独立field差替え・集合／時刻oracle、受理済みreceipt以外を拒否 |
 | RD-C | 同新frameのfinish専用fake job／一度応答消費／候補slot | 同id旧世代・ready／analyze応答・二重送信を拒否。全pre/post guard、send失敗でも再利用なし |
 | RD-D | 同source終端・新cleanup内部確認slot・一度候補消費 | cleanup両軸と固定順序、hard後の診断回収と復活0、解放後最終checkpoint、正常時参照／UTC破棄 |
@@ -146,7 +146,7 @@ source解放・worker cleanupは別軸で、片方の成功や最終resource数0
 
 ## 10 承認待ち・未確認事項
 
-- FinishContextEvidenceの具体的な発行slot／constructor配置・strict型、同新frameのprivate job台帳への接続方法は実装前レビュー対象。任意入力で本物のsessionを登録するfriend／昇格口は追加しない。
+- FinishContextEvidenceのstrict型／発行slot・新合成assembly・元receipt／immutable結果参照・route証拠はRD-A詳細MD案へ分離した。実装時の具体配置とcapture hook、同新frameのprivate job台帳への接続方法は引き続きレビュー対象。任意入力で本物のsessionを登録するfriend／昇格口は追加しない。
 - reviewedの完全な結果を親でcopyせず保持する配置、omission前の受理済み期待値の寿命、既存のconfig日時長policyは未確定。欠損時に検証済み扱いにしない。
 - 同sourceの正常close証拠と新cleanup正常確認のprivate発行継続は未実装。現SC2-Cの診断sinkやSC2-Dのdata handoffだけでは代替できない。
 - phase型SR-Bのprivate plan受理、実session／ReleasePermit／payload／worker jobの正式binding、実finish／runtime・実通信、実cleanup／外側終了、B-03、全体work上界は別工程。
