@@ -8,10 +8,6 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 ## [Unreleased]
 
-### Added
-
-- Loopback test fixtures (`tests/review/oauth-g0.test.ts` issuer helper, `tests/review/fixtures/oauth-g0-smoke.ts`, `tests/fixtures/http-host-survival.mjs`, and the fixed-port probes/occupiers in `tests/review/r2-runner.cases.ts`) now reject their listen wait on the server `error` event and close the already-created server on failure, so a refused local listen (e.g. `listen EPERM` in a restricted sandbox) fails fast instead of stalling until the Vitest timeout. Test-only; no product code, timeouts or skips changed.
-
 ### Fixed
 
 - Development-only closed body capture now applies its 4096-chunk retention limit only to nonempty additions. Empty chunks at the exact limit keep sequence validation and zero-byte accounting without discarding a valid body; the 4097th nonempty chunk is still charged then rejected. Includes a RED/GREEN boundary regression through EOF, parsing and digest comparison; formal issuance and production behavior remain unchanged.
@@ -79,6 +75,8 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 - Remove packaged fixture registration/owner/transport-claim exports and the real session's fixture transport factory. Fixture registries, claims, draft handles and synthetic accounting now live exclusively in package-excluded development modules, and reject raw real-session registration. Ordinary session GET/payload/phase behavior remains intact; packaged and source regression tests cover the former fixture-to-real-mode path. Production BR-006 evidence issuance remains unimplemented/closed.
 
 ### Added
+
+- Loopback test fixtures (`tests/review/oauth-g0.test.ts` issuer helper, `tests/review/fixtures/oauth-g0-smoke.ts`, `tests/fixtures/http-host-survival.mjs`, and the fixed-port probes/occupiers in `tests/review/r2-runner.cases.ts`) now reject their listen wait on the server `error` event and close the already-created server on failure, so a refused local listen (e.g. `listen EPERM` in a restricted sandbox) fails fast instead of stalling until the Vitest timeout. Test-only; no product code, timeouts or skips changed.
 
 - Adds five SR-C1 synthetic worker-closure tests for checks that earlier tests did not distinguish: no-generation evidence for an unstarted origin requires the same supervisor/request/input/point context, and a closure settle event with an extra field is refused instead of issuing closed-generation evidence.
 
