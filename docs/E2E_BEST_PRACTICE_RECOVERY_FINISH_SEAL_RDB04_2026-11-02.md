@@ -51,7 +51,13 @@ Date: 2026-11-02。開始時HEADは`ca67222`。作業中の既存RD-B03追加修
 
 関連はmaxWorkers=1、全体はmaxWorkers=3。150秒の外側監督は検証用で、製品／既存試験の期限を変更していない。ローカル待受の既存合成テストを含むが、外部サービスへ通信していない。
 
-## 6 費目・未確認事項
+## 6 レビュー確認（2026-11-03）
+
+§5のESLintは変更したTS／梱包scriptだけに対する結果で、修正前の記録として残す。レビュー時にrepo全体の`npm run lint`を実行し、exit 0を確認した。同時に`npm run build`成功、offline梱包441ファイル成功、全体合成（maxWorkers=3）258ファイル／12,437件成功・失敗0・pending 0を確認した。
+
+レビューで封印処理の14判定を外す変異を確認した。受理済みhandleの照合、選択IDの昇順検査、source／cleanup開始時の封印期待値の失効の3判定は、外すと既存試験が失敗した。残る11判定（seal一度限り、終端slotとのhandle／sink対応、cleanup serial・live照合、cleanup開始後のact制限、commitでの不一致flagと再確認、発行時snapshotとの比較、破棄時の消去、closeでの確認）は、外しても既存試験が通るが、claim時点で受理slotが空になること、受理時に同時生成される終端slotとの不変条件、開始時の失効処理、期待値未生成時のcommit停止とbusy、pinの不変性、source close時点の失効と終端slotによるclose停止によって同じく拒否される等価変異として扱い、追加試験の対象にしていない。実装・試験は変更していない。
+
+## 7 費目・未確認事項
 
 finish_seal.usageは新しい期待値projectionだけのnodes／character_units。plan再projection、RA-01比較の二入力枠、guard／同一性検査、Zod copy／保持data／opaque slot、失効・discardの総work／allocationを単一Budgetで計測した値ではない。各既存有限枠は維持するが、追加の総費用・本番cap・全体上界はUnknownとする。
 
