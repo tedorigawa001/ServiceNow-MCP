@@ -132,7 +132,8 @@ export function createSyntheticSoftRecoveryIssuer(seed:SyntheticRecoverySeed,exp
       return Object.freeze({start,cleanup});
     },()=>{generationTicketPublished=true;state='generation_claimed';});},
     startWorkerGeneration(b:object,handle:object){return act('generation_start',b,()=>{
-      const own=generationStart;generationStart=undefined;if(state!=='generation_claimed'||!own||own!==handle||!generationFrame||generationCleanupContext?.frame!==generationFrame||!generationCleanupToken||generationStarts)fail('generation_start');state='generation_starting';
+      // A started frame is discarded only through its accepted ready handle, never the pre-start ticket.
+      const own=generationStart;generationStart=undefined;generationDiscard=undefined;if(state!=='generation_claimed'||!own||own!==handle||!generationFrame||generationCleanupContext?.frame!==generationFrame||!generationCleanupToken||generationStarts)fail('generation_start');state='generation_starting';
     },()=>{generationStarts=1;generationCleanupContext=Object.freeze({frame:generationFrame!,started:true});generationCleanup=Object.freeze({status:'not_started'});return opaque<GenerationLease>();},handle=>{generationLease=handle;state='generation_waiting';});},
     issueWorkerGenerationReady(b:object,lease:object){return act('generation_ready',b,()=>{
       const used=generationEventIssued;generationEventIssued=true;if(used||state!=='generation_waiting'||lease!==generationLease||!generationFrame||!generationCleanupToken)fail('generation_ready');

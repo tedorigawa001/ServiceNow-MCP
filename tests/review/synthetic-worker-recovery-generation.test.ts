@@ -107,3 +107,16 @@ it('retains a preissued new-frame cleanup sink after startup failure without res
   expect(f.owner.inspect()).toMatchObject({state:'failed',diagnostics:{soft:{kind:'worker_deadline'},hard:{code:'worker_unavailable'}},new_generation:{starts:1,ready_events:0,cleanup_pending:false,cleanup:{status:'confirmed'}}});
   expect(()=>f.owner.claimWorkerGeneration(f.b,f.p)).toThrow('worker_unavailable');
 });
+it('fixes an unexpected startup/ready failure reason to an internal error',()=>{
+  const f=fixture();f.verify();const t=f.owner.claimWorkerGeneration(f.b,f.p),lease=f.owner.startWorkerGeneration(f.b,t.start);
+  expect(()=>f.owner.failWorkerGeneration(f.b,lease,'access_denied')).toThrow('internal_review_error');expect(f.owner.inspect().diagnostics.hard?.code).toBe('internal_review_error');
+});
+it('rejects caught reentry into the new-frame cleanup sink during startup',()=>{
+  const f=fixture();f.verify();const t=f.owner.claimWorkerGeneration(f.b,f.p);let once=false;
+  f.arm(()=>{if(!once){once=true;try{f.owner.recordWorkerGenerationCleanup(t.cleanup,'not_required');}catch{/* outer must stop */}}return undefined;});
+  expect(()=>f.owner.startWorkerGeneration(f.b,t.start)).toThrow('internal_review_error');expect(f.owner.inspect()).toMatchObject({state:'failed',new_generation:{starts:0,cleanup_pending:true}});
+});
+it('does not let the pre-start ticket discard a started frame even after confirmed cleanup',()=>{
+  const f=fixture();f.verify();const t=f.owner.claimWorkerGeneration(f.b,f.p);f.owner.startWorkerGeneration(f.b,t.start);f.owner.recordWorkerGenerationCleanup(t.cleanup,'confirmed');
+  expect(()=>f.owner.discardWorkerGeneration(f.b,t.start)).toThrow('internal_review_error');expect(f.owner.inspect()).toMatchObject({state:'failed',new_generation:{starts:1,ready_events:0,cleanup:{status:'confirmed'}}});
+});

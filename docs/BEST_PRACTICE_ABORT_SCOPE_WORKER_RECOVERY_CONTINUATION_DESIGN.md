@@ -1,6 +1,6 @@
 # SR-C後半の終了証拠とverifyと新世代readyの接続契約
 
-Version: br006-worker-recovery-continuation-draft-0.6 / Date: 2026-11-02。
+Version: br006-worker-recovery-continuation-draft-0.7 / Date: 2026-11-02。
 Status: **SC2-Aの証拠移譲・準備入力（§10）、SC2-Bの必要verify・fake会計（§11）、SC2-Cの終了証拠使用・合成新世代ready・別cleanup診断（§12）を独立合成issuerで限定実装。SC2-D・正式bindingは未実装で、人による正式bindingの承認未実施。正式発行口閉鎖・Unknown・全体受付無効・VM／監視／telemetry調査保留を維持する。**
 
 基準HEADは`07e7631`。[soft回復claim設計](BEST_PRACTICE_ABORT_SCOPE_SOFT_RECOVERY_CLAIM_DESIGN.md)§6・7・14と[worker時刻設計](BEST_PRACTICE_ABORT_SCOPE_WORKER_TIME_BINDING_DESIGN.md)の差分として、旧世代終了後に同ownerのまま必要verifyと新世代readyへ進む内部境界を定める。既存の非実行consumerを回復権限へ昇格させず、通常WJ-C・runtime／実worker・実sourceを変更しない。
@@ -162,10 +162,12 @@ claim／startを分け、合成起動より先にcleanup sinkを渡す。claim�
 
 `recordWorkerGenerationCleanup(sink, status)`はrun guard／bindingを要求しない診断専用の一度限りsnapshotで、hard停止後も同sinkだけで報告できる。起動前はnot_requiredだけ、起動後はconfirmedだけが解放確認済み。not_started／requested／failed／unconfirmedは区別するが未確認のためhard停止し、不正値はunconfirmedに固定する。先行hardを上書きしない。旧closureのcomplete／旧cleanup sinkのconfirmedを流用しない。実terminate要求・OS終了・実resource解放の証拠ではない。
 
-frame／入力やcleanup責務が残るnormal closeは拒否する。固定終了用の`discardWorkerGeneration`は同ready handle（起動前の中止は元start）を一度消費し、cleanupがconfirmed／not_requiredかつsink消費済みの場合だけprivate入力／frameを破棄してconsumedへ進む。未確認cleanupをdiscardで隠せず、失敗後の遅延cleanup報告でも実行・discard能力は復活しない。元UTCは正常close／terminal discardまで保持する。
+frame／入力やcleanup責務が残るnormal closeは拒否する。固定終了用の`discardWorkerGeneration`は同ready handle（起動前の中止は元start）を一度消費し（startは`startWorkerGeneration`の開始claimで同時に無効化し、起動後のframeを元startで破棄させない。readyへ至らない起動後frameはstartup／ready失敗またはhard停止で失効させ、cleanupは発行済みsinkで回収する）、cleanupがconfirmed／not_requiredかつsink消費済みの場合だけprivate入力／frameを破棄してconsumedへ進む。未確認cleanupをdiscardで隠せず、失敗後の遅延cleanup報告でも実行・discard能力は復活しない。元UTCは正常close／terminal discardまで保持する。
 
 追加診断new_generationはclaim_started・starts・ready_events・cleanup状態／sink pendingというscalarのみ。frame・token・receipt・id・コード・raw例外を出さない。元soft・最初のhard・旧／新cleanupを分離し、C/G/Pを引き継ぐ。実待機時間・追加work／layout／allocation・全体上界はUnknownのまま。
 
-[合成試験](../tests/review/synthetic-worker-recovery-generation.test.ts)125件で、7発生点、verify未完了、混入／二重使用、7×8位置のguard取消、旧／新cleanup分離、失敗後の診断回収と固定discardを確認する。期待するclaim／start／ready数はguard位置から独立に求める。梱包検査は全関数・brand文字列の漏出をseeded負の対照で拒否し、既存I/O／時計／worker参照監査も維持する。[SC2-C検証記録](E2E_BEST_PRACTICE_WORKER_RECOVERY_SC2C_2026-11-02.md)参照。
+[合成試験](../tests/review/synthetic-worker-recovery-generation.test.ts)128件（初回125件＋レビュー修正3件）で、7発生点、verify未完了、混入／二重使用、7×8位置のguard取消、旧／新cleanup分離、失敗後の診断回収と固定discardを確認する。期待するclaim／start／ready数はguard位置から独立に求める。梱包検査は全関数・brand文字列の漏出をseeded負の対照で拒否し、既存I/O／時計／worker参照監査も維持する。[SC2-C検証記録](E2E_BEST_PRACTICE_WORKER_RECOVERY_SC2C_2026-11-02.md)参照。
 
 finish専用planの封印／移譲はSC2-D、実finish／E・候補消費はSR-Dへ残す。ready handleは実行可能planではなく、実session／source／ReleasePermit／worker jobへの正式binding、実worker／runtime接続・実通信、B-03 compiled保証は追加しない。正式発行口閉鎖・Unknown・全体受付無効・調査保留を維持する。
+
+draft-0.6のレビュー修正：SC2-Cでは、(1) startup／ready失敗理由の限定、(2) 新frame用cleanup sinkへの再入拒否（busy判定）が、各判定を外す変異でも125件通っていた。(1)を外すと`access_denied`等がSR-Bで拡張したhard理由としてそのまま残り、(2)を外すとstartのguard内からsinkを記録でき、startも成功する。また、起動後も元startで固定discardでき、ready未受理のstarted frameがconsumedへ進んでいた。§12の「起動前の中止は元start」に合わせ、start開始claimでdiscard用のstart参照も無効化した（試験helperの実装修正）。3件の試験を追加し、§12の件数と親設計・soft回復claim設計・検証記録からの版数リンクを更新した。

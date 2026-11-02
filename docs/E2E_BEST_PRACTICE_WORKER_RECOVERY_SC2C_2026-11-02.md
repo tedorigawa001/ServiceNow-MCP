@@ -5,7 +5,7 @@ Status: 合成依存限定。正式発行口閉鎖・Unknown・全体受付無�
 
 ## 1 実装範囲
 
-[接続契約draft-0.6](BEST_PRACTICE_ABORT_SCOPE_WORKER_RECOVERY_CONTINUATION_DESIGN.md)§12に従い、tests配下の同issuer内でSC2-Bのverified状態から次へ進む境界を追加した。src・runtime module・実worker factoryは変更していない。
+[接続契約draft-0.7](BEST_PRACTICE_ABORT_SCOPE_WORKER_RECOVERY_CONTINUATION_DESIGN.md)§12に従い、tests配下の同issuer内でSC2-Bのverified状態から次へ進む境界を追加した。src・runtime module・実worker factoryは変更していない。
 
 - 同ownerのHeldClosureを最初のguard前に一度占有し、元handleを取り外す。generation_usesはclaim占有、startsは合成起動実施、ready_eventsはpost-guard後の受理成功として区別する。
 - 同じprivate入力／時刻／C/G/Pを維持し、固定issuerが旧参照と異なる新supervisor／worker／generationを作る。任意frameや応答JSONから発行しない。
@@ -62,7 +62,30 @@ guard oracleは実装helperを使わず、有限の位置式からclaim1・start
 SHA-256: `b1d4d181baaf6487f3043bedb25d2726c5225a0612d32919a338872b2c9eb452`。
 関連試験JSON：`/private/tmp/servicenow-sc2c-related-20261102.json`。一時artifactの永続保持は保証しない。コード本文・資格情報・raw例外は出力せず、集計だけ確認した。
 
-## 5 残課題・非対象
+## 5 レビュー修正（2026-11-02）
+
+§3・§4の125件／11,179件と、ESLintを対象ファイルだけに対して実行した結果は、修正前の記録として残す。レビューで次の3点が判明した。
+
+| 項目 | 修正前の挙動 | 対応 |
+|---|---|---|
+| startup／ready失敗理由の限定（`failWorkerGeneration`） | 判定を外しても125件が通った。外すと`access_denied`等がSR-Bで拡張したhard理由の許可リストを通り、そのままhard理由として残る | 想定外の理由（`access_denied`）が`internal_review_error`へ固定される試験を追加 |
+| 新frame用cleanup sinkの再入拒否（`recordWorkerGenerationCleanup`のbusy判定） | 判定を外しても125件が通った。外すとstartのguard内からsinkを記録でき、startも成功する | 捕捉された再入でstartが`internal_review_error`で停止し、sinkは未記録のまま残る試験を追加 |
+| 起動後のstart handleによる固定discard | `generationDiscard`がclaim時のstartのまま残り、start→cleanup confirmed→元startでのdiscardが、ready未受理のままconsumedへ進んだ。§1の「起動前の中止はstart」と不一致 | **試験helperの実装を修正**し、`startWorkerGeneration`の開始claimでdiscard用のstart参照も無効化した。起動後に元startでdiscardすると拒否される試験を追加 |
+
+3件目の修正後、readyへ至らない起動後frameはstartup／ready失敗またはhard停止で失効し、cleanupは発行済みsinkで回収する。各変異（理由限定の除去、busy判定の除去、start参照の無効化の除去）では対応する追加試験1件だけが失敗し、復元後に`cmp`一致を確認した。claimの一度限り判定、start／acceptのframe照合、discardのcleanup状態確認は、外してもslotの存在や内部整合性で同じく拒否される等価変異として扱い、追加試験の対象にしていない。runtime sourceは変更していない。
+
+修正後の結果：
+
+| 検証 | 結果 |
+|---|---|
+| SC2-C合成 | 1ファイル／128件成功。SR-A／B／C①・SC2-A／Bを含む関連6ファイル698件も成功 |
+| ESLint | `npm run lint`（repo全体）exit 0 |
+| build・梱包 | `npm run build`成功、offline梱包441ファイル成功 |
+| 全体合成 | maxWorkers=3、244ファイル／11,182件成功、失敗0・pending 0、exit 0。JSON内の開始〜最終試験終了は約44.8秒 |
+
+接続契約はdraft-0.7へ更新し、親設計・soft回復claim設計・本書からの版数リンクを直した。
+
+## 6 残課題・非対象
 
 SC2-Dの非実行plan封印／一度限りの移譲、SR-Dの実finish／E・候補消費、実session／ReleasePermit／payload／worker jobへの正式bindingは未対応。実canonical writer・final予約・実worker／runtime・実cleanup・外側checkpointには接続していない。SC2-Aの一般化したinput契約も変更しない。
 

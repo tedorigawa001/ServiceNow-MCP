@@ -175,7 +175,7 @@ job・listener・timer・worker／stdioは監督owner、HTTP・認証・予約�
 
 1. **SR-A（合成限定実装）**：内部discriminant・同ownerの観測／回復slotとone-shot検査、soft／hard／cleanup診断分離を独立合成issuerだけで実装した。§12参照。route／世代移行や実cleanup証拠は発行しない。
 2. **SR-B（合成限定実装）**：phase型の同世代維持／未起動分岐、未処理集合・必要verifyのfakeイベント会計を非実行planへ接続した（§13）。実finish権限ではない。
-3. **SR-C（①とSC2-A／B／Cのみ合成限定実装）**：worker型の7発生点、旧世代終了／世代なし証拠とone-shot消費を接続した（§14）。[後半の接続契約draft-0.6](BEST_PRACTICE_ABORT_SCOPE_WORKER_RECOVERY_CONTINUATION_DESIGN.md)§10〜12で、未消費証拠のprivate移譲・HeldClosure・strict準備入力と集合／時刻検査、必要verify・同prefixのfake会計、合成新世代ready・別cleanup診断を限定実装した。SC2-Dのplan・実回復routeは未接続。正式bindingに関する人の承認は未実施。
+3. **SR-C（①とSC2-A／B／Cのみ合成限定実装）**：worker型の7発生点、旧世代終了／世代なし証拠とone-shot消費を接続した（§14）。[後半の接続契約draft-0.7](BEST_PRACTICE_ABORT_SCOPE_WORKER_RECOVERY_CONTINUATION_DESIGN.md)§10〜12で、未消費証拠のprivate移譲・HeldClosure・strict準備入力と集合／時刻検査、必要verify・同prefixのfake会計、合成新世代ready・別cleanup診断を限定実装した。SC2-Dのplan・実回復routeは未接続。正式bindingに関する人の承認は未実施。
 4. **SR-D**：通常WJ-CのE／固定集合・候補消費へ接続し、全guardと独立oracleを確認する。実session／監督・外側cleanup接続は行わない。
 
 SC2-D以降の実装は別の依頼後に行う。実生成継続のclass／module配置、private終了証拠の実発行条件、停止後finishとの接続互換性、実cleanup上限・外側checkpoint／診断写像、実選択windowと集合証拠、全費目上界はレビュー待ちで、人の承認済みとはしない。draft-0.1／0.2はコード照合とMD設計のみ。SR-A／B／C①は§12〜14、SC2-A／B／Cは後半の接続契約§10〜12へ分離し、実通信・環境設定操作を実施したことにはしない。

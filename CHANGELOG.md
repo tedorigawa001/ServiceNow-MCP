@@ -82,6 +82,8 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 ### Added
 
+- SC2-C synthetic generation recovery now invalidates the pre-start ticket as a discard handle when the new frame starts, so a started frame without an accepted ready can no longer be discarded through the original start ticket. Adds three tests covering that refusal, fixing unexpected startup/ready failure reasons to an internal error, and caught reentry into the new-frame cleanup sink during startup.
+
 - Adds three SC2-B synthetic worker-verify tests for checks that earlier tests did not distinguish: a non-boolean verify change flag hard-stops instead of counting as changed, and string or proxy chunk identities are refused without charging received bytes.
 
 - Adds three SC2-A synthetic preparation tests: unknown `collection_status` and `consistency` values are refused, and a generalized unfinished-input set (another retained input besides the active receipt, active receipt not at U) is shown to be accepted. The design now states that the adapter's sequential order (only the active input unfinished, with T_i equal to U; none for phase deadlines) is not guaranteed by the SC2-A/SR-B synthetic contracts.
