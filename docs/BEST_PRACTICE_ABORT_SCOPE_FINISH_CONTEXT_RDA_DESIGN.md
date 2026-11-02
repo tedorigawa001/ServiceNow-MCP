@@ -1,6 +1,6 @@
 # RD-A FinishContextEvidenceの詳細型・private発行契約
 
-Version: br006-finish-context-rda-draft-0.4 / Date: 2026-11-02。
+Version: br006-finish-context-rda-draft-0.5 / Date: 2026-11-02。
 Status: **RA-01値層とRA-02①②の新合成assembly・private fixture pinだけ実装。RA-02のhandoff／live route結合・証拠発行とRA-03の受理は未実装。正式発行口閉鎖・Unknown・全体受付無効・VM／監視／telemetry調査保留を維持する。**
 
 基準HEAD: `a62c897`。[SR-D接続設計](BEST_PRACTICE_ABORT_SCOPE_RECOVERY_FINISH_SRD_DESIGN.md)§1〜3・9のRD-Aを具体化する。[SC2-D](BEST_PRACTICE_ABORT_SCOPE_WORKER_RECOVERY_CONTINUATION_DESIGN.md)と[通常WJ-C](BEST_PRACTICE_ABORT_SCOPE_WORKER_TIME_BINDING_DESIGN.md)の既存契約は維持する。コード・公開JSON／MCP・設定を変更する指示ではなく、実接続・実通信・本番cap／Permit投入の承認ではない。
@@ -239,3 +239,5 @@ pre／post guardは同一closureのbusy／hardを使う。再入で起きたhard
 seed copyは深さ8・object項目30・配列100・訪問10,000・文字費262144をseed全体で共有し、非opaqueデータのaliasも出現ごとに課金する。組み立て後のRA-01 projectionも独立に同上限へ検査する。二回の局所検査を単一実予算の課金や全体work上界の証明と呼ばない。列挙の確保・exact layout／allocationと本番capはUnknown。
 
 [RA-02①②検証記録](E2E_BEST_PRACTICE_FINISH_ASSEMBLY_RA02_2026-11-02.md)を参照。SourceLifecycleSlot／NewFrameRouteSlot、元SC2-D handoff・元active receiptと本来の受理capture、FinishContextIssueSlot／証拠発行、RA-03受理とcleanup責務の接続は未実装のまま。準備成功をFinishContextEvidenceへ昇格しない。
+
+次段の[RA-02③接続差分設計draft-0.1](BEST_PRACTICE_ABORT_SCOPE_FINISH_ASSEMBLY_RA02_BINDING_DESIGN.md)では、別ownerの外部登録を避ける共通kernel生成境界、同receipt／handoffとlive routeの結合、worker起動とcleanup開始serialの分離を整理した。RB-A〜Dは未実装で、証拠発行は含めない。
