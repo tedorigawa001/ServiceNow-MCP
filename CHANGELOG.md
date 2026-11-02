@@ -16,6 +16,8 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 ### Changed
 
+- RA-02 preparation adds a package-excluded fresh synthetic finish assembly with separately branded owner binding, one-shot bind/prepare claims and bounded private fixture pins. Foreign/copy/old-issuer bindings, replay, reentrancy and failed reuse stop without restoring pins; diagnostics expose counts only. Existing recovery issuer APIs remain unchanged. No evidence issuer, handoff/live-route adoption, real connection or whole-run admission is enabled.
+
 - RA-01 adds package-excluded, synthetic-only finish-context value projections and comparisons with a separate value-only brand, strict variants and shared node/character limits. Missing fields, mixed references and oversized inputs fail closed. This does not issue evidence, validate live provenance or enable formal issuance, runtime connections or whole-run admission.
 
 - SC2-D seals a package-excluded non-executable recovery plan from the same accepted synthetic generation, immutable selected set and retained T_i/U. One-shot private handoff and authority:none summary branches are exclusive; copies, summary promotion, replay, revocation and mixed owners are rejected. The receiving slot has fixed cleanup-confirmed discard only. No real finish/runtime connection, formal issuance or whole-run admission is enabled.

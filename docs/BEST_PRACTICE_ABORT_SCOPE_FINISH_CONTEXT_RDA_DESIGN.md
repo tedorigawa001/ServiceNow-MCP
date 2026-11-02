@@ -1,7 +1,7 @@
 # RD-A FinishContextEvidenceの詳細型・private発行契約
 
-Version: br006-finish-context-rda-draft-0.3 / Date: 2026-11-02。
-Status: **RA-01の値型・bounded projection／比較だけ合成依存で実装。RA-02／03のprivate発行・受理とlive証拠は未実装。正式発行口閉鎖・Unknown・全体受付無効・VM／監視／telemetry調査保留を維持する。**
+Version: br006-finish-context-rda-draft-0.4 / Date: 2026-11-02。
+Status: **RA-01値層とRA-02①②の新合成assembly・private fixture pinだけ実装。RA-02のhandoff／live route結合・証拠発行とRA-03の受理は未実装。正式発行口閉鎖・Unknown・全体受付無効・VM／監視／telemetry調査保留を維持する。**
 
 基準HEAD: `a62c897`。[SR-D接続設計](BEST_PRACTICE_ABORT_SCOPE_RECOVERY_FINISH_SRD_DESIGN.md)§1〜3・9のRD-Aを具体化する。[SC2-D](BEST_PRACTICE_ABORT_SCOPE_WORKER_RECOVERY_CONTINUATION_DESIGN.md)と[通常WJ-C](BEST_PRACTICE_ABORT_SCOPE_WORKER_TIME_BINDING_DESIGN.md)の既存契約は維持する。コード・公開JSON／MCP・設定を変更する指示ではなく、実接続・実通信・本番cap／Permit投入の承認ではない。
 
@@ -179,7 +179,7 @@ headerと全receipt／outcome projectionを合わせ、一つの収集予算で�
 | 最初の実装分割案 | 合成だけで確認する範囲 |
 |---|---|
 | RA-01（値層実装済み） | 別brand・strict値型とbounded projection／比較。不足項目・不正variant・総量超過を拒否。発行や実行能力なし |
-| RA-02 | 新合成assemblyのpin済み補助slot、receipt／immutable outcome由来、issue one-shot。旧factory／SC2-D互換、外部登録・responseからの昇格なし |
+| RA-02（①②の準備層のみ実装） | 新合成assemblyの生成境界・private fixture pin。元receipt／immutable outcomeのcapture、handoff／live route結合、issue one-shotは未実装。旧factory／SC2-Dを維持、外部owner登録・responseからの昇格なし |
 | RA-03 | 同handoffと証拠の原子的受理、ready／cleanup未開始・source openのfake lifecycleとclaim、失効／解放責務の接続。非実行acceptedまで |
 
 RD-B/C/Dへ進む前に各段階の実コード配置・抽出範囲を確認する。通常WJ-Cの未完了receipt拒否、full schemaの責務、公開JSON／MCP、実transport／workerは変更しない。新しい本番capやconfig日時長policyを入れない。
@@ -213,3 +213,29 @@ projection内の通常containerはコピーしてfreezeするが、元route.fram
 [RA-01検証記録](E2E_BEST_PRACTICE_FINISH_CONTEXT_RA01_2026-11-02.md)：新規186件・全体11,446件成功（レビュー修正後は204件・11,464件）、型検査・build・lint・非同梱検査を確認。RA-02／03と実接続の成功を意味しない。正式発行口閉鎖・Unknown・全体受付無効・調査保留を維持する。
 
 draft-0.2のレビュー修正：RA-01の値層で、S≤O・U≤S+L・header開始とS・collection件数・要求rule／limitationsの重複・ruleset導出・skipped_rules空・期待limitationsの部分集合・受理結果参照の再利用・result_omittedのcompleted input要求の各判定を外す変異でも186件が通っていた。また§3.1のcollection規則が既存集約schemaより緩く、実adapterが作らない`metadata_seen`／`selected`／`truncated`の組合せを受理した。collection規則を既存集約schemaのmetadata予算規則に揃え（試験helperの実装修正）、各判定を個別に検出する試験と、循環／配列上限の失敗分類の試験を追加した（186件→204件）。SR-D設計への版数リンクも現行版へ直した。
+
+## 10 RA-02①②：新合成assemblyとprivate fixture pin
+
+実装基準HEADは`5ca638a`。新規`tests/support/review/synthetic-finish-assembly.ts`は既存`synthetic-soft-recovery.ts`をimportせず、旧factory・export・試験を変更しない。これは新assemblyの**生成準備境界**であり、既存SC2-D ownerを包んでfinishへ接続した実装ではない。将来の統合でもguard／busy／hardを二重生成しないことは未検証の接続条件として残す。
+
+factory `createSyntheticFinishAssembly(seed, check)`は診断shellだけを作り、外部データやguardをまだ読まない。`bind()`を一度だけ呼ぶ保護区間で、新しい別brandのowner bindingとrun／session／source／window等の合成参照を内部生成し、seedをboundedにcopy・検査・pinする。既存ownerやsessionを受け取る引数、後付け登録・setter・任意callbackによる補助slot供給はない。同じfixtureデータで独立factoryを二つ作ることは許すが、binding・claim・slotは共有しない。
+
+seedはstrictな6項目`kind=synthetic_finish_seed_v1, time, header, selected, inputs, outcomes`だけ。timeはS／全L／O／U。各inputは`update_xml_sys_id, retrieved_at, state, expected_context, accepted`の5項目で、caller receipt／AcceptedOutcomeRefを受け取らない。acceptedは明示nullか、strictな`kind=synthetic_reviewed_pin, update_xml_sys_id, retrieved_at`の合成構築descriptor。同inputのID／T_i・completed・期待context必須を確認してから、内部でimmutableなfixture pinを作る。**元analyzeのpost-guard受理やfull結果の検証を証明しない。** 本物の結果、summary、任意可変resultを後から登録する経路ではない。
+
+receipt identityは入力IDごとに内部生成し、重複IDを拒否する。reviewed outcomeのfixture入力はstate／IDだけ、omittedはstate／ID／reasonだけで、receipt／結果参照やreviewed_originの有無はcallerに選ばせず同ledgerから導出する。元fixtureがreviewed pinを持つ場合だけomissionにも同起源を結ぶ。その他の非reviewed variantはRA-01 strict検査へ渡す。
+
+RA-01による値検査のためだけに作るplan／frame／ready／lifecycle placeholderは局所scaffoldingであり、private pinには保持しない。生存証拠やroute slotとして扱わず、常に`route_bound=false`。pin済みheader／selected／time・合成参照の`PinnedFinishSeed`、receipt／期待contextのledger、元outcomeの値だけをclosure内へ置く。元seedはpin後に参照を外し、外部変更で置換されない。
+
+| 境界 | 状態・責務 |
+|---|---|
+| bind | fresh → binding → bound。生成claimは最初の外部guardより前に消費。copy／RA-01検査とpost-guardが終わるまでbindingを返さない |
+| prepare(binding) | bound → preparing → prepared。一度限りの準備claimを先に消費。同owner以外・copy・旧issuer bindingは拒否。値／handle／証拠を返さない |
+| fail／revoke | 最初の固定codeとstageを保持し、seed／owner／pin参照を同期破棄。再bind・再準備・正常closeへの救済なし |
+| close | data-only scopeの参照破棄だけ。実source正常close／worker cleanupの証拠ではない。close後の再開不可 |
+| inspect | 状態・claim開始・件数・固定hard理由だけ。ID／UTC／header／release／receipt／pin参照は返さず、evidence_issues=0 |
+
+pre／post guardは同一closureのbusy／hardを使う。再入で起きたhardを依存がcatchしてもpost側で検出し、preparedへ復活させない。cancelled／deadline_exceeded以外の例外や入力失敗は固定internal_review_errorで止め、元例外・秘密を表示しない。ここにはHTTP・worker・clock・C/G/Pの更新や実resourceがないため、closeは論理参照破棄だけであり物理heapの消去を保証しない。
+
+seed copyは深さ8・object項目30・配列100・訪問10,000・文字費262144をseed全体で共有し、非opaqueデータのaliasも出現ごとに課金する。組み立て後のRA-01 projectionも独立に同上限へ検査する。二回の局所検査を単一実予算の課金や全体work上界の証明と呼ばない。列挙の確保・exact layout／allocationと本番capはUnknown。
+
+[RA-02①②検証記録](E2E_BEST_PRACTICE_FINISH_ASSEMBLY_RA02_2026-11-02.md)を参照。SourceLifecycleSlot／NewFrameRouteSlot、元SC2-D handoff・元active receiptと本来の受理capture、FinishContextIssueSlot／証拠発行、RA-03受理とcleanup責務の接続は未実装のまま。準備成功をFinishContextEvidenceへ昇格しない。

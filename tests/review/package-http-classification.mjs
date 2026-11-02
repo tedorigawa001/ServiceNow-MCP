@@ -94,6 +94,17 @@ for(const f of pack.files.filter(f=>f.path.startsWith('dist/')&&/\.(?:js|ts|map)
 for(const leak of ['globalThis.setTimeout(()=>{},0);','Date.now();','new Date();',"import('node:fs');",'new Worker("x");',"export * from 'node:fs';"])
   assert.throws(()=>auditSyntheticIssuer(finishValueText+'\n'+leak,finishValueImports),assert.AssertionError,'RA-01 audit missed seeded leak: '+leak);
 console.log('RA-01 value-only projections excluded; fixed pure-data imports + seeded I/O/clock/worker/leak controls PASS');
+const assemblyPath='tests/support/review/synthetic-finish-assembly.ts',assemblyText=readFileSync(join(root,assemblyPath),'utf8');
+const assemblyImports=['node:util','./synthetic-finish-context-values.js'];
+auditSyntheticIssuer(assemblyText,assemblyImports);
+const assemblyMarkers=['synthetic-finish-assembly','createSyntheticFinishAssembly','synthetic_finish_assembly','synthetic_finish_assembly_binding','synthetic_finish_seed_v1','synthetic_reviewed_pin','synthetic_original_outcome_pin'];
+const noFinishAssembly=text=>assert(!assemblyMarkers.some(x=>text.includes(x)),'RA-02 preparation leaked into runtime');
+for(const marker of assemblyMarkers)assert.throws(()=>noFinishAssembly(marker));
+assert(!pack.files.some(f=>f.path.includes('synthetic-finish-assembly')));
+for(const f of pack.files.filter(f=>f.path.startsWith('dist/')&&/\.(?:js|ts|map)$/.test(f.path)))noFinishAssembly(readFileSync(join(root,f.path),'utf8'));
+for(const leak of ['globalThis.setTimeout(()=>{},0);','Date.now();','new Date();',"import('node:fs');",'new Worker("x");',"export * from 'node:fs';","import {createSyntheticSoftRecoveryIssuer} from './synthetic-soft-recovery.js';const zzOldRoot=createSyntheticSoftRecoveryIssuer;"])
+  assert.throws(()=>auditSyntheticIssuer(assemblyText+'\n'+leak,assemblyImports),assert.AssertionError,'RA-02 audit missed seeded leak: '+leak);
+console.log('RA-02 preparation excluded; separate root/pure-value imports + seeded old-root/I/O/clock/worker/leak controls PASS');
 for(const suffix of ['.js','.js.map','.d.ts','.d.ts.map'])assert(pack.files.some(f=>f.path==='dist/servicenow/review-kernel/release-observation'+suffix),'required one-shot UTC value helper missing: '+suffix);
 const sessionDeclarations=readFileSync(join(root,'dist/servicenow/bounded-read.d.ts'),'utf8');
 const sessionAst=parse(readFileSync(join(root,'dist/servicenow/bounded-read.js'),'utf8'),{ecmaVersion:'latest',sourceType:'module'});
