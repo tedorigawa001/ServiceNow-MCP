@@ -63,7 +63,13 @@ TDDで3経路を順に接続した。
 SHA-256: `dde27b97393693b91e30ca254ac771c46d02d6ece70a6277e1795f9a027ebad2`。
 関連試験：`/private/tmp/servicenow-sc2d-related-20261102.json`。一時artifactの永続保持は保証しない。実コード本文・資格情報・raw例外は表示せず、集計だけ確認した。
 
-## 5 残課題・非対象
+## 5 レビュー確認（2026-11-02）
+
+§4のESLintは対象TSと梱包監査だけに対する結果で、修正前の記録として残す。レビュー時にrepo全体の`npm run lint`を実行し、exit 0を確認した。同時に`npm run build`成功、offline梱包441ファイル成功、全体合成（maxWorkers=3）245ファイル／11,260件成功・失敗0・pending 0を確認し、§4の全体JSONのSHA-256も一致した。
+
+レビューで実装の8判定を外す変異を確認した。新cleanup確認前の受取discard拒否、封印／移譲済みplanを隠すnormal closeの拒否、summaryのverify error保持、collection failedのrun_status保持の4判定は、外すと既存試験が失敗した。seal claimの一度限り（`planStarted`）、sealでのverify完了確認、`checkPlan`のowner／seed／time照合、`checkPlan`の起動数・ready数・cleanup frame照合の4判定は、外しても既存試験が通るが、それぞれready handleのslot先行取外し、claim時のverify完了要求とclaim後のverify停止、hard停止時のact入口での拒否、ready受理後に変わらない内部整合性によって同じく拒否される等価変異として扱い、追加試験の対象にしていない。実装・試験は変更していない。
+
+## 6 残課題・非対象
 
 今回のhandoffは同合成owner内の受取slotであり、SR-Dの実finishへ移譲した証拠ではない。実finish／E／結果schema・候補消費、実session／ReleasePermit／payload／worker jobへの正式binding、実worker／runtime、実cleanup・外側checkpoint、B-03 compiled保証は未対応。SC2-Aの一般化したinput契約も変更しない。
 
