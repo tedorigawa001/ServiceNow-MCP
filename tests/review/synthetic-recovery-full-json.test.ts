@@ -147,12 +147,25 @@ it('accepts a full-schema window over 10000 decoded nodes when its original wire
   const p=validateRecoveryAggregateJson(json);expect(p.usage.nodes).toBeGreaterThan(10000);expect(p.usage).toMatchObject(valueOracle(r));
 });
 it('round-trips a deterministic corpus of JSON.stringify output with controls, Unicode and member order changes',()=>{
-  const alphabet=['a','あ','😀','\\','"','\t','\n','\u0000','\ud800'];
+  const alphabet=['a','あ','😀','\\','"','\t','\n','\u0000','\ud800','\b','\f','\r','\u001f'];
   for(let n=0;n<45;n++){
     const r=aggregate();r.assets[0].result.findings[0].issue=Array.from({length:n+1},(_,i)=>alphabet[(n*7+i*3)%alphabet.length]).join('');
     const json=JSON.stringify(r),reordered=JSON.stringify(Object.fromEntries(Object.entries(JSON.parse(json)).reverse()));
     for(const wire of [json,reordered]){const p=validateRecoveryAggregateJson(wire);expect(p.value).toEqual(r);expect(p.usage).toMatchObject(valueOracle(r));}
   }
+});
+it('decodes each JSON.stringify short control escape to its exact code unit',()=>{
+  for(const c of ['\b','\f','\r','\t','\n']){
+    const r=aggregate();r.assets[0].result.findings[0].issue='x'+c+'y';const json=JSON.stringify(r);
+    expect(json).toContain('x'+JSON.stringify(c).slice(1,-1)+'y');expect(validateRecoveryAggregateJson(json).value).toEqual(r);
+  }
+});
+it('accepts RFC 8259 spellings that JSON.stringify does not emit, with identical decoded values',()=>{
+  const r=aggregate();r.assets[0].result.findings[0].issue='a/é\u001f';const json=JSON.stringify(r);
+  const issue=JSON.stringify(r.assets[0].result.findings[0].issue),line=r.assets[0].result.findings[0].line_start;
+  const wires=[json.replace(issue,'"a\\/\\u00E9\\u001F"'),json.replace(/"line_start":\d+/,`"line_start":${line}E0`),json.replace(/"line_start":\d+/,`"line_start":${line}e+0`),
+    '\t\r\n '+json.replace('{','{\t').replace(',',' ,\r\n')+'\n\t'];
+  for(const wire of wires){expect(wire).not.toBe(json);expect(validateRecoveryAggregateJson(wire).value).toEqual(r);}
 });
 it('exposes only pure values/calculators, with no capture, origin registration, job or candidate entry',async()=>{
   const api=await import('../support/review/synthetic-recovery-full-json.js');
