@@ -10,7 +10,7 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 ### Added
 
-- Loopback test fixtures (`tests/review/oauth-g0.test.ts` issuer helper, `tests/review/fixtures/oauth-g0-smoke.ts`, `tests/fixtures/http-host-survival.mjs`) now reject their listen wait on the server `error` event and close the already-created server on failure, so a refused local listen (e.g. `listen EPERM` in a restricted sandbox) fails fast instead of stalling until the Vitest timeout. Test-only; no product code, timeouts or skips changed.
+- Loopback test fixtures (`tests/review/oauth-g0.test.ts` issuer helper, `tests/review/fixtures/oauth-g0-smoke.ts`, `tests/fixtures/http-host-survival.mjs`, and the fixed-port probes/occupiers in `tests/review/r2-runner.cases.ts`) now reject their listen wait on the server `error` event and close the already-created server on failure, so a refused local listen (e.g. `listen EPERM` in a restricted sandbox) fails fast instead of stalling until the Vitest timeout. Test-only; no product code, timeouts or skips changed.
 
 ### Fixed
 

@@ -324,8 +324,10 @@ it('waits for cancelled startup and its delayed OS close confirmation before rep
     expect(await task).toMatchObject({ ok: false, code: 'cancelled', cleanup: 'complete' });
     expect(ready).not.toHaveBeenCalled(); expect(fetcher).not.toHaveBeenCalled();
     expect(getEventListeners(root.signal, 'abort')).toHaveLength(0);
-    const port = createServer(); await new Promise<void>(r => port.listen(18765, '127.0.0.1', r));
-    await new Promise<void>(r => port.close(() => r()));
+    const port = createServer();
+    await new Promise<void>((resolve, reject) => {
+      port.once('error', reject); port.listen(18765, '127.0.0.1', () => { port.off('error', reject); resolve(); });
+    }).finally(() => new Promise<void>(r => port.close(() => r())));
   } finally { release(); await task; }
 });
 
@@ -349,8 +351,10 @@ it('reports cleanup_incomplete when cancelled startup cannot finish inside the s
     expect(getEventListeners(root.signal, 'abort')).toHaveLength(0);
     release(); await new Promise<void>(r => setImmediate(r));
     expect(JSON.stringify(result)).toBe(snapshot);
-    const port = createServer(); await new Promise<void>(r => port.listen(18765, '127.0.0.1', r));
-    await new Promise<void>(r => port.close(() => r()));
+    const port = createServer();
+    await new Promise<void>((resolve, reject) => {
+      port.once('error', reject); port.listen(18765, '127.0.0.1', () => { port.off('error', reject); resolve(); });
+    }).finally(() => new Promise<void>(r => port.close(() => r())));
   } finally { release(); await task; }
 });
 it.each(['runner', 'host'] as const)('connects manifest, callback, identity, SDK and worker once with %s signal ownership', async signalOwner => {
@@ -530,8 +534,10 @@ it('does not bind on pre-cancellation and restores process subscriptions after r
 
 it('does not fall back to another port or disturb a pre-existing listener', async () => {
   const occupied = createServer(socket => socket.end());
-  await new Promise<void>(r => occupied.listen(18765, '127.0.0.1', r));
   try {
+    await new Promise<void>((resolve, reject) => {
+      occupied.once('error', reject); occupied.listen(18765, '127.0.0.1', () => { occupied.off('error', reject); resolve(); });
+    });
     const fetcher = vi.fn<typeof fetch>(), ready = vi.fn();
     expect(await runR2ApprovalManifest(file, { fetch: fetcher, onReady: ready }))
       .toMatchObject({ ok: false, code: 'callback_unavailable', cleanup: 'complete' });
@@ -544,8 +550,10 @@ it('does not fall back to another port or disturb a pre-existing listener', asyn
 
 it('separates early callback failure from a still-pending non-cooperative exchange stage gate', async () => {
   const occupied = createServer(socket => socket.end());
-  await new Promise<void>(r => occupied.listen(18765, '127.0.0.1', r));
   try {
+    await new Promise<void>((resolve, reject) => {
+      occupied.once('error', reject); occupied.listen(18765, '127.0.0.1', () => { occupied.off('error', reject); resolve(); });
+    });
     let entered!: () => void, stageEntered = false;
     const began = new Promise<void>(r => { entered = r; });
     const fetcher = vi.fn<typeof fetch>(async () => {
@@ -719,8 +727,10 @@ it.each(['normal', 'slow-close'] as const)('supervises the actual runner host wi
 
 it('reproduces normal-host callback_unavailable with a controlled occupied port before ready', async () => {
   const occupied = createServer(socket => socket.end());
-  await new Promise<void>(r => occupied.listen(18765, '127.0.0.1', r));
   try {
+    await new Promise<void>((resolve, reject) => {
+      occupied.once('error', reject); occupied.listen(18765, '127.0.0.1', () => { occupied.off('error', reject); resolve(); });
+    });
     let ready = false;
     const result = await superviseR2Host(file, { totalTimeoutMs: 4000, cleanupTimeoutMs: 500,
       onReady: () => { ready = true; }, spawnHost: (command, args, options) =>
