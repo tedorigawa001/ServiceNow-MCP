@@ -3,7 +3,7 @@
 Date: 2026-11-02 / 基準HEAD: `f61faeb`。
 Status: **配布対象外の独立合成issuerのみ。実worker／runtime・実予算writer・実通信・実finishへ未接続。**
 
-[soft回復claim設計draft-0.5](BEST_PRACTICE_ABORT_SCOPE_SOFT_RECOVERY_CLAIM_DESIGN.md)§13と[親設計draft-0.11](BEST_PRACTICE_ABORT_SCOPE_WORKER_TIME_BINDING_DESIGN.md)を参照。正式発行口閉鎖・Unknown・全体受付無効・VM／監視／telemetry調査保留を維持する。
+[soft回復claim設計draft-0.6](BEST_PRACTICE_ABORT_SCOPE_SOFT_RECOVERY_CLAIM_DESIGN.md)§13と[親設計draft-0.11](BEST_PRACTICE_ABORT_SCOPE_WORKER_TIME_BINDING_DESIGN.md)を参照。正式発行口閉鎖・Unknown・全体受付無効・VM／監視／telemetry調査保留を維持する。
 
 ## 1 範囲・会計訂正
 
@@ -54,7 +54,37 @@ fake台帳は同budget identityに対応するC/G/P prefixを一度copyする。
 
 梱包内の既存compiled回帰をSR-B専用compiled／B-03保証へ流用しない。新規MD5文書のローカルリンク64件・末尾空白、変更diffの空白検査は成功。検証は今回の限定機能と全体回帰を分けて扱う。
 
-## 5 未実施・残課題
+## 5 レビュー修正（2026-11-02）
+
+§2・§4の112件／236件と「全体合成：未完了」の記載は、修正前の記録として残す。
+
+**全体合成の再実行**：レビュー時に`npm test -- --maxWorkers=3 --reporter=json`を単独で実行し、240ファイル／10,720件成功、失敗0・pending 0、exit 0（JSON内の開始〜最終試験終了は約64.8秒）を確認した。§4で観測したとされる失敗マーカーは再現せず、失敗した試験はなかった。exit 143は外側からの打切りによる終了であり、当時の未完了は実行環境側の制約だった可能性が高い。ただし当時のmarkerの内容は未回収のままで、原因を断定しない。
+
+**未保護の判定**：レビューで、次の判定をそれぞれ外す変異でも236件が成功することが判明した。
+
+| 判定 | 外した場合の影響 | 追加試験 |
+|---|---|---|
+| verify結果の`kind==='failure'`・`type==='bounded'` | `type:'unexpected'`の失敗がunverified継続になり、「BoundedReadError以外はhard停止」に反する | 非bounded失敗でhard停止（internal_review_error）、worker起動0 |
+| success結果のchange flagのboolean検査 | `changed:'no'`のような文字列が真としてchangedになる | 非booleanのflagでhard停止 |
+| `preparePhase`のworker期限型拒否 | worker期限の観測からphase planを作れ、SR-Cの旧世代終了証拠を迂回する | worker期限型のrecoveryからのprepareを拒否し、phase診断を作らない |
+| 受理済みinputのないreviewed／result_omittedの拒否 | T_iのないreviewed結果が完了として残る | reviewedのみでinputなしのprepareを拒否 |
+| window／verify／receiptのopaque参照検査 | 文字列やProxyが`===`の値一致で同一参照と扱われ得る | 3種×文字列／Proxyでprepareを拒否（3件） |
+| ready世代維持時の`initial_worker=null`要求 | 不要な初回起動frameが黙って無視される | ready世代維持で初回frameを渡すと拒否 |
+| ready失敗理由の限定 | `access_denied`等がそのままhard理由として残る | 想定外の理由をinternal_review_errorへ固定 |
+
+各変異では対応する追加試験1件だけが失敗し、復元後に`cmp`一致を確認した。`used>=2`、U超過のT_i、retry_wait／takeのstage判定、preparePhaseのstate／phaseModel判定は、外しても他の判定で同じく拒否される等価変異として扱い、追加試験の対象にしていない。model・issuer実装・runtime sourceは変更していない。
+
+修正後の結果：
+
+| 検証 | 結果 |
+|---|---|
+| SR-B＋SR-A | 2ファイル／245件成功（121＋124） |
+| ESLint | `npm run lint`（repo全体）exit 0、errors 0 |
+| 全体合成 | maxWorkers=3、240ファイル／10,729件成功、失敗0・pending 0、exit 0。JSON内の開始〜最終試験終了は約56.7秒 |
+
+soft回復claim設計はdraft-0.6へ更新し、§13の件数・保証範囲と親設計・本書からの版数リンクを直した。
+
+## 6 未実施・残課題
 
 SR-Cのworker期限型・旧世代終了証拠・世代交換、SR-DのWJ-C finish／E・実cleanup・外側checkpoint連結は未実装。実session／ReleasePermit／実選択window／payload receipt／worker jobの正式証拠発行、実予算writerと予約台帳の接続、全費目上界・本番cap・全体受付は別工程。非実行dataを正式権限へ昇格しない。
 

@@ -1,6 +1,6 @@
 # WJ-C残工程：soft回復claim・世代移行の詳細設計
 
-Version: br006-soft-recovery-claim-draft-0.5 / Date: 2026-11-02。
+Version: br006-soft-recovery-claim-draft-0.6 / Date: 2026-11-02。
 Status: **SR-Aの内部claim／診断分離（§12）とSR-Bのphase型の非実行plan／fakeイベント会計（§13）を独立合成issuerで限定実装。実回復route・世代移行・実生成元／cleanup接続・SR-C／Dは未実装。正式発行口閉鎖・Unknown・全体受付無効・VM／監視／telemetry調査保留を維持する。**
 
 基準HEAD: `2804af5`。[親設計](BEST_PRACTICE_ABORT_SCOPE_WORKER_TIME_BINDING_DESIGN.md)§7・13の差分。WJ-Cの通常finish限定実装を変更せず、次の合成実装範囲を定める。実worker／runtime接続、実通信・実機操作、設定変更、本番cap／Permit投入・Pushの承認ではない。
@@ -246,4 +246,6 @@ verify完了後だけ`phaseWorker`へ進む。既存readyは同supervisor／work
 
 `consumePhase`はplan handleをpre-guard前に占有し、post-guard後だけ`authority=none`のimmutableな非実行summaryを一度返す。inspectはUTC／identity／payloadを含まないscalar診断のみ。失効時には試行済みC/G/Pと先行soft／hard診断を残し、実行用参照を破棄する。正常closeで終端UTCも破棄する。SR-A cleanup snapshotは従来の診断であり、ここでfake起動したframeの実終了証拠にはならない。
 
-SR-Bは112件、SR-Aとの合計236件で局所検査する。初回起動経路の20 guardすべての取消位置に対してC/G/Pと停止を独立oracleで比較し、混入・一度限り・上限・継続エラー・close／再入も確認する。実finish／E比較・WJ-Cへの接続、worker期限型の世代交換（SR-C）、実cleanup連結（SR-D）、B-03 compiled保証は未実施。配布物にはissuer／値モデル／試験を含めず、混入とruntime／I/O／clock依存の負の対照を追加する。詳細は[SR-B検証記録](E2E_BEST_PRACTICE_PHASE_RECOVERY_SRB_2026-11-02.md)。人の承認済みとはしない。
+SR-Bは121件、SR-Aとの合計245件で局所検査する。BoundedReadError相当以外のverify結果・非booleanのchange flagのhard停止、worker期限型からのphase plan拒否、受理済みinputのないreviewed／result_omittedの拒否、window／verify／receiptの文字列・Proxy参照の拒否、ready世代維持時の初回起動frameの拒否、想定外のready失敗理由の内部エラー固定も個別に確認する。初回起動経路の20 guardすべての取消位置に対してC/G/Pと停止を独立oracleで比較し、混入・一度限り・上限・継続エラー・close／再入も確認する。実finish／E比較・WJ-Cへの接続、worker期限型の世代交換（SR-C）、実cleanup連結（SR-D）、B-03 compiled保証は未実施。配布物にはissuer／値モデル／試験を含めず、混入とruntime／I/O／clock依存の負の対照を追加する。詳細は[SR-B検証記録](E2E_BEST_PRACTICE_PHASE_RECOVERY_SRB_2026-11-02.md)。人の承認済みとはしない。
+
+draft-0.5のレビュー修正：SR-Bの次の判定は、各判定を外す変異でも236件が通っていた。verify結果の`kind`／`type`照合（外すと非bounded失敗がunverified継続になり、§7の「BoundedReadError以外はhard停止」に反する）、success結果のchange flagのboolean検査、`preparePhase`のworker期限型拒否（§13の明記事項）、受理済みinputのないreviewed／result_omittedの拒否（§13.1の明記事項）、window／verify／receiptのopaque参照検査、ready世代維持時の`initial_worker=null`要求、ready失敗理由の限定。9件の試験を追加し、§13の件数・保証範囲と親設計・検証記録からの版数リンクを更新した。

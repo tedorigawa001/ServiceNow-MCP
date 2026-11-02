@@ -206,3 +206,36 @@ it.each(['pending','retry_wait','waiting_ready'] as const)('does not disguise an
   else{const a=f.owner.phaseAttempt(f.b,p,'parent')!;if(stage==='retry_wait')f.owner.phaseOutcome(f.b,p,a,error('upstream_unavailable'));}
   expect(()=>f.owner.close(f.b)).toThrow('internal_review_error');expect(f.owner.inspect()).toMatchObject({state:'failed',phase:{disposed:true,attempt_pending:false}});
 });
+it.each([
+  ['a non-bounded failure',{kind:'failure',type:'unexpected',code:'access_denied'}],
+  ['a non-boolean change flag',{kind:'success',changed:'no'}],
+] as const)('stops instead of continuing verify on %s',(_name,outcome)=>{
+  const f=fixture('payload',true,true),p=f.prepare(),a=f.owner.phaseAttempt(f.b,p,'parent')!;expect(()=>f.owner.phaseOutcome(f.b,p,a,outcome)).toThrow('internal_review_error');
+  expect(f.owner.inspect()).toMatchObject({state:'failed',diagnostics:{hard:{code:'internal_review_error'}},phase:{worker_starts:0}});
+});
+it('refuses to prepare a phase plan from a worker-deadline recovery',()=>{
+  const s={run:{},session:{},source:{},key:{},origin:{},budget:{},release:{},started_at:S,deadline_ms:60000,observed_at:O,upper_utc:O};
+  const facts={kind:'worker_deadline',phase:'analysis',input:{},request:{},supervisor:{},point:'analyze_timer',worker:{},generation:{},worker_state:'ready',id:7,job:{}} as SyntheticSoftFacts;
+  const owner=createSyntheticSoftRecoveryIssuer(s,facts),b=owner.bind(s),c=owner.claimRecovery(b,owner.observe(b,facts));
+  const input={source:s.source,budget:s.budget,release:s.release,origin:s.origin,window:{},verify:null,accounting:{requests:10,received_bytes:20,payload_bytes:30},rows:[],completed:[],inputs:[],collection_status:'complete',consistency:'unverified',initial_worker:null};
+  expect(()=>owner.preparePhase(b,c,input)).toThrow('internal_review_error');expect(owner.inspect()).toMatchObject({state:'failed',phase:null});
+});
+it('refuses a completed reviewed row without an accepted input time',()=>{
+  const f=fixture(),id='a'.repeat(32);f.input.rows=[id];f.input.completed=[{state:'reviewed',update_xml_sys_id:id}];expect(f.prepare).toThrow('internal_review_error');
+});
+// Plan references compare by ===, so primitives or proxies would not be opaque identities.
+it.each(['window','verify','receipt'] as const)('rejects a %s reference given as a string or proxy',key=>{
+  for(const value of ['identity-7',new Proxy({},{})]){
+    const t='2026-11-02T00:00:02.000Z',f=fixture('payload',true,true,key==='receipt'?t:O);
+    if(key==='receipt'){const id='a'.repeat(32);f.input.rows=[id];f.input.inputs=[{receipt:value,update_xml_sys_id:id,retrieved_at:t,state:'retained'}];}
+    else Object.assign(f.input,{[key]:value});
+    expect(f.prepare).toThrow('internal_review_error');
+  }
+});
+it('refuses an initial-start frame for a reused ready generation',()=>{
+  const f=fixture();f.input.initial_worker={supervisor:{},worker:{},generation:{}};expect(f.prepare).toThrow('internal_review_error');
+});
+it('fixes an unexpected initial ready failure reason to an internal error',()=>{
+  const f=fixture('payload',false,false),p=f.prepare(),w=f.owner.phaseWorker(f.b,p);expect(()=>f.owner.phaseReadyFailure(f.b,p,w,'access_denied')).toThrow('internal_review_error');
+  expect(f.owner.inspect().diagnostics.hard?.code).toBe('internal_review_error');
+});
