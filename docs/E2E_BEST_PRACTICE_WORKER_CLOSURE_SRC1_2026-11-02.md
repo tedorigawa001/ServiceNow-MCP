@@ -3,7 +3,7 @@
 Date: 2026-11-02 / 基準HEAD: `fbbd844`。
 Status: **独立合成issuerだけの内部契約。実worker／runtime・実終了確認・新世代／finishへ未接続。**
 
-全体回帰の最新状況：§4〜6は初回未完了・レビュー・環境切分けの履歴として保持する。listen失敗対策後の§7でも、待受可能な条件で241ファイル／10,845件成功を確認した。制限環境は最終reportまで終了したが125件失敗で、readyだけを待つ既存R2試験の30秒timeoutが3件残る。実回復経路が有効になったという意味ではない。
+全体回帰の最新状況：§4〜7は初回未完了・レビュー・環境切分け・listen対策後の履歴として保持する。ready待ち3件の修正を確認した§8では、制限環境で約18〜29msで終了理由を示す失敗となり、対象3件の30秒timeoutは再現しなかった。待受可能な条件では対象3件を含む241ファイル／10,845件が成功した。環境制約の解消や実回復経路の有効化を意味しない。
 
 [soft回復claim設計draft-0.8](BEST_PRACTICE_ABORT_SCOPE_SOFT_RECOVERY_CLAIM_DESIGN.md)§14と[親設計draft-0.12](BEST_PRACTICE_ABORT_SCOPE_WORKER_TIME_BINDING_DESIGN.md)を参照。正式発行口閉鎖・Unknown・全体受付無効・VM／監視／telemetry調査保留を維持する。
 
@@ -132,7 +132,7 @@ G0試験とharnessはSR-C①前の`fbbd844`と現在でGit blobが同一だっ�
 
 §4の過去の150秒打切り時にはOSエラー／環境状態を回収していないため、過去の全実行が今回と同一原因だったとまでは断定しない。§5で挙げた負荷・並行実行の可能性は当時の未確定仮説として残すが、今回の再現を単なる負荷だけで説明しない。
 
-この切分け時点の対策候補は、ローカルlisten能力を事前確認し、fixtureのlisten失敗を即時rejectして固定cleanupへ進めること。同じresolveだけを待つlistenは`tests/review/fixtures/oauth-g0-smoke.ts`と`tests/fixtures/http-host-survival.mjs`にも残っていた（`oauth-g0.test.ts`のport probe、`bp5-oauth-harness.ts`、`r2-runner.cases.ts`はerrorでrejectする）。この時点では実装せず、後の修正と確認は§7へ分離する。制限環境でtestをskip／成功へ変えることや、期限を延長する対応は行わない。今回の未完了切分けは完了とし、SR-C後半などの未実装課題は§8のままとする。
+この切分け時点の対策候補は、ローカルlisten能力を事前確認し、fixtureのlisten失敗を即時rejectして固定cleanupへ進めること。同じresolveだけを待つlistenは`tests/review/fixtures/oauth-g0-smoke.ts`と`tests/fixtures/http-host-survival.mjs`にも残っていた（`oauth-g0.test.ts`のport probe、`bp5-oauth-harness.ts`、`r2-runner.cases.ts`はerrorでrejectする）。この時点では実装せず、後の修正と確認は§7へ分離する。制限環境でtestをskip／成功へ変えることや、期限を延長する対応は行わない。今回の未完了切分けは完了とし、SR-C後半などの未実装課題は§9のままとする。
 
 ### 6.4 証拠と変更範囲
 
@@ -175,7 +175,7 @@ G0試験とharnessはSR-C①前の`fbbd844`と現在でGit blobが同一だっ�
 
 上記125件すべての個別原因をEPERMと断定しない。固定観測metaのEPERMとfailure本文のEPERMは重なることがあるため、件数を足し合わせない。対応する同一HEAD全体は待受可能な条件で成功しており、今回の変更による製品／通常合成経路の退行は観測していない。
 
-R2で残るtimeoutは次の3件（test本体は各約30.01〜30.02秒）。
+この時点でR2に残ったtimeoutは次の3件（test本体は各約30.01〜30.02秒）。後の修正と検証は§8へ分離する。
 
 1. `pins the host remaining budget before bind and reserves cleanup inside that same budget`
 2. `arms the waiting timer from the host budget rather than the runner default`
@@ -195,7 +195,51 @@ R2で残るtimeoutは次の3件（test本体は各約30.01〜30.02秒）。
 
 raw JSONはローカル一時領域にだけ置き、リポジトリには追加しない。件数・時刻はJSONから確認し、今回の変更は本記録だけ。正式発行口閉鎖・Unknown・全体受付無効・VM／監視／telemetry調査保留を維持し、PDIへの実接続・実通信・実機操作・トークン発行・設定変更・Pushは行っていない。既存合成試験のローカルHTTP／workerの実行は実接続や正式発行口の開放とは区別する。
 
-## 8 未実施・残課題
+## 8 R2 ready待ち3件の修正検証（2026-11-02）
+
+対象HEADは`a2990d5`。同コミットは[runner cases](../tests/review/r2-runner.cases.ts)の3件に`untilReady(began, task)`を接続し、ready到達とrunner終端を`Promise.race`で合流する。runnerが先に終了した場合は、その受領物を`runner settled before onReady`のassertionで示す。今回ソース・試験・設定は変更せず、検証と本記録の更新だけを行った。`2ee58c1..HEAD`の`src/`と`vitest.config.ts`の差分は0。
+
+### 8.1 条件・結果
+
+Node v24.18.0／Vitest v5.0.3／darwin arm64、OS release 27.2.0、availableParallelism=10。制限環境で対象3件を単独実行し、default reporterでも受領物の表示を再確認した後、待受可能な実行権限で全体回帰を単独実行した。実行は重ねていない。`npm run build`はexit 0。
+
+| 対象 | 制限環境のtest本体時間 | 制限環境の終了 | 待受可能な全体実行内の結果 |
+|---|---:|---|---|
+| pins the host remaining budget before bind and reserves cleanup inside that same budget | 約29.40ms | runner settled before onReady | passed |
+| arms the waiting timer from the host budget rather than the runner default | 約19.52ms | runner settled before onReady | passed |
+| enforces the default 385-second budget with three seconds reserved for cleanup | 約17.74ms | runner settled before onReady | passed |
+
+制限環境のJSON実行は3 failed／111非選択、exit 1、全コマンドのreport内時間は約3.42秒。test名フィルターは`pins the host remaining budget before bind|arms the waiting timer from the host budget|enforces the default 385-second budget`、maxWorkers=1で、fileは`tests/review/r2-loopback.test.ts`。111件は診断用の非選択で、testへskipを追加したものではない。3件ともfailureMessagesに上記の早期終了assertionがあり、`timed out`は0件だった。再確認のdefault reporterでも3件は約17〜29msで同じ受領物を表示した。
+
+**待受可能な条件での全体回帰：241 file／10,845 passed／failed 0／pending 0、success=true、exit 0、約32.40秒。** 対象3件もすべてpassedである。全体の名前／fileフィルターはなく、単独確認の非選択件数を全体へ流用していない。
+
+全体は従来と同じ`maxWorkers=3`、verbose＋JSON reporter、silent、外側150000msの観測枠で実行し、outer_stop=false。製品60秒・R2全体385秒／cleanup3秒・各testの30000ms・worker起動上限・既存実行順序・実機E2E／transport除外は変更していない。fake timerで予算を進める試験であり、test本体の短時間終了を製品の385秒予算の短縮や性能改善の主張には使わない。
+
+### 8.2 終了理由・cleanup・環境との区別
+
+default reporterのReceivedには3件すべてで次の固定受領物が表示された。
+
+```json
+{"ok":false,"code":"callback_unavailable","cleanup":"complete","mcpListed":false,"otherAccountTokenPossible":false,"tokenMayHaveBeenIssued":false}
+```
+
+JSON reporterのfailureMessagesは`expected { ok: false, …(5) } to be undefined`と略記するため、code／cleanupの根拠はdefault reporterのReceivedも併用する。秘密・認可URL・任意の例外本文・結果本文はこの受領物に含まれない。
+
+固定観測metaでは3件ともlisten_attempt→listen_error(EPERM)→close、listening=0、dropped=0。OSのlisten拒否は引き続き存在するが、readyだけを待たずrunner終端を受け取るため、従来の30000ms timeoutにはならない。正常なready到達を前提とする試験は不合格のままであり、環境非対応をskip／成功へ変換していない。fake timerの影響でmeta.at_msに負値が含まれるため、時間はVitestのtest.durationで確認し、metaはイベント順・code・listening数に限って使った。
+
+最初の2件の既存finallyは`root.abort(); await task`を維持している。3件目はraceでrunnerの終了済み受領物を得た後にassertionで失敗する。testプロセスはexit 1まで終了し、上記metaと受領物のcleanup=completeを確認した。これはこの3経路の合成観測で、すべての失敗時のOS resource解放や未観測の取消競合の網羅的な証明ではない。
+
+同一HEADの待受可能な全体実行が成功したことと合わせ、今回のready待ち修正による通常経路の退行は観測していない。この3件の確認範囲では§7の30秒待ちの残課題は解消した。制限環境全体はこのHEADで再実行していないため、§7の125 failedという件数を現在の件数として流用せず、制限環境で全試験が成功するとも主張しない。過去の未完了すべての原因に関する未確定事項は維持する。
+
+### 8.3 証拠と変更範囲
+
+制限環境の対象3件JSON：`/private/tmp/servicenow-readyfix-three-restricted.json`、SHA-256：`2a544073ec0a069ec47898aaf44ef159ad50355665f7458c2adf212d4564b14a`。
+
+待受可能な全体JSON：`/private/tmp/servicenow-readyfix-full-allowed.json`、SHA-256：`cc2a108397c1eea6c89bdc5b0aa90e4c55cb827a14818aedd266d4b9dfcf763e`。
+
+件数・時間・対象3件のstatusはJSONから確認した。raw JSONはローカル一時領域にのみ置き、リポジトリへ追加しない。追加実行権限はローカル合成試験のコマンドに限定し、恒久設定やPDI側の権限・設定を変更していない。正式発行口閉鎖・Unknown・全体受付無効・VM／監視／telemetry調査保留を維持する。実PDI接続・実通信・実機操作・実トークン発行・設定変更・Push・追加実装は行わず、変更は本検証記録のみ。実worker／runtimeへの新接続や正式発行口を開いた検証ではない。
+
+## 9 未実施・残課題
 
 終了証拠→必要verify→新世代ready、元選択集合／input receipt／保持Uとの接続はSR-C後半。WJ-Cのfinish／E・候補消費、実cleanup・外側checkpoint連結はSR-D以降。実発行元、全費目上界、本番cap、正式発行・全体受付は未完了。合成の成功を実終了保証や人の承認へ昇格しない。
 
