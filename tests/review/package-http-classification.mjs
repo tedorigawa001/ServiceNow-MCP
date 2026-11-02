@@ -42,7 +42,7 @@ auditSyntheticIssuer(timeText,timeImports);
 for(const leak of ['globalThis.setTimeout(()=>{},0);','queueMicrotask(()=>{});','const zzNow=Date.now;','performance.now.call(performance);',"Date['now']();",'new Date();',"import('node:fs');","import {BoundedReadSession} from '../../../src/servicenow/bounded-read.js';const zzRoot=BoundedReadSession;"])
   assert.throws(()=>auditSyntheticIssuer(timeText+'\n'+leak,timeImports),assert.AssertionError,'WJ-B audit missed seeded leak: '+leak);
 console.log('WJ-B/C time/finish owner excluded; fixed pure-data imports, no runtime/I/O/clock references + negative controls PASS');
-const recoveryText=readFileSync(join(root,'tests/support/review/synthetic-soft-recovery.ts'),'utf8'),recoveryImports=['node:util','zod','./synthetic-phase-recovery.js','./synthetic-worker-recovery-input.js'];
+const recoveryText=readFileSync(join(root,'tests/support/review/synthetic-soft-recovery.ts'),'utf8'),recoveryImports=['node:util','zod','./synthetic-phase-recovery.js','./synthetic-worker-recovery-input.js','./synthetic-worker-recovery-verify.js'];
 auditSyntheticIssuer(recoveryText,recoveryImports);
 for(const leak of ['globalThis.setTimeout(()=>{},0);','queueMicrotask(()=>{});','const zzNow=Date.now;','performance.now.call(performance);',"Date['now']();",'new Date();','new Worker(\'x\');',"import('node:fs');","import {BoundedReadSession} from '../../../src/servicenow/bounded-read.js';const zzRoot=BoundedReadSession;"])
   assert.throws(()=>auditSyntheticIssuer(recoveryText+'\n'+leak,recoveryImports),assert.AssertionError,'SR-A audit missed seeded leak: '+leak);
@@ -64,6 +64,15 @@ for(const f of pack.files.filter(f=>f.path.startsWith('dist/')&&/\.(?:js|ts|map)
 for(const leak of ['globalThis.setTimeout(()=>{},0);','queueMicrotask(()=>{});','const zzNow=Date.now;',"Date['now']();",'new Date();',"import('node:fs');","import {BoundedReadSession} from '../../../src/servicenow/bounded-read.js';const zzRoot=BoundedReadSession;"])
   assert.throws(()=>auditSyntheticIssuer(preparationText+'\n'+leak,preparationImports),assert.AssertionError,'SC2-A audit missed seeded leak: '+leak);
 console.log('SC2-A preparation excluded; pure-data imports, no I/O/clock/runtime references + seeded negative controls PASS');
+const verifyText=readFileSync(join(root,'tests/support/review/synthetic-worker-recovery-verify.ts'),'utf8');
+auditSyntheticIssuer(verifyText,['node:util']);
+const verifyMarkers=['createSyntheticWorkerVerify','synthetic-worker-recovery-verify','beginWorkerVerify','workerVerifyAttempt','workerVerifyChunk','workerVerifyOutcome','workerVerifyRetry'];
+const noWorkerVerify=text=>assert(!verifyMarkers.some(x=>text.includes(x)),'SC2-B verify leaked into runtime');
+for(const marker of verifyMarkers)assert.throws(()=>noWorkerVerify(marker));
+for(const f of pack.files.filter(f=>f.path.startsWith('dist/')&&/\.(?:js|ts|map)$/.test(f.path)))noWorkerVerify(readFileSync(join(root,f.path),'utf8'));
+for(const leak of ['globalThis.setTimeout(()=>{},0);','queueMicrotask(()=>{});','Date.now();',"Date['now']();",'new Date();',"import('node:fs');","import {BoundedReadSession} from '../../../src/servicenow/bounded-read.js';const zzRoot=BoundedReadSession;"])
+  assert.throws(()=>auditSyntheticIssuer(verifyText+'\n'+leak,['node:util']),assert.AssertionError,'SC2-B audit missed seeded leak: '+leak);
+console.log('SC2-B verify excluded; no runtime/I/O/clock/worker references + seeded negative controls PASS');
 for(const suffix of ['.js','.js.map','.d.ts','.d.ts.map'])assert(pack.files.some(f=>f.path==='dist/servicenow/review-kernel/release-observation'+suffix),'required one-shot UTC value helper missing: '+suffix);
 const sessionDeclarations=readFileSync(join(root,'dist/servicenow/bounded-read.d.ts'),'utf8');
 const sessionAst=parse(readFileSync(join(root,'dist/servicenow/bounded-read.js'),'utf8'),{ecmaVersion:'latest',sourceType:'module'});

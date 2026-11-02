@@ -1,7 +1,7 @@
 # SR-C後半の終了証拠とverifyと新世代readyの接続契約
 
-Version: br006-worker-recovery-continuation-draft-0.3 / Date: 2026-11-02。
-Status: **SC2-Aの内部証拠移譲・HeldClosure・strict準備入力を独立合成issuerで限定実装（§10）。SC2-B〜D・正式bindingは未実装で、人の承認未実施。正式発行口閉鎖・Unknown・全体受付無効・VM／監視／telemetry調査保留を維持する。**
+Version: br006-worker-recovery-continuation-draft-0.4 / Date: 2026-11-02。
+Status: **SC2-Aの内部証拠移譲・HeldClosure・strict準備入力（§10）と、SC2-Bの必要verify・同prefixのfake会計（§11）を独立合成issuerで限定実装。SC2-C〜D・正式bindingは未実装で、人による正式bindingの承認未実施。正式発行口閉鎖・Unknown・全体受付無効・VM／監視／telemetry調査保留を維持する。**
 
 基準HEADは`07e7631`。[soft回復claim設計](BEST_PRACTICE_ABORT_SCOPE_SOFT_RECOVERY_CLAIM_DESIGN.md)§6・7・14と[worker時刻設計](BEST_PRACTICE_ABORT_SCOPE_WORKER_TIME_BINDING_DESIGN.md)の差分として、旧世代終了後に同ownerのまま必要verifyと新世代readyへ進む内部境界を定める。既存の非実行consumerを回復権限へ昇格させず、通常WJ-C・runtime／実worker・実sourceを変更しない。
 
@@ -100,7 +100,7 @@ inspectやsummaryへsource／token／コード本文／raw例外／worker参照�
 | 段階案 | 次に実装する範囲 | 必須の独立確認 |
 |---|---|---|
 | SC2-A（合成限定実装） | 同ownerの証拠移譲、HeldClosure、strict準備入力と不変集合 | 7発生点、処理中receiptの同一性、completed不変、T_i／U保持、二重移譲・公開data／別rootの拒否、全guard失効。verify／新世代は0。§10参照 |
-| SC2-B | 必要verifyとprefixを引継ぐfake会計 | 論理0／1・物理0〜4、C/G/Pの等号・超過、retryとchunkの二重計上拒否、旧終了前／verify中の起動0。継続エラーとhard失効を区別 |
+| SC2-B（合成限定実装） | 必要verifyとprefixを引継ぐfake会計（§11） | 論理0／1・物理0〜4、C/G/Pの等号・超過、retryとchunkの二重計上拒否、旧終了前／verify中の起動0。継続エラーとhard失効を区別 |
 | SC2-C | HeldClosureの一度の使用、新frame／ready、新cleanup診断slot | 旧世代終了後だけ起動1、未起動は初回1、旧応答・別frame・二重readyを拒否。全pre/post guard・起動後取消でもcleanup責務を保持 |
 | SC2-D | 非実行planの封印と排他的な移譲境界 | 集合追加／欠落・state昇格・U切下げを拒否。summaryからの再準備0。SR-Dへの実接続なしでprivate所有権と固定解放を確認 |
 
@@ -126,8 +126,24 @@ rootの追加診断は集合件数・保持input件数・collection／consistenc
 
 SC2-Aの終了用にdiscardWorkerRecoveryPreparationを追加した。同handleを一度占有し、HeldClosureとhandleをpre-guard前に取り外して参照を破棄する。これは世代移行での証拠使用ではない。元ownerのS／L／O／Uは従来どおりnormal closeまたはterminal discardまで保持する。HeldClosure／handleが残るnormal closeはhard停止とし、握りつぶさない。取消・期限・混入・再入の失敗でも参照を同期破棄し、先行soft／hard・旧cleanup診断とscalar会計を保持する。
 
-[合成試験](../tests/review/synthetic-worker-recovery-preparation.test.ts)117件。7発生点×prepare／固定discardの4 guardの取消を別の位置式で計数し、成功時の4 guard、移譲0／1、世代使用・verify・新世代がすべて0であることを確認する。元consumerとの排他・公開dataの拒否・他owner不変、入力混入／上限／時刻／不正getter、純粋な集合とreasonの保持を確認した。将来のverify／起動／plan消費はまだ存在せず、summaryの公開やSR-D接続も行わない。
+[合成試験](../tests/review/synthetic-worker-recovery-preparation.test.ts)117件（SC2-A初回。draft-0.3で追加したstatus検査を含む現行120件）。7発生点×prepare／固定discardの4 guardの取消を別の位置式で計数し、成功時の4 guard、移譲0／1、世代使用・verify・新世代がすべて0であることを確認する。元consumerとの排他・公開dataの拒否・他owner不変、入力混入／上限／時刻／不正getter、純粋な集合とreasonの保持を確認した。SC2-A自体はverify／起動／plan消費を追加しない。SC2-Bのverify接続は§11へ分離し、summaryの公開やSR-D接続は行わない。
 
 配布物の関数／scope／path混入とI/O／clock／runtime依存を、負の対照付きの梱包監査へ追加する。実装・検証履歴は[SC2-A検証記録](E2E_BEST_PRACTICE_WORKER_RECOVERY_SC2A_2026-11-02.md)参照。実C/G/P writer・予約台帳・実cleanup・work／allocation上界はUnknown。正式発行口閉鎖・全体受付無効・調査保留を維持する。
 
 draft-0.3の変更：§3に、準備入力が実adapterの逐次順序（未完了inputは処理中の1件だけ・そのT_i=U）より広い一般化であること、その順序が未保証であることを明記した。レビューで、処理中以外の未完了inputと非最新の処理中receiptが受理されることを確認したが、WJ-Bの合成ownerに合わせた一般化として維持する判断とした。collection_status／consistencyの不正値拒否の試験も追加した（§10の件数は検証記録参照）。
+
+## 11 SC2-Bの限定実装
+
+基準HEADは`e47bdf8`。同じissuerの`beginWorkerVerify(binding, preparation)`が、SC2-Aの同owner・同handle・保持中HeldClosureを要求し、最初のguard前に一度限りの開始claimを占有する。同じstrict入力snapshotのprefixとprivate verify継続の有無を、[worker専用の純粋ledger](../tests/support/review/synthetic-worker-recovery-verify.ts)へ渡す。元run／session／source／origin／budget／releaseと旧worker factsは毎pre/post guardで従来どおり再照合する。HeldClosureを世代使用せず、旧consumerへの戻し・新frame生成・finishを追加しない。
+
+private verify継続がnullなら論理0・物理0でverifiedとなり、元consistencyをそのまま保持する。継続ありではparent→metadataを固定し、upstream_unavailableだけ各1回のretry待ちイベントを受ける。`workerVerifyAttempt`は元prefixのCが210未満のときだけ1を加え、opaque attemptを発行する。C枠なしならGET=0でunverified／request_budget_exceededを保持する。既存SR-Bと同じC→Gの検査順とし、C枠があってGが既に16MiBならCを増やさずhard停止する。retryは待ちイベントのみでC/G/Pを増やさず、再dispatch時だけCを加える。論理verifyは1、物理は最大4で、実final予約・実待機・予算の補充は行わない。
+
+`workerVerifyChunk`は同pending attemptと一意な非Proxy chunk参照を要求し、safe integerのbyte数だけGへ課金する。同attemptの二重chunkは課金前に拒否する。response4MiB／累積16MiBを超すchunkも先に全量を加え、その値を保持してhard停止する。Pは元8MiB上限のsnapshotから一切増やさない。chunk参照は同attempt内のイベントidentityであり、body bytesや実readerから発行された証拠ではない。
+
+`workerVerifyOutcome`はpending attemptをpre-guard前に取り外し、同じprivate receiptを一度だけsettleする。successはstrictなkind／changed、failureはstrictなkind／type／codeのみ。getter・Proxy・余分な列・非bounded・未知codeを拒否し、raw例外を診断へ残さない。継続対象の9codeと写像は§5のまま。全体取消・deadline_exceeded・受信上限・元run失効はhard停止する。changedはchanged_during_reviewとprovisional、unverifiedはconsistency_unverifiedを保持する。各attempt／chunk／retry／outcomeに同じpre/post guardを置く。post-guard失敗でも実施済みfake課金は消さない。
+
+診断はworker_preparation.verifyに、必要性・論理回数・物理回数・retry数・stage・consistency・固定error／limitations・累積C/G/Pを示す。準備時のcollection／consistencyは元snapshotのまま、verify後のconsistencyはこの子診断で区別する。失敗時はattempt／chunk台帳／HeldClosure／handleを同期破棄し、固定scalar会計・先行soft・最初のhard・旧cleanup診断を保持する。正常discardもledgerを破棄して会計を保持するが、pending／settling／retry_wait中のdiscardは拒否する。保持中HeldClosureをnormal closeで隠すことも拒否する。
+
+[合成試験](../tests/review/synthetic-worker-recovery-verify.test.ts)は実装helperを使わない有限イベント式から期待C/G/P・retryを求める。retryなし成功・最大4試行・枠途中消尽・等号／超過・混入／二重イベント・18箇所のguard取消を確認し、旧SR-BとSC2-Aの試験も維持する。SR-Bのrootやphase factsをworker factsへ偽装して再利用せず、既存phase modelは変更しない。重複するverify意味規則の追随は両系列の試験で確認する。梱包監査に関数／module混入とI/O／時計／worker依存の負の対照を追加した。[SC2-B検証記録](E2E_BEST_PRACTICE_WORKER_RECOVERY_SC2B_2026-11-02.md)参照。
+
+SC2-Cの世代使用／新ready／新cleanup、SC2-Dのplan封印、実canonical writer・final予約・実transport／worker・実選択順序・B-03 compiled保証は未対応。追加work／allocation・全体上界はUnknownで、全体受付を有効化しない。正式発行口閉鎖・調査保留を維持する。
