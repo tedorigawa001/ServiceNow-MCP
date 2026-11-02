@@ -1,7 +1,7 @@
 # RD-B 回復finish期待値封印・集合／時刻比較 詳細設計
 
-Version: br006-recovery-finish-values-rdb-draft-0.1 / Date: 2026-11-02。
-Status: **設計のみ。合成依存限定。正式発行口閉鎖・全体受付無効・Unknown・VM／監視／telemetry調査保留を維持する。**
+Version: br006-recovery-finish-values-rdb-draft-0.2 / Date: 2026-11-02。
+Status: **RD-B01のstrict構造projection・別brand・有限枠まで合成限定実装。RD-B02〜04は未実装。正式発行口閉鎖・全体受付無効・Unknown・VM／監視／telemetry調査保留を維持する。**
 
 基準HEAD: `4653cd2`。[SR-D](BEST_PRACTICE_ABORT_SCOPE_RECOVERY_FINISH_SRD_DESIGN.md)§2〜5・8のRD-Bと、[RA-03-A／B](BEST_PRACTICE_ABORT_SCOPE_FINISH_ISSUE_ACCEPT_DESIGN.md)§10〜11の間の差分。実装・証拠発行・fake finish dispatch・実接続・実通信・設定変更・Pushの承認ではない。
 
@@ -19,7 +19,7 @@ Status: **設計のみ。合成依存限定。正式発行口閉鎖・全体受�
 
 ## 2 型と供給元を分ける
 
-下記は内部役割案であり、現行export／APIではない。
+下記は内部役割の全体案。RD-B01では§11のstructure-only型とprojectionだけを追加し、sealed期待値・実比較結果・owner接続は追加しない。
 
 | 内部役割 | 唯一の供給元・内容 | 消費／出力 |
 | --- | --- | --- |
@@ -45,7 +45,7 @@ acceptedTerminationは固定終端側に残し、sink／resourceを複製しな�
 
 ## 4 期待値の固定列
 
-純粋契約のkind／modeはstrict固定値、余分／不足key・未知variantは拒否する。次のgroupごとに明示した項目だけを持ち、sealed側の不透明参照はcallerのobjectから再生成しない。最終の型名・exact keysは最初の値型実装で固定する。
+純粋契約のkindはstrict固定値、可変mode分岐は設けず、余分／不足key・未知variantを拒否する。次のgroupごとに明示した項目だけを持ち、sealed側の不透明参照はcallerのobjectから再生成しない。RD-B01のexact keysは§11に固定した。
 
 - binding：同owner／plan／source／window／release／frame／accepted originのprivate参照。純粋値比較だけでは由来を保証しない。
 - time：元S・実効全L・O・Uと、receiptごとのT_i。remainingからLを作らず、Eは期待値へ事前設定しない。
@@ -116,7 +116,7 @@ full worker応答をこの局所projectionへそのままparseしてfull schema�
 
 | 分割案 | 実装範囲・受入条件 |
 | --- | --- |
-| RD-B01 | 別brandのstrict期待値／応答projection・非実行比較結果型。純粋bounded値層のみ。不足列・未知state・余分key・総量超過を拒否。本文保証Unknownを明示 |
+| RD-B01（合成実装済み） | 別brandのstrict期待値／応答projectionと、発行関数のない比較結果型。structure-onlyの純粋bounded値層。不足列・未知state・余分key・総量超過を拒否。本文／意味比較Unknownを明示 |
 | RD-B02 | 小さなscalar predicateの最小抽出と通常WJ-C接続。全旧試験と未完了receipt拒否を維持。独立field差替え・集合／E oracleで新旧の責務を分離 |
 | RD-B03 | 回復manifest／T_i・U・E・header比較の純粋接続。state遷移表と0.2／0.3・operator境界の独立oracle。本文不足でfull検証／候補に昇格しない |
 | RD-B04 | 同acceptedからの一度限り封印・同owner／frameへのbindingとRA-03-Bのsealed破棄連結。両guard・再入・混入・失効・競合を合成検査。job送信はしない |
@@ -135,4 +135,31 @@ source／cleanup開始後のseal、summary／copy／別root、二重seal、seal�
 - 実verify・実session／ReleasePermit／payload／workerの正式binding、実clock／OS終了・外側監督との連結は対象外。
 - 追加work／allocationモデル・本番cap・全体受付は未承認／Unknown。設定日時長の新capやruntime規則を追加しない。
 
-本工程はMDだけを作成し、実装・合成証拠／候補発行・実機操作・設定変更・Pushを行わない。後続実装は改めて指示を受けて進める。
+draft-0.1はMDだけを作成した。後続RD-B01の合成実装は§11。通常WJ-C共有・意味比較・封印はRD-B02〜04として改めて指示を受けて進める。合成証拠／候補発行・実接続・実機操作・設定変更・Pushは行わない。
+
+## 11 RD-B01の実装契約
+
+[純粋値層](../tests/support/review/synthetic-recovery-finish-values.ts)は`projectRecoveryFinishExpectation(raw)`と`projectRecoveryFinishReply(raw)`の二つだけをprojection入口にする。比較・seal・owner／claim登録・ready／job／candidateの発行口はない。既存RA-01・WJ-C・回復kernelは変更しない。
+
+| strict top-level | exact keys |
+| --- | --- |
+| expectation（kind=synthetic_recovery_finish_expectation_v1） | kind, binding, time, header, selected, inputs, outcomes, run_status, consistency, content_evidence |
+| reply（kind=synthetic_recovery_finish_reply_v1） | kind, header, ended_at, run_status, consistency, assets, content_evidence |
+
+bindingはowner／plan／run／session／source／key／origin／budget／release／window／accepted_originのopaque参照と、supervisor／worker／generationを持つstrict frame container。timeはstarted_at／deadline_ms（1〜60000）／observed_at／upper_utc。期待selected／inputs／outcomesは1〜100件、reply assetsは0〜100件とし、空replyと期待集合の不一致はRD-B03へ残す。
+
+inputはreceipt／update_xml_sys_id／retrieved_at／state（completed・not_processed）／expected_context（明示nullまたは既存5列context）。reviewed期待outcomeはstate／ID／receipt／accepted_outcome、omittedはstate／ID／reason=response_limit／reviewed_origin（明示nullまたはreceipt／accepted_outcome）。他stateは既存asset variantを再利用し、not_processedのreasonはdeadline_exceededに限定する。
+
+reply reviewed assetはstate／ID／applicable_rule_idsと、resultの局所contextだけ。result exact keysはreviewed_at, target, instance_binding, instance_release, coverage, limitations。targetはupdate_set_id／update_xml_sys_id／target_version=update_set_payload／retrieved_at／record_updated_at、coverageはrequested_rule_idsのみ。他stateは既存非reviewed variant、omittedにはreviewed_originを受けない。full worker resultのfindings／code等を渡せば余分keyとして拒否し、黙って削除しない。将来の固定adapterが局所viewへ変換する契約であり、full JSON検証ではない。
+
+headerはRA-01相当の0.2／0.3 strict列、matched release・complete／failed collection・analysis_complete=falseに限定する。0.3ではselectionと追加coverage列を必須にする。run_statusはpartial／failed、consistencyは既存3variant。構造化releaseやrule／reasonの型は既存schemaを再利用し、新しい本番規則や設定日時長capを足さない。
+
+content_evidenceはoriginal_body=unknown／full_schema=unverified／wire=unverifiedのstrict固定3項目。project結果はauthority:none／validation_scope:structure_onlyと別々のprivate Symbol brandを持つ。unverifiedはbinding_provenance, context_and_manifest, time_consistency, original_body, full_schema, wireの固定6項目で、stateに応じて勝手に消さない。usageはnodes／character_unitsだけ。
+
+`SyntheticRecoveryFinishValueCheck`はRD-B03向けの別brand型だけ定義し、constructor／factoryは実装しない。projectionにはmatches・成功候補・実行権を付けない。重複集合・時刻逆行・header不整合を型として読めても意味比較済みとはならない。後続consumerがstructure-onlyを比較成功として受理することを禁止する。
+
+collectorは入力全体で深さ8・配列100・object項目30・訪問10,000・文字費262144を共有する。文字列とobject keyはUTF-16 length×3を課金し、配列index keyとlengthは文字費に数えない。opaque参照は1 nodeとして型／非Proxyだけを検査し、内部を読まず、freezeもしない。frame等のdata containerはcopyして深くfreezeする。node／文字費にZod内部copy・出力metadata・opaque graphの保持メモリ・ownKeys等のnative処理費は含めず、実メモリ／work／wireの上界はUnknownのまま。
+
+不正shapeと局所limit超過は型付き`RecoveryFinishValueError`で区別するが、message／codeは常にinternal_review_error。raw値・Zod issue・例外causeを返さない。二入力共有予算を使う実比較はまだ存在しないため、その保証はRD-B03で接続・検証する。
+
+[RD-B01合成検証記録](E2E_BEST_PRACTICE_RECOVERY_FINISH_VALUES_RDB01_2026-11-02.md)参照。RD-B02のscalar共有・RD-B03の集合／時刻／context比較・RD-B04の同accepted封印とRA-03-B破棄接続は未実装。

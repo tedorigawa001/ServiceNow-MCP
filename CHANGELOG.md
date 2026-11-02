@@ -16,6 +16,8 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 ### Changed
 
+- RD-B01 adds package-excluded, separately branded structure-only recovery finish expectation/reply projections with strict variants and shared per-projection depth, array, key, node and character-unit limits. Opaque references are preserved without traversal or authority; original-body, origin, semantic time/set matching, full-schema and wire guarantees remain explicitly unverified. The comparison-result type has no constructor yet. No owner, seal, job, candidate or runtime connection is enabled.
+
 - RA-03-B adds package-excluded fixed discard for synthetic accepted finish contexts. The same-owner accepted slot and private source/new-frame completion receipts are spent once; only both healthy fixed terminal paths permit discard followed by normal close. Missing/mixed confirmations, replay, reentry and guard stops fail without restoring authority, while prior diagnostics remain available. No finish candidate, production capability, real connection or whole-run admission is enabled.
 
 - RA-03-A adds package-excluded synthetic acceptance of the same recovery handoff, issued context and one-shot route claim in one protected section. Consumed slots are never restored; bounded revalidation and comparison complete before a separately branded non-executable accepted handle is published. Live invalidation drops expectations while preserving terminal-only ownership, which blocks normal close until the separate RA-03-B discard path exists. No production issuance, finish execution, runtime connection or whole-run admission is enabled.

@@ -139,6 +139,16 @@ for(const f of pack.files.filter(f=>f.path.startsWith('dist/')&&/\.(?:js|ts|map)
 for(const leak of ['globalThis.setTimeout(()=>{},0);','Date.now();','new Date();',"import('node:fs');",'new Worker("x");',"export * from 'node:fs';","import {BoundedReadSession} from '../../../src/servicenow/bounded-read.js';const zzRoot=BoundedReadSession;"])
   assert.throws(()=>auditSyntheticIssuer(bindingText+'\n'+leak,bindingImports),assert.AssertionError,'RB-D audit missed seeded leak: '+leak);
 console.log('RB-D private plan binding projection excluded; fixed pure-value graph + seeded runtime/I/O/clock/worker/type/scope leak controls PASS');
+const recoveryValuesText=readFileSync(join(root,'tests/support/review/synthetic-recovery-finish-values.ts'),'utf8'),recoveryValueImports=['node:util','zod','../../../src/review/aggregate-schema.js','../../../src/review/result-schema-v2.js'];
+auditSyntheticIssuer(recoveryValuesText,recoveryValueImports);
+const recoveryValueMarkers=['synthetic-recovery-finish-values','projectRecoveryFinishExpectation','projectRecoveryFinishReply','SyntheticRecoveryFinishExpectationValues','SyntheticRecoveryFinishReplyValues','SyntheticRecoveryFinishValueCheck','synthetic_recovery_finish_expectation_values','synthetic_recovery_finish_reply_values','synthetic_recovery_finish_value_check','synthetic_recovery_finish_expectation_v1','synthetic_recovery_finish_reply_v1'];
+const noRecoveryFinishValues=text=>assert(!recoveryValueMarkers.some(x=>text.includes(x)),'RD-B01 pure recovery values leaked into runtime');
+for(const marker of recoveryValueMarkers)assert.throws(()=>noRecoveryFinishValues(marker));
+assert(!pack.files.some(f=>f.path.includes('synthetic-recovery-finish-values')));
+for(const f of pack.files.filter(f=>f.path.startsWith('dist/')&&/\.(?:js|ts|map)$/.test(f.path)))noRecoveryFinishValues(readFileSync(join(root,f.path),'utf8'));
+for(const leak of ['globalThis.setTimeout(()=>{},0);','Date.now();','new Date();',"import('node:fs');",'new Worker("x");',"export * from 'node:fs';","import {BoundedReadSession} from '../../../src/servicenow/bounded-read.js';const zzRoot=BoundedReadSession;"])
+  assert.throws(()=>auditSyntheticIssuer(recoveryValuesText+'\n'+leak,recoveryValueImports),assert.AssertionError,'RD-B01 audit missed seeded leak: '+leak);
+console.log('RD-B01 structure-only expectation/reply values excluded; fixed pure imports + seeded runtime/I/O/clock/worker/type/scope leak controls PASS');
 for(const suffix of ['.js','.js.map','.d.ts','.d.ts.map'])assert(pack.files.some(f=>f.path==='dist/servicenow/review-kernel/release-observation'+suffix),'required one-shot UTC value helper missing: '+suffix);
 const sessionDeclarations=readFileSync(join(root,'dist/servicenow/bounded-read.d.ts'),'utf8');
 const sessionAst=parse(readFileSync(join(root,'dist/servicenow/bounded-read.js'),'utf8'),{ecmaVersion:'latest',sourceType:'module'});
