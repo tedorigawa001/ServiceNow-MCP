@@ -2,7 +2,7 @@
 
 Date: 2026-11-02 / Status: 合成依存限定・証拠発行なし。
 
-対象：[RD-A draft-0.2](BEST_PRACTICE_ABORT_SCOPE_FINISH_CONTEXT_RDA_DESIGN.md)§9。`tests/support/review/synthetic-finish-context-values.ts`と専用試験、梱包負の対照だけを追加した。runtime source・MCP・設定は変更していない。
+対象：[RD-A draft-0.3](BEST_PRACTICE_ABORT_SCOPE_FINISH_CONTEXT_RDA_DESIGN.md)§9。`tests/support/review/synthetic-finish-context-values.ts`と専用試験、梱包負の対照だけを追加した。runtime source・MCP・設定は変更していない。
 
 ## 実装・保証範囲
 
@@ -33,6 +33,37 @@ Date: 2026-11-02 / Status: 合成依存限定・証拠発行なし。
 3. node超過fixtureが文字費も超えていたため、短い一意文字列に変更。独立oracleでnode超過だけを隔離した。
 4. prototype／疎配列／余剰array keyの3件は当初limit分類だった。shape分類へ分離して再検証した。公開失敗codeは変えない。
 5. readonly projectionへの型付けでprivate brand欠落を検出。value-only Symbolを明示し、証拠brandは発行しない構造にした。最終型検査は成功。
+
+## レビュー修正（2026-11-02）
+
+上記の186件／11,446件と、ESLintを対象3ファイルだけに対して実行した結果は、修正前の記録として残す。
+
+**collection規則の強化（試験helperの実装修正）**：修正前は`selected <= max_records`かつ`selected <= metadata_seen`だけを検査し、既存`aggregate-schema.ts`のmetadata予算規則より緩かった。`metadata_seen=5, selected=1`のように実adapterが作らないheaderも固定期待値として受理した。既存集約schemaと同じ`metadata_seen <= max_records+1`、`selected = min(metadata_seen, max_records)`、`truncated = (metadata_seen > max_records)`へ揃え、`selected`が選択集合の件数に一致することも維持した。旧比較表の`truncated=true`行はこの規則で不正になるため、`max_records=1`への差替えと、整合したtruncated header（`max_records=1, metadata_seen=2`）の比較試験へ置き換えた。
+
+**未保護の判定**：次の判定は、外す変異でも186件が通っていた。各判定を個別に検出する試験を追加した。
+
+| 判定 | 追加試験 |
+|---|---|
+| S≤O、U≤S+L、header開始＝S | 各1件 |
+| collection.selectedと選択件数、`metadata_seen <= max+1`、`selected = min(...)`、`truncated`整合 | 各1件 |
+| 要求ruleの重複、limitationsの重複、ruleset導出、skipped_rules空 | 各1件 |
+| 期待contextのrelease_limitationsがheaderの部分集合 | 1件 |
+| 受理結果参照の重複（reviewed同士、omitted originとの再利用） | 各1件（＋正常対照1件） |
+| result_omittedに対応するcompleted inputの要求 | 1件 |
+| 循環をshape、配列101件をlimitへ分類 | 1件 |
+
+各変異では対応する追加試験だけが失敗し、復元後に`cmp`一致を確認した。release conflict／noneの分岐、identity数の照合は、外しても他の判定で同じく拒否される等価変異として扱う。
+
+修正後の結果：
+
+| 検証 | 結果 |
+|---|---|
+| RA-01専用合成試験 | 204件成功 |
+| ESLint | `npm run lint`（repo全体）exit 0 |
+| build・梱包 | `npm run build`成功、offline梱包441ファイル成功 |
+| 全体合成 | maxWorkers=3、246ファイル／11,464件成功、失敗0・pending 0、exit 0。JSON内の開始〜最終試験終了は約34.5秒 |
+
+RD-A設計はdraft-0.3へ更新した。SR-D設計（draft-0.3）を指す3文書の版数リンクも現行版へ直した。
 
 ## 残課題・非実施
 

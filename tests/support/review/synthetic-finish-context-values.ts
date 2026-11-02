@@ -73,7 +73,10 @@ function equalData(a:unknown,b:unknown,path:string[]=[]):boolean{
 }
 function semantics(p:Values){
   const c=p.run_context,h=p.header,S=Date.parse(c.started_at),O=Date.parse(c.observed_at),U=Date.parse(c.upper_utc);
-  if(S>O||O>U||U>S+c.deadline_ms||h.started_at!==c.started_at||h.collection.selected!==p.selected.length||p.selected.length>h.limits.max_records||p.selected.length>h.collection.metadata_seen)bad('mismatch');
+  if(S>O||O>U||U>S+c.deadline_ms||h.started_at!==c.started_at||h.collection.selected!==p.selected.length)bad('mismatch');
+  // Same metadata budget/accounting refinement as the aggregate schema.
+  const seen=h.collection.metadata_seen,max=h.limits.max_records;
+  if(seen>max+1)bad('mismatch');if(h.collection.selected!==Math.min(seen,max))bad('mismatch');if(h.collection.truncated!==(seen>max))bad('mismatch');
   unique(p.selected);unique(h.coverage.requested_rule_ids);unique(h.limitations);unique(h.coverage.skipped_rules.map(x=>x.rule_id));
   if(h.versions.ruleset!==bp5RulesetFor(h.coverage.requested_rule_ids)||releaseMatchForEvidence(h.instance_release)!=='matched'||h.coverage.skipped_rules.length)bad('mismatch');
   const e=h.instance_release;

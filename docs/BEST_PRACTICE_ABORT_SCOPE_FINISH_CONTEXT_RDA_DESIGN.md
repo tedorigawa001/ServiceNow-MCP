@@ -1,6 +1,6 @@
 # RD-A FinishContextEvidenceの詳細型・private発行契約
 
-Version: br006-finish-context-rda-draft-0.2 / Date: 2026-11-02。
+Version: br006-finish-context-rda-draft-0.3 / Date: 2026-11-02。
 Status: **RA-01の値型・bounded projection／比較だけ合成依存で実装。RA-02／03のprivate発行・受理とlive証拠は未実装。正式発行口閉鎖・Unknown・全体受付無効・VM／監視／telemetry調査保留を維持する。**
 
 基準HEAD: `a62c897`。[SR-D接続設計](BEST_PRACTICE_ABORT_SCOPE_RECOVERY_FINISH_SRD_DESIGN.md)§1〜3・9のRD-Aを具体化する。[SC2-D](BEST_PRACTICE_ABORT_SCOPE_WORKER_RECOVERY_CONTINUATION_DESIGN.md)と[通常WJ-C](BEST_PRACTICE_ABORT_SCOPE_WORKER_TIME_BINDING_DESIGN.md)の既存契約は維持する。コード・公開JSON／MCP・設定を変更する指示ではなく、実接続・実通信・本番cap／Permit投入の承認ではない。
@@ -84,7 +84,7 @@ run_contextのUTCは元契約のms精度24文字、Lはsafe integerで1〜60000�
 | errors | schema別の既存strict stage／code／任意target ID、最大100件。既存の打切り／error_details_truncated規則を維持し、回復由来の必要理由を失わせない |
 | selection（0.3だけ） | 既存filter_version・requested_asset_types・action_scope・order・null excluded_countsをそのまま検査。要求rule／同windowと一致させる |
 
-collection.selectedはlimits.max_records以下かつmetadata_seen以下とし、等号を許す。poc_only=true／code_return_mode=noneは固定継続が作る定数で、headerの可変入力にはしない。通常WJ-Cより広い文字列や公開aggregateで合法な値でも、今回の局所subset／総量枠を超えれば対応範囲外として停止し、全schema対応を主張しない。
+collection.selectedは選択集合の件数に一致し、既存集約schemaのmetadata予算規則（`metadata_seen <= max_records+1`、`selected = min(metadata_seen, max_records)`、`truncated = (metadata_seen > max_records)`）をそのまま満たす。実adapterが作らない組合せを固定期待値として受けない。poc_only=true／code_return_mode=noneは固定継続が作る定数で、headerの可変入力にはしない。通常WJ-Cより広い文字列や公開aggregateで合法な値でも、今回の局所subset／総量枠を超えれば対応範囲外として停止し、全schema対応を主張しない。
 
 値schemaと意味検査を分ける。構造化releaseのbind・configのS時点有効性と`expires_at > S+60000`、rule／versions、selectionと要求asset typeを検査する。release観測UTCと将来のEの比較はRD-Bに残すが、reviewed期待値については元T_i時点の既存release検査が必要。config日時の新しい長さpolicyは承認せず、既存ISO検査と局所総量上限で停止する。
 
@@ -210,4 +210,6 @@ projection内の通常containerはコピーしてfreezeするが、元route.fram
 
 `Reflect.ownKeys`等の列挙自体の確保、exact layout／allocation・全体work上界は保証しない。文字量／nodeの局所枠を全体受付の根拠に昇格しない。新しい日時長policyや実Permitは導入しない。
 
-[RA-01検証記録](E2E_BEST_PRACTICE_FINISH_CONTEXT_RA01_2026-11-02.md)：新規186件・全体11,446件成功、型検査・build・lint・非同梱検査を確認。RA-02／03と実接続の成功を意味しない。正式発行口閉鎖・Unknown・全体受付無効・調査保留を維持する。
+[RA-01検証記録](E2E_BEST_PRACTICE_FINISH_CONTEXT_RA01_2026-11-02.md)：新規186件・全体11,446件成功（レビュー修正後は204件・11,464件）、型検査・build・lint・非同梱検査を確認。RA-02／03と実接続の成功を意味しない。正式発行口閉鎖・Unknown・全体受付無効・調査保留を維持する。
+
+draft-0.2のレビュー修正：RA-01の値層で、S≤O・U≤S+L・header開始とS・collection件数・要求rule／limitationsの重複・ruleset導出・skipped_rules空・期待limitationsの部分集合・受理結果参照の再利用・result_omittedのcompleted input要求の各判定を外す変異でも186件が通っていた。また§3.1のcollection規則が既存集約schemaより緩く、実adapterが作らない`metadata_seen`／`selected`／`truncated`の組合せを受理した。collection規則を既存集約schemaのmetadata予算規則に揃え（試験helperの実装修正）、各判定を個別に検出する試験と、循環／配列上限の失敗分類の試験を追加した（186件→204件）。SR-D設計への版数リンクも現行版へ直した。

@@ -141,7 +141,7 @@ function changed(raw:unknown,path:string,value:unknown):unknown{
   target[key]=rest.length?changed((raw as Record<string,unknown>)[key],rest.join('.'),value):value;return copy;
 }
 it.each([
-  ['header.target.update_set_sys_id',id(99)],['header.principal.auth_mode','service-account'],['header.collection.status','failed'],['header.collection.truncated',true],['run_context.deadline_ms',50000],['header.instance_release.observed_at',S],['header.errors',[{stage:'analysis',code:'deadline_exceeded'}]],['header.limitations',['release_visible_nodes_only','extra']],
+  ['header.target.update_set_sys_id',id(99)],['header.principal.auth_mode','service-account'],['header.collection.status','failed'],['header.limits.max_records',1],['run_context.deadline_ms',50000],['header.instance_release.observed_at',S],['header.errors',[{stage:'analysis',code:'deadline_exceeded'}]],['header.limitations',['release_visible_nodes_only','extra']],
 ] as const)('compares valid nonidentity field %s against the pinned value',(path,value)=>{
   const expected=fixture(),raw=changed(expected,path,value);projectSyntheticFinishValues(raw);rejects(()=>compareSyntheticFinishValues(raw,expected),'mismatch');
 });
@@ -152,4 +152,45 @@ it('normalizes rule/limitation sets but never canonicalizes a changed selected o
   const raw=fixture();raw.header.coverage.requested_rule_ids=['AU-BR-001','AU-BR-002'];raw.header.limitations.push('extra');
   const other=changed(changed(raw,'header.coverage.requested_rule_ids',['AU-BR-002','AU-BR-001']),'header.limitations',[...raw.header.limitations].reverse());expect(compareSyntheticFinishValues(raw,other).matches).toBe(true);
   const manyRows=many(2),reversed=changed(changed(manyRows,'selected',[...manyRows.selected].reverse()),'outcomes',[...manyRows.outcomes].reverse());projectSyntheticFinishValues(reversed);rejects(()=>compareSyntheticFinishValues(reversed,manyRows),'mismatch');
+});
+it('compares a consistent truncated collection against the pinned untruncated value',()=>{
+  const expected=fixture(),raw=changed(changed(changed(expected,'header.limits.max_records',1),'header.collection.metadata_seen',2),'header.collection.truncated',true);
+  projectSyntheticFinishValues(raw);rejects(()=>compareSyntheticFinishValues(raw,expected),'mismatch');
+});
+// Header/run semantics: each case isolates one check in semantics().
+it.each([
+  ['O before S',(r:ReturnType<typeof fixture>)=>{r.run_context.observed_at='2026-11-01T23:59:59.999Z';}],
+  ['U beyond S+L',(r:ReturnType<typeof fixture>)=>{r.run_context.deadline_ms=1000;}],
+  ['header start differs from run S',(r:ReturnType<typeof fixture>)=>{r.header.started_at=O;}],
+  ['collection.selected differs from the selected set',(r:ReturnType<typeof fixture>)=>{r.header.collection.selected=2;r.header.collection.metadata_seen=2;}],
+  ['metadata_seen above max_records+1',(r:ReturnType<typeof fixture>)=>{r.header.limits.max_records=1;r.header.collection.metadata_seen=3;r.header.collection.truncated=true;}],
+  ['selected not min(metadata_seen,max_records)',(r:ReturnType<typeof fixture>)=>{r.header.collection.metadata_seen=5;}],
+  ['truncated inconsistent with metadata_seen',(r:ReturnType<typeof fixture>)=>{r.header.collection.truncated=true;}],
+  ['duplicate requested rule',(r:ReturnType<typeof fixture>)=>{r.header.coverage.requested_rule_ids=['AU-BR-001','AU-BR-001'];}],
+  ['duplicate limitation',(r:ReturnType<typeof fixture>)=>{r.header.limitations=['release_visible_nodes_only','release_visible_nodes_only'];}],
+  ['ruleset not derived from rules',(r:ReturnType<typeof fixture>)=>{r.header.versions.ruleset='bp3-0.5';}],
+  ['nonempty skipped rules',(r:ReturnType<typeof fixture>)=>{r.header.coverage.skipped_rules=[{rule_id:'AU-BR-001',reason:'release_mismatch'}] as never[];}],
+] as const)('rejects header/run semantic mismatch: %s',(_name,change)=>{const raw=fixture();change(raw);rejects(()=>projectSyntheticFinishValues(raw),'mismatch');});
+it('rejects reviewed expected limitations outside the header set',()=>{
+  const raw=reviewed();write(raw,'inputs.0.expected_context.release_limitations',['release_visible_nodes_only','extra']);rejects(()=>projectSyntheticFinishValues(raw),'mismatch');
+});
+function twoReviewed(){
+  const raw=reviewed(),receipt={};raw.selected.push(id(3));raw.header.collection.selected=raw.header.collection.metadata_seen=3;
+  const ex=(raw.inputs[0] as {expected_context:unknown}).expected_context;
+  raw.inputs.splice(1,0,{receipt,update_xml_sys_id:id(3),retrieved_at:O,state:'completed',expected_context:ex} as never);
+  raw.outcomes.push({state:'reviewed',update_xml_sys_id:id(3),receipt,accepted_outcome:{}} as never);return raw;
+}
+it('accepts two reviewed rows with distinct accepted outcomes (positive control)',()=>{expect(projectSyntheticFinishValues(twoReviewed()).value.outcomes).toHaveLength(3);});
+it('rejects one accepted outcome reused by two reviewed rows',()=>{
+  const raw=twoReviewed();write(raw,'outcomes.2.accepted_outcome',(raw.outcomes[1] as {accepted_outcome:object}).accepted_outcome);rejects(()=>projectSyntheticFinishValues(raw),'mismatch');
+});
+it('rejects an omitted reviewed origin reusing another row accepted outcome',()=>{
+  const raw=twoReviewed(),shared=(raw.outcomes[1] as {accepted_outcome:object}).accepted_outcome;
+  write(raw,'outcomes.2',{state:'result_omitted',update_xml_sys_id:id(3),reason:'response_limit',reviewed_origin:{receipt:(raw.inputs[1] as {receipt:object}).receipt,accepted_outcome:shared}});rejects(()=>projectSyntheticFinishValues(raw),'mismatch');
+});
+it('rejects a result_omitted row without a completed input',()=>{
+  const raw=reviewed();raw.inputs.shift();write(raw,'outcomes.1',{state:'result_omitted',update_xml_sys_id:id(2),reason:'response_limit',reviewed_origin:null});rejects(()=>projectSyntheticFinishValues(raw),'mismatch');
+});
+it('classifies a cycle as shape and an oversized array as limit',()=>{
+  const raw=fixture();write(raw,'header.extra',raw);rejects(()=>projectSyntheticFinishValues(raw),'shape');rejects(()=>projectSyntheticFinishValues(many(101)),'limit');
 });
