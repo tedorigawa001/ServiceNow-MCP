@@ -85,11 +85,12 @@ it.each(states.flatMap(from=>states.map(to=>({from,to}))))('state oracle: $from 
     if(from==='not_processed')set(a,'inputs.0.state','not_processed');
   }
   set(b,'assets.0',to==='reviewed'?reviewedReply:simple(to));b.header.limitations.push('response_truncated');
+  if(from==='reviewed'&&to==='result_omitted')(b.header.errors as unknown[]).push({stage:'output',code:'response_limit'});
   const allowed=from===to||from==='reviewed'&&to==='result_omitted';
   if(allowed)expect(compareRecoveryFinishValues(a,b).matches).toBe(true);else rejects(a,b);
 });
 it('requires response_truncated only for a newly omitted reviewed result and never fabricates T_i for unfetched rows',()=>{
-  const {a,b}=withReviewed();set(b,'assets.0',simple('result_omitted'));rejects(a,b);b.header.limitations.push('response_truncated');expect(compareRecoveryFinishValues(a,b).matches).toBe(true);
+  const {a,b}=withReviewed();set(b,'assets.0',simple('result_omitted'));rejects(a,b);b.header.limitations.push('response_truncated');(b.header.errors as unknown[]).push({stage:'output',code:'response_limit'});expect(compareRecoveryFinishValues(a,b).matches).toBe(true);
   a.selected.push(id(3));a.outcomes.push({state:'not_processed',update_xml_sys_id:id(3),reason:'deadline_exceeded'});b.assets.push({state:'not_processed',update_xml_sys_id:id(3),reason:'deadline_exceeded'});
   a.header.collection.metadata_seen=b.header.collection.metadata_seen=3;a.header.collection.selected=b.header.collection.selected=3;
   expect(compareRecoveryFinishValues(a,b).matches).toBe(true);expect(a.inputs).toHaveLength(2);
@@ -228,3 +229,21 @@ it('does not mutate, freeze opaque identities or turn repeated pure comparisons 
   const {a,b}=withReviewed(),before=JSON.stringify([a,b]);compareRecoveryFinishValues(a,b);compareRecoveryFinishValues(a,b);
   expect(JSON.stringify([a,b])).toBe(before);expect(Object.isFrozen(a.binding.owner)).toBe(false);
 });
+// Finalize appends exactly one output/response_limit error when it first adds response_truncated (aggregate-finalize.ts omit()).
+function omitted(){const {a,b}=withReviewed();set(b,'assets.0',simple('result_omitted'));b.header.limitations.push('response_truncated');return {a,b};}
+it('requires the finalize omission error rather than accepting a limitation-only omission',()=>{const {a,b}=omitted();rejects(a,b);});
+it('rejects an unrelated appended error even with a valid omission',()=>{const {a,b}=omitted();(b.header.errors as unknown[]).push({stage:'output',code:'response_limit'},{stage:'analysis',code:'deadline_exceeded'});rejects(a,b);});
+it('rejects an omission error without any newly omitted reviewed result',()=>{const {a,b}=withReviewed();(b.header.errors as unknown[]).push({stage:'output',code:'response_limit'});rejects(a,b);});
+it('does not expect a second omission error when response_truncated was already present',()=>{
+  const {a,b}=omitted();a.header.limitations.push('response_truncated');expect(compareRecoveryFinishValues(a,b).matches).toBe(true);(b.header.errors as unknown[]).push({stage:'output',code:'response_limit'});rejects(a,b);
+});
+it('marks error truncation instead of appending once the expected errors are full',()=>{
+  const {a,b}=omitted(),full=Array.from({length:100},()=>({stage:'analysis',code:'deadline_exceeded'}));set(a,'header.errors',full);set(b,'header.errors',full.map(x=>({...x})));
+  rejects(a,b);b.header.limitations.push('error_details_truncated');expect(compareRecoveryFinishValues(a,b).matches).toBe(true);
+});
+it('rejects a same-length reply whose duplicate asset hides a missing expected id',()=>{
+  const {a,b}=pair();a.selected.push(id(3));a.header.collection.selected=a.header.collection.metadata_seen=2;b.header.collection.selected=b.header.collection.metadata_seen=2;
+  a.outcomes.push({state:'not_processed',update_xml_sys_id:id(3),reason:'deadline_exceeded'});b.assets.push({...(b.assets[0] as object)} as never);rejects(a,b);
+});
+it('rejects a reply that drops an expected non-release limitation',()=>{const {a,b}=pair();a.header.limitations.push('soft_deadline_reached');rejects(a,b);b.header.limitations.push('soft_deadline_reached');expect(compareRecoveryFinishValues(a,b).matches).toBe(true);});
+it('rejects reply coverage that reports skipped rules',()=>{const {a,b}=pair();set(b,'header.coverage.skipped_rules',[{rule_id:'AU-BR-001',reason:'release_mismatch'}]);rejects(a,b);});

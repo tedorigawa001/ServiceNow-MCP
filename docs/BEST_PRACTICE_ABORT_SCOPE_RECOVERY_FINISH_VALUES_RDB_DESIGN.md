@@ -1,6 +1,6 @@
 # RD-B 回復finish期待値封印・集合／時刻比較 詳細設計
 
-Version: br006-recovery-finish-values-rdb-draft-0.4 / Date: 2026-11-02。
+Version: br006-recovery-finish-values-rdb-draft-0.5 / Date: 2026-11-02。
 Status: **RD-B01〜03のstrict構造projection・最小scalar共有・回復用局所値比較まで合成限定実装。RD-B04の同accepted封印・owner接続は未実装。正式発行口閉鎖・全体受付無効・Unknown・VM／監視／telemetry調査保留を維持する。**
 
 基準HEAD: `4653cd2`。[SR-D](BEST_PRACTICE_ABORT_SCOPE_RECOVERY_FINISH_SRD_DESIGN.md)§2〜5・8のRD-Bと、[RA-03-A／B](BEST_PRACTICE_ABORT_SCOPE_FINISH_ISSUE_ACCEPT_DESIGN.md)§10〜11の間の差分。実装・証拠発行・fake finish dispatch・実接続・実通信・設定変更・Pushの承認ではない。
@@ -186,8 +186,10 @@ selectedは重複なしの昇順、期待outcomeは同じ順で各ID一度。入
 
 reviewedのtarget／T_i／release／rule／必要limitationsを比較する。reviewed→result_omittedだけはreason=response_limitと応答response_truncatedを要求する。元omittedからreviewedへの復帰や、他state・reason・asset_typeの置換は不可。未取得not_processedにはinputや時刻を補わない。元omittedのreviewed_origin=nullはUnknownを保持し、本文証拠にしない。
 
-headerのtarget・versions・開始UTC・principal・collection・limits・errors・0.3 selectionは固定一致。requested ruleは重複を拒否して順序差だけ許し、coverageの他列は固定。必要limitationsを削除せず、応答の追加警告は許す。元run_status／consistencyも固定し、collection failedならfailed、その他はpartialを要求する。ruleset導出、release matched、skipped_rules空、0.3の対象種別／inventory制限／candidate_filter_violationと削除行の制限を検査する。
+headerのtarget・versions・開始UTC・principal・collection・limits・0.3 selectionは固定一致。errorsは期待値の全件を同順の先頭に保ち、追加は既存finalizeのomission分だけを許す：期待limitationsにresponse_truncatedがなく、期待reviewedが応答でresult_omittedになった場合に限り、期待errorsが100件未満なら`{stage:output, code:response_limit}`を1件だけ末尾に許し、100件ならerror_details_truncatedのlimitationを要求する。それ以外のerror追加・削除・並べ替えは拒否する。requested ruleは重複を拒否して順序差だけ許し、coverageの他列は固定。必要limitationsを削除せず、応答の追加警告は許す。元run_status／consistencyも固定し、collection failedならfailed、その他はpartialを要求する。ruleset導出、release matched、skipped_rules空、0.3の対象種別／inventory制限／candidate_filter_violationと削除行の制限を検査する。
 
 **停止境界の明確化：** 初回metadata collection failedは既存aggregateと同じく件数0・truncated=false・consistency=unverifiedが必要だが、本段階の回復契約は非空selected／active inputを必須にする。この組合せを矛盾なく供給できないため、failed初回collectionの回復比較は拒否し、ゼロ件やreceiptを合成して救済しない。構造projectionがfailedを読めることと、意味比較が受理することを区別する。RA-01や通常WJ-Cの挙動は変更しない。
 
 [RD-B03検証記録](E2E_BEST_PRACTICE_RECOVERY_FINISH_COMPARE_RDB03_2026-11-02.md)参照。二入力合算のnode／文字費は確認するが、Zod copy・比較work・allocation・実wire費用はUnknown。取消／期限切れのpost-guard優先・同期失効・一度限りのsealはowner接続の別責務であり、本純粋関数が実行したとは主張しない。元結果本文／findingsの内容保証・full集約schemaは未接続のまま。
+
+draft-0.4のレビュー修正：RD-B03はheaderのerrorsを完全一致で比較していたため、既存`finalizeAggregate`がreviewedをomitするときに追加する`output/response_limit`のerrorを含む正当な応答を不一致として拒否していた。errorsを「期待の先頭一致＋finalize由来のomission errorだけ追加可（errors満杯時はerror_details_truncated）」に改めた（試験helperの実装修正）。あわせて、応答assetの重複拒否、期待limitationsの保持、coverageの非rule列の固定一致が、外す変異でも通っていたため個別の試験を追加した。

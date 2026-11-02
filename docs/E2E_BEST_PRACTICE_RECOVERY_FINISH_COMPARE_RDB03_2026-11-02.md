@@ -51,7 +51,38 @@ Date: 2026-11-02。Baseline: `fe7e296`。対象はtests配下の純粋値層と�
 
 関連はmaxWorkers=1、全体はmaxWorkers=3。150秒の外側監督は検証の停止装置で、製品／試験の期限は緩めていない。既存のローカル待受合成テストを含むが、外部ServiceNowへ接続していない。
 
-## 6 未実施・残課題
+## 6 レビュー修正（2026-11-02）
+
+§3・§5の件数と、ESLintを対象ファイルだけに対して実行した結果は、修正前の記録として残す。
+
+**finalize由来のomission errorの扱い（試験helperの実装修正）**：修正前はheaderのerrorsを完全一致で比較していた。既存`finalizeAggregate`（`aggregate-finalize.ts`のomit）は、reviewedをresult_omittedへ変えるとき、`response_truncated`がまだなければそれを追加すると同時に`addReviewError`で`{stage:'output',code:'response_limit'}`を1件追加する。修正前の試験はlimitationだけを足していたため通っていたが、finalizeと同じ形の応答は`mismatch`で拒否された。errorsは期待値の全件を同順の先頭に保ち、上記の条件でだけomission errorを1件末尾に許す（期待errorsが100件なら代わりにerror_details_truncatedを要求）形に改めた。
+
+| 追加・変更した試験 | 確認内容 |
+|---|---|
+| 既存2件（state oracleのreviewed→omitted、response_truncated要求） | finalizeと同じくlimitationとomission errorの両方を足した形へ更新 |
+| limitationだけのomission | omission errorがないため拒否 |
+| 無関係なerrorの追加 | 拒否 |
+| 新omissionなしのomission error | 拒否 |
+| 期待に既にresponse_truncatedがある場合 | 追加errorなしで一致、errorを足すと拒否 |
+| 期待errorsが100件の場合 | error_details_truncatedが必要 |
+| 同じ長さで重複assetが欠落IDを隠す応答 | 拒否（assetsの重複拒否） |
+| 期待の非release limitationを落とす応答 | 拒否 |
+| 応答coverageのskipped_rules | 拒否 |
+
+各判定を外す変異では対応する追加試験だけが失敗し（errors比較の全体を外す変異では関係する既存1件と追加3件）、復元後に`cmp`一致を確認した。
+
+修正後の結果：
+
+| 検証 | 結果 |
+|---|---|
+| RD-B03比較試験 | 160件成功 |
+| ESLint | `npm run lint`（repo全体）exit 0 |
+| build・梱包 | `npm run build`成功、offline梱包441ファイル成功 |
+| 全体合成 | maxWorkers=3、257ファイル／12,365件成功、失敗0・pending 0、exit 0。約53.0秒 |
+
+RD-B詳細設計はdraft-0.5へ更新し、参照する3文書の版数リンクも直した。
+
+## 7 未実施・残課題
 
 RD-B04の同accepted seal、同期失効とRA-03-B固定discard接続、ownerのpost-guard優先／一度限り消費は未実装。元本文／由来・full schema／wire、比較work／実allocation・全体上界・本番capはUnknown。正式発行口閉鎖・全体受付無効・VM／監視／telemetry調査保留を維持した。実Permit／candidate／finish job発行、実worker／runtime接続・実通信・実機操作・設定変更・Pushは行っていない。
 

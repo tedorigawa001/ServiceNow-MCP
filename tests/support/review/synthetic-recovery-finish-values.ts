@@ -124,7 +124,7 @@ function compareManifest(a:ExpectedValues,b:ReplyValues){
     }else if(!equalData(expected,actual))bad('mismatch');
   }
 }
-function compareHeaderAndTime(a:ExpectedValues,b:ReplyValues){
+function compareHeaderAndTime(a:ExpectedValues,b:ReplyValues,newOmission:boolean){
   const h=a.header,r=b.header,t=a.time,S=Date.parse(t.started_at),O=Date.parse(t.observed_at),U=Date.parse(t.upper_utc);
   if(S>O||O>U||U>S+t.deadline_ms||h.started_at!==t.started_at||h.collection.selected!==a.selected.length||a.run_status!==(h.collection.status==='failed'?'failed':'partial')||b.run_status!==a.run_status||b.consistency!==a.consistency)bad('mismatch');
   const seen=h.collection.metadata_seen,max=h.limits.max_records;
@@ -136,10 +136,15 @@ function compareHeaderAndTime(a:ExpectedValues,b:ReplyValues){
   if(!sameFinishRuleSet(h.coverage.requested_rule_ids,r.coverage.requested_rule_ids)||h.limitations.some(x=>!r.limitations.includes(x))||!sameFinishReleaseEncoding(JSON.stringify(h.instance_release),JSON.stringify(r.instance_release)))bad('mismatch');
   // All fixed header facts remain exact; only requested-rule order and added warnings vary.
   for(const key of Object.keys(h) as (keyof typeof h)[]){
-    if(key==='coverage'||key==='limitations'||key==='instance_release')continue;
+    if(key==='coverage'||key==='limitations'||key==='instance_release'||key==='errors')continue;
     if(!equalData(h[key],r[key]))bad('mismatch');
   }
   if(!equalData({...h.coverage,requested_rule_ids:[]},{...r.coverage,requested_rule_ids:[]}))bad('mismatch');
+  // Errors keep the expected prefix; finalize may append only its single omission error (addReviewError), else marks truncation.
+  const appendsOmissionError=newOmission&&!h.limitations.includes('response_truncated');
+  const extraErrors=appendsOmissionError&&h.errors.length<100?[{stage:'output',code:'response_limit'}]:[];
+  if(r.errors.length!==h.errors.length+extraErrors.length||!equalData(h.errors,r.errors.slice(0,h.errors.length))||!equalData(extraErrors,r.errors.slice(h.errors.length)))bad('mismatch');
+  if(appendsOmissionError&&h.errors.length>=100&&!r.limitations.includes('error_details_truncated'))bad('mismatch');
   const release=h.instance_release;
   if(release.source==='sys_cluster_state.build_name'&&checkReleaseEvidence(release,t.observed_at,h.target.instance_binding,h.limitations).length)bad('mismatch');
   if(checkReleaseEvidence(release,release.source==='operator_config'?t.started_at:b.ended_at,h.target.instance_binding,r.limitations).length||release.source==='operator_config'&&Date.parse(release.expires_at)<=S+60000)bad('mismatch');
@@ -154,7 +159,8 @@ export function compareRecoveryFinishValues(rawExpectation:unknown,rawReply:unkn
     const b=replySchema.safeParse(collect(rawReply,budget,false));if(!b.success)bad();
     const expected=a.data!,reply=b.data!,t=expected.time;
     if(finishEndOutsideBounds(Date.parse(reply.ended_at),Date.parse(t.upper_utc),Date.parse(t.started_at),t.deadline_ms))bad('mismatch');
-    compareHeaderAndTime(expected,reply);
+    const newOmission=expected.outcomes.some(o=>o.state==='reviewed'&&reply.assets.some(x=>x.update_xml_sys_id===o.update_xml_sys_id&&x.state==='result_omitted'));
+    compareHeaderAndTime(expected,reply,newOmission);
     compareManifest(expected,reply);
     return Object.freeze({scope:'synthetic_recovery_finish_value_check',authority:'none',checked_scope:'context_and_manifest_only',matches:true,
       unverified:Object.freeze(['binding_provenance','original_body','full_schema','wire'] as const),usage:budget.usage(),[checkBrand]:'comparison_value_only' as const});

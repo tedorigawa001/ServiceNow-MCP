@@ -108,6 +108,8 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 ### Added
 
+- RD-B03 synthetic recovery finish comparison now accepts the single `output/response_limit` error that `finalizeAggregate` appends when it first omits a reviewed result (or `error_details_truncated` once errors are full), instead of rejecting finalize-shaped replies; any other error change is still refused. Adds tests for that rule and for previously unguarded duplicate reply assets, dropped expected limitations and reply skipped rules.
+
 - RA-02④ synthetic finish-context issuance now holds value/identity mismatches without recording a hard stop until the post guard, so a cancellation or deadline at the post guard keeps priority as the design requires; the mismatch is still refused at commit. Adds two tests for the held mismatch with and without a post-guard cancellation.
 
 - RB-C synthetic recovery kernel now refuses a normal close while a begun source close is still unsettled, instead of reporting the source as closed. Adds three tests covering that refusal, the unchanged `closed` report for a close that never began a source close, and caught cleanup-start reentry during worker startup.
