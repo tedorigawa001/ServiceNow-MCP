@@ -1,7 +1,7 @@
 # RA-02③ 同handoff・route結合の接続差分設計
 
-Version: br006-finish-assembly-binding-draft-0.2 / Date: 2026-11-02。
-Status: **RB-Aの共通kernel生成境界と閉鎖した新入口だけ合成限定実装。RB-B〜Dは未実装。証拠発行なし・正式発行口閉鎖・全体受付無効・Unknown・VM／監視／telemetry調査保留を維持する。**
+Version: br006-finish-assembly-binding-draft-0.3 / Date: 2026-11-02。
+Status: **RB-A生成境界とRB-Bの同pin／receipt供給・既存準備まで合成限定実装。RB-C／Dは未実装。finish証拠発行なし・正式発行口閉鎖・全体受付無効・Unknown・VM／監視／telemetry調査保留を維持する。**
 
 基準HEAD: `d263282`。[RD-A](BEST_PRACTICE_ABORT_SCOPE_FINISH_CONTEXT_RDA_DESIGN.md)§2〜5・10と[RA-02①②検証記録](E2E_BEST_PRACTICE_FINISH_ASSEMBLY_RA02_2026-11-02.md)に対する接続差分。実装・実接続・実通信・設定変更・実Permit投入の承認ではない。
 
@@ -75,7 +75,7 @@ legacyのsummary／固定discardは維持する。summaryを選んだplan、消�
 | 分割案 | 次に確認する範囲 |
 |---|---|
 | RB-A（生成境界実装済み） | 共通kernelの生成境界抽出。旧API／全旧試験とRA-02①②を維持し、新入口はまだpin／handoff／routeを受理しない。各rootのowner／guard／claim独立、後付け登録なし |
-| RB-B | 新入口構築での同receipt／source／window／releaseとpinの供給。元active receipt・selected／T_i／U・元state、異なる構築の混入拒否 |
+| RB-B（合成供給・既存準備まで実装） | 新しい固定入口構築で同receipt／source／window／releaseとpinを供給。元active receipt・selected／T_i／U・元state、異なる構築の混入を拒否。verify／新世代／route／handoffは未接続 |
 | RB-C | ready受理origin、source lifecycle、cleanup開始serialを同rootへ追加。開始前／中／後、guard再入・取消・失効を区別 |
 | RB-D | 同handoffの一度限り結合。pre/post照合と競合・失敗後再利用拒否。証拠発行は引き続き0 |
 
@@ -87,7 +87,7 @@ ready_events=1でもcleanup開始済み、source closing／closed／failed、発
 
 ## 7 承認・未確認事項
 
-draft-0.1の生成境界案は§8のRB-Aだけ実装した。RB-B〜D、共通pin型の最小抽出、固定合流規則の費目別上界は未対応。既存APIsを緩める可変modeや任意hookを追加しない。
+draft-0.1の生成境界案は§8のRB-Aと§9のRB-Bだけ実装した。RB-C／D、verify後の固定合流規則と費目別上界は未対応。既存APIsを緩める可変modeや任意hookを追加しない。
 
 RA-02④の一度限りの証拠発行、RA-03の証拠とhandoffの原子的受理、RD-B以降のE／finish／候補・正常cleanup能力は別工程。正式発行口閉鎖・全体受付無効・調査保留を維持する。
 
@@ -104,3 +104,35 @@ facadeは新しいkernelを一つだけ生成し、binding／guard／busy／hard
 新入口のinspectは元state・claim開始・固定診断・permissionsとroute_bound=false／evidence_issues=0に限定し、元kernelのtime／identityを返さない。RB-Aの小さなdescriptor pinは、RA-02①②のheader／receipt ledgerとの接続ではない。active inputとselected／T_i／U・期待contextを同構築で供給する本体はRB-B、live routeはRB-C、handoff結合はRB-Dへ残す。
 
 [RB-A検証記録](E2E_BEST_PRACTICE_FINISH_RECOVERY_ROOT_RBA_2026-11-02.md)参照。局所の構築／inspect／破棄にもwork・allocationは必要であり、会計更新なしを費用0の証明にしない。全体work／layout／allocationはUnknown、実session／実worker保証・本番capや全体受付には昇格しない。
+
+## 9 RB-B実装範囲・同pin供給
+
+基準HEADは`e0c19a2`。既存legacy kernel／RB-A入口は変更しない。新しい固定入口`createSyntheticPinnedRecoveryRoot`をtests配下へ分け、既に存在するRB-A／data-only assemblyを切り替えたり登録したりしない。data-only assemblyから純粋なbounded pin生成だけを`synthetic-finish-pins.ts`へ抽出し、元APIと状態機械・post-guard commitを維持する。
+
+新入口のdescriptorはstrictな6項目：`kind=synthetic_pinned_recovery_root_v1, point, active_input_sys_id, accounting, consistency, finish`。finishは既存RA-02のstrict seed。timeを別途申告させず同pinのS／全L／O／Uを使う。pointは既存7variant、accountingは同C/G/P prefixの合成値（C≤210、G≤16777216、P≤8388608）、consistencyはstable_observation／changed／unverified。後から変更するsetterはない。
+
+共通pin生成は新しいrun／session／source／key／origin／budget／release／windowとreceiptを内部で一度作る。RA-01値検査用owner／plan／routeのscaffoldingは検査だけに使い、live証拠にはしない。data-only assemblyのbindingや既存rootを引数で受け取らず、構築データだけから生成する。
+
+| 供給先 | 同構築で固定するもの |
+|---|---|
+| recovery seed | pinのrun／session／source／key／origin／budget／releaseを同参照で使用。S／全L／O／Uも同値 |
+| facts.input | active_input_sys_idが指す同ledgerの未完了receipt。completed／不存在は拒否し、新receiptを作らない |
+| SC2-A input context | source／budget／release／origin／windowは同pin参照。verifyはこの段階では明示null |
+| rows／completed／inputs | 同selected順、元outcome state／reason、全receipt／ID／T_i／stateを使用。SC2-Aへはcompleted／retainedへ固定写像し、reviewed期待context・omission起源は元private pinに残す |
+| accounting／collection／consistency | 構築時のprefixと同header collection.status、同構築consistencyを使用。ここで再課金・新観測・verify結果の捏造をしない |
+
+固定supplierはsource／budget／release／originのseedとpinの参照一致、window、selected配列、active receipt、全inputのreceipt／ID／T_i／stateを構築時に検査する。既存SC2-Aも元seedとsource等・active receipt・selected・時刻を再検査する。**SC2-A自体はwindowを元pinと比較するAPIではない**ので、その部分は同immutable構築と固定supplierの明示照合で保証する。外からwindowを渡して登録できるようにする解決策は採らない。
+
+公開操作はbind／observe／claimRecovery、`prepareWorkerRecovery(binding, recovery, closureEvent)`、固定discard、revoke／close／inspectだけ。prepareでは同recovery claimを既存kernelのbeginWorkerClosureで一度消費し、厳密なtermination／cleanupだけのfake eventを内部factsに結ぶ。起動済み旧世代は両方confirmed／completeが必要、未起動はnot_required／not_requiredだけ。既存の合成closure証拠は内部で一時使用し、外へは返さない。その後、同immutable inputを既存prepareWorkerRecoveryへ供給する。元kernelの3操作のpre／postを使い、別のbusy／hard／guard ownerを作らない。
+
+返すのは同kernelの非実行preparation handleに新入口専用の静的brandを付けたものだけ。FinishContextEvidenceではない。binding／recovery／preparationの混入・copy・重複を元kernelで拒否し、prepareの余分な引数によるsource／window／release／receipt／callbackの差込みも拒否する。raw例外・失敗後のmaterialは破棄し、最初のhard code／stageと旧closureの未確認診断を保持する。
+
+未処理inputが複数でも、activeは同ledgerの一件だけに結ぶ。activeが最新でなくてもUは全inputの最大のまま。受理済みreviewed pinは同期待contextを保持し、omitted起源の有無も元ledgerから変えない。元analyzeのpost-guardやfull結果の由来を証明したとはしない。
+
+preparationがheldのまま正常closeすることは禁止。成功後は同handleの固定discardを一度行ってからdata-only closeへ進む。これは元source正常close／新frame cleanup能力の発行ではない。失敗時に参照を落とすことも、未確認の旧termination／cleanupを成功へ変えない。
+
+inspectは元の固定診断・pin件数・準備件数／prefix／stateだけで、ID／UTC／receipt／期待context／release値やpinを返さない。route_bound=false、evidence_issues=0を維持。guard取消・期限切れ・再入・生成失敗後には同rootを再bind／再準備できない。
+
+費目：descriptor読取、共有pinのbounded copy／RA-01検査、fixed supplierの最大100行照合、SC2-Aの再検査、元kernelのguard、inspect／失効／discardは各々work／allocationを要する。C/G/Pは構築prefixを継承するだけで新規計上しないが、それをwork費用0とは呼ばない。全体work／layout／allocation・本番capはUnknown。RB-Bの成功は本試行の実取得・実解析成績ではない。
+
+[RB-B検証記録](E2E_BEST_PRACTICE_PINNED_RECOVERY_ROOT_RBB_2026-11-02.md)を参照。verify後のheader／limitations／errors合流、新世代ready、source open／cleanup開始serial、handoff／route結合、finish証拠発行は未接続。RB-C／D以降へ残す。

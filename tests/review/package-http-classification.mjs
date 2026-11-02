@@ -107,7 +107,7 @@ for(const leak of ['globalThis.setTimeout(()=>{},0);','Date.now();','new Date();
   assert.throws(()=>auditSyntheticIssuer(finishValueText+'\n'+leak,finishValueImports),assert.AssertionError,'RA-01 audit missed seeded leak: '+leak);
 console.log('RA-01 value-only projections excluded; fixed pure-data imports + seeded I/O/clock/worker/leak controls PASS');
 const assemblyPath='tests/support/review/synthetic-finish-assembly.ts',assemblyText=readFileSync(join(root,assemblyPath),'utf8');
-const assemblyImports=['node:util','./synthetic-finish-context-values.js'];
+const assemblyImports=['./synthetic-finish-pins.js'];
 auditSyntheticIssuer(assemblyText,assemblyImports);
 const assemblyMarkers=['synthetic-finish-assembly','createSyntheticFinishAssembly','synthetic_finish_assembly','synthetic_finish_assembly_binding','synthetic_finish_seed_v1','synthetic_reviewed_pin','synthetic_original_outcome_pin'];
 const noFinishAssembly=text=>assert(!assemblyMarkers.some(x=>text.includes(x)),'RA-02 preparation leaked into runtime');
@@ -117,6 +117,18 @@ for(const f of pack.files.filter(f=>f.path.startsWith('dist/')&&/\.(?:js|ts|map)
 for(const leak of ['globalThis.setTimeout(()=>{},0);','Date.now();','new Date();',"import('node:fs');",'new Worker("x");',"export * from 'node:fs';","import {createSyntheticSoftRecoveryIssuer} from './synthetic-soft-recovery.js';const zzOldRoot=createSyntheticSoftRecoveryIssuer;"])
   assert.throws(()=>auditSyntheticIssuer(assemblyText+'\n'+leak,assemblyImports),assert.AssertionError,'RA-02 audit missed seeded leak: '+leak);
 console.log('RA-02 preparation excluded; separate root/pure-value imports + seeded old-root/I/O/clock/worker/leak controls PASS');
+const pinText=readFileSync(join(root,'tests/support/review/synthetic-finish-pins.ts'),'utf8'),pinImports=['node:util','./synthetic-finish-context-values.js'];
+const pinnedRootText=readFileSync(join(root,'tests/support/review/synthetic-pinned-recovery-root.ts'),'utf8'),pinnedRootImports=['node:util','zod','./synthetic-finish-pins.js','./synthetic-recovery-kernel.js'];
+auditSyntheticIssuer(pinText,pinImports);auditSyntheticIssuer(pinnedRootText,pinnedRootImports);
+const pinMarkers=['synthetic-finish-pins','createSyntheticFinishPins','SyntheticFinishPins','synthetic-pinned-recovery-root','createSyntheticPinnedRecoveryRoot','synthetic_pinned_recovery_root','synthetic_pinned_recovery_binding','synthetic_pinned_recovery_observation','synthetic_pinned_recovery_claim','synthetic_pinned_recovery_preparation'];
+const noPinnedRoot=text=>assert(!pinMarkers.some(x=>text.includes(x)),'RB-B private pin/root leaked into runtime');
+for(const marker of pinMarkers)assert.throws(()=>noPinnedRoot(marker));
+assert(!pack.files.some(f=>/synthetic-finish-pins|synthetic-pinned-recovery-root/.test(f.path)));
+for(const f of pack.files.filter(f=>f.path.startsWith('dist/')&&/\.(?:js|ts|map)$/.test(f.path)))noPinnedRoot(readFileSync(join(root,f.path),'utf8'));
+for(const [text,imports] of [[pinText,pinImports],[pinnedRootText,pinnedRootImports]])
+  for(const leak of ['globalThis.setTimeout(()=>{},0);','Date.now();','new Date();',"import('node:fs');",'new Worker("x");',"export * from 'node:fs';","import {BoundedReadSession} from '../../../src/servicenow/bounded-read.js';const zzRoot=BoundedReadSession;"])
+    assert.throws(()=>auditSyntheticIssuer(text+'\n'+leak,imports),assert.AssertionError,'RB-B audit missed seeded leak: '+leak);
+console.log('RB-B private pin supplier/root excluded; pure dependency graphs + seeded runtime/I/O/clock/worker/leak controls PASS');
 for(const suffix of ['.js','.js.map','.d.ts','.d.ts.map'])assert(pack.files.some(f=>f.path==='dist/servicenow/review-kernel/release-observation'+suffix),'required one-shot UTC value helper missing: '+suffix);
 const sessionDeclarations=readFileSync(join(root,'dist/servicenow/bounded-read.d.ts'),'utf8');
 const sessionAst=parse(readFileSync(join(root,'dist/servicenow/bounded-read.js'),'utf8'),{ecmaVersion:'latest',sourceType:'module'});
