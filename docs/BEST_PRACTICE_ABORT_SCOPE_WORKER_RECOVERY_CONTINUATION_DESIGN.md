@@ -1,6 +1,6 @@
 # SR-C後半の終了証拠とverifyと新世代readyの接続契約
 
-Version: br006-worker-recovery-continuation-draft-0.8 / Date: 2026-11-02。
+Version: br006-worker-recovery-continuation-draft-0.9 / Date: 2026-11-02。
 Status: **SC2-Aの証拠移譲・準備入力（§10）、SC2-Bの必要verify・fake会計（§11）、SC2-Cの終了証拠使用・合成新世代ready・別cleanup診断（§12）、SC2-Dの非実行plan封印・移譲境界（§13）を独立合成issuerで限定実装。正式binding・SR-Dは未実装で、人による正式bindingの承認未実施。正式発行口閉鎖・Unknown・全体受付無効・VM／監視／telemetry調査保留を維持する。**
 
 基準HEADは`07e7631`。[soft回復claim設計](BEST_PRACTICE_ABORT_SCOPE_SOFT_RECOVERY_CLAIM_DESIGN.md)§6・7・14と[worker時刻設計](BEST_PRACTICE_ABORT_SCOPE_WORKER_TIME_BINDING_DESIGN.md)の差分として、旧世代終了後に同ownerのまま必要verifyと新世代readyへ進む内部境界を定める。既存の非実行consumerを回復権限へ昇格させず、通常WJ-C・runtime／実worker・実sourceを変更しない。
@@ -189,4 +189,4 @@ summaryはframe・owner・seed・receipt・ReleasePermit・cleanup sinkを出さ
 
 [合成試験](../tests/review/synthetic-worker-recovery-plan.test.ts)78件で、1／3／100件の選択順、T_i／U、callerの集合追加／欠落／state変更／U切下げが凍結planへ入らないこと、summary編集・copy／別owner・branch replay・二重seal・二重消費の拒否を確認する。値の再入力を拒否する構造なので、今回新しく任意JSONのplan validatorを作るものではない。summary／transfer各6位置のguard取消は独立の位置式からseal／移動／発行数を求める。新cleanup・UTC・会計を保持し、旧試験を維持する。梱包監査に関数・brand・scope漏出の負の対照を追加した。[SC2-D検証記録](E2E_BEST_PRACTICE_WORKER_RECOVERY_SC2D_2026-11-02.md)参照。
 
-このhandoffは同合成owner内の受取slotであり、SR-Dの実finishへ接続した証拠ではない。実session／ReleasePermit／payload／worker job binding、実finish／runtime、実cleanup・外側checkpoint、B-03 compiled保証・全費目上界は未対応。work／layout／allocationはUnknownで、本番capを導出しない。正式発行口閉鎖・全体受付無効・調査保留を維持する。
+このhandoffは同合成owner内の受取slotであり、SR-Dの実finishへ接続した証拠ではない。実session／ReleasePermit／payload／worker job binding、実finish／runtime、実cleanup・外側checkpoint、B-03 compiled保証・全費目上界は未対応。work／layout／allocationはUnknownで、本番capを導出しない。正式発行口閉鎖・全体受付無効・調査保留を維持する。 次工程の[SR-D接続設計draft-0.1](BEST_PRACTICE_ABORT_SCOPE_RECOVERY_FINISH_SRD_DESIGN.md)で、不足するheader／reviewed期待context・同新frameのfinish専用台帳・E／集合比較・候補終端をMDに分離した。設計のみで、現handoffのfinish実行権限は増やしていない。
