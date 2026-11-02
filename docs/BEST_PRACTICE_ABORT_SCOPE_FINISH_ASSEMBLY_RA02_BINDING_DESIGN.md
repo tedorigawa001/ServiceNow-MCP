@@ -91,7 +91,7 @@ draft-0.1の生成境界案は§8〜11のRB-A〜Dを実装した。後続RA-02�
 
 RA-02④-Aの発行とRA-03-A／Bの受理／固定discardは後続工程で合成実装した。RD-B以降のE／finish／候補・正常cleanup能力は未実装の別工程。正式発行口閉鎖・全体受付無効・調査保留を維持する。
 
-RB-D後の[発行・RA-03受理接続差分draft-0.5](BEST_PRACTICE_ABORT_SCOPE_FINISH_ISSUE_ACCEPT_DESIGN.md)で、同kernelの発行・受理・固定discardと同期失効を合成限定実装した。受理後の終端専用slotは、両方の固定完了受領情報とともにRA-03-Bで一度だけ消費し、未解放をnormal closeで隠さない。§8〜11の発行0という記述はRB-A〜D段階の履歴であり、結合だけで発行しない条件は維持する。
+RB-D後の[発行・RA-03受理接続差分draft-0.6](BEST_PRACTICE_ABORT_SCOPE_FINISH_ISSUE_ACCEPT_DESIGN.md)で、同kernelの発行・受理・固定discardと同期失効を合成限定実装した。受理後の終端専用slotは、両方の固定完了受領情報とともにRA-03-Bで一度だけ消費し、未解放をnormal closeで隠さない。§8〜11の発行0という記述はRB-A〜D段階の履歴であり、結合だけで発行しない条件は維持する。
 
 ## 8 RB-A実装範囲
 
