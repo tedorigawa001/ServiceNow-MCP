@@ -78,6 +78,11 @@ const noWorkerGeneration=text=>assert(!generationMarkers.some(x=>text.includes(x
 for(const marker of generationMarkers)assert.throws(()=>noWorkerGeneration(marker));
 for(const f of pack.files.filter(f=>f.path.startsWith('dist/')&&/\.(?:js|ts|map)$/.test(f.path)))noWorkerGeneration(readFileSync(join(root,f.path),'utf8'));
 console.log('SC2-C generation claims/ready/cleanup excluded; seeded symbol/function leak controls PASS');
+const planMarkers=['sealWorkerRecoveryPlan','summarizeWorkerRecoveryPlan','transferWorkerRecoveryPlan','discardTransferredWorkerRecoveryPlan','synthetic_worker_recovery_plan_handle','synthetic_worker_recovery_plan_handoff','synthetic_worker_recovery_plan'];
+const noWorkerPlan=text=>assert(!planMarkers.some(x=>text.includes(x)),'SC2-D plan leaked into runtime');
+for(const marker of planMarkers)assert.throws(()=>noWorkerPlan(marker));
+for(const f of pack.files.filter(f=>f.path.startsWith('dist/')&&/\.(?:js|ts|map)$/.test(f.path)))noWorkerPlan(readFileSync(join(root,f.path),'utf8'));
+console.log('SC2-D sealed plan/summary/handoff excluded; seeded symbol/function/scope leak controls PASS');
 for(const suffix of ['.js','.js.map','.d.ts','.d.ts.map'])assert(pack.files.some(f=>f.path==='dist/servicenow/review-kernel/release-observation'+suffix),'required one-shot UTC value helper missing: '+suffix);
 const sessionDeclarations=readFileSync(join(root,'dist/servicenow/bounded-read.d.ts'),'utf8');
 const sessionAst=parse(readFileSync(join(root,'dist/servicenow/bounded-read.js'),'utf8'),{ecmaVersion:'latest',sourceType:'module'});

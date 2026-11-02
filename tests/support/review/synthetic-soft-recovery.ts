@@ -17,8 +17,8 @@ export type SyntheticSoftFacts=
     |{point:'analyze_timer'|'analyze_reply_check';worker_state:'ready';job:object;id:number}&WorkerRefs)>;
 export type SyntheticRecoverySeed=Readonly<{run:object;session:object;source:object;key:object;origin:object;budget:object;release:object;started_at:string;deadline_ms:number;observed_at:string;upper_utc:string}>;
 type Code='cancelled'|'deadline_exceeded'|'worker_unavailable'|'internal_review_error'|'receive_budget_exceeded'|'authentication_failed'|'access_denied'|'request_budget_exceeded'|'payload_budget_exceeded';
-type Phase='binding'|'observation'|'recovery_claim'|'recovery_consume'|'cleanup_lease'|'cleanup_record'|'revoke'|'close'|'discard'|'phase_prepare'|'phase_verify'|'phase_chunk'|'phase_retry'|'phase_worker'|'phase_ready'|'phase_consume'|'worker_closure_begin'|'worker_closure_settle'|'worker_closure_consume'|'worker_prepare'|'worker_prepare_discard'|'worker_verify'|'generation_claim'|'generation_start'|'generation_ready'|'generation_cleanup'|'generation_discard';
-type State='fresh'|'binding'|'active'|'observing'|'observed'|'claiming'|'claimed'|'consuming'|'consumed'|'failed'|'closed'|'phase_planning'|'phase_planned'|'phase_consuming'|'worker_closing'|'worker_closed'|'worker_preparing'|'worker_prepared'|'generation_claiming'|'generation_claimed'|'generation_starting'|'generation_waiting'|'generation_ready';
+type Phase='binding'|'observation'|'recovery_claim'|'recovery_consume'|'cleanup_lease'|'cleanup_record'|'revoke'|'close'|'discard'|'phase_prepare'|'phase_verify'|'phase_chunk'|'phase_retry'|'phase_worker'|'phase_ready'|'phase_consume'|'worker_closure_begin'|'worker_closure_settle'|'worker_closure_consume'|'worker_prepare'|'worker_prepare_discard'|'worker_verify'|'generation_claim'|'generation_start'|'generation_ready'|'generation_cleanup'|'generation_discard'|'worker_plan';
+type State='fresh'|'binding'|'active'|'observing'|'observed'|'claiming'|'claimed'|'consuming'|'consumed'|'failed'|'closed'|'phase_planning'|'phase_planned'|'phase_consuming'|'worker_closing'|'worker_closed'|'worker_preparing'|'worker_prepared'|'generation_claiming'|'generation_claimed'|'generation_starting'|'generation_waiting'|'generation_ready'|'plan_sealed'|'plan_transferred';
 type ClosureDiagnostic=Readonly<{close_requests:0|1;input_state:'unsent'|'sent_terminal';id_state:'absent'|'allocated_unsent'|'sent_terminal';termination:'not_required'|'requested'|'confirmed'|'rejected'|'unconfirmed';cleanup:'not_required'|'not_started'|'complete'|'failed'|'unconfirmed'}>;
 type SoftDiagnostic=Readonly<Pick<SyntheticSoftFacts,'kind'|'phase'|'point'|'worker_state'>>;
 type CleanupStatus='not_required'|'not_started'|'requested'|'confirmed'|'failed'|'unconfirmed';
@@ -37,6 +37,10 @@ type WorkerClosureLease=Readonly<{[closureLeaseBrand]:'synthetic_worker_closure'
 type WorkerClosureEvidence=Readonly<{[closureEvidenceBrand]:'no_generation'|'closed_generation'}>;
 type WorkerRecoveryPreparation=Readonly<{[preparationBrand]:'synthetic_worker_recovery_preparation'}>;
 type HeldClosure=Readonly<{evidence:WorkerClosureEvidence;origin:Extract<SyntheticSoftFacts,{kind:'worker_deadline'}>;inputs:ReturnType<typeof prepareSyntheticWorkerRecoveryInputs>}>;
+declare const planBrand:unique symbol,handoffBrand:unique symbol;
+type RecoveryPlanHandle=Readonly<{[planBrand]:'synthetic_worker_recovery_plan_handle'}>;
+type RecoveryPlanHandoff=Readonly<{[handoffBrand]:'synthetic_worker_recovery_plan_handoff'}>;
+type SealedRecoveryPlan=Readonly<{owner:OwnerBinding;seed:SyntheticRecoverySeed;frame:object;inputs:HeldClosure['inputs'];time:Readonly<Pick<SyntheticRecoverySeed,'started_at'|'deadline_ms'|'observed_at'|'upper_utc'>>;verify:ReturnType<ReturnType<typeof createSyntheticWorkerVerify>['inspect']>}>;
 const seedKeys=['run','session','source','key','origin','budget','release','started_at','deadline_ms','observed_at','upper_utc'];
 const referenceKeys=['run','session','source','key','origin','budget','release','input','request','supervisor','worker','generation','allocation','job'];
 const utc=z.iso.datetime({precision:3});
@@ -106,8 +110,11 @@ export function createSyntheticSoftRecoveryIssuer(seed:SyntheticRecoverySeed,exp
   let generationCleanup:Readonly<{status:CleanupStatus}>|null=null;
   let generationTicketPublished=false,generationEventIssued=false;
   let generationLease:GenerationLease|undefined,generationEvent:Readonly<{handle:GenerationEvent;frame:object}>|undefined,generationDiscard:GenerationStart|GenerationReady|undefined;
+  let planStarted=false,planSeals=0,planTransfers=0,planSummaries=0;
+  let sealedPlan:SealedRecoveryPlan|undefined,transferredPlan:SealedRecoveryPlan|undefined,planHandle:RecoveryPlanHandle|undefined,handoffHandle:RecoveryPlanHandoff|undefined;
+  let planCounts:Readonly<{selected:number;retained_inputs:number}>|undefined;
   let time:Readonly<{started_at:string;deadline_ms:number;observed_at:string;upper_utc:string}>|null=null;
-  function clear(){if(phaseModel){phaseModel.dispose();phaseDiagnostic=phaseModel.inspect();phaseModel=undefined;}if(workerVerify){workerVerify.dispose();verifyDiagnostic=workerVerify.inspect();workerVerify=undefined;}generationStart=generationLease=generationDiscard=undefined;generationEvent=generationFrame=generationInputs=undefined;if(!generationTicketPublished&&!generationStarts){generationCleanupToken=generationCleanupContext=undefined;}heldClosure=undefined;preparationHandle=undefined;phaseHandle=closureLease=closureEvidence=undefined;binding=observation=recovery=seedRef=expectedRef=undefined;pinned=facts=undefined;}
+  function clear(){if(phaseModel){phaseModel.dispose();phaseDiagnostic=phaseModel.inspect();phaseModel=undefined;}if(workerVerify){workerVerify.dispose();verifyDiagnostic=workerVerify.inspect();workerVerify=undefined;}sealedPlan=transferredPlan=undefined;planHandle=handoffHandle=undefined;generationStart=generationLease=generationDiscard=undefined;generationEvent=generationFrame=generationInputs=undefined;if(!generationTicketPublished&&!generationStarts){generationCleanupToken=generationCleanupContext=undefined;}heldClosure=undefined;preparationHandle=undefined;phaseHandle=closureLease=closureEvidence=undefined;binding=observation=recovery=seedRef=expectedRef=undefined;pinned=facts=undefined;}
   function fail(phase:Phase,raw?:unknown):never{
     if(state==='closed')throw Error('internal_review_error');hard??=Object.freeze({code:code(raw),phase});state='failed';clear();throw Object.assign(Error(hard.code),{code:hard.code});
   }
@@ -121,7 +128,29 @@ export function createSyntheticSoftRecoveryIssuer(seed:SyntheticRecoverySeed,exp
     busy=true;try{claim();guard(phase);const value=work();guard(phase);commit(value);return value;}catch(error){return fail(phase,error);}finally{busy=false;}
   }
   function verifyModel(handle:object){if(state!=='worker_prepared'||handle!==preparationHandle||!heldClosure||!workerVerify)fail('worker_verify');return workerVerify!;}
+  function checkPlan(p:SealedRecoveryPlan){
+    if(p.owner!==binding||p.seed!==pinned||p.time!==time||generationStarts!==1||generationReadyEvents!==1||(generationCleanupToken?generationCleanupContext?.frame!==p.frame:generationCleanup?.status!=='confirmed'))fail('worker_plan');
+  }
+  function takePlan(handle:object){const own=planHandle,p=sealedPlan;planHandle=undefined;sealedPlan=undefined;if(state!=='plan_sealed'||!own||handle!==own||!p)fail('worker_plan');checkPlan(p!);return p!;}
   return Object.freeze({
+    transferWorkerRecoveryPlan(b:object,handle:object){let p:SealedRecoveryPlan;return act('worker_plan',b,()=>{p=takePlan(handle);},()=>{
+      transferredPlan=p;planTransfers=1;return opaque<RecoveryPlanHandoff>();
+    },handoff=>{handoffHandle=handoff;state='plan_transferred';});},
+    discardTransferredWorkerRecoveryPlan(b:object,handoff:object){return act('worker_plan',b,()=>{
+      const p=transferredPlan,own=handoffHandle;transferredPlan=undefined;handoffHandle=undefined;
+      if(state!=='plan_transferred'||!p||!own||handoff!==own||generationCleanupToken||generationCleanup?.status!=='confirmed')fail('worker_plan');checkPlan(p!);
+    },()=>{},()=>{state='consumed';});},
+    summarizeWorkerRecoveryPlan(b:object,handle:object){let p:SealedRecoveryPlan;return act('worker_plan',b,()=>{p=takePlan(handle);},()=>{
+      const errors:Readonly<{stage:'analysis'|'consistency';code:string}>[]=[Object.freeze({stage:'analysis',code:'deadline_exceeded'})];if(p.verify.verify_error)errors.push(Object.freeze({stage:'consistency',code:p.verify.verify_error}));if(p.verify.consistency==='changed')errors.push(Object.freeze({stage:'consistency',code:'changed_during_review'}));
+      return Object.freeze({scope:'synthetic_worker_recovery_plan' as const,authority:'none' as const,mode:'new_generation' as const,assets:p.inputs.assets,inputs:Object.freeze(p.inputs.inputs.map(x=>Object.freeze({update_xml_sys_id:x.update_xml_sys_id,retrieved_at:x.retrieved_at,state:x.state}))),time:p.time,accounting:p.verify.accounting,collection_status:p.inputs.collection_status,run_status:p.inputs.collection_status==='failed'?'failed' as const:'partial' as const,consistency:p.verify.consistency,limitations:Object.freeze(['soft_deadline_reached','deadline_exceeded',...p.verify.limitations]),errors:Object.freeze(errors)});
+    },()=>{planSummaries=1;state='consumed';});},
+    sealWorkerRecoveryPlan(b:object,ready:object){return act('worker_plan',b,()=>{
+      const used=planStarted,own=generationDiscard;planStarted=true;generationDiscard=undefined;
+      if(used||state!=='generation_ready'||!own||ready!==own||!generationFrame||!generationInputs||!time||workerVerify?.inspect().stage!=='verified')fail('worker_plan');
+    },()=>{
+      sealedPlan=Object.freeze({owner:binding!,seed:pinned!,frame:generationFrame!,inputs:generationInputs!,time:time!,verify:workerVerify!.inspect()});
+      planCounts=Object.freeze({selected:generationInputs!.rows.length,retained_inputs:generationInputs!.inputs.length});generationFrame=generationInputs=undefined;planSeals=1;return opaque<RecoveryPlanHandle>();
+    },handle=>{planHandle=handle;state='plan_sealed';});},
     claimWorkerGeneration(b:object,handle:object){let held:HeldClosure;return act('generation_claim',b,()=>{
       const used=generationClaimed;generationClaimed=true;
       if(used||state!=='worker_prepared'||handle!==preparationHandle||!heldClosure||workerVerify?.inspect().stage!=='verified')fail('generation_claim');
@@ -225,10 +254,11 @@ export function createSyntheticSoftRecoveryIssuer(seed:SyntheticRecoverySeed,exp
       cleanup=Object.freeze({scope:'synthetic_cleanup_snapshot',status:valid?status as CleanupStatus:'unconfirmed'});
       if(!valid||status!=='confirmed'&&status!=='not_required')fail('cleanup_record');
     },
-    close(b:object){return act('close',b,()=>{},()=>{if(cleanupToken||phaseModel?.inFlight()||closureLease||closureEvidence||heldClosure||preparationHandle||generationCleanupToken||generationInputs||generationFrame)fail('close');},()=>{clear();time=null;state='closed';});},
+    close(b:object){return act('close',b,()=>{},()=>{if(cleanupToken||phaseModel?.inFlight()||closureLease||closureEvidence||heldClosure||preparationHandle||generationCleanupToken||generationInputs||generationFrame||sealedPlan||transferredPlan)fail('close');},()=>{clear();time=null;state='closed';});},
     discardTerminalTime(){if(busy||state!=='failed'||time===null)return fail('discard',hard?.code);time=null;},
     inspect(){return Object.freeze({scope:'synthetic_soft_recovery_only' as const,state,time,observation_pending:!!observation,recovery_pending:!!recovery,cleanup_pending:!!cleanupToken,
       new_generation:generationClaimed?Object.freeze({claim_started:true,starts:generationStarts,ready_events:generationReadyEvents,cleanup:generationCleanup,cleanup_pending:!!generationCleanupToken}):null,
+      worker_plan:planStarted?Object.freeze({...planCounts,seal_started:true,seals:planSeals,transfers:planTransfers,summaries:planSummaries,sealed_pending:!!sealedPlan,transferred_pending:!!transferredPlan,finish_calls:0}):null,
       claims:Object.freeze({observation_started:observationStarted,recovery_started:recoveryStarted,cleanup_started:cleanupStarted}),
       diagnostics:Object.freeze({soft,hard,cleanup}),phase:phaseModel?.inspect()??phaseDiagnostic,worker_closure:closureDiagnostic?Object.freeze({...closureDiagnostic,lease_pending:!!closureLease,evidence_pending:!!closureEvidence}):null,worker_preparation:preparationStarted?Object.freeze({...preparationDiagnostic,...(workerVerify||verifyDiagnostic?{verify:workerVerify?.inspect()??verifyDiagnostic,accounting:(workerVerify?.inspect()??verifyDiagnostic)!.accounting}:{}),claim_started:true,held:!!heldClosure,handle_pending:!!preparationHandle,transfers,generation_uses:generationUses,verify_attempts:(workerVerify?.inspect()??verifyDiagnostic)?.attempts??0,new_generations:generationStarts}):null,permissions:Object.freeze({formal_issuance:false,dispatch:false,recovery_route:false})});},
   });
