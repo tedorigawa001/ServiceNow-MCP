@@ -92,6 +92,8 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 ### Added
 
+- Adds eight RB-B synthetic pinned recovery root tests: unstarted origins refuse closure events other than `not_required`/`not_required` (with a positive control), bind/observe extra arguments are refused, construction descriptors with a non-plain prototype are refused, and a structurally invalid descriptor never invokes the external guard.
+
 - Adds two RB-A synthetic finish-recovery root tests showing that construction descriptors and their time objects with a non-plain prototype are refused even when their own data properties are valid.
 
 - RA-02 synthetic finish assembly now publishes its bound/prepared states only after the final post guard. Adds three tests covering caught reentry into close during the preparation post guard and the post-guard publication order of bind and prepare.

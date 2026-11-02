@@ -118,3 +118,22 @@ it('does not invoke constructor/event getters and revokes pending private inputs
 it('keeps deadline failure ahead of later cleanup/input errors and refuses a new root binding',()=>{
   let stop:string|undefined;const f=begin(fixture(),()=>stop);stop='deadline_exceeded';expect(f.prepare).toThrow('deadline_exceeded');stop=undefined;expect(()=>f.root.prepareWorkerRecovery(f.b,f.recovery,null)).toThrow('deadline_exceeded');expect(f.root.inspect()).toMatchObject({pins:null,diagnostics:{hard:{code:'deadline_exceeded'}}});
 });
+it.each([['confirmed','complete'],['not_required','complete'],['confirmed','not_required']] as const)('refuses unstarted closure event termination=%s cleanup=%s',(termination,cleanup)=>{
+  const raw=fixture();raw.point='request_check_unstarted';const f=begin(raw);
+  expect(()=>f.root.prepareWorkerRecovery(f.b,f.recovery,{termination,cleanup})).toThrow('internal_review_error');expect(f.root.inspect()).toMatchObject({state:'failed',route_bound:false,evidence_issues:0});
+});
+it('accepts not_required closure only for the unstarted origin (positive control)',()=>{
+  const raw=fixture();raw.point='request_check_unstarted';const f=begin(raw);f.root.prepareWorkerRecovery(f.b,f.recovery,{termination:'not_required',cleanup:'not_required'});expect(f.root.inspect().state).toBe('worker_prepared');
+});
+it('rejects bind and observe extra arguments instead of accepting caller seed or facts',()=>{
+  const a=createSyntheticPinnedRecoveryRoot(fixture());expect(()=>(a.bind as (...x:unknown[])=>unknown)({owner:{}})).toThrow('internal_review_error');
+  const b=createSyntheticPinnedRecoveryRoot(fixture()),bb=b.bind();expect(()=>(b.observe as (...x:unknown[])=>unknown)(bb,{point:'SECRET'})).toThrow('internal_review_error');
+});
+it.each(['descriptor','accounting'] as const)('rejects a non-plain prototype %s even with valid own data properties',where=>{
+  const raw=fixture();if(where==='descriptor')rejected(Object.assign(Object.create({inherited:true}),raw));
+  else{write(raw,'accounting',Object.assign(Object.create({inherited:true}),raw.accounting));rejected(raw);}
+});
+it('does not invoke the external guard for a structurally invalid descriptor',()=>{
+  let checks=0;const raw=fixture();write(raw,'kind','wrong');const root=createSyntheticPinnedRecoveryRoot(raw,()=>{checks++;return undefined;});
+  expect(()=>root.bind()).toThrow('internal_review_error');expect(checks).toBe(0);
+});

@@ -40,6 +40,33 @@ Date: 2026-11-02 / Baseline: `e0c19a2` / Status: 合成依存限定・FinishCont
 
 公開入力からの混入拒否を検証したのであり、既存実sessionの取得証拠・実結果やOS workerの状態を検証したものではない。純粋helperの型・戻り値はtests配下の固定構築だけに使い、runtimeの登録台帳や発行口にはしない。
 
+## レビュー確認・修正（2026-11-02）
+
+上記の89件と、対象ファイルだけのESLint結果は修正前の記録として残す。
+
+**切出しの確認**：旧`synthetic-finish-assembly.ts`の`pin()`と新`synthetic-finish-pins.ts`の差分は、関数名と「ownerを引数でなく内部生成する」1行だけだった。このownerはRA-01検査用placeholderにだけ使われ、挙動は変わらない。
+
+**未保護の判定と追加試験**：次の判定は、外す変異でも89件が通っていた。
+
+| 判定 | 外した場合の影響 | 追加試験 |
+|---|---|---|
+| 未起動originのclosure eventは`not_required`／`not_required`だけ | `{termination:'confirmed',cleanup:'complete'}`等でも世代なし証拠が発行される | 不正な3組合せの拒否（3件）と`not_required`の正常対照（1件） |
+| bind／observeの余剰引数拒否（RB-Aで試験済みの規則） | callerのseed／factsを受け取る | 余剰引数でbind・observeを拒否（1件） |
+| 構築descriptorのprototype検査（RB-Aで`0b7f5e2`に追加したのと同じ抜け） | `Object.create({...})`等を構築データとして受理する | descriptor本体と`accounting`で拒否（2件） |
+| 構造不正なdescriptorで外部guardを呼ばない判定 | 不正入力でも外部checkが呼ばれる | 不正kindでcheck呼出し0（1件） |
+
+各変異では対応する追加試験だけが失敗し、復元後に`cmp`一致を確認した。active未検出の分岐（型エラーで停止）と、内部で作った値の受渡しを確かめる3つの照合（構築上常に成立）は、等価変異として扱う。helper実装は変更していない。
+
+修正後の結果：
+
+| 検証 | 結果 |
+|---|---|
+| RB-B専用合成試験 | 97件成功 |
+| ESLint | `npm run lint`（repo全体）exit 0 |
+| 全体合成 | maxWorkers=3、249ファイル／11,719件成功、失敗0・pending 0、exit 0。約34.0秒 |
+
+SR-D設計（draft-0.7）を指す3文書の版数リンクも現行版へ直した。
+
 ## 未対応
 
 RB-Cのsource open／ready受理origin／cleanup開始serial、RB-Dの同handoff結合は未実装。新世代起動・verify後のlimitations／errors合流・FinishContextEvidence発行・原子的受理・finish／E／候補・正常source／worker cleanup能力は別工程。
