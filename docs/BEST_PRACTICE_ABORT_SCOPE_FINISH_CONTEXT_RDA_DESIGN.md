@@ -242,6 +242,6 @@ seed copyは深さ8・object項目30・配列100・訪問10,000・文字費26214
 
 [RA-02①②検証記録](E2E_BEST_PRACTICE_FINISH_ASSEMBLY_RA02_2026-11-02.md)を参照。このdata-only assembly自体はSourceLifecycleSlot／NewFrameRouteSlotを持たないまま維持する。後続RB-B〜Dの新固定入口で同receipt供給・合成lifecycle・元SC2-D handoff結合を実装したが、本来のanalyze受理capture、FinishContextIssueSlot／証拠発行、RA-03受理は未実装。準備成功をFinishContextEvidenceへ昇格しない。
 
-次段の[RA-02③接続差分設計draft-0.6](BEST_PRACTICE_ABORT_SCOPE_FINISH_ASSEMBLY_RA02_BINDING_DESIGN.md)では、別ownerの外部登録を避ける共通kernel生成境界、同receipt／handoffとlive routeの結合、worker起動とcleanup開始serialの分離を整理した。RB-A〜Dの生成・同pin供給・同root lifecycle・plan／handoff一度限り結合まで合成限定実装済み。finish証拠発行は含めない。共通pin生成・data-only assemblyの状態機械は維持する。実source／workerの生存や正常終端能力は引き続きUnknown。
+次段の[RA-02③接続差分設計draft-0.7](BEST_PRACTICE_ABORT_SCOPE_FINISH_ASSEMBLY_RA02_BINDING_DESIGN.md)では、別ownerの外部登録を避ける共通kernel生成境界、同receipt／handoffとlive routeの結合、worker起動とcleanup開始serialの分離を整理した。RB-A〜Dの生成・同pin供給・同root lifecycle・plan／handoff一度限り結合まで合成限定実装済み。finish証拠発行は含めない。共通pin生成・data-only assemblyの状態機械は維持する。実source／workerの生存や正常終端能力は引き続きUnknown。
 
 draft-0.5のレビュー修正：RA-02の`act`の再入拒否（busy判定）は、既存の再入試験がbind／prepareへの再入だけでclaim一度限り・state判定が先に止めるため、外す変異でも86件が通っていた。外すとprepareのpost-guard内から`close`へ再入でき、closeが成功したうえで外側prepareも成功する。また、bound／preparedへの遷移がwork内にあり、post-guard中の`inspect()`に先行公開されていた。遷移を最後のpost-guard後のcommitへ移し（試験helperの実装修正、`88ed8e9`）、close再入と公開順序の試験を追加した（86件→89件）。SR-D設計を指す3文書の版数リンクも現行版へ直した。

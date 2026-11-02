@@ -44,7 +44,7 @@ FinishContextEvidenceの合成発行口は配布対象外の独立assemblyに留
 3. soft終端化時に未完了receiptをnot_processedへ移す。完了済み記録を消した後に再生成しない。SC2-Aで確定した集合とreceipt対応をFinishContextEvidence側の記録へ照合する。
 4. 同SC2-D planと追加証拠がすべて揃い、元guardが生きている場合だけ受理する。欠けた列を空値・現在時刻・別release・再解析で補完しない。
 
-追加値のstrict schema・bounded projection／比較はRA-01の合成値層だけ実装した。[RD-A詳細型・発行契約draft-0.10](BEST_PRACTICE_ABORT_SCOPE_FINISH_CONTEXT_RDA_DESIGN.md)§9〜10参照。RA-02①②に加え、[RA-02③接続差分設計draft-0.6](BEST_PRACTICE_ABORT_SCOPE_FINISH_ASSEMBLY_RA02_BINDING_DESIGN.md)のRB-A〜Dで同pin供給・準備・合成lifecycle・plan／handoff結合まで実装した。元analyze受理capture、private発行slot・実生存の真正性・一度限りのissue／acceptは未実装。ローカル上限（深さ8・配列100・object項目30・訪問10,000・保守的文字費262144）はsnapshot全体で共有し、比較時は両入力で共有する。これは合成projectionの有限枠であり、新たな本番日時長cap・実メモリ上界を承認するものではない。
+追加値のstrict schema・bounded projection／比較はRA-01の合成値層だけ実装した。[RD-A詳細型・発行契約draft-0.11](BEST_PRACTICE_ABORT_SCOPE_FINISH_CONTEXT_RDA_DESIGN.md)§9〜10参照。RA-02①②に加え、[RA-02③接続差分設計draft-0.7](BEST_PRACTICE_ABORT_SCOPE_FINISH_ASSEMBLY_RA02_BINDING_DESIGN.md)のRB-A〜Dで同pin供給・準備・合成lifecycle・plan／handoff結合まで実装した。元analyze受理capture、private発行slot・実生存の真正性・一度限りのissue／acceptは未実装。ローカル上限（深さ8・配列100・object項目30・訪問10,000・保守的文字費262144）はsnapshot全体で共有し、比較時は両入力で共有する。これは合成projectionの有限枠であり、新たな本番日時長cap・実メモリ上界を承認するものではない。
 
 ## 3 固定状態遷移と一度限りのclaim
 
