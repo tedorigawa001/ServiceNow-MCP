@@ -16,6 +16,8 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 ### Changed
 
+- RB-A extracts the package-excluded synthetic recovery lifecycle into a shared fresh-root kernel while retaining the legacy issuer API. A separate descriptor-only finish-recovery facade uses the same guard/claim implementation, mints private references and rejects mixed/copy/legacy bindings, replay and reentrancy. It exposes only the observation/claim/non-executable-consumption prefix: no pin adoption, handoff/route acceptance, finish evidence or real connection is enabled.
+
 - RA-02 preparation adds a package-excluded fresh synthetic finish assembly with separately branded owner binding, one-shot bind/prepare claims and bounded private fixture pins. Foreign/copy/old-issuer bindings, replay, reentrancy and failed reuse stop without restoring pins; diagnostics expose counts only. Existing recovery issuer APIs remain unchanged. No evidence issuer, handoff/live-route adoption, real connection or whole-run admission is enabled.
 
 - RA-01 adds package-excluded, synthetic-only finish-context value projections and comparisons with a separate value-only brand, strict variants and shared node/character limits. Missing fields, mixed references and oversized inputs fail closed. This does not issue evidence, validate live provenance or enable formal issuance, runtime connections or whole-run admission.

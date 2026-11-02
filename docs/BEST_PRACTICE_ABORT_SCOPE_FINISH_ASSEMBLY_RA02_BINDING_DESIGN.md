@@ -1,7 +1,7 @@
 # RA-02③ 同handoff・route結合の接続差分設計
 
-Version: br006-finish-assembly-binding-draft-0.1 / Date: 2026-11-02。
-Status: **設計のみ・未実装。合成依存限定・証拠発行なし・正式発行口閉鎖・全体受付無効・Unknown・VM／監視／telemetry調査保留を維持する。**
+Version: br006-finish-assembly-binding-draft-0.2 / Date: 2026-11-02。
+Status: **RB-Aの共通kernel生成境界と閉鎖した新入口だけ合成限定実装。RB-B〜Dは未実装。証拠発行なし・正式発行口閉鎖・全体受付無効・Unknown・VM／監視／telemetry調査保留を維持する。**
 
 基準HEAD: `d263282`。[RD-A](BEST_PRACTICE_ABORT_SCOPE_FINISH_CONTEXT_RDA_DESIGN.md)§2〜5・10と[RA-02①②検証記録](E2E_BEST_PRACTICE_FINISH_ASSEMBLY_RA02_2026-11-02.md)に対する接続差分。実装・実接続・実通信・設定変更・実Permit投入の承認ではない。
 
@@ -74,7 +74,7 @@ legacyのsummary／固定discardは維持する。summaryを選んだplan、消�
 
 | 分割案 | 次に確認する範囲 |
 |---|---|
-| RB-A | 共通kernelの生成境界抽出。旧API／全旧試験とRA-02①②を維持し、新入口はまだrouteを受理しない。各rootのowner／guard／claim独立、後付け登録なし |
+| RB-A（生成境界実装済み） | 共通kernelの生成境界抽出。旧API／全旧試験とRA-02①②を維持し、新入口はまだpin／handoff／routeを受理しない。各rootのowner／guard／claim独立、後付け登録なし |
 | RB-B | 新入口構築での同receipt／source／window／releaseとpinの供給。元active receipt・selected／T_i／U・元state、異なる構築の混入拒否 |
 | RB-C | ready受理origin、source lifecycle、cleanup開始serialを同rootへ追加。開始前／中／後、guard再入・取消・失効を区別 |
 | RB-D | 同handoffの一度限り結合。pre/post照合と競合・失敗後再利用拒否。証拠発行は引き続き0 |
@@ -87,6 +87,20 @@ ready_events=1でもcleanup開始済み、source closing／closed／failed、発
 
 ## 7 承認・未確認事項
 
-この文書は接続方針だけで、RB-A〜Dは未実装。具体的なkernelファイル配置・旧wrapperの戻り型互換性、共通pin型の最小抽出、固定合流規則の費目別上界は実装前に確認する。既存APIsを緩める可変modeや任意hookを追加しない。
+draft-0.1の生成境界案は§8のRB-Aだけ実装した。RB-B〜D、共通pin型の最小抽出、固定合流規則の費目別上界は未対応。既存APIsを緩める可変modeや任意hookを追加しない。
 
 RA-02④の一度限りの証拠発行、RA-03の証拠とhandoffの原子的受理、RD-B以降のE／finish／候補・正常cleanup能力は別工程。正式発行口閉鎖・全体受付無効・調査保留を維持する。
+
+## 8 RB-A実装範囲
+
+基準HEADは`3787799`。`tests/support/review/synthetic-recovery-kernel.ts`へ旧issuer本体を機械移動した。旧本体と比較して先頭comment・factory名以外は同一で、`synthetic-soft-recovery.ts`は同じ引数／default／戻りAPI・型exportを保つ薄いlegacy入口とした。旧試験は変更しない。RA-02①②のdata-only assemblyも変更せず、既にbind済みのrootを新モードへ移行する口は追加しない。
+
+新規`createSyntheticFinishRecoveryRoot`は、strictな`kind=synthetic_finish_recovery_root_v1, time, point`の3項目だけを受ける閉鎖facade。timeは24文字ms精度のS／O／Uと1〜60000の全L、pointは既存worker_deadlineの固定7variant。worker_state、supervisor／worker／generation／request／active input等はpointから内部生成し、caller owner／seed／facts／receipt／frameを受けない。O＝Uを含む既存UTC条件は共通kernelで維持する。
+
+facadeは新しいkernelを一つだけ生成し、binding／guard／busy／hard／claimの別台帳を持たない。bind・observeは内部の固定seed／factsを渡すだけで、余分な引数を拒否する。出力binding／observation／recoveryは新入口専用の静的brandに分けるが、元kernelが発行した同一objectを使い、二つ目のruntime handleを作らない。混入拒否は元kernel内のidentity検査で行う。
+
+公開する操作はbind／observe／claimRecovery／consumeRecovery／revoke／close／inspectだけ。consumeは既存のauthority:none消費結果であり、finishや新世代を開始しない。旧kernelの残りの操作やcore・seed・factsを返さない。失敗／close後はfacadeの構築materialも参照を外し、固定診断だけを残す。guardは各操作で元kernelのpre／postだけが動き、inspectはguardを実行しない。
+
+新入口のinspectは元state・claim開始・固定診断・permissionsとroute_bound=false／evidence_issues=0に限定し、元kernelのtime／identityを返さない。RB-Aの小さなdescriptor pinは、RA-02①②のheader／receipt ledgerとの接続ではない。active inputとselected／T_i／U・期待contextを同構築で供給する本体はRB-B、live routeはRB-C、handoff結合はRB-Dへ残す。
+
+[RB-A検証記録](E2E_BEST_PRACTICE_FINISH_RECOVERY_ROOT_RBA_2026-11-02.md)参照。局所の構築／inspect／破棄にもwork・allocationは必要であり、会計更新なしを費用0の証明にしない。全体work／layout／allocationはUnknown、実session／実worker保証・本番capや全体受付には昇格しない。
