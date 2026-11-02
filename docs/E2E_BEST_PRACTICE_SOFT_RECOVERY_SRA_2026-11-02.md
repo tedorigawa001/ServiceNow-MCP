@@ -3,7 +3,7 @@
 Date: 2026-11-02 / 基準HEAD: `cc5e221`。
 Status: **配布対象外の独立合成issuerのみ。回復route・実worker／runtime・実cleanupに未接続。**
 
-[soft回復claim設計draft-0.3](BEST_PRACTICE_ABORT_SCOPE_SOFT_RECOVERY_CLAIM_DESIGN.md)§12と[親設計draft-0.10](BEST_PRACTICE_ABORT_SCOPE_WORKER_TIME_BINDING_DESIGN.md)を参照。正式発行口閉鎖・Unknown・全体受付無効・VM／監視／telemetry調査保留を維持する。
+[soft回復claim設計draft-0.4](BEST_PRACTICE_ABORT_SCOPE_SOFT_RECOVERY_CLAIM_DESIGN.md)§12と[親設計draft-0.10](BEST_PRACTICE_ABORT_SCOPE_WORKER_TIME_BINDING_DESIGN.md)を参照。正式発行口閉鎖・Unknown・全体受付無効・VM／監視／telemetry調査保留を維持する。
 
 ## 1 実装範囲と非権威性
 
@@ -67,7 +67,29 @@ SR-01／02、SR-05の値variant・identity、SR-07の同期guard、SR-11の診�
 
 最終JSONはローカル一時領域`/private/tmp/servicenow-sra-tests-final-20261102.json`。ファイル数はtestResults.length、時間はJSON開始〜最終試験終了で集計した。中間の全体実行もexit 0であり、最終値とは分ける。梱包内の既存compiled回帰をSR-Aの専用compiled保証／B-03完了へ流用しない。
 
-## 5 残課題・未実施
+## 5 レビュー修正（2026-11-02）
+
+§2・§4の119件／10,603件と、ESLintを変更ファイルだけに対して実行した結果は、修正前の記録として残す。レビューで、issuer実装にある次の判定をそれぞれ外す変異でも119件が成功することが判明した。
+
+| 判定 | 外した場合の影響 | 追加試験 |
+|---|---|---|
+| seedのidentity参照をobject・非Proxyに限る（`pinSeed`内の`refs()`） | runなどを文字列で渡すと受理され、`===`の値一致によりcopyした値でも同一rootと判定される | seedのrunが文字列／Proxyならbindを拒否し、soft診断を残さない（2件） |
+| factsのidentity参照をobject・非Proxyに限る（`pinFacts`内の`refs()`） | jobなどが文字列なら値のcopyで観測が通る。既存試験は差替えに新しい`{}`だけを使い、getter／Proxy試験もroot自体のpropertyが対象だった | factsのjobが文字列／Proxyならbindを拒否（2件） |
+| `recordCleanup`の再入拒否（busy判定） | observeのguard内から発行済みsinkへconfirmedを記録でき、observeもそのまま成功する。既存の再入試験はcleanupLeaseだけを呼んでいた | 捕捉された再入でobserveが`internal_review_error`で停止し、sinkは未sealのまま残り、soft／cleanup診断を記録しない |
+
+各変異では対応する追加試験だけが失敗し、復元後に`cmp`一致を確認した。observeの`state!=='active'`判定は、外しても`observationStarted`だけで同じく拒否される等価変異として扱い、追加試験の対象にしていない。issuer実装・runtime sourceは変更していない。
+
+修正後の結果：
+
+| 検証 | 結果 |
+|---|---|
+| SR-A合成 | 1ファイル／124件成功 |
+| ESLint | `npm run lint`（repo全体）exit 0、errors 0 |
+| 全体合成 | maxWorkers=3、239ファイル／10,608件成功、失敗0・pending 0。JSON内の開始〜最終試験終了は約34.4秒 |
+
+soft回復claim設計はdraft-0.4へ更新し、§12.4の件数・保証範囲と親設計・本書からの版数リンクを直した。
+
+## 6 残課題・未実施
 
 RunHealthWitnessの正式発行、実ReadState／監督のprivate継続、SR-Bのphase route／未処理集合／verify、SR-Cの旧終了証拠・新世代、SR-DのWJ-C finish連結、外側cleanup・最終checkpointは未実装。実session／source／ReleasePermit／worker jobの証拠にこのfake topologyを昇格しない。
 

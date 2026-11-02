@@ -113,6 +113,17 @@ it.each(['seed','facts','observed'] as const)('rejects %s accessor/proxy data wi
     const owner=createSyntheticSoftRecoveryIssuer((kind==='seed'?bad:s) as SyntheticRecoverySeed,(kind==='facts'?bad:facts) as SyntheticSoftFacts);
     expect(()=>{const b=owner.bind(s);owner.observe(b,kind==='observed'?bad:facts);}).toThrow('internal_review_error');expect(calls).toBe(0);}
 });
+// Identity slots compare by ===, so a primitive would match any copied value.
+it.each([['seed','string'],['seed','proxy'],['facts','string'],['facts','proxy']] as const)('rejects a %s identity reference given as a %s before binding',(where,form)=>{
+  const value=form==='string'?'identity-7':new Proxy({},{}),s=where==='seed'?{...seed(),run:value}:seed(),facts=where==='facts'?{...worker('analyze_timer'),job:value}:worker('analyze_timer');
+  const owner=createSyntheticSoftRecoveryIssuer(s as SyntheticRecoverySeed,facts as SyntheticSoftFacts);expect(()=>owner.bind(s as SyntheticRecoverySeed)).toThrow('internal_review_error');
+  expect(owner.inspect()).toMatchObject({state:'failed',diagnostics:{soft:null}});
+});
+it('rejects caught reentry into a preissued cleanup sink during observation',()=>{
+  const f=fixture(worker('analyze_timer')),lease=f.owner.cleanupLease(f.b);let once=false;
+  f.arm(()=>{if(!once){once=true;try{f.owner.recordCleanup(lease,'confirmed');}catch{}}return undefined;});
+  expect(f.observe).toThrow('internal_review_error');expect(f.owner.inspect()).toMatchObject({state:'failed',observation_pending:false,cleanup_pending:true,diagnostics:{soft:null,cleanup:null}});
+});
 it.each([
   {...phase(),job:{},id:1},{...phase(),worker_state:'starting'},worker('unknown'),{...worker('request_check_unstarted'),generation:{}},
   {...worker('ready_timer'),id:1},{...worker('send_check'),job:{}},{...worker('analyze_timer'),allocation:{}},{...worker('analyze_timer'),id:0},

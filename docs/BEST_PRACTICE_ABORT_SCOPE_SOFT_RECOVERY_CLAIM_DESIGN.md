@@ -1,6 +1,6 @@
 # WJ-C残工程：soft回復claim・世代移行の詳細設計
 
-Version: br006-soft-recovery-claim-draft-0.3 / Date: 2026-11-02。
+Version: br006-soft-recovery-claim-draft-0.4 / Date: 2026-11-02。
 Status: **SR-Aの内部型・同ownerの観測／回復slot消費・診断分離だけを独立合成issuerで限定実装（§12）。回復route・世代移行・実生成元／cleanup接続・SR-B〜Dは未実装。正式発行口閉鎖・Unknown・全体受付無効・VM／監視／telemetry調査保留を維持する。**
 
 基準HEAD: `2804af5`。[親設計](BEST_PRACTICE_ABORT_SCOPE_WORKER_TIME_BINDING_DESIGN.md)§7・13の差分。WJ-Cの通常finish限定実装を変更せず、次の合成実装範囲を定める。実worker／runtime接続、実通信・実機操作、設定変更、本番cap／Permit投入・Pushの承認ではない。
@@ -213,8 +213,10 @@ recordCleanupのstatusはfixtureが渡す合成イベントで、GenerationClose
 
 ### 12.4 試験・非実装範囲
 
-[119件の試験](../tests/review/synthetic-soft-recovery.test.ts)でSR-01／02、SR-05のvariant値・identity、SR-07の同期guard、SR-11の診断分離の一部を確認した。最後のpost-guard内の期待世代差替え、S=O=U／O=U／U=S+Lの値境界、fake health checkの理由文字列だけからsoftへ昇格しないことも確認する。実ReadStateの期限通知・await・terminate・終了待ち・元sessionの失効連携は確認していない。
+[124件の試験](../tests/review/synthetic-soft-recovery.test.ts)でSR-01／02、SR-05のvariant値・identity（seed／factsのidentity参照が文字列・Proxyなら拒否）、発行済みcleanup sinkへの捕捉再入の停止、SR-07の同期guard、SR-11の診断分離の一部を確認した。最後のpost-guard内の期待世代差替え、S=O=U／O=U／U=S+Lの値境界、fake health checkの理由文字列だけからsoftへ昇格しないことも確認する。実ReadStateの期限通知・await・terminate・終了待ち・元sessionの失効連携は確認していない。
 
 独立oracleは、全9 topology（phase payloadのworker有／無＋worker7発生点）の各一度のbind／cleanup lease／observe／claim／consume／close、計12 guardを確認する。phase3種は別にworker有／無を検査する。回数は局所fakeモデルのイベント数で、actual work／cap・全体受付の根拠ではない。旧WJ-A 157／WJ-B 66／通常WJ-C 82件を維持し、初回RED・最終検証は[SR-A検証記録](E2E_BEST_PRACTICE_SOFT_RECOVERY_SRA_2026-11-02.md)へ分離する。
 
 issuer・試験は配布物に含めず、dist JS／宣言／mapの関数／path混入とruntime／I/O／timer／clock／worker依存を負の対照付きで検査する。これは字句・依存先の局所検査であり、間接global取得等の網羅的証明ではない。専用compiled／B-03・実class保証へ流用しない。正式発行口閉鎖・全体受付無効・Unknown・調査保留を維持する。
+
+draft-0.3のレビュー修正：seed／factsのidentity参照をobject・非Proxyに限る検査（`refs()`）と、`recordCleanup`の再入拒否（busy判定）は、各判定を外す変異でも119件が通っていた。前者を外すと文字列のidentityが`===`の値一致でcopyでも通り、§3の「同じid／日時／hashだけでは通さない」が成り立たない。後者を外すとobserveのguard内から発行済みsinkへconfirmedを記録でき、observeも成功する。seed／facts×文字列／Proxyの4件と再入1件の試験を追加し、§12.4の件数・保証範囲と親設計・検証記録からの版数リンクを更新した。
