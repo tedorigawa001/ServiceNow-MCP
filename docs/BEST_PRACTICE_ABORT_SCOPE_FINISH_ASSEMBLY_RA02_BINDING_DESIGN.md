@@ -1,6 +1,6 @@
 # RA-02③ 同handoff・route結合の接続差分設計
 
-Version: br006-finish-assembly-binding-draft-0.4 / Date: 2026-11-02。
+Version: br006-finish-assembly-binding-draft-0.5 / Date: 2026-11-02。
 Status: **RB-A／Bの生成・供給とRB-Cの同root lifecycle／ready origin／cleanup開始serialまで合成限定実装。RB-Dは未実装。finish証拠発行なし・正式発行口閉鎖・全体受付無効・Unknown・VM／監視／telemetry調査保留を維持する。**
 
 基準HEAD: `d263282`。[RD-A](BEST_PRACTICE_ABORT_SCOPE_FINISH_CONTEXT_RDA_DESIGN.md)§2〜5・10と[RA-02①②検証記録](E2E_BEST_PRACTICE_FINISH_ASSEMBLY_RA02_2026-11-02.md)に対する接続差分。実装・実接続・実通信・設定変更・実Permit投入の承認ではない。
@@ -168,3 +168,5 @@ public inspectはsource状態／completion・開始flag・serial・ready_origin�
 費目は定数個のlifecycle／origin参照生成、通常guard、開始claim、診断・失効・破棄。これらのwork／allocationは未導出で、会計不変を費用0とはしない。全体work／layout／allocation・本番capはUnknown。旧class／実sessionの生存を証明したものではない。
 
 [RB-C検証記録](E2E_BEST_PRACTICE_RECOVERY_LIFECYCLE_RBC_2026-11-02.md)参照。RB-Dの同handoff・planへの結合、verify後の制限合流・issue／accept・finish／E・正常source／cleanup能力は引き続き未実装。
+
+draft-0.4のレビュー修正（RB-C）：通常closeは、source closeを開始してsettleしていない状態（closing）でも成功し、`clear()`がsourceを一律`closed`にしていた。未確定のsource closeが正常closeに見えるため、source closing中の通常closeを拒否する（試験helperの実装修正）。source closeを一度も開始しない通常closeは`closed`の表示を維持し、`source_close_started=false`・`source_completion=none`で区別する。

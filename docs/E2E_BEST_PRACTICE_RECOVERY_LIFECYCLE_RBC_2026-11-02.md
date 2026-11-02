@@ -2,7 +2,7 @@
 
 Date: 2026-11-02 / Baseline: `c7d5961` / Status: 合成依存限定・FinishContextEvidence発行なし。
 
-[RA-02③接続差分設計draft-0.4](BEST_PRACTICE_ABORT_SCOPE_FINISH_ASSEMBLY_RA02_BINDING_DESIGN.md)§10の合成状態だけを実装した。共通kernel／pinned facade・専用試験・梱包監査・CHANGELOG・設計書を更新。runtime source・MCP・設定・既存試験は変更していない。
+[RA-02③接続差分設計draft-0.5](BEST_PRACTICE_ABORT_SCOPE_FINISH_ASSEMBLY_RA02_BINDING_DESIGN.md)§10の合成状態だけを実装した。共通kernel／pinned facade・専用試験・梱包監査・CHANGELOG・設計書を更新。runtime source・MCP・設定・既存試験は変更していない。
 
 ## 実装・所有権
 
@@ -51,6 +51,31 @@ generation claimは同preparationのverify=null継続を既存kernelで確定し
 4. 混入対照は、start／lease／cleanup recordが本来成功する段階へ揃えた。単に順序違反でも失敗するfixtureだけを根拠にせず、同一handleの成功対照も確認した。
 
 51件版の全体11,770件成功後、cleanup開始単独の対照2件を追加し、最終53件を含む全体11,772件を再実行した。最終の根拠は上表の再実行結果とする。
+
+## レビュー修正（2026-11-02）
+
+上記の件数と、対象ファイルだけのESLint結果は修正前の記録として残す。
+
+**未確定source closeの隠蔽（試験helperの実装修正）**：`beginSourceClose`でclosingにした後、settleせずに準備を破棄して通常`close`すると、closeが成功しlifecycleが`source:'closed'`／`source_completion:'none'`になった。actの制限がsource非open時も`close`を許し、`clear()`がfailed以外を一律`closed`にしていたためである。kernelの通常closeを、sourceがclosingの間は拒否するよう修正した。拒否後はhard停止としてsourceは`failed`になる。source closeを一度も開始しない通常closeは、合意どおり`closed`表示を維持し、`source_close_started=false`・`source_completion=none`で区別する。
+
+| 追加試験 | 確認内容 |
+|---|---|
+| closing中の通常close | `internal_review_error`で拒否し、`source:'failed'`・`source_close_started:true`・`source_completion:'none'` |
+| source close未開始の通常close | `closed`・`source_close_started:false`・`source_completion:'none'` |
+| worker起動中のcleanup開始への捕捉再入 | startが`internal_review_error`で停止し、cleanup開始serialは1のまま |
+
+closing拒否の判定を外す変異では1件目だけが失敗し、復元後に`cmp`一致を確認した。cleanup開始の`busy`判定は、外してもguard内の「cleanup開始後はclaim／start／ready／planを拒否」で同じく停止するため、3件目は動作の確認として残し、等価変異として扱う。check時の`readyUsable`、ready commit時の照合、`readyUsable`の各条件も、actの入口制限・readyの失効・busyで同じく拒否される等価変異として扱う。
+
+修正後の結果：
+
+| 検証 | 結果 |
+|---|---|
+| RB-C専用合成試験 | 56件成功 |
+| ESLint | `npm run lint`（repo全体）exit 0 |
+| build・梱包 | `npm run build`成功、offline梱包441ファイル成功 |
+| 全体合成 | maxWorkers=3、250ファイル／11,775件成功、失敗0・pending 0、exit 0。約45.7秒 |
+
+RA-02③接続差分設計はdraft-0.5へ更新した。SR-D設計（draft-0.8）を指す3文書と、RA-02③設計（draft-0.5）を指す3文書の版数リンクも現行版へ直した。
 
 ## 未対応・非実施
 

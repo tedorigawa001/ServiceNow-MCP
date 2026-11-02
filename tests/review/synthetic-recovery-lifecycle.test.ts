@@ -137,3 +137,15 @@ it('never exposes identity witnesses, handoff or finish evidence in lifecycle di
   type Root=ReturnType<typeof createSyntheticPinnedRecoveryRoot>;type Ticket=ReturnType<Root['claimRecoveryGeneration']>;type Ready=ReturnType<Root['acceptRecoveryReady']>;
   const noEvidence:Ready extends SyntheticFinishContextEvidence?true:false=false,noMix:Ticket['cleanup'] extends Ready?true:false=false;expect([noEvidence,noMix]).toEqual([false,false]);expect(f.root.inspect()).toMatchObject({route_bound:false,evidence_issues:0});
 });
+it('refuses normal close while a begun source close is unsettled instead of reporting it closed',()=>{
+  const f=prepared();f.root.beginSourceClose(f.b);f.root.discardWorkerRecoveryPreparation(f.b,f.p);
+  expect(()=>f.root.close(f.b)).toThrow('internal_review_error');expect(f.root.inspect()).toMatchObject({state:'failed',lifecycle:{source:'failed',source_close_started:true,source_completion:'none'}});
+});
+it('keeps closed for a normal close that never began a source close (no completion recorded)',()=>{
+  const f=prepared();f.root.discardWorkerRecoveryPreparation(f.b,f.p);f.root.close(f.b);expect(f.root.inspect()).toMatchObject({state:'closed',lifecycle:{source:'closed',source_close_started:false,source_completion:'none'}});
+});
+it('rejects swallowed cleanup-start reentry during worker startup',()=>{
+  const f=claimed();let n=0;f.arm(()=>{if(++n===2){try{f.root.beginRecoveryCleanup(f.ticket.cleanup);}catch{/* outer must stop */}}return undefined;});
+  expect(()=>f.root.startRecoveryGeneration(f.b,f.ticket.start)).toThrow('internal_review_error');expect(f.root.inspect()).toMatchObject({state:'failed',lifecycle:{cleanup_started:true,cleanup_serial:1}});
+  f.root.recordRecoveryCleanup(f.ticket.cleanup,'confirmed');
+});

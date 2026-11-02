@@ -94,6 +94,8 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 ### Added
 
+- RB-C synthetic recovery kernel now refuses a normal close while a begun source close is still unsettled, instead of reporting the source as closed. Adds three tests covering that refusal, the unchanged `closed` report for a close that never began a source close, and caught cleanup-start reentry during worker startup.
+
 - Adds eight RB-B synthetic pinned recovery root tests: unstarted origins refuse closure events other than `not_required`/`not_required` (with a positive control), bind/observe extra arguments are refused, construction descriptors with a non-plain prototype are refused, and a structurally invalid descriptor never invokes the external guard.
 
 - Adds two RB-A synthetic finish-recovery root tests showing that construction descriptors and their time objects with a non-plain prototype are refused even when their own data properties are valid.
