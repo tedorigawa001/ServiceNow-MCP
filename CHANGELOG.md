@@ -88,6 +88,8 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 ### Added
 
+- RA-02 synthetic finish assembly now publishes its bound/prepared states only after the final post guard. Adds three tests covering caught reentry into close during the preparation post guard and the post-guard publication order of bind and prepare.
+
 - RA-01 synthetic finish-context values now apply the aggregate schema's metadata budget rule (`metadata_seen <= max_records+1`, `selected = min(metadata_seen, max_records)`, `truncated = metadata_seen > max_records`) instead of only upper bounds. Adds 18 tests isolating previously unguarded header/run semantics (S/O/U/L order, header start, collection counts, duplicate rules/limitations, ruleset derivation, empty skipped rules), expected-limitation subsets, accepted-outcome reuse, omitted rows without a completed input, and cycle/oversized-array failure classification.
 
 - SC2-C synthetic generation recovery now invalidates the pre-start ticket as a discard handle when the new frame starts, so a started frame without an accepted ready can no longer be discarded through the original start ticket. Adds three tests covering that refusal, fixing unexpected startup/ready failure reasons to an internal error, and caught reentry into the new-frame cleanup sink during startup.

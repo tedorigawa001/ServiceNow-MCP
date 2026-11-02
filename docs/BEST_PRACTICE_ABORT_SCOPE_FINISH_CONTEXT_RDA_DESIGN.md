@@ -1,6 +1,6 @@
 # RD-A FinishContextEvidenceの詳細型・private発行契約
 
-Version: br006-finish-context-rda-draft-0.5 / Date: 2026-11-02。
+Version: br006-finish-context-rda-draft-0.6 / Date: 2026-11-02。
 Status: **RA-01値層とRA-02①②の新合成assembly・private fixture pinだけ実装。RA-02のhandoff／live route結合・証拠発行とRA-03の受理は未実装。正式発行口閉鎖・Unknown・全体受付無効・VM／監視／telemetry調査保留を維持する。**
 
 基準HEAD: `a62c897`。[SR-D接続設計](BEST_PRACTICE_ABORT_SCOPE_RECOVERY_FINISH_SRD_DESIGN.md)§1〜3・9のRD-Aを具体化する。[SC2-D](BEST_PRACTICE_ABORT_SCOPE_WORKER_RECOVERY_CONTINUATION_DESIGN.md)と[通常WJ-C](BEST_PRACTICE_ABORT_SCOPE_WORKER_TIME_BINDING_DESIGN.md)の既存契約は維持する。コード・公開JSON／MCP・設定を変更する指示ではなく、実接続・実通信・本番cap／Permit投入の承認ではない。
@@ -228,8 +228,8 @@ RA-01による値検査のためだけに作るplan／frame／ready／lifecycle 
 
 | 境界 | 状態・責務 |
 |---|---|
-| bind | fresh → binding → bound。生成claimは最初の外部guardより前に消費。copy／RA-01検査とpost-guardが終わるまでbindingを返さない |
-| prepare(binding) | bound → preparing → prepared。一度限りの準備claimを先に消費。同owner以外・copy・旧issuer bindingは拒否。値／handle／証拠を返さない |
+| bind | fresh → binding → bound。boundへの遷移は最後のpost-guard後のcommitで行う。生成claimは最初の外部guardより前に消費。copy／RA-01検査とpost-guardが終わるまでbindingを返さない |
+| prepare(binding) | bound → preparing → prepared。preparedへの遷移は最後のpost-guard後のcommitで行う。一度限りの準備claimを先に消費。同owner以外・copy・旧issuer bindingは拒否。値／handle／証拠を返さない |
 | fail／revoke | 最初の固定codeとstageを保持し、seed／owner／pin参照を同期破棄。再bind・再準備・正常closeへの救済なし |
 | close | data-only scopeの参照破棄だけ。実source正常close／worker cleanupの証拠ではない。close後の再開不可 |
 | inspect | 状態・claim開始・件数・固定hard理由だけ。ID／UTC／header／release／receipt／pin参照は返さず、evidence_issues=0 |
@@ -241,3 +241,5 @@ seed copyは深さ8・object項目30・配列100・訪問10,000・文字費26214
 [RA-02①②検証記録](E2E_BEST_PRACTICE_FINISH_ASSEMBLY_RA02_2026-11-02.md)を参照。SourceLifecycleSlot／NewFrameRouteSlot、元SC2-D handoff・元active receiptと本来の受理capture、FinishContextIssueSlot／証拠発行、RA-03受理とcleanup責務の接続は未実装のまま。準備成功をFinishContextEvidenceへ昇格しない。
 
 次段の[RA-02③接続差分設計draft-0.1](BEST_PRACTICE_ABORT_SCOPE_FINISH_ASSEMBLY_RA02_BINDING_DESIGN.md)では、別ownerの外部登録を避ける共通kernel生成境界、同receipt／handoffとlive routeの結合、worker起動とcleanup開始serialの分離を整理した。RB-A〜Dは未実装で、証拠発行は含めない。
+
+draft-0.5のレビュー修正：RA-02の`act`の再入拒否（busy判定）は、既存の再入試験がbind／prepareへの再入だけでclaim一度限り・state判定が先に止めるため、外す変異でも86件が通っていた。外すとprepareのpost-guard内から`close`へ再入でき、closeが成功したうえで外側prepareも成功する。また、bound／preparedへの遷移がwork内にあり、post-guard中の`inspect()`に先行公開されていた。遷移を最後のpost-guard後のcommitへ移し（試験helperの実装修正、`88ed8e9`）、close再入と公開順序の試験を追加した（86件→89件）。SR-D設計を指す3文書の版数リンクも現行版へ直した。

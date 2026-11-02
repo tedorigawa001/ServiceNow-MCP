@@ -2,7 +2,7 @@
 
 Date: 2026-11-02 / Baseline: `5ca638a` / Status: 合成依存限定・証拠発行なし。
 
-[RD-A draft-0.4](BEST_PRACTICE_ABORT_SCOPE_FINISH_CONTEXT_RDA_DESIGN.md)§10の生成準備境界だけを対象とする。`tests/support/review/synthetic-finish-assembly.ts`と専用試験を追加し、梱包監査・CHANGELOG・設計書を更新した。runtime source、旧`createSyntheticSoftRecoveryIssuer`、既存試験は変更していない。
+[RD-A draft-0.6](BEST_PRACTICE_ABORT_SCOPE_FINISH_CONTEXT_RDA_DESIGN.md)§10の生成準備境界だけを対象とする。`tests/support/review/synthetic-finish-assembly.ts`と専用試験を追加し、梱包監査・CHANGELOG・設計書を更新した。runtime source、旧`createSyntheticSoftRecoveryIssuer`、既存試験は変更していない。
 
 ## 実装・責務
 
@@ -38,6 +38,28 @@ seed全体で深さ8・object項目30・配列100・訪問10,000・保守的文�
 2. strict型検査で、先行条件によりnullへ絞られたhardをcatch内で参照したため`never.code`エラーになった。最初の診断はfail内部の`??=`が保持しているので、catchの冗長なhard参照を除いた。最終型検査は成功。
 3. 最初のguardで取消された場合にclaim開始flagがfalseのままだったことを追加REDで確認。claimをguardより前に移して、失敗時も消費済みとする契約へ揃えた。成功・拒否・再入を再検証した。
 4. 梱包監査の旧root混入の負の対照が、未使用importのためTypeScript変換時に消え、期待した拒否にならず監査が失敗した。importした関数への参照を含める対照に訂正し、監査が確実に検出することを再確認した。実helperに旧root依存は追加していない。
+
+## レビュー修正（2026-11-02）
+
+上記の86件／11,550件と、ESLintを対象3ファイルだけに対して実行した結果は、修正前の記録として残す。実装と試験の修正は`88ed8e9`、本記録・設計・CHANGELOGの更新は続くコミットで行った。
+
+| 項目 | 修正前 | 対応 |
+|---|---|---|
+| `act`の再入拒否（busy判定） | 外しても86件が通った。既存の再入試験はbind／prepareへの再入で、claim一度限り・state判定が先に止めていた。外すとprepareのpost-guard内から`close(b)`へ再入でき、closeが成功しclosedになったうえで外側prepareも成功する | 捕捉されたclose再入でprepareが`internal_review_error`で停止し、hardがclose段階で記録される試験を追加 |
+| bound／preparedの公開順序 | 遷移がwork内にあり、post-guard中の`inspect()`がbound／preparedを先行表示した | **試験helperの実装を修正**し、`act`にcommitを加えて遷移を最後のpost-guard後へ移した。post-guard中はbinding／preparingに留まる試験を追加（2件） |
+
+busy判定の除去と、各遷移をwork内へ戻す変異では、対応する追加試験1件だけが失敗し、復元後に`cmp`一致を確認した。重複ID、accepted descriptorのstate／context、reviewed起源の欠落、bind／prepareの一度限り、prototype、循環の各判定は、外しても後段のRA-01検査・state判定・schema・深さ上限で同じく拒否される等価変異として扱う。
+
+修正後の結果：
+
+| 検証 | 結果 |
+|---|---|
+| RA-02専用合成試験 | 89件成功 |
+| ESLint | `npm run lint`（repo全体）exit 0 |
+| build・梱包 | `npm run build`成功、offline梱包441ファイル成功 |
+| 全体合成 | maxWorkers=3、247ファイル／11,553件成功、失敗0・pending 0、exit 0。JSON内の開始〜最終試験終了は約34.2秒 |
+
+RD-A設計はdraft-0.6へ更新した。SR-D設計（draft-0.5）を指す3文書の版数リンクも現行版へ直した。
 
 ## 未対応・非実施
 
