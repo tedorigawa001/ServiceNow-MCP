@@ -1,9 +1,9 @@
 # SR-D 回復planからfinish検証・終端候補への接続設計
 
-Version: br006-recovery-finish-srd-draft-0.14 / Date: 2026-11-02。
-Status: **SR-D finish接続は未実装。前提のRA-01／RA-02①②・RB-A〜D・RA-02④-AとRA-03-A／Bの合成受理／固定discardまで実装。正式発行口閉鎖・Unknown・全体受付無効・VM／監視／telemetry調査保留を維持する。実finish／runtime接続・実通信・設定変更・本番cap／Permit投入の承認ではない。**
+Version: br006-recovery-finish-srd-draft-0.15 / Date: 2026-11-03。
+Status: **前提のRA-03-BとRD-B01〜04の合成値比較・同accepted封印・失効／固定discardまで実装。RD-Cのfinish job／応答／候補とRD-Dの候補終端は未実装。RD-C詳細設計はdraft-0.1。正式発行口閉鎖・Unknown・全体受付無効・VM／監視／telemetry調査保留を維持する。実finish／runtime接続・実通信・設定変更・本番cap／Permit投入の承認ではない。**
 
-基準HEAD: `31cff06`。[SC2-D接続契約](BEST_PRACTICE_ABORT_SCOPE_WORKER_RECOVERY_CONTINUATION_DESIGN.md)§13、[soft回復設計](BEST_PRACTICE_ABORT_SCOPE_SOFT_RECOVERY_CLAIM_DESIGN.md)§2〜9・11、[通常WJ-C](BEST_PRACTICE_ABORT_SCOPE_WORKER_TIME_BINDING_DESIGN.md)§13との差分を定める。本書の型・操作名は内部役割案で、実在するAPIや実装済み保証ではない。
+初版基準HEAD: `31cff06`。本版の現状照合: `04eef33`。[SC2-D接続契約](BEST_PRACTICE_ABORT_SCOPE_WORKER_RECOVERY_CONTINUATION_DESIGN.md)§13、[soft回復設計](BEST_PRACTICE_ABORT_SCOPE_SOFT_RECOVERY_CLAIM_DESIGN.md)§2〜9・11、[通常WJ-C](BEST_PRACTICE_ABORT_SCOPE_WORKER_TIME_BINDING_DESIGN.md)§13との差分を定める。内部役割案と実装済み範囲を分け、現在の保証は§2・9と各詳細設計で確認する。
 
 ## 1 適用範囲と接続前の不足
 
@@ -18,13 +18,13 @@ Status: **SR-D finish接続は未実装。前提のRA-01／RA-02①②・RB-A〜
 | [WJ-A job owner](../tests/support/review/synthetic-worker-job.ts) | 同generation／supervisor／worker／id／kindの応答相関 | SC2-Cのframe／ready証拠から、同ownerのfinish専用jobへ一度移すprivate接続が必要 |
 | SC2-C cleanup sink | 同新frameの診断snapshotを停止後も記録可能 | 診断やinspect値だけから候補の解放証拠を作らない。正常時の固定cleanup継続と内部確認slotを結ぶ必要がある |
 
-**現状のSC2-DだけではWJ-C相当のfinish全検証を行えない。** 足りない列をresponse・summary・任意aggregate JSONから補わない。既存の12列準備入力、旧seedのstrict keys、通常WJ-Cの公開合成APIを暗黙に拡張しない。追加証拠は別の内部契約として設計・合成実装し、欠けたままの旧SC2-D fixtureは引き続きsummary／discard専用とする。
+**旧SC2-D単体ではWJ-C相当のfinish全検証を行えない。** 後続RD-A／Bは同kernelの別private継続として合成実装したが、足りない列をresponse・summary・任意aggregate JSONから補わない。既存の12列準備入力、旧seedのstrict keys、通常WJ-Cの公開合成APIを暗黙に拡張しない。欠けたままの旧SC2-D fixtureは引き続きsummary／discard専用とする。
 
 ## 2 接続方式とprivate証拠
 
 同じ回復ownerの固定継続内にSR-Dの受理slot・finish job・候補slotを置く案とする。必要ならprivate child viewへ分けるが、元のguard／busy／停止slotを共有し、別rootや別予算を生成しない。`createSyntheticWorkerTimeIssuer`を新しくbindして旧receiptや新frameを再登録する救済は行わない。
 
-WJ-Cの純粋なheader／E／asset比較をtest-only coreへ最小抽出して再利用することを検討する。共有は値比較だけで、通常WJ-Cのjob claim・未完了receipt拒否・候補／cleanup台帳を緩めない。抽出と通常WJ-C互換試験を独立工程にし、共有しただけで実class／compiled保証が成立したとはしない。
+RD-B02ではrule集合・release表現・E境界の小さな純粋predicateだけを共有し、RD-B03に別の回復用局所比較を実装した。通常WJ-Cのheader／asset parserやowner全体を共有したわけではない。通常WJ-Cのjob claim・未完了receipt拒否・候補／cleanup台帳は維持し、値比較の共有だけで実class／compiled保証が成立したとはしない。
 
 RA-03-B後の[RD-B詳細設計draft-0.6](BEST_PRACTICE_ABORT_SCOPE_RECOVERY_FINISH_VALUES_RDB_DESIGN.md)で、RD-B01〜04のstrict構造projection・局所比較・同acceptedの一度限り封印と固定discard接続まで合成実装した。finish job／応答／候補との接続は後続に残す。現reviewed pinは本文ではなくdescriptor由来のcontext参照であり、本文一致・full schema／wire保証はUnknownのまま分離する。初回collection failedと必須active receiptの矛盾は拒否し、ゼロ件を合成しない。
 
@@ -46,7 +46,7 @@ FinishContextEvidenceの合成発行口は配布対象外の独立assemblyに留
 3. soft終端化時に未完了receiptをnot_processedへ移す。完了済み記録を消した後に再生成しない。SC2-Aで確定した集合とreceipt対応をFinishContextEvidence側の記録へ照合する。
 4. 同SC2-D planと追加証拠がすべて揃い、元guardが生きている場合だけ受理する。欠けた列を空値・現在時刻・別release・再解析で補完しない。
 
-追加値のstrict schema・bounded projection／比較はRA-01、後続RD-B01は構造専用projectionだけを合成実装した。[RD-A詳細型・発行契約draft-0.16](BEST_PRACTICE_ABORT_SCOPE_FINISH_CONTEXT_RDA_DESIGN.md)§9〜10参照。[RA-02③接続差分設計draft-0.10](BEST_PRACTICE_ABORT_SCOPE_FINISH_ASSEMBLY_RA02_BINDING_DESIGN.md)のRB-A〜Dに続き、[RA-02④-A／RA-03-A／B](BEST_PRACTICE_ABORT_SCOPE_FINISH_ISSUE_ACCEPT_DESIGN.md)で同kernelの合成発行・受理・同期失効・固定discardまで実装した。元analyze受理capture・実生存の真正性・finish job接続は未実装。ローカル上限（深さ8・配列100・object項目30・訪問10,000・保守的文字費262144）は各projection全体で共有する。RA-01の二入力比較と未実装のRD-B03は別工程であり、構造projectionだけで二入力比較済みとしない。新たな本番日時長cap・実メモリ上界は承認しない。
+追加値のstrict schema・bounded projection／比較はRA-01、後続RD-B01〜04は別の構造値層・局所比較・封印として合成実装した。[RD-A詳細型・発行契約](BEST_PRACTICE_ABORT_SCOPE_FINISH_CONTEXT_RDA_DESIGN.md)§9〜10と[RD-B](BEST_PRACTICE_ABORT_SCOPE_RECOVERY_FINISH_VALUES_RDB_DESIGN.md)§11〜14参照。[RA-02③接続差分設計draft-0.10](BEST_PRACTICE_ABORT_SCOPE_FINISH_ASSEMBLY_RA02_BINDING_DESIGN.md)のRB-A〜Dに続き、[RA-02④-A／RA-03-A／B](BEST_PRACTICE_ABORT_SCOPE_FINISH_ISSUE_ACCEPT_DESIGN.md)で同kernelの合成発行・受理・同期失効・固定discardまで実装した。元analyze本文受理capture・実生存の真正性・finish job接続は未実装。ローカル上限（深さ8・配列100・object項目30・訪問10,000・保守的文字費262144）は各projection全体で共有し、RD-B03の比較は二入力で一枠を共有する。構造projectionやRD-B04封印だけで二入力比較済み／本文確認済みとしない。新たな本番日時長cap・実メモリ上界は承認しない。
 
 ## 3 固定状態遷移と一度限りのclaim
 
@@ -80,6 +80,8 @@ FinishContextEvidenceの合成発行口は配布対象外の独立assemblyに留
 
 ## 5 同新世代のjob相関とE
 
+RD-B04後の具体的なID台帳・開始claim・応答origin・内容gateは[RD-C接続詳細設計draft-0.1](BEST_PRACTICE_ABORT_SCOPE_RECOVERY_FINISH_JOB_RDC_DESIGN.md)で補足する。以下はその未実装契約である。
+
 finish jobは同run／新frame／supervisor／worker／generation／kind=finish／idへ結合する。数値idは同新frame内で単調に一度消費する。旧世代と同じ数値idでも参照が違えば拒否し、readyイベント・旧analyze応答をfinishへ読替えない。SC2-CのreadyをWJ-Aの新しいstart／ready呼出しで作り直さない。
 
 時刻は次を同時に検査する。
@@ -107,7 +109,7 @@ finish jobは同run／新frame／supervisor／worker／generation／kind=finish�
 
 cleanupは元ownerから固定終端ownerへ一度だけ論理移譲し、物理的なsink／同frame contextは共用する。途中失敗時の責任者を空にしない。hard後は発行済み診断sinkで要求済み／失敗／未確認を回収できるが、private正常終端能力を新発行しない。候補はすでに失効済みで、後からconfirmedになっても復活しない。
 
-source解放・worker cleanupは別軸で、片方の成功や最終resource数0だけで両方の固定section実行を証明しない。通常WJ-Cの閉鎖順を基準としつつ、SC2-Dにはsource lifecycleも要求／確認型の新cleanup継続も未接続であることを明記する。実session close・実terminate・OS終了・外側強制終了／最終checkpointはWJ-D／CT-C以降へ残す。
+source解放・worker cleanupは別軸で、片方の成功や最終resource数0だけで両方の固定section実行を証明しない。旧SC2-D単体にはsource lifecycleとの接続はないが、後続pinned root／RA-03-B／RD-B04では同source・新frameのfake lifecycleとdiscard接続まで実装済みである。ただし候補用の終端証拠は未実装。実session close・実terminate・OS終了・外側強制終了／最終checkpointはWJ-D／CT-C以降へ残す。
 
 ## 7 失敗分類と診断保持
 
@@ -137,9 +139,9 @@ source解放・worker cleanupは別軸で、片方の成功や最終resource数0
 
 | 段階案 | 範囲 | 必須試験 |
 |---|---|---|
-| RD-A（RA-03-Bまで合成実装） | [詳細型・発行契約](BEST_PRACTICE_ABORT_SCOPE_FINISH_CONTEXT_RDA_DESIGN.md)の合成発行・受理・非実行期待値・固定discardまで。finish jobへの封印は未実装 | 値検査・fixture pinを由来の証明にしない。実source／worker生存はUnknown。summary／raw manifest／別rootからの昇格0。元SC2-D互換 |
-| RD-B（01の構造値層だけ合成実装） | [期待値封印・値比較設計](BEST_PRACTICE_ABORT_SCOPE_RECOVERY_FINISH_VALUES_RDB_DESIGN.md)。02のscalar共有・03の意味比較・04の同accepted封印は未実装 | 通常WJ-Cの全旧試験維持。構造検査をcontext／集合／時刻一致や本文保証へ昇格しない |
-| RD-C | 同新frameのfinish専用fake job／一度応答消費／候補slot | 同id旧世代・ready／analyze応答・二重送信を拒否。全pre/post guard、send失敗でも再利用なし |
+| RD-A（RA-03-Bまで合成実装） | [詳細型・発行契約](BEST_PRACTICE_ABORT_SCOPE_FINISH_CONTEXT_RDA_DESIGN.md)の合成発行・受理・非実行期待値・固定discardまで。後続封印はRD-B04で扱う | 値検査・fixture pinを由来の証明にしない。実source／worker生存はUnknown。summary／raw manifest／別rootからの昇格0。元SC2-D互換 |
+| RD-B（01〜04合成実装） | [期待値封印・値比較設計](BEST_PRACTICE_ABORT_SCOPE_RECOVERY_FINISH_VALUES_RDB_DESIGN.md)の構造値層・最小scalar共有・局所比較・同accepted封印と失効／固定discard | 通常WJ-Cの全旧試験維持。構造検査・封印・局所比較を本文／full schema／wire保証へ昇格しない |
+| RD-C（詳細設計のみ） | [接続詳細設計draft-0.1](BEST_PRACTICE_ABORT_SCOPE_RECOVERY_FINISH_JOB_RDC_DESIGN.md)。同新frameのID継続・fake job・一度応答消費。本文等のgate前は非実行check／discardだけ | 同id旧世代・ready／analyze応答・二重送信を拒否。全pre/post guard、send失敗でも再利用なし。候補は全内容gate成立後の別段階 |
 | RD-D | 同source終端・新cleanup内部確認slot・一度候補消費 | cleanup両軸と固定順序、hard後の診断回収と復活0、解放後最終checkpoint、正常時参照／UTC破棄 |
 
 独立oracleは実装helperを呼ばず、固定集合・時刻表と有限イベント列から期待数を求める。S/O/T_i/U/Eの等号、E<U・E>S+L、設定期限の等号拒否、100件／超過、重複で欠落を隠す応答、全guard失効・再入・混入・不正getter／Proxy・秘密非出力を含める。通常WJ-A/B/C、SR-A/B/C①、SC2-A〜Dを維持する。
@@ -148,7 +150,7 @@ source解放・worker cleanupは別軸で、片方の成功や最終resource数0
 
 ## 10 承認待ち・未確認事項
 
-- FinishContextEvidenceのstrict型／発行slot・新合成assembly・元receipt／immutable結果参照・route証拠はRD-A詳細MD案へ分離した。実装時の具体配置とcapture hook、同新frameのprivate job台帳への接続方法は引き続きレビュー対象。任意入力で本物のsessionを登録するfriend／昇格口は追加しない。
+- FinishContextEvidenceのstrict型／合成発行slot・新assembly・descriptor由来の元receipt／結果参照・route・受理・封印はRD-A／Bで合成実装済み。元analyze本文のcapture hookと同新frameのprivate job台帳への接続は未実装。任意入力で本物のsessionを登録するfriend／昇格口は追加しない。
 - reviewedの完全な結果を親でcopyせず保持する配置、omission前の受理済み期待値の寿命、既存のconfig日時長policyは未確定。欠損時に検証済み扱いにしない。
 - 候補消費用のSourceClosed／NewCleanupConfirmedのprivate発行継続は未実装。SC2-Cの診断sink・SC2-Dのdata handoff・RA-03-Bのdiscard専用完了受領情報では代替できない。
 - phase型SR-Bのprivate plan受理、実session／ReleasePermit／payload／worker jobの正式binding、実finish／runtime・実通信、実cleanup／外側終了、B-03、全体work上界は別工程。

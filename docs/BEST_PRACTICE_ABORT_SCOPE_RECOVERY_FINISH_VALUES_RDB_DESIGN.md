@@ -209,4 +209,4 @@ source close開始／cleanup開始／hard stopはsealedFinishを同期破棄す�
 
 費目は固定のplan再projection、RA-01二入力比較、新期待値projection、guard／同一性検査、opaque handle／slotと保持data、失効／discardに分ける。各projection／比較の既存有限枠は維持するが、seal全体を単一Budgetとして計測したとは主張しない。finish_seal.usageは**最後の新期待値projectionだけ**で、再検証・比較・Zod copy・work／allocationの総費用はUnknown。新HTTP／retry／verify／input／analyze／generation／finish dispatch・E採取は0、元会計prefixは不変。
 
-[RD-B04検証記録](E2E_BEST_PRACTICE_RECOVERY_FINISH_SEAL_RDB04_2026-11-02.md)参照。以後はRD-Cでの封印slotの一度限りjob消費・応答相関・RD-B03比較接続、その後の候補／終端契約が残る。正式発行口閉鎖・全体受付無効・調査保留を維持し、実session／runtimeには接続しない。
+[RD-B04検証記録](E2E_BEST_PRACTICE_RECOVERY_FINISH_SEAL_RDB04_2026-11-02.md)参照。以後は[RD-C接続詳細設計draft-0.1](BEST_PRACTICE_ABORT_SCOPE_RECOVERY_FINISH_JOB_RDC_DESIGN.md)の封印slotの一度限りjob消費・ID継続・応答相関・RD-B03比較接続、その後の候補／終端契約が残る。本文／full schema／wireのgate未充足時は非実行check／discardだけとし、候補を先行発行しない。正式発行口閉鎖・全体受付無効・調査保留を維持し、実session／runtimeには接続しない。
