@@ -1,7 +1,7 @@
 # WJ-C残工程：soft回復claim・世代移行の詳細設計
 
-Version: br006-soft-recovery-claim-draft-0.9 / Date: 2026-11-02。
-Status: **SR-Aの内部claim／診断分離（§12）、SR-Bのphase非実行plan／fake会計（§13）、SR-C①の旧世代終了／世代なし内部証拠と一度限りの消費（§14）を独立合成issuerで限定実装。実回復route・新世代・実生成元／cleanup接続・SR-C後半／Dは未実装。正式発行口閉鎖・Unknown・全体受付無効・VM／監視／telemetry調査保留を維持する。**
+Version: br006-soft-recovery-claim-draft-0.10 / Date: 2026-11-02。
+Status: **SR-A（§12）、SR-B（§13）、SR-C①（§14）とSC2-Aの証拠移譲・strict準備入力を独立合成issuerで限定実装。実回復route・新世代・実生成元／cleanup接続・SC2-B〜D／SR-Dは未実装。正式発行口閉鎖・Unknown・全体受付無効・VM／監視／telemetry調査保留を維持する。**
 
 基準HEAD: `2804af5`。[親設計](BEST_PRACTICE_ABORT_SCOPE_WORKER_TIME_BINDING_DESIGN.md)§7・13の差分。WJ-Cの通常finish限定実装を変更せず、次の合成実装範囲を定める。実worker／runtime接続、実通信・実機操作、設定変更、本番cap／Permit投入・Pushの承認ではない。
 
@@ -175,10 +175,10 @@ job・listener・timer・worker／stdioは監督owner、HTTP・認証・予約�
 
 1. **SR-A（合成限定実装）**：内部discriminant・同ownerの観測／回復slotとone-shot検査、soft／hard／cleanup診断分離を独立合成issuerだけで実装した。§12参照。route／世代移行や実cleanup証拠は発行しない。
 2. **SR-B（合成限定実装）**：phase型の同世代維持／未起動分岐、未処理集合・必要verifyのfakeイベント会計を非実行planへ接続した（§13）。実finish権限ではない。
-3. **SR-C（①のみ合成限定実装）**：worker型の7発生点、旧世代終了／世代なし証拠とone-shot消費を接続した（§14）。必要verify・新世代routeは未接続。[後半の接続契約draft-0.1](BEST_PRACTICE_ABORT_SCOPE_WORKER_RECOVERY_CONTINUATION_DESIGN.md)で、未消費証拠のprivate移譲・集合／時刻・verify会計・新世代ready／cleanupを分離し、最初の実装単位をSC2-Aとした。設計のみで人の承認は未実施。
+3. **SR-C（①とSC2-Aのみ合成限定実装）**：worker型の7発生点、旧世代終了／世代なし証拠とone-shot消費を接続した（§14）。[後半の接続契約draft-0.2](BEST_PRACTICE_ABORT_SCOPE_WORKER_RECOVERY_CONTINUATION_DESIGN.md)§10で、未消費証拠のprivate移譲・HeldClosure・strict準備入力と集合／時刻検査をSC2-Aとして限定実装した。必要verify・新世代route・SC2-B〜Dは未接続。正式bindingに関する人の承認は未実施。
 4. **SR-D**：通常WJ-CのE／固定集合・候補消費へ接続し、全guardと独立oracleを確認する。実session／監督・外側cleanup接続は行わない。
 
-SR-C後半以降の実装は別の依頼後に行う。実生成継続のclass／module配置、private終了証拠の実発行条件、停止後finishとの接続互換性、実cleanup上限・外側checkpoint／診断写像、実選択windowと集合証拠、全費目上界はレビュー待ちで、人の承認済みとはしない。draft-0.1／0.2はコード照合とMD設計のみ。SR-A／B／C①の実施済み範囲は§12〜14へ分離し、実通信・環境設定操作を実施したことにはしない。
+SC2-B以降の実装は別の依頼後に行う。実生成継続のclass／module配置、private終了証拠の実発行条件、停止後finishとの接続互換性、実cleanup上限・外側checkpoint／診断写像、実選択windowと集合証拠、全費目上界はレビュー待ちで、人の承認済みとはしない。draft-0.1／0.2はコード照合とMD設計のみ。SR-A／B／C①は§12〜14、SC2-Aは後半の接続契約§10へ分離し、実通信・環境設定操作を実施したことにはしない。
 
 draft-0.1のレビュー修正：worker期限型の観測をtimer終端と「送信後／ready待ち」だけに限っていたが、現監督はrequest冒頭（worker未起動のこともある）・ready／応答処理内・送信直前（id消費済み未送信）の`check()`からも同じdeadline_exceededを投げ、adapterはそれらをsoftとして受け付ける。未起動の場合に旧worker終了証拠を要求すると既存soft partialが回復不能になるため、§6.0に発生点の表を追加し、§3・SR-05を合わせた。またsoft後verifyの失敗分類が未記載で、既存adapterが続行してfinishする失敗をhard停止と誤実装し得たため、§7に既存分類との対応表を追加し、SR-09／10を合わせた。
 
@@ -283,7 +283,7 @@ worker_closure診断は要求数・termination／cleanup・input／id終端区�
 
 7発生点×begin／確認／消費の各pre/post guard（6点）の取消を独立oracleで検査し、終了要求0／1、失効後のlease／証拠0、新世代0を確認する。未起動・ready待ち・割当済み未送信・送信済みを分け、混入・二重開始／消費・再入・Proxy／getter・不完全終了を拒否する。実worker method・timer・clock・通信は呼ばない。追加するのは局所の合成イベントだけで、実C/G/P・retry／予約・work capへ費目を追加／再配賦した保証ではない。
 
-実際の終了要求→Promise settle→固定cleanupの継続、遅延OS通知、外側強制終了は未接続。終了後の必要verify・新世代ready・未処理集合との結合はSR-C後半、WJ-C finish／E・候補消費はSR-Dに残す。B-03 compiled保証・全体費目上界・実発行元は未完了。配布物へのscope／関数／path混入を負の対照で拒否する。[SR-C①検証記録](E2E_BEST_PRACTICE_WORKER_CLOSURE_SRC1_2026-11-02.md)参照。正式発行口閉鎖・Unknown・全体受付無効・調査保留を維持し、人の承認済みとはしない。
+実際の終了要求→Promise settle→固定cleanupの継続、遅延OS通知、外側強制終了は未接続。証拠移譲と未処理集合／時刻の準備検査はSC2-Aに限定し、必要verify・新世代readyはSC2-B以降、WJ-C finish／E・候補消費はSR-Dに残す。B-03 compiled保証・全体費目上界・実発行元は未完了。配布物へのscope／関数／path混入を負の対照で拒否する。[SR-C①検証記録](E2E_BEST_PRACTICE_WORKER_CLOSURE_SRC1_2026-11-02.md)参照。正式発行口閉鎖・Unknown・全体受付無効・調査保留を維持し、人の承認済みとはしない。
 
 draft-0.7のレビュー修正：`confirmWorkerUnstarted`の同context照合と、`settleWorkerClosure`のevent 3列のstrict検査は、各判定を外す変異でも111件が通っていた。前者を外すと別input／request／supervisorのcontextからno_generation証拠が発行され、§14.2の「同lease・同contextから」に反する。後者を外すと余分な列を含むeventから証拠が発行される。5件の試験を追加し、§14の件数と親設計・検証記録からの版数リンクを更新した。
 

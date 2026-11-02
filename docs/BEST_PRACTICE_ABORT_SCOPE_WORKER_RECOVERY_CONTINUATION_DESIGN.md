@@ -1,7 +1,7 @@
 # SR-C後半の終了証拠とverifyと新世代readyの接続契約
 
-Version: br006-worker-recovery-continuation-draft-0.1 / Date: 2026-11-02。
-Status: **差分設計案。接続は未実装・人の承認未実施。合成issuerだけを次の実装対象とし、正式発行口閉鎖・Unknown・全体受付無効・VM／監視／telemetry調査保留を維持する。**
+Version: br006-worker-recovery-continuation-draft-0.2 / Date: 2026-11-02。
+Status: **SC2-Aの内部証拠移譲・HeldClosure・strict準備入力を独立合成issuerで限定実装（§10）。SC2-B〜D・正式bindingは未実装で、人の承認未実施。正式発行口閉鎖・Unknown・全体受付無効・VM／監視／telemetry調査保留を維持する。**
 
 基準HEADは`07e7631`。[soft回復claim設計](BEST_PRACTICE_ABORT_SCOPE_SOFT_RECOVERY_CLAIM_DESIGN.md)§6・7・14と[worker時刻設計](BEST_PRACTICE_ABORT_SCOPE_WORKER_TIME_BINDING_DESIGN.md)の差分として、旧世代終了後に同ownerのまま必要verifyと新世代readyへ進む内部境界を定める。既存の非実行consumerを回復権限へ昇格させず、通常WJ-C・runtime／実worker・実sourceを変更しない。
 
@@ -15,7 +15,7 @@ Status: **差分設計案。接続は未実装・人の承認未実施。合成i
 | [既存adapter](../src/review/update-set-adapter.ts)のsoft分岐 | worker期限では旧close→未処理集合確定→必要verify→遅延CPU生成 | 固定順序を合成経路でも維持。既存productionは差し替えない |
 | [WJ-B/C owner](../tests/support/review/synthetic-worker-time.ts) | 通常finishは未完了receiptを拒否。failでidentityを消す | 汎用fail後に別rootで再開しない。回復planの正式受付・E／集合比較はSR-Dへ残す |
 
-本書の型・操作名は内部役割案であり、現在使えるAPIではない。非実行dataを読み返す既存試験と、証拠を保持して先へ移譲する新試験は別経路にする。
+本書の型・操作名は内部役割案で、SC2-Aの実在する合成APIだけを§10へ分離する。非実行dataを読み返す既存試験と、証拠を保持して先へ移譲する新試験は別経路にする。runtime APIとしては公開しない。
 
 ## 2 同ownerの証拠移譲
 
@@ -98,7 +98,7 @@ inspectやsummaryへsource／token／コード本文／raw例外／worker参照�
 
 | 段階案 | 次に実装する範囲 | 必須の独立確認 |
 |---|---|---|
-| SC2-A | 同ownerの証拠移譲、HeldClosure、strict準備入力と不変集合 | 7発生点、処理中receiptの同一性、completed不変、T_i／U保持、二重移譲・公開data／別rootの拒否、全guard失効。verify／新世代は0 |
+| SC2-A（合成限定実装） | 同ownerの証拠移譲、HeldClosure、strict準備入力と不変集合 | 7発生点、処理中receiptの同一性、completed不変、T_i／U保持、二重移譲・公開data／別rootの拒否、全guard失効。verify／新世代は0。§10参照 |
 | SC2-B | 必要verifyとprefixを引継ぐfake会計 | 論理0／1・物理0〜4、C/G/Pの等号・超過、retryとchunkの二重計上拒否、旧終了前／verify中の起動0。継続エラーとhard失効を区別 |
 | SC2-C | HeldClosureの一度の使用、新frame／ready、新cleanup診断slot | 旧世代終了後だけ起動1、未起動は初回1、旧応答・別frame・二重readyを拒否。全pre/post guard・起動後取消でもcleanup責務を保持 |
 | SC2-D | 非実行planの封印と排他的な移譲境界 | 集合追加／欠落・state昇格・U切下げを拒否。summaryからの再準備0。SR-Dへの実接続なしでprivate所有権と固定解放を確認 |
@@ -111,4 +111,20 @@ inspectやsummaryへsource／token／コード本文／raw例外／worker参照�
 
 この案は、SC2-Aを最初の実装単位とし、未消費内部証拠の移譲と集合／時刻の検査までに限定する。新frame／readyイベントのprivate配置、新cleanup sinkとSR-Dの所有権移譲APIはSC2-C着手前に実コード配置と照合する。追加のlayout・work・allocation・実待機上限・全体費目上界はUnknownで、本番capや全体受付を導出しない。
 
-人による本案の承認、実session／source／ReleasePermit・選択payload・worker jobの正式binding、runtime／実transport／実worker接続、WJ-CのE／全schema／結果公開、実cleanup・外側checkpoint、B-03 compiled保証は未実施。今回の作業はMD設計だけで、実装・環境操作・実機操作・実通信・トークン発行・設定変更・permit発行・Pushを行わない。
+人による本案の承認、実session／source／ReleasePermit・選択payload・worker jobの正式binding、runtime／実transport／実worker接続、WJ-CのE／全schema／結果公開、実cleanup・外側checkpoint、B-03 compiled保証は未実施。draft-0.1はMD設計のみ。draft-0.2のSC2-A限定実装は次節へ分離し、環境操作・実機操作・実通信・トークン発行・設定変更・permit発行・Pushの承認や実施とはしない。
+
+## 10 SC2-Aの限定実装
+
+基準HEADは`95121c2`。[既存合成issuer](../tests/support/review/synthetic-soft-recovery.ts)と[新しい純粋入力検査](../tests/support/review/synthetic-worker-recovery-input.ts)だけを接続した。HeldClosureはrootのprivate変数に、同じ発行済み証拠参照・pinnedな旧origin・検査済み入力を保持する。外部へ返すのは別brandのWorkerRecoveryPreparationだけで、証拠・入力・実行操作を外へ出さない。
+
+prepareWorkerRecoveryは最初のguard前にpreparation開始claimを占有し、旧証拠slotを取り外す。strict入力検査で失敗した場合も証拠を返さない。HeldClosureの作成後、post-guardを通って初めてhandleを発行しworker_preparedへ進む。claim_startedは準備開始の事実、transfersはHeldClosure作成済み0／1を示す。post-guard失敗ではtransfers=1の診断を残すが、HeldClosure／handleは失効し、generation_usesは0のまま。
+
+12列・各配列最大100件・32桁IDのstrict検査、完了集合の部分集合／重複、receiptの同一性、元O≤T_i≤U・単調順・最大T_i=Uを検査する。処理中receiptは旧facts.inputと同じ参照が一度だけ存在してretainedでなければならず、0 inputはO=Uでも拒否する。未処理はnot_processed／deadline_exceededへ確定し、reviewed／result_omittedには受理済みinputを要求する。collection／consistencyとC/G/P prefixをsnapshotし、課金・時計採取・verify呼出しは行わない。
+
+rootの追加診断は集合件数・保持input件数・collection／consistency・C/G/P・claim／移譲／保持状態のscalarだけで、inputのID／UTC／receiptを公開しない。pure helperはpinned seed／factsを前提に値を検査して返すもので、証拠発行口ではない。直接の値検査試験を正式window／payload／WJ-B receipt保証に数えない。SR-Bのコードをworker型へ偽装して呼ばず、既存SR-B契約は変更していない。
+
+SC2-Aの終了用にdiscardWorkerRecoveryPreparationを追加した。同handleを一度占有し、HeldClosureとhandleをpre-guard前に取り外して参照を破棄する。これは世代移行での証拠使用ではない。元ownerのS／L／O／Uは従来どおりnormal closeまたはterminal discardまで保持する。HeldClosure／handleが残るnormal closeはhard停止とし、握りつぶさない。取消・期限・混入・再入の失敗でも参照を同期破棄し、先行soft／hard・旧cleanup診断とscalar会計を保持する。
+
+[合成試験](../tests/review/synthetic-worker-recovery-preparation.test.ts)117件。7発生点×prepare／固定discardの4 guardの取消を別の位置式で計数し、成功時の4 guard、移譲0／1、世代使用・verify・新世代がすべて0であることを確認する。元consumerとの排他・公開dataの拒否・他owner不変、入力混入／上限／時刻／不正getter、純粋な集合とreasonの保持を確認した。将来のverify／起動／plan消費はまだ存在せず、summaryの公開やSR-D接続も行わない。
+
+配布物の関数／scope／path混入とI/O／clock／runtime依存を、負の対照付きの梱包監査へ追加する。実装・検証履歴は[SC2-A検証記録](E2E_BEST_PRACTICE_WORKER_RECOVERY_SC2A_2026-11-02.md)参照。実C/G/P writer・予約台帳・実cleanup・work／allocation上界はUnknown。正式発行口閉鎖・全体受付無効・調査保留を維持する。
