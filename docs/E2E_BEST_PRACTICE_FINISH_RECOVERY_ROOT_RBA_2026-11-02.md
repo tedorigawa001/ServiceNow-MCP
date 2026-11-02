@@ -35,6 +35,24 @@ Date: 2026-11-02 / Baseline: `3787799` / Status: 合成依存限定・finish証�
 1. 新module未存在のREDを確認してから、共有kernel抽出と新facadeの最小prefixを実装した。旧issuerとの最初の2ファイル125件は成功。
 2. 境界表の拒否例でOをUと同値に設定し、1件が期待どおり拒否されなかった。既存kernelはO＝Uを合法としていることを照合し、O＞Uへfixtureを訂正、O＝U受付の正の対照を追加した。実装・期限の条件は変更していない。最終67件は成功。
 
+## レビュー確認・修正（2026-11-02）
+
+上記の67件と、ESLintを対象5ファイルだけに対して実行した結果は、修正前の記録として残す。
+
+**リファクタリングの確認**：旧`synthetic-soft-recovery.ts`と新`synthetic-recovery-kernel.ts`の差分は先頭コメント1行と関数名1箇所だけで、中身はそのまま移動されていた。旧APIは同じ引数のまま薄いwrapperとして残り、旧SR-A／B／C①・SC2-A〜Dと新RB-Aの8ファイル843件が成功した。
+
+**未保護の判定**：構築descriptorの`record()`にあるprototype検査（`null`／`Object.prototype`以外を拒否）は、外す変異でも67件が通っていた。外すと`Object.create({...})`やclass instanceを構築データとして受理する。descriptor本体と`time`の各々で非plain prototypeを拒否する試験を2件追加し、変異で両方が失敗し、復元後に`cmp`一致を確認した。getter拒否は外しても後段schemaで拒否されgetterも呼ばれない等価変異、失敗／close後の`material`参照破棄は公開APIから観察できない内部整理として扱い、追加試験の対象にしていない。helper実装は変更していない。
+
+修正後の結果：
+
+| 検証 | 結果 |
+|---|---|
+| 新root専用合成試験 | 69件成功 |
+| ESLint | `npm run lint`（repo全体）exit 0 |
+| 全体合成 | maxWorkers=3、249ファイル／11,623件成功、失敗0・pending 0、exit 0。約33.8秒。実行時の作業ツリーには、次工程のユーザー作業中の未コミットファイル（pinned recovery root関係）が含まれ、それらも成功した |
+
+SR-D設計（draft-0.6）を指す3文書の版数リンクも現行版へ直した。
+
 ## 未対応・保証しないこと
 
 新rootのactive inputは内部placeholderであり、RA-02①②のselected／receipt／期待contextとまだ結ばれていない。新入口から元SC2-Dまでの連続経路、同pinとreceipt ledgerの供給はRB-Bへ残す。新入口で旧回復操作を単に全公開する方式や、外から既存ownerを採用する方式は使わない。

@@ -97,3 +97,7 @@ it('clears the root at normal close and refuses reopening or a finish route',()=
 it('does not expose UTC/identity/material through diagnostics or raw thrown details',()=>{
   const root=createSyntheticFinishRecoveryRoot(fixture(),()=>{throw Error('SECRET');});expect(()=>root.bind()).toThrow('internal_review_error');const visible=JSON.stringify(root.inspect());for(const text of ['SECRET',S,O,U,'started_at','upper_utc','receipt','generation'])expect(visible).not.toContain(text);
 });
+it.each(['descriptor','time'] as const)('rejects a non-plain prototype %s even with valid own data properties',where=>{
+  const raw=fixture();if(where==='descriptor')rejects(Object.assign(Object.create({inherited:true}),raw));
+  else{write(raw,'time',Object.assign(Object.create({inherited:true}),raw.time));rejects(raw);}
+});

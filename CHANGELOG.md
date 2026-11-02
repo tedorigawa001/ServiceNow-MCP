@@ -90,6 +90,8 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 ### Added
 
+- Adds two RB-A synthetic finish-recovery root tests showing that construction descriptors and their time objects with a non-plain prototype are refused even when their own data properties are valid.
+
 - RA-02 synthetic finish assembly now publishes its bound/prepared states only after the final post guard. Adds three tests covering caught reentry into close during the preparation post guard and the post-guard publication order of bind and prepare.
 
 - RA-01 synthetic finish-context values now apply the aggregate schema's metadata budget rule (`metadata_seen <= max_records+1`, `selected = min(metadata_seen, max_records)`, `truncated = metadata_seen > max_records`) instead of only upper bounds. Adds 18 tests isolating previously unguarded header/run semantics (S/O/U/L order, header start, collection counts, duplicate rules/limitations, ruleset derivation, empty skipped rules), expected-limitation subsets, accepted-outcome reuse, omitted rows without a completed input, and cycle/oversized-array failure classification.
