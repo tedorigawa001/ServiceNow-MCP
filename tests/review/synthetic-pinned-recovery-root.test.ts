@@ -106,9 +106,10 @@ it('rejects a swallowed preparation reentry in the shared guard',()=>{
   expect(f.prepare).toThrow('internal_review_error');expect(f.root.inspect()).toMatchObject({state:'failed',pins:null});
 });
 it('does not hide a pending preparation in normal close',()=>{const f=begin();f.prepare();expect(()=>f.root.close(f.b)).toThrow('internal_review_error');expect(f.root.inspect()).toMatchObject({state:'failed',pins:null,preparation:{held:false}});});
-it('does not expose pin values, raw exceptions, lifecycle witnesses or a finish issuer',()=>{
+it('does not expose pin values, raw exceptions or lifecycle witnesses, and cannot issue from preparation',()=>{
   const f=begin();f.prepare();const text=JSON.stringify(f.root.inspect());for(const value of [S,O,U,id(1),'instance_binding','receipt','expected_context'])expect(text).not.toContain(value);
-  for(const key of ['pins','input','seed','facts','source','core','handoff','issueFinishContext','claimWorkerGeneration','acceptRoute'])expect(Object.hasOwn(f.root,key)).toBe(false);
+  for(const key of ['pins','input','seed','facts','source','core','handoff','claimWorkerGeneration','acceptRoute'])expect(Object.hasOwn(f.root,key)).toBe(false);
+  expect(f.root.inspect().evidence_issues).toBe(0);
   const root=createSyntheticPinnedRecoveryRoot(fixture(),()=>{throw Error('SECRET');});expect(()=>root.bind()).toThrow('internal_review_error');expect(JSON.stringify(root.inspect())).not.toContain('SECRET');
 });
 it('does not invoke constructor/event getters and revokes pending private inputs on failure',()=>{

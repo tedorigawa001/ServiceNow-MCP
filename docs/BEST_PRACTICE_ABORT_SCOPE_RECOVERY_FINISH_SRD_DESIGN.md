@@ -1,7 +1,7 @@
 # SR-D 回復planからfinish検証・終端候補への接続設計
 
-Version: br006-recovery-finish-srd-draft-0.9 / Date: 2026-11-02。
-Status: **SR-D finish接続は未実装。前提のRA-01／RA-02①②とRB-A〜Dの生成・供給・合成lifecycle・plan／handoff結合まで実装。正式発行口閉鎖・Unknown・全体受付無効・VM／監視／telemetry調査保留を維持する。実finish／runtime接続・実通信・設定変更・本番cap／Permit投入の承認ではない。**
+Version: br006-recovery-finish-srd-draft-0.10 / Date: 2026-11-02。
+Status: **SR-D finish接続は未実装。前提のRA-01／RA-02①②・RB-A〜DとRA-02④-Aの合成一度限り発行まで実装。正式発行口閉鎖・Unknown・全体受付無効・VM／監視／telemetry調査保留を維持する。実finish／runtime接続・実通信・設定変更・本番cap／Permit投入の承認ではない。**
 
 基準HEAD: `31cff06`。[SC2-D接続契約](BEST_PRACTICE_ABORT_SCOPE_WORKER_RECOVERY_CONTINUATION_DESIGN.md)§13、[soft回復設計](BEST_PRACTICE_ABORT_SCOPE_SOFT_RECOVERY_CLAIM_DESIGN.md)§2〜9・11、[通常WJ-C](BEST_PRACTICE_ABORT_SCOPE_WORKER_TIME_BINDING_DESIGN.md)§13との差分を定める。本書の型・操作名は内部役割案で、実在するAPIや実装済み保証ではない。
 
@@ -44,7 +44,7 @@ FinishContextEvidenceの合成発行口は配布対象外の独立assemblyに留
 3. soft終端化時に未完了receiptをnot_processedへ移す。完了済み記録を消した後に再生成しない。SC2-Aで確定した集合とreceipt対応をFinishContextEvidence側の記録へ照合する。
 4. 同SC2-D planと追加証拠がすべて揃い、元guardが生きている場合だけ受理する。欠けた列を空値・現在時刻・別release・再解析で補完しない。
 
-追加値のstrict schema・bounded projection／比較はRA-01の合成値層だけ実装した。[RD-A詳細型・発行契約draft-0.11](BEST_PRACTICE_ABORT_SCOPE_FINISH_CONTEXT_RDA_DESIGN.md)§9〜10参照。RA-02①②に加え、[RA-02③接続差分設計draft-0.7](BEST_PRACTICE_ABORT_SCOPE_FINISH_ASSEMBLY_RA02_BINDING_DESIGN.md)のRB-A〜Dで同pin供給・準備・合成lifecycle・plan／handoff結合まで実装した。元analyze受理capture、private発行slot・実生存の真正性・一度限りのissue／acceptは未実装。ローカル上限（深さ8・配列100・object項目30・訪問10,000・保守的文字費262144）はsnapshot全体で共有し、比較時は両入力で共有する。これは合成projectionの有限枠であり、新たな本番日時長cap・実メモリ上界を承認するものではない。
+追加値のstrict schema・bounded projection／比較はRA-01の合成値層だけ実装した。[RD-A詳細型・発行契約draft-0.12](BEST_PRACTICE_ABORT_SCOPE_FINISH_CONTEXT_RDA_DESIGN.md)§9〜10参照。[RA-02③接続差分設計draft-0.8](BEST_PRACTICE_ABORT_SCOPE_FINISH_ASSEMBLY_RA02_BINDING_DESIGN.md)のRB-A〜Dに続き、[RA-02④-A](BEST_PRACTICE_ABORT_SCOPE_FINISH_ISSUE_ACCEPT_DESIGN.md)で同kernelの合成一度限り発行・同期失効まで実装した。元analyze受理capture・実生存の真正性・RA-03受理は未実装。ローカル上限（深さ8・配列100・object項目30・訪問10,000・保守的文字費262144）はsnapshot全体で共有し、比較時は両入力で共有する。これは合成projectionの有限枠であり、新たな本番日時長cap・実メモリ上界を承認するものではない。
 
 ## 3 固定状態遷移と一度限りのclaim
 
@@ -135,7 +135,7 @@ source解放・worker cleanupは別軸で、片方の成功や最終resource数0
 
 | 段階案 | 範囲 | 必須試験 |
 |---|---|---|
-| RD-A（RA-01／RA-02①②・RB-A〜Dまで実装） | [詳細型・発行契約](BEST_PRACTICE_ABORT_SCOPE_FINISH_CONTEXT_RDA_DESIGN.md)のprivate pin・同参照供給・合成lifecycle・plan／handoff結合まで。finish発行・同owner受理・期待値封印は未実装 | 値検査・fixture pinを由来の証明にしない。実source／worker生存はUnknown。summary／raw manifest／別rootからの昇格0。元SC2-D互換 |
+| RD-A（RA-01／RA-02①②・RB-A〜D・④-Aまで実装） | [詳細型・発行契約](BEST_PRACTICE_ABORT_SCOPE_FINISH_CONTEXT_RDA_DESIGN.md)の合成一度限り発行まで。同owner受理・期待値封印は未実装 | 値検査・fixture pinを由来の証明にしない。実source／worker生存はUnknown。summary／raw manifest／別rootからの昇格0。元SC2-D互換 |
 | RD-B | 通常WJ-C値比較の最小抽出と回復集合／T_i／U／E比較器 | 通常WJ-C82件維持、独立field差替え・集合／時刻oracle、受理済みreceipt以外を拒否 |
 | RD-C | 同新frameのfinish専用fake job／一度応答消費／候補slot | 同id旧世代・ready／analyze応答・二重送信を拒否。全pre/post guard、send失敗でも再利用なし |
 | RD-D | 同source終端・新cleanup内部確認slot・一度候補消費 | cleanup両軸と固定順序、hard後の診断回収と復活0、解放後最終checkpoint、正常時参照／UTC破棄 |

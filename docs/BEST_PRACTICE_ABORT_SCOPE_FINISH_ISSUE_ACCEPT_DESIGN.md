@@ -1,13 +1,13 @@
 # RB-D後のfinish証拠発行・RA-03受理 接続差分設計
 
-Version: br006-finish-issue-accept-draft-0.1 / Date: 2026-11-02。
-Status: **設計のみ。合成依存限定。証拠発行なし・正式発行口閉鎖・全体受付無効・Unknown・VM／監視／telemetry調査保留を維持する。**
+Version: br006-finish-issue-accept-draft-0.2 / Date: 2026-11-02。
+Status: **RA-02④-Aの同kernel一度限り発行・同期失効・固定discard接続まで合成限定実装。RA-03受理は未実装。正式発行口閉鎖・全体受付無効・Unknown・VM／監視／telemetry調査保留を維持する。**
 
 基準HEAD: `6021339`。対象は[RA-02③](BEST_PRACTICE_ABORT_SCOPE_FINISH_ASSEMBLY_RA02_BINDING_DESIGN.md)§11と[RD-A](BEST_PRACTICE_ABORT_SCOPE_FINISH_CONTEXT_RDA_DESIGN.md)§5〜7との差分。実装・証拠発行・実接続・実通信・設定変更・Pushの承認ではない。
 
 ## 1 現状と追加境界
 
-RB-Dの`bindRecoveryPlan`は元`transferredPlan`／handoff、constructor pinと同source／frame／ready origin／cleanup identityを結合するだけ。`finishBindings=1`や`route_bound=true`は発行・受理・route利用の許可ではない。現時点の`evidence_issues=0`とpermissions=falseは変更していない。
+RB-Dの`bindRecoveryPlan`は元`transferredPlan`／handoff、constructor pinと同source／frame／ready origin／cleanup identityを結合するだけ。`finishBindings=1`や`route_bound=true`は発行・受理・route利用の許可ではない。結合だけなら`evidence_issues=0`、RA-02④-Aの明示的な合成発行commit後だけ1となる。permissions=falseは維持する。
 
 追加するslotは同kernelのowner／busy／hard／guardの下に置く。別ownerのwrapper、外部登録台帳、raw header／結果／pin／route／任意callbackを受ける入口は追加しない。legacy factory・data-only RA-02・旧試験は維持する。runtimeの台帳やfixture登録口と共有しない。
 
@@ -25,7 +25,7 @@ handleは空・凍結・identity一致を必須とし、brandだけで真正と�
 
 ## 3 発行の固定順序
 
-操作案は`issueFinishContext(binding, handoff)`のみ。現行APIにはまだ追加しない。
+合成限定APIは`issueFinishContext(binding, handoff)`のみ。runtime／正式発行口には追加しない。
 
 1. 同ownerのbusy／hard／bindingを検査。他rootのslotは検索・変更しない。
 2. 自ownerのissue開始claimを外部guard前に占有する。別handoff・二重issueでも自ownerを停止し、claimを戻さない。
@@ -84,8 +84,20 @@ RA-01の共有枠（深さ8・配列100・object項目30・訪問10,000・保守
 2. **RA-03-A**：同handoff／evidence／routeの原子的消費とpost後の非実行accepted公開。別brand・コピー・別root・部分失敗・再入を検査。
 3. **RA-03-B**：accepted固定discard、source／新cleanupの独立診断、issue→accept→終端の連続合成検査。
 
-各段階は改めて実装の指示を受けて進める。今回は全slot未実装・発行件数0。
+RA-02④-Aのみ合成実装済み。RA-03-A／Bは別指示まで未実装とし、accept／route利用claim・accepted slotを先行生成しない。
 
 必須の負の対照は、別rootの不変、二重issue／accept、summaryからの昇格、issue直前／直後・accept両guard中の取消／期限切れ／source close／cleanup開始、吞み込まれた再入例外、issue後discardとの競合、片側だけの解放確認、失効後の再発行／再準備である。成功対照でもpermissionsをfinish実行可にしない。
 
-旧合成試験・legacy APIを維持し、新brand／scope／helper／宣言／mapの配布物非同梱とruntime／I/O／clock／worker依存の負の対照を継続する。build・strict型検査・全体合成回帰・梱包確認は実装工程で行う。本書の確認は参照・状態表・現行APIとの差分の静的照合のみ。
+旧合成試験・legacy APIを維持し、新brand／scope／helper／宣言／mapの配布物非同梱とruntime／I/O／clock／worker依存の負の対照を継続する。build・strict型検査・全体合成回帰・梱包確認を実装工程で行う。
+
+## 9 RA-02④-A実装範囲
+
+`synthetic-recovery-kernel.ts`の同owner内にprivate issue状態・開始claim・handleとbound参照／再検査projectionの対応を追加した。新たなguard owner・登録台帳・setterはない。元pinと集合／時刻／verify事実を再projectionし、post guardと同bound参照の再検査後だけhandleを返す。失敗・取消・期限切れ・再入でpendingを公開しない。
+
+別brandの`SyntheticIssuedFinishContext`は空・凍結・null-prototypeで、外部へsnapshotを返さない。RA-01に残る発行機能のないplaceholder型とは別であり、値projectionや旧handleをcastして発行しない。RA-03はこのprivate slotのidentityを受ける唯一consumerとして今後接続する。
+
+issue状態はunused／issuing／issued／invalidated／discarded／failed、診断はstate／started／issues／pendingだけ。issuesはcommit済み履歴0または1で、失効・破棄後も履歴を保持する。source close・cleanup開始ではhandle対応とsnapshot参照を落とすが、元receiverとcleanup sinkは残す。同receiverの固定discardが両解放確認後にhandoffとissue slotを終端化する。hard後に診断confirmedを回収しても発行権は戻らない。
+
+legacy／lifecycle専用factoryには新method・診断field・phase型を公開しない。旧pin／lifecycle／RB-D試験の「発行methodが存在しない」という時点依存の期待3箇所だけを新段階に合わせ、秘密非露出・結合のみ発行0の検査は維持した。現在の公開合成経路はverify=nullのまま、実結果の由来・元analyze capture・RA-03・E／finish／候補は未接続。
+
+[合成検証記録](E2E_BEST_PRACTICE_FINISH_ISSUE_RA024A_2026-11-02.md)参照。追加のwork／allocation上界は未導出で、全体受付無効を維持する。

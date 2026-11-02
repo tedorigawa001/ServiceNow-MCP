@@ -132,9 +132,9 @@ it('keeps legacy runtime and static diagnostic surfaces free of binding state an
   const seed={run:{},session:{},source:{},key:{},origin:{},budget:{},release:{},...fixture().finish.time},facts={kind:'phase_deadline',point:'phase_guard',phase:'metadata',worker_state:'none'} as const,root=createSyntheticSoftRecoveryIssuer(seed,facts);
   for(const key of ['bindRecoveryPlan','checkBoundRecoveryPlan','discardBoundRecoveryPlan'])expect(Object.hasOwn(root,key)).toBe(false);expect(Object.hasOwn(root.inspect(),'finish_binding')).toBe(false);
 });
-it('does not expose private snapshots, issuance or raw identity in bound diagnostics',()=>{
+it('does not expose private snapshots or raw identity, and does not issue merely by binding',()=>{
   const f=bound();const text=JSON.stringify(f.root.inspect());for(const value of [S,O,U,id(1),'instance_binding','receipt','ready_origin_id'])expect(text).not.toContain(value);
-  for(const key of ['snapshot','finishBound','finishPins','issueFinishContext','acceptFinishContext','source','core'])expect(Object.hasOwn(f.root,key)).toBe(false);
+  for(const key of ['snapshot','finishBound','finishPins','acceptFinishContext','source','core'])expect(Object.hasOwn(f.root,key)).toBe(false);
   type H=ReturnType<ReturnType<typeof createSyntheticPinnedRecoveryRoot>['transferRecoveryPlan']>;const notEvidence:H extends SyntheticFinishContextEvidence?true:false=false;expect(notEvidence).toBe(false);expect(f.root.inspect().evidence_issues).toBe(0);
 });
 it('projects original private references as value-only data, not a reconstructed frame or evidence',()=>{

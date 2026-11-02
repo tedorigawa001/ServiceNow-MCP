@@ -133,7 +133,7 @@ it('rejects swallowed source-close reentry during ready acceptance',()=>{
 });
 it('never exposes identity witnesses, handoff or finish evidence in lifecycle diagnostics',()=>{
   const f=accepted(),visible=JSON.stringify(f.root.inspect());for(const text of [S,O,U,id(1),'supervisor','ready_origin_id','source_identity','cleanup_identity'])expect(visible).not.toContain(text);
-  for(const k of ['handoff','issueFinishContext','acceptFinishContext','readyOrigin','source','frame','core'])expect(Object.hasOwn(f.root,k)).toBe(false);
+  for(const k of ['handoff','acceptFinishContext','readyOrigin','source','frame','core'])expect(Object.hasOwn(f.root,k)).toBe(false);
   type Root=ReturnType<typeof createSyntheticPinnedRecoveryRoot>;type Ticket=ReturnType<Root['claimRecoveryGeneration']>;type Ready=ReturnType<Root['acceptRecoveryReady']>;
   const noEvidence:Ready extends SyntheticFinishContextEvidence?true:false=false,noMix:Ticket['cleanup'] extends Ready?true:false=false;expect([noEvidence,noMix]).toEqual([false,false]);expect(f.root.inspect()).toMatchObject({route_bound:false,evidence_issues:0});
 });

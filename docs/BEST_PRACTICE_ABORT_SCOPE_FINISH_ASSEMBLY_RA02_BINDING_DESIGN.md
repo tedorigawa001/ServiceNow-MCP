@@ -1,7 +1,7 @@
 # RA-02③ 同handoff・route結合の接続差分設計
 
-Version: br006-finish-assembly-binding-draft-0.7 / Date: 2026-11-02。
-Status: **RB-A〜Dの生成・供給・同root lifecycle・同plan／handoffへの一度限り結合まで合成限定実装。finish証拠発行なし・正式発行口閉鎖・全体受付無効・Unknown・VM／監視／telemetry調査保留を維持する。**
+Version: br006-finish-assembly-binding-draft-0.8 / Date: 2026-11-02。
+Status: **RB-A〜Dの結合と後続RA-02④-Aの一度限り発行まで合成限定実装。RA-03未実装・正式発行口閉鎖・全体受付無効・Unknown・VM／監視／telemetry調査保留を維持する。**
 
 基準HEAD: `d263282`。[RD-A](BEST_PRACTICE_ABORT_SCOPE_FINISH_CONTEXT_RDA_DESIGN.md)§2〜5・10と[RA-02①②検証記録](E2E_BEST_PRACTICE_FINISH_ASSEMBLY_RA02_2026-11-02.md)に対する接続差分。実装・実接続・実通信・設定変更・実Permit投入の承認ではない。
 
@@ -87,11 +87,11 @@ ready_events=1でもcleanup開始済み、source closing／closed／failed、発
 
 ## 7 承認・未確認事項
 
-draft-0.1の生成境界案は§8〜11のRB-A〜Dを実装した。実verify接続・issue／acceptと費目別上界は未対応。既存APIsを緩める可変modeや任意hookを追加しない。
+draft-0.1の生成境界案は§8〜11のRB-A〜Dを実装した。後続RA-02④-Aの合成issueは別設計§9参照。実verify接続・acceptと費目別上界は未対応。既存APIsを緩める可変modeや任意hookを追加しない。
 
-RA-02④の一度限りの証拠発行、RA-03の証拠とhandoffの原子的受理、RD-B以降のE／finish／候補・正常cleanup能力は別工程。正式発行口閉鎖・全体受付無効・調査保留を維持する。
+RA-02④-Aの一度限り発行は後続工程で合成実装した。RA-03の証拠とhandoffの原子的受理、RD-B以降のE／finish／候補・正常cleanup能力は未実装の別工程。正式発行口閉鎖・全体受付無効・調査保留を維持する。
 
-RB-D後の[発行・RA-03受理接続差分draft-0.1](BEST_PRACTICE_ABORT_SCOPE_FINISH_ISSUE_ACCEPT_DESIGN.md)で、issue／accept／route利用claimの分離、同receiverの固定discardとの競合、同期失効と解放責務、合成受入条件を具体化した。設計のみで、証拠発行・受理は未実装。
+RB-D後の[発行・RA-03受理接続差分draft-0.2](BEST_PRACTICE_ABORT_SCOPE_FINISH_ISSUE_ACCEPT_DESIGN.md)で、issue／accept／route利用claimの分離、同receiverの固定discardとの競合、同期失効と解放責務を具体化した。RA-02④-Aの発行のみ合成限定実装済みで、受理は未実装。§8〜11の発行0という記述はRB-A〜D段階の履歴であり、結合だけで発行しない条件は維持する。
 
 ## 8 RB-A実装範囲
 
