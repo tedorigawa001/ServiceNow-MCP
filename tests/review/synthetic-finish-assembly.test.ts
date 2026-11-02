@@ -131,3 +131,13 @@ it('uses one seed character cap across records even when each warning and array 
   function characters(v:unknown):number{return typeof v==='string'?v.length:v&&typeof v==='object'?Object.entries(v).reduce((sum,[k,x])=>sum+(Array.isArray(v)?0:k.length)+characters(x),0):0;}
   expect(warnings.every(x=>x.length<=200)).toBe(true);expect(warnings.length).toBe(100);expect(characters(raw)*3).toBeGreaterThan(262144);rejected(raw);
 });
+it('rejects caught reentry into close during the preparation post guard',()=>{
+  let a:ReturnType<typeof createSyntheticFinishAssembly>,b:object,calls=0;
+  a=createSyntheticFinishAssembly(fixture(),()=>{if(++calls===4){try{a.close(b);}catch{/* outer must still stop */}}});b=a.bind();
+  expect(()=>a.prepare(b)).toThrow('internal_review_error');expect(a.inspect()).toMatchObject({state:'failed',pins:null,hard:{code:'internal_review_error',stage:'close'}});
+});
+it.each([['bind',2,'binding'],['prepare',4,'preparing']] as const)('publishes %s state only after its post guard',(_name,at,expected)=>{
+  let a:ReturnType<typeof createSyntheticFinishAssembly>,calls=0,seen:string|undefined;
+  a=createSyntheticFinishAssembly(fixture(),()=>{if(++calls===at)seen=a.inspect().state;return undefined;});const b=a.bind();a.prepare(b);
+  expect(seen).toBe(expected);expect(a.inspect().state).toBe('prepared');
+});
