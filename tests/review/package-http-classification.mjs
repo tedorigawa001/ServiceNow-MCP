@@ -50,10 +50,10 @@ console.log('SR-A/C1 separate synthetic issuer/closure contracts excluded; no ru
 const rootKernelText=readFileSync(join(root,'tests/support/review/synthetic-recovery-kernel.ts'),'utf8'),rootKernelImports=['node:util','zod','./synthetic-phase-recovery.js','./synthetic-worker-recovery-input.js','./synthetic-worker-recovery-verify.js'];
 const finishRootText=readFileSync(join(root,'tests/support/review/synthetic-finish-recovery-root.ts'),'utf8'),finishRootImports=['node:util','zod','./synthetic-recovery-kernel.js'];
 auditSyntheticIssuer(rootKernelText,rootKernelImports);auditSyntheticIssuer(finishRootText,finishRootImports);
-const rootMarkers=['synthetic-recovery-kernel','createSyntheticRecoveryKernel','synthetic-finish-recovery-root','createSyntheticFinishRecoveryRoot','synthetic_finish_recovery_root','synthetic_finish_recovery_binding','synthetic_finish_recovery_observation','synthetic_finish_recovery_claim'];
+const rootMarkers=['synthetic-recovery-kernel','createSyntheticRecoveryKernel','createSyntheticLifecycleRecoveryKernel','synthetic-recovery-lifecycle','synthetic-finish-recovery-root','createSyntheticFinishRecoveryRoot','synthetic_finish_recovery_root','synthetic_finish_recovery_binding','synthetic_finish_recovery_observation','synthetic_finish_recovery_claim'];
 const noRecoveryRoot=text=>assert(!rootMarkers.some(x=>text.includes(x)),'RB-A shared kernel/root leaked into runtime');
 for(const marker of rootMarkers)assert.throws(()=>noRecoveryRoot(marker));
-assert(!pack.files.some(f=>/synthetic-recovery-kernel|synthetic-finish-recovery-root/.test(f.path)));
+assert(!pack.files.some(f=>/synthetic-recovery-kernel|synthetic-recovery-lifecycle|synthetic-finish-recovery-root/.test(f.path)));
 for(const f of pack.files.filter(f=>f.path.startsWith('dist/')&&/\.(?:js|ts|map)$/.test(f.path)))noRecoveryRoot(readFileSync(join(root,f.path),'utf8'));
 for(const [text,imports] of [[rootKernelText,rootKernelImports],[finishRootText,finishRootImports]])
   for(const leak of ['globalThis.setTimeout(()=>{},0);','Date.now();','new Date();',"import('node:fs');",'new Worker("x");',"export * from 'node:fs';","import {BoundedReadSession} from '../../../src/servicenow/bounded-read.js';const zzRoot=BoundedReadSession;"])
@@ -120,7 +120,7 @@ console.log('RA-02 preparation excluded; separate root/pure-value imports + seed
 const pinText=readFileSync(join(root,'tests/support/review/synthetic-finish-pins.ts'),'utf8'),pinImports=['node:util','./synthetic-finish-context-values.js'];
 const pinnedRootText=readFileSync(join(root,'tests/support/review/synthetic-pinned-recovery-root.ts'),'utf8'),pinnedRootImports=['node:util','zod','./synthetic-finish-pins.js','./synthetic-recovery-kernel.js'];
 auditSyntheticIssuer(pinText,pinImports);auditSyntheticIssuer(pinnedRootText,pinnedRootImports);
-const pinMarkers=['synthetic-finish-pins','createSyntheticFinishPins','SyntheticFinishPins','synthetic-pinned-recovery-root','createSyntheticPinnedRecoveryRoot','synthetic_pinned_recovery_root','synthetic_pinned_recovery_binding','synthetic_pinned_recovery_observation','synthetic_pinned_recovery_claim','synthetic_pinned_recovery_preparation'];
+const pinMarkers=['synthetic-finish-pins','createSyntheticFinishPins','SyntheticFinishPins','synthetic-pinned-recovery-root','createSyntheticPinnedRecoveryRoot','synthetic_pinned_recovery_root','synthetic_pinned_recovery_binding','synthetic_pinned_recovery_observation','synthetic_pinned_recovery_claim','synthetic_pinned_recovery_preparation','synthetic_pinned_generation_start','synthetic_pinned_generation_cleanup','synthetic_pinned_generation_lease','synthetic_pinned_generation_ready'];
 const noPinnedRoot=text=>assert(!pinMarkers.some(x=>text.includes(x)),'RB-B private pin/root leaked into runtime');
 for(const marker of pinMarkers)assert.throws(()=>noPinnedRoot(marker));
 assert(!pack.files.some(f=>/synthetic-finish-pins|synthetic-pinned-recovery-root/.test(f.path)));

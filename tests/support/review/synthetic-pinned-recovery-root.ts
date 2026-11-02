@@ -2,12 +2,17 @@
 import {types} from 'node:util';
 import {z} from 'zod';
 import {createSyntheticFinishPins} from './synthetic-finish-pins.js';
-import {createSyntheticRecoveryKernel,type SyntheticRecoverySeed,type SyntheticSoftFacts} from './synthetic-recovery-kernel.js';
+import {createSyntheticLifecycleRecoveryKernel,type SyntheticRecoverySeed,type SyntheticSoftFacts} from './synthetic-recovery-kernel.js';
 declare const bindingBrand:unique symbol,observationBrand:unique symbol,recoveryBrand:unique symbol,preparationBrand:unique symbol;
 type Binding=Readonly<{[bindingBrand]:'synthetic_pinned_recovery_binding'}>;
 type Observation=Readonly<{[observationBrand]:'synthetic_pinned_recovery_observation'}>;
 type Recovery=Readonly<{[recoveryBrand]:'synthetic_pinned_recovery_claim'}>;
 type Preparation=Readonly<{[preparationBrand]:'synthetic_pinned_recovery_preparation'}>;
+declare const startBrand:unique symbol,cleanupBrand:unique symbol,leaseBrand:unique symbol,readyBrand:unique symbol;
+type Start=Readonly<{[startBrand]:'synthetic_pinned_generation_start'}>;
+type Cleanup=Readonly<{[cleanupBrand]:'synthetic_pinned_generation_cleanup'}>;
+type Lease=Readonly<{[leaseBrand]:'synthetic_pinned_generation_lease'}>;
+type Ready=Readonly<{[readyBrand]:'synthetic_pinned_generation_ready'}>;
 const opaque=()=>Object.freeze(Object.create(null)) as object;
 const accountingSchema=z.strictObject({requests:z.number().int().min(0).max(210),received_bytes:z.number().int().min(0).max(16777216),payload_bytes:z.number().int().min(0).max(8388608)});
 const pointSchema=z.enum(['request_check_unstarted','request_check_existing','ready_timer','ready_reply_check','send_check','analyze_timer','analyze_reply_check']);
@@ -39,7 +44,7 @@ function construct(raw:unknown){
 }
 export function createSyntheticPinnedRecoveryRoot(raw:unknown,check:()=>string|undefined=()=>undefined){
   let material:ReturnType<typeof construct>|undefined;try{material=construct(raw);}catch{/* fixed binding rejection below */}
-  const invalid=!material,core=createSyntheticRecoveryKernel(material?.seed as SyntheticRecoverySeed,material?.facts as SyntheticSoftFacts,()=>invalid?'internal_review_error':check());
+  const invalid=!material,core=createSyntheticLifecycleRecoveryKernel(material?.seed as SyntheticRecoverySeed,material?.facts as SyntheticSoftFacts,()=>invalid?'internal_review_error':check());
   function invoke<T>(work:()=>T):T{try{return work();}catch{core.revoke('internal_review_error');const code=core.inspect().diagnostics.hard?.code??'internal_review_error';throw Object.assign(Error(code),{code});}finally{if(['failed','closed'].includes(core.inspect().state))material=undefined;}}
   return Object.freeze({
     bind(...extra:unknown[]):Binding{return invoke(()=>core.bind(extra.length?Object.freeze({}) as SyntheticRecoverySeed:material?.seed as SyntheticRecoverySeed)) as unknown as Binding;},
@@ -54,8 +59,17 @@ export function createSyntheticPinnedRecoveryRoot(raw:unknown,check:()=>string|u
       return core.prepareWorkerRecovery(binding,proof,material.input);
     }) as unknown as Preparation;},
     discardWorkerRecoveryPreparation(binding:object,preparation:object){return invoke(()=>core.discardWorkerRecoveryPreparation(binding,preparation));},
+    claimRecoveryGeneration(binding:object,preparation:object){return invoke(()=>{core.beginWorkerVerify(binding,preparation);const ticket=core.claimWorkerGeneration(binding,preparation);return Object.freeze({start:ticket.start as unknown as Start,cleanup:ticket.cleanup as unknown as Cleanup});});},
+    startRecoveryGeneration(binding:object,start:object):Lease{return invoke(()=>core.startWorkerGeneration(binding,start)) as unknown as Lease;},
+    acceptRecoveryReady(binding:object,lease:object):Ready{return invoke(()=>{const event=core.issueWorkerGenerationReady(binding,lease);return core.acceptWorkerGenerationReady(binding,lease,event);}) as unknown as Ready;},
+    checkRecoveryReady(binding:object,ready:object){return invoke(()=>core.checkWorkerGenerationReady(binding,ready));},
+    beginSourceClose(binding:object){return invoke(()=>core.beginSourceClose(binding));},
+    settleSourceClose(binding:object,status:unknown){return invoke(()=>core.settleSourceClose(binding,status));},
+    beginRecoveryCleanup(sink:object){return invoke(()=>core.beginWorkerGenerationCleanup(sink));},
+    recordRecoveryCleanup(sink:object,status:unknown){return invoke(()=>core.recordWorkerGenerationCleanup(sink,status));},
+    discardRecoveryGeneration(binding:object,ready:object){return invoke(()=>core.discardWorkerGeneration(binding,ready));},
     revoke(reason:unknown){return invoke(()=>core.revoke(reason));},
     close(binding:object){return invoke(()=>core.close(binding));},
-    inspect(){const s=core.inspect(),p=s.worker_preparation;return Object.freeze({scope:'synthetic_pinned_recovery_root' as const,authority:'none' as const,state:s.state,claims:s.claims,diagnostics:s.diagnostics,closure:s.worker_closure,pins:material?Object.freeze({selected:material.pins.seed.selected.length,inputs:material.pins.receipts.length,accepted:material.pins.accepted}):null,preparation:p?Object.freeze({selected:p.selected,retained_inputs:p.retained_inputs,completed:p.completed,not_processed:p.not_processed,accounting:p.accounting,collection_status:p.collection_status,consistency:p.consistency,held:p.held}):null,route_bound:false as const,evidence_issues:0 as const,permissions:s.permissions});},
+    inspect(){const s=core.inspect(),p=s.worker_preparation;return Object.freeze({scope:'synthetic_pinned_recovery_root' as const,authority:'none' as const,state:s.state,claims:s.claims,diagnostics:s.diagnostics,closure:s.worker_closure,lifecycle:s.lifecycle??null,new_generation:s.new_generation,pins:material?Object.freeze({selected:material.pins.seed.selected.length,inputs:material.pins.receipts.length,accepted:material.pins.accepted}):null,preparation:p?Object.freeze({selected:p.selected,retained_inputs:p.retained_inputs,completed:p.completed,not_processed:p.not_processed,accounting:p.accounting,collection_status:p.collection_status,consistency:p.consistency,held:p.held}):null,route_bound:false as const,evidence_issues:0 as const,permissions:s.permissions});},
   });
 }
