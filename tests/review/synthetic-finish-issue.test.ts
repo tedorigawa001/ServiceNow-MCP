@@ -110,3 +110,10 @@ it.each(['request_check_unstarted','request_check_existing','ready_timer','ready
   expect(f.root.inspect().closure).toEqual(before.closure);expect(f.root.inspect().preparation).toEqual(before.preparation);expect(f.root.inspect().finish_issue).toMatchObject({issues:1,pending:true});
   closeResources(f);f.root.discardBoundRecoveryPlan(f.b,f.handoff);f.root.close(f.b);
 });
+it('holds a mismatched handoff until the post guard so a cancellation there keeps priority',()=>{
+  const f=setup();let n=0;f.arm(()=>++n===2?'cancelled':undefined);
+  expect(()=>f.root.issueFinishContext(f.b,{})).toThrow('cancelled');expect(f.root.inspect()).toMatchObject({state:'failed',evidence_issues:0,diagnostics:{hard:{code:'cancelled'}},finish_issue:{issues:0,pending:false}});
+});
+it('rejects the same mismatched handoff at commit when no guard stops',()=>{
+  const f=setup();expect(()=>f.root.issueFinishContext(f.b,{})).toThrow('internal_review_error');expect(f.root.inspect()).toMatchObject({state:'failed',evidence_issues:0,diagnostics:{hard:{code:'internal_review_error',phase:'finish_issue'}}});
+});

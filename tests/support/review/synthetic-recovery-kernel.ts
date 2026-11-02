@@ -148,22 +148,28 @@ function createRecoveryKernel(seed:SyntheticRecoverySeed,expected:SyntheticSoftF
     busy=true;try{claim();guard(phase);const value=work();guard(phase);commit(value);return value;}catch(error){return fail(phase,error);}finally{busy=false;}
   }
   function verifyModel(handle:object){if(state!=='worker_prepared'||handle!==preparationHandle||!heldClosure||!workerVerify)fail('worker_verify');return workerVerify!;}
-  function checkPlan(p:SealedRecoveryPlan){
-    if(p.owner!==binding||p.seed!==pinned||p.time!==time||generationStarts!==1||generationReadyEvents!==1||(generationCleanupToken?generationCleanupContext?.frame!==p.frame:generationCleanup?.status!=='confirmed'))fail('worker_plan');
+  function planOk(p:SealedRecoveryPlan){
+    return !(p.owner!==binding||p.seed!==pinned||p.time!==time||generationStarts!==1||generationReadyEvents!==1||(generationCleanupToken?generationCleanupContext?.frame!==p.frame:generationCleanup?.status!=='confirmed'));
   }
+  function checkPlan(p:SealedRecoveryPlan){if(!planOk(p))fail('worker_plan');}
   function takePlan(handle:object){const own=planHandle,p=sealedPlan;planHandle=undefined;sealedPlan=undefined;if(state!=='plan_sealed'||!own||handle!==own||!p)fail('worker_plan');checkPlan(p!);return p!;}
   function finishProjection(p:SealedRecoveryPlan,phase:'finish_binding'|'finish_issue'='finish_binding'){
     if(!tracked||!finishPins||!readyUsable()||!source?.identity||!liveCleanup?.identity||!generationCleanupToken||readyOrigin?.frame!==p.frame)fail(phase);
     checkPlan(p);
     return projectSyntheticFinishPlanBinding(finishPins!,p,{owner:binding!,frame:p.frame,source:source!.reference!,source_identity:source!.identity!,cleanup_identity:liveCleanup!.identity!,sink:generationCleanupToken!,ready_origin:readyOrigin!,serial:0});
   }
-  function checkBound(handoff:object,phase:'finish_binding'|'finish_issue'='finish_binding'){
-    if(!finishBound||finishState!=='bound'||handoff!==finishBound.handoff||handoff!==handoffHandle||transferredPlan!==finishBound.plan||!readyUsable()||readyOrigin!==finishBound.origin||source?.identity!==finishBound.source||liveCleanup?.identity!==finishBound.cleanup)fail(phase);
+  function boundOk(handoff:object){
+    return !(!finishBound||finishState!=='bound'||handoff!==finishBound.handoff||handoff!==handoffHandle||transferredPlan!==finishBound.plan||!readyUsable()||readyOrigin!==finishBound.origin||source?.identity!==finishBound.source||liveCleanup?.identity!==finishBound.cleanup);
   }
+  function checkBound(handoff:object,phase:'finish_binding'|'finish_issue'='finish_binding'){if(!boundOk(handoff))fail(phase);}
   return Object.freeze({
     issueFinishContext(b:object,handoff:object){let own:NonNullable<typeof finishBound>,projection:ReturnType<typeof projectSyntheticFinishPlanBinding>|undefined,projectionFailed=false;return act('finish_issue',b,()=>{
       const used=issueStarted;issueStarted=true;issueState='issuing';if(!hasFinish||used||state!=='plan_transferred')fail('finish_issue');
-    },()=>{try{checkBound(handoff,'finish_issue');own=finishBound!;projection=finishProjection(own.plan,'finish_issue');}catch{projectionFailed=true;}return opaque<SyntheticIssuedFinishContext>();},handle=>{
+    },()=>{
+      // Value/identity mismatches are held (no hard yet) so a post-guard stop keeps priority; commit rejects them.
+      if(!boundOk(handoff)||!finishPins||!source?.identity||!liveCleanup?.identity||!generationCleanupToken||readyOrigin?.frame!==finishBound!.plan.frame||!planOk(finishBound!.plan))projectionFailed=true;
+      else{own=finishBound!;try{projection=projectSyntheticFinishPlanBinding(finishPins,own.plan,{owner:binding!,frame:own.plan.frame,source:source.reference!,source_identity:source.identity,cleanup_identity:liveCleanup.identity,sink:generationCleanupToken,ready_origin:readyOrigin!,serial:0});}catch{projectionFailed=true;}}
+      return opaque<SyntheticIssuedFinishContext>();},handle=>{
       if(projectionFailed||!projection||!own||finishBound!==own)fail('finish_issue');checkBound(handoff,'finish_issue');
       issuedFinish=Object.freeze({handle,bound:own,projection:projection!});issueCount=1;issueState='issued';
     });},

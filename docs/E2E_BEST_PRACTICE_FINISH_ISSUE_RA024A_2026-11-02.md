@@ -40,7 +40,31 @@ source close開始・cleanup開始で同slotを同期失効し、元receiverとc
 
 全体合成回帰はローカル待受が可能な条件で実施。製品・試験期限の変更なし。PDI／外部サービスへの接続・OAuth token発行・OS worker実運用を確認する試験ではない。梱包では新試験／issuer名／brand型／scopeの非同梱、既存共通kernelの限定依存とruntime／I/O／clock／worker混入の負の対照を確認した。
 
-## 5 残課題・制限
+## 5 レビュー修正（2026-11-02）
+
+§3・§4の件数は修正前の記録として残す。
+
+**値検査失敗とpost-guardの優先順位（試験helperの実装修正）**：発行・受理接続差分設計§3は「値検査失敗は一旦保持してpost guardを通し、既存の最初のhardを優先する」と定める。修正前の`issueFinishContext`はworkをtry／catchで包み`projectionFailed`で保持する形だったが、try内の`checkBound`と`finishProjection`が不一致時にその場で`fail()`を呼び、hardを`internal_review_error`として先に記録していた。このため、別のhandoffを渡しpost-guardで`cancelled`を返しても、`internal_review_error`（phase=finish_issue）と報告された。
+
+kernelに`fail()`を呼ばない真偽値の照合`boundOk`・`planOk`を設け、issueのworkではこれらと前提条件・純粋projectionの失敗を`projectionFailed`として保持するだけにした。commitで従来どおり`checkBound`により正式に拒否する。`checkBound`・`checkPlan`は同じ真偽値照合を使う形にして挙動を変えていない。
+
+| 追加試験 | 確認内容 |
+|---|---|
+| 不一致handoff＋post-guard取消 | `cancelled`で停止し、hardは`cancelled`、発行件数0 |
+| 不一致handoff・guard停止なし | commitで`internal_review_error`（phase=finish_issue）、発行件数0 |
+
+修正前のkernelでは1件目だけが失敗することを確認し、修正版へ戻して`cmp`一致を確認した。RB-Dの`bindRecoveryPlan`にも前提条件の不一致で先にhardを記録する同じ形があるが、RB-Dの設計にはこの優先規則の明記がないため、今回は変更していない。
+
+修正後の結果：
+
+| 検証 | 結果 |
+|---|---|
+| 発行と関連（RA-02④・RB-D・RB-C・RB-B）合成試験 | 4ファイル／305件成功 |
+| ESLint | `npm run lint`（repo全体）exit 0 |
+| build・梱包 | `npm run build`成功、offline梱包441ファイル成功 |
+| 全体合成 | maxWorkers=3、252ファイル／11,927件成功、失敗0・pending 0、exit 0。約37.6秒 |
+
+## 6 残課題・制限
 
 RA-03-Aのhandoff／証拠／route原子的消費、RA-03-Bのaccepted固定discardは未実装。現在の合成source経路はverify=nullであり、実verify接続、元analyze受理capture、実結果の由来、E／finish／正常終了候補は確認しない。RA-01のplaceholder型・値projectionを発行証拠へ昇格しない。
 
