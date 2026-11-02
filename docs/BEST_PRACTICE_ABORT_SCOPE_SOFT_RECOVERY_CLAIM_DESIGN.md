@@ -1,7 +1,7 @@
 # WJ-C残工程：soft回復claim・世代移行の詳細設計
 
-Version: br006-soft-recovery-claim-draft-0.4 / Date: 2026-11-02。
-Status: **SR-Aの内部型・同ownerの観測／回復slot消費・診断分離だけを独立合成issuerで限定実装（§12）。回復route・世代移行・実生成元／cleanup接続・SR-B〜Dは未実装。正式発行口閉鎖・Unknown・全体受付無効・VM／監視／telemetry調査保留を維持する。**
+Version: br006-soft-recovery-claim-draft-0.5 / Date: 2026-11-02。
+Status: **SR-Aの内部claim／診断分離（§12）とSR-Bのphase型の非実行plan／fakeイベント会計（§13）を独立合成issuerで限定実装。実回復route・世代移行・実生成元／cleanup接続・SR-C／Dは未実装。正式発行口閉鎖・Unknown・全体受付無効・VM／監視／telemetry調査保留を維持する。**
 
 基準HEAD: `2804af5`。[親設計](BEST_PRACTICE_ABORT_SCOPE_WORKER_TIME_BINDING_DESIGN.md)§7・13の差分。WJ-Cの通常finish限定実装を変更せず、次の合成実装範囲を定める。実worker／runtime接続、実通信・実機操作、設定変更、本番cap／Permit投入・Pushの承認ではない。
 
@@ -112,7 +112,7 @@ closeを要求しただけ、workerのerror／exit通知を見ただけ、termin
 
 通常finishの「未完了inputがあれば拒否」を単に削除しない。RecoveryFinishPlanにより同inputの終端化と集合への一度限りの組込みが成立した場合だけ、回復用の固定受付を通す。raw manifest・callerのnot_processed申告から未完了inputを消せないようにする。集合は元source／選択windowへのbindingを必要とし、その正式供給口は未接続のまま。
 
-consistency段階に入る前のsoftで既存verify継続があれば、同source／ReleasePermit・同予算のverifyを**一度だけ**行う。既にconsistency段階でsoftになった場合は繰り返さない。verify継続が存在しない場合もGETを追加しない。verify未実施を成功扱いせず、changed／unverified・provisional_resultsと既存errorを保持する。GET・chunk・予約／retryは元HTTP ownerに課金し、回復claim側では二重計上しない。
+consistency段階に入る前のsoftで既存verify継続があれば、同source／ReleasePermit・同予算のverifyを**論理呼出しとして一度だけ**行う。実sourceのverifyは親→metadataの2 GETで、各GETのupstream_unavailableだけを最大1 retryするため、物理試行は最大4となる。旧記述の「GET最大1」は論理呼出しとの混同だった。既にconsistency段階でsoftになった場合は繰り返さない。verify継続が存在しない場合もGETを追加しない。verify未実施を成功扱いせず、changed／unverified・provisional_resultsと既存errorを保持する。GET・chunk・予約／retryは元HTTP ownerに課金し、回復claim側では二重計上しない。
 
 soft後verifyの失敗は、既存adapter（[adapter](../src/review/update-set-adapter.ts)のsoft分岐内のverify catch）の分類を変えない。
 
@@ -145,7 +145,7 @@ job・listener・timer・worker／stdioは監督owner、HTTP・認証・予約�
 | 観測・claim・guard／失効 | 回復owner | runにつき開始1、route1、finish1。失敗試行も将来oracleで数える |
 | input終端化・集合封印 | 同時刻／集合owner | 最大100 targetの既存局所枠。T_i／Uを再採取しない。payload／findingsを再copyしない |
 | 世代生成・ready／id・終了 | 同監督 | phase既存世代は交換0、未起動は初回1。worker期限型は旧終了後の新世代1だけ。readyはjobと別 |
-| consistency GET・受信／retry・予約返却 | 元source／transport／session | 必要な既存verifyは最大1、追加GETなし。元C/G/P・全体期限を共有 |
+| consistency GET・受信／retry・予約返却 | 元source／transport／session | 論理verify最大1。親→metadataの2 GET、各最大1 retryで物理最大4試行。追加の論理verifyなし。元C/G/P・全体期限を共有 |
 | E採取・全schema・finalize omission | 同finish worker | 既存の一度採取／一度finishを維持。親は同E／集合を検査するだけ |
 | 固定終端・解放後checkpoint | 外側owner（後工程） | worker→session→元取消／期限の対応を別途設計。合成closeから実証拠を発行しない |
 
@@ -163,7 +163,7 @@ job・listener・timer・worker／stdioは監督owner、HTTP・認証・予約�
 | SR-06 | terminate未確認／reject／後始末throw・取消／全体期限では新世代・候補を発行しない |
 | SR-07 | 全境界のpre/post guardとawait後の失効。phase期限と全体期限を区別し、S／全L／O／Uは固定 |
 | SR-08 | 未完了inputは同targetのnot_processedへ一度確定。U保持、元完了state維持、集合追加／欠落・reviewed昇格を拒否 |
-| SR-09 | verify要否を元stage／継続へ結合。既存GET最大1・consistency再試行0・C/G/P二重課金0を別イベントoracleで確認。§7の続行対象のverify失敗ごとにunverified＋finishへ進むことを確認 |
+| SR-09 | verify要否を元stage／継続へ結合。論理verify最大1、親→metadataの2 GET・各最大1 retryで物理最大4試行、consistency段階からの論理再試行0・C/G/P二重課金0を別イベントoracleで確認。§7の続行対象のverify失敗ごとにunverified継続を確認。実finish接続はSR-D |
 | SR-10 | verify中のreceive_budget_exceededによるrun失効・取消・全体期限でfinish_onlyへ進まないこと、対象外の既存finish・停止後finishの回帰を維持 |
 | SR-11 | finish／ready／送信失敗で再回復しない。finishは1回、候補は1回消費。終了未確認とhard診断を別slotに保持 |
 | SR-12 | 固定cleanup section各区間の観測、失敗後の継続と診断回収。rollback結果だけで代替しない |
@@ -174,11 +174,11 @@ job・listener・timer・worker／stdioは監督owner、HTTP・認証・予約�
 ## 11 推奨実装分割・承認／レビュー待ち
 
 1. **SR-A（合成限定実装）**：内部discriminant・同ownerの観測／回復slotとone-shot検査、soft／hard／cleanup診断分離を独立合成issuerだけで実装した。§12参照。route／世代移行や実cleanup証拠は発行しない。
-2. **SR-B**：phase型の同世代維持／未起動分岐、未処理集合・必要verifyのfakeイベント会計を接続する。
+2. **SR-B（合成限定実装）**：phase型の同世代維持／未起動分岐、未処理集合・必要verifyのfakeイベント会計を非実行planへ接続した（§13）。実finish権限ではない。
 3. **SR-C**：worker型の送信後／ready待ち区別、旧世代終了証拠・新世代routeをfake依存で接続する。
 4. **SR-D**：通常WJ-CのE／固定集合・候補消費へ接続し、全guardと独立oracleを確認する。実session／監督・外側cleanup接続は行わない。
 
-SR-B以降の実装は別の依頼後に行う。実生成継続のclass／module配置、private終了証拠の実発行条件、停止後finishとの接続互換性、実cleanup上限・外側checkpoint／診断写像、実選択windowと集合証拠、全費目上界はレビュー待ちで、人の承認済みとはしない。draft-0.1／0.2はコード照合とMD設計のみ。SR-Aの実施済み範囲・試験記録を次節へ分離し、実通信・環境設定操作を実施したことにはしない。
+SR-C以降の実装は別の依頼後に行う。実生成継続のclass／module配置、private終了証拠の実発行条件、停止後finishとの接続互換性、実cleanup上限・外側checkpoint／診断写像、実選択windowと集合証拠、全費目上界はレビュー待ちで、人の承認済みとはしない。draft-0.1／0.2はコード照合とMD設計のみ。SR-A／Bの実施済み範囲・試験記録を§12／13へ分離し、実通信・環境設定操作を実施したことにはしない。
 
 draft-0.1のレビュー修正：worker期限型の観測をtimer終端と「送信後／ready待ち」だけに限っていたが、現監督はrequest冒頭（worker未起動のこともある）・ready／応答処理内・送信直前（id消費済み未送信）の`check()`からも同じdeadline_exceededを投げ、adapterはそれらをsoftとして受け付ける。未起動の場合に旧worker終了証拠を要求すると既存soft partialが回復不能になるため、§6.0に発生点の表を追加し、§3・SR-05を合わせた。またsoft後verifyの失敗分類が未記載で、既存adapterが続行してfinishする失敗をhard停止と誤実装し得たため、§7に既存分類との対応表を追加し、SR-09／10を合わせた。
 
@@ -200,12 +200,12 @@ owner binding／observation／recovery／cleanup診断には別の内部brandを
 
 observeは発行claimを最初のguard前に占有し、最後のpost-guard後だけ観測をpublishする。claimRecoveryは同観測をguard前に取り外し、回復開始bitを一度消費する。consumeRecoveryも同回復slotをguard前に取り外し、全guard後だけauthority:noneの限定dataを返す。コピー／別owner／二重操作・捕捉再入・identity変更・取消／期限はhard停止し、失敗後に再生成しない。
 
-ここでのconsumedは**SR-Aの非実行結果を消費しただけ**で、§4のquiescing／route_ready／finish_onlyへの遷移ではない。新世代、HTTP、analyze、finish、対象集合の封印、未完了inputの終端化、回復権限を発行しない。SR-B〜Dで固定producerと対にした接続が必要となる。
+ここでのconsumedは**SR-Aの非実行結果を消費しただけ**で、§4のquiescing／route_ready／finish_onlyへの遷移ではない。新世代、HTTP、analyze、finish、対象集合の封印、未完了inputの終端化、回復権限を発行しない。SR-Bの別の非実行plan分岐は§13へ分離し、実producerとの接続は引き続き未実施とする。
 
 ### 12.3 soft／hard／cleanupの分離
 
 - soft slotは受理済みkind／phase／point／worker_stateだけを保持し、hard停止後も残す。元identity・source・例外本文は含めない。
-- hard slotは最初の固定code／phaseを保持し、後続cleanupで上書きしない。SR-Aで直接扱うcodeはcancelled／deadline_exceeded／worker_unavailable／internal_review_error。未知理由は内部エラーへ固定する。verify失敗のHTTP分類はSR-B以降で、現在のadapterを変更しない。
+- hard slotは最初の固定code／phaseを保持し、後続cleanupで上書きしない。SR-A初期の直接codeはcancelled／deadline_exceeded／worker_unavailable／internal_review_error。SR-Bではfake run失効のreceive_budget_exceeded／authentication_failed／access_denied／request_budget_exceeded／payload_budget_exceededも固定保持する。未知理由は内部エラーへ固定する。verifyの継続分類は§13へ分離し、現在のadapterを変更しない。
 - cleanupLeaseは元ownerが生存する間に一度だけ発行する**診断専用sink**。失敗後に新sinkを作れず、既に発行したsinkだけはhard停止後もrecordCleanupで一度sealできる。これはrun guardを呼ばず、失効したrunを正常化しない。capabilityは診断記録だけで、worker／HTTP操作や回復を許可しない。
 - cleanupはSR-Aでは一つのimmutableなsnapshotであり、実closeの要求→settle処理ではない。workerなしはnot_requiredだけ、workerありはnot_started／requested／confirmed／failed／unconfirmedを区別する。confirmed以外の未完了／失敗はhard停止を要求し、無効なsnapshotはunconfirmedへ固定する。未確認を記録した後、遅れてconfirmedへ上書きしない。先行cancelledと後続cleanup failedは両方保持する。
 
@@ -220,3 +220,30 @@ recordCleanupのstatusはfixtureが渡す合成イベントで、GenerationClose
 issuer・試験は配布物に含めず、dist JS／宣言／mapの関数／path混入とruntime／I/O／timer／clock／worker依存を負の対照付きで検査する。これは字句・依存先の局所検査であり、間接global取得等の網羅的証明ではない。専用compiled／B-03・実class保証へ流用しない。正式発行口閉鎖・全体受付無効・Unknown・調査保留を維持する。
 
 draft-0.3のレビュー修正：seed／factsのidentity参照をobject・非Proxyに限る検査（`refs()`）と、`recordCleanup`の再入拒否（busy判定）は、各判定を外す変異でも119件が通っていた。前者を外すと文字列のidentityが`===`の値一致でcopyでも通り、§3の「同じid／日時／hashだけでは通さない」が成り立たない。後者を外すとobserveのguard内から発行済みsinkへconfirmedを記録でき、observeも成功する。seed／facts×文字列／Proxyの4件と再入1件の試験を追加し、§12.4の件数・保証範囲と親設計・検証記録からの版数リンクを更新した。
+
+## 13 SR-B：phase分岐・集合保持・fake verify会計
+
+実装は[独立issuer](../tests/support/review/synthetic-soft-recovery.ts)と[private値モデル](../tests/support/review/synthetic-phase-recovery.ts)、[合成試験](../tests/review/synthetic-phase-recovery.test.ts)のみ。SR-Aの`consumeRecovery`で返した公開データから昇格せず、未消費の同owner recovery handleを`preparePhase`が先に占有する。worker期限型は拒否する。各操作のpre/post guard・busy検査と固定hard理由を継続し、失敗時はphase handle／attempt／ready claimを破棄する。既存SR-Aの124試験は維持する。
+
+### 13.1 同一性・集合・時刻
+
+prepareのstrictな13列はsource／budget／release／origin／window／verify／accounting／rows／completed／inputs／collection_status／consistency／initial_worker。同source・budget・release・originはpinned参照と一致し、window／verify／receiptは非Proxy参照だけを受ける。これは合成issuerの入力であり、実window／payload受領物の供給証拠ではない。
+
+選択IDは重複なし最大100件。完了結果は選択集合の部分集合として保持し、未完了行は`not_processed: deadline_exceeded`へ確定する。受理済みinputのT_iは完了／未処理を問わず保持し、O≤T_i≤U・単調順と最大T_i=保持U（0 inputならO=U）を要求する。入力receipt／IDの重複、集合外、reviewed／result_omittedのinput欠落は拒否する。metadata段階のsoftではcollection_status／run_statusをfailedとする。開始S・全deadline L・O・Uは再採取／再計算しない。
+
+### 13.2 必要verifyと費目所有
+
+- 元phaseがconsistencyならverifyを繰り返さず、継続なしもGET=0。初期consistencyを勝手にstableへ変更しない。
+- 必要なら親→metadataの固定順。各GETのupstream_unavailableのみ最大1 retryで、論理verifyは1、物理attemptは最大4。retry待ちはfakeイベントでありtimer／sleepを開始しない。
+- 合成prefix C/G/Pはprepareで一度copyする。C上限210、G累積16MiB、response上限4MiB、P prefix上限8MiBを維持し、attemptだけC、同attemptの一意chunkだけGへ課金する。上限を越えたchunkもGへ計上してから停止する。verifyのP追加は0。C枠切れはdispatchせずunverified、G枠切れはhard停止。
+- §7の継続対象エラーはunverifiedと固定errorを保持し、phase_deadlineはdeadline_exceeded、invalid_responseはmetadata_unavailableへ写像する。changedはprovisionalとchanged_during_reviewを保持する。取消・全体期限・receive予算失効・未知理由はhard停止し、worker選択へ進まない。
+
+この会計は**同fake budget identityに結合した局所snapshot／イベント計数**である。実canonical budget writer・予約台帳・実GETには接続しておらず、実sessionでの会計継続保証に数えない。従来の210試行・final4枠を増やす変更でもない。
+
+### 13.3 worker選択・消費・失効
+
+verify完了後だけ`phaseWorker`へ進む。既存readyは同supervisor／worker／generationを維持し、起動0・ready再受理0。未起動では合成の予約済み初回frameをsnapshotし、fake起動イベント1の後、同frameのready claimを一度受理する。別frame・二重ready・ready失敗は停止し、代替起動しない。取得中・retry待ち・ready待ちを正常closeで完了扱いしない。
+
+`consumePhase`はplan handleをpre-guard前に占有し、post-guard後だけ`authority=none`のimmutableな非実行summaryを一度返す。inspectはUTC／identity／payloadを含まないscalar診断のみ。失効時には試行済みC/G/Pと先行soft／hard診断を残し、実行用参照を破棄する。正常closeで終端UTCも破棄する。SR-A cleanup snapshotは従来の診断であり、ここでfake起動したframeの実終了証拠にはならない。
+
+SR-Bは112件、SR-Aとの合計236件で局所検査する。初回起動経路の20 guardすべての取消位置に対してC/G/Pと停止を独立oracleで比較し、混入・一度限り・上限・継続エラー・close／再入も確認する。実finish／E比較・WJ-Cへの接続、worker期限型の世代交換（SR-C）、実cleanup連結（SR-D）、B-03 compiled保証は未実施。配布物にはissuer／値モデル／試験を含めず、混入とruntime／I/O／clock依存の負の対照を追加する。詳細は[SR-B検証記録](E2E_BEST_PRACTICE_PHASE_RECOVERY_SRB_2026-11-02.md)。人の承認済みとはしない。

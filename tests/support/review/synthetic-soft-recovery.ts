@@ -1,6 +1,7 @@
 /** SR-A: package-excluded synthetic issuer, never a runtime recovery authority. */
 import {types} from 'node:util';
 import {z} from 'zod';
+import {createSyntheticPhaseModel} from './synthetic-phase-recovery.js';
 type ReadPhase='metadata'|'payload'|'consistency';
 type WorkerRefs=Readonly<{generation:object;worker:object}>;
 type WorkerCall=Readonly<{kind:'worker_deadline';phase:'analysis';supervisor:object;request:object;input:object}>;
@@ -13,9 +14,9 @@ export type SyntheticSoftFacts=
     |{point:'send_check';worker_state:'ready';allocation:object;id:number}&WorkerRefs
     |{point:'analyze_timer'|'analyze_reply_check';worker_state:'ready';job:object;id:number}&WorkerRefs)>;
 export type SyntheticRecoverySeed=Readonly<{run:object;session:object;source:object;key:object;origin:object;budget:object;release:object;started_at:string;deadline_ms:number;observed_at:string;upper_utc:string}>;
-type Code='cancelled'|'deadline_exceeded'|'worker_unavailable'|'internal_review_error';
-type Phase='binding'|'observation'|'recovery_claim'|'recovery_consume'|'cleanup_lease'|'cleanup_record'|'revoke'|'close'|'discard';
-type State='fresh'|'binding'|'active'|'observing'|'observed'|'claiming'|'claimed'|'consuming'|'consumed'|'failed'|'closed';
+type Code='cancelled'|'deadline_exceeded'|'worker_unavailable'|'internal_review_error'|'receive_budget_exceeded'|'authentication_failed'|'access_denied'|'request_budget_exceeded'|'payload_budget_exceeded';
+type Phase='binding'|'observation'|'recovery_claim'|'recovery_consume'|'cleanup_lease'|'cleanup_record'|'revoke'|'close'|'discard'|'phase_prepare'|'phase_verify'|'phase_chunk'|'phase_retry'|'phase_worker'|'phase_ready'|'phase_consume';
+type State='fresh'|'binding'|'active'|'observing'|'observed'|'claiming'|'claimed'|'consuming'|'consumed'|'failed'|'closed'|'phase_planning'|'phase_planned'|'phase_consuming';
 type SoftDiagnostic=Readonly<Pick<SyntheticSoftFacts,'kind'|'phase'|'point'|'worker_state'>>;
 type CleanupStatus='not_required'|'not_started'|'requested'|'confirmed'|'failed'|'unconfirmed';
 declare const ownerBrand:unique symbol,observationBrand:unique symbol,recoveryBrand:unique symbol,cleanupBrand:unique symbol;
@@ -66,7 +67,7 @@ function pinFacts(raw:unknown):SyntheticSoftFacts{
 function equal(a:object,b:object){const x=a as Record<string,unknown>,y=b as Record<string,unknown>;return Object.keys(x).length===Object.keys(y).length&&Object.keys(x).every(k=>x[k]===y[k]);}
 function code(raw:unknown):Code{
   const c=raw&&typeof raw==='object'&&!types.isProxy(raw)?Object.getOwnPropertyDescriptor(raw,'code')?.value:raw;
-  return c==='cancelled'||c==='deadline_exceeded'||c==='worker_unavailable'?c:'internal_review_error';
+  return c==='cancelled'||c==='deadline_exceeded'||c==='worker_unavailable'||c==='receive_budget_exceeded'||c==='authentication_failed'||c==='access_denied'||c==='request_budget_exceeded'||c==='payload_budget_exceeded'?c:'internal_review_error';
 }
 /** Caller-supplied expected topology is a fake fixture, not live-source evidence. */
 export function createSyntheticSoftRecoveryIssuer(seed:SyntheticRecoverySeed,expected:SyntheticSoftFacts,check:()=>string|undefined=()=>undefined){
@@ -77,8 +78,10 @@ export function createSyntheticSoftRecoveryIssuer(seed:SyntheticRecoverySeed,exp
   let cleanupToken:CleanupDiagnosticHandle|undefined,cleanupStarted=false,cleanupRequiresWorker=false;
   let soft:SoftDiagnostic|null=null,hard:Readonly<{code:Code;phase:Phase}>|null=null;
   let cleanup:Readonly<{scope:'synthetic_cleanup_snapshot';status:CleanupStatus}>|null=null;
+  let phaseModel:ReturnType<typeof createSyntheticPhaseModel>|undefined,phaseHandle:object|undefined;
+  let phaseDiagnostic:ReturnType<ReturnType<typeof createSyntheticPhaseModel>['inspect']>|null=null;
   let time:Readonly<{started_at:string;deadline_ms:number;observed_at:string;upper_utc:string}>|null=null;
-  function clear(){binding=observation=recovery=seedRef=expectedRef=undefined;pinned=facts=undefined;}
+  function clear(){if(phaseModel){phaseModel.dispose();phaseDiagnostic=phaseModel.inspect();phaseModel=undefined;}phaseHandle=undefined;binding=observation=recovery=seedRef=expectedRef=undefined;pinned=facts=undefined;}
   function fail(phase:Phase,raw?:unknown):never{
     if(state==='closed')throw Error('internal_review_error');hard??=Object.freeze({code:code(raw),phase});state='failed';clear();throw Object.assign(Error(hard.code),{code:hard.code});
   }
@@ -86,6 +89,7 @@ export function createSyntheticSoftRecoveryIssuer(seed:SyntheticRecoverySeed,exp
     const reason=check();if(reason!==undefined)fail(phase,reason);if(hard)fail(phase,hard.code);
     if(!seedRef||!expectedRef||!pinned||!facts||!equal(pinSeed(seedRef),pinned)||!equal(pinFacts(expectedRef),facts))fail(phase);
   }
+  function model(handle:object,phase:Phase){if(!phaseModel||handle!==phaseHandle)fail(phase);return phaseModel!;}
   function act<T>(phase:Phase,b:object|undefined,claim:()=>void,work:()=>T,commit:(v:T)=>void=()=>{}):T{
     if(busy||hard||state==='closed'||(phase==='binding'?state!=='fresh':!binding||b!==binding))return fail(phase,hard?.code);
     busy=true;try{claim();guard(phase);const value=work();guard(phase);commit(value);return value;}catch(error){return fail(phase,error);}finally{busy=false;}
@@ -99,6 +103,18 @@ export function createSyntheticSoftRecoveryIssuer(seed:SyntheticRecoverySeed,exp
     consumeRecovery(b:object,handle:object){return act('recovery_consume',b,()=>{
       const issued=recovery;recovery=undefined;if(state!=='claimed'||!issued||issued!==handle)fail('recovery_consume');state='consuming';
     },()=>Object.freeze({scope:'synthetic_recovery_consumption' as const,kind:soft!.kind,phase:soft!.phase,point:soft!.point,authority:'none' as const}),()=>{state='consumed';});},
+    preparePhase(b:object,handle:object,input:unknown){let model:ReturnType<typeof createSyntheticPhaseModel>;return act('phase_prepare',b,()=>{
+      const issued=recovery;recovery=undefined;if(state!=='claimed'||!issued||issued!==handle||phaseModel)fail('phase_prepare');state='phase_planning';
+    },()=>{const f=facts!;if(f.kind!=='phase_deadline')fail('phase_prepare');model=createSyntheticPhaseModel(pinned!,f as Extract<SyntheticSoftFacts,{kind:'phase_deadline'}>,input);return opaque<object>();},
+    handle=>{phaseModel=model;phaseHandle=handle;state='phase_planned';});},
+    phaseAttempt(b:object,plan:object,role:unknown){return act('phase_verify',b,()=>{model(plan,'phase_verify');},()=>model(plan,'phase_verify').dispatch(role));},
+    phaseChunk(b:object,plan:object,attempt:object,identity:object,bytes:unknown){return act('phase_chunk',b,()=>{model(plan,'phase_chunk');},()=>model(plan,'phase_chunk').chunk(attempt,identity,bytes));},
+    phaseOutcome(b:object,plan:object,attempt:object,outcome:unknown){let receipt:ReturnType<ReturnType<typeof createSyntheticPhaseModel>['take']>;return act('phase_verify',b,()=>{receipt=model(plan,'phase_verify').take(attempt);},()=>model(plan,'phase_verify').settle(receipt,outcome));},
+    phaseRetry(b:object,plan:object){return act('phase_retry',b,()=>{model(plan,'phase_retry');},()=>model(plan,'phase_retry').retry());},
+    phaseWorker(b:object,plan:object){return act('phase_worker',b,()=>{model(plan,'phase_worker');},()=>model(plan,'phase_worker').selectWorker());},
+    phaseReady(b:object,plan:object,worker:object,context:unknown){return act('phase_ready',b,()=>{model(plan,'phase_ready').takeWorker(worker);},()=>model(plan,'phase_ready').ready(context));},
+    phaseReadyFailure(b:object,plan:object,worker:object,reason:unknown){return act('phase_ready',b,()=>{model(plan,'phase_ready').takeWorker(worker);},()=>model(plan,'phase_ready').readyFailure(reason));},
+    consumePhase(b:object,plan:object){let own:ReturnType<typeof createSyntheticPhaseModel>;return act('phase_consume',b,()=>{own=model(plan,'phase_consume');phaseHandle=undefined;state='phase_consuming';},()=>own.consume(),()=>{state='consumed';});},
     revoke(reason:unknown){if(state==='closed')return;try{fail('revoke',reason);}catch{/* fixed synchronous revocation */}},
     cleanupLease(b:object){return act('cleanup_lease',b,()=>{if(cleanupStarted)fail('cleanup_lease');cleanupStarted=true;},()=>opaque<CleanupDiagnosticHandle>(),handle=>{cleanupToken=handle;cleanupRequiresWorker=facts!.worker_state!=='none';});},
     recordCleanup(lease:object,status:unknown){
@@ -110,10 +126,10 @@ export function createSyntheticSoftRecoveryIssuer(seed:SyntheticRecoverySeed,exp
       cleanup=Object.freeze({scope:'synthetic_cleanup_snapshot',status:valid?status as CleanupStatus:'unconfirmed'});
       if(!valid||status!=='confirmed'&&status!=='not_required')fail('cleanup_record');
     },
-    close(b:object){return act('close',b,()=>{},()=>{if(cleanupToken)fail('close');},()=>{clear();time=null;state='closed';});},
+    close(b:object){return act('close',b,()=>{},()=>{if(cleanupToken||phaseModel?.inFlight())fail('close');},()=>{clear();time=null;state='closed';});},
     discardTerminalTime(){if(busy||state!=='failed'||time===null)return fail('discard',hard?.code);time=null;},
     inspect(){return Object.freeze({scope:'synthetic_soft_recovery_only' as const,state,time,observation_pending:!!observation,recovery_pending:!!recovery,cleanup_pending:!!cleanupToken,
       claims:Object.freeze({observation_started:observationStarted,recovery_started:recoveryStarted,cleanup_started:cleanupStarted}),
-      diagnostics:Object.freeze({soft,hard,cleanup}),permissions:Object.freeze({formal_issuance:false,dispatch:false,recovery_route:false})});},
+      diagnostics:Object.freeze({soft,hard,cleanup}),phase:phaseModel?.inspect()??phaseDiagnostic,permissions:Object.freeze({formal_issuance:false,dispatch:false,recovery_route:false})});},
   });
 }
