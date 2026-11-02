@@ -1,6 +1,6 @@
 # RD-A FinishContextEvidenceの詳細型・private発行契約
 
-Version: br006-finish-context-rda-draft-0.14 / Date: 2026-11-02。
+Version: br006-finish-context-rda-draft-0.15 / Date: 2026-11-02。
 Status: **RA-01・RA-02①②・RB-A〜D・RA-02④-AとRA-03-A／Bの受理／固定discardまで合成限定実装。正式発行口閉鎖・Unknown・全体受付無効・VM／監視／telemetry調査保留を維持する。**
 
 基準HEAD: `a62c897`。[SR-D接続設計](BEST_PRACTICE_ABORT_SCOPE_RECOVERY_FINISH_SRD_DESIGN.md)§1〜3・9のRD-Aを具体化する。[SC2-D](BEST_PRACTICE_ABORT_SCOPE_WORKER_RECOVERY_CONTINUATION_DESIGN.md)と[通常WJ-C](BEST_PRACTICE_ABORT_SCOPE_WORKER_TIME_BINDING_DESIGN.md)の既存契約は維持する。コード・公開JSON／MCP・設定を変更する指示ではなく、実接続・実通信・本番cap／Permit投入の承認ではない。
@@ -113,6 +113,8 @@ outcomesは選択ID全件に一度対応する最大100件のdiscriminated union
 | その他の非reviewed | 既存`assetOutcomeStructure`の該当variantの項目だけ。同plan.assetsのstate／reason／asset_typeと一致。not_processedはdeadline_exceededの確定を維持 |
 
 AcceptedOutcomeRefは、同合成assemblyの元受理slotにあるimmutable synthetic outcomeへのopaque参照。発行者がfixture値を作り、元receiptの重要contextを検査・post-guard受理した継続だけが発行する設計とする。現在のWJ-Bにこのexportはなく、capture hook／slot接続は未実装。通常WJ-Bの公開summaryやraw resultをあとから登録する口は作らない。
+
+[RD-B詳細設計draft-0.1](BEST_PRACTICE_ABORT_SCOPE_RECOVERY_FINISH_VALUES_RDB_DESIGN.md)の照合で、現在のsynthetic_original_outcome_pinはID・T_i・expected_contextを持つdescriptor由来参照であり、元結果本文／findingsのsnapshot・digestを持たないことを明示した。context比較の成功を本文完全一致・full schema／実wire保証へ昇格せず、その不足はUnknownとして後続接続を止める。RD-B自体は未実装。
 
 reviewed_originの有無は同private ledgerの元受理variantとomission継続から固定し、callerのboolやnull申告で選ばせない。元reviewedだった記録から参照だけを落としてnullにすること、逆に元omittedへreviewed起源を捏造することを拒否する。
 

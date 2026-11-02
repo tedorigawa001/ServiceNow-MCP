@@ -1,6 +1,6 @@
 # RB-D後のfinish証拠発行・RA-03受理 接続差分設計
 
-Version: br006-finish-issue-accept-draft-0.4 / Date: 2026-11-02。
+Version: br006-finish-issue-accept-draft-0.5 / Date: 2026-11-02。
 Status: **RA-02④-Aの発行・RA-03-Aの原子的受理・RA-03-Bのaccepted固定discardまで合成限定実装。正式発行口閉鎖・全体受付無効・Unknown・VM／監視／telemetry調査保留を維持する。実finish／候補・正常終端能力への接続ではない。**
 
 基準HEAD: `6021339`。対象は[RA-02③](BEST_PRACTICE_ABORT_SCOPE_FINISH_ASSEMBLY_RA02_BINDING_DESIGN.md)§11と[RD-A](BEST_PRACTICE_ABORT_SCOPE_FINISH_CONTEXT_RDA_DESIGN.md)§5〜7との差分。実装・証拠発行・実接続・実通信・設定変更・Pushの承認ではない。
@@ -133,3 +133,5 @@ discardのpre/post guardは既存期限・取消を共有するが、source clos
 合成の正常discardはRD-DのSourceClosed／NewCleanupConfirmedや終了候補を発行する能力ではない。source／cleanupの実処理・OS終了・実workerの真正性は未検証。受領情報の保持・確認・消費・guard／破棄の追加work／allocation上界はUnknownのまま、全体受付は無効とする。
 
 [RA-03-B合成検証記録](E2E_BEST_PRACTICE_FINISH_DISCARD_RA03B_2026-11-02.md)参照。
+
+後続の[RD-B期待値封印・値比較詳細設計draft-0.1](BEST_PRACTICE_ABORT_SCOPE_RECOVERY_FINISH_VALUES_RDB_DESIGN.md)では、同accepted期待値の一度限りsealと、元accepted handleをcleanup責務用にだけ残す差分を整理した。新sealed slotをRA-03-Bのdiscard／失効へ明示接続する必要があり、現行discardが将来slotを自動で消すとは仮定しない。設計のみでseal／finish jobは未実装。
