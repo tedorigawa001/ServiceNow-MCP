@@ -1,7 +1,7 @@
 # RA-02③ 同handoff・route結合の接続差分設計
 
-Version: br006-finish-assembly-binding-draft-0.5 / Date: 2026-11-02。
-Status: **RB-A／Bの生成・供給とRB-Cの同root lifecycle／ready origin／cleanup開始serialまで合成限定実装。RB-Dは未実装。finish証拠発行なし・正式発行口閉鎖・全体受付無効・Unknown・VM／監視／telemetry調査保留を維持する。**
+Version: br006-finish-assembly-binding-draft-0.6 / Date: 2026-11-02。
+Status: **RB-A〜Dの生成・供給・同root lifecycle・同plan／handoffへの一度限り結合まで合成限定実装。finish証拠発行なし・正式発行口閉鎖・全体受付無効・Unknown・VM／監視／telemetry調査保留を維持する。**
 
 基準HEAD: `d263282`。[RD-A](BEST_PRACTICE_ABORT_SCOPE_FINISH_CONTEXT_RDA_DESIGN.md)§2〜5・10と[RA-02①②検証記録](E2E_BEST_PRACTICE_FINISH_ASSEMBLY_RA02_2026-11-02.md)に対する接続差分。実装・実接続・実通信・設定変更・実Permit投入の承認ではない。
 
@@ -77,7 +77,7 @@ legacyのsummary／固定discardは維持する。summaryを選んだplan、消�
 | RB-A（生成境界実装済み） | 共通kernelの生成境界抽出。旧API／全旧試験とRA-02①②を維持し、新入口はまだpin／handoff／routeを受理しない。各rootのowner／guard／claim独立、後付け登録なし |
 | RB-B（合成供給・既存準備まで実装） | 新しい固定入口構築で同receipt／source／window／releaseとpinを供給。元active receipt・selected／T_i／U・元state、異なる構築の混入を拒否。verify／新世代／route／handoffは未接続 |
 | RB-C（合成限定実装済み） | ready受理origin、source lifecycle、cleanup開始serialを同rootへ追加。worker起動とcleanup開始、guard再入・取消・失効を区別。handoff／finish能力なし |
-| RB-D | 同handoffの一度限り結合。pre/post照合と競合・失敗後再利用拒否。証拠発行は引き続き0 |
+| RB-D（合成限定実装済み） | 同handoffの一度限り結合。pre/post照合と競合・失敗後再利用拒否。証拠発行は引き続き0。§11参照 |
 
 必須の負の対照：別root／copy binding／copy handoff／summary／RA-01 value／RA-02①②の準備binding、同値だが別receipt・source・frame、selected追加／欠落／順序変更、T_i／U書換え、reviewed起源欠損、verify由来の制限削除を拒否する。他rootは不変であることを確認する。
 
@@ -87,7 +87,7 @@ ready_events=1でもcleanup開始済み、source closing／closed／failed、発
 
 ## 7 承認・未確認事項
 
-draft-0.1の生成境界案は§8〜10のRB-A／B／Cを実装した。RB-D、verify後の固定合流規則と費目別上界は未対応。既存APIsを緩める可変modeや任意hookを追加しない。
+draft-0.1の生成境界案は§8〜11のRB-A〜Dを実装した。実verify接続・issue／acceptと費目別上界は未対応。既存APIsを緩める可変modeや任意hookを追加しない。
 
 RA-02④の一度限りの証拠発行、RA-03の証拠とhandoffの原子的受理、RD-B以降のE／finish／候補・正常cleanup能力は別工程。正式発行口閉鎖・全体受付無効・調査保留を維持する。
 
@@ -167,6 +167,18 @@ public inspectはsource状態／completion・開始flag・serial・ready_origin�
 
 費目は定数個のlifecycle／origin参照生成、通常guard、開始claim、診断・失効・破棄。これらのwork／allocationは未導出で、会計不変を費用0とはしない。全体work／layout／allocation・本番capはUnknown。旧class／実sessionの生存を証明したものではない。
 
-[RB-C検証記録](E2E_BEST_PRACTICE_RECOVERY_LIFECYCLE_RBC_2026-11-02.md)参照。RB-Dの同handoff・planへの結合、verify後の制限合流・issue／accept・finish／E・正常source／cleanup能力は引き続き未実装。
+[RB-C検証記録](E2E_BEST_PRACTICE_RECOVERY_LIFECYCLE_RBC_2026-11-02.md)参照。後続RB-Dの結合は§11。issue／accept・finish／E・正常source／cleanup能力は引き続き未実装。
 
 draft-0.4のレビュー修正（RB-C）：通常closeは、source closeを開始してsettleしていない状態（closing）でも成功し、`clear()`がsourceを一律`closed`にしていた。未確定のsource closeが正常closeに見えるため、source closing中の通常closeを拒否する（試験helperの実装修正）。source closeを一度も開始しない通常closeは`closed`の表示を維持し、`source_close_started=false`・`source_completion=none`で区別する。
+
+## 11 RB-Dの合成限定実装
+
+同constructorで生成したimmutable pinをkernelへ渡し、元planとそのprivate receiver slotのhandoff、同owner／source／frame／ready origin／cleanup identityを固定照合する。利用側がraw header・結果・置換pin・別routeを登録する口は作らない。`bindRecoveryPlan`はpre guard前に開始claimを消費し、workとpost guardの後だけboundを公開する。再入・競合・二重開始・混入・失敗後再利用はhard停止し、最初の診断を保持する。
+
+純粋な値projectionは由来の証拠ではない。seedの7参照、S／L／O／U、元receipt／集合／T_i／completed、verify事実と会計prefixを比較し、RA-01の共有bounded projectionで一度検査する。元frameはprojectionのコピーに置き換えず保持する。limitationsは固定合流後100件を超えれば拒否し、errorsは既存100件上限・切詰めmarkerを維持する。現在の公開合成準備経路はverify=nullであり、実verifyや観測UTC採取は接続しない。
+
+source close開始・新cleanup開始は即座にbound参照を失効させる。診断の`route_bound`は合成private結合の状態だけで、permissionsは全てfalse、evidence_issues=0を維持する。handoffの発行／受理claimは未実装。固定discardだけが元receiverを消費でき、同sourceのclose完了と新cleanup確認の両方を要求する。正常finish能力は発行しない。hard後のcleanup診断は回復権限を復元しない。
+
+収集・比較は100件以内の固定集合と一度の共有projectionに限定するが、追加guard・参照保持・合流・破棄のwork／allocation上界は未導出。C/G/P prefixの不変を費用0とはしない。Unknown・全体受付無効を維持する。legacy factoryとlifecycle専用factoryには新API／診断型を公開しない。
+
+[RB-D検証記録](E2E_BEST_PRACTICE_RECOVERY_PLAN_BINDING_RBD_2026-11-02.md)参照。

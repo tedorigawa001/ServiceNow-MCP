@@ -16,6 +16,8 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 ### Changed
 
+- RB-D binds the same synthetic recovery plan/handoff once to constructor-pinned values and the live private route. Mixed handles, competing branches, revocation and failed reuse stop while retaining diagnostics; source close and cleanup start invalidate the binding. Bounded value projection retains the original frame and exposes counts only. No finish evidence, real connection or whole-run admission is enabled.
+
 - RB-C adds package-excluded source lifecycle, private post-guard ready origins and a separate monotonic cleanup-start serial to the same synthetic pinned recovery kernel. Worker startup does not start cleanup; source close, cleanup start and hard stop invalidate readiness. Owned cleanup sinks remain diagnostics-only after failure. Legacy/RB-A method and diagnostic types are preserved; no handoff, finish evidence, runtime connection or whole-run admission is enabled.
 
 - RB-B adds a package-excluded pinned synthetic recovery root whose immutable pins and fixed recovery input share the original receipt/source/window/release identities. A separate strict constructor supplies selected rows, retained T_i/U and accounting prefix; caller handles or replacement contexts are rejected. Old fake closure confirmation feeds the existing guarded preparation once, with first-stop diagnostics and fixed discard. Legacy/RB-A APIs remain unchanged; no live route, handoff, finish evidence or real connection is enabled.

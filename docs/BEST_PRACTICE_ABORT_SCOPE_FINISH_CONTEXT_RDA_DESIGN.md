@@ -1,7 +1,7 @@
 # RD-A FinishContextEvidenceの詳細型・private発行契約
 
-Version: br006-finish-context-rda-draft-0.9 / Date: 2026-11-02。
-Status: **RA-01・RA-02①②とRB-A〜Cの合成供給・lifecycleまで実装。plan／handoffへの結合・finish証拠発行とRA-03受理は未実装。正式発行口閉鎖・Unknown・全体受付無効・VM／監視／telemetry調査保留を維持する。**
+Version: br006-finish-context-rda-draft-0.10 / Date: 2026-11-02。
+Status: **RA-01・RA-02①②とRB-A〜Dの合成供給・lifecycle・plan／handoff結合まで実装。finish証拠発行とRA-03受理は未実装。正式発行口閉鎖・Unknown・全体受付無効・VM／監視／telemetry調査保留を維持する。**
 
 基準HEAD: `a62c897`。[SR-D接続設計](BEST_PRACTICE_ABORT_SCOPE_RECOVERY_FINISH_SRD_DESIGN.md)§1〜3・9のRD-Aを具体化する。[SC2-D](BEST_PRACTICE_ABORT_SCOPE_WORKER_RECOVERY_CONTINUATION_DESIGN.md)と[通常WJ-C](BEST_PRACTICE_ABORT_SCOPE_WORKER_TIME_BINDING_DESIGN.md)の既存契約は維持する。コード・公開JSON／MCP・設定を変更する指示ではなく、実接続・実通信・本番cap／Permit投入の承認ではない。
 
@@ -133,7 +133,7 @@ cleanup_originは同新frameのprivate cleanup lifecycle identityと開始serial
 3. 新frameのcleanupが未開始、同serialのまま、同診断sinkが未消費。closing／closedやrequested事実があれば拒否する。
 4. routeの利用claimが未使用。accept時に一度消費して期待値ownerへ移す。
 
-**過去にready_events=1であることと、今finish可能なrouteであることを分ける。** cleanup開始claimは、要求処理や依存呼出しより先に単調な開始状態／serialを更新し、record／confirmed／失敗で巻き戻さない。RB-Cで同rootの合成private lifecycleを実装したが、plan／handoff・証拠発行への結合は未実装。legacy SC2-Cのstatus=not_startedやsinkが残るという診断だけで代替せず、実source／workerの生存証拠とも呼ばない。
+**過去にready_events=1であることと、今finish可能なrouteであることを分ける。** cleanup開始claimは、要求処理や依存呼出しより先に単調な開始状態／serialを更新し、record／confirmed／失敗で巻き戻さない。RB-Cの同root合成private lifecycleとRB-Dのplan／handoff結合まで実装したが、証拠発行は未実装。legacy SC2-Cのstatus=not_startedやsinkが残るという診断だけで代替せず、実source／workerの生存証拠とも呼ばない。
 
 受理後にcleanupが始まればAcceptedFinishContextのrouteも失効する。RD-Cでfinishを発行する直前にも元ownerの同live条件を原子的に再検査する。RD-Aでの受理を将来の生存証明やfinish job発行権限にしない。既にcleanup済みのSC2-D handoffは引き続きsummary／固定discardに使えるが、本入口では拒否する。
 
@@ -179,7 +179,7 @@ headerと全receipt／outcome projectionを合わせ、一つの収集予算で�
 | 最初の実装分割案 | 合成だけで確認する範囲 |
 |---|---|
 | RA-01（値層実装済み） | 別brand・strict値型とbounded projection／比較。不足項目・不正variant・総量超過を拒否。発行や実行能力なし |
-| RA-02（準備・合成lifecycleまで実装） | ①②とRB-A〜Cの生成・private pin供給・同root lifecycle。元analyze受理capture、handoff／plan結合、issue one-shotは未実装。旧factory／SC2-Dを維持、外部owner登録・responseからの昇格なし |
+| RA-02（合成結合まで実装） | ①②とRB-A〜Dの生成・private pin供給・同root lifecycle・handoff／plan結合。元analyze受理capture、issue one-shotは未実装。旧factory／SC2-Dを維持、外部owner登録・responseからの昇格なし |
 | RA-03 | 同handoffと証拠の原子的受理、ready／cleanup未開始・source openのfake lifecycleとclaim、失効／解放責務の接続。非実行acceptedまで |
 
 RD-B/C/Dへ進む前に各段階の実コード配置・抽出範囲を確認する。通常WJ-Cの未完了receipt拒否、full schemaの責務、公開JSON／MCP、実transport／workerは変更しない。新しい本番capやconfig日時長policyを入れない。
@@ -196,7 +196,7 @@ RD-B/C/Dへ進む前に各段階の実コード配置・抽出範囲を確認す
 - 新analyze／input／HTTP／E採取／finishは0、同C/G/Pを保持。hard後のcleanup診断回収と能力復活0、元UTCの終端保持、秘密非出力を確認する。
 - 既存SC2-A〜D・SR-A/B/C①・通常WJ-A/B/Cを維持し、関数／brand／scope／path／宣言／mapの非同梱、I/O／時計／worker依存と漏出の負の対照を別確認する。compiled保証／B-03は別工程。
 
-private source lifecycle・cleanup開始serialはRB-Cの合成状態だけ実装した。元analyze受理のcapture hook／immutable結果の由来、plan／handoff結合、新assemblyの発行slotは未実装。RA-01や合成counterだけで確認済みにしない。full結果／wire比較・Eと候補はRD-B/C、正常source／新cleanup能力と一度候補消費はRD-Dへ残す。phase型・実session／ReleasePermit／payload／worker jobの正式binding、実finish／runtime・実通信・設定変更は対象外。
+private source lifecycle・cleanup開始serialとplan／handoff結合はRB-C／Dの合成状態だけ実装した。元analyze受理のcapture hook／immutable結果の由来、新assemblyの発行slotは未実装。RA-01や合成counterだけで確認済みにしない。full結果／wire比較・Eと候補はRD-B/C、正常source／新cleanup能力と一度候補消費はRD-Dへ残す。phase型・実session／ReleasePermit／payload／worker jobの正式binding、実finish／runtime・実通信・設定変更は対象外。
 
 ## 9 RA-01実装範囲と制限
 
@@ -238,8 +238,8 @@ pre／post guardは同一closureのbusy／hardを使う。再入で起きたhard
 
 seed copyは深さ8・object項目30・配列100・訪問10,000・文字費262144をseed全体で共有し、非opaqueデータのaliasも出現ごとに課金する。組み立て後のRA-01 projectionも独立に同上限へ検査する。二回の局所検査を単一実予算の課金や全体work上界の証明と呼ばない。列挙の確保・exact layout／allocationと本番capはUnknown。
 
-[RA-02①②検証記録](E2E_BEST_PRACTICE_FINISH_ASSEMBLY_RA02_2026-11-02.md)を参照。このdata-only assembly自体はSourceLifecycleSlot／NewFrameRouteSlotを持たないまま維持する。後続RB-B／Cの新固定入口で同receipt供給・合成lifecycleを実装したが、元SC2-D handoffとの結合・本来のanalyze受理capture、FinishContextIssueSlot／証拠発行、RA-03受理は未実装。準備成功をFinishContextEvidenceへ昇格しない。
+[RA-02①②検証記録](E2E_BEST_PRACTICE_FINISH_ASSEMBLY_RA02_2026-11-02.md)を参照。このdata-only assembly自体はSourceLifecycleSlot／NewFrameRouteSlotを持たないまま維持する。後続RB-B〜Dの新固定入口で同receipt供給・合成lifecycle・元SC2-D handoff結合を実装したが、本来のanalyze受理capture、FinishContextIssueSlot／証拠発行、RA-03受理は未実装。準備成功をFinishContextEvidenceへ昇格しない。
 
-次段の[RA-02③接続差分設計draft-0.5](BEST_PRACTICE_ABORT_SCOPE_FINISH_ASSEMBLY_RA02_BINDING_DESIGN.md)では、別ownerの外部登録を避ける共通kernel生成境界、同receipt／handoffとlive routeの結合、worker起動とcleanup開始serialの分離を整理した。RB-A／Bの生成・同pin供給と、RB-Cの同root source lifecycle・post-guard ready origin・cleanup開始serialまで合成限定実装済み。RB-Dのplan／handoff結合は未実装で、finish証拠発行は含めない。共通pin生成・data-only assemblyの状態機械は維持する。実source／workerの生存や正常終端能力は引き続きUnknown。
+次段の[RA-02③接続差分設計draft-0.6](BEST_PRACTICE_ABORT_SCOPE_FINISH_ASSEMBLY_RA02_BINDING_DESIGN.md)では、別ownerの外部登録を避ける共通kernel生成境界、同receipt／handoffとlive routeの結合、worker起動とcleanup開始serialの分離を整理した。RB-A〜Dの生成・同pin供給・同root lifecycle・plan／handoff一度限り結合まで合成限定実装済み。finish証拠発行は含めない。共通pin生成・data-only assemblyの状態機械は維持する。実source／workerの生存や正常終端能力は引き続きUnknown。
 
 draft-0.5のレビュー修正：RA-02の`act`の再入拒否（busy判定）は、既存の再入試験がbind／prepareへの再入だけでclaim一度限り・state判定が先に止めるため、外す変異でも86件が通っていた。外すとprepareのpost-guard内から`close`へ再入でき、closeが成功したうえで外側prepareも成功する。また、bound／preparedへの遷移がwork内にあり、post-guard中の`inspect()`に先行公開されていた。遷移を最後のpost-guard後のcommitへ移し（試験helperの実装修正、`88ed8e9`）、close再入と公開順序の試験を追加した（86件→89件）。SR-D設計を指す3文書の版数リンクも現行版へ直した。
