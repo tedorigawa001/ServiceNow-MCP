@@ -16,6 +16,8 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 ### Changed
 
+- SC2-C adds package-excluded one-shot HeldClosure use after verification, synthetic new-frame startup and issuer-bound ready acceptance. A separate cleanup sink is handed out before startup and remains diagnostics-only after hard stop; old cleanup cannot discharge the new frame. Mixing, replay and guard cancellation cannot restart or accept a second ready. No real worker/runtime connection, finish plan, formal issuance or whole-run admission is enabled.
+
 - SC2-B connects required consistency verification to the package-excluded worker-recovery preparation. Its fake event ledger inherits the C/G/P prefix once, bounds parent/metadata retries to four attempts, charges unique chunks (including over-limit bytes) once and keeps payload charges unchanged. Guards, one-shot attempt outcomes and fixed diagnostics reject replay, mixing and revoked owners. No generation startup, real accounting/transport/worker connection, formal issuance or whole-run admission is enabled.
 
 - SC2-A adds package-excluded same-owner closure transfer into private HeldClosure and strict bounded recovery-input validation. It preserves completed outcomes, active receipt identity and retained T_i/U, rejects mixing/replay/reentry and revokes held references on failure. A fixed one-shot discard releases preparation without using the generation proof; normal close cannot conceal held preparation. Synthetic tests and package leak controls cover the boundary. No verify, generation startup, worker/runtime connection, formal issuance or whole-run admission is enabled by this preparation path.

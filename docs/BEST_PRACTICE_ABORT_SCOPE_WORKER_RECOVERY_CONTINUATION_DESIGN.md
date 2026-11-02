@@ -1,7 +1,7 @@
 # SR-C後半の終了証拠とverifyと新世代readyの接続契約
 
-Version: br006-worker-recovery-continuation-draft-0.5 / Date: 2026-11-02。
-Status: **SC2-Aの内部証拠移譲・HeldClosure・strict準備入力（§10）と、SC2-Bの必要verify・同prefixのfake会計（§11）を独立合成issuerで限定実装。SC2-C〜D・正式bindingは未実装で、人による正式bindingの承認未実施。正式発行口閉鎖・Unknown・全体受付無効・VM／監視／telemetry調査保留を維持する。**
+Version: br006-worker-recovery-continuation-draft-0.6 / Date: 2026-11-02。
+Status: **SC2-Aの証拠移譲・準備入力（§10）、SC2-Bの必要verify・fake会計（§11）、SC2-Cの終了証拠使用・合成新世代ready・別cleanup診断（§12）を独立合成issuerで限定実装。SC2-D・正式bindingは未実装で、人による正式bindingの承認未実施。正式発行口閉鎖・Unknown・全体受付無効・VM／監視／telemetry調査保留を維持する。**
 
 基準HEADは`07e7631`。[soft回復claim設計](BEST_PRACTICE_ABORT_SCOPE_SOFT_RECOVERY_CLAIM_DESIGN.md)§6・7・14と[worker時刻設計](BEST_PRACTICE_ABORT_SCOPE_WORKER_TIME_BINDING_DESIGN.md)の差分として、旧世代終了後に同ownerのまま必要verifyと新世代readyへ進む内部境界を定める。既存の非実行consumerを回復権限へ昇格させず、通常WJ-C・runtime／実worker・実sourceを変更しない。
 
@@ -101,7 +101,7 @@ inspectやsummaryへsource／token／コード本文／raw例外／worker参照�
 |---|---|---|
 | SC2-A（合成限定実装） | 同ownerの証拠移譲、HeldClosure、strict準備入力と不変集合 | 7発生点、処理中receiptの同一性、completed不変、T_i／U保持、二重移譲・公開data／別rootの拒否、全guard失効。verify／新世代は0。§10参照 |
 | SC2-B（合成限定実装） | 必要verifyとprefixを引継ぐfake会計（§11） | 論理0／1・物理0〜4、C/G/Pの等号・超過、retryとchunkの二重計上拒否、旧終了前／verify中の起動0。継続エラーとhard失効を区別 |
-| SC2-C | HeldClosureの一度の使用、新frame／ready、新cleanup診断slot | 旧世代終了後だけ起動1、未起動は初回1、旧応答・別frame・二重readyを拒否。全pre/post guard・起動後取消でもcleanup責務を保持 |
+| SC2-C（合成限定実装） | HeldClosureの一度の使用、新frame／ready、新cleanup診断slot（§12） | 旧世代終了後だけ起動1、未起動は初回1、旧応答・別frame・二重readyを拒否。全pre/post guard・起動後取消でもcleanup責務を保持 |
 | SC2-D | 非実行planの封印と排他的な移譲境界 | 集合追加／欠落・state昇格・U切下げを拒否。summaryからの再準備0。SR-Dへの実接続なしでprivate所有権と固定解放を確認 |
 
 期待費目のoracleは実装のhelperを呼ばず、有限のイベント列から計数する。証拠移譲1と使用1、verify物理最大4、新起動最大1、ready受理最大1、finish実行0を区別する。成功・拒否・中断・再入を含め、旧SR-A／B／C①とWJ-A／B／通常WJ-Cを残す。配布物へissuer／fixture／scope／path／宣言／mapを含めず、I/O／clock／worker依存と混入の負の対照も維持する。
@@ -110,7 +110,7 @@ inspectやsummaryへsource／token／コード本文／raw例外／worker参照�
 
 ## 9 承認待ちと今回の非対象
 
-この案は、SC2-Aを最初の実装単位とし、未消費内部証拠の移譲と集合／時刻の検査までに限定する。新frame／readyイベントのprivate配置、新cleanup sinkとSR-Dの所有権移譲APIはSC2-C着手前に実コード配置と照合する。追加のlayout・work・allocation・実待機上限・全体費目上界はUnknownで、本番capや全体受付を導出しない。
+最初の実装単位SC2-Aは未消費内部証拠の移譲と集合／時刻の検査に限定し、SC2-Bのfake verify、SC2-Cの新frame／readyイベント・新cleanup sinkを§11〜12へ分離した。SR-Dの所有権移譲APIは未対応で、SC2-Dのplan境界と併せて別途設計・検証する。追加のlayout・work・allocation・実待機上限・全体費目上界はUnknownで、本番capや全体受付を導出しない。
 
 人による本案の承認、実session／source／ReleasePermit・選択payload・worker jobの正式binding、runtime／実transport／実worker接続、WJ-CのE／全schema／結果公開、実cleanup・外側checkpoint、B-03 compiled保証は未実施。draft-0.1はMD設計のみ。draft-0.2のSC2-A限定実装は次節へ分離し、環境操作・実機操作・実通信・トークン発行・設定変更・permit発行・Pushの承認や実施とはしない。
 
@@ -146,6 +146,26 @@ private verify継続がnullなら論理0・物理0でverifiedとなり、元cons
 
 [合成試験](../tests/review/synthetic-worker-recovery-verify.test.ts)は実装helperを使わない有限イベント式から期待C/G/P・retryを求める。retryなし成功・最大4試行・枠途中消尽・等号／超過・混入／二重イベント・18箇所のguard取消を確認し、旧SR-BとSC2-Aの試験も維持する。SR-Bのrootやphase factsをworker factsへ偽装して再利用せず、既存phase modelは変更しない。重複するverify意味規則の追随は両系列の試験で確認する。梱包監査に関数／module混入とI/O／時計／worker依存の負の対照を追加した。[SC2-B検証記録](E2E_BEST_PRACTICE_WORKER_RECOVERY_SC2B_2026-11-02.md)参照。 レビュー修正で、非booleanのchange flagのhard停止と、文字列／Proxyのchunk identityの拒否を個別に確認する試験を追加した（89件）。
 
-SC2-Cの世代使用／新ready／新cleanup、SC2-Dのplan封印、実canonical writer・final予約・実transport／worker・実選択順序・B-03 compiled保証は未対応。追加work／allocation・全体上界はUnknownで、全体受付を有効化しない。正式発行口閉鎖・調査保留を維持する。
+SC2-B自体は世代使用／新ready／新cleanupを追加しない。SC2-Cの合成接続は§12へ分離する。SC2-Dのplan封印、実canonical writer・final予約・実transport／worker・実選択順序・B-03 compiled保証は未対応。追加work／allocation・全体上界はUnknownで、全体受付を有効化しない。正式発行口閉鎖・調査保留を維持する。
 
 draft-0.4のレビュー修正：SC2-B ledgerのsuccess結果のchange flagのboolean検査と、chunk identityのobject・非Proxy検査は、各判定を外す変異でも86件が通っていた。前者を外すと`changed:'no'`のような値がchangedとして扱われ、後者を外すとProxyのchunk identityで課金できる（文字列は`WeakSet`の型エラーで偶然止まるだけ）。3件の試験を追加し、§11の件数と親設計・soft回復claim設計・検証記録からの版数リンクを更新した。
+
+## 12 SC2-Cの限定実装
+
+基準HEADは`1d74bff`。同じ配布対象外issuer内で次の3段階に分けた。runtime moduleや実worker factoryを作らず、実会計・S／全L／O／U・集合／inputを追加取得・更新しない。
+
+1. `claimWorkerGeneration(binding, preparation)`：同owner・未使用HeldClosureとverifyのverified状態を要求する。最初のguard前に元handle／HeldClosureを取り外し、一度限りの使用claimを占有する。generation_uses=1はこの占有で、起動成功ではない。workで元入力をprivateに移し、固定issuerが新supervisor／worker／generationを別々の新しいopaque参照として作る。別brandのstartと診断専用cleanupを返す。
+2. `startWorkerGeneration(binding, start)`：startをpre-guard前に取り外す。新frameとcleanup contextの同一性を検査し、workで合成起動を1回計数、cleanupをnot_requiredからnot_startedへ変える。post-guard後に同frame用ready leaseを返す。起動前失敗はstarts=0、起動後失敗はstarts=1を保持する。
+3. `issueWorkerGenerationReady`→`acceptWorkerGenerationReady`：同lease／frameのprivate継続が一度だけ発行したopaque eventを要求する。acceptはleaseとeventをpre-guard前に取り外す。別owner・旧証拠・copy・任意ready JSON・同数値idのanalyze応答を拒否する。post-guard後だけready_events=1となり、固定discard用の内部ready handleを返す。実workerのready観測やanalyze完了の証明ではない。
+
+claim／startを分け、合成起動より先にcleanup sinkを渡す。claimのpost-guardまでに失敗した未公開ticketは、未起動なのでframe／sinkを破棄しnot_required診断だけ保持する。公開済みticketの後の取消・startup／ready失敗では実行用start／lease／event／入力を同期失効するが、同新frameの診断contextと事前発行sinkだけを保持する。`failWorkerGeneration`は同pending leaseを取り外し、worker_unavailable／cancelled／deadline_exceeded、または未知理由の固定拒否で停止する。別世代への再試行はない。
+
+`recordWorkerGenerationCleanup(sink, status)`はrun guard／bindingを要求しない診断専用の一度限りsnapshotで、hard停止後も同sinkだけで報告できる。起動前はnot_requiredだけ、起動後はconfirmedだけが解放確認済み。not_started／requested／failed／unconfirmedは区別するが未確認のためhard停止し、不正値はunconfirmedに固定する。先行hardを上書きしない。旧closureのcomplete／旧cleanup sinkのconfirmedを流用しない。実terminate要求・OS終了・実resource解放の証拠ではない。
+
+frame／入力やcleanup責務が残るnormal closeは拒否する。固定終了用の`discardWorkerGeneration`は同ready handle（起動前の中止は元start）を一度消費し、cleanupがconfirmed／not_requiredかつsink消費済みの場合だけprivate入力／frameを破棄してconsumedへ進む。未確認cleanupをdiscardで隠せず、失敗後の遅延cleanup報告でも実行・discard能力は復活しない。元UTCは正常close／terminal discardまで保持する。
+
+追加診断new_generationはclaim_started・starts・ready_events・cleanup状態／sink pendingというscalarのみ。frame・token・receipt・id・コード・raw例外を出さない。元soft・最初のhard・旧／新cleanupを分離し、C/G/Pを引き継ぐ。実待機時間・追加work／layout／allocation・全体上界はUnknownのまま。
+
+[合成試験](../tests/review/synthetic-worker-recovery-generation.test.ts)125件で、7発生点、verify未完了、混入／二重使用、7×8位置のguard取消、旧／新cleanup分離、失敗後の診断回収と固定discardを確認する。期待するclaim／start／ready数はguard位置から独立に求める。梱包検査は全関数・brand文字列の漏出をseeded負の対照で拒否し、既存I/O／時計／worker参照監査も維持する。[SC2-C検証記録](E2E_BEST_PRACTICE_WORKER_RECOVERY_SC2C_2026-11-02.md)参照。
+
+finish専用planの封印／移譲はSC2-D、実finish／E・候補消費はSR-Dへ残す。ready handleは実行可能planではなく、実session／source／ReleasePermit／worker jobへの正式binding、実worker／runtime接続・実通信、B-03 compiled保証は追加しない。正式発行口閉鎖・Unknown・全体受付無効・調査保留を維持する。

@@ -17,12 +17,18 @@ export type SyntheticSoftFacts=
     |{point:'analyze_timer'|'analyze_reply_check';worker_state:'ready';job:object;id:number}&WorkerRefs)>;
 export type SyntheticRecoverySeed=Readonly<{run:object;session:object;source:object;key:object;origin:object;budget:object;release:object;started_at:string;deadline_ms:number;observed_at:string;upper_utc:string}>;
 type Code='cancelled'|'deadline_exceeded'|'worker_unavailable'|'internal_review_error'|'receive_budget_exceeded'|'authentication_failed'|'access_denied'|'request_budget_exceeded'|'payload_budget_exceeded';
-type Phase='binding'|'observation'|'recovery_claim'|'recovery_consume'|'cleanup_lease'|'cleanup_record'|'revoke'|'close'|'discard'|'phase_prepare'|'phase_verify'|'phase_chunk'|'phase_retry'|'phase_worker'|'phase_ready'|'phase_consume'|'worker_closure_begin'|'worker_closure_settle'|'worker_closure_consume'|'worker_prepare'|'worker_prepare_discard'|'worker_verify';
-type State='fresh'|'binding'|'active'|'observing'|'observed'|'claiming'|'claimed'|'consuming'|'consumed'|'failed'|'closed'|'phase_planning'|'phase_planned'|'phase_consuming'|'worker_closing'|'worker_closed'|'worker_preparing'|'worker_prepared';
+type Phase='binding'|'observation'|'recovery_claim'|'recovery_consume'|'cleanup_lease'|'cleanup_record'|'revoke'|'close'|'discard'|'phase_prepare'|'phase_verify'|'phase_chunk'|'phase_retry'|'phase_worker'|'phase_ready'|'phase_consume'|'worker_closure_begin'|'worker_closure_settle'|'worker_closure_consume'|'worker_prepare'|'worker_prepare_discard'|'worker_verify'|'generation_claim'|'generation_start'|'generation_ready'|'generation_cleanup'|'generation_discard';
+type State='fresh'|'binding'|'active'|'observing'|'observed'|'claiming'|'claimed'|'consuming'|'consumed'|'failed'|'closed'|'phase_planning'|'phase_planned'|'phase_consuming'|'worker_closing'|'worker_closed'|'worker_preparing'|'worker_prepared'|'generation_claiming'|'generation_claimed'|'generation_starting'|'generation_waiting'|'generation_ready';
 type ClosureDiagnostic=Readonly<{close_requests:0|1;input_state:'unsent'|'sent_terminal';id_state:'absent'|'allocated_unsent'|'sent_terminal';termination:'not_required'|'requested'|'confirmed'|'rejected'|'unconfirmed';cleanup:'not_required'|'not_started'|'complete'|'failed'|'unconfirmed'}>;
 type SoftDiagnostic=Readonly<Pick<SyntheticSoftFacts,'kind'|'phase'|'point'|'worker_state'>>;
 type CleanupStatus='not_required'|'not_started'|'requested'|'confirmed'|'failed'|'unconfirmed';
 declare const ownerBrand:unique symbol,observationBrand:unique symbol,recoveryBrand:unique symbol,cleanupBrand:unique symbol,closureLeaseBrand:unique symbol,closureEvidenceBrand:unique symbol,preparationBrand:unique symbol;
+declare const generationStartBrand:unique symbol,generationCleanupBrand:unique symbol,generationLeaseBrand:unique symbol,generationEventBrand:unique symbol,generationReadyBrand:unique symbol;
+type GenerationStart=Readonly<{[generationStartBrand]:'synthetic_generation_start'}>;
+type GenerationCleanup=Readonly<{[generationCleanupBrand]:'synthetic_generation_cleanup'}>;
+type GenerationLease=Readonly<{[generationLeaseBrand]:'synthetic_generation_lease'}>;
+type GenerationEvent=Readonly<{[generationEventBrand]:'synthetic_generation_event'}>;
+type GenerationReady=Readonly<{[generationReadyBrand]:'synthetic_generation_ready'}>;
 type OwnerBinding=Readonly<{[ownerBrand]:'synthetic_owner'}>;
 type ObservationHandle=Readonly<{[observationBrand]:'synthetic_observation'}>;
 type RecoveryHandle=Readonly<{[recoveryBrand]:'synthetic_recovery'}>;
@@ -92,8 +98,16 @@ export function createSyntheticSoftRecoveryIssuer(seed:SyntheticRecoverySeed,exp
   let preparationDiagnostic:Readonly<{selected:number;completed:number;not_processed:number;retained_inputs:number;collection_status:string;consistency:string;accounting:Readonly<{requests:number;received_bytes:number;payload_bytes:number}>}>|undefined;
   let workerVerify:ReturnType<typeof createSyntheticWorkerVerify>|undefined,verifyStarted=false;
   let verifyDiagnostic:ReturnType<ReturnType<typeof createSyntheticWorkerVerify>['inspect']>|undefined;
+  let generationClaimed=false,generationUses=0,generationStarts=0,generationReadyEvents=0;
+  let generationStart:GenerationStart|undefined,generationCleanupToken:GenerationCleanup|undefined;
+  let generationFrame:Readonly<{supervisor:object;worker:object;generation:object}>|undefined;
+  let generationInputs:HeldClosure['inputs']|undefined;
+  let generationCleanupContext:Readonly<{frame:object;started:boolean}>|undefined;
+  let generationCleanup:Readonly<{status:CleanupStatus}>|null=null;
+  let generationTicketPublished=false,generationEventIssued=false;
+  let generationLease:GenerationLease|undefined,generationEvent:Readonly<{handle:GenerationEvent;frame:object}>|undefined,generationDiscard:GenerationStart|GenerationReady|undefined;
   let time:Readonly<{started_at:string;deadline_ms:number;observed_at:string;upper_utc:string}>|null=null;
-  function clear(){if(phaseModel){phaseModel.dispose();phaseDiagnostic=phaseModel.inspect();phaseModel=undefined;}if(workerVerify){workerVerify.dispose();verifyDiagnostic=workerVerify.inspect();workerVerify=undefined;}heldClosure=undefined;preparationHandle=undefined;phaseHandle=closureLease=closureEvidence=undefined;binding=observation=recovery=seedRef=expectedRef=undefined;pinned=facts=undefined;}
+  function clear(){if(phaseModel){phaseModel.dispose();phaseDiagnostic=phaseModel.inspect();phaseModel=undefined;}if(workerVerify){workerVerify.dispose();verifyDiagnostic=workerVerify.inspect();workerVerify=undefined;}generationStart=generationLease=generationDiscard=undefined;generationEvent=generationFrame=generationInputs=undefined;if(!generationTicketPublished&&!generationStarts){generationCleanupToken=generationCleanupContext=undefined;}heldClosure=undefined;preparationHandle=undefined;phaseHandle=closureLease=closureEvidence=undefined;binding=observation=recovery=seedRef=expectedRef=undefined;pinned=facts=undefined;}
   function fail(phase:Phase,raw?:unknown):never{
     if(state==='closed')throw Error('internal_review_error');hard??=Object.freeze({code:code(raw),phase});state='failed';clear();throw Object.assign(Error(hard.code),{code:hard.code});
   }
@@ -108,6 +122,40 @@ export function createSyntheticSoftRecoveryIssuer(seed:SyntheticRecoverySeed,exp
   }
   function verifyModel(handle:object){if(state!=='worker_prepared'||handle!==preparationHandle||!heldClosure||!workerVerify)fail('worker_verify');return workerVerify!;}
   return Object.freeze({
+    claimWorkerGeneration(b:object,handle:object){let held:HeldClosure;return act('generation_claim',b,()=>{
+      const used=generationClaimed;generationClaimed=true;
+      if(used||state!=='worker_prepared'||handle!==preparationHandle||!heldClosure||workerVerify?.inspect().stage!=='verified')fail('generation_claim');
+      held=heldClosure!;heldClosure=undefined;preparationHandle=undefined;generationUses=1;state='generation_claiming';
+    },()=>{
+      generationInputs=held.inputs;generationFrame=Object.freeze({supervisor:opaque(),worker:opaque(),generation:opaque()});
+      const start=opaque<GenerationStart>(),cleanup=opaque<GenerationCleanup>();generationStart=start;generationDiscard=start;generationCleanupToken=cleanup;generationCleanupContext=Object.freeze({frame:generationFrame,started:false});generationCleanup=Object.freeze({status:'not_required'});
+      return Object.freeze({start,cleanup});
+    },()=>{generationTicketPublished=true;state='generation_claimed';});},
+    startWorkerGeneration(b:object,handle:object){return act('generation_start',b,()=>{
+      const own=generationStart;generationStart=undefined;if(state!=='generation_claimed'||!own||own!==handle||!generationFrame||generationCleanupContext?.frame!==generationFrame||!generationCleanupToken||generationStarts)fail('generation_start');state='generation_starting';
+    },()=>{generationStarts=1;generationCleanupContext=Object.freeze({frame:generationFrame!,started:true});generationCleanup=Object.freeze({status:'not_started'});return opaque<GenerationLease>();},handle=>{generationLease=handle;state='generation_waiting';});},
+    issueWorkerGenerationReady(b:object,lease:object){return act('generation_ready',b,()=>{
+      const used=generationEventIssued;generationEventIssued=true;if(used||state!=='generation_waiting'||lease!==generationLease||!generationFrame||!generationCleanupToken)fail('generation_ready');
+    },()=>{const handle=opaque<GenerationEvent>();generationEvent=Object.freeze({handle,frame:generationFrame!});return handle;});},
+    acceptWorkerGenerationReady(b:object,lease:object,event:object){let own:object|undefined,issued:typeof generationEvent;return act('generation_ready',b,()=>{
+      own=generationLease;issued=generationEvent;generationLease=generationEvent=undefined;
+      if(state!=='generation_waiting'||!own||lease!==own||!issued||event!==issued.handle||issued.frame!==generationFrame||generationCleanupContext?.frame!==generationFrame||!generationCleanupToken)fail('generation_ready');
+    },()=>opaque<GenerationReady>(),handle=>{generationReadyEvents=1;generationDiscard=handle;state='generation_ready';});},
+    failWorkerGeneration(b:object,lease:object,reason:unknown){return act('generation_ready',b,()=>{
+      const own=generationLease;generationLease=undefined;generationEvent=undefined;if(state!=='generation_waiting'||!own||lease!==own)fail('generation_ready');
+    },()=>fail('generation_ready',reason==='worker_unavailable'||reason==='cancelled'||reason==='deadline_exceeded'?reason:'internal_review_error'));},
+    recordWorkerGenerationCleanup(sink:object,status:unknown){
+      // Preissued new-frame sink is diagnostics only, including after hard stop.
+      if(busy||state==='closed'||!generationCleanupToken||sink!==generationCleanupToken||!generationCleanupContext)return fail('generation_cleanup',hard?.code);
+      generationCleanupToken=undefined;const started=generationCleanupContext.started;generationCleanupContext=undefined;
+      const valid=started?['not_started','requested','confirmed','failed','unconfirmed'].includes(status as string):status==='not_required';
+      generationCleanup=Object.freeze({status:valid?status as CleanupStatus:'unconfirmed'});generationStart=generationLease=undefined;generationEvent=undefined;
+      if(!valid||(started?status!=='confirmed':status!=='not_required'))fail('generation_cleanup');
+    },
+    discardWorkerGeneration(b:object,handle:object){return act('generation_discard',b,()=>{
+      const own=generationDiscard;generationDiscard=undefined;if(!own||handle!==own||!generationInputs||generationCleanupToken||!['confirmed','not_required'].includes(generationCleanup?.status??''))fail('generation_discard');
+      generationInputs=generationFrame=undefined;state='consuming';
+    },()=>{},()=>{state='consumed';});},
     beginWorkerVerify(b:object,handle:object){return act('worker_verify',b,()=>{
       const used=verifyStarted;verifyStarted=true;if(used||state!=='worker_prepared'||!heldClosure||handle!==preparationHandle)fail('worker_verify');
     },()=>{const i=heldClosure!.inputs;workerVerify=createSyntheticWorkerVerify(i.accounting,i.context.verify!==null,i.consistency);});},
@@ -176,10 +224,11 @@ export function createSyntheticSoftRecoveryIssuer(seed:SyntheticRecoverySeed,exp
       cleanup=Object.freeze({scope:'synthetic_cleanup_snapshot',status:valid?status as CleanupStatus:'unconfirmed'});
       if(!valid||status!=='confirmed'&&status!=='not_required')fail('cleanup_record');
     },
-    close(b:object){return act('close',b,()=>{},()=>{if(cleanupToken||phaseModel?.inFlight()||closureLease||closureEvidence||heldClosure||preparationHandle)fail('close');},()=>{clear();time=null;state='closed';});},
+    close(b:object){return act('close',b,()=>{},()=>{if(cleanupToken||phaseModel?.inFlight()||closureLease||closureEvidence||heldClosure||preparationHandle||generationCleanupToken||generationInputs||generationFrame)fail('close');},()=>{clear();time=null;state='closed';});},
     discardTerminalTime(){if(busy||state!=='failed'||time===null)return fail('discard',hard?.code);time=null;},
     inspect(){return Object.freeze({scope:'synthetic_soft_recovery_only' as const,state,time,observation_pending:!!observation,recovery_pending:!!recovery,cleanup_pending:!!cleanupToken,
+      new_generation:generationClaimed?Object.freeze({claim_started:true,starts:generationStarts,ready_events:generationReadyEvents,cleanup:generationCleanup,cleanup_pending:!!generationCleanupToken}):null,
       claims:Object.freeze({observation_started:observationStarted,recovery_started:recoveryStarted,cleanup_started:cleanupStarted}),
-      diagnostics:Object.freeze({soft,hard,cleanup}),phase:phaseModel?.inspect()??phaseDiagnostic,worker_closure:closureDiagnostic?Object.freeze({...closureDiagnostic,lease_pending:!!closureLease,evidence_pending:!!closureEvidence}):null,worker_preparation:preparationStarted?Object.freeze({...preparationDiagnostic,...(workerVerify||verifyDiagnostic?{verify:workerVerify?.inspect()??verifyDiagnostic,accounting:(workerVerify?.inspect()??verifyDiagnostic)!.accounting}:{}),claim_started:true,held:!!heldClosure,handle_pending:!!preparationHandle,transfers,generation_uses:0,verify_attempts:(workerVerify?.inspect()??verifyDiagnostic)?.attempts??0,new_generations:0}):null,permissions:Object.freeze({formal_issuance:false,dispatch:false,recovery_route:false})});},
+      diagnostics:Object.freeze({soft,hard,cleanup}),phase:phaseModel?.inspect()??phaseDiagnostic,worker_closure:closureDiagnostic?Object.freeze({...closureDiagnostic,lease_pending:!!closureLease,evidence_pending:!!closureEvidence}):null,worker_preparation:preparationStarted?Object.freeze({...preparationDiagnostic,...(workerVerify||verifyDiagnostic?{verify:workerVerify?.inspect()??verifyDiagnostic,accounting:(workerVerify?.inspect()??verifyDiagnostic)!.accounting}:{}),claim_started:true,held:!!heldClosure,handle_pending:!!preparationHandle,transfers,generation_uses:generationUses,verify_attempts:(workerVerify?.inspect()??verifyDiagnostic)?.attempts??0,new_generations:generationStarts}):null,permissions:Object.freeze({formal_issuance:false,dispatch:false,recovery_route:false})});},
   });
 }

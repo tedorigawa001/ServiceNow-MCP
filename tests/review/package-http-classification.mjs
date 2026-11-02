@@ -73,6 +73,11 @@ for(const f of pack.files.filter(f=>f.path.startsWith('dist/')&&/\.(?:js|ts|map)
 for(const leak of ['globalThis.setTimeout(()=>{},0);','queueMicrotask(()=>{});','Date.now();',"Date['now']();",'new Date();',"import('node:fs');","import {BoundedReadSession} from '../../../src/servicenow/bounded-read.js';const zzRoot=BoundedReadSession;"])
   assert.throws(()=>auditSyntheticIssuer(verifyText+'\n'+leak,['node:util']),assert.AssertionError,'SC2-B audit missed seeded leak: '+leak);
 console.log('SC2-B verify excluded; no runtime/I/O/clock/worker references + seeded negative controls PASS');
+const generationMarkers=['claimWorkerGeneration','startWorkerGeneration','issueWorkerGenerationReady','acceptWorkerGenerationReady','failWorkerGeneration','recordWorkerGenerationCleanup','discardWorkerGeneration','synthetic_generation_start','synthetic_generation_cleanup','synthetic_generation_lease','synthetic_generation_event','synthetic_generation_ready'];
+const noWorkerGeneration=text=>assert(!generationMarkers.some(x=>text.includes(x)),'SC2-C generation leaked into runtime');
+for(const marker of generationMarkers)assert.throws(()=>noWorkerGeneration(marker));
+for(const f of pack.files.filter(f=>f.path.startsWith('dist/')&&/\.(?:js|ts|map)$/.test(f.path)))noWorkerGeneration(readFileSync(join(root,f.path),'utf8'));
+console.log('SC2-C generation claims/ready/cleanup excluded; seeded symbol/function leak controls PASS');
 for(const suffix of ['.js','.js.map','.d.ts','.d.ts.map'])assert(pack.files.some(f=>f.path==='dist/servicenow/review-kernel/release-observation'+suffix),'required one-shot UTC value helper missing: '+suffix);
 const sessionDeclarations=readFileSync(join(root,'dist/servicenow/bounded-read.d.ts'),'utf8');
 const sessionAst=parse(readFileSync(join(root,'dist/servicenow/bounded-read.js'),'utf8'),{ecmaVersion:'latest',sourceType:'module'});
