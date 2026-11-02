@@ -8,7 +8,7 @@ import { createServer } from 'node:net';
 import { getEventListeners } from 'node:events';
 import { createReviewInstanceBinding } from '../../src/servicenow/review-release-config.js';
 import { aggregateReviewSchema, aggregateReviewV3Schema } from '../../src/review/aggregate-schema.js';
-import { runR2ApprovalManifest, R2_RUNNER_TOTAL_MS, R2_RUNNER_CLEANUP_MS, type R2RunnerOptions } from '../../src/review/r2-runner.js';
+import { runR2ApprovalManifest, R2_RUNNER_TOTAL_MS, R2_RUNNER_CLEANUP_MS, type R2RunnerOptions, type R2RunnerOutcome } from '../../src/review/r2-runner.js';
 import { superviseR2Host } from '../../src/review/r2-supervisor.js';
 import { checkR2PlanOffline } from '../../src/review/r2-plan-check.js';
 import { approveAndRunR2Plan } from '../../src/review/r2-approved-launch.js';
@@ -53,6 +53,11 @@ function get(path = '/bp5/start') {
       let body = ''; res.setEncoding('utf8'); res.on('data', v => { body += v; }); res.once('end', () => resolve(body));
     }); req.on('error', reject); req.setTimeout(2000, () => req.destroy(Error('TEST_HTTP_TIMEOUT'))); req.end();
   });
+}
+// Refused local listen settles the runner without onReady; end the ready wait there with its receipt.
+async function untilReady(began: Promise<void>, task: Promise<R2RunnerOutcome>) {
+  const early = await Promise.race([began.then(() => undefined), task]);
+  expect(early, 'runner settled before onReady').toBeUndefined();
 }
 async function authorize() {
   const page = await get(); const auth = new URL(page.match(/href="([^"]+)"/)![1].replace(/&amp;/g, '&'));
@@ -175,7 +180,7 @@ it('pins the host remaining budget before bind and reserves cleanup inside that 
     onCleanupStart: notice => { notices.push(notice); }, onReady: () => { clock = 1260; ready(); } });
   void task.then(() => { settled = true; });
   try {
-    await began; await new Promise<void>(r => setImmediate(r));
+    await untilReady(began, task); await new Promise<void>(r => setImmediate(r));
     expect(settled).toBe(true);
     expect(await task).toMatchObject({ ok: false, code: 'deadline_exceeded', cleanup: 'complete' });
     expect(notices).toEqual([{ reason: 'deadline_exceeded', remainingMs: 40 }]);
@@ -200,7 +205,7 @@ it('arms the waiting timer from the host budget rather than the runner default',
     onReady: () => { ready(); return new Promise<void>(() => {}); } });
   void task.then(() => { settled = true; });
   try {
-    await began; await vi.advanceTimersByTimeAsync(1159); expect(settled).toBe(false);
+    await untilReady(began, task); await vi.advanceTimersByTimeAsync(1159); expect(settled).toBe(false);
     await vi.advanceTimersByTimeAsync(1);
     expect(await task).toMatchObject({ ok: false, code: 'deadline_exceeded', cleanup: 'complete' });
     expect(vi.getTimerCount()).toBe(0);
@@ -408,7 +413,7 @@ it('enforces the default 385-second budget with three seconds reserved for clean
   let ready!: () => void; const began = new Promise<void>(r => { ready = r; });
   let settled = false;
   const task = runR2ApprovalManifest(file, { fetch: vi.fn<typeof fetch>(), onReady: () => { ready(); return new Promise(() => {}); } });
-  void task.then(() => { settled = true; }); await began;
+  void task.then(() => { settled = true; }); await untilReady(began, task);
   await vi.advanceTimersByTimeAsync(381999); expect(settled).toBe(false);
   await vi.advanceTimersByTimeAsync(1);
   expect(await task).toMatchObject({ ok: false, code: 'deadline_exceeded', cleanup: 'complete' });
