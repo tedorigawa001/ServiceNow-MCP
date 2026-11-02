@@ -1,9 +1,9 @@
 # 回復finish 本文capture・full schema・同bytes検証gate 詳細設計
 
-Version: br006-recovery-finish-content-draft-0.2 / Date: 2026-11-03。
-Status: **設計のみ。capture／full応答gate／候補発行は未実装。合成依存限定、正式発行口閉鎖・全体受付無効・Unknown・VM／監視／telemetry保留を維持する。**
+Version: br006-recovery-finish-content-draft-0.3 / Date: 2026-11-03。
+Status: **CG-Aの純粋shape／同JSON文字列のbounded decode／full schema値検証を合成限定実装。capture／jobへの接続／full応答gate／候補発行は未実装。正式発行口閉鎖・全体受付無効・Unknown・VM／監視／telemetry保留を維持する。**
 
-基準HEAD: `43223b9`。[RD-C](BEST_PRACTICE_ABORT_SCOPE_RECOVERY_FINISH_JOB_RDC_DESIGN.md)§5・7・10〜11の内容gateを具体化する。以下の型・操作・数値モデルは未実装の内部案で、本番cap・通常経路の受付変更・実通信・実機操作・設定変更・Pushの承認ではない。
+基準HEAD: `b367f37`。[RD-C](BEST_PRACTICE_ABORT_SCOPE_RECOVERY_FINISH_JOB_RDC_DESIGN.md)§5・7・10〜11の内容gateを具体化する。CG-Aの純粋値層の実装範囲は§11、それ以外の型・操作・数値モデルは未実装の内部案。本番cap・通常経路の受付変更・実通信・実機操作・設定変更・Pushの承認ではない。
 
 ## 1 「本文」と現状の不足
 
@@ -146,15 +146,33 @@ captureとwireの一度限り消費は別claimで管理する。captureは受理
 
 | 分割案 | 最初の範囲 | まだ発行しないもの |
 | --- | --- | --- |
-| CG-A | 完全schemaのshape導出・bounded strict decoder／同json origin・純粋なfull body値契約。独立oracleで上限と同bytesを検証 | capture証拠・候補・実受信保証 |
+| CG-A（純粋値層を合成実装） | 完全schemaのshape導出・bounded strict decoder／同json文字列・full schema値契約。独立oracleで上限と論理bytesを検証。実delivery originは未接続 | capture証拠・候補・実受信保証 |
 | CG-B | 同analyzeのprivate capture owner／post-guard受理・一度限り移譲をfresh合成issuer限定で実装 | descriptor／rawからの昇格、実session登録 |
 | CG-C | 三つの省略点の固定決定証拠と純粋omissionモデル、full aggregate＋RD-B03＋元本文比較 | 不足gateの候補化 |
 | CG-D | 全receiptが同job／planに揃う一度限りgate。RC-Dへ渡すprivate契約を検証 | RD-Dの正常終端・実review結果／Permit発行 |
 
-名前・上界モデル・copy方式は設計案。まずCG-Aのschema形状上界と同bytes境界から、別途指示を受けて実装する。現在のRD-B04 handle／pin／content_evidenceのUnknownをそのままverifiedへ書換えない。
+CG-Aの実装契約は§11。CG-B以降のowner／copy方式・総費用は設計案のまま。現在のRD-B04 handle／pin／content_evidenceのUnknownをそのままverifiedへ書換えない。
 
-未確認事項はschema全variantからの形状証明、既存JSON.stringify出力とのdecoder互換性、元bodyの保持／cloneピーク、checkpointの配置と同期schema検証の中断粒度、omissionのserialize総費用、body／job／終端ownerの同時寿命、本番cap／全体work上界。これらを未導出のまま実経路や候補gateを開かない。
+CG-Aで固定schema全variantのshapeを導出し、独立oracleとJSON.stringify合成corpusで検証した。未確認事項は将来schema／任意の既存出力に対する互換性、実deliveryからの同bytes結合、元bodyの保持／cloneピーク、checkpointの配置と同期schema検証の中断粒度、omissionのserialize総費用、body／job／終端ownerの同時寿命、本番cap／全体work上界。これらを未導出のまま実経路や候補gateを開かない。
 
 draft-0.2のレビュー修正：§1の実worker行は、analyze時にworker内でreviewResultV2Schemaが実行済みであることを欠き、refinementが一度も実行されないように読めたため、不足を「親による受信wireの再検証がない」ことへ訂正した。§2の旧設計引用は出典がなく、再検証の変更を含んでいなかったため、出典リンクと再検証・copy両方の差分範囲を明記した。設計判断・数値モデル・未承認事項は変更しない。
 
-本書はMDのみ。正式発行口閉鎖・全体受付無効・Unknown・調査保留を維持し、実装・worker起動・実通信・実機操作・トークン発行・設定変更・Permit／候補発行・Pushは行わない。
+初版はMDのみ。CG-A後も正式発行口閉鎖・全体受付無効・Unknown・調査保留を維持し、worker起動・実通信・実機操作・トークン発行・設定変更・Permit／候補発行・Pushは行わない。
+
+## 11 CG-Aの純粋full JSON値層
+
+[合成専用値層](../tests/support/review/synthetic-recovery-full-json.ts)は次の6 exportだけを持ち、owner／registry／capture／job／候補は生成しない。
+
+- RECOVERY_FULL_JSON_SHAPE：固定JSON Schemaの全oneOf／anyOf・object／array分岐からshapeを導出。analyze最大深さ6、集約0.2／0.3最大8。object／arrayの実最大値を収集し、array>100／key>30、未対応のref等、導出走査100,000件／深さ32超過ではmodel拒否。maxItems=0のnever itemは実値を持たないものとして扱う。
+- recoveryFullJsonBounds(bytes, model_id)：recovery-full-json-shape-v1と0〜262144のsafe integerだけを受け、node≤bytes・文字費≤3×bytes・lexical_work≤16×bytes+128を算出。範囲外値・モデル違いで停止し、callerによる枠増加は許さない。
+- measureRecoveryFullJson(raw)：primitive stringだけを受け、UTF-16長を先に確認し、同じ文字列の論理UTF-8長を検査。これはJSON構文やUTF-8 round-tripを検証した結果ではない。
+- validateRecoveryAnalysisJson(raw)／validateRecoveryAggregateJson(raw)：同文字列のprivate bufferからround-trip一致を確認し、その内容だけをstrict decodeする。前者はassetOutcomeStructureとreviewed時のreviewResultV2Schema、後者はanyAggregateReviewSchemaのfull refinementを実行する。集約の前段shape枠は0.2／0.3の各導出値の最大値を使い、schema固有制限を後段で適用する。
+- RecoveryFullJsonError：shape／limit／syntax／schema／modelを区別するが、公開code／messageはinternal_review_errorで固定。raw本文・Zod issue・causeを保持しない。
+
+decoderはwhole JSON.parseを使わず、値・文字列・escape・数値を有限深さで走査する。escape解決後の重複key、raw制御文字、余分token、範囲外containerを拒否し、objectはnull-prototypeへ作る。数値はsafe integerへ**丸められるだけ**の小数・underflowも拒否し、整数を正確に表す指数／小数表記と負の0は保持する。生の孤立surrogateはround-trip不一致で拒否、JSON escapeで表された同code unitは保持する。
+
+返却値は深くfreezeしたfull schema値・同sourceからのusage・別Symbol brandと固定authority:none／checked_scope:full_schema_value_onlyを持つ。unverifiedはdelivery_origin／original_body／context_binding／runtime_transport。元文字列やbufferを返さず、同関数内のデータ経路を実jobの由来に昇格しない。反復呼出しは純粋値処理で、一度限りの受理claimではない。metadataのorigin wrapperや既存RD-B03契約も変更しない。
+
+usageはnodes／character_units／maximum_depth／max_array_length／max_object_keys、入力UTF-16／論理UTF-8長、lexical_work。lexical_workは明示advance・node・文字列のappend／join相当量・数値token走査相当量を数える**局所ledger**であり、native UTF-8変換／Number／正規表現内部・schema導出／Zod refinement・freeze・allocationの総CPUや60秒の実中断保証ではない。固定raw長と各構造枠は維持するが、全体work／heap上界はUnknownで受付無効のまま。
+
+[CG-A合成検証記録](E2E_BEST_PRACTICE_RECOVERY_FULL_JSON_CGA_2026-11-03.md)参照。CG-Bのpost-guard capture・CG-Cの元本文／omission照合・CG-Dの同job gate、runtime／IPC受信上限との接続は未実装。

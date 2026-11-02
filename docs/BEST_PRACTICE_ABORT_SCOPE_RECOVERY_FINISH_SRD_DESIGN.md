@@ -1,7 +1,7 @@
 # SR-D 回復planからfinish検証・終端候補への接続設計
 
-Version: br006-recovery-finish-srd-draft-0.16 / Date: 2026-11-03。
-Status: **前提のRA-03-BとRD-B01〜04の合成値比較・同accepted封印・失効／固定discardまで実装。RD-Cのfinish job／応答／候補とRD-Dの候補終端は未実装。RD-C詳細設計はdraft-0.2、内容gate詳細設計はdraft-0.2。正式発行口閉鎖・Unknown・全体受付無効・VM／監視／telemetry調査保留を維持する。実finish／runtime接続・実通信・設定変更・本番cap／Permit投入の承認ではない。**
+Version: br006-recovery-finish-srd-draft-0.17 / Date: 2026-11-03。
+Status: **前提のRA-03-BとRD-B01〜04の合成値比較・同accepted封印・失効／固定discardまで実装。CG-Aのshape／同JSON文字列bounded decode／full schema値検証は合成限定実装。RD-Cのfinish job／応答／候補とRD-Dの候補終端は未実装。RD-C・内容gate詳細設計はdraft-0.3。正式発行口閉鎖・Unknown・全体受付無効・VM／監視／telemetry調査保留を維持する。実finish／runtime接続・実通信・設定変更・本番cap／Permit投入の承認ではない。**
 
 初版基準HEAD: `31cff06`。本版の現状照合: `04eef33`。[SC2-D接続契約](BEST_PRACTICE_ABORT_SCOPE_WORKER_RECOVERY_CONTINUATION_DESIGN.md)§13、[soft回復設計](BEST_PRACTICE_ABORT_SCOPE_SOFT_RECOVERY_CLAIM_DESIGN.md)§2〜9・11、[通常WJ-C](BEST_PRACTICE_ABORT_SCOPE_WORKER_TIME_BINDING_DESIGN.md)§13との差分を定める。内部役割案と実装済み範囲を分け、現在の保証は§2・9と各詳細設計で確認する。
 
@@ -80,7 +80,7 @@ FinishContextEvidenceの合成発行口は配布対象外の独立assemblyに留
 
 ## 5 同新世代のjob相関とE
 
-RD-B04後の具体的なID台帳・開始claim・応答originは[RD-C接続詳細設計draft-0.2](BEST_PRACTICE_ABORT_SCOPE_RECOVERY_FINISH_JOB_RDC_DESIGN.md)、保護capture・full schema・同bytes・合法omissionは[内容gate詳細設計draft-0.2](BEST_PRACTICE_ABORT_SCOPE_RECOVERY_FINISH_CONTENT_GATE_DESIGN.md)で補足する。以下はその未実装契約である。
+RD-B04後の具体的なID台帳・開始claim・応答originは[RD-C接続詳細設計draft-0.3](BEST_PRACTICE_ABORT_SCOPE_RECOVERY_FINISH_JOB_RDC_DESIGN.md)、保護capture・full schema・同bytes・合法omissionは[内容gate詳細設計draft-0.3](BEST_PRACTICE_ABORT_SCOPE_RECOVERY_FINISH_CONTENT_GATE_DESIGN.md)で補足する。CG-Aの純粋値検証は実装済みだが、以下のjob・captureとの接続契約は未実装である。
 
 finish jobは同run／新frame／supervisor／worker／generation／kind=finish／idへ結合する。数値idは同新frame内で単調に一度消費する。旧世代と同じ数値idでも参照が違えば拒否し、readyイベント・旧analyze応答をfinishへ読替えない。SC2-CのreadyをWJ-Aの新しいstart／ready呼出しで作り直さない。
 
@@ -141,7 +141,7 @@ source解放・worker cleanupは別軸で、片方の成功や最終resource数0
 |---|---|---|
 | RD-A（RA-03-Bまで合成実装） | [詳細型・発行契約](BEST_PRACTICE_ABORT_SCOPE_FINISH_CONTEXT_RDA_DESIGN.md)の合成発行・受理・非実行期待値・固定discardまで。後続封印はRD-B04で扱う | 値検査・fixture pinを由来の証明にしない。実source／worker生存はUnknown。summary／raw manifest／別rootからの昇格0。元SC2-D互換 |
 | RD-B（01〜04合成実装） | [期待値封印・値比較設計](BEST_PRACTICE_ABORT_SCOPE_RECOVERY_FINISH_VALUES_RDB_DESIGN.md)の構造値層・最小scalar共有・局所比較・同accepted封印と失効／固定discard | 通常WJ-Cの全旧試験維持。構造検査・封印・局所比較を本文／full schema／wire保証へ昇格しない |
-| RD-C（詳細設計のみ） | [接続詳細設計draft-0.2](BEST_PRACTICE_ABORT_SCOPE_RECOVERY_FINISH_JOB_RDC_DESIGN.md)。同新frameのID継続・fake job・一度応答消費。[内容gate](BEST_PRACTICE_ABORT_SCOPE_RECOVERY_FINISH_CONTENT_GATE_DESIGN.md)成立前は非実行check／discardだけ | 同id旧世代・ready／analyze応答・二重送信を拒否。全pre/post guard、send失敗でも再利用なし。候補は全内容gate成立後の別段階 |
+| RD-C（詳細設計のみ） | [接続詳細設計draft-0.3](BEST_PRACTICE_ABORT_SCOPE_RECOVERY_FINISH_JOB_RDC_DESIGN.md)。同新frameのID継続・fake job・一度応答消費。[内容gate](BEST_PRACTICE_ABORT_SCOPE_RECOVERY_FINISH_CONTENT_GATE_DESIGN.md)はCG-A純粋値層だけ実装済み。全gate成立前は非実行check／discardだけ | 同id旧世代・ready／analyze応答・二重送信を拒否。全pre/post guard、send失敗でも再利用なし。候補は全内容gate成立後の別段階 |
 | RD-D | 同source終端・新cleanup内部確認slot・一度候補消費 | cleanup両軸と固定順序、hard後の診断回収と復活0、解放後最終checkpoint、正常時参照／UTC破棄 |
 
 独立oracleは実装helperを呼ばず、固定集合・時刻表と有限イベント列から期待数を求める。S/O/T_i/U/Eの等号、E<U・E>S+L、設定期限の等号拒否、100件／超過、重複で欠落を隠す応答、全guard失効・再入・混入・不正getter／Proxy・秘密非出力を含める。通常WJ-A/B/C、SR-A/B/C①、SC2-A〜Dを維持する。

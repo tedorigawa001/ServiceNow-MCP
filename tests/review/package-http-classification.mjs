@@ -159,6 +159,17 @@ for(const f of pack.files.filter(f=>f.path.startsWith('dist/')&&/\.(?:js|ts|map)
 for(const leak of ['globalThis.setTimeout(()=>{},0);','Date.now();','new Date();',"import('node:fs');",'new Worker("x");',"export * from 'node:fs';","import {BoundedReadSession} from '../../../src/servicenow/bounded-read.js';const zzRoot=BoundedReadSession;"])
   assert.throws(()=>auditSyntheticIssuer(recoveryValuesText+'\n'+leak,recoveryValueImports),assert.AssertionError,'RD-B01 audit missed seeded leak: '+leak);
 console.log('RD-B01/03/04 values, comparison and private seal excluded; fixed pure imports + seeded runtime/I/O/clock/worker/type/scope leak controls PASS');
+const fullJsonText=readFileSync(join(root,'tests/support/review/synthetic-recovery-full-json.ts'),'utf8');
+const fullJsonImports=['zod','node:buffer','../../../src/review/aggregate-schema.js','../../../src/review/result-schema-v2.js'];
+auditSyntheticIssuer(fullJsonText,fullJsonImports);
+const fullJsonMarkers=['synthetic-recovery-full-json','RECOVERY_FULL_JSON_SHAPE','RecoveryFullJsonError','measureRecoveryFullJson','recoveryFullJsonBounds','validateRecoveryAnalysisJson','validateRecoveryAggregateJson','synthetic_recovery_full_json_values'];
+const noFullJson=text=>assert(!fullJsonMarkers.some(x=>text.includes(x)),'CG-A full values leaked into runtime');
+for(const marker of fullJsonMarkers)assert.throws(()=>noFullJson(marker));
+assert(!pack.files.some(f=>f.path.includes('synthetic-recovery-full-json')));
+for(const f of pack.files.filter(f=>f.path.startsWith('dist/')&&/\.(?:js|ts|map)$/.test(f.path)))noFullJson(readFileSync(join(root,f.path),'utf8'));
+for(const leak of ['fetch("x");','Date.now();','new Date();','new Worker("x");',"import('node:fs');","import {BoundedReadSession} from '../../../src/servicenow/bounded-read.js';const zzRoot=BoundedReadSession;"])
+  assert.throws(()=>auditSyntheticIssuer(fullJsonText+'\n'+leak,fullJsonImports),assert.AssertionError,'CG-A audit missed seeded leak: '+leak);
+console.log('CG-A full schema values/shape/strict JSON excluded; fixed pure imports + seeded runtime/I/O/clock/worker/leak controls PASS');
 for(const suffix of ['.js','.js.map','.d.ts','.d.ts.map'])assert(pack.files.some(f=>f.path==='dist/servicenow/review-kernel/release-observation'+suffix),'required one-shot UTC value helper missing: '+suffix);
 const sessionDeclarations=readFileSync(join(root,'dist/servicenow/bounded-read.d.ts'),'utf8');
 const sessionAst=parse(readFileSync(join(root,'dist/servicenow/bounded-read.js'),'utf8'),{ecmaVersion:'latest',sourceType:'module'});
