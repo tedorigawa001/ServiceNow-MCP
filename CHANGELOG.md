@@ -16,6 +16,8 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 ### Changed
 
+- CG-B adds a package-excluded, fresh synthetic capture owner. Same-delivery full analysis values are accepted only after context checks and the post guard, retained privately and transferred once to an opaque manifest. Cross-root handles, duplicates, reordered receipts, cancellation and reentry fail closed with scalar-only diagnostics; no runtime capture, finish job, candidate or whole-run admission is enabled.
+
 - CG-A adds package-excluded, value-only full-result shape derivation, logical UTF-8 measurement and bounded strict JSON decoding from the same input string. Duplicate decoded keys, unsafe/rounded numbers and raw surrogate replacement are rejected before full analysis/aggregate schema validation. Full-body limits remain separate from local context limits; no delivery provenance, capture, candidate, runtime transport or whole-run admission is enabled.
 
 - RD-B04 adds a package-excluded, synthetic-only one-shot seal from the same private accepted finish slot. It rechecks pinned data and the live source/frame before publishing an empty, separately branded handle; source/cleanup start, hard stops and fixed accepted discard explicitly erase the sealed expectations. Original accepted ownership remains cleanup-only, legacy roots keep their prior surface, and no finish job, candidate, runtime authority or whole-run admission is enabled.

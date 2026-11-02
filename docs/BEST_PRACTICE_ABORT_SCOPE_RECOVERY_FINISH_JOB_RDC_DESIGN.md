@@ -1,6 +1,6 @@
 # RD-C 封印期待値からfinish job・応答相関への接続 詳細設計
 
-Version: br006-recovery-finish-job-rdc-draft-0.3 / Date: 2026-11-03。
+Version: br006-recovery-finish-job-rdc-draft-0.4 / Date: 2026-11-03。
 Status: **設計のみ。RD-Cのjob／応答／候補は未実装。合成依存限定、正式発行口閉鎖・全体受付無効・Unknown・VM／監視／telemetry調査保留を維持する。**
 
 基準HEAD: `04eef33`（RD-B04実装`4533f49`と検証記録レビューを含む）。[親SR-D](BEST_PRACTICE_ABORT_SCOPE_RECOVERY_FINISH_SRD_DESIGN.md)§3・5〜10と[RD-B draft-0.6](BEST_PRACTICE_ABORT_SCOPE_RECOVERY_FINISH_VALUES_RDB_DESIGN.md)§13〜14からの差分。以下の型・操作・phase名は提案であり、現存API・承認済みruntime経路ではない。実装・実worker／runtime接続・実通信・実機操作・設定変更・Pushの許可を含まない。
@@ -102,7 +102,7 @@ RD-Cの局所検査を終えた非実行経路では、元accepted handleの固�
 
 ## 7 本文／full schema／wire不足による候補発行停止
 
-保護capture・所有権・同bytes・full schema・三つのomissionの差分は[内容gate詳細設計draft-0.3](BEST_PRACTICE_ABORT_SCOPE_RECOVERY_FINISH_CONTENT_GATE_DESIGN.md)で具体化する。CG-Aの純粋値層だけは合成実装済みだが、以下のgate全体はまだ成立していない。
+保護capture・所有権・同bytes・full schema・三つのomissionの差分は[内容gate詳細設計draft-0.4](BEST_PRACTICE_ABORT_SCOPE_RECOVERY_FINISH_CONTENT_GATE_DESIGN.md)で具体化する。CG-Aの純粋値層とCG-Bのfresh合成capture／一度限りmanifest移譲は実装済み。既存plan・jobへの連結と以下のgate全体はまだ成立していない。
 
 現`synthetic_original_outcome_pin`はdescriptorとcontextの参照で、受理済み元結果本文／findingsのcaptureやdigestではない。RD-B04の封印とRD-B03のmatches:trueを足しても、本文改変を検出できる証拠にはならない。
 
@@ -152,7 +152,7 @@ RD-Cの局所検査を終えた非実行経路では、元accepted handleの固�
 | RC-A | 同kernelの開始／job内部型、生成時からのFrameSequence継続、sealed one-shot移譲・live binding・失効 | dispatcher・応答・候補。旧APIは維持 |
 | RC-B | 固定fake dispatchとイベント会計、send throw／rejectとcleanup責務 | 実通信・実worker・候補 |
 | RC-C | private delivery相関、一度応答消費・E・RD-B03への限定比較接続 | 本文等のgate未充足時の候補発行。非実行check／discardまで |
-| 内容gate（CG-A純粋値層のみ実装） | [CG-A〜D](BEST_PRACTICE_ABORT_SCOPE_RECOVERY_FINISH_CONTENT_GATE_DESIGN.md)。CG-Aのshape／同文字列decode／full schema値検証は合成実装済み。受信origin、保護capture、omission／full比較、一度限りgateは後続 | descriptor pinの昇格、未知費目の確認済み化 |
+| 内容gate（CG-A／B合成限定実装） | [CG-A〜D](BEST_PRACTICE_ABORT_SCOPE_RECOVERY_FINISH_CONTENT_GATE_DESIGN.md)。CG-Aの値検証とCG-Bのfresh capture／post-guard受理／manifest移譲は合成実装済み。既存plan／job・実受信origin、omission／full比較、一度限りgateは後続 | descriptor pinの昇格、未知費目の確認済み化 |
 | RC-D（gate成立後のみ） | 同jobからの候補一度格納・失効・RD-Dへのprivate終端移譲 | 正常終端証拠の代用、実review結果・Permit発行 |
 
 名称・分割は設計案。RC-A以降の実装は個別に指示を受ける。phase型拡張、実session／ReleasePermit／payload／workerへの正式binding、実OS終了・外側監督、B-03 compiled保証、全体work受付は別工程とする。
@@ -160,7 +160,7 @@ RD-Cの局所検査を終えた非実行経路では、元accepted handleの固�
 ## 11 承認待ち・未確認事項
 
 - FrameSequenceの具体配置とready交換の最初のclaim位置。既存合成ready試験・実監督との対応は実装時に再確認する。
-- 構造化cloneで受けたjson文字列のUTF-8論理bytesと実IPC受信量は別保証。strict bounded decode・重複member・深さ／node／文字総量の案は内容gate§5、互換性と上界証明は未検証。通常経路の受付は変更しない。
+- 構造化cloneで受けたjson文字列のUTF-8論理bytesと実IPC受信量は別保証。CG-Aの固定shape／decoder互換試験とCG-Bのfresh合成captureは内容gate§11〜12で実装したが、実IPC由来と全体費用は未検証。通常経路の受付は変更しない。
 - 内容gate§2では同wire由来のschema-normalized owned本文をprivate snapshotにする案を選ぶ。正規化copy・保持ピークとworkの受付は未承認。hashや現descriptor pinだけで意味／由来／full schemaを証明しない。
 - 元cleanup責務を候補の終端ownerへ一度移す具体型。RA-03-Bのdiscard経路と競合せず、hard後のsink回収も失わせないこと。
 - 総work／allocation・本番cap・全体受付、実clock／send／terminateの上限は未導出。候補gateを将来開く判断とともに別途レビューする。

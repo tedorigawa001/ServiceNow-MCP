@@ -1,9 +1,9 @@
 # 回復finish 本文capture・full schema・同bytes検証gate 詳細設計
 
-Version: br006-recovery-finish-content-draft-0.3 / Date: 2026-11-03。
-Status: **CG-Aの純粋shape／同JSON文字列のbounded decode／full schema値検証を合成限定実装。capture／jobへの接続／full応答gate／候補発行は未実装。正式発行口閉鎖・全体受付無効・Unknown・VM／監視／telemetry保留を維持する。**
+Version: br006-recovery-finish-content-draft-0.4 / Date: 2026-11-03。
+Status: **CG-Aの純粋値層に加え、CG-Bのfresh合成capture owner・post-guard受理・一度限りのmanifest移譲／固定discardを実装。既存assembly／plan／jobへの接続・非reviewed受領物・omission／full応答gate／候補発行は未実装。正式発行口閉鎖・全体受付無効・Unknown・VM／監視／telemetry保留を維持する。**
 
-基準HEAD: `b367f37`。[RD-C](BEST_PRACTICE_ABORT_SCOPE_RECOVERY_FINISH_JOB_RDC_DESIGN.md)§5・7・10〜11の内容gateを具体化する。CG-Aの純粋値層の実装範囲は§11、それ以外の型・操作・数値モデルは未実装の内部案。本番cap・通常経路の受付変更・実通信・実機操作・設定変更・Pushの承認ではない。
+基準HEAD: `886d037`（CG-A `00bd3ca`と追加互換試験を含む）。[RD-C](BEST_PRACTICE_ABORT_SCOPE_RECOVERY_FINISH_JOB_RDC_DESIGN.md)§5・7・10〜11の内容gateを具体化する。実装範囲はCG-A§11・CG-B§12、それ以外の型・操作・数値モデルは未実装の内部案。本番cap・通常経路の受付変更・実通信・実機操作・設定変更・Pushの承認ではない。
 
 ## 1 「本文」と現状の不足
 
@@ -147,11 +147,11 @@ captureとwireの一度限り消費は別claimで管理する。captureは受理
 | 分割案 | 最初の範囲 | まだ発行しないもの |
 | --- | --- | --- |
 | CG-A（純粋値層を合成実装） | 完全schemaのshape導出・bounded strict decoder／同json文字列・full schema値契約。独立oracleで上限と論理bytesを検証。実delivery originは未接続 | capture証拠・候補・実受信保証 |
-| CG-B | 同analyzeのprivate capture owner／post-guard受理・一度限り移譲をfresh合成issuer限定で実装 | descriptor／rawからの昇格、実session登録 |
+| CG-B（fresh合成限定実装） | 同analyzeのprivate capture owner／post-guard受理・一度限りmanifest移譲／固定discard。既存planやfinish jobとの連結は後続 | descriptorからの昇格、実session登録、非reviewed本文の捏造 |
 | CG-C | 三つの省略点の固定決定証拠と純粋omissionモデル、full aggregate＋RD-B03＋元本文比較 | 不足gateの候補化 |
 | CG-D | 全receiptが同job／planに揃う一度限りgate。RC-Dへ渡すprivate契約を検証 | RD-Dの正常終端・実review結果／Permit発行 |
 
-CG-Aの実装契約は§11。CG-B以降のowner／copy方式・総費用は設計案のまま。現在のRD-B04 handle／pin／content_evidenceのUnknownをそのままverifiedへ書換えない。
+CG-Aの実装契約は§11、CG-Bのfresh合成ownerは§12。既存planへのowner接続・omission・総費用は設計案のまま。現在のRD-B04 handle／pin／content_evidenceのUnknownをそのままverifiedへ書換えない。
 
 CG-Aで固定schema全variantのshapeを導出し、独立oracleとJSON.stringify合成corpusで検証した。未確認事項は将来schema／任意の既存出力に対する互換性、実deliveryからの同bytes結合、元bodyの保持／cloneピーク、checkpointの配置と同期schema検証の中断粒度、omissionのserialize総費用、body／job／終端ownerの同時寿命、本番cap／全体work上界。これらを未導出のまま実経路や候補gateを開かない。
 
@@ -175,4 +175,27 @@ decoderはwhole JSON.parseを使わず、値・文字列・escape・数値を有
 
 usageはnodes／character_units／maximum_depth／max_array_length／max_object_keys、入力UTF-16／論理UTF-8長、lexical_work。lexical_workは明示advance・node・文字列のappend／join相当量・数値token走査相当量を数える**局所ledger**であり、native UTF-8変換／Number／正規表現内部・schema導出／Zod refinement・freeze・allocationの総CPUや60秒の実中断保証ではない。固定raw長と各構造枠は維持するが、全体work／heap上界はUnknownで受付無効のまま。
 
-[CG-A合成検証記録](E2E_BEST_PRACTICE_RECOVERY_FULL_JSON_CGA_2026-11-03.md)参照。CG-Bのpost-guard capture・CG-Cの元本文／omission照合・CG-Dの同job gate、runtime／IPC受信上限との接続は未実装。
+[CG-A合成検証記録](E2E_BEST_PRACTICE_RECOVERY_FULL_JSON_CGA_2026-11-03.md)参照。CG-Bのfresh合成限定実装は§12。CG-Cの元本文／omission照合・CG-Dの同job gate、runtime／IPC受信上限との接続は未実装。
+
+## 12 CG-Bのfresh合成capture owner
+
+[合成capture層](../tests/support/review/synthetic-recovery-capture.ts)は新しいclosureごとに独立した台帳を作る。既存root・session・source・budget・Permit・frameの登録口を持たず、runtime／fixtureの台帳は共有しない。共通closureと固定順のprivate slotが合成runの所属、空の別brand input handleがjob／receiptを表す。これを実sessionの認証・発行証拠と呼ばない。
+
+1. constructorは1〜100件の固定期待contextをown-dataとして収集し、strict schemaの正規化copyだけを保持する。target全列、T_i相当のreviewed_at、binding、release、要求rule、必要limitations、applicable ruleをpinする。同runのinstance／release／Update Set不一致、重複IDを拒否する。caller objectをfreezeしない。注入guard関数もown-dataから一度pinし、後書換え／getter／Proxyを受けない。
+2. `deliver`は同inputの生成claimを先に消費する。固定連番idとown-dataの厳密な`{id,ok:true,json}`だけを受け、CG-Aの元文字列長検査を経て、private wire slotへ同文字列を一度保持する。別root・copy・二重生成・不正envelopeでsticky停止する。これは合成受信イベントであり、任意の既存値を実受信証拠へ登録するAPIではない。
+3. `accept`はwireをpre-guard前に取り外す。CG-Aで同文字列のfull analysis値を生成し、reviewedの全target／reviewed_at／binding／release／要求rule／applicable ruleを完全一致、必要limitationsを包含で検査する。不正schema／局所不一致でもpost-guardを通し、その停止を局所理由より優先する。成功したpost-guard後だけprivate capture slotへ同immutable正規化値を移す。再parse／再serialize／findings cloneはしない。順序違い・再入・失敗後の再受理を拒否する。
+4. `transfer`は全固定inputの受理完了とwire残数0を確認し、pre/post-guardを通して、同じ本文参照のMap索引を一度だけprivate manifest slotへ移す。外へ返すのは空の別brand handleだけ。本文／readonly viewのgetter・任意receiver callback・summaryからの再登録口はない。既存RD-B04のplan sealやfinish jobとのbindingはまだ接続しない。
+5. 唯一のmanifest終端操作`discardManifest`、ownerの`discard`、hard stopでprivate参照を取り外す。guard中の再入は、callerが例外を捕捉しても失効を取り消さない。cancel／deadline／未知例外を固定理由に写像し、最初のhard診断を保持する。受理・移譲後のhardでも同期失効する。JS heapの物理消去や実worker cleanup完了は主張しない。
+
+今回のcaptureはreviewed専用。analyze時点で既にomitted等の値はschema適合でもcaptureへ受けず、AcceptedNonReviewed／ParentOmissionDecisionの保持は後続へ残す。元T_i・retrieved_atを取り直さず、時計も読まない。期限・取消は固定したfake guard／明示stopから供給し、実時計・timer・transport・workerは使わない。
+
+| 費目所有 | 今回の有限枠／未保証 |
+| --- | --- |
+| constructor期待context | 100件以下。1件ごと深さ8／array100／key30／node10,000／文字費262144。収集copyとschema正規化copyは別の一時graph。全件を局所1件枠へ押し込めない |
+| wire保持・decode・schema／freeze | wireごとCG-AのB=262144。複数wireのraw長の理論和は最大26,214,400 byte。期待contextと本文は別保持で、実heap上界ではない |
+| capture／manifest索引 | 各100件以下。移譲時のMap複製は索引だけで本文graphは複製しない。post-guard前にはmanifestを公開しない |
+| guards／診断／discard | acceptとtransferの固定pre/post。失敗時にprivate Mapをclearし、固定scalarと未保証項目だけをsummaryに残す |
+
+これらは局所の有限構造であり、元C/G/Pの会計や全体work／memory受付へ加算・承認した値ではない。予算不足を本文切捨てやdigest代替で救済しない。summaryのauthorityはnoneで、runtime origin／finish job／omission／content gate／whole-run budgetは未保証。本文の正しさやsource承認も変わらない。
+
+[CG-B検証記録](E2E_BEST_PRACTICE_RECOVERY_CAPTURE_CGB_2026-11-03.md)参照。既存accepted／planへの一度限りの結合、非reviewed受領物と合法omission、finish側full比較・終端証拠の連結が残る。旧試験・公開JSON・正式発行口閉鎖・全体受付無効・調査保留を維持する。
