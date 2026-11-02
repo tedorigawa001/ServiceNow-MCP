@@ -1,7 +1,7 @@
 # RD-A FinishContextEvidenceの詳細型・private発行契約
 
-Version: br006-finish-context-rda-draft-0.1 / Date: 2026-11-02。
-Status: **MD設計のみ・全型と操作は未実装の内部役割案。合成依存限定・正式発行口閉鎖・Unknown・全体受付無効・VM／監視／telemetry調査保留を維持する。**
+Version: br006-finish-context-rda-draft-0.2 / Date: 2026-11-02。
+Status: **RA-01の値型・bounded projection／比較だけ合成依存で実装。RA-02／03のprivate発行・受理とlive証拠は未実装。正式発行口閉鎖・Unknown・全体受付無効・VM／監視／telemetry調査保留を維持する。**
 
 基準HEAD: `a62c897`。[SR-D接続設計](BEST_PRACTICE_ABORT_SCOPE_RECOVERY_FINISH_SRD_DESIGN.md)§1〜3・9のRD-Aを具体化する。[SC2-D](BEST_PRACTICE_ABORT_SCOPE_WORKER_RECOVERY_CONTINUATION_DESIGN.md)と[通常WJ-C](BEST_PRACTICE_ABORT_SCOPE_WORKER_TIME_BINDING_DESIGN.md)の既存契約は維持する。コード・公開JSON／MCP・設定を変更する指示ではなく、実接続・実通信・本番cap／Permit投入の承認ではない。
 
@@ -178,7 +178,7 @@ headerと全receipt／outcome projectionを合わせ、一つの収集予算で�
 
 | 最初の実装分割案 | 合成だけで確認する範囲 |
 |---|---|
-| RA-01 | 別brand・strict値型とbounded projection／比較。不足項目・不正variant・総量超過を拒否。発行や実行能力なし |
+| RA-01（値層実装済み） | 別brand・strict値型とbounded projection／比較。不足項目・不正variant・総量超過を拒否。発行や実行能力なし |
 | RA-02 | 新合成assemblyのpin済み補助slot、receipt／immutable outcome由来、issue one-shot。旧factory／SC2-D互換、外部登録・responseからの昇格なし |
 | RA-03 | 同handoffと証拠の原子的受理、ready／cleanup未開始・source openのfake lifecycleとclaim、失効／解放責務の接続。非実行acceptedまで |
 
@@ -198,4 +198,16 @@ RD-B/C/Dへ進む前に各段階の実コード配置・抽出範囲を確認す
 
 private source lifecycle、cleanup開始serial、元analyze受理のcapture hook／immutable結果保管、新assemblyの発行slotは**すべて未実装**。RA-01だけでこれらを確認済みにしない。full結果／wire比較・Eと候補はRD-B/C、正常source／新cleanup能力と一度候補消費はRD-Dへ残す。phase型・実session／ReleasePermit／payload／worker jobの正式binding、実finish／runtime・実通信・設定変更は対象外。
 
-本書は設計と試験計画だけで、新規試験成功は主張しない。正式発行口閉鎖・Unknown・全体受付無効・調査保留を維持する。
+## 9 RA-01実装範囲と制限
+
+`tests/support/review/synthetic-finish-context-values.ts`だけに値層を置く。`projectSyntheticFinishValues`はreadonlyな非実行projection、`compareSyntheticFinishValues`は固定の比較結果を返す。privateなvalue-only Symbol brandと、発行関数のない`SyntheticFinishContextEvidence`型を分離し、projectionを証拠型へ代入できない。issuer・claim・runtime登録口は追加しない。
+
+strictな0.2／0.3 header、input、outcome unionを検査し、S／O／T_i／U・集合・期待contextの値整合と元参照の一致を確認する。参照欄は非Proxy objectのopaque placeholderとして保持するだけで、取得元・immutable解析結果・ready／open／cleanup未開始の真正性を証明しない。元active receipt、plan由来のlimitations／consistencyなどとの照合はRA-02／03までUnknown。headerのrelease観測UTCと将来Eの関係はRD-Bへ残す。
+
+深さ8・object項目30・配列100・訪問10,000・文字費262144を一つの収集予算で検査する。文字費はkey／文字列のUTF-16長×3であり、最大到達値262143と次の262146を境界試験する。比較は両入力で同予算を共有する保守的subsetで、個別projectionが合法でも二つ合わせて拒否し得る。非opaqueの共有参照は出現ごとに課金し、循環・getter／symbol・疎配列を拒否する。opaque参照の内部は読まず、freezeもしない。
+
+projection内の通常containerはコピーしてfreezeするが、元route.frameのidentityは比較用の元入力から採取する。返却valueを元handle graphの代替・再発行素材として扱わない。比較APIへ渡すのは元の値graphであり、summaryからの証拠復元口ではない。失敗は固定`internal_review_error`と`shape`／`limit`／`mismatch`分類だけで、入力やZod例外は出力しない。
+
+`Reflect.ownKeys`等の列挙自体の確保、exact layout／allocation・全体work上界は保証しない。文字量／nodeの局所枠を全体受付の根拠に昇格しない。新しい日時長policyや実Permitは導入しない。
+
+[RA-01検証記録](E2E_BEST_PRACTICE_FINISH_CONTEXT_RA01_2026-11-02.md)：新規186件・全体11,446件成功、型検査・build・lint・非同梱検査を確認。RA-02／03と実接続の成功を意味しない。正式発行口閉鎖・Unknown・全体受付無効・調査保留を維持する。

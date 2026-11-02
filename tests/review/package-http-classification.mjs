@@ -83,6 +83,17 @@ const noWorkerPlan=text=>assert(!planMarkers.some(x=>text.includes(x)),'SC2-D pl
 for(const marker of planMarkers)assert.throws(()=>noWorkerPlan(marker));
 for(const f of pack.files.filter(f=>f.path.startsWith('dist/')&&/\.(?:js|ts|map)$/.test(f.path)))noWorkerPlan(readFileSync(join(root,f.path),'utf8'));
 console.log('SC2-D sealed plan/summary/handoff excluded; seeded symbol/function/scope leak controls PASS');
+const finishValuePath='tests/support/review/synthetic-finish-context-values.ts',finishValueText=readFileSync(join(root,finishValuePath),'utf8');
+const finishValueImports=['node:util','zod','../../../src/review/aggregate-schema.js','../../../src/review/result-schema-v2.js','../../../src/review/target-selection.js'];
+auditSyntheticIssuer(finishValueText,finishValueImports);
+const valueMarkers=['synthetic-finish-context-values','projectSyntheticFinishValues','compareSyntheticFinishValues','synthetic_finish_values','synthetic_finish_comparison','synthetic_finish_value_only','evidence_not_issued_by_ra01'];
+const noFinishValues=text=>assert(!valueMarkers.some(x=>text.includes(x)),'RA-01 values leaked into runtime');
+for(const marker of valueMarkers)assert.throws(()=>noFinishValues(marker));
+assert(!pack.files.some(f=>f.path.includes('synthetic-finish-context-values')));
+for(const f of pack.files.filter(f=>f.path.startsWith('dist/')&&/\.(?:js|ts|map)$/.test(f.path)))noFinishValues(readFileSync(join(root,f.path),'utf8'));
+for(const leak of ['globalThis.setTimeout(()=>{},0);','Date.now();','new Date();',"import('node:fs');",'new Worker("x");',"export * from 'node:fs';"])
+  assert.throws(()=>auditSyntheticIssuer(finishValueText+'\n'+leak,finishValueImports),assert.AssertionError,'RA-01 audit missed seeded leak: '+leak);
+console.log('RA-01 value-only projections excluded; fixed pure-data imports + seeded I/O/clock/worker/leak controls PASS');
 for(const suffix of ['.js','.js.map','.d.ts','.d.ts.map'])assert(pack.files.some(f=>f.path==='dist/servicenow/review-kernel/release-observation'+suffix),'required one-shot UTC value helper missing: '+suffix);
 const sessionDeclarations=readFileSync(join(root,'dist/servicenow/bounded-read.d.ts'),'utf8');
 const sessionAst=parse(readFileSync(join(root,'dist/servicenow/bounded-read.js'),'utf8'),{ecmaVersion:'latest',sourceType:'module'});

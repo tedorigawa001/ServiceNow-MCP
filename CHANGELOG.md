@@ -16,6 +16,8 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 ### Changed
 
+- RA-01 adds package-excluded, synthetic-only finish-context value projections and comparisons with a separate value-only brand, strict variants and shared node/character limits. Missing fields, mixed references and oversized inputs fail closed. This does not issue evidence, validate live provenance or enable formal issuance, runtime connections or whole-run admission.
+
 - SC2-D seals a package-excluded non-executable recovery plan from the same accepted synthetic generation, immutable selected set and retained T_i/U. One-shot private handoff and authority:none summary branches are exclusive; copies, summary promotion, replay, revocation and mixed owners are rejected. The receiving slot has fixed cleanup-confirmed discard only. No real finish/runtime connection, formal issuance or whole-run admission is enabled.
 
 - SC2-C adds package-excluded one-shot HeldClosure use after verification, synthetic new-frame startup and issuer-bound ready acceptance. A separate cleanup sink is handed out before startup and remains diagnostics-only after hard stop; old cleanup cannot discharge the new frame. Mixing, replay and guard cancellation cannot restart or accept a second ready. No real worker/runtime connection, finish plan, formal issuance or whole-run admission is enabled.
