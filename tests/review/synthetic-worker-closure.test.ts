@@ -120,3 +120,11 @@ it('retains a prior cancellation and later diagnostic cleanup failure without re
   const f=fixture(),sink=f.owner.cleanupLease(f.b),proof=confirm(f,f.begin());f.owner.revoke('cancelled');expect(()=>f.owner.recordCleanup(sink,'failed')).toThrow('cancelled');
   expect(f.owner.inspect()).toMatchObject({diagnostics:{hard:{code:'cancelled'},cleanup:{status:'failed'}},worker_closure:{termination:'confirmed',evidence_pending:false}});expect(()=>f.owner.consumeWorkerClosure(f.b,proof)).toThrow('cancelled');
 });
+it.each(['supervisor','request','input','point'] as const)('rejects a mixed unstarted context %s before issuing no-generation evidence',key=>{
+  const f=fixture('request_check_unstarted'),lease=f.begin(),context={...f.facts,[key]:key==='point'?'request_check_existing':{}};
+  expect(()=>f.owner.confirmWorkerUnstarted(f.b,lease,context)).toThrow('internal_review_error');expect(f.owner.inspect()).toMatchObject({state:'failed',worker_closure:{evidence_pending:false,lease_pending:false}});
+});
+it('rejects an extra closure event field instead of issuing closed-generation evidence',()=>{
+  const f=fixture(),lease=f.begin();expect(()=>f.owner.settleWorkerClosure(f.b,lease,{context:f.facts,termination:'confirmed',cleanup:'complete',extra:true})).toThrow('internal_review_error');
+  expect(f.owner.inspect()).toMatchObject({state:'failed',worker_closure:{evidence_pending:false,termination:'requested'}});
+});

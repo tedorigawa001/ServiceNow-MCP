@@ -3,7 +3,7 @@
 Date: 2026-11-02 / 基準HEAD: `fbbd844`。
 Status: **独立合成issuerだけの内部契約。実worker／runtime・実終了確認・新世代／finishへ未接続。**
 
-[soft回復claim設計draft-0.7](BEST_PRACTICE_ABORT_SCOPE_SOFT_RECOVERY_CLAIM_DESIGN.md)§14と[親設計draft-0.12](BEST_PRACTICE_ABORT_SCOPE_WORKER_TIME_BINDING_DESIGN.md)を参照。正式発行口閉鎖・Unknown・全体受付無効・VM／監視／telemetry調査保留を維持する。
+[soft回復claim設計draft-0.8](BEST_PRACTICE_ABORT_SCOPE_SOFT_RECOVERY_CLAIM_DESIGN.md)§14と[親設計draft-0.12](BEST_PRACTICE_ABORT_SCOPE_WORKER_TIME_BINDING_DESIGN.md)を参照。正式発行口閉鎖・Unknown・全体受付無効・VM／監視／telemetry調査保留を維持する。
 
 ## 1 実装範囲と非権威性
 
@@ -64,7 +64,32 @@ started世代は、同lease・同contextのtermination=confirmedとcleanup=compl
 
 梱包の関数／scope／path混入負の対照を拡張した。既存の依存監査を維持し、追加I/O／clock／worker依存を許可しない。既存compiled回帰はSR-C①の専用compiled保証／B-03完了には数えない。更新したMD5文書のローカルリンク69件と末尾空白、git diffの空白検査も成功。
 
-## 5 未実施・残課題
+## 5 レビュー修正（2026-11-02）
+
+§2・§4の111件／356件と「全体回帰：未完了」の記載は、修正前の記録として残す。
+
+**全体回帰の再実行**：レビュー時に`npm test -- --maxWorkers=3 --reporter=json`を単独で実行し、241ファイル／10,840件成功、失敗0・pending 0、exit 0（JSON内の開始〜最終試験終了は約59.7秒）を確認した。§4の未完了は外側150000msの打切り（exit 143）によるもので、今回の所要時間からは実行環境の負荷・並行実行が原因だった可能性が高い。ただし当時の環境状態は未回収で、原因を断定しない。
+
+**未保護の判定**：レビューで、次の判定をそれぞれ外す変異でも111件が成功することが判明した。
+
+| 判定 | 外した場合の影響 | 追加試験 |
+|---|---|---|
+| `confirmWorkerUnstarted`の同context照合 | 別のsupervisor／request／input・pointのcontextからno_generation証拠が発行される。既存の混入試験はstarted側のsettleだけが対象だった | 未起動originでsupervisor／request／input／pointを差し替えたcontextを拒否し、証拠・leaseを残さない（4件） |
+| `settleWorkerClosure`のevent 3列のstrict検査 | 余分な列を含むeventから終了証拠が発行される | 余分な列を含むeventを拒否し、terminationをrequestedのまま保持 |
+
+各変異では対応する追加試験だけが失敗し、復元後に`cmp`一致を確認した。begin／settle／consumeのstate判定とbeginの`closureDiagnostic`判定は、外してもslotの存在で同じく拒否される等価変異として扱い、追加試験の対象にしていない。issuer実装・runtime sourceは変更していない。
+
+修正後の結果：
+
+| 検証 | 結果 |
+|---|---|
+| SR-C①合成 | 1ファイル／116件成功（SR-A／Bと合わせて361件） |
+| ESLint | `npm run lint`（repo全体）exit 0、errors 0 |
+| 全体合成 | maxWorkers=3、241ファイル／10,845件成功、失敗0・pending 0、exit 0。JSON内の開始〜最終試験終了は約58.2秒 |
+
+soft回復claim設計はdraft-0.8へ更新し、§14の件数と親設計・本書からの版数リンクを直した。
+
+## 6 未実施・残課題
 
 終了証拠→必要verify→新世代ready、元選択集合／input receipt／保持Uとの接続はSR-C後半。WJ-Cのfinish／E・候補消費、実cleanup・外側checkpoint連結はSR-D以降。実発行元、全費目上界、本番cap、正式発行・全体受付は未完了。合成の成功を実終了保証や人の承認へ昇格しない。
 

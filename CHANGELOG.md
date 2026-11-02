@@ -76,6 +76,8 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 ### Added
 
+- Adds five SR-C1 synthetic worker-closure tests for checks that earlier tests did not distinguish: no-generation evidence for an unstarted origin requires the same supervisor/request/input/point context, and a closure settle event with an extra field is refused instead of issuing closed-generation evidence.
+
 - Adds nine SR-B synthetic phase-recovery tests for checks that earlier tests did not distinguish: non-bounded verify failures and non-boolean change flags stop instead of continuing as unverified, worker-deadline recoveries cannot prepare a phase plan, completed reviewed rows require an accepted input time, window/verify/receipt references must be non-proxy objects, a reused ready generation refuses an initial-start frame, and unexpected ready-failure reasons are fixed to an internal error.
 
 - Adds SR-A synthetic soft-recovery coverage for two checks that earlier tests did not distinguish: seed and observation identity references must be non-proxy objects (a string identity would otherwise match any copied value by `===`), and caught reentry into a preissued cleanup diagnostics sink during a guard stops the owner instead of recording cleanup mid-operation.
