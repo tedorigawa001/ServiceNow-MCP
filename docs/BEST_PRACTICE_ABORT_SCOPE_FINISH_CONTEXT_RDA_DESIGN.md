@@ -1,6 +1,6 @@
 # RD-A FinishContextEvidenceの詳細型・private発行契約
 
-Version: br006-finish-context-rda-draft-0.10 / Date: 2026-11-02。
+Version: br006-finish-context-rda-draft-0.11 / Date: 2026-11-02。
 Status: **RA-01・RA-02①②とRB-A〜Dの合成供給・lifecycle・plan／handoff結合まで実装。finish証拠発行とRA-03受理は未実装。正式発行口閉鎖・Unknown・全体受付無効・VM／監視／telemetry調査保留を維持する。**
 
 基準HEAD: `a62c897`。[SR-D接続設計](BEST_PRACTICE_ABORT_SCOPE_RECOVERY_FINISH_SRD_DESIGN.md)§1〜3・9のRD-Aを具体化する。[SC2-D](BEST_PRACTICE_ABORT_SCOPE_WORKER_RECOVERY_CONTINUATION_DESIGN.md)と[通常WJ-C](BEST_PRACTICE_ABORT_SCOPE_WORKER_TIME_BINDING_DESIGN.md)の既存契約は維持する。コード・公開JSON／MCP・設定を変更する指示ではなく、実接続・実通信・本番cap／Permit投入の承認ではない。
@@ -138,6 +138,8 @@ cleanup_originは同新frameのprivate cleanup lifecycle identityと開始serial
 受理後にcleanupが始まればAcceptedFinishContextのrouteも失効する。RD-Cでfinishを発行する直前にも元ownerの同live条件を原子的に再検査する。RD-Aでの受理を将来の生存証明やfinish job発行権限にしない。既にcleanup済みのSC2-D handoffは引き続きsummary／固定discardに使えるが、本入口では拒否する。
 
 ## 5 発行・一度限りの受理・状態
+
+RB-D実装後の具体的なslot移譲・discard競合・失効／解放責務は、[発行・RA-03受理接続差分draft-0.1](BEST_PRACTICE_ABORT_SCOPE_FINISH_ISSUE_ACCEPT_DESIGN.md)で補足する。設計のみで発行件数0・非実行を維持する。
 
 issueとacceptは同ownerのguard／busy／hardを共有する。先にbusy／hard／bindingを検査し、他ownerのslotを検索・消費しない。その後は自分のslotを先に占有するため、不一致handleによる失敗でも自ownerのclaimを戻さない。
 
