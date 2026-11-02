@@ -10,12 +10,13 @@ const root=fileURLToPath(new URL('../../',import.meta.url)),moduleNames=['abort-
 const output=execFileSync('npm',['pack','--dry-run','--ignore-scripts','--offline','--json'],{cwd:root,encoding:'utf8',maxBuffer:8*1024*1024,env:{...process.env,npm_config_cache:join(tmpdir(),'servicenow-mcp-owner-pack-cache')},stdio:['ignore','pipe','pipe']});
 const [pack]=JSON.parse(output);
 // WJ-A remains a separate synthetic issuer, not a distributed registration/claim entry point.
-const noSyntheticJobIssuer=text=>assert(!['createSyntheticWorkerJobIssuer','synthetic-worker-job','createSyntheticWorkerTimeIssuer','synthetic-worker-time','synthetic_finish_terminal','createSyntheticSoftRecoveryIssuer','synthetic-soft-recovery'].some(x=>text.includes(x)),'synthetic issuer leaked into runtime');
+const noSyntheticJobIssuer=text=>assert(!['createSyntheticWorkerJobIssuer','synthetic-worker-job','createSyntheticWorkerTimeIssuer','synthetic-worker-time','synthetic_finish_terminal','createSyntheticSoftRecoveryIssuer','synthetic-soft-recovery','synthetic-worker-closure','synthetic_worker_closure_consumption','beginWorkerClosure','settleWorkerClosure','confirmWorkerUnstarted','consumeWorkerClosure'].some(x=>text.includes(x)),'synthetic issuer leaked into runtime');
 assert.throws(()=>noSyntheticJobIssuer('export function createSyntheticWorkerJobIssuer() {}'));
 assert.throws(()=>noSyntheticJobIssuer('export function createSyntheticWorkerTimeIssuer() {}'));
 assert.throws(()=>noSyntheticJobIssuer('export const scope="synthetic_finish_terminal";'));
 assert.throws(()=>noSyntheticJobIssuer('export function createSyntheticSoftRecoveryIssuer() {}'));
-assert(!pack.files.some(f=>/synthetic-worker-(?:job|time|finish)|synthetic-soft-recovery/.test(f.path)));
+for(const marker of ['synthetic-worker-closure','synthetic_worker_closure_consumption','beginWorkerClosure','settleWorkerClosure','confirmWorkerUnstarted','consumeWorkerClosure'])assert.throws(()=>noSyntheticJobIssuer(marker));
+assert(!pack.files.some(f=>/synthetic-worker-(?:job|time|finish|closure)|synthetic-soft-recovery/.test(f.path)));
 for(const f of pack.files.filter(f=>f.path.startsWith('dist/')&&/\.(?:js|ts|map)$/.test(f.path)))noSyntheticJobIssuer(readFileSync(join(root,f.path),'utf8'));
 // Names are denied as references, not as object keys or member property names; the same audit must reject seeded leaks.
 const syntheticDenied=new Set(['globalThis','global','window','self','process','performance','fetch','setTimeout','setInterval','setImmediate','queueMicrotask','require','Worker','SharedArrayBuffer','Atomics','XMLHttpRequest','WebSocket','eval','Function']);
@@ -45,7 +46,7 @@ const recoveryText=readFileSync(join(root,'tests/support/review/synthetic-soft-r
 auditSyntheticIssuer(recoveryText,recoveryImports);
 for(const leak of ['globalThis.setTimeout(()=>{},0);','queueMicrotask(()=>{});','const zzNow=Date.now;','performance.now.call(performance);',"Date['now']();",'new Date();','new Worker(\'x\');',"import('node:fs');","import {BoundedReadSession} from '../../../src/servicenow/bounded-read.js';const zzRoot=BoundedReadSession;"])
   assert.throws(()=>auditSyntheticIssuer(recoveryText+'\n'+leak,recoveryImports),assert.AssertionError,'SR-A audit missed seeded leak: '+leak);
-console.log('SR-A separate synthetic issuer excluded; no runtime/I/O/clock/worker imports or references + negative controls PASS');
+console.log('SR-A/C1 separate synthetic issuer/closure contracts excluded; no runtime/I/O/clock/worker imports or references + negative controls PASS');
 const phaseText=readFileSync(join(root,'tests/support/review/synthetic-phase-recovery.ts'),'utf8'),phaseImports=['node:util','zod','../../../src/review/aggregate-schema.js'];
 auditSyntheticIssuer(phaseText,phaseImports);
 const noPhaseIssuer=text=>assert(!['createSyntheticPhaseModel','synthetic-phase-recovery','synthetic_phase_recovery_plan'].some(x=>text.includes(x)),'synthetic phase model leaked into runtime');
