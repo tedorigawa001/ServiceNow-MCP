@@ -141,7 +141,7 @@ cleanup_originは同新frameのprivate cleanup lifecycle identityと開始serial
 
 ## 5 発行・一度限りの受理・状態
 
-RB-D実装後の具体的なslot移譲・discard競合・失効／解放責務は、[発行・RA-03受理接続差分draft-0.4](BEST_PRACTICE_ABORT_SCOPE_FINISH_ISSUE_ACCEPT_DESIGN.md)で補足する。同設計§9〜11のRA-02④-A／RA-03-A／Bまで合成実装済み。正式発行口閉鎖・非実行の制限は維持する。
+RB-D実装後の具体的なslot移譲・discard競合・失効／解放責務は、[発行・RA-03受理接続差分draft-0.5](BEST_PRACTICE_ABORT_SCOPE_FINISH_ISSUE_ACCEPT_DESIGN.md)で補足する。同設計§9〜11のRA-02④-A／RA-03-A／Bまで合成実装済み。正式発行口閉鎖・非実行の制限は維持する。
 
 issueとacceptは同ownerのguard／busy／hardを共有する。先にbusy／hard／bindingを検査し、他ownerのslotを検索・消費しない。その後は自分のslotを先に占有するため、不一致handleによる失敗でも自ownerのclaimを戻さない。
 
