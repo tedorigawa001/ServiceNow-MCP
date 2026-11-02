@@ -3,7 +3,7 @@
 Date: 2026-11-02 / 基準HEAD: `fbbd844`。
 Status: **独立合成issuerだけの内部契約。実worker／runtime・実終了確認・新世代／finishへ未接続。**
 
-全体回帰の最新状況：§4の初回未完了は履歴として保持する。§5のレビュー後成功に加え、§7の同一HEAD比較でも241ファイル／10,845件成功を確認した。制限環境ではローカルlistenのEPERMとfixtureの待ち方により未完了を再現した。実回復経路が有効になったという意味ではない。
+全体回帰の最新状況：§4の初回未完了は履歴として保持する。§5のレビュー後成功に加え、§6の同一HEAD比較でも241ファイル／10,845件成功を確認した。制限環境ではローカルlistenのEPERMとfixtureの待ち方により未完了を再現した。実回復経路が有効になったという意味ではない。
 
 [soft回復claim設計draft-0.8](BEST_PRACTICE_ABORT_SCOPE_SOFT_RECOVERY_CLAIM_DESIGN.md)§14と[親設計draft-0.12](BEST_PRACTICE_ABORT_SCOPE_WORKER_TIME_BINDING_DESIGN.md)を参照。正式発行口閉鎖・Unknown・全体受付無効・VM／監視／telemetry調査保留を維持する。
 
@@ -91,17 +91,11 @@ started世代は、同lease・同contextのtermination=confirmedとcleanup=compl
 
 soft回復claim設計はdraft-0.8へ更新し、§14の件数と親設計・本書からの版数リンクを直した。
 
-## 6 未実施・残課題
-
-終了証拠→必要verify→新世代ready、元選択集合／input receipt／保持Uとの接続はSR-C後半。WJ-Cのfinish／E・候補消費、実cleanup・外側checkpoint連結はSR-D以降。実発行元、全費目上界、本番cap、正式発行・全体受付は未完了。合成の成功を実終了保証や人の承認へ昇格しない。
-
-実worker／runtime接続・実通信・実機操作・トークン発行・設定変更・permit発行・Pushは行っていない。無関係な`.vscode/`／`CLAUDE.md`は変更していない。
-
-## 7 全体回帰未完了の切分け（2026-11-02）
+## 6 全体回帰未完了の切分け（2026-11-02）
 
 対象HEADは`24cd4ec`。ソース・test・Vitest設定を変更せず、同一ソースで実行権限の異なる条件を比較した。Node v24.18.0、Vitest v5.0.3、darwin arm64、OS release 27.2.0、availableParallelism=10。実資格情報・環境変数の一覧・ServiceNow側のコード本文や実通信本文は取得・表示していない。
 
-### 7.1 停止位置と直接の再現条件
+### 6.1 停止位置と直接の再現条件
 
 全体を`maxWorkers=3`、verbose＋JSON reporter、silentで単独実行し、10秒ごとに最後に観測したtest file・観測file数・完了行数だけを記録した。実機E2E／transportプロジェクトの除外とunit→real-hostの順序は既存[Vitest設定](../vitest.config.ts)のまま。
 
@@ -117,7 +111,7 @@ soft回復claim設計はdraft-0.8へ更新し、§14の件数と親設計・本�
 
 verboseの文字列一致で得たworker_unavailable／callback_unavailable／timed out等は、期待エラーを確認するtest名にも含まれる。成功した比較全体実行にも現れたため、それらの出現数を実失敗数として扱わない。また、単独JSON reporterの再実行はtimeoutを記録するが、JSONには上記unhandled EPERMの詳細が入らなかった。原因の証拠はverbose出力とsource照合を併用して判断した。
 
-### 7.2 同一ソースでの比較結果
+### 6.2 同一ソースでの比較結果
 
 | 条件 | 結果 | 判断 |
 |---|---|---|
@@ -132,18 +126,24 @@ verboseの文字列一致で得たworker_unavailable／callback_unavailable／ti
 
 製品60秒、個々のtest timeout、worker startup上限、maxWorkers=3を維持した。外側打切りも150000msのまま。reporterは進捗の観測方法だけの変更で、source／test／configファイルは不変。
 
-### 7.3 退行との区別・未確定事項
+### 6.3 退行との区別・未確定事項
 
 G0試験とharnessはSR-C①前の`fbbd844`と現在でGit blobが同一だった（試験`87f05fc33e417276aac8790cc8bb5d4f8940e51f`、harness`82948a2fd6bc41217c4017803d7daa35cd3ee091`）。単独のG0再現にSR-C①issuerは関与せず、同一HEADの全体も待受可能な条件で成功した。**今回再現した未完了は実行環境の権限制約と既存fixtureのerror処理不足で説明でき、SR-C①の製品／合成契約の退行は観測していない。** 全ての潜在的な退行がないという証明ではない。
 
 §4の過去の150秒打切り時にはOSエラー／環境状態を回収していないため、過去の全実行が今回と同一原因だったとまでは断定しない。§5で挙げた負荷・並行実行の可能性は当時の未確定仮説として残すが、今回の再現を単なる負荷だけで説明しない。
 
-今後の対策候補は、ローカルlisten能力を事前確認し、fixtureのlisten失敗を即時rejectして固定cleanupへ進めること。これは診断性・失敗時の終了を改善する別変更であり、今回実装していない。制限環境でtestをskip／成功へ変えることや、期限を延長する対応は行わない。今回の未完了切分けは完了とし、SR-C後半などの未実装課題は§6のままとする。
+今後の対策候補は、ローカルlisten能力を事前確認し、fixtureのlisten失敗を即時rejectして固定cleanupへ進めること。同じresolveだけを待つlistenは`tests/review/fixtures/oauth-g0-smoke.ts`と`tests/fixtures/http-host-survival.mjs`にも残る（`oauth-g0.test.ts`のport probe、`bp5-oauth-harness.ts`、`r2-runner.cases.ts`はerrorでrejectする）。これは診断性・失敗時の終了を改善する別変更であり、今回実装していない。制限環境でtestをskip／成功へ変えることや、期限を延長する対応は行わない。今回の未完了切分けは完了とし、SR-C後半などの未実装課題は§7のままとする。
 
-### 7.4 証拠と変更範囲
+### 6.4 証拠と変更範囲
 
 最終全体JSON：`/private/tmp/servicenow-src1-full-allowed.json`。SHA-256：`30dde107fd871d7b89a65dfafd8ef8d3afb61556c40bab7d93c46477764d6f5d`。件数はJSONのtestResultsと集計値、時間はstartTime〜最終testResults.endTimeで確認した。raw JSONは一時領域に置き、本リポジトリへ追加しない。
 
 単独比較JSON：`/private/tmp/servicenow-g0-allowed.json`、`/private/tmp/servicenow-g0-restricted-repeat.json`、`/private/tmp/servicenow-target-isolated.json`。制限環境の全体JSON予定先`/private/tmp/servicenow-src1-diagnostic.json`は未完了のため生成されていない。
 
-変更は本検証記録のみ。ソース・試験・設定・CHANGELOG・正式発行口・全体受付は変更していない。正式発行口閉鎖・Unknown・全体受付無効・VM／監視／telemetry調査保留を維持し、実worker／runtimeへの新接続・実機操作・実通信・設定変更・Push・コミットは行っていない。既存合成試験のローカルworker／HTTPの実行を、実PDI接続や正式発行口の開放とは数えない。
+変更は本検証記録のみ。ソース・試験・設定・CHANGELOG・正式発行口・全体受付は変更していない。正式発行口閉鎖・Unknown・全体受付無効・VM／監視／telemetry調査保留を維持し、切分け作業中は実worker／runtimeへの新接続・実機操作・実通信・設定変更・Pushを行わず、ソース・試験・設定の変更をコミットしていない（本記録だけを後からコミットした）。既存合成試験のローカルworker／HTTPの実行を、実PDI接続や正式発行口の開放とは数えない。
+
+## 7 未実施・残課題
+
+終了証拠→必要verify→新世代ready、元選択集合／input receipt／保持Uとの接続はSR-C後半。WJ-Cのfinish／E・候補消費、実cleanup・外側checkpoint連結はSR-D以降。実発行元、全費目上界、本番cap、正式発行・全体受付は未完了。合成の成功を実終了保証や人の承認へ昇格しない。
+
+実worker／runtime接続・実通信・実機操作・トークン発行・設定変更・permit発行・Pushは行っていない。無関係な`.vscode/`／`CLAUDE.md`は変更していない。
