@@ -78,6 +78,8 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 ### Added
 
+- Adds three SC2-A synthetic preparation tests: unknown `collection_status` and `consistency` values are refused, and a generalized unfinished-input set (another retained input besides the active receipt, active receipt not at U) is shown to be accepted. The design now states that the adapter's sequential order (only the active input unfinished, with T_i equal to U; none for phase deadlines) is not guaranteed by the SC2-A/SR-B synthetic contracts.
+
 - The three R2 runner budget tests in `tests/review/r2-runner.cases.ts` (host remaining budget pinning, host-budget waiting timer, default 385-second budget) now race their `onReady` wait against the runner task settling, so a refused local listen (e.g. `listen EPERM` in a restricted sandbox) fails immediately with the runner's actual receipt (such as `callback_unavailable`) instead of waiting for the 30000ms test timeout. Assertions after ready, the existing abort-and-await `finally`, fake timers, product code and test timeouts are unchanged; no tests are skipped (see `docs/E2E_BEST_PRACTICE_WORKER_CLOSURE_SRC1_2026-11-02.md` §7.3).
 
 - Loopback test fixtures (`tests/review/oauth-g0.test.ts` issuer helper, `tests/review/fixtures/oauth-g0-smoke.ts`, `tests/fixtures/http-host-survival.mjs`, and the fixed-port probes/occupiers in `tests/review/r2-runner.cases.ts`) now reject their listen wait on the server `error` event and close the already-created server on failure, so a refused local listen (e.g. `listen EPERM` in a restricted sandbox) fails fast instead of stalling until the Vitest timeout. Test-only; no product code, timeouts or skips changed.

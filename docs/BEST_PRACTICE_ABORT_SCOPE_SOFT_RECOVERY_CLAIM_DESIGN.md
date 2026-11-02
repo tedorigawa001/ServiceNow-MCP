@@ -1,6 +1,6 @@
 # WJ-C残工程：soft回復claim・世代移行の詳細設計
 
-Version: br006-soft-recovery-claim-draft-0.10 / Date: 2026-11-02。
+Version: br006-soft-recovery-claim-draft-0.11 / Date: 2026-11-02。
 Status: **SR-A（§12）、SR-B（§13）、SR-C①（§14）とSC2-Aの証拠移譲・strict準備入力を独立合成issuerで限定実装。実回復route・新世代・実生成元／cleanup接続・SC2-B〜D／SR-Dは未実装。正式発行口閉鎖・Unknown・全体受付無効・VM／監視／telemetry調査保留を維持する。**
 
 基準HEAD: `2804af5`。[親設計](BEST_PRACTICE_ABORT_SCOPE_WORKER_TIME_BINDING_DESIGN.md)§7・13の差分。WJ-Cの通常finish限定実装を変更せず、次の合成実装範囲を定める。実worker／runtime接続、実通信・実機操作、設定変更、本番cap／Permit投入・Pushの承認ではない。
@@ -175,7 +175,7 @@ job・listener・timer・worker／stdioは監督owner、HTTP・認証・予約�
 
 1. **SR-A（合成限定実装）**：内部discriminant・同ownerの観測／回復slotとone-shot検査、soft／hard／cleanup診断分離を独立合成issuerだけで実装した。§12参照。route／世代移行や実cleanup証拠は発行しない。
 2. **SR-B（合成限定実装）**：phase型の同世代維持／未起動分岐、未処理集合・必要verifyのfakeイベント会計を非実行planへ接続した（§13）。実finish権限ではない。
-3. **SR-C（①とSC2-Aのみ合成限定実装）**：worker型の7発生点、旧世代終了／世代なし証拠とone-shot消費を接続した（§14）。[後半の接続契約draft-0.2](BEST_PRACTICE_ABORT_SCOPE_WORKER_RECOVERY_CONTINUATION_DESIGN.md)§10で、未消費証拠のprivate移譲・HeldClosure・strict準備入力と集合／時刻検査をSC2-Aとして限定実装した。必要verify・新世代route・SC2-B〜Dは未接続。正式bindingに関する人の承認は未実施。
+3. **SR-C（①とSC2-Aのみ合成限定実装）**：worker型の7発生点、旧世代終了／世代なし証拠とone-shot消費を接続した（§14）。[後半の接続契約draft-0.3](BEST_PRACTICE_ABORT_SCOPE_WORKER_RECOVERY_CONTINUATION_DESIGN.md)§10で、未消費証拠のprivate移譲・HeldClosure・strict準備入力と集合／時刻検査をSC2-Aとして限定実装した。必要verify・新世代route・SC2-B〜Dは未接続。正式bindingに関する人の承認は未実施。
 4. **SR-D**：通常WJ-CのE／固定集合・候補消費へ接続し、全guardと独立oracleを確認する。実session／監督・外側cleanup接続は行わない。
 
 SC2-B以降の実装は別の依頼後に行う。実生成継続のclass／module配置、private終了証拠の実発行条件、停止後finishとの接続互換性、実cleanup上限・外側checkpoint／診断写像、実選択windowと集合証拠、全費目上界はレビュー待ちで、人の承認済みとはしない。draft-0.1／0.2はコード照合とMD設計のみ。SR-A／B／C①は§12〜14、SC2-Aは後半の接続契約§10へ分離し、実通信・環境設定操作を実施したことにはしない。
@@ -230,6 +230,8 @@ draft-0.3のレビュー修正：seed／factsのidentity参照をobject・非Pro
 prepareのstrictな13列はsource／budget／release／origin／window／verify／accounting／rows／completed／inputs／collection_status／consistency／initial_worker。同source・budget・release・originはpinned参照と一致し、window／verify／receiptは非Proxy参照だけを受ける。これは合成issuerの入力であり、実window／payload受領物の供給証拠ではない。
 
 選択IDは重複なし最大100件。完了結果は選択集合の部分集合として保持し、未完了行は`not_processed: deadline_exceeded`へ確定する。受理済みinputのT_iは完了／未処理を問わず保持し、O≤T_i≤U・単調順と最大T_i=保持U（0 inputならO=U）を要求する。入力receipt／IDの重複、集合外、reviewed／result_omittedのinput欠落は拒否する。metadata段階のsoftではcollection_status／run_statusをfailedとする。開始S・全deadline L・O・Uは再採取／再計算しない。
+
+**一般化と未保証の差**：phase期限はsessionの読取り中に確定し、実adapterではその時点でanalyzeが動いていないため、未完了（retained）のinputは0件のはずである。本合成モデルはWJ-Bの合成ownerがanalyze前に複数のinput receiptを受理できることに合わせて一般化しており、retained inputを受理してnot_processedへ確定する。この「phase型では未完了input 0件」という実adapterの順序は**未保証**であり、SR-Bの合成成功をその証明に数えない。
 
 ### 13.2 必要verifyと費目所有
 
@@ -288,3 +290,5 @@ worker_closure診断は要求数・termination／cleanup・input／id終端区�
 draft-0.7のレビュー修正：`confirmWorkerUnstarted`の同context照合と、`settleWorkerClosure`のevent 3列のstrict検査は、各判定を外す変異でも111件が通っていた。前者を外すと別input／request／supervisorのcontextからno_generation証拠が発行され、§14.2の「同lease・同contextから」に反する。後者を外すと余分な列を含むeventから証拠が発行される。5件の試験を追加し、§14の件数と親設計・検証記録からの版数リンクを更新した。
 
 draft-0.9の変更：§11のSR-Cの項に、後半の接続契約（未消費証拠のprivate移譲・集合／時刻・verify会計・新世代ready／cleanup、最初の実装単位SC2-A）への案内を追加した。設計の案内のみで、SR-A／B／C①の実装・試験・保証範囲は変更していない。
+
+draft-0.11の変更：§13.1に、phase型の準備入力が実adapterの順序（未完了input 0件）より広い一般化であり、その順序が未保証であることを明記した。実装・試験は変更していない。

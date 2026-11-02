@@ -3,7 +3,7 @@
 Date: 2026-11-02 / 基準HEAD: `95121c2`。
 Status: **配布対象外の合成issuer限定。verify・世代移行使用・新世代起動は未接続。**
 
-[接続契約draft-0.2](BEST_PRACTICE_ABORT_SCOPE_WORKER_RECOVERY_CONTINUATION_DESIGN.md)§10を参照。正式発行口閉鎖・Unknown・全体受付無効・VM／監視／telemetry調査保留を維持する。
+[接続契約draft-0.3](BEST_PRACTICE_ABORT_SCOPE_WORKER_RECOVERY_CONTINUATION_DESIGN.md)§10を参照。正式発行口閉鎖・Unknown・全体受付無効・VM／監視／telemetry調査保留を維持する。
 
 ## 1 実装と所有権
 
@@ -61,7 +61,25 @@ pure helperから得た集合の比較は値契約の保証であり、正式な
 
 最終JSON：`/private/tmp/servicenow-sc2a-full-20261102.json`。SHA-256：`7ad7f3409a4767991b39057bb88e7e09e3d0adf03c6199cc7173a7b826528fc4`。件数・時間はJSONの集計とstartTime〜最終testResults.endTimeを使用し、raw JSONはリポジトリへ追加しない。
 
-## 5 未実施と次の境界
+## 5 レビュー修正（2026-11-02）
+
+§2・§4の117件／10,962件は修正前の記録として残す。
+
+**一般化した準備入力の扱い**：レビューで、処理中以外の未完了inputや、T_iがUより小さい処理中receiptも準備入力として受理されることを確認した（`[処理中=O, 別の未完了=U]`も通る。既存の100 input試験も処理中以外の99件を未完了とする）。実adapter（`update-set-adapter.ts`の解析ループ）は行ごとにT_iを採取して直ちに`await cpu().analyze`するため、worker期限の時点で未完了inputは処理中の1件だけで、そのT_iはUに等しい。WJ-Bの合成ownerがanalyze前に複数のinput receiptを受理できることに合わせた一般化として現行のhelperを維持し、その逐次順序は未保証と接続契約§3に明記した。一般化した組合せを受理することを示す試験を1件追加した。同じ一般化はSR-Bのphase型（実adapterでは未完了input 0件）にもあり、soft回復claim設計§13.1に同様に明記した。helper・issuerの実装は変更していない。
+
+**未保護の判定**：`collection_status`と`consistency`のenum検査は、外す変異でも117件が通っていた。不正値を拒否する試験を各1件追加し、各変異で対応する1件だけが失敗し、復元後に`cmp`一致を確認した。
+
+修正後の結果：
+
+| 検証 | 結果 |
+|---|---|
+| SC2-A合成 | 1ファイル／120件成功 |
+| ESLint | `npm run lint`（repo全体）exit 0 |
+| 全体合成 | maxWorkers=3、242ファイル／10,965件成功、失敗0・pending 0、exit 0。JSON内の開始〜最終試験終了は約35.5秒 |
+
+接続契約はdraft-0.3、soft回復claim設計はdraft-0.11へ更新し、親設計・本書からの版数リンクを直した。
+
+## 6 未実施と次の境界
 
 SC2-Bの必要verify・単一fake会計、SC2-Cの世代移行使用／新frame／ready／cleanup、SC2-Dのplan封印、SR-DのWJ-C finish／Eは未実装。元rootのHeldClosureはそのための保持状態に留まり、今回の公開handleから任意の実行へ進めない。
 

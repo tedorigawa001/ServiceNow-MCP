@@ -122,3 +122,11 @@ it.each(['failed','complete'] as const)('keeps original collection status %s wit
 it('retains prior hard and later cleanup diagnostics without restoring a held proof',()=>{
   const f=fixture(),sink=f.owner.cleanupLease(f.b);f.prepare();f.owner.revoke('cancelled');expect(()=>f.owner.recordCleanup(sink,'failed')).toThrow('cancelled');expect(f.owner.inspect()).toMatchObject({worker_preparation:{held:false},diagnostics:{hard:{code:'cancelled'},cleanup:{status:'failed'}}});
 });
+it.each([['collection_status','partial'],['consistency','stable']] as const)('refuses an unknown %s value %s',(key,value)=>{
+  const f=fixture();Object.assign(f.input,{[key]:value});expect(f.prepare).toThrow('internal_review_error');expect(f.owner.inspect()).toMatchObject({state:'failed',worker_preparation:{held:false}});
+});
+// Generalized synthetic contract: other retained inputs and a non-latest active receipt are accepted; the adapter's one-in-flight order is not checked here.
+it('accepts a generalized unfinished set that the sequential adapter would not produce',()=>{
+  const f=fixture();f.input.rows=[id(1),id(2)];f.input.inputs=[{receipt:f.facts.input,update_xml_sys_id:id(1),retrieved_at:O,state:'retained'},{receipt:{},update_xml_sys_id:id(2),retrieved_at:U,state:'retained'}];
+  f.prepare();expect(f.owner.inspect()).toMatchObject({worker_preparation:{retained_inputs:2,not_processed:2}});
+});

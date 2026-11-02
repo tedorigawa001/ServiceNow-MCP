@@ -1,6 +1,6 @@
 # SR-C後半の終了証拠とverifyと新世代readyの接続契約
 
-Version: br006-worker-recovery-continuation-draft-0.2 / Date: 2026-11-02。
+Version: br006-worker-recovery-continuation-draft-0.3 / Date: 2026-11-02。
 Status: **SC2-Aの内部証拠移譲・HeldClosure・strict準備入力を独立合成issuerで限定実装（§10）。SC2-B〜D・正式bindingは未実装で、人の承認未実施。正式発行口閉鎖・Unknown・全体受付無効・VM／監視／telemetry調査保留を維持する。**
 
 基準HEADは`07e7631`。[soft回復claim設計](BEST_PRACTICE_ABORT_SCOPE_SOFT_RECOVERY_CLAIM_DESIGN.md)§6・7・14と[worker時刻設計](BEST_PRACTICE_ABORT_SCOPE_WORKER_TIME_BINDING_DESIGN.md)の差分として、旧世代終了後に同ownerのまま必要verifyと新世代readyへ進む内部境界を定める。既存の非実行consumerを回復権限へ昇格させず、通常WJ-C・runtime／実worker・実sourceを変更しない。
@@ -39,6 +39,7 @@ source／budget／release／originは元rootのpinned参照と同一。window・
 - inputsはreceipt／update_xml_sys_id／retrieved_at／stateのstrictな4列。receiptとIDの重複・集合外を拒否する。処理中inputは旧facts.inputと同じreceiptが一度だけ存在し、未完了であることを要求する。存在しないjobや受領時刻を補わない。
 - 未完了inputと未処理行はnot_processed／deadline_exceededへ一度確定する。処理中inputをcompleted／reviewed／result_omittedへ昇格させず、完了済みtargetへ二重追加しない。
 - 受理済みT_iは未処理となっても保持し、O≤T_i≤U・元の受理順の単調性・最大T_i=Uを検査する。0 inputの値規則はO=Uだが、worker型は処理中inputを必要とするため0 inputからの回復準備は拒否する。
+- **一般化と未保証の差**：実adapter（`update-set-adapter.ts`の解析ループ）は行ごとにT_iを採取して直ちに`await cpu().analyze`するため、worker期限の時点で未完了inputは処理中の1件だけで、そのT_iはUに等しい。本合成契約はWJ-Bの合成ownerがanalyze前に複数のinput receiptを受理できることに合わせて一般化しており、処理中以外の未完了inputや、処理中inputのT_iがUより小さい組合せも受理する。この「未完了は処理中の1件だけ・そのT_i=U」という実adapterの逐次順序は**未保証**であり、SC2-A〜Dの合成成功をその順序の証明に数えない。実供給元との接続時に別途検査を設計する。
 - S／全L／O／U・release contextは同rootのまま。新しいUTC採取、残時間からの全L再計算、Uの切下げ、metadata不完全からcollection completeへの昇格を禁止する。
 
 入力の値検査・immutable copyはSR-Bと共通化できるが、元factsのkind／旧世代の扱いは共有しない。snapshot後のcaller側配列書換えはplanへ影響させず、元runのidentity／factsの変更はguardで停止する。現在のSR-Bの局所fake入力を実選択window／WJ-B receiptの証明へ昇格させない。
@@ -128,3 +129,5 @@ SC2-Aの終了用にdiscardWorkerRecoveryPreparationを追加した。同handle�
 [合成試験](../tests/review/synthetic-worker-recovery-preparation.test.ts)117件。7発生点×prepare／固定discardの4 guardの取消を別の位置式で計数し、成功時の4 guard、移譲0／1、世代使用・verify・新世代がすべて0であることを確認する。元consumerとの排他・公開dataの拒否・他owner不変、入力混入／上限／時刻／不正getter、純粋な集合とreasonの保持を確認した。将来のverify／起動／plan消費はまだ存在せず、summaryの公開やSR-D接続も行わない。
 
 配布物の関数／scope／path混入とI/O／clock／runtime依存を、負の対照付きの梱包監査へ追加する。実装・検証履歴は[SC2-A検証記録](E2E_BEST_PRACTICE_WORKER_RECOVERY_SC2A_2026-11-02.md)参照。実C/G/P writer・予約台帳・実cleanup・work／allocation上界はUnknown。正式発行口閉鎖・全体受付無効・調査保留を維持する。
+
+draft-0.3の変更：§3に、準備入力が実adapterの逐次順序（未完了inputは処理中の1件だけ・そのT_i=U）より広い一般化であること、その順序が未保証であることを明記した。レビューで、処理中以外の未完了inputと非最新の処理中receiptが受理されることを確認したが、WJ-Bの合成ownerに合わせた一般化として維持する判断とした。collection_status／consistencyの不正値拒否の試験も追加した（§10の件数は検証記録参照）。
