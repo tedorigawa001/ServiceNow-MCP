@@ -62,6 +62,8 @@ reviewed出力0件でも親省略により元reviewedがあれば、元body数�
 
 ## 5 accepted投影と小型expectationの供給
 
+[full projection一度限り受領・完成bundle結合の差分設計](BEST_PRACTICE_ABORT_SCOPE_RECOVERY_FULL_PROJECTION_BUNDLE_DESIGN.md)で、D2後の同take／共有consume claim、full受領物・expectation／全manifestの段階型、失効／全破棄を具体化した。設計のみで、完成bundle準備と実commit／seal成功は分離し、固定abortを維持する。
+
 現行のheader consumerは同accepted projectionを保持するprivate slotを消費してheaderだけを渡す。OB-03でfull metadata再照合が必要なら、**新rootの同take・同receipt消費の中**でprivate projection比較と必要値の移譲を完了する固定継続を設計する。headerを受け取った後に二度目のconsumeを追加しない。旧header consumer／旧rootの公開契約は維持する。
 
 同planからの再投影は、同受理済みprojectionとの完全値比較に限って利用できる。placeholder route／新しく作ったaccepted／後から復元したheaderをoriginalの代わりにしない。run／session／source／key／origin／budget／release／window・frame／ready／cleanup・S／O／T_i／U／全deadline、版・target・policy／coverage等の既存検査を維持する。prefix関係値だけではfull header適合を証明しない。
