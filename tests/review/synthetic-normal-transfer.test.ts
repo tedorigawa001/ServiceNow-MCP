@@ -116,3 +116,17 @@ it.each(['pre','post'] as const)('detects swallowed retired-local stop during up
   expect(f.root.upper.inspect().report).toBe(report);expect(f.root.upper.inspect().current).toMatchObject({roles:{new_generation:{cleanup:phase==='pre'?'not_requested':'confirmed',termination:'unknown'}}});
   f.arm(()=>undefined);f.root.finalDiscard(r);if(phase==='pre')f.root.upper.cleanupOwned('confirmed');else expect(()=>f.root.upper.cleanupOwned('confirmed')).toThrow();
 });
+it('poisons a terminal transfer when a guard swallows reentry into a normal operation',()=>{
+  const f=setup();f.adopt();expect(()=>f.root.abortBoundTransfer()).toThrow();
+  f.arm(s=>{if(s==='failure_seal_pre')try{f.root.prepare();}catch{/* deliberately swallowed */}return undefined;});
+  expect(()=>f.root.transferFailure()).toThrow();expect(f.root.custody()).toMatchObject({holder:'local',upper_capsule:false});
+});
+it('fails closed on an unknown guard return at the upper cleanup capsule checkpoint',()=>{
+  const f=setup();f.adopt();expect(()=>f.root.abortBoundTransfer()).toThrow();f.root.finalDiscard(f.root.transferFailure());
+  f.arm(s=>s==='failure_cleanup_pre'?'caller_text':undefined);
+  expect(()=>f.root.upper.cleanupOwned('confirmed')).toThrow();
+  expect((f.root.upper.inspect() as unknown as {current:{roles:{new_generation:{cleanup:string}}}}).current.roles.new_generation.cleanup).toBe('not_requested');
+});
+it('reports extra abortBoundTransfer arguments as binding rather than the fixed abort',()=>{
+  const f=setup();f.adopt();expect(()=>(f.root.abortBoundTransfer as (...x:unknown[])=>void)({})).toThrow();expect(f.root.inspect().first_failure).toBe('binding');
+});

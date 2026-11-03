@@ -46,6 +46,18 @@ Date: 2026-11-03 / 基準HEAD: `4e469d1`。実機E2Eではない。
 
 正式発行口閉鎖・全体受付無効・VM／監視／telemetry保留を維持する。内容比較・移譲先seal成功・正常終端・実cleanup／予算lease・全work／heap上界は未保証。元の210試行・C/G/P・全60秒の上限や旧FB-03の会計modelは変更せず、実接続・実通信・設定変更・Pushは行わない。
 
-## 5 コミット候補だけの再検証
+## 5 レビュー修正（2026-11-03）
+
+修正前の新規32件は記録として残す。本記録は全リポジトリの合成テストを実行していなかったため、レビュー時にrepo全体のlint（error 0・warning 374）、build、梱包分類監査、全体合成275ファイル／13,496件成功・失敗0を確認した。
+
+レビューで30変異を確認し、次の判定は唯一の防御なのに未検証だった。実装は正しく、probeでも現行コードは拒否した。試験だけの不足である。
+
+- terminal操作中の通常操作への再入。`live()`の`if(terminalBusy){terminalPoison=true;…}`が唯一の防御だった。`failure_seal_pre`のguardから`root.prepare()`を呼び例外を握り潰すと、判定を外した変異では再入が検出されずcommitが通り、custodyがupperへ移った。既存の再入試験はterminal操作への再入だけで、別判定が先に止めていた。transferFailureが拒否されlocalのまま残ることを検査する1件を追加した。
+- cleanup capsule経路での未知のguard戻り値。FB-03と同じ型で、`terminalCheckpoint`の未知値判定がこの経路の唯一の防御だった（seal／commitはcustodyの`reject('shape')`が別に拒否）。`failure_cleanup_pre`で未知値を返すと、判定を外した変異ではcleanupが完了し`confirmed`と記録された。拒否されcleanupが`not_requested`のままであることを検査する1件を追加した。
+- `abortBoundTransfer`の余分な引数が固定abortの`state`ではなく`binding`になることを検査する1件を追加した。
+
+上記3変異はそれぞれ追加した試験だけを失敗させた。payload破棄の照合（`assertCleared`／`checkClearedReceipt`／`isCleared`／`payloadPending`。rootの`fail()`が常に`clear()`と`kernel.revoke`を行い構造上成立）、taken値の内部整合（marker／hard／終端結合）と二度目の`checkTaken`、一度限りtakeと重複abort判定・capsuleのholder判定とcapsule有無・abort前のbinding判定（他の判定が先に拒否）は等価変異として扱う。helperは変更せず、新規試験は35件。修正後も全体合成275ファイル／13,499件成功・失敗0。
+
+## 6 コミット候補だけの再検証
 
 対象8ファイルだけをindexへ登録し、`git checkout-index`でHEAD＋その変更の一時コピーを生成した。既存node_modulesを参照し、distはコピー内で新規ビルドした。製品ビルド、合成recovery **40ファイル3,317件**、NB-01〜03とhelperのstrict／noUnused型検査、変更箇所ESLint、offline梱包監査・製品依存限定スモーク（ともに**441 files**）がすべて成功。元作業ツリーの未登録変更には依存せず、期限緩和・実通信・設定変更・Pushは行っていない。
