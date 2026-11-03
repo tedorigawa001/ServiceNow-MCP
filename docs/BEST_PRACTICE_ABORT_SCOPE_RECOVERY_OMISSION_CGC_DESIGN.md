@@ -215,4 +215,4 @@ summaryはstate／first_failure／累積accepted・decided・keep・omit・保�
 
 非reviewed／元worker omitted／retainedと同receiptで混合する供給元、同accepted／plan移譲、OM-B size／finalize、同finish job／E／応答内容gate・候補・正常終端は未接続。NR-Cの親omission拒否を解除せず、実origin発行口閉鎖・全体受付無効・調査保留を維持する。[OM-C検証記録](E2E_BEST_PRACTICE_PARENT_OMISSION_OMC_2026-11-03.md)参照。
 
-[OM-D接続差分draft-0.1](BEST_PRACTICE_ABORT_SCOPE_RECOVERY_MIXED_CONTENT_OMD_DESIGN.md)で、同一の新合成assembly内の混合origin・prefix段階・private移譲・同JSON内容照合を具体化した。OM-B前は新finish省略を拒否する限定的な非実行照合だけを設計し、合法finalize／同finish job／全gateの成立とは区別する。実装はOD-Aから段階化し、本書の未接続状態は変えない。
+[OM-D接続差分](BEST_PRACTICE_ABORT_SCOPE_RECOVERY_MIXED_CONTENT_OMD_DESIGN.md)で、同一の新合成assembly内の混合origin・prefix段階・private移譲・同JSON内容照合を具体化した。OM-B前は新finish省略を拒否する限定的な非実行照合だけを設計し、合法finalize／同finish job／全gateの成立とは区別する。実装はOD-Aから段階化し、本書の未接続状態は変えない。

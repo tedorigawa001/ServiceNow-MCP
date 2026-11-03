@@ -105,7 +105,7 @@ JSONはデータとして扱い、review対象のJavaScriptを実行しない。
 
 上記はOM-A時点の経緯。§12のOM-Cは新constructorのreviewed列だけに、同capture・固定prefix・一度限りの決定と固定discard／同期失効を接続した。初期prefixは合成DATA pinで、実originや混合manifestへの昇格口ではない。非reviewedとの混合・同accepted／plan／finishへの移譲・OM-B finalizeは未接続。
 
-[OM-D接続差分draft-0.1](BEST_PRACTICE_ABORT_SCOPE_RECOVERY_MIXED_CONTENT_OMD_DESIGN.md)で、混合originと同accepted／planの一度限り移譲、同full値からの局所viewと元本文比較を具体化した。OM-B未成立時の親manifest内容照合は非実行の限定結果に留め、新finish省略を拒否する。本文一致を合法finalizeや本節の完全gateへ昇格せず、接続実装・RD-Cの同job originは引き続き未成立とする。
+[OM-D接続差分](BEST_PRACTICE_ABORT_SCOPE_RECOVERY_MIXED_CONTENT_OMD_DESIGN.md)で、混合originと同accepted／planの一度限り移譲、同full値からの局所viewと元本文比較を具体化した。OM-B未成立時の親manifest内容照合は非実行の限定結果に留め、新finish省略を拒否する。本文一致を合法finalizeや本節の完全gateへ昇格せず、接続実装・RD-Cの同job originは引き続き未成立とする。
 
 [OM-Bサイズ計数器契約](BEST_PRACTICE_ABORT_SCOPE_RECOVERY_JSON_SIZE_OMB_DESIGN.md)では、入力全体の有限な受付を先に完了し、その後の計数だけをexact／over_thresholdへ分ける案とした。数値候補・JSON互換・共有予算・停止と固定Eへの境界は設計段階で、実装・全体受付・finish jobを有効にしない。
 
