@@ -73,7 +73,8 @@ try{
     [receive+' acceptedChannel.consumeHeader(b, p.taken);',1],
     [receive+' acceptedChannel.consumeProjection(b, p.taken);',1],
     ['pendingProjection = acceptedChannel.consumeProjection(b, Object.freeze({ ...p.taken }));',0],
-  ]){const r=setup(await load(t=>t.replace(receive,replacement),fullFactory));fullClean(r,'binding',0,0);assert.equal(r.inspect().kernel.accepted_projection.consumptions,kernelCount);}
+  ]){const r=setup(await load(t=>t.replace(receive,replacement),fullFactory));fullClean(r,'binding',0,0);assert.equal(r.inspect().kernel.accepted_projection.consumptions,kernelCount);
+    assert.equal(r.inspect().kernel.accepted_header.consumptions,0,'full mode must never complete a header consume');}
   for(const fault of [
     'pendingProjection = Object.freeze({ ...pendingProjection });',
     'pendingProjection = Object.freeze({ ...pendingProjection, receipt: Object.freeze({}) });',

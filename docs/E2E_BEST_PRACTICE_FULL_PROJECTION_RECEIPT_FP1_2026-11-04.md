@@ -34,7 +34,15 @@ FP-2のexpectation／BundlePartsDraft、FP-3の完成bundle、成功dest・commi
 
 コミット前再検証：対象9ファイルだけをstageし、未stage差分・未追跡ファイルがない状態でビルドと全体合成テストを再実行。JSON結果は281 files／13,710 tests成功、失敗・保留0。対象4ファイルのESLint、ローカルリンク25件、compiled保証を含む配布除外監査（441 files）も成功。初回失敗の記録は上記のまま保持する。
 
-## 4 維持する停止状態と残課題
+## 4 レビュー修正（2026-11-04）
+
+本記録の試験件数は修正前の記録として残す。レビュー時にrepo全体のlint（error 0・warning 374）、build、梱包分類監査（441ファイル、Compiled FP-1を含む）、全体合成281ファイル／13,710件成功・失敗0を確認した。
+
+kernelの13変異を確認し、full受領modeでheader consumerを完了させない判定（`consumeHeader`の`fullProjectionMode`）は外しても既存試験が全て通過した。compiled fixtureのheader→full故障では、判定を外すとheader消費が成功しheader参照を返すが、続くfull受領が共有claimの使用済みで拒否されるため、失敗理由bindingとfull側の消費数0は変わらなかった。header側の完了消費数は0から1へ変わるが、確認していなかった。
+
+compiled fixtureの4故障経路（header→full、full→header、full→full、コピーtaken）でheader側の完了消費数0も確認するよう補強した。上記変異はこの追加確認だけを失敗させた。full受領の`used`判定（二度目はslot空で`!own`が先に拒否）、`checkProjection`のreceipt／accepted／plan／消費数照合とpost時のtaken照合・内部`checkTaken`（内部生成・freeze済み受領物との同一性照合、失効時の受領slot clearで代替）は等価変異として扱う。kernelは変更せず、設計書は実装追記に合わせてdraft-0.2とした。vitest試験数は不変。修正後も全体合成281ファイル／13,710件成功・失敗0。
+
+## 5 維持する停止状態と残課題
 
 正式発行口閉鎖・全体受付無効・Unknown・VM／監視／telemetry調査保留を維持する。実session／実transport接続・ServiceNowへの実通信・実機操作・設定変更・Pushは行っていない。上記npmの取得試行は成功しておらず、最終梱包検証は外部取得禁止で完了した。
 
