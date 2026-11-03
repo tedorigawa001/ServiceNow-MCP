@@ -157,6 +157,6 @@ inspectのruntime_resource_origin／actual_cleanup／attempt_inventory／canonic
 
 ## 10 OB-01とkernelへの接続差分
 
-[接続差分draft-0.1](BEST_PRACTICE_ABORT_SCOPE_RECOVERY_FAILURE_BINDING_DESIGN.md)で、同constructionの先行owner確保、OB-01 first-hardの一度限り通知とfinallyによる本文破棄、4roleの生成点・初期所有証拠・frame／sink対応を具体化した。public issuerを接着する方法や、C/G/P・cleanup文字列からの全終端証拠の生成は採らない。sourceのhard後close・transport全件証拠・独立worker終了証拠の不足はUnknownへ残す。
+[接続差分](BEST_PRACTICE_ABORT_SCOPE_RECOVERY_FAILURE_BINDING_DESIGN.md)で、同constructionの先行owner確保、OB-01 first-hardの一度限り通知とfinallyによる本文破棄、4roleの生成点・初期所有証拠・frame／sink対応を具体化した。public issuerを接着する方法や、C/G/P・cleanup文字列からの全終端証拠の生成は採らない。sourceのhard後close・transport全件証拠・独立worker終了証拠の不足はUnknownへ残す。
 
 FB-01〜03は設計段階であり、§9の独立合成ownerから既存resourceへの連結やOB-02のaccepted採用はまだ実装していない。
