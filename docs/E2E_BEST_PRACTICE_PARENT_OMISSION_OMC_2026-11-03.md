@@ -46,7 +46,18 @@ Date: 2026-11-03 / 基準HEAD: `747084e`。
 - 決定後のsource開始／cleanup開始／discard／stopによる同期失効とcount保持、late cleanup、未開始／別sink／未知status／二重開始・終端を検査した。先行hardを後のbinding失敗で置換しない。
 - initial response_truncatedの有無とerrors=100、prefix／context／guardの後書換え、strict top-level・model／version／context差・非reviewed／不正JSONを検査。getter／Proxy callbackは0回、raw exception／本文／IDをsummaryへ出さないことを確認した。
 
-## 4 費目と残課題
+## 4 レビュー修正（2026-11-03）
+
+§3の59件・13,003件は修正前の記録として残す。レビュー時にrepo全体のlint（error 0・warning 374）、build、梱包、全体合成266ファイル／13,003件成功・失敗0を再確認した。
+
+レビューでownerの25変異を確認し、次の判定は外しても既存59件がすべて通過した。実装は正しく、probeでも現行コードは拒否した。試験だけの不足である。
+
+- accept guard中の`beginSourceClose`／`beginCleanup`再入。既存試験は後続の`decide`失敗後の状態だけを見ていた。busy判定を外すと、pre／post・source／cleanupの4通りすべてでacceptが成功し、失効後なのにcaptureが公開された（state invalidated・retained_captures 1）。`accept`自体が`reentrant`で失敗しcapture 0であることを直接検査する4件を追加した。
+- 初回deliverの余分引数（既存試験は同inputへの2回目で重複claimが先に拒否）、停止なしのdecide余分引数（既存試験はpost期限停止が先に拒否）、未知kind、contextsの昇順判定（外してもdecide時にOM-Aの順序検査が拒否するが構築時拒否は未検証）、`stop`の未知理由を、各々単独で検査する2件を追加した。
+
+上記8変異はそれぞれ追加した試験だけを失敗させた。決定claimの消費・二重判定・ordinal照合（相互に重複）、trace再確認（モデルが決定的）、post後の再照合、`parentInvalidated`判定（失効時にmapを全クリアし`binding`で止まる）、`recordCleanup`・`discardDecision`のbusy判定（sink取得前に失効済み／`discard`自身のbusy判定）は等価変異として扱う。helperは変更せず、新規試験は65件。修正後も全体合成266ファイル／13,009件成功・失敗0。
+
+## 5 費目と残課題
 
 入力／wire／capture／決定／履歴は各100以下だが、k行目のOM-A全履歴再計算はk asset分のcopy／schema／serialize／freezeを行う。最大100行なら5050 asset分のpure計算で、元private本文と一時正規化graphの保持費は別。guard4点／行・Map／handle／prefix／trace・clearも追加費目であり、総work／memoryと同期中断粒度はUnknown。全60秒・210試行・C/G/P／retryを更新していないが、その期限保証を新owner単体で得たとも主張しない。
 

@@ -126,6 +126,8 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 ### Added
 
+- OM-C parent-decision owner tests now check directly that `beginSourceClose`/`beginCleanup` reentry from an accept guard fails `accept` itself with no capture published, and cover first-delivery and decision extra arguments, unknown kind, construction-time context order and unknown stop reasons in isolation. The owner itself is unchanged.
+
 - OM-A parent omission values now accept retained (not_processed) rows only as a contiguous suffix, as the adapter appends them after interrupting its loop; a reviewed row after a retained row was previously modeled. New tests also cover two-rule applicability duplicates and subsets, nested result refinements, consistently reversed selected order and an unknown kind.
 
 - NR-C mixed manifest tests now reject a retrieval failure bound to a completed input that already carries an analysis context, an analysis outcome whose completed input has no expected context, and a shorter supplier expected-evidence list at construction; each check was previously the sole, untested guard. The root and supplier themselves are unchanged.

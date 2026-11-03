@@ -146,3 +146,18 @@ it('supports 100 ordered zero-finding captures with 100 one-shot decisions and r
   const f=setup(Array(100).fill(0));for(let i=0;i<100;i++)f.root.decide(captured(f,i));expect(f.root.summary()).toMatchObject({accepted:100,decided:100,kept_findings:0,kept:100,omitted:0,pending_decisions:100});f.root.discard();expect(f.root.summary().retained_captures).toBe(0);
   const over=fixture(Array(101).fill(0));expect(()=>createSyntheticParentOmissionAssembly(over.config,{guard:()=>undefined})).toThrow('internal_review_error');
 });
+it.each([['source','pre'],['source','post'],['cleanup','pre'],['cleanup','post']] as const)('refuses %s start reentry from the accept %s guard before publishing a capture',(operation,phase)=>{
+  let root:ReturnType<typeof createSyntheticParentOmissionAssembly>;const f=fixture([1]);
+  root=createSyntheticParentOmissionAssembly(f.config,{guard:(p,o)=>{if(o==='accept'&&p===phase)try{if(operation==='source')root.beginSourceClose();else root.beginCleanup();}catch{/* deliberately swallowed */}}});
+  const wire=root.deliver(root.inputs[0],f.responses[0]);let error:unknown;try{root.accept(wire);}catch(e){error=e;}
+  expect(error).toMatchObject({reason:'reentrant'});expect(root.summary()).toMatchObject({state:'failed',accepted:0,retained_captures:0});
+});
+it('refuses extra arguments on a first delivery and on an otherwise valid decision, without a guard stop',()=>{
+  const a=setup();expect(()=>a.root.deliver(a.root.inputs[0],a.responses[0],{})).toThrow('internal_review_error');expect(a.root.summary()).toMatchObject({state:'failed',first_failure:'shape'});
+  const b=setup(),c=captured(b);expect(()=>b.root.decide(c,{})).toThrow('internal_review_error');expect(b.root.summary()).toMatchObject({first_failure:'shape',decided:0,pending_decisions:0});
+});
+it('rejects an unknown kind and reversed contexts at construction, and maps an unknown stop reason to internal',()=>{
+  expect(()=>createSyntheticParentOmissionAssembly({...fixture().config,kind:'synthetic_parent_omission_owner_v2'},{guard:()=>undefined})).toThrow('internal_review_error');
+  const f=fixture([1,1]);f.config.contexts.reverse();expect(()=>createSyntheticParentOmissionAssembly(f.config,{guard:()=>undefined})).toThrow('internal_review_error');
+  const s=setup();expect(()=>s.root.stop('caller_reason' as never)).toThrow('internal_review_error');expect(s.root.summary().first_failure).toBe('internal');
+});
