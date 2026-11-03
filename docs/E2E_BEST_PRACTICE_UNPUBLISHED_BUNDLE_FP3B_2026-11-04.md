@@ -45,7 +45,22 @@ detach失敗はreadyへの遷移を止める。最終clearの失敗は本文破�
 
 コミット前再検証：対象9ファイルだけをstageし、未stage差分・未追跡ファイルがない状態でビルドと全体合成テストを再実行。284 files／13,740 tests成功、失敗・保留0。対象4ファイルのESLint、リンク30件、外部取得禁止の梱包試験と最新compiled保証を含む配布除外監査（各441 files）も成功。初回の期待値・等価変異・位置指定の失敗記録は上記のまま保持する。
 
-## 5 維持する閉鎖状態と残課題
+## 5 レビュー修正（2026-11-04）
+
+本記録の故障件数は修正前の記録として残す。レビュー時にrepo全体のlint（error 0・warning 374）、build、梱包分類監査（441ファイル、Compiled FP3-Bを含む）、全体合成284ファイル／13,740件成功・失敗0を確認した。
+
+kernelの約60変異を確認し、次の条件は外しても既存試験が全て通過した。実装は正しく、試験だけの不足である。
+
+- builder入口のone-shot条件（`used`、状態、受理数、4 slotの空判定）。既存の逆順・二重呼出しは`!postAcceptedProofPair`が先に拒否しており、ガード全体を外したときだけ検出されていた。
+- builderの確保前照合（`checkProofBindings`と`checkBundleComposition`）。§1の「先に検査して確保する」を区別する故障がなかった。
+- 生成中／prepared段階の状態ガード。既存の状態故障はready段階に集中していた。
+- FP3-Aから移動した`proofIssueStarts!==1`。
+
+[compiled fixture](../tests/review/fixtures/compiled-destination-preparation.mjs)に18故障を追加した。builder呼出し直前に各条件を崩す11件（生成数0で停止することを確認）、生成中／prepared段階の状態を崩す各3件、FP3-A側の`proofIssueStarts`の1件である。各条件を一つずつ外す18変異は、それぞれ対応する故障で初めて失敗した。
+
+bundleのowner／budget／budgetSerial／invalidationSerialの二重照合の片方（残る片方と全構成照合から導出でき、両方を外す4変異は検出される）、`value.pending`／`value.received`（`checkBoundBundleComposition`の引数として同じ照合を通る）、`buildingBundle.parts`／`proofs`のlive slot照合と`pair.pending`／`pair.received`のlive slot照合（`checkProofBindings`と全構成照合、origin台帳から導出）、`!bundleBuildStarted`（builder先頭で必ず設定）、detachの`pendingHeader`／`channel.birth`／`channel.take`／`lease`／`evidence`／`ready`（この時点で既に空）は等価変異として扱う。kernelは変更せず、設計書をdraft-0.5とした。vitest試験数は不変。修正後も全体合成284ファイル／13,740件成功・失敗0。
+
+## 6 維持する閉鎖状態と残課題
 
 正式発行口閉鎖・全体受付無効・Unknown・VM／監視／telemetry調査保留を維持する。seal成功・実session／worker／runtime接続・実通信・実機操作・設定変更・Pushは行っていない。
 

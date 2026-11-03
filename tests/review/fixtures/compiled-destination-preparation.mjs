@@ -255,6 +255,7 @@ try{
     ['unpublishedDestination = Object.freeze({});',1,1,0],
     ['destinationPreparations++;',1,1,0],
   ]){proofClean(setup(await load(t=>t.replace(pairSite,fault+' '+pairSite),proofFactory)),'binding',content,prefix,pairs,1,0);proofFaults++;}
+  proofClean(setup(await load(t=>t.replace(pairSite,'proofIssueStarts++; '+pairSite),proofFactory)),'binding',1,1,0,2,0);proofFaults++;
   // Issuer pre-check: drift or an already-present proof must stop BEFORE any evidence is issued.
   const issuerRecheck='acceptedChannel.checkProjection(b, pendingProjection);\n        fullPostChecks++;';assert.equal(text.split(issuerRecheck).length,2,'FP3-A issuer recheck site must be unique');
   for(const [fault,content,prefix] of [
@@ -329,6 +330,30 @@ try{
   bundleClean(setup(await load(t=>t.replace(readySite,alteredExpectation+readySite),bundleFactory)),'binding',1,0,2);bundleFaults++;
   const alteredBody='const bp = unpublishedCompleteBundle.parts, d = bp.content.draft, nd = Object.freeze({ ...d, value: Object.freeze({ ...d.value, manifest: Object.freeze({ ...d.value.manifest, assets: d.value.manifest.assets.map((a,n) => n === 0 ? { ...a, result: { ...a.result, findings: a.result.findings.map((f,i) => i === 0 ? { ...f, recommendation: "wrong" } : f) } } : a) }) }) }), cc = Object.freeze({ ...bp.content, draft: nd }), np = Object.freeze({ ...bp, content: cc }), cp = Object.freeze({ ...unpublishedCompleteBundle.proofs.content, candidate: cc }), pp = Object.freeze({ ...unpublishedCompleteBundle.proofs, parts: np, content: cp }); proofOrigins = Object.freeze({ parts: np, content: cp, prefix: pp.prefix, pair: pp }); unpublishedCompleteBundle = Object.freeze({ ...unpublishedCompleteBundle, parts: np, proofs: pp, content: nd }); bundleOrigin = Object.freeze({ value: unpublishedCompleteBundle, parts: np, proofs: pp }); ';
   bundleClean(setup(await load(t=>t.replace(readySite,alteredBody+readySite),bundleFactory),undefined,bundlePartsInput(true)),'binding',1,0,2);bundleFaults++;
+  // Builder entry: each one-shot term and pre-allocation check must stop before any bundle allocation.
+  for(const [fault,reason] of [
+    ['bundleBuildStarted = true;','state'],
+    ['proofIssueState = "unused";','state'],
+    ['proofPairAccepts = 0;','state'],
+    ['postAcceptedProofPair = undefined;','state'],
+    ['bundleParts = undefined;','state'],
+    ['buildingBundle = Object.freeze({});','state'],
+    ['unpublishedCompleteBundle = Object.freeze({});','state'],
+    ['bundleMarker = Object.freeze({});','state'],
+    ['bundleOrigin = Object.freeze({});','state'],
+    ['proofOrigins = Object.freeze({ ...proofOrigins, content: Object.freeze({ ...proofOrigins.content }) });','binding'],
+    ['pendingExpectation = Object.freeze({ ...pendingExpectation });','binding'],
+  ]){bundleClean(setup(await load(t=>t.replace(bundleSite,fault+' '+bundleSite),bundleFactory)),reason,0,0,0);bundleFaults++;}
+  // Building and prepared stages each own their state guards; the later ready check must not be what rejects these.
+  const preparedSite='checkPreparedBundle();';assert.equal(text.split(preparedSite).length,2);
+  for(const [site,fault,readies,checks] of [
+    [buildingSite,'proofIssueState = "ready";',0,0],
+    [buildingSite,'unpublishedCompleteBundle = buildingBundle;',0,0],
+    [buildingSite,'bundleReadies++;',1,0],
+    [preparedSite,'proofIssueState = "ready";',0,1],
+    [preparedSite,'buildingBundle = unpublishedCompleteBundle;',0,1],
+    [preparedSite,'bundleReadies++;',1,1],
+  ]){bundleClean(setup(await load(t=>t.replace(site,fault+' '+site),bundleFactory)),'binding',1,readies,checks);bundleFaults++;}
   const bundleCross=await load(t=>'let temporaryForeignBundle;\n'+t.replace(readySite,'if (!temporaryForeignBundle) temporaryForeignBundle = unpublishedCompleteBundle; else unpublishedCompleteBundle = temporaryForeignBundle; '+readySite),bundleFactory);
   bundleClean(setup(bundleCross),'state',1,1,3);bundleClean(setup(bundleCross),'binding',1,0,2);
   // Throw at each allocation/move boundary: the original proof pair is never reissued and all partial payload clears.

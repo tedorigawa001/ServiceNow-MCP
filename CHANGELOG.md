@@ -166,6 +166,8 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 ### Added
 
+- The OB-03 FP3-B compiled fixture adds 17 faults: each builder entry one-shot term and pre-allocation check must stop with no bundle allocated, and building and prepared stages each reject their own state drift. An FP3-A issue-start fault covers the moved start check. Each of these checks was previously unobserved. The kernel itself is unchanged.
+
 - The OB-03 FP3-A compiled fixture adds 16 faults: origin-ledger-only drift, post-issuance counter and D2-slot drift, and pre-issuance drift or injected proofs that must stop with no further evidence issued. Each of these checks was previously unobserved. Synthetic tests also pin a provisional work failure and post-stop priority on the FP3-A root. The kernel itself is unchanged.
 
 - The OB-03 FP-2 compiled fixture adds 20 faults: prefix-lane rewrites that keep the candidate, values and parts consistent; expectation run status, consistency, kind, frame supervisor/worker and appended input/outcome rows; same-shape copies of reviewed outcome receipts and accepted outcomes; a diverging same-plan reprojection; and draft version, ruleset, selected and initial-prefix changes. Each of these post-guard checks was previously unobserved because existing faults were rejected earlier by identity or shape. The kernel itself is unchanged.
