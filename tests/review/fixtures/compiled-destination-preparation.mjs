@@ -282,4 +282,97 @@ try{
     const r=setup(await load(withoutClear(slot),proofFactory));assert.throws(()=>r.issuePostProofs());assert.throws(()=>r.transferFailure(),undefined,slot);assert.equal(r.custody().payload_cleared,false);
   }
   console.log(`Compiled FP3-A: post-only/one-shot issuer, ${proofFaults} binding faults, foreign pair, 4 partial-allocation faults, revoke and 6 retained-slot controls PASS (no complete bundle/seal)`);
+  const bundleFactory='createSyntheticUnpublishedBundleRoot',bundleSite='buildUnpublishedBundle();',buildingSite='checkBuildingBundle();',readySite='checkReadyBundle();';
+  for(const site of [bundleSite,buildingSite,readySite])assert.equal(text.split(site).length,2,'FP3-B fixed site must be unique');
+  function bundleClean(r,reason='binding',builds=1,readies=0,checks=0){
+    assert.throws(()=>r.prepareUnpublishedBundle());const s=r.inspect();assert.equal(s.first_failure,reason);
+    assert.deepEqual(s.unpublished_bundle,{started:true,builds,readies,checks,building_pending:false,pending:false,marker_pending:false,origin_pending:false,published:0,seals:0,consumptions:0});
+    for(const key of ['pending','expectation_pending','content_pending','prefix_pending','owner_pending'])assert.equal(s.bundle_parts[key],false);
+    assert.equal(s.post_proofs.state,'failed');assert.equal(s.post_proofs.completed_bundles,readies);assert.equal(s.transfer.successful_seals,0);
+    r.finalDiscard(r.transferFailure());assert.equal(r.custody().payload_cleared,true);assert.throws(()=>r.prepareUnpublishedBundle());
+  }
+  bundleClean(setup(await load(undefined,bundleFactory),undefined,bundlePartsInput(true)),'state',1,1,3);
+  // One-shot builder: pre-issuance or a second private build cannot rearm the claim or duplicate ready authority.
+  bundleClean(setup(await load(t=>t.replace(buildSite,buildSite+' '+bundleSite),bundleFactory)),'state',0,0,0);
+  bundleClean(setup(await load(t=>t.replace(bundleSite,bundleSite+' '+bundleSite),bundleFactory)),'state',1,1,3);
+  let bundleFaults=0;
+  for(const fault of [
+    'bundleOrigin = undefined;',
+    'bundleMarker = undefined;',
+    'buildingBundle = undefined;',
+    'bundleOrigin = Object.freeze({ ...bundleOrigin, value: Object.freeze({ ...bundleOrigin.value }) });',
+    'bundleOrigin = Object.freeze({ ...bundleOrigin, parts: Object.freeze({ ...bundleOrigin.parts }) });',
+    'bundleOrigin = Object.freeze({ ...bundleOrigin, proofs: Object.freeze({ ...bundleOrigin.proofs }) });',
+    'bundleBuilds++;',
+    'proofPairChecks++;',
+    'proofPairAccepts++;',
+    'invalidations++;',
+  ]){bundleClean(setup(await load(t=>t.replace(buildingSite,fault+' '+buildingSite),bundleFactory)),'binding',fault==='bundleBuilds++;'?2:1);bundleFaults++;}
+  // Rewrite both the object and its identity slot to reach each component binding, not just object-copy refusal.
+  for(const patch of [
+    'token: Object.freeze({ ...token })','marker: Object.freeze({ ...bundleMarker })','owner: Object.freeze({ ...destinationOwner })',
+    'parts: Object.freeze({ ...buildingBundle.parts })','proofs: Object.freeze({ ...buildingBundle.proofs })',
+    'pending: Object.freeze({ ...buildingBundle.pending })','received: Object.freeze({ ...buildingBundle.received })',
+    'expectation: Object.freeze({ ...buildingBundle.expectation })','content: Object.freeze({ ...buildingBundle.content })',
+    'rows: [...buildingBundle.rows]','model: Object.freeze({ ...buildingBundle.model })','prefixValues: Object.freeze({ ...buildingBundle.prefixValues })',
+    'budget: Object.freeze({ ...buildingBundle.budget })','budgetSerial: 2','invalidationSerial: invalidations + 1',
+  ]){
+    const fault=`buildingBundle = Object.freeze({ ...buildingBundle, ${patch} }); bundleOrigin = Object.freeze({ ...bundleOrigin, value: buildingBundle }); `;
+    bundleClean(setup(await load(t=>t.replace(buildingSite,fault+buildingSite),bundleFactory)));bundleFaults++;
+  }
+  // A ready bundle must be checked using its same parts, with all standalone source-use slots already removed.
+  for(const fault of ['unpublishedCompleteBundle = undefined;','unpublishedCompleteBundle = Object.freeze({ ...unpublishedCompleteBundle });','proofIssueState = "issuing";','proofPostPassed = false;','bundleReadies++;']){
+    const r=setup(await load(t=>t.replace(readySite,fault+' '+readySite),bundleFactory));
+    bundleClean(r,'binding',1,fault==='bundleReadies++;'?1:0,2);bundleFaults++;
+  }
+  const alteredExpectation='const bp = unpublishedCompleteBundle.parts, ex = Object.freeze({ ...bp.expectation, value: Object.freeze({ ...bp.expectation.value, consistency: "changed" }) }), np = Object.freeze({ ...bp, expectation: ex }), pp = Object.freeze({ ...unpublishedCompleteBundle.proofs, parts: np }); proofOrigins = Object.freeze({ ...proofOrigins, parts: np, pair: pp }); unpublishedCompleteBundle = Object.freeze({ ...unpublishedCompleteBundle, parts: np, proofs: pp, expectation: ex }); bundleOrigin = Object.freeze({ value: unpublishedCompleteBundle, parts: np, proofs: pp }); ';
+  bundleClean(setup(await load(t=>t.replace(readySite,alteredExpectation+readySite),bundleFactory)),'binding',1,0,2);bundleFaults++;
+  const alteredBody='const bp = unpublishedCompleteBundle.parts, d = bp.content.draft, nd = Object.freeze({ ...d, value: Object.freeze({ ...d.value, manifest: Object.freeze({ ...d.value.manifest, assets: d.value.manifest.assets.map((a,n) => n === 0 ? { ...a, result: { ...a.result, findings: a.result.findings.map((f,i) => i === 0 ? { ...f, recommendation: "wrong" } : f) } } : a) }) }) }), cc = Object.freeze({ ...bp.content, draft: nd }), np = Object.freeze({ ...bp, content: cc }), cp = Object.freeze({ ...unpublishedCompleteBundle.proofs.content, candidate: cc }), pp = Object.freeze({ ...unpublishedCompleteBundle.proofs, parts: np, content: cp }); proofOrigins = Object.freeze({ parts: np, content: cp, prefix: pp.prefix, pair: pp }); unpublishedCompleteBundle = Object.freeze({ ...unpublishedCompleteBundle, parts: np, proofs: pp, content: nd }); bundleOrigin = Object.freeze({ value: unpublishedCompleteBundle, parts: np, proofs: pp }); ';
+  bundleClean(setup(await load(t=>t.replace(readySite,alteredBody+readySite),bundleFactory),undefined,bundlePartsInput(true)),'binding',1,0,2);bundleFaults++;
+  const bundleCross=await load(t=>'let temporaryForeignBundle;\n'+t.replace(readySite,'if (!temporaryForeignBundle) temporaryForeignBundle = unpublishedCompleteBundle; else unpublishedCompleteBundle = temporaryForeignBundle; '+readySite),bundleFactory);
+  bundleClean(setup(bundleCross),'state',1,1,3);bundleClean(setup(bundleCross),'binding',1,0,2);
+  // Throw at each allocation/move boundary: the original proof pair is never reissued and all partial payload clears.
+  for(const [site,builds,checks] of [
+    ['buildingBundle = Object.freeze(',0,0],
+    ['bundleOrigin = Object.freeze({ value: buildingBundle, parts: bundleParts, proofs: postAcceptedProofPair });',1,0],
+    ['unpublishedCompleteBundle = buildingBundle;',1,1],
+    ['detachBundleSources();',1,1],
+    ['checkPreparedBundle();',1,1],
+  ]){assert.equal(text.split(site).length,2);bundleClean(setup(await load(t=>t.replace(site,'throw Error("PRIVATE_BUNDLE_FAILURE"); '+site),bundleFactory)),'internal',builds,0,checks);}
+  bundleClean(setup(await load(t=>t.replace(readySite,'acceptedChannel.invalidatePayload(); '+readySite),bundleFactory)),'internal',1,0,2);
+  // Detach is distinct from final clear: retaining a live source alias must prevent readiness, even if abort later clears it.
+  const detachStart=text.indexOf('function detachBundleSources() {'),detachEnd=text.indexOf('\n    function checkPreparedBundle()',detachStart);assert(detachStart>=0&&detachEnd>detachStart);
+  // preparationInput was already consumed at prepareGeneration, so omitting its later detach is equivalent here.
+  for(const slot of ['bundleParts','postAcceptedProofPair','pendingExpectation','pendingProjection','pendingContent','pendingPrefix','contentChecked','prefixRelation','prefixRelationMarker','pendingTransfer','initial','preparation']){
+    const change=t=>{const body=t.slice(detachStart,detachEnd),line=slot==='preparation'?'lease = evidence = preparation = ready = undefined;':`${slot} = undefined;`;assert.equal(body.split(line).length,2);return t.slice(0,detachStart)+body.replace(line,slot==='preparation'?'lease = evidence = ready = undefined;':`/* retained source ${slot} */`)+t.slice(detachEnd);};
+    bundleClean(setup(await load(change,bundleFactory)),'binding',1,0,1);
+  }
+  for(const [slot,early] of [['buildingBundle',true],['unpublishedCompleteBundle',false],['bundleMarker',false],['bundleOrigin',false],['proofOrigins',false],['proofIssueMarkers',false]]){
+    const change=t=>{const leaked=withoutClear(slot)(t);return early?leaked.replace(buildingSite,'throw Error("PRIVATE_BUILD_FAILURE"); '+buildingSite):leaked;};
+    const r=setup(await load(change,bundleFactory));assert.throws(()=>r.prepareUnpublishedBundle());assert.throws(()=>r.transferFailure(),undefined,slot);assert.equal(r.custody().payload_cleared,false);
+  }
+  // Mutation controls: these specific new checks must be necessary for their already-tested rejection path.
+  function withoutBundleComparison(t,field){
+    const file=ts.createSourceFile('temporary-bundle.js',t,ts.ScriptTarget.ES2022,true,ts.ScriptKind.JS),found=[];
+    const left=`value.${field}`,right=`value.parts.${field==='content'?'content.draft':field}`;
+    function walk(n){if(ts.isBinaryExpression(n)&&n.operatorToken.kind===ts.SyntaxKind.ExclamationEqualsEqualsToken&&n.left.getText(file)===left&&n.right.getText(file)===right)found.push(n);ts.forEachChild(n,walk);}
+    walk(file);assert.equal(found.length,1,`one semantic ${field} comparison required`);const n=found[0];return t.slice(0,n.getStart(file))+'false'+t.slice(n.end);
+  }
+  for(const field of ['expectation','content','rows']){
+    const patch=field==='rows'?'rows: [...buildingBundle.rows]':`${field}: Object.freeze({ ...buildingBundle.${field} })`;
+    const fault=`buildingBundle = Object.freeze({ ...buildingBundle, ${patch} }); bundleOrigin = Object.freeze({ ...bundleOrigin, value: buildingBundle }); `;
+    const create=await load(t=>withoutBundleComparison(t,field).replace(buildingSite,fault+buildingSite),bundleFactory),r=setup(create);
+    assert.throws(()=>bundleClean(r),assert.AssertionError,`removed ${field} check escaped its fault oracle`);
+  }
+  const withoutExpectationDetach=t=>{
+    const body=t.slice(detachStart,detachEnd),changed=t.slice(0,detachStart)+body.replace('pendingExpectation = undefined;','/* retained expectation source */')+t.slice(detachEnd);
+    const head='function bundleSourcesDetached() {',start=changed.indexOf(head),end=changed.indexOf('\n',start),line=changed.slice(start,end);assert.equal(line.split('!pendingExpectation && ').length,2);
+    return changed.slice(0,start)+line.replace('!pendingExpectation && ','')+changed.slice(end);
+  };
+  const setupDetached=setup(await load(withoutExpectationDetach,bundleFactory));
+  assert.throws(()=>bundleClean(setupDetached),assert.AssertionError);
+  const readyGuard="proofIssueState !== 'ready' || !unpublishedCompleteBundle || buildingBundle || bundleReadies || ";assert.equal(text.split(readyGuard).length,2);
+  const noReadyCounter=await load(t=>t.replace(readyGuard,"proofIssueState !== 'ready' || !unpublishedCompleteBundle || buildingBundle || ").replace(readySite,'bundleReadies++; '+readySite),bundleFactory);
+  assert.throws(()=>bundleClean(setup(noReadyCounter),'binding',1,1,2),assert.AssertionError);
+  console.log(`Compiled FP3-B: ${bundleFaults} bundle/component/ready faults, foreign bundle, 5 partial-build faults, 12 detach, 6 clear and 5 mutation controls PASS (private ready only; no seal/consumer)`);
 }finally{globalThis.fetch=originalFetch;rmSync(out,{recursive:true,force:true});}

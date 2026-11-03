@@ -62,7 +62,7 @@ reviewed出力0件でも親省略により元reviewedがあれば、元body数�
 
 ## 5 accepted投影と小型expectationの供給
 
-[full projection一度限り受領・完成bundle結合の差分設計](BEST_PRACTICE_ABORT_SCOPE_RECOVERY_FULL_PROJECTION_BUNDLE_DESIGN.md)で、D2後の同take／共有consume claim、full受領物・expectation／全manifestの段階型、失効／全破棄を具体化した。FP-1のprivate full受領・失効／破棄（[検証記録](E2E_BEST_PRACTICE_FULL_PROJECTION_RECEIPT_FP1_2026-11-04.md)）と、FP-2の同snapshot expectation・BundlePartsDraft／全構成照合（[検証記録](E2E_BEST_PRACTICE_BUNDLE_PARTS_FP2_2026-11-04.md)）を合成内実装済み。完成bundle・実commit／seal成功は未実装で、固定abortを維持する。
+[full projection一度限り受領・完成bundle結合の差分設計](BEST_PRACTICE_ABORT_SCOPE_RECOVERY_FULL_PROJECTION_BUNDLE_DESIGN.md)で、D2後の同take／共有consume claim、full受領物・expectation／全manifestの段階型、失効／全破棄を具体化した。FP-1のprivate full受領・失効／破棄（[検証記録](E2E_BEST_PRACTICE_FULL_PROJECTION_RECEIPT_FP1_2026-11-04.md)）と、FP-2の同snapshot expectation・BundlePartsDraft／全構成照合（[検証記録](E2E_BEST_PRACTICE_BUNDLE_PARTS_FP2_2026-11-04.md)）を合成内実装済み。FP3-Bでは未公開完成bundleの合成内組立まで接続したが、実commit／seal成功は未実装で固定abortを維持する。
 
 現行のheader consumerは同accepted projectionを保持するprivate slotを消費してheaderだけを渡す。OB-03でfull metadata再照合が必要なら、**新rootの同take・同receipt消費の中**でprivate projection比較と必要値の移譲を完了する固定継続を設計する。headerを受け取った後に二度目のconsumeを追加しない。旧header consumer／旧rootの公開契約は維持する。
 
@@ -72,7 +72,7 @@ reviewed出力0件でも親省略により元reviewedがあれば、元body数�
 
 ## 6 一度限りの移譲とatomic commit
 
-[FP-3内部契約](BEST_PRACTICE_ABORT_SCOPE_RECOVERY_FP3_POST_ACCEPT_BUNDLE_DESIGN.md)は、この前段のpost-only証拠受理・未公開bundle・一度限りの固定消費を具体化する。FP3-Aのpost-only issuer・private proof pairだけ合成内実装済み（[検証記録](E2E_BEST_PRACTICE_POST_PROOF_FP3A_2026-11-04.md)）。未公開完成bundle・固定consumerは未実装で、固定abortまでの合成検証と、以下の成功destへのatomic commitを分離する。
+[FP-3内部契約](BEST_PRACTICE_ABORT_SCOPE_RECOVERY_FP3_POST_ACCEPT_BUNDLE_DESIGN.md)は、この前段のpost-only証拠受理・未公開bundle・一度限りの固定消費を具体化する。FP3-Aのpost-only issuer・private proof pair（[検証記録](E2E_BEST_PRACTICE_POST_PROOF_FP3A_2026-11-04.md)）とFP3-Bの未公開完成bundle結合・途中失敗clear（[検証記録](E2E_BEST_PRACTICE_UNPUBLISHED_BUNDLE_FP3B_2026-11-04.md)）を合成内実装済み。固定consumerは未実装で、固定abortまでの合成検証と、以下の成功destへのatomic commitを分離する。
 
 新rootの固定操作案`sealBoundMixedExpectation()`は外部accepted／manifest／destを引数に取らない。処理順は以下に固定するが、今回実装・seal成功は有効化しない。
 

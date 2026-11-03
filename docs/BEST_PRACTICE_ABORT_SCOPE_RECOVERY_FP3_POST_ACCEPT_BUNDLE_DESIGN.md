@@ -1,9 +1,11 @@
 # FP-3 post後受理と未公開完成bundleの内部契約
 
-Version: br006-recovery-fp3-post-accept-bundle-draft-0.3 / Date: 2026-11-04。
-設計初稿の基準HEAD: `8369094`。Status: **FP3-Aだけ合成内実装済み。FP3-B／Cは設計段階。正式発行口閉鎖・全体受付無効・Unknown・VM／監視／telemetry調査保留を維持する。完成bundle生成・seal成功・実接続・実通信・設定変更・Pushは行わない。**
+Version: br006-recovery-fp3-post-accept-bundle-draft-0.4 / Date: 2026-11-04。
+設計初稿の基準HEAD: `8369094`。Status: **FP3-A／Bは合成内実装済み。FP3-Cは設計段階。未公開完成bundleの合成内生成と固定abortだけを許し、正式発行口閉鎖・全体受付無効・Unknown・VM／監視／telemetry調査保留を維持する。seal成功・実接続・実通信・設定変更・Pushは行わない。**
 
 FP3-A追記：[検証記録](E2E_BEST_PRACTICE_POST_PROOF_FP3A_2026-11-04.md)に、root側発行状態・post-only issuer・同partsのprivate proof pair、混入拒否・途中失敗clearを記録する。pair受理後も固定abortし、以下のready／consuming／retiredや未公開完成bundleには進まない。
+
+FP3-B追記：[検証記録](E2E_BEST_PRACTICE_UNPUBLISHED_BUNDLE_FP3B_2026-11-04.md)に、別のfresh合成継続で同parts／proof pairを未公開完成bundleへ結合し、生成中slotから唯一のready slotへ移して固定abortする範囲を記録する。元のFP3-A入口はpair-onlyのまま。readyは内部状態であり、consumer・利用可能dest・seal成功はない。
 
 draft-0.2のレビュー修正：FP3-Aのorigin台帳のparts／content／prefix照合、issuer内の発行前照合、証拠0条件、発行後のカウンタ／D2 slot条件は、外しても全試験が通過していた。compiled fixtureに、台帳だけのずれ、発行前の不整合と証拠混入（証拠数0のまま停止）、発行後のカウンタ／slotのずれを追加し、合成試験にwork失敗の暫定保持とpost停止優先を追加した。kernelの挙動は変更していない。
 
@@ -19,7 +21,7 @@ FP3-AはcheckBundlePartsの証拠0条件を保ち、共通の値・identity検�
 
 ## 2 内部保持物と発行元
 
-PostAcceptedProofPairと発行中slotはFP3-Aで合成内実装済み。未公開完成bundle／消費中slotは未実装。BundlePartsDraftはFP-2の既存型を供給元とする。全slot・利用状態・失敗診断の所有者は、DATA検査前の同constructionで確保する。値を移動するだけで自動的に失われるboolを、再利用防止の唯一の根拠にしない。
+PostAcceptedProofPairと発行中slotはFP3-A、UnpublishedCompleteBundleと生成中／ready slotはFP3-Bで合成内実装済み。消費中slotは未実装。BundlePartsDraftはFP-2の既存型を供給元とする。全slot・利用状態・失敗診断の所有者は、DATA検査前の同constructionで確保する。値を移動するだけで自動的に失われるboolを、再利用防止の唯一の根拠にしない。
 
 | 内部保持物 | 発行元と結合 | 利用権限 |
 | --- | --- | --- |
@@ -39,6 +41,8 @@ bundleは同じ元partsを保持してよい。候補への参照が残ること
 
 FP3-Aで使用する状態はunused／issuing／failedだけ。proof pairの受理数は最大1として残すが、完成bundleがないためreadyには遷移せず、固定abortでfailedへ進む。停止・失効時のclearでも状態をunusedへ戻さない。
 
+FP3-Bはroot側build claimを先行消費し、issuing中に同parts・proof pair、bundle marker／origin、全明示構成を照合する。元利用slotのdetachと再照合後にprivate readyへ進み、初回ready検査を通った場合だけ局所readies数を1にする。直後は固定abortでfailedとなる。初回ready検査はFP3-Cのconsumerではなく、後続の消費権限を発行しない。
+
 | 状態 | 固定遷移と条件 |
 | --- | --- |
 | unused | work中はこの状態のまま。post guard後にissuerへ入り、検査・確保より先にissuingへ移る |
@@ -51,6 +55,8 @@ FP3-Aで使用する状態はunused／issuing／failedだけ。proof pairの受�
 post前に停止した場合は発行数0で終える。発行状態がunusedでも、外側transfer claimは消費済みなので再開できない。readyのbundle objectや証拠があっても、同rootの状態・元slotとの対応がなければ固定consumerは拒否する。
 
 ## 4 post後の発行順序
+
+手順1〜5はFP3-Bの合成内に接続済み。手順6の固定consumerは未実装のため、現在はready確認後に固定abortする。元parts／proof pairの照合台帳はprivate借用として保持し、利用slotを再arm／復元しない。
 
 1. 既存のpre／workで同take・同full受領物からpartsを作る。work不適合は暫定保持し、post guardの取消・期限・先行hardを優先する。
 2. post guard通過後、issuerのroot状態をissuingへ先行消費する。元partsが一つ存在すること、同pending／owner／receipt、開始UTC・全deadline、budget／失効serial、source／ready／cleanupのlive条件を再検査する。証拠はまだ0のままとする。
@@ -109,6 +115,6 @@ post停止はwork不適合より優先する。発行／消費のguardが返す�
 
 ## 10 次の実装分割
 
-FP3-A（合成内実装済み）はroot側発行状態・post-only issuerとprivate proof pair、FP3-B（未実装）は同partsとの未公開bundle結合・生成途中失敗clear、FP3-C（未実装）はroot側one-shot固定consumerと失効／全破棄・compiled対照へ分ける。各段階は合成内・固定abortまでとし、単独でも旧入口を変更しない。
+FP3-A（合成内実装済み）はroot側発行状態・post-only issuerとprivate proof pair、FP3-B（合成内実装済み）は同partsとの未公開bundle結合・生成途中失敗clear、FP3-C（未実装）はroot側one-shot固定consumerと失効／全破棄・compiled対照へ分ける。各段階は合成内・固定abortまでとし、単独でも旧入口を変更しない。
 
 実atomic commit・利用可能dest／seal成功と正常terminal-only接続は、[OB-03親設計](BEST_PRACTICE_ABORT_SCOPE_RECOVERY_OB03_DESTINATION_CONTENT_DESIGN.md)の別工程に残す。本稿の受理状態・未公開bundleの成立は、それらの実装や有効化の承認ではない。
