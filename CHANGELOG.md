@@ -124,6 +124,8 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 ### Added
 
+- OM-A parent omission values now accept retained (not_processed) rows only as a contiguous suffix, as the adapter appends them after interrupting its loop; a reviewed row after a retained row was previously modeled. New tests also cover two-rule applicability duplicates and subsets, nested result refinements, consistently reversed selected order and an unknown kind.
+
 - NR-C mixed manifest tests now reject a retrieval failure bound to a completed input that already carries an analysis context, an analysis outcome whose completed input has no expected context, and a shorter supplier expected-evidence list at construction; each check was previously the sole, untested guard. The root and supplier themselves are unchanged.
 
 - NR-B issuer tests now cover same-root cross-row retrieval terminals (previously the only check against issuing another row's outcome), `discard`/`recordCleanup` reentry from guards, terminal release after issue, cleanup recorded before the terminal event, constructor dependency and rule-list shape, unknown stop/revoke reasons, and an AST oracle keeping the metadata classification copy identical to the adapter. The issuer itself is unchanged.

@@ -43,7 +43,16 @@ strictなmodel_id／版／cap=100、同selected順のproducer付き全row、pref
 - caller後書換えとfreeze副作用なし、出力のdeep freeze／readonly compile-fail、固定例外にraw値・causeがないことを確認した。原値と変換後DATAには合成本文が含まれるが、診断・エラーメッセージへ出さず、実受領物の保護ownerとも呼ばない。
 - adapterを実行せず、親finding／元omittedの分岐、prefix reduce、addErrorのASTを固定照合した。`>`→`>=`、warning順、reason、prefix式、error capの変更で監査が失敗するseeded対照を通した。これはsource drift検出であり、その監査自身を独立のfinding期待表の代用にはしていない。
 
-## 4 費目・未対応
+## 4 レビュー修正（2026-11-03）
+
+§3の71件・12,940件は修正前の記録として残す。レビュー時にrepo全体のlint（error 0・warning 374）、build、梱包、全体合成265ファイル／12,940件成功・失敗0を再確認した。
+
+- 実装：retained（not_processed）行の後に処理済み行が続く順序を受理していた。adapterはsoft deadline・request budget・停止理由のいずれでも、ループ中断後に残り全行をnot_processedとして連続した末尾へ追加し、停止warning／errorもループ後に加える。開始prefixに省略副作用だけを足す本モデルはこの順序でのみ成立するため、retainedの後に別producerが来れば`order`で拒否するよう修正し、[CG-C設計](BEST_PRACTICE_ABORT_SCOPE_RECOVERY_OMISSION_CGC_DESIGN.md)をdraft-0.4へ改版した。既存の「元worker omittedを区別」試験はretained（row 5）の後にreviewed（row 6）を置いていたため、retainedを末尾へ移した正しい順序へ直した（期待traceも同順に更新）。末尾連続を受理し、3種の非末尾順序を拒否する1件を追加した。
+- 試験：applicableの重複判定（2 rule同長の重複）と長さ判定（部分集合）、nestedのreviewResultV2Schema refinement（出典URL変更）、selectedの昇順判定（selectedとrowsを一貫して逆順）、kind不一致は、外しても既存試験が通過した。2 ruleのnested結果で完全一致を受理し重複／部分集合を拒否する1件、nested refinement 1件、逆順とkind 1件を追加した。
+
+上記7変異はそれぞれ追加・修正した試験だけを失敗させた。中間limitations上限103（構造上それ以上増えない）、prefix／asset copy上限（schemaの上限が先に効く）は等価変異として扱う。新規試験は75件。修正後も全体合成265ファイル／12,944件成功・失敗0。
+
+## 5 費目・未対応
 
 prefix copyは深さ3／node2500／文字費650000、各assetはCG-A由来の現analyze depth・array100／key30／node262144／文字費786432、正規化JSON≤B。row／trace／原値と変換後の索引は100以下。親で増えるwarningは最大3なので中間枠103。これらは有限の局所構造であり、native key列挙・schema copy／refinement・serialize／UTF-8走査・NR-A再投影・freezeの総work／heapを証明しない。
 

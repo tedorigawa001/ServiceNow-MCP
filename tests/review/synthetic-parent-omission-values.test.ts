@@ -26,9 +26,9 @@ it('keeps an original worker omission distinct and does not count nonreviewed ro
   const raw=fixture([reviewed(1,99),{producer:'analysis',outcome:{state:'result_omitted',update_xml_sys_id:id(2),reason:'response_limit'}},
     {producer:'metadata',outcome:{state:'not_applicable',update_xml_sys_id:id(3),asset_type:'other',reason:'asset_type_unsupported'}},
     {producer:'retrieval',outcome:{state:'retrieval_failed',update_xml_sys_id:id(4),reason:'payload_unavailable'}},
-    {producer:'retained',outcome:{state:'not_processed',update_xml_sys_id:id(5),reason:'deadline_exceeded'}},reviewed(6,2)]);
+    reviewed(5,2),{producer:'retained',outcome:{state:'not_processed',update_xml_sys_id:id(6),reason:'deadline_exceeded'}}]);
   const out=modelSyntheticParentOmission(raw);
-  expect(out.value.trace.map(t=>[t.action,t.incoming,t.after])).toEqual([['keep',99,99],['keep',0,99],['keep',0,99],['keep',0,99],['keep',0,99],['parent_omit',2,99]]);
+  expect(out.value.trace.map(t=>[t.action,t.incoming,t.after])).toEqual([['keep',99,99],['keep',0,99],['keep',0,99],['keep',0,99],['parent_omit',2,99],['keep',0,99]]);
   expect(out.value.prefix).toEqual({limitations:['response_truncated'],errors:[{stage:'output',code:'response_limit'}]});
 });
 const omitted=(n:number)=>({producer:'analysis',outcome:{state:'result_omitted',update_xml_sys_id:id(n),reason:'response_limit'}});
@@ -187,4 +187,26 @@ it.each([
   ['error_cap','run.errors.length < 100','run.errors.length <= 100'],
 ] as const)('detects source %s drift as a negative control',(_name,from,to)=>{
   const source=readFileSync(new URL('../../src/review/update-set-adapter.ts',import.meta.url),'utf8');expect(source).toContain(from);expect(()=>auditParent(source.replace(from,to))).toThrow();
+});
+const retained=(n:number)=>({producer:'retained',outcome:{state:'not_processed',update_xml_sys_id:id(n),reason:'deadline_exceeded'}});
+it('accepts retained rows only as the contiguous suffix the adapter appends after interrupting its loop',()=>{
+  expect(modelSyntheticParentOmission(fixture([reviewed(1),retained(2),retained(3)])).value.trace.map(t=>t.producer)).toEqual(['analysis','retained','retained']);
+  for(const rows of [[retained(1),reviewed(2)],[reviewed(1),retained(2),omitted(3)],[retained(1),{producer:'metadata',outcome:{state:'not_applicable',update_xml_sys_id:id(2),asset_type:'other',reason:'asset_type_unsupported'}}]]){
+    let e:unknown;try{modelSyntheticParentOmission(fixture(rows));}catch(error){e=error;}expect(e).toMatchObject({reason:'order'});
+  }
+});
+function twoRules(applicable:string[]){
+  const row=reviewed();Object.assign(row.outcome.result.coverage,{requested_rule_ids:['AU-BR-001','AU-BR-002'],evaluated_rule_ids:['AU-BR-001','AU-BR-002']});row.outcome.applicable_rule_ids=applicable;return row;
+}
+it('accepts exactly matching two-rule applicability but rejects an equal-length duplicate or a subset',()=>{
+  expect(modelSyntheticParentOmission(fixture([twoRules(['AU-BR-002','AU-BR-001'])])).value.kept_findings).toBe(1);
+  for(const applicable of [['AU-BR-001','AU-BR-001'],['AU-BR-001']])expect(()=>modelSyntheticParentOmission(fixture([twoRules(applicable)]))).toThrow('internal_review_error');
+});
+it('runs nested result refinements, not merely the reviewed asset structure',()=>{
+  const row=reviewed();row.outcome.result.findings[0].sources[0].url='https://example.invalid/changed';expect(()=>modelSyntheticParentOmission(fixture([row]))).toThrow('internal_review_error');
+});
+it('rejects selected rows that are consistently reversed, and an unknown kind',()=>{
+  const raw=fixture([reviewed(1),reviewed(2)]);raw.selected.reverse();raw.rows.reverse();
+  let e:unknown;try{modelSyntheticParentOmission(raw);}catch(error){e=error;}expect(e).toMatchObject({reason:'order'});
+  expect(()=>modelSyntheticParentOmission({...fixture(),kind:'synthetic_parent_omission_values_v2'})).toThrow('internal_review_error');
 });

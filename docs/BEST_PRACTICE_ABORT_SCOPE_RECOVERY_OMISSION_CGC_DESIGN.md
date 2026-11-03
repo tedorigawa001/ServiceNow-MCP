@@ -1,6 +1,6 @@
 # CG-C 親省略決定証拠・合法omissionモデル 詳細設計
 
-Version: br006-recovery-omission-cgc-draft-0.3 / Date: 2026-11-03。
+Version: br006-recovery-omission-cgc-draft-0.4 / Date: 2026-11-03。
 Status: **OM-Aのstrict値型・親prefix／keep／omit純粋計算を合成限定で実装。親決定証拠・finalizeモデル・manifest／finish job接続は未実装。正式発行口閉鎖・全体受付無効・Unknown・VM／監視／telemetry調査保留を維持する。**
 
 基準HEAD: `fd5ddb9`（NR-Cの追加対照を含む）。[内容gate設計](BEST_PRACTICE_ABORT_SCOPE_RECOVERY_FINISH_CONTENT_GATE_DESIGN.md)§3・7・8と[非reviewed設計](BEST_PRACTICE_ABORT_SCOPE_RECOVERY_NONREVIEWED_DESIGN.md)§6・11からの差分。現NR-Cは親受理後のomissionを拒否する。このMDはその拒否を変更せず、実装・実接続・実通信・実機操作・設定変更・本番cap／Permit／候補発行・Pushの承認ではない。
@@ -147,7 +147,7 @@ OM-Bの受付／計数分離・数値候補・256-unit checkpoint・epoch／同b
 
 ### 11.1 strict入力・保持値と検査の範囲
 
-入力はstrictなkind=synthetic_parent_omission_values_v1、model_id=recovery-omission-v1、schema_version=0.2／0.3、limits:{max_findings:100}、selected、prefix:{limitations,errors}、rows。各rowはproducer／outcomeだけで、producerはanalysis／metadata／retrieval／retainedの閉じたunion。selectedは32桁sys_idの一意昇順・最大100、rowのID・順序・件数が完全一致しなければ拒否する。keep前のfinding数を外から入力するfieldはない。
+入力はstrictなkind=synthetic_parent_omission_values_v1、model_id=recovery-omission-v1、schema_version=0.2／0.3、limits:{max_findings:100}、selected、prefix:{limitations,errors}、rows。各rowはproducer／outcomeだけで、producerはanalysis／metadata／retrieval／retainedの閉じたunion。selectedは32桁sys_idの一意昇順・最大100、rowのID・順序・件数が完全一致しなければ拒否する。retainedは連続した末尾だけを許し、retainedの後に別producerの行が来れば拒否する（adapterはループ中断後に残り全行をnot_processedとして末尾へ追加し、その停止warning／errorもループ後に加えるため）。keep前のfinding数を外から入力するfieldはない。
 
 reviewedはanalysisだけで、assetOutcomeStructureとreviewResultV2Schemaのrefinementを検査する。外側asset ID＝内側target ID、applicable rule集合＝nested requested集合・重複なしを追加で確認する。header／auth／release／source／job／receiptとの実bindingを証明する検査ではない。非reviewedはNR-Aへ渡し、producer別variant／reason・0.3 deleted拒否をそのまま再利用する。parent_omissionは入力producerとして拒否し、元omittedはanalysisに限る。retainedはdeadline_exceededだけ。
 
@@ -176,3 +176,5 @@ OM-Aには共有budget／期限／取消のcheckpointはまだ接続していな
 独立の明示finding表・warning／error境界表、B境界、caller後書換え・deep readonly、strict入力とproducer対照を検査した。親adapterのfinding分岐・元omitted分岐・prefix reduce・addErrorは実行せずASTで固定照合し、比較演算子／warning順／reason／prefix／error capの変異を負の対照にした。これは現在sourceへの一致検査であり、共有runtime kernelへの置換ではない。
 
 [OM-A検証記録](E2E_BEST_PRACTICE_PARENT_OMISSION_OMA_2026-11-03.md)参照。OM-B以降のsize／finalizeモデル、実captureからのprefix供給、ParentOmissionDecision・one-shot／同期失効／discard、同accepted／plan／finish jobとのbinding、full比較・候補・全体予算は未接続。npmへ同梱せず、固定importとseeded漏出／I/O／clock／workerの負の対照を維持する。
+
+draft-0.4のレビュー修正：OM-A初版はretained行の後に処理済み行が続く順序を受理しており、既存試験もその順序で親計算を行っていた。adapterではnot_processed行は常にループ中断後の連続した末尾で、停止由来の副作用もループ後に追加されるため、「開始prefix＋省略副作用」だけのモデルが成立するのはこの順序に限られる。§11.1へ末尾連続の要求を追加した。他の契約・費目・未接続事項、OM-Bの計数契約は変更しない。

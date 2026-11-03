@@ -48,10 +48,12 @@ export function modelSyntheticParentOmission(raw:unknown){
     const prefix=copy(top.prefix,PARENT_OMISSION_VALUE_LIMITS.prefix_nodes,PARENT_OMISSION_VALUE_LIMITS.prefix_character_units,3);
     const p=own(prefix.value,['limitations','errors']),limitations=aggregateReviewStructure.shape.limitations.parse(p.limitations),errors=(version==='bp-mcp-review-0.2'?aggregateReviewStructure:aggregateReviewV3Structure).shape.errors.parse(p.errors);
     const initialPrefix={limitations:[...limitations],errors:[...errors]};
-    const assets:Asset[]=[],originals:{producer:Producer;outcome:Asset}[]=[],trace:Trace[]=[];let kept=0,assetNodes=0,assetCharacters=0;
+    const assets:Asset[]=[],originals:{producer:Producer;outcome:Asset}[]=[],trace:Trace[]=[];let kept=0,assetNodes=0,assetCharacters=0,retainedSeen=false;
     const addOmissionError=()=>{if(errors.length<100)errors.push({stage:'output',code:'response_limit'});else if(!limitations.includes('error_details_truncated'))limitations.push('error_details_truncated');};
     for(const [ordinal,row] of sourceRows.entries()){
       const r=own(row,['producer','outcome']);if(!['analysis','metadata','retrieval','retained'].includes(r.producer as string))bad('unsupported');
+      // The adapter appends not_processed rows only as a contiguous suffix after interrupting its loop.
+      if(r.producer==='retained')retainedSeen=true;else if(retainedSeen)bad('order');
       const copied=copy(r.outcome,PARENT_OMISSION_VALUE_LIMITS.asset_nodes,PARENT_OMISSION_VALUE_LIMITS.asset_character_units,RECOVERY_FULL_JSON_SHAPE.analyze.depth);
       let asset=assetOutcomeStructure.parse(copied.value);
       if(asset.state==='reviewed'){if(r.producer!=='analysis')bad('unsupported');asset.result=reviewResultV2Schema.parse(asset.result);
