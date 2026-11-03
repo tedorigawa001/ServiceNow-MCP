@@ -1,7 +1,7 @@
 # OM-D 混合manifestと内容比較の接続差分
 
-Version: br006-recovery-mixed-content-omd-draft-0.1 / Date: 2026-11-03。
-Status: **設計のみ。合成依存限定。混合origin・一度限り移譲・内容比較の接続は未実装。正式発行口閉鎖・全体受付無効・Unknown・VM／監視／telemetry調査保留を維持する。**
+Version: br006-recovery-mixed-content-omd-draft-0.2 / Date: 2026-11-03。
+Status: **OD-Aのfresh合成DATA assembly・strict mixed slot・prefix段階・生成／消費claimまで実装。既存origin・同accepted／planへの移譲・内容比較は未接続。正式発行口閉鎖・全体受付無効・Unknown・VM／監視／telemetry調査保留を維持する。**
 
 基準HEAD: `6405b8b`。[CG-C設計](BEST_PRACTICE_ABORT_SCOPE_RECOVERY_OMISSION_CGC_DESIGN.md)§10・12、[NR-C](BEST_PRACTICE_ABORT_SCOPE_RECOVERY_NONREVIEWED_DESIGN.md)§11、[本文gate](BEST_PRACTICE_ABORT_SCOPE_RECOVERY_FINISH_CONTENT_GATE_DESIGN.md)§6からの差分。OM-Bの計数／finalizeモデルとRD-Cのfinish jobは設計段階なので、それらを成立済みにせず接続範囲を分割する。
 
@@ -49,7 +49,7 @@ prefix配列順と重複は親段階で保存する。現RA／RD-Bのprojection�
 
 ## 4 内部型と一度限りの移譲
 
-名称は案。今回、型・slot・発行口は追加しない。
+以下はOM-D全体の型案。OD-Aで追加した合成専用の型・slotは§11に分離し、同accepted／planへ移す型・発行口はまだ追加しない。
 
 | 型案 | 内容と発行元 | 消費契約 |
 | --- | --- | --- |
@@ -121,7 +121,7 @@ diagnosticは固定state／stage／reasonとcountのみ。ID・時刻・body／f
 - 同jsonからfull検証・固定局所view・E・body照合を行い、不正full schema、別版、counts／coverage／selection差、B・局所上限の境界でも各stageを省略しない。
 - 旧OM-C／NR-C／CG-B／RD-B03／通常worker試験を維持し、新factory／brand／consumerはpackage非同梱、seeded runtime／I/O／clock／worker／漏出の負の対照を実施する。
 
-以上は接続の試験計画であり、実行済みの保証ではない。新たな実transport／実worker／PDIを使わない。
+以上はOM-D全体の接続試験計画。OD-Aの実施済み範囲だけを§11と検証記録に分離し、後段の保証は未成立とする。新たな実transport／実worker／PDIを使わない。
 
 ## 10 最初の実装範囲
 
@@ -134,4 +134,35 @@ diagnosticは固定state／stage／reasonとcountのみ。ID・時刻・body／f
 
 未確定：開始prefix／後段deltaの固定発行owner、混合slotと既存pinsの生成順、元の配列順を保持するprojection、同budget／停止の供給、移譲途中の終端責務、full値から局所viewの固定型と上限、OM-B／RD-C未成立時の限定結果の型。これらを型・試験で固定してから各段階を実装する。
 
-本工程は接続差分のMD化だけ。コード・旧拒否条件は変更せず、実接続・実通信・実機操作・設定変更・token／Permit／候補発行・Pushは行わない。
+draft-0.1はMD化だけ。続くOD-Aの実装範囲は以下に限定し、旧拒否条件・実接続・実通信・実機操作・設定変更・token／Permit／候補発行・Pushは変更しない。
+
+## 11 OD-A：fresh合成slotとprefix段階の実装
+
+[新assembly](../tests/support/review/synthetic-omd-slots.ts)と[合成試験](../tests/review/synthetic-omd-slots.test.ts)をtests配下へ追加した。既存OM-C／NR-Cのfactory・台帳・APIは変更しない。同じfixture DATAから二つ生成しても、それぞれのrow／receipt／prefix／slotは別identityである。
+
+### 11.1 受付と由来の範囲
+
+固定kind・model_id・schema_version・selected・prefix・rowsだけを受け付け、OM-Aのbounded DATA投影とstrict state×producer検査へ接続する。selectedは1〜100件・一意sys_id昇順、retainedは連続末尾。0.3のdeleted拒否・各reason・元worker omittedのvariantを維持する。reviewed同士のinstance binding／Update Set／release値の不一致もconstructorで拒否する。空集合は空manifest証明ではなく受付拒否。
+
+constructorは全original値とOM-Aのtraceを一度pinし、各行へ新しいopaque rowとreceiptを発行する。外部row／receipt／capture／runtime ownerを登録する口はない。**元の実row／input／job／wire由来やOM-C captureの採用を保証しない。** 元reviewed DATAを保持したprivate slotと既存capture証拠は別物であり、summaryにもexisting_row_receipt等を未保証として残す。後続OD-Bで必要な同accepted／planのpins供給は未接続。
+
+### 11.2 状態とclaim
+
+| 操作 | 一度限りの入力・状態 | 成立後だけ公開するもの |
+| --- | --- | --- |
+| begin | constructor内の開始claimを占有、pre／post guard | InitialMixedPrefixとinitial段階 |
+| generate | 同cursorのrow＋receipt・initial／parent prefixを先に消費、行の生成claimを占有 | MixedSlot。次prefixはprivateに保持 |
+| consume | 同row＋receipt＋生成済みslotを先に取外し、private original参照・未消費・cursorを検査 | ParentMixedPrefix、最終行ならCompletedMixedPrefix |
+| discard／source close／cleanup開始／hard | 全private元値・prefix・slotを同期破棄 | 件数と固定診断のみ。cleanupは別sinkで一度だけ確定可能 |
+
+rowが違う同receipt、同IDの別assembly、コピー、別段階prefix、二重begin／generate／consume、順序違反・生成中の次生成を拒否する。生成／消費にはpre／post guardを置き、post stopをbinding不一致より優先する。再入が内部で握り潰されても先行失敗を保持し、claimを復活させない。失効後のlate cleanupは診断だけで、slotやprefixを再生成しない。
+
+private slotはkept_reviewed／parent_omitted／original_worker_omitted／metadata／retrieval／analysis_rejected／retainedの7種。親省略だけは同rowの元reviewed DATA参照を保持する。元worker omittedから本文やfindings数を作らない。最終段階は非実行のprefix完了であり、manifest seal／empty-reviewed proof／正常worker終端／候補ではない。現在の唯一の出口は固定discardまたは同期失効である。
+
+### 11.3 prefixと費目・未対応
+
+開始prefixは合成fixture DATAだけ。任意のpost-loop delta登録は拒否し、元runの後段originを受ける口は追加しない。OM-Aが同全original列から作った固定traceに従い、consume成立後だけcursor／保持finding数／limitations・errorsの順序と重複を進める。親省略後も次に収まる行はkeepでき、元omittedによるresponse_truncatedの先行も維持する。
+
+OD-Aはconstructorでbounded全列投影／OM-A値モデルを一度実行し、generate時に同traceの増分からprivate次prefixを作る。OM-Cの全履歴再計算を追加で繰返す方式ではない。元全値保持・投影／schema copy・trace・行／receipt台帳・prefix配列copy・操作ごとのpre/post guard・失敗時clearは追加費目であり、元100行の上限だけで総work／heapを証明しない。同canonical budget／stopへの接続・中断粒度・総費用はUnknown。guardは注入fakeであり、元60秒・210試行・実C/G/P会計は更新しない。
+
+同accepted採用・OD-Bのprivate値移譲、OD-Cの比較、OM-B／RD-C・全体受付は未成立のまま。[OD-A検証記録](E2E_BEST_PRACTICE_OMD_SLOTS_ODA_2026-11-03.md)に初回失敗・修正と確認範囲を記す。
