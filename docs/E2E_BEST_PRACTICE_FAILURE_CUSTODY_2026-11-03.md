@@ -42,7 +42,15 @@ report／proof／receiptの確保はcommitのpost checkpoint前に済ませ、cu
 
 repository全体のテストとPDI E2Eは今回実行していない。梱包smokeのworker／sourceは既存ローカル合成fixtureであり、新ownerの実resource origin保証には数えない。実通信・設定変更は行っていない。
 
-## 4 境界と残課題
+## 4 レビュー修正（2026-11-03）
+
+§3の105件は修正前の記録として残す。§3は全体回帰を実行していなかったため、レビュー時にrepo全体のlint（error 0・warning 374）、build、梱包分類監査、全体合成269ファイル／13,261件成功・失敗0を確認した。
+
+- 試験：commit後・finalDiscard前の`local`によるcleanup操作の拒否。`custody.holder!==side`判定が唯一の防御だが未検証だった。判定を外すと、commit後もholder=upperのまま`local.requestCleanup`が受理され、localとupperの双方がcleanup権限を持った。既存試験はdiscard後だけを見ており、discard済み判定が先に止めていた。実装は正しく、現行コードは`state`で拒否する。commit後・discard前に`local.requestCleanup`と`local.observe`が`state`で拒否され、holderがupperのまま、同じ未消費factをupperが消費できることを検査する1件を追加した。
+
+この変異は追加した試験だけを失敗させた。次は等価変異として扱う：hard時のcreation closeと新規生成拒否、issued重複flagとtermination／created／absence状態判定、seal／commit／discard claimとstate／handle判定、commitの上位slot・discard proof判定（いずれも相互に重複する一度限りflag）、証拠のtoken・role・frame（一rootに一token、各roleに一frame）、ticket・absence種別（ticket有無が異なり必ず一方が拒否）、absenceのever_started／creation_closed、discard後localとcommit前upperのowner判定（holder判定が先に停止）。helperは変更せず、新規試験は106件。修正後も全体合成269ファイル／13,262件成功・失敗0。
+
+## 5 境界と残課題
 
 新ownerは本文・pins・accepted／planを最初から受け付けない。したがって既存OB-01の実payload失効やresource生成点へのowner確保を代行したとはしない。upperのcleanup custodyも合成ticket／factの一意な所有であり、実reader・worker・sessionの操作権限ではない。
 

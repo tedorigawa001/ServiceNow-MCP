@@ -223,3 +223,14 @@ it.each(roles.flatMap(role=>releaseCases.map(row=>[role,...row] as const)))('mat
   }
   failed(root);expect(root.local.inspect().report).toMatchObject({outcome:'failed',release:expected?'confirmed':'unconfirmed',unresolved:expected?0:1});
 });
+it('keeps upper as the sole cleanup owner between commit and final discard, without consuming its evidence',()=>{
+  const c=createSyntheticFailureCustody({kind:'synthetic_failure_custody_v1',upper:'connected'},{guard:()=>undefined});
+  const ticket=c.issuer.beginCreation('source');c.local.hard('cancelled','prepare');const receipt=c.local.commit(c.local.seal());const created=c.issuer.fact(ticket,'created');
+  for(const attempt of [()=>c.local.requestCleanup('source',ticket),()=>c.local.observe('source',ticket,created)]){
+    let error:unknown;try{attempt();}catch(e){error=e;}expect(error).toMatchObject({reason:'state'});
+  }
+  expect(c.local.inspect()).toMatchObject({state:'committed_to_upper',custody:'upper',local_cleanup_refs:0});
+  c.upper.observe('source',ticket,created);c.upper.requestCleanup('source',ticket);
+  expect(c.upper.inspect().current?.roles.source).toMatchObject({generation:'created',stop:'requested',cleanup:'requested'});
+  c.local.finalDiscard(receipt);expect(c.local.inspect()).toMatchObject({state:'discarded',custody:'upper'});
+});
