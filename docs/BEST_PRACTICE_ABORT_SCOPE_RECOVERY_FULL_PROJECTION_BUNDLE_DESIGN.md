@@ -7,7 +7,7 @@ Version: br006-recovery-full-projection-bundle-draft-0.1 / Date: 2026-11-04。
 
 ## 1 現行不足と採る境界
 
-現行takeはaccept post-guardで受理した同projectionをprivate slotへ捕捉し、元accepted slotを消す。`consumeHeader`は同taken／projectionReceiptを検査してslotを外し、header参照だけを渡す。D2の未公開destは同ownerとContentCheckedだけで、full投影の受領物・小型expectation・完成bundleはない。
+現行takeはaccept post-guardで受理した同projectionをprivate slotへ捕捉し、元accepted slotを消す。`consumeHeader`は同利用状態を先行消費してslotを外してから、同taken／projectionReceiptを検査し、header参照だけを渡す。D2の未公開destは同ownerとContentCheckedだけで、full投影の受領物・小型expectation・完成bundleはない。
 
 **将来のfresh合成継続で、同take・同receiptの一つの消費をfull projection受領へ固定する。** 旧header-only経路は維持する。callerが用途・mode・headerかfullかを指定する引数、別sourceの登録口、汎用callbackや公開getterを追加しない。
 
