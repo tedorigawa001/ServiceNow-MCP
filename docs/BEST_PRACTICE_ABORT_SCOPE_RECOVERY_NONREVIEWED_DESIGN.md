@@ -1,0 +1,106 @@
+# 回復finish 非reviewed受領物・発行元・ゼロcapture 詳細設計
+
+Version: br006-recovery-nonreviewed-draft-0.1 / Date: 2026-11-03。
+Status: **設計のみ。AcceptedNonReviewed・混合集合・reviewedゼロ件の接続は未実装。正式発行口閉鎖・全体受付無効・Unknown・VM／監視／telemetry調査保留を維持する。**
+
+基準HEAD: `0ed7d91`。[内容gate](BEST_PRACTICE_ABORT_SCOPE_RECOVERY_FINISH_CONTENT_GATE_DESIGN.md)§3・7・12〜13と[RD-C](BEST_PRACTICE_ABORT_SCOPE_RECOVERY_FINISH_JOB_RDC_DESIGN.md)からの差分案。CG-BP1の現受付はreviewedが1件以上のreviewed／not_processed planだけであり、本書によって受付を広げない。公開JSON・既存契約・元60秒・受信枠・会計は変更しない。
+
+## 1 根拠と分離原則
+
+現状の根拠は[assetOutcomeStructureと集約refinement](../src/review/aggregate-schema.ts)、[adapter](../src/review/update-set-adapter.ts)、[worker](../src/review/review-worker.ts)、[finish pins](../tests/support/review/synthetic-finish-pins.ts)、[局所context検査](../tests/support/review/synthetic-finish-context-values.ts)。本書はこれらを読んだ設計であり、新しい合成試験や実機検証の成功記録ではない。
+
+- assetのstateだけから発行元を推定しない。同じrejectedでもmetadata分類・payload上限・worker解析で発行元が異なる。
+- AcceptedNonReviewedは「そのstateの結果を同じイベントから受理した」証拠であり、未受信のreviewed本文・解析成功・findingの不存在を証明しない。
+- not_processedは受理済みanalyze結果ではなく、未処理inputと固定停止判定の証拠。別型にし、AcceptedNonReviewedへ混ぜない。
+- 親でreviewedを受理した後のomissionには元captureが存在する。workerから最初にresult_omittedだけが届いた場合とは別の型・寿命・claimにする。
+- 原則は同receiptだが、payload／worker inputが存在しない行では**元のselection row receipt**へ結ぶ。存在しないinput receipt・job・T_iを作らない。
+
+## 2 状態×発行元の保持／拒否表
+
+各variantは既存schemaの全fieldをstrictに保持する。reasonは自由文字列にせず、既存enumと下表の固定producer条件の両方を満たす必要がある。schemaに存在しても固定producerが現状生成しない組合せは初版では未対応拒否とする。
+
+| 外向きstate | 唯一の発行元案・保持値 | 不足／混入時の扱い |
+| --- | --- | --- |
+| not_applicable | adapterのmetadata分類継続。元rowのaction／name・要求ruleから固定classify相当の判定。ID・asset_type・reason全部 | worker応答としては拒否。任意のasset_typeやno_requested_rulesを自己申告できない |
+| skipped_deleted | 同metadata分類継続のDELETE判定。ID・deleted_asset | 0.2だけで検討。0.3 review_targetsでは既存refinementどおり拒否し、deletedを別stateへ変えて救済しない |
+| rejected（metadata） | unsupported_action／identity_mismatchの固定分類。ID・reasonと元row origin | worker由来へ付替え不可。現在の分類ロジックと独立oracleの一致が必要 |
+| rejected（payload上限） | adapterが同payload取得のpayload_limitを固定写像した継続。ID・reason | schema適合だけでは発行しない。別attemptの失敗・単なるcaller例外からは不可 |
+| rejected（analysis） | 同analyzeのprivate envelope／job／input receipt。ID・workerのrejected reason | CG-Aの同JSON文字列検証、相関・pre/post guardが必須。workerが生成可能なreason契約との不一致は拒否 |
+| retrieval_failed | 同source／payload attemptまたは取得値検査の固定写像。ID・reason | 現adapterのpayload_unavailable／missing_required_field／changed_during_reviewを初期範囲とする。schemaだけにあるunauthorizedを自動で有効化しない |
+| result_omitted（worker analyze時点） | 同analyze応答のresult_omitted／response_limitを受理した継続。元job／inputとID・reason、本文captureなし | worker内でどのstateやfindingsから省略されたかは推測しない。reviewedへの昇格や空findingsの捏造は不可 |
+| result_omitted（親受理後） | OriginalReviewedCapture＋後続CG-CのParentOmissionDecision。ID・reasonと元captureの連鎖 | AcceptedNonReviewedへ格下げしない。変換証拠が未実装の間は接続拒否 |
+| not_processed | 未処理input／rowの固定停止継続。ID・reason・送信状態／旧世代終了証拠 | 独立のRetainedNotProcessed。完了結果・本文受理済みとはしない。返答がなかったことを任意boolで申告できない |
+
+not_processedの既存JSON enumにはdeadline以外の予算・認証・権限・上流停止もあるが、本SR-Dのsoft回復へ全てを追加する承認ではない。初期接続は既存回復契約のdeadline_exceededに限定する。他reasonの通常adapter結果を改変せず、回復接続ではunsupportedとして停止する。hard取消・全体deadline・終了未確認をnot_processedへ変換してpartialに救済しない。
+
+## 3 内部型・private発行slot
+
+以下の名称は提案であり、公開constructorや既存型へのverified flag追加ではない。
+
+| 型案 | private内容／発行継続 | 寿命・拒否 |
+| --- | --- | --- |
+| ClassifiedNonReviewed | classification origin、selection window／row receipt、固定要求rule、strict not_applicable／skipped_deleted／metadata rejected | fresh合成metadataイベントからのみ。input／jobなしはnullではなく型上absent |
+| RetrievedNonReviewed | 同rowとsource／attempt／用途、失敗または値検査origin、strict retrieval_failed／payload_limit rejected | attemptの一度消費とtyped cleanup／取得終端の整合が前提。異なる用途・未確認終端を代替証拠にしない |
+| AnalyzedNonReviewed | 同旧frame／job／id／input receipt／T_i、private delivery origin、strict rejected／元result_omitted | envelopeをpre-guard前に取り外し、同bytes検証後のpost-guardでだけ発行。rawを外へ返さない |
+| AcceptedNonReviewed | 上記3型の閉じたunionと受理origin。共通owner／run／session／source／auth／budget／release／windowと同rowに結合 | producer tagのない汎用factoryは作らない。worker／metadata／retrievalを互いに差替え不可 |
+| RetainedNotProcessed | 同未処理receiptまたはrow、固定停止origin、未送信／sent-terminalの区別と必要な旧世代終了証拠 | 新たなT_i・analyze jobを作らない。sentで終了未確認なら回復停止 |
+| OutcomeManifestSeal | selectedの固定順と、ReviewedCapture／AcceptedNonReviewed／RetainedNotProcessedのprivate slot参照 | 同accepted／planへ全体を一度移譲する。本文入りと本文なしを型で区別 |
+| EmptyReviewedManifest | 同OutcomeManifestSealに対するreviewed capture件数0の固定partition検査結果 | 汎用空配列／定数tokenから発行しない。非reviewedの検査を省略しない |
+
+共通bindingは既存private生成継続から供給し、callerがowner／receipt objectを指定して登録する口は作らない。合成issuerは別root内の固定イベントからだけ発行し、runtime／fixture台帳を共有しない。既存root・RD-B04 handle・CG-BP1 summaryを後付け昇格しない。
+
+## 4 固定順・one-shotと失敗分類
+
+1. 同selected rowを固定順で取り出し、producer別の開始claimを一度占有する。pending worker delivery／payload終端はpre-guard前に取り外す。元row／input receiptの参照を保持し、新しい同ID receiptで置換しない。
+2. 共通stop／budget ownerをpre-guardする。metadataは固定分類、retrievalは固定写像、analysisはown-data strict envelopeと同JSON文字列のCG-A検証へ進む。任意callerオブジェクトをfreezeして受領物にしない。
+3. state×producer・全field・reason・ID・認証／release／selectionと、存在する場合だけinput／job／T_iを照合する。失敗は局所flagとして保持し、post-guardの停止を優先する。
+4. post-guardと同originの再確認後だけ、元値のowned immutable正規化copyと別brandの空handleをprivate slotへ発行する。受理claimとplan移譲claimは別にする。
+5. selectedを固定順にpartitionする。同rowは厳密に1 slot、unknown／duplicate／missingは拒否する。ParentOmissionDecision付きreviewedは元captureを保持する別variantであり、二重slotではない。
+6. 同accepted／planの一度限りsealで全slotを移す。失敗・競合・取消・期限切れ・失効後は再開始／再受理／再移譲を拒否し、先行hardとcleanup責務を保持する。
+
+型付き局所理由案はshape／binding／producer／state／duplicate／missing／unsupported／limit。上位codeは既存の固定失敗と共通停止理由だけに写像し、新しい公開MCP errorを追加しない。元asset.reasonは保存するデータであり、transportやhardの診断codeと混同しない。本文・schema issues・例外cause・資格情報を診断へ残さない。
+
+## 5 reviewedゼロ件の判断
+
+**設計上は許容するが、実装・受付はまだ有効化しない。** ゼロ件をcaptureの成功件数不足と同一視せず、次の全条件が揃った場合だけ専用EmptyReviewedManifestを発行する案とする。
+
+- selectedは既存の最大100件と順序を満たし、全行が検証済み非reviewedまたは固定not_processedにちょうど一度割り当たる。
+- 元reviewed受理／reviewed_originが1件もない。後から省略したreviewedがあるならゼロcaptureではなく、元captureを持つomission経路を必要とする。
+- 既存soft回復条件とactive未処理input／旧世代終了・新世代ready・同receiptの連鎖を維持する。reviewedが0件でも必要verify・cleanup・full集約schema・同job相関を省略しない。
+- not_processedがある回復planをcompleted／analysis_complete:trueにしない。最終statusは元headerと既存full schemaで判定し、reviewedが0という理由だけでpartial／failedを決め直さない。
+
+selected=0／input=0、collection failedで必須active receiptが存在しないケース、未処理inputのない「非reviewedだけで終了した通常実行」は、現在のSR-D回復kernelの前提外。架空のactive receiptやworkerを作らず、本工程の回復接続では拒否する。通常adapterがその結果を返せることと、SR-D回復planとして受理できることは別である。
+
+## 6 合法omission・finish jobへの後続境界
+
+元workerのresult_omittedは、その値が届いた事実だけを保持し、worker内部のサイズ判定を親が再現して証明したとは言わない。親受理後の省略にはCG-Cで元capture・固定finding予算順序・省略判断・warning／error副作用が必要。finalizeのfinding／byte省略はさらに別モデルとする。
+
+finish応答で非reviewedのstate・ID・reason・asset_type等を変えること、元omitted→reviewed、未処理→解析済みへの昇格は不可。元reviewed→omittedだけは別の合法変換証拠がある場合に後続で検討する。省略の見かけが同じでもproducerを消さない。
+
+本書のsealはfinish jobを起動・送信しない。後続RC-A〜Cで同新frame／job／idへOutcomeManifestSealを一度移し、同response originからfull検証・内容比較する。非reviewedだけでもschema／時刻／集合／error／limitationsの検証を省略せず、候補factoryを先に作らない。
+
+## 7 費目所有・失効・解放
+
+| 費目 | 所有者・有限構造／未導出 |
+| --- | --- |
+| 選択行とproducer検査 | 既存window／row ownerと各固定issuer。selected合計100以下。元sourceのbounded metadata前提を再利用し、任意の追加rowデータは保持しない |
+| worker結果 | 同analysis受理owner。CG-Aの元B=262144と同文字列decode／schema copy。正規化非reviewed値は固定fieldの小さいvariantだが、実heap費用0とはしない |
+| metadata／retrieval値 | 対応する固定owner。既存schemaのID・enum・必要asset_typeをowned値へ一度正規化し、schemaにない自由記述を足さない |
+| partition／seal | 同accepted／plan owner。最大100 slot、元receipt索引・variant・originを保持。索引の移譲と本文graphのcloneを区別する |
+| guards／discard | 同共通owner。発行pre/post・sealpre/post・claim・比較・clearの費用を別計上し、元C/G/P prefixへ紛れ込ませない |
+
+取得・解析をこの検査のために再実行せず、元T_i／UやS／全deadlineも再採取しない。同期検証の中断粒度・総work／allocation・正規化copyの保持ピークはUnknownで、受付無効のまま。既存局所10,000 node／文字費262144枠に全nonreviewed集合を無条件に押し込めたり、上限を超えた行を削って通したりしない。
+
+source／cleanup開始、hard、close、準備／世代／plan／acceptedの固定discardでpending・受理値・seal参照を同期に外す。正常解放時もacceptedのterminal-only責務とsource／worker両終端の固定確認は維持する。late cleanupは診断だけで、消費済みslotを復活させない。raw payload／codeは保持・表示せず、JS heapの物理消去も主張しない。
+
+## 8 合成受入条件・実装順案
+
+1. **NR-A：strict variantとpure検査**。state×producerの表、元omitted／親omittedの別型、必須／absent field、未知reason／余分field、bounded統計を独立oracleで照合する。この段階では証拠を発行しない。
+2. **NR-B：fresh合成issuer**。metadata／retrieval／analysisの固定イベントと別claimを接続する。同row／存在する同input・job・T_i、pre/post guard、コピー／別root／二重生成／混入／失敗後再利用拒否を検査する。
+3. **NR-C：混合manifest・reviewedゼロ**。CG-BP1の別rootからpartition・同accepted／plan一度移譲・ゼロ証拠・同期失効／固定discardを接続する。旧root／旧試験は維持する。
+
+必須対照は、同じrejectedを別producerで発行、workerからmetadata state、別attemptのretrieval失敗、応答未受信からomittedの捏造、schemaだけにあるunauthorized、hard停止からnot_processedへの格下げ、missing／duplicate／順序入替え、親省略後のcapture削除、ゼロ件tokenの再利用、0.3のdeleted、各guardの取消／期限／再入／未知例外。元時刻・会計prefix・必要verify／cleanup回数の不変、秘密非出力、package非同梱とseeded混入検出も維持する。
+
+未確認事項：producer別reason allowlistの固定方法、選択row receiptと現input receiptの型対応、worker受理時点の元omittedのterminal claim、metadataだけの行と未処理inputのpartition接続、既存局所schemaとの互換・追加費用。各実装前に対応sourceと合成oracleを再照合し、unsupportedを暗黙に受理へ変更しない。
+
+今回はMD設計と参照更新だけ。実装・合成issuer発行・実接続・実通信・実機操作・設定変更・本番cap／Permit／候補発行・Push・担当者への連絡は行わない。

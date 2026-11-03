@@ -1,6 +1,6 @@
 # RD-C 封印期待値からfinish job・応答相関への接続 詳細設計
 
-Version: br006-recovery-finish-job-rdc-draft-0.5 / Date: 2026-11-03。
+Version: br006-recovery-finish-job-rdc-draft-0.6 / Date: 2026-11-03。
 Status: **設計のみ。RD-Cのjob／応答／候補は未実装。合成依存限定、正式発行口閉鎖・全体受付無効・Unknown・VM／監視／telemetry調査保留を維持する。**
 
 基準HEAD: `04eef33`（RD-B04実装`4533f49`と検証記録レビューを含む）。[親SR-D](BEST_PRACTICE_ABORT_SCOPE_RECOVERY_FINISH_SRD_DESIGN.md)§3・5〜10と[RD-B draft-0.6](BEST_PRACTICE_ABORT_SCOPE_RECOVERY_FINISH_VALUES_RDB_DESIGN.md)§13〜14からの差分。以下の型・操作・phase名は提案であり、現存API・承認済みruntime経路ではない。実装・実worker／runtime接続・実通信・実機操作・設定変更・Pushの許可を含まない。
@@ -156,6 +156,8 @@ RD-Cの局所検査を終えた非実行経路では、元accepted handleの固�
 | RC-D（gate成立後のみ） | 同jobからの候補一度格納・失効・RD-Dへのprivate終端移譲 | 正常終端証拠の代用、実review結果・Permit発行 |
 
 名称・分割は設計案。RC-A以降の実装は個別に指示を受ける。phase型拡張、実session／ReleasePermit／payload／workerへの正式binding、実OS終了・外側監督、B-03 compiled保証、全体work受付は別工程とする。
+
+CG-BP1後の先行項目は[非reviewed受領物詳細設計draft-0.1](BEST_PRACTICE_ABORT_SCOPE_RECOVERY_NONREVIEWED_DESIGN.md)。producer別のAcceptedNonReviewed、RetainedNotProcessed、reviewedゼロ件のpartition証拠をNR-A〜Cで合成実装する案とし、workerに存在しないjob／T_iをmetadata行へ捏造しない。元omittedと親受理後のomissionを分けた上で、CG-Cの合法変換モデル、RC-A〜Cの同job通信相関へ進む。これは設計順の追加だけで、現rootの受付・job起動・候補発行を変更しない。
 
 ## 11 承認待ち・未確認事項
 
