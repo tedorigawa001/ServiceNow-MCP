@@ -1,9 +1,9 @@
 # D3前工程：full accepted projection一度限り受領・完成bundle結合
 
-Version: br006-recovery-full-projection-bundle-draft-0.2 / Date: 2026-11-04。
-設計初稿の基準HEAD: `dca4270`。Status: **FP-1のみ合成内実装済み、FP-2／FP-3は設計段階。正式発行口閉鎖・全体受付無効・Unknown・VM／監視／telemetry調査保留を維持する。seal成功・実接続・実通信・設定変更・Pushは行わない。**
+Version: br006-recovery-full-projection-bundle-draft-0.3 / Date: 2026-11-04。
+設計初稿の基準HEAD: `dca4270`。Status: **FP-1／FP-2のみ合成内実装済み、FP-3は設計段階。正式発行口閉鎖・全体受付無効・Unknown・VM／監視／telemetry調査保留を維持する。完成bundle・seal成功・実接続・実通信・設定変更・Pushは行わない。**
 
-実装追記（2026-11-04）：FP-1のfull受領内部型・固定継続・同期失効／全破棄だけを合成依存限定で実装した。[FP-1検証記録](E2E_BEST_PRACTICE_FULL_PROJECTION_RECEIPT_FP1_2026-11-04.md)を参照。FP-2／FP-3・完成bundle・seal成功は未実装、正式発行口閉鎖・全体受付無効・Unknown・調査保留は継続する。
+実装追記（2026-11-04）：FP-1のfull受領内部型・固定継続・同期失効／全破棄を合成依存限定で実装した。[FP-1検証記録](E2E_BEST_PRACTICE_FULL_PROJECTION_RECEIPT_FP1_2026-11-04.md)を参照。FP-2では同受領snapshotからの小型expectation・BundlePartsDraftとwork／postの全構成照合までを接続した（[FP-2検証記録](E2E_BEST_PRACTICE_BUNDLE_PARTS_FP2_2026-11-04.md)）。FP-3・完成bundle・seal成功は未実装、正式発行口閉鎖・全体受付無効・Unknown・調査保留は継続する。
 
 draft-0.1のレビュー修正：FP-1の実装追記後も版が初稿のままだったため本版へ上げた。full受領modeでheader consumerを完了させない判定は、compiled fixtureのheader→full等の故障経路がfull側の消費数だけを見ていたため、外しても全試験が通過していた。各故障経路でheader側の完了消費数0も確認するよう補強した。kernelの挙動は変更していない。
 
@@ -19,7 +19,7 @@ header-onlyで消費した後の二度目の取得、claimの再arm、元accepte
 
 ## 2 同take・同claimの供給契約
 
-名称・型は案であり未実装。新しい独立したfull用claimを追加してheaderと二重取得できるようにせず、既存projection slotの消費権を一つに保つ。
+FP-1のReceivedAcceptedProjectionとFP-2のBundlePartsDraft／固定継続は合成内実装済み。以後の完成bundle等の名称・型は案であり未実装。新しい独立したfull用claimを追加してheaderと二重取得できるようにせず、既存projection slotの消費権を一つに保つ。
 
 | 境界 | 固定する内容 |
 | --- | --- |
@@ -29,7 +29,7 @@ header-onlyで消費した後の二度目の取得、claimの再arm、元accepte
 | full受領物 | 同taken object／marker／projectionReceipt・元accepted handle・同projection object／snapshotを束ねた非export record。headerはこのsnapshotからだけ借用 |
 | 利用 | 同pendingの固定保護scopeだけが使用。別のheader consumerを呼ばず、同snapshotをPD入力・投影比較・expectation生成へ供給 |
 
-名称案`ReceivedAcceptedProjection`は同kernelの固定消費継続だけが発行する。raw snapshotを受け取るfactoryや外部receipt登録は作らない。利用可能ownerはkernel slotから同pendingへ移り、元slotは復元しない。
+`ReceivedAcceptedProjection`は同kernelの固定消費継続だけが発行する。raw snapshotを受け取るfactoryや外部receipt登録は作らない。利用可能ownerはkernel slotから同pendingへ移り、元slotは復元しない。
 
 snapshot内のDATAは既存の検査・所有済みreadonly値を使用し、opaqueなowner／plan／frame／receipt等は**元参照**を維持する。全graphのstructuredClone／JSON化、live controllerのdeep freeze、新しい同値objectへの置換はしない。freezeや構造一致だけを発行元の根拠にしない。
 
@@ -54,6 +54,8 @@ snapshot内のDATAは既存の検査・所有済みreadonly値を使用し、opa
 | BundlePartsDraft | work内の同pending／dest owner、ReceivedAcceptedProjection、D1 full draftと元row対応、Content候補・prefix候補、局所expectation候補。post前なので受理済みContentChecked／関係値を持つと偽らない |
 | UnpublishedCompleteBundle | post再確認後だけ生成。同owner／pending・受領物、小型expectation＋全manifest／元本文、private ContentCheckedと同prefix関係値、全binding／serialを束ねる。まだ利用可能destではない |
 | PreCommitBundle | 上の全構成と利用claimを固定検査済みの同owner内状態。実commit未実装の段階では固定破棄だけ可能。公開handle／getterや成功票を返さない |
+
+FP-2追記：実装したのは最初のBundlePartsDraftだけ。同snapshotのexpectation、同model／rowsとD1 draft、同header由来prefix候補を同pending／dest owner／receipt・予算serial／失効serialへ結合し、workとpostで照合して固定abortする。prefix候補は同純粋計算結果の参照も保持し、Pp／base／canonicalの値と対応させる。ContentChecked／prefix関係値・UnpublishedCompleteBundleへの昇格はまだ行わない。FP-1の受領専用入口や旧D2入口はexpectationを生成しない。
 
 bundleが必要とする具体的な構成を以下に固定する。
 
@@ -120,4 +122,4 @@ pre／work／post／利用直前の停止、binding不一致・二重消費、so
 - compiled graphの一時copyだけにfaultを注入し、受領後失効・proof差替え・serial違い・再消費・各slotのclear漏れが拒否されることを確認する。runtime friend／getterは追加しない。
 - 旧header／D2固定abort・compiled試験を維持し、新経路の保証と分離する。配布除外・固定依存・秘密非出力とguard外assertionを確認する。
 
-実装分割は、(FP-1、合成内実装済み) 同claimのfull受領内部型／固定継続と失効・破棄、(FP-2、未実装) 同snapshotのexpectationとBundlePartsDraft・全構成照合、(FP-3、未実装) post受理・未公開完成bundle／一度限り固定消費とcompiled保証。**全段階を合成依存・固定abortに限定し、実commit／seal成功は別の詳細検証・明示指示待ち**とする。初稿作成時は設計のみで、今回の実装／試験の範囲と結果は上記検証記録に分離する。
+実装分割は、(FP-1、合成内実装済み) 同claimのfull受領内部型／固定継続と失効・破棄、(FP-2、合成内実装済み) 同snapshotのexpectationとBundlePartsDraft・全構成照合、(FP-3、未実装) post受理・未公開完成bundle／一度限り固定消費とcompiled保証。**全段階を合成依存・固定abortに限定し、実commit／seal成功は別の詳細検証・明示指示待ち**とする。初稿作成時は設計のみで、今回の実装／試験の範囲と結果は上記検証記録に分離する。

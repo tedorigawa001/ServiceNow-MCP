@@ -34,6 +34,8 @@ headerは[既存投影](../tests/support/review/synthetic-finish-plan-binding.ts
 
 後続の[full projection受領・bundle結合差分設計](BEST_PRACTICE_ABORT_SCOPE_RECOVERY_FULL_PROJECTION_BUNDLE_DESIGN.md)のFP-1は、fresh合成継続で同slotのconsume claimをheader／fullで共有する範囲を実装済み。現行header受領後にfullを追加取得せず、旧経路は維持する。[検証記録](E2E_BEST_PRACTICE_FULL_PROJECTION_RECEIPT_FP1_2026-11-04.md)を参照。完成bundle・seal成功・実接続は有効化しない。
 
+FP-2は同full受領snapshotからexpectationとBundlePartsDraftを作って全構成を照合するfresh合成継続まで実装済み（[検証記録](E2E_BEST_PRACTICE_BUNDLE_PARTS_FP2_2026-11-04.md)）。本header-only経路への二度目の消費や完成bundleへの昇格は追加しない。
+
 1. 既存one-shot take claimを先に消費する。検査失敗でも再armしない。
 2. 同owner・accepted handle・受理状態・pins／window・live source／cleanupを検査する。
 3. その時点の同`acceptedFinish`からprojection identityとheader参照を取得し、同take markerへ束ねる。caller callback・await・getter評価を挟まない。
