@@ -158,3 +158,8 @@ it.each(['prepare','move','beginSourceClose','beginCleanup','discard','stop'] as
       failure:{first_hard:{code:operation==='stop'?'cancelled':'internal_review_error',stage:'cleanup'},unresolved:4}});
   }
 });
+it('records an unknown stop reason as internal instead of retaining caller text',()=>{
+  const root=createSyntheticNormalOwnedSupply(fixture(),{guard:()=>undefined});
+  expect(()=>root.stop('caller_reason' as never)).toThrow('internal_review_error');
+  expect(root.inspect()).toMatchObject({state:'failed',first_failure:'internal'});expect(JSON.stringify(root.inspect())).not.toContain('caller_reason');
+});

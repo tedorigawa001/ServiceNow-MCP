@@ -45,6 +45,15 @@ Date: 2026-11-03 / 基準HEAD: `a160b0d`。この記録は実機E2Eではない�
 
 全リポジトリの合成テスト全件は今回未実行。合成recovery群と梱包smokeの保証をそれ以上へ拡張しない。実resource・canonical予算lease・全work／heap上界、PayloadClearedReceiptと上位custody連結は未保証。NB-02／03以降へ残す。
 
-## 5 コミット候補だけの再検証
+## 5 レビュー修正（2026-11-03）
+
+修正前の新規46件は記録として残す。本記録は全リポジトリの合成テストを実行していなかったため、レビュー時にrepo全体のlint（error 0・warning 374）、build、梱包分類監査、全体合成273ファイル／13,418件成功・失敗0を確認した。
+
+- 梱包監査：既存FB-01〜03はkernelのleak marker一覧（`package-http-classification.mjs`の`rootMarkers`）へ新factory／scopeを追加していたが、NB-01の`createSyntheticNormalOwnedSupply`と`synthetic_normal_owned_supply`は未登録だった。runtime `dist`へ漏れても名前検査で検出できないため、両markerを追加した。kernelの固定import自体は変更がなく、既存の監査で引き続き検査される。
+- 試験：`stop()`の未知理由。判定を外すと`stop('caller_reason')`がcallerの文字列をそのまま`first_failure`へ保持し、inspectに現れた（custodyのhardは`internal_review_error`のまま）。未知理由が`internal`へ固定され、caller文字列を出さないことを検査する1件を追加した。同じ判定文はOB-01側にも存在するが、NB-01側の判定を外した変異で新規1件だけが失敗し、既存46件は通過することを確認した。
+
+take側の内部検査・`normal`の同token照合・prepare後のbirth存在（内部継続で常に成立）、birthの結合検査・`checkOwnedSupply`の再実行・8 refsのobject性・active input／4時刻（同DATAからpinsを生成するため構造上一致）、二重prepare／move（supply側・takeの判定が先に停止）、二度目の`custody.local.hard`（supplyの`recordFailure`が既にhard設定）は等価変異として扱う。helperは変更せず、新規試験は47件。修正後も全体合成273ファイル／13,419件成功・失敗0。
+
+## 6 コミット候補だけの再検証
 
 対象7ファイルだけをindexへ登録し、`git checkout-index`でHEAD＋その変更だけの一時コピーを生成した。依存は既存node_modulesを参照し、distは一時コピー内で新規ビルドした。そこでビルド、合成recovery **38ファイル3,239件**、新試験とhelperの厳密型検査、変更TSのESLint、offline梱包 **441 files** がすべて成功。製品依存のみのinstall・compiled worker／MCP smoke・fixture非同梱も再確認した。元作業ツリーの未登録変更には依存せず、期限緩和・実通信・設定変更・Pushは行っていない。

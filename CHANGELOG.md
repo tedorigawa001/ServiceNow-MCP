@@ -140,6 +140,8 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 ### Added
 
+- NB-01 normal owned supply markers are now part of the kernel package leak audit, and a test checks that an unknown `stop()` reason is recorded as `internal` rather than retaining caller text. The supply itself is unchanged.
+
 - FB-03 failure custody run tests now check that an unknown `cleanup_guard` return at either cleanup checkpoint fails closed with the first hard stop, without recording a stop observation or (before the sink) a cleanup fact; the budget observer was previously the sole, untested guard on the cleanup path. The run itself is unchanged.
 
 - Synthetic failure custody tests now check that after commit and before final discard the local owner can no longer request or observe cleanup, the holder stays upper and upper can still consume the same evidence; the custody holder check was previously the sole, untested guard against dual cleanup authority. The custody helper itself is unchanged.
