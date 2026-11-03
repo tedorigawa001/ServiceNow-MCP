@@ -16,6 +16,8 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 ### Changed
 
+- OB-03 D1 adds a package-excluded, non-executable FullMixedDraft DATA contract and full-field mixed-manifest comparator. Existing per-asset/full-schema and producer limits remain intact; original reviewed bodies, parent omission, worker omission, prefix and trace are checked without ID/hash-only shortcuts or array normalization. Independent oracles and a removed-comparison negative control cover content changes and boundaries. No pending connection, ContentChecked authority, seal, runtime connection or admission is enabled.
+
 - PD-B(C) accepts the private prefix relation only after the transfer post-guard and identity recheck, then retires it through a single fixed, non-returning consumer before the existing abort. Root-owned consumption claims and payload-clear checks cover every relation slot. Temporary compiled-graph fault controls exercise replay, marker/epoch mismatch, cancellation after acceptance and retained-reference refusal without adding a runtime friend or publishing a seal; formal issuance and whole-run admission remain disabled.
 
 - PD-B(B) connects the fixed prefix selector/comparator to the same synthetic pending and private header consumer. A root-owned start claim, token/budget/epoch-bound provisional candidate and post-guard recheck preserve one-shot behavior and stop precedence; all new payload references are cleared before failure custody transfer. Mixed parent-omission tests detect P0/Pp substitution. Post-accepted relations, seals, runtime connections, formal issuance and whole-run admission remain disabled.

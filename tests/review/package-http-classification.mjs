@@ -226,6 +226,18 @@ for(const f of pack.files.filter(f=>f.path.startsWith('dist/')&&/\.(?:js|ts|map)
 for(const leak of ['fetch("x");','Date.now();','new Date();','new Worker("x");',"import('node:fs');","import {BoundedReadSession} from '../../../src/servicenow/bounded-read.js';const zzRoot=BoundedReadSession;"])
   assert.throws(()=>auditSyntheticIssuer(parentOmissionText+'\n'+leak,parentOmissionImports),assert.AssertionError,'OM-A audit missed seeded leak: '+leak);
 console.log('OM-A pure parent finding/prefix model excluded; fixed imports + seeded runtime/I/O/clock/worker/leak controls PASS');
+const fullMixedDraftText=readFileSync(join(root,'tests/support/review/synthetic-full-mixed-draft.ts'),'utf8');
+const fullMixedDraftImports=['node:util','node:buffer','../../../src/review/aggregate-schema.js','../../../src/review/result-schema-v2.js','./synthetic-parent-omission-values.js','./synthetic-recovery-full-json.js','./synthetic-recovery-nonreviewed-values.js'];
+auditSyntheticIssuer(fullMixedDraftText,fullMixedDraftImports);
+const fullMixedDraftMarkers=['synthetic-full-mixed-draft','projectSyntheticFullMixedDraft','FullMixedDraftError','FULL_MIXED_DRAFT_LIMITS','full-mixed-draft-v1','synthetic_full_mixed_draft_values'];
+const noFullMixedDraft=text=>assert(!fullMixedDraftMarkers.some(x=>text.includes(x)),'D1 full mixed draft leaked into runtime');
+for(const marker of fullMixedDraftMarkers)assert.throws(()=>noFullMixedDraft(marker));
+assert(!pack.files.some(f=>f.path.includes('synthetic-full-mixed-draft')));
+for(const f of pack.files.filter(f=>f.path.startsWith('dist/')&&/\.(?:js|ts|map)$/.test(f.path)))noFullMixedDraft(readFileSync(join(root,f.path),'utf8'));
+for(const leak of ['fetch("x");','Date.now();','new Date();','new Worker("x");',"import('node:fs');","import {BoundedReadSession} from '../../../src/servicenow/bounded-read.js';const zzRoot=BoundedReadSession;"])
+  assert.throws(()=>auditSyntheticIssuer(fullMixedDraftText+'\n'+leak,fullMixedDraftImports),assert.AssertionError,'D1 audit missed seeded leak: '+leak);
+assert(!rootKernelText.includes('synthetic-full-mixed-draft'),'D1 must remain disconnected from pending kernel');
+console.log('D1 full mixed DATA draft/comparison excluded; fixed imports, disconnected pending + seeded leak controls PASS');
 const prefixDeltaText=readFileSync(join(root,'tests/support/review/synthetic-prefix-delta.ts'),'utf8');
 const prefixDeltaImports=['node:util','zod','../../../src/review/aggregate-schema.js'];
 auditSyntheticIssuer(prefixDeltaText,prefixDeltaImports);

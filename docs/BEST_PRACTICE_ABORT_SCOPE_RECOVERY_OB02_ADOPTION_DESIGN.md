@@ -100,7 +100,7 @@ BoundAdoptionはbodyの新しい所有者や二つ目のaccepted handleではな
 
 ## 6 一つの移譲claimとOB-03への境界
 
-[OB-03移譲先owner・本文／混合manifest比較詳細設計](BEST_PRACTICE_ABORT_SCOPE_RECOVERY_OB03_DESTINATION_CONTENT_DESIGN.md)で、現行PD-B(C)の固定消費を再利用せず別fresh継続へ結ぶ条件、全field内容比較と同destへのatomic commit・失敗時全破棄を具体化した。設計のみで、seal成功は別指示待ちとする。
+[OB-03移譲先owner・本文／混合manifest比較詳細設計](BEST_PRACTICE_ABORT_SCOPE_RECOVERY_OB03_DESTINATION_CONTENT_DESIGN.md)で、現行PD-B(C)の固定消費を再利用せず別fresh継続へ結ぶ条件、全field内容比較と同destへのatomic commit・失敗時全破棄を具体化した。D1の値専用draft／全field比較だけを合成実装し、同pending／ContentCheckedとseal成功は未接続・別指示待ちとする。
 
 新正常系の固定seal操作案を`sealBoundMixedExpectation()`とし、同owner内のprivate採用ticketから元accepted／contentを選ぶ。外部accepted・manifest・pins・plan・binding・移譲先ownerを指定する引数は作らず、余分な引数は拒否する。旧factoryのbinding／accepted handleを受けるAPIは変更しない。新入口を既存handleの登録口にはしない。
 

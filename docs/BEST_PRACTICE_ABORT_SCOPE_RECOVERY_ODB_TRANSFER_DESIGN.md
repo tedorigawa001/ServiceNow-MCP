@@ -80,7 +80,7 @@ OM-Aが許す最大103 limitationsや重複初期limitationsは、既存RA base�
 
 ## 5 一度限りの移譲
 
-[OB-03移譲先owner・本文／混合manifest比較詳細設計](BEST_PRACTICE_ABORT_SCOPE_RECOVERY_OB03_DESTINATION_CONTENT_DESIGN.md)で、本節のcommitと全行／本文照合を対にした。小型expectationの構造保証と元reviewed全本文の比較を分離し、同take／同relation消費の固定継続・未公開bundle・失敗custodyの境界を定める。実装・seal成功は有効化しない。
+[OB-03移譲先owner・本文／混合manifest比較詳細設計](BEST_PRACTICE_ABORT_SCOPE_RECOVERY_OB03_DESTINATION_CONTENT_DESIGN.md)で、本節のcommitと全行／本文照合を対にした。小型expectationの構造保証と元reviewed全本文の比較を分離し、同take／同relation消費の固定継続・未公開bundle・失敗custodyの境界を定める。D1の値専用draft／全field比較だけを合成実装し、同pending接続・seal成功は有効化しない。
 
 新固定操作案を`sealBoundMixedExpectation()`とする。[OB-02接続差分](BEST_PRACTICE_ABORT_SCOPE_RECOVERY_OB02_ADOPTION_DESIGN.md)のprivate採用ticketから同ownerのaccepted／contentを選び、binding／plan／handoffもprivateに保持する。callerが外部accepted／manifest／移譲先ownerを指定する引数は作らない。旧factoryのhandleを受けるAPIは変更しない。
 

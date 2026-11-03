@@ -1,7 +1,7 @@
 # OB-03：移譲先owner・seal接続と本文／混合manifest比較
 
-Version: br006-recovery-ob03-destination-content-draft-0.1 / Date: 2026-11-03。
-基準HEAD: `4f82d9c`。Status: **設計のみ。正式発行口閉鎖・全体受付無効・Unknown・VM／監視／telemetry調査保留を維持する。実装・seal成功・実接続・実通信・設定変更・Pushは行わない。**
+Version: br006-recovery-ob03-destination-content-draft-0.2 / Date: 2026-11-03。
+設計基準HEAD: `4f82d9c`／D1実装基準HEAD: `b17a418`。Status: **D1の値専用FullMixedDraft・全field比較と独立oracleを合成実装。同pending・ContentChecked・dest／sealは未接続。正式発行口閉鎖・全体受付無効・Unknown・VM／監視／telemetry調査保留を維持する。seal成功・実接続・実通信・設定変更・Pushは行わない。**
 
 [OD-B設計](BEST_PRACTICE_ABORT_SCOPE_RECOVERY_ODB_TRANSFER_DESIGN.md)§3〜7、[OB-02接続](BEST_PRACTICE_ABORT_SCOPE_RECOVERY_OB02_ADOPTION_DESIGN.md)§6〜8と[PD-B接続](BEST_PRACTICE_ABORT_SCOPE_RECOVERY_PENDING_PREFIX_BINDING_DESIGN.md)§10の差分。prefix関係値を確認できることと、元本文を保持したmixed内容を一つの移譲先へsealできることを分離する。調査時のkernel作業中差分は変更せず、本稿の現行到達点は上記コミットを基準とする。
 
@@ -112,3 +112,19 @@ atomicはJS内の同期所有権・状態遷移を指し、プロセス停止・
 - strict compile・実emit graphの固定fault試験・package除外／friend不在を確認し、旧(C)固定abortの試験と新正常系保証を区別する。全条件があるまでseal成功の承認へ進めない。
 
 実装分割案：(D1) 非実行のFullMixedDraft値契約・全field比較と独立oracle、(D2) 同pendingへのprivate ContentChecked／未公開dest owner・一度限り準備／固定abort、(D3) 事前レビュー後のatomic commitと同期失効、(D4) 正常terminal-only／固定discard・hard診断の連続接続。D3のseal成功は別の明示指示待ちであり、本稿やD1／D2の成功で有効化しない。
+
+## 10 D1の合成値実装と未保証範囲
+
+[synthetic-full-mixed-draft](../tests/support/review/synthetic-full-mixed-draft.ts)に`projectSyntheticFullMixedDraft`とreadonlyの戻り値型`SyntheticFullMixedDraftValues`を追加した。厳密な外側DATAは`kind／model_id／schema_version／ruleset_version／selected／prefix／rows／manifest`のみ。kindはsynthetic_full_mixed_draft_v1、modelはfull-mixed-draft-v1、manifestはassets／prefix／traceのみである。rulesetは現行schemaの対応版を必要とし、各元／候補reviewedのrulesetとも一致させる。
+
+元列の値検査・keep／omit導出は既存OM-Aを利用し、候補manifestは独立にsnapshotしてstrict全asset schema・reviewed full schema・producer検査を通す。全field比較は元列由来の親変換後assetと候補asset、およびprefix／traceを対象とし、object identity／ID／hashだけで一致扱いしない。親省略の元reviewed全本文はoriginal_rowsに保持し、公開omitted行へ本文を足さない。full schemaで未知fieldをstripせず拒否する。
+
+元列・候補とも選択最大100、非空かつretained not_processedを最低1件必要とするが、実active input／T_i／receiptへの結合は未検証。元reviewed0件の列は扱える。現在のOM-Aはfindings枠100から開始し単一reviewedのfindingsも最大100なので、親省略のみが存在して出力reviewed0となる経路を新たに捏造しない。
+
+各assetのnodes 262,144／文字課金786,432（stringとkeyのUTF-16長×3）／UTF-8 JSON bytes262,144・CG-A由来depth・配列100／record keys30を維持する。選択／prefix／traceの補助snapshotはnodes10,000／文字650,000／depth4／配列103／keys30に限定し、元列のOM-A局所枠は別途維持する。最大100assetを有限に処理する容量モデルであり、新たな本番総量cap・全work／heap受付ではない。
+
+OM-Aの103件の中間prefixは値として比較できるが、RA／PD-A eligibilityに受理された証拠にはしない。D1はPD-Aもkernelも呼ばず、同pendingや実originを採用しない。候補と元DATAを両方同じ値へ改変したcallerに対してprovenanceを証明できるとは扱わない。
+
+出力はauthority:none／full_mixed_values_only、freeze済み元列とmanifest・保持findings数・部分的なcopy／比較node使用量だけ。usageはschema検査／JSON serialization／全workやheapの上界ではない。失敗はshape／limit／unsupported／mismatchとinput／parent／manifest／contentの固定分類であり、本文・ID・causeを含めない。
+
+[D1検証記録](E2E_BEST_PRACTICE_FULL_MIXED_DRAFT_D1_2026-11-03.md)に、独立oracle・全field変更・省略区別・境界と比較除去の負の対照を記録する。package監査で固定pure依存・漏出負の対照・kernel未接続を確認する。D2のprivate ContentChecked／dest準備・D3 commit・D4正常終端と、それらに必要な費用導出は未実装。
