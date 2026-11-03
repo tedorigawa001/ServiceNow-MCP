@@ -76,6 +76,8 @@ PD-Aの成功はprefix-local値だけを保証する。供給したheaderからs
 
 次の範囲は、同pendingのP0／Pp／traceと実header受領物を固定比較へ結ぶ詳細契約・実装、one-shot関係値の破棄、費用計数である。移譲先seal成功・実session／worker接続は引き続き対象外とする。
 
+[同pendingのPD-A入力化・関係値接続差分](BEST_PRACTICE_ABORT_SCOPE_RECOVERY_PENDING_PREFIX_BINDING_DESIGN.md)で、同model／planからの固定入力・base／実headerの比較範囲・root側claimとpost受理を具体化した。設計のみで、既存header consume claimを再armせず、固定abortを維持する。
+
 ## 8 合成実装の到達範囲
 
 `TakenNormalAccepted`へopaqueな`projectionReceipt`を追加した。公開の`NormalAcceptedSnapshot`は変更せず、同kernelのtakeだけが受理済み`acceptedFinish.projection`とheaderをprivate slotへ保持し、元accepted slotを外す。`checkTaken`は元taken object自体も照合する。

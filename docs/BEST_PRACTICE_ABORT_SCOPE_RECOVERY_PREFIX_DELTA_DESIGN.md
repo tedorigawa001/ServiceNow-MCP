@@ -131,9 +131,11 @@ error上限100とwarning上限100は独立である。E=100であること自体
 
 将来の内部関係値（名称案OrderedPrefixRelation）は、同P0／Pp・traceへの参照、同pins base、同plan／accepted origin、原順序側prefix、固定deltaの採用／drop件数、canonical一致結果を同claim内で束ねる。一般のprefix／delta／acceptedを登録するfactoryやgetterを設けない。値計算成功だけでは移譲・seal authorityにならない。
 
-現在のNormalAcceptedSnapshotはpins／plan／handoff／route等を持つが、実accepted projectionのheader参照は返していない。OB-03前に、同constructorのprivate継続がその実headerとの比較を内部で行うか、同takeへ束ねるprivate projection receiptを追加する必要がある。別呼出し・summaryや仮routeで投影を再生成して「実accepted header」とみなさない。公開snapshot／body getterを追加しない。
+現在のNormalAcceptedSnapshotはpins／plan／handoff／route等を持つが、実accepted projectionのheader参照は返していない。この供給は次段落の同takeに束ねるprivate receipt／consumerで補い、公開snapshotは拡張しない。別呼出し・summaryや仮routeで投影を再生成して「実accepted header」とみなさない。公開snapshot／body getterを追加しない。
 
 [実accepted header供給境界](BEST_PRACTICE_ABORT_SCOPE_RECOVERY_ACCEPTED_HEADER_SUPPLY_DESIGN.md)で二案を比較し、同takeへprivate receiptを束ねる案を合成実装した。対象はaccept後の同projectionで、take後の再読・再生成はしない。固定consumerと失効時破棄までを接続し、PD-A入力のprivate結合・内容比較・sealは未実装のまま。
+
+[同pendingの入力化・比較・関係値接続差分](BEST_PRACTICE_ABORT_SCOPE_RECOVERY_PENDING_PREFIX_BINDING_DESIGN.md)に、Pp／同plan verifyのstrict入力化、Q.base_prefixとpins base・Q.canonical_prefixと実headerの比較、root側one-shotとpost受理・固定消費を設計した。full header適合・seal authorityとは分離し、接続実装は未着手。
 
 関係計算は同pendingを所有する保護scopeに限定し、pre／work／postと同失効serialを結ぶ。workのshape／limit／不一致は一時失敗に留め、postのcancelled／deadlineを優先する。失敗時は関係値・ordered/canonicalの一時コピーも破棄し、NB-03の本文破棄証拠・固定診断／同custodyへ進む。diagnosticは固定reasonと件数だけでprefix本文・rawエラーや行IDを出さない。
 
