@@ -16,6 +16,8 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 ### Changed
 
+- Adds package-excluded synthetic failure/upper owners with four fixed cleanup roles and a single custody selector. Immutable failure reports, one-shot commit receipts and final discard keep unresolved obligations under the upper owner without calling them released. Same-origin evidence, late cleanup, duplicate/foreign handles and reentry are covered by synthetic tests; accepted adoption, runtime cleanup, destination seals and whole-run admission remain disabled.
+
 - OB-01 adds a package-excluded owned mixed-supply constructor with a strict DATA-only contract and a one-shot preparation claim. Parent and original worker omissions derive from one pinned row sequence; one pins construction supplies the exact input/original-outcome references used by private row links. Guard stops, mixed handles, invalid contexts and duplicate preparation fail closed. Legacy entry points remain unchanged; accepted adoption, destination seals, runtime binding and whole-run admission remain disabled.
 
 - OD-A adds a package-excluded, fresh synthetic mixed-slot assembly with separate brands and row/receipt identities. Strict producer/state values and canonical order feed one-shot initial/parent/completed prefix stages; original worker omissions remain distinct from parent omissions retaining reviewed DATA. Mixed handles, duplicate generation/consumption, guard stops and cleanup invalidate pending values without upgrading legacy roots. Accepted/plan adoption, content comparison, candidates, runtime origin and whole-run admission remain disabled.

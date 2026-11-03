@@ -231,6 +231,16 @@ for(const f of pack.files.filter(f=>f.path.startsWith('dist/')&&/\.(?:js|ts|map)
 for(const leak of ['fetch("x");','Date.now();','new Date();','new Worker("x");',"import('node:fs');","import {BoundedReadSession} from '../../../src/servicenow/bounded-read.js';const zzRoot=BoundedReadSession;"])
   assert.throws(()=>auditSyntheticIssuer(mixedSlotText+'\n'+leak,mixedSlotImports),assert.AssertionError,'OD-A audit missed seeded leak: '+leak);
 console.log('OD-A fresh synthetic mixed slots excluded; fixed imports + seeded runtime/I/O/clock/worker/leak controls PASS');
+const failureCustodyText=readFileSync(join(root,'tests/support/review/synthetic-failure-custody.ts'),'utf8'),failureCustodyImports=['node:util'];
+auditSyntheticIssuer(failureCustodyText,failureCustodyImports);
+const failureCustodyMarkers=['synthetic-failure-custody','createSyntheticFailureCustody','FailureCustodyError','synthetic_failure_custody_v1','synthetic_failure_owner','synthetic_upper_failure_owner','synthetic_failure_creation','synthetic_failure_fact','synthetic_failure_absence','synthetic_failure_report','synthetic_failure_commit'];
+const noFailureCustody=text=>assert(!failureCustodyMarkers.some(x=>text.includes(x)),'synthetic failure custody leaked into runtime');
+for(const marker of failureCustodyMarkers)assert.throws(()=>noFailureCustody(marker));
+assert(!pack.files.some(f=>f.path.includes('synthetic-failure-custody')));
+for(const f of pack.files.filter(f=>f.path.startsWith('dist/')&&/\.(?:js|ts|map)$/.test(f.path)))noFailureCustody(readFileSync(join(root,f.path),'utf8'));
+for(const leak of ['fetch("x");','Date.now();','new Date();','new Worker("x");',"import('node:fs');","import {BoundedReadSession} from '../../../src/servicenow/bounded-read.js';const zzRoot=BoundedReadSession;"])
+  assert.throws(()=>auditSyntheticIssuer(failureCustodyText+'\n'+leak,failureCustodyImports),assert.AssertionError,'failure custody audit missed seeded leak: '+leak);
+console.log('Synthetic failure/upper custody excluded; fixed imports + seeded runtime/I/O/clock/worker/leak controls PASS');
 for(const suffix of ['.js','.js.map','.d.ts','.d.ts.map'])assert(pack.files.some(f=>f.path==='dist/servicenow/review-kernel/release-observation'+suffix),'required one-shot UTC value helper missing: '+suffix);
 const sessionDeclarations=readFileSync(join(root,'dist/servicenow/bounded-read.d.ts'),'utf8');
 const sessionAst=parse(readFileSync(join(root,'dist/servicenow/bounded-read.js'),'utf8'),{ecmaVersion:'latest',sourceType:'module'});

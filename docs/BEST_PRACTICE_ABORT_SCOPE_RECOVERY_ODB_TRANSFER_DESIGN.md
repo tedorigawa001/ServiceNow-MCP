@@ -1,7 +1,7 @@
 # OD-B 同生成元の供給と一度限りの内容移譲
 
-Version: br006-recovery-odb-transfer-draft-0.3 / Date: 2026-11-03。
-Status: **OB-01のstrict DATA・OwnedMixedSupply・同pins／行対応・準備claimまで合成実装。accepted採用・移譲先sealは未接続。正式発行口閉鎖・全体受付無効・Unknown・VM／監視／telemetry調査保留を維持する。**
+Version: br006-recovery-odb-transfer-draft-0.4 / Date: 2026-11-03。
+Status: **OB-01の供給・準備claimと、独立した純粋FailureOwner／上位custodyまで合成実装。既存cleanup連結・accepted採用・移譲先sealは未接続。正式発行口閉鎖・全体受付無効・Unknown・VM／監視／telemetry調査保留を維持する。**
 
 基準HEAD: `1eb3c74`。[OM-D設計](BEST_PRACTICE_ABORT_SCOPE_RECOVERY_MIXED_CONTENT_OMD_DESIGN.md)§4・7・10〜11と[OD-A検証記録](E2E_BEST_PRACTICE_OMD_SLOTS_ODA_2026-11-03.md)からの差分。同じ生成元で作ったmixed内容とaccepted／planを、一つのprivate操作で移譲先へ確定する。OD-Aの公開handleを既存rootへ後付け登録する方式は採らない。本文照合・finish job・候補発行はOD-Bの対象外。
 
@@ -188,3 +188,5 @@ guardはfake停止境界だけ。準備のguard数は成功時2N+2、discardは2
 梱包監査の既存kernel固定importに、pureなpins生成・OM-Aモデルの2依存を明示追加し、新factory／brand markerも漏出拒否へ加えた。seeded I/O／時計／worker／runtime漏出の負の対照は維持する。runtimeソース、旧OD-A／NR-Cと実sessionの台帳は変更していない。
 
 OB-02のaccepted採用・一つの移譲claim、OB-03のdest seal／terminal-only接続、固定soft／verify delta・OD-C比較・実originは未成立。preparedの成功をこれらの成立へ昇格しない。
+
+失敗時の先行条件として、[寿命設計§9](BEST_PRACTICE_ABORT_SCOPE_RECOVERY_FAILURE_OWNER_LIFETIME_DESIGN.md)の独立した合成FailureOwner／上位owner・4roleのcustody・一度限りcommit receipt／最終discardを実装した。未解決責務を上位へ移せたこととresource解放を区別し、immutable reportとlate current診断を分ける。OB-01／既存kernelへの連結、accepted採用と移譲先sealは引き続き未対応。

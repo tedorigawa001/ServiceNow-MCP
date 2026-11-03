@@ -1,7 +1,7 @@
 # OD-B 失敗ownerの寿命と最終discard条件
 
-Version: br006-recovery-failure-owner-lifetime-draft-0.1 / Date: 2026-11-03。
-Status: **設計のみ。合成依存限定。正式発行口閉鎖・全体受付無効・Unknown・VM／監視／telemetry調査保留を維持する。**
+Version: br006-recovery-failure-owner-lifetime-draft-0.2 / Date: 2026-11-03。
+Status: **固定4roleの失敗owner・上位owner・custody slot・commit receipt／最終discardを純粋合成実装。既存resource／cleanupとの連結は未対応。正式発行口閉鎖・全体受付無効・Unknown・VM／監視／telemetry調査保留を維持する。**
 
 基準HEAD: `35541ab`。[OD-B設計](BEST_PRACTICE_ABORT_SCOPE_RECOVERY_ODB_TRANSFER_DESIGN.md)§7・10のOB-02開始条件を具体化する。hard後の診断と解放責務は、利用可能なaccepted／planとは別に保持する。最終discardはownerの保持参照を外す操作であり、resource解放完了の証明ではない。
 
@@ -32,7 +32,7 @@ FailureOwner自身は最大100行の本文や全attempt台帳を複製しない�
 
 ## 3 保持する型と捨てる情報
 
-以下は未実装の合成内部型案。
+以下は全体の合成内部型案。独立した合成owner／証拠の実装範囲は§9、既存kernelやresourceへの結合は未実装とする。
 
 | 型案 | 必要な内容 | 保持しないもの |
 | --- | --- | --- |
@@ -123,4 +123,34 @@ FailureOwnerの台帳は4 role、first hard 1件、roleごとの固定診断slot
 
 最初の実装範囲は、固定4 roleのFailureOwner・immutable report・同生成元のUpperFailureOwnerとcustody slot・一度限りcommit receipt／discardの純粋内部契約である。accepted採用や移譲先sealより先に、失敗後の唯一の責務所有者を確認する。既存cleanup sinkとの実連結・外側executorの終了保証・実会計と上界は後続へ残す。
 
-本工程はMDと親参照の更新だけ。実装・実接続・実通信・実機操作・設定変更・token／Permit／候補発行・Pushは行わない。
+draft-0.1はMDと親参照の更新だけ。続く純粋実装の範囲を以下に分離し、実接続・実通信・実機操作・設定変更・token／Permit／候補発行・Pushは行わない。
+
+## 9 独立した合成FailureOwnerとcustodyの実装
+
+[新assembly](../tests/support/review/synthetic-failure-custody.ts)と[合成試験](../tests/review/synthetic-failure-custody.test.ts)をtests配下へ追加した。既存OB-01／recovery kernelは変更しない。新factoryのDATAは固定kindとupperのconnected／absent／reject条件だけで、resource／session／既存ownerを注入する項目はない。guardは固定したfake checkpointだけ。upper条件の後書換えを採用しない。
+
+### 9.1 生成元と証拠
+
+同constructionにissuer・local・upperの3facade、4roleの台帳、一つのcustody holderを生成する。固定issuerの生成claim／未生成証拠／生成結果／role別終了／cleanup証拠は空の別brand handleで、consumerは同token・role・private frame・ticketを照合して一度消費する。開始前・hard前に観測したfactsも同台帳へ残す。
+
+hardは未使用の生成claimを閉じるが、absenceを自動でconfirmedにしない。生成中はcreatingのままで、遅着のcreatedは同ticketへだけ結ぶ。元ownerのdiscard後も、上位が引き継いだ台帳への同発行元の遅着証拠を受理できる。コピー・foreign・別role・unknown kind・余分な引数・重複は拒否する。
+
+現実装は生成済みの全roleで、同roleの終了観測と要求済みcleanupのconfirmedを両方必要とする保守的なsubset。sourceもsource_closedだけではcleanupを推論しない。未生成は固定issuerの証拠を受理したときだけ解決済みとする。これは合成factsの整合であり、実source closeや全attempt消費の証明ではない。
+
+### 9.2 封印と一度限りのcommit
+
+local.hardで最初の固定code／stageを保持し、sealで4roleのimmutable reportを作る。reportもoutcome=failed、scope=synthetic_failure_diagnostic、authority=noneで、cleanup解決をレビュー成功へ変換しない。
+
+commitはreport handleと空の同upper slotを検査し、report・proof・receiptの準備とpre/post checkpointを済ませてから、同期の代入だけでcustody holderをupperへ切り替える。reportだけ／custodyだけの公開受理口はない。commit後の表示失敗で元へ戻さない。upper不在／拒否・検査失敗なら元が責務を保持し、移譲claimは復活させない。
+
+finalDiscardは同commit receiptを先に取り外し、同token／report／first hard／custody serialとupper所有を照合して一度だけ元ownerを終端する。未解決があっても、同上位に責務を移せた場合だけ元ownerをdiscardできる。これはresourceの解放confirmedではない。上位未受理・foreign／copy／summary・二重消費は拒否する。
+
+### 9.3 診断と上限
+
+上位の受理済みreportは書換えず、late factsは上位のcurrent診断だけを更新する。元localのconsumerはcustody移譲後に拒否され、上位の未消費証拠を奪わない。first hardは後続のcleanup失敗・protocol fault・表示失敗・停止観測で置換しない。
+
+checkpointのcancelled／deadline_exceededは停止観測へ記録するだけで、cleanup-onlyのseal／commit／discardをhealthy guardで妨げない。throw／未知返値・再入はその操作を拒否し、commit前はlocal、commit後はupperが唯一の責務所有者として残る。fault件数は100で飽和させ、別のprivate poison flagで飽和後の握り潰した再入も検出する。
+
+4 ticket、最大12個の未消費証拠slot、report／upper report／commit receipt各1slotだけを持ち、本文や例外履歴を受け付けない。native I/O、clock、timer、workerを呼ばず、残予算0相当の停止checkpointでも追加待機は作らない。一方で実deadline／共有予算／実cleanup・attempt inventoryは未結合であり、guard数や固定slot数を全work／heap上界とはしない。
+
+inspectのruntime_resource_origin／actual_cleanup／attempt_inventory／canonical_budget／cleanup_deadlineは未保証のまま。OB-01の実payload失効や既存kernelのsink連結は後続であり、本実装が代行したとはしない。[検証記録](E2E_BEST_PRACTICE_FAILURE_CUSTODY_2026-11-03.md)参照。
