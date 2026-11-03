@@ -73,7 +73,7 @@ selected=0／input=0、collection failedで必須active receiptが存在しな�
 
 ## 6 合法omission・finish jobへの後続境界
 
-親省略決定証拠とfinalizeの合法変換モデルは[CG-C詳細設計draft-0.1](BEST_PRACTICE_ABORT_SCOPE_RECOVERY_OMISSION_CGC_DESIGN.md)で具体化した。元worker omittedと親受理後のomissionを別variantとし、元captureを保持したまま検証する案である。モデル／証拠は未実装で、NR-Cの親omission拒否を解除しない。
+親省略決定証拠とfinalizeの合法変換モデルは[CG-C詳細設計](BEST_PRACTICE_ABORT_SCOPE_RECOVERY_OMISSION_CGC_DESIGN.md)で具体化した。元worker omittedと親受理後のomissionを別variantとし、元captureを保持したまま検証する案である。モデル／証拠は未実装で、NR-Cの親omission拒否を解除しない。
 
 元workerのresult_omittedは、その値が届いた事実だけを保持し、worker内部のサイズ判定を親が再現して証明したとは言わない。親受理後の省略にはCG-Cで元capture・固定finding予算順序・省略判断・warning／error副作用が必要。finalizeのfinding／byte省略はさらに別モデルとする。
 

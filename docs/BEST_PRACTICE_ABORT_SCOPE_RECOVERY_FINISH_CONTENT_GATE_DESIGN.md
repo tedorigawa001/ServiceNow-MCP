@@ -101,7 +101,7 @@ JSONはデータとして扱い、review対象のJavaScriptを実行しない。
 
 ## 7 三つのomissionと合法変換
 
-親決定証拠・固定順序・副作用差・bounded size計数・独立oracleの後続契約は[CG-C詳細設計draft-0.1](BEST_PRACTICE_ABORT_SCOPE_RECOVERY_OMISSION_CGC_DESIGN.md)へ分離した。設計のみで、現NR-Cの親omission拒否・旧root・正式発行口閉鎖を変更しない。
+親決定証拠・固定順序・副作用差・bounded size計数・独立oracleの後続契約は[CG-C詳細設計](BEST_PRACTICE_ABORT_SCOPE_RECOVERY_OMISSION_CGC_DESIGN.md)へ分離した。設計のみで、現NR-Cの親omission拒否・旧root・正式発行口閉鎖を変更しない。
 
 | 省略点 | 現行動作 | 本文gateで必要な根拠 |
 | --- | --- | --- |
