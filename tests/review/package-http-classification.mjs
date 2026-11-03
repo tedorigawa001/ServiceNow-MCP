@@ -68,7 +68,8 @@ const rootMarkers=['synthetic-recovery-kernel','createSyntheticRecoveryKernel','
   'createSyntheticNormalTransferRoot','PendingBoundTransfer','PayloadClearedReceipt','synthetic_normal_transfer_custody',
   'projectionReceipt','normalHeaderConsumptions','clearNormalHeader','PendingPrefixCheck','prefixPostChecks','prefixCandidates',
   'OrderedPrefixRelation','consumePrefixRelation','relationConsumeStarted','prefixRelationMarker',
-  'createSyntheticDestinationPreparationRoot','PendingContentCheck','ContentChecked','UnpublishedDestination','checkDestinationCandidate'];
+  'createSyntheticDestinationPreparationRoot','PendingContentCheck','ContentChecked','UnpublishedDestination','checkDestinationCandidate',
+  'createSyntheticFullProjectionReceiptRoot','ReceivedAcceptedProjection','receivedProjection','pendingProjection','consumeProjection','checkProjection'];
 const noRecoveryRoot=text=>assert(!rootMarkers.some(x=>text.includes(x)),'RB-A shared kernel/root leaked into runtime');
 for(const marker of rootMarkers)assert.throws(()=>noRecoveryRoot(marker));
 assert(!pack.files.some(f=>/synthetic-recovery-kernel|synthetic-recovery-lifecycle|synthetic-finish-recovery-root/.test(f.path)));

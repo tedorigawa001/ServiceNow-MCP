@@ -16,6 +16,8 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 ### Changed
 
+- OB-03 FP-1 adds a fresh package-excluded synthetic full-projection receipt continuation. Header/full consumers share the same pre-spent claim and original take receipt; the full receipt stays private, is rechecked after the guard, and is retired by the fixed abort. Cross-path/replay, foreign/copy and retained-payload controls preserve diagnostics and cleanup-only custody. No expectation/bundle generation, seal, runtime connection, formal issuance or whole-run admission is enabled.
+
 - OB-03 D2 adds a fresh package-excluded preparation root with a pre-reserved private destination owner. The same pending/pins/model/header feed D1; post-guard identity, budget and epoch checks alone can issue private ContentChecked and prepare an unpublished destination once. The fixed abort clears all new payload slots before failure custody transfer. Legacy transfers never call D1; no commit, seal, runtime connection, formal issuance or whole-run admission is enabled.
 
 - OB-03 D1 adds a package-excluded, non-executable FullMixedDraft DATA contract and full-field mixed-manifest comparator. Existing per-asset/full-schema and producer limits remain intact; original reviewed bodies, parent omission, worker omission, prefix and trace are checked without ID/hash-only shortcuts or array normalization. Independent oracles and a removed-comparison negative control cover content changes and boundaries. No pending connection, ContentChecked authority, seal, runtime connection or admission is enabled.

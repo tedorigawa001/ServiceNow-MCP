@@ -32,7 +32,7 @@ headerは[既存投影](../tests/support/review/synthetic-finish-plan-binding.ts
 
 ## 4 同takeでの移譲順序
 
-後続の[full projection受領・bundle結合差分設計](BEST_PRACTICE_ABORT_SCOPE_RECOVERY_FULL_PROJECTION_BUNDLE_DESIGN.md)は、fresh継続で同slotのconsume claimをheader／fullで共有する案とする。現行header受領後にfullを追加取得せず、旧経路は維持する。設計のみで、実装・seal成功は有効化しない。
+後続の[full projection受領・bundle結合差分設計](BEST_PRACTICE_ABORT_SCOPE_RECOVERY_FULL_PROJECTION_BUNDLE_DESIGN.md)のFP-1は、fresh合成継続で同slotのconsume claimをheader／fullで共有する範囲を実装済み。現行header受領後にfullを追加取得せず、旧経路は維持する。[検証記録](E2E_BEST_PRACTICE_FULL_PROJECTION_RECEIPT_FP1_2026-11-04.md)を参照。完成bundle・seal成功・実接続は有効化しない。
 
 1. 既存one-shot take claimを先に消費する。検査失敗でも再armしない。
 2. 同owner・accepted handle・受理状態・pins／window・live source／cleanupを検査する。

@@ -24,7 +24,7 @@ try{
   const clearEnd=text.indexOf('\n',clearStart);assert(clearEnd>clearStart);
   const withoutClear=slot=>t=>{const body=t.slice(clearStart,clearEnd),line=`${slot} = undefined;`;assert.equal(body.split(line).length,2,`clear must retire ${slot} once`);return t.slice(0,clearStart)+body.replace(line,`/* seeded retained ${slot} */`)+t.slice(clearEnd);};
   let serial=0;
-  async function load(change){const file=join(out,`tests/support/review/destination-case-${serial++}.js`);writeFileSync(file,change?change(text):text);return (await import(pathToFileURL(file).href)).createSyntheticDestinationPreparationRoot;}
+  async function load(change,factory='createSyntheticDestinationPreparationRoot'){const file=join(out,`tests/support/review/destination-case-${serial++}.js`);writeFileSync(file,change?change(text):text);return (await import(pathToFileURL(file).href))[factory];}
   function setup(create,guard=()=>undefined){
     const a=aggregate(),id='1'.repeat(32),S='2026-10-17T04:59:00.000Z',O='2026-10-17T04:59:01.000Z',U='2026-10-17T04:59:03.000Z';
     const raw={kind:'synthetic_omd_bound_root_v1',recovery:{point:'analyze_timer',active_input_sys_id:id,accounting:{requests:10,received_bytes:20,payload_bytes:30},consistency:'unverified'},
@@ -56,4 +56,36 @@ try{
     assert.throws(()=>r.transferFailure());assert.equal(r.custody().payload_cleared,false);
   }
   console.log('Compiled destination preparation: post-only ContentChecked, epoch/owner/pending/model/budget/missing recheck rejection, full clear + 4 retained-slot negative controls PASS (no network/seal)');
+  // FP-1: exercise private calls only in temporary emitted copies. No test friend or payload getter.
+  const fullFactory='createSyntheticFullProjectionReceiptRoot';
+  function fullClean(r,reason,receipts,checks){
+    assert.throws(()=>r.receiveFullProjection());assert.equal(r.inspect().first_failure,reason);
+    assert.deepEqual(r.inspect().full_projection,{receipts,post_checks:checks,pending:false,bundles:0,seals:0});
+    assert.equal(r.inspect().kernel.accepted_projection.pending,false);
+    r.finalDiscard(r.transferFailure());assert.equal(r.custody().payload_cleared,true);
+  }
+  fullClean(setup(await load(undefined,fullFactory)),'state',1,1);
+  const receive='pendingProjection = acceptedChannel.consumeProjection(b, p.taken);';
+  const recheck='acceptedChannel.checkProjection(b, pendingProjection);';
+  for(const line of [receive,recheck])assert.equal(text.split(line).length,2,'FP-1 call site must be unique');
+  for(const [replacement,kernelCount] of [
+    ['try { acceptedChannel.consumeHeader(b, p.taken); } catch {} '+receive,0],
+    [receive+' acceptedChannel.consumeHeader(b, p.taken);',1],
+    [receive+' acceptedChannel.consumeProjection(b, p.taken);',1],
+    ['pendingProjection = acceptedChannel.consumeProjection(b, Object.freeze({ ...p.taken }));',0],
+  ]){const r=setup(await load(t=>t.replace(receive,replacement),fullFactory));fullClean(r,'binding',0,0);assert.equal(r.inspect().kernel.accepted_projection.consumptions,kernelCount);}
+  for(const fault of [
+    'pendingProjection = Object.freeze({ ...pendingProjection });',
+    'pendingProjection = Object.freeze({ ...pendingProjection, receipt: Object.freeze({}) });',
+    'pendingProjection = Object.freeze({ ...pendingProjection, accepted: Object.freeze({}) });',
+    'acceptedChannel.invalidatePayload();',
+  ])fullClean(setup(await load(t=>t.replace(recheck,fault+' '+recheck),fullFactory)),'internal',1,0);
+  // Both owners must clear the same received payload before cleanup-only custody can be claimed.
+  for(const [slot,make] of [
+    ['pendingProjection',withoutClear('pendingProjection')],
+    ['receivedProjection',t=>{const line='receivedProjection = undefined;';assert.equal(t.split(line).length,2);return t.replace(line,'/* seeded retained receivedProjection */');}],
+  ]){
+    const r=setup(await load(make,fullFactory));assert.throws(()=>r.receiveFullProjection());assert.throws(()=>r.transferFailure(),undefined,slot);assert.equal(r.custody().payload_cleared,false);
+  }
+  console.log('Compiled FP-1: same claim cross-path/replay rejection, copied take/receipt/accepted refusal, revoke and 2 retained-payload controls PASS (no network/bundle/seal)');
 }finally{globalThis.fetch=originalFetch;rmSync(out,{recursive:true,force:true});}
