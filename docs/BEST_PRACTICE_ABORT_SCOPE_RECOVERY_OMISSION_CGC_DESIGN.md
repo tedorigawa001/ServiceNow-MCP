@@ -1,6 +1,6 @@
 # CG-C 親省略決定証拠・合法omissionモデル 詳細設計
 
-Version: br006-recovery-omission-cgc-draft-0.2 / Date: 2026-11-03。
+Version: br006-recovery-omission-cgc-draft-0.3 / Date: 2026-11-03。
 Status: **OM-Aのstrict値型・親prefix／keep／omit純粋計算を合成限定で実装。親決定証拠・finalizeモデル・manifest／finish job接続は未実装。正式発行口閉鎖・全体受付無効・Unknown・VM／監視／telemetry調査保留を維持する。**
 
 基準HEAD: `fd5ddb9`（NR-Cの追加対照を含む）。[内容gate設計](BEST_PRACTICE_ABORT_SCOPE_RECOVERY_FINISH_CONTENT_GATE_DESIGN.md)§3・7・8と[非reviewed設計](BEST_PRACTICE_ABORT_SCOPE_RECOVERY_NONREVIEWED_DESIGN.md)§6・11からの差分。現NR-Cは親受理後のomissionを拒否する。このMDはその拒否を変更せず、実装・実接続・実通信・実機操作・設定変更・本番cap／Permit／候補発行・Pushの承認ではない。
@@ -109,6 +109,8 @@ source close／cleanup開始・取消・期限・hard・固定discardでpending�
 
 巨大な期待runを毎回JSON.stringifyして一時巨大文字列を作る方式は未承認。純粋モデルの最初の実装前に、own-data限定のbounded count-only JSON size計算器を具体化する。callback／toJSON／getterを呼ばず、JSON.stringifyと同じescape／number／UTF-8の規則を独立corpusで確認する。測定はexact length≤Hまたはover_Hの別variantとし、早期超過を架空のexact lengthへ変えない。traceもその区別を保持する。
 
+OM-Bの受付／計数分離・数値候補・256-unit checkpoint・epoch／同budgetと固定Eへの接続は[サイズ計数器詳細契約](BEST_PRACTICE_ABORT_SCOPE_RECOVERY_JSON_SIZE_OMB_DESIGN.md)で具体化した。設計のみで、候補cap／work式は未検証・本番未承認。OM-Aの事後serialize検査も変更しない。
+
 計数器は有限depth／node／key／array／文字費、checked arithmetic、checkpointを反復・確保前に要求する。全runの中間表現は最終出力Bを超え得るため、CG-Aの最終aggregate枠へ無条件に押し込めない。元capture集合＋header／error／warningsの有限上界から別途導出し、超過時は省略をでっち上げず停止する。数値cap・総work／heap・同期schema検証の中断粒度はUnknown、全体受付無効を維持する。
 
 元60秒・210試行・C/G/P／retry prefix、全deadlineを維持し、model検証のための再取得・再解析・再finishをしない。純粋値計算とauthority-bearing証拠の発行を分離したまま実装を進める。
@@ -131,7 +133,7 @@ source close／cleanup開始・取消・期限・hard・固定discardでpending�
 | 段階案 | 最初の範囲 | まだ開かないもの |
 | --- | --- | --- |
 | OM-A（§11の値層のみ実装） | strict値型・親prefix／keep／omitの純粋計算と副作用表。別producerの元omittedを区別する | 決定証拠・manifest拡張・finish job |
-| OM-B | bounded count-only JSON sizeの詳細数値契約と実装、固定Eによるfinalize純粋モデル・独立oracle | 総work受付・runtime・候補 |
+| OM-B（計数詳細契約のみ追加） | [MB-A〜C](BEST_PRACTICE_ABORT_SCOPE_RECOVERY_JSON_SIZE_OMB_DESIGN.md)：strict準備値→count-only core→固定Eのfinalizeモデル。同budget・epoch・独立oracle | 総work受付・runtime・候補 |
 | OM-C | fresh合成ownerから同captureへ親決定を結合し、one-shot・失効・discardと別brandを検証 | 旧root昇格・正式発行・本番binding |
 | OM-D | 同accepted／planの新混合variantへ一度移譲、finish応答full比較と局所比較の整合条件を具体化 | 同job／wire／全gate未成立の候補化 |
 
