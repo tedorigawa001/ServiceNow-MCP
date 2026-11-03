@@ -1,6 +1,6 @@
 # FailureOwnerとOB-01とkernelの接続差分
 
-Version: br006-recovery-failure-binding-draft-0.6 / Date: 2026-11-03。
+Version: br006-recovery-failure-binding-draft-0.7 / Date: 2026-11-03。
 Status: **FB-01〜03の同construction・private kernel／sink・同上位custody移譲／元owner固定discard・合成停止／予算供給点まで実装。実resource・実予算・全work上界は未保証。正式発行口閉鎖・全体受付無効・Unknown・VM／監視／telemetry調査保留を維持する。**
 
 基準HEAD: `196ca0c`。[失敗owner寿命設計](BEST_PRACTICE_ABORT_SCOPE_RECOVERY_FAILURE_OWNER_LIFETIME_DESIGN.md)§9と[OD-B設計](BEST_PRACTICE_ABORT_SCOPE_RECOVERY_ODB_TRANSFER_DESIGN.md)§11からの差分。同一constructionでFailureOwnerを先行確保し、OB-01の失敗通知と既存kernelのresource生成・cleanupを結ぶ。既存の独立factoryを二つ呼び、summaryやID一致で接続する方式は採らない。
@@ -218,4 +218,4 @@ guardのthrow／未知返値は固定internal_review_errorで止める。例外�
 
 [同pins保持・private採用接続差分](BEST_PRACTICE_ABORT_SCOPE_RECOVERY_OB02_ADOPTION_DESIGN.md)で、正常内容の寿命と一度限りmove、同pinsを唯一のidentity起点にする新正常系、同accepted／planと内容を結ぶ移譲claimを設計した。新正常系の予算shellは同pins生成証拠へ一度結び、既存FB-03の固定identityやmodelを後から付け替えない。
 
-hard時は同保護区間でnormal／pending／destとkernelのpayload参照を外したprivate receiptを必要とし、FailureOwner／上位capsuleへ本文を持ち込まない。未知の解放責務を保存する本書のcustody契約は維持する。後続NB-01で同pins正常保持・一度限りmove／予算bindingまでを別の閉鎖合成rootに実装した。生成前FailureOwnerと診断は結ぶが、正常系採用・dest seal・PayloadClearedReceipt／上位移譲連結・実予算／全体受付は未実装・未有効のままである。
+hard時は同保護区間でnormal／pending／destとkernelのpayload参照を外したprivate receiptを必要とし、FailureOwner／上位capsuleへ本文を持ち込まない。未知の解放責務を保存する本書のcustody契約は維持する。後続NB-01／02で同pins正常保持・予算bindingと同kernel／private採用を別の閉鎖合成rootに実装した。同じFailureKernelLinkの出生・clear前保護で診断とcleanup責務を保持するが、内容移譲・dest seal・PayloadClearedReceipt／上位移譲連結・実予算／全体受付は未実装・未有効のままである。

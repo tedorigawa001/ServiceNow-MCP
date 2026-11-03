@@ -16,6 +16,8 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 ### Changed
 
+- NB-02 adds a package-excluded fresh synthetic normal-adoption root. The same NB-01 pins feed the private recovery kernel, post-guard completed-content proof and one-shot accepted/plan adoption ticket; a private same-kernel view separately checks the original window. Foreign generation/ready/cleanup values, duplicate adoption and invalidation fail closed while cleanup responsibilities and first diagnostics survive. No body comparison, destination/finish-expectation seal, runtime connection, formal issuance or whole-run admission is enabled.
+
 - NB-01 adds a package-excluded fresh synthetic normal-supply root. Its private pins-birth receipt and no-argument one-shot move retain the original row/input/outcome references and bind an initially unbound budget shell to that same pins context. Guard stops, reentry and invalidation clear payload without restoring claims, while first diagnostics and committed accounting remain available. Legacy FB-03 identity/accounting is unchanged; accepted adoption, transfer seals, runtime binding, formal issuance and whole-run admission remain disabled.
 
 - FB-03 adds a package-excluded fresh synthetic custody run. A fixed seal/commit moves the same cleanup capsule and immutable failure report to its preallocated upper owner; only its matching one-shot receipt permits local final discard. Upper-only late cleanup preserves unresolved evidence and the sealed report. Stop checkpoints and a bounded count-only fake budget trace retain one identity, original C/G/P and full deadline; no actual work admission, accepted adoption, runtime connection or formal issuance is enabled.
