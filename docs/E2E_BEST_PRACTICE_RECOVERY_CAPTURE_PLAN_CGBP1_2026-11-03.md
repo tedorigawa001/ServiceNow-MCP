@@ -34,7 +34,19 @@ Date: 2026-11-03 / 基準HEAD: `1e1e78d`。
 
 旧root・旧accepted・copy・別owner・別plan／handoff／summaryの混入拒否、4 guard各点の取消／再入、constructor停止、固定2 receiptの順序と逆順拒否、二重seal、同期失効、遅延cleanupの診断保持、0.2／0.3、旧会計／世代不変を確認した。source／cleanup開始後もacceptedの終端責務を保持し、元の固定discard／closeまで検査した。全体回帰は既存localhost合成試験だけを許可し、外部サービスへ接続していない。
 
-## 4 未保証・残課題
+## 4 レビュー修正（2026-11-03）
+
+§3の46件・12,644件は修正前の記録として残す。レビュー時にrepo全体のlint（error 0・warning 374）、build、梱包441ファイル、全体合成261ファイル／12,644件成功・失敗0を再確認した。
+
+- 実装：applicable ruleを元pinと照合していなかった。contextと本文の両方を要求rule（`AU-BR-001`）と異なるapplicable rule（`AU-BR-002`）にすると、rootが構築されcaptureされた。workerは常にapplicable＝requestedを送り、集約schemaとRD-B03もこれを要求するため、finishで後段失敗する値である。receipt照合へ`applicable_rule_ids`と元`requested_rule_ids`の完全一致を追加し、[内容gate設計](BEST_PRACTICE_ABORT_SCOPE_RECOVERY_FINISH_CONTENT_GATE_DESIGN.md)をdraft-0.6へ改版した。
+- 試験：constructorの失敗試験はcontextだけを変えていたため、CG-Bのcontext／本文照合が先に拒否し、private pinとの照合はどれも唯一の検出点になっていなかった。本文とcontextを一緒に変えてpinとだけ食い違わせると、reviewed_at、target.retrieved_at、record_updated_at、Update Set、release、ID（input／outcomeの両判定）、件数の各判定が唯一の防御だった。件数判定を外すと、not_processed inputへの余分なイベントがreceiptに結ばれないcaptureとして保持される。整合したイベントの正常対照1件、各pin不一致7件、余分イベント1件を追加した。
+- 試験：非実行summary終端の後、kernelは`consumed`で`failed`／`closed`ではないため、summary経路の失効を外すとcaptureが`prepared`のまま残った。同期失効1件を追加した。constructor中の既存予算停止を保持する1件も追加した（引継ぎを外すと`internal_review_error`へ変わる）。
+
+上記の各変異は追加した試験だけを失敗させた。input completed判定、input／outcome ID判定の片方、`used`、`ownPlan`／`ownAccepted`、seal時のreceipt再照合、constructor／invokeのRecoveryCaptureError分岐は、pinsの不変条件・前段の拒否・先に設定される`captureStop`と重なる等価変異として扱う。要求rule判定も、整合する本文ではapplicable＝requestedが必要なため今回のapplicable照合とschemaが先に拒否し、等価変異として扱う。世代・未束縛plan・束縛plan・accepted contextの固定discardは、probeした呼出し点ではいずれもkernel側で失敗し、失効は失敗経路で起きる。新規capture binding試験は57件。修正後も全体合成261ファイル／12,655件成功・失敗0。
+
+[RDB設計](BEST_PRACTICE_ABORT_SCOPE_RECOVERY_FINISH_VALUES_RDB_DESIGN.md)の後続節は改版のたびに古いdraft表記が残っていたため、RD-C／内容gateへのリンクから版数表記を外し、実装状態は内容gate設計のStatusを参照する形にした（リンク表記のみで版数は変更しない）。
+
+## 5 未保証・残課題
 
 今回の発行元は合成イベントであり、実session／実IPC／実worker由来の証拠ではない。新rootは少なくとも1件のreviewed captureと、既存recovery条件に必要な未処理inputを持つ範囲を扱う。元omitted等の受領物は未対応として拒否し、本文を捏造しない。
 

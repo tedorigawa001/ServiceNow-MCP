@@ -116,6 +116,8 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 ### Added
 
+- CG-BP1 synthetic captured recovery roots now require each event's `applicable_rule_ids` to equal the pinned requested rules, as the worker always sends; a self-consistent event with different applicable rules was previously captured. New tests change body and context together so each private pin check (time, record update, Update Set, release, ID, event count) is the sole detector, and cover the summary terminal and constructor budget stops.
+
 - CG-B synthetic capture tests now cover construction-time context consistency (target ID and duplicate rule IDs that CG-A alone accepts), trap-counting transparent Proxy envelopes, dependencies and contexts, `discard`/`discardManifest` reentry from accept and transfer guards, and invalid explicit stop reasons. The capture helper itself is unchanged.
 
 - CG-A full JSON decoder tests now cover the `\b`, `\f` and `\r` escapes that `JSON.stringify` emits, so mis-decoding them can no longer silently change a schema-valid body, and RFC 8259 spellings it does not emit (`\/`, uppercase hex, `E` exponents, tab/CR/LF whitespace) decode to identical values. The decoder itself is unchanged.

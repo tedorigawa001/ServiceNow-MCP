@@ -67,7 +67,7 @@ function createRoot(raw:unknown,check:()=>string|undefined,captureMode=false,eve
       if(o.state!=='reviewed')throw Error();const c=contexts[i],input=pins.receipts.find(r=>r.receipt===o.receipt),e=input?.expected_context;
       if(!input||!e||input.state!=='completed'||input.update_xml_sys_id!==c.update_xml_sys_id||o.update_xml_sys_id!==c.update_xml_sys_id||c.reviewed_at!==input.retrieved_at||c.target.retrieved_at!==input.retrieved_at
         ||c.target.update_set_id!==pins.seed.header.target.update_set_sys_id||c.instance_binding!==e.instance_binding||c.target.record_updated_at!==e.record_updated_at
-        ||JSON.stringify(c.instance_release)!==JSON.stringify(e.instance_release)||JSON.stringify(c.requested_rule_ids)!==JSON.stringify(e.requested_rule_ids)||e.release_limitations.some(x=>!c.release_limitations.includes(x)))throw Error();
+        ||JSON.stringify(c.instance_release)!==JSON.stringify(e.instance_release)||JSON.stringify(c.requested_rule_ids)!==JSON.stringify(e.requested_rule_ids)||JSON.stringify(c.applicable_rule_ids)!==JSON.stringify(e.requested_rule_ids)||e.release_limitations.some(x=>!c.release_limitations.includes(x)))throw Error();
       return Object.freeze({receipt:input.receipt,accepted:o.accepted_outcome,id:o.update_xml_sys_id});
     }));
     capturedReceipts=receiptLinks.length;

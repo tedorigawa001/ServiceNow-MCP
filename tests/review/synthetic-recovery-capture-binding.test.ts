@@ -157,6 +157,42 @@ function twoReviewed(){
   const next=structuredClone(f.events[0]);next.context.update_xml_sys_id=next.context.target.update_xml_sys_id=id(2);next.context.reviewed_at=next.context.target.retrieved_at=T;
   const body=JSON.parse(next.response.json);body.update_xml_sys_id=body.result.target.update_xml_sys_id=id(2);body.result.reviewed_at=body.result.target.retrieved_at=T;next.response={id:2,ok:true,json:JSON.stringify(body)};f.events.push(next);return f;
 }
+type Body=ReturnType<typeof aggregate>['assets'][number]&{state:'reviewed'};
+function eventFor(body:Body,n=1){
+  const r=body.result;
+  return {context:{update_xml_sys_id:body.update_xml_sys_id,applicable_rule_ids:body.applicable_rule_ids,reviewed_at:r.reviewed_at,target:r.target,instance_binding:r.instance_binding,instance_release:r.instance_release,requested_rule_ids:r.coverage.requested_rule_ids,release_limitations:r.limitations},response:{id:n,ok:true,json:JSON.stringify(body)}};
+}
+// Change the delivered body and its context together, so only the private pins can detect the mismatch.
+function consistent(change:(body:Body)=>void){const f=fixture(),body=JSON.parse(f.events[0].response.json) as Body;change(body);f.events[0]=eventFor(body);return f;}
+it('accepts the unchanged self-consistent event used by the pin mismatch cases',()=>{
+  const f=setup(consistent(()=>{}));f.root.sealCapturedRecoveryFinishExpectation(f.b,f.accepted);expect(f.root.inspect().capture_binding).toMatchObject({state:'sealed',pending:true});
+});
+it.each([
+  ['reviewed_at',(b:Body)=>{b.result.reviewed_at='2026-10-17T04:59:02.500Z';}],
+  ['target_retrieved_at',(b:Body)=>{b.result.target.retrieved_at='2026-10-17T04:59:01.500Z';}],
+  ['record_updated_at',(b:Body)=>{b.result.target.record_updated_at='2026-10-17T04:57:00Z';}],
+  ['update_set',(b:Body)=>{b.result.target.update_set_id=id(99);}],
+  ['release',(b:Body)=>{Object.assign(b.result.instance_release,{config_version:'e'.repeat(64)});}],
+  ['id',(b:Body)=>{b.update_xml_sys_id=b.result.target.update_xml_sys_id=id(9);}],
+  ['applicable_rules',(b:Body)=>{b.applicable_rule_ids=['AU-BR-002'];}],
+] as const)('rejects a self-consistent analyze event whose %s disagrees with the private pins',(_name,change)=>{
+  const f=consistent(change),root=createSyntheticCapturedRecoveryRoot(f.raw,f.events);
+  expect(()=>root.bind()).toThrow('internal_review_error');expect(root.inspect().capture_binding).toMatchObject({state:'failed',pending:false,receipts:0});
+});
+it('rejects an extra self-consistent event for a not_processed input instead of retaining an unlinked capture',()=>{
+  const f=fixture(),body=JSON.parse(f.events[0].response.json) as Body;body.update_xml_sys_id=body.result.target.update_xml_sys_id=id(2);f.events.push(eventFor(body,2));
+  const root=createSyntheticCapturedRecoveryRoot(f.raw,f.events);expect(()=>root.bind()).toThrow('internal_review_error');
+  expect(root.inspect().capture_binding).toMatchObject({state:'failed',pending:false,receipts:0});
+});
+it('drops captures synchronously on the non-executable summary terminal',()=>{
+  const f=fixture(),root=createSyntheticCapturedRecoveryRoot(f.raw,f.events),b=root.bind(),r=root.claimRecovery(b,root.observe(b)),p=root.prepareWorkerRecovery(b,r,{termination:'confirmed',cleanup:'complete'});
+  const t=root.claimRecoveryGeneration(b,p),ready=root.acceptRecoveryReady(b,root.startRecoveryGeneration(b,t.start)),plan=root.sealRecoveryPlan(b,ready);root.summarizeRecoveryPlan(b,plan);
+  expect(root.inspect()).toMatchObject({state:'consumed',capture_binding:{state:'discarded',pending:false}});
+});
+it('preserves a shared-budget stop raised during constructor capture',()=>{
+  const f=fixture();let n=0;const root=createSyntheticCapturedRecoveryRoot(f.raw,f.events,()=>++n===1?'receive_budget_exceeded':undefined);
+  expect(()=>root.bind()).toThrow('receive_budget_exceeded');expect(root.inspect().capture_binding).toMatchObject({state:'failed',pending:false});
+});
 it('uses two distinct original receipts in canonical order, without rebuilding them by ID',()=>{
   const f=setup(twoReviewed());f.root.sealCapturedRecoveryFinishExpectation(f.b,f.accepted);expect(f.root.inspect().capture_binding).toMatchObject({receipts:2,transfers:1,pending:true});
 });

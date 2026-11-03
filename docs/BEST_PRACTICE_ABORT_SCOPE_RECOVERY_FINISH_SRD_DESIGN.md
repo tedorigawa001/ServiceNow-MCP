@@ -1,7 +1,7 @@
 # SR-D 回復planからfinish検証・終端候補への接続設計
 
 Version: br006-recovery-finish-srd-draft-0.19 / Date: 2026-11-03。
-Status: **RA-03-B／RD-B01〜04、CG-A／Bに続き、別rootから既存accepted／plan kernelへ同receiptのcaptureを一度結合するCG-BP1を合成限定実装。RD-Cのfinish job／応答／候補とRD-Dの候補終端は未実装。RD-C・内容gate詳細設計はdraft-0.5。正式発行口閉鎖・Unknown・全体受付無効・VM／監視／telemetry調査保留を維持する。実finish／runtime接続・実通信・設定変更・本番cap／Permit投入の承認ではない。**
+Status: **RA-03-B／RD-B01〜04、CG-A／Bに続き、別rootから既存accepted／plan kernelへ同receiptのcaptureを一度結合するCG-BP1を合成限定実装。RD-Cのfinish job／応答／候補とRD-Dの候補終端は未実装。RD-C詳細設計はdraft-0.5、内容gate詳細設計はdraft-0.6。正式発行口閉鎖・Unknown・全体受付無効・VM／監視／telemetry調査保留を維持する。実finish／runtime接続・実通信・設定変更・本番cap／Permit投入の承認ではない。**
 
 初版基準HEAD: `31cff06`。本版の現状照合: `04eef33`。[SC2-D接続契約](BEST_PRACTICE_ABORT_SCOPE_WORKER_RECOVERY_CONTINUATION_DESIGN.md)§13、[soft回復設計](BEST_PRACTICE_ABORT_SCOPE_SOFT_RECOVERY_CLAIM_DESIGN.md)§2〜9・11、[通常WJ-C](BEST_PRACTICE_ABORT_SCOPE_WORKER_TIME_BINDING_DESIGN.md)§13との差分を定める。内部役割案と実装済み範囲を分け、現在の保証は§2・9と各詳細設計で確認する。
 
@@ -80,7 +80,7 @@ FinishContextEvidenceの合成発行口は配布対象外の独立assemblyに留
 
 ## 5 同新世代のjob相関とE
 
-RD-B04後の具体的なID台帳・開始claim・応答originは[RD-C接続詳細設計draft-0.5](BEST_PRACTICE_ABORT_SCOPE_RECOVERY_FINISH_JOB_RDC_DESIGN.md)、保護capture・full schema・同bytes・合法omissionは[内容gate詳細設計draft-0.5](BEST_PRACTICE_ABORT_SCOPE_RECOVERY_FINISH_CONTENT_GATE_DESIGN.md)で補足する。CG-A／Bと別rootからのaccepted／plan結合は実装済みだが、以下のfinish jobとの接続契約は未実装である。
+RD-B04後の具体的なID台帳・開始claim・応答originは[RD-C接続詳細設計draft-0.5](BEST_PRACTICE_ABORT_SCOPE_RECOVERY_FINISH_JOB_RDC_DESIGN.md)、保護capture・full schema・同bytes・合法omissionは[内容gate詳細設計draft-0.6](BEST_PRACTICE_ABORT_SCOPE_RECOVERY_FINISH_CONTENT_GATE_DESIGN.md)で補足する。CG-A／Bと別rootからのaccepted／plan結合は実装済みだが、以下のfinish jobとの接続契約は未実装である。
 
 finish jobは同run／新frame／supervisor／worker／generation／kind=finish／idへ結合する。数値idは同新frame内で単調に一度消費する。旧世代と同じ数値idでも参照が違えば拒否し、readyイベント・旧analyze応答をfinishへ読替えない。SC2-CのreadyをWJ-Aの新しいstart／ready呼出しで作り直さない。
 
