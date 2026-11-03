@@ -49,7 +49,20 @@ full assetの深い比較だけを一時的に外し、schema検査・ID・conte
 
 D1専用compiled実行fixture・全機能の全体回帰は未追加／未実行。実接続・実通信・実機操作・設定変更・Pushは行っていない。
 
-## 5 残課題と限界
+## 5 レビュー修正（2026-11-03）
+
+本記録の新規試験件数は修正前の記録として残す。レビュー時にrepo全体のlint（error 0・warning 374）、build、梱包分類監査（441ファイル）、全体合成279ファイル／13,682件成功・失敗0を確認した。
+
+D1 helperの14変異を確認し、次の4判定は外しても既存試験が全て通過した。実装は正しく、試験だけの不足である。
+
+- 候補assets数と選択数の一致。比較は候補assetsの範囲だけを走るため、判定を外すと末尾assetを落とした候補が受理された。1件を追加した。
+- 深い比較の配列長。元列側を基準に走査するため、判定を外すと候補側の追記（findings、prefixのlimitations／errors、traceの行）を見逃した。既存の順序・重複試験は同じ長さの置換だった。4件を追加した。
+- 深い比較のkey数。assetはstrict schemaが余分fieldを拒否するが、prefix／traceはschemaを通らないcopyのみで、末尾に整列する余分keyを見逃した。trace・prefixの各1件を追加した。
+- 元列reviewedのruleset照合。外しても候補側照合（manifest）が拒否するが、既存試験はphaseを見ていなかった。parent phaseを固定する1件を追加した。
+
+上記4変異はそれぞれ追加した試験だけを失敗させた。空rows判定（OM-Aが先に拒否）、候補のper-asset bytes判定（元列と同じ上限を通過済みの値との全field一致が必要で、変わるのは不一致時のreasonのみ）、非reviewedのproducer検査、reviewed full schemaの再parse（元列検査と全field比較で代替）、候補reviewedのruleset照合（元列照合が先に拒否）、primitive比較の`===`→`==`（許可する値型で差が出ない）は等価変異として扱う。helperは変更せず、新規試験は8件増。修正後も全体合成279ファイル／13,690件成功・失敗0。
+
+## 6 残課題と限界
 
 D2の同pending由来検査・private ContentChecked／未公開dest・一度限り準備、D3 atomic commit／同期失効、D4正常終端は未実装。今回の非実行draftをこれらの証拠へ昇格させない。
 

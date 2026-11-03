@@ -117,3 +117,18 @@ it('does not turn matching synthetic caller DATA into original-body or receipt a
   const f=fixture();(f.rows[0].outcome.result as Body).findings[0].recommendation='same synthetic replacement';body(f).findings[0].recommendation='same synthetic replacement';
   const result=projectSyntheticFullMixedDraft(f);expect(result.authority).toBe('none');expect(result.unverified).toContain('row_receipts');expect(result.unverified).toContain('original_wire');
 });
+it('rejects a manifest that drops trailing assets instead of comparing only the supplied prefix',()=>{
+  const f=fixture();f.manifest.assets.pop();reject(f,'manifest');
+});
+it.each(['finding','prefix_limitation','prefix_error','trace_row'] as const)('rejects an appended candidate %s that the original-side comparison would not visit',kind=>{
+  const f=fixture();
+  if(kind==='finding')body(f).findings.push(structuredClone(body(f).findings[0]));if(kind==='prefix_limitation')f.manifest.prefix.limitations.push('extra');
+  if(kind==='prefix_error')f.manifest.prefix.errors.push({stage:'output',code:'response_limit'});if(kind==='trace_row')f.manifest.trace.push(structuredClone(f.manifest.trace[0]));
+  reject(f,kind==='finding'?'content':'manifest');
+});
+it.each(['trace','prefix'] as const)('rejects a trailing extra key in the schema-free %s copy',kind=>{
+  const f=fixture();Object.assign(kind==='trace'?f.manifest.trace[0]:f.manifest.prefix,{zzz:1});reject(f,'manifest');
+});
+it('rejects an original reviewed ruleset mismatch in the parent phase before candidate checks',()=>{
+  const f=fixture();f.ruleset_version='bp3-0.5';reject(f,'parent');
+});

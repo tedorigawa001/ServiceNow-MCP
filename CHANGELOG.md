@@ -156,6 +156,8 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 ### Added
 
+- OB-03 D1 FullMixedDraft tests now reject a manifest that drops trailing assets, a candidate array with an appended element (finding, prefix limitation/error or trace row), a trailing extra key in the schema-free prefix/trace copies, and pin the original reviewed ruleset mismatch to the parent phase; each check was previously untested. The value helper itself is unchanged.
+
 - PD-B(A) pending prefix value tests now reject a same-key but different `update_xml_sys_id` value in both the pins and accepted header errors, and an unknown `kind`; each check was previously untested. The value helper itself is unchanged.
 
 - PD-A prefix delta tests now check that a `candidate_filter_violation` supplied as a verify error is rejected under a failed collection at the delta phase; the delta-side error rule was previously the sole, untested guard there. The value helper itself is unchanged.
