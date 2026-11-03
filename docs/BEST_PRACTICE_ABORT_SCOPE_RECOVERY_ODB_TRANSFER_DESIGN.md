@@ -167,7 +167,7 @@ FB-02は別fresh entryで同private初期topology・kernel生成点／clear前�
 
 FB-03の上記連続保証は[接続差分§12](BEST_PRACTICE_ABORT_SCOPE_RECOVERY_FAILURE_BINDING_DESIGN.md)の閉鎖合成範囲で確認した（[記録](E2E_BEST_PRACTICE_FAILURE_BINDING_FB03_2026-11-03.md)）。同capsuleの上位移譲と元owner固定discard、fake予算identity／prefix・停止checkpoint・費目の継続を検証しただけで、実解放や全体work受付ではない。次のOB-02の同pins／accepted／plan採用は未実装であり、今回有効化しない。
 
-[OB-02採用接続差分draft-0.1](BEST_PRACTICE_ABORT_SCOPE_RECOVERY_OB02_ADOPTION_DESIGN.md)で、正常系の同pins保持・一度限りmove、pins由来identityを起点にした新正常系予算shellの結合、同private accepted／planとの採用と移譲claimを具体化した。既存FB-03のidentity方式やpins APIは変更しない。正常内容を失敗capsuleへ残さない論理破棄receiptと上位診断の境界を定め、NB-01〜03を実装分割案とした。設計のみであり、dest sealはOB-03・全体workはUnknownのまま。
+[OB-02採用接続差分](BEST_PRACTICE_ABORT_SCOPE_RECOVERY_OB02_ADOPTION_DESIGN.md)で、正常系の同pins保持・一度限りmove、pins由来identityを起点にした新正常系予算shellの結合、同private accepted／planとの採用と移譲claimを具体化した。既存FB-03のidentity方式やpins APIは変更しない。正常内容を失敗capsuleへ残さない論理破棄receiptと上位診断の境界を定め、NB-01〜03を実装分割案とした。設計のみであり、dest sealはOB-03・全体workはUnknownのまま。
 
 draft-0.1は設計MDだけ。続くOB-01の実装範囲を以下に限定し、実Permit／候補発行・実接続・実通信・実機操作・設定変更・Pushは行わない。
 

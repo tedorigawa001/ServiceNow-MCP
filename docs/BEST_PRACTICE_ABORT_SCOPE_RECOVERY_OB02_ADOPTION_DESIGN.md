@@ -1,6 +1,6 @@
 # OB-02 同pins保持・identity統一とprivate採用／移譲claim
 
-Version: br006-recovery-ob02-adoption-draft-0.1 / Date: 2026-11-03。
+Version: br006-recovery-ob02-adoption-draft-0.2 / Date: 2026-11-03。
 Status: **接続差分の設計のみ。合成依存限定。正式発行口閉鎖・全体受付無効・Unknown・VM／監視／telemetry調査保留を維持する。**
 
 基準HEAD: `8126d10`。[OD-B設計](BEST_PRACTICE_ABORT_SCOPE_RECOVERY_ODB_TRANSFER_DESIGN.md)§2〜7・10と[FB接続設計](BEST_PRACTICE_ABORT_SCOPE_RECOVERY_FAILURE_BINDING_DESIGN.md)§12からの差分。FB-03の失敗責務保存を維持したまま、正常系で同pins・元内容を保持し、同private kernelのaccepted／planと一度だけ結ぶ。OB-02の採用や移譲先sealが実装済みであるとは扱わない。
@@ -12,7 +12,7 @@ Status: **接続差分の設計のみ。合成依存限定。正式発行口閉�
 | [OB-01供給core](../tests/support/review/synthetic-recovery-kernel.ts) | 一つのpins・元列・行／input対応を準備し、同handleのdiscardで破棄する | 新正常系だけにprivateな所有権moveを設け、prepare成功をeager discardしない |
 | [FB-02／03生成](../tests/support/review/synthetic-recovery-kernel.ts) | 元supplyをdiscardし、別のfresh seed／window、finish pinsなしのkernelを生成する | 同pins由来のcontextを全経路へ渡し、正常内容を同ownerが保持する |
 | [pins生成](../tests/support/review/synthetic-finish-pins.ts) | run／session／source／key／origin／budget／release／windowを一度生成する | この同生成呼出しを新正常系identityの唯一の起点とする |
-| [plan投影](../tests/support/review/synthetic-finish-plan-binding.ts) | 上記refs・input receipt・行順・時刻の完全一致を要求する | IDや値一致で後から異なるseed／pinsを接着しない |
+| [plan投影](../tests/support/review/synthetic-finish-plan-binding.ts) | window以外の7 refs（run／session／source／key／origin／budget／release）・時刻・input receipt／state・行数の一致を要求する。plan viewのseedはwindowを持たず、windowは比較しない | IDや値一致で後から異なるseed／pinsを接着しない |
 | 既存accepted／seal | accepted受理でplan／handoff等の元live slotを消費し、accepted内のbound snapshotへ移す | 同snapshotとCompletedMixedContentを同じprivate移譲claimに結ぶ |
 
 新しい閉鎖合成constructionを用意し、旧FB-01／02／03、OD-A、NR-C、pins公開factoryの契約は維持する。既存root／prepared／accepted／plan／pins／budgetを引数に採用するfactory、登録台帳、upgrade、body getterは追加しない。共有するのはprivate生成継続と既存pure検査であり、独立した成功handleを二つ作って連結する方式ではない。
@@ -153,5 +153,7 @@ OB-03前に[OD-B設計§4](BEST_PRACTICE_ABORT_SCOPE_RECOVERY_ODB_TRANSFER_DESIG
 mixed各種・親省略・元omitted・全retained・真の元reviewedゼロ、0.2／0.3、上限境界を独立表へ照合する。各pre／work／postの取消・期限・throw・swallowed再入、source／cleanup失効でpayload参照0・dest成功0・先行診断保持を確認する。失敗capsuleに本文が残らず、上位受理／元discard前後でcleanup ownerが一つであることを連続検証する。
 
 旧factory／試験・非同梱marker・固定import・runtime／I/O／clock／worker／秘密漏出の負の対照を維持する。正常sealの成功・正常terminal-only discardの全連続保証はOB-03で別途検証する。
+
+draft-0.2のレビュー修正：§1のplan投影行は「上記refs」をwindowまで含む全8 refsの一致と読めたが、[plan投影](../tests/support/review/synthetic-finish-plan-binding.ts)はseedからwindowを除いた7 refs・時刻・input receipt／state・行数だけを比較する。windowは§5の採用検査で別に照合する必要があるため、記述を実装どおりに訂正した。設計判断・型案・分割案は変更しない。
 
 今回の変更はMDと親参照だけ。実装・実接続・実通信・実機操作・token／Permit／候補発行・設定変更・Pushは行わない。
