@@ -16,6 +16,8 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 ### Changed
 
+- NR-A adds package-excluded, bounded non-reviewed value checks with strict state/producer/reason variants. Original worker omissions, parent omission drafts and retained deadlines remain distinct; invalid fields, schema-only unsupported reasons and deleted rows under 0.3 are rejected. Results are immutable data only, with producer/receipt/capture/cleanup provenance explicitly unverified; no evidence issuance, mixed-manifest admission or runtime behavior is enabled.
+
 - CG-B's protected captures can now be bound to the existing synthetic accepted/plan lifecycle through a separate constructor-only root. Private original receipts and canonical order are checked before a one-shot content seal; source/cleanup start, hard stops and fixed discard paths synchronously erase content while preserving cleanup responsibilities and first diagnostics. Legacy roots cannot be upgraded, and no finish comparison, runtime binding, candidate or whole-run admission is enabled.
 
 - CG-B adds a package-excluded, fresh synthetic capture owner. Same-delivery full analysis values are accepted only after context checks and the post guard, retained privately and transferred once to an opaque manifest. Cross-root handles, duplicates, reordered receipts, cancellation and reentry fail closed with scalar-only diagnostics; no runtime capture, finish job, candidate or whole-run admission is enabled.

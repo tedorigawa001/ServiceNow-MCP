@@ -1,13 +1,13 @@
 # 回復finish 非reviewed受領物・発行元・ゼロcapture 詳細設計
 
-Version: br006-recovery-nonreviewed-draft-0.1 / Date: 2026-11-03。
-Status: **設計のみ。AcceptedNonReviewed・混合集合・reviewedゼロ件の接続は未実装。正式発行口閉鎖・全体受付無効・Unknown・VM／監視／telemetry調査保留を維持する。**
+Version: br006-recovery-nonreviewed-draft-0.2 / Date: 2026-11-03。
+Status: **NR-Aのstrict値型・state×producer純粋検査だけを合成限定実装。AcceptedNonReviewedの証拠発行・混合集合・reviewedゼロ件の接続は未実装。正式発行口閉鎖・全体受付無効・Unknown・VM／監視／telemetry調査保留を維持する。**
 
 基準HEAD: `0ed7d91`。[内容gate](BEST_PRACTICE_ABORT_SCOPE_RECOVERY_FINISH_CONTENT_GATE_DESIGN.md)§3・7・12〜13と[RD-C](BEST_PRACTICE_ABORT_SCOPE_RECOVERY_FINISH_JOB_RDC_DESIGN.md)からの差分案。CG-BP1の現受付はreviewedが1件以上のreviewed／not_processed planだけであり、本書によって受付を広げない。公開JSON・既存契約・元60秒・受信枠・会計は変更しない。
 
 ## 1 根拠と分離原則
 
-現状の根拠は[assetOutcomeStructureと集約refinement](../src/review/aggregate-schema.ts)、[adapter](../src/review/update-set-adapter.ts)、[worker](../src/review/review-worker.ts)、[finish pins](../tests/support/review/synthetic-finish-pins.ts)、[局所context検査](../tests/support/review/synthetic-finish-context-values.ts)。本書はこれらを読んだ設計であり、新しい合成試験や実機検証の成功記録ではない。
+現状の根拠は[assetOutcomeStructureと集約refinement](../src/review/aggregate-schema.ts)、[adapter](../src/review/update-set-adapter.ts)、[worker](../src/review/review-worker.ts)、[finish pins](../tests/support/review/synthetic-finish-pins.ts)、[局所context検査](../tests/support/review/synthetic-finish-context-values.ts)。§2〜8はこれらを読んだ設計案。実装済みのpure値層は§9と検証記録だけで、証拠発行や実機検証の成功を主張しない。
 
 - assetのstateだけから発行元を推定しない。同じrejectedでもmetadata分類・payload上限・worker解析で発行元が異なる。
 - AcceptedNonReviewedは「そのstateの結果を同じイベントから受理した」証拠であり、未受信のreviewed本文・解析成功・findingの不存在を証明しない。
@@ -95,7 +95,7 @@ source／cleanup開始、hard、close、準備／世代／plan／acceptedの固�
 
 ## 8 合成受入条件・実装順案
 
-1. **NR-A：strict variantとpure検査**。state×producerの表、元omitted／親omittedの別型、必須／absent field、未知reason／余分field、bounded統計を独立oracleで照合する。この段階では証拠を発行しない。
+1. **NR-A：strict variantとpure検査（§9の値層のみ実装済み）**。state×producerの表、元omitted／親omittedの別型、必須／absent field、未知reason／余分field、bounded統計を独立oracleで照合する。この段階では証拠を発行しない。
 2. **NR-B：fresh合成issuer**。metadata／retrieval／analysisの固定イベントと別claimを接続する。同row／存在する同input・job・T_i、pre/post guard、コピー／別root／二重生成／混入／失敗後再利用拒否を検査する。
 3. **NR-C：混合manifest・reviewedゼロ**。CG-BP1の別rootからpartition・同accepted／plan一度移譲・ゼロ証拠・同期失効／固定discardを接続する。旧root／旧試験は維持する。
 
@@ -103,4 +103,22 @@ source／cleanup開始、hard、close、準備／世代／plan／acceptedの固�
 
 未確認事項：producer別reason allowlistの固定方法、選択row receiptと現input receiptの型対応、worker受理時点の元omittedのterminal claim、metadataだけの行と未処理inputのpartition接続、既存局所schemaとの互換・追加費用。各実装前に対応sourceと合成oracleを再照合し、unsupportedを暗黙に受理へ変更しない。
 
-今回はMD設計と参照更新だけ。実装・合成issuer発行・実接続・実通信・実機操作・設定変更・本番cap／Permit／候補発行・Push・担当者への連絡は行わない。
+初版はMDのみ。NR-Aの実装範囲は§9で、証拠／合成issuer発行・実接続・実通信・実機操作・設定変更・本番cap／Permit／候補発行・Push・担当者への連絡は行わない。
+
+## 9 NR-A strict値層の実装契約
+
+基準HEAD: `84c3461`。[合成専用pure値層](../tests/support/review/synthetic-recovery-nonreviewed-values.ts)はissuer・owner・claim台帳を持たず、次の3 runtime exportだけを持つ。追加type exportのSyntheticNonReviewedValuesも証拠型ではない。
+
+- RECOVERY_NONREVIEWED_VALUE_LIMITS：nr-state-producer-v1、値root=0の深さ2、object key数4、訪問node16、string／keyのUTF-16長×3合計1024。1値ごとの局所枠であり、混合manifest全体の受付枠ではない。
+- projectSyntheticNonReviewedValue(raw)：own-dataをboundedにcopyし、strictな`{schema_version,producer,outcome}`を検査する。parent_omissionだけは`original_state:reviewed`を追加必須とし、他producerでは拒否する。0.2／0.3を値として受けるが、0.3のskipped_deletedはunsupportedで拒否する。
+- NonReviewedValueError：shape／limit／unsupportedを固定理由として返し、code／messageはinternal_review_error。raw本文・Zod issues・causeを保持しない。
+
+producerはmetadata／retrieval／analysis／parent_omission／retainedの閉じたunion。metadataは固定2 rejected理由、deleted、およびasset_typeと理由の整合するnot_applicable。retrievalは固定3 retrieval_failed理由とpayload_limit rejected。analysisは現固定ソースとasset schemaの双方が扱う26 rejected理由、および元result_omitted。retainedはdeadline_exceededだけ。parent_omissionはresult_omittedの**非実行draft**であり、OriginalReviewedCapture／ParentOmissionDecisionを持つ証拠ではない。
+
+解析器が返し得るinvalid_result_contextは現assetOutcomeStructureのrejected enumにない。workerではasset parseに失敗してok:falseとなるため、NR-Aでも拒否し、公開schemaやworker動作を拡張しない。schemaにあるunauthorizedをretrievalへ追加することや、既存JSON enumの他not_processed理由を回復へ追加することもしない。reason一覧は固定snapshotで、ソース変更時は独立AST oracleとmodelを再確認する。
+
+返却値は深くfreezeしたcallerデータの正規化copyと局所usageを持ち、caller objectをfreezeしない。categoryはnonreviewed_value／parent_omission_value／retained_valueの別型、scopeはsynthetic_nonreviewed_values、authorityはnone、validation_scopeはstate_producer_values_only。producer_origin／receipt_binding／decision_origin／original_capture／cleanup／manifest／runtime_transportは全て未検証と明示する。DATAのoriginal_stateやproducerが正しい形でも、実際の由来や元captureを証明しない。
+
+getter／Proxy／特殊prototype／array／symbol key／不正primitive／上限超過を拒否し、callbackや時計を呼ばない。この関数はJSON文字列をdecodeせず、同wire・実受信量・job／T_i・metadata分類の事実を証明しない。反復呼出しは許されるpure検査で、one-shot受理ではない。receipt／job／owner／capture等の付加fieldはnullでも拒否し、任意の証拠objectを登録しない。
+
+usageはnodes／character_units／maximum_depth／max_object_keysを同copyから収集する。native key列挙・copy・Zod正規化・freezeの総CPU／heap費用や全体60秒の中断保証ではない。全体work／memoryはUnknownのまま。NR-Bの発行前提とNR-Cの混合manifest／ゼロcapture条件も有効化しない。[NR-A検証記録](E2E_BEST_PRACTICE_RECOVERY_NONREVIEWED_NRA_2026-11-03.md)参照。

@@ -1,7 +1,7 @@
 # 回復finish 本文capture・full schema・同bytes検証gate 詳細設計
 
-Version: br006-recovery-finish-content-draft-0.7 / Date: 2026-11-03。
-Status: **CG-A／Bに続き、別constructorの合成rootから既存accepted／plan kernelと同receiptのcaptureを結合するCG-BP1まで実装。旧rootの後付け昇格は不可。実origin／finish job・非reviewed受領物・omission／full応答gate／候補発行は未実装。正式発行口閉鎖・全体受付無効・Unknown・VM／監視／telemetry保留を維持する。**
+Version: br006-recovery-finish-content-draft-0.8 / Date: 2026-11-03。
+Status: **CG-A／B／BP1に加え、NR-Aのstate×producer純粋値層だけを実装。旧rootの後付け昇格は不可。実origin／finish job・非reviewed証拠発行・omission／full応答gate／候補発行は未実装。正式発行口閉鎖・全体受付無効・Unknown・VM／監視／telemetry保留を維持する。**
 
 基準HEAD: `1e1e78d`（CG-B追加回帰を含む）。[RD-C](BEST_PRACTICE_ABORT_SCOPE_RECOVERY_FINISH_JOB_RDC_DESIGN.md)§5・7・10〜11の内容gateを具体化する。実装範囲はCG-A§11・CG-B§12・CG-BP1§13、それ以外の型・操作・数値モデルは未実装の内部案。本番cap・通常経路の受付変更・実通信・実機操作・設定変更・Pushの承認ではない。
 
@@ -234,6 +234,6 @@ draft-0.6のレビュー修正：初版はapplicable ruleを元pinと照合し�
 
 ## 14 非reviewed受領物への次工程（設計のみ）
 
-[非reviewed詳細設計draft-0.1](BEST_PRACTICE_ABORT_SCOPE_RECOVERY_NONREVIEWED_DESIGN.md)でAcceptedNonReviewedのproducer別型・発行継続、RetainedNotProcessedとの分離、状態別の保持／拒否、同rowと存在するinput／jobのbinding、reviewedゼロ件の専用partition証拠を定める。workerから届くrejected／元omittedと、metadata分類／retrieval失敗は同じissuerにしない。親受理後の省略は元capture＋後続CG-Cの変換証拠を必要とし、元omittedと統合しない。
+[非reviewed詳細設計](BEST_PRACTICE_ABORT_SCOPE_RECOVERY_NONREVIEWED_DESIGN.md)でAcceptedNonReviewedのproducer別型・発行継続、RetainedNotProcessedとの分離、状態別の保持／拒否、同rowと存在するinput／jobのbinding、reviewedゼロ件の専用partition証拠を定める。workerから届くrejected／元omittedと、metadata分類／retrieval失敗は同じissuerにしない。親受理後の省略は元capture＋後続CG-Cの変換証拠を必要とし、元omittedと統合しない。
 
-次はNR-Aのstrict値契約、NR-Bの合成issuer、NR-Cの混合集合／ゼロcapture接続の順を提案する。zeroは設計上の許容案だけで、現CG-B／BP1のmin1やreviewed／not_processed限定を今回変更しない。finish job・omissionモデル・full内容gate・総費用も未実装／未承認のまま。正式発行口閉鎖・全体受付無効・Unknown・調査保留を維持する。
+NR-Aのstrict値契約は合成限定実装した（[非reviewed設計§9](BEST_PRACTICE_ABORT_SCOPE_RECOVERY_NONREVIEWED_DESIGN.md)）。元omitted／親省略draft／retainedを区別するpure値層だけで、証拠発行やproducerの事実確認ではない。次はNR-Bの合成issuer、NR-Cの混合集合／ゼロcapture接続。zeroは設計上の許容案だけで、現CG-B／BP1のmin1やreviewed／not_processed限定を変更しない。finish job・omissionモデル・full内容gate・総費用も未実装／未承認のまま。正式発行口閉鎖・全体受付無効・Unknown・調査保留を維持する。

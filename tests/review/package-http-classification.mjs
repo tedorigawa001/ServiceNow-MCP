@@ -183,6 +183,17 @@ for(const f of pack.files.filter(f=>f.path.startsWith('dist/')&&/\.(?:js|ts|map)
 for(const leak of ['fetch("x");','Date.now();','new Date();','new Worker("x");',"import('node:fs');","import {BoundedReadSession} from '../../../src/servicenow/bounded-read.js';const zzRoot=BoundedReadSession;"])
   assert.throws(()=>auditSyntheticIssuer(captureText+'\n'+leak,captureImports),assert.AssertionError,'CG-B audit missed seeded leak: '+leak);
 console.log('CG-B fresh synthetic capture/one-shot manifest excluded; fixed imports + seeded runtime/I/O/clock/worker/leak controls PASS');
+const nonReviewedText=readFileSync(join(root,'tests/support/review/synthetic-recovery-nonreviewed-values.ts'),'utf8');
+const nonReviewedImports=['node:util','zod','../../../src/review/aggregate-schema.js'];
+auditSyntheticIssuer(nonReviewedText,nonReviewedImports);
+const nonReviewedMarkers=['synthetic-recovery-nonreviewed-values','projectSyntheticNonReviewedValue','NonReviewedValueError','RECOVERY_NONREVIEWED_VALUE_LIMITS','SyntheticNonReviewedValues','synthetic_nonreviewed_values','synthetic_nonreviewed_value_only'];
+const noNonReviewed=text=>assert(!nonReviewedMarkers.some(x=>text.includes(x)),'NR-A pure nonreviewed values leaked into runtime');
+for(const marker of nonReviewedMarkers)assert.throws(()=>noNonReviewed(marker));
+assert(!pack.files.some(f=>f.path.includes('synthetic-recovery-nonreviewed-values')));
+for(const f of pack.files.filter(f=>f.path.startsWith('dist/')&&/\.(?:js|ts|map)$/.test(f.path)))noNonReviewed(readFileSync(join(root,f.path),'utf8'));
+for(const leak of ['fetch("x");','Date.now();','new Date();','new Worker("x");',"import('node:fs');","import {BoundedReadSession} from '../../../src/servicenow/bounded-read.js';const zzRoot=BoundedReadSession;"])
+  assert.throws(()=>auditSyntheticIssuer(nonReviewedText+'\n'+leak,nonReviewedImports),assert.AssertionError,'NR-A audit missed seeded leak: '+leak);
+console.log('NR-A pure state/producer/omission values excluded; fixed imports + seeded runtime/I/O/clock/worker/leak controls PASS');
 for(const suffix of ['.js','.js.map','.d.ts','.d.ts.map'])assert(pack.files.some(f=>f.path==='dist/servicenow/review-kernel/release-observation'+suffix),'required one-shot UTC value helper missing: '+suffix);
 const sessionDeclarations=readFileSync(join(root,'dist/servicenow/bounded-read.d.ts'),'utf8');
 const sessionAst=parse(readFileSync(join(root,'dist/servicenow/bounded-read.js'),'utf8'),{ecmaVersion:'latest',sourceType:'module'});
