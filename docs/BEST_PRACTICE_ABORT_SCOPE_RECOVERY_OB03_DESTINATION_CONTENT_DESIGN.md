@@ -72,6 +72,8 @@ reviewed出力0件でも親省略により元reviewedがあれば、元body数�
 
 ## 6 一度限りの移譲とatomic commit
 
+[FP-3内部契約](BEST_PRACTICE_ABORT_SCOPE_RECOVERY_FP3_POST_ACCEPT_BUNDLE_DESIGN.md)は、この前段のpost-only証拠受理・未公開bundle・一度限りの固定消費を具体化する。実装はまだ行わず、固定abortまでの将来合成検証と、以下の成功destへのatomic commitを分離する。
+
 新rootの固定操作案`sealBoundMixedExpectation()`は外部accepted／manifest／destを引数に取らない。処理順は以下に固定するが、今回実装・seal成功は有効化しない。
 
 1. 同ownerのbusy／first hardを確認し、transfer／content準備claimを先に消費。元accepted・内容・採用ticketを同pendingへtakeする。

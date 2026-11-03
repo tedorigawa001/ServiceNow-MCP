@@ -88,6 +88,8 @@ D1のPpをcanonical headerやdelta後prefixで上書きしない。errors先頭1
 
 ## 6 生成・結合・消費の順序
 
+[FP-3のpost後受理・未公開完成bundle内部契約](BEST_PRACTICE_ABORT_SCOPE_RECOVERY_FP3_POST_ACCEPT_BUNDLE_DESIGN.md)で、root側発行／消費状態、同partsのproof pair、発行中／ready／消費中の所有権と全破棄を詳細化した。設計のみであり、完成bundle生成・実commit／seal成功は有効化しない。
+
 1. fresh constructionで同dest owner・失敗slot・claim／保持slotを先に確保し、同takeで元accepted／内容をpendingへ移す。take／受領消費／準備claimは別責務だが、受領消費はheader／fullを共有する一つだけ。
 2. pre guard後、同pendingを検査してfull受領物を一度得る。workで同snapshot由来の投影再比較・expectationと、同model由来のD1／PD候補を作り、BundlePartsDraftを非公開で保持する。
 3. shape／limit／不一致は暫定保持し、post guardの取消・期限・先行hardを優先する。post通過後、受領物・同pending／owner・source／cleanup・budget／serialと全partsの対応を再確認する。
