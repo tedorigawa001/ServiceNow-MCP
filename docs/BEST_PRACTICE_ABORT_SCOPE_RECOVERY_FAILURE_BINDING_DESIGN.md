@@ -1,0 +1,121 @@
+# FailureOwnerとOB-01とkernelの接続差分
+
+Version: br006-recovery-failure-binding-draft-0.1 / Date: 2026-11-03。
+Status: **設計のみ。合成依存限定。正式発行口閉鎖・全体受付無効・Unknown・VM／監視／telemetry調査保留を維持する。**
+
+基準HEAD: `196ca0c`。[失敗owner寿命設計](BEST_PRACTICE_ABORT_SCOPE_RECOVERY_FAILURE_OWNER_LIFETIME_DESIGN.md)§9と[OD-B設計](BEST_PRACTICE_ABORT_SCOPE_RECOVERY_ODB_TRANSFER_DESIGN.md)§11からの差分。同一constructionでFailureOwnerを先行確保し、OB-01の失敗通知と既存kernelのresource生成・cleanupを結ぶ。既存の独立factoryを二つ呼び、summaryやID一致で接続する方式は採らない。
+
+## 1 追加するものと維持する境界
+
+[OwnedMixedSupply](../tests/support/review/synthetic-recovery-kernel.ts)は現在、DATAと同pins／行対応を準備するだけでrecovery kernelを作らない。[FailureCustody](../tests/support/review/synthetic-failure-custody.ts)は別token・別frameで4roleを管理し、公開issuerのfactsは合成由来だけである。双方の単体試験は接続済みの証明ではない。
+
+新しいclosed合成constructionを一つ追加し、privateな供給・lifecycle・失敗coreを同じ生成継続に置く。旧factoryの入力・brand・返却surface・診断は維持する。新entryは合成DATAを受けるだけで、既存root／session／owner／issuer／callbackを登録する引数を持たない。
+
+accepted採用・移譲先seal・内容比較は本差分の対象外。実session、実transport、実worker、source-closeの新しい実発行口、MCP登録も追加しない。
+
+## 2 同一constructionと生成順序
+
+新constructionの順序を固定する。
+
+1. 入力を読む前に、固定の上位診断slot、FailureOwner、custody slot、first-hard slotを確保する。既知の安全な内部初期値だけを使い、callerのguardやupper objectをこの段階で実行・採用しない。
+2. 共通construction tokenとfake停止境界をpinし、OB-01のstrict DATA投影を開始する。不正DATA／依存形状も同上位診断へ固定理由で残す。旧standalone factoryの例外動作は変更しない。
+3. 同生成元のOwnedMixedSupply・pins・行対応を準備する。外部へpinsや実issuerを返さず、既存の一度限りprepare claimを維持する。
+4. resourceを担当する固定creatorと、追跡対象範囲を結ぶprivate RoleBindingを準備する。生成claim占有前にFailureOwnerへcreatingを登録し、その後だけ対応する生成処理へ進む。
+5. 同pinsとprivate初期topologyから既存kernelの新経路を構成する。sourceや旧世代がこの時点で既に存在するなら、同生成元の初期所有証拠を必要とする。後からcallerの参照を登録して済ませない。
+6. 最初のhardを一度通知し、内容権限を同期失効する。busy区間を抜けた後、固定外側callerがcleanup-only・report封印・上位custody受理・元owner最終discardへ進む。
+
+OB-01の公開prepared handleやFailureCustodyの公開issuerを、汎用DIで互いに渡す方式は禁止する。必要な共通化はprivate coreの同居・固定生成継続とpure検査の抽出に限定し、共有tokenやlive frameを受け取る公開factory／attach／register関数を作らない。private coreを同じ内部moduleに置く場合も、公開するのは旧fresh factoryと新fresh DATA entryだけとする。
+
+## 3 private接続契約
+
+名称は案。今回、型や入口は追加しない。
+
+| 型案 | 固定内容 | 検査と所有権 |
+| --- | --- | --- |
+| ClosedConstructionIdentity | 共通token、供給owner、kernel scope、失敗owner、上位slot | 新constructorのみ生成。別factoryのtokenを後付けしない |
+| RoleBinding | role、creator identity、追跡範囲、allocation identity、generation ticket、frame／source identity、cleanup sink | 同生成元の参照だけ。raw IDやsummaryでは発行不可 |
+| ClosedCreatorSetProof | 対象roleで生成を開始したか、全creator claimを閉じたか、既存resourceの供給元を覆うか | absence発行の前提。未登録・未対応はabsenceでなくUnknown |
+| KernelFailureNotice | 確定済みfirst hard code、固定phase、failure serial、construction | 元失敗点だけが一度発行。raw Error／messageを渡さない |
+| CleanupOnlyCapsule | 同role／frame／sinkへの固定停止・結果受領継続、未解決状態 | review／ready／dispatch／accepted／sealの操作を含めない |
+| RoleTerminalProof | 同birth／frame／sink・scopeに結合した終了またはcleanup証拠 | 証拠の種別と一度限りclaimを維持。文字列statusを昇格させない |
+
+FailureCustodyが現在生成する内部frameとkernel frameは独立している。新経路ではbirth時のRoleBindingから両者を固定対応させるか、一つのprivate frameを共有する。readyが返った後に「同じ世代らしい」と対応付けることは不可。metadata allocation、生成処理開始、生成結果の受領、ready受理を別の節目として扱う。
+
+## 4 OB-01の失敗通知と参照破棄
+
+OB-01のconstructor内拒否、prepare／row／discardのguard、重複・混入・失効拒否を対象とする。既存のfirst_failureが確定する箇所に、新経路専用の固定通知継続を置く。外側catchが例外の文字列やinspectを読み直して証拠を再発行する案は採らない。
+
+失敗処理の順序は次とする。
+
+1. 元の規則で優先される失敗を確定する。prepare内で保留したbinding不一致よりpost guardの取消／期限が優先される順序を変えない。
+2. 同constructionのfirst-hard slotへ固定noticeを一度格納し、新しい生成claimを閉じる。通知先の追加失敗で元のcodeを置換しない。
+3. OwnedMixedSupplyのDATA／pins／元本文／prepared handleと移譲途中の一時値を外す。FailureOwnerへ本文を渡して退避しない。
+4. 元操作を終了させ、busyを解く。外側の固定失敗callerが、保持済みnoticeと責務を使う。失敗中のpublic facade再入でseal／commitを呼ばない。
+
+noticeの一度限りclaimは書込み前に占有する。同じfirst hardを既存actのcatchが再びfailへ渡しても、同serialの通知を二重発行せず、元claimを戻さない。通知処理の成否にかかわらずfinallyでpayload clearとbusy解除を行い、通知失敗を理由に本文を保持しない。
+
+通知先は任意callbackではなく、先行確保したprivate固定slotへの書込みとする。通知経路の不成立は別の固定faultとして残し、成功応答を返さない。旧factoryをこの新通知先へ後付け参加させない。
+
+prepare前の拒否では、この接続経路がresourceを生成していないことと、run全体にresourceが存在しなかったことを区別する。後者を覆うClosedCreatorSetProofがなければ、4roleの未生成証拠を自動発行しない。空map・pin_builds=0・DATA-onlyだったことだけで全runの解放confirmedにしない。
+
+## 5 kernelの生成点と4roleの対応
+
+| role | 対象となる現在の節目 | 新経路で先に保護するもの | 成立させない推論 |
+| --- | --- | --- | --- |
+| source | tracked kernelのconstructorでsource identityを生成。beginSourceClose／settleSourceCloseで状態更新 | constructor前のRoleBindingと初期source所有証拠。clear前のcleanup-only責務 | bind前だからsourceなし、source closedだから全transport／cleanup完了 |
+| transport_group | 現kernelには全HTTP attempt／readerの台帳がない。verify accountingは件数・byte値だけ | 同run・同budgetの全attempt ownerからの集約証拠と保護範囲 | C=0／G=0／P=0、verify非実施、source閉鎖からquiescentを生成 |
+| old_generation | beginWorkerClosure、confirmWorkerUnstarted、settleWorkerClosure | 同初期topologyの旧frame／creator、closure lease、終了とcleanupの別facts | worker_state=none／close_requests=0だけでabsence、片方confirmedだけで両完了 |
+| new_generation | claimWorkerGenerationでframe／sinkを割当て、startWorkerGenerationで開始、ready受理でroute origin確定 | claim前の予約、同frame／cleanup identity／sink、作成途中と開始結果 | frame確保／generationStarts／ready_eventsだけでphysical terminationやcleanup完了 |
+
+sourceや旧workerのように回復開始前から存在するものは、creatorの出生時追跡または同private初期供給証拠を必要とする。回復開始時のcaller-supplied topologyは現在もfake fixtureであり、実source originへ昇格しない。新結合試験でも証拠scopeはsynthetic_lifecycleに限定する。
+
+new generationは「予約したが未開始」「作成中」「生成結果を受領」「ready受理」を分ける。生成が起きた後のpost guardで停止しても、birth factを未生成へ戻さない。作成を開始したが結果を確定できない場合はcreating／unconfirmedで保持し、同ticketの遅着結果をcleanup所有先へ結ぶ。
+
+transport全件の供給元は現在未接続のため、初期接続ではUnknownを残す。新kernel区間でdispatchがなかったとしても、回復前のattemptを含む範囲を覆う証拠なしにgroup absenceを出さない。全roleが解決したという試験期待値を先に作らない。
+
+## 6 hardとclearの接続位置
+
+既存kernelでは`hard??=...`の後に`clear()`がsource identity・frame・acceptedTermination等を外す。新経路は、その前に既に確保してあるRoleBinding／CleanupOnlyCapsuleと確定済みfactsを失敗側へ保護する。hard発生後にinspectから参照を再構成しない。
+
+新FailureOwnerへの通知はfirst hard確定直後、payload clearより前に行う。cleanup-onlyのrole metadataはrun利用権限と別slotで保持し、元healthy bindingやready originを復元しない。clearを止めて本文を残すのではなく、cleanupに必要な最小限の停止専用参照だけを残す。
+
+現在のbeginWorkerGenerationCleanupはhealthy guardを通さず、発行済みsinkについてhard後も処理できる。この性質を維持する。既存source closeはhealthy actを要するため、hard後の代替source-close実行口を本接続で追加しない。sourceの操作・証拠が不足すれば、上位へ未解決のまま引き継ぐ。
+
+コードとstageは明示写像にする。OB-01のshape／binding／order等はinternal_review_error、cancelled／deadline_exceededは同codeを維持する。kernelは確定したhard.codeをそのまま使い、phaseからFailureOwnerのprepare／transfer／cleanup／internalへ固定変換する。生成・準備はprepare、plan／finish系はtransfer、closure／source close／cleanup／discardはcleanupを基本とし、全phase unionを列挙して検査する。未対応phaseを文字列prefixで自動分類せずinternalへ止め、元の固定phaseは別の限定診断へ保持する。displayは外側表示の通知に限定する。
+
+## 7 cleanup sinkからの観測契約
+
+- old generationのsettle結果は、同private lease／contextの検査後にterminationとcleanupを別々に保持する。両方成立したときだけ返る既存closure evidenceを待つと、片方のみ確認済みのままfailするケースを失うため、clear前に確定済みfactsを保護する。
+- confirmWorkerUnstartedからabsenceへ結ぶには、同creatorの開始未実施・閉鎖済みclaimを追加照合する。callerのworker_stateだけを根拠にしない。
+- new generationのrecordWorkerGenerationCleanupは、同sink／frame・開始serial・validStartとstatusの検査結果を使う。参照を消す前に、受理できたcleanup factだけを固定継続へ渡す。foreign／unknown statusからconfirmedを発行しない。
+- cleanup confirmedとworker_terminatedを別発行にする。現kernelのcleanup文字列やready countersに独立した終了証拠がなければ、終了はUnknownのまま。正常acceptedのcleanup証拠をhard後に復活させない。
+- source closedは同sourceの固定settle proofに結ぶ。新FailureOwnerの保守的なsubsetが要求するsource cleanup factは、適切な固定完了issuerがなければUnknownとする。同じ文字列を二つの独立証拠へ複製しない。
+- transport_quiescentには全対象attemptのtyped cleanup・in-flight／遅着生成なしの固定集約証拠を必要とする。現在の会計値は代替証拠にしない。
+
+cleanupを始めるときも、同capsuleから一度要求し、同結果を元kernelと失敗ownerへ二重消費させない。元sinkの唯一のconsumerが固定の受理receiptを作り、そのreceiptから許された診断factsだけを派生させる。上位へcustody移譲後は共通holderがcleanupを制御し、元local facadeは操作不可とする。late factsは受理済みreportを書換えずupperのcurrent診断へだけ反映する。
+
+## 8 停止と費目と未対応
+
+healthy stopは生成・解析・accepted等を止め、cleanup-only stopは元全deadline・既存残予算の範囲で責務を回収・報告する。両guardを同じ戻り値処理で包まない。FailureCustodyの停止checkpointは待機を作らず診断へ記録するが、それだけで実budgetが結合したとはしない。
+
+共通token／先行slot、初期所有証拠・role対応、first-hard写像と通知、payload clear、sink受理と派生facts、上位custodyと最終discardが追加費目となる。source／worker処理を通知のために再実行せず、C/G/P・retry・210試行・全60秒を増やさない。総work／heap・中断粒度・外側executorの終了保証はUnknownを維持する。
+
+## 9 合成受入条件とOB-02の開始条件
+
+1. FailureOwner／上位slot確保前にOB-01のraw validationやguardが実行されないことを確認する。不正DATA／依存例外にもfirst hardが一度残り、本文がfailure側へ漏れない。
+2. constructor・各prepare／row／post guardの失敗で元の優先codeを保持し、body／pins／preparedを破棄する。通知の例外・swallowed再入で先行診断を置換せず、成功handleを返さない。
+3. source／旧世代の初期存在、new frame予約・未開始・作成中・生成結果・ready前後を区別する。別frame／sink／construction、summary由来の証拠、未開始と未確認の混同を拒否する。
+4. old generationの終了だけ／cleanupだけ、新世代cleanup confirmedだけ、source closedだけ、accountingだけのケースで解放confirmedを出さない。欠けるissuerはUnknownのまま上位へ移す。
+5. clear前のfactsとcleanup-only参照を保持し、hard後も発行済みsinkだけが結果を受ける。late生成／cleanupをlocal／upperの唯一のholderへ配送し、normal acceptedやreadyを復活させない。
+6. 先行hard→payload失効→cleanup-only→immutable report→同上位custody受理→元owner最終discardを連続fakeで確認する。責務移譲を実resource解放と扱わない。
+7. 旧OB-01・kernel・FailureCustodyのstandalone入口と試験を維持し、新factory／private issuerをpackage非同梱にする。runtime／I/O／clock／worker起動・秘密漏出の負の対照も維持する。
+
+| 分割案 | 最初の実装範囲 | 未接続のまま残すもの |
+| --- | --- | --- |
+| FB-01 | 同construction shell、先行FailureOwner／上位slot、OB-01 first-hard固定通知とpayload失効。欠けるrole証拠はUnknown | kernel生成・accepted採用・移譲先seal |
+| FB-02 | 同初期topologyとkernelのRoleBinding、生成点・clear前保護・既存cleanup sinkからの固定factsをfakeで接続 | transport全件証拠・独立終了証拠のない項目、実resource |
+| FB-03 | 未解決のまま上位へ移す連続試験、停止／診断／同予算供給点・費目を確認 | accepted／plan結合とdest seal |
+
+この3段階の失敗停止・責務保存と欠ける証拠の扱いを確認した後に、OB-02の同pins／accepted／planを一つの移譲claimへ結ぶ。Unknownをconfirmedに変えることで開始条件を満たしたことにはしない。
+
+本工程はMDと親参照の更新だけ。実装・実接続・実通信・実機操作・設定変更・token／Permit／候補発行・Pushは行わない。

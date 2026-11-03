@@ -1,6 +1,6 @@
 # OD-B 失敗ownerの寿命と最終discard条件
 
-Version: br006-recovery-failure-owner-lifetime-draft-0.2 / Date: 2026-11-03。
+Version: br006-recovery-failure-owner-lifetime-draft-0.3 / Date: 2026-11-03。
 Status: **固定4roleの失敗owner・上位owner・custody slot・commit receipt／最終discardを純粋合成実装。既存resource／cleanupとの連結は未対応。正式発行口閉鎖・全体受付無効・Unknown・VM／監視／telemetry調査保留を維持する。**
 
 基準HEAD: `35541ab`。[OD-B設計](BEST_PRACTICE_ABORT_SCOPE_RECOVERY_ODB_TRANSFER_DESIGN.md)§7・10のOB-02開始条件を具体化する。hard後の診断と解放責務は、利用可能なaccepted／planとは別に保持する。最終discardはownerの保持参照を外す操作であり、resource解放完了の証明ではない。
@@ -154,3 +154,9 @@ checkpointのcancelled／deadline_exceededは停止観測へ記録するだけ�
 4 ticket、最大12個の未消費証拠slot、report／upper report／commit receipt各1slotだけを持ち、本文や例外履歴を受け付けない。native I/O、clock、timer、workerを呼ばず、残予算0相当の停止checkpointでも追加待機は作らない。一方で実deadline／共有予算／実cleanup・attempt inventoryは未結合であり、guard数や固定slot数を全work／heap上界とはしない。
 
 inspectのruntime_resource_origin／actual_cleanup／attempt_inventory／canonical_budget／cleanup_deadlineは未保証のまま。OB-01の実payload失効や既存kernelのsink連結は後続であり、本実装が代行したとはしない。[検証記録](E2E_BEST_PRACTICE_FAILURE_CUSTODY_2026-11-03.md)参照。
+
+## 10 OB-01とkernelへの接続差分
+
+[接続差分draft-0.1](BEST_PRACTICE_ABORT_SCOPE_RECOVERY_FAILURE_BINDING_DESIGN.md)で、同constructionの先行owner確保、OB-01 first-hardの一度限り通知とfinallyによる本文破棄、4roleの生成点・初期所有証拠・frame／sink対応を具体化した。public issuerを接着する方法や、C/G/P・cleanup文字列からの全終端証拠の生成は採らない。sourceのhard後close・transport全件証拠・独立worker終了証拠の不足はUnknownへ残す。
+
+FB-01〜03は設計段階であり、§9の独立合成ownerから既存resourceへの連結やOB-02のaccepted採用はまだ実装していない。
