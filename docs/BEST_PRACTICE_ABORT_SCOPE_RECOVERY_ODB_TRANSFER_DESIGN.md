@@ -1,6 +1,6 @@
 # OD-B 同生成元の供給と一度限りの内容移譲
 
-Version: br006-recovery-odb-transfer-draft-0.13 / Date: 2026-11-03。
+Version: br006-recovery-odb-transfer-draft-0.14 / Date: 2026-11-03。
 Status: **OB-01／FB-01〜03とNB-01〜03の正常保持・private採用・非実行take／固定破棄・同custody連結まで合成実装。実resource・canonical予算／全work保証・移譲先seal成功・正常終端は未接続。正式発行口閉鎖・全体受付無効・Unknown・VM／監視／telemetry調査保留を維持する。**
 
 基準HEAD: `1eb3c74`。[OM-D設計](BEST_PRACTICE_ABORT_SCOPE_RECOVERY_MIXED_CONTENT_OMD_DESIGN.md)§4・7・10〜11と[OD-A検証記録](E2E_BEST_PRACTICE_OMD_SLOTS_ODA_2026-11-03.md)からの差分。同じ生成元で作ったmixed内容とaccepted／planを、一つのprivate操作で移譲先へ確定する。OD-Aの公開handleを既存rootへ後付け登録する方式は採らない。本文照合・finish job・候補発行はOD-Bの対象外。
@@ -68,7 +68,7 @@ full本文を含むmixed列を旧pinsの小さい一括コピー枠へ押し込�
 
 ## 4 順序付きprefixと固定delta
 
-[prefix／固定delta詳細契約](BEST_PRACTICE_ABORT_SCOPE_RECOVERY_PREFIX_DELTA_DESIGN.md)で、RA入口前のeligibility、原順序側とsort済みbase側の二経路、100／103・error切詰めと独立oracleを具体化した。実accepted projection headerのprivate供給は未接続であり、関係値・移譲先sealの実装を追加したものではない。
+[prefix／固定delta詳細契約](BEST_PRACTICE_ABORT_SCOPE_RECOVERY_PREFIX_DELTA_DESIGN.md)で、RA入口前のeligibility、二経路、100／103・error切詰めと独立oracleを具体化し、PD-Aのprefix-local値計算だけを合成実装した。実accepted projection headerのprivate供給・同pendingへの結合・移譲先sealは未接続である。
 
 開始prefixは新fixtureのDATA pinに限定する。base headerのlimitations／errorsとinitial_prefixの関係を、元の順序・重複を含めて検査する。別々の任意配列を独立した真実として採用しない。OM-Aの親処理後prefixを新constructionのbase headerへ固定反映してから、同pinsとplanを結ぶ。
 

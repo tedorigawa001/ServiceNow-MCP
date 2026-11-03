@@ -1,6 +1,6 @@
 # OB-02 同pins保持・identity統一とprivate採用／移譲claim
 
-Version: br006-recovery-ob02-adoption-draft-0.7 / Date: 2026-11-03。
+Version: br006-recovery-ob02-adoption-draft-0.8 / Date: 2026-11-03。
 Status: **NB-01／02とNB-03の一度限りtake・固定abort・破棄証拠／同上位custody連結まで合成実装。内容比較・移譲先seal成功・正常終端は未接続。正式発行口閉鎖・全体受付無効・Unknown・VM／監視／telemetry調査保留を維持する。**
 
 初版の基準HEAD: `8126d10`。[OD-B設計](BEST_PRACTICE_ABORT_SCOPE_RECOVERY_ODB_TRANSFER_DESIGN.md)§2〜7・10と[FB接続設計](BEST_PRACTICE_ABORT_SCOPE_RECOVERY_FAILURE_BINDING_DESIGN.md)§12からの差分。FB-03の失敗責務保存を維持したまま、正常系で同pins・元内容を保持し、同private kernelのaccepted／planと一度だけ結ぶ。現行の合成実装範囲は§10〜12に示し、移譲先seal成功を実装済みとは扱わない。
@@ -124,7 +124,7 @@ PayloadClearedReceiptは論理slotを外した後だけ発行し、失敗capsule
 
 ## 8 prefix・費目・未確定事項
 
-[順序付きprefix／固定delta詳細契約](BEST_PRACTICE_ABORT_SCOPE_RECOVERY_PREFIX_DELTA_DESIGN.md)で、元の親順序とplan canonical値の関係・受付前の重複／上限拒否・errors先頭100件と切詰め警告・独立oracle条件を具体化した。値計算／private結合はPD-A／Bの候補で、NB-03の固定abortや閉鎖条件は変更しない。
+[順序付きprefix／固定delta詳細契約](BEST_PRACTICE_ABORT_SCOPE_RECOVERY_PREFIX_DELTA_DESIGN.md)で、元の親順序とplan canonical値の関係・受付前の重複／上限拒否・errors先頭100件と切詰め警告・独立oracle条件を具体化した。PD-Aはprefix-local値計算まで実装し、private結合はPD-B以降へ残す。NB-03の固定abortや閉鎖条件は変更しない。
 
 normal ownerは原順序の親prefixと同pins header、同plan.verify／投影を別々に保持する。RAのsort済みheaderから原順序を復元しない。OB-02の採用は同origin／所有権の確認に限定し、prefix変換関係を未確認のままseal成功へ進めない。
 

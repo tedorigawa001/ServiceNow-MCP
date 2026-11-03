@@ -1,7 +1,7 @@
 # OB-03前工程：順序付きprefix・固定deltaの詳細契約
 
-Version: br006-recovery-prefix-delta-draft-0.1 / Date: 2026-11-03。
-基準HEAD: `7866991`。Status: **設計のみ。合成依存限定、正式発行口閉鎖・全体受付無効・Unknown・VM／監視／telemetry調査保留を維持する。**
+Version: br006-recovery-prefix-delta-draft-0.2 / Date: 2026-11-03。
+初版基準HEAD: `7866991`。Status: **PD-Aのprefix-local値計算・eligibilityと境界oracleを合成実装。private結合・実accepted header照合・移譲先sealは未接続。正式発行口閉鎖・全体受付無効・Unknown・VM／監視／telemetry調査保留を維持する。**
 
 [OD-B設計§4〜6](BEST_PRACTICE_ABORT_SCOPE_RECOVERY_ODB_TRANSFER_DESIGN.md)と[NB接続設計§8・12](BEST_PRACTICE_ABORT_SCOPE_RECOVERY_OB02_ADOPTION_DESIGN.md)の具体化。新しい正規化・上限緩和・seal成功を導入せず、親の原順序と既存plan投影のcanonical値の関係を証明する条件を定める。
 
@@ -139,7 +139,7 @@ error上限100とwarning上限100は独立である。E=100であること自体
 
 oracleは被検査のmodel／plan投影／関係計算器／finalizeAggregateを呼んで期待値を作らない。既存fixturesはstrict入力の雛形としてだけ使用できる。期待する親分岐・delta順・残るerrors／dropと拒否段階は、手書きの表と別表現の逐次状態機械で作る。stable dedupには線形既出リスト、sortにはUTF-16比較の独立挿入順計算を使う等、実装のSet＋sortをそのまま複製しない。
 
-必須検証を以下に固定する。実行済み試験という意味ではない。
+必要な検証を以下に固定する。PD-Aで実行した値検査と、PD-B以降に残るorigin／寿命の範囲は§11で区別する。
 
 | 群 | 必須ケース／比較対象 |
 | --- | --- |
@@ -160,6 +160,29 @@ oracleは被検査のmodel／plan投影／関係計算器／finalizeAggregateを
 
 P0／Pp／traceは既存ownerが保持し、追加のordered／canonical一時配列・delta最大3 errors・比較／sort作業・private receiptの寿命とcopyピークを別費目にする。warning／error件数の局所上限は有限でも、全work・heap・中断粒度の数値上界や予約額は未導出。既存予算leaseを更新せず、無料扱い・旧FB-03費目の流用・全体受付有効化はしない。
 
-最初の実装候補はPD-A（値だけの二経路計算／eligibility・境界oracle）、次にPD-B（同pending／実accepted projectionへのprivate結合・guard／破棄）とする。どちらも移譲先sealの成功を返さない。移譲先ownerのatomic commit／正常terminal-only寿命と、保持量／全work上界の設計は別途必要。
+PD-A（値だけの二経路計算／eligibility・境界oracle）は§11で実装した。次はPD-B（同pending／実accepted projectionへのprivate結合・guard／破棄）とする。どちらも移譲先sealの成功を返さない。移譲先ownerのatomic commit／正常terminal-only寿命と、保持量／全work上界の設計は別途必要。
 
-本稿はMDと親参照だけを更新する。検証条件の実行・helper実装・実接続・実通信・実機操作・token／permit／seal発行・設定変更・Pushは行わない。
+draft-0.1はMDだけ。後続PD-Aも実接続・実通信・実機操作・token／permit／seal発行・設定変更・Pushは行わない。
+
+## 11 PD-Aの実装範囲
+
+[synthetic-prefix-delta](../tests/support/review/synthetic-prefix-delta.ts)に`projectSyntheticPrefixDelta`を追加した。package除外の値専用helperで、lifecycle／owner／claim／clockをimportせず、既存normal rootやplan投影へ接続しない。成功はprefix-localの計算だけを示し、発行元・P0／traceとの対応・full header適合・同accepted header一致の証拠ではない。
+
+strict DATA契約は次の6項目。extra引数・未知field・accessor・Proxy・疎配列・特殊prototype・unsafe値を拒否し、失敗は固定`internal_review_error`と固定phase／reasonだけを返す。
+
+| 項目 | 値 |
+| --- | --- |
+| kind／model_id | synthetic_prefix_delta_v1／ordered-prefix-delta-v1 |
+| schema_version／collection_status | bp-mcp-review-0.2または0.3／completeまたはfailed。candidate_filter errorのprefix-local条件に使用 |
+| parent_prefix | 親処理後のlimitations／errors。P0や本文・行・traceは入力しない |
+| verify | stage=verified、verify_required、consistency、verify_error、limitations、errorsの6項目のみ。accountingやoriginの検査は未保証 |
+
+一つのcopy budget（depth≤4、object keys≤8、array≤103、nodes≤2,500、character units≤650,000、文字列とkeyのUTF-16長×3）でDATA全体をsnapshotする。各fieldで枠をresetしない。schemaで親warnings≤103／各長≤2000、errors≤100、verify warnings≤100／各長≤200、verify errors≤2等を検査した後、prefix-local eligibilityで親warnings≤100／各長≤200／uniqueを要求する。103を通すのは入力値の検査までで、受付や出力上限を拡張しない。
+
+成功値にはchecked version／collection、親prefix、sort済みbase、ordered、plan pre、canonical、固定delta、採用／drop件数を別々に保持する。配列・recordは深くfreezeし、callerをfreezeせず後からの変更も反映しない。2経路の算出上の一致は確認するが、外部の実accepted headerは比較していない。
+
+error schemaは候補errorを含む全入力・deltaを切詰め前に検査する。100件で落ちる予定の未知code／版不適合codeも隠さず拒否する。これは新しいstrict DATA境界であり、legacy pure plan viewの不正入力処理を変更するものではない。verify値の整合は既存pure投影の規則に合わせ、warningは必要集合と一意性、errorsは必要なcode順を検査する。任意viewや到達不能なk=3の値成功はcreator証拠ではない。
+
+`usage`は入力snapshot時のnodes／character units／最大depthだけ。schema検査・merge／sort・出力copyのworkや全heapは計上しておらず、全体予算やcapへのprojectionではない。pre/post guard・取消・失効・one-shot claimは追加しない（PD-Bのprivate owner責務）。
+
+[PD-A検証記録](E2E_BEST_PRACTICE_PREFIX_DELTA_PDA_2026-11-03.md)では、独立した線形既出リスト／UTF-16挿入順oracle、親の残findings枠による別状態機械と手書き表、実OM-Aとの値比較、境界・厳密入力・変異の負の対照を確認する。runtime用の配布物や正式発行口へ昇格せず、既存0.2／0.3・受信／210試行／全60秒・Unknownの扱いを維持する。

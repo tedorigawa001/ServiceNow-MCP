@@ -224,6 +224,17 @@ for(const f of pack.files.filter(f=>f.path.startsWith('dist/')&&/\.(?:js|ts|map)
 for(const leak of ['fetch("x");','Date.now();','new Date();','new Worker("x");',"import('node:fs');","import {BoundedReadSession} from '../../../src/servicenow/bounded-read.js';const zzRoot=BoundedReadSession;"])
   assert.throws(()=>auditSyntheticIssuer(parentOmissionText+'\n'+leak,parentOmissionImports),assert.AssertionError,'OM-A audit missed seeded leak: '+leak);
 console.log('OM-A pure parent finding/prefix model excluded; fixed imports + seeded runtime/I/O/clock/worker/leak controls PASS');
+const prefixDeltaText=readFileSync(join(root,'tests/support/review/synthetic-prefix-delta.ts'),'utf8');
+const prefixDeltaImports=['node:util','zod','../../../src/review/aggregate-schema.js'];
+auditSyntheticIssuer(prefixDeltaText,prefixDeltaImports);
+const prefixDeltaMarkers=['synthetic-prefix-delta','projectSyntheticPrefixDelta','PrefixDeltaValueError','PREFIX_DELTA_VALUE_LIMITS','ordered-prefix-delta-v1','synthetic_prefix_delta_values','synthetic_prefix_delta_value_only','prefix_delta_values_only'];
+const noPrefixDelta=text=>assert(!prefixDeltaMarkers.some(x=>text.includes(x)),'PD-A prefix-local values leaked into runtime');
+for(const marker of prefixDeltaMarkers)assert.throws(()=>noPrefixDelta(marker));
+assert(!pack.files.some(f=>f.path.includes('synthetic-prefix-delta')));
+for(const f of pack.files.filter(f=>f.path.startsWith('dist/')&&/\.(?:js|ts|map)$/.test(f.path)))noPrefixDelta(readFileSync(join(root,f.path),'utf8'));
+for(const leak of ['fetch("x");','Date.now();','new Date();','new Worker("x");',"import('node:fs');","import {BoundedReadSession} from '../../../src/servicenow/bounded-read.js';const zzRoot=BoundedReadSession;"])
+  assert.throws(()=>auditSyntheticIssuer(prefixDeltaText+'\n'+leak,prefixDeltaImports),assert.AssertionError,'PD-A audit missed seeded leak: '+leak);
+console.log('PD-A bounded prefix-local values excluded; fixed pure imports + seeded runtime/I/O/clock/worker/leak controls PASS');
 const mixedSlotText=readFileSync(join(root,'tests/support/review/synthetic-omd-slots.ts'),'utf8');
 const mixedSlotImports=['node:util','./synthetic-parent-omission-values.js'];
 auditSyntheticIssuer(mixedSlotText,mixedSlotImports);
