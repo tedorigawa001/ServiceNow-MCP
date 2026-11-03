@@ -39,11 +39,8 @@ function same(a:unknown,b:unknown):boolean{
 }
 const handle=<T>():T=>Object.freeze(Object.create(null)) as T;
 type GuardStop='cancelled'|'deadline_exceeded';
-export function createSyntheticRecoveryCaptureAssembly(raw:unknown,dependencies:Readonly<{guard:(phase:'pre'|'post',operation:'accept'|'transfer')=>GuardStop|void}>){
-  if(!dependencies||typeof dependencies!=='object'||types.isProxy(dependencies))throw new RecoveryCaptureError('shape');
-  const guardDescriptor=Object.getOwnPropertyDescriptor(dependencies,'guard');
-  if(!guardDescriptor||!Object.hasOwn(guardDescriptor,'value')||typeof guardDescriptor.value!=='function'||types.isProxy(guardDescriptor.value))throw new RecoveryCaptureError('shape');
-  const fixedGuard=guardDescriptor.value as typeof dependencies.guard;
+/** Bounded DATA projection only, never a receipt/capture registration or body getter. */
+export function projectSyntheticRecoveryCaptureContexts(raw:unknown){
   let contexts:Context[];
   try{
     if(!Array.isArray(raw)||types.isProxy(raw)||Object.getPrototypeOf(raw)!==Array.prototype||raw.length<1||raw.length>100||Reflect.ownKeys(raw).length!==raw.length+1)throw 0;
@@ -52,6 +49,14 @@ export function createSyntheticRecoveryCaptureAssembly(raw:unknown,dependencies:
     for(const c of contexts)if(c.target.update_xml_sys_id!==c.update_xml_sys_id||new Set(c.applicable_rule_ids).size!==c.applicable_rule_ids.length||new Set(c.requested_rule_ids).size!==c.requested_rule_ids.length
       ||c.instance_binding!==contexts[0].instance_binding||c.target.update_set_id!==contexts[0].target.update_set_id||!same(c.instance_release,contexts[0].instance_release))throw 0;
   }catch{throw new RecoveryCaptureError('shape');}
+  function freeze(v:unknown){if(v&&typeof v==='object'){for(const x of Object.values(v))freeze(x);Object.freeze(v);}}
+  freeze(contexts);return Object.freeze(contexts);
+}
+export function createSyntheticRecoveryCaptureAssembly(raw:unknown,dependencies:Readonly<{guard:(phase:'pre'|'post',operation:'accept'|'transfer')=>GuardStop|void}>){
+  if(!dependencies||typeof dependencies!=='object'||types.isProxy(dependencies))throw new RecoveryCaptureError('shape');
+  const guardDescriptor=Object.getOwnPropertyDescriptor(dependencies,'guard');
+  if(!guardDescriptor||!Object.hasOwn(guardDescriptor,'value')||typeof guardDescriptor.value!=='function'||types.isProxy(guardDescriptor.value))throw new RecoveryCaptureError('shape');
+  const fixedGuard=guardDescriptor.value as typeof dependencies.guard,contexts=projectSyntheticRecoveryCaptureContexts(raw);
   // Only these fresh handles represent synthetic run/session/source/auth/budget/release/window/frame/job/receipt identity.
   // No caller-supplied identity, runtime registry, or existing root can be adopted.
   type Slot={context:Context;id:number;started:boolean;accepted:boolean};

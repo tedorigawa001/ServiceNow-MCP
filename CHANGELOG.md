@@ -16,6 +16,8 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 ### Changed
 
+- CG-B's protected captures can now be bound to the existing synthetic accepted/plan lifecycle through a separate constructor-only root. Private original receipts and canonical order are checked before a one-shot content seal; source/cleanup start, hard stops and fixed discard paths synchronously erase content while preserving cleanup responsibilities and first diagnostics. Legacy roots cannot be upgraded, and no finish comparison, runtime binding, candidate or whole-run admission is enabled.
+
 - CG-B adds a package-excluded, fresh synthetic capture owner. Same-delivery full analysis values are accepted only after context checks and the post guard, retained privately and transferred once to an opaque manifest. Cross-root handles, duplicates, reordered receipts, cancellation and reentry fail closed with scalar-only diagnostics; no runtime capture, finish job, candidate or whole-run admission is enabled.
 
 - CG-A adds package-excluded, value-only full-result shape derivation, logical UTF-8 measurement and bounded strict JSON decoding from the same input string. Duplicate decoded keys, unsafe/rounded numbers and raw surrogate replacement are rejected before full analysis/aggregate schema validation. Full-body limits remain separate from local context limits; no delivery provenance, capture, candidate, runtime transport or whole-run admission is enabled.

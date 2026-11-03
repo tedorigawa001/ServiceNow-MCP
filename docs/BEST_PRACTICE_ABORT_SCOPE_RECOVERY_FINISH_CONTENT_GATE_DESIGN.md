@@ -1,9 +1,9 @@
 # 回復finish 本文capture・full schema・同bytes検証gate 詳細設計
 
-Version: br006-recovery-finish-content-draft-0.4 / Date: 2026-11-03。
-Status: **CG-Aの純粋値層に加え、CG-Bのfresh合成capture owner・post-guard受理・一度限りのmanifest移譲／固定discardを実装。既存assembly／plan／jobへの接続・非reviewed受領物・omission／full応答gate／候補発行は未実装。正式発行口閉鎖・全体受付無効・Unknown・VM／監視／telemetry保留を維持する。**
+Version: br006-recovery-finish-content-draft-0.5 / Date: 2026-11-03。
+Status: **CG-A／Bに続き、別constructorの合成rootから既存accepted／plan kernelと同receiptのcaptureを結合するCG-BP1まで実装。旧rootの後付け昇格は不可。実origin／finish job・非reviewed受領物・omission／full応答gate／候補発行は未実装。正式発行口閉鎖・全体受付無効・Unknown・VM／監視／telemetry保留を維持する。**
 
-基準HEAD: `886d037`（CG-A `00bd3ca`と追加互換試験を含む）。[RD-C](BEST_PRACTICE_ABORT_SCOPE_RECOVERY_FINISH_JOB_RDC_DESIGN.md)§5・7・10〜11の内容gateを具体化する。実装範囲はCG-A§11・CG-B§12、それ以外の型・操作・数値モデルは未実装の内部案。本番cap・通常経路の受付変更・実通信・実機操作・設定変更・Pushの承認ではない。
+基準HEAD: `1e1e78d`（CG-B追加回帰を含む）。[RD-C](BEST_PRACTICE_ABORT_SCOPE_RECOVERY_FINISH_JOB_RDC_DESIGN.md)§5・7・10〜11の内容gateを具体化する。実装範囲はCG-A§11・CG-B§12・CG-BP1§13、それ以外の型・操作・数値モデルは未実装の内部案。本番cap・通常経路の受付変更・実通信・実機操作・設定変更・Pushの承認ではない。
 
 ## 1 「本文」と現状の不足
 
@@ -147,11 +147,11 @@ captureとwireの一度限り消費は別claimで管理する。captureは受理
 | 分割案 | 最初の範囲 | まだ発行しないもの |
 | --- | --- | --- |
 | CG-A（純粋値層を合成実装） | 完全schemaのshape導出・bounded strict decoder／同json文字列・full schema値契約。独立oracleで上限と論理bytesを検証。実delivery originは未接続 | capture証拠・候補・実受信保証 |
-| CG-B（fresh合成限定実装） | 同analyzeのprivate capture owner／post-guard受理・一度限りmanifest移譲／固定discard。既存planやfinish jobとの連結は後続 | descriptorからの昇格、実session登録、非reviewed本文の捏造 |
+| CG-B／BP1（合成限定実装） | private capture owner／post-guard受理／manifest移譲に加え、別root生成時から既存accepted／plan kernelへ同receiptを結合。finish jobとの連結は後続 | 旧descriptor／handleからの昇格、実session登録、非reviewed本文の捏造 |
 | CG-C | 三つの省略点の固定決定証拠と純粋omissionモデル、full aggregate＋RD-B03＋元本文比較 | 不足gateの候補化 |
 | CG-D | 全receiptが同job／planに揃う一度限りgate。RC-Dへ渡すprivate契約を検証 | RD-Dの正常終端・実review結果／Permit発行 |
 
-CG-Aの実装契約は§11、CG-Bのfresh合成ownerは§12。既存planへのowner接続・omission・総費用は設計案のまま。現在のRD-B04 handle／pin／content_evidenceのUnknownをそのままverifiedへ書換えない。
+CG-Aの実装契約は§11、CG-Bのfresh合成ownerは§12、既存kernelとの別root結合は§13。finish job・omission・総費用は設計案のまま。現在のRD-B04 handle／pin／content_evidenceのUnknownをそのままverifiedへ書換えない。
 
 CG-Aで固定schema全variantのshapeを導出し、独立oracleとJSON.stringify合成corpusで検証した。未確認事項は将来schema／任意の既存出力に対する互換性、実deliveryからの同bytes結合、元bodyの保持／cloneピーク、checkpointの配置と同期schema検証の中断粒度、omissionのserialize総費用、body／job／終端ownerの同時寿命、本番cap／全体work上界。これらを未導出のまま実経路や候補gateを開かない。
 
@@ -198,4 +198,34 @@ usageはnodes／character_units／maximum_depth／max_array_length／max_object_
 
 これらは局所の有限構造であり、元C/G/Pの会計や全体work／memory受付へ加算・承認した値ではない。予算不足を本文切捨てやdigest代替で救済しない。summaryのauthorityはnoneで、runtime origin／finish job／omission／content gate／whole-run budgetは未保証。本文の正しさやsource承認も変わらない。
 
-[CG-B検証記録](E2E_BEST_PRACTICE_RECOVERY_CAPTURE_CGB_2026-11-03.md)参照。既存accepted／planへの一度限りの結合、非reviewed受領物と合法omission、finish側full比較・終端証拠の連結が残る。旧試験・公開JSON・正式発行口閉鎖・全体受付無効・調査保留を維持する。
+[CG-B検証記録](E2E_BEST_PRACTICE_RECOVERY_CAPTURE_CGB_2026-11-03.md)参照。別rootからの既存accepted／plan kernel結合は§13。非reviewed受領物と合法omission、finish側full比較・終端証拠の連結が残る。旧試験・公開JSON・正式発行口閉鎖・全体受付無効・調査保留を維持する。
+
+## 13 CG-BP1 同receipt・accepted／plan ownerへの結合
+
+[新しい合成constructor](../tests/support/review/synthetic-pinned-recovery-root.ts) `createSyntheticCapturedRecoveryRoot`は、既存のconstruct／finish pins／recovery kernelを再利用するが、**既存rootやhandleを引数に受けない**。旧`createSyntheticPinnedRecoveryRoot`は従来のsurface／diagnosticを維持する。新rootでは旧structure-only sealを公開せず、別brandの`sealCapturedRecoveryFinishExpectation`だけを公開する。runtime用の登録口や可変モード切替は追加しない。
+
+### 13.1 生成と固定順
+
+constructorは既存finish seedと別の合成analyzeイベント列`[{context,response}]`を受ける。全てown-data、最大100件。`projectSyntheticRecoveryCaptureContexts`はDATAだけのbounded正規化器で、captureやreceiptを発行しない。次をprivate pinに照合してからCG-Bのdeliver／acceptへ接続する。
+
+- reviewed outcomeの順序・件数・IDとイベント列を一致させ、対応する**同じreceipt object**とaccepted_outcomeをprivate linksへ保持する。IDから新しいreceiptを生成して差し替えない。
+- input completedと元expected_context、T_i／target.retrieved_at、record_updated_at、Update Set、binding／release／要求rule／必須limitationsを照合する。
+- 正式な本文は同イベントのresponse文字列だけからCG-Aで検証・CG-Bでpost-guard受理する。context／descriptorからfindingsを補わない。constructor終了時にraw引数・イベント列の参照も外す。
+
+この段階は合成受信イベントの由来であり、実IPC／sessionの証明ではない。現在は少なくとも1件のreviewed captureを持つreviewed／not_processedのplanだけを扱い、元omitted等やcaptureゼロ件の連結は後続へ残す。旧fixtureから本文を生成して救済しない。
+
+### 13.2 一度限りsealと停止
+
+新rootは既存kernelから返った同plan／handoff／acceptedをprivateに記録する。seal開始claimをpre guard前に占有し、既存kernelのRD-B04 sealで同owner／accepted／planとpre/post guardを検査した後、private linksのreceipt／accepted_outcomeを再確認し、CG-B manifestをpre/post guard付きで一度移す。全4 guardが完了するまで新content handleは公開しない。元本文を再serialize／cloneしない。
+
+内部slotには同accepted・plan・handoff・旧seal・capture manifest・新brand handleが結ばれる。後半失敗ではkernelのsealも失効させ、部分成功を返さない。CG-B側で検出した取消・期限切れ・既存予算停止は共通check由来の固定理由をkernelへ渡し、先行hardを上書きしない。任意例外や未知文字列は固定internal_review_errorへ写像する。
+
+source close／worker cleanup開始の戻り前、hard、close、準備／世代／plan／acceptedの固定discard、非実行summary終端でcaptureとlinksを同期破棄する。正常source／worker解放時にはacceptedのterminal-only責務を消さず、既存の両終端証拠とaccepted discardを引き続き必要とする。late cleanup成功でもcaptureは復活しない。
+
+### 13.3 保証・費目・未接続
+
+新rootの診断は固定scope・state・開始claim・receipt件数・移譲回数・pending・authority:none／content_gate:falseだけを追加する。本文、ID、opaque receipt、target hashを出さない。legacy診断にはこのfieldを追加しない。
+
+追加費目は、contextの初回bounded projectionとCG-B constructorの再projection／private copy、最大100件のreceipt linksと照合、constructorのanalyzeごとの2 guard、sealの4 guard、リンクslot／新handle、各discardでの参照解放。旧C/G/P prefix・元時刻・世代回数は更新しないが、CPU／heapを無料とはしない。全体work／memory上界はUnknownで受付無効のまま。
+
+同finish jobへの移譲、元非reviewed受領物、親省略証拠、full結果の内容比較と合法omission、終端candidateは未接続。新handleを旧RD-B04 handle／summaryから作る経路や、content_gate:trueへ変更するAPIはない。[CG-BP1検証記録](E2E_BEST_PRACTICE_RECOVERY_CAPTURE_PLAN_CGBP1_2026-11-03.md)参照。
