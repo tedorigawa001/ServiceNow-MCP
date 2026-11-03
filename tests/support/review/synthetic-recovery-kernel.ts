@@ -540,7 +540,7 @@ export function createSyntheticOwnedMixedSupply(raw:unknown,dependencies:unknown
   return createOwnedMixedSupply(raw,deps.guard as SupplyGuard,extra,opaque<object>());
 }
 type SupplyGuard=(stage:'prepare_pre'|'row_pre'|'row_post'|'prepare_post'|'discard_pre'|'discard_post',ordinal?:number)=>unknown;
-type SupplyFailureSlot={token:object;claimed:boolean;notices:number;reason:SupplyReason|undefined;custody:ReturnType<typeof createFailureCustodyCore>};
+type SupplyFailureSlot={token:object;claimed:boolean;notices:number;reason:SupplyReason|undefined;custody:ReturnType<typeof createFailureCustodyCore>;accounting?:FailureRunSupply};
 type SupplyKernelBridge={token:object;owned:OwnedMixedSupply|undefined};
 function createOwnedMixedSupply(raw:unknown,fixedGuard:SupplyGuard,extra:unknown[],constructionToken:object,failure?:SupplyFailureSlot,initialFailure?:SupplyReason,bridge?:SupplyKernelBridge){
   let first:SupplyReason|undefined,state:'fresh'|'preparing'|'prepared'|'failed'|'invalidated'|'discarded'='fresh',busy=false,started=false;
@@ -556,6 +556,7 @@ function createOwnedMixedSupply(raw:unknown,fixedGuard:SupplyGuard,extra:unknown
         if(failure.token!==constructionToken)throw new OwnedMixedSupplyError('binding');
         failure.custody.local.hard(first==='cancelled'||first==='deadline_exceeded'?first:'internal_review_error','prepare');
         failure.notices++;
+        failure.accounting?.record('notice');
       }
     }finally{clear();}
   }
@@ -648,7 +649,28 @@ export function createSyntheticFailureCustody(raw:unknown,dependencies:unknown,.
   return Object.freeze({issuer:core.issuer,local:core.local,upper:core.upper});
 }
 type CustodyGuard=(phase:'pre'|'post',operation:'seal'|'commit'|'discard')=>unknown;
-function createFailureCustodyCore(upperMode:unknown,fixedGuard:CustodyGuard,token:object){
+type FailureResourceSlot={token:object;budget:object|undefined;local:object|undefined;upper:object|undefined;serial:0|1};
+const failureRunCosts=['shell','budget_pin','entry','rejected_entry','healthy_checkpoint','role_reservation','role_fact','clear_checkpoint','notice','cleanup_request','terminal_receipt','cleanup_checkpoint','seal','commit','discard'] as const;
+type FailureRunCost=typeof failureRunCosts[number];
+function createFailureRunSupply(token:object){
+  const identity=opaque<object>(),costs=Object.fromEntries(failureRunCosts.map(k=>[k,0])) as Record<FailureRunCost,number>;
+  let total=0,saturated=false,bound=false,prefix:Readonly<{requests:number;received_bytes:number;payload_bytes:number}>|null=null;
+  let startedAt:string|null=null,deadline:number|null=null,observedStop:'cancelled'|'deadline_exceeded'|null=null;
+  function record(key:FailureRunCost){if(total===4096){saturated=true;return;}costs[key]++;total++;}
+  record('shell');
+  return Object.freeze({identity,record,
+    pin(owner:object,budget:object,accounting:Readonly<{requests:number;received_bytes:number;payload_bytes:number}>,started:string,deadlineMs:number){
+      if(owner!==token||budget!==identity||bound)throw Error('internal_review_error');bound=true;prefix=Object.freeze({...accounting});startedAt=started;deadline=deadlineMs;record('budget_pin');
+    },
+    observe(stop:unknown){if(stop==='cancelled'||stop==='deadline_exceeded')observedStop??=stop;else if(stop!==undefined)throw Error('internal_review_error');},
+    inspect:()=>Object.freeze({scope:'synthetic_failure_budget_view' as const,authority:'none' as const,model_id:'fb03-fake-events-v1' as const,budget_bound:bound,
+      accounting:prefix,started_at:startedAt,deadline_ms:deadline,observed_stop:observedStop,total,saturated,costs:Object.freeze({...costs}),
+      unverified:Object.freeze(['canonical_budget','actual_work_bound','cleanup_deadline'])}),
+  });
+}
+type FailureRunSupply=ReturnType<typeof createFailureRunSupply>;
+type FailureRunGuard=(phase:'pre'|'post',operation:'seal'|'commit'|'discard'|'cleanup',view:ReturnType<FailureRunSupply['inspect']>)=>unknown;
+function createFailureCustodyCore(upperMode:unknown,fixedGuard:CustodyGuard,token:object,resources?:FailureResourceSlot,accounting?:FailureRunSupply){
   const unverified=Object.freeze(['runtime_resource_origin','actual_cleanup','attempt_inventory','canonical_budget','cleanup_deadline']);
   const ledger=Object.fromEntries(roles.map(role=>[role,{role,frame:opaque(),ever_started:false,creation_closed:false,ticket:undefined,generation:'unknown',stop:'not_requested',termination:'unknown',cleanup:'not_requested',issued:{creation:false,terminal:false,cleanup:false,absence:false}}])) as Record<Role,RoleState>;
   // One common slot selects the sole cleanup owner. No duplicate authority is kept by local/upper facades.
@@ -658,7 +680,7 @@ function createFailureCustodyCore(upperMode:unknown,fixedGuard:CustodyGuard,toke
   let busy=false,poisoned=false,faults=0,observedStop:'cancelled'|'deadline_exceeded'|null=null;
   let sealStarted=false,commitStarted=false,discardStarted=false,commits=0,discards=0;
   let reportHandle:FailureReport|undefined,report:Snapshot|undefined,upperReport:Snapshot|undefined,receipt:FailureCommitReceipt|undefined;
-  let commitProof:Readonly<{token:object;report:Snapshot;serial:1;failure:FirstHard}>|undefined;
+  let commitProof:Readonly<{token:object;report:Snapshot;serial:1;failure:FirstHard;resources:object|undefined}>|undefined;
   function setHard(code:HardCode,stage:Stage){first??=Object.freeze({code,stage});for(const r of Object.values(ledger))r.creation_closed=true;if(state==='tracking')state='failed_draining';}
   const reject=(reason:Reason):never=>{faults=Math.min(100,faults+1);if(busy)poisoned=true;setHard('internal_review_error','internal');throw new FailureCustodyError(reason);};
   function action<T>(work:()=>T):T{
@@ -722,25 +744,28 @@ function createFailureCustodyCore(upperMode:unknown,fixedGuard:CustodyGuard,toke
     observeAbsent:(role:Role,fact:FailureAbsence,...args:unknown[])=>observe('local',role,undefined,fact,true,args),
     requestCleanup:(role:Role,ticket:FailureCreationTicket,...args:unknown[])=>requestCleanup('local',role,ticket,args),
     seal(...args:unknown[]):FailureReport{return action(()=>{
-      if(sealStarted)return reject('duplicate');sealStarted=true;checkpoint('pre','seal');
+      if(sealStarted)return reject('duplicate');sealStarted=true;accounting?.record('seal');checkpoint('pre','seal');
       if(args.length||state!=='failed_draining'||!first)return reject('state');const draft=snapshot(),handle=opaque<FailureReport>();checkpoint('post','seal');
       report=draft;reportHandle=handle;state='sealed_waiting_ack';return reportHandle;
     });},
     commit(handle:FailureReport,...args:unknown[]):FailureCommitReceipt{return action(()=>{
-      if(commitStarted)return reject('duplicate');commitStarted=true;const ownHandle=reportHandle;reportHandle=undefined;
+      if(commitStarted)return reject('duplicate');commitStarted=true;accounting?.record('commit');const ownHandle=reportHandle;reportHandle=undefined;
       checkpoint('pre','commit');
       if(args.length||state!=='sealed_waiting_ack'||handle!==ownHandle||!report||upperReport||custody.holder!=='local'||custody.serial!==0)return reject('binding');
-      if(upperMode!=='connected')return reject('state');const moving=report;
-      const proof=Object.freeze({token,report:moving,serial:1 as const,failure:first!}),nextReceipt=opaque<FailureCommitReceipt>();checkpoint('post','commit');
+      if(upperMode!=='connected')return reject('state');const moving=report,movingResources=resources?.local;
+      if(resources&&(resources.token!==token||resources.serial!==0||!movingResources||resources.upper||accounting&&resources.budget!==accounting.identity))return reject('binding');
+      const proof=Object.freeze({token,report:moving,serial:1 as const,failure:first!,resources:movingResources}),nextReceipt=opaque<FailureCommitReceipt>();checkpoint('post','commit');
       // Single synchronous commit: no callback/await between custody selection, report storage and receipt creation.
+      if(resources){resources.upper=movingResources;resources.local=undefined;resources.serial=1;}
       upperReport=moving;commitProof=proof;receipt=nextReceipt;custody.holder='upper';custody.serial=1;
       state='committed_to_upper';commits=1;return receipt;
     });},
     finalDiscard(handle:FailureCommitReceipt,...args:unknown[]){return action(()=>{
-      if(discardStarted)return reject('duplicate');discardStarted=true;const ownReceipt=receipt;receipt=undefined;
+      if(discardStarted)return reject('duplicate');discardStarted=true;accounting?.record('discard');const ownReceipt=receipt;receipt=undefined;
       checkpoint('pre','discard');
       if(args.length||state!=='committed_to_upper'||!ownReceipt||handle!==ownReceipt||!commitProof||commitProof.token!==token||commitProof.failure!==first||commitProof.report!==upperReport
-        ||commitProof.serial!==custody.serial||custody.holder!=='upper'||!upperReport)return reject('binding');
+        ||commitProof.serial!==custody.serial||custody.holder!=='upper'||!upperReport
+        ||resources&&(resources.token!==token||resources.serial!==1||resources.local!==undefined||!resources.upper||resources.upper!==commitProof.resources||accounting&&resources.budget!==accounting.identity))return reject('binding');
       checkpoint('post','discard');commitProof=undefined;state='discarded';discards=1;
     });},
     inspect:()=>Object.freeze({scope:'synthetic_failure_owner' as const,authority:'none' as const,state,first_hard:first??null,custody:custody.holder,local_cleanup_refs:custody.holder==='local'?roles.filter(r=>ledger[r].ever_started).length:0,
@@ -753,7 +778,7 @@ function createFailureCustodyCore(upperMode:unknown,fixedGuard:CustodyGuard,toke
     requestCleanup:(role:Role,ticket:FailureCreationTicket,...args:unknown[])=>requestCleanup('upper',role,ticket,args),
     inspect:()=>Object.freeze({scope:'synthetic_upper_failure_owner' as const,authority:'none' as const,accepted:!!upperReport,custody:custody.holder,report:upperReport??null,current:upperReport?snapshot():null,unverified}),
   });
-  return Object.freeze({issuer,local,upper,currentFailure:()=>first?snapshot():null});
+  return Object.freeze({issuer,local,upper,currentFailure:()=>first?snapshot():null,holder:()=>custody.holder});
 }
 
 /** FB-01: fresh DATA-only construction. No kernel, role issuer, accepted adoption or cleanup execution. */
@@ -784,24 +809,27 @@ const failureStages:Readonly<Record<Phase,Stage>>={binding:'prepare',observation
   generation_cleanup:'cleanup',generation_discard:'cleanup',worker_plan:'transfer',source_lifecycle:'cleanup',finish_binding:'transfer',finish_discard:'cleanup',
   finish_issue:'transfer',finish_accept:'transfer',finish_accepted_discard:'cleanup',finish_seal:'transfer'};
 type KernelRoleBinding={ticket:FailureCreationTicket;creator:object;frame:object|undefined;reference:object|undefined;sink:object|undefined;started:boolean;settled:boolean;requested:boolean};
-function createFailureKernelLink(failure:SupplyFailureSlot){
+function createFailureKernelLink(failure:SupplyFailureSlot,accounting?:FailureRunSupply){
   const {custody}=failure,bindings:Partial<Record<Role,KernelRoleBinding>>={};let protectedState=false,protectionChecks=0,bindingFault=false,phase:Phase|null=null,oldCreatorClosed=false,unstartedLease:object|undefined;
   function reserve(role:Role){
     if(bindings[role])throw Error('internal_review_error');
-    const b:KernelRoleBinding={ticket:custody.issuer.beginCreation(role),creator:opaque(),frame:undefined,reference:undefined,sink:undefined,started:false,settled:false,requested:false};bindings[role]=b;return b;
+    const b:KernelRoleBinding={ticket:custody.issuer.beginCreation(role),creator:opaque(),frame:undefined,reference:undefined,sink:undefined,started:false,settled:false,requested:false};bindings[role]=b;accounting?.record('role_reservation');return b;
   }
-  function created(role:Role,b:KernelRoleBinding){custody.local.observe(role,b.ticket,custody.issuer.fact(b.ticket,'created'));}
-  function notice(code:Code,where:Phase){if(!failure.claimed){failure.claimed=true;phase=where;custody.local.hard(code,failureStages[where]);failure.notices++;}}
+  const consumer=()=>custody.holder()==='upper'?custody.upper:custody.local;
+  function fact(role:Role,b:KernelRoleBinding,kind:FactKind){consumer().observe(role,b.ticket,custody.issuer.fact(b.ticket,kind));accounting?.record('role_fact');}
+  function request(role:Role,b:KernelRoleBinding){consumer().requestCleanup(role,b.ticket);accounting?.record('cleanup_request');}
+  function created(role:Role,b:KernelRoleBinding){fact(role,b,'created');}
+  function notice(code:Code,where:Phase){if(!failure.claimed){failure.claimed=true;phase=where;custody.local.hard(code,failureStages[where]);failure.notices++;accounting?.record('notice');}}
   return Object.freeze({
     reserveSource(){reserve('source');},
     sourceBorn(frame:object,reference:object){const b=bindings.source;if(!b||b.frame)throw Error('internal_review_error');b.frame=frame;b.reference=reference;b.started=true;created('source',b);},
     sourceCloseRequested(frame:object,reference:object){
       const b=bindings.source;if(!b||b.requested||b.frame!==frame||b.reference!==reference)throw Error('internal_review_error');
-      b.requested=true;custody.local.requestCleanup('source',b.ticket);
+      b.requested=true;request('source',b);
     },
     sourceClosed(frame:object,reference:object){
       const b=bindings.source;if(!b||!b.requested||b.settled||b.frame!==frame||b.reference!==reference)throw Error('internal_review_error');
-      b.settled=true;custody.local.observe('source',b.ticket,custody.issuer.fact(b.ticket,'source_closed'));
+      b.settled=true;accounting?.record('terminal_receipt');fact('source',b,'source_closed');
     },
     reserveOld(){reserve('old_generation');},
     oldBorn(frame:object,generation:object){const b=bindings.old_generation;if(!b||b.frame||oldCreatorClosed)throw Error('internal_review_error');b.frame=frame;b.reference=generation;b.started=true;created('old_generation',b);},
@@ -810,37 +838,37 @@ function createFailureKernelLink(failure:SupplyFailureSlot){
       const b=bindings.old_generation;
       if(facts.worker_state==='none'){if(!oldCreatorClosed||b||unstartedLease)throw Error('internal_review_error');unstartedLease=lease;return;}
       if(!b||b.sink||facts.worker!==b.frame||facts.generation!==b.reference)throw Error('internal_review_error');
-      b.sink=lease;b.requested=true;custody.local.requestCleanup('old_generation',b.ticket);
+      b.sink=lease;b.requested=true;request('old_generation',b);
     },
     oldUnstarted(lease:object,facts:SyntheticSoftFacts){
       if(!oldCreatorClosed||bindings.old_generation||facts.worker_state!=='none'||lease!==unstartedLease)throw Error('internal_review_error');
-      unstartedLease=undefined;custody.local.observeAbsent('old_generation',custody.issuer.proveUncreated('old_generation'));
+      unstartedLease=undefined;consumer().observeAbsent('old_generation',custody.issuer.proveUncreated('old_generation'));accounting?.record('role_fact');accounting?.record('terminal_receipt');
     },
     oldSettled(lease:object,facts:SyntheticSoftFacts,termination:string,cleanup:string){
       const b=bindings.old_generation;
       if(!b||b.settled||b.sink!==lease||facts.worker_state==='none'||facts.worker!==b.frame||facts.generation!==b.reference)throw Error('internal_review_error');
-      b.settled=true;b.sink=undefined;
-      if(termination==='confirmed')custody.local.observe('old_generation',b.ticket,custody.issuer.fact(b.ticket,'worker_terminated'));
-      custody.local.observe('old_generation',b.ticket,custody.issuer.fact(b.ticket,cleanup==='complete'?'cleanup_confirmed':'cleanup_unconfirmed'));
+      b.settled=true;b.sink=undefined;accounting?.record('terminal_receipt');
+      if(termination==='confirmed')fact('old_generation',b,'worker_terminated');
+      fact('old_generation',b,cleanup==='complete'?'cleanup_confirmed':'cleanup_unconfirmed');
     },
     reserveNew(){reserve('new_generation');},
     newAllocated(frame:object,sink:object,identity:object){const b=bindings.new_generation;if(!b||b.frame||b.sink)throw Error('internal_review_error');b.frame=frame;b.reference=identity;b.sink=sink;},
     newStarted(frame:object,sink:object){const b=bindings.new_generation;if(!b||b.started||b.frame!==frame||b.sink!==sink||b.settled)throw Error('internal_review_error');b.started=true;created('new_generation',b);},
     newCleanupRequested(frame:object,sink:object,identity:object){
       const b=bindings.new_generation;if(!b||b.requested||b.settled||b.frame!==frame||b.sink!==sink||b.reference!==identity)throw Error('internal_review_error');
-      b.requested=true;custody.local.requestCleanup('new_generation',b.ticket);
+      b.requested=true;request('new_generation',b);
     },
     newSettled(frame:object,sink:object,validStart:boolean,started:boolean,valid:boolean,status:unknown){
       const b=bindings.new_generation;if(!b||b.settled||b.frame!==frame||b.sink!==sink||started!==b.started)throw Error('internal_review_error');
-      b.settled=true;b.sink=undefined;
+      b.settled=true;b.sink=undefined;accounting?.record('terminal_receipt');
       // Existing sink validation is the sole consumer; only its same-frame accepted fact is projected.
-      if(validStart&&b.requested&&started)custody.local.observe('new_generation',b.ticket,custody.issuer.fact(b.ticket,valid&&status==='confirmed'?'cleanup_confirmed':'cleanup_unconfirmed'));
+      if(validStart&&b.requested&&started)fact('new_generation',b,valid&&status==='confirmed'?'cleanup_confirmed':'cleanup_unconfirmed');
     },
     hasNewSink:()=>!!bindings.new_generation?.sink,
     ownedNewCleanup:()=>{const b=bindings.new_generation;return b?.sink?Object.freeze({sink:b.sink,requested:b.requested}):undefined;},
     beforeClear(code:Code,where:Phase,live:{source:object|undefined;reference:object|undefined;old_worker:object|undefined;old_generation:object|undefined;new_frame:object|undefined;new_sink:object|undefined}){
       if(!protectionChecks){
-        protectionChecks=1;const s=bindings.source,o=bindings.old_generation,n=bindings.new_generation;
+        protectionChecks=1;accounting?.record('clear_checkpoint');const s=bindings.source,o=bindings.old_generation,n=bindings.new_generation;
         bindingFault=!!(s?.frame&&(s.frame!==live.source||s.reference!==live.reference)||o?.frame&&(o.frame!==live.old_worker||o.reference!==live.old_generation)
           ||n?.sink&&(n.frame!==live.new_frame||n.sink!==live.new_sink));
         protectedState=!bindingFault;
@@ -856,11 +884,27 @@ type FailureKernelLink=ReturnType<typeof createFailureKernelLink>;
 
 /** FB-02: creates initial synthetic topology privately. No caller-supplied live references or accepted route. */
 export function createSyntheticFailureBoundKernel(raw:unknown,dependencies:unknown,...extra:unknown[]){
-  const token=opaque<object>(),custody=createFailureCustodyCore('connected',()=>undefined,token);
-  const failure:SupplyFailureSlot={token,claimed:false,notices:0,reason:undefined,custody},bridge:SupplyKernelBridge={token,owned:undefined};
-  const link=createFailureKernelLink(failure);let fixedGuard:(stage:string,n?:number)=>unknown=()=>undefined,initialFailure:SupplyReason|undefined;
-  try{const d=supplyRecord(dependencies,['guard']);if(typeof d.guard!=='function'||types.isProxy(d.guard))supplyBad();fixedGuard=d.guard as typeof fixedGuard;}catch{initialFailure='shape';}
-  const supply=createOwnedMixedSupply(raw,(stage,n)=>{const stop=fixedGuard(stage,n);return failure.claimed?custody.currentFailure()!.first_hard.code:stop;},extra,token,failure,initialFailure,bridge);raw=dependencies=undefined;extra=[];
+  return createFailureBoundKernelCore(raw,dependencies,extra,false).base;
+}
+export function createSyntheticFailureCustodyRun(raw:unknown,dependencies:unknown,...extra:unknown[]){
+  return createFailureBoundKernelCore(raw,dependencies,extra,true).joined;
+}
+function createFailureBoundKernelCore(raw:unknown,dependencies:unknown,extra:unknown[],joined:boolean){
+  const token=opaque<object>(),accounting=joined?createFailureRunSupply(token):undefined;
+  const resources:FailureResourceSlot|undefined=joined?{token,budget:accounting!.identity,local:{operations:undefined},upper:undefined,serial:0}:undefined;
+  let terminalBusy=false,terminalPoison=false,cleanupGuard:FailureRunGuard=()=>undefined;
+  function cleanupCheckpoint(phase:'pre'|'post',operation:'seal'|'commit'|'discard'|'cleanup'){
+    accounting?.record('cleanup_checkpoint');let stop:unknown;
+    try{stop=cleanupGuard(phase,operation,accounting!.inspect());}catch{throw Error('internal_review_error');}
+    if(terminalPoison)throw Error('internal_review_error');accounting?.observe(stop);return stop;
+  }
+  const custody=createFailureCustodyCore('connected',(phase,operation)=>cleanupCheckpoint(phase,operation),token,resources,accounting);
+  const failure:SupplyFailureSlot={token,claimed:false,notices:0,reason:undefined,custody,accounting},bridge:SupplyKernelBridge={token,owned:undefined};
+  const link=createFailureKernelLink(failure,accounting);let fixedGuard:(stage:string,n?:number)=>unknown=()=>undefined,initialFailure:SupplyReason|undefined;
+  try{const d=supplyRecord(dependencies,joined?['guard','cleanup_guard']:['guard']);if(typeof d.guard!=='function'||types.isProxy(d.guard))supplyBad();
+    if(joined){if(typeof d.cleanup_guard!=='function'||types.isProxy(d.cleanup_guard))supplyBad();cleanupGuard=d.cleanup_guard as FailureRunGuard;}fixedGuard=d.guard as typeof fixedGuard;
+  }catch{initialFailure='shape';}
+  const supply=createOwnedMixedSupply(raw,(stage,n)=>{accounting?.record('healthy_checkpoint');const stop=fixedGuard(stage,n);return failure.claimed?custody.currentFailure()!.first_hard.code:stop;},extra,token,failure,initialFailure,bridge);raw=dependencies=undefined;extra=[];
   let kernel:ReturnType<typeof createRecoveryKernel>|undefined,initial:Readonly<{seed:SyntheticRecoverySeed;facts:SyntheticSoftFacts}>|undefined;
   let b:OwnerBinding|undefined,lease:WorkerClosureLease|undefined,evidence:WorkerClosureEvidence|undefined,busy=false;
   let preparationInput:unknown,preparation:WorkerRecoveryPreparation|undefined;
@@ -870,15 +914,18 @@ export function createSyntheticFailureBoundKernel(raw:unknown,dependencies:unkno
     busy=true;try{return work();}catch(e){link.hard(code(e),phase);kernel?.revoke(custody.currentFailure()!.first_hard.code);throw Error(custody.currentFailure()!.first_hard.code);}
     finally{busy=false;if(failure.claimed)invalidate();}
   }
-  return Object.freeze({
+  const inspectFailure=()=>Object.freeze({scope:'synthetic_failure_bound_kernel' as const,authority:'none' as const,notices:failure.notices,current:custody.currentFailure(),...link.inspect(),upper_accepted:custody.upper.inspect().accepted,
+    permissions:Object.freeze({accepted_adoption:false,destination_seal:false,formal_issuance:false}),unverified:Object.freeze(['runtime_resource_origin','actual_cleanup','attempt_inventory','worker_termination_origin','canonical_budget','cleanup_deadline','whole_run_work'])});
+  const base=Object.freeze({
     prepare(...args:unknown[]){return run('binding',()=>{
       const h=supply.prepare(...args);let owned=bridge.owned;
       try{
         if(!owned||owned.token!==token)throw Error('internal_review_error');
         const time=owned.data.finish.time,point=owned.data.recovery.point;
         link.reserveSource();
-        const seed:SyntheticRecoverySeed=Object.freeze({run:opaque(),session:opaque(),source:opaque(),key:opaque(),origin:opaque(),budget:opaque(),release:opaque(),
+        const seed:SyntheticRecoverySeed=Object.freeze({run:opaque(),session:opaque(),source:opaque(),key:opaque(),origin:opaque(),budget:accounting?.identity??opaque(),release:opaque(),
           started_at:time.started_at as string,deadline_ms:time.deadline_ms as number,observed_at:time.observed_at as string,upper_utc:time.upper_utc as string});
+        accounting?.pin(token,seed.budget,owned.data.recovery.accounting,seed.started_at,seed.deadline_ms);
         const active=owned.pins.receipts.find(i=>i.update_xml_sys_id===owned!.data.recovery.active_input_sys_id);if(!active)throw Error('internal_review_error');
         const common={kind:'worker_deadline' as const,phase:'analysis' as const,point,supervisor:opaque(),request:opaque(),input:active.receipt};
         if(point!=='request_check_unstarted')link.reserveOld();else link.closeUnstartedOldCreator();
@@ -892,7 +939,7 @@ export function createSyntheticFailureBoundKernel(raw:unknown,dependencies:unkno
           inputs:owned.pins.receipts.map(i=>({receipt:i.receipt,update_xml_sys_id:i.update_xml_sys_id,retrieved_at:i.retrieved_at,state:i.state==='completed'?'completed':'retained'})),
           collection_status:(owned.data.finish.header.collection as Record<string,unknown>).status,consistency:owned.data.recovery.consistency};
         supply.discardPrepared(h);
-        kernel=createRecoveryKernel(seed,facts,()=>{const stop=fixedGuard('kernel');return failure.claimed?custody.currentFailure()!.first_hard.code:stop===undefined?undefined:typeof stop==='string'?stop:'internal_review_error';},true,undefined,link);
+        kernel=createRecoveryKernel(seed,facts,()=>{accounting?.record('healthy_checkpoint');const stop=fixedGuard('kernel');return failure.claimed?custody.currentFailure()!.first_hard.code:stop===undefined?undefined:typeof stop==='string'?stop:'internal_review_error';},true,undefined,link);
         initial=Object.freeze({seed,facts});
       }catch(e){link.hard(code(e),'binding');throw Object.assign(Error(custody.currentFailure()!.first_hard.code),{code:custody.currentFailure()!.first_hard.code});}
       finally{owned=undefined;bridge.owned=undefined;if(failure.claimed)supply.discard();}
@@ -925,8 +972,62 @@ export function createSyntheticFailureBoundKernel(raw:unknown,dependencies:unkno
     beginSourceClose(...args:unknown[]){return run('source_lifecycle',()=>{if(args.length||!kernel||!b)throw Error('internal_review_error');kernel.beginSourceClose(b);});},
     settleSourceClose(status:unknown,...args:unknown[]){return run('source_lifecycle',()=>{if(args.length||!kernel||!b)throw Error('internal_review_error');kernel.settleSourceClose(b,status);});},
     stop(reason:unknown,...args:unknown[]){try{if(args.length){link.hard('internal_review_error','revoke');kernel?.revoke('internal_review_error');throw Error(custody.currentFailure()!.first_hard.code);}if(kernel)kernel.revoke(reason);else supply.stop(reason as 'cancelled');}finally{if(failure.claimed)invalidate();}},
-    failure:()=>Object.freeze({scope:'synthetic_failure_bound_kernel' as const,authority:'none' as const,notices:failure.notices,current:custody.currentFailure(),...link.inspect(),upper_accepted:custody.upper.inspect().accepted,
-      permissions:Object.freeze({accepted_adoption:false,destination_seal:false,formal_issuance:false}),unverified:Object.freeze(['runtime_resource_origin','actual_cleanup','attempt_inventory','worker_termination_origin','canonical_budget','cleanup_deadline','whole_run_work'])}),
+    failure:inspectFailure,
     inspect:()=>Object.freeze({supply:supply.inspect(),kernel:kernel?.inspect()??null}),
   });
+  if(resources)(resources.local as {operations:object}).operations=base;
+  let transferStarted=false;
+  function rejectJoined(phase:Phase):never{
+    if(!custody.currentFailure())link.hard('internal_review_error',phase);
+    if(resources?.local)(resources.local as {operations:typeof base}).operations.stop(custody.currentFailure()!.first_hard.code);
+    throw Error(custody.currentFailure()!.first_hard.code);
+  }
+  function operations(side:'local'|'upper'){
+    accounting?.record('entry');
+    if(terminalBusy){accounting?.record('rejected_entry');terminalPoison=true;return rejectJoined('generation_cleanup');}
+    const capsule=resources?.[side];
+    if(!capsule||custody.holder()!==side){accounting?.record('rejected_entry');return rejectJoined('generation_cleanup');}
+    return (capsule as {operations:typeof base}).operations;
+  }
+  function cleanup<T>(side:'local'|'upper',work:(ops:typeof base)=>T):T{
+    const ops=operations(side);terminalBusy=true;terminalPoison=false;
+    try{
+      const stop=cleanupCheckpoint('pre','cleanup');
+      if((stop==='cancelled'||stop==='deadline_exceeded')&&!custody.currentFailure()){link.hard(stop,'generation_cleanup');ops.stop(stop);}
+      const value=work(ops);cleanupCheckpoint('post','cleanup');return value;
+    }catch(e){link.hard(code(e),'generation_cleanup');ops.stop(custody.currentFailure()!.first_hard.code);throw Error(custody.currentFailure()!.first_hard.code);}
+    finally{terminalBusy=false;}
+  }
+  const extended=Object.freeze({
+    prepare:(...args:unknown[])=>operations('local').prepare(...args),
+    beginClosure:(...args:unknown[])=>operations('local').beginClosure(...args),
+    confirmOldUnstarted:(...args:unknown[])=>operations('local').confirmOldUnstarted(...args),
+    settleOld:(event:unknown,...args:unknown[])=>operations('local').settleOld(event,...args),
+    prepareGeneration:(...args:unknown[])=>operations('local').prepareGeneration(...args),
+    claimGeneration:(...args:unknown[])=>operations('local').claimGeneration(...args),
+    startGeneration:(start:object,...args:unknown[])=>operations('local').startGeneration(start,...args),
+    issueReady:(lease:object,...args:unknown[])=>operations('local').issueReady(lease,...args),
+    acceptReady:(lease:object,event:object,...args:unknown[])=>operations('local').acceptReady(lease,event,...args),
+    beginCleanup:(sink:object,...args:unknown[])=>cleanup('local',ops=>ops.beginCleanup(sink,...args)),
+    settleCleanup:(sink:object,status:unknown,...args:unknown[])=>cleanup('local',ops=>ops.settleCleanup(sink,status,...args)),
+    cleanupOwned:(status:unknown,...args:unknown[])=>cleanup('local',ops=>ops.cleanupOwned(status,...args)),
+    beginSourceClose:(...args:unknown[])=>operations('local').beginSourceClose(...args),
+    settleSourceClose:(status:unknown,...args:unknown[])=>operations('local').settleSourceClose(status,...args),
+    stop:(reason:unknown,...args:unknown[])=>operations('local').stop(reason,...args),
+    transferFailure(...args:unknown[]){
+      operations('local');if(transferStarted)return rejectJoined('worker_plan');transferStarted=true;
+      if(args.length||!custody.currentFailure())return rejectJoined('worker_plan');
+      terminalBusy=true;terminalPoison=false;
+      try{return custody.local.commit(custody.local.seal());}catch{return rejectJoined('worker_plan');}finally{terminalBusy=false;}
+    },
+    finalDiscard(receipt:FailureCommitReceipt,...args:unknown[]){
+      accounting?.record('entry');if(terminalBusy){accounting?.record('rejected_entry');terminalPoison=true;return rejectJoined('discard');}terminalBusy=true;terminalPoison=false;
+      try{custody.local.finalDiscard(receipt,...args);}catch{return rejectJoined('discard');}finally{terminalBusy=false;}
+    },
+    failure:()=>Object.freeze({...inspectFailure(),...custody.local.inspect(),scope:'synthetic_failure_custody_run' as const,local_capsule:!!resources?.local,upper_capsule:!!resources?.upper,budget:accounting?.inspect()}),
+    inspect:()=>resources?.local?(resources.local as {operations:typeof base}).operations.inspect():Object.freeze({supply:null,kernel:null}),
+    upper:Object.freeze({cleanupOwned:(status:unknown,...args:unknown[])=>cleanup('upper',ops=>ops.cleanupOwned(status,...args)),
+      inspect:()=>Object.freeze({...custody.upper.inspect(),capsule_pending:!!resources?.upper,budget:accounting?.inspect()})}),
+  });
+  return Object.freeze({base,joined:extended});
 }

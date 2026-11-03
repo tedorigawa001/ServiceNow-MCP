@@ -1,7 +1,7 @@
 # OD-B 失敗ownerの寿命と最終discard条件
 
-Version: br006-recovery-failure-owner-lifetime-draft-0.5 / Date: 2026-11-03。
-Status: **固定4roleの失敗owner／上位custodyと、FB-01〜02の同construction・合成kernel／既存sink連結まで実装。実resource・新entryの上位移譲は未対応。正式発行口閉鎖・全体受付無効・Unknown・VM／監視／telemetry調査保留を維持する。**
+Version: br006-recovery-failure-owner-lifetime-draft-0.6 / Date: 2026-11-03。
+Status: **固定4roleとFB-01〜03の同construction・合成kernel／sink・同上位custody移譲／元owner固定discardまで実装。実resource・実予算・全work上界は未保証。正式発行口閉鎖・全体受付無効・Unknown・VM／監視／telemetry調査保留を維持する。**
 
 基準HEAD: `35541ab`。[OD-B設計](BEST_PRACTICE_ABORT_SCOPE_RECOVERY_ODB_TRANSFER_DESIGN.md)§7・10のOB-02開始条件を具体化する。hard後の診断と解放責務は、利用可能なaccepted／planとは別に保持する。最終discardはownerの保持参照を外す操作であり、resource解放完了の証明ではない。
 
@@ -161,4 +161,6 @@ inspectのruntime_resource_origin／actual_cleanup／attempt_inventory／canonic
 
 FB-01は[接続差分§10](BEST_PRACTICE_ABORT_SCOPE_RECOVERY_FAILURE_BINDING_DESIGN.md)の同construction先行slot・OB-01固定失敗通知とpayload失効まで合成実装した。旧FB-01 entryの4roleは全てUnknownのままで、上位slotへのcommit／最終discardやkernel生成は公開しない。[記録](E2E_BEST_PRACTICE_FAILURE_BINDING_FB01_2026-11-03.md)参照。
 
-FB-02の別fresh entryは[接続差分§11](BEST_PRACTICE_ABORT_SCOPE_RECOVERY_FAILURE_BINDING_DESIGN.md)の同private初期topology・RoleBinding・生成点・clear前checkpoint・既存sinkへ合成接続した。[記録](E2E_BEST_PRACTICE_FAILURE_BINDING_FB02_2026-11-03.md)参照。成立した終了／cleanupは別factsで保持し、transport全件証拠・新世代exit・source cleanupの不足はUnknownのまま。FB-03の新entry上位移譲、実resource接続、OB-02のaccepted採用は未実装である。
+FB-02の別fresh entryは[接続差分§11](BEST_PRACTICE_ABORT_SCOPE_RECOVERY_FAILURE_BINDING_DESIGN.md)の同private初期topology・RoleBinding・生成点・clear前checkpoint・既存sinkへ合成接続した。[記録](E2E_BEST_PRACTICE_FAILURE_BINDING_FB02_2026-11-03.md)参照。成立した終了／cleanupは別factsで保持し、transport全件証拠・新世代exit・source cleanupの不足はUnknownのまま。
+
+FB-03は[接続差分§12](BEST_PRACTICE_ABORT_SCOPE_RECOVERY_FAILURE_BINDING_DESIGN.md)で、別fresh entryの同上位slotへ実際の合成cleanup capsuleをreportと同期移譲し、同receiptによる元owner最終discardへ接続した。以後のcleanupはupperだけが処理し、未知責務を保持する。[記録](E2E_BEST_PRACTICE_FAILURE_BINDING_FB03_2026-11-03.md)参照。実resource接続・canonical予算／全work保証・OB-02のaccepted採用は未実装である。

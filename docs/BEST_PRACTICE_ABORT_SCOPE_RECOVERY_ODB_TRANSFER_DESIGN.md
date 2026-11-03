@@ -1,7 +1,7 @@
 # OD-B 同生成元の供給と一度限りの内容移譲
 
-Version: br006-recovery-odb-transfer-draft-0.7 / Date: 2026-11-03。
-Status: **OB-01と独立FailureOwner／上位custody、FB-01〜02の同construction・合成kernel／既存sink連結まで実装。新entryの上位移譲・実resource・accepted採用・移譲先sealは未接続。正式発行口閉鎖・全体受付無効・Unknown・VM／監視／telemetry調査保留を維持する。**
+Version: br006-recovery-odb-transfer-draft-0.8 / Date: 2026-11-03。
+Status: **OB-01とFB-01〜03の同construction・合成kernel／sink・上位custody移譲まで実装。実resource・canonical予算／全work保証・accepted採用・移譲先sealは未接続。正式発行口閉鎖・全体受付無効・Unknown・VM／監視／telemetry調査保留を維持する。**
 
 基準HEAD: `1eb3c74`。[OM-D設計](BEST_PRACTICE_ABORT_SCOPE_RECOVERY_MIXED_CONTENT_OMD_DESIGN.md)§4・7・10〜11と[OD-A検証記録](E2E_BEST_PRACTICE_OMD_SLOTS_ODA_2026-11-03.md)からの差分。同じ生成元で作ったmixed内容とaccepted／planを、一つのprivate操作で移譲先へ確定する。OD-Aの公開handleを既存rootへ後付け登録する方式は採らない。本文照合・finish job・候補発行はOD-Bの対象外。
 
@@ -164,6 +164,8 @@ OB-01では上記strict入力・行別input存在条件を型と試験に固定�
 FB-01の先行FailureOwner／上位slot・OB-01一度限り通知とpayload失効は合成実装済み（[記録](E2E_BEST_PRACTICE_FAILURE_BINDING_FB01_2026-11-03.md)）。FB-01 entryはkernelを生成せず、role証拠・上位受理・実予算はUnknown／未接続のまま。FB-02〜03とOB-02以降の開始条件を省略しない。
 
 FB-02は別fresh entryで同private初期topology・kernel生成点／clear前保護・既存cleanup sinkを合成接続した（[接続差分§11](BEST_PRACTICE_ABORT_SCOPE_RECOVERY_FAILURE_BINDING_DESIGN.md)、[記録](E2E_BEST_PRACTICE_FAILURE_BINDING_FB02_2026-11-03.md)）。不足するtransport全件・新世代終了・source cleanup・実予算の証拠はUnknownのまま。FB-03の上位custody移譲と未解決責務の保存を確認してからOB-02へ進む。
+
+FB-03の上記連続保証は[接続差分§12](BEST_PRACTICE_ABORT_SCOPE_RECOVERY_FAILURE_BINDING_DESIGN.md)の閉鎖合成範囲で確認した（[記録](E2E_BEST_PRACTICE_FAILURE_BINDING_FB03_2026-11-03.md)）。同capsuleの上位移譲と元owner固定discard、fake予算identity／prefix・停止checkpoint・費目の継続を検証しただけで、実解放や全体work受付ではない。次のOB-02の同pins／accepted／plan採用は未実装であり、今回有効化しない。
 
 draft-0.1は設計MDだけ。続くOB-01の実装範囲を以下に限定し、実Permit／候補発行・実接続・実通信・実機操作・設定変更・Pushは行わない。
 

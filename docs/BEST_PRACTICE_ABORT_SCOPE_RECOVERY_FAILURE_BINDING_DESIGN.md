@@ -1,7 +1,7 @@
 # FailureOwnerとOB-01とkernelの接続差分
 
-Version: br006-recovery-failure-binding-draft-0.3 / Date: 2026-11-03。
-Status: **FB-01とFB-02の同construction・private初期topology・kernel生成点／clear前保護／既存sink接続まで合成実装。実resource・上位custody移譲は未接続。正式発行口閉鎖・全体受付無効・Unknown・VM／監視／telemetry調査保留を維持する。**
+Version: br006-recovery-failure-binding-draft-0.4 / Date: 2026-11-03。
+Status: **FB-01〜03の同construction・private kernel／sink・同上位custody移譲／元owner固定discard・合成停止／予算供給点まで実装。実resource・実予算・全work上界は未保証。正式発行口閉鎖・全体受付無効・Unknown・VM／監視／telemetry調査保留を維持する。**
 
 基準HEAD: `196ca0c`。[失敗owner寿命設計](BEST_PRACTICE_ABORT_SCOPE_RECOVERY_FAILURE_OWNER_LIFETIME_DESIGN.md)§9と[OD-B設計](BEST_PRACTICE_ABORT_SCOPE_RECOVERY_ODB_TRANSFER_DESIGN.md)§11からの差分。同一constructionでFailureOwnerを先行確保し、OB-01の失敗通知と既存kernelのresource生成・cleanupを結ぶ。既存の独立factoryを二つ呼び、summaryやID一致で接続する方式は採らない。
 
@@ -28,7 +28,7 @@ OB-01の公開prepared handleやFailureCustodyの公開issuerを、汎用DIで�
 
 ## 3 private接続契約
 
-以下は全接続の型案。FB-01は§10、FB-02は§11の範囲で実装した。
+以下は全接続の型案。FB-01は§10、FB-02は§11、FB-03は§12の範囲で実装した。
 
 | 型案 | 固定内容 | 検査と所有権 |
 | --- | --- | --- |
@@ -166,4 +166,50 @@ kernelの最初のfailはclearの前に専用checkpointを通す。保持中のs
 
 追加費目は固定3roleの予約・出生写像、元100行上限内の準備値投影、明示Phase表、1回のclear前同一性照合、既存sinkの受理fact派生である。sink操作・C/G/P・retryを通知のために再実行せず、元210試行・全60秒を変更しない。同canonical予算・全work／heap・中断粒度・実cleanup／外側終了はUnknownのまま。
 
-[合成試験](../tests/review/synthetic-failure-bound-kernel.test.ts)と[検証記録](E2E_BEST_PRACTICE_FAILURE_BINDING_FB02_2026-11-03.md)に、7初期point・独立終了／cleanup表・全guard・混入・再入・未公開sink・失効を記録する。次のFB-03は未解決責務の同上位custodyへの移譲と最終discard・停止／予算供給点の確認であり、今回、上位slotは未受理のまま。accepted採用・実接続・実通信・設定変更・token／Permit／候補発行・Pushは行わない。
+[合成試験](../tests/review/synthetic-failure-bound-kernel.test.ts)と[検証記録](E2E_BEST_PRACTICE_FAILURE_BINDING_FB02_2026-11-03.md)に、7初期point・独立終了／cleanup表・全guard・混入・再入・未公開sink・失効を記録する。FB-02 entryの上位slotは未受理のまま維持する。後続FB-03の移譲・停止／予算供給点は別entryとして§12へ接続した。accepted採用・実接続・実通信・設定変更・token／Permit／候補発行・Pushは行わない。
+
+## 12 FB-03の同上位custody・固定最終discard・合成供給点
+
+fresh entry `createSyntheticFailureCustodyRun`を、既存FB-02と同じprivate生成coreへ追加した。旧FB-01／FB-02 entryには上位操作を増やさない。新entryのstrict依存はguardとcleanup_guardだけで、既存owner・budget・上位receiver・任意capsuleの登録引数はない。DATAを読む前に同token、4role台帳、上位slot、resource slot、合成供給ownerを確保する。
+
+resource slotはlocal／upperの2候補と一つのserialだけを持つ。同constructionの実際の合成kernel／固定cleanup操作objectを一つのcapsuleとして格納し、roleの診断コピーを渡すだけにはしない。transferFailureは既にfirst hardがある場合にだけ、固定seal→commitを一度行う。core commitのpost checkpoint後、同token／budget identityと空upper slotを照合済みのまま、capsule参照、report、custody holder、serial、commit receiptを同期確定する。確定区間にcaller callback／awaitはない。
+
+commit receiptは同report・同capsule・同token／serialへprivateに結ぶ。finalDiscardはそのreceiptを先に消費し、同upperに同capsuleが残り、local slotが空であることを照合する。copy／foreign／report／余分引数は拒否し、失敗したclaimを戻さない。commit前の失敗はlocal、commit後のdiscard失敗はupperに責務が残る。元facadeに上位操作objectの直接lookupを残さず、各操作は現在のslotとholderを先に検査する。借り置きした旧操作関数もcommit直後から拒否する。元ownerのdiscardは上位capsuleの解放ではない。
+
+上位facadeは固定cleanupOwnedとimmutableな診断だけを持つ。同kernelの唯一のsink consumerを使い、RoleBindingのfact受理先だけを同holderのupperへ切り替える。未公開frameのsinkも同capsuleで移る。seal済みreportは不変で、遅着cleanupはupper.currentだけを更新する。transport全件・source cleanup・新worker exitの不足はUnknownのままで、利用可能なcleanupを完了しても上位capsuleを自動discardしない。source／旧settleの新しいhard後実行口やhealthy routeは追加しない。
+
+### 12.1 停止・予算の供給契約
+
+同constructionで生成したfake budget identityをprivate seed.budgetへ渡し、同tokenと同budgetを検査してC/G/P prefix・開始UTC・全deadlineを一度pinする。resource slotとcommit／discardも同identityを照合する。残時間からdeadlineを再生成せず、新しいtimer／wall clockを作らない。pin前の失敗ではbudget_bound=false、prefix／開始UTC／deadline=nullのまま上位へ渡す。値がないことをゼロ予算や未生成証拠にしない。
+
+cleanup_guardはseal／commit／discardとcleanupのpre／postに、同供給ownerからのimmutableな限定viewを受け取る。viewは実行権限を持たず、budget identity自体や本文・資格情報を含まない。取消／期限は停止観測へ保持し、cleanup-onlyの報告や解放を妨げず、先行hardを置換しない。まだhardがないcleanupで停止を観測した場合は、その停止を先に記録して健康側を失効してからcleanupだけを続ける。
+
+guardのthrow／未知返値は固定internal_review_errorで止める。例外自身のcode／messageを信頼しない。共有busy／poisonにより、guardが内側の再入拒否を握り潰しても外側の移譲／discardを確定しない。cleanupのpre例外はsink未開始のまま残し、明示的な後続cleanup-only呼出しで処理できる。post例外は既に受理したfactを戻さず、消費済みsinkを再発行しない。待機・自動retryはない。
+
+実sessionのcanonical budget／OS停止／cleanup deadlineの証明ではなく、合成供給点とprefix継続の検証だけである。
+
+### 12.2 費目所有と独立計数
+
+`fb03-fake-events-v1`はcount-onlyの合成イベントmodelで、各観測点を1件として数える。実work unit／heap／CPU費用の上界ではなく、全体受付には使用しない。
+
+| 費目 | 唯一の計上元 |
+| --- | --- |
+| shell | construction先行slot確保時に1件 |
+| budget_pin | 同token／budgetのprefix pin成功時に1件 |
+| entry | local／upper／固定discardの操作入口。診断readは除外 |
+| rejected_entry | owner／busyによるfrontdoor拒否だけ。全拒否費の総称ではない |
+| healthy_checkpoint | OB-01／kernelのfake guard供給直前 |
+| role_reservation | 同roleの生成ticket予約成功時 |
+| role_fact | 同consumerが受理した個別birth／終了／cleanup／absence fact |
+| clear_checkpoint | 最初のkernel clear前同一性照合に1件 |
+| notice | 最初の供給／kernel失敗の固定writeに1件 |
+| cleanup_request | 同roleの固定要求受理時 |
+| terminal_receipt | 同sink／元contextの終端受領時。解放完了とは別 |
+| cleanup_checkpoint | 各cleanup-only pre／post。throwの場合も到達1件 |
+| seal／commit／discard | 各一度限りclaim占有時。失敗しても戻さない |
+
+独立oracleの通常失敗→移譲→discard→上位cleanupは、上から順に1、1、10、0、24、3、6、1、1、2、2、8、1／1／1で計62件となる。内部modelから期待値を計算しない。C/G/Pは同prefixの10／20／30を維持し、移譲や通知のために再計上・retryしない。
+
+台帳は固定15counter、総計4096件まで保持する。以降はsaturated=trueとし、未計数分・全workをUnknownへ残す。counter飽和で未解決責務やcleanup権限を捨てず、これを本番cap承認や正常受付に用いない。費目表にないJSON検査・投影・JS割当て等も含む全上界は未導出である。
+
+[合成試験](../tests/review/synthetic-failure-custody-run.test.ts)と[検証記録](E2E_BEST_PRACTICE_FAILURE_BINDING_FB03_2026-11-03.md)で連続経路を確認する。FB-03が成立するのは閉鎖した合成範囲だけ。OB-02の同accepted／plan採用や移譲先seal、実origin／実会計・全work上界は別工程であり、正式発行口閉鎖・全体受付無効・調査保留を維持する。
