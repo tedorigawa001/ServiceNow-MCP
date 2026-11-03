@@ -38,6 +38,22 @@ FP-1・旧header／D2継続は維持する。FP-1では新しいexpectation／D1
 
 コミット前再検証：対象10ファイルだけをstageし、未stage差分・未追跡ファイルがない状態でビルド・全体合成テストを再実行。282 files／13,719 tests成功、失敗・保留0。対象5ファイルのESLint、リンク28件、外部取得禁止の梱包試験とcompiled保証を含む配布除外監査（各441 files）も成功。初回の期待分類誤りは上記のまま保持する。
 
-## 4 残課題・維持する閉鎖状態
+## 4 レビュー修正（2026-11-04）
+
+本記録の故障件数は修正前の記録として残す。レビュー時にrepo全体のlint（error 0・warning 374）、build、梱包分類監査（441ファイル、Compiled FP-2を含む）、全体合成282ファイル／13,719件成功・失敗0を確認した。
+
+kernelの27変異を確認し、`checkBundleParts`と再投影の次の照合は外しても既存試験が全て通過した。実装は正しく、compiled故障の形が偏っていたことによる不足である。
+
+- prefix lane（schema_version／collection_status／parent_prefix／base_prefix／canonical_prefix）。既存故障はvaluesだけを差し替え、`own.prefix.values!==own.prefixValues`の同一性照合で先に拒否されていた。
+- expectationのrun_status・consistency・kind、frameのsupervisor・worker、inputs／outcomesの件数。件数照合を外すとexpectation側へ追記した行を受理した。
+- reviewed outcomeのreceipt・accepted_outcome同一性。既存故障の`Object.freeze({})`は構造差で`supplyEqual`が先に拒否していた。
+- 同plan再投影の`compareSyntheticFinishValues`。再投影を変える故障がなかった。
+- D1 draftの版・ruleset・selected・P0。
+
+[compiled fixture](../tests/review/fixtures/compiled-destination-preparation.mjs)に20件の故障を追加した。prefix候補・値・partsを揃えて各laneを改変する5件、上記expectation項目と同形copy・追記行の9件、再投影snapshotのowner／headerを変える2件、draft 4項目の4件である。上記の各照合を外す19変異（receipt／accepted_outcomeとframe workerを個別に外したものを含む）は、それぞれ対応する故障経路で初めて失敗した。
+
+outcomeのstate照合（直後の`supplyEqual`に包含）、snapshotの`s.owner`等の照合（内部生成・freeze済み受領物を`checkProjection`の同一性照合で代替）、ContentChecked／関係値0の照合（parts modeでは不生成で常に成立）、build時の二重生成判定（transfer claimで再入拒否）、build内の`checkBundleParts()`（postで同照合が必ず走り、間に状態を変えるのはguard停止のみ）は等価変異として扱う。kernelは変更せず、設計書をdraft-0.4とした。vitest試験数は不変。修正後も全体合成282ファイル／13,719件成功・失敗0。
+
+## 5 残課題・維持する閉鎖状態
 
 次はFP-3のpost-only private proof受理と未公開完成bundle／一度限りの固定消費。その実装・完成bundle・seal成功は今回の範囲外。正式発行口閉鎖・全体受付無効・Unknown・VM／監視／telemetry調査保留を維持し、実接続・実通信・実機操作・設定変更・Pushは行っていない。

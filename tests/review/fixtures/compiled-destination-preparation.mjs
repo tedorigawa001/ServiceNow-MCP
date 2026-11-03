@@ -133,6 +133,16 @@ try{
     'outcomes: e.outcomes.map((x,n) => n === 1 ? { ...x, reviewed_origin: { ...x.reviewed_origin, receipt: Object.freeze({}) } } : x)',
     'content_evidence: { ...e.content_evidence, wire: "verified" }',
     'extra: true',
+    // Same-shape copies and appended rows: only identity and length checks can reject these.
+    'run_status: e.run_status === "failed" ? "partial" : "failed"',
+    'consistency: e.consistency === "changed" ? "stable_observation" : "changed"',
+    'kind: "synthetic_recovery_finish_expectation_v2"',
+    'binding: { ...e.binding, frame: { ...e.binding.frame, supervisor: Object.freeze({}) } }',
+    'binding: { ...e.binding, frame: { ...e.binding.frame, worker: Object.freeze({}) } }',
+    'inputs: [...e.inputs, e.inputs[0]]',
+    'outcomes: [...e.outcomes, e.outcomes[0]]',
+    'outcomes: e.outcomes.map((x,n) => n === 0 ? { ...x, receipt: { ...x.receipt } } : x)',
+    'outcomes: e.outcomes.map((x,n) => n === 0 ? { ...x, accepted_outcome: { ...x.accepted_outcome } } : x)',
   ]){
     const fault=`const e = pendingExpectation.value; pendingExpectation = Object.freeze({ ...pendingExpectation, value: Object.freeze({ ...e, ${patch} }) }); bundleParts = Object.freeze({ ...bundleParts, expectation: pendingExpectation }); `;
     partsClean(setup(await load(t=>t.replace(partsAnchor,fault+partsAnchor),partsFactory),undefined,bundlePartsInput(true)),patch==='extra: true'?'shape':'binding');
@@ -145,12 +155,33 @@ try{
     'manifest: { ...d.manifest, assets: d.manifest.assets.map((x,n) => n === 0 ? { ...x, result: { ...x.result, findings: x.result.findings.map((f,i) => i === 0 ? { ...f, recommendation: "wrong" } : f) } } : x) }',
     'manifest: { ...d.manifest, trace: [] }',
     'kept_findings: 0',
+    'schema_version: d.schema_version === "bp-mcp-review-0.2" ? "bp-mcp-review-0.3" : "bp-mcp-review-0.2"',
+    'ruleset_version: d.ruleset_version === "bp3-0.4" ? "bp3-0.5" : "bp3-0.4"',
+    'selected: [...d.selected].reverse()',
+    'initial_prefix: { ...d.initial_prefix, limitations: [...d.initial_prefix.limitations].reverse() }',
   ]){
     const fault=`const d = pendingContent.draft.value; pendingContent = Object.freeze({ ...pendingContent, draft: Object.freeze({ ...pendingContent.draft, value: Object.freeze({ ...d, ${patch} }) }) }); bundleParts = Object.freeze({ ...bundleParts, content: pendingContent }); `;
     partsClean(setup(await load(t=>t.replace(partsAnchor,fault+partsAnchor),partsFactory),undefined,bundlePartsInput(true)));
   }
+  // Rewrite the prefix candidate, its values and the parts together so the value-identity check passes and each lane check must reject.
+  for(const patch of [
+    'schema_version: q.schema_version === "bp-mcp-review-0.2" ? "bp-mcp-review-0.3" : "bp-mcp-review-0.2"',
+    'collection_status: q.collection_status === "failed" ? "complete" : "failed"',
+    'value: { ...q.value, parent_prefix: q.value.canonical_prefix }',
+    'value: { ...q.value, base_prefix: q.value.canonical_prefix }',
+    'value: { ...q.value, canonical_prefix: q.value.base_prefix }',
+  ]){
+    const fault=`const pv = pendingPrefix.values, q = pv.projection, nv = Object.freeze({ ...pv, projection: Object.freeze({ ...q, ${patch} }) }); pendingPrefix = Object.freeze({ ...pendingPrefix, values: nv }); bundleParts = Object.freeze({ ...bundleParts, prefix: pendingPrefix, prefixValues: nv }); `;
+    partsClean(setup(await load(t=>t.replace(partsAnchor,fault+partsAnchor),partsFactory),undefined,bundlePartsInput(true)));
+  }
+  // A diverging same-plan reprojection must be rejected by the comparison, never adopted as the expectation source.
+  const reproject='const again = acceptedChannel.reproject(b, received);';assert.equal(text.split(reproject).length,2,'FP-2 reprojection must have exactly one site');
+  for(const patch of ['owner: Object.freeze({})','header: Object.freeze({ ...again.snapshot.header, started_at: "2026-10-17T04:58:59.000Z" })']){
+    const fault=`let again = acceptedChannel.reproject(b, received); again = Object.freeze({ ...again, snapshot: Object.freeze({ ...again.snapshot, ${patch} }) });`;
+    partsClean(setup(await load(t=>t.replace(reproject,fault),partsFactory),undefined,bundlePartsInput(true)));
+  }
   for(const slot of ['pendingExpectation','bundleParts','pendingContent','pendingPrefix','destinationOwner']){
     const r=setup(await load(withoutClear(slot),partsFactory),undefined,bundlePartsInput(true));assert.throws(()=>r.prepareBundleParts());assert.throws(()=>r.transferFailure(),undefined,slot);assert.equal(r.custody().payload_cleared,false);
   }
-  console.log('Compiled FP-2: private parts/expectation/full-content binding, 35 field/origin faults and 5 retained-slot controls PASS (no complete bundle/seal)');
+  console.log('Compiled FP-2: private parts/expectation/full-content binding, 55 field/origin/lane/reprojection faults and 5 retained-slot controls PASS (no complete bundle/seal)');
 }finally{globalThis.fetch=originalFetch;rmSync(out,{recursive:true,force:true});}

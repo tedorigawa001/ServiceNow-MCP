@@ -1,11 +1,13 @@
 # D3前工程：full accepted projection一度限り受領・完成bundle結合
 
-Version: br006-recovery-full-projection-bundle-draft-0.3 / Date: 2026-11-04。
+Version: br006-recovery-full-projection-bundle-draft-0.4 / Date: 2026-11-04。
 設計初稿の基準HEAD: `dca4270`。Status: **FP-1／FP-2のみ合成内実装済み、FP-3は設計段階。正式発行口閉鎖・全体受付無効・Unknown・VM／監視／telemetry調査保留を維持する。完成bundle・seal成功・実接続・実通信・設定変更・Pushは行わない。**
 
 実装追記（2026-11-04）：FP-1のfull受領内部型・固定継続・同期失効／全破棄を合成依存限定で実装した。[FP-1検証記録](E2E_BEST_PRACTICE_FULL_PROJECTION_RECEIPT_FP1_2026-11-04.md)を参照。FP-2では同受領snapshotからの小型expectation・BundlePartsDraftとwork／postの全構成照合までを接続した（[FP-2検証記録](E2E_BEST_PRACTICE_BUNDLE_PARTS_FP2_2026-11-04.md)）。FP-3・完成bundle・seal成功は未実装、正式発行口閉鎖・全体受付無効・Unknown・調査保留は継続する。
 
 draft-0.1のレビュー修正：FP-1の実装追記後も版が初稿のままだったため本版へ上げた。full受領modeでheader consumerを完了させない判定は、compiled fixtureのheader→full等の故障経路がfull側の消費数だけを見ていたため、外しても全試験が通過していた。各故障経路でheader側の完了消費数0も確認するよう補強した。kernelの挙動は変更していない。
+
+draft-0.3のレビュー修正：FP-2のpost全構成照合のうち、prefix各lane、expectationのrun_status／consistency／kind／frame supervisor・worker／inputs・outcomesの件数、reviewed outcomeのreceipt・accepted_outcomeの同一性、同plan再投影の比較、D1 draftの版／ruleset／selected／P0は、外しても全試験が通過していた。compiled fixtureの故障は値の同一性照合や構造差で先に拒否される形に偏っていたため、候補・値・partsを揃えた改変、同形copy、行の追記、再投影の改変を追加した。kernelの挙動は変更していない。
 
 [OB-03設計](BEST_PRACTICE_ABORT_SCOPE_RECOVERY_OB03_DESTINATION_CONTENT_DESIGN.md)§5〜7・11と[private header供給](BEST_PRACTICE_ABORT_SCOPE_RECOVERY_ACCEPTED_HEADER_SUPPLY_DESIGN.md)の差分。[D2検証記録](E2E_BEST_PRACTICE_DESTINATION_PREPARATION_D2_2026-11-03.md)のcompiled再照合・clear漏れ負の対照を維持し、未公開準備slotを完成bundleやsealと取り違えない。
 

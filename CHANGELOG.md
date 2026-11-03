@@ -162,6 +162,8 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 ### Added
 
+- The OB-03 FP-2 compiled fixture adds 20 faults: prefix-lane rewrites that keep the candidate, values and parts consistent; expectation run status, consistency, kind, frame supervisor/worker and appended input/outcome rows; same-shape copies of reviewed outcome receipts and accepted outcomes; a diverging same-plan reprojection; and draft version, ruleset, selected and initial-prefix changes. Each of these post-guard checks was previously unobserved because existing faults were rejected earlier by identity or shape. The kernel itself is unchanged.
+
 - The OB-03 FP-1 compiled fixture now also requires zero completed header consumptions on each cross-path, replay and copied-take fault, so the full-mode refusal inside the header consumer is covered; previously only the full-side count was checked and removing that refusal went unnoticed. The kernel itself is unchanged.
 
 - OB-03 D2 now has a compiled-graph fixture, run by the package audit, that injects epoch, owner, pending, model, budget-serial and missing-candidate faults only into emitted temporary copies just before the post-guard destination recheck, and seeds a retained destination owner, candidate, ContentChecked or unpublished destination slot to show each blocks payload-clear custody. The recheck and the new clear checks were previously unobservable by runtime tests. The kernel itself is unchanged.
