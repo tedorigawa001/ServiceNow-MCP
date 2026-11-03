@@ -1,13 +1,13 @@
 # 回復finish 非reviewed受領物・発行元・ゼロcapture 詳細設計
 
-Version: br006-recovery-nonreviewed-draft-0.2 / Date: 2026-11-03。
-Status: **NR-Aのstrict値型・state×producer純粋検査だけを合成限定実装。AcceptedNonReviewedの証拠発行・混合集合・reviewedゼロ件の接続は未実装。正式発行口閉鎖・全体受付無効・Unknown・VM／監視／telemetry調査保留を維持する。**
+Version: br006-recovery-nonreviewed-draft-0.3 / Date: 2026-11-03。
+Status: **NR-Aの値層とNR-Bのfresh producer別合成issuerまで実装。実originの証拠発行・既存planとの混合集合・reviewedゼロ件の接続は未実装。正式発行口閉鎖・全体受付無効・Unknown・VM／監視／telemetry調査保留を維持する。**
 
 基準HEAD: `0ed7d91`。[内容gate](BEST_PRACTICE_ABORT_SCOPE_RECOVERY_FINISH_CONTENT_GATE_DESIGN.md)§3・7・12〜13と[RD-C](BEST_PRACTICE_ABORT_SCOPE_RECOVERY_FINISH_JOB_RDC_DESIGN.md)からの差分案。CG-BP1の現受付はreviewedが1件以上のreviewed／not_processed planだけであり、本書によって受付を広げない。公開JSON・既存契約・元60秒・受信枠・会計は変更しない。
 
 ## 1 根拠と分離原則
 
-現状の根拠は[assetOutcomeStructureと集約refinement](../src/review/aggregate-schema.ts)、[adapter](../src/review/update-set-adapter.ts)、[worker](../src/review/review-worker.ts)、[finish pins](../tests/support/review/synthetic-finish-pins.ts)、[局所context検査](../tests/support/review/synthetic-finish-context-values.ts)。§2〜8はこれらを読んだ設計案。実装済みのpure値層は§9と検証記録だけで、証拠発行や実機検証の成功を主張しない。
+現状の根拠は[assetOutcomeStructureと集約refinement](../src/review/aggregate-schema.ts)、[adapter](../src/review/update-set-adapter.ts)、[worker](../src/review/review-worker.ts)、[finish pins](../tests/support/review/synthetic-finish-pins.ts)、[局所context検査](../tests/support/review/synthetic-finish-context-values.ts)。§2〜8は設計案、実装範囲はpure値層§9とfresh合成issuer§10。実originの証拠発行や実機検証の成功を主張しない。
 
 - assetのstateだけから発行元を推定しない。同じrejectedでもmetadata分類・payload上限・worker解析で発行元が異なる。
 - AcceptedNonReviewedは「そのstateの結果を同じイベントから受理した」証拠であり、未受信のreviewed本文・解析成功・findingの不存在を証明しない。
@@ -96,14 +96,14 @@ source／cleanup開始、hard、close、準備／世代／plan／acceptedの固�
 ## 8 合成受入条件・実装順案
 
 1. **NR-A：strict variantとpure検査（§9の値層のみ実装済み）**。state×producerの表、元omitted／親omittedの別型、必須／absent field、未知reason／余分field、bounded統計を独立oracleで照合する。この段階では証拠を発行しない。
-2. **NR-B：fresh合成issuer**。metadata／retrieval／analysisの固定イベントと別claimを接続する。同row／存在する同input・job・T_i、pre/post guard、コピー／別root／二重生成／混入／失敗後再利用拒否を検査する。
+2. **NR-B：fresh合成issuer（§10の単独rootを実装済み）**。metadata／retrieval／analysisの固定イベントと別claimを接続する。同row／存在する同input・job・T_i、pre/post guard、コピー／別root／二重生成／混入／失敗後再利用拒否を検査する。
 3. **NR-C：混合manifest・reviewedゼロ**。CG-BP1の別rootからpartition・同accepted／plan一度移譲・ゼロ証拠・同期失効／固定discardを接続する。旧root／旧試験は維持する。
 
 必須対照は、同じrejectedを別producerで発行、workerからmetadata state、別attemptのretrieval失敗、応答未受信からomittedの捏造、schemaだけにあるunauthorized、hard停止からnot_processedへの格下げ、missing／duplicate／順序入替え、親省略後のcapture削除、ゼロ件tokenの再利用、0.3のdeleted、各guardの取消／期限／再入／未知例外。元時刻・会計prefix・必要verify／cleanup回数の不変、秘密非出力、package非同梱とseeded混入検出も維持する。
 
 未確認事項：producer別reason allowlistの固定方法、選択row receiptと現input receiptの型対応、worker受理時点の元omittedのterminal claim、metadataだけの行と未処理inputのpartition接続、既存局所schemaとの互換・追加費用。各実装前に対応sourceと合成oracleを再照合し、unsupportedを暗黙に受理へ変更しない。
 
-初版はMDのみ。NR-Aの実装範囲は§9で、証拠／合成issuer発行・実接続・実通信・実機操作・設定変更・本番cap／Permit／候補発行・Push・担当者への連絡は行わない。
+初版はMDのみ。NR-Aは§9、NR-Bの合成発行は§10。実originの証拠発行・実接続・実通信・実機操作・設定変更・本番cap／Permit／候補発行・Push・担当者への連絡は行わない。
 
 ## 9 NR-A strict値層の実装契約
 
@@ -121,4 +121,40 @@ producerはmetadata／retrieval／analysis／parent_omission／retainedの閉じ
 
 getter／Proxy／特殊prototype／array／symbol key／不正primitive／上限超過を拒否し、callbackや時計を呼ばない。この関数はJSON文字列をdecodeせず、同wire・実受信量・job／T_i・metadata分類の事実を証明しない。反復呼出しは許されるpure検査で、one-shot受理ではない。receipt／job／owner／capture等の付加fieldはnullでも拒否し、任意の証拠objectを登録しない。
 
-usageはnodes／character_units／maximum_depth／max_object_keysを同copyから収集する。native key列挙・copy・Zod正規化・freezeの総CPU／heap費用や全体60秒の中断保証ではない。全体work／memoryはUnknownのまま。NR-Bの発行前提とNR-Cの混合manifest／ゼロcapture条件も有効化しない。[NR-A検証記録](E2E_BEST_PRACTICE_RECOVERY_NONREVIEWED_NRA_2026-11-03.md)参照。
+usageはnodes／character_units／maximum_depth／max_object_keysを同copyから収集する。native key列挙・copy・Zod正規化・freezeの総CPU／heap費用や全体60秒の中断保証ではない。全体work／memoryはUnknown。このpure値だけでは§10の合成発行originを作れず、NR-Cの混合manifest／ゼロcapture条件も有効化しない。[NR-A検証記録](E2E_BEST_PRACTICE_RECOVERY_NONREVIEWED_NRA_2026-11-03.md)参照。
+
+## 10 NR-B fresh合成issuerの実装契約
+
+基準HEAD: `912144c`。[合成issuer](../tests/support/review/synthetic-recovery-nonreviewed-issuer.ts)はconstructorごとに独立した台帳を作る。実session・既存root・外部receiptを登録する口を持たず、runtime／fixtureの台帳を共有しない。共通closureが合成owner／run／windowの所属を表し、元row handleと各input／attempt／jobはそのclosure内だけで生成する。実auth／ReleasePermitへのbindingではない。
+
+### 10.1 constructorとproducer別入口
+
+入力はstrictなkind／schema_version／requested_rule_ids／rows。rowはsys_id／name／action／固定producerで、analysisだけに固定retrieved_atを必須とする。IDは一意・昇順、最大100件。metadataは固定分類で終わる行だけ、retrieval／analysisは分類を通過する対象行だけを受ける。row name≤200／action≤40は既存metadata枠を維持し、任意のoutcome／job／owner fieldを足せない。own-dataをbounded copyし、注入同期guardを一度pinする。後書換え・getter／Proxyを受けない。
+
+| producer | 固定操作・claim | 受理と発行 |
+| --- | --- | --- |
+| metadata | issueClassifiedで同rowの発行claimをpre guard前に消費 | action／name／固定要求ruleから現classify相当を決定し、NR-Aとpost guard後だけClassifiedNonReviewedを発行。input／job／T_iを生成しない |
+| retrieval | beginRetrievalの開始claim、settleRetrievalの終端claim、issueRetrievedの発行claimを分離 | 同rowのinput／attempt／cleanup sinkを生成。同input／attemptの固定errorまたはinvalid_timestampイベントを写像し、cleanup confirmedとpost guard後にだけprivate terminalを発行。terminalを一度取り外して再照合・発行 |
+| analysis | beginAnalysisの開始claim、deliverAnalysisの受信claim、issueAnalyzedの発行claimを分離 | 同rowのinput／job／連番idを生成。strict envelopeを同idへ相関し、元json文字列をpin。発行前にdeliveryを取り外し、CG-A同文字列検証・ID・producer／NR-A適合とpost guard後だけAnalyzedNonReviewedを発行 |
+
+retrieval eventはerrorのnot_found_or_not_visible／invalid_response／changed_during_review／payload_limit、またはinvalid_timestamp。固定写像はpayload_unavailable／missing_required_field／changed_during_review／payload_limitで、cleanupはconfirmed以外なら発行しない。callerがasset.state／reasonを指定する汎用入口はない。analysisの非reviewed応答はrejected／元result_omittedだけ。既存schemaの他stateや親省略draftを受理しない。元T_iはconstructorの同analysis rowへpinし、clockで再採取しない。
+
+同rowにclaimは各1回。別producer・別row・別root・コピー・別input／attempt／job／id／terminal／deliveryの混入を拒否し、失敗後の再開は不可。NR-Bは各rowの発行を担当するだけで、集合全体の固定順partition／同accepted／planへの移譲はNR-Cへ残す。親省略・retainedのissuerやmanifest操作は公開しない。
+
+### 10.2 guard・失効・diagnostic-only cleanup
+
+各操作はclaim消費→pre guard→局所検査→post guard→発行commit。局所のschema／相関失敗でもpost guardを通し、その停止と先行hardを優先する。guard再入をcallerが捕捉しても失効は戻らない。発行handleは空の別brandで、本文／private値のgetterはない。
+
+hard／discardでrow slot・pending terminal／delivery・発行値の参照を同期に外す。discardEvidenceは同rootの発行済みhandleを一度消費し、同rowの再発行claimを戻さない。retained raw jsonは発行成功・失敗・discardで外す。JS heapの物理消去は保証しない。
+
+retrieval cleanupの確認は**同attemptの合成イベント**であり、native close／cancelの実証拠ではない。開始後のpending sinkには、失敗・discard後もrecordCleanupで1回だけfixed診断を記録できる。cleanup単独の確認からterminalを作れず、unconfirmedを後からconfirmedへ替えて発行を再開できない。worker終了証拠やacceptedの終端責務は本rootでは作らない。
+
+summaryは固定scope／authority:none、最初のcode／reason、producer別累積発行数、既存enumだけのstate／reason集計、pending数、合成input／job数、cleanup pending／unconfirmed数のみ。row ID・name・T_i・raw body・例外causeを含まない。runtime_origin／native_cleanup／manifest／whole_run_budgetは未保証とする。
+
+### 10.3 有限枠・費目と未接続
+
+- constructor copyは深さ4／object key8／array100／node2000／UTF-16文字費262144。normalized row・rule／versionを保持し、caller rawや元row配列の参照は保持しない。
+- row・evidence・terminal・delivery・cleanup台帳は各100以下、input／jobは各rowで最大1。analysisの同jsonはCG-AのB=262144を維持し、100 pendingなら論理bytes和だけでも26,214,400 byteになり得る。
+- 操作ごとの2 guard、固定分類／写像、own-data envelope、CG-A decode／copy／freeze、NR-A projection、索引・handle、clearは別費目。metadata発行は2 guard、retrievalとanalysisの基本3段階は各6 guard。元C/G/P prefixや全60秒の期限を延長・更新しないが、総work／heap費用を0とは扱わない。
+
+実transport／実worker・実auth／ReleasePermit、CG-BP1の元receiptとの結合、混合manifest・reviewedゼロ件、親省略・合法omission、finish job／candidateは未接続。全体受付無効・Unknownを維持する。[NR-B検証記録](E2E_BEST_PRACTICE_RECOVERY_NONREVIEWED_NRB_2026-11-03.md)参照。

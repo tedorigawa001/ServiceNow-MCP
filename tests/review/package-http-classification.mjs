@@ -194,6 +194,17 @@ for(const f of pack.files.filter(f=>f.path.startsWith('dist/')&&/\.(?:js|ts|map)
 for(const leak of ['fetch("x");','Date.now();','new Date();','new Worker("x");',"import('node:fs');","import {BoundedReadSession} from '../../../src/servicenow/bounded-read.js';const zzRoot=BoundedReadSession;"])
   assert.throws(()=>auditSyntheticIssuer(nonReviewedText+'\n'+leak,nonReviewedImports),assert.AssertionError,'NR-A audit missed seeded leak: '+leak);
 console.log('NR-A pure state/producer/omission values excluded; fixed imports + seeded runtime/I/O/clock/worker/leak controls PASS');
+const nonReviewedIssuerText=readFileSync(join(root,'tests/support/review/synthetic-recovery-nonreviewed-issuer.ts'),'utf8');
+const nonReviewedIssuerImports=['node:util','zod','../../../src/review/catalog.js','../../../src/review/result-schema-v2.js','./synthetic-recovery-nonreviewed-values.js','./synthetic-recovery-full-json.js'];
+auditSyntheticIssuer(nonReviewedIssuerText,nonReviewedIssuerImports);
+const nonReviewedIssuerMarkers=['synthetic-recovery-nonreviewed-issuer','createSyntheticNonReviewedIssuer','NonReviewedIssuerError','synthetic_nonreviewed_issuer_only','synthetic_nonreviewed_issuer_v1','synthetic_classified_nonreviewed','synthetic_retrieved_nonreviewed','synthetic_analyzed_nonreviewed'];
+const noNonReviewedIssuer=text=>assert(!nonReviewedIssuerMarkers.some(x=>text.includes(x)),'NR-B synthetic issuer leaked into runtime');
+for(const marker of nonReviewedIssuerMarkers)assert.throws(()=>noNonReviewedIssuer(marker));
+assert(!pack.files.some(f=>f.path.includes('synthetic-recovery-nonreviewed-issuer')));
+for(const f of pack.files.filter(f=>f.path.startsWith('dist/')&&/\.(?:js|ts|map)$/.test(f.path)))noNonReviewedIssuer(readFileSync(join(root,f.path),'utf8'));
+for(const leak of ['fetch("x");','Date.now();','new Date();','new Worker("x");',"import('node:fs');","import {BoundedReadSession} from '../../../src/servicenow/bounded-read.js';const zzRoot=BoundedReadSession;"])
+  assert.throws(()=>auditSyntheticIssuer(nonReviewedIssuerText+'\n'+leak,nonReviewedIssuerImports),assert.AssertionError,'NR-B audit missed seeded leak: '+leak);
+console.log('NR-B fresh producer claims/synthetic issuer excluded; fixed imports + seeded runtime/I/O/clock/worker/leak controls PASS');
 for(const suffix of ['.js','.js.map','.d.ts','.d.ts.map'])assert(pack.files.some(f=>f.path==='dist/servicenow/review-kernel/release-observation'+suffix),'required one-shot UTC value helper missing: '+suffix);
 const sessionDeclarations=readFileSync(join(root,'dist/servicenow/bounded-read.d.ts'),'utf8');
 const sessionAst=parse(readFileSync(join(root,'dist/servicenow/bounded-read.js'),'utf8'),{ecmaVersion:'latest',sourceType:'module'});
