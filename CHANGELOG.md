@@ -138,6 +138,8 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 ### Added
 
+- FB-03 failure custody run tests now check that an unknown `cleanup_guard` return at either cleanup checkpoint fails closed with the first hard stop, without recording a stop observation or (before the sink) a cleanup fact; the budget observer was previously the sole, untested guard on the cleanup path. The run itself is unchanged.
+
 - Synthetic failure custody tests now check that after commit and before final discard the local owner can no longer request or observe cleanup, the holder stays upper and upper can still consume the same evidence; the custody holder check was previously the sole, untested guard against dual cleanup authority. The custody helper itself is unchanged.
 
 - OB-01 owned mixed supply tests now reject a reviewed row whose `target.retrieved_at` differs from the pinned input T_i, and analysis rows with a null-context or missing input; each check was previously the sole, untested guard required by the OD-B contract. The supply itself is unchanged.

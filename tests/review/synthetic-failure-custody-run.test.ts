@@ -145,3 +145,11 @@ it('normalizes cleanup guard exceptions before first hard instead of trusting th
   expect(()=>f.root.cleanupOwned('confirmed')).toThrow('internal_review_error');expect(f.root.failure()).toMatchObject({first_hard:{code:'internal_review_error'},current:{roles:{new_generation:{cleanup:'not_requested'}}}});
   f.arm(()=>undefined);f.root.finalDiscard(f.root.transferFailure());f.root.upper.cleanupOwned('confirmed');
 });
+it.each(['pre','post'] as const)('fails closed on an unknown cleanup_guard return at cleanup %s, keeping the first hard',phase=>{
+  const f=setup();f.running();f.root.stop('cancelled');f.root.finalDiscard(f.root.transferFailure());
+  f.arm((p,o)=>o==='cleanup'&&p===phase?'caller_text':undefined);
+  expect(()=>f.root.upper.cleanupOwned('confirmed')).toThrow('cancelled');
+  const upper=f.root.upper.inspect();expect(upper.current?.first_hard.code).toBe('cancelled');expect(upper.budget?.observed_stop).toBeNull();
+  // The pre checkpoint precedes the sink, so no cleanup fact may be recorded; post runs after the sink was already consumed.
+  if(phase==='pre')expect(upper.current?.roles.new_generation.cleanup).toBe('not_requested');
+});

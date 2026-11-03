@@ -67,7 +67,15 @@ repository全体の試験・PDI E2Eは実行していない。梱包smoke内の�
 
 OB-02の同pins／accepted／plan採用と移譲先sealは未実装。正式発行口閉鎖・全体受付無効・調査保留を維持し、accepted採用・実接続・実通信・実機操作・token／Permit／候補発行・設定変更・Pushは行っていない。元60秒・210試行・C/G/P／retryの上限は変更していない。
 
-## 6 コミット対象だけの再検証
+## 6 レビュー修正（2026-11-03）
+
+§4の新28件は修正前の記録として残す。§4はrepository全体の試験を実行していなかったため、レビュー時にrepo全体のlint（error 0・warning 374）、build、梱包分類監査、全体合成272ファイル／13,370件成功・失敗0を確認した。
+
+- 試験：cleanup経路で`cleanup_guard`が未知の値を返した場合の拒否。`cleanupCheckpoint`内の`accounting.observe(stop)`が`cancelled`／`deadline_exceeded`／`undefined`以外を投げることが、cleanup経路（`cleanup()`）で未知の値を拒否する唯一の防御だった（seal／commit／discard側はcustodyの`reject('shape')`が別に拒否する）。判定を外すと、discard後の`upper.cleanupOwned('confirmed')`が未知の戻り値を無視して完了し、`cleanup: confirmed`として記録された。実装は正しく、現行コードは先行hard（`cancelled`）で拒否する。cleanupのpre／post各checkpointで未知値を返し、先行hardのまま失敗し`observed_stop`を汚さないこと、preではcleanup factを記録しないことを検査する2件を追加した。
+
+この変異は追加した2件だけを失敗させた。commit／discardのresource slot照合（private slotは常に整合）、holderとcapsuleの判定（相互に重複）、hard前transfer（custodyのseal状態判定が先に拒否）、final discardのbusy判定（custody自身のbusy判定が先に拒否）、budget pin（内部で一度だけ呼出し）は等価変異として扱う。依存key契約の変異はFB-02の試験が検出する。helperは変更せず、新規試験は30件。修正後も全体合成272ファイル／13,372件成功・失敗0。
+
+## 7 コミット対象だけの再検証
 
 FB-03関連8ファイルだけをindexへ選び、HEAD＋indexの全ファイルを一時フォルダへ取り出して再検証した。依存は既存node_modulesを参照し、作業ツリーの未選択ファイルには依存していない。
 
