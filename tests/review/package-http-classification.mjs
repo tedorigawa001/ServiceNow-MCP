@@ -236,6 +236,18 @@ for(const f of pack.files.filter(f=>f.path.startsWith('dist/')&&/\.(?:js|ts|map)
 for(const leak of ['fetch("x");','Date.now();','new Date();','new Worker("x");',"import('node:fs');","import {BoundedReadSession} from '../../../src/servicenow/bounded-read.js';const zzRoot=BoundedReadSession;"])
   assert.throws(()=>auditSyntheticIssuer(prefixDeltaText+'\n'+leak,prefixDeltaImports),assert.AssertionError,'PD-A audit missed seeded leak: '+leak);
 console.log('PD-A bounded prefix-local values excluded; fixed pure imports + seeded runtime/I/O/clock/worker/leak controls PASS');
+const pendingPrefixText=readFileSync(join(root,'tests/support/review/synthetic-pending-prefix-values.ts'),'utf8');
+const pendingPrefixImports=['node:util','./synthetic-prefix-delta.js'];
+auditSyntheticIssuer(pendingPrefixText,pendingPrefixImports);
+const pendingPrefixMarkers=['synthetic-pending-prefix-values','projectSyntheticPendingPrefixValues','PendingPrefixValueError','PENDING_PREFIX_VALUE_LIMITS','synthetic_pending_prefix_values_v1','synthetic_pending_prefix_values'];
+const noPendingPrefix=text=>assert(!pendingPrefixMarkers.some(x=>text.includes(x)),'PD-B(A) DATA boundary leaked into runtime');
+for(const marker of pendingPrefixMarkers)assert.throws(()=>noPendingPrefix(marker));
+assert(!pack.files.some(f=>f.path.includes('synthetic-pending-prefix-values')));
+for(const f of pack.files.filter(f=>f.path.startsWith('dist/')&&/\.(?:js|ts|map)$/.test(f.path)))noPendingPrefix(readFileSync(join(root,f.path),'utf8'));
+for(const leak of ['fetch("x");','Date.now();','new Date();','new Worker("x");',"import('node:fs');","import {BoundedReadSession} from '../../../src/servicenow/bounded-read.js';const zzRoot=BoundedReadSession;"])
+  assert.throws(()=>auditSyntheticIssuer(pendingPrefixText+'\n'+leak,pendingPrefixImports),assert.AssertionError,'PD-B(A) audit missed seeded leak: '+leak);
+assert(!rootKernelText.includes('synthetic-pending-prefix-values'),'PD-B(A) must remain disconnected from pending kernel');
+console.log('PD-B(A) DATA selectors/comparison excluded; fixed pure imports, disconnected pending + seeded leak controls PASS');
 const mixedSlotText=readFileSync(join(root,'tests/support/review/synthetic-omd-slots.ts'),'utf8');
 const mixedSlotImports=['node:util','./synthetic-parent-omission-values.js'];
 auditSyntheticIssuer(mixedSlotText,mixedSlotImports);

@@ -1,9 +1,9 @@
 # PD-B：同pendingのPD-A入力化・比較・関係値の接続差分
 
-Version: br006-recovery-pending-prefix-binding-draft-0.1 / Date: 2026-11-03。
-基準HEAD: `802b5c3`。Status: **設計のみ。正式発行口閉鎖・全体受付無効・Unknown・VM／監視／telemetry調査保留を維持する。**
+Version: br006-recovery-pending-prefix-binding-draft-0.2 / Date: 2026-11-03。
+設計基準HEAD: `802b5c3`／(A)実装基準HEAD: `2043665`。Status: **(A)の値専用入力化・比較と独立oracleを合成実装。同pending接続・claim／関係値発行は未着手。正式発行口閉鎖・全体受付無効・Unknown・VM／監視／telemetry調査保留を維持する。**
 
-[prefix／delta契約](BEST_PRACTICE_ABORT_SCOPE_RECOVERY_PREFIX_DELTA_DESIGN.md)§8〜11と[private header供給](BEST_PRACTICE_ABORT_SCOPE_RECOVERY_ACCEPTED_HEADER_SUPPLY_DESIGN.md)§8の差分。本稿は同pendingの供給元・比較範囲・一度限りの内部関係値を具体化する。実装・実接続・実通信・設定変更・Pushは行わない。内容比較をまだ実装済みとはせず、NB-03の固定abortを維持する。
+[prefix／delta契約](BEST_PRACTICE_ABORT_SCOPE_RECOVERY_PREFIX_DELTA_DESIGN.md)§8〜11と[private header供給](BEST_PRACTICE_ABORT_SCOPE_RECOVERY_ACCEPTED_HEADER_SUPPLY_DESIGN.md)§8の差分。本稿は同pendingの供給元・比較範囲・一度限りの内部関係値を具体化する。(A)の実装は§8に限定し、同pending接続・実接続・実通信・設定変更・Pushは行わない。実acceptedとのprivate内容比較をまだ実装済みとはせず、NB-03の固定abortを維持する。
 
 ## 1 現行との差分
 
@@ -99,4 +99,16 @@ claimは関係値の中のboolだけに置かず、同pendingを所有するroot
 - assertionはguardの外で行う。新header供給試験の初回見逃しを再現しないよう、誤供給の負の対照で実際の失敗を確認する。
 - package漏出監査のimport許可をPD-Aの固定依存だけに更新し、新private markerの負の対照を追加する。新経路のcompiled保証と製品src buildは別に確認する。
 
-推奨分割は、(A) 固定入力化・配列比較の内部境界と合成oracle、(B) 同pending／header consumerへ接続してclaim・pre/post・暫定候補を検証、(C) 関係値のpost受理・一度限り消費・全破棄とcompiled／梱包監査である。各段階で固定abortを維持する。本稿の作成では実装や試験の追加・実行を行っていない。
+推奨分割は、(A) 固定入力化・配列比較の内部境界と合成oracle、(B) 同pending／header consumerへ接続してclaim・pre/post・暫定候補を検証、(C) 関係値のpost受理・一度限り消費・全破棄とcompiled／梱包監査である。各段階で固定abortを維持する。(A)の実装・試験範囲は以下に限定する。
+
+## 8 (A)の値専用実装・非保証範囲
+
+[synthetic-pending-prefix-values](../tests/support/review/synthetic-pending-prefix-values.ts)の`projectSyntheticPendingPrefixValues`は、厳密な外側DATA契約`kind／model／pins_header／plan_verify／accepted_header`を受ける。modelは`schema_version／prefix`だけの値viewであり、実OMモデル・trace・ownerを受け取る入口ではない。将来(B)が同pendingから固定viewを作る責務は未実装。
+
+headersはschema_version／collection.status／limitations／errors、verifyは§2の6項目だけをown DATA descriptorから読む。対象外のprincipal／accounting等は、getterを含んでも実行せず無視する。これらの正しさ・full header適合を確認した保証ではない。選択対象のproxy／accessor、外側やmodel viewの未知fieldは拒否する。
+
+選択値全体を共有snapshot枠でcopyする：nodes 8,000、文字課金1,950,000（入力string長×3、keyを含む）、depth 6、record keys 8、array 103。これは3つのprefixを含む値専用受付の有限枠であり、PD-Aの既存nodes 2,500／文字650,000／eligibility上限は別途維持する。比較対象headerが104以上ならPD-A前にinput拒否する。全合法DATAの直積を必ず受理する保証や全work／heap上界ではない。
+
+PD-Aを1回呼び、modelの版・base prefix・accepted側の版／collection・canonical prefixを比較する。配列のsort／dedup救済はしない。比較結果は`authority:none／checked_scope:prefix_values_only`とPD-Aのfreeze済み値・snapshot使用量だけを返し、入力aliasを保持しない。shape／limit／binding／unsupportedとinput／delta／base／acceptedの固定理由を返し、PD-A失敗時は元のphaseも`delta_phase`に保持する。raw例外・cause・入力値は返さない。
+
+同pending・receipt／pins origin・元trace・実accepted provenance・one-shot関係値・guard・失効・全体予算は未検証であり、再呼出し可能な値計算をone-shotの証拠に昇格させない。[検証記録](E2E_BEST_PRACTICE_PENDING_PREFIX_VALUES_2026-11-03.md)に独立oracle・初回失敗・順序比較を外す負の対照を記録する。kernelからのimportはなく、package監査で未接続と配布除外を確認する。
