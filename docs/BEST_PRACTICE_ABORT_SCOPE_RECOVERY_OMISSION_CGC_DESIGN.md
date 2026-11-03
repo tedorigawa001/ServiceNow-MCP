@@ -1,0 +1,140 @@
+# CG-C 親省略決定証拠・合法omissionモデル 詳細設計
+
+Version: br006-recovery-omission-cgc-draft-0.1 / Date: 2026-11-03。
+Status: **設計のみ。合成依存限定の後続案。親省略証拠・モデル・manifest／finish job接続は未実装。正式発行口閉鎖・全体受付無効・Unknown・VM／監視／telemetry調査保留を維持する。**
+
+基準HEAD: `fd5ddb9`（NR-Cの追加対照を含む）。[内容gate設計](BEST_PRACTICE_ABORT_SCOPE_RECOVERY_FINISH_CONTENT_GATE_DESIGN.md)§3・7・8と[非reviewed設計](BEST_PRACTICE_ABORT_SCOPE_RECOVERY_NONREVIEWED_DESIGN.md)§6・11からの差分。現NR-Cは親受理後のomissionを拒否する。このMDはその拒否を変更せず、実装・実接続・実通信・実機操作・設定変更・本番cap／Permit／候補発行・Pushの承認ではない。
+
+## 1 根拠・目的と対象外
+
+照合したローカル根拠：
+
+- [worker](../src/review/review-worker.ts)：analyzeのserializeサイズ省略とfinish後のwire上限。
+- [親adapter](../src/review/update-set-adapter.ts)：受理後の累積finding上限、元worker omitted受理時の警告、soft回復への引継ぎ。
+- [finalizeAggregate／addReviewError](../src/review/aggregate-finalize.ts)：finding順走査・recount・analysis_complete・末尾byte省略・limitations dedup・full schema。
+- [集約schema](../src/review/aggregate-schema.ts)：0.2／0.3・counts／nested result／provenance／上限refinement。
+- [既存局所比較器](../tests/support/review/synthetic-recovery-finish-values.ts)：context／集合／時刻・許容error差分。ただし本文と省略対象の正当性は未検証。
+- [CG-B capture](../tests/support/review/synthetic-recovery-capture.ts)と[NR-C root](../tests/support/review/synthetic-pinned-recovery-root.ts)：private本文・同receipt／accepted／plan、同期失効とdiscard。
+
+目的は「必要warningがあれば任意のreviewedをomitできる」を避け、固定処理が選ぶ全結果単位の変換だけを許すこと。source承認・findingの妥当性・元worker内部のサイズ判断・実worker応答originは証明しない。今回、公開JSON・runtimeロジック・旧fixture／root／比較器を変更しない。
+
+## 2 三つの省略点を分離する
+
+| 点 | 元受領物／決定主体 | 変換と扱い |
+| --- | --- | --- |
+| worker analyze | 元wireで既にresult_omitted。worker内部でasset serialize長が262144−256を超えると変換 | NR-B／CのAnalyzedNonReviewed。元reviewed本文・findings数・元stateを推測せず、新たなcapture／ParentOmissionDecisionを作らない |
+| 親adapter | 同analyzeでfull reviewedを検証・captureした後、選択順の既保持finding数で判断 | 同captureを保持したParentOmissionDecision。省略後の見かけが同じでも元worker omittedへ格下げしない |
+| finish finalize | 同planの親受理後入力に対するfinding順走査、続く全runのbyte上限処理 | 別のFinalizeOmissionTrace。元capture・親決定・元nonreviewed／retainedを維持し、finish E・同job受領物との接続は後工程 |
+
+result_omittedは既存のstate／reason=response_limitだけ。findingsの一部分割・内容修正・空配列化で合わせる変換は不可。metadata／retrieval／rejected／retained／元omittedをreviewedへ昇格しない。親で省略された行は「captureゼロ」の証明対象ではなく、出力reviewed=0でも保持captureが存在する別状態である。
+
+## 3 固定モデルの値入力と保護された供給元
+
+モデル識別子案は`recovery-omission-v1`。実装前に固定sourceの各分岐・full schemaの仕様と対にしてpinする。source変更を自動追従して許容を広げず、識別子とoracleを再審査する。
+
+### 3.1 純粋値層（非実行draft）
+
+strict入力はmodel_id・schema_version・固定limits・canonical選択順・元asset値・開始時点のrun header／errors／limitationsとする。親段階とfinalize段階は別入力型にする。各fieldは既存schemaの値と有限枠だけを使い、任意callback／identity／verified flag／clock／serializerを受けない。
+
+純粋関数はbounded copy／検査済みのown-dataだけを読む。出力はkeep／omitの固定順trace、派生counts／coverage／errors／limitations、比較用の非実行期待値。型名にevidenceを使わずauthority:noneとし、反復計算できる値をone-shot証拠と呼ばない。元bodyを診断・summaryへ返さない。最大100行だが、総work／heap受付を満たしたとは扱わない。
+
+### 3.2 後続の合成private供給
+
+固定ownerが同constructorのcapture／NR-B evidence／元retained receiptから入力を作る。値だけのmodel draftや外部summaryを証拠として登録しない。親prefixはcallerが保持finding数だけを申告する方式にせず、同selected順の既受理slotから導出する。
+
+limitations／errorsはサイズ判断にも影響する。非省略由来のerror・soft停止・consistency結果等は、同runの固定継続がpinした前段prefixを供給する。返信のcounts／warnings／errorsから期待入力を逆算しない。親の各受理イベント間に他の副作用が入る場合、その順序を保護されたprefix originで表す。供給できないfieldや順序はUnknownとして接続を拒否する。
+
+finalize入力は親処理後の同plan値そのもので、親省略前の全reviewedを再投入しない。親で省略済みのcaptureは内容証拠として別slotに保持するが、finalizeのfinding予算には加えない。Eは後続の同finish responseからU≤E≤S+L等の既存時刻検査後に渡す固定値。モデルはUTCを採取せず、S／O／T_i／U／全deadlineを変更しない。E供給とfinish job originがまだない段階では、純粋値draftだけに止める。
+
+## 4 親adapterモデルの正確な順序
+
+選択順に受理済みassetを処理する。prefixのfinding数Fは、その時点で保持されたreviewedのfindings.lengthの和だけ。省略済み結果・元omitted・その他stateは0。
+
+1. reviewedでF＋nがmax_findings（現契約100）を**超える**と、当該全assetをresult_omitted／response_limitへ変換する。Fは増やさない。後続の小さいreviewedは再び収まる可能性があり、一律に残り全部をomitしない。
+2. この親finding省略でresponse_truncatedがまだなければ、limitationsへresponse_truncatedとfinding_budget_exceededをその順にpushし、固定output／response_limit errorを追加する。既にresponse_truncatedがある場合は、finding_budget_exceededもerrorもこの分岐では追加しない。
+3. 収まるreviewedはfull値のまま保持する。元worker omittedを受けた場合は、その値を保持し、response_truncatedがまだなければそれだけをpushして固定errorを追加する。finding_budget_exceededは加えない。
+4. 親段階でlimitationsをdedupしない。既存warningの有無とpush順、重複、errors prefixを正確に保持する。親処理だけでcounts／status／analysis_completeをfinalize相当に書換えない。
+
+addReviewError相当はerrors.length<100なら固定errorを末尾へ追加、満杯なら未存在のerror_details_truncatedをlimitations末尾へ追加する。codeが同じerrorの存在によるdedupはしない。response_truncatedがあるため追加自体が呼ばれない場合と、呼ばれたがerrors満杯の場合を区別する。
+
+## 5 finalizeモデルの正確な順序
+
+実finalizeAggregateは時計を読むので、親モデルからそのまま呼ばない。固定Eを受ける独立した純粋モデルとして次を再現する。
+
+1. ended_atを同Eへ設定する。その他の前段header／status／consistency／assets順／errors prefixは同入力を使う。
+2. reviewedだけを先頭から走査。retained finding数にnを足すとmax_findingsを超える行を全結果単位でomitする。この分岐ではresponse_truncatedの既存状態に関係なく、finding_budget_exceededがなければ追加する。収まる後続行は保持する。
+3. 各omitは当該行をresult_omittedへ替え、response_truncatedがなければpushしてaddReviewError相当を呼ぶ。analysis_complete=false、全state counts／findingsをrecountする。
+4. finding走査後にrecountし、現sourceの条件でanalysis_completeを再計算する。collection・truncated・0.3 selected>0・consistency・release・errors・全asset state・skipped_rules・固定unresolved limitations一覧をそのまま使う。statusは再計算しない。nested resultのreview_status等は最後のfull schemaでも別に検査する。
+5. **dedup前**のrun serialize長がH=B−256（現B=262144）を超える間、末尾から最後のreviewedを探して全結果単位でomitし、手順3の副作用とrecount後に再測定する。Hちょうどなら省略しない。前からの省略や最大結果の選別は不可。reviewedが残っていないのに超過なら固定失敗で止める。
+6. 最後にlimitationsを初出順でdedupし、既存full aggregate schema（nested refinementを含む）へ適合することを要求する。dedup後なら収まるという理由で手順5を先に省略しない。
+
+analysis_completeに影響するunresolved一覧は現sourceを固定snapshotとして別費目で比較する。schemaの「不完全なのにtrueは不可」と、finalizeがどの値へ再計算するかは同一検査ではない。既存RD-B03のcoverage完全一致前提と現sourceとの差が生じる入力は、後続接続設計で適合範囲を決めるまでunsupportedとして拒否し、局所比較器を黙って緩めない。
+
+workerの最終wire上限Bと、モデル内のHによる省略判断を区別する。full schema後の同finish JSONをCG-Aで測ることと、期待runのserialize長を省略判断に用いることも別の費目・別originである。
+
+## 6 内部証拠型・one-shot境界案
+
+名称は案。今回のMDだけでは型も入口も発行しない。
+
+| 型案 | private内容／発行前提 | 消費／保持 |
+| --- | --- | --- |
+| ParentPrefixCursor | 同owner／run／session／source／auth／budget／release／window、選択順cursor、既受理slot集合、保持finding数、warning／error prefix origin | 次の同row以外を拒否。失敗後のcursor巻戻し不可 |
+| ParentOmissionDecision | 同row／input receipt／job／T_i／受理origin・元ReviewedCapture、モデル版・ordinal・F／n／cap・変換と副作用 | 検証済みcaptureの後だけ発行。caller bool／任意reasonからは不可。同rowの決定claimはkeep／omit共通で一度 |
+| ParentOmittedSlot | 同capture＋同decision＋変換後strict省略値 | 元AnalyzedNonReviewedとは別variant。元captureを捨てず同manifestへ一度移す |
+| FinalizeOmissionTrace | 同入力manifest／plan／accepted・モデル版・固定E、finding走査とbyte反復の順序・対象・副作用 | 値モデルのsummaryから昇格不可。同finish input／responseの連結後だけ証拠を検討 |
+| ModeledAggregateExpectation | 同manifestと上記traceからのfull期待値。元reviewedは不変参照、変換は全結果単位のみ | 外部getterなし。後続同job content比較へ一度移譲、現段階は非実行draft |
+
+親受理claim→capture受理→決定claim→pre guard→F／n／cap・順序・同一性検査→post guard→keep／omit commitの順。局所不一致はpost guardまで保持し、共通停止・先行hardを優先する。claimは失敗でも戻さず、再入をcallerが捕捉しても失効を戻さない。
+
+manifestへの移譲は同receipt／accepted／planの一度限り。親omittedをmixed rootへ追加する際も、元selected行を二重に数えず、capture保有数と出力reviewed数を別にする。NR-Cの既存empty proofを親omissionへ流用しない。旧root・公開APIは維持し、新合成constructorの生成時からのみ組み立てる。
+
+## 7 保持寿命・失敗・discard
+
+親省略前のcaptureはfull内容比較の根拠として保持する。wire文字列を再登録したり、omittedから本文を作り直したりしない。同manifestへ所有権を移すと元ownerのpending slotを空にする。移譲後もcleanup sink／終端責務だけは別slotに残す。
+
+source close／cleanup開始・取消・期限・hard・固定discardでpending決定／prefix／本文参照／trace／期待値を同期失効する。正常cleanupと終端候補のterminal-only寿命の区別は既存RD-C／RD-Dに従うが、今回候補は作らない。late cleanup confirmedは診断だけ更新し、失効済みcapture／decision／manifestを復活させない。JS heap物理消去は保証しない。
+
+内部失敗案はshape／binding／state／order／duplicate／missing／unsupported／limit／model_mismatch／content_mismatch。上位codeは既存の固定失敗・共通停止だけに写像する。本文・field値・schema issues・serialize結果・例外causeは診断へ出さず、固定count／stage／first failureだけ残す。hard停止をresult_omittedやnot_processedへ変換して救済しない。
+
+## 8 bounded解析・費目所有とUnknown
+
+| 費目 | 所有者／必要な上界 |
+| --- | --- |
+| 元full値・context・非reviewedの検査／保持 | 各既存capture／issuer。100行・各元JSON B以内等の局所枠を維持。合計graph・copyピークをB一個分と見積もらない |
+| prefix導出・親決定 | 親モデルowner。最大100行のcursor／trace、finding数加算はsafe integer checked、元保持数は同slotから導出 |
+| finding順走査・recount・coverage | finalizeモデルowner。最大100行、各omit後のrecountと固定条件費を明示。上限100を理由に無料にしない |
+| byte測定・末尾探索・再測定 | finalizeモデルowner。成功するbyte省略は元reviewed数R以下、測定は初回込みR+1以下。各回のrun graph・escaping・UTF-8費を別課金 |
+| full schema・元本文比較・copy／freeze | 内容gate owner。CG-A局所検査／RD-B03と二重計上・未計上を区別する |
+| handle・claim・移譲・guard・discard | 各owner。最大100の索引と固定操作、停止時の解放費も含む |
+
+巨大な期待runを毎回JSON.stringifyして一時巨大文字列を作る方式は未承認。純粋モデルの最初の実装前に、own-data限定のbounded count-only JSON size計算器を具体化する。callback／toJSON／getterを呼ばず、JSON.stringifyと同じescape／number／UTF-8の規則を独立corpusで確認する。測定はexact length≤Hまたはover_Hの別variantとし、早期超過を架空のexact lengthへ変えない。traceもその区別を保持する。
+
+計数器は有限depth／node／key／array／文字費、checked arithmetic、checkpointを反復・確保前に要求する。全runの中間表現は最終出力Bを超え得るため、CG-Aの最終aggregate枠へ無条件に押し込めない。元capture集合＋header／error／warningsの有限上界から別途導出し、超過時は省略をでっち上げず停止する。数値cap・総work／heap・同期schema検証の中断粒度はUnknown、全体受付無効を維持する。
+
+元60秒・210試行・C/G/P／retry prefix、全deadlineを維持し、model検証のための再取得・再解析・再finishをしない。純粋値計算とauthority-bearing証拠の発行を分離したまま実装を進める。
+
+## 9 合成受入条件・独立oracle
+
+1. 親finding：F+n=99／100／101、ゼロfindings、超過行の後に小さい行、metadata／rejected／retained／元omittedが挟まる順序。全結果単位だけが変わり、元captureの全fieldは保持される。
+2. 既存response_truncatedなし／あり、finding_budget_exceededだけ既存、同code errorだけ既存、重複warning、errors=99／100の組合せ。親とfinalizeの異なる警告条件を固定表で別検査する。
+3. finalize：finding順走査後のcounts／coverage、0.2／0.3、unresolved一覧・skipped_rules、末尾reviewed探索、H−1／H／H+1とB、dedup前／後の差、全reviewedを省略しても収まらない固定失敗。
+4. UTF-8多byte・制御文字・quote／backslash・Unicode escape／surrogate、正当な数値、key順・array順、optional fieldの有無を独立JSONサイズcorpusで検査。値が同じでも許可外field／prototype／accessor／Proxyは拒否する。
+5. 別root／receipt／capture／decision／plan／model、コピー・順序違い・重複・二重決定／移譲・失効後再利用、全pre/post guardの取消／期限／再入／未知例外。比較不一致よりpost停止・先行hardを優先し、部分結果を発行しない。
+6. reviewed本文の一field／findings順／sources／recommendationだけを変える対照は、合法omissionに見せても通らない。元worker omittedに空本文を捏造する対照、親omittedのcaptureを削除してempty proofへ替える対照も拒否する。
+7. count／副作用の独立oracleは固定fixtureの明示表から期待値を作り、モデル関数自身や受信応答から生成しない。別途、隔離した合成時計で現finalizeのended_atを固定する差分試験を計画する。本番sourceは改変せず、単に同関数を二度呼ぶだけを独立oracleとしない。
+8. sourceの対象分岐・unresolved一覧・固定上限の変更をAST／固定snapshot対照で検出し、意図的な省略対象／比較演算子／warning順の変異でも試験が失敗することを確認する。旧試験・0.2互換性・0.3制約・package非同梱とseeded混入負の対照を維持する。
+
+これは試験計画であり、今回実行済みの保証ではない。実worker／実transportや実PDIは使わない。
+
+## 10 実装順と未確認事項
+
+| 段階案 | 最初の範囲 | まだ開かないもの |
+| --- | --- | --- |
+| OM-A | strict値型・親prefix／keep／omitの純粋計算と副作用表。別producerの元omittedを区別する | 決定証拠・manifest拡張・finish job |
+| OM-B | bounded count-only JSON sizeの詳細数値契約と実装、固定Eによるfinalize純粋モデル・独立oracle | 総work受付・runtime・候補 |
+| OM-C | fresh合成ownerから同captureへ親決定を結合し、one-shot・失効・discardと別brandを検証 | 旧root昇格・正式発行・本番binding |
+| OM-D | 同accepted／planの新混合variantへ一度移譲、finish応答full比較と局所比較の整合条件を具体化 | 同job／wire／全gate未成立の候補化 |
+
+未確認：保護された親prefixの発行owner、元captureを内部で借用する固定継続、親決定の移譲とsource／cleanupの同時寿命、size計数器のescaping互換・中間graph上界、coverageの局所契約との接続、omission追加費目・共有budgetの中断点、同finish job／E／response originの発行元。未実装の型や数値を確認済みにせず、各段階の実装前に固定sourceと照合する。
+
+本書の保存と参照更新だけを行う。正式発行口閉鎖・全体受付無効・Unknown・調査保留を維持し、実装・実接続・実通信・実機操作・設定変更・鍵承認・担当者連絡・Pushは行わない。

@@ -1,6 +1,6 @@
 # 回復finish 非reviewed受領物・発行元・ゼロcapture 詳細設計
 
-Version: br006-recovery-nonreviewed-draft-0.4 / Date: 2026-11-03。
+Version: br006-recovery-nonreviewed-draft-0.5 / Date: 2026-11-03。
 Status: **NR-A／Bに加え、NR-Cの新合成constructor限定の混合manifest・reviewedゼロ件と同accepted／plan接続を実装。旧root・実originの証拠発行・finish job・親省略は未接続。正式発行口閉鎖・全体受付無効・Unknown・VM／監視／telemetry調査保留を維持する。**
 
 基準HEAD: `0ed7d91`。[内容gate](BEST_PRACTICE_ABORT_SCOPE_RECOVERY_FINISH_CONTENT_GATE_DESIGN.md)§3・7・12〜13と[RD-C](BEST_PRACTICE_ABORT_SCOPE_RECOVERY_FINISH_JOB_RDC_DESIGN.md)からの差分案。CG-BP1の現受付はreviewedが1件以上のreviewed／not_processed planだけであり、本書によって受付を広げない。公開JSON・既存契約・元60秒・受信枠・会計は変更しない。
@@ -72,6 +72,8 @@ not_processedの既存JSON enumにはdeadline以外の予算・認証・権限�
 selected=0／input=0、collection failedで必須active receiptが存在しないケース、未処理inputのない「非reviewedだけで終了した通常実行」は、現在のSR-D回復kernelの前提外。架空のactive receiptやworkerを作らず、本工程の回復接続では拒否する。通常adapterがその結果を返せることと、SR-D回復planとして受理できることは別である。
 
 ## 6 合法omission・finish jobへの後続境界
+
+親省略決定証拠とfinalizeの合法変換モデルは[CG-C詳細設計draft-0.1](BEST_PRACTICE_ABORT_SCOPE_RECOVERY_OMISSION_CGC_DESIGN.md)で具体化した。元worker omittedと親受理後のomissionを別variantとし、元captureを保持したまま検証する案である。モデル／証拠は未実装で、NR-Cの親omission拒否を解除しない。
 
 元workerのresult_omittedは、その値が届いた事実だけを保持し、worker内部のサイズ判定を親が再現して証明したとは言わない。親受理後の省略にはCG-Cで元capture・固定finding予算順序・省略判断・warning／error副作用が必要。finalizeのfinding／byte省略はさらに別モデルとする。
 
