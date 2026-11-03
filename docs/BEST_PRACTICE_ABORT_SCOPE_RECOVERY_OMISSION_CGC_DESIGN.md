@@ -1,7 +1,7 @@
 # CG-C 親省略決定証拠・合法omissionモデル 詳細設計
 
-Version: br006-recovery-omission-cgc-draft-0.4 / Date: 2026-11-03。
-Status: **OM-Aのstrict値型・親prefix／keep／omit純粋計算を合成限定で実装。親決定証拠・finalizeモデル・manifest／finish job接続は未実装。正式発行口閉鎖・全体受付無効・Unknown・VM／監視／telemetry調査保留を維持する。**
+Version: br006-recovery-omission-cgc-draft-0.5 / Date: 2026-11-03。
+Status: **OM-A値層とOM-Cのreviewed列限定fresh合成決定ownerを実装。混合origin・finalizeモデル・同accepted／plan／manifest／finish job接続は未実装。正式発行口閉鎖・全体受付無効・Unknown・VM／監視／telemetry調査保留を維持する。**
 
 基準HEAD: `fd5ddb9`（NR-Cの追加対照を含む）。[内容gate設計](BEST_PRACTICE_ABORT_SCOPE_RECOVERY_FINISH_CONTENT_GATE_DESIGN.md)§3・7・8と[非reviewed設計](BEST_PRACTICE_ABORT_SCOPE_RECOVERY_NONREVIEWED_DESIGN.md)§6・11からの差分。現NR-Cは親受理後のomissionを拒否する。このMDはその拒否を変更せず、実装・実接続・実通信・実機操作・設定変更・本番cap／Permit／候補発行・Pushの承認ではない。
 
@@ -134,7 +134,7 @@ OM-Bの受付／計数分離・数値候補・256-unit checkpoint・epoch／同b
 | --- | --- | --- |
 | OM-A（§11の値層のみ実装） | strict値型・親prefix／keep／omitの純粋計算と副作用表。別producerの元omittedを区別する | 決定証拠・manifest拡張・finish job |
 | OM-B（計数詳細契約のみ追加） | [MB-A〜C](BEST_PRACTICE_ABORT_SCOPE_RECOVERY_JSON_SIZE_OMB_DESIGN.md)：strict準備値→count-only core→固定Eのfinalizeモデル。同budget・epoch・独立oracle | 総work受付・runtime・候補 |
-| OM-C | fresh合成ownerから同captureへ親決定を結合し、one-shot・失効・discardと別brandを検証 | 旧root昇格・正式発行・本番binding |
+| OM-C（§12のreviewed列限定で実装） | fresh合成ownerから同captureへ親決定を結合し、one-shot・失効・discardと別brandを検証。非reviewed混合は後続 | 旧root昇格・正式発行・本番binding |
 | OM-D | 同accepted／planの新混合variantへ一度移譲、finish応答full比較と局所比較の整合条件を具体化 | 同job／wire／全gate未成立の候補化 |
 
 未確認：保護された親prefixの発行owner、元captureを内部で借用する固定継続、親決定の移譲とsource／cleanupの同時寿命、size計数器のescaping互換・中間graph上界、coverageの局所契約との接続、omission追加費目・共有budgetの中断点、同finish job／E／response originの発行元。未実装の型や数値を確認済みにせず、各段階の実装前に固定sourceと照合する。
@@ -178,3 +178,39 @@ OM-Aには共有budget／期限／取消のcheckpointはまだ接続していな
 [OM-A検証記録](E2E_BEST_PRACTICE_PARENT_OMISSION_OMA_2026-11-03.md)参照。OM-B以降のsize／finalizeモデル、実captureからのprefix供給、ParentOmissionDecision・one-shot／同期失効／discard、同accepted／plan／finish jobとのbinding、full比較・候補・全体予算は未接続。npmへ同梱せず、固定importとseeded漏出／I/O／clock／workerの負の対照を維持する。
 
 draft-0.4のレビュー修正：OM-A初版はretained行の後に処理済み行が続く順序を受理しており、既存試験もその順序で親計算を行っていた。adapterではnot_processed行は常にループ中断後の連続した末尾で、停止由来の副作用もループ後に追加されるため、「開始prefix＋省略副作用」だけのモデルが成立するのはこの順序に限られる。§11.1へ末尾連続の要求を追加した。他の契約・費目・未接続事項、OM-Bの計数契約は変更しない。
+
+## 12 OM-C reviewed列限定のfresh合成決定owner
+
+基準HEAD: `747084e`。§11末尾はOM-A時点の未接続事項。[CG-Bと同じprivate kernel](../tests/support/review/synthetic-recovery-capture.ts)へ新constructorを追加し、元capture内部値を外へ返さず親決定へ結合した。OM-Bの実装は先行させていない。初回subsetはreviewed列だけで、非reviewed／元omitted／retainedとの混合は未対応として止める。
+
+### 12.1 strict生成・別brand・同capture
+
+createSyntheticParentOmissionAssemblyのstrict入力はkind=synthetic_parent_omission_owner_v1、model_id、schema_version（0.2／0.3）、prefix:{limitations,errors}、contextsだけ。初期prefixはOM-Aの空行pure検査でowned immutable DATAへpinする。実runの前段origin証拠ではない。contextsは既存CG-Bのbounded投影で1〜100件・一意sys_id昇順・同binding／対象Update Set／releaseへ固定し、任意のkept_findingsや既存ownerを登録できない。
+
+新constructorは依存objectもplain own-data／guardだけに限定し、guard関数を一度pinする。旧createSyntheticRecoveryCaptureAssemblyのAPI・診断は維持し、新側にはtransfer／manifest／body getterを公開しない。入力／wire／reviewed capture／decision／cleanup sinkは空の別brand。旧capture・外部pureモデル／summaryからの昇格は拒否する。
+
+private recordは同CG-B slot（固定context／連番id／input所属）と同wireのfull JSONから検証・post-guard受理した**同じimmutable reviewed値**を保持する。実auth／session／ReleasePermit／実worker jobへのbindingではなく、fresh合成constructor内の同一性である。
+
+### 12.2 固定順・one-shot発行・消費
+
+各行はdeliver→accept→decide。次行のcaptureをacceptする前に前行の決定が必要。元入力の開始claim／受理originに加え、keep／omit共通のdecision_startedをpre guard前に占有する。
+
+decideは同captures mapから元参照を取り、pre guard後に同owner／slot・ordinal・受理数を照合する。初期pinと決定済み同capture列＋当該captureだけでOM-Aを固定呼出しし、最後のtraceのbefore＝保持finding数、incoming＝元captureのfindings.lengthを確認する。callerによるmodel／callback／prefix数値の差替えはない。
+
+初回実装は履歴全体のpure再計算。OM-Aの正規化copyを決定の由来へ置換せず、recordは元capture handle・同slot・同元値と当該traceへ結ぶ。keep／omit双方で元captureを残し、出力reviewed=0でもcaptureゼロ証明にしない。局所binding／二重開始／余分引数の不一致はpost guardまで保持して、その停止を優先する。post後のmap再照合と先行hard確認後だけ空decisionを発行する。失敗・競合後の再開始／再発行は不可。
+
+消費口はdiscardDecisionだけ。同ownerの発行済みhandleを一度取り外し、全ownerを固定discardへ終端して他のpending決定・本文／wire／prefix／履歴も外す。個別discard後にprefix処理を続ける口や、同accepted／planへ移す口は未実装。OM-Dへ残す。
+
+### 12.3 同期失効・診断・cleanup
+
+beginSourceClose／beginCleanupでbody／決定／履歴／prefix参照を同期に外す。beginCleanupが返す同ownerの合成sinkは、失敗・discard後もrecordCleanupでconfirmed／unconfirmedを一度だけ記録できる。native resourceの取得／解放証拠ではなく、late confirmedから決定を復活させない。未開始・別sink・未知status・二重開始／記録は拒否する。
+
+取消／期限・throw・未知停止・再入はfail-closed。guard内で例外を捕捉されても失効は戻らない。capture受理2点＋親決定2点のguardを持つが、OM-A内部の長い同期parseを途中中断できる保証ではない。エラーは既存RecoveryCaptureErrorの固定message／code=internal_review_errorと固定reasonのみで、raw例外・本文・causeを残さない。
+
+summaryはstate／first_failure／累積accepted・decided・keep・omit・保持finding数・consume回数・pending数・warning／error件数・source／cleanup状態だけ。row ID・T_i・本文・trace値・内部handleを含めず、失効後もscalarと最初のreasonを保持する。runtime／初期prefix origin／非reviewed origin／receipt／manifest／finish job／content gate／全体予算は未保証。JS heapの物理消去も主張しない。
+
+### 12.4 費目・未対応
+
+入力／capture／決定／履歴は各100以下、prefixとfull結果には既存CG-B／OM-A局所枠を適用する。1行ごとのcapture検査に加え、k行目の決定でk行のOM-A copy／schema／serialize／freezeを再計算し、100行なら最大5050 asset分のpure検査になる。元private本文とモデル一時copy、prefix／trace、guard、Map／handle、clearは別費目。総work／memory・canonical budget／中断粒度はUnknownで、元C/G/P／retry・210試行・全60秒を変更せず、runtimeにも投入しない。
+
+非reviewed／元worker omitted／retainedと同receiptで混合する供給元、同accepted／plan移譲、OM-B size／finalize、同finish job／E／応答内容gate・候補・正常終端は未接続。NR-Cの親omission拒否を解除せず、実origin発行口閉鎖・全体受付無効・調査保留を維持する。[OM-C検証記録](E2E_BEST_PRACTICE_PARENT_OMISSION_OMC_2026-11-03.md)参照。

@@ -3,6 +3,7 @@ import {types} from 'node:util';
 import {z} from 'zod';
 import {reviewResultV2Structure,bp5RuleIdsSchema,releaseEvidenceStructure} from '../../../src/review/result-schema-v2.js';
 import {validateRecoveryAnalysisJson,measureRecoveryFullJson} from './synthetic-recovery-full-json.js';
+import {modelSyntheticParentOmission} from './synthetic-parent-omission-values.js';
 
 type Reason='binding'|'duplicate'|'state'|'shape'|'context'|'internal'|'cancelled'|'deadline_exceeded'|'reentrant';
 export class RecoveryCaptureError extends Error{readonly code='internal_review_error';constructor(readonly reason:Reason){super('internal_review_error');}}
@@ -11,6 +12,12 @@ export type CaptureInput=Readonly<{[inputBrand]:'synthetic_capture_input'}>;
 export type CaptureWire=Readonly<{[wireBrand]:'synthetic_capture_wire'}>;
 export type ReviewedCapture=Readonly<{[captureBrand]:'synthetic_reviewed_capture'}>;
 export type CaptureManifest=Readonly<{[manifestBrand]:'synthetic_capture_manifest'}>;
+declare const parentInputBrand:unique symbol,parentWireBrand:unique symbol,parentCaptureBrand:unique symbol,parentDecisionBrand:unique symbol,parentCleanupBrand:unique symbol;
+export type ParentCaptureInput=Readonly<{[parentInputBrand]:'synthetic_parent_capture_input'}>;
+export type ParentCaptureWire=Readonly<{[parentWireBrand]:'synthetic_parent_capture_wire'}>;
+export type ParentReviewedCapture=Readonly<{[parentCaptureBrand]:'synthetic_parent_reviewed_capture'}>;
+export type ParentOmissionDecision=Readonly<{[parentDecisionBrand]:'synthetic_parent_omission_decision'}>;
+export type ParentOmissionCleanup=Readonly<{[parentCleanupBrand]:'synthetic_parent_omission_cleanup'}>;
 type Asset=ReturnType<typeof validateRecoveryAnalysisJson>['value'];
 type Reviewed=Extract<Asset,{state:'reviewed'}>;
 const contextSchema=z.strictObject({update_xml_sys_id:z.string().regex(/^[a-f0-9]{32}$/),applicable_rule_ids:bp5RuleIdsSchema,
@@ -52,19 +59,27 @@ export function projectSyntheticRecoveryCaptureContexts(raw:unknown){
   function freeze(v:unknown){if(v&&typeof v==='object'){for(const x of Object.values(v))freeze(x);Object.freeze(v);}}
   freeze(contexts);return Object.freeze(contexts);
 }
-export function createSyntheticRecoveryCaptureAssembly(raw:unknown,dependencies:Readonly<{guard:(phase:'pre'|'post',operation:'accept'|'transfer')=>GuardStop|void}>){
+type ParentSeed={schema_version:'bp-mcp-review-0.2'|'bp-mcp-review-0.3';prefix:ReturnType<typeof modelSyntheticParentOmission>['value']['initial_prefix']};
+type Guard=(phase:'pre'|'post',operation:'accept'|'transfer'|'decide')=>GuardStop|void;
+function createAssembly(raw:unknown,dependencies:unknown,parent?:ParentSeed){
   if(!dependencies||typeof dependencies!=='object'||types.isProxy(dependencies))throw new RecoveryCaptureError('shape');
   const guardDescriptor=Object.getOwnPropertyDescriptor(dependencies,'guard');
   if(!guardDescriptor||!Object.hasOwn(guardDescriptor,'value')||typeof guardDescriptor.value!=='function'||types.isProxy(guardDescriptor.value))throw new RecoveryCaptureError('shape');
-  const fixedGuard=guardDescriptor.value as typeof dependencies.guard,contexts=projectSyntheticRecoveryCaptureContexts(raw);
+  const fixedGuard=guardDescriptor.value as Guard,contexts=projectSyntheticRecoveryCaptureContexts(raw);
+  if(parent&&contexts.some((c,i)=>i>0&&contexts[i-1].update_xml_sys_id>=c.update_xml_sys_id))throw new RecoveryCaptureError('shape');
   // Only these fresh handles represent synthetic run/session/source/auth/budget/release/window/frame/job/receipt identity.
   // No caller-supplied identity, runtime registry, or existing root can be adopted.
-  type Slot={context:Context;id:number;started:boolean;accepted:boolean};
+  type Slot={context:Context;id:number;started:boolean;accepted:boolean;decision_started?:boolean};
   const inputs=new Map<CaptureInput,Slot>(),wires=new Map<CaptureWire,{slot:Slot;json:string}>(),captures=new Map<ReviewedCapture,{slot:Slot;value:Reviewed}>();
   let manifest:CaptureManifest|undefined,held:typeof captures|undefined,state:'active'|'transferred'|'failed'|'discarded'='active',first:Reason|undefined,busy=false,accepted=0;
-  const fail:(reason:Reason)=>never=(reason)=>{first??=reason;state='failed';wires.clear();captures.clear();held?.clear();held=undefined;manifest=undefined;inputs.clear();throw new RecoveryCaptureError(first);};
-  function active(){if(first)throw new RecoveryCaptureError(first);if(busy)fail('reentrant');if(state!=='active')fail('state');}
-  function guard(phase:'pre'|'post',operation:'accept'|'transfer'){
+  const decisions=new Map<ParentOmissionDecision,{capture:ReviewedCapture;slot:Slot;value:Reviewed;trace:ReturnType<typeof modelSyntheticParentOmission>['value']['trace'][number]}>();
+  let history:{producer:'analysis';outcome:Reviewed}[]=[],initialPrefix=parent?.prefix,currentPrefix=parent?.prefix,decided=0,keptFindings=0,keptCount=0,omittedCount=0,consumedDecisions=0;
+  let warningCount=initialPrefix?.limitations.length??0,errorCount=initialPrefix?.errors.length??0;
+  let parentInvalidated=false,sourceCloseStarted=false,cleanupSink:ParentOmissionCleanup|undefined,cleanupStatus:'not_started'|'pending'|'confirmed'|'unconfirmed'='not_started';
+  function clearParent(){decisions.clear();history=[];initialPrefix=currentPrefix=undefined;parent=undefined;}
+  const fail:(reason:Reason)=>never=(reason)=>{first??=reason;state='failed';wires.clear();captures.clear();held?.clear();held=undefined;manifest=undefined;inputs.clear();clearParent();throw new RecoveryCaptureError(first);};
+  function active(){if(first)throw new RecoveryCaptureError(first);if(busy)fail('reentrant');if(state!=='active'||parentInvalidated)fail('state');}
+  function guard(phase:'pre'|'post',operation:'accept'|'transfer'|'decide'){
     let stop:unknown;try{stop=fixedGuard(phase,operation);}catch{fail('internal');}
     if(first)throw new RecoveryCaptureError(first);
     if(stop!==undefined){if(stop==='cancelled'||stop==='deadline_exceeded')fail(stop);fail('internal');}
@@ -82,7 +97,7 @@ export function createSyntheticRecoveryCaptureAssembly(raw:unknown,dependencies:
     }catch{if(first)throw new RecoveryCaptureError(first);return fail('shape');}
   }
   function accept(wire:CaptureWire):ReviewedCapture{
-    active();const pending=wires.get(wire);if(!pending)fail('binding');wires.delete(wire);if(pending.slot.id!==accepted+1)fail('state');busy=true;
+    active();const pending=wires.get(wire);if(!pending)fail('binding');wires.delete(wire);if(pending.slot.id!==accepted+1||parent&&accepted!==decided)fail('state');busy=true;
     try{
       guard('pre','accept');let value:Asset|undefined,mismatch:Reason|undefined;
       try{
@@ -109,9 +124,55 @@ export function createSyntheticRecoveryCaptureAssembly(raw:unknown,dependencies:
     if(first)throw new RecoveryCaptureError(first);if(busy)fail('reentrant');if(state!=='transferred'||value!==manifest)fail('binding');
     held?.clear();held=undefined;manifest=undefined;state='discarded';inputs.clear();
   }
-  function discard(){if(busy)fail('reentrant');wires.clear();captures.clear();held?.clear();held=undefined;manifest=undefined;inputs.clear();if(!first)state='discarded';}
+  function discard(){if(busy)fail('reentrant');wires.clear();captures.clear();held?.clear();held=undefined;manifest=undefined;inputs.clear();clearParent();if(!first)state='discarded';}
+  if(parent)return Object.freeze({
+    inputs:Object.freeze([...inputs.keys()]) as unknown as readonly ParentCaptureInput[],
+    deliver:(input:ParentCaptureInput,envelope:unknown,...extra:unknown[])=>{if(extra.length)fail('shape');return deliver(input as unknown as CaptureInput,envelope) as unknown as ParentCaptureWire;},
+    accept:(wire:ParentCaptureWire,...extra:unknown[])=>{if(extra.length)fail('shape');return accept(wire as unknown as CaptureWire) as unknown as ParentReviewedCapture;},
+    decide(capture:ParentReviewedCapture,...extra:unknown[]):ParentOmissionDecision{
+      active();const original=captures.get(capture as unknown as ReviewedCapture);let mismatch:Reason|undefined=extra.length?'shape':!original?'binding':original.slot.decision_started?'duplicate':undefined;
+      if(original)original.slot.decision_started=true;busy=true;
+      try{
+        guard('pre','decide');let modeled:ReturnType<typeof modelSyntheticParentOmission>|undefined;
+        if(!mismatch)try{
+          if(!original)throw 0;
+          if(!parent||!initialPrefix||!currentPrefix||original.slot.id!==decided+1||accepted!==decided+1)throw 0;
+          const rows=[...history,{producer:'analysis' as const,outcome:original.value}];
+          modeled=modelSyntheticParentOmission({kind:'synthetic_parent_omission_values_v1',model_id:'recovery-omission-v1',schema_version:parent.schema_version,limits:{max_findings:100},selected:rows.map(r=>r.outcome.update_xml_sys_id),prefix:initialPrefix,rows});
+          const trace=modeled.value.trace[decided];if(!trace||trace.before!==keptFindings||trace.incoming!==original.value.result.findings.length)throw 0;
+        }catch{mismatch='context';}
+        guard('post','decide');if(mismatch||!modeled)fail(mismatch??'internal');
+        if(!original||captures.get(capture as unknown as ReviewedCapture)!==original)fail('binding');
+        const trace=modeled.value.trace[decided],decision=handle<ParentOmissionDecision>();
+        decisions.set(decision,{capture:capture as unknown as ReviewedCapture,slot:original.slot,value:original.value,trace});history.push({producer:'analysis',outcome:original.value});currentPrefix=modeled.value.prefix;
+        warningCount=currentPrefix.limitations.length;errorCount=currentPrefix.errors.length;decided++;keptFindings=trace.after;if(trace.action==='parent_omit')omittedCount++;else keptCount++;return decision;
+      }catch{if(first)throw new RecoveryCaptureError(first);return fail('internal');}finally{busy=false;}
+    },
+    discardDecision(decision:ParentOmissionDecision){if(first)throw new RecoveryCaptureError(first);if(busy)fail('reentrant');if(!decisions.delete(decision))fail('binding');consumedDecisions++;discard();},
+    beginSourceClose(){if(busy)fail('reentrant');if(sourceCloseStarted)fail('state');sourceCloseStarted=true;parentInvalidated=true;wires.clear();captures.clear();inputs.clear();clearParent();},
+    beginCleanup():ParentOmissionCleanup{if(busy)fail('reentrant');if(cleanupStatus!=='not_started')fail('state');cleanupSink=handle<ParentOmissionCleanup>();cleanupStatus='pending';parentInvalidated=true;wires.clear();captures.clear();inputs.clear();clearParent();return cleanupSink;},
+    recordCleanup(sink:ParentOmissionCleanup,status:'confirmed'|'unconfirmed'){if(busy)fail('reentrant');if(sink!==cleanupSink||cleanupStatus!=='pending'||status!=='confirmed'&&status!=='unconfirmed')fail('binding');cleanupStatus=status;},
+    discard,
+    stop:(reason:GuardStop)=>{if(reason!=='cancelled'&&reason!=='deadline_exceeded')fail('internal');return fail(reason);},
+    summary:()=>Object.freeze({scope:'synthetic_parent_omission_owner' as const,authority:'none' as const,state:first?'failed':state==='discarded'?'discarded':parentInvalidated?'invalidated':state,first_failure:first??null,accepted,decided,kept_findings:keptFindings,kept:keptCount,omitted:omittedCount,consumed_decisions:consumedDecisions,pending_decisions:decisions.size,retained_captures:captures.size,source_close_started:sourceCloseStarted,cleanup:cleanupStatus,
+      warnings:warningCount,errors:errorCount,unverified:Object.freeze(['runtime_origin','prefix_origin','nonreviewed_prefix_origin','receipt_binding','manifest','finish_job','content_gate','whole_run_budget'])}),
+  });
   return Object.freeze({inputs:Object.freeze([...inputs.keys()]),deliver,accept,transfer,discardManifest,discard,
     stop:(reason:GuardStop)=>{if(reason!=='cancelled'&&reason!=='deadline_exceeded')fail('internal');return fail(reason);},
     summary:()=>Object.freeze({scope:'synthetic_recovery_capture_only' as const,authority:'none' as const,state,first_failure:first??null,accepted,
       wires:wires.size,captures:captures.size,manifests:manifest?1:0,unverified:Object.freeze(['runtime_origin','finish_job','omission','content_gate','whole_run_budget'] as const)})});
+}
+type CaptureAssembly=Exclude<ReturnType<typeof createAssembly>,{decide:unknown}>;
+export function createSyntheticRecoveryCaptureAssembly(raw:unknown,dependencies:Readonly<{guard:(phase:'pre'|'post',operation:'accept'|'transfer')=>GuardStop|void}>){return createAssembly(raw,dependencies) as CaptureAssembly;}
+/** Fresh synthetic construction only. No old capture adoption or caller-provided prefix count. */
+export function createSyntheticParentOmissionAssembly(raw:unknown,dependencies:Readonly<{guard:(phase:'pre'|'post',operation:'accept'|'decide')=>GuardStop|void}>){
+  if(!dependencies||typeof dependencies!=='object'||types.isProxy(dependencies)||![null,Object.prototype].includes(Object.getPrototypeOf(dependencies))||Reflect.ownKeys(dependencies).length!==1)throw new RecoveryCaptureError('shape');
+  if(!raw||typeof raw!=='object'||types.isProxy(raw)||![null,Object.prototype].includes(Object.getPrototypeOf(raw)))throw new RecoveryCaptureError('shape');
+  const keys=['kind','model_id','schema_version','prefix','contexts'],values:Record<string,unknown>=Object.create(null);
+  if(Reflect.ownKeys(raw).length!==keys.length)throw new RecoveryCaptureError('shape');
+  for(const key of keys){const p=Object.getOwnPropertyDescriptor(raw,key);if(!p||!Object.hasOwn(p,'value'))throw new RecoveryCaptureError('shape');values[key]=p.value;}
+  if(values.kind!=='synthetic_parent_omission_owner_v1')throw new RecoveryCaptureError('shape');
+  let seed:ParentSeed;
+  try{const pin=modelSyntheticParentOmission({kind:'synthetic_parent_omission_values_v1',model_id:values.model_id,schema_version:values.schema_version,limits:{max_findings:100},selected:[],prefix:values.prefix,rows:[]});seed={schema_version:pin.value.schema_version,prefix:pin.value.initial_prefix};}catch{throw new RecoveryCaptureError('shape');}
+  return createAssembly(values.contexts,dependencies,seed) as Extract<ReturnType<typeof createAssembly>,{decide:unknown}>;
 }

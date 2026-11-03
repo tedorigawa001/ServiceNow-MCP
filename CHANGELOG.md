@@ -16,6 +16,8 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 ### Changed
 
+- OM-C adds a package-excluded fresh synthetic parent-decision owner for reviewed-only capture sequences. Each keep/omit decision is bound to the original private capture and a pinned prefix, claimed once, and consumed only by fixed discard; source/cleanup start and hard stops invalidate held values synchronously. Legacy capture APIs are unchanged. Mixed non-reviewed origins, accepted/plan transfer, finalize, finish jobs and runtime issuance remain disabled.
+
 - OM-A adds a package-excluded, bounded pure parent-omission value model. It derives retained finding counts in canonical row order, preserves original reviewed values separately from whole-result omissions, and reproduces the parent's warning/error-prefix behavior without deduplication. Independent truth tables, fixed-source drift controls and malformed-input tests cover the model; no omission evidence, manifest expansion, finish job or runtime admission is enabled.
 
 - NR-C adds a package-excluded, constructor-only synthetic mixed recovery manifest. Reviewed captures, producer-verified non-reviewed outcomes and original retained inputs are partitioned in canonical selected order and transferred once to the same accepted/plan lifecycle. Zero reviewed results require a private plan-bound empty proof; cancellation, mixed identities and fixed discard paths fail closed. Legacy roots, formal issuance, finish jobs and whole-run admission remain unchanged.

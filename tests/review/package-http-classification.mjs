@@ -173,17 +173,19 @@ for(const leak of ['fetch("x");','Date.now();','new Date();','new Worker("x");',
   assert.throws(()=>auditSyntheticIssuer(fullJsonText+'\n'+leak,fullJsonImports),assert.AssertionError,'CG-A audit missed seeded leak: '+leak);
 console.log('CG-A full schema values/shape/strict JSON excluded; fixed pure imports + seeded runtime/I/O/clock/worker/leak controls PASS');
 const captureText=readFileSync(join(root,'tests/support/review/synthetic-recovery-capture.ts'),'utf8');
-const captureImports=['node:util','zod','../../../src/review/result-schema-v2.js','./synthetic-recovery-full-json.js'];
+const captureImports=['node:util','zod','../../../src/review/result-schema-v2.js','./synthetic-recovery-full-json.js','./synthetic-parent-omission-values.js'];
 auditSyntheticIssuer(captureText,captureImports);
 const captureMarkers=['synthetic-recovery-capture','createSyntheticRecoveryCaptureAssembly','RecoveryCaptureError','synthetic_recovery_capture_only','synthetic_capture_manifest','synthetic_reviewed_capture','synthetic_capture_wire'];
 const noCapture=text=>assert(!captureMarkers.some(x=>text.includes(x)),'CG-B synthetic capture leaked into runtime');
 captureMarkers.push('projectSyntheticRecoveryCaptureContexts');
+captureMarkers.push('createSyntheticParentOmissionAssembly','ParentCaptureInput','ParentCaptureWire','ParentReviewedCapture','ParentOmissionDecision','ParentOmissionCleanup','synthetic_parent_capture_input','synthetic_parent_capture_wire','synthetic_parent_reviewed_capture','synthetic_parent_omission_decision','synthetic_parent_omission_cleanup','synthetic_parent_omission_owner');
 for(const marker of captureMarkers)assert.throws(()=>noCapture(marker));
 assert(!pack.files.some(f=>f.path.includes('synthetic-recovery-capture')));
 for(const f of pack.files.filter(f=>f.path.startsWith('dist/')&&/\.(?:js|ts|map)$/.test(f.path)))noCapture(readFileSync(join(root,f.path),'utf8'));
 for(const leak of ['fetch("x");','Date.now();','new Date();','new Worker("x");',"import('node:fs');","import {BoundedReadSession} from '../../../src/servicenow/bounded-read.js';const zzRoot=BoundedReadSession;"])
   assert.throws(()=>auditSyntheticIssuer(captureText+'\n'+leak,captureImports),assert.AssertionError,'CG-B audit missed seeded leak: '+leak);
 console.log('CG-B fresh synthetic capture/one-shot manifest excluded; fixed imports + seeded runtime/I/O/clock/worker/leak controls PASS');
+console.log('OM-C fresh reviewed-only decision owner/brands excluded; same pure graph + seeded leak controls PASS');
 const nonReviewedText=readFileSync(join(root,'tests/support/review/synthetic-recovery-nonreviewed-values.ts'),'utf8');
 const nonReviewedImports=['node:util','zod','../../../src/review/aggregate-schema.js'];
 auditSyntheticIssuer(nonReviewedText,nonReviewedImports);
