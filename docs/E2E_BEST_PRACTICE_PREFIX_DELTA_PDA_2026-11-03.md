@@ -49,6 +49,14 @@ P0の供給一致・実headerのcapture／比較・同pendingの一度限り結�
 
 正式発行口閉鎖・全体受付無効・Unknown・VM／監視／telemetry調査保留を維持する。private結合・移譲先seal成功・実接続・実通信・設定変更・Pushは行わない。
 
-## 5 コミット候補だけの再検証
+## 5 レビュー修正（2026-11-03）
+
+修正前の新規75件は記録として残す。本記録は全リポジトリの合成テストを実行していなかったため、レビュー時にrepo全体のlint（error 0・warning 374）、build、梱包分類監査、全体合成276ファイル／13,574件成功・失敗0を確認した。
+
+- 試験：delta側の`candidate_filter_violation`規則。`checkError(e,'delta')`はverify errorとして供給された`candidate_filter_violation`にもstage／collection条件（consistency段階はcollection `complete`が必要）を適用する。0.3のschema検査（`deltaSchema`）はこのcodeを受理するため、この場合は唯一の防御だった。0.3・collection `failed`・verify_error=`candidate_filter_violation`の入力は現行コードで`delta/binding`拒否されるが、判定を外すと受理された。既存試験は`complete`の正常系だけだった。`phase:'delta'`／`reason:'binding'`で拒否されることを検査する1件を追加した。
+
+この変異は追加した試験だけを失敗させた。二経路のcanonical一致検査（同じ集合を二度sortするため構造上一致）、delta側のschema検査（未知codeはdelta側`checkError`も拒否）は等価変異として扱う。設計が必須とする負の対照（dedup前倒し・last-occurrence保持・locale sort・errorsのsort・X誤追加・末尾からの採用）は既存試験が全て検出した。helperは変更せず、新規試験は76件。修正後も全体合成276ファイル／13,575件成功・失敗0。
+
+## 6 コミット候補だけの再検証
 
 対象8ファイルだけをindexへ登録し、`git checkout-index`でHEAD＋その変更の一時コピーを生成した。既存node_modulesを参照し、distはコピー内で新規ビルドした。製品ビルド、合成recovery **41ファイル3,395件**、新helper／oracleのstrict／noUnused型検査、変更箇所ESLint、offline梱包監査・製品依存限定スモーク（ともに**441 files**）がすべて成功。元作業ツリーの未登録変更には依存せず、上限・期限緩和・実通信・設定変更・Pushは行っていない。

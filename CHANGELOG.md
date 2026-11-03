@@ -146,6 +146,8 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 ### Added
 
+- PD-A prefix delta tests now check that a `candidate_filter_violation` supplied as a verify error is rejected under a failed collection at the delta phase; the delta-side error rule was previously the sole, untested guard there. The value helper itself is unchanged.
+
 - NB-03 normal transfer tests now check that a guard swallowing reentry into a normal operation poisons the terminal transfer, that an unknown guard return on the cleanup-capsule path fails closed without recording cleanup, and that extra `abortBoundTransfer` arguments report `binding`. The transfer root itself is unchanged.
 
 - NB-02 normal adoption failures detected by the root itself after the kernel starts are now recorded with the operation stage (`cleanup`, `transfer`) instead of `internal`; the root previously revoked the kernel before claiming, so the kernel's revoke notice claimed first. Kernel-detected failures keep their phase stage. Tests also cover extra `startKernel` arguments and post-checkpoint stop priority for startKernel and adopt.

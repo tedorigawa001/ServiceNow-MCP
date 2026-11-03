@@ -181,3 +181,8 @@ it('bounds nodes even for wide unknown input before the strict schema can reject
   function tree(depth:number):unknown{return depth?Object.fromEntries(Array.from({length:8},(_,n)=>['k'+n,tree(depth-1)])):null;}
   rejected(tree(4),'shape','limit');
 });
+it('applies the candidate-filter collection rule to a delta verify error, not only to the parent prefix',()=>{
+  const f=withVerify('error');f.schema_version='bp-mcp-review-0.3';f.collection_status='failed';f.verify.verify_error='candidate_filter_violation';f.verify.errors=['candidate_filter_violation'];
+  // The 0.3 schema accepts the code; only the consistency-stage collection rule rejects it here.
+  rejected(f,'delta','binding');
+});
