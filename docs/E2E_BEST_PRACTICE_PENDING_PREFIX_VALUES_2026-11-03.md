@@ -42,6 +42,17 @@ Scope: [接続差分設計](BEST_PRACTICE_ABORT_SCOPE_RECOVERY_PENDING_PREFIX_BI
 
 新helper専用のcompiled実行fixtureや全機能の全体回帰は未追加／未実行。実接続・実通信・設定変更・Pushは行っていない。
 
-## 5 次工程
+## 5 レビュー修正（2026-11-03）
+
+本記録の新規試験件数は修正前の記録として残す。後続のPD-B(B)接続（`b3ceea7`）と合わせ、レビュー時にrepo全体のlint（error 0・warning 374）、build、梱包分類監査、全体合成278ファイル／13,629件成功・失敗0を確認した。
+
+PD-B(A)値層とPD-B(B)接続の20変異を確認し、次の2判定は外しても既存試験が全て通過した。実装は正しく、試験だけの不足である。
+
+- error recordの`update_xml_sys_id`値の不一致。期待側にIDがあり実値も同keyを持つが値が異なる場合、`has&&field(a,'update_xml_sys_id')!==b.update_xml_sys_id`が唯一の検出点だった。既存の`optional_id`試験はkeyの追加／削除で、key集合の判定が先に拒否していた。pins header側・accepted header側の各1件を追加した。
+- 未知`kind`の拒否。判定を外しても全試験が通過した。1件を追加した。
+
+上記2変異はそれぞれ追加した試験だけを失敗させた。PD-B(B)の重複claim判定（`transferStarted`と同時に設定）、post後の候補identity再照合（常に同値）、post時の候補・header・budget有無の判定（候補欠落時は先に`mismatch`が立つ）、`isCleared`の候補条件（`clear()`が常に実行）は等価変異として扱う。helperは変更せず、新規試験は3件増。修正後も全体合成278ファイル／13,632件成功・失敗0。
+
+## 6 次工程
 
 (B)で同pendingが保持するPp／model版・同plan verify・実header受領物から固定DATA viewを供給し、同identity・開始claim・pre/post・暫定候補を接続する。(C)のpost受理・一度限り関係値消費・全破棄・compiled保証も未実装。全work／heap・3round配賦・元trace／runtime provenanceはUnknownであり、今回の値一致をそれらの証拠へ昇格させない。

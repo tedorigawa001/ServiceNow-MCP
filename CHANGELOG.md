@@ -152,6 +152,8 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 ### Added
 
+- PD-B(A) pending prefix value tests now reject a same-key but different `update_xml_sys_id` value in both the pins and accepted header errors, and an unknown `kind`; each check was previously untested. The value helper itself is unchanged.
+
 - PD-A prefix delta tests now check that a `candidate_filter_violation` supplied as a verify error is rejected under a failed collection at the delta phase; the delta-side error rule was previously the sole, untested guard there. The value helper itself is unchanged.
 
 - NB-03 normal transfer tests now check that a guard swallowing reentry into a normal operation poisons the terminal transfer, that an unknown guard return on the cleanup-capsule path fails closed without recording cleanup, and that extra `abortBoundTransfer` arguments report `binding`. The transfer root itself is unchanged.

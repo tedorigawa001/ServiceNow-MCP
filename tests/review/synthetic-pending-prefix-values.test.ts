@@ -103,3 +103,8 @@ it('retains the PD-A eligibility phase and does not claim full-header or origin 
   const f=fixture();Object.assign(f.pins_header,{target:'not-validated'});Object.assign(f.accepted_header,{target:'different-not-validated'});
   const r=projectSyntheticPendingPrefixValues(f);expect(r.unverified).toContain('full_header');expect(r.unverified).toContain('accepted_origin');
 });
+it.each(['pins_header','accepted_header'] as const)('rejects a same-key but different update_xml_sys_id value in the %s errors',where=>{
+  const p={limitations:['z','a'],errors:[{stage:'output',code:'response_limit',update_xml_sys_id:'1'.repeat(32)}]},f=fixture(p);
+  (f[where].errors[0] as {update_xml_sys_id?:string}).update_xml_sys_id='f'.repeat(32);reject(f,where==='pins_header'?'base':'accepted');
+});
+it('rejects an unknown kind',()=>{reject({...fixture(),kind:'synthetic_pending_prefix_values_v2'},'input');});
