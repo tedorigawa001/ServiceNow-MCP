@@ -67,7 +67,7 @@ try{
   }
   fullClean(setup(await load(undefined,fullFactory)),'state',1,1);
   const receive='pendingProjection = acceptedChannel.consumeProjection(b, p.taken);';
-  const recheck='acceptedChannel.checkProjection(b, pendingProjection);';
+  const recheck='acceptedChannel.checkProjection(b, pendingProjection);\n                    fullPostChecks++;';
   for(const line of [receive,recheck])assert.equal(text.split(line).length,2,'FP-1 call site must be unique');
   for(const [replacement,kernelCount] of [
     ['try { acceptedChannel.consumeHeader(b, p.taken); } catch {} '+receive,0],
@@ -184,4 +184,77 @@ try{
     const r=setup(await load(withoutClear(slot),partsFactory),undefined,bundlePartsInput(true));assert.throws(()=>r.prepareBundleParts());assert.throws(()=>r.transferFailure(),undefined,slot);assert.equal(r.custody().payload_cleared,false);
   }
   console.log('Compiled FP-2: private parts/expectation/full-content binding, 55 field/origin/lane/reprojection faults and 5 retained-slot controls PASS (no complete bundle/seal)');
+  const proofFactory='createSyntheticPostProofRoot',issueSite='issuePostProofPair(mismatch);',pairSite='checkPostProofPair();';
+  for(const site of [issueSite,pairSite])assert.equal(text.split(site).length,2,'FP3-A fixed site must be unique');
+  function proofClean(r,reason,content,prefix,pairs,starts=1){
+    assert.throws(()=>r.issuePostProofs());const s=r.inspect();assert.equal(s.first_failure,reason);
+    assert.deepEqual(s.post_proofs,{state:'failed',starts,pairs,checks:pairs,post_passed:false,pair_pending:false,markers_pending:false,origins_pending:false,content_issues:content,prefix_issues:prefix,completed_bundles:0,seals:0});
+    assert.equal(s.transfer.successful_seals,0);assert.equal(s.kernel.accepted_header.consumptions,0);
+    r.finalDiscard(r.transferFailure());assert.equal(r.custody().payload_cleared,true);assert.throws(()=>r.issuePostProofs());assert.equal(r.inspect().post_proofs.starts,starts);
+  }
+  proofClean(setup(await load(undefined,proofFactory),undefined,bundlePartsInput(true)),'state',1,1,1);
+  // Duplicate private issuer and direct pre-post invocation never produce a second pair.
+  proofClean(setup(await load(t=>t.replace(issueSite,issueSite+' '+issueSite),proofFactory)),'state',1,1,1);
+  const buildSite='buildBundleParts();';assert.equal(text.split(buildSite).length,2);
+  proofClean(setup(await load(t=>t.replace(buildSite,buildSite+' issuePostProofPair(false);'),proofFactory)),'state',0,0,0);
+  let proofFaults=0;
+  for(const fault of [
+    'postAcceptedProofPair = undefined;',
+    'proofOrigins = undefined;',
+    'proofIssueMarkers = undefined;',
+    'proofIssueState = "unused";',
+    'proofPostPassed = false;',
+    'postAcceptedProofPair = Object.freeze({ ...postAcceptedProofPair });',
+    'contentChecked = Object.freeze({ ...contentChecked });',
+    'prefixRelation = Object.freeze({ ...prefixRelation });',
+    'prefixRelationMarker = Object.freeze({ ...prefixRelationMarker });',
+    'bundleParts = Object.freeze({ ...bundleParts });',
+    'destinationOwner = Object.freeze({ ...destinationOwner });',
+    'pendingTransfer = Object.freeze({ ...pendingTransfer });',
+    'pendingProjection = Object.freeze({ ...pendingProjection });',
+    'invalidations++;',
+  ]){proofClean(setup(await load(t=>t.replace(pairSite,fault+' '+pairSite),proofFactory)),'binding',1,1,0);proofFaults++;}
+  // Keep the pair/origin aliases in sync so specific marker and binding checks, not the first alias check, must reject.
+  for(const patch of [
+    'token: Object.freeze({ ...token })',
+    'marker: Object.freeze({ ...postAcceptedProofPair.marker })',
+    'parts: Object.freeze({ ...bundleParts })',
+    'owner: Object.freeze({ ...destinationOwner })',
+    'pending: Object.freeze({ ...pendingTransfer })',
+    'received: Object.freeze({ ...pendingProjection })',
+    'budget: Object.freeze({ ...budget.identity })',
+    'budgetSerial: 2',
+    'invalidationSerial: invalidations + 1',
+  ]){
+    const fault=`postAcceptedProofPair = Object.freeze({ ...postAcceptedProofPair, ${patch} }); proofOrigins = Object.freeze({ ...proofOrigins, pair: postAcceptedProofPair }); `;
+    proofClean(setup(await load(t=>t.replace(pairSite,fault+pairSite),proofFactory)),'binding',1,1,0);proofFaults++;
+  }
+  for(const [side,patch] of [
+    ['content','marker: Object.freeze({ ...contentChecked.marker })'],
+    ['content','candidate: Object.freeze({ ...contentChecked.candidate })'],
+    ['prefix','marker: Object.freeze({ ...prefixRelation.marker })'],
+    ['prefix','check: Object.freeze({ ...prefixRelation.check })'],
+  ]){
+    const slot=side==='content'?'contentChecked':'prefixRelation';
+    const fault=`${slot} = Object.freeze({ ...${slot}, ${patch} }); postAcceptedProofPair = Object.freeze({ ...postAcceptedProofPair, ${side}: ${slot} }); proofOrigins = Object.freeze({ ...proofOrigins, ${side}: ${slot}, pair: postAcceptedProofPair }); `;
+    proofClean(setup(await load(t=>t.replace(pairSite,fault+pairSite),proofFactory)),'binding',1,1,0);proofFaults++;
+  }
+  // Coherently rebind the parts aliases: the shared full-value validation must still run AFTER issuance.
+  const changedExpectation='pendingExpectation = Object.freeze({ ...pendingExpectation, value: Object.freeze({ ...pendingExpectation.value, consistency: "changed" }) }); bundleParts = Object.freeze({ ...bundleParts, expectation: pendingExpectation }); postAcceptedProofPair = Object.freeze({ ...postAcceptedProofPair, parts: bundleParts }); proofOrigins = Object.freeze({ ...proofOrigins, parts: bundleParts, pair: postAcceptedProofPair }); ';
+  proofClean(setup(await load(t=>t.replace(pairSite,changedExpectation+pairSite),proofFactory)),'binding',1,1,0);proofFaults++;
+  // A foreign actual pair from another root in the SAME temporary module is not a valid local proof.
+  const cross=await load(t=>'let temporaryForeignPair;\n'+t.replace(pairSite,'if (!temporaryForeignPair) temporaryForeignPair = postAcceptedProofPair; else postAcceptedProofPair = temporaryForeignPair; '+pairSite),proofFactory);
+  proofClean(setup(cross),'state',1,1,1);proofClean(setup(cross),'binding',1,1,0);
+  // Allocation faults remain private partial issuance. No issuer callback or fixture registration is added.
+  for(const [site,c,p] of [
+    ['contentChecked = Object.freeze({ marker: proofIssueMarkers.content, candidate: bundleParts.content });',0,0],
+    ['prefixRelationMarker = proofIssueMarkers.prefix;',1,0],
+    ['postAcceptedProofPair = Object.freeze(',1,1],
+    ['proofOrigins = Object.freeze({ parts: bundleParts, content: contentChecked, prefix: prefixRelation, pair: postAcceptedProofPair });',1,1],
+  ]){assert.equal(text.split(site).length,2);proofClean(setup(await load(t=>t.replace(site,'throw Error("PRIVATE_ALLOCATION_FAILURE"); '+site),proofFactory)),'internal',c,p,0);}
+  proofClean(setup(await load(t=>t.replace(pairSite,'acceptedChannel.invalidatePayload(); '+pairSite),proofFactory)),'internal',1,1,0);
+  for(const slot of ['postAcceptedProofPair','proofIssueMarkers','proofOrigins','contentChecked','prefixRelation','prefixRelationMarker']){
+    const r=setup(await load(withoutClear(slot),proofFactory));assert.throws(()=>r.issuePostProofs());assert.throws(()=>r.transferFailure(),undefined,slot);assert.equal(r.custody().payload_cleared,false);
+  }
+  console.log(`Compiled FP3-A: post-only/one-shot issuer, ${proofFaults} binding faults, foreign pair, 4 partial-allocation faults, revoke and 6 retained-slot controls PASS (no complete bundle/seal)`);
 }finally{globalThis.fetch=originalFetch;rmSync(out,{recursive:true,force:true});}

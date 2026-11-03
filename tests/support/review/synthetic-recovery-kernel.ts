@@ -723,6 +723,11 @@ export function createSyntheticBundlePartsRoot(raw:unknown,dependencies:unknown,
   const {abortBoundTransfer,...surface}=createNormalOwnedSupplyCore(raw,dependencies,extra,true,false,true,true).transferring;
   return Object.freeze({...surface,prepareBundleParts:abortBoundTransfer});
 }
+/** FP3-A post-only proof pair, followed by fixed abort. No complete bundle or seal. */
+export function createSyntheticPostProofRoot(raw:unknown,dependencies:unknown,...extra:unknown[]){
+  const {abortBoundTransfer,...surface}=createNormalOwnedSupplyCore(raw,dependencies,extra,true,false,true,true,true).transferring;
+  return Object.freeze({...surface,issuePostProofs:abortBoundTransfer});
+}
 type CompletedMixedContent=Readonly<{token:object;owned:OwnedMixedSupply;pins:SyntheticFinishPins;serial:1}>;
 type BoundAdoption=Readonly<{token:object;content:CompletedMixedContent;bound:NormalAcceptedSnapshot;serial:1}>;
 type PendingBoundTransfer=Readonly<{token:object;ticket:BoundAdoption;content:CompletedMixedContent;binding:NormalPinBinding;taken:TakenNormalAccepted}>;
@@ -734,9 +739,11 @@ type ContentChecked=Readonly<{marker:object;candidate:PendingContentCheck}>;
 type UnpublishedDestination=Readonly<{owner:DestinationOwner;check:ContentChecked}>;
 type BundlePartsDraft=Readonly<{token:object;owner:DestinationOwner;pending:PendingBoundTransfer;received:ReceivedAcceptedProjection;model:SupplyModel;rows:OwnedMixedSupply['rows'];
   expectation:ReturnType<typeof projectRecoveryFinishExpectation>;prefix:PendingPrefixCheck;prefixValues:PendingPrefixCheck['values'];content:PendingContentCheck;budget:object;budgetSerial:1;invalidationSerial:number}>;
+type PostAcceptedProofPair=Readonly<{token:object;marker:object;parts:BundlePartsDraft;owner:DestinationOwner;pending:PendingBoundTransfer;received:ReceivedAcceptedProjection;
+  content:ContentChecked;prefix:OrderedPrefixRelation;budget:object;budgetSerial:1;invalidationSerial:number}>;
 type PayloadClearedReceipt=Readonly<{token:object;serial:number;budgetSerial:0|1;budget:object|undefined}>;
 type NormalCleanupCapsule={token:object;cleanup:((status:unknown)=>void)|undefined};
-function createNormalOwnedSupplyCore(raw:unknown,dependencies:unknown,extra:unknown[],transferMode=false,destinationMode=false,fullProjectionMode=false,partsMode=false){
+function createNormalOwnedSupplyCore(raw:unknown,dependencies:unknown,extra:unknown[],transferMode=false,destinationMode=false,fullProjectionMode=false,partsMode=false,proofMode=false){
   const deps=supplyRecord(dependencies,['guard']);if(typeof deps.guard!=='function'||types.isProxy(deps.guard))return supplyBad();
   const fixedGuard=deps.guard as (stage:string,ordinal?:number)=>unknown,token=opaque<object>();
   // All owners and slots precede DATA inspection. Unknown roles are not promoted to absence.
@@ -758,6 +765,9 @@ function createNormalOwnedSupplyCore(raw:unknown,dependencies:unknown,extra:unkn
   let pendingHeader:AcceptedHeader|undefined,headerConsumptions=0,headerErrorCount:number|undefined;
   let pendingProjection:ReceivedAcceptedProjection|undefined,fullReceipts=0,fullPostChecks=0;
   let pendingExpectation:ReturnType<typeof projectRecoveryFinishExpectation>|undefined,bundleParts:BundlePartsDraft|undefined,expectationBuilds=0,partsBuilds=0,partsChecks=0,projectionComparisons=0;
+  let proofIssueState:'unused'|'issuing'|'failed'='unused',proofPostPassed=false,proofIssueStarts=0,proofPairAccepts=0,proofPairChecks=0;
+  let postAcceptedProofPair:PostAcceptedProofPair|undefined,proofIssueMarkers:Readonly<{content:object;prefix:object;pair:object}>|undefined;
+  let proofOrigins:Readonly<{parts:BundlePartsDraft;content:ContentChecked;prefix:OrderedPrefixRelation;pair:PostAcceptedProofPair}>|undefined;
   let prefixStarted=false,prefixCalls=0,prefixCandidates=0,prefixPostChecks=0,pendingPrefix:PendingPrefixCheck|undefined;
   let prefixRelation:OrderedPrefixRelation|undefined,prefixRelationMarker:object|undefined,prefixRelations=0,relationConsumeStarted=false,relationConsumptions=0;
   let prefixRejection:Readonly<{reason:PendingPrefixValueError['reason'];phase:PendingPrefixValueError['phase']}>|undefined;
@@ -771,7 +781,7 @@ function createNormalOwnedSupplyCore(raw:unknown,dependencies:unknown,extra:unkn
   let budget:NormalBudget|undefined,identityChecks=0,rowsChecked=0;
   const supply=createOwnedMixedSupply(raw,(stage,n)=>fixedGuard(stage,n),extra,token,failure,undefined,undefined,channel);
   raw=undefined;extra=[];
-  function clear(){unpublishedDestination=undefined;pendingExpectation=undefined;bundleParts=undefined;pendingProjection=undefined;contentChecked=undefined;pendingContent=undefined;destinationOwner=undefined;prefixRelation=undefined;prefixRelationMarker=undefined;pendingPrefix=undefined;pendingHeader=undefined;owned=undefined;binding=undefined;channel.birth=undefined;channel.take=undefined;completed=undefined;adoption=undefined;accepted=undefined;pendingTransfer=undefined;initial=undefined;preparationInput=undefined;b=lease=evidence=preparation=ready=undefined;}
+  function clear(){unpublishedDestination=undefined;postAcceptedProofPair=undefined;proofIssueMarkers=undefined;proofOrigins=undefined;proofPostPassed=false;proofIssueState=proofMode?'failed':proofIssueState;pendingExpectation=undefined;bundleParts=undefined;pendingProjection=undefined;contentChecked=undefined;pendingContent=undefined;destinationOwner=undefined;prefixRelation=undefined;prefixRelationMarker=undefined;pendingPrefix=undefined;pendingHeader=undefined;owned=undefined;binding=undefined;channel.birth=undefined;channel.take=undefined;completed=undefined;adoption=undefined;accepted=undefined;pendingTransfer=undefined;initial=undefined;preparationInput=undefined;b=lease=evidence=preparation=ready=undefined;}
   function fail(reason:SupplyReason):never{
     if(terminalBusy)terminalPoison=true;
     if(resources&&custody.holder()==='upper')throw new OwnedMixedSupplyError(first??'state');
@@ -949,6 +959,10 @@ function createNormalOwnedSupplyCore(raw:unknown,dependencies:unknown,extra:unkn
         }
       }catch(error){if(error instanceof PendingPrefixValueError)prefixRejection=Object.freeze({reason:error.reason,phase:error.phase});if(error instanceof FullMixedDraftError)contentRejection=Object.freeze({reason:error.reason,phase:error.phase});mismatch=true;}
       checkpoint('transfer_post');
+      if(proofMode){
+        proofPostPassed=true;issuePostProofPair(mismatch);
+        transferAborts=1;return fail('state'); // FP3-A stops at private proof pair; no bundle or success destination.
+      }
       if(fullProjectionMode){
         if(mismatch||!pendingTransfer||!pendingProjection||pendingProjection.taken!==pendingTransfer.taken||!b||!budget||pendingTransfer.binding.context.budget!==budget.identity)fail('binding');
         acceptedChannel.checkProjection!(b!,pendingProjection!);fullPostChecks++;
@@ -985,6 +999,8 @@ function createNormalOwnedSupplyCore(raw:unknown,dependencies:unknown,extra:unkn
       ...(fullProjectionMode?{full_projection:Object.freeze({receipts:fullReceipts,post_checks:fullPostChecks,pending:!!pendingProjection,bundles:0,seals:0})}:{}),
       ...(partsMode?{bundle_parts:Object.freeze({owner_pending:!!destinationOwner,expectations:expectationBuilds,projection_comparisons:projectionComparisons,builds:partsBuilds,post_checks:partsChecks,
         expectation_pending:!!pendingExpectation,pending:!!bundleParts,content_pending:!!pendingContent,prefix_pending:!!pendingPrefix,completed_bundles:0,content_checks:contentChecks,relations:prefixRelations,seals:0})}:{}),
+      ...(proofMode?{post_proofs:Object.freeze({state:proofIssueState,starts:proofIssueStarts,pairs:proofPairAccepts,checks:proofPairChecks,post_passed:proofPostPassed,
+        pair_pending:!!postAcceptedProofPair,markers_pending:!!proofIssueMarkers,origins_pending:!!proofOrigins,content_issues:contentChecks,prefix_issues:prefixRelations,completed_bundles:0,seals:0})}:{}),
       prefix_check:Object.freeze({started:prefixStarted,calls:prefixCalls,candidates:prefixCandidates,post_checks:prefixPostChecks,pending:!!pendingPrefix,rejection:prefixRejection??null,relations:prefixRelations,
         relation_pending:!!prefixRelation,relation_marker_pending:!!prefixRelationMarker,consume_started:relationConsumeStarted,consumptions:relationConsumptions}),
       ...(destinationMode?{destination:Object.freeze({owners:1,owner_pending:!!destinationOwner,started:destinationStarted,content_calls:contentCalls,candidates:contentCandidates,checks:contentChecks,preparations:destinationPreparations,
@@ -1020,6 +1036,11 @@ function createNormalOwnedSupplyCore(raw:unknown,dependencies:unknown,extra:unkn
     checkBundleParts();partsBuilds++;
   }
   function checkBundleParts(){
+    checkBundleComposition();
+    // FP-2 candidates may never be silently promoted by disabling this pre-issuance invariant.
+    if(contentChecked||prefixRelation||unpublishedDestination||contentChecks||prefixRelations||destinationPreparations)supplyBad('binding');
+  }
+  function checkBundleComposition(){
     const v=bundleParts,p=pendingTransfer,r=pendingProjection;
     if(!partsMode||!busy||first||!v||!p||!r||!budget||!b||!destinationOwner||v.token!==token||v.owner!==destinationOwner||destinationOwner.token!==token||v.pending!==p||v.received!==r||r.taken!==p.taken
       ||v.model!==p.content.owned.model||v.rows!==p.content.owned.rows||v.expectation!==pendingExpectation||!pendingExpectation||v.prefix!==pendingPrefix||!pendingPrefix||v.content!==pendingContent||!pendingContent
@@ -1053,10 +1074,34 @@ function createNormalOwnedSupplyCore(raw:unknown,dependencies:unknown,extra:unkn
     const d=own.content.draft.value,m=own.model;
     if(d.schema_version!==m.schema_version||d.ruleset_version!==s.header.versions.ruleset||!supplyEqual(d.selected,m.selected)||!supplyEqual(d.initial_prefix,m.initial_prefix)||!supplyEqual(d.original_rows,m.original_rows)
       ||!supplyEqual(d.manifest,{assets:m.assets,prefix:m.prefix,trace:m.trace})||d.kept_findings!==m.kept_findings)supplyBad('binding');
-    // These are work candidates, never post-issued ContentChecked / prefix relation / completed bundle.
-    if(contentChecked||prefixRelation||unpublishedDestination||contentChecks||prefixRelations||destinationPreparations)supplyBad('binding');
   }
-  function isCleared(){return !busy&&!pendingExpectation&&!bundleParts&&!pendingProjection&&!destinationOwner&&!pendingContent&&!contentChecked&&!unpublishedDestination&&!prefixRelation&&!prefixRelationMarker&&!pendingPrefix&&!pendingHeader&&!owned&&!binding&&!pendingTransfer&&!completed&&!adoption&&!accepted&&!channel.birth&&!channel.take&&!initial&&!preparationInput&&!b&&!lease&&!evidence&&!preparation&&!ready&&!supply.inspect().pending&&!(acceptedChannel.payloadPending?.()??false);}
+  function issuePostProofPair(workMismatch:boolean){
+    const used=proofIssueState!=='unused';
+    if(!used){proofIssueState='issuing';proofIssueStarts++;} // Root-owned claim, spent before checks or allocation.
+    if(!proofMode||used||!proofPostPassed||!busy||first)return fail('state');
+    if(workMismatch||!pendingTransfer||!pendingProjection||!b||!budget||!bundleParts||proofIssueMarkers||proofOrigins||postAcceptedProofPair||proofPairAccepts)supplyBad('binding');
+    acceptedChannel.checkProjection!(b!,pendingProjection!);fullPostChecks++;
+    checkBundleParts();partsChecks+=1;
+    proofIssueMarkers=Object.freeze({content:opaque(),prefix:opaque(),pair:opaque()});
+    contentChecked=Object.freeze({marker:proofIssueMarkers.content,candidate:bundleParts!.content});contentChecks++;
+    prefixRelationMarker=proofIssueMarkers.prefix;prefixRelation=Object.freeze({marker:prefixRelationMarker,check:bundleParts!.prefix});prefixRelations++;
+    postAcceptedProofPair=Object.freeze({token,marker:proofIssueMarkers.pair,parts:bundleParts!,owner:bundleParts!.owner,pending:bundleParts!.pending,received:bundleParts!.received,
+      content:contentChecked,prefix:prefixRelation,budget:bundleParts!.budget,budgetSerial:bundleParts!.budgetSerial,invalidationSerial:bundleParts!.invalidationSerial});
+    proofOrigins=Object.freeze({parts:bundleParts!,content:contentChecked,prefix:prefixRelation,pair:postAcceptedProofPair});
+    checkPostProofPair();proofPairAccepts++;
+  }
+  function checkPostProofPair(){
+    const pair=postAcceptedProofPair,markers=proofIssueMarkers,origin=proofOrigins,parts=bundleParts;
+    if(!proofMode||proofIssueState!=='issuing'||!proofPostPassed||proofIssueStarts!==1||!busy||first||!pair||!markers||!origin||!parts||!budget||!b
+      ||pair!==origin.pair||pair.token!==token||pair.marker!==markers.pair||pair.parts!==parts||origin.parts!==parts||pair.owner!==destinationOwner||pair.owner!==parts.owner
+      ||pair.pending!==pendingTransfer||pair.pending!==parts.pending||pair.received!==pendingProjection||pair.received!==parts.received
+      ||pair.content!==contentChecked||pair.content!==origin.content||pair.content.marker!==markers.content||pair.content.candidate!==parts.content
+      ||pair.prefix!==prefixRelation||pair.prefix!==origin.prefix||pair.prefix.marker!==markers.prefix||prefixRelationMarker!==markers.prefix||pair.prefix.check!==parts.prefix
+      ||pair.budget!==budget.identity||pair.budget!==parts.budget||pair.budgetSerial!==budget.serial||pair.budgetSerial!==parts.budgetSerial||pair.invalidationSerial!==invalidations||pair.invalidationSerial!==parts.invalidationSerial
+      ||contentChecks!==1||prefixRelations!==1||proofPairAccepts!==0||unpublishedDestination||destinationPreparations)supplyBad('binding');
+    checkBundleComposition();proofPairChecks++;
+  }
+  function isCleared(){return !busy&&!postAcceptedProofPair&&!proofIssueMarkers&&!proofOrigins&&!pendingExpectation&&!bundleParts&&!pendingProjection&&!destinationOwner&&!pendingContent&&!contentChecked&&!unpublishedDestination&&!prefixRelation&&!prefixRelationMarker&&!pendingPrefix&&!pendingHeader&&!owned&&!binding&&!pendingTransfer&&!completed&&!adoption&&!accepted&&!channel.birth&&!channel.take&&!initial&&!preparationInput&&!b&&!lease&&!evidence&&!preparation&&!ready&&!supply.inspect().pending&&!(acceptedChannel.payloadPending?.()??false);}
   function assertCleared(){if(!isCleared()||resources?.token!==token||resources.budget!==budget?.identity||budget&&budget.token!==token)throw Error('internal_review_error');}
   function checkClearedReceipt(){assertCleared();if(!payloadCleared||payloadCleared.token!==token||payloadCleared.serial!==invalidations||payloadCleared.budgetSerial!==(budget?.serial??0)||payloadCleared.budget!==budget?.identity)throw Error('internal_review_error');}
   function terminal<T>(work:()=>T):T{
