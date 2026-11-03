@@ -16,6 +16,8 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 ### Changed
 
+- PD-B's first synthetic-only step binds a private accepted-header receipt to the same one-shot take. The fixed internal consumer checks the original taken identity and accepted projection, spends its claim before validation, and clears header references on invalidation/fixed abort. Payload-clear custody includes the new slots; package leak controls cover the private markers. Prefix comparison, destination seals, runtime connections, formal issuance and whole-run admission remain disabled.
+
 - PD-A adds a package-excluded bounded, value-only ordered-prefix/delta projection. Prefix-local eligibility rejects duplicates and 101–103 intermediate limitations before normalization; separate original-order and sorted-base lanes apply the existing stable dedup, fixed soft/verify delta and first-100 error retention. Independent linear/insertion-order oracles cover parent sequences, truncation and Unicode boundaries, with seeded negative controls. No private binding, accepted-header proof, seal, runtime connection, formal issuance or whole-run admission is enabled.
 
 - NB-03 adds a package-excluded fresh synthetic transfer/cleanup root. A private one-shot take removes the same accepted and completed-content slots into a guarded pending value, then fixed-aborts without publishing a destination seal. A token/budget/epoch-bound logical payload-clear receipt gates transfer of the sole cleanup capsule and immutable failure report to its upper owner, with one-shot final discard and upper-only late cleanup. First diagnostics and unknown obligations survive; production issuance, content comparison, runtime connection and whole-run admission remain disabled.

@@ -1,9 +1,9 @@
 # PD-B前工程：実accepted headerのprivate供給境界
 
-Version: br006-recovery-accepted-header-supply-draft-0.1 / Date: 2026-11-03。
-Status: **設計のみ。正式発行口閉鎖・全体受付無効・Unknown・VM／監視／telemetry調査保留を維持する。**
+Version: br006-recovery-accepted-header-supply-draft-0.2 / Date: 2026-11-03。
+Status: **同takeのprivate供給・固定consumerと失効時破棄を合成実装。内容比較・sealは未接続。正式発行口閉鎖・全体受付無効・Unknown・VM／監視／telemetry調査保留を維持する。**
 
-[順序付きprefix・固定delta契約](BEST_PRACTICE_ABORT_SCOPE_RECOVERY_PREFIX_DELTA_DESIGN.md)§8と[NB接続設計](BEST_PRACTICE_ABORT_SCOPE_RECOVERY_OB02_ADOPTION_DESIGN.md)の差分。実装・実接続・実通信・設定変更・Pushを行わない。NB-03の固定abortと、移譲先seal未接続を変更しない。
+[順序付きprefix・固定delta契約](BEST_PRACTICE_ABORT_SCOPE_RECOVERY_PREFIX_DELTA_DESIGN.md)§8と[NB接続設計](BEST_PRACTICE_ABORT_SCOPE_RECOVERY_OB02_ADOPTION_DESIGN.md)の差分。実装は合成依存に限定し、実接続・実通信・設定変更・Pushを行わない。NB-03の固定abortと、移譲先seal未接続を変更しない。
 
 ## 1 現行の生成点と不足
 
@@ -65,7 +65,7 @@ PD-Aの成功はprefix-local値だけを保証する。供給したheaderからs
 
 ## 7 合成受入条件と残課題
 
-実装時は以下を独立の負の対照で確認する。本稿では試験を追加・実行していない。
+詳細な受入条件は以下。今回確認した範囲と未検証範囲は§8で区別する。
 
 - pins seed／issued projection／summary再生成値ではなく、accept post-guardで保存した同projectionのheaderが供給される。
 - 別owner／accepted／pins／plan／handoff／window／take marker、構造が同じcopy、二重takeを拒否する。
@@ -75,3 +75,13 @@ PD-Aの成功はprefix-local値だけを保証する。供給したheaderからs
 - 既存read／旧試験・固定abort・200限定guard・梱包除外を維持し、公開getterや配布物からの登録経路が増えない。
 
 次の範囲は、同pendingのP0／Pp／traceと実header受領物を固定比較へ結ぶ詳細契約・実装、one-shot関係値の破棄、費用計数である。移譲先seal成功・実session／worker接続は引き続き対象外とする。
+
+## 8 合成実装の到達範囲
+
+`TakenNormalAccepted`へopaqueな`projectionReceipt`を追加した。公開の`NormalAcceptedSnapshot`は変更せず、同kernelのtakeだけが受理済み`acceptedFinish.projection`とheaderをprivate slotへ保持し、元accepted slotを外す。`checkTaken`は元taken object自体も照合する。
+
+非export channelの固定`consumeHeader`は利用claimを先に消費し、private slotを外してから同owner／taken／receipt／projectionのplan・header参照を検査する。成功時のreadonly headerだけを同pendingの保護scopeが保持し、transfer post-guard後も従来どおり固定abortする。PD-Aの呼出し・header内容比較・関係値の発行は追加していない。
+
+kernelのclear／invalidateとnormal rootのclearへ新参照を含め、`payloadPending`／`isCleared`が残存参照を検知する。inspectには発行・消費件数、保持boolと固定error件数だけを返し、projection／header／receiptを返さない。cleanup capsuleへheaderを移さない。
+
+[検証記録](E2E_BEST_PRACTICE_ACCEPTED_HEADER_SUPPLY_2026-11-03.md)に正常take・取消／期限・失効・二重操作・別root／summary混入、誤seed供給の負の対照を記録する。private consumer単体へ偽receiptを直接注入する試験口は追加していないため、その直接呼出しの網羅試験やfull header／全work保証とは区別する。次工程で比較claimを追加する際もtakeの消費claimを再armしない。

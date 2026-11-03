@@ -130,3 +130,62 @@ it('fails closed on an unknown guard return at the upper cleanup capsule checkpo
 it('reports extra abortBoundTransfer arguments as binding rather than the fixed abort',()=>{
   const f=setup();f.adopt();expect(()=>(f.root.abortBoundTransfer as (...x:unknown[])=>void)({})).toThrow();expect(f.root.inspect().first_failure).toBe('binding');
 });
+
+it('moves the private accepted header with the same take and consumes it only inside the fixed transfer',()=>{
+  const f=setup();f.adopt();
+  expect(f.root.inspect().kernel?.accepted_header).toEqual({issues:0,consume_started:false,consumptions:0,pending:false,taken_pending:false});
+  const seen:string[]=[],snapshots:ReturnType<typeof f.root.inspect>[]=[];
+  f.arm(stage=>{
+    if(stage==='transfer_pre'){
+      seen.push(stage);
+      snapshots.push(f.root.inspect());
+    }
+    if(stage==='transfer_post'){
+      seen.push(stage);
+      snapshots.push(f.root.inspect());
+    }
+  });
+  expect(()=>f.root.abortBoundTransfer()).toThrow();expect(seen).toEqual(['transfer_pre','transfer_post']);
+  expect(snapshots[0]).toMatchObject({transfer:{takes:1,header_pending:false,header_consumptions:0},kernel:{finish_accept:{pending:false},accepted_header:{issues:1,consumptions:0,pending:true,taken_pending:true}}});
+  // Assert outside the guard: the fixed abort must not swallow a test assertion.
+  // The seed has zero errors; the accepted projection has the fixed analysis delta.
+  expect(snapshots[1]).toMatchObject({transfer:{takes:1,header_pending:true,header_consumptions:1,header_error_count:1},kernel:{accepted_header:{issues:1,consume_started:true,consumptions:1,pending:false,taken_pending:true}}});
+  expect(f.root.inspect()).toMatchObject({transfer:{header_pending:false,header_consumptions:1,successful_seals:0},kernel:{accepted_header:{issues:1,consumptions:1,pending:false,taken_pending:false}}});
+  expect(()=>f.root.abortBoundTransfer()).toThrow();
+  expect(f.root.inspect().kernel?.accepted_header?.consumptions).toBe(1);
+  f.root.finalDiscard(f.root.transferFailure());expect(f.root.custody().payload_cleared).toBe(true);
+});
+
+it.each(['transfer_pre','transfer_post'] as const)('clears header custody on %s cancellation/deadline without reissuing',stage=>{
+  for(const stop of ['cancelled','deadline_exceeded'] as const){
+    const f=setup();f.adopt();f.arm(s=>s===stage?stop:undefined);
+    expect(()=>f.root.abortBoundTransfer()).toThrow();
+    expect(f.root.inspect()).toMatchObject({first_failure:stop,transfer:{header_pending:false,header_consumptions:stage==='transfer_pre'?0:1},kernel:{accepted_header:{issues:1,pending:false,taken_pending:false}}});
+    expect(()=>f.root.abortBoundTransfer()).toThrow();f.arm(()=>undefined);
+    f.root.finalDiscard(f.root.transferFailure());expect(f.root.custody().payload_cleared).toBe(true);
+  }
+});
+
+it.each(['source','cleanup'] as const)('does not issue a header receipt after %s invalidation',event=>{
+  const f=setup(),ticket=f.adopt();if(event==='source')f.root.beginSourceClose();else f.root.beginCleanup(ticket.cleanup);
+  expect(()=>f.root.abortBoundTransfer()).toThrow();
+  expect(f.root.inspect().kernel?.accepted_header).toMatchObject({issues:0,consumptions:0,pending:false,taken_pending:false});
+});
+
+it('cannot use another root or a summary as a header supply and never publishes header payload',()=>{
+  const a=setup(),b=setup();a.adopt();b.adopt();const before=b.root.inspect();
+  expect(()=>a.root.abortBoundTransfer(b.root.inspect())).toThrow();expect(b.root.inspect()).toEqual(before);
+  expect(a.root.inspect()).toMatchObject({first_failure:'binding',kernel:{accepted_header:{issues:1,consumptions:0,pending:false,taken_pending:false}}});
+  expect(Object.keys(a.root)).not.toContain('consumeHeader');expect(Object.keys(a.root)).not.toContain('take');
+  const report=JSON.stringify(a.root.inspect());expect(report).not.toContain('projectionReceipt');expect(report).not.toContain('snapshot');
+  a.root.finalDiscard(a.root.transferFailure());
+  expect(()=>b.root.abortBoundTransfer()).toThrow();expect(b.root.inspect().transfer.header_consumptions).toBe(1);
+});
+
+it('does not reuse a consumed header on swallowed post-guard reentry and clears it before custody transfer',()=>{
+  const f=setup();f.adopt();
+  f.arm(s=>{if(s==='transfer_post')try{f.root.abortBoundTransfer();}catch{/* fixed guard deliberately swallows reentry */}});
+  expect(()=>f.root.abortBoundTransfer()).toThrow();
+  expect(f.root.inspect()).toMatchObject({first_failure:'reentrant',transfer:{header_pending:false,header_consumptions:1},kernel:{accepted_header:{issues:1,consumptions:1,pending:false,taken_pending:false}}});
+  f.arm(()=>undefined);f.root.finalDiscard(f.root.transferFailure());expect(f.root.custody().payload_cleared).toBe(true);
+});
