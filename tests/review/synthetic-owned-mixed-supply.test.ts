@@ -173,3 +173,12 @@ it('keeps old factory APIs unchanged and rejects their values at the new DATA bo
   // @ts-expect-error A prepared supply is not a row receipt or old finish/owner binding.
   expect(()=>old.generate(prepared,old.rows[0].receipt,{})).toThrow();
 });
+it('rejects a reviewed row whose target.retrieved_at differs from the pinned input T_i, even with reviewed_at matching',()=>{
+  const f=fixture();(f.mixed.rows[0].outcome as ReturnType<typeof aggregate>['assets'][number]&{state:'reviewed'}).result.target.retrieved_at='2026-10-17T04:59:01.500Z';
+  expect(expectRejected(f).first_failure).toBe('binding');
+});
+it.each(['null_context','missing_input'] as const)('rejects an analysis rejected row with %s, as the original analysis must have a completed input and context',kind=>{
+  const f=fixture(),inputs=f.finish.inputs as {update_xml_sys_id:string;expected_context:unknown}[],n=inputs.findIndex(i=>i.update_xml_sys_id===id(6));
+  if(kind==='null_context')inputs[n].expected_context=null;else inputs.splice(n,1);
+  expect(expectRejected(f).first_failure).toBe('binding');
+});

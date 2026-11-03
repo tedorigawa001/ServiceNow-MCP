@@ -132,6 +132,8 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 ### Added
 
+- OB-01 owned mixed supply tests now reject a reviewed row whose `target.retrieved_at` differs from the pinned input T_i, and analysis rows with a null-context or missing input; each check was previously the sole, untested guard required by the OD-B contract. The supply itself is unchanged.
+
 - OD-A mixed slots now have the same package classification audit as other synthetic helpers (fixed imports, non-packaged markers and seeded runtime/I/O/clock/worker leak controls). Tests also check directly that source close, cleanup start or discard reentry from the generate post guard fails `generate` with no slot published, and cover prefix release, a Proxy guard, unknown kind and stop reason, double starts and unknown cleanup status. The assembly itself is unchanged.
 
 - OM-C parent-decision owner tests now check directly that `beginSourceClose`/`beginCleanup` reentry from an accept guard fails `accept` itself with no capture published, and cover first-delivery and decision extra arguments, unknown kind, construction-time context order and unknown stop reasons in isolation. The owner itself is unchanged.

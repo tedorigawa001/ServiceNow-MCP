@@ -42,7 +42,18 @@ Status: **strict DATA・同pins／行対応・一度限りの準備まで合成�
 
 repository全体のテストは今回再実行していない。既存の梱包smokeはローカル合成worker／fake sourceであり、ServiceNow実通信ではない。実session／worker origin・PDI E2Eの保証には数えない。
 
-## 4 未対応と境界
+## 4 レビュー修正（2026-11-03）
+
+§3の72件は修正前の記録として残す。§3は全体回帰を実行していなかったため、レビュー時にrepo全体のlint（error 0・warning 374）、build、梱包分類監査、全体合成269ファイル／13,258件成功・失敗0を確認した（作業ツリー上にあった後続`085e95a`の失敗custody試験を含む件数）。
+
+レビューで供給コードの36変異を確認し、生存した変異は整合した不一致入力のprobeで切り分けた。次の判定は唯一の防御なのに未検証だった。実装は正しく、現行コードは拒否した。試験だけの不足である。
+
+- reviewed行の`target.retrieved_at`と元input T_iの一致。判定を外すと、reviewed_atは一致しtarget.retrieved_atだけ異なるreviewed行が`prepare`を通過した。OD-B設計§2.1の要求であり、既存試験はreviewed_atだけを変えていた。拒否する1件を追加した。
+- analysis rejected／元worker omitted行の「同completed input・context必須」。`input.expected_context===null`判定、またはanalysis条件全体を外すと、contextがnullのinput、input自体がない場合のいずれも`prepare`を通過した。拒否する2件を追加した。
+
+上記3変異はそれぞれ追加した試験だけを失敗させた（analysis条件全体の除去は2件とも失敗させる）。次は等価変異として扱う：`checkOwnedSupply`のoutcome／state／件数／receipt／accepted origin照合（pinsが同じmodelから生成されるため構造上一致）、binding／release／rule集合／limitations・重複／未選択inputの判定（pins自身の検証が先に拒否し、probeでも除去後に拒否）、二重prepare／discard claim（state・data判定が先に停止）。helperは変更せず、新規試験は75件。修正後も全体合成269ファイル／13,261件成功・失敗0（同じく`085e95a`を含み、差分は本節の3件だけ）。
+
+## 5 未対応と境界
 
 新factoryは既存kernelと同moduleにあるが`createRecoveryKernel`を呼ばず、bind／accepted採用／plan／ready／移譲先seal／比較／候補の操作を返さない。元reviewed pinは合成DATAの内部対応で、実workerのaccepted証拠や実Permitではない。外部のrow／receiptや旧ownerを採用できない。
 
