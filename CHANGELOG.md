@@ -120,6 +120,8 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 ### Added
 
+- NR-B issuer tests now cover same-root cross-row retrieval terminals (previously the only check against issuing another row's outcome), `discard`/`recordCleanup` reentry from guards, terminal release after issue, cleanup recorded before the terminal event, constructor dependency and rule-list shape, unknown stop/revoke reasons, and an AST oracle keeping the metadata classification copy identical to the adapter. The issuer itself is unchanged.
+
 - NR-A non-reviewed value tests now cover valid own data carried by exotic prototypes, symbol keys whose values are admissible strings (which would otherwise disable character accounting), and the exact 16/17 node boundary. The value helper itself is unchanged.
 
 - CG-BP1 synthetic captured recovery roots now require each event's `applicable_rule_ids` to equal the pinned requested rules, as the worker always sends; a self-consistent event with different applicable rules was previously captured. New tests change body and context together so each private pin check (time, record update, Update Set, release, ID, event count) is the sole detector, and cover the summary terminal and constructor budget stops.

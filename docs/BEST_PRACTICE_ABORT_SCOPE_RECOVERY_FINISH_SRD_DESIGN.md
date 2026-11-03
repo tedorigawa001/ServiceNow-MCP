@@ -1,7 +1,7 @@
 # SR-D 回復planからfinish検証・終端候補への接続設計
 
 Version: br006-recovery-finish-srd-draft-0.19 / Date: 2026-11-03。
-Status: **RA-03-B／RD-B01〜04、CG-A／Bに続き、別rootから既存accepted／plan kernelへ同receiptのcaptureを一度結合するCG-BP1を合成限定実装。RD-Cのfinish job／応答／候補とRD-Dの候補終端は未実装。RD-C詳細設計はdraft-0.6、内容gate詳細設計はdraft-0.8。正式発行口閉鎖・Unknown・全体受付無効・VM／監視／telemetry調査保留を維持する。実finish／runtime接続・実通信・設定変更・本番cap／Permit投入の承認ではない。**
+Status: **RA-03-B／RD-B01〜04、CG-A／Bに続き、別rootから既存accepted／plan kernelへ同receiptのcaptureを一度結合するCG-BP1を合成限定実装。RD-Cのfinish job／応答／候補とRD-Dの候補終端は未実装。RD-C・内容gate・非reviewed詳細設計の版数と実装状態は各設計のStatusを参照する。正式発行口閉鎖・Unknown・全体受付無効・VM／監視／telemetry調査保留を維持する。実finish／runtime接続・実通信・設定変更・本番cap／Permit投入の承認ではない。**
 
 初版基準HEAD: `31cff06`。本版の現状照合: `04eef33`。[SC2-D接続契約](BEST_PRACTICE_ABORT_SCOPE_WORKER_RECOVERY_CONTINUATION_DESIGN.md)§13、[soft回復設計](BEST_PRACTICE_ABORT_SCOPE_SOFT_RECOVERY_CLAIM_DESIGN.md)§2〜9・11、[通常WJ-C](BEST_PRACTICE_ABORT_SCOPE_WORKER_TIME_BINDING_DESIGN.md)§13との差分を定める。内部役割案と実装済み範囲を分け、現在の保証は§2・9と各詳細設計で確認する。
 

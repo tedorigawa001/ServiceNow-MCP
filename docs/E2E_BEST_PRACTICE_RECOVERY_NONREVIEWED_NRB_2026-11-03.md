@@ -8,7 +8,7 @@ Date: 2026-11-03 / 基準HEAD: `912144c`。
 
 - constructor内だけで同owner／windowのrow handleを生成し、producerを固定する。metadata／retrieval／analysis以外のissuer、既存rootや外部receiptを登録する口は持たない。
 - metadataは固定分類からだけ発行し、input／job／T_iを作らない。retrievalは同rowのinput／attempt／cleanup sinkを生成し、同attemptの固定終端イベントとconfirmed cleanup、terminalの一度消費を必要とする。
-- analysisは同rowにpinしたT_iと新input／job／連番idを結び、strict envelopeを相関する。同json文字列をCG-Aで検証し、NR-Aで扱うrejected／元omittedだけを発行する。
+- analysisは同rowに新input／job／連番idを結び、strict envelopeを相関する。元T_iはconstructorの同rowへpinして再採取しないが、rejected／元omittedの値は時刻を持たないため照合には使わない。同json文字列をCG-Aで検証し、NR-Aで扱うrejected／元omittedだけを発行する。
 - producer別開始・終端／受信・発行claimをpre guard前に占有する。局所失敗でもpost guardへ進み、共通停止と先行hardを優先する。commit前のhandleや本文を公開しない。
 - 発行handleは別brandの空object。hard／discardでpendingとprivate値を取り外し、発行済みhandleの固定discardでもclaimを戻さない。late retrieval cleanupは1回だけ固定診断を更新でき、terminal／証拠を復活させない。
 
@@ -39,7 +39,22 @@ retrievalのcleanup confirmedは同attemptの**合成イベント**であり、n
 
 全体回帰では既存localhost合成待受試験だけを許可し、外部サービスは使っていない。新issuer自体はnative worker／transport／時計／timerを呼ばない。
 
-## 4 費用と残課題
+## 4 レビュー修正（2026-11-03）
+
+§3の77件・12,795件は修正前の記録として残す。レビュー時にrepo全体のlint（error 0・warning 374）、build、梱包、全体合成263ファイル／12,795件成功・失敗0を再確認した。§1のanalysis記述は、T_iを照合に使うように読めたため、pinするだけで照合しないと訂正した。
+
+レビューでissuerの26変異を確認し、次の判定は外しても既存77件がすべて通過した。実装は正しく、probeでも現行コードは拒否した。試験だけの不足である。
+
+- 同root別rowのretrieval terminal。`pending.slot!==slot`を外すと、row 1のinput／attemptにrow 2のterminalを渡した発行が通り、row 2の`payload_unavailable`がrow 1の証拠として発行された。2 rowとも終端済みの状態で入替えを拒否する1件を追加した。
+- guard中の`discard`／`recordCleanup`再入。busy判定を外すと、discard後もmetadata証拠が発行され（state discarded・pending_evidence 1）、guard中にcleanup診断が書き換わった。各々`reentrant`で停止し何も公開しない2件を追加した。
+- 発行成功後のterminal取外し（pending_terminals:0を既存正常系へ追加）、終端イベント前に記録されたcleanupでの終端拒否、requested rule重複・依存の余分key・Proxy guard関数（呼出し0回）、未知のguard停止文字列と未知のrevoke理由の固定写像を各々追加した。
+- metadata分類は[adapter](../src/review/update-set-adapter.ts)の`classify`の複製で、ソース変更時のずれを検出できなかった。両方をTypeScript transpile後にAcorn ASTへ変換し、局所名・単文block・末尾`return undefined`だけを正規化して構造一致を検査する1件を追加した。対象JSは実行しない。DELETE判定・table比較・name参照を変えた複製では失敗することを確認した。
+
+上記11変異はそれぞれ追加・拡張した試験だけを失敗させた。発行時のcleanup confirmed再確認（confirmed時だけterminalが作られ以後変化しない）、analysisのstate制限（NR-Aがrejected／元omitted以外を拒否）、analysisの同root別row delivery（本文IDの照合が必ず拒否）は等価変異として扱う。helperは変更せず、新規試験は84件。修正後も全体合成263ファイル／12,802件成功・失敗0。
+
+[SRD設計](BEST_PRACTICE_ABORT_SCOPE_RECOVERY_FINISH_SRD_DESIGN.md)のStatusは改版のたびに内容gateの古いdraft表記が残っていたため、版数を書かず各設計のStatusを参照する形にした（表記のみで版数は変更しない）。
+
+## 5 費用と残課題
 
 constructorのbounded copy（深さ4／key8／array100／node2000／文字費262144）、private row／claim索引、操作ごとの2 guard、分類・固定写像、CG-A同json decode／schema copy、NR-A projection、handle／terminal／diagnostic集計とclearは追加費目である。台帳は各100以下、input／jobは各rowで最大1だが、実heap／総CPU／work上界ではない。pending jsonだけでも最大100×262144の論理byte和を持ち得る。
 

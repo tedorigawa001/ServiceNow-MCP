@@ -1,5 +1,8 @@
 import {expect,it} from 'vitest';
-import {createSyntheticNonReviewedIssuer,NonReviewedIssuerError,type NonReviewedJob,type NonReviewedAttempt,type RetrievedTerminal} from '../support/review/synthetic-recovery-nonreviewed-issuer.js';
+import {createSyntheticNonReviewedIssuer,NonReviewedIssuerError,type NonReviewedJob,type NonReviewedAttempt,type RetrievedTerminal,type NonReviewedCleanup} from '../support/review/synthetic-recovery-nonreviewed-issuer.js';
+import {readFileSync} from 'node:fs';
+import {parse} from 'acorn';
+import ts from 'typescript';
 const id=(n:number)=>n.toString(16).padStart(32,'0');
 function row(producer='metadata',n=1){return {producer,sys_id:id(n),name:producer==='metadata'?'sys_dictionary_task_name':`sys_script_${id(n)}`,action:'INSERT_OR_UPDATE',...(producer==='analysis'?{retrieved_at:'2026-11-03T00:00:01.000Z'}:{})};}
 function config(rows=[row()]){return {kind:'synthetic_nonreviewed_issuer_v1',schema_version:'bp-mcp-review-0.2',requested_rule_ids:['AU-BR-001'],rows};}
@@ -12,7 +15,7 @@ it('requires the same retrieval input/attempt and confirmed synthetic cleanup be
   const root=createSyntheticNonReviewedIssuer(config([row('retrieval')]),{guard:()=>undefined}),r=root.rows[0],t=root.beginRetrieval(r);
   const terminal=root.settleRetrieval(r,t.input,t.attempt,{kind:'error',code:'not_found_or_not_visible',cleanup:'confirmed'});
   const evidence=root.issueRetrieved(r,t.input,t.attempt,terminal);
-  expect(Reflect.ownKeys(evidence)).toEqual([]);expect(root.summary()).toMatchObject({issued:{retrieval:1},inputs:1,jobs:0,cleanup_pending:0});
+  expect(Reflect.ownKeys(evidence)).toEqual([]);expect(root.summary()).toMatchObject({issued:{retrieval:1},inputs:1,jobs:0,cleanup_pending:0,pending_terminals:0});
 });
 it('issues an original omitted result only from the same analysis job and bounded response',()=>{
   const root=createSyntheticNonReviewedIssuer(config([row('analysis')]),{guard:()=>undefined}),r=root.rows[0],t=root.beginAnalysis(r);
@@ -178,4 +181,52 @@ it('matches a fixed oracle for retrieval reason mapping without exposing evidenc
     const f=retrieval(),terminal=f.root.settleRetrieval(f.r,f.t.input,f.t.attempt,{kind:'error',code,cleanup:'confirmed'});f.root.issueRetrieved(f.r,f.t.input,f.t.attempt,terminal);
     expect(f.root.summary()).toMatchObject({outcome_reasons:{[reason]:1}});
   }
+});
+function twoSettled(){
+  const root=createSyntheticNonReviewedIssuer(config([row('retrieval',1),row('retrieval',2)]),{guard:()=>{}}),[r1,r2]=root.rows,t1=root.beginRetrieval(r1),t2=root.beginRetrieval(r2);
+  root.settleRetrieval(r1,t1.input,t1.attempt,{kind:'error',code:'payload_limit',cleanup:'confirmed'});
+  const other=root.settleRetrieval(r2,t2.input,t2.attempt,{kind:'error',code:'not_found_or_not_visible',cleanup:'confirmed'});return {root,r1,t1,other};
+}
+it('rejects a terminal settled for another row of the same root, even with this row settled too',()=>{
+  const f=twoSettled();fail(()=>f.root.issueRetrieved(f.r1,f.t1.input,f.t1.attempt,f.other),'binding');
+  expect(f.root.summary()).toMatchObject({state:'failed',pending_evidence:0});expect(f.root.summary().outcome_reasons).toEqual({});
+});
+it.each(['discard','recordCleanup'] as const)('refuses %s reentry from a guard and publishes nothing',operation=>{
+  let root:Root;let sink:NonReviewedCleanup|undefined;
+  root=createSyntheticNonReviewedIssuer(config([row('metadata',1),row('retrieval',2)]),{guard:(op,p)=>{if(op==='metadata_issue'&&p==='pre')try{if(operation==='discard')root.discard();else root.recordCleanup(sink!,'confirmed');}catch{/* first hard must survive */}}});
+  sink=root.beginRetrieval(root.rows[1]).cleanup;
+  fail(()=>root.issueClassified(root.rows[0]),'reentrant');expect(root.summary()).toMatchObject({state:'failed',pending_evidence:0,cleanup_pending:1});
+});
+it('refuses a retrieval terminal once cleanup was recorded before its terminal event',()=>{
+  const f=retrieval();f.root.recordCleanup(f.t.cleanup,'confirmed');
+  fail(()=>f.root.settleRetrieval(f.r,f.t.input,f.t.attempt,{kind:'error',code:'payload_limit',cleanup:'confirmed'}),'binding');expect(f.root.summary().pending_terminals).toBe(0);
+});
+it('rejects duplicate requested rules, extra dependency keys and a Proxy guard without invoking it',()=>{
+  fail(()=>createSyntheticNonReviewedIssuer({...config(),requested_rule_ids:['AU-BR-001','AU-BR-001']},{guard:()=>{}}),'shape');
+  fail(()=>createSyntheticNonReviewedIssuer(config(),{guard:()=>{},extra:1} as never),'shape');
+  let calls=0;fail(()=>createSyntheticNonReviewedIssuer(config(),{guard:new Proxy(()=>undefined,{apply:()=>{calls++;return undefined;}})}),'shape');expect(calls).toBe(0);
+});
+it('maps unknown guard stop strings and revoke reasons to fixed internal codes',()=>{
+  const a=createSyntheticNonReviewedIssuer(config(),{guard:()=>'caller_text' as never});fail(()=>a.issueClassified(a.rows[0]),'internal');
+  const b=createSyntheticNonReviewedIssuer(config(),{guard:()=>{}});fail(()=>b.revoke('caller_text' as never),'stopped','internal_review_error');
+});
+// Structural AST oracle: the synthetic copy must stay identical to the adapter classify, up to local names and a trailing undefined return.
+function classifyShape(file:string){
+  const js=ts.transpileModule(readFileSync(new URL(file,import.meta.url),'utf8'),{compilerOptions:{target:ts.ScriptTarget.ES2022,module:ts.ModuleKind.ESNext}}).outputText;
+  const root=parse(js,{ecmaVersion:'latest',sourceType:'module'}) as unknown as {body:Record<string,unknown>[]};
+  const fn=root.body.map(n=>n.type==='ExportNamedDeclaration'?n.declaration as Record<string,unknown>:n).find(n=>n?.type==='FunctionDeclaration'&&(n.id as {name:string}).name==='classify');
+  if(!fn)throw Error('classify missing in '+file);
+  const names=new Map<string,string>();
+  const norm=(v:unknown):unknown=>{
+    if(Array.isArray(v))return v.map(norm);if(!v||typeof v!=='object')return v;const n=v as Record<string,unknown>;
+    if(n.type==='BlockStatement'&&(n.body as unknown[]).length===1)return norm((n.body as unknown[])[0]);
+    if(n.type==='Identifier'){const k=n.name as string;if(!names.has(k))names.set(k,'v'+names.size);return {type:'Identifier',name:names.get(k)};}
+    const out:Record<string,unknown>={};for(const [k,x] of Object.entries(n))if(!['start','end','raw','range','loc'].includes(k))out[k]=norm(x);return out;
+  };
+  const body=[...(fn.body as {body:Record<string,unknown>[]}).body],last=body.at(-1);
+  if(last?.type==='ReturnStatement'&&(last.argument as {name?:string}|null)?.name==='undefined')body.pop();
+  return JSON.stringify(norm({params:fn.params,body}));
+}
+it('keeps the metadata classification copy structurally identical to the adapter source',()=>{
+  expect(classifyShape('../support/review/synthetic-recovery-nonreviewed-issuer.ts')).toBe(classifyShape('../../src/review/update-set-adapter.ts'));
 });
