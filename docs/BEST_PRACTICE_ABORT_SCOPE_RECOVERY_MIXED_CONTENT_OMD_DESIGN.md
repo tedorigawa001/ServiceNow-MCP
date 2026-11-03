@@ -1,6 +1,6 @@
 # OM-D 混合manifestと内容比較の接続差分
 
-Version: br006-recovery-mixed-content-omd-draft-0.4 / Date: 2026-11-03。
+Version: br006-recovery-mixed-content-omd-draft-0.5 / Date: 2026-11-03。
 Status: **OD-Aのfresh mixed slot／prefixと、OB-01のstrict DATA・同pins／行対応・準備claimまで合成実装。既存origin・同accepted／planへの移譲・内容比較は未接続。正式発行口閉鎖・全体受付無効・Unknown・VM／監視／telemetry調査保留を維持する。**
 
 基準HEAD: `6405b8b`。[CG-C設計](BEST_PRACTICE_ABORT_SCOPE_RECOVERY_OMISSION_CGC_DESIGN.md)§10・12、[NR-C](BEST_PRACTICE_ABORT_SCOPE_RECOVERY_NONREVIEWED_DESIGN.md)§11、[本文gate](BEST_PRACTICE_ABORT_SCOPE_RECOVERY_FINISH_CONTENT_GATE_DESIGN.md)§6からの差分。OM-Bの計数／finalizeモデルとRD-Cのfinish jobは設計段階なので、それらを成立済みにせず接続範囲を分割する。
@@ -174,3 +174,5 @@ OD-Aはconstructorでbounded全列投影／OM-A値モデルを一度実行し、
 正常系のacceptedTerminationとhard失敗時の解放未解決・cleanup診断は別に扱う。現kernelのhard clear後に通常のsource close／accepted discardが使えるとはせず、終了未確認を正常完了へ変換しない。OB-02〜03は設計段階であり、accepted採用以降を実装済みとはしない。
 
 同設計§11のOB-01では、既存kernel module内の別factoryにstrict DATA・OwnedMixedSupply・同pins／行対応・一度限りのprepareを実装した。prepared値は非実行で、同handleの固定discardと同期失効だけを持つ。accepted採用・移譲先seal・固定delta・内容比較は未接続。[OB-01検証記録](E2E_BEST_PRACTICE_OWNED_MIXED_SUPPLY_OB01_2026-11-03.md)参照。
+
+[失敗ownerの寿命・最終discard設計](BEST_PRACTICE_ABORT_SCOPE_RECOVERY_FAILURE_OWNER_LIFETIME_DESIGN.md)で、hard後の固定診断、role別の終了／cleanup観測、同上位ownerへの一度限りの責務移譲を具体化した。元ownerのdiscardとresource解放確認を分け、上位受理がなければ最終discardを拒否する。契約は設計段階であり、OB-01以外の実装済み範囲を増やさない。

@@ -1,6 +1,6 @@
 # OD-B 同生成元の供給と一度限りの内容移譲
 
-Version: br006-recovery-odb-transfer-draft-0.2 / Date: 2026-11-03。
+Version: br006-recovery-odb-transfer-draft-0.3 / Date: 2026-11-03。
 Status: **OB-01のstrict DATA・OwnedMixedSupply・同pins／行対応・準備claimまで合成実装。accepted採用・移譲先sealは未接続。正式発行口閉鎖・全体受付無効・Unknown・VM／監視／telemetry調査保留を維持する。**
 
 基準HEAD: `1eb3c74`。[OM-D設計](BEST_PRACTICE_ABORT_SCOPE_RECOVERY_MIXED_CONTENT_OMD_DESIGN.md)§4・7・10〜11と[OD-A検証記録](E2E_BEST_PRACTICE_OMD_SLOTS_ODA_2026-11-03.md)からの差分。同じ生成元で作ったmixed内容とaccepted／planを、一つのprivate操作で移譲先へ確定する。OD-Aの公開handleを既存rootへ後付け登録する方式は採らない。本文照合・finish job・候補発行はOD-Bの対象外。
@@ -122,7 +122,7 @@ source close／cleanup開始・固定discardは、元mixed／pending／destの�
 
 新constructionはresource生成時から内容を持たない解放責務を追跡する。hard時にはpayload・pins・expectation・route権限を外し、生成済みresourceの未解決状態と発行済みcleanup診断だけを残す。worker cleanupのconfirmedだけでsourceの解放やaccepted正常discardまでconfirmedにしない。source終了の証拠が得られない場合はunconfirmed／pendingのまま保持し、成功close・正常完了へ変換しない。
 
-初期OD-Bでは新たな失敗用source-close証拠発行口を作らず、この区別と診断保持を検証する。実resourceの強制解放・終了確認の接続は別工程であり、実装開始前に合成失敗ownerの寿命と最終discard条件を固定する。未確定を「全解放完了」の試験期待値にしない。JS heapの物理消去は保証しない。
+初期OD-Bでは新たな失敗用source-close証拠発行口を作らず、この区別と診断保持を検証する。[失敗owner寿命・最終discard契約](BEST_PRACTICE_ABORT_SCOPE_RECOVERY_FAILURE_OWNER_LIFETIME_DESIGN.md)では、同生成元の上位ownerが診断と未解決cleanup custodyを一度受理したことを、元ownerの最終discard条件とした。受理のないsummaryコピーでは責務を捨てられず、上位へ移した未解決はrelease=unconfirmedのまま残す。実resourceの強制解放・終了確認の接続は別工程で、未確定を「全解放完了」の試験期待値にしない。JS heapの物理消去は保証しない。
 
 ## 8 診断と費目所有
 
@@ -159,7 +159,7 @@ source close／cleanup開始・固定discardは、元mixed／pending／destの�
 | OB-02 | 同private kernelのaccepted／planとCompletedMixedContentを一つの移譲claimへ結合し、失敗obligationを先に確保 | 内容比較・finish job・候補 |
 | OB-03 | pre/post・一つのdest commit、同期失効、正常terminal-only discardとhard時の診断保持を連続fake検証 | OD-C比較・OM-B／RD-C・全体受付・runtime |
 
-OB-01では上記strict入力・行別input存在条件を型と試験に固定し、同module内の抽出が旧入口へ影響しないことを確認する。OB-02前には失敗ownerの寿命・最終discard条件を、OB-03前には順序付きprefixと既存sort／dedupの固定写像・projection／対応表の費用と中断点を具体化する。数値上界の未導出はUnknownに残し、型・独立表・失敗試験なしで完了flagだけを追加しない。
+OB-01では上記strict入力・行別input存在条件を型と試験に固定した。OB-02前は、上記の失敗owner寿命契約に従う固定role・上位受理・custody／commit receipt・最終discardの純粋内部契約から実装し、実cleanupへの接続と混同しない。OB-03前には順序付きprefixと既存sort／dedupの固定写像・projection／対応表の費用と中断点を具体化する。数値上界の未導出はUnknownに残し、型・独立表・失敗試験なしで完了flagだけを追加しない。
 
 draft-0.1は設計MDだけ。続くOB-01の実装範囲を以下に限定し、実Permit／候補発行・実接続・実通信・実機操作・設定変更・Pushは行わない。
 
