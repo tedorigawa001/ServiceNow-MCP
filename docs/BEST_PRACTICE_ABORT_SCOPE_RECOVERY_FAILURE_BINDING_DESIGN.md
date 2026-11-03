@@ -1,6 +1,6 @@
 # FailureOwnerとOB-01とkernelの接続差分
 
-Version: br006-recovery-failure-binding-draft-0.4 / Date: 2026-11-03。
+Version: br006-recovery-failure-binding-draft-0.5 / Date: 2026-11-03。
 Status: **FB-01〜03の同construction・private kernel／sink・同上位custody移譲／元owner固定discard・合成停止／予算供給点まで実装。実resource・実予算・全work上界は未保証。正式発行口閉鎖・全体受付無効・Unknown・VM／監視／telemetry調査保留を維持する。**
 
 基準HEAD: `196ca0c`。[失敗owner寿命設計](BEST_PRACTICE_ABORT_SCOPE_RECOVERY_FAILURE_OWNER_LIFETIME_DESIGN.md)§9と[OD-B設計](BEST_PRACTICE_ABORT_SCOPE_RECOVERY_ODB_TRANSFER_DESIGN.md)§11からの差分。同一constructionでFailureOwnerを先行確保し、OB-01の失敗通知と既存kernelのresource生成・cleanupを結ぶ。既存の独立factoryを二つ呼び、summaryやID一致で接続する方式は採らない。
@@ -213,3 +213,9 @@ guardのthrow／未知返値は固定internal_review_errorで止める。例外�
 台帳は固定15counter、総計4096件まで保持する。以降はsaturated=trueとし、未計数分・全workをUnknownへ残す。counter飽和で未解決責務やcleanup権限を捨てず、これを本番cap承認や正常受付に用いない。費目表にないJSON検査・投影・JS割当て等も含む全上界は未導出である。
 
 [合成試験](../tests/review/synthetic-failure-custody-run.test.ts)と[検証記録](E2E_BEST_PRACTICE_FAILURE_BINDING_FB03_2026-11-03.md)で連続経路を確認する。FB-03が成立するのは閉鎖した合成範囲だけ。OB-02の同accepted／plan採用や移譲先seal、実origin／実会計・全work上界は別工程であり、正式発行口閉鎖・全体受付無効・調査保留を維持する。
+
+## 13 正常系OB-02への接続設計
+
+[同pins保持・private採用接続差分](BEST_PRACTICE_ABORT_SCOPE_RECOVERY_OB02_ADOPTION_DESIGN.md)で、正常内容の寿命と一度限りmove、同pinsを唯一のidentity起点にする新正常系、同accepted／planと内容を結ぶ移譲claimを設計した。新正常系の予算shellは同pins生成証拠へ一度結び、既存FB-03の固定identityやmodelを後から付け替えない。
+
+hard時は同保護区間でnormal／pending／destとkernelのpayload参照を外したprivate receiptを必要とし、FailureOwner／上位capsuleへ本文を持ち込まない。未知の解放責務を保存する本書のcustody契約は維持する。新差分はMDだけで、正常系採用・dest seal・実予算／全体受付は未実装・未有効のままである。

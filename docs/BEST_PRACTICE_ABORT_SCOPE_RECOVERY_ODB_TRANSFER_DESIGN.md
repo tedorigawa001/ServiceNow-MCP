@@ -1,6 +1,6 @@
 # OD-B 同生成元の供給と一度限りの内容移譲
 
-Version: br006-recovery-odb-transfer-draft-0.8 / Date: 2026-11-03。
+Version: br006-recovery-odb-transfer-draft-0.9 / Date: 2026-11-03。
 Status: **OB-01とFB-01〜03の同construction・合成kernel／sink・上位custody移譲まで実装。実resource・canonical予算／全work保証・accepted採用・移譲先sealは未接続。正式発行口閉鎖・全体受付無効・Unknown・VM／監視／telemetry調査保留を維持する。**
 
 基準HEAD: `1eb3c74`。[OM-D設計](BEST_PRACTICE_ABORT_SCOPE_RECOVERY_MIXED_CONTENT_OMD_DESIGN.md)§4・7・10〜11と[OD-A検証記録](E2E_BEST_PRACTICE_OMD_SLOTS_ODA_2026-11-03.md)からの差分。同じ生成元で作ったmixed内容とaccepted／planを、一つのprivate操作で移譲先へ確定する。OD-Aの公開handleを既存rootへ後付け登録する方式は採らない。本文照合・finish job・候補発行はOD-Bの対象外。
@@ -78,7 +78,7 @@ OM-Aが許す最大103 limitationsや重複初期limitationsは、既存RA base�
 
 ## 5 一度限りの移譲
 
-新固定操作案を`sealBoundMixedExpectation(binding, accepted)`とする。外へ公開するのは新factory固有の入口だけで、plan／handoff／内容は同ownerがprivateに保持する。callerが任意manifestや移譲先ownerを指定する引数は作らない。
+新固定操作案を`sealBoundMixedExpectation()`とする。[OB-02接続差分](BEST_PRACTICE_ABORT_SCOPE_RECOVERY_OB02_ADOPTION_DESIGN.md)のprivate採用ticketから同ownerのaccepted／contentを選び、binding／plan／handoffもprivateに保持する。callerが外部accepted／manifest／移譲先ownerを指定する引数は作らない。旧factoryのhandleを受けるAPIは変更しない。
 
 | 段階 | 固定処理 |
 | --- | --- |
@@ -167,6 +167,8 @@ FB-02は別fresh entryで同private初期topology・kernel生成点／clear前�
 
 FB-03の上記連続保証は[接続差分§12](BEST_PRACTICE_ABORT_SCOPE_RECOVERY_FAILURE_BINDING_DESIGN.md)の閉鎖合成範囲で確認した（[記録](E2E_BEST_PRACTICE_FAILURE_BINDING_FB03_2026-11-03.md)）。同capsuleの上位移譲と元owner固定discard、fake予算identity／prefix・停止checkpoint・費目の継続を検証しただけで、実解放や全体work受付ではない。次のOB-02の同pins／accepted／plan採用は未実装であり、今回有効化しない。
 
+[OB-02採用接続差分draft-0.1](BEST_PRACTICE_ABORT_SCOPE_RECOVERY_OB02_ADOPTION_DESIGN.md)で、正常系の同pins保持・一度限りmove、pins由来identityを起点にした新正常系予算shellの結合、同private accepted／planとの採用と移譲claimを具体化した。既存FB-03のidentity方式やpins APIは変更しない。正常内容を失敗capsuleへ残さない論理破棄receiptと上位診断の境界を定め、NB-01〜03を実装分割案とした。設計のみであり、dest sealはOB-03・全体workはUnknownのまま。
+
 draft-0.1は設計MDだけ。続くOB-01の実装範囲を以下に限定し、実Permit／候補発行・実接続・実通信・実機操作・設定変更・Pushは行わない。
 
 ## 11 OB-01の実装範囲
@@ -195,4 +197,4 @@ guardはfake停止境界だけ。準備のguard数は成功時2N+2、discardは2
 
 OB-02のaccepted採用・一つの移譲claim、OB-03のdest seal／terminal-only接続、固定soft／verify delta・OD-C比較・実originは未成立。preparedの成功をこれらの成立へ昇格しない。
 
-失敗時の先行条件として、[寿命設計§9](BEST_PRACTICE_ABORT_SCOPE_RECOVERY_FAILURE_OWNER_LIFETIME_DESIGN.md)の独立した合成FailureOwner／上位owner・4roleのcustody・一度限りcommit receipt／最終discardを実装した。未解決責務を上位へ移せたこととresource解放を区別し、immutable reportとlate current診断を分ける。OB-01／既存kernelへの連結、accepted採用と移譲先sealは引き続き未対応。
+失敗時の先行条件として、[寿命設計§9](BEST_PRACTICE_ABORT_SCOPE_RECOVERY_FAILURE_OWNER_LIFETIME_DESIGN.md)の独立した合成FailureOwner／上位owner・4roleのcustody・一度限りcommit receipt／最終discardを実装した。未解決責務を上位へ移せたこととresource解放を区別し、immutable reportとlate current診断を分ける。OB-01／kernelの失敗経路接続はFB-01〜03の閉鎖合成範囲で成立済み。正常系accepted採用と移譲先sealは引き続き未対応で、新接続差分をその実装完了とは扱わない。
