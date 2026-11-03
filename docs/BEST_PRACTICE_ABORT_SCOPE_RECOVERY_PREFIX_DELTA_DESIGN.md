@@ -133,6 +133,8 @@ error上限100とwarning上限100は独立である。E=100であること自体
 
 現在のNormalAcceptedSnapshotはpins／plan／handoff／route等を持つが、実accepted projectionのheader参照は返していない。OB-03前に、同constructorのprivate継続がその実headerとの比較を内部で行うか、同takeへ束ねるprivate projection receiptを追加する必要がある。別呼出し・summaryや仮routeで投影を再生成して「実accepted header」とみなさない。公開snapshot／body getterを追加しない。
 
+[実accepted header供給境界](BEST_PRACTICE_ABORT_SCOPE_RECOVERY_ACCEPTED_HEADER_SUPPLY_DESIGN.md)で二案を比較し、同takeへprivate receiptを束ねる案を推奨した。対象はaccept後の同projectionで、take後の再読・再生成はしない。供給・pending結合・比較・sealは未実装のまま。
+
 関係計算は同pendingを所有する保護scopeに限定し、pre／work／postと同失効serialを結ぶ。workのshape／limit／不一致は一時失敗に留め、postのcancelled／deadlineを優先する。失敗時は関係値・ordered/canonicalの一時コピーも破棄し、NB-03の本文破棄証拠・固定診断／同custodyへ進む。diagnosticは固定reasonと件数だけでprefix本文・rawエラーや行IDを出さない。
 
 ## 9 独立oracleの検証条件

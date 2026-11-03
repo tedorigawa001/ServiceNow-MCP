@@ -126,6 +126,8 @@ PayloadClearedReceiptは論理slotを外した後だけ発行し、失敗capsule
 
 [順序付きprefix／固定delta詳細契約](BEST_PRACTICE_ABORT_SCOPE_RECOVERY_PREFIX_DELTA_DESIGN.md)で、元の親順序とplan canonical値の関係・受付前の重複／上限拒否・errors先頭100件と切詰め警告・独立oracle条件を具体化した。PD-Aはprefix-local値計算まで実装し、private結合はPD-B以降へ残す。NB-03の固定abortや閉鎖条件は変更しない。
 
+[実accepted header供給境界](BEST_PRACTICE_ABORT_SCOPE_RECOVERY_ACCEPTED_HEADER_SUPPLY_DESIGN.md)で、同take内のprivate受領物・所有権・失効とclear対象を設計した。公開getterを増やさず、受理済みprojectionのheaderを同pendingへ束ねる推奨であり、実装や正常sealの接続を示さない。
+
 normal ownerは原順序の親prefixと同pins header、同plan.verify／投影を別々に保持する。RAのsort済みheaderから原順序を復元しない。OB-02の採用は同origin／所有権の確認に限定し、prefix変換関係を未確認のままseal成功へ進めない。
 
 OB-03前に[OD-B設計§4](BEST_PRACTICE_ABORT_SCOPE_RECOVERY_ODB_TRANSFER_DESIGN.md)の固定soft／verify delta、first-occurrence dedup／sort、100／103境界・errors99／100の写像を独立表へ固定する。現在の局所cap超過は既存どおり拒否し、追加切捨て・救済dedup・上限拡張をしない。
