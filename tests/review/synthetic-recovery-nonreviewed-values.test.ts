@@ -88,6 +88,19 @@ it('rejects exotic prototypes, symbol keys, arrays, cycles and primitive substit
   for(const raw of [null,1,true,[],JSON.stringify(value()),Object.create({producer:'analysis'}),{...value(),[Symbol('x')]:1},{...value(),outcome:[]},new String('x')])fails(raw);
   const cycle:Record<string,unknown>={};cycle.outcome=cycle;fails(cycle);
 });
+it('rejects otherwise valid own data carried by an exotic prototype, at root and outcome',()=>{
+  class Carrier{}
+  fails(Object.assign(new Carrier(),value()),'shape');
+  fails({...value(),outcome:Object.assign(Object.create(Date.prototype) as object,value().outcome)},'shape');
+});
+it('rejects a symbol key even when its value is an admissible string',()=>{
+  fails({...value(),[Symbol('x')]:'s'},'shape');fails({...value(),outcome:{...value().outcome,[Symbol('x')]:'s'}},'shape');
+});
+it('admits exactly 16 visited nodes to schema validation and stops the 17th as a limit',()=>{
+  const four=()=>({a:'',b:'',c:'',d:''});
+  fails({a:four(),b:four(),c:{a:'',b:'',c:''},d:''},'shape');
+  fails({a:four(),b:four(),c:four(),d:''},'limit');
+});
 function usageOracle(raw:unknown){
   const queue:[unknown,number][]=[[raw,0]];let nodes=0,character_units=0,maximum_depth=0,max_object_keys=0;
   for(let i=0;i<queue.length;i++){const [v,d]=queue[i];nodes++;maximum_depth=Math.max(maximum_depth,d);

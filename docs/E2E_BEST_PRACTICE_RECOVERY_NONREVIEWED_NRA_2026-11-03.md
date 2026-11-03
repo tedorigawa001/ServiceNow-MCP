@@ -34,7 +34,21 @@ helper未存在のimport失敗をREDで確認し、analysisのrejectedをimmutab
 
 文字費は1024 capに対し3の倍数で計上するため、1023でschema段階へ進み1026ではlimit拒否する境界を検査した。深さ・node・key上限、getter／Proxy trap実行0、入力の後書換えとcaller freeze副作用なし、固定errorだけを保持することも確認した。全体回帰では既存localhost合成待受試験だけを許可し、外部サービスを使っていない。
 
-## 4 未保証と残課題
+## 4 レビュー修正（2026-11-03）
+
+§3の60件・12,715件は修正前の記録として残す。レビュー時にrepo全体のlint（error 0・warning 374）、build、梱包、全体合成262ファイル／12,715件成功・失敗0を再確認した。
+
+レビューでpure値層の25変異を確認し、次の3判定は外しても既存60件がすべて通過した。実装は正しく、試験だけの不足である。
+
+- 特殊prototypeの拒否。既存試験の`Object.create({producer:'analysis'})`はown keyを持たず、schemaで必ず失敗していた。正当なown dataを持つclass instance（root）とDate.prototype由来object（outcome）を拒否する1件を追加した。判定を外すとnull-prototype copyへ移されて受理される。
+- symbol keyの拒否。既存試験のsymbol値は数値で、値のcopyで失敗していた。値が文字列のsymbol keyをroot／outcomeで拒否する1件を追加した。判定を外すと受理され、文字費がNaNになって以後の文字費上限も効かなくなる。
+- node上限の境界。21 nodeだけを検査していたため、`>=`→`>`が通過した。16 nodeはschema段階へ進み、17 node目で`limit`になる1件を追加した。
+
+上記3変異はそれぞれ追加した試験だけを失敗させた。analysis理由snapshotの撤去（現rejected enum全26件と一致）、文字費の`>`→`>=`（計上は3の倍数で1024ちょうどにならない）、配列判定（`length`が数値で必ず拒否）、accessor判定（valueがundefinedで必ず拒否）、catch変換（対象例外が発生しない）は等価変異として扱う。helperは変更せず、新規試験は63件。修正後も全体合成262ファイル／12,718件成功・失敗0。
+
+[RDC設計](BEST_PRACTICE_ABORT_SCOPE_RECOVERY_FINISH_JOB_RDC_DESIGN.md)の非reviewed設計リンクから古いdraft表記を外し、[SRD設計](BEST_PRACTICE_ABORT_SCOPE_RECOVERY_FINISH_SRD_DESIGN.md)のStatusを内容gate draft-0.8へ揃えた（表記のみで版数は変更しない）。
+
+## 5 未保証と残課題
 
 NR-Aはcallerが渡した値の形状・組合せだけを検査する。metadata分類が実際に起きたこと、同attempt／jobから来たこと、停止がsoftだったこと、元reviewed captureが存在することは証明しない。producerやoriginal_stateの正しい文字列から証拠へ昇格するAPIはない。元JSON文字列の検証・実受信量の保証でもない。
 
