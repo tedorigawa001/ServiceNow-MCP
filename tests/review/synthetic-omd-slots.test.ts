@@ -189,3 +189,26 @@ it('keeps legacy capture and mixed-root surfaces unchanged and brands inaccessib
   expect(()=>fresh.root.generate(capture,fresh.root.rows[0].receipt,p.prefix)).toThrow();
   expect(old.summary()).toEqual(before);for(const key of ['generate','consume','begin'])expect(old).not.toHaveProperty(key);
 });
+it.each(['source','cleanup','discard'] as const)('refuses %s reentry from the generate post guard before publishing a slot',operation=>{
+  let root:ReturnType<typeof createSyntheticMixedSlotAssembly>;
+  root=createSyntheticMixedSlotAssembly(fixture(),{guard:(p:string,o:string)=>{if(o==='generate'&&p==='post')try{if(operation==='source')root.beginSourceClose();else if(operation==='cleanup')root.beginCleanup();else root.discard();}catch{/* deliberately swallowed */}}});
+  const p=root.begin();if(p.stage!=='initial')throw Error();let error:unknown;
+  try{root.generate(root.rows[0].row,root.rows[0].receipt,p.prefix);}catch(e){error=e;}
+  expect(error).toMatchObject({reason:'reentrant'});expect(root.summary()).toMatchObject({state:'failed',generated:0,pending_slots:0});
+});
+it('releases the consumed prefix on generate, leaving only the private next prefix after consume',()=>{
+  const f=setup(),p=f.root.begin();if(p.stage!=='initial')throw Error();expect(f.root.summary().pending_prefixes).toBe(1);
+  const pair=f.root.rows[0],slot=f.root.generate(pair.row,pair.receipt,p.prefix);expect(f.root.summary()).toMatchObject({pending_prefixes:0,pending_slots:1});
+  f.root.consume(pair.row,pair.receipt,slot);expect(f.root.summary()).toMatchObject({pending_prefixes:1,pending_slots:0});
+});
+it('rejects a Proxy guard function without invoking it and an unknown kind',()=>{
+  let calls=0;const guard=new Proxy(()=>undefined,{apply:()=>{calls++;return undefined;}});
+  expect(()=>createSyntheticMixedSlotAssembly(fixture(),{guard})).toThrow('internal_review_error');expect(calls).toBe(0);
+  expect(()=>createSyntheticMixedSlotAssembly({...fixture(),kind:'synthetic_omd_slots_v2'},{guard:()=>undefined})).toThrow('internal_review_error');
+});
+it('maps an unknown stop reason to internal and refuses double source/cleanup starts and unknown cleanup status',()=>{
+  const a=setup();expect(()=>a.root.stop('caller_reason' as never)).toThrow('internal_review_error');expect(a.root.summary().first_failure).toBe('internal');
+  const b=setup();b.root.beginSourceClose();expect(()=>b.root.beginSourceClose()).toThrow('internal_review_error');expect(b.root.summary().first_failure).toBe('state');
+  const c=setup();c.root.beginCleanup();expect(()=>c.root.beginCleanup()).toThrow('internal_review_error');expect(c.root.summary().first_failure).toBe('state');
+  const d=setup(),sink=d.root.beginCleanup();expect(()=>d.root.recordCleanup(sink,'unknown' as 'confirmed')).toThrow('internal_review_error');expect(d.root.summary()).toMatchObject({first_failure:'binding',cleanup:'pending'});
+});

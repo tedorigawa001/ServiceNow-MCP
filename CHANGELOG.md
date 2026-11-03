@@ -128,6 +128,8 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 ### Added
 
+- OD-A mixed slots now have the same package classification audit as other synthetic helpers (fixed imports, non-packaged markers and seeded runtime/I/O/clock/worker leak controls). Tests also check directly that source close, cleanup start or discard reentry from the generate post guard fails `generate` with no slot published, and cover prefix release, a Proxy guard, unknown kind and stop reason, double starts and unknown cleanup status. The assembly itself is unchanged.
+
 - OM-C parent-decision owner tests now check directly that `beginSourceClose`/`beginCleanup` reentry from an accept guard fails `accept` itself with no capture published, and cover first-delivery and decision extra arguments, unknown kind, construction-time context order and unknown stop reasons in isolation. The owner itself is unchanged.
 
 - OM-A parent omission values now accept retained (not_processed) rows only as a contiguous suffix, as the adapter appends them after interrupting its loop; a reviewed row after a retained row was previously modeled. New tests also cover two-rule applicability duplicates and subsets, nested result refinements, consistently reversed selected order and an unknown kind.

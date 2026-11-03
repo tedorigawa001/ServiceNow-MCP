@@ -215,4 +215,4 @@ summaryはstate／first_failure／累積accepted・decided・keep・omit・保�
 
 非reviewed／元worker omitted／retainedと同receiptで混合する供給元、同accepted／plan移譲、OM-B size／finalize、同finish job／E／応答内容gate・候補・正常終端は未接続。NR-Cの親omission拒否を解除せず、実origin発行口閉鎖・全体受付無効・調査保留を維持する。[OM-C検証記録](E2E_BEST_PRACTICE_PARENT_OMISSION_OMC_2026-11-03.md)参照。
 
-[OM-D接続差分](BEST_PRACTICE_ABORT_SCOPE_RECOVERY_MIXED_CONTENT_OMD_DESIGN.md)で、同一の新合成assembly内の混合origin・prefix段階・private移譲・同JSON内容照合を具体化した。OM-B前は新finish省略を拒否する限定的な非実行照合だけを設計し、合法finalize／同finish job／全gateの成立とは区別する。同書draft-0.2§11のOD-Aは別台帳のfresh合成DATAだけで混合slotとprefixの生成／消費を実装した。既存OM-C captureやNR-C receiptの採用ではなく、同accepted／plan・内容比較・finishへの未接続は維持する。[OD-A検証記録](E2E_BEST_PRACTICE_OMD_SLOTS_ODA_2026-11-03.md)参照。
+[OM-D接続差分](BEST_PRACTICE_ABORT_SCOPE_RECOVERY_MIXED_CONTENT_OMD_DESIGN.md)で、同一の新合成assembly内の混合origin・prefix段階・private移譲・同JSON内容照合を具体化した。OM-B前は新finish省略を拒否する限定的な非実行照合だけを設計し、合法finalize／同finish job／全gateの成立とは区別する。同書§11のOD-Aは別台帳のfresh合成DATAだけで混合slotとprefixの生成／消費を実装した。既存OM-C captureやNR-C receiptの採用ではなく、同accepted／plan・内容比較・finishへの未接続は維持する。[OD-A検証記録](E2E_BEST_PRACTICE_OMD_SLOTS_ODA_2026-11-03.md)参照。

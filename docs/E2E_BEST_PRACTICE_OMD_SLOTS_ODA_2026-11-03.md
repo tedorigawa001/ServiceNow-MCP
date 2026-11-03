@@ -38,7 +38,19 @@ Status: **合成DATA assemblyの内部型・生成／消費claimまで確認。�
 
 全repositoryのテスト・実worker origin・実session・PDI E2Eは今回実行していない。梱包smokeのworker／MCPは既存のローカル合成fixtureであり、実ServiceNowへの接続ではない。
 
-## 4 保証しないこと・次工程
+## 4 レビュー修正（2026-11-03）
+
+§3の66件は修正前の記録として残す。§3は全体回帰と梱包分類監査を実行していなかったため、レビュー時にrepo全体のlint（error 0・warning 374）、build、`node tests/review/package-http-classification.mjs`、全体合成267ファイル／13,075件成功・失敗0を確認した。
+
+- 梱包監査：既存の合成helperはすべて`package-http-classification.mjs`に固定import監査・marker非同梱・seeded runtime／I/O／clock／worker漏出の負の対照を持つが、新helperには無かった。同じ形のOD-A監査（固定import：`node:util`・`./synthetic-parent-omission-values.js`）を追加した。helperへ`node:fs`のimportを足すと監査が失敗することを確認した。
+- 試験：generateのpost guard中の`beginSourceClose`／`beginCleanup`／`discard`再入。既存試験は後続consumeの失敗後だけを見ていた。busy判定を外すと、generateのcommitはmodelを参照しないためclear後も完了し、失効／discard後にslotが公開された（pending_slots 1）。generate自体が`reentrant`で失敗しslot 0であることを直接検査する3件を追加した。
+- 試験：generate時の旧prefix取外し（pending_prefixes）、Proxy guard関数（呼出し0回）、未知kind、`stop`の未知理由、source close／cleanupの二重開始、未知cleanup statusを各々単独で検査する3件を追加した。
+
+上記10変異はそれぞれ追加した試験だけを失敗させた。二重生成・slot残数・完了prefix・priorのordinal判定（ordinal／cursor判定が先に停止）、consumeのrow／receipt／original／消費済み／ordinal判定（`pending.pin!==pin`が先に停止）、`recordCleanup`のbusy判定（sink取得前に失効済み）は等価変異として扱う。helperは変更せず、新規試験は72件。修正後も全体合成267ファイル／13,081件成功・失敗0。
+
+[CG-C設計](BEST_PRACTICE_ABORT_SCOPE_RECOVERY_OMISSION_CGC_DESIGN.md)本文の「同書draft-0.2§11」を版数なしの「同書§11」へ直した（表記のみで版数は変更しない）。
+
+## 5 保証しないこと・次工程
 
 row／receiptと元reviewed値は新合成assemblyのDATA由来。既存OM-C capture／NR-C receipt・元runのsource／auth／ReleasePermit／jobを取り込む登録口はなく、そのoriginを証明したとはしない。初期prefixもfixture DATAだけで、後段deltaは未対応。固定traceはconstructor時のOM-A検査から採り、実通信・時刻採取・再解析を行わない。
 

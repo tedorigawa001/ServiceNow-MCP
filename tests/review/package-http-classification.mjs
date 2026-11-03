@@ -219,6 +219,17 @@ for(const f of pack.files.filter(f=>f.path.startsWith('dist/')&&/\.(?:js|ts|map)
 for(const leak of ['fetch("x");','Date.now();','new Date();','new Worker("x");',"import('node:fs');","import {BoundedReadSession} from '../../../src/servicenow/bounded-read.js';const zzRoot=BoundedReadSession;"])
   assert.throws(()=>auditSyntheticIssuer(parentOmissionText+'\n'+leak,parentOmissionImports),assert.AssertionError,'OM-A audit missed seeded leak: '+leak);
 console.log('OM-A pure parent finding/prefix model excluded; fixed imports + seeded runtime/I/O/clock/worker/leak controls PASS');
+const mixedSlotText=readFileSync(join(root,'tests/support/review/synthetic-omd-slots.ts'),'utf8');
+const mixedSlotImports=['node:util','./synthetic-parent-omission-values.js'];
+auditSyntheticIssuer(mixedSlotText,mixedSlotImports);
+const mixedSlotMarkers=['synthetic-omd-slots','createSyntheticMixedSlotAssembly','MixedSlotError','synthetic_omd_slots','synthetic_omd_row','synthetic_omd_receipt','synthetic_omd_slot','synthetic_omd_initial','synthetic_omd_parent','synthetic_omd_complete','synthetic_omd_cleanup'];
+const noMixedSlot=text=>assert(!mixedSlotMarkers.some(x=>text.includes(x)),'OD-A synthetic mixed slots leaked into runtime');
+for(const marker of mixedSlotMarkers)assert.throws(()=>noMixedSlot(marker));
+assert(!pack.files.some(f=>f.path.includes('synthetic-omd-slots')));
+for(const f of pack.files.filter(f=>f.path.startsWith('dist/')&&/\.(?:js|ts|map)$/.test(f.path)))noMixedSlot(readFileSync(join(root,f.path),'utf8'));
+for(const leak of ['fetch("x");','Date.now();','new Date();','new Worker("x");',"import('node:fs');","import {BoundedReadSession} from '../../../src/servicenow/bounded-read.js';const zzRoot=BoundedReadSession;"])
+  assert.throws(()=>auditSyntheticIssuer(mixedSlotText+'\n'+leak,mixedSlotImports),assert.AssertionError,'OD-A audit missed seeded leak: '+leak);
+console.log('OD-A fresh synthetic mixed slots excluded; fixed imports + seeded runtime/I/O/clock/worker/leak controls PASS');
 for(const suffix of ['.js','.js.map','.d.ts','.d.ts.map'])assert(pack.files.some(f=>f.path==='dist/servicenow/review-kernel/release-observation'+suffix),'required one-shot UTC value helper missing: '+suffix);
 const sessionDeclarations=readFileSync(join(root,'dist/servicenow/bounded-read.d.ts'),'utf8');
 const sessionAst=parse(readFileSync(join(root,'dist/servicenow/bounded-read.js'),'utf8'),{ecmaVersion:'latest',sourceType:'module'});
