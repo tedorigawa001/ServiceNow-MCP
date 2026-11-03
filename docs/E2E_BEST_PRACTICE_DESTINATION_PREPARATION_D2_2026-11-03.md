@@ -49,7 +49,20 @@ negative controlとしてD2のmanifest prefix供給だけをPpからP0へ一時�
 
 D2新root専用のcompiled実行fixture・全機能の全体回帰は未追加／未実行。既存compiled試験の成功をD2専用compiled保証とはみなさない。実接続・実通信・実機操作・設定変更・Pushは行っていない。
 
-## 5 残課題・保証しないこと
+## 5 レビュー修正（2026-11-03）
+
+本記録の新規試験件数は修正前の記録として残す。レビュー時にrepo全体のlint（error 0・warning 374）、build、梱包分類監査（441ファイル）、既存compiled prefix relation fixture、全体合成280ファイル／13,703件成功・失敗0を確認した。
+
+kernelの16変異を確認し、次の2群は外しても既存試験が全て通過した。実装は正しく、実行時試験では観測できないことによる不足である。
+
+- post guard後の`checkDestinationCandidate()`。各条件は直前のprefix候補の再照合と同値か構造上常に成立し、呼出しごと外しても通過した。
+- 未公開dest slotの生成と、`isCleared`の新4項目。生成直後にguardがなく固定abortで`clear()`が必ず走るため、区別できなかった。
+
+[compiled fixture](../tests/review/fixtures/compiled-destination-preparation.mjs)を追加し、梱包分類監査から実行する。実kernel／依存をTypeScript strict診断0でemitし、一時copyだけで再照合の直前にepoch・owner・pending・model・budget serial・候補欠落のfaultを注入する。各faultはprefix再照合の通過後でもbindingで停止し、ContentChecked／準備／prefix関係値0のまま全slotを外してpayload clearできる。無改変copyは準備1回・固定stateで終わる。負の対照として、D2の`clear()`から未公開dest・ContentChecked・owner・候補（transfer_post停止時）を一つずつ残すと、上位custody移譲が拒否されpayload clearにならない。runtime root／APIへのfriendやfault口は追加していない。
+
+再照合のowner・pending・model・budget serial・失効serialの各条件、`isCleared`の新4項目、未公開dest slotの生成を外す計10変異は、fixtureの対応する1経路だけを失敗させた。候補有無の条件（`!c`）を外す変異はstrict型検査で拒否される。work中のowner確認（`clear()`後は入口で拒否）、`pendingContent`の即時clear（直後にguardなし）、`destinationStarted`の重複判定（`transferStarted`と同時に設定）、旧経路でのowner生成（inspect非公開で`clear()`される）は等価変異として扱う。kernelは変更せず、vitest試験数は不変。修正後も全体合成280ファイル／13,703件成功・失敗0。
+
+## 6 残課題・保証しないこと
 
 D3のfull accepted projectionの同take受領、完成expectation＋manifest bundle・atomic commit／同期失効、D4正常terminal-onlyは未実装。未公開dest準備は完成bundleやsealではない。D2の固定abort済みrootからContentCheckedを再発行せず、次工程もfresh継続で検証する。
 

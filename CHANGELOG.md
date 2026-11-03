@@ -158,6 +158,8 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 ### Added
 
+- OB-03 D2 now has a compiled-graph fixture, run by the package audit, that injects epoch, owner, pending, model, budget-serial and missing-candidate faults only into emitted temporary copies just before the post-guard destination recheck, and seeds a retained destination owner, candidate, ContentChecked or unpublished destination slot to show each blocks payload-clear custody. The recheck and the new clear checks were previously unobservable by runtime tests. The kernel itself is unchanged.
+
 - OB-03 D1 FullMixedDraft tests now reject a manifest that drops trailing assets, a candidate array with an appended element (finding, prefix limitation/error or trace row), a trailing extra key in the schema-free prefix/trace copies, and pin the original reviewed ruleset mismatch to the parent phase; each check was previously untested. The value helper itself is unchanged.
 
 - PD-B(A) pending prefix value tests now reject a same-key but different `update_xml_sys_id` value in both the pins and accepted header errors, and an unknown `kind`; each check was previously untested. The value helper itself is unchanged.
