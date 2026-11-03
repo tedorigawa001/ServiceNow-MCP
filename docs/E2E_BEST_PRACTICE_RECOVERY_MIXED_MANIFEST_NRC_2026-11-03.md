@@ -49,7 +49,19 @@ caller後書換え・getter／Proxy trap実行0、空opaque handle・scalar診�
 
 全体回帰は既存localhost合成待受を許可した条件で、maxWorkers=3・既存期限を変更せずに実施した。新root自体にはnative worker／transport／時計／timerの入口がなく、外部サービスは使っていない。
 
-## 4 費用と未対応
+## 4 レビュー修正（2026-11-03）
+
+§3の64件・12,866件は修正前の記録として残す。レビュー時にrepo全体のlint（error 0・warning 374）、build、梱包、全体合成264ファイル／12,866件成功・失敗0を再確認した。
+
+レビューでroot／supplierの31変異を確認し、次の判定は外しても既存64件がすべて通過した。実装は正しく、probeでも現行コードは拒否した。試験だけの不足である。
+
+- retrieval行の元inputが解析context（expected_context）を持つ場合の拒否。判定を外すと、解析済みinputに結ばれたretrieval_failedがそのままsealされた。既存試験はcontextなしinputの正常系だけだった。拒否する1件を追加した。
+- analysis行の元completed inputがexpected_contextを持たない場合の拒否。判定を外すと、解析contextのないinputにanalysis結果が結ばれsealされた。既存試験はinput欠落とT_i不一致だけだった。拒否する1件を追加した。
+- supplier constructorでのexpected長の照合。短いexpected列は判定を外すとconstructorを通過した。構築時に拒否する1件を追加した。
+
+上記3変異はそれぞれ追加した試験だけを失敗させた。次は等価変異として扱う。selected順序とretained input／理由（pinsの不変条件が拒否）、reviewed／非reviewedの取違え（capture件数照合とNR-Aが拒否）、row producer／sys_idとsupplierの期待ID（相互に重複し、最後はseal時比較が拒否）、supplierの件数・pending terminal／delivery・cleanup（欠けた証拠をseal時比較が拒否）、sealの`used`・counts／links再照合・`ownAccepted`・`mixedBusy`（kernel／CG-B／supplierの各busyと`consumed`判定が先に停止）、reviewed eventの参照解放（観測不能）。supplierの二重sealの`duplicate`判定も、2回目は`active()`のstate判定が先に停止して到達しないため等価とする。helperは変更せず、新規試験は67件。修正後も全体合成264ファイル／12,869件成功・失敗0。
+
+## 5 費用と未対応
 
 最大100件のpins／event／private row／partition索引、既存bounded copy、CG-A／Bの同JSON検証、NR-A投影、NR-B producer別claim、manifest集合copy・比較、最大8 guard、handle／clearは追加費目。実heap／総CPU／work上界はUnknown。元C/G/P prefix・retry・60秒・210試行を変更していない。JS heapのゼロ化や実worker終了を主張しない。
 

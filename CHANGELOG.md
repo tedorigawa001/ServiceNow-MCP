@@ -122,6 +122,8 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 ### Added
 
+- NR-C mixed manifest tests now reject a retrieval failure bound to a completed input that already carries an analysis context, an analysis outcome whose completed input has no expected context, and a shorter supplier expected-evidence list at construction; each check was previously the sole, untested guard. The root and supplier themselves are unchanged.
+
 - NR-B issuer tests now cover same-root cross-row retrieval terminals (previously the only check against issuing another row's outcome), `discard`/`recordCleanup` reentry from guards, terminal release after issue, cleanup recorded before the terminal event, constructor dependency and rule-list shape, unknown stop/revoke reasons, and an AST oracle keeping the metadata classification copy identical to the adapter. The issuer itself is unchanged.
 
 - NR-A non-reviewed value tests now cover valid own data carried by exotic prototypes, symbol keys whose values are admissible strings (which would otherwise disable character accounting), and the exact 16/17 node boundary. The value helper itself is unchanged.

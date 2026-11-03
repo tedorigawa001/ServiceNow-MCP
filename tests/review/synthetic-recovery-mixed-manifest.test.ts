@@ -185,3 +185,15 @@ it('seals a full 100-row metadata/retained partition, including Choice names',()
   const events=Array.from({length:99},(_,i)=>({kind:'metadata',row:{producer:'metadata',sys_id:id(i+1),name:i%2?'sys_choice_task_state':'sys_dictionary_task_name',action:'INSERT_OR_UPDATE'}}));
   const x=setup({raw,events});x.root.sealMixedRecoveryFinishExpectation(x.b,x.accepted);expect(x.root.inspect().manifest_binding).toMatchObject({selected:100,reviewed:0,nonreviewed:99,retained:1,pending:true});
 });
+it('refuses a retrieval failure bound to a completed input that already carries an analysis context',()=>{
+  const f=combined(),inputs=f.raw.finish.inputs as Record<string,unknown>[];
+  inputs.splice(1,0,{update_xml_sys_id:id(3),retrieved_at:'2026-10-17T04:59:02.000Z',state:'completed',expected_context:inputs[0].expected_context,accepted:null});
+  const root=createSyntheticMixedRecoveryRoot(f.raw,f.events);expect(()=>root.bind()).toThrow('internal_review_error');expect(root.inspect().manifest_binding).toMatchObject({state:'failed',pending:false});
+});
+it('refuses an analysis outcome whose completed input has no expected analysis context',()=>{
+  const f=combined();(f.raw.finish.inputs as Record<string,unknown>[])[1].expected_context=null;
+  const root=createSyntheticMixedRecoveryRoot(f.raw,f.events);expect(()=>root.bind()).toThrow('internal_review_error');expect(root.inspect().manifest_binding).toMatchObject({state:'failed',pending:false});
+});
+it('rejects a shorter expected evidence list at supplier construction, before any issue',()=>{
+  const f=supplierFixture(2);expect(()=>createSyntheticNonReviewedManifestSupplier(f.raw,{guard:()=>undefined},f.expected.slice(0,1))).toThrow('internal_review_error');
+});
