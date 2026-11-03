@@ -1,6 +1,6 @@
 # 回復finish 本文capture・full schema・同bytes検証gate 詳細設計
 
-Version: br006-recovery-finish-content-draft-0.14 / Date: 2026-11-03。
+Version: br006-recovery-finish-content-draft-0.15 / Date: 2026-11-03。
 Status: **CG-A／B／BP1、NR-A／B／C、OM-AとOM-Cのreviewed列限定合成決定ownerまで実装。旧rootの後付け昇格は不可。混合origin・実origin／finish job／finalizeモデル／full応答gate／候補発行は未実装。正式発行口閉鎖・全体受付無効・Unknown・VM／監視／telemetry保留を維持する。**
 
 基準HEAD: `1e1e78d`（CG-B追加回帰を含む）。[RD-C](BEST_PRACTICE_ABORT_SCOPE_RECOVERY_FINISH_JOB_RDC_DESIGN.md)§5・7・10〜11の内容gateを具体化する。実装範囲はCG-A§11・CG-B§12・CG-BP1§13、それ以外の型・操作・数値モデルは未実装の内部案。本番cap・通常経路の受付変更・実通信・実機操作・設定変更・Pushの承認ではない。
@@ -104,6 +104,8 @@ JSONはデータとして扱い、review対象のJavaScriptを実行しない。
 親決定証拠・固定順序・副作用差・bounded size計数・独立oracleの後続契約は[CG-C詳細設計](BEST_PRACTICE_ABORT_SCOPE_RECOVERY_OMISSION_CGC_DESIGN.md)へ分離した。§11のOM-Aは親prefix／keep／omitのpure値層だけを合成実装済み。証拠・finalizeモデルは未接続で、現NR-Cの親omission拒否・旧root・正式発行口閉鎖を変更しない。
 
 上記はOM-A時点の経緯。§12のOM-Cは新constructorのreviewed列だけに、同capture・固定prefix・一度限りの決定と固定discard／同期失効を接続した。初期prefixは合成DATA pinで、実originや混合manifestへの昇格口ではない。非reviewedとの混合・同accepted／plan／finishへの移譲・OM-B finalizeは未接続。
+
+[OM-D接続差分draft-0.1](BEST_PRACTICE_ABORT_SCOPE_RECOVERY_MIXED_CONTENT_OMD_DESIGN.md)で、混合originと同accepted／planの一度限り移譲、同full値からの局所viewと元本文比較を具体化した。OM-B未成立時の親manifest内容照合は非実行の限定結果に留め、新finish省略を拒否する。本文一致を合法finalizeや本節の完全gateへ昇格せず、接続実装・RD-Cの同job originは引き続き未成立とする。
 
 [OM-Bサイズ計数器契約](BEST_PRACTICE_ABORT_SCOPE_RECOVERY_JSON_SIZE_OMB_DESIGN.md)では、入力全体の有限な受付を先に完了し、その後の計数だけをexact／over_thresholdへ分ける案とした。数値候補・JSON互換・共有予算・停止と固定Eへの境界は設計段階で、実装・全体受付・finish jobを有効にしない。
 

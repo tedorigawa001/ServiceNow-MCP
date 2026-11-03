@@ -1,6 +1,6 @@
 # CG-C 親省略決定証拠・合法omissionモデル 詳細設計
 
-Version: br006-recovery-omission-cgc-draft-0.5 / Date: 2026-11-03。
+Version: br006-recovery-omission-cgc-draft-0.6 / Date: 2026-11-03。
 Status: **OM-A値層とOM-Cのreviewed列限定fresh合成決定ownerを実装。混合origin・finalizeモデル・同accepted／plan／manifest／finish job接続は未実装。正式発行口閉鎖・全体受付無効・Unknown・VM／監視／telemetry調査保留を維持する。**
 
 基準HEAD: `fd5ddb9`（NR-Cの追加対照を含む）。[内容gate設計](BEST_PRACTICE_ABORT_SCOPE_RECOVERY_FINISH_CONTENT_GATE_DESIGN.md)§3・7・8と[非reviewed設計](BEST_PRACTICE_ABORT_SCOPE_RECOVERY_NONREVIEWED_DESIGN.md)§6・11からの差分。現NR-Cは親受理後のomissionを拒否する。このMDはその拒否を変更せず、実装・実接続・実通信・実機操作・設定変更・本番cap／Permit／候補発行・Pushの承認ではない。
@@ -135,7 +135,7 @@ OM-Bの受付／計数分離・数値候補・256-unit checkpoint・epoch／同b
 | OM-A（§11の値層のみ実装） | strict値型・親prefix／keep／omitの純粋計算と副作用表。別producerの元omittedを区別する | 決定証拠・manifest拡張・finish job |
 | OM-B（計数詳細契約のみ追加） | [MB-A〜C](BEST_PRACTICE_ABORT_SCOPE_RECOVERY_JSON_SIZE_OMB_DESIGN.md)：strict準備値→count-only core→固定Eのfinalizeモデル。同budget・epoch・独立oracle | 総work受付・runtime・候補 |
 | OM-C（§12のreviewed列限定で実装） | fresh合成ownerから同captureへ親決定を結合し、one-shot・失効・discardと別brandを検証。非reviewed混合は後続 | 旧root昇格・正式発行・本番binding |
-| OM-D | 同accepted／planの新混合variantへ一度移譲、finish応答full比較と局所比較の整合条件を具体化 | 同job／wire／全gate未成立の候補化 |
+| OM-D | [接続差分設計](BEST_PRACTICE_ABORT_SCOPE_RECOVERY_MIXED_CONTENT_OMD_DESIGN.md)で新混合variant・一度移譲・full／局所比較を分割。契約のみで接続は未実装 | 同job／wire／全gate未成立の候補化 |
 
 未確認：保護された親prefixの発行owner、元captureを内部で借用する固定継続、親決定の移譲とsource／cleanupの同時寿命、size計数器のescaping互換・中間graph上界、coverageの局所契約との接続、omission追加費目・共有budgetの中断点、同finish job／E／response originの発行元。未実装の型や数値を確認済みにせず、各段階の実装前に固定sourceと照合する。
 
@@ -214,3 +214,5 @@ summaryはstate／first_failure／累積accepted・decided・keep・omit・保�
 入力／capture／決定／履歴は各100以下、prefixとfull結果には既存CG-B／OM-A局所枠を適用する。1行ごとのcapture検査に加え、k行目の決定でk行のOM-A copy／schema／serialize／freezeを再計算し、100行なら最大5050 asset分のpure検査になる。元private本文とモデル一時copy、prefix／trace、guard、Map／handle、clearは別費目。総work／memory・canonical budget／中断粒度はUnknownで、元C/G/P／retry・210試行・全60秒を変更せず、runtimeにも投入しない。
 
 非reviewed／元worker omitted／retainedと同receiptで混合する供給元、同accepted／plan移譲、OM-B size／finalize、同finish job／E／応答内容gate・候補・正常終端は未接続。NR-Cの親omission拒否を解除せず、実origin発行口閉鎖・全体受付無効・調査保留を維持する。[OM-C検証記録](E2E_BEST_PRACTICE_PARENT_OMISSION_OMC_2026-11-03.md)参照。
+
+[OM-D接続差分draft-0.1](BEST_PRACTICE_ABORT_SCOPE_RECOVERY_MIXED_CONTENT_OMD_DESIGN.md)で、同一の新合成assembly内の混合origin・prefix段階・private移譲・同JSON内容照合を具体化した。OM-B前は新finish省略を拒否する限定的な非実行照合だけを設計し、合法finalize／同finish job／全gateの成立とは区別する。実装はOD-Aから段階化し、本書の未接続状態は変えない。
