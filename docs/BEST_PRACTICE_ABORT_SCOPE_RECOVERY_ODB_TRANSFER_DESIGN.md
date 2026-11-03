@@ -1,7 +1,7 @@
 # OD-B 同生成元の供給と一度限りの内容移譲
 
-Version: br006-recovery-odb-transfer-draft-0.5 / Date: 2026-11-03。
-Status: **OB-01の供給・準備claimと、独立した純粋FailureOwner／上位custodyまで合成実装。既存cleanup連結・accepted採用・移譲先sealは未接続。正式発行口閉鎖・全体受付無効・Unknown・VM／監視／telemetry調査保留を維持する。**
+Version: br006-recovery-odb-transfer-draft-0.6 / Date: 2026-11-03。
+Status: **OB-01の供給・準備claim、独立FailureOwner／上位custodyと、FB-01の先行slot／固定失敗通知まで合成実装。既存cleanup連結・accepted採用・移譲先sealは未接続。正式発行口閉鎖・全体受付無効・Unknown・VM／監視／telemetry調査保留を維持する。**
 
 基準HEAD: `1eb3c74`。[OM-D設計](BEST_PRACTICE_ABORT_SCOPE_RECOVERY_MIXED_CONTENT_OMD_DESIGN.md)§4・7・10〜11と[OD-A検証記録](E2E_BEST_PRACTICE_OMD_SLOTS_ODA_2026-11-03.md)からの差分。同じ生成元で作ったmixed内容とaccepted／planを、一つのprivate操作で移譲先へ確定する。OD-Aの公開handleを既存rootへ後付け登録する方式は採らない。本文照合・finish job・候補発行はOD-Bの対象外。
 
@@ -160,6 +160,8 @@ source close／cleanup開始・固定discardは、元mixed／pending／destの�
 | OB-03 | pre/post・一つのdest commit、同期失効、正常terminal-only discardとhard時の診断保持を連続fake検証 | OD-C比較・OM-B／RD-C・全体受付・runtime |
 
 OB-01では上記strict入力・行別input存在条件を型と試験に固定した。固定role・上位受理・custody／commit receipt・最終discardの独立合成実装後、[FailureOwner接続差分](BEST_PRACTICE_ABORT_SCOPE_RECOVERY_FAILURE_BINDING_DESIGN.md)のFB-01〜03で、先行生成・失敗通知・kernel生成点／cleanup対応・未解決責務の保存を確認してからOB-02へ進む。OB-03前には順序付きprefixと既存sort／dedupの固定写像・projection／対応表の費用と中断点を具体化する。数値上界の未導出はUnknownに残し、型・独立表・失敗試験なしで完了flagだけを追加しない。
+
+FB-01の先行FailureOwner／上位slot・OB-01一度限り通知とpayload失効は合成実装済み（[記録](E2E_BEST_PRACTICE_FAILURE_BINDING_FB01_2026-11-03.md)）。新entryはkernelを生成せず、role証拠・上位受理・実予算はUnknown／未接続のまま。FB-02〜03とOB-02以降の開始条件を省略しない。
 
 draft-0.1は設計MDだけ。続くOB-01の実装範囲を以下に限定し、実Permit／候補発行・実接続・実通信・実機操作・設定変更・Pushは行わない。
 

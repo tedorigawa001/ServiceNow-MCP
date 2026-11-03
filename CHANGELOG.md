@@ -16,6 +16,8 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 ### Changed
 
+- FB-01 adds a package-excluded fresh DATA-only construction that allocates failure/custody/upper slots before validating OB-01 input, shares the private construction token, and records the first fixed failure notice once before clearing payload references. Legacy supply and custody APIs remain unchanged through co-located private cores. Missing role evidence stays unknown; no kernel generation, accepted adoption, cleanup execution, formal issuance or whole-run admission is enabled.
+
 - Adds package-excluded synthetic failure/upper owners with four fixed cleanup roles and a single custody selector. Immutable failure reports, one-shot commit receipts and final discard keep unresolved obligations under the upper owner without calling them released. Same-origin evidence, late cleanup, duplicate/foreign handles and reentry are covered by synthetic tests; accepted adoption, runtime cleanup, destination seals and whole-run admission remain disabled.
 
 - OB-01 adds a package-excluded owned mixed-supply constructor with a strict DATA-only contract and a one-shot preparation claim. Parent and original worker omissions derive from one pinned row sequence; one pins construction supplies the exact input/original-outcome references used by private row links. Guard stops, mixed handles, invalid contexts and duplicate preparation fail closed. Legacy entry points remain unchanged; accepted adoption, destination seals, runtime binding and whole-run admission remain disabled.

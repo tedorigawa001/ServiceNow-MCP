@@ -1,7 +1,7 @@
 # FailureOwnerとOB-01とkernelの接続差分
 
-Version: br006-recovery-failure-binding-draft-0.1 / Date: 2026-11-03。
-Status: **設計のみ。合成依存限定。正式発行口閉鎖・全体受付無効・Unknown・VM／監視／telemetry調査保留を維持する。**
+Version: br006-recovery-failure-binding-draft-0.2 / Date: 2026-11-03。
+Status: **FB-01の先行owner／上位slot・OB-01失敗通知とpayload失効まで合成実装。kernel／resource接続は未実装。正式発行口閉鎖・全体受付無効・Unknown・VM／監視／telemetry調査保留を維持する。**
 
 基準HEAD: `196ca0c`。[失敗owner寿命設計](BEST_PRACTICE_ABORT_SCOPE_RECOVERY_FAILURE_OWNER_LIFETIME_DESIGN.md)§9と[OD-B設計](BEST_PRACTICE_ABORT_SCOPE_RECOVERY_ODB_TRANSFER_DESIGN.md)§11からの差分。同一constructionでFailureOwnerを先行確保し、OB-01の失敗通知と既存kernelのresource生成・cleanupを結ぶ。既存の独立factoryを二つ呼び、summaryやID一致で接続する方式は採らない。
 
@@ -28,7 +28,7 @@ OB-01の公開prepared handleやFailureCustodyの公開issuerを、汎用DIで�
 
 ## 3 private接続契約
 
-名称は案。今回、型や入口は追加しない。
+以下は全接続の型案。FB-01で実装した部分は§10に限定する。
 
 | 型案 | 固定内容 | 検査と所有権 |
 | --- | --- | --- |
@@ -118,4 +118,20 @@ healthy stopは生成・解析・accepted等を止め、cleanup-only stopは元�
 
 この3段階の失敗停止・責務保存と欠ける証拠の扱いを確認した後に、OB-02の同pins／accepted／planを一つの移譲claimへ結ぶ。Unknownをconfirmedに変えることで開始条件を満たしたことにはしない。
 
-本工程はMDと親参照の更新だけ。実装・実接続・実通信・実機操作・設定変更・token／Permit／候補発行・Pushは行わない。
+draft-0.1はMDと親参照の更新のみ。draft-0.2の実装範囲は以下のFB-01に限定する。
+
+## 10 FB-01の合成実装と残す境界
+
+[実装](../tests/support/review/synthetic-recovery-kernel.ts)のfresh DATA entry `createSyntheticFailureBoundSupply`は、入力／依存のstrict検査より先に同construction token、既存FailureOwner coreの4role台帳・custody・上位slotとprivate通知slotを確保する。既存FailureCustody coreを同moduleへ移し、[旧module](../tests/support/review/synthetic-failure-custody.ts)は同じfresh factory・error・typeだけを固定importして公開する。旧API／brand／独立台帳は維持し、public issuerを接着する方式にはしていない。
+
+OB-01のprivate供給coreは同tokenと固定通知slotだけを内部生成継続から受け取る。旧DATA entryにowner登録引数は増やさない。最初の失敗理由を確定し、通知claimを先に占有して固定code／prepare stageを同FailureOwnerへ書く。cancelled／deadline_exceededはそのまま、他の供給reasonはinternal_review_errorへ写す。同じ失敗のcatch／再操作では通知数1を維持する。通知先はcaller callbackでなく同coreの固定writeであり、原文Error・本文を格納しない。
+
+通知処理はfinallyでDATA／held／preparedを外す。prepareの途中movingとbusy、discardのbusyもfinallyで解放する。元のpost guardと保留binding不一致の優先順を維持する。constructorの不正DATAだけでなく不正依存も新entryでは失敗済みfacadeとして診断へ残し、旧standalone entryの不正依存throwは維持する。constructorの元raw／余分引数も参照から外す。JS heapの物理消去・OOM時の診断確保は保証しない。
+
+新facadeはOB-01のprepare／固定失効操作とimmutableな`failure()`診断だけを返す。診断のcurrentは同coreから導出する限定snapshotで、sealed reportやcommit receiptではない。issuer／local／upper／seal／commit／finalDiscardを公開せず、通知faultを注入する任意callbackも持たない。上位slotは先行確保するだけで、上位受理はfalseのまま。正常なsource／cleanup／discard失効自体をhardやresource解放と扱わない。
+
+4roleは全てunknown、release=unconfirmed／unresolved=4を維持する。DATA-onlyでC/G/P=0でもabsenceを発行しない。kernel生成・初期topology／RoleBinding・cleanup-only capsule／sink・同予算／全deadline・上位custody移譲はFB-02〜03へ残す。新entryは`createRecoveryKernel`を呼ばず、accepted採用・移譲先seal・実発行口を持たない。
+
+[合成試験](../tests/review/synthetic-failure-bound-supply.test.ts)と[検証記録](E2E_BEST_PRACTICE_FAILURE_BINDING_FB01_2026-11-03.md)で、不正入力、全prepare checkpointの停止、握り潰した再入、foreign／copy／summary、post guard優先、固定依存・旧入口不変を確認する。通知先はprivate固定writeで外部から差替え不能のため、内部通知の任意throw注入は今回の試験保証に含めない。新marker非同梱と固定import／runtime・I/O・clock・workerの負の対照も維持する。
+
+追加費目は先行4role／custody／上位slot、同tokenと通知slot、first-hard写像・固定write・clearである。回数は通知1、固定4roleだが、これを全work／heap上界と扱わない。実会計・C/G/P・retry・210試行・全60秒は変更せず、総上界・中断粒度はUnknownのままとする。実接続・実通信・実機操作・設定変更・token／Permit／候補発行・Pushは行っていない。
