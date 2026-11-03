@@ -12,6 +12,7 @@ export class NonReviewedIssuerError extends Error{constructor(readonly code:Stop
 declare const rowBrand:unique symbol,classifiedBrand:unique symbol;
 declare const inputBrand:unique symbol,attemptBrand:unique symbol,cleanupBrand:unique symbol,terminalBrand:unique symbol,retrievedBrand:unique symbol;
 declare const jobBrand:unique symbol,deliveryBrand:unique symbol,analyzedBrand:unique symbol;
+declare const manifestBrand:unique symbol;
 export type NonReviewedRow=Readonly<{[rowBrand]:'synthetic_nonreviewed_row'}>;
 export type ClassifiedNonReviewed=Readonly<{[classifiedBrand]:'synthetic_classified_nonreviewed'}>;
 export type NonReviewedInput=Readonly<{[inputBrand]:'synthetic_nonreviewed_input'}>;
@@ -22,6 +23,7 @@ export type RetrievedNonReviewed=Readonly<{[retrievedBrand]:'synthetic_retrieved
 export type NonReviewedJob=Readonly<{[jobBrand]:'synthetic_nonreviewed_job'}>;
 export type NonReviewedDelivery=Readonly<{[deliveryBrand]:'synthetic_nonreviewed_delivery'}>;
 export type AnalyzedNonReviewed=Readonly<{[analyzedBrand]:'synthetic_analyzed_nonreviewed'}>;
+export type NonReviewedManifest=Readonly<{[manifestBrand]:'synthetic_nonreviewed_manifest'}>;
 class Mismatch{constructor(readonly reason:Reason){}}
 const mismatch=(reason:Reason):never=>{throw new Mismatch(reason);};
 const opaque=<T>():T=>Object.freeze(Object.create(null)) as T;
@@ -53,22 +55,26 @@ function classify(row:Row,rules:readonly string[]){
   if(type==='other')return {...common,state:'not_applicable',asset_type:type,reason:'asset_type_unsupported'};
   if(!rules.some(id=>RULES.find(r=>r.rule_id===id)!.asset_types.includes(type)))return {...common,state:'not_applicable',asset_type:type,reason:'no_requested_rules'};
 }
-export function createSyntheticNonReviewedIssuer(raw:unknown,dependencies:Readonly<{guard:(operation:string,phase:'pre'|'post')=>Stop|void}>){
+function createIssuer(raw:unknown,dependencies:Readonly<{guard:(operation:string,phase:'pre'|'post')=>Stop|void}>,manifestMode=false,expected?:unknown){
   let config:z.infer<typeof schema>,guardFn:typeof dependencies.guard;
+  let expectedValues:readonly SyntheticNonReviewedValues[]|undefined;
   try{const deps=own(dependencies);if(Reflect.ownKeys(deps).length!==1||typeof deps.guard!=='function'||types.isProxy(deps.guard))throw Error();guardFn=deps.guard as typeof guardFn;
     config=schema.parse(copy(raw));if(new Set(config.requested_rule_ids).size!==config.requested_rule_ids.length||config.rows.some((r,i)=>i>0&&config.rows[i-1].sys_id>=r.sys_id))throw Error();
     for(const r of config.rows)if((r.producer==='metadata')!==!!classify(r,config.requested_rule_ids))throw Error();
+    if(manifestMode){const data=copy(expected);if(!Array.isArray(data)||data.length!==config.rows.length)throw Error();expectedValues=Object.freeze(data.map(projectSyntheticNonReviewedValue));
+      for(const [i,p] of expectedValues.entries())if(p.value.producer!==config.rows[i].producer||p.value.schema_version!==config.schema_version||p.value.outcome.update_xml_sys_id!==config.rows[i].sys_id)throw Error();}
   }catch{throw new NonReviewedIssuerError('internal_review_error','shape');}
   type Slot={row:Row;issue_started:boolean;begin_started?:boolean;settle_started?:boolean;delivery_started?:boolean;input?:NonReviewedInput;attempt?:NonReviewedAttempt;cleanup?:NonReviewedCleanup;job?:NonReviewedJob;id?:number};
   const slots=new Map<NonReviewedRow,Slot>(),evidence=new Map<ClassifiedNonReviewed|RetrievedNonReviewed|AnalyzedNonReviewed,{slot:Slot;value:SyntheticNonReviewedValues}>();
   const terminals=new Map<RetrievedTerminal,{slot:Slot;value:SyntheticNonReviewedValues}>(),cleanups=new Map<NonReviewedCleanup,'pending'|'confirmed'|'unconfirmed'>();
   const deliveries=new Map<NonReviewedDelivery,{slot:Slot;json:string}>();
-  let state:'active'|'failed'|'discarded'='active',busy=false,first:Readonly<{code:Stop|'internal_review_error';reason:Reason}>|undefined;
+  let state:'active'|'sealed'|'failed'|'discarded'='active',busy=false,first:Readonly<{code:Stop|'internal_review_error';reason:Reason}>|undefined;
+  let manifestStarted=false,manifestTransfers=0,manifest:NonReviewedManifest|undefined,held:typeof evidence|undefined;
   const issued={metadata:0,retrieval:0,analysis:0};let inputCount=0,jobCount=0;
   const outcomeStates={not_applicable:0,skipped_deleted:0,rejected:0,retrieval_failed:0,result_omitted:0};
   const outcomeReasons=new Map<string,number>();
   function published(value:SyntheticNonReviewedValues){const {state,reason}=value.value.outcome;if(state==='not_processed')mismatch('producer');outcomeStates[state as keyof typeof outcomeStates]++;outcomeReasons.set(reason,(outcomeReasons.get(reason)??0)+1);}
-  const fail:(reason:Reason,code?:Stop|'internal_review_error')=>never=(reason,code='internal_review_error')=>{first??=Object.freeze({reason,code});state='failed';slots.clear();terminals.clear();deliveries.clear();evidence.clear();throw new NonReviewedIssuerError(first.code,first.reason);};
+  const fail:(reason:Reason,code?:Stop|'internal_review_error')=>never=(reason,code='internal_review_error')=>{first??=Object.freeze({reason,code});state='failed';slots.clear();terminals.clear();deliveries.clear();evidence.clear();held?.clear();held=undefined;manifest=undefined;expectedValues=undefined;throw new NonReviewedIssuerError(first.code,first.reason);};
   function active(){if(first)throw new NonReviewedIssuerError(first.code,first.reason);if(busy)fail('reentrant');if(state!=='active')fail('state');}
   function guard(op:string,phase:'pre'|'post'){
     let stop:unknown;try{stop=guardFn(op,phase);}catch{fail('internal');}if(first)throw new NonReviewedIssuerError(first.code,first.reason);
@@ -121,9 +127,27 @@ export function createSyntheticNonReviewedIssuer(raw:unknown,dependencies:Readon
     if(busy)fail('reentrant');if(cleanups.get(sink)!=='pending'||!['confirmed','unconfirmed'].includes(status))fail('binding');cleanups.set(sink,status);
   }
   function discardEvidence(handle:ClassifiedNonReviewed|RetrievedNonReviewed|AnalyzedNonReviewed){active();if(!evidence.delete(handle))fail('binding');}
-  function discard(){if(busy)fail('reentrant');slots.clear();terminals.clear();deliveries.clear();evidence.clear();if(!first)state='discarded';}
-  return Object.freeze({rows:Object.freeze([...slots.keys()]),issueClassified,beginRetrieval,settleRetrieval,issueRetrieved,beginAnalysis,deliverAnalysis,issueAnalyzed,recordCleanup,discardEvidence,discard,
+  function discard(){if(busy)fail('reentrant');slots.clear();terminals.clear();deliveries.clear();evidence.clear();held?.clear();held=undefined;manifest=undefined;expectedValues=undefined;if(!first)state='discarded';}
+  const surface=Object.freeze({rows:Object.freeze([...slots.keys()]),issueClassified,beginRetrieval,settleRetrieval,issueRetrieved,beginAnalysis,deliverAnalysis,issueAnalyzed,recordCleanup,discardEvidence,discard,
     revoke:(reason:Stop)=>fail('stopped',['cancelled','deadline_exceeded','request_budget_exceeded','receive_budget_exceeded','payload_budget_exceeded','authentication_failed','access_denied','upstream_unavailable'].includes(reason)?reason:'internal_review_error'),
     summary:()=>Object.freeze({scope:'synthetic_nonreviewed_issuer_only',authority:'none',state,first_failure:first??null,issued:Object.freeze({...issued}),outcome_states:Object.freeze({...outcomeStates}),outcome_reasons:Object.freeze(Object.fromEntries(outcomeReasons)),pending_evidence:evidence.size,pending_terminals:terminals.size,pending_deliveries:deliveries.size,inputs:inputCount,jobs:jobCount,
-      cleanup_pending:[...cleanups.values()].filter(x=>x==='pending').length,cleanup_unconfirmed:[...cleanups.values()].filter(x=>x==='unconfirmed').length,unverified:Object.freeze(['runtime_origin','native_cleanup','manifest','whole_run_budget'])})});
+      cleanup_pending:[...cleanups.values()].filter(x=>x==='pending').length,cleanup_unconfirmed:[...cleanups.values()].filter(x=>x==='unconfirmed').length,unverified:Object.freeze(['runtime_origin','native_cleanup','manifest','whole_run_budget']),
+      ...(manifestMode?{manifest:Object.freeze({started:manifestStarted,transfers:manifestTransfers,pending:!!manifest})}:{})})});
+  if(!manifestMode)return surface;
+  return Object.freeze({...surface,
+    sealManifest(){let pending:typeof evidence;return act('manifest_seal',()=>{if(manifestStarted)fail('duplicate');manifestStarted=true;pending=new Map(evidence);evidence.clear();},()=>{
+      if(!expectedValues||pending.size!==slots.size||terminals.size||deliveries.size||[...cleanups.values()].some(x=>x!=='confirmed'))mismatch('state');
+      const bySlot=new Map([...pending.values()].map(v=>[v.slot,v]));if(bySlot.size!==pending.size)mismatch('duplicate');
+      for(const [i,slot] of [...slots.values()].entries()){const original=bySlot.get(slot);if(!original||!slot.issue_started||JSON.stringify(original.value.value)!==JSON.stringify(expectedValues![i].value))mismatch('context');}
+      return opaque<NonReviewedManifest>();
+    },handle=>{held=pending;manifest=handle;manifestTransfers=1;expectedValues=undefined;state='sealed';});},
+    discardManifest(handle:NonReviewedManifest){if(busy)fail('reentrant');if(first)throw new NonReviewedIssuerError(first.code,first.reason);if(!manifest||handle!==manifest||state!=='sealed')fail('binding');discard();},
+  });
 }
+type Dependencies=Parameters<typeof createIssuer>[1];
+type CoreIssuer=Exclude<ReturnType<typeof createIssuer>,{sealManifest:unknown}>;
+type PlainIssuer=Omit<CoreIssuer,'summary'>&{summary():Omit<ReturnType<CoreIssuer['summary']>,'manifest'|'state'>&{state:'active'|'failed'|'discarded'}};
+export function createSyntheticNonReviewedIssuer(raw:unknown,dependencies:Dependencies){return createIssuer(raw,dependencies) as PlainIssuer;}
+/** Constructor-only supplier. Expected values are DATA, never a registration of existing evidence. */
+type ManifestSupplier=CoreIssuer&{sealManifest():NonReviewedManifest;discardManifest(handle:NonReviewedManifest):void};
+export function createSyntheticNonReviewedManifestSupplier(raw:unknown,dependencies:Dependencies,expected:unknown){return createIssuer(raw,dependencies,true,expected) as ManifestSupplier;}

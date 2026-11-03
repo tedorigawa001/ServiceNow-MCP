@@ -1,13 +1,13 @@
 # 回復finish 非reviewed受領物・発行元・ゼロcapture 詳細設計
 
-Version: br006-recovery-nonreviewed-draft-0.3 / Date: 2026-11-03。
-Status: **NR-Aの値層とNR-Bのfresh producer別合成issuerまで実装。実originの証拠発行・既存planとの混合集合・reviewedゼロ件の接続は未実装。正式発行口閉鎖・全体受付無効・Unknown・VM／監視／telemetry調査保留を維持する。**
+Version: br006-recovery-nonreviewed-draft-0.4 / Date: 2026-11-03。
+Status: **NR-A／Bに加え、NR-Cの新合成constructor限定の混合manifest・reviewedゼロ件と同accepted／plan接続を実装。旧root・実originの証拠発行・finish job・親省略は未接続。正式発行口閉鎖・全体受付無効・Unknown・VM／監視／telemetry調査保留を維持する。**
 
 基準HEAD: `0ed7d91`。[内容gate](BEST_PRACTICE_ABORT_SCOPE_RECOVERY_FINISH_CONTENT_GATE_DESIGN.md)§3・7・12〜13と[RD-C](BEST_PRACTICE_ABORT_SCOPE_RECOVERY_FINISH_JOB_RDC_DESIGN.md)からの差分案。CG-BP1の現受付はreviewedが1件以上のreviewed／not_processed planだけであり、本書によって受付を広げない。公開JSON・既存契約・元60秒・受信枠・会計は変更しない。
 
 ## 1 根拠と分離原則
 
-現状の根拠は[assetOutcomeStructureと集約refinement](../src/review/aggregate-schema.ts)、[adapter](../src/review/update-set-adapter.ts)、[worker](../src/review/review-worker.ts)、[finish pins](../tests/support/review/synthetic-finish-pins.ts)、[局所context検査](../tests/support/review/synthetic-finish-context-values.ts)。§2〜8は設計案、実装範囲はpure値層§9とfresh合成issuer§10。実originの証拠発行や実機検証の成功を主張しない。
+現状の根拠は[assetOutcomeStructureと集約refinement](../src/review/aggregate-schema.ts)、[adapter](../src/review/update-set-adapter.ts)、[worker](../src/review/review-worker.ts)、[finish pins](../tests/support/review/synthetic-finish-pins.ts)、[局所context検査](../tests/support/review/synthetic-finish-context-values.ts)。§2〜8は設計案、実装範囲はpure値層§9・fresh合成issuer§10・混合接続§11。実originの証拠発行や実機検証の成功を主張しない。
 
 - assetのstateだけから発行元を推定しない。同じrejectedでもmetadata分類・payload上限・worker解析で発行元が異なる。
 - AcceptedNonReviewedは「そのstateの結果を同じイベントから受理した」証拠であり、未受信のreviewed本文・解析成功・findingの不存在を証明しない。
@@ -158,3 +158,39 @@ summaryは固定scope／authority:none、最初のcode／reason、producer別累
 - 操作ごとの2 guard、固定分類／写像、own-data envelope、CG-A decode／copy／freeze、NR-A projection、索引・handle、clearは別費目。metadata発行は2 guard、retrievalとanalysisの基本3段階は各6 guard。元C/G/P prefixや全60秒の期限を延長・更新しないが、総work／heap費用を0とは扱わない。
 
 実transport／実worker・実auth／ReleasePermit、CG-BP1の元receiptとの結合、混合manifest・reviewedゼロ件、親省略・合法omission、finish job／candidateは未接続。全体受付無効・Unknownを維持する。[NR-B検証記録](E2E_BEST_PRACTICE_RECOVERY_NONREVIEWED_NRB_2026-11-03.md)参照。
+
+## 11 NR-C 混合manifest・reviewedゼロ件の合成接続
+
+基準HEAD: `d93908c`。§10.3末尾はNR-B時点の未接続事項であり、本節が新合成rootの差分を定める。[private root](../tests/support/review/synthetic-pinned-recovery-root.ts)のcreateSyntheticMixedRecoveryRootだけが混合集合を受ける。旧pinned／captured rootのAPI・min1／reviewed限定契約・診断は変えず、旧handleを登録・昇格できない。新rootには旧structure-only／captured sealを公開しない。
+
+### 11.1 同constructorのpartitionと供給
+
+同じconstructから作ったprivate pinsのselected・outcomes・input receiptを使う。全selected行に新しい選択行receiptを付け、outcomeは元の参照、inputが存在する行は元のinput参照を保存する。selected順の完全partitionでreviewed＋nonreviewed＋retained＝selectedを要求し、重複・missing・順序差・余剰eventを拒否する。処理済み行には固定順のeventをちょうど1個、not_processedにはeventを渡さない。
+
+| 行 | 新rootの供給・照合 |
+| --- | --- |
+| reviewed | context／元JSON応答をCG-Bへ渡す。元receipt・accepted outcome・ID・T_i・対象・release・ruleと同じでなければ拒否 |
+| metadata | 固定row分類をNR-Bで再実行。inputが存在すれば拒否し、選択行receiptへ結ぶ。input／job／T_iは作らない |
+| retrieval | 同rowの合成attempt・cleanupから発行。元inputは任意だが、存在時はcompletedかつanalysis contextなし。元outcomeのstate・reason全体と比較 |
+| analysis | 元completed input・非null expected_context・同T_iが必須。同rowの合成jobと元応答JSONから発行し、元outcome全体と比較 |
+| retained | 元not_processed inputが必須でdeadline_exceededだけ。既存回復kernelのplanへ保持し、新issuerは作らない |
+
+元workerのresult_omittedはreviewed_origin:nullだけをanalysisで扱う。親がreviewedを受理後に省略するvariantは、元capture／省略decisionの接続が未完了なので拒否する。0.2／0.3を既存strict pinsで検査し、0.3のdeleted拒否を維持する。
+
+NR-Bの通常issuerにmanifest入口は追加しない。別のconstructor-only supplierで、privateに発行した全evidenceを一度取り外し、元pinsから作ったstrict期待値へ固定row順で比較する。pending terminal／deliveryや未確認cleanup、未発行／discard済み行があれば停止する。supplierの返すopaque manifestには値getterがなく、旧証拠handleを外から登録できない。
+
+### 11.2 seal・ゼロ証明・失効とdiscard
+
+sealMixedRecoveryFinishExpectationはclaimを先に占有し、同accepted／plan／handoffの既存kernel sealを実行してからpartitionを再照合する。CG-B captureとNR-B supplierを一度だけ消費し、post guard後に新しい別brandの空handleを公開する。局所不一致・コピー・別owner・二重seal・余分な引数は停止し、部分manifestを公開しない。
+
+reviewed=0でも検査を省略しない。同planと全選択行receiptに結ぶprivate empty proofを新root内部で作る。汎用の空配列tokenや外部summaryから証明を作れない。全件retained・eventゼロは元active inputと既存old closure／新世代ready／accepted検査が通る場合だけ受ける。selectedゼロ、active inputなしは従来どおり拒否する。
+
+sealの固定guardはkernelの2点＋partitionのpre/post2点＋reviewedがある場合のcapture2点＋nonreviewedがある場合のsupplier2点（最大8点）。全点で取消／期限／共通停止と再入を検査し、先行hardを保持する。busy中の変更操作の再入を捕捉されても再開しない。summaryは固定countとstate・authority:noneだけであり、権限・manifest・再利用可能なreceiptを表さない。
+
+source close開始・新世代cleanup開始・hard・preparation／plan／acceptedの固定discardで、capture・supplier値・partition link・seal参照を同期に外す。countだけ診断に残す。既存acceptedのsource／worker終端責務は免除せず、late cleanupは診断だけ更新できる。JS heapの物理消去は保証しない。
+
+### 11.3 有限枠・費用・残課題
+
+selected／event／row／link／manifestは最大100、各入力のown-data／strict検査と既存copy上限を維持する。metadataのinput捏造やretainedへのanalyze eventは拒否する。constructor時のpins生成・partition走査／input検索、producer別発行、NR-A投影、CG-B検証、manifest索引と比較・Map移動用copy、opaque handle、guard・clearが追加費目。最大100件なので走査は有限だが、総work／heap費用の証明ではなくUnknownのままとする。C/G/P prefix・retry・60秒・210試行の本番契約を更新しない。
+
+finish jobへの移譲・full finish内容gate・親省略decision・合法omission・runtime binding・実cleanup証拠・candidate発行は未接続。npmの配布物から新root／supplier／brandも除外し、固定import監査とseeded負の対照で検査する。[NR-C検証記録](E2E_BEST_PRACTICE_RECOVERY_MIXED_MANIFEST_NRC_2026-11-03.md)参照。

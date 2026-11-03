@@ -1,7 +1,7 @@
 # 回復finish 本文capture・full schema・同bytes検証gate 詳細設計
 
-Version: br006-recovery-finish-content-draft-0.9 / Date: 2026-11-03。
-Status: **CG-A／B／BP1、NR-Aの値層とNR-Bのproducer別fresh合成issuerまで実装。旧rootの後付け昇格は不可。実origin／finish job・混合manifest・omission／full応答gate／候補発行は未実装。正式発行口閉鎖・全体受付無効・Unknown・VM／監視／telemetry保留を維持する。**
+Version: br006-recovery-finish-content-draft-0.10 / Date: 2026-11-03。
+Status: **CG-A／B／BP1、NR-A／BとNR-Cの新合成root限定の混合manifest・reviewedゼロ件まで実装。旧rootの後付け昇格は不可。実origin／finish job・親omission／full応答gate／候補発行は未実装。正式発行口閉鎖・全体受付無効・Unknown・VM／監視／telemetry保留を維持する。**
 
 基準HEAD: `1e1e78d`（CG-B追加回帰を含む）。[RD-C](BEST_PRACTICE_ABORT_SCOPE_RECOVERY_FINISH_JOB_RDC_DESIGN.md)§5・7・10〜11の内容gateを具体化する。実装範囲はCG-A§11・CG-B§12・CG-BP1§13、それ以外の型・操作・数値モデルは未実装の内部案。本番cap・通常経路の受付変更・実通信・実機操作・設定変更・Pushの承認ではない。
 
@@ -237,3 +237,5 @@ draft-0.6のレビュー修正：初版はapplicable ruleを元pinと照合し�
 [非reviewed詳細設計](BEST_PRACTICE_ABORT_SCOPE_RECOVERY_NONREVIEWED_DESIGN.md)でAcceptedNonReviewedのproducer別型・発行継続、RetainedNotProcessedとの分離、状態別の保持／拒否、同rowと存在するinput／jobのbinding、reviewedゼロ件の専用partition証拠を定める。workerから届くrejected／元omittedと、metadata分類／retrieval失敗は同じissuerにしない。親受理後の省略は元capture＋後続CG-Cの変換証拠を必要とし、元omittedと統合しない。
 
 NR-Aの値層とNR-Bのproducer別fresh合成issuerを実装した（[非reviewed設計§9〜10](BEST_PRACTICE_ABORT_SCOPE_RECOVERY_NONREVIEWED_DESIGN.md)）。NR-Bは同rootのrow／input／attempt／jobに結ぶ合成発行だけで、実originの証拠ではない。次はNR-Cの混合集合／ゼロcapture接続。zeroは設計上の許容案だけで、現CG-B／BP1のmin1やreviewed／not_processed限定を変更しない。finish job・omissionモデル・full内容gate・総費用も未実装／未承認のまま。正式発行口閉鎖・全体受付無効・Unknown・調査保留を維持する。
+
+上記はNR-B時点の経緯。NR-Cは[非reviewed設計§11](BEST_PRACTICE_ABORT_SCOPE_RECOVERY_NONREVIEWED_DESIGN.md)の新合成constructorだけに混合partition／private empty proofを接続した。元receipt・固定順序・同accepted／planの一度限り消費と同期失効を検査し、旧CG-B／BP1のmin1・APIは維持する。finish job／full gate／親省略への接続はなお未実装。[NR-C検証記録](E2E_BEST_PRACTICE_RECOVERY_MIXED_MANIFEST_NRC_2026-11-03.md)参照。
