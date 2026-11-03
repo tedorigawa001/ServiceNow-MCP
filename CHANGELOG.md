@@ -16,6 +16,8 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 ### Changed
 
+- OB-01 adds a package-excluded owned mixed-supply constructor with a strict DATA-only contract and a one-shot preparation claim. Parent and original worker omissions derive from one pinned row sequence; one pins construction supplies the exact input/original-outcome references used by private row links. Guard stops, mixed handles, invalid contexts and duplicate preparation fail closed. Legacy entry points remain unchanged; accepted adoption, destination seals, runtime binding and whole-run admission remain disabled.
+
 - OD-A adds a package-excluded, fresh synthetic mixed-slot assembly with separate brands and row/receipt identities. Strict producer/state values and canonical order feed one-shot initial/parent/completed prefix stages; original worker omissions remain distinct from parent omissions retaining reviewed DATA. Mixed handles, duplicate generation/consumption, guard stops and cleanup invalidate pending values without upgrading legacy roots. Accepted/plan adoption, content comparison, candidates, runtime origin and whole-run admission remain disabled.
 
 - OM-C adds a package-excluded fresh synthetic parent-decision owner for reviewed-only capture sequences. Each keep/omit decision is bound to the original private capture and a pinned prefix, claimed once, and consumed only by fixed discard; source/cleanup start and hard stops invalidate held values synchronously. Legacy capture APIs are unchanged. Mixed non-reviewed origins, accepted/plan transfer, finalize, finish jobs and runtime issuance remain disabled.

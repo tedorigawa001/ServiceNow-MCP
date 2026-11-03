@@ -1,7 +1,7 @@
 # OM-D 混合manifestと内容比較の接続差分
 
-Version: br006-recovery-mixed-content-omd-draft-0.3 / Date: 2026-11-03。
-Status: **OD-Aのfresh合成DATA assembly・strict mixed slot・prefix段階・生成／消費claimまで実装。既存origin・同accepted／planへの移譲・内容比較は未接続。正式発行口閉鎖・全体受付無効・Unknown・VM／監視／telemetry調査保留を維持する。**
+Version: br006-recovery-mixed-content-omd-draft-0.4 / Date: 2026-11-03。
+Status: **OD-Aのfresh mixed slot／prefixと、OB-01のstrict DATA・同pins／行対応・準備claimまで合成実装。既存origin・同accepted／planへの移譲・内容比較は未接続。正式発行口閉鎖・全体受付無効・Unknown・VM／監視／telemetry調査保留を維持する。**
 
 基準HEAD: `6405b8b`。[CG-C設計](BEST_PRACTICE_ABORT_SCOPE_RECOVERY_OMISSION_CGC_DESIGN.md)§10・12、[NR-C](BEST_PRACTICE_ABORT_SCOPE_RECOVERY_NONREVIEWED_DESIGN.md)§11、[本文gate](BEST_PRACTICE_ABORT_SCOPE_RECOVERY_FINISH_CONTENT_GATE_DESIGN.md)§6からの差分。OM-Bの計数／finalizeモデルとRD-Cのfinish jobは設計段階なので、それらを成立済みにせず接続範囲を分割する。
 
@@ -169,6 +169,8 @@ OD-Aはconstructorでbounded全列投影／OM-A値モデルを一度実行し、
 
 ## 12 OD-Bの供給と移譲契約
 
-[OD-B詳細設計draft-0.1](BEST_PRACTICE_ABORT_SCOPE_RECOVERY_ODB_TRANSFER_DESIGN.md)で、一つの新constructionによるpins／混合元列の供給、同private kernelの一度限りcommit、順序付きprefixと固定soft／verify deltaの対応を具体化した。standalone OD-Aのhandleや旧rootを後付け登録せず、accepted受理で消費したrouteも再生しない。
+[OD-B詳細設計](BEST_PRACTICE_ABORT_SCOPE_RECOVERY_ODB_TRANSFER_DESIGN.md)で、一つの新constructionによるpins／混合元列の供給、同private kernelの一度限りcommit、順序付きprefixと固定soft／verify deltaの対応を具体化した。standalone OD-Aのhandleや旧rootを後付け登録せず、accepted受理で消費したrouteも再生しない。
 
-正常系のacceptedTerminationとhard失敗時の解放未解決・cleanup診断は別に扱う。現kernelのhard clear後に通常のsource close／accepted discardが使えるとはせず、終了未確認を正常完了へ変換しない。OB-01〜03は実装前の分割案で、OD-A以外の実装済み範囲は増やしていない。
+正常系のacceptedTerminationとhard失敗時の解放未解決・cleanup診断は別に扱う。現kernelのhard clear後に通常のsource close／accepted discardが使えるとはせず、終了未確認を正常完了へ変換しない。OB-02〜03は設計段階であり、accepted採用以降を実装済みとはしない。
+
+同設計§11のOB-01では、既存kernel module内の別factoryにstrict DATA・OwnedMixedSupply・同pins／行対応・一度限りのprepareを実装した。prepared値は非実行で、同handleの固定discardと同期失効だけを持つ。accepted採用・移譲先seal・固定delta・内容比較は未接続。[OB-01検証記録](E2E_BEST_PRACTICE_OWNED_MIXED_SUPPLY_OB01_2026-11-03.md)参照。

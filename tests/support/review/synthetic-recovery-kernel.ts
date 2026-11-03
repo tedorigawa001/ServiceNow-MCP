@@ -7,7 +7,8 @@ import {createSyntheticWorkerVerify} from './synthetic-worker-recovery-verify.js
 import {projectSyntheticFinishPlanBinding} from './synthetic-finish-plan-binding.js';
 import {compareSyntheticFinishValues} from './synthetic-finish-context-values.js';
 import {projectRecoveryFinishExpectation} from './synthetic-recovery-finish-values.js';
-import type {SyntheticFinishPins} from './synthetic-finish-pins.js';
+import {createSyntheticFinishPins,type SyntheticFinishPins} from './synthetic-finish-pins.js';
+import {modelSyntheticParentOmission} from './synthetic-parent-omission-values.js';
 type ReadPhase='metadata'|'payload'|'consistency';
 type WorkerRefs=Readonly<{generation:object;worker:object}>;
 type WorkerCall=Readonly<{kind:'worker_deadline';phase:'analysis';supervisor:object;request:object;input:object}>;
@@ -435,3 +436,148 @@ export function createSyntheticLifecycleRecoveryKernel(seed:SyntheticRecoverySee
 }
 /** Constructor-only pin supply; never accepts an existing owner/kernel or registration callback. */
 export function createSyntheticFinishBindingKernel(seed:SyntheticRecoverySeed,expected:SyntheticSoftFacts,pins:SyntheticFinishPins|undefined,check:()=>string|undefined=()=>undefined){return createRecoveryKernel(seed,expected,check,true,pins);}
+
+// OB-01: DATA preparation only, deliberately not connected to createRecoveryKernel/accepted/seal.
+type SupplyReason='shape'|'binding'|'order'|'duplicate'|'state'|'internal'|'reentrant'|'cancelled'|'deadline_exceeded';
+export class OwnedMixedSupplyError extends Error{readonly code='internal_review_error';constructor(readonly reason:SupplyReason){super('internal_review_error');}}
+declare const preparedSupplyBrand:unique symbol;
+export type PreparedOwnedMixedSupply=Readonly<{[preparedSupplyBrand]:'synthetic_owned_mixed_supply'}>;
+type SupplyModel=ReturnType<typeof modelSyntheticParentOmission>['value'];
+type SupplyInput={update_xml_sys_id:string;retrieved_at:string;state:'completed'|'not_processed';expected_context:unknown};
+type SupplyData={recovery:{point:string;active_input_sys_id:string;accounting:{requests:number;received_bytes:number;payload_bytes:number};consistency:string};
+  finish:{time:Record<string,unknown>;header:Record<string,unknown>;inputs:SupplyInput[]};model:SupplyModel};
+type BoundSupplyRow={row:object;row_receipt:object;original:SupplyModel['original_rows'][number];outcome:SyntheticFinishPins['outcomes'][number];
+  input:SyntheticFinishPins['receipts'][number]|undefined;original_reviewed:object|null;generated:boolean;consumed:boolean};
+type OwnedMixedSupply={token:object;pins:SyntheticFinishPins;rows:BoundSupplyRow[];model:SupplyModel;data:SupplyData};
+const supplyBad=(reason:SupplyReason='shape'):never=>{throw new OwnedMixedSupplyError(reason);};
+function supplyRecord(raw:unknown,keys:readonly string[]):Record<string,unknown>{
+  if(!raw||typeof raw!=='object'||types.isProxy(raw)||Array.isArray(raw)||![null,Object.prototype].includes(Object.getPrototypeOf(raw)))return supplyBad();
+  const names=Reflect.ownKeys(raw);if(names.length!==keys.length||names.some(k=>typeof k!=='string'||!keys.includes(k)))return supplyBad();
+  const out:Record<string,unknown>=Object.create(null);for(const k of keys){const d=Object.getOwnPropertyDescriptor(raw,k);if(!d||!Object.hasOwn(d,'value'))return supplyBad();out[k]=d.value;}return out;
+}
+function supplyCopySmall(raw:unknown):unknown{
+  let nodes=0,characters=0;
+  function text(s:string){characters+=s.length*3;if(characters>262144)supplyBad();return s;}
+  function visit(v:unknown,depth:number):unknown{
+    if(++nodes>10000||depth>8)supplyBad();
+    if(typeof v==='string')return text(v);if(v===null||typeof v==='boolean'||typeof v==='number'&&Number.isSafeInteger(v))return v;
+    if(!v||typeof v!=='object'||types.isProxy(v))return supplyBad();
+    if(Array.isArray(v)){
+      if(Object.getPrototypeOf(v)!==Array.prototype||v.length>100||Reflect.ownKeys(v).length!==v.length+1)return supplyBad();
+      return Object.freeze(Array.from({length:v.length},(_,i)=>{const d=Object.getOwnPropertyDescriptor(v,String(i));if(!d||!Object.hasOwn(d,'value'))return supplyBad();return visit(d.value,depth+1);}));
+    }
+    if(![null,Object.prototype].includes(Object.getPrototypeOf(v)))return supplyBad();
+    const keys=Reflect.ownKeys(v);if(keys.length>30)return supplyBad();const out:Record<string,unknown>=Object.create(null);
+    for(const k of keys){if(typeof k!=='string')return supplyBad();text(k);const d=Object.getOwnPropertyDescriptor(v,k);if(!d||!Object.hasOwn(d,'value'))return supplyBad();out[k]=visit(d.value,depth+1);}return Object.freeze(out);
+  }return visit(raw,0);
+}
+function supplyEqual(a:unknown,b:unknown):boolean{
+  if(Object.is(a,b))return true;if(!a||!b||typeof a!=='object'||typeof b!=='object'||Array.isArray(a)!==Array.isArray(b))return false;
+  const x=Object.keys(a).sort(),y=Object.keys(b).sort();return x.length===y.length&&x.every((k,n)=>k===y[n]&&supplyEqual((a as Record<string,unknown>)[k],(b as Record<string,unknown>)[k]));
+}
+function supplyRules(a:readonly string[],b:readonly string[]){return a.length===b.length&&new Set(a).size===a.length&&a.every(x=>b.includes(x));}
+function pinSupplyData(raw:unknown):SupplyData{
+  const top=supplyRecord(raw,['kind','recovery','finish','mixed']);if(top.kind!=='synthetic_omd_bound_root_v1')return supplyBad();
+  const rec=supplyRecord(top.recovery,['point','active_input_sys_id','accounting','consistency']);
+  const recovery=z.strictObject({point:z.enum(['request_check_unstarted','request_check_existing','ready_timer','ready_reply_check','send_check','analyze_timer','analyze_reply_check']),
+    active_input_sys_id:z.string().regex(/^[a-f0-9]{32}$/),accounting:z.strictObject({requests:z.number().int().min(0).max(210),received_bytes:z.number().int().min(0).max(16777216),payload_bytes:z.number().int().min(0).max(8388608)}),
+    consistency:z.enum(['stable_observation','changed','unverified'])}).parse(supplyCopySmall(rec));
+  const f=supplyRecord(top.finish,['time','header','selected','inputs']),m=supplyRecord(top.mixed,['model_id','initial_prefix','rows']);
+  const small=supplyCopySmall(f) as Record<string,unknown>,time=supplyRecord(small.time,['started_at','deadline_ms','observed_at','upper_utc']);
+  if(!small.header||typeof small.header!=='object'||Array.isArray(small.header)||!Array.isArray(small.inputs))return supplyBad();const header=small.header as Record<string,unknown>;
+  const inputs=small.inputs.map(v=>z.strictObject({update_xml_sys_id:z.string().regex(/^[a-f0-9]{32}$/),retrieved_at:z.iso.datetime({precision:3}),state:z.enum(['completed','not_processed']),expected_context:z.unknown()})
+    .parse(supplyRecord(v,['update_xml_sys_id','retrieved_at','state','expected_context'])));
+  const model=modelSyntheticParentOmission({kind:'synthetic_parent_omission_values_v1',model_id:m.model_id,schema_version:header.schema_version,limits:{max_findings:100},selected:small.selected,prefix:m.initial_prefix,rows:m.rows}).value;
+  if(!model.selected.length||!supplyEqual(model.initial_prefix,{limitations:header.limitations,errors:header.errors}))return supplyBad('binding');
+  const byId=new Map(inputs.map(i=>[i.update_xml_sys_id,i]));if(byId.size!==inputs.length||inputs.some(i=>!model.selected.includes(i.update_xml_sys_id)))return supplyBad('binding');
+  const active=byId.get(recovery.active_input_sys_id);if(!active||active.state!=='not_processed')return supplyBad('binding');
+  for(const original of model.original_rows){const input=byId.get(original.outcome.update_xml_sys_id);
+    if(original.producer==='metadata'&&input||original.producer==='analysis'&&(!input||input.state!=='completed'||input.expected_context===null)
+      ||original.producer==='retrieval'&&input&&(input.state!=='completed'||input.expected_context!==null)
+      ||original.producer==='retained'&&(!input||input.state!=='not_processed'))return supplyBad('binding');
+  }
+  return {recovery,finish:{time,header,inputs},model};
+}
+function checkOwnedSupply(s:OwnedMixedSupply,token:object){
+  const {pins,model,rows}=s;if(s.token!==token||rows.length!==model.selected.length||rows.length!==pins.outcomes.length||pins.accepted!==model.original_rows.filter(x=>x.outcome.state==='reviewed').length)supplyBad('binding');
+  const rowRefs=new Set<object>(),rowReceipts=new Set<object>();
+  for(const [n,link] of rows.entries()){
+    const original=model.original_rows[n],outcome=pins.outcomes[n],input=pins.receipts.find(i=>i.update_xml_sys_id===model.selected[n]);
+    if(rowRefs.has(link.row)||rowReceipts.has(link.row_receipt)||link.row===link.row_receipt||link.row_receipt===input?.receipt||link.original!==original||link.outcome!==outcome||link.input!==input||!link.generated||!link.consumed
+      ||pins.seed.selected[n]!==model.selected[n]||outcome.update_xml_sys_id!==model.selected[n]||outcome.state!==model.assets[n].state)supplyBad('binding');
+    if(outcome.state!=='reviewed'&&!supplyEqual(outcome.state==='result_omitted'?{state:outcome.state,update_xml_sys_id:outcome.update_xml_sys_id,reason:outcome.reason}:outcome,model.assets[n]))supplyBad('binding');
+    rowRefs.add(link.row);rowReceipts.add(link.row_receipt);
+    const accepted=outcome.state==='reviewed'?outcome.accepted_outcome:outcome.state==='result_omitted'?outcome.reviewed_origin?.accepted_outcome??null:null;
+    if(link.original_reviewed!==accepted||(original.outcome.state==='reviewed')!==(accepted!==null))supplyBad('binding');
+    if(outcome.state==='reviewed'&&outcome.receipt!==input?.receipt||outcome.state==='result_omitted'&&outcome.reviewed_origin&&outcome.reviewed_origin.receipt!==input?.receipt)supplyBad('binding');
+    if(original.outcome.state==='reviewed'){
+      const r=original.outcome.result,e=input?.expected_context,h=pins.seed.header;
+      if(!input||!e||r.reviewed_at!==input.retrieved_at||r.target.retrieved_at!==input.retrieved_at||r.target.update_xml_sys_id!==input.update_xml_sys_id
+        ||r.target.update_set_id!==h.target.update_set_sys_id||r.target.record_updated_at!==e.record_updated_at||r.instance_binding!==e.instance_binding||r.instance_binding!==h.target.instance_binding
+        ||!supplyEqual(r.instance_release,e.instance_release)||!supplyEqual(r.instance_release,h.instance_release)||!supplyRules(original.outcome.applicable_rule_ids,e.requested_rule_ids)
+        ||!supplyRules(r.coverage.requested_rule_ids,e.requested_rule_ids)||e.release_limitations.some(x=>!r.limitations.includes(x)))supplyBad('binding');
+    }
+  }
+}
+
+/** Fresh synthetic DATA only. Never adopts old handles, creates a recovery kernel or exposes pins. */
+export function createSyntheticOwnedMixedSupply(raw:unknown,dependencies:unknown,...extra:unknown[]){
+  const constructionToken=opaque<object>();
+  let first:SupplyReason|undefined,state:'fresh'|'preparing'|'prepared'|'failed'|'invalidated'|'discarded'='fresh',busy=false,started=false;
+  let data:SupplyData|undefined,held:OwnedMixedSupply|undefined,prepared:PreparedOwnedMixedSupply|undefined;
+  let selected=0,pinBuilds=0,pinsCreated=0,preparations=0,linked=0,generated=0,consumed=0,inputs=0,originalReviewed=0,parentOmitted=0,workerOmitted=0,retained=0,keptFindings=0;
+  const deps=supplyRecord(dependencies,['guard']);if(typeof deps.guard!=='function'||types.isProxy(deps.guard))return supplyBad();
+  const fixedGuard=deps.guard as (stage:'prepare_pre'|'row_pre'|'row_post'|'prepare_post'|'discard_pre'|'discard_post',ordinal?:number)=>unknown;
+  function clear(){data=undefined;held=undefined;prepared=undefined;}
+  const fail=(reason:SupplyReason):never=>{first??=reason;state='failed';clear();throw new OwnedMixedSupplyError(first);};
+  function live(){if(first)throw new OwnedMixedSupplyError(first);if(busy)fail('reentrant');if(state==='invalidated'||state==='discarded')fail('state');}
+  function guard(stage:Parameters<typeof fixedGuard>[0],n?:number){
+    let stop:unknown;try{stop=fixedGuard(stage,n);}catch{if(first)throw new OwnedMixedSupplyError(first);fail('internal');}
+    if(first)throw new OwnedMixedSupplyError(first);if(stop!==undefined)fail(stop==='cancelled'||stop==='deadline_exceeded'?stop:'internal');
+  }
+  try{if(extra.length)supplyBad();data=pinSupplyData(raw);selected=data.model.selected.length;}catch(e){first=e instanceof OwnedMixedSupplyError?e.reason:'shape';state='failed';clear();}
+  raw=undefined;
+  return Object.freeze({
+    prepare(...args:unknown[]):PreparedOwnedMixedSupply{
+      live();if(started)fail('duplicate');started=true;state='preparing';busy=true;
+      let moving:OwnedMixedSupply|undefined;
+      try{
+        guard('prepare_pre');let mismatch:SupplyReason|undefined;
+        try{
+          if(args.length||!data)supplyBad();const source=data!,model=source.model;
+          const originalById=new Map(model.original_rows.map(x=>[x.outcome.update_xml_sys_id,x]));
+          pinBuilds++;
+          const pins=createSyntheticFinishPins({kind:'synthetic_finish_seed_v1',time:source.finish.time,header:{...source.finish.header,limitations:model.prefix.limitations,errors:model.prefix.errors},selected:model.selected,
+            inputs:source.finish.inputs.map(i=>({...i,accepted:originalById.get(i.update_xml_sys_id)?.outcome.state==='reviewed'?{kind:'synthetic_reviewed_pin',update_xml_sys_id:i.update_xml_sys_id,retrieved_at:i.retrieved_at}:null})),
+            outcomes:model.assets.map(a=>a.state==='reviewed'?{state:a.state,update_xml_sys_id:a.update_xml_sys_id}:a)});
+          pinsCreated++;inputs=pins.receipts.length;originalReviewed=pins.accepted;
+          const rows:BoundSupplyRow[]=[];
+          for(const [n,original] of model.original_rows.entries()){
+            generated++;guard('row_pre',n);const outcome=pins.outcomes[n],input=pins.receipts.find(i=>i.update_xml_sys_id===model.selected[n]);
+            const link:BoundSupplyRow={row:opaque(),row_receipt:opaque(),original,outcome,input,
+              original_reviewed:outcome.state==='reviewed'?outcome.accepted_outcome:outcome.state==='result_omitted'?outcome.reviewed_origin?.accepted_outcome??null:null,generated:true,consumed:true};
+            guard('row_post',n);rows.push(link);consumed++;linked++;
+          }
+          moving={token:constructionToken,pins,rows,model,data:source};checkOwnedSupply(moving,constructionToken);
+        }catch(e){mismatch=e instanceof OwnedMixedSupplyError?e.reason:'shape';}
+        guard('prepare_post');if(mismatch||!moving)fail(mismatch??'internal');const complete=moving!;checkOwnedSupply(complete,constructionToken);
+        held=complete;data=undefined;prepared=opaque<PreparedOwnedMixedSupply>();preparations=1;state='prepared';
+        parentOmitted=complete.model.trace.filter(t=>t.action==='parent_omit').length;workerOmitted=complete.model.original_rows.filter(x=>x.outcome.state==='result_omitted').length;
+        retained=complete.model.original_rows.filter(x=>x.producer==='retained').length;keptFindings=complete.model.kept_findings;
+        return prepared;
+      }catch(e){if(first)throw new OwnedMixedSupplyError(first);return fail(e instanceof OwnedMixedSupplyError?e.reason:'internal');}finally{moving=undefined;busy=false;}
+    },
+    discardPrepared(handle:PreparedOwnedMixedSupply,...args:unknown[]){
+      live();const own=prepared;prepared=undefined;busy=true;
+      try{guard('discard_pre');const mismatch=args.length||state!=='prepared'||handle!==own||!held;guard('discard_post');if(mismatch)fail('binding');clear();state='discarded';}
+      catch(e){if(first)throw new OwnedMixedSupplyError(first);fail(e instanceof OwnedMixedSupplyError?e.reason:'internal');}finally{busy=false;}
+    },
+    beginSourceClose(...args:unknown[]){live();if(args.length)fail('shape');clear();state='invalidated';},
+    beginCleanup(...args:unknown[]){if(busy)fail('reentrant');if(args.length)fail('shape');clear();if(!first)state='invalidated';},
+    discard(...args:unknown[]){if(busy)fail('reentrant');if(args.length)fail('shape');clear();if(!first)state='discarded';},
+    stop(reason:'cancelled'|'deadline_exceeded',...args:unknown[]){if(args.length||reason!=='cancelled'&&reason!=='deadline_exceeded')return fail('internal');return fail(reason);},
+    inspect:()=>Object.freeze({scope:'synthetic_owned_mixed_supply' as const,authority:'none' as const,state,first_failure:first??null,started,preparations,pin_builds:pinBuilds,pins_created:pinsCreated,pending:!!held,
+      selected,linked_rows:linked,generated,consumed,inputs,original_reviewed_pins:originalReviewed,parent_omitted:parentOmitted,original_worker_omitted:workerOmitted,retained,kept_findings:keptFindings,retained_rows:held?.rows.length??0,
+      permissions:Object.freeze({accepted_adoption:false,destination_seal:false,formal_issuance:false}),unverified:Object.freeze(['runtime_origin','accepted_plan','ready_origin','cleanup_evidence','whole_run_budget'])}),
+  });
+}

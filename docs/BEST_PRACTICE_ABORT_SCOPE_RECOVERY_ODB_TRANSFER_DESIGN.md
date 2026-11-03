@@ -1,7 +1,7 @@
 # OD-B 同生成元の供給と一度限りの内容移譲
 
-Version: br006-recovery-odb-transfer-draft-0.1 / Date: 2026-11-03。
-Status: **詳細設計のみ。合成依存限定。正式発行口閉鎖・全体受付無効・Unknown・VM／監視／telemetry調査保留を維持する。**
+Version: br006-recovery-odb-transfer-draft-0.2 / Date: 2026-11-03。
+Status: **OB-01のstrict DATA・OwnedMixedSupply・同pins／行対応・準備claimまで合成実装。accepted採用・移譲先sealは未接続。正式発行口閉鎖・全体受付無効・Unknown・VM／監視／telemetry調査保留を維持する。**
 
 基準HEAD: `1eb3c74`。[OM-D設計](BEST_PRACTICE_ABORT_SCOPE_RECOVERY_MIXED_CONTENT_OMD_DESIGN.md)§4・7・10〜11と[OD-A検証記録](E2E_BEST_PRACTICE_OMD_SLOTS_ODA_2026-11-03.md)からの差分。同じ生成元で作ったmixed内容とaccepted／planを、一つのprivate操作で移譲先へ確定する。OD-Aの公開handleを既存rootへ後付け登録する方式は採らない。本文照合・finish job・候補発行はOD-Bの対象外。
 
@@ -53,7 +53,7 @@ full本文を含むmixed列を旧pinsの小さい一括コピー枠へ押し込�
 
 ## 3 private型と参照対応
 
-名称は内部案。全て合成専用の別brandであり、今回の文書では実装しない。
+以下はOD-B全体の内部型案。OB-01で実装した供給型・別brandと準備claimは§11へ分離し、移譲やsealの型は未実装とする。
 
 | 内部型案 | 保持内容 | 発行・消費の制約 |
 | --- | --- | --- |
@@ -149,16 +149,42 @@ source close／cleanup開始・固定discardは、元mixed／pending／destの�
 7. 初期重複warning・親処理後101〜103件・errors99／100・固定soft／verify deltaと元配列順を独立表へ照合する。局所上限超過を切捨て・追加dedupで救済しない。
 8. 旧OD-A／OM-C／NR-C／seal／accepted discardのAPIと試験を維持し、新factoryが旧rootやruntimeを採用できないことを確認する。packageではtests／新factoryを非同梱とし、I/O／clock／worker起動・秘密漏出の負の対照を用意する。
 
-以上は未実行の試験計画であり、OD-B成功や解放完了を報告する検証記録ではない。
+以上はOD-B全体の試験計画。OB-01の実行済み範囲は§11と検証記録へ分離し、OD-B全体の成功や解放完了とは扱わない。
 
 ## 10 実装順と開始前に固定する点
 
 | 分割案 | 範囲 | 開かないもの |
 | --- | --- | --- |
-| OB-01 | 新DATA契約・OwnedMixedSupply・同pins／行対応・完了までの準備claim。旧入口不変 | accepted採用・移譲先seal |
+| OB-01 | §11の新DATA契約・OwnedMixedSupply・同pins／行対応・準備claimを合成実装済み。旧入口不変 | accepted採用・移譲先seal |
 | OB-02 | 同private kernelのaccepted／planとCompletedMixedContentを一つの移譲claimへ結合し、失敗obligationを先に確保 | 内容比較・finish job・候補 |
 | OB-03 | pre/post・一つのdest commit、同期失効、正常terminal-only discardとhard時の診断保持を連続fake検証 | OD-C比較・OM-B／RD-C・全体受付・runtime |
 
 OB-01では上記strict入力・行別input存在条件を型と試験に固定し、同module内の抽出が旧入口へ影響しないことを確認する。OB-02前には失敗ownerの寿命・最終discard条件を、OB-03前には順序付きprefixと既存sort／dedupの固定写像・projection／対応表の費用と中断点を具体化する。数値上界の未導出はUnknownに残し、型・独立表・失敗試験なしで完了flagだけを追加しない。
 
-本工程は設計MDと参照更新だけ。実装・実Permit／候補発行・実接続・実通信・実機操作・設定変更・Pushは行わない。
+draft-0.1は設計MDだけ。続くOB-01の実装範囲を以下に限定し、実Permit／候補発行・実接続・実通信・実機操作・設定変更・Pushは行わない。
+
+## 11 OB-01の実装範囲
+
+[既存kernel module](../tests/support/review/synthetic-recovery-kernel.ts)にfresh factory `createSyntheticOwnedMixedSupply`を追加した。旧factoryの関数本体と返却surfaceは変更していない。新factoryは`createRecoveryKernel`を呼ばず、accepted／plan／ready／sealの生成・採用口を持たない。[新合成試験](../tests/review/synthetic-owned-mixed-supply.test.ts)と[OB-01検証記録](E2E_BEST_PRACTICE_OWNED_MIXED_SUPPLY_OB01_2026-11-03.md)参照。
+
+### 11.1 DATA pinと準備
+
+診断shellとconstruction tokenを先に生成し、§2の4区分DATAをboundedコピー・OM-A投影へ渡す。schema_versionはheader由来だけ。top-levelは固定4 keys、recoveryとfinishの小さいheader・time・input群はそれぞれ10,000 nodes・262,144 character units・深さ8・array100・object30 keys、本文列は既存OM-Aの個別asset上限で扱う。これらを単一のwork予算と呼ばない。caller値をfreezeせず、準備前の後書換えやguard差替えを採用しない。
+
+不正DATAは固定失敗を持つ非実行shellとなり、prepareで停止する。不正な依存形状・Proxy guardはfactory時に拒否する。外部outcomes／receipt／accepted／deltaや旧ownerを登録しない。
+
+prepareは入口でclaimを占有し、prepare_pre→全行のrow_pre／row_post→prepare_postを通る。親処理後のstateと元reviewedの有無を同modelから導出し、`createSyntheticFinishPins`を一度だけ呼ぶ。raw本文はpinsへ渡さず、reviewedは構造用state／sys_idに分離する。元reviewedを持つinputだけに内部DATA markerを作り、親省略でも同元accepted-outcome pinを残す。元worker omittedはnullのままとする。
+
+行台帳の一般row receiptとpinsのinput receiptは別参照として保持する。metadataにはinputなし、analysisにはcompleted＋context必須、retrievalのoptional inputはcompleted＋context=null、retainedには同not_processed inputを要求する。active input・時刻単調性・末尾U・releaseとheaderの整合は既存pinsのstrict検査を維持する。
+
+各行の固定生成／消費と元値対応をprivateに完了し、同construction token・同pins outcome／input・元accepted参照・非reviewed全field・元reviewed contextをprepare_postの前後で検査する。生成済み途中行やpinsを返さず、全成立後だけ別brandの空PreparedOwnedMixedSupplyを返す。準備回数・pins生成回数は各最大1で、旧OD-A完了prefixからは発行できない。
+
+### 11.2 終端と未対応
+
+現時点のprepared値の唯一の消費口は、同handleの固定discardPrepared。コピー・foreign・二重消費・余分な引数を拒否し、source close／cleanup開始・hard・discardでheld元列／pins／handleを同期失効する。cleanup操作は内容の失効だけであり、resource解放confirmedや実source終端証拠を発行しない。最初のreasonと累積scalar件数を残し、失敗後の再準備は不可とする。
+
+guardはfake停止境界だけ。準備のguard数は成功時2N+2、discardは2で、全work／heapの上界ではない。元列投影・pinsコピー／RA検査・行対応表・二度の全行検査・固定破棄を追加費目とし、同canonical予算／実会計・中断粒度はUnknown。recoveryのaccounting・point・consistencyは検査したDATAとしてprivateに保持するだけで更新しない。
+
+梱包監査の既存kernel固定importに、pureなpins生成・OM-Aモデルの2依存を明示追加し、新factory／brand markerも漏出拒否へ加えた。seeded I/O／時計／worker／runtime漏出の負の対照は維持する。runtimeソース、旧OD-A／NR-Cと実sessionの台帳は変更していない。
+
+OB-02のaccepted採用・一つの移譲claim、OB-03のdest seal／terminal-only接続、固定soft／verify delta・OD-C比較・実originは未成立。preparedの成功をこれらの成立へ昇格しない。
