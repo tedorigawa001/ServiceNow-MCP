@@ -1,13 +1,13 @@
 # FailureOwnerとOB-01とkernelの接続差分
 
-Version: br006-recovery-failure-binding-draft-0.2 / Date: 2026-11-03。
-Status: **FB-01の先行owner／上位slot・OB-01失敗通知とpayload失効まで合成実装。kernel／resource接続は未実装。正式発行口閉鎖・全体受付無効・Unknown・VM／監視／telemetry調査保留を維持する。**
+Version: br006-recovery-failure-binding-draft-0.3 / Date: 2026-11-03。
+Status: **FB-01とFB-02の同construction・private初期topology・kernel生成点／clear前保護／既存sink接続まで合成実装。実resource・上位custody移譲は未接続。正式発行口閉鎖・全体受付無効・Unknown・VM／監視／telemetry調査保留を維持する。**
 
 基準HEAD: `196ca0c`。[失敗owner寿命設計](BEST_PRACTICE_ABORT_SCOPE_RECOVERY_FAILURE_OWNER_LIFETIME_DESIGN.md)§9と[OD-B設計](BEST_PRACTICE_ABORT_SCOPE_RECOVERY_ODB_TRANSFER_DESIGN.md)§11からの差分。同一constructionでFailureOwnerを先行確保し、OB-01の失敗通知と既存kernelのresource生成・cleanupを結ぶ。既存の独立factoryを二つ呼び、summaryやID一致で接続する方式は採らない。
 
 ## 1 追加するものと維持する境界
 
-[OwnedMixedSupply](../tests/support/review/synthetic-recovery-kernel.ts)は現在、DATAと同pins／行対応を準備するだけでrecovery kernelを作らない。[FailureCustody](../tests/support/review/synthetic-failure-custody.ts)は別token・別frameで4roleを管理し、公開issuerのfactsは合成由来だけである。双方の単体試験は接続済みの証明ではない。
+旧単体entryの[OwnedMixedSupply](../tests/support/review/synthetic-recovery-kernel.ts)は、DATAと同pins／行対応を準備するだけでrecovery kernelを作らない。旧standalone [FailureCustody](../tests/support/review/synthetic-failure-custody.ts)は別token・別frameで4roleを管理し、公開issuerのfactsは合成由来だけである。双方の単体試験は接続済みの証明ではない。
 
 新しいclosed合成constructionを一つ追加し、privateな供給・lifecycle・失敗coreを同じ生成継続に置く。旧factoryの入力・brand・返却surface・診断は維持する。新entryは合成DATAを受けるだけで、既存root／session／owner／issuer／callbackを登録する引数を持たない。
 
@@ -28,7 +28,7 @@ OB-01の公開prepared handleやFailureCustodyの公開issuerを、汎用DIで�
 
 ## 3 private接続契約
 
-以下は全接続の型案。FB-01で実装した部分は§10に限定する。
+以下は全接続の型案。FB-01は§10、FB-02は§11の範囲で実装した。
 
 | 型案 | 固定内容 | 検査と所有権 |
 | --- | --- | --- |
@@ -135,3 +135,35 @@ OB-01のprivate供給coreは同tokenと固定通知slotだけを内部生成継�
 [合成試験](../tests/review/synthetic-failure-bound-supply.test.ts)と[検証記録](E2E_BEST_PRACTICE_FAILURE_BINDING_FB01_2026-11-03.md)で、不正入力、全prepare checkpointの停止、握り潰した再入、foreign／copy／summary、post guard優先、固定依存・旧入口不変を確認する。通知先はprivate固定writeで外部から差替え不能のため、内部通知の任意throw注入は今回の試験保証に含めない。新marker非同梱と固定import／runtime・I/O・clock・workerの負の対照も維持する。
 
 追加費目は先行4role／custody／上位slot、同tokenと通知slot、first-hard写像・固定write・clearである。回数は通知1、固定4roleだが、これを全work／heap上界と扱わない。実会計・C/G/P・retry・210試行・全60秒は変更せず、総上界・中断粒度はUnknownのままとする。実接続・実通信・実機操作・設定変更・token／Permit／候補発行・Pushは行っていない。
+
+## 11 FB-02の同topology・kernel／sink接続
+
+新fresh DATA entry `createSyntheticFailureBoundKernel`は旧FB-01 entryを昇格せず、同private供給core・FailureOwner coreから新constructionを作る。callerが渡せる依存はfake guardだけ。DATAはOB-01と同じstrict契約で、既存root／seed／facts／source／issuer／callbackを登録しない。旧entryのsurface・brand・動作は維持する。
+
+prepare成功後、同tokenで保護したprivate bridgeだけが同OwnedMixedSupplyを参照する。同じ入力receiptをactive inputへ結び、同時刻・選択順・最小completed値・会計から回復準備値を作る。元reviewed本文やaccepted値はkernelへ渡さず、元supplyの固定discardとfinallyでheld／bridge／元rawを外す。固定fake範囲ではverify continuationをnullとし、既存のno-verifyモデルを通す。実runの必要verifyを省略できる証拠ではない。
+
+同private生成継続がsourceと初期worker参照をfresh生成する。pointが未起動なら旧creatorを閉じ、初期workerを作らない。他のpointでは旧frameを生成し同generationとRoleBindingへ結ぶ。kernelには外から取得した参照を採用せず、tracked constructorのsource identityを出生時に結ぶ。source／old roleの生成ticketはその生成より前に予約する。これらはsynthetic lifecycleの発行前提だけで、実source originやOS workerの証拠ではない。
+
+| 接続点 | 固定の処理 | 未確認のまま残すもの |
+| --- | --- | --- |
+| 初期source | private creator予約→kernel constructorのidentity／同source参照→created | 実origin・source cleanup |
+| 旧worker | private creator予約→同worker／generation→created。begin closureの同leaseを固定sinkへ結ぶ | caller文字列だけのabsence・実終了origin |
+| 旧未起動 | 同constructionが旧creatorを閉鎖しworkerを作らなかったprivate前提＋同closure lease／context検査後だけabsence | worker_state=noneだけ／未観測のrun全体absence |
+| 新worker | generation claim占有前の予約→frame／cleanup identity／sinkの割当て→start時のcreated | metadata確保だけのcreated・独立したworker exit |
+| transport_group | 集約issuerなし。C/G/Pやverify回数から生成・absenceを作らない | 常にUnknown |
+
+kernelの最初のfailはclearの前に専用checkpointを通す。保持中のsource identity／参照、旧worker／generation、新frame／sinkを出生時RoleBindingと照合し、同FailureOwnerへ固定codeと明示的な全Phase→Stage表で通知する。参照照合は最初の1回だけで、重なるfail／catchでは通知claimや診断を戻さない。外側拒否のnoticeとclear前checkpointを分離し、clear後のcatchだけでprotected=trueにはできない。同一性不成立は限定binding_faultへ残し、元のfirst hardは置換しない。
+
+既知のframe／sinkは出生時から失敗側の固定slotに保持する。kernelのclearは通常のbinding／seed／facts／ready／generation inputs等を外し、新entryの失敗finallyも健康側の準備値・lease等を外す。cleanup-only参照からreview／ready／acceptedを復元しない。
+
+新frameの割当て後、claimのpost guardで停止すると公開ticketは未発行のままである。新経路に限り、private保持sinkがある間はkernelの最小cleanup contextをclearで落とさない。固定`cleanupOwned`が同sinkのbegin→recordを一度だけ行える。旧経路にこの保持例外は適用せず、旧試験を維持する。割当てだけで未起動のroleはcreatingのまま保持し、not_requiredを終了／absenceへ昇格しない。
+
+旧settleは同lease／元context検査後、終了とcleanupを別々にFailureOwnerへ写してから元の成功条件を判定する。片方が失敗してclosure evidenceを返せなくても、成立した片方のfactはclearで失わない。新cleanupは同frame／sink／開始serialに関する既存validStart・開始状態を、参照を消す前に検査する。同begin claimを通った開始済みframeのconfirmedだけをcleanup confirmedへ写し、その他は未確認／不成立のまま。終了factは別issuerがないためUnknown。source closeも同identityの閉鎖だけを写し、source cleanupは確認しない。
+
+`bindings.*.cleanup_pending`は消費可能な固定sinkが残るかだけを示し、責務全体の解決判定ではない。sink消費後も役割の未解決facts／最小frame対応は残る。sourceのsettledもsource閉鎖の受理だけで、解放完了ではない。最終的なreleaseは既存FailureOwnerの別factsから保守的に導出する。
+
+公開surfaceは固定の合成lifecycle操作とimmutableな限定診断だけ。seed／source／pins／private issuer／kernel object・accepted採用／seal／commit／最終discardは公開しない。hard後に通すのは既存新世代sinkのcleanup-only操作だけで、source／旧settleの新しいhard後実行口は追加しない。正常なsource closeはhealthy guardに従う。
+
+追加費目は固定3roleの予約・出生写像、元100行上限内の準備値投影、明示Phase表、1回のclear前同一性照合、既存sinkの受理fact派生である。sink操作・C/G/P・retryを通知のために再実行せず、元210試行・全60秒を変更しない。同canonical予算・全work／heap・中断粒度・実cleanup／外側終了はUnknownのまま。
+
+[合成試験](../tests/review/synthetic-failure-bound-kernel.test.ts)と[検証記録](E2E_BEST_PRACTICE_FAILURE_BINDING_FB02_2026-11-03.md)に、7初期point・独立終了／cleanup表・全guard・混入・再入・未公開sink・失効を記録する。次のFB-03は未解決責務の同上位custodyへの移譲と最終discard・停止／予算供給点の確認であり、今回、上位slotは未受理のまま。accepted採用・実接続・実通信・設定変更・token／Permit／候補発行・Pushは行わない。

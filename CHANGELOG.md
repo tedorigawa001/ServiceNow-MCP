@@ -16,6 +16,8 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 ### Changed
 
+- FB-02 adds a package-excluded fresh synthetic construction joining the same private OB-01 supply, initial topology, kernel role bindings and failure owner. Birth/clear checkpoints and same-sink consumers retain old termination and cleanup independently, preserve unpublished new-frame cleanup after a claim post-guard stop, and never infer a new worker exit or transport quiescence from cleanup/counters. Legacy roots stay unchanged; accepted adoption, real resources, formal issuance and whole-run admission remain disabled.
+
 - FB-01 adds a package-excluded fresh DATA-only construction that allocates failure/custody/upper slots before validating OB-01 input, shares the private construction token, and records the first fixed failure notice once before clearing payload references. Legacy supply and custody APIs remain unchanged through co-located private cores. Missing role evidence stays unknown; no kernel generation, accepted adoption, cleanup execution, formal issuance or whole-run admission is enabled.
 
 - Adds package-excluded synthetic failure/upper owners with four fixed cleanup roles and a single custody selector. Immutable failure reports, one-shot commit receipts and final discard keep unresolved obligations under the upper owner without calling them released. Same-origin evidence, late cleanup, duplicate/foreign handles and reentry are covered by synthetic tests; accepted adoption, runtime cleanup, destination seals and whole-run admission remain disabled.

@@ -98,7 +98,7 @@ function code(raw:unknown):Code{
   return c==='cancelled'||c==='deadline_exceeded'||c==='worker_unavailable'||c==='receive_budget_exceeded'||c==='authentication_failed'||c==='access_denied'||c==='request_budget_exceeded'||c==='payload_budget_exceeded'?c:'internal_review_error';
 }
 /** Caller-supplied expected topology is a fake fixture, not live-source evidence. */
-function createRecoveryKernel(seed:SyntheticRecoverySeed,expected:SyntheticSoftFacts,check:()=>string|undefined,tracked:boolean,providedPins?:SyntheticFinishPins){
+function createRecoveryKernel(seed:SyntheticRecoverySeed,expected:SyntheticSoftFacts,check:()=>string|undefined,tracked:boolean,providedPins?:SyntheticFinishPins,failureLink?:FailureKernelLink){
   let seedRef:SyntheticRecoverySeed|undefined=seed,expectedRef:SyntheticSoftFacts|undefined=expected,pinned:SyntheticRecoverySeed|undefined,facts:SyntheticSoftFacts|undefined;
   try{pinned=pinSeed(seed);facts=pinFacts(expected);}catch{/* bind stops without exposing input */}
   let state:State='fresh',busy=false,binding:OwnerBinding|undefined,observation:ObservationHandle|undefined,observationStarted=false;
@@ -126,6 +126,7 @@ function createRecoveryKernel(seed:SyntheticRecoverySeed,expected:SyntheticSoftF
   let planCounts:Readonly<{selected:number;retained_inputs:number}>|undefined;
   let time:Readonly<{started_at:string;deadline_ms:number;observed_at:string;upper_utc:string}>|null=null;
   const source=tracked?{reference:pinned?.source,identity:opaque<object>() as object|undefined,status:'open' as 'open'|'closing'|'closed'|'failed',close_started:false,completion:'none' as 'none'|'closed'|'failed'|'unconfirmed'}:undefined;
+  if(source?.identity&&source.reference)failureLink?.sourceBorn(source.identity,source.reference);
   let liveCleanup:{frame:object|undefined;identity:object|undefined;sink:object|undefined;started:boolean;serial:0|1;settled:boolean}|undefined;
   let readyOrigin:Readonly<{owner:object;frame:object;lease:object;event:object;source:object;cleanup:object}>|undefined;
   const hasFinish=providedPins!==undefined;let finishPins=providedPins,finishStarted=false,finishDiscards=false,finishBindings=0;
@@ -149,9 +150,13 @@ function createRecoveryKernel(seed:SyntheticRecoverySeed,expected:SyntheticSoftF
   type AcceptPending=Readonly<{plan:SealedRecoveryPlan|undefined;handoff:RecoveryPlanHandoff|undefined;bound:typeof finishBound;issue:typeof issuedFinish;route_used:boolean}>;
   function invalidateFinish(){finishBound=undefined;issuedFinish=undefined;acceptedFinish=undefined;sealedFinish=undefined;if(sealState==='sealed')sealState='invalidated';if(acceptState==='accepted'||acceptState==='sealed')acceptState='invalidated';if(issueState==='issued')issueState='invalidated';if(hasFinish&&(finishState==='bound'||finishState==='accepted'||finishState==='sealed'))finishState='invalidated';}
   function readyUsable(){return !!(tracked&&readyOrigin&&binding===readyOrigin.owner&&source?.status==='open'&&source.reference===pinned?.source&&source.identity===readyOrigin.source&&liveCleanup?.identity===readyOrigin.cleanup&&liveCleanup.frame===readyOrigin.frame&&!liveCleanup.started&&!liveCleanup.settled&&generationCleanupToken===liveCleanup.sink&&generationCleanupContext?.frame===readyOrigin.frame);}
-  function clear(){finishBound=undefined;finishPins=undefined;issuedFinish=undefined;acceptedFinish=undefined;sealedFinish=undefined;acceptedTermination=acceptedSourceClosed=acceptedCleanupConfirmed=undefined;if(hasFinish&&state==='failed'){finishState='failed';issueState='failed';acceptState='failed';sealState='failed';}if(source){source.status=state==='failed'?'failed':'closed';source.reference=source.identity=undefined;readyOrigin=undefined;}if(phaseModel){phaseModel.dispose();phaseDiagnostic=phaseModel.inspect();phaseModel=undefined;}if(workerVerify){workerVerify.dispose();verifyDiagnostic=workerVerify.inspect();workerVerify=undefined;}sealedPlan=transferredPlan=undefined;planHandle=handoffHandle=undefined;generationStart=generationLease=generationDiscard=undefined;generationEvent=generationFrame=generationInputs=undefined;if(!generationTicketPublished&&!generationStarts){generationCleanupToken=generationCleanupContext=undefined;}if(liveCleanup&&!generationCleanupToken)liveCleanup.frame=liveCleanup.identity=liveCleanup.sink=undefined;heldClosure=undefined;preparationHandle=undefined;phaseHandle=closureLease=closureEvidence=undefined;binding=observation=recovery=seedRef=expectedRef=undefined;pinned=facts=undefined;}
+  function clear(){finishBound=undefined;finishPins=undefined;issuedFinish=undefined;acceptedFinish=undefined;sealedFinish=undefined;acceptedTermination=acceptedSourceClosed=acceptedCleanupConfirmed=undefined;if(hasFinish&&state==='failed'){finishState='failed';issueState='failed';acceptState='failed';sealState='failed';}if(source){source.status=state==='failed'?'failed':'closed';source.reference=source.identity=undefined;readyOrigin=undefined;}if(phaseModel){phaseModel.dispose();phaseDiagnostic=phaseModel.inspect();phaseModel=undefined;}if(workerVerify){workerVerify.dispose();verifyDiagnostic=workerVerify.inspect();workerVerify=undefined;}sealedPlan=transferredPlan=undefined;planHandle=handoffHandle=undefined;generationStart=generationLease=generationDiscard=undefined;generationEvent=generationFrame=generationInputs=undefined;if(!generationTicketPublished&&!generationStarts&&!failureLink?.hasNewSink()){generationCleanupToken=generationCleanupContext=undefined;}if(liveCleanup&&!generationCleanupToken)liveCleanup.frame=liveCleanup.identity=liveCleanup.sink=undefined;heldClosure=undefined;preparationHandle=undefined;phaseHandle=closureLease=closureEvidence=undefined;binding=observation=recovery=seedRef=expectedRef=undefined;pinned=facts=undefined;}
   function fail(phase:Phase,raw?:unknown):never{
-    if(state==='closed')throw Error('internal_review_error');hard??=Object.freeze({code:code(raw),phase});state='failed';clear();throw Object.assign(Error(hard.code),{code:hard.code});
+    if(state==='closed')throw Error('internal_review_error');hard??=Object.freeze({code:code(raw),phase});state='failed';
+    try{failureLink?.beforeClear(hard.code,hard.phase,{source:source?.identity,reference:source?.reference,
+      old_worker:facts&&'worker' in facts?facts.worker:undefined,old_generation:facts&&'generation' in facts?facts.generation:undefined,
+      new_frame:generationCleanupContext?.frame,new_sink:generationCleanupToken});}finally{clear();}
+    throw Object.assign(Error(hard.code),{code:hard.code});
   }
   function guard(phase:Phase){
     const reason=check();if(reason!==undefined)fail(phase,reason);if(hard)fail(phase,hard.code);
@@ -256,11 +261,13 @@ function createRecoveryKernel(seed:SyntheticRecoverySeed,expected:SyntheticSoftF
     },()=>{},()=>{finishState='discarded';if(issueStarted)issueState='discarded';state='consumed';});},
     beginSourceClose(b:object){return act('source_lifecycle',b,()=>{
       if(!tracked||!source||source.status!=='open'||source.close_started)fail('source_lifecycle');
+      failureLink?.sourceCloseRequested(source!.identity!,source!.reference!);
       source!.close_started=true;source!.status='closing';readyOrigin=undefined;invalidateFinish();
     },()=>{});},
     settleSourceClose(b:object,status:unknown){return act('source_lifecycle',b,()=>{
       if(!tracked||!source?.close_started||source.status!=='closing')fail('source_lifecycle');
-    },()=>{source!.completion=status==='closed'?'closed':status==='failed'?'failed':'unconfirmed';if(status!=='closed')fail('source_lifecycle');source!.status='closed';readyOrigin=undefined;},()=>{
+    },()=>{source!.completion=status==='closed'?'closed':status==='failed'?'failed':'unconfirmed';if(status!=='closed')fail('source_lifecycle');
+      failureLink?.sourceClosed(source!.identity!,source!.reference!);source!.status='closed';readyOrigin=undefined;},()=>{
       if(acceptedTermination&&source?.identity===acceptedTermination.source&&source.reference===pinned?.source)acceptedSourceClosed=acceptedTermination;
     });},
     checkWorkerGenerationReady(b:object,ready:object){return act('generation_ready',b,()=>{
@@ -269,6 +276,7 @@ function createRecoveryKernel(seed:SyntheticRecoverySeed,expected:SyntheticSoftF
     beginWorkerGenerationCleanup(sink:object){
       // Cleanup-only claim: safe after hard stop; it never runs the healthy-run guard.
       if(!tracked||state==='closed'||!generationCleanupToken||sink!==generationCleanupToken||!generationCleanupContext||!liveCleanup||liveCleanup.sink!==sink||liveCleanup.frame!==generationCleanupContext.frame||liveCleanup.started||liveCleanup.settled)fail('generation_cleanup',hard?.code);
+      failureLink?.newCleanupRequested(generationCleanupContext.frame,sink,liveCleanup.identity!);
       liveCleanup!.started=true;liveCleanup!.serial=1;readyOrigin=undefined;invalidateFinish();
       if(busy)fail('generation_cleanup',hard?.code);
       generationCleanup=Object.freeze({status:generationCleanupContext!.started?'requested':'not_required'});
@@ -292,19 +300,21 @@ function createRecoveryKernel(seed:SyntheticRecoverySeed,expected:SyntheticSoftF
       planCounts=Object.freeze({selected:generationInputs!.rows.length,retained_inputs:generationInputs!.inputs.length});generationFrame=generationInputs=undefined;planSeals=1;return opaque<RecoveryPlanHandle>();
     },handle=>{planHandle=handle;state='plan_sealed';});},
     claimWorkerGeneration(b:object,handle:object){let held:HeldClosure;return act('generation_claim',b,()=>{
-      const used=generationClaimed;generationClaimed=true;
+      const used=generationClaimed;if(!used)failureLink?.reserveNew();generationClaimed=true;
       if(used||state!=='worker_prepared'||handle!==preparationHandle||!heldClosure||workerVerify?.inspect().stage!=='verified')fail('generation_claim');
       held=heldClosure!;heldClosure=undefined;preparationHandle=undefined;generationUses=1;state='generation_claiming';
     },()=>{
       generationInputs=held.inputs;generationFrame=Object.freeze({supervisor:opaque(),worker:opaque(),generation:opaque()});
       const start=opaque<GenerationStart>(),cleanup=opaque<GenerationCleanup>();generationStart=start;generationDiscard=start;generationCleanupToken=cleanup;generationCleanupContext=Object.freeze({frame:generationFrame,started:false});generationCleanup=Object.freeze({status:'not_required'});
       if(tracked)liveCleanup={frame:generationFrame,identity:opaque(),sink:cleanup,started:false,serial:0,settled:false};
+      failureLink?.newAllocated(generationFrame,cleanup,liveCleanup!.identity!);
       return Object.freeze({start,cleanup});
     },()=>{generationTicketPublished=true;state='generation_claimed';});},
     startWorkerGeneration(b:object,handle:object){return act('generation_start',b,()=>{
       // A started frame is discarded only through its accepted ready handle, never the pre-start ticket.
       const own=generationStart;generationStart=undefined;generationDiscard=undefined;if(state!=='generation_claimed'||!own||own!==handle||!generationFrame||generationCleanupContext?.frame!==generationFrame||!generationCleanupToken||generationStarts)fail('generation_start');state='generation_starting';
-    },()=>{generationStarts=1;generationCleanupContext=Object.freeze({frame:generationFrame!,started:true});generationCleanup=Object.freeze({status:'not_started'});return opaque<GenerationLease>();},handle=>{generationLease=handle;state='generation_waiting';});},
+    },()=>{generationStarts=1;generationCleanupContext=Object.freeze({frame:generationFrame!,started:true});generationCleanup=Object.freeze({status:'not_started'});
+      failureLink?.newStarted(generationFrame!,generationCleanupToken!);return opaque<GenerationLease>();},handle=>{generationLease=handle;state='generation_waiting';});},
     issueWorkerGenerationReady(b:object,lease:object){return act('generation_ready',b,()=>{
       const used=generationEventIssued;generationEventIssued=true;if(used||state!=='generation_waiting'||lease!==generationLease||!generationFrame||!generationCleanupToken)fail('generation_ready');
     },()=>{const handle=opaque<GenerationEvent>();generationEvent=Object.freeze({handle,frame:generationFrame!});return handle;});},
@@ -323,10 +333,12 @@ function createRecoveryKernel(seed:SyntheticRecoverySeed,expected:SyntheticSoftF
       if(busy||state==='closed'||!generationCleanupToken||sink!==generationCleanupToken||!generationCleanupContext)return fail('generation_cleanup',hard?.code);
       const validStart=!tracked||!!(liveCleanup?.started&&liveCleanup.sink===sink&&liveCleanup.frame===generationCleanupContext.frame&&!liveCleanup.settled);
       const terminal=!hard&&acceptedTermination&&liveCleanup?.frame===acceptedTermination.frame&&liveCleanup.identity===acceptedTermination.cleanup&&sink===acceptedTermination.sink?acceptedTermination:undefined;
-      generationCleanupToken=undefined;const started=generationCleanupContext.started;generationCleanupContext=undefined;
+      const started=generationCleanupContext.started;
+      const valid=validStart&&(started?['not_started','requested','confirmed','failed','unconfirmed'].includes(status as string):status==='not_required');
+      failureLink?.newSettled(generationCleanupContext.frame,sink,validStart,started,valid,status);
+      generationCleanupToken=undefined;generationCleanupContext=undefined;
       if(tracked&&liveCleanup){liveCleanup.settled=true;liveCleanup.frame=liveCleanup.identity=liveCleanup.sink=undefined;readyOrigin=undefined;}
       invalidateFinish();
-      const valid=validStart&&(started?['not_started','requested','confirmed','failed','unconfirmed'].includes(status as string):status==='not_required');
       generationCleanup=Object.freeze({status:valid?status as CleanupStatus:'unconfirmed'});generationStart=generationLease=undefined;generationEvent=undefined;
       if(!valid||(started?status!=='confirmed':status!=='not_required'))fail('generation_cleanup');
       if(terminal&&started&&status==='confirmed')acceptedCleanupConfirmed=terminal;
@@ -357,17 +369,19 @@ function createRecoveryKernel(seed:SyntheticRecoverySeed,expected:SyntheticSoftF
       const own=recovery;recovery=undefined;if(state!=='claimed'||!own||own!==handle||closureDiagnostic)fail('worker_closure_begin');
       if(facts!.kind!=='worker_deadline')fail('worker_closure_begin');state='worker_closing';
     },()=>{const f=facts!;const sent=f.kind==='worker_deadline'&&(f.point==='analyze_timer'||f.point==='analyze_reply_check');
-      closureDiagnostic=Object.freeze({close_requests:f.worker_state==='none'?0:1,input_state:sent?'sent_terminal':'unsent',id_state:sent?'sent_terminal':f.point==='send_check'?'allocated_unsent':'absent',termination:f.worker_state==='none'?'not_required':'requested',cleanup:f.worker_state==='none'?'not_required':'not_started'});return opaque<WorkerClosureLease>();
+      closureDiagnostic=Object.freeze({close_requests:f.worker_state==='none'?0:1,input_state:sent?'sent_terminal':'unsent',id_state:sent?'sent_terminal':f.point==='send_check'?'allocated_unsent':'absent',termination:f.worker_state==='none'?'not_required':'requested',cleanup:f.worker_state==='none'?'not_required':'not_started'});
+      const lease=opaque<WorkerClosureLease>();failureLink?.oldLease(lease,f);return lease;
     },handle=>{closureLease=handle;});},
     confirmWorkerUnstarted(b:object,lease:object,context:unknown){return act('worker_closure_settle',b,()=>{
       const own=closureLease;closureLease=undefined;if(state!=='worker_closing'||!own||own!==lease)fail('worker_closure_settle');
-    },()=>{if(facts!.worker_state!=='none'||!equal(pinFacts(context),facts!))fail('worker_closure_settle');return opaque<WorkerClosureEvidence>();},handle=>{closureEvidence=handle;state='worker_closed';});},
+    },()=>{if(facts!.worker_state!=='none'||!equal(pinFacts(context),facts!))fail('worker_closure_settle');failureLink?.oldUnstarted(lease,facts!);return opaque<WorkerClosureEvidence>();},handle=>{closureEvidence=handle;state='worker_closed';});},
     settleWorkerClosure(b:object,lease:object,event:unknown){return act('worker_closure_settle',b,()=>{
       const own=closureLease;closureLease=undefined;if(state!=='worker_closing'||!own||own!==lease)fail('worker_closure_settle');
     },()=>{const v=plain(event);exact(v,['context','termination','cleanup']);if(facts!.worker_state==='none'||!equal(pinFacts(v.context),facts!))fail('worker_closure_settle');
       const termination=['confirmed','rejected','unconfirmed'].includes(v.termination as string)?v.termination as 'confirmed'|'rejected'|'unconfirmed':'unconfirmed';
       const cleanup=['complete','failed','unconfirmed'].includes(v.cleanup as string)?v.cleanup as 'complete'|'failed'|'unconfirmed':'unconfirmed';
-      closureDiagnostic=Object.freeze({...closureDiagnostic!,termination,cleanup});if(termination!=='confirmed'||cleanup!=='complete')fail('worker_closure_settle');return opaque<WorkerClosureEvidence>();
+      closureDiagnostic=Object.freeze({...closureDiagnostic!,termination,cleanup});failureLink?.oldSettled(lease,facts!,termination,cleanup);
+      if(termination!=='confirmed'||cleanup!=='complete')fail('worker_closure_settle');return opaque<WorkerClosureEvidence>();
     },handle=>{closureEvidence=handle;state='worker_closed';});},
     consumeWorkerClosure(b:object,evidence:object){return act('worker_closure_consume',b,()=>{
       const own=closureEvidence;closureEvidence=undefined;if(state!=='worker_closed'||!own||own!==evidence)fail('worker_closure_consume');state='consuming';
@@ -527,11 +541,12 @@ export function createSyntheticOwnedMixedSupply(raw:unknown,dependencies:unknown
 }
 type SupplyGuard=(stage:'prepare_pre'|'row_pre'|'row_post'|'prepare_post'|'discard_pre'|'discard_post',ordinal?:number)=>unknown;
 type SupplyFailureSlot={token:object;claimed:boolean;notices:number;reason:SupplyReason|undefined;custody:ReturnType<typeof createFailureCustodyCore>};
-function createOwnedMixedSupply(raw:unknown,fixedGuard:SupplyGuard,extra:unknown[],constructionToken:object,failure?:SupplyFailureSlot,initialFailure?:SupplyReason){
+type SupplyKernelBridge={token:object;owned:OwnedMixedSupply|undefined};
+function createOwnedMixedSupply(raw:unknown,fixedGuard:SupplyGuard,extra:unknown[],constructionToken:object,failure?:SupplyFailureSlot,initialFailure?:SupplyReason,bridge?:SupplyKernelBridge){
   let first:SupplyReason|undefined,state:'fresh'|'preparing'|'prepared'|'failed'|'invalidated'|'discarded'='fresh',busy=false,started=false;
   let data:SupplyData|undefined,held:OwnedMixedSupply|undefined,prepared:PreparedOwnedMixedSupply|undefined;
   let selected=0,pinBuilds=0,pinsCreated=0,preparations=0,linked=0,generated=0,consumed=0,inputs=0,originalReviewed=0,parentOmitted=0,workerOmitted=0,retained=0,keptFindings=0;
-  function clear(){data=undefined;held=undefined;prepared=undefined;}
+  function clear(){data=undefined;held=undefined;prepared=undefined;if(bridge)bridge.owned=undefined;}
   function recordFailure(reason:SupplyReason){
     first??=reason;state='failed';
     try{
@@ -577,6 +592,7 @@ function createOwnedMixedSupply(raw:unknown,fixedGuard:SupplyGuard,extra:unknown
         }catch(e){mismatch=e instanceof OwnedMixedSupplyError?e.reason:'shape';}
         guard('prepare_post');if(mismatch||!moving)fail(mismatch??'internal');const complete=moving!;checkOwnedSupply(complete,constructionToken);
         held=complete;data=undefined;prepared=opaque<PreparedOwnedMixedSupply>();preparations=1;state='prepared';
+        if(bridge){if(bridge.token!==constructionToken)fail('binding');bridge.owned=complete;}
         parentOmitted=complete.model.trace.filter(t=>t.action==='parent_omit').length;workerOmitted=complete.model.original_rows.filter(x=>x.outcome.state==='result_omitted').length;
         retained=complete.model.original_rows.filter(x=>x.producer==='retained').length;keptFindings=complete.model.kept_findings;
         return prepared;
@@ -758,4 +774,159 @@ export function createSyntheticFailureBoundSupply(raw:unknown,dependencies:unkno
     current:custody.currentFailure(),upper_accepted:custody.upper.inspect().accepted,
     permissions:Object.freeze({kernel_generation:false,accepted_adoption:false,destination_seal:false,formal_issuance:false}),
     unverified:Object.freeze(['role_origin','actual_cleanup','attempt_inventory','canonical_budget','cleanup_deadline'])})});
+}
+
+// FB-02 fixed private lifecycle connection. These bindings never leave the fresh DATA constructor.
+const failureStages:Readonly<Record<Phase,Stage>>={binding:'prepare',observation:'prepare',recovery_claim:'prepare',recovery_consume:'prepare',
+  cleanup_lease:'cleanup',cleanup_record:'cleanup',revoke:'internal',close:'cleanup',discard:'cleanup',phase_prepare:'prepare',phase_verify:'prepare',phase_chunk:'prepare',
+  phase_retry:'prepare',phase_worker:'prepare',phase_ready:'prepare',phase_consume:'prepare',worker_closure_begin:'cleanup',worker_closure_settle:'cleanup',worker_closure_consume:'cleanup',
+  worker_prepare:'prepare',worker_prepare_discard:'cleanup',worker_verify:'prepare',generation_claim:'prepare',generation_start:'prepare',generation_ready:'prepare',
+  generation_cleanup:'cleanup',generation_discard:'cleanup',worker_plan:'transfer',source_lifecycle:'cleanup',finish_binding:'transfer',finish_discard:'cleanup',
+  finish_issue:'transfer',finish_accept:'transfer',finish_accepted_discard:'cleanup',finish_seal:'transfer'};
+type KernelRoleBinding={ticket:FailureCreationTicket;creator:object;frame:object|undefined;reference:object|undefined;sink:object|undefined;started:boolean;settled:boolean;requested:boolean};
+function createFailureKernelLink(failure:SupplyFailureSlot){
+  const {custody}=failure,bindings:Partial<Record<Role,KernelRoleBinding>>={};let protectedState=false,protectionChecks=0,bindingFault=false,phase:Phase|null=null,oldCreatorClosed=false,unstartedLease:object|undefined;
+  function reserve(role:Role){
+    if(bindings[role])throw Error('internal_review_error');
+    const b:KernelRoleBinding={ticket:custody.issuer.beginCreation(role),creator:opaque(),frame:undefined,reference:undefined,sink:undefined,started:false,settled:false,requested:false};bindings[role]=b;return b;
+  }
+  function created(role:Role,b:KernelRoleBinding){custody.local.observe(role,b.ticket,custody.issuer.fact(b.ticket,'created'));}
+  function notice(code:Code,where:Phase){if(!failure.claimed){failure.claimed=true;phase=where;custody.local.hard(code,failureStages[where]);failure.notices++;}}
+  return Object.freeze({
+    reserveSource(){reserve('source');},
+    sourceBorn(frame:object,reference:object){const b=bindings.source;if(!b||b.frame)throw Error('internal_review_error');b.frame=frame;b.reference=reference;b.started=true;created('source',b);},
+    sourceCloseRequested(frame:object,reference:object){
+      const b=bindings.source;if(!b||b.requested||b.frame!==frame||b.reference!==reference)throw Error('internal_review_error');
+      b.requested=true;custody.local.requestCleanup('source',b.ticket);
+    },
+    sourceClosed(frame:object,reference:object){
+      const b=bindings.source;if(!b||!b.requested||b.settled||b.frame!==frame||b.reference!==reference)throw Error('internal_review_error');
+      b.settled=true;custody.local.observe('source',b.ticket,custody.issuer.fact(b.ticket,'source_closed'));
+    },
+    reserveOld(){reserve('old_generation');},
+    oldBorn(frame:object,generation:object){const b=bindings.old_generation;if(!b||b.frame||oldCreatorClosed)throw Error('internal_review_error');b.frame=frame;b.reference=generation;b.started=true;created('old_generation',b);},
+    closeUnstartedOldCreator(){if(bindings.old_generation||oldCreatorClosed)throw Error('internal_review_error');oldCreatorClosed=true;},
+    oldLease(lease:object,facts:SyntheticSoftFacts){
+      const b=bindings.old_generation;
+      if(facts.worker_state==='none'){if(!oldCreatorClosed||b||unstartedLease)throw Error('internal_review_error');unstartedLease=lease;return;}
+      if(!b||b.sink||facts.worker!==b.frame||facts.generation!==b.reference)throw Error('internal_review_error');
+      b.sink=lease;b.requested=true;custody.local.requestCleanup('old_generation',b.ticket);
+    },
+    oldUnstarted(lease:object,facts:SyntheticSoftFacts){
+      if(!oldCreatorClosed||bindings.old_generation||facts.worker_state!=='none'||lease!==unstartedLease)throw Error('internal_review_error');
+      unstartedLease=undefined;custody.local.observeAbsent('old_generation',custody.issuer.proveUncreated('old_generation'));
+    },
+    oldSettled(lease:object,facts:SyntheticSoftFacts,termination:string,cleanup:string){
+      const b=bindings.old_generation;
+      if(!b||b.settled||b.sink!==lease||facts.worker_state==='none'||facts.worker!==b.frame||facts.generation!==b.reference)throw Error('internal_review_error');
+      b.settled=true;b.sink=undefined;
+      if(termination==='confirmed')custody.local.observe('old_generation',b.ticket,custody.issuer.fact(b.ticket,'worker_terminated'));
+      custody.local.observe('old_generation',b.ticket,custody.issuer.fact(b.ticket,cleanup==='complete'?'cleanup_confirmed':'cleanup_unconfirmed'));
+    },
+    reserveNew(){reserve('new_generation');},
+    newAllocated(frame:object,sink:object,identity:object){const b=bindings.new_generation;if(!b||b.frame||b.sink)throw Error('internal_review_error');b.frame=frame;b.reference=identity;b.sink=sink;},
+    newStarted(frame:object,sink:object){const b=bindings.new_generation;if(!b||b.started||b.frame!==frame||b.sink!==sink||b.settled)throw Error('internal_review_error');b.started=true;created('new_generation',b);},
+    newCleanupRequested(frame:object,sink:object,identity:object){
+      const b=bindings.new_generation;if(!b||b.requested||b.settled||b.frame!==frame||b.sink!==sink||b.reference!==identity)throw Error('internal_review_error');
+      b.requested=true;custody.local.requestCleanup('new_generation',b.ticket);
+    },
+    newSettled(frame:object,sink:object,validStart:boolean,started:boolean,valid:boolean,status:unknown){
+      const b=bindings.new_generation;if(!b||b.settled||b.frame!==frame||b.sink!==sink||started!==b.started)throw Error('internal_review_error');
+      b.settled=true;b.sink=undefined;
+      // Existing sink validation is the sole consumer; only its same-frame accepted fact is projected.
+      if(validStart&&b.requested&&started)custody.local.observe('new_generation',b.ticket,custody.issuer.fact(b.ticket,valid&&status==='confirmed'?'cleanup_confirmed':'cleanup_unconfirmed'));
+    },
+    hasNewSink:()=>!!bindings.new_generation?.sink,
+    ownedNewCleanup:()=>{const b=bindings.new_generation;return b?.sink?Object.freeze({sink:b.sink,requested:b.requested}):undefined;},
+    beforeClear(code:Code,where:Phase,live:{source:object|undefined;reference:object|undefined;old_worker:object|undefined;old_generation:object|undefined;new_frame:object|undefined;new_sink:object|undefined}){
+      if(!protectionChecks){
+        protectionChecks=1;const s=bindings.source,o=bindings.old_generation,n=bindings.new_generation;
+        bindingFault=!!(s?.frame&&(s.frame!==live.source||s.reference!==live.reference)||o?.frame&&(o.frame!==live.old_worker||o.reference!==live.old_generation)
+          ||n?.sink&&(n.frame!==live.new_frame||n.sink!==live.new_sink));
+        protectedState=!bindingFault;
+      }
+      // Inspect/catch after clear cannot synthesize this retained-FD-like identity checkpoint.
+      notice(code,where);
+    },
+    hard:notice,
+    inspect:()=>Object.freeze({protected:protectedState,protection_checks:protectionChecks,binding_fault:bindingFault,phase,bindings:Object.freeze(Object.fromEntries(roles.map(role=>{const b=bindings[role];return [role,Object.freeze({bound:!!b?.frame,reserved:!!b,started:b?.started??false,settled:b?.settled??false,cleanup_pending:!!b?.sink})];})))}),
+  });
+}
+type FailureKernelLink=ReturnType<typeof createFailureKernelLink>;
+
+/** FB-02: creates initial synthetic topology privately. No caller-supplied live references or accepted route. */
+export function createSyntheticFailureBoundKernel(raw:unknown,dependencies:unknown,...extra:unknown[]){
+  const token=opaque<object>(),custody=createFailureCustodyCore('connected',()=>undefined,token);
+  const failure:SupplyFailureSlot={token,claimed:false,notices:0,reason:undefined,custody},bridge:SupplyKernelBridge={token,owned:undefined};
+  const link=createFailureKernelLink(failure);let fixedGuard:(stage:string,n?:number)=>unknown=()=>undefined,initialFailure:SupplyReason|undefined;
+  try{const d=supplyRecord(dependencies,['guard']);if(typeof d.guard!=='function'||types.isProxy(d.guard))supplyBad();fixedGuard=d.guard as typeof fixedGuard;}catch{initialFailure='shape';}
+  const supply=createOwnedMixedSupply(raw,(stage,n)=>{const stop=fixedGuard(stage,n);return failure.claimed?custody.currentFailure()!.first_hard.code:stop;},extra,token,failure,initialFailure,bridge);raw=dependencies=undefined;extra=[];
+  let kernel:ReturnType<typeof createRecoveryKernel>|undefined,initial:Readonly<{seed:SyntheticRecoverySeed;facts:SyntheticSoftFacts}>|undefined;
+  let b:OwnerBinding|undefined,lease:WorkerClosureLease|undefined,evidence:WorkerClosureEvidence|undefined,busy=false;
+  let preparationInput:unknown,preparation:WorkerRecoveryPreparation|undefined;
+  function invalidate(){initial=undefined;b=lease=evidence=preparation=undefined;preparationInput=undefined;supply.discard();}
+  function run<T>(phase:Phase,work:()=>T,cleanupOnly=false):T{
+    if(busy||failure.claimed&&!cleanupOnly){link.hard(custody.currentFailure()?.first_hard.code??'internal_review_error',phase);kernel?.revoke(custody.currentFailure()!.first_hard.code);throw Error(custody.currentFailure()!.first_hard.code);}
+    busy=true;try{return work();}catch(e){link.hard(code(e),phase);kernel?.revoke(custody.currentFailure()!.first_hard.code);throw Error(custody.currentFailure()!.first_hard.code);}
+    finally{busy=false;if(failure.claimed)invalidate();}
+  }
+  return Object.freeze({
+    prepare(...args:unknown[]){return run('binding',()=>{
+      const h=supply.prepare(...args);let owned=bridge.owned;
+      try{
+        if(!owned||owned.token!==token)throw Error('internal_review_error');
+        const time=owned.data.finish.time,point=owned.data.recovery.point;
+        link.reserveSource();
+        const seed:SyntheticRecoverySeed=Object.freeze({run:opaque(),session:opaque(),source:opaque(),key:opaque(),origin:opaque(),budget:opaque(),release:opaque(),
+          started_at:time.started_at as string,deadline_ms:time.deadline_ms as number,observed_at:time.observed_at as string,upper_utc:time.upper_utc as string});
+        const active=owned.pins.receipts.find(i=>i.update_xml_sys_id===owned!.data.recovery.active_input_sys_id);if(!active)throw Error('internal_review_error');
+        const common={kind:'worker_deadline' as const,phase:'analysis' as const,point,supervisor:opaque(),request:opaque(),input:active.receipt};
+        if(point!=='request_check_unstarted')link.reserveOld();else link.closeUnstartedOldCreator();
+        const refs=point==='request_check_unstarted'?{}:{worker:opaque(),generation:opaque()};
+        const facts=Object.freeze({...common,...refs,worker_state:point==='request_check_unstarted'?'none':point==='ready_timer'||point==='ready_reply_check'?'starting':'ready',
+          ...(point==='send_check'?{allocation:opaque(),id:1}:point==='analyze_timer'||point==='analyze_reply_check'?{job:opaque(),id:1}:{})}) as SyntheticSoftFacts;
+        if('worker' in facts)link.oldBorn(facts.worker,facts.generation);
+        preparationInput={source:seed.source,budget:seed.budget,release:seed.release,origin:seed.origin,window:opaque(),verify:null,
+          accounting:owned.data.recovery.accounting,rows:owned.model.selected,
+          completed:owned.model.assets.filter(a=>a.state!=='not_processed').map(a=>a.state==='reviewed'?{state:a.state,update_xml_sys_id:a.update_xml_sys_id}:a),
+          inputs:owned.pins.receipts.map(i=>({receipt:i.receipt,update_xml_sys_id:i.update_xml_sys_id,retrieved_at:i.retrieved_at,state:i.state==='completed'?'completed':'retained'})),
+          collection_status:(owned.data.finish.header.collection as Record<string,unknown>).status,consistency:owned.data.recovery.consistency};
+        supply.discardPrepared(h);
+        kernel=createRecoveryKernel(seed,facts,()=>{const stop=fixedGuard('kernel');return failure.claimed?custody.currentFailure()!.first_hard.code:stop===undefined?undefined:typeof stop==='string'?stop:'internal_review_error';},true,undefined,link);
+        initial=Object.freeze({seed,facts});
+      }catch(e){link.hard(code(e),'binding');throw Object.assign(Error(custody.currentFailure()!.first_hard.code),{code:custody.currentFailure()!.first_hard.code});}
+      finally{owned=undefined;bridge.owned=undefined;if(failure.claimed)supply.discard();}
+    });},
+    beginClosure(...args:unknown[]){return run('worker_closure_begin',()=>{
+      if(args.length||!kernel||!initial)throw Error('internal_review_error');b=kernel.bind(initial.seed);
+      const observation=kernel.observe(b,initial.facts),recovery=kernel.claimRecovery(b,observation);lease=kernel.beginWorkerClosure(b,recovery);
+    });},
+    confirmOldUnstarted(...args:unknown[]){return run('worker_closure_settle',()=>{
+      if(args.length||!kernel||!initial||!b||!lease)throw Error('internal_review_error');evidence=kernel.confirmWorkerUnstarted(b,lease,initial.facts);lease=undefined;
+    });},
+    settleOld(rawEvent:unknown,...args:unknown[]){return run('worker_closure_settle',()=>{
+      if(args.length||!kernel||!initial||!b||!lease)throw Error('internal_review_error');const event=supplyRecord(rawEvent,['termination','cleanup']);
+      evidence=kernel.settleWorkerClosure(b,lease,{context:initial.facts,termination:event.termination,cleanup:event.cleanup});lease=undefined;
+    });},
+    prepareGeneration(...args:unknown[]){return run('worker_prepare',()=>{
+      if(args.length||!kernel||!b||!evidence||!preparationInput)throw Error('internal_review_error');const input=preparationInput;preparationInput=undefined;
+      preparation=kernel.prepareWorkerRecovery(b,evidence,input);evidence=undefined;kernel.beginWorkerVerify(b,preparation);
+    });},
+    claimGeneration(...args:unknown[]){return run('generation_claim',()=>{if(args.length||!kernel||!b||!preparation)throw Error('internal_review_error');return kernel.claimWorkerGeneration(b,preparation);});},
+    startGeneration(start:object,...args:unknown[]){return run('generation_start',()=>{if(args.length||!kernel||!b)throw Error('internal_review_error');return kernel.startWorkerGeneration(b,start);});},
+    issueReady(lease:object,...args:unknown[]){return run('generation_ready',()=>{if(args.length||!kernel||!b)throw Error('internal_review_error');return kernel.issueWorkerGenerationReady(b,lease);});},
+    acceptReady(lease:object,event:object,...args:unknown[]){return run('generation_ready',()=>{if(args.length||!kernel||!b)throw Error('internal_review_error');return kernel.acceptWorkerGenerationReady(b,lease,event);});},
+    beginCleanup(sink:object,...args:unknown[]){return run('generation_cleanup',()=>{if(args.length||!kernel)throw Error('internal_review_error');kernel.beginWorkerGenerationCleanup(sink);},true);},
+    settleCleanup(sink:object,status:unknown,...args:unknown[]){return run('generation_cleanup',()=>{if(args.length||!kernel)throw Error('internal_review_error');kernel.recordWorkerGenerationCleanup(sink,status);},true);},
+    cleanupOwned(status:unknown,...args:unknown[]){return run('generation_cleanup',()=>{
+      const own=link.ownedNewCleanup();if(args.length||!kernel||!own)throw Error('internal_review_error');
+      if(!own.requested)kernel.beginWorkerGenerationCleanup(own.sink);kernel.recordWorkerGenerationCleanup(own.sink,status);
+    },true);},
+    beginSourceClose(...args:unknown[]){return run('source_lifecycle',()=>{if(args.length||!kernel||!b)throw Error('internal_review_error');kernel.beginSourceClose(b);});},
+    settleSourceClose(status:unknown,...args:unknown[]){return run('source_lifecycle',()=>{if(args.length||!kernel||!b)throw Error('internal_review_error');kernel.settleSourceClose(b,status);});},
+    stop(reason:unknown,...args:unknown[]){try{if(args.length){link.hard('internal_review_error','revoke');kernel?.revoke('internal_review_error');throw Error(custody.currentFailure()!.first_hard.code);}if(kernel)kernel.revoke(reason);else supply.stop(reason as 'cancelled');}finally{if(failure.claimed)invalidate();}},
+    failure:()=>Object.freeze({scope:'synthetic_failure_bound_kernel' as const,authority:'none' as const,notices:failure.notices,current:custody.currentFailure(),...link.inspect(),upper_accepted:custody.upper.inspect().accepted,
+      permissions:Object.freeze({accepted_adoption:false,destination_seal:false,formal_issuance:false}),unverified:Object.freeze(['runtime_resource_origin','actual_cleanup','attempt_inventory','worker_termination_origin','canonical_budget','cleanup_deadline','whole_run_work'])}),
+    inspect:()=>Object.freeze({supply:supply.inspect(),kernel:kernel?.inspect()??null}),
+  });
 }
