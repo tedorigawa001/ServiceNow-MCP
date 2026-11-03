@@ -124,7 +124,7 @@ PayloadClearedReceiptは論理slotを外した後だけ発行し、失敗capsule
 
 ## 8 prefix・費目・未確定事項
 
-[順序付きprefix／固定delta詳細契約draft-0.1](BEST_PRACTICE_ABORT_SCOPE_RECOVERY_PREFIX_DELTA_DESIGN.md)で、元の親順序とplan canonical値の関係・受付前の重複／上限拒否・errors先頭100件と切詰め警告・独立oracle条件を具体化した。値計算／private結合はPD-A／Bの候補で、NB-03の固定abortや閉鎖条件は変更しない。
+[順序付きprefix／固定delta詳細契約](BEST_PRACTICE_ABORT_SCOPE_RECOVERY_PREFIX_DELTA_DESIGN.md)で、元の親順序とplan canonical値の関係・受付前の重複／上限拒否・errors先頭100件と切詰め警告・独立oracle条件を具体化した。値計算／private結合はPD-A／Bの候補で、NB-03の固定abortや閉鎖条件は変更しない。
 
 normal ownerは原順序の親prefixと同pins header、同plan.verify／投影を別々に保持する。RAのsort済みheaderから原順序を復元しない。OB-02の採用は同origin／所有権の確認に限定し、prefix変換関係を未確認のままseal成功へ進めない。
 

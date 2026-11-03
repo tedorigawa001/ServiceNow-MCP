@@ -68,7 +68,7 @@ full本文を含むmixed列を旧pinsの小さい一括コピー枠へ押し込�
 
 ## 4 順序付きprefixと固定delta
 
-[prefix／固定delta詳細契約draft-0.1](BEST_PRACTICE_ABORT_SCOPE_RECOVERY_PREFIX_DELTA_DESIGN.md)で、RA入口前のeligibility、原順序側とsort済みbase側の二経路、100／103・error切詰めと独立oracleを具体化した。実accepted projection headerのprivate供給は未接続であり、関係値・移譲先sealの実装を追加したものではない。
+[prefix／固定delta詳細契約](BEST_PRACTICE_ABORT_SCOPE_RECOVERY_PREFIX_DELTA_DESIGN.md)で、RA入口前のeligibility、原順序側とsort済みbase側の二経路、100／103・error切詰めと独立oracleを具体化した。実accepted projection headerのprivate供給は未接続であり、関係値・移譲先sealの実装を追加したものではない。
 
 開始prefixは新fixtureのDATA pinに限定する。base headerのlimitations／errorsとinitial_prefixの関係を、元の順序・重複を含めて検査する。別々の任意配列を独立した真実として採用しない。OM-Aの親処理後prefixを新constructionのbase headerへ固定反映してから、同pinsとplanを結ぶ。
 
