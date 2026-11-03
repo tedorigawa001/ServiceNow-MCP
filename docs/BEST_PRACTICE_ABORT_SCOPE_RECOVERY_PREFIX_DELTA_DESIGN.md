@@ -1,7 +1,7 @@
 # OB-03前工程：順序付きprefix・固定deltaの詳細契約
 
-Version: br006-recovery-prefix-delta-draft-0.3 / Date: 2026-11-03。
-初版基準HEAD: `7866991`。Status: **PD-Aの値計算とPD-B(A/B)の同pending／実accepted header prefix比較・暫定候補を合成実装。post受理済み関係値・移譲先sealは未接続。正式発行口閉鎖・全体受付無効・Unknown・VM／監視／telemetry調査保留を維持する。**
+Version: br006-recovery-prefix-delta-draft-0.4 / Date: 2026-11-03。
+初版基準HEAD: `7866991`。Status: **PD-AとPD-B(A/B/C)の入力化・prefix比較・post関係値受理／一度限りの固定消費・破棄を合成実装。関係値を外部へ返さず、移譲先sealは未接続。正式発行口閉鎖・全体受付無効・Unknown・VM／監視／telemetry調査保留を維持する。**
 
 [OD-B設計§4〜6](BEST_PRACTICE_ABORT_SCOPE_RECOVERY_ODB_TRANSFER_DESIGN.md)と[NB接続設計§8・12](BEST_PRACTICE_ABORT_SCOPE_RECOVERY_OB02_ADOPTION_DESIGN.md)の具体化。新しい正規化・上限緩和・seal成功を導入せず、親の原順序と既存plan投影のcanonical値の関係を証明する条件を定める。
 
@@ -133,9 +133,9 @@ error上限100とwarning上限100は独立である。E=100であること自体
 
 現在のNormalAcceptedSnapshotはpins／plan／handoff／route等を持つが、実accepted projectionのheader参照は返していない。この供給は次段落の同takeに束ねるprivate receipt／consumerで補い、公開snapshotは拡張しない。別呼出し・summaryや仮routeで投影を再生成して「実accepted header」とみなさない。公開snapshot／body getterを追加しない。
 
-[実accepted header供給境界](BEST_PRACTICE_ABORT_SCOPE_RECOVERY_ACCEPTED_HEADER_SUPPLY_DESIGN.md)で二案を比較し、同takeへprivate receiptを束ねる案を合成実装した。対象はaccept後の同projectionで、take後の再読・再生成はしない。固定consumerと失効時破棄を接続し、後続(B)で同pendingのPD-A入力化・prefix比較・暫定候補までを接続した。post受理済み関係値とsealは未実装のまま。
+[実accepted header供給境界](BEST_PRACTICE_ABORT_SCOPE_RECOVERY_ACCEPTED_HEADER_SUPPLY_DESIGN.md)で二案を比較し、同takeへprivate receiptを束ねる案を合成実装した。対象はaccept後の同projectionで、take後の再読・再生成はしない。後続(B/C)で同pendingの入力化・prefix比較・post関係値受理と固定消費／破棄まで接続し、sealは未実装のまま。
 
-[同pendingの入力化・比較・関係値接続差分](BEST_PRACTICE_ABORT_SCOPE_RECOVERY_PENDING_PREFIX_BINDING_DESIGN.md)に、Pp／同plan verifyのstrict入力化、Q.base_prefixとpins base・Q.canonical_prefixと実headerの比較、root側one-shotとpost受理・固定消費を設計した。(A)の値専用境界・独立oracleと(B)の同pending接続・開始claim・暫定候補を合成実装し、full header適合・seal authorityとは分離する。(C)のpost受理・関係値発行／消費は未着手。
+[同pendingの入力化・比較・関係値接続差分](BEST_PRACTICE_ABORT_SCOPE_RECOVERY_PENDING_PREFIX_BINDING_DESIGN.md)に、Pp／同plan verifyのstrict入力化、Q.base_prefixとpins base・Q.canonical_prefixと実headerの比較、root側one-shotとpost受理・固定消費を設計した。(A/B/C)を合成実装し、full header適合・seal authorityとは分離する。関係値は同scope内で消費・破棄し、外部移譲は行わない。
 
 関係計算は同pendingを所有する保護scopeに限定し、pre／work／postと同失効serialを結ぶ。workのshape／limit／不一致は一時失敗に留め、postのcancelled／deadlineを優先する。失敗時は関係値・ordered/canonicalの一時コピーも破棄し、NB-03の本文破棄証拠・固定診断／同custodyへ進む。diagnosticは固定reasonと件数だけでprefix本文・rawエラーや行IDを出さない。
 
@@ -164,7 +164,7 @@ oracleは被検査のmodel／plan投影／関係計算器／finalizeAggregateを
 
 P0／Pp／traceは既存ownerが保持し、追加のordered／canonical一時配列・delta最大3 errors・比較／sort作業・private receiptの寿命とcopyピークを別費目にする。warning／error件数の局所上限は有限でも、全work・heap・中断粒度の数値上界や予約額は未導出。既存予算leaseを更新せず、無料扱い・旧FB-03費目の流用・全体受付有効化はしない。
 
-PD-A（値だけの二経路計算／eligibility・境界oracle）は§11で実装した。次はPD-B（同pending／実accepted projectionへのprivate結合・guard／破棄）とする。どちらも移譲先sealの成功を返さない。移譲先ownerのatomic commit／正常terminal-only寿命と、保持量／全work上界の設計は別途必要。
+PD-A（値だけの二経路計算／eligibility・境界oracle）は§11で実装した。後続PD-B(A/B/C)で同pending／実accepted projectionへのprivate結合・guard・post関係値受理と固定消費／破棄までを合成実装した。どちらも移譲先sealの成功を返さない。移譲先ownerのatomic commit／正常terminal-only寿命と、保持量／全work上界の設計は別途必要。
 
 draft-0.1はMDだけ。後続PD-Aも実接続・実通信・実機操作・token／permit／seal発行・設定変更・Pushは行わない。
 

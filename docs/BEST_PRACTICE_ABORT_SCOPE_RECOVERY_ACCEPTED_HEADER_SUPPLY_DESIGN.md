@@ -1,7 +1,7 @@
 # PD-B前工程：実accepted headerのprivate供給境界
 
-Version: br006-recovery-accepted-header-supply-draft-0.3 / Date: 2026-11-03。
-Status: **同takeのprivate供給・固定consumerと失効時破棄を合成実装。後続(B)で同pendingのprefix比較・暫定候補まで接続し、post受理済み関係値・sealは未接続。正式発行口閉鎖・全体受付無効・Unknown・VM／監視／telemetry調査保留を維持する。**
+Version: br006-recovery-accepted-header-supply-draft-0.4 / Date: 2026-11-03。
+Status: **同takeのprivate供給・固定consumerと失効時破棄を合成実装。後続(B/C)で同pendingのprefix比較・post関係値受理／固定消費・破棄まで接続し、sealは未接続。正式発行口閉鎖・全体受付無効・Unknown・VM／監視／telemetry調査保留を維持する。**
 
 [順序付きprefix・固定delta契約](BEST_PRACTICE_ABORT_SCOPE_RECOVERY_PREFIX_DELTA_DESIGN.md)§8と[NB接続設計](BEST_PRACTICE_ABORT_SCOPE_RECOVERY_OB02_ADOPTION_DESIGN.md)の差分。実装は合成依存に限定し、実接続・実通信・設定変更・Pushを行わない。NB-03の固定abortと、移譲先seal未接続を変更しない。
 
@@ -74,7 +74,7 @@ PD-Aの成功はprefix-local値だけを保証する。供給したheaderからs
 - 全失敗位置でheader参照をclearし、payloadPendingと本文破棄証拠が一致する。上位custodyにはheader本文を残さない。
 - 既存read／旧試験・固定abort・200限定guard・梱包除外を維持し、公開getterや配布物からの登録経路が増えない。
 
-次の範囲は、同pendingのP0／Pp／traceと実header受領物を固定比較へ結ぶ詳細契約・実装、one-shot関係値の破棄、費用計数である。移譲先seal成功・実session／worker接続は引き続き対象外とする。
+後続の同pending／P0・Pp・traceと実header受領物の結合・prefix比較・one-shot関係値の破棄は、次の接続差分設計に合成実装範囲を記録する。費用計数、移譲先seal成功・実session／worker接続は未接続のままとする。
 
 [同pendingのPD-A入力化・関係値接続差分](BEST_PRACTICE_ABORT_SCOPE_RECOVERY_PENDING_PREFIX_BINDING_DESIGN.md)で、同model／planからの固定入力・base／実headerの比較範囲・root側claimとpost受理を具体化した。設計のみで、既存header consume claimを再armせず、固定abortを維持する。
 
@@ -82,7 +82,7 @@ PD-Aの成功はprefix-local値だけを保証する。供給したheaderからs
 
 `TakenNormalAccepted`へopaqueな`projectionReceipt`を追加した。公開の`NormalAcceptedSnapshot`は変更せず、同kernelのtakeだけが受理済み`acceptedFinish.projection`とheaderをprivate slotへ保持し、元accepted slotを外す。`checkTaken`は元taken object自体も照合する。
 
-非export channelの固定`consumeHeader`は利用claimを先に消費し、private slotを外してから同owner／taken／receipt／projectionのplan・header参照を検査する。成功時のreadonly headerだけを同pendingの保護scopeが保持し、transfer post-guard後も従来どおり固定abortする。後続(B)では[接続差分設計§9](BEST_PRACTICE_ABORT_SCOPE_RECOVERY_PENDING_PREFIX_BINDING_DESIGN.md)に従い同headerとPD-Aのprefix比較・暫定候補を追加したが、post受理済み関係値の発行は未実装。
+非export channelの固定`consumeHeader`は利用claimを先に消費し、private slotを外してから同owner／taken／receipt／projectionのplan・header参照を検査する。成功時のreadonly headerだけを同pendingの保護scopeが保持し、transfer post-guard後も従来どおり固定abortする。後続(B/C)では[接続差分設計§9〜10](BEST_PRACTICE_ABORT_SCOPE_RECOVERY_PENDING_PREFIX_BINDING_DESIGN.md)に従い同headerとPD-Aのprefix比較・暫定候補・post関係値受理と一度限りの固定消費を追加し、関係値を外部へ返さず全破棄する。
 
 kernelのclear／invalidateとnormal rootのclearへ新参照を含め、`payloadPending`／`isCleared`が残存参照を検知する。inspectには発行・消費件数、保持boolと固定error件数だけを返し、projection／header／receiptを返さない。cleanup capsuleへheaderを移さない。
 

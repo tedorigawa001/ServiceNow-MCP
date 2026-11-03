@@ -1,9 +1,9 @@
 # PD-B：同pendingのPD-A入力化・比較・関係値の接続差分
 
-Version: br006-recovery-pending-prefix-binding-draft-0.3 / Date: 2026-11-03。
-設計基準HEAD: `802b5c3`／(A)実装基準HEAD: `2043665`／(B)実装基準HEAD: `af6fdaa`。Status: **(A)値専用境界と(B)同pending／header consumer・開始claim・暫定候補を合成実装。(C)のpost受理／関係値発行・消費は未着手。正式発行口閉鎖・全体受付無効・Unknown・VM／監視／telemetry調査保留を維持する。**
+Version: br006-recovery-pending-prefix-binding-draft-0.4 / Date: 2026-11-03。
+設計基準HEAD: `802b5c3`／(A)実装基準HEAD: `2043665`／(B)実装基準HEAD: `af6fdaa`／(C)実装開始HEAD: `b3ceea7`。Status: **(A/B)の入力化・比較・暫定候補と(C)のpost受理・一度限りの固定消費／全破棄を合成実装。関係値を外部へ返さず固定abortを維持。正式発行口閉鎖・全体受付無効・Unknown・VM／監視／telemetry調査保留を維持する。**
 
-[prefix／delta契約](BEST_PRACTICE_ABORT_SCOPE_RECOVERY_PREFIX_DELTA_DESIGN.md)§8〜11と[private header供給](BEST_PRACTICE_ABORT_SCOPE_RECOVERY_ACCEPTED_HEADER_SUPPLY_DESIGN.md)§8の差分。本稿は同pendingの供給元・比較範囲・一度限りの内部関係値を具体化する。(A/B)の合成実装は§8〜9に限定し、実接続・実通信・設定変更・Pushは行わない。post受理済み関係値や移譲先sealを実装済みとはせず、NB-03の固定abortを維持する。
+[prefix／delta契約](BEST_PRACTICE_ABORT_SCOPE_RECOVERY_PREFIX_DELTA_DESIGN.md)§8〜11と[private header供給](BEST_PRACTICE_ABORT_SCOPE_RECOVERY_ACCEPTED_HEADER_SUPPLY_DESIGN.md)§8の差分。本稿は同pendingの供給元・比較範囲・一度限りの内部関係値を具体化する。(A/B/C)の合成実装は§8〜10に限定し、実接続・実通信・設定変更・Pushは行わない。移譲先sealを実装済みとはせず、NB-03の固定abortを維持する。
 
 ## 1 現行との差分
 
@@ -121,4 +121,16 @@ normal rootに`prefixStarted`を置き、transfer開始と同時に一度だけ�
 
 候補はrootのclearとisClearedに含め、固定abort／停止でheader等とともに破棄してから既存上位custodyへ進む。inspectは開始・呼出し・候補数・再確認数・保持boolと固定拒否分類だけ。関係値数は0のまま。全work費用や3round配賦は依然Unknownで、実会計の枠・期限は変更しない。
 
-[接続検証記録](E2E_BEST_PRACTICE_PENDING_PREFIX_TRANSFER_2026-11-03.md)に正常・guard停止・値不一致とpost停止の競合・再入・失効・混入・親省略を確認した結果を記録する。試験の値helper spyはVitest内だけに置き、runtime rootに依存差替え口やfriendを追加しない。(C)の関係値post受理・一度限り消費・compiled保証は未実装。
+[接続検証記録](E2E_BEST_PRACTICE_PENDING_PREFIX_TRANSFER_2026-11-03.md)に(B)時点の正常・guard停止・不一致とpost停止の競合・再入・失効・混入・親省略を確認した結果を記録する。試験の値helper spyはVitest内だけに置き、runtime rootに依存差替え口やfriendを追加しない。(C)の後続差分は次節に限定する。
+
+## 10 (C)のpost受理・固定消費・全破棄
+
+post guardと既存checkTaken・同候補／pending／header／model／budget／失効serialの再確認が完了した固定継続だけが、opaque markerと同候補をprivate `OrderedPrefixRelation`へ束ねる。暫定slotを外し、同scope内の引数なし`consumePrefixRelation`をただちに呼ぶ。両者の間にguard／callback／awaitや公開返却を置かない。
+
+consumerはroot側`relationConsumeStarted`を先に消費し、relation／marker slotを外してからspent状態・同marker・保護scope・停止状態・同pending等・既存checkTakenを検査する。成功時も関係値を返さず、消費件数だけを残し、元の固定state abortへ戻る。公開inspectのrelations／consumptionsは件数であって再構成できる証拠ではない。
+
+root clearとisClearedへrelation／markerを含め、全失敗経路で暫定候補・header・関係値を破棄する。本文参照が残ればcustody移譲の前提を満たさない。正常固定abortでは受理1／消費1、post以前の停止・不一致では0／0を保持し、cleanup確認やseal成功へ昇格させない。
+
+[compiled fixture](../tests/review/fixtures/compiled-prefix-relation.mjs)は実kernelと依存をTypeScriptのstrict検査付きで一時ESM treeへemitし、通常経路と一時出力コピーだけのfault注入を実行する。実行時rootのprivate操作口／friend／台帳を追加しない。使い終わったtreeはfinallyで除去する。これは配布物の本番経路接続・OS実資源の解放保証ではなく、package除外された合成graphのコンパイル／実行保証である。
+
+[検証記録](E2E_BEST_PRACTICE_PREFIX_RELATION_CONSUME_2026-11-03.md)に初回fixture依存不足と再実行、claim replay・marker／serial不一致・受理後取消・参照保持の負の対照を記録する。全work／heap・3round配賦と、将来のseal ownerへの移譲設計は依然Unknown／未接続。

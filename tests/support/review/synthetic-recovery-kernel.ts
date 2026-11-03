@@ -688,6 +688,7 @@ type CompletedMixedContent=Readonly<{token:object;owned:OwnedMixedSupply;pins:Sy
 type BoundAdoption=Readonly<{token:object;content:CompletedMixedContent;bound:NormalAcceptedSnapshot;serial:1}>;
 type PendingBoundTransfer=Readonly<{token:object;ticket:BoundAdoption;content:CompletedMixedContent;binding:NormalPinBinding;taken:TakenNormalAccepted}>;
 type PendingPrefixCheck=Readonly<{token:object;pending:PendingBoundTransfer;header:AcceptedHeader;model:SupplyModel;budget:object;budgetSerial:1;invalidationSerial:number;values:ReturnType<typeof projectSyntheticPendingPrefixValues>}>;
+type OrderedPrefixRelation=Readonly<{marker:object;check:PendingPrefixCheck}>;
 type PayloadClearedReceipt=Readonly<{token:object;serial:number;budgetSerial:0|1;budget:object|undefined}>;
 type NormalCleanupCapsule={token:object;cleanup:((status:unknown)=>void)|undefined};
 function createNormalOwnedSupplyCore(raw:unknown,dependencies:unknown,extra:unknown[],transferMode=false){
@@ -710,6 +711,7 @@ function createNormalOwnedSupplyCore(raw:unknown,dependencies:unknown,extra:unkn
   let transferStarted=false,transferTakes=0,transferAborts=0,pendingTransfer:PendingBoundTransfer|undefined;
   let pendingHeader:AcceptedHeader|undefined,headerConsumptions=0,headerErrorCount:number|undefined;
   let prefixStarted=false,prefixCalls=0,prefixCandidates=0,prefixPostChecks=0,pendingPrefix:PendingPrefixCheck|undefined;
+  let prefixRelation:OrderedPrefixRelation|undefined,prefixRelationMarker:object|undefined,prefixRelations=0,relationConsumeStarted=false,relationConsumptions=0;
   let prefixRejection:Readonly<{reason:PendingPrefixValueError['reason'];phase:PendingPrefixValueError['phase']}>|undefined;
   let state:'fresh'|'prepared'|'moving'|'normal_owned'|'failed'|'invalidated'|'discarded'='fresh',first:SupplyReason|undefined,busy=false;
   let failureStage:'prepare'|'transfer'|'cleanup'='prepare';
@@ -719,7 +721,7 @@ function createNormalOwnedSupplyCore(raw:unknown,dependencies:unknown,extra:unkn
   let budget:NormalBudget|undefined,identityChecks=0,rowsChecked=0;
   const supply=createOwnedMixedSupply(raw,(stage,n)=>fixedGuard(stage,n),extra,token,failure,undefined,undefined,channel);
   raw=undefined;extra=[];
-  function clear(){pendingPrefix=undefined;pendingHeader=undefined;owned=undefined;binding=undefined;channel.birth=undefined;channel.take=undefined;completed=undefined;adoption=undefined;accepted=undefined;pendingTransfer=undefined;initial=undefined;preparationInput=undefined;b=lease=evidence=preparation=ready=undefined;}
+  function clear(){prefixRelation=undefined;prefixRelationMarker=undefined;pendingPrefix=undefined;pendingHeader=undefined;owned=undefined;binding=undefined;channel.birth=undefined;channel.take=undefined;completed=undefined;adoption=undefined;accepted=undefined;pendingTransfer=undefined;initial=undefined;preparationInput=undefined;b=lease=evidence=preparation=ready=undefined;}
   function fail(reason:SupplyReason):never{
     if(terminalBusy)terminalPoison=true;
     if(resources&&custody.holder()==='upper')throw new OwnedMixedSupplyError(first??'state');
@@ -887,7 +889,10 @@ function createNormalOwnedSupplyCore(raw:unknown,dependencies:unknown,extra:unkn
       checkpoint('transfer_post');if(mismatch||!pendingTransfer||!pendingHeader||!pendingPrefix||!b||!budget)fail('binding');acceptedChannel.checkTaken!(b!,pendingTransfer!.taken);
       const c=pendingPrefix!;
       if(c.token!==token||c.pending!==pendingTransfer||c.header!==pendingHeader||c.model!==pendingTransfer!.content.owned.model||c.budget!==budget!.identity||c.budgetSerial!==budget!.serial||c.invalidationSerial!==invalidations)fail('binding');
-      prefixPostChecks++; // Still a provisional candidate: no post-accepted relation or destination exists in (B).
+      prefixPostChecks++;
+      // Only the post-guard fixed continuation can accept; no callback or external handle escapes.
+      prefixRelationMarker=opaque();prefixRelation=Object.freeze({marker:prefixRelationMarker,check:c});pendingPrefix=undefined;prefixRelations++;
+      consumePrefixRelation();
       transferAborts=1;return fail('state'); // Fixed non-executing abort: no destination exists and no success handle is published.
     });},
     transferFailure(...args:unknown[]){return terminal(()=>{
@@ -904,9 +909,19 @@ function createNormalOwnedSupplyCore(raw:unknown,dependencies:unknown,extra:unkn
     custody:()=>Object.freeze({scope:'synthetic_normal_transfer_custody' as const,authority:'none' as const,holder:custody.holder(),payload_cleared:!!payloadCleared&&isCleared()&&payloadCleared.serial===invalidations&&payloadCleared.budget===budget?.identity&&payloadCleared.budgetSerial===(budget?.serial??0),
       local_capsule:!!resources?.local,upper_capsule:!!resources?.upper,discards:custody.local.inspect().discards,report:custody.local.inspect().report,unresolved:custody.currentFailure()?.unresolved??null}),
     inspect:()=>Object.freeze({...extended.inspect(),transfer:Object.freeze({started:transferStarted,takes:transferTakes,aborts:transferAborts,pending:!!pendingTransfer,header_pending:!!pendingHeader,header_consumptions:headerConsumptions,header_error_count:headerErrorCount??null,successful_seals:0}),
-      prefix_check:Object.freeze({started:prefixStarted,calls:prefixCalls,candidates:prefixCandidates,post_checks:prefixPostChecks,pending:!!pendingPrefix,rejection:prefixRejection??null,relations:0})}),
+      prefix_check:Object.freeze({started:prefixStarted,calls:prefixCalls,candidates:prefixCandidates,post_checks:prefixPostChecks,pending:!!pendingPrefix,rejection:prefixRejection??null,relations:prefixRelations,
+        relation_pending:!!prefixRelation,relation_marker_pending:!!prefixRelationMarker,consume_started:relationConsumeStarted,consumptions:relationConsumptions})}),
   });
-  function isCleared(){return !busy&&!pendingPrefix&&!pendingHeader&&!owned&&!binding&&!pendingTransfer&&!completed&&!adoption&&!accepted&&!channel.birth&&!channel.take&&!initial&&!preparationInput&&!b&&!lease&&!evidence&&!preparation&&!ready&&!supply.inspect().pending&&!(acceptedChannel.payloadPending?.()??false);}
+  function consumePrefixRelation(){
+    const used=relationConsumeStarted;relationConsumeStarted=true;
+    const relation=prefixRelation,marker=prefixRelationMarker;prefixRelation=undefined;prefixRelationMarker=undefined;
+    if(used||!relation||relation.marker!==marker||!busy||first||!prefixStarted||!pendingTransfer||!pendingHeader||!budget||!b)fail('binding');
+    const c=relation!.check;
+    if(c.token!==token||c.pending!==pendingTransfer||c.header!==pendingHeader||c.model!==pendingTransfer!.content.owned.model||c.budget!==budget!.identity||c.budgetSerial!==budget!.serial||c.invalidationSerial!==invalidations)fail('binding');
+    acceptedChannel.checkTaken!(b!,pendingTransfer!.taken);relationConsumptions++;
+    // No return value: this consumer can only retire the relation before the existing fixed abort.
+  }
+  function isCleared(){return !busy&&!prefixRelation&&!prefixRelationMarker&&!pendingPrefix&&!pendingHeader&&!owned&&!binding&&!pendingTransfer&&!completed&&!adoption&&!accepted&&!channel.birth&&!channel.take&&!initial&&!preparationInput&&!b&&!lease&&!evidence&&!preparation&&!ready&&!supply.inspect().pending&&!(acceptedChannel.payloadPending?.()??false);}
   function assertCleared(){if(!isCleared()||resources?.token!==token||resources.budget!==budget?.identity||budget&&budget.token!==token)throw Error('internal_review_error');}
   function checkClearedReceipt(){assertCleared();if(!payloadCleared||payloadCleared.token!==token||payloadCleared.serial!==invalidations||payloadCleared.budgetSerial!==(budget?.serial??0)||payloadCleared.budget!==budget?.identity)throw Error('internal_review_error');}
   function terminal<T>(work:()=>T):T{

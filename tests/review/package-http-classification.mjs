@@ -66,7 +66,8 @@ const rootMarkers=['synthetic-recovery-kernel','createSyntheticRecoveryKernel','
   'createSyntheticFailureCustodyRun','synthetic_failure_custody_run','createFailureRunSupply','fb03-fake-events-v1','FailureResourceSlot',
   'createSyntheticNormalOwnedSupply','synthetic_normal_owned_supply','createSyntheticNormalAdoptionRoot','CompletedMixedContent','BoundAdoption',
   'createSyntheticNormalTransferRoot','PendingBoundTransfer','PayloadClearedReceipt','synthetic_normal_transfer_custody',
-  'projectionReceipt','normalHeaderConsumptions','clearNormalHeader','PendingPrefixCheck','prefixPostChecks','prefixCandidates'];
+  'projectionReceipt','normalHeaderConsumptions','clearNormalHeader','PendingPrefixCheck','prefixPostChecks','prefixCandidates',
+  'OrderedPrefixRelation','consumePrefixRelation','relationConsumeStarted','prefixRelationMarker'];
 const noRecoveryRoot=text=>assert(!rootMarkers.some(x=>text.includes(x)),'RB-A shared kernel/root leaked into runtime');
 for(const marker of rootMarkers)assert.throws(()=>noRecoveryRoot(marker));
 assert(!pack.files.some(f=>/synthetic-recovery-kernel|synthetic-recovery-lifecycle|synthetic-finish-recovery-root/.test(f.path)));
@@ -338,4 +339,5 @@ execFileSync(process.execPath,[fileURLToPath(new URL('fixtures/compiled-source-v
 execFileSync(process.execPath,[fileURLToPath(new URL('fixtures/compiled-release-comparison-contract.mjs',import.meta.url))],{cwd:root,stdio:'inherit'});
 execFileSync(process.execPath,[fileURLToPath(new URL('fixtures/compiled-release-time-owner.mjs',import.meta.url))],{cwd:root,stdio:'inherit'});
 execFileSync(process.execPath,[fileURLToPath(new URL('fixtures/compiled-release-time-handoff.mjs',import.meta.url))],{cwd:root,stdio:'inherit'});
+execFileSync(process.execPath,[fileURLToPath(new URL('fixtures/compiled-prefix-relation.mjs',import.meta.url))],{cwd:root,stdio:'inherit'});
 console.log('HTTP classification/status terminal/cleanup/context excluded; formal/production adoption disabled; fixture/oracle excluded PASS ('+pack.files.length+' files)');

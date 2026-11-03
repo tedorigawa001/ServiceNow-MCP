@@ -16,6 +16,8 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 ### Changed
 
+- PD-B(C) accepts the private prefix relation only after the transfer post-guard and identity recheck, then retires it through a single fixed, non-returning consumer before the existing abort. Root-owned consumption claims and payload-clear checks cover every relation slot. Temporary compiled-graph fault controls exercise replay, marker/epoch mismatch, cancellation after acceptance and retained-reference refusal without adding a runtime friend or publishing a seal; formal issuance and whole-run admission remain disabled.
+
 - PD-B(B) connects the fixed prefix selector/comparator to the same synthetic pending and private header consumer. A root-owned start claim, token/budget/epoch-bound provisional candidate and post-guard recheck preserve one-shot behavior and stop precedence; all new payload references are cleared before failure custody transfer. Mixed parent-omission tests detect P0/Pp substitution. Post-accepted relations, seals, runtime connections, formal issuance and whole-run admission remain disabled.
 
 - PD-B(A) adds a package-excluded, value-only fixed selector and bounded prefix-array comparison around PD-A. It selects the six verify fields, checks sorted base and canonical header prefixes without sort/dedup rescue, and preserves fixed typed rejection metadata. An independent linear/insertion oracle covers ordering, duplicate errors, optional IDs, versions and limits; no pending connection, claims, relation issuance, destination seal, runtime connection or admission is enabled.

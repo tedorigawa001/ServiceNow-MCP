@@ -33,12 +33,12 @@ it('uses same pending values once and retains only a provisional candidate acros
   const budget=f.root.inspect().budget;
   f.arm(s=>{if(s==='transfer_pre'||s==='transfer_post')snapshots.push(f.root.inspect());});
   expect(()=>f.root.abortBoundTransfer()).toThrow();expect(spy).toHaveBeenCalledTimes(1);
-  expect(snapshots[0].prefix_check).toEqual({started:true,calls:0,candidates:0,post_checks:0,pending:false,rejection:null,relations:0});
-  expect(snapshots[1].prefix_check).toEqual({started:true,calls:1,candidates:1,post_checks:0,pending:true,rejection:null,relations:0});
+  expect(snapshots[0].prefix_check).toMatchObject({started:true,calls:0,candidates:0,post_checks:0,pending:false,rejection:null,relations:0,consume_started:false,consumptions:0});
+  expect(snapshots[1].prefix_check).toMatchObject({started:true,calls:1,candidates:1,post_checks:0,pending:true,rejection:null,relations:0,consume_started:false,consumptions:0});
   const input=spy.mock.calls[0][0] as {model:{prefix:{limitations:readonly string[]}};pins_header:{limitations:readonly string[]};accepted_header:{errors:readonly unknown[]};plan_verify:{stage:string}};
   expect(input.model.prefix.limitations).toEqual(f.prefix);expect(input.pins_header.limitations).toEqual([...f.prefix].sort());
   expect(input.accepted_header.errors).toHaveLength(1);expect(input.plan_verify.stage).toBe('verified');
-  expect(f.root.inspect()).toMatchObject({first_failure:'state',prefix_check:{calls:1,candidates:1,post_checks:1,pending:false,relations:0},transfer:{successful_seals:0,header_pending:false}});
+  expect(f.root.inspect()).toMatchObject({first_failure:'state',prefix_check:{calls:1,candidates:1,post_checks:1,pending:false,relations:1,consume_started:true,consumptions:1,relation_pending:false,relation_marker_pending:false},transfer:{successful_seals:0,header_pending:false}});
   expect(f.root.inspect().budget).toEqual(budget);
   expect(()=>f.root.abortBoundTransfer()).toThrow();expect(spy).toHaveBeenCalledTimes(1);
   f.root.finalDiscard(f.root.transferFailure());expect(f.root.custody().payload_cleared).toBe(true);
@@ -48,7 +48,7 @@ it.each(['transfer_pre','transfer_post'] as const)('preserves one-shot claim and
     const spy=vi.spyOn(values,'projectSyntheticPendingPrefixValues'),f=setup();
     f.arm(s=>{if(s===stage){if(stop==='throw')throw Error('PRIVATE');return stop==='unknown'?'PRIVATE':stop;}});
     expect(()=>f.root.abortBoundTransfer()).toThrow();
-    expect(f.root.inspect()).toMatchObject({first_failure:stop==='throw'||stop==='unknown'?'internal':stop,prefix_check:{started:true,calls:stage==='transfer_pre'?0:1,candidates:stage==='transfer_pre'?0:1,post_checks:0,pending:false,relations:0}});
+    expect(f.root.inspect()).toMatchObject({first_failure:stop==='throw'||stop==='unknown'?'internal':stop,prefix_check:{started:true,calls:stage==='transfer_pre'?0:1,candidates:stage==='transfer_pre'?0:1,post_checks:0,pending:false,relations:0,consume_started:false,consumptions:0,relation_pending:false,relation_marker_pending:false}});
     expect(spy).toHaveBeenCalledTimes(stage==='transfer_pre'?0:1);expect(()=>f.root.abortBoundTransfer()).toThrow();
     f.arm(()=>undefined);f.root.finalDiscard(f.root.transferFailure());expect(f.root.custody().payload_cleared).toBe(true);spy.mockRestore();
   }
@@ -87,5 +87,13 @@ it('supplies the parent-processed Pp rather than P0 for mixed keep/omit/worker-o
   // Handwritten oracle for 99 findings kept, 2 parent-omitted, then worker-omitted and retained.
   expect(input.model.prefix.limitations).toEqual([...f.prefix,'response_truncated','finding_budget_exceeded']);
   expect(input.model.prefix.errors).toEqual([{stage:'output',code:'response_limit'}]);expect(input.accepted_header.errors).toHaveLength(2);
-  expect(f.root.inspect()).toMatchObject({first_failure:'state',supply:{parent_omitted:1,original_worker_omitted:1},prefix_check:{calls:1,candidates:1,post_checks:1,pending:false,relations:0}});
+  expect(f.root.inspect()).toMatchObject({first_failure:'state',supply:{parent_omitted:1,original_worker_omitted:1},prefix_check:{calls:1,candidates:1,post_checks:1,pending:false,relations:1,consumptions:1,relation_pending:false}});
+});
+it('never exposes a post-accepted relation and clears every payload slot before upper custody',()=>{
+  const f=setup();expect(()=>f.root.abortBoundTransfer()).toThrow();
+  expect(f.root.inspect().prefix_check).toMatchObject({relations:1,consumptions:1,pending:false,relation_pending:false,relation_marker_pending:false});
+  for(const key of ['consumePrefixRelation','prefixRelation','OrderedPrefixRelation','relation','seal'])expect(f.root).not.toHaveProperty(key);
+  const summary=JSON.stringify(f.root.inspect());expect(summary).not.toContain('projectionReceipt');expect(summary).not.toContain('canonical_prefix');
+  const receipt=f.root.transferFailure();f.root.finalDiscard(receipt);expect(f.root.custody()).toMatchObject({payload_cleared:true,holder:'upper',local_capsule:false});
+  expect(()=>f.root.abortBoundTransfer()).toThrow();expect(f.root.inspect().prefix_check.consumptions).toBe(1);
 });
