@@ -1,7 +1,7 @@
 # 回復finish 本文capture・full schema・同bytes検証gate 詳細設計
 
-Version: br006-recovery-finish-content-draft-0.11 / Date: 2026-11-03。
-Status: **CG-A／B／BP1、NR-A／BとNR-Cの新合成root限定の混合manifest・reviewedゼロ件まで実装。旧rootの後付け昇格は不可。実origin／finish job・親omission／full応答gate／候補発行は未実装。正式発行口閉鎖・全体受付無効・Unknown・VM／監視／telemetry保留を維持する。**
+Version: br006-recovery-finish-content-draft-0.12 / Date: 2026-11-03。
+Status: **CG-A／B／BP1、NR-A／B／CとOM-Aの親省略pure値層まで合成限定実装。旧rootの後付け昇格は不可。実origin／finish job・親omission証拠／finalizeモデル／full応答gate／候補発行は未実装。正式発行口閉鎖・全体受付無効・Unknown・VM／監視／telemetry保留を維持する。**
 
 基準HEAD: `1e1e78d`（CG-B追加回帰を含む）。[RD-C](BEST_PRACTICE_ABORT_SCOPE_RECOVERY_FINISH_JOB_RDC_DESIGN.md)§5・7・10〜11の内容gateを具体化する。実装範囲はCG-A§11・CG-B§12・CG-BP1§13、それ以外の型・操作・数値モデルは未実装の内部案。本番cap・通常経路の受付変更・実通信・実機操作・設定変更・Pushの承認ではない。
 
@@ -101,7 +101,7 @@ JSONはデータとして扱い、review対象のJavaScriptを実行しない。
 
 ## 7 三つのomissionと合法変換
 
-親決定証拠・固定順序・副作用差・bounded size計数・独立oracleの後続契約は[CG-C詳細設計](BEST_PRACTICE_ABORT_SCOPE_RECOVERY_OMISSION_CGC_DESIGN.md)へ分離した。設計のみで、現NR-Cの親omission拒否・旧root・正式発行口閉鎖を変更しない。
+親決定証拠・固定順序・副作用差・bounded size計数・独立oracleの後続契約は[CG-C詳細設計](BEST_PRACTICE_ABORT_SCOPE_RECOVERY_OMISSION_CGC_DESIGN.md)へ分離した。§11のOM-Aは親prefix／keep／omitのpure値層だけを合成実装済み。証拠・finalizeモデルは未接続で、現NR-Cの親omission拒否・旧root・正式発行口閉鎖を変更しない。
 
 | 省略点 | 現行動作 | 本文gateで必要な根拠 |
 | --- | --- | --- |

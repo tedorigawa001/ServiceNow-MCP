@@ -206,6 +206,17 @@ for(const f of pack.files.filter(f=>f.path.startsWith('dist/')&&/\.(?:js|ts|map)
 for(const leak of ['fetch("x");','Date.now();','new Date();','new Worker("x");',"import('node:fs');","import {BoundedReadSession} from '../../../src/servicenow/bounded-read.js';const zzRoot=BoundedReadSession;"])
   assert.throws(()=>auditSyntheticIssuer(nonReviewedIssuerText+'\n'+leak,nonReviewedIssuerImports),assert.AssertionError,'NR-B audit missed seeded leak: '+leak);
 console.log('NR-B fresh producer claims/synthetic issuer excluded; fixed imports + seeded runtime/I/O/clock/worker/leak controls PASS');
+const parentOmissionText=readFileSync(join(root,'tests/support/review/synthetic-parent-omission-values.ts'),'utf8');
+const parentOmissionImports=['node:util','node:buffer','zod','../../../src/review/aggregate-schema.js','../../../src/review/result-schema-v2.js','./synthetic-recovery-full-json.js','./synthetic-recovery-nonreviewed-values.js'];
+auditSyntheticIssuer(parentOmissionText,parentOmissionImports);
+const parentOmissionMarkers=['synthetic-parent-omission-values','modelSyntheticParentOmission','ParentOmissionValueError','PARENT_OMISSION_VALUE_LIMITS','synthetic_parent_omission_values','synthetic_parent_omission_value_only','non_executable_parent_model'];
+const noParentOmission=text=>assert(!parentOmissionMarkers.some(x=>text.includes(x)),'OM-A pure parent omission model leaked into runtime');
+for(const marker of parentOmissionMarkers)assert.throws(()=>noParentOmission(marker));
+assert(!pack.files.some(f=>f.path.includes('synthetic-parent-omission-values')));
+for(const f of pack.files.filter(f=>f.path.startsWith('dist/')&&/\.(?:js|ts|map)$/.test(f.path)))noParentOmission(readFileSync(join(root,f.path),'utf8'));
+for(const leak of ['fetch("x");','Date.now();','new Date();','new Worker("x");',"import('node:fs');","import {BoundedReadSession} from '../../../src/servicenow/bounded-read.js';const zzRoot=BoundedReadSession;"])
+  assert.throws(()=>auditSyntheticIssuer(parentOmissionText+'\n'+leak,parentOmissionImports),assert.AssertionError,'OM-A audit missed seeded leak: '+leak);
+console.log('OM-A pure parent finding/prefix model excluded; fixed imports + seeded runtime/I/O/clock/worker/leak controls PASS');
 for(const suffix of ['.js','.js.map','.d.ts','.d.ts.map'])assert(pack.files.some(f=>f.path==='dist/servicenow/review-kernel/release-observation'+suffix),'required one-shot UTC value helper missing: '+suffix);
 const sessionDeclarations=readFileSync(join(root,'dist/servicenow/bounded-read.d.ts'),'utf8');
 const sessionAst=parse(readFileSync(join(root,'dist/servicenow/bounded-read.js'),'utf8'),{ecmaVersion:'latest',sourceType:'module'});

@@ -1,7 +1,7 @@
 # CG-C 親省略決定証拠・合法omissionモデル 詳細設計
 
-Version: br006-recovery-omission-cgc-draft-0.1 / Date: 2026-11-03。
-Status: **設計のみ。合成依存限定の後続案。親省略証拠・モデル・manifest／finish job接続は未実装。正式発行口閉鎖・全体受付無効・Unknown・VM／監視／telemetry調査保留を維持する。**
+Version: br006-recovery-omission-cgc-draft-0.2 / Date: 2026-11-03。
+Status: **OM-Aのstrict値型・親prefix／keep／omit純粋計算を合成限定で実装。親決定証拠・finalizeモデル・manifest／finish job接続は未実装。正式発行口閉鎖・全体受付無効・Unknown・VM／監視／telemetry調査保留を維持する。**
 
 基準HEAD: `fd5ddb9`（NR-Cの追加対照を含む）。[内容gate設計](BEST_PRACTICE_ABORT_SCOPE_RECOVERY_FINISH_CONTENT_GATE_DESIGN.md)§3・7・8と[非reviewed設計](BEST_PRACTICE_ABORT_SCOPE_RECOVERY_NONREVIEWED_DESIGN.md)§6・11からの差分。現NR-Cは親受理後のomissionを拒否する。このMDはその拒否を変更せず、実装・実接続・実通信・実機操作・設定変更・本番cap／Permit／候補発行・Pushの承認ではない。
 
@@ -130,11 +130,47 @@ source close／cleanup開始・取消・期限・hard・固定discardでpending�
 
 | 段階案 | 最初の範囲 | まだ開かないもの |
 | --- | --- | --- |
-| OM-A | strict値型・親prefix／keep／omitの純粋計算と副作用表。別producerの元omittedを区別する | 決定証拠・manifest拡張・finish job |
+| OM-A（§11の値層のみ実装） | strict値型・親prefix／keep／omitの純粋計算と副作用表。別producerの元omittedを区別する | 決定証拠・manifest拡張・finish job |
 | OM-B | bounded count-only JSON sizeの詳細数値契約と実装、固定Eによるfinalize純粋モデル・独立oracle | 総work受付・runtime・候補 |
 | OM-C | fresh合成ownerから同captureへ親決定を結合し、one-shot・失効・discardと別brandを検証 | 旧root昇格・正式発行・本番binding |
 | OM-D | 同accepted／planの新混合variantへ一度移譲、finish応答full比較と局所比較の整合条件を具体化 | 同job／wire／全gate未成立の候補化 |
 
 未確認：保護された親prefixの発行owner、元captureを内部で借用する固定継続、親決定の移譲とsource／cleanupの同時寿命、size計数器のescaping互換・中間graph上界、coverageの局所契約との接続、omission追加費目・共有budgetの中断点、同finish job／E／response originの発行元。未実装の型や数値を確認済みにせず、各段階の実装前に固定sourceと照合する。
 
-本書の保存と参照更新だけを行う。正式発行口閉鎖・全体受付無効・Unknown・調査保留を維持し、実装・実接続・実通信・実機操作・設定変更・鍵承認・担当者連絡・Pushは行わない。
+初版はMDだけを保存した。OM-Aの合成値層の実装範囲は§11で定める。正式発行口閉鎖・全体受付無効・Unknown・調査保留を維持し、実接続・実通信・実機操作・設定変更・鍵承認・担当者連絡・Pushは行わない。
+
+## 11 OM-A 合成pure値層の実装契約
+
+基準HEAD: `bb47b63`。[pure helper](../tests/support/review/synthetic-parent-omission-values.ts)はPARENT_OMISSION_VALUE_LIMITS、ParentOmissionValueError、modelSyntheticParentOmissionの3 runtime exportだけを持つ。owner／claim／registry／guard callback／clock／native操作は持たない。反復計算は可能だが、証拠の再発行ではない。旧NR-Cの親omission拒否は変更していない。
+
+### 11.1 strict入力・保持値と検査の範囲
+
+入力はstrictなkind=synthetic_parent_omission_values_v1、model_id=recovery-omission-v1、schema_version=0.2／0.3、limits:{max_findings:100}、selected、prefix:{limitations,errors}、rows。各rowはproducer／outcomeだけで、producerはanalysis／metadata／retrieval／retainedの閉じたunion。selectedは32桁sys_idの一意昇順・最大100、rowのID・順序・件数が完全一致しなければ拒否する。keep前のfinding数を外から入力するfieldはない。
+
+reviewedはanalysisだけで、assetOutcomeStructureとreviewResultV2Schemaのrefinementを検査する。外側asset ID＝内側target ID、applicable rule集合＝nested requested集合・重複なしを追加で確認する。header／auth／release／source／job／receiptとの実bindingを証明する検査ではない。非reviewedはNR-Aへ渡し、producer別variant／reason・0.3 deleted拒否をそのまま再利用する。parent_omissionは入力producerとして拒否し、元omittedはanalysisに限る。retainedはdeadline_exceededだけ。
+
+OM-Aでは§3.1のrun header案を、親計算が実際に参照するprefixと固定finding capへ限定する。counts／coverage／status／E／最終aggregate／全run contextは入力も出力もしない。prefixのerrorsは同版aggregateのstrict構造を使うが、stageとcollection等の全体semantic整合は未検証。retainedのstop warning等も上位run契約の責務であり、OM-Aだけでfull schema適合を主張しない。
+
+返却値はauthority:none、checked_scope:parent_finding_values_only、別のvalue-only brandを持つ。valueにはinitial_prefix、変換後prefix、original_rows、変換後assets、固定順trace、kept_findings等を保持する。各traceはordinal／producer／元state／keepまたはparent_omit／before・incoming・afterと追加limitations・error件数だけ。full原値はpure DATAのoriginal_rowsへ保持し、親省略後のassetsと分離する。同じowned値をkeep結果にも参照し、追加のJSON round-tripで複製しない。callerのgraphをfreezeせず、出力はdeep readonly／freezeした正規化copyである。
+
+元bodyを隠すprivate getter契約ではなく、入力されたpure値の正規化結果を返す**開発専用値関数**である。これはOM-Cの保護capture／証拠ownerの代用品ではない。producer／capture／context／prefix／receipt／decision／manifest／finish job／finalize／全体予算はunverifiedのまま。空入力も純粋計算としては返せるが、NR-Cのempty proof・active input・回復条件の成立は意味しない。
+
+### 11.2 副作用・中間枠・費用
+
+§4の親分岐を維持し、F＋n>100のときだけ全assetをomitする。n≤100・F≤100は検査／計算から導かれ、加算の最大値200はsafe integer内である。超過行の後の小さいreviewedは収まればkeepする。元omittedやその他stateはfinding数0。元omittedの警告追加と親finding省略の警告追加を別条件に保ち、親段階ではdedupしない。
+
+prefix入力はlimitations≤100（各2000文字）／errors≤100、bounded copyは深さ3／node2500／文字費650000。キーの列挙はplain own-dataに限定し、getter／Proxy／特殊prototype／疎配列・余分keyを拒否する。各asset copyはCG-A由来の現analyze depthとarray≤100／object key≤30、node262144／文字費786432を上限とし、strict正規化後のJSON論理UTF-8長がB=262144以下であることも検査する。元wire origin・worker内のH省略を証明するbytesではない。
+
+親段階の出力limitationsは、初回response_truncated＋finding_budget_exceeded、error満杯時のerror_details_truncatedで最大3増えるため、**中間上限103**とする。既存warningや重複を削って100件へ戻さない。finalizeのdedup／full schema前の中間DATAであり、103件を公開JSONとして受理する変更ではない。
+
+usageはprefix／asset copyのnode・文字費と行数を同copyから数えるだけで、総work／heapではない。top-level検査・配列／key列挙、strict schema／refinementのcopy、各assetのサイズ検査用serialize／UTF-8走査、NR-A再投影、original／変換後の参照索引、trace／prefix copy、freeze（共有値の再訪を含む）も別費目。Bはserialize後の検査であり、拒否されるassetの一時serialize文字列をB以下に抑える確保前保証ではない。その中間構造はcopy枠で有限に制限するだけで、総allocation上界は未導出。最大100 assetそれぞれにBを用いるため、集合全体の保持・serialize合計をBで制限したとは扱わない。
+
+OM-Aには共有budget／期限／取消のcheckpointはまだ接続していない。有限の局所枠で止めるpure値層であり、全60秒の強制中断・総費用を保証しない。bounded count-only計数器・finalizeモデルはOM-Bへ残し、実経路・全体受付へ投入しない。
+
+### 11.3 固定失敗・検証・残課題
+
+失敗はshape／limit／model／order／unsupportedを固定code・message=internal_review_errorへまとめ、raw値・schema issues・causeを保持しない。途中までのprefix／asset／traceは返さない。stateful ownerではないため失敗後の再利用claimや失効証拠を作らず、後続OM-Cで対応する。
+
+独立の明示finding表・warning／error境界表、B境界、caller後書換え・deep readonly、strict入力とproducer対照を検査した。親adapterのfinding分岐・元omitted分岐・prefix reduce・addErrorは実行せずASTで固定照合し、比較演算子／warning順／reason／prefix／error capの変異を負の対照にした。これは現在sourceへの一致検査であり、共有runtime kernelへの置換ではない。
+
+[OM-A検証記録](E2E_BEST_PRACTICE_PARENT_OMISSION_OMA_2026-11-03.md)参照。OM-B以降のsize／finalizeモデル、実captureからのprefix供給、ParentOmissionDecision・one-shot／同期失効／discard、同accepted／plan／finish jobとのbinding、full比較・候補・全体予算は未接続。npmへ同梱せず、固定importとseeded漏出／I/O／clock／workerの負の対照を維持する。

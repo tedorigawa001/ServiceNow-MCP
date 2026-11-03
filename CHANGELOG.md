@@ -16,6 +16,8 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 ### Changed
 
+- OM-A adds a package-excluded, bounded pure parent-omission value model. It derives retained finding counts in canonical row order, preserves original reviewed values separately from whole-result omissions, and reproduces the parent's warning/error-prefix behavior without deduplication. Independent truth tables, fixed-source drift controls and malformed-input tests cover the model; no omission evidence, manifest expansion, finish job or runtime admission is enabled.
+
 - NR-C adds a package-excluded, constructor-only synthetic mixed recovery manifest. Reviewed captures, producer-verified non-reviewed outcomes and original retained inputs are partitioned in canonical selected order and transferred once to the same accepted/plan lifecycle. Zero reviewed results require a private plan-bound empty proof; cancellation, mixed identities and fixed discard paths fail closed. Legacy roots, formal issuance, finish jobs and whole-run admission remain unchanged.
 
 - NR-B adds a package-excluded fresh synthetic issuer with separate metadata, retrieval and analysis claims. Opaque evidence is published only after matching row/input/attempt/job identities and pre/post guards; retrieval needs a same-attempt confirmed synthetic terminal, and analysis uses the correlated original JSON string. Duplicate/mixed/failed reuse is rejected, while late cleanup remains diagnostic-only. No runtime issuance, mixed manifest, retained/parent omission issuer or whole-run admission is enabled.
