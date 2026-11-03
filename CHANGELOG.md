@@ -142,6 +142,8 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 ### Added
 
+- NB-02 normal adoption failures detected by the root itself after the kernel starts are now recorded with the operation stage (`cleanup`, `transfer`) instead of `internal`; the root previously revoked the kernel before claiming, so the kernel's revoke notice claimed first. Kernel-detected failures keep their phase stage. Tests also cover extra `startKernel` arguments and post-checkpoint stop priority for startKernel and adopt.
+
 - NB-01 normal owned supply markers are now part of the kernel package leak audit, and a test checks that an unknown `stop()` reason is recorded as `internal` rather than retaining caller text. The supply itself is unchanged.
 
 - FB-03 failure custody run tests now check that an unknown `cleanup_guard` return at either cleanup checkpoint fails closed with the first hard stop, without recording a stop observation or (before the sink) a cleanup fact; the budget observer was previously the sole, untested guard on the cleanup path. The run itself is unchanged.

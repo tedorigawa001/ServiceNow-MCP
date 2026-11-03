@@ -668,14 +668,15 @@ function createNormalOwnedSupplyCore(raw:unknown,dependencies:unknown,extra:unkn
   function clear(){owned=undefined;binding=undefined;channel.birth=undefined;channel.take=undefined;completed=undefined;adoption=undefined;accepted=undefined;initial=undefined;preparationInput=undefined;b=lease=evidence=preparation=ready=undefined;}
   function fail(reason:SupplyReason):never{
     first??=reason;state='failed';invalidations++;
-    failure.stage=failureStage;
-    try{kernel?.revoke(first==='cancelled'||first==='deadline_exceeded'?first:'internal_review_error');}catch{/* preserve same-kernel cleanup obligations and first hard */}
+    failure.stage=failureStage;const hardCode=first==='cancelled'||first==='deadline_exceeded'?first:'internal_review_error';
+    // Claim with this root's stage before revoking the kernel, whose own notice would otherwise record the revoke phase.
+    // Kernel- or supply-originated failures have already claimed the slot with their own stage.
+    if(!failure.claimed){failure.claimed=true;failure.reason=first;failure.notices++;try{custody.local.hard(hardCode,failureStage);}catch{/* keep the original diagnosis */}}
+    try{kernel?.revoke(hardCode);}catch{/* preserve same-kernel cleanup obligations and first hard */}
     try{channel.invalidate!(first);}catch{/* fixed private invalidation; keep the original diagnosis */}
     finally{
       clear();
-      // The supply may already have reported a preparation failure.
-      if(!failure.claimed){failure.claimed=true;failure.reason=first;failure.notices++;}
-      custody.local.hard(first==='cancelled'||first==='deadline_exceeded'?first:'internal_review_error',failureStage);
+      custody.local.hard(hardCode,failureStage);
     }
     throw new OwnedMixedSupplyError(first);
   }

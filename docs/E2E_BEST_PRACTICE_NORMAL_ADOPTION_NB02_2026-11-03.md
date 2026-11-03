@@ -46,6 +46,15 @@ plan封印は既存の非実行準備段階であり、finish expectation／移�
 
 追加費目・全work／heap・copyピーク・中断粒度は未導出。未確認のtransport終端・実worker exit・予算leaseを確認済みにしない。PendingBoundTransfer／PayloadClearedReceipt・同上位custody移譲／固定最終discard・正常終了はNB-03以降へ残す。実通信・実機操作・設定変更・Pushは行わない。
 
-## 5 コミット候補だけの再検証
+## 5 レビュー修正（2026-11-03）
+
+修正前の新規41件は記録として残す。本記録は全リポジトリの合成テストを実行していなかったため、レビュー時にrepo全体のlint（error 0・warning 374）、build、梱包分類監査、全体合成274ファイル／13,460件成功・失敗0を確認した。
+
+- 実装：kernel生成後にroot自身が検出した失敗が、custodyで全てstage=`internal`と記録されていた。root `fail()`が`kernel.revoke`を先に呼び、revoke経由のkernel失敗通知が`revoke`→`internal`の写像で先にslotを占有していたためで、操作ごとの`failureStage`は無効になっていた（外しても結果が変わらなかった）。rootの失敗はrevoke前に同rootのstageで占有するよう修正し、[OB-02設計](BEST_PRACTICE_ABORT_SCOPE_RECOVERY_OB02_ADOPTION_DESIGN.md)をdraft-0.5へ改版した。closureのkernel checkpointでの取消が`cleanup`、adoption preでの取消が`transfer`になること、kernel自身が検出した失敗（generation_startへの別ticket）は従来どおりkernel phase由来の`prepare`のままで通知1回であることを検査する3件を追加した。
+- 試験：`startKernel`の余分な引数の拒否、startKernel不一致より`content_post`停止を優先、adopt不一致より`adoption_post`停止を優先の3判定は、いずれも唯一の防御なのに未検証だった（判定を外すと成功、または`binding`へ置換された）。3つをまとめて検査する1件を追加した。
+
+修正の取消・操作stage写像の除去・kernel phase写像の変更・上記3判定の除去の各変異は、それぞれ追加した試験だけを失敗させた。採用readのowner／window／bound・post後の再読込比較・`current()`の整合（root自身の値への内部検査）、二重startKernel／adopt（他の判定が先に停止）、kernel payload失効（inspectに現れず、kernelの`beginSourceClose`も`invalidateFinish`を呼ぶ）は等価変異として扱う。新規試験は45件。修正後も全体合成274ファイル／13,464件成功・失敗0。
+
+## 6 コミット候補だけの再検証
 
 対象8ファイルだけをindexへ登録し、`git checkout-index`でHEAD＋その変更の一時コピーを生成した。既存node_modulesを参照し、distをそのコピー内で新規ビルド。製品ビルド、合成recovery **39ファイル3,281件**、NB-01／02とhelperのstrict／noUnused型検査、変更箇所ESLint、offlineの梱包監査・製品依存限定スモーク（ともに**441 files**）がすべて成功した。元作業ツリーの未登録変更には依存せず、期限緩和・実通信・設定変更・Pushは行っていない。

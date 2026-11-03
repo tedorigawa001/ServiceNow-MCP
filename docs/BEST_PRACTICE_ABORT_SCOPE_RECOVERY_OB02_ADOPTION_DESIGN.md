@@ -1,6 +1,6 @@
 # OB-02 同pins保持・identity統一とprivate採用／移譲claim
 
-Version: br006-recovery-ob02-adoption-draft-0.4 / Date: 2026-11-03。
+Version: br006-recovery-ob02-adoption-draft-0.5 / Date: 2026-11-03。
 Status: **NB-01の正常保持／予算binding、NB-02の同pins kernel・完了内容・private採用を合成依存限定で実装。内容移譲・比較・移譲先sealは未接続。正式発行口閉鎖・全体受付無効・Unknown・VM／監視／telemetry調査保留を維持する。**
 
 基準HEAD: `8126d10`。[OD-B設計](BEST_PRACTICE_ABORT_SCOPE_RECOVERY_ODB_TRANSFER_DESIGN.md)§2〜7・10と[FB接続設計](BEST_PRACTICE_ABORT_SCOPE_RECOVERY_FAILURE_BINDING_DESIGN.md)§12からの差分。FB-03の失敗責務保存を維持したまま、正常系で同pins・元内容を保持し、同private kernelのaccepted／planと一度だけ結ぶ。OB-02の採用や移譲先sealが実装済みであるとは扱わない。
@@ -183,3 +183,5 @@ privateなNormalAcceptedChannelは同kernel constructorだけが作り、実際�
 source close／同cleanup開始は正常内容・completion／adoptionとkernel内のpins／expectation側参照を同期失効させる。ready／元slotは復元しない。kernel生成後の公開normal discardは拒否し、解放証拠にしない。hardは既存linkのclear前保護・固定通知と結び、本文を渡さず最初の診断・結合済み予算・未解決cleanup責務を残す。上位移譲／cleanup実行／正常終端、PendingBoundTransfer／PayloadClearedReceiptはNB-03以降。
 
 新操作はguard付き合成依存のみで、実verify・worker・transport／clock・認証sessionを接続しない。追加投影／検査／保持費目・copyピークの全上界はUnknownであり、全体受付や本番capを有効化しない。[NB-02検証記録](E2E_BEST_PRACTICE_NORMAL_ADOPTION_NB02_2026-11-03.md)で旧API回帰・混入・重複・失効・負の対照を確認する。
+
+draft-0.5のレビュー修正：NB-02初版のroot `fail()`は、kernel生成後に`kernel.revoke`を先に呼んでからcustodyへroot段階のhardを記録していた。revoke経由のkernel失敗通知が`revoke`→`internal`の写像で先にslotを占有するため、root自身が検出した停止・不一致（closureのkernel checkpoint、adoption pre等）が全てstage=`internal`となり、§7が求める`prepare`／`transfer`／`cleanup`への明示写像が失われていた。rootの失敗はrevoke前に同rootのstageでslotを占有するよう修正した。kernelやsupplyが自ら検出した失敗は従来どおり先に各自のphase由来のstageで占有し、通知は1回のまま。他の契約・型・分割案は変更しない。

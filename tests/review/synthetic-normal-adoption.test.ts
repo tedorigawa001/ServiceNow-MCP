@@ -136,3 +136,26 @@ it('fails at every actual kernel checkpoint without publishing an adoption or re
     f.arm(()=>undefined);expect(()=>f.root.adopt()).toThrow();
   }
 });
+function failureStage(f:ReturnType<typeof setup>){return (f.root.inspect() as unknown as {failure:{first_hard:{code:string;stage:string}}|null}).failure?.first_hard;}
+it.each([
+  ['closure kernel checkpoint','cleanup'],['adoption_pre','transfer'],
+] as const)('records a root-detected stop at %s with the operation stage, not the kernel revoke phase',(where,stage)=>{
+  const f=setup();
+  if(where==='adoption_pre'){f.ready();f.arm(s=>s==='adoption_pre'?'cancelled':undefined);expect(()=>f.root.adopt()).toThrow();}
+  else{f.root.prepare();f.root.move();f.root.startKernel();f.arm(s=>s==='kernel'?'cancelled':undefined);expect(()=>f.root.beginClosure()).toThrow();}
+  expect(failureStage(f)).toEqual({code:'cancelled',stage});expect(f.root.inspect()).toMatchObject({first_failure:'cancelled',failure_notices:1});
+});
+it('keeps the kernel phase stage for a failure the kernel detects itself',()=>{
+  const f=setup();f.root.prepare();f.root.move();f.root.startKernel();f.root.beginClosure();f.root.settleOld({termination:'confirmed',cleanup:'complete'});f.root.prepareGeneration();f.root.claimGeneration();
+  // A foreign start ticket is rejected inside the kernel's generation_start phase (prepare), not the root's generation stage (transfer).
+  expect(()=>f.root.startGeneration({})).toThrow();
+  expect(failureStage(f)).toEqual({code:'internal_review_error',stage:'prepare'});expect(f.root.inspect().failure_notices).toBe(1);
+});
+it('rejects extra startKernel arguments and lets content_post and adoption_post stops outrank mismatches',()=>{
+  const a=setup();a.root.prepare();a.root.move();expect(()=>(a.root.startKernel as (...x:unknown[])=>void)({})).toThrow('internal_review_error');
+  expect(a.root.inspect()).toMatchObject({first_failure:'binding',adoption:{kernel_builds:0}});
+  const b=setup();b.root.prepare();b.root.move();b.arm(s=>s==='content_post'?'deadline_exceeded':undefined);
+  expect(()=>(b.root.startKernel as (...x:unknown[])=>void)({})).toThrow();expect(b.root.inspect().first_failure).toBe('deadline_exceeded');
+  const c=setup();c.ready();c.arm(s=>s==='adoption_post'?'deadline_exceeded':undefined);
+  expect(()=>(c.root.adopt as (...x:unknown[])=>void)({})).toThrow();expect(c.root.inspect()).toMatchObject({first_failure:'deadline_exceeded',adoption:{pending:false,adoptions:0}});
+});
