@@ -57,7 +57,7 @@ auditSyntheticIssuer(recoveryText,recoveryImports);
 for(const leak of ['globalThis.setTimeout(()=>{},0);','queueMicrotask(()=>{});','const zzNow=Date.now;','performance.now.call(performance);',"Date['now']();",'new Date();','new Worker(\'x\');',"import('node:fs');","import {BoundedReadSession} from '../../../src/servicenow/bounded-read.js';const zzRoot=BoundedReadSession;"])
   assert.throws(()=>auditSyntheticIssuer(recoveryText+'\n'+leak,recoveryImports),assert.AssertionError,'SR-A audit missed seeded leak: '+leak);
 console.log('SR-A/C1 separate synthetic issuer/closure contracts excluded; no runtime/I/O/clock/worker imports or references + negative controls PASS');
-const rootKernelText=readFileSync(join(root,'tests/support/review/synthetic-recovery-kernel.ts'),'utf8'),rootKernelImports=['node:util','zod','./synthetic-phase-recovery.js','./synthetic-worker-recovery-input.js','./synthetic-worker-recovery-verify.js','./synthetic-finish-plan-binding.js','./synthetic-finish-context-values.js','./synthetic-recovery-finish-values.js','./synthetic-finish-pins.js','./synthetic-parent-omission-values.js','./synthetic-pending-prefix-values.js'];
+const rootKernelText=readFileSync(join(root,'tests/support/review/synthetic-recovery-kernel.ts'),'utf8'),rootKernelImports=['node:util','zod','./synthetic-phase-recovery.js','./synthetic-worker-recovery-input.js','./synthetic-worker-recovery-verify.js','./synthetic-finish-plan-binding.js','./synthetic-finish-context-values.js','./synthetic-recovery-finish-values.js','./synthetic-finish-pins.js','./synthetic-parent-omission-values.js','./synthetic-pending-prefix-values.js','./synthetic-full-mixed-draft.js'];
 const finishRootText=readFileSync(join(root,'tests/support/review/synthetic-finish-recovery-root.ts'),'utf8'),finishRootImports=['node:util','zod','./synthetic-recovery-kernel.js'];
 auditSyntheticIssuer(rootKernelText,rootKernelImports);auditSyntheticIssuer(finishRootText,finishRootImports);
 const rootMarkers=['synthetic-recovery-kernel','createSyntheticRecoveryKernel','createSyntheticLifecycleRecoveryKernel','createSyntheticFinishBindingKernel','synthetic-recovery-lifecycle','synthetic-finish-recovery-root','createSyntheticFinishRecoveryRoot','synthetic_finish_recovery_root','synthetic_finish_recovery_binding','synthetic_finish_recovery_observation','synthetic_finish_recovery_claim',
@@ -67,7 +67,8 @@ const rootMarkers=['synthetic-recovery-kernel','createSyntheticRecoveryKernel','
   'createSyntheticNormalOwnedSupply','synthetic_normal_owned_supply','createSyntheticNormalAdoptionRoot','CompletedMixedContent','BoundAdoption',
   'createSyntheticNormalTransferRoot','PendingBoundTransfer','PayloadClearedReceipt','synthetic_normal_transfer_custody',
   'projectionReceipt','normalHeaderConsumptions','clearNormalHeader','PendingPrefixCheck','prefixPostChecks','prefixCandidates',
-  'OrderedPrefixRelation','consumePrefixRelation','relationConsumeStarted','prefixRelationMarker'];
+  'OrderedPrefixRelation','consumePrefixRelation','relationConsumeStarted','prefixRelationMarker',
+  'createSyntheticDestinationPreparationRoot','PendingContentCheck','ContentChecked','UnpublishedDestination','checkDestinationCandidate'];
 const noRecoveryRoot=text=>assert(!rootMarkers.some(x=>text.includes(x)),'RB-A shared kernel/root leaked into runtime');
 for(const marker of rootMarkers)assert.throws(()=>noRecoveryRoot(marker));
 assert(!pack.files.some(f=>/synthetic-recovery-kernel|synthetic-recovery-lifecycle|synthetic-finish-recovery-root/.test(f.path)));
@@ -236,8 +237,8 @@ assert(!pack.files.some(f=>f.path.includes('synthetic-full-mixed-draft')));
 for(const f of pack.files.filter(f=>f.path.startsWith('dist/')&&/\.(?:js|ts|map)$/.test(f.path)))noFullMixedDraft(readFileSync(join(root,f.path),'utf8'));
 for(const leak of ['fetch("x");','Date.now();','new Date();','new Worker("x");',"import('node:fs');","import {BoundedReadSession} from '../../../src/servicenow/bounded-read.js';const zzRoot=BoundedReadSession;"])
   assert.throws(()=>auditSyntheticIssuer(fullMixedDraftText+'\n'+leak,fullMixedDraftImports),assert.AssertionError,'D1 audit missed seeded leak: '+leak);
-assert(!rootKernelText.includes('synthetic-full-mixed-draft'),'D1 must remain disconnected from pending kernel');
-console.log('D1 full mixed DATA draft/comparison excluded; fixed imports, disconnected pending + seeded leak controls PASS');
+assert(rootKernelImports.includes('./synthetic-full-mixed-draft.js'),'D2 fixed D1 import must be audited');
+console.log('D1 DATA values + D2 fresh preparation root excluded; fixed imports + seeded leak controls PASS');
 const prefixDeltaText=readFileSync(join(root,'tests/support/review/synthetic-prefix-delta.ts'),'utf8');
 const prefixDeltaImports=['node:util','zod','../../../src/review/aggregate-schema.js'];
 auditSyntheticIssuer(prefixDeltaText,prefixDeltaImports);

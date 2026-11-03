@@ -1,7 +1,7 @@
 # OB-03：移譲先owner・seal接続と本文／混合manifest比較
 
-Version: br006-recovery-ob03-destination-content-draft-0.2 / Date: 2026-11-03。
-設計基準HEAD: `4f82d9c`／D1実装基準HEAD: `b17a418`。Status: **D1の値専用FullMixedDraft・全field比較と独立oracleを合成実装。同pending・ContentChecked・dest／sealは未接続。正式発行口閉鎖・全体受付無効・Unknown・VM／監視／telemetry調査保留を維持する。seal成功・実接続・実通信・設定変更・Pushは行わない。**
+Version: br006-recovery-ob03-destination-content-draft-0.3 / Date: 2026-11-03。
+設計基準HEAD: `4f82d9c`／D1実装基準HEAD: `b17a418`／D2実装開始HEAD: `f467fc4`。Status: **D1値境界とD2のfresh合成root・同pendingのprivate ContentChecked／未公開dest準備を実装。固定abortを維持し、commit／sealは未接続。正式発行口閉鎖・全体受付無効・Unknown・VM／監視／telemetry調査保留を維持する。seal成功・実接続・実通信・設定変更・Pushは行わない。**
 
 [OD-B設計](BEST_PRACTICE_ABORT_SCOPE_RECOVERY_ODB_TRANSFER_DESIGN.md)§3〜7、[OB-02接続](BEST_PRACTICE_ABORT_SCOPE_RECOVERY_OB02_ADOPTION_DESIGN.md)§6〜8と[PD-B接続](BEST_PRACTICE_ABORT_SCOPE_RECOVERY_PENDING_PREFIX_BINDING_DESIGN.md)§10の差分。prefix関係値を確認できることと、元本文を保持したmixed内容を一つの移譲先へsealできることを分離する。調査時のkernel作業中差分は変更せず、本稿の現行到達点は上記コミットを基準とする。
 
@@ -11,7 +11,7 @@ Version: br006-recovery-ob03-destination-content-draft-0.2 / Date: 2026-11-03。
 
 消費済み関係値の再発行、元accepted slotの復元、spent handoffの再bind、summaryからの再構成でsealへ進めない。既存公開`sealRecoveryFinishExpectation`を先に成功させ、別取引で内容移譲を足す方式も禁止する。今回の詳細設計だけで固定abortを外さない。
 
-将来のOB-03は**別fresh合成rootと同module内の固定destination継続**を設計対象とする。旧rootの一般的なmode引数／callback、外部dest／accepted／manifest登録口は作らない。新rootも同生成元のtake・header／projection受領・関係値消費を一度だけ通り、固定consumerの役割を「破棄」か「同destへのcommit」のどちらかにconstructor内部で固定する。旧rootで消費した関係値を新rootへ渡さない。
+OB-03は**別fresh合成rootと同module内の固定destination継続**を設計対象とする。D2で未公開準備までのfresh rootを§11に実装し、旧rootの一般的なmode引数／callback、外部dest／accepted／manifest登録口は作らない。将来のcommit継続も同生成元のtake・header／projection受領・関係値消費を一度だけ通り、consumerの役割をconstructor内部で固定する。旧rootや固定abort済みD2 rootの関係値を新rootへ渡さない。
 
 ## 2 二つの本文比較を区別する
 
@@ -127,4 +127,20 @@ OM-Aの103件の中間prefixは値として比較できるが、RA／PD-A eligib
 
 出力はauthority:none／full_mixed_values_only、freeze済み元列とmanifest・保持findings数・部分的なcopy／比較node使用量だけ。usageはschema検査／JSON serialization／全workやheapの上界ではない。失敗はshape／limit／unsupported／mismatchとinput／parent／manifest／contentの固定分類であり、本文・ID・causeを含めない。
 
-[D1検証記録](E2E_BEST_PRACTICE_FULL_MIXED_DRAFT_D1_2026-11-03.md)に、独立oracle・全field変更・省略区別・境界と比較除去の負の対照を記録する。package監査で固定pure依存・漏出負の対照・kernel未接続を確認する。D2のprivate ContentChecked／dest準備・D3 commit・D4正常終端と、それらに必要な費用導出は未実装。
+[D1検証記録](E2E_BEST_PRACTICE_FULL_MIXED_DRAFT_D1_2026-11-03.md)に、独立oracle・全field変更・省略区別・境界と比較除去の負の対照を記録する。D1時点ではkernel未接続を確認し、D2では次節の固定importだけを依存監査へ追加する。D3 commit・D4正常終端と、それらに必要な費用導出は未実装。
+
+## 11 D2のfresh準備root・private ContentChecked
+
+[合成kernel](../tests/support/review/synthetic-recovery-kernel.ts)に`createSyntheticDestinationPreparationRoot`を追加した。外側のDATA／guard契約は既存normal supplyと同じ厳密契約を使い、callerによるmode・owner・handle指定は拒否する。旧transferの`abortBoundTransfer`を公開せず、引数なしの固定`prepareDestination`を持つ。既存rootの公開面・D1非呼出し経路は維持する。
+
+DestinationOwnerは同construction tokenとopaque markerを持つ内部objectとしてDATA検査前に一つ確保する。準備claimはtransfer／prefix開始とともに先行消費し、失敗・余分な引数・guard停止でも再armしない。準備は同rootの既存prepare／move／kernel／adoptの後だけ可能であり、別rootから採用しない。
+
+workで同pendingの既存owned／taken検査・header一度消費・PD比較を行った後、D1へ同modelのselected／P0／original_rows／親変換後assets・Pp／traceと、同pinsの版／rulesetを供給する。D1のcopyを元row／receiptの代わりにせず、PendingContentCheckは元pending／model／header、同owner／budget identity・serial／失効serialとD1値を束ねる。work不一致は固定分類の暫定診断だけに留める。
+
+post guardと既存taken・prefix候補の再確認後、同Content候補のowner／token／pending／model／header／budget／serialを検査してからprivate ContentCheckedを一度生成する。未公開dest準備slotはこの同ownerと同checkを保持するだけであり、完成SealedMixedBundle・小型expectation・full accepted projectionのseal受領物ではない。prefix関係値も既存固定consumerで消費し、そのまま固定state abortする。公開されるhandleや成功値はなく、published／sealsは常に0。
+
+new owner／candidate／ContentChecked／未公開destをclear／isClearedへ含め、固定abort・失効・任意のhard後は全参照を外してから上位custodyへ移す。ContentCheckedは同合成pendingの内容対応だけを示し、実worker／wire origin・full header比較・正式permitの証明ではない。元4roleの未解決を新ownerのabsenceや解放確認へ昇格させない。
+
+[D2検証記録](E2E_BEST_PRACTICE_DESTINATION_PREPARATION_D2_2026-11-03.md)に、pre／post、混合／元reviewed0、body不一致とpost停止、再入・失効・foreign summary、旧経路不変、初回の試験alias問題と負の対照を記録する。Vitest spy以外の依存注入口・friendは追加しない。実予算の数値は変えず、追加copy／work・保持ピーク／全体受付はUnknownのまま。
+
+D3では同take内のfull投影受領と完成bundle・atomic commitを別途検証する必要があり、D2のabort後にheader consumerを再実行したりContentCheckedを復元したりしない。D3のseal成功は引き続き別の明示指示待ちとする。
