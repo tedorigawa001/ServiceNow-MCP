@@ -1,13 +1,13 @@
 # PD-B：同pendingのPD-A入力化・比較・関係値の接続差分
 
-Version: br006-recovery-pending-prefix-binding-draft-0.2 / Date: 2026-11-03。
-設計基準HEAD: `802b5c3`／(A)実装基準HEAD: `2043665`。Status: **(A)の値専用入力化・比較と独立oracleを合成実装。同pending接続・claim／関係値発行は未着手。正式発行口閉鎖・全体受付無効・Unknown・VM／監視／telemetry調査保留を維持する。**
+Version: br006-recovery-pending-prefix-binding-draft-0.3 / Date: 2026-11-03。
+設計基準HEAD: `802b5c3`／(A)実装基準HEAD: `2043665`／(B)実装基準HEAD: `af6fdaa`。Status: **(A)値専用境界と(B)同pending／header consumer・開始claim・暫定候補を合成実装。(C)のpost受理／関係値発行・消費は未着手。正式発行口閉鎖・全体受付無効・Unknown・VM／監視／telemetry調査保留を維持する。**
 
-[prefix／delta契約](BEST_PRACTICE_ABORT_SCOPE_RECOVERY_PREFIX_DELTA_DESIGN.md)§8〜11と[private header供給](BEST_PRACTICE_ABORT_SCOPE_RECOVERY_ACCEPTED_HEADER_SUPPLY_DESIGN.md)§8の差分。本稿は同pendingの供給元・比較範囲・一度限りの内部関係値を具体化する。(A)の実装は§8に限定し、同pending接続・実接続・実通信・設定変更・Pushは行わない。実acceptedとのprivate内容比較をまだ実装済みとはせず、NB-03の固定abortを維持する。
+[prefix／delta契約](BEST_PRACTICE_ABORT_SCOPE_RECOVERY_PREFIX_DELTA_DESIGN.md)§8〜11と[private header供給](BEST_PRACTICE_ABORT_SCOPE_RECOVERY_ACCEPTED_HEADER_SUPPLY_DESIGN.md)§8の差分。本稿は同pendingの供給元・比較範囲・一度限りの内部関係値を具体化する。(A/B)の合成実装は§8〜9に限定し、実接続・実通信・設定変更・Pushは行わない。post受理済み関係値や移譲先sealを実装済みとはせず、NB-03の固定abortを維持する。
 
 ## 1 現行との差分
 
-[合成kernel](../tests/support/review/synthetic-recovery-kernel.ts)は同takeからprivate receiptを発行し、固定consumerが実accepted headerを一度だけ`pendingHeader`へ渡す。transfer post-guard後は固定abortする。[PD-A](../tests/support/review/synthetic-prefix-delta.ts)は独立したbounded値計算であり、この経路からは呼ばれていない。
+[合成kernel](../tests/support/review/synthetic-recovery-kernel.ts)は同takeからprivate receiptを発行し、固定consumerが実accepted headerを一度だけ`pendingHeader`へ渡す。(B)で同pendingから固定DATA viewを作り、(A)を経由して[PD-A](../tests/support/review/synthetic-prefix-delta.ts)を呼ぶ。transfer post-guard後も固定abortする。
 
 追加するのは、既存transfer保護scope内の固定入力化・PD-A呼出し・private比較と、post-guard後の内部関係値受理／固定消費である。公開snapshot／rootの引数にprefix・verify・header・関係値を追加しない。新factory／登録台帳／caller callback／summaryからの再構成を導入しない。
 
@@ -103,7 +103,7 @@ claimは関係値の中のboolだけに置かず、同pendingを所有するroot
 
 ## 8 (A)の値専用実装・非保証範囲
 
-[synthetic-pending-prefix-values](../tests/support/review/synthetic-pending-prefix-values.ts)の`projectSyntheticPendingPrefixValues`は、厳密な外側DATA契約`kind／model／pins_header／plan_verify／accepted_header`を受ける。modelは`schema_version／prefix`だけの値viewであり、実OMモデル・trace・ownerを受け取る入口ではない。将来(B)が同pendingから固定viewを作る責務は未実装。
+[synthetic-pending-prefix-values](../tests/support/review/synthetic-pending-prefix-values.ts)の`projectSyntheticPendingPrefixValues`は、厳密な外側DATA契約`kind／model／pins_header／plan_verify／accepted_header`を受ける。modelは`schema_version／prefix`だけの値viewであり、実OMモデル・trace・ownerを受け取る入口ではない。(B)の固定callerが同pendingからこのviewを作る。値helper自体にowner／receiptを登録しない。
 
 headersはschema_version／collection.status／limitations／errors、verifyは§2の6項目だけをown DATA descriptorから読む。対象外のprincipal／accounting等は、getterを含んでも実行せず無視する。これらの正しさ・full header適合を確認した保証ではない。選択対象のproxy／accessor、外側やmodel viewの未知fieldは拒否する。
 
@@ -111,4 +111,14 @@ headersはschema_version／collection.status／limitations／errors、verifyは�
 
 PD-Aを1回呼び、modelの版・base prefix・accepted側の版／collection・canonical prefixを比較する。配列のsort／dedup救済はしない。比較結果は`authority:none／checked_scope:prefix_values_only`とPD-Aのfreeze済み値・snapshot使用量だけを返し、入力aliasを保持しない。shape／limit／binding／unsupportedとinput／delta／base／acceptedの固定理由を返し、PD-A失敗時は元のphaseも`delta_phase`に保持する。raw例外・cause・入力値は返さない。
 
-同pending・receipt／pins origin・元trace・実accepted provenance・one-shot関係値・guard・失効・全体予算は未検証であり、再呼出し可能な値計算をone-shotの証拠に昇格させない。[検証記録](E2E_BEST_PRACTICE_PENDING_PREFIX_VALUES_2026-11-03.md)に独立oracle・初回失敗・順序比較を外す負の対照を記録する。kernelからのimportはなく、package監査で未接続と配布除外を確認する。
+値helper単独では同pending・receipt／pins origin・元trace・実accepted provenance・one-shot関係値・guard・失効・全体予算は未検証であり、再呼出し可能な値計算をone-shotの証拠に昇格させない。[検証記録](E2E_BEST_PRACTICE_PENDING_PREFIX_VALUES_2026-11-03.md)に(A)時点の独立oracle・初回失敗・負の対照と未接続状態を記録する。(B)では次節の固定kernel importだけを追加し、packageの固定依存監査と配布除外を維持する。
+
+## 9 (B)の同pending接続・暫定候補
+
+normal rootに`prefixStarted`を置き、transfer開始と同時に一度だけ消費する。pre停止でも再armせず、PD-Aへの入力化はwork内の既存同identity／owned検査・header消費の後に限る。同`p.content.owned.model.prefix`／model版・pins header・taken plan.verify・pendingHeaderを固定callerから(A)へ渡す。
+
+成功時だけprivate `PendingPrefixCheck`へ同token／pending object／model／header／budget identity・serial／失効serialと値計算結果を束ねる。workでの値helper失敗は固定reason／phaseだけを保持して暫定不一致とし、post guardの取消・期限・先行hardを優先する。post通過後は既存checkTakenと候補identity／budget／serialを再確認するが、候補をpost受理済み関係値へ昇格しない。`post_checks`は再確認回数だけでありauthorityではない。
+
+候補はrootのclearとisClearedに含め、固定abort／停止でheader等とともに破棄してから既存上位custodyへ進む。inspectは開始・呼出し・候補数・再確認数・保持boolと固定拒否分類だけ。関係値数は0のまま。全work費用や3round配賦は依然Unknownで、実会計の枠・期限は変更しない。
+
+[接続検証記録](E2E_BEST_PRACTICE_PENDING_PREFIX_TRANSFER_2026-11-03.md)に正常・guard停止・値不一致とpost停止の競合・再入・失効・混入・親省略を確認した結果を記録する。試験の値helper spyはVitest内だけに置き、runtime rootに依存差替え口やfriendを追加しない。(C)の関係値post受理・一度限り消費・compiled保証は未実装。

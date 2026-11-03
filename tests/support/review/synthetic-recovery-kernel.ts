@@ -9,6 +9,7 @@ import {compareSyntheticFinishValues} from './synthetic-finish-context-values.js
 import {projectRecoveryFinishExpectation} from './synthetic-recovery-finish-values.js';
 import {createSyntheticFinishPins,type SyntheticFinishPins} from './synthetic-finish-pins.js';
 import {modelSyntheticParentOmission} from './synthetic-parent-omission-values.js';
+import {projectSyntheticPendingPrefixValues,PendingPrefixValueError} from './synthetic-pending-prefix-values.js';
 type ReadPhase='metadata'|'payload'|'consistency';
 type WorkerRefs=Readonly<{generation:object;worker:object}>;
 type WorkerCall=Readonly<{kind:'worker_deadline';phase:'analysis';supervisor:object;request:object;input:object}>;
@@ -686,6 +687,7 @@ export function createSyntheticNormalTransferRoot(raw:unknown,dependencies:unkno
 type CompletedMixedContent=Readonly<{token:object;owned:OwnedMixedSupply;pins:SyntheticFinishPins;serial:1}>;
 type BoundAdoption=Readonly<{token:object;content:CompletedMixedContent;bound:NormalAcceptedSnapshot;serial:1}>;
 type PendingBoundTransfer=Readonly<{token:object;ticket:BoundAdoption;content:CompletedMixedContent;binding:NormalPinBinding;taken:TakenNormalAccepted}>;
+type PendingPrefixCheck=Readonly<{token:object;pending:PendingBoundTransfer;header:AcceptedHeader;model:SupplyModel;budget:object;budgetSerial:1;invalidationSerial:number;values:ReturnType<typeof projectSyntheticPendingPrefixValues>}>;
 type PayloadClearedReceipt=Readonly<{token:object;serial:number;budgetSerial:0|1;budget:object|undefined}>;
 type NormalCleanupCapsule={token:object;cleanup:((status:unknown)=>void)|undefined};
 function createNormalOwnedSupplyCore(raw:unknown,dependencies:unknown,extra:unknown[],transferMode=false){
@@ -707,6 +709,8 @@ function createNormalOwnedSupplyCore(raw:unknown,dependencies:unknown,extra:unkn
   let kernelStarted=false,adoptionStarted=false,kernelBuilds=0,contentCompletions=0,adoptions=0;
   let transferStarted=false,transferTakes=0,transferAborts=0,pendingTransfer:PendingBoundTransfer|undefined;
   let pendingHeader:AcceptedHeader|undefined,headerConsumptions=0,headerErrorCount:number|undefined;
+  let prefixStarted=false,prefixCalls=0,prefixCandidates=0,prefixPostChecks=0,pendingPrefix:PendingPrefixCheck|undefined;
+  let prefixRejection:Readonly<{reason:PendingPrefixValueError['reason'];phase:PendingPrefixValueError['phase']}>|undefined;
   let state:'fresh'|'prepared'|'moving'|'normal_owned'|'failed'|'invalidated'|'discarded'='fresh',first:SupplyReason|undefined,busy=false;
   let failureStage:'prepare'|'transfer'|'cleanup'='prepare';
   let prepareStarted=false,moveStarted=false,births=0,birthConsumptions=0,moves=0,invalidations=0;
@@ -715,7 +719,7 @@ function createNormalOwnedSupplyCore(raw:unknown,dependencies:unknown,extra:unkn
   let budget:NormalBudget|undefined,identityChecks=0,rowsChecked=0;
   const supply=createOwnedMixedSupply(raw,(stage,n)=>fixedGuard(stage,n),extra,token,failure,undefined,undefined,channel);
   raw=undefined;extra=[];
-  function clear(){pendingHeader=undefined;owned=undefined;binding=undefined;channel.birth=undefined;channel.take=undefined;completed=undefined;adoption=undefined;accepted=undefined;pendingTransfer=undefined;initial=undefined;preparationInput=undefined;b=lease=evidence=preparation=ready=undefined;}
+  function clear(){pendingPrefix=undefined;pendingHeader=undefined;owned=undefined;binding=undefined;channel.birth=undefined;channel.take=undefined;completed=undefined;adoption=undefined;accepted=undefined;pendingTransfer=undefined;initial=undefined;preparationInput=undefined;b=lease=evidence=preparation=ready=undefined;}
   function fail(reason:SupplyReason):never{
     if(terminalBusy)terminalPoison=true;
     if(resources&&custody.holder()==='upper')throw new OwnedMixedSupplyError(first??'state');
@@ -863,7 +867,7 @@ function createNormalOwnedSupplyCore(raw:unknown,dependencies:unknown,extra:unkn
   });
   const transferring=Object.freeze({...extended,
     abortBoundTransfer(...args:unknown[]){return operation('adoption',()=>{
-      if(transferStarted)fail('duplicate');transferStarted=true;let mismatch=false;
+      if(transferStarted||prefixStarted)fail('duplicate');transferStarted=prefixStarted=true;let mismatch=false;
       try{
         if(!adoption||!completed||!binding||!owned||!accepted||!b||adoption.token!==token||adoption.content!==completed||completed.owned!==owned)supplyBad('binding');
         const taken=acceptedChannel.take!(b!,accepted!);
@@ -875,8 +879,15 @@ function createNormalOwnedSupplyCore(raw:unknown,dependencies:unknown,extra:unkn
         const p=pendingTransfer;if(args.length||mismatch||!p||!b||p.token!==token||p.content!==p.ticket.content||p.binding.token!==token||p.taken.value.pins!==p.content.pins||p.content.pins!==p.binding.pins||p.taken.value.plan!==p.ticket.bound.plan||p.taken.value.handoff!==p.ticket.bound.handoff||p.taken.value.accepted!==p.ticket.bound.accepted||p.taken.value.origin!==p.ticket.bound.origin||p.taken.value.source!==p.ticket.bound.source||p.taken.value.cleanup!==p.ticket.bound.cleanup||p.taken.value.window!==p.binding.context.window||budget?.identity!==p.binding.context.budget)supplyBad('binding');
         checkOwnedSupply(p!.content.owned,token);acceptedChannel.checkTaken!(b!,p!.taken);
         pendingHeader=acceptedChannel.consumeHeader!(b!,p!.taken);headerConsumptions++;headerErrorCount=pendingHeader.errors.length;
-      }catch{mismatch=true;}
-      checkpoint('transfer_post');if(mismatch||!pendingTransfer||!b)fail('binding');acceptedChannel.checkTaken!(b!,pendingTransfer!.taken);
+        const model=p!.content.owned.model;prefixCalls++;
+        const values=projectSyntheticPendingPrefixValues({kind:'synthetic_pending_prefix_values_v1',model:{schema_version:model.schema_version,prefix:model.prefix},
+          pins_header:p!.content.pins.seed.header,plan_verify:p!.taken.value.plan.verify,accepted_header:pendingHeader});
+        pendingPrefix=Object.freeze({token,pending:p!,header:pendingHeader,model,budget:budget!.identity,budgetSerial:budget!.serial,invalidationSerial:invalidations,values});prefixCandidates++;
+      }catch(error){if(error instanceof PendingPrefixValueError)prefixRejection=Object.freeze({reason:error.reason,phase:error.phase});mismatch=true;}
+      checkpoint('transfer_post');if(mismatch||!pendingTransfer||!pendingHeader||!pendingPrefix||!b||!budget)fail('binding');acceptedChannel.checkTaken!(b!,pendingTransfer!.taken);
+      const c=pendingPrefix!;
+      if(c.token!==token||c.pending!==pendingTransfer||c.header!==pendingHeader||c.model!==pendingTransfer!.content.owned.model||c.budget!==budget!.identity||c.budgetSerial!==budget!.serial||c.invalidationSerial!==invalidations)fail('binding');
+      prefixPostChecks++; // Still a provisional candidate: no post-accepted relation or destination exists in (B).
       transferAborts=1;return fail('state'); // Fixed non-executing abort: no destination exists and no success handle is published.
     });},
     transferFailure(...args:unknown[]){return terminal(()=>{
@@ -892,9 +903,10 @@ function createNormalOwnedSupplyCore(raw:unknown,dependencies:unknown,extra:unkn
     upper:Object.freeze({cleanupOwned:(status:unknown,...args:unknown[])=>cleanupCapsule('upper',status,args),inspect:()=>Object.freeze({...custody.upper.inspect(),capsule_pending:!!resources?.upper})}),
     custody:()=>Object.freeze({scope:'synthetic_normal_transfer_custody' as const,authority:'none' as const,holder:custody.holder(),payload_cleared:!!payloadCleared&&isCleared()&&payloadCleared.serial===invalidations&&payloadCleared.budget===budget?.identity&&payloadCleared.budgetSerial===(budget?.serial??0),
       local_capsule:!!resources?.local,upper_capsule:!!resources?.upper,discards:custody.local.inspect().discards,report:custody.local.inspect().report,unresolved:custody.currentFailure()?.unresolved??null}),
-    inspect:()=>Object.freeze({...extended.inspect(),transfer:Object.freeze({started:transferStarted,takes:transferTakes,aborts:transferAborts,pending:!!pendingTransfer,header_pending:!!pendingHeader,header_consumptions:headerConsumptions,header_error_count:headerErrorCount??null,successful_seals:0})}),
+    inspect:()=>Object.freeze({...extended.inspect(),transfer:Object.freeze({started:transferStarted,takes:transferTakes,aborts:transferAborts,pending:!!pendingTransfer,header_pending:!!pendingHeader,header_consumptions:headerConsumptions,header_error_count:headerErrorCount??null,successful_seals:0}),
+      prefix_check:Object.freeze({started:prefixStarted,calls:prefixCalls,candidates:prefixCandidates,post_checks:prefixPostChecks,pending:!!pendingPrefix,rejection:prefixRejection??null,relations:0})}),
   });
-  function isCleared(){return !busy&&!pendingHeader&&!owned&&!binding&&!pendingTransfer&&!completed&&!adoption&&!accepted&&!channel.birth&&!channel.take&&!initial&&!preparationInput&&!b&&!lease&&!evidence&&!preparation&&!ready&&!supply.inspect().pending&&!(acceptedChannel.payloadPending?.()??false);}
+  function isCleared(){return !busy&&!pendingPrefix&&!pendingHeader&&!owned&&!binding&&!pendingTransfer&&!completed&&!adoption&&!accepted&&!channel.birth&&!channel.take&&!initial&&!preparationInput&&!b&&!lease&&!evidence&&!preparation&&!ready&&!supply.inspect().pending&&!(acceptedChannel.payloadPending?.()??false);}
   function assertCleared(){if(!isCleared()||resources?.token!==token||resources.budget!==budget?.identity||budget&&budget.token!==token)throw Error('internal_review_error');}
   function checkClearedReceipt(){assertCleared();if(!payloadCleared||payloadCleared.token!==token||payloadCleared.serial!==invalidations||payloadCleared.budgetSerial!==(budget?.serial??0)||payloadCleared.budget!==budget?.identity)throw Error('internal_review_error');}
   function terminal<T>(work:()=>T):T{

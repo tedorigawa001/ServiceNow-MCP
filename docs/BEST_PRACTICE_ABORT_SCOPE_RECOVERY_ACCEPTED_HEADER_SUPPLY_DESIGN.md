@@ -1,7 +1,7 @@
 # PD-B前工程：実accepted headerのprivate供給境界
 
-Version: br006-recovery-accepted-header-supply-draft-0.2 / Date: 2026-11-03。
-Status: **同takeのprivate供給・固定consumerと失効時破棄を合成実装。内容比較・sealは未接続。正式発行口閉鎖・全体受付無効・Unknown・VM／監視／telemetry調査保留を維持する。**
+Version: br006-recovery-accepted-header-supply-draft-0.3 / Date: 2026-11-03。
+Status: **同takeのprivate供給・固定consumerと失効時破棄を合成実装。後続(B)で同pendingのprefix比較・暫定候補まで接続し、post受理済み関係値・sealは未接続。正式発行口閉鎖・全体受付無効・Unknown・VM／監視／telemetry調査保留を維持する。**
 
 [順序付きprefix・固定delta契約](BEST_PRACTICE_ABORT_SCOPE_RECOVERY_PREFIX_DELTA_DESIGN.md)§8と[NB接続設計](BEST_PRACTICE_ABORT_SCOPE_RECOVERY_OB02_ADOPTION_DESIGN.md)の差分。実装は合成依存に限定し、実接続・実通信・設定変更・Pushを行わない。NB-03の固定abortと、移譲先seal未接続を変更しない。
 
@@ -82,7 +82,7 @@ PD-Aの成功はprefix-local値だけを保証する。供給したheaderからs
 
 `TakenNormalAccepted`へopaqueな`projectionReceipt`を追加した。公開の`NormalAcceptedSnapshot`は変更せず、同kernelのtakeだけが受理済み`acceptedFinish.projection`とheaderをprivate slotへ保持し、元accepted slotを外す。`checkTaken`は元taken object自体も照合する。
 
-非export channelの固定`consumeHeader`は利用claimを先に消費し、private slotを外してから同owner／taken／receipt／projectionのplan・header参照を検査する。成功時のreadonly headerだけを同pendingの保護scopeが保持し、transfer post-guard後も従来どおり固定abortする。PD-Aの呼出し・header内容比較・関係値の発行は追加していない。
+非export channelの固定`consumeHeader`は利用claimを先に消費し、private slotを外してから同owner／taken／receipt／projectionのplan・header参照を検査する。成功時のreadonly headerだけを同pendingの保護scopeが保持し、transfer post-guard後も従来どおり固定abortする。後続(B)では[接続差分設計§9](BEST_PRACTICE_ABORT_SCOPE_RECOVERY_PENDING_PREFIX_BINDING_DESIGN.md)に従い同headerとPD-Aのprefix比較・暫定候補を追加したが、post受理済み関係値の発行は未実装。
 
 kernelのclear／invalidateとnormal rootのclearへ新参照を含め、`payloadPending`／`isCleared`が残存参照を検知する。inspectには発行・消費件数、保持boolと固定error件数だけを返し、projection／header／receiptを返さない。cleanup capsuleへheaderを移さない。
 
