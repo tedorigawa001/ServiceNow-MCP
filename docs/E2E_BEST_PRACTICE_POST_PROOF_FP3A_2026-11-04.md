@@ -42,7 +42,24 @@ pair／marker台帳／origin台帳・両proof／relation markerと、元parts／
 
 コミット前再検証：対象9ファイルだけをstageし、未stage差分・未追跡ファイルがない状態でビルドと全体合成テストを再実行。283 files／13,728 tests成功、失敗・保留0。対象4ファイルのESLint、リンク27件、外部取得禁止の梱包試験とcompiled保証を含む配布除外監査（各441 files）も成功。初回のfixture位置特定エラーは上記のまま保持する。
 
-## 5 維持する閉鎖状態と次工程
+## 5 レビュー修正（2026-11-04）
+
+本記録の試験件数・故障件数は修正前の記録として残す。レビュー時にrepo全体のlint（error 0・warning 374）、build、梱包分類監査（441ファイル、Compiled FP3-Aを含む）、全体合成283ファイル／13,728件成功・失敗0を確認した。
+
+kernelの44変異を確認し、次の照合は外しても既存試験が全て通過した。実装は正しく、試験だけの不足である。
+
+- origin台帳のparts／content／prefix照合。既存故障はpairと台帳を常に揃えて書き換えており、台帳だけのずれを試していなかった。
+- issuer内の発行前`checkBundleParts()`。外しても発行後のpair照合が同じ理由で拒否するが、設計§4の「証拠はまだ0」が崩れて発行後の拒否へ変わる差を確認していなかった。
+- 証拠0条件。発行前に証拠やカウンタが混入する故障がなかった。
+- 発行後のカウンタ（contentChecks／prefixRelations／proofPairAccepts）とD2 slot（unpublishedDestination／destinationPreparations）の条件。
+
+[compiled fixture](../tests/review/fixtures/compiled-destination-preparation.mjs)に16故障を追加した（台帳3、発行後5、発行前8）。発行前の故障は、binding拒否に加えて証拠数がそれぞれ注入分のままであることを確認する。上記の各条件を一つずつ外す15変異は、それぞれ対応する故障で初めて失敗した。
+
+別に[合成試験](../tests/review/synthetic-post-proof.test.ts)へ、work失敗の暫定保持とpost停止優先の3件を追加した。FP3-A入口にこの経路の試験がなかったためで、停止なしならbinding（issuer開始1）、停止ありならその理由（issuer開始0）で、いずれも証拠0のままpayload clearへ進むことを固定する。
+
+pairのowner／pending／received／budget／budgetSerial／invalidationSerialの二重照合の片方（残る片方と全構成照合から導出でき、両方を外す6変異は検出される）、`workMismatch`判定（partsなしは`!bundleParts`、ありは再照合が同理由で拒否）、issuer冒頭のslot空判定（先行する`used`で到達不能）、issuer内の`checkProjection`（直後の全構成照合に包含）は等価変異として扱う。kernelは変更せず、設計書をdraft-0.3とした。新規試験は3件増。既存試験2箇所のstrict型エラー（`post_proofs`のoptional参照）も、判定を弱めずに解消した。修正後の全体合成は283ファイル／13,731件成功・失敗0。
+
+## 6 維持する閉鎖状態と次工程
 
 正式発行口閉鎖・全体受付無効・Unknown・VM／監視／telemetry調査保留を維持する。完成bundle・seal成功・実session／worker／runtime接続・実通信・実機操作・設定変更・Pushは行っていない。
 

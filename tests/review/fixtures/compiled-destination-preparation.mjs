@@ -186,9 +186,9 @@ try{
   console.log('Compiled FP-2: private parts/expectation/full-content binding, 55 field/origin/lane/reprojection faults and 5 retained-slot controls PASS (no complete bundle/seal)');
   const proofFactory='createSyntheticPostProofRoot',issueSite='issuePostProofPair(mismatch);',pairSite='checkPostProofPair();';
   for(const site of [issueSite,pairSite])assert.equal(text.split(site).length,2,'FP3-A fixed site must be unique');
-  function proofClean(r,reason,content,prefix,pairs,starts=1){
+  function proofClean(r,reason,content,prefix,pairs,starts=1,checks=pairs){
     assert.throws(()=>r.issuePostProofs());const s=r.inspect();assert.equal(s.first_failure,reason);
-    assert.deepEqual(s.post_proofs,{state:'failed',starts,pairs,checks:pairs,post_passed:false,pair_pending:false,markers_pending:false,origins_pending:false,content_issues:content,prefix_issues:prefix,completed_bundles:0,seals:0});
+    assert.deepEqual(s.post_proofs,{state:'failed',starts,pairs,checks,post_passed:false,pair_pending:false,markers_pending:false,origins_pending:false,content_issues:content,prefix_issues:prefix,completed_bundles:0,seals:0});
     assert.equal(s.transfer.successful_seals,0);assert.equal(s.kernel.accepted_header.consumptions,0);
     r.finalDiscard(r.transferFailure());assert.equal(r.custody().payload_cleared,true);assert.throws(()=>r.issuePostProofs());assert.equal(r.inspect().post_proofs.starts,starts);
   }
@@ -242,6 +242,31 @@ try{
   // Coherently rebind the parts aliases: the shared full-value validation must still run AFTER issuance.
   const changedExpectation='pendingExpectation = Object.freeze({ ...pendingExpectation, value: Object.freeze({ ...pendingExpectation.value, consistency: "changed" }) }); bundleParts = Object.freeze({ ...bundleParts, expectation: pendingExpectation }); postAcceptedProofPair = Object.freeze({ ...postAcceptedProofPair, parts: bundleParts }); proofOrigins = Object.freeze({ ...proofOrigins, parts: bundleParts, pair: postAcceptedProofPair }); ';
   proofClean(setup(await load(t=>t.replace(pairSite,changedExpectation+pairSite),proofFactory)),'binding',1,1,0);proofFaults++;
+  // The origin ledger alone drifts: the pair stays coherent, so only the ledger checks can reject.
+  for(const side of ['parts','content','prefix']){
+    const fault=`proofOrigins = Object.freeze({ ...proofOrigins, ${side}: Object.freeze({ ...proofOrigins.${side} }) }); `;
+    proofClean(setup(await load(t=>t.replace(pairSite,fault+pairSite),proofFactory)),'binding',1,1,0);proofFaults++;
+  }
+  // Counters and D2 slots drift after issuance: nothing but the post-issuance tallies can reject these.
+  for(const [fault,content,prefix,pairs] of [
+    ['contentChecks++;',2,1,0],
+    ['prefixRelations++;',1,2,0],
+    ['proofPairAccepts++;',1,1,1],
+    ['unpublishedDestination = Object.freeze({});',1,1,0],
+    ['destinationPreparations++;',1,1,0],
+  ]){proofClean(setup(await load(t=>t.replace(pairSite,fault+' '+pairSite),proofFactory)),'binding',content,prefix,pairs,1,0);proofFaults++;}
+  // Issuer pre-check: drift or an already-present proof must stop BEFORE any evidence is issued.
+  const issuerRecheck='acceptedChannel.checkProjection(b, pendingProjection);\n        fullPostChecks++;';assert.equal(text.split(issuerRecheck).length,2,'FP3-A issuer recheck site must be unique');
+  for(const [fault,content,prefix] of [
+    ['invalidations++;',0,0],
+    ['pendingExpectation = undefined;',0,0],
+    ['contentChecked = Object.freeze({});',0,0],
+    ['prefixRelation = Object.freeze({});',0,0],
+    ['unpublishedDestination = Object.freeze({});',0,0],
+    ['contentChecks++;',1,0],
+    ['prefixRelations++;',0,1],
+    ['destinationPreparations++;',0,0],
+  ]){proofClean(setup(await load(t=>t.replace(issuerRecheck,issuerRecheck+' '+fault),proofFactory)),'binding',content,prefix,0);proofFaults++;}
   // A foreign actual pair from another root in the SAME temporary module is not a valid local proof.
   const cross=await load(t=>'let temporaryForeignPair;\n'+t.replace(pairSite,'if (!temporaryForeignPair) temporaryForeignPair = postAcceptedProofPair; else postAcceptedProofPair = temporaryForeignPair; '+pairSite),proofFactory);
   proofClean(setup(cross),'state',1,1,1);proofClean(setup(cross),'binding',1,1,0);

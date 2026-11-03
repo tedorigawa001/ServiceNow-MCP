@@ -1,9 +1,11 @@
 # FP-3 post後受理と未公開完成bundleの内部契約
 
-Version: br006-recovery-fp3-post-accept-bundle-draft-0.2 / Date: 2026-11-04。
+Version: br006-recovery-fp3-post-accept-bundle-draft-0.3 / Date: 2026-11-04。
 設計初稿の基準HEAD: `8369094`。Status: **FP3-Aだけ合成内実装済み。FP3-B／Cは設計段階。正式発行口閉鎖・全体受付無効・Unknown・VM／監視／telemetry調査保留を維持する。完成bundle生成・seal成功・実接続・実通信・設定変更・Pushは行わない。**
 
 FP3-A追記：[検証記録](E2E_BEST_PRACTICE_POST_PROOF_FP3A_2026-11-04.md)に、root側発行状態・post-only issuer・同partsのprivate proof pair、混入拒否・途中失敗clearを記録する。pair受理後も固定abortし、以下のready／consuming／retiredや未公開完成bundleには進まない。
+
+draft-0.2のレビュー修正：FP3-Aのorigin台帳のparts／content／prefix照合、issuer内の発行前照合、証拠0条件、発行後のカウンタ／D2 slot条件は、外しても全試験が通過していた。compiled fixtureに、台帳だけのずれ、発行前の不整合と証拠混入（証拠数0のまま停止）、発行後のカウンタ／slotのずれを追加し、合成試験にwork失敗の暫定保持とpost停止優先を追加した。kernelの挙動は変更していない。
 
 [full投影とbundleの親設計](BEST_PRACTICE_ABORT_SCOPE_RECOVERY_FULL_PROJECTION_BUNDLE_DESIGN.md)§4・6のFP-3を具体化する。目的は、FP-2のwork候補をpost後だけ受理し、同一取引の非公開bundleへ一度だけ結合・固定消費すること。未公開bundleの成立と、後続のatomic commit／利用可能destへの移譲は別工程とする。
 
