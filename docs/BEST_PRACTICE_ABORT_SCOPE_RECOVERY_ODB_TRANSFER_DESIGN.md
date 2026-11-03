@@ -1,7 +1,7 @@
 # OD-B 同生成元の供給と一度限りの内容移譲
 
-Version: br006-recovery-odb-transfer-draft-0.11 / Date: 2026-11-03。
-Status: **OB-01とFB-01〜03、NB-01の正常保持／予算binding、NB-02の同pins kernel／private採用まで合成実装。実resource・canonical予算／全work保証・内容移譲・移譲先sealは未接続。正式発行口閉鎖・全体受付無効・Unknown・VM／監視／telemetry調査保留を維持する。**
+Version: br006-recovery-odb-transfer-draft-0.12 / Date: 2026-11-03。
+Status: **OB-01／FB-01〜03とNB-01〜03の正常保持・private採用・非実行take／固定破棄・同custody連結まで合成実装。実resource・canonical予算／全work保証・移譲先seal成功・正常終端は未接続。正式発行口閉鎖・全体受付無効・Unknown・VM／監視／telemetry調査保留を維持する。**
 
 基準HEAD: `1eb3c74`。[OM-D設計](BEST_PRACTICE_ABORT_SCOPE_RECOVERY_MIXED_CONTENT_OMD_DESIGN.md)§4・7・10〜11と[OD-A検証記録](E2E_BEST_PRACTICE_OMD_SLOTS_ODA_2026-11-03.md)からの差分。同じ生成元で作ったmixed内容とaccepted／planを、一つのprivate操作で移譲先へ確定する。OD-Aの公開handleを既存rootへ後付け登録する方式は採らない。本文照合・finish job・候補発行はOD-Bの対象外。
 
@@ -173,7 +173,7 @@ draft-0.1は設計MDだけ。続くOB-01の実装範囲を以下に限定し、�
 
 ## 11 OB-01の実装範囲
 
-後続の[OB-02接続差分§10〜11](BEST_PRACTICE_ABORT_SCOPE_RECOVERY_OB02_ADOPTION_DESIGN.md)でNB-01の同pins正常保持・一度限りmove／予算bindingと、NB-02の同pins kernel／完了内容／private採用を追加した。旧OB-01／FB-03のAPI・identity／会計modelは変更せず、新入口はpackage除外の合成限定。内容移譲・dest seal・正常resource終端は未接続である。
+後続の[OB-02接続差分§10〜12](BEST_PRACTICE_ABORT_SCOPE_RECOVERY_OB02_ADOPTION_DESIGN.md)でNB-01／02の保持／採用とNB-03の一度限りtake・固定abort・payload-clear receipt／失敗custodyを追加した。旧OB-01／FB-03のAPI・identity／会計modelは変更せず、新入口はpackage除外の合成限定。dest seal成功・内容比較・正常resource終端は未接続である。
 
 [既存kernel module](../tests/support/review/synthetic-recovery-kernel.ts)にfresh factory `createSyntheticOwnedMixedSupply`を追加した。旧factoryの関数本体と返却surfaceは変更していない。新factoryは`createRecoveryKernel`を呼ばず、accepted／plan／ready／sealの生成・採用口を持たない。[新合成試験](../tests/review/synthetic-owned-mixed-supply.test.ts)と[OB-01検証記録](E2E_BEST_PRACTICE_OWNED_MIXED_SUPPLY_OB01_2026-11-03.md)参照。
 
@@ -199,4 +199,4 @@ guardはfake停止境界だけ。準備のguard数は成功時2N+2、discardは2
 
 OB-02のaccepted採用・一つの移譲claim、OB-03のdest seal／terminal-only接続、固定soft／verify delta・OD-C比較・実originは未成立。preparedの成功をこれらの成立へ昇格しない。
 
-失敗時の先行条件として、[寿命設計§9](BEST_PRACTICE_ABORT_SCOPE_RECOVERY_FAILURE_OWNER_LIFETIME_DESIGN.md)の独立した合成FailureOwner／上位owner・4roleのcustody・一度限りcommit receipt／最終discardを実装した。未解決責務を上位へ移せたこととresource解放を区別し、immutable reportとlate current診断を分ける。OB-01／kernelの失敗経路接続はFB-01〜03の閉鎖合成範囲で成立済み。正常系は後続NB-02でprivate採用まで追加したが、内容移譲・移譲先seal・正常終端と上位custody連結は未対応のままである。
+失敗時の先行条件として、[寿命設計§9](BEST_PRACTICE_ABORT_SCOPE_RECOVERY_FAILURE_OWNER_LIFETIME_DESIGN.md)の独立した合成FailureOwner／上位owner・4roleのcustody・一度限りcommit receipt／最終discardを実装した。未解決責務を上位へ移せたこととresource解放を区別し、immutable reportとlate current診断を分ける。OB-01／kernelの失敗経路接続はFB-01〜03の閉鎖合成範囲で成立済み。後続NB-02／03でprivate採用と非実行take／固定abort・上位custody連結を追加したが、移譲先seal成功・正常終端は未対応のままである。

@@ -1,9 +1,9 @@
 # OB-02 同pins保持・identity統一とprivate採用／移譲claim
 
-Version: br006-recovery-ob02-adoption-draft-0.5 / Date: 2026-11-03。
-Status: **NB-01の正常保持／予算binding、NB-02の同pins kernel・完了内容・private採用を合成依存限定で実装。内容移譲・比較・移譲先sealは未接続。正式発行口閉鎖・全体受付無効・Unknown・VM／監視／telemetry調査保留を維持する。**
+Version: br006-recovery-ob02-adoption-draft-0.6 / Date: 2026-11-03。
+Status: **NB-01／02とNB-03の一度限りtake・固定abort・破棄証拠／同上位custody連結まで合成実装。内容比較・移譲先seal成功・正常終端は未接続。正式発行口閉鎖・全体受付無効・Unknown・VM／監視／telemetry調査保留を維持する。**
 
-基準HEAD: `8126d10`。[OD-B設計](BEST_PRACTICE_ABORT_SCOPE_RECOVERY_ODB_TRANSFER_DESIGN.md)§2〜7・10と[FB接続設計](BEST_PRACTICE_ABORT_SCOPE_RECOVERY_FAILURE_BINDING_DESIGN.md)§12からの差分。FB-03の失敗責務保存を維持したまま、正常系で同pins・元内容を保持し、同private kernelのaccepted／planと一度だけ結ぶ。OB-02の採用や移譲先sealが実装済みであるとは扱わない。
+初版の基準HEAD: `8126d10`。[OD-B設計](BEST_PRACTICE_ABORT_SCOPE_RECOVERY_ODB_TRANSFER_DESIGN.md)§2〜7・10と[FB接続設計](BEST_PRACTICE_ABORT_SCOPE_RECOVERY_FAILURE_BINDING_DESIGN.md)§12からの差分。FB-03の失敗責務保存を維持したまま、正常系で同pins・元内容を保持し、同private kernelのaccepted／planと一度だけ結ぶ。現行の合成実装範囲は§10〜12に示し、移譲先seal成功を実装済みとは扱わない。
 
 ## 1 現状と接続上の相違
 
@@ -65,7 +65,7 @@ moveは同token・自分のprepare handle／BirthReceipt・元slot・全行完�
 
 ## 4 private型・発行前提
 
-名称は案。§10〜11でNB-01内部型とCompletedMixedContent／BoundAdoptionを実装し、PendingBoundTransfer／PayloadClearedReceipt等は未実装のままとする。
+名称は案。§10〜12でNB-01内部型とCompletedMixedContent／BoundAdoption／PendingBoundTransfer／PayloadClearedReceiptを実装した。移譲先の正常seal／終了証拠は未実装のままとする。
 
 | 型案 | 同生成元へ結ぶもの | 消費規則 |
 | --- | --- | --- |
@@ -166,7 +166,7 @@ draft-0.1／0.2はMDのみ。次節のNB-01追加後も、実接続・実通信�
 
 取消・期限・throw・unknown guard・swallowed再入・重複／余分引数はclaimを復元せず、局所pendingをfinallyで外す。source close／cleanup開始・固定discardも元supplyと正常payloadの参照を同期破棄する。成功済み予算bindingは解除せず、元C/G/P・開始UTC・全deadlineと最初の固定診断を保持する。未結合ならaccounting／時刻はnullのままで、0やabsenceに補完しない。FailureOwnerの4roleはUnknownのまま、本文・pinsをcapsuleへ渡さない。
 
-NB-01 rootのdiscardはresourceを生成しないpayload破棄だけであり、source解放・worker exit・accepted正常終端の証拠ではない。kernel生成とprivate採用は後続§11のNB-02で追加した。FailureOwnerの上位移譲／最終discard・PayloadClearedReceiptはNB-03以降、費目model／全work・heap上界と実予算leaseは未導出。旧FB-03の固定identity・62イベントoracle・公開APIは不変。
+NB-01 rootのdiscardはresourceを生成しないpayload破棄だけであり、source解放・worker exit・accepted正常終端の証拠ではない。kernel生成とprivate採用は後続§11のNB-02、FailureOwnerの上位移譲／最終discard・PayloadClearedReceiptは§12のNB-03で追加した。費目model／全work・heap上界と実予算leaseは未導出。旧FB-03の固定identity・62イベントoracle・公開APIは不変。
 
 [NB-01検証記録](E2E_BEST_PRACTICE_NORMAL_SUPPLY_NB01_2026-11-03.md)に、RED/GREEN・混合／0.3／100行・停止と一度限り消費・旧合成回帰・オフライン梱包を記録する。TDDは同rootの動作を検査し、runtime内部を公開するfriendや試験用登録口を追加しない。
 
@@ -180,8 +180,22 @@ NB-01 rootのdiscardはresourceを生成しないpayload破棄だけであり、
 
 privateなNormalAcceptedChannelは同kernel constructorだけが作り、実際のaccepted slot・消費済みroute・同plan／handoff・live source／frame／ready／cleanup未開始serial=0を検査する。plan純粋投影が比較しないwindowも、実準備入力contextと同pinsの参照一致で別途確認する。post guard後に同viewを再確認し、同CompletedMixedContentとBoundAdoptionを保持する。ticketは非所有のslot結合であり、本文／acceptedの第二所有者、再利用handle、summaryからの昇格口ではない。
 
-source close／同cleanup開始は正常内容・completion／adoptionとkernel内のpins／expectation側参照を同期失効させる。ready／元slotは復元しない。kernel生成後の公開normal discardは拒否し、解放証拠にしない。hardは既存linkのclear前保護・固定通知と結び、本文を渡さず最初の診断・結合済み予算・未解決cleanup責務を残す。上位移譲／cleanup実行／正常終端、PendingBoundTransfer／PayloadClearedReceiptはNB-03以降。
+source close／同cleanup開始は正常内容・completion／adoptionとkernel内のpins／expectation側参照を同期失効させる。ready／元slotは復元しない。kernel生成後の公開normal discardは拒否し、解放証拠にしない。hardは既存linkのclear前保護・固定通知と結び、本文を渡さず最初の診断・結合済み予算・未解決cleanup責務を残す。失敗時の上位移譲／fake cleanup、PendingBoundTransfer／PayloadClearedReceiptは後続§12で追加したが、正常終端と実cleanupは未接続。
 
 新操作はguard付き合成依存のみで、実verify・worker・transport／clock・認証sessionを接続しない。追加投影／検査／保持費目・copyピークの全上界はUnknownであり、全体受付や本番capを有効化しない。[NB-02検証記録](E2E_BEST_PRACTICE_NORMAL_ADOPTION_NB02_2026-11-03.md)で旧API回帰・混入・重複・失効・負の対照を確認する。
 
 draft-0.5のレビュー修正：NB-02初版のroot `fail()`は、kernel生成後に`kernel.revoke`を先に呼んでからcustodyへroot段階のhardを記録していた。revoke経由のkernel失敗通知が`revoke`→`internal`の写像で先にslotを占有するため、root自身が検出した停止・不一致（closureのkernel checkpoint、adoption pre等）が全てstage=`internal`となり、§7が求める`prepare`／`transfer`／`cleanup`への明示写像が失われていた。rootの失敗はrevoke前に同rootのstageでslotを占有するよう修正した。kernelやsupplyが自ら検出した失敗は従来どおり先に各自のphase由来のstageで占有し、通知は1回のまま。他の契約・型・分割案は変更しない。
+
+## 12 NB-03 一度限りtake・固定abort・失敗custody
+
+`createSyntheticNormalTransferRoot`を別fresh合成入口として追加。旧NB-01／02の公開操作は増やさない。新`abortBoundTransfer()`は引数なしの非実行試験口であり、将来の`sealBoundMixedExpectation()`を開くものではない。専用claimを一度占有し、同kernelのprivate takeで実accepted slotを外し、同完了内容・採用ticket・bindingと一つのPendingBoundTransferへ同期移動する。最初の外部guard前に両元slot・採用ticketの利用権限を除く。kernelは空のtake markerとcleanup-only終端を残し、acceptedを二重所有しない。
+
+pre／work／postで同token・pins／元行・receipt・plan／handoff・元route／window・budget参照と同live source／frame／ready／cleanup serial=0を照合する。post停止は引数／binding不一致より優先。成功しても移譲先がないため固定`state`拒否でabortし、pending／元payloadを外してfirst hardを保持する。成功handle・本文・段階的なseal成功票は返さず、正常元slotへ復元しない。
+
+失敗後の固定callerが、正常／pending／binding／completion／adoption／準備slotとkernel payload slotが空で、保護scopeが終了したことを検査する。同token・失効serial・元budget参照とbinding serial（未結合は0）に結ぶPayloadClearedReceiptをprivate発行し、失敗report確定・custody移譲・元owner最終discardで再検査する。これは既知slotの論理破棄証拠であり、JS heap物理消去やguard外部の保持物の証明ではない。
+
+NB-03だけに生成前のcleanup capsule slotを確保する。capsuleは同kernel／FailureKernelLinkの固定new-generation cleanupだけを操作でき、元rootや本文・pins・planのAPIを持たない。同resources selectorを既存custody coreへ渡し、`transferFailure()`の一度限りclaimから、immutable診断と同capsuleを上位へ同期移動する。ここで封印するのは失敗reportであり、内容の移譲先sealではない。移譲直後からlocal cleanup／stopは上位の状態やreceiptを変更できず、matching receiptによる元metadataの`finalDiscard()`を一度だけ許す。不正引数でも最終claimを戻さない。
+
+上位の遅いcleanupは同sinkを一度だけ消費し、sealed reportは不変、late currentの事実だけを更新する。新worker終了・source cleanup・transport終端の不足を補完せず、未起動／未公開allocationでもUnknownを保持する。cleanup pre/postの取消／期限観測は最初のhardを上書きせず後始末を許すが、throw・unknown返値・swallowed再入は固定拒否とし、受理前後のcustody holderを変えない。正常終端・正常discardをhard後のcleanupの代わりに使わない。
+
+追加費目はprivate take／同元slot確認、行再検査、post再照合、payload-clear検査／receipt、report／capsule移譲、final discard・cleanup guardである。全work／heap／copyピーク・実cleanup期限・費用modelはUnknown、旧FB-03の62イベントoracleを流用しない。元C/G/P／開始UTC／全deadlineは固定し、全体受付は有効化しない。[NB-03検証記録](E2E_BEST_PRACTICE_NORMAL_TRANSFER_NB03_2026-11-03.md)を参照。

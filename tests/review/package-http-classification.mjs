@@ -64,7 +64,8 @@ const rootMarkers=['synthetic-recovery-kernel','createSyntheticRecoveryKernel','
   'createSyntheticOwnedMixedSupply','OwnedMixedSupplyError','synthetic_owned_mixed_supply','synthetic_omd_bound_root_v1',
   'createSyntheticFailureBoundSupply','synthetic_failure_bound_supply','createSyntheticFailureBoundKernel','synthetic_failure_bound_kernel','createFailureKernelLink','KernelRoleBinding',
   'createSyntheticFailureCustodyRun','synthetic_failure_custody_run','createFailureRunSupply','fb03-fake-events-v1','FailureResourceSlot',
-  'createSyntheticNormalOwnedSupply','synthetic_normal_owned_supply','createSyntheticNormalAdoptionRoot','CompletedMixedContent','BoundAdoption'];
+  'createSyntheticNormalOwnedSupply','synthetic_normal_owned_supply','createSyntheticNormalAdoptionRoot','CompletedMixedContent','BoundAdoption',
+  'createSyntheticNormalTransferRoot','PendingBoundTransfer','PayloadClearedReceipt','synthetic_normal_transfer_custody'];
 const noRecoveryRoot=text=>assert(!rootMarkers.some(x=>text.includes(x)),'RB-A shared kernel/root leaked into runtime');
 for(const marker of rootMarkers)assert.throws(()=>noRecoveryRoot(marker));
 assert(!pack.files.some(f=>/synthetic-recovery-kernel|synthetic-recovery-lifecycle|synthetic-finish-recovery-root/.test(f.path)));
