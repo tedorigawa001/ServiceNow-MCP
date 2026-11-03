@@ -1,7 +1,7 @@
 # OB-02 同pins保持・identity統一とprivate採用／移譲claim
 
-Version: br006-recovery-ob02-adoption-draft-0.2 / Date: 2026-11-03。
-Status: **接続差分の設計のみ。合成依存限定。正式発行口閉鎖・全体受付無効・Unknown・VM／監視／telemetry調査保留を維持する。**
+Version: br006-recovery-ob02-adoption-draft-0.3 / Date: 2026-11-03。
+Status: **NB-01の生成証拠・正常supply move・同pins予算bindingを合成依存限定で実装。accepted採用・移譲先sealは未接続。正式発行口閉鎖・全体受付無効・Unknown・VM／監視／telemetry調査保留を維持する。**
 
 基準HEAD: `8126d10`。[OD-B設計](BEST_PRACTICE_ABORT_SCOPE_RECOVERY_ODB_TRANSFER_DESIGN.md)§2〜7・10と[FB接続設計](BEST_PRACTICE_ABORT_SCOPE_RECOVERY_FAILURE_BINDING_DESIGN.md)§12からの差分。FB-03の失敗責務保存を維持したまま、正常系で同pins・元内容を保持し、同private kernelのaccepted／planと一度だけ結ぶ。OB-02の採用や移譲先sealが実装済みであるとは扱わない。
 
@@ -65,7 +65,7 @@ moveは同token・自分のprepare handle／BirthReceipt・元slot・全行完�
 
 ## 4 private型・発行前提
 
-名称は案であり、今回型や入口を実装しない。
+名称は案。§10のNB-01内部型だけを実装し、CompletedMixedContent／BoundAdoption／PendingBoundTransfer等は未実装のままとする。
 
 | 型案 | 同生成元へ結ぶもの | 消費規則 |
 | --- | --- | --- |
@@ -156,4 +156,16 @@ mixed各種・親省略・元omitted・全retained・真の元reviewedゼロ、0
 
 draft-0.2のレビュー修正：§1のplan投影行は「上記refs」をwindowまで含む全8 refsの一致と読めたが、[plan投影](../tests/support/review/synthetic-finish-plan-binding.ts)はseedからwindowを除いた7 refs・時刻・input receipt／state・行数だけを比較する。windowは§5の採用検査で別に照合する必要があるため、記述を実装どおりに訂正した。設計判断・型案・分割案は変更しない。
 
-今回の変更はMDと親参照だけ。実装・実接続・実通信・実機操作・token／Permit／候補発行・設定変更・Pushは行わない。
+draft-0.1／0.2はMDのみ。次節のNB-01追加後も、実接続・実通信・実機操作・token／Permit／候補発行・設定変更・Pushは行わない。
+
+## 10 NB-01の実装と残る境界
+
+[合成normal root](../tests/support/review/synthetic-recovery-kernel.ts)に`createSyntheticNormalOwnedSupply`を追加した。constructorはFailureOwner／上位slot・claim・未結合予算slotをDATA検査前に確保する。旧OB-01 coreのprivate生成継続だけがprepare post guard後に同token・serial=1・同pins／元所有物のPinsBirthReceiptを発行し、公開prepared handleは新rootから返さない。
+
+`prepare()`→`move()`は引数なし。move claimは一度占有し、同private channelから元held／prepared／bridgeとbirthを取り外して局所pendingへ移す。既存の行／input／元accepted-outcome検査と、同contextの8 refs・active receipt・S/O/U／全deadlineを確認し、post guard後の同期commitで正常所有物・NormalPinBinding・同budget参照／serialを一緒に保持する。再生成seed／windowや外部pins登録口は設けない。上位planがwindowを検査済みとは扱わない。
+
+取消・期限・throw・unknown guard・swallowed再入・重複／余分引数はclaimを復元せず、局所pendingをfinallyで外す。source close／cleanup開始・固定discardも元supplyと正常payloadの参照を同期破棄する。成功済み予算bindingは解除せず、元C/G/P・開始UTC・全deadlineと最初の固定診断を保持する。未結合ならaccounting／時刻はnullのままで、0やabsenceに補完しない。FailureOwnerの4roleはUnknownのまま、本文・pinsをcapsuleへ渡さない。
+
+新rootのdiscardはresourceを生成しないNB-01のpayload破棄だけであり、source解放・worker exit・accepted正常終端の証拠ではない。FailureOwnerの上位移譲／最終discard、PayloadClearedReceipt、kernel生成とaccepted採用はNB-02／03以降。費目model／全work・heap上界と実予算leaseは未導出。旧FB-03の固定identity・62イベントoracle・公開APIは不変。
+
+[NB-01検証記録](E2E_BEST_PRACTICE_NORMAL_SUPPLY_NB01_2026-11-03.md)に、RED/GREEN・混合／0.3／100行・停止と一度限り消費・旧合成回帰・オフライン梱包を記録する。TDDは同rootの動作を検査し、runtime内部を公開するfriendや試験用登録口を追加しない。

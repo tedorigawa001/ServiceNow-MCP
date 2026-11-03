@@ -1,7 +1,7 @@
 # OD-B 同生成元の供給と一度限りの内容移譲
 
-Version: br006-recovery-odb-transfer-draft-0.9 / Date: 2026-11-03。
-Status: **OB-01とFB-01〜03の同construction・合成kernel／sink・上位custody移譲まで実装。実resource・canonical予算／全work保証・accepted採用・移譲先sealは未接続。正式発行口閉鎖・全体受付無効・Unknown・VM／監視／telemetry調査保留を維持する。**
+Version: br006-recovery-odb-transfer-draft-0.10 / Date: 2026-11-03。
+Status: **OB-01とFB-01〜03の同construction・合成kernel／sink・上位custody移譲、NB-01の同pins正常保持／予算bindingまで実装。実resource・canonical予算／全work保証・accepted採用・移譲先sealは未接続。正式発行口閉鎖・全体受付無効・Unknown・VM／監視／telemetry調査保留を維持する。**
 
 基準HEAD: `1eb3c74`。[OM-D設計](BEST_PRACTICE_ABORT_SCOPE_RECOVERY_MIXED_CONTENT_OMD_DESIGN.md)§4・7・10〜11と[OD-A検証記録](E2E_BEST_PRACTICE_OMD_SLOTS_ODA_2026-11-03.md)からの差分。同じ生成元で作ったmixed内容とaccepted／planを、一つのprivate操作で移譲先へ確定する。OD-Aの公開handleを既存rootへ後付け登録する方式は採らない。本文照合・finish job・候補発行はOD-Bの対象外。
 
@@ -172,6 +172,8 @@ FB-03の上記連続保証は[接続差分§12](BEST_PRACTICE_ABORT_SCOPE_RECOVE
 draft-0.1は設計MDだけ。続くOB-01の実装範囲を以下に限定し、実Permit／候補発行・実接続・実通信・実機操作・設定変更・Pushは行わない。
 
 ## 11 OB-01の実装範囲
+
+後続の[OB-02接続差分§10](BEST_PRACTICE_ABORT_SCOPE_RECOVERY_OB02_ADOPTION_DESIGN.md)でNB-01の同pins正常保持・private生成receipt・一度限りmove／予算bindingを追加した。旧OB-01／FB-03のAPI・identity／会計modelは変更せず、新入口はpackage除外の合成限定。accepted採用・dest seal・正常resource終端は未接続である。
 
 [既存kernel module](../tests/support/review/synthetic-recovery-kernel.ts)にfresh factory `createSyntheticOwnedMixedSupply`を追加した。旧factoryの関数本体と返却surfaceは変更していない。新factoryは`createRecoveryKernel`を呼ばず、accepted／plan／ready／sealの生成・採用口を持たない。[新合成試験](../tests/review/synthetic-owned-mixed-supply.test.ts)と[OB-01検証記録](E2E_BEST_PRACTICE_OWNED_MIXED_SUPPLY_OB01_2026-11-03.md)参照。
 

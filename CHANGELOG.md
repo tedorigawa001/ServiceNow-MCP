@@ -16,6 +16,8 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 ### Changed
 
+- NB-01 adds a package-excluded fresh synthetic normal-supply root. Its private pins-birth receipt and no-argument one-shot move retain the original row/input/outcome references and bind an initially unbound budget shell to that same pins context. Guard stops, reentry and invalidation clear payload without restoring claims, while first diagnostics and committed accounting remain available. Legacy FB-03 identity/accounting is unchanged; accepted adoption, transfer seals, runtime binding, formal issuance and whole-run admission remain disabled.
+
 - FB-03 adds a package-excluded fresh synthetic custody run. A fixed seal/commit moves the same cleanup capsule and immutable failure report to its preallocated upper owner; only its matching one-shot receipt permits local final discard. Upper-only late cleanup preserves unresolved evidence and the sealed report. Stop checkpoints and a bounded count-only fake budget trace retain one identity, original C/G/P and full deadline; no actual work admission, accepted adoption, runtime connection or formal issuance is enabled.
 
 - FB-02 adds a package-excluded fresh synthetic construction joining the same private OB-01 supply, initial topology, kernel role bindings and failure owner. Birth/clear checkpoints and same-sink consumers retain old termination and cleanup independently, preserve unpublished new-frame cleanup after a claim post-guard stop, and never infer a new worker exit or transport quiescence from cleanup/counters. Legacy roots stay unchanged; accepted adoption, real resources, formal issuance and whole-run admission remain disabled.

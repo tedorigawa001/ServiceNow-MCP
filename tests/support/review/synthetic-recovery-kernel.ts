@@ -540,13 +540,17 @@ export function createSyntheticOwnedMixedSupply(raw:unknown,dependencies:unknown
   return createOwnedMixedSupply(raw,deps.guard as SupplyGuard,extra,opaque<object>());
 }
 type SupplyGuard=(stage:'prepare_pre'|'row_pre'|'row_post'|'prepare_post'|'discard_pre'|'discard_post',ordinal?:number)=>unknown;
-type SupplyFailureSlot={token:object;claimed:boolean;notices:number;reason:SupplyReason|undefined;custody:ReturnType<typeof createFailureCustodyCore>;accounting?:FailureRunSupply};
+type SupplyFailureSlot={token:object;claimed:boolean;notices:number;reason:SupplyReason|undefined;custody:ReturnType<typeof createFailureCustodyCore>;accounting?:FailureRunSupply;stage?:'prepare'|'transfer'|'cleanup'};
 type SupplyKernelBridge={token:object;owned:OwnedMixedSupply|undefined};
-function createOwnedMixedSupply(raw:unknown,fixedGuard:SupplyGuard,extra:unknown[],constructionToken:object,failure?:SupplyFailureSlot,initialFailure?:SupplyReason,bridge?:SupplyKernelBridge){
-  let first:SupplyReason|undefined,state:'fresh'|'preparing'|'prepared'|'failed'|'invalidated'|'discarded'='fresh',busy=false,started=false;
+// NB-01: private constructor continuation only; no external receipt/pins registration.
+type PinsBirthReceipt=Readonly<{token:object;serial:1;pins:SyntheticFinishPins;owned:OwnedMixedSupply}>;
+type NormalPinBinding=Readonly<{token:object;pins:SyntheticFinishPins;context:SyntheticFinishPins['seed']['run_context'];serial:1}>;
+type NormalSupplyChannel={token:object;birth:PinsBirthReceipt|undefined;take:(()=>OwnedMixedSupply)|undefined;invalidate:((reason:SupplyReason)=>void)|undefined};
+function createOwnedMixedSupply(raw:unknown,fixedGuard:SupplyGuard,extra:unknown[],constructionToken:object,failure?:SupplyFailureSlot,initialFailure?:SupplyReason,bridge?:SupplyKernelBridge,normal?:NormalSupplyChannel){
+  let first:SupplyReason|undefined,state:'fresh'|'preparing'|'prepared'|'moved'|'failed'|'invalidated'|'discarded'='fresh',busy=false,started=false;
   let data:SupplyData|undefined,held:OwnedMixedSupply|undefined,prepared:PreparedOwnedMixedSupply|undefined;
   let selected=0,pinBuilds=0,pinsCreated=0,preparations=0,linked=0,generated=0,consumed=0,inputs=0,originalReviewed=0,parentOmitted=0,workerOmitted=0,retained=0,keptFindings=0;
-  function clear(){data=undefined;held=undefined;prepared=undefined;if(bridge)bridge.owned=undefined;}
+  function clear(){data=undefined;held=undefined;prepared=undefined;if(bridge)bridge.owned=undefined;if(normal){normal.birth=undefined;normal.take=undefined;}}
   function recordFailure(reason:SupplyReason){
     first??=reason;state='failed';
     try{
@@ -554,13 +558,14 @@ function createOwnedMixedSupply(raw:unknown,fixedGuard:SupplyGuard,extra:unknown
         // Claim before the fixed private write. Neither caller callbacks nor public issuer attachment are used.
         failure.claimed=true;failure.reason=first;
         if(failure.token!==constructionToken)throw new OwnedMixedSupplyError('binding');
-        failure.custody.local.hard(first==='cancelled'||first==='deadline_exceeded'?first:'internal_review_error','prepare');
+        failure.custody.local.hard(first==='cancelled'||first==='deadline_exceeded'?first:'internal_review_error',failure.stage??'prepare');
         failure.notices++;
         failure.accounting?.record('notice');
       }
     }finally{clear();}
   }
   const fail=(reason:SupplyReason):never=>{recordFailure(reason);throw new OwnedMixedSupplyError(first!);};
+  if(normal)normal.invalidate=recordFailure;
   function live(){if(first)throw new OwnedMixedSupplyError(first);if(busy)fail('reentrant');if(state==='invalidated'||state==='discarded')fail('state');}
   function guard(stage:Parameters<typeof fixedGuard>[0],n?:number){
     let stop:unknown;try{stop=fixedGuard(stage,n);}catch{if(first)throw new OwnedMixedSupplyError(first);fail('internal');}
@@ -594,6 +599,14 @@ function createOwnedMixedSupply(raw:unknown,fixedGuard:SupplyGuard,extra:unknown
         guard('prepare_post');if(mismatch||!moving)fail(mismatch??'internal');const complete=moving!;checkOwnedSupply(complete,constructionToken);
         held=complete;data=undefined;prepared=opaque<PreparedOwnedMixedSupply>();preparations=1;state='prepared';
         if(bridge){if(bridge.token!==constructionToken)fail('binding');bridge.owned=complete;}
+        if(normal){
+          if(normal.token!==constructionToken)fail('binding');
+          normal.birth=Object.freeze({token:constructionToken,serial:1,pins:complete.pins,owned:complete});
+          normal.take=()=>{
+            live();if(state!=='prepared'||held!==complete||!prepared||normal.birth?.owned!==complete)fail('binding');
+            const moved=held!;clear();state='moved';return moved;
+          };
+        }
         parentOmitted=complete.model.trace.filter(t=>t.action==='parent_omit').length;workerOmitted=complete.model.original_rows.filter(x=>x.outcome.state==='result_omitted').length;
         retained=complete.model.original_rows.filter(x=>x.producer==='retained').length;keptFindings=complete.model.kept_findings;
         return prepared;
@@ -611,6 +624,91 @@ function createOwnedMixedSupply(raw:unknown,fixedGuard:SupplyGuard,extra:unknown
     inspect:()=>Object.freeze({scope:'synthetic_owned_mixed_supply' as const,authority:'none' as const,state,first_failure:first??null,started,preparations,pin_builds:pinBuilds,pins_created:pinsCreated,pending:!!held,
       selected,linked_rows:linked,generated,consumed,inputs,original_reviewed_pins:originalReviewed,parent_omitted:parentOmitted,original_worker_omitted:workerOmitted,retained,kept_findings:keptFindings,retained_rows:held?.rows.length??0,
       permissions:Object.freeze({accepted_adoption:false,destination_seal:false,formal_issuance:false}),unverified:Object.freeze(['runtime_origin','accepted_plan','ready_origin','cleanup_evidence','whole_run_budget'])}),
+  });
+}
+
+/** NB-01 closed synthetic normal root. No kernel, accepted route, transferable handle or runtime authority. */
+export function createSyntheticNormalOwnedSupply(raw:unknown,dependencies:unknown,...extra:unknown[]){
+  const deps=supplyRecord(dependencies,['guard']);if(typeof deps.guard!=='function'||types.isProxy(deps.guard))return supplyBad();
+  const fixedGuard=deps.guard as (stage:string,ordinal?:number)=>unknown,token=opaque<object>();
+  // All owners and slots precede DATA inspection. Unknown roles are not promoted to absence.
+  const custody=createFailureCustodyCore('connected',()=>undefined,token);
+  const failure:SupplyFailureSlot={token,claimed:false,notices:0,reason:undefined,custody};
+  const channel:NormalSupplyChannel={token,birth:undefined,take:undefined,invalidate:undefined};
+  let state:'fresh'|'prepared'|'moving'|'normal_owned'|'failed'|'invalidated'|'discarded'='fresh',first:SupplyReason|undefined,busy=false;
+  let failureStage:'prepare'|'transfer'|'cleanup'='prepare';
+  let prepareStarted=false,moveStarted=false,births=0,birthConsumptions=0,moves=0,invalidations=0;
+  let owned:OwnedMixedSupply|undefined,binding:NormalPinBinding|undefined;
+  type NormalBudget=Readonly<{token:object;identity:object;serial:1;accounting:Readonly<SupplyData['recovery']['accounting']>;started_at:string;deadline_ms:number}>;
+  let budget:NormalBudget|undefined,identityChecks=0,rowsChecked=0;
+  const supply=createOwnedMixedSupply(raw,(stage,n)=>fixedGuard(stage,n),extra,token,failure,undefined,undefined,channel);
+  raw=undefined;extra=[];
+  function clear(){owned=undefined;binding=undefined;channel.birth=undefined;channel.take=undefined;}
+  function fail(reason:SupplyReason):never{
+    first??=reason;state='failed';invalidations++;
+    failure.stage=failureStage;
+    try{channel.invalidate!(first);}catch{/* fixed private invalidation; keep the original diagnosis */}
+    finally{
+      clear();
+      // The supply may already have reported a preparation failure.
+      if(!failure.claimed){failure.claimed=true;failure.reason=first;failure.notices++;}
+      custody.local.hard(first==='cancelled'||first==='deadline_exceeded'?first:'internal_review_error',failureStage);
+    }
+    throw new OwnedMixedSupplyError(first);
+  }
+  function live(){if(first)throw new OwnedMixedSupplyError(first);if(busy)fail('reentrant');if(state==='invalidated'||state==='discarded')fail('state');}
+  function guard(stage:'move_pre'|'move_post'|'normal_discard_pre'|'normal_discard_post'){
+    let stop:unknown;try{stop=fixedGuard(stage);}catch{if(first)throw new OwnedMixedSupplyError(first);return fail('internal');}
+    if(first)throw new OwnedMixedSupplyError(first);if(stop!==undefined)fail(stop==='cancelled'||stop==='deadline_exceeded'?stop:'internal');
+  }
+  function reject(e:unknown):never{if(first)throw new OwnedMixedSupplyError(first);return fail(e instanceof OwnedMixedSupplyError?e.reason:'internal');}
+  return Object.freeze({
+    prepare(...args:unknown[]){
+      live();if(prepareStarted)fail('duplicate');prepareStarted=true;busy=true;
+      try{if(args.length)fail('shape');supply.prepare();if(!channel.birth||channel.birth.token!==token||channel.birth.serial!==1)fail('binding');births=1;state='prepared';}
+      catch(e){reject(e);}finally{busy=false;if(first)clear();}
+    },
+    move(...args:unknown[]){
+      live();if(moveStarted)fail('duplicate');moveStarted=true;busy=true;state='moving';failureStage='transfer';
+      let pending:OwnedMixedSupply|undefined,birth:PinsBirthReceipt|undefined;
+      try{
+        birth=channel.birth;const take=channel.take;
+        if(take){pending=take();birthConsumptions++;}
+        guard('move_pre');let mismatch:SupplyReason|undefined,nextBudget:NormalBudget|undefined;
+        try{
+          if(args.length)supplyBad('shape');
+          if(!pending||!birth||birth.token!==token||birth.serial!==1||birth.owned!==pending||birth.pins!==pending.pins||budget||binding)supplyBad('binding');
+          checkOwnedSupply(pending!,token);
+          const p=pending!,context=p.pins.seed.run_context;
+          // Bind all eight original refs, never a reconstructed seed/window or a caller capability.
+          for(const key of ['run','session','source','key','origin','budget','release','window'] as const){
+            if(!context[key]||typeof context[key]!=='object')supplyBad('binding');
+          }
+          const source=p.data,active=p.pins.receipts.find(i=>i.update_xml_sys_id===source.recovery.active_input_sys_id);
+          if(!active||!p.rows.some(r=>r.input===active)||context.started_at!==source.finish.time.started_at||context.deadline_ms!==source.finish.time.deadline_ms
+            ||context.observed_at!==source.finish.time.observed_at||context.upper_utc!==source.finish.time.upper_utc)supplyBad('binding');
+          nextBudget=Object.freeze({token,identity:context.budget,serial:1,accounting:Object.freeze({...source.recovery.accounting}),started_at:context.started_at,deadline_ms:context.deadline_ms});
+        }catch(e){mismatch=e instanceof OwnedMixedSupplyError?e.reason:'internal';}
+        guard('move_post');if(mismatch||!pending||!birth||!nextBudget)fail(mismatch??'internal');
+        // No callbacks/await between the post guard and this single ownership/binding commit.
+        owned=pending;binding=Object.freeze({token,pins:birth!.pins,context:birth!.pins.seed.run_context,serial:1});budget=nextBudget;
+        identityChecks=8;rowsChecked=owned!.rows.length;moves=1;state='normal_owned';
+      }catch(e){reject(e);}finally{pending=undefined;birth=undefined;busy=false;if(first)clear();}
+    },
+    beginSourceClose(...args:unknown[]){live();if(args.length)fail('shape');supply.beginSourceClose();clear();invalidations++;state='invalidated';},
+    beginCleanup(...args:unknown[]){live();if(args.length)fail('shape');supply.beginCleanup();clear();invalidations++;state='invalidated';},
+    discard(...args:unknown[]){
+      live();busy=true;failureStage='cleanup';try{guard('normal_discard_pre');const mismatch=args.length;guard('normal_discard_post');if(mismatch)fail('shape');supply.discard();clear();state='discarded';}
+      catch(e){reject(e);}finally{busy=false;if(first)clear();}
+    },
+    stop(reason:'cancelled'|'deadline_exceeded',...args:unknown[]){if(args.length||reason!=='cancelled'&&reason!=='deadline_exceeded')return fail('internal');return fail(reason);},
+    inspect:()=>Object.freeze({scope:'synthetic_normal_owned_supply' as const,authority:'none' as const,state,first_failure:first??null,prepare_started:prepareStarted,move_started:moveStarted,
+      births,birth_consumptions:birthConsumptions,moves,invalidations,birth_pending:!!channel.birth,normal_pending:!!owned,retained_rows:owned?.rows.length??0,
+      binding:binding?Object.freeze({serial:binding.serial,identity_checks:identityChecks,rows_checked:rowsChecked,
+        same_origin:binding.token===token&&budget?.token===token&&binding.pins===owned?.pins&&binding.context===owned?.pins.seed.run_context&&budget.identity===binding.context.budget}):null,
+      budget:Object.freeze({state:budget?'bound':'unbound',serial:budget?.serial??0,accounting:budget?.accounting??null,started_at:budget?.started_at??null,deadline_ms:budget?.deadline_ms??null}),
+      supply:supply.inspect(),failure:custody.currentFailure(),failure_notices:failure.notices,permissions:Object.freeze({accepted_adoption:false,destination_seal:false,formal_issuance:false}),
+      unverified:Object.freeze(['runtime_origin','accepted_plan','ready_origin','cleanup_evidence','whole_run_budget'])}),
   });
 }
 /** Fresh synthetic failure/cleanup custody only. No runtime resource, accepted route or registration. */
