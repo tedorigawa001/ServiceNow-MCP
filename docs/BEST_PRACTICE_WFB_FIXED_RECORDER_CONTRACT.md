@@ -1,10 +1,12 @@
 # WF-B 固定採取器の詳細契約・合成受入条件
 
-Version: draft-0.2 / Date: 2026-11-04 / 設計基準HEAD: `0fe45fb`。
+Version: draft-0.3 / Date: 2026-11-04 / 設計基準HEAD: `0fe45fb` / 純粋fake実装基準HEAD: `7f055b4`。
+
+draft-0.3: 有限状態・四軸・checkpoint planner・外側予約だけを試験専用moduleに実装。[純粋fake検証記録](E2E_BEST_PRACTICE_WFB_FIXED_RECORDER_FAKE_2026-11-04.md)へ実施／未実施を分離した。draft-0.2のレビュー修正は維持する。
 
 draft-0.1のレビュー修正: 必須観測の定義を親手順と揃え、状態遷移の失敗経路、checkpointの内容、時間予約とsession枠の下限、module単位の失敗、受入条件を追加した。設計のみで、承認状態と操作禁止は変更していない。
 
-Status: **設計のみ。実装・試験・再採取・保管操作は未実施。** 正式発行口閉鎖・全体受付無効・Unknown・VM／監視／telemetry調査保留を維持する。保存先・保持期間・容量・時間枠・停止方式は未承認のまま。実接続・実通信・設定変更・Pushを行わない。
+Status: **純粋fakeの計画ロジックだけを実装・合成検証。採取器全体は未実装。再採取・保管操作は未実施。** 正式発行口閉鎖・全体受付無効・Unknown・VM／監視／telemetry調査保留を維持する。保存先・保持期間・容量・時間枠・停止方式は未承認のまま。実接続・実通信・設定変更・Pushを行わない。
 
 親契約は[再採取・証拠保全手順](BEST_PRACTICE_WFB_RECAPTURE_EVIDENCE_PROCEDURE.md)。本書はそのR04／R07を具体化するが、R01〜R08の充足や操作承認を代替しない。以下の型名・定数・境界は後続実装への提案であり、現行runnerの保証ではない。
 
@@ -102,7 +104,7 @@ WF-Aの4096件、既存reporterのcase／event各20,000件・sample600件・modu
 
 歴史的な自然失敗・遅い成功・WF-B artifactの在庫／copyは親手順の別承認操作。本書を根拠に既存一時ファイルを開き直して保全・移動しない。保全だけの許可は再採取許可ではなく、欠けた原本を再構築して原証拠と呼ばない。
 
-## 7 合成受入条件（未実施）
+## 7 合成受入条件（純粋fakeの部分検証のみ）
 
 fake store／clock／processと注入messageのみで検証する計画。実保存先・real dispatcher・実workerは使わない。独立oracleは実装のplanner／判定関数を呼ばず、期待slot・試行数・期限・四軸を手計算した表とする。拒否試験では狙った境界への到達をassertし、先行gate失敗による見かけの成功を防ぐ。
 
@@ -127,10 +129,18 @@ fake store／clock／processと注入messageのみで検証する計画。実保
 
 ## 8 次の段階と未承認事項
 
-1. 本契約のレビュー。有限状態・四軸・checkpoint planner・時間予約の純粋fake実装を最初の候補とするが、別途実装依頼を要する。
+1. 有限状態・四軸・checkpoint planner・時間予約の純粋fake実装をレビューする。非上書きstore・ProcessOwner・観測集約・実承認は未接続で、採取可能とは扱わない。
 2. 非上書きstoreとProcessOwnerのbackend／上界・故障契約を選定し、合成対照から検証する。OS依存の保証不足をUnknownのまま残す。
 3. byte／memory／retry／時間の具体上限、保存先・保持／削除・歴史的証拠copy・停止権限・通常run観測期間／回数を本人が承認する。設計定数6や31は操作許可ではない。
 4. 固定版の入力digest・試験証拠を揃え、R01〜R08をその時点で再確認してから、保全／再採取を別々に判断する。
 5. supervisorと子へ分けることで通信の負荷が増え、WF-Bのrunnerと同一の条件にはならない。合成試験では測れないため、実採取の前に負荷の確認方法を別途決める。確認までは、新旧の全体時間を同じ尺度で比較しない。
 
 loader内部観測・stdio事前ビルド・AC-Cは別課題。本書は自然timeoutの原因確定、H5a／H5bの解決、正常sealや全体受付の有効化を宣言しない。
+
+### 8.1 今回のfake境界
+
+- `tests/review/fixtures/fixed-recorder.ts`はimportなしの試験専用module。`reserve(true)`は合成gate入力にすぎず、本人承認やR01〜R08を検証しない。`verify(boolean)`／`publish(boolean)`／checkpoint ackもfake値であり、OS終了・保存hashの証拠発行ではない。
+- 時間はsafe integerの相対単調ms。開始時点・早い方のsession期限・正の有限予約を固定し、overflowと起動直前の観測窓不足を拒否する。6予約はstop／force／confirm／flush／manifest／final。ここでflush枠は終了後負荷採取・report／termination／analysis作成・再読の合算枠であり、これらの費用をゼロ扱いしない。工程内の個別配賦・実行は未実装。
+- 取消・例外・clock再入／逆行で元の観測へ復帰しない。Reservedで停止はClosed、Draining以降は状態を戻さない。保全falseまたはVerifyingの期限切れはPublishedを経ずClosed。Published後の停止は診断だけに残し、新checkpointを作らない。予算不足の未保全終端は明示`abandon`でも確定できる。
+- checkpointは固定headerの順序／identity plannerだけ。6種類各1回、FIFO ack、空にしても発行枠は復活しない。§4の集約本体・WF-A event・module／hook分類・snapshot byte／scratch・任意messageは今回未実装。
+- FR03〜06／08／10／13の純粋state／計画部分を検証する。実store・process・承認／sessionの2run配賦・比較許可・analysis・compiled保証・梱包完了は未実証。四軸のfake注入が成功してもそれらの代替にしない。
