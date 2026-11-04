@@ -498,4 +498,65 @@ try{
   const retainedActive=setup(await load(noActiveClearCheck,consumerFactory),s=>s==='bundle_consume_post'?'cancelled':undefined);assert.throws(()=>retainedActive.consumePreparedBundle());
   const badReceipt=retainedActive.transferFailure();retainedActive.finalDiscard(badReceipt);assert.equal(retainedActive.custody().payload_cleared,true,'removed active-slot predicate escapes the retained-slot oracle');
   console.log(`Compiled FP3-C: ${consumerFaults} entry/work/post/origin faults, post-stop precedence, 5 retained-slot controls, 3 partial-retirement failures, 7 retirement-boundary omissions and 5 mutation controls PASS (logical retirement only; fixed abort, no seal)`);
+  // AC-A is a distinct fresh construction. Only the reserved/preparing/failed states exist here.
+  const acFactory='createSyntheticAtomicPreparationRoot',acSite='prepareAtomicCommit();';assert.equal(text.split(acSite).length,2);
+  const acWork=text.match(/checkAtomicPreparation\(\);\s+atomicWorkChecks\+\+;/g),acFinal=text.match(/checkAtomicPreparation\(\);\s+atomicFinalChecks\+\+;/g);
+  assert.equal(acWork?.length,1);assert.equal(acFinal?.length,1);
+  function acClean(r,reason='binding',phase='work',starts=1,custodyCanTransfer=true){
+    assert.throws(()=>r.prepareAtomicCommit());const s=r.inspect(),a=s.atomic_preparation;
+    assert.equal(s.first_failure,reason);assert.equal(a.state,'failed');assert.equal(a.starts,starts);assert.deepEqual(a.failure,{phase,reason});
+    for(const key of ['owner_pending','shell_pending','bundle_pending','preparation_pending'])assert.equal(a[key],false);
+    for(const key of ['staged','commits','seals','published'])assert.equal(a[key],0);assert.equal(s.transfer.successful_seals,0);assert.equal(s.unpublished_bundle.pending,false);
+    if(custodyCanTransfer){r.finalDiscard(r.transferFailure());assert.equal(r.custody().payload_cleared,true);}else{assert.throws(()=>r.transferFailure());assert.equal(r.custody().payload_cleared,false);}
+    const before=r.inspect().atomic_preparation;assert.throws(()=>r.prepareAtomicCommit());assert.deepEqual(r.inspect().atomic_preparation,before);assert(!JSON.stringify(r.inspect()).includes('PRIVATE_ATOMIC'));
+  }
+  acClean(setup(await load(undefined,acFactory),undefined,bundlePartsInput(true)),'state','fixed_abort');
+  let acFaults=0;
+  for(const fault of ['atomicStarted = true;','atomicState = "failed";','atomicOwner = undefined;','atomicShell = undefined;',
+    'atomicOwner = Object.freeze({ ...atomicOwner });','atomicShell = Object.freeze({ ...atomicShell });','proofIssueState = "issuing";','bundleReadies = 0;',
+    'unpublishedCompleteBundle = undefined;','buildingBundle = unpublishedCompleteBundle;','consumingBundle = unpublishedCompleteBundle;',
+    'atomicPreparingBundle = unpublishedCompleteBundle;','atomicPreparation = Object.freeze({});','budget = undefined;']){
+    let guards=0;const r=setup(await load(t=>t.replace(acSite,fault+' '+acSite),acFactory),s=>{if(s.startsWith('atomic_prepare_'))guards++;});
+    acClean(r,'state','entry',0,!fault.includes('budget ='));assert.equal(guards,0);acFaults++;
+  }
+  // Rewriting the wrapper reaches each binding without first failing object-copy equality.
+  for(const patch of ['token: Object.freeze({})','owner: Object.freeze({ ...atomicOwner })','shell: Object.freeze({ ...atomicShell })',
+    'bundle: Object.freeze({ ...atomicPreparingBundle })','budget: Object.freeze({})','budgetSerial: 2','invalidationSerial: invalidations + 1',
+    'startedAt: "2020-01-01T00:00:00.000Z"','deadlineMs: 59999']){
+    const fault=`atomicPreparation = Object.freeze({ ...atomicPreparation, ${patch} }); `;
+    for(const stop of [undefined,'cancelled','deadline_exceeded']){
+      let post=0;const r=setup(await load(t=>t.replace(acWork[0],fault+acWork[0]),acFactory),s=>{if(s==='atomic_prepare_post'){post++;return stop;}});
+      acClean(r,stop??'binding','post');assert.equal(post,1);assert.equal(r.inspect().atomic_preparation.rejection,'binding');
+    }acFaults++;
+  }
+  for(const fault of ['atomicState = "reserved";','atomicStarts = 2;','atomicPreparingBundle = undefined;','atomicPreparation = undefined;',
+    'unpublishedCompleteBundle = atomicPreparingBundle;','invalidations++;','atomicOwner = Object.freeze({ ...atomicOwner });']){
+    acClean(setup(await load(t=>t.replace(acWork[0],fault+' '+acWork[0]),acFactory)),'binding','post',fault==='atomicStarts = 2;'?2:1);acFaults++;
+  }
+  for(const fault of ['atomicPreparation = Object.freeze({ ...atomicPreparation, deadlineMs: 59999 });','invalidations++;','atomicPreparingBundle = Object.freeze({ ...atomicPreparingBundle });']){
+    acClean(setup(await load(t=>t.replace(acFinal[0],fault+' '+acFinal[0]),acFactory)),'binding','final');acFaults++;
+  }
+  const acForeign=await load(t=>'let temporaryForeignAtomic;\n'+t.replace(acWork[0],'if (!temporaryForeignAtomic) temporaryForeignAtomic = atomicPreparation; else atomicPreparation = temporaryForeignAtomic; '+acWork[0]),acFactory);
+  acClean(setup(acForeign),'state','fixed_abort');acClean(setup(acForeign),'binding','post');acFaults++;
+  // An allocation exception still runs post; a prior hard stop does not run a new checkpoint.
+  const allocation='atomicPreparation = Object.freeze({ token,';assert.equal(text.split(allocation).length,2);
+  for(const stop of [undefined,'deadline_exceeded']){let post=0;const r=setup(await load(t=>t.replace(allocation,'throw Error("PRIVATE_ATOMIC"); '+allocation),acFactory),s=>{if(s==='atomic_prepare_post'){post++;return stop;}});acClean(r,stop??'internal','post');assert.equal(post,1);}
+  {let post=0;const r=setup(await load(t=>t.replace(acWork[0],'fail("cancelled"); '+acWork[0]),acFactory),s=>{if(s==='atomic_prepare_post')post++;});acClean(r,'cancelled','work');assert.equal(post,0);}
+  // Existing custody cannot certify a changed canonical budget, even when all payload has cleared.
+  acClean(setup(await load(t=>t.replace(acFinal[0],'budget = Object.freeze({ ...budget, identity: Object.freeze({}) }); '+acFinal[0]),acFactory)),'binding','final',1,false);
+  for(const slot of ['atomicPreparingBundle','atomicPreparation','atomicOwner','atomicShell']){
+    const r=setup(await load(withoutClear(slot),acFactory),s=>s==='atomic_prepare_post'?'cancelled':undefined);assert.throws(()=>r.prepareAtomicCommit());assert.throws(()=>r.transferFailure(),undefined,slot);assert.equal(r.custody().payload_cleared,false);
+  }
+  for(const stage of ['atomic_prepare_pre','atomic_prepare_post']){
+    const site=`checkpoint('${stage}');`;assert.equal(text.split(site).length,2);
+    const r=setup(await load(t=>t.replace(site,'/* omitted atomic checkpoint */'),acFactory),s=>s===stage?'cancelled':undefined);
+    assert.throws(()=>acClean(r,'cancelled',stage.endsWith('pre')?'pre':'post'),assert.AssertionError);
+  }
+  const noFinal=setup(await load(t=>t.replace(acFinal[0],'invalidations++; atomicFinalChecks++;'),acFactory));assert.throws(()=>acClean(noFinal,'binding','final'),assert.AssertionError);
+  const acMove='atomicPreparingBundle = unpublishedCompleteBundle;';assert.equal(text.split(acMove).length,2);
+  const noAcMove=setup(await load(t=>t.replace(acMove,'/* omitted atomic move */'),acFactory));assert.throws(()=>acClean(noAcMove,'state','fixed_abort'),assert.AssertionError);
+  // Even an internally swallowed first failure cannot replace its diagnosis on a second private entry.
+  const repeatedAc=setup(await load(t=>t.replace(acSite,'try { '+acSite+' } catch {} '+acSite),acFactory),s=>s==='atomic_prepare_pre'?'cancelled':undefined);
+  acClean(repeatedAc,'cancelled','pre');
+  console.log(`Compiled AC-A: ${acFaults} entry/binding/state/final/foreign faults, allocation/post precedence + hard-stop, 4 retained-slot and 4 mutation controls PASS (no staged record/commit/seal)`);
 }finally{globalThis.fetch=originalFetch;rmSync(out,{recursive:true,force:true});}

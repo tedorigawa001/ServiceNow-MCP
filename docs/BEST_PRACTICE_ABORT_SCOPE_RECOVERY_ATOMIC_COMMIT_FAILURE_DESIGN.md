@@ -1,9 +1,9 @@
 # OB-03 atomic commit準備・線形化点と失敗時所有権
 
-Version: br006-recovery-atomic-commit-failure-draft-0.1 / Date: 2026-11-04。
-基準HEAD: `3f61e4a`。Status: **詳細設計のみ。正式発行口閉鎖・全体受付無効・Unknown・VM／監視／telemetry調査保留を維持する。実装・seal成功・実接続・実通信・実機操作・設定変更・Pushは行わない。**
+Version: br006-recovery-atomic-commit-failure-draft-0.2 / Date: 2026-11-04。
+設計基準HEAD: `3f61e4a`／AC-A実装開始HEAD: `381c7fd`。Status: **AC-Aのowner／準備状態・claim・失敗診断／全破棄だけ合成内実装済み。staged record・atomic commit・seal成功・正常終端は未実装。正式発行口閉鎖・全体受付無効・Unknown・VM／監視／telemetry調査保留を維持し、実接続・実通信・実機操作・設定変更・Pushは行わない。**
 
-[OB-03親設計](BEST_PRACTICE_ABORT_SCOPE_RECOVERY_OB03_DESTINATION_CONTENT_DESIGN.md)§6〜9と[FP-3内部契約](BEST_PRACTICE_ABORT_SCOPE_RECOVERY_FP3_POST_ACCEPT_BUNDLE_DESIGN.md)の差分。atomic commitの準備と、commit前後の失敗責務を対にして具体化する。型・slot・状態名は案であり、以下の成功遷移は未実装・未承認である。
+[OB-03親設計](BEST_PRACTICE_ABORT_SCOPE_RECOVERY_OB03_DESTINATION_CONTENT_DESIGN.md)§6〜9と[FP-3内部契約](BEST_PRACTICE_ABORT_SCOPE_RECOVERY_FP3_POST_ACCEPT_BUNDLE_DESIGN.md)の差分。atomic commitの準備と、commit前後の失敗責務を対にして具体化する。以下の成功遷移は未実装・未承認である。AC-Aの限定実装と実行結果は[検証記録](E2E_BEST_PRACTICE_ATOMIC_PREPARATION_ACA_2026-11-04.md)と§11に分離する。
 
 ## 1 現行到達点と再利用禁止
 
@@ -13,7 +13,7 @@ Version: br006-recovery-atomic-commit-failure-draft-0.1 / Date: 2026-11-04。
 
 既存`normalAccepted.take`は元accepted slotを外してtransferredにする。一方、既存`sealRecoveryFinishExpectation`は未移譲のaccepted slotを前提とする。この既存sealを先に呼ぶ、take済みacceptedを戻して呼ぶ、contextだけをsealして後から全本文を付ける方式は採用しない。必要なのは同full受領物・同bundleからのprivate継続であり、その型付き接続自体を後続で検証する。
 
-調査時のkernel作業中差分は保持し、本稿の到達保証へ取り込まない。本稿作成でソースを変更・試験実行したとは扱わない。
+初稿の調査時にあったkernel作業中差分は保持し、設計だけの到達保証へ取り込まなかった。初稿作成と、後続AC-Aの実装／試験（§11・検証記録）は区別する。
 
 ## 2 不変条件と所有権の判定元
 
@@ -140,4 +140,14 @@ sectionの順序案：
 
 未確認：移譲元borrow除去のprivate契約、canonical recordのpayload切離し方法、実装上の単一線形化点と非確保section、正常terminal証拠との一度限り結合、各追加費目の上界。これらは本稿の記述だけで確認済みとしない。
 
-推奨順序は、(AC-A) owner／準備状態・claim・失敗診断と全破棄を固定abortの合成内で実装、(AC-B) 同bundle／record／terminal bindingと非公開staged境界を固定abortのまま接続、(AC-C) 事前レビューと別の明示承認後に合成atomic commit／同期失効・空handle検査、(D4) 正常terminal-only／固定discard・hard診断の連続接続。本稿はどの実装・seal成功も承認しない。実接続・実通信・全体受付はさらに別の承認条件に残す。
+推奨順序は、(AC-A、合成内限定実装済み) owner／準備状態・claim・失敗診断と全破棄を固定abortの合成内で実装、(AC-B、未実装) 同bundle／record／terminal bindingと非公開staged境界を固定abortのまま接続、(AC-C、未実装) 事前レビューと別の明示承認後に合成atomic commit／同期失効・空handle検査、(D4、未実装) 正常terminal-only／固定discard・hard診断の連続接続。本稿自体は後続実装・seal成功を承認しない。実接続・実通信・全体受付はさらに別の承認条件に残す。
+
+## 11 AC-Aの限定実装と後続境界
+
+`createSyntheticAtomicPreparationRoot`は別fresh合成継続の引数なし`prepareAtomicCommit`だけを固定公開する。DATA検査前に同token／既存DestinationOwnerに結合したAtomicPreparationOwner、非公開空handleを持つAtomicDestinationShell、original identity台帳、準備claim・固定診断slotを確保する。identity台帳はpayloadを含まないshell参照だけであり、外部登録・成功handle・利用権限を持たない。
+
+同rootのready bundleから、FP3-Cのconsumer／retireを通さず準備継続へ進む。claimを先行消費し、reservedからpreparingへ移り、唯一の同bundleを準備追跡slotへmoveする。同budgetのpre後、AtomicPreparationに同owner／shell／bundle・budget identity／serial・失効serial・開始UTC／全deadlineを結合し、全構成照合を行う。これは準備用のbasic bindingであり、AC-Bの完成record・terminal origin供給・stagedの証拠ではない。
+
+work不適合は固定理由で暫定保持し、post停止を優先する。post通過後の再照合まで通ってもphaseをfixed_abortとして既存state失敗へ進む。準備中bundle／wrapper／owner／shellをclearとisClearedへ含め、busy終了・kernel側payload不在の確認後だけ既存失敗custodyへ移る。claim／phase別first failure・件数は保持し、payloadを上位capsuleへ隠さない。source／cleanup開始ではinvalidatedとして利用不可にし、後続の試行も拒否する。
+
+現在の実装状態はreserved／preparing／invalidated／failedだけで、staged／committing／sealedやcommit claimの成功消費は作らない。追加費目はowner／shell／marker／空handle・identity台帳、準備wrapperと重複参照保持、pre／post・work／final全構成照合、診断・clear／custody検査。総量・work上界はUnknownのまま。旧入口の挙動と成功数0を維持する。
