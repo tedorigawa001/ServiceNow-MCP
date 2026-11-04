@@ -4,6 +4,8 @@ Version: draft-0.4 / Date: 2026-11-05 / 基準HEAD: `7f6ef4f` / レビュー修�
 
 draft-0.4: cleanup期限以降に返ったcloseの成功を、新しい状態`late`として示す（§3）。
 
+draft-0.3: [recorder一度限り接続の差分設計](BEST_PRACTICE_WFB_STORE_RECORDER_BRIDGE_DESIGN.md)を追加。receiptの公開DATAを権限へ昇格せず、同生成元のprivate継続・共有期限／停止・試行別cleanup診断を結ぶ方針。既存fakeの挙動・未承認事項は変更せず、接続は未実装。
+
 draft-0.2のレビュー修正: 入力長の検査とコピーの間にcallbackが入り、byte上限をすり抜けられた経路を閉じた。入力・再読の長さは実サイズで判定する。cleanup期限を超えて返ったcloseはconfirmedにしない。object以外の偽receiptも同じsticky失敗にする。
 
 Status: **試験専用・メモリ内だけの実装。OS backend・実保存・recorder接続は未実装。** 正式発行口閉鎖・全体受付無効・Unknown・調査保留を維持する。保存先・保持期間・運用cap／時間枠・停止方式は未承認のまま。既存証拠のcopy／保管操作・再採取・実接続・実通信・設定変更・Pushを行わない。

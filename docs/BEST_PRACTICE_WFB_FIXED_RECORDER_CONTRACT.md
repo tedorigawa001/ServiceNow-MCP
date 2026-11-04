@@ -1,6 +1,8 @@
 # WF-B 固定採取器の詳細契約・合成受入条件
 
-Version: draft-0.5 / Date: 2026-11-04 / 設計基準HEAD: `0fe45fb` / 純粋fake実装基準HEAD: `7f055b4`。
+Version: draft-0.6 / Date: 2026-11-05 / 設計基準HEAD: `0fe45fb` / 純粋fake実装基準HEAD: `7f055b4`。
+
+draft-0.6: [Store／recorder一度限り接続の差分設計](BEST_PRACTICE_WFB_STORE_RECORDER_BRIDGE_DESIGN.md)を追加。同run・checkpoint・保存receiptのprivate結合、共有期限／停止、cleanup診断、保存済み未ackとqueue／unsavedの区別を具体化した。設計のみで接続実装や承認状態は変更しない。
 
 draft-0.5: [artifact単位EvidenceStoreの内部契約・fake](BEST_PRACTICE_WFB_EVIDENCE_STORE_FAKE_CONTRACT.md)と[合成検証記録](E2E_BEST_PRACTICE_WFB_EVIDENCE_STORE_FAKE_2026-11-04.md)を追加。非上書き・有限書込・再読hash・一度限りreceiptをメモリ内で検証する。OS storeやrecorderへの接続、run全体の保全証明は未対応。
 
@@ -133,7 +135,7 @@ fake store／clock／processと注入messageのみで検証する計画。実保
 
 ## 8 次の段階と未承認事項
 
-1. 有限状態・四軸・checkpoint planner・時間予約とartifact単位EvidenceStoreのfakeをレビューする。storeからrecorderのack／publicationへの接続、ProcessOwner・観測集約・実承認は未対応で、採取可能とは扱わない。
+1. 有限状態・四軸・checkpoint planner・時間予約とartifact単位EvidenceStoreのfake、および[接続差分設計](BEST_PRACTICE_WFB_STORE_RECORDER_BRIDGE_DESIGN.md)をレビューする。storeからrecorderのackへの接続は設計のみ。publication・ProcessOwner・観測集約・実承認は未対応で、採取可能とは扱わない。
 2. 非上書きstoreとProcessOwnerのbackend／上界・故障契約を選定し、合成対照から検証する。OS依存の保証不足をUnknownのまま残す。
 3. byte／memory／retry／時間の具体上限、保存先・保持／削除・歴史的証拠copy・停止権限・通常run観測期間／回数を本人が承認する。設計定数6や31は操作許可ではない。
 4. 固定版の入力digest・試験証拠を揃え、R01〜R08をその時点で再確認してから、保全／再採取を別々に判断する。
