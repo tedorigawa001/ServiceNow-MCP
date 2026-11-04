@@ -192,3 +192,30 @@ adapter本体試験と**同じhook設置helper**を利用する子プロセスfi
 新fixture内の意図的timeoutは外側の成功判定条件であり、通常回帰の未解消失敗として数えない。既存の5秒case期限、hook期限、製品60秒は延長していない。§9.6の候補1は今回接続したが、候補2・3（ready／finish競合、stdio事前ビルド）を解消したとは扱わない。通常並列の単回成功は、過去の断続的timeoutの原因確定や完全解消の証拠ではない。
 
 正式発行口閉鎖・全体受付無効・Unknown・調査保留を維持する。実接続・実通信・設定変更・Pushは行わない。
+
+## 12 レビュー修正（2026-11-04）
+
+本節までの§11の件数（287ファイル／13,771件）と記述は修正前の記録として残す。`fc910ff`のレビューで、parent段階の回帰では「終了待ち」と「復元の順序」を検証できていないことが分かった。parent段階のレビューは取消の直後に自ら終了するため、§11.2の「取消・終了待ちがない場合の後続失敗を検出する」のうち、確認できていたのは取消がない場合だけである。実装は正しく、製品source・期限・並列設定は変更していない。
+
+[fixture](../tests/review/fixtures/adapter-timeout.cases.ts)と[外側の回帰](../tests/review/selection-timeout.test.ts)へ次を追加した。
+
+- worker段階の回帰: 起動済みworkerの`terminate`を300ms遅らせ、偽Dateを有効にしてreviewを250msの実timeoutへ到達させる。後続が`review_busy`でないこと、worker終了、terminate 1回、レビュー終了時に時計がまだ偽であることを検査する。
+- signal結合の検査: 共通hookより先に実行される`afterEach`で、取消がVitestのsignalから届いていることを確認する。
+- close失敗の回帰: `close`を1回だけ失敗させ、失敗が元ケースへ報告され、次のケースでmockと時計が復元されていることを検査する。
+
+共通helperへの変異と、失敗した外側の試験は次のとおり。全て検出され、等価変異は残っていない。
+
+| 変異 | 失敗した試験 |
+| --- | --- |
+| 取消・終了待ちなし（mock／時計の復元だけ） | drains…、waits…、reports… |
+| `close`をawaitしない | waits…、reports… |
+| mock／時計の復元を`close`より先に実行 | waits…、reports… |
+| `context.signal`を結合しない | drains… |
+| `close`の失敗を握り潰す | reports… |
+| `finally`を外す | reports… |
+| `useRealTimers`を外す | reports… |
+| `restoreAllMocks`を外す | reports… |
+| lifecycle metaを保存しない | drains…、waits… |
+| lifecycle metaを`close`の前に保存 | drains…、waits… |
+
+修正後のrepo全体の確認は、lint（error 0・warning 374）、build、梱包分類監査（441ファイル）が成功した。全体試験は他の検査と同時に走らせず、`--maxWorkers=3`と通常並列で各1回実行し、どちらも287ファイル／13,773件成功・失敗0だった。これらの単回成功は過去の断続的timeoutの原因確定や解消を示さず、§9.6の候補2・3は未対応のままである。

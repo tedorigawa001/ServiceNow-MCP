@@ -20,19 +20,34 @@ async function reproduce(pattern: string, config = 'tests/review/fixtures/select
       unhandled: JSON.parse(readFileSync(output + '.lifecycle.json', 'utf8')).unhandled_errors };
   } finally { clearTimeout(timer); if (child.exitCode === null) child.kill('SIGKILL'); rmSync(dir, { recursive: true, force: true }); }
 }
+interface AdapterChildResult { status: string; failureMessages: string[]; meta: { bp5_review_lifecycle: { workers: Array<{ terminate_ms: number | null }> } } }
+/** Child run whose only allowed failure is the origin case; the follower must pass. */
+async function adapterOriginFailure(pattern: string, message: string) {
+  const { code, report, unhandled } = await reproduce(pattern, 'tests/review/fixtures/adapter-timeout.config.ts');
+  expect(code).toBe(1); expect(report.numFailedTests).toBe(1);
+  const results: AdapterChildResult[] = report.testResults.flatMap((f: { assertionResults: AdapterChildResult[] }) => f.assertionResults)
+    .filter((r: AdapterChildResult) => !['pending', 'skipped'].includes(r.status));
+  expect(results).toHaveLength(2);
+  expect(results[0].status).toBe('failed');
+  expect(results[0].failureMessages.join(' ')).toContain(message);
+  expect(results[1].status).toBe('passed'); expect(unhandled).toBe(0);
+  return results;
+}
 describe('selection timeout lifecycle reproduction', () => {
   it('drains the adapter suite owner after an actual timeout before admitting its follower', async () => {
-    const { code, report, unhandled } = await reproduce('adapter managed timeout reproduction', 'tests/review/fixtures/adapter-timeout.config.ts');
-    expect(code).toBe(1); expect(report.numFailedTests).toBe(1);
-    const results = report.testResults.flatMap((f: { assertionResults: Array<{ status: string; failureMessages: string[] }> }) => f.assertionResults)
-      .filter((r: { status: string }) => !['pending', 'skipped'].includes(r.status));
-    expect(results).toHaveLength(2);
-    expect(results[0].status).toBe('failed');
-    expect(results[0].failureMessages.join(' ')).toContain('Test timed out in 250ms');
-    expect(results[1].status).toBe('passed'); expect(unhandled).toBe(0);
+    const results = await adapterOriginFailure('adapter managed timeout reproduction', 'Test timed out in 250ms');
     expect(results[0]).toMatchObject({ meta: { bp5_review_lifecycle: {
       aborted: true, close_requested: true, pending_reviews: 0, workers: [],
     } } });
+  }, 30000);
+  it('waits for delayed adapter worker termination while the injected clock stays active', async () => {
+    const results = await adapterOriginFailure('adapter worker drain reproduction', 'Test timed out in 250ms');
+    const lifecycle = results[0].meta.bp5_review_lifecycle;
+    expect(lifecycle).toMatchObject({ aborted: true, close_requested: true, pending_reviews: 0, workers: [{ ready_ms: null, exited: true }] });
+    expect(lifecycle.workers[0].terminate_ms).toBeTypeOf('number');
+  }, 30000);
+  it('reports an adapter owner close failure and still restores mocks and clocks', async () => {
+    await adapterOriginFailure('adapter close failure reproduction', 'synthetic_close_failure');
   }, 30000);
   it('reproduces an actual Vitest timeout followed by review_busy without blaming the product deadline', async () => {
     const { code, report, unhandled } = await reproduce('unmanaged timeout reproduction');
