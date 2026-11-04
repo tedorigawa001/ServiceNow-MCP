@@ -53,11 +53,28 @@ rootのterminal／PreCommitBundle／候補record／staged record／origin台帳�
 
 ## 6 閉鎖状態と残課題
 
-正式発行口閉鎖・全体受付無効・Unknown・VM／監視／telemetry調査保留を維持する。seal成功・実session／worker／runtime接続・実通信・実機操作・設定変更・Pushは行っていない。実装時点では未コミットとし、その後の指示によるコミット前検証を次節へ記録する。
+正式発行口閉鎖・全体受付無効・Unknown・VM／監視／telemetry調査保留を維持する。seal成功・実session／worker／runtime接続・実通信・実機操作・設定変更・Pushは行っていない。実装時点では未コミットとし、その後の指示によるコミット前検証を§8へ記録する。
 
 次はAC-Cの事前レビューと、同staged recordの利用可能化・移譲元borrow除去・commit前後の同期失効・payloadなし履歴保持の設計／検証である。seal成功は別の明示指示待ち。正常source終了／cleanup確認からのterminal-only discardと実originの接続も未実装であり、本bindingから正常終端票を捏造しない。
 
-## 7 コミット前の再検証
+## 7 レビュー修正（2026-11-04）
+
+本記録の故障件数は修正前の記録として残す。レビュー時にrepo全体のlint（error 0・warning 374）、build、梱包分類監査（441ファイル、Compiled AC-Bを含む）を確認した。全体合成は他の検査と同時に走らせず`--maxWorkers=3`で実行し、287ファイル／13,770件成功・失敗0だった。§5の通常並列の時間依存失敗の原因確定にはならない。
+
+kernelの約110変異を確認し、次の条件は外しても既存試験が全て通過した。実装は正しく、試験だけの不足である。
+
+- `checkAtomicRecordBinding`の`checkTerminal`呼出しとsink照合、`checkTerminal`の`t!==normalTerminal`、`liveCleanup.started`／`settled`、`!readyUsable()`。既存のterminal故障はissuer内で引数とslotを同時に書き換えていた。
+- record内部と台帳の照合（`r.payload`／`r.terminal`／`p`の台帳照合、payload側のtoken／owner／shell／terminal、record側のowner／shell、`atomicRecordBuilds`、`!atomicStageStarted`）。既存故障はrecord最上位のfieldだけを書き換えていた。
+- builderの`checkAtomicPreparation()`呼出し、resourceの確保前ガードとrecord照合側の同条件、入口の状態／発行数／staged数。
+- 候補段階と`checkStagedAtomicRecord`のslot条件。
+
+[compiled fixture](../tests/review/fixtures/compiled-destination-preparation.mjs)に44故障を追加した（AC-B計81）。builder呼出し直前9件（terminal・record生成0で停止）、terminalの一括差替え・sink・custody holder・cleanup／ready live条件の6件、staged recordの内部と台帳10件、候補段階7件、staged段階11件、capsuleとlive slotの同時消失1件である。候補段階のstaged数は、後段のstaged段階でも同じ理由で拒否されるため、照合回数1で区別する確認を別に追加した。同じ約110変異を再実行し、下記の等価を除く全条件が検出されることを確認した。
+
+resource故障のうちupper／localは、本文破棄確認は成立するが上位custody移譲は拒否される。token／budgetはどちらも拒否される。fixtureはこの差を区別して確認する。
+
+`issueTerminal`の`used`と`normalTerminal`の片方（両方を外す変異は検出される）、`!normalTerminalStarted`（発行が先に設定）、`issueTerminal`／`checkTerminal`冒頭の`checkProjection`（両方を外しても、直前の準備照合とrecord照合の全構成照合に包含）、`r.payload.bundle!==p.bundle`（`checkAtomicPreparationBinding`の`p.bundle!==bundle`と同じ）、候補段階の`!atomicPreparation`／`!atomicPreparingBundle`／`!preCommitBundle`／`!atomicTerminal`（空なら直後の同一性照合が同じbindingで拒否）、`!busy`・`first`・`!b`（`operation`内でだけ呼ばれ、hardは先に停止し、`b`はclearでだけ消える）は等価変異として扱う。kernelは変更せず、設計書をdraft-0.5とした。vitest試験数は不変。修正後も全体合成287ファイル／13,770件成功・失敗0（`--maxWorkers=3`）。
+
+## 8 コミット前の再検証
 
 ユーザーのコミット指示後、AC-Bの8ファイルだけをstageし、未stage差分・未追跡ファイルがない状態で再検証した。ビルド、対象4ファイルのESLint、実行引数`--maxWorkers=2`での全体287 files／13,770 tests（失敗・保留0）が成功した。出力先は`/private/tmp/servicenow-acb-commit-vitest.json`。全体テスト終了後に外部取得禁止・既存キャッシュのみの梱包動作試験（441 files）、続けて配布除外・固定依存・漏洩負の対照と最新compiled保証を含む監査（441 files）を単独実行し成功した。関連3文書のリンク25件と差分検査も問題なし。
 

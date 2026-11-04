@@ -1,11 +1,13 @@
 # OB-03 atomic commit準備・線形化点と失敗時所有権
 
-Version: br006-recovery-atomic-commit-failure-draft-0.4 / Date: 2026-11-04。
+Version: br006-recovery-atomic-commit-failure-draft-0.5 / Date: 2026-11-04。
 設計基準HEAD: `3f61e4a`／AC-A実装開始HEAD: `381c7fd`／AC-B実装開始HEAD: `ebd2c0f`。Status: **AC-AとAC-Bの非公開staged境界まで合成内実装済み。atomic commit・seal成功・正常終端は未実装。正式発行口閉鎖・全体受付無効・Unknown・VM／監視／telemetry調査保留を維持し、実接続・実通信・実機操作・設定変更・Pushは行わない。**
 
 [OB-03親設計](BEST_PRACTICE_ABORT_SCOPE_RECOVERY_OB03_DESTINATION_CONTENT_DESIGN.md)§6〜9と[FP-3内部契約](BEST_PRACTICE_ABORT_SCOPE_RECOVERY_FP3_POST_ACCEPT_BUNDLE_DESIGN.md)の差分。atomic commitの準備と、commit前後の失敗責務を対にして具体化する。以下の成功遷移は未実装・未承認である。AC-Aの限定実装と実行結果は[検証記録](E2E_BEST_PRACTICE_ATOMIC_PREPARATION_ACA_2026-11-04.md)と§11に分離する。
 
 draft-0.2のレビュー修正：AC-Aの準備照合のうち、元bundle全構成の照合呼出し、work段階の状態／元利用slot条件、shell台帳の照合、入口のdestination照合と、source／cleanup後のinvalidated状態は、外しても全試験が通過していた。compiled fixtureに同条件へ届く故障を追加し、合成試験でinvalidated状態を確認するようにした。kernelの挙動は変更していない。
+
+draft-0.4のレビュー修正：AC-Bのrecord照合からのterminal照合とsink照合、terminalのlive条件、record内部（payload側）と台帳の照合、builderの確保前照合、候補／staged段階のslot条件は、外しても全試験が通過していた。既存故障はrecord最上位のfieldとissuer内に偏っていたため、compiled fixtureに各照合へ届く故障を追加した。kernelの挙動は変更していない。
 
 ## 1 現行到達点と再利用禁止
 

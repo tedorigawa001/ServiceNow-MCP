@@ -576,12 +576,12 @@ try{
     const n=found[0],start=n.getStart(file);return t.slice(0,start)+edit(t.slice(start,n.end))+t.slice(n.end);
   }
   function atCall(t,fn,call,fault){return inFunction(t,fn,body=>{assert.equal(body.split(call).length,2);return body.replace(call,fault+' '+call);});}
-  function abClean(r,{reason='binding',phase='post',staged=0,issues=1,builds=1}={}){
+  function abClean(r,{reason='binding',phase='post',staged=0,issues=1,builds=1,custodyCanTransfer=true,payloadCleared=false}={}){
     assert.throws(()=>r.stageAtomicCommit());const x=r.inspect(),a=x.atomic_stage;
     assert.equal(x.first_failure,reason);assert.deepEqual(x.atomic_preparation.failure,{phase,reason});assert.equal(a.staged,staged);assert.equal(a.terminal_issues,issues);assert.equal(a.record_builds,builds);
     for(const key of ['terminal_pending','bundle_pending','candidate_pending','staged_pending','origin_pending','source_closed','cleanup_confirmed'])assert.equal(a[key],false);
     for(const key of ['commits','seals','published'])assert.equal(a[key],0);assert.equal(x.transfer.successful_seals,0);
-    r.finalDiscard(r.transferFailure());assert.equal(r.custody().payload_cleared,true);const before=r.inspect().atomic_stage;assert.throws(()=>r.stageAtomicCommit());assert.deepEqual(r.inspect().atomic_stage,before);assert(!JSON.stringify(x).includes('PRIVATE_STAGING'));
+    if(custodyCanTransfer){r.finalDiscard(r.transferFailure());assert.equal(r.custody().payload_cleared,true);}else{assert.throws(()=>r.transferFailure());assert.equal(r.custody().payload_cleared,payloadCleared);}const before=r.inspect().atomic_stage;assert.throws(()=>r.stageAtomicCommit());assert.deepEqual(r.inspect().atomic_stage,before);assert(!JSON.stringify(x).includes('PRIVATE_STAGING'));
   }
   const stagedOracle='if (atomicState !== "staged" || !stagedAtomicRecord || atomicRecordCandidate || atomicPreparation || atomicPreparingBundle || preCommitBundle || atomicTerminal || atomicStaged !== 1) throw Error("PRIVATE_STAGING"); ';
   abClean(setup(await load(t=>t.replace(abStage,abStage+' '+stagedOracle),abFactory),undefined,bundlePartsInput(true)),{reason:'state',phase:'fixed_abort',staged:1});
@@ -618,6 +618,49 @@ try{
   for(const fault of ['stagedAtomicRecord = Object.freeze({ ...stagedAtomicRecord });','atomicPreparingBundle = stagedAtomicRecord.payload.bundle;','atomicState = "preparing";']){
     abClean(setup(await load(t=>atCall(t,'stageAtomicRecord','checkStagedAtomicRecord();',fault),abFactory)),{phase:'staging'});abFaults++;
   }
+  // Builder entry: slot/count drift and pre-record preparation or resource drift stop before a terminal or record exists.
+  const shadowHolder=(t,fn)=>inFunction(t,fn,body=>body.replace('{','{ const custody = { holder: () => "upper" };'));
+  for(const [fault,opts] of [
+    ['atomicState = "reserved";',{reason:'state'}],['atomicTerminalIssues = 1;',{reason:'state',issues:1}],['atomicStaged = 1;',{reason:'state',staged:1}],['invalidations++;',{}],
+    ['resources.token = Object.freeze({});',{custodyCanTransfer:false}],['resources.budget = Object.freeze({});',{custodyCanTransfer:false}],['resources.upper = Object.freeze({});',{custodyCanTransfer:false,payloadCleared:true}],['resources.local = undefined;',{custodyCanTransfer:false,payloadCleared:true}],
+  ]){abClean(setup(await load(t=>t.replace(abBuild,fault+' '+abBuild),abFactory)),{issues:0,builds:0,...opts});abFaults++;}
+  abClean(setup(await load(t=>shadowHolder(t,'buildAtomicStage'),abFactory)),{issues:0,builds:0});abFaults++;
+  // Coherently replace the terminal everywhere the root holds it: only the kernel's own slot identity can reject.
+  const copiedTerminal='const nt = Object.freeze({ ...atomicTerminal }); atomicTerminal = nt; preCommitBundle = Object.freeze({ ...preCommitBundle, terminal: nt }); atomicRecordCandidate = Object.freeze({ ...atomicRecordCandidate, terminal: nt, payload: preCommitBundle }); atomicRecordOrigin = Object.freeze({ ...atomicRecordOrigin, record: atomicRecordCandidate, payload: preCommitBundle, terminal: nt });';
+  abClean(setup(await load(t=>atCall(t,'buildAtomicStage','checkAtomicStageCandidate();',copiedTerminal),abFactory)),{reason:'internal'});abFaults++;
+  abClean(setup(await load(t=>inFunction(t,'checkAtomicRecordBinding',body=>body.replace('{','{ const link = { ownedNewCleanup: () => ({ sink: Object.freeze({}) }) };')),abFactory)));abFaults++;
+  abClean(setup(await load(t=>shadowHolder(t,'checkAtomicRecordBinding'),abFactory)));abFaults++;
+  const checkTerminalHead='normalAccepted.checkTerminal = (owner, value, t) => {';assert.equal(text.split(checkTerminalHead).length,2);
+  for(const shadow of ['const liveCleanup = { serial: 0, started: true, settled: false };','const liveCleanup = { serial: 0, started: false, settled: true };','const readyUsable = () => false;']){
+    abClean(setup(await load(t=>t.replace(checkTerminalHead,checkTerminalHead+' '+shadow),abFactory)),{reason:'internal',issues:0,builds:0});abFaults++;
+  }
+  // Staged record internals: rewrite the record and only the ledger entries named, so one specific comparison must reject.
+  const stagedCase=(payload,record,ledger)=>`const op = stagedAtomicRecord.payload, nt = Object.freeze({ ...stagedAtomicRecord.terminal }), oc = Object.freeze({ ...stagedAtomicRecord.owner }), sc = Object.freeze({ ...stagedAtomicRecord.shell }), np = Object.freeze({ ...op, ${payload} }); stagedAtomicRecord = Object.freeze({ ...stagedAtomicRecord, payload: np, ${record} }); atomicRecordOrigin = Object.freeze({ ...atomicRecordOrigin, record: stagedAtomicRecord, ${ledger} });`;
+  for(const [payload,record,ledger] of [
+    ['token: Object.freeze({})','','payload: np'],
+    ['owner: oc','','payload: np'],['shell: sc','','payload: np'],
+    ['owner: oc','owner: oc','payload: np'],['shell: sc','shell: sc','payload: np'],
+    ['bundle: Object.freeze({ ...op.bundle })','','payload: np'],
+    ['terminal: nt','','payload: np'],['terminal: nt','terminal: nt','payload: np'],
+    ['preparation: Object.freeze({ ...op.preparation })','','payload: np'],
+    ['','','terminal: stagedAtomicRecord.terminal'],
+  ]){abClean(setup(await load(t=>atCall(t,'stageAtomicRecord','checkStagedAtomicRecord();',stagedCase(payload,record,ledger)),abFactory)),{phase:'staging'});abFaults++;}
+  // Candidate and staged gates own their slot conditions; the shared record check must not be what rejects these.
+  for(const [fault,opts] of [
+    ['atomicState = "reserved";',{}],['stagedAtomicRecord = atomicRecordCandidate;',{}],['atomicStaged = 1;',{staged:1}],
+    ['preCommitBundle = Object.freeze({ ...preCommitBundle });',{}],['atomicTerminal = Object.freeze({ ...atomicTerminal });',{}],
+    ['atomicPreparation = Object.freeze({ ...atomicPreparation });',{}],['atomicPreparingBundle = Object.freeze({ ...atomicPreparingBundle });',{}],
+  ]){abClean(setup(await load(t=>t.replace(abStage,fault+' '+abStage),abFactory)),{phase:'staging',...opts});abFaults++;}
+  for(const [fault,opts] of [
+    ['stagedAtomicRecord = undefined;',{}],['atomicRecordCandidate = stagedAtomicRecord;',{}],['atomicPreparation = stagedAtomicRecord.payload.preparation;',{}],
+    ['preCommitBundle = stagedAtomicRecord.payload;',{}],['atomicTerminal = stagedAtomicRecord.terminal;',{}],['atomicStaged = 1;',{staged:1}],
+    ['atomicRecordBuilds = 2;',{builds:2}],['atomicStageStarted = false;',{}],
+    ['resources.token = Object.freeze({});',{custodyCanTransfer:false}],['resources.budget = Object.freeze({});',{custodyCanTransfer:false}],['resources.upper = Object.freeze({});',{custodyCanTransfer:false,payloadCleared:true}],
+  ]){abClean(setup(await load(t=>atCall(t,'stageAtomicRecord','checkStagedAtomicRecord();',fault),abFactory)),{phase:'staging',...opts});abFaults++;}
+  // Both the capsule and the live slot vanish together: only the non-empty capsule condition can reject.
+  abClean(setup(await load(t=>atCall(t,'stageAtomicRecord','checkStagedAtomicRecord();','resources.local = undefined; stagedAtomicRecord = Object.freeze({ ...stagedAtomicRecord, capsule: undefined }); atomicRecordOrigin = Object.freeze({ ...atomicRecordOrigin, record: stagedAtomicRecord });'),abFactory)),{phase:'staging',custodyCanTransfer:false,payloadCleared:true});abFaults++;
+  // A staged count at the candidate gate rejects before the second check, not later at the staged gate.
+  {const r=setup(await load(t=>t.replace(abStage,'atomicStaged = 1; '+abStage),abFactory));abClean(r,{phase:'staging',staged:1});assert.equal(r.inspect().atomic_stage.checks,1);}
   abClean(setup(await load(t=>t.replace(abStage,abStage+' fail("cancelled");'),abFactory)),{reason:'cancelled',phase:'staging',staged:1});
   for(const slot of ['atomicTerminal','preCommitBundle','atomicRecordCandidate','atomicRecordOrigin','stagedAtomicRecord']){
     const r=setup(await load(withoutClear(slot),abFactory),slot==='stagedAtomicRecord'?undefined:s=>s==='atomic_prepare_post'?'cancelled':undefined);
