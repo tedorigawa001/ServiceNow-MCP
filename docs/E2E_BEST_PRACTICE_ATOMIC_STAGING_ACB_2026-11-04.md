@@ -80,11 +80,11 @@ resource故障のうちupper／localは、本文破棄確認は成立するが�
 
 初回のfixture構文誤り、通常並列2回のtimeout／adapter連鎖失敗／stdio保留と原因未確定の記録は維持する。今回の再検証は通常並列の修正や退行なしの証明ではない。製品・テスト期限と設定ファイル、閉鎖状態は変更していない。
 
-## 8 通常並列timeoutの切り分け（2026-11-04）
+## 9 通常並列timeoutの切り分け（2026-11-04）
 
-調査基準HEAD: `94b81c4`。ソース・試験・Vitest設定ファイルは変更せず、本記録だけを追記する。正式発行口閉鎖・全体受付無効・Unknown・VM／監視／telemetry調査保留を維持する。実装・seal成功・実接続・実通信・設定変更・Pushは行わない。
+観測実行時HEAD: `3758109`（reflogの移動時刻11:42:48と、観測JSON作成時刻11:51〜12:01で確認）。ソース・試験・Vitest設定ファイルは変更せず、本記録だけを追記する。正式発行口閉鎖・全体受付無効・Unknown・VM／監視／telemetry調査保留を維持する。実装・seal成功・実接続・実通信・設定変更・Pushは行わない。
 
-### 8.1 観測方法と限界
+### 9.1 観測方法と限界
 
 既存JSONレポートを再読したところ、assertionにはdurationはあるが開始時刻がない。配列順を発生順と見なすことはできず、§5の過去2回について「最初のtimeoutケース」を後から確定することはできない。suiteの時刻もケース順の代用にはしない。
 
@@ -92,19 +92,19 @@ resource故障のうちupper／localは、本文破棄確認は成立するが�
 
 入力／本文／資格情報／URL／principal hash／例外本文は採取・出力しない。ケースは既知の静的名称に対応する番号／hash、診断は固定値・数値・真偽だけ。child stderrと通常consoleは転送しない。観測器の追加負荷・キャッシュや実行順の影響を除去した実験ではないため、単発成功から原因解消とは結論しない。負荷生成や他プロセス停止はしていない。
 
-観測器の初回はケース名の区切りが既存JSONと異なりadapter番号が全て0になったため、名称対応には使用しない。インストール済みVitestのgetTestName実装と照合して区切りだけを正規化し、単独54 tests／55呼出しで未対応番号0件を確認した。また、同期beforeAllのconsoleが複数行まとめて届き、初回のビルド前後ログは採取できなかった。行ごとの固定prefix解析へ訂正した。親側hook通知の受信時刻差は実行時間と同一視せず、訂正後はworker内のビルド前後時刻を用いる。これらは一時観測器だけの訂正で、製品・試験の期限や挙動の修正ではない。
+観測器の初回はケース名の区切りが既存JSONと異なりadapter番号が全て0になったため、名称対応には使用しない。インストール済みVitestのgetTestName実装と照合して区切りだけを正規化し、単独54 tests／55呼出しで未対応番号0件を確認した。番号は名称単位で、54 testsに対して48種類である。同名の7ケース（`rejects unsupported input before I/O`）は番号41を共有するため、番号とケースは1対1ではない。また、同期beforeAllのconsoleが複数行まとめて届き、初回のビルド前後ログは採取できなかった。行ごとの固定prefix解析へ訂正した。親側hook通知の受信時刻差は実行時間と同一視せず、訂正後はworker内のビルド前後時刻を用いる。これらは一時観測器だけの訂正で、製品・試験の期限や挙動の修正ではない。
 
-### 8.2 最初の5秒timeoutとworker段階
+### 9.2 最初の5秒timeoutとworker段階
 
-通常並列の新しい観測 `full` は13,770 tests中15失敗・1保留だった。ケースのstartTime＋durationで見た、観測上最初に失敗完了した5秒timeoutは[選択試験](../tests/review/target-selection.test.ts)の `QRY-002 preserves per-finding construction and unverified indexing through worker in both envelopes`、durationは約5,377msだった。これは原因が最初に発生した箇所の証明ではない。開始順・失敗完了順・親への通知順を区別する。
+通常並列の新しい観測 `full` は13,770 tests中15失敗・1保留だった。ケースのstartTime＋durationで見た、観測上最初に失敗完了した5秒timeoutは[選択試験](../tests/review/target-selection.test.ts)の `QRY-002 preserves per-finding construction and unverified indexing through worker in both envelopes`、durationは約5,377msだった。これは原因が最初に発生した箇所の証明ではない。開始順・失敗完了順・親への通知順を区別する。また、5秒timeoutに限らない場合、同じ基準で最初に失敗完了したのは[worker-lifecycle試験](../tests/review/worker-lifecycle.test.ts)のadmission slot保持ケース（duration約2,640ms、timeout文言なし）で、`QRY-002`の開始より前に完了している。timeoutを最初の異常とは扱わない。
 
-同ケースは2種類のenvelopeを順に検証し、[ReviewTestScope](../tests/review/fixtures/review-test-scope.ts)を使う。ただしこの観測回では当該ケースのworker lifecycleを保存しておらず、どちらのenvelope／worker段階で上限に達したかは未確定。15失敗には10件の5秒timeoutと、worker／cleanup関連の別assertion失敗5件が含まれる。全てを同じ原因と扱わない。
+同ケースは2種類のenvelopeを順に検証し、[ReviewTestScope](../tests/review/fixtures/review-test-scope.ts)を使う。ただしこの観測回では当該ケースのworker lifecycleを保存しておらず、どちらのenvelope／worker段階で上限に達したかは未確定。15失敗には10件の5秒timeoutと、timeout文言のない5件（worker-lifecycle 3件、worker-supervisor 1件、r2-mcp 1件）が含まれる。観測器が保存したのはtimeout文言の有無だけで、例外本文は採取していない。この5件の失敗種別は未確定で、worker／cleanupとの関連はケース名からの推定に留まる。全てを同じ原因と扱わない。
 
 一方、過去2回のJSONに残っていたtarget-selectionの失敗9ケースの既存`bp5_review_lifecycle`を確認できた。8ケースは最後のworkerのready未受理（ready_ms=null、analyze／finish未開始）のまま約5秒でterminateしており、残るBR-005の1ケースはready受理後、finish開始約4,807ms・terminate約5,002msであった。全9ケースでaborted=true／close_requested=true／pending_reviews=0、生成workerのexited=trueを確認した。startup待ちとfinish待ちを区別でき、これらのケースではcleanup後に未完了レビューを残したとは言えない。CPU／loader等のどこが遅かったかはこの診断だけでは確定しない。
 
-### 8.3 adapterの後続失敗理由
+### 9.3 adapterの後続失敗理由
 
-[adapter試験](../tests/review/update-set-adapter.test.ts)の単独観測は54 tests全件成功、55呼出しの固定結果を観測した。新しい通常並列観測`full`でもadapterは全件成功し、review_busyは0だった。したがって過去2回のisError=trueの理由を、今回の自然観測だけからreview_busyと確定することはできない。
+[adapter試験](../tests/review/update-set-adapter.test.ts)の単独観測は54 tests全件成功、55呼出しの固定結果を観測した。新しい通常並列観測`full`でもadapterは全件成功し、review_busyは0だった。ただし`full`のadapterは最大約4,610msで、約4.1秒以上のケースが4件あり、5秒上限との差は最小約390msだった。`full_checked`の最大は約376ms、単独の`adapter_checked`の最大は約3,664msである。上限に近づいた事実であり、遅延の原因を示すものではない。したがって過去2回のisError=trueの理由を、今回の自然観測だけからreview_busyと確定することはできない。
 
 別途、合成fetchの最初の応答だけを6,000ms遅らせる負の対照`adapter_delay_drained`を実施した。実fetch／外部通信へフォールバックせず、既存のfake fetchにだけ遅延を加えた。製品の全60秒・各phase期限・Vitestの5秒上限は変更していない。
 
@@ -120,30 +120,43 @@ resource故障のうちupper／localは、本文破棄確認は成立するが�
 
 静的経路も整合する。[adapter](../src/review/update-set-adapter.ts)はworker closeをawaitしてからsessionをcloseし、[bounded-read](../src/servicenow/bounded-read.ts)は同principalのadmissionをclose時に解放する。既存adapter試験のafterEachはmock復元／実timer復帰だけで、Vitestのtimeout signalを元レビューへ渡したり未完了Promiseをdrainしたりしない。対してtarget-selectionはReviewTestScopeでそれを行う。確認できた再現条件は「5秒試験が先に終わり、元レビューが未完了のまま同principalの次ケースが始まること」であり、恒久的なadmissionリークの証拠ではない。過去の自然失敗全てがこの経路だったかは、当時の理由code未採取のため未確定に残す。
 
-### 8.4 stdio保留の分類
+### 9.4 stdio保留の分類
 
 [stdio試験](../tests/review/stdio-review.test.ts)は、beforeAllで`execFileSync`によるTypeScriptビルドを実行する。子ビルドのtimeoutとhook上限は各60,000ms、本体の上限は30,000msである。過去2回のsuite messageは`spawnSync ... ETIMEDOUT`、本体stateはskippedだった。新しい観測`full`もmodule failed／beforeAll未完了／spawn_timeout=trueだった。本体が任意にskipされたのではなく、事前ビルド失敗により未実行となった保留であり、本体30秒timeoutやレビュー拒否と混同しない。
 
 ログ分割訂正後のstdio単独観測は、ビルド約5,770msで終了し、本体1 test成功。後述の通常並列`full_checked`は、事前ビルド約7,812msで終了し本体も成功した。60秒に達する負荷条件の閾値や、ビルド内部のどの工程が遅延したかまでは未確定。現行hook／子プロセス／本体の期限は一切延長していない。
 
-### 8.5 再観測結果と証拠
+### 9.5 再観測結果と証拠
 
 `full_checked`では通常の並列設定のまま13,770 tests全件成功、失敗・保留0だった。adapter 54 tests／55呼出しにreview_busyはなく、stdioも実行された。観測器にはログ分割と既存lifecycle metadata採取の訂正があるため、完全に同一の計測器での比較とは言わない。リポジトリのソース・期限・並列設定は両回とも不変である。通常並列での成功も確認できたが、再現性の問題を修正したわけではなく、§5・7の未解消履歴を取り消さない。
 
-一時runnerの実行方法は`bdo node /private/tmp/servicenow-timeout-observer.mjs <mode>`。runnerと観測JSONはローカル一時領域にだけあり、配布物やコミット対象へ追加しない。以下の数値と結論は本MDへ残す。一時ファイルは将来消える可能性がある。
+一時runnerの実行方法は`bdo node /private/tmp/servicenow-timeout-observer.mjs <mode>`。runnerと観測JSONはローカル一時領域にだけあり、配布物やコミット対象へ追加しない。以下の数値と結論は本MDへ残す。一時ファイルは将来消える可能性がある。runnerは12:00:22に上書きされており、最終版のSHA-256は`d9c34d53349aa61439d254a346cf538a24da5d452f677b224bff5ee510a297b4`である。ファイル時刻から、`full_checked`と`adapter_delay_drained`は最終版、`full`・`adapter_checked`・`stdio_checked2`はそれより前の版による観測で、旧版は保存していない。
 
 | mode／観測JSON（`/private/tmp/servicenow-timeout-`に続く名称） | 結果 | SHA-256 |
 | --- | --- | --- |
 | `full.json` | 15失敗・1保留、adapter成功・stdio事前ビルドtimeout | `54f497140c04391282b97b0cf284bc9d5d3cd433d74a7111129378c5fa2f032d` |
 | `full_checked.json` | 通常並列13,770成功、失敗・保留0 | `573e69d58f5a5207475259ba0f3c631fef1528597507ab52dab69854b67819e8` |
-| `adapter_checked.json` | 単独54成功、55呼出しの番号対応確認 | `6fa27eb614fc7b520a29ffd5a575a21100c46d035665bd5336c6e63df73bc0e2` |
+| `adapter_checked.json` | 単独54成功、55呼出しで未対応番号0件（48番号） | `6fa27eb614fc7b520a29ffd5a575a21100c46d035665bd5336c6e63df73bc0e2` |
 | `adapter_delay_drained.json` | 意図的6秒遅延で46 review_busy、自然終了後に回復 | `0289b0b61fccd649383383ada3fde4cee97054667ce0c8897540e3acd83e1637` |
 | `stdio_checked2.json` | 単独本体成功、事前ビルド5,770ms | `f8214953700323a3eabed4f20c07b43653db1cb892812e6fd66f26b98834983f` |
 
-### 8.6 未解消点と次の候補（未実装）
+### 9.6 未解消点と次の候補（未実装）
 
 1. adapter試験のtimeout時に元レビューを取消・終了待ちし、mock復元より先に解放を待つ試験所有権の接続。既存ReviewTestScopeの適用を候補とし、admissionの強制resetや期限延長で救済しない。
 2. 通常並列のworker ready待ち／finish待ちと、複数envelopeを1ケースで検証する累積時間の切り分け。起動・解析・終了の各費目を分け、CPU競合／loader等の原因を確定する。構成や製品期限は本調査で変更しない。
 3. stdio事前ビルドの重複・他試験との競合の切り分け。将来ビルドを統合／別phase化する場合もdistの鮮度検証を省略しない。現在の60秒を延ばしたりhookを無条件skipしたりしない。
 
 以上は次の対応候補で、今回の実装指示ではない。repo内変更は本記録のみ。commit／seal成功・正常終端・実接続を有効化せず、全体受付無効・Unknown・調査保留を継続する。
+
+## 10 レビュー修正（2026-11-04）
+
+`e11b665`のレビューで次を訂正・補足した。文書だけの修正で、ソース・試験・設定・期限と観測JSONは変更していない。§9の診断の結論は変わらない。
+
+- 節番号の重複を解消するため、timeoutの切り分けを§9へ繰り下げた。§6の「§8」は「コミット前の再検証」を指す。
+- 調査基準HEADの`94b81c4`を、観測実行時の`3758109`へ訂正した。両者の差は、Vitestが実行しないcompiled fixtureと文書だけである。
+- §9.2へ、最初に失敗完了したのは5秒timeoutではないケースであることを追記し、「別assertion失敗」の記述を観測で確認できる範囲へ改めた。
+- §9.1と§9.5へ、番号が名称単位であること、および観測器の版を追記した。§9.3へ`full`のadapter所要時間を追記した。
+
+レビューでは5件の観測JSONのSHA-256と記載値を再計算し、一致を確認した。`adapter_delay_drained`はscratchpadへコピーした観測器で再実行し、47失敗、review_busy 46件、その他7件を再現した。元レビューは約6,128msで自然終了し、再レビューも成功した。1件のreview_busyの時刻が65,036msと見えるのは、当該ケースが偽のDateを使うためで、受信順では46件全てが元レビュー終了より前である。
+
+修正前のrepo全体の確認は、lint（error 0・warning 374）、build、梱包分類監査（441ファイル、Compiled AC-B 81件を含む）が成功した。全体試験は他の検査と同時に走らせず`--maxWorkers=3`で実行し、287ファイル／13,770件成功・失敗0だった。これは通常並列のtimeoutの解消や原因確定を示さず、§9.6の候補は未実装のままである。
