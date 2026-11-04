@@ -536,6 +536,15 @@ try{
   for(const fault of ['atomicPreparation = Object.freeze({ ...atomicPreparation, deadlineMs: 59999 });','invalidations++;','atomicPreparingBundle = Object.freeze({ ...atomicPreparingBundle });']){
     acClean(setup(await load(t=>t.replace(acFinal[0],fault+' '+acFinal[0]),acFactory)),'binding','final');acFaults++;
   }
+  // Rewrite the bundle and wrapper together: only the full same-origin bundle check can reject this, at either stage.
+  const acBundleCopy='const nb = Object.freeze({ ...atomicPreparingBundle }); atomicPreparingBundle = nb; atomicPreparation = Object.freeze({ ...atomicPreparation, bundle: nb }); ';
+  for(const [site,phase] of [[acWork[0],'post'],[acFinal[0],'final']]){acClean(setup(await load(t=>t.replace(site,acBundleCopy+site),acFactory)),'binding',phase);acFaults++;}
+  // Work-stage state, source-slot and coherent shell drift must each reject at this check, not only at the entry.
+  for(const fault of ['buildingBundle = atomicPreparingBundle;','consumingBundle = atomicPreparingBundle;','proofIssueState = "issuing";','bundleReadies = 0;','atomicStarted = false;','initial = Object.freeze({});',
+    'atomicShell = Object.freeze({ ...atomicShell }); atomicPreparation = Object.freeze({ ...atomicPreparation, shell: atomicShell });']){
+    acClean(setup(await load(t=>t.replace(acWork[0],fault+' '+acWork[0]),acFactory)),'binding','post');acFaults++;
+  }
+  {let guards=0;const r=setup(await load(t=>t.replace(acSite,'destinationOwner = Object.freeze({ ...destinationOwner }); '+acSite),acFactory),s=>{if(s.startsWith('atomic_prepare_'))guards++;});acClean(r,'state','entry',0);assert.equal(guards,0);acFaults++;}
   const acForeign=await load(t=>'let temporaryForeignAtomic;\n'+t.replace(acWork[0],'if (!temporaryForeignAtomic) temporaryForeignAtomic = atomicPreparation; else atomicPreparation = temporaryForeignAtomic; '+acWork[0]),acFactory);
   acClean(setup(acForeign),'state','fixed_abort');acClean(setup(acForeign),'binding','post');acFaults++;
   // An allocation exception still runs post; a prior hard stop does not run a new checkpoint.

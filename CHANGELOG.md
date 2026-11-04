@@ -170,6 +170,8 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 ### Added
 
+- The OB-03 AC-A compiled fixture adds 10 faults: same-origin bundle and wrapper rewrites at work and final that only the full bundle check can reject, work-stage state and source-slot drift, a coherent shell rewrite and an entry destination-owner change. Synthetic tests also pin the invalidated state after source close or cleanup start. Each of these was previously unobserved. The kernel itself is unchanged.
+
 - The OB-03 FP3-C compiled fixture adds 11 faults: each retire-entry term rejected just before the use right is removed, a completed count during work, and a hard stop during work that must not run the post guard. A temporary oracle also observes the retired state at the consumer return. Each of these was previously unobserved. Consumer test assertions moved outside the guard, and one strict type error in the FP-2 test was resolved. The kernel itself is unchanged.
 
 - The OB-03 FP3-B compiled fixture adds 17 faults: each builder entry one-shot term and pre-allocation check must stop with no bundle allocated, and building and prepared stages each reject their own state drift. An FP3-A issue-start fault covers the moved start check. Each of these checks was previously unobserved. The kernel itself is unchanged.

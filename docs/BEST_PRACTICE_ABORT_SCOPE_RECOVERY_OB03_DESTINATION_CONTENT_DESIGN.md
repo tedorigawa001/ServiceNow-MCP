@@ -72,7 +72,7 @@ reviewed出力0件でも親省略により元reviewedがあれば、元body数�
 
 ## 6 一度限りの移譲とatomic commit
 
-AC-A追記：[atomic commit準備設計](BEST_PRACTICE_ABORT_SCOPE_RECOVERY_ATOMIC_COMMIT_FAILURE_DESIGN.md)draft-0.2の§11にowner／空shell・reserved→preparing・一度限りclaim・固定診断と全破棄の限定実装を分離した（[検証記録](E2E_BEST_PRACTICE_ATOMIC_PREPARATION_ACA_2026-11-04.md)）。同bundleのbasic bindingまでで固定abortし、staged record・terminal binding・atomic commit／seal成功は未実装のままとする。
+AC-A追記：[atomic commit準備設計](BEST_PRACTICE_ABORT_SCOPE_RECOVERY_ATOMIC_COMMIT_FAILURE_DESIGN.md)の§11にowner／空shell・reserved→preparing・一度限りclaim・固定診断と全破棄の限定実装を分離した（[検証記録](E2E_BEST_PRACTICE_ATOMIC_PREPARATION_ACA_2026-11-04.md)）。同bundleのbasic bindingまでで固定abortし、staged record・terminal binding・atomic commit／seal成功は未実装のままとする。
 
 [atomic commit準備・線形化点と失敗時所有権の詳細設計](BEST_PRACTICE_ABORT_SCOPE_RECOVERY_ATOMIC_COMMIT_FAILURE_DESIGN.md)で、未公開staged状態・同canonical recordの単一線形化点・commit前後の全破棄と同FailureOwnerへの責務保持を対にした。移譲元borrow除去のprivate境界と正常終端は未確認のまま残す。設計のみであり、固定abort・正式発行口閉鎖・全体受付無効・Unknown・調査保留を維持する。
 

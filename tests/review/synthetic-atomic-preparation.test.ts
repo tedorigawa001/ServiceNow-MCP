@@ -41,7 +41,7 @@ it.each(['atomic_prepare_pre','atomic_prepare_post'])('delegates the original fi
 });
 it('rejects early/foreign arguments and source or cleanup invalidation',()=>{
   const early=setup();expect(()=>early.r.prepareAtomicCommit()).toThrow();expect(early.r.inspect().atomic_preparation).toMatchObject({starts:0,failure:{phase:'upstream'}});
-  for(const kind of ['source','cleanup','argument']){const f=setup(),t=f.ready();if(kind==='source')f.r.beginSourceClose();if(kind==='cleanup')f.r.beginCleanup(t.cleanup);expect(()=>kind==='argument'?f.r.prepareAtomicCommit({}):f.r.prepareAtomicCommit()).toThrow();expect(f.r.inspect().atomic_preparation?.starts).toBe(0);cleared(f.r);}
+  for(const kind of ['source','cleanup','argument']){const f=setup(),t=f.ready();if(kind==='source')f.r.beginSourceClose();if(kind==='cleanup')f.r.beginCleanup(t.cleanup);if(kind!=='argument')expect(f.r.inspect().atomic_preparation).toMatchObject({state:'invalidated',failure:null,owner_pending:false,shell_pending:false});expect(()=>kind==='argument'?f.r.prepareAtomicCommit({}):f.r.prepareAtomicCommit()).toThrow();expect(f.r.inspect().atomic_preparation?.starts).toBe(0);cleared(f.r);}
 });
 it('does not replace the existing FP3-C retirement continuation',()=>{
   const r=createSyntheticBundleConsumerRoot(bundlePartsInput(),{guard:()=>undefined});expect(r).not.toHaveProperty('prepareAtomicCommit');expect(r.inspect()).not.toHaveProperty('atomic_preparation');

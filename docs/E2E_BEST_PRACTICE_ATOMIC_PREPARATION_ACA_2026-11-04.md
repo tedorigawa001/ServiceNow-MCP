@@ -43,12 +43,27 @@ AtomicPreparationはbasic bindingであり、完成PreCommitBundle・CanonicalCo
 
 ## 5 維持する制約と次工程
 
-正式発行口閉鎖・全体受付無効・Unknown・VM／監視／telemetry調査保留を維持する。seal成功・実session／worker／runtime接続・実通信・実機操作・設定変更・Pushは行っていない。実装時点では未コミットとし、その後の指示によるコミット前検証を次節に記録する。
+正式発行口閉鎖・全体受付無効・Unknown・VM／監視／telemetry調査保留を維持する。seal成功・実session／worker／runtime接続・実通信・実機操作・設定変更・Pushは行っていない。実装時点では未コミットとし、その後の指示によるコミット前検証を§7に記録する。
 
 追加費目はshell／owner／marker／空handle・元identity台帳、準備wrapper／重複参照保持、pre／post・work／finalの全結合照合、固定診断・全clearとcustody検査。元C/G/P・retry・210試行・全60秒・局所bounded上限は不変。全work／heap・copyピーク・3round配賦・必要予約／中断粒度はUnknownのままにする。
 
 次はAC-Bの同bundle／record／terminal bindingと未公開staged境界。AC-Aのpreparingやwork通過をstaged・利用可能dest・終端証拠として使わない。atomic commit・seal成功と正常terminal-only接続は別の明示指示待ちである。
 
-## 6 コミット前の再検証
+## 6 レビュー修正（2026-11-04）
+
+本記録の試験件数・故障件数は修正前の記録として残す。レビュー時にrepo全体のlint（error 0・warning 374）、build、梱包分類監査（441ファイル、Compiled AC-Aを含む）、全体合成286ファイル／13,760件成功・失敗0を確認した。
+
+kernelの約70変異を確認し、次の条件は外しても既存試験が全て通過した。実装は正しく、試験だけの不足である。
+
+- `checkAtomicPreparation`の`checkCompleteBundleBindings`呼出し。wrapperの照合が先に拒否し、§1の元bundle全構成の再照合へ届く故障がなかった。
+- work段階の`buildingBundle`／`consumingBundle`／`proofIssueState`／`bundleReadies`／`!atomicStarted`／`bundleSourcesDetached()`。これらの状態故障は入口にしかなかった。
+- 照合側の`atomicShell!==atomicOrigins.shell`と、入口の`atomicOwner.destination!==destinationOwner`。
+- source／cleanup開始後の`invalidated`状態。§2に記載があるが、常に`failed`としても通過した。
+
+[compiled fixture](../tests/review/fixtures/compiled-destination-preparation.mjs)に10故障を追加した。bundleとwrapperを揃えて差し替えるwork／finalの2件、work段階の状態・元利用slotの6件、shell slotとwrapperを揃えて差し替える1件、入口のdestination owner変更1件である。各条件を一つずつ外す9変異は、それぞれ対応する故障で初めて失敗した。[合成試験](../tests/review/synthetic-atomic-preparation.test.ts)にはsource／cleanup直後の`invalidated`・診断なし・owner／shell不在の確認を追加し、常に`failed`とする変異がこの試験だけを失敗させることを確認した。
+
+照合側の`atomicOwner!==atomicOrigins.owner`（`p.owner`、`p.shell`と`p.shell.owner`、shell台帳の照合から導出）、入口の`atomicOwner!==atomicOrigins.owner`と`atomicShell.owner!==atomicOwner`の片方、照合の`p.owner!==atomicOwner`と`p.shell.owner!==p.owner`の片方（いずれも両方を外す変異は検出される）、`!atomicOwner`／`!atomicShell`（台帳照合が同理由で拒否）、owner／shellのtoken照合（台帳との同一性から作成時の値に確定）、`p.owner.destination`（全構成照合に包含）、`!atomicPreparingBundle`（`p.bundle`照合が拒否）、`!busy`・`first`（`operation`内でだけ呼ばれ、hardは先に停止）は等価変異として扱う。kernelは変更せず、設計書をdraft-0.3とした。vitest試験数は不変。修正後も全体合成286ファイル／13,760件成功・失敗0。
+
+## 7 コミット前の再検証
 
 ユーザーのコミット指示後、AC-Aの8ファイルだけをstageし、未stage差分・未追跡ファイルがない状態で再検証した。ビルド、対象4ファイルのESLint、全体286 files／13,760 tests（失敗・保留0）が成功した。出力先は`/private/tmp/servicenow-aca-commit-vitest.json`。外部取得禁止・既存キャッシュのみの梱包動作試験（441 files）、AC-Aの34故障・4残留slot・4変異対照と旧保証を含む配布監査（441 files）も成功した。関連3文書のローカルリンク22件と差分の空白検査も問題なし。初回失敗と診断件数の修正記録は保持し、期限・閉鎖状態は変更していない。
