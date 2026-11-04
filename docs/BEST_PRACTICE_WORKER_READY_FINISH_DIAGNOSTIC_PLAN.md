@@ -1,6 +1,6 @@
 # worker ready／finish待ちの切り分け計画
 
-Version: draft-0.8 / Date: 2026-11-04 / 調査基準HEAD: `c581e5c` / WF-A実装基準HEAD: `1ffb8fe` / WF-B調査HEAD: `b5f9933`。
+Version: draft-0.9 / Date: 2026-11-04 / 調査基準HEAD: `c581e5c` / WF-A実装基準HEAD: `1ffb8fe` / WF-B調査HEAD: `b5f9933`。
 
 draft-0.1のレビュー修正: スイート全体の負荷の仮説H5とその採取手順、`ReviewTestScope`の観測範囲外、既存JSONのworker別時刻、§6の実行順を追加した。§2〜5の現行経路と対照の内容は変更していない。
 
@@ -14,7 +14,9 @@ draft-0.6: [WF-B限定反復の記録](E2E_BEST_PRACTICE_WORKER_CORRELATION_WFB_
 
 draft-0.6のレビュー修正: 過去の失敗が約2分以上かかる時間帯に集中し、その中で通常並列だけが失敗していたことを§7へ反映し、遅い回を調べる目安を追加した。
 
-draft-0.8: [再採取・証拠保全手順draft-0.1](BEST_PRACTICE_WFB_RECAPTURE_EVIDENCE_PROCEDURE.md)を追加。開始gate・最大2回のsession案・非上書き保存・旧一時観測器の不足・終了確認と未承認事項を整理した。再実行・実装・保管操作の承認ではない。
+draft-0.8: [再採取・証拠保全手順](BEST_PRACTICE_WFB_RECAPTURE_EVIDENCE_PROCEDURE.md)を追加。開始gate・最大2回のsession案・非上書き保存・旧一時観測器の不足・終了確認と未承認事項を整理した。再実行・実装・保管操作の承認ではない。
+
+draft-0.8のレビュー修正: 手順の保全対象へ自然失敗の証拠を追加し、参照から版表記を外した。
 
 Status: **WF-A実装済み、WF-Bの限定反復を実施。再採取手順は設計のみ。loader内部／strict受理観測と自然失敗時の原因確定は未完了。** 正式発行口閉鎖・全体受付無効・Unknown・VM／監視／telemetry調査保留を維持する。製品／試験期限・並列設定を変更せず、seal成功・実接続・実通信・設定変更・Pushは行わない。
 
