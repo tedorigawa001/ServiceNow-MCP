@@ -2,11 +2,11 @@
 
 Date: 2026-11-04 / 調査HEAD: `0df669a` / Status: **今回timeout再現なし。過去の失敗の根本原因は未確定。**
 
-[診断計画draft-0.2](BEST_PRACTICE_WORKER_READY_FINISH_DIAGNOSTIC_PLAN.md)のH1〜H5を、既存JSON再読と現行HEADの合成試験で調べた。製品／試験ソース・期限・設定ファイルは変更していない。正式発行口閉鎖・全体受付無効・Unknown・調査保留を維持し、seal成功・実接続・実サービス通信・設定変更・Push・commitは行っていない。
+[診断計画](BEST_PRACTICE_WORKER_READY_FINISH_DIAGNOSTIC_PLAN.md)のH1〜H5を、既存JSON再読と現行HEADの合成試験で調べた。製品／試験ソース・期限・設定ファイルは変更していない。正式発行口閉鎖・全体受付無効・Unknown・調査保留を維持し、seal成功・実接続・実サービス通信・設定変更・Push・commitは行っていない。
 
 ## 1 結論と確度
 
-1. **全体負荷による時間の増大（H5）を支持する材料が得られた。** 同HEAD・同観測器の通常並列と実行時maxWorkers=3の比較では、target-selectionの生成→ready形messageの中央値が386ms対182ms、case中央値が464ms対213msだった。workerを直接使わない重い検査も短くなり、OS CPU busy標本中央値は約98%対67%だった。ただし比較は各1回で、時間帯・他process・cache／GC等を分離し切っていない。
+1. **全体負荷による時間の増大（H5）を支持する材料が得られた。** 同HEAD・同観測器の通常並列と実行時maxWorkers=3の比較では、target-selectionの生成→ready形messageの中央値が386ms対182ms、case中央値が464ms対213msだった。workerを直接使わない重い検査も短くなり、OS CPU busy標本中央値は約98%対67%だった。ただし比較は各1回で、時間帯・他process・cache／GC等を分離し切っていない。この数値は通常並列のうち遅い回との比較である。同じ通常並列でもready待ち中央値は230〜419msと約1.8倍の差があり、速い回のfull-1と比べると230ms対182msで約1.3倍に留まる（§3の比較表）。並列数の効果とマシン状態の変動は、今回の結果では分離できていない。
 2. **worker起動費と同case内の複数review累積（H1／H3）は有力な増幅要因。** 過去のBR-005はfinish開始約4.8秒でもready形message前に約3.7秒を使っていた。CL-008はcase内3個目のworkerでready未観測。finishで止まった事実だけでfinalize内部が主因とは言えない。
 3. **5秒framework timeoutは今回再現しなかった。** 通常並列4回は全て13,773件成功・失敗0・skip0。並列数3比較1回も同件数成功。これらで過去の失敗履歴を取り消さない。
 4. **新たな停止／admission漏れの証拠は得ていない。** 既存記録の失敗後pending=0／worker exitとadapter回帰は維持されるが、未観測の全経路へ一般化しない。
@@ -40,7 +40,19 @@ Date: 2026-11-04 / 調査HEAD: `0df669a` / Status: **今回timeout再現なし�
 | full-bounded-1 | 実行時maxWorkers=3、同じload観測 | 13,773 | 64.6秒 |
 | baseline-2 | 通常並列、標準JSONへ戻す | 13,773 | 62.3秒 |
 
-baseline-2も約62秒であり、full-2の約63秒を全て観測器の負荷とは言えない。逆に計測負荷も否定しない。並列数3はcase時間を縮めたが全体時間は短くなっておらず、恒久設定の変更や一般的な高速化として適用・推奨しない。
+同じHEADの通常並列でも全体時間に約40％の差があり、次のように速い回と遅い回に分かれた。
+
+| 実行（実行順） | 並列数 | 全体時間 | ready待ち中央値 | OS busy中央値 |
+| --- | --- | --- | --- | --- |
+| baseline-1 | 通常 | 45.5秒 | 231ms | 未採取 |
+| full-1 | 通常 | 44.9秒 | 230ms | 99.7% |
+| full-2 | 通常 | 63.3秒 | 386ms | 98.3% |
+| full-bounded-1 | 3 | 64.6秒 | 182ms | 67.2% |
+| baseline-2 | 通常 | 62.3秒 | 419ms | 未採取 |
+
+full-1はbusy 99.7％でも速く、full-2は98.3％で遅いため、busy率では速い回と遅い回を区別できない。この差の原因は未確定である。遅い2回に挟まれたboundedの回が速いことは並列数の効果を支持する材料だが、順序を入れ替えていないため確定しない。
+
+baseline-2も約62秒であり、full-2の約63秒を全て観測器の負荷とは言えない。観測器のないbaseline-2でもready待ちが伸びているため、伸びは観測器だけによるものではない。逆に計測負荷も否定しない。並列数3はcase時間を縮めたが全体時間は短くなっておらず、恒久設定の変更や一般的な高速化として適用・推奨しない。
 
 ### 3.1 target-selection
 
@@ -48,28 +60,28 @@ ready待ちは既存metaのready_ms−created_msで、strict受理・loaderだ�
 
 | artifact | case中央値／p95／最大（ms） | ready待ち中央値／p95／最大（ms） |
 | --- | --- | --- |
-| baseline-1 | 290／647／855 | この表では未集計 |
+| baseline-1 | 290／647／855 | 231／320／357 |
 | single-1 | 114／223／281 | 96／118／132 |
 | full-1 | 279／695／1,342 | 230／318／765 |
 | single-2 | 154／371／486 | 133／162／198 |
 | full-2 | 464／1,055／1,486 | 386／557／710 |
 | full-bounded-1 | 213／730／784 | 182／326／477 |
-| baseline-2 | 532／1,088／1,272 | この表では未集計 |
+| baseline-2 | 532／1,088／1,272 | 419／650／835 |
 
 H1の区間が並列条件で伸びたが、tsx register・module import・OS schedulingへの帰属は未確定。full-2のtarget-selectionで標本があるcaseの最大event loop遅延は約44.5ms（caseごとの最大値のp95は約37.2ms）、single-2は約27.9ms、boundedは約31.1ms。これを過去の失敗回の5秒停止を説明する計測とは扱わない。
 
 ### 3.2 worker以外と全体負荷
 
-同HEAD・同観測器のfull-2／bounded比較。期待値生成・oracle内容・期限は不変。
+同HEADのfull-2／bounded比較に、観測器の異なるfull-1を参考として加えた。期待値生成・oracle内容・期限は不変。
 
-| case | 通常並列（ms） | maxWorkers=3（ms） |
-| --- | --- | --- |
-| synthetic-full-mixed-draft、v0.2全asset／trace oracle | 2,159 | 725 |
-| synthetic-parent-omission-owner、100決定／101拒否 | 1,047 | 206 |
-| http-classification-legacy、parent全status | 832 | 144 |
-| synthetic-pending-prefix-values、v0.2全配列oracle | 729 | 224 |
+| case | full-2（ms） | maxWorkers=3（ms） | full-1（ms） |
+| --- | --- | --- | --- |
+| synthetic-full-mixed-draft、v0.2全asset／trace oracle | 2,159 | 725 | 846 |
+| synthetic-parent-omission-owner、100決定／101拒否 | 1,047 | 206 | 754 |
+| http-classification-legacy、parent全status | 832 | 144 | 927 |
+| synthetic-pending-prefix-values、v0.2全配列oracle | 729 | 224 | 484 |
 
-full-2のOS busy標本中央値98.3%、bounded67.2%。full-2のloadavgは開始約9.77／10.12／7.02、終了約31.94／16.89／9.80。loadavgには時間窓・他processの影響があり、core数との比だけで原因を確定しない。worker以外にも共通の遅延が見える点はH5を支持する。
+full-2のOS busy標本中央値98.3%、bounded67.2%。full-2のloadavgは開始約9.77／10.12／7.02、終了約31.94／16.89／9.80。loadavgには時間窓・他processの影響があり、core数との比だけで原因を確定しない。worker以外にも共通の遅延が見える点はH5を支持する。ただし`synthetic-full-mixed-draft`はfull-1では846msで、boundedとの差は約1.17倍に留まり、差の大きさは実行回により変わる。
 
 free memory標本やvm_statの圧縮counterも取得できたが、freeの小ささだけでmemory pressure／swapを原因としない。swapusageは環境の権限制約で取得できなかった。過去失敗時のOS負荷は未保存で、現在値を過去へ当てはめない。
 
@@ -80,12 +92,24 @@ free memory標本やvm_statの圧縮counterも取得できたが、freeの小さ
 - H1／H3: 起動区間の拡大・複数worker累積は観測できる。内部の処理／待ちはUnknown。
 - H2: finish固有の長時間停止は今回再現しない。過去finish開始約4.8秒は開始前の費用も大きく、finalizeの退行と断定しない。
 - H4: 記録の範囲では終了後の未完了reviewを残さない。未観測経路はUnknown。
-- H5: 負荷・非worker case・起動待ちの変動から第一候補として優先する。ただし今回も高いbusy率で成功しており、timeoutを起こす十分条件は得られていない。
+- H5: 負荷・非worker case・起動待ちの変動から第一候補として優先する。ただし今回も高いbusy率で成功しており、timeoutを起こす十分条件は得られていない。計画に合わせ、スイート自身の並列負荷（H5a）と外部・マシン状態（H5b）を分ける。§3の速い回と遅い回の差はH5aでは説明できず、H5bはUnknownである。
+- 遅延の大きさ: 今回の7回とも4秒以上のcaseは0件で、最大は`security.test.ts`の約3秒、target-selectionの最大は1,486msだった。過去の失敗回は`prefix`配列case 11,082ms（baseline-1では653ms、約17倍）、`full`のadapter最大は4,610ms（`full_checked`では376ms）である。今回の条件間の差は最大で約6倍で、失敗回の状態は再現していない。失敗回のdurationを処理時間とは解釈しないが、今回の負荷と同程度の負荷で過去の失敗を説明できるとは言えない。
 - stdio: 今回の全体実行は本体も成功。新runnerのmodule情報でspawn timeoutなし。ただしbeforeAllビルドを個別採取しておらず、module全体時間をビルド時間にしない。過去の60秒ETIMEDOUTは未解消として残す。
 
 次に必要なのは、自然失敗回そのもののboundedなreview／request相関と起動内部区間。WF-Aの恒久test-only観測・独立対照を先にレビューして追加する案、または一時観測を同条件で後日再実行する案がある。期限延長・skip・admission強制resetでは回避しない。意図的なマシン全体のCPU／memory stress、tool導入、profiling設定変更は行っていない。AC-C接続の未確認事項も解消扱いにしない。
 
-## 5 artifact識別
+## 5 レビュー修正（2026-11-04）
+
+`b1699e9`のレビューで次を追加・訂正した。文書だけの修正で、artifact・ソース・試験・設定・期限は変更していない。記載済みの観測値は変更せず、§1の結論へ限定を加えた。
+
+- 同じ設定の実行間の差を§3の比較表として追加し、§1の比較が遅い回とのものであることを明記した。
+- H5をH5a／H5bへ分け、過去の失敗回との遅延の大きさの差を§4へ記録した。
+- §3.1の未集計だったbaselineのready待ちを既存JSONから集計し、§3.2へfull-1を追加した。
+- 参照から版表記を外した。
+
+修正前のrepo全体の確認は、lint（error 0・warning 374）、build、梱包分類監査（441ファイル）が成功した。全体試験は他の検査と同時に走らせず`--maxWorkers=3`で実行し、287ファイル／13,773件成功・失敗0だった。これも通常並列のtimeoutの再現や解消を示さない。
+
+## 6 artifact識別
 
 後半runnerのSHA-256は`b347739955ef6f710b3072bf2fefdd26735566493d4fb58d80349c0dcbb080a4`、一時setupは`c5a587e8127b51ea73e52efd98855bcffa50640736f58affd4ff09549730a19e`。vitest.config.tsは`4acfd66a6d551cd3ac9363a04df1d2c41ae993392b63a45f323c0ab89a4fc0f5`、package-lock.jsonは`3c1840c0f0a2820a28870a90b08ff14943dca339e0eb1e5f3b57a4422d0ae014`。
 
