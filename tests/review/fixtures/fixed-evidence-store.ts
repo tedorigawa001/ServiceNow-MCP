@@ -28,6 +28,9 @@ interface Saved { slot: string; size: number; digest: string }
 const natural = (n: number) => Number.isSafeInteger(n) && n >= 0;
 const positive = (n: number) => natural(n) && n > 0;
 const sha256 = (bytes: Uint8Array) => createHash('sha256').update(bytes).digest('hex');
+// Intrinsic accessor: a subclass or a Proxy cannot misreport the size of the bytes it holds.
+const intrinsicByteLength = Object.getOwnPropertyDescriptor(Object.getPrototypeOf(Uint8Array.prototype), 'byteLength')!.get!;
+const realLength = (bytes: Uint8Array) => intrinsicByteLength.call(bytes) as number;
 
 export class FakeEvidenceStore {
   #reason: StoreReason | undefined;
@@ -63,6 +66,13 @@ export class FakeEvidenceStore {
     catch { return this.#fail('binding'); }
     return !this.#reason && this.#clock(this.caps.deadline) && !this.#reason;
   }
+  /** Confirmed only when the driver reports release before the finite cleanup reserve ends. */
+  #closeAttempt(handle: object) {
+    this.#cleanup = 'unconfirmed';
+    const ok = this.ops.closeOnce(handle);
+    if (ok && this.#clock(this.caps.cleanupDeadline)) this.#cleanup = 'confirmed';
+    return ok;
+  }
   #step(action: () => boolean, reason: StoreReason) {
     if (!this.#guard()) return false;
     try { if (!action()) return this.#fail(reason); }
@@ -80,11 +90,12 @@ export class FakeEvidenceStore {
     try {
       if (run !== this.run || !RUN_FILES.includes(slot) || this.#slots.has(slot)) { this.#fail('binding'); return undefined; }
       this.#slots.add(slot); // spent even when validation or create fails
-      if (!(bytes instanceof Uint8Array) || bytes.byteLength > this.caps.fileBytes
-        || bytes.byteLength > this.caps.totalBytes - this.#charged) { this.#fail('limit'); return undefined; }
-      this.#charged += bytes.byteLength; // failed/partial writes never refund the reservation
-      if (!this.#guard()) return undefined;
-      const owned = Uint8Array.from(bytes);
+      if (!(bytes instanceof Uint8Array)) { this.#fail('limit'); return undefined; }
+      const size = realLength(bytes);
+      if (size > this.caps.fileBytes || size > this.caps.totalBytes - this.#charged) { this.#fail('limit'); return undefined; }
+      this.#charged += size; // failed/partial writes never refund the reservation
+      // No callback runs between the size check and this internal-slot copy.
+      const owned = new Uint8Array(bytes);
       const digest = sha256(owned);
       if (!this.#step(() => { handle = this.ops.createExclusive(slot); return !!handle; }, 'create')) return undefined;
       let offset = 0, attempts = 0, retries = 0;
@@ -103,15 +114,12 @@ export class FakeEvidenceStore {
       if (!this.#step(() => this.ops.flushOnce(handle!), 'flush')) return undefined;
       if (!this.#step(() => {
         closed = true; // one attempt even if it throws or cannot confirm release
-        this.#cleanup = 'unconfirmed';
-        const ok = this.ops.closeOnce(handle!);
-        if (ok) this.#cleanup = 'confirmed';
-        return ok;
+        return this.#closeAttempt(handle!);
       }, 'close')) return undefined;
       let reread: Uint8Array | undefined;
       if (!this.#step(() => { reread = this.ops.readBack(handle!, slot, this.caps.fileBytes); return reread instanceof Uint8Array; }, 'reread')) return undefined;
-      if (reread!.byteLength > this.caps.fileBytes || reread!.byteLength !== owned.byteLength) { this.#fail('reread'); return undefined; }
-      if (sha256(Uint8Array.from(reread!)) !== digest) { this.#fail('digest'); return undefined; }
+      if (realLength(reread!) !== owned.byteLength) { this.#fail('reread'); return undefined; }
+      if (sha256(reread!) !== digest) { this.#fail('digest'); return undefined; }
       if (!this.#guard()) return undefined;
       const receipt = Object.freeze({}) as FakeSaveReceipt;
       this.#receipts.set(receipt, Object.freeze({ slot, size: owned.byteLength, digest }));
@@ -125,7 +133,7 @@ export class FakeEvidenceStore {
         this.#cleanup = 'unconfirmed';
         // Cleanup has a separate finite reserve and never resets the original failure.
         if (this.#clock(this.caps.cleanupDeadline)) {
-          try { if (this.ops.closeOnce(handle)) this.#cleanup = 'confirmed'; } catch { /* fixed diagnostic only */ }
+          try { this.#closeAttempt(handle); } catch { /* fixed diagnostic only */ }
         }
       }
       this.#busy = false;
@@ -133,7 +141,7 @@ export class FakeEvidenceStore {
   }
   consume(run: object, receipt: FakeSaveReceipt) {
     if (this.#busy) { this.#fail('binding'); return undefined; }
-    if (!receipt || typeof receipt !== 'object' || this.#reason) return undefined;
+    if (this.#reason) return undefined;
     this.#busy = true;
     try {
       const saved = this.#receipts.get(receipt);

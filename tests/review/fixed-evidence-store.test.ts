@@ -62,9 +62,14 @@ describe('fake EvidenceStore: no-replace and one-shot receipt', () => {
     const f = fixture();
     const receipt = f.store.save(f.run, 'conditions.json', abc)!;
     expect(receipt).toBeDefined();
+    expect(Object.isFrozen(receipt)).toBe(true);
+    expect(Object.keys(receipt)).toEqual([]);
     expect(f.calls.filter(x => x !== 'identity')).toEqual(['create', 'write', 'flush', 'close', 'reread']);
     expect(f.files.get('conditions.json')!.bytes).toEqual([97, 98, 99]);
-    expect(f.store.consume(f.run, receipt)).toEqual({ slot: 'conditions.json', size: 3, digest: ABC_SHA256 });
+    const saved = f.store.consume(f.run, receipt);
+    expect(saved).toEqual({ slot: 'conditions.json', size: 3, digest: ABC_SHA256 });
+    expect(Object.isFrozen(saved)).toBe(true);
+    expect(Object.isFrozen(f.store.snapshot())).toBe(true);
     expect(f.store.consume(f.run, receipt)).toBeUndefined();
     expect(f.store.snapshot()).toEqual({ reason: 'binding', claimed: 1, charged: 3, cleanup: 'confirmed' });
   });
@@ -100,6 +105,15 @@ describe('fake EvidenceStore: no-replace and one-shot receipt', () => {
     expect(f.store.consume(f.run, receipt)).toBeUndefined();
     expect(f.store.snapshot().reason).toBe('binding');
   });
+  it.each([
+    ['JSON string', '{"slot":"conditions.json","size":3}'], ['number', 1], ['null', null], ['undefined', undefined], ['function', () => undefined],
+  ])('treats a %s receipt as the same sticky failure as a forged object', (_name, wrong) => {
+    const f = fixture();
+    const receipt = f.store.save(f.run, 'conditions.json', abc)!;
+    expect(f.store.consume(f.run, wrong as unknown as FakeSaveReceipt)).toBeUndefined();
+    expect(f.store.snapshot().reason).toBe('binding');
+    expect(f.store.consume(f.run, receipt)).toBeUndefined();
+  });
   it('rejects wrong run before I/O and retains no caller bytes', () => {
     const f = fixture();
     expect(f.store.save({}, 'conditions.json', abc)).toBeUndefined();
@@ -115,6 +129,47 @@ describe('fake EvidenceStore: no-replace and one-shot receipt', () => {
     const receipt = f.store.save(f.run, 'conditions.json', bytes)!;
     expect(f.files.get('conditions.json')!.bytes).toEqual([97, 98, 99]);
     expect(f.store.consume(f.run, receipt)?.digest).toBe(ABC_SHA256);
+  });
+  it('copies at the size check, so an identity callback cannot grow the reservation or the copy', () => {
+    const f = fixture();
+    const buffer = new (ArrayBuffer as unknown as new (n: number, o: { maxByteLength: number }) => ArrayBuffer & { resize(n: number): void })(3, { maxByteLength: 64 });
+    const bytes = new Uint8Array(buffer);
+    bytes.set(abc);
+    let grown = false;
+    f.hook(op => { if (op === 'identity' && !grown) { grown = true; buffer.resize(64); } });
+    const receipt = f.store.save(f.run, 'conditions.json', bytes)!;
+    expect(grown).toBe(true);
+    expect(f.store.snapshot().charged).toBe(3);
+    expect(f.files.get('conditions.json')!.bytes).toEqual([97, 98, 99]);
+    expect(f.store.consume(f.run, receipt)).toEqual({ slot: 'conditions.json', size: 3, digest: ABC_SHA256 });
+  });
+  it('uses the real size and bytes when a subclass misreports its length', () => {
+    class Short extends Uint8Array { override get byteLength() { return 1; } }
+    const f = fixture();
+    expect(f.store.save(f.run, 'conditions.json', new Short(9))).toBeUndefined();
+    expect(f.store.snapshot()).toMatchObject({ reason: 'limit', charged: 0 });
+    expect(f.calls).toEqual([]);
+    const g = fixture();
+    for (const slot of ['conditions.json', 'runner.mjs']) expect(g.store.save(g.run, slot, new Short(8))).toBeDefined();
+    expect(g.store.snapshot().charged).toBe(16);
+    expect(g.store.save(g.run, 'load-setup.ts', new Short(1))).toBeUndefined();
+    expect(g.store.snapshot()).toMatchObject({ reason: 'limit', charged: 16 });
+  });
+  it('copies the held bytes, not what a subclass iterator yields', () => {
+    class Lying extends Uint8Array { override *[Symbol.iterator](): ArrayIterator<number> { yield* [1, 2, 3, 4, 5, 6, 7, 8, 9]; } }
+    const f = fixture();
+    const receipt = f.store.save(f.run, 'conditions.json', new Lying(abc))!;
+    expect(f.files.get('conditions.json')!.bytes).toEqual([97, 98, 99]);
+    expect(f.store.consume(f.run, receipt)).toEqual({ slot: 'conditions.json', size: 3, digest: ABC_SHA256 });
+  });
+  it.each([
+    ['array', [97, 98, 99], 'limit'], ['string', 'abc', 'limit'], ['Uint16Array', new Uint16Array(1), 'limit'], ['null', null, 'limit'],
+    ['fake instance', Object.create(Uint8Array.prototype), 'binding'],
+  ])('refuses %s content before reservation or I/O', (_name, content, reason) => {
+    const f = fixture();
+    expect(f.store.save(f.run, 'conditions.json', content as unknown as Uint8Array)).toBeUndefined();
+    expect(f.calls).toEqual([]);
+    expect(f.store.snapshot()).toMatchObject({ reason, claimed: 1, charged: 0 });
   });
   it('accepts all 14 fixed slots, and empty content has the known SHA-256', () => {
     const f = fixture({ totalBytes: 64 });
@@ -138,6 +193,22 @@ describe('fake EvidenceStore: bounded writes, retry and cleanup', () => {
     expect(offsets).toEqual([0, 1, 1, 2]);
     expect(f.calls.filter(x => x !== 'identity')).toEqual(['create', 'write', 'write', 'write', 'write', 'flush', 'close', 'reread']);
     expect(f.store.consume(f.run, receipt)?.digest).toBe(ABC_SHA256);
+  });
+  it('gives each write a private copy, so a driver cannot alter the remaining bytes', () => {
+    const f = fixture();
+    const original = f.ops.writeOnce;
+    f.ops.writeOnce = (handle, offset, bytes) => { const result = original(handle, offset, bytes); bytes.fill(0); return result; };
+    f.writes.push({ kind: 'written', bytes: 1 });
+    const receipt = f.store.save(f.run, 'conditions.json', abc)!;
+    expect(f.files.get('conditions.json')!.bytes).toEqual([97, 98, 99]);
+    expect(f.store.consume(f.run, receipt)?.digest).toBe(ABC_SHA256);
+  });
+  it('passes the fixed file cap to reread', () => {
+    const f = fixture();
+    const limits: number[] = [], original = f.ops.readBack;
+    f.ops.readBack = (handle, slot, limit) => { limits.push(limit); return original(handle, slot, limit); };
+    expect(f.store.save(f.run, 'conditions.json', abc)).toBeDefined();
+    expect(limits).toEqual([f.caps.fileBytes]);
   });
   it.each([0, 1, 2])('allows exactly %s EINTR retries', retries => {
     const f = fixture({ retries });
@@ -182,6 +253,45 @@ describe('fake EvidenceStore: bounded writes, retry and cleanup', () => {
     expect(count(f.calls, 'close')).toBe(1);
     expect(JSON.stringify(f.store.snapshot())).not.toContain('SECRET');
   });
+  it('keeps the first reason when cleanup time or a later cancel also fails', () => {
+    const f = fixture();
+    f.writes.push('throw');
+    f.hook(op => { if (op === 'write') f.time(120); });
+    expect(f.store.save(f.run, 'conditions.json', abc)).toBeUndefined();
+    expect(f.store.snapshot()).toMatchObject({ reason: 'write', cleanup: 'unconfirmed' });
+    expect(count(f.calls, 'close')).toBe(0);
+    f.store.cancel();
+    expect(f.store.snapshot().reason).toBe('write');
+  });
+  it('contains a throwing cleanup close and keeps the original reason', () => {
+    const f = fixture();
+    f.writes.push('throw');
+    f.hook(op => { if (op === 'close') throw Error('SECRET_CLEANUP'); });
+    expect(f.store.save(f.run, 'conditions.json', abc)).toBeUndefined();
+    expect(f.store.snapshot()).toMatchObject({ reason: 'write', cleanup: 'unconfirmed' });
+    expect(count(f.calls, 'close')).toBe(1);
+    expect(JSON.stringify(f.store.snapshot())).not.toContain('SECRET');
+  });
+  it.each([[119, 'confirmed'], [120, 'unconfirmed'], [500, 'unconfirmed']] as const)('reports cleanup finishing at %s as %s, in cleanup and in the normal close', (time, cleanup) => {
+    const f = fixture();
+    f.writes.push('throw');
+    f.hook(op => { if (op === 'close') f.time(time); });
+    expect(f.store.save(f.run, 'conditions.json', abc)).toBeUndefined();
+    expect(f.store.snapshot()).toMatchObject({ reason: 'write', cleanup });
+    expect(count(f.calls, 'close')).toBe(1);
+    const g = fixture();
+    g.hook(op => { if (op === 'close') g.time(time); });
+    expect(g.store.save(g.run, 'conditions.json', abc)).toBeUndefined();
+    expect(g.store.snapshot()).toMatchObject({ reason: 'deadline', cleanup });
+    expect(count(g.calls, 'close')).toBe(1);
+  });
+  it('resets the cleanup axis for each save instead of showing an earlier result', () => {
+    const f = fixture();
+    expect(f.store.save(f.run, 'conditions.json', abc)).toBeDefined();
+    expect(f.store.snapshot().cleanup).toBe('confirmed');
+    expect(f.store.save(f.run, 'report.final.json', new Uint8Array(9))).toBeUndefined();
+    expect(f.store.snapshot()).toMatchObject({ reason: 'limit', cleanup: 'not_started' });
+  });
   it.each(['identity', 'create', 'flush', 'close', 'reread'] as const)('normalizes a throwing %s without retaining exceptions', phase => {
     const f = fixture();
     f.hook(op => { if (op === phase) throw Error('SECRET_EXCEPTION'); });
@@ -195,6 +305,11 @@ describe('fake EvidenceStore: bounded writes, retry and cleanup', () => {
     f.ops.readBack = () => new Uint8Array(9);
     expect(f.store.save(f.run, 'conditions.json', abc)).toBeUndefined();
     expect(f.store.snapshot().reason).toBe('reread');
+    class Short extends Uint8Array { override get byteLength() { return 3; } }
+    const g = fixture();
+    g.ops.readBack = () => new Short(9);
+    expect(g.store.save(g.run, 'conditions.json', abc)).toBeUndefined();
+    expect(g.store.snapshot().reason).toBe('reread');
   });
   it('does not reflect an unexpected byte accessor exception', () => {
     const f = fixture();
@@ -237,9 +352,47 @@ describe('fake EvidenceStore: pinned identity and finite time', () => {
     expect(f.store.snapshot().reason).toBe('cancelled');
     expect(count(f.calls, 'close')).toBe(1);
   });
+  it('reports expiry during an operation before judging that operation\'s own result', () => {
+    const f = fixture({ retries: 0 });
+    f.writes.push({ kind: 'eintr' });
+    f.hook(op => { if (op === 'write') f.time(100); });
+    expect(f.store.save(f.run, 'conditions.json', abc)).toBeUndefined();
+    expect(f.store.snapshot().reason).toBe('deadline');
+    const g = fixture();
+    g.faults.corrupt = true;
+    g.hook(op => { if (op === 'reread') g.time(100); });
+    expect(g.store.save(g.run, 'conditions.json', abc)).toBeUndefined();
+    expect(g.store.snapshot().reason).toBe('deadline');
+  });
+  it('rechecks stop after each clock read, before any identity or create dispatch', () => {
+    for (const [target, identities] of [[1, 0], [2, 1]] as const) {
+      const f = fixture();
+      let reads = 0;
+      const store: FakeEvidenceStore = FakeEvidenceStore.create(f.ops, f.root, f.run, f.caps, () => { if (++reads === target) store.cancel(); return 0; })!;
+      expect(store.save(f.run, 'conditions.json', abc)).toBeUndefined();
+      expect(store.snapshot().reason).toBe('cancelled');
+      expect(count(f.calls, 'identity')).toBe(identities);
+      expect(count(f.calls, 'create')).toBe(0);
+    }
+  });
+  it('issues no receipt when the clock expires on the final guard', () => {
+    const f = fixture();
+    let reads = 0;
+    const counting = FakeEvidenceStore.create(f.ops, f.root, f.run, f.caps, () => { reads++; return 0; })!;
+    expect(counting.save(f.run, 'conditions.json', abc)).toBeDefined();
+    // Five operations x (two pre-guard + two post-guard reads), one close check, two final-guard reads.
+    expect(reads).toBe(5 * 4 + 1 + 2);
+    const total = reads, g = fixture();
+    reads = 0;
+    const store = FakeEvidenceStore.create(g.ops, g.root, g.run, g.caps, () => (++reads >= total - 1 ? 100 : 0))!;
+    expect(store.save(g.run, 'conditions.json', abc)).toBeUndefined();
+    expect(store.snapshot()).toMatchObject({ reason: 'deadline', cleanup: 'confirmed' });
+    expect(count(g.calls, 'reread')).toBe(1);
+  });
   it.each([NaN, -1, 0.5, Infinity, 100])('stops before create at invalid/expired time %s', time => {
     const f = fixture(); f.time(time);
     expect(f.store.save(f.run, 'conditions.json', abc)).toBeUndefined();
+    expect(count(f.calls, 'identity')).toBe(0);
     expect(count(f.calls, 'create')).toBe(0);
   });
   it('uses a finite cleanup reserve after operational expiry, never resets the deadline', () => {
@@ -255,6 +408,8 @@ describe('fake EvidenceStore: pinned identity and finite time', () => {
   it('does not dispatch after an identity check consumes the remaining time', () => {
     const f = fixture(); f.hook(op => { if (op === 'identity') f.time(100); });
     expect(f.store.save(f.run, 'conditions.json', abc)).toBeUndefined();
+    expect(f.store.snapshot().reason).toBe('deadline');
+    expect(count(f.calls, 'identity')).toBe(1);
     expect(count(f.calls, 'create')).toBe(0);
   });
   it('catches a regressing or throwing clock, with the original failure retained', () => {
@@ -289,7 +444,24 @@ describe('fake EvidenceStore: pinned identity and finite time', () => {
     expect(count(f.calls, 'close')).toBe(1);
     expect(f.store.snapshot().reason).toBe('binding');
   });
-  it('spends consume before guard and rejects cancellation/expiry on either guard', () => {
+  it('rejects a consume nested in a save callback and a save nested in a consume callback', () => {
+    const f = fixture();
+    const first = f.store.save(f.run, 'conditions.json', abc)!;
+    let inner: unknown = 'not_run';
+    f.hook(op => { if (op === 'create') inner = f.store.consume(f.run, first); });
+    expect(f.store.save(f.run, 'report.final.json', abc)).toBeUndefined();
+    expect(inner).toBeUndefined();
+    expect(f.store.snapshot()).toMatchObject({ reason: 'binding', cleanup: 'confirmed' });
+    expect(count(f.calls, 'close')).toBe(2);
+    const g = fixture();
+    const receipt = g.store.save(g.run, 'conditions.json', abc)!;
+    let nested: unknown = 'not_run', once = false;
+    g.hook(op => { if (op === 'identity' && !once) { once = true; nested = g.store.save(g.run, 'report.final.json', abc); } });
+    expect(g.store.consume(g.run, receipt)).toBeUndefined();
+    expect(nested).toBeUndefined();
+    expect(g.store.snapshot()).toMatchObject({ reason: 'binding', claimed: 1 });
+  });
+  it('rejects cancellation/expiry on either consume guard, with no second use', () => {
     for (const target of [1, 2]) {
       const f = fixture();
       const receipt = f.store.save(f.run, 'conditions.json', abc)!;
@@ -303,8 +475,19 @@ describe('fake EvidenceStore: pinned identity and finite time', () => {
     f.time(100);
     expect(f.store.consume(f.run, receipt)).toBeUndefined();
   });
+  it('accepts the exact structural ceilings and keeps a private copy of the caps', () => {
+    expect(fixture({ fileBytes: 65_536, totalBytes: 1_048_576, attempts: 4096, retries: 16 }).store).toBeDefined();
+    const f = fixture();
+    f.caps.fileBytes = 1;
+    f.caps.deadline = 0;
+    expect(f.store.save(f.run, 'conditions.json', abc)).toBeDefined();
+  });
+  it.each([[null, {}], [{}, null], ['root', {}], [{}, 'run']])('rejects non-object bindings %j / %j', (root, run) => {
+    const f = fixture();
+    expect(FakeEvidenceStore.create(f.ops, root as object, run as object, f.caps, () => 0)).toBeUndefined();
+  });
   it.each([
-    { fileBytes: 0 }, { fileBytes: 65_537 }, { totalBytes: 1_048_577 }, { totalBytes: 1 },
+    { fileBytes: 0 }, { fileBytes: 65_537, totalBytes: 65_537 }, { totalBytes: 1_048_577 }, { totalBytes: 1 },
     { attempts: 0 }, { attempts: 4097 }, { retries: -1 }, { retries: 17 },
     { deadline: NaN }, { cleanupDeadline: 100 }, { cleanupDeadline: Infinity },
   ])('rejects invalid structural caps %j', caps => { expect(fixture(caps).store).toBeUndefined(); });

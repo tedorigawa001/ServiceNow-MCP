@@ -180,6 +180,8 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 ### Added
 
+- WF-B review fixes for the test-only in-memory EvidenceStore: the byte limits now use the real input size and copy with no callback after the check, so a growing buffer or a subclass that misreports its length cannot exceed them. A close that returns after the cleanup deadline stays unconfirmed, and non-object forged receipts are sticky failures. New controls cover first-reason retention, throwing cleanup, structural ceilings and nested calls. No filesystem, recorder or issuance behavior changes.
+
 - The WF-B pure-fake recorder now keeps measurement after the test terminal and a verified preservation after Published, reports checkpoints left behind by Closed as unsaved, and no longer spends the stop slot on a stray call after the terminal. New tests cover invalid timing values, acknowledgement deadlines, state transitions, runtime type checks and snapshot immutability. Product code and deadlines are unchanged.
 
 - WF-A observation time now uses a clock captured at import, so `vi.useFakeTimers()` can no longer freeze case time at zero or stop measurement as a false rewind. New tests cover terminate failures, a worker left running at close, rejected reviews, first-reason retention, ordinal limits and request ID handling, and event order checks now fail when an event is missing. Product code and deadlines are unchanged.
