@@ -159,3 +159,7 @@ WF-Aを通らない失敗のphaseはUnknown。今回の成功・completeな観�
 | sn-wfb-single-2.json | `bff70f1461041e950a6e580b5c0f42e40ded3d45016e96a3a30134f3d1126325` |
 
 各JSONの件数・全caseのload meta・HEAD／hash一致・scope complete／解放状態・review_busy 0を再検算した。今回のrepo変更は本記録と既存2文書の参照更新だけ。別のbuild／梱包検査は文書変更のため再実行せず、設定・source・期限を変更しない。
+
+## 7 次回の再採取・保全境界（設計のみ）
+
+[再採取・証拠保全手順draft-0.1](BEST_PRACTICE_WFB_RECAPTURE_EVIDENCE_PROCEDURE.md)に、開始gate・回数／停止条件・旧artifact保全・非上書き出力・終了確認を整理した。既存一時runnerは固定出力名を上書きし得て途中保存・所有process終了確認も十分ではないため、そのまま再実行しない。通常1回＋条件付き比較1回までのsession案とし、2分超は目安であって失敗条件／打切り期限ではない。保存先・保持／容量枠・外側時間枠・固定版等の承認／検証が済むまで再採取を開始しない。今回の追記で観測値・失敗履歴・Unknownを変更せず、実装・試験・保管操作を行っていない。
