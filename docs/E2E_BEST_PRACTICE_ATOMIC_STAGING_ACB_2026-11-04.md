@@ -222,4 +222,10 @@ adapter本体試験と**同じhook設置helper**を利用する子プロセスfi
 
 ## 13 worker待ち切り分けの次工程（計画のみ）
 
-候補2の[ready／finish診断計画draft-0.1](BEST_PRACTICE_WORKER_READY_FINISH_DIAGNOSTIC_PLAN.md)を追加した。現行`ready_ms`はscopeによるready形message観測でありsupervisorの受理完了ではないこと、開始値は初回のみでreply相関・review別累積が不足することを整理した。既存の過去時刻・成功件数は変更しない。次候補は親側のboundedイベントとready／finish独立合成対照（WF-A）で、今回は実装・追加試験を行っていない。stdio事前ビルドとAC-Cの未確認事項も分離して保持する。
+候補2の[ready／finish診断計画](BEST_PRACTICE_WORKER_READY_FINISH_DIAGNOSTIC_PLAN.md)を追加した。現行`ready_ms`はscopeによるready形message観測でありsupervisorの受理完了ではないこと、開始値は初回のみでreply相関・review別累積が不足することを整理した。既存の過去時刻・成功件数は変更しない。次候補は親側のboundedイベントとready／finish独立合成対照（WF-A）で、今回は実装・追加試験を行っていない。stdio事前ビルドとAC-Cの未確認事項も分離して保持する。
+
+## 14 レビュー修正（2026-11-04）
+
+`a41aaf0`のレビューで、計画の仮説がworker内部に限られ、過去の5秒timeout 23件のうちworkerと関係の薄いファイルの失敗を説明できないことが分かった。計画へスイート全体の負荷の仮説H5と採取手順、観測範囲外の扱い、既存JSONのworker別時刻、実行順を追加した。§13の参照から版表記を外した。文書だけの修正で、ソース・試験・設定・期限は変更していない。
+
+修正前のrepo全体の確認は、lint（error 0・warning 374）、build、梱包分類監査（441ファイル）が成功した。全体試験は他の検査と同時に走らせず`--maxWorkers=3`で実行し、287ファイル／13,773件成功・失敗0だった。WF-A〜Cは未実装で、通常並列のtimeoutの原因は未確定のままである。

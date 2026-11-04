@@ -1,6 +1,8 @@
 # worker ready／finish待ちの切り分け計画
 
-Version: draft-0.1 / Date: 2026-11-04 / 調査基準HEAD: `c581e5c`。
+Version: draft-0.2 / Date: 2026-11-04 / 調査基準HEAD: `c581e5c`。
+
+draft-0.1のレビュー修正: スイート全体の負荷の仮説H5とその採取手順、`ReviewTestScope`の観測範囲外、既存JSONのworker別時刻、§6の実行順を追加した。§2〜5の現行経路と対照の内容は変更していない。
 
 Status: **静的調査と検証計画のみ。観測実装・追加実験は未実施。** 正式発行口閉鎖・全体受付無効・Unknown・VM／監視／telemetry調査保留を維持する。製品／試験期限・並列設定を変更せず、seal成功・実接続・実通信・設定変更・Pushは行わない。
 
@@ -10,14 +12,28 @@ Status: **静的調査と検証計画のみ。観測実装・追加実験は未�
 
 過去のtarget-selection失敗9ケースでは、最後のworkerについて8件がready形メッセージ未観測、1件がready形メッセージ観測後にfinish開始約4,807ms・terminate約5,002msだった。全9件で後始末後のpending=0、worker exitedを確認済み。ただし、どのCPU／loader工程が遅れたかは未確定である。これらは当時のJSONからの知見で、新規実験ではない。
 
+「最後のworker」だけの要約では読み取れない値を、同じJSONから次に示す。時刻はcase相対のmsで、原因の証明ではない。
+
+| case | worker | 生成 | ready形message | finish開始 |
+| --- | --- | --- | --- | --- |
+| BR-005 | 1個目 | 22 | 3,687 | 4,807 |
+| CL-008 | 1個目 | 5 | 2,232 | 2,336 |
+| CL-008 | 2個目 | 2,438 | 3,888 | 3,979 |
+| CL-008 | 3個目 | 4,006 | なし | なし |
+
+BR-005はfinish待ちの例だが、5秒のうち約3.7秒はready形messageより前に経過している。CL-008はready未観測の8件に含まれるが、同case内で3個目のworkerまで進んでいた。
+
+timeoutはworkerの経路だけで起きたものではない。過去2回の5秒timeout 23件のうち、target-selectionは9件である。残り14件のうち9件は`dom-client`、`ui-policy`、`http-classification-legacy`、`synthetic-*`で、これらのファイルにはworker・子プロセス・adapterの直接利用が検索で見つからない。`full`の10件でも5件は`mcp-review`、`evaluation-v2`、`new-followups-evaluation`、`worker-lifecycle`で起きている。
+
 確認する仮説は分離する。
 
 - H1: worker生成からreadyまでの起動／loader／import待ちがcaseの時間を消費する。
 - H2: ready後のanalyze・finalize・親側decode／受理が時間を消費する。
 - H3: 同case内の複数review／envelopeと親側schema・偽造対照の累積で、後段finishへ到達する余裕が小さくなる。
 - H4: 製品停止後のworker終了／session解放、またはtest hookの時間が別途残る。
+- H5: スイート全体またはマシン全体の負荷（CPU競合・event loop遅延等）がworkerの有無を問わず各caseを遅らせ、H1〜H4の時間も同時に伸ばす。
 
-H1〜H4は併存し得る。単回成功／固定遅延の合成再現から自然発生時の原因を断定しない。
+H1〜H5は併存し得る。単回成功／固定遅延の合成再現から自然発生時の原因を断定しない。
 
 ## 2 現行経路と費目の境界
 
@@ -47,6 +63,8 @@ H1〜H4は併存し得る。単回成功／固定遅延の合成再現から自�
 ## 4 後続のtest-only観測契約（未実装）
 
 最初の実装範囲は親側の観測追加とboundedな合成対照までとする。製品protocol・public option・runtime friend・worker選択条件を増やさない。
+
+観測できるのは`ReviewTestScope`を通るreviewだけで、現在はtarget-selectionとadapter試験に限られる。他のファイルのtimeoutや、`full`でtimeout以外に失敗した`worker-lifecycle`・`worker-supervisor`・`r2-mcp`は、この観測の範囲外としてUnknownに残す。範囲外の失敗を、範囲内の分類へ含めない。
 
 ### 4.1 親側イベント
 
@@ -84,7 +102,15 @@ strict受理内部の観測が必要なら、固定sourceの一時emit copy等�
 
 ## 6 自然発生の観測計画と判定
 
-後続実行時は、同一HEAD・Node／依存版・source worker bootstrap・観測器hash・設定hash・待受可否・実行順を保存する。観測なし／ありを各3回、対象ファイル単独→通常並列全体の順に実施する案とし、build・lint・梱包監査等を重ねない。各回は前回のchild／worker終了後に開始する。回数追加は負荷・観測結果を見て別判断し、無制限の再実行はしない。
+後続実行時は、同一HEAD・Node／依存版・source worker bootstrap・観測器hash・設定hash・待受可否・実行順を保存する。観測なし／ありを交互に各3回、対象ファイル単独→通常並列全体の順に実施する案とし、build・lint・梱包監査等を重ねない。順序を固定しないのは時間帯の影響を混ぜないためである（`full`は最初のadapter case開始から終了まで約119秒、4分余り後の`full_checked`は約29秒だった）。各回は前回のchild／worker終了後に開始する。3回は打ち切りの上限であり判定基準ではない。断続的な失敗に対して3回の差だけでは観測器の負荷と判断しない。回数追加は負荷・観測結果を見て別判断し、無制限の再実行はしない。
+
+H5の判定には§4とは別に、スイート全体の次の値を各回で保存する。
+
+- 通常のJSONレポートのcase別duration。workerを使わないcaseの所要時間を回の間で比較する。異常時にこれらも同時に伸びていれば、H5を支持する材料になる。
+- `perf_hooks.monitorEventLoopDelay`によるtest worker内のevent loop遅延の数値。
+- `os.loadavg()`の開始時・終了時の数値。他プロセスの名前や引数は採取しない。
+
+これらも負荷の存在を示す材料であり、負荷の発生元やtimeoutの唯一の原因を確定しない。採取器自体の実装は別承認とする。
 
 通常並列は設定のまま。必要ならmaxWorkers=3等を**別の比較群**として記録するが、その成功で通常並列失敗を相殺しない。v2／v3の個別実行も診断対照であり、元の複数envelope caseを分割・置換した保証にしない。
 
@@ -100,7 +126,7 @@ strict受理内部の観測が必要なら、固定sourceの一時emit copy等�
 ## 7 分割とAC-Cへの関係
 
 1. **WF-A（次の実装候補）**: 親側boundedイベント・review／worker／request相関と、ready待ち／finish待ちの独立合成対照。製品source・期限を変更しない。
-2. **WF-B**: 自然発生の単独／通常並列観測と原因候補の絞込み。必要なbootstrap内部観測は不足を示してから別途設計する。
+2. **WF-B**: 自然発生の単独／通常並列観測、§6のH5の採取、原因候補の絞込み。必要なbootstrap内部観測は不足を示してから別途設計する。
 3. **WF-C**: 根拠に応じた最小修正案とRED／GREEN。現時点では修正内容を決めない。
 
 [atomic commit設計](BEST_PRACTICE_ABORT_SCOPE_RECOVERY_ATOMIC_COMMIT_FAILURE_DESIGN.md)のAC-Cは未実装・seal成功の別承認待ちのまま。本調査はAC-Cの固定abortを外さず、staged数をcommit／正常終端へ昇格しない。timeoutの原因未確定とAC-Cの所有権・線形化点の未確認は別台帳に保持する。本計画の保存は観測実装・実行・AC-C実装の承認ではない。
