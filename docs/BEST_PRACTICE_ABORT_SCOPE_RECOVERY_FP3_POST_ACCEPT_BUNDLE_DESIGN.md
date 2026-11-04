@@ -1,6 +1,6 @@
 # FP-3 post後受理と未公開完成bundleの内部契約
 
-Version: br006-recovery-fp3-post-accept-bundle-draft-0.6 / Date: 2026-11-04。
+Version: br006-recovery-fp3-post-accept-bundle-draft-0.7 / Date: 2026-11-04。
 設計初稿の基準HEAD: `8369094`。Status: **FP3-A／B／Cは合成内実装済み。未公開完成bundleの合成内生成・固定消費と固定abortだけを許し、正式発行口閉鎖・全体受付無効・Unknown・VM／監視／telemetry調査保留を維持する。seal成功・実接続・実通信・設定変更・Pushは行わない。**
 
 FP3-A追記：[検証記録](E2E_BEST_PRACTICE_POST_PROOF_FP3A_2026-11-04.md)に、root側発行状態・post-only issuer・同partsのprivate proof pair、混入拒否・途中失敗clearを記録する。pair受理後も固定abortし、以下のready／consuming／retiredや未公開完成bundleには進まない。
@@ -128,3 +128,5 @@ post停止はwork不適合より優先する。発行／消費のguardが返す�
 FP3-A（合成内実装済み）はroot側発行状態・post-only issuerとprivate proof pair、FP3-B（合成内実装済み）は同partsとの未公開bundle結合・生成途中失敗clear、FP3-C（合成内実装済み）はroot側one-shot固定consumerと失効／全破棄・compiled対照へ分ける。各段階は合成内・固定abortまでとし、単独でも旧入口を変更しない。
 
 実atomic commit・利用可能dest／seal成功と正常terminal-only接続は、[OB-03親設計](BEST_PRACTICE_ABORT_SCOPE_RECOVERY_OB03_DESTINATION_CONTENT_DESIGN.md)の別工程に残す。本稿の受理状態・未公開bundleの成立は、それらの実装や有効化の承認ではない。
+
+次工程の[atomic commit準備・失敗時所有権の詳細設計](BEST_PRACTICE_ABORT_SCOPE_RECOVERY_ATOMIC_COMMIT_FAILURE_DESIGN.md)draft-0.1は、FP3-Cのretire後を再利用せず、別fresh固定継続の準備状態・線形化点・同FailureOwner／cleanup責務を具体化する。未公開候補の成立と成功destを分離し、実装・seal成功・正常終端接続は未承認のままとする。
