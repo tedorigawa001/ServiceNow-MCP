@@ -1,4 +1,4 @@
-import { expect, it } from 'vitest';
+import { expect, it, vi } from 'vitest';
 import { ServiceNowClient } from '../../src/servicenow/client.js';
 import { ReviewTestScope } from './fixtures/review-test-scope.js';
 import { ParentObservation, WorkerObservation, OBSERVATION_LIMIT } from './fixtures/parent-observation.js';
@@ -7,6 +7,8 @@ import { Worker } from 'node:worker_threads';
 const client = () => new ServiceNowClient({ instanceUrl: 'https://observation.service-now.com', authMode: 'per-user',
   perUserBearerToken: 'PRIVATE_OBSERVATION_TOKEN', oauth: { clientId: '', clientSecret: '' } });
 const input = { update_set_sys_id: 'a'.repeat(32) };
+const realSetTimeout = setTimeout;
+const realDelay = (ms: number) => new Promise(resolve => realSetTimeout(resolve, ms));
 it('correlates sequential reviews without retaining their inputs or changing outcomes', async ({ signal }) => {
   const scope = new ReviewTestScope(signal);
   try {
@@ -196,7 +198,11 @@ for (const phase of ['ready', 'finish'] as const) it(`independently reaches ${ph
   }
   const { events, measurement_incomplete } = scope.diagnostics().observation;
   expect(measurement_incomplete).toBe(false);
-  const index = (name: string) => events.findIndex(e => e.event === name && e.review === 1);
+  const index = (name: string) => {
+    const found = events.findIndex(e => e.event === name && e.review === 1);
+    expect(found, name).toBeGreaterThanOrEqual(0);
+    return found;
+  };
   expect(index('factory_start')).toBeLessThan(index('factory_return'));
   expect(index('terminate_try')).toBeLessThan(index('worker_exit'));
   expect(index('worker_exit')).toBeLessThan(index('review_end'));
@@ -204,4 +210,85 @@ for (const phase of ['ready', 'finish'] as const) it(`independently reaches ${ph
   expect(events.filter(e => e.event === 'review_end').map(e => e.review)).toEqual([1, 2]);
   expect(scope.diagnostics()).toMatchObject({ pending_reviews: 0, workers: [{ exited: true }] });
   expect(JSON.stringify(events)).not.toMatch(/PRIVATE|service-now|sys_id|current.update/);
+});
+it('keeps measuring real elapsed time while fake timers replace process.hrtime', async ({ signal }) => {
+  const scope = new ReviewTestScope(signal), denied = async () => new Response(null, { status: 403 });
+  try {
+    await realDelay(20);
+    await scope.review(client(), input, { fetch: denied });
+    vi.useFakeTimers();
+    await scope.review(client(), input, { fetch: denied });
+    await realDelay(20);
+    await scope.review(client(), input, { fetch: denied });
+  } finally { vi.useRealTimers(); await scope.close(); }
+  const { measurement_incomplete, reason, events } = scope.diagnostics().observation;
+  expect([measurement_incomplete, reason]).toEqual([false, 'none']);
+  const starts = events.filter(e => e.event === 'review_start').map(e => e.at_ms);
+  expect(starts).toHaveLength(3);
+  expect(starts[0]).toBeGreaterThanOrEqual(15);
+  expect(starts[2] - starts[1]).toBeGreaterThanOrEqual(15);
+});
+
+it.each(['throw', 'reject'] as const)('reports a worker that a terminate %s left running as incomplete cleanup', async mode => {
+  const external = new AbortController(), scope = new ReviewTestScope(external.signal), cancel = new AbortController();
+  let stop: (() => Promise<number>) | undefined, made!: () => void;
+  const created = new Promise<void>(resolve => { made = resolve; });
+  const pending = scope.review(client(), input, { fetch: assetFetch(), signal: cancel.signal,
+    workerFactory: (_url, options) => {
+      const worker = new Worker('setInterval(() => {}, 1000)', { ...options, eval: true });
+      stop = worker.terminate.bind(worker);
+      worker.terminate = () => {
+        if (mode === 'throw') throw Error('PRIVATE_TERMINATE');
+        return Promise.reject(Error('PRIVATE_TERMINATE'));
+      };
+      made();
+      return worker;
+    } });
+  try {
+    await created;
+    cancel.abort();
+    expect(await pending).toMatchObject({ isError: true });
+    await expect(scope.close()).rejects.toThrow('test_review_cleanup_incomplete');
+  } finally { await stop?.(); }
+  const { events } = scope.diagnostics().observation;
+  expect(events.filter(e => e.event === (mode === 'throw' ? 'terminate_throw' : 'terminate_settle')).map(e => e.detail))
+    .toContain(mode === 'throw' ? 'none' : 'rejected');
+  // The worker exits only when the test's own stop runs, after the owner already reported it.
+  expect(events.filter(e => e.event === 'close_end').map(e => e.detail)).toEqual(['rejected']);
+  expect(events.findIndex(e => e.event === 'close_end')).toBeLessThan(events.findIndex(e => e.event === 'worker_exit'));
+  expect(JSON.stringify(events)).not.toContain('PRIVATE');
+});
+
+it('records a review rejected by a closed scope and survives a hostile outcome', async ({ signal }) => {
+  const scope = new ReviewTestScope(signal);
+  await scope.close();
+  await expect(scope.review(client(), input)).rejects.toThrow('test_review_scope_closed');
+  expect(scope.diagnostics().observation.events.at(-1)).toMatchObject({ event: 'review_end', review: 1, detail: 'rejected', code: 'other_fixed_code' });
+  const log = new ParentObservation(() => 0);
+  expect(() => log.reviewEnd(1, new Proxy({}, { getOwnPropertyDescriptor() { throw Error('PRIVATE_OUTCOME'); } }))).not.toThrow();
+  expect(log.snapshot()).toMatchObject({ measurement_incomplete: true, reason: 'observer' });
+  expect(JSON.stringify(log.snapshot())).not.toContain('PRIVATE');
+});
+
+it('keeps the first incomplete reason and bounds ordinal issuance', () => {
+  const first = new ParentObservation(() => 0);
+  first.incomplete('clock'); first.incomplete('observer'); first.incomplete('capacity');
+  expect(first.snapshot().reason).toBe('clock');
+  const log = new ParentObservation(() => 0);
+  for (let n = 1; n <= OBSERVATION_LIMIT; n++) expect(log.ordinal('worker')).toBe(n);
+  expect(log.snapshot().measurement_incomplete).toBe(false);
+  expect(log.ordinal('worker')).toBe(0);
+  expect(log.snapshot()).toMatchObject({ measurement_incomplete: true, reason: 'capacity' });
+});
+
+it('assigns request ordinals only to safe positive IDs and reuses one on repost', () => {
+  const log = new ParentObservation(() => 0), trace = new WorkerObservation(log, 1, 1);
+  for (const id of [1.5, 0, -1, Number.MAX_SAFE_INTEGER + 1, '7', undefined]) trace.post({ id, kind: 'analyze' }, () => undefined);
+  trace.post({ id: 7, kind: 'analyze' }, () => undefined);
+  trace.post({ id: 7, kind: 'analyze' }, () => undefined);
+  trace.post({ id: 8, kind: 'finish' }, () => undefined);
+  expect(log.snapshot().events.filter(e => e.event === 'post_try').map(e => [e.request, e.phase])).toEqual([
+    [0, 'analyze'], [0, 'analyze'], [0, 'analyze'], [0, 'analyze'], [0, 'analyze'], [0, 'analyze'],
+    [1, 'analyze'], [1, 'analyze'], [2, 'finish'],
+  ]);
 });

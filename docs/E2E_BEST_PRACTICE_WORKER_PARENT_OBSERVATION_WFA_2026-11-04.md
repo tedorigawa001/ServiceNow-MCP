@@ -45,6 +45,7 @@ review／worker／requestのordinal発行も各4096までで、上限後は0（�
 
 ## 5 残課題
 
+- 計画§5の対照のうち、analyze待ちの独立gateと、実workerでのlate／不正replyは未実施。reply分類は純粋対照だけで確認している。
 - WF-Bの自然失敗時の採取とH5a／H5bの切り分け。今回は全体回帰の新相関metaを取得したが、自然timeout自体は再現していない。
 - 親のready／reply観測とstrict受理、worker内のregister／import／処理入口出口は未接続。専用port等による内部観測は別範囲。現行logだけでloaderやfinalize内部を原因としない。
 - 観測対象はReviewTestScopeを使う経路に限定。範囲外のtimeout、stdio事前ビルドの60秒問題、AC-Cのatomic commit・seal成功・正常終端は未解消／未実装のまま。
@@ -52,7 +53,25 @@ review／worker／requestのordinal発行も各4096までで、上限後は0（�
 
 正式発行口閉鎖・全体受付無効・Unknown・調査保留を維持する。実接続・実通信・設定変更・Pushは行わない。
 
-## 6 コミット前の対象限定再検証
+## 6 レビュー修正（2026-11-04）
+
+本節までの§3・§4の件数（新試験11件、288ファイル／13,784件）は修正前の記録として残す。`7dac60a`のレビューで次の問題が分かった。製品source・期限・設定は変更していない。
+
+- 観測時計の不具合: `vi.useFakeTimers()`は`process.hrtime`も置き換える。そのためfake timer下で`at_ms`が0のままcompleteになる、または実時間の経過後に有効化すると逆行と判定されて観測が止まる状態だった。§4の「全て観測complete」のうちadapterのwhole-run deadline／cancel 2caseは、全eventが`at_ms=0`で実測値ではなかった。import時に本物の`process.hrtime.bigint`を保持するよう修正し、この2caseの時刻も進むことを確認した。
+- 未検証の経路: terminateのthrow／reject、未終了workerの`test_review_cleanup_incomplete`、closeの`rejected`、reviewの拒否とProxyのoutcome、最初の理由の保持、ordinal上限、request IDの検査と再送へ新試験6件を追加した。順序の検査は、eventがなければ失敗するよう改めた。
+
+レビュー時の変異37個の結果は次のとおり。33個は新規または既存のcaseで検出される。
+
+| 検出されない変異 | 判断 |
+| --- | --- |
+| `at < 0`の除去 | 等価。`last`の初期値が0のため`at < last`に含まれる |
+| 終了済みworkerを所有mapから消さない | 等価。メモリだけの差で、closeの判定は`threadId`による |
+| scopeの`observedField`を直接の読取りへ変更 | 実質等価。messageは構造化クローンで、accessorは届かない |
+| lifecycle履歴の4096件上限の除去 | 未検証のまま。検証に4,097個のworkerが必要で、費用に見合わない |
+
+修正前の確認は、lint（error 0・warning 374）、build、梱包分類監査（441ファイル）が成功し、`--maxWorkers=3`の全体試験は288ファイル／13,784件成功・失敗0だった。修正後は同じ検査が成功し、全体試験は`--maxWorkers=3`と通常並列で各1回、どちらも288ファイル／13,790件成功・失敗0、target-selection／adapterの122caseは観測complete・pending 0・未終了worker 0だった。これらは過去の通常並列timeoutの原因確定や解消を示さない。
+
+## 7 コミット前の対象限定再検証
 
 今回分8ファイルを明示選択し、未選択差分0・未追跡ファイル0であることを確認した。同じ作業ツリーでbuild→通常並列の全体試験→梱包dry-runを順に再実行し、build成功、288ファイル／13,784件成功・失敗0・skip0、梱包441ファイル／観測fixture・tests混入0を確認した。追加のsource・期限・設定変更はない。
 

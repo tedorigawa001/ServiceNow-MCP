@@ -4,6 +4,8 @@ import type { ServiceNowClient } from '../../../src/servicenow/client.js';
 import { reviewBoundedUpdateSet, type ReviewAdapterOptions } from '../../../src/review/update-set-adapter.js';
 import { sourceWorkerFactory } from './worker-factory.js';
 import { OBSERVATION_LIMIT, ParentObservation, WorkerObservation } from './parent-observation.js';
+// Captured at import: vi.useFakeTimers() also replaces process.hrtime, which would freeze or rewind case time.
+const monotonic = process.hrtime.bigint.bind(process.hrtime);
 interface WorkerLifecycle {
   created_ms: number; ready_ms: number | null; analyze_started_ms: number | null;
   finish_started_ms: number | null; last_reply_ms: number | null;
@@ -15,11 +17,11 @@ export class ReviewTestScope {
   private readonly pending = new Set<Promise<unknown>>();
   private readonly workers = new Map<Worker, WorkerLifecycle>();
   private readonly lifecycles: WorkerLifecycle[] = [];
-  private readonly started = process.hrtime.bigint();
+  private readonly started = monotonic();
   private readonly observation = new ParentObservation(() => this.elapsed());
   private readonly removeExternal: () => void;
   private closing?: Promise<void>;
-  private elapsed() { return Math.max(0, Math.floor(Number(process.hrtime.bigint() - this.started) / 1e6)); }
+  private elapsed() { return Math.max(0, Math.floor(Number(monotonic() - this.started) / 1e6)); }
   private observedField(value: unknown, name: string): unknown {
     try { return value && typeof value === 'object' ? Object.getOwnPropertyDescriptor(value, name)?.value : undefined; }
     catch { this.observation.incomplete('observer'); return undefined; }
