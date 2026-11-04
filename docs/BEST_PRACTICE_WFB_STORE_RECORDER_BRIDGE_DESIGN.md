@@ -1,6 +1,8 @@
 # WF-B EvidenceStore／recorder：一度限り接続の差分設計
 
-Version: draft-0.1 / Date: 2026-11-05 / 基準HEAD: `2595b11`。
+Version: draft-0.2 / Date: 2026-11-05 / 基準HEAD: `62df06f`。
+
+draft-0.2のレビュー修正: 取消でStoreまで閉じると停止後の証拠を保存できないため、観測停止と致命的停止を分けた。Storeの期限をslot区分ごとの固定表とし、`manifest.json`を`D_save`後も保存できるようにした。cleanupの`late`を反映した。試行別の結果にStore側の変更が必要なことを差分へ明記した。線形化sectionの処理を補った。
 
 Status: **設計のみ。接続実装・新規合成試験は未実施。** 正式発行口閉鎖・全体受付無効・Unknown・VM／監視／telemetry調査保留を維持する。保存先・保持期間・運用cap／時間枠・停止方式は未承認。再採取・既存証拠copy／保管操作・実接続・実通信・設定変更・Pushを行わない。
 
@@ -15,6 +17,9 @@ Status: **設計のみ。接続実装・新規合成試験は未実施。** 正�
 | Storeの保存情報はslot・size・digest | 同checkpoint origin・sequence・trigger・固定encoding版・期待bytesへ結ぶprivate結合情報を追加 |
 | recorderとStoreはclock・停止・期限を個別保持 | 先行する単一RunBridgeOwnerから同clock／停止世代／絶対期限のreadonly viewを供給 |
 | Storeのcleanupは直近saveの診断、recorderはqueue／unsavedを保持 | 各保存試行のcleanupを上位slotへ即時固定し、queue保持と独立に診断を残す |
+| Storeの`snapshot`はstore全体のfirst reasonと累積値。sticky拒否された試行ではcleanupが前回のまま残り、create失敗と未試行が同じ`not_started` | **Storeを変更**し、拒否も含めた`save`ごとの試行結果（create試行の有無・その試行のcleanup・結果区分）を返す。store全体のfirst reasonとは別fieldにする |
+| Storeの`deadline`／`cleanupDeadline`は全slotで1組 | **Storeを変更**し、生成時に固定するslot区分別の期限表にする（§4）。保存中に変更・再計算しない |
+| recorderの`acknowledge`は内部でclockを読み、失敗時に停止処理へ進む | §3の線形化sectionに使えないため、bound経路専用のprivate ackを別に設ける |
 | `publish(boolean)`／`verify(boolean)`は単体fake注入 | 本接続からは呼ばない。run保全／process終了の証明は後続のまま |
 
 checkpoint本文・WF-A集約・実reporter・manifest集合・session票・ProcessOwner・OS storeは範囲外。結合試験は固定の小さいheader snapshotとメモリdriverだけを使い、実採取の入口を作らない。
@@ -28,21 +33,21 @@ checkpoint本文・WF-A集約・実reporter・manifest集合・session票・Proc
 - sequence 1〜6に対応する`report.partial.0001.json`〜`.0006.json`。trigger名から別名を選ばず、実際の発行順へ一対一対応する。
 - 固定encoding版・同snapshotから作ったprivate owned bytes、その実サイズとdigest。byte列は外部へ公開せず、検査からcopyの間にcallbackを挟まない。可変長buffer・subclassの長さ／iteratorを信頼しないというStoreの修正を引き継ぐ。
 
-単体fakeの既存入口・試験は残すが、新しいbound recorder／Storeは別のprivate admissionで区別する。既存`acknowledge`や`consume`の公開DATAからbound経路へ登録／昇格できるfriendを作らない。結合ownerの生成は同runにつき一度だけclaimし、失敗しても再生成してStoreのsticky失敗・累積枠を回避しない。実sessionや製品runtimeの台帳とは共有しない。
+単体fakeの既存入口・試験は残すが、新しいbound recorder／Storeは別のprivate admissionで区別する。既存`acknowledge`や`consume`の公開DATAからbound経路へ登録／昇格できるfriendを作らない。結合ownerの生成は同runにつき一度だけclaimし、失敗しても再生成してStoreのsticky失敗・累積枠を回避しない。claimは試験module内のprivateなWeakSetにrun tokenをkeyとして持つ。実sessionや製品runtimeの台帳とは共有せず、process間の一意性は保証しない（session台帳の後続課題）。
 
 `conditions_ready`も他のcheckpointと同じ連番partialへ保存する。これは`conditions.json`自体の検証・R01〜R08承認を代替しない。今回のfakeで子起動状態へ進むとしても、実processを起動する権限はない。
 
 ## 3 保存からackまでの固定手順
 
-bridgeの利用状態は `Idle → InFlight → Idle`、失敗時は`Stopped`で再開しない。全体に非再入。checkpointごとの状態は`Pending → Claimed → Saved → Acknowledged`、途中失敗は`Failed`で終える。
+bridgeの利用状態は `Idle → InFlight → Idle`、致命的停止で`Stopped`となり再開しない。`D_save`で`Closed`（保存経路だけの閉鎖）となり再開しない。観測停止（§4）では状態を変えない。全体に非再入。checkpointごとの状態は`Pending → Claimed → Saved → Acknowledged`、途中失敗は`Failed`で終える。
 
 1. queue先頭の元参照・同run／origin・未claim・sequence／保存名対応・共有停止世代を確認する。checkpoint用claimを先に消費し、以後失敗しても返さない。
 2. 固定headerを内部encodingし、有限byte上限・予約を確認する。期待bytes／digestを同じsnapshotへ固定する。後からsnapshotを取り直して別bytesへ差し替えない。
 3. 同Storeの`save`を1回だけ呼ぶ。Store内の有限short write／EINTRは既存費目。bridgeは新たなretryや代替slotを発行しない。取得handleのcleanupは最後までStoreが所有する。
-4. saveが返った時点で、receiptの有無にかかわらず、同試行のStore reason・cleanup・byte予約結果を先行診断slotへ固定する。callbackが途中で失敗しても、後続saveで上書きしない。
+4. saveが返った時点で、receiptの有無にかかわらず、Storeが返す同試行の結果（§1）とstore全体のfirst reason・byte予約結果を先行診断slotへ固定する。callbackが途中で失敗しても、後続saveで上書きしない。
 5. 成功receiptを同Storeのprivate継続で一度だけ消費する。同run・Store・checkpoint origin・sequence・trigger・encoding版・slot・実size・期待digestを照合する。claimの消費は失敗時も不可逆とするが、sticky拒否下で観測できない内部順序を試験で証明したとは呼ばない。
 6. privateな`StoredCheckpointEvidence`をbridgeの消費中slotへ置く。コピー／foreign receipt／返値DATAからの生成はできない。pre／post guardで同owner・予算・停止世代・queue先頭を再確認する。
-7. 最後のguard後、**callback・await・clock読取・IO・割当てを挟まない固定section**で、同証拠を消費し、同queue先頭を1件だけ外し、当該slotをAcknowledgedへ進める。これをackの線形化点とする。必要な結果／診断containerは先行確保する。
+7. 最後のguard後、**callback・await・clock読取・IOを挟まず、事前確保したものだけを使い、失敗し得る処理を呼ばない固定section**で、同証拠を消費し、同queue先頭を1件だけ外し、`conditions_ready`なら`start()`が要求する書込済みフラグを立て、当該slotをAcknowledgedへ進める。これをackの線形化点とする。必要な結果／診断containerは先行確保する。現行の`acknowledge`はclockを読むので使わず、bound経路専用のprivate ackを設ける。JavaScriptの内部割当てが起きないことは保証・検証しない。
 
 線形化点前に必要情報が欠けた場合はqueueを外さない。ack後の失敗を理由に同checkpointを再save／再ackしない。任意hookを線形化sectionへ注入する設計は避け、前後の故障点を合成試験で区別する。新規実装でこの固定sectionの前提を満たせなければ、成功経路を有効化しない。
 
@@ -52,28 +57,39 @@ Storeの既存`consume`返値は引き続きDATAである。新private継続は�
 
 ownerは元runの開始時点・単調clock・`planTime`の絶対期限・停止世代を一度pinする。recorderとStoreへ異なるclockや新しい開始時点を渡さず、残時間から期限を再計算しない。共有viewは別runやserialized summaryから作れない。
 
-- 既存のflush工程終端を`D_flush`（現在の計画のstages[3]）とする。この内側に正・有限のStore cleanup予約`C_store`を**切り分け**、`D_save = D_flush − C_store`、`D_store_cleanup = D_flush`とする。save・receipt消費・ackのguardは`D_save`、取得済みhandleのclose確認は`D_store_cleanup`まで。
+- 既存のflush工程終端を`D_flush`（現在の計画のstages[3]）とする。この内側に正・有限のStore cleanup予約`C_store`を**切り分け**、`D_save = D_flush − C_store`、`D_store_cleanup = D_flush`とする。checkpointのsave・receipt消費・ackのguardは`D_save`、取得済みhandleのclose確認は`D_store_cleanup`まで。
+- Storeは次の期限表を生成時に固定する。
+
+  | slot区分 | 操作の期限 | cleanup期限 |
+  |---|---|---|
+  | `conditions.json`・source写し・`report.partial.*`・`report.final.json`・`termination.json`・`analysis.json` | `D_save` | `D_store_cleanup` |
+  | `manifest.json` | `D_manifest_save = D_manifest − C_manifest` | `D_manifest`（stages[4]） |
+
+  `C_manifest`もmanifest工程の内側を切り分ける正・有限の予約で、`D_flush < D_manifest_save < D_manifest`を保つ。manifestの保存自体は範囲外だが、期限表で後続の経路を塞がない。
+- `D_save`到達ではbridgeがcheckpoint経路だけを`Closed`にする。Storeを呼ばないので、Store失敗にも`Store.cancel`にもしない。保存中に`D_save`を超えた場合はStoreの`deadline`失敗で、後述の致命的停止となる。
 - `C_store`は新しい時間の追加ではない。正のflush工程を二分し、`stages[2] < D_save < D_store_cleanup = D_flush < D_manifest ≤ D_all`を保つ。加減算のoverflow・空の処理枠を拒否し、manifest／session票の後続予約を借用しない。byte処理／再読／ackに使える残枠が不足する場合は新規saveを始めない。具体値と費用モデルは未承認・後続確認事項で、未導出の受付保証はUnknownのまま。
 - deadlineは全operationの前後、ack直前にも検査し、等値で拒否する。同期操作が期限後に返った場合は新たな成功証拠へ進めない。closeは期限前に成功返答を確認できた場合だけconfirmed。同期処理の途中停止や実wall-time保証ではない。
-- 明示取消・期限・clock不正・binding不一致・Store失敗は同ownerの停止へ合流する。まずownerをStoppedとして新規save／receipt受理／ackを閉じ、次にStore.cancel、recorder停止通知の順で同期通知する。各通知は一度だけclaimし、片方のthrowでも固定診断を保持して他方と取得済みhandleの回収責務を省略しない。通知中に再入しても新規権限を与えない。
+- **観測停止**（明示取消・`D_stop`到達・採取器の停止要求）: recorderへ通知し、新規観測を止める。Storeは閉じず、停止世代も変えない。処理中の保存はそのままackまで進め、`stop_requested`を含むqueueの残りを`D_save`までFIFOで保存する。親契約§4の`stop_requested`と§5の停止後の作成予約を満たすための区別である。recorderがClosedなら（Reservedでの取消等）新規保存もackも行わず、queueの残りはunsavedとして残す。
+- **致命的停止**（clock不正・binding不一致・Store失敗）: 同ownerの停止へ合流する。まずownerをStoppedとして停止世代を進め、新規save／receipt受理／ackを閉じ、次にStore.cancel、recorder停止通知の順で同期通知する。各通知は一度だけclaimし、片方のthrowでも固定診断を保持して他方と取得済みhandleの回収責務を省略しない。通知中に再入しても新規権限を与えない。Store.cancelはこの場合だけ呼ぶ。
 - 通常のcase／module／hook失敗は停止要求ではない。first anomaly保存を試み、suite継続と観測終端を妨げない。採取器の失敗・利用者取消と混同しない。
 
-停止後も取得済みhandleの解放責務は残る。cleanupにより新規saveが再許可されたり、期限原点が更新されたりしない。bridgeがStoppedになっても、recorderをDrainingからObservingへ戻さない。Published／Closed後は新規bridge保存なし。
+どの停止後も取得済みhandleの解放責務は残る。cleanupにより新規saveが再許可されたり、期限原点が更新されたりしない。bridgeがStoppedになっても、recorderをDrainingからObservingへ戻さない。Published／Closed後は新規bridge保存なし。
 
 ## 5 cleanup診断・四軸・queue／unsaved
 
 | 保存試行の終わり | queue／ack | 上位に残す区分 |
 |---|---|---|
-| create前拒否 | 元先頭を維持 | not_started、固定reason、claim済み、予約状況 |
-| 部分書込・flush／close／再読失敗 | 元先頭を維持 | partial_unverified、cleanup三値、first reason |
+| create前拒否（sticky拒否を含む） | 元先頭を維持 | not_started、固定reason、claim済み、予約状況 |
+| create試行の失敗（handle未取得） | 元先頭を維持 | create_failed、cleanupはnot_started。未回収resourceがないことはdriverの前提で、未実証 |
+| 部分書込・flush／close／再読失敗 | 元先頭を維持 | partial_unverified、cleanup四値（not_started／confirmed／late／unconfirmed）、first reason |
 | receipt発行後、消費／post guard拒否 | 元先頭を維持。receiptの再利用不可 | saved_unacknowledged、保存size／digestの診断DATA、cleanup |
 | 固定ack完了 | 同先頭だけ1件除去 | acknowledged、同sequence、cleanup |
 
-`saved_unacknowledged`はprivate診断を残すための区分であり、receiptの再発行や再開権限ではない。bridge失敗後は別Storeを作り直したり、同名を上書きしたりしない。停止に伴いrecorderが`stop_requested`を追加しても、失敗済みStoreへ再帰的に保存しにいかずqueueへ残す。
+`saved_unacknowledged`はprivate診断を残すための区分であり、receiptの再発行や再開権限ではない。bridge失敗後は別Storeを作り直したり、同名を上書きしたりしない。致命的停止に伴いrecorderが`stop_requested`を追加しても、失敗済みStoreへ再帰的に保存しにいかずqueueへ残す。観測停止では§4のとおり保存する。
 
 Closedではack不可、queueの残りとその順序を診断として保持する。**結合後の`unsaved`は「recorderが保存受理を完了していない件数」**と定義する。物理的なbytes不存在を意味しない。現行コメントの「never saved」は結合実装時に訂正し、保存済み未ack件数・partial件数も固定slotから区別できるようにする。Closedへ進むだけでqueueを消したり、残数を0へ補正したりしない。
 
-recorderのtest_result／measurementは既存契約を維持し、試験終端後のStore／cleanup失敗では書き換えない。Storeのclose confirmedはartifact handleのfake解放だけで、ProcessOwnerのtermination confirmedではない。checkpointが全てack済みでもmanifest／必須集合／session票の受理なしにpreservation verifiedへ進めない。本接続は`publish(true)`／`verify(true)`を注入しない。
+recorderのtest_result／measurementは既存契約を維持し、試験終端後のStore／cleanup失敗では書き換えない。Storeのclose confirmedはartifact handleのfake解放だけで、ProcessOwnerのtermination confirmedではない。`late`はconfirmedと同じ扱いにせず、時間予約内の解放の証拠にしない。checkpointが全てack済みでもmanifest／必須集合／session票の受理なしにpreservation verifiedへ進めない。本接続は`publish(true)`／`verify(true)`を注入しない。
 
 上位診断は、最初のbridge停止理由、Store reason、試験異常、各保存のcleanup、recorder状態とqueue残数を別fieldで保持する。raw例外・bytes・URL・path・認証情報を反射しない。未知のcleanup／process状態はUnknownのままで、欠けた証拠をconfirmedへ補完しない。
 
@@ -97,13 +113,17 @@ Storeの64KiB／1MiB等は合成構造上限であり、実観測本文に適合
 | BR01 | 正常な6trigger、発生順の違いと未発生trigger | sequence→保存名の手書き表どおり、同先頭だけ各1ack。発行済み枠は復活しない |
 | BR02 | 別run／recorder／Store／checkpoint、コピー・同値の元参照、slot／digest／size／encoding不一致 | create前で拒否できるものはcreate=0。それ以外もack=0・queue不変・固定失敗 |
 | BR03 | 外部DATA／summary／偽receipt、直接ack／legacy入口、二重save／consume／ack | 新bound経路へ昇格0、成功分の二重消費0、旧単体試験の保証は別に維持 |
-| BR04 | 部分書込・EINTR境界・flush／close／再読失敗・同長hash不一致 | Storeの手書き試行列どおり、bridge retry=0。cleanup最大1回、元先頭が残る |
-| BR05 | receipt発行直後、consume前後、最終guard直前の取消／期限／世代変更 | 線形化点前はack=0、saved_unacknowledgedとqueue／unsaved保持 |
+| BR04 | 部分書込・EINTR境界・create試行失敗・flush／close／再読失敗・同長hash不一致、sticky失敗後の次の保存 | Storeの手書き試行列どおり、bridge retry=0。cleanup最大1回、元先頭が残る。試行別結果がcreate試行の有無を区別し、拒否された試行に前回のcleanupを写さない |
+| BR05 | receipt発行直後、consume前後、最終guard直前の致命的停止／`D_save`到達／世代変更 | 線形化点前はack=0、saved_unacknowledgedとqueue／unsaved保持 |
 | BR06 | ack後の停止・残queueを持つClosed、Store失敗に伴うstop_requested追加 | 成功分をqueueへ戻さない。未ackだけ残し、停止checkpointを再帰保存しない |
-| BR07 | 残時間による期限作り直し、別clock、逆行・例外・遅いclose、cleanup等値 | 原点不変。D_save／D_cleanupはflush枠内、期限延長0、遅いcloseはunconfirmed |
+| BR07 | 残時間による期限作り直し、別clock、逆行・例外・遅いclose、cleanup等値 | 原点不変。`D_save`／`D_store_cleanup`はflush枠内、期限延長0。期限以降の成功返答は`late`、失敗返答と時刻を読めない場合はunconfirmed |
 | BR08 | save／consume／guard／停止通知中の再入、部分生成失敗 | 新規権限0、claim不可逆、handleの二重close0、先行診断保持 |
 | BR09 | test失敗とStore故障の組合せ、試験終端後のcleanup失敗、全checkpoint ack済み | test／measurement不変、artifact解放からprocess終了を推定しない、run保全への昇格0 |
 | BR10 | 初期cap／byte予約不足、可変buffer／subclass、閉鎖後payload破棄 | copy前の実サイズと元snapshotが対応。cap超過は固定理由、queue診断を消さず本文別名を残さない |
+| BR11 | 健全なStoreでObserving中に明示取消・`D_stop`到達、保存中の取消 | Store.cancel=0、Store reasonなし。手書きのqueue（例: `child_started`、`stop_requested`）がsequence順に保存・ackされunsaved=0。処理中の保存はackまで進む |
+| BR12 | `D_save`の前後と等値、残queueあり。Reservedでの取消 | 等値以降は新規save=0・Store呼出し=0・Store.cancel=0。残りはunsavedでqueue順を保持。Reservedの取消はack=0 |
+| BR13 | slot区分別期限の境界。`D_save`後の`manifest.json`とcheckpoint、期限表の不正な順序 | `D_save`後でもmanifestの期限表には到達でき、checkpointは拒否される。順序不正はStoreを生成しない。実manifest集合の検証とは呼ばない |
+| BR14 | `conditions_ready`のack成功・線形化点前の失敗 | ack成功時だけ`start()`へ進める。失敗時は子起動0 |
 
 oracleはbridge自身のmapper／encoder／guardを呼ばず、固定expected header・golden digest・イベント順・queue残数を独立定義する。各負の対照は狙った故障点へ到達したことをassertする。compile／配布物の負の対照ではprivate証拠を外部生成できず、試験登録口・driverが製品へ入らないことを確認する。線形化の中間故障を無理に注入して実装に新callbackを持ち込まない。
 
@@ -111,6 +131,6 @@ oracleはbridge自身のmapper／encoder／guardを呼ばず、固定expected he
 
 1. **SB-A**: 同生成元owner・run／checkpoint binding・private証拠型・一度限りclaim。旧試験を残したまま混入／直接ackを拒否する合成経路を作る。
 2. **SB-B**: 同snapshotの固定header encodingとStore保存／private消費／固定ackを接続。保存後の失敗・queue／unsavedの区分を確認する。
-3. **SB-C**: 同clock／停止ownerとflush内の予約分割、上位cleanup診断・部分生成の回収を連続fakeで確認する。SB-B時点でも期限／取消の最低限の共通guardを省略せず、詳細な境界対照をここで補完する。
+3. **SB-C**: 同clock／停止ownerとflush内の予約分割、観測停止と致命的停止の区別、上位cleanup診断・部分生成の回収を連続fakeで確認する。SB-B時点でも期限／取消の最低限の共通guardを省略せず、詳細な境界対照をここで補完する。
 
 生成・claim・線形化section・費目の実現方法は未実装。byte／work／時間の数値、正式保存先、保管／削除、OS backendは未承認・未確認のまま。storeとrecorderが繋がっても、採取・保全・process監督の開始許可にはならない。
