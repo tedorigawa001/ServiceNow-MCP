@@ -72,7 +72,7 @@ reviewed出力0件でも親省略により元reviewedがあれば、元body数�
 
 ## 6 一度限りの移譲とatomic commit
 
-[atomic commit準備・線形化点と失敗時所有権の詳細設計](BEST_PRACTICE_ABORT_SCOPE_RECOVERY_ATOMIC_COMMIT_FAILURE_DESIGN.md)draft-0.1で、未公開staged状態・同canonical recordの単一線形化点・commit前後の全破棄と同FailureOwnerへの責務保持を対にした。移譲元borrow除去のprivate境界と正常終端は未確認のまま残す。設計のみであり、固定abort・正式発行口閉鎖・全体受付無効・Unknown・調査保留を維持する。
+[atomic commit準備・線形化点と失敗時所有権の詳細設計](BEST_PRACTICE_ABORT_SCOPE_RECOVERY_ATOMIC_COMMIT_FAILURE_DESIGN.md)で、未公開staged状態・同canonical recordの単一線形化点・commit前後の全破棄と同FailureOwnerへの責務保持を対にした。移譲元borrow除去のprivate境界と正常終端は未確認のまま残す。設計のみであり、固定abort・正式発行口閉鎖・全体受付無効・Unknown・調査保留を維持する。
 
 [FP-3内部契約](BEST_PRACTICE_ABORT_SCOPE_RECOVERY_FP3_POST_ACCEPT_BUNDLE_DESIGN.md)は、この前段のpost-only証拠受理・未公開bundle・一度限りの固定消費を具体化する。FP3-Aのpost-only issuer・private proof pair（[検証記録](E2E_BEST_PRACTICE_POST_PROOF_FP3A_2026-11-04.md)）とFP3-Bの未公開完成bundle結合・途中失敗clear（[検証記録](E2E_BEST_PRACTICE_UNPUBLISHED_BUNDLE_FP3B_2026-11-04.md)）、FP3-Cのroot側consumer・消費中slot・同budgetでの停止／全破棄（[検証記録](E2E_BEST_PRACTICE_BUNDLE_CONSUMER_FP3C_2026-11-04.md)）を合成内実装済み。論理retire後も固定abortし、以下の成功destへのatomic commit・正常terminal-only接続とは分離する。
 

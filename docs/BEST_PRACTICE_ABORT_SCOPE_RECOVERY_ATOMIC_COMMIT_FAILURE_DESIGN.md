@@ -32,11 +32,13 @@ Version: br006-recovery-atomic-commit-failure-draft-0.1 / Date: 2026-11-04。
 | --- | --- | --- |
 | CommitOwner | 同token・budget binding・開始時点の全deadline・失効世代、未使用の準備／commit claim | 同root専有。callerから生成・登録不可。claimと固定診断はclear後も保持 |
 | DestinationShell | 未公開空handle、未公開payload slot、commit状態、失効slot | DATA前に予約。payloadの有無だけで利用可にしない |
-| CommitPreparation | 同消費中bundle・parts／proof pair・期待値／全本文／rows／prefix、同dest／元receiptの対応 | 検査中の追跡slot。別rootやretired bundleから作らない |
+| CommitPreparation | 同準備追跡slotのbundle・parts／proof pair・期待値／全本文／rows／prefix、同dest／元receiptの対応 | 検査中の追跡slot。別rootやretired bundleから作らない |
 | PreCommitBundle | 同準備物を検査済みとして固定結合した未公開候補。元のfull projection／期待値／全manifestと終端bindingを保持 | post・最終照合前はcommit不可。単独の外部handleは返さない |
 | CanonicalCommitRecord | 同候補・空handle・dest・元receipt・budget／失効serial・同terminal責務への固定対応 | 公開前に確保・freeze・検査済み。最後の状態遷移だけで利用権限を発生させる |
 | TerminalBinding | 同source identity・frame／世代・cleanup sink／identity・元accepted originと責務holderの最小対応 | payloadを含まない。正常終了確認は未発行。失敗時は同FailureOwnerへ継承 |
 | FailureOwner／custody slot | 既存first hard、cleanup診断、未解決責務、本文破棄receiptの受け口 | 最初から予約。commit前後で新たな別FailureOwnerを作らない |
+
+既存型との対応（案）：§2の「同owner」は、D2で合成内実装済みの`DestinationOwner`を指し、destの所有者identityとして再利用する。`CommitOwner`はclaim・失効世代・全deadlineの保持に限り、`DestinationShell`は同`DestinationOwner`に属する空handleとpayload slotとする。OB-03親設計§3の`TakenSealProjection`は、FP-1で合成内実装済みの`ReceivedAcceptedProjection`に当たる。`SealedMixedBundle`は、線形化点の到達後に同destが保持する`PreCommitBundle`由来のpayloadに当たり、別objectを新たに確保しない。いずれも実装時に確認する。
 
 準備用slot、stage中のdest payload slot、binding台帳、kernel照合用借用はすべてpayload追跡対象とする。後からclosure・診断cause・helper cacheへ隠して残さない。owner shellと診断だけが残る場合と、payloadが残る場合を区別する。
 

@@ -131,4 +131,4 @@ FP3-A（合成内実装済み）はroot側発行状態・post-only issuerとpriv
 
 実atomic commit・利用可能dest／seal成功と正常terminal-only接続は、[OB-03親設計](BEST_PRACTICE_ABORT_SCOPE_RECOVERY_OB03_DESTINATION_CONTENT_DESIGN.md)の別工程に残す。本稿の受理状態・未公開bundleの成立は、それらの実装や有効化の承認ではない。
 
-次工程の[atomic commit準備・失敗時所有権の詳細設計](BEST_PRACTICE_ABORT_SCOPE_RECOVERY_ATOMIC_COMMIT_FAILURE_DESIGN.md)draft-0.1は、FP3-Cのretire後を再利用せず、別fresh固定継続の準備状態・線形化点・同FailureOwner／cleanup責務を具体化する。未公開候補の成立と成功destを分離し、実装・seal成功・正常終端接続は未承認のままとする。
+次工程の[atomic commit準備・失敗時所有権の詳細設計](BEST_PRACTICE_ABORT_SCOPE_RECOVERY_ATOMIC_COMMIT_FAILURE_DESIGN.md)は、FP3-Cのretire後を再利用せず、別fresh固定継続の準備状態・線形化点・同FailureOwner／cleanup責務を具体化する。未公開候補の成立と成功destを分離し、実装・seal成功・正常終端接続は未承認のままとする。
