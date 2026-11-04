@@ -1,6 +1,8 @@
 # worker ready／finish待ちの切り分け計画
 
-Version: draft-0.9 / Date: 2026-11-04 / 調査基準HEAD: `c581e5c` / WF-A実装基準HEAD: `1ffb8fe` / WF-B調査HEAD: `b5f9933`。
+Version: draft-0.10 / Date: 2026-11-04 / 調査基準HEAD: `c581e5c` / WF-A実装基準HEAD: `1ffb8fe` / WF-B調査HEAD: `b5f9933`。
+
+draft-0.10: [固定採取器の詳細契約・合成受入条件](BEST_PRACTICE_WFB_FIXED_RECORDER_CONTRACT.md)を追加。非上書き出力・最大6 checkpoint・外側枠内の停止／保存予約・終了確認を具体化した。設計のみで、実装・再採取・保管操作・承認状態の変更はない。
 
 draft-0.1のレビュー修正: スイート全体の負荷の仮説H5とその採取手順、`ReviewTestScope`の観測範囲外、既存JSONのworker別時刻、§6の実行順を追加した。§2〜5の現行経路と対照の内容は変更していない。
 

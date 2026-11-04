@@ -1,6 +1,8 @@
 # WF-B 自然失敗時の再採取・証拠保全手順
 
-Version: draft-0.2 / Date: 2026-11-04 / 設計基準HEAD: `e238f1c`。
+Version: draft-0.3 / Date: 2026-11-04 / 設計基準HEAD: `e238f1c`。
+
+draft-0.3: [固定採取器の詳細契約・合成受入条件](BEST_PRACTICE_WFB_FIXED_RECORDER_CONTRACT.md)へ非上書きpublication・最大6 checkpoint・外側予約・四軸終端を具体化した。session票は非上書きの連番とする。数値枠・保存先等の承認状態と操作禁止は変更しない。
 
 draft-0.1のレビュー修正: 自然失敗の証拠を保全対象へ追加し、保全を再採取より先に判断できるよう分離した。期間つきの承認形式、`report.partial`の連番化、外側枠の下限、session票の定義、手元の実行時刻の記録を追加した。
 
@@ -91,7 +93,7 @@ dirty checkoutは勝手にreset／stashしない。未整理の変更が試験�
 | termination.json | 元run／context close／所有process終了の確認、確認できない範囲、取消・外側打切りの固定理由 |
 | analysis.json | 元report digestに結合した派生集計。元reportを書き換えない |
 | manifest.json | 許可file名・サイズ・SHA-256・版・親manifest参照と保全結果。自己hashは含めず、manifest digestを別のsession票へ記録 |
-| session.json | runごとのmanifest digest、run順、手元の実行の開始・終了時刻。run用フォルダの外、session単位に置く |
+| session.0001.json〜session.0003.json | 開設／run1結果と比較判断／閉鎖の非上書き票。先行票digest、runごとのmanifest digest、run順、手元の実行の開始・終了時刻。run用フォルダの外、session単位に置く |
 
 file名は固定allowlist（連番は有限の整数だけ）。外部文字列やURL／sys_idからpathを作らない。祖先を含めsymlink／所有・書込権限の不適合、既存file衝突、サイズ超過、途中書込・再読不一致を拒否し、他のpathへ自動fallbackしない。コピー・hashの事後一致だけで検査中の差替えが防げたとはしない。安全なopen／排他作成・部分書込・rename・再読の境界は固定版の実装／合成試験で確認する。
 
@@ -111,7 +113,7 @@ manifestと保存先の再読hashが一致した場合のみ`preserved_verified`
 ## 7 再開前の未決事項・次の作業
 
 1. 非公開保存先の具体path・保護確認・保持／見直し日・byte／file数枠を利用者が選択・承認する。今回フォルダ作成・権限変更・copy／移動／削除はしない。決まれば§5.1の保全を最初に行う。
-2. 旧在庫を壊さず、runごとの非上書き出力・有限checkpoint・外側枠・終了確認を備える固定採取器の詳細契約と合成受入条件を設計する。既存固定名runnerをそのまま常用起動へ接続しない。
+2. [固定採取器の詳細契約・合成受入条件](BEST_PRACTICE_WFB_FIXED_RECORDER_CONTRACT.md)をレビューする。旧在庫を壊さず、runごとの非上書き出力・有限checkpoint・外側枠・終了確認を具体化した設計のみであり、実装・合成試験は未実施。既存固定名runnerをそのまま常用起動へ接続しない。
 3. 混入／衝突・symlink・容量境界・部分書込・clock／hash不一致・取消／終了未確認の独立対照を、別の明示実装指示後に確認する。製品runtimeへ登録口を増やさない。
 4. R01〜R08の充足後にのみ、承認された1sessionを別指示で実施する。未充足なら設計・文書化だけで止める。
 
