@@ -18,6 +18,8 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 ### Changed
 
+- WF-B adds a test-only in-memory EvidenceStore contract with fixed artifact slots, exclusive creation, pre-spent claims, bounded short-write/EINTR handling, one-attempt cleanup, same-handle reread SHA-256 verification and private one-shot save receipts. Fault and independent event/digest oracles cover collision, replacement, cancellation, deadlines and receipt mixing without filesystem or network access. Receipts do not establish whole-run preservation or enable formal issuance/admission.
+
 - WF-B adds a test-only pure-fake fixed-recorder model: monotone lifecycle, four independent terminal axes, six one-shot FIFO checkpoint slots and immutable outer deadlines with explicit cleanup/publication reserves. Handwritten timing/axis oracles and replay, cancellation, clock reentry/regression and boundary controls perform no capture, storage, process control or network I/O. Operational values remain unapproved; formal issuance and whole-run admission remain disabled.
 
 - WF-A adds test-only bounded parent observations to `ReviewTestScope`, correlating review calls, worker factory attempts and numeric protocol requests without retaining messages or raw request IDs. A fixed 4096-event limit and sticky incomplete-measurement reasons do not change review outcomes. Independent ready/finish gates verify cancellation, worker termination and admission recovery; runtime code, deadlines and closed issuance remain unchanged.

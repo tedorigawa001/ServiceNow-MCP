@@ -1,6 +1,8 @@
 # WF-B 固定採取器の詳細契約・合成受入条件
 
-Version: draft-0.4 / Date: 2026-11-04 / 設計基準HEAD: `0fe45fb` / 純粋fake実装基準HEAD: `7f055b4`。
+Version: draft-0.5 / Date: 2026-11-04 / 設計基準HEAD: `0fe45fb` / 純粋fake実装基準HEAD: `7f055b4`。
+
+draft-0.5: [artifact単位EvidenceStoreの内部契約・fake](BEST_PRACTICE_WFB_EVIDENCE_STORE_FAKE_CONTRACT.md)と[合成検証記録](E2E_BEST_PRACTICE_WFB_EVIDENCE_STORE_FAKE_2026-11-04.md)を追加。非上書き・有限書込・再読hash・一度限りreceiptをメモリ内で検証する。OS storeやrecorderへの接続、run全体の保全証明は未対応。
 
 draft-0.3: 有限状態・四軸・checkpoint planner・外側予約だけを試験専用moduleに実装。[純粋fake検証記録](E2E_BEST_PRACTICE_WFB_FIXED_RECORDER_FAKE_2026-11-04.md)へ実施／未実施を分離した。draft-0.2のレビュー修正は維持する。
 
@@ -131,7 +133,7 @@ fake store／clock／processと注入messageのみで検証する計画。実保
 
 ## 8 次の段階と未承認事項
 
-1. 有限状態・四軸・checkpoint planner・時間予約の純粋fake実装をレビューする。非上書きstore・ProcessOwner・観測集約・実承認は未接続で、採取可能とは扱わない。
+1. 有限状態・四軸・checkpoint planner・時間予約とartifact単位EvidenceStoreのfakeをレビューする。storeからrecorderのack／publicationへの接続、ProcessOwner・観測集約・実承認は未対応で、採取可能とは扱わない。
 2. 非上書きstoreとProcessOwnerのbackend／上界・故障契約を選定し、合成対照から検証する。OS依存の保証不足をUnknownのまま残す。
 3. byte／memory／retry／時間の具体上限、保存先・保持／削除・歴史的証拠copy・停止権限・通常run観測期間／回数を本人が承認する。設計定数6や31は操作許可ではない。
 4. 固定版の入力digest・試験証拠を揃え、R01〜R08をその時点で再確認してから、保全／再採取を別々に判断する。
@@ -145,4 +147,4 @@ loader内部観測・stdio事前ビルド・AC-Cは別課題。本書は自然ti
 - 時間はsafe integerの相対単調ms。開始時点・早い方のsession期限・正の有限予約を固定し、overflowと起動直前の観測窓不足を拒否する。6予約はstop／force／confirm／flush／manifest／final。ここでflush枠は終了後負荷採取・report／termination／analysis作成・再読の合算枠であり、これらの費用をゼロ扱いしない。工程内の個別配賦・実行は未実装。
 - 取消・例外・clock再入／逆行で元の観測へ復帰しない。Reservedで停止はClosed、Draining以降は状態を戻さない。保全falseまたはVerifyingの期限切れはPublishedを経ずClosed。Published後の停止は診断だけに残し、新checkpointを作らない。予算不足の終端は明示`abandon`でも確定でき、Publishedで得た`verified`は保持する。Closedでackを受けず、残ったcheckpointは`unsaved`として示す。
 - checkpointは固定headerの順序／identity plannerだけ。6種類各1回、FIFO ack、空にしても発行枠は復活しない。§4の集約本体・WF-A event・module／hook分類・snapshot byte／scratch・任意messageは今回未実装。
-- FR03〜06／08／10／13の純粋state／計画部分を検証する。実store・process・承認／sessionの2run配賦・比較許可・analysis・compiled保証・梱包完了は未実証。四軸のfake注入が成功してもそれらの代替にしない。
+- FR03〜06／08／10／13の純粋state／計画部分を検証する。別途artifact storeのfakeでFR01／02／06／08／12の一部を追加検証するが、実store・process・承認／sessionの2run配賦・比較許可・analysis・compiled保証は未実証。梱包dry-runの後日の確認は純粋fake検証記録§5を参照。四軸のfake注入が成功しても未対応部分の代替にしない。
