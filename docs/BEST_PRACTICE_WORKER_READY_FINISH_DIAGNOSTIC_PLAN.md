@@ -1,12 +1,14 @@
 # worker ready／finish待ちの切り分け計画
 
-Version: draft-0.3 / Date: 2026-11-04 / 調査基準HEAD: `c581e5c`。
+Version: draft-0.4 / Date: 2026-11-04 / 調査基準HEAD: `c581e5c` / WF-A実装基準HEAD: `1ffb8fe`。
 
 draft-0.1のレビュー修正: スイート全体の負荷の仮説H5とその採取手順、`ReviewTestScope`の観測範囲外、既存JSONのworker別時刻、§6の実行順を追加した。§2〜5の現行経路と対照の内容は変更していない。
 
 draft-0.2のレビュー修正: 探索調査で同じ設定の実行間に大きな差が見えたため、H5をH5a／H5bへ分け、§6へ実行回ごとの比較を追加した。
 
-Status: **静的調査と検証計画のみ。観測実装・追加実験は未実施。** 正式発行口閉鎖・全体受付無効・Unknown・VM／監視／telemetry調査保留を維持する。製品／試験期限・並列設定を変更せず、seal成功・実接続・実通信・設定変更・Pushは行わない。
+draft-0.4: WF-Aのtest-only親側観測とready／finish独立対照を接続した。実装・結果は[WF-A検証記録](E2E_BEST_PRACTICE_WORKER_PARENT_OBSERVATION_WFA_2026-11-04.md)へ分離する。
+
+Status: **WF-Aの親側bounded観測・独立合成対照まで実装済み。loader内部／strict受理観測と自然失敗時の原因確定は未完了。** 正式発行口閉鎖・全体受付無効・Unknown・VM／監視／telemetry調査保留を維持する。製品／試験期限・並列設定を変更せず、seal成功・実接続・実通信・設定変更・Pushは行わない。
 
 ## 1 目的と既知の証拠
 
@@ -64,9 +66,9 @@ H1〜H5は併存し得る。単回成功／固定遅延の合成再現から自�
 
 §1の「ready」はこの観測上の意味で解釈する。過去の時刻や集計値を改変せず、受理済みと過大評価しない。scopeは`process.hrtime.bigint()`で経過を測るため、偽DateのUTCと混ぜない。JSON assertion配列の並びも実行開始順には使わない。
 
-## 4 後続のtest-only観測契約（未実装）
+## 4 test-only観測契約（親側WF-A実装済み、詳細観測は未実装）
 
-最初の実装範囲は親側の観測追加とboundedな合成対照までとする。製品protocol・public option・runtime friend・worker選択条件を増やさない。
+WF-Aの実装範囲は親側の観測追加とboundedな合成対照まで。§4.1は固定4096イベントのjournalとして実装し、requestのmatchedは数値IDの観測上の対応だけで、strict受理を表さない。§4.2は未実装。製品protocol・public option・runtime friend・worker選択条件を増やさない。
 
 観測できるのは`ReviewTestScope`を通るreviewだけで、現在はtarget-selectionとadapter試験に限られる。他のファイルのtimeoutや、`full`でtimeout以外に失敗した`worker-lifecycle`・`worker-supervisor`・`r2-mcp`は、この観測の範囲外としてUnknownに残す。範囲外の失敗を、範囲内の分類へ含めない。
 
@@ -129,7 +131,7 @@ H5の判定には§4とは別に、スイート全体の次の値を各回で保
 
 ## 7 分割とAC-Cへの関係
 
-1. **WF-A（次の実装候補）**: 親側boundedイベント・review／worker／request相関と、ready待ち／finish待ちの独立合成対照。製品source・期限を変更しない。
+1. **WF-A（合成内実装済み）**: 親側boundedイベント・review／worker／request相関と、ready待ち／finish待ちの独立合成対照。製品source・期限は不変。実行範囲・未確認事項はWF-A検証記録に限定し、§5の全対照や自然失敗の再現まで完了したとは扱わない。
 2. **WF-B**: 自然発生の単独／通常並列観測、§6のH5の採取、原因候補の絞込み。必要なbootstrap内部観測は不足を示してから別途設計する。
 3. **WF-C**: 根拠に応じた最小修正案とRED／GREEN。現時点では修正内容を決めない。
 

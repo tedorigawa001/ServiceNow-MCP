@@ -233,3 +233,7 @@ adapter本体試験と**同じhook設置helper**を利用する子プロセスfi
 ## 15 通常並列負荷の探索調査（2026-11-04）
 
 `0df669a`基準の[探索調査記録](E2E_BEST_PRACTICE_PARALLEL_TIMEOUT_LOAD_2026-11-04.md)を追加した。通常並列4回と並列数3比較1回は各13,773件成功で、今回timeoutは再現しなかった。単独／通常並列／並列数3のworker時刻と負荷、worker以外のcaseも比較し、H5を第一候補として優先する証拠を得たが、同じ設定の実行間にも同程度の差があり、自然失敗時の原因は未確定（同記録§5でレビュー修正済み）。stdio事前ビルド失敗・AC-Cの未確認事項を解消扱いにしない。製品／試験コード・期限・設定は不変、repo変更は文書だけである。
+
+## 16 WF-Aの親側相関観測（2026-11-04）
+
+[WF-A検証記録](E2E_BEST_PRACTICE_WORKER_PARENT_OBSERVATION_WFA_2026-11-04.md)に、test-onlyの4096-event journal・review／worker／request相関・ready／finish独立gateの実装と初回RED、関連160件・通常並列13,784件成功、型検査・梱包除外を記録した。観測上のmatched／readyはstrict受理や正常終端証拠ではない。製品期限・設定・AC-Bの固定abortは変更せず、自然timeoutの原因確定・stdio事前ビルド・AC-C成功は未完了のまま。
