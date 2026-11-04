@@ -52,6 +52,16 @@ fixture moduleは計算用`node:crypto`だけをimportする。試験driverはMa
 
 修正後の全スイート（`--maxWorkers=3`）は290ファイル・**13,989件すべて成功**。`npm run lint`はエラー0、`npm run build`は成功、`package-http-classification`はPASS（441ファイル）、`git diff --check`も成功。梱包dry-runは未実施。
 
-## 5 未対応
+## 5 cleanup状態の変更（2026-11-05）
+
+§4では期限超過のcloseをunconfirmedと記録した。本人の判断で契約§3を変更し、等値・超過の成功返答を別状態`late`として示す。失敗の返答と、close後に時刻を読めない・時計が逆行した場合はunconfirmedのまま。`late`を時間予約内の解放の証拠にはしない。§4の件数は変更前の記録として残す。
+
+試験を1件追加し、新規試験は108件になった。既存recorderの92件と合わせて2ファイル**200件成功**。
+
+変異67個のうち63個が検出された。残る4個は§4の3個と、時刻を読めないときの`at !== undefined`を外す変異で、後者は`clock`理由が先に確定しているので等価と判断した。
+
+全スイート（`--maxWorkers=3`）は290ファイル・**13,990件すべて成功**。`npm run lint`はエラー0、`npm run build`は成功、`package-http-classification`はPASS（441ファイル）、`git diff --check`も成功。梱包dry-runは未実施。
+
+## 6 未対応
 
 artifact単位fake以外の実保存・directory／file metadata実取得・耐久性・no-replace OS実証・manifest集合・session台帳・recorder ack／四軸接続は未対応。retry／byte／期限は明示合成値だけで、本番の承認capを確定していない。first reason・cleanup結果は失敗診断であり、実FD解放の証明ではない。既存の暫定退避証拠は今回一切操作していない。

@@ -40,7 +40,7 @@ export class FakeEvidenceStore {
   #receipts = new WeakMap<object, Saved>();
   #consumed = new WeakSet<object>();
   #charged = 0;
-  #cleanup: 'not_started' | 'confirmed' | 'unconfirmed' = 'not_started';
+  #cleanup: 'not_started' | 'confirmed' | 'late' | 'unconfirmed' = 'not_started';
   private constructor(private readonly ops: EvidenceOps, private readonly root: object,
     private readonly run: object, private readonly caps: Readonly<StoreCaps>, private readonly now: () => number) {}
   static create(ops: EvidenceOps, root: object, run: object, caps: StoreCaps, now: () => number) {
@@ -53,12 +53,16 @@ export class FakeEvidenceStore {
     return new FakeEvidenceStore(ops, root, run, Object.freeze({ ...caps }), now);
   }
   #fail(reason: StoreReason) { this.#reason ??= reason; return false; }
-  #clock(deadline: number) {
+  #read(): number | undefined {
     let at: number;
-    try { at = this.now(); } catch { return this.#fail('clock'); }
-    if (!natural(at) || at < this.#last) return this.#fail('clock');
+    try { at = this.now(); } catch { this.#fail('clock'); return undefined; }
+    if (!natural(at) || at < this.#last) { this.#fail('clock'); return undefined; }
     this.#last = at;
-    return at < deadline || this.#fail('deadline');
+    return at;
+  }
+  #clock(deadline: number) {
+    const at = this.#read();
+    return at !== undefined && (at < deadline || this.#fail('deadline'));
   }
   #guard() {
     if (this.#reason || !this.#clock(this.caps.deadline) || this.#reason) return false;
@@ -66,12 +70,13 @@ export class FakeEvidenceStore {
     catch { return this.#fail('binding'); }
     return !this.#reason && this.#clock(this.caps.deadline) && !this.#reason;
   }
-  /** Confirmed only when the driver reports release before the finite cleanup reserve ends. */
+  /** A reported release is confirmed before the cleanup reserve ends and late from then on; no readable time stays unconfirmed. */
   #closeAttempt(handle: object) {
     this.#cleanup = 'unconfirmed';
-    const ok = this.ops.closeOnce(handle);
-    if (ok && this.#clock(this.caps.cleanupDeadline)) this.#cleanup = 'confirmed';
-    return ok;
+    if (!this.ops.closeOnce(handle)) return false;
+    const at = this.#read();
+    if (at !== undefined) this.#cleanup = at < this.caps.cleanupDeadline ? 'confirmed' : 'late';
+    return true;
   }
   #step(action: () => boolean, reason: StoreReason) {
     if (!this.#guard()) return false;

@@ -272,7 +272,7 @@ describe('fake EvidenceStore: bounded writes, retry and cleanup', () => {
     expect(count(f.calls, 'close')).toBe(1);
     expect(JSON.stringify(f.store.snapshot())).not.toContain('SECRET');
   });
-  it.each([[119, 'confirmed'], [120, 'unconfirmed'], [500, 'unconfirmed']] as const)('reports cleanup finishing at %s as %s, in cleanup and in the normal close', (time, cleanup) => {
+  it.each([[119, 'confirmed'], [120, 'late'], [500, 'late']] as const)('reports cleanup finishing at %s as %s, in cleanup and in the normal close', (time, cleanup) => {
     const f = fixture();
     f.writes.push('throw');
     f.hook(op => { if (op === 'close') f.time(time); });
@@ -284,6 +284,22 @@ describe('fake EvidenceStore: bounded writes, retry and cleanup', () => {
     expect(g.store.save(g.run, 'conditions.json', abc)).toBeUndefined();
     expect(g.store.snapshot()).toMatchObject({ reason: 'deadline', cleanup });
     expect(count(g.calls, 'close')).toBe(1);
+  });
+  it('keeps cleanup unconfirmed when a failed close is late or the time after close is unreadable', () => {
+    const f = fixture();
+    f.writes.push('throw'); f.faults.close = true;
+    f.hook(op => { if (op === 'close') f.time(500); });
+    expect(f.store.save(f.run, 'conditions.json', abc)).toBeUndefined();
+    expect(f.store.snapshot()).toMatchObject({ reason: 'write', cleanup: 'unconfirmed' });
+    for (const time of [5, NaN, Infinity, 0.5]) {
+      const g = fixture();
+      g.time(10);
+      g.writes.push('throw');
+      g.hook(op => { if (op === 'close') g.time(time); });
+      expect(g.store.save(g.run, 'conditions.json', abc)).toBeUndefined();
+      expect(g.store.snapshot()).toMatchObject({ reason: 'write', cleanup: 'unconfirmed' });
+      expect(count(g.calls, 'close')).toBe(1);
+    }
   });
   it('resets the cleanup axis for each save instead of showing an earlier result', () => {
     const f = fixture();

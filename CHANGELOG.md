@@ -180,7 +180,7 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 ### Added
 
-- WF-B review fixes for the test-only in-memory EvidenceStore: the byte limits now use the real input size and copy with no callback after the check, so a growing buffer or a subclass that misreports its length cannot exceed them. A close that returns after the cleanup deadline stays unconfirmed, and non-object forged receipts are sticky failures. New controls cover first-reason retention, throwing cleanup, structural ceilings and nested calls. No filesystem, recorder or issuance behavior changes.
+- WF-B review fixes for the test-only in-memory EvidenceStore: the byte limits now use the real input size and copy with no callback after the check, so a growing buffer or a subclass that misreports its length cannot exceed them. A close that succeeds at or after the cleanup deadline is reported as a separate `late` state rather than confirmed, and non-object forged receipts are sticky failures. New controls cover first-reason retention, throwing cleanup, structural ceilings and nested calls. No filesystem, recorder or issuance behavior changes.
 
 - The WF-B pure-fake recorder now keeps measurement after the test terminal and a verified preservation after Published, reports checkpoints left behind by Closed as unsaved, and no longer spends the stop slot on a stray call after the terminal. New tests cover invalid timing values, acknowledgement deadlines, state transitions, runtime type checks and snapshot immutability. Product code and deadlines are unchanged.
 

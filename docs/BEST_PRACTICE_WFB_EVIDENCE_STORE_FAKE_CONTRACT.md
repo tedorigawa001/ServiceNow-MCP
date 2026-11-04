@@ -1,6 +1,8 @@
 # WF-B EvidenceStore：artifact単位の内部契約とfake
 
-Version: draft-0.2 / Date: 2026-11-05 / 基準HEAD: `7f6ef4f` / レビュー修正の基準HEAD: `3e0d7d5`。
+Version: draft-0.4 / Date: 2026-11-05 / 基準HEAD: `7f6ef4f` / レビュー修正の基準HEAD: `3e0d7d5`。
+
+draft-0.4: cleanup期限以降に返ったcloseの成功を、新しい状態`late`として示す（§3）。
 
 draft-0.2のレビュー修正: 入力長の検査とコピーの間にcallbackが入り、byte上限をすり抜けられた経路を閉じた。入力・再読の長さは実サイズで判定する。cleanup期限を超えて返ったcloseはconfirmedにしない。object以外の偽receiptも同じsticky失敗にする。
 
@@ -39,7 +41,7 @@ write試行数は最大attempt cap。create／flush／close／再読は各1回�
 
 正常操作には同じ絶対`deadline`、失敗後cleanupにはそれより後の有限`cleanupDeadline`を明示する。途中で期限を再設定しない。recorderの外側予約からこれらを供給する接続は未実装。時刻はsafe integer・逆行拒否、等値は期限切れ。
 
-取得済みhandleがまだclose未試行ならfinallyで最大1回closeする。元の停止理由を保持し、`cleanup=not_started／confirmed／unconfirmed`を別軸で示す。cleanup期限切れ・時計取得失敗なら操作を増やさずunconfirmed。close要求だけをconfirmedにしない。成功の返答がcleanup期限前に得られた場合だけconfirmedとし、等値・超過はunconfirmedとする（通常closeも同じ）。同期操作を途中で止める仕組みではないので、超過の実行自体は防げない。これもfake driverの返答であり、実FD解放の証明ではない。
+取得済みhandleがまだclose未試行ならfinallyで最大1回closeする。元の停止理由を保持し、`cleanup=not_started／confirmed／late／unconfirmed`を別軸で示す。cleanup期限切れ・時計取得失敗なら操作を増やさずunconfirmed。close要求だけをconfirmedにしない。成功の返答がcleanup期限前に得られた場合だけconfirmedとする。等値・超過は`late`で、返答はあったが予約を超えたことを示す（通常closeも同じ）。`late`はconfirmedと同じ扱いにせず、時間予約内の解放の証拠にしない。失敗の返答、close後に時刻を読めない・時計が逆行した場合はunconfirmedのままとする。同期操作を途中で止める仕組みではないので、超過の実行自体は防げない。これもfake driverの返答であり、実FD解放の証明ではない。
 
 ## 4 receipt消費・診断
 
