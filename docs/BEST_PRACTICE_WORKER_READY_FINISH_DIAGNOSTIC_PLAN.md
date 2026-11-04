@@ -130,3 +130,7 @@ H5の判定には§4とは別に、スイート全体の次の値を各回で保
 3. **WF-C**: 根拠に応じた最小修正案とRED／GREEN。現時点では修正内容を決めない。
 
 [atomic commit設計](BEST_PRACTICE_ABORT_SCOPE_RECOVERY_ATOMIC_COMMIT_FAILURE_DESIGN.md)のAC-Cは未実装・seal成功の別承認待ちのまま。本調査はAC-Cの固定abortを外さず、staged数をcommit／正常終端へ昇格しない。timeoutの原因未確定とAC-Cの所有権・線形化点の未確認は別台帳に保持する。本計画の保存は観測実装・実行・AC-C実装の承認ではない。
+
+## 8 探索調査への参照（2026-11-04）
+
+後続の[通常並列負荷・worker待ち調査記録](E2E_BEST_PRACTICE_PARALLEL_TIMEOUT_LOAD_2026-11-04.md)に、同HEADでの通常並列4回・maxWorkers=3比較1回の各13,773件成功と、target-selection単独2回を分離して保存した。H5を支持するCPU負荷・非worker case・ready待ちの時間増大がある一方、timeout自体は今回再現せず、根本原因は未確定。初版のevent loop観測不成立と、観測器の版／範囲も記録した。WF-Aの恒久観測・独立対照や計画の交互各3回を完了したとは扱わない。本稿の元の「未実施」は計画作成時の状態で、実施済み範囲と結論は上記記録に限る。
