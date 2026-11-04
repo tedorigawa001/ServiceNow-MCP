@@ -160,3 +160,35 @@ resource故障のうちupper／localは、本文破棄確認は成立するが�
 レビューでは5件の観測JSONのSHA-256と記載値を再計算し、一致を確認した。`adapter_delay_drained`はscratchpadへコピーした観測器で再実行し、47失敗、review_busy 46件、その他7件を再現した。元レビューは約6,128msで自然終了し、再レビューも成功した。1件のreview_busyの時刻が65,036msと見えるのは、当該ケースが偽のDateを使うためで、受信順では46件全てが元レビュー終了より前である。
 
 修正前のrepo全体の確認は、lint（error 0・warning 374）、build、梱包分類監査（441ファイル、Compiled AC-B 81件を含む）が成功した。全体試験は他の検査と同時に走らせず`--maxWorkers=3`で実行し、287ファイル／13,770件成功・失敗0だった。これは通常並列のtimeoutの解消や原因確定を示さず、§9.6の候補は未実装のままである。
+
+## 11 adapter試験の取消・終了待ち（2026-11-04）
+
+### 11.1 対応範囲と所有順序
+
+§9.6の候補1だけを試験側で対応する。`update-set-adapter.test.ts`の全review呼出しを、共通のtest-only `installAdapterReviewScope`経由に変更した。製品source・admission・期限・並列設定は変更しない。
+
+1. 各caseの開始時に既存`ReviewTestScope`を生成し、Vitestの`context.signal`を結合する。
+2. scopeがreviewのPromiseと生成workerを追跡し、既存のsource worker factoryを使用する。
+3. `afterEach`はscopeを取消し、元reviewの実際のfinally（worker終了、session／admission解放）が終わるまで待つ。mock・時計はその後のfinallyで復元する。
+4. 終了時のmetaには既存scopeの数値／boolean診断だけを保存する。admissionの強制resetや成功への書換えは行わない。後始末失敗も握り潰さない。
+
+### 11.2 実timeout回帰と初回失敗
+
+adapter本体試験と**同じhook設置helper**を利用する子プロセスfixtureを追加した。注入parent fetchだけを取消まで保留し、実Vitestの250ms timeoutを発生させる。外側の回帰試験は、子が意図どおり失敗終了し、失敗は元caseのtimeout1件だけであること、後続caseが同principalでparent GETへ到達して`access_denied`となり`review_busy`ではないことを検査する。元reviewの`cancelled`、取消1回分のfetch、終了metaの`pending_reviews=0`と未処理例外0も確認する。実通信・worker起動はこの新fixtureでは不要である。
+
+- RED: helperを旧来の「mock／時計復元だけ」にした状態で、新回帰は失敗した（子の失敗2件、期待は元timeout1件）。取消・終了待ちがない場合の後続失敗を検出する。
+- 初回接続: adapter54件は成功したが、既存selection子fixtureと同じ設定へ追加したため、名前filterの衝突／skip行混入で既存回帰2件が失敗した。adapter用configを分離し、既存selection configとfilterは維持した。
+- GREEN: `npx vitest run tests/review/selection-timeout.test.ts tests/review/update-set-adapter.test.ts`は2ファイル／58件成功。元のunmanaged timeout・review_busy対照、worker終了待ち対照、fake timerを使う既存adapter試験も維持した。
+- `npm run build`は成功した。
+
+### 11.3 通常並列回帰・環境制約と残課題
+
+- 初回`npx vitest run`は実行環境のlocalhost待受制限で失敗した。HTTP Host試験の`listen EPERM 127.0.0.1`、OAuth／R2の`callback_unavailable`、stdio無出力20秒等を観測した。この実行を成功扱いせず、全失敗の原因を一律に断定もしない。
+- localhostを使う合成fixtureを許可した条件で、`npx vitest run --reporter=json --outputFile=/private/tmp/adapter-scope-full.json`を再実行した。`maxWorkers`・既存期限は変更せず、287ファイル／**13,771件成功・失敗0・skip0**。外部ServiceNowへの通信は行っていない。
+- JSONのadapter54件の終了metaは全て`aborted=true / close_requested=true / pending_reviews=0`、合計43 workerの`exited=true`を確認した。追加した外側timeout回帰も成功した。
+- 保存済みJSONのSHA-256: `68cdc032f5be84a833c2c91a2372381d72fea716456f400d510c3584701b312c`。これは一時領域の観測結果であり、repo／配布物へは含めない。
+- 変更した試験・helper・configの5ファイルに対するESLintは指摘0。
+
+新fixture内の意図的timeoutは外側の成功判定条件であり、通常回帰の未解消失敗として数えない。既存の5秒case期限、hook期限、製品60秒は延長していない。§9.6の候補1は今回接続したが、候補2・3（ready／finish競合、stdio事前ビルド）を解消したとは扱わない。通常並列の単回成功は、過去の断続的timeoutの原因確定や完全解消の証拠ではない。
+
+正式発行口閉鎖・全体受付無効・Unknown・調査保留を維持する。実接続・実通信・設定変更・Pushは行わない。

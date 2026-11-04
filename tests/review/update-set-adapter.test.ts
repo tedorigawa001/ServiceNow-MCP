@@ -1,11 +1,9 @@
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { ServiceNowClient } from '../../src/servicenow/client.js';
-import { reviewBoundedUpdateSet as reviewWithWorker } from '../../src/review/update-set-adapter.js';
 import { aggregateReviewSchema } from '../../src/review/aggregate-schema.js';
 import { createReviewInstanceBinding } from '../../src/servicenow/review-release-config.js';
-import { sourceWorkerFactory } from './fixtures/worker-factory.js';
-const reviewBoundedUpdateSet: typeof reviewWithWorker = (client, input, options) =>
-  reviewWithWorker(client, input, { ...options, workerFactory: sourceWorkerFactory });
+import { installAdapterReviewScope } from './fixtures/adapter-review-scope.js';
+const reviewBoundedUpdateSet = installAdapterReviewScope();
 
 const parent = 'a'.repeat(32);
 const id = (n: number) => n.toString(16).padStart(32, '0');
@@ -36,7 +34,6 @@ function fixture(rows: Row[]) {
   });
   return { details, fetcher };
 }
-afterEach(() => { vi.restoreAllMocks(); vi.useRealTimers(); });
 describe('BP-5 bounded update-set adapter', () => {
   it.each(['sys_script_', 'sys_script_bad_id', 'sys_script_client_', 'sys_script_client_bad_id',
     `sys_script_${'a'.repeat(31)}`, `sys_script_client_${'A'.repeat(32)}`])('still rejects malformed target name %s without fetching its payload', async name => {

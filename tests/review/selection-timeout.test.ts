@@ -8,10 +8,10 @@ import { ServiceNowClient } from '../../src/servicenow/client.js';
 import { ReviewTestScope } from './fixtures/review-test-scope.js';
 import { BOUNDED_LIMITS } from '../../src/servicenow/bounded-read.js';
 
-async function reproduce(pattern: string) {
+async function reproduce(pattern: string, config = 'tests/review/fixtures/selection-timeout.config.ts') {
   const dir = mkdtempSync(join(tmpdir(), 'bp5-timeout-repro-')), output = join(dir, 'results.json');
   const child = spawn(process.execPath, ['node_modules/vitest/vitest.mjs', 'run', '--config',
-    'tests/review/fixtures/selection-timeout.config.ts', '--testNamePattern', pattern, '--outputFile', output],
+    config, '--testNamePattern', pattern, '--outputFile', output],
   { env: {}, stdio: ['ignore', 'ignore', 'ignore'] });
   const timer = setTimeout(() => child.kill('SIGKILL'), 25000);
   try {
@@ -21,6 +21,19 @@ async function reproduce(pattern: string) {
   } finally { clearTimeout(timer); if (child.exitCode === null) child.kill('SIGKILL'); rmSync(dir, { recursive: true, force: true }); }
 }
 describe('selection timeout lifecycle reproduction', () => {
+  it('drains the adapter suite owner after an actual timeout before admitting its follower', async () => {
+    const { code, report, unhandled } = await reproduce('adapter managed timeout reproduction', 'tests/review/fixtures/adapter-timeout.config.ts');
+    expect(code).toBe(1); expect(report.numFailedTests).toBe(1);
+    const results = report.testResults.flatMap((f: { assertionResults: Array<{ status: string; failureMessages: string[] }> }) => f.assertionResults)
+      .filter((r: { status: string }) => !['pending', 'skipped'].includes(r.status));
+    expect(results).toHaveLength(2);
+    expect(results[0].status).toBe('failed');
+    expect(results[0].failureMessages.join(' ')).toContain('Test timed out in 250ms');
+    expect(results[1].status).toBe('passed'); expect(unhandled).toBe(0);
+    expect(results[0]).toMatchObject({ meta: { bp5_review_lifecycle: {
+      aborted: true, close_requested: true, pending_reviews: 0, workers: [],
+    } } });
+  }, 30000);
   it('reproduces an actual Vitest timeout followed by review_busy without blaming the product deadline', async () => {
     const { code, report, unhandled } = await reproduce('unmanaged timeout reproduction');
     expect(code).toBe(1); expect(report.numFailedTests).toBe(1);

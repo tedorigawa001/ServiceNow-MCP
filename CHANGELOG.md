@@ -10,6 +10,8 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 ### Fixed
 
+- Adapter regression tests now own cancellation and drain the original review before restoring mocks or clocks, preventing a timed-out case from leaving admission occupied for following cases. An isolated actual-Vitest-timeout regression preserves the original failure while checking cancellation, cleanup and same-principal recovery. Product deadlines and runtime behavior are unchanged.
+
 - Development-only closed body capture now applies its 4096-chunk retention limit only to nonempty additions. Empty chunks at the exact limit keep sequence validation and zero-byte accounting without discarding a valid body; the 4097th nonempty chunk is still charged then rejected. Includes a RED/GREEN boundary regression through EOF, parsing and digest comparison; formal issuance and production behavior remain unchanged.
 
 - AU-BR-005 no longer treats indirect use of `current.setAbortAction` as "no abort call". Extracted method references, `.call`/`.apply`/`.bind`, comma-operator calls and destructuring (named, computed or rest) of `current` now mark the abort analysis unresolved, so the review cannot complete as clear. The same rules apply to the development-only BR-006 scope plan, which additionally treats `current` passed to code outside the analyzed body as receiver-unresolved instead of `no_target_call`. Direct `current.setAbortAction(...)` calls and ordinary field reads are unchanged.
