@@ -733,6 +733,11 @@ export function createSyntheticUnpublishedBundleRoot(raw:unknown,dependencies:un
   const {abortBoundTransfer,...surface}=createNormalOwnedSupplyCore(raw,dependencies,extra,true,false,true,true,true,true).transferring;
   return Object.freeze({...surface,prepareUnpublishedBundle:abortBoundTransfer});
 }
+/** FP3-C one-shot private consumer and retirement only. No destination or successful seal. */
+export function createSyntheticBundleConsumerRoot(raw:unknown,dependencies:unknown,...extra:unknown[]){
+  const {abortBoundTransfer,...surface}=createNormalOwnedSupplyCore(raw,dependencies,extra,true,false,true,true,true,true,true).transferring;
+  return Object.freeze({...surface,consumePreparedBundle:abortBoundTransfer});
+}
 type CompletedMixedContent=Readonly<{token:object;owned:OwnedMixedSupply;pins:SyntheticFinishPins;serial:1}>;
 type BoundAdoption=Readonly<{token:object;content:CompletedMixedContent;bound:NormalAcceptedSnapshot;serial:1}>;
 type PendingBoundTransfer=Readonly<{token:object;ticket:BoundAdoption;content:CompletedMixedContent;binding:NormalPinBinding;taken:TakenNormalAccepted}>;
@@ -750,7 +755,7 @@ type UnpublishedCompleteBundle=Readonly<{token:object;marker:object;owner:Destin
   expectation:BundlePartsDraft['expectation'];content:SyntheticFullMixedDraftValues;rows:OwnedMixedSupply['rows'];model:SupplyModel;prefixValues:BundlePartsDraft['prefixValues'];budget:object;budgetSerial:1;invalidationSerial:number}>;
 type PayloadClearedReceipt=Readonly<{token:object;serial:number;budgetSerial:0|1;budget:object|undefined}>;
 type NormalCleanupCapsule={token:object;cleanup:((status:unknown)=>void)|undefined};
-function createNormalOwnedSupplyCore(raw:unknown,dependencies:unknown,extra:unknown[],transferMode=false,destinationMode=false,fullProjectionMode=false,partsMode=false,proofMode=false,bundleMode=false){
+function createNormalOwnedSupplyCore(raw:unknown,dependencies:unknown,extra:unknown[],transferMode=false,destinationMode=false,fullProjectionMode=false,partsMode=false,proofMode=false,bundleMode=false,consumerMode=false){
   const deps=supplyRecord(dependencies,['guard']);if(typeof deps.guard!=='function'||types.isProxy(deps.guard))return supplyBad();
   const fixedGuard=deps.guard as (stage:string,ordinal?:number)=>unknown,token=opaque<object>();
   // All owners and slots precede DATA inspection. Unknown roles are not promoted to absence.
@@ -772,11 +777,13 @@ function createNormalOwnedSupplyCore(raw:unknown,dependencies:unknown,extra:unkn
   let pendingHeader:AcceptedHeader|undefined,headerConsumptions=0,headerErrorCount:number|undefined;
   let pendingProjection:ReceivedAcceptedProjection|undefined,fullReceipts=0,fullPostChecks=0;
   let pendingExpectation:ReturnType<typeof projectRecoveryFinishExpectation>|undefined,bundleParts:BundlePartsDraft|undefined,expectationBuilds=0,partsBuilds=0,partsChecks=0,projectionComparisons=0;
-  let proofIssueState:'unused'|'issuing'|'ready'|'failed'='unused',proofPostPassed=false,proofIssueStarts=0,proofPairAccepts=0,proofPairChecks=0;
+  let proofIssueState:'unused'|'issuing'|'ready'|'consuming'|'retired'|'failed'='unused',proofPostPassed=false,proofIssueStarts=0,proofPairAccepts=0,proofPairChecks=0;
   let postAcceptedProofPair:PostAcceptedProofPair|undefined,proofIssueMarkers:Readonly<{content:object;prefix:object;pair:object}>|undefined;
   let proofOrigins:Readonly<{parts:BundlePartsDraft;content:ContentChecked;prefix:OrderedPrefixRelation;pair:PostAcceptedProofPair}>|undefined;
   let bundleBuildStarted=false,bundleBuilds=0,bundleReadies=0,bundleChecks=0,buildingBundle:UnpublishedCompleteBundle|undefined,unpublishedCompleteBundle:UnpublishedCompleteBundle|undefined,bundleMarker:object|undefined;
   let bundleOrigin:Readonly<{value:UnpublishedCompleteBundle;parts:BundlePartsDraft;proofs:PostAcceptedProofPair}>|undefined;
+  let bundleConsumeStarted=false,bundleConsumptions=0,bundleConsumePrePasses=0,bundleConsumeWorkChecks=0,bundleConsumePostPasses=0,bundleConsumePostChecks=0;
+  let consumingBundle:UnpublishedCompleteBundle|undefined,bundleConsumeRejection:SupplyReason|undefined;
   let prefixStarted=false,prefixCalls=0,prefixCandidates=0,prefixPostChecks=0,pendingPrefix:PendingPrefixCheck|undefined;
   let prefixRelation:OrderedPrefixRelation|undefined,prefixRelationMarker:object|undefined,prefixRelations=0,relationConsumeStarted=false,relationConsumptions=0;
   let prefixRejection:Readonly<{reason:PendingPrefixValueError['reason'];phase:PendingPrefixValueError['phase']}>|undefined;
@@ -790,7 +797,7 @@ function createNormalOwnedSupplyCore(raw:unknown,dependencies:unknown,extra:unkn
   let budget:NormalBudget|undefined,identityChecks=0,rowsChecked=0;
   const supply=createOwnedMixedSupply(raw,(stage,n)=>fixedGuard(stage,n),extra,token,failure,undefined,undefined,channel);
   raw=undefined;extra=[];
-  function clear(){unpublishedDestination=undefined;buildingBundle=undefined;unpublishedCompleteBundle=undefined;bundleMarker=undefined;bundleOrigin=undefined;postAcceptedProofPair=undefined;proofIssueMarkers=undefined;proofOrigins=undefined;proofPostPassed=false;proofIssueState=proofMode?'failed':proofIssueState;pendingExpectation=undefined;bundleParts=undefined;pendingProjection=undefined;contentChecked=undefined;pendingContent=undefined;destinationOwner=undefined;prefixRelation=undefined;prefixRelationMarker=undefined;pendingPrefix=undefined;pendingHeader=undefined;owned=undefined;binding=undefined;channel.birth=undefined;channel.take=undefined;completed=undefined;adoption=undefined;accepted=undefined;pendingTransfer=undefined;initial=undefined;preparationInput=undefined;b=lease=evidence=preparation=ready=undefined;}
+  function clear(){unpublishedDestination=undefined;consumingBundle=undefined;buildingBundle=undefined;unpublishedCompleteBundle=undefined;bundleMarker=undefined;bundleOrigin=undefined;postAcceptedProofPair=undefined;proofIssueMarkers=undefined;proofOrigins=undefined;proofPostPassed=false;proofIssueState=proofMode?'failed':proofIssueState;pendingExpectation=undefined;bundleParts=undefined;pendingProjection=undefined;contentChecked=undefined;pendingContent=undefined;destinationOwner=undefined;prefixRelation=undefined;prefixRelationMarker=undefined;pendingPrefix=undefined;pendingHeader=undefined;owned=undefined;binding=undefined;channel.birth=undefined;channel.take=undefined;completed=undefined;adoption=undefined;accepted=undefined;pendingTransfer=undefined;initial=undefined;preparationInput=undefined;b=lease=evidence=preparation=ready=undefined;}
   function fail(reason:SupplyReason):never{
     if(terminalBusy)terminalPoison=true;
     if(resources&&custody.holder()==='upper')throw new OwnedMixedSupplyError(first??'state');
@@ -971,7 +978,8 @@ function createNormalOwnedSupplyCore(raw:unknown,dependencies:unknown,extra:unkn
       if(proofMode){
         proofPostPassed=true;issuePostProofPair(mismatch);
         if(bundleMode)buildUnpublishedBundle();
-        transferAborts=1;return fail('state'); // FP3-A/B remain private and fixed-abort; no success destination.
+        if(consumerMode)consumeUnpublishedBundle();
+        transferAborts=1;return fail('state'); // FP3-A/B/C remain private and fixed-abort; no success destination.
       }
       if(fullProjectionMode){
         if(mismatch||!pendingTransfer||!pendingProjection||pendingProjection.taken!==pendingTransfer.taken||!b||!budget||pendingTransfer.binding.context.budget!==budget.identity)fail('binding');
@@ -1012,7 +1020,9 @@ function createNormalOwnedSupplyCore(raw:unknown,dependencies:unknown,extra:unkn
       ...(proofMode?{post_proofs:Object.freeze({state:proofIssueState,starts:proofIssueStarts,pairs:proofPairAccepts,checks:proofPairChecks,post_passed:proofPostPassed,
         pair_pending:!!postAcceptedProofPair,markers_pending:!!proofIssueMarkers,origins_pending:!!proofOrigins,content_issues:contentChecks,prefix_issues:prefixRelations,completed_bundles:bundleReadies,seals:0})}:{}),
       ...(bundleMode?{unpublished_bundle:Object.freeze({started:bundleBuildStarted,builds:bundleBuilds,readies:bundleReadies,checks:bundleChecks,building_pending:!!buildingBundle,pending:!!unpublishedCompleteBundle,
-        marker_pending:!!bundleMarker,origin_pending:!!bundleOrigin,published:0,seals:0,consumptions:0})}:{}),
+        marker_pending:!!bundleMarker,origin_pending:!!bundleOrigin,published:0,seals:0,consumptions:bundleConsumptions})}:{}),
+      ...(consumerMode?{bundle_consumer:Object.freeze({started:bundleConsumeStarted,pre_passes:bundleConsumePrePasses,work_checks:bundleConsumeWorkChecks,post_passes:bundleConsumePostPasses,post_checks:bundleConsumePostChecks,
+        pending:!!consumingBundle,consumptions:bundleConsumptions,retired:bundleConsumptions===1,rejection:bundleConsumeRejection??null,published:0,seals:0})}:{}),
       prefix_check:Object.freeze({started:prefixStarted,calls:prefixCalls,candidates:prefixCandidates,post_checks:prefixPostChecks,pending:!!pendingPrefix,rejection:prefixRejection??null,relations:prefixRelations,
         relation_pending:!!prefixRelation,relation_marker_pending:!!prefixRelationMarker,consume_started:relationConsumeStarted,consumptions:relationConsumptions}),
       ...(destinationMode?{destination:Object.freeze({owners:1,owner_pending:!!destinationOwner,started:destinationStarted,content_calls:contentCalls,candidates:contentCandidates,checks:contentChecks,preparations:destinationPreparations,
@@ -1165,8 +1175,30 @@ function createNormalOwnedSupplyCore(raw:unknown,dependencies:unknown,extra:unkn
     if(proofIssueState!=='ready'||!unpublishedCompleteBundle||buildingBundle||bundleReadies||!bundleSourcesDetached())supplyBad('binding');
     checkCompleteBundleBindings(unpublishedCompleteBundle!);bundleChecks++;
   }
+  function consumeUnpublishedBundle(){
+    const used=bundleConsumeStarted;bundleConsumeStarted=true;
+    if(!consumerMode||used||proofIssueState!=='ready'||!unpublishedCompleteBundle||consumingBundle||buildingBundle||bundleReadies!==1||bundleConsumptions)return fail('state');
+    proofIssueState='consuming';consumingBundle=unpublishedCompleteBundle;unpublishedCompleteBundle=undefined;
+    checkpoint('bundle_consume_pre');bundleConsumePrePasses++;
+    try{checkConsumingBundle();bundleConsumeWorkChecks++;}
+    catch(error){if(first)throw error;bundleConsumeRejection=error instanceof OwnedMixedSupplyError?error.reason:'internal';}
+    checkpoint('bundle_consume_post');bundleConsumePostPasses++;
+    if(bundleConsumeRejection)return fail(bundleConsumeRejection);
+    checkConsumingBundle();bundleConsumePostChecks++;
+    retireConsumedBundle();
+  }
+  function checkConsumingBundle(){
+    if(!consumerMode||!busy||first||!bundleConsumeStarted||proofIssueState!=='consuming'||!consumingBundle||unpublishedCompleteBundle||buildingBundle||bundleReadies!==1||bundleConsumptions||!bundleSourcesDetached())supplyBad('binding');
+    checkCompleteBundleBindings(consumingBundle!);
+  }
+  function retireConsumedBundle(){
+    if(!consumerMode||proofIssueState!=='consuming'||!consumingBundle||!bundleConsumeStarted||bundleConsumptions||bundleConsumePrePasses!==1||bundleConsumeWorkChecks!==1||bundleConsumePostPasses!==1||bundleConsumePostChecks!==1||bundleConsumeRejection)supplyBad('binding');
+    // Retire the sole use right and every payload-bearing verification alias. Never return or re-register it.
+    consumingBundle=undefined;bundleOrigin=undefined;bundleMarker=undefined;proofOrigins=undefined;proofIssueMarkers=undefined;destinationOwner=undefined;
+    acceptedChannel.invalidatePayload!();bundleConsumptions++;proofIssueState='retired';
+  }
   function bundleSourcesDetached(){return !bundleParts&&!postAcceptedProofPair&&!pendingExpectation&&!pendingProjection&&!pendingContent&&!pendingPrefix&&!contentChecked&&!prefixRelation&&!prefixRelationMarker&&!pendingTransfer&&!pendingHeader&&!initial&&!preparationInput&&!channel.birth&&!channel.take&&!lease&&!evidence&&!preparation&&!ready;}
-  function isCleared(){return !busy&&!buildingBundle&&!unpublishedCompleteBundle&&!bundleMarker&&!bundleOrigin&&!postAcceptedProofPair&&!proofIssueMarkers&&!proofOrigins&&!pendingExpectation&&!bundleParts&&!pendingProjection&&!destinationOwner&&!pendingContent&&!contentChecked&&!unpublishedDestination&&!prefixRelation&&!prefixRelationMarker&&!pendingPrefix&&!pendingHeader&&!owned&&!binding&&!pendingTransfer&&!completed&&!adoption&&!accepted&&!channel.birth&&!channel.take&&!initial&&!preparationInput&&!b&&!lease&&!evidence&&!preparation&&!ready&&!supply.inspect().pending&&!(acceptedChannel.payloadPending?.()??false);}
+  function isCleared(){return !busy&&!consumingBundle&&!buildingBundle&&!unpublishedCompleteBundle&&!bundleMarker&&!bundleOrigin&&!postAcceptedProofPair&&!proofIssueMarkers&&!proofOrigins&&!pendingExpectation&&!bundleParts&&!pendingProjection&&!destinationOwner&&!pendingContent&&!contentChecked&&!unpublishedDestination&&!prefixRelation&&!prefixRelationMarker&&!pendingPrefix&&!pendingHeader&&!owned&&!binding&&!pendingTransfer&&!completed&&!adoption&&!accepted&&!channel.birth&&!channel.take&&!initial&&!preparationInput&&!b&&!lease&&!evidence&&!preparation&&!ready&&!supply.inspect().pending&&!(acceptedChannel.payloadPending?.()??false);}
   function assertCleared(){if(!isCleared()||resources?.token!==token||resources.budget!==budget?.identity||budget&&budget.token!==token)throw Error('internal_review_error');}
   function checkClearedReceipt(){assertCleared();if(!payloadCleared||payloadCleared.token!==token||payloadCleared.serial!==invalidations||payloadCleared.budgetSerial!==(budget?.serial??0)||payloadCleared.budget!==budget?.identity)throw Error('internal_review_error');}
   function terminal<T>(work:()=>T):T{

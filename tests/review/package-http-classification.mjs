@@ -72,7 +72,8 @@ const rootMarkers=['synthetic-recovery-kernel','createSyntheticRecoveryKernel','
   'createSyntheticFullProjectionReceiptRoot','ReceivedAcceptedProjection','receivedProjection','pendingProjection','consumeProjection','checkProjection',
   'createSyntheticBundlePartsRoot','BundlePartsDraft','bundleParts','pendingExpectation','buildBundleParts','checkBundleParts',
   'createSyntheticPostProofRoot','PostAcceptedProofPair','postAcceptedProofPair','proofIssueMarkers','proofOrigins','issuePostProofPair','checkPostProofPair','checkBundleComposition',
-  'createSyntheticUnpublishedBundleRoot','UnpublishedCompleteBundle','buildingBundle','unpublishedCompleteBundle','bundleOrigin','checkBoundBundleComposition','checkCompleteBundleBindings','buildUnpublishedBundle'];
+  'createSyntheticUnpublishedBundleRoot','UnpublishedCompleteBundle','buildingBundle','unpublishedCompleteBundle','bundleOrigin','checkBoundBundleComposition','checkCompleteBundleBindings','buildUnpublishedBundle',
+  'createSyntheticBundleConsumerRoot','consumingBundle','bundleConsumeStarted','bundleConsumeRejection','consumeUnpublishedBundle','checkConsumingBundle','retireConsumedBundle'];
 const noRecoveryRoot=text=>assert(!rootMarkers.some(x=>text.includes(x)),'RB-A shared kernel/root leaked into runtime');
 for(const marker of rootMarkers)assert.throws(()=>noRecoveryRoot(marker));
 assert(!pack.files.some(f=>/synthetic-recovery-kernel|synthetic-recovery-lifecycle|synthetic-finish-recovery-root/.test(f.path)));

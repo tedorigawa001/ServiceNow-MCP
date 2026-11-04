@@ -400,4 +400,90 @@ try{
   const noReadyCounter=await load(t=>t.replace(readyGuard,"proofIssueState !== 'ready' || !unpublishedCompleteBundle || buildingBundle || ").replace(readySite,'bundleReadies++; '+readySite),bundleFactory);
   assert.throws(()=>bundleClean(setup(noReadyCounter),'binding',1,1,2),assert.AssertionError);
   console.log(`Compiled FP3-B: ${bundleFaults} bundle/component/ready faults, foreign bundle, 5 partial-build faults, 12 detach, 6 clear and 5 mutation controls PASS (private ready only; no seal/consumer)`);
+  // FP3-C: the only consumer is a fixed continuation of this same construction.
+  const consumerFactory='createSyntheticBundleConsumerRoot',consumeSite='consumeUnpublishedBundle();';
+  assert.equal(text.split(consumeSite).length,2);
+  function consumerClean(r,reason='binding',count=0,custodyCanTransfer=true){
+    assert.throws(()=>r.consumePreparedBundle());const s=r.inspect();assert.equal(s.first_failure,reason);
+    assert.equal(s.bundle_consumer.pending,false);assert.equal(s.bundle_consumer.consumptions,count);assert.equal(s.unpublished_bundle.consumptions,count);
+    for(const key of ['pending','building_pending','marker_pending','origin_pending'])assert.equal(s.unpublished_bundle[key],false);
+    assert.equal(s.bundle_consumer.published,0);assert.equal(s.bundle_consumer.seals,0);assert.equal(s.transfer.successful_seals,0);
+    if(custodyCanTransfer){r.finalDiscard(r.transferFailure());assert.equal(r.custody().payload_cleared,true);}
+    else{assert.throws(()=>r.transferFailure());assert.equal(r.custody().payload_cleared,false);}
+    assert.throws(()=>r.consumePreparedBundle());assert.equal(r.inspect().bundle_consumer.consumptions,count);
+    assert(!JSON.stringify(r.inspect()).includes('PRIVATE_CONSUMER'));
+  }
+  consumerClean(setup(await load(undefined,consumerFactory),undefined,bundlePartsInput(true)),'state',1);
+  let consumerFaults=0;
+  for(const fault of ['bundleConsumeStarted = true;','proofIssueState = "issuing";','unpublishedCompleteBundle = undefined;','consumingBundle = unpublishedCompleteBundle;','buildingBundle = unpublishedCompleteBundle;','bundleReadies = 0;']){
+    let calls=0;const r=setup(await load(t=>t.replace(consumeSite,fault+' '+consumeSite),consumerFactory),s=>{if(s.startsWith('bundle_consume_'))calls++;});
+    consumerClean(r,'state');assert.equal(calls,0);consumerFaults++;
+  }
+  {
+    let calls=0;const r=setup(await load(t=>t.replace(consumeSite,'bundleConsumptions = 1; '+consumeSite),consumerFactory),s=>{if(s.startsWith('bundle_consume_'))calls++;});
+    consumerClean(r,'state',1);assert.equal(calls,0);assert.equal(r.inspect().bundle_consumer.work_checks,0);consumerFaults++;
+  }
+  consumerClean(setup(await load(t=>t.replace(bundleSite,consumeSite+' '+bundleSite),consumerFactory)),'state');
+  consumerClean(setup(await load(t=>t.replace(consumeSite,consumeSite+' '+consumeSite),consumerFactory)),'state',1);
+  // Target the work and post guard call sites separately, without adding any source-level fault hook.
+  const consumerWork='checkConsumingBundle();\n            bundleConsumeWorkChecks++;',consumerPost='checkConsumingBundle();\n        bundleConsumePostChecks++;';
+  for(const site of [consumerWork,consumerPost])assert.equal(text.split(site).length,2);
+  const workFaults=['consumingBundle = undefined;','consumingBundle = Object.freeze({ ...consumingBundle });','bundleOrigin = undefined;','bundleMarker = undefined;',
+    'budget = Object.freeze({ ...budget, identity: Object.freeze({}) });','budget = Object.freeze({ ...budget, serial: 2 });','invalidations++;',
+    'proofIssueState = "ready";','unpublishedCompleteBundle = consumingBundle;','buildingBundle = consumingBundle;','bundleReadies = 0;','bundleConsumeStarted = false;',
+    'initial = Object.freeze({});'];
+  for(const fault of workFaults){
+    for(const stop of [undefined,'cancelled','deadline_exceeded']){
+      let post=0;const r=setup(await load(t=>t.replace(consumerWork,fault+' '+consumerWork),consumerFactory),s=>{if(s==='bundle_consume_post'){post++;return stop;}});
+      consumerClean(r,stop??'binding',0,!fault.includes('identity:'));assert.equal(post,1);assert.equal(r.inspect().bundle_consumer.rejection,'binding');
+    }consumerFaults++;
+  }
+  for(const fault of ['throw Error("PRIVATE_CONSUMER");','acceptedChannel.invalidatePayload();']){
+    for(const stop of [undefined,'cancelled']){const r=setup(await load(t=>t.replace(consumerWork,fault+' '+consumerWork),consumerFactory),s=>s==='bundle_consume_post'?stop:undefined);consumerClean(r,stop??'internal');}consumerFaults++;
+  }
+  // Mutation after the guard returns must be caught by the second full same-origin binding check.
+  for(const fault of ['invalidations++;','bundleOrigin = undefined;','consumingBundle = Object.freeze({ ...consumingBundle });','budget = Object.freeze({ ...budget, serial: 2 });','acceptedChannel.invalidatePayload();']){
+    consumerClean(setup(await load(t=>t.replace(consumerPost,fault+' '+consumerPost),consumerFactory)),fault.includes('invalidatePayload')?'internal':'binding');consumerFaults++;
+  }
+  const consumerCross=await load(t=>'let temporaryForeignConsumerBundle;\n'+t.replace(consumerWork,'if (!temporaryForeignConsumerBundle) temporaryForeignConsumerBundle = consumingBundle; else consumingBundle = temporaryForeignConsumerBundle; '+consumerWork),consumerFactory);
+  consumerClean(setup(consumerCross),'state',1);consumerClean(setup(consumerCross),'binding');consumerFaults++;
+  // The tracked active slot is mandatory for custody clearance, including after a stopped post guard.
+  for(const slot of ['consumingBundle','bundleOrigin','bundleMarker','proofOrigins','proofIssueMarkers']){
+    const r=setup(await load(withoutClear(slot),consumerFactory),s=>s==='bundle_consume_post'?'cancelled':undefined);assert.throws(()=>r.consumePreparedBundle());assert.throws(()=>r.transferFailure(),undefined,slot);assert.equal(r.custody().payload_cleared,false);
+  }
+  // Partial retirement never mints a completed consumption; all references still clear on the fixed abort.
+  const retireStart=text.indexOf('function retireConsumedBundle() {'),retireEnd=text.indexOf('\n    function bundleSourcesDetached()',retireStart);assert(retireStart>=0&&retireEnd>retireStart);
+  for(const site of ['consumingBundle = undefined;','acceptedChannel.invalidatePayload();','bundleConsumptions++;']){
+    const change=t=>{const body=t.slice(retireStart,retireEnd);assert.equal(body.split(site).length,2);return t.slice(0,retireStart)+body.replace(site,'throw Error("PRIVATE_CONSUMER"); '+site)+t.slice(retireEnd);};
+    consumerClean(setup(await load(change,consumerFactory)),'internal');
+  }
+  // Observe the retirement boundary itself, not merely the later abort that also clears these references.
+  const retiredAssertion='if (consumingBundle || bundleOrigin || bundleMarker || proofOrigins || proofIssueMarkers || destinationOwner || acceptedChannel.payloadPending()) throw Error("PRIVATE_CONSUMER"); ';
+  function retirementOracle(t,omitted){
+    let body=t.slice(retireStart,retireEnd);
+    if(omitted){assert.equal(body.split(omitted).length,2);body=body.replace(omitted,'/* removed retirement step */');}
+    body=body.replace('bundleConsumptions++;',retiredAssertion+'bundleConsumptions++;');return t.slice(0,retireStart)+body+t.slice(retireEnd);
+  }
+  consumerClean(setup(await load(t=>retirementOracle(t),consumerFactory)),'state',1);
+  for(const step of ['consumingBundle = undefined;','bundleOrigin = undefined;','bundleMarker = undefined;','proofOrigins = undefined;','proofIssueMarkers = undefined;','destinationOwner = undefined;','acceptedChannel.invalidatePayload();']){
+    consumerClean(setup(await load(t=>retirementOracle(t,step),consumerFactory)),'internal');
+  }
+  // Independently disable a checkpoint: its stop oracle must now fail, rather than pass vacuously.
+  for(const stage of ['bundle_consume_pre','bundle_consume_post']){
+    const call=`checkpoint('${stage}');`;assert.equal(text.split(call).length,2);
+    const r=setup(await load(t=>t.replace(call,'/* deliberately removed checkpoint */'),consumerFactory),s=>s===stage?'cancelled':undefined);
+    assert.throws(()=>consumerClean(r,'cancelled'),assert.AssertionError);
+  }
+  // Removing the post binding recheck lets an invalidated epoch retire; the rejection oracle must detect it.
+  const noPost=setup(await load(t=>t.replace(consumerPost,'invalidations++; bundleConsumePostChecks++;'),consumerFactory));
+  assert.throws(()=>consumerClean(noPost),assert.AssertionError);
+  // Omitting the ready->active move fails the success oracle before either consumption or publication.
+  const move='consumingBundle = unpublishedCompleteBundle;';assert.equal(text.split(move).length,2);
+  const noMove=setup(await load(t=>t.replace(move,'/* removed active move */'),consumerFactory));assert.throws(()=>consumerClean(noMove,'state',1),assert.AssertionError);
+  // The new active-slot cleared predicate is required independently of the other payload slots.
+  const clearedHead='function isCleared() {',clearedStart=text.indexOf(clearedHead),clearedEnd=text.indexOf('\n',clearedStart),clearedLine=text.slice(clearedStart,clearedEnd);assert.equal(clearedLine.split('!consumingBundle && ').length,2);
+  const noActiveClearCheck=t=>{const changed=t.slice(0,clearedStart)+clearedLine.replace('!consumingBundle && ','')+t.slice(clearedEnd);const start=changed.indexOf(clearHead),end=changed.indexOf('\n',start);return changed.slice(0,start)+changed.slice(start,end).replace('consumingBundle = undefined;','/* retained active slot */')+changed.slice(end);};
+  const retainedActive=setup(await load(noActiveClearCheck,consumerFactory),s=>s==='bundle_consume_post'?'cancelled':undefined);assert.throws(()=>retainedActive.consumePreparedBundle());
+  const badReceipt=retainedActive.transferFailure();retainedActive.finalDiscard(badReceipt);assert.equal(retainedActive.custody().payload_cleared,true,'removed active-slot predicate escapes the retained-slot oracle');
+  console.log(`Compiled FP3-C: ${consumerFaults} entry/work/post/origin faults, post-stop precedence, 5 retained-slot controls, 3 partial-retirement failures, 7 retirement-boundary omissions and 5 mutation controls PASS (logical retirement only; fixed abort, no seal)`);
 }finally{globalThis.fetch=originalFetch;rmSync(out,{recursive:true,force:true});}
