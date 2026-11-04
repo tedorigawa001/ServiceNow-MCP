@@ -76,3 +76,7 @@ review／worker／requestのordinal発行も各4096までで、上限後は0（�
 今回分8ファイルを明示選択し、未選択差分0・未追跡ファイル0であることを確認した。同じ作業ツリーでbuild→通常並列の全体試験→梱包dry-runを順に再実行し、build成功、288ファイル／13,784件成功・失敗0・skip0、梱包441ファイル／観測fixture・tests混入0を確認した。追加のsource・期限・設定変更はない。
 
 再検証JSONは`/private/tmp/sn-wfa-commit-full.json`、SHA-256は`a4b53b2315575f2fb2cd60001299190fb7869a2b5b38daf9c3085ce06553f1a1`。本節の追記だけを同じ8ファイルの選択範囲へ反映する。保存済みの初回RED・実装時の結果・未解消事項は変更しない。
+
+## 8 WF-Bの後続観測（2026-11-04）
+
+レビュー修正後の`b5f9933`で[WF-Bの限定反復](E2E_BEST_PRACTICE_WORKER_CORRELATION_WFB_2026-11-04.md)を実施した。通常並列3回・実行時maxWorkers=3比較3回は各13,790件成功、全体の122caseでWF-A相関complete・pending 0・未終了worker 0・review_busy 0。自然timeoutは未再現で、同設定／前後単独にも時間変動があるため、H5a／H5bや過去失敗の原因は未確定。WF-Aの試験・source・期限・設定は変更せず、未実施対照・stdio事前ビルド・AC-Cの残課題を解消扱いにしない。
