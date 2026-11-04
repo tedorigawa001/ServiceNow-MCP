@@ -307,7 +307,132 @@ describe('fixed recorder: immutable outer origin and fake clock failures', () =>
     expect(phase === 'verify' ? recorder.verify(true) : phase === 'publish' ? recorder.publish(true) : recorder.close()).toBe(false);
     expect(recorder.snapshot().reason).toBe('deadline');
     expect(recorder.snapshot().axes.test_result).toBe('failed');
+    if (phase === 'publish') expect(recorder.snapshot().state).toBe('Closed');
     recorder.abandon();
+    expect(recorder.snapshot().state).toBe('Closed');
+    expect(recorder.snapshot().axes.preservation).toBe(phase === 'close' ? 'verified' : 'unverified');
+  });
+  it('keeps a pending checkpoint until the whole deadline, not the observation stop', () => {
+    const { recorder, set } = started();
+    recorder.endTest('failed', true);
+    set(299_999);
+    expect(recorder.acknowledge(recorder.snapshot().checkpoints[0])).toBe(true);
+    const pending = recorder.snapshot().checkpoints[0];
+    set(300_000);
+    expect(recorder.acknowledge(pending)).toBe(false);
+    expect(recorder.snapshot().checkpoints[0]).toBe(pending);
+    expect(recorder.snapshot().reason).toBe('deadline');
+  });
+});
+
+describe('fixed recorder: review regressions', () => {
+  it.each([
+    ['startedAt', -1], ['startedAt', 0.5],
+    ['outerMs', 300_000.5], ['sessionDeadline', 600_000.5],
+    ['marginMs', 0], ['marginMs', -1],
+  ] as const)('rejects %s=%s even where a later check would not notice', (key, value) => {
+    const { timing } = setup();
+    if (key === 'outerMs') timing.sessionDeadline = 280_000;
+    timing[key] = value;
+    expect(planTime(timing)).toBeUndefined();
+  });
+  it.each(['recorderFailure', 'clock', 'checkpoint', 'cancel'] as const)('keeps complete measurement after a post-terminal %s', cause => {
+    const f = started();
+    expect(f.recorder.endTest('passed', true)).toBe(true);
+    drain(f.recorder);
+    if (cause === 'recorderFailure') f.recorder.recorderFailure();
+    if (cause === 'cancel') f.recorder.cancel();
+    if (cause === 'checkpoint') f.recorder.acknowledge({ sequence: 1, trigger: 'test_terminal', at: 0 });
+    if (cause === 'clock') { f.set(5); f.recorder.verify(true); f.set(4); f.recorder.publish(true); }
+    expect(f.recorder.snapshot().reason).toBe(cause === 'recorderFailure' ? 'recorder' : cause === 'cancel' ? 'cancelled' : cause);
+    expect(f.recorder.snapshot().axes).toMatchObject({ test_result: 'passed', measurement: 'complete' });
+  });
+  it('keeps measurement and preservation when a failure follows Published', () => {
+    const { recorder } = started();
+    recorder.endTest('passed', true);
+    drain(recorder);
+    recorder.verify(true);
+    recorder.publish(true);
+    const issued = recorder.snapshot().issued;
+    recorder.recorderFailure();
+    recorder.cancel();
+    expect(recorder.snapshot().issued).toBe(issued);
+    expect(recorder.snapshot().axes).toEqual({ test_result: 'passed', measurement: 'complete', preservation: 'verified', termination: 'confirmed' });
+    expect(recorder.abandon()).toBe(true);
+    expect(recorder.snapshot().state).toBe('Closed');
+    expect(recorder.snapshot().axes.preservation).toBe('verified');
+  });
+  it('reports checkpoints left behind by Closed as unsaved', () => {
+    const { recorder } = setup();
+    recorder.reserve(true);
+    expect(recorder.snapshot().unsaved).toBe(0);
+    recorder.cancel();
+    const view = recorder.snapshot();
+    expect(view.state).toBe('Closed');
+    expect(view.checkpoints.map(slot => slot.trigger)).toEqual(['conditions_ready', 'stop_requested']);
+    expect(view.unsaved).toBe(2);
+    expect(recorder.acknowledge(view.checkpoints[0])).toBe(false);
+    expect(recorder.snapshot().unsaved).toBe(2);
+    const open = started().recorder;
+    expect(open.snapshot().unsaved).toBe(0);
+    open.endTest('failed', true);
+    open.abandon();
+    expect(open.snapshot().checkpoints.map(slot => slot.trigger)).toEqual(['child_started', 'test_terminal', 'stop_requested']);
+    expect(open.snapshot().unsaved).toBe(3);
+  });
+  it('does not spend the stop slot on a stray call after the terminal', () => {
+    const { recorder } = started();
+    recorder.endTest('passed', true);
+    drain(recorder);
+    expect(recorder.poll()).toBe(false);
+    expect(recorder.snapshot().reason).toBe('state');
+    expect(recorder.snapshot().checkpoints).toEqual([]);
+    recorder.verify(true);
+    expect(recorder.start()).toBe(false);
+    expect(recorder.snapshot().checkpoints).toEqual([]);
+    expect(recorder.snapshot().state).toBe('Verifying');
+  });
+  it('still records a stop when the same misuse happens while observing', () => {
+    const { recorder } = started();
+    expect(recorder.start()).toBe(false);
+    expect(recorder.snapshot().state).toBe('Draining');
+    expect(recorder.snapshot().checkpoints.map(slot => slot.trigger)).toEqual(['child_started', 'stop_requested']);
+  });
+  it('closes a denied gate directly', () => {
+    const { recorder } = setup();
+    expect(recorder.reserve(false)).toBe(false);
+    expect(recorder.snapshot().state).toBe('Closed');
+  });
+  it.each(['result', 'complete', 'termination', 'preserved'] as const)('rejects a non-conforming runtime %s', field => {
+    const { recorder } = started();
+    if (field === 'result') expect(recorder.endTest('other' as never, true)).toBe(false);
+    if (field === 'complete') expect(recorder.endTest('passed', 1 as never)).toBe(false);
+    if (field === 'result' || field === 'complete') {
+      expect(recorder.snapshot().reason).toBe('binding');
+      expect(recorder.snapshot().axes.test_result).toBe('incomplete');
+      return;
+    }
+    recorder.endTest('passed', true);
+    drain(recorder);
+    if (field === 'termination') {
+      expect(recorder.verify('yes' as never)).toBe(false);
+      expect(recorder.snapshot().reason).toBe('binding');
+      expect(recorder.snapshot().axes.termination).toBe('unconfirmed');
+      expect(recorder.snapshot().state).toBe('Draining');
+      return;
+    }
+    recorder.verify(true);
+    expect(recorder.publish(1 as never)).toBe(false);
     expect(recorder.snapshot().axes.preservation).toBe('unverified');
+    expect(recorder.snapshot().state).toBe('Verifying');
+  });
+  it('returns snapshots that later transitions cannot change', () => {
+    const { recorder } = started();
+    const before = recorder.snapshot();
+    expect(Object.isFrozen(before.axes)).toBe(true);
+    expect(Object.isFrozen(before.checkpoints)).toBe(true);
+    recorder.endTest('failed', true);
+    expect(before.axes.test_result).toBe('incomplete');
+    expect(before.checkpoints.map(slot => slot.trigger)).toEqual(['child_started']);
   });
 });

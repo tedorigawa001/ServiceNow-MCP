@@ -63,9 +63,10 @@ export class FakeFixedRecorder {
   #stop(reason: Reason) {
     if (this.#state === 'Closed') return false;
     this.#failure ??= reason;
-    if (!this.#ended || reason === 'recorder' || reason === 'clock' || reason === 'checkpoint') this.#axes.measurement = 'incomplete';
     if (this.#state !== 'Published') this.#axes.preservation = 'unverified';
-    if (this.#state !== 'Published') this.#checkpoint('stop_requested', this.#last);
+    // A misused call after the terminal is only a diagnostic: it must not take the real stop slot.
+    const stray = reason === 'state' && (this.#state === 'Draining' || this.#state === 'Verifying');
+    if (this.#state !== 'Published' && !stray) this.#checkpoint('stop_requested', this.#last);
     if (this.#state === 'Gated' || this.#state === 'Reserved') this.#state = 'Closed';
     else if (this.#state === 'Observing') this.#state = 'Draining';
     return false;
@@ -180,14 +181,16 @@ export class FakeFixedRecorder {
   /** Explicit unconfirmed terminal for exhausted budget; never a publication success. */
   abandon() {
     if (this.#state === 'Closed') return false;
+    // #stop keeps a preservation result that Published already established.
     this.#stop('recorder');
-    this.#axes.preservation = 'unverified';
     this.#state = 'Closed';
     return true;
   }
   snapshot() {
     return Object.freeze({ state: this.#state, reason: this.#failure, testFailure: this.#testFailure,
       axes: Object.freeze({ ...this.#axes }), issued: this.#triggers.size,
-      checkpoints: Object.freeze([...this.#queue]), deadlines: this.#plan });
+      checkpoints: Object.freeze([...this.#queue]), deadlines: this.#plan,
+      // Closed accepts no acknowledgement, so what remains was never saved.
+      unsaved: this.#state === 'Closed' ? this.#queue.length : 0 });
   }
 }

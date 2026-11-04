@@ -4,7 +4,7 @@ Date: 2026-11-04 / 実装前HEAD: `f47c99f` / 最新設計基準HEAD: `7f055b4` 
 
 ## 1 範囲・制限
 
-[詳細契約draft-0.3](BEST_PRACTICE_WFB_FIXED_RECORDER_CONTRACT.md)の有限状態・四軸終端・checkpoint planner・外側予約だけを試験専用moduleに実装。製品src／config／依存関係は変更していない。保存先・保持期間・容量・運用時間値・停止方式等は未承認。正式発行口閉鎖・全体受付無効・Unknown・調査保留を維持する。
+[詳細契約](BEST_PRACTICE_WFB_FIXED_RECORDER_CONTRACT.md)の有限状態・四軸終端・checkpoint planner・外側予約だけを試験専用moduleに実装。製品src／config／依存関係は変更していない。保存先・保持期間・容量・運用時間値・停止方式等は未承認。正式発行口閉鎖・全体受付無効・Unknown・調査保留を維持する。
 
 再採取・証拠copy／移動／保管操作・実process監督・実接続・実通信・設定変更・Pushは未実施。以下の保全／終了はfake入力であり物理的証拠ではない。通常buildのdist生成は既存証拠の保全とは別である。
 
@@ -44,12 +44,38 @@ Date: 2026-11-04 / 実装前HEAD: `f47c99f` / 最新設計基準HEAD: `7f055b4` 
 - 新規2ファイルのstrict単独TypeScript検査とESLint: 成功。
 - `git diff --check`: 成功。文書の相対リンク先存在と、importなしの試験専用module／製品build対象外という構成も確認する。これは梱包完了の代わりではない。
 
-## 5 未実証・残課題
+## 5 レビュー修正（2026-11-04）
+
+§3・§4の件数（新規71件）は修正前の記録として残す。`aaf9ba6`のレビューで、モデルの次の不具合が分かった。製品src・設定・依存関係は変更していない。
+
+- 試験の終端後の採取器失敗・時計異常・checkpoint異常で、`measurement`が`complete`から`incomplete`へ書き換わっていた。契約§2の四軸独立に反し、後始末の失敗だけで比較が拒否される。終端後は変更しないよう修正した。
+- Published後の`abandon`が`preservation`を`verified`から`unverified`へ書き換えていた。既存の試験がこの動作を固定していたため、試験も改めた。
+- Closedへ進むと、残ったcheckpointを保存する経路がなかった。Closedではackを受けないまま、残りを`unsaved`としてsnapshotへ明示する。
+- 終端後の誤った呼出しが、取消や期限と同じ`stop_requested`の枠を消費していた。Draining／Verifyingの`state`理由では発行しないよう修正した。Observing中の誤用は従来どおり停止として記録する。
+
+試験を21件追加し、新規試験は92件になった。負の値・0・非整数の入力、終端後の軸の保持、ackの期限、Verifyingの期限切れの遷移、実行時の型検査、snapshotの不変性を確認する。
+
+レビュー時の変異55個のうち23個が検出されなかった。修正後の変異59個（修正箇所に合わせて更新）は53個が検出され、残る6個は次の理由で等価と判断した。
+
+| 検出されない変異 | 判断 |
+| --- | --- |
+| checkpoint上限の行の除去 | triggerが6種類で、重複を別の行が止めるため到達しない |
+| `verify`の二重確認の除去 | 2回目はstateがDrainingでなく、先の条件で止まる |
+| 時計の再入の先頭チェックの除去 | 直後のstate確認で同じ結果になる |
+| `natural(stop)`の除去 | `startedAt`の検査と`stop - startedAt`の検査に含まれる |
+| `sum`等の安全整数の確認の除去 | 不正値は`stop`の検査で拒否される |
+| `outerMs`の正の検査の除去 | 0以下は`stop`の検査、非整数は安全整数の確認で拒否される |
+
+§3で未完了だった梱包は、レビューで一時cacheを指定して確認した。`npm pack --dry-run --ignore-scripts --offline`は441ファイルで、`tests/`と固定採取器の混入は0件だった。npm cacheのEPERMの原因自体は確認していない。
+
+修正前のrepo全体の確認は、lint（error 0・warning 374）、build、梱包分類監査（441ファイル）が成功し、`--maxWorkers=3`の全体試験は289ファイル／13,861件成功・失敗0だった。修正後は同じ検査が成功し、全体試験は`--maxWorkers=3`と通常並列で各1回、どちらも289ファイル／13,882件成功・失敗0だった。これらは過去の通常並列timeoutの原因確定や解消を示さない。
+
+## 6 未実証・残課題
 
 1. 承認・session／run identity／2run枠／比較許可は未接続。`reserve(true)`は実承認を検証しない。実source／認証／ReleasePermitにも接続しない。
 2. 非上書きstore、byte／scratch／容量上限、manifest／連番session票、writer／再読検証は未実装。checkpoint ackをdurable保存と呼ばない。header plannerだけで、集約本体／WF-A／module・hook分類は未対応。
 3. ProcessOwner／外側watchdog、子孫の終了確認、stop／force／flush各工程への接続は未実装。時間計画の試験はOS終了や実時間上限の保証ではない。
 4. 実受信・analysisは未対応。新規試験は本文・path・credentialを扱わない固定snapshotのみ。新採取器と実transport／workerの接続試験や全体回帰は実行していない。別途実行した既存WF-AのローカルWorker回帰と区別する。
-5. 新moduleはtests配下で製品tsconfigのbuild対象外。package.jsonのfiles許可対象外という構成と、梱包dry-runの完了は区別する。compiled保証・梱包の最終確認は未完了。
+5. 新moduleはtests配下で製品tsconfigのbuild対象外。package.jsonのfiles許可対象外という構成と、梱包dry-runの完了は区別する。compiled保証は未完了。梱包のdry-runは§5で確認した。
 
 合成成功は自然timeoutの原因確定、H5a／H5bの解決、R04／R07充足、採取の許可、seal成功を意味しない。

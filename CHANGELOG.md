@@ -178,6 +178,8 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 ### Added
 
+- The WF-B pure-fake recorder now keeps measurement after the test terminal and a verified preservation after Published, reports checkpoints left behind by Closed as unsaved, and no longer spends the stop slot on a stray call after the terminal. New tests cover invalid timing values, acknowledgement deadlines, state transitions, runtime type checks and snapshot immutability. Product code and deadlines are unchanged.
+
 - WF-A observation time now uses a clock captured at import, so `vi.useFakeTimers()` can no longer freeze case time at zero or stop measurement as a false rewind. New tests cover terminate failures, a worker left running at close, rejected reviews, first-reason retention, ordinal limits and request ID handling, and event order checks now fail when an event is missing. Product code and deadlines are unchanged.
 
 - Adapter timeout regressions now reach a delayed worker termination and an owner close failure. They fail if the shared test owner stops awaiting cleanup, restores mocks or clocks too early, drops the framework signal, swallows a close failure, or skips restoration after one. Product code and deadlines are unchanged.

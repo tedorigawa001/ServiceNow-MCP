@@ -1,8 +1,10 @@
 # WF-B 固定採取器の詳細契約・合成受入条件
 
-Version: draft-0.3 / Date: 2026-11-04 / 設計基準HEAD: `0fe45fb` / 純粋fake実装基準HEAD: `7f055b4`。
+Version: draft-0.4 / Date: 2026-11-04 / 設計基準HEAD: `0fe45fb` / 純粋fake実装基準HEAD: `7f055b4`。
 
 draft-0.3: 有限状態・四軸・checkpoint planner・外側予約だけを試験専用moduleに実装。[純粋fake検証記録](E2E_BEST_PRACTICE_WFB_FIXED_RECORDER_FAKE_2026-11-04.md)へ実施／未実施を分離した。draft-0.2のレビュー修正は維持する。
+
+draft-0.3のレビュー修正: 試験の終端後は`measurement`を変えないこと、Published後の`abandon`が`verified`を保つこと、Closedで残ったcheckpointを`unsaved`と示すこと、終端後の誤用で停止の枠を消費しないことをモデルへ反映した。
 
 draft-0.1のレビュー修正: 必須観測の定義を親手順と揃え、状態遷移の失敗経路、checkpointの内容、時間予約とsession枠の下限、module単位の失敗、受入条件を追加した。設計のみで、承認状態と操作禁止は変更していない。
 
@@ -141,6 +143,6 @@ loader内部観測・stdio事前ビルド・AC-Cは別課題。本書は自然ti
 
 - `tests/review/fixtures/fixed-recorder.ts`はimportなしの試験専用module。`reserve(true)`は合成gate入力にすぎず、本人承認やR01〜R08を検証しない。`verify(boolean)`／`publish(boolean)`／checkpoint ackもfake値であり、OS終了・保存hashの証拠発行ではない。
 - 時間はsafe integerの相対単調ms。開始時点・早い方のsession期限・正の有限予約を固定し、overflowと起動直前の観測窓不足を拒否する。6予約はstop／force／confirm／flush／manifest／final。ここでflush枠は終了後負荷採取・report／termination／analysis作成・再読の合算枠であり、これらの費用をゼロ扱いしない。工程内の個別配賦・実行は未実装。
-- 取消・例外・clock再入／逆行で元の観測へ復帰しない。Reservedで停止はClosed、Draining以降は状態を戻さない。保全falseまたはVerifyingの期限切れはPublishedを経ずClosed。Published後の停止は診断だけに残し、新checkpointを作らない。予算不足の未保全終端は明示`abandon`でも確定できる。
+- 取消・例外・clock再入／逆行で元の観測へ復帰しない。Reservedで停止はClosed、Draining以降は状態を戻さない。保全falseまたはVerifyingの期限切れはPublishedを経ずClosed。Published後の停止は診断だけに残し、新checkpointを作らない。予算不足の終端は明示`abandon`でも確定でき、Publishedで得た`verified`は保持する。Closedでackを受けず、残ったcheckpointは`unsaved`として示す。
 - checkpointは固定headerの順序／identity plannerだけ。6種類各1回、FIFO ack、空にしても発行枠は復活しない。§4の集約本体・WF-A event・module／hook分類・snapshot byte／scratch・任意messageは今回未実装。
 - FR03〜06／08／10／13の純粋state／計画部分を検証する。実store・process・承認／sessionの2run配賦・比較許可・analysis・compiled保証・梱包完了は未実証。四軸のfake注入が成功してもそれらの代替にしない。
