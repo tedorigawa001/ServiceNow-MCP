@@ -1,6 +1,6 @@
 # OB-03：移譲先owner・seal接続と本文／混合manifest比較
 
-Version: br006-recovery-ob03-destination-content-draft-0.6 / Date: 2026-11-04。
+Version: br006-recovery-ob03-destination-content-draft-0.7 / Date: 2026-11-04。
 設計基準HEAD: `4f82d9c`／D1実装基準HEAD: `b17a418`／D2実装開始HEAD: `f467fc4`。Status: **D1値境界とD2のfresh合成root・同pendingのprivate ContentChecked／未公開dest準備を実装。固定abortを維持し、commit／sealは未接続。正式発行口閉鎖・全体受付無効・Unknown・VM／監視／telemetry調査保留を維持する。seal成功・実接続・実通信・設定変更・Pushは行わない。**
 
 [OD-B設計](BEST_PRACTICE_ABORT_SCOPE_RECOVERY_ODB_TRANSFER_DESIGN.md)§3〜7、[OB-02接続](BEST_PRACTICE_ABORT_SCOPE_RECOVERY_OB02_ADOPTION_DESIGN.md)§6〜8と[PD-B接続](BEST_PRACTICE_ABORT_SCOPE_RECOVERY_PENDING_PREFIX_BINDING_DESIGN.md)§10の差分。prefix関係値を確認できることと、元本文を保持したmixed内容を一つの移譲先へsealできることを分離する。調査時のkernel作業中差分は変更せず、本稿の現行到達点は上記コミットを基準とする。
@@ -72,9 +72,11 @@ reviewed出力0件でも親省略により元reviewedがあれば、元body数�
 
 ## 6 一度限りの移譲とatomic commit
 
-AC-A追記：[atomic commit準備設計](BEST_PRACTICE_ABORT_SCOPE_RECOVERY_ATOMIC_COMMIT_FAILURE_DESIGN.md)の§11にowner／空shell・reserved→preparing・一度限りclaim・固定診断と全破棄の限定実装を分離した（[検証記録](E2E_BEST_PRACTICE_ATOMIC_PREPARATION_ACA_2026-11-04.md)）。同bundleのbasic bindingまでで固定abortし、staged record・terminal binding・atomic commit／seal成功は未実装のままとする。
+AC-B追記：[atomic commit準備設計](BEST_PRACTICE_ABORT_SCOPE_RECOVERY_ATOMIC_COMMIT_FAILURE_DESIGN.md)§12で同bundle／record・同kernelのlive terminal bindingと非公開staged境界を合成内接続した（[検証記録](E2E_BEST_PRACTICE_ATOMIC_STAGING_ACB_2026-11-04.md)）。post後の同record再照合・standalone slot除去後も固定abortする。staged履歴は成功destや正常終端ではなく、atomic commit・seal成功・実接続は未実装／未承認のまま。
 
-[atomic commit準備・線形化点と失敗時所有権の詳細設計](BEST_PRACTICE_ABORT_SCOPE_RECOVERY_ATOMIC_COMMIT_FAILURE_DESIGN.md)で、未公開staged状態・同canonical recordの単一線形化点・commit前後の全破棄と同FailureOwnerへの責務保持を対にした。移譲元borrow除去のprivate境界と正常終端は未確認のまま残す。設計のみであり、固定abort・正式発行口閉鎖・全体受付無効・Unknown・調査保留を維持する。
+AC-A追記：[atomic commit準備設計](BEST_PRACTICE_ABORT_SCOPE_RECOVERY_ATOMIC_COMMIT_FAILURE_DESIGN.md)の§11にowner／空shell・reserved→preparing・一度限りclaim・固定診断と全破棄の限定実装を分離した（[検証記録](E2E_BEST_PRACTICE_ATOMIC_PREPARATION_ACA_2026-11-04.md)）。AC-A入口は同bundleのbasic bindingまでで固定abortする。staged record／live terminal bindingは別AC-B入口だけが扱い、atomic commit／seal成功は未実装のままとする。
+
+[atomic commit準備・線形化点と失敗時所有権の詳細設計](BEST_PRACTICE_ABORT_SCOPE_RECOVERY_ATOMIC_COMMIT_FAILURE_DESIGN.md)で、未公開staged状態・同canonical recordの単一線形化点・commit前後の全破棄と同FailureOwnerへの責務保持を対にした。移譲元borrow除去のprivate境界と正常終端は未確認のまま残す。成功commit sectionは設計のみであり、固定abort・正式発行口閉鎖・全体受付無効・Unknown・調査保留を維持する。
 
 [FP-3内部契約](BEST_PRACTICE_ABORT_SCOPE_RECOVERY_FP3_POST_ACCEPT_BUNDLE_DESIGN.md)は、この前段のpost-only証拠受理・未公開bundle・一度限りの固定消費を具体化する。FP3-Aのpost-only issuer・private proof pair（[検証記録](E2E_BEST_PRACTICE_POST_PROOF_FP3A_2026-11-04.md)）とFP3-Bの未公開完成bundle結合・途中失敗clear（[検証記録](E2E_BEST_PRACTICE_UNPUBLISHED_BUNDLE_FP3B_2026-11-04.md)）、FP3-Cのroot側consumer・消費中slot・同budgetでの停止／全破棄（[検証記録](E2E_BEST_PRACTICE_BUNDLE_CONSUMER_FP3C_2026-11-04.md)）を合成内実装済み。論理retire後も固定abortし、以下の成功destへのatomic commit・正常terminal-only接続とは分離する。
 

@@ -568,4 +568,68 @@ try{
   const repeatedAc=setup(await load(t=>t.replace(acSite,'try { '+acSite+' } catch {} '+acSite),acFactory),s=>s==='atomic_prepare_pre'?'cancelled':undefined);
   acClean(repeatedAc,'cancelled','pre');
   console.log(`Compiled AC-A: ${acFaults} entry/binding/state/final/foreign faults, allocation/post precedence + hard-stop, 4 retained-slot and 4 mutation controls PASS (no staged record/commit/seal)`);
+  const abFactory='createSyntheticAtomicStagingRoot',abBuild='buildAtomicStage();',abStage='stageAtomicRecord();';
+  for(const site of [abBuild,abStage])assert.equal(text.split(site).length,2);
+  function inFunction(t,name,edit){
+    const file=ts.createSourceFile('temporary-staging.js',t,ts.ScriptTarget.ES2022,true,ts.ScriptKind.JS),found=[];
+    function walk(n){if(ts.isFunctionDeclaration(n)&&n.name?.text===name)found.push(n);ts.forEachChild(n,walk);}walk(file);assert.equal(found.length,1,name);
+    const n=found[0],start=n.getStart(file);return t.slice(0,start)+edit(t.slice(start,n.end))+t.slice(n.end);
+  }
+  function atCall(t,fn,call,fault){return inFunction(t,fn,body=>{assert.equal(body.split(call).length,2);return body.replace(call,fault+' '+call);});}
+  function abClean(r,{reason='binding',phase='post',staged=0,issues=1,builds=1}={}){
+    assert.throws(()=>r.stageAtomicCommit());const x=r.inspect(),a=x.atomic_stage;
+    assert.equal(x.first_failure,reason);assert.deepEqual(x.atomic_preparation.failure,{phase,reason});assert.equal(a.staged,staged);assert.equal(a.terminal_issues,issues);assert.equal(a.record_builds,builds);
+    for(const key of ['terminal_pending','bundle_pending','candidate_pending','staged_pending','origin_pending','source_closed','cleanup_confirmed'])assert.equal(a[key],false);
+    for(const key of ['commits','seals','published'])assert.equal(a[key],0);assert.equal(x.transfer.successful_seals,0);
+    r.finalDiscard(r.transferFailure());assert.equal(r.custody().payload_cleared,true);const before=r.inspect().atomic_stage;assert.throws(()=>r.stageAtomicCommit());assert.deepEqual(r.inspect().atomic_stage,before);assert(!JSON.stringify(x).includes('PRIVATE_STAGING'));
+  }
+  const stagedOracle='if (atomicState !== "staged" || !stagedAtomicRecord || atomicRecordCandidate || atomicPreparation || atomicPreparingBundle || preCommitBundle || atomicTerminal || atomicStaged !== 1) throw Error("PRIVATE_STAGING"); ';
+  abClean(setup(await load(t=>t.replace(abStage,abStage+' '+stagedOracle),abFactory),undefined,bundlePartsInput(true)),{reason:'state',phase:'fixed_abort',staged:1});
+  let abFaults=0;
+  for(const fault of ['atomicStageStarted = true;','atomicTerminal = Object.freeze({});','preCommitBundle = Object.freeze({});','atomicRecordCandidate = Object.freeze({});','stagedAtomicRecord = Object.freeze({});','atomicRecordOrigin = Object.freeze({});','atomicRecordBuilds = 1;']){
+    abClean(setup(await load(t=>t.replace(abBuild,fault+' '+abBuild),abFactory)),{reason:'state',issues:0,builds:fault.includes('Builds = 1')?1:0});abFaults++;
+  }
+  for(const patch of ['token: Object.freeze({})','owner: Object.freeze({ ...atomicOwner })','shell: Object.freeze({ ...atomicShell })','handle: Object.freeze({})',
+    'resource: Object.freeze({ ...resources })','capsule: Object.freeze({})','budget: Object.freeze({})','budgetSerial: 2','invalidationSerial: invalidations + 1']){
+    const fault=`atomicRecordCandidate = Object.freeze({ ...atomicRecordCandidate, ${patch} }); atomicRecordOrigin = Object.freeze({ ...atomicRecordOrigin, record: atomicRecordCandidate });`;
+    for(const stop of [undefined,'cancelled']){let post=0;const r=setup(await load(t=>atCall(t,'buildAtomicStage','checkAtomicStageCandidate();',fault),abFactory),s=>{if(s==='atomic_prepare_post'){post++;return stop;}});abClean(r,{reason:stop??'binding'});assert.equal(post,1);}abFaults++;
+  }
+  for(const fault of ['atomicRecordOrigin = undefined;','atomicRecordCandidate = Object.freeze({ ...atomicRecordCandidate });','atomicStageStarts = 2;','atomicTerminalIssues = 2;','invalidations++;']){
+    const r=setup(await load(t=>atCall(t,'buildAtomicStage','checkAtomicStageCandidate();',fault),abFactory));
+    abClean(r,{issues:fault==='atomicTerminalIssues = 2;'?2:1});abFaults++;
+  }
+  // The same-kernel issuer's object is rewritten before its validator, not merely at the outer record gate.
+  const terminalSite='normalAccepted.checkTerminal(owner, value, normalTerminal);';assert.equal(text.split(terminalSite).length,2);
+  for(const field of ['owner','accepted','frame','source','cleanup','sink','origin','terminal','cleanupSerial']){
+    const fault=`normalTerminal = Object.freeze({ ...normalTerminal, ${field}: ${field==='cleanupSerial'?'1':'Object.freeze({})'} }); `;
+    abClean(setup(await load(t=>t.replace(terminalSite,fault+terminalSite),abFactory)),{reason:'internal',issues:0,builds:0});abFaults++;
+  }
+  for(const [site,issues,builds] of [['atomicTerminal = acceptedChannel.issueTerminal(',0,0],['preCommitBundle = Object.freeze(',1,0],['atomicRecordCandidate = Object.freeze(',1,0],['atomicRecordOrigin = Object.freeze(',1,1]]){
+    assert.equal(text.split(site).length,2);for(const stop of [undefined,'deadline_exceeded']){const r=setup(await load(t=>t.replace(site,'throw Error("PRIVATE_STAGING"); '+site),abFactory),s=>s==='atomic_prepare_post'?stop:undefined);abClean(r,{reason:stop??'internal',issues,builds});}
+  }
+  // Issue claims cannot be rearmed by a second call on the same private channel.
+  const secondTerminal='atomicTerminalIssues++;';assert.equal(text.split(secondTerminal).length,2);
+  abClean(setup(await load(t=>t.replace(secondTerminal,secondTerminal+' acceptedChannel.issueTerminal(b, p.bundle.received);'),abFactory)),{reason:'internal',builds:0});
+  const foreignRecord=await load(t=>'let temporaryForeignStaged;\n'+t.replace(abStage,'if (!temporaryForeignStaged) temporaryForeignStaged = atomicRecordCandidate; else atomicRecordCandidate = temporaryForeignStaged; '+abStage),abFactory);
+  abClean(setup(foreignRecord),{reason:'state',phase:'fixed_abort',staged:1});abClean(setup(foreignRecord),{phase:'staging'});abFaults++;
+  for(const fault of ['atomicRecordCandidate = undefined;','atomicRecordCandidate = Object.freeze({ ...atomicRecordCandidate });','invalidations++;']){
+    abClean(setup(await load(t=>t.replace(abStage,fault+' '+abStage),abFactory)),{phase:'staging'});abFaults++;
+  }
+  for(const fault of ['stagedAtomicRecord = Object.freeze({ ...stagedAtomicRecord });','atomicPreparingBundle = stagedAtomicRecord.payload.bundle;','atomicState = "preparing";']){
+    abClean(setup(await load(t=>atCall(t,'stageAtomicRecord','checkStagedAtomicRecord();',fault),abFactory)),{phase:'staging'});abFaults++;
+  }
+  abClean(setup(await load(t=>t.replace(abStage,abStage+' fail("cancelled");'),abFactory)),{reason:'cancelled',phase:'staging',staged:1});
+  for(const slot of ['atomicTerminal','preCommitBundle','atomicRecordCandidate','atomicRecordOrigin','stagedAtomicRecord']){
+    const r=setup(await load(withoutClear(slot),abFactory),slot==='stagedAtomicRecord'?undefined:s=>s==='atomic_prepare_post'?'cancelled':undefined);
+    assert.throws(()=>r.stageAtomicCommit());assert.throws(()=>r.transferFailure(),undefined,slot);assert.equal(r.custody().payload_cleared,false);
+  }
+  const retainedNative=setup(await load(t=>inFunction(t,'clearNormalHeader',body=>{assert.equal(body.split('normalTerminal = undefined;').length,2);return body.replace('normalTerminal = undefined;','/* retained native terminal */');}),abFactory));
+  assert.throws(()=>retainedNative.stageAtomicCommit());assert.throws(()=>retainedNative.transferFailure());assert.equal(retainedNative.custody().payload_cleared,false);
+  // These field guards are independently necessary even if a fault coherently replaces the record's origin slot.
+  for(const [comparison,patch] of [['r.handle !== p.shell.handle','handle: Object.freeze({})'],['r.capsule !== r.resource.local','capsule: Object.freeze({})'],['r.budget !== p.budget','budget: Object.freeze({})']]){
+    const fault=`atomicRecordCandidate = Object.freeze({ ...atomicRecordCandidate, ${patch} }); atomicRecordOrigin = Object.freeze({ ...atomicRecordOrigin, record: atomicRecordCandidate });`;
+    const change=t=>atCall(inFunction(t,'checkAtomicRecordBinding',body=>{assert.equal(body.split(comparison).length,2);return body.replace(comparison,'false');}),'buildAtomicStage','checkAtomicStageCandidate();',fault);
+    const mutated=setup(await load(change,abFactory));assert.throws(()=>abClean(mutated),assert.AssertionError);
+  }
+  console.log(`Compiled AC-B: ${abFaults} record/kernel-terminal/state/origin faults, 4 partial allocations + post priority, issuer replay, staged boundary, 6 retained-slot and 3 mutation controls PASS (no commit/seal/normal completion)`);
 }finally{globalThis.fetch=originalFetch;rmSync(out,{recursive:true,force:true});}

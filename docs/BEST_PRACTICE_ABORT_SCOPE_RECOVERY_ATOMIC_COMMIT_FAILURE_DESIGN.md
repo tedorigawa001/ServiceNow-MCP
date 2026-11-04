@@ -1,7 +1,7 @@
 # OB-03 atomic commit準備・線形化点と失敗時所有権
 
-Version: br006-recovery-atomic-commit-failure-draft-0.3 / Date: 2026-11-04。
-設計基準HEAD: `3f61e4a`／AC-A実装開始HEAD: `381c7fd`。Status: **AC-Aのowner／準備状態・claim・失敗診断／全破棄だけ合成内実装済み。staged record・atomic commit・seal成功・正常終端は未実装。正式発行口閉鎖・全体受付無効・Unknown・VM／監視／telemetry調査保留を維持し、実接続・実通信・実機操作・設定変更・Pushは行わない。**
+Version: br006-recovery-atomic-commit-failure-draft-0.4 / Date: 2026-11-04。
+設計基準HEAD: `3f61e4a`／AC-A実装開始HEAD: `381c7fd`／AC-B実装開始HEAD: `ebd2c0f`。Status: **AC-AとAC-Bの非公開staged境界まで合成内実装済み。atomic commit・seal成功・正常終端は未実装。正式発行口閉鎖・全体受付無効・Unknown・VM／監視／telemetry調査保留を維持し、実接続・実通信・実機操作・設定変更・Pushは行わない。**
 
 [OB-03親設計](BEST_PRACTICE_ABORT_SCOPE_RECOVERY_OB03_DESTINATION_CONTENT_DESIGN.md)§6〜9と[FP-3内部契約](BEST_PRACTICE_ABORT_SCOPE_RECOVERY_FP3_POST_ACCEPT_BUNDLE_DESIGN.md)の差分。atomic commitの準備と、commit前後の失敗責務を対にして具体化する。以下の成功遷移は未実装・未承認である。AC-Aの限定実装と実行結果は[検証記録](E2E_BEST_PRACTICE_ATOMIC_PREPARATION_ACA_2026-11-04.md)と§11に分離する。
 
@@ -142,7 +142,9 @@ sectionの順序案：
 
 未確認：移譲元borrow除去のprivate契約、canonical recordのpayload切離し方法、実装上の単一線形化点と非確保section、正常terminal証拠との一度限り結合、各追加費目の上界。これらは本稿の記述だけで確認済みとしない。
 
-推奨順序は、(AC-A、合成内限定実装済み) owner／準備状態・claim・失敗診断と全破棄を固定abortの合成内で実装、(AC-B、未実装) 同bundle／record／terminal bindingと非公開staged境界を固定abortのまま接続、(AC-C、未実装) 事前レビューと別の明示承認後に合成atomic commit／同期失効・空handle検査、(D4、未実装) 正常terminal-only／固定discard・hard診断の連続接続。本稿自体は後続実装・seal成功を承認しない。実接続・実通信・全体受付はさらに別の承認条件に残す。
+推奨順序は、(AC-A、合成内限定実装済み) owner／準備状態・claim・失敗診断と全破棄を固定abortの合成内で実装、(AC-B、合成内限定実装済み) 同bundle／record／terminal bindingと非公開staged境界を固定abortのまま接続、(AC-C、未実装) 事前レビューと別の明示承認後に合成atomic commit／同期失効・空handle検査、(D4、未実装) 正常terminal-only／固定discard・hard診断の連続接続。本稿自体は後続実装・seal成功を承認しない。実接続・実通信・全体受付はさらに別の承認条件に残す。
+
+上記AC-Bは§12の合成限定実装へ進んだ。AC-Cの利用可能化・線形化点の実装とD4の正常終端は未実装のままであり、staged数1をそれらの成立として扱わない。
 
 ## 11 AC-Aの限定実装と後続境界
 
@@ -152,4 +154,22 @@ sectionの順序案：
 
 work不適合は固定理由で暫定保持し、post停止を優先する。post通過後の再照合まで通ってもphaseをfixed_abortとして既存state失敗へ進む。準備中bundle／wrapper／owner／shellをclearとisClearedへ含め、busy終了・kernel側payload不在の確認後だけ既存失敗custodyへ移る。claim／phase別first failure・件数は保持し、payloadを上位capsuleへ隠さない。source／cleanup開始ではinvalidatedとして利用不可にし、後続の試行も拒否する。
 
-現在の実装状態はreserved／preparing／invalidated／failedだけで、staged／committing／sealedやcommit claimの成功消費は作らない。追加費目はowner／shell／marker／空handle・identity台帳、準備wrapperと重複参照保持、pre／post・work／final全構成照合、診断・clear／custody検査。総量・work上界はUnknownのまま。旧入口の挙動と成功数0を維持する。
+AC-A入口の実装状態はreserved／preparing／invalidated／failedだけで、staged／committing／sealedやcommit claimの成功消費は作らない。追加費目はowner／shell／marker／空handle・identity台帳、準備wrapperと重複参照保持、pre／post・work／final全構成照合、診断・clear／custody検査。総量・work上界はUnknownのまま。旧入口の挙動と成功数0を維持する。
+
+## 12 AC-Bの同record・terminal bindingと非公開staged
+
+別fresh入口`createSyntheticAtomicStagingRoot`は引数なし`stageAtomicCommit`だけを固定継続にする。AC-A入口は従来のpreparing後固定abortのまま。callerのflag・bundle／terminal／record登録・payload getter・汎用callbackを追加しない。[AC-B検証記録](E2E_BEST_PRACTICE_ATOMIC_STAGING_ACB_2026-11-04.md)に実行範囲を分離する。
+
+同kernelのprivate channelに`issueTerminal／checkTerminal`を追加した。同full projection受領物をlive再検査し、同owner・元accepted・frame・source identity・cleanup identity／sink・ready origin・元acceptedTermination object・cleanup serial=0を結合したNormalTerminalBindingを一度だけ発行する。発行claimは検査前に消費し、失効／clearで戻さない。これは生きた解放責務のidentity対応であり、source closed・cleanup confirmed・実OS／worker終端・absenceの証明ではない。外部issuer・fixture登録口は作らない。
+
+work内でAC-B側の一度限りclaimを消費し、同AtomicPreparationと同bundle／owner／shellをPreCommitBundleへ結合する。同shellの非公開空handle、同budget／serial・失効serial、既存の同resource slot／local cleanup capsule・terminal bindingをAtomicCommitRecordへ結合し、元record／payload／terminal／preparationをprivate origin台帳で保持する。cleanup主体は既存の同rootだけで、capsuleの複製・解放開始・上位移譲はしない。元kernel sinkと同FailureOwner側sinkの対応も検査する。
+
+work候補照合→同budgetのpost→準備物の最終照合→record候補再照合を通ってから、同record objectをstaged slotへmoveする。候補record・standalone準備／準備中bundle・PreCommitBundle／terminal利用slotを外し、staged状態・元originとの同一性・全構成・同terminalのlive条件を再検査した場合だけstaged履歴を1とする。private origin台帳と元bundleの照合台帳は検査用借用であり、独立利用権限やcommit権限ではない。
+
+段階別の検査wrapperと、元AtomicPreparationの値／identity結合の検査を分離した。初回preparing検査の状態条件を緩めてstagedへ流用しない。staged側は同record内の元準備物を固定借用して検査する。AC-Aレビュー補強の元bundle全構成・work状態／元利用slot・shell台帳の保証を維持する。
+
+直後は既存fixed_abortへ進み、commit／seal／公開は0のまま。staged数1は過去の非公開準備履歴であり、最後はfailed・payloadなしになる。stage処理中の検査や移動を、§5の非確保atomic commit sectionと同一視しない。
+
+部分生成・post停止・失効ではterminal／PreCommitBundle／record候補／staged record／origin台帳と元payloadをclearする。kernel内のterminal slotもclearNormalHeaderで失効し、payloadPendingへ含める。新slotを残した場合は本文破棄receiptとcustody移譲を拒否する。最小cleanup-only capsule・first hard・未解決責務は既存経路で保持し、正常解放確認へ昇格しない。
+
+追加費目はterminal bindingの発行claim・kernel側保持と再照合、PreCommitBundle／record／origin台帳の確保・保持ピーク、work／post後／stagedの全照合、固定move／alias除去、全clear／custody検査。総work／heap・予約・3round配賦と実origin証明はUnknown。移譲元borrow除去とdest利用可能化、payloadなしcommit履歴への変換、正常terminal-only終端は後続に残す。
