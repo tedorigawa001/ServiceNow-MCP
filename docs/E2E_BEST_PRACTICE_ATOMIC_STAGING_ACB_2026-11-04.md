@@ -219,3 +219,7 @@ adapter本体試験と**同じhook設置helper**を利用する子プロセスfi
 | lifecycle metaを`close`の前に保存 | drains…、waits… |
 
 修正後のrepo全体の確認は、lint（error 0・warning 374）、build、梱包分類監査（441ファイル）が成功した。全体試験は他の検査と同時に走らせず、`--maxWorkers=3`と通常並列で各1回実行し、どちらも287ファイル／13,773件成功・失敗0だった。これらの単回成功は過去の断続的timeoutの原因確定や解消を示さず、§9.6の候補2・3は未対応のままである。
+
+## 13 worker待ち切り分けの次工程（計画のみ）
+
+候補2の[ready／finish診断計画draft-0.1](BEST_PRACTICE_WORKER_READY_FINISH_DIAGNOSTIC_PLAN.md)を追加した。現行`ready_ms`はscopeによるready形message観測でありsupervisorの受理完了ではないこと、開始値は初回のみでreply相関・review別累積が不足することを整理した。既存の過去時刻・成功件数は変更しない。次候補は親側のboundedイベントとready／finish独立合成対照（WF-A）で、今回は実装・追加試験を行っていない。stdio事前ビルドとAC-Cの未確認事項も分離して保持する。

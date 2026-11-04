@@ -148,6 +148,8 @@ sectionの順序案：
 
 上記AC-Bは§12の合成限定実装へ進んだ。AC-Cの利用可能化・線形化点の実装とD4の正常終端は未実装のままであり、staged数1をそれらの成立として扱わない。
 
+adapter試験の取消・終了待ち対応後に残る並列timeoutは、[worker ready／finish診断計画](BEST_PRACTICE_WORKER_READY_FINISH_DIAGNOSTIC_PLAN.md)で別に切り分ける。観測点の不足と合成対照の計画だけを整理したもので、AC-Cの実装・seal成功を承認せず、本稿の未確認事項を確認済みにしない。
+
 ## 11 AC-Aの限定実装と後続境界
 
 `createSyntheticAtomicPreparationRoot`は別fresh合成継続の引数なし`prepareAtomicCommit`だけを固定公開する。DATA検査前に同token／既存DestinationOwnerに結合したAtomicPreparationOwner、非公開空handleを持つAtomicDestinationShell、original identity台帳、準備claim・固定診断slotを確保する。identity台帳はpayloadを含まないshell参照だけであり、外部登録・成功handle・利用権限を持たない。
