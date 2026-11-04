@@ -45,7 +45,7 @@ it('rejects reentry, foreign arguments and reuse after invalidation',()=>{
   const f=setup();f.ready();f.arm(s=>{if(s==='transfer_post')try{f.r.prepareBundleParts();}catch{/* swallowed */}});expect(()=>f.r.prepareBundleParts()).toThrow();expect(f.r.inspect().first_failure).toBe('reentrant');
   f.arm(()=>undefined);f.r.finalDiscard(f.r.transferFailure());expect(f.r.custody().payload_cleared).toBe(true);
   const a=setup(),b=setup();a.ready();b.ready();const before=b.r.inspect();expect(()=>a.r.prepareBundleParts(before)).toThrow();expect(b.r.inspect()).toEqual(before);
-  const x=setup();x.ready();x.r.beginSourceClose();expect(()=>x.r.prepareBundleParts()).toThrow();expect(x.r.inspect().bundle_parts.builds).toBe(0);
+  const x=setup();x.ready();x.r.beginSourceClose();expect(()=>x.r.prepareBundleParts()).toThrow();expect(x.r.inspect().bundle_parts?.builds).toBe(0);
 });
 it('leaves the FP-1 continuation free of expectation and body generation',()=>{
   const es=vi.spyOn(expectation,'projectRecoveryFinishExpectation'),ds=vi.spyOn(content,'projectSyntheticFullMixedDraft'),r=createSyntheticFullProjectionReceiptRoot(bundlePartsInput(),{guard:()=>undefined});

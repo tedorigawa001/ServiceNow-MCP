@@ -1,6 +1,6 @@
 # FP-3 post後受理と未公開完成bundleの内部契約
 
-Version: br006-recovery-fp3-post-accept-bundle-draft-0.7 / Date: 2026-11-04。
+Version: br006-recovery-fp3-post-accept-bundle-draft-0.8 / Date: 2026-11-04。
 設計初稿の基準HEAD: `8369094`。Status: **FP3-A／B／Cは合成内実装済み。未公開完成bundleの合成内生成・固定消費と固定abortだけを許し、正式発行口閉鎖・全体受付無効・Unknown・VM／監視／telemetry調査保留を維持する。seal成功・実接続・実通信・設定変更・Pushは行わない。**
 
 FP3-A追記：[検証記録](E2E_BEST_PRACTICE_POST_PROOF_FP3A_2026-11-04.md)に、root側発行状態・post-only issuer・同partsのprivate proof pair、混入拒否・途中失敗clearを記録する。pair受理後も固定abortし、以下のready／consuming／retiredや未公開完成bundleには進まない。
@@ -8,6 +8,8 @@ FP3-A追記：[検証記録](E2E_BEST_PRACTICE_POST_PROOF_FP3A_2026-11-04.md)に
 FP3-B追記：[検証記録](E2E_BEST_PRACTICE_UNPUBLISHED_BUNDLE_FP3B_2026-11-04.md)に、別のfresh合成継続で同parts／proof pairを未公開完成bundleへ結合し、生成中slotから唯一のready slotへ移して固定abortする範囲を記録する。元のFP3-A入口はpair-onlyのまま。readyは内部状態であり、consumer・利用可能dest・seal成功はない。
 
 FP3-C追記：[検証記録](E2E_BEST_PRACTICE_BUNDLE_CONSUMER_FP3C_2026-11-04.md)に、さらに別のfresh合成継続のroot側consumer・消費中slot、同budgetのpre／post停止・失効・全破棄を記録する。FP3-B入口はconsumerなしのまま。Cも論理retire後に固定abortし、利用可能dest・seal成功はない。
+
+draft-0.7のレビュー修正：FP3-Cのretire入口の全条件、work照合の完了数条件、work中hard後のrethrow、retired状態の書込みは、外しても全試験が通過していた。compiled fixtureに、retire直前の各条件のずれ、work中の完了数とhard停止（post guard呼出し0）、consumer戻り時点の状態確認を追加した。kernelの挙動は変更していない。
 
 draft-0.4のレビュー修正：FP3-Bのbuilder入口のone-shot条件と確保前照合、生成中／prepared段階の状態ガード、移動後の`proofIssueStarts`条件は、外しても全試験が通過していた。compiled fixtureに、builder呼出し直前の各条件のずれ（生成数0で停止）と、両段階の状態のずれを追加した。kernelの挙動は変更していない。
 

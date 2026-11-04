@@ -441,6 +441,18 @@ try{
   for(const fault of ['throw Error("PRIVATE_CONSUMER");','acceptedChannel.invalidatePayload();']){
     for(const stop of [undefined,'cancelled']){const r=setup(await load(t=>t.replace(consumerWork,fault+' '+consumerWork),consumerFactory),s=>s==='bundle_consume_post'?stop:undefined);consumerClean(r,stop??'internal');}consumerFaults++;
   }
+  // A completed count during work is a work rejection, not something left for the later retire guard.
+  {const r=setup(await load(t=>t.replace(consumerWork,'bundleConsumptions = 1; '+consumerWork),consumerFactory));consumerClean(r,'binding',1);assert.equal(r.inspect().bundle_consumer.rejection,'binding');assert.equal(r.inspect().bundle_consumer.work_checks,0);consumerFaults++;}
+  // A hard stop during work ends immediately: the post guard must not run after it.
+  {let post=0;const r=setup(await load(t=>t.replace(consumerWork,'fail("cancelled"); '+consumerWork),consumerFactory),s=>{if(s==='bundle_consume_post')post++;});consumerClean(r,'cancelled');assert.equal(post,0);consumerFaults++;}
+  // Retire entry: every term rejects by itself just before the sole use right is removed.
+  const retireSite='retireConsumedBundle();';assert.equal(text.split(retireSite).length,2);
+  for(const [fault,count] of [
+    ['proofIssueState = "ready";',0],['consumingBundle = undefined;',0],['bundleConsumeStarted = false;',0],['bundleConsumptions = 1;',1],
+    ['bundleConsumePrePasses = 0;',0],['bundleConsumeWorkChecks = 0;',0],['bundleConsumePostPasses = 0;',0],['bundleConsumePostChecks = 0;',0],['bundleConsumeRejection = "internal";',0],
+  ]){consumerClean(setup(await load(t=>t.replace(retireSite,fault+' '+retireSite),consumerFactory)),'binding',count);consumerFaults++;}
+  // The retired state is transient under the fixed abort, so observe it at the consumer's return.
+  consumerClean(setup(await load(t=>t.replace(consumeSite,consumeSite+' if (proofIssueState !== "retired") throw Error("PRIVATE_CONSUMER");'),consumerFactory)),'state',1);
   // Mutation after the guard returns must be caught by the second full same-origin binding check.
   for(const fault of ['invalidations++;','bundleOrigin = undefined;','consumingBundle = Object.freeze({ ...consumingBundle });','budget = Object.freeze({ ...budget, serial: 2 });','acceptedChannel.invalidatePayload();']){
     consumerClean(setup(await load(t=>t.replace(consumerPost,fault+' '+consumerPost),consumerFactory)),fault.includes('invalidatePayload')?'internal':'binding');consumerFaults++;

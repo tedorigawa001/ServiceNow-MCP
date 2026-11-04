@@ -8,9 +8,11 @@ function setup(mixed=false){
 }
 it.each([false,true])('moves the sole bundle into the tracked slot and retires it without publishing (%s)',mixed=>{
   const f=setup(mixed);f.ready();const budget=f.r.inspect().budget;
-  const seen:string[]=[];
-  f.arm(stage=>{if(stage.startsWith('bundle_consume_')){seen.push(stage);const x=f.r.inspect();expect(x.unpublished_bundle).toMatchObject({pending:false,consumptions:0});expect(x.bundle_consumer).toMatchObject({started:true,pending:true,consumptions:0});expect(x.post_proofs?.state).toBe('consuming');if(stage==='bundle_consume_post')expect(x.bundle_consumer?.work_checks).toBe(1);}});
+  const seen:string[]=[],snapshots:ReturnType<typeof f.r.inspect>[]=[];
+  f.arm(stage=>{if(stage.startsWith('bundle_consume_')){seen.push(stage);snapshots.push(f.r.inspect());}});
   expect(()=>f.r.consumePreparedBundle()).toThrow();expect(seen).toEqual(['bundle_consume_pre','bundle_consume_post']);
+  for(const x of snapshots){expect(x.unpublished_bundle).toMatchObject({pending:false,consumptions:0});expect(x.bundle_consumer).toMatchObject({started:true,pending:true,consumptions:0});expect(x.post_proofs?.state).toBe('consuming');}
+  expect(snapshots[0].bundle_consumer?.work_checks).toBe(0);expect(snapshots[1].bundle_consumer?.work_checks).toBe(1);
   expect(f.r.inspect()).toMatchObject({first_failure:'state',bundle_consumer:{started:true,pre_passes:1,work_checks:1,post_passes:1,post_checks:1,pending:false,consumptions:1,retired:true,rejection:null,published:0,seals:0},unpublished_bundle:{pending:false,building_pending:false,origin_pending:false,marker_pending:false,consumptions:1},transfer:{successful_seals:0}});
   expect(f.r.inspect().budget).toEqual(budget);expect(()=>f.r.consumePreparedBundle()).toThrow();expect(f.r.inspect().bundle_consumer?.consumptions).toBe(1);
   expect(JSON.stringify(f.r.inspect())).not.toContain('PRIVATE_BODY');for(const key of ['bundle','consumeUnpublishedBundle','consumingBundle','seal','commit'])expect(f.r).not.toHaveProperty(key);

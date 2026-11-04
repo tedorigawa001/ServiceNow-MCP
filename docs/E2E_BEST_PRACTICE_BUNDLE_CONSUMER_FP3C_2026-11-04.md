@@ -43,12 +43,29 @@ work不適合は固定理由だけを暫定保持し、post停止の取消／期
 
 ## 5 閉鎖状態と残課題
 
-正式発行口閉鎖・全体受付無効・Unknown・VM／監視／telemetry調査保留を維持する。seal成功・実session／worker／runtime接続・実通信・実機操作・設定変更・Pushは行っていない。実装時点では未コミットとし、その後の指示によるコミット前検証を次節へ記録する。
+正式発行口閉鎖・全体受付無効・Unknown・VM／監視／telemetry調査保留を維持する。seal成功・実session／worker／runtime接続・実通信・実機操作・設定変更・Pushは行っていない。実装時点では未コミットとし、その後の指示によるコミット前検証を§7へ記録する。
 
 追加費目はroot claim／消費中slot、pre／postと二度の全構成照合、暫定理由保持、同一性再確認、借用参照retire・失敗clear・診断保持。C/G/P・retry・210試行・全60秒は既存のまま。全work／heap・copyピーク・3round配賦・予約額を導出したとは扱わず、Unknownを0へ置換しない。
 
 実atomic commit・利用可能dest／seal成功・正常terminal-only cleanup接続は別工程である。今回のretired履歴や未公開bundle成立を、その承認・完成証拠として使わない。
 
-## 6 コミット前の再検証
+## 6 レビュー修正（2026-11-04）
+
+本記録の故障件数は修正前の記録として残す。レビュー時にrepo全体のlint（error 0・warning 374）、build、梱包分類監査（441ファイル、Compiled FP3-Cを含む）、全体合成285ファイル／13,750件成功・失敗0を確認した。
+
+kernelの37変異を確認し、次の条件は外しても既存試験が全て通過した。実装は正しく、試験だけの不足である。
+
+- `retireConsumedBundle`入口の9条件（状態、消費中slot、started、完了数、pre／work／postの通過数、postの照合数、暫定理由）。retireは照合の直後に呼ばれ、既存故障はこのガードへ届かなかった。§3のretire省略はガードより後の処理だけを対象にしている。
+- work照合の完了数条件。
+- work中にhardが立った場合のrethrow。外すとhard後にpost guardが1回余分に呼ばれる。
+- `proofIssueState='retired'`の書込み。直後のclearで上書きされ、観測点がなかった。
+
+[compiled fixture](../tests/review/fixtures/compiled-destination-preparation.mjs)に11故障を追加した。retire直前に各条件を崩す9件、work中に完了数を崩す1件（workでの拒否を確認）、work中のhard停止1件（post guard呼出し0を確認）である。別にconsumer戻り時点でretired状態を確認する一時oracleを追加した。上記12条件を一つずつ外す変異は、それぞれ対応するcaseで初めて失敗した。
+
+[合成試験](../tests/review/synthetic-bundle-consumer.test.ts)のguard内`expect`は呼出しの外へ移した。guard内の例外は`checkpoint`が`internal`へ変換し、失敗表示が実際の原因を指さなくなるためである。あわせて[FP-2試験](../tests/review/synthetic-bundle-parts.test.ts)に残っていたstrict型エラー1件（`bundle_parts`のoptional参照）を、判定を弱めずに解消した。
+
+`checkConsumingBundle`の`!busy`（`operation`内でだけ呼ばれる）、`first`（hardは`fail`で例外となり直前のcheckpointかrethrowで止まる）、`!consumingBundle`（`value!==origin.value`が同じbindingで拒否）は等価変異として扱う。kernelは変更せず、設計書をdraft-0.8とした。vitest試験数は不変。修正後も全体合成285ファイル／13,750件成功・失敗0。
+
+## 7 コミット前の再検証
 
 ユーザーのコミット指示後、今回の9ファイルだけをstageし、未stage差分・未追跡ファイルがない状態で再検証した。ビルド、対象4ファイルのESLint、全体285 files／13,750 tests（失敗・保留0）、外部取得禁止の梱包試験（441 files）、最新compiled保証を含む配布除外監査（441 files）が成功した。関連4文書のローカルリンク33件と差分の空白検査も問題なし。全体テストの出力先は`/private/tmp/servicenow-fp3c-commit-vitest.json`。初回の期待値訂正の記録は維持し、期限・閉鎖状態は変更していない。
