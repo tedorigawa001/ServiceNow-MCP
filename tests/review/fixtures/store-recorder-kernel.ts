@@ -9,6 +9,7 @@ let terminalView: (recorder: FakeFixedRecorder) => { state: State; queued: numbe
 let terminalCommit: (recorder: FakeFixedRecorder) => void;
 let storeIdle: (store: FakeEvidenceStore) => boolean;
 let installStoreUnwind: (store: FakeEvidenceStore, unwind: () => void) => void;
+let closeStoreAdmission: (store: FakeEvidenceStore) => void;
 const shiftQueue = Function.prototype.call.bind(Array.prototype.shift) as (queue: Checkpoint[]) => Checkpoint | undefined;
 
 /** Legacy recorder state model; its bound ack continuation remains private to this module. */
@@ -325,6 +326,7 @@ const realLength = (bytes: Uint8Array) => intrinsicByteLength.call(bytes) as num
 export class FakeEvidenceStore {
   static {
     storeIdle = s => !s.#busy;
+    closeStoreAdmission = s => { s.#reason ??= 'cancelled'; };
     installStoreUnwind = (s, unwind) => { s.#unwind = unwind; };
     boundConsume = (s, run, receipt, expected) => {
       if (s.#busy) return s.#fail('binding');
@@ -552,9 +554,10 @@ export interface BoundStore { readonly [storeBrand]: true }
 export interface BoundCheckpoint { readonly [checkpointBrand]: true }
 export interface PreparationClaim { readonly [claimBrand]: true }
 interface StoredCheckpointEvidence { readonly checkpoint: Checkpoint; readonly receiptOrigin: object; readonly epoch: number }
-type Failure = 'binding' | 'state' | 'clock' | 'construction' | 'discarded' | 'encoding' | 'store';
+type Failure = 'binding' | 'state' | 'clock' | 'construction' | 'discarded' | 'encoding' | 'store' | 'notification';
 type Phase = 'Idle' | 'InFlight' | 'Stopped' | 'Closed';
 type TerminalState = 'NotRequested' | 'Pending' | 'Entered' | 'Committed' | 'Failed';
+type Notice = 'not_requested' | 'not_present' | 'attempted' | 'returned' | 'threw';
 type TerminalReason = 'observation_not_started' | 'forced_from_observing' | 'closed_after_drain'
   | 'closed_after_verify' | 'closed_after_publish' | 'already_closed' | 'not_constructed' | 'binding';
 interface TerminalSlot {
@@ -597,6 +600,9 @@ export class SyntheticStoreRecorderBinding {
   #terminalIdentity: { owner: object; run: object; budget: object; recorder: FakeFixedRecorder } | undefined;
   #depth = 0;
   #storeCancelled = false;
+  #notifications: { store: Notice; recorder: Notice; observation: Notice } = {
+    store: 'not_requested', recorder: 'not_requested', observation: 'not_requested',
+  };
   #phase: Phase = 'Idle';
   #reason: Failure | undefined;
   #stage: 'owner' | 'recorder' | 'store' | 'ready' = 'owner';
@@ -659,7 +665,8 @@ export class SyntheticStoreRecorderBinding {
     } catch {
       owner.#fatal('construction');
       const view = owner.#record ? terminalView(owner.#record) : undefined;
-      owner.#terminalSlot.reason = view ? 'already_closed' : 'not_constructed';
+      owner.#terminalSlot.reason = !view ? 'not_constructed'
+        : view.state === 'Closed' ? 'already_closed' : 'observation_not_started';
       owner.#terminalSlot.from = view?.state;
       owner.#terminalSlot.to = view?.state;
       owner.#terminalSlot.queued = view?.queued;
@@ -682,12 +689,25 @@ export class SyntheticStoreRecorderBinding {
     this.#epoch++;
     this.#retire();
     this.#cancelStore();
-    this.#record?.recorderFailure();
+    this.#notifyRecorder();
     return false;
   }
   #terminal() { return this.#phase === 'Stopped' || this.#phase === 'Closed'; }
   #cancelStore() {
-    if (!this.#storeCancelled && this.#storage) { this.#storeCancelled = true; this.#storage.cancel(); }
+    if (this.#storeCancelled) return;
+    this.#storeCancelled = true;
+    if (!this.#storage) { this.#notifications.store = 'not_present'; return; }
+    closeStoreAdmission(this.#storage); // authoritative closure precedes a fallible notification
+    this.#notifications.store = 'attempted';
+    try { this.#storage.cancel(); this.#notifications.store = 'returned'; }
+    catch { this.#notifications.store = 'threw'; }
+  }
+  #notifyRecorder() {
+    if (this.#notifications.recorder !== 'not_requested') return;
+    if (!this.#record) { this.#notifications.recorder = 'not_present'; return; }
+    this.#notifications.recorder = 'attempted';
+    try { this.#record.recorderFailure(); this.#notifications.recorder = 'returned'; }
+    catch { this.#notifications.recorder = 'threw'; }
   }
   #clockFailure() {
     if (this.#terminal()) {
@@ -804,7 +824,11 @@ export class SyntheticStoreRecorderBinding {
     try {
       if (this.#terminal()) return false;
       // Observation cancellation is not a new bridge operation, even during a clock callback.
-      this.#record?.cancel();
+      if (this.#notifications.observation === 'not_requested') {
+        this.#notifications.observation = 'attempted';
+        try { this.#record!.cancel(); this.#notifications.observation = 'returned'; }
+        catch { this.#notifications.observation = 'threw'; return this.#fatal('notification'); }
+      }
       if (this.#record?.snapshot().state === 'Closed') { this.#phase = 'Closed'; this.#retire(); }
       return false;
     } finally { this.#depth--; this.#drainTerminal(); }
@@ -922,6 +946,7 @@ export class SyntheticStoreRecorderBinding {
     const recorder = this.#record?.snapshot();
     return Object.freeze({ phase: this.#phase, reason: this.#reason, stage: this.#stage, epoch: this.#epoch,
       terminal: Object.freeze({ ...this.#terminalSlot }),
+      notifications: Object.freeze({ ...this.#notifications }),
       claims: this.#claims, evidenceIssued: this.#storedEvidence !== undefined,
       slots: Object.freeze(this.#slots.map(s => s.status)),
       recorder, store: this.#storage?.snapshot(), unacknowledged: recorder?.checkpoints.length ?? 0, acknowledgements: this.#acks,

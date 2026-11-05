@@ -1,6 +1,8 @@
 # WF-B EvidenceStore／recorder：一度限り接続の差分設計
 
-Version: draft-0.11 / Date: 2026-11-05 / 基準HEAD: `fb91044` / SB-A実装基準HEAD: `2f1120f` / SB-B実装基準HEAD: `186cea6` / 試行別結果の実装基準HEAD: `85eb9ad`。
+Version: draft-0.12 / Date: 2026-11-05 / 基準HEAD: `fb91044` / SB-A実装基準HEAD: `2f1120f` / SB-B実装基準HEAD: `186cea6` / 試行別結果の実装基準HEAD: `85eb9ad`。
+
+draft-0.12: [DT-C連続合成検証](E2E_BEST_PRACTICE_WFB_RECORDER_CONTINUOUS_DTC_2026-11-05.md)を追加。D_stop→FIFO→D_save→終端、通知throw／部分生成／cleanup異常と構造費目を確認した。通知を一度限りに分離し、throw時も受付閉鎖・他方通知・固定診断を保持する。実時間／heap・任意呼出し列・運用capは未確認／未承認。
 
 draft-0.11: [DT-B検証記録](E2E_BEST_PRACTICE_WFB_RECORDER_TERMINAL_DTB_2026-11-05.md)を追加。private終端slot・一度限りclaim・安全なPendingと固定terminal処理を合成接続し、queue／四軸／診断を保持する。DT-Cの状態別連続対照・費目上界と実保存は残課題。
 
@@ -22,7 +24,7 @@ draft-0.3: [SB-A合成検証記録](E2E_BEST_PRACTICE_WFB_STORE_RECORDER_SBA_202
 
 draft-0.2のレビュー修正: 取消でStoreまで閉じると停止後の証拠を保存できないため、観測停止と致命的停止を分けた。Storeの期限をslot区分ごとの固定表とし、`manifest.json`を`D_save`後も保存できるようにした。cleanupの`late`を反映した。試行別の結果にStore側の変更が必要なことを差分へ明記した。線形化sectionの処理を補った。
 
-Status: **SB-A／SB-B・試行別診断・DT-A期限表・DT-B終端をメモリ内で合成検証。DT-C連続検証と実保存は未対応。** 正式発行口閉鎖・全体受付無効・Unknown・VM／監視／telemetry調査保留を維持する。保存先・保持期間・運用cap／時間枠・停止方式は未承認。再採取・既存証拠copy／保管操作・実接続・実通信・設定変更・Pushを行わない。
+Status: **SB-A／SB-B・試行別診断・DT-A／DT-B／DT-Cの固定連続経路と構造上界をメモリ内で合成検証。実保存・実時間保証は未対応。** 正式発行口閉鎖・全体受付無効・Unknown・VM／監視／telemetry調査保留を維持する。保存先・保持期間・運用cap／時間枠・停止方式は未承認。再採取・既存証拠copy／保管操作・実接続・実通信・設定変更・Pushを行わない。
 
 親は[固定採取器契約](BEST_PRACTICE_WFB_FIXED_RECORDER_CONTRACT.md)と[EvidenceStore内部契約](BEST_PRACTICE_WFB_EVIDENCE_STORE_FAKE_CONTRACT.md)。既存の単体fakeとレビュー修正を維持し、試験専用の新しい結合経路だけを後続対象とする。以下の型名は提案であり、既存コードに存在するとは限らない。
 
@@ -90,7 +92,7 @@ ownerは元runの開始時点・単調clock・`planTime`の絶対期限・停止
 - deadlineは全operationの前後、ack直前にも検査し、等値で拒否する。同期操作が期限後に返った場合は新たな成功証拠へ進めない。closeは期限前に成功返答を確認できた場合だけconfirmed。同期処理の途中停止や実wall-time保証ではない。
 - **観測停止**（明示取消・`D_stop`到達・採取器の停止要求）: recorderへ通知し、新規観測を止める。Storeは閉じず、停止世代も変えない。処理中の保存はそのままackまで進め、`stop_requested`を含むqueueの残りを`D_save`までFIFOで保存する。親契約§4の`stop_requested`と§5の停止後の作成予約を満たすための区別である。recorderがClosedなら（Reservedでの取消等）新規保存もackも行わず、queueの残りはunsavedとして残す。
 - recorderの理由は次のとおり分類する。`cancelled`・`deadline`・`window`は観測停止。`clock`・`state`（誤用）・`binding`（gate拒否・矛盾する引数）は致命的停止。ただし`Draining`／`Verifying`での`state`は、試験終端後の余分な呼出しによるrecorderの診断なので停止にせず、呼出しへ`false`を返す。queueの証拠を保存し続けるためである。
-- **致命的停止**（clock不正・binding不一致・Store失敗・recorderの誤用）: 同ownerの停止へ合流する。まずownerをStoppedとして停止世代を進め、新規save／receipt受理／ackを閉じ、次にStore.cancel、recorder停止通知の順で同期通知する。各通知は一度だけclaimし、片方のthrowでも固定診断を保持して他方と取得済みhandleの回収責務を省略しない。通知中に再入しても新規権限を与えない。Store.cancelはこの場合だけ呼ぶ。
+- **致命的停止**（clock不正・binding不一致・Store失敗・recorderの誤用・観測停止通知throw）: 同ownerの停止へ合流する。まずownerをStoppedとして停止世代を進め、新規save／receipt受理／ackとStoreのprivate受付を閉じ、次にStore.cancel、recorder停止通知の順で同期通知する。各通知は一度だけclaimし、片方のthrowでも固定診断を保持して他方と取得済みhandleの回収責務を省略しない。通知中に再入しても新規権限を与えない。Closed後のclock不正でもStoreを一度だけ取消すが、phaseはClosedのままとする。通知のreturnedはcleanup confirmedではない。
 - 通常のcase／module／hook失敗は停止要求ではない。first anomaly保存を試み、suite継続と観測終端を妨げない。採取器の失敗・利用者取消と混同しない。
 
 どの停止後も取得済みhandleの解放責務は残る。cleanupにより新規saveが再許可されたり、期限原点が更新されたりしない。bridgeがStoppedになっても、recorderをDrainingからObservingへ戻さない。Published／Closed後は新規bridge保存なし。
@@ -153,13 +155,13 @@ SB-A／SB-B／試行別結果の時点の状況は次のとおり。実施済み
 | BR02 | 一部 | encoding版の不一致。slot・size・digest・別owner・コピーは実施済み |
 | BR03 | 一部 | 成功分の二重消費は、receiptの再利用経路がないので到達不能 |
 | BR04 | 実施済み | なし。sticky失敗後の次の保存は、bridgeが健全時しか保存を始めないので、Storeの取消を直前に差し込んで確認した |
-| BR06 | 一部 | 成功分の保持は実施済み。停止checkpointの非再帰は明示の対照なし |
+| BR06 | DT-Cで合成実施済み | stop_requested自身の保存失敗後も再帰保存しない |
 | BR07 | 一部 | 別clockの対照。`late`・逆行・原点は実施済み |
-| BR08 | 一部 | 通知throw・部分生成の連続対照 |
-| BR09 | 一部 | 試験終端後のcleanup失敗 |
+| BR08 | DT-Cで合成実施済み | 通知throw／両方throw・部分生成の実状態と固定診断。実通知保証は範囲外 |
+| BR09 | DT-Cで合成実施済み | 試験終端後のclose false／throw／lateでもtest／measurementを保持 |
 | BR10 | 一部 | 可変buffer・subclassは単体Storeのみ。閉鎖後のpayload破棄は未実施 |
-| BR11 | 一部 | 観測中の明示取消は実施済み。`D_stop`到達から保存完了までの連続対照 |
-| BR12 | 一部 | `D_save`等値とReservedの取消は実施済み。残queueの順序の連続対照 |
+| BR11 | DT-Cで合成実施済み | D_stop自動停止／明示通知から残FIFO保存までの固定経路 |
+| BR12 | DT-Cで合成実施済み | 0／1／3件保存後のD_save閉鎖と残queueの元参照順を保持 |
 | BR13 | DT-Aで合成実施済み | manifestはspy-only子Store対照。正式writer／集合の証明は範囲外 |
 
 oracleはbridge自身のmapper／encoder／guardを呼ばず、固定expected header・golden digest・イベント順・queue残数を独立定義する。各負の対照は狙った故障点へ到達したことをassertする。compile／配布物の負の対照ではprivate証拠を外部生成できず、試験登録口・driverが製品へ入らないことを確認する。線形化の中間故障を無理に注入して実装に新callbackを持ち込まない。
@@ -170,7 +172,7 @@ oracleはbridge自身のmapper／encoder／guardを呼ばず、固定expected he
 2. **SB-B（メモリ接続済み）**: 同snapshotの固定header encodingとStore保存／private消費／固定ackを接続。保存後の失敗・queue／未受理件数の区分を確認した。§8.2の範囲を参照。
 3. **SB-C**: [固定期限表・recorder終端の差分設計](BEST_PRACTICE_WFB_SLOT_DEADLINES_RECORDER_TERMINAL_DESIGN.md)のDT-A→DT-B→DT-Cで具体化する。同clock／停止owner、上位cleanup診断・部分生成の回収を連続fakeで確認する。SB-B時点でも期限／取消の最低限の共通guardを省略せず、詳細な境界対照をここで補完する。
 
-SB-Aの生成・準備claim、SB-Bのメモリ保存・線形化section、Store試行別結果の分類、DT-Aのslot区分別期限表、DT-Bのrecorder終端と閉鎖後clock失効までを実装。状態別連続対照・詳細費目はDT-Cへ残す。byte／work／時間の運用値、正式保存先、保管／削除、OS backendは未承認・未確認のまま。storeとrecorderが繋がっても、採取・保全・process監督の開始許可にはならない。
+SB-Aの生成・準備claim、SB-Bのメモリ保存・線形化section、Store試行別結果、DT-Aの期限表、DT-Bの終端／閉鎖後clock失効、DT-Cの固定連続経路・通知分離・構造費目を確認した。構造式の対象と所有は[DT-C設計§8.3](BEST_PRACTICE_WFB_SLOT_DEADLINES_RECORDER_TERMINAL_DESIGN.md#83-dt-c連続検証通知と費目)を参照。統合CPU work unit・任意呼出し数・実時間／heapと運用capは未確認／未承認。正式保存先・保管／削除・OS backendも同じで、採取・保全・process監督の開始許可にはならない。
 
 試行別結果追加後は`persist`が`saveAttempt`を呼び、戻りのreceiptだけを既存private consumerへ渡す。診断には同じattempt objectを保持し、snapshotの過去cleanupから推定しない。従来の上位粗分類`attempted_unverified`は互換で残し、詳細は`attempt.disposition`でnot_started／create_failed／partial_unverified／savedを区別する。下位methodそのものがthrowして戻らなければattemptは未定義であり、証拠不足として扱う。以下§8.1の未実装一覧にある試行別結果と、§8.2の「試行別結果はSB-Cへ残る」は当時の記録で、この部分は今回解消した。
 

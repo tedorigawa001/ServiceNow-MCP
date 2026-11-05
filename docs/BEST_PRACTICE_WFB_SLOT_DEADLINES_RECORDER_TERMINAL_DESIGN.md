@@ -1,6 +1,8 @@
 # WF-B：slot固定期限表・保存経路閉鎖後recorder終端の接続差分
 
-Version: draft-0.4 / Date: 2026-11-05 / 基準HEAD: `31712a6` / レビュー修正の基準HEAD: `9f8507b` / DT-A実装基準HEAD: `eb642a2` / DT-B実装基準HEAD: `aa575f3`。
+Version: draft-0.5 / Date: 2026-11-05 / 基準HEAD: `31712a6` / レビュー修正の基準HEAD: `9f8507b` / DT-A実装基準HEAD: `eb642a2` / DT-B実装基準HEAD: `aa575f3` / DT-C実装基準HEAD: `e4b87d7`。
+
+draft-0.5: **DT-Cの固定連続transcriptと構造費目を合成検証**。通知throwと部分生成のRED対照から、試験専用kernelの通知分離・受付閉鎖・実状態の診断を補完した。[検証記録](E2E_BEST_PRACTICE_WFB_RECORDER_CONTINUOUS_DTC_2026-11-05.md)と§8.3を参照。実時間／heap／任意呼出し列の上界や運用capの承認ではない。
 
 draft-0.4: **DT-Bを合成実装**。先行terminal slot・同owner identity・一度限りclaim・安全なPending・queue／四軸を変えないprivate commitと、閉鎖後clock不正のStore一度限り取消を接続した。[検証記録](E2E_BEST_PRACTICE_WFB_RECORDER_TERMINAL_DTB_2026-11-05.md)を参照。DT-Cの連続対照・最終費目は未実施。
 
@@ -8,7 +10,7 @@ draft-0.3: **DT-Aだけを合成実装**。固定2区分の純粋計算・厳密
 
 draft-0.2のレビュー修正: Pendingの条件をownerのすべての同期区間とclock読取中へ広げた。`D_save`閉鎖後に残るrecorderの状態ごとの終端を定めた。`Closed`後のclock不正ではStoreを取消す。期限切れのevidence保存はstickyとし、manifestも不可とする。manifestの試験方法と親§7の残項目との対応を追加した。
 
-Status: **DT-A／DT-Bはメモリ内で合成検証済み。DT-Cの状態別連続対照・最終費目と実保存は未対応。** 正式発行口閉鎖・全体受付無効・Unknown・VM／監視／telemetry調査保留を維持する。保存先・保持期間・運用cap／時間枠・停止方式は未承認。再採取・既存証拠copy／保管操作・実接続・実通信・設定変更・Pushは行わない。
+Status: **DT-A／DT-BとDT-Cの固定連続経路・構造上界をメモリ内で合成検証済み。実保存・実時間／heap上界・運用capは未対応／未承認。** 正式発行口閉鎖・全体受付無効・Unknown・VM／監視／telemetry調査保留を維持する。保存先・保持期間・運用cap／時間枠・停止方式は未承認。再採取・既存証拠copy／保管操作・実接続・実通信・設定変更・Pushは行わない。
 
 親は[Store／recorder接続設計](BEST_PRACTICE_WFB_STORE_RECORDER_BRIDGE_DESIGN.md)と[EvidenceStore契約](BEST_PRACTICE_WFB_EVIDENCE_STORE_FAKE_CONTRACT.md)。既存SB-A／SB-B・試行別結果とレビュー修正を維持する。実装境界はDT-Aが§8.1、DT-Bが§8.2。運用側のfacade／保存／ProcessOwnerへの接続は未実装。
 
@@ -117,7 +119,7 @@ terminal slotは固定理由・元状態／最終状態・clock診断・late・�
 
 未知の通知結果・未解決handle・clock不明はUnknownのまま。未確認の解放責務／leaseは診断とは別に所有元へ残し、terminal helperにそれを破棄する権限を与えない。OS leaseの具体方式は未実装である。必要なidentityが欠ける場合はFailed、recorderが未生成ならnot_constructedを記録し、成功boolで埋めない。payload／私的証拠別名は固定unwindで外すが、診断・queueを削除／無限複製しない。raw例外・bytes・実path・環境・認証情報は出さない。
 
-## 7 合成受入条件（実施範囲は§8.1／§8.2、連続対照はDT-C）
+## 7 合成受入条件（実施範囲・限界は§8.1〜§8.3）
 
 | ID | 対照 | 必須結果 |
 |---|---|---|
@@ -155,7 +157,7 @@ oracleは表生成器やterminal helperを呼ばず、手書きのrow／境界�
 
 1. **DT-A（合成実装済み）**: 固定表の純粋計算・strict構造検査・同run／budget binding。メモリStoreのsave／consume／closeへ接続し、legacy単体入口を維持する。
 2. **DT-B（合成実装済み）**: privateな終端slot／claim・安全なPending／固定terminal section。queue不変・四軸・診断保持を確認し、save-lane guardから独立させる。
-3. **DT-C**: D_stopから保存完了／閉鎖／終端まで、通知throw／部分生成失敗を含む連続fakeと費目上界を確認する。manifest rowは到達性だけで、正式writerの発行へ進めない。
+3. **DT-C（固定経路の合成検証済み）**: D_stopから保存完了／閉鎖／終端まで、通知throw／部分生成失敗を含む連続fakeと構造費目を確認した。manifest rowは到達性だけで、正式writerの発行へ進めない。実時間・heap・任意呼出し列と統合work会計は未確認。
 
 全段階とも別の明示実装指示を要する。期限の具体値・terminal費用・正式保存先・保持／削除・OS backend・実承認は未承認／未確認。本文・容量モデル・ProcessOwner・manifest集合・session台帳・実採取は別課題であり、本書作成で状態を進めない。
 
@@ -183,4 +185,29 @@ ownerの成功操作だけでなく入口拒否／fatal区間にもdepthを置�
 
 生成失敗は新facadeを返さない。terminal slotは`NotRequested`／claim 0のまま、未生成なら`not_constructed`、recorder生成後のStore生成失敗は既存fatal後の実stateから`already_closed`を記録する。これを終端claimの成功やProcessOwnerの終了確認と数えない。
 
+DT-C訂正: recorderが生成済みでも停止通知がthrowするとGatedのままの場合がある。その場合は`observation_not_started`と実際のfrom／toを記録し、`already_closed`へ補完しない。
+
 DT07の7状態、DT08のnot_ready／混入／二重／再入／各同期区間、DT09の取得handle回収・未確認closeと試行結果保持、DT10のpre／post clock・D_all境界、DT11のack済み／保存済み未ack／未試行混在、DT12のspy-only manifest区分の到達性を局所合成対照で確認した。Published／Verifyingの準備はraw recorderのbranch対照で、bound成功ではない。DT06のD_stopからの全経路、通知throw／部分生成と終端の全組合せ、費目／上界の連続検証はDT-Cへ残し、§7全体の完了とは呼ばない。
+
+### 8.3 DT-C連続検証・通知と費目
+
+`recorder-continuous.test.ts`で元ownerのreserve→conditions保存→startから進める。D_stopでのpoll停止と明示observeStop、FIFO全部保存と0／1／3件保存後のD_save閉鎖、固定terminalまでを連続確認する。既存DT-Bの7状態対照も維持する。試験終端後のpartial write、create失敗、stop_requested自身の保存失敗、closeのfalse／throw／lateを確認し、保存済み／未受理・四軸と元queue参照順を保持する。
+
+通知throwは、固定の通知境界だけをspyで故障注入するbranch対照である。内部実装全般をmockして正常経路の証明に置き換えない。Store受付のprivate閉鎖を通知前に行い、通知のthrowで再開させない。Store取消・recorder致命的通知・観測停止通知は各1 claimと固定slotを持ち、`not_requested／not_present／attempted／returned／threw`を区別する。returnedは返答があっただけでcleanup confirmedではない。片方のthrowで他方を省略せず、両方throwでも主理由・Unknownを保持する。観測停止通知throwは`notification`理由で致命的停止へ合流する。constructor失敗はownerを公開せず、未生成と生成済み未閉鎖を区別する。
+
+構造式の対象は固定transcript、通常の単発fake境界、最大6個の固有checkpoint、1保存あたり宣言header上限H=95 ASCII byteである。callerのsnapshot／not_ready／空checkpoint等を任意回数許す列や、無限の再入・同期操作停止不能は対象外。以下の数値は試験値で、runtimeのwork_model_id／受付capではない。
+
+| 費目 | 所有・上界 |
+|---|---|
+| write試行 W | Store。A=明示attempt cap、R=EINTR capとして `W≤min(A,H+R)`。正のshort writeは1 byte以上進む。拒否まで進む場合は進行writeが最大H−1なので、最後の超過EINTR／throwを含めても`(H−1)+(R+1)=H+R`。非空headerのモデルに限る |
+| create／flush／close／再読 | Store。各保存につき各≤1。正常closeとfinally closeは同じ1枠で、二重に加算しない |
+| identity | Storeとreceipt検査。保存成功で`2W+11`、拒否／中断はその以下 |
+| clock読取 | ownerのcheckpoint／prepare／persist、Store、private consumeを合わせ成功`4W+30`。失敗finallyを保守的に含め`≤4W+32`。terminalのpre／post≤2はfinal予約へ一度だけ別所有 |
+| header予約 | Store。Q≤6保存で`ΣH_i≤6×95=570 byte`。失敗予約を返さない |
+| hash入力 | bridge期待hash H_i＋Store owned hash H_i＋再読hash≤H_i、計≤`3ΣH_i`。private consumeにhashを再課金しない（経路のソース照合による上界） |
+| private copy／encoding | bridge encoding H_i、Store owned copy H_i、write用残りsliceの累積≤W_i H_i。再読driverのcopyと文字列生成は別費目であり、無料扱いしない |
+| 通知／terminal／clear | 3固定通知が各≤1、terminal commit≤1、retireは通常閉鎖／fatalとterminalで各≤6 slot。再要求を新費目へ展開しない |
+
+固定6checkpoint対照のA=128、R=2、W≤97では、単発IO≤606、identity≤1230。追加clock-bearing recorder操作M≤8、guard-only checkpoint G≤2とterminal 2読取を含む保守的clock上界は2532。write sliceの累積内容量≤55290 byte、hash入力≤1710 byte。最後の超過EINTR／throwを含む拒否列も上のW式で覆い、失敗・短書込／retry境界の別対照で照合する。
+
+上界の根拠は個別の有限loop／一度限りclaimと独立操作計数であり、統合したCPU work unit・実wall-time・JS allocator／heap／RSSの保証ではない。driver内部のcopy／callback費用、snapshot呼出し上限、OS lease回収、manifest内容／容量・必須集合、ProcessOwner、実capの導出・承認は未確認のまま。全体受付へ採用しない。
