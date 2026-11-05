@@ -1,6 +1,8 @@
 # WF-B EvidenceStore／recorder：一度限り接続の差分設計
 
-Version: draft-0.4 / Date: 2026-11-05 / 基準HEAD: `277c057` / SB-A実装基準HEAD: `2f1120f`。
+Version: draft-0.5 / Date: 2026-11-05 / 基準HEAD: `277c057` / SB-A実装基準HEAD: `2f1120f` / SB-B実装基準HEAD: `186cea6`。
+
+draft-0.5: [SB-B合成検証記録](E2E_BEST_PRACTICE_WFB_STORE_RECORDER_SBB_2026-11-05.md)を追加。同checkpointの固定header・メモリ保存・private消費・固定ackを接続した。public friendを増やさず試験用実装を共通kernelへ集約し、旧pathは同じclassの再exportとして維持する。実保存・run全体の保全・ProcessOwnerへの昇格はない。
 
 draft-0.4のレビュー修正: 共有clockが停止後に例外を返し、Storeの解放処理を止めていたので、読取と受付を分けた。新しいkeyで同じrootに別Storeを作れたので、rootもclaimの対象にした。recorderの誤用を致命的停止へ分類した。`D_save`後のdiscardはStore.cancelを呼ばず閉鎖する。
 
@@ -8,7 +10,7 @@ draft-0.3: [SB-A合成検証記録](E2E_BEST_PRACTICE_WFB_STORE_RECORDER_SBA_202
 
 draft-0.2のレビュー修正: 取消でStoreまで閉じると停止後の証拠を保存できないため、観測停止と致命的停止を分けた。Storeの期限をslot区分ごとの固定表とし、`manifest.json`を`D_save`後も保存できるようにした。cleanupの`late`を反映した。試行別の結果にStore側の変更が必要なことを差分へ明記した。線形化sectionの処理を補った。
 
-Status: **SB-Aの準備内部契約だけを合成検証。保存・receipt消費・ack接続は未実装。** 正式発行口閉鎖・全体受付無効・Unknown・VM／監視／telemetry調査保留を維持する。保存先・保持期間・運用cap／時間枠・停止方式は未承認。再採取・既存証拠copy／保管操作・実接続・実通信・設定変更・Pushを行わない。
+Status: **SB-A／SB-Bをメモリ内で合成検証。SB-Cの詳細診断・期限表と実保存は未対応。** 正式発行口閉鎖・全体受付無効・Unknown・VM／監視／telemetry調査保留を維持する。保存先・保持期間・運用cap／時間枠・停止方式は未承認。再採取・既存証拠copy／保管操作・実接続・実通信・設定変更・Pushを行わない。
 
 親は[固定採取器契約](BEST_PRACTICE_WFB_FIXED_RECORDER_CONTRACT.md)と[EvidenceStore内部契約](BEST_PRACTICE_WFB_EVIDENCE_STORE_FAKE_CONTRACT.md)。既存の単体fakeとレビュー修正を維持し、試験専用の新しい結合経路だけを後続対象とする。以下の型名は提案であり、既存コードに存在するとは限らない。
 
@@ -136,10 +138,10 @@ oracleはbridge自身のmapper／encoder／guardを呼ばず、固定expected he
 ## 8 後続の実装分割と未確認事項
 
 1. **SB-A（準備内部契約を実装済み）**: 同生成元owner・run／checkpoint binding・private証拠型の予約・一度限りclaimと固定discard。旧試験を残したまま混入／直接ackを拒否する合成経路を追加した。StoredCheckpointEvidenceの発行はない。
-2. **SB-B**: 同snapshotの固定header encodingとStore保存／private消費／固定ackを接続。保存後の失敗・queue／unsavedの区分を確認する。
+2. **SB-B（メモリ接続済み）**: 同snapshotの固定header encodingとStore保存／private消費／固定ackを接続。保存後の失敗・queue／未受理件数の区分を確認した。§8.2の範囲を参照。
 3. **SB-C**: 同clock／停止ownerとflush内の予約分割、観測停止と致命的停止の区別、上位cleanup診断・部分生成の回収を連続fakeで確認する。SB-B時点でも期限／取消の最低限の共通guardを省略せず、詳細な境界対照をここで補完する。
 
-SB-Aの生成・準備claim以外の保存・線形化section・試行別結果・slot区分別期限と詳細費目は未実装。byte／work／時間の運用値、正式保存先、保管／削除、OS backendは未承認・未確認のまま。storeとrecorderが繋がっても、採取・保全・process監督の開始許可にはならない。
+SB-Aの生成・準備claimとSB-Bのメモリ保存・線形化section以外の、試行別結果の完全分類・slot区分別期限表・詳細費目は未実装。byte／work／時間の運用値、正式保存先、保管／削除、OS backendは未承認・未確認のまま。storeとrecorderが繋がっても、採取・保全・process監督の開始許可にはならない。
 
 ### 8.1 SB-Aの実装境界
 
@@ -150,3 +152,17 @@ ownerの6 slotは準備状態だけを保持し、実保存の試行別cleanup s
 clock viewと計画値を先行pinし、checkpoint用D_save／cleanup境界の構造条件だけを検査する。生成時の合成値は運用capではない。準備中の観測停止は致命的停止にせず、ReservedのrecorderをClosedにしてStoreは取消さない。D_save到達も保存側だけを閉じ、Store操作／取消をしない。共有clockは停止後も読めるので、処理中のStoreはcleanupを続けられる。recorderの誤用とgate拒否は致命的停止で、Storeを取消す。Closed時のbound診断は`unacknowledged`を持ち、recorder自体がClosedでない場合の旧`unsaved=0`と区別する。これは実保存bytesの有無を表さない。
 
 SB-Aではconditions_readyをackできないので、観測状態へ進める成功経路・6checkpointの連続保存・保存中の取消継続は検証できない。SB-B／SB-Cへ残し、手前のgate拒否を後段の成功実証と数えない。既存子fakeは変更しておらず、slot別期限表・試行別結果・private Store consumer・callbackなしprivate ackは未実装。`D_save`で閉鎖した後の`observeStop`はrecorderへ伝えない（現状を試験で固定）。recorderを終端させる経路はSB-Cで決める。
+
+### 8.2 SB-Bの実装境界
+
+§8.1はSB-A単独時点の記録として残す。SB-Bでは`persist(PreparationClaim)`だけを追加し、外部からbytes・receipt・consumer callbackを渡せない固定継続にする。class実装を`tests/review/fixtures/store-recorder-kernel.ts`に機械的に集約し、旧3 pathは再exportにした。同moduleのstatic blockに閉じたprivate consume／ackだけを設け、公開DATAから証拠を生成する口はない。移動だけの段階で旧277件が成功した。
+
+固定encodingはUTF-8／ASCII、key順は`version,sequence,trigger,at`、versionは`wfb-checkpoint-1`、末尾LF。元の凍結checkpointのscalarだけを内部で使い、再snapshotやcaller getterを挟まない。sequenceは1〜6、atはsafe非負整数、trigger最長16文字なのでheader最大95 byte。実装の構造上限160文字とStore file capをencoding前に検査する。本文・承認票・run identityをこのJSONから発行しない。
+
+同private bytesから期待size／digestを作り、同Storeのsave結果をprivate WeakMapに基づくconsumerで照合・一度だけ消費する。private証拠には元checkpoint・receipt origin・owner epochを保持し、前後guard後に同queue先頭だけを固定ackする。conditions_readyの書込済みフラグも同sectionで立てる。公開`acknowledge`／`consume`を呼ばず、queue操作も先行captureした組込み関数を使う。JS内部の割当て／停止の不存在は保証しない。
+
+各slotへ`not_started／attempted_unverified／saved_unacknowledged／acknowledged`、期待file／size／digest、saveのcleanup／reason、consumer失敗reasonを保存する。`attempted_unverified`はcreate試行の有無・partialの完全分類ではなく、§1で要求したStoreの試行別結果はSB-Cへ残る。今回のbridgeは健全時のsaveしか始めず、失敗後の次試行を呼ばないので、前回cleanupを新しいsave結果に複写しない。未試行slotのcleanupは未定義のまま。
+
+保存後の期限／guard拒否では元先頭を残し、保存済み未ackを記録する。`unacknowledged`はbridge閉鎖時もqueue件数、recorderの`unsaved`はrecorder自体がClosedになった時の未受理件数であり、どちらもbytes不存在の証明ではない。ack済みslotは後続失敗でも退役表示へ戻さず、成功件数・診断を保持する。期待bytesとreceipt／証拠の別名は固定終端で外す。
+
+観測中の取消はStoreを閉じず、現在の保存とstop_requestedのFIFO保存を継続できる。Reserved取消はClosedなので保存済みでもackしない。致命的停止後も共有clockはcleanup用に読める。全checkpointがack済みでもtest／measurement以外のrun保全・process終了軸は既存の未確認値から進めない。manifest区分の期限表・run終端・OS backend・実観測本文・容量モデルはSB-C以降のままである。

@@ -1,6 +1,8 @@
 # WF-B 固定採取器の詳細契約・合成受入条件
 
-Version: draft-0.7 / Date: 2026-11-05 / 設計基準HEAD: `0fe45fb` / 純粋fake実装基準HEAD: `7f055b4`。
+Version: draft-0.8 / Date: 2026-11-05 / 設計基準HEAD: `0fe45fb` / 純粋fake実装基準HEAD: `7f055b4`。
+
+draft-0.8: [SB-B検証記録](E2E_BEST_PRACTICE_WFB_STORE_RECORDER_SBB_2026-11-05.md)を追加。固定headerのメモリ保存・private消費・一度限りackを接続し、queue／保存済み未ackを確認した。実保存・run保全／process終了確認・本文容量モデルは未対応のまま。
 
 draft-0.7: [SB-A検証記録](E2E_BEST_PRACTICE_WFB_STORE_RECORDER_SBA_2026-11-05.md)を追加。同生成元の閉じたassembly・別brand・run生成／checkpoint準備claimと固定discardだけを実装した。保存／ack成功・正式発行・採取可能への昇格はない。
 

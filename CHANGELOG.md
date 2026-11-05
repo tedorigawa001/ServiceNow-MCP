@@ -18,6 +18,8 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 ### Changed
 
+- WF-B SB-B connects the same frozen checkpoint to fixed header bytes, one memory-store save, a module-private receipt consumer and a callback/clock-free acknowledgement section. Existing test-only classes are mechanically colocated behind unchanged re-export paths so no public friend is introduced. FIFO, replay, byte/digest, stop, deadline and saved-but-unacknowledged controls retain queue diagnostics; no filesystem capture, whole-run preservation, formal issuance or runtime connection is enabled.
+
 - WF-B SB-A adds a test-only closed binding assembly with a preallocated owner, module-private one-shot run admission, distinct run/recorder/store/checkpoint brands and irreversible preparation/discard claims. Legacy fakes remain unchanged, and the public references give legacy entry points no child instance to acknowledge. Synthetic mixing, replay, construction, clock and cancellation controls issue no save receipt, perform no Store operations and enable no acknowledgement, formal issuance or whole-run admission.
 
 - WF-B adds a test-only in-memory EvidenceStore contract with fixed artifact slots, exclusive creation, pre-spent claims, bounded short-write/EINTR handling, one-attempt cleanup, same-handle reread SHA-256 verification and private one-shot save receipts. Fault and independent event/digest oracles cover collision, replacement, cancellation, deadlines and receipt mixing without filesystem or network access. Receipts do not establish whole-run preservation or enable formal issuance/admission.
