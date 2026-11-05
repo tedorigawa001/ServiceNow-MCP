@@ -1,6 +1,8 @@
 # WF-B EvidenceStore：artifact単位の内部契約とfake
 
-Version: draft-0.6 / Date: 2026-11-05 / 基準HEAD: `7f6ef4f` / レビュー修正の基準HEAD: `fb91044` / 試行別結果の実装基準HEAD: `85eb9ad`。
+Version: draft-0.7 / Date: 2026-11-05 / 基準HEAD: `7f6ef4f` / レビュー修正の基準HEAD: `fb91044` / 試行別結果の実装基準HEAD: `85eb9ad`。
+
+draft-0.7: [slot固定期限表・閉鎖後recorder終端の差分設計](BEST_PRACTICE_WFB_SLOT_DEADLINES_RECORDER_TERMINAL_DESIGN.md)を追加。save・receipt消費・closeが同じprivate rowを使い、Storeの健全性とcheckpoint受付／recorder終端を分離する契約。実装・運用値の承認は行っていない。
 
 draft-0.6のレビュー修正: 接続済みの期限供給を「未実装」としていた§3と、実装の所在を訂正した。挙動は変更していない。
 

@@ -1,6 +1,8 @@
 # WF-B EvidenceStore／recorder：一度限り接続の差分設計
 
-Version: draft-0.8 / Date: 2026-11-05 / 基準HEAD: `fb91044` / SB-A実装基準HEAD: `2f1120f` / SB-B実装基準HEAD: `186cea6` / 試行別結果の実装基準HEAD: `85eb9ad`。
+Version: draft-0.9 / Date: 2026-11-05 / 基準HEAD: `fb91044` / SB-A実装基準HEAD: `2f1120f` / SB-B実装基準HEAD: `186cea6` / 試行別結果の実装基準HEAD: `85eb9ad`。
+
+draft-0.9: [slot固定期限表・閉鎖後recorder終端の差分設計](BEST_PRACTICE_WFB_SLOT_DEADLINES_RECORDER_TERMINAL_DESIGN.md)を追加。receiptに結ぶ区分別rowと、保存guardから独立した一度限りterminal claim、queue不変／未受理件数・診断保持を具体化した。設計のみで実装・承認状態は変更しない。
 
 draft-0.8のレビュー修正: partialのcleanupが`not_started`にならない実装に§5を合わせた。不足していたbridgeの対照を追加し、§7のBR04を実施済みとした。§8の「当時の記録」の範囲に§8.1を含めた。
 
@@ -162,7 +164,7 @@ oracleはbridge自身のmapper／encoder／guardを呼ばず、固定expected he
 
 1. **SB-A（準備内部契約を実装済み）**: 同生成元owner・run／checkpoint binding・private証拠型の予約・一度限りclaimと固定discard。旧試験を残したまま混入／直接ackを拒否する合成経路を追加した。StoredCheckpointEvidenceの発行はない。
 2. **SB-B（メモリ接続済み）**: 同snapshotの固定header encodingとStore保存／private消費／固定ackを接続。保存後の失敗・queue／未受理件数の区分を確認した。§8.2の範囲を参照。
-3. **SB-C**: 同clock／停止ownerとflush内の予約分割、観測停止と致命的停止の区別、上位cleanup診断・部分生成の回収を連続fakeで確認する。SB-B時点でも期限／取消の最低限の共通guardを省略せず、詳細な境界対照をここで補完する。
+3. **SB-C**: [固定期限表・recorder終端の差分設計](BEST_PRACTICE_WFB_SLOT_DEADLINES_RECORDER_TERMINAL_DESIGN.md)のDT-A→DT-B→DT-Cで具体化する。同clock／停止owner、上位cleanup診断・部分生成の回収を連続fakeで確認する。SB-B時点でも期限／取消の最低限の共通guardを省略せず、詳細な境界対照をここで補完する。
 
 SB-Aの生成・準備claim、SB-Bのメモリ保存・線形化section、Store試行別結果の分類までを実装。slot区分別期限表・閉鎖後の最終終端・詳細費目は未実装。byte／work／時間の運用値、正式保存先、保管／削除、OS backendは未承認・未確認のまま。storeとrecorderが繋がっても、採取・保全・process監督の開始許可にはならない。
 
