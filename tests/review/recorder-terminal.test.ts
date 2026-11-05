@@ -111,7 +111,8 @@ describe('DT-B terminal admission and fixed commit', () => {
     expect(before.state).toBe(state);
     const abandon = vi.spyOn(f.recorder, 'abandon'), verify = vi.spyOn(f.recorder, 'verify'), publish = vi.spyOn(f.recorder, 'publish');
     expect(request(f)).toBe('Committed'); assertPreserved(f, before);
-    expect(f.root.snapshot().terminal).toMatchObject({ reason, stopNotObserved: state === 'Observing' });
+    expect(f.root.snapshot().terminal).toMatchObject({ reason, from: state, queued: before.checkpoints.length,
+      stopNotObserved: state === 'Observing' });
     expect(f.root.snapshot().acknowledgements).toBe(bound.acknowledgements);
     expect(f.root.snapshot().saves).toEqual(bound.saves);
     expect(abandon).not.toHaveBeenCalled(); expect(verify).not.toHaveBeenCalled(); expect(publish).not.toHaveBeenCalled();
@@ -122,6 +123,9 @@ describe('DT-B terminal admission and fixed commit', () => {
     expect(f.result.diagnostic).toMatchObject({ reason: 'construction', terminal: { state: 'NotRequested', claims: 0,
       reason: stage === 'store' ? 'already_closed' : 'not_constructed' } });
     expect(f.result.diagnostic.terminal.to).toBe(stage === 'store' ? 'Closed' : undefined);
+    expect(f.result.diagnostic.terminal.from).toBe(stage === 'store' ? 'Closed' : undefined);
+    expect(f.result.diagnostic.terminal.queued).toBe(stage === 'store' ? 1 : undefined); // the existing fatal stop checkpoint
+    expect(f.result.diagnostic.terminal.queued).toBe(f.result.diagnostic.recorder?.checkpoints.length);
     expect(f.events).toEqual([]);
   });
 });
@@ -244,6 +248,25 @@ describe('DT-B Pending until the outermost safe unwind', () => {
     expect(f.root.snapshot().terminal).toMatchObject({ state: 'Committed', clock: 'valid' });
     expect(f.store.consume(f.privateRun, result.receipt!)).toBeDefined();
   });
+  it('waits for a spy-only Store consume and commits at its unwind, with the consume result intact', () => {
+    const f = assembly(); cutoff(f); let reached = 0;
+    const saved = f.store.saveAttempt(f.privateRun, 'manifest.json', Uint8Array.of(1));
+    f.hook(name => {
+      if (name !== 'identity' || reached) return;
+      reached++; expect(request(f)).toBe('Pending');
+      expect(f.recorder.snapshot().state).toBe('Gated');
+    });
+    expect(f.store.consume(f.privateRun, saved.receipt!)).toMatchObject({ slot: 'manifest.json', size: 1 });
+    expect(reached).toBe(1);
+    expect(f.root.snapshot().terminal).toMatchObject({ state: 'Committed', clock: 'valid' });
+  });
+  it('records the advanced save epoch for a request after a fatal stop', () => {
+    const f = assembly(); f.root.reserve(true); claim(f);
+    expect(f.root.start()).toBe(false);
+    expect(f.root.snapshot()).toMatchObject({ phase: 'Stopped', epoch: 1 });
+    expect(request(f)).toBe('Committed');
+    expect(f.root.snapshot().terminal).toMatchObject({ requestedEpoch: 1, completedEpoch: 1, from: 'Closed', reason: 'already_closed' });
+  });
 });
 
 describe('DT-B terminal clock and first-diagnostic ownership', () => {
@@ -264,6 +287,7 @@ describe('DT-B terminal clock and first-diagnostic ownership', () => {
     const reads = f.reads(); expect(request(f)).toBe('Committed');
     expect(reached).toBe(1); expect(f.reads() - reads).toBe(1); assertPreserved(f, before);
     expect(f.root.snapshot()).toMatchObject({ phase: 'Closed', reason: 'clock', terminal: { state: 'Committed', clock: 'unknown' } });
+    expect(f.root.snapshot().terminal.late).toBeUndefined(); // unknown time is never reported as inside the window
     f.clock(); f.set(288001); expect(f.sharedClock()).toBe(288001);
     expect(f.store.save(f.privateRun, 'manifest.json', Uint8Array.of(1))).toBeUndefined();
     expect(cancel).toHaveBeenCalledTimes(1);
@@ -274,12 +298,54 @@ describe('DT-B terminal clock and first-diagnostic ownership', () => {
     f.clock(() => {
       reads++; expect(request(f)).toBe('rejected');
       expect(f.root.snapshot().terminal.state).toBe(reads === 1 ? 'Entered' : 'Committed');
+      expect(f.recorder.snapshot().state).toBe(reads === 1 ? 'Gated' : 'Closed'); // pre-clock precedes the commit
       if (reads === 2) throw Error('SECRET_POST');
     });
     expect(request(f)).toBe('Committed'); expect(reads).toBe(2);
     expect(f.root.snapshot().terminal).toMatchObject({ state: 'Committed', clock: 'unknown', late: undefined, claims: 1 });
     expect(f.recorder.snapshot().state).toBe('Closed');
     expect(f.store.snapshot().reason).toBe('cancelled');
+  });
+  it('keeps lateness already seen at D_all by the pre-clock when the post-clock then fails', () => {
+    const f = assembly(); cutoff(f); f.set(300000); let reads = 0;
+    f.clock(() => { reads++; if (reads === 2) throw Error('SECRET_POST'); });
+    expect(request(f)).toBe('Committed'); expect(reads).toBe(2);
+    expect(f.root.snapshot().terminal).toMatchObject({ clock: 'unknown', late: true });
+  });
+  it('reports late when only the post-clock reaches D_all', () => {
+    const f = assembly(); cutoff(f); f.set(299999); let reads = 0;
+    f.clock(() => { reads++; if (reads === 2) f.set(300000); });
+    expect(request(f)).toBe('Committed'); expect(reads).toBe(2);
+    expect(f.root.snapshot().terminal).toMatchObject({ clock: 'valid', late: true });
+  });
+  it('cancels the Store only once across repeated clock faults after closure', () => {
+    const f = assembly(); cutoff(f); const cancel = vi.spyOn(f.store, 'cancel');
+    f.clock(() => { throw Error('SECRET_CLOCK'); });
+    expect(() => f.sharedClock()).toThrow('binding_clock');
+    expect(() => f.sharedClock()).toThrow('binding_clock');
+    expect(cancel).toHaveBeenCalledTimes(1);
+    expect(f.root.snapshot()).toMatchObject({ phase: 'Closed', reason: 'clock', store: { reason: 'cancelled' } });
+  });
+  it('treats a nested clock read after closure as a clock fault that stays Closed', () => {
+    const f = assembly(); cutoff(f); let nested = 0;
+    f.clock(() => {
+      f.clock(); nested++;
+      expect(() => f.sharedClock()).toThrow('binding_clock');
+    });
+    expect(f.sharedClock()).toBe(288000); expect(nested).toBe(1);
+    expect(f.root.snapshot()).toMatchObject({ phase: 'Closed', reason: 'clock', store: { reason: 'cancelled' } });
+    expect(f.store.save(f.privateRun, 'manifest.json', Uint8Array.of(1))).toBeUndefined();
+  });
+  it('still closes an acquired manifest handle after one clock fault following closure', () => {
+    const f = assembly(); cutoff(f); const cancel = vi.spyOn(f.store, 'cancel');
+    f.hook(name => {
+      if (name === 'write') f.clock(() => { f.clock(); throw Error('SECRET_CLOCK'); });
+    });
+    const { receipt, attempt } = f.store.saveAttempt(f.privateRun, 'manifest.json', Uint8Array.of(1));
+    expect(receipt).toBeUndefined(); expect(cancel).toHaveBeenCalledTimes(1);
+    expect(f.events.filter(e => e === 'close')).toHaveLength(1);
+    expect(attempt).toMatchObject({ disposition: 'partial_unverified', closeAttempted: true, cleanup: 'confirmed', reason: 'cancelled' });
+    expect(f.root.snapshot()).toMatchObject({ phase: 'Closed', reason: 'clock' });
   });
   it('keeps earlier store/bridge/cleanup diagnoses separate from terminal clock failure', () => {
     const f = observing(); f.faults.write = true; f.faults.close = true;

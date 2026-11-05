@@ -190,6 +190,8 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 ### Added
 
+- WF-B DT-B terminal controls now pin unknown and boundary lateness, the pre-clock before the commit, one Store cancellation across repeated clock faults, nested clock reads, a pending request during a direct Store consume, the post-fatal epoch and queue counts, and handle cleanup after one clock fault. No fixture behaviour changes.
+
 - WF-B review tests for the test-only Store attempt results: a close that throws counts as attempted, a reported close with an invalid next time stays unconfirmed, and a late close keeps the primary reason. The bound bridge now has controls for partial writes, the EINTR cap and a refused save that must not copy the previous cleanup. No fixture behaviour, real storage or formal issuance changes.
 
 - WF-B review fixes for the test-only checkpoint persistence: a stray recorder call after the test terminal is only a diagnostic and no longer cancels the Store, so queued evidence can still be saved; misuse while observing stays a fatal stop. The cleanup split and the limits are read once at construction. Tests now cover consume failures, slot and digest mismatches with a genuine receipt, and a queue head that moved. No whole-run preservation or formal issuance is enabled.

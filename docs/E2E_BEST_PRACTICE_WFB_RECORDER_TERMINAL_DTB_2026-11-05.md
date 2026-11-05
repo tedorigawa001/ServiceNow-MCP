@@ -1,10 +1,10 @@
 # WF-B DT-B：private recorder終端・安全なPendingの合成検証
 
-Date: 2026-11-05 / 実装前HEAD: `aa575f3` / Status: **合成依存限定、未コミット**。
+Date: 2026-11-05 / 実装前HEAD: `aa575f3` / Status: **合成依存限定**、コミット`52136f4`。
 
 正式発行口閉鎖・全体受付無効・Unknown・VM／監視／telemetry調査保留を維持する。実接続・実通信・設定変更・Pushは行っていない。再採取・証拠保管・manifest発行・実ProcessOwnerの起動／終了操作も行っていない。保存先・保持期間・運用時間枠・停止方式・費目上界の承認状態は変更しない。
 
-設計は[固定期限表・recorder終端 draft-0.4](BEST_PRACTICE_WFB_SLOT_DEADLINES_RECORDER_TERMINAL_DESIGN.md)§8.2。今回の実装はDT-Bのみで、DT-Cの連続検証・最終費目は未実施。
+設計は[固定期限表・recorder終端](BEST_PRACTICE_WFB_SLOT_DEADLINES_RECORDER_TERMINAL_DESIGN.md)§8.2。今回の実装はDT-Bのみで、DT-Cの連続検証・最終費目は未実施。
 
 ## 1 実装
 
@@ -58,6 +58,42 @@ Verifying／Publishedは、生recorderを使ったbranch準備である。bound 
 
 全体回帰・実npm pack／dry-run・展開／production install・実保存・OS／network／worker接続は未実施。静的境界確認を実梱包成功や実機保証へ昇格しない。
 
-## 5 残課題
+## 5 レビュー修正（2026-11-05）
+
+`52136f4`のレビューで実装の誤りは見つからなかった。§4の数値は修正前の記録としてそのまま残す。変異61件のうち17件が残り、そのうち13件はテストの不足だったので、`recorder-terminal.test.ts`に対照を追加した。fixtureの挙動は変更していない。
+
+| 追加した対照 | 検出するようになった変異 |
+|---|---|
+| pre不明時の`late`が未定義 | pre不明を`late=false`にする |
+| preがD_all等値でpostが失敗 | preの等値判定を`>`にする、post失敗で`late`を消す |
+| preが枠内でpostだけD_all等値 | postの等値判定を`>`にする |
+| pre読取中はrecorderが元の状態 | pre-clockの前にcommitする |
+| 閉鎖後のclock不正を2回 | Store取消の一度限りを外す |
+| 閉鎖後の入れ子読取 | 入れ子読取を`#fatal`のみにする |
+| 生Store consume中の要求 | 生consumeのunwindを外す |
+| 致命的停止後の要求（epoch=1） | 要求時／完了時のepochを0にする |
+| 7状態の`from`／`queued`、Store生成失敗の`from`／`queued` | `queued`を記録しない、生成失敗時の`from`／`queued`を記録しない |
+
+DT10の「取得済みhandleのcleanupは継続」は、閉鎖後の一度限りのclock不正でmanifest handleを1回closeする対照を追加して確認した。clock不正が続く場合は、cleanup前の読取も失敗するのでcloseを試みず、`unconfirmed`／`clock`のままになる。§2.1の期限確認と整合する既存の挙動で、今回変更していない。
+
+Store生成失敗時の`queued`は、既存の致命的停止が発行する停止checkpointを含むので1である。追加時に0と期待して1件失敗したのは試験側の誤りで、期待値を訂正した。
+
+再実行の結果、対象ファイル単独で変異61件のうち57件を検出した。残る4件は等価変異である。
+
+| 変異 | 等価である理由 |
+|---|---|
+| `#drainTerminal`の`#busy`確認を外す | `#busy`が真なら`#depth`も必ず正になる |
+| `boundConsume`のunwindを外す | `persist`の中でのみ呼ばれ、`#leave`がdrainする |
+| Entered時の`#retire`を外す | 終端phaseへの遷移時に毎回retire済み |
+| `Failed`の分岐を外す | 現状は到達不能。したがって§1の`Failed`の記述はテストでは確認していない |
+
+| 実行 | 結果 |
+|---|---|
+| `recorder-terminal.test.ts` | **38件成功**（修正前31件） |
+| 全体テスト | **294ファイル、14,234件成功、失敗0** |
+| repo全体のlint | エラー0 |
+| build、`package-http-classification` | 成功 |
+
+## 6 残課題
 
 DT-CとしてD_stopからFIFO保存・D_save閉鎖・終端までの状態別連続対照、通知throw／部分生成／cleanup異常の組合せ、追加記録費・work／時間上界を確認する必要がある。同期操作が戻らなければPendingの完了は保証できない。ProcessOwner・実FD回収・manifest必須集合・正式writer・運用cap／保存先の承認は別課題のまま。§7の全受入条件や全体受付の完了とは呼ばない。

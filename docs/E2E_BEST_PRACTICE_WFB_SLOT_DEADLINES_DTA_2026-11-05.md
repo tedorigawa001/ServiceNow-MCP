@@ -1,10 +1,10 @@
 # WF-B DT-A：slot固定期限表の合成検証
 
-Date: 2026-11-05 / 実装前HEAD: `eb642a2` / Status: **合成依存限定、未コミット**。
+Date: 2026-11-05 / 実装前HEAD: `eb642a2` / Status: **合成依存限定**、コミット`aa575f3`。
 
 正式発行口閉鎖・全体受付無効・Unknown・VM／監視／telemetry調査保留を維持する。運用時間枠・保存先・保持期間・停止方式は未承認。再採取・証拠copy／保管操作・実接続・実通信・設定変更・Pushは行っていない。本記録のMD作成とローカルbuildは、証拠Storeの実保存ではない。
 
-設計は[固定期限表・recorder終端の差分設計 draft-0.3](BEST_PRACTICE_WFB_SLOT_DEADLINES_RECORDER_TERMINAL_DESIGN.md)§8.1。今回はDT-Aのみで、DT-B／DT-Cは実装していない。
+設計は[固定期限表・recorder終端の差分設計](BEST_PRACTICE_WFB_SLOT_DEADLINES_RECORDER_TERMINAL_DESIGN.md)§8.1。今回はDT-Aのみで、DT-B／DT-Cは実装していない。
 
 ## 1 実装範囲
 
