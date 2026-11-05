@@ -1,6 +1,8 @@
 # WF-B 固定採取器の詳細契約・合成受入条件
 
-Version: draft-0.9 / Date: 2026-11-06 / 設計基準HEAD: `0fe45fb` / 純粋fake実装基準HEAD: `7f055b4` / 本文設計の調査基準HEAD: `12dcc37`。
+Version: draft-0.10 / Date: 2026-11-06 / 設計基準HEAD: `0fe45fb` / 純粋fake実装基準HEAD: `7f055b4` / 本文設計の調査基準HEAD: `12dcc37`。
+
+draft-0.9のレビュー修正: 本文を固定できない場合の本文なし失敗variantを§4の例外として追加した。同時保持の上界を本文4件＋本文なし2件へ揃え、旧合成Store上限には契約最大値が収まらないと明記した。
 
 draft-0.9: [checkpoint本文snapshot・容量・失敗時停止の詳細設計](BEST_PRACTICE_WFB_CHECKPOINT_SNAPSHOT_BODY_DESIGN.md)を追加。6variant・4本文snapshot、scopeごとの4096件とrun集約枠、未承認byte／work・custodyを区別する。本文は設計のみ。固定header経路はSB-A／SB-B／DT-A〜Cまで合成検証済みで、実保存・観測本文・ProcessOwnerは未接続。
 
@@ -77,7 +79,7 @@ session票はrun外の `session.0001.json`〜`.0003.json` とし、開設／run1
 
 checkpointは次の**6種類を各1回まで**。発生順に連番を割り当て、未発生の種類は省略する。同一triggerの反復は有限counterへ集約し、新規ファイルや無限queueを作らない。
 
-全checkpointは固定headerと下表の情報を持つ。`first_anomaly`／`slow_hint`／`test_terminal`／`stop_requested`は、その時点の集約本体（case結果とWF-A相関、既存上限内）のsnapshotも含む。`conditions_ready`／`child_started`は集約本体を持たない。WF-Aのイベントはcase終了時に届くため、実行中のcaseの内容はプロセス停止時には残らない。
+全checkpointは固定headerと下表の情報を持つ。`first_anomaly`／`slow_hint`／`test_terminal`／`stop_requested`は、その時点の集約本体（case結果とWF-A相関、既存上限内）のsnapshotも含む。`conditions_ready`／`child_started`は集約本体を持たない。採取失敗や観測開始前で本文を固定できない場合、前述の4種は[本文なし失敗variant](BEST_PRACTICE_WFB_CHECKPOINT_SNAPSHOT_BODY_DESIGN.md#31-本文なし失敗variant)で保存し、coverageの証拠とはしない。WF-Aのイベントはcase終了時に届くため、実行中のcaseの内容はプロセス停止時には残らない。
 
 | trigger | 保存する限定情報 |
 |---|---|
@@ -88,11 +90,11 @@ checkpointは次の**6種類を各1回まで**。発生順に連番を割り当�
 | test_terminal | 試験結果と観測完了状態 |
 | stop_requested | 最初の取消／外側期限／採取器停止とcleanup開始 |
 
-writerは1本、immutable snapshot queueは最大6件。per-case同期IO・周期無制限flush・古いcheckpointの更新を禁止する。queue拒否・snapshot上限超過・writer失敗では新規試験／比較を止め、既存checkpointと先行診断を残す。crash／OOM時に必ず保存できるとは主張しない。
+writerは1本、immutable checkpoint queueは最大6件（集約本文は最大4件）。per-case同期IO・周期無制限flush・古いcheckpointの更新を禁止する。queue拒否・snapshot上限超過・writer失敗では新規試験／比較を止め、既存checkpointと先行診断を残す。crash／OOM時に必ず保存できるとは主張しない。
 
-WF-Aの4096件、既存reporterのcase／event各20,000件・sample600件・module1,000件の上限は拡張しない。必須coverageの欠落はmeasurement incomplete。各message・snapshot・final・analysis・manifest・session票のbyte上限、総byte上限、serialization／再読scratch上限を有限の必須条件として別途固定する。`0`／未指定を無制限へ解釈しない。概念上の保持量は集約本体＋最大6 snapshot＋writer／検証scratchであり、JavaScript heapの実測上界やRSS保証とは区別する。
+WF-Aの4096件、既存reporterのcase／event各20,000件・sample600件・module1,000件の上限は拡張しない。必須coverageの欠落はmeasurement incomplete。各message・snapshot・final・analysis・manifest・session票のbyte上限、総byte上限、serialization／再読scratch上限を有限の必須条件として別途固定する。`0`／未指定を無制限へ解釈しない。概念上の保持量は集約本体＋最大4 snapshot＋本文なし2件＋writer／検証scratchであり、JavaScript heapの実測上界やRSS保証とは区別する。
 
-本文・容量の具体化は[本文snapshot設計](BEST_PRACTICE_WFB_CHECKPOINT_SNAPSHOT_BODY_DESIGN.md)を参照。4096件はParentObservation instanceごとの上限で、複数scopeのrun合計やreporterの20,000相関event枠と同一ではない。現行95 byteのheaderだけの上界を本文へ流用しない。本文用の新cap・旧合成Store上限との適合は未承認／未確認。
+本文・容量の具体化は[本文snapshot設計](BEST_PRACTICE_WFB_CHECKPOINT_SNAPSHOT_BODY_DESIGN.md)を参照。4096件はParentObservation instanceごとの上限で、複数scopeのrun合計やreporterの20,000相関event枠と同一ではない。現行95 byteのheaderだけの上界を本文へ流用しない。本文用の新capは未承認で、契約最大値は旧合成Store上限に収まらない。
 
 ## 5 外側時間枠・停止と終了確認
 
