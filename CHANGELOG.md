@@ -192,6 +192,8 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 ### Added
 
+- WF-B DT-C review hardening: assertions inside throwing notification mocks were swallowed by the notification catch, so they now observe in the mock and assert after unwind. New synthetic controls pin Pending during both notifications, admission closure before notification, Store-then-recorder order, one observation claim across reentry, `not_present` on owner/recorder construction failure, frozen notification snapshots, a whole-save EINTR cap and EINTR charging against the write attempt cap. The test kernel, cost formulas, runtime sources, deadlines, formal issuance and whole-run admission are unchanged.
+
 - WF-B DT-B terminal controls now pin unknown and boundary lateness, the pre-clock before the commit, one Store cancellation across repeated clock faults, nested clock reads, a pending request during a direct Store consume, the post-fatal epoch and queue counts, and handle cleanup after one clock fault. No fixture behaviour changes.
 
 - WF-B review tests for the test-only Store attempt results: a close that throws counts as attempted, a reported close with an invalid next time stays unconfirmed, and a late close keeps the primary reason. The bound bridge now has controls for partial writes, the EINTR cap and a refused save that must not copy the previous cleanup. No fixture behaviour, real storage or formal issuance changes.

@@ -155,13 +155,13 @@ SB-A／SB-B／試行別結果の時点の状況は次のとおり。実施済み
 | BR02 | 一部 | encoding版の不一致。slot・size・digest・別owner・コピーは実施済み |
 | BR03 | 一部 | 成功分の二重消費は、receiptの再利用経路がないので到達不能 |
 | BR04 | 実施済み | なし。sticky失敗後の次の保存は、bridgeが健全時しか保存を始めないので、Storeの取消を直前に差し込んで確認した |
-| BR06 | DT-Cで合成実施済み | stop_requested自身の保存失敗後も再帰保存しない |
+| BR06 | DT-Cで合成実施済み | なし。stop_requested自身の保存失敗後も再帰保存しないことを確認 |
 | BR07 | 一部 | 別clockの対照。`late`・逆行・原点は実施済み |
-| BR08 | DT-Cで合成実施済み | 通知throw／両方throw・部分生成の実状態と固定診断。実通知保証は範囲外 |
-| BR09 | DT-Cで合成実施済み | 試験終端後のclose false／throw／lateでもtest／measurementを保持 |
+| BR08 | DT-Cで合成実施済み | なし。通知throw／両方throw・部分生成の実状態と固定診断を確認。実通知保証は範囲外 |
+| BR09 | DT-Cで合成実施済み | なし。試験終端後のclose false／throw／lateでもtest／measurementの保持を確認 |
 | BR10 | 一部 | 可変buffer・subclassは単体Storeのみ。閉鎖後のpayload破棄は未実施 |
-| BR11 | DT-Cで合成実施済み | D_stop自動停止／明示通知から残FIFO保存までの固定経路 |
-| BR12 | DT-Cで合成実施済み | 0／1／3件保存後のD_save閉鎖と残queueの元参照順を保持 |
+| BR11 | DT-Cで合成実施済み | なし。D_stop自動停止／明示通知から残FIFO保存までの固定経路を確認 |
+| BR12 | DT-Cで合成実施済み | なし。0／1／3件保存後のD_save閉鎖と残queueの元参照順の保持を確認 |
 | BR13 | DT-Aで合成実施済み | manifestはspy-only子Store対照。正式writer／集合の証明は範囲外 |
 
 oracleはbridge自身のmapper／encoder／guardを呼ばず、固定expected header・golden digest・イベント順・queue残数を独立定義する。各負の対照は狙った故障点へ到達したことをassertする。compile／配布物の負の対照ではprivate証拠を外部生成できず、試験登録口・driverが製品へ入らないことを確認する。線形化の中間故障を無理に注入して実装に新callbackを持ち込まない。

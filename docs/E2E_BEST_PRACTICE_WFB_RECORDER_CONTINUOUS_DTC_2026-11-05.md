@@ -1,8 +1,8 @@
 # WF-B DT-C：停止からFIFO保存・閉鎖・終端までの連続合成検証
 
-Date: 2026-11-05 / 基準HEAD: `e4b87d7` / Status: **合成依存限定・未コミット**。
+Date: 2026-11-05 / 基準HEAD: `e4b87d7` / Status: **合成依存限定、コミット`9e12d9a`**。
 
-正式発行口閉鎖・全体受付無効・Unknown・VM／監視／telemetry調査保留を維持する。実接続・実通信・実worker／ProcessOwner操作・設定変更・Push・再採取・証拠保管は行っていない。時間枠・保存先・保持期間・運用capは未承認のまま。設計は[固定期限表／recorder終端 draft-0.5](BEST_PRACTICE_WFB_SLOT_DEADLINES_RECORDER_TERMINAL_DESIGN.md)§8.3。
+正式発行口閉鎖・全体受付無効・Unknown・VM／監視／telemetry調査保留を維持する。実接続・実通信・実worker／ProcessOwner操作・設定変更・Push・再採取・証拠保管は行っていない。時間枠・保存先・保持期間・運用capは未承認のまま。設計は[固定期限表／recorder終端](BEST_PRACTICE_WFB_SLOT_DEADLINES_RECORDER_TERMINAL_DESIGN.md)§8.3。
 
 ## 1 変更と連続経路
 
@@ -14,7 +14,7 @@ Date: 2026-11-05 / 基準HEAD: `e4b87d7` / Status: **合成依存限定・未コ
 - stop_requested自身の保存失敗後は再帰保存しない。create失敗はhandle未取得／cleanup not_started、write途中失敗はpartial_unverifiedとし、同じ1 close枠だけを使う。
 - 固定通知のthrowは通知境界だけをspyで故障注入するbranch対照。Store通知、recorder通知の副作用前／後、両方のthrow、観測停止通知throw、部分生成との組合せを確認する。正常transcriptをmockした比較結果へ置き換えない。
 
-明示cancelは現行recorderの最終既知時刻をcheckpointへ使う。通知時刻を新規採取したとは扱わない。pollによるD_stop検出では279000、明示通知のfull列では最終既知122000であることをそれぞれ確認した。両通知throwと取得済みhandleのclose正常／throwも組み合わせ、Pendingが回収／診断固定より先に進まないことを確認した。
+明示cancelは現行recorderの最終既知時刻をcheckpointへ使う。通知時刻を新規採取したとは扱わない。pollによるD_stop検出では279000、明示通知のfull列では最終既知122000であることをそれぞれ確認した。両通知throwと取得済みhandleのclose正常／throwも組み合わせ、Pendingが回収／診断固定より先に進まないことを確認した（通知中のPending確認は当初無効で、§5で修正した）。
 
 runtimeソース／設定は変更しない。試験専用kernelだけに、発見した以下の差分を実装した。
 
@@ -76,4 +76,31 @@ CPU work unitへの換算・統合会計・caller側呼出し数のcap、driver�
 | 静的build／配布境界 | src限定build・tests除外・package filesのtests不含。src 183ファイルに新private受付閉鎖／kernel参照なし。private閉鎖継続をexportしない。archive作成0 |
 | `bdo git -c core.fsmonitor=false diff --check` | 成功 |
 
-全体回帰・実npm pack／dry-run・配布物展開／production install・実保存・実通信・OS操作は未実施。静的境界確認を実梱包や実機検証の成功とは呼ばない。コミット／Pushも行っていない。
+本節の実行時点では全体回帰・実npm pack／dry-run・配布物展開／production install・実保存・実通信・OS操作は未実施。全体回帰の結果は§5を参照。静的境界確認を実梱包や実機検証の成功とは呼ばない。コミット／Pushも行っていない。
+
+## 5 レビュー修正（2026-11-06）
+
+`9e12d9a`のレビューで、kernelと費目の式に不具合は見つからなかった。テストと記録の次の点を修正した。§4の件数は修正前の値として残す。
+
+- **無効なassert**: throwするmock内の`expect`は、失敗しても通知の`catch`に吸収される。期待値を意図的に誤った値へ変えても33件すべて成功することを確認した。mock内では値の取得だけを行い、unwind後にassertする形へ変更した。
+- **通知中のPending**: Store通知とrecorder通知の各区間で、終端要求がPendingに留まることを確認した。Store通知中は受付が閉鎖済みであること、通知順がStore→recorderであることも確認する。
+- **通知claim**: 戻った観測停止通知は再入と再呼出しでも1回であること、`attempted`／`returned`の遷移、owner／recorder生成失敗時の`not_present`、`snapshot().notifications`の凍結と別objectであることを追加した。
+- **費目上界の根拠**: EINTR capが進行で戻らないこと（`1,EINTR`の3回繰返しでW=6、理由`retry`）と、EINTRがwrite attempt capへ計上されること（A=3でW=3、理由`limit`）を追加した。
+- **試験名**: 観測停止通知throwの試験は、致命的通知が`stop_requested`を発行し、終端では追加されないことを示す名前とassertへ変更した。
+
+ミューテーションは新しい通知経路と費目上界を対象に43件を実施した。修正前は対象ファイルで27件、関連7 test files全体で28件を検出し、15件が生存した。修正後は対象ファイルで41件を検出し、生存していた14件はそれぞれ新しいassertで失敗することを確認した。
+
+| 修正後も対象ファイルで生存 | 理由 |
+|---|---|
+| `recorder-once-removed` | 等価。`#notifyRecorder`は`#fatal`からだけ呼ばれ、`#fatal`はphaseにより一度しか進まない |
+| `construct-never-closed` | 本ファイルの範囲外。既存の`recorder-terminal.test.ts`のStore生成失敗対照が検出する |
+
+| 修正後の実行 | 結果 |
+|---|---|
+| `tests/review/recorder-continuous.test.ts` | 39件成功 |
+| 全テスト | 295ファイル、14,273件成功、失敗0 |
+| repo全体の`npm run lint` | エラー0、警告374 |
+| `npm run build`、`node tests/review/package-http-classification.mjs` | 成功 |
+| 変更テストの型検査、`git diff --check` | 成功 |
+
+実npm pack／配布物展開・実保存・実通信・OS操作は未実施のまま。上界の適用範囲と保証しないものは§3から変更しない。

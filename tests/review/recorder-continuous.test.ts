@@ -64,12 +64,13 @@ describe('DT-C continuous stop, FIFO save and terminal', () => {
   it.each(['ok', 'throw'] as const)('finishes acquired-handle cleanup despite both notification throws, close=%s', close => {
     const f = fixture(); f.observing(); f.set(279000); f.root.poll(); f.faults.close = close;
     const before = f.root.snapshot().recorder!, write = f.input.ops.writeOnce;
-    const store = vi.spyOn(f.store, 'cancel').mockImplementation(() => {
-      expect(f.finish()).toBe('Pending'); throw Error('SECRET_CANCEL');
-    });
+    // A failing expect inside a throwing mock is swallowed by the notification catch: observe here, assert after unwind.
+    let requested: string | undefined;
+    const store = vi.spyOn(f.store, 'cancel').mockImplementation(() => { requested = f.finish(); throw Error('SECRET_CANCEL'); });
     const recorder = vi.spyOn(f.recorder, 'recorderFailure').mockImplementation(() => { throw Error('SECRET_RECORDER'); });
     f.input.ops.writeOnce = (...args) => { f.root.checkpoint(); return write(...args); }; // boundary reentry after handle acquisition
     expect(f.saveHead()).toBe(false);
+    expect(requested).toBe('Pending');
     const after = f.root.snapshot();
     expect(after).toMatchObject({ reason: 'binding', notifications: { store: 'threw', recorder: 'threw' },
       terminal: { state: 'Committed', claims: 1 } });
@@ -174,12 +175,14 @@ describe('DT-C continuous stop, FIFO save and terminal', () => {
       terminal: { state: 'NotRequested', claims: 0, reason: 'observation_not_started', from: 'Gated', to: 'Gated' } });
     expect(JSON.stringify(result.diagnostic)).not.toContain('SECRET');
   });
-  it('contains an observation-stop notification throw and closes without inventing a stop checkpoint', () => {
+  it('contains an observation-stop notification throw; only the fatal recorder notice issues stop, terminal adds no checkpoint', () => {
     const f = fixture(); f.observing(); f.set(279000);
     const cancel = vi.spyOn(f.recorder, 'cancel').mockImplementation(() => { throw Error('SECRET_STOP'); });
     expect(() => f.root.observeStop()).not.toThrow();
-    expect(f.root.snapshot()).toMatchObject({ phase: 'Stopped', reason: 'notification', notifications: { observation: 'threw' } });
+    expect(f.root.snapshot()).toMatchObject({ phase: 'Stopped', reason: 'notification',
+      notifications: { observation: 'threw', recorder: 'returned' }, recorder: { reason: 'recorder' } });
     const before = f.root.snapshot().recorder!;
+    expect(before.checkpoints.map(c => c.trigger)).toEqual(['child_started', 'stop_requested']);
     expect(f.finish()).toBe('Committed');
     expect(f.root.snapshot().recorder!.checkpoints).toEqual(before.checkpoints);
     expect(f.root.snapshot().recorder!.axes).toEqual(before.axes);
@@ -189,13 +192,23 @@ describe('DT-C continuous stop, FIFO save and terminal', () => {
   it('contains a throwing Store notification, still notifies recorder and never restarts saving', () => {
     const f = fixture(); f.observing(); f.set(279000); f.root.poll();
     const cp = f.root.checkpoint()!, claim = f.root.prepare(f.root.run, f.root.recorder, f.root.store, cp)!;
+    const original = f.recorder.recorderFailure.bind(f.recorder), order: string[] = [];
+    let requested: string | undefined;
+    let duringStore: ReturnType<typeof f.root.snapshot> | undefined, duringRecorder: ReturnType<typeof f.root.snapshot> | undefined;
     const cancel = vi.spyOn(f.store, 'cancel').mockImplementation(() => {
-      expect(f.finish()).toBe('Pending');
-      expect(f.root.snapshot()).toMatchObject({ notifications: { store: 'attempted' }, terminal: { state: 'Pending' } });
+      order.push('store'); requested = f.finish(); duringStore = f.root.snapshot();
       throw Error('SECRET_NOTIFY');
     });
-    const notify = vi.spyOn(f.recorder, 'recorderFailure');
+    const notify = vi.spyOn(f.recorder, 'recorderFailure').mockImplementation(() => {
+      order.push('recorder'); f.root.observeStop(); // a fixed unwind attempt must not drain inside the notification
+      duringRecorder = f.root.snapshot(); return original();
+    });
     expect(() => f.root.discard(claim)).not.toThrow();
+    expect(order).toEqual(['store', 'recorder']);
+    expect(requested).toBe('Pending');
+    expect(duringStore).toMatchObject({ notifications: { store: 'attempted', recorder: 'not_requested' },
+      terminal: { state: 'Pending' }, store: { reason: 'cancelled' } }); // admission closed before the fallible notice
+    expect(duringRecorder).toMatchObject({ notifications: { store: 'threw', recorder: 'attempted' }, terminal: { state: 'Pending' } });
     expect(notify).toHaveBeenCalledTimes(1); expect(cancel).toHaveBeenCalledTimes(1);
     expect(f.root.snapshot()).toMatchObject({ phase: 'Stopped', reason: 'discarded',
       notifications: { store: 'threw', recorder: 'returned' }, store: { reason: 'cancelled' } });
@@ -203,6 +216,35 @@ describe('DT-C continuous stop, FIFO save and terminal', () => {
     expect(f.root.snapshot().recorder!.checkpoints.map(c => c.trigger)).toEqual(['child_started', 'stop_requested']);
     expect(JSON.stringify(f.root.snapshot())).not.toContain('SECRET');
     cancel.mockRestore(); notify.mockRestore();
+  });
+  it('claims a returning observation notice once across reentry and repeated observeStop', () => {
+    const f = fixture(); f.observing(); f.set(279000);
+    const original = f.recorder.cancel.bind(f.recorder);
+    let during: string | undefined;
+    const cancel = vi.spyOn(f.recorder, 'cancel').mockImplementation(() => {
+      during = f.root.snapshot().notifications.observation; f.root.observeStop(); return original();
+    });
+    expect(f.root.snapshot().notifications.observation).toBe('not_requested');
+    f.root.observeStop();
+    expect(during).toBe('attempted');
+    expect(f.root.snapshot().notifications.observation).toBe('returned');
+    const before = f.root.snapshot().recorder!;
+    f.root.observeStop();
+    expect(cancel).toHaveBeenCalledTimes(1);
+    expect(f.root.snapshot().recorder!.checkpoints).toEqual(before.checkpoints);
+    cancel.mockRestore();
+  });
+  it.each(['owner', 'recorder'] as const)('reports both absent children as not_present after %s construction failure', failAt => {
+    const f = fixture();
+    const result = SyntheticStoreRecorderBinding.create({}, { ...f.input, root: {}, failAt });
+    if (result.ok || typeof result.diagnostic === 'string') throw Error('expected diagnostic');
+    expect(result.diagnostic.notifications).toEqual({ store: 'not_present', recorder: 'not_present', observation: 'not_requested' });
+    expect(result.diagnostic.terminal).toMatchObject({ state: 'NotRequested', claims: 0, reason: 'not_constructed' });
+  });
+  it('exposes notification results only as a frozen copy', () => {
+    const f = fixture(), first = f.root.snapshot().notifications;
+    expect(Object.isFrozen(first)).toBe(true);
+    expect(f.root.snapshot().notifications).not.toBe(first);
   });
   it('keeps both throwing notification results and terminalizes only once after their unwind', () => {
     const f = fixture(); f.observing(); f.set(279000); f.root.poll();
@@ -270,6 +312,20 @@ describe('DT-C independent operation/byte bounds, not runtime admission', () => 
     expect(f.clocks() - start).toBeLessThanOrEqual(4 * W + 32);
     expect(f.events.filter(e => e.op === 'close')).toHaveLength(1);
     expect(f.root.snapshot().saves[0].attempt!.cleanup).toBe('confirmed');
+  });
+  it('caps EINTR over the whole save, not per progressing write', () => {
+    const f = fixture(); f.root.reserve(true);
+    f.progress.push(1, 'eintr', 1, 'eintr', 1, 'eintr');
+    expect(f.saveHead()).toBe(false);
+    expect(f.events.filter(e => e.op === 'write')).toHaveLength(6);
+    expect(f.root.snapshot().store!.reason).toBe('retry');
+  });
+  it('charges EINTR against the explicit write attempt cap', () => {
+    const f = fixture(3); f.root.reserve(true);
+    f.progress.push('eintr', 'eintr', 1);
+    expect(f.saveHead()).toBe(false);
+    expect(f.events.filter(e => e.op === 'write')).toHaveLength(3);
+    expect(f.root.snapshot().store!.reason).toBe('limit');
   });
   it.each(['full', 'one-byte', 'two-eintr'] as const)('checks measured successful save costs against the independent bound: %s', mode => {
     const f = fixture(); f.root.reserve(true);
