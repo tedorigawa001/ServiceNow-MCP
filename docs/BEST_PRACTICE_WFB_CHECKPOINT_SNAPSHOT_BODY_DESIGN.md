@@ -1,6 +1,8 @@
 # WF-B：checkpoint本文snapshot・容量・失敗時停止の詳細設計
 
-Version: draft-0.3 / Date: 2026-11-06 / 調査基準HEAD: `12dcc37` / レビュー修正の基準HEAD: `f8cd328` / strict値契約の基準HEAD: `ff2c56f`。
+Version: draft-0.4 / Date: 2026-11-06 / 調査基準HEAD: `12dcc37` / レビュー修正の基準HEAD: `f8cd328` / strict値契約の基準HEAD: `ff2c56f`。
+
+draft-0.3のレビュー修正: 観測停止後に作られたworker行の扱いを§5へ追記し、値契約の修正に揃えた。
 
 draft-0.3: [strict値契約・固定encoding・row幅](BEST_PRACTICE_WFB_SNAPSHOT_VALUE_CONTRACT.md)を追加。10 variant・全rowのfield順／enum／局所関係と構造幅を固定案として整理した。本文なし失敗variant・更新中worker／sampleのcutoff・反復counterを維持する。設計のみで、値型／parser実装・運用cap承認は行っていない。
 
@@ -100,7 +102,7 @@ cutoffは`source_event_ordinal`、`scope_tails`（scope_ordinal／last_seqのstr
 ## 5 時刻・対応・coverageの意味
 
 - ParentObservationのseq／ordinalはscope内の値。keyは`(scope_ordinal, seq)`とし、別scopeのseq=1を重複と誤判定しない。review／worker／requestの0は元契約の未対応sentinelだけに使い、正のcase／module／scope identityとは区別する。
-- 現行diagnostics.workersの配列rowはworker ordinalを持たない。factory throwでordinalだけ進む場合があるため、配列index＋1で補完しない。同factory／scopeのprivate対応証拠を供給するadapterは未実装で、対応不明なら接続拒否する。
+- 現行diagnostics.workersの配列rowはworker ordinalを持たない。factory throwでordinalだけ進む場合があるため、配列index＋1で補完しない。同factory／scopeのprivate対応証拠を供給するadapterは未実装で、対応不明なら接続拒否する。観測停止後に作られたworkerはordinalが0で対応を持たないので、inactive scopeの`worker_ordinal=null`として表し、番号を補完しない。
 - ReviewTestScopeの時刻はscope開始からのms。run開始からのmsへ足すには、同じ単調clockに結ぶscope開始receiptとchecked加算が必要。異なる原点をそのまま比較せず、UTCや残時間で作り直さない。原点が未証明なら停止し、0 offsetを補完しない。
 - at_ms／duration／cpuはfinite非負値、byte数・個数・ordinalはsafe非負整数（identityは正）。scope内event順の逆行と不正時間を拒否する。小数msを暗黙に丸めて既存観測を変えない。JSONの−0／NaN／Infinity、数値overflowは拒否する案とする。
 - WorkerLifecycleは連番のない行をその場で更新し、event記録が止まった後も更新される。workers行はtriggerとcutoffを確保する同じ同期区間でcopyした値だけを使い、後から読み直さない。後読みする方式は、行ごとの世代を供給する場合に限る。copyした行とevent tailの間に時間の整合を推論しない。

@@ -1,8 +1,10 @@
 # WF-B：snapshot strict値契約・固定encoding・row幅
 
-Version: draft-0.1 / Date: 2026-11-06 / 基準HEAD: `ff2c56f`。
+Version: draft-0.2 / Date: 2026-11-06 / 基準HEAD: `ff2c56f` / レビュー修正の基準HEAD: `04260f2`。
 
-Status: **実装前レビュー用の値契約。型・validator・encoder・raw JSON parser・合成試験は未実装。** [本文snapshot設計 draft-0.2](BEST_PRACTICE_WFB_CHECKPOINT_SNAPSHOT_BODY_DESIGN.md)の「全field・enum・row幅の固定」を具体化する。正式発行口閉鎖・全体受付無効・Unknown・VM／監視／telemetry調査保留を維持する。実装・実接続・実通信・実機操作・設定変更・再採取・保管操作・Pushを行わない。
+draft-0.1のレビュー修正: 観測停止後に作られたworker行を表せるよう`worker_ordinal`をnullableにした。`source_event_ordinal`の局所検査と、`prefix=complete`のときの`first_reason`を定めた。pinをrecorder生成の前提とした。`R_p`の導出を注記した。幅の上界は変わらず、実装・承認状態も変更していない。
+
+Status: **実装前レビュー用の値契約。型・validator・encoder・raw JSON parser・合成試験は未実装。** [本文snapshot設計](BEST_PRACTICE_WFB_CHECKPOINT_SNAPSHOT_BODY_DESIGN.md)の「全field・enum・row幅の固定」を具体化する。正式発行口閉鎖・全体受付無効・Unknown・VM／監視／telemetry調査保留を維持する。実装・実接続・実通信・実機操作・設定変更・再採取・保管操作・Pushを行わない。
 
 ここでいうcaptured／complete／gates=trueは**値の表現**であり、capture証拠・承認・保存／終了確認を発行しない。private owner／source／budget／cutoffへの結合・cap承認は別契約である。旧`wfb-checkpoint-1`・DT-A〜C・既存ParentObservationを変更しない。未承認のStore上限も引き上げない。
 
@@ -32,7 +34,7 @@ enumは後掲の完全な集合だけを受け、JSONではASCII文字列をquot
 共通field順は `version, sequence, trigger, at, binding, detail`。
 
 - version=`wfb-checkpoint-2`、sequence=1〜6、triggerは親の6値、at=U。
-- bindingのfield順は`source_digest:H, inventory_digest:H`。未pinのdigestを全zero等で補完しない。source喪失後の失敗variantは先行pinを使う。pin前の生成失敗はowner診断だけで、v2 frameを捏造しない。
+- bindingのfield順は`source_digest:H, inventory_digest:H`。未pinのdigestを全zero等で補完しない。source喪失後の失敗variantは先行pinを使う。pinはrecorder生成の前提とし、pinのないrecorderやqueue要素を作らない。pin前の生成失敗はowner診断だけで、v2 frameを捏造しない。
 - conditions_ready／child_startedは共通fieldだけ。snapshot_status／snapshot／snapshot_reasonは禁止。
 - 本文trigger4種のcapturedは共通fieldの後に`snapshot_status='captured', snapshot:Snapshot`。snapshot_reasonは禁止。
 - 本文trigger4種のunavailableは共通fieldの後に`snapshot_status='unavailable', snapshot:null, snapshot_reason:SnapshotReason`。本文を再読／captureする権限はない。
@@ -58,7 +60,7 @@ Snapshotのfield順は`version, generation, cutoff, coverage, modules, cases, sc
 
 - cutoffの順は`source_event_ordinal:U, scope_tails:ScopeTail[], sample_count:Z600`。ScopeTailは`scope_ordinal:P, last_seq:Z`。
 - coverageの順は`prefix:'complete'|'incomplete', run:'complete'|'incomplete', first_reason:CoverageReason`。
-- CoverageReasonはnone／source_unavailable／inventory_unknown／missing_case／missing_module／missing_scope／event_gap／capacity／clock／observer／protocol／secret。prefix incompleteでnoneは禁止、run completeならprefix completeかつnoneを要求する。正常な途中prefixはcomplete／run incomplete／noneでよい。
+- CoverageReasonはnone／source_unavailable／inventory_unknown／missing_case／missing_module／missing_scope／event_gap／capacity／clock／observer／protocol／secret。prefix incompleteでnoneは禁止、prefix completeならnoneを要求し、run completeならprefix completeを要求する。正常な途中prefixはcomplete／run incomplete／noneでよい。
 
 | row | field順・型 |
 |---|---|
@@ -66,7 +68,7 @@ Snapshotのfield順は`version, generation, cutoff, coverage, modules, cases, sc
 | Case | `case_ordinal:C, module_ordinal:M, state:CaseState, duration_ms:nullable(T), failure_class:FailureClass, scope_coverage:'observed'|'outside_scope'|'unknown'` |
 | Scope | `scope_ordinal:P, case_ordinal:C, origin_ms:T, log_count:Z, log_limit:4096, active:B, incomplete_reason:'none'|'capacity'|'clock'|'observer'` |
 | Event | `scope_ordinal:P, seq:O, at_ms:T, review:Z, worker:Z, request:Z, event:EventName, phase:Phase, detail:EventDetail, code:EventCode` |
-| Worker | `scope_ordinal:P, worker_ordinal:O, created_ms:T, ready_ms:nullable(T), analyze_started_ms:nullable(T), finish_started_ms:nullable(T), last_reply_ms:nullable(T), terminate_ms:nullable(T), exit_ms:nullable(T), exited:B` |
+| Worker | `scope_ordinal:P, worker_ordinal:nullable(O), created_ms:T, ready_ms:nullable(T), analyze_started_ms:nullable(T), finish_started_ms:nullable(T), last_reply_ms:nullable(T), terminate_ms:nullable(T), exit_ms:nullable(T), exited:B` |
 | Sample | `at_ms:T, scope:'root'|'owned_tree', cpu_ms:Metric(T), rss_bytes:Metric(U), owned_process_count:Metric(U)` |
 
 CaseStateはdiscovered／running／passed／failed／skipped／todo／not_run／unknown。CaseCountsはこの順の8 keyをすべて持ち、各値C0。ModuleStateはdiscovered／running／completed／failed／not_run／unknown。completedはmoduleの実行終端を表し、配下caseの全passedを意味しない。FailureClassはnone／assertion／module／hook／unhandled／collector／not_observed。
@@ -88,11 +90,12 @@ request>0ならphaseはanalyzeまたはfinish。0は元の未対応sentinelだ�
 
 | pure coreで検査する関係 | 補完してはいけないもの |
 |---|---|
-| modules／cases／scopes／scope_tailsは各ordinal昇順・重複なし。workersは(scope, worker)昇順・重複なし | sort／dedupで壊れた入力を受理しない。worker ordinalのgapはfactory throw等で生じ得るので欠番だけで拒否しない |
+| modules／cases／scopes／scope_tailsは各ordinal昇順・重複なし。workersはscope昇順で、同scope内は番号付き行をworker昇順・重複なしで先に置き、`worker_ordinal=null`の行をその後へ受理順に置く。nullは`active=false`のscopeだけに許可する | sort／dedupで壊れた入力を受理しない。worker ordinalのgapはfactory throw等で生じ得るので欠番だけで拒否しない。nullの行へ番号を補完しない |
 | 全caseのmodule参照、全scopeのcase参照、event／workerのscope参照が存在する | 私的なcase／scopeの登録済みという真偽は証明できない |
 | 各moduleのCaseCountsが同moduleを参照するCaseのstate別件数と一致し、総数も一致 | moduleのcompletedやcaseのpassedを配列位置から推測しない |
 | scope_tailsはscopesと同じscope集合。last_seq=log_count、scope別event seqは1から連続してlast_seqまで。同scope内at_msは非減少 | sourceからeventが落ちていない真偽、別scope原点の同一性はprivate側の証明を要する |
 | eventsはaggregateで受理した順を保持し、scope別seqを検査する。global時刻sortやscopeごとの並替えは禁止 | scope-local at_msの大小でrun内の前後を推論しない |
+| `source_event_ordinal=0`なら全配列が空でsample_count=0。`N_e≤source_event_ordinal` | source側で受理したevent数の真偽はprivate側の証明を要する |
 | sample_count=samples.length、sampleは受理したprefix順でrun相対at_msが非減少。同時刻の標本を勝手に削除しない | sample値の採取・owned_treeの所有・OS終了の証拠を推論しない |
 | active=trueならscope reason none、active=falseならnone以外。workerの非null時刻はcreated_ms以上、exitedとexit_ms非nullは同値 | event tailがworker行の更新をすべて表すとは仮定しない。exitとterminateの順も一律固定しない |
 | outside_scopeのcaseにscope行なし、observedのcaseに1件以上のscope行。unknownはcoverage不足を残す | scope外Unknownだけで不完全にせず、outside_scopeの正当性はprivate inventoryへ照合する |
@@ -120,7 +123,7 @@ ASCII key／enum／hexと上記scalarだけを使い、空白なし・key順固�
 | ScopeTail | R_t | 51 |
 | Snapshotの固定部（空配列の括弧、cutoff／coverage含む） | K | 321 |
 
-CaseCounts単独は127、coverage単独は78、空scope_tailsを持つcutoffは77 byte以下。recordの同じrowを二度課金しない。SはSnapshot objectそのもの（末尾LFなし）の幅上界とし、`S=321+177N_c+218N_m+227N_e+181N_s+409N_w+264N_p+51N_s`。N_s R_tを落とさない。
+`R_p`のMetricだけはstatusとvalueの対応を使い、variant別の最大（observedは`30+X`、それ以外は39）を幅とする。fieldごとに独立に足すと279になるが、到達できる最大は264である。CaseCounts単独は127、coverage単独は78、空scope_tailsを持つcutoffは77 byte以下。recordの同じrowを二度課金しない。SはSnapshot objectそのもの（末尾LFなし）の幅上界とし、`S=321+177N_c+218N_m+227N_e+181N_s+409N_w+264N_p+51N_s`。N_s R_tを落とさない。
 
 | trigger | detail上界 | captured envelope上界（LF込み） | 本文なし上界（LF込み） |
 |---|---:|---:|---:|
@@ -158,8 +161,8 @@ captured→unavailableは親設計どおりStore開始前だけ一度許す。so
 | 対照 | 必須の独立検証 |
 |---|---|
 | 10 variantと全enum | 既知値・不足／未知field・null／禁止field・statusの不一致。JSONのcaptured／completeだけで証拠を発行しない |
-| 全row・関係 | case/module集計、scope/tail集合、local seq、worker gap、global event原順序、metricのnullと0を区別 |
-| 幅と算術 | 上記object式とは別のgolden文字列、行数0／1／上限、N_s R_t、末尾LF、overflow、numeric token幅の境界 |
+| 全row・関係 | case/module集計、scope/tail集合、local seq、worker gap、worker_ordinal=nullの位置とactive=true時の拒否、source_event_ordinal=0と件数の矛盾、coverage 3項目の組合せ、global event原順序、metricのnullと0を区別 |
+| 幅と算術 | 上記object式とは別のgolden文字列、行数0／1／上限、N_s R_t、Metricのvariant別最大、末尾LF、overflow、numeric token幅の境界 |
 | value parser | accessor／Proxy／prototype／cycle／sparse array等を拒否し、hookを実行しない。raw JSONのduplicate-key試験は別parser未実装なら未実施と明記 |
 | 失敗 | 小さな合成capで不足を拒否し、cap引上げ／間引き／v1 fallback・保存0。固定理由だけ返しraw値／秘密を出さない |
 
