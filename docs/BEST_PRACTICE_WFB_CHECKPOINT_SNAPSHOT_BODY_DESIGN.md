@@ -1,6 +1,8 @@
 # WF-B：checkpoint本文snapshot・容量・失敗時停止の詳細設計
 
-Version: draft-0.4 / Date: 2026-11-06 / 調査基準HEAD: `12dcc37` / レビュー修正の基準HEAD: `f8cd328` / strict値契約の基準HEAD: `ff2c56f`。
+Version: draft-0.5 / Date: 2026-11-06 / 調査基準HEAD: `12dcc37` / レビュー修正の基準HEAD: `f8cd328` / strict値契約の基準HEAD: `ff2c56f`。
+
+draft-0.5: [strict値契約§9](BEST_PRACTICE_WFB_SNAPSHOT_VALUE_CONTRACT.md)の内部型・10 variant・件数／encoded上界・局所関係を合成専用coreとして実装した。[検証記録](E2E_BEST_PRACTICE_WFB_SNAPSHOT_VALUE_CORE_2026-11-06.md)。private capture・集約source・本文encoder／保存への接続はない。
 
 draft-0.3のレビュー修正: 観測停止後に作られたworker行の扱いを§5へ追記し、値契約の修正に揃えた。
 
@@ -8,7 +10,7 @@ draft-0.3: [strict値契約・固定encoding・row幅](BEST_PRACTICE_WFB_SNAPSHO
 
 draft-0.1のレビュー修正: 採取器の失敗時や観測開始前に本文を固定できず`stop_requested`を作れない矛盾を、本文なし失敗variant（§3.1）で解消した。recorderの停止理由と`cause`の対応を追加した。現行Store上限は契約最大値に収まらないと明記し、上限見直しをStore接続の前提とした。`cutoff`がworker／sampleも固定するようにし、容量式へ`scope_tails`・添字の定義・write slice枠を追加した。反復counterの所有者と枠を定めた。実装・承認状態は変更していない。
 
-Status: **設計のみ。型・parser・集約・capture・本文保存は未実装、合成受入試験も未実施。** 正式発行口閉鎖・全体受付無効・Unknown・VM／監視／telemetry調査保留を維持する。実装・実接続・実通信・実機操作・再採取・証拠保管・設定変更・Pushは行わない。容量／時間枠・保存先・保持期間・運用capの承認は代替しない。
+Status: **型・strict値検査・局所関係と上界計算のみ合成実装済み。raw JSON parser・集約・capture・本文保存と本文保存の合成受入は未実装／未実施。** 正式発行口閉鎖・全体受付無効・Unknown・VM／監視／telemetry調査保留を維持する。証拠発行・実接続・実通信・実機操作・再採取・証拠保管・設定変更・Pushは行わない。容量／時間枠・保存先・保持期間・運用capの承認は代替しない。
 
 親は[固定採取器契約](BEST_PRACTICE_WFB_FIXED_RECORDER_CONTRACT.md)§4と[Store／recorder接続契約](BEST_PRACTICE_WFB_STORE_RECORDER_BRIDGE_DESIGN.md)。[DT-A〜C](BEST_PRACTICE_WFB_SLOT_DEADLINES_RECORDER_TERMINAL_DESIGN.md)の期限・FIFO・一度限りack・通知分離・terminal処理は維持する。本書の型名・版名は提案で、利用可能な発行口ではない。
 
@@ -163,7 +165,9 @@ SnapshotCustodyは再保存権限や自動復旧口を持たない。ackで責�
 
 信頼済みtest_terminal受理前のcoverage欠落はmeasurement incompleteの入力になる。受理後のencoding／Store／cleanup失敗では、既受理のtest_result／measurementを変更しない。後着の矛盾で先行completeの根拠自体が疑わしくなった場合も黙って結果を書き換えず、別のcoverage conflict診断とUnknownを残し、run保全／比較許可を拒否する。四軸の更新ownerと受理順の厳密写像は本文接続前に確認する。
 
-## 9 合成受入条件（未実施）
+## 9 合成受入条件（本文接続は未実施）
+
+draft-0.5でBS01・BS03〜06・BS12の**純粋値側だけ**を部分検証した（[記録](E2E_BEST_PRACTICE_WFB_SNAPSHOT_VALUE_CORE_2026-11-06.md)）。BS02のprivate同一性、source原点／cutoff、raw bytes parser、本文create／保存・capture・custody・compiled実行等は未検証で、下表全体を完了にはしない。
 
 | ID | 対照 | 必須結果 |
 |---|---|---|
@@ -186,7 +190,7 @@ golden本文・UTF-8長・件数・counter・操作列は実装のencoder／calc
 
 ## 10 未確認・承認待ち・次の実装範囲
 
-1. **最初の実装候補**: [strict値契約](BEST_PRACTICE_WFB_SNAPSHOT_VALUE_CONTRACT.md)の内部値型／10 variant・件数／encoded上界の純粋計算・局所関係検査だけを合成依存で追加する。旧v1を維持し、証拠発行・本文保存・capture成功はまだ接続しない。全field・enum・row幅の固定案を実装前レビューの基準とし、実装は別の明示指示で開始する。
+1. **最初の純粋実装は実施済み**: [strict値契約§9](BEST_PRACTICE_WFB_SNAPSHOT_VALUE_CONTRACT.md)の内部値型／10 variant・件数／encoded上界・局所関係検査を合成専用で追加した。旧v1を維持し、証拠発行・本文保存・capture成功は未接続。raw bytes parser・encoder・統合費目は残課題で、後続実装は別の明示指示を要する。
 2. 次にprivate aggregate／capture claim・cutoff・immutable capsuleと有限custodyを合成issuer限定で実装する。最終discard／所有移譲を先に固定し、Store上限の見直し（§6）を別途承認した後に、v2同bytesのStore接続へ進む。各段階は別の明示指示を要する。
 3. reporter／sampleの実schema・既存artifactの版と上限、動的case／retry／inventory、scope原点の供給・case対応、source世代の固定方法は未確認。実reporterや過去artifactを取得・起動したとは扱わない。
 4. row幅はstrict値契約の構造上界案として整理したが、新byte／work cap、収集／copy／encode／再読scratchと累積予約、実保存先・保持期間・運用時間枠は未導出／未承認。capが不明なまま正式受付を有効にしない。

@@ -1,10 +1,12 @@
 # WF-B：snapshot strict値契約・固定encoding・row幅
 
-Version: draft-0.2 / Date: 2026-11-06 / 基準HEAD: `ff2c56f` / レビュー修正の基準HEAD: `04260f2`。
+Version: draft-0.3 / Date: 2026-11-06 / 基準HEAD: `ff2c56f` / レビュー修正の基準HEAD: `04260f2` / 純粋core実装基準HEAD: `70cbffb`。
+
+draft-0.3: 合成依存限定の内部値型・10 variant・件数／encoded上界・局所関係検査を実装した（§9）。[検証記録](E2E_BEST_PRACTICE_WFB_SNAPSHOT_VALUE_CORE_2026-11-06.md)。旧v1・既存保存経路には接続しない。
 
 draft-0.1のレビュー修正: 観測停止後に作られたworker行を表せるよう`worker_ordinal`をnullableにした。`source_event_ordinal`の局所検査と、`prefix=complete`のときの`first_reason`を定めた。pinをrecorder生成の前提とした。`R_p`の導出を注記した。幅の上界は変わらず、実装・承認状態も変更していない。
 
-Status: **実装前レビュー用の値契約。型・validator・encoder・raw JSON parser・合成試験は未実装。** [本文snapshot設計](BEST_PRACTICE_WFB_CHECKPOINT_SNAPSHOT_BODY_DESIGN.md)の「全field・enum・row幅の固定」を具体化する。正式発行口閉鎖・全体受付無効・Unknown・VM／監視／telemetry調査保留を維持する。実装・実接続・実通信・実機操作・設定変更・再採取・保管操作・Pushを行わない。
+Status: **合成専用の型・値validator・上界計算と局所関係試験を実装。encoder・raw JSON parser・実source写像・capture・本文保存は未実装。** [本文snapshot設計](BEST_PRACTICE_WFB_CHECKPOINT_SNAPSHOT_BODY_DESIGN.md)の「全field・enum・row幅の固定」を具体化する。正式発行口閉鎖・全体受付無効・Unknown・VM／監視／telemetry調査保留を維持する。証拠発行・実接続・実通信・実機操作・設定変更・再採取・保管操作・Pushを行わない。
 
 ここでいうcaptured／complete／gates=trueは**値の表現**であり、capture証拠・承認・保存／終了確認を発行しない。private owner／source／budget／cutoffへの結合・cap承認は別契約である。旧`wfb-checkpoint-1`・DT-A〜C・既存ParentObservationを変更しない。未承認のStore上限も引き上げない。
 
@@ -23,7 +25,7 @@ Status: **実装前レビュー用の値契約。型・validator・encoder・raw
 | B | boolean | 5 |
 | nullable(X) | Xまたは明示null | max(Xの幅,4) |
 
-Tのcanonical number tokenは32 ASCII文字以下とする。JSON数値のleading zero・不要な末尾zero等を許す別表記を追加しない。この幅は新値契約の**構造制約案**であり、Number formatterの全入力証明や運用capの承認ではない。将来のscalar formatterは、変換後tokenの幅と往復同値をchecked検査し、満たせない値を停止する。Number objectや任意callbackをformatterとして受け取らない。
+Tのcanonical number tokenは32 ASCII文字以下とする。JSON数値のleading zero・不要な末尾zero等を許す別表記を追加しない。この幅は新値契約の**構造制約案**であり、Number formatterの全入力証明や運用capの承認ではない。pure coreのscalar検査は変換後tokenの幅と往復同値をchecked検査し、満たせない値を停止する。body encoderは未実装。Number objectや任意callbackをformatterとして受け取らない。
 
 enumは後掲の完全な集合だけを受け、JSONではASCII文字列をquoteする。U等の数値を文字列へ置き換えることは不可。standalone snapshotのcontainer深さは最大4、checkpoint envelopeからは最大5（root objectを1、object／arrayの入れ子ごとに加算しscalarは数えない）。raw bytesからのUTF-8・duplicate key・token／work上限付きparserは別実装で、JSON.parse後の検査で代替しない。
 
@@ -154,7 +156,7 @@ N_c≤20000、N_m≤1000、N_e≤20000、N_p≤600。N_s≤明示L_scope、N_w�
 
 captured→unavailableは親設計どおりStore開始前だけ一度許す。sourceの再読／capture retryはしない。本文と失敗variantの一時copyが同時に存在する場合のscratch、元capsuleの退役／custody責務・固定discard証拠は後続契約を要する。本pure値契約は切替えや破棄を実行する権限を持たず、同値DATAを渡して既存claimを再開しない。失敗variant自体がencodeできなければ停止し、再帰しない。
 
-## 8 次の純粋実装と検証条件
+## 8 純粋実装の範囲と検証条件
 
 最初の実装は本契約の内部値型・strict variant・局所関係検査・shape／encoded上界の純粋計算だけ。新規合成fixtureで値を作っても、private capture／custody／issuer／receipt・Store保存には接続しない。旧v1・既存型／試験・正式閉鎖状態を維持する。
 
@@ -166,4 +168,21 @@ captured→unavailableは親設計どおりStore開始前だけ一度許す。so
 | value parser | accessor／Proxy／prototype／cycle／sparse array等を拒否し、hookを実行しない。raw JSONのduplicate-key試験は別parser未実装なら未実施と明記 |
 | 失敗 | 小さな合成capで不足を拒否し、cap引上げ／間引き／v1 fallback・保存0。固定理由だけ返しraw値／秘密を出さない |
 
-field・enum・幅の算術をMD作成時に読み取り専用の計算で照合したが、validator／encoderの合成試験を実施したとは扱わない。レビュー後、実装は別の明示指示で開始する。実sourceへの写像・capsule切替え／custody・Store上限見直し・運用capと実機承認は未確認／未承認のままである。
+draft-0.2時点ではfield・enum・幅の算術をMD作成時の読み取り専用計算で照合しただけで、validator／encoderの合成試験ではなかった。今回の明示指示により§9の純粋coreを追加したが、encoder・実sourceへの写像・capsule切替え／custody・Store上限見直し・運用capと実機承認は未確認／未承認のままである。
+
+## 9 合成専用coreの実装境界
+
+配置は`tests/review/fixtures/snapshot-value-core.ts`、試験は`tests/review/snapshot-value.test.ts`。依存はProxyの非実行判定用`node:util.types.isProxy`のみ。実台帳・clock・recorder・Store・runtimeのimportはない。`src`／build／packageの入口は変更しない。`CheckpointValue`は2 control＋4 captured＋4 unavailableのreadonly unionであり、nominalな発行証拠ではない。
+
+| 純粋API | 受付・返却 |
+|---|---|
+| `validateCheckpointValue(value, limits)` | 固定field順のown-data record／dense標準arrayを検査し、入力参照を残さず全containerをcopy／freezeする。局所関係を照合した`non_executable_value`・実測shape・当該variantのencoded上界・workだけを返す。bytes／receipt／保存関数は返さない |
+| `calculateSnapshotBounds(shape, limits)` | shapeの順は`cases, modules, events, scopes, workers, samples`。件数上限・scope局所aggregate上限とchecked算術を検査し、S、最悪captured=S+449、control=500、6control=3000を返す。渡されたshapeの真正性は証明しない |
+
+limitsの固定順は`max_scopes, max_workers, max_nodes, max_work, max_snapshot_bytes, max_control_bytes, max_file_bytes`。全て明示の正safe整数で、0／欠落／余分fieldを拒否する。これは**合成呼出しの拒否閾値**で、本番cap承認ではない。validatorはcapturedならSと当該frame上界、control／unavailableなら当該本文なし上界を検査する。standalone計算器は最悪captured・500を検査する。3000は構造式の返値だけで、予約操作やその受付を実行しない。
+
+内部計数は`structural, relation, arithmetic, number_formatting, copies`とその総和を分ける。limitsの固定初期計数8、各record入口／field・array入口／index・scalar／discriminator検査、明示の関係検査／索引処理、上界式のchecked加算／乗算、数値のintrinsic formatter呼出し＋token長、copyしたscalar／containerをそれぞれ計数する。enumの有限比較等は当該scalar単位に含む。`max_nodes`はstructural計数、`max_work`は総和の上限であり、実CPU命令数・allocator byte・DT-Cのclock／copy式ではない。失敗は`schema / relation / limit / overflow / invalid_value`だけで、raw値・例外・秘密は返さない。
+
+数値は捕捉したintrinsic Number formatterで32文字以下・往復同値を確認し、小数を丸めない。これはbody encoderではない。fieldを読むgetter・toJSON・外部iteratorは呼ばず、Proxyはreflection前に拒否する。schemaが有限で再帰参照を持たないためcycleは許可される終端型へ到達できず拒否される。異scopeのevent原順序・worker欠番・inactive scope末尾の複数null worker・同時刻sampleを維持する。
+
+**未確認:** raw bytesのUTF-8／duplicate key／token制限、任意unknownに対するnative reflectionの一時heapと実時間、Number formatter全binary64入力の証明、実reporter／inventory／worker世代／cutoffの真正性、統合work／scratch費、private owner・予算・custody結合、発行・capture・保存は未実装／未承認。合成成功やJSONのcompleteを根拠にUnknownを確認済みへ変えない。
