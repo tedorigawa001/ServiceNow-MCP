@@ -194,6 +194,8 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 ### Added
 
+- WF-B snapshot value core review hardening: an empty snapshot can no longer claim a complete run, and `passed` now conflicts with `not_run` cases blocked by a module or hook failure. Non-observed metrics, including `not_supported`, keep the prefix incomplete. New synthetic controls isolate each local relation, pin all ten encoded bounds, add maximal-width fixtures, hostile nested values, standalone caps and a hand-counted work breakdown. Bound formulas, runtime sources, formal issuance and whole-run admission are unchanged.
+
 - WF-B DT-C review hardening: assertions inside throwing notification mocks were swallowed by the notification catch, so they now observe in the mock and assert after unwind. New synthetic controls pin Pending during both notifications, admission closure before notification, Store-then-recorder order, one observation claim across reentry, `not_present` on owner/recorder construction failure, frozen notification snapshots, a whole-save EINTR cap and EINTR charging against the write attempt cap. The test kernel, cost formulas, runtime sources, deadlines, formal issuance and whole-run admission are unchanged.
 
 - WF-B DT-B terminal controls now pin unknown and boundary lateness, the pre-clock before the commit, one Store cancellation across repeated clock faults, nested clock reads, a pending request during a direct Store consume, the post-fatal epoch and queue counts, and handle cleanup after one clock fault. No fixture behaviour changes.

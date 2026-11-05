@@ -335,6 +335,190 @@ describe('count, work and encoded envelopes with independent controls', () => {
   });
 });
 
+describe('each local relation rejects on its own', () => {
+  type Body = ReturnType<typeof populated>;
+  const addEmptyScope = (s: Body) => {
+    s.scopes.push({ ...s.scopes[0], scope_ordinal: 2, log_count: 0 });
+    s.cutoff.scope_tails.push({ scope_ordinal: 2, last_seq: 0 });
+  };
+  const incomplete = (s: Body) => { s.coverage = { prefix: 'incomplete', run: 'incomplete', first_reason: 'capacity' }; };
+  // Every fixture breaks exactly one rule, so another check cannot answer `relation` in its place.
+  const isolated: [string, (s: Body) => void][] = [
+    ['run complete with incomplete prefix', s => { s.coverage = { prefix: 'incomplete', run: 'complete', first_reason: 'clock' }; }],
+    ['extra tail', s => { s.cutoff.scope_tails.push({ scope_ordinal: 2, last_seq: 0 }); }],
+    ['events beyond a nonzero source ordinal', s => {
+      s.cutoff.source_event_ordinal = 1; s.events.push({ ...s.events[0], seq: 2 });
+      s.scopes[0].log_count = 2; s.cutoff.scope_tails[0].last_seq = 2;
+    }],
+    ['rows under source ordinal zero without events', s => {
+      s.cutoff.source_event_ordinal = 0; s.events = []; s.scopes[0].log_count = 0; s.cutoff.scope_tails[0].last_seq = 0;
+    }],
+    ['completed module with a failure class', s => { s.modules[0].failure_class = 'module'; }],
+    ['scope of a missing case', s => { s.cases[0].scope_coverage = 'outside_scope'; s.scopes[0].case_ordinal = 2; }],
+    ['active scope with a reason', s => { s.scopes[0].incomplete_reason = 'capacity'; }],
+    ['inactive scope without a reason', s => { incomplete(s); s.scopes[0].active = false; }],
+    ['passed case with a failure class', s => { s.cases[0].failure_class = 'assertion'; }],
+    ['not_run case with a duration', s => { s.cases[0].state = 'not_run'; s.modules[0].case_counts = { ...zeroCounts(), not_run: 1 }; }],
+    ['observed case without a scope row', s => { s.scopes = []; s.cutoff.scope_tails = []; s.events = []; s.workers = []; }],
+    ['running case in a complete run', s => {
+      s.coverage.run = 'complete'; s.cases[0].state = 'running'; Object.assign(s.cases[0], { duration_ms: null });
+      s.modules[0].case_counts = { ...zeroCounts(), running: 1 };
+    }],
+    ['event of a missing scope beside a valid one', s => { s.events.push({ ...s.events[0], scope_ordinal: 2 }); }],
+    ['log count without events', s => { s.events = []; }],
+    ['workers out of scope order', s => { addEmptyScope(s); s.workers = [{ ...s.workers[0], scope_ordinal: 2 }, { ...s.workers[0], scope_ordinal: 1 }]; }],
+    ['inactive scope under a complete prefix', s => { s.scopes[0].active = false; s.scopes[0].incomplete_reason = 'capacity'; }],
+    ['unknown module under a complete prefix', s => { s.modules[0].state = 'unknown'; s.modules[0].failure_class = 'collector'; }],
+    ['unknown case under a complete prefix', s => {
+      s.cases[0].state = 'unknown'; s.cases[0].failure_class = 'not_observed'; Object.assign(s.cases[0], { duration_ms: null });
+      s.modules[0].case_counts = { ...zeroCounts(), unknown: 1 };
+    }],
+    ['not_supported metric under a complete prefix', s => { s.samples[0].cpu_ms = { status: 'not_supported', value: null }; }],
+  ];
+  it.each(isolated)('rejects %s', (_name, change) => {
+    const s = populated(); change(s);
+    expect(validateCheckpointValue(withBody(s), limits())).toEqual({ ok: false, reason: 'relation' });
+  });
+  it('keeps the unbroken fixture and a complete run accepted as the positive control', () => {
+    const s = populated(); s.coverage.run = 'complete';
+    expect(validateCheckpointValue(withBody(s), limits()).ok).toBe(true);
+  });
+  it('never takes an empty snapshot as a complete run', () => {
+    const empty = { ...frame(), snapshot: { ...body(), coverage: { prefix: 'complete', run: 'complete', first_reason: 'none' } } };
+    expect(validateCheckpointValue(empty, limits())).toEqual({ ok: false, reason: 'relation' });
+    expect(validateCheckpointValue(frame(), limits()).ok).toBe(true);
+  });
+  it('counts 4097 worker rows inside one of two scopes even when the aggregate fits', () => {
+    const s = populated(); addEmptyScope(s); incomplete(s);
+    s.scopes[0].active = false; s.scopes[0].incomplete_reason = 'capacity';
+    s.workers = Array.from({ length: 4097 }, () => ({ ...s.workers[0], worker_ordinal: null }));
+    expect(validateCheckpointValue(withBody(s), { ...limits(), max_workers: 5000 })).toEqual({ ok: false, reason: 'relation' });
+  });
+  it.each([
+    ['scope without case', { kind: 'collector', case_ordinal: null, module_ordinal: null, scope_ordinal: 1, reason: 'collector_failure' }],
+    ['case without module', { kind: 'collector', case_ordinal: 1, module_ordinal: null, scope_ordinal: null, reason: 'collector_failure' }],
+    ['module anomaly naming a case', { kind: 'module', case_ordinal: 1, module_ordinal: 1, scope_ordinal: null, reason: 'module_failure' }],
+    ['hook anomaly without module', { kind: 'hook', case_ordinal: null, module_ordinal: null, scope_ordinal: null, reason: 'hook_failure' }],
+  ])('rejects first_anomaly %s even without a body', (_name, detail) => {
+    expect(validateCheckpointValue({ ...frame('first_anomaly', 'unavailable'), detail }, limits())).toEqual({ ok: false, reason: 'relation' });
+  });
+  it('rejects a first_anomaly module missing from the body', () => {
+    const detail = { kind: 'module', case_ordinal: null, module_ordinal: 2, scope_ordinal: null, reason: 'module_failure' };
+    expect(validateCheckpointValue({ ...frame('first_anomaly'), detail, snapshot: populated() }, limits())).toEqual({ ok: false, reason: 'relation' });
+  });
+  it('rejects a first_anomaly case that belongs to another module', () => {
+    const s = populated(); s.modules.push({ ...s.modules[0], module_ordinal: 2, case_counts: zeroCounts() });
+    const detail = { kind: 'case', case_ordinal: 1, module_ordinal: 2, scope_ordinal: null, reason: 'case_failure' };
+    expect(validateCheckpointValue({ ...frame('first_anomaly'), detail, snapshot: s }, limits())).toEqual({ ok: false, reason: 'relation' });
+  });
+  const passed = { test_result: 'passed', measurement: 'complete' };
+  it('rejects passed against a failed module', () => {
+    const s = populated(); s.modules[0].state = 'failed'; s.modules[0].failure_class = 'module';
+    expect(validateCheckpointValue({ ...withBody(s), detail: passed }, limits())).toEqual({ ok: false, reason: 'relation' });
+    expect(validateCheckpointValue(withBody(s), limits()).ok).toBe(true);
+  });
+  it.each(['module', 'hook'])('rejects passed against a not_run case blocked by %s failure', failure => {
+    const s = populated(); s.cases[0].state = 'not_run'; s.cases[0].failure_class = failure;
+    Object.assign(s.cases[0], { duration_ms: null }); s.modules[0].case_counts = { ...zeroCounts(), not_run: 1 };
+    expect(validateCheckpointValue({ ...withBody(s), detail: passed }, limits())).toEqual({ ok: false, reason: 'relation' });
+    expect(validateCheckpointValue(withBody(s), limits()).ok).toBe(true);
+  });
+  it('keeps an unobserved not_run case compatible with passed', () => {
+    const s = populated(); s.cases[0].state = 'not_run'; s.cases[0].failure_class = 'not_observed';
+    Object.assign(s.cases[0], { duration_ms: null }); s.modules[0].case_counts = { ...zeroCounts(), not_run: 1 };
+    expect(validateCheckpointValue({ ...withBody(s), detail: passed }, limits()).ok).toBe(true);
+  });
+});
+
+describe('exact envelopes and maximal fixtures', () => {
+  it.each([
+    ['conditions_ready', 'captured', 486], ['child_started', 'captured', 340],
+    ['first_anomaly', 'captured', 321 + 449], ['slow_hint', 'captured', 321 + 389], ['test_terminal', 'captured', 321 + 379], ['stop_requested', 'captured', 321 + 413],
+    ['first_anomaly', 'unavailable', 500], ['slow_hint', 'unavailable', 440], ['test_terminal', 'unavailable', 430], ['stop_requested', 'unavailable', 464],
+  ] as const)('pins the %s/%s upper bound exactly', (trigger, status, encoded) => {
+    expect(validateCheckpointValue(frame(trigger, status), limits())).toMatchObject({ ok: true, value: { upper: { encoded } } });
+  });
+  const LONG = 1.2345678901234567e-300, BIG = Number.MAX_SAFE_INTEGER, H = 'f'.repeat(64);
+  const allCases = { ...zeroCounts(), discovered: 20000, running: 20000, passed: 20000, failed: 20000, skipped: 20000, todo: 20000, not_run: 20000, unknown: 20000 };
+  it.each<[string, unknown, number]>([
+    ['case', { case_ordinal: 20000, module_ordinal: 1000, state: 'discovered', duration_ms: LONG, failure_class: 'not_observed', scope_coverage: 'outside_scope' }, 177],
+    ['module', { module_ordinal: 1000, state: 'discovered', failure_class: 'not_observed', case_counts: allCases }, 218],
+    ['event', { scope_ordinal: BIG, seq: 4096, at_ms: LONG, review: 4096, worker: 4096, request: 4096, event: 'terminate_settle', phase: 'analyze', detail: 'duplicate', code: 'internal_review_error' }, 227],
+    ['scope', { scope_ordinal: BIG, case_ordinal: 20000, origin_ms: LONG, log_count: 4096, log_limit: 4096, active: false, incomplete_reason: 'capacity' }, 181],
+    ['worker', { scope_ordinal: BIG, worker_ordinal: 4096, created_ms: LONG, ready_ms: LONG, analyze_started_ms: LONG, finish_started_ms: LONG, last_reply_ms: LONG, terminate_ms: LONG, exit_ms: LONG, exited: false }, 409],
+    ['sample', { at_ms: LONG, scope: 'owned_tree', cpu_ms: { status: 'observed', value: LONG }, rss_bytes: { status: 'observed', value: BIG }, owned_process_count: { status: 'observed', value: BIG } }, 264],
+    ['tail', { scope_ordinal: BIG, last_seq: 4096 }, 51],
+  ])('keeps a maximal %s row within its width', (_name, row, width) => {
+    expect(JSON.stringify(row).length + 1).toBeLessThanOrEqual(width);
+  });
+  const common = (trigger: string, detail: unknown) => ({ version: 'wfb-checkpoint-2', sequence: 6, trigger, at: BIG, binding: { source_digest: H, inventory_digest: H }, detail });
+  it.each<[string, Record<string, unknown>]>([
+    ['conditions_ready', common('conditions_ready', { conditions_digest: H, approval_revision: BIG, gates: { offline_checked: true, approval_bound: true, scope_locked: true } })],
+    ['child_started', common('child_started', { lease_ordinal: BIG, startup: 'ready_wait' })],
+    ['stop_requested', { ...common('stop_requested', { cause: 'collector_failure', stop_reason: 'checkpoint', cleanup_state: 'not_requested' }), snapshot_status: 'unavailable', snapshot: null, snapshot_reason: 'observation_not_started' }],
+  ])('reaches the %s bodyless bound with a maximal frame', (_name, value) => {
+    const r = validateCheckpointValue(value, limits()); if (!r.ok) throw Error('fixture');
+    expect(JSON.stringify(value).length + 1).toBe(r.value.upper.encoded);
+  });
+});
+
+describe('hostile values at every container and the remaining caps', () => {
+  function hostile<T extends object>(target: T) {
+    const state = { calls: 0 };
+    const trap = () => { state.calls++; throw Error('secret'); };
+    const proxy = new Proxy(target, { get: trap, has: trap, ownKeys: trap, getPrototypeOf: trap, getOwnPropertyDescriptor: trap });
+    return { state, proxy };
+  }
+  it('rejects a root Proxy before the first field read', () => {
+    const { state, proxy } = hostile(frame());
+    expect(validateCheckpointValue(proxy, limits())).toEqual({ ok: false, reason: 'schema' }); expect(state.calls).toBe(0);
+  });
+  it('rejects a nested record Proxy without running a trap', () => {
+    const v = frame(), { state, proxy } = hostile(v.binding); v.binding = proxy;
+    expect(validateCheckpointValue(v, limits())).toEqual({ ok: false, reason: 'schema' }); expect(state.calls).toBe(0);
+  });
+  it('rejects a Metric Proxy without running a trap', () => {
+    const s = populated(), { state, proxy } = hostile(s.samples[0].cpu_ms); s.samples[0].cpu_ms = proxy;
+    expect(validateCheckpointValue(withBody(s), limits())).toEqual({ ok: false, reason: 'schema' }); expect(state.calls).toBe(0);
+  });
+  it('rejects an Array subclass, a non-enumerable field and a non-enumerable row', () => {
+    class Rows<T> extends Array<T> {}
+    const sub = withBody(); sub.snapshot.events = Rows.from(sub.snapshot.events);
+    expect(validateCheckpointValue(sub, limits())).toEqual({ ok: false, reason: 'schema' });
+    const field = frame(); Object.defineProperty(field, 'at', { value: 0, enumerable: false, writable: true, configurable: true });
+    expect(validateCheckpointValue(field, limits())).toEqual({ ok: false, reason: 'schema' });
+    const row = withBody(); Object.defineProperty(row.snapshot.events, '0', { value: row.snapshot.events[0], enumerable: false, writable: true, configurable: true });
+    expect(validateCheckpointValue(row, limits())).toEqual({ ok: false, reason: 'schema' });
+  });
+  it('rejects a time above the safe integer range', () => {
+    const s = populated(); s.cases[0].duration_ms = 2 ** 53;
+    expect(validateCheckpointValue(withBody(s), limits())).toEqual({ ok: false, reason: 'schema' });
+    s.cases[0].duration_ms = Number.MAX_SAFE_INTEGER;
+    expect(validateCheckpointValue(withBody(s), limits()).ok).toBe(true);
+  });
+  it('refuses checked addition overflow when every product still fits', () => {
+    const workers = Math.floor(Number.MAX_SAFE_INTEGER / 409), scopes = Math.ceil(workers / 4096);
+    const cap = { ...limits(), max_scopes: Number.MAX_SAFE_INTEGER, max_workers: Number.MAX_SAFE_INTEGER,
+      max_snapshot_bytes: Number.MAX_SAFE_INTEGER, max_file_bytes: Number.MAX_SAFE_INTEGER, max_nodes: 1000, max_work: 1000 };
+    expect(calculateSnapshotBounds({ ...emptyShape(), workers, scopes }, cap)).toEqual({ ok: false, reason: 'overflow' });
+  });
+  it('checks the local worker aggregate in the standalone calculator', () => {
+    expect(calculateSnapshotBounds({ ...emptyShape(), scopes: 1, workers: 4097 }, { ...limits(), max_workers: 5000 })).toEqual({ ok: false, reason: 'relation' });
+    expect(calculateSnapshotBounds({ ...emptyShape(), scopes: 1, workers: 4096 }, { ...limits(), max_workers: 5000 }).ok).toBe(true);
+  });
+  it.each([['max_snapshot_bytes', 321], ['max_file_bytes', 770], ['max_control_bytes', 500]] as const)('enforces standalone %s at equality and one below', (key, cap) => {
+    expect(calculateSnapshotBounds(emptyShape(), { ...limits(), [key]: cap }).ok).toBe(true);
+    expect(calculateSnapshotBounds(emptyShape(), { ...limits(), [key]: cap - 1 })).toEqual({ ok: false, reason: 'limit' });
+  });
+  it('pins each work category for a hand-counted child_started frame', () => {
+    // structural: 8 initial + peek 1 + trigger 1 + root 7 + 4 scalars + binding 5 + detail 5.
+    // copies: trigger 1 + 4 scalars + binding 3 + detail 3 + root 1. formatting: 3 one-digit numbers x2.
+    // relation: bounds 8. arithmetic: local 1 + 7 rows x2 + captured 1 + encoded 1.
+    const r = validateCheckpointValue(frame('child_started'), limits());
+    expect(r).toMatchObject({ ok: true, work: { structural: 31, copies: 12, number_formatting: 6, relation: 8, arithmetic: 17, total: 74 } });
+  });
+});
+
 describe('closed packaging and runtime boundary', () => {
   it('keeps the new core out of the runtime build and distributed roots', () => {
     const read = (path: string) => readFileSync(new URL('../../' + path, import.meta.url), 'utf8');

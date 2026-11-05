@@ -214,6 +214,7 @@ function relations(frame: CheckpointValue, c: Cost): void {
   const s = frame.snapshot;
   check((s.coverage.prefix === 'complete') === (s.coverage.first_reason === 'none'));
   check(s.coverage.run !== 'complete' || s.coverage.prefix === 'complete');
+  check(s.coverage.run !== 'complete' || s.modules.length + s.cases.length + s.scopes.length + s.events.length + s.workers.length + s.samples.length > 0);
   function index<T>(rows: readonly T[], ordinal: (row: T) => number): Map<number, T> {
     const out = new Map<number, T>(); let previous = 0;
     for (const row of rows) { const n = ordinal(row); check(n > previous); c.spend('relation'); out.set(n, row); previous = n; }
@@ -290,7 +291,7 @@ function relations(frame: CheckpointValue, c: Cost): void {
     if (d.scope_ordinal !== null) check(scopes.get(d.scope_ordinal)?.case_ordinal === d.case_ordinal);
   }
   if (frame.trigger === 'test_terminal' && frame.detail.test_result === 'passed') {
-    for (const row of s.cases) check(row.state !== 'failed' && row.failure_class !== 'unhandled');
+    for (const row of s.cases) check(row.state !== 'failed' && !['module', 'hook', 'unhandled'].includes(row.failure_class));
     for (const row of s.modules) check(row.state !== 'failed' && row.failure_class !== 'unhandled');
   }
 }

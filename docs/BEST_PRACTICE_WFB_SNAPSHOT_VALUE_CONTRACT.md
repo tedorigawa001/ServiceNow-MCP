@@ -1,6 +1,8 @@
 # WF-B：snapshot strict値契約・固定encoding・row幅
 
-Version: draft-0.3 / Date: 2026-11-06 / 基準HEAD: `ff2c56f` / レビュー修正の基準HEAD: `04260f2` / 純粋core実装基準HEAD: `70cbffb`。
+Version: draft-0.4 / Date: 2026-11-06 / 基準HEAD: `ff2c56f` / レビュー修正の基準HEAD: `04260f2` / 純粋core実装基準HEAD: `70cbffb` / core修正の基準HEAD: `b37214f`。
+
+draft-0.3のレビュー修正: `observed`以外のmetricは`not_supported`も含めてprefix incompleteとする規則に確定した。`passed`と矛盾するcaseに`not_run`のmodule／hook failureを含めた。空snapshotのrun complete拒否をcoreへ実装した。
 
 draft-0.3: 合成依存限定の内部値型・10 variant・件数／encoded上界・局所関係検査を実装した（§9）。[検証記録](E2E_BEST_PRACTICE_WFB_SNAPSHOT_VALUE_CORE_2026-11-06.md)。旧v1・既存保存経路には接続しない。
 
@@ -104,9 +106,9 @@ request>0ならphaseはanalyzeまたはfinish。0は元の未対応sentinelだ�
 
 Caseのdiscovered／runningはfailure_class=none、duration=null。passedはnone、failedはassertion／module／hook／unhandledのいずれか。skipped／todoはnoneかつduration=null。not_runはnone／module／hook／not_observedでduration=null。unknownはcollector／not_observedでduration=null。実行済みterminalのduration=nullは未観測であり、必要coverageが満たされたとは扱わない。
 
-Moduleのfailedはmodule／hook／unhandled、unknownはcollector／not_observed、それ以外はnoneとする。module completedでもfailed caseを保持できる。case unknown／scope対応unknown・inactive scope・必須metric unavailableがあればprefix incompleteと固定理由を要する。途中のdiscovered／runningや未観測のworker phaseだけで異常を捏造しない。
+Moduleのfailedはmodule／hook／unhandled、unknownはcollector／not_observed、それ以外はnoneとする。module completedでもfailed caseを保持できる。case unknown／scope対応unknown・inactive scope・`observed`以外のmetric（`not_supported`を含む）があればprefix incompleteと固定理由を要する。その環境でmetricを取得できなければrun completeにならず、実samplerの接続時に見直す。途中のdiscovered／runningや未観測のworker phaseだけで異常を捏造しない。
 
-run completeなら、局所的にもrunning／discovered／unknownのcaseや非終端moduleを残さず、必要な値と参照が揃うことを要求する。ただし、局所的に矛盾がなくても**期待対象集合・reporter終端・generation／cutoffの真正性を満たしたとはいえない**。private ownerが別途照合するまで候補DATAである。test_terminalがpassedなら、captured本文に明示failed case／module failure／unhandled errorがある矛盾を拒否する。未観測をfailedやpassedへ変換しない。
+run completeなら、局所的にもrunning／discovered／unknownのcaseや非終端moduleを残さず、必要な値と参照が揃うことを要求する。ただし、局所的に矛盾がなくても**期待対象集合・reporter終端・generation／cutoffの真正性を満たしたとはいえない**。private ownerが別途照合するまで候補DATAである。test_terminalがpassedなら、captured本文に明示failed case／module failure／unhandled error（`not_run`caseのmodule／hook failureを含む）がある矛盾を拒否する。未観測をfailedやpassedへ変換しない。
 
 実Vitestのstate／retry／parameterized case、inventory、scope原点、worker ordinalと更新世代、samplerの正規化は未接続。本契約はそれらのmapを承認しない。対応不明ならsource_unavailableで接続拒否し、配列index＋1やnull→0で埋めない。
 
