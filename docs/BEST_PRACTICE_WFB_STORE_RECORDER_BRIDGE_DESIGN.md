@@ -1,6 +1,8 @@
 # WF-B EvidenceStore／recorder：一度限り接続の差分設計
 
-Version: draft-0.9 / Date: 2026-11-05 / 基準HEAD: `fb91044` / SB-A実装基準HEAD: `2f1120f` / SB-B実装基準HEAD: `186cea6` / 試行別結果の実装基準HEAD: `85eb9ad`。
+Version: draft-0.10 / Date: 2026-11-05 / 基準HEAD: `fb91044` / SB-A実装基準HEAD: `2f1120f` / SB-B実装基準HEAD: `186cea6` / 試行別結果の実装基準HEAD: `85eb9ad`。
+
+draft-0.10: [DT-A検証記録](E2E_BEST_PRACTICE_WFB_SLOT_DEADLINES_DTA_2026-11-05.md)を追加。同run／budgetの固定期限表をメモリStoreへ供給する。BR13の期限区分を合成確認し、閉鎖後recorder終端はDT-B以降へ残す。
 
 draft-0.9: [slot固定期限表・閉鎖後recorder終端の差分設計](BEST_PRACTICE_WFB_SLOT_DEADLINES_RECORDER_TERMINAL_DESIGN.md)を追加。receiptに結ぶ区分別rowと、保存guardから独立した一度限りterminal claim、queue不変／未受理件数・診断保持を具体化した。設計のみで実装・承認状態は変更しない。
 
@@ -18,7 +20,7 @@ draft-0.3: [SB-A合成検証記録](E2E_BEST_PRACTICE_WFB_STORE_RECORDER_SBA_202
 
 draft-0.2のレビュー修正: 取消でStoreまで閉じると停止後の証拠を保存できないため、観測停止と致命的停止を分けた。Storeの期限をslot区分ごとの固定表とし、`manifest.json`を`D_save`後も保存できるようにした。cleanupの`late`を反映した。試行別の結果にStore側の変更が必要なことを差分へ明記した。線形化sectionの処理を補った。
 
-Status: **SB-A／SB-Bをメモリ内で合成検証。SB-Cの詳細診断・期限表と実保存は未対応。** 正式発行口閉鎖・全体受付無効・Unknown・VM／監視／telemetry調査保留を維持する。保存先・保持期間・運用cap／時間枠・停止方式は未承認。再採取・既存証拠copy／保管操作・実接続・実通信・設定変更・Pushを行わない。
+Status: **SB-A／SB-B・試行別診断・DT-A期限表をメモリ内で合成検証。recorder最終終端と実保存は未対応。** 正式発行口閉鎖・全体受付無効・Unknown・VM／監視／telemetry調査保留を維持する。保存先・保持期間・運用cap／時間枠・停止方式は未承認。再採取・既存証拠copy／保管操作・実接続・実通信・設定変更・Pushを行わない。
 
 親は[固定採取器契約](BEST_PRACTICE_WFB_FIXED_RECORDER_CONTRACT.md)と[EvidenceStore内部契約](BEST_PRACTICE_WFB_EVIDENCE_STORE_FAKE_CONTRACT.md)。既存の単体fakeとレビュー修正を維持し、試験専用の新しい結合経路だけを後続対象とする。以下の型名は提案であり、既存コードに存在するとは限らない。
 
@@ -156,7 +158,7 @@ SB-A／SB-B／試行別結果の時点の状況は次のとおり。実施済み
 | BR10 | 一部 | 可変buffer・subclassは単体Storeのみ。閉鎖後のpayload破棄は未実施 |
 | BR11 | 一部 | 観測中の明示取消は実施済み。`D_stop`到達から保存完了までの連続対照 |
 | BR12 | 一部 | `D_save`等値とReservedの取消は実施済み。残queueの順序の連続対照 |
-| BR13 | 未実施 | slot区分別の期限表が未実装 |
+| BR13 | DT-Aで合成実施済み | manifestはspy-only子Store対照。正式writer／集合の証明は範囲外 |
 
 oracleはbridge自身のmapper／encoder／guardを呼ばず、固定expected header・golden digest・イベント順・queue残数を独立定義する。各負の対照は狙った故障点へ到達したことをassertする。compile／配布物の負の対照ではprivate証拠を外部生成できず、試験登録口・driverが製品へ入らないことを確認する。線形化の中間故障を無理に注入して実装に新callbackを持ち込まない。
 
@@ -166,7 +168,7 @@ oracleはbridge自身のmapper／encoder／guardを呼ばず、固定expected he
 2. **SB-B（メモリ接続済み）**: 同snapshotの固定header encodingとStore保存／private消費／固定ackを接続。保存後の失敗・queue／未受理件数の区分を確認した。§8.2の範囲を参照。
 3. **SB-C**: [固定期限表・recorder終端の差分設計](BEST_PRACTICE_WFB_SLOT_DEADLINES_RECORDER_TERMINAL_DESIGN.md)のDT-A→DT-B→DT-Cで具体化する。同clock／停止owner、上位cleanup診断・部分生成の回収を連続fakeで確認する。SB-B時点でも期限／取消の最低限の共通guardを省略せず、詳細な境界対照をここで補完する。
 
-SB-Aの生成・準備claim、SB-Bのメモリ保存・線形化section、Store試行別結果の分類までを実装。slot区分別期限表・閉鎖後の最終終端・詳細費目は未実装。byte／work／時間の運用値、正式保存先、保管／削除、OS backendは未承認・未確認のまま。storeとrecorderが繋がっても、採取・保全・process監督の開始許可にはならない。
+SB-Aの生成・準備claim、SB-Bのメモリ保存・線形化section、Store試行別結果の分類、DT-Aのslot区分別期限表までを実装。閉鎖後の最終終端・追加clock失効・詳細費目は未実装。byte／work／時間の運用値、正式保存先、保管／削除、OS backendは未承認・未確認のまま。storeとrecorderが繋がっても、採取・保全・process監督の開始許可にはならない。
 
 試行別結果追加後は`persist`が`saveAttempt`を呼び、戻りのreceiptだけを既存private consumerへ渡す。診断には同じattempt objectを保持し、snapshotの過去cleanupから推定しない。従来の上位粗分類`attempted_unverified`は互換で残し、詳細は`attempt.disposition`でnot_started／create_failed／partial_unverified／savedを区別する。下位methodそのものがthrowして戻らなければattemptは未定義であり、証拠不足として扱う。以下§8.1の未実装一覧にある試行別結果と、§8.2の「試行別結果はSB-Cへ残る」は当時の記録で、この部分は今回解消した。
 

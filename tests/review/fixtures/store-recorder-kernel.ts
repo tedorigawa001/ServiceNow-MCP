@@ -4,7 +4,7 @@ import { createHash } from 'node:crypto';
 // Installed by class static blocks; deliberately never exported as friend/registration APIs.
 let boundAckReady: (recorder: FakeFixedRecorder, checkpoint: Checkpoint) => boolean;
 let boundAckCommit: (recorder: FakeFixedRecorder, checkpoint: Checkpoint) => void;
-let boundConsume: (store: FakeEvidenceStore, run: object, receipt: FakeSaveReceipt, expected: Saved) => boolean;
+let boundConsume: (store: FakeEvidenceStore, run: object, receipt: FakeSaveReceipt, expected: SavedFacts) => boolean;
 const shiftQueue = Function.prototype.call.bind(Array.prototype.shift) as (queue: Checkpoint[]) => Checkpoint | undefined;
 
 /** Legacy recorder state model; its bound ack continuation remains private to this module. */
@@ -218,6 +218,61 @@ export const RUN_FILES = Object.freeze([
   ...Array.from({ length: 6 }, (_, i) => `report.partial.${String(i + 1).padStart(4, '0')}.json`),
   'report.final.json', 'termination.json', 'analysis.json', 'manifest.json',
 ]);
+export type SlotCategory = 'evidence' | 'manifest';
+interface DeadlineRow { readonly category: SlotCategory | 'legacy'; readonly deadline: number; readonly cleanupDeadline: number }
+export interface SlotDeadlinePlan {
+  readonly version: 'wfb-slot-deadlines-1';
+  readonly startedAt: number; readonly stop: number; readonly confirm: number; readonly all: number;
+  readonly evidence: Readonly<DeadlineRow & { category: 'evidence' }>;
+  readonly manifest: Readonly<DeadlineRow & { category: 'manifest' }>;
+}
+declare const deadlineTableBrand: unique symbol;
+export interface FakeDeadlineTable { readonly [deadlineTableBrand]: true }
+const deadlineTables = new WeakMap<object, { run: object; budget: object; plan: SlotDeadlinePlan }>();
+/** Strict own DATA only: no getter, unknown key, symbol or caller-defined row mapping. */
+function fixedData(value: unknown, keys: readonly string[]): Record<string, unknown> | undefined {
+  try {
+    if (!value || typeof value !== 'object') return undefined;
+    const proto = Object.getPrototypeOf(value);
+    if (proto !== Object.prototype && proto !== null) return undefined;
+    const names = Reflect.ownKeys(value);
+    if (names.length !== keys.length || names.some(k => typeof k !== 'string' || !keys.includes(k))) return undefined;
+    const result: Record<string, unknown> = Object.create(null);
+    for (const key of keys) {
+      const d = Object.getOwnPropertyDescriptor(value, key);
+      if (!d || !('value' in d) || !d.enumerable) return undefined;
+      result[key] = d.value;
+    }
+    return result;
+  } catch { return undefined; }
+}
+export function planSlotDeadlines(value: unknown): SlotDeadlinePlan | undefined {
+  const input = fixedData(value, ['timing', 'cleanupMs', 'manifestCleanupMs']);
+  const t = fixedData(input?.timing, ['startedAt', 'outerMs', 'sessionDeadline', 'marginMs', 'reservations']);
+  const r = fixedData(t?.reservations, ['stop', 'force', 'confirm', 'flush', 'manifest', 'final']);
+  if (!input || !t || !r) return undefined;
+  const plan = planTime({ startedAt: t.startedAt as number, outerMs: t.outerMs as number,
+    sessionDeadline: t.sessionDeadline as number, marginMs: t.marginMs as number,
+    reservations: { stop: r.stop as number, force: r.force as number, confirm: r.confirm as number,
+      flush: r.flush as number, manifest: r.manifest as number, final: r.final as number } });
+  const cleanup = input.cleanupMs as number, manifestCleanup = input.manifestCleanupMs as number;
+  if (!plan || !positive(cleanup) || !positive(manifestCleanup)) return undefined;
+  const evidence = plan.stages[3] - cleanup, manifest = plan.stages[4] - manifestCleanup;
+  if (!natural(evidence) || !natural(manifest) || !(plan.stages[2] < evidence && evidence < plan.stages[3]
+    && plan.stages[3] < manifest && manifest < plan.stages[4] && plan.stages[4] < plan.all)) return undefined;
+  return Object.freeze({ version: 'wfb-slot-deadlines-1', startedAt: plan.startedAt, stop: plan.stop, confirm: plan.stages[2], all: plan.all,
+    evidence: Object.freeze({ category: 'evidence', deadline: evidence, cleanupDeadline: plan.stages[3] }),
+    manifest: Object.freeze({ category: 'manifest', deadline: manifest, cleanupDeadline: plan.stages[4] }) });
+}
+/** Standalone synthetic table issuer only; cannot authenticate a production budget or run. */
+export function createFakeDeadlineTable(run: object, budget: object, input: unknown) {
+  if (!run || typeof run !== 'object' || !budget || typeof budget !== 'object') return undefined;
+  const plan = planSlotDeadlines(input);
+  if (!plan) return undefined;
+  const table = Object.freeze({}) as FakeDeadlineTable;
+  deadlineTables.set(table, { run, budget, plan });
+  return Object.freeze({ table, plan });
+}
 export type StoreReason = 'binding' | 'limit' | 'clock' | 'deadline' | 'cancelled' | 'create'
   | 'write' | 'retry' | 'flush' | 'close' | 'reread' | 'digest';
 export type WriteResult = { kind: 'written'; bytes: number } | { kind: 'eintr' };
@@ -234,6 +289,9 @@ export interface StoreCaps {
   fileBytes: number; totalBytes: number; attempts: number; retries: number;
   deadline: number; cleanupDeadline: number;
 }
+export interface TableStoreCaps extends Pick<StoreCaps, 'fileBytes' | 'totalBytes' | 'attempts' | 'retries'> {
+  deadlineTable: FakeDeadlineTable; budget: object;
+}
 declare const receiptBrand: unique symbol;
 export interface FakeSaveReceipt { readonly [receiptBrand]: true }
 export interface SaveAttempt {
@@ -246,10 +304,13 @@ export interface SaveAttempt {
   readonly reason?: StoreReason | 'store_stopped';
   readonly rejection?: 'busy' | 'sticky';
   readonly reservedBytes: number;
+  readonly deadlineClass?: SlotCategory;
+  readonly deadlineVersion?: 'wfb-slot-deadlines-1';
 }
 export interface SaveAttemptResult { readonly receipt?: FakeSaveReceipt; readonly attempt: Readonly<SaveAttempt> }
 type MutableAttempt = { -readonly [K in keyof SaveAttempt]: SaveAttempt[K] };
-interface Saved { slot: string; size: number; digest: string }
+interface SavedFacts { slot: string; size: number; digest: string }
+interface Saved extends SavedFacts { row: DeadlineRow; tableOrigin: object }
 const sha256 = (bytes: Uint8Array) => createHash('sha256').update(bytes).digest('hex');
 // Intrinsic accessor: a subclass or a Proxy cannot misreport the size of the bytes it holds.
 const intrinsicByteLength = Object.getOwnPropertyDescriptor(Object.getPrototypeOf(Uint8Array.prototype), 'byteLength')!.get!;
@@ -267,7 +328,8 @@ export class FakeEvidenceStore {
         s.#consumed.add(receipt);
         if (run !== s.run || saved.slot !== expected.slot || saved.size !== expected.size || saved.digest !== expected.digest)
           return s.#fail('binding');
-        return s.#guard() && s.#guard();
+        if (saved.tableOrigin !== s.#tableOrigin || saved.row !== s.#row(saved.slot)) return s.#fail('binding');
+        return s.#guard(saved.row) && s.#guard(saved.row);
       } finally { s.#busy = false; }
     };
   }
@@ -279,16 +341,42 @@ export class FakeEvidenceStore {
   #consumed = new WeakSet<object>();
   #charged = 0;
   #cleanup: 'not_started' | 'confirmed' | 'late' | 'unconfirmed' = 'not_started';
+  #tableOrigin: object;
+  #legacyRow: DeadlineRow | undefined;
+  #tablePlan: SlotDeadlinePlan | undefined;
   private constructor(private readonly ops: EvidenceOps, private readonly root: object,
-    private readonly run: object, private readonly caps: Readonly<StoreCaps>, private readonly now: () => number) {}
-  static create(ops: EvidenceOps, root: object, run: object, caps: StoreCaps, now: () => number) {
+    private readonly run: object, private readonly caps: Readonly<Pick<StoreCaps, 'fileBytes' | 'totalBytes' | 'attempts' | 'retries'>>,
+    private readonly now: () => number, tableOrigin: object, legacy?: DeadlineRow, plan?: SlotDeadlinePlan) {
+    this.#tableOrigin = tableOrigin; this.#legacyRow = legacy; this.#tablePlan = plan;
+    this.#last = plan?.startedAt ?? 0;
+  }
+  static create(ops: EvidenceOps, root: object, run: object, input: StoreCaps | TableStoreCaps, now: () => number) {
+    let caps: StoreCaps | TableStoreCaps, binding: { run: object; budget: object; plan: SlotDeadlinePlan } | undefined;
+    let table: object | undefined;
+    try {
+      if ('deadlineTable' in input) {
+        const data = fixedData(input, ['fileBytes', 'totalBytes', 'attempts', 'retries', 'deadlineTable', 'budget']);
+        if (!data) return undefined;
+        caps = data as unknown as TableStoreCaps;
+        table = caps.deadlineTable;
+        binding = deadlineTables.get(table);
+        if (!binding || binding.run !== run || binding.budget !== caps.budget) return undefined;
+      } else caps = { ...input };
+    } catch { return undefined; }
     // Structural ceilings for this small fake, not approved production limits.
     if (!root || typeof root !== 'object' || !run || typeof run !== 'object'
       || !positive(caps.fileBytes) || caps.fileBytes > 65_536 || !positive(caps.totalBytes)
       || caps.totalBytes > 1_048_576 || caps.totalBytes < caps.fileBytes
-      || !positive(caps.attempts) || caps.attempts > 4096 || !natural(caps.retries) || caps.retries > 16
-      || !positive(caps.deadline) || !positive(caps.cleanupDeadline) || caps.cleanupDeadline <= caps.deadline) return undefined;
-    return new FakeEvidenceStore(ops, root, run, Object.freeze({ ...caps }), now);
+      || !positive(caps.attempts) || caps.attempts > 4096 || !natural(caps.retries) || caps.retries > 16) return undefined;
+    const limits = Object.freeze({ fileBytes: caps.fileBytes, totalBytes: caps.totalBytes, attempts: caps.attempts, retries: caps.retries });
+    if (binding && table) return new FakeEvidenceStore(ops, root, run, limits, now, table, undefined, binding.plan);
+    if (!('deadline' in caps) || !positive(caps.deadline) || !positive(caps.cleanupDeadline) || caps.cleanupDeadline <= caps.deadline) return undefined;
+    const row = Object.freeze({ category: 'legacy' as const, deadline: caps.deadline, cleanupDeadline: caps.cleanupDeadline });
+    return new FakeEvidenceStore(ops, root, run, limits, now, Object.freeze({}), row);
+  }
+  #row(slot: string): DeadlineRow | undefined {
+    if (!RUN_FILES.includes(slot)) return undefined;
+    return this.#legacyRow ?? (slot === 'manifest.json' ? this.#tablePlan?.manifest : this.#tablePlan?.evidence);
   }
   #fail(reason: StoreReason) { this.#reason ??= reason; return false; }
   #read(): number | undefined {
@@ -302,14 +390,14 @@ export class FakeEvidenceStore {
     const at = this.#read();
     return at !== undefined && (at < deadline || this.#fail('deadline'));
   }
-  #guard() {
-    if (this.#reason || !this.#clock(this.caps.deadline) || this.#reason) return false;
+  #guard(row: DeadlineRow) {
+    if (this.#reason || !this.#clock(row.deadline) || this.#reason) return false;
     try { if (this.ops.identity() !== this.root) return this.#fail('binding'); }
     catch { return this.#fail('binding'); }
-    return !this.#reason && this.#clock(this.caps.deadline) && !this.#reason;
+    return !this.#reason && this.#clock(row.deadline) && !this.#reason;
   }
   /** A reported release is confirmed before the cleanup reserve ends and late from then on; no readable time stays unconfirmed. */
-  #closeAttempt(handle: object, attempt: MutableAttempt) {
+  #closeAttempt(handle: object, attempt: MutableAttempt, row: DeadlineRow) {
     this.#cleanup = 'unconfirmed';
     attempt.closeAttempted = true;
     attempt.cleanup = 'unconfirmed';
@@ -319,17 +407,17 @@ export class FakeEvidenceStore {
     if (!ok) { attempt.cleanupReason = 'close'; return false; }
     const at = this.#read();
     if (at !== undefined) {
-      this.#cleanup = at < this.caps.cleanupDeadline ? 'confirmed' : 'late';
+      this.#cleanup = at < row.cleanupDeadline ? 'confirmed' : 'late';
       attempt.cleanup = this.#cleanup;
       if (this.#cleanup === 'late') attempt.cleanupReason = 'deadline';
     } else attempt.cleanupReason = 'clock';
     return true;
   }
-  #step(action: () => boolean, reason: StoreReason) {
-    if (!this.#guard()) return false;
+  #step(action: () => boolean, reason: StoreReason, row: DeadlineRow) {
+    if (!this.#guard(row)) return false;
     try { if (!action()) return this.#fail(reason); }
     catch { return this.#fail(reason); }
-    return this.#guard();
+    return this.#guard(row);
   }
   cancel() { this.#fail('cancelled'); }
   save(run: object, slot: string, bytes: Uint8Array): FakeSaveReceipt | undefined {
@@ -350,11 +438,17 @@ export class FakeEvidenceStore {
     if (this.#reason) { attempt.reason = 'store_stopped'; attempt.rejection = 'sticky'; return undefined; }
     this.#busy = true;
     let handle: object | undefined;
+    let row: DeadlineRow | undefined;
     let closed = false;
     this.#cleanup = 'not_started';
     try {
       if (run !== this.run || !RUN_FILES.includes(slot) || this.#slots.has(slot)) { this.#fail('binding'); return undefined; }
       this.#slots.add(slot); // spent even when validation or create fails
+      row = this.#row(slot);
+      if (!row) { this.#fail('binding'); return undefined; }
+      if (row.category !== 'legacy') {
+        attempt.deadlineClass = row.category; attempt.deadlineVersion = 'wfb-slot-deadlines-1';
+      }
       if (!(bytes instanceof Uint8Array)) { this.#fail('limit'); return undefined; }
       const size = realLength(bytes);
       if (size > this.caps.fileBytes || size > this.caps.totalBytes - this.#charged) { this.#fail('limit'); return undefined; }
@@ -368,13 +462,13 @@ export class FakeEvidenceStore {
         handle = this.ops.createExclusive(slot);
         attempt.handleAcquired = !!handle;
         return !!handle;
-      }, 'create')) return undefined;
+      }, 'create', row)) return undefined;
       let offset = 0, attempts = 0, retries = 0;
       while (offset < owned.byteLength) {
         if (attempts === this.caps.attempts) { this.#fail('limit'); return undefined; }
         attempts++;
         let outcome: WriteResult | undefined;
-        if (!this.#step(() => { outcome = this.ops.writeOnce(handle!, offset, owned.slice(offset)); return true; }, 'write')) return undefined;
+        if (!this.#step(() => { outcome = this.ops.writeOnce(handle!, offset, owned.slice(offset)); return true; }, 'write', row)) return undefined;
         if (outcome?.kind === 'eintr') {
           if (retries === this.caps.retries) { this.#fail('retry'); return undefined; }
           retries++;
@@ -382,18 +476,18 @@ export class FakeEvidenceStore {
           offset += outcome.bytes;
         } else { this.#fail('write'); return undefined; }
       }
-      if (!this.#step(() => this.ops.flushOnce(handle!), 'flush')) return undefined;
+      if (!this.#step(() => this.ops.flushOnce(handle!), 'flush', row)) return undefined;
       if (!this.#step(() => {
         closed = true; // one attempt even if it throws or cannot confirm release
-        return this.#closeAttempt(handle!, attempt);
-      }, 'close')) return undefined;
+        return this.#closeAttempt(handle!, attempt, row!);
+      }, 'close', row)) return undefined;
       let reread: Uint8Array | undefined;
-      if (!this.#step(() => { reread = this.ops.readBack(handle!, slot, this.caps.fileBytes); return reread instanceof Uint8Array; }, 'reread')) return undefined;
+      if (!this.#step(() => { reread = this.ops.readBack(handle!, slot, this.caps.fileBytes); return reread instanceof Uint8Array; }, 'reread', row)) return undefined;
       if (realLength(reread!) !== owned.byteLength) { this.#fail('reread'); return undefined; }
       if (sha256(reread!) !== digest) { this.#fail('digest'); return undefined; }
-      if (!this.#guard()) return undefined;
+      if (!this.#guard(row)) return undefined;
       const receipt = Object.freeze({}) as FakeSaveReceipt;
-      this.#receipts.set(receipt, Object.freeze({ slot, size: owned.byteLength, digest }));
+      this.#receipts.set(receipt, Object.freeze({ slot, size: owned.byteLength, digest, row, tableOrigin: this.#tableOrigin }));
       attempt.disposition = 'saved';
       return receipt;
     } catch {
@@ -407,8 +501,8 @@ export class FakeEvidenceStore {
         // Cleanup has a separate finite reserve and never resets the original failure.
         const at = this.#read();
         if (at === undefined) attempt.cleanupReason = 'clock';
-        else if (at >= this.caps.cleanupDeadline) { attempt.cleanupReason = 'deadline'; this.#fail('deadline'); }
-        else { try { this.#closeAttempt(handle, attempt); } catch { /* first operation reason retained */ } }
+        else if (at >= row!.cleanupDeadline) { attempt.cleanupReason = 'deadline'; this.#fail('deadline'); }
+        else { try { this.#closeAttempt(handle, attempt, row!); } catch { /* first operation reason retained */ } }
       }
       if (attempt.disposition !== 'saved') {
         attempt.disposition = attempt.handleAcquired ? 'partial_unverified' : attempt.createAttempted ? 'create_failed' : 'not_started';
@@ -426,8 +520,9 @@ export class FakeEvidenceStore {
       if (!saved || this.#consumed.has(receipt)) { this.#fail('binding'); return undefined; }
       this.#consumed.add(receipt); // pre-spend, including wrong-run or failed pre/post guard
       if (run !== this.run) { this.#fail('binding'); return undefined; }
-      if (!this.#guard() || !this.#guard()) return undefined;
-      return Object.freeze({ ...saved }); // DATA only, not another receipt
+      if (saved.tableOrigin !== this.#tableOrigin || saved.row !== this.#row(saved.slot)) { this.#fail('binding'); return undefined; }
+      if (!this.#guard(saved.row) || !this.#guard(saved.row)) return undefined;
+      return Object.freeze({ slot: saved.slot, size: saved.size, digest: saved.digest }); // DATA only; private row/origin stays hidden
     } finally { this.#busy = false; }
   }
   snapshot() { return Object.freeze({ reason: this.#reason, claimed: this.#slots.size, charged: this.#charged, cleanup: this.#cleanup }); }
@@ -462,6 +557,7 @@ export interface BindingInput {
   timing: Timing; root: object; ops: EvidenceOps; now: () => number;
   limits: Pick<StoreCaps, 'fileBytes' | 'totalBytes' | 'attempts' | 'retries'>;
   cleanupMs: number;
+  manifestCleanupMs: number;
   /** Fixed fault labels only, not injectable construction/ack continuations. */
   failAt?: 'owner' | 'recorder' | 'store';
 }
@@ -476,6 +572,7 @@ export class SyntheticStoreRecorderBinding {
   readonly recorder = token<BoundRecorder>();
   readonly store = token<BoundStore>();
   #runOrigin = Object.freeze({});
+  #budgetOrigin = Object.freeze({});
   #phase: Phase = 'Idle';
   #reason: Failure | undefined;
   #stage: 'owner' | 'recorder' | 'store' | 'ready' = 'owner';
@@ -509,10 +606,12 @@ export class SyntheticStoreRecorderBinding {
         marginMs: t.marginMs, reservations: { ...t.reservations } };
       const plan = planTime(pinned);
       const cleanupMs = input.cleanupMs;
-      if (!plan || !Number.isSafeInteger(cleanupMs) || cleanupMs <= 0
-        || plan.stages[3] - cleanupMs <= plan.stages[2]) throw Error();
+      const manifestCleanupMs = input.manifestCleanupMs;
+      const deadlines = createFakeDeadlineTable(owner.#runOrigin, owner.#budgetOrigin,
+        { timing: pinned, cleanupMs, manifestCleanupMs });
+      if (!plan || !deadlines) throw Error();
       owner.#plan = plan;
-      owner.#saveDeadline = plan.stages[3] - cleanupMs;
+      owner.#saveDeadline = deadlines.plan.evidence.deadline;
       owner.#last = plan.startedAt;
       owner.#now = input.now;
       const sharedClock = () => owner.#readClock();
@@ -525,7 +624,7 @@ export class SyntheticStoreRecorderBinding {
       const limits = { ...input.limits };
       owner.#fileLimit = limits.fileBytes;
       owner.#storage = FakeEvidenceStore.create(input.ops, root, owner.#runOrigin,
-        { ...limits, deadline: owner.#saveDeadline, cleanupDeadline: plan.stages[3] }, sharedClock);
+        { ...limits, deadlineTable: deadlines.table, budget: owner.#budgetOrigin }, sharedClock);
       if (!owner.#storage) throw Error();
       owner.#stage = 'ready';
       // Freeze the public surface, not the private state; no child instance is exposed.

@@ -19,7 +19,7 @@ function setup() {
   const input: BindingInput = {
     timing: { startedAt: 0, outerMs: 300_000, sessionDeadline: 600_000, marginMs: 1_000,
       reservations: { stop: 1_000, force: 2_000, confirm: 3_000, flush: 4_000, manifest: 5_000, final: 6_000 } },
-    root: directory, now: () => { onClock?.(); return at; }, cleanupMs: 1000,
+    root: directory, now: () => { onClock?.(); return at; }, cleanupMs: 1000, manifestCleanupMs: 1000,
     limits: { fileBytes: 1024, totalBytes: 8192, attempts: 8, retries: 2 },
     ops: {
       identity() { op('identity'); return faults.identity ? undefined : directory; },

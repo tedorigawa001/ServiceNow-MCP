@@ -18,6 +18,8 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 ### Changed
 
+- WF-B DT-A pins a strict, immutable evidence/manifest deadline table to the same synthetic run and budget origins. Save, private/public receipt consumption and one-attempt cleanup retain the same internally selected row; expired evidence requests remain sticky and cannot borrow the later manifest window. Legacy standalone deadline pairs remain supported. Independent arithmetic, boundary and binding controls use memory-only dependencies; recorder finalization, manifest issuance, formal issuance and whole-run admission remain disabled.
+
 - WF-B adds immutable per-call Store attempt results while preserving receipt-only `save` compatibility. Pre-create refusal, create failure, acquired-but-unverified content and saved receipts carry their own create/acquisition/close flags, byte reservation and cleanup diagnosis; sticky and reentrant refusals never inherit an earlier call's cleanup. The bound recorder now retains the exact attempt result separately from the Store-wide first reason. Synthetic isolation and fault controls do not enable real storage or change deadlines.
 
 - WF-B SB-B connects the same frozen checkpoint to fixed header bytes, one memory-store save, a module-private receipt consumer and a callback/clock-free acknowledgement section. Existing test-only classes are mechanically colocated behind unchanged re-export paths so no public friend is introduced. FIFO, replay, byte/digest, stop, deadline and saved-but-unacknowledged controls retain queue diagnostics; no filesystem capture, whole-run preservation, formal issuance or runtime connection is enabled.

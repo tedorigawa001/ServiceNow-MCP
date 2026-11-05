@@ -1,12 +1,14 @@
 # WF-B：slot固定期限表・保存経路閉鎖後recorder終端の接続差分
 
-Version: draft-0.2 / Date: 2026-11-05 / 基準HEAD: `31712a6` / レビュー修正の基準HEAD: `9f8507b`。
+Version: draft-0.3 / Date: 2026-11-05 / 基準HEAD: `31712a6` / レビュー修正の基準HEAD: `9f8507b` / DT-A実装基準HEAD: `eb642a2`。
+
+draft-0.3: **DT-Aだけを合成実装**。固定2区分の純粋計算・厳密DATA検査・同run／budget結合をsave／receipt消費／closeへ接続した。[検証記録](E2E_BEST_PRACTICE_WFB_SLOT_DEADLINES_DTA_2026-11-05.md)を参照。DT-B／DT-Cは未実装。
 
 draft-0.2のレビュー修正: Pendingの条件をownerのすべての同期区間とclock読取中へ広げた。`D_save`閉鎖後に残るrecorderの状態ごとの終端を定めた。`Closed`後のclock不正ではStoreを取消す。期限切れのevidence保存はstickyとし、manifestも不可とする。manifestの試験方法と親§7の残項目との対応を追加した。
 
-Status: **設計のみ。接続実装・新規合成試験は未実施。** 正式発行口閉鎖・全体受付無効・Unknown・VM／監視／telemetry調査保留を維持する。保存先・保持期間・運用cap／時間枠・停止方式は未承認。再採取・既存証拠copy／保管操作・実接続・実通信・設定変更・Pushは行わない。
+Status: **固定期限表のDT-Aはメモリ内で合成検証済み。recorder終端・閉鎖後clockの追加処理・連続費目検証は未実装。** 正式発行口閉鎖・全体受付無効・Unknown・VM／監視／telemetry調査保留を維持する。保存先・保持期間・運用cap／時間枠・停止方式は未承認。再採取・既存証拠copy／保管操作・実接続・実通信・設定変更・Pushは行わない。
 
-親は[Store／recorder接続設計](BEST_PRACTICE_WFB_STORE_RECORDER_BRIDGE_DESIGN.md)と[EvidenceStore契約](BEST_PRACTICE_WFB_EVIDENCE_STORE_FAKE_CONTRACT.md)。既存SB-A／SB-B・試行別結果とレビュー修正を維持し、次の合成実装への差分だけを定める。型名・操作名は提案で、実装済みのAPIではない。
+親は[Store／recorder接続設計](BEST_PRACTICE_WFB_STORE_RECORDER_BRIDGE_DESIGN.md)と[EvidenceStore契約](BEST_PRACTICE_WFB_EVIDENCE_STORE_FAKE_CONTRACT.md)。既存SB-A／SB-B・試行別結果とレビュー修正を維持する。終端関係の型名・操作名は提案で、DT-A実装境界は§8.1に限る。
 
 ## 1 差分・非目標
 
@@ -113,7 +115,7 @@ terminal slotは固定理由・元状態／最終状態・clock診断・late・�
 
 未知の通知結果・未解決handle・clock不明はUnknownのまま。未確認の解放責務／leaseは診断とは別に所有元へ残し、terminal helperにそれを破棄する権限を与えない。OS leaseの具体方式は未実装である。必要なidentityが欠ける場合はFailed、recorderが未生成ならnot_constructedを記録し、成功boolで埋めない。payload／私的証拠別名は固定unwindで外すが、診断・queueを削除／無限複製しない。raw例外・bytes・実path・環境・認証情報は出さない。
 
-## 7 合成受入条件（未実施）
+## 7 合成受入条件（DT-Aは§8.1、終端関係は未実施）
 
 | ID | 対照 | 必須結果 |
 |---|---|---|
@@ -149,8 +151,20 @@ oracleは表生成器やterminal helperを呼ばず、手書きのrow／境界�
 
 ## 8 後続の順序・未確認事項
 
-1. **DT-A**: 固定表の純粋計算・strict構造検査・同run／budget binding。メモリStoreのsave／consume／closeへ接続し、legacy単体入口を維持する。
+1. **DT-A（合成実装済み）**: 固定表の純粋計算・strict構造検査・同run／budget binding。メモリStoreのsave／consume／closeへ接続し、legacy単体入口を維持する。
 2. **DT-B**: privateな終端slot／claim・安全なPending／固定terminal section。queue不変・四軸・診断保持を確認し、save-lane guardから独立させる。
 3. **DT-C**: D_stopから保存完了／閉鎖／終端まで、通知throw／部分生成失敗を含む連続fakeと費目上界を確認する。manifest rowは到達性だけで、正式writerの発行へ進めない。
 
 全段階とも別の明示実装指示を要する。期限の具体値・terminal費用・正式保存先・保持／削除・OS backend・実承認は未承認／未確認。本文・容量モデル・ProcessOwner・manifest集合・session台帳・実採取は別課題であり、本書作成で状態を進めない。
+
+### 8.1 DT-A実装境界
+
+実装は試験専用`store-recorder-kernel.ts`、旧`fixed-evidence-store.ts`から再exportする。`planSlotDeadlines(unknown)`は固定keyのown enumerable DATAだけを受理し、getterを実行しない。未知／欠落／symbol／独自prototype／accessor、非safe整数・空の工程枠・元planの上限違反を拒否する。外部からrow配列を受け取らず、14固定名のうち`manifest.json`だけをmanifestにするため、区分対応の欠落・重複を入力で作れない。
+
+`createFakeDeadlineTable`は同run／budget originと凍結planをmodule-private WeakMapに結ぶ合成専用issuerで、runtime台帳とは共有しない。summaryやtokenのcopyは表として受理しない。bound ownerは非公開run／budget originを先行確保し、元timing・`cleanupMs`・必須`manifestCleanupMs`を一度読み、同じtableをStoreへ渡す。運用既定値や別budgetは作らない。ここでのbudget originは合成identityであり、実予算の配賦・費用課金・承認を証明しない。
+
+table-mode Storeは同run／budgetを生成時照合し、期限表の不正入力から旧pairへfallbackしない。旧単体fakeの`StoreCaps` pairは互換入口として残す。saveはslotからrowを内部選択し、同rowを操作・通常close・失敗finallyに保持する。receiptには同rowとtable originをprivateに保存し、public／private consumerはそれを再照合する。公開consume DATAはslot／size／digestのみで期限借換え口を追加しない。table-modeの当該attemptだけに`deadlineClass`／`deadlineVersion`を追加し、旧単体結果の形は維持する。
+
+DT01〜DT05の期限表部分を実施した。直前／等値／直後、途中期限到達、cleanup予約切れ・late、別run／budget・summary／継承table混入、evidence sticky後のmanifest拒否を独立oracleで確認した。bound checkpoint laneの閉鎖後のmanifest保存は、§7のspy-only子Store対照に限る。必須集合・manifest writer・run保全／process終了へ昇格しない。
+
+DT06以降のrecorder終端・Pending・閉鎖後clock不正のStore取消・状態別連続対照・最終費目は未実装。DT10／DT12全体を実施済みと数えない。shared clockや保存guardの既存挙動はDT-Aで拡張しない。

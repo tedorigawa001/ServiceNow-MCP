@@ -10,7 +10,7 @@ function input() {
   const value: BindingInput = {
     timing: { startedAt: 0, outerMs: 300_000, sessionDeadline: 600_000, marginMs: 1_000,
       reservations: { stop: 1_000, force: 2_000, confirm: 3_000, flush: 4_000, manifest: 5_000, final: 6_000 } },
-    root: directory, cleanupMs: 1_000,
+    root: directory, cleanupMs: 1_000, manifestCleanupMs: 1_000,
     limits: { fileBytes: 1024, totalBytes: 8192, attempts: 8, retries: 2 },
     now: () => at,
     ops: {
@@ -186,9 +186,9 @@ describe('SB-A: private construction and admissions', () => {
   });
   it('wires the Store to the same clock, the D_save split and a private run origin', () => {
     const f = wired();
-    expect(f.caps).toMatchObject({ fileBytes: 1024, totalBytes: 8192, attempts: 8, retries: 2, deadline: 288_000, cleanupDeadline: 289_000 });
-    expect(f.caps.deadline).toBe(f.root.snapshot().deadlines!.save);
-    expect(f.caps.cleanupDeadline).toBe(f.root.snapshot().deadlines!.cleanup);
+    expect(f.caps).toMatchObject({ fileBytes: 1024, totalBytes: 8192, attempts: 8, retries: 2, deadlineTable: {}, budget: {} });
+    expect('deadline' in f.caps).toBe(false); // no caller-selected deadline pair on the bound path
+    expect(f.root.snapshot().deadlines).toEqual({ save: 288_000, cleanup: 289_000, all: 300_000 });
     for (const token of [f.root.run, f.root.recorder, f.root.store]) expect(f.run).not.toBe(token);
     f.set(10);
     f.root.reserve(true);

@@ -1,6 +1,8 @@
 # WF-B EvidenceStore：artifact単位の内部契約とfake
 
-Version: draft-0.7 / Date: 2026-11-05 / 基準HEAD: `7f6ef4f` / レビュー修正の基準HEAD: `fb91044` / 試行別結果の実装基準HEAD: `85eb9ad`。
+Version: draft-0.8 / Date: 2026-11-05 / 基準HEAD: `7f6ef4f` / レビュー修正の基準HEAD: `fb91044` / 試行別結果の実装基準HEAD: `85eb9ad`。
+
+draft-0.8: [DT-Aの合成検証](E2E_BEST_PRACTICE_WFB_SLOT_DEADLINES_DTA_2026-11-05.md)。固定期限表・同run／budget bindingをsave／receipt消費／closeへ接続した。旧単体の期限pairは維持し、recorder終端・manifest writer・実予算接続は行わない。
 
 draft-0.7: [slot固定期限表・閉鎖後recorder終端の差分設計](BEST_PRACTICE_WFB_SLOT_DEADLINES_RECORDER_TERMINAL_DESIGN.md)を追加。save・receipt消費・closeが同じprivate rowを使い、Storeの健全性とcheckpoint受付／recorder終端を分離する契約。実装・運用値の承認は行っていない。
 
@@ -47,7 +49,7 @@ Status: **試験専用・メモリ内だけの実装。OS backend・実保存は
 
 write試行数は最大attempt cap。create／flush／close／再読は各1回、slotは最大14。writeへは残りcopyを渡すためscratchはfile上限内だが、各試行のcopy累積費用は最大attempts×fileBytesである。OS・JavaScript heap・allocator／RSS・実messageの上界証明ではない。再読driver自身も要求limit以内の取得を行う前提で、過大allocationを後検査だけで防げたとはしない。
 
-正常操作には同じ絶対`deadline`、失敗後cleanupにはそれより後の有限`cleanupDeadline`を明示する。途中で期限を再設定しない。bound bridgeはrecorderの外側予約から`D_save`と`D_store_cleanup`をこの2つへ供給する。slot区分別の期限表は未実装。時刻はsafe integer・逆行拒否、等値は期限切れ。
+正常操作には同じ絶対`deadline`、失敗後cleanupにはそれより後の有限`cleanupDeadline`を明示する。途中で期限を再設定しない。DT-A以降、bound bridgeは元の外側予約から計算した固定2区分の表を同run／budget originへ結び、Storeへ供給する。`manifest.json`だけ後続manifest区分で、他の13名はevidence区分。save・receiptのpublic／private消費・通常／失敗closeは同じprivate rowを使う。旧単体入口だけは明示pairを維持する。時刻はsafe integer・開始点未満／逆行拒否、等値は期限切れ。厳密入力・算術・実装境界は[DT-A設計§8.1](BEST_PRACTICE_WFB_SLOT_DEADLINES_RECORDER_TERMINAL_DESIGN.md#81-dt-a実装境界)を参照。
 
 取得済みhandleがまだclose未試行ならfinallyで最大1回closeする。元の停止理由を保持し、`cleanup=not_started／confirmed／late／unconfirmed`を別軸で示す。cleanup期限切れ・時計取得失敗なら操作を増やさずunconfirmed。close要求だけをconfirmedにしない。成功の返答がcleanup期限前に得られた場合だけconfirmedとする。等値・超過は`late`で、返答はあったが予約を超えたことを示す（通常closeも同じ）。`late`はconfirmedと同じ扱いにせず、時間予約内の解放の証拠にしない。失敗の返答、close後に時刻を読めない・時計が逆行した場合はunconfirmedのままとする。同期操作を途中で止める仕組みではないので、超過の実行自体は防げない。これもfake driverの返答であり、実FD解放の証明ではない。
 
@@ -80,4 +82,4 @@ OS backend・metadata／ACL／symlink実取得、共有session claim／retry、m
 
 `reason`はこの保存の主失敗を保持する。既存sticky状態による拒否は`store_stopped`／`rejection=sticky`、busy再入拒否は`binding`／`rejection=busy`。Store全体の最初の理由は従来どおりsnapshot.reasonへ別保持する。cleanupのfalse／throwは`cleanupReason=close`、不正／取得失敗時刻はclock、予約超過はdeadline。cleanup失敗で主理由を置換しない。成功後やconsume失敗後の次の保存拒否も、新recordのcleanupはnot_startedである。
 
-試行結果は限定DATAで、bytes・path・raw例外を含まず、receiptを新規生成／昇格する権限ではない。Store内部に呼出し履歴を無制限保持せず、bridgeは既存の最大6 slotへ同じ凍結resultを紐付ける。Storeからの戻り自体が得られない異常ではattemptを推定・捏造しない。slot区分別期限表・上位通知throw／最終終端・費用上界の詳細は別段階のまま。
+試行結果は限定DATAで、bytes・path・raw例外を含まず、receiptを新規生成／昇格する権限ではない。DT-Aのtable-modeでは選択済みの`deadlineClass`／`deadlineVersion`を追加する。busy／sticky拒否では選択自体がないので付加せず、legacy単体結果も変更しない。Store内部に呼出し履歴を無制限保持せず、bridgeは既存の最大6 slotへ同じ凍結resultを紐付ける。Storeからの戻り自体が得られない異常ではattemptを推定・捏造しない。上位通知throw／最終終端・費用上界の詳細は別段階のまま。
