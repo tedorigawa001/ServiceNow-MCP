@@ -1,6 +1,8 @@
 # WF-B EvidenceStore／recorder：一度限り接続の差分設計
 
-Version: draft-0.12 / Date: 2026-11-05 / 基準HEAD: `fb91044` / SB-A実装基準HEAD: `2f1120f` / SB-B実装基準HEAD: `186cea6` / 試行別結果の実装基準HEAD: `85eb9ad`。
+Version: draft-0.13 / Date: 2026-11-06 / 基準HEAD: `fb91044` / SB-A実装基準HEAD: `2f1120f` / SB-B実装基準HEAD: `186cea6` / 試行別結果の実装基準HEAD: `85eb9ad`。
+
+draft-0.13: [本文snapshot・容量・失敗時停止の詳細設計](BEST_PRACTICE_WFB_CHECKPOINT_SNAPSHOT_BODY_DESIGN.md)を追加。v1 headerを維持し、提案v2のstrict variant・同cutoffのimmutable本文・cap／費目・未解決custodyを分離する。設計のみで本文接続・上限変更・正式発行は行わない。
 
 draft-0.12: [DT-C連続合成検証](E2E_BEST_PRACTICE_WFB_RECORDER_CONTINUOUS_DTC_2026-11-05.md)を追加。D_stop→FIFO→D_save→終端、通知throw／部分生成／cleanup異常と構造費目を確認した。通知を一度限りに分離し、throw時も受付閉鎖・他方通知・固定診断を保持する。実時間／heap・任意呼出し列・運用capは未確認／未承認。
 
@@ -127,6 +129,8 @@ recorderのtest_result／measurementは既存契約を維持し、試験終端�
 | 未解決handle／cleanup | Storeが解放を所有し、上位は診断を保持。bridgeで二重closeしない |
 
 Storeの64KiB／1MiB等は合成構造上限であり、実観測本文に適合するcapではない。本文・UTF-8総量・serialization scratch・6snapshotの同時保持・共有session会計の詳細は次段階。bindingのためのprivate複製／hashの費用も明示し、既存費目へ無断で隠さない。
+
+その差分を[本文snapshot設計](BEST_PRACTICE_WFB_CHECKPOINT_SNAPSHOT_BODY_DESIGN.md)で具体化した。実装は未着手。4個の集約本文と2個のcontrol、元source／run／budget／cutoffへの結合、同bytesの保存、失敗時の有限custodyを新経路の前提とする。旧95 byte／DT-Cのheader専用式や旧Store capを、新本文の受付根拠へ昇格しない。
 
 ## 7 合成受入条件
 

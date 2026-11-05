@@ -1,6 +1,8 @@
 # WF-B 固定採取器の詳細契約・合成受入条件
 
-Version: draft-0.8 / Date: 2026-11-05 / 設計基準HEAD: `0fe45fb` / 純粋fake実装基準HEAD: `7f055b4`。
+Version: draft-0.9 / Date: 2026-11-06 / 設計基準HEAD: `0fe45fb` / 純粋fake実装基準HEAD: `7f055b4` / 本文設計の調査基準HEAD: `12dcc37`。
+
+draft-0.9: [checkpoint本文snapshot・容量・失敗時停止の詳細設計](BEST_PRACTICE_WFB_CHECKPOINT_SNAPSHOT_BODY_DESIGN.md)を追加。6variant・4本文snapshot、scopeごとの4096件とrun集約枠、未承認byte／work・custodyを区別する。本文は設計のみ。固定header経路はSB-A／SB-B／DT-A〜Cまで合成検証済みで、実保存・観測本文・ProcessOwnerは未接続。
 
 draft-0.8: [SB-B検証記録](E2E_BEST_PRACTICE_WFB_STORE_RECORDER_SBB_2026-11-05.md)を追加。固定headerのメモリ保存・private消費・一度限りackを接続し、queue／保存済み未ackを確認した。実保存・run保全／process終了確認・本文容量モデルは未対応のまま。
 
@@ -16,7 +18,7 @@ draft-0.3のレビュー修正: 試験の終端後は`measurement`を変えな�
 
 draft-0.1のレビュー修正: 必須観測の定義を親手順と揃え、状態遷移の失敗経路、checkpointの内容、時間予約とsession枠の下限、module単位の失敗、受入条件を追加した。設計のみで、承認状態と操作禁止は変更していない。
 
-Status: **純粋fakeの計画ロジックだけを実装・合成検証。採取器全体は未実装。再採取・保管操作は未実施。** 正式発行口閉鎖・全体受付無効・Unknown・VM／監視／telemetry調査保留を維持する。保存先・保持期間・容量・時間枠・停止方式は未承認のまま。実接続・実通信・設定変更・Pushを行わない。
+Status: **state／期限・固定headerの保存／private消費／ack・終端の閉鎖合成経路を検証済み。観測本文・採取器全体・実保存は未実装。再採取・保管操作は未実施。** 正式発行口閉鎖・全体受付無効・Unknown・VM／監視／telemetry調査保留を維持する。保存先・保持期間・容量・時間枠・停止方式は未承認のまま。実接続・実通信・設定変更・Pushを行わない。
 
 親契約は[再採取・証拠保全手順](BEST_PRACTICE_WFB_RECAPTURE_EVIDENCE_PROCEDURE.md)。本書はそのR04／R07を具体化するが、R01〜R08の充足や操作承認を代替しない。以下の型名・定数・境界は後続実装への提案であり、現行runnerの保証ではない。
 
@@ -90,6 +92,8 @@ writerは1本、immutable snapshot queueは最大6件。per-case同期IO・周�
 
 WF-Aの4096件、既存reporterのcase／event各20,000件・sample600件・module1,000件の上限は拡張しない。必須coverageの欠落はmeasurement incomplete。各message・snapshot・final・analysis・manifest・session票のbyte上限、総byte上限、serialization／再読scratch上限を有限の必須条件として別途固定する。`0`／未指定を無制限へ解釈しない。概念上の保持量は集約本体＋最大6 snapshot＋writer／検証scratchであり、JavaScript heapの実測上界やRSS保証とは区別する。
 
+本文・容量の具体化は[本文snapshot設計](BEST_PRACTICE_WFB_CHECKPOINT_SNAPSHOT_BODY_DESIGN.md)を参照。4096件はParentObservation instanceごとの上限で、複数scopeのrun合計やreporterの20,000相関event枠と同一ではない。現行95 byteのheaderだけの上界を本文へ流用しない。本文用の新cap・旧合成Store上限との適合は未承認／未確認。
+
 ## 5 外側時間枠・停止と終了確認
 
 具体値と停止方式はR07の未承認事項。採取器独自の有限session枠・各run枠を設け、製品／試験timeout・並列設定は変更しない。最大2run案と、期間／回数つき通常実行への観測許可を区別し、後者で追加の試験実行を生成しない。
@@ -139,7 +143,7 @@ fake store／clock／processと注入messageのみで検証する計画。実保
 
 ## 8 次の段階と未承認事項
 
-1. 有限状態・四軸・checkpoint planner・時間予約とartifact単位EvidenceStoreのfake、および[接続差分設計](BEST_PRACTICE_WFB_STORE_RECORDER_BRIDGE_DESIGN.md)をレビューする。storeからrecorderのackへの接続は設計のみ。publication・ProcessOwner・観測集約・実承認は未対応で、採取可能とは扱わない。
+1. 固定headerについては[接続差分設計](BEST_PRACTICE_WFB_STORE_RECORDER_BRIDGE_DESIGN.md)のSB-A／SB-B・DT-A〜Cまで閉鎖合成経路を検証済み。次は[本文snapshot設計](BEST_PRACTICE_WFB_CHECKPOINT_SNAPSHOT_BODY_DESIGN.md)のstrict値契約・純粋容量検査を合成依存限定で具体化する。publication・ProcessOwner・観測本文・実承認は未対応で、採取可能とは扱わない。
 2. 非上書きstoreとProcessOwnerのbackend／上界・故障契約を選定し、合成対照から検証する。OS依存の保証不足をUnknownのまま残す。
 3. byte／memory／retry／時間の具体上限、保存先・保持／削除・歴史的証拠copy・停止権限・通常run観測期間／回数を本人が承認する。設計定数6や31は操作許可ではない。
 4. 固定版の入力digest・試験証拠を揃え、R01〜R08をその時点で再確認してから、保全／再採取を別々に判断する。
