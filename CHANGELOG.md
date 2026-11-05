@@ -18,6 +18,8 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 ### Changed
 
+- WF-B SB-A adds a test-only closed binding assembly with a preallocated owner, module-private one-shot run admission, distinct run/recorder/store/checkpoint brands and irreversible preparation/discard claims. Legacy fakes remain unchanged and hidden child instances cannot be acknowledged through legacy entry points. Synthetic mixing, replay, construction, clock and cancellation controls issue no save receipt, perform no Store operations and enable no acknowledgement, formal issuance or whole-run admission.
+
 - WF-B adds a test-only in-memory EvidenceStore contract with fixed artifact slots, exclusive creation, pre-spent claims, bounded short-write/EINTR handling, one-attempt cleanup, same-handle reread SHA-256 verification and private one-shot save receipts. Fault and independent event/digest oracles cover collision, replacement, cancellation, deadlines and receipt mixing without filesystem or network access. Receipts do not establish whole-run preservation or enable formal issuance/admission.
 
 - WF-B adds a test-only pure-fake fixed-recorder model: monotone lifecycle, four independent terminal axes, six one-shot FIFO checkpoint slots and immutable outer deadlines with explicit cleanup/publication reserves. Handwritten timing/axis oracles and replay, cancellation, clock reentry/regression and boundary controls perform no capture, storage, process control or network I/O. Operational values remain unapproved; formal issuance and whole-run admission remain disabled.

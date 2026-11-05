@@ -1,6 +1,8 @@
 # WF-B 固定採取器の詳細契約・合成受入条件
 
-Version: draft-0.6 / Date: 2026-11-05 / 設計基準HEAD: `0fe45fb` / 純粋fake実装基準HEAD: `7f055b4`。
+Version: draft-0.7 / Date: 2026-11-05 / 設計基準HEAD: `0fe45fb` / 純粋fake実装基準HEAD: `7f055b4`。
+
+draft-0.7: [SB-A検証記録](E2E_BEST_PRACTICE_WFB_STORE_RECORDER_SBA_2026-11-05.md)を追加。同生成元の閉じたassembly・別brand・run生成／checkpoint準備claimと固定discardだけを実装した。保存／ack成功・正式発行・採取可能への昇格はない。
 
 draft-0.6: [Store／recorder一度限り接続の差分設計](BEST_PRACTICE_WFB_STORE_RECORDER_BRIDGE_DESIGN.md)を追加。同run・checkpoint・保存receiptのprivate結合、共有期限／停止、cleanup診断、保存済み未ackとqueue／unsavedの区別を具体化した。設計のみで接続実装や承認状態は変更しない。
 

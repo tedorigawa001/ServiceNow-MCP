@@ -1,10 +1,12 @@
 # WF-B EvidenceStore／recorder：一度限り接続の差分設計
 
-Version: draft-0.2 / Date: 2026-11-05 / 基準HEAD: `62df06f`。
+Version: draft-0.3 / Date: 2026-11-05 / 基準HEAD: `62df06f` / SB-A実装基準HEAD: `2f1120f`。
+
+draft-0.3: [SB-A合成検証記録](E2E_BEST_PRACTICE_WFB_STORE_RECORDER_SBA_2026-11-05.md)を追加。同生成元owner・別brand・run生成claim・元checkpointへの準備claimと固定discardを試験専用assemblyへ実装した。旧単体fakeの実装・入口は変更せず、新経路ではraw子instanceを非公開にする。保存証拠発行・保存／ack接続は未実装。
 
 draft-0.2のレビュー修正: 取消でStoreまで閉じると停止後の証拠を保存できないため、観測停止と致命的停止を分けた。Storeの期限をslot区分ごとの固定表とし、`manifest.json`を`D_save`後も保存できるようにした。cleanupの`late`を反映した。試行別の結果にStore側の変更が必要なことを差分へ明記した。線形化sectionの処理を補った。
 
-Status: **設計のみ。接続実装・新規合成試験は未実施。** 正式発行口閉鎖・全体受付無効・Unknown・VM／監視／telemetry調査保留を維持する。保存先・保持期間・運用cap／時間枠・停止方式は未承認。再採取・既存証拠copy／保管操作・実接続・実通信・設定変更・Pushを行わない。
+Status: **SB-Aの準備内部契約だけを合成検証。保存・receipt消費・ack接続は未実装。** 正式発行口閉鎖・全体受付無効・Unknown・VM／監視／telemetry調査保留を維持する。保存先・保持期間・運用cap／時間枠・停止方式は未承認。再採取・既存証拠copy／保管操作・実接続・実通信・設定変更・Pushを行わない。
 
 親は[固定採取器契約](BEST_PRACTICE_WFB_FIXED_RECORDER_CONTRACT.md)と[EvidenceStore内部契約](BEST_PRACTICE_WFB_EVIDENCE_STORE_FAKE_CONTRACT.md)。既存の単体fakeとレビュー修正を維持し、試験専用の新しい結合経路だけを後続対象とする。以下の型名は提案であり、既存コードに存在するとは限らない。
 
@@ -129,8 +131,18 @@ oracleはbridge自身のmapper／encoder／guardを呼ばず、固定expected he
 
 ## 8 後続の実装分割と未確認事項
 
-1. **SB-A**: 同生成元owner・run／checkpoint binding・private証拠型・一度限りclaim。旧試験を残したまま混入／直接ackを拒否する合成経路を作る。
+1. **SB-A（準備内部契約を実装済み）**: 同生成元owner・run／checkpoint binding・private証拠型の予約・一度限りclaimと固定discard。旧試験を残したまま混入／直接ackを拒否する合成経路を追加した。StoredCheckpointEvidenceの発行はない。
 2. **SB-B**: 同snapshotの固定header encodingとStore保存／private消費／固定ackを接続。保存後の失敗・queue／unsavedの区分を確認する。
 3. **SB-C**: 同clock／停止ownerとflush内の予約分割、観測停止と致命的停止の区別、上位cleanup診断・部分生成の回収を連続fakeで確認する。SB-B時点でも期限／取消の最低限の共通guardを省略せず、詳細な境界対照をここで補完する。
 
-生成・claim・線形化section・費目の実現方法は未実装。byte／work／時間の数値、正式保存先、保管／削除、OS backendは未承認・未確認のまま。storeとrecorderが繋がっても、採取・保全・process監督の開始許可にはならない。
+SB-Aの生成・準備claim以外の保存・線形化section・試行別結果・slot区分別期限と詳細費目は未実装。byte／work／時間の運用値、正式保存先、保管／削除、OS backendは未承認・未確認のまま。storeとrecorderが繋がっても、採取・保全・process監督の開始許可にはならない。
+
+### 8.1 SB-Aの実装境界
+
+`tests/review/fixtures/store-recorder-binding.ts`は既存recorder／Storeを同じprivate継続で生成し、公開面は別brandのopaque参照と限定操作だけにする。旧子instanceへのreferenceは返さない。checkpointは元のqueue先頭から内部発行したbindingだけを受け、raw checkpoint・コピー・summaryも拒否する。型上のbrandと実行時の参照同一性を両方検査する。
+
+ownerの6 slotは準備状態だけを保持し、実保存の試行別cleanup slotではない。run生成claimはmodule-private WeakSetへ先に記録し、生成失敗でも返さない。準備成功はInFlightとなるが、唯一の終端は固定discard（Stopped）である。再入・二重準備・foreign claimも停止させ、元queueと診断を残す。失敗時は私的なcheckpoint／claim別名をretireし、共有参照を再利用しない。
+
+clock viewと計画値を先行pinし、checkpoint用D_save／cleanup境界の構造条件だけを検査する。生成時の合成値は運用capではない。準備中の観測停止は致命的停止にせず、ReservedのrecorderをClosedにしてStoreは取消さない。D_save到達も保存側だけを閉じ、Store操作／取消をしない。Closed時のbound診断は`unacknowledged`を持ち、recorder自体がClosedでない場合の旧`unsaved=0`と区別する。これは実保存bytesの有無を表さない。
+
+SB-Aではconditions_readyをackできないので、観測状態へ進める成功経路・6checkpointの連続保存・保存中の取消継続は検証できない。SB-B／SB-Cへ残し、手前のgate拒否を後段の成功実証と数えない。既存子fakeは変更しておらず、slot別期限表・試行別結果・private Store consumer・callbackなしprivate ackは未実装。
