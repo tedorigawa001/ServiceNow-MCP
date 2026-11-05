@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { SyntheticStoreRecorderBinding, type BindingInput, type PreparationClaim } from './fixtures/store-recorder-binding.js';
 import { FakeFixedRecorder } from './fixtures/fixed-recorder.js';
 import { FakeEvidenceStore } from './fixtures/fixed-evidence-store.js';
@@ -79,6 +79,21 @@ function observing() {
   return f;
 }
 const nonIdentity = (events: string[]) => events.filter(op => op !== 'identity');
+/** Captures the raw recorder for fault setup only; the bound path never exposes it. */
+function spiedRecorder() {
+  const spy = vi.spyOn(FakeFixedRecorder, 'create');
+  const f = setup(), root = f.construct();
+  const recorder = spy.mock.results[0]!.value as FakeFixedRecorder;
+  spy.mockRestore();
+  expect(root.reserve(true)).toBe(true);
+  return { ...f, root, recorder };
+}
+/** Replaces the public Store save for one run: the receipt stays genuine, the saved facts differ. */
+function withSave<T>(replace: (save: FakeEvidenceStore['save'], store: FakeEvidenceStore, run: object, slot: string, bytes: Uint8Array) => ReturnType<FakeEvidenceStore['save']>, body: () => T) {
+  const original = FakeEvidenceStore.prototype.save;
+  FakeEvidenceStore.prototype.save = function (this: FakeEvidenceStore, run, slot, bytes) { return replace(original, this, run, slot, bytes); };
+  try { return body(); } finally { FakeEvidenceStore.prototype.save = original; }
+}
 
 describe('SB-B: fixed header to private consumption and ack', () => {
   it('saves exact independent header bytes, then conditions ack allows start', () => {
@@ -96,6 +111,9 @@ describe('SB-B: fixed header to private consumption and ack', () => {
     expect(f.root.snapshot().saves[0]).toMatchObject({ disposition: 'acknowledged', file: name, size: expected.length, cleanup: 'confirmed',
       digest: 'aacdba98587d693127aa25cd4a590ae1acb5d1c40450c4780c84695deaec83d1' });
     expect(f.root.snapshot().evidenceIssued).toBe(false);
+    expect(f.root.snapshot().slots[0]).toBe('acknowledged');
+    expect(Object.isFrozen(f.root.snapshot().saves)).toBe(true);
+    expect(Object.isFrozen(f.root.snapshot().saves[0])).toBe(true);
     expect(f.root.start()).toBe(true);
     expect(f.root.snapshot().recorder!.checkpoints[0]).not.toBe(original);
     expect(f.root.snapshot().recorder!.state).toBe('Observing');
@@ -229,6 +247,7 @@ describe('SB-B: failures keep queue / saved-unacknowledged facts', () => {
     expect(root.snapshot().acknowledgements).toBe(1);
     expect(root.snapshot().saves[0].disposition).toBe('acknowledged');
     expect(root.snapshot().saves[1]).toMatchObject({ disposition: 'attempted_unverified', reason: 'limit', cleanup: 'not_started' });
+    expect(root.snapshot().slots.slice(0, 2)).toEqual(['acknowledged', 'retired']); // a later failure keeps the earlier ack
     expect(f.files.size).toBe(1);
   });
   it.each(['saved', 'consumed'])('retains saved_unacknowledged on D_save at %s boundary', boundary => {
@@ -258,6 +277,66 @@ describe('SB-B: failures keep queue / saved-unacknowledged facts', () => {
     expect(f.root.snapshot().recorder!.checkpoints[0]).toBe(original);
     expect(f.root.snapshot().saves[0].disposition).toBe('saved_unacknowledged');
   });
+  it.each([2, 3])('stops when the Store guard fails on clock read %s inside the consume, keeping saved_unacknowledged', read => {
+    const f = reserved(), prepared = claim(f.root), original = f.root.snapshot().recorder!.checkpoints[0];
+    let reads = 0;
+    f.clock(() => { if (f.root.snapshot().slots[0] === 'saved' && ++reads === read) f.faults.identity = true; });
+    expect(f.root.persist(prepared)).toBe(false);
+    expect(reads).toBeGreaterThanOrEqual(read);
+    expect(f.root.snapshot()).toMatchObject({ phase: 'Stopped', reason: 'store', acknowledgements: 0, store: { reason: 'binding' } });
+    expect(f.root.snapshot().saves[0]).toMatchObject({ disposition: 'saved_unacknowledged', consumeReason: 'binding', cleanup: 'confirmed' });
+    expect(f.root.snapshot().recorder!.checkpoints[0]).toBe(original);
+  });
+  it('treats D_save reached inside the consume as a Store deadline failure, unlike at the bridge guard', () => {
+    const inConsume = reserved(), prepared = claim(inConsume.root);
+    let reads = 0;
+    inConsume.clock(() => { if (inConsume.root.snapshot().slots[0] === 'saved' && ++reads === 2) inConsume.set(288_000); });
+    expect(inConsume.root.persist(prepared)).toBe(false);
+    expect(inConsume.root.snapshot()).toMatchObject({ phase: 'Stopped', reason: 'store', acknowledgements: 0, store: { reason: 'deadline' } });
+    expect(inConsume.root.snapshot().saves[0]).toMatchObject({ disposition: 'saved_unacknowledged', consumeReason: 'deadline' });
+    const atGuard = reserved(), other = claim(atGuard.root);
+    atGuard.clock(() => { if (atGuard.root.snapshot().slots[0] === 'saved') atGuard.set(288_000); });
+    expect(atGuard.root.persist(other)).toBe(false);
+    expect(atGuard.root.snapshot()).toMatchObject({ phase: 'Closed', reason: undefined, acknowledgements: 0, store: { reason: undefined } });
+  });
+  it.each([
+    ['slot', (slot: string, bytes: Uint8Array) => { void slot; return { slot: 'report.partial.0006.json', bytes }; }],
+    ['size', (slot: string, bytes: Uint8Array) => ({ slot, bytes: bytes.slice(1) })],
+    ['digest', (slot: string, bytes: Uint8Array) => { const changed = bytes.slice(); changed[0] ^= 1; return { slot, bytes: changed }; }],
+  ] as const)('refuses a genuine receipt whose saved %s differs from the bound expectation', (_field, change) => {
+    const f = reserved(), prepared = claim(f.root), original = f.root.snapshot().recorder!.checkpoints[0];
+    const result = withSave((save, store, run, slot, bytes) => {
+      const next = change(slot, bytes);
+      return save.call(store, run, next.slot, next.bytes);
+    }, () => f.root.persist(prepared));
+    expect(result).toBe(false);
+    expect(f.files.size).toBe(1);
+    expect(f.root.snapshot()).toMatchObject({ phase: 'Stopped', reason: 'store', acknowledgements: 0, store: { reason: 'binding' } });
+    expect(f.root.snapshot().saves[0]).toMatchObject({ disposition: 'saved_unacknowledged', consumeReason: 'binding' });
+    expect(f.root.snapshot().recorder!.checkpoints[0]).toBe(original);
+  });
+  it('normalizes an unexpected save exception without reflecting it', () => {
+    const f = reserved(), prepared = claim(f.root);
+    const result = withSave(() => { throw Error('SECRET_SAVE'); }, () => f.root.persist(prepared));
+    expect(result).toBe(false);
+    expect(f.root.snapshot()).toMatchObject({ phase: 'Stopped', reason: 'binding', acknowledgements: 0 });
+    expect(JSON.stringify(f.root.snapshot())).not.toContain('SECRET_SAVE');
+  });
+  it('refuses before encoding when the claimed checkpoint is no longer the queue head', () => {
+    const f = spiedRecorder(), prepared = claim(f.root);
+    f.recorder.acknowledge(f.root.snapshot().recorder!.checkpoints[0]!);
+    expect(f.root.persist(prepared)).toBe(false);
+    expect(f.events).toEqual([]);
+    expect(f.root.snapshot()).toMatchObject({ phase: 'Stopped', reason: 'binding', acknowledgements: 0 });
+  });
+  it('does not ack another head when the queue moved during the save', () => {
+    const f = spiedRecorder(), prepared = claim(f.root);
+    f.hook(op => { if (op === 'reread') f.recorder.acknowledge(f.root.snapshot().recorder!.checkpoints[0]!); });
+    expect(f.root.persist(prepared)).toBe(false);
+    expect(f.files.size).toBe(1);
+    expect(f.root.snapshot()).toMatchObject({ phase: 'Stopped', reason: 'binding', acknowledgements: 0 });
+    expect(f.root.snapshot().saves[0].disposition).toBe('saved_unacknowledged');
+  });
   it('stops before save at D_save, without giving Store a failing call', () => {
     const f = reserved(), prepared = claim(f.root); f.set(288_000);
     expect(f.root.persist(prepared)).toBe(false);
@@ -283,6 +362,7 @@ describe('SB-B: observation stop / cleanup / four-axis separation', () => {
     expect(persistHead(f.root)).toBe(false);
     expect(f.root.snapshot()).toMatchObject({ phase: 'Closed', acknowledgements: 0, unacknowledged: 2, store: { reason: undefined } });
     expect(f.root.snapshot().saves[0].disposition).toBe('saved_unacknowledged');
+    expect(f.root.snapshot().slots[0]).toBe('retired');
     expect(f.files.size).toBe(1);
   });
   it('keeps the shared clock readable for one cleanup after a fatal callback', () => {
@@ -300,6 +380,47 @@ describe('SB-B: observation stop / cleanup / four-axis separation', () => {
     expect(f.root.snapshot().saves[0]).toMatchObject({ disposition: 'attempted_unverified', cleanup: 'late', reason: 'deadline' });
     expect(f.root.snapshot().recorder!.checkpoints[0]).toBe(original);
     expect(f.events.filter(op => op === 'close')).toHaveLength(1);
+  });
+  it.each([
+    ['poll', (root: SyntheticStoreRecorderBinding) => root.poll()],
+    ['anomaly', (root: SyntheticStoreRecorderBinding) => root.testAnomaly()],
+    ['second end', (root: SyntheticStoreRecorderBinding) => root.endTest('passed', true)],
+  ] as const)('keeps saving queued evidence after a stray %s following the test terminal', (_name, stray) => {
+    const f = observing();
+    expect(f.root.endTest('passed', true)).toBe(true);
+    expect(stray(f.root)).toBe(false);
+    expect(f.root.snapshot()).toMatchObject({ phase: 'Idle', reason: undefined, epoch: 0, store: { reason: undefined }, recorder: { state: 'Draining', reason: 'state' } });
+    expect(f.root.snapshot().recorder!.checkpoints.map(c => c.trigger)).toEqual(['child_started', 'test_terminal']);
+    expect(persistHead(f.root)).toBe(true);
+    expect(persistHead(f.root)).toBe(true);
+    expect(f.root.snapshot()).toMatchObject({ phase: 'Idle', acknowledgements: 3, unacknowledged: 0, recorder: { axes: { test_result: 'passed' } } });
+  });
+  it('keeps the save path after a stray call in Verifying', () => {
+    const f = spiedRecorder();
+    expect(persistHead(f.root)).toBe(true);
+    expect(f.root.start()).toBe(true);
+    expect(f.root.endTest('passed', true)).toBe(true);
+    expect(f.recorder.verify(true)).toBe(true); // raw child: the bound path has no verify yet
+    expect(f.root.poll()).toBe(false);
+    expect(f.root.snapshot()).toMatchObject({ phase: 'Idle', reason: undefined, store: { reason: undefined }, recorder: { state: 'Verifying' } });
+  });
+  it('still treats misuse while observing as a fatal stop', () => {
+    const f = observing();
+    expect(f.root.reserve(true)).toBe(false);
+    expect(f.root.snapshot()).toMatchObject({ phase: 'Stopped', reason: 'state', store: { reason: 'cancelled' }, recorder: { state: 'Draining', reason: 'state' } });
+  });
+  it('reads the cleanup split and the limits once at construction', () => {
+    const f = setup();
+    let cleanupReads = 0, limitReads = 0, fileReads = 0;
+    Object.defineProperty(f.input, 'cleanupMs', { get() { return cleanupReads++ === 0 ? 1000 : 3999; } });
+    const limits = f.input.limits;
+    const counted = { ...limits, get fileBytes() { return fileReads++ === 0 ? limits.fileBytes : 1; } };
+    Object.defineProperty(f.input, 'limits', { get() { limitReads++; return counted; } });
+    const root = f.construct();
+    expect([cleanupReads, limitReads, fileReads]).toEqual([1, 1, 1]);
+    expect(root.snapshot().deadlines!.save).toBe(288_000);
+    expect(root.reserve(true)).toBe(true);
+    expect(persistHead(root)).toBe(true);
   });
   it('does not lose complete measurement / failed test on a later Store failure', () => {
     const f = observing(); f.root.testAnomaly(); f.root.endTest('failed', true);

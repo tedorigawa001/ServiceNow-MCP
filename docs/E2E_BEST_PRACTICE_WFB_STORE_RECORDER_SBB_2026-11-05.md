@@ -35,7 +35,39 @@ Date: 2026-11-05 / 基準HEAD: `186cea6` / 未コミット変更を検証。
 
 最終の型・lint・`git diff --check`は成功。文書リンク13件、kernelの依存が計算用cryptoだけでtestsが製品build／package許可対象外である構成も確認した。構成確認は実梱包の代替ではない。全体回帰・梱包dry-run・compiled配布物試験は今回未実施。旧277件の成功と、実観測器を使う全体回帰は区別する。
 
-## 4 残課題
+## 4 レビュー修正（2026-11-05）
+
+`672eda4`のレビュー指摘を修正した。§3の件数は修正前の記録で、そのまま残す。
+
+| 指摘 | 修正 |
+|---|---|
+| 通常の`endTest`の後の`poll`・`testAnomaly`・二重`endTest`で致命的停止となり、Storeを取消して`test_terminal`を保存できなくなった | 呼出し前が`Draining`／`Verifying`なら`state`理由で停止せず`false`を返す。`Observing`の誤用は致命的停止のまま |
+| 消費の失敗経路と照合が未検証だった | 消費中のidentity喪失・`D_save`、slot／size／digest不一致、queue先頭の移動の対照を追加した |
+| 消費中の`D_save`の分類が未定義だった | 設計§4へ明記し、bridgeのguardとの差を試験で固定した |
+| `cleanupMs`を3回、`limits`を2回読んでいた | 一度だけ読む |
+| 設計の`unsaved`の定義が実装とずれ、§7の見出しが「未実施」のままだった | 定義を`unacknowledged`へ合わせ、§7へ状況表を追加した |
+
+前者の誤分類は、`186cea6`で採用したレビュー指摘の分類が`Draining`を考慮していなかったことによる。
+
+照合の対照は公開Store `save`のprototypeを差し替え、本物のreceiptと異なるslot・bytesを作る。queue先頭の移動と`Verifying`の対照は、準備のために生のrecorderを使う。いずれもbound経路の成功実証ではない。
+
+`persist`とprivate継続を対象に、変異61個のうち41個を検出した。残る20個は次の理由で等価または到達不能と判断した。
+
+| 変異 | 理由 |
+|---|---|
+| `claim-not-spent`、`ack-keeps-checkpoint`、`ack-keeps-binding` | slotの状態とphaseの検査が先に拒否するので、別名が残っても受理されない |
+| `guard1`、`guard-before-save`、`guard-after-consume` | 間にcallbackがなく、次のguardが同じ結果を返す |
+| `cap-160` | 最大95 byteで、到達しない構造上限 |
+| `final-evidence-check`、`final-epoch-check` | 直前のguardの後にcallbackがなく、自己比較になる |
+| `commit-any-conditions` | `conditions_ready`はsequence 1で、`start`前のackはこれだけである |
+| `ack-evidence-kept-in-success`、`finally-evidence-kept` | 成功時とfinallyの解除が重複している |
+| `ready-closed`、`ready-published` | recorderのClosedはbridgeの閉鎖へ写され、Publishedはqueueが空でないと到達しない |
+| `consume-busy`、`consume-reason`、`consume-receipt`、`consume-no-spend`、`consume-run` | saveごとにreceiptは1つで、再入経路も別のrun originを渡す経路もない |
+| `consume-size` | sizeが違えばdigestも違うので、digestの照合が同じ結果を返す |
+
+全スイート（`--maxWorkers=3`）は292ファイル・**14,115件すべて成功**（SB-B試験は48件）。`npm run lint`はエラー0、`npm run build`は成功、`package-http-classification`はPASS（441ファイル）、`git diff --check`も成功。strict単独TypeScript検査も成功。梱包dry-runは未実施。
+
+## 5 残課題
 
 1. SB-CのStore試行別結果（create試行の有無を含む完全分類）とmanifest区分を含む期限表。現状はcheckpoint専用のStore／単一D_saveを内部で使用し、manifest入口を公開しない。未試行slotへ前回のcleanupを写さないが、一般的なsticky拒否全件の試行結果APIは未実装。
 2. D_saveで保存経路を閉じた後のrecorder最終終端、通知throw・部分生成／上位cleanup診断の詳細費目と連続対照。今回のclose lateや観測停止の基本接続だけを、SB-C全体の完了と呼ばない。

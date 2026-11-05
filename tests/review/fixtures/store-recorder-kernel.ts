@@ -459,10 +459,11 @@ export class SyntheticStoreRecorderBinding {
       const pinned: Timing = { startedAt: t.startedAt, outerMs: t.outerMs, sessionDeadline: t.sessionDeadline,
         marginMs: t.marginMs, reservations: { ...t.reservations } };
       const plan = planTime(pinned);
-      if (!plan || !Number.isSafeInteger(input.cleanupMs) || input.cleanupMs <= 0
-        || plan.stages[3] - input.cleanupMs <= plan.stages[2]) throw Error();
+      const cleanupMs = input.cleanupMs;
+      if (!plan || !Number.isSafeInteger(cleanupMs) || cleanupMs <= 0
+        || plan.stages[3] - cleanupMs <= plan.stages[2]) throw Error();
       owner.#plan = plan;
-      owner.#saveDeadline = plan.stages[3] - input.cleanupMs;
+      owner.#saveDeadline = plan.stages[3] - cleanupMs;
       owner.#last = plan.startedAt;
       owner.#now = input.now;
       const sharedClock = () => owner.#readClock();
@@ -472,9 +473,10 @@ export class SyntheticStoreRecorderBinding {
       if (!owner.#record) throw Error();
       owner.#stage = 'store';
       if (input.failAt === 'store') throw Error();
-      owner.#fileLimit = input.limits.fileBytes;
+      const limits = { ...input.limits };
+      owner.#fileLimit = limits.fileBytes;
       owner.#storage = FakeEvidenceStore.create(input.ops, root, owner.#runOrigin,
-        { ...input.limits, deadline: owner.#saveDeadline, cleanupDeadline: plan.stages[3] }, sharedClock);
+        { ...limits, deadline: owner.#saveDeadline, cleanupDeadline: plan.stages[3] }, sharedClock);
       if (!owner.#storage) throw Error();
       owner.#stage = 'ready';
       // Freeze the public surface, not the private state; no child instance is exposed.
@@ -540,9 +542,12 @@ export class SyntheticStoreRecorderBinding {
   #command(action: (recorder: FakeFixedRecorder) => boolean) {
     if (!this.#enter('Idle')) return false;
     try {
+      const before = this.#record!.snapshot().state;
       const ok = action(this.#record!);
       if (this.#phase === 'Stopped' || this.#phase === 'Closed') return false;
       const result = this.#record!.snapshot();
+      // A stray call after the test terminal is only a recorder diagnostic: queued evidence keeps its save path.
+      if (result.reason === 'state' && (before === 'Draining' || before === 'Verifying')) return ok;
       // Misuse, a refused gate and a clock failure are fatal; cancellation, D_stop and window are observation-only.
       if (result.reason === 'clock' || result.reason === 'state' || result.reason === 'binding') return this.#fatal(result.reason);
       if (result.state === 'Closed') { this.#phase = 'Closed'; this.#retire(); }

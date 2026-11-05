@@ -1,6 +1,8 @@
 # WF-B EvidenceStore／recorder：一度限り接続の差分設計
 
-Version: draft-0.5 / Date: 2026-11-05 / 基準HEAD: `277c057` / SB-A実装基準HEAD: `2f1120f` / SB-B実装基準HEAD: `186cea6`。
+Version: draft-0.6 / Date: 2026-11-05 / 基準HEAD: `672eda4` / SB-A実装基準HEAD: `2f1120f` / SB-B実装基準HEAD: `186cea6`。
+
+draft-0.6のレビュー修正: 試験終端後の余分な呼出しでStoreを取消し、未保存の証拠を失っていたので、`Draining`／`Verifying`での`state`理由は停止にしない。消費中の`D_save`超過を§4へ明記した。未受理件数の定義を実装に合わせ、§7へSB-A／SB-B時点の状況を追加した。
 
 draft-0.5: [SB-B合成検証記録](E2E_BEST_PRACTICE_WFB_STORE_RECORDER_SBB_2026-11-05.md)を追加。同checkpointの固定header・メモリ保存・private消費・固定ackを接続した。public friendを増やさず試験用実装を共通kernelへ集約し、旧pathは同じclassの再exportとして維持する。実保存・run全体の保全・ProcessOwnerへの昇格はない。
 
@@ -72,12 +74,12 @@ ownerは元runの開始時点・単調clock・`planTime`の絶対期限・停止
   | `manifest.json` | `D_manifest_save = D_manifest − C_manifest` | `D_manifest`（stages[4]） |
 
   `C_manifest`もmanifest工程の内側を切り分ける正・有限の予約で、`D_flush < D_manifest_save < D_manifest`を保つ。manifestの保存自体は範囲外だが、期限表で後続の経路を塞がない。
-- `D_save`到達ではbridgeがcheckpoint経路だけを`Closed`にする。Storeを呼ばないので、Store失敗にも`Store.cancel`にもしない。保存中に`D_save`を超えた場合はStoreの`deadline`失敗で、後述の致命的停止となる。
+- `D_save`到達ではbridgeがcheckpoint経路だけを`Closed`にする。Storeを呼ばないので、Store失敗にも`Store.cancel`にもしない。保存中または消費中に`D_save`を超えた場合はStoreの`deadline`失敗で、後述の致命的停止となる。同じ時刻でも、bridgeのguardが先に読めば`Closed`、Storeのguardが先に読めば致命的停止で、どちらもackしない。
 - `C_store`は新しい時間の追加ではない。正のflush工程を二分し、`stages[2] < D_save < D_store_cleanup = D_flush < D_manifest ≤ D_all`を保つ。加減算のoverflow・空の処理枠を拒否し、manifest／session票の後続予約を借用しない。byte処理／再読／ackに使える残枠が不足する場合は新規saveを始めない。具体値と費用モデルは未承認・後続確認事項で、未導出の受付保証はUnknownのまま。
 - 共有clockは読取と検証だけを担い、停止後も読める。受付の判定はguardが行う。Storeが取得済みhandleのcleanup時刻を読むためで、不正な値と逆行は停止後も拒否する。
 - deadlineは全operationの前後、ack直前にも検査し、等値で拒否する。同期操作が期限後に返った場合は新たな成功証拠へ進めない。closeは期限前に成功返答を確認できた場合だけconfirmed。同期処理の途中停止や実wall-time保証ではない。
 - **観測停止**（明示取消・`D_stop`到達・採取器の停止要求）: recorderへ通知し、新規観測を止める。Storeは閉じず、停止世代も変えない。処理中の保存はそのままackまで進め、`stop_requested`を含むqueueの残りを`D_save`までFIFOで保存する。親契約§4の`stop_requested`と§5の停止後の作成予約を満たすための区別である。recorderがClosedなら（Reservedでの取消等）新規保存もackも行わず、queueの残りはunsavedとして残す。
-- recorderの理由は次のとおり分類する。`cancelled`・`deadline`・`window`は観測停止。`clock`・`state`（誤用）・`binding`（gate拒否・矛盾する引数）は致命的停止。
+- recorderの理由は次のとおり分類する。`cancelled`・`deadline`・`window`は観測停止。`clock`・`state`（誤用）・`binding`（gate拒否・矛盾する引数）は致命的停止。ただし`Draining`／`Verifying`での`state`は、試験終端後の余分な呼出しによるrecorderの診断なので停止にせず、呼出しへ`false`を返す。queueの証拠を保存し続けるためである。
 - **致命的停止**（clock不正・binding不一致・Store失敗・recorderの誤用）: 同ownerの停止へ合流する。まずownerをStoppedとして停止世代を進め、新規save／receipt受理／ackを閉じ、次にStore.cancel、recorder停止通知の順で同期通知する。各通知は一度だけclaimし、片方のthrowでも固定診断を保持して他方と取得済みhandleの回収責務を省略しない。通知中に再入しても新規権限を与えない。Store.cancelはこの場合だけ呼ぶ。
 - 通常のcase／module／hook失敗は停止要求ではない。first anomaly保存を試み、suite継続と観測終端を妨げない。採取器の失敗・利用者取消と混同しない。
 
@@ -95,7 +97,7 @@ ownerは元runの開始時点・単調clock・`planTime`の絶対期限・停止
 
 `saved_unacknowledged`はprivate診断を残すための区分であり、receiptの再発行や再開権限ではない。bridge失敗後は別Storeを作り直したり、同名を上書きしたりしない。致命的停止に伴いrecorderが`stop_requested`を追加しても、失敗済みStoreへ再帰的に保存しにいかずqueueへ残す。観測停止では§4のとおり保存する。
 
-Closedではack不可、queueの残りとその順序を診断として保持する。**結合後の`unsaved`は「recorderが保存受理を完了していない件数」**と定義する。物理的なbytes不存在を意味しない。現行コメントの「never saved」は結合実装時に訂正し、保存済み未ack件数・partial件数も固定slotから区別できるようにする。Closedへ進むだけでqueueを消したり、残数を0へ補正したりしない。
+Closedではack不可、queueの残りとその順序を診断として保持する。**未受理件数はownerの`unacknowledged`**で、閉鎖の理由を問わずqueue件数を返す。recorderの`unsaved`は、recorder自体がClosedのときだけ同じ件数を返し、それ以外は0である（`D_save`閉鎖ではrecorderがClosedではないので0）。どちらも物理的なbytes不存在を意味しない。保存済み未ack件数・partial件数は固定slotの`saves`から区別する。Closedへ進むだけでqueueを消したり、残数を0へ補正したりしない。
 
 recorderのtest_result／measurementは既存契約を維持し、試験終端後のStore／cleanup失敗では書き換えない。Storeのclose confirmedはartifact handleのfake解放だけで、ProcessOwnerのtermination confirmedではない。`late`はconfirmedと同じ扱いにせず、時間予約内の解放の証拠にしない。checkpointが全てack済みでもmanifest／必須集合／session票の受理なしにpreservation verifiedへ進めない。本接続は`publish(true)`／`verify(true)`を注入しない。
 
@@ -114,7 +116,7 @@ recorderのtest_result／measurementは既存契約を維持し、試験終端�
 
 Storeの64KiB／1MiB等は合成構造上限であり、実観測本文に適合するcapではない。本文・UTF-8総量・serialization scratch・6snapshotの同時保持・共有session会計の詳細は次段階。bindingのためのprivate複製／hashの費用も明示し、既存費目へ無断で隠さない。
 
-## 7 合成受入条件（未実施）
+## 7 合成受入条件
 
 | ID | 注入／境界 | 独立した期待値 |
 |---|---|---|
@@ -122,16 +124,33 @@ Storeの64KiB／1MiB等は合成構造上限であり、実観測本文に適合
 | BR02 | 別run／recorder／Store／checkpoint、コピー・同値の元参照、slot／digest／size／encoding不一致 | create前で拒否できるものはcreate=0。それ以外もack=0・queue不変・固定失敗 |
 | BR03 | 外部DATA／summary／偽receipt、直接ack／legacy入口、二重save／consume／ack | 新bound経路へ昇格0、成功分の二重消費0、旧単体試験の保証は別に維持 |
 | BR04 | 部分書込・EINTR境界・create試行失敗・flush／close／再読失敗・同長hash不一致、sticky失敗後の次の保存 | Storeの手書き試行列どおり、bridge retry=0。cleanup最大1回、元先頭が残る。試行別結果がcreate試行の有無を区別し、拒否された試行に前回のcleanupを写さない |
-| BR05 | receipt発行直後、consume前後、最終guard直前の致命的停止／`D_save`到達／世代変更 | 線形化点前はack=0、saved_unacknowledgedとqueue／unsaved保持 |
+| BR05 | receipt発行直後、consume前後、最終guard直前の致命的停止／`D_save`到達／世代変更 | 線形化点前はack=0、saved_unacknowledgedとqueue／`unacknowledged`保持 |
 | BR06 | ack後の停止・残queueを持つClosed、Store失敗に伴うstop_requested追加 | 成功分をqueueへ戻さない。未ackだけ残し、停止checkpointを再帰保存しない |
 | BR07 | 残時間による期限作り直し、別clock、逆行・例外・遅いclose、cleanup等値 | 原点不変。`D_save`／`D_store_cleanup`はflush枠内、期限延長0。期限以降の成功返答は`late`、失敗返答と時刻を読めない場合はunconfirmed |
 | BR08 | save／consume／guard／停止通知中の再入、部分生成失敗 | 新規権限0、claim不可逆、handleの二重close0、先行診断保持 |
 | BR09 | test失敗とStore故障の組合せ、試験終端後のcleanup失敗、全checkpoint ack済み | test／measurement不変、artifact解放からprocess終了を推定しない、run保全への昇格0 |
 | BR10 | 初期cap／byte予約不足、可変buffer／subclass、閉鎖後payload破棄 | copy前の実サイズと元snapshotが対応。cap超過は固定理由、queue診断を消さず本文別名を残さない |
-| BR11 | 健全なStoreでObserving中に明示取消・`D_stop`到達、保存中の取消 | Store.cancel=0、Store reasonなし。手書きのqueue（例: `child_started`、`stop_requested`）がsequence順に保存・ackされunsaved=0。処理中の保存はackまで進む |
-| BR12 | `D_save`の前後と等値、残queueあり。Reservedでの取消 | 等値以降は新規save=0・Store呼出し=0・Store.cancel=0。残りはunsavedでqueue順を保持。Reservedの取消はack=0 |
+| BR11 | 健全なStoreでObserving中に明示取消・`D_stop`到達、保存中の取消 | Store.cancel=0、Store reasonなし。手書きのqueue（例: `child_started`、`stop_requested`）がsequence順に保存・ackされ`unacknowledged`=0。処理中の保存はackまで進む |
+| BR12 | `D_save`の前後と等値、残queueあり。Reservedでの取消 | 等値以降は新規save=0・Store呼出し=0・Store.cancel=0。残りは`unacknowledged`でqueue順を保持。Reservedの取消はack=0 |
 | BR13 | slot区分別期限の境界。`D_save`後の`manifest.json`とcheckpoint、期限表の不正な順序 | `D_save`後でもmanifestの期限表には到達でき、checkpointは拒否される。順序不正はStoreを生成しない。実manifest集合の検証とは呼ばない |
 | BR14 | `conditions_ready`のack成功・線形化点前の失敗 | ack成功時だけ`start()`へ進める。失敗時は子起動0 |
+
+SB-A／SB-B時点の状況は次のとおり。実施済みはメモリfakeでの確認で、実保存の証明ではない。
+
+| ID | 状況 | 残り |
+|---|---|---|
+| BR01、BR05、BR14 | 実施済み | なし |
+| BR02 | 一部 | encoding版の不一致。slot・size・digest・別owner・コピーは実施済み |
+| BR03 | 一部 | 成功分の二重消費は、receiptの再利用経路がないので到達不能 |
+| BR04 | 一部 | Storeの試行別結果（create試行の有無） |
+| BR06 | 一部 | 成功分の保持は実施済み。停止checkpointの非再帰は明示の対照なし |
+| BR07 | 一部 | 別clockの対照。`late`・逆行・原点は実施済み |
+| BR08 | 一部 | 通知throw・部分生成の連続対照 |
+| BR09 | 一部 | 試験終端後のcleanup失敗 |
+| BR10 | 一部 | 可変buffer・subclassは単体Storeのみ。閉鎖後のpayload破棄は未実施 |
+| BR11 | 一部 | 観測中の明示取消は実施済み。`D_stop`到達から保存完了までの連続対照 |
+| BR12 | 一部 | `D_save`等値とReservedの取消は実施済み。残queueの順序の連続対照 |
+| BR13 | 未実施 | slot区分別の期限表が未実装 |
 
 oracleはbridge自身のmapper／encoder／guardを呼ばず、固定expected header・golden digest・イベント順・queue残数を独立定義する。各負の対照は狙った故障点へ到達したことをassertする。compile／配布物の負の対照ではprivate証拠を外部生成できず、試験登録口・driverが製品へ入らないことを確認する。線形化の中間故障を無理に注入して実装に新callbackを持ち込まない。
 

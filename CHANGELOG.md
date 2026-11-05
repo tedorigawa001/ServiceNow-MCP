@@ -184,6 +184,8 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 ### Added
 
+- WF-B review fixes for the test-only checkpoint persistence: a stray recorder call after the test terminal is only a diagnostic and no longer cancels the Store, so queued evidence can still be saved; misuse while observing stays a fatal stop. The cleanup split and the limits are read once at construction. Tests now cover consume failures, slot and digest mismatches with a genuine receipt, and a queue head that moved. No whole-run preservation or formal issuance is enabled.
+
 - WF-B review fixes for the test-only store/recorder binding: the shared clock stays readable after a stop so a Store can still release its handle, admission staying with the guard; a root takes one owner, so a fresh run key cannot obtain a fresh Store; recorder misuse and a refused gate are fatal stops, while cancellation, the stop deadline and the start window stay observation stops; a discard at or after the save deadline closes without cancelling the Store. Tests now cover the Store wiring and `Store.cancel`. No bound save or acknowledgement exists yet.
 
 - WF-B review fixes for the test-only in-memory EvidenceStore: the byte limits now use the real input size and copy with no callback after the check, so a growing buffer or a subclass that misreports its length cannot exceed them. A close that succeeds at or after the cleanup deadline is reported as a separate `late` state rather than confirmed, and non-object forged receipts are sticky failures. New controls cover first-reason retention, throwing cleanup, structural ceilings and nested calls. No filesystem, recorder or issuance behavior changes.
