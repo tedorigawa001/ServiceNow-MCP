@@ -1,6 +1,8 @@
 # WF-B EvidenceStore：artifact単位の内部契約とfake
 
-Version: draft-0.8 / Date: 2026-11-05 / 基準HEAD: `7f6ef4f` / レビュー修正の基準HEAD: `fb91044` / 試行別結果の実装基準HEAD: `85eb9ad`。
+Version: draft-0.9 / Date: 2026-11-05 / 基準HEAD: `7f6ef4f` / レビュー修正の基準HEAD: `fb91044` / 試行別結果の実装基準HEAD: `85eb9ad`。
+
+draft-0.9: [DT-B検証記録](E2E_BEST_PRACTICE_WFB_RECORDER_TERMINAL_DTB_2026-11-05.md)。Store busy照会・固定unwind継続をmodule-privateに接続し、Storeのcleanup／試行結果固定より先にrecorder終端へ入らない。閉鎖後clock不正は一度だけStore受付を取消すが、既存cleanupと診断は保持する。実保存／ProcessOwnerへの接続ではない。
 
 draft-0.8: [DT-Aの合成検証](E2E_BEST_PRACTICE_WFB_SLOT_DEADLINES_DTA_2026-11-05.md)。固定期限表・同run／budget bindingをsave／receipt消費／closeへ接続した。旧単体の期限pairは維持し、recorder終端・manifest writer・実予算接続は行わない。
 
@@ -82,4 +84,4 @@ OS backend・metadata／ACL／symlink実取得、共有session claim／retry、m
 
 `reason`はこの保存の主失敗を保持する。既存sticky状態による拒否は`store_stopped`／`rejection=sticky`、busy再入拒否は`binding`／`rejection=busy`。Store全体の最初の理由は従来どおりsnapshot.reasonへ別保持する。cleanupのfalse／throwは`cleanupReason=close`、不正／取得失敗時刻はclock、予約超過はdeadline。cleanup失敗で主理由を置換しない。成功後やconsume失敗後の次の保存拒否も、新recordのcleanupはnot_startedである。
 
-試行結果は限定DATAで、bytes・path・raw例外を含まず、receiptを新規生成／昇格する権限ではない。DT-Aのtable-modeでは選択済みの`deadlineClass`／`deadlineVersion`を追加する。busy／sticky拒否では選択自体がないので付加せず、legacy単体結果も変更しない。Store内部に呼出し履歴を無制限保持せず、bridgeは既存の最大6 slotへ同じ凍結resultを紐付ける。Storeからの戻り自体が得られない異常ではattemptを推定・捏造しない。上位通知throw／最終終端・費用上界の詳細は別段階のまま。
+試行結果は限定DATAで、bytes・path・raw例外を含まず、receiptを新規生成／昇格する権限ではない。DT-Aのtable-modeでは選択済みの`deadlineClass`／`deadlineVersion`を追加する。busy／sticky拒否では選択自体がないので付加せず、legacy単体結果も変更しない。Store内部に呼出し履歴を無制限保持せず、bridgeは既存の最大6 slotへ同じ凍結resultを紐付ける。Storeからの戻り自体が得られない異常ではattemptを推定・捏造しない。recorder終端はDT-Bで合成接続し、上位通知throw／部分生成との全組合せ・連続費用上界はDT-Cへ残す。

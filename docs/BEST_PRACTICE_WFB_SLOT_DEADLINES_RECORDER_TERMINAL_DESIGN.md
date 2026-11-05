@@ -1,14 +1,16 @@
 # WF-B：slot固定期限表・保存経路閉鎖後recorder終端の接続差分
 
-Version: draft-0.3 / Date: 2026-11-05 / 基準HEAD: `31712a6` / レビュー修正の基準HEAD: `9f8507b` / DT-A実装基準HEAD: `eb642a2`。
+Version: draft-0.4 / Date: 2026-11-05 / 基準HEAD: `31712a6` / レビュー修正の基準HEAD: `9f8507b` / DT-A実装基準HEAD: `eb642a2` / DT-B実装基準HEAD: `aa575f3`。
+
+draft-0.4: **DT-Bを合成実装**。先行terminal slot・同owner identity・一度限りclaim・安全なPending・queue／四軸を変えないprivate commitと、閉鎖後clock不正のStore一度限り取消を接続した。[検証記録](E2E_BEST_PRACTICE_WFB_RECORDER_TERMINAL_DTB_2026-11-05.md)を参照。DT-Cの連続対照・最終費目は未実施。
 
 draft-0.3: **DT-Aだけを合成実装**。固定2区分の純粋計算・厳密DATA検査・同run／budget結合をsave／receipt消費／closeへ接続した。[検証記録](E2E_BEST_PRACTICE_WFB_SLOT_DEADLINES_DTA_2026-11-05.md)を参照。DT-B／DT-Cは未実装。
 
 draft-0.2のレビュー修正: Pendingの条件をownerのすべての同期区間とclock読取中へ広げた。`D_save`閉鎖後に残るrecorderの状態ごとの終端を定めた。`Closed`後のclock不正ではStoreを取消す。期限切れのevidence保存はstickyとし、manifestも不可とする。manifestの試験方法と親§7の残項目との対応を追加した。
 
-Status: **固定期限表のDT-Aはメモリ内で合成検証済み。recorder終端・閉鎖後clockの追加処理・連続費目検証は未実装。** 正式発行口閉鎖・全体受付無効・Unknown・VM／監視／telemetry調査保留を維持する。保存先・保持期間・運用cap／時間枠・停止方式は未承認。再採取・既存証拠copy／保管操作・実接続・実通信・設定変更・Pushは行わない。
+Status: **DT-A／DT-Bはメモリ内で合成検証済み。DT-Cの状態別連続対照・最終費目と実保存は未対応。** 正式発行口閉鎖・全体受付無効・Unknown・VM／監視／telemetry調査保留を維持する。保存先・保持期間・運用cap／時間枠・停止方式は未承認。再採取・既存証拠copy／保管操作・実接続・実通信・設定変更・Pushは行わない。
 
-親は[Store／recorder接続設計](BEST_PRACTICE_WFB_STORE_RECORDER_BRIDGE_DESIGN.md)と[EvidenceStore契約](BEST_PRACTICE_WFB_EVIDENCE_STORE_FAKE_CONTRACT.md)。既存SB-A／SB-B・試行別結果とレビュー修正を維持する。終端関係の型名・操作名は提案で、DT-A実装境界は§8.1に限る。
+親は[Store／recorder接続設計](BEST_PRACTICE_WFB_STORE_RECORDER_BRIDGE_DESIGN.md)と[EvidenceStore契約](BEST_PRACTICE_WFB_EVIDENCE_STORE_FAKE_CONTRACT.md)。既存SB-A／SB-B・試行別結果とレビュー修正を維持する。実装境界はDT-Aが§8.1、DT-Bが§8.2。運用側のfacade／保存／ProcessOwnerへの接続は未実装。
 
 ## 1 差分・非目標
 
@@ -65,7 +67,7 @@ Status: **固定期限表のDT-Aはメモリ内で合成検証済み。recorder�
 
 RunBridgeOwnerは子生成前にterminal診断slotとclaimを確保する。終端identityは同owner／run／recorder／budgetへ結び、保存の停止epochとは別に保持する。保存epochの進行を理由にcleanupやrecorder終端まで失効させない。診断には要求時／完了時の保存epochを残し、他ownerへ移譲しない。
 
-将来の限定facadeから`finishRecorder`を要求できるが、callerが時刻・成功bool・四軸・queue・終端理由を供給するAPIにしない。内部owner状態から固定理由を選ぶ。通常の保存用enter／guardを迂回する**終端専用のprivate継続**であり、保存権限を迂回するfriendではない。
+合成限定facadeの`finishRecorder(run, recorder, store)`は同ownerのopaque参照だけを受け、callerが時刻・成功bool・四軸・queue・終端理由を供給するAPIにしない。内部owner状態から固定理由を選ぶ。通常の保存用enter／guardを迂回する**終端専用のprivate継続**であり、保存権限を迂回するfriendではない。runtimeの入口へは接続しない。
 
 - 保存受付がまだ健全に開いている要求はnot_readyで拒否し、終端claimを消費しない。観測停止を勝手に保存閉鎖へ昇格させない。
 - Closed／Stoppedで、ownerの同期区間の途中ならclaimを取りPendingだけを記録する。同期区間は保存・消費に限らず、recorderコマンド、`checkpoint`、`prepare`、`discard`、共有clockの読取を含む。未解決handleはStoreが所有したまま。Storeのfinally、bridge消費中slotの回収、実行中のrecorderコマンド、clock読取のいずれかが戻るまでrecorder終端sectionへ入らない。これにより、読取中の再入がterminal.clockの異常として記録されることと、recorderの時刻判定の途中で閉じることを防ぐ。
@@ -115,7 +117,7 @@ terminal slotは固定理由・元状態／最終状態・clock診断・late・�
 
 未知の通知結果・未解決handle・clock不明はUnknownのまま。未確認の解放責務／leaseは診断とは別に所有元へ残し、terminal helperにそれを破棄する権限を与えない。OS leaseの具体方式は未実装である。必要なidentityが欠ける場合はFailed、recorderが未生成ならnot_constructedを記録し、成功boolで埋めない。payload／私的証拠別名は固定unwindで外すが、診断・queueを削除／無限複製しない。raw例外・bytes・実path・環境・認証情報は出さない。
 
-## 7 合成受入条件（DT-Aは§8.1、終端関係は未実施）
+## 7 合成受入条件（実施範囲は§8.1／§8.2、連続対照はDT-C）
 
 | ID | 対照 | 必須結果 |
 |---|---|---|
@@ -152,7 +154,7 @@ oracleは表生成器やterminal helperを呼ばず、手書きのrow／境界�
 ## 8 後続の順序・未確認事項
 
 1. **DT-A（合成実装済み）**: 固定表の純粋計算・strict構造検査・同run／budget binding。メモリStoreのsave／consume／closeへ接続し、legacy単体入口を維持する。
-2. **DT-B**: privateな終端slot／claim・安全なPending／固定terminal section。queue不変・四軸・診断保持を確認し、save-lane guardから独立させる。
+2. **DT-B（合成実装済み）**: privateな終端slot／claim・安全なPending／固定terminal section。queue不変・四軸・診断保持を確認し、save-lane guardから独立させる。
 3. **DT-C**: D_stopから保存完了／閉鎖／終端まで、通知throw／部分生成失敗を含む連続fakeと費目上界を確認する。manifest rowは到達性だけで、正式writerの発行へ進めない。
 
 全段階とも別の明示実装指示を要する。期限の具体値・terminal費用・正式保存先・保持／削除・OS backend・実承認は未承認／未確認。本文・容量モデル・ProcessOwner・manifest集合・session台帳・実採取は別課題であり、本書作成で状態を進めない。
@@ -167,4 +169,18 @@ table-mode Storeは同run／budgetを生成時照合し、期限表の不正入�
 
 DT01〜DT05の期限表部分を実施した。直前／等値／直後、途中期限到達、cleanup予約切れ・late、別run／budget・summary／継承table混入、evidence sticky後のmanifest拒否を独立oracleで確認した。bound checkpoint laneの閉鎖後のmanifest保存は、§7のspy-only子Store対照に限る。必須集合・manifest writer・run保全／process終了へ昇格しない。
 
-DT06以降のrecorder終端・Pending・閉鎖後clock不正のStore取消・状態別連続対照・最終費目は未実装。DT10／DT12全体を実施済みと数えない。shared clockや保存guardの既存挙動はDT-Aで拡張しない。
+DT-A単独時点ではrecorder終端・Pending・閉鎖後clock不正のStore取消は未実装だった。これらのDT-Bでの範囲は次節。状態別連続対照・最終費目はDT-Cへ残す。
+
+### 8.2 DT-B実装境界
+
+同じ試験専用kernelに先行`TerminalSlot`を確保し、子recorder生成後に同owner／run origin／budget origin／recorderを一度結ぶ。保存epochはidentityへ使い回さず、要求／完了epochを限定DATAへ残す。保存受付が健全なら`not_ready`でclaim 0、foreign参照・copy・診断DATAは`rejected`でclaim 0。eligible要求だけ1 claimを取り`Pending`となり、以後の要求・再入は再実行しない。
+
+ownerの成功操作だけでなく入口拒否／fatal区間にもdepthを置く。recorderコマンド・checkpoint・prepare・discard・persist・observeStopの最外側unwind、共有clockの読取／検証終了、Storeの単発試行結果凍結／cleanup／消費finallyの完了を待つ。Storeのbusy照会・固定unwind取付けはmodule-private継続で、公開friend／登録口を作らない。raw子Storeを使う試験対照でもStore busy中はPendingのままである。
+
+安全な位置でidentityを再照合し`Entered`、元state／queue件数を先行slotへ記録する。private commitはrecorderのstateをClosedへ変更するだけで、clock・IO・callback・public abandon／verify／publishを呼ばない。queue配列・要素参照／順序・issued・first reason・testFailure・四軸は書き換えない。公開snapshotだけを追加し、終端権限を返さない。
+
+同clockはpre 1回、preが読めたときだけpost 1回まで。読めなくてもメモリ閉鎖はCommittedとし、`clock=unknown`、時刻未確定は`late=undefined`にする。D_all等値以降はlate。post失敗でもCommittedを戻さず、枠内完了・保存・process終了へ昇格しない。閉鎖後clock異常はphaseを保ち、空ならbridge理由clock、Store取消は一度だけ。後の正常clockはcleanup用に読めるが、Storeの受付は戻らない。
+
+生成失敗は新facadeを返さない。terminal slotは`NotRequested`／claim 0のまま、未生成なら`not_constructed`、recorder生成後のStore生成失敗は既存fatal後の実stateから`already_closed`を記録する。これを終端claimの成功やProcessOwnerの終了確認と数えない。
+
+DT07の7状態、DT08のnot_ready／混入／二重／再入／各同期区間、DT09の取得handle回収・未確認closeと試行結果保持、DT10のpre／post clock・D_all境界、DT11のack済み／保存済み未ack／未試行混在、DT12のspy-only manifest区分の到達性を局所合成対照で確認した。Published／Verifyingの準備はraw recorderのbranch対照で、bound成功ではない。DT06のD_stopからの全経路、通知throw／部分生成と終端の全組合せ、費目／上界の連続検証はDT-Cへ残し、§7全体の完了とは呼ばない。

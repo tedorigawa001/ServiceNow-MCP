@@ -5,6 +5,10 @@ import { createHash } from 'node:crypto';
 let boundAckReady: (recorder: FakeFixedRecorder, checkpoint: Checkpoint) => boolean;
 let boundAckCommit: (recorder: FakeFixedRecorder, checkpoint: Checkpoint) => void;
 let boundConsume: (store: FakeEvidenceStore, run: object, receipt: FakeSaveReceipt, expected: SavedFacts) => boolean;
+let terminalView: (recorder: FakeFixedRecorder) => { state: State; queued: number };
+let terminalCommit: (recorder: FakeFixedRecorder) => void;
+let storeIdle: (store: FakeEvidenceStore) => boolean;
+let installStoreUnwind: (store: FakeEvidenceStore, unwind: () => void) => void;
 const shiftQueue = Function.prototype.call.bind(Array.prototype.shift) as (queue: Checkpoint[]) => Checkpoint | undefined;
 
 /** Legacy recorder state model; its bound ack continuation remains private to this module. */
@@ -50,6 +54,8 @@ export interface Checkpoint { readonly sequence: number; readonly trigger: Trigg
 /** The only effects are bounded in-memory fake state transitions. */
 export class FakeFixedRecorder {
   static {
+    terminalView = r => ({ state: r.#state, queued: r.#queue.length });
+    terminalCommit = r => { r.#state = 'Closed'; }; // no clock, callbacks, queue or axis writes
     boundAckReady = (r, checkpoint) => r.#state !== 'Closed' && r.#state !== 'Published' && r.#queue[0] === checkpoint;
     boundAckCommit = (r, checkpoint) => {
       shiftQueue(r.#queue);
@@ -318,6 +324,8 @@ const realLength = (bytes: Uint8Array) => intrinsicByteLength.call(bytes) as num
 
 export class FakeEvidenceStore {
   static {
+    storeIdle = s => !s.#busy;
+    installStoreUnwind = (s, unwind) => { s.#unwind = unwind; };
     boundConsume = (s, run, receipt, expected) => {
       if (s.#busy) return s.#fail('binding');
       if (s.#reason) return false;
@@ -330,11 +338,12 @@ export class FakeEvidenceStore {
           return s.#fail('binding');
         if (saved.tableOrigin !== s.#tableOrigin || saved.row !== s.#row(saved.slot)) return s.#fail('binding');
         return s.#guard(saved.row) && s.#guard(saved.row);
-      } finally { s.#busy = false; }
+      } finally { s.#busy = false; s.#unwind?.(); }
     };
   }
   #reason: StoreReason | undefined;
   #busy = false;
+  #unwind: (() => void) | undefined;
   #last = 0;
   #slots = new Set<string>();
   #receipts = new WeakMap<object, Saved>();
@@ -428,7 +437,9 @@ export class FakeEvidenceStore {
     const attempt: MutableAttempt = { disposition: 'not_started', createAttempted: false, handleAcquired: false,
       closeAttempted: false, cleanup: 'not_started', reservedBytes: 0 };
     const receipt = this.#save(run, slot, bytes, attempt);
-    return Object.freeze({ receipt, attempt: Object.freeze(attempt) });
+    const result = Object.freeze({ receipt, attempt: Object.freeze(attempt) });
+    this.#unwind?.();
+    return result;
   }
   #save(run: object, slot: string, bytes: Uint8Array, attempt: MutableAttempt): FakeSaveReceipt | undefined {
     if (this.#busy) {
@@ -523,7 +534,7 @@ export class FakeEvidenceStore {
       if (saved.tableOrigin !== this.#tableOrigin || saved.row !== this.#row(saved.slot)) { this.#fail('binding'); return undefined; }
       if (!this.#guard(saved.row) || !this.#guard(saved.row)) return undefined;
       return Object.freeze({ slot: saved.slot, size: saved.size, digest: saved.digest }); // DATA only; private row/origin stays hidden
-    } finally { this.#busy = false; }
+    } finally { this.#busy = false; this.#unwind?.(); }
   }
   snapshot() { return Object.freeze({ reason: this.#reason, claimed: this.#slots.size, charged: this.#charged, cleanup: this.#cleanup }); }
 }
@@ -543,6 +554,14 @@ export interface PreparationClaim { readonly [claimBrand]: true }
 interface StoredCheckpointEvidence { readonly checkpoint: Checkpoint; readonly receiptOrigin: object; readonly epoch: number }
 type Failure = 'binding' | 'state' | 'clock' | 'construction' | 'discarded' | 'encoding' | 'store';
 type Phase = 'Idle' | 'InFlight' | 'Stopped' | 'Closed';
+type TerminalState = 'NotRequested' | 'Pending' | 'Entered' | 'Committed' | 'Failed';
+type TerminalReason = 'observation_not_started' | 'forced_from_observing' | 'closed_after_drain'
+  | 'closed_after_verify' | 'closed_after_publish' | 'already_closed' | 'not_constructed' | 'binding';
+interface TerminalSlot {
+  state: TerminalState; claims: number; reason?: TerminalReason; from?: State; to?: State;
+  queued?: number; stopNotObserved: boolean; clock: 'not_read' | 'valid' | 'unknown'; late?: boolean;
+  requestedEpoch?: number; completedEpoch?: number;
+}
 type Slot = {
   status: 'empty' | 'bound' | 'claimed' | 'saved' | 'consumed' | 'acknowledged' | 'retired';
   checkpoint?: Checkpoint; binding?: BoundCheckpoint; claim?: PreparationClaim;
@@ -573,6 +592,11 @@ export class SyntheticStoreRecorderBinding {
   readonly store = token<BoundStore>();
   #runOrigin = Object.freeze({});
   #budgetOrigin = Object.freeze({});
+  // Shell precedes children. This state and identity are independent of the save epoch.
+  #terminalSlot: TerminalSlot = { state: 'NotRequested', claims: 0, stopNotObserved: false, clock: 'not_read' };
+  #terminalIdentity: { owner: object; run: object; budget: object; recorder: FakeFixedRecorder } | undefined;
+  #depth = 0;
+  #storeCancelled = false;
   #phase: Phase = 'Idle';
   #reason: Failure | undefined;
   #stage: 'owner' | 'recorder' | 'store' | 'ready' = 'owner';
@@ -619,6 +643,7 @@ export class SyntheticStoreRecorderBinding {
       if (input.failAt === 'recorder') throw Error();
       owner.#record = FakeFixedRecorder.create(pinned, sharedClock);
       if (!owner.#record) throw Error();
+      owner.#terminalIdentity = Object.freeze({ owner, run: owner.#runOrigin, budget: owner.#budgetOrigin, recorder: owner.#record });
       owner.#stage = 'store';
       if (input.failAt === 'store') throw Error();
       const limits = { ...input.limits };
@@ -626,12 +651,18 @@ export class SyntheticStoreRecorderBinding {
       owner.#storage = FakeEvidenceStore.create(input.ops, root, owner.#runOrigin,
         { ...limits, deadlineTable: deadlines.table, budget: owner.#budgetOrigin }, sharedClock);
       if (!owner.#storage) throw Error();
+      installStoreUnwind(owner.#storage, () => owner.#drainTerminal());
       owner.#stage = 'ready';
       // Freeze the public surface, not the private state; no child instance is exposed.
       Object.freeze(owner);
       return { ok: true as const, root: owner };
     } catch {
       owner.#fatal('construction');
+      const view = owner.#record ? terminalView(owner.#record) : undefined;
+      owner.#terminalSlot.reason = view ? 'already_closed' : 'not_constructed';
+      owner.#terminalSlot.from = view?.state;
+      owner.#terminalSlot.to = view?.state;
+      owner.#terminalSlot.queued = view?.queued;
       return { ok: false as const, diagnostic: owner.snapshot() };
     }
   }
@@ -650,28 +681,89 @@ export class SyntheticStoreRecorderBinding {
     this.#phase = 'Stopped';
     this.#epoch++;
     this.#retire();
-    this.#storage?.cancel();
+    this.#cancelStore();
     this.#record?.recorderFailure();
     return false;
   }
   #terminal() { return this.#phase === 'Stopped' || this.#phase === 'Closed'; }
+  #cancelStore() {
+    if (!this.#storeCancelled && this.#storage) { this.#storeCancelled = true; this.#storage.cancel(); }
+  }
+  #clockFailure() {
+    if (this.#terminal()) {
+      this.#reason ??= 'clock';
+      this.#cancelStore(); // sticky even when a later shared-clock read recovers; Closed stays Closed
+    } else this.#fatal('clock');
+  }
   /** Reads and validates only, also after a stop: a Store still owns its cleanup. Admission is #guard's. */
   #readClock() {
-    if (this.#reading) { this.#fatal('clock'); throw Error('binding_clock'); }
+    if (this.#reading) { this.#clockFailure(); throw Error('binding_clock'); }
     this.#reading = true;
-    let at: number;
-    try { at = this.#now!(); }
-    catch { this.#fatal('clock'); throw Error('binding_clock'); }
-    finally { this.#reading = false; }
-    if (!Number.isSafeInteger(at) || at < this.#last || at < 0) {
-      this.#fatal('clock'); throw Error('binding_clock');
+    try {
+      let at: number;
+      try { at = this.#now!(); }
+      catch { this.#clockFailure(); throw Error('binding_clock'); }
+      if (!Number.isSafeInteger(at) || at < this.#last || at < 0) {
+        this.#clockFailure(); throw Error('binding_clock');
+      }
+      this.#last = at;
+      return at;
+    } finally {
+      this.#reading = false;
+      this.#drainTerminal();
     }
-    this.#last = at;
-    return at;
+  }
+  /** Synthetic facade only: caller supplies identities, never time/axes/queue/success or a continuation. */
+  finishRecorder(run: BoundRun, recorder: BoundRecorder, store: BoundStore) {
+    if (run !== this.run || recorder !== this.recorder || store !== this.store) return 'rejected' as const;
+    const slot = this.#terminalSlot;
+    if (slot.state !== 'NotRequested') return 'rejected' as const;
+    if (!this.#terminal()) return 'not_ready' as const;
+    slot.state = 'Pending'; slot.claims = 1; slot.requestedEpoch = this.#epoch;
+    this.#drainTerminal();
+    return slot.state as 'Pending' | 'Committed' | 'Failed';
+  }
+  #drainTerminal() {
+    const slot = this.#terminalSlot;
+    if (slot.state !== 'Pending' || this.#depth || this.#busy || this.#reading
+      || (this.#storage && !storeIdle(this.#storage))) return;
+    const identity = this.#terminalIdentity;
+    if (!this.#terminal() || !identity || identity.owner !== this || identity.run !== this.#runOrigin
+      || identity.budget !== this.#budgetOrigin || identity.recorder !== this.#record || !this.#plan) {
+      slot.state = 'Failed'; slot.reason = 'binding'; return;
+    }
+    slot.state = 'Entered';
+    this.#retire();
+    const view = terminalView(identity.recorder);
+    slot.from = view.state; slot.queued = view.queued;
+    const reasons: Record<State, TerminalReason> = {
+      Gated: 'observation_not_started', Reserved: 'observation_not_started', Observing: 'forced_from_observing',
+      Draining: 'closed_after_drain', Verifying: 'closed_after_verify', Published: 'closed_after_publish', Closed: 'already_closed',
+    };
+    slot.reason = reasons[view.state]; slot.stopNotObserved = view.state === 'Observing';
+    let pre: number | undefined;
+    try { pre = this.#readClock(); } catch { /* close memory even with unknown time */ }
+    slot.clock = pre === undefined ? 'unknown' : 'valid';
+    slot.late = pre === undefined ? undefined : pre >= this.#plan.all;
+    terminalCommit(identity.recorder);
+    slot.to = 'Closed'; slot.state = 'Committed';
+    if (pre !== undefined) {
+      try { slot.late = this.#readClock() >= this.#plan.all || slot.late; }
+      catch { slot.clock = 'unknown'; if (!slot.late) slot.late = undefined; }
+    }
+    slot.completedEpoch = this.#epoch;
+  }
+  #leave() {
+    this.#busy = false;
+    this.#depth--;
+    this.#drainTerminal();
   }
   #enter(required: Phase) {
-    if (this.#busy) return this.#fatal('binding');
-    if (this.#phase !== required) return this.#fatal('state');
+    this.#depth++;
+    if (this.#busy || this.#phase !== required) {
+      try { return this.#fatal(this.#busy ? 'binding' : 'state'); }
+      finally { this.#depth--; this.#drainTerminal(); }
+    }
     this.#busy = true;
     return true;
   }
@@ -700,7 +792,7 @@ export class SyntheticStoreRecorderBinding {
       if (result.reason === 'clock' || result.reason === 'state' || result.reason === 'binding') return this.#fatal(result.reason);
       if (result.state === 'Closed') { this.#phase = 'Closed'; this.#retire(); }
       return ok;
-    } finally { this.#busy = false; }
+    } finally { this.#leave(); }
   }
   reserve(gates: boolean) { return this.#command(r => r.reserve(gates)); }
   start() { return this.#command(r => r.start()); }
@@ -708,12 +800,14 @@ export class SyntheticStoreRecorderBinding {
   testAnomaly() { return this.#command(r => r.testAnomaly()); }
   endTest(result: 'passed' | 'failed' | 'incomplete', complete: boolean) { return this.#command(r => r.endTest(result, complete)); }
   observeStop() {
-    if (this.#terminal()) return false;
-    // Observation cancellation is not a new bridge operation, even during a clock callback.
-    // Reserved closes directly; Observing becomes Draining while a healthy save may continue.
-    this.#record?.cancel();
-    if (this.#record?.snapshot().state === 'Closed') { this.#phase = 'Closed'; this.#retire(); }
-    return false;
+    this.#depth++;
+    try {
+      if (this.#terminal()) return false;
+      // Observation cancellation is not a new bridge operation, even during a clock callback.
+      this.#record?.cancel();
+      if (this.#record?.snapshot().state === 'Closed') { this.#phase = 'Closed'; this.#retire(); }
+      return false;
+    } finally { this.#depth--; this.#drainTerminal(); }
   }
 
   checkpoint(): BoundCheckpoint | undefined {
@@ -732,7 +826,7 @@ export class SyntheticStoreRecorderBinding {
         slot.status = 'bound';
       }
       return slot.binding;
-    } finally { this.#busy = false; }
+    } finally { this.#leave(); }
   }
   prepare(run: BoundRun, recorder: BoundRecorder, store: BoundStore, binding: BoundCheckpoint): PreparationClaim | undefined {
     if (!this.#enter('Idle')) return undefined;
@@ -751,7 +845,7 @@ export class SyntheticStoreRecorderBinding {
       const claim = token<PreparationClaim>();
       slot.claim = claim;
       return claim;
-    } finally { this.#busy = false; }
+    } finally { this.#leave(); }
   }
   /** The original SB-A fixed discard remains available instead of the SB-B persist continuation. */
   discard(claim: PreparationClaim) {
@@ -762,7 +856,7 @@ export class SyntheticStoreRecorderBinding {
       if (!this.#guard()) return false; // D_save closes without Store.cancel, as for any other operation
       this.#fatal('discarded');
       return true;
-    } finally { this.#busy = false; }
+    } finally { this.#leave(); }
   }
   /** Fixed bound continuation; no caller bytes, receipt, consumer callback or ack authority. */
   persist(claim: PreparationClaim) {
@@ -821,12 +915,13 @@ export class SyntheticStoreRecorderBinding {
       owned = undefined;
       receipt = undefined;
       this.#storedEvidence = undefined;
-      this.#busy = false;
+      this.#leave();
     }
   }
   snapshot() {
     const recorder = this.#record?.snapshot();
     return Object.freeze({ phase: this.#phase, reason: this.#reason, stage: this.#stage, epoch: this.#epoch,
+      terminal: Object.freeze({ ...this.#terminalSlot }),
       claims: this.#claims, evidenceIssued: this.#storedEvidence !== undefined,
       slots: Object.freeze(this.#slots.map(s => s.status)),
       recorder, store: this.#storage?.snapshot(), unacknowledged: recorder?.checkpoints.length ?? 0, acknowledgements: this.#acks,

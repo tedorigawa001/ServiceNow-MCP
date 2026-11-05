@@ -556,7 +556,7 @@ describe('SB-A: failure/clock boundary, not runtime I/O', () => {
     expect(f.root.snapshot().phase).toBe('Closed');
     expect(f.store.snapshot()).toMatchObject({ reason: 'deadline', cleanup: 'confirmed' });
   });
-  it('keeps validating the clock after a stop, so regression is still refused', () => {
+  it('keeps Closed after a clock regression, records clock and permanently cancels Store', () => {
     const f = wired();
     f.root.reserve(true);
     f.set(10);
@@ -564,7 +564,10 @@ describe('SB-A: failure/clock boundary, not runtime I/O', () => {
     expect(f.clock()).toBe(10);
     f.set(9);
     expect(() => f.clock()).toThrow('binding_clock');
-    expect(f.root.snapshot()).toMatchObject({ phase: 'Closed', reason: undefined });
+    expect(f.root.snapshot()).toMatchObject({ phase: 'Closed', reason: 'clock', store: { reason: 'cancelled' } });
+    f.set(11);
+    expect(f.clock()).toBe(11); // cleanup clock remains usable, admission never recovers
+    expect(f.store.save(f.run, 'manifest.json', f.bytes)).toBeUndefined();
   });
   it('returns immutable diagnostic DATA, not reusable claims', () => {
     const f = prepared();
