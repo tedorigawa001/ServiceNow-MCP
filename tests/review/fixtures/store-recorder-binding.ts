@@ -14,7 +14,7 @@ export interface BoundCheckpoint { readonly [checkpointBrand]: true }
 export interface PreparationClaim { readonly [claimBrand]: true }
 // Reserved for the private post-save continuation in SB-B; SB-A has no issuer.
 interface StoredCheckpointEvidence { readonly checkpoint: Checkpoint; readonly receiptOrigin: object }
-type Failure = 'binding' | 'state' | 'clock' | 'deadline' | 'construction' | 'discarded';
+type Failure = 'binding' | 'state' | 'clock' | 'construction' | 'discarded';
 type Phase = 'Idle' | 'InFlight' | 'Stopped' | 'Closed';
 type Slot = { status: 'empty' | 'bound' | 'claimed' | 'retired'; checkpoint?: Checkpoint; binding?: BoundCheckpoint; claim?: PreparationClaim };
 export interface BindingInput {
@@ -25,6 +25,8 @@ export interface BindingInput {
   failAt?: 'owner' | 'recorder' | 'store';
 }
 const runClaims = new WeakSet<object>(); // Synthetic module only; never a runtime/session ledger.
+// One owner per root: a fresh run key must not buy a fresh Store over the same run files.
+const rootClaims = new WeakSet<object>();
 const objectToken = (v: unknown): v is object => v !== null && typeof v === 'object';
 const token = <T>() => Object.freeze({}) as T;
 
@@ -56,6 +58,9 @@ export class SyntheticStoreRecorderBinding {
     const owner = new SyntheticStoreRecorderBinding(); // diagnostic slots precede children and input inspection
     try {
       if (input.failAt === 'owner') throw Error();
+      const root = input.root;
+      if (rootClaims.has(root)) throw Error();
+      rootClaims.add(root); // Never refunded; a non-object root throws here and is a construction failure.
       const t = input.timing;
       const pinned: Timing = { startedAt: t.startedAt, outerMs: t.outerMs, sessionDeadline: t.sessionDeadline,
         marginMs: t.marginMs, reservations: { ...t.reservations } };
@@ -73,7 +78,7 @@ export class SyntheticStoreRecorderBinding {
       if (!owner.#record) throw Error();
       owner.#stage = 'store';
       if (input.failAt === 'store') throw Error();
-      owner.#storage = FakeEvidenceStore.create(input.ops, input.root, owner.#runOrigin,
+      owner.#storage = FakeEvidenceStore.create(input.ops, root, owner.#runOrigin,
         { ...input.limits, deadline: owner.#saveDeadline, cleanupDeadline: plan.stages[3] }, sharedClock);
       if (!owner.#storage) throw Error();
       owner.#stage = 'ready';
@@ -105,10 +110,9 @@ export class SyntheticStoreRecorderBinding {
     return false;
   }
   #terminal() { return this.#phase === 'Stopped' || this.#phase === 'Closed'; }
+  /** Reads and validates only, also after a stop: a Store still owns its cleanup. Admission is #guard's. */
   #readClock() {
-    if (this.#reading || this.#phase === 'Stopped' || this.#phase === 'Closed') {
-      this.#fatal('clock'); throw Error('binding_clock');
-    }
+    if (this.#reading) { this.#fatal('clock'); throw Error('binding_clock'); }
     this.#reading = true;
     let at: number;
     try { at = this.#now!(); }
@@ -117,7 +121,6 @@ export class SyntheticStoreRecorderBinding {
     if (!Number.isSafeInteger(at) || at < this.#last || at < 0) {
       this.#fatal('clock'); throw Error('binding_clock');
     }
-    if (this.#terminal()) throw Error('binding_stopped');
     this.#last = at;
     return at;
   }
@@ -145,9 +148,9 @@ export class SyntheticStoreRecorderBinding {
       const ok = action(this.#record!);
       if (this.#phase === 'Stopped' || this.#phase === 'Closed') return false;
       const result = this.#record!.snapshot();
+      // Misuse, a refused gate and a clock failure are fatal; cancellation, D_stop and window are observation-only.
+      if (result.reason === 'clock' || result.reason === 'state' || result.reason === 'binding') return this.#fatal(result.reason);
       if (result.state === 'Closed') { this.#phase = 'Closed'; this.#retire(); }
-      // Cancellation / D_stop is observation-only; a recorder clock failure is fatal.
-      else if (result.reason === 'clock') return this.#fatal('clock');
       return ok;
     } finally { this.#busy = false; }
   }
@@ -208,6 +211,7 @@ export class SyntheticStoreRecorderBinding {
     try {
       const slot = this.#slots.find(s => s.claim === claim && s.status === 'claimed');
       if (!slot) return this.#fatal('binding');
+      if (!this.#guard()) return false; // D_save closes without Store.cancel, as for any other operation
       this.#fatal('discarded');
       return true;
     } finally { this.#busy = false; }

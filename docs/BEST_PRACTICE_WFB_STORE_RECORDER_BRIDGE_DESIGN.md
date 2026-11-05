@@ -1,6 +1,8 @@
 # WF-B EvidenceStore／recorder：一度限り接続の差分設計
 
-Version: draft-0.3 / Date: 2026-11-05 / 基準HEAD: `62df06f` / SB-A実装基準HEAD: `2f1120f`。
+Version: draft-0.4 / Date: 2026-11-05 / 基準HEAD: `277c057` / SB-A実装基準HEAD: `2f1120f`。
+
+draft-0.4のレビュー修正: 共有clockが停止後に例外を返し、Storeの解放処理を止めていたので、読取と受付を分けた。新しいkeyで同じrootに別Storeを作れたので、rootもclaimの対象にした。recorderの誤用を致命的停止へ分類した。`D_save`後のdiscardはStore.cancelを呼ばず閉鎖する。
 
 draft-0.3: [SB-A合成検証記録](E2E_BEST_PRACTICE_WFB_STORE_RECORDER_SBA_2026-11-05.md)を追加。同生成元owner・別brand・run生成claim・元checkpointへの準備claimと固定discardを試験専用assemblyへ実装した。旧単体fakeの実装・入口は変更せず、新経路ではraw子instanceを非公開にする。保存証拠発行・保存／ack接続は未実装。
 
@@ -35,7 +37,7 @@ checkpoint本文・WF-A集約・実reporter・manifest集合・session票・Proc
 - sequence 1〜6に対応する`report.partial.0001.json`〜`.0006.json`。trigger名から別名を選ばず、実際の発行順へ一対一対応する。
 - 固定encoding版・同snapshotから作ったprivate owned bytes、その実サイズとdigest。byte列は外部へ公開せず、検査からcopyの間にcallbackを挟まない。可変長buffer・subclassの長さ／iteratorを信頼しないというStoreの修正を引き継ぐ。
 
-単体fakeの既存入口・試験は残すが、新しいbound recorder／Storeは別のprivate admissionで区別する。既存`acknowledge`や`consume`の公開DATAからbound経路へ登録／昇格できるfriendを作らない。結合ownerの生成は同runにつき一度だけclaimし、失敗しても再生成してStoreのsticky失敗・累積枠を回避しない。claimは試験module内のprivateなWeakSetにrun tokenをkeyとして持つ。実sessionや製品runtimeの台帳とは共有せず、process間の一意性は保証しない（session台帳の後続課題）。
+単体fakeの既存入口・試験は残すが、新しいbound recorder／Storeは別のprivate admissionで区別する。既存`acknowledge`や`consume`の公開DATAからbound経路へ登録／昇格できるfriendを作らない。結合ownerの生成は同runにつき一度だけclaimし、失敗しても再生成してStoreのsticky失敗・累積枠を回避しない。claimは試験module内のprivateなWeakSetにrun tokenをkeyとして持つ。同じrootにも1 ownerだけとし、同様にWeakSetでclaimして返さない。run tokenは呼出し側が作れるので、これだけでは新しいtokenで別Storeを得られるためである。実sessionや製品runtimeの台帳とは共有せず、process間の一意性は保証しない（session台帳の後続課題）。
 
 `conditions_ready`も他のcheckpointと同じ連番partialへ保存する。これは`conditions.json`自体の検証・R01〜R08承認を代替しない。今回のfakeで子起動状態へ進むとしても、実processを起動する権限はない。
 
@@ -70,9 +72,11 @@ ownerは元runの開始時点・単調clock・`planTime`の絶対期限・停止
   `C_manifest`もmanifest工程の内側を切り分ける正・有限の予約で、`D_flush < D_manifest_save < D_manifest`を保つ。manifestの保存自体は範囲外だが、期限表で後続の経路を塞がない。
 - `D_save`到達ではbridgeがcheckpoint経路だけを`Closed`にする。Storeを呼ばないので、Store失敗にも`Store.cancel`にもしない。保存中に`D_save`を超えた場合はStoreの`deadline`失敗で、後述の致命的停止となる。
 - `C_store`は新しい時間の追加ではない。正のflush工程を二分し、`stages[2] < D_save < D_store_cleanup = D_flush < D_manifest ≤ D_all`を保つ。加減算のoverflow・空の処理枠を拒否し、manifest／session票の後続予約を借用しない。byte処理／再読／ackに使える残枠が不足する場合は新規saveを始めない。具体値と費用モデルは未承認・後続確認事項で、未導出の受付保証はUnknownのまま。
+- 共有clockは読取と検証だけを担い、停止後も読める。受付の判定はguardが行う。Storeが取得済みhandleのcleanup時刻を読むためで、不正な値と逆行は停止後も拒否する。
 - deadlineは全operationの前後、ack直前にも検査し、等値で拒否する。同期操作が期限後に返った場合は新たな成功証拠へ進めない。closeは期限前に成功返答を確認できた場合だけconfirmed。同期処理の途中停止や実wall-time保証ではない。
 - **観測停止**（明示取消・`D_stop`到達・採取器の停止要求）: recorderへ通知し、新規観測を止める。Storeは閉じず、停止世代も変えない。処理中の保存はそのままackまで進め、`stop_requested`を含むqueueの残りを`D_save`までFIFOで保存する。親契約§4の`stop_requested`と§5の停止後の作成予約を満たすための区別である。recorderがClosedなら（Reservedでの取消等）新規保存もackも行わず、queueの残りはunsavedとして残す。
-- **致命的停止**（clock不正・binding不一致・Store失敗）: 同ownerの停止へ合流する。まずownerをStoppedとして停止世代を進め、新規save／receipt受理／ackを閉じ、次にStore.cancel、recorder停止通知の順で同期通知する。各通知は一度だけclaimし、片方のthrowでも固定診断を保持して他方と取得済みhandleの回収責務を省略しない。通知中に再入しても新規権限を与えない。Store.cancelはこの場合だけ呼ぶ。
+- recorderの理由は次のとおり分類する。`cancelled`・`deadline`・`window`は観測停止。`clock`・`state`（誤用）・`binding`（gate拒否・矛盾する引数）は致命的停止。
+- **致命的停止**（clock不正・binding不一致・Store失敗・recorderの誤用）: 同ownerの停止へ合流する。まずownerをStoppedとして停止世代を進め、新規save／receipt受理／ackを閉じ、次にStore.cancel、recorder停止通知の順で同期通知する。各通知は一度だけclaimし、片方のthrowでも固定診断を保持して他方と取得済みhandleの回収責務を省略しない。通知中に再入しても新規権限を与えない。Store.cancelはこの場合だけ呼ぶ。
 - 通常のcase／module／hook失敗は停止要求ではない。first anomaly保存を試み、suite継続と観測終端を妨げない。採取器の失敗・利用者取消と混同しない。
 
 どの停止後も取得済みhandleの解放責務は残る。cleanupにより新規saveが再許可されたり、期限原点が更新されたりしない。bridgeがStoppedになっても、recorderをDrainingからObservingへ戻さない。Published／Closed後は新規bridge保存なし。
@@ -141,8 +145,8 @@ SB-Aの生成・準備claim以外の保存・線形化section・試行別結果�
 
 `tests/review/fixtures/store-recorder-binding.ts`は既存recorder／Storeを同じprivate継続で生成し、公開面は別brandのopaque参照と限定操作だけにする。旧子instanceへのreferenceは返さない。checkpointは元のqueue先頭から内部発行したbindingだけを受け、raw checkpoint・コピー・summaryも拒否する。型上のbrandと実行時の参照同一性を両方検査する。
 
-ownerの6 slotは準備状態だけを保持し、実保存の試行別cleanup slotではない。run生成claimはmodule-private WeakSetへ先に記録し、生成失敗でも返さない。準備成功はInFlightとなるが、唯一の終端は固定discard（Stopped）である。再入・二重準備・foreign claimも停止させ、元queueと診断を残す。失敗時は私的なcheckpoint／claim別名をretireし、共有参照を再利用しない。
+ownerの6 slotは準備状態だけを保持し、実保存の試行別cleanup slotではない。run生成claimはmodule-private WeakSetへ先に記録し、生成失敗でも返さない。準備成功はInFlightとなるが、保存へは進めない。終わり方は固定discard（Stopped）、観測停止（Closed）、`D_save`到達（Closed）、致命的停止（Stopped）のいずれかである。discardも先にguardを通るので、`D_save`以降はStore.cancelを呼ばず閉鎖する。再入・二重準備・foreign claimも停止させ、元queueと診断を残す。失敗時は私的なcheckpoint／claim別名をretireし、共有参照を再利用しない。
 
-clock viewと計画値を先行pinし、checkpoint用D_save／cleanup境界の構造条件だけを検査する。生成時の合成値は運用capではない。準備中の観測停止は致命的停止にせず、ReservedのrecorderをClosedにしてStoreは取消さない。D_save到達も保存側だけを閉じ、Store操作／取消をしない。Closed時のbound診断は`unacknowledged`を持ち、recorder自体がClosedでない場合の旧`unsaved=0`と区別する。これは実保存bytesの有無を表さない。
+clock viewと計画値を先行pinし、checkpoint用D_save／cleanup境界の構造条件だけを検査する。生成時の合成値は運用capではない。準備中の観測停止は致命的停止にせず、ReservedのrecorderをClosedにしてStoreは取消さない。D_save到達も保存側だけを閉じ、Store操作／取消をしない。共有clockは停止後も読めるので、処理中のStoreはcleanupを続けられる。recorderの誤用とgate拒否は致命的停止で、Storeを取消す。Closed時のbound診断は`unacknowledged`を持ち、recorder自体がClosedでない場合の旧`unsaved=0`と区別する。これは実保存bytesの有無を表さない。
 
-SB-Aではconditions_readyをackできないので、観測状態へ進める成功経路・6checkpointの連続保存・保存中の取消継続は検証できない。SB-B／SB-Cへ残し、手前のgate拒否を後段の成功実証と数えない。既存子fakeは変更しておらず、slot別期限表・試行別結果・private Store consumer・callbackなしprivate ackは未実装。
+SB-Aではconditions_readyをackできないので、観測状態へ進める成功経路・6checkpointの連続保存・保存中の取消継続は検証できない。SB-B／SB-Cへ残し、手前のgate拒否を後段の成功実証と数えない。既存子fakeは変更しておらず、slot別期限表・試行別結果・private Store consumer・callbackなしprivate ackは未実装。`D_save`で閉鎖した後の`observeStop`はrecorderへ伝えない（現状を試験で固定）。recorderを終端させる経路はSB-Cで決める。

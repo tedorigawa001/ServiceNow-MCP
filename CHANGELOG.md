@@ -18,7 +18,7 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 ### Changed
 
-- WF-B SB-A adds a test-only closed binding assembly with a preallocated owner, module-private one-shot run admission, distinct run/recorder/store/checkpoint brands and irreversible preparation/discard claims. Legacy fakes remain unchanged and hidden child instances cannot be acknowledged through legacy entry points. Synthetic mixing, replay, construction, clock and cancellation controls issue no save receipt, perform no Store operations and enable no acknowledgement, formal issuance or whole-run admission.
+- WF-B SB-A adds a test-only closed binding assembly with a preallocated owner, module-private one-shot run admission, distinct run/recorder/store/checkpoint brands and irreversible preparation/discard claims. Legacy fakes remain unchanged, and the public references give legacy entry points no child instance to acknowledge. Synthetic mixing, replay, construction, clock and cancellation controls issue no save receipt, perform no Store operations and enable no acknowledgement, formal issuance or whole-run admission.
 
 - WF-B adds a test-only in-memory EvidenceStore contract with fixed artifact slots, exclusive creation, pre-spent claims, bounded short-write/EINTR handling, one-attempt cleanup, same-handle reread SHA-256 verification and private one-shot save receipts. Fault and independent event/digest oracles cover collision, replacement, cancellation, deadlines and receipt mixing without filesystem or network access. Receipts do not establish whole-run preservation or enable formal issuance/admission.
 
@@ -181,6 +181,8 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 - Remove packaged fixture registration/owner/transport-claim exports and the real session's fixture transport factory. Fixture registries, claims, draft handles and synthetic accounting now live exclusively in package-excluded development modules, and reject raw real-session registration. Ordinary session GET/payload/phase behavior remains intact; packaged and source regression tests cover the former fixture-to-real-mode path. Production BR-006 evidence issuance remains unimplemented/closed.
 
 ### Added
+
+- WF-B review fixes for the test-only store/recorder binding: the shared clock stays readable after a stop so a Store can still release its handle, admission staying with the guard; a root takes one owner, so a fresh run key cannot obtain a fresh Store; recorder misuse and a refused gate are fatal stops, while cancellation, the stop deadline and the start window stay observation stops; a discard at or after the save deadline closes without cancelling the Store. Tests now cover the Store wiring and `Store.cancel`. No bound save or acknowledgement exists yet.
 
 - WF-B review fixes for the test-only in-memory EvidenceStore: the byte limits now use the real input size and copy with no callback after the check, so a growing buffer or a subclass that misreports its length cannot exceed them. A close that succeeds at or after the cleanup deadline is reported as a separate `late` state rather than confirmed, and non-object forged receipts are sticky failures. New controls cover first-reason retention, throwing cleanup, structural ceilings and nested calls. No filesystem, recorder or issuance behavior changes.
 

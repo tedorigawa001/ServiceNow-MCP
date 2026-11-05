@@ -35,11 +35,50 @@ Date: 2026-11-05 / 基準HEAD: `2f1120f` / 未コミット変更を検証。
 
 文書リンク11件・`git diff --check`は成功。新moduleの依存は既存の試験専用fake 2点のみで、testsが製品build／package許可対象外である構成も確認した。これは実梱包成功の証明ではない。全体回帰・梱包dry-run・compiled試験は今回未実施。旧段階の成功を今回の検証へ流用しない。
 
-## 4 残課題
+## 4 レビュー修正（2026-11-05）
+
+`277c057`のレビュー指摘を修正した。§3の件数は修正前の記録で、そのまま残す。
+
+| 指摘 | 修正 |
+|---|---|
+| 共有clockが停止後に常に例外を返し、Storeが取得済みhandleをcloseできなかった（健全なclockでclose 0回、Store reason `clock`） | 読取・検証と受付を分離。停止後も読め、受付はguardが判定する。不正値と逆行は停止後も拒否する |
+| 新しいrun keyなら同じrootに別Storeを作れた | rootもWeakSetでclaimし、失敗後も返さない。入力の`root`は一度だけ読む |
+| recorderの誤用・gate拒否がowner理由なしのClosedになった | `state`／`binding`は致命的停止（Store取消）。`cancelled`・`deadline`・`window`は観測停止のまま |
+| `D_save`後のdiscardがStoreを取消した | discardもguardを通し、`D_save`以降はClosedで閉鎖する |
+| Store配線と`Store.cancel`が未検証だった | `vi.spyOn`で`create`の引数と生成物を取得し、期限・clock・run originと、保存中の停止を検証する。公開面は変えていない |
+
+試験は`vi.spyOn`で子を取得する。観測中の分類試験は、SB-Aにbound ackがないので生の`acknowledge`で`Observing`まで進める。これは準備のためだけで、bound経路の成功実証ではない。
+
+保存中の停止の対照は生のStoreへ直接`save`する。bridgeから保存する経路はなく、SB-Bの実証ではない。
+
+変異70個のうち62個を検出した。残る8個は次の理由で等価または到達不能と判断した。
+
+| 変異 | 理由 |
+|---|---|
+| `first-reason-overwritten` | `#fatal`は終端後に何もしないので、理由は一度しか書かれない |
+| `retire-keeps-claim`、`retire-keeps-binding` | 状態が`retired`になるので、別名が残っても受理されず、外から観測できない |
+| `guard-epoch` | 世代が変わるのは致命的停止だけで、直後の状態検査が同じ結果を返す |
+| `command-no-clock-reason` | SB-Aのrecorderのclock失敗は共有clock経由で、先に致命的停止になる |
+| `checkpoint-slot-check` | sequenceは1〜6で、bound ackがないSB-Aではslotの状態が変わらない |
+| `prepare-status` | 二重準備は`InFlight`の状態検査で先に拒否される |
+| `discard-any-slot` | claimが入るのは`claimed`のslotだけである |
+
+うち`checkpoint-slot-check`と`command-no-clock-reason`はSB-Bの実装で再評価する。
+
+全スイート（`--maxWorkers=3`）は291ファイル・**14,067件すべて成功**（新規ファイルは77件）。`npm run lint`はエラー0、`npm run build`は成功、`package-http-classification`はPASS（441ファイル）、`git diff --check`も成功。`@ts-expect-error`は次のコマンドで確認した（`tests`は`tsconfig`の対象外で、vitestも型検査をしない）。
+
+```bash
+npx tsc --noEmit --strict --target es2022 --module nodenext --moduleResolution nodenext --skipLibCheck --types node tests/review/store-recorder-binding.test.ts
+```
+
+梱包dry-runは未実施。
+
+## 5 残課題
 
 1. SB-Bの固定header encoding・同bytes／digest binding・実際のStore save／private consumer・一度限りack。現時点でstore呼出し0、issuerなし、ack成功なし。
 2. SB-Cのslot区分別期限表・試行別cleanup結果・連続観測停止／致命的停止・停止後のFIFO保存。準備段階の対照だけで、保存中の取消の継続を実証しない。
 3. 元queueを条件として使うので今回到達するのはconditions_readyだけ。6保存slotの完成保証、manifest集合、run全体のpreservation、process終了、session配賦は未対応。
-4. owner確保失敗は固定fault labelと入力／子生成失敗で模擬した。実OOMやOSの部分resource回収、機密bytesの物理消去を保証しない。六つのslotは準備診断であり、保存試行のcleanup証拠ではない。
+4. `D_save`で閉鎖した後の`observeStop`はrecorderへ伝わらず、recorderは`Reserved`などのまま残る。SB-Cで終端の経路を決める。
+5. owner確保失敗は固定fault labelと入力／子生成失敗で模擬した。実OOMやOSの部分resource回収、機密bytesの物理消去を保証しない。六つのslotは準備診断であり、保存試行のcleanup証拠ではない。
 
 結合admissionの成功はR01〜R08充足、実採取・実保管・実process操作の承認ではない。
