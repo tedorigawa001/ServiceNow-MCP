@@ -1,6 +1,8 @@
 # WF-B：checkpoint本文snapshot・容量・失敗時停止の詳細設計
 
-Version: draft-0.2 / Date: 2026-11-06 / 調査基準HEAD: `12dcc37` / レビュー修正の基準HEAD: `f8cd328`。
+Version: draft-0.3 / Date: 2026-11-06 / 調査基準HEAD: `12dcc37` / レビュー修正の基準HEAD: `f8cd328` / strict値契約の基準HEAD: `ff2c56f`。
+
+draft-0.3: [strict値契約・固定encoding・row幅](BEST_PRACTICE_WFB_SNAPSHOT_VALUE_CONTRACT.md)を追加。10 variant・全rowのfield順／enum／局所関係と構造幅を固定案として整理した。本文なし失敗variant・更新中worker／sampleのcutoff・反復counterを維持する。設計のみで、値型／parser実装・運用cap承認は行っていない。
 
 draft-0.1のレビュー修正: 採取器の失敗時や観測開始前に本文を固定できず`stop_requested`を作れない矛盾を、本文なし失敗variant（§3.1）で解消した。recorderの停止理由と`cause`の対応を追加した。現行Store上限は契約最大値に収まらないと明記し、上限見直しをStore接続の前提とした。`cutoff`がworker／sampleも固定するようにし、容量式へ`scope_tails`・添字の定義・write slice枠を追加した。反復counterの所有者と枠を定めた。実装・承認状態は変更していない。
 
@@ -78,6 +80,8 @@ v2共通fieldは`version, sequence, trigger, at, binding, detail`。本文trigge
 
 snapshotのstrict共通fieldは`version='wfb-observation-snapshot-1', generation, cutoff, coverage, modules, cases, scopes, events, workers, samples`。全配列を必須とし、空と未取得はcoverageで区別する。payload／コード／例外本文・stack／生protocol message・URL／sys_id／PID／process引数／環境変数を追加する拡張fieldは設けない。
 
+以下は概要。fieldの完全な集合・enum・固定key順・null／禁止field・局所関係は[strict値契約](BEST_PRACTICE_WFB_SNAPSHOT_VALUE_CONTRACT.md)§1〜§4を参照する。runtime sourceの真偽やprivate bindingを、値の整合性で代替しない。
+
 | 集合 | 限定rowの項目案・検査 |
 |---|---|
 | modules | module_ordinal、state、固定failure_class、case_counts（discovered／running／passed／failed／skipped／todo／not_run／unknownの固定8整数）。ordinal重複・参照case数との矛盾を拒否。hook／module失敗で本体未実行のcaseをpassedにしない |
@@ -121,6 +125,8 @@ cutoffは`source_event_ordinal`、`scope_tails`（scope_ordinal／last_seqのstr
 上記の具体byte／work値は**未導出・未承認**。件数の既存値を、そのまま保存容量の承認にしない。対象の事前shapeが不明なら契約上の最大値を使うか受付を拒否し、直近の小さいfixture実測だけで開始を許可しない。全caseの保存が必要な対象を、byte不足のため黙って間引かない。
 
 strict rowごとの最大encoded長をR_c（cases）／R_m（modules）／R_e（events）／R_s（scopes）／R_w（workers）／R_p（samples）／R_t（cutoffのscope_tails）、固定key／配列／区切り等の上界をKとする。separatorを各rowに含めたうえで、`S_upper=K+N_c R_c+N_m R_m+N_e R_e+N_s R_s+N_w R_w+N_p R_p+N_s R_t`をchecked加乗算で求める。共通context／variant detailの上界を加えた`E_upper`がB_snapshot／B_file等へ収まることをcapture前に要求する。row幅や文字列最大長が未確定なら式もUnknownであり、受付証拠を発行しない。
+
+構造幅の固定案は[strict値契約§5](BEST_PRACTICE_WFB_SNAPSHOT_VALUE_CONTRACT.md#5-固定encodingの幅)に記載した。K=321、R_c=177／R_m=218／R_e=227／R_s=181／R_w=409／R_p=264／R_t=51で、numeric tokenの32文字制約を含む条件付き上界である。本文なしの共通上界500 byteは運用B_controlの承認ではない。formatter／validator／encoderの実証とbyte／work capが未承認な間は、正式な受付証拠を発行しない。
 
 必要保持量は、sourceが持つ集約・scope log、正規化集約、最大4個のfull snapshot、2個のcontrol、writer／Store owned copy・write slice・再読、失敗custodyである。sourceと正規化copyを同じ領域と仮定しない。custodyへ同じcapsuleの所有権を移すだけなら内容を二重加算しないが、新copyを作る方式なら費目を追加する。JS heap／allocator／RSS・実wall-timeの保証とは区別する。
 
@@ -178,8 +184,8 @@ golden本文・UTF-8長・件数・counter・操作列は実装のencoder／calc
 
 ## 10 未確認・承認待ち・次の実装範囲
 
-1. **最初の実装候補**: 新strict値型／variant・件数／encoded長の純粋計算・関係検査だけを合成依存で追加する。旧v1を維持し、証拠発行・本文保存・capture成功はまだ接続しない。wireの全field・enum・row幅を実装前レビューで固定する。
+1. **最初の実装候補**: [strict値契約](BEST_PRACTICE_WFB_SNAPSHOT_VALUE_CONTRACT.md)の内部値型／10 variant・件数／encoded上界の純粋計算・局所関係検査だけを合成依存で追加する。旧v1を維持し、証拠発行・本文保存・capture成功はまだ接続しない。全field・enum・row幅の固定案を実装前レビューの基準とし、実装は別の明示指示で開始する。
 2. 次にprivate aggregate／capture claim・cutoff・immutable capsuleと有限custodyを合成issuer限定で実装する。最終discard／所有移譲を先に固定し、Store上限の見直し（§6）を別途承認した後に、v2同bytesのStore接続へ進む。各段階は別の明示指示を要する。
 3. reporter／sampleの実schema・既存artifactの版と上限、動的case／retry／inventory、scope原点の供給・case対応、source世代の固定方法は未確認。実reporterや過去artifactを取得・起動したとは扱わない。
-4. 新byte／work値、row幅、収集／copy／encode／再読scratchと累積予約、実保存先・保持期間・運用時間枠は未導出／未承認。capが不明なまま正式受付を有効にしない。
+4. row幅はstrict値契約の構造上界案として整理したが、新byte／work cap、収集／copy／encode／再読scratchと累積予約、実保存先・保持期間・運用時間枠は未導出／未承認。capが不明なまま正式受付を有効にしない。
 5. schema・snapshot失敗理由と上位四軸／既存first reasonの写像（§3の`cause`対応は案）、反復counterの公開先、custodyの厳密型と最終discard条件、統合work model、ProcessOwner／manifest集合・session台帳は後続課題。unknownを成功や0費用に補完しない。

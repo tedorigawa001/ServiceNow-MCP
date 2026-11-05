@@ -1,6 +1,8 @@
 # WF-B EvidenceStore／recorder：一度限り接続の差分設計
 
-Version: draft-0.14 / Date: 2026-11-06 / 基準HEAD: `fb91044` / SB-A実装基準HEAD: `2f1120f` / SB-B実装基準HEAD: `186cea6` / 試行別結果の実装基準HEAD: `85eb9ad`。
+Version: draft-0.15 / Date: 2026-11-06 / 基準HEAD: `fb91044` / SB-A実装基準HEAD: `2f1120f` / SB-B実装基準HEAD: `186cea6` / 試行別結果の実装基準HEAD: `85eb9ad`。
+
+draft-0.15: [snapshot strict値契約・row幅](BEST_PRACTICE_WFB_SNAPSHOT_VALUE_CONTRACT.md)を追加。本文なし失敗variantを含む10 variant、rowの全field／enumと構造幅、値の検査とprivate証明の境界を具体化した。pure値coreの実装前契約だけで、本文のStore採用・cap変更・正式発行は行っていない。
 
 draft-0.13のレビュー修正: 同時保持の記述を本文4件＋control 2件へ揃え、本文を固定できない場合の失敗variantとStore上限の前提を追記した。
 
