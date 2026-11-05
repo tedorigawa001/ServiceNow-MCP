@@ -1,6 +1,8 @@
 # WF-B EvidenceStore／recorder：一度限り接続の差分設計
 
-Version: draft-0.6 / Date: 2026-11-05 / 基準HEAD: `672eda4` / SB-A実装基準HEAD: `2f1120f` / SB-B実装基準HEAD: `186cea6`。
+Version: draft-0.7 / Date: 2026-11-05 / 基準HEAD: `672eda4` / SB-A実装基準HEAD: `2f1120f` / SB-B実装基準HEAD: `186cea6`。
+
+draft-0.7: [Store試行別結果の検証記録](E2E_BEST_PRACTICE_WFB_STORE_ATTEMPT_2026-11-05.md)を追加。SB-Cの最初の段階として`saveAttempt`を実装し、bridgeは当該呼出しの凍結resultを保持する。slot区分別期限表と閉鎖後の最終終端は未実装のまま。
 
 draft-0.6のレビュー修正: 試験終端後の余分な呼出しでStoreを取消し、未保存の証拠を失っていたので、`Draining`／`Verifying`での`state`理由は停止にしない。消費中の`D_save`超過を§4へ明記した。未受理件数の定義を実装に合わせ、§7へSB-A／SB-B時点の状況を追加した。
 
@@ -142,7 +144,7 @@ SB-A／SB-B時点の状況は次のとおり。実施済みはメモリfakeで�
 | BR01、BR05、BR14 | 実施済み | なし |
 | BR02 | 一部 | encoding版の不一致。slot・size・digest・別owner・コピーは実施済み |
 | BR03 | 一部 | 成功分の二重消費は、receiptの再利用経路がないので到達不能 |
-| BR04 | 一部 | Storeの試行別結果（create試行の有無） |
+| BR04 | 試行別結果を追加検証 | create試行の有無・各試行のcleanup分離を単体／bridgeで確認。OS保存の実証ではない |
 | BR06 | 一部 | 成功分の保持は実施済み。停止checkpointの非再帰は明示の対照なし |
 | BR07 | 一部 | 別clockの対照。`late`・逆行・原点は実施済み |
 | BR08 | 一部 | 通知throw・部分生成の連続対照 |
@@ -160,7 +162,9 @@ oracleはbridge自身のmapper／encoder／guardを呼ばず、固定expected he
 2. **SB-B（メモリ接続済み）**: 同snapshotの固定header encodingとStore保存／private消費／固定ackを接続。保存後の失敗・queue／未受理件数の区分を確認した。§8.2の範囲を参照。
 3. **SB-C**: 同clock／停止ownerとflush内の予約分割、観測停止と致命的停止の区別、上位cleanup診断・部分生成の回収を連続fakeで確認する。SB-B時点でも期限／取消の最低限の共通guardを省略せず、詳細な境界対照をここで補完する。
 
-SB-Aの生成・準備claimとSB-Bのメモリ保存・線形化section以外の、試行別結果の完全分類・slot区分別期限表・詳細費目は未実装。byte／work／時間の運用値、正式保存先、保管／削除、OS backendは未承認・未確認のまま。storeとrecorderが繋がっても、採取・保全・process監督の開始許可にはならない。
+SB-Aの生成・準備claim、SB-Bのメモリ保存・線形化section、Store試行別結果の分類までを実装。slot区分別期限表・閉鎖後の最終終端・詳細費目は未実装。byte／work／時間の運用値、正式保存先、保管／削除、OS backendは未承認・未確認のまま。storeとrecorderが繋がっても、採取・保全・process監督の開始許可にはならない。
+
+試行別結果追加後は`persist`が`saveAttempt`を呼び、戻りのreceiptだけを既存private consumerへ渡す。診断には同じattempt objectを保持し、snapshotの過去cleanupから推定しない。従来の上位粗分類`attempted_unverified`は互換で残し、詳細は`attempt.disposition`でnot_started／create_failed／partial_unverified／savedを区別する。下位methodそのものがthrowして戻らなければattemptは未定義であり、証拠不足として扱う。以下§8.2の「試行別結果はSB-Cへ残る」はSB-B当時の記録で、この部分は今回解消した。
 
 ### 8.1 SB-Aの実装境界
 

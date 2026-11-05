@@ -57,6 +57,115 @@ function fixture(changes: Partial<StoreCaps> = {}) {
 }
 const count = (calls: Operation[], op: Operation) => calls.filter(value => value === op).length;
 
+describe('fake EvidenceStore: independent per-call attempt results', () => {
+  it('returns a frozen successful result while preserving the legacy receipt-only entry', () => {
+    const f = fixture();
+    const result = f.store.saveAttempt(f.run, 'conditions.json', abc);
+    expect(result.attempt).toEqual({ disposition: 'saved', createAttempted: true, handleAcquired: true,
+      closeAttempted: true, cleanup: 'confirmed', reservedBytes: 3 });
+    expect(Object.isFrozen(result)).toBe(true);
+    expect(Object.isFrozen(result.attempt)).toBe(true);
+    expect(f.store.consume(f.run, result.receipt!)?.digest).toBe(ABC_SHA256);
+    const legacy = f.store.save(f.run, 'report.final.json', abc)!;
+    expect(f.store.consume(f.run, legacy)?.digest).toBe(ABC_SHA256);
+  });
+  it.each(['name', 'run', 'size', 'identity', 'deadline'] as const)('distinguishes %s refusal before create', kind => {
+    const f = fixture();
+    if (kind === 'identity') f.identity();
+    if (kind === 'deadline') f.time(100);
+    const result = f.store.saveAttempt(kind === 'run' ? {} : f.run, kind === 'name' ? '../SECRET' : 'conditions.json',
+      kind === 'size' ? new Uint8Array(9) : abc);
+    expect(result.receipt).toBeUndefined();
+    expect(result.attempt).toMatchObject({ disposition: 'not_started', createAttempted: false,
+      handleAcquired: false, closeAttempted: false, cleanup: 'not_started' });
+    expect(result.attempt.reason).toBe(kind === 'size' ? 'limit' : kind === 'deadline' ? 'deadline' : 'binding');
+    expect(count(f.calls, 'create')).toBe(0);
+    expect(JSON.stringify(result)).not.toContain('SECRET');
+  });
+  it.each(['return', 'throw'] as const)('records create %s failure without pretending no create was tried', mode => {
+    const f = fixture();
+    f.faults.create = true;
+    if (mode === 'throw') f.hook(op => { if (op === 'create') throw Error('SECRET_CREATE'); });
+    const result = f.store.saveAttempt(f.run, 'conditions.json', abc);
+    expect(result.attempt).toEqual({ disposition: 'create_failed', createAttempted: true, handleAcquired: false,
+      closeAttempted: false, cleanup: 'not_started', reason: 'create', reservedBytes: 3 });
+    expect(f.calls.filter(op => op !== 'identity')).toEqual(['create']);
+    expect(result.receipt).toBeUndefined();
+    expect(JSON.stringify(result)).not.toContain('SECRET_CREATE');
+  });
+  it.each(['write', 'flush', 'close', 'reread', 'digest'] as const)('records acquired-but-unverified %s failure', kind => {
+    const f = fixture();
+    if (kind === 'write') f.writes.push('throw');
+    else if (kind === 'digest') f.faults.corrupt = true;
+    else f.faults[kind] = true;
+    const result = f.store.saveAttempt(f.run, 'conditions.json', abc);
+    expect(result.receipt).toBeUndefined();
+    expect(result.attempt).toMatchObject({ disposition: 'partial_unverified', createAttempted: true,
+      handleAcquired: true, closeAttempted: true, cleanup: kind === 'close' ? 'unconfirmed' : 'confirmed', reason: kind, reservedBytes: 3 });
+    expect(count(f.calls, 'close')).toBe(1);
+    if (kind === 'close') expect(result.attempt.cleanupReason).toBe('close');
+  });
+  it('does not copy prior confirmed cleanup into a new create failure or sticky rejection', () => {
+    const f = fixture();
+    const first = f.store.saveAttempt(f.run, 'conditions.json', abc);
+    expect(first.attempt.cleanup).toBe('confirmed');
+    f.faults.create = true;
+    const second = f.store.saveAttempt(f.run, 'report.final.json', abc);
+    expect(second.attempt).toMatchObject({ disposition: 'create_failed', cleanup: 'not_started', createAttempted: true });
+    const before = f.calls.length;
+    const third = f.store.saveAttempt(f.run, 'termination.json', abc);
+    expect(third.attempt).toEqual({ disposition: 'not_started', createAttempted: false, handleAcquired: false,
+      closeAttempted: false, cleanup: 'not_started', reason: 'store_stopped', rejection: 'sticky', reservedBytes: 0 });
+    expect(f.calls).toHaveLength(before);
+    expect(f.store.snapshot().reason).toBe('create');
+    expect(first.attempt.cleanup).toBe('confirmed');
+    expect(second.attempt.reason).toBe('create');
+  });
+  it('does not reuse confirmed cleanup after a later consume failure stops the store', () => {
+    const f = fixture();
+    const first = f.store.saveAttempt(f.run, 'conditions.json', abc);
+    f.store.consume(f.run, {} as FakeSaveReceipt);
+    const before = f.calls.length;
+    const rejected = f.store.saveAttempt(f.run, 'report.final.json', abc);
+    expect(rejected.attempt).toMatchObject({ disposition: 'not_started', cleanup: 'not_started',
+      closeAttempted: false, reason: 'store_stopped', rejection: 'sticky' });
+    expect(f.store.snapshot()).toMatchObject({ reason: 'binding', cleanup: 'confirmed' });
+    expect(first.attempt.cleanup).toBe('confirmed');
+    expect(f.calls).toHaveLength(before);
+  });
+  it.each(['create', 'write', 'close'] as const)('keeps nested %s reentry results separate from the outer cleanup', phase => {
+    const f = fixture();
+    let nested: ReturnType<FakeEvidenceStore['saveAttempt']> | undefined;
+    f.hook(op => { if (op === phase) nested = f.store.saveAttempt(f.run, 'report.final.json', abc); });
+    const result = f.store.saveAttempt(f.run, 'conditions.json', abc);
+    expect(nested).toBeDefined();
+    expect(nested!.attempt).toEqual({ disposition: 'not_started', createAttempted: false, handleAcquired: false,
+      closeAttempted: false, cleanup: 'not_started', reason: 'binding', rejection: 'busy', reservedBytes: 0 });
+    expect(result.attempt).toMatchObject({ disposition: 'partial_unverified', createAttempted: true,
+      handleAcquired: true, closeAttempted: true, cleanup: 'confirmed', reason: 'binding' });
+    expect(count(f.calls, 'create')).toBe(1);
+    expect(count(f.calls, 'close')).toBe(1);
+  });
+  it.each(['close', 'clock', 'deadline'] as const)('preserves primary failure and records cleanup %s independently', fault => {
+    const f = fixture(); f.writes.push('throw');
+    if (fault === 'close') f.faults.close = true;
+    if (fault === 'clock') f.hook(op => { if (op === 'write') f.time(NaN); });
+    if (fault === 'deadline') f.hook(op => { if (op === 'write') f.time(120); });
+    const result = f.store.saveAttempt(f.run, 'conditions.json', abc);
+    expect(result.attempt).toMatchObject({ disposition: 'partial_unverified', reason: 'write',
+      cleanup: 'unconfirmed', cleanupReason: fault, closeAttempted: fault === 'close' });
+    expect(f.store.snapshot().reason).toBe('write');
+  });
+  it('records late cleanup locally without carrying it into the next rejection', () => {
+    const f = fixture(); f.hook(op => { if (op === 'close') f.time(120); });
+    const result = f.store.saveAttempt(f.run, 'conditions.json', abc);
+    expect(result.attempt).toMatchObject({ disposition: 'partial_unverified', cleanup: 'late', cleanupReason: 'deadline', reason: 'deadline' });
+    const next = f.store.saveAttempt(f.run, 'report.final.json', abc);
+    expect(next.attempt).toMatchObject({ cleanup: 'not_started', closeAttempted: false, reason: 'store_stopped' });
+    expect(count(f.calls, 'close')).toBe(1);
+  });
+});
+
 describe('fake EvidenceStore: no-replace and one-shot receipt', () => {
   it('writes/flushes/closes/rereads in fixed order and consumes a private receipt once', () => {
     const f = fixture();

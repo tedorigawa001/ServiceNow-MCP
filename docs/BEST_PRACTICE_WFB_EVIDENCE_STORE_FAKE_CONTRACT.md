@@ -1,6 +1,8 @@
 # WF-B EvidenceStore：artifact単位の内部契約とfake
 
-Version: draft-0.4 / Date: 2026-11-05 / 基準HEAD: `7f6ef4f` / レビュー修正の基準HEAD: `3e0d7d5`。
+Version: draft-0.5 / Date: 2026-11-05 / 基準HEAD: `7f6ef4f` / レビュー修正の基準HEAD: `3e0d7d5` / 試行別結果の実装基準HEAD: `85eb9ad`。
+
+draft-0.5: [試行別結果の合成検証記録](E2E_BEST_PRACTICE_WFB_STORE_ATTEMPT_2026-11-05.md)を追加。`saveAttempt`が当該呼出し専用の凍結結果を返し、旧`save`はreceiptだけを返す互換入口とする。Store全体のfirst reasonと試行の主失敗／cleanup理由を分離し、bridgeはsnapshotから推定せず同じ戻り値を保持する。
 
 draft-0.4: cleanup期限以降に返ったcloseの成功を、新しい状態`late`として示す（§3）。
 
@@ -8,7 +10,7 @@ draft-0.3: [recorder一度限り接続の差分設計](BEST_PRACTICE_WFB_STORE_R
 
 draft-0.2のレビュー修正: 入力長の検査とコピーの間にcallbackが入り、byte上限をすり抜けられた経路を閉じた。入力・再読の長さは実サイズで判定する。cleanup期限を超えて返ったcloseはconfirmedにしない。object以外の偽receiptも同じsticky失敗にする。
 
-Status: **試験専用・メモリ内だけの実装。OS backend・実保存・recorder接続は未実装。** 正式発行口閉鎖・全体受付無効・Unknown・調査保留を維持する。保存先・保持期間・運用cap／時間枠・停止方式は未承認のまま。既存証拠のcopy／保管操作・再採取・実接続・実通信・設定変更・Pushを行わない。
+Status: **試験専用・メモリ内だけの実装。OS backend・実保存は未実装。recorderとはSB-B／試行別結果をfake接続済み。** 正式発行口閉鎖・全体受付無効・Unknown・調査保留を維持する。保存先・保持期間・運用cap／時間枠・停止方式は未承認のまま。既存証拠のcopy／保管操作・再採取・実接続・実通信・設定変更・Pushを行わない。
 
 親は[固定採取器契約](BEST_PRACTICE_WFB_FIXED_RECORDER_CONTRACT.md)§3。実装は`tests/review/fixtures/fixed-evidence-store.ts`、合成driverと対照は`tests/review/fixed-evidence-store.test.ts`。[検証記録](E2E_BEST_PRACTICE_WFB_EVIDENCE_STORE_FAKE_2026-11-04.md)と合わせて読む。
 
@@ -51,10 +53,27 @@ write試行数は最大attempt cap。create／flush／close／再読は各1回�
 - copy／foreign／JSON／値summary・object以外の値はreceiptにならず、同じsticky失敗にする。二重consumeは拒否する。成功時の固定slot・size・digestは凍結DATAで、別receiptや正式証拠へ昇格できない。
 - 最初の失敗はsticky。以後の新規save／consumeを拒否し、slot／累積予約を戻さない。既に書いたartifactを上書きしない。cleanup失敗で先行reasonを置換しない。
 - 診断は固定reason・数値・cleanup状態だけ。raw例外・入力byte・path・環境情報を反射しない。入力の予期しないaccessor例外も固定理由へ落とす。OOM等で必ず回収できる保証はない。
-- 保存receiptは**artifact単位のfake照合結果**。recorderのcheckpoint ack／preservation軸へ接続せず、run全体の保全・manifest・session票や実ディスク耐久保存の証拠と呼ばない。
+- 保存receiptは**artifact単位のfake照合結果**。公開consumeのDATAはack権限にならない。SB-Bの閉じたprivate継続ではcheckpoint ackへ接続するが、run全体のpreservation・manifest・session票や実ディスク耐久保存の証拠と呼ばない。
 
 ## 5 合成受入と残課題
 
 固定SHA-256既知値（空／abc）、手書き操作順、offset列`[0,1,1,2]`と試行数を独立oracleに使う。collision、slot replay、名前拒否、入力copy、短書込、EINTR境界、byte／総試行上限、可変長バッファ・長さやiteratorを偽るsubclass・Uint8Array以外の入力、flush／close／再読のfalse／throw、同長hash不一致、長さ変更、handle差替え、root失効、取消、期限／逆行、再入（save中のconsume、consume中のsaveを含む）、receipt混入・post-guard停止、first reasonの保持、cleanup中のthrow・期限超過を確認する。
 
-OS backend・metadata／ACL／symlink実取得、共有session claim／retry、manifest集合、recorderへの一度限り受理、実保管、全体process終端は後続。今回の合成成功だけでR02／R03／R04／R07や再採取gateを満たさない。
+OS backend・metadata／ACL／symlink実取得、共有session claim／retry、manifest集合、実保管、全体process終端は後続。recorderへの一度限り受理はSB-Bのfakeのみで接続済み。今回の合成成功だけでR02／R03／R04／R07や再採取gateを満たさない。
+
+## 6 呼出し単位の試行結果
+
+本体は試験専用の共通`store-recorder-kernel.ts`、旧`fixed-evidence-store.ts`は再exportである。`saveAttempt(run, slot, bytes)`は`{ receipt?, attempt }`を返し、両方のcontainerを凍結する。`save`は同じcoreを一度呼んでreceiptだけ返す。独立した「最後の結果」slotは置かず、各呼出しのlocal recordをfinallyまで保持するので、再入拒否が外側の結果を上書きしない。
+
+| disposition | 判定 | cleanup |
+|---|---|---|
+| not_started | create境界へ入っていない。入力／guard拒否・sticky拒否・busy再入を含む | not_started。前回の値を写さない |
+| create_failed | createを1回試したがhandleを受領しなかった | not_started。driver側で隠れたresourceを作らない前提は未実証 |
+| partial_unverified | handle取得後に保存証拠を発行できなかった | 当該handleのconfirmed／late／unconfirmed。0 byteでもこの区分で、書込完了やdurabilityを意味しない |
+| saved | flush・close・再読・hash・post guardを通りreceiptを発行した | 当該handleのconfirmed。run全体の保全ではない |
+
+固定fieldは`createAttempted`・`handleAcquired`・`closeAttempted`・`reservedBytes`、試行の`reason`・`rejection`、`cleanup`・`cleanupReason`。create／closeのflagは単発境界を呼ぶ直前に記録し、throwでも試行済みとする。cleanup予約切れ等でcloseを呼ばなければ`closeAttempted=false`かつcleanup unconfirmedとなる。
+
+`reason`はこの保存の主失敗を保持する。既存sticky状態による拒否は`store_stopped`／`rejection=sticky`、busy再入拒否は`binding`／`rejection=busy`。Store全体の最初の理由は従来どおりsnapshot.reasonへ別保持する。cleanupのfalse／throwは`cleanupReason=close`、不正／取得失敗時刻はclock、予約超過はdeadline。cleanup失敗で主理由を置換しない。成功後やconsume失敗後の次の保存拒否も、新recordのcleanupはnot_startedである。
+
+試行結果は限定DATAで、bytes・path・raw例外を含まず、receiptを新規生成／昇格する権限ではない。Store内部に呼出し履歴を無制限保持せず、bridgeは既存の最大6 slotへ同じ凍結resultを紐付ける。Storeからの戻り自体が得られない異常ではattemptを推定・捏造しない。slot区分別期限表・上位通知throw／最終終端・費用上界の詳細は別段階のまま。

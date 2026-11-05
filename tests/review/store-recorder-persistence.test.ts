@@ -88,11 +88,11 @@ function spiedRecorder() {
   expect(root.reserve(true)).toBe(true);
   return { ...f, root, recorder };
 }
-/** Replaces the public Store save for one run: the receipt stays genuine, the saved facts differ. */
-function withSave<T>(replace: (save: FakeEvidenceStore['save'], store: FakeEvidenceStore, run: object, slot: string, bytes: Uint8Array) => ReturnType<FakeEvidenceStore['save']>, body: () => T) {
-  const original = FakeEvidenceStore.prototype.save;
-  FakeEvidenceStore.prototype.save = function (this: FakeEvidenceStore, run, slot, bytes) { return replace(original, this, run, slot, bytes); };
-  try { return body(); } finally { FakeEvidenceStore.prototype.save = original; }
+/** Replaces the attempt-returning Store call: the receipt stays genuine, saved facts differ. */
+function withSave<T>(replace: (save: FakeEvidenceStore['saveAttempt'], store: FakeEvidenceStore, run: object, slot: string, bytes: Uint8Array) => ReturnType<FakeEvidenceStore['saveAttempt']>, body: () => T) {
+  const original = FakeEvidenceStore.prototype.saveAttempt;
+  FakeEvidenceStore.prototype.saveAttempt = function (this: FakeEvidenceStore, run, slot, bytes) { return replace(original, this, run, slot, bytes); };
+  try { return body(); } finally { FakeEvidenceStore.prototype.saveAttempt = original; }
 }
 
 describe('SB-B: fixed header to private consumption and ack', () => {
@@ -223,6 +223,12 @@ describe('SB-B: failures keep queue / saved-unacknowledged facts', () => {
     const original = f.root.snapshot().recorder!.checkpoints[0];
     expect(persistHead(f.root)).toBe(false);
     expect(f.root.snapshot()).toMatchObject({ phase: 'Stopped', reason: 'store', acknowledgements: 0, evidenceIssued: false });
+    expect(f.root.snapshot().saves[0].attempt).toMatchObject({
+      disposition: failure === 'identity' ? 'not_started' : failure === 'create' ? 'create_failed' : 'partial_unverified',
+      createAttempted: failure !== 'identity', handleAcquired: failure !== 'identity' && failure !== 'create',
+      closeAttempted: failure !== 'identity' && failure !== 'create',
+    });
+    expect(Object.isFrozen(f.root.snapshot().saves[0].attempt)).toBe(true);
     expect(f.root.snapshot().recorder!.checkpoints[0]).toBe(original);
     expect(f.root.snapshot().recorder!.unsaved).toBe(2);
     expect(f.root.start()).toBe(false);
@@ -247,6 +253,9 @@ describe('SB-B: failures keep queue / saved-unacknowledged facts', () => {
     expect(root.snapshot().acknowledgements).toBe(1);
     expect(root.snapshot().saves[0].disposition).toBe('acknowledged');
     expect(root.snapshot().saves[1]).toMatchObject({ disposition: 'attempted_unverified', reason: 'limit', cleanup: 'not_started' });
+    expect(root.snapshot().saves[1].attempt).toMatchObject({ disposition: 'not_started', createAttempted: false,
+      closeAttempted: false, cleanup: 'not_started', reason: 'limit', reservedBytes: 0 });
+    expect(root.snapshot().saves[0].attempt).toMatchObject({ disposition: 'saved', cleanup: 'confirmed' });
     expect(root.snapshot().slots.slice(0, 2)).toEqual(['acknowledged', 'retired']); // a later failure keeps the earlier ack
     expect(f.files.size).toBe(1);
   });
@@ -320,6 +329,7 @@ describe('SB-B: failures keep queue / saved-unacknowledged facts', () => {
     const result = withSave(() => { throw Error('SECRET_SAVE'); }, () => f.root.persist(prepared));
     expect(result).toBe(false);
     expect(f.root.snapshot()).toMatchObject({ phase: 'Stopped', reason: 'binding', acknowledgements: 0 });
+    expect(f.root.snapshot().saves[0].attempt).toBeUndefined(); // absent lower result is not fabricated from a snapshot
     expect(JSON.stringify(f.root.snapshot())).not.toContain('SECRET_SAVE');
   });
   it('refuses before encoding when the claimed checkpoint is no longer the queue head', () => {

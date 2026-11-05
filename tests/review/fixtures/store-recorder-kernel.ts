@@ -236,6 +236,19 @@ export interface StoreCaps {
 }
 declare const receiptBrand: unique symbol;
 export interface FakeSaveReceipt { readonly [receiptBrand]: true }
+export interface SaveAttempt {
+  readonly disposition: 'not_started' | 'create_failed' | 'partial_unverified' | 'saved';
+  readonly createAttempted: boolean;
+  readonly handleAcquired: boolean;
+  readonly closeAttempted: boolean;
+  readonly cleanup: 'not_started' | 'confirmed' | 'late' | 'unconfirmed';
+  readonly cleanupReason?: 'close' | 'clock' | 'deadline';
+  readonly reason?: StoreReason | 'store_stopped';
+  readonly rejection?: 'busy' | 'sticky';
+  readonly reservedBytes: number;
+}
+export interface SaveAttemptResult { readonly receipt?: FakeSaveReceipt; readonly attempt: Readonly<SaveAttempt> }
+type MutableAttempt = { -readonly [K in keyof SaveAttempt]: SaveAttempt[K] };
 interface Saved { slot: string; size: number; digest: string }
 const sha256 = (bytes: Uint8Array) => createHash('sha256').update(bytes).digest('hex');
 // Intrinsic accessor: a subclass or a Proxy cannot misreport the size of the bytes it holds.
@@ -296,11 +309,20 @@ export class FakeEvidenceStore {
     return !this.#reason && this.#clock(this.caps.deadline) && !this.#reason;
   }
   /** A reported release is confirmed before the cleanup reserve ends and late from then on; no readable time stays unconfirmed. */
-  #closeAttempt(handle: object) {
+  #closeAttempt(handle: object, attempt: MutableAttempt) {
     this.#cleanup = 'unconfirmed';
-    if (!this.ops.closeOnce(handle)) return false;
+    attempt.closeAttempted = true;
+    attempt.cleanup = 'unconfirmed';
+    let ok: boolean;
+    try { ok = this.ops.closeOnce(handle); }
+    catch { attempt.cleanupReason = 'close'; throw Error('store_close'); }
+    if (!ok) { attempt.cleanupReason = 'close'; return false; }
     const at = this.#read();
-    if (at !== undefined) this.#cleanup = at < this.caps.cleanupDeadline ? 'confirmed' : 'late';
+    if (at !== undefined) {
+      this.#cleanup = at < this.caps.cleanupDeadline ? 'confirmed' : 'late';
+      attempt.cleanup = this.#cleanup;
+      if (this.#cleanup === 'late') attempt.cleanupReason = 'deadline';
+    } else attempt.cleanupReason = 'clock';
     return true;
   }
   #step(action: () => boolean, reason: StoreReason) {
@@ -311,8 +333,21 @@ export class FakeEvidenceStore {
   }
   cancel() { this.#fail('cancelled'); }
   save(run: object, slot: string, bytes: Uint8Array): FakeSaveReceipt | undefined {
-    if (this.#busy) { this.#fail('binding'); return undefined; }
-    if (this.#reason) return undefined;
+    return this.saveAttempt(run, slot, bytes).receipt;
+  }
+  saveAttempt(run: object, slot: string, bytes: Uint8Array): SaveAttemptResult {
+    // Per-invocation storage, including reentry and sticky refusal; never a shared last-result slot.
+    const attempt: MutableAttempt = { disposition: 'not_started', createAttempted: false, handleAcquired: false,
+      closeAttempted: false, cleanup: 'not_started', reservedBytes: 0 };
+    const receipt = this.#save(run, slot, bytes, attempt);
+    return Object.freeze({ receipt, attempt: Object.freeze(attempt) });
+  }
+  #save(run: object, slot: string, bytes: Uint8Array, attempt: MutableAttempt): FakeSaveReceipt | undefined {
+    if (this.#busy) {
+      attempt.reason = 'binding'; attempt.rejection = 'busy';
+      this.#fail('binding'); return undefined;
+    }
+    if (this.#reason) { attempt.reason = 'store_stopped'; attempt.rejection = 'sticky'; return undefined; }
     this.#busy = true;
     let handle: object | undefined;
     let closed = false;
@@ -324,10 +359,16 @@ export class FakeEvidenceStore {
       const size = realLength(bytes);
       if (size > this.caps.fileBytes || size > this.caps.totalBytes - this.#charged) { this.#fail('limit'); return undefined; }
       this.#charged += size; // failed/partial writes never refund the reservation
+      attempt.reservedBytes = size;
       // No callback runs between the size check and this internal-slot copy.
       const owned = new Uint8Array(bytes);
       const digest = sha256(owned);
-      if (!this.#step(() => { handle = this.ops.createExclusive(slot); return !!handle; }, 'create')) return undefined;
+      if (!this.#step(() => {
+        attempt.createAttempted = true;
+        handle = this.ops.createExclusive(slot);
+        attempt.handleAcquired = !!handle;
+        return !!handle;
+      }, 'create')) return undefined;
       let offset = 0, attempts = 0, retries = 0;
       while (offset < owned.byteLength) {
         if (attempts === this.caps.attempts) { this.#fail('limit'); return undefined; }
@@ -344,7 +385,7 @@ export class FakeEvidenceStore {
       if (!this.#step(() => this.ops.flushOnce(handle!), 'flush')) return undefined;
       if (!this.#step(() => {
         closed = true; // one attempt even if it throws or cannot confirm release
-        return this.#closeAttempt(handle!);
+        return this.#closeAttempt(handle!, attempt);
       }, 'close')) return undefined;
       let reread: Uint8Array | undefined;
       if (!this.#step(() => { reread = this.ops.readBack(handle!, slot, this.caps.fileBytes); return reread instanceof Uint8Array; }, 'reread')) return undefined;
@@ -353,6 +394,7 @@ export class FakeEvidenceStore {
       if (!this.#guard()) return undefined;
       const receipt = Object.freeze({}) as FakeSaveReceipt;
       this.#receipts.set(receipt, Object.freeze({ slot, size: owned.byteLength, digest }));
+      attempt.disposition = 'saved';
       return receipt;
     } catch {
       this.#fail('binding'); // never reflect unexpected input/allocation exceptions
@@ -361,10 +403,16 @@ export class FakeEvidenceStore {
       if (handle && !closed) {
         closed = true;
         this.#cleanup = 'unconfirmed';
+        attempt.cleanup = 'unconfirmed';
         // Cleanup has a separate finite reserve and never resets the original failure.
-        if (this.#clock(this.caps.cleanupDeadline)) {
-          try { this.#closeAttempt(handle); } catch { /* fixed diagnostic only */ }
-        }
+        const at = this.#read();
+        if (at === undefined) attempt.cleanupReason = 'clock';
+        else if (at >= this.caps.cleanupDeadline) { attempt.cleanupReason = 'deadline'; this.#fail('deadline'); }
+        else { try { this.#closeAttempt(handle, attempt); } catch { /* first operation reason retained */ } }
+      }
+      if (attempt.disposition !== 'saved') {
+        attempt.disposition = attempt.handleAcquired ? 'partial_unverified' : attempt.createAttempted ? 'create_failed' : 'not_started';
+        attempt.reason = this.#reason ?? 'binding';
       }
       this.#busy = false;
     }
@@ -408,6 +456,7 @@ type Slot = {
   cleanup?: ReturnType<FakeEvidenceStore['snapshot']>['cleanup'];
   storeReason?: StoreReason;
   consumeReason?: StoreReason;
+  attempt?: Readonly<SaveAttempt>;
 };
 export interface BindingInput {
   timing: Timing; root: object; ops: EvidenceOps; now: () => number;
@@ -638,11 +687,11 @@ export class SyntheticStoreRecorderBinding {
       const expected = { slot: slot.file, size: slot.size, digest: slot.digest };
       if (!this.#guard()) return false;
       slot.disposition = 'attempted_unverified';
-      receipt = this.#storage!.save(this.#runOrigin, slot.file, owned);
-      // This bridge starts only healthy saves. No next save is attempted after any failure.
-      const outcome = this.#storage!.snapshot();
-      slot.cleanup = outcome.cleanup;
-      slot.storeReason = outcome.reason;
+      const outcome = this.#storage!.saveAttempt(this.#runOrigin, slot.file, owned);
+      receipt = outcome.receipt;
+      slot.attempt = outcome.attempt;
+      slot.cleanup = outcome.attempt.cleanup;
+      slot.storeReason = this.#storage!.snapshot().reason;
       if (!receipt) return this.#fatal('store');
       slot.disposition = 'saved_unacknowledged';
       if (!this.#terminal()) slot.status = 'saved';
@@ -683,7 +732,8 @@ export class SyntheticStoreRecorderBinding {
       slots: Object.freeze(this.#slots.map(s => s.status)),
       recorder, store: this.#storage?.snapshot(), unacknowledged: recorder?.checkpoints.length ?? 0, acknowledgements: this.#acks,
       saves: Object.freeze(this.#slots.map(s => Object.freeze({ disposition: s.disposition,
-        file: s.file, size: s.size, digest: s.digest, cleanup: s.cleanup, reason: s.storeReason, consumeReason: s.consumeReason }))),
+        file: s.file, size: s.size, digest: s.digest, cleanup: s.cleanup, reason: s.storeReason, consumeReason: s.consumeReason,
+        attempt: s.attempt }))),
       deadlines: this.#plan ? Object.freeze({ save: this.#saveDeadline, cleanup: this.#plan.stages[3], all: this.#plan.all }) : undefined });
   }
 }
