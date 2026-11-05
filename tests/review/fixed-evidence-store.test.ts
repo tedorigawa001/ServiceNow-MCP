@@ -156,6 +156,33 @@ describe('fake EvidenceStore: independent per-call attempt results', () => {
       cleanup: 'unconfirmed', cleanupReason: fault, closeAttempted: fault === 'close' });
     expect(f.store.snapshot().reason).toBe('write');
   });
+  it.each(['close step', 'after a write failure'] as const)('counts a close that throws as attempted, on the %s path', path => {
+    const f = fixture();
+    if (path === 'after a write failure') f.writes.push('throw');
+    f.hook(op => { if (op === 'close') throw Error('SECRET_CLOSE'); });
+    const result = f.store.saveAttempt(f.run, 'conditions.json', abc);
+    expect(result.attempt).toMatchObject({ disposition: 'partial_unverified', closeAttempted: true, cleanup: 'unconfirmed',
+      cleanupReason: 'close', reason: path === 'close step' ? 'close' : 'write' });
+    expect(count(f.calls, 'close')).toBe(1);
+    expect(JSON.stringify(result)).not.toContain('SECRET_CLOSE');
+  });
+  it.each(['close step', 'after a write failure'] as const)('does not confirm a reported close when the next time is invalid, on the %s path', path => {
+    const f = fixture();
+    if (path === 'after a write failure') f.writes.push('throw');
+    f.hook(op => { if (op === 'close') f.time(NaN); });
+    const result = f.store.saveAttempt(f.run, 'conditions.json', abc);
+    expect(result.attempt).toMatchObject({ disposition: 'partial_unverified', closeAttempted: true, cleanup: 'unconfirmed',
+      cleanupReason: 'clock', reason: path === 'close step' ? 'clock' : 'write' });
+    expect(count(f.calls, 'close')).toBe(1);
+  });
+  it('records a late close on the failure path without replacing the primary reason', () => {
+    const f = fixture(); f.writes.push('throw');
+    f.hook(op => { if (op === 'close') f.time(120); });
+    const result = f.store.saveAttempt(f.run, 'conditions.json', abc);
+    expect(result.attempt).toMatchObject({ disposition: 'partial_unverified', closeAttempted: true, cleanup: 'late',
+      cleanupReason: 'deadline', reason: 'write' });
+    expect(f.store.snapshot().reason).toBe('write');
+  });
   it('records late cleanup locally without carrying it into the next rejection', () => {
     const f = fixture(); f.hook(op => { if (op === 'close') f.time(120); });
     const result = f.store.saveAttempt(f.run, 'conditions.json', abc);

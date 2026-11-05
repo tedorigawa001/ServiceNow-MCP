@@ -1,6 +1,8 @@
 # WF-B EvidenceStore：artifact単位の内部契約とfake
 
-Version: draft-0.5 / Date: 2026-11-05 / 基準HEAD: `7f6ef4f` / レビュー修正の基準HEAD: `3e0d7d5` / 試行別結果の実装基準HEAD: `85eb9ad`。
+Version: draft-0.6 / Date: 2026-11-05 / 基準HEAD: `7f6ef4f` / レビュー修正の基準HEAD: `fb91044` / 試行別結果の実装基準HEAD: `85eb9ad`。
+
+draft-0.6のレビュー修正: 接続済みの期限供給を「未実装」としていた§3と、実装の所在を訂正した。挙動は変更していない。
 
 draft-0.5: [試行別結果の合成検証記録](E2E_BEST_PRACTICE_WFB_STORE_ATTEMPT_2026-11-05.md)を追加。`saveAttempt`が当該呼出し専用の凍結結果を返し、旧`save`はreceiptだけを返す互換入口とする。Store全体のfirst reasonと試行の主失敗／cleanup理由を分離し、bridgeはsnapshotから推定せず同じ戻り値を保持する。
 
@@ -12,7 +14,7 @@ draft-0.2のレビュー修正: 入力長の検査とコピーの間にcallback�
 
 Status: **試験専用・メモリ内だけの実装。OS backend・実保存は未実装。recorderとはSB-B／試行別結果をfake接続済み。** 正式発行口閉鎖・全体受付無効・Unknown・調査保留を維持する。保存先・保持期間・運用cap／時間枠・停止方式は未承認のまま。既存証拠のcopy／保管操作・再採取・実接続・実通信・設定変更・Pushを行わない。
 
-親は[固定採取器契約](BEST_PRACTICE_WFB_FIXED_RECORDER_CONTRACT.md)§3。実装は`tests/review/fixtures/fixed-evidence-store.ts`、合成driverと対照は`tests/review/fixed-evidence-store.test.ts`。[検証記録](E2E_BEST_PRACTICE_WFB_EVIDENCE_STORE_FAKE_2026-11-04.md)と合わせて読む。
+親は[固定採取器契約](BEST_PRACTICE_WFB_FIXED_RECORDER_CONTRACT.md)§3。実装は`tests/review/fixtures/store-recorder-kernel.ts`（`fixed-evidence-store.ts`は再export）、合成driverと対照は`tests/review/fixed-evidence-store.test.ts`。[検証記録](E2E_BEST_PRACTICE_WFB_EVIDENCE_STORE_FAKE_2026-11-04.md)と合わせて読む。
 
 ## 1 所有権・用途
 
@@ -43,7 +45,7 @@ Status: **試験専用・メモリ内だけの実装。OS backend・実保存は
 
 write試行数は最大attempt cap。create／flush／close／再読は各1回、slotは最大14。writeへは残りcopyを渡すためscratchはfile上限内だが、各試行のcopy累積費用は最大attempts×fileBytesである。OS・JavaScript heap・allocator／RSS・実messageの上界証明ではない。再読driver自身も要求limit以内の取得を行う前提で、過大allocationを後検査だけで防げたとはしない。
 
-正常操作には同じ絶対`deadline`、失敗後cleanupにはそれより後の有限`cleanupDeadline`を明示する。途中で期限を再設定しない。recorderの外側予約からこれらを供給する接続は未実装。時刻はsafe integer・逆行拒否、等値は期限切れ。
+正常操作には同じ絶対`deadline`、失敗後cleanupにはそれより後の有限`cleanupDeadline`を明示する。途中で期限を再設定しない。bound bridgeはrecorderの外側予約から`D_save`と`D_store_cleanup`をこの2つへ供給する。slot区分別の期限表は未実装。時刻はsafe integer・逆行拒否、等値は期限切れ。
 
 取得済みhandleがまだclose未試行ならfinallyで最大1回closeする。元の停止理由を保持し、`cleanup=not_started／confirmed／late／unconfirmed`を別軸で示す。cleanup期限切れ・時計取得失敗なら操作を増やさずunconfirmed。close要求だけをconfirmedにしない。成功の返答がcleanup期限前に得られた場合だけconfirmedとする。等値・超過は`late`で、返答はあったが予約を超えたことを示す（通常closeも同じ）。`late`はconfirmedと同じ扱いにせず、時間予約内の解放の証拠にしない。失敗の返答、close後に時刻を読めない・時計が逆行した場合はunconfirmedのままとする。同期操作を途中で止める仕組みではないので、超過の実行自体は防げない。これもfake driverの返答であり、実FD解放の証明ではない。
 

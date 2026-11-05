@@ -186,6 +186,8 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 ### Added
 
+- WF-B review tests for the test-only Store attempt results: a close that throws counts as attempted, a reported close with an invalid next time stays unconfirmed, and a late close keeps the primary reason. The bound bridge now has controls for partial writes, the EINTR cap and a refused save that must not copy the previous cleanup. No fixture behaviour, real storage or formal issuance changes.
+
 - WF-B review fixes for the test-only checkpoint persistence: a stray recorder call after the test terminal is only a diagnostic and no longer cancels the Store, so queued evidence can still be saved; misuse while observing stays a fatal stop. The cleanup split and the limits are read once at construction. Tests now cover consume failures, slot and digest mismatches with a genuine receipt, and a queue head that moved. No whole-run preservation or formal issuance is enabled.
 
 - WF-B review fixes for the test-only store/recorder binding: the shared clock stays readable after a stop so a Store can still release its handle, admission staying with the guard; a root takes one owner, so a fresh run key cannot obtain a fresh Store; recorder misuse and a refused gate are fatal stops, while cancellation, the stop deadline and the start window stay observation stops; a discard at or after the save deadline closes without cancelling the Store. Tests now cover the Store wiring and `Store.cancel`. No bound save or acknowledgement exists yet.

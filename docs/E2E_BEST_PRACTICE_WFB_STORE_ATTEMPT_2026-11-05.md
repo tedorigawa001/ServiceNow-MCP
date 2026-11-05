@@ -29,7 +29,30 @@ Date: 2026-11-05 / 基準HEAD: `85eb9ad` / 未コミット変更を検証。
 
 最終の型／lint・`git diff --check`は成功。文書リンク10件、kernelの依存がcryptoだけでtestsが製品build／package許可対象外である構成も確認した。構成確認は実梱包成功の代替ではない。全体回帰・梱包dry-run・compiled試験は今回未実施。前段の全体成功は今回の変更の検証へ流用しない。
 
-## 4 残課題
+## 4 レビュー修正（2026-11-05）
+
+`fb91044`のレビュー指摘を修正した。実装の不具合はなく、kernelは変更していない。§3の件数は修正前の記録で、そのまま残す。
+
+| 指摘 | 修正 |
+|---|---|
+| closeのthrowが試行済みになること、close成功後の時計不正、失敗経路の`late`に対照がなかった | 通常経路と失敗後cleanupの両方で確認する単体試験を5件追加した |
+| bridgeが戻り値のattemptからcleanupを取り、reasonはStore全体のfirst reasonを保持することが未検証だった | 戻り値のobjectそのものを保持する対照と、拒否された保存の対照を追加した |
+| BR04が求める部分書込・EINTR境界のbridge対照がなかった | write throw、部分書込後のthrow、再試行上限超過、上限内の部分書込とEINTRの4件を追加した |
+| 契約§3の「接続は未実装」、実装の所在、設計§5の「cleanup四値」、BR04の状況、設計の基準HEADが実態と違っていた | 文書を訂正した |
+
+拒否された保存の対照は、公開Store `saveAttempt`のprototypeを差し替え、呼出しの直前にStoreを取り消す。bridgeは健全時しか保存を始めないので、通常経路では到達しない。bound経路の成功実証ではない。
+
+kernelの変異は、元の43個のうち40個を検出した。§3の時点で生存した8個のうち5個は新しい対照で検出し、残る3個は次の理由で等価と判断した。追加の5個（attemptのコピー、`receipt`なしを致命的停止にしない、再試行の上限なし、EINTRの即失敗、部分書込の完了扱い）はすべて新しい対照で検出した。
+
+| 変異 | 理由 |
+|---|---|
+| `finally-deadline-no-fail` | finallyのcleanupに入る時点で主失敗が必ず記録済みなので、`#fail`は何も変えない |
+| `attempt-reason-no-default` | 失敗経路はすべて`#reason`を設定するので、`?? 'binding'`には到達しない |
+| `attempt-reason-kept-sticky` | sticky／busy拒否はtryの前に返り、finallyを通らない |
+
+全スイート（`--maxWorkers=3`）は292ファイル・**14,148件すべて成功**（対象4ファイルは358件）。`npm run lint`はエラー0、`npm run build`は成功、`package-http-classification`はPASS（441ファイル）、`git diff --check`も成功。strict単独TypeScript検査も成功。梱包dry-runは未実施。
+
+## 5 残課題
 
 slot区分別の固定期限表・manifest専用枠、保存経路Closed後のrecorder最終終端、上位通知throw／部分生成失敗と詳細費目の連続対照が残る。本文／容量モデル・ProcessOwner・manifest集合・session台帳・OS backend・実承認は未対応。
 

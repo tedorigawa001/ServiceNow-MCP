@@ -1,6 +1,8 @@
 # WF-B EvidenceStore／recorder：一度限り接続の差分設計
 
-Version: draft-0.7 / Date: 2026-11-05 / 基準HEAD: `672eda4` / SB-A実装基準HEAD: `2f1120f` / SB-B実装基準HEAD: `186cea6`。
+Version: draft-0.8 / Date: 2026-11-05 / 基準HEAD: `fb91044` / SB-A実装基準HEAD: `2f1120f` / SB-B実装基準HEAD: `186cea6` / 試行別結果の実装基準HEAD: `85eb9ad`。
+
+draft-0.8のレビュー修正: partialのcleanupが`not_started`にならない実装に§5を合わせた。不足していたbridgeの対照を追加し、§7のBR04を実施済みとした。§8の「当時の記録」の範囲に§8.1を含めた。
 
 draft-0.7: [Store試行別結果の検証記録](E2E_BEST_PRACTICE_WFB_STORE_ATTEMPT_2026-11-05.md)を追加。SB-Cの最初の段階として`saveAttempt`を実装し、bridgeは当該呼出しの凍結resultを保持する。slot区分別期限表と閉鎖後の最終終端は未実装のまま。
 
@@ -93,7 +95,7 @@ ownerは元runの開始時点・単調clock・`planTime`の絶対期限・停止
 |---|---|---|
 | create前拒否（sticky拒否を含む） | 元先頭を維持 | not_started、固定reason、claim済み、予約状況 |
 | create試行の失敗（handle未取得） | 元先頭を維持 | create_failed、cleanupはnot_started。未回収resourceがないことはdriverの前提で、未実証 |
-| 部分書込・flush／close／再読失敗 | 元先頭を維持 | partial_unverified、cleanup四値（not_started／confirmed／late／unconfirmed）、first reason |
+| 部分書込・flush／close／再読失敗 | 元先頭を維持 | partial_unverified、cleanup（confirmed／late／unconfirmed）、first reason |
 | receipt発行後、消費／post guard拒否 | 元先頭を維持。receiptの再利用不可 | saved_unacknowledged、保存size／digestの診断DATA、cleanup |
 | 固定ack完了 | 同先頭だけ1件除去 | acknowledged、同sequence、cleanup |
 
@@ -137,14 +139,14 @@ Storeの64KiB／1MiB等は合成構造上限であり、実観測本文に適合
 | BR13 | slot区分別期限の境界。`D_save`後の`manifest.json`とcheckpoint、期限表の不正な順序 | `D_save`後でもmanifestの期限表には到達でき、checkpointは拒否される。順序不正はStoreを生成しない。実manifest集合の検証とは呼ばない |
 | BR14 | `conditions_ready`のack成功・線形化点前の失敗 | ack成功時だけ`start()`へ進める。失敗時は子起動0 |
 
-SB-A／SB-B時点の状況は次のとおり。実施済みはメモリfakeでの確認で、実保存の証明ではない。
+SB-A／SB-B／試行別結果の時点の状況は次のとおり。実施済みはメモリfakeでの確認で、実保存の証明ではない。
 
 | ID | 状況 | 残り |
 |---|---|---|
 | BR01、BR05、BR14 | 実施済み | なし |
 | BR02 | 一部 | encoding版の不一致。slot・size・digest・別owner・コピーは実施済み |
 | BR03 | 一部 | 成功分の二重消費は、receiptの再利用経路がないので到達不能 |
-| BR04 | 試行別結果を追加検証 | create試行の有無・各試行のcleanup分離を単体／bridgeで確認。OS保存の実証ではない |
+| BR04 | 実施済み | なし。sticky失敗後の次の保存は、bridgeが健全時しか保存を始めないので、Storeの取消を直前に差し込んで確認した |
 | BR06 | 一部 | 成功分の保持は実施済み。停止checkpointの非再帰は明示の対照なし |
 | BR07 | 一部 | 別clockの対照。`late`・逆行・原点は実施済み |
 | BR08 | 一部 | 通知throw・部分生成の連続対照 |
@@ -164,7 +166,7 @@ oracleはbridge自身のmapper／encoder／guardを呼ばず、固定expected he
 
 SB-Aの生成・準備claim、SB-Bのメモリ保存・線形化section、Store試行別結果の分類までを実装。slot区分別期限表・閉鎖後の最終終端・詳細費目は未実装。byte／work／時間の運用値、正式保存先、保管／削除、OS backendは未承認・未確認のまま。storeとrecorderが繋がっても、採取・保全・process監督の開始許可にはならない。
 
-試行別結果追加後は`persist`が`saveAttempt`を呼び、戻りのreceiptだけを既存private consumerへ渡す。診断には同じattempt objectを保持し、snapshotの過去cleanupから推定しない。従来の上位粗分類`attempted_unverified`は互換で残し、詳細は`attempt.disposition`でnot_started／create_failed／partial_unverified／savedを区別する。下位methodそのものがthrowして戻らなければattemptは未定義であり、証拠不足として扱う。以下§8.2の「試行別結果はSB-Cへ残る」はSB-B当時の記録で、この部分は今回解消した。
+試行別結果追加後は`persist`が`saveAttempt`を呼び、戻りのreceiptだけを既存private consumerへ渡す。診断には同じattempt objectを保持し、snapshotの過去cleanupから推定しない。従来の上位粗分類`attempted_unverified`は互換で残し、詳細は`attempt.disposition`でnot_started／create_failed／partial_unverified／savedを区別する。下位methodそのものがthrowして戻らなければattemptは未定義であり、証拠不足として扱う。以下§8.1の未実装一覧にある試行別結果と、§8.2の「試行別結果はSB-Cへ残る」は当時の記録で、この部分は今回解消した。
 
 ### 8.1 SB-Aの実装境界
 

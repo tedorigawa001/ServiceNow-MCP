@@ -237,6 +237,47 @@ describe('SB-B: failures keep queue / saved-unacknowledged facts', () => {
     expect(f.events.filter(op => op === 'create')).toHaveLength(creates);
     expect(f.events.filter(op => op === 'close').length).toBe(failure === 'identity' || failure === 'create' ? 0 : 1);
   });
+  it.each([
+    { name: 'a write that throws', progress: ['throw'], writes: 1, reason: 'write' },
+    { name: 'a partial write, then a throw', progress: [1, 'throw'], writes: 2, reason: 'write' },
+    { name: 'EINTR past the retry cap', progress: ['eintr', 'eintr', 'eintr'], writes: 3, reason: 'retry' },
+  ] as const)('keeps the head and retries nothing after $name', ({ progress, writes, reason }) => {
+    const f = reserved(); f.progress.push(...progress);
+    const original = f.root.snapshot().recorder!.checkpoints[0];
+    expect(persistHead(f.root)).toBe(false);
+    expect(f.root.snapshot()).toMatchObject({ phase: 'Stopped', reason: 'store', acknowledgements: 0 });
+    expect(f.root.snapshot().saves[0].attempt).toMatchObject({ disposition: 'partial_unverified', createAttempted: true,
+      handleAcquired: true, closeAttempted: true, cleanup: 'confirmed', reason });
+    expect(f.root.snapshot().recorder!.checkpoints[0]).toBe(original);
+    expect(nonIdentity(f.events)).toEqual(['create', ...Array<string>(writes).fill('write'), 'close']);
+  });
+  it('acknowledges after a partial write and an EINTR inside the retry cap', () => {
+    const f = reserved(); f.progress.push(1, 'eintr');
+    expect(persistHead(f.root)).toBe(true);
+    expect(f.root.snapshot().saves[0].attempt).toMatchObject({ disposition: 'saved', cleanup: 'confirmed' });
+    expect(nonIdentity(f.events)).toEqual(['create', 'write', 'write', 'write', 'flush', 'close', 'reread']);
+  });
+  it('retains the returned attempt object itself', () => {
+    const f = reserved(), prepared = claim(f.root);
+    let returned: ReturnType<FakeEvidenceStore['saveAttempt']> | undefined;
+    withSave((save, store, run, slot, bytes) => (returned = save.call(store, run, slot, bytes)), () => f.root.persist(prepared));
+    expect(returned).toBeDefined();
+    expect(f.root.snapshot().saves[0].attempt).toBe(returned!.attempt);
+  });
+  it('takes a refused save from its own attempt, not from the Store-wide snapshot', () => {
+    const f = observing(), prepared = claim(f.root);
+    // The bridge starts only healthy saves, so the stopped Store is inserted just before the call. Setup only.
+    const result = withSave((save, store, run, slot, bytes) => { store.cancel(); return save.call(store, run, slot, bytes); }, () => f.root.persist(prepared));
+    expect(result).toBe(false);
+    const { store, saves, acknowledgements } = f.root.snapshot();
+    expect(store).toMatchObject({ reason: 'cancelled', cleanup: 'confirmed' }); // the previous save's cleanup, still Store-wide
+    expect(saves[1]).toMatchObject({ disposition: 'attempted_unverified', cleanup: 'not_started', reason: 'cancelled' });
+    expect(saves[1].attempt).toEqual({ disposition: 'not_started', createAttempted: false, handleAcquired: false,
+      closeAttempted: false, cleanup: 'not_started', reason: 'store_stopped', rejection: 'sticky', reservedBytes: 0 });
+    expect(saves[0].attempt).toMatchObject({ disposition: 'saved', cleanup: 'confirmed' });
+    expect(acknowledgements).toBe(1);
+    expect(nonIdentity(f.events).filter(op => op === 'create')).toHaveLength(1);
+  });
   it('rejects a small header cap before Store operations', () => {
     const f = setup(); f.input.limits.fileBytes = 32;
     const root = f.construct(); root.reserve(true);
