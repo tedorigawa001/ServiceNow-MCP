@@ -198,6 +198,8 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 ### Added
 
+- WF-B RP-B review hardening: raw JSON syntax controls now pin each fixed stage and reason, and a hand-counted 312-unit tree checks every per-unit work charge. New controls cover same-length delimiter and literal errors, mismatched closers, unterminated strings, DEL bytes, scratch and hard ceilings, smaller global caps at known paths, and off-path arrays. The parser, value core, formal issuance and whole-run admission are unchanged.
+
 - WF-B snapshot value core review hardening: an empty snapshot can no longer claim a complete run, and `passed` now conflicts with `not_run` cases blocked by a module or hook failure. Non-observed metrics, including `not_supported`, keep the prefix incomplete. New synthetic controls isolate each local relation, pin all ten encoded bounds, add maximal-width fixtures, hostile nested values, standalone caps and a hand-counted work breakdown. Bound formulas, runtime sources, formal issuance and whole-run admission are unchanged.
 
 - WF-B DT-C review hardening: assertions inside throwing notification mocks were swallowed by the notification catch, so they now observe in the mock and assert after unwind. New synthetic controls pin Pending during both notifications, admission closure before notification, Store-then-recorder order, one observation claim across reentry, `not_present` on owner/recorder construction failure, frozen notification snapshots, a whole-save EINTR cap and EINTR charging against the write attempt cap. The test kernel, cost formulas, runtime sources, deadlines, formal issuance and whole-run admission are unchanged.

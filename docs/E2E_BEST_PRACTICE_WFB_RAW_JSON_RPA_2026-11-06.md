@@ -1,7 +1,7 @@
 # WF-B RP-A：raw byte入力境界・UTF-8・外側framingの合成検証
 
-Date: 2026-11-06 / 実装基準HEAD: `baaf60d` / 実行Node: `v24.18.0`。
-対象: [raw parser契約draft-0.3 §8](BEST_PRACTICE_WFB_BOUNDED_RAW_JSON_PARSER_DESIGN.md#8-rp-a実装境界計数と破棄)。
+Date: 2026-11-06 / 実装基準HEAD: `baaf60d` / 実行Node: `v24.18.0` / コミット: `f28f0a2`。
+対象: [raw parser契約§8](BEST_PRACTICE_WFB_BOUNDED_RAW_JSON_PARSER_DESIGN.md#8-rp-a実装境界計数と破棄)。
 
 ## 1 範囲と状態
 
@@ -9,7 +9,7 @@ Date: 2026-11-06 / 実装基準HEAD: `baaf60d` / 実行Node: `v24.18.0`。
 
 APIは`inspectCheckpointBoundary`。成功でも`kind=non_executable_raw_boundary, syntax=unchecked`であり、検査済みJSON値・bytes・receipt・proofを返さない。colon／comma／literal／number・重複key・field／schema・値関係は未検査。`{not_json}`・重複key・旧v1文字列の殻が境界を通り得ることを負の対照として固定し、完成parserの成功へ昇格しない。RP-B／RP-Cが入るまで、malformed bodyについての最終診断優先順位も保証しない。
 
-既存の値core・旧v1・Store／recorder・runtime・package／build設定は変更していない。正式発行口閉鎖・全体受付無効・Unknown・VM／監視／telemetry調査保留を維持した。証拠発行・本文保存・実接続・実通信・実機操作・設定変更・再採取・保管操作・コミット・Pushは行っていない。今回のソース／MD編集は未承認の観測証拠保存とは区別する。
+既存の値core・旧v1・Store／recorder・runtime・package／build設定は変更していない。正式発行口閉鎖・全体受付無効・Unknown・VM／監視／telemetry調査保留を維持した。証拠発行・本文保存・実接続・実通信・実機操作・設定変更・再採取・保管操作・Pushは行っていない。今回のソース／MD編集は未承認の観測証拠保存とは区別する。
 
 ## 2 TDDの経過
 

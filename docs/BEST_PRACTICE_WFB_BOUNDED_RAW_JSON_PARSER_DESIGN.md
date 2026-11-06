@@ -1,6 +1,8 @@
 # WF-B：bounded raw JSON parserの詳細契約
 
-Version: draft-0.4 / Date: 2026-11-06 / 照合基準HEAD: `7eefb10` / レビュー修正の基準HEAD: `09e65e0` / RP-A実装基準HEAD: `baaf60d` / RP-B実装基準HEAD: `f28f0a2`。
+Version: draft-0.5 / Date: 2026-11-06 / 照合基準HEAD: `7eefb10` / レビュー修正の基準HEAD: `09e65e0` / RP-A実装基準HEAD: `baaf60d` / RP-B実装基準HEAD: `f28f0a2` / RP-Bレビュー修正の基準HEAD: `6a8209a`。
+
+draft-0.4のレビュー修正: byte不正とcap不足の優先順位を§5へ明記した。RP-Bの理由検査を固定し、非空の木の手計数workと拒否・上限の対照を追加した。実装と保証範囲は変更していない。
 
 draft-0.4: RP-Bの有限stack構文解析・重複key・canonical数値・path件数とnode／token上限を合成専用で実装した（§9）。[検証記録](E2E_BEST_PRACTICE_WFB_RAW_JSON_RPB_2026-11-06.md)。新入口の成功はsyntax checked／value uncheckedのmetadataのみ。旧RP-Aと値coreは不変で、RP-C・発行／保存は未接続。
 
@@ -112,7 +114,7 @@ parser内の抽象費目は、入力copy byte、UTF-8 byte走査、字句のadva
 | `value_schema / value_relation / value_limit / value_overflow / value_invalid` | 既存coreの`schema / relation / limit / overflow / invalid_value`を1対1で保持。`value_limit`がwork由来かbyte由来か等は現行coreから識別できず、推測しない |
 | `raw_internal` | 想定外の内部例外を固定化。成功・正常cleanupへ補完しない |
 
-優先順位は「前段優先、同段は次に実行する操作のcap課金→byte／token検査→値操作」の先着sticky。すべての不正を探すために失敗後の入力走査を続けない。UTF-8 prepassはparseより先なので、後方の不正UTF-8が前方のJSON不正より先に報告され得る。これは明示した順序であり、offset最小の全種エラーを返す契約ではない。上位への写像と保存／cleanup診断との合流は未接続。
+優先順位は「前段優先、同段は次に実行する操作のcap課金→byte／token検査→値操作」の先着sticky。すべての不正を探すために失敗後の入力走査を続けない。UTF-8 prepassはparseより先なので、後方の不正UTF-8が前方のJSON不正より先に報告され得る。これは明示した順序であり、offset最小の全種エラーを返す契約ではない。空白は次tokenを開始しないので、token capの残量に関わらず`raw_profile`とする。value開始位置はbyte classの確認→node予約→値の分類の順で、node枠が尽きていれば不正な値の字句でも`raw_limit`を先に返す。上位への写像と保存／cleanup診断との合流は未接続。
 
 ### 5.1 境界入力の固定理由
 
@@ -232,4 +234,4 @@ RP-B modelは`wfb-raw-syntax-rpb-1`。元RP-Aの受付／copy／UTF-8計数に�
 
 `tokens, valueNodes, objectFields, arrayItems, containers, maxDepth, numericTokens`は受理された正常treeの独立数え上げと一致する。失敗prefixの開始予約も含むvalueNodesを、内部treeの責務としてretiredNodesへ一度退役させる。`treeReferences=0`はこのAPIが参照を持ち出さない意味で、物理node数／GC／zero化・OS解放確認ではない。
 
-手書き10 variant、正常golden・80個の有限生成treeの独立oracle、全7既知pathの等値／次要素拒否、全work切断対照を実施した。既存RP-Aと値coreは維持する。full値の比較・core固定受理・2Vとstructural計数の受付式、shared budget／期限／取消、native allocation失敗、実heap／時間・運用cap、encoder／private aggregate／capture／custody／保存は未接続／未確認。正式発行口閉鎖・全体受付無効・Unknown・調査保留を維持する。
+手書き10 variant、正常golden・80個の有限生成treeの独立oracle、全7既知pathの等値／次要素拒否、全work切断対照と、非空の木の手計数312unit対照を実施した。既存RP-Aと値coreは維持する。full値の比較・core固定受理・2Vとstructural計数の受付式、shared budget／期限／取消、native allocation失敗、実heap／時間・運用cap、encoder／private aggregate／capture／custody／保存は未接続／未確認。正式発行口閉鎖・全体受付無効・Unknown・調査保留を維持する。

@@ -33,20 +33,36 @@ describe('RP-B finite syntax, never value/evidence acceptance', () => {
 });
 
 describe('bounded JSON grammar and earliest rejection', () => {
-  it.each(['{not_json}\n', '{a:1}\n', '{"a"1}\n', '{"a":}\n', '{"a":1,}\n', '{"a":[1,]}\n',
-    '{"a":[,1]}\n', '{"a":[1,,2]}\n', '{"a":[1 2]}\n', '{"a":truefalse}\n', '{"a":nul}\n',
-    '{"a":False}\n', '{"a":undefined}\n', '{"a":NaN}\n', '{"a":Infinity}\n', '{"a":/x/}\n',
-    '{"a":1/*x*/}\n', '{"a":1 "b":2}\n', '{"a":[]]\n', '{"a":{]}\n', '{"a":[}', '{"a":'])('rejects grammar case %s', text => {
-    const r = inspect(text); expect(r.ok).toBe(false);
-    if (!r.ok) expect(['raw_syntax', 'raw_profile']).toContain(r.reason);
+  it.each([
+    ['{not_json}\n', 'raw_syntax'], ['{a:1}\n', 'raw_syntax'], ['{"a"1}\n', 'raw_syntax'], ['{"a":}\n', 'raw_syntax'],
+    ['{"a":1,}\n', 'raw_syntax'], ['{"a":[1,]}\n', 'raw_syntax'], ['{"a":[,1]}\n', 'raw_syntax'], ['{"a":[1,,2]}\n', 'raw_syntax'],
+    ['{"a":[1 2]}\n', 'raw_profile'], ['{"a":truefalse}\n', 'raw_syntax'], ['{"a":nul}\n', 'raw_syntax'],
+    ['{"a":False}\n', 'raw_syntax'], ['{"a":undefined}\n', 'raw_syntax'], ['{"a":NaN}\n', 'raw_syntax'], ['{"a":Infinity}\n', 'raw_syntax'],
+    ['{"a":/x/}\n', 'raw_syntax'], ['{"a":1/*x*/}\n', 'raw_syntax'], ['{"a":1 "b":2}\n', 'raw_profile'],
+    ['{"a":[]]\n', 'raw_syntax'], ['{"a":{]}\n', 'raw_syntax'], ['{"a":[}', 'raw_syntax'], ['{"a":', 'raw_syntax'],
+    ['{"a";1}\n', 'raw_syntax'], ['{"a":1;"b":2}\n', 'raw_syntax'], ['{"a":[1;2]}\n', 'raw_syntax'],
+    ['{"a":nuXl}\n', 'raw_syntax'], ['{"a":fxlse}\n', 'raw_syntax'], ['{"a":trux}\n', 'raw_syntax'],
+    ['{"a":[1}}\n', 'raw_syntax'], ['{"a":{"b":0]}\n', 'raw_syntax'],
+    ['{', 'raw_syntax'], ['{"a', 'raw_syntax'], ['{"a":"x', 'raw_syntax'], ['{"a":tr', 'raw_syntax'], ['{"a":1', 'raw_syntax'],
+    ['{"\u007f":0}\n', 'raw_profile'], ['{"a":"\u007f"}\n', 'raw_profile'], ['{\u007f}\n', 'raw_profile'],
+  ])('rejects grammar case %s with the fixed reason %s', (text, reason) => {
+    const r = inspect(text); expect(r).toMatchObject({ ok: false, stage: 'parse', reason });
     expect(r.operations.copyAttempts).toBe(1); expect(r.operations.copiesRetired).toBe(1);
     expect(r.treeReferences).toBe(0); expect(r.counts.retiredNodes).toBe(r.counts.valueNodes);
   });
   it.each(['[]\n', 'null\n', '1\n', '"x"\n'])('rejects nonobject root %s before allocating tree nodes', text => {
     expect(inspect(text)).toMatchObject({ ok: false, stage: 'parse', reason: 'raw_syntax', counts: { valueNodes: 0, tokens: 0 } });
   });
-  it.each([' {}\n', '\ufeff{}\n', '{ }\n', '{"a":"\\u0061"}\n', '{"a":"\\\\"}\n', '{"a":"é"}\n', '{"a":"\t"}\n', '{"a":1}\t\n'])('rejects disallowed wire profile or suffix %s', text => {
-    const r = inspect(text); expect(r.ok).toBe(false); if (!r.ok) expect(['raw_profile', 'raw_frame']).toContain(r.reason);
+  it.each([[' {}\n', 'parse', 'raw_profile'], ['\ufeff{}\n', 'parse', 'raw_profile'], ['{ }\n', 'parse', 'raw_profile'],
+    ['{"a":"\\u0061"}\n', 'parse', 'raw_profile'], ['{"a":"\\\\"}\n', 'parse', 'raw_profile'], ['{"a":"é"}\n', 'parse', 'raw_profile'],
+    ['{"a":"\t"}\n', 'parse', 'raw_profile'], ['{"a":1}\t\n', 'frame', 'raw_frame']])('rejects disallowed wire profile or suffix %s at %s with %s', (text, stage, reason) => {
+    expect(inspect(text)).toMatchObject({ ok: false, stage, reason });
+  });
+  it('keeps byte class ahead of a token cap when no token starts, and a node reservation ahead of value classification', () => {
+    expect(inspect('{ }\n', { ...limits(), max_tokens: 1 })).toMatchObject({ ok: false, reason: 'raw_profile', counts: { tokens: 1, valueNodes: 1 } });
+    expect(inspect('{"a": 1}\n', { ...limits(), max_value_nodes: 1 })).toMatchObject({ ok: false, reason: 'raw_profile', counts: { tokens: 3, valueNodes: 1 } });
+    expect(inspect('{"a":x}\n', { ...limits(), max_value_nodes: 1 })).toMatchObject({ ok: false, reason: 'raw_limit', counts: { tokens: 3, valueNodes: 1 } });
+    expect(inspect('{"a":x}\n', { ...limits(), max_tokens: 3 })).toMatchObject({ ok: false, reason: 'raw_syntax', counts: { tokens: 3, valueNodes: 2 } });
   });
   it.each(['{}', '{}\r\n', '{}\n\n', '{} \n', '{}{}\n', '{}\n{}\n'])('rejects framing after valid root %s', text => {
     expect(inspect(text)).toMatchObject({ ok: false, stage: 'frame', reason: 'raw_frame' });
@@ -75,11 +91,14 @@ describe('bounded JSON grammar and earliest rejection', () => {
 });
 
 describe('canonical numeric tokens without value-core connection', () => {
-  it.each(['-0', '-1', '-0.25', '+1', '01', '00', '1.', '.1', '1e', '1e+', '1e-', '1.0', '1e0', '1E-7', '1e-07',
-    '1e+0', '0.0', '1e309', '1e-999', '9007199254740992', '9007199254740993', '0.10000000000000001', '1.2345678901234567e-7'])('rejects numeric candidate %s', token => {
-    const r = inspect('{"n":' + token + '}\n'); expect(r.ok).toBe(false);
-    if (!r.ok) expect(['raw_number', 'raw_syntax']).toContain(r.reason);
+  it.each(['-0', '-1', '-0.25', '+1', '01', '00', '1.', '1e', '1e+', '1e-', '1.0', '1e0', '1E-7', '1e-07',
+    '1e+0', '0.0', '1e309', '1e-999', '9007199254740992', '9007199254740993', '0.10000000000000001', '1.2345678901234567e-7'])('rejects numeric candidate %s as raw_number', token => {
+    const r = inspect('{"n":' + token + '}\n');
+    expect(r).toMatchObject({ ok: false, stage: 'parse', reason: 'raw_number' });
     expect(r.counts.numericTokens).toBe(0);
+  });
+  it('treats a leading dot as a value-start syntax error, not as a numeric candidate', () => {
+    expect(inspect('{"n":.1}\n')).toMatchObject({ ok: false, stage: 'parse', reason: 'raw_syntax', counts: { numericTokens: 0 }, work: { numeric: 0 } });
   });
   it.each(['0', '1', '0.25', '0.000001', '1e-7', '5e-324', '1.2345678901234566e-7', '9007199254740991'])('accepts canonical primitive %s but returns no value', token => {
     expect(Number(token).toString()).toBe(token);
@@ -137,6 +156,29 @@ describe('structural caps and schema-path limits', () => {
     expect(inspect('{"snapshot":{"scopes":[0,1]}}\n', cap)).toMatchObject({ ok: false, reason: 'raw_limit' });
     expect(inspect('{"unknown":[[],[],not_json]}\n', cap)).toMatchObject({ ok: false, reason: 'raw_limit', counts: { arrayItems: 2 } });
   });
+  it('keeps the 64-byte string and 32-byte number ceilings when the declared scratch is larger', () => {
+    const wide = { ...limits(), max_token_scratch_bytes: 1000 };
+    for (const text of ['{"' + 'x'.repeat(64) + '":0}\n', '{"a":"' + 'x'.repeat(64) + '"}\n']) expect(inspect(text, wide).ok).toBe(true);
+    for (const text of ['{"' + 'x'.repeat(65) + '":0}\n', '{"a":"' + 'x'.repeat(65) + '"}\n']) expect(inspect(text, wide)).toMatchObject({ ok: false, reason: 'raw_limit' });
+    expect(inspect('{"n":' + '1'.repeat(33) + '}\n', wide)).toMatchObject({ ok: false, reason: 'raw_limit', work: { numeric: 0 } });
+  });
+  it('charges both quotes of an empty string against the scratch', () => {
+    expect(inspect('{"":0}\n', { ...limits(), max_token_scratch_bytes: 2 }).ok).toBe(true);
+    expect(inspect('{"":0}\n', { ...limits(), max_token_scratch_bytes: 1 })).toMatchObject({ ok: false, stage: 'parse', reason: 'raw_limit', counts: { tokens: 2 } });
+  });
+  it.each(paths)('applies a smaller global array cap at the fixed %s path', key => {
+    const text = key === 'scope_tails' ? '{"snapshot":{"cutoff":{"scope_tails":[0,1]}}}\n' : '{"snapshot":{"' + key + '":[0,1]}}\n';
+    expect(inspect(text, { ...limits(), max_array_items: 2 }).ok).toBe(true);
+    expect(inspect(text, { ...limits(), max_array_items: 1 })).toMatchObject({ ok: false, reason: 'raw_limit', counts: { arrayItems: 1 } });
+  });
+  it.each(['{"a":{"scope_tails":[0,1]}}\n', '{"cutoff":{"scope_tails":[0,1]}}\n', '{"snapshot":{"scope_tails":[0,1]}}\n', '{"scopes":[0,1]}\n'])('does not apply the scope cap to the off-path array in %s', text => {
+    expect(inspect(text, { ...limits(), max_scopes: 1, max_array_items: 2 }).ok).toBe(true);
+  });
+  it('returns the children of a known array to the unknown path', () => {
+    const cap = { ...limits(), max_scopes: 1, max_array_items: 2 };
+    expect(inspect('{"snapshot":{"scopes":[[0,1]]}}\n', cap).ok).toBe(true);
+    expect(inspect('{"snapshot":{"scopes":[[0,1,2]]}}\n', cap)).toMatchObject({ ok: false, reason: 'raw_limit' });
+  });
   it('does not activate core max_nodes, live-copy or value limits in the syntax-only stage', () => {
     expect(inspect('{"not_a_checkpoint":[0,1]}\n', { ...limits(), max_nodes: 1, max_live_value_nodes: 1, max_value_work: 1 })).toMatchObject({ ok: true, valueStatus: 'unchecked' });
   });
@@ -165,6 +207,18 @@ describe('independent structure oracle, work and closed ownership', () => {
       counts: { tokens: 2, valueNodes: 1, containers: 1, maxDepth: 1, retiredNodes: 1 } });
     expect(inspect('{}\n', { ...limits(), max_parse_work: 110 }).ok).toBe(true);
     expect(inspect('{}\n', { ...limits(), max_parse_work: 109 })).toMatchObject({ ok: false, stage: 'frame', reason: 'raw_work' });
+  });
+  it('matches a hand-counted 312-unit breakdown for a non-empty tree', () => {
+    // N=33. keys ab, ac, e; numbers 0.5, 1; string x; literal null; one nested array. Every unit below was counted by hand.
+    const text = '{"ab":0.5,"ac":[1,"x"],"e":null}\n';
+    const work = { plan: 64, input: 20, arithmetic: 2, copy: 34, utf8: 33, cleanup: 1,
+      lexical: 57, tokenStarts: 17, nodeReservations: 6, nodeCleanup: 6, fields: 3, items: 2, insertion: 5,
+      keyComparison: 5, tokenCopy: 10, numeric: 16, path: 8, states: 17, stack: 4, frame: 2 };
+    expect(Object.values(work).reduce((sum, n) => sum + n, 0)).toBe(312);
+    expect(inspect(text)).toMatchObject({ ok: true, work: { ...work, total: 312 },
+      counts: { tokens: 17, valueNodes: 6, objectFields: 3, arrayItems: 2, containers: 2, maxDepth: 2, numericTokens: 2, retiredNodes: 6 } });
+    expect(inspect(text, { ...limits(), max_parse_work: 312 }).ok).toBe(true);
+    expect(inspect(text, { ...limits(), max_parse_work: 311 })).toMatchObject({ ok: false, stage: 'frame', reason: 'raw_work' });
   });
   it('accepts ten manually assembled wire variants as syntax only', () => {
     const binding = '"binding":{"source_digest":"' + 'a'.repeat(64) + '","inventory_digest":"' + 'b'.repeat(64) + '"}';
