@@ -1,6 +1,8 @@
 # WF-B：bounded raw JSON parserの詳細契約
 
-Version: draft-0.1 / Date: 2026-11-06 / 照合基準HEAD: `7eefb10`。
+Version: draft-0.2 / Date: 2026-11-06 / 照合基準HEAD: `7eefb10` / レビュー修正の基準HEAD: `09e65e0`。
+
+draft-0.1のレビュー修正: copy手段を固定し、resizable bufferの拒否を追加した。境界入力と固定理由の対応表（§5.1）を置いた。`max_value_nodes`とcoreの`max_nodes`の単位の違いを明記し、ASTとcore copyの同時保持に枠の名前を付けた。設計のみで、実装状態は変わらない。
 
 Status: **設計のみ。parser・新試験・encoder・接続は未実装。** 親は[strict値契約](BEST_PRACTICE_WFB_SNAPSHOT_VALUE_CONTRACT.md)（照合した値規則はdraft-0.4）と[本文snapshot設計](BEST_PRACTICE_WFB_CHECKPOINT_SNAPSHOT_BODY_DESIGN.md)。旧`wfb-checkpoint-1`・既存recorder／Storeを維持し、正式発行口閉鎖・全体受付無効・Unknown・VM／監視／telemetry調査保留を継続する。実装・証拠発行・本文保存・実接続・実通信・実機操作・設定変更・Pushは行わない。
 
@@ -14,10 +16,10 @@ Status: **設計のみ。parser・新試験・encoder・接続は未実装。** 
 
 ### 1.1 byte所有と入口の固定
 
-- 入力は通常の`ArrayBuffer`を背後に持つ**標準prototypeのUint8Array view**に限定する案。Buffer／subclass／Proxy／SharedArrayBuffer／detached buffer／DataView／他typed array・string／任意iterableは拒否する。callerの`toString`／getter／iterator／sliceメソッドを呼ばない。
-- brand／prototype／buffer・offset・lengthは捕捉したintrinsic境界で検査する。callerのproperty lookupを所有確認の代わりにしない。具体的なintrinsicの選定とdetached判定は実装前に照合する未確認事項である。
+- 入力は標準prototypeの固定長`ArrayBuffer`を背後に持つ**標準prototypeのUint8Array view**に限定する案。Buffer／subclass／Proxy／SharedArrayBuffer／resizable buffer／length-tracking view／detached buffer／DataView／他typed array・string／任意iterableは拒否する。callerの`toString`／getter／iterator／sliceメソッドを呼ばない。resizableは初期subsetでは拒否し、受け入れる場合は別版で設計する。
+- brand／prototype／buffer・offset・lengthは捕捉したintrinsic境界で検査する。callerのproperty lookupを所有確認の代わりにしない。detached／範囲外のviewは`byteLength`が0と読めるので、N=0として`raw_input`で拒否する。brand取得に使うintrinsicの具体的な選定は実装前に照合する未確認事項である。
 - `N=view.byteLength`と背後のbuffer全長`A`を入口で確定し、byte上限・入力保持枠・copy枠・copy workを確認してから、可視範囲だけを一度private copyする。offset外のprefix／suffixを解析しない。背後が大きいviewをN byteだけの保持と数えない。
-- copyはawait／外部callbackなしの同期区間とし、copy前後のview状態を確認する。共有bufferは初めから拒否する。以後は同じowned copyだけをUTF-8検査・字句解析・構築へ渡し、caller viewを再読しない。
+- copyは、新規`Uint8Array(N)`へ捕捉した`%TypedArray%.prototype.set`で行う。捕捉した`%TypedArray%.prototype.slice`と`ArrayBuffer.prototype.slice`はspecies解決でview／bufferの`constructor`を読み、callerのgetterを実行するので使わない。`Uint8Array.from`もiteratorを読むので使わない。copyはawait／外部callbackなしの同期区間とし、copy前後のview状態を確認する。共有bufferは初めから拒否する。以後は同じowned copyだけをUTF-8検査・字句解析・構築へ渡し、caller viewを再読しない。
 - private copyは本parser内の一時所有に限る。解析後にraw bytesの再利用権限や保存用capsuleを作らない。停止時は未受理AST・byte参照・token scratchを固定unwindで外す。JSの即時GC／ゼロ化／RSS返却を証明したとは扱わない。
 
 ## 2 初期wire subset：広いJSON受理を暗黙に追加しない
@@ -53,8 +55,8 @@ limitsは合成計画が事前に確定するimmutableなprimitive値の集合�
 | `max_array_items` | 未確定pathを含む全arrayの有限上限。既知pathには下記のより小さい上限も適用し、次要素開始前に拒否。callerがpath別callbackを供給しない |
 | 既知pathの件数 | `snapshot.modules≤1000, cases≤20000, events≤20000, samples≤600`。`scopes`と`cutoff.scope_tails≤max_scopes`、`workers≤max_workers`。rootとそのsnapshotからの固定path表で判定する。scope別4096・参照・集計は既存coreで照合 |
 | `max_parse_work`／`max_value_work`／`max_total_work` | 解析と既存値検査の固定配賦。いずれも正値、checkedに`max_parse_work+max_value_work≤max_total_work`を受付。unused解析枠の転用や失敗後の再試行なし |
-| `max_token_scratch_bytes`／`max_ast_nodes` | tokenの有限scratchと中間構築枠。AST node枠はvalue nodeと同じ定義で二重に生成数を計上しないが、ASTと最終core copyの同時保持は別枠。node数を実heap byteと見なさない |
-| 既存`ValueLimits` | `max_scopes, max_workers, max_nodes, max_snapshot_bytes, max_control_bytes, max_file_bytes`を同じ計画から固定供給。coreの`max_work`へ`max_value_work`を渡す。入力Nの実長と、coreが返す保守encoded上界は両方を検査し、短い入力で保守上界の不足を回避しない |
+| `max_token_scratch_bytes`／`max_ast_nodes`／`max_live_value_nodes` | tokenの有限scratchと中間構築枠。AST node枠はvalue nodeと同じ定義で二重に生成数を計上しない。ASTと最終core copyの同時保持は`max_live_value_nodes`で受け、構築したnode数の実測V_aについて`2V_a`をcheckedに照合してからcoreへ渡す（超過はparse段の`raw_limit`）。coreの内部一時containerは含まない。node数を実heap byteと見なさない |
+| 既存`ValueLimits` | `max_scopes, max_workers, max_nodes, max_snapshot_bytes, max_control_bytes, max_file_bytes`を同じ計画から固定供給。coreの`max_work`へ`max_value_work`を渡す。入力Nの実長と、coreが返す保守encoded上界は両方を検査し、短い入力で保守上界の不足を回避しない。`max_nodes`はcoreのstructural計数の上限で、`max_value_nodes`のV定義とは単位が異なる。Vをそのまま渡さず、coreの計数に対する上界式は未導出として別途確定する |
 
 このpath表は初期schema版に固定し、値coreのkind／件数上限が変われば同時改版する。未知pathの大きいarrayを無制限にwalkしてからschema拒否してはならない。`max_array_items`とnode／token／work枠は未知pathにも有効である。
 
@@ -73,7 +75,7 @@ limitsは合成計画が事前に確定するimmutableなprimitive値の集合�
 3. **Utf8Checked**: owned bytes全体をboundedなUTF-8走査で検査。stringへ全decodeしない。最初の不正sequenceで停止。cap／workが先に尽きればその理由が優先。
 4. **Parsing**: root object・compact profile、文字列／数値／literalと有限container stackを解析する。次byte probe／token／field／element／nodeの前に該当費を課金する。同objectの既出keyは有界リストで照合し、重複判明時は値の解析・挿入前に停止する。
 5. **Framed**: root終了直後が単一LFかつ直後EOFであることを確認。root閉鎖以前のsyntax不正を末尾エラーへ置き換えない。
-6. **ValueChecked**: 有界に自前構築した中間値だけを既存`validateCheckpointValue`へ一度渡す。fixed field順・10 variant・局所関係・実shape・encoded上界を照合する。parent draft-0.4のnon-observed metric、not_run failure矛盾、空run complete拒否を維持する。
+6. **ValueChecked**: 有界に自前構築した中間値だけを既存`validateCheckpointValue`へ一度渡す。fixed field順・10 variant・局所関係・実shape・encoded上界を照合する。親§4のnon-observed metricとnot_run failure矛盾、親§6の空run complete拒否を維持する。
 7. **Returned／Rejected**: 成功値のcopy／freezeを受け取った後に中間AST・bytesへの参照を外す。失敗は固定理由と実到達stageのみを保持し、部分値を返さない。coreが失敗すればparser-only成功へdowngradeしない。
 
 duplicate keyの照合は**現在のobjectだけ**で最大10key、key比較は最大64byte。substringの無制限蓄積・汎用hash callback・外部reviver／schema callbackは使わない。generic JSON.parseに先に任せる方式は禁止する。既存coreが自身でcopy／freezeする費用を省略・無料化せず、中間ASTとの寿命の重なりを残す。
@@ -93,20 +95,36 @@ parser内の抽象費目は、入力copy byte、UTF-8 byte走査、字句のadva
 | reason | 固定意味 |
 |---|---|
 | `raw_limits` | limit不正／欠落・配賦不整合。既定値で続行しない |
-| `raw_input` | 許可外brand／buffer／detached／view状態不整合・copy不能 |
+| `raw_input` | 許可外brand／buffer／resizable／detached／view状態不整合・N=0・copy不能 |
 | `raw_limit` | 入力／保持／depth／token／node／field／array／scalar scratch等の上限超過 |
 | `raw_work` | parserの課金枠不足。core内のwork不足と混同しない |
 | `raw_overflow` | byte合計・shape・配賦・カウンター等のchecked算術不成立 |
 | `raw_utf8` | owned byte列の不正UTF-8 |
-| `raw_profile` | 有効UTF-8だがASCII compact subset外、BOM／途中空白／非ASCII／escape等 |
-| `raw_syntax` | 構造・delimiter・literalの不正、途中切れ、trailing comma等 |
+| `raw_profile` | 有効UTF-8だがASCII compact subset外、BOM／root閉鎖前の空白・制御文字／非ASCII／escape等（§5.1） |
+| `raw_syntax` | 構造・delimiter・literalの不正、object以外のroot、途中切れ、trailing comma等（§5.1） |
 | `raw_duplicate_key` | 同object内で既出の非escape key。後の値で上書きしない |
 | `raw_number` | 数値字句・canonical往復同値・finite／非負等の不成立。token長超過は先に`raw_limit` |
-| `raw_frame` | 正常rootの後が単一LF＋EOFでない、複数frame／trailing data |
+| `raw_frame` | 正常rootの後が単一LF＋EOFでない、空白／CR／複数frame／trailing data（§5.1） |
 | `value_schema / value_relation / value_limit / value_overflow / value_invalid` | 既存coreの`schema / relation / limit / overflow / invalid_value`を1対1で保持。`value_limit`がwork由来かbyte由来か等は現行coreから識別できず、推測しない |
 | `raw_internal` | 想定外の内部例外を固定化。成功・正常cleanupへ補完しない |
 
 優先順位は「前段優先、同段は次に実行する操作のcap課金→byte／token検査→値操作」の先着sticky。すべての不正を探すために失敗後の入力走査を続けない。UTF-8 prepassはparseより先なので、後方の不正UTF-8が前方のJSON不正より先に報告され得る。これは明示した順序であり、offset最小の全種エラーを返す契約ではない。上位への写像と保存／cleanup診断との合流は未接続。
+
+### 5.1 境界入力の固定理由
+
+判定位置で理由を決める。JSONとして有効かどうかを追加で読んで理由を変えない。下表は、該当操作のcapが先に尽きず、前段を通過した場合の理由である。
+
+| 入力 | stage | reason |
+|---|---|---|
+| N=0（空、detached、範囲外view） | input | `raw_input` |
+| 先頭がBOM／空白／LF／CR、LFのみの入力 | parse | `raw_profile` |
+| root閉鎖前のtoken境界にある空白／LF／CR／制御文字／DEL／非ASCII | parse | `raw_profile` |
+| 文字列内の制御文字／DEL／非ASCII／backslash | parse | `raw_profile` |
+| 先頭が`{`以外のprintable ASCII（`[]`、`1`、`"a"`、`null`、`x`を含む） | parse | `raw_syntax`。rootを読み進めない |
+| root閉鎖前のEOF（閉じていない文字列を含む） | parse | `raw_syntax` |
+| 閉じたrootの直後がEOF（LF欠落） | frame | `raw_frame` |
+| 閉じたrootの直後が空白／CR／LF以外の任意のbyte | frame | `raw_frame` |
+| 閉じたrootとLFの後にbyteが続く（複数LF、後続frameを含む） | frame | `raw_frame` |
 
 ## 6 独立oracle・合成受入条件（未実施）
 
@@ -114,15 +132,15 @@ oracleを製品encoderやparserの出力から生成して正解としない。�
 
 | ID | 合成対照 | 受入条件 |
 |---|---|---|
-| RJ01 | 全10 variantの手書きgolden、全row・enum、空captured（run incomplete）、unavailable | 同じfield順・値でcore受理、非実行DATAだけ返却。raw reasonと既存value reasonの層を混同しない |
-| RJ02 | 先頭／末尾offsetを持つview、caller側変更、Buffer／subclass／Proxy／SAB／detached等 | 可視範囲一度copy・再読0、許可外input拒否、入力hook実行0。detached試験手段の利用は合成試験として別途確定 |
+| RJ01 | 全10 variantの手書きgolden、全row・enum、空captured（run incomplete）、unavailable | 同じfield順・値でcore受理、非実行DATAだけ返却。`N≤upper.encoded`。raw reasonと既存value reasonの層を混同しない |
+| RJ02 | 先頭／末尾offsetを持つview、caller側変更、Buffer／subclass／Proxy／SAB／resizable／length-tracking／detached／範囲外view、viewとbufferのown accessor（`constructor`、`length`、`byteLength`、`Symbol.iterator`） | 可視範囲一度copy・再読0、許可外input拒否、入力hook実行0。accessor付きの標準viewはgetter実行0のまま受理候補とする。detached試験手段の利用は合成試験として別途確定 |
 | RJ03 | 不正UTF-8：overlong・surrogate・範囲外・途中切れ、BOM、正しい非ASCII | 不正UTF-8とsubset外を固定理由で区別。置換・BOM削除・文字列全decodeなし |
 | RJ04 | 全depthのobjectで同名key、別object同名key、escape alias、`__proto__` | 同object重複は値解析／挿入前に拒否、別objectは候補、escape aliasはprofile拒否、prototype変更0 |
-| RJ05 | whitespace／CRLF／LF欠落・2個、trailing value／data、empty、未閉鎖・不正literal・comma | profile／syntax／frameの定めた順序で拒否。複数frame分割・v1 fallback・途中補正0 |
+| RJ05 | §5.1の全行：empty、LFのみ、先頭／途中／root後のwhitespace、CRLF、LF欠落・2個、object以外のroot、制御文字、trailing value／data、未閉鎖・不正literal・comma | §5.1のstageと理由に一致。複数frame分割・v1 fallback・途中補正0 |
 | RJ06 | −0・unsafe整数・32／33byte token、1.0／1e0／1E-7、underflow／overflow、MIN_VALUE・小数 | 長さ境界、canonical比較とcoreのfield範囲を分離。丸め／string→整数補完なし。33byteは変換前に拒否 |
 | RJ07 | 各capの−1／等値／＋1、depth5／6、10／11field、64／65byte string、件数path別境界 | 次操作前の課金・拒否、無制限のskip／構築なし。上限fixtureを実運用capへ昇格しない |
-| RJ08 | 入力Nと背後Aの差、A+N、token scratch、ASTとcore copyの同時保持 | 独立BigIntでoverflow／必要量を比較。visible byteだけでbacking保持を無料化しない。実heap byte保証は未確認 |
-| RJ09 | node／tokenを手書き小treeと全rowで数える、32固定費・ScopeTail・Metric variants | §3.1のV／T上界と実計数を独立検証。parser内部counter同士だけで正当化しない |
+| RJ08 | 入力Nと背後Aの差、A+N、token scratch、`max_live_value_nodes`の等値／1不足 | 独立BigIntでoverflow／必要量を比較。不足時はcoreを呼ばない。visible byteだけでbacking保持を無料化しない。実heap byte保証は未確認 |
+| RJ09 | node／tokenを手書き小treeと全rowで数える、32固定費・ScopeTail・Metric variants、受理した全fixtureの入力長 | §3.1のV／T上界と実計数を独立検証。parser内部counter同士だけで正当化しない。`N≤upper.encoded`を確認し、encoderとは別の経路で上界式を照合する。Vを`max_nodes`へ流用した場合に正当な値が`value_limit`になることを対照として固定する |
 | RJ10 | 途中のbyte／token／node／比較／数値変換でwork不足、coreのwork不足 | 前後の操作到達数を計数する内部fixtureで停止位置を検証。二重課金・core複数呼出し0、unused枠転用0、公開fault callbackなし |
 | RJ11 | 不正UTF-8＋schema不正、token上限＋syntax不正、parse成功＋関係矛盾等 | §4／§5の先着理由を保持。失敗後の後段開始0。passedとnot_run module／hook failureの矛盾、非observed metric、空run completeを最新core通り拒否 |
 | RJ12 | 秘密canaryを含む不正key／値／trailing bytes、部分生成失敗 | raw値・offset・key・例外・stackの出力0、未受理AST／byte参照の固定unwind。JSメモリ消去成功と称さない |
@@ -134,8 +152,14 @@ oracleを製品encoderやparserの出力から生成して正解としない。�
 2. **RP-B**: 有限stackの字句／構文、同object重複、strict numeric token、path別件数・node／token制限。中間値は外へ返さず、parser内固定継続だけへ渡す。独立goldenと拒否対照を追加。
 3. **RP-C**: 既存coreへの一度の値検査・費目の分離・結果合流と全10 variantの連続試験。発行・保存とは引き続き分離する。
 
-各段階は別の明示指示を要する。API／brand取得のintrinsic選定、copy途中の例外・detached判定、parser work modelの版とunwind費、raw byte／heap／scratchの具体capは未確認／未承認。小さい合成capだけで有限境界を検証し、本番capは投入しない。
+各段階は別の明示指示を要する。brand取得のintrinsic選定、copy途中の例外、parser work modelの版とunwind費、coreのstructural計数の上界式、raw byte／heap／scratchの具体capは未確認／未承認。小さい合成capだけで有限境界を検証し、本番capは投入しない。
 
 ASCII compact＋LFだけという初期subsetを将来広げる判断、共有期限／取消ownerと停止照会間隔、budgetへの正式結合、formatter全入力の根拠、encoderと同bytesの独立照合、private aggregate／capture／custody・Store接続は残課題。raw parserの成功からこれらを確認済みにせず、Unknown・正式発行口閉鎖・全体受付無効・調査保留を維持する。
 
 文書作成時の確認は、ローカルMDリンク・差分の空白検査と、手作りのfirst_anomaly＋空snapshot値による固定32nodeの独立数え上げに限る。これはparserの合成試験や§6の受入完了ではない。テスト・ビルド・実parser実行は今回未実施である。
+
+draft-0.1のレビューでは、残さない一時プローブで次を確認した（Node v24.18.0）。いずれもparserの試験ではなく、§6の受入完了でもない。
+
+- copy手段のgetter実行は、捕捉`slice`系と`Uint8Array.from`であり、捕捉`set`と`new Uint8Array(view)`では0。全engine・全版の保証ではない。
+- resizable bufferの固定長viewとlength-tracking viewは、prototypeとSABの検査だけでは拒否されない。
+- 手作りの多行fixtureでVは§3.1の式と一致（902）。T／Vは最大4.14。depth 5、10 field、64 byteに到達。同じfixtureのcore structural計数は1829で、`max_nodes=902`は`limit`になる。
