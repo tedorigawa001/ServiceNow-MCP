@@ -1,6 +1,8 @@
 # WF-B：checkpoint本文snapshot・容量・失敗時停止の詳細設計
 
-Version: draft-0.5 / Date: 2026-11-06 / 調査基準HEAD: `12dcc37` / レビュー修正の基準HEAD: `f8cd328` / strict値契約の基準HEAD: `ff2c56f`。
+Version: draft-0.6 / Date: 2026-11-06 / 調査基準HEAD: `12dcc37` / レビュー修正の基準HEAD: `f8cd328` / strict値契約の基準HEAD: `ff2c56f`。
+
+draft-0.6: [bounded raw JSON parser詳細契約](BEST_PRACTICE_WFB_BOUNDED_RAW_JSON_PARSER_DESIGN.md)を追加。bytes境界の有限解析と既存値coreの費目／保証を分離し、encoder・private capture・保存は未接続のまま維持する。今回は文書のみ。
 
 draft-0.5: [strict値契約§9](BEST_PRACTICE_WFB_SNAPSHOT_VALUE_CONTRACT.md)の内部型・10 variant・件数／encoded上界・局所関係を合成専用coreとして実装した。[検証記録](E2E_BEST_PRACTICE_WFB_SNAPSHOT_VALUE_CORE_2026-11-06.md)。private capture・集約source・本文encoder／保存への接続はない。
 
@@ -190,7 +192,7 @@ golden本文・UTF-8長・件数・counter・操作列は実装のencoder／calc
 
 ## 10 未確認・承認待ち・次の実装範囲
 
-1. **最初の純粋実装は実施済み**: [strict値契約§9](BEST_PRACTICE_WFB_SNAPSHOT_VALUE_CONTRACT.md)の内部値型／10 variant・件数／encoded上界・局所関係検査を合成専用で追加した。旧v1を維持し、証拠発行・本文保存・capture成功は未接続。raw bytes parser・encoder・統合費目は残課題で、後続実装は別の明示指示を要する。
+1. **最初の純粋実装は実施済み**: [strict値契約§9](BEST_PRACTICE_WFB_SNAPSHOT_VALUE_CONTRACT.md)の内部値型／10 variant・件数／encoded上界・局所関係検査を合成専用で追加した。旧v1を維持し、証拠発行・本文保存・capture成功は未接続。raw bytes parserは[詳細契約](BEST_PRACTICE_WFB_BOUNDED_RAW_JSON_PARSER_DESIGN.md)まで整理済みで未実装。encoder・統合費目も残課題で、後続実装は別の明示指示を要する。
 2. 次にprivate aggregate／capture claim・cutoff・immutable capsuleと有限custodyを合成issuer限定で実装する。最終discard／所有移譲を先に固定し、Store上限の見直し（§6）を別途承認した後に、v2同bytesのStore接続へ進む。各段階は別の明示指示を要する。
 3. reporter／sampleの実schema・既存artifactの版と上限、動的case／retry／inventory、scope原点の供給・case対応、source世代の固定方法は未確認。実reporterや過去artifactを取得・起動したとは扱わない。
 4. row幅はstrict値契約の構造上界案として整理したが、新byte／work cap、収集／copy／encode／再読scratchと累積予約、実保存先・保持期間・運用時間枠は未導出／未承認。capが不明なまま正式受付を有効にしない。

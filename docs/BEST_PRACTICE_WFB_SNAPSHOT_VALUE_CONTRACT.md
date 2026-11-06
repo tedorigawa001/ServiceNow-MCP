@@ -1,6 +1,8 @@
 # WF-B：snapshot strict値契約・固定encoding・row幅
 
-Version: draft-0.4 / Date: 2026-11-06 / 基準HEAD: `ff2c56f` / レビュー修正の基準HEAD: `04260f2` / 純粋core実装基準HEAD: `70cbffb` / core修正の基準HEAD: `b37214f`。
+Version: draft-0.5 / Date: 2026-11-06 / 基準HEAD: `ff2c56f` / レビュー修正の基準HEAD: `04260f2` / 純粋core実装基準HEAD: `70cbffb` / core修正の基準HEAD: `b37214f`。
+
+draft-0.5: [bounded raw JSON parser詳細契約](BEST_PRACTICE_WFB_BOUNDED_RAW_JSON_PARSER_DESIGN.md)を追加。raw bytes専用の初期subset、入力所有／上限／検査順・固定理由・独立oracleを具体化した。設計のみで、現行値core・旧v1・発行／保存経路は変更しない。
 
 draft-0.3のレビュー修正: `observed`以外のmetricは`not_supported`も含めてprefix incompleteとする規則に確定した。`passed`と矛盾するcaseに`not_run`のmodule／hook failureを含めた。空snapshotのrun complete拒否をcoreへ実装した。
 
