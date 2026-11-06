@@ -1,6 +1,8 @@
 # WF-B：snapshot strict値契約・固定encoding・row幅
 
-Version: draft-0.6 / Date: 2026-11-06 / 基準HEAD: `ff2c56f` / レビュー修正の基準HEAD: `04260f2` / 純粋core実装基準HEAD: `70cbffb` / core修正の基準HEAD: `b37214f`。
+Version: draft-0.7 / Date: 2026-11-06 / 基準HEAD: `ff2c56f` / レビュー修正の基準HEAD: `04260f2` / 純粋core実装基準HEAD: `70cbffb` / core修正の基準HEAD: `b37214f`。
+
+draft-0.7: [RP-B構文境界](BEST_PRACTICE_WFB_BOUNDED_RAW_JSON_PARSER_DESIGN.md#9-rp-b構文だけの閉鎖した固定継続)と[合成記録](E2E_BEST_PRACTICE_WFB_RAW_JSON_RPB_2026-11-06.md)を追加。有限stack・重複key・canonical数値とpath／node／token制限を構文専用で実装。本値coreは呼ばず、値受理・発行／保存は未接続。
 
 draft-0.6: [RP-A byte境界](BEST_PRACTICE_WFB_BOUNDED_RAW_JSON_PARSER_DESIGN.md#8-rp-a実装境界計数と破棄)と[合成記録](E2E_BEST_PRACTICE_WFB_RAW_JSON_RPA_2026-11-06.md)を追加。UTF-8／外側framingだけを検査する非実行metadataで、raw JSON構文parserや本値coreへの接続は未実装。値規則・旧v1・発行／保存経路は不変。
 
@@ -12,7 +14,7 @@ draft-0.3: 合成依存限定の内部値型・10 variant・件数／encoded上�
 
 draft-0.1のレビュー修正: 観測停止後に作られたworker行を表せるよう`worker_ordinal`をnullableにした。`source_event_ordinal`の局所検査と、`prefix=complete`のときの`first_reason`を定めた。pinをrecorder生成の前提とした。`R_p`の導出を注記した。幅の上界は変わらず、実装・承認状態も変更していない。
 
-Status: **合成専用の型・値validator・上界計算と局所関係試験を実装。encoder・raw JSON parser・実source写像・capture・本文保存は未実装。** [本文snapshot設計](BEST_PRACTICE_WFB_CHECKPOINT_SNAPSHOT_BODY_DESIGN.md)の「全field・enum・row幅の固定」を具体化する。正式発行口閉鎖・全体受付無効・Unknown・VM／監視／telemetry調査保留を維持する。証拠発行・実接続・実通信・実機操作・設定変更・再採取・保管操作・Pushを行わない。
+Status: **合成専用の型・値validator・上界計算と局所関係試験を実装。別入口のraw JSON構文解析も実装済みだが、本値coreへの接続・encoder・実source写像・capture・本文保存は未実装。** [本文snapshot設計](BEST_PRACTICE_WFB_CHECKPOINT_SNAPSHOT_BODY_DESIGN.md)の「全field・enum・row幅の固定」を具体化する。正式発行口閉鎖・全体受付無効・Unknown・VM／監視／telemetry調査保留を維持する。証拠発行・実接続・実通信・実機操作・設定変更・再採取・保管操作・Pushを行わない。
 
 ここでいうcaptured／complete／gates=trueは**値の表現**であり、capture証拠・承認・保存／終了確認を発行しない。private owner／source／budget／cutoffへの結合・cap承認は別契約である。旧`wfb-checkpoint-1`・DT-A〜C・既存ParentObservationを変更しない。未承認のStore上限も引き上げない。
 
@@ -191,4 +193,4 @@ limitsの固定順は`max_scopes, max_workers, max_nodes, max_work, max_snapshot
 
 数値は捕捉したintrinsic Number formatterで32文字以下・往復同値を確認し、小数を丸めない。これはbody encoderではない。fieldを読むgetter・toJSON・外部iteratorは呼ばず、Proxyはreflection前に拒否する。schemaが有限で再帰参照を持たないためcycleは許可される終端型へ到達できず拒否される。異scopeのevent原順序・worker欠番・inactive scope末尾の複数null worker・同時刻sampleを維持する。
 
-**未確認:** raw bytesのUTF-8／duplicate key／token制限、任意unknownに対するnative reflectionの一時heapと実時間、Number formatter全binary64入力の証明、実reporter／inventory／worker世代／cutoffの真正性、統合work／scratch費、private owner・予算・custody結合、発行・capture・保存は未実装／未承認。合成成功やJSONのcompleteを根拠にUnknownを確認済みへ変えない。
+**未確認:** raw bytesのUTF-8／duplicate key／token制限はRP-A／RP-Bの別入口で合成実装したが、本値coreへの接続は未実装。任意unknownに対するnative reflectionの一時heapと実時間、Number formatter全binary64入力の証明、実reporter／inventory／worker世代／cutoffの真正性、統合work／scratch費、private owner・予算・custody結合、発行・capture・保存は未実装／未承認。合成成功やJSONのcompleteを根拠にUnknownを確認済みへ変えない。

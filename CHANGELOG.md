@@ -18,6 +18,8 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 ### Changed
 
+- WF-B RP-B adds a separate synthetic-only finite-stack JSON syntax route on the same one-copy byte boundary. It rejects malformed grammar, duplicate keys before their values, noncanonical numeric tokens, and fixed-path/cardinality/node/token excesses; it retains only frozen counts and drops its private AST on every outcome. Independent structure, numeric, cap and work controls preserve RP-A and v1. Value-core binding, evidence issuance, body storage, runtime wiring and whole-run admission remain disabled.
+
 - WF-B RP-A adds a synthetic-only raw-byte boundary with strict limit types, separate work counters, pre-copy byte/backing/live admission, intrinsic-only fixed-buffer copying, a bounded UTF-8 prepass and container-aware framing. Hook, buffer-brand, capacity, malformed-byte and retirement controls return only frozen non-executable metadata marked syntax-unchecked. JSON token/value acceptance, evidence issuance, body storage, runtime wiring and whole-run admission remain disabled; v1 is unchanged.
 
 - WF-B adds a development-only strict snapshot value core: ten readonly checkpoint variants, detached/frozen projections, local row/reference/coverage checks, checked count and encoded-size envelopes, and separate synthetic work counters. Independent enum, arithmetic, width and hostile-value controls preserve v1 and existing recorder/Store paths. The core produces no encoded body, evidence, receipt or save authority; formal issuance, whole-run admission and production connections remain closed/unknown.

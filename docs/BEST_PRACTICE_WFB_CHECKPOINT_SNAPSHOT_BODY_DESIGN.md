@@ -1,6 +1,8 @@
 # WF-B：checkpoint本文snapshot・容量・失敗時停止の詳細設計
 
-Version: draft-0.7 / Date: 2026-11-06 / 調査基準HEAD: `12dcc37` / レビュー修正の基準HEAD: `f8cd328` / strict値契約の基準HEAD: `ff2c56f`。
+Version: draft-0.8 / Date: 2026-11-06 / 調査基準HEAD: `12dcc37` / レビュー修正の基準HEAD: `f8cd328` / strict値契約の基準HEAD: `ff2c56f`。
+
+draft-0.8: [RP-Bの有限構文解析](BEST_PRACTICE_WFB_BOUNDED_RAW_JSON_PARSER_DESIGN.md)と[合成検証](E2E_BEST_PRACTICE_WFB_RAW_JSON_RPB_2026-11-06.md)を追加。syntax checked／value uncheckedを分離し、core値受理・capture・encoder・保存は接続しない。旧RP-A／v1を維持する。
 
 draft-0.7: [RP-A実装境界](BEST_PRACTICE_WFB_BOUNDED_RAW_JSON_PARSER_DESIGN.md)と[合成検証](E2E_BEST_PRACTICE_WFB_RAW_JSON_RPA_2026-11-06.md)を追加。byte受付・UTF-8・外側framingまでで、JSON値／capture・encoder・保存は未接続。`syntax=unchecked`をcapture証拠へ昇格しない。
 
@@ -14,7 +16,7 @@ draft-0.3: [strict値契約・固定encoding・row幅](BEST_PRACTICE_WFB_SNAPSHO
 
 draft-0.1のレビュー修正: 採取器の失敗時や観測開始前に本文を固定できず`stop_requested`を作れない矛盾を、本文なし失敗variant（§3.1）で解消した。recorderの停止理由と`cause`の対応を追加した。現行Store上限は契約最大値に収まらないと明記し、上限見直しをStore接続の前提とした。`cutoff`がworker／sampleも固定するようにし、容量式へ`scope_tails`・添字の定義・write slice枠を追加した。反復counterの所有者と枠を定めた。実装・承認状態は変更していない。
 
-Status: **型・strict値検査・局所関係と上界計算のみ合成実装済み。raw JSON parser・集約・capture・本文保存と本文保存の合成受入は未実装／未実施。** 正式発行口閉鎖・全体受付無効・Unknown・VM／監視／telemetry調査保留を維持する。証拠発行・実接続・実通信・実機操作・再採取・証拠保管・設定変更・Pushは行わない。容量／時間枠・保存先・保持期間・運用capの承認は代替しない。
+Status: **型・strict値検査・局所関係／上界と、別入口のraw JSON構文解析まで合成実装済み。raw→値core接続・集約・capture・本文保存と本文保存の合成受入は未実装／未実施。** 正式発行口閉鎖・全体受付無効・Unknown・VM／監視／telemetry調査保留を維持する。証拠発行・実接続・実通信・実機操作・再採取・証拠保管・設定変更・Pushは行わない。容量／時間枠・保存先・保持期間・運用capの承認は代替しない。
 
 親は[固定採取器契約](BEST_PRACTICE_WFB_FIXED_RECORDER_CONTRACT.md)§4と[Store／recorder接続契約](BEST_PRACTICE_WFB_STORE_RECORDER_BRIDGE_DESIGN.md)。[DT-A〜C](BEST_PRACTICE_WFB_SLOT_DEADLINES_RECORDER_TERMINAL_DESIGN.md)の期限・FIFO・一度限りack・通知分離・terminal処理は維持する。本書の型名・版名は提案で、利用可能な発行口ではない。
 
@@ -194,7 +196,7 @@ golden本文・UTF-8長・件数・counter・操作列は実装のencoder／calc
 
 ## 10 未確認・承認待ち・次の実装範囲
 
-1. **最初の純粋実装は実施済み**: [strict値契約§9](BEST_PRACTICE_WFB_SNAPSHOT_VALUE_CONTRACT.md)の内部値型／10 variant・件数／encoded上界・局所関係検査を合成専用で追加した。旧v1を維持し、証拠発行・本文保存・capture成功は未接続。[RP-A](BEST_PRACTICE_WFB_BOUNDED_RAW_JSON_PARSER_DESIGN.md)のbyte受付・UTF-8・外側framingのみ追加済みで、JSON構文parser・値受理接続、encoder・統合費目は残課題。後続実装は別の明示指示を要する。
+1. **最初の純粋実装は実施済み**: [strict値契約§9](BEST_PRACTICE_WFB_SNAPSHOT_VALUE_CONTRACT.md)の内部値型／10 variant・件数／encoded上界・局所関係検査を合成専用で追加した。旧v1を維持し、証拠発行・本文保存・capture成功は未接続。[RP-A／RP-B](BEST_PRACTICE_WFB_BOUNDED_RAW_JSON_PARSER_DESIGN.md)のbyte受付・UTF-8と構文解析まで追加済み。RP-Cの値core固定接続、encoder・統合費目は残課題で、後続実装は別の明示指示を要する。
 2. 次にprivate aggregate／capture claim・cutoff・immutable capsuleと有限custodyを合成issuer限定で実装する。最終discard／所有移譲を先に固定し、Store上限の見直し（§6）を別途承認した後に、v2同bytesのStore接続へ進む。各段階は別の明示指示を要する。
 3. reporter／sampleの実schema・既存artifactの版と上限、動的case／retry／inventory、scope原点の供給・case対応、source世代の固定方法は未確認。実reporterや過去artifactを取得・起動したとは扱わない。
 4. row幅はstrict値契約の構造上界案として整理したが、新byte／work cap、収集／copy／encode／再読scratchと累積予約、実保存先・保持期間・運用時間枠は未導出／未承認。capが不明なまま正式受付を有効にしない。

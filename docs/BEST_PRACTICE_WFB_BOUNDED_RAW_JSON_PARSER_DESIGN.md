@@ -1,12 +1,14 @@
 # WF-B：bounded raw JSON parserの詳細契約
 
-Version: draft-0.3 / Date: 2026-11-06 / 照合基準HEAD: `7eefb10` / レビュー修正の基準HEAD: `09e65e0` / RP-A実装基準HEAD: `baaf60d`。
+Version: draft-0.4 / Date: 2026-11-06 / 照合基準HEAD: `7eefb10` / レビュー修正の基準HEAD: `09e65e0` / RP-A実装基準HEAD: `baaf60d` / RP-B実装基準HEAD: `f28f0a2`。
+
+draft-0.4: RP-Bの有限stack構文解析・重複key・canonical数値・path件数とnode／token上限を合成専用で実装した（§9）。[検証記録](E2E_BEST_PRACTICE_WFB_RAW_JSON_RPB_2026-11-06.md)。新入口の成功はsyntax checked／value uncheckedのmetadataのみ。旧RP-Aと値coreは不変で、RP-C・発行／保存は未接続。
 
 draft-0.3: RP-Aのlimit／計数型・byte受付／copy・UTF-8 prepass・外側framingを合成専用で実装した（§8）。[検証記録](E2E_BEST_PRACTICE_WFB_RAW_JSON_RPA_2026-11-06.md)。返値はsyntax uncheckedの非実行metadataだけで、`parseCheckpointBytes`・JSON構文／値受理は未実装。
 
 draft-0.1のレビュー修正: copy手段を固定し、resizable bufferの拒否を追加した。境界入力と固定理由の対応表（§5.1）を置いた。`max_value_nodes`とcoreの`max_nodes`の単位の違いを明記し、ASTとcore copyの同時保持に枠の名前を付けた。設計のみで、実装状態は変わらない。
 
-Status: **RP-Aの純粋byte境界と合成試験のみ実装済み。JSON字句／構文parser・core値受理・encoder・実接続は未実装。** 親は[strict値契約](BEST_PRACTICE_WFB_SNAPSHOT_VALUE_CONTRACT.md)（照合した値規則はdraft-0.4）と[本文snapshot設計](BEST_PRACTICE_WFB_CHECKPOINT_SNAPSHOT_BODY_DESIGN.md)。旧`wfb-checkpoint-1`・既存recorder／Storeを維持し、正式発行口閉鎖・全体受付無効・Unknown・VM／監視／telemetry調査保留を継続する。証拠発行・本文保存・実接続・実通信・実機操作・設定変更・Pushは行わない。
+Status: **RP-Aのbyte境界とRP-BのJSON字句／構文解析・合成試験を実装済み。core値受理・encoder・実接続は未実装。** 親は[strict値契約](BEST_PRACTICE_WFB_SNAPSHOT_VALUE_CONTRACT.md)（照合した値規則はdraft-0.4）と[本文snapshot設計](BEST_PRACTICE_WFB_CHECKPOINT_SNAPSHOT_BODY_DESIGN.md)。旧`wfb-checkpoint-1`・既存recorder／Storeを維持し、正式発行口閉鎖・全体受付無効・Unknown・VM／監視／telemetry調査保留を継続する。証拠発行・本文保存・実接続・実通信・実機操作・設定変更・Pushは行わない。
 
 ## 1 目的・非目標と入力口
 
@@ -128,9 +130,11 @@ parser内の抽象費目は、入力copy byte、UTF-8 byte走査、字句のadva
 | 閉じたrootの直後が空白／CR／LF以外の任意のbyte | frame | `raw_frame` |
 | 閉じたrootとLFの後にbyteが続く（複数LF、後続frameを含む） | frame | `raw_frame` |
 
-## 6 独立oracle・合成受入条件（RP-Aの一部のみ実施）
+## 6 独立oracle・合成受入条件（RP-A／RP-Bを部分実施）
 
-§8と[記録](E2E_BEST_PRACTICE_WFB_RAW_JSON_RPA_2026-11-06.md)でRJ02／03／05／07／08／10〜13のbyte境界側を部分確認した。RJ01の全10 variant値受理、重複key・数値token・全syntax拒否、AST／core copy、token／node・value workは未実施。下表全体を完了扱いしない。
+RP-BによりRJ04／06、syntax側のRJ05／07／09〜12を追加確認した（[記録](E2E_BEST_PRACTICE_WFB_RAW_JSON_RPB_2026-11-06.md)）。全10 variantの構文・構造計数も確認したが、RJ01のcore値受理、実encoded上界との連続照合、AST／core copyの同時保持、value work、privateな真正性はRP-C以降へ残す。
+
+draft-0.3時点では§8と[RP-A記録](E2E_BEST_PRACTICE_WFB_RAW_JSON_RPA_2026-11-06.md)でRJ02／03／05／07／08／10〜13のbyte境界側だけを部分確認した。当時の重複key・数値token・syntax・token／node未実施分はRP-Bで追加検証したが、AST／core copy・value workと値受理は未実施のまま。下表全体を完了扱いしない。
 
 oracleを製品encoderやparserの出力から生成して正解としない。手書きASCII golden／hex byte列、独立の構造数え上げ、BigInt算術、boundedな標準JSON.parseによる**正常な合成例だけの**値比較を併用する。JSON.parseは重複key／UTF-8／上限の拒否oracleには使わない。故障callbackを新APIへ渡す口は設けず、失敗検査は返却後に行う。
 
@@ -153,7 +157,7 @@ oracleを製品encoderやparserの出力から生成して正解としない。�
 ## 7 実装順と未確認・承認待ち
 
 1. **RP-A（byte境界のみ実装済み）**: 合成専用のlimit／計数型・入力境界、UTF-8 prepass・外側framingと固定理由を実装。入力hook非実行・copy前受付・failure unwindを検証した。JSON値の受理・証拠発行は未接続であり、syntax uncheckedの結果をparser成功へ昇格しない（§8）。
-2. **RP-B**: 有限stackの字句／構文、同object重複、strict numeric token、path別件数・node／token制限。中間値は外へ返さず、parser内固定継続だけへ渡す。独立goldenと拒否対照を追加。
+2. **RP-B（合成専用で実装済み）**: 有限stackの字句／構文、同object重複、strict numeric token、path別件数・node／token制限を追加。中間ASTは外へ返さず、内部の固定retireで破棄する。独立goldenと構造oracle・拒否対照を追加した（§9）。coreへの固定継続は未接続。
 3. **RP-C**: 既存coreへの一度の値検査・費目の分離・結果合流と全10 variantの連続試験。発行・保存とは引き続き分離する。
 
 後続段階は別の明示指示を要する。RP-Aのintrinsic選定と境界用work modelは§8へ固定したが、native copyのallocation／set例外の故障注入、全parserのwork model／unwind費、coreのstructural計数上界式、raw byte／heap／scratchの運用capは未確認／未承認。小さい合成capだけで有限境界を検証し、本番capは投入しない。
@@ -196,4 +200,36 @@ modelは`wfb-raw-boundary-rpa-1`。workの項目は`plan, input, arithmetic, cop
 
 copyのattempt／完了／retireを別計数し、成功・UTF-8／frame／work失敗ともfinallyでowned参照を一度だけ外す。native set途中失敗なら確保済み領域も対象にする。返却metadataにowned bytesのaliasはなく、`ownedReferences=0`はこの境界からの参照非持出しの意味だけ。caller入力・backingの破壊、zero化・即時GC／RSS返却・保存責務の解決は主張しない。計数は合成専用・raw内容／offset／key／例外／stackを含まず、公開上位診断へは未接続。
 
-残課題はRP-B／RP-C、native allocation／set例外の故障注入、設定bootstrapやnative処理のheap／実時間、全parser計数式・共有停止／予算、raw上限とAST/core同時保持の運用承認、encoder・capture／custody・保存接続である。Unknown・正式発行口閉鎖・全体受付無効・調査保留を維持する。
+RP-A時点で残したRP-Bは§9で合成実装した。RP-C、native allocation／set例外の故障注入、設定bootstrapやnative処理のheap／実時間、全parser計数式・共有停止／予算、raw上限とAST/core同時保持の運用承認、encoder・capture／custody・保存接続は引き続き残課題である。Unknown・正式発行口閉鎖・全体受付無効・調査保留を維持する。
+
+## 9 RP-B：構文だけの閉鎖した固定継続
+
+### 9.1 入口・所有・保証の区別
+
+同じ`raw-json-boundary.ts`に`inspectCheckpointSyntax(bytes, limits)`を追加した。privateなmode選択で、既存のlimit受付→一度copy→UTF-8を共用し、RP-Bは旧frame-only走査ではなく構文解析を先に行い、正常root閉鎖の後だけLF／EOFを確認する。callerがmode／root-end／AST／継続callbackを渡す口はない。旧`inspectCheckpointBoundary`のmodel・syntax unchecked・100unit対照は維持した。
+
+RP-Bの返値は成功なら`kind=non_executable_json_syntax, syntax=checked, valueStatus=unchecked`、失敗なら固定stage／reason。双方にfrozen work／操作数／構造計数だけを付ける。bytes／token文字列／AST／scalar値／key／path／例外・offset／receipt／proofを返さない。JSONとして構文が通る旧v1や未知fieldもsyntax-only成功になり得る。`parseCheckpointBytes`やcore受理・版検査を実装済みと呼ばない。
+
+ASTは同copyから自前構築し、Object.create(null)とdense arrayだけを使う。keyはown dataで挿入し、`__proto__`もsetterを起動しない。frameのkeyリストはsource順で重複照合し、sort／dedupしない。汎用JS objectのnumeric-like keyの列挙順を元source順の証拠にせず、後続RP-Cで固定schemaのfield順／未知fieldを厳密拒否する前提を維持する。現在はASTを外へ移譲せず、成功／失敗ともroot参照とframe stackを固定finallyで外す。bytesのretireは外側の元finallyが一度だけ所有する。
+
+### 9.2 有限状態・制限
+
+object frameは先頭key-or-end／key必須／colon／value／comma-or-end、array frameは先頭value-or-end／value必須／comma-or-endで進む。parser関数の再帰は使わず、container開始前に`min(5,max_depth)`を確認する。trailing comma・hole・不正literal・delimiter不整合・途中切れを拒否する。
+
+- 各objectの11番目のfieldはkey token生成前に`raw_limit`。最大10個の既出keyと、長さ＋最大64文字の比較を課金し、同名ならcolon／value解析・挿入前に`raw_duplicate_key`。別objectの同名keyは合法。
+- string内容は64byte以内、quote込みscratchも受付する。escape／非ASCII／control等は親profile通り拒否し、decodeしない。
+- 数値候補byte集合を最大32／明示scratch以内で集め、固定JSON number grammar→捕捉Number変換→finite／非負／−0禁止／MAX_SAFE以下→捕捉formatter→元tokenとの文字単位一致を確認する。33番目は変換前の`raw_limit`。`1.0`／`1e0`／`1E-7`・underflow／precision差は`raw_number`。値coreのfield別integer等は未検査。
+- token上限は次token開始前。value nodeは`min(max_value_nodes,max_ast_nodes)`を次予約前に確認する。keyはnodeに加算せず、containerとscalarだけを各1予約。成功時は§3.1のV定義と一致する。失敗時の計数は未完成token／valueの開始予約を含み得るので、実allocation数とは呼ばない。
+- pathはroot／snapshot／cutoffと固定の配列名の有限tagで管理し、配列要素の子や他のpathではunknownへ戻す。root直下snapshotのmodules1000／cases20000／events20000／samples600／scopes=明示cap／workers=明示cap、cutoff.scope_tails=明示scope capと、全arrayの`max_array_items`の小さい方を、次要素解析前に確認する。似たsuffixだけで既知pathにしない。unknownにも全array capが働く。
+
+`max_nodes`（core structural計数）、`max_live_value_nodes`の2V受付、value work・encoded上界はRP-Cの責務で、RP-Bからcoreを呼んで確認済みにしない。小さな合成capやschemaに不適合なsyntax成功を、本番受付やcaptureの根拠へ昇格しない。
+
+### 9.3 model・独立対照と残課題
+
+RP-B modelは`wfb-raw-syntax-rpb-1`。元RP-Aの受付／copy／UTF-8計数に、`lexical, tokenStarts, nodeReservations, fields, items, insertion, keyComparison, tokenCopy, numeric, path, states, nodeCleanup`を追加する。byte／EOF lookaheadごとlexical1、token開始1、node予約1＋retire予約1、field／item受付と値挿入は各1、keyの長さ比較と各文字比較は各1、scratchへ追加する文字ごと1。numeric grammarは長さ＋1、変換／formatter／長さ照合は各1と実比較文字ごと1。有限path分岐／状態stepも各1、stack push／popは元のstack費、最後のLF／EOFはframe費として分離する。有限の組込み比較を含む抽象単位で、実CPU命令数／heapの証明ではない。
+
+`{}\n`の独立上界対照はplan64＋input20＋arithmetic2＋copy4＋utf8 3＋cleanup1＋lexical5＋tokenStarts2＋nodeReservations1＋nodeCleanup1＋path1＋states2＋stack2＋frame2＝**110unit**。RP-Aの100と混同しない。work不足は次操作前に停止し、value予算へ借入れず、予約は返却しない。
+
+`tokens, valueNodes, objectFields, arrayItems, containers, maxDepth, numericTokens`は受理された正常treeの独立数え上げと一致する。失敗prefixの開始予約も含むvalueNodesを、内部treeの責務としてretiredNodesへ一度退役させる。`treeReferences=0`はこのAPIが参照を持ち出さない意味で、物理node数／GC／zero化・OS解放確認ではない。
+
+手書き10 variant、正常golden・80個の有限生成treeの独立oracle、全7既知pathの等値／次要素拒否、全work切断対照を実施した。既存RP-Aと値coreは維持する。full値の比較・core固定受理・2Vとstructural計数の受付式、shared budget／期限／取消、native allocation失敗、実heap／時間・運用cap、encoder／private aggregate／capture／custody／保存は未接続／未確認。正式発行口閉鎖・全体受付無効・Unknown・調査保留を維持する。
