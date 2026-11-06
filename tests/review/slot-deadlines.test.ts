@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 import { createFakeDeadlineTable, FakeEvidenceStore, planSlotDeadlines, RUN_FILES,
-  type EvidenceOps, type FakeDeadlineTable, type TableStoreCaps } from './fixtures/fixed-evidence-store.js';
+  type EvidenceOps, type FakeDeadlineTable, type StoreCaps, type TableStoreCaps } from './fixtures/fixed-evidence-store.js';
 import { SyntheticStoreRecorderBinding } from './fixtures/store-recorder-binding.js';
 
 const input = () => ({
@@ -127,7 +127,8 @@ describe('DT-A private run/budget table binding', () => {
     expect(f.events).toEqual([]);
   });
   it('pins copied table-mode limits and refuses a genuine receipt from another Store', () => {
-    const f = fixture(), other = FakeEvidenceStore.create(f.ops, f.directory, f.run, f.caps, f.now)!;
+    const f = fixture(), second = createFakeDeadlineTable(f.run, f.budget, input())!;
+    const other = FakeEvidenceStore.create(f.ops, f.directory, f.run, { ...limits, deadlineTable: second.table, budget: f.budget }, f.now)!;
     f.caps.deadlineTable = {} as FakeDeadlineTable; f.caps.budget = {}; f.caps.fileBytes = 0;
     const receipt = f.store.save(f.run, 'manifest.json', Uint8Array.of(1))!;
     expect(receipt).toBeDefined();
@@ -219,6 +220,85 @@ describe('DT-A private run/budget table binding', () => {
     expect(f.store.save(f.run, 'manifest.copy.json', Uint8Array.of(7))).toBeUndefined();
     expect(f.store.snapshot().reason).toBe('binding');
     expect(f.events).toEqual([]);
+  });
+});
+
+describe('DT-A review: one Store per table and strict DATA', () => {
+  const tracked = <T extends object>(target: T) => {
+    const hits = { n: 0 }, hit = <R>(value: R) => { hits.n++; return value; };
+    const proxy = new Proxy(target, {
+      ownKeys: t => hit(Reflect.ownKeys(t)), has: (t, k) => hit(Reflect.has(t, k)), get: (t, k) => hit(Reflect.get(t, k)),
+      getPrototypeOf: t => hit(Reflect.getPrototypeOf(t)), getOwnPropertyDescriptor: (t, k) => hit(Reflect.getOwnPropertyDescriptor(t, k)),
+    });
+    return { proxy, hits };
+  };
+  it('refuses a second Store from a table after a sticky failure, so manifest stays unreachable', () => {
+    const f = fixture(); f.set(288000);
+    expect(f.store.saveAttempt(f.run, 'conditions.json', Uint8Array.of(1)).attempt.reason).toBe('deadline');
+    expect(FakeEvidenceStore.create(f.ops, f.directory, f.run, f.caps, f.now)).toBeUndefined();
+    expect(f.store.saveAttempt(f.run, 'manifest.json', Uint8Array.of(1)).attempt).toMatchObject({ rejection: 'sticky', reason: 'store_stopped' });
+    expect(f.events).toEqual([]);
+  });
+  it('refuses a second live Store, so the byte budget stays shared', () => {
+    const f = fixture();
+    expect(FakeEvidenceStore.create(f.ops, f.directory, f.run, f.caps, f.now)).toBeUndefined();
+    expect(f.store.save(f.run, 'analysis.json', Uint8Array.of(1))).toBeDefined();
+  });
+  it('spends a table once its binding passes, even when a later limit check refuses the Store', () => {
+    const run = {}, budget = {}, f = fixture(), t = createFakeDeadlineTable(run, budget, input())!;
+    const caps = { ...limits, deadlineTable: t.table, budget };
+    expect(FakeEvidenceStore.create(f.ops, f.directory, run, { ...caps, fileBytes: 0 }, f.now)).toBeUndefined();
+    expect(FakeEvidenceStore.create(f.ops, f.directory, run, caps, f.now)).toBeUndefined();
+  });
+  it('does not spend a table on a refused run or budget', () => {
+    const run = {}, budget = {}, f = fixture(), t = createFakeDeadlineTable(run, budget, input())!;
+    const caps = { ...limits, deadlineTable: t.table, budget };
+    expect(FakeEvidenceStore.create(f.ops, f.directory, {}, caps, f.now)).toBeUndefined();
+    expect(FakeEvidenceStore.create(f.ops, f.directory, run, { ...caps, budget: {} }, f.now)).toBeUndefined();
+    expect(FakeEvidenceStore.create(f.ops, f.directory, run, caps, f.now)).toBeDefined();
+  });
+  it('refuses a valid-looking Proxy at every plan level without running a trap', () => {
+    const root = tracked(input()), timing = input(), inner = tracked(timing.timing), reservations = input(), leaf = tracked(reservations.timing.reservations);
+    expect(planSlotDeadlines(root.proxy)).toBeUndefined();
+    expect(planSlotDeadlines({ ...timing, timing: inner.proxy })).toBeUndefined();
+    expect(planSlotDeadlines({ ...reservations, timing: { ...reservations.timing, reservations: leaf.proxy } })).toBeUndefined();
+    expect([root.hits.n, inner.hits.n, leaf.hits.n]).toEqual([0, 0, 0]);
+  });
+  it('refuses Proxy Store caps in both modes without running a trap or spending the table', () => {
+    const f = fixture(), run = {}, budget = {}, t = createFakeDeadlineTable(run, budget, input())!;
+    const table = tracked({ ...limits, deadlineTable: t.table, budget }), legacy = tracked({ ...limits, deadline: 100, cleanupDeadline: 200 });
+    expect(FakeEvidenceStore.create(f.ops, f.directory, run, table.proxy, f.now)).toBeUndefined();
+    expect(FakeEvidenceStore.create(f.ops, f.directory, run, legacy.proxy, f.now)).toBeUndefined();
+    expect([table.hits.n, legacy.hits.n]).toEqual([0, 0]);
+    expect(FakeEvidenceStore.create(f.ops, f.directory, run, { ...limits, deadlineTable: t.table, budget }, f.now)).toBeDefined();
+  });
+  it('refuses a stray budget on the legacy pair and keeps the plain pair', () => {
+    const f = fixture(), pair = { ...limits, deadline: 100, cleanupDeadline: 200 };
+    expect(FakeEvidenceStore.create(f.ops, f.directory, {}, { ...pair, budget: {} } as StoreCaps, f.now)).toBeUndefined();
+    expect(FakeEvidenceStore.create(f.ops, f.directory, {}, pair, f.now)).toBeDefined();
+  });
+  it('refuses non-object or identical run and budget origins', () => {
+    const same = {};
+    expect(createFakeDeadlineTable(same, same, input())).toBeUndefined();
+    for (const [run, budget] of [[null, {}], [{}, null], [1, {}], [{}, 'x']])
+      expect(createFakeDeadlineTable(run as object, budget as object, input())).toBeUndefined();
+  });
+  it('refuses a numeric string for either cleanup reserve', () => {
+    for (const key of ['cleanupMs', 'manifestCleanupMs'])
+      expect(planSlotDeadlines({ ...input(), [key]: '1000' })).toBeUndefined();
+  });
+  it('accepts null-prototype DATA at each plan level', () => {
+    const bare = <T extends object>(v: T) => Object.assign(Object.create(null) as T, v), v = input();
+    const value = bare({ ...v, timing: bare({ ...v.timing, reservations: bare(v.timing.reservations) }) });
+    expect(planSlotDeadlines(value)).toEqual(planSlotDeadlines(input()));
+  });
+  it('freezes the issued pair and its table token', () => {
+    const f = fixture();
+    expect(Object.isFrozen(f.issued)).toBe(true); expect(Object.isFrozen(f.issued.table)).toBe(true);
+  });
+  it.each([null, undefined, 1, 'caps'])('returns undefined for nonobject caps %s instead of throwing', caps => {
+    const f = fixture();
+    expect(FakeEvidenceStore.create(f.ops, f.directory, f.run, caps as unknown as StoreCaps, f.now)).toBeUndefined();
   });
 });
 

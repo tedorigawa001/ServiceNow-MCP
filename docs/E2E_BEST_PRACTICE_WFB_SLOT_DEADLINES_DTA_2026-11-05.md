@@ -51,7 +51,46 @@ Date: 2026-11-05 / 実装前HEAD: `eb642a2` / Status: **合成依存限定**、�
 
 全体14,000件規模の回帰、npm pack／dry-run、配布物展開・production install、実保存・OS／process／network接続は実施していない。静的境界確認を実梱包成功や実機保証とは呼ばない。
 
-## 4 残課題・非昇格
+## 4 レビュー修正（2026-11-06）
+
+`aa575f3`の個別レビューで、期限の計算と区分の選択に誤りはなかった。次の不具合を試験専用kernelで修正した。上記の件数は修正前の値として残す。
+
+| 重要度 | 不具合 | 修正 |
+|---|---|---|
+| P2 | 同じ表から2つ目のStoreを作れた。sticky `deadline`の後でも`manifest.json`を`saved`にでき、設計§3に反した。同時に作ると`totalBytes`も別々に数えた。bound経路は表が非公開でroot claimもあり、再現しなかった | 表は照合を通った時点で消費する。上限検査で失敗しても戻さない。run／budgetの不一致は消費しない |
+| P3 | 値が正しいProxyをtrap実行のまま受理した（plan root 5回、入れ子8回、Store caps 9回） | `fixedData`とStore生成の入口で先に拒否する |
+| P3 | 表のない`budget`を持つ入力を旧pairとして受理した | 旧入口で拒否する |
+| P3 | runとbudgetが同じobjectの表を発行できた | 発行時に拒否する |
+
+**テストの修正**
+
+`tests/review/slot-deadlines.test.ts`へ、上記の対照と、次の穴を塞ぐ対照を追加した。先に7件が失敗することを確認してから実装した。
+
+- `manifestCleanupMs`の数値文字列、null prototype入力の受理、run／budgetが非object、発行結果と表の凍結、object以外のcaps。
+- 既存の「別Storeのreceipt拒否」は表の再利用を前提にしていたので、2つ目の表を使う形へ直した。
+
+**ミューテーション**
+
+DT-A部分への変異を実施した。修正前は60件中、kernel系7ファイルで37件、`slot-deadlines`単独で29件を検出した。修正後は追加を含む67件中、kernel系7ファイルで49件、`slot-deadlines`単独で41件を検出した。単独で生存した8件はkernel系の他のファイルが検出する。kernel系全体で生存した18件は次のとおり。
+
+| 修正後も生存 | 件数 | 理由 |
+|---|---:|---|
+| 等価・冗長 | 11 | 期限の順序は正の予約で必ず成立する。`natural`の検査、`fixedData`の個別検査、未登録表の判定は別の検査が同じ入力を拒否する。limitsは内部copyなのでfreezeの有無で結果が変わらない |
+| 到達不能の防御 | 7 | receiptはStoreごとのWeakMapにあるので`tableOrigin`／rowの再照合に届かない。`#row`の2件、`finally`内の`#fail`、Proxy拒否後の`fixedData`の`catch`も同様 |
+
+`tableOrigin`の再照合は、現行の構造では動かない防御である。試験では確認できない。
+
+| 修正後の実行 | 結果 |
+|---|---|
+| `tests/review/slot-deadlines.test.ts` | 63件成功 |
+| 全テスト | 298ファイル、14,798件成功、失敗0 |
+| repo全体の`npm run lint` | エラー0、警告374 |
+| `npm run build`、`node tests/review/package-http-classification.mjs` | 成功 |
+| 変更ファイルの型検査、`git diff --check` | 成功 |
+
+修正前の「5ファイル406件」はコミット時点を再現して確認していない。実pack・実保存・実接続は未実施のまま。
+
+## 5 残課題・非昇格
 
 DT-Bのprivate終端slot／一度限りclaim／安全なPending／queue不変のrecorder閉鎖、閉鎖後clock異常のStore取消と診断保持は未実装。DT-Cの状態別連続対照・最終費目も未実施。本書のDT01〜DT05確認は期限表部分に限り、DT06〜DT12全体を合格扱いにしない。
 

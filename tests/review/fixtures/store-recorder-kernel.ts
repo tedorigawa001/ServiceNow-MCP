@@ -1,5 +1,6 @@
 /** Test-only shared kernel. Closed continuations are module-private; no filesystem or network adapter. */
 import { createHash } from 'node:crypto';
+import { types } from 'node:util';
 
 // Installed by class static blocks; deliberately never exported as friend/registration APIs.
 let boundAckReady: (recorder: FakeFixedRecorder, checkpoint: Checkpoint) => boolean;
@@ -236,10 +237,12 @@ export interface SlotDeadlinePlan {
 declare const deadlineTableBrand: unique symbol;
 export interface FakeDeadlineTable { readonly [deadlineTableBrand]: true }
 const deadlineTables = new WeakMap<object, { run: object; budget: object; plan: SlotDeadlinePlan }>();
-/** Strict own DATA only: no getter, unknown key, symbol or caller-defined row mapping. */
+// One Store per table: a rebuilt Store must not shed a sticky failure or start a fresh byte budget.
+const spentDeadlineTables = new WeakSet<object>();
+/** Strict own DATA only: no Proxy trap, getter, unknown key, symbol or caller-defined row mapping. */
 function fixedData(value: unknown, keys: readonly string[]): Record<string, unknown> | undefined {
   try {
-    if (!value || typeof value !== 'object') return undefined;
+    if (!value || typeof value !== 'object' || types.isProxy(value)) return undefined;
     const proto = Object.getPrototypeOf(value);
     if (proto !== Object.prototype && proto !== null) return undefined;
     const names = Reflect.ownKeys(value);
@@ -273,7 +276,7 @@ export function planSlotDeadlines(value: unknown): SlotDeadlinePlan | undefined 
 }
 /** Standalone synthetic table issuer only; cannot authenticate a production budget or run. */
 export function createFakeDeadlineTable(run: object, budget: object, input: unknown) {
-  if (!run || typeof run !== 'object' || !budget || typeof budget !== 'object') return undefined;
+  if (!run || typeof run !== 'object' || !budget || typeof budget !== 'object' || run === budget) return undefined;
   const plan = planSlotDeadlines(input);
   if (!plan) return undefined;
   const table = Object.freeze({}) as FakeDeadlineTable;
@@ -365,14 +368,19 @@ export class FakeEvidenceStore {
     let caps: StoreCaps | TableStoreCaps, binding: { run: object; budget: object; plan: SlotDeadlinePlan } | undefined;
     let table: object | undefined;
     try {
+      if (types.isProxy(input)) return undefined;
       if ('deadlineTable' in input) {
         const data = fixedData(input, ['fileBytes', 'totalBytes', 'attempts', 'retries', 'deadlineTable', 'budget']);
         if (!data) return undefined;
         caps = data as unknown as TableStoreCaps;
         table = caps.deadlineTable;
         binding = deadlineTables.get(table);
-        if (!binding || binding.run !== run || binding.budget !== caps.budget) return undefined;
-      } else caps = { ...input };
+        if (!binding || binding.run !== run || binding.budget !== caps.budget || spentDeadlineTables.has(table)) return undefined;
+        spentDeadlineTables.add(table); // Never refunded, including a later limit refusal.
+      } else {
+        if ('budget' in input) return undefined; // a budget without its table is not a legacy pair
+        caps = { ...input };
+      }
     } catch { return undefined; }
     // Structural ceilings for this small fake, not approved production limits.
     if (!root || typeof root !== 'object' || !run || typeof run !== 'object'

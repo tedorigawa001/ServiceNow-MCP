@@ -1,6 +1,8 @@
 # WF-B：slot固定期限表・保存経路閉鎖後recorder終端の接続差分
 
-Version: draft-0.5 / Date: 2026-11-05 / 基準HEAD: `31712a6` / レビュー修正の基準HEAD: `9f8507b` / DT-A実装基準HEAD: `eb642a2` / DT-B実装基準HEAD: `aa575f3` / DT-C実装基準HEAD: `e4b87d7`。
+Version: draft-0.6 / Date: 2026-11-05 / 基準HEAD: `31712a6` / レビュー修正の基準HEAD: `9f8507b` / DT-A実装基準HEAD: `eb642a2` / DT-B実装基準HEAD: `aa575f3` / DT-C実装基準HEAD: `e4b87d7` / DT-Aレビュー修正の基準HEAD: `0fd1919`。
+
+draft-0.5のレビュー修正: 1つの期限表から作れるStoreを1つに限定し、sticky失敗後の作り直しでmanifestへ進めないようにした。Proxy入力、表のない`budget`、同じobjectのrun／budgetを拒否した。期限の計算と区分の選択は変更していない。
 
 draft-0.5: **DT-Cの固定連続transcriptと構造費目を合成検証**。通知throwと部分生成のRED対照から、試験専用kernelの通知分離・受付閉鎖・実状態の診断を補完した。[検証記録](E2E_BEST_PRACTICE_WFB_RECORDER_CONTINUOUS_DTC_2026-11-05.md)と§8.3を参照。実時間／heap／任意呼出し列の上界や運用capの承認ではない。
 
@@ -163,11 +165,11 @@ oracleは表生成器やterminal helperを呼ばず、手書きのrow／境界�
 
 ### 8.1 DT-A実装境界
 
-実装は試験専用`store-recorder-kernel.ts`、旧`fixed-evidence-store.ts`から再exportする。`planSlotDeadlines(unknown)`は固定keyのown enumerable DATAだけを受理し、getterを実行しない。未知／欠落／symbol／独自prototype／accessor、非safe整数・空の工程枠・元planの上限違反を拒否する。外部からrow配列を受け取らず、14固定名のうち`manifest.json`だけをmanifestにするため、区分対応の欠落・重複を入力で作れない。
+実装は試験専用`store-recorder-kernel.ts`、旧`fixed-evidence-store.ts`から再exportする。`planSlotDeadlines(unknown)`は固定keyのown enumerable DATAだけを受理し、getterを実行しない。未知／欠落／symbol／Proxy／独自prototype／accessor、非safe整数・空の工程枠・元planの上限違反を拒否する。外部からrow配列を受け取らず、14固定名のうち`manifest.json`だけをmanifestにするため、区分対応の欠落・重複を入力で作れない。
 
 `createFakeDeadlineTable`は同run／budget originと凍結planをmodule-private WeakMapに結ぶ合成専用issuerで、runtime台帳とは共有しない。summaryやtokenのcopyは表として受理しない。bound ownerは非公開run／budget originを先行確保し、元timing・`cleanupMs`・必須`manifestCleanupMs`を一度読み、同じtableをStoreへ渡す。運用既定値や別budgetは作らない。ここでのbudget originは合成identityであり、実予算の配賦・費用課金・承認を証明しない。
 
-table-mode Storeは同run／budgetを生成時照合し、期限表の不正入力から旧pairへfallbackしない。旧単体fakeの`StoreCaps` pairは互換入口として残す。saveはslotからrowを内部選択し、同rowを操作・通常close・失敗finallyに保持する。receiptには同rowとtable originをprivateに保存し、public／private consumerはそれを再照合する。公開consume DATAはslot／size／digestのみで期限借換え口を追加しない。table-modeの当該attemptだけに`deadlineClass`／`deadlineVersion`を追加し、旧単体結果の形は維持する。
+table-mode Storeは同run／budgetを生成時照合し、期限表の不正入力から旧pairへfallbackしない。表は照合を通った時点で消費し、以後の上限検査で失敗しても戻さない。これによりsticky失敗後の作り直しや、byte枠を分けた同時Storeを防ぐ。run／budgetの不一致は消費しない。表のない`budget`は旧pairとして受理せず、runとbudgetが同じobjectの表は発行しない。旧単体fakeの`StoreCaps` pairは互換入口として残す。saveはslotからrowを内部選択し、同rowを操作・通常close・失敗finallyに保持する。receiptには同rowとtable originをprivateに保存し、public／private consumerはそれを再照合する。公開consume DATAはslot／size／digestのみで期限借換え口を追加しない。table-modeの当該attemptだけに`deadlineClass`／`deadlineVersion`を追加し、旧単体結果の形は維持する。
 
 DT01〜DT05の期限表部分を実施した。直前／等値／直後、途中期限到達、cleanup予約切れ・late、別run／budget・summary／継承table混入、evidence sticky後のmanifest拒否を独立oracleで確認した。bound checkpoint laneの閉鎖後のmanifest保存は、§7のspy-only子Store対照に限る。必須集合・manifest writer・run保全／process終了へ昇格しない。
 
