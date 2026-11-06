@@ -1,6 +1,8 @@
 # WF-B：snapshot strict値契約・固定encoding・row幅
 
-Version: draft-0.7 / Date: 2026-11-06 / 基準HEAD: `ff2c56f` / レビュー修正の基準HEAD: `04260f2` / 純粋core実装基準HEAD: `70cbffb` / core修正の基準HEAD: `b37214f`。
+Version: draft-0.8 / Date: 2026-11-07 / 基準HEAD: `ff2c56f` / レビュー修正の基準HEAD: `04260f2` / 純粋core実装基準HEAD: `70cbffb` / core修正の基準HEAD: `b37214f`。
+
+draft-0.8: [RP-C同AST・2V／計数診断保持の差分設計](BEST_PRACTICE_WFB_RPC_PRIVATE_VALUE_BRIDGE_DESIGN.md)を追加。Vとstructuralの別単位、失敗時observed／unavailable、5理由の1対1保持と旧API projectionを具体化した。設計のみで既存値core・課金・公開型は変更していない。
 
 draft-0.7: [RP-B構文境界](BEST_PRACTICE_WFB_BOUNDED_RAW_JSON_PARSER_DESIGN.md#9-rp-b構文だけの閉鎖した固定継続)と[合成記録](E2E_BEST_PRACTICE_WFB_RAW_JSON_RPB_2026-11-06.md)を追加。有限stack・重複key・canonical数値とpath／node／token制限を構文専用で実装。本値coreは呼ばず、値受理・発行／保存は未接続。
 
