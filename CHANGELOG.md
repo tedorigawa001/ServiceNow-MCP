@@ -18,6 +18,8 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 ### Changed
 
+- WF-B RP-A adds a synthetic-only raw-byte boundary with strict limit types, separate work counters, pre-copy byte/backing/live admission, intrinsic-only fixed-buffer copying, a bounded UTF-8 prepass and container-aware framing. Hook, buffer-brand, capacity, malformed-byte and retirement controls return only frozen non-executable metadata marked syntax-unchecked. JSON token/value acceptance, evidence issuance, body storage, runtime wiring and whole-run admission remain disabled; v1 is unchanged.
+
 - WF-B adds a development-only strict snapshot value core: ten readonly checkpoint variants, detached/frozen projections, local row/reference/coverage checks, checked count and encoded-size envelopes, and separate synthetic work counters. Independent enum, arithmetic, width and hostile-value controls preserve v1 and existing recorder/Store paths. The core produces no encoded body, evidence, receipt or save authority; formal issuance, whole-run admission and production connections remain closed/unknown.
 
 - WF-B DT-C adds continuous synthetic D_stop/FIFO/D_save/terminal transcripts and independent operation/byte envelopes, including short writes, EINTR, exhausted attempts, partial construction and uncertain cleanup. Test-only notification paths now pre-close Store admission, contain and separately retain one-shot notification throws, continue the other notification, and record the actual recorder state after failed construction. Closed/unknown outcomes never become preservation or process-termination success. Runtime sources, deadlines, formal issuance and whole-run admission are unchanged.

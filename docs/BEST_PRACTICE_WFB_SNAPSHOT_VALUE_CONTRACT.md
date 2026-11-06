@@ -1,6 +1,8 @@
 # WF-B：snapshot strict値契約・固定encoding・row幅
 
-Version: draft-0.5 / Date: 2026-11-06 / 基準HEAD: `ff2c56f` / レビュー修正の基準HEAD: `04260f2` / 純粋core実装基準HEAD: `70cbffb` / core修正の基準HEAD: `b37214f`。
+Version: draft-0.6 / Date: 2026-11-06 / 基準HEAD: `ff2c56f` / レビュー修正の基準HEAD: `04260f2` / 純粋core実装基準HEAD: `70cbffb` / core修正の基準HEAD: `b37214f`。
+
+draft-0.6: [RP-A byte境界](BEST_PRACTICE_WFB_BOUNDED_RAW_JSON_PARSER_DESIGN.md#8-rp-a実装境界計数と破棄)と[合成記録](E2E_BEST_PRACTICE_WFB_RAW_JSON_RPA_2026-11-06.md)を追加。UTF-8／外側framingだけを検査する非実行metadataで、raw JSON構文parserや本値coreへの接続は未実装。値規則・旧v1・発行／保存経路は不変。
 
 draft-0.5: [bounded raw JSON parser詳細契約](BEST_PRACTICE_WFB_BOUNDED_RAW_JSON_PARSER_DESIGN.md)を追加。raw bytes専用の初期subset、入力所有／上限／検査順・固定理由・独立oracleを具体化した。設計のみで、現行値core・旧v1・発行／保存経路は変更しない。
 

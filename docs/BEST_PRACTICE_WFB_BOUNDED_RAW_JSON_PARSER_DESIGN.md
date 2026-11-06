@@ -1,10 +1,12 @@
 # WF-B：bounded raw JSON parserの詳細契約
 
-Version: draft-0.2 / Date: 2026-11-06 / 照合基準HEAD: `7eefb10` / レビュー修正の基準HEAD: `09e65e0`。
+Version: draft-0.3 / Date: 2026-11-06 / 照合基準HEAD: `7eefb10` / レビュー修正の基準HEAD: `09e65e0` / RP-A実装基準HEAD: `baaf60d`。
+
+draft-0.3: RP-Aのlimit／計数型・byte受付／copy・UTF-8 prepass・外側framingを合成専用で実装した（§8）。[検証記録](E2E_BEST_PRACTICE_WFB_RAW_JSON_RPA_2026-11-06.md)。返値はsyntax uncheckedの非実行metadataだけで、`parseCheckpointBytes`・JSON構文／値受理は未実装。
 
 draft-0.1のレビュー修正: copy手段を固定し、resizable bufferの拒否を追加した。境界入力と固定理由の対応表（§5.1）を置いた。`max_value_nodes`とcoreの`max_nodes`の単位の違いを明記し、ASTとcore copyの同時保持に枠の名前を付けた。設計のみで、実装状態は変わらない。
 
-Status: **設計のみ。parser・新試験・encoder・接続は未実装。** 親は[strict値契約](BEST_PRACTICE_WFB_SNAPSHOT_VALUE_CONTRACT.md)（照合した値規則はdraft-0.4）と[本文snapshot設計](BEST_PRACTICE_WFB_CHECKPOINT_SNAPSHOT_BODY_DESIGN.md)。旧`wfb-checkpoint-1`・既存recorder／Storeを維持し、正式発行口閉鎖・全体受付無効・Unknown・VM／監視／telemetry調査保留を継続する。実装・証拠発行・本文保存・実接続・実通信・実機操作・設定変更・Pushは行わない。
+Status: **RP-Aの純粋byte境界と合成試験のみ実装済み。JSON字句／構文parser・core値受理・encoder・実接続は未実装。** 親は[strict値契約](BEST_PRACTICE_WFB_SNAPSHOT_VALUE_CONTRACT.md)（照合した値規則はdraft-0.4）と[本文snapshot設計](BEST_PRACTICE_WFB_CHECKPOINT_SNAPSHOT_BODY_DESIGN.md)。旧`wfb-checkpoint-1`・既存recorder／Storeを維持し、正式発行口閉鎖・全体受付無効・Unknown・VM／監視／telemetry調査保留を継続する。証拠発行・本文保存・実接続・実通信・実機操作・設定変更・Pushは行わない。
 
 ## 1 目的・非目標と入力口
 
@@ -126,7 +128,9 @@ parser内の抽象費目は、入力copy byte、UTF-8 byte走査、字句のadva
 | 閉じたrootの直後が空白／CR／LF以外の任意のbyte | frame | `raw_frame` |
 | 閉じたrootとLFの後にbyteが続く（複数LF、後続frameを含む） | frame | `raw_frame` |
 
-## 6 独立oracle・合成受入条件（未実施）
+## 6 独立oracle・合成受入条件（RP-Aの一部のみ実施）
+
+§8と[記録](E2E_BEST_PRACTICE_WFB_RAW_JSON_RPA_2026-11-06.md)でRJ02／03／05／07／08／10〜13のbyte境界側を部分確認した。RJ01の全10 variant値受理、重複key・数値token・全syntax拒否、AST／core copy、token／node・value workは未実施。下表全体を完了扱いしない。
 
 oracleを製品encoderやparserの出力から生成して正解としない。手書きASCII golden／hex byte列、独立の構造数え上げ、BigInt算術、boundedな標準JSON.parseによる**正常な合成例だけの**値比較を併用する。JSON.parseは重複key／UTF-8／上限の拒否oracleには使わない。故障callbackを新APIへ渡す口は設けず、失敗検査は返却後に行う。
 
@@ -148,18 +152,48 @@ oracleを製品encoderやparserの出力から生成して正解としない。�
 
 ## 7 実装順と未確認・承認待ち
 
-1. **RP-A（最初の候補）**: 合成専用のlimit／計数型とbyte入力境界、UTF-8 prepass・framingの固定理由を実装。未知入力のhook非実行・copy前受付・failure unwindを先に検証する。JSON値の受理・証拠発行はまだ接続しない。
+1. **RP-A（byte境界のみ実装済み）**: 合成専用のlimit／計数型・入力境界、UTF-8 prepass・外側framingと固定理由を実装。入力hook非実行・copy前受付・failure unwindを検証した。JSON値の受理・証拠発行は未接続であり、syntax uncheckedの結果をparser成功へ昇格しない（§8）。
 2. **RP-B**: 有限stackの字句／構文、同object重複、strict numeric token、path別件数・node／token制限。中間値は外へ返さず、parser内固定継続だけへ渡す。独立goldenと拒否対照を追加。
 3. **RP-C**: 既存coreへの一度の値検査・費目の分離・結果合流と全10 variantの連続試験。発行・保存とは引き続き分離する。
 
-各段階は別の明示指示を要する。brand取得のintrinsic選定、copy途中の例外、parser work modelの版とunwind費、coreのstructural計数の上界式、raw byte／heap／scratchの具体capは未確認／未承認。小さい合成capだけで有限境界を検証し、本番capは投入しない。
+後続段階は別の明示指示を要する。RP-Aのintrinsic選定と境界用work modelは§8へ固定したが、native copyのallocation／set例外の故障注入、全parserのwork model／unwind費、coreのstructural計数上界式、raw byte／heap／scratchの運用capは未確認／未承認。小さい合成capだけで有限境界を検証し、本番capは投入しない。
 
 ASCII compact＋LFだけという初期subsetを将来広げる判断、共有期限／取消ownerと停止照会間隔、budgetへの正式結合、formatter全入力の根拠、encoderと同bytesの独立照合、private aggregate／capture／custody・Store接続は残課題。raw parserの成功からこれらを確認済みにせず、Unknown・正式発行口閉鎖・全体受付無効・調査保留を維持する。
 
-文書作成時の確認は、ローカルMDリンク・差分の空白検査と、手作りのfirst_anomaly＋空snapshot値による固定32nodeの独立数え上げに限る。これはparserの合成試験や§6の受入完了ではない。テスト・ビルド・実parser実行は今回未実施である。
+draft-0.1作成時の確認は、ローカルMDリンク・差分の空白検査と、手作りのfirst_anomaly＋空snapshot値による固定32nodeの独立数え上げに限る。当時はテスト・ビルド・実parser実行を行っていない。今回のRP-A試験も全parserの受入完了ではない。
 
 draft-0.1のレビューでは、残さない一時プローブで次を確認した（Node v24.18.0）。いずれもparserの試験ではなく、§6の受入完了でもない。
 
 - copy手段のgetter実行は、捕捉`slice`系と`Uint8Array.from`であり、捕捉`set`と`new Uint8Array(view)`では0。全engine・全版の保証ではない。
 - resizable bufferの固定長viewとlength-tracking viewは、prototypeとSABの検査だけでは拒否されない。
 - 手作りの多行fixtureでVは§3.1の式と一致（902）。T／Vは最大4.14。depth 5、10 field、64 byteに到達。同じfixtureのcore structural計数は1829で、`max_nodes=902`は`limit`になる。
+
+## 8 RP-A実装境界・計数と破棄
+
+配置は`tests/review/fixtures/raw-json-boundary.ts`、試験は`tests/review/raw-json-boundary.test.ts`。runtime／旧fixture台帳と共有せず、importは`node:util.types`だけ。公開する合成APIは`inspectCheckpointBoundary(bytes, limits)`であり、§1の将来の`parseCheckpointBytes`ではない。成功は`kind=non_executable_raw_boundary, syntax=unchecked`と固定model名・計数metadataのみ。bytes・文字列・AST・検査済み値・callback・proofを返さない。
+
+### 8.1 受付とnative memory操作
+
+limitは§3の19項目を列挙順のown enumerable dataで必須とし、正safe整数のみをcopy／freezeする。bootstrapの設定検査後に固定64unitを計上する。設定objectのreflection一時heap／実時間をこの64unitで証明したとはせず、任意巨大unknown設定はruntimeへ開かない。
+
+捕捉するのは`Uint8Array` constructor、`%TypedArray%.prototype`の`buffer / byteLength / byteOffset` getterと`set`、`ArrayBuffer.prototype`の`byteLength / resizable` getter。prototype／Proxy／AB内部状態を確認し、resizable getterがない環境も拒否する。view／bufferにown constructor・length・byteLength・buffer・slice・set・iterator accessorがあっても読まない。species／slice／from／外部iteratorによるcopyを行わない。
+
+plan配賦和、入力N・背後A・同時保持A+N、copy全費用とcleanup予約を先に検査・課金してから、新規Uint8Array(N)へ捕捉setを一度呼ぶ。copy後もintrinsicで元viewの同一buffer／offset／N／Aを確認する。以後はprivate copyだけを走査する。SharedArrayBuffer・resizable／length-tracking／detached・異brand／prototypeは拒否する。
+
+### 8.2 UTF-8と外側framingの保証範囲
+
+UTF-8 prepassは全owned bytesを直接読む。C2〜DF、E0のA0下限、EDの9F上限、F0の90下限、F4の8F上限と残りcontinuationを固定検査し、overlong／surrogate／範囲外／途中切れを拒否する。TextDecoderや全string decodeは使わない。不正UTF-8の先着を後続のframing診断で上書きしない。
+
+外側scannerは最大5段のcontainer stackとquote状態だけを追い、文字列中の括弧をroot終端と誤認しない。depth、printable ASCII／backslash禁止、string内容64byteとquote込みscratch枠を検査する。最初のunquoted root閉鎖の直後がLF、さらに直後がEOFであることを検査する。UTF-8後のprofile／root種別／未閉鎖／末尾の固定理由は§5.1に対応する。
+
+**このscannerはJSON parserではない。** colon／comma／literal／number文法、field数・key重複・schema版／field順・path別件数・値関係は未検査。`{not_json}`や重複keyを持つ殻でも`syntax=unchecked`の結果になり得る。malformed bodyの診断優先順位はRP-Bの構文検査が入るまで未完成であり、RP-Aのframe診断を完成parserの最終診断へ転用しない。将来は同module内の固定継続へ接続し、RP-Bが構文不正を拒否してから最終framing／RP-Cの値受理へ進む。新たな任意root-end指定口・昇格口は設けない。
+
+### 8.3 境界modelと参照retire
+
+modelは`wfb-raw-boundary-rpa-1`。workの項目は`plan, input, arithmetic, copy, utf8, frame, stack, cleanup`と総和。plan=64、metadata検査1回=10、checked加算1回=1、copy=N+1、UTF-8はbyte probeごと1（途中切れ時のEOF probeも含む）、framingもbyte／EOF probeごと1、stack push／popごと1、cleanupの予約=1。copy前後のmetadataは各1回。`max_parse_work`を超える次操作は実行せず、`max_value_work`や`max_total_work`の余りへ流用しない。失敗時の未使用／予約済み費用を返却しない。
+
+`{}\n`（N=A=3）の独立対照は`64+20+2+4+3+4+2+1=100`unit。等値100は境界成功、99はframeのEOF probe直前で停止する。固定cleanup予約は破棄用のabstract費で、GC／OS cleanup確認や実CPU命令数ではない。token／node／AST／value workなど将来のlimitも型／planで検査するが、RP-Aではその処理を始めず、当該上限を消費済みとしない。
+
+copyのattempt／完了／retireを別計数し、成功・UTF-8／frame／work失敗ともfinallyでowned参照を一度だけ外す。native set途中失敗なら確保済み領域も対象にする。返却metadataにowned bytesのaliasはなく、`ownedReferences=0`はこの境界からの参照非持出しの意味だけ。caller入力・backingの破壊、zero化・即時GC／RSS返却・保存責務の解決は主張しない。計数は合成専用・raw内容／offset／key／例外／stackを含まず、公開上位診断へは未接続。
+
+残課題はRP-B／RP-C、native allocation／set例外の故障注入、設定bootstrapやnative処理のheap／実時間、全parser計数式・共有停止／予算、raw上限とAST/core同時保持の運用承認、encoder・capture／custody・保存接続である。Unknown・正式発行口閉鎖・全体受付無効・調査保留を維持する。
