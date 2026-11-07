@@ -1,6 +1,8 @@
 # WF-B RP-C 同AST接続と2V受付 計数診断保持の差分設計
 
-Version: draft-0.4 / Date: 2026-11-07 / 照合基準HEAD: `81d23f3` / レビュー修正の基準HEAD: `cc0f410` / RC-A実装基準HEAD: `5b03dfc` / RC-Aレビュー修正の基準HEAD: `0e1229b`。
+Version: draft-0.5 / Date: 2026-11-07 / 照合基準HEAD: `81d23f3` / レビュー修正の基準HEAD: `cc0f410` / RC-A実装基準HEAD: `5b03dfc` / RC-Aレビュー修正の基準HEAD: `0e1229b` / RC-B基準HEAD: `252dfbd`。
+
+draft-0.5: RC-Bの2V／structural純粋受付を実装した（§12）。固定structuralモデルは保守式`3V+10`を採用し、別候補式へのfallbackは行わない。全10 variantの再照合で、§4.2の「本文なしは2V+9」はcontrolに限り、unavailableはstatus peekの1 unitを含む`2V+10`と訂正した。課金点・値engine・raw入口は変更しない。[合成検証記録](E2E_BEST_PRACTICE_WFB_VALUE_ADMISSION_RCB_2026-11-07.md)。
 
 draft-0.3のレビュー修正: §6と§8に残っていた「案」「未実装」の記述を、RC-Aで実装した範囲に合わせた。bounds計算器の課金とfreezeの試験を追加した（§11）。engineと課金は変更していない。
 
@@ -8,7 +10,7 @@ draft-0.3: RC-Aの単一値engine・detailed計数owner・legacy projectionだ�
 
 draft-0.1のレビュー修正: 受入条件ごとに検証経路を付け、bytesから届かない経路と試験専用assemblyの決定順を明記した（§9、§10）。modelをplanへ入れないことと、post拒否の理由を固定した。structuralの別候補式を検証対象へ追加した（§4.2）。設計のみで、実装状態は変わらない。
 
-Status: **RC-Aのdetailed計数API・旧API互換projectionと合成試験を実装。RP-Cのraw接続・受付計算器は未実装。** [raw parser契約](BEST_PRACTICE_WFB_BOUNDED_RAW_JSON_PARSER_DESIGN.md)のRP-Bから、[strict値core](BEST_PRACTICE_WFB_SNAPSHOT_VALUE_CONTRACT.md)へ同じASTを一度だけ借用し、copy前の2V受付と失敗時の計数保持を組み合わせる方針は未接続。旧v1・正式発行口閉鎖・全体受付無効・Unknown・VM／監視／telemetry調査保留を維持する。証拠発行・本文保存・実接続・実通信・実機操作・設定変更・Pushを行わない。
+Status: **RC-AとRC-Bの純粋受付・合成試験を実装。RP-Cのraw接続・bridge統合費は未実装／未導出。** [raw parser契約](BEST_PRACTICE_WFB_BOUNDED_RAW_JSON_PARSER_DESIGN.md)のRP-Bから、[strict値core](BEST_PRACTICE_WFB_SNAPSHOT_VALUE_CONTRACT.md)へ同じASTを一度だけ借用し、copy前の2V受付と失敗時の計数保持を組み合わせる方針は未接続。旧v1・正式発行口閉鎖・全体受付無効・Unknown・VM／監視／telemetry調査保留を維持する。証拠発行・本文保存・実接続・実通信・実機操作・設定変更・Pushを行わない。
 
 ## 1 現状と接続の前提
 
@@ -62,9 +64,9 @@ checkedに`L_tree = V + V`を求め、`L_tree ≤ max_live_value_nodes`を要求
 
 2Vは元ASTと最終normalized treeの**論理node枠**で、native heap byteの保証ではない。coreのownData／recordの一時container、索引、key列挙、数値文字列、plan／診断／結果wrapper、owned bytesは含まれない。core成功後に返すのはそのcopyのmoveであり、三つ目のtreeを生成しない。これら追加費目と実heapはUnknownのままである。
 
-### 4.2 core structural上界の候補
+### 4.2 core structural上界と比較候補
 
-parserのVをcoreの`max_nodes`へ直接渡さない。以下を**現行coreに限定した未検証の候補式**として独立検証する。
+parserのVをcoreの`max_nodes`へ直接渡さない。以下は現行coreに限定した保守式で、RC-Bの純粋計算器へ固定した（検証範囲・制限は§12）。raw接続は行わない。
 
 `S_candidate(V) = 3V + 10`
 
@@ -72,17 +74,17 @@ parserのVをcoreの`max_nodes`へ直接渡さない。以下を**現行coreに�
 
 前提はRP-Bが生成した有限・非循環・aliasなしのAST、現在のschema分岐が同じsubtreeを再walkしないこと、coreの課金点／単位が固定されることである。汎用unknown objectや別のschema／modelには適用しない。正当値だけでなく途中schema拒否のcharged prefixも式内であることを要する。sourceレビューだけで採用済みとはせず、全10 variant・全row・破損prefixと独立計数・課金変異で検証してからmodelを固定する。
 
-採用する場合、checked算術で候補値を求め、`S_candidate ≤ plan.max_nodes`をcore前に照合する。不足ならparse段`raw_limit`、算術overflowならparse段`raw_overflow`、core呼出し0。保守式により実際には通る値を早期拒否し得るが、limitを自動で引き上げない。式の検証・model固定前にRP-Cの受付全体を有効にしない。
+RC-Bの純粋計算器はchecked算術で保守値を求め、`S_candidate ≤ plan.max_nodes`を照合する。不足なら`raw_limit`、算術overflowなら`raw_overflow`で停止し、coreを呼ばない。将来のraw接続ではこれをparse段へ保持する。保守式により実際には通る値を早期拒否し得るが、limitを自動で引き上げない。式だけを根拠にRP-Cの受付全体を有効にせず、private供給・bridge統合費・post／破棄予約の検証を別途要する。
 
 この受付を採用すると、RP-C入口を通る値はcoreのstructural上限に届かない。`max_nodes`不足はparse段の`raw_limit`になり、core呼出しは0である。coreの`value_limit`はwork／byte由来で残る。structural上限の拒否はcore直呼びで検証する。
 
 `cc0f410`のレビューでは、残さない一時プローブで次を確認した。`JSON.parse`した値をcoreへ渡した計数であり、RP-Cの実行でもRC03の完了でもない。
 
-- 正当値53件のstructural計数は、本文ありで`2V+10+M`、本文なしで`2V+9`に一致した（MはMetric数）。
+- 正当値53件のstructural計数について、旧レビューは本文ありで`2V+10+M`、本文なしで`2V+9`と記録した（MはMetric数）。RC-Bの全10 variant再照合で、本文なしのうちcontrolだけが`2V+9`、unavailableはstatus peekを含む`2V+10`と訂正した。
 - 構文を通った変異11,312件で、拒否までの計数は`3V+10`を超えなかった。
 - `3V+10`は実計数の1.33〜1.5倍だった。scope 100、worker 1000の最大shape（V=392332）へ式を当てると、実計数の上限786474に対して1177006になる。
 
-Metricはsample行だけにあり、sampleは最大600行なので`M≤1800`である。これによる別候補`S_alt(V) = min(3V+10, 2V+1810)`もRC03の検証対象とする。1800の部分はsample上限に依存し、主にソースから導出した値なので、sample上限やMetric数を変えたら再検証する。どちらの式を採用するかは未決定で、現時点の候補は`S_candidate`のままである。
+Metricはsample行だけにあり、sampleは最大600行なので`M≤1800`である。これによる別候補`S_alt(V) = min(3V+10, 2V+1810)`もRC-Bで独立比較した。1800の部分はsample上限に依存し、sample上限やMetric数を変えたら再検証する。RC-Bの計算器は費目根拠が単純な`3V+10`だけを固定modelへ採用し、`S_alt`を実受付へ採用しない。3Vのoverflowを別式で回避するfallbackも設けない。
 
 ## 5 同planのValueLimitsと費目所有
 
@@ -156,7 +158,7 @@ value schema／discriminatorの追加、再walk、課金点・単位の変更は
 
 ## 9 独立合成受入条件
 
-以下は実装後の受入条件であり、今回は未実施。
+以下はRP-C全体の受入条件。RC-Aのdetailed／legacy・計数保持とRC-Bの純粋算術／structural corpusだけを実施した（§11、§12）。同rootのprivate接続・model混在・bridge費・post／破棄は未実施で、各行全体の完了とはみなさない。
 
 | ID | 対照 | 必須結果 | 検証経路 |
 |---|---|---|---|
@@ -190,12 +192,12 @@ value schema／discriminatorの追加、再walk、課金点・単位の変更は
 
 1. **RC-A前に決定済み**: 純粋計数ownerを共有し、別の固定scenario専用assemblyで非到達故障を検証する。理由対応はfreezeした固定表。実engineへ外部meter／callbackを渡す口や共有prototype改変を作らない。未実装のbridge故障まで受入済みにはしない。
 2. **RC-A実装済み**: shared core engineのdetailed結果・計数ownerとlegacy projection。失敗prefix保持を固定し、raw入口はcoreへ接続しない（§11）。
-3. **RC-B候補**: 同V／同planからの2Vとstructural受付の純粋計算・固定model。独立oracleと保守性の検証が済むまで、候補式を実受付へ採用しない。
+3. **RC-B実装済み**: 2Vとstructural受付の純粋計算・固定modelと独立oracle（§12）。callerのVや公開metadataは証拠にせず、同root／planのprivate供給・統合費を伴うraw接続は後続へ残す。
 4. **RC-C候補**: parser finally前の固定借用・一度claim・pre／post・費目合流を連続接続。bridge費profileがreadyであることを前提とし、失敗時の診断／破棄を検証する。
 
-各段階は別の明示指示を要する。structural式は候補、bridge固定費・core全work上界・内部一時containerと索引／scratchの保持上界・運用capは未導出／未承認。shared deadline／取消・native故障・実heap／CPU時間、実source、encoder、private aggregate／capture／custody、本文保存と正式発行は対象外のままである。
+各段階は別の明示指示を要する。structuralはRC-Bの純粋モデルだけを固定し、bridge固定費・core全work上界・内部一時containerと索引／scratchの保持上界・運用capは未導出／未承認。shared deadline／取消・native故障・実heap／CPU時間、実source、encoder、private aggregate／capture／custody、本文保存と正式発行は対象外のままである。
 
-RC-Aの検証以外は設計であり、新受付計算器・候補式の合成受入・raw/core接続試験を実施した記録ではない。旧v1・正式発行口閉鎖・全体受付無効・Unknown・調査保留を維持する。
+RC-A／RC-B以外は設計であり、raw/coreのprivate接続試験を実施した記録ではない。旧v1・正式発行口閉鎖・全体受付無効・Unknown・調査保留を維持する。
 
 ## 11 RC-A実装境界
 
@@ -206,3 +208,17 @@ RC-Aの検証以外は設計であり、新受付計算器・候補式の合成�
 純粋kernel `value-core-accounting.ts`には入力や部分copyを保持させない。失敗結果に例外・stack・本文は含めず、usageはprivate、返す計数はdetached／freeze済みとする。別module `value-core-accounting-assembly.ts`は固定scenario名だけを受け、overflow・内部例外・snapshot故障を同ownerで試す。実engine・rawからimportせず、runtime／packageへ含めない。5理由の将来向け固定表は単体検査のみで、raw診断へは未接続。
 
 実engineではchild_startedの独立課金列からwork 1〜73／structural 1〜30の拒否prefixと等値74 unitを照合し、10 variant・旧256件も維持する。非到達故障のassembly試験は、bytesから実際に発生させた証拠ではない。§9のmodel混在・bridge post拒否等は後続段階のまま。owner／wrapper／snapshotの追加処理を既存抽象workに課金したとは扱わず、統合費・実heap・CPU・GC／ゼロ化はUnknownである。
+
+## 12 RC-B：純粋受付モデルと非接続境界
+
+`tests/review/fixtures/value-admission-core.ts`の`calculateValueAdmission(V, plan)`は算術DATAだけを受ける合成専用入口である。AST・bytes・callback・core関数を受けず、parser／engineを呼ばない。型だけRawLimitsを参照し、19項目の元planの固定順・own-data・正safe整数・余分fieldなしを検査してpinする。limitsへmodel欄を追加しない。caller供給V・返却metadataの値一致は同rootの証拠ではなく、同V／planのprivate供給と一度claimはRC-Cで実装する。
+
+検査順はplan strict → checkedなparse/value work配賦の和 → Vの正safe整数 → 既存value／AST枠 → checkedなV+Vとlive枠 → checkedな3×V+10とstructural枠 → 固定順ValueLimits projection。等値は許可し、cap不足は`raw_limit`、算術overflowは`raw_overflow`、不正plan／V・配賦不成立は`raw_limits`。先行拒否後は後続算術・projectionを行わない。残りparser workからvalue枠を再計算せず、`max_work=plan.max_value_work`と他6項目の元値だけを渡す。pure結果の拒否には部分projectionを返さず、例外・入力参照も含めない。
+
+固定modelは`wfb-value-admission-rcb-1`／`wfb-value-structural-3v10-1`／既存`wfb-value-core-work-1`。成功も`non_executable_value_admission`で、`coreInvocation=not_called`、`bridgeWork=unmodeled`とする。算術のattempted／completedは配賦和・2V・3倍・+10の最大4試行だけを数え、parser費やmodel照合・19field reflection・snapshot／結果wrapper・post／discard予約の統合workへ無料加算したとは扱わない。これら費目が未導出な間はreadyなbridgeを作らない。
+
+保守式の費目根拠は、有限treeの各node訪問≤Vとfield／indexの辺≤V−1、初期8、rootの追加判定≤3、Metric peek≤Vの和で`3V+10`。拒否prefixでもownDataはfield数一致後に既存辺を課金し、listはlength検査後に既存indexを課金し、schemaは同subtreeを再walkしない。Metric branchも同じvalueを一方のrecordとしてだけ検査する。これはRP-Bのaliasなし有限AST・現行schemaと課金点に限定した上界であり、任意JS object／native heap／全workの上界ではない。
+
+独立試験は実bytesからRP-Bが返すVを別のtree計数と照合した後、別呼出しのdetailed coreを検査する。17正常入力（10 variant、全row、Metric全3分岐・600 sample）でcontrol=`2V+9`、unavailable=`2V+10`、captured=`2V+10+M`を全比較し、両候補式以内を確認した。正常入力の実計数±1は厳密oracle不一致、2倍の診断変異は保守上界超過となる。これは診断値の変異対照であり、sourceの課金点を改変して検査した試験ではない。
+
+全nodeの6種置換でrawを通った526入力、fieldの欠落／余剰／逆順、600 sampleを超えるarrayの拒否prefixも検査した。深さ超過でraw拒否された変異をcore受入へ混ぜない。BigInt oracleで2V・3V+10のsafe integer境界とoverflowを独立照合する。有限corpusは全JSONの形式証明ではない。model／schema／discriminator・課金点・再walk変更時は式と試験を再検証し、将来raw接続時には同contextのmodel照合とcore呼出し0の負対照も必要である。

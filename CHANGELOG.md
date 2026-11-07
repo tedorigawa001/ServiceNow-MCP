@@ -18,6 +18,8 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 ### Changed
 
+- WF-B RC-B adds a synthetic-only pure admission calculator for separate 2V logical-tree and 3V+10 structural budgets. Strict pinned-plan projection, checked arithmetic and BigInt/bounded structural controls preserve the original value reserve; the unavailable-variant structural oracle is corrected to 2V+10. Results remain non-executable with bridge work unmodeled; raw/core wiring, formal issuance and whole-run admission stay disabled.
+
 - WF-B RC-A adds a synthetic-only shared value engine with detailed success/failure accounting and an exact legacy API projection. The meter is installed before the first fallible charge; observed zero, unavailable counts and first-failure diagnostics remain distinct. Independent fee-prefix and fixed fault-assembly tests preserve the existing model, schema and v1. Raw-parser/core binding, evidence issuance, body storage and whole-run admission remain disabled.
 
 - WF-B RP-B adds a separate synthetic-only finite-stack JSON syntax route on the same one-copy byte boundary. It rejects malformed grammar, duplicate keys before their values, noncanonical numeric tokens, and fixed-path/cardinality/node/token excesses; it retains only frozen counts and drops its private AST on every outcome. Independent structure, numeric, cap and work controls preserve RP-A and v1. Value-core binding, evidence issuance, body storage, runtime wiring and whole-run admission remain disabled.

@@ -1,6 +1,8 @@
 # WF-B：snapshot strict値契約・固定encoding・row幅
 
-Version: draft-0.9 / Date: 2026-11-07 / 基準HEAD: `ff2c56f` / レビュー修正の基準HEAD: `04260f2` / 純粋core実装基準HEAD: `70cbffb` / core修正の基準HEAD: `b37214f` / RC-A基準HEAD: `5b03dfc`。
+Version: draft-0.10 / Date: 2026-11-07 / 基準HEAD: `ff2c56f` / レビュー修正の基準HEAD: `04260f2` / 純粋core実装基準HEAD: `70cbffb` / core修正の基準HEAD: `b37214f` / RC-A基準HEAD: `5b03dfc` / RC-B基準HEAD: `252dfbd`。
+
+draft-0.10: [RC-B純粋受付](BEST_PRACTICE_WFB_RPC_PRIVATE_VALUE_BRIDGE_DESIGN.md#12-rc-b純粋受付モデルと非接続境界)を追加。2Vと`3V+10`を別枠で検査し、元planのvalue枠をprojectionする非実行DATAだけを実装。値coreの課金・schema・raw入口は変更しない。[検証記録](E2E_BEST_PRACTICE_WFB_VALUE_ADMISSION_RCB_2026-11-07.md)。private供給・統合bridge費・raw/core接続は未対応のまま。
 
 draft-0.9: [RC-A実装境界](BEST_PRACTICE_WFB_RPC_PRIVATE_VALUE_BRIDGE_DESIGN.md#11-rc-a実装境界)を反映。単一値engine・失敗prefixのdetailed計数と旧API projectionを合成実装した。[検証記録](E2E_BEST_PRACTICE_WFB_VALUE_CORE_RCA_2026-11-07.md)。raw接続・受付・発行／保存は未実装のまま。
 
