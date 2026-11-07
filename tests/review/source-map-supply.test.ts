@@ -7,10 +7,10 @@ describe('fixed synthetic map supply, no real pins or I/O', () => {
     expect(supply.check()).toMatchObject({ ok: true, kind: 'non_executable_map_supply', ready: false,
       authority: 'none', hash: 'not_checked', mapping: 'shape_only', implementation: 'unknown' });
     expect(supply.inspect()).toMatchObject({ state: 'active', reviewSetId: 'synthetic-map-set-1',
-      files: 4, rows: 12, partialRows: 1, unimplementedRows: 11, missingPoints: 12, checks: 1 });
+      files: 4, rows: 12, partialRows: 1, unimplementedRows: 11, missingPoints: 12, checks: 1, construction: 'ready' });
     expect(Object.isFrozen(supply.inspect())).toBe(true);
   });
-  for (const scenario of ['other_snapshot', 'equal_snapshot_copy', 'map_copy', 'files_copy', 'rows_copy', 'pair_mix', 'version_mix', 'origin_input']) {
+  for (const scenario of ['other_snapshot', 'equal_snapshot_copy', 'map_copy', 'map_wrapper', 'files_copy', 'rows_copy', 'pair_mix', 'version_mix', 'origin_input']) {
     it(`rejects ${scenario} and retires the original binding without replacing its first diagnosis`, () => {
       const supply = createFixedSyntheticMapSupply(scenario);
       expect(supply.check()).toMatchObject({ ok: false, reason: 'binding_mismatch' });
@@ -22,6 +22,18 @@ describe('fixed synthetic map supply, no real pins or I/O', () => {
       expect(supply.inspect()).toEqual(stopped);
     });
   }
+  it('isolates map identity: same files and rows in a different map object are still a mismatch', () => {
+    const supply = createFixedSyntheticMapSupply('map_wrapper');
+    expect(supply.inspect()).toMatchObject({ state: 'active', retainedSnapshot: true, construction: 'ready' });
+    expect(supply.check()).toMatchObject({ ok: false, reason: 'binding_mismatch' });
+  });
+  it('holds the original input before the origin probe, so that probe tests the copy boundary', () => {
+    const supply = createFixedSyntheticMapSupply('origin_input');
+    expect(supply.inspect()).toMatchObject({ retainedOrigin: true, retainedSnapshot: true });
+    expect(createSyntheticMapSupply().inspect()).toMatchObject({ retainedOrigin: false });
+    expect(supply.check()).toMatchObject({ ok: false, reason: 'binding_mismatch' });
+    expect(supply.inspect()).toMatchObject({ retainedOrigin: false });
+  });
   it('rejects unknown scenarios rather than falling back to a normal supply', () => {
     const supply = createFixedSyntheticMapSupply('unknown');
     expect(supply.check()).toMatchObject({ ok: false, reason: 'supply_invalid' });

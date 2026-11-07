@@ -35,6 +35,39 @@ Date: 2026-11-07 / 設計基準HEAD: `5d7b410` / レビュー反映基準HEAD: `
 
 関連対象はsource-map-supply／source-map-values／carrier-coverage／seed-bootstrap／bridge-work／value-admission／value-core-detailed／snapshot-value／raw-json-boundary／raw-json-syntax／store-recorder-persistence／store-recorder-binding／fixed-evidence-storeの`tests/review/*.test.ts`。今回全repository回帰は実施していない。梱包は一時cacheを使い、script起動・archive生成・公開・設定変更を行わないdry-runで確認した。
 
+## レビュー修正（2026-11-07）
+
+`a88c7e0`の個別レビューで、不正な結合を受理する不具合はなかった。一方、「同じmapであること」の検査を守るprobeがなかったので塞いだ。上記の件数は修正前の値として残す。
+
+`map_copy`と`origin_input`は、どちらも`files`と`rows`も別物なので、先に`files`の比較で拒否されていた。そのため`map === this.#map`を消しても全件成功した。`origin_input`は元入力を保持する行を消しても、「mapが`undefined`」として拒否されるので成功していた。
+
+**修正**
+
+- fixtureに`map_wrapper`を追加した。`files`と`rows`は正規のまま、map objectだけを変えて渡す。追加した試験は、変更前のfixtureに対して2件失敗（未知のscenarioとして`supply_invalid`になる）するREDを確認してから追加した。
+- `origin_input`でcheckの前に元入力を保持していること、正常な供給の生成段階が`ready`であることを試験に加えた（19件→22件）。
+- 設計§9に`map_wrapper`を追記した。契約は変わらないので版は上げていない。
+
+**ミューテーション**
+
+`source-map-supply-fake.ts`への変異を実施した。修正前は55件中40件、修正後は56件中44件を検出した。追加した1件は`map_wrapper`の同一性を崩す変異である。
+
+| 修正後も生存 | 件数 | 理由 |
+|---|---:|---|
+| 外から見えない | 6 | snapshot、`closed`、`counts`の凍結（いずれも外へ出ないか、結果へ展開される）。snapshotと一時snapshotの退役処理（参照は直後に手放される） |
+| 到達しない | 4 | `this.#map !== undefined`と`!this.#snapshot`は、先に状態の判定で返る。2回目の`reject`は起きない。`checked`の段階は直後に上書きされ、その間に失敗する経路がない |
+| 結果が同じ | 1 | mapの拒否を例外に変えても、同じ`supply_invalid`になる |
+| 内容の差に依存しない | 1 | 第2セットを正規セットと同じ内容にしても拒否される。拒否は同一性で決まるためで、設計どおりである |
+
+| 修正後の実行 | 結果 |
+|---|---|
+| `tests/review/source-map-supply.test.ts` | 22件成功 |
+| 全テスト | 305ファイル、15,195件成功、失敗0 |
+| repo全体の`npm run lint` | エラー0、警告374 |
+| `npm run build`、`node tests/review/package-http-classification.mjs` | 成功 |
+| 記録と同じ型検査、対象2ファイルのESLint | 成功 |
+
+全テストは文書の更新前に実行した。上記で未実施としていた全体回帰は、この実行で補った。`npm pack`のファイル数は再確認していない。
+
 ## 未確認
 
 realPins=not_supplied、authority=none、ready=false、hash=not_checked、mapping=shape_only、implementation／runtimeCoverage／nativeCost／実E／S要求量=unknown、coreInvocation=not_calledを維持する。供給成功は実期待値レビュー・採用・実hash一致・missing解消・実施点対応の証拠ではない。

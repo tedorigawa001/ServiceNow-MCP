@@ -212,6 +212,8 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 ### Added
 
+- WF-B map-supply review adds a `map_wrapper` probe that keeps the checked files and rows but changes the map object, so the map identity check is now guarded on its own. Tests also pin that the origin probe holds its input before the check and that a normal supply finishes construction. Supply results stay synthetic and non-executable.
+
 - WF-B source-map review tests now pin array proxies before traps, array-like and subclassed lists, hidden entries and fields, duplicate file IDs, free-text missing points, a thirteenth row, step order within a row, unknown roles and reference bindings that claim a cost step. Two earlier tests were rejecting their input for a different reason than their names stated. The implementation is unchanged.
 
 - WF-B coverage rows must now list all five gaps, so an Unknown or synthetic row cannot understate what remains unverified. Review tests pin every closed carrier and ledger field, truncated ledgers, non-standard arrays, array proxies and deep freezing. Values stay untrusted DATA, with runtime coverage unknown and seed issuance, core wiring and formal issuance closed.

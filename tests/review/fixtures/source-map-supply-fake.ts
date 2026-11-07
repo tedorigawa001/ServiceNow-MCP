@@ -4,7 +4,7 @@ import { inspectSourceMapDraft } from './source-map-values-core.js';
 type MapValue = Extract<ReturnType<typeof inspectSourceMapDraft>, { ok: true }>['value'];
 type SetId = 'synthetic-map-set-1' | 'synthetic-map-set-2';
 type Reason = 'supply_invalid' | 'binding_mismatch' | 'supply_closed';
-const scenarios = ['normal', 'other_snapshot', 'equal_snapshot_copy', 'map_copy', 'files_copy', 'rows_copy',
+const scenarios = ['normal', 'other_snapshot', 'equal_snapshot_copy', 'map_copy', 'map_wrapper', 'files_copy', 'rows_copy',
   'pair_mix', 'version_mix', 'origin_input', 'partial_build_failure', 'map_rejected', 'after_snapshot_failure'] as const;
 type Scenario = (typeof scenarios)[number];
 interface Counts { readonly files: number; readonly rows: number; readonly partialRows: number;
@@ -99,6 +99,7 @@ class Supply {
     if (this.scenario === 'version_mix') return this.accept(this.#snapshot, 'synthetic-map-set-2', map, map.files, map.rows);
     if (this.scenario === 'files_copy') return this.accept(this.#snapshot, this.#setId, map, Object.freeze([...map.files]), map.rows);
     if (this.scenario === 'rows_copy') return this.accept(this.#snapshot, this.#setId, map, map.files, Object.freeze([...map.rows]));
+    if (this.scenario === 'map_wrapper') return this.accept(this.#snapshot, this.#setId, Object.freeze({ ...map }), map.files, map.rows);
     if (this.scenario === 'map_copy') {
       const copy = inspectSourceMapDraft(map);
       if (!copy.ok) return this.reject('supply_invalid');
