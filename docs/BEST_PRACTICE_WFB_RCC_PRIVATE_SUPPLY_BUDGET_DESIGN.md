@@ -1,5 +1,7 @@
 # WF-B RC-C：同root／同planのprivate供給・所有とbridge費／破棄予約
 
+実装追記（2026-11-07）: [carrier／coverageのstrict値契約](BEST_PRACTICE_WFB_SCHEDULE_CARRIER_SEED_HANDOFF_DESIGN.md#11-合成専用strict値契約とcoverage内部表現)を既存K0／E fake・実供給から分離した。検査成功は値適合だけで、取得・coverage・費用・private供給証拠にはならない。実E／S上界はUnknown、正式発行口・全体受付・core接続は閉鎖のまま。
+
 Version: draft-0.8 / Date: 2026-11-07 / 照合基準HEAD: `692d9ae` / レビュー修正の基準HEAD: `ddff46e` / 有限費目model実装基準HEAD: `8dff929` / 有限費目modelレビュー修正の基準HEAD: `52cdfb8` / seed bootstrap設計基準HEAD: `8dfc49d` / seed bootstrapレビュー修正の基準HEAD: `f33623c` / K0／E fake基準HEAD: `3c53902` / schedule／S所有設計基準HEAD: `a2f568e`。
 
 draft-0.8: [固定schedule／carrier coverageとS pending／handoffの詳細契約](BEST_PRACTICE_WFB_SCHEDULE_CARRIER_SEED_HANDOFF_DESIGN.md)を追加。元plan／meter・record／creditのprivate結合、debitと移譲の別commit、E／Sの費目分離と未解決責務を整理した。設計のみで、実供給・E要求量・profile coverage・core接続は未確認／未実装のまま。

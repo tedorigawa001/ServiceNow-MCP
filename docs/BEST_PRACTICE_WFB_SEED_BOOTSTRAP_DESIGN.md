@@ -1,5 +1,7 @@
 # WF-B：初期seed予約bootstrap・取得前費用と拒否診断の詳細契約
 
+実装追記（2026-11-07）: [carrier／coverageのstrict値契約](BEST_PRACTICE_WFB_SCHEDULE_CARRIER_SEED_HANDOFF_DESIGN.md#11-合成専用strict値契約とcoverage内部表現)を独立moduleに実装した。既存K0／E fake・5 unitと実供給を変更せず、実E／S要求量はUnknown、S発行・core接続は閉鎖のまま。[検証記録](E2E_BEST_PRACTICE_WFB_CARRIER_COVERAGE_2026-11-07.md)。
+
 Version: draft-0.5 / Date: 2026-11-07 / 照合基準HEAD: `8dfc49d` / レビュー修正の基準HEAD: `f33623c` / K0／E fake実装基準HEAD: `3c53902` / K0／E fakeレビュー修正の基準HEAD: `b62218c` / schedule／S所有設計基準HEAD: `a2f568e`。
 
 draft-0.5: [固定schedule／carrierのcoverage・S pending／handoff所有境界](BEST_PRACTICE_WFB_SCHEDULE_CARRIER_SEED_HANDOFF_DESIGN.md)を追加。SC01〜12の実施点・費目所有、診断carrierとcredit authorityの分離、S debit後のentry pending、単一cell切替によるhandoff、失敗後の上位credit slotを具体化した。設計のみで、実E要求量・X／Δ・private供給はUnknown／未実装のまま。

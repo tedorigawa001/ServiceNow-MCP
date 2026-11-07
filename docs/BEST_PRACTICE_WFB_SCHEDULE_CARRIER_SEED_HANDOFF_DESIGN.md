@@ -1,10 +1,12 @@
 # WF-B：固定schedule／carrierの実装coverageとS pending／handoffの所有境界
 
-Version: draft-0.2 / Date: 2026-11-07 / 照合基準HEAD: `a2f568e` / レビュー修正の基準HEAD: `3c0e7a4`。
+Version: draft-0.3 / Date: 2026-11-07 / 照合基準HEAD: `a2f568e` / レビュー修正の基準HEAD: `3c0e7a4` / 値契約実装基準HEAD: `54619ef`。
+
+draft-0.3: §11のcarrier／coverage値契約だけを合成依存で実装した。以下の「詳細設計のみ」「実装を行わない」はdraft-0.2時点の設計範囲を指す。実schedule／pool供給・coverage証拠・S pending／handoffは引き続き未実装。[検証記録](E2E_BEST_PRACTICE_WFB_CARRIER_COVERAGE_2026-11-07.md)。
 
 draft-0.1のレビュー修正: creditの保持slotの寿命を1回の呼出しまでとし、返却時に未確認を最終診断へ確定するようにした（§4〜§7）。返却できるcarrierを5状態20 variantへ改め、E取得済み・S未取得の未確認をC6として追加した。証拠の保管を指す語と区別するため`RunCustodySlot`とcustody cellを`RunCreditSlot`とcredit cellへ改名した。source revisionの照合方法とSH04の検証経路を定めた。設計のみで、実装状態は変わらない。
 
-Status: **詳細設計のみ。実schedule／carrier供給・coverage証拠・S pending／handoffは未実装。** 親は[seed bootstrap契約](BEST_PRACTICE_WFB_SEED_BOOTSTRAP_DESIGN.md)と[RC-C供給／予約設計](BEST_PRACTICE_WFB_RCC_PRIVATE_SUPPLY_BUDGET_DESIGN.md)。K0／Eのfakeにない実施点と、E要求量の導出に必要なS移譲の失敗経路を対にして固定する。
+Status: **§11のstrict値契約だけを合成依存で実装。実schedule／carrier供給・coverage証拠・S pending／handoffは未実装。** 親は[seed bootstrap契約](BEST_PRACTICE_WFB_SEED_BOOTSTRAP_DESIGN.md)と[RC-C供給／予約設計](BEST_PRACTICE_WFB_RCC_PRIVATE_SUPPLY_BUDGET_DESIGN.md)。K0／Eのfakeにない実施点と、E要求量の導出に必要なS移譲の失敗経路を対にして固定する。
 
 作業中・既存の変更を保持する。旧v1・正式発行口閉鎖・全体受付無効・Unknown・VM／監視／telemetry調査保留を維持し、実装・core接続・実接続・実通信・実機操作・証拠発行・設定変更・Pushは行わない。本書の型名・生成点・commit primitiveは提案で、呼出し可能なAPIではない。
 
@@ -161,3 +163,22 @@ ready条件は、SC01〜12の必要行がsource revision／step／所有者／�
 次はcarrierのstrict値契約とcoverage台帳の内部表現を、既存K0／E fakeや実供給と分離して検査する範囲が候補となる。その後にsource対応から実E要求量を導出し、Sのpending／handoffは合成issuerだけで段階実装する。新cap・上位予算owner・runtime供給の採用は本書で承認しない。
 
 `a2f568e`のsourceと設計を読み取り照合し、今回はMDの参照先・空白だけを確認する。source／test変更、ビルド・新合成試験・計算器実行・実通信は行わない。anchorの信頼、poolの実供給費、K0基底、実E／S上界、private実装coverage・native反射／module初期化／OOM／実heap・CPU・GC／ゼロ化はUnknownである。正式発行口閉鎖・全体受付無効・調査保留を維持する。
+
+## 11 合成専用strict値契約とcoverage内部表現
+
+`tests/review/fixtures/carrier-coverage-core.ts`はnode:utilのproxy判定だけをimportする独立module。既存K0／E fake・実供給・budget・core・issuerへ依存せず、入力DATAを検査して切離し／freezeする。返値は常に`authority=none, ready=false, runtimeCoverage=unknown`。成功は値の適合だけで、取得・所有・source真正性・実施点対応・費用coverageの証拠ではない。
+
+carrierの固定field順は`model, variant, reason, entry, seed, credit, usage, ready, runtimeCoverage, nativeCost, coreInvocation`。modelは`wfb-carrier-values-1`。variantはC0／C1／C4／C5／C6、reasonは§4の4種類、全20値を許す。entry／seedはnot_acquiredまたはacquired、creditは順にnone／none／logically_retired／unconfirmed／entry_unconfirmed。各variantの取得事実は§4と完全一致させる。C2／C3とE未取得・S取得済みは拒否する。usageはunavailableのみ、残りはfalse／unknown／unknown／not_calledに固定。C5／C6は未確認の最終診断で、呼出し後の責務保持や解放確認を証明しない。pool・選択器・発行口は作らない。
+
+coverage外形の固定field順は`model, rows, ready, runtimeCoverage, nativeCost, entryRequirement, seedRequirement`。modelは`wfb-coverage-values-1`、rowsはSC01〜SC12をこの順で各1行、残りはfalseと4個のunknown。行は次の順で全fieldを要求する。
+
+`id, status, sourceRevision, symbol, phase, producer, costOwner, maxRepetitions, slots, paths, diagnostic, verification, gaps`
+
+- status=unknownではsourceRevision／symbol／maxRepetitionsはnull、phase／producer／costOwner／diagnosticはunknown、verificationはnone、slots／pathsは空。未導出量を0にしない。
+- status=synthetic_onlyは対応記録用。sourceRevisionは対象source内容のSHA-256表現（64桁小文字hex）で、コミットIDではない。この値検査は実sourceとのhash照合を行わない。symbolは英字またはunderscore開始のASCII識別列（英数字・underscore・dot・colon、最大128文字）、反復は1〜1,000,000のsafe整数。これは表現上限で運用capや導出済み上界ではない。
+- phaseはbefore_entry／entry_prepare／entry_terminal／seed／handoff、producerはplan／anchor／entry／carrier／seed／recipient／credit、costOwnerはbase_unknown／k0_excluded／entry_prepare／entry_terminal／seed／split_unknown。synthetic行のdiagnostic／verificationはsynthetic_onlyのみ。
+- slotsはslot00〜slot63の最大64個、pathsはnormal／refused／partial、gapsはruntime_coverage／native_cost／source_mapping／ownership／cost_bound。各配列は記載した固定順の重複なし部分集合。全行でgapsのruntime_coverageとnative_costは必須。未知点の自由文・raw例外は保持しない。
+
+syntheticラベルやrevision文字列をprivate manifestへ昇格しない。SCごとのproducer／費用所有の実source照合、同producer／body結合、固定sourceから内容hashを再計算する独立試験、全経路の独立計数・実E／S導出は次工程である。本実装が生成するのは未信頼の対応DATAだけで、coverage証拠は発行しない。
+
+objectはplain／null prototypeの固定順own enumerable DATAのみ。余分／欠落／symbol／accessor／独自prototypeを拒否。配列は標準prototypeのdense own DATAのみ、入力proxyはtrap前に拒否する。反射のnative費・OOM・module初期化は未計量で、有限件数は実CPU／heap／work予算の証明ではない。失敗返値は固定invalid_valueだけを持ち、入力・例外・key・offsetは出力しない。返値からS・record・identityを復元する入口はない。
