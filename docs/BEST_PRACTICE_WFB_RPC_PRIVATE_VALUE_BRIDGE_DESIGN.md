@@ -1,6 +1,8 @@
 # WF-B RP-C 同AST接続と2V受付 計数診断保持の差分設計
 
-Version: draft-0.9 / Date: 2026-11-07 / 照合基準HEAD: `81d23f3` / レビュー修正の基準HEAD: `cc0f410` / RC-A実装基準HEAD: `5b03dfc` / RC-Aレビュー修正の基準HEAD: `0e1229b` / RC-B基準HEAD: `252dfbd` / RC-C詳細設計基準HEAD: `692d9ae` / RC-B／RC-Cレビュー修正の基準HEAD: `ddff46e` / 有限費目model基準HEAD: `8dff929` / 有限費目modelレビュー修正の基準HEAD: `52cdfb8`。
+Version: draft-0.10 / Date: 2026-11-07 / 照合基準HEAD: `81d23f3` / レビュー修正の基準HEAD: `cc0f410` / RC-A実装基準HEAD: `5b03dfc` / RC-Aレビュー修正の基準HEAD: `0e1229b` / RC-B基準HEAD: `252dfbd` / RC-C詳細設計基準HEAD: `692d9ae` / RC-B／RC-Cレビュー修正の基準HEAD: `ddff46e` / 有限費目model基準HEAD: `8dff929` / 有限費目modelレビュー修正の基準HEAD: `52cdfb8` / seed bootstrap設計基準HEAD: `8dfc49d`。
+
+draft-0.10: [初期seed bootstrapとprivate供給／coverage境界](BEST_PRACTICE_WFB_SEED_BOOTSTRAP_DESIGN.md)を追加。seed取得前は独立entry枠でprofile・取得制御／診断を所有し、そのentryの基底受付K0も未検証費を0へ補完しない。現行数値model・19項目plan・既存APIは不変で、core接続・実profileは未実装のまま。
 
 draft-0.8のレビュー修正: bridge費を「未導出」としていた記述を、抽象係数の固定と実bridgeとの対応が未確認であることに分けた。設計内容と実装は変更していない。
 

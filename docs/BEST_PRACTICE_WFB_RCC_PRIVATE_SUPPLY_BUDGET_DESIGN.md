@@ -1,6 +1,8 @@
 # WF-B RC-C：同root／同planのprivate供給・所有とbridge費／破棄予約
 
-Version: draft-0.4 / Date: 2026-11-07 / 照合基準HEAD: `692d9ae` / レビュー修正の基準HEAD: `ddff46e` / 有限費目model実装基準HEAD: `8dff929` / 有限費目modelレビュー修正の基準HEAD: `52cdfb8`。
+Version: draft-0.5 / Date: 2026-11-07 / 照合基準HEAD: `692d9ae` / レビュー修正の基準HEAD: `ddff46e` / 有限費目model実装基準HEAD: `8dff929` / 有限費目modelレビュー修正の基準HEAD: `52cdfb8` / seed bootstrap設計基準HEAD: `8dfc49d`。
+
+draft-0.5: [初期seed bootstrap・取得前費用／拒否診断の詳細契約](BEST_PRACTICE_WFB_SEED_BOOTSTRAP_DESIGN.md)を追加。基底受付K0・同cap内の独立entry枠E・commit後のseed枠Sへ所有を分け、未取得seedによる循環を禁止した。guard/gateの27 unit移管・seed75は分解例で、新上界・X／Δ・基底coverageはUnknown。設計のみで旧102／57／239と計算器・接続状態は不変。
 
 draft-0.3のレビュー修正: checkの単位を検査群と定義し、現行`readLimits`との粒度の差を記した（§11.2、§11.3）。経路が実行順を表さないことと、seed拒否時の未確定費を明記した（§11.4）。係数と予約上界は変更していない。
 
@@ -179,7 +181,7 @@ core拒否に対する診断整合確認は、first reasonを確定してから�
 
 ## 9 後続の実装順と未確認事項
 
-1. **費目・予約model先行（有限recipeのみ実装）**：§11の純粋計算・独立oracleで数値を固定した。次にprivate実装の各実施点との対応・未対応費目を検査する必要がある。初期seed取得処理のbootstrapも含め、coverage証拠がない間はprofileをUnknownとし、core接続を許可しない。
+1. **費目・予約model先行（有限recipeのみ実装）**：§11の純粋計算・独立oracleで数値を固定した。次は[seed bootstrap契約](BEST_PRACTICE_WFB_SEED_BOOTSTRAP_DESIGN.md)のK0・E取得前後／拒否診断と、private実装の実施点・未対応費目を検査する。基底受付・追加費X／Δを含むcoverage証拠がない間はprofileをUnknownとし、core接続を許可しない。
 2. **private供給／共通kernel境界**：元parser生存区間の内部型・同plan／meter・claimと最小算術共有を合成依存で実装する。旧入口を残し、profile未readyならcore未呼出しで停止する。
 3. **予約済み固定core／pre/post接続**：一度だけのcore、pending管理・理由合流・元finally後の返却を連続合成試験で確認する。正式発行・runtimeとは分離する。
 
@@ -262,6 +264,6 @@ logical slotは`invocation, plan, meter, byteIdentity, rootBorrow, inputLength, 
 
 `inspectBridgeReservation`はphase=`seed/admit/tail`と、固定順`max_parse_work, parser_charged, bridge_charged`のstrict own-dataだけを受ける。capは正safe整数、既課金は0以上のsafe整数（−0拒否）。元counterを変更しない。P+Bのchecked和がoverflowなら`raw_overflow`、既課金超過または予約額が残量を超えれば`raw_work`、不正入力は`raw_limits`。等値許可で、成功projectionの`bridgeChargedAfter=B+R`、`chargedAfter=P+B+R`、残量をfreezeして返す。reserve・消費・一度claimを実施した証拠ではない。
 
-計算器自身の経路列挙・結果生成費を、実行時gateの14 unitに含めたとは主張しない。将来の実経路では、独立確認した固定profile定数の供給方式と、その供給費を別途対応付ける必要がある。初回seed予約の取得処理はまだ元meterへ結合しておらず、そのbootstrapの実施費／native反射の扱いもUnknownである。seedが確保済みというpure計算上の前提から、取得前の処理を無料・安全と証明しない。
+計算器自身の経路列挙・結果生成費を、実行時gateの14 unitに含めたとは主張しない。将来の実経路では、独立確認した固定profile定数の供給方式と、その供給費を別途対応付ける必要がある。初回seed予約の取得処理はまだ元meterへ結合しておらず、そのbootstrapの実施費／native反射の扱いもUnknownである。[取得前費用・拒否診断の別契約](BEST_PRACTICE_WFB_SEED_BOOTSTRAP_DESIGN.md)で独立entry枠と基底受付を分離するが、seedが確保済みというpure計算上の前提から取得前の処理を無料・安全と証明しない。
 
 19 logical slotと28 stepを将来のprivate実装へ結び、phaseをまたぐ費目所有、未使用credit・先行診断・全aliasの実退役を観測する試験は未実施。未知の追加stepを0で補完せず、recipe変更はmodel改版と独立再計数を必要とする。実heap・CPU・ABI・native allocation／OOM・GC／ゼロ化・正式capはUnknownのまま。core接続許可は発行しない。
