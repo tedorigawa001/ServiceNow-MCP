@@ -1,5 +1,7 @@
 # WF-B：固定source対応表・内容hash照合・未実装行の詳細契約
 
+詳細設計追記（2026-11-07）: [private読取・共有上限・hash結果owner契約](BEST_PRACTICE_WFB_PRIVATE_READ_HASH_DESIGN.md)を追加。読取bytesの計数とhash入力を同scratchへ固定し、同snapshot／file／sessionへの受理、hashと未実装／cleanupの分離を設計した。実装・実source hash照合・5 gapsの解消はしていない。
+
 実装追記（2026-11-07）: [合成固定供給・MapSupplySnapshotのprivate結合](BEST_PRACTICE_WFB_FIXED_DICTIONARY_SUPPLY_DESIGN.md)を実装した。実辞書ではない固定syntheticセットだけを使い、同じ純粋検査返値のmap／files／rowsへの結合を検査する。実期待値pin・実source hash・missingの解消・実coverageには昇格しない。
 
 差分設計追記（2026-11-07）: [固定辞書の供給・期待値更新・同SourceMapDraft結合](BEST_PRACTICE_WFB_FIXED_DICTIONARY_SUPPLY_DESIGN.md)で、開発専用の固定供給元、raw bytes期待値の別確認・採用レビュー、同じ検査返値へのprivate結合とmissing保持を具体化した。設計のみで、実辞書pin／hash照合・実装・接続状態は変更していない。
