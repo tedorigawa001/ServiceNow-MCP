@@ -1,6 +1,8 @@
 # WF-B：初期seed予約bootstrap・取得前費用と拒否診断の詳細契約
 
-Version: draft-0.4 / Date: 2026-11-07 / 照合基準HEAD: `8dfc49d` / レビュー修正の基準HEAD: `f33623c` / K0／E fake実装基準HEAD: `3c53902` / K0／E fakeレビュー修正の基準HEAD: `b62218c`。
+Version: draft-0.5 / Date: 2026-11-07 / 照合基準HEAD: `8dfc49d` / レビュー修正の基準HEAD: `f33623c` / K0／E fake実装基準HEAD: `3c53902` / K0／E fakeレビュー修正の基準HEAD: `b62218c` / schedule／S所有設計基準HEAD: `a2f568e`。
+
+draft-0.5: [固定schedule／carrierのcoverage・S pending／handoff所有境界](BEST_PRACTICE_WFB_SCHEDULE_CARRIER_SEED_HANDOFF_DESIGN.md)を追加。SC01〜12の実施点・費目所有、診断carrierとcredit authorityの分離、S debit後のentry pending、単一cell切替によるhandoff、失敗後の上位custodyを具体化した。設計のみで、実E要求量・X／Δ・private供給はUnknown／未実装のまま。
 
 draft-0.3のレビュー修正: 参照機械を正常close後の操作まで届く長さへ延ばした（§10）。既課金がcapを超える場合の理由の差を、実K0の実装時に統一する項目として記した。fakeの動作は変更していない。
 
@@ -152,7 +154,7 @@ sourceの実施点へ対応付ける前に、19 slot／28 stepが新entryを含�
 
 ## 8 段階分割・未確認／承認待ち
 
-K0／Eの有限内部契約と拒否状態は§10の純粋fakeで検査した。次は実施点に対応する固定schedule／carrier・entry slot／終端経路のcoverageと新係数を導出し、Sのprivate pending／handoffは別段階にする。実profileがUnknownでも検査できる内部契約と、未検証profileでは実供給を開始しないgateを区別する。
+K0／Eの有限内部契約と拒否状態は§10の純粋fakeで検査した。次は[固定schedule／carrierとS所有の詳細設計](BEST_PRACTICE_WFB_SCHEDULE_CARRIER_SEED_HANDOFF_DESIGN.md)に従い、実施点・entry slot／終端経路のcoverageと新係数を導出し、Sのprivate pending／handoff実装は別段階にする。実profileがUnknownでも検査できる内部契約と、未検証profileでは実供給を開始しないgateを区別する。
 
 K0を抽象計量の基底として受け入れる条件、固定carrierの成立性／供給費、entryのslot数・schedule係数、X／Δと新予約上界、元meterへの実結合、native reflection・module初期化／OOM・実heap／CPU／GC／ゼロ化はUnknown。上位の既取得予算ownerや新capが必要になった場合の採用は未承認である。
 

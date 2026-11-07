@@ -1,6 +1,8 @@
 # WF-B RC-C：同root／同planのprivate供給・所有とbridge費／破棄予約
 
-Version: draft-0.7 / Date: 2026-11-07 / 照合基準HEAD: `692d9ae` / レビュー修正の基準HEAD: `ddff46e` / 有限費目model実装基準HEAD: `8dff929` / 有限費目modelレビュー修正の基準HEAD: `52cdfb8` / seed bootstrap設計基準HEAD: `8dfc49d` / seed bootstrapレビュー修正の基準HEAD: `f33623c` / K0／E fake基準HEAD: `3c53902`。
+Version: draft-0.8 / Date: 2026-11-07 / 照合基準HEAD: `692d9ae` / レビュー修正の基準HEAD: `ddff46e` / 有限費目model実装基準HEAD: `8dff929` / 有限費目modelレビュー修正の基準HEAD: `52cdfb8` / seed bootstrap設計基準HEAD: `8dfc49d` / seed bootstrapレビュー修正の基準HEAD: `f33623c` / K0／E fake基準HEAD: `3c53902` / schedule／S所有設計基準HEAD: `a2f568e`。
+
+draft-0.8: [固定schedule／carrier coverageとS pending／handoffの詳細契約](BEST_PRACTICE_WFB_SCHEDULE_CARRIER_SEED_HANDOFF_DESIGN.md)を追加。元plan／meter・record／custodyのprivate結合、debitと移譲の別commit、E／Sの費目分離と未解決責務を整理した。設計のみで、実供給・E要求量・profile coverage・core接続は未確認／未実装のまま。
 
 draft-0.7: [K0／Eの純粋fake実装境界](BEST_PRACTICE_WFB_SEED_BOOTSTRAP_DESIGN.md#10-k0e純粋fakeの実装境界)を追加。取得前後・一度取得・拒否診断・固定故障を合成検証した。5 unitはfixture専用で、旧102／57／239や実E要求量に採用しない。実meter・private供給・S／core接続は未実装、coverageはUnknownのまま。
 
