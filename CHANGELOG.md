@@ -208,6 +208,8 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 ### Added
 
+- WF-B coverage rows must now list all five gaps, so an Unknown or synthetic row cannot understate what remains unverified. Review tests pin every closed carrier and ledger field, truncated ledgers, non-standard arrays, array proxies and deep freezing. Values stay untrusted DATA, with runtime coverage unknown and seed issuance, core wiring and formal issuance closed.
+
 - WF-B K0/entry fake review tests: extend the reference machine to all 3,125 five-operation words so it reaches operations after a successful close, and pin frozen results and carriers, the coverage flag, refusal when used equals the cap, pre-entry diagnostics and the refused end state. The fake, its fixture schedule, the absence of seed, core and real-budget wiring are unchanged.
 
 - WF-B finite bridge-work review tests: refuse non-enumerable counters and pin frozen capacity and overflow refusals; remove assertions that could not fail. The recipes, reservation bounds, not-ready status and absence of core wiring are unchanged.

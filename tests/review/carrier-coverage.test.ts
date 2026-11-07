@@ -32,6 +32,16 @@ describe('isolated carrier DATA', () => {
     expect(inspectCarrier({ ...carrier(), variant, entry: 'acquired', seed: 'acquired',
       credit: variant === 'C2' ? 'entry_pending' : 'target_active' }).ok).toBe(false);
   });
+  for (const [field, value] of Object.entries({ model: 'wfb-carrier-values-2', variant: 'C7', reason: 'raw_other', usage: 'observed',
+    ready: 'false', runtimeCoverage: 'complete', nativeCost: 'zero', coreInvocation: 'called_once' })) {
+    it(`rejects carrier ${field} outside the closed value`, () => {
+      expect(inspectCarrier({ ...carrier(), [field]: value }).ok).toBe(false);
+    });
+  }
+  it('rejects a non-enumerable carrier field and freezes the accepted result', () => {
+    expect(inspectCarrier(Object.defineProperty(carrier(), 'reason', { value: 'raw_work', enumerable: false })).ok).toBe(false);
+    expect(Object.isFrozen(inspectCarrier(carrier()))).toBe(true);
+  });
   it('does not execute hostile hooks or retain raw errors', () => {
     let hooks = 0;
     const values = [new Proxy({}, { ownKeys() { hooks++; throw Error('secret'); } }),
@@ -43,9 +53,10 @@ describe('isolated carrier DATA', () => {
   });
 });
 
+const allGaps = ['runtime_coverage', 'native_cost', 'source_mapping', 'ownership', 'cost_bound'];
 const row = (i: number) => ({ id: `SC${String(i).padStart(2, '0')}`, status: 'unknown', sourceRevision: null,
   symbol: null, phase: 'unknown', producer: 'unknown', costOwner: 'unknown', maxRepetitions: null,
-  slots: [] as string[], paths: [] as string[], diagnostic: 'unknown', verification: 'none', gaps: ['runtime_coverage', 'native_cost'] });
+  slots: [] as string[], paths: [] as string[], diagnostic: 'unknown', verification: 'none', gaps: [...allGaps] });
 const ledger = () => ({ model: 'wfb-coverage-values-1', rows: Array.from({ length: 12 }, (_, i) => row(i + 1)),
   ready: false, runtimeCoverage: 'unknown', nativeCost: 'unknown', entryRequirement: 'unknown', seedRequirement: 'unknown' });
 describe('coverage correspondence DATA, never proof', () => {
@@ -54,7 +65,7 @@ describe('coverage correspondence DATA, never proof', () => {
     expect(r.ok).toBe(true);
     if (!r.ok) return;
     input.rows[0].gaps.pop();
-    expect(r.value.rows[0].gaps).toEqual(['runtime_coverage', 'native_cost']);
+    expect(r.value.rows[0].gaps).toEqual(allGaps);
     expect(Object.isFrozen(r.value.rows[0].gaps)).toBe(true);
     expect(r.value.entryRequirement).toBe('unknown');
   });
@@ -81,6 +92,82 @@ describe('coverage correspondence DATA, never proof', () => {
       expect(inspectCoverageLedger({ ...ledger(), rows }).ok).toBe(false);
     });
   }
+  for (const [field, value] of Object.entries({ model: 'wfb-coverage-values-2', ready: true, runtimeCoverage: 'complete',
+    nativeCost: 'zero', entryRequirement: 5, seedRequirement: 75 })) {
+    it(`rejects ledger ${field} outside the closed value`, () => {
+      expect(inspectCoverageLedger({ ...ledger(), [field]: value }).ok).toBe(false);
+    });
+  }
+  const withRow = (value: unknown) => {
+    const rows: unknown[] = ledger().rows;
+    rows[0] = value;
+    return inspectCoverageLedger({ ...ledger(), rows });
+  };
+  for (const [field, value] of Object.entries({ sourceRevision: 'a'.repeat(64), symbol: 'Synthetic.inspect', phase: 'seed', producer: 'entry',
+    costOwner: 'seed', maxRepetitions: 1, slots: ['slot00'], paths: ['normal'], diagnostic: 'synthetic_only', verification: 'synthetic_only' })) {
+    it(`rejects a known ${field} on an Unknown row`, () => {
+      expect(withRow({ ...row(1), [field]: value }).ok).toBe(false);
+    });
+  }
+  let revisionHooks = 0;
+  const revisionLike = { length: 64, toString() { revisionHooks++; return 'a'.repeat(64); } };
+  const syntheticBad: readonly (readonly [string, unknown])[] = [
+    ['sourceRevision', null], ['sourceRevision', revisionLike], ['sourceRevision', 'a'.repeat(63)], ['sourceRevision', 'g'.repeat(64)],
+    ['symbol', null], ['symbol', true], ['symbol', ''], ['symbol', '1x'], ['symbol', 'a-b'], ['symbol', 'a/b'], ['symbol', '$x'], ['symbol', 'a\n'],
+    ['maxRepetitions', null], ['maxRepetitions', '1'], ['maxRepetitions', 0], ['maxRepetitions', -1], ['maxRepetitions', 1.5],
+    ['paths', []], ['phase', 'unknown'], ['producer', 'unknown'], ['costOwner', 'unknown'], ['diagnostic', 'unknown'], ['verification', 'none'],
+  ];
+  for (const [field, value] of syntheticBad) {
+    it(`rejects synthetic ${field}=${JSON.stringify(value)?.slice(0, 16)}`, () => {
+      expect(withRow({ ...synthetic(), [field]: value }).ok).toBe(false);
+      expect(revisionHooks).toBe(0);
+    });
+  }
+  it('allows a synthetic row without slots, because a recorded step may use none', () => {
+    expect(withRow({ ...synthetic(), slots: [] }).ok).toBe(true);
+  });
+  for (const gap of allGaps) {
+    it(`requires the ${gap} gap on Unknown and synthetic rows`, () => {
+      const gaps = allGaps.filter(g => g !== gap);
+      expect(withRow({ ...row(1), gaps }).ok).toBe(false);
+      expect(withRow({ ...synthetic(), gaps }).ok).toBe(false);
+    });
+  }
+  it('rejects a truncated ledger whose remaining rows are in order', () => {
+    expect(inspectCoverageLedger({ ...ledger(), rows: ledger().rows.slice(0, 11) }).ok).toBe(false);
+  });
+  it('rejects array proxies before traps, on rows and on every row list', () => {
+    let hooks = 0;
+    const array = () => new Proxy([], { getPrototypeOf() { hooks++; return Array.prototype; },
+      ownKeys() { hooks++; return ['length']; }, getOwnPropertyDescriptor() { hooks++; return undefined; } });
+    expect(inspectCoverageLedger({ ...ledger(), rows: array() }).ok).toBe(false);
+    for (const field of ['slots', 'paths', 'gaps']) expect(withRow({ ...synthetic(), [field]: array() }).ok).toBe(false);
+    expect(hooks).toBe(0);
+  });
+  it('rejects non-standard arrays: subclass, array-like, extra keys, hidden entries and duplicates', () => {
+    class Paths extends Array<string> {}
+    const subclass = new Paths();
+    subclass.push('normal');
+    const arrayLike = Object.create(Array.prototype) as object;
+    Object.defineProperty(arrayLike, '0', { value: 'normal', enumerable: true });
+    Object.defineProperty(arrayLike, 'length', { value: 1 });
+    for (const paths of [subclass, arrayLike, Object.assign(['normal'], { extra: 1 }), Object.assign(['normal'], { [Symbol('extra')]: 1 }),
+      Object.defineProperty(['normal'], '0', { value: 'normal', enumerable: false }), ['normal', 'normal']]) {
+      expect(withRow({ ...synthetic(), paths }).ok).toBe(false);
+    }
+    expect(withRow({ ...synthetic(), slots: ['slot00', 'slot00'] }).ok).toBe(false);
+  });
+  it('freezes and detaches the result, ledger, rows and every row list', () => {
+    const input = synthetic(), r = withRow(input);
+    expect(Object.isFrozen(r)).toBe(true);
+    if (!r.ok) throw new Error('expected accepted ledger');
+    const accepted = r.value.rows[0];
+    expect(Object.isFrozen(r.value)).toBe(true);
+    for (const field of ['slots', 'paths', 'gaps'] as const) {
+      expect(Object.isFrozen(accepted[field])).toBe(true);
+      expect(accepted[field]).not.toBe(input[field]);
+    }
+  });
   it('accepts finite representation limits, not an operational capacity approval', () => {
     const rows: unknown[] = ledger().rows;
     rows[0] = { ...synthetic(), maxRepetitions: 1_000_000, symbol: 'x'.repeat(128),

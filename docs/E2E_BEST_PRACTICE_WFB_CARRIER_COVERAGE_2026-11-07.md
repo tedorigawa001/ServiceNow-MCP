@@ -21,6 +21,40 @@ Date: 2026-11-07 / 実装基準HEAD: `54619ef` / 対象: [詳細契約§11](BEST
 
 追加検証：`npm run build`成功、対象試験とfixtureのstrict TypeScript検査成功、対象2ファイルESLint成功。`npm pack --dry-run --ignore-scripts`は441ファイル、tests／docs／新moduleおよび既存fakeの混入0。キャッシュは一時directoryを使い、設定変更・archive生成・公開はしていない。
 
+## レビュー修正（2026-11-07）
+
+`c092694`の個別レビューで、不正値を受理する不具合はなかった。一方、閉鎖値を拒否する試験が不足していたので塞いだ。契約は`gaps`の1点だけ変更した。上記の件数は修正前の値として残す。
+
+**契約の変更**
+
+Unknown行とsynthetic行が`gaps`を2項目だけ持って通っていた。未確認の範囲を少なく見せられるので、全行で5項目すべてを必須とした（[詳細契約§11](BEST_PRACTICE_WFB_SCHEDULE_CARRIER_SEED_HANDOFF_DESIGN.md#11-合成専用strict値契約とcoverage内部表現)）。追加した試験は、変更前の実装に対して3件失敗（`source_mapping`、`ownership`、`cost_bound`）するREDを確認してから実装を変えた。他の追加試験は変更前の実装でも成功した。model名は`wfb-coverage-values-1`のままとした。保存済みのデータがないためである。
+
+**テストの修正**
+
+`tests/review/carrier-coverage.test.ts`を変更した（63件→121件）。
+
+- carrierとledgerの閉鎖field全部の拒否、Unknown行に既知の値を入れた場合の拒否、synthetic行の型・文字種・境界の拒否を追加した。
+- 順序どおりで末尾だけ欠けた11行、配列のproxy、独自prototype、array-like、余分なkey、非列挙、重複の拒否を追加した。
+- 受理した結果、ledger本体、`slots`、`paths`、`gaps`の凍結と切離しを確認した。
+
+**ミューテーション**
+
+`carrier-coverage-core.ts`への変異98件を実施した。修正前は44件、修正後は87件を検出した。`gaps`の変異3件は、変更後の実装に合わせて置き換えた。
+
+| 修正後も生存 | 件数 | 理由 |
+|---|---:|---|
+| 等価・冗長 | 11 | 非objectやnullは後続の検査か例外で同じ固定失敗になる（3件）。accessorと穴の要素は`undefined`となり、後続の値検査で拒否される（3件）。配列の上限超過は順序や行数の検査で同じ結果になる（1件）。選択肢外の値は位置の比較で拒否される（1件）。`sourceRevision`の長さは正規表現、`maxRepetitions`の型は`isSafeInteger`、`entryRequirement`の上書きは先行検査と重複する（3件） |
+
+| 修正後の実行 | 結果 |
+|---|---|
+| `tests/review/carrier-coverage.test.ts` | 121件成功 |
+| 全テスト | 303ファイル、15,112件成功、失敗0 |
+| repo全体の`npm run lint` | エラー0、警告374 |
+| `npm run build`、`node tests/review/package-http-classification.mjs` | 成功 |
+| 記録と同じ型検査、対象2ファイルのESLint | 成功 |
+
+全テストは文書の更新前に実行した。上記で未実施としていた全体回帰は、この実行で補った。`npm pack`のファイル数は再確認していない。実通信試験と再採取は未実施のまま。
+
 ## 保証と未確認
 
 検査成功は未信頼の値適合だけ。revision文字列とsymbolから実source対応・発行元・実装coverageは証明しない。実source内容hashの再計算照合、全SC行の実施点・費目対応と独立イベントoracle、実E／S要求量、schedule／carrier pool供給、K0基底費・native反射／OOM／module初期化／実heap・CPU・GCはUnknown／未対応。64 slot・1,000,000反復・128文字は内部表現の有限上限であり、本番capの承認ではない。

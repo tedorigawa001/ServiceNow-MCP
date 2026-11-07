@@ -1,6 +1,8 @@
 # WF-B：固定schedule／carrierの実装coverageとS pending／handoffの所有境界
 
-Version: draft-0.3 / Date: 2026-11-07 / 照合基準HEAD: `a2f568e` / レビュー修正の基準HEAD: `3c0e7a4` / 値契約実装基準HEAD: `54619ef`。
+Version: draft-0.4 / Date: 2026-11-07 / 照合基準HEAD: `a2f568e` / レビュー修正の基準HEAD: `3c0e7a4` / 値契約実装基準HEAD: `54619ef` / 値契約レビュー修正の基準HEAD: `c092694`。
+
+draft-0.3のレビュー修正: 全行で`gaps`の5項目すべてを必須にした。未確認の範囲を少なく見せる行を受理していたためである。synthetic行の`paths`は1件以上必須、`slots`は空でも可と明記した。行から対象ソースを特定できない点を次工程の要件として記録した（§11）。
 
 draft-0.3: §11のcarrier／coverage値契約だけを合成依存で実装した。以下の「詳細設計のみ」「実装を行わない」はdraft-0.2時点の設計範囲を指す。実schedule／pool供給・coverage証拠・S pending／handoffは引き続き未実装。[検証記録](E2E_BEST_PRACTICE_WFB_CARRIER_COVERAGE_2026-11-07.md)。
 
@@ -175,10 +177,12 @@ coverage外形の固定field順は`model, rows, ready, runtimeCoverage, nativeCo
 `id, status, sourceRevision, symbol, phase, producer, costOwner, maxRepetitions, slots, paths, diagnostic, verification, gaps`
 
 - status=unknownではsourceRevision／symbol／maxRepetitionsはnull、phase／producer／costOwner／diagnosticはunknown、verificationはnone、slots／pathsは空。未導出量を0にしない。
-- status=synthetic_onlyは対応記録用。sourceRevisionは対象source内容のSHA-256表現（64桁小文字hex）で、コミットIDではない。この値検査は実sourceとのhash照合を行わない。symbolは英字またはunderscore開始のASCII識別列（英数字・underscore・dot・colon、最大128文字）、反復は1〜1,000,000のsafe整数。これは表現上限で運用capや導出済み上界ではない。
+- status=synthetic_onlyは対応記録用。sourceRevisionは対象source内容のSHA-256表現（64桁小文字hex）で、コミットIDではない。この値検査は実sourceとのhash照合を行わない。symbolは英字またはunderscore開始のASCII識別列（英数字・underscore・dot・colon、最大128文字）、反復は1〜1,000,000のsafe整数。これは表現上限で運用capや導出済み上界ではない。`paths`は1件以上必須とする。`slots`は空でもよい。slotを使わない処理の行があり得るためである。
 - phaseはbefore_entry／entry_prepare／entry_terminal／seed／handoff、producerはplan／anchor／entry／carrier／seed／recipient／credit、costOwnerはbase_unknown／k0_excluded／entry_prepare／entry_terminal／seed／split_unknown。synthetic行のdiagnostic／verificationはsynthetic_onlyのみ。
-- slotsはslot00〜slot63の最大64個、pathsはnormal／refused／partial、gapsはruntime_coverage／native_cost／source_mapping／ownership／cost_bound。各配列は記載した固定順の重複なし部分集合。全行でgapsのruntime_coverageとnative_costは必須。未知点の自由文・raw例外は保持しない。
+- slotsはslot00〜slot63の最大64個、pathsはnormal／refused／partial、gapsはruntime_coverage／native_cost／source_mapping／ownership／cost_bound。各配列は記載した固定順の重複なし部分集合。全行でgapsの5項目すべてを必須とする。Unknown行は全fieldが未定で、synthetic行もsource対応・所有・費用上界を証明しないので、現時点ではどの項目も解消していない。解消を検証できる行が出た時点で緩める。未知点の自由文・raw例外は保持しない。
 
 syntheticラベルやrevision文字列をprivate manifestへ昇格しない。SCごとのproducer／費用所有の実source照合、同producer／body結合、固定sourceから内容hashを再計算する独立試験、全経路の独立計数・実E／S導出は次工程である。本実装が生成するのは未信頼の対応DATAだけで、coverage証拠は発行しない。
+
+現在の行には対象sourceのファイルを示すfieldがなく、symbolは`/`と`-`を受理しないので、行の情報だけでは内容hashの再計算対象を決められない。再計算の試験を作る工程で、行とsourceファイルの対応の持ち方を定める。1行が複数ファイルにまたがる場合の形式は、実施点の棚卸しの後に決める。
 
 objectはplain／null prototypeの固定順own enumerable DATAのみ。余分／欠落／symbol／accessor／独自prototypeを拒否。配列は標準prototypeのdense own DATAのみ、入力proxyはtrap前に拒否する。反射のnative費・OOM・module初期化は未計量で、有限件数は実CPU／heap／work予算の証明ではない。失敗返値は固定invalid_valueだけを持ち、入力・例外・key・offsetは出力しない。返値からS・record・identityを復元する入口はない。

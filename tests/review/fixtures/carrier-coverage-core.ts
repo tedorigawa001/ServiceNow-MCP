@@ -99,6 +99,7 @@ interface CoverageLedger { readonly model: 'wfb-coverage-values-1'; readonly row
 const rowKeys = ['id', 'status', 'sourceRevision', 'symbol', 'phase', 'producer', 'costOwner',
   'maxRepetitions', 'slots', 'paths', 'diagnostic', 'verification', 'gaps'];
 const slotNames = Array.from({ length: 64 }, (_, i) => `slot${String(i).padStart(2, '0')}`);
+const gapNames = ['runtime_coverage', 'native_cost', 'source_mapping', 'ownership', 'cost_bound'];
 /** An untrusted correspondence record. Source strings and synthetic labels are not verified evidence. */
 export function inspectCoverageLedger(input: unknown): Result<CoverageLedger> {
   return run(() => {
@@ -113,8 +114,8 @@ export function inspectCoverageLedger(input: unknown): Result<CoverageLedger> {
       one(r.status, ['unknown', 'synthetic_only']);
       const slots = subset(r.slots, slotNames);
       const paths = subset(r.paths, ['normal', 'refused', 'partial']);
-      const gaps = subset(r.gaps, ['runtime_coverage', 'native_cost', 'source_mapping', 'ownership', 'cost_bound']);
-      if (!gaps.includes('runtime_coverage') || !gaps.includes('native_cost')) invalid();
+      const gaps = subset(r.gaps, gapNames);
+      if (gaps.length !== gapNames.length) invalid();
       if (r.status === 'unknown') {
         if (r.sourceRevision !== null || r.symbol !== null || r.phase !== 'unknown' || r.producer !== 'unknown'
           || r.costOwner !== 'unknown' || r.maxRepetitions !== null || slots.length || paths.length
