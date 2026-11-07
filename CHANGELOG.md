@@ -200,6 +200,8 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 ### Added
 
+- WF-B RC-A review tests: pin the separate first eight units of the standalone bounds calculator with an independent 45-unit control, and pin frozen detailed, legacy and unavailable results, a snapshot detached from the live meter, and refusal of a meter installed after the terminal result. The value engine, charges, raw-parser separation, formal issuance and whole-run admission are unchanged.
+
 - WF-B DT-A review fixes: one synthetic deadline table now yields one Store, so a rebuilt Store cannot shed a sticky failure to reach `manifest.json` or start a separate byte budget. The table is spent once its binding passes and is never refunded. Proxy plan and Store inputs, a `budget` without a table, and identical run and budget origins are refused. Deadline arithmetic, row selection, formal issuance and whole-run admission are unchanged.
 
 - WF-B RP-B review hardening: raw JSON syntax controls now pin each fixed stage and reason, and a hand-counted 312-unit tree checks every per-unit work charge. New controls cover same-length delimiter and literal errors, mismatched closers, unterminated strings, DEL bytes, scratch and hard ceilings, smaller global caps at known paths, and off-path arrays. The parser, value core, formal issuance and whole-run admission are unchanged.

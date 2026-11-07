@@ -1,6 +1,8 @@
 # WF-B RP-C 同AST接続と2V受付 計数診断保持の差分設計
 
-Version: draft-0.3 / Date: 2026-11-07 / 照合基準HEAD: `81d23f3` / レビュー修正の基準HEAD: `cc0f410` / RC-A実装基準HEAD: `5b03dfc`。
+Version: draft-0.4 / Date: 2026-11-07 / 照合基準HEAD: `81d23f3` / レビュー修正の基準HEAD: `cc0f410` / RC-A実装基準HEAD: `5b03dfc` / RC-Aレビュー修正の基準HEAD: `0e1229b`。
+
+draft-0.3のレビュー修正: §6と§8に残っていた「案」「未実装」の記述を、RC-Aで実装した範囲に合わせた。bounds計算器の課金とfreezeの試験を追加した（§11）。engineと課金は変更していない。
 
 draft-0.3: RC-Aの単一値engine・detailed計数owner・legacy projectionだけを合成依存で実装した（§11）。raw入口との接続、2V／structural受付とbridge費は未実装／Unknownのまま。[合成検証記録](E2E_BEST_PRACTICE_WFB_VALUE_CORE_RCA_2026-11-07.md)。
 
@@ -99,11 +101,11 @@ ValueLimitsは既存の固定順を保つ。`max_scopes, max_workers, max_nodes,
 
 ## 6 detailed core結果と旧API互換
 
-内部API名案は`inspectCheckpointValueDetailed`。旧`validateCheckpointValue`と同じ単一engineを使い、旧APIは従来のValueResultへprojectionする。旧APIから新APIを呼んだ後に再検査する実装や、二つの検査器の複製は禁止する。旧理由・正常copy・成功work・課金順とunitを維持する。
+内部APIは`inspectCheckpointValueDetailed`（RC-Aで実装、§11）。旧`validateCheckpointValue`と同じ単一engineを使い、旧APIは従来のValueResultへprojectionする。旧APIから新APIを呼んだ後に再検査する実装や、二つの検査器の複製は禁止する。旧理由・正常copy・成功work・課金順とunitを維持する。
 
 ### 6.1 計数snapshotの型と初期課金
 
-bridgeの`coreInvocation`は`not_called / called_once`。計数snapshot案は次の二variantとし、呼ばなかった場合のabsenceはbridge側で別に持つ。
+bridgeの`coreInvocation`は`not_called / called_once`。計数snapshotは次の二variantとし、呼ばなかった場合のabsenceはbridge側で別に持つ。
 
 | snapshot | 意味 |
 |---|---|
@@ -148,7 +150,7 @@ postでは固定model、元context／claimの対応、観測された各work枠�
 
 ## 8 modelと互換性の固定
 
-parserの既存model、value work model案、RP-C bridge model案を別に扱う。value work model候補名は`wfb-value-core-work-1`、bridgeは`wfb-raw-value-rpc-1`とし、まだ実装済みの定数ではない。modelは固定import先の定数とし、callerの自由な文字列で検査器を選ばない。limitsは19項目の入力契約を維持し、model欄を追加しない。
+parserの既存model、value work model、RP-C bridge model案を別に扱う。value work modelは`wfb-value-core-work-1`で、RC-Aで定数として実装した。bridgeの候補名`wfb-raw-value-rpc-1`は未実装である。modelは固定import先の定数とし、callerの自由な文字列で検査器を選ばない。limitsは19項目の入力契約を維持し、model欄を追加しない。
 
 value schema／discriminatorの追加、再walk、課金点・単位の変更はstructural式とmodelの再検証を要する。model名だけ一致させて旧計数へ混ぜない。現行の旧v1、RP-A／RP-Bの結果型・課金対照、legacy値coreの5理由と成功値を保持する。Detailed結果はtest-only module内の純粋な検査契約であり、runtime friendや証拠発行口へ配布しない。
 
@@ -197,7 +199,7 @@ RC-Aの検証以外は設計であり、新受付計算器・候補式の合成�
 
 ## 11 RC-A実装境界
 
-`tests/review/fixtures/snapshot-value-core.ts`のprivate `runValueEngine`だけが値を解析する。`inspectCheckpointValueDetailed(value, limits)`と既存`validateCheckpointValue(value, limits)`はそれぞれ一度だけ同engineを呼び、後者は結果のlegacy projectionだけを行う。schema・局所関係・課金順・上界式・limitsの7 fieldを変更しない。standalone bounds計算器も最初の8 unitを明示課金し、旧結果形を維持する。
+`tests/review/fixtures/snapshot-value-core.ts`のprivate `runValueEngine`だけが値を解析する。`inspectCheckpointValueDetailed(value, limits)`と既存`validateCheckpointValue(value, limits)`はそれぞれ一度だけ同engineを呼び、後者は結果のlegacy projectionだけを行う。schema・局所関係・課金順・上界式・limitsの7 fieldを変更しない。standalone bounds計算器も最初の8 unitを明示課金し、旧結果形を維持する。空shapeの45 unit対照と、上限の等値／1不足で固定した。
 
 詳細結果は固定model `wfb-value-core-work-1`と`accounting`を持つ。成功は`observed`とfreezeしたwork必須、失敗は5理由と`observed`または`unavailable`。ownerはmeterを初回課金前に保持し、拒否された課金を足さない。limitsの厳密検査前後でmeterがなければunavailable、初回8 unit拒否は実測0である。失敗理由をsnapshotより先に確定し、snapshot取得不能でも先行理由を変えず、取得不能を0補完しない。成功時取得不能も値を返さず`invalid_value`で拒否する。終端結果は一度確定すると後着failure／successで上書きしない。
 

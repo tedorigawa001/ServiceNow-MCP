@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { inspectCheckpointValueDetailed, validateCheckpointValue } from './fixtures/snapshot-value-core.js';
-import { VALUE_FAILURE_STAGE_REASONS } from './fixtures/value-core-accounting.js';
+import { calculateSnapshotBounds, inspectCheckpointValueDetailed, validateCheckpointValue } from './fixtures/snapshot-value-core.js';
+import { VALUE_FAILURE_STAGE_REASONS, ValueAccountingOwner, ValueCost, ValueRejected } from './fixtures/value-core-accounting.js';
 import type { ValueWork } from './fixtures/value-core-accounting.js';
 import { runFixedAccountingScenario } from './fixtures/value-core-accounting-assembly.js';
 
@@ -138,5 +138,49 @@ describe('fixed accounting assembly, not bytes/core reachability claims', () => 
   it('pins all five future labels without connecting the raw parser', () => {
     expect(VALUE_FAILURE_STAGE_REASONS).toEqual({ schema: 'value_schema', relation: 'value_relation', limit: 'value_limit', overflow: 'value_overflow', invalid_value: 'value_invalid' });
     expect(Object.isFrozen(VALUE_FAILURE_STAGE_REASONS)).toBe(true);
+  });
+});
+
+describe('RC-A review: bounds fees, frozen results and owner guards', () => {
+  const shape = () => ({ cases: 0, modules: 0, events: 0, scopes: 0, workers: 0, samples: 0 });
+  // Hand count: first 8 + shape 13 structural; 8 relation; scope product + 7 mul/add pairs + captured add.
+  const boundsWork = { ...zero(), structural: 21, relation: 8, arithmetic: 16, total: 45 };
+  it('pins the separate first eight bounds units through an independent 45-unit golden', () => {
+    expect(calculateSnapshotBounds(shape(), { ...limits(), max_work: 45, max_nodes: 21 })).toMatchObject({ ok: true, work: boundsWork });
+  });
+  it.each([{ max_work: 7 }, { max_work: 44 }, { max_nodes: 7 }, { max_nodes: 20 }])('refuses bounds below the fees with a frozen failure at %j', cap => {
+    const result = calculateSnapshotBounds(shape(), { ...limits(), ...cap });
+    expect(result).toEqual({ ok: false, reason: 'limit' }); expect(Object.isFrozen(result)).toBe(true);
+  });
+  it('freezes detailed and legacy success results', () => {
+    const detailed = inspectCheckpointValueDetailed(child(), limits()), legacy = validateCheckpointValue(child(), limits());
+    expect(detailed.ok).toBe(true);
+    expect(Object.isFrozen(detailed)).toBe(true); expect(Object.isFrozen(detailed.accounting)).toBe(true); expect(Object.isFrozen(legacy)).toBe(true);
+  });
+  it('freezes the legacy failure projection', () => {
+    expect(Object.isFrozen(validateCheckpointValue(undefined, limits()))).toBe(true);
+    expect(Object.isFrozen(validateCheckpointValue(child(), {}))).toBe(true);
+  });
+  it('freezes unavailable accounting on bootstrap and fixed fault results', () => {
+    const bootstrap = inspectCheckpointValueDetailed(child(), {});
+    expect(Object.isFrozen(bootstrap)).toBe(true); expect(Object.isFrozen(bootstrap.accounting)).toBe(true);
+    for (const scenario of ['before_meter', 'snapshot_unavailable', 'success_snapshot_unavailable'] as const) {
+      const result = runFixedAccountingScenario(scenario);
+      if ('first' in result) throw Error('fixture');
+      expect(result.accounting).toEqual({ state: 'unavailable' });
+      expect(Object.isFrozen(result)).toBe(true); expect(Object.isFrozen(result.accounting)).toBe(true);
+    }
+  });
+  it('returns a snapshot detached from the live meter', () => {
+    const cost = new ValueCost(limits()); cost.spend('structural', 8);
+    const before = cost.snapshot(); cost.spend('copies');
+    expect(before).toEqual({ ...zero(), structural: 8, total: 8 });
+    expect(cost.snapshot()).toEqual({ ...zero(), structural: 8, copies: 1, total: 9 });
+  });
+  it('refuses to install a meter after the terminal result without changing it', () => {
+    const owner = new ValueAccountingOwner<null>(), first = owner.failure(new ValueRejected('relation'));
+    expect(() => owner.install(new ValueCost(limits()))).toThrow(ValueRejected);
+    expect(owner.failure(new ValueRejected('schema'))).toBe(first);
+    expect(first).toEqual({ ok: false, reason: 'relation', model: 'wfb-value-core-work-1', accounting: { state: 'unavailable' } });
   });
 });

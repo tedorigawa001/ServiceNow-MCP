@@ -1,6 +1,8 @@
 # WF-B：bounded raw JSON parserの詳細契約
 
-Version: draft-0.7 / Date: 2026-11-07 / 照合基準HEAD: `7eefb10` / レビュー修正の基準HEAD: `09e65e0` / RP-A実装基準HEAD: `baaf60d` / RP-B実装基準HEAD: `f28f0a2` / RP-Bレビュー修正の基準HEAD: `6a8209a` / RP-C設計レビュー修正の基準HEAD: `cc0f410`。
+Version: draft-0.8 / Date: 2026-11-07 / 照合基準HEAD: `7eefb10` / レビュー修正の基準HEAD: `09e65e0` / RP-A実装基準HEAD: `baaf60d` / RP-B実装基準HEAD: `f28f0a2` / RP-Bレビュー修正の基準HEAD: `6a8209a` / RP-C設計レビュー修正の基準HEAD: `cc0f410` / RC-Aレビュー修正の基準HEAD: `0e1229b`。
+
+draft-0.7のレビュー修正: §7のRP-Cの状態を、RC-A実装後の内容に合わせた。parserは変更していない。
 
 draft-0.6のレビュー修正: §4の値検査手順とRJ09を[RP-C差分設計](BEST_PRACTICE_WFB_RPC_PRIVATE_VALUE_BRIDGE_DESIGN.md)に合わせた。設計のみで、実装状態は変わらない。
 
@@ -164,7 +166,7 @@ oracleを製品encoderやparserの出力から生成して正解としない。�
 
 1. **RP-A（byte境界のみ実装済み）**: 合成専用のlimit／計数型・入力境界、UTF-8 prepass・外側framingと固定理由を実装。入力hook非実行・copy前受付・failure unwindを検証した。JSON値の受理・証拠発行は未接続であり、syntax uncheckedの結果をparser成功へ昇格しない（§8）。
 2. **RP-B（合成専用で実装済み）**: 有限stackの字句／構文、同object重複、strict numeric token、path別件数・node／token制限を追加。中間ASTは外へ返さず、内部の固定retireで破棄する。独立goldenと構造oracle・拒否対照を追加した（§9）。coreへの固定継続は未接続。
-3. **RP-C**: [同AST／2V・計数診断保持の差分設計](BEST_PRACTICE_WFB_RPC_PRIVATE_VALUE_BRIDGE_DESIGN.md)まで整理済み。失敗時も計数を残すcore結果、受付計算器、固定借用・費目合流の順で進める案とし、実装・式の採用・core接続は未実施。発行・保存とは引き続き分離する。
+3. **RP-C**: [同AST／2V・計数診断保持の差分設計](BEST_PRACTICE_WFB_RPC_PRIVATE_VALUE_BRIDGE_DESIGN.md)まで整理済み。失敗時も計数を残すcore結果（RC-A）は合成実装した。受付計算器と固定借用・費目合流は未実装で、式の採用とcore接続も未実施。発行・保存とは引き続き分離する。
 
 後続段階は別の明示指示を要する。RP-Aのintrinsic選定と境界用work modelは§8へ固定したが、native copyのallocation／set例外の故障注入、全parserのwork model／unwind費、coreのstructural計数上界式、raw byte／heap／scratchの運用capは未確認／未承認。小さい合成capだけで有限境界を検証し、本番capは投入しない。
 

@@ -32,6 +32,47 @@ Date: 2026-11-07 / 基準HEAD: `5b03dfc` / 実行対象: 本作業の未コミ�
 
 梱包確認は`bdo node`からローカルnpmを起動し、JSONのfile一覧だけを検査した。既存cacheの所有者が実際にrootであるかは確認しておらず、npmのエラーメッセージだけで原因を断定しない。chownや永続設定変更は行っていない。全体テスト／実通信試験／再採取は今回実施していない。
 
-## 4 未対応・残るUnknown
+## 4 レビュー修正（2026-11-07）
+
+`0e1229b`の個別レビューで、実装の不具合はなかった。engineと課金は変更せず、次の試験の穴を塞いだ。上記の件数は修正前の値として残す。
+
+旧core（`5b03dfc`）へ計数の観測を1行足した一時コピーと、変異入力・上限を変えて比較した。比較した一時プローブは残していない。
+
+| 対象 | 件数 | 差分 |
+|---|---:|---:|
+| 旧APIの結果（キー順を含む） | 30,000 | 0 |
+| 失敗途中を含む計数（全variantと変異入力） | 30,000 | 0 |
+| freezeの状態 | 30,000 | 0 |
+| `calculateSnapshotBounds` | 5,000 | 0 |
+
+**テストの修正**
+
+`tests/review/value-core-detailed.test.ts`へ10件を追加した（118件→128件）。
+
+- bounds計算器の空shapeを手計算の45 unit（structural 21、relation 8、arithmetic 16）で固定し、work 7／44、structural 7／20の拒否を追加した。engineから分離した最初の8 unitが無防備だった。
+- 詳細の成功結果、旧APIの成功／失敗結果、bounds失敗、unavailable計数のfreezeを検査した。
+- 既存の不変性の試験は別の実行を走らせるだけだったので、同じ計数器でsnapshot後に課金する対照を追加した。
+- 終端確定後の`install`拒否と、確定した結果が変わらないことを追加した。
+
+**ミューテーション**
+
+accounting kernelとcoreへの変異53件を、coreを読み込む2試験ファイルで実施した。修正前は38件、修正後は47件を検出した。修正前に生存した試験の穴9件はすべて検出するようになった。
+
+| 修正後も生存 | 件数 | 理由 |
+|---|---:|---|
+| 到達不能の防御 | 3 | `spend`の整数／負値／−0の検査。engineは正の安全な整数だけを渡す |
+| 等価・観測不能 | 3 | `mul`の0ガードは0除算がInfinityになり結果が同じ。終端確定後の`#cost`クリア2件は、終端のガードがあるので結果に現れない |
+
+| 修正後の実行 | 結果 |
+|---|---|
+| `tests/review/value-core-detailed.test.ts` | 128件成功 |
+| 全テスト | 299ファイル、14,926件成功、失敗0 |
+| repo全体の`npm run lint` | エラー0、警告374 |
+| `npm run build`、`node tests/review/package-http-classification.mjs` | 成功 |
+| 記録と同じ型検査、`git diff --check` | 成功 |
+
+全テストは文書の更新前に実行した。上記の§3で未実施としていた全体テストは、この実行で補った。実通信試験と再採取は未実施のまま。
+
+## 5 未対応・残るUnknown
 
 RC-Bの同V／planからの2V・structural受付、RC-Cのraw finally前の固定借用・claim・pre/post・費目合流は未実装。旧値coreの抽象workモデルは維持したが、追加owner／結果wrapper／snapshotの実処理費を無料と証明したものではなく、統合bridge profileは未導出。実heap・CPU時間・OOM／native故障・GC完了／ゼロ化はUnknown。encoder・private aggregate／capture／custody・本文保存・正式発行・運用cap承認にも進んでいない。
