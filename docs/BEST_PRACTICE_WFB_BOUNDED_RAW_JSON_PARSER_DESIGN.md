@@ -1,6 +1,8 @@
 # WF-B：bounded raw JSON parserの詳細契約
 
-Version: draft-0.8 / Date: 2026-11-07 / 照合基準HEAD: `7eefb10` / レビュー修正の基準HEAD: `09e65e0` / RP-A実装基準HEAD: `baaf60d` / RP-B実装基準HEAD: `f28f0a2` / RP-Bレビュー修正の基準HEAD: `6a8209a` / RP-C設計レビュー修正の基準HEAD: `cc0f410` / RC-Aレビュー修正の基準HEAD: `0e1229b`。
+Version: draft-0.9 / Date: 2026-11-07 / 照合基準HEAD: `7eefb10` / レビュー修正の基準HEAD: `09e65e0` / RP-A実装基準HEAD: `baaf60d` / RP-B実装基準HEAD: `f28f0a2` / RP-Bレビュー修正の基準HEAD: `6a8209a` / RP-C設計レビュー修正の基準HEAD: `cc0f410` / RC-Aレビュー修正の基準HEAD: `0e1229b` / RC-C詳細設計基準HEAD: `692d9ae`。
+
+draft-0.9: [RC-C private供給・所有／bridge費と破棄予約](BEST_PRACTICE_WFB_RCC_PRIVATE_SUPPLY_BUDGET_DESIGN.md)を参照追加。RC-Bの純粋受付実装を§7へ反映し、同parserのframe後・finally前での固定借用、元plan／meter・LF込みN、既存nodeCleanupと新alias退役の区別を具体化した。設計のみでparser・接続・課金は変更していない。
 
 draft-0.7のレビュー修正: §7のRP-Cの状態を、RC-A実装後の内容に合わせた。parserは変更していない。
 
@@ -166,9 +168,9 @@ oracleを製品encoderやparserの出力から生成して正解としない。�
 
 1. **RP-A（byte境界のみ実装済み）**: 合成専用のlimit／計数型・入力境界、UTF-8 prepass・外側framingと固定理由を実装。入力hook非実行・copy前受付・failure unwindを検証した。JSON値の受理・証拠発行は未接続であり、syntax uncheckedの結果をparser成功へ昇格しない（§8）。
 2. **RP-B（合成専用で実装済み）**: 有限stackの字句／構文、同object重複、strict numeric token、path別件数・node／token制限を追加。中間ASTは外へ返さず、内部の固定retireで破棄する。独立goldenと構造oracle・拒否対照を追加した（§9）。coreへの固定継続は未接続。
-3. **RP-C**: [同AST／2V・計数診断保持の差分設計](BEST_PRACTICE_WFB_RPC_PRIVATE_VALUE_BRIDGE_DESIGN.md)まで整理済み。失敗時も計数を残すcore結果（RC-A）は合成実装した。受付計算器と固定借用・費目合流は未実装で、式の採用とcore接続も未実施。発行・保存とは引き続き分離する。
+3. **RP-C**: [同AST／2V・計数診断保持の差分設計](BEST_PRACTICE_WFB_RPC_PRIVATE_VALUE_BRIDGE_DESIGN.md)に基づき、RC-Aの詳細core結果とRC-Bの2V／3V+10純粋受付を合成実装した。raw入口への固定借用・費目合流は未接続。[RC-C詳細契約](BEST_PRACTICE_WFB_RCC_PRIVATE_SUPPLY_BUDGET_DESIGN.md)で元plan／meter・root生存区間・一度claim・bridge費と破棄予約を整理したが、係数・ready profileは未導出。発行・保存とは引き続き分離する。
 
-後続段階は別の明示指示を要する。RP-Aのintrinsic選定と境界用work modelは§8へ固定したが、native copyのallocation／set例外の故障注入、全parserのwork model／unwind費、coreのstructural計数上界式、raw byte／heap／scratchの運用capは未確認／未承認。小さい合成capだけで有限境界を検証し、本番capは投入しない。
+後続段階は別の明示指示を要する。RP-Aのintrinsic選定と境界用work modelは§8、RP-Bの構文modelは§9、core structuralの保守式はRC-Bの純粋計算器へ固定した。ただしnative copyのallocation／set例外の故障注入、bridgeを含む統合work／unwind費、core全work上界、raw byte／heap／scratchの運用capは未確認／未承認。小さい合成capだけで有限境界を検証し、本番capは投入しない。
 
 ASCII compact＋LFだけという初期subsetを将来広げる判断、共有期限／取消ownerと停止照会間隔、budgetへの正式結合、formatter全入力の根拠、encoderと同bytesの独立照合、private aggregate／capture／custody・Store接続は残課題。raw parserの成功からこれらを確認済みにせず、Unknown・正式発行口閉鎖・全体受付無効・調査保留を維持する。
 
