@@ -1,6 +1,8 @@
 # WF-B：固定辞書の供給・期待値更新・同SourceMapDraft結合の差分設計
 
-Version: draft-0.1 / Date: 2026-11-07 / 読み取り照合基準HEAD: `89fa53a`。
+Version: draft-0.2 / Date: 2026-11-07 / 読み取り照合基準HEAD: `89fa53a` / レビュー修正の基準HEAD: `5d7b410`。
+
+draft-0.1のレビュー修正: DS02とDS08は公開の入口から到達できないので、試験専用の第2合成セットでのみ確認すると明記した（§4、§7）。`reviewSetId`の更新忘れは検出できず、レビューに頼ると書き足した。採用までは内容hash照合を既定の`npm test`から外す方針とした（§3）。「必須file」を採用した固定セットの全fileと定義した。設計のみで、実装状態は変わらない。
 
 Status: **差分設計のみ。固定供給元・実辞書の期待値pin・private結合・内容hash照合は未実装。** 親は[固定source対応・純粋値検査契約](BEST_PRACTICE_WFB_FIXED_SOURCE_COVERAGE_DESIGN.md)と[固定schedule／carrier設計](BEST_PRACTICE_WFB_SCHEDULE_CARRIER_SEED_HANDOFF_DESIGN.md)。
 
@@ -41,13 +43,15 @@ K0前に起きる供給module初期化・DATA構築・freeze・選択の費用�
 4. レビュー記録へ対象集合、候補と再確認の結果、差異の有無、関連SC・test／oracle・missingを残す。差異があれば採用しない。
 5. 採用判断が明示された値だけを固定セットへ格納する。検証実行はこの静的なexpectedを読むだけで、実行時のactualから上書きしない。レビューが未完了の候補を既承認セットとして提供しない。
 
-現時点では実期待値を採取・承認していない。したがって「未pin」の開発上の状態を、hashが0の辞書や空配列として完成供給しない。現行純粋検査が空辞書を受理することは、実固定セットの採用条件ではない。将来の固定供給は必須fileが未pinなら非供給とする。合成セットは別の非実行試験として区別し、実セットの代役にしない。
+現時点では実期待値を採取・承認していない。したがって「未pin」の開発上の状態を、hashが0の辞書や空配列として完成供給しない。現行純粋検査が空辞書を受理することは、実固定セットの採用条件ではない。将来の固定供給は、採用した固定セットの全fileのうち1つでも未pinなら非供給とする。合成セットは別の非実行試験として区別し、実セットの代役にしない。
+
+採用までは、内容hash照合を既定の`npm test`（`tests/review/*.test.ts`を含む）から外し、別の設定で明示的に実行する。対象ファイルは頻繁に変わり、既定に入れると変更のたびに再レビューまで全体の試験が失敗するためである。`tests/transport`を既定から外して`vitest.transport.config.ts`で実行している先例に倣う。合成セットだけを使う試験は、この制限の対象外である。
 
 checkoutの改行変換を止める`.gitattributes`等は親設計の未実施要件として残す。適用は設定変更を含む別作業であり、本書では行わない。設定と実bytesの範囲が未確定なままクロス環境の再現性を保証しない。
 
 ## 4 同SourceMapDraftへのprivate結合
 
-将来の`MapSupplySnapshot`は、固定セット版を示す`reviewSetId`と、同セットのfiles／rowsを1回の`inspectSourceMapDraft`で検査した成功返値だけを非公開に保持する。`reviewSetId`は手動で改版する有限の管理名で、内容hash・署名・invocation identityではない。既存SourceMapDraftのstrict fieldへ追加せず、供給側wrapperのmetadataとする。
+将来の`MapSupplySnapshot`は、固定セット版を示す`reviewSetId`と、同セットのfiles／rowsを1回の`inspectSourceMapDraft`で検査した成功返値だけを非公開に保持する。`reviewSetId`は手動で改版する有限の管理名で、内容hash・署名・invocation identityではない。内容と結び付かないので、期待値を変えて`reviewSetId`の更新を忘れても検出できない。更新の漏れはレビューで止める。既存SourceMapDraftのstrict fieldへ追加せず、供給側wrapperのmetadataとする。
 
 1. 供給元が同版のfiles／rowsと既存modelを選ぶ。外部から別の辞書・行・版を渡せない。
 2. files／rowsをまとめて検査する。`inspectSourceDictionary`単体の成功と別由来の行を後から貼り合わせない。失敗・部分生成ならsnapshotを供給せず、部分参照を固定破棄する。raw例外は外へ出さない。
@@ -56,6 +60,8 @@ checkoutの改行変換を止める`.gitattributes`等は親設計の未実施�
 5. 検証後の結果も、同snapshotと対象file／rowのIDへ結合して保持する。数値や公開summaryからsnapshotを復元・採用しない。実hash照合の結果ownerや安全読取の詳細は後続設計とする。
 
 このbindingは、開発検証の別セット混入を防ぐ内部契約であり、S・record・budget・runtimeの権限ではない。DATAである現行純粋検査にone-shot claimや所有移動は追加しない。必要性が未確認の新しい一度限り台帳を作らず、供給snapshotの参照結合とcredit移譲のclaimを混同しない。
+
+供給元は静的な1つのmoduleで、snapshotを受け取る公開入口もない。したがって1回の実行の中に、別snapshot・同値copy・新旧の固定セットが現れる経路はない。以下と§7のDS02／DS08は、試験専用に組み立てた第2の合成セットでだけ確認でき、公開経路からの到達の証拠にはならない。
 
 固定セット更新時に既存snapshotのfiles／rowsを差替えない。進行中の検証は同じ不変セットを使い切るか、その検証を停止し、新セットでは新しい検証として始める。新旧結果を合流しない。これは長期実行runtimeの更新APIを設ける提案ではない。
 
@@ -85,13 +91,13 @@ missingを削除するには、実施点・全必要file・費目所有・成功
 ## 7 将来の合成受入条件（未実施）
 
 - DS01：固定供給元以外のdictionary／rows／model／reviewSetIdの注入、任意path・外部supplier登録を拒否。供給元自身のレビュー範囲と梱包除外を別確認する。
-- DS02：1回のmap検査が返した同value／files／rowsを基準とし、元入力とのcopy差は許すが、別snapshot・同値copy・別版・filesだけの差替えを結合として拒否する。
+- DS02（試験専用の第2合成セットでのみ確認）：1回のmap検査が返した同value／files／rowsを基準とし、元入力とのcopy差は許すが、別snapshot・同値copy・別版・filesだけの差替えを結合として拒否する。
 - DS03：実期待値が未pin／不完全なら供給しない。0hash・空辞書・fakeの5 unit・既存summaryを完成供給に使わない。合成セットの成功から実セットへ昇格しない。
 - DS04：複数fileのhelperだけ変更、path rename、role変更、test参照変更を独立の集合oracleで検出。辞書からexpected集合をそのまま読み、同じものをexpectedにする試験だけでは不可。
 - DS05：候補と別確認が一致しない場合の非採用、期待値とsourceの同時不適切更新をレビューで止める条件、旧記録の保持を確認する。暗号学的に改ざんを検知したとは呼ばない。
 - DS06：部分生成／map検査失敗でprivate参照を固定破棄し、後続へ部分snapshotを渡さない。最初の固定拒否診断を保持し、本文・raw例外を出さない。
 - DS07：未実装行のmissing・status、hash／mapping／implementationの別軸、5 gaps・ready=false・Unknownを保持する。hash成功時にもS／core／実I/Oを呼ばない。
-- DS08：新旧snapshotの混合・古い期待値のfallback・自動hash更新を拒否。改行変換の扱いと安全読取は別の未実施条件として残す。
+- DS08（試験専用の第2合成セットでのみ確認）：新旧snapshotの混合・古い期待値のfallback・自動hash更新を拒否。改行変換の扱いと安全読取は別の未実施条件として残す。
 
 供給境界はまず合成セットだけで検証する段階を分ける。その後の実source候補算出／pin／照合・改行設定は別の明示承認を要する。上記試験を今回実行した記録はない。
 
