@@ -1,6 +1,8 @@
 # WF-B：private読取継続・共有上限・同bytes hashと結果owner
 
-Version: draft-0.1 / Date: 2026-11-07 / 読み取り照合基準HEAD: `77255f2`。
+Version: draft-0.2 / Date: 2026-11-07 / 読み取り照合基準HEAD: `77255f2` / レビュー修正の基準HEAD: `72e4745`。
+
+draft-0.1のレビュー修正: 行のhash集約へbindingのtests（T／O file）を含め、辞書全体hash軸の状態を定義した（§6）。受理区間内のguard呼出しをなくし、guardを受理区間の前後へ移した（§4／§5）。早いEOF・余剰byteをcontent_mismatchに固定し、読取中変更とは区別しないことを明記した（§3）。cleanup軸のopen未試行とresource未取得を分けた（§6）。RH03／RH04／RH06の対照を追加した。設計のみで、実装・実source照合は変えていない。
 
 Status: **詳細設計のみ。読取session・共有予算・hash照合・結果ownerは未実装。** 親は[固定辞書供給・同map結合](BEST_PRACTICE_WFB_FIXED_DICTIONARY_SUPPLY_DESIGN.md)と[固定source対応・内容照合](BEST_PRACTICE_WFB_FIXED_SOURCE_COVERAGE_DESIGN.md)。現在のcheckはprivate結合の非実行確認だけで、読取やhashへ接続していない。
 
@@ -38,6 +40,8 @@ readonly checkの反復許可を、複数読取sessionの同時実行許可に�
 
 before／after観測は、regular-kind、同resource identity、size、変更stampを比較する固定fake契約とする。期待sizeとの差はcontent_mismatch、同resourceのidentity／kind／stamp／sizeの途中差はsource_changed。取得不能はsource_unavailable。実adapterの具体stat field・精度・path同一性の保証は未確定で、OS metadata照合済みとは呼ばない。読取中に変わって元へ戻る変更や、全fileが同一時刻のsnapshotであることまでは保証しない。
 
+分類の優先順位は固定する。before観測のsizeが期待値と異なればreadを始めずcontent_mismatch。readの途中で期待長より前のEOF、または宣言位置の余剰byteが出た場合も、before sizeが期待値と一致していたかに関係なくcontent_mismatchを最初のprimary理由とし、after観測を行わずcloseへ進む。この場合は読取中の切詰め・伸長とsource本来の差を区別せず、source_changedとは報告しない。source_changedは、期待長とEOFが一致した後のafter観測でbeforeとの差が見つかった場合だけに使う。
+
 readOnceは現在offsetと要求長、ownerの固定scratchを使い、bytes(n)、eof、interrupted、failedの有限結果を返す。bytesは1≤n≤要求長だけ。eof前の0進捗や過大n・未知variantはoperation_invalidで停止する。不正なnから実受信量を確定できなければunavailableを残し、0や申告nで補完しない。呼出し試行1回という観測は保持する。正の短読取はoffsetをnだけ進め、残量から次要求を作る。期待長より前のEOFはcontent_mismatch。期待長へ達した後はoffset=expectedBytes、要求1 byteのEOF probeを1つ行う（interrupted時は同probeを共有retry枠で再試行）。追加byteが返れば、それも受信費へ計上してcontent_mismatchとし、hashへ追加しない。
 
 openの単発結果はresource取得の有無を明示する。取得後の異常では同resourceをownerへ渡して固定cleanupへ進め、単なるthrowから「未取得」と推定しない。初期fakeは取得なしと取得済みの有限結果を使う。取得有無すら不明な実adapter故障は未対応で、解放済み・resourceなしとは報告できない。後続の実adapter契約で取得未確認の責務を設計するまで採用しない。
@@ -60,11 +64,11 @@ interruptedはbytesもoffsetも進めない。共有retry枠を消費し、同re
 | 同時resource／cleanup | open resource最大1。各open前にclose1試行を予約、合計最大32。未使用予約は実試行に数えない |
 | 結果／row slot | file最大32、rowちょうど12。固定上限を超えるlistや自由文は保持しない |
 
-極端に細かい短読取では、正当なbyte長でもread試行枠で停止し得る。全分割パターンの受付を保証する上限ではなく、無制限loopを防ぐ契約である。buffer要求を受ける前にサイズを確認し、成功readで返ったnを受信計数へ加算してから後続guard／hashへ進む。失敗しても消費済み試行・受信量をrefundしない。pre-guardで拒否した未実行操作は試行0、呼出しに入った同期throwは試行1とする。
+極端に細かい短読取では、正当なbyte長でもread試行枠で停止し得る。全分割パターンの受付を保証する上限ではなく、無制限loopを防ぐ契約である。buffer要求を受ける前にサイズを確認し、成功readで返ったnを受信計数へ加算し、同じ受理区間でhash updateまで進めてから後続guardを行う（§5）。失敗しても消費済み試行・受信量をrefundしない。pre-guardで拒否した未実行操作は試行0、呼出しに入った同期throwは試行1とする。
 
 合成clockは整数tickで、session開始T0からD_end=T0+1000、D_stop=D_end−100を一度だけ計算する候補とする。900 tickは通常処理、末尾100 tickはcleanup／結果終端用で、実msや製品の既存期限へ換算・反映しない。全fileで同じ期限を使い、残時間から作り直さない。加算overflow・clock例外・逆行はclock_unavailableとして停止する。
 
-通常操作の前後、readからhashへ進む前、candidate受理、row集約、最終checkpointでguardする。cancel／close要求・now≥D_stopで新しいopen／read／observe／hashを禁止する。時刻採取自体も有限の操作表へ含め、guard箇所と回数上界を実装時に独立計数する。今回のprofileはworkモデルではなく、反射・native hash・copy／freeze・CPU／heap／GCの実費上界はUnknown。
+通常操作の前後、hash final直前、candidate受理、row集約、最終checkpointでguardする。readOnceとhash updateの間（受理区間）ではclock／cancelを呼ばない。readOnce直前のguardを通過した後に来たcancel／close要求・期限到達は、受理区間のhash update完了後のguardで観測し、それ以降の新しいread／hash final／open／observeを禁止する。cancel／close要求・now≥D_stopで新しいopen／read／observe／hash final／次のhash updateを禁止する。時刻採取自体も有限の操作表へ含め、guard箇所と回数上界を実装時に独立計数する。今回のprofileはworkモデルではなく、反射・native hash・copy／freeze・CPU／heap／GCの実費上界はUnknown。
 
 cleanupは予約済みcloseを1回だけ試す。cancel・D_stop超過・clock異常で既存resourceの解放をskipしない。cleanupは新規payload操作を始められず、D_endを延長しない。終了がD_end以降・時計未確認ならcleanup確認とは別に終端期限／時計診断を残す。nativeが無期限に戻らない問題をclock guardだけで解決したとは扱わない。実adapterの非blocking性・外側containmentは未検証であり、実時間内の必着保証はしない。
 
@@ -72,7 +76,7 @@ cleanupは予約済みcloseを1回だけ試す。cancel・D_stop超過・clock�
 
 同resourceが書き込んだprivate scratchの[0,n)を、1回の受理区間で受信計数とSHA-256 updateに使う。pathを開き直した別read、decodeした文字列、再encode、summary、別bufferの同値DATAでhashを代用しない。payload offset／hash済bytesを別に記録し、update成功後だけ進める。hash失敗やpost-guard拒否でcandidateを出さず、既受信／既課金の観測は保持する。
 
-固定adapterはscratch参照を保持せず、受理からhash update完了まで外部callback・await・別操作・buffer再利用を挟まない。hash境界は同期的に当該bytesを消費して参照を残さない契約とし、init／update／final失敗を固定hash_unavailableにする。この性質を実backendが満たすかは別途検証する。SharedArrayBuffer・resizable buffer・外部保持viewを受け付ける一般的な注入口は設けない。
+固定adapterはscratch参照を保持せず、受理からhash update完了まで外部callback・await・別操作・buffer再利用を挟まない。注入clock／cancelの呼出しもこの区間へ入れず、停止判定はreadOnce直前とhash update完了後のguardで行う（§4）。hash境界は同期的に当該bytesを消費して参照を残さない契約とし、init／update／final失敗を固定hash_unavailableにする。この性質を実backendが満たすかは別途検証する。SharedArrayBuffer・resizable buffer・外部保持viewを受け付ける一般的な注入口は設けない。
 
 期待byte長とEOF、before／after観測、hash済byte数が一致した場合だけfinalを1回行い、同canonical fileのexpectedSha256と固定64桁として比較する。期待値をactualへ合わせて更新しない。copy前後の同bytes保証をmetadataの一致だけで代用せず、受理したscratchを直接hashする。異なるfile IDへのdigest流用・path一致による採用・複数file digestの連結は禁止。
 
@@ -84,9 +88,11 @@ cleanupは予約済みcloseを1回だけ試す。cancel・D_stop超過・clock�
 
 file候補は同snapshot／session／scope／canonical fileへ結合し、close確認とpost-guardの後で対応する固定slotへ受理する。二重slot書込み・別scope結果・同値copyを拒否する。close前にdigestが一致しても未受理候補で、cleanup未確認やpost-guard失敗でhash_matchへ昇格しない。途中の内容比較が一致した事実は、固定の観測診断として区別して保持できる。
 
-fileのhash軸はpending／hash_match／content_mismatch／incomplete／not_startedを区別する。cleanup軸はnot_started（resource未取得）／closed_confirmed／close_unconfirmed。最初のprimary理由、後着の停止／時計理由、cleanup理由は別slotとし、content_mismatchをcleanup異常で上書きしない。resource取得なしのclose0回、取得済みのclose1回を確認する。close_unconfirmedなら次fileへ進まない。
+fileのhash軸はpending／hash_match／content_mismatch／incomplete／not_startedを区別する。cleanup軸はnot_attempted（openを試行していない）／no_resource（open試行の結果resource未取得）／closed_confirmed／close_unconfirmed。最初のprimary理由、後着の停止／時計理由、cleanup理由は別slotとし、content_mismatchをcleanup異常で上書きしない。resource取得なしのclose0回、取得済みのclose1回を確認する。close_unconfirmedなら次fileへ進まない。
 
-行のhash集約は全binding（reference_onlyを含む）のfile slotを参照する。同じfileを複数行が参照しても再読・二重hashしない。全対象がhash_matchの行だけhash_match、空bindingはnot_applicable、未開始／中断／不一致がある行はそれぞれ非成功とする。辞書に存在するが行から参照されないfileも、辞書全体hash軸の対象から黙って省かない。
+行のhash集約の対象は、全binding（reference_onlyを含む）のfileIdと、各bindingのtests（T／O file）の和集合のfile slotとする。implementation bindingはtestsを必須とするため、試験・oracle fileだけの差替えや欠落を行のhash_matchから漏らさない。同じfileを複数行が参照しても再読・二重hashしない。全対象がhash_matchの行だけhash_match、空bindingはnot_applicable、未開始／中断／不一致がある行はそれぞれ非成功とする。
+
+辞書全体hash軸は、行からの参照の有無に関係なく辞書の全file slotを対象とする。全slotがhash_matchの場合だけhash_match、それ以外は非成功とし、file状態ごとの件数と、辞書ID順で最初の非成功fileのIDを固定値で保持する。行から参照されないfileも、この軸から黙って省かない。
 
 hash／mapping／implementation／cleanupとsessionの停止状態を別々に保持する。未実装行が残っていても、他のfile／行のhash_matchという局所観測は保持するが、全体readyにはしない。mappingはshape_only（実symbol／step未検証）、implementationは未実装／missingの状態をそのまま保持し、5 gaps・実E／S要求量Unknownを緩めない。
 
@@ -113,10 +119,10 @@ hash／mapping／implementation／cleanupとsessionの停止状態を別々に�
 |---|---|---|
 | RH01 | 同snapshotと第2合成set／map wrapper／file要素copy／別session・scope | open前または結果受理前に拒否。公開経路から到達するという主張にはしない |
 | RH02 | 既知bytesと別途固定したdigest／byte長、複数chunk分割 | chunk分割に依存せず同digest。本体のhash出力からexpectedを同時生成しない |
-| RH03 | 1 byte・改行・BOM・末尾差、早いEOF・宣言位置の余剰byte | 変換せずcontent_mismatch。余剰byteも受信計数に含む |
-| RH04 | 主file一致・helperだけ差替え／欠落、同内容でも別file ID | 全binding照合・同file slot受理。主fileだけで成功にしない |
+| RH03 | 1 byte・改行・BOM・末尾差、早いEOF・宣言位置の余剰byte（before sizeが期待値と一致する場合を含む） | 変換せずcontent_mismatch。after観測を呼ばずsource_changedにしない。余剰byteも受信計数に含む |
+| RH04 | 主file一致・helperだけ差替え／欠落、test／oracle fileだけ差替え／欠落、行から参照されないfileだけ差替え、同内容でも別file ID | 全bindingのfileIdとtestsを照合・同file slot受理。主fileだけで行を成功にせず、未参照fileの差は辞書全体hash軸を非成功にする |
 | RH05 | 独立イベント表とBigInt計算でbyte・試行・retry・hash・cleanupを照合 | 等値／1超過、短読取多数、EINTR連続、同期throwを検出。refund／二重課金なし |
-| RH06 | fake clock／cancelを各pre／post点、hash直前・候補受理・最終点へ配置 | 期限延長・失敗後再開なし。未dispatch0、呼出しthrow1。cleanupは別診断 |
+| RH06 | fake clock／cancelを各pre／post点、hash final直前・候補受理・最終点へ配置。readOnce中にcancel／期限到達を起こす | 期限延長・失敗後再開なし。未dispatch0、呼出しthrow1。受理区間内のclock／cancel呼出し0で、停止はhash update完了後のguardで観測する。cleanupは別診断 |
 | RH07 | before／afterのkind・identity・size・stamp差、取得不能 | source_changedとsource_unavailableを区別。実OS同一性を証明したとしない |
 | RH08 | bind／scratch／hash init・update・final／結果slotの固定故障 | 部分候補を採用せず、先行理由・観測prefix・cleanup責務を保持 |
 | RH09 | close失敗・終端時計異常・遅着read・二重finish・読取中close | 1回cleanup、結果終端後の不変、未確認を成功化しない。active借用を早期破棄しない |
@@ -135,3 +141,5 @@ hash／mapping／implementation／cleanupとsessionの停止状態を別々に�
 ## 10 今回の確認範囲
 
 `77255f2`の供給sourceと親設計を読み取り照合し、このMDと親2文書の参照だけを追加した。文書のローカル参照・空白・変更範囲のみ確認する。code／test／CHANGELOG／設定は変更せず、build・合成試験・実source hash採取／照合は行わない。正式発行口閉鎖・全体受付無効・Unknown・調査保留を維持する。
+
+draft-0.2のレビュー修正では、`72e4745`の本書を`source-map-values-core.ts`のbinding／tests検査と親設計のSC表へ照合し、本書のMDだけを変更した。code／test／CHANGELOG／親設計・設定は変更していない。
