@@ -2,7 +2,7 @@
 
 Version: draft-0.5 / Date: 2026-11-07 / 照合基準HEAD: `8dfc49d` / レビュー修正の基準HEAD: `f33623c` / K0／E fake実装基準HEAD: `3c53902` / K0／E fakeレビュー修正の基準HEAD: `b62218c` / schedule／S所有設計基準HEAD: `a2f568e`。
 
-draft-0.5: [固定schedule／carrierのcoverage・S pending／handoff所有境界](BEST_PRACTICE_WFB_SCHEDULE_CARRIER_SEED_HANDOFF_DESIGN.md)を追加。SC01〜12の実施点・費目所有、診断carrierとcredit authorityの分離、S debit後のentry pending、単一cell切替によるhandoff、失敗後の上位custodyを具体化した。設計のみで、実E要求量・X／Δ・private供給はUnknown／未実装のまま。
+draft-0.5: [固定schedule／carrierのcoverage・S pending／handoff所有境界](BEST_PRACTICE_WFB_SCHEDULE_CARRIER_SEED_HANDOFF_DESIGN.md)を追加。SC01〜12の実施点・費目所有、診断carrierとcredit authorityの分離、S debit後のentry pending、単一cell切替によるhandoff、失敗後の上位credit slotを具体化した。設計のみで、実E要求量・X／Δ・private供給はUnknown／未実装のまま。
 
 draft-0.3のレビュー修正: 参照機械を正常close後の操作まで届く長さへ延ばした（§10）。既課金がcapを超える場合の理由の差を、実K0の実装時に統一する項目として記した。fakeの動作は変更していない。
 
