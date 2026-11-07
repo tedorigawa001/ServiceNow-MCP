@@ -40,7 +40,42 @@ fixture専用scheduleはE要求量5、prepare2（build／fake profile確認各1�
 
 梱包確認は`bdo node`からローカルnpmを起動しfile一覧だけを照合した。永続cache設定・所有者・権限は変更していない。全体テスト・実通信試験・再採取は行っていない。
 
-## 4 残るUnknown
+## 4 レビュー修正（2026-11-07）
+
+`b62218c`の個別レビューで、fakeの不具合はなかった。fakeは変更せず、次の試験の穴を塞いだ。上記の件数は修正前の値として残す。
+
+§2の長さ4の全625列は、正常closeに4操作を使い切るので、close後の操作へ届いていなかった。参照機械の`done`分岐は実行されていなかった。同じく§2の「carrierの不変性」は、`inspect`の結果だけを検査したもので、carrierと結果オブジェクトを含んでいなかった。
+
+一時プローブで、6シナリオ×長さ6の全15,625列（562,500ステップ）の不変条件を確認した。debit、cleanup、退役の回数、budget、使用量の和、entryの逆戻り、実行順、freeze、閉鎖フラグ、cleanup未確認の補完に違反はなかった。「失敗後に`ok`へ戻らない」だけ4件該当したが、いずれも正常close→後着拒否→closeの列で、完了済みの結果を返す設計どおりの動作である。プローブは残していない。
+
+**テストの修正**
+
+`tests/review/seed-bootstrap.test.ts`を変更した（23件→28件）。
+
+- 参照機械を長さ5の全3,125列へ延ばし、`done`分岐を5回通ることを固定した。
+- close後の`checkProfile`拒否と、後着拒否の結果の同一性を追加した。
+- 結果オブジェクト、取得前後のcarrier、後着拒否のdeep freezeを検査した。
+- `runtimeCoverage=unknown`、`used == cap`の`raw_work`、E前の`inspect`の診断、ownerなしのsnapshot故障、`Rejected`状態を固定した。
+
+**ミューテーション**
+
+`seed-bootstrap-fake.ts`への変異70件を、`tests/review/seed-bootstrap.test.ts`で実施した。修正前は53件、修正後は65件を検出した。
+
+| 修正後も生存 | 件数 | 理由 |
+|---|---:|---|
+| 等価・冗長 | 5 | `typeof`は`isSafeInteger`が同じ入力を拒否する。`CLOSED`のfreezeは外に出ない。`first`の上書きは`finish`が1回だけなので起きない。終端ガード2件は`close`と`finish`で二重になっている |
+
+| 修正後の実行 | 結果 |
+|---|---|
+| `tests/review/seed-bootstrap.test.ts` | 28件成功 |
+| 全テスト | 302ファイル、14,991件成功、失敗0 |
+| repo全体の`npm run lint` | エラー0、警告374 |
+| `npm run build`、`node tests/review/package-http-classification.mjs` | 成功 |
+| 記録と同じ型検査、`git diff --check` | 成功 |
+
+全テストは文書の更新前に実行した。§3で未実施としていた全体テストは、この実行で補った。実通信試験と再採取は未実施のまま。
+
+## 5 残るUnknown
 
 本書はK0／Eのfake内部状態に関する部分検証で、SB01〜08全体の完了ではない。固定carrier自体を供給できないnative故障、K0を基底として認める信頼前提、実schedule・entry slot・X／Δ・新予約上界、元plan／meterへの実結合、実owner生成のallocation、Sのpending／handoff・root供給は未対応。実費coverage・正式cap・native反射／OOM／module初期化・実heap／CPU／GC／ゼロ化はUnknownのままである。
 

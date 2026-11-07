@@ -6,8 +6,9 @@ describe('K0/E pure fake, no seed/core or real budget connection', () => {
   it('refuses E one below capacity without a debit or a fabricated zero usage', () => {
     const fake = createSeedBootstrapFake(14, 10, 0);
     expect(fake.acquireEntry()).toMatchObject({ ok: false, reason: 'raw_work', entry: 'not_acquired', bootstrapUsage: { state: 'unavailable' },
-      k0Work: 'excluded', ready: false, coreInvocation: 'not_called' });
-    expect(fake.inspect()).toMatchObject({ budget: { state: 'observed', parser: 10, bridge: 0, total: 10 }, ownerBuilt: false });
+      k0Work: 'excluded', ready: false, runtimeCoverage: 'unknown', coreInvocation: 'not_called' });
+    expect(fake.inspect()).toMatchObject({ budget: { state: 'observed', parser: 10, bridge: 0, total: 10 }, ownerBuilt: false, runtimeCoverage: 'unknown' });
+    expect(fake.inspect().diagnostics).toEqual({ firstReason: 'raw_work', snapshot: 'not_reported', cleanup: 'not_reported' });
   });
   it('debits once at equality and rejects a second acquisition without refund or a second debit', () => {
     const fake = createSeedBootstrapFake(15, 10, 0);
@@ -56,7 +57,8 @@ describe('K0/E pure fake, no seed/core or real budget connection', () => {
     const fake = createSeedBootstrapFake(20, 10, 0); fake.acquireEntry(); fake.buildEntry(); fake.checkProfile();
     const terminal = fake.close(), snapshot = fake.inspect();
     expect(fake.acquireEntry()).toMatchObject({ ok: false, reason: 'raw_limits' });
-    expect(fake.buildEntry()).toMatchObject({ ok: false }); expect(fake.reject('raw_work')).toMatchObject({ ok: false });
+    expect(fake.buildEntry()).toMatchObject({ ok: false }); expect(fake.checkProfile()).toMatchObject({ ok: false, reason: 'raw_limits' }); expect(fake.reject('raw_work')).toMatchObject({ ok: false });
+    expect(fake.buildEntry()).toBe(fake.acquireEntry());
     expect(fake.close()).toBe(terminal); expect(fake.inspect()).toEqual(snapshot);
     expect(snapshot.diagnostics.firstReason).toBe('none');
   });
@@ -105,17 +107,18 @@ describe('K0/E pure fake, no seed/core or real budget connection', () => {
       expect(r.k0Work).toBe('excluded'); expect(r.nativeCost).toBe('unknown'); expect(r).not.toHaveProperty('k0Units');
     }
   });
-  it('matches a separate finite reference machine for every four-command word', () => {
+  it('matches a separate finite reference machine for every five-command word, including after success', () => {
     const commands = ['acquire', 'build', 'profile', 'close', 'reject'] as const;
-    for (let word = 0; word < 625; word++) {
+    let doneSteps = 0;
+    for (let word = 0; word < 3125; word++) {
       const fake = createSeedBootstrapFake(20, 10, 0);
       let state: 'base' | 'debit' | 'built' | 'checked' | 'failed' | 'done' = 'base';
       let acquired = false, ownerBuilt = false, cleanup = false, first = 'none', n = word;
-      for (let i = 0; i < 4; i++) {
+      for (let i = 0; i < 5; i++) {
         const command = commands[n % 5]; n = Math.floor(n / 5);
         let ok = false, reason = 'raw_limits';
         if (state === 'failed') reason = first;
-        else if (state === 'done') ok = command === 'close';
+        else if (state === 'done') { ok = command === 'close'; doneSteps++; }
         else if (command === 'acquire' && state === 'base') { state = 'debit'; acquired = true; ok = true; }
         else if (command === 'build' && state === 'debit') { state = 'built'; ownerBuilt = true; ok = true; }
         else if (command === 'profile' && state === 'built') { state = 'checked'; ok = true; }
@@ -129,6 +132,7 @@ describe('K0/E pure fake, no seed/core or real budget connection', () => {
           creditRetires: cleanup ? 1 : 0, diagnostics: { firstReason: first }, budget: { total: acquired ? 15 : 10 } });
       }
     }
+    expect(doneSteps).toBe(5); // acquire, build, profile, close, then each of the five commands.
   });
   it('rejects fake-only impossible base states, unsafe inputs and objects without running hooks', () => {
     let calls = 0; const object = { valueOf() { calls++; throw Error('PRIVATE'); }, toString() { calls++; throw Error('PRIVATE'); } };
@@ -159,5 +163,35 @@ describe('K0/E pure fake, no seed/core or real budget connection', () => {
     expect(source).not.toMatch(/\b(?:fetch|inspectCheckpoint|parseCheckpoint|saveAttempt|setTimeout|issueReceipt)\s*\(/);
     for (const name of ['raw-json-boundary', 'snapshot-value-core', 'value-admission-core', 'bridge-work-core']) expect(read('tests/review/fixtures/' + name + '.ts')).not.toContain('seed-bootstrap-fake');
     expect(JSON.parse(read('tsconfig.json')).exclude).toContain('tests'); expect(JSON.parse(read('package.json')).files).not.toContain('tests/');
+  });
+});
+
+describe('K0/E review: returned results, boundary and fixed-state diagnostics', () => {
+  const walk = (v: unknown) => { if (v && typeof v === 'object') { expect(Object.isFrozen(v)).toBe(true); for (const x of Object.values(v)) walk(x); } };
+  it('freezes every returned result, including carriers and late refusals', () => {
+    walk(createSeedBootstrapFake(14, 10, 0).acquireEntry());
+    walk(createSeedBootstrapFake(0, 0, 0).acquireEntry());
+    const failed = createFixedBootstrapFake('entry_build_failure'); walk(failed.acquireEntry()); walk(failed.buildEntry());
+    const fake = createSeedBootstrapFake(20, 10, 0);
+    walk(fake.acquireEntry()); walk(fake.buildEntry()); walk(fake.checkProfile()); walk(fake.close()); walk(fake.acquireEntry());
+    const rejected = createSeedBootstrapFake(20, 10, 0); rejected.acquireEntry(); rejected.buildEntry(); walk(rejected.reject('raw_work'));
+  });
+  it('refuses E with raw_work, not an invalid base, when the used amount equals the cap', () => {
+    const fake = createSeedBootstrapFake(10, 10, 0);
+    expect(fake.inspect()).toMatchObject({ state: 'BaseEstablished', budget: { total: 10 } });
+    expect(fake.acquireEntry()).toMatchObject({ ok: false, reason: 'raw_work', entry: 'not_acquired' });
+  });
+  it('keeps the carrier diagnostics visible when the base itself is invalid', () => {
+    const fake = createSeedBootstrapFake(0, 0, 0);
+    expect(fake.inspect().diagnostics).toEqual({ firstReason: 'raw_limits', snapshot: 'not_reported', cleanup: 'not_reported' });
+  });
+  it('does not report a snapshot fault when no entry owner exists', () => {
+    const fake = createFixedBootstrapFake('snapshot_failure'); fake.acquireEntry();
+    expect(fake.reject('raw_work')).toMatchObject({ ok: false, reason: 'raw_work', entry: 'acquired', bootstrapUsage: { state: 'unavailable' } });
+    expect(fake.inspect().diagnostics).toEqual({ firstReason: 'raw_work', snapshot: 'not_failed', cleanup: 'simulated_released' });
+  });
+  it('ends a refused run in Rejected, not Retired', () => {
+    const fake = createSeedBootstrapFake(20, 10, 0); fake.acquireEntry(); fake.reject('raw_work');
+    expect(fake.inspect()).toMatchObject({ state: 'Rejected', cleanupAttempts: 1, creditRetires: 1 });
   });
 });

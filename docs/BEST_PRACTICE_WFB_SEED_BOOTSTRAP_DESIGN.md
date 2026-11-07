@@ -1,6 +1,8 @@
 # WF-B：初期seed予約bootstrap・取得前費用と拒否診断の詳細契約
 
-Version: draft-0.3 / Date: 2026-11-07 / 照合基準HEAD: `8dfc49d` / レビュー修正の基準HEAD: `f33623c` / K0／E fake実装基準HEAD: `3c53902`。
+Version: draft-0.4 / Date: 2026-11-07 / 照合基準HEAD: `8dfc49d` / レビュー修正の基準HEAD: `f33623c` / K0／E fake実装基準HEAD: `3c53902` / K0／E fakeレビュー修正の基準HEAD: `b62218c`。
+
+draft-0.3のレビュー修正: 参照機械を正常close後の操作まで届く長さへ延ばした（§10）。既課金がcapを超える場合の理由の差を、実K0の実装時に統一する項目として記した。fakeの動作は変更していない。
 
 draft-0.3: K0／Eの有限内部契約・拒否状態を純粋fakeで実装した（§10）。E取得前後・二重取得・失敗後停止、先行理由とsnapshot／cleanup二軸、全625個の4操作列を合成照合した。[検証記録](E2E_BEST_PRACTICE_WFB_K0_ENTRY_FAKE_2026-11-07.md)。fakeの5 unit scheduleは実要求量・X／Δや実creditへ昇格させず、K0の実費・実profile・private供給はUnknown／未接続のまま。
 
@@ -178,4 +180,6 @@ owner構築後はcharged／executed／prepaidUnusedをfreezeしたsnapshotとし
 
 固定故障は`entry_build_failure, profile_rejected, snapshot_failure, cleanup_failure, snapshot_cleanup_failure`の5種だけで、状態上の故障を再現する。native allocation／実snapshot／OS cleanupを故障注入したものではない。`simulated_released`もfakeの状態値に限り、物理解放確認にならない。carrier自体を供給できない故障、実module初期化費、X／Δ・本番E要求量・実credit／実plan結合・root供給は未対応である。
 
-別の6状態の参照機械で5操作の長さ4の全625列を比較し、取得・順序違反・終端後再開／debitの有無と先行診断を照合した。BigInt容量対照はparser6値×bridge3値×境界3値の54組。固定故障と100回の後着呼出し、immutable／秘密非出力・package負対照も確認した。これらのfake成功はSB01〜08の実接続・native受入完了ではない。
+別の6状態の参照機械で5操作の長さ5の全3,125列を比較し、取得・順序違反・終端後再開／debitの有無と先行診断を照合した。BigInt容量対照はparser6値×bridge3値×境界3値の54組。固定故障と100回の後着呼出し、immutable／秘密非出力・package負対照も確認した。これらのfake成功はSB01〜08の実接続・native受入完了ではない。
+
+既課金がcapを超える場合の理由は、このfakeが`raw_limits`、`inspectBridgeReservation`が`raw_work`である。実meterでは起きない状態なので、実K0の実装時に統一する。

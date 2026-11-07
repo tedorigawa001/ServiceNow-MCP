@@ -206,6 +206,8 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 ### Added
 
+- WF-B K0/entry fake review tests: extend the reference machine to all 3,125 five-operation words so it reaches operations after a successful close, and pin frozen results and carriers, the coverage flag, refusal when used equals the cap, pre-entry diagnostics and the refused end state. The fake, its fixture schedule, the absence of seed, core and real-budget wiring are unchanged.
+
 - WF-B finite bridge-work review tests: refuse non-enumerable counters and pin frozen capacity and overflow refusals; remove assertions that could not fail. The recipes, reservation bounds, not-ready status and absence of core wiring are unchanged.
 
 - WF-B RC-B review tests: pin non-enumerable plan refusal, the arithmetic step where structural overflow stops, frozen refusals, and exact charges on the value core's field-count and field-order rejection paths; remove assertions that compared a value with itself. The admission calculator, value engine, raw-parser separation, formal issuance and whole-run admission are unchanged.
