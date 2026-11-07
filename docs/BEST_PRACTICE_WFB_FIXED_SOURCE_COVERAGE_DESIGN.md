@@ -1,5 +1,7 @@
 # WF-B：固定source対応表・内容hash照合・未実装行の詳細契約
 
+差分設計追記（2026-11-07）: [固定辞書の供給・期待値更新・同SourceMapDraft結合](BEST_PRACTICE_WFB_FIXED_DICTIONARY_SUPPLY_DESIGN.md)で、開発専用の固定供給元、raw bytes期待値の別確認・採用レビュー、同じ検査返値へのprivate結合とmissing保持を具体化した。設計のみで、実辞書pin／hash照合・実装・接続状態は変更していない。
+
 Version: draft-0.3 / Date: 2026-11-07 / 読み取り照合基準HEAD: `8f27eac` / レビュー修正の基準HEAD: `82ac0cb` / 純粋値検査実装基準HEAD: `c3b3b03`。
 
 draft-0.3: §9のstrict内部型・純粋検査を合成依存限定で実装した。実sourceの辞書pin／hash照合・実施点対応の確認は未実施。[検証記録](E2E_BEST_PRACTICE_WFB_SOURCE_MAP_VALUES_2026-11-07.md)。§4〜§8の将来手順は、この値検査の成功だけでは実施済みにならない。

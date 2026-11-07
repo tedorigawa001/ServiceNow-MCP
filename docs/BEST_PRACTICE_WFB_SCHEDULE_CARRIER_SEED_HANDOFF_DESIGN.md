@@ -1,5 +1,7 @@
 # WF-B：固定schedule／carrierの実装coverageとS pending／handoffの所有境界
 
+差分設計追記（2026-11-07）: [固定辞書供給・期待値更新・同map結合](BEST_PRACTICE_WFB_FIXED_DICTIONARY_SUPPLY_DESIGN.md)を追加。供給元とレビュー責務を定める設計であり、sourceのhash一致や供給成功をcoverage／所有／実E・S要求量の証明にしない。未実装行・5 gaps・閉鎖状態は維持する。
+
 実装追記（2026-11-07）: [固定source辞書・SourceMapDraftのstrict値検査](BEST_PRACTICE_WFB_FIXED_SOURCE_COVERAGE_DESIGN.md#9-strict内部型純粋検査の実装境界)を別moduleへ実装。複数file・未実装行・不正参照を合成検査するだけで、実source hash・実施点対応・5 gapsの解消・実E／S要求量・発行には接続しない。
 
 設計追記（2026-11-07）: [固定source対応表・内容hash照合・未実装行の詳細契約](BEST_PRACTICE_WFB_FIXED_SOURCE_COVERAGE_DESIGN.md)でSC01〜12の既存参照とmissing point、別対応記録、複数fileの全件照合と独立検証条件を具体化した。設計のみで、現行値契約・5 gaps・Unknownと実接続状態は変更していない。
