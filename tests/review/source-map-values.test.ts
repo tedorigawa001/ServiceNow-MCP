@@ -225,3 +225,58 @@ describe('SourceMapDraft without source verification', () => {
     expect(inspectSourceDictionary(badArray).ok).toBe(false);
   });
 });
+
+describe('review pins for strict DATA and binding order', () => {
+  const row = (status: string, bindings: unknown[], missing: string[], id = 'SC01') => ({ id, status, bindings, missing });
+  const withRow = (value: unknown) => { const input = draft(); (input.rows as unknown[])[0] = value; return inspectSourceMapDraft(input); };
+  const reference = () => ({ ...binding(), role: 'reference_only', costStep: null });
+  it('freezes the fixed failure result', () => {
+    expect(Object.isFrozen(inspectSourceMapDraft(null))).toBe(true);
+    expect(Object.isFrozen(inspectSourceDictionary(null))).toBe(true);
+  });
+  it('rejects array proxies before any trap on every list field', () => {
+    let hooks = 0;
+    const array = () => new Proxy([], { getPrototypeOf() { hooks++; return Array.prototype; },
+      ownKeys() { hooks++; return ['length']; }, getOwnPropertyDescriptor() { hooks++; return undefined; } });
+    expect(inspectSourceDictionary(array()).ok).toBe(false);
+    expect(inspectSourceMapDraft({ ...draft(), rows: array() }).ok).toBe(false);
+    expect(withRow(row('unimplemented', [], array())).ok).toBe(false);
+    expect(withRow(row('partial_reference', array(), ['m'])).ok).toBe(false);
+    for (const field of ['prefixes', 'tests']) expect(withRow(row('mapped_unverified', [{ ...binding(), [field]: array() }], [])).ok).toBe(false);
+    expect(hooks).toBe(0);
+  });
+  it('rejects array-like, subclassed and hidden-entry arrays and non-enumerable fields', () => {
+    class Files extends Array<unknown> {}
+    const subclass = new Files();
+    subclass.push(file());
+    const arrayLike = Object.create(Array.prototype) as object;
+    Object.defineProperty(arrayLike, '0', { value: file(), enumerable: true });
+    Object.defineProperty(arrayLike, 'length', { value: 1 });
+    const hidden = Object.defineProperty([file()], '0', { value: file(), enumerable: false });
+    for (const files of [subclass, arrayLike, hidden]) expect(inspectSourceDictionary(files).ok).toBe(false);
+    expect(inspectSourceDictionary([Object.defineProperty(file(), 'path', { value: 'x.ts', enumerable: false })]).ok).toBe(false);
+  });
+  it('rejects a duplicated file ID even when the paths differ', () => {
+    expect(inspectSourceDictionary([file('F01', 'a.ts'), file('F01', 'b.ts')]).ok).toBe(false);
+  });
+  it('rejects free text, digit-led and empty missing points', () => {
+    for (const missing of ['not implemented', '1x', '', 'a-b']) expect(withRow(row('unimplemented', [], [missing])).ok).toBe(false);
+  });
+  it('rejects a thirteenth row even when it is numbered SC13', () => {
+    expect(inspectSourceMapDraft({ ...draft(), rows: [...rows(), { ...rows()[0], id: 'SC13' }] }).ok).toBe(false);
+  });
+  it('requires strictly ascending steps within a row, not only distinct owners', () => {
+    const second = { ...binding('step02'), symbol: 'Synthetic.other' };
+    expect(withRow(row('mapped_unverified', [binding(), second], [])).ok).toBe(true);
+    expect(withRow(row('mapped_unverified', [second, binding()], [])).ok).toBe(false);
+    expect(withRow(row('mapped_unverified', [binding(), { ...second, step: 'step01' }], [])).ok).toBe(false);
+  });
+  it('rejects an unknown role and a reference that claims a cost step', () => {
+    expect(withRow(row('partial_reference', [{ ...binding(), role: 'verified', costStep: null }], ['m'])).ok).toBe(false);
+    expect(withRow(row('partial_reference', [reference()], ['m'])).ok).toBe(true);
+    expect(withRow(row('partial_reference', [{ ...reference(), costStep: 'cost_step01' }], ['m'])).ok).toBe(false);
+  });
+  it('accepts the same point as implementation and reference in one row, as specified', () => {
+    expect(withRow(row('mapped_unverified', [binding(), { ...reference(), step: 'step02' }], [])).ok).toBe(true);
+  });
+});

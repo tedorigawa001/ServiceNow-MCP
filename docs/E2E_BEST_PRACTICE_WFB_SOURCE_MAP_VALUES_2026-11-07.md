@@ -33,6 +33,42 @@ Date: 2026-11-07 / 実装基準HEAD: `c3b3b03` / [設計契約§9](BEST_PRACTICE
 
 独立対照として、実装からimportしないSC01〜12一覧、24組のstatus truth table、30組のBigInt容量／件数oracleを使用した。これは値・局所関係のoracleで、実sourceの意味・実費用・全prefixイベントの独立証明ではない。梱包は一時cacheを使うdry-runで、生成script・公開・設定変更を行っていない。
 
+## レビュー修正（2026-11-07）
+
+`c77063f`の個別レビューで、不正値を受理する不具合はなかった。実装は変更せず、試験の穴を塞いだ。上記の件数は修正前の値として残す。
+
+試験2件は、名前と実際に拒否される理由が違っていた。「reference_onlyは費用を持たない」の試験は、stepや費用stepの重複で先に拒否されていた。`tests`のproxyの試験は`get`だけをtrapしており、`list`は`get`を呼ばないので、空の`tests`として拒否されていた。どちらも、意図した検査を消しても試験が成功した。
+
+**テストの修正**
+
+`tests/review/source-map-values.test.ts`に9件を追加した（52件→61件）。実装を変えないので、追加した試験は変更前の実装でも成功する。
+
+- 失敗結果の凍結。
+- 全list fieldでのproxyのtrap前拒否、array-like、独自prototype、非列挙の要素とfield。
+- 別pathでのfile ID重複、自由文・数字始まり・空のmissing、`SC13`と番号付けした13行目。
+- 行内のstepの昇順と重複、`partial_reference`での未知のrole、costStepを持つreference_only。
+- 同じ行で同じ実施点をimplementationとreference_onlyの両方に書けること（§9.3どおりの受理を固定）。
+
+設計§9.3に、reference_onlyのcostOwnerは参照先の所有を書いたもので、binding自身は費用を持たないと一文足した。契約は変わらないので版は上げていない。
+
+**ミューテーション**
+
+`source-map-values-core.ts`への変異97件を実施した。修正前は75件、修正後は89件を検出した。
+
+| 修正後も生存 | 件数 | 理由 |
+|---|---:|---|
+| 等価・冗長 | 8 | 文字列・選択肢・数値の`typeof`は後続の正規表現・`includes`・`isSafeInteger`と重複する（3件）。nullは`getPrototypeOf`の例外で同じ固定失敗になる（1件）。accessorの値は`undefined`となり後続の検査で拒否される（1件）。prefixの上限は重複検査で同じ結果になる（1件）。`fileId`の正規表現と辞書のrole検査は、辞書がIDの接頭辞とroleを一致させるため互いに冗長（2件） |
+
+| 修正後の実行 | 結果 |
+|---|---|
+| `tests/review/source-map-values.test.ts` | 61件成功 |
+| 全テスト | 304ファイル、15,173件成功、失敗0 |
+| repo全体の`npm run lint` | エラー0、警告374 |
+| `npm run build`、`node tests/review/package-http-classification.mjs` | 成功 |
+| 記録と同じ型検査、新規試験のESLint | 成功 |
+
+全テストは文書の更新前に実行した。上記で未実施としていた全体回帰は、この実行で補った。`npm pack`のファイル数は再確認していない。
+
 ## 未確認と閉鎖境界
 
 hashはnot_checked、mappingはshape_only、implementation・runtimeCoverage・nativeCost・実E／S要求量はunknown、readyはfalse、authorityはnoneに固定する。mapperの返値と既存coverageのsourceRevisionを照合する接続もない。既存5 gapsは全項目必須のまま。

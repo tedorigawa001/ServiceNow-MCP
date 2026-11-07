@@ -210,6 +210,8 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 ### Added
 
+- WF-B source-map review tests now pin array proxies before traps, array-like and subclassed lists, hidden entries and fields, duplicate file IDs, free-text missing points, a thirteenth row, step order within a row, unknown roles and reference bindings that claim a cost step. Two earlier tests were rejecting their input for a different reason than their names stated. The implementation is unchanged.
+
 - WF-B coverage rows must now list all five gaps, so an Unknown or synthetic row cannot understate what remains unverified. Review tests pin every closed carrier and ledger field, truncated ledgers, non-standard arrays, array proxies and deep freezing. Values stay untrusted DATA, with runtime coverage unknown and seed issuance, core wiring and formal issuance closed.
 
 - WF-B K0/entry fake review tests: extend the reference machine to all 3,125 five-operation words so it reaches operations after a successful close, and pin frozen results and carriers, the coverage flag, refusal when used equals the cap, pre-entry diagnostics and the refused end state. The fake, its fixture schedule, the absence of seed, core and real-budget wiring are unchanged.
