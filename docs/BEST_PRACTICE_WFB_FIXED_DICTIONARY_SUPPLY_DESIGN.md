@@ -1,12 +1,14 @@
 # WF-B：固定辞書の供給・期待値更新・同SourceMapDraft結合の差分設計
 
-Version: draft-0.2 / Date: 2026-11-07 / 読み取り照合基準HEAD: `89fa53a` / レビュー修正の基準HEAD: `5d7b410`。
+Version: draft-0.3 / Date: 2026-11-07 / 読み取り照合基準HEAD: `89fa53a` / レビュー修正の基準HEAD: `5d7b410` / 合成供給実装基準HEAD: `545f044`。
+
+draft-0.3: §9の合成固定供給元・MapSupplySnapshotとprivate結合を実装した。実辞書・期待値レビュー・内容hash検証の計画は実施済みにしない。[検証記録](E2E_BEST_PRACTICE_WFB_MAP_SUPPLY_2026-11-07.md)。
 
 draft-0.1のレビュー修正: DS02とDS08は公開の入口から到達できないので、試験専用の第2合成セットでのみ確認すると明記した（§4、§7）。`reviewSetId`の更新忘れは検出できず、レビューに頼ると書き足した。採用までは内容hash照合を既定の`npm test`から外す方針とした（§3）。「必須file」を採用した固定セットの全fileと定義した。設計のみで、実装状態は変わらない。
 
-Status: **差分設計のみ。固定供給元・実辞書の期待値pin・private結合・内容hash照合は未実装。** 親は[固定source対応・純粋値検査契約](BEST_PRACTICE_WFB_FIXED_SOURCE_COVERAGE_DESIGN.md)と[固定schedule／carrier設計](BEST_PRACTICE_WFB_SCHEDULE_CARRIER_SEED_HANDOFF_DESIGN.md)。
+Status: **合成固定セットとprivate結合だけを実装。実辞書の供給・期待値pin・内容hash照合は未実装。** 親は[固定source対応・純粋値検査契約](BEST_PRACTICE_WFB_FIXED_SOURCE_COVERAGE_DESIGN.md)と[固定schedule／carrier設計](BEST_PRACTICE_WFB_SCHEDULE_CARRIER_SEED_HANDOFF_DESIGN.md)。
 
-正式発行口閉鎖・全体受付無効・Unknown・VM／監視／telemetry調査保留を維持する。今回変更するのはMDだけで、実装・実sourceのhash採取／照合・S発行・core接続・実接続・実通信・設定変更・Pushは行わない。以下の型名・固定module・検査点は将来案で、呼出し可能な入口や発行済み証拠ではない。
+正式発行口閉鎖・全体受付無効・Unknown・VM／監視／telemetry調査保留を維持する。draft-0.1／0.2はMDだけ、draft-0.3は§9の合成実装に限定する。実sourceのhash採取／照合・実期待値pin・S発行・core接続・実接続・実通信・設定変更・Pushは行わない。§9以外の型名・固定module・検査点は将来案で、発行済み証拠ではない。
 
 ## 1 既存契約からの差分
 
@@ -106,3 +108,25 @@ missingを削除するには、実施点・全必要file・費目所有・成功
 `89fa53a`の純粋検査と親設計を読み取り照合し、差分設計と親2文書の参照を追加した。ローカル文書参照・空白・変更範囲だけを確認する。code／test／CHANGELOG／設定は変更せず、build・合成試験・実source hash照合は実行しない。
 
 固定供給snapshot・期待値作成の独立手段・具体担当・実セットの採用、bounded安全読取・hash検査、実施点の意味照合・全費目oracleは未実装／未承認である。正式発行口閉鎖・全体受付無効・Unknown・調査保留を維持する。
+
+上記はdraft-0.1時点の記録。今回の合成実装範囲は以下と検証記録に分離する。
+
+## 9 合成固定セット・MapSupplySnapshotの実装境界
+
+`tests/review/fixtures/source-map-supply-fake.ts`を追加。importは既存の純粋`inspectSourceMapDraft`だけで、実source・fs・crypto・runtime・K0/E fake台帳を使わない。固定recipeはsynthetic配下の4 file（F01／F02／O01／T01）、長さ10と模擬64桁値、SC12行。SC01は2 fileへのreference_onlyを持つpartial_reference、残り11行はunimplementedで、各行にactual_producerというmissingを残す。親の実10ファイル辞書ではなく、実期待値pinではない。
+
+通常factoryは外部map／files／rows／版／supplierを受け付けない。引数があれば、その内容を読まずsupply_invalidで停止する。正常時は同recipeのmapを1回検査し、その成功返値valueを新しい非公開MapSupplySnapshotへ保持する。MapSupplySnapshotとSupply classはexportせず、同一性の保持は各ownerのprivate fieldだけで、global台帳・登録口はない。
+
+同snapshot・synthetic-map-set-1・同value・同value.files・同value.rowsがそろう場合だけprivate acceptを通す。snapshot／map／配列の同値copyと、copy前の元入力はcanonicalとして採用しない。pure値検査のcopy／freeze自体はそのままで、新しい権限やclaimを追加しない。
+
+facadeはcheck／close／inspectだけで、map・辞書・snapshot・hash本文・adopt口は出さない。checkは固定の非実行継続による結合確認で、hashや意味検証を呼ばない。正常時のreadonly再確認は許し、one-shot claimは作らない。closeはprivate参照を1回だけ論理退役させ、終了後checkはsupply_closedで拒否する。close自体は反復可能だが二重退役しない。
+
+binding拒否または生成失敗では最初のsupply_invalid／binding_mismatchを保持し、owner内のsnapshotと試験用元入力参照を退役する。以後のcheck／closeは先行理由を返して再開しない。正常close後の拒否は正常終了の診断を後から上書きしない。logicalRetirementsは当該ownerの参照退役回数で、物理解放／GC／ゼロ化の証明ではない。
+
+createFixedSyntheticMapSupplyは有限scenario名だけを受ける合成probe factory。未知名・余分引数は正常へfallbackせず、DATA構築前に拒否する。通常継続とprobeは同じprivate acceptを通る。別snapshot、canonical mapを持つ別wrapper、再検査したmap copy、files／rowsだけのcopy、第2mapのfiles、元入力、版文字列の混入を内部だけで作る。第2セットはhelperの模擬path／byte長を変えたcontrol DATAで、synthetic-map-set-2は混入対照だけに使い、正常供給する別の承認済み版にはしない。
+
+DS02／DS08の拒否は、試験専用copy／第2セットの内部対照によるもの。通常の公開facadeにはsnapshot／map引数がなく、外部からその混入へ到達した証拠ではない。reviewSetIdと内容はhashで結合していないため、内容を変えて版更新を忘れる問題は検出せず、引き続きレビューで扱う。実hash照合を既定のnpm testへ追加していない。
+
+固定故障はDATA準備後、map拒否、snapshot生成後の3境界。snapshot生成後の故障では同snapshotを退役してから拒否する。probe内の一時foreign snapshotもfinallyで退役する。任意fault callbackやprototype破壊は使わず、native allocation／freeze内部の全故障は未検証。inspectのmapChecksは当該供給mapの検査回数で、negative probeがcopy／foreign候補を準備する追加純粋検査は含まない。全費用・native費は未計量のまま。
+
+全返値はsynthetic=true、realPins=not_supplied、authority=none、ready=false、hash=not_checked、mapping=shape_only、implementation／runtimeCoverage／nativeCost／entryRequirement／seedRequirement=unknown、coreInvocation=not_calledに固定。供給の成功は実セット採用・レビュー・内容hash一致・missing解消を意味しない。DS01／DS02／DS06／DS07／DS08の合成境界部分だけが対象で、DS03の実未pin管理、DS04の実source集合、DS05の期待値レビューは未実施。実供給・hash検証・意味対応・S／core接続は閉鎖のまま。
