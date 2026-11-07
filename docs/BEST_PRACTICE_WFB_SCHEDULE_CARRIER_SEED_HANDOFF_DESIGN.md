@@ -2,7 +2,9 @@
 
 設計追記（2026-11-07）: [固定source対応表・内容hash照合・未実装行の詳細契約](BEST_PRACTICE_WFB_FIXED_SOURCE_COVERAGE_DESIGN.md)でSC01〜12の既存参照とmissing point、別対応記録、複数fileの全件照合と独立検証条件を具体化した。設計のみで、現行値契約・5 gaps・Unknownと実接続状態は変更していない。
 
-Version: draft-0.4 / Date: 2026-11-07 / 照合基準HEAD: `a2f568e` / レビュー修正の基準HEAD: `3c0e7a4` / 値契約実装基準HEAD: `54619ef` / 値契約レビュー修正の基準HEAD: `c092694`。
+Version: draft-0.5 / Date: 2026-11-07 / 照合基準HEAD: `a2f568e` / レビュー修正の基準HEAD: `3c0e7a4` / 値契約実装基準HEAD: `54619ef` / 値契約レビュー修正の基準HEAD: `c092694` / source対応設計レビュー修正の基準HEAD: `82ac0cb`。
+
+draft-0.4のレビュー修正: 内容hashの置き場所を、行ごとから[source対応設計](BEST_PRACTICE_WFB_FIXED_SOURCE_COVERAGE_DESIGN.md)の固定ファイル辞書へ改めた（§3、§8、§11）。1行が複数ファイルにまたがると、1行1個のhashでは照合できないためである。現行の`sourceRevision`は形式だけを検査する値とし、照合に使わない。値契約と実装は変わらない。
 
 draft-0.3のレビュー修正: 全行で`gaps`の5項目すべてを必須にした。未確認の範囲を少なく見せる行を受理していたためである。synthetic行の`paths`は1件以上必須、`slots`は空でも可と明記した。行から対象ソースを特定できない点を次工程の要件として記録した（§11）。
 
@@ -41,7 +43,7 @@ E後の検査対象は固定field順のmodel／revision、有限step集合・経
 
 各行は少なくとも`source revision / symbol・実施点 / phase / producer / 費用所有 / 最大反復・slot集合 / 正常・拒否・部分prefix / 診断可能性 / 独立検証経路 / 未対応点`を持つ。source変更時はsymbolだけが同名でも再照合し、旧試験の件数を新行の証拠へ移さない。台帳は設計・検証の対応表であり、それだけでruntime identityを発行しない。
 
-`source revision`はコミットハッシュにしない。台帳は自分を含むコミットのハッシュを持てないためである。対象sourceの内容ハッシュを行ごとに持ち、試験がsourceから計算して照合する。実行時には照合せず、一致しても発行権限や実行permitにならない。
+`source revision`はコミットハッシュにしない。台帳は自分を含むコミットのハッシュを持てないためである。対象sourceの内容ハッシュは、[source対応設計](BEST_PRACTICE_WFB_FIXED_SOURCE_COVERAGE_DESIGN.md)の固定ファイル辞書だけが持つ。各行は辞書のfile IDを参照し、試験がsourceから計算して辞書の値と照合する。1行が複数ファイルにまたがる場合も、行に1個のhashを持たせない。実行時には照合せず、一致しても発行権限や実行permitにならない。
 
 | ID | 対応させる実施点・処理 | 費用所有 | 現在の根拠／不足 |
 |---|---|---|---|
@@ -145,7 +147,7 @@ first reasonは後着のsnapshot／cleanup／entry終端異常で上書きしな
 
 追加entry slot・wrapper・pool供給・transferの費用はXと費目所有へ、target初期化／cleanupと旧S recipeとの差分はΔへ対応付ける。5、27、75、398からの逆算で実係数を決めない。実E要求量とS上界は、全slot集合・最大反復・全終端経路の独立計数が完了するまでUnknownとする。
 
-ready条件は、SC01〜12の必要行がsource revision／step／所有者／経路と対応し、K0・anchor・carrierの基底供給条件、E／Sの上界、privateなdebit／handoffの原子境界と失敗時責務、旧API／package負対照が確認できることである。単なるmanifestのcompleteラベルや総額一致でreadyにしない。現時点では条件を満たしておらず、実供給・core接続は閉鎖したままである。
+ready条件は、SC01〜12の必要行がファイル辞書経由のsource照合／step／所有者／経路と対応し、K0・anchor・carrierの基底供給条件、E／Sの上界、privateなdebit／handoffの原子境界と失敗時責務、旧API／package負対照が確認できることである。単なるmanifestのcompleteラベルや総額一致でreadyにしない。現時点では条件を満たしておらず、実供給・core接続は閉鎖したままである。
 
 ## 9 将来の合成受入条件
 
@@ -185,6 +187,6 @@ coverage外形の固定field順は`model, rows, ready, runtimeCoverage, nativeCo
 
 syntheticラベルやrevision文字列をprivate manifestへ昇格しない。SCごとのproducer／費用所有の実source照合、同producer／body結合、固定sourceから内容hashを再計算する独立試験、全経路の独立計数・実E／S導出は次工程である。本実装が生成するのは未信頼の対応DATAだけで、coverage証拠は発行しない。
 
-現在の行には対象sourceのファイルを示すfieldがなく、symbolは`/`と`-`を受理しないので、行の情報だけでは内容hashの再計算対象を決められない。再計算の試験を作る工程で、行とsourceファイルの対応の持ち方を定める。1行が複数ファイルにまたがる場合の形式は、実施点の棚卸しの後に決める。
+現在の行には対象sourceのファイルを示すfieldがなく、symbolは`/`と`-`を受理しないので、行の情報だけでは内容hashの再計算対象を決められない。行とsourceファイルの対応は、[source対応設計](BEST_PRACTICE_WFB_FIXED_SOURCE_COVERAGE_DESIGN.md)の別の対応記録で持つ。本値契約の`sourceRevision`は64桁の形式を検査するだけの値で、辞書のhashとの照合には使わない。両者が食い違っても、どちらも検証済みにはならない。
 
 objectはplain／null prototypeの固定順own enumerable DATAのみ。余分／欠落／symbol／accessor／独自prototypeを拒否。配列は標準prototypeのdense own DATAのみ、入力proxyはtrap前に拒否する。反射のnative費・OOM・module初期化は未計量で、有限件数は実CPU／heap／work予算の証明ではない。失敗返値は固定invalid_valueだけを持ち、入力・例外・key・offsetは出力しない。返値からS・record・identityを復元する入口はない。

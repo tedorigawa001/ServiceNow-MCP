@@ -1,6 +1,8 @@
 # WF-B：固定source対応表・内容hash照合・未実装行の詳細契約
 
-Version: draft-0.1 / Date: 2026-11-07 / 読み取り照合基準HEAD: `8f27eac`。
+Version: draft-0.2 / Date: 2026-11-07 / 読み取り照合基準HEAD: `8f27eac` / レビュー修正の基準HEAD: `82ac0cb`。
+
+draft-0.1のレビュー修正: 内容hashの置き場所を固定ファイル辞書だけとし、親設計の「行ごとのhash」を改めた（§1）。照合結果を全体の成否1つから、hash／mapping／implementationの3軸へ分けた。未実装行が残っていても、hashの一致を報告できるようにするためである（§5）。作業中変更での停止をGitの状態ではなくhashの一致で判定するようにし、対応記録自身の完全性はレビューに任せると明記した。SC01に`SyntaxMeter`を加え、改行の変換を止める設定を実装時の要件とした。設計のみで、実装状態は変わらない。
 
 Status: **設計のみ。source対応台帳・hash検証器・coverage証拠は未実装。** 親は[固定schedule／carrier設計](BEST_PRACTICE_WFB_SCHEDULE_CARRIER_SEED_HANDOFF_DESIGN.md)と[seed bootstrap設計](BEST_PRACTICE_WFB_SEED_BOOTSTRAP_DESIGN.md)。現行のcarrier／coverage値検査を変更せず、その値から分からない対象sourceと実施点を別の対応記録で固定する。
 
@@ -12,13 +14,19 @@ Status: **設計のみ。source対応台帳・hash検証器・coverage証拠は�
 
 現行`inspectCoverageLedger`はsourceRevisionという64桁値の形式だけを検査し、対象ファイルを特定しない。全行のgapsはruntime_coverage／native_cost／source_mapping／ownership／cost_boundの5項目を必須とする。この契約を無断で緩めず、本書の対応表や将来のhash成功を既存strict値へcompleteとして書き戻さない。
 
+内容hashの置き場所は§4の固定ファイル辞書だけとする。親設計の`sourceRevision`は形式を検査するだけの値で、辞書のhashとの照合に使わない。両者が食い違っても検出の対象にせず、どちらも検証済みとは扱わない。
+
+対応記録と検証器自身は辞書に入れない。入れると、記録が自分のhashを含む循環が起きるためである。したがって、sourceと期待hashを同じ変更で書き換えた場合は、この照合では検出できない。記録の完全性はコミットのレビューに任せる。
+
+`mapped_unverified`の先に、確認済みへ進む状態はまだない。実施点対応の検証方式と、親設計の`gaps`を緩める条件は、後続の設計で一緒に定める。それまで親設計のready条件は満たされない。
+
 ## 2 固定ファイル辞書：現時点で存在する参照先
 
 pathはすべてrepository rootからの相対path。以下は読み取った参照先であり、まだhashをpinしたmanifestではない。
 
 | ID | 固定path | 役割と確認したsymbol／境界 |
 |---|---|---|
-| F01 | `tests/review/fixtures/raw-json-boundary.ts` | 既存raw fixture。readLimits、Meter、runBoundary。planの検査後にmeter生成・plan64・配賦和検査を行う |
+| F01 | `tests/review/fixtures/raw-json-boundary.ts` | 既存raw fixture。readLimits、Meter、SyntaxMeter（T02の経路で生成）、runBoundary。planの検査後にmeter生成・plan64・配賦和検査を行う |
 | F02 | `tests/review/fixtures/seed-bootstrap-fake.ts` | 独立数値fake。Assembly.acquireEntry／buildEntry／checkProfile／finish、carriers。実schedule・実allocation・S供給ではない |
 | F03 | `tests/review/fixtures/carrier-coverage-core.ts` | 独立値検査。inspectCarrier／inspectCoverageLedgerとrecord／list／subset。pool・issuer・meterは持たない |
 | F04 | `tests/review/fixtures/bridge-work-core.ts` | 旧有限recipe計算。calculateBridgeWorkBounds／inspectBridgeReservation。新bootstrap費の実測ではない |
@@ -37,7 +45,7 @@ pathはすべてrepository rootからの相対path。以下は読み取った参
 
 | 行 | 既存参照・試験 | 確認できる範囲 | 固定供給経路で欠ける実施点 |
 |---|---|---|---|
-| SC01 | F01.readLimits／runBoundary／Meter、T01／T02 | 既存plan検査・meter生成・配賦和の実施位置 | 新bootstrapでの同plan／meter継続、取得前native費の境界 |
+| SC01 | F01.readLimits／runBoundary／Meter／SyntaxMeter、T01／T02 | 既存plan検査・meter生成・配賦和の実施位置 | 新bootstrapでの同plan／meter継続、取得前native費の境界 |
 | SC02 | F02.Assembly.acquireEntry、T03 | fakeの一度取得・容量判定・非refund | 固定anchor供給、実K0の受付primitiveと拒否返却 |
 | SC03 | F02.Assembly.buildEntry／finish、T03 | ownerBuilt flagと固定故障の論理状態 | 実owner／診断slot／終端予約の全生成点とpartial alias |
 | SC04 | F02.Assembly.checkProfile、F03.inspectCoverageLedger、T03／T04 | fakeの順序、coverage DATAの形式 | 同anchorのbody読取、固定model／coverageのprivate照合 |
@@ -67,14 +75,17 @@ F03の値適合はSC04／SC05／SC11の全処理を実施した意味ではな�
 
 ## 5 内容hashの照合手順と停止条件
 
-1. 対象checkoutと対応記録の版を固定する。対象ファイルと対応記録に作業中変更があれば、通常の承認済み対応検査は停止する。作業中版の調査結果を既承認版の成功として保存しない。無関係な変更は保持し、検証器が自動修復しない。
+1. 対応記録の版を固定する。作業中変更の有無はGitの状態では判定しない。対象ファイルは、bytesが期待hash・byte長と一致するかで判定する。一致すれば作業中でも同じbytesなので、照合を続けてよい。不一致は`content_mismatch`とする。作業中版の調査結果を既承認版の成功として保存しない。無関係な変更は保持し、検証器が自動修復しない。
 2. 固定辞書のpathだけをrepository root配下で読む。絶対path・空要素・`.`／`..`・backslash・重複／大小文字aliasを拒否する。symlinkや特殊fileは拒否し、追従しない。将来の検証器の安全な読取実装は別途確認が必要で、今回保証していない。
-3. source／test／oracleの実file bytes全体をSHA-256へ入れる。UTF-8 decode・改行変換・BOM除去・整形・コメント除去・transpileをしない。Git blob headerやpathもfile内容hashに混ぜない。byte長も照合する。予定上限は1ファイル1MiB・総bytes8MiBで、読取前と読取中に制限し超過は拒否する。
-4. 各固定file IDの期待hash・byte長と照合する。複数ファイル行は必要な全bindingの照合が成功して初めて`hash_match`とする。全体集合digestだけに省略しない。hash集合の文字列連結は行わない。
+3. source／test／oracleの実file bytes全体をSHA-256へ入れる。UTF-8 decode・改行変換・BOM除去・整形・コメント除去・transpileをしない。Git blob headerやpathもfile内容hashに混ぜない。byte長も照合する。checkout時の改行変換でbytesが変わらないよう、実装時に辞書の対象ファイルへ`.gitattributes`で変換の停止を設定する。現在はこの設定がなく、`core.autocrlf`も未設定で、CIはUbuntuだけである。予定上限は1ファイル1MiB・総bytes8MiBで、読取前と読取中に制限し超過は拒否する。
+4. 各固定file IDの期待hash・byte長と照合する。複数ファイル行は、`reference_only`を含む全bindingの照合が成功して初めて`hash_match`とする。bindingが空の行のhash軸は`not_applicable`とし、`hash_match`と数えない。全体集合digestだけに省略しない。hash集合の文字列連結は行わない。
 5. symbol／step対応を別に確認する。コメント中の同名文字列や単なるsubstring検索を実施点の存在と扱わない。非export関数・呼出し点・module初期化・helper境界は独立のsourceレビューと試験へ対応付ける。静的検査の方式自体が未実装ならその確認はunverifiedとする。
-6. いずれかの不足・hash／長さ差・読取不能・途中変更・不正path・未知版・曖昧symbolで検証全体を非成功とする。成功済みfileの部分結果と最初の固定失敗分類は保持できるが、失敗行をskipして全体成功にはしない。自動の期待hash更新・fallback・追加source読取はしない。
+6. 結果は全体の成否1つにせず、次の3軸で別々に返す。各軸は、その軸のどこか1か所でも失敗があれば非成功とし、失敗をskipして成功にはしない。成功済みfileの部分結果と、軸ごとの最初の固定失敗分類は保持できる。自動の期待hash更新・fallback・追加source読取はしない。
+   - `hash`：辞書の全ファイルのbytes照合。未実装行の有無に左右されない。
+   - `mapping`：対応記録の形式と、symbol／step対応の確認。
+   - `implementation`：未実装行とmissing pointの有無。SC06／07／09などが残る間は常に非成功で、これは正常な現状である。
 
-将来の固定失敗分類案は`mapping_invalid`／`source_unavailable`／`source_changed`／`source_limit`／`content_mismatch`／`point_unverified`／`row_unimplemented`。raw例外や任意source本文を診断へ出さない。hash照合結果・実施点対応・試験結果は別軸にし、`hash_match`をcoverage completeやreadyへ写像しない。
+将来の固定失敗分類案は軸ごとに分ける。`hash`軸は`source_unavailable`／`source_changed`／`source_limit`／`content_mismatch`。`source_changed`は読取りの途中で内容や種別が変わった場合だけを指し、期待値との差は`content_mismatch`とする。`mapping`軸は`mapping_invalid`／`point_unverified`。`implementation`軸は`row_unimplemented`。raw例外や任意source本文を診断へ出さない。3軸がすべて成功しても、coverage completeやreadyへ写像しない。試験結果は、さらに別の軸として扱う。
 
 内容が変われば期待hashの更新だけで済ませない。該当行・依存する共有helperの全行・費目・成功／拒否／部分prefix・試験を再レビューする。hash pinと実sourceを同じ生成処理から無条件で作り直す試験は独立検証にならない。
 
@@ -88,8 +99,8 @@ F03の値適合はSC04／SC05／SC11の全処理を実施した意味ではな�
 | FS04 | 同じhashだが誤symbol／誤phase／誤費目所有／欠けた呼出し点 | 内容一致と実施点対応を分け、unverifiedを残す |
 | FS05 | SC06／07／09等の未実装行、空binding、架空source、reference_onlyをimplementationへ付替え | 未実装をpassや0費用へ昇格させない |
 | FS06 | 別の意味イベントoracleで正常・拒否・全部分prefixの生成／copy／freeze／診断／clearを計数 | 欠落・二重課金・E/Sへの誤所属・反復上限違いを検出。旧oracleを新SCへ流用しない |
-| FS07 | path逸脱・symlink・特殊file・size境界・短読取・読取中差替え・読取失敗 | 固定失敗、外部sourceへ追従しない。注入依存で行い実接続しない |
-| FS08 | 一部file成功後の失敗、未知版、未確認native費、古いtest参照 | 部分診断を残すが全体非成功。5 gaps、Unknown、ready=falseを維持 |
+| FS07 | path逸脱・symlink・特殊file・size境界・短読取・読取中差替え・読取失敗。期待hashと一致する作業中bytesと、一致しない作業中bytes | 固定失敗、外部sourceへ追従しない。読取中差替えは`source_changed`、期待値との差は`content_mismatch`。一致する作業中bytesは照合を続ける。注入依存で行い実接続しない |
+| FS08 | 一部file成功後の失敗、未知版、未確認native費、古いtest参照。全hash一致で未実装行だけが残る場合 | 部分診断を残し、失敗した軸だけを非成功にする。後者は`hash`成功・`implementation`非成功を区別して返す。5 gaps、Unknown、ready=falseを維持 |
 | FS09 | 対応記録・検証器・fixture・oracleの梱包負対照とimport検査 | runtimeへの登録口・fromSummary昇格・K0/E fake台帳共有・S/core呼出しがない |
 
 oracleと本体で固定事実を別記述する際は、その対応表を人が照合する。同じ実装のhelperを両側から呼ぶだけでは独立性を満たさない。hashの独立性は固定期待値との比較、意味・費目の独立性は別イベント表との比較で、別の問題である。
