@@ -1,6 +1,8 @@
 # WF-B：bounded raw JSON parserの詳細契約
 
-Version: draft-0.6 / Date: 2026-11-07 / 照合基準HEAD: `7eefb10` / レビュー修正の基準HEAD: `09e65e0` / RP-A実装基準HEAD: `baaf60d` / RP-B実装基準HEAD: `f28f0a2` / RP-Bレビュー修正の基準HEAD: `6a8209a`。
+Version: draft-0.7 / Date: 2026-11-07 / 照合基準HEAD: `7eefb10` / レビュー修正の基準HEAD: `09e65e0` / RP-A実装基準HEAD: `baaf60d` / RP-B実装基準HEAD: `f28f0a2` / RP-Bレビュー修正の基準HEAD: `6a8209a` / RP-C設計レビュー修正の基準HEAD: `cc0f410`。
+
+draft-0.6のレビュー修正: §4の値検査手順とRJ09を[RP-C差分設計](BEST_PRACTICE_WFB_RPC_PRIVATE_VALUE_BRIDGE_DESIGN.md)に合わせた。設計のみで、実装状態は変わらない。
 
 draft-0.6: [RP-Cの同AST接続・2V受付とcore計数診断保持の差分設計](BEST_PRACTICE_WFB_RPC_PRIVATE_VALUE_BRIDGE_DESIGN.md)を追加。parser finally前の固定借用、一度claim、core失敗計数の観測可否、legacy互換と独立検証条件を具体化した。設計のみでcore接続・受付式の採用は行っていない。
 
@@ -83,7 +85,7 @@ limitsは合成計画が事前に確定するimmutableなprimitive値の集合�
 3. **Utf8Checked**: owned bytes全体をboundedなUTF-8走査で検査。stringへ全decodeしない。最初の不正sequenceで停止。cap／workが先に尽きればその理由が優先。
 4. **Parsing**: root object・compact profile、文字列／数値／literalと有限container stackを解析する。次byte probe／token／field／element／nodeの前に該当費を課金する。同objectの既出keyは有界リストで照合し、重複判明時は値の解析・挿入前に停止する。
 5. **Framed**: root終了直後が単一LFかつ直後EOFであることを確認。root閉鎖以前のsyntax不正を末尾エラーへ置き換えない。
-6. **ValueChecked**: 有界に自前構築した中間値だけを既存`validateCheckpointValue`へ一度渡す。fixed field順・10 variant・局所関係・実shape・encoded上界を照合する。親§4のnon-observed metricとnot_run failure矛盾、親§6の空run complete拒否を維持する。
+6. **ValueChecked**: [RP-C差分設計](BEST_PRACTICE_WFB_RPC_PRIVATE_VALUE_BRIDGE_DESIGN.md)の2V／structural受付を通した後、有界に自前構築した中間値だけを、既存`validateCheckpointValue`と同じ単一engineのdetailed入口へ一度渡す。fixed field順・10 variant・局所関係・実shape・encoded上界を照合する。親§4のnon-observed metricとnot_run failure矛盾、親§6の空run complete拒否を維持する。
 7. **Returned／Rejected**: 成功値のcopy／freezeを受け取った後に中間AST・bytesへの参照を外す。失敗は固定理由と実到達stageのみを保持し、部分値を返さない。coreが失敗すればparser-only成功へdowngradeしない。
 
 duplicate keyの照合は**現在のobjectだけ**で最大10key、key比較は最大64byte。substringの無制限蓄積・汎用hash callback・外部reviver／schema callbackは使わない。generic JSON.parseに先に任せる方式は禁止する。既存coreが自身でcopy／freezeする費用を省略・無料化せず、中間ASTとの寿命の重なりを残す。
@@ -152,7 +154,7 @@ oracleを製品encoderやparserの出力から生成して正解としない。�
 | RJ06 | −0・unsafe整数・32／33byte token、1.0／1e0／1E-7、underflow／overflow、MIN_VALUE・小数 | 長さ境界、canonical比較とcoreのfield範囲を分離。丸め／string→整数補完なし。33byteは変換前に拒否 |
 | RJ07 | 各capの−1／等値／＋1、depth5／6、10／11field、64／65byte string、件数path別境界 | 次操作前の課金・拒否、無制限のskip／構築なし。上限fixtureを実運用capへ昇格しない |
 | RJ08 | 入力Nと背後Aの差、A+N、token scratch、`max_live_value_nodes`の等値／1不足 | 独立BigIntでoverflow／必要量を比較。不足時はcoreを呼ばない。visible byteだけでbacking保持を無料化しない。実heap byte保証は未確認 |
-| RJ09 | node／tokenを手書き小treeと全rowで数える、32固定費・ScopeTail・Metric variants、受理した全fixtureの入力長 | §3.1のV／T上界と実計数を独立検証。parser内部counter同士だけで正当化しない。`N≤upper.encoded`を確認し、encoderとは別の経路で上界式を照合する。Vを`max_nodes`へ流用した場合に正当な値が`value_limit`になることを対照として固定する |
+| RJ09 | node／tokenを手書き小treeと全rowで数える、32固定費・ScopeTail・Metric variants、受理した全fixtureの入力長 | §3.1のV／T上界と実計数を独立検証。parser内部counter同士だけで正当化しない。`N≤upper.encoded`を確認し、encoderとは別の経路で上界式を照合する。Vを`max_nodes`へ流用した場合に正当な値が`value_limit`になることを、core直呼びの対照として固定する。RP-C入口では事前受付によりparse段の`raw_limit`となり、coreを呼ばない |
 | RJ10 | 途中のbyte／token／node／比較／数値変換でwork不足、coreのwork不足 | 前後の操作到達数を計数する内部fixtureで停止位置を検証。二重課金・core複数呼出し0、unused枠転用0、公開fault callbackなし |
 | RJ11 | 不正UTF-8＋schema不正、token上限＋syntax不正、parse成功＋関係矛盾等 | §4／§5の先着理由を保持。失敗後の後段開始0。passedとnot_run module／hook failureの矛盾、非observed metric、空run completeを最新core通り拒否 |
 | RJ12 | 秘密canaryを含む不正key／値／trailing bytes、部分生成失敗 | raw値・offset・key・例外・stackの出力0、未受理AST／byte参照の固定unwind。JSメモリ消去成功と称さない |

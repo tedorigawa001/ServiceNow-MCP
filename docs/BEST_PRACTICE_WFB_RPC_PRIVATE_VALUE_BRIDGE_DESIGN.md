@@ -1,6 +1,8 @@
 # WF-B RP-C 同AST接続と2V受付 計数診断保持の差分設計
 
-Version: draft-0.1 / Date: 2026-11-07 / 照合基準HEAD: `81d23f3`。
+Version: draft-0.2 / Date: 2026-11-07 / 照合基準HEAD: `81d23f3` / レビュー修正の基準HEAD: `cc0f410`。
+
+draft-0.1のレビュー修正: 受入条件ごとに検証経路を付け、bytesから届かない経路と試験専用assemblyの決定順を明記した（§9、§10）。modelをplanへ入れないことと、post拒否の理由を固定した。structuralの別候補式を検証対象へ追加した（§4.2）。設計のみで、実装状態は変わらない。
 
 Status: **設計のみ。RP-C・新しい計数API・受付計算器・試験は未実装。** [raw parser契約](BEST_PRACTICE_WFB_BOUNDED_RAW_JSON_PARSER_DESIGN.md)のRP-Bから、[strict値core](BEST_PRACTICE_WFB_SNAPSHOT_VALUE_CONTRACT.md)へ同じASTを一度だけ借用し、copy前の2V受付と失敗時の計数保持を組み合わせる。旧v1・正式発行口閉鎖・全体受付無効・Unknown・VM／監視／telemetry調査保留を維持する。実装・証拠発行・本文保存・実接続・実通信・実機操作・設定変更・Pushを行わない。
 
@@ -18,7 +20,7 @@ RP-Cの成功も候補DATAであり、capture／保存／終了やsourceの真�
 
 ## 2 同invocationのprivate供給と所有権
 
-合成入口名は親案の`parseCheckpointBytes(bytes, plan)`を候補とする。既存RP-A／RP-BのAPI・model・試験を置き換えない。callerがAST・core関数・Meter・root-end・継続callback・発行済み風のsummaryを供給する引数は追加しない。runtime export・fixture台帳共有も行わない。
+合成入口名は親案の`parseCheckpointBytes(bytes, limits)`を候補とする。既存RP-A／RP-BのAPI・model・試験を置き換えない。callerがAST・core関数・Meter・root-end・継続callback・発行済み風のsummaryを供給する引数は追加しない。runtime export・fixture台帳共有も行わない。
 
 同invocationのprivate contextは、元のowned bytes、parser root参照、構文成功時の実測V、元plan、parserの累積計数器、core呼出しclaim、先行診断を持つ。実run／session台帳や外部認証とのbindingではなく、この閉じた同期呼出し内の同一性である。公開digest・件数の一致だけで別contextを混ぜない。
 
@@ -37,7 +39,7 @@ source順のkeyは既存coreが固定field順と未知field拒否で照合する
 
 状態案は`Parsing → Framed → AdmissionChecked → CoreClaimed → CoreReturned → Returned / Rejected`。元の構文／frame失敗は`Framed`へ進まず、そのまま元診断で停止する。
 
-1. 受付時に同planを検査・pinし、parser／core／bridgeの固定model版を照合する。modelの違いを同一単位とみなさない。
+1. 受付時に同planを検査・pinする。parser／core／bridgeのmodel版は固定定数として照合し、planへmodel欄を追加しない（§8）。modelの違いを同一単位とみなさない。
 2. RP-A／RP-Bの同じ一度copy・UTF-8・構文解析を継続し、単一LF／EOFまで確認する。別の`inspectCheckpointSyntax`実行結果を受け取って再parseする方式は使わない。
 3. rootが生きている同同期区間で、元の実測Vとplanから§4の受付を行う。構文失敗prefixの開始予約数は使わない。
 4. 同planから固定ValueLimitsを生成し、core後のpost検査・診断copy・pending破棄に必要なbridge費も先行確保する。
@@ -67,6 +69,16 @@ parserのVをcoreの`max_nodes`へ直接渡さない。以下を**現行coreに�
 前提はRP-Bが生成した有限・非循環・aliasなしのAST、現在のschema分岐が同じsubtreeを再walkしないこと、coreの課金点／単位が固定されることである。汎用unknown objectや別のschema／modelには適用しない。正当値だけでなく途中schema拒否のcharged prefixも式内であることを要する。sourceレビューだけで採用済みとはせず、全10 variant・全row・破損prefixと独立計数・課金変異で検証してからmodelを固定する。
 
 採用する場合、checked算術で候補値を求め、`S_candidate ≤ plan.max_nodes`をcore前に照合する。不足ならparse段`raw_limit`、算術overflowならparse段`raw_overflow`、core呼出し0。保守式により実際には通る値を早期拒否し得るが、limitを自動で引き上げない。式の検証・model固定前にRP-Cの受付全体を有効にしない。
+
+この受付を採用すると、RP-C入口を通る値はcoreのstructural上限に届かない。`max_nodes`不足はparse段の`raw_limit`になり、core呼出しは0である。coreの`value_limit`はwork／byte由来で残る。structural上限の拒否はcore直呼びで検証する。
+
+`cc0f410`のレビューでは、残さない一時プローブで次を確認した。`JSON.parse`した値をcoreへ渡した計数であり、RP-Cの実行でもRC03の完了でもない。
+
+- 正当値53件のstructural計数は、本文ありで`2V+10+M`、本文なしで`2V+9`に一致した（MはMetric数）。
+- 構文を通った変異11,312件で、拒否までの計数は`3V+10`を超えなかった。
+- `3V+10`は実計数の1.33〜1.5倍だった。scope 100、worker 1000の最大shape（V=392332）へ式を当てると、実計数の上限786474に対して1177006になる。
+
+Metricはsample行だけにあり、sampleは最大600行なので`M≤1800`である。これによる別候補`S_alt(V) = min(3V+10, 2V+1810)`もRC03の検証対象とする。1800の部分はsample上限に依存し、主にソースから導出した値なので、sample上限やMetric数を変えたら再検証する。どちらの式を採用するかは未決定で、現時点の候補は`S_candidate`のままである。
 
 ## 5 同planのValueLimitsと費目所有
 
@@ -119,11 +131,11 @@ bridgeの`coreInvocation`は`not_called / called_once`。計数snapshot案は次
 | 位置 | 固定結果と責務 |
 |---|---|
 | raw／構文／frame拒否 | 元stage／reasonを保持。core not_called。元AST／bytesは元finallyがretire |
-| model／plan不成立 | core前に拒否。model混在を`raw_limits`として扱い、cap不足や観測成功へ補完しない |
+| model／plan不成立 | core前に拒否。model混在を`raw_limits`として扱い、cap不足や観測成功へ補完しない。model混在はbytesから届かない（§9.1） |
 | 2V／structural／bridge費不足 | parse段`raw_limit / raw_overflow / raw_work`。core not_called。未知fieldでも先行受付不足が優先 |
 | core拒否 | value段で1対1理由を保持し、observed／unavailableも保持。raw成功へdowngrade・再呼出し・fallbackなし |
 | 固定core呼出し自体の予期しないthrow／結果型・model不成立 | coreを呼び直さず、value段`raw_internal`。取得できた先行診断／計数成分を残し、部分成功を出さない |
-| core成功後のpost拒否 | pending copyを破棄し、value段の最初のbridge理由を保持。coreの成功workは残すが、候補値は外へ返さない |
+| core成功後のpost拒否 | pending copyを破棄し、value段`raw_internal`を保持。coreの成功workは残すが、候補値は外へ返さない |
 | 成功post後 | normalized copyを非実行の結果ownerへ一度moveし、元ASTとbytesをretire。コピーからcapture／save権限を生成しない |
 
 postでは固定model、元context／claimの対応、観測された各work枠・合計、元Nと返却encoded上界の整合を確認する。成功値に対して`N ≤ upper.encoded`が成り立たなければ幅modelの不成立として`raw_internal`で拒否し、上界やcapを修正して続行しない。core自身のbyte上限拒否は元の`value_limit`を保持する。
@@ -134,7 +146,7 @@ postでは固定model、元context／claimの対応、観測された各work枠�
 
 ## 8 modelと互換性の固定
 
-parserの既存model、value work model案、RP-C bridge model案を別に扱う。value work model候補名は`wfb-value-core-work-1`、bridgeは`wfb-raw-value-rpc-1`とし、まだ実装済みの定数ではない。modelは固定import先と同planに内部でpinし、callerの自由な文字列で検査器を選ばない。
+parserの既存model、value work model案、RP-C bridge model案を別に扱う。value work model候補名は`wfb-value-core-work-1`、bridgeは`wfb-raw-value-rpc-1`とし、まだ実装済みの定数ではない。modelは固定import先の定数とし、callerの自由な文字列で検査器を選ばない。limitsは19項目の入力契約を維持し、model欄を追加しない。
 
 value schema／discriminatorの追加、再walk、課金点・単位の変更はstructural式とmodelの再検証を要する。model名だけ一致させて旧計数へ混ぜない。現行の旧v1、RP-A／RP-Bの結果型・課金対照、legacy値coreの5理由と成功値を保持する。Detailed結果はtest-only module内の純粋な検査契約であり、runtime friendや証拠発行口へ配布しない。
 
@@ -142,26 +154,40 @@ value schema／discriminatorの追加、再walk、課金点・単位の変更は
 
 以下は実装後の受入条件であり、今回は未実施。
 
-| ID | 対照 | 必須結果 |
-|---|---|---|
-| RC01 | 同root／同planと、返却metadata・別invocation・再parseからの混入 | 固定内部継続だけが対象。公開AST供給・getter／friend・任意core callbackなし |
-| RC02 | 構文成功V、失敗prefixの予約数、2Vの等値／1不足／overflow | 成功Vだけを使い、受付拒否はcore呼出し0。BigIntの別計算で算術を照合 |
-| RC03 | structural候補式の全10 variant・全row・Metric variant・schema拒否prefix | coreの計数を独立に数え、3V+10候補の適用条件と保守性を検証。課金削除・追加・再walkの変異を検出。Vをmax_nodesへ流用しない |
-| RC04 | Detailedとlegacyの成功・5理由・各費目と既存golden | 単一engineを一度実行し旧API互換。schemaを緩めず未知field・順序・旧版を拒否 |
-| RC05 | 初回8unit拒否・途中課金拒否・relation／byte拒否・計数器前の失敗 | 観測済み0とunavailableを区別。失敗charged prefixを保持し、未実施費を加算しない |
-| RC06 | parser／bridge／core各work枠の等値・1不足、core全5費目の途中停止 | 枠転用・reset・二重計上なし。実計数と予約上界を別に保持し、取得不能totalを0にしない |
-| RC07 | coreの5理由、core後の診断異常・post拒否 | value段1対1写像と先行理由を固定。limitの種類を推測せず、失敗後の再利用／二重呼出し0 |
-| RC08 | full値の10 variant・全row、normal golden・不正schema／関係・Nと上界 | boundedな独立oracleと全field／順序を比較。normalized copyだけを一度move、schema失敗からsyntax成功へ戻らない |
-| RC09 | copy途中／core途中／postの故障・秘密canary | AST・bytes・pendingの責務が同ownerでretire。未受理本文・raw例外・key／offset持出し0。即時GC／zero化成功とは呼ばない |
-| RC10 | 旧v1・RP-A／RP-B・値core・配布境界の負対照 | 旧試験を残し、runtime台帳／実I/O／発行／保存への接続0。model混在を拒否 |
+| ID | 対照 | 必須結果 | 検証経路 |
+|---|---|---|---|
+| RC01 | 同root／同planと、返却metadata・別invocation・再parseからの混入 | 固定内部継続だけが対象。公開AST供給・getter／friend・任意core callbackなし | bytes、配布境界の検査 |
+| RC02 | 構文成功V、失敗prefixの予約数、2Vの等値／1不足／overflow | 成功Vだけを使い、受付拒否はcore呼出し0。BigIntの別計算で算術を照合 | 等値／1不足はbytes。overflowは受付の純粋計算 |
+| RC03 | structural候補式の全10 variant・全row・Metric variant・schema拒否prefix | coreの計数を独立に数え、3V+10と`S_alt`の適用条件と保守性を検証。課金削除・追加・再walkの変異を検出。Vをmax_nodesへ流用しない | Detailed直呼び。Vはbytesから取得 |
+| RC04 | Detailedとlegacyの成功・5理由・各費目と既存golden | 単一engineを一度実行し旧API互換。schemaを緩めず未知field・順序・旧版を拒否 | Detailed直呼び。`overflow`／`invalid_value`は§9.1 |
+| RC05 | 初回8unit拒否・途中課金拒否・relation／byte拒否・計数器前の失敗 | 観測済み0とunavailableを区別。失敗charged prefixを保持し、未実施費を加算しない | Detailed直呼び |
+| RC06 | parser／bridge／core各work枠の等値・1不足、core全5費目の途中停止 | 枠転用・reset・二重計上なし。実計数と予約上界を別に保持し、取得不能totalを0にしない | bytes。計数取得不能だけ試験専用assembly |
+| RC07 | coreの5理由、core後の診断異常・post拒否 | value段1対1写像と先行理由を固定。limitの種類を推測せず、失敗後の再利用／二重呼出し0 | `schema`／`relation`／`limit`はbytes。他の2理由とpost拒否は§9.1 |
+| RC08 | full値の10 variant・全row、normal golden・不正schema／関係・Nと上界 | boundedな独立oracleと全field／順序を比較。normalized copyだけを一度move、schema失敗からsyntax成功へ戻らない | bytes |
+| RC09 | copy途中／core途中／postの故障・秘密canary | AST・bytes・pendingの責務が同ownerでretire。未受理本文・raw例外・key／offset持出し0。即時GC／zero化成功とは呼ばない | 秘密canaryはbytes。core途中／postの故障は試験専用assembly |
+| RC10 | 旧v1・RP-A／RP-B・値core・配布境界の負対照 | 旧試験を残し、runtime台帳／実I/O／発行／保存への接続0。model混在を拒否 | 旧試験と配布境界の検査。model混在は§9.1 |
 
-core内部の故障注入や内部値比較を行う場合も、public AST consumer／任意callbackを増やさず、test専用の独立assemblyと固定継続の境界を先に決める。private参照が外へ出ないことだけからGC完了を推論しない。
+### 9.1 bytesから届かない経路
+
+次の経路は、現行のcoreとparserではbytesから届かない。bytes経由で検証したと記録しない。
+
+| 経路 | 届かない理由 | 検証手段 |
+|---|---|---|
+| core `overflow` | 配列長は最大2^32−1で、`validateCheckpointValue`の乗算・加算は桁あふれしない。JS値を渡しても同じ | 理由の対応表を純粋関数として単体検証し、保持は試験専用assemblyで確認 |
+| core `invalid_value` | ASTにgetter／Proxyがなく、engine内で例外が出ない。レビューでは`Array.prototype.push`を壊した場合だけ観測した | 同上。共有prototypeの改変を受入の手段にしない |
+| model混在 | modelは固定定数で、入力から変えられない | 試験専用assembly |
+| detailed engineのthrow、成功時のwork取得不能、結果型の不成立 | engineの`try`が例外を固定失敗へ変換する | 試験専用assembly |
+| `N > upper.encoded`のpost拒否 | レビューの最長値では差が0で、超える値は確認していない。等値は受理する | 試験専用assembly |
+| RP-C入口からのcore structural上限 | 受付で候補式と`max_nodes`を照合済み（§4.2） | core直呼び |
+
+試験専用assemblyと固定継続の境界は、RC-Aの実装前に決める。assemblyはruntimeへ配布せず、public AST consumer／任意callbackを増やさない。private参照が外へ出ないことだけからGC完了を推論しない。
 
 ## 10 実装順と未確認事項
 
-1. **RC-A候補**: shared core engineのdetailed結果・計数ownerとlegacy projection。失敗prefix保持を先に固定し、まだraw入口をcoreへ接続しない。
-2. **RC-B候補**: 同V／同planからの2Vとstructural受付の純粋計算・固定model。独立oracleと保守性の検証が済むまで、候補式を実受付へ採用しない。
-3. **RC-C候補**: parser finally前の固定借用・一度claim・pre／post・費目合流を連続接続。bridge費profileがreadyであることを前提とし、失敗時の診断／破棄を検証する。
+1. **実装前の決定**: 試験専用assemblyと固定継続の境界、理由対応表の形（§9.1）。これがない間は、§9.1の経路を受入済みにしない。
+2. **RC-A候補**: shared core engineのdetailed結果・計数ownerとlegacy projection。失敗prefix保持を先に固定し、まだraw入口をcoreへ接続しない。
+3. **RC-B候補**: 同V／同planからの2Vとstructural受付の純粋計算・固定model。独立oracleと保守性の検証が済むまで、候補式を実受付へ採用しない。
+4. **RC-C候補**: parser finally前の固定借用・一度claim・pre／post・費目合流を連続接続。bridge費profileがreadyであることを前提とし、失敗時の診断／破棄を検証する。
 
 各段階は別の明示指示を要する。structural式は候補、bridge固定費・core全work上界・内部一時containerと索引／scratchの保持上界・運用capは未導出／未承認。shared deadline／取消・native故障・実heap／CPU時間、実source、encoder、private aggregate／capture／custody、本文保存と正式発行は対象外のままである。
 
