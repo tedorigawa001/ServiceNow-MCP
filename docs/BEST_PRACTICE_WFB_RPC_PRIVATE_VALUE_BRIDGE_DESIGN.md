@@ -1,6 +1,8 @@
 # WF-B RP-C 同AST接続と2V受付 計数診断保持の差分設計
 
-Version: draft-0.7 / Date: 2026-11-07 / 照合基準HEAD: `81d23f3` / レビュー修正の基準HEAD: `cc0f410` / RC-A実装基準HEAD: `5b03dfc` / RC-Aレビュー修正の基準HEAD: `0e1229b` / RC-B基準HEAD: `252dfbd` / RC-C詳細設計基準HEAD: `692d9ae` / RC-B／RC-Cレビュー修正の基準HEAD: `ddff46e`。
+Version: draft-0.8 / Date: 2026-11-07 / 照合基準HEAD: `81d23f3` / レビュー修正の基準HEAD: `cc0f410` / RC-A実装基準HEAD: `5b03dfc` / RC-Aレビュー修正の基準HEAD: `0e1229b` / RC-B基準HEAD: `252dfbd` / RC-C詳細設計基準HEAD: `692d9ae` / RC-B／RC-Cレビュー修正の基準HEAD: `ddff46e` / 有限費目model基準HEAD: `8dff929`。
+
+draft-0.8: [RC-C有限recipe／費用model](BEST_PRACTICE_WFB_RCC_PRIVATE_SUPPLY_BUDGET_DESIGN.md#11-有限stepslotunit係数と純粋予約計算)の純粋計算を追加。19 slot・28 step・29経路からseed102／admit57／tail239（総398）を求め、意味付き操作イベントoracleと容量境界を合成検証した。実bridge coverage・初期bootstrapはUnknownで、ready=false・core未接続を維持する。
 
 draft-0.6のレビュー修正: §4.2と§12の課金変異の記述を、レビューで実施した結果に合わせた。設計内容と実装は変更していない。
 
@@ -197,7 +199,7 @@ value schema／discriminatorの追加、再walk、課金点・単位の変更は
 1. **RC-A前に決定済み**: 純粋計数ownerを共有し、別の固定scenario専用assemblyで非到達故障を検証する。理由対応はfreezeした固定表。実engineへ外部meter／callbackを渡す口や共有prototype改変を作らない。未実装のbridge故障まで受入済みにはしない。
 2. **RC-A実装済み**: shared core engineのdetailed結果・計数ownerとlegacy projection。失敗prefix保持を固定し、raw入口はcoreへ接続しない（§11）。
 3. **RC-B実装済み**: 2Vとstructural受付の純粋計算・固定modelと独立oracle（§12）。callerのVや公開metadataは証拠にせず、同root／planのprivate供給・統合費を伴うraw接続は後続へ残す。
-4. **RC-C候補**: [private供給・費目所有／予約の詳細契約](BEST_PRACTICE_WFB_RCC_PRIVATE_SUPPLY_BUDGET_DESIGN.md)から、費目係数・有限経路と予約上界を先に導出する。profile readyの確認後にparser finally前の固定借用・一度claim・pre／post・finally後返却を合成接続し、診断／全alias破棄を検証する。実装は未着手。
+4. **RC-C候補**: [private供給・費目所有／予約の詳細契約](BEST_PRACTICE_WFB_RCC_PRIVATE_SUPPLY_BUDGET_DESIGN.md)の有限recipe計算だけを合成実装した。実private供給とのcoverage・初期bootstrap・creditの一度利用は未実装／未確認。profile readyの確認後にparser finally前の固定借用・一度claim・pre／post・finally後返却を合成接続し、診断／全alias破棄を検証する。core接続は未着手。
 
 各段階は別の明示指示を要する。structuralはRC-Bの純粋モデルだけを固定し、bridge固定費・core全work上界・内部一時containerと索引／scratchの保持上界・運用capは未導出／未承認。shared deadline／取消・native故障・実heap／CPU時間、実source、encoder、private aggregate／capture／custody、本文保存と正式発行は対象外のままである。
 

@@ -1,10 +1,12 @@
 # WF-B RC-C：同root／同planのprivate供給・所有とbridge費／破棄予約
 
-Version: draft-0.2 / Date: 2026-11-07 / 照合基準HEAD: `692d9ae` / レビュー修正の基準HEAD: `ddff46e`。
+Version: draft-0.3 / Date: 2026-11-07 / 照合基準HEAD: `692d9ae` / レビュー修正の基準HEAD: `ddff46e` / 有限費目model実装基準HEAD: `8dff929`。
+
+draft-0.3: 19 logical slot・28 step・29経路の有限recipe、unit係数とseed／admit／tail予約上界を純粋計算器へ実装した（§11）。独立の意味付き操作イベントoracleで合成照合した。[検証記録](E2E_BEST_PRACTICE_WFB_BRIDGE_WORK_2026-11-07.md)。実bridgeとのcoverage・初期bootstrap・実layout／native費はUnknownで、ready profile／予約台帳／core接続は作っていない。
 
 draft-0.1のレビュー修正: 同module配置で変わるimportの負対照を明記した（§1、CC10）。返却準備の失敗理由と、未使用予約のslot遷移を追加した（§6、§7）。設計のみで、実装状態は変わらない。
 
-Status: **詳細設計のみ。新しい型・生成口・profile・予約台帳・parser/core接続は未実装。** 親は[RP-C差分設計](BEST_PRACTICE_WFB_RPC_PRIVATE_VALUE_BRIDGE_DESIGN.md)、[raw parser契約](BEST_PRACTICE_WFB_BOUNDED_RAW_JSON_PARSER_DESIGN.md)。RC-Aの詳細結果とRC-Bの純粋受付を、同じ構文解析の生存区間へ接続するための契約を具体化する。費目の数値unitとreadyなbridge profileはUnknown／未導出のまま。旧v1・正式発行口閉鎖・全体受付無効・VM／監視／telemetry調査保留を維持する。実装・実接続・実通信・実機操作・証拠発行・本文保存・設定変更・Pushは行わない。
+Status: **有限費目recipeの純粋計算器・予約容量検査と合成試験だけを実装。private供給・実profile・予約台帳・parser/core接続は未実装。** 親は[RP-C差分設計](BEST_PRACTICE_WFB_RPC_PRIVATE_VALUE_BRIDGE_DESIGN.md)、[raw parser契約](BEST_PRACTICE_WFB_BOUNDED_RAW_JSON_PARSER_DESIGN.md)。RC-Aの詳細結果とRC-Bの純粋受付を、同じ構文解析の生存区間へ接続するための契約を具体化する。§11の抽象係数は固定したが、実装coverageの証拠とreadyなbridge profileはUnknownのまま。旧v1・正式発行口閉鎖・全体受付無効・VM／監視／telemetry調査保留を維持する。core接続・実接続・実通信・実機操作・証拠発行・本文保存・設定変更・Pushは行わない。
 
 ## 1 現行との差分と固定する入口
 
@@ -81,7 +83,7 @@ claim未消費の拒否でもcontextは終端化し、再準備しない。消�
 
 ## 5 費目所有とprofileの必須coverage
 
-下表のunit係数はすべて未導出。有限な処理範囲を固定するための費目表であり、空欄を0／1などの仮値で埋めてprofileをreadyにしない。
+下表は費目の所有契約。有限な処理範囲と抽象unit係数は§11のrecipeへ固定したが、実bridgeとの対応・全追加処理のcoverageは未確認である。recipeの計算成功だけでprofileをreadyにしない。
 
 | 費目ID | 対象と有限範囲 | 所有・重複禁止 |
 |---|---|---|
@@ -107,7 +109,7 @@ core成功・拒否のwrapper処理やValueLimits bootstrapは、現行RC-A/RC-B
 
 ## 6 予約式・一度限り会計・失敗後の固定unwind
 
-記号は全て非負safe整数としてchecked演算する。数値係数は未導出である。
+記号は全て非負safe整数としてchecked演算する。数値例は§11の有限recipeに限定し、実profileの係数として承認済みとはしない。
 
 - `P`：元parser側の既存累積課金。既存cleanup前払いを既に含む。
 - `B`：同meterのbridge内訳の累積課金。即時費と前払い予約を含み、Pと重ならない。
@@ -156,7 +158,7 @@ core拒否に対する診断整合確認は、first reasonを確定してから�
 
 ## 8 合成受入条件・独立oracle
 
-以下は将来の必須試験で、今回は実施していない。
+以下は接続全体の将来の必須試験。今回実施したのは§11の純粋modelに対するCC04／CC05相当の算術・有限経路／slot対照だけであり、実credit・元meter・同rootの接続条件の完了ではない。
 
 | ID | 対照と合格条件 |
 |---|---|
@@ -175,12 +177,89 @@ core拒否に対する診断整合確認は、first reasonを確定してから�
 
 ## 9 後続の実装順と未確認事項
 
-1. **費目・予約model先行**：本表を有限step／slotと実施点へ落とし、bootstrap・post各prefix・unwindを含むunit係数と経路上界を導出する。純粋計算と独立oracleで検証するまでprofileはUnknownで、core接続を許可しない。
+1. **費目・予約model先行（有限recipeのみ実装）**：§11の純粋計算・独立oracleで数値を固定した。次にprivate実装の各実施点との対応・未対応費目を検査する必要がある。初期seed取得処理のbootstrapも含め、coverage証拠がない間はprofileをUnknownとし、core接続を許可しない。
 2. **private供給／共通kernel境界**：元parser生存区間の内部型・同plan／meter・claimと最小算術共有を合成依存で実装する。旧入口を残し、profile未readyならcore未呼出しで停止する。
 3. **予約済み固定core／pre/post接続**：一度だけのcore、pending管理・理由合流・元finally後の返却を連続合成試験で確認する。正式発行・runtimeとは分離する。
 
-bridge unit係数、有限alias slotの具体数・ABI、全経路の独立計数、core work外のbootstrap／wrapper費、scratch／内部一時container・運用cap、native故障・実heap／CPU／GC／ゼロ化は未導出／未確認。実source・共有期限／取消の正式owner、encoder・capture／custody／本文保存は別の未対応範囲である。純粋な受付成功や非実行結果の存在から、これらを確認済み／承認済みにしない。
+有限recipeの係数・19 logical slot・29経路の数値対照は§11で固定した。実layout／ABI・全実施点とのcoverage、core work外の実bootstrap／wrapper処理との完全対応、scratch／内部一時container・運用cap、native故障・実heap／CPU／GC／ゼロ化は未導出／未確認。実source・共有期限／取消の正式owner、encoder・capture／custody／本文保存は別の未対応範囲である。純粋な受付成功や非実行結果の存在から、これらを確認済み／承認済みにしない。
 
 ## 10 今回の確認範囲
 
-`692d9ae`のローカルsource・親設計・RC-A／RC-B記録を読み取り照合した。MDのローカル参照と差分空白を確認する範囲であり、新profileの実装・ビルド・合成試験・parser実行・再採取を実施した記録ではない。既存928件成功のRC-B記録を、未実装CC01〜10の成功として流用しない。
+draft-0.1作成時は`692d9ae`のローカルsource・親設計・RC-A／RC-B記録を読み取り照合した。MDのローカル参照と差分空白だけを確認し、新profileの実装・ビルド・合成試験・parser実行・再採取は行っていない。今回の§11の検証は別記録とし、既存928件成功のRC-B記録を未実装CC01〜10の成功として流用しない。
+
+## 11 有限step／slot・unit係数と純粋予約計算
+
+### 11.1 実装の性質と閉鎖状態
+
+`tests/review/fixtures/bridge-work-core.ts`へ固定model `wfb-bridge-finite-work-1`を実装した。`calculateBridgeWorkBounds()`は引数なしで固定recipeの経路和・最大値を計算し、`inspectBridgeReservation(phase, counters)`は固定phaseの予約が容量内かだけを計算する。root／plan／meter／既存credit・係数・callbackは受け取らず、台帳更新・claim・実予約・core呼出しを行わない。繰り返し計算は許され、その結果から一度限りの利用証拠は生成できない。
+
+結果は常に`ready=false, runtimeCoverage=unknown, coreInvocation=not_called`の非実行DATA。これは将来の実装が従うための**有限recipeの数値契約**で、現行の未接続bridgeを計測して全費目を証明したものではない。`core_limits_recipe`／`core_metadata_recipe`も固定処理枠のモデル名であり、実coreの起動・native操作・全unmetered処理の実証拠ではない。`dispatch_marker`はcontrol unitを一つ置く計算上の記号に限る。
+
+### 11.2 8操作種別と19 logical slot
+
+操作種別を`read / check / write / arithmetic / copy / container / freeze / control`の8種とし、**各1回の係数を1 unit**と定義する。readは一つの固定field／descriptor取得、checkは定義済み有限predicate一つ、writeは一つのlogical slot更新、arithmeticはchecked加算／差／乗算等一つ、copyは固定scalar一つ、containerは固定container枠一つ、freezeは固定container一つ、controlは固定状態step一つである。任意callback／全tree走査を一つのcheckに隠さない。native内部命令数やbyteの測定単位ではなく、allocation／freeze成功・OOM下の診断生成も保証しない。
+
+logical slotは`invocation, plan, meter, byteIdentity, rootBorrow, inputLength, valueNodes, claim, firstReason, secondaryReason, coreState, coreWork, admissionProjection, coreResult, candidate, returnPending, reservationSeed, reservationAdmit, reservationTail`の19個に固定する。実classのABI／heap layoutが19fieldであるという証明ではない。
+
+退役はseed_clear=15、admit_clear=`admissionProjection`の1、tail_clear=`coreResult/candidate/returnPending`の3へ排他的に割り当て、全19 slotを一度ずつ覆う。空slotのclearも同じ固定上界に含める。元AST・bytesの既存nodeCleanup／cleanupと、coreの既存5費目は下表に入れない。credit制御に関する3つのgateはseedが前払い所有するため、後続admit／tailの容量拒否時に未取得creditへ制御費を付け替えない。
+
+### 11.3 固定step係数表
+
+列順はread/check/write/arithmetic/copy/container/freeze/control、0は当該recipeに操作がないことを表す。28 stepの各係数は固定でcallerから変更できない。
+
+| step | r | c | w | a | p | o | f | t | 合計 |
+|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|
+| seed_guard | 4 | 8 | 0 | 0 | 0 | 0 | 0 | 1 | 13 |
+| seed_allocate | 0 | 0 | 19 | 0 | 0 | 3 | 0 | 0 | 22 |
+| seed_gate | 3 | 4 | 3 | 3 | 0 | 0 | 0 | 1 | 14 |
+| admit_gate | 3 | 4 | 3 | 3 | 0 | 0 | 0 | 1 | 14 |
+| tail_gate | 3 | 4 | 3 | 3 | 0 | 0 | 0 | 1 | 14 |
+| seed_diagnostic | 4 | 2 | 4 | 0 | 0 | 0 | 0 | 0 | 10 |
+| seed_clear | 0 | 0 | 15 | 0 | 0 | 0 | 0 | 0 | 15 |
+| bind | 8 | 8 | 0 | 0 | 0 | 0 | 0 | 1 | 17 |
+| admission | 5 | 5 | 0 | 3 | 0 | 0 | 0 | 0 | 13 |
+| projection | 7 | 0 | 7 | 0 | 7 | 1 | 1 | 0 | 23 |
+| admit_state | 1 | 1 | 1 | 0 | 0 | 0 | 0 | 0 | 3 |
+| admit_clear | 0 | 0 | 1 | 0 | 0 | 0 | 0 | 0 | 1 |
+| pre_claim | 9 | 9 | 2 | 0 | 0 | 0 | 0 | 2 | 22 |
+| dispatch_marker | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 1 | 1 |
+| core_limits_recipe | 9 | 25 | 7 | 0 | 0 | 1 | 1 | 8 | 51 |
+| core_metadata_recipe | 8 | 0 | 12 | 0 | 12 | 5 | 4 | 2 | 43 |
+| accept | 4 | 4 | 2 | 0 | 0 | 0 | 0 | 0 | 10 |
+| work_guard | 6 | 8 | 0 | 5 | 0 | 0 | 0 | 0 | 19 |
+| work_snapshot | 0 | 0 | 0 | 0 | 6 | 1 | 1 | 0 | 8 |
+| identity_guard | 4 | 4 | 0 | 0 | 0 | 0 | 0 | 0 | 8 |
+| width_guard | 6 | 6 | 0 | 0 | 0 | 0 | 0 | 0 | 12 |
+| pending_move | 1 | 0 | 2 | 0 | 0 | 0 | 0 | 1 | 4 |
+| return_prepare | 10 | 0 | 0 | 0 | 10 | 2 | 2 | 0 | 24 |
+| return_totals | 3 | 2 | 0 | 2 | 0 | 0 | 0 | 0 | 7 |
+| return_seal | 0 | 0 | 0 | 0 | 0 | 1 | 1 | 1 | 3 |
+| failure_metadata | 6 | 6 | 0 | 0 | 6 | 1 | 1 | 0 | 20 |
+| tail_clear | 0 | 0 | 3 | 0 | 0 | 0 | 0 | 0 | 3 |
+| tail_retire | 1 | 1 | 1 | 0 | 0 | 0 | 0 | 1 | 4 |
+
+`projection`は元7項目のread/copy/write＋固定container/freeze、`admission`はVと4 capのread/check＋2V/3V/+10の3算術である。元parserのwork配賦和は再計上しない。`core_limits_recipe`はheader read2/check4/container1/control1、各7fieldのread1/check3/write1/control1、最後のfreeze1で51とする。`core_metadata_recipe`はshape／upper／owner／accounting／wrapperの固定枠と、recipeで定義した12 scalar項目等の処理枠に限定する。現行core内の全allocation・全wrapper処理をこれで覆ったとはしない。
+
+独立oracle `bridge-work-oracle.ts`は係数表や計算器をimportせず、field名・slot名・guard対象に対する意味付きイベントを別の手続きで生成する。例えば各limits fieldはname/data/numberの3checkを発生させ、そのイベント数を集計して表の各列と比較する。表のtotalだけをコピーした期待値にはしない。
+
+### 11.4 経路と予約上界
+
+有限経路はseed 3、admit 5、tail 21の合計29。これらは**費目所属phaseごとの保守列**であり、seed_clearやadmit_clearをcore前に実行するプログラムではない。実際のclearは全体の終端で行う契約を維持する。
+
+- seed列：guard13＋allocate22＋seed_gate14＋後続gate最大28＋diagnostic10＋clear15。最大`R_seed=102`。
+- admit列：bind17＋admission13＋projection23＋state3＋clear1。各step前の拒否prefixを含め、最大`C_admit=57`。
+- tail共通head：pre_claim22＋dispatch marker1＋limits51＋metadata43=`117`。pre拒否・head途中のthrow・core拒否／不正結果も別列にする。
+- postはaccept10＋work_guard19＋snapshot8＋identity8＋width12=`57`。各post prefixの拒否では、そのprefixとfailure_metadata20＋tail_clear3＋tail_retire4を加える。
+- 正常tail：head117＋post57＋move4＋return(24+7+3)＋clear/retire7=`219`。
+- 最も遅い返却準備失敗：正常の公開直前までのprefix＋failure_metadata20＋clear/retire7=`239`。したがって`R_tail=239`で、正常経路だけの219を予約額にしない。
+- diagnostic故障は同じbuilderを再起動せず、cleanup故障も各prefixで停止する列とする。step内部の任意primitive中断は、そのstep全費を保守的に使った列以内であることを対照する。
+
+予約総上界は`102+57+239=398`。正常モデルの実施費は`102+57+219=378`、未使用前払い20は返却せず、課金398を維持する。parser拒否で後続gateを使わないseed列は74で、seed予約の未使用28を保持し、admit/tailは未取得のまま。この計算は原予算への実加算や未使用枠の返却処理ではない。
+
+### 11.5 純粋な容量検査と残るcoverage
+
+`inspectBridgeReservation`はphase=`seed/admit/tail`と、固定順`max_parse_work, parser_charged, bridge_charged`のstrict own-dataだけを受ける。capは正safe整数、既課金は0以上のsafe整数（−0拒否）。元counterを変更しない。P+Bのchecked和がoverflowなら`raw_overflow`、既課金超過または予約額が残量を超えれば`raw_work`、不正入力は`raw_limits`。等値許可で、成功projectionの`bridgeChargedAfter=B+R`、`chargedAfter=P+B+R`、残量をfreezeして返す。reserve・消費・一度claimを実施した証拠ではない。
+
+計算器自身の経路列挙・結果生成費を、実行時gateの14 unitに含めたとは主張しない。将来の実経路では、独立確認した固定profile定数の供給方式と、その供給費を別途対応付ける必要がある。初回seed予約の取得処理はまだ元meterへ結合しておらず、そのbootstrapの実施費／native反射の扱いもUnknownである。seedが確保済みというpure計算上の前提から、取得前の処理を無料・安全と証明しない。
+
+19 logical slotと28 stepを将来のprivate実装へ結び、phaseをまたぐ費目所有、未使用credit・先行診断・全aliasの実退役を観測する試験は未実施。未知の追加stepを0で補完せず、recipe変更はmodel改版と独立再計数を必要とする。実heap・CPU・ABI・native allocation／OOM・GC／ゼロ化・正式capはUnknownのまま。core接続許可は発行しない。
