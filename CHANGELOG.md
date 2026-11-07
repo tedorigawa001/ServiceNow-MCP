@@ -18,6 +18,8 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 ### Changed
 
+- WF-B RC-A adds a synthetic-only shared value engine with detailed success/failure accounting and an exact legacy API projection. The meter is installed before the first fallible charge; observed zero, unavailable counts and first-failure diagnostics remain distinct. Independent fee-prefix and fixed fault-assembly tests preserve the existing model, schema and v1. Raw-parser/core binding, evidence issuance, body storage and whole-run admission remain disabled.
+
 - WF-B RP-B adds a separate synthetic-only finite-stack JSON syntax route on the same one-copy byte boundary. It rejects malformed grammar, duplicate keys before their values, noncanonical numeric tokens, and fixed-path/cardinality/node/token excesses; it retains only frozen counts and drops its private AST on every outcome. Independent structure, numeric, cap and work controls preserve RP-A and v1. Value-core binding, evidence issuance, body storage, runtime wiring and whole-run admission remain disabled.
 
 - WF-B RP-A adds a synthetic-only raw-byte boundary with strict limit types, separate work counters, pre-copy byte/backing/live admission, intrinsic-only fixed-buffer copying, a bounded UTF-8 prepass and container-aware framing. Hook, buffer-brand, capacity, malformed-byte and retirement controls return only frozen non-executable metadata marked syntax-unchecked. JSON token/value acceptance, evidence issuance, body storage, runtime wiring and whole-run admission remain disabled; v1 is unchanged.

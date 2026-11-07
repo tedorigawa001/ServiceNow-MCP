@@ -1,26 +1,19 @@
 /** Synthetic pure values only. No recorder, Store, clock, issuer or runtime ledger imports. */
 import { types } from 'node:util';
-
-export interface ValueLimits {
-  readonly max_scopes: number; readonly max_workers: number; readonly max_nodes: number; readonly max_work: number;
-  readonly max_snapshot_bytes: number; readonly max_control_bytes: number; readonly max_file_bytes: number;
-}
+import { ValueCost as Cost, ValueAccountingOwner, projectLegacyValueResult, refuse, valueFailureOf } from './value-core-accounting.js';
+import type { ValueLimits, ValueResult, DetailedValueResult } from './value-core-accounting.js';
+export type { ValueLimits, ValueFailure, ValueWork, ValueResult, ValueWorkSnapshot, DetailedValueResult } from './value-core-accounting.js';
+export { VALUE_WORK_MODEL } from './value-core-accounting.js';
 export interface SnapshotShape {
   readonly cases: number; readonly modules: number; readonly events: number;
   readonly scopes: number; readonly workers: number; readonly samples: number;
 }
-export type ValueFailure = 'schema' | 'relation' | 'limit' | 'overflow' | 'invalid_value';
-export interface ValueWork { readonly structural: number; readonly relation: number; readonly arithmetic: number; readonly number_formatting: number; readonly copies: number; readonly total: number }
-export type ValueResult<T> = { readonly ok: true; readonly value: T; readonly work: ValueWork }
-  | { readonly ok: false; readonly reason: ValueFailure };
 export interface SnapshotBounds {
   readonly kind: 'non_executable_bounds'; readonly snapshot: number; readonly captured: number;
   readonly control: 500; readonly controlReserve: 3000;
 }
 const MAX = Number.MAX_SAFE_INTEGER;
 const numberText = Number.prototype.toString;
-class Rejected extends Error { constructor(readonly reason: ValueFailure) { super('snapshot_value_rejected'); } }
-function refuse(reason: ValueFailure): never { throw new Rejected(reason); }
 function uint(value: unknown, max = MAX, min = 0): value is number {
   return typeof value === 'number' && Number.isSafeInteger(value) && !Object.is(value, -0) && value >= min && value <= max;
 }
@@ -47,17 +40,6 @@ function readLimits(value: unknown): ValueLimits {
   for (const key of keys) if (!uint(data[key], MAX, 1)) refuse('schema');
   return Object.freeze(data) as unknown as ValueLimits;
 }
-class Cost {
-  readonly usage = { structural: 0, relation: 0, arithmetic: 0, number_formatting: 0, copies: 0, total: 0 };
-  constructor(readonly limits: ValueLimits) { this.spend('structural', 8); }
-  spend(kind: Exclude<keyof ValueWork, 'total'>, n = 1) {
-    if (!uint(n) || n > this.limits.max_work - this.usage.total) refuse('limit');
-    if (kind === 'structural' && n > this.limits.max_nodes - this.usage.structural) refuse('limit');
-    this.usage[kind] += n; this.usage.total += n;
-  }
-  add(a: number, b: number) { this.spend('arithmetic'); if (b > MAX - a) refuse('overflow'); return a + b; }
-  mul(a: number, b: number) { this.spend('arithmetic'); if (a && b > Math.floor(MAX / a)) refuse('overflow'); return a * b; }
-}
 function shapeOf(value: unknown, c: Cost): SnapshotShape {
   const data = ownData(value, ['cases', 'modules', 'events', 'scopes', 'workers', 'samples'], () => c.spend('structural'));
   for (const key of Object.keys(data)) { c.spend('structural'); if (!uint(data[key])) refuse('schema'); }
@@ -74,14 +56,15 @@ function baseBounds(s: SnapshotShape, c: Cost): SnapshotBounds {
     [s.workers, 409], [s.samples, 264], [s.scopes, 51]]) size = c.add(size, c.mul(n, width));
   return Object.freeze({ kind: 'non_executable_bounds', snapshot: size, captured: c.add(size, 449), control: 500, controlReserve: 3000 });
 }
-function failure(error: unknown): { readonly ok: false; readonly reason: ValueFailure } {
-  return Object.freeze({ ok: false, reason: error instanceof Rejected ? error.reason : 'invalid_value' });
+function failure(error: unknown): { readonly ok: false; readonly reason: ReturnType<typeof valueFailureOf> } {
+  return Object.freeze({ ok: false, reason: valueFailureOf(error) });
 }
 export function calculateSnapshotBounds(shape: unknown, limits: unknown): ValueResult<SnapshotBounds> {
   try {
-    const c = new Cost(readLimits(limits)), value = baseBounds(shapeOf(shape, c), c);
+    const c = new Cost(readLimits(limits)); c.spend('structural', 8);
+    const value = baseBounds(shapeOf(shape, c), c);
     if (value.snapshot > c.limits.max_snapshot_bytes || value.captured > c.limits.max_file_bytes || value.control > c.limits.max_control_bytes) refuse('limit');
-    return Object.freeze({ ok: true, value, work: Object.freeze({ ...c.usage }) });
+    return Object.freeze({ ok: true, value, work: c.snapshot() });
   } catch (error) { return failure(error); }
 }
 type Schema<T> = (v: unknown, c: Cost) => T;
@@ -295,9 +278,11 @@ function relations(frame: CheckpointValue, c: Cost): void {
     for (const row of s.modules) check(row.state !== 'failed' && row.failure_class !== 'unhandled');
   }
 }
-export function validateCheckpointValue(value: unknown, limits: unknown): ValueResult<ValidatedValue> {
+function runValueEngine(value: unknown, limits: unknown): DetailedValueResult<ValidatedValue> {
+  const owner = new ValueAccountingOwner<ValidatedValue>();
   try {
-    const c = new Cost(readLimits(limits)), parsed = parseFrame(value, c);
+    const c = new Cost(readLimits(limits)); owner.install(c); c.spend('structural', 8);
+    const parsed = parseFrame(value, c);
     const s = 'snapshot_status' in parsed && parsed.snapshot_status === 'captured' ? parsed.snapshot : null;
     relations(parsed, c);
     const shape = Object.freeze({ cases: s?.cases.length ?? 0, modules: s?.modules.length ?? 0, events: s?.events.length ?? 0,
@@ -306,7 +291,9 @@ export function validateCheckpointValue(value: unknown, limits: unknown): ValueR
     const overhead = { conditions_ready: 486, child_started: 340, first_anomaly: 449, slow_hint: 389, test_terminal: 379, stop_requested: 413 }[parsed.trigger];
     const encoded = s ? c.add(bounds.snapshot, overhead) : c.add(overhead, 'snapshot_status' in parsed ? 51 : 0);
     if ((s && bounds.snapshot > c.limits.max_snapshot_bytes) || encoded > c.limits.max_file_bytes || (!s && encoded > c.limits.max_control_bytes)) refuse('limit');
-    return Object.freeze({ ok: true, value: Object.freeze({ kind: 'non_executable_value', value: parsed, shape,
-      upper: Object.freeze({ snapshot: s ? bounds.snapshot : null, encoded, control: 500, controlReserve: 3000 }) }), work: Object.freeze({ ...c.usage }) });
-  } catch (error) { return failure(error); }
+    return owner.success(Object.freeze({ kind: 'non_executable_value', value: parsed, shape,
+      upper: Object.freeze({ snapshot: s ? bounds.snapshot : null, encoded, control: 500, controlReserve: 3000 }) }));
+  } catch (error) { return owner.failure(error); }
 }
+export function inspectCheckpointValueDetailed(value: unknown, limits: unknown): DetailedValueResult<ValidatedValue> { return runValueEngine(value, limits); }
+export function validateCheckpointValue(value: unknown, limits: unknown): ValueResult<ValidatedValue> { return projectLegacyValueResult(runValueEngine(value, limits)); }

@@ -527,7 +527,13 @@ describe('closed packaging and runtime boundary', () => {
     expect(ts.include).toEqual(['src/**/*']); expect(ts.exclude).toContain('tests');
     expect(pkg.files).not.toContain('tests/'); expect(pkg.files).not.toContain('tests');
     const core = read('tests/review/fixtures/snapshot-value-core.ts');
-    expect(core.match(/^import .*$/gm)).toEqual(["import { types } from 'node:util';"]);
+    expect(core.match(/^import .*$/gm)).toEqual(["import { types } from 'node:util';",
+      "import { ValueCost as Cost, ValueAccountingOwner, projectLegacyValueResult, refuse, valueFailureOf } from './value-core-accounting.js';",
+      "import type { ValueLimits, ValueResult, DetailedValueResult } from './value-core-accounting.js';"]);
+    const accounting = read('tests/review/fixtures/value-core-accounting.ts');
+    expect(accounting).not.toMatch(/^import /m);
+    expect(core).not.toContain('accounting-assembly');
+    expect(read('tests/review/fixtures/raw-json-boundary.ts')).not.toMatch(/snapshot-value-core|value-core-accounting|inspectCheckpointValueDetailed/);
     expect(core).not.toMatch(/\b(?:fetch|writeFile|setTimeout|emit|saveAttempt|persist|issueReceipt)\s*\(/);
     expect(core).not.toContain('store-recorder-kernel');
   });

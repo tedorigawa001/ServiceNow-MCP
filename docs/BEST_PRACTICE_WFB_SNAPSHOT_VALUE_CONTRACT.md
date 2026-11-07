@@ -1,6 +1,8 @@
 # WF-B：snapshot strict値契約・固定encoding・row幅
 
-Version: draft-0.8 / Date: 2026-11-07 / 基準HEAD: `ff2c56f` / レビュー修正の基準HEAD: `04260f2` / 純粋core実装基準HEAD: `70cbffb` / core修正の基準HEAD: `b37214f`。
+Version: draft-0.9 / Date: 2026-11-07 / 基準HEAD: `ff2c56f` / レビュー修正の基準HEAD: `04260f2` / 純粋core実装基準HEAD: `70cbffb` / core修正の基準HEAD: `b37214f` / RC-A基準HEAD: `5b03dfc`。
+
+draft-0.9: [RC-A実装境界](BEST_PRACTICE_WFB_RPC_PRIVATE_VALUE_BRIDGE_DESIGN.md#11-rc-a実装境界)を反映。単一値engine・失敗prefixのdetailed計数と旧API projectionを合成実装した。[検証記録](E2E_BEST_PRACTICE_WFB_VALUE_CORE_RCA_2026-11-07.md)。raw接続・受付・発行／保存は未実装のまま。
 
 draft-0.8: [RP-C同AST・2V／計数診断保持の差分設計](BEST_PRACTICE_WFB_RPC_PRIVATE_VALUE_BRIDGE_DESIGN.md)を追加。Vとstructuralの別単位、失敗時observed／unavailable、5理由の1対1保持と旧API projectionを具体化した。設計のみで既存値core・課金・公開型は変更していない。
 
@@ -182,11 +184,12 @@ draft-0.2時点ではfield・enum・幅の算術をMD作成時の読み取り専
 
 ## 9 合成専用coreの実装境界
 
-配置は`tests/review/fixtures/snapshot-value-core.ts`、試験は`tests/review/snapshot-value.test.ts`。依存はProxyの非実行判定用`node:util.types.isProxy`のみ。実台帳・clock・recorder・Store・runtimeのimportはない。`src`／build／packageの入口は変更しない。`CheckpointValue`は2 control＋4 captured＋4 unavailableのreadonly unionであり、nominalな発行証拠ではない。
+配置は`tests/review/fixtures/snapshot-value-core.ts`、試験は`tests/review/snapshot-value.test.ts`と`value-core-detailed.test.ts`。依存はProxyの非実行判定用`node:util.types.isProxy`と純粋な`value-core-accounting.ts`だけ。故障用の別assemblyはcoreからimportしない。実台帳・clock・recorder・Store・runtimeのimportはない。`src`／build／packageの入口は変更しない。`CheckpointValue`は2 control＋4 captured＋4 unavailableのreadonly unionであり、nominalな発行証拠ではない。
 
 | 純粋API | 受付・返却 |
 |---|---|
 | `validateCheckpointValue(value, limits)` | 固定field順のown-data record／dense標準arrayを検査し、入力参照を残さず全containerをcopy／freezeする。局所関係を照合した`non_executable_value`・実測shape・当該variantのencoded上界・workだけを返す。bytes／receipt／保存関数は返さない |
+| `inspectCheckpointValueDetailed(value, limits)` | 同private engineを一度実行。固定modelと`accounting`を追加し、失敗でも完了した課金を保持する。成功はobserved work必須、失敗はobserved／unavailableを区別する。legacy APIは同結果から旧成功／失敗形へprojectionするだけ |
 | `calculateSnapshotBounds(shape, limits)` | shapeの順は`cases, modules, events, scopes, workers, samples`。件数上限・scope局所aggregate上限とchecked算術を検査し、S、最悪captured=S+449、control=500、6control=3000を返す。渡されたshapeの真正性は証明しない |
 
 limitsの固定順は`max_scopes, max_workers, max_nodes, max_work, max_snapshot_bytes, max_control_bytes, max_file_bytes`。全て明示の正safe整数で、0／欠落／余分fieldを拒否する。これは**合成呼出しの拒否閾値**で、本番cap承認ではない。validatorはcapturedならSと当該frame上界、control／unavailableなら当該本文なし上界を検査する。standalone計算器は最悪captured・500を検査する。3000は構造式の返値だけで、予約操作やその受付を実行しない。

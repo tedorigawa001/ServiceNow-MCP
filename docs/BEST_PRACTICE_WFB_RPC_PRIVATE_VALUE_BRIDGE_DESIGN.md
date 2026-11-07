@@ -1,10 +1,12 @@
 # WF-B RP-C 同AST接続と2V受付 計数診断保持の差分設計
 
-Version: draft-0.2 / Date: 2026-11-07 / 照合基準HEAD: `81d23f3` / レビュー修正の基準HEAD: `cc0f410`。
+Version: draft-0.3 / Date: 2026-11-07 / 照合基準HEAD: `81d23f3` / レビュー修正の基準HEAD: `cc0f410` / RC-A実装基準HEAD: `5b03dfc`。
+
+draft-0.3: RC-Aの単一値engine・detailed計数owner・legacy projectionだけを合成依存で実装した（§11）。raw入口との接続、2V／structural受付とbridge費は未実装／Unknownのまま。[合成検証記録](E2E_BEST_PRACTICE_WFB_VALUE_CORE_RCA_2026-11-07.md)。
 
 draft-0.1のレビュー修正: 受入条件ごとに検証経路を付け、bytesから届かない経路と試験専用assemblyの決定順を明記した（§9、§10）。modelをplanへ入れないことと、post拒否の理由を固定した。structuralの別候補式を検証対象へ追加した（§4.2）。設計のみで、実装状態は変わらない。
 
-Status: **設計のみ。RP-C・新しい計数API・受付計算器・試験は未実装。** [raw parser契約](BEST_PRACTICE_WFB_BOUNDED_RAW_JSON_PARSER_DESIGN.md)のRP-Bから、[strict値core](BEST_PRACTICE_WFB_SNAPSHOT_VALUE_CONTRACT.md)へ同じASTを一度だけ借用し、copy前の2V受付と失敗時の計数保持を組み合わせる。旧v1・正式発行口閉鎖・全体受付無効・Unknown・VM／監視／telemetry調査保留を維持する。実装・証拠発行・本文保存・実接続・実通信・実機操作・設定変更・Pushを行わない。
+Status: **RC-Aのdetailed計数API・旧API互換projectionと合成試験を実装。RP-Cのraw接続・受付計算器は未実装。** [raw parser契約](BEST_PRACTICE_WFB_BOUNDED_RAW_JSON_PARSER_DESIGN.md)のRP-Bから、[strict値core](BEST_PRACTICE_WFB_SNAPSHOT_VALUE_CONTRACT.md)へ同じASTを一度だけ借用し、copy前の2V受付と失敗時の計数保持を組み合わせる方針は未接続。旧v1・正式発行口閉鎖・全体受付無効・Unknown・VM／監視／telemetry調査保留を維持する。証拠発行・本文保存・実接続・実通信・実機操作・設定変更・Pushを行わない。
 
 ## 1 現状と接続の前提
 
@@ -12,8 +14,8 @@ Status: **設計のみ。RP-C・新しい計数API・受付計算器・試験は
 |---|---|
 | `SyntaxParser.run()`はframing後のfinallyでroot／stackを破棄する | rootが生きているframing後・finally前に固定継続点を置く。返却metadataからASTを復元しない |
 | `inspectCheckpointSyntax`はsyntax checked／value uncheckedの計数だけを返す | 旧入口はそのまま保持し、別の閉鎖した合成入口で値検査へ進む。公開AST getter／任意consumerを作らない |
-| `validateCheckpointValue`は成功時だけworkを返し、失敗は5種類のreasonだけ | 単一の検査engineが成功／失敗の計数を保持する内部結果を追加し、旧APIは同engineの互換projectionとする |
-| coreの`Cost`はconstructorで最初のstructural 8unitを課金する | 失敗可能な初回課金より前に計数器を診断ownerへ保持する。初回課金失敗を「計数不明だから0」と補完しない |
+| RC-A: `validateCheckpointValue`はdetailedと同じ単一engineの互換projection。旧失敗形は5理由だけ | detailed結果の理由と計数を将来のraw bridgeへ接続する（未接続） |
+| RC-A: `Cost`をownerへ保持してから最初のstructural 8unitを課金する | 初回拒否はobserved zero、limits bootstrap拒否はunavailableと区別する。wrapper等の追加費は未導出 |
 | parserのVとcoreのstructural計数は別単位 | 2Vとstructural上界を別々に計算・受付し、片方の値をもう片方のlimitへ流用しない |
 
 RP-Cの成功も候補DATAであり、capture／保存／終了やsourceの真正性を証明しない。未知fieldや旧版が構文だけ通っても、RP-Cでは既存coreのschemaを緩めず拒否する。
@@ -180,15 +182,25 @@ value schema／discriminatorの追加、再walk、課金点・単位の変更は
 | `N > upper.encoded`のpost拒否 | レビューの最長値では差が0で、超える値は確認していない。等値は受理する | 試験専用assembly |
 | RP-C入口からのcore structural上限 | 受付で候補式と`max_nodes`を照合済み（§4.2） | core直呼び |
 
-試験専用assemblyと固定継続の境界は、RC-Aの実装前に決める。assemblyはruntimeへ配布せず、public AST consumer／任意callbackを増やさない。private参照が外へ出ないことだけからGC完了を推論しない。
+試験専用assemblyと固定継続の境界は、RC-Aの実装前に決める（今回の決定と実装は§11）。assemblyはruntimeへ配布せず、public AST consumer／任意callbackを増やさない。private参照が外へ出ないことだけからGC完了を推論しない。
 
 ## 10 実装順と未確認事項
 
-1. **実装前の決定**: 試験専用assemblyと固定継続の境界、理由対応表の形（§9.1）。これがない間は、§9.1の経路を受入済みにしない。
-2. **RC-A候補**: shared core engineのdetailed結果・計数ownerとlegacy projection。失敗prefix保持を先に固定し、まだraw入口をcoreへ接続しない。
+1. **RC-A前に決定済み**: 純粋計数ownerを共有し、別の固定scenario専用assemblyで非到達故障を検証する。理由対応はfreezeした固定表。実engineへ外部meter／callbackを渡す口や共有prototype改変を作らない。未実装のbridge故障まで受入済みにはしない。
+2. **RC-A実装済み**: shared core engineのdetailed結果・計数ownerとlegacy projection。失敗prefix保持を固定し、raw入口はcoreへ接続しない（§11）。
 3. **RC-B候補**: 同V／同planからの2Vとstructural受付の純粋計算・固定model。独立oracleと保守性の検証が済むまで、候補式を実受付へ採用しない。
 4. **RC-C候補**: parser finally前の固定借用・一度claim・pre／post・費目合流を連続接続。bridge費profileがreadyであることを前提とし、失敗時の診断／破棄を検証する。
 
 各段階は別の明示指示を要する。structural式は候補、bridge固定費・core全work上界・内部一時containerと索引／scratchの保持上界・運用capは未導出／未承認。shared deadline／取消・native故障・実heap／CPU時間、実source、encoder、private aggregate／capture／custody、本文保存と正式発行は対象外のままである。
 
-本設計は既存ソースの所有／課金点を読み取り照合したもので、新計算器・式の合成受入・core接続試験を実施した記録ではない。旧v1・正式発行口閉鎖・全体受付無効・Unknown・調査保留を維持する。
+RC-Aの検証以外は設計であり、新受付計算器・候補式の合成受入・raw/core接続試験を実施した記録ではない。旧v1・正式発行口閉鎖・全体受付無効・Unknown・調査保留を維持する。
+
+## 11 RC-A実装境界
+
+`tests/review/fixtures/snapshot-value-core.ts`のprivate `runValueEngine`だけが値を解析する。`inspectCheckpointValueDetailed(value, limits)`と既存`validateCheckpointValue(value, limits)`はそれぞれ一度だけ同engineを呼び、後者は結果のlegacy projectionだけを行う。schema・局所関係・課金順・上界式・limitsの7 fieldを変更しない。standalone bounds計算器も最初の8 unitを明示課金し、旧結果形を維持する。
+
+詳細結果は固定model `wfb-value-core-work-1`と`accounting`を持つ。成功は`observed`とfreezeしたwork必須、失敗は5理由と`observed`または`unavailable`。ownerはmeterを初回課金前に保持し、拒否された課金を足さない。limitsの厳密検査前後でmeterがなければunavailable、初回8 unit拒否は実測0である。失敗理由をsnapshotより先に確定し、snapshot取得不能でも先行理由を変えず、取得不能を0補完しない。成功時取得不能も値を返さず`invalid_value`で拒否する。終端結果は一度確定すると後着failure／successで上書きしない。
+
+純粋kernel `value-core-accounting.ts`には入力や部分copyを保持させない。失敗結果に例外・stack・本文は含めず、usageはprivate、返す計数はdetached／freeze済みとする。別module `value-core-accounting-assembly.ts`は固定scenario名だけを受け、overflow・内部例外・snapshot故障を同ownerで試す。実engine・rawからimportせず、runtime／packageへ含めない。5理由の将来向け固定表は単体検査のみで、raw診断へは未接続。
+
+実engineではchild_startedの独立課金列からwork 1〜73／structural 1〜30の拒否prefixと等値74 unitを照合し、10 variant・旧256件も維持する。非到達故障のassembly試験は、bytesから実際に発生させた証拠ではない。§9のmodel混在・bridge post拒否等は後続段階のまま。owner／wrapper／snapshotの追加処理を既存抽象workに課金したとは扱わず、統合費・実heap・CPU・GC／ゼロ化はUnknownである。
