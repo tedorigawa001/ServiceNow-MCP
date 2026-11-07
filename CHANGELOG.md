@@ -18,6 +18,8 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 ### Changed
 
+- WF-B adds synthetic-only strict source-dictionary and SourceMapDraft values with bounded multi-file bindings, role-safe references, retained unimplemented/missing points and unique cost ownership. Detached frozen outputs never perform file/hash verification or establish implementation coverage, E/S requirements or issuance authority; existing carrier/K0/E contracts remain unchanged.
+
 - WF-B adds isolated strict carrier/coverage DATA validation: twenty returnable diagnostic variants, canonical twelve-row bounded correspondence records and detached frozen values. Synthetic labels never establish runtime coverage, acquisition, credit ownership or E/S requirements. Existing K0/E fake and real providers remain separate; seed issuance, core wiring and formal issuance stay closed.
 
 - WF-B adds a pure isolated K0/entry-bootstrap fake with one-shot debit, ordered owner/profile states and fixed refusal carriers. Synthetic capacity boundaries, all 625 four-operation words and fixed build/snapshot/cleanup faults check non-refund accounting and first-diagnostic retention. Its five-unit schedule is fixture-only; K0 remains excluded from abstract work, runtime coverage unknown and all seed/core/real-budget wiring closed.

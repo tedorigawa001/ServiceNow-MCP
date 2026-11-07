@@ -1,12 +1,14 @@
 # WF-B：固定source対応表・内容hash照合・未実装行の詳細契約
 
-Version: draft-0.2 / Date: 2026-11-07 / 読み取り照合基準HEAD: `8f27eac` / レビュー修正の基準HEAD: `82ac0cb`。
+Version: draft-0.3 / Date: 2026-11-07 / 読み取り照合基準HEAD: `8f27eac` / レビュー修正の基準HEAD: `82ac0cb` / 純粋値検査実装基準HEAD: `c3b3b03`。
+
+draft-0.3: §9のstrict内部型・純粋検査を合成依存限定で実装した。実sourceの辞書pin／hash照合・実施点対応の確認は未実施。[検証記録](E2E_BEST_PRACTICE_WFB_SOURCE_MAP_VALUES_2026-11-07.md)。§4〜§8の将来手順は、この値検査の成功だけでは実施済みにならない。
 
 draft-0.1のレビュー修正: 内容hashの置き場所を固定ファイル辞書だけとし、親設計の「行ごとのhash」を改めた（§1）。照合結果を全体の成否1つから、hash／mapping／implementationの3軸へ分けた。未実装行が残っていても、hashの一致を報告できるようにするためである（§5）。作業中変更での停止をGitの状態ではなくhashの一致で判定するようにし、対応記録自身の完全性はレビューに任せると明記した。SC01に`SyntaxMeter`を加え、改行の変換を止める設定を実装時の要件とした。設計のみで、実装状態は変わらない。
 
-Status: **設計のみ。source対応台帳・hash検証器・coverage証拠は未実装。** 親は[固定schedule／carrier設計](BEST_PRACTICE_WFB_SCHEDULE_CARRIER_SEED_HANDOFF_DESIGN.md)と[seed bootstrap設計](BEST_PRACTICE_WFB_SEED_BOOTSTRAP_DESIGN.md)。現行のcarrier／coverage値検査を変更せず、その値から分からない対象sourceと実施点を別の対応記録で固定する。
+Status: **合成DATAのstrict内部型・純粋検査のみ実装。実source対応台帳の供給・hash検証器・coverage証拠は未実装。** 親は[固定schedule／carrier設計](BEST_PRACTICE_WFB_SCHEDULE_CARRIER_SEED_HANDOFF_DESIGN.md)と[seed bootstrap設計](BEST_PRACTICE_WFB_SEED_BOOTSTRAP_DESIGN.md)。現行のcarrier／coverage値検査を変更せず、その値から分からない対象sourceと実施点を別の対応記録で固定する。
 
-正式発行口閉鎖・全体受付無効・Unknown・VM／監視／telemetry調査保留を維持する。本書は実装・S発行・core接続・実接続・実通信・設定変更・Pushを承認しない。既存K0／E fakeの5 unit、旧102／57／239と398、既存19項目planを変更しない。
+正式発行口閉鎖・全体受付無効・Unknown・VM／監視／telemetry調査保留を維持する。実装済みは§9の純粋値検査だけで、本書は実sourceのhash照合・S発行・core接続・実接続・実通信・設定変更・Pushを承認しない。既存K0／E fakeの5 unit、旧102／57／239と398、既存19項目planを変更しない。
 
 ## 1 何を照合し、何を証明しないか
 
@@ -62,7 +64,7 @@ F03の値適合はSC04／SC05／SC11の全処理を実施した意味ではな�
 
 ## 4 別の対応記録：複数ファイルと未実装を表す
 
-将来の開発専用`SourceMapDraft`を、現行coverage値とは別の版付きDATAとして設計する。今回はschemaや生成器を実装しない。既存行のsourceRevisionへ複数hashを連結して押し込まず、既存APIにfieldを追加しない。
+開発専用`SourceMapDraft`を、現行coverage値とは別の版付きDATAとして設計する。draft-0.2までは設計のみで、draft-0.3で§9のschema／純粋検査だけを実装した。実辞書の生成器は未実装。既存行のsourceRevisionへ複数hashを連結して押し込まず、既存APIにfieldを追加しない。
 
 - 固定ファイル辞書はID・path・role（source／test／oracle）・expected SHA-256・期待byte長を持つ。実装する時点でレビュー済み値をpinする。動的探索・glob・caller指定path・ネットワーク取得は使わない。
 - 各SC行は必須で一度だけ現れ、実施点ごとのbindingを持つ。bindingは固定file ID、symbol／固定step ID、役割（reference_only／implementation）、phase・費用所有・対象prefix、対応test／oracleのIDを指す。symbolは非export／module初期化も含めて列挙し、行番号だけに依存しない。
@@ -116,3 +118,49 @@ K0基底処理、取得前のmodule初期化／carrier供給、native反射／OO
 ## 8 今回の検証範囲
 
 `8f27eac`の固定ファイル・symbol・既存試験を読み取り照合し、このMDと親2文書の参照だけを追加した。内容hashの採取／pin／照合、検証器実装、合成試験・build・梱包試験は行っていない。文書のローカル参照と空白のみを確認する。source対応の成立・実coverage・所有・実E／S上界は未確認のままである。
+
+上記はdraft-0.1時点の実施記録である。draft-0.3の実施範囲は§9と検証記録に分離する。
+
+## 9 strict内部型・純粋検査の実装境界
+
+`tests/review/fixtures/source-map-values-core.ts`を新設。importはnode:utilのproxy判定だけで、既存carrier／K0/E fake・予算・core・fs・crypto・runtimeを使わない。`inspectSourceDictionary`と`inspectSourceMapDraft`は未信頼の合成DATAを切離し／freezeして検査する。任意pathを読む供給口・登録台帳・issuerではなく、§2の実ファイル辞書も生成／pinしない。
+
+共通返値は`authority=none, ready=false, hash=not_checked, mapping=shape_only, implementation=unknown, runtimeCoverage=unknown, nativeCost=unknown, entryRequirement=unknown, seedRequirement=unknown, coreInvocation=not_called`に固定。`ok=true`は形式／参照の適合だけ。`mapping=shape_only`は検査範囲の表示で、実施点対応の成功ではない。不正入力は固定`mapping_invalid`で、入力・例外・path・symbol本文を診断へ出さない。
+
+### 9.1 辞書契約
+
+固定field順は`id, path, role, expectedSha256, expectedBytes`。最大32件、IDはF01〜F99／O01〜O99／T01〜T99の文字列昇順で重複なし。prefixとrole=source／oracle／testを一致させる。pathは1〜256 ASCII文字（英数字・underscore・dot・slash・hyphen）、空segment・`.`／`..`・backslash・絶対pathを拒否し、大文字小文字を無視した同一pathも拒否する。symlink／実file種別は値から判定できず、未検査である。
+
+expectedSha256は64桁小文字hex、expectedBytesは1〜1,048,576のsafe整数、総和は8,388,608以下。hashとbyte長は未信頼の期待値で、空ファイルの代用品・実照合結果ではない。dictionaryは空でもよいが、空からhash成功は返さない。
+
+### 9.2 SourceMapDraft契約
+
+外形の固定順は`model, files, rows, ready, runtimeCoverage, nativeCost, entryRequirement, seedRequirement`。modelは`wfb-source-map-draft-values-1`、filesは上記辞書、rowsはSC01〜SC12を順に1回ずつ、残りはfalseと4個のunknown。
+
+行の固定順は`id, status, bindings, missing`。bindingsは最大32件、missingは最大32個の固定識別子（英字／underscore開始、英数字／underscore、最大64文字）の昇順・重複なし。missingは自由文や0費用ではなく未対応pointのDATA。
+
+| status | bindings／missingの制約 | 意味 |
+|---|---|---|
+| unimplemented | bindings空、missing 1件以上 | 対象処理がない状態を保持 |
+| partial_reference | bindings 1件以上、missing 1件以上 | 参照または一部実装の申告があっても未対応を保持 |
+| mapped_unverified | implementation binding 1件以上、missing空 | 対応を申告しただけ。実装確認・coverage・所有を証明しない |
+
+空bindingを完成扱いにした行、reference_onlyだけのmapped_unverified、complete／verified等の未知statusは拒否する。実sourceを読まないため、callerが存在しない処理をimplementationと申告しても、その真偽は確認できない。値適合を発行証拠やSCの不足解消へ昇格しない。
+
+### 9.3 bindingと費目所有
+
+固定順は`step, fileId, symbol, site, role, phase, costOwner, costStep, prefixes, tests`。
+
+- stepは最大64文字の上記識別子。行内はstepの文字列昇順で重複なし。fileIdは辞書に存在するsource roleのF IDのみ。symbolは最大128文字の英字／underscore開始、英数字／underscore／dot／colonの識別列。
+- siteはproducer／callsite／helper／module_init。roleはreference_only／implementation。phaseはbefore_entry／entry_prepare／entry_terminal／seed／handoff。costOwnerはbase_unknown／k0_excluded／entry_prepare／entry_terminal／seed／split_unknown。
+- prefixesはnormal／refused／partialの固定順で1〜3件、重複なし。testsは辞書に存在するtest／oracle roleのT／O IDを文字列昇順で最大8件、重複なし。implementationでは1件以上必須。試験参照は結果ではない。
+- reference_onlyのcostStepはnull。implementationのcostStepは最大64文字の識別子で、全行を通じて唯一にする。行内の同fileId／symbol／site／roleの重複を拒否し、implementationの同fileId／symbol／siteの重複も全行で拒否する。step名だけ変えた二重所有を認めない。
+- 共有helperは1か所のimplementation ownerと複数行のreference_onlyで表す。この初版では排他的prefixごとの複数implementation ownerも拒否する。§4の経路付き再利用を有効にするには、排他性・費目集約の別契約が必要。実施点の意味を自動判定して費用を数えるものではない。
+
+複数ファイルの行は複数bindingを保持するが、必要なfileが本当に全部列挙されたかは未確認。未登録ID、role違い、test参照不足・不正順序、同じ主fileだけを別stepで重複させたbindingは拒否する。辞書とrowの照合をしてもhashは一切計算しない。
+
+### 9.4 入力安全性・未対応
+
+plain／null prototypeの固定順own enumerable DATA object、標準prototypeのdense arrayだけを許す。proxyはtrap前に拒否し、accessor・symbol・余分／欠落field・独自prototype・穴を拒否する。出力はnested array／objectを含め切離してfreezeする。反射・copy／freeze・module初期化・OOMの実費上界はUnknownで、今回work課金を追加しない。
+
+FS02とFS05の形式部分、FS03／FS04の参照形式部分を合成確認する範囲に限る。FS01の実source hash、FS03の実helper差替え、FS04の実symbol／phaseの意味照合、FS06の全費目独立oracle、FS07の安全読取、実辞書の承認・改行設定は未対応。既存carrierの5 gapsは変更しない。
