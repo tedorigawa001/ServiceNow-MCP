@@ -46,7 +46,38 @@ BigInt oracleは3 phaseそれぞれで、parser課金5値×bridge課金3値×境
 
 梱包確認は`bdo node`からローカルnpmを起動してfile一覧だけを照合した。永続cache設定・所有者・権限は変更していない。境界試験では計算器のruntime importが`node:util.types`だけであること、oracleが計算器をimportしないこと、既存raw/core/RC-Bが新modelをimportしないことを確認した。全体テスト・実通信試験・再採取は今回行っていない。
 
-## 4 残るUnknown／未対応
+## 4 レビュー修正（2026-11-07）
+
+`52cdfb8`の個別レビューで、計算の誤りはなかった。設計書の係数表28行はコードと一致し、計算器は変更していない。上記の件数は修正前の値として残す。
+
+§2の「各primitive位置での中断prefix上界を比較した」と「係数±1…の対照を追加した」は、実態以上の表現だった。前者は総数以下の整数を数えるだけで中断を再現せず、後者は一致を確認済みの値に±1して比べるだけだった。どちらの試験行も削除した。step内の中断の上界は、step全費を含む列で保守的に覆うという設計上の扱いで、試験で再現したものではない。
+
+**テストの修正**
+
+`tests/review/bridge-work.test.ts`を変更した（11件のまま）。
+
+- 列挙不可のcounterを拒否入力へ追加した。
+- `raw_limits`、`raw_work`、`raw_overflow`の拒否結果のfreezeを検査した。
+
+**ミューテーション**
+
+`bridge-work-core.ts`への変異71件（28 stepの係数変更、経路の削除、予約額の計算、容量判定、freeze等）を、`tests/review/bridge-work.test.ts`で実施した。修正前は66件、修正後は68件を検出した。係数の変更は28件すべて検出した。ただしoracleは同じ構成を別手続きで書いたものなので、両方に同じstepが抜けていれば検出できない。実bridgeとの対応の証拠にはならない。
+
+| 修正後も生存 | 件数 | 理由 |
+|---|---:|---|
+| 等価 | 3 | `'value' in d`と`typeof`は続く検査が同じ入力を拒否する。`charged > cap`は次の条件に含まれる |
+
+| 修正後の実行 | 結果 |
+|---|---|
+| `tests/review/bridge-work.test.ts` | 11件成功 |
+| 全テスト | 301ファイル、14,963件成功、失敗0 |
+| repo全体の`npm run lint` | エラー0、警告374 |
+| `npm run build`、`node tests/review/package-http-classification.mjs` | 成功 |
+| 記録と同じ型検査、`git diff --check` | 成功 |
+
+全テストは文書の更新前に実行した。§3で未実施としていた全体テストは、この実行で補った。実通信試験と再採取は未実施のまま。
+
+## 5 残るUnknown／未対応
 
 数値係数は有限recipeの定義・計算として固定しただけである。未接続の実bridgeの全処理が19 slot／28 stepで覆われる証拠、coreの全unmetered処理との完全対応、初期seed予約を取得する前のbootstrap費、実profile定数の供給費はUnknown。計算器自身の経路列挙／allocation費を、将来の実行時gate14 unitへ無料で含めない。
 

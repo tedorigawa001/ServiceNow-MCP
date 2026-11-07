@@ -1,6 +1,8 @@
 # WF-B RC-C：同root／同planのprivate供給・所有とbridge費／破棄予約
 
-Version: draft-0.3 / Date: 2026-11-07 / 照合基準HEAD: `692d9ae` / レビュー修正の基準HEAD: `ddff46e` / 有限費目model実装基準HEAD: `8dff929`。
+Version: draft-0.4 / Date: 2026-11-07 / 照合基準HEAD: `692d9ae` / レビュー修正の基準HEAD: `ddff46e` / 有限費目model実装基準HEAD: `8dff929` / 有限費目modelレビュー修正の基準HEAD: `52cdfb8`。
+
+draft-0.3のレビュー修正: checkの単位を検査群と定義し、現行`readLimits`との粒度の差を記した（§11.2、§11.3）。経路が実行順を表さないことと、seed拒否時の未確定費を明記した（§11.4）。係数と予約上界は変更していない。
 
 draft-0.3: 19 logical slot・28 step・29経路の有限recipe、unit係数とseed／admit／tail予約上界を純粋計算器へ実装した（§11）。独立の意味付き操作イベントoracleで合成照合した。[検証記録](E2E_BEST_PRACTICE_WFB_BRIDGE_WORK_2026-11-07.md)。実bridgeとのcoverage・初期bootstrap・実layout／native費はUnknownで、ready profile／予約台帳／core接続は作っていない。
 
@@ -197,7 +199,7 @@ draft-0.1作成時は`692d9ae`のローカルsource・親設計・RC-A／RC-B記
 
 ### 11.2 8操作種別と19 logical slot
 
-操作種別を`read / check / write / arithmetic / copy / container / freeze / control`の8種とし、**各1回の係数を1 unit**と定義する。readは一つの固定field／descriptor取得、checkは定義済み有限predicate一つ、writeは一つのlogical slot更新、arithmeticはchecked加算／差／乗算等一つ、copyは固定scalar一つ、containerは固定container枠一つ、freezeは固定container一つ、controlは固定状態step一つである。任意callback／全tree走査を一つのcheckに隠さない。native内部命令数やbyteの測定単位ではなく、allocation／freeze成功・OOM下の診断生成も保証しない。
+操作種別を`read / check / write / arithmetic / copy / container / freeze / control`の8種とし、**各1回の係数を1 unit**と定義する。readは一つの固定field／descriptor取得、checkは定義済みの有限な検査群一つ（descriptorや数値の検査のように、固定個のpredicateをまとめてよい）、writeは一つのlogical slot更新、arithmeticはchecked加算／差／乗算等一つ、copyは固定scalar一つ、containerは固定container枠一つ、freezeは固定container一つ、controlは固定状態step一つである。任意callback／全tree走査を一つのcheckに隠さない。native内部命令数やbyteの測定単位ではなく、allocation／freeze成功・OOM下の診断生成も保証しない。
 
 logical slotは`invocation, plan, meter, byteIdentity, rootBorrow, inputLength, valueNodes, claim, firstReason, secondaryReason, coreState, coreWork, admissionProjection, coreResult, candidate, returnPending, reservationSeed, reservationAdmit, reservationTail`の19個に固定する。実classのABI／heap layoutが19fieldであるという証明ではない。
 
@@ -238,13 +240,13 @@ logical slotは`invocation, plan, meter, byteIdentity, rootBorrow, inputLength, 
 | tail_clear | 0 | 0 | 3 | 0 | 0 | 0 | 0 | 0 | 3 |
 | tail_retire | 1 | 1 | 1 | 0 | 0 | 0 | 0 | 1 | 4 |
 
-`projection`は元7項目のread/copy/write＋固定container/freeze、`admission`はVと4 capのread/check＋2V/3V/+10の3算術である。元parserのwork配賦和は再計上しない。`core_limits_recipe`はheader read2/check4/container1/control1、各7fieldのread1/check3/write1/control1、最後のfreeze1で51とする。`core_metadata_recipe`はshape／upper／owner／accounting／wrapperの固定枠と、recipeで定義した12 scalar項目等の処理枠に限定する。現行core内の全allocation・全wrapper処理をこれで覆ったとはしない。
+`projection`は元7項目のread/copy/write＋固定container/freeze、`admission`はVと4 capのread/check＋2V/3V/+10の3算術である。元parserのwork配賦和は再計上しない。`core_limits_recipe`はheader read2/check4/container1/control1、各7fieldのread1/check3/write1/control1、最後のfreeze1で51とする。現行`readLimits`を個別のpredicateで数えると69（header 6、各field 9）で、check 25はname／data／numberの検査群で数えた値である。`core_metadata_recipe`はshape／upper／owner／accounting／wrapperの固定枠と、recipeで定義した12 scalar項目等の処理枠に限定する。現行core内の全allocation・全wrapper処理をこれで覆ったとはしない。
 
 独立oracle `bridge-work-oracle.ts`は係数表や計算器をimportせず、field名・slot名・guard対象に対する意味付きイベントを別の手続きで生成する。例えば各limits fieldはname/data/numberの3checkを発生させ、そのイベント数を集計して表の各列と比較する。表のtotalだけをコピーした期待値にはしない。
 
 ### 11.4 経路と予約上界
 
-有限経路はseed 3、admit 5、tail 21の合計29。これらは**費目所属phaseごとの保守列**であり、seed_clearやadmit_clearをcore前に実行するプログラムではない。実際のclearは全体の終端で行う契約を維持する。
+有限経路はseed 3、admit 5、tail 21の合計29。これらは**費目所属phaseごとの保守列**であり、seed_clearやadmit_clearをcore前に実行するプログラムではなく、実行順も表さない。§3と§6のとおり、実装では予約を確保してからslotを生成する。seed列のguard13とallocate22は費目の所属を示す。容量不足でseed_gateが拒否するときのこの35 unitの扱いは未確定で、§11.5の初期bootstrapに含まれる。実際のclearは全体の終端で行う契約を維持する。
 
 - seed列：guard13＋allocate22＋seed_gate14＋後続gate最大28＋diagnostic10＋clear15。最大`R_seed=102`。
 - admit列：bind17＋admission13＋projection23＋state3＋clear1。各step前の拒否prefixを含め、最大`C_admit=57`。

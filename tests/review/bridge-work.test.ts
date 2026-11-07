@@ -30,8 +30,6 @@ describe('finite bridge work model, never a runtime profile or core permission',
       const events = p.steps.flatMap(oracleStep), actual = result.paths.find(x => x.id === p.id)!;
       expect(actual.total, p.id).toBe(events.length); expect(actual.phase).toBe(p.phase);
       expect(events.length).toBeLessThanOrEqual(result.reservations[p.phase]);
-      // Every primitive interruption is covered, including partial cleanup and diagnostic failure.
-      for (let prefix = 0; prefix <= events.length; prefix++) expect(BigInt(prefix)).toBeLessThanOrEqual(BigInt(result.reservations[p.phase]));
     }
     const success = result.paths.find(p => p.id === 'success')!, late = result.paths.find(p => p.id === 'return_refused/3')!;
     expect(success.total).toBe(219); expect(late.total).toBe(239);
@@ -83,9 +81,11 @@ describe('finite bridge work model, never a runtime profile or core permission',
     const proxy = new Proxy(input, { ownKeys() { calls++; throw Error('PRIVATE'); }, getPrototypeOf() { calls++; throw Error('PRIVATE'); } });
     for (const bad of [null, [], getter, proxy, { ...input, extra: 'PRIVATE' }, { ...input, toJSON() { calls++; return 'PRIVATE'; } },
       { ...input, [Symbol('secret')]: 1 }, Object.setPrototypeOf({ ...input }, { secret: 'PRIVATE' }),
-      { parser_charged: 0, max_parse_work: 1000, bridge_charged: 0 }, { max_parse_work: 1000, parser_charged: 0 }]) {
+      { parser_charged: 0, max_parse_work: 1000, bridge_charged: 0 }, { max_parse_work: 1000, parser_charged: 0 },
+      Object.defineProperty({ ...input }, 'parser_charged', { enumerable: false, value: 0 })]) {
       const r = inspectBridgeReservation('tail', bad); expect(r).toMatchObject({ ok: false, reason: 'raw_limits' });
       expect(JSON.stringify(r)).not.toMatch(/PRIVATE|stack/); expect(r).not.toHaveProperty('value');
+      expect(Object.isFrozen(r)).toBe(true);
     }
     for (const bad of [0, -0, -1, 0.5, NaN, Infinity, Number.MAX_SAFE_INTEGER + 1, '1000', {}]) {
       expect(inspectBridgeReservation('seed', { ...input, max_parse_work: bad })).toMatchObject({ ok: false, reason: 'raw_limits' });
@@ -98,16 +98,11 @@ describe('finite bridge work model, never a runtime profile or core permission',
     }
     expect(calls).toBe(0); expect(inspectBridgeReservation('seed', Object.setPrototypeOf({ ...input }, null)).ok).toBe(true);
   });
-  it('keeps every returned structure immutable and detects coefficient/omitted-path mutants in the oracle', () => {
-    const result = calculateBridgeWorkBounds();
+  it('keeps every returned structure immutable, including capacity and overflow refusals', () => {
     const walk = (v: unknown) => { if (v && typeof v === 'object') { expect(Object.isFrozen(v)).toBe(true); for (const x of Object.values(v)) walk(x); } };
-    walk(result); walk(inspectBridgeReservation('tail', { max_parse_work: 239, parser_charged: 0, bridge_charged: 0 }));
-    for (const [id, step] of Object.entries(result.steps)) {
-      const expected = BigInt(oracleStep(id).length);
-      expect(BigInt(step.total) + 1n).not.toBe(expected); expect(BigInt(step.total) - 1n).not.toBe(expected);
-    }
-    expect(result.reservations.tail - 1).toBeLessThan(oraclePaths().find(p => p.id === 'return_refused/3')!.steps.flatMap(oracleStep).length);
-    expect(result.paths.find(p => p.id === 'success')!.total).toBeLessThan(result.reservations.tail);
+    walk(calculateBridgeWorkBounds()); walk(inspectBridgeReservation('tail', { max_parse_work: 239, parser_charged: 0, bridge_charged: 0 }));
+    walk(inspectBridgeReservation('tail', { max_parse_work: 238, parser_charged: 0, bridge_charged: 0 }));
+    walk(inspectBridgeReservation('tail', { max_parse_work: 1, parser_charged: Number.MAX_SAFE_INTEGER, bridge_charged: 1 }));
   });
   it('keeps the pure calculator and independent oracle outside runtime/raw/core/package roots', () => {
     const read = (path: string) => readFileSync(new URL('../../' + path, import.meta.url), 'utf8');

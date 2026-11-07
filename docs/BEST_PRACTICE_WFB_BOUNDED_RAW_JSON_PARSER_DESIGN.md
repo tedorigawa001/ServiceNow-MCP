@@ -1,6 +1,8 @@
 # WF-B：bounded raw JSON parserの詳細契約
 
-Version: draft-0.10 / Date: 2026-11-07 / 照合基準HEAD: `7eefb10` / レビュー修正の基準HEAD: `09e65e0` / RP-A実装基準HEAD: `baaf60d` / RP-B実装基準HEAD: `f28f0a2` / RP-Bレビュー修正の基準HEAD: `6a8209a` / RP-C設計レビュー修正の基準HEAD: `cc0f410` / RC-Aレビュー修正の基準HEAD: `0e1229b` / RC-C詳細設計基準HEAD: `692d9ae` / RC-B／RC-Cレビュー修正の基準HEAD: `ddff46e`。
+Version: draft-0.11 / Date: 2026-11-07 / 照合基準HEAD: `7eefb10` / レビュー修正の基準HEAD: `09e65e0` / RP-A実装基準HEAD: `baaf60d` / RP-B実装基準HEAD: `f28f0a2` / RP-Bレビュー修正の基準HEAD: `6a8209a` / RP-C設計レビュー修正の基準HEAD: `cc0f410` / RC-Aレビュー修正の基準HEAD: `0e1229b` / RC-C詳細設計基準HEAD: `692d9ae` / RC-B／RC-Cレビュー修正の基準HEAD: `ddff46e` / 有限費目modelレビュー修正の基準HEAD: `52cdfb8`。
+
+draft-0.10のレビュー修正: §7のRP-Cの状態を、有限recipeの固定後の内容に合わせた。parserは変更していない。
 
 draft-0.9のレビュー修正: §3の`max_nodes`の上界の記述を、RC-Bの保守式に合わせた。parserは変更していない。
 
@@ -170,7 +172,7 @@ oracleを製品encoderやparserの出力から生成して正解としない。�
 
 1. **RP-A（byte境界のみ実装済み）**: 合成専用のlimit／計数型・入力境界、UTF-8 prepass・外側framingと固定理由を実装。入力hook非実行・copy前受付・failure unwindを検証した。JSON値の受理・証拠発行は未接続であり、syntax uncheckedの結果をparser成功へ昇格しない（§8）。
 2. **RP-B（合成専用で実装済み）**: 有限stackの字句／構文、同object重複、strict numeric token、path別件数・node／token制限を追加。中間ASTは外へ返さず、内部の固定retireで破棄する。独立goldenと構造oracle・拒否対照を追加した（§9）。coreへの固定継続は未接続。
-3. **RP-C**: [同AST／2V・計数診断保持の差分設計](BEST_PRACTICE_WFB_RPC_PRIVATE_VALUE_BRIDGE_DESIGN.md)に基づき、RC-Aの詳細core結果とRC-Bの2V／3V+10純粋受付を合成実装した。raw入口への固定借用・費目合流は未接続。[RC-C詳細契約](BEST_PRACTICE_WFB_RCC_PRIVATE_SUPPLY_BUDGET_DESIGN.md)で元plan／meter・root生存区間・一度claim・bridge費と破棄予約を整理したが、係数・ready profileは未導出。発行・保存とは引き続き分離する。
+3. **RP-C**: [同AST／2V・計数診断保持の差分設計](BEST_PRACTICE_WFB_RPC_PRIVATE_VALUE_BRIDGE_DESIGN.md)に基づき、RC-Aの詳細core結果とRC-Bの2V／3V+10純粋受付を合成実装した。raw入口への固定借用・費目合流は未接続。[RC-C詳細契約](BEST_PRACTICE_WFB_RCC_PRIVATE_SUPPLY_BUDGET_DESIGN.md)で元plan／meter・root生存区間・一度claim・bridge費と破棄予約を整理し、抽象係数を有限recipeへ固定した。実bridgeとの対応は未確認で、ready profileはない。発行・保存とは引き続き分離する。
 
 後続段階は別の明示指示を要する。RP-Aのintrinsic選定と境界用work modelは§8、RP-Bの構文modelは§9、core structuralの保守式はRC-Bの純粋計算器へ固定した。ただしnative copyのallocation／set例外の故障注入、bridgeを含む統合work／unwind費、core全work上界、raw byte／heap／scratchの運用capは未確認／未承認。小さい合成capだけで有限境界を検証し、本番capは投入しない。
 

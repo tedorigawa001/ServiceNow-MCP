@@ -1,6 +1,8 @@
 # WF-B RP-C 同AST接続と2V受付 計数診断保持の差分設計
 
-Version: draft-0.8 / Date: 2026-11-07 / 照合基準HEAD: `81d23f3` / レビュー修正の基準HEAD: `cc0f410` / RC-A実装基準HEAD: `5b03dfc` / RC-Aレビュー修正の基準HEAD: `0e1229b` / RC-B基準HEAD: `252dfbd` / RC-C詳細設計基準HEAD: `692d9ae` / RC-B／RC-Cレビュー修正の基準HEAD: `ddff46e` / 有限費目model基準HEAD: `8dff929`。
+Version: draft-0.9 / Date: 2026-11-07 / 照合基準HEAD: `81d23f3` / レビュー修正の基準HEAD: `cc0f410` / RC-A実装基準HEAD: `5b03dfc` / RC-Aレビュー修正の基準HEAD: `0e1229b` / RC-B基準HEAD: `252dfbd` / RC-C詳細設計基準HEAD: `692d9ae` / RC-B／RC-Cレビュー修正の基準HEAD: `ddff46e` / 有限費目model基準HEAD: `8dff929` / 有限費目modelレビュー修正の基準HEAD: `52cdfb8`。
+
+draft-0.8のレビュー修正: bridge費を「未導出」としていた記述を、抽象係数の固定と実bridgeとの対応が未確認であることに分けた。設計内容と実装は変更していない。
 
 draft-0.8: [RC-C有限recipe／費用model](BEST_PRACTICE_WFB_RCC_PRIVATE_SUPPLY_BUDGET_DESIGN.md#11-有限stepslotunit係数と純粋予約計算)の純粋計算を追加。19 slot・28 step・29経路からseed102／admit57／tail239（総398）を求め、意味付き操作イベントoracleと容量境界を合成検証した。実bridge coverage・初期bootstrapはUnknownで、ready=false・core未接続を維持する。
 
@@ -16,7 +18,7 @@ draft-0.3: RC-Aの単一値engine・detailed計数owner・legacy projectionだ�
 
 draft-0.1のレビュー修正: 受入条件ごとに検証経路を付け、bytesから届かない経路と試験専用assemblyの決定順を明記した（§9、§10）。modelをplanへ入れないことと、post拒否の理由を固定した。structuralの別候補式を検証対象へ追加した（§4.2）。設計のみで、実装状態は変わらない。
 
-Status: **RC-AとRC-Bの純粋受付・合成試験を実装。RP-Cのraw接続・bridge統合費は未実装／未導出。** [raw parser契約](BEST_PRACTICE_WFB_BOUNDED_RAW_JSON_PARSER_DESIGN.md)のRP-Bから、[strict値core](BEST_PRACTICE_WFB_SNAPSHOT_VALUE_CONTRACT.md)へ同じASTを一度だけ借用し、copy前の2V受付と失敗時の計数保持を組み合わせる方針は未接続。旧v1・正式発行口閉鎖・全体受付無効・Unknown・VM／監視／telemetry調査保留を維持する。証拠発行・本文保存・実接続・実通信・実機操作・設定変更・Pushを行わない。
+Status: **RC-AとRC-Bの純粋受付・合成試験を実装。RP-Cのraw接続は未実装で、bridge費は有限recipeだけを固定した。** [raw parser契約](BEST_PRACTICE_WFB_BOUNDED_RAW_JSON_PARSER_DESIGN.md)のRP-Bから、[strict値core](BEST_PRACTICE_WFB_SNAPSHOT_VALUE_CONTRACT.md)へ同じASTを一度だけ借用し、copy前の2V受付と失敗時の計数保持を組み合わせる方針は未接続。旧v1・正式発行口閉鎖・全体受付無効・Unknown・VM／監視／telemetry調査保留を維持する。証拠発行・本文保存・実接続・実通信・実機操作・設定変更・Pushを行わない。
 
 ## 1 現状と接続の前提
 
@@ -103,7 +105,7 @@ ValueLimitsは既存の固定順を保つ。`max_scopes, max_workers, max_nodes,
 | core | 独立のValueWork 5費目を`max_value_work`以内で計数。parser残量への借入れなし |
 | 入力／tree保持 | A+NとV／2Vを別々に受付。node枠をbyte・structural単位へ換算しない |
 
-`max_parse_work + max_value_work ≤ max_total_work`の事前配賦を維持する。parser＋bridgeが前者、coreが後者を使い、未使用枠を相互に移さない。bridgeの固定費・post／破棄予約の具体unitは未導出で、0として追加しない。新しいbridge profileとmodelの検証が必要であり、旧RP-A100／RP-B110や312の対照へ追加処理を無料で押し込まない。
+`max_parse_work + max_value_work ≤ max_total_work`の事前配賦を維持する。parser＋bridgeが前者、coreが後者を使い、未使用枠を相互に移さない。bridgeの固定費・post／破棄予約の抽象unitは[RC-Cの有限recipe](BEST_PRACTICE_WFB_RCC_PRIVATE_SUPPLY_BUDGET_DESIGN.md#11-有限stepslotunit係数と純粋予約計算)へ固定したが、実bridgeとの対応は未確認で、0として追加しない。新しいbridge profileとmodelの検証が必要であり、旧RP-A100／RP-B110や312の対照へ追加処理を無料で押し込まない。
 
 両方の計数を観測できる場合だけ、checkedなparser＋bridge実計数とcore実計数の合計を返す。core実計数が取得不能なら、既知のparser成分と予約上界は保持するが、観測totalはUnknownにする。予約上界と実計数を二重加算しない。limits bootstrapのnative reflectionや実heap／時間は、抽象work totalとは別の未確認事項である。
 
@@ -154,7 +156,7 @@ postでは固定model、元context／claimの対応、観測された各work枠�
 
 同じfreeze済みcopyを指すDetailed結果wrapperとpendingは、別treeとして二重計上しない。ただしpost拒否時にはwrapperも含む全candidate aliasを固定unwindで外す。成功move後も診断slotへ本文参照を残さず、固定計数と理由だけを保持する。
 
-先行失敗後は追加の業務post検査を行わず、先行確保した固定unwindだけを実行する。後処理費不足で先行core理由を置換しない。返却用の固定診断と破棄費をcore呼出し前に確保することが前提で、その数値が未導出な間はreadyなbridge profileを作らない。
+先行失敗後は追加の業務post検査を行わず、先行確保した固定unwindだけを実行する。後処理費不足で先行core理由を置換しない。返却用の固定診断と破棄費をcore呼出し前に確保することが前提で、実bridgeとの対応が確認できない間はreadyなbridge profileを作らない。
 
 ## 8 modelと互換性の固定
 
@@ -201,7 +203,7 @@ value schema／discriminatorの追加、再walk、課金点・単位の変更は
 3. **RC-B実装済み**: 2Vとstructural受付の純粋計算・固定modelと独立oracle（§12）。callerのVや公開metadataは証拠にせず、同root／planのprivate供給・統合費を伴うraw接続は後続へ残す。
 4. **RC-C候補**: [private供給・費目所有／予約の詳細契約](BEST_PRACTICE_WFB_RCC_PRIVATE_SUPPLY_BUDGET_DESIGN.md)の有限recipe計算だけを合成実装した。実private供給とのcoverage・初期bootstrap・creditの一度利用は未実装／未確認。profile readyの確認後にparser finally前の固定借用・一度claim・pre／post・finally後返却を合成接続し、診断／全alias破棄を検証する。core接続は未着手。
 
-各段階は別の明示指示を要する。structuralはRC-Bの純粋モデルだけを固定し、bridge固定費・core全work上界・内部一時containerと索引／scratchの保持上界・運用capは未導出／未承認。shared deadline／取消・native故障・実heap／CPU時間、実source、encoder、private aggregate／capture／custody、本文保存と正式発行は対象外のままである。
+各段階は別の明示指示を要する。structuralはRC-Bの純粋モデル、bridge費はRC-Cの有限recipeだけを固定した。実bridgeとの対応、core全work上界、内部一時containerと索引／scratchの保持上界、運用capは未確認／未導出／未承認。shared deadline／取消・native故障・実heap／CPU時間、実source、encoder、private aggregate／capture／custody、本文保存と正式発行は対象外のままである。
 
 RC-A／RC-B以外は設計であり、raw/coreのprivate接続試験を実施した記録ではない。旧v1・正式発行口閉鎖・全体受付無効・Unknown・調査保留を維持する。
 
@@ -221,7 +223,7 @@ RC-A／RC-B以外は設計であり、raw/coreのprivate接続試験を実施し
 
 検査順はplan strict → checkedなparse/value work配賦の和 → Vの正safe整数 → 既存value／AST枠 → checkedなV+Vとlive枠 → checkedな3×V+10とstructural枠 → 固定順ValueLimits projection。等値は許可し、cap不足は`raw_limit`、算術overflowは`raw_overflow`、不正plan／V・配賦不成立は`raw_limits`。先行拒否後は後続算術・projectionを行わない。残りparser workからvalue枠を再計算せず、`max_work=plan.max_value_work`と他6項目の元値だけを渡す。pure結果の拒否には部分projectionを返さず、例外・入力参照も含めない。
 
-固定modelは`wfb-value-admission-rcb-1`／`wfb-value-structural-3v10-1`／既存`wfb-value-core-work-1`。成功も`non_executable_value_admission`で、`coreInvocation=not_called`、`bridgeWork=unmodeled`とする。算術のattempted／completedは配賦和・2V・3倍・+10の最大4試行だけを数え、parser費やmodel照合・19field reflection・snapshot／結果wrapper・post／discard予約の統合workへ無料加算したとは扱わない。これら費目が未導出な間はreadyなbridgeを作らない。
+固定modelは`wfb-value-admission-rcb-1`／`wfb-value-structural-3v10-1`／既存`wfb-value-core-work-1`。成功も`non_executable_value_admission`で、`coreInvocation=not_called`、`bridgeWork=unmodeled`とする。算術のattempted／completedは配賦和・2V・3倍・+10の最大4試行だけを数え、parser費やmodel照合・19field reflection・snapshot／結果wrapper・post／discard予約の統合workへ無料加算したとは扱わない。これら費目と実bridgeの対応が確認できない間はreadyなbridgeを作らない。
 
 保守式の費目根拠は、有限treeの各node訪問≤Vとfield／indexの辺≤V−1、初期8、rootの追加判定≤3、Metric peek≤Vの和で`3V+10`。拒否prefixでもownDataはfield数一致後に既存辺を課金し、listはlength検査後に既存indexを課金し、schemaは同subtreeを再walkしない。Metric branchも同じvalueを一方のrecordとしてだけ検査する。これはRP-Bのaliasなし有限AST・現行schemaと課金点に限定した上界であり、任意JS object／native heap／全workの上界ではない。
 
