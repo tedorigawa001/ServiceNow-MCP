@@ -38,6 +38,46 @@ raw入口・値engine・課金点・旧APIは変更しない。同root／planの
 
 配布境界は既存raw入口から新計算器／値engineへのimportなし、計算器から実engine呼出し・I/Oなしも検査した。梱包確認は`bdo node`からローカルnpmを呼びfile一覧だけを照合し、永続cache設定や権限は変更していない。今回、全体テスト・実通信試験・再採取は行っていない。
 
-## 5 残課題
+## 5 レビュー修正（2026-11-07）
+
+`692d9ae`と`ddff46e`の個別レビューで、実装の不具合はなかった。計算器とengineは変更せず、次の試験の穴を塞いだ。上記の件数は修正前の値として残す。
+
+一時プローブで、計算器とparserのplan受付を比較した。変異plan 19,891件で、受付と拒否理由の差分は0だった。プローブは残していない。
+
+**テストの修正**
+
+`tests/review/value-admission.test.ts`を変更した（24件→26件）。
+
+- 列挙不可のplan項目を拒否入力へ追加した。
+- 3倍と+10のoverflowで止まる算術の試行数を固定した。
+- 拒否結果とその`arithmetic`のfreezeを検査した。
+- field数の不一致と順序違いの拒否で、計数を手計算で固定した（structural 11／total 12、structural 12／total 13）。これまで拒否途中は上界の照合だけだった。
+- §2の「正常計数±1」「2倍の診断変異」の試験行は、実行時を変えず同じ値を比べるだけだったので削除した。
+
+**ミューテーション**
+
+`tests/review/value-admission.test.ts`だけで実施した。
+
+| 対象 | 変異数 | 修正前の検出 | 修正後の検出 |
+|---|---:|---:|---:|
+| RC-Bの計算器 | 51 | 45 | 48 |
+| coreの課金点（削除、追加、再walk） | 14 | 13 | 14 |
+
+| 修正後も生存 | 件数 | 理由 |
+|---|---:|---|
+| 等価 | 2 | `'value' in d`を外しても続く`positive`が同じ入力を拒否する。`pinPlan`の戻り値は外へ出ないのでfreezeの有無が見えない |
+| 到達不能の防御 | 1 | `catch`の既定理由。計算器内で例外が発生しない |
+
+| 修正後の実行 | 結果 |
+|---|---|
+| `tests/review/value-admission.test.ts` | 26件成功 |
+| 全テスト | 300ファイル、14,952件成功、失敗0 |
+| repo全体の`npm run lint` | エラー0、警告374 |
+| `npm run build`、`node tests/review/package-http-classification.mjs` | 成功 |
+| 記録と同じ型検査、`git diff --check` | 成功 |
+
+全テストは文書の更新前に実行した。§4で未実施としていた全体テストは、この実行で補った。実通信試験と再採取は未実施のまま。
+
+## 6 残課題
 
 RC-Cの同root／同planからの固定private供給と呼出しclaim、model照合、pre/post・費目合流は未接続。bridge固定費・19field bootstrap reflection・core全work上界・post／破棄予約・一時container／scratch・運用cap・実heap／CPU／GC／ゼロ化はUnknown／未導出。これらが未完了な間、純粋受付成功からreadyなbridge・正式発行・全体受付を生成しない。model／schema・Metric数／sample上限・再walk・課金点変更時は式と対照を再検証する。

@@ -1,6 +1,8 @@
 # WF-B：bounded raw JSON parserの詳細契約
 
-Version: draft-0.9 / Date: 2026-11-07 / 照合基準HEAD: `7eefb10` / レビュー修正の基準HEAD: `09e65e0` / RP-A実装基準HEAD: `baaf60d` / RP-B実装基準HEAD: `f28f0a2` / RP-Bレビュー修正の基準HEAD: `6a8209a` / RP-C設計レビュー修正の基準HEAD: `cc0f410` / RC-Aレビュー修正の基準HEAD: `0e1229b` / RC-C詳細設計基準HEAD: `692d9ae`。
+Version: draft-0.10 / Date: 2026-11-07 / 照合基準HEAD: `7eefb10` / レビュー修正の基準HEAD: `09e65e0` / RP-A実装基準HEAD: `baaf60d` / RP-B実装基準HEAD: `f28f0a2` / RP-Bレビュー修正の基準HEAD: `6a8209a` / RP-C設計レビュー修正の基準HEAD: `cc0f410` / RC-Aレビュー修正の基準HEAD: `0e1229b` / RC-C詳細設計基準HEAD: `692d9ae` / RC-B／RC-Cレビュー修正の基準HEAD: `ddff46e`。
+
+draft-0.9のレビュー修正: §3の`max_nodes`の上界の記述を、RC-Bの保守式に合わせた。parserは変更していない。
 
 draft-0.9: [RC-C private供給・所有／bridge費と破棄予約](BEST_PRACTICE_WFB_RCC_PRIVATE_SUPPLY_BUDGET_DESIGN.md)を参照追加。RC-Bの純粋受付実装を§7へ反映し、同parserのframe後・finally前での固定借用、元plan／meter・LF込みN、既存nodeCleanupと新alias退役の区別を具体化した。設計のみでparser・接続・課金は変更していない。
 
@@ -70,7 +72,7 @@ limitsは合成計画が事前に確定するimmutableなprimitive値の集合�
 | 既知pathの件数 | `snapshot.modules≤1000, cases≤20000, events≤20000, samples≤600`。`scopes`と`cutoff.scope_tails≤max_scopes`、`workers≤max_workers`。rootとそのsnapshotからの固定path表で判定する。scope別4096・参照・集計は既存coreで照合 |
 | `max_parse_work`／`max_value_work`／`max_total_work` | 解析と既存値検査の固定配賦。いずれも正値、checkedに`max_parse_work+max_value_work≤max_total_work`を受付。unused解析枠の転用や失敗後の再試行なし |
 | `max_token_scratch_bytes`／`max_ast_nodes`／`max_live_value_nodes` | tokenの有限scratchと中間構築枠。AST node枠はvalue nodeと同じ定義で二重に生成数を計上しない。ASTと最終core copyの同時保持は`max_live_value_nodes`で受け、構築したnode数の実測V_aについて`2V_a`をcheckedに照合してからcoreへ渡す（超過はparse段の`raw_limit`）。coreの内部一時containerは含まない。node数を実heap byteと見なさない |
-| 既存`ValueLimits` | `max_scopes, max_workers, max_nodes, max_snapshot_bytes, max_control_bytes, max_file_bytes`を同じ計画から固定供給。coreの`max_work`へ`max_value_work`を渡す。入力Nの実長と、coreが返す保守encoded上界は両方を検査し、短い入力で保守上界の不足を回避しない。`max_nodes`はcoreのstructural計数の上限で、`max_value_nodes`のV定義とは単位が異なる。Vをそのまま渡さず、coreの計数に対する上界式は未導出として別途確定する |
+| 既存`ValueLimits` | `max_scopes, max_workers, max_nodes, max_snapshot_bytes, max_control_bytes, max_file_bytes`を同じ計画から固定供給。coreの`max_work`へ`max_value_work`を渡す。入力Nの実長と、coreが返す保守encoded上界は両方を検査し、短い入力で保守上界の不足を回避しない。`max_nodes`はcoreのstructural計数の上限で、`max_value_nodes`のV定義とは単位が異なる。Vをそのまま渡さず、coreの計数に対する上界は[RC-Bの保守式`3V+10`](BEST_PRACTICE_WFB_RPC_PRIVATE_VALUE_BRIDGE_DESIGN.md#12-rc-b純粋受付モデルと非接続境界)で受ける |
 
 このpath表は初期schema版に固定し、値coreのkind／件数上限が変われば同時改版する。未知pathの大きいarrayを無制限にwalkしてからschema拒否してはならない。`max_array_items`とnode／token／work枠は未知pathにも有効である。
 

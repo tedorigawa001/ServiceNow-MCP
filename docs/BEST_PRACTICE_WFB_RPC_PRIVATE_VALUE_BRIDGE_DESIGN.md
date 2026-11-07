@@ -1,6 +1,8 @@
 # WF-B RP-C 同AST接続と2V受付 計数診断保持の差分設計
 
-Version: draft-0.6 / Date: 2026-11-07 / 照合基準HEAD: `81d23f3` / レビュー修正の基準HEAD: `cc0f410` / RC-A実装基準HEAD: `5b03dfc` / RC-Aレビュー修正の基準HEAD: `0e1229b` / RC-B基準HEAD: `252dfbd` / RC-C詳細設計基準HEAD: `692d9ae`。
+Version: draft-0.7 / Date: 2026-11-07 / 照合基準HEAD: `81d23f3` / レビュー修正の基準HEAD: `cc0f410` / RC-A実装基準HEAD: `5b03dfc` / RC-Aレビュー修正の基準HEAD: `0e1229b` / RC-B基準HEAD: `252dfbd` / RC-C詳細設計基準HEAD: `692d9ae` / RC-B／RC-Cレビュー修正の基準HEAD: `ddff46e`。
+
+draft-0.6のレビュー修正: §4.2と§12の課金変異の記述を、レビューで実施した結果に合わせた。設計内容と実装は変更していない。
 
 draft-0.6: [RC-C private供給・所有とbridge統合費／破棄予約の詳細設計](BEST_PRACTICE_WFB_RCC_PRIVATE_SUPPLY_BUDGET_DESIGN.md)を追加。同plan／meter再利用、同rootの生存区間、一度claim、既存cleanup前払いとの費目分離、core前のtail予約・finally後の返却を具体化した。設計のみで、unit係数・ready profileはUnknown、raw/core接続は未実装のまま。
 
@@ -74,7 +76,7 @@ parserのVをcoreの`max_nodes`へ直接渡さない。以下は現行coreに限
 
 根拠案は、schemaのnode訪問が最大V、record field／array indexの辺が最大V−1、初期課金8、root trigger／statusの追加判定が最大3、Metric discriminatorの追加訪問が高々V、という費目所有である。合計は`V+(V−1)+8+3+V`。これはstructuralだけであり、relation・copy・number formatting・arithmeticを含む全work上界ではない。
 
-前提はRP-Bが生成した有限・非循環・aliasなしのAST、現在のschema分岐が同じsubtreeを再walkしないこと、coreの課金点／単位が固定されることである。汎用unknown objectや別のschema／modelには適用しない。正当値だけでなく途中schema拒否のcharged prefixも式内であることを要する。sourceレビューだけで採用済みとはせず、全10 variant・全row・破損prefixと独立計数・課金変異で検証してからmodelを固定する。
+前提はRP-Bが生成した有限・非循環・aliasなしのAST、現在のschema分岐が同じsubtreeを再walkしないこと、coreの課金点／単位が固定されることである。汎用unknown objectや別のschema／modelには適用しない。正当値だけでなく途中schema拒否のcharged prefixも式内であることを要する。sourceレビューだけで採用済みとはしない。RC-Bで全10 variant・全row・破損prefixを独立計数で検証し、modelを固定した。課金点の変異はレビューで実施した（§12）。
 
 RC-Bの純粋計算器はchecked算術で保守値を求め、`S_candidate ≤ plan.max_nodes`を照合する。不足なら`raw_limit`、算術overflowなら`raw_overflow`で停止し、coreを呼ばない。将来のraw接続ではこれをparse段へ保持する。保守式により実際には通る値を早期拒否し得るが、limitを自動で引き上げない。式だけを根拠にRP-Cの受付全体を有効にせず、private供給・bridge統合費・post／破棄予約の検証を別途要する。
 
@@ -221,6 +223,6 @@ RC-A／RC-B以外は設計であり、raw/coreのprivate接続試験を実施し
 
 保守式の費目根拠は、有限treeの各node訪問≤Vとfield／indexの辺≤V−1、初期8、rootの追加判定≤3、Metric peek≤Vの和で`3V+10`。拒否prefixでもownDataはfield数一致後に既存辺を課金し、listはlength検査後に既存indexを課金し、schemaは同subtreeを再walkしない。Metric branchも同じvalueを一方のrecordとしてだけ検査する。これはRP-Bのaliasなし有限AST・現行schemaと課金点に限定した上界であり、任意JS object／native heap／全workの上界ではない。
 
-独立試験は実bytesからRP-Bが返すVを別のtree計数と照合した後、別呼出しのdetailed coreを検査する。17正常入力（10 variant、全row、Metric全3分岐・600 sample）でcontrol=`2V+9`、unavailable=`2V+10`、captured=`2V+10+M`を全比較し、両候補式以内を確認した。正常入力の実計数±1は厳密oracle不一致、2倍の診断変異は保守上界超過となる。これは診断値の変異対照であり、sourceの課金点を改変して検査した試験ではない。
+独立試験は実bytesからRP-Bが返すVを別のtree計数と照合した後、別呼出しのdetailed coreを検査する。17正常入力（10 variant、全row、Metric全3分岐・600 sample）でcontrol=`2V+9`、unavailable=`2V+10`、captured=`2V+10+M`を全比較し、両候補式以内を確認した。`692d9ae`のレビューで、coreの課金点の削除・追加・再walkの変異14件を実施した。修正後の試験は14件すべてを検出する（[記録 §5](E2E_BEST_PRACTICE_WFB_VALUE_ADMISSION_RCB_2026-11-07.md#5-レビュー修正2026-11-07)）。
 
 全nodeの6種置換でrawを通った526入力、fieldの欠落／余剰／逆順、600 sampleを超えるarrayの拒否prefixも検査した。深さ超過でraw拒否された変異をcore受入へ混ぜない。BigInt oracleで2V・3V+10のsafe integer境界とoverflowを独立照合する。有限corpusは全JSONの形式証明ではない。model／schema／discriminator・課金点・再walk変更時は式と試験を再検証し、将来raw接続時には同contextのmodel照合とcore呼出し0の負対照も必要である。

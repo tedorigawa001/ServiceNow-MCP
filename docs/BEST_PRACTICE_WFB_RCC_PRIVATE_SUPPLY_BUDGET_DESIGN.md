@@ -1,6 +1,8 @@
 # WF-B RC-C：同root／同planのprivate供給・所有とbridge費／破棄予約
 
-Version: draft-0.1 / Date: 2026-11-07 / 照合基準HEAD: `692d9ae`。
+Version: draft-0.2 / Date: 2026-11-07 / 照合基準HEAD: `692d9ae` / レビュー修正の基準HEAD: `ddff46e`。
+
+draft-0.1のレビュー修正: 同module配置で変わるimportの負対照を明記した（§1、CC10）。返却準備の失敗理由と、未使用予約のslot遷移を追加した（§6、§7）。設計のみで、実装状態は変わらない。
 
 Status: **詳細設計のみ。新しい型・生成口・profile・予約台帳・parser/core接続は未実装。** 親は[RP-C差分設計](BEST_PRACTICE_WFB_RPC_PRIVATE_VALUE_BRIDGE_DESIGN.md)、[raw parser契約](BEST_PRACTICE_WFB_BOUNDED_RAW_JSON_PARSER_DESIGN.md)。RC-Aの詳細結果とRC-Bの純粋受付を、同じ構文解析の生存区間へ接続するための契約を具体化する。費目の数値unitとreadyなbridge profileはUnknown／未導出のまま。旧v1・正式発行口閉鎖・全体受付無効・VM／監視／telemetry調査保留を維持する。実装・実接続・実通信・実機操作・証拠発行・本文保存・設定変更・Pushは行わない。
 
@@ -18,6 +20,8 @@ Status: **詳細設計のみ。新しい型・生成口・profile・予約台帳
 将来の合成専用入口は`parseCheckpointBytes(bytes, limits)`の2引数だけとする。公開済み`inspectCheckpointBoundary`／`inspectCheckpointSyntax`は残し、旧modeでは新bridgeの生成・費用・core呼出しを一切始めない。選択modeは内部の固定入口で決め、callerからmode・root・V・plan receipt・meter・core関数・fault callbackを受けない。
 
 実装配置案は、既存byte／parser ownerの同module内にprivateな固定継続を置き、coreと算術kernelを固定importする方式とする。bridge専用の内部pure helperを抽出しても、trusted root／planの発行口や任意consumerをexportしない。tests配下の別assemblyとruntimeの台帳・brandは共有せず、runtime export／package入口は追加しない。
+
+この配置ではraw parser moduleのimportが増える。private rootへ同じmoduleからしか触れないためである。`raw-json-boundary.test.ts`と`raw-json-syntax.test.ts`のimport完全一致、`snapshot-value.test.ts`と`value-admission.test.ts`の不使用検査は、実装時に許可したimportだけを列挙する形へ明示的に変える。緩めるのはimportの一覧だけで、旧入口の動作は別の対照で固定する（CC10）。
 
 ## 2 同生成元のprivate入力とbinding
 
@@ -115,7 +119,7 @@ core成功・拒否のwrapper処理やValueLimits bootstrapは、現行RC-A/RC-B
 
 `R_tail = C_core_bootstrap + C_pre_claim + max_{σ∈合法な終端経路}(Σσ C_step)`を候補式とする。σは正常post→move→最終finally→返却、core拒否→診断→unwind、core throw／不正結果→診断→unwind、postの各途中拒否→先行post費＋拒否診断＋全破棄、返却準備途中失敗→全破棄を含む。途中postを使ってから失敗枝へ移る経路も含め、単なる「成功費と失敗費の大きい方」で済ませない。全aliasを外す費用と外側finalizeも各経路の中に一度だけ含める。
 
-seed／受付／tailにまたがる同じ操作を二重予約しない。実装前に各stepを一つの費目・一つのcreditへ割り当てる。前段のcreditを後段へ流用せず、各slotは`unreserved → reserved → in_use → retired`だけに進む。部分実行／拒否でも再取得・再消費を許さない。利用時は前払いcreditを消費したという有限イベントを記録し、同じ操作をmeterへもう一度課金しない。
+seed／受付／tailにまたがる同じ操作を二重予約しない。実装前に各stepを一つの費目・一つのcreditへ割り当てる。前段のcreditを後段へ流用せず、各slotは`unreserved → reserved → in_use → retired`の順にだけ進む。未使用のまま終わる予約は`reserved → retired`とし、`prepaid_unused`へ記録する。取得しなかった予約は`unreserved`のまま終わる。部分実行／拒否でも再取得・再消費を許さない。利用時は前払いcreditを消費したという有限イベントを記録し、同じ操作をmeterへもう一度課金しない。
 
 既存parserとの整合のため、予約の未使用分はbudgetへ返却・借用せず、課金済みのまま保持する。`B_charged = 即時課金 + 一度取得した予約の和`であり、別の`executed`／`prepaid_unused`診断を必要とする。core・parser・bridgeの「観測課金total」は抽象課金の合計で、予約を含む既存workの意味を維持する。実行操作数・実CPU費と呼ばず、予約上界を合計へ再加算しない。
 
@@ -141,7 +145,10 @@ preは同owner、未失効borrow、元plan／meter、frame成功、完了V／N�
 | coreの5拒否理由 | value段`value_schema / value_relation / value_limit / value_overflow / value_invalid` | first reasonとcore計数を先に保持。成功postなし、候補なし、再呼出しなし |
 | core呼出しthrow／結果variant・model不成立 | value段`raw_internal` | claim消費済み。取得できた計数を保持し、後続成功なし |
 | success post不成立（N超過等） | value段`raw_internal` | 成功workは保持、全candidate aliasを外す |
+| 返却準備の途中失敗 | value段`raw_internal` | 取得できた計数を保持し、ReturnPendingを破棄。値を返さない |
 | 先行失敗後のsnapshot／退役診断異常 | first reasonを維持、二次診断に別保持 | 先行理由を置換せず、値を返さない |
+
+現行`runBoundary`は`finally`後の結果生成を`try`の外で行う。新経路の返却準備は、上表の固定理由で受けられる位置へ置く。
 
 既存RawStageへ無断でvalueを追加して旧RP-A／RP-Bを変更せず、新接続結果だけに値段の型を設計する。`limit`から不足費目を推測する新分類も追加しない。
 
@@ -162,7 +169,7 @@ core拒否に対する診断整合確認は、first reasonを確定してから�
 | CC07 | core5理由・観測済み0・途中prefix・unavailable・snapshot異常を保持。core未呼出しと取得不能を分離し、Unknown totalを0にしない。後着異常でfirst reasonを書き換えない |
 | CC08 | 全10 variant・全row、Nとencodedの等値、schema／関係／byte拒否、core cap境界、post N超過を検査。bytesで到達しないcore故障・post拒否は別assemblyで明記し、実到達扱いしない |
 | CC09 | borrow→pending→ReturnPending→結果ownerの同tree一度move。copy追加・再validateなし。post／返却準備の各故障でwrapper／local／slotの全aliasと元root／bytesが境界から持ち出されない。GC確認へ昇格しない |
-| CC10 | 秘密canary・例外・key／offset／stackの非出力。診断に固定理由・計数以外の本文を残さない。旧v1・RP-A100／RP-B110／312・legacy core・RC-B・梱包負対照を維持 |
+| CC10 | 秘密canary・例外・key／offset／stackの非出力。診断に固定理由・計数以外の本文を残さない。旧v1・RP-A100／RP-B110／312・legacy core・RC-B・梱包負対照を維持。旧入口でbridge生成・claim・core呼出しが0で、work対照も不変 |
 
 独立oracleは、手計数の小さいwire、JSON構造の別計数、BigInt算術、費目別イベントの別集計を使う。profile係数や予約式をそのままコピーしたoracleだけで成立を主張しない。sourceの課金点を変えるmutation検証と、診断数値だけを変える対照を区別する。
 

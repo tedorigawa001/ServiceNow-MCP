@@ -52,10 +52,12 @@ describe('RC-B separate logical tree and structural admission, no core invocatio
     for (const input of [getter, proxy, missing, { ...rest, max_input_bytes }, { ...plan(), model: 'forged' },
       { ...plan(), max_nodes: 0 }, { ...plan(), max_nodes: -0 }, { ...plan(), max_nodes: 1.5 },
       { ...plan(), max_nodes: Number.MAX_SAFE_INTEGER + 1 }, { ...plan(), toJSON() { calls++; return 'PRIVATE'; } },
-      Object.setPrototypeOf(plan(), { secret: 'PRIVATE' }), { ...plan(), [Symbol('secret')]: 'PRIVATE' }]) {
+      Object.setPrototypeOf(plan(), { secret: 'PRIVATE' }), { ...plan(), [Symbol('secret')]: 'PRIVATE' },
+      Object.defineProperty(plan(), 'max_nodes', { enumerable: false, value: 600010 })]) {
       const r = calculateValueAdmission(10, input);
       expect(r).toMatchObject({ ok: false, reason: 'raw_limits', arithmetic: { attempted: 0, completed: 0 } });
       expect(JSON.stringify(r)).not.toMatch(/PRIVATE|stack/); expect(r).not.toHaveProperty('value');
+      expect(Object.isFrozen(r)).toBe(true); expect(Object.isFrozen(r.arithmetic)).toBe(true);
     }
     expect(calls).toBe(0);
     expect(calculateValueAdmission(10, Object.setPrototypeOf(plan(), null)).ok).toBe(true);
@@ -74,6 +76,14 @@ describe('RC-B separate logical tree and structural admission, no core invocatio
     expect(calculateValueAdmission(max, { ...plan(), max_value_nodes: max, max_ast_nodes: max })).toMatchObject({ reason: 'raw_overflow', arithmetic: { attempted: 2, completed: 1 } });
     // Tree refusal is earlier than structural overflow; no hidden alternative-formula fallback.
     expect(calculateValueAdmission(Math.floor(max / 3) + 1, { ...plan(), max_value_nodes: max, max_ast_nodes: max })).toMatchObject({ reason: 'raw_limit', arithmetic: { attempted: 2, completed: 2 } });
+  });
+  it('stops at the failing structural arithmetic step and freezes the refusal', () => {
+    const max = Number.MAX_SAFE_INTEGER, p = { ...plan(), max_value_nodes: max, max_ast_nodes: max, max_live_value_nodes: max, max_nodes: max };
+    const tripled = calculateValueAdmission(Math.floor(max / 3) + 1, p);
+    expect(tripled).toMatchObject({ ok: false, reason: 'raw_overflow', arithmetic: { attempted: 3, completed: 2 } });
+    const plusTen = calculateValueAdmission(Math.floor((max - 10) / 3) + 1, p);
+    expect(plusTen).toMatchObject({ ok: false, reason: 'raw_overflow', arithmetic: { attempted: 4, completed: 3 } });
+    for (const r of [tripled, plusTen]) { expect(Object.isFrozen(r)).toBe(true); expect(Object.isFrozen(r.arithmetic)).toBe(true); }
   });
 });
 
@@ -132,12 +142,15 @@ describe('independent structural oracle, separate syntax/core probes only', () =
       const a = calculateValueAdmission(parsed.counts.valueNodes, plan()); expect(a.ok).toBe(true);
       // This is a test composition of separate calls, not private same-root runtime binding.
       expect(a).toMatchObject({ coreInvocation: 'not_called', bridgeWork: 'unmodeled' });
-      const matches = (charge: number) => charge === expected;
-      expect(matches(detailed.accounting.work.structural)).toBe(true);
-      expect(matches(detailed.accounting.work.structural + 1)).toBe(false);
-      expect(matches(detailed.accounting.work.structural - 1)).toBe(false);
-      expect(expected * 2).toBeGreaterThan(bounds.conservative); // diagnostic rewalk mutant, not a modified runtime
     }
+  });
+  it('pins exact charges on the field-count and field-order rejection paths', () => {
+    // Hand count: initial 8 + trigger peek 1 + trigger scalar 1 (+ copy 1) + record entry 1, then per-field 1 once the count matches.
+    const child = frame('child_started');
+    const extra = inspectCheckpointValueDetailed({ ...child, extra: 0 }, coreLimits());
+    expect(extra).toMatchObject({ ok: false, reason: 'schema', accounting: { state: 'observed', work: { structural: 11, copies: 1, total: 12 } } });
+    const reversed = inspectCheckpointValueDetailed(Object.fromEntries(Object.entries(child).reverse()), coreLimits());
+    expect(reversed).toMatchObject({ ok: false, reason: 'schema', accounting: { state: 'observed', work: { structural: 12, copies: 1, total: 13 } } });
   });
   it('bounds missing/extra/reordered fields and array-limit prefixes without normalizing them', () => {
     const original = frame('test_terminal', populated());
