@@ -1,5 +1,7 @@
 # WF-B：固定schedule／carrierの実装coverageとS pending／handoffの所有境界
 
+設計追記（2026-11-07）: [固定source対応表・内容hash照合・未実装行の詳細契約](BEST_PRACTICE_WFB_FIXED_SOURCE_COVERAGE_DESIGN.md)でSC01〜12の既存参照とmissing point、別対応記録、複数fileの全件照合と独立検証条件を具体化した。設計のみで、現行値契約・5 gaps・Unknownと実接続状態は変更していない。
+
 Version: draft-0.4 / Date: 2026-11-07 / 照合基準HEAD: `a2f568e` / レビュー修正の基準HEAD: `3c0e7a4` / 値契約実装基準HEAD: `54619ef` / 値契約レビュー修正の基準HEAD: `c092694`。
 
 draft-0.3のレビュー修正: 全行で`gaps`の5項目すべてを必須にした。未確認の範囲を少なく見せる行を受理していたためである。synthetic行の`paths`は1件以上必須、`slots`は空でも可と明記した。行から対象ソースを特定できない点を次工程の要件として記録した（§11）。
