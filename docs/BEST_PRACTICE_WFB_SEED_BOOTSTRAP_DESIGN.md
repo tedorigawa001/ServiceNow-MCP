@@ -1,6 +1,8 @@
 # WF-B：初期seed予約bootstrap・取得前費用と拒否診断の詳細契約
 
-Version: draft-0.1 / Date: 2026-11-07 / 照合基準HEAD: `8dfc49d`。
+Version: draft-0.2 / Date: 2026-11-07 / 照合基準HEAD: `8dfc49d` / レビュー修正の基準HEAD: `f33623c`。
+
+draft-0.1のレビュー修正: K0を抽象workへ計上しないことを明記した（§2.1）。75の記号を、RP-Cの`S_candidate(V)`と区別して改名した（§3）。受入条件へ検証経路を付けた（§7）。設計のみで、実装状態は変わらない。
 
 Status: **設計のみ。entry bootstrap owner・受付primitive・新費用profile・private供給は未実装。** 親は[RC-C供給／費用・予約設計](BEST_PRACTICE_WFB_RCC_PRIVATE_SUPPLY_BUDGET_DESIGN.md)と[RP-C接続設計](BEST_PRACTICE_WFB_RPC_PRIVATE_VALUE_BRIDGE_DESIGN.md)。既存の有限model 102／57／239を実予約へ昇格させず、seedを取得する前に何が実施され、誰がその費用と拒否診断を持つかを定める。
 
@@ -28,6 +30,8 @@ K0は、既にprivateに確立した同plan／同meterに対する固定の容�
 | 残量差・成功時の加算 | `E_req ≤ cap−used`を先に確認し、成立した場合だけ加算する。先行費用を後から押し込まない |
 | 成功commit | 同meterの累積課金とentry debit状態を同期に一度更新する。call間の非同期処理・callback・seed生成を挟まない |
 | 不足時の拒否 | debit更新・新entry owner生成・seed生成なし。固定の拒否状態を外側へ戻す |
+
+K0の処理は、成功でも拒否でも抽象workへ計上しない。`B_total`にも`E_req`にも含めない。拒否時は予算を取れないので、成功時だけEへ入れると同じ処理の扱いが結果で分かれるためである。
 
 K0は新しい計測単位の基底であって、実CPU・native反射・allocationを0費用とする宣言ではない。既存Meterにこの契約が実装済みとも扱わない。K0の固定処理範囲・失敗経路・同meter結合を独立に監査し、抽象モデルの開始境界として受け入れる条件を確定する必要がある。
 
@@ -63,7 +67,7 @@ seed creditは、Eから費用を受けた検査／予約処理を通り、同me
 | entry自身の一時参照退役 | E_terminal | seed_clearと別のaliasだけを外す。未使用Eのrefundなし |
 | AST／bytes | 元parser／byte ownerの既存前払い | entry／seedに同じ退役費を再計上しない |
 
-既存recipeの`seed_guard13`と`seed_gate14`は、取得前に置く処理としてEへ移す候補とする。`seed_allocate22`はS取得後、後続gate28・seed診断10・clear15はS所有のままとする。単純移管なら`S_candidate = 102−13−14 = 75`、移管分は27である。
+既存recipeの`seed_guard13`と`seed_gate14`は、取得前に置く処理としてEへ移す候補とする。`seed_allocate22`はS取得後、後続gate28・seed診断10・clear15はS所有のままとする。単純移管なら`S_seed_candidate = 102−13−14 = 75`、移管分は27である。
 
 これは**所有の分解例であって、新しい実seed上界の承認ではない**。entry slot・bootstrap診断・handoff／部分生成処理・固定profile供給の追加費Xと、Sの実施点差分Δは未導出。候補全体は`(27+X) + (75+Δ) + 57 + 239 = 398+X+Δ`となり、398のまま収まるとはしない。entryの予約方式が変わる場合はこの分解も再検証する。
 
@@ -131,16 +135,16 @@ sourceの実施点へ対応付ける前に、19 slot／28 stepが新entryを含�
 
 ## 7 将来の合成受入条件
 
-以下は受入条件の設計であり、今回は試験していない。
+以下は受入条件の設計であり、今回は試験していない。各項に検証経路を記す。純粋fakeと試験専用assemblyの結果を、実入力から到達した証拠として記録しない。
 
-- SB01：元plan・meter確立前／K0拒否／E取得前後を区別。Eなしで新owner／root／seedを生成しない。固定carrierの供給失敗も成功扱いしない。
-- SB02：K0の固定容量判定・commitで、等値／1不足・overflow・不正内部状態を別oracleと照合。拒否でmeter更新なし、成功は一度。K0の実行費が0という期待値は置かない。
-- SB03：E_prepareと全E_terminal経路を独立計数。profileを読む前にEが取得済み、診断費不足による後着課金・未取得Sからの借入れ・value枠借入れ0。
-- SB04：guard／gate移管の二重課金・欠落を検出。旧102／398対照を残し、新modelのX／Δが未導出ならreadyにならない。
-- SB05：S不足、ownerの各部分生成失敗、handoff前後の混入・再入・二重取得を確認。同pending期間に所有者不在・二重所有なし。
-- SB06：E前は最小固定理由と取得不能、E後は観測prefix・未使用前払いを保持。未取得とobserved zeroを混同しない。snapshot／cleanup故障でfirst reasonを上書きしない。
-- SB07：同plan／meterと同bootstrap identityだけを移譲。root／V／Nはまだ発行しない。公開summary、同値copy、旧fixture台帳、別invocationからの混入を拒否する。
-- SB08：旧v1・RP-A／RP-B・RC-A／RC-B・有限費目modelのAPI／課金／配布境界を維持。新core呼出し・実I/O・正式発行は0。native故障やGC確認を合成数値から主張しない。
+- SB01：元plan・meter確立前／K0拒否／E取得前後を区別。Eなしで新owner／root／seedを生成しない。固定carrierの供給失敗も成功扱いしない。検証経路：plan入力と純粋fake。carrierの供給失敗は試験専用assembly。
+- SB02：K0の固定容量判定・commitで、等値／1不足・overflow・不正内部状態を別oracleと照合。拒否でmeter更新なし、成功は一度。K0の実行費が0という期待値は置かない。検証経路：等値／1不足は純粋fake。overflowと不正内部状態は`used ≤ cap`と先比較のもとで実入力から届かないので、fakeだけで確認する。
+- SB03：E_prepareと全E_terminal経路を独立計数。profileを読む前にEが取得済み、診断費不足による後着課金・未取得Sからの借入れ・value枠借入れ0。検証経路：純粋fakeと独立計数。
+- SB04：guard／gate移管の二重課金・欠落を検出。旧102／398対照を残し、新modelのX／Δが未導出ならreadyにならない。検証経路：純粋計算と旧model対照。
+- SB05：S不足、ownerの各部分生成失敗、handoff前後の混入・再入・二重取得を確認。同pending期間に所有者不在・二重所有なし。検証経路：S不足はplan入力。部分生成とhandoffの失敗は試験専用assembly。
+- SB06：E前は最小固定理由と取得不能、E後は観測prefix・未使用前払いを保持。未取得とobserved zeroを混同しない。snapshot／cleanup故障でfirst reasonを上書きしない。検証経路：E前はplan入力。snapshot／cleanup故障は試験専用assembly。
+- SB07：同plan／meterと同bootstrap identityだけを移譲。root／V／Nはまだ発行しない。公開summary、同値copy、旧fixture台帳、別invocationからの混入を拒否する。検証経路：private供給の実装後の結合試験。
+- SB08：旧v1・RP-A／RP-B・RC-A／RC-B・有限費目modelのAPI／課金／配布境界を維持。新core呼出し・実I/O・正式発行は0。native故障やGC確認を合成数値から主張しない。検証経路：既存試験と配布境界の検査。
 
 ## 8 段階分割・未確認／承認待ち
 

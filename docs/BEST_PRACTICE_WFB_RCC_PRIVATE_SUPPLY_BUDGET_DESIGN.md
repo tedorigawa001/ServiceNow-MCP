@@ -1,6 +1,8 @@
 # WF-B RC-C：同root／同planのprivate供給・所有とbridge費／破棄予約
 
-Version: draft-0.5 / Date: 2026-11-07 / 照合基準HEAD: `692d9ae` / レビュー修正の基準HEAD: `ddff46e` / 有限費目model実装基準HEAD: `8dff929` / 有限費目modelレビュー修正の基準HEAD: `52cdfb8` / seed bootstrap設計基準HEAD: `8dfc49d`。
+Version: draft-0.6 / Date: 2026-11-07 / 照合基準HEAD: `692d9ae` / レビュー修正の基準HEAD: `ddff46e` / 有限費目model実装基準HEAD: `8dff929` / 有限費目modelレビュー修正の基準HEAD: `52cdfb8` / seed bootstrap設計基準HEAD: `8dfc49d` / seed bootstrapレビュー修正の基準HEAD: `f33623c`。
+
+draft-0.5のレビュー修正: §3手順1、§6の`R_seed`、§7のprofile不成立、§11.4のseed列を、K0・E・Sの順序に合わせた。旧model 102／57／239と計算器は変更していない。
 
 draft-0.5: [初期seed bootstrap・取得前費用／拒否診断の詳細契約](BEST_PRACTICE_WFB_SEED_BOOTSTRAP_DESIGN.md)を追加。基底受付K0・同cap内の独立entry枠E・commit後のseed枠Sへ所有を分け、未取得seedによる循環を禁止した。guard/gateの27 unit移管・seed75は分解例で、新上界・X／Δ・基底coverageはUnknown。設計のみで旧102／57／239と計算器・接続状態は不変。
 
@@ -53,7 +55,7 @@ Vは構文・framing成功時の完了`valueNodes`だけを使う。失敗prefix
 
 状態案は`Prepared → Parsing → Framed → AdmissionChecked → TailReserved → CoreClaimed → CoreReturned → PostAccepted → ReturnPending → Returned`。どの未返却状態からも`Rejected → Retired`へだけ停止し、再開しない。
 
-1. 元planのstrict検査と元meterを確立する。新profileのmodelとready状態を固定内部定数で確認し、context／診断slotの準備・早期unwindに必要な費用を先行確保してから新しいslotを生成する。bootstrap前の失敗は既存固定理由を保持し、profile不明を0費用として通さない。
+1. 元planのstrict検査と元meterを確立する。[seed bootstrap契約](BEST_PRACTICE_WFB_SEED_BOOTSTRAP_DESIGN.md)のとおり、K0でentry枠Eを取得してからprofileのmodelとready状態を確認し、seed枠Sを取得してからbridgeのslotを生成する。E取得前の失敗は既存固定理由を保持し、profile不明を0費用として通さない。
 2. 既存の一度copy・UTF-8・構文・framingを元meterで継続する。失敗ならcoreを呼ばず、元AST／bytesの元finallyを実行する。
 3. 同parserの生存rootを固定継続へ同期借用し、元owner／plan／meter／完了V／Nの組を確認する。受付に必要なbridge処理費を先行確保してから、RC-Bと同じ2V・3V+10の判定を行う。ここでの不足・overflowはcore未呼出しで停止する。
 4. 受付成功後もまだcoreを呼ばない。core bootstrapとpre、core戻り値の処理、post、全候補aliasのunwind、診断・結果確定を覆う残りのtail予約を同meterで確立する。予約失敗ならclaimを消費せず終端拒否し、contextは再利用不可とする。
@@ -117,7 +119,7 @@ core成功・拒否のwrapper処理やValueLimits bootstrapは、現行RC-A/RC-B
 
 - `P`：元parser側の既存累積課金。既存cleanup前払いを既に含む。
 - `B`：同meterのbridge内訳の累積課金。即時費と前払い予約を含み、Pと重ならない。
-- `R_seed`：context生成前に確保する初期・早期失敗の診断／alias退役費。
+- `R_seed`：旧有限modelの初期予約102。bridge contextの生成前に確保する費目である。取得前の処理はseed bootstrap契約のentry枠Eへ分かれ、新しい上界は未導出である。
 - `C_admit`：binding・受付・projectionまでの固定最大経路費。
 - `R_tail`：core開始前に必要なcore bootstrap・preと、戻り値受理から全終端までの最大経路費。
 
@@ -144,7 +146,7 @@ preは同owner、未失効borrow、元plan／meter、frame成功、完了V／N�
 | 位置 | stage／固定理由・診断 | 固定処理 |
 |---|---|---|
 | 元input／UTF-8／syntax／frame拒否 | 元stage／reason | 元finallyだけ。core未呼出し |
-| 初期profile／model不成立 | plan段`raw_limits` | 新context／parse／core開始0。bootstrap診断だけを保持 |
+| 初期profile／model不成立 | plan段`raw_limits` | bridge context／parse／core開始0。E取得済みならentry ownerが診断を保持し、Eで退役する |
 | Framed後の生成元／model／profile不成立 | parse段`raw_limits`。内部生成状態の予期しない破損は`raw_internal` | 後段開始0、seedで診断・alias退役 |
 | 2V／structural不足・overflow | parse段`raw_limit`／`raw_overflow` | core未呼出し、同contextを終端化 |
 | bridge予約不足 | seedはplan段、Framed後の受付／tailはparse段の`raw_work` | core未呼出し、既存creditと元finallyで固定unwind |
@@ -248,7 +250,7 @@ logical slotは`invocation, plan, meter, byteIdentity, rootBorrow, inputLength, 
 
 ### 11.4 経路と予約上界
 
-有限経路はseed 3、admit 5、tail 21の合計29。これらは**費目所属phaseごとの保守列**であり、seed_clearやadmit_clearをcore前に実行するプログラムではなく、実行順も表さない。§3と§6のとおり、実装では予約を確保してからslotを生成する。seed列のguard13とallocate22は費目の所属を示す。容量不足でseed_gateが拒否するときのこの35 unitの扱いは未確定で、§11.5の初期bootstrapに含まれる。実際のclearは全体の終端で行う契約を維持する。
+有限経路はseed 3、admit 5、tail 21の合計29。これらは**費目所属phaseごとの保守列**であり、seed_clearやadmit_clearをcore前に実行するプログラムではなく、実行順も表さない。§3と§6のとおり、実装では予約を確保してからslotを生成する。実行時の扱いは[seed bootstrap契約 §3](BEST_PRACTICE_WFB_SEED_BOOTSTRAP_DESIGN.md#3-取得前取得後の費目所有と102からの移管)に従う。guard13とseed_gate14はEへ移す候補で、allocate22はS取得後に行うのでseed拒否時には走らない。旧modelの数値は変更しない。実際のclearは全体の終端で行う契約を維持する。
 
 - seed列：guard13＋allocate22＋seed_gate14＋後続gate最大28＋diagnostic10＋clear15。最大`R_seed=102`。
 - admit列：bind17＋admission13＋projection23＋state3＋clear1。各step前の拒否prefixを含め、最大`C_admit=57`。
