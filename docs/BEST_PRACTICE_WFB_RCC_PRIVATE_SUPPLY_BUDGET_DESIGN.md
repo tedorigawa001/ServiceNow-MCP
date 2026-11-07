@@ -1,6 +1,8 @@
 # WF-B RC-C：同root／同planのprivate供給・所有とbridge費／破棄予約
 
-Version: draft-0.6 / Date: 2026-11-07 / 照合基準HEAD: `692d9ae` / レビュー修正の基準HEAD: `ddff46e` / 有限費目model実装基準HEAD: `8dff929` / 有限費目modelレビュー修正の基準HEAD: `52cdfb8` / seed bootstrap設計基準HEAD: `8dfc49d` / seed bootstrapレビュー修正の基準HEAD: `f33623c`。
+Version: draft-0.7 / Date: 2026-11-07 / 照合基準HEAD: `692d9ae` / レビュー修正の基準HEAD: `ddff46e` / 有限費目model実装基準HEAD: `8dff929` / 有限費目modelレビュー修正の基準HEAD: `52cdfb8` / seed bootstrap設計基準HEAD: `8dfc49d` / seed bootstrapレビュー修正の基準HEAD: `f33623c` / K0／E fake基準HEAD: `3c53902`。
+
+draft-0.7: [K0／Eの純粋fake実装境界](BEST_PRACTICE_WFB_SEED_BOOTSTRAP_DESIGN.md#10-k0e純粋fakeの実装境界)を追加。取得前後・一度取得・拒否診断・固定故障を合成検証した。5 unitはfixture専用で、旧102／57／239や実E要求量に採用しない。実meter・private供給・S／core接続は未実装、coverageはUnknownのまま。
 
 draft-0.5のレビュー修正: §3手順1、§6の`R_seed`、§7のprofile不成立、§11.4のseed列を、K0・E・Sの順序に合わせた。旧model 102／57／239と計算器は変更していない。
 
@@ -12,7 +14,7 @@ draft-0.3: 19 logical slot・28 step・29経路の有限recipe、unit係数とse
 
 draft-0.1のレビュー修正: 同module配置で変わるimportの負対照を明記した（§1、CC10）。返却準備の失敗理由と、未使用予約のslot遷移を追加した（§6、§7）。設計のみで、実装状態は変わらない。
 
-Status: **有限費目recipeの純粋計算器・予約容量検査と合成試験だけを実装。private供給・実profile・予約台帳・parser/core接続は未実装。** 親は[RP-C差分設計](BEST_PRACTICE_WFB_RPC_PRIVATE_VALUE_BRIDGE_DESIGN.md)、[raw parser契約](BEST_PRACTICE_WFB_BOUNDED_RAW_JSON_PARSER_DESIGN.md)。RC-Aの詳細結果とRC-Bの純粋受付を、同じ構文解析の生存区間へ接続するための契約を具体化する。§11の抽象係数は固定したが、実装coverageの証拠とreadyなbridge profileはUnknownのまま。旧v1・正式発行口閉鎖・全体受付無効・VM／監視／telemetry調査保留を維持する。core接続・実接続・実通信・実機操作・証拠発行・本文保存・設定変更・Pushは行わない。
+Status: **有限費目recipeの純粋計算器・予約容量検査とK0／Eの純粋fake・合成試験を実装。private供給・実profile・予約台帳・parser/core接続は未実装。** 親は[RP-C差分設計](BEST_PRACTICE_WFB_RPC_PRIVATE_VALUE_BRIDGE_DESIGN.md)、[raw parser契約](BEST_PRACTICE_WFB_BOUNDED_RAW_JSON_PARSER_DESIGN.md)。RC-Aの詳細結果とRC-Bの純粋受付を、同じ構文解析の生存区間へ接続するための契約を具体化する。§11の抽象係数は固定したが、実装coverageの証拠とreadyなbridge profileはUnknownのまま。旧v1・正式発行口閉鎖・全体受付無効・VM／監視／telemetry調査保留を維持する。core接続・実接続・実通信・実機操作・証拠発行・本文保存・設定変更・Pushは行わない。
 
 ## 1 現行との差分と固定する入口
 

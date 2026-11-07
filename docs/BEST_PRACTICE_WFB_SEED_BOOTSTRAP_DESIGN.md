@@ -1,12 +1,14 @@
 # WF-B：初期seed予約bootstrap・取得前費用と拒否診断の詳細契約
 
-Version: draft-0.2 / Date: 2026-11-07 / 照合基準HEAD: `8dfc49d` / レビュー修正の基準HEAD: `f33623c`。
+Version: draft-0.3 / Date: 2026-11-07 / 照合基準HEAD: `8dfc49d` / レビュー修正の基準HEAD: `f33623c` / K0／E fake実装基準HEAD: `3c53902`。
+
+draft-0.3: K0／Eの有限内部契約・拒否状態を純粋fakeで実装した（§10）。E取得前後・二重取得・失敗後停止、先行理由とsnapshot／cleanup二軸、全625個の4操作列を合成照合した。[検証記録](E2E_BEST_PRACTICE_WFB_K0_ENTRY_FAKE_2026-11-07.md)。fakeの5 unit scheduleは実要求量・X／Δや実creditへ昇格させず、K0の実費・実profile・private供給はUnknown／未接続のまま。
 
 draft-0.1のレビュー修正: K0を抽象workへ計上しないことを明記した（§2.1）。75の記号を、RP-Cの`S_candidate(V)`と区別して改名した（§3）。受入条件へ検証経路を付けた（§7）。設計のみで、実装状態は変わらない。
 
-Status: **設計のみ。entry bootstrap owner・受付primitive・新費用profile・private供給は未実装。** 親は[RC-C供給／費用・予約設計](BEST_PRACTICE_WFB_RCC_PRIVATE_SUPPLY_BUDGET_DESIGN.md)と[RP-C接続設計](BEST_PRACTICE_WFB_RPC_PRIVATE_VALUE_BRIDGE_DESIGN.md)。既存の有限model 102／57／239を実予約へ昇格させず、seedを取得する前に何が実施され、誰がその費用と拒否診断を持つかを定める。
+Status: **K0／Eの有限状態を純粋fakeだけで実装。実entry owner・受付primitive・新費用profile・private供給は未実装。** 親は[RC-C供給／費用・予約設計](BEST_PRACTICE_WFB_RCC_PRIVATE_SUPPLY_BUDGET_DESIGN.md)と[RP-C接続設計](BEST_PRACTICE_WFB_RPC_PRIVATE_VALUE_BRIDGE_DESIGN.md)。既存の有限model 102／57／239を実予約へ昇格させず、seedを取得する前に何が実施され、誰がその費用と拒否診断を持つかを定める。
 
-作業中・既存の変更は保持する。旧v1・正式発行口閉鎖・全体受付無効・Unknown・VM／監視／telemetry調査保留を維持し、実装・core接続・実接続・実通信・実機操作・証拠発行・設定変更・Pushを行わない。
+作業中・既存の変更は保持する。旧v1・正式発行口閉鎖・全体受付無効・Unknown・VM／監視／telemetry調査保留を維持し、core接続・実接続・実通信・実機操作・証拠発行・設定変更・Pushを行わない。
 
 ## 1 現行コードと解消すべき循環
 
@@ -123,19 +125,19 @@ entryがSを保持したまま失敗した場合、未使用Sは課金済みと�
 
 | 境界 | 必要な実装証拠 | 現在の状態 |
 |---|---|---|
-| K0 | privateなcap／used、固定要求量、拒否時副作用なし、commit一度、固定carrier供給 | 未実装・Unknown |
-| E確立 | E取得前にbridge ownerを作らない。terminal枠を他用途へ流さない | 未実装 |
+| K0 | privateなcap／used、固定要求量、拒否時副作用なし、commit一度、固定carrier供給 | §10のfake状態だけ確認。実primitiveはUnknown |
+| E確立 | E取得前にbridge ownerを作らない。terminal枠を他用途へ流さない | §10の論理状態だけ確認。実生成／費用coverageは未実装 |
 | profile供給 | 毎callの経路列挙を14 unitへ含めない。固定値の生成元・版・coverageが独立に確認できる | 数値recipeだけ実装済み。実供給はUnknown |
 | 費目移管 | guard13／seed_gate14と追加X／Δを各実施点・経路へ一度だけ割当て | 27／75は分解例。新上界は未導出 |
 | Sとhandoff | 同entry／plan／meter、pending期間の所有者、重複・混入・失敗後再利用の拒否 | 未実装 |
 | root供給 | frame後・同finally前、元V／N／rootとのprivate結合 | 本bootstrapからは未発行・未接続 |
-| 寿命・診断 | E前／E後・S前／S後の全prefixと部分生成、carrier／診断不能の区別 | 未試験 |
+| 寿命・診断 | E前／E後・S前／S後の全prefixと部分生成、carrier／診断不能の区別 | E前後のfake拒否・固定故障だけ確認。S／handoff・native故障は未試験 |
 
 sourceの実施点へ対応付ける前に、19 slot／28 stepが新entryを含む全coverageだとはしない。entry slot・carrier・scheduleの追加は、旧ABIに無理に押し込まず別の有限集合として数える。新modelは算術oracle、実施イベントの独立計数、拒否／handoff各prefixの故障試験が必要である。既存oracle同士の係数一致だけでK0・E・Sを承認しない。
 
 ## 7 将来の合成受入条件
 
-以下は受入条件の設計であり、今回は試験していない。各項に検証経路を記す。純粋fakeと試験専用assemblyの結果を、実入力から到達した証拠として記録しない。
+以下は接続全体の受入条件。今回は§10のK0／E純粋fakeだけを部分確認し、各項全体の完了とはみなさない。各項に検証経路を記す。純粋fakeと試験専用assemblyの結果を、実入力から到達した証拠として記録しない。
 
 - SB01：元plan・meter確立前／K0拒否／E取得前後を区別。Eなしで新owner／root／seedを生成しない。固定carrierの供給失敗も成功扱いしない。検証経路：plan入力と純粋fake。carrierの供給失敗は試験専用assembly。
 - SB02：K0の固定容量判定・commitで、等値／1不足・overflow・不正内部状態を別oracleと照合。拒否でmeter更新なし、成功は一度。K0の実行費が0という期待値は置かない。検証経路：等値／1不足は純粋fake。overflowと不正内部状態は`used ≤ cap`と先比較のもとで実入力から届かないので、fakeだけで確認する。
@@ -148,7 +150,7 @@ sourceの実施点へ対応付ける前に、19 slot／28 stepが新entryを含�
 
 ## 8 段階分割・未確認／承認待ち
 
-次の最小実装候補は、coreを呼ばずにK0／Eの有限内部契約と拒否状態を純粋fakeで検査する範囲。固定schedule／carrier・entry slot／終端経路のcoverageと新係数を先に導出し、Sのprivate pending／handoffは別段階にする。実profileがUnknownでも検査できる内部契約と、未検証profileでは実供給を開始しないgateを区別する。
+K0／Eの有限内部契約と拒否状態は§10の純粋fakeで検査した。次は実施点に対応する固定schedule／carrier・entry slot／終端経路のcoverageと新係数を導出し、Sのprivate pending／handoffは別段階にする。実profileがUnknownでも検査できる内部契約と、未検証profileでは実供給を開始しないgateを区別する。
 
 K0を抽象計量の基底として受け入れる条件、固定carrierの成立性／供給費、entryのslot数・schedule係数、X／Δと新予約上界、元meterへの実結合、native reflection・module初期化／OOM・実heap／CPU／GC／ゼロ化はUnknown。上位の既取得予算ownerや新capが必要になった場合の採用は未承認である。
 
@@ -156,4 +158,24 @@ K0を抽象計量の基底として受け入れる条件、固定carrierの成�
 
 ## 9 今回の照合範囲
 
-`8dfc49d`のsource、有限model・親設計・検証記録を読み取り照合し、MDの参照先と空白だけを確認する。実装・ビルド・新合成試験・計算器実行・実通信・保管操作を行った記録ではない。既存941件成功は旧有限modelの記録であり、本bootstrap SB01〜08の検証結果へ流用しない。
+draft-0.1作成時は`8dfc49d`のsource、有限model・親設計・検証記録を読み取り照合し、MDの参照先と空白だけを確認した。当時の実装・ビルド・新合成試験・計算器実行・実通信・保管操作の記録ではない。今回のfake検証は別記録とし、既存941件成功を本bootstrap SB01〜08全体の成功へ流用しない。
+
+## 10 K0／E純粋fakeの実装境界
+
+配置は`tests/review/fixtures/seed-bootstrap-fake.ts`。外部import・実台帳・reader／clock・runtimeとの共有はない。private classと閉じたfacadeで同assemblyのfake数値budgetと取得claimを所有し、callerのcap／parser課金／bridge課金をprimitive整数として検査する。object・数値文字列をcoerceせず、privateな同状態でだけ一度debitする。budget snapshotやcarrierの同値性を生成元の証拠にしない。
+
+APIは`createSeedBootstrapFake(cap, parser, bridge)`と、固定の故障名だけを選ぶ`createFixedBootstrapFake(scenario)`。facadeには`acquireEntry / buildEntry / checkProfile / reject / close / inspect`だけを置く。schema・profile・実meter・任意callback・rootを注入する引数や、summaryから採用する入口はない。Assembly自体はfactory呼出し時にJS objectとして作るため、`ownerBuilt=false`は**論理状態**であって実allocationがE前にない証明ではない。
+
+modelは`wfb-k0-entry-fake-1`、scheduleは`fixture-5-unit-1`。要求量5は試験専用で、prepare2（buildとfake profile確認各1）／terminal3（診断・cleanup・credit退役各1）に分ける。E取得ではfake bridge課金を一度5増やし、利用時は重複課金・refundしない。K0処理は成功／拒否とも抽象workに入れず`k0Work=excluded`とする。これは実K0のCPU費0を意味せず、全結果の`nativeCost/runtimeCoverage=unknown, ready=false, seed=not_acquired, coreInvocation=not_called`を固定する。
+
+有効なbaseでは等値を許可し、1不足は`raw_work`でdebitなし。base確立時の不正整数・cap超過は`raw_limits`、safe和overflowは`raw_overflow`。後二者の不正内部状態は実入力経路ではなくfakeだけの対照である。E後は`EntryDebited → EntryBuilding → EntryBuilt → FakeProfileChecked → Retired`の順を守り、順序違い・二重取得／生成／確認は固定拒否へ進む。fake profileの成功は実profileのready判定ではなく、Sを発行する操作もない。
+
+最初の拒否は終端診断へ保持し、その後の操作は同じ固定結果を返して再開しない。正常close後の再取得等は別の操作拒否`raw_limits`とし、完了済み正常診断を後から書き換えない。closeは同じ終端DATAを再表示するだけでcleanupを再実行しない。取得・build・profile・cleanup・credit退役の各観測は0／1、prepare使用は最大2、terminal使用は最大3で、繰返し呼出しで増殖しない。
+
+E前の失敗は不変の共有carrierを使い、利用量はunavailableとする。carrierはprivate identityも前callのcounterも持たず、共有されてもbudgetを混ぜない。E commit後に固定build故障があれば`entry=acquired`を維持し、owner未生成のため利用量はunavailableのまま。別のfake budget観測で残るdebitと、carrierに出せないE使用量を区別し、取得不能を0へ補完しない。
+
+owner構築後はcharged／executed／prepaidUnusedをfreezeしたsnapshotとして返す。prepaidUnusedはそのsnapshot時点の未実施前払いで、途中状態ではterminal用の予約も含む。終端時の未使用分は再利用・返却しない。first reasonを固定した後にsnapshot／cleanup異常を別軸へ保持し、cleanup未確認を成功へ補完しない。
+
+固定故障は`entry_build_failure, profile_rejected, snapshot_failure, cleanup_failure, snapshot_cleanup_failure`の5種だけで、状態上の故障を再現する。native allocation／実snapshot／OS cleanupを故障注入したものではない。`simulated_released`もfakeの状態値に限り、物理解放確認にならない。carrier自体を供給できない故障、実module初期化費、X／Δ・本番E要求量・実credit／実plan結合・root供給は未対応である。
+
+別の6状態の参照機械で5操作の長さ4の全625列を比較し、取得・順序違反・終端後再開／debitの有無と先行診断を照合した。BigInt容量対照はparser6値×bridge3値×境界3値の54組。固定故障と100回の後着呼出し、immutable／秘密非出力・package負対照も確認した。これらのfake成功はSB01〜08の実接続・native受入完了ではない。
