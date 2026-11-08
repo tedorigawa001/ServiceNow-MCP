@@ -1,5 +1,7 @@
 # WF-B：private読取継続・共有上限・同bytes hashと結果owner
 
+差分設計追記（2026-11-08）: [scratch受理区間・進行位置・候補確定点](BEST_PRACTICE_WFB_SCRATCH_CANDIDATE_DESIGN.md)で、受信量と正常hash済prefixの分離、同attemptのupdate予約、close／post後の単一slot確定と確定後の停止診断を具体化した。(A)の`acceptedFiles`をhash確認済みと読み替えず、(B)のguard上界は再計数を要する。設計のみで、hash接続・実source照合は未実施。
+
 Version: draft-0.4 / Date: 2026-11-08 / 読み取り照合基準HEAD: `77255f2` / レビュー修正の基準HEAD: `72e4745`・`e235ec9` / (A)実装基準HEAD: `dfc79ff`。
 
 draft-0.3のレビュー修正: (A)のfakeで、完走してclose確認したfileと途中で放棄したfileが同じ`incomplete`／理由なしになっていた。完走fileは`pending`のまま残して`acceptedFiles`へ数え、after観測前のcloseは`incomplete`をprimary理由にした。全file受理後の期限・取消・時計・上限の停止は`stopReason`だけに残す（§11.1／§11.2）。after読取のsize／identity／kind差とbefore読取のidentity／kind差の固定scenarioを追加した。
