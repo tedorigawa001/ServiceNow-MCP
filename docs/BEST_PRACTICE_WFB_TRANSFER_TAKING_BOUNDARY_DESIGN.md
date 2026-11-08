@@ -1,6 +1,8 @@
 # WF-B (C)：移譲開始後の停止・所有境界とdetach後照合の差分設計
 
-Version: draft-0.1 / Date: 2026-11-09 / 読み取り照合基準HEAD: `ece8724`。
+Version: draft-0.2 / Date: 2026-11-09 / 読み取り照合基準HEAD: `ece8724`（レビュー修正基準HEAD: `ca4dd6d`）。
+
+draft-0.2のレビュー修正：現行で失敗Snapshotを退役させる契機は、root finishの`closeRequested`／supplyFirst条件と、供給準備owner finishの自身のfirst条件（`retireFailed`）だけである。移譲開始後の失敗は供給準備ownerのfailを呼ばずroot lifecycle理由だけを写すため、どちらにも該当せずSnapshotが退役しない。また回収後に供給準備ownerのfinishを使うと、内部の`clear()`が発行根拠として残すenvelopeを見てdiscardPasses／`supply_references_cleared`を記録し、detachとdiscardを混算する。§4・§7・TB05／TB09で、root finish＋`retireFailed`を新private停止継続から呼び、退役判定を移譲側firstとroot lifecycleFirstで行うことを明記した。
 
 Status: **設計のみ。** 親は[下位移譲claim・pending／holder設計draft-0.4](BEST_PRACTICE_WFB_SUPPLY_TRANSFER_DESIGN.md)と[同snapshotの所有・停止契約](BEST_PRACTICE_WFB_SNAPSHOT_READ_LIFECYCLE_DESIGN.md)。[preflight検証記録とレビュー修正](E2E_BEST_PRACTICE_WFB_SUPPLY_TRANSFER_PREFLIGHT_2026-11-09.md)を前提とするが、その成功をclaim消費・移動済み証拠へ転用しない。
 
@@ -50,9 +52,9 @@ immutableなclaimのstateを書き換える方法、同値claimの再発行、�
 | 正規close | 既存preflight／元ownerのclose契約 | 同rootへ同期close latchと既存readStopだけを伝える。元CanonicalSupplyAssembly.closeは呼ばず、payload参照を消さない |
 | binding／生成失敗 | 既存fail＋clearを利用可 | 先行transfer理由を記録し、同rootへの既存lifecycle理由写像だけを依頼。元CanonicalSupplyAssembly.failは呼ばない |
 | 通常利用／再prepare／再take | 先行拒否／停止・claimを検査 | 拒否。元slotへの巻戻し・claim返却・代替source生成なし |
-| finish | 準備参照clear後に既存finish | 固定回収または未確認保持を先に判定。参照が未退役なら元finishを呼ばない |
+| finish | 準備参照clear後に既存finish | 固定回収または未確認保持を先に判定。未退役参照があれば供給準備owner（`CanonicalSupplyAssembly`）のfinishもroot finishも呼ばない。退役確認後も供給準備ownerのfinish（内部`clear()`を含む）は経由せず、新private停止継続からroot finish→`retireFailed`を呼ぶ |
 
-継続は同compositionのlexical境界だけに置き、診断facade／公開summaryから元rootを再取得しない。現在の`canonicalSupplyAccess.context()`は通常利用向けであり、停止後の回収の前提にはしない。別のreadonly停止参照は同rootのclose latch・先行理由・終端／borrow状態を読むだけとし、session／budget／creditや新Snapshotを発行しない。
+停止だけのprivate継続は、既存`canonicalSupplyAccess`（context／open／fail／retireFailed）とは別の新しい窓口とし、同rootのclose・lifecycle理由写像・finish・`retireFailed`だけを中継する。通常利用向けの`context()`を経由せず、payload参照・session／budgetを返さない。継続は同compositionのlexical境界だけに置き、診断facade／公開summaryから元rootを再取得しない。現在の`canonicalSupplyAccess.context()`は通常利用向けであり、停止後の回収の前提にはしない。別のreadonly停止参照は同rootのclose latch・先行理由・終端／borrow状態を読むだけとし、session／budget／creditや新Snapshotを発行しない。
 
 close直後に通常利用を禁止することと、保持参照を捨てることを分ける。親readStopは既存の開始claim発行後だけ記録する規則を維持する。transferFirst／transferStop、親supplyFirst／lifecycleFirst／readFirst／readStop、discard診断は別軸とし、後着closeやcleanup異常で先行原因を上書きしない。
 
@@ -96,7 +98,7 @@ detach前preは元normal slotとanchor／payloadの一致および通常利用�
 
 消費後の全prefixを受ける固定回収・失敗保持・finish gateは、claim消費を有効にする前提である。親設計の「第3段階のdiscard」を理由に、第2段階の失敗後始末を未実装のままtakeを動かさない。holder公開後の正常discardは後段に残すが、未公開pending／元aliasの回収を先に用意する。
 
-回収開始は一度限りの専用状態で管理し、同failure custodyへ既存責務を保持→固定参照clear→空確認→anchor／発行根拠退役→元root結果固定とborrow退役→必要時Snapshot退役の順とする。pendingが空でも元alias・issued alias・anchorが残れば完全退役ではない。結果slotは先行確保し、生成失敗を追加の任意objectへ保存し直さない。
+回収開始は一度限りの専用状態で管理し、同failure custodyへ既存責務を保持→固定参照clear→空確認→anchor／発行根拠退役→元root結果固定とborrow退役→必要時Snapshot退役の順とする。root結果固定とborrow退役は新private停止継続からroot finishを呼んで行い、供給準備ownerのfinish／`clear()`は経由しない（経由すると発行根拠として残るenvelope等を見てdiscardPasses／`supply_references_cleared`を記録し、detachや固定回収と混算する）。「必要時」は、移譲側firstまたはroot lifecycleFirstが`none`でないこと、あるいは正規closeで`closeRequested`が立っていることを指す。現行root finishはsupplyFirst／`closeRequested`だけ、供給準備owner finishは自身のfirstだけを見るため、移譲開始後の失敗では同継続から`retireFailed`を明示的に呼ぶ。pendingが空でも元alias・issued alias・anchorが残れば完全退役ではない。結果slotは先行確保し、生成失敗を追加の任意objectへ保存し直さない。
 
 回収・保持確認が不明ならretained_unconfirmedとし、元参照・pending・anchorのうち未退役箇所を同ownerが保持する。空への補完・failure slotへ移譲したという未確認申告・元finishによる退役済み化は禁止。close／finishの反復でも再試行しない。外側の後日回収、GC、物理ゼロ化、OOM時の診断必着はUnknown／未対応である。
 
@@ -118,11 +120,11 @@ unit係数・全guard数・wrapper／台帳の実layout・全heap／work・実E�
 | TB02 | 消費点の直前は0、直後以降は1。再入・二重take・後着closeでも追加消費・権利復活なし。消費とgateを別更新する変異を検出 |
 | TB03 | F0〜F7の故障・closeを別記述の所有oracleで確認。pending記録前の元clear、記録前detach、参照copy／再生成・順序補正の変異を検出 |
 | TB04 | 元normal slot空でも正しいpending／anchorで関係検査成功。旧matches／current field依存を残す変異、未detachなのにpost成功させる変異を検出 |
-| TB05 | taking後のclose／failが元CanonicalSupplyAssemblyのclearを呼ぶ変異、finishが先にborrowを退役させる変異を検出。停止理由と保持責務を両方維持 |
+| TB05 | taking後のclose／failが元CanonicalSupplyAssemblyのclearを呼ぶ変異、finishが先にborrowを退役させる変異を検出。停止理由と保持責務を両方維持。移譲開始後のbinding／生成失敗でSnapshotを退役させないまま終端する変異、回収後に供給準備ownerのfinish（内部`clear()`）を経由する変異も検出 |
 | TB06 | envelope／live context・借用失効・未発行／消失slot等、preflightで未到達だった条件へ固定単独選択子を先に用意する。現在の等価変異判定を継承しない |
 | TB07 | 同一性だけは停止後も照合可能だが、通常postは拒否。closeによるcontext不在をbindingへ誤分類する変異と、cleanup identityから通常権を復活する変異を検出 |
 | TB08 | source／pending／issued／anchor／failureの各保持漏れ、回収途中故障を注入。未確認保持・finish保留・一度限り回収を確認。反復要求で診断・計数不変 |
-| TB09 | 消費点・pending記録・detachのevent順序と0／1を独立に数える。detachをdiscardへ混算、二重退役・二重課金する変異を検出 |
+| TB09 | 消費点・pending記録・detachのevent順序と0／1を独立に数える。detachをdiscardへ混算、二重退役・二重課金する変異を検出。移譲開始後の全経路で供給準備ownerのdiscardPasses／`supply_references_cleared`が増えないことを確認 |
 | TB10 | 旧B／C-start／供給準備／preflightのclose前後・理由・export・compiled保証を維持。新factoryもholder公開・C実行・正式発行0、fixtureの梱包漏洩負対照を維持 |
 
 正常経路の試験だけでなく、各拒否条件について他の条件が整合した対照を用意する。oracleは本体の検査式・anchor builder・event係数をimportせず、元canonical参照の対応と各境界の責務を別記述する。実host／worker／transportは使わない。
