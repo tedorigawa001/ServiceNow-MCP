@@ -1,6 +1,8 @@
 # WF-B (C)：同canonical fileのprivate供給表・非実行viewの差分設計
 
-Version: draft-0.1 / Date: 2026-11-08 / 読み取り照合基準HEAD: `e1b3978`。
+Version: draft-0.2 / Date: 2026-11-08 / 読み取り照合基準HEAD: `e1b3978`（レビュー修正基準HEAD: `fc0c2f3`）。
+
+draft-0.2のレビュー修正：配置移動時に既存compiled対照（`compiled-declared-actual.mjs`）の変異元source読込・module解決・export集合検査が壊れる点を§2.2に明記し、§9手順1の受入条件へ追加した。
 
 Status: **設計のみ。private供給表・非実行view・下位移譲claimは未実装。** 親は[共通kernelのprivate供給境界](BEST_PRACTICE_WFB_PRIVATE_KERNEL_SUPPLY_DESIGN.md)と[同snapshotの所有・停止契約](BEST_PRACTICE_WFB_SNAPSHOT_READ_LIFECYCLE_DESIGN.md)。[宣言／actual分離](BEST_PRACTICE_WFB_DECLARED_ACTUAL_SCRIPT_DESIGN.md)と[その検証記録](E2E_BEST_PRACTICE_WFB_DECLARED_ACTUAL_2026-11-08.md)はlegacy Bの合成保証として維持し、Cへの供給済み証拠にしない。
 
@@ -42,6 +44,14 @@ privateなSnapshot／Borrow／preparedをmodule間のadopt関数で受け渡す�
 旧C-start facadeを呼んで返された公開診断から表を作る方式は禁止する。旧C-startと新試験用factoryは、同じprivate construction手順を利用できるが、factory呼出しごとのoriginは別であり、互いのpreparedを採用できない。新factory内では最初に所有した同Snapshot／Borrowを使う。別assemblyの保証を既存C-startの追加保証へ自動的に合算しない。
 
 配置移行は挙動追加より先に別工程として照合する。B／旧C-startのclass内部状態・既存結果schema／計数・期待値を変えず、新入口を使わない場合は追加の表／sourceを生成しない。移動時のclass名衝突等は内部改名に限り、既存cap・期限・検査順を変えない。private値をexportするために梱包設定やsrc／distへfriendを追加しない。
+
+compiled対照の維持は「実行して通る」ことで確認し、文面上の互換扱いにしない。現行`compiled-declared-actual.mjs`は`./shared-read-hash-kernel-fake.ts`の本文を読み、8種の文字列変異（各変異位置が1回だけ現れることを`mutation site drift`で検査）を加えて単一fileをtranspileし、`data:` URLのESMとしてimportする。物理移動後はこの前提が2点で崩れる。
+
+1. 読込先がre-export 1行になり、変異位置が0回となってdrift検査で停止する。読込先は移動先のcomposition moduleへ切り替え、8変異の置換元が移動後も各1回だけ現れることを確認する。
+2. composition moduleはC-start由来の`./source-map-values-core.js`相対importを含むため、`data:` URLからは解決できない（Nodeは`ERR_UNSUPPORTED_RESOLVE_REQUEST`）。移動工程では、依存moduleを含めて一時directoryへtranspile出力してfile URLでimportする等、相対importを解決できる方式へ改める。composition moduleから相対importを除くために純粋値検査を複製・内包することはしない。
+3. 同fixtureはcompile結果のexport集合が`['createReadHashFake']`だけであることも検査する。composition moduleはC-start等の既存factoryも持つため、移動後はcompile対象のexport集合を移動先の固定集合として明示照合し、`shared-read-hash-kernel-fake.ts`のre-export集合が`createReadHashFake`だけであることは別に照合する。片方の検査で他方を代用しない。
+
+一時出力はscratch相当の作業領域に限り、tests／src／distや梱包対象へ残さない。変異の内容・数・期待する失敗は移動前と同一とし、移動を理由に削除・弱化しない。
 
 ## 3 private供給表の所有契約
 
@@ -148,7 +158,7 @@ supplyFirst／lifecycleFirst／readFirst／readStop・参照退役状態を別�
 
 ## 9 推奨する実装分割と停止線
 
-1. 配置だけを移し、既存B／C-startの全挙動・export・compiled／梱包保証を維持する。新規private値の生成はまだ行わない。
+1. 配置だけを移し、既存B／C-startの全挙動・export・compiled／梱包保証を維持する。compiled対照は§2.2のとおり読込先とmodule解決方式を移動先へ合わせ、8変異すべてが移動後も検出されることを`package-http-classification.mjs`経由で確認する。新規private値の生成はまだ行わない。
 2. 同constructionの正規registry／全file供給表・非実行viewと準備claimを実装する。CV01〜07の純粋identity／生成故障対照を優先し、旧facadeからのpublic再採用は不可とする。
 3. 別brandの非実行移譲claim・pending／holder・固定discardを実装し、CV08〜12と失敗時診断／寿命を確認する。kernel生成／受領は0のまま。
 4. 同budget／停止owner／非空cleanup custodyと接続費目の設計・検証を別途完了してから、改めてC→kernelの実行接続を検討する。非実行holderをそのまま昇格することはしない。
