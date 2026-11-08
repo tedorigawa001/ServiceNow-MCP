@@ -1,12 +1,14 @@
 # WF-B (C)：下位移譲claim・pending／非実行holderの差分設計
 
-Version: draft-0.2 / Date: 2026-11-09 / 読み取り照合基準HEAD: `0e98c56`（レビュー修正基準HEAD: `8b5af60`）。
+Version: draft-0.3 / Date: 2026-11-09 / 読み取り照合基準HEAD: `0e98c56`（レビュー修正基準HEAD: `8b5af60`、preflight実装基準HEAD: `35c1d2a`）。
+
+draft-0.3: §11の第1段階だけを合成依存で実装した。発行anchor・未消費の別brand claim・空のpending／holder／failure shellを同ownerへ結合し、消費前の固定拒否を確認する。通常利用slotからの移動・公開・C実行は未接続。[検証記録](E2E_BEST_PRACTICE_WFB_SUPPLY_TRANSFER_PREFLIGHT_2026-11-09.md)。実装境界は§12を参照。
 
 draft-0.2のレビュー修正：現行の供給準備ownerは`finish()`だけでなく`close()`と`fail()`も終端前に無条件で`clear()`を呼ぶため、移譲開始後の停止・失敗がこれらを経由すると元aliasと計数を消してしまう点を§7に明記し、ST07／ST09へ対応する変異対照を加えた。
 
-Status: **設計のみ。下位移譲claim・pending／holder・移譲後discardは未実装。** 親は[canonical供給表・非実行view設計](BEST_PRACTICE_WFB_CANONICAL_SUPPLY_VIEW_DESIGN.md)と[同snapshotの所有・停止契約](BEST_PRACTICE_WFB_SNAPSHOT_READ_LIFECYCLE_DESIGN.md)。[供給準備の検証・post検査レビュー修正](E2E_BEST_PRACTICE_WFB_CANONICAL_SUPPLY_VIEW_2026-11-08.md)を前提とするが、その成功を移譲済み証拠へ転用しない。
+Status: **第1段階のanchor・未消費claim・空shellと消費前拒否だけ実装。移動・公開・移譲後discardは未実装。** 親は[canonical供給表・非実行view設計](BEST_PRACTICE_WFB_CANONICAL_SUPPLY_VIEW_DESIGN.md)と[同snapshotの所有・停止契約](BEST_PRACTICE_WFB_SNAPSHOT_READ_LIFECYCLE_DESIGN.md)。[供給準備の検証・post検査レビュー修正](E2E_BEST_PRACTICE_WFB_CANONICAL_SUPPLY_VIEW_2026-11-08.md)を前提とするが、その成功を移譲済み証拠へ転用しない。
 
-正式発行口閉鎖・C実行入口閉鎖・全体受付無効・Unknown・VM／監視／telemetry調査保留を維持する。今回はMDのみ。実装・C実行・実期待値pin・実source照合・S発行・core接続・実接続・実通信・設定変更・Pushは行わない。以下の型・理由・状態・factory名は内部設計案であり、既存APIや権限を追加したものではない。
+正式発行口閉鎖・C実行入口閉鎖・全体受付無効・Unknown・VM／監視／telemetry調査保留を維持する。draft-0.1／0.2はMDのみ、draft-0.3の実装は§12の合成preflightだけ。C実行・実期待値pin・実source照合・S発行・core接続・実接続・実通信・設定変更・Pushは行わない。移動・公開・移譲後discardの記述は引き続き設計案であり、実行権限を追加したものではない。
 
 ## 1 現行との差分と非目標
 
@@ -20,7 +22,7 @@ Status: **設計のみ。下位移譲claim・pending／holder・移譲後discard
 
 ## 2 生成元・配置・旧入口
 
-既存composition moduleのlexical境界内にprivateな移譲ownerとissuer／consumerを置く。新しい固定合成診断factory候補をcreateCanonicalSupplyTransferFake、薄い入口候補をtests/review/fixtures/canonical-supply-transfer-fake.tsとする。今回はfileやexportを作らない。
+既存composition moduleのlexical境界内にprivateな移譲ownerとissuer／consumerを置く。新しい固定合成診断factoryをcreateCanonicalSupplyTransferFake、薄い入口をtests/review/fixtures/canonical-supply-transfer-fake.tsとする。draft-0.1／0.2ではfileやexportを作らず、draft-0.3で非実行preflightの診断入口だけ追加した。
 
 新factoryのconstructionは同じprivate CanonicalSupplyAssemblyを生成し、同rootで開始・供給準備を行う。旧公開facade／summaryを呼んで採用する方式は不可。private継続だけが同ownerの発行物をcapture／detachでき、constructor・anchor・claim・payload・pending／holderやadopt helperはexportしない。外部map／bytes／ops／callbackも受領しない。
 
@@ -142,7 +144,7 @@ clear・anchor退役・failure slotへの保持確認が完了しない場合は
 
 全CPU／heap／native費・slotの実確保layout・C接続全体guard・実E／SはUnknown。実clock・実予算・共有期限の導入は別工程とし、Bのcap・D_stop900／D_end1000・guard131,524を延長・再計算して吸収しない。open／read／hash／resource cleanupは引き続き0。
 
-## 10 独立合成受入条件（未実施）
+## 10 独立合成受入条件（draft-0.3で消費前部分だけ実施）
 
 | ID | 必須対照 |
 |---|---|
@@ -168,4 +170,20 @@ clear・anchor退役・failure slotへの保持確認が完了しない場合は
 2. taking・同参照pending記録・元通常利用detachとpost照合を接続する。途中故障・再入・closeと未公開破棄を確認し、kernel受領には進まない。
 3. 非実行holderの単一公開点・専用discard claim・未確認保持とfinish保留を接続する。全prefixの費目／寿命oracle、compiled変異・旧回帰・梱包を確認する。
 
-各段階で公開していないものを受理済み、保持中のものを退役済みと呼ばない。本書では実装・合成試験を行っていない。正常経路を実装してもholderの用途は固定discardに限り、C→kernel実行・実budget／stop／resource連結・実期待値pin・S／core／runtime接続は別承認・別検証まで閉じる。
+各段階で公開していないものを受理済み、保持中のものを退役済みと呼ばない。draft-0.3では第1段階だけ実装・合成試験済み。正常経路を実装してもholderの用途は固定discardに限り、C→kernel実行・実budget／stop／resource連結・実期待値pin・S／core／runtime接続は別承認・別検証まで閉じる。
+
+## 12 第1段階の実装境界（draft-0.3）
+
+新しい`createCanonicalSupplyTransferFake`は同composition内のprivate `CanonicalSupplyAssembly`を一つ生成し、同rootのbegin→prepare→prepareSupplyへ進む。facadeはprepare／close／finish／inspectの固定診断だけ。旧3factory／旧薄い入口は不変で、compositionのexport集合だけ新診断factoryを追加した4つになる。
+
+module-private継続が元ownerのprepared／発行borrow・同envelope、registry、発行済みtable／view／declarationsとtable originをcaptureする。anchorは同transfer ownerを保持し、private発行slotと元ownerの現在の正規参照の双方を検査する。固定scriptによるanchor候補copyや1項目差は、候補側だけから期待値を作らず拒否する。元の不変registry／供給表のfile対応検査は準備側が所有し、この段階では再生成・再hashしない。
+
+別unique-symbol brandの`NonExecutingSupplyTransfer`はstate=`unused`だけを表し、消費methodを持たない。pending／holder／failureのtyped shellは各1つ・同owner／source／anchor／claim／receiverへ結合し、payload型は`undefined`だけ。正常preflightでも原ownerのregistry／table／viewは保持されたままで、sourceDetaches／holderPublications／claimsConsumedは0。anchorのstrong reference保持はretainedAnchorとして明示し、本文参照なしとは報告しない。
+
+準備の有限順序は元供給の受付→anchor capture→未消費claim発行→pending／holder／failureの空shell結合→pre検査。shell保持用のprivate slotは先行確保し、各shellの生成故障もclaim消費前に止まる。元供給が失敗していればanchor／claim／各shellの発行は0。構造計数は上記の局所生成prefixだけで、全確保費・実E・OOM診断必着の証明ではない。
+
+拒否はsource_rejected／transfer_prepare_unavailable／binding_mismatch／duplicate_transfer_preparation／supply_closed。元診断はsource内の固定snapshotに保持する。失敗後はrejectedのまま再prepareを拒否し、claim消費0でも再準備・再発行を許さない。正規closeはstopReasonへ分離し先行firstReasonを上書きしない。先行確保失敗時に存在しないfailure shellへ移譲済みと報告しない。
+
+全経路が移譲開始前なので、拒否／closeは既存の元ownerの固定clearを利用できる。finishは空shell／claim／anchor参照を消してから元ownerのfinishへ進み、borrow退役後は不変終端診断を返す。これは移譲後discard claim・custody保持・未確認時finish保留の実装ではない。taking以降の処理を追加する前に§7の旧close／fail／finishを迂回する専用境界が必要。
+
+40種の単独混入対照、6箇所の生成故障prefix、正規close・元供給失敗・二重準備・外部hook非実行・終端不変を確認する。compiled対照はanchor9・claim7・shell共通8の24種と、current／issuedのanchor・claim・shell保持漏れ6種およびborrow先行退役1種の計7退役対照。retainedAnchor／retainedClaim／retainedShellsは発行済みaliasも含め、anchor退役時に元borrowがまだ保持されていたかを固定booleanで記録する。anchor table／viewは元current／issuedの同参照を二箇所で確認するため、その二条件は組で除去し、それ以外は単条件を除去する。これは将来detach後の冗長性を保証しない。ST01／02／05／07／11〜13の消費前部分だけを対象とし、taking・移動・公開・移譲後discard／保持未確認の受入条件は未実施のまま。

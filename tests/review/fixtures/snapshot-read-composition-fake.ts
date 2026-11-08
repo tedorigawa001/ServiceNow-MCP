@@ -793,6 +793,17 @@ const canonicalSupplyScenarios: readonly string[] = Object.freeze([...cStartScen
   'post_view_declarations_short', 'post_registry_file', 'post_registry_ordinal', 'post_registry_duplicate_origin',
   'post_source_origin', 'post_invalid_record', 'post_source_oversize', 'post_binding_file', 'post_binding_ordinal',
   'post_binding_table_origin', 'post_declaration_file', 'post_declaration_ordinal', 'post_declaration_binding']);
+interface SupplyIssuanceAnchor {
+  readonly transferOwner: object; readonly sourceOwner: CanonicalSupplyAssembly; readonly envelope: CPreparedContext;
+  readonly registry: readonly CanonicalRegistryEntry[]; readonly table: CanonicalPayloadTable;
+  readonly view: NonExecutingSupplyView; readonly declarations: readonly CanonicalDeclarationView[]; readonly tableOrigin: object;
+}
+// Lexical issuer only: no facade, summary, external callback or registration can supply an anchor.
+let supplyTransferAccess: {
+  capture(a: CanonicalSupplyAssembly, transferOwner: object): SupplyIssuanceAnchor | undefined;
+  matches(a: CanonicalSupplyAssembly, anchor: SupplyIssuanceAnchor): boolean;
+  fail(a: CanonicalSupplyAssembly, reason: 'binding_mismatch' | 'supply_prepare_unavailable'): void;
+};
 class CanonicalSupplyAssembly {
   readonly #root: CStartAssembly;
   #state: 'unused' | 'preparing' | 'prepared' | 'discarded' = 'unused';
@@ -810,6 +821,30 @@ class CanonicalSupplyAssembly {
   readonly #retirementOrder: string[] = [];
   readonly #counts = { preparationClaims: 0, registryRecords: 0, bindings: 0, declarations: 0, tables: 0, views: 0,
     validationPasses: 0, fileChecks: 0, discardPasses: 0 };
+  static {
+    supplyTransferAccess = Object.freeze({
+      capture(a: CanonicalSupplyAssembly, transferOwner: object): SupplyIssuanceAnchor | undefined {
+        if (a.#terminal || a.#first !== 'none' || a.#state !== 'prepared'
+          || !canonicalSupplyAccess.context(a.#root) || !a.#envelope || !a.#registry || !a.#table || !a.#view
+          || !a.#issuedDeclarations || !a.#tableOrigin) return undefined;
+        return Object.freeze({ transferOwner, sourceOwner: a, envelope: a.#envelope, registry: a.#registry,
+          table: a.#issuedTable!, view: a.#issuedView!, declarations: a.#issuedDeclarations, tableOrigin: a.#tableOrigin });
+      },
+      matches(a: CanonicalSupplyAssembly, anchor: SupplyIssuanceAnchor): boolean {
+        const live = canonicalSupplyAccess.context(a.#root), e = anchor.envelope;
+        return !a.#terminal && a.#first === 'none' && a.#state === 'prepared' && !!live
+          && anchor.sourceOwner === a && e === a.#envelope && anchor.registry === a.#registry
+          && anchor.table === a.#table && anchor.table === a.#issuedTable
+          && anchor.view === a.#view && anchor.view === a.#issuedView
+          && anchor.declarations === a.#issuedDeclarations && anchor.tableOrigin === a.#tableOrigin
+          && e.owner === live.owner && e.snapshot === live.snapshot && e.setId === live.setId
+          && e.map === live.map && e.files === live.files && e.rows === live.rows && e.file === live.file
+          && e.ordinal === live.ordinal && e.session === live.session && e.budget === live.budget
+          && e.borrow === live.borrow && e.prepared === live.prepared && e.borrow.matches(e);
+      },
+      fail(a: CanonicalSupplyAssembly, reason: 'binding_mismatch' | 'supply_prepare_unavailable'): void { a.fail(reason); },
+    });
+  }
   constructor(private readonly scenario: string, admitted: boolean) {
     this.#root = new CStartAssembly((cStartScenarios as readonly string[]).includes(scenario) ? scenario as CStartScenario : 'normal', admitted);
   }
@@ -1088,5 +1123,183 @@ export function createCanonicalSupplyViewFake(...args: readonly unknown[]) {
     begin: (...input: readonly unknown[]) => input.length ? a.rejectArguments() : a.begin(),
     prepare: (...input: readonly unknown[]) => input.length ? a.rejectArguments() : a.prepare(),
     prepareSupply: (...input: readonly unknown[]) => input.length ? a.rejectArguments() : a.prepareSupply(),
+    close: () => a.close(), finish: () => a.finish(), inspect: () => a.inspect() });
+}
+
+const TRANSFER_BRAND: unique symbol = Symbol('nonexecuting-transfer');
+interface NonExecutingSupplyTransfer {
+  readonly [TRANSFER_BRAND]: true; readonly owner: object; readonly source: CanonicalSupplyAssembly;
+  readonly anchor: SupplyIssuanceAnchor; readonly receiver: object; readonly state: 'unused';
+}
+type ShellRole = 'pending' | 'holder' | 'failure';
+interface EmptyTransferShell {
+  readonly role: ShellRole; readonly owner: object; readonly source: CanonicalSupplyAssembly;
+  readonly anchor: SupplyIssuanceAnchor; readonly claim: NonExecutingSupplyTransfer; readonly receiver: object;
+  readonly payload: undefined;
+}
+type TransferReason = 'none' | 'binding_mismatch' | 'transfer_prepare_unavailable' | 'source_rejected'
+  | 'duplicate_transfer_preparation' | 'supply_closed';
+const TRANSFER_CLOSED = Object.freeze({ ...CLOSED, model: 'wfb-supply-transfer-preflight-fake-1',
+  cExecution: 'not_connected', cleanupDisposition: 'not_started', normalSlotMovement: 'not_connected',
+  holderPublication: 'not_connected', actualBudget: 'not_connected' } as const);
+const transferScenarios = Object.freeze(['normal', 'source_failure', 'source_closed', 'close_before_pre',
+  'anchor_failure', 'claim_failure', 'pending_failure', 'holder_failure', 'failure_failure', 'pre_failure',
+  'anchor_copy', 'anchor_owner', 'anchor_source', 'anchor_envelope', 'anchor_registry', 'anchor_table',
+  'anchor_view', 'anchor_declarations', 'anchor_origin', 'claim_copy', 'claim_owner', 'claim_source',
+  'claim_anchor', 'claim_receiver', 'claim_brand', 'claim_state',
+  ...(['pending', 'holder', 'failure'] as const).flatMap(role =>
+    ['copy', 'role', 'owner', 'source', 'anchor', 'claim', 'receiver', 'payload'].map(field => `${role}_${field}`))]);
+
+class SupplyTransferPreflight {
+  readonly #owner = Object.freeze({}); readonly #receiver = Object.freeze({});
+  readonly #source: CanonicalSupplyAssembly;
+  #state: 'unused' | 'preparing' | 'prepared' | 'rejected' | 'terminal' = 'unused';
+  #first: TransferReason = 'none'; #stop: 'none' | 'supply_closed' = 'none';
+  #anchor: SupplyIssuanceAnchor | undefined; #issuedAnchor: SupplyIssuanceAnchor | undefined;
+  #claim: NonExecutingSupplyTransfer | undefined; #issuedClaim: NonExecutingSupplyTransfer | undefined;
+  #shells: Partial<Record<ShellRole, EmptyTransferShell>> = {};
+  #issuedShells: Partial<Record<ShellRole, EmptyTransferShell>> = {};
+  #anchorRetiredWithBorrowLive: boolean | undefined;
+  #terminal: ReturnType<SupplyTransferPreflight['snapshot']> | undefined;
+  readonly #counts = { preparationStarts: 0, anchors: 0, claimsIssued: 0, claimsConsumed: 0,
+    pendingShells: 0, holderShells: 0, failureShells: 0, preChecks: 0, sourceDetaches: 0, holderPublications: 0,
+    open: 0, read: 0, hash: 0, cleanup: 0 };
+  constructor(private readonly scenario: string, admitted: boolean) {
+    this.#source = new CanonicalSupplyAssembly(scenario === 'source_failure' ? 'table_failure' : 'normal', admitted);
+  }
+  private reply(reason?: Exclude<TransferReason, 'none'> | 'read_already_used') {
+    return Object.freeze(reason ? { ...TRANSFER_CLOSED, ok: false, reason } : { ...TRANSFER_CLOSED, ok: true });
+  }
+  private clearPreparatory(): void {
+    if (this.#anchor || this.#issuedAnchor) this.#anchorRetiredWithBorrowLive = this.#source.inspect().root.retainedBorrow;
+    this.#shells = {}; this.#issuedShells = {}; this.#claim = undefined; this.#issuedClaim = undefined;
+    this.#anchor = undefined; this.#issuedAnchor = undefined;
+  }
+  private reject(reason: Exclude<TransferReason, 'none'>) {
+    if (this.#first === 'none') this.#first = reason;
+    // Pre-consumption only: source still owns every normal payload reference.
+    if (reason !== 'source_rejected' && reason !== 'supply_closed') supplyTransferAccess.fail(this.#source,
+      reason === 'transfer_prepare_unavailable' ? 'supply_prepare_unavailable' : 'binding_mismatch');
+    this.clearPreparatory(); this.#state = 'rejected'; return this.reply(this.#first);
+  }
+  private fault(point: string): void { if (this.scenario === `${point}_failure`) throw Error('synthetic_preflight'); }
+  private probe(): void {
+    const a = this.#anchor!, c = this.#claim!;
+    const foreign = Object.freeze({});
+    const anchorField = this.scenario.slice('anchor_'.length);
+    if (this.scenario.startsWith('anchor_')) {
+      const patch: Partial<SupplyIssuanceAnchor> = anchorField === 'owner' ? { transferOwner: foreign }
+        : anchorField === 'source' ? { sourceOwner: foreign as CanonicalSupplyAssembly }
+        : anchorField === 'envelope' ? { envelope: Object.freeze({ ...a.envelope }) }
+        : anchorField === 'registry' ? { registry: Object.freeze([...a.registry]) }
+        : anchorField === 'table' ? { table: Object.freeze({ ...a.table }) }
+        : anchorField === 'view' ? { view: Object.freeze({ ...a.view }) }
+        : anchorField === 'declarations' ? { declarations: Object.freeze([...a.declarations]) }
+        : anchorField === 'origin' ? { tableOrigin: foreign } : {};
+      this.#anchor = Object.freeze({ ...a, ...patch });
+      // All other references remain consistent; only the targeted issuer fact differs.
+      if (anchorField !== 'copy') this.#issuedAnchor = this.#anchor;
+      this.#claim = Object.freeze({ ...c, anchor: this.#anchor }); this.#issuedClaim = this.#claim;
+      for (const role of ['pending', 'holder', 'failure'] as const) {
+        this.#shells[role] = Object.freeze({ ...this.#shells[role]!, anchor: this.#anchor, claim: this.#claim });
+        this.#issuedShells[role] = this.#shells[role];
+      }
+    }
+    if (this.scenario.startsWith('claim_')) {
+      const field = this.scenario.slice(6);
+      const patch = field === 'owner' ? { owner: foreign } : field === 'source' ? { source: foreign }
+        : field === 'anchor' ? { anchor: Object.freeze({ ...a }) } : field === 'receiver' ? { receiver: foreign }
+        : field === 'brand' ? { [TRANSFER_BRAND]: false } : field === 'state' ? { state: 'spent' } : {};
+      this.#claim = Object.freeze({ ...c, ...patch }) as NonExecutingSupplyTransfer;
+      if (field !== 'copy') this.#issuedClaim = this.#claim;
+      for (const role of ['pending', 'holder', 'failure'] as const) {
+        this.#shells[role] = Object.freeze({ ...this.#shells[role]!, claim: this.#claim });
+        this.#issuedShells[role] = this.#shells[role];
+      }
+    }
+    for (const role of ['pending', 'holder', 'failure'] as const) {
+      if (!this.scenario.startsWith(`${role}_`)) continue;
+      const field = this.scenario.slice(role.length + 1);
+      const patch = field === 'role' ? { role: 'foreign' } : field === 'owner' ? { owner: foreign }
+        : field === 'source' ? { source: foreign } : field === 'anchor' ? { anchor: Object.freeze({ ...a }) }
+        : field === 'claim' ? { claim: Object.freeze({ ...c }) } : field === 'receiver' ? { receiver: foreign }
+        : field === 'payload' ? { payload: a.table } : {};
+      this.#shells[role] = Object.freeze({ ...this.#shells[role]!, ...patch }) as EmptyTransferShell;
+      if (field !== 'copy') this.#issuedShells[role] = this.#shells[role];
+    }
+  }
+  private valid(): boolean {
+    this.#counts.preChecks++;
+    const a = this.#anchor, c = this.#claim;
+    if (!a || a !== this.#issuedAnchor || a.transferOwner !== this.#owner
+      || !supplyTransferAccess.matches(this.#source, a) || !c || c !== this.#issuedClaim
+      || c[TRANSFER_BRAND] !== true || c.owner !== this.#owner || c.source !== this.#source
+      || c.anchor !== a || c.receiver !== this.#receiver || c.state !== 'unused') return false;
+    for (const role of ['pending', 'holder', 'failure'] as const) {
+      const shell = this.#shells[role];
+      if (!shell || shell !== this.#issuedShells[role] || shell.role !== role || shell.owner !== this.#owner
+        || shell.source !== this.#source || shell.anchor !== a || shell.claim !== c
+        || shell.receiver !== this.#receiver || shell.payload !== undefined) return false;
+    }
+    return true;
+  }
+  prepare() {
+    if (this.#terminal) return this.reply('read_already_used');
+    if (this.#first !== 'none') return this.reply(this.#first);
+    if (this.#stop !== 'none') return this.reject('supply_closed');
+    if (this.#state !== 'unused') return this.reject('duplicate_transfer_preparation');
+    this.#state = 'preparing'; this.#counts.preparationStarts++;
+    if (!this.#source.begin().ok || !this.#source.prepare().ok || !this.#source.prepareSupply().ok) return this.reject('source_rejected');
+    if (this.scenario === 'source_closed') { this.close(); return this.reply('supply_closed'); }
+    try {
+      // Shell storage is preallocated above; all payload slots stay empty in this stage.
+      this.fault('anchor');
+      this.#anchor = supplyTransferAccess.capture(this.#source, this.#owner); this.#issuedAnchor = this.#anchor;
+      if (!this.#anchor) return this.reject('binding_mismatch');
+      this.#counts.anchors++;
+      this.fault('claim');
+      this.#claim = Object.freeze<NonExecutingSupplyTransfer>({ [TRANSFER_BRAND]: true, owner: this.#owner, source: this.#source,
+        anchor: this.#anchor, receiver: this.#receiver, state: 'unused' }); this.#issuedClaim = this.#claim;
+      this.#counts.claimsIssued++;
+      for (const role of ['pending', 'holder', 'failure'] as const) {
+        this.fault(role);
+        this.#shells[role] = Object.freeze({ role, owner: this.#owner, source: this.#source,
+          anchor: this.#anchor, claim: this.#claim, receiver: this.#receiver, payload: undefined });
+        this.#issuedShells[role] = this.#shells[role]; this.#counts[`${role}Shells`]++;
+      }
+      if (this.scenario === 'close_before_pre') { this.close(); return this.reply('supply_closed'); }
+      this.fault('pre'); this.probe();
+      if (!this.valid()) return this.reject('binding_mismatch');
+      this.#state = 'prepared'; return this.reply();
+    } catch { return this.reject('transfer_prepare_unavailable'); }
+  }
+  close() {
+    if (this.#terminal) return this.reply('read_already_used');
+    this.#stop = 'supply_closed'; this.#source.close();
+    return this.reject('supply_closed');
+  }
+  rejectArguments() { return this.#terminal ? this.reply('read_already_used') : this.reject('binding_mismatch'); }
+  private snapshot() {
+    return Object.freeze({ ...TRANSFER_CLOSED, state: this.#state, firstReason: this.#first, stopReason: this.#stop,
+      claimState: this.#claim?.state ?? (this.#counts.claimsIssued ? 'retired_unused' : 'not_issued'),
+      retainedAnchor: !!this.#anchor || !!this.#issuedAnchor, retainedClaim: !!this.#claim || !!this.#issuedClaim,
+      retainedShells: (['pending', 'holder', 'failure'] as const).filter(role => this.#shells[role] || this.#issuedShells[role]).length,
+      anchorRetiredWithBorrowLive: this.#anchorRetiredWithBorrowLive,
+      emptyShells: Object.values(this.#shells).filter(s => s.payload === undefined).length,
+      payloadSlots: Object.values(this.#shells).filter(s => s.payload !== undefined).length,
+      counts: Object.freeze({ ...this.#counts }), source: this.#source.inspect() });
+  }
+  inspect() { return this.#terminal ?? this.snapshot(); }
+  finish() {
+    if (this.#terminal) return this.#terminal;
+    this.clearPreparatory(); this.#source.finish(); this.#state = 'terminal';
+    this.#terminal = this.snapshot(); return this.#terminal;
+  }
+}
+export function createCanonicalSupplyTransferFake(...args: readonly unknown[]) {
+  const input = args.length === 0 ? 'normal' : args[0];
+  const admitted = args.length <= 1 && typeof input === 'string' && transferScenarios.includes(input);
+  const a = new SupplyTransferPreflight(admitted ? input as string : 'normal', admitted);
+  return Object.freeze({ prepare: (...input: readonly unknown[]) => input.length ? a.rejectArguments() : a.prepare(),
     close: () => a.close(), finish: () => a.finish(), inspect: () => a.inspect() });
 }

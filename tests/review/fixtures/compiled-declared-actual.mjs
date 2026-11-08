@@ -18,11 +18,12 @@ try {
 writeFileSync(join(scratch, 'package.json'), '{"type":"module"}');
 await compile(readFileSync(new URL('./source-map-values-core.ts', import.meta.url), 'utf8'), 'source-map-values-core.js');
 const original = await compile(source);
-assert.deepEqual(Object.keys(original), ['createCanonicalSupplyViewFake', 'createReadHashFake', 'createSnapshotReadStartFake']);
-for (const name of ['shared-read-hash-kernel-fake', 'read-hash-fake', 'snapshot-read-start-fake', 'canonical-supply-view-fake']) {
+assert.deepEqual(Object.keys(original), ['createCanonicalSupplyTransferFake', 'createCanonicalSupplyViewFake', 'createReadHashFake', 'createSnapshotReadStartFake']);
+for (const name of ['shared-read-hash-kernel-fake', 'read-hash-fake', 'snapshot-read-start-fake', 'canonical-supply-view-fake', 'canonical-supply-transfer-fake']) {
   const facade = await compile(readFileSync(new URL(`./${name}.ts`, import.meta.url), 'utf8'), `${name}.js`);
   const factory = name === 'snapshot-read-start-fake' ? 'createSnapshotReadStartFake'
-    : name === 'canonical-supply-view-fake' ? 'createCanonicalSupplyViewFake' : 'createReadHashFake';
+    : name === 'canonical-supply-view-fake' ? 'createCanonicalSupplyViewFake'
+      : name === 'canonical-supply-transfer-fake' ? 'createCanonicalSupplyTransferFake' : 'createReadHashFake';
   assert.deepEqual(Object.keys(facade), [factory]);
   assert.equal(facade[factory], original[factory]);
 }
@@ -37,6 +38,67 @@ assert.deepEqual(supply.inspect().fileSlots.map(f => f.id), ['F01', 'F02', 'O01'
 assert.equal(supply.inspect().transferClaim, 'not_issued');
 assert.equal(supply.prepareSupply().reason, 'duplicate_preparation');
 assert.equal(supply.finish().retainedView, false);
+const transfer = original.createCanonicalSupplyTransferFake();
+assert.equal(transfer.prepare().ok, true);
+assert.equal(transfer.inspect().source.retainedView, true);
+assert.equal(transfer.inspect().retainedAnchor, true);
+assert.equal(transfer.inspect().counts.claimsConsumed, 0);
+assert.equal(transfer.inspect().counts.sourceDetaches, 0);
+assert.equal(transfer.inspect().counts.holderPublications, 0);
+assert.equal(transfer.finish().retainedAnchor, false);
+const transferControls = [
+  ['anchor_copy', ['a !== this.#issuedAnchor']],
+  ['anchor_owner', ['a.transferOwner !== this.#owner']],
+  ['anchor_source', ['anchor.sourceOwner === a']],
+  ['anchor_envelope', ['e === a.#envelope']],
+  ['anchor_registry', ['anchor.registry === a.#registry']],
+  ['anchor_table', ['anchor.table === a.#table', 'anchor.table === a.#issuedTable']],
+  ['anchor_view', ['anchor.view === a.#view', 'anchor.view === a.#issuedView']],
+  ['anchor_declarations', ['anchor.declarations === a.#issuedDeclarations']],
+  ['anchor_origin', ['anchor.tableOrigin === a.#tableOrigin']],
+  ['claim_copy', ['c !== this.#issuedClaim']],
+  ['claim_owner', ['c.owner !== this.#owner']],
+  ['claim_source', ['c.source !== this.#source']],
+  ['claim_anchor', ['c.anchor !== a']],
+  ['claim_receiver', ['c.receiver !== this.#receiver']],
+  ['claim_brand', ['c[TRANSFER_BRAND] !== true']],
+  ['claim_state', ["c.state !== 'unused'"]],
+  ...['copy', 'role', 'owner', 'source', 'anchor', 'claim', 'receiver', 'payload'].map(field => [
+    `pending_${field}`, [field === 'copy' ? 'shell !== this.#issuedShells[role]'
+      : field === 'role' ? 'shell.role !== role' : field === 'owner' ? 'shell.owner !== this.#owner'
+        : field === 'source' ? 'shell.source !== this.#source' : field === 'anchor' ? 'shell.anchor !== a'
+          : field === 'claim' ? 'shell.claim !== c' : field === 'receiver' ? 'shell.receiver !== this.#receiver'
+            : 'shell.payload !== undefined'],
+  ]),
+];
+for (const [i, [selector, clauses]] of transferControls.entries()) {
+  let text = source;
+  for (const clause of clauses) {
+    assert.equal(text.split(clause).length, 2, `transfer mutation drift: ${selector}`);
+    text = text.replace(clause, clause.includes(' !== ') ? 'false' : 'true');
+  }
+  const m = await compile(text, `transfer-mutant-${i}.js`);
+  const a = m.createCanonicalSupplyTransferFake(selector);
+  assert.notEqual(a.prepare().reason, 'binding_mismatch', `surviving transfer control: ${selector}`);
+  a.finish();
+}
+const transferRetirementControls = [
+  ['this.#anchor = undefined; this.#issuedAnchor = undefined;', 'this.#issuedAnchor = undefined;'],
+  ['this.#anchor = undefined; this.#issuedAnchor = undefined;', 'this.#anchor = undefined;'],
+  ['this.#claim = undefined; this.#issuedClaim = undefined;', 'this.#issuedClaim = undefined;'],
+  ['this.#claim = undefined; this.#issuedClaim = undefined;', 'this.#claim = undefined;'],
+  ['this.#shells = {}; this.#issuedShells = {};', 'this.#issuedShells = {};'],
+  ['this.#shells = {}; this.#issuedShells = {};', 'this.#shells = {};'],
+  ['this.clearPreparatory(); this.#source.finish();', 'this.#source.finish(); this.clearPreparatory();'],
+];
+for (const [i, [from, to]] of transferRetirementControls.entries()) {
+  assert.equal(source.split(from).length, 2, `transfer retirement site drift: ${i}`);
+  const m = await compile(source.replace(from, to), `transfer-retirement-mutant-${i}.js`);
+  const a = m.createCanonicalSupplyTransferFake(); a.prepare();
+  const end = a.finish();
+  assert.equal(!end.retainedAnchor && !end.retainedClaim && end.retainedShells === 0
+    && end.anchorRetiredWithBorrowLive === true, false, `surviving transfer retirement control: ${i}`);
+}
 const supplyControls = [
   ['source binding unchecked', [['binding.source !== registry.source', 'false']], 'record_swap',
     s => s.prepareSupply().reason === 'binding_mismatch'],
@@ -101,5 +163,7 @@ for (const [i, [name, from, to, holds]] of controls.entries()) {
   assert.equal(holds(mutant), false, `surviving negative control: ${name}`);
 }
 console.log(JSON.stringify({ compiled: true, sourceGrid: 75, rejectedMutations: controls.length,
-  supplyMutationControls: supplyControls.length, compatibilityFactories: 4, cExecution: 'not_connected', authority: 'none' }));
+  supplyMutationControls: supplyControls.length, transferMutationControls: transferControls.length,
+  transferRetirementControls: transferRetirementControls.length,
+  compatibilityFactories: 5, cExecution: 'not_connected', authority: 'none' }));
 } finally { rmSync(scratch, { recursive: true, force: true }); }

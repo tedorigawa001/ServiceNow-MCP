@@ -1,5 +1,7 @@
 # WF-B (C)：同snapshot読取接続の所有・停止契約の差分設計
 
+第1段階実装追記（2026-11-09）: [下位移譲の合成preflight](BEST_PRACTICE_WFB_SUPPLY_TRANSFER_DESIGN.md)で、同ownerのanchor・未消費claimと空shellの結合・消費前拒否を実装した。anchorはstrong referenceとして保持を診断し、固定finishではそれらをclearしてから旧borrow終端へ進む。通常slotからの移動・公開・移譲後discard／未確認保持は未接続。[検証記録](E2E_BEST_PRACTICE_WFB_SUPPLY_TRANSFER_PREFLIGHT_2026-11-09.md)。
+
 差分設計追記（2026-11-08）: [非実行供給の下位移譲・pending／holder・固定discard](BEST_PRACTICE_WFB_SUPPLY_TRANSFER_DESIGN.md)で、close後も保持する検査用identityと通常利用権を分け、各失敗位置の責任者・未退役責務の先行保持・内側finish／borrow退役を保留する条件を具体化した。resource cleanup確認やkernel_ownedへ昇格しない。設計のみで実装状態は変わらない。
 
 供給準備追記（2026-11-08）: [同canonical供給の非実行実装](BEST_PRACTICE_WFB_CANONICAL_SUPPLY_VIEW_DESIGN.md)で、同C constructionのprepared／borrowから全file表・viewを準備する新合成ownerを追加した。部分参照の固定clear、二重準備時の親停止、正規closeと先行理由、borrow後の失敗Snapshot退役を確認する。[検証記録](E2E_BEST_PRACTICE_WFB_CANONICAL_SUPPLY_VIEW_2026-11-08.md)。旧C-start facadeは不変で、移譲・resource取得・cleanup・実budgetは未開始のまま。

@@ -1,5 +1,7 @@
 # WF-B (C)：同canonical fileのprivate供給表・非実行viewの差分設計
 
+第1段階実装追記（2026-11-09）: [下位移譲設計§12](BEST_PRACTICE_WFB_SUPPLY_TRANSFER_DESIGN.md#12-第1段階の実装境界draft-03)の合成preflightに、同発行物anchor・未消費claim・空pending／holder／failure shellを追加した。旧供給準備入口はtransferClaim=not_issuedのまま。通常slotの移動・holder公開・C実行は0。[検証記録](E2E_BEST_PRACTICE_WFB_SUPPLY_TRANSFER_PREFLIGHT_2026-11-09.md)。
+
 差分設計追記（2026-11-08）: [下位移譲claim・pending／非実行holder](BEST_PRACTICE_WFB_SUPPLY_TRANSFER_DESIGN.md)へ、同発行物anchorと通常利用slotの分離、claim消費点／private公開点、固定discard・未確認保持・borrow退役保留を具体化した。既存clear／validate／finishを移動へ直接流用せず、新段階の所有・検査境界を分ける。設計のみで移譲claim・C実行は未実装のまま。
 
 Version: draft-0.5 / Date: 2026-11-08 / 読み取り照合基準HEAD: `e1b3978`（レビュー修正基準HEAD: `fc0c2f3`、配置移行基準HEAD: `3a6b401`、供給準備実装基準HEAD: `98702a9`、供給準備レビュー修正基準HEAD: `70a8d0c`）。
