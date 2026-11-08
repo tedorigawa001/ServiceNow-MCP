@@ -1,6 +1,8 @@
 # WF-B (C)：同snapshot読取接続の所有・停止契約の差分設計
 
-Version: draft-0.1 / Date: 2026-11-08 / 読み取り照合基準HEAD: `e662a21`。
+Version: draft-0.2 / Date: 2026-11-08 / 読み取り照合基準HEAD: `e662a21` / レビュー修正の基準HEAD: `a4fd836`。
+
+draft-0.1のレビュー修正: 読取側`stopReason=supply_closed`を、現行Supplyがclose後のcheckに返す同名の非記録戻り値と別物だと明記した（§4／§6）。cleanup custodyの固定1slotを開始順序の先行確保対象に加え、確保失敗をopen0の固定拒否としてSL03へ含めた（§3／§5／§8）。§6のcleanup行で、試行全体の`cleanupReason`（`none`／`close_unconfirmed`）とfile slotの`cleanup`（`closed_confirmed`等）を分けた。設計のみで、実装状態は変わらない。
 
 Status: **設計のみ。同snapshotへの読取接続は未実装。** 親は[private読取・hash設計](BEST_PRACTICE_WFB_PRIVATE_READ_HASH_DESIGN.md)と[固定辞書供給設計](BEST_PRACTICE_WFB_FIXED_DICTIONARY_SUPPLY_DESIGN.md)。既存[(B)の候補確定・容量契約](BEST_PRACTICE_WFB_SCRATCH_CANDIDATE_DESIGN.md)を維持する。[最大8MiBの合成検証](E2E_BEST_PRACTICE_WFB_READ_HASH_CAPACITY_2026-11-08.md)は独立assemblyの保証であり、同snapshot接続済みの証拠にはしない。
 
@@ -38,7 +40,7 @@ borrowの退役とSupply所有snapshotの退役も分ける。正常な読取終
 
 固定開始順序は次とする。
 
-1. 同constructionの上位診断／結果保持slotを、借用・resource取得より先に準備する。保持先が作れなければ読取を始めず、既存の供給側失敗診断へ固定拒否を残す。OOM時の必着保証はUnknown。
+1. 同constructionの上位診断／結果保持slotと、§5の非公開cleanup custody固定1slotを、借用・resource取得より先に準備する。いずれかが作れなければ読取を始めず（open0）、既存の供給側失敗診断へ固定拒否を残す。resource取得後にcustodyを追加確保しない。OOM時の必着保証はUnknown。
 2. 供給がopenで、既存の供給失敗がなく、読取利用状態がunusedであることを確認する。同じ同期区間でstartingへ遷移し、生成の再入・第2開始を禁止する。
 3. 同snapshotのprivate継続から検査済みtupleを借用し、参照・合成セット・shapeを検査する。借用・生成失敗でもunusedへ戻さない。
 4. 同sessionのbudget／期限・固定依存・scratch・結果slotを準備し、最後のbinding／停止guard後にactiveへ進める。active受理前のopenは0。
@@ -65,7 +67,7 @@ close要求の同期区間は、同lifecycleのcloseRequested latchを一度だ�
 
 「同期停止」はcloseが戻る前に停止要求を固定する意味で、実行中の同期hashやnative処理を強制中断する保証ではない。単一JS実行文脈でcloseが実際に呼べる位置と、固定合成scriptで停止latchを変える位置を試験で区別する。任意の外部hookを受理区間へ導入しない。
 
-停止理由は正規closeを取消へ丸めず、lifecycleの`close_requested`と、読取の固定`stopReason=supply_closed`（新規内部理由案）を保持する。未完了中は先行primaryがなければ同理由を記録し、全file受理後は内容primaryを変えず終端をstoppedにする。これは現行(B)のreason unionへの実装済み追加ではなく、接続時に型・model・試験を更新すべき差分である。
+停止理由は正規closeを取消へ丸めず、lifecycleの`close_requested`と、読取の固定`stopReason=supply_closed`（新規内部理由案）を保持する。現行Supplyの理由型にも同名の`supply_closed`があるが、これはclose後のcheck／acceptが返す戻り値で、Supplyの先行理由へは記録されない。読取側の停止理由はreadStopにだけ記録する別の値であり、両者を同一の診断として照合・集計しない。未完了中は先行primaryがなければ同理由を記録し、全file受理後は内容primaryを変えず終端をstoppedにする。これは現行(B)のreason unionへの実装済み追加ではなく、接続時に型・model・試験を更新すべき差分である。
 
 ## 5 cleanup後の借用退役と終了責務
 
@@ -86,7 +88,7 @@ cleanup未確認はこの順序から消さない。未取得はno_resourceでcl
 | supplyFirst | 既存supply_invalid／binding_mismatch等を最初の1件として保持。read故障やclose要求で上書きしない |
 | lifecycleFirst | read_prepare_unavailable／binding_mismatch／duplicate_start等の最初の拒否。closeRequestedは別latch |
 | readFirst／readStop | (B)の先行primary／後着制御停止を維持。正規供給closeにはsupply_closedを追加する案 |
-| cleanupReason／cleanupTiming | 1試行の結果と期限内確認を分離。close要求固定やborrow退役をclosed_confirmedへ昇格しない |
+| cleanupReason／cleanupTiming／file slotのcleanup | 試行全体の`cleanupReason`（`none`／`close_unconfirmed`）、期限内確認、file slotごとの`cleanup`（`no_resource`／`closed_confirmed`／`close_unconfirmed`等）を分離。close要求固定やborrow退役をslotの`closed_confirmed`へ昇格しない |
 | terminalDisposition／retirement | 観測済み／停止／責務未確認と、borrow／snapshot退役を分離して保持 |
 
 供給binding不一致が読取開始前ならopen0、供給側の先行理由を上位結果へ保持する。active中の供給不適合なら通常利用を停止し、read側のbinding診断とcleanupを残してから退役する。hash_unavailable後にcloseが来れば、readFirst=hash_unavailable、readStop=supply_closed、cleanupは実際の確認状態を別々に残す。先に取消があればreadStopの最初の取消を保ち、closeRequestedも別に観測できるようにする。
@@ -107,7 +109,7 @@ cleanup未確認はこの順序から消さない。未取得はno_resourceでcl
 |---|---|
 | SL01 | 同snapshot／map／files／rows／canonical fileと、別snapshot・同値copy・元DATA・版混入を対照。開始前混入はopen0、受理直前混入は候補未受理 |
 | SL02 | readonly check反復とread開始を分離。starting／active／unwindingの第2開始は新規budget／open0、元runは停止。terminal後の再開始は固定拒否で既存結果不変 |
-| SL03 | owner／borrow／結果slot／scratch準備の各失敗prefix。開始権をunusedへ戻さず、部分参照・診断を保持して退役し、未開始open0 |
+| SL03 | owner／cleanup custody slot／borrow／結果slot／scratch準備の各失敗prefix。custody確保失敗はresource取得前のopen0固定拒否。開始権をunusedへ戻さず、部分参照・診断を保持して退役し、未開始open0 |
 | SL04 | closeを開始前・準備中・payload前・read中の合成停止点・digest後・close確認後・post直前に配置。停止固定と解放完了を区別し、通常操作再開なし |
 | SL05 | read中のcloseでも返却payloadを同scratchで1回課金・updateし、区間内hook／guard0。次read／final／受理は0。hash故障＋closeの二軸保持 |
 | SL06 | 部分file確定後／全file確定後／終端後のclose。確定済みhash_match保持、未完了と後着停止を区別。終端後の結果追記・二重退役なし |
