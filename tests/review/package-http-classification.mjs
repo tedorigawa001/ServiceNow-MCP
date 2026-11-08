@@ -361,7 +361,7 @@ execFileSync(process.execPath,[fileURLToPath(new URL('fixtures/compiled-release-
 execFileSync(process.execPath,[fileURLToPath(new URL('fixtures/compiled-release-time-handoff.mjs',import.meta.url))],{cwd:root,stdio:'inherit'});
 execFileSync(process.execPath,[fileURLToPath(new URL('fixtures/compiled-prefix-relation.mjs',import.meta.url))],{cwd:root,stdio:'inherit'});
 execFileSync(process.execPath,[fileURLToPath(new URL('fixtures/compiled-destination-preparation.mjs',import.meta.url))],{cwd:root,stdio:'inherit'});
-const compositionMarkers=['snapshot-read-composition-fake','shared-read-hash-kernel-fake','snapshot-read-start-fake','createReadHashFake','createSnapshotReadStartFake'];
+const compositionMarkers=['snapshot-read-composition-fake','shared-read-hash-kernel-fake','snapshot-read-start-fake','canonical-supply-view-fake','createReadHashFake','createSnapshotReadStartFake','createCanonicalSupplyViewFake'];
 const noReadComposition=text=>assert(!compositionMarkers.some(marker=>text.includes(marker)),'WF-B composition/factory leaked into package');
 for(const marker of compositionMarkers)assert.throws(()=>noReadComposition(marker),assert.AssertionError);
 for(const f of pack.files){noReadComposition(f.path);if(f.path.startsWith('dist/')&&/\.(?:js|ts|map)$/.test(f.path))noReadComposition(readFileSync(join(root,f.path),'utf8'));}

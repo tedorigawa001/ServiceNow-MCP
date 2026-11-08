@@ -1,4 +1,4 @@
-/** Physical B/C-start co-location only. No C execution, supply table or view generation. */
+/** Synthetic B and C preparation only. C execution, transfer and formal issuance remain closed. */
 import { createHash, type Hash } from 'node:crypto';
 import { inspectSourceMapDraft } from './source-map-values-core.js';
 
@@ -559,7 +559,30 @@ function fixedData() {
       status: 'unimplemented', bindings: [], missing: ['actual_producer'] })),
     ready: false, runtimeCoverage: 'unknown', nativeCost: 'unknown', entryRequirement: 'unknown', seedRequirement: 'unknown' };
 }
+interface CPreparedContext extends Binding { readonly prepared: object; readonly borrow: Borrow }
+// Module-private closure: no accessor/adopt method is exposed through a diagnostic facade.
+let canonicalSupplyAccess: Readonly<{
+  context(a: CStartAssembly): CPreparedContext | undefined;
+  open(a: CStartAssembly): boolean;
+  fail(a: CStartAssembly, reason: Exclude<LifecycleReason, 'none'>): void;
+  retireFailed(a: CStartAssembly): void;
+}>;
 class CStartAssembly {
+  static {
+    canonicalSupplyAccess = Object.freeze({
+      context(a: CStartAssembly): CPreparedContext | undefined {
+        const map = a.#snapshot?.view(), prepared = a.#prepared;
+        if (a.#terminal || a.#state !== 'prepared' || a.#closeRequested || a.#supplyState !== 'open'
+          || !map || !prepared || !a.#borrow || a.#borrow !== a.#issuedBorrow) return undefined;
+        const binding = a.binding(map);
+        if (!a.#borrow.matches(binding)) return undefined;
+        return Object.freeze({ ...binding, prepared, borrow: a.#borrow });
+      },
+      open: (a: CStartAssembly) => a.#supplyState === 'open' && !a.#closeRequested,
+      fail(a: CStartAssembly, reason: Exclude<LifecycleReason, 'none'>): void { a.fail(reason); },
+      retireFailed(a: CStartAssembly): void { if (a.#terminal && !a.#borrow) a.retireSnapshot(); },
+    });
+  }
   #diagnostic: DiagnosticOwner | undefined;
   #fallbackSupply: SupplyReason = 'none';
   #custody: Readonly<{ state: 'empty' }> | undefined;
@@ -735,5 +758,272 @@ export function createSnapshotReadStartFake(...args: readonly unknown[]) {
   return Object.freeze({ check: () => a.check(),
     begin: (...input: readonly unknown[]) => input.length ? a.rejectArguments() : a.begin(),
     prepare: (...input: readonly unknown[]) => input.length ? a.rejectArguments() : a.prepare(),
+    close: () => a.close(), finish: () => a.finish(), inspect: () => a.inspect() });
+}
+
+interface CanonicalRegistryEntry {
+  readonly file: MapValue['files'][number]; readonly ordinal: number; readonly origin: object; readonly source: SourceRecord;
+}
+interface CanonicalPayloadBinding extends CanonicalRegistryEntry { readonly tableOrigin: object }
+interface CanonicalPayloadTable {
+  readonly envelope: CPreparedContext; readonly origin: object; readonly bindings: readonly CanonicalPayloadBinding[];
+}
+interface CanonicalDeclarationView {
+  readonly file: MapValue['files'][number]; readonly ordinal: number; readonly binding: CanonicalPayloadBinding;
+}
+interface NonExecutingSupplyView {
+  readonly envelope: CPreparedContext; readonly table: CanonicalPayloadTable; readonly declarations: readonly CanonicalDeclarationView[];
+}
+type CanonicalSupplyReason = 'none' | 'binding_mismatch' | 'supply_prepare_unavailable' | 'duplicate_preparation' | 'supply_closed';
+const CANONICAL_CLOSED = Object.freeze({ ...CLOSED, model: 'wfb-canonical-supply-view-fake-C2-1',
+  transferClaim: 'not_issued', viewAuthority: 'none' } as const);
+const canonicalSupplyScenarios: readonly string[] = Object.freeze([...cStartScenarios, 'record_swap',
+  'envelope_failure', 'origin_failure', 'table_failure', 'view_failure', 'post_failure', 'reentrant_preparation',
+  'close_during_registry', 'close_before_post',
+  'envelope_owner_mix', 'envelope_snapshot_mix', 'envelope_set_mix', 'envelope_map_copy', 'envelope_map_redecode',
+  'envelope_raw_map', 'envelope_files_copy', 'envelope_rows_copy', 'envelope_file_copy', 'envelope_ordinal_mix',
+  'envelope_session_mix', 'envelope_budget_mix', 'envelope_borrow_copy', 'envelope_prepared_copy',
+  'binding_missing', 'binding_duplicate', 'binding_extra', 'binding_order', 'binding_ordinal', 'binding_file_copy',
+  'binding_legacy', 'origin_swap', 'record_origin_swap', 'table_copy', 'view_copy', 'foreign_table', 'foreign_view',
+  'source_zero', 'source_short', 'source_extra', 'source_abd', 'source_shrink', 'source_grow',
+  ...Array.from({ length: 4 }, (_, i) => [`registry_${i}_failure`, `bindings_${i}_failure`, `declarations_${i}_failure`]).flat()]);
+class CanonicalSupplyAssembly {
+  readonly #root: CStartAssembly;
+  #state: 'unused' | 'preparing' | 'prepared' | 'discarded' = 'unused';
+  #first: CanonicalSupplyReason = 'none';
+  #envelope: CPreparedContext | undefined;
+  #registry: readonly CanonicalRegistryEntry[] | undefined;
+  #buildingRegistry: CanonicalRegistryEntry[] | undefined;
+  #buildingBindings: CanonicalPayloadBinding[] | undefined;
+  #buildingDeclarations: CanonicalDeclarationView[] | undefined;
+  #table: CanonicalPayloadTable | undefined; #issuedTable: CanonicalPayloadTable | undefined;
+  #view: NonExecutingSupplyView | undefined; #issuedView: NonExecutingSupplyView | undefined;
+  #issuedDeclarations: readonly CanonicalDeclarationView[] | undefined;
+  #tableOrigin: object | undefined;
+  #terminal: ReturnType<CanonicalSupplyAssembly['snapshot']> | undefined;
+  readonly #retirementOrder: string[] = [];
+  readonly #counts = { preparationClaims: 0, registryRecords: 0, bindings: 0, declarations: 0, tables: 0, views: 0,
+    validationPasses: 0, fileChecks: 0, discardPasses: 0 };
+  constructor(private readonly scenario: string, admitted: boolean) {
+    this.#root = new CStartAssembly((cStartScenarios as readonly string[]).includes(scenario) ? scenario as CStartScenario : 'normal', admitted);
+  }
+  private reply(reason?: Exclude<CanonicalSupplyReason, 'none'> | 'read_already_used') {
+    return Object.freeze(reason ? { ...CANONICAL_CLOSED, ok: false, reason } : { ...CANONICAL_CLOSED, ok: true });
+  }
+  private clear(): void {
+    if (this.#envelope || this.#registry || this.#table || this.#view || this.#buildingRegistry
+      || this.#buildingBindings || this.#buildingDeclarations) {
+      this.#counts.discardPasses++; this.#retirementOrder.push('supply_references_cleared');
+    }
+    this.#envelope = undefined; this.#registry = undefined; this.#table = undefined; this.#issuedTable = undefined;
+    this.#view = undefined; this.#issuedView = undefined; this.#issuedDeclarations = undefined;
+    this.#buildingRegistry = undefined; this.#buildingBindings = undefined; this.#buildingDeclarations = undefined;
+    this.#tableOrigin = undefined; this.#state = 'discarded';
+  }
+  private fail(reason: Exclude<CanonicalSupplyReason, 'none'>) {
+    if (this.#first === 'none') this.#first = reason;
+    if (reason !== 'supply_closed' && this.#root.inspect().supplyFirst === 'none') canonicalSupplyAccess.fail(this.#root,
+      reason === 'supply_prepare_unavailable' ? 'read_prepare_unavailable' : 'binding_mismatch');
+    this.clear(); return this.reply(this.#first);
+  }
+  private baseOperation(kind: 'begin' | 'prepare') {
+    if (this.#terminal) return this.reply('read_already_used');
+    if (this.#first !== 'none') return this.reply(this.#first);
+    const result = this.#root[kind]();
+    if (result.ok) return this.reply();
+    return this.fail(result.reason === 'supply_closed' ? 'supply_closed'
+      : result.reason === 'supply_invalid' || result.reason === 'read_prepare_unavailable' ? 'supply_prepare_unavailable' : 'binding_mismatch');
+  }
+  begin() { return this.baseOperation('begin'); }
+  prepare() { return this.baseOperation('prepare'); }
+  check() {
+    if (this.#first !== 'none') return this.reply(this.#first);
+    const result = this.#root.check();
+    return result.ok ? this.reply() : this.reply(result.reason === 'supply_closed' ? 'supply_closed'
+      : result.reason === 'supply_invalid' ? 'supply_prepare_unavailable' : 'binding_mismatch');
+  }
+  private fault(point: string): void { if (this.scenario === point + '_failure') throw Error('synthetic_preparation'); }
+  private sourceRecord(origin: object, ordinal: number, normal: readonly number[]): SourceRecord {
+    let bytes = normal, initialLength = 3;
+    const events: SourceEvent[] = [];
+    if (ordinal === 0) {
+      if (this.scenario === 'source_zero') { bytes = Object.freeze([]); initialLength = 0; }
+      if (this.scenario === 'source_short') { bytes = Object.freeze([97, 98]); initialLength = 2; }
+      if (this.scenario === 'source_extra') { bytes = Object.freeze([97, 98, 99, 120]); initialLength = 4; }
+      if (this.scenario === 'source_abd') bytes = Object.freeze([97, 98, 100]);
+      if (this.scenario === 'source_shrink') events.push({ at: 'read', offset: 0, length: 2, stamp: 0, relative: false });
+      if (this.scenario === 'source_grow') {
+        bytes = Object.freeze([97, 98, 99, 120]); events.push({ at: 'read', offset: 3, length: 4, stamp: 0, relative: false });
+      }
+    }
+    return Object.freeze({ origin, bytes, initialLength, maxReturn: 65_536, events: Object.freeze(events.map(e => Object.freeze(e))) });
+  }
+  private probeEnvelope(e: CPreparedContext): CPreparedContext {
+    switch (this.scenario) {
+      case 'envelope_owner_mix': return Object.freeze({ ...e, owner: Object.freeze({}) });
+      case 'envelope_snapshot_mix': return Object.freeze({ ...e, snapshot: new Snapshot(e.map) });
+      case 'envelope_set_mix': return Object.freeze({ ...e, setId: 'synthetic-foreign-set' });
+      case 'envelope_map_copy': return Object.freeze({ ...e, map: Object.freeze({ ...e.map }) });
+      case 'envelope_map_redecode': {
+        const copy = inspectSourceMapDraft(e.map);
+        if (!copy.ok) throw Error('synthetic_control');
+        return Object.freeze({ ...e, map: copy.value });
+      }
+      case 'envelope_raw_map': return Object.freeze({ ...e, map: fixedData() as MapValue });
+      case 'envelope_files_copy': return Object.freeze({ ...e, files: Object.freeze([...e.files]) });
+      case 'envelope_rows_copy': return Object.freeze({ ...e, rows: Object.freeze([...e.rows]) });
+      case 'envelope_file_copy': return Object.freeze({ ...e, file: Object.freeze({ ...e.file }) });
+      case 'envelope_ordinal_mix': return Object.freeze({ ...e, ordinal: 1 });
+      case 'envelope_session_mix': return Object.freeze({ ...e, session: Object.freeze({}) });
+      case 'envelope_budget_mix': return Object.freeze({ ...e, budget: Object.freeze({}) });
+      case 'envelope_borrow_copy': return Object.freeze({ ...e, borrow: new Borrow(e) });
+      case 'envelope_prepared_copy': return Object.freeze({ ...e, prepared: Object.freeze({ ...e.prepared }) });
+      default: return e;
+    }
+  }
+  private probeBindings(items: readonly CanonicalPayloadBinding[]): readonly CanonicalPayloadBinding[] {
+    const values = [...items];
+    switch (this.scenario) {
+      case 'binding_missing': values.pop(); break;
+      case 'binding_extra': values.push(values[0]); break;
+      case 'binding_duplicate': values[1] = values[0]; break;
+      case 'binding_order': [values[0], values[1]] = [values[1], values[0]]; break;
+      case 'binding_ordinal': values[0] = Object.freeze({ ...values[0], ordinal: 1 }); break;
+      case 'binding_file_copy': values[0] = Object.freeze({ ...values[0], file: Object.freeze({ ...values[0].file }) }); break;
+      case 'binding_legacy': {
+        const legacy: File = Object.freeze({ id: 'F01', declaredBytes: 3, digest: ABC, origin: Object.freeze({}) });
+        values[0] = Object.freeze({ ...values[0], file: legacy as unknown as MapValue['files'][number] }); break;
+      }
+    }
+    return Object.freeze(values);
+  }
+  private probeIssued(): void {
+    if (this.scenario === 'table_copy') this.#table = Object.freeze({ ...this.#table! });
+    if (this.scenario === 'view_copy') this.#view = Object.freeze({ ...this.#view! });
+    if (this.scenario === 'foreign_table' || this.scenario === 'foreign_view') {
+      const other = new CanonicalSupplyAssembly('normal', true); other.begin(); other.prepare(); other.prepareSupply();
+      if (this.scenario === 'foreign_table') this.#table = other.#table;
+      else this.#view = other.#view;
+      other.finish();
+    }
+  }
+  private validate(): boolean {
+    this.#counts.validationPasses++;
+    const e = this.#envelope, now = canonicalSupplyAccess.context(this.#root), t = this.#table, v = this.#view, r = this.#registry;
+    if (!e || !now || !t || !v || !r || t !== this.#issuedTable || v !== this.#issuedView
+      || t.envelope !== e || v.envelope !== e || v.table !== t || t.origin !== this.#tableOrigin
+      || v.declarations !== this.#issuedDeclarations || e.owner !== now.owner || e.snapshot !== now.snapshot
+      || e.setId !== now.setId || e.map !== now.map || e.files !== now.files || e.rows !== now.rows
+      || e.file !== now.file || e.ordinal !== now.ordinal || e.session !== now.session || e.budget !== now.budget
+      || e.borrow !== now.borrow || e.prepared !== now.prepared || !e.borrow.matches(e)
+      || t.bindings.length !== e.files.length || r.length !== e.files.length || v.declarations.length !== e.files.length
+      || r.length > 32 || e.rows.length !== 12) return false;
+    const origins = new Set<object>();
+    for (let i = 0; i < r.length; i++) {
+      this.#counts.fileChecks++;
+      const registry = r[i], binding = t.bindings[i], declaration = v.declarations[i], file = e.files[i];
+      if (registry.file !== file || registry.ordinal !== i || origins.has(registry.origin)
+        || registry.source.origin !== registry.origin || !validRecord(registry.source)
+        || registry.source.bytes.length > file.expectedBytes + 1 || binding.file !== file || binding.ordinal !== i
+        || binding.tableOrigin !== t.origin || binding.origin !== registry.origin || binding.source !== registry.source
+        || declaration.file !== file || declaration.ordinal !== i || declaration.binding !== binding) return false;
+      origins.add(registry.origin);
+    }
+    return true;
+  }
+  prepareSupply() {
+    if (this.#terminal) return this.reply('read_already_used');
+    if (this.#first !== 'none') return this.reply(this.#first);
+    if (this.#root.inspect().supplyFirst !== 'none') return this.fail('supply_prepare_unavailable');
+    if (!canonicalSupplyAccess.open(this.#root)) return this.fail('supply_closed');
+    const canonical = canonicalSupplyAccess.context(this.#root);
+    if (!canonical) return this.fail('binding_mismatch');
+    if (this.#state !== 'unused') return this.fail('duplicate_preparation');
+    this.#state = 'preparing'; this.#counts.preparationClaims++;
+    try {
+      const envelope = this.probeEnvelope(canonical);
+      this.fault('envelope'); this.#envelope = envelope;
+      this.fault('origin'); this.#tableOrigin = Object.freeze({});
+      if (this.scenario === 'reentrant_preparation') { this.prepareSupply(); return this.reply(this.#first as Exclude<CanonicalSupplyReason, 'none'>); }
+      const bytes = Object.freeze([97, 98, 99]);
+      this.#buildingRegistry = [];
+      for (let ordinal = 0; ordinal < envelope.files.length; ordinal++) {
+        this.fault(`registry_${ordinal}`);
+        const file = envelope.files[ordinal];
+        const origin = Object.freeze({});
+        const source = this.sourceRecord(origin, ordinal, bytes);
+        this.#buildingRegistry.push(Object.freeze({ file, ordinal, origin, source })); this.#counts.registryRecords++;
+        if (this.scenario === 'close_during_registry') { this.close(); return this.reply('supply_closed'); }
+      }
+      this.#registry = Object.freeze(this.#buildingRegistry); this.#buildingRegistry = undefined;
+      this.#buildingBindings = [];
+      for (let i = 0; i < this.#registry.length; i++) {
+        this.fault(`bindings_${i}`); const r = this.#registry[i];
+        const swapped = this.#registry[i < 2 ? 1 - i : i];
+        this.#buildingBindings.push(Object.freeze({ ...r,
+          source: (this.scenario === 'record_swap' || this.scenario === 'record_origin_swap') && i < 2 ? swapped.source : r.source,
+          origin: (this.scenario === 'origin_swap' || this.scenario === 'record_origin_swap') && i < 2 ? swapped.origin : r.origin,
+          tableOrigin: this.#tableOrigin! })); this.#counts.bindings++;
+      }
+      const bindings = this.probeBindings(Object.freeze(this.#buildingBindings)); this.#buildingBindings = undefined;
+      this.fault('table');
+      this.#table = Object.freeze({ envelope, origin: this.#tableOrigin, bindings }); this.#issuedTable = this.#table;
+      this.#counts.tables++;
+      this.#buildingDeclarations = [];
+      for (let i = 0; i < bindings.length; i++) {
+        this.fault(`declarations_${i}`); const binding = bindings[i];
+        this.#buildingDeclarations.push(Object.freeze({ file: binding.file, ordinal: binding.ordinal, binding })); this.#counts.declarations++;
+      }
+      const declarations = Object.freeze(this.#buildingDeclarations); this.#buildingDeclarations = undefined;
+      this.#issuedDeclarations = declarations;
+      this.fault('view');
+      this.#view = Object.freeze({ envelope, table: this.#table, declarations }); this.#issuedView = this.#view;
+      this.#counts.views++;
+      this.probeIssued();
+      if (this.scenario === 'close_before_post') { this.close(); return this.reply('supply_closed'); }
+      this.fault('post');
+      if (!this.validate()) return this.fail('binding_mismatch');
+      this.#state = 'prepared'; return this.reply();
+    } catch { return this.fail('supply_prepare_unavailable'); }
+  }
+  close() {
+    const reply = this.#root.close();
+    if (!this.#terminal) { if (this.#counts.preparationClaims && this.#first === 'none') this.#first = 'supply_closed'; this.clear(); }
+    return reply;
+  }
+  private snapshot() {
+    const root = this.#root.inspect();
+    return Object.freeze({ ...CANONICAL_CLOSED, firstReason: this.#first, preparationState: this.#state,
+      retainedRegistry: !!this.#registry, retainedTable: !!this.#table, retainedView: !!this.#view,
+      retainedEnvelope: !!this.#envelope, retainedIssuedTable: !!this.#issuedTable, retainedIssuedView: !!this.#issuedView,
+      retainedIssuedDeclarations: !!this.#issuedDeclarations,
+      retainedBuilding: !!this.#buildingRegistry || !!this.#buildingBindings || !!this.#buildingDeclarations,
+      fileSlots: Object.freeze(this.#view?.declarations.map(d => Object.freeze({ id: d.file.id, ordinal: d.ordinal })) ?? []),
+      rowStates: Object.freeze(this.#envelope?.rows.map(r => Object.freeze({ id: r.id, status: r.status, missingCount: r.missing.length })) ?? []),
+      sourceShapes: Object.freeze(this.#registry?.map(r => Object.freeze({ id: r.file.id, declaredBytes: r.file.expectedBytes,
+        actualBytes: r.source.initialLength, backingBytes: r.source.bytes.length, eventCount: r.source.events.length })) ?? []),
+      counts: Object.freeze({ ...this.#counts }), retirementOrder: Object.freeze([...this.#retirementOrder]), root });
+  }
+  inspect() { return this.#terminal ?? this.snapshot(); }
+  finish() {
+    if (this.#terminal) return this.#terminal;
+    this.clear();
+    const before = this.#root.inspect(); this.#root.finish();
+    if (this.#first !== 'none') canonicalSupplyAccess.retireFailed(this.#root);
+    const after = this.#root.inspect();
+    if (before.retainedBorrow && !after.retainedBorrow) this.#retirementOrder.push('borrow_retired');
+    if (before.retainedSnapshot && !after.retainedSnapshot) this.#retirementOrder.push('snapshot_retired');
+    this.#terminal = this.snapshot(); return this.#terminal;
+  }
+  rejectArguments() { return this.#terminal ? this.reply('read_already_used') : this.fail('binding_mismatch'); }
+}
+export function createCanonicalSupplyViewFake(...args: readonly unknown[]) {
+  const input = args.length === 0 ? 'normal' : args[0];
+  const admitted = args.length <= 1 && typeof input === 'string' && (canonicalSupplyScenarios as readonly string[]).includes(input);
+  const a = new CanonicalSupplyAssembly(admitted ? input as string : 'normal', admitted);
+  return Object.freeze({ check: () => a.check(),
+    begin: (...input: readonly unknown[]) => input.length ? a.rejectArguments() : a.begin(),
+    prepare: (...input: readonly unknown[]) => input.length ? a.rejectArguments() : a.prepare(),
+    prepareSupply: (...input: readonly unknown[]) => input.length ? a.rejectArguments() : a.prepareSupply(),
     close: () => a.close(), finish: () => a.finish(), inspect: () => a.inspect() });
 }

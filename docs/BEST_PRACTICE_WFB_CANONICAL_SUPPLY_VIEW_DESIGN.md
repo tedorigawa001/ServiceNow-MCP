@@ -1,14 +1,16 @@
 # WF-B (C)：同canonical fileのprivate供給表・非実行viewの差分設計
 
-Version: draft-0.3 / Date: 2026-11-08 / 読み取り照合基準HEAD: `e1b3978`（レビュー修正基準HEAD: `fc0c2f3`、配置移行基準HEAD: `3a6b401`）。
+Version: draft-0.4 / Date: 2026-11-08 / 読み取り照合基準HEAD: `e1b3978`（レビュー修正基準HEAD: `fc0c2f3`、配置移行基準HEAD: `3a6b401`、供給準備実装基準HEAD: `98702a9`）。
+
+draft-0.4: §9手順2の正規registry・全fileのprivate供給表・非実行viewと供給準備claimを、新しい合成診断factoryだけへ実装した。同moduleのprivate継続から同C constructionのprepared／borrowを参照し、旧公開診断から再構築しない。[検証記録](E2E_BEST_PRACTICE_WFB_CANONICAL_SUPPLY_VIEW_2026-11-08.md)。下位移譲claim・C実行・実budget／停止guard接続は未実装。
 
 draft-0.3: §9手順1の配置移行だけを実装した。B本体はimport／先頭コメントを除き同一、C-startは衝突回避の内部名3つだけを変更し、同composition moduleへ移した。旧入口のexport・factory参照・既存結果を維持する。compiled対照も§2.2どおりscratch ESMへ移行した。[検証記録](E2E_BEST_PRACTICE_WFB_COMPOSITION_MOVE_2026-11-08.md)。供給表・view・下位移譲claimは生成しない。
 
 draft-0.2のレビュー修正：配置移動時に既存compiled対照（`compiled-declared-actual.mjs`）の変異元source読込・module解決・export集合検査が壊れる点を§2.2に明記し、§9手順1の受入条件へ追加した。
 
-Status: **配置移行だけ実装。private供給表・非実行view・下位移譲claimは未実装。** 親は[共通kernelのprivate供給境界](BEST_PRACTICE_WFB_PRIVATE_KERNEL_SUPPLY_DESIGN.md)と[同snapshotの所有・停止契約](BEST_PRACTICE_WFB_SNAPSHOT_READ_LIFECYCLE_DESIGN.md)。[宣言／actual分離](BEST_PRACTICE_WFB_DECLARED_ACTUAL_SCRIPT_DESIGN.md)と[その検証記録](E2E_BEST_PRACTICE_WFB_DECLARED_ACTUAL_2026-11-08.md)はlegacy Bの合成保証として維持し、Cへの供給済み証拠にしない。
+Status: **合成registry／供給表／非実行view・準備claimまで実装。下位移譲・C実行は未実装。** 親は[共通kernelのprivate供給境界](BEST_PRACTICE_WFB_PRIVATE_KERNEL_SUPPLY_DESIGN.md)と[同snapshotの所有・停止契約](BEST_PRACTICE_WFB_SNAPSHOT_READ_LIFECYCLE_DESIGN.md)。[宣言／actual分離](BEST_PRACTICE_WFB_DECLARED_ACTUAL_SCRIPT_DESIGN.md)と[その検証記録](E2E_BEST_PRACTICE_WFB_DECLARED_ACTUAL_2026-11-08.md)はlegacy Bの合成保証として維持し、Cからkernelへの供給済み証拠にしない。
 
-C実行入口・正式発行口閉鎖、全体受付無効・Unknown・VM／監視／telemetry調査保留を維持する。今回は合成fixtureの配置移行・検証と文書だけ。実期待値pin・実source照合・S発行・core接続・実接続・実通信・設定変更・Pushは行わない。以下の供給型・状態名は未実装の内部案で、既存API・診断型・権限の追加ではない。
+C実行入口・正式発行口閉鎖、全体受付無効・Unknown・VM／監視／telemetry調査保留を維持する。今回は合成fixtureの供給準備・検証と文書だけ。実期待値pin・実source照合・S発行・core接続・実接続・実通信・設定変更・Pushは行わない。§5の下位移譲型・状態は未実装の内部案で、実行権限の追加ではない。
 
 ## 1 現行との差分と到達させない状態
 
@@ -139,7 +141,7 @@ supplyFirst／lifecycleFirst／readFirst／readStop・参照退役状態を別�
 
 現行Cのbudget／session origin一致はidentityだけを示す。本段階で実clockを呼んだ・期限を守ることを実証したとはしない。将来の同budget／停止owner連結は別工程で、既存BのD_stop900／D_end1000・cap・guard上界131,524を延長・再計算して接続費を吸収しない。C接続全体のguard／CPU／heap／native上界、実E／Sは未確認。
 
-## 8 独立合成受入条件（未実施）
+## 8 独立合成受入条件（実施範囲は§10）
 
 | ID | 必須対照 |
 |---|---|
@@ -165,4 +167,22 @@ supplyFirst／lifecycleFirst／readFirst／readStop・参照退役状態を別�
 3. 別brandの非実行移譲claim・pending／holder・固定discardを実装し、CV08〜12と失敗時診断／寿命を確認する。kernel生成／受領は0のまま。
 4. 同budget／停止owner／非空cleanup custodyと接続費目の設計・検証を別途完了してから、改めてC→kernelの実行接続を検討する。非実行holderをそのまま昇格することはしない。
 
-手順1の配置移行と旧保証の再検証だけを実施した。手順2以降、CV01〜11とCV12の供給／view固有部分は未実施であり、物理的な同居をC接続完了にしない。実期待値pin・実source照合・行hash集約・S発行・core／runtime接続は別範囲。C実行入口・正式発行口閉鎖、全体受付無効・Unknown・調査保留を維持する。
+手順1の配置移行と手順2の非実行供給準備を実施した。手順3以降の下位移譲・pending／holder、実budget／stop／custody接続は未実施であり、view準備をC接続完了にしない。実期待値pin・実source照合・行hash集約・S発行・core／runtime接続は別範囲。C実行入口・正式発行口閉鎖、全体受付無効・Unknown・調査保留を維持する。
+
+## 10 draft-0.4の供給準備実装
+
+`snapshot-read-composition-fake.ts`にprivateなCanonicalSupplyAssembly／registry／binding／table／viewを追加した。module内の非export継続`canonicalSupplyAccess`はCStartAssemblyのstatic blockで設定し、同instanceのprivate prepared／Snapshot／Borrowとliveなtupleを参照する。公開facade・診断summaryからの採用、genericなconstructor／adopt helper・外部friend登録口は作らない。旧C-startのinstance field・既存method本体とB本体は変更しない。moduleのstatic定義は増えており、その初期化費用を既存Bのguardへ計上済みとはしない。
+
+追加exportは固定selector限定の`createCanonicalSupplyViewFake`だけで、薄い`canonical-supply-view-fake.ts`からも同関数をre-exportする。composition moduleは合計3診断factoryとなるが、旧B／C-startの3入口は従来の単独export／facadeのまま。新facadeはcheck／begin／prepare／prepareSupply／close／finish／inspectだけで、viewそのもの・移譲／take／execute操作を返さない。
+
+新rootは同CStartAssemblyによるstrict検査1回・Snapshot1つ・開始claim1回・borrow／preparedを再利用する。prepareSupplyはunused→preparingの同期置換で専用claimを1回消費し、全4fileを原順序でregistry→bindings→table→declarations→viewへ構築する。各部分生成物はprivate building slotへ直ちに保持し、失敗時に通常・発行済み参照と共に消去する。
+
+正規registryを候補表とは別に固定し、同tuple・同発行table／view・各file／ordinal／record／source originをpostで全件照合する。viewの期待値は同canonical fileへの参照でありscalar cacheを持たない。同内容のsourceの交換でも拒否する。actual0／2／4byte・同長abd・before後の縮伸scriptは、構築subset内ならidentity検査を通るがhashは実行しない。sourceShapes診断のbyte数は初期可視長／backing容量で、受信済量やhash済量ではない。
+
+二重・再入準備はduplicate_preparationを新診断へ固定し、親C lifecycleも停止させる。source／owner生成失敗では親supplyFirst・読取unusedを保持し、準備claim0、未開始readStopを新設しない。正規closeはsupply_closedとしてbinding拒否と分け、未受理の表／viewを同期破棄する。失敗後の再準備・新origin・第2budget生成はない。
+
+新ownerのfinishは、供給参照clear → 内側Cの非実行終端固定／borrow退役 → 必要時Snapshot退役 → 外側の不変診断固定、の順とする。生成失敗時は専用private継続でborrow退役後のSnapshotも退役し、偽のclose要求／readStopは追加しない。正常discardでは従来どおりreadonly用Snapshotを残せるが、再準備は許さない。retirementOrderは最大3件の固定論理イベントで、GC／物理解放・resource cleanup確認ではない。
+
+CV01〜07、CV09の準備段階close、CV10の部分生成参照／borrow退役、CV11の非実行部分とCV12の旧互換・compiled／梱包を確認した。CV08と移譲後のCV09〜11、未確認責務のpending／holder保持・retirement unconfirmedは手順3に残す。生成17prefix・長さ4の625操作列を独立oracle／不変条件で確認し、compiledでは従来8変異に新供給6変異を加えた。
+
+新countsは生成／検査の局所計数（validationPassesは全表post検査）であり、全CPU・確保試行・追加private context参照や負対照copyの費用を網羅したwork上界ではない。rootのopaque budgetは引き続きidentityだけ。実会計・実clock・共有期限・実E／Sの導出はUnknownのままとする。

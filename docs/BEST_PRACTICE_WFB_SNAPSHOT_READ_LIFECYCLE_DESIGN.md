@@ -1,5 +1,7 @@
 # WF-B (C)：同snapshot読取接続の所有・停止契約の差分設計
 
+供給準備追記（2026-11-08）: [同canonical供給の非実行実装](BEST_PRACTICE_WFB_CANONICAL_SUPPLY_VIEW_DESIGN.md)で、同C constructionのprepared／borrowから全file表・viewを準備する新合成ownerを追加した。部分参照の固定clear、二重準備時の親停止、正規closeと先行理由、borrow後の失敗Snapshot退役を確認する。[検証記録](E2E_BEST_PRACTICE_WFB_CANONICAL_SUPPLY_VIEW_2026-11-08.md)。旧C-start facadeは不変で、移譲・resource取得・cleanup・実budgetは未開始のまま。
+
 配置移行追記（2026-11-08）: [private供給の配置設計](BEST_PRACTICE_WFB_CANONICAL_SUPPLY_VIEW_DESIGN.md)に従い、既存C-start本体をB kernelと同一moduleへ移した。衝突回避の内部名3つ以外の本体・状態／計数・旧facadeは維持し、preparedは非実行のまま。[検証記録](E2E_BEST_PRACTICE_WFB_COMPOSITION_MOVE_2026-11-08.md)。全file供給表／view・下位移譲・C読取接続は追加していない。
 
 差分設計追記（2026-11-08）: [同canonical fileの供給表・非実行viewと移譲責務](BEST_PRACTICE_WFB_CANONICAL_SUPPLY_VIEW_DESIGN.md)で、同prepared／borrowに結合する全file表・viewの準備claim、非実行移譲claimの消費点、pending／holder・close時の破棄と診断保持を具体化した。開始claimと下位claimを分け、非実行の退役をresource cleanup確認にしない。設計のみでCのkernel／実budget接続は未実装のまま。
