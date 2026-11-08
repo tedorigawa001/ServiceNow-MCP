@@ -1,6 +1,8 @@
 # WF-B：scratch受理区間・進行位置・候補確定点の差分設計
 
-Version: draft-0.1 / Date: 2026-11-08 / 読み取り照合基準HEAD: `692b280`。
+Version: draft-0.2 / Date: 2026-11-08 / 読み取り照合基準HEAD: `692b280` / レビュー修正の基準HEAD: `d80f817`。
+
+draft-0.1のレビュー修正: 固定上限ではupdate枠がread枠より先に尽きないことを導出し、update枠拒否の検証を縮小profileの合成内部対照へ限定して検査順と理由を固定した（§3／SC05）。`readCompletedFiles`の加算点をafter観測一致へ固定し、(A)の`acceptedFiles`と同義にしない（§2）。固定record準備をclose確認後・最後のpost-guard前の`record_ready`段に一本化した（§4／§5）。全file確定後の取消・上限停止もsession成功扱いしないと明記した（§5）。SC02の位置をbyte累計で表した。
 
 Status: **設計のみ。(A)の長さだけを扱う独立fakeから、(B)の同scratch・同bytes hashと候補受理へ進むための契約。実装済み証拠ではない。** 親は[private読取・hash設計](BEST_PRACTICE_WFB_PRIVATE_READ_HASH_DESIGN.md)と[固定辞書供給設計](BEST_PRACTICE_WFB_FIXED_DICTIONARY_SUPPLY_DESIGN.md)。
 
@@ -23,7 +25,7 @@ FileReadScopeは同session・canonical file要素・ordinal・resourceと、befo
 | `payloadPosition` | 次のpayload readの位置。初期0、hash update成功後だけn進める。成功区間ではhash済prefix長と一致 |
 | `hashedPrefixBytes` | 正常完了したupdateの対象byte数。失敗updateによるbackend内部の部分進行は含めず、別の`hashState=poisoned`で不確実性を示す |
 | `hashUpdateAttempts`／`hashUpdateCompleted` | update呼出し直前／正常復帰後にそれぞれ加算。throwは試行のみ増える。既知完了量をbackendの総処理量と呼ばない |
-| `readCompletedFiles`／`hashAcceptedFiles` | 前者は(A)相当の読取完了観測、後者は§5の確定済みslot数。内部で区別し、前者から後者を導出しない |
+| `readCompletedFiles`／`hashAcceptedFiles` | 前者は宣言位置のEOF確認とafter観測一致を観測した時点で1加算し、close確認・post-guard・primary理由の有無を含まない。後者は§5の確定済みslot数。前者は(A)の`acceptedFiles`（close確認・post-guard・理由なしまで含む）と同義ではない。内部で区別し、前者から後者を導出しない |
 
 受信量はsession累積で、payloadとEOF余剰byteを含む。hash済量はfileごとの正常完了prefixとsession合計を持ち、EOF余剰byteを含まない。受信量と位置の一致は一般には要求しない。全加算を有限上限・safe整数で事前検査し、overflowで丸めない。
 
@@ -55,19 +57,21 @@ payload readは以下の固定順にする。
 
 hash initはpayload前に1回、finalは期待長・EOF・after観測・hash済長一致の後に1回だけ実行する。空fileもinit／EOF probe／after／finalを通し、updateは0回。init／update／finalの故障は`hash_unavailable`として停止し、backendの例外本文やscratch内容を診断へ出さない。
 
-既存合成上限（32 file、期待総量8,388,608、受信8,388,609、read65,536、retry32）は据え置く。hashはinit／final各最大32、update最大65,536試行で、完了数は試行数以下。予約は同時最大1。新しいguard／候補処理の回数は固定操作表から再計数する。(A)のguard上限131,330をそのまま流用して十分と主張しない。(B)のguard上界と費目検証が確定するまでは実装受付条件未充足であり、実E／S・work／heap実費はUnknown。
+既存合成上限（32 file、期待総量8,388,608、受信8,388,609、read65,536、retry32）は据え置く。hashはinit／final各最大32、update最大65,536試行で、完了数は試行数以下。予約は同時最大1。
+
+update試行の前には必ず課金済みpayload readが1回あり、EOF probe・interrupted・eof／failed等のreadもread枠を消費するため、update試行数 ≤ payload read数 ≤ read試行数 ≤ 65,536 となる。update枠が尽きるのはread枠も同時に尽きた場合（全readがpayload）に限られ、次のreadは先行するread枠検査で拒否される。したがって固定上限ではupdate枠不足の拒否は通常入口から到達しない。dispatch前の検査順はread枠・retry枠・受信余裕・update予約・位置加算の順に固定し、いずれも理由は`source_limit`、read=0・受信不変とする。update枠拒否は、update上限だけを縮めた専用の合成profileによる内部対照としてのみ検証し、その到達範囲を記録する。固定上限で同じ結果が出たことの証拠にしない。新しいguard／候補処理の回数は固定操作表から再計数する。(A)のguard上限131,330をそのまま流用して十分と主張しない。(B)のguard上界と費目検証が確定するまでは実装受付条件未充足であり、実E／S・work／heap実費はUnknown。
 
 ## 4 候補生成と確定前の所有権
 
-期待長・EOF・before／after一致・正常hash済長・digest一致が揃った場合だけ、同scopeのprivate FileHashCandidateを作る。candidateは本文／scratch viewを持たず、同session・scope・canonical file・ordinalと比較済み状態へ結合する。candidate生成や固定record準備が失敗した場合も、close責務はscopeが保持する。
+期待長・EOF・before／after一致・正常hash済長・digest一致が揃った場合だけ、同scopeのprivate FileHashCandidateを作る。candidateは本文／scratch viewを持たず、同session・scope・canonical file・ordinalと比較済み状態へ結合する。candidate生成はclose前に行い、失敗した場合もclose責務はscopeが保持する。確定用の固定record準備はclose確認後だけに行う（§5）。
 
-状態は`reading → compared_provisional → closing → post_checked → accepted`。途中故障は`discarded`へ一方向に進み、再生成・再受理しない。digest一致は暫定観測にすぎず、close未確認・期限切れ・取消・時計不明ならacceptedへ進めない。digest不一致は`content_mismatch`を先行理由として保持し、cleanup故障で上書きしない。
+状態は`reading → compared_provisional → closing → record_ready → post_checked → accepted`。`record_ready`はclose確認後に固定record準備を終えた段で、close未確認では入らない。record準備失敗は`discarded`、cleanupは`closed_confirmed`のまま、当該fileはincompleteとする。途中故障は`discarded`へ一方向に進み、再生成・再受理しない。digest一致は暫定観測にすぎず、close未確認・期限切れ・取消・時計不明ならacceptedへ進めない。digest不一致は`content_mismatch`を先行理由として保持し、cleanup故障で上書きしない。
 
 resourceはscopeがcloseを1回試す。candidate側へclose責務を複製しない。close後、scratchの再使用はcandidate本文破棄・借用退役の後だけとし、確認不能なら次fileへ進まない。hash状態とscratchの参照は固定discardで退役する。参照破棄は物理的なメモリ消去・native解放確認の証明ではない。
 
 ## 5 一度限りの確定点と確定後の停止
 
-close確認後、必要な固定record生成を終えて最後の通常post-guardを通す。同owner／scope／file slotが未受理、candidateがliveであることを再検査する。その直後の**固定slotの単一private状態置換**をfile候補の確定点とする。置換先recordにaccepted状態とcandidate消費済み状態を一体化し、別boolと公開値の二重更新を権限根拠にしない。件数は固定slotから整合確認し、途中例外で件数だけ増やさない。
+close確認後、必要な固定record生成を終えて（`record_ready`）最後の通常post-guardを通す。同owner／scope／file slotが未受理、candidateがliveであることを再検査する。その直後の**固定slotの単一private状態置換**をfile候補の確定点とする。置換先recordにaccepted状態とcandidate消費済み状態を一体化し、別boolと公開値の二重更新を権限根拠にしない。件数は固定slotから整合確認し、途中例外で件数だけ増やさない。
 
 この置換区間にはallocation・copy／freeze・clock・callback・awaitを置かない。post-guard後にそれらが必要になった実装は本契約を満たさず、再設計する。これは単一実行文脈のprivate状態遷移の契約であり、並列共有メモリ・process停止・OOM時の永続atomic性の証明ではない。
 
@@ -75,7 +79,7 @@ close確認後、必要な固定record生成を終えて最後の通常post-guar
 |---|---|
 | 当該file確定前 | candidateを破棄、当該fileはincomplete（既観測のcontent_mismatchは保持）。既受信・試行・正常hash済prefix・cleanup診断は残す |
 | 一部file確定後、残file未確定 | 確定slotは変更しない。残slotは未開始／incompleteを区別し、sessionは未完了として先行停止理由を保持 |
-| 全file hash確定後、集約／最終checkpoint前 | fileのhash_matchを遡及取消しない。取消・期限・時計・上限はstop診断へ残す。集約未実施ならrowを未集約に保つ |
+| 全file hash確定後、集約／最終checkpoint前 | fileのhash_matchを遡及取消しない。取消・期限・時計・上限はstop診断へ残し、sessionは停止として成功扱いしない。集約未実施ならrowを未集約に保つ |
 | 全file確定後の終端期限超過／時計不明 | 内容観測の確定と終端の成否を分離。primary内容理由を後着制御理由で上書きせず、session終端は停止／時刻未確認として成功扱いしない |
 | 終端record確定後 | 結果不変。再操作は固定closed拒否または既存終端参照を返し、新しい診断・close・hash・受理を追加しない |
 
@@ -88,12 +92,12 @@ close確認後、必要な固定record生成を終えて最後の通常post-guar
 | 対照 | 必須確認 |
 |---|---|
 | SC01 同bytes／scratch | 複数分割・短読取で同digest。n以後に異なる残存byteがあっても結果不変。同値別scratchの混入は拒否 |
-| SC02 位置と失敗prefix | 第k updateでthrowし、受信は当該nまで、正常hash済位置はk−1まで。部分update可能性はpoisoned、再読取／finalは0 |
+| SC02 位置と失敗prefix | 第k updateでthrowし、受信は当該nまで、正常hash済位置は第k−1 updateまでの累計bytes。部分update可能性はpoisoned、再読取／finalは0 |
 | SC03 停止の区間 | read中の取消／期限到達でも返ったpayloadはupdate 1回、その後停止。区間内clock／cancel hookは0回。pre拒否はread=0 |
 | SC04 EINTR／EOF | retryのみ増加し二重hashなし。早EOF／余剰byteはcontent_mismatch、余剰byteは受信のみ。空fileはupdate=0 |
-| SC05 枠と計数 | 更新枠不足をread前に拒否。解除と課金を区別し、失敗時refundなし。不正n／read throwの既知prefixと不確実性を保持 |
+| SC05 枠と計数 | 固定上限ではread枠拒否が先行することを確認。更新枠不足のread前拒否は縮小profileの合成内部対照で確認し、検査順と`source_limit`・read=0を固定。解除と課金を区別し、失敗時refundなし。不正n／read throwの既知prefixと不確実性を保持 |
 | SC06 候補identity | 別session／scope／canonical file・同値copy・重複candidate・二重受理を拒否。2回目にhashAcceptedFilesを増やさない |
-| SC07 確定点の前後 | record準備失敗、close未確認、最後のpost拒否では未受理。確定後の取消で当該slot不変、未完了session／全file確定後を区別 |
+| SC07 確定点の前後 | close前のcandidate生成失敗、close確認後のrecord準備失敗（cleanupは確認済みのまま）、close未確認、最後のpost拒否では未受理。確定後の取消で当該slot不変、未完了session／全file確定後を区別 |
 | SC08 診断と退役 | mismatch＋close故障、hash故障＋取消、全file確定後の時計故障で別軸を保持。終端反復で計数／診断／解放数不変、本文非出力 |
 | SC09 固定操作上界 | 最大file・1-byte短読取・共有retry境界・各故障prefixで試行／完了／予約とguardを独立計数。cleanup枠が停止で消えない |
 | SC10 非目標の負の対照 | (A)旧契約を維持。実file読取・期待値pin・実snapshot採用・S発行・core／runtime接続なし。合成成功を実source証拠へ昇格しない |
