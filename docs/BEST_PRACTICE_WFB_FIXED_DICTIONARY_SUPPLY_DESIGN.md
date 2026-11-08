@@ -1,5 +1,7 @@
 # WF-B：固定辞書の供給・期待値更新・同SourceMapDraft結合の差分設計
 
+実装追記（2026-11-08）: [private読取設計の(A)純粋fake](BEST_PRACTICE_WFB_PRIVATE_READ_HASH_DESIGN.md)に共有上限・停止・単発ReadOps・結果slotを実装した。独立assemblyのみで、当該供給元／MapSupplySnapshot・bytes／hash・実sourceには接続しない。未実装行・5 gaps・Unknownは維持する。
+
 詳細設計追記（2026-11-07）: [private読取継続・共有上限・同bytes hashと結果owner](BEST_PRACTICE_WFB_PRIVATE_READ_HASH_DESIGN.md)で、同snapshot借用・単発ReadOps・全file共有上限・cleanup予約・候補のpost受理と独立合成条件を具体化した。設計のみで、実期待値pin・読取／hash実装・実source照合は進めていない。
 
 Version: draft-0.3 / Date: 2026-11-07 / 読み取り照合基準HEAD: `89fa53a` / レビュー修正の基準HEAD: `5d7b410` / 合成供給実装基準HEAD: `545f044`。

@@ -1,12 +1,14 @@
 # WF-B：private読取継続・共有上限・同bytes hashと結果owner
 
-Version: draft-0.2 / Date: 2026-11-07 / 読み取り照合基準HEAD: `77255f2` / レビュー修正の基準HEAD: `72e4745`。
+Version: draft-0.3 / Date: 2026-11-08 / 読み取り照合基準HEAD: `77255f2` / レビュー修正の基準HEAD: `72e4745` / (A)実装基準HEAD: `dfc79ff`。
+
+draft-0.3: §11の(A)共有上限・停止・単発ReadOps・結果slotを純粋fakeで実装した。bytes／scratch／hash・同snapshot借用・行hash集約は接続しない。[検証記録](E2E_BEST_PRACTICE_WFB_READ_OPS_A_2026-11-08.md)。
 
 draft-0.1のレビュー修正: 行のhash集約へbindingのtests（T／O file）を含め、辞書全体hash軸の状態を定義した（§6）。受理区間内のguard呼出しをなくし、guardを受理区間の前後へ移した（§4／§5）。早いEOF・余剰byteをcontent_mismatchに固定し、読取中変更とは区別しないことを明記した（§3）。cleanup軸のopen未試行とresource未取得を分けた（§6）。RH03／RH04／RH06の対照を追加した。設計のみで、実装・実source照合は変えていない。
 
-Status: **詳細設計のみ。読取session・共有予算・hash照合・結果ownerは未実装。** 親は[固定辞書供給・同map結合](BEST_PRACTICE_WFB_FIXED_DICTIONARY_SUPPLY_DESIGN.md)と[固定source対応・内容照合](BEST_PRACTICE_WFB_FIXED_SOURCE_COVERAGE_DESIGN.md)。現在のcheckはprivate結合の非実行確認だけで、読取やhashへ接続していない。
+Status: **(A)の独立純粋fakeのみ実装。実bytes読取・hash照合・同snapshotへの読取接続は未実装。** 親は[固定辞書供給・同map結合](BEST_PRACTICE_WFB_FIXED_DICTIONARY_SUPPLY_DESIGN.md)と[固定source対応・内容照合](BEST_PRACTICE_WFB_FIXED_SOURCE_COVERAGE_DESIGN.md)。供給元のcheckはprivate結合の非実行確認だけで、今回のfakeへ接続していない。
 
-正式発行口閉鎖・全体受付無効・Unknown・VM／監視／telemetry調査保留を維持する。今回はMDだけを変更し、実装・実期待値pin・実sourceのhash採取／照合・S発行・core接続・実接続・実通信・設定変更・Pushは行わない。以下の数値は合成検証用の候補profileで、本番capや時間枠の承認ではない。
+正式発行口閉鎖・全体受付無効・Unknown・VM／監視／telemetry調査保留を維持する。draft-0.1／0.2はMDだけ、draft-0.3の実装は§11の純粋fakeに限定する。hash接続・実期待値pin・実sourceのhash採取／照合・S発行・core接続・実接続・実通信・設定変更・Pushは行わない。以下の数値は合成検証用profileで、本番capや時間枠の承認ではない。
 
 ## 1 現行からの差分と非目標
 
@@ -143,3 +145,39 @@ hash／mapping／implementation／cleanupとsessionの停止状態を別々に�
 `77255f2`の供給sourceと親設計を読み取り照合し、このMDと親2文書の参照だけを追加した。文書のローカル参照・空白・変更範囲のみ確認する。code／test／CHANGELOG／設定は変更せず、build・合成試験・実source hash採取／照合は行わない。正式発行口閉鎖・全体受付無効・Unknown・調査保留を維持する。
 
 draft-0.2のレビュー修正では、`72e4745`の本書を`source-map-values-core.ts`のbinding／tests検査と親設計のSC表へ照合し、本書のMDだけを変更した。code／test／CHANGELOG／親設計・設定は変更していない。
+
+## 11 (A) 共有上限・停止・単発ReadOps・結果slotの純粋fake
+
+`tests/review/fixtures/read-ops-fake.ts`を追加した。importは0、file／network I/O・buffer確保・hash・source辞書／snapshot・K0/E fake・core・runtimeのいずれにも接続しない。Resource／OpenOutcome／Observation／ReadOutcome／ReadOps／Slotを内部型とし、非公開Sessionが予算・固定FakeOps／FakeClock・結果slotを所有する。class・resource参照はexportしない。
+
+createReadOpsFakeは固定の2 file（模擬長3／2）だけを使い、factory引数を認めない。createFixedReadOpsFakeは有限scenario名だけを受ける。任意profile／resource／ops／callback・外部DATA注入、未知名・余分引数はbindingで拒否する。facadeはopenOnce(ordinal)／observeOnce()／readOnce(offset, requested)／closeOnce()／advanceTo(tick)／cancel()／finish()／inspect()。時計の変更とcancelは合成依存の制御で、実clockや製品設定へ反映しない。
+
+### 11.1 模擬操作と結果
+
+操作順はopened→before→reading→eof→after→close。scopeは同時1つだけで、ordinal順の同Resourceに全操作を固定する。readはnだけの有限結果を返し、実bytesを返さない。正の短読取・同offset／要求長のEINTR retry、期待長位置の1 byte EOF probeをモデル化する。hash update未接続なので、offsetは模擬bytes受理後に進むだけでhash進行位置ではない。(B)でhashを接続する際は、readとhash受理区間へclock／cancelを挟まない構造にする必要がある。
+
+各ReadOpsは1呼出し1試行、同期throwも1回。予算とFakeOpsの呼出しcounterは別に保持し、内部retryはない。payload／EOF不一致をcontent_mismatchとし、after観測を呼ばずcloseする。beforeのsize差も同分類。期待長／EOFが一致した後のstamp差だけをsource_changedにする対照を持つ。不正n／read throwで受信量を確定できなければreceivedState=unavailableとし、budget.receivedは既知prefixを残す。
+
+openのno_resourceは明示された未取得だけを指す。failed_ownedではresourceを保持して停止・close1回。openの非型付きthrowは取得未確認とし、acquisitionUncertain=true／close_unconfirmedを残す。handle不明なのでcloseを作り上げず、cleanup予約も未使用返却したとは扱わない。これは実FD漏れを解決する仕組みではなく、実adapter採用前の未対応を可視化する合成対照である。
+
+file slotのhashはnot_started／pending／incomplete／content_mismatchだけで、hash_matchを発行できない。cleanupは§6の4状態。全12 row slotはnot_aggregatedのまま。finishはcleanupと最終clock確認後に不変snapshotを1回だけ確定し、二重finish・終端後cancel／clock変更・操作で診断やslotを変えない。slotの部分生成故障では部分配列を破棄し、slotsState=unavailableで操作開始を拒否する。
+
+### 11.2 共有会計・停止
+
+§4のfile／期待総和／受信量／read・retry・open・observe・cleanup上限を全scopeで共有する。受信枠はread要求長の最大値をdispatch前に受付し、成功nだけを受信prefixへ加算する。EOF probeの最大1 byteも受付対象だが、eofなら受信量は増えない。試行・既受信・cleanup予約の累積数はfile切替や失敗でreset／refundしない。
+
+EINTRの初回試行はread1／retry0。再試行の呼出し直前にretry1を課金し、32 retryなら最大33回のinterrupted readを観測できる。pending retry中の別offset／要求長は拒否する。cleanupReservedは予約累積、cleanupUnusedは明示未取得時の返却、closeは実試行、cleanupOutstandingはその差。未確認取得の予約を0にしない。
+
+固定clockのT0=0、D_stop=900／D_end=1000 tickを全fileで使う。単位は合成tickのみ。clock例外・非整数／NaN／overflow値・逆行はstickyなclock_unavailableとし、後から正常値に戻して信頼を回復しない。cancel・期限・clock異常・上限超過後は新規通常操作を禁止するが、取得済みresourceの予約済みcloseは1回試す。
+
+clock採取上限は131,330回（2×(open32＋observe64＋read65,536＋close32)＋最終2）。これは(A)の模擬操作表からの有限なclock呼出し枠で、(B)のhashや(C)の行集約guardは含まない。未dispatch拒否のpre-guard等も同枠を消費し、不足すればsource_limitで止める。cleanup時に採取できなければcleanupTiming=unknownとし、clockを追加生成せずcloseだけを試す。native CPU・heap・実時間上界を表す数ではない。
+
+cleanupはpre／postのD_end観測、postの通常停止観測を同じ採取で扱う。close失敗が期限到達より先に起きればsource_unavailableをprimaryとし、後着deadlineとclose_unconfirmedを別slotに残す。閉じた確認と期限内確認も別軸。close・primary停止・時計／取消の診断を上書き合流しない。
+
+### 11.3 対照と未対応
+
+正常profileとは別に、read枠3／chunk2、受信枠4、retry枠1、guard枠3の縮小profileを有限scenario内だけで使い、共有枠のfile越し消費を対照する。容量対照は32 file×262,144=8MiB、read試行対照は1MiB宣言へ1 byte短読取を65,536回。いずれも実fileや本番capの採用ではない。
+
+正常の全9部分prefixとcleanupを独立の操作イベント表・BigIntと照合する。固定故障はopen／observe／read／close／clock・slot生成の指定点のみで、native primitive内部の全故障やOOMを網羅しない。freeze済み出力は切離しDATAだけ。authority=none、ready=false、hashConnection=not_connected、hashCalls=0、runtimeCoverage／nativeCost／実E・S要求量=unknown、coreInvocation=not_calledを維持する。
+
+同snapshot借用、供給側の読取中close、実scratch・同bytesのhash、FileHashCandidateのpost受理、row依存集合と辞書全体hashの集約、実adapter・期待値pinは未接続。(A)の手動合成操作を通常private読取継続まで接続した保証とは呼ばない。既存5 gaps・正式発行口閉鎖・全体受付無効・調査保留を維持する。
