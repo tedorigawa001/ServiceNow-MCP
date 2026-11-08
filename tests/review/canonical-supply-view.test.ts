@@ -148,3 +148,78 @@ describe('C canonical registry/table/view preparation only', () => {
     }
   });
 });
+
+describe('C canonical post-validation clauses in isolation (review fix)', () => {
+  // Each selector re-issues a consistent table/view/registry so exactly one post-validation clause fails.
+  for (const [scenario, fileChecks] of [
+    ['post_table_unissued', 0], ['post_table_envelope', 0], ['post_view_envelope', 0], ['post_view_table', 0],
+    ['post_table_origin', 0], ['post_declarations_unissued', 0], ['post_registry_missing', 0],
+    ['post_table_bindings_short', 0], ['post_view_declarations_short', 0],
+    ['post_registry_file', 1], ['post_registry_ordinal', 1], ['post_registry_duplicate_origin', 2],
+    ['post_source_origin', 1], ['post_invalid_record', 1], ['post_source_oversize', 1],
+    ['post_binding_file', 1], ['post_binding_ordinal', 1], ['post_binding_table_origin', 1],
+    ['post_declaration_file', 1], ['post_declaration_ordinal', 1], ['post_declaration_binding', 1],
+  ] as const) {
+    it(`rejects only its own clause: ${scenario}`, () => {
+      const c = createCanonicalSupplyViewFake(scenario); c.begin(); c.prepare();
+      expect(c.prepareSupply()).toMatchObject({ ok: false, reason: 'binding_mismatch' });
+      expect(c.inspect()).toMatchObject({ firstReason: 'binding_mismatch', preparationState: 'discarded',
+        retainedRegistry: false, retainedTable: false, retainedView: false, retainedTableOrigin: false,
+        counts: { preparationClaims: 1, registryRecords: 4, tables: 1, views: 1, validationPasses: 1, fileChecks },
+        root: { lifecycleFirst: 'binding_mismatch', readFirst: 'binding' } });
+    });
+  }
+  it('accepts the re-issued valid bases used by the isolated controls', () => {
+    for (const scenario of ['post_reissue_control', 'post_registry_rebuild_control']) {
+      const c = createCanonicalSupplyViewFake(scenario); c.begin(); c.prepare();
+      expect(c.prepareSupply(), scenario).toMatchObject({ ok: true });
+      expect(c.inspect().counts, scenario).toMatchObject({ validationPasses: 1, fileChecks: 4 });
+    }
+  });
+});
+
+describe('C canonical supply reason routing (review fix)', () => {
+  it('records the generation failure on the parent lifecycle as read_prepare_unavailable', () => {
+    const c = createCanonicalSupplyViewFake('registry_2_failure'); c.begin(); c.prepare(); c.prepareSupply();
+    expect(c.inspect().root).toMatchObject({ lifecycleFirst: 'read_prepare_unavailable', readFirst: 'read_prepare_unavailable' });
+    expect(c.check()).toMatchObject({ ok: false, reason: 'supply_prepare_unavailable' });
+  });
+  it('maps parent prepare failures without inventing a supply claim', () => {
+    for (const [scenario, reason] of [['borrow_failure', 'supply_prepare_unavailable'], ['result_prepare_failure', 'supply_prepare_unavailable'],
+      ['borrow_copy', 'binding_mismatch']] as const) {
+      const c = createCanonicalSupplyViewFake(scenario); c.begin();
+      expect(c.prepare(), scenario).toMatchObject({ ok: false, reason });
+      expect(c.inspect(), scenario).toMatchObject({ firstReason: reason, counts: { preparationClaims: 0 } });
+    }
+  });
+  it('rejects a direct preparation after a construction failure as supply_prepare_unavailable', () => {
+    const c = createCanonicalSupplyViewFake('map_rejected');
+    expect(c.prepareSupply()).toMatchObject({ ok: false, reason: 'supply_prepare_unavailable' });
+    expect(c.inspect()).toMatchObject({ counts: { preparationClaims: 0 }, root: { supplyFirst: 'supply_invalid', readState: 'unused' } });
+  });
+  it('does not admit a valid selector followed by an extra factory argument', () => {
+    const c = createCanonicalSupplyViewFake('normal', 'extra'); c.begin(); c.prepare();
+    expect(c.prepareSupply()).toMatchObject({ ok: false, reason: 'supply_prepare_unavailable' });
+    expect(c.inspect()).toMatchObject({ counts: { preparationClaims: 0 }, root: { supplyFirst: 'supply_invalid', counts: { startClaims: 0 } } });
+  });
+  it('distinguishes a claim-less close from a later rejected preparation', () => {
+    const quiet = createCanonicalSupplyViewFake(); quiet.begin(); quiet.prepare(); quiet.close();
+    expect(quiet.finish()).toMatchObject({ firstReason: 'none', counts: { preparationClaims: 0 } });
+    const late = createCanonicalSupplyViewFake(); late.begin(); late.prepare(); late.close();
+    expect(late.prepareSupply()).toMatchObject({ ok: false, reason: 'supply_closed' });
+    expect(late.finish()).toMatchObject({ firstReason: 'supply_closed', counts: { preparationClaims: 0, registryRecords: 0 } });
+  });
+  it('releases every building slot and keeps only issued references in the prepared state', () => {
+    const c = createCanonicalSupplyViewFake(); c.begin(); c.prepare(); c.prepareSupply();
+    expect(c.inspect()).toMatchObject({ preparationState: 'prepared', retainedBuilding: false, retainedEnvelope: true,
+      retainedIssuedTable: true, retainedIssuedView: true, retainedIssuedDeclarations: true, retainedTableOrigin: true });
+    expect(c.finish()).toMatchObject({ retainedTableOrigin: false, retainedEnvelope: false });
+  });
+  it('answers read_already_used after the terminal without changing the terminal diagnosis', () => {
+    const c = createCanonicalSupplyViewFake(); c.begin(); c.prepare(); c.prepareSupply(); const end = c.finish();
+    for (const reply of [c.begin(), c.prepare(), c.prepareSupply(), c.prepareSupply('extra')]) {
+      expect(reply).toMatchObject({ ok: false, reason: 'read_already_used' });
+    }
+    expect(c.inspect()).toBe(end); expect(end.firstReason).toBe('none');
+  });
+});

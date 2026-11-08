@@ -1,6 +1,8 @@
 # WF-B (C)：同canonical fileのprivate供給表・非実行viewの差分設計
 
-Version: draft-0.4 / Date: 2026-11-08 / 読み取り照合基準HEAD: `e1b3978`（レビュー修正基準HEAD: `fc0c2f3`、配置移行基準HEAD: `3a6b401`、供給準備実装基準HEAD: `98702a9`）。
+Version: draft-0.5 / Date: 2026-11-08 / 読み取り照合基準HEAD: `e1b3978`（レビュー修正基準HEAD: `fc0c2f3`、配置移行基準HEAD: `3a6b401`、供給準備実装基準HEAD: `98702a9`、供給準備レビュー修正基準HEAD: `70a8d0c`）。
+
+draft-0.5のレビュー修正：post検査の各条件に、その条件だけが外れる固定selector（post_*の21種と有効基点2種）を加え、親lifecycleへの理由写像・claim前close・構築失敗後の直接準備・終端後応答・building slot解放を試験で固定した。table originの保持を`retainedTableOrigin`として診断へ出す。envelopeの10項目照合と`borrow.matches(e)`は相互に冗長で、単独除去は等価、組での除去は全検出とする（§10）。
 
 draft-0.4: §9手順2の正規registry・全fileのprivate供給表・非実行viewと供給準備claimを、新しい合成診断factoryだけへ実装した。同moduleのprivate継続から同C constructionのprepared／borrowを参照し、旧公開診断から再構築しない。[検証記録](E2E_BEST_PRACTICE_WFB_CANONICAL_SUPPLY_VIEW_2026-11-08.md)。下位移譲claim・C実行・実budget／停止guard接続は未実装。
 
@@ -184,5 +186,7 @@ supplyFirst／lifecycleFirst／readFirst／readStop・参照退役状態を別�
 新ownerのfinishは、供給参照clear → 内側Cの非実行終端固定／borrow退役 → 必要時Snapshot退役 → 外側の不変診断固定、の順とする。生成失敗時は専用private継続でborrow退役後のSnapshotも退役し、偽のclose要求／readStopは追加しない。正常discardでは従来どおりreadonly用Snapshotを残せるが、再準備は許さない。retirementOrderは最大3件の固定論理イベントで、GC／物理解放・resource cleanup確認ではない。
 
 CV01〜07、CV09の準備段階close、CV10の部分生成参照／borrow退役、CV11の非実行部分とCV12の旧互換・compiled／梱包を確認した。CV08と移譲後のCV09〜11、未確認責務のpending／holder保持・retirement unconfirmedは手順3に残す。生成17prefix・長さ4の625操作列を独立oracle／不変条件で確認し、compiledでは従来8変異に新供給6変異を加えた。
+
+post検査はenvelope／発行済み同参照・長さ・registry・binding・declarationの各条件を固定post_* selectorで単独に外して確認する。envelopeの各項目照合は同borrowの`matches(e)`と重複して働き、`matches(e)`は各項目一致とcontext側の`matches`検査から導かれるため、片方だけの除去は等価変異として扱う。
 
 新countsは生成／検査の局所計数（validationPassesは全表post検査）であり、全CPU・確保試行・追加private context参照や負対照copyの費用を網羅したwork上界ではない。rootのopaque budgetは引き続きidentityだけ。実会計・実clock・共有期限・実E／Sの導出はUnknownのままとする。

@@ -786,7 +786,13 @@ const canonicalSupplyScenarios: readonly string[] = Object.freeze([...cStartScen
   'binding_missing', 'binding_duplicate', 'binding_extra', 'binding_order', 'binding_ordinal', 'binding_file_copy',
   'binding_legacy', 'origin_swap', 'record_origin_swap', 'table_copy', 'view_copy', 'foreign_table', 'foreign_view',
   'source_zero', 'source_short', 'source_extra', 'source_abd', 'source_shrink', 'source_grow',
-  ...Array.from({ length: 4 }, (_, i) => [`registry_${i}_failure`, `bindings_${i}_failure`, `declarations_${i}_failure`]).flat()]);
+  ...Array.from({ length: 4 }, (_, i) => [`registry_${i}_failure`, `bindings_${i}_failure`, `declarations_${i}_failure`]).flat(),
+  // Post-validation isolation: each re-issues a consistent set so exactly one clause fails.
+  'post_reissue_control', 'post_registry_rebuild_control', 'post_table_unissued', 'post_table_envelope', 'post_view_envelope',
+  'post_view_table', 'post_table_origin', 'post_declarations_unissued', 'post_registry_missing', 'post_table_bindings_short',
+  'post_view_declarations_short', 'post_registry_file', 'post_registry_ordinal', 'post_registry_duplicate_origin',
+  'post_source_origin', 'post_invalid_record', 'post_source_oversize', 'post_binding_file', 'post_binding_ordinal',
+  'post_binding_table_origin', 'post_declaration_file', 'post_declaration_ordinal', 'post_declaration_binding']);
 class CanonicalSupplyAssembly {
   readonly #root: CStartAssembly;
   #state: 'unused' | 'preparing' | 'prepared' | 'discarded' = 'unused';
@@ -906,6 +912,63 @@ class CanonicalSupplyAssembly {
       else this.#view = other.#view;
       other.finish();
     }
+    if (this.scenario.startsWith('post_')) this.probePost();
+  }
+  /** Synthetic control only: replaces current and issued references together, without counting a second table/view. */
+  private reissue(bindings: readonly CanonicalPayloadBinding[], declarations?: readonly CanonicalDeclarationView[],
+    envelopes: { table?: CPreparedContext; view?: CPreparedContext } = {}): void {
+    const e = this.#envelope!;
+    const table: CanonicalPayloadTable = Object.freeze({ envelope: envelopes.table ?? e, origin: this.#tableOrigin!, bindings: Object.freeze([...bindings]) });
+    const decls = Object.freeze([...(declarations ?? bindings.map(binding =>
+      Object.freeze({ file: binding.file, ordinal: binding.ordinal, binding })))]);
+    this.#table = table; this.#issuedTable = table; this.#issuedDeclarations = decls;
+    this.#view = Object.freeze({ envelope: envelopes.view ?? e, table, declarations: decls }); this.#issuedView = this.#view;
+  }
+  private rebuildBindings(registry: readonly CanonicalRegistryEntry[]): readonly CanonicalPayloadBinding[] {
+    return registry.map(r => Object.freeze({ ...r, tableOrigin: this.#tableOrigin! }));
+  }
+  private probePost(): void {
+    const e = this.#envelope!, t = this.#table!, v = this.#view!, r = this.#registry!;
+    const b = t.bindings, d = v.declarations, file0 = Object.freeze({ ...b[0].file });
+    const withEntry = <T>(items: readonly T[], i: number, value: T) => Object.freeze(items.map((x, j) => j === i ? value : x));
+    const withSource = (i: number, patch: Partial<SourceRecord>, origin = r[i].origin) =>
+      withEntry(r, i, Object.freeze({ ...r[i], origin, source: Object.freeze({ ...r[i].source, ...patch }) }));
+    switch (this.scenario) {
+      case 'post_reissue_control': this.reissue(b); break;
+      case 'post_registry_rebuild_control': {
+        this.#registry = Object.freeze(r.map(x => Object.freeze({ ...x, source: Object.freeze({ ...x.source }) })));
+        this.reissue(this.rebuildBindings(this.#registry)); break;
+      }
+      case 'post_table_unissued': {
+        this.#table = Object.freeze({ ...t }); this.#view = Object.freeze({ ...v, table: this.#table }); this.#issuedView = this.#view; break;
+      }
+      case 'post_table_envelope': this.reissue(b, undefined, { table: Object.freeze({ ...e }) }); break;
+      case 'post_view_envelope': this.reissue(b, undefined, { view: Object.freeze({ ...e }) }); break;
+      case 'post_view_table': this.#view = Object.freeze({ ...v, table: Object.freeze({ ...t }) }); this.#issuedView = this.#view; break;
+      case 'post_table_origin': this.#tableOrigin = Object.freeze({}); break;
+      case 'post_declarations_unissued': this.#issuedDeclarations = Object.freeze([...d]); break;
+      case 'post_registry_missing': this.#registry = Object.freeze(r.slice(0, -1)); break;
+      case 'post_table_bindings_short': this.reissue(b.slice(0, -1), d); break;
+      case 'post_view_declarations_short': this.reissue(b, d.slice(0, -1)); break;
+      case 'post_registry_file': this.#registry = withEntry(r, 0, Object.freeze({ ...r[0], file: file0 })); break;
+      case 'post_registry_ordinal': this.#registry = withEntry(r, 0, Object.freeze({ ...r[0], ordinal: 1 })); break;
+      case 'post_registry_duplicate_origin': this.#registry = withSource(1, { origin: r[0].origin }, r[0].origin); this.reissue(this.rebuildBindings(this.#registry)); break;
+      case 'post_source_origin': this.#registry = withSource(0, { origin: Object.freeze({}) }); this.reissue(this.rebuildBindings(this.#registry)); break;
+      case 'post_invalid_record': this.#registry = withSource(0, { maxReturn: 0 }); this.reissue(this.rebuildBindings(this.#registry)); break;
+      case 'post_source_oversize': {
+        this.#registry = withSource(0, { bytes: Object.freeze([97, 98, 99, 120, 121]), initialLength: 5 });
+        this.reissue(this.rebuildBindings(this.#registry)); break;
+      }
+      case 'post_binding_file': case 'post_binding_ordinal': case 'post_binding_table_origin': {
+        const patch = this.scenario === 'post_binding_file' ? { file: file0 }
+          : this.scenario === 'post_binding_ordinal' ? { ordinal: 1 } : { tableOrigin: Object.freeze({}) };
+        const binding = Object.freeze({ ...b[0], ...patch });
+        this.reissue(withEntry(b, 0, binding), withEntry(d, 0, Object.freeze({ file: b[0].file, ordinal: 0, binding }))); break;
+      }
+      case 'post_declaration_file': this.reissue(b, withEntry(d, 0, Object.freeze({ ...d[0], file: file0 }))); break;
+      case 'post_declaration_ordinal': this.reissue(b, withEntry(d, 0, Object.freeze({ ...d[0], ordinal: 1 }))); break;
+      case 'post_declaration_binding': this.reissue(b, withEntry(d, 0, Object.freeze({ ...d[0], binding: Object.freeze({ ...b[0] }) }))); break;
+    }
   }
   private validate(): boolean {
     this.#counts.validationPasses++;
@@ -996,7 +1059,7 @@ class CanonicalSupplyAssembly {
     return Object.freeze({ ...CANONICAL_CLOSED, firstReason: this.#first, preparationState: this.#state,
       retainedRegistry: !!this.#registry, retainedTable: !!this.#table, retainedView: !!this.#view,
       retainedEnvelope: !!this.#envelope, retainedIssuedTable: !!this.#issuedTable, retainedIssuedView: !!this.#issuedView,
-      retainedIssuedDeclarations: !!this.#issuedDeclarations,
+      retainedIssuedDeclarations: !!this.#issuedDeclarations, retainedTableOrigin: !!this.#tableOrigin,
       retainedBuilding: !!this.#buildingRegistry || !!this.#buildingBindings || !!this.#buildingDeclarations,
       fileSlots: Object.freeze(this.#view?.declarations.map(d => Object.freeze({ id: d.file.id, ordinal: d.ordinal })) ?? []),
       rowStates: Object.freeze(this.#envelope?.rows.map(r => Object.freeze({ id: r.id, status: r.status, missingCount: r.missing.length })) ?? []),

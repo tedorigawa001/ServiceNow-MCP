@@ -65,6 +65,32 @@ SourceRecord／table／viewはprivateな合成値であり、SourceOps instance�
 
 正式発行口閉鎖・全体受付無効・Unknown・VM／監視／telemetry調査保留を維持する。移譲claim・C実行・実期待値pin・実source照合・S発行・core接続・実接続・実通信・設定変更・Pushは行っていない。今回の変更は未コミット。
 
+## レビュー修正（2026-11-08）
+
+`70a8d0c`のレビューで、post検査`validate()`の条件の多くが単独で裏付けられていないこと（1条件を外しても全試験・compiledが成功）と、理由写像など一部経路の未検査を指摘された。修正前の対象は新規canonical供給準備試験13件、全体313file・15,401件成功。
+
+**変異の事前測定（修正前）**: 一時変異57件のうち検出14件・残存43件。残存のうち11件はどのselectorからも到達しないpost条件（未発行table、table／viewのenvelope、view.table、table origin、未発行declarations、binding.tableOrigin、registryのfile／ordinal／origin重複／source origin／validRecord）、そのほか長さ・binding／declaration条件の相互冗長、理由写像・終端後応答・building slot解放・factory引数数の未検査だった。
+
+**試験（RED→GREEN）**: `canonical-supply-view.test.ts`に29件を追加した。
+
+- post検査の単独対照21件：`post_table_unissued`／`post_table_envelope`／`post_view_envelope`／`post_view_table`／`post_table_origin`／`post_declarations_unissued`／`post_registry_missing`／`post_table_bindings_short`／`post_view_declarations_short`（fileChecks 0）、`post_registry_file`／`post_registry_ordinal`／`post_source_origin`／`post_invalid_record`／`post_source_oversize`／`post_binding_file`／`post_binding_ordinal`／`post_binding_table_origin`／`post_declaration_file`／`post_declaration_ordinal`／`post_declaration_binding`（fileChecks 1）、`post_registry_duplicate_origin`（fileChecks 2）。各々binding_mismatch・validationPasses 1・親lifecycle binding_mismatch／readFirst bindingを確認する。
+- 有効基点1件：同じ再発行helperで内容を変えない`post_reissue_control`と、registryを複製して再構築する`post_registry_rebuild_control`が成功し、fileChecks 4となる。
+- 経路7件：生成失敗時の親`lifecycleFirst`／`readFirst`=read_prepare_unavailableとcheckの理由、親prepare失敗（borrow_failure／result_prepare_failure→supply_prepare_unavailable、borrow_copy→binding_mismatch）、構築失敗後の直接prepareSupply、claim前close単独（firstReason none）とその後の準備（supply_closed）の区別、prepared状態のbuilding slot解放、終端後のbegin／prepare／prepareSupply／引数付き呼出しがread_already_used、selector＋余剰引数の非受理。
+
+REDは、新selectorの未登録と`retainedTableOrigin`未出力による23件失敗（post対照21件、有効基点、prepared状態の保持診断）。経路試験6件は既存挙動の固定で初回から成功し、対応する変異の検出で感度を確認した。
+
+**実装**: `snapshot-read-composition-fake.ts`の新供給ownerだけを変更した。`probeIssued`の末尾から`post_*` selector時だけ`probePost`を呼び、現在参照と発行済み参照を同時に差し替える合成対照用`reissue`で、狙った1条件以外を整合させる。この差替えはtables／views計数を増やさない負対照補助で、正規生成の第2発行ではない。snapshotに`retainedTableOrigin`を追加した。B本体・旧C-start・既存selectorの挙動とcompiled対照は変更していない。
+
+**変異（修正後）**: 単独59件＋組10件の計69件中54件検出。残存15件は等価として扱う。
+
+- envelope項目照合10件（owner／snapshot／setId／map／files／rows／file／ordinal／session／budget）の単独除去：同borrowの`matches(e)`が同じ差を検出する。各項目と`matches(e)`の組除去10件はすべて検出。
+- `!e.borrow.matches(e)`単独除去：`e.borrow === now.borrow`と各項目一致、context側の`matches`検査から導かれる。
+- context内の`closeRequested`判定：prepareSupplyの直前のopen判定が同条件で先に停止し、準備中のcloseは自身でreturnするためpostへ到達しない。
+- context内の`issuedBorrow`／`matches`判定：borrow差替え・項目混入はroot prepareで先に失敗し、prepared後にborrowは変わらない。
+- retireFailedの`!borrow`判定：root finishが必ず先にborrowを退役させる。
+
+**全体回帰**: npm run lint・build・package-http-classification.mjs（compiled 8＋6変異・梱包負対照を含む）成功。全体313file・15,430件成功（修正前15,401件＋29件）、失敗0。期限・cap・既存期待値は変更していない。
+
 ## コミット前の対象限定再検証
 
 上記「未コミット」は記録作成時点の状態。今回の12ファイルだけをindexへ登録し、そのindexを新しい一時作業ツリーへ展開した。依存node_modulesへの参照だけを加え、元の未登録変更・既存distを取り込まず、同候補で再検証した。

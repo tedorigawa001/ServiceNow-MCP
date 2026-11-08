@@ -228,6 +228,8 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 ### Added
 
+- WF-B canonical supply review adds fixed `post_*` selectors that each break exactly one post-validation clause (issued table/view, envelopes, table origin, registry/binding/declaration correspondence, lengths, record validity and oversize), two valid re-issue bases, a `retainedTableOrigin` diagnostic, and reason-routing tests for parent lifecycle mapping, claim-less close, direct preparation after construction failure, terminal replies and extra factory arguments. Envelope field checks and `borrow.matches(e)` are documented as mutually redundant.
+
 - WF-B declared/actual review now runs the compiled declared/actual negative controls from the package classification runner, and isolates each malformed source event/record field against a valid base, including rejection through `openOnce`. New fixed selectors check that a read event fires only at its own offset and that an after-metadata size change is `source_changed`; cleanup timing distinguishes stop/end clock signals and the source probe diagnostic stays limited to its selector. Legacy B results, caps and deadlines are unchanged.
 
 - WF-B snapshot/read preparation review keeps the read side unused when synthetic supply construction fails and records a close-derived read stop only after the construction issued its start claim, so a never-started read no longer reports `supply_closed`. Added controls cover prepare after an ordinary terminal, close-only `rejected` disposition and readonly check returning the first prior reason after lifecycle or supply failure. No legacy supply, B kernel, budget or resource wiring changes.
