@@ -22,12 +22,28 @@ const scenarios = ['normal', 'one_byte', 'interrupt_once', 'interrupt_always', '
   'hash_throw_cancel', 'after_changed', 'before_size', 'close_failure', 'close_throw', 'close_late',
   'candidate_failure', 'record_failure', 'accept_cancel', 'accept_clock', 'foreign_scope', 'foreign_owner', 'file_copy',
   'candidate_copy', 'double_accept', 'update_cap', 'read_cap', 'received_cap', 'guard_cap',
-  'open_none', 'open_owned_failure', 'clock_throw', 'capacity_files', 'long_short_reads', 'mismatch_close_failure'] as const;
+  'open_none', 'open_owned_failure', 'clock_throw', 'capacity_files', 'long_short_reads', 'mismatch_close_failure',
+  'capacity_8m_8', 'capacity_8m_32', 'capacity_8m_8_extra', 'capacity_8m_32_extra',
+  'declared_total_over', 'declared_file_over', 'declared_files_over'] as const;
 type Scenario = typeof scenarios[number];
 const EMPTY = 'e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855';
 const ABC = 'ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad';
 const HELLO = '2cf24dba5fb0a30e26e83b2ac5b9e29e1b161e5c1fa7425e73043362938b9824';
+// Synthetic repeated-a vectors obtained independently; never calculated by the target hash adapter.
+const MIB_A = '9bc1b2a288b26af7257a36277ae3816a7d4f16e89c1e7e77d0a5c48bad62b360';
+const QUARTER_MIB_A = 'dd3dde87623d9a6b354c68c943d189c89c63652d945e7bbdf0986cae91a49521';
 function files(scenario: Scenario): readonly File[] {
+  if (['capacity_8m_8', 'capacity_8m_32', 'capacity_8m_8_extra', 'capacity_8m_32_extra',
+    'declared_total_over', 'declared_file_over'].includes(scenario)) {
+    const quarter = scenario === 'capacity_8m_32' || scenario === 'capacity_8m_32_extra';
+    const payload = Object.freeze(Array<number>(quarter ? 262_144 : scenario === 'declared_file_over' ? 1_048_577 : 1_048_576).fill(97));
+    const values: (readonly number[])[] = Array<readonly number[]>(scenario === 'declared_file_over' ? 1 : quarter ? 32 : 8).fill(payload);
+    if (scenario === 'declared_total_over') values.push(Object.freeze([97]));
+    return Object.freeze(values.map((bytes, i) => Object.freeze({ id: `F${String(i + 1).padStart(2, '0')}`,
+      bytes, digest: quarter ? QUARTER_MIB_A : MIB_A })));
+  }
+  if (scenario === 'declared_files_over') return Object.freeze(Array.from({ length: 33 }, (_, i) =>
+    Object.freeze({ id: `F${String(i + 1).padStart(2, '0')}`, bytes: Object.freeze([97, 98, 99]), digest: ABC })));
   const values = scenario === 'capacity_files' ? Array.from({ length: 32 }, () => [97, 98, 99])
     : scenario === 'long_short_reads' ? [Array<number>(1_048_576).fill(97)]
     // Mismatch controls change one payload byte; the pinned abc digest stays the independent expected value.
@@ -137,7 +153,8 @@ class Assembly {
       if (this.scenario === 'early_eof') { this.mismatch(); return; }
       if (this.scenario === 'invalid_n') { this.#receivedKnown = false; this.fail('operation_invalid'); return; }
       if (!remaining) {
-        if (this.scenario === 'extra_byte') { this.#scratch[0] = 120; this.#counts.received++; this.mismatch(); }
+        if (this.scenario === 'extra_byte' || (['capacity_8m_8_extra', 'capacity_8m_32_extra'].includes(this.scenario)
+          && this.#ordinal === this.#files.length - 1)) { this.#scratch[0] = 120; this.#counts.received++; this.mismatch(); }
         else this.#phase = 'after';
         return;
       }

@@ -1,6 +1,8 @@
 # WF-B：scratch受理区間・進行位置・候補確定点の差分設計
 
-Version: draft-0.4 / Date: 2026-11-08 / 読み取り照合基準HEAD: `692b280` / レビュー修正の基準HEAD: `d80f817`・`2eb2b76` / (B)実装基準HEAD: `6fd83d4`。
+Version: draft-0.5 / Date: 2026-11-08 / 読み取り照合基準HEAD: `692b280` / レビュー修正の基準HEAD: `d80f817`・`2eb2b76` / (B)実装基準HEAD: `6fd83d4` / 容量補完基準HEAD: `92523f2`。
+
+draft-0.5: §9の最大8MiB成功走査・最終fileの余剰byte・宣言上限拒否を合成試験で補完した。[容量検証記録](E2E_BEST_PRACTICE_WFB_READ_HASH_CAPACITY_2026-11-08.md)。同snapshot接続・行集約は進めていない。
 
 draft-0.3のレビュー修正: (B)のdigest不一致対照がscenario名で不一致を強制しており、実digest比較を外しても検出できなかった。対照のpayloadを1 byte変え、固定abc digestとの実比較だけで不一致にした。全file確定後の誤用は後着停止の有無にかかわらず`binding`として保持する。入口は引数0個（normal）または固定scenario文字列1個だけを受け付ける。sticky停止後の直接step、900／1000の固定時刻境界、時計逆行、先行制御理由の保持、guard枠切れ時のcleanup時刻unknownの対照を追加した（§8）。
 
@@ -141,6 +143,25 @@ fixtureの静的合成source配列はmock読取元で、受信chunk履歴では�
 
 同scopeに保持するresource tokenと合成byte列はowner内部に閉じる。metadata取得は固定fake観測であり実OS保証ではない。candidateの発行元参照を別private slotで保持し、copy・別owner／scope／fileを拒否する。slot置換後の候補／発行元／record退役は外部hookなしの固定同期処理で、再受理は失敗する。readCompletedFilesはafter観測一致の時点で加算する。全file確定後の取消・期限・時計異常はfirstReasonを変えずstopReason／terminalDispositionへ記録し、確定済みhash_matchを維持する。部分完了時はincomplete／先行理由を保持する。
 
-SC01の別scratch混入は公開factoryがbuffer／supplierをhook非実行で拒否する負の対照であり、任意readerの悪意を監視した試験ではない。SC06のorigin混入は固定内部scenario専用。update_capは§3の縮小profile専用で、固定profileでの到達を主張しない。SC09は65,536回短読取・32file・retry32と縮小cap対照であり、最大期待総byte数の(B)成功走査は未実施（(A)の容量試験を(B)hashの保証へ流用しない）。rowsは全12件not_aggregated、5 gapsとruntime／native／E／Sはunknownを固定する。
+SC01の別scratch混入は公開factoryがbuffer／supplierをhook非実行で拒否する負の対照であり、任意readerの悪意を監視した試験ではない。SC06のorigin混入は固定内部scenario専用。update_capは§3の縮小profile専用で、固定profileでの到達を主張しない。SC09の65,536回短読取・32file・retry32と縮小cap対照に加え、最大期待総byte数の(B)成功走査を§9で補完した（(A)の容量試験を(B)hashの保証へ流用しない）。rowsは全12件not_aggregated、5 gapsとruntime／native／E／Sはunknownを固定する。
 
 後続(C)の同MapSupplySnapshotへの借用・辞書全fileのhash／行集約、実source読取・実期待値pinは引き続き未実装。合成成功を供給済みSや実装coverageへ昇格しない。
+
+## 9 最大8MiB成功走査・上限境界の合成補完
+
+新しい固定scenarioだけを追加し、profile・guard上界・操作順は変更しない。`capacity_8m_8`は8file×1,048,576 byte、`capacity_8m_32`は32file×262,144 byte。各fileはbyte 0x61の反復で、同サイズの固定source配列をfile間で共有しても、canonical file要素・scope・候補・slotは別物である。ownerの同scratchへ写したbytesを従来と同じNode hash境界へ通し、digest一致だけで受理する。既存の96byte対照を8MiBの証拠へ読み替えない。
+
+合成期待digestは1MiBが`9bc1b2a288b26af7257a36277ae3816a7d4f16e89c1e7e77d0a5c48bad62b360`、256KiBが`dd3dde87623d9a6b354c68c943d189c89c63652d945e7bbdf0986cae91a49521`。実sourceの期待値ではない。別moduleのboundedな純粋SHA-256 oracle（Node crypto／本体をimportしない）で再構成し、空列・単一a・100万aの既知vectorとの一致も確認する。本体はoracleをimportせず、実行時にactual digestから期待値を作らない。
+
+| 合成shape | 受信／正常hash済bytes | read／update | open／observe／init／final／close／受理 | guard |
+|---|---|---|---|---|
+| 8×1MiB | 8,388,608／8,388,608 | 136／128 | 8／16／8／8／8／8 | 386 |
+| 32×256KiB | 8,388,608／8,388,608 | 160／128 | 32／64／32／32／32／32 | 770 |
+| 8fileの最終EOF位置に余剰1byte | 8,388,609／8,388,608 | 136／128 | 8／15／8／7／8／7 | 380 |
+| 32fileの最終EOF位置に余剰1byte | 8,388,609／8,388,608 | 160／128 | 32／63／32／31／32／31 | 764 |
+
+余剰byteは受信上限ちょうどまで課金してcontent_mismatchで停止し、hashには追加せず、当該fileのafter／final／候補受理を行わない。既に確定した前fileのhash_matchと、全resourceのclose確認を保持する。最初の余剰で停止するため、受信上限を実際に2byte超過させる経路の試験ではない。受信capの変更や上限超過を許可しない。
+
+宣言総量8MiB+1（8×1MiB＋1byte）、1file=1MiB+1、33fileは、constructorでsource_limitを保持しopen／read／hash／cleanup予約0で拒否する。期待総量と1file・file数の等値／1超過を別々の固定shapeで確認する。計数oracleは本体のLIMIT／係数／counterをimportせず、別記述の操作イベントとBigInt積で照合する。
+
+今回確かめたのは65,536byte chunkの固定分割だけで、全短読取分割の成功や実期限内の処理時間を保証しない。全heap／native費・GC／同期hashの非保持性もUnknown。metadataは合成のまま、snapshotConnection／rowAggregationはnot_connected、全rowはnot_aggregated。S発行・core／runtime接続・実期待値pin・実source照合・実通信・設定変更・Pushは行わない。

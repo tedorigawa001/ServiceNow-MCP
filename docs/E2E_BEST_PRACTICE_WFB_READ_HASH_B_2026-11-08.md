@@ -1,5 +1,7 @@
 # WF-B (B)：同scratch・同bytes hashと一度限り候補受理の合成検証
 
+後続追記（2026-11-08）: 下記の「最大8MiB未実施」は各記録時点の状態。[最大8MiB成功走査・上限境界の合成検証](E2E_BEST_PRACTICE_WFB_READ_HASH_CAPACITY_2026-11-08.md)で補完した。過去の件数・失敗／未確認記録は変更せず、同snapshot接続・行集約・実source照合は未実施のままとする。
+
 Date: 2026-11-08 / 実装基準HEAD: `6fd83d4` / [契約・固定操作表](BEST_PRACTICE_WFB_SCRATCH_CANDIDATE_DESIGN.md) / [親設計](BEST_PRACTICE_WFB_PRIVATE_READ_HASH_DESIGN.md)。
 
 ## 対象と保証の範囲

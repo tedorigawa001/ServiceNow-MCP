@@ -1,5 +1,7 @@
 # WF-B：private読取継続・共有上限・同bytes hashと結果owner
 
+容量補完（2026-11-08）: [(B)の8file×1MiB・32file×256KiBと上限境界](BEST_PRACTICE_WFB_SCRATCH_CANDIDATE_DESIGN.md)を、独立hash／計数oracleで確認する合成試験を追加した。[検証記録](E2E_BEST_PRACTICE_WFB_READ_HASH_CAPACITY_2026-11-08.md)。固定cap・guard上界は変更せず、同snapshot接続・行集約・実sourceは未対応のまま。
+
 実装追記（2026-11-08）: [(B)の固定操作表・guard上界と合成実装](BEST_PRACTICE_WFB_SCRATCH_CANDIDATE_DESIGN.md)を追加した。独立assemblyで同scratchの受信／hash計数、poisoned時停止、同scope候補のcleanup／post後一度限り受理を検証する。上界は`2(R+7F)+4=131,524`。既存(A)・同snapshot供給・行集約・実sourceは変更しない。[検証記録](E2E_BEST_PRACTICE_WFB_READ_HASH_B_2026-11-08.md)。
 
 差分設計追記（2026-11-08）: [scratch受理区間・進行位置・候補確定点](BEST_PRACTICE_WFB_SCRATCH_CANDIDATE_DESIGN.md)で、受信量と正常hash済prefixの分離、同attemptのupdate予約、close／post後の単一slot確定と確定後の停止診断を具体化した。(A)の`acceptedFiles`をhash確認済みと読み替えず、(B)のguard上界は再計数を要する。設計のみで、hash接続・実source照合は未実施。
