@@ -18,6 +18,8 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 ### Changed
 
+- WF-B mechanically relocates the legacy B read/hash kernel into a package-excluded shared fixture module, leaving its original path as a two-line compatibility factory re-export. The implementation body, fixed scenarios, model, counters, limits and existing expectations remain unchanged. Export/compatibility/C-closed controls introduce no kernel constructor, arbitrary supply registration, canonical adapter or C execution path; issuance, whole-run admission and runtime/core wiring remain closed.
+
 - WF-B snapshot/read preparation adds a separate synthetic-only construction with a prior diagnostic/result owner, preallocated empty cleanup custody, private checked-map borrow and one-shot start claim. Fixed identity/reentry/failure probes retain first diagnoses, forbid origin recreation after failure, and retire borrow references on discard without issuing read or cleanup evidence. The legacy supply and B hash kernel remain unchanged and unconnected; real budgets, pins, row aggregation, core/runtime wiring and formal issuance stay disabled or unknown.
 
 - WF-B read/hash stage B adds synthetic exact-8-MiB success controls (8×1 MiB and 32×256 KiB), last-file excess-byte accounting and pre-open declaration-limit refusals. A separate bounded pure SHA-256 oracle reconstructs the static repeated-byte vectors, while semantic-event/BigInt controls check byte totals, all cleanup reservations and 386/770 success guards without increasing existing caps. Real source pins, snapshot wiring, row aggregation, issuance and whole-run admission remain closed or unknown.

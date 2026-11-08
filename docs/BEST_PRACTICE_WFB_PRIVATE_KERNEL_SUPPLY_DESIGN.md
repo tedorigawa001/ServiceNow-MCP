@@ -1,12 +1,14 @@
 # WF-B (C)：共通読取kernelへのprivate供給境界の詳細設計
 
-Version: draft-0.2 / Date: 2026-11-08 / 読み取り照合基準HEAD: `91e4e4e` / レビュー修正の基準HEAD: `ee04dcd`。
+Version: draft-0.3 / Date: 2026-11-08 / 読み取り照合基準HEAD: `91e4e4e` / レビュー修正の基準HEAD: `ee04dcd` / 機械的抽出基準HEAD: `f6018b5`。
+
+draft-0.3: §11の(B)kernelの機械的抽出と薄い互換factoryだけを実装した。[抽出検証記録](E2E_BEST_PRACTICE_WFB_KERNEL_EXTRACTION_2026-11-08.md)。Cからの実行・private供給表・actual判定への変更は行っていない。
 
 draft-0.1のレビュー修正: 現行(B)の早EOF・余剰byte・before長差・after変更は読取経路内のscenario分岐で起こし、宣言長＝actual（`bytes.length`）であることを明記した。§6のexpectedBytes基準の残量計算とactual source由来のEOF／余剰判定はkernelの挙動変更で、機械的抽出に含めないと§5・§10で区別した。抽出段階はscenario分岐を残したまま移し、actual判定の導入とlegacy adapterの故障script化は別段階とし、その後に(B)既存試験を期待値不変で全件再実行する。設計のみで、実装状態は変わらない。
 
-Status: **設計のみ。共通kernel抽出・private供給・読取接続はいずれも未実装。** 親は[同snapshotの所有・停止契約](BEST_PRACTICE_WFB_SNAPSHOT_READ_LIFECYCLE_DESIGN.md)と[private読取・hash設計](BEST_PRACTICE_WFB_PRIVATE_READ_HASH_DESIGN.md)。[(B)の候補確定契約](BEST_PRACTICE_WFB_SCRATCH_CANDIDATE_DESIGN.md)、[8MiB合成検証](E2E_BEST_PRACTICE_WFB_READ_HASH_CAPACITY_2026-11-08.md)、[開始準備の検証](E2E_BEST_PRACTICE_WFB_SNAPSHOT_READ_START_2026-11-08.md)の保証範囲を合算して、接続完了とはしない。
+Status: **(B)kernelの機械的抽出だけを実装。private供給・Cからの読取接続は未実装。** 親は[同snapshotの所有・停止契約](BEST_PRACTICE_WFB_SNAPSHOT_READ_LIFECYCLE_DESIGN.md)と[private読取・hash設計](BEST_PRACTICE_WFB_PRIVATE_READ_HASH_DESIGN.md)。[(B)の候補確定契約](BEST_PRACTICE_WFB_SCRATCH_CANDIDATE_DESIGN.md)、[8MiB合成検証](E2E_BEST_PRACTICE_WFB_READ_HASH_CAPACITY_2026-11-08.md)、[開始準備の検証](E2E_BEST_PRACTICE_WFB_SNAPSHOT_READ_START_2026-11-08.md)の保証範囲を合算して、接続完了とはしない。
 
-正式発行口閉鎖・全体受付無効・Unknown・VM／監視／telemetry調査保留を維持する。今回はMDのみ。実装・実期待値pin・実source照合・S発行・core接続・実接続・実通信・設定変更・Pushは行わない。以下の型名・module配置・状態は内部案であり、生成済み証拠・公開API・採用済みcapではない。
+正式発行口閉鎖・全体受付無効・Unknown・VM／監視／telemetry調査保留を維持する。draft-0.1／0.2はMDのみ、draft-0.3は§11の機械的抽出に限定する。実期待値pin・実source照合・S発行・core接続・実接続・実通信・設定変更・Pushは行わない。§11以外の型名・供給状態は内部案であり、生成済み証拠・公開API・採用済みcapではない。
 
 ## 1 現行の構造差と設計判断
 
@@ -131,4 +133,16 @@ binding点はread→hash受理区間に入れない。metadata／hash／closeの
 
 最初は(B)の共通kernel抽出と薄い互換factoryだけを行い、Cからの実行入口は閉じたままBの既存試験・型／梱包保証を移す。この段階ではscenario分岐と`bytes.length`基準の計算をそのまま移し、宣言／actualの分離は行わない。次の段階で、kernelへexpectedBytes基準の残量計算とactual source由来のEOF／余剰判定を導入し、(B)のscenario故障をlegacy adapterの固定source record／故障scriptへ置き換える。その直後に(B)の既存試験を期待値・oracleを変えずに全件再実行し、宣言≠actualの経路はKS02相当の合成対照で別に確認する。次に、同canonical参照・静的期待値とpayload binding表・非実行view・移譲claimの純粋合成検査を実装する。共有budget／停止guard・非空custodyへの接続と上界を確定してから、初めて同snapshot→kernelの連続合成試験へ進む。
 
-本書作成時点では上記の抽出・供給表・移譲claim・KS01〜09は未実施。C-startのprepared、B単独のhash_matchをS・実装coverage・正常な接続終端へ昇格しない。row集約、旧Supply classの採用、実期待値pin・実source照合・実resource／runtime・core接続は別範囲のまま、正式発行口閉鎖・全体受付無効・Unknown・調査保留を維持する。
+機械的抽出だけを§11で実施し、供給表・移譲claim・KS01〜09全体は未実施。C-startのprepared、B単独のhash_matchをS・実装coverage・正常な接続終端へ昇格しない。row集約、旧Supply classの採用、実期待値pin・実source照合・実resource／runtime・core接続は別範囲のまま、正式発行口閉鎖・全体受付無効・Unknown・調査保留を維持する。
+
+## 11 (B)kernelの機械的抽出・互換factory（部分実装）
+
+`tests/review/fixtures/shared-read-hash-kernel-fake.ts`へ従来(B)の全実装を移した。先頭コメント以外は抽出基準HEADの旧file本文と同一で、class・固定recipe・scenario分岐・constructor・状態遷移・ReadOps相当処理・hash・guard／計数・結果model・factory実装を変更していない。従来の`read-hash-fake.ts`はコメントとcreateReadHashFakeのre-exportだけの2行である。
+
+新moduleのprivate Assemblyが読取kernelの本体を保持する。exportはcreateReadHashFakeという固定診断factoryの1つだけで、raw kernel constructor・generic供給口・C実行口を追加しない。旧pathと新moduleのexportは同じ関数参照を返す。この配置は共通化の物理的な第1段階で、canonical宣言adapter／source判定・C rootとのcolocationや接続まで完了したものではない。
+
+§5のレビュー方針どおり、現行(B)の宣言長＝actual bytes.length、早EOF・余剰byte・before長差・after変更の固定scenario判定を維持する。§6のexpectedBytesとactual sourceを独立させた判定には変更していない。既存Bのmodel／全cap／D_stop900・D_end1000・guard上界131,524と全既存試験の期待値を維持する。
+
+追加のexport／互換／C閉鎖試験は、両入口の同一性、有限のB診断、caller source／callback拒否、Cのprepared／summaryを供給として採用しないこと、終端不変と閉鎖authorityを確認する。両入口の出力比較は互換性の対照であって、独立したhash oracleの代わりではない。既存の既知vector・純粋SHA-256 oracle・8MiB／失敗prefix試験を変更せずに抽出先へ通す。
+
+C-start／旧Supplyの実装・試験とsrc／dist／配布設定は変更しない。CのreadKernel／actualBudgetはnot_connectedのままで、open／read／hash／cleanupも0。(B)のsnapshotConnection／rowAggregationもnot_connected、正式発行口閉鎖・全体受付無効・Unknown・調査保留を維持する。検証範囲・未確認事項は[抽出検証記録](E2E_BEST_PRACTICE_WFB_KERNEL_EXTRACTION_2026-11-08.md)へ記載する。

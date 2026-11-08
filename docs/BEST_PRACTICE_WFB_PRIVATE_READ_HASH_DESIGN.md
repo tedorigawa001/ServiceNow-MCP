@@ -1,5 +1,7 @@
 # WF-B：private読取継続・共有上限・同bytes hashと結果owner
 
+機械的抽出追記（2026-11-08）: [(B)kernelの共通moduleへの移動と互換factory](BEST_PRACTICE_WFB_PRIVATE_KERNEL_SUPPLY_DESIGN.md)を実装した。本文は先頭コメント以外そのまま移し、旧fixture pathのcreateReadHashFakeと既存期待値を維持する。[検証記録](E2E_BEST_PRACTICE_WFB_KERNEL_EXTRACTION_2026-11-08.md)。Cからの実行・private供給・actual判定への変更は行わない。
+
 詳細設計追記（2026-11-08）: [共通読取kernelへのprivate供給境界](BEST_PRACTICE_WFB_PRIVATE_KERNEL_SUPPLY_DESIGN.md)へ、(B)のFileとstrict辞書の構造差、canonical参照を維持した期待値／actual bytesの分離、共通化範囲・所有権・停止と独立検証条件を整理した。設計のみで実装・接続・実source照合は行っていない。
 
 準備実装追記（2026-11-08）: [同snapshot開始準備の新合成root](BEST_PRACTICE_WFB_SNAPSHOT_READ_LIFECYCLE_DESIGN.md)で、先行診断owner・private borrow・identity・一度限り開始claimを実装した。[検証記録](E2E_BEST_PRACTICE_WFB_SNAPSHOT_READ_START_2026-11-08.md)。旧Supply／(B)kernelへの接続、実budget・読取／hash・行集約は進めていない。
