@@ -1,6 +1,8 @@
 # WF-B：宣言長とactual判定の分離・legacy source故障script化の実装境界
 
-Version: draft-0.1 / Date: 2026-11-08 / 読み取り照合基準HEAD: `375826f`。
+Version: draft-0.2 / Date: 2026-11-08 / 読み取り照合基準HEAD: `375826f` / レビュー修正の基準HEAD: `7a40526`。
+
+draft-0.1のレビュー修正: §6のread pre順序で、update枠の上限受付と予約計上を分けた。read枠・retry枠・受信余裕・update上限・宣言位置をすべて受け付けた後に、予約計上とretry／read試行課金を行う（現行どおり）。また、deadline_during_read／close_lateの時刻更新とcancel_during_read等の取消を、producerが停止ownerの時計・取消状態へ直接書くのでなく、型付き単発結果の固定停止signalとして返し、kernelが同じ受理位置で停止ownerへ反映すると定めた（§3／§5）。設計のみで、実装状態は変わらない。
 
 Status: **設計のみ。宣言／actualの分離とsource script化は未実装。** 親は[private供給境界](BEST_PRACTICE_WFB_PRIVATE_KERNEL_SUPPLY_DESIGN.md)と[private読取・hash設計](BEST_PRACTICE_WFB_PRIVATE_READ_HASH_DESIGN.md)。[kernel機械的抽出の検証](E2E_BEST_PRACTICE_WFB_KERNEL_EXTRACTION_2026-11-08.md)は、今回の挙動変更の証拠へ転用しない。
 
@@ -32,7 +34,7 @@ legacyの空fileはdeclaredBytes=0として引き続き扱う。strict SourceMap
 
 ## 3 producerの単発境界とactual判定
 
-非公開producerの操作はopenOnce、observeOnce(handle, before/after)、readOnce(handle, offset, requested, ownedScratch)、closeOnceに限定する。呼出し1回につき1試行で、内部retry・clock採取・外部callback・宣言lookup・hashを行わない。外部からproducerやscriptを登録するexportは作らない。
+非公開producerの操作はopenOnce、observeOnce(handle, before/after)、readOnce(handle, offset, requested, ownedScratch)、closeOnceに限定する。呼出し1回につき1試行で、内部retry・clock採取・外部callback・宣言lookup・hashを行わない。producerは停止ownerの時計値・取消状態への参照を持たず、書き込まない。固定の停止事象は、単発結果に付く有限の`stopSignal`（none／cancel／advance_to_stop／advance_to_end）として返すだけとする。外部からproducerやscriptを登録するexportは作らない。
 
 readOnceの正常動作は、scriptの当該イベントを適用した後、同handleの現在actual可視長Aとoffset Pを使って判定する。
 
@@ -83,13 +85,15 @@ metadataは同handleのregular-kind／identity／size／stampを返す固定観�
 | close_failure／close_throw／close_late | false／throw／固定時刻更新を伴うclose結果 | 予約closeを1回試し、cleanup理由と終端時刻を分離 |
 | mismatch_close_failure | abdという実bytesと失敗closeを組で供給。比較結果を返さない | abcの固定期待digestとの実比較でmismatch、cleanup異常を別保持 |
 
+`stopSignal`の反映はkernelが行う。readでは返却結果の受理時、すなわち妥当なpayloadの受信計上の直後・hash update前（現行の`deadline_during_read`／`cancel_during_read`と同じ位置）に、closeではclose結果の受理時（現行の`close_late`と同じ位置）に、停止ownerの取消latch／固定時計値を1回だけ更新する。停止の観測は従来どおり次のpost guardで行い、受理区間内にguard・clock採取を追加しない。signalを伴う結果が不正・失敗variantの場合も同じ固定位置で反映し、別位置への遅延や二重反映をしない。
+
 producer側の固定signal／scriptは呼出し元が与える任意関数ではない。既存の同期停止対照を表すための非公開依存であり、kernelがpublic callbackへ制御を渡す口を作らない。
 
 kernelから除くのは、source／metadataのscenario名に基づく不一致・EOFの強制判定である。hash故障・候補copy／origin／生成故障、guard_cap・read_cap等の縮小profile、時計例外・逆行、開始／終端誤用の既存対照は別責務として維持する。全faultを同時に汎用化・統合するrefactorは本範囲へ含めない。
 
 ## 6 同scratch受理区間・課金順序の維持
 
-read preの順は停止guard → read枠 → retry枠 → 要求長ぶんの受信余裕 → payload予定時のupdate枠予約 → 宣言位置加算の受付 → retry／read試行課金 → producer単発呼出し。producerがeofを返す可能性があっても、宣言上payload予定ならupdate枠を事前予約する。
+read preの順は停止guard → 受付（read枠 → retry枠 → 要求長ぶんの受信余裕 → payload予定時のupdate枠上限 → 宣言位置加算）→ payload予定時のupdate予約計上 → retry／read試行課金 → producer単発呼出し。受付のどれかで拒否した場合はsource_limitとし、予約・試行課金は0で、解除すべき予約を作らない。producerがeofを返す可能性があっても、宣言上payload予定なら全受付後にupdate予約を計上する。
 
 妥当なpayload bytes(n)を受けたら、同じ受理区間で受信nを加算し、同scratch[0,n)を1回updateする。成功後だけposition／正常hash済prefixをn進める。producer呼出しからupdate完了まで、追加clock／停止hook／別source操作／awaitを入れない。hash失敗時は既知受信量を保持し、poisonedと直前の正常prefixを残して再read／finalへ進まない。
 
