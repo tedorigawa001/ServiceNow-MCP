@@ -1,5 +1,7 @@
 # WF-B：固定辞書の供給・期待値更新・同SourceMapDraft結合の差分設計
 
+実装追記（2026-11-08）: [(B)の同scratch・同bytes hash／候補受理](BEST_PRACTICE_WFB_SCRATCH_CANDIDATE_DESIGN.md)を別の合成assemblyに実装した。[検証記録](E2E_BEST_PRACTICE_WFB_READ_HASH_B_2026-11-08.md)。当該供給元／MapSupplySnapshotの読取接続や模擬hash値は変更せず、実期待値pin・実source照合・5 gapsの確認には進めていない。
+
 差分設計追記（2026-11-08）: [scratch受理区間・進行位置・候補確定点](BEST_PRACTICE_WFB_SCRATCH_CANDIDATE_DESIGN.md)へ、同bytesの受信／hash計数・同scope候補の一度限り受理・確定後の停止診断と独立検証条件を整理した。独立合成(B)向けの設計であり、当該MapSupplySnapshotへの読取接続、実期待値pin、実source照合、5 gapsの確認を進めたものではない。
 
 実装追記（2026-11-08）: [private読取設計の(A)純粋fake](BEST_PRACTICE_WFB_PRIVATE_READ_HASH_DESIGN.md)に共有上限・停止・単発ReadOps・結果slotを実装した。独立assemblyのみで、当該供給元／MapSupplySnapshot・bytes／hash・実sourceには接続しない。未実装行・5 gaps・Unknownは維持する。

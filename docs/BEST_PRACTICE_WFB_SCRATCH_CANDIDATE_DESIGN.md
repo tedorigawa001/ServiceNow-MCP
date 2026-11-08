@@ -1,12 +1,14 @@
 # WF-B：scratch受理区間・進行位置・候補確定点の差分設計
 
-Version: draft-0.2 / Date: 2026-11-08 / 読み取り照合基準HEAD: `692b280` / レビュー修正の基準HEAD: `d80f817`。
+Version: draft-0.3 / Date: 2026-11-08 / 読み取り照合基準HEAD: `692b280` / レビュー修正の基準HEAD: `d80f817` / (B)実装基準HEAD: `6fd83d4`。
+
+draft-0.3: §8の(B)独立合成assemblyを実装した。§1〜7の契約に対する実施範囲・残差を§8と[検証記録](E2E_BEST_PRACTICE_WFB_READ_HASH_B_2026-11-08.md)で区別する。
 
 draft-0.1のレビュー修正: 固定上限ではupdate枠がread枠より先に尽きないことを導出し、update枠拒否の検証を縮小profileの合成内部対照へ限定して検査順と理由を固定した（§3／SC05）。`readCompletedFiles`の加算点をafter観測一致へ固定し、(A)の`acceptedFiles`と同義にしない（§2）。固定record準備をclose確認後・最後のpost-guard前の`record_ready`段に一本化した（§4／§5）。全file確定後の取消・上限停止もsession成功扱いしないと明記した（§5）。SC02の位置をbyte累計で表した。
 
-Status: **設計のみ。(A)の長さだけを扱う独立fakeから、(B)の同scratch・同bytes hashと候補受理へ進むための契約。実装済み証拠ではない。** 親は[private読取・hash設計](BEST_PRACTICE_WFB_PRIVATE_READ_HASH_DESIGN.md)と[固定辞書供給設計](BEST_PRACTICE_WFB_FIXED_DICTIONARY_SUPPLY_DESIGN.md)。
+Status: **(B)の同scratch・同bytes hashと候補受理を独立合成assemblyで実装。実source／同MapSupplySnapshotへの接続・行集約は未実装。** 親は[private読取・hash設計](BEST_PRACTICE_WFB_PRIVATE_READ_HASH_DESIGN.md)と[固定辞書供給設計](BEST_PRACTICE_WFB_FIXED_DICTIONARY_SUPPLY_DESIGN.md)。
 
-正式発行口閉鎖・全体受付無効・Unknown・VM／監視／telemetry調査保留を維持する。今回はMDのみ。実装・hash接続・実期待値pin・実source照合・S発行・core接続・実接続・実通信・設定変更・Pushは行わない。以下の内部名は提案であり、本番cap・実backend・実snapshotへの接続を承認しない。
+正式発行口閉鎖・全体受付無効・Unknown・VM／監視／telemetry調査保留を維持する。draft-0.1／0.2はMDのみ、draft-0.3の実装は§8の合成bytesに限定する。実期待値pin・実source照合・S発行・core接続・実接続・実通信・設定変更・Pushは行わない。本番cap・実backend保証・実snapshotへの接続を承認しない。
 
 ## 1 差分と所有境界
 
@@ -85,7 +87,7 @@ close確認後、必要な固定record生成を終えて（`record_ready`）最�
 
 最初のprimary理由、制御停止理由、cleanup理由／期限確認を別slotに保持する。確定前hash故障＋取消ならprimary hash_unavailableと取消の両方を残す。全file確定後でも新たなbinding不正は契約違反として保持し、正常完了へ偽装しない。いずれも非実行結果でready=false、authority=none。hash観測が揃ってもmapping／implementation／5 gaps・全体受付を確認済みにしない。
 
-## 6 独立検証の受入条件（未実施）
+## 6 独立検証の受入条件（実施範囲は§8と検証記録）
 
 期待結果を対象実装のhash／進行関数・係数・summaryから計算しない。既知byte列と独立固定digest、別のイベント遷移oracle、上限の手計数を分けて用いる。hash oracleだけで所有権や順序の正しさを証明しない。
 
@@ -108,4 +110,35 @@ privateな混入が通常入口から作れない場合、検査を公開factory
 
 次候補は(B)専用合成assemblyで、同scratch書込・固定同期hash境界・二種類の進行計数・同scope候補・固定slot確定を実装すること。既存(A)を上書きせず、操作表とguard上界を先に確定してSC01〜10を検証する。実MapSupplySnapshot借用・行hash集約へのprivate接続は(C)に残す。
 
-実hash実装の選定／保証、実source期待値、実metadataとpath同一性、runtime費用・実E／S導出は未解決。今回の文書はそれらの承認・完了記録ではなく、独立合成試験も未実施である。
+実hash実装の保証、実source期待値、実metadataとpath同一性、runtime費用・実E／S導出は未解決。§1〜7だけでは承認・完了記録にならない。
+
+## 8 (B)固定操作表・合成実装と残差
+
+`tests/review/fixtures/read-hash-fake.ts`は、既存(A)をimport／変更しない独立assemblyである。唯一の入力は固定scenario文字列、公開facadeはstep／run／inspect／finish／cancel／advanceToのみ。file・buffer・reader・clock callback・candidate・snapshotの登録／採用口を作らない。合成abc・空列・helloの期待digestは静的な既知ベクトルで、actualから生成しない。
+
+| 固定phase | session最大操作数 | guard／費目 |
+|---|---|---|
+| open | F≤32 | 通常pre／post各1、open1・cleanup予約1。取得なしは未使用予約返却 |
+| before | F | 通常pre／post各1、observe1 |
+| init | F | 通常pre／post各1、init試行1 |
+| read（payload／EOF／EINTR／throw） | R≤65,536 | 通常pre／post各1。readとupdate間0。payload予定時にupdate1枠を一時予約 |
+| after | F | 通常pre／post各1、observe1。早EOF／余剰byteでは未実施 |
+| final | F | 通常pre／post各1、final試行1、正常比較でprivate candidate1 |
+| close | F | cleanup pre／post各1、予約済みclose1。停止／時計異常でも呼出しを省略しない |
+| accept | F | 通常pre／post各1。record準備・origin検査はpost前、単一slot置換はpost後 |
+| 最初の拒否操作 | 最大1 | 未実行read上限拒否などで最大2 guard。sticky停止後は追加操作なし |
+| finish | 最大1 | 通常1＋cleanup終端1。途中resourceのcloseは上のF枠に含む |
+
+したがって`G ≤ 2(R + 7F) + 2 + 2 = 131,524`。失敗postも当該操作の2枠に含み、preで停止した場合の未使用postを追加枠へ数えない。readとhash updateの間のguardは0。scheduler上限は`R+7F+1` stepで、最初の拒否用stepを含む。guard予算自体を消費し切った場合は追加時計採取を行わず停止し、cleanupの時間確認はunknownでもcloseを1回試す。
+
+同じsession内でopen・observe・close・init・finalはphase順序により上限を守り、read／retry／受信／updateはdispatch前に枠を検査する。公開の任意順ReadOps操作はなく、再入可能な外部hookもない。update予約は同時最大1で、`予約累計 = update試行 + 未使用解除 + 現在予約`、cleanupは`予約累計 = close試行 + 未使用返却`を合成oracleで検査する。init／final成功の計数は今回別slot化せず、init試行・final試行とhashStateで失敗を区別する。
+
+固定Node SHA-256境界はprivate scratchのsubarrayを同期updateする。Nodeのhash実装を別実装のhashで再検証したものではなく、独立固定ベクトル・分割差・残存tail対照が今回の保証範囲。hash内部の非保持・nativeコスト・OOM／process停止・実時間内の完了保証はUnknown。実sourceのhash採取は行わない。
+
+fixtureの静的合成source配列はmock読取元で、受信chunk履歴ではない。この配列やNode hashの内部heapをscratch上限65,536 byteへ含めて実測したものではなく、session全heapの上界はUnknown。終端のretained判定はscope／candidate／issued／record参照の退役であり、固定fixture配列のGCや物理消去を意味しない。
+
+同scopeに保持するresource tokenと合成byte列はowner内部に閉じる。metadata取得は固定fake観測であり実OS保証ではない。candidateの発行元参照を別private slotで保持し、copy・別owner／scope／fileを拒否する。slot置換後の候補／発行元／record退役は外部hookなしの固定同期処理で、再受理は失敗する。readCompletedFilesはafter観測一致の時点で加算する。全file確定後の取消・期限・時計異常はfirstReasonを変えずstopReason／terminalDispositionへ記録し、確定済みhash_matchを維持する。部分完了時はincomplete／先行理由を保持する。
+
+SC01の別scratch混入は公開factoryがbuffer／supplierをhook非実行で拒否する負の対照であり、任意readerの悪意を監視した試験ではない。SC06のorigin混入は固定内部scenario専用。update_capは§3の縮小profile専用で、固定profileでの到達を主張しない。SC09は65,536回短読取・32file・retry32と縮小cap対照であり、最大期待総byte数の(B)成功走査は未実施（(A)の容量試験を(B)hashの保証へ流用しない）。rowsは全12件not_aggregated、5 gapsとruntime／native／E／Sはunknownを固定する。
+
+後続(C)の同MapSupplySnapshotへの借用・辞書全fileのhash／行集約、実source読取・実期待値pinは引き続き未実装。合成成功を供給済みSや実装coverageへ昇格しない。

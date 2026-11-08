@@ -1,8 +1,10 @@
 # WF-B：private読取継続・共有上限・同bytes hashと結果owner
 
+実装追記（2026-11-08）: [(B)の固定操作表・guard上界と合成実装](BEST_PRACTICE_WFB_SCRATCH_CANDIDATE_DESIGN.md)を追加した。独立assemblyで同scratchの受信／hash計数、poisoned時停止、同scope候補のcleanup／post後一度限り受理を検証する。上界は`2(R+7F)+4=131,524`。既存(A)・同snapshot供給・行集約・実sourceは変更しない。[検証記録](E2E_BEST_PRACTICE_WFB_READ_HASH_B_2026-11-08.md)。
+
 差分設計追記（2026-11-08）: [scratch受理区間・進行位置・候補確定点](BEST_PRACTICE_WFB_SCRATCH_CANDIDATE_DESIGN.md)で、受信量と正常hash済prefixの分離、同attemptのupdate予約、close／post後の単一slot確定と確定後の停止診断を具体化した。(A)の`acceptedFiles`をhash確認済みと読み替えず、(B)のguard上界は再計数を要する。設計のみで、hash接続・実source照合は未実施。
 
-Version: draft-0.4 / Date: 2026-11-08 / 読み取り照合基準HEAD: `77255f2` / レビュー修正の基準HEAD: `72e4745`・`e235ec9` / (A)実装基準HEAD: `dfc79ff`。
+Version: draft-0.5 / Date: 2026-11-08 / 読み取り照合基準HEAD: `77255f2` / レビュー修正の基準HEAD: `72e4745`・`e235ec9` / (A)実装基準HEAD: `dfc79ff` / (B)実装基準HEAD: `6fd83d4`。
 
 draft-0.3のレビュー修正: (A)のfakeで、完走してclose確認したfileと途中で放棄したfileが同じ`incomplete`／理由なしになっていた。完走fileは`pending`のまま残して`acceptedFiles`へ数え、after観測前のcloseは`incomplete`をprimary理由にした。全file受理後の期限・取消・時計・上限の停止は`stopReason`だけに残す（§11.1／§11.2）。after読取のsize／identity／kind差とbefore読取のidentity／kind差の固定scenarioを追加した。
 
@@ -10,9 +12,9 @@ draft-0.3: §11の(A)共有上限・停止・単発ReadOps・結果slotを純粋
 
 draft-0.1のレビュー修正: 行のhash集約へbindingのtests（T／O file）を含め、辞書全体hash軸の状態を定義した（§6）。受理区間内のguard呼出しをなくし、guardを受理区間の前後へ移した（§4／§5）。早いEOF・余剰byteをcontent_mismatchに固定し、読取中変更とは区別しないことを明記した（§3）。cleanup軸のopen未試行とresource未取得を分けた（§6）。RH03／RH04／RH06の対照を追加した。設計のみで、実装・実source照合は変えていない。
 
-Status: **(A)の独立純粋fakeのみ実装。実bytes読取・hash照合・同snapshotへの読取接続は未実装。** 親は[固定辞書供給・同map結合](BEST_PRACTICE_WFB_FIXED_DICTIONARY_SUPPLY_DESIGN.md)と[固定source対応・内容照合](BEST_PRACTICE_WFB_FIXED_SOURCE_COVERAGE_DESIGN.md)。供給元のcheckはprivate結合の非実行確認だけで、今回のfakeへ接続していない。
+Status: **(A)の独立純粋fakeと(B)の独立合成bytes／hash assemblyを実装。同snapshotへの読取接続・実source照合・行集約は未実装。** 親は[固定辞書供給・同map結合](BEST_PRACTICE_WFB_FIXED_DICTIONARY_SUPPLY_DESIGN.md)と[固定source対応・内容照合](BEST_PRACTICE_WFB_FIXED_SOURCE_COVERAGE_DESIGN.md)。供給元のcheckはprivate結合の非実行確認だけで、今回のfakeへ接続していない。
 
-正式発行口閉鎖・全体受付無効・Unknown・VM／監視／telemetry調査保留を維持する。draft-0.1／0.2はMDだけ、draft-0.3の実装は§11の純粋fakeに限定する。hash接続・実期待値pin・実sourceのhash採取／照合・S発行・core接続・実接続・実通信・設定変更・Pushは行わない。以下の数値は合成検証用profileで、本番capや時間枠の承認ではない。
+正式発行口閉鎖・全体受付無効・Unknown・VM／監視／telemetry調査保留を維持する。draft-0.1／0.2はMDだけ、draft-0.3／0.4の実装は§11の純粋fake、draft-0.5は独立(B)の合成hash接続に限定する。同snapshot読取接続・実期待値pin・実sourceのhash採取／照合・S発行・core接続・実接続・実通信・設定変更・Pushは行わない。以下の数値は合成検証用profileで、本番capや時間枠の承認ではない。
 
 ## 1 現行からの差分と非目標
 

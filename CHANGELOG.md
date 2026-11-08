@@ -18,6 +18,8 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 ### Changed
 
+- WF-B read/hash stage B adds a separate synthetic-only owned-scratch SHA-256 assembly with a fixed eight-phase schedule and a 131,524-call guard ceiling. Independent vectors and event/count oracles check received versus successfully hashed prefixes, attempt-bound update reservations, poisoned hash failures, private one-shot candidate acceptance after cleanup/post-guard, and late-stop diagnostics without rewriting committed file observations. Stage A remains unchanged; real pins, source/snapshot wiring, row aggregation, E/S requirements and issuance remain unavailable or closed.
+
 - WF-B read/hash stage A adds an isolated pure ReadOps fake with shared attempt/byte/retry ceilings, fixed logical deadlines, reserved one-attempt cleanup and immutable file/row result slots. Synthetic boundary/fault controls retain first and cleanup diagnoses without resetting budgets; no buffers, hashing, source pins, supply/snapshot wiring or runtime authority are introduced.
 
 - WF-B adds a fixed synthetic-only map supplier and private MapSupplySnapshot bound to the same checked SourceMapDraft/files/rows. Test-only second-set probes reject foreign snapshots, equal copies and version mixing; construction faults retain first diagnoses and retire private references. No real expected values are pinned or hashed, and formal supply/issuance/core paths stay closed.
