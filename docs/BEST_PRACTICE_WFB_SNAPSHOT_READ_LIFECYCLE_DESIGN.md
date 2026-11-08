@@ -1,5 +1,7 @@
 # WF-B (C)：同snapshot読取接続の所有・停止契約の差分設計
 
+差分設計追記（2026-11-08）: [同canonical fileの供給表・非実行viewと移譲責務](BEST_PRACTICE_WFB_CANONICAL_SUPPLY_VIEW_DESIGN.md)で、同prepared／borrowに結合する全file表・viewの準備claim、非実行移譲claimの消費点、pending／holder・close時の破棄と診断保持を具体化した。開始claimと下位claimを分け、非実行の退役をresource cleanup確認にしない。設計のみでCのkernel／実budget接続は未実装のまま。
+
 詳細設計追記（2026-11-08）: [共通読取kernelへのprivate供給境界](BEST_PRACTICE_WFB_PRIVATE_KERNEL_SUPPLY_DESIGN.md)で、同canonical fileと同snapshotの期待値・独立した合成bytes表、共通化module境界・一度限り移譲・失敗時の所有と停止を具体化した。設計のみで、共通kernel抽出・供給・読取接続は進めていない。
 
 Version: draft-0.4 / Date: 2026-11-08 / 読み取り照合基準HEAD: `e662a21` / レビュー修正の基準HEAD: `a4fd836`・`aa6477e` / 開始準備実装基準HEAD: `9b7ddb9`。

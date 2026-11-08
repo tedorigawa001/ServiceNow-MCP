@@ -1,0 +1,156 @@
+# WF-B (C)：同canonical fileのprivate供給表・非実行viewの差分設計
+
+Version: draft-0.1 / Date: 2026-11-08 / 読み取り照合基準HEAD: `e1b3978`。
+
+Status: **設計のみ。private供給表・非実行view・下位移譲claimは未実装。** 親は[共通kernelのprivate供給境界](BEST_PRACTICE_WFB_PRIVATE_KERNEL_SUPPLY_DESIGN.md)と[同snapshotの所有・停止契約](BEST_PRACTICE_WFB_SNAPSHOT_READ_LIFECYCLE_DESIGN.md)。[宣言／actual分離](BEST_PRACTICE_WFB_DECLARED_ACTUAL_SCRIPT_DESIGN.md)と[その検証記録](E2E_BEST_PRACTICE_WFB_DECLARED_ACTUAL_2026-11-08.md)はlegacy Bの合成保証として維持し、Cへの供給済み証拠にしない。
+
+C実行入口・正式発行口閉鎖、全体受付無効・Unknown・VM／監視／telemetry調査保留を維持する。今回はMDのみ。実装・実期待値pin・実source照合・S発行・core接続・実接続・実通信・設定変更・Pushは行わない。以下の型名・module名・状態名は実装候補を固定するための内部案で、既存API・診断型・権限の追加ではない。
+
+## 1 現行との差分と到達させない状態
+
+現行Bは不変のlegacy File（id／declaredBytes／digest／origin）と、期待値を持たないSourceRecord／SourceOpsを分離した。しかしBのoriginはCのcanonical fileを表さず、B factoryから返る診断をCが採用する口もない。
+
+現行C-startはstrict検査の返値をSnapshotが所有し、先頭fileの同一性だけをBorrowへ結合する。preparedは同borrow／session origin／budget originを保持するが、全fileのpayload対応表・実会計・停止guard・resource・kernelは持たない。budget originはopaque tokenであり、cap／期限・credit・実Eではない。
+
+今回具体化するのは、このpreparedと同construction内にある全canonical fileへの供給表、期待値を別供給しない非実行view、そのprivate所有と失効・discardである。schemaを緩めず、未参照fileも含め辞書全体を対象とする。rowsのunimplemented／missingはそのまま保持し、行hash集約・実装coverageの充足にしない。
+
+本段階はopen／observe／read／hash／resource cleanupをすべて0に保つ。source recordやviewの生成をopen、論理参照消去をclosed_confirmed、非実行holderへの移譲をkernel_ownedと呼ばない。CのreadKernel／actualBudgetはnot_connected、ready=false／authority=noneのままとする。
+
+## 2 生成元・配置境界
+
+### 2.1 private値を生成する唯一の経路
+
+同constructionの先行DiagnosticOwner・結果slot・空custody → 固定合成DATAのstrict検査 → Snapshotによる返値の所有 → 開始claim → 同borrow／prepared → 下記供給準備claim → 全fileの表と非実行view、の順とする。前段を成功summaryから再構築しない。
+
+strict検査でcopy／freezeされたmapの返値をSnapshotが一度所有した後は、再decode／再検査で新mapを作らない。`snapshot.map.files[i]`のその参照が唯一のcanonical fileである。raw DATA・同値copy・legacy File・ID／path再検索の結果を代用しない。
+
+初期合成セットは現行C-startの4file／12row、各fileの宣言3byte・既知abc digestを用いる。期待値の供給元は同canonical fileだけ。sourceは固定recipeが独立に生成するabc／abd／可視長変化等で、actual hashから期待値を生成・補正しない。これは合成値であり、実sourceの期待値pinではない。
+
+### 2.2 配置の選択と互換入口
+
+privateなSnapshot／Borrow／preparedをmodule間のadopt関数で受け渡す案は採らない。将来の物理配置候補を`tests/review/fixtures/snapshot-read-composition-fake.ts`という単一moduleに固定し、B kernel／SourceOps、Cのconstruction／lifecycle、供給表issuer／view／移譲consumerを同じlexical境界に置く。今はそのfileを作らない。
+
+| 対象 | 移行時の扱いとexport境界 |
+|---|---|
+| read-hash-fake.ts | 従来のcreateReadHashFakeだけを維持する互換入口 |
+| shared-read-hash-kernel-fake.ts | 物理移動後もcreateReadHashFakeだけをre-exportし、既存export集合・関数参照互換を保つ |
+| snapshot-read-start-fake.ts | 従来のcreateSnapshotReadStartFakeとfacadeを維持する互換入口 |
+| 新composition module | private class／表／view／claimを共有。exportは固定合成scenarioの診断factoryだけ。constructor・ops・borrow・adopt helper・可変budgetはexportしない |
+| 新しい供給view試験用入口 | 固定selectorのみの診断facadeを薄くre-exportする案。任意map／bytes／callback・戻されたviewを引数に取らない |
+| source-map-values-core.ts | 既存の純粋値検査だけを再利用。private originや実行権限の発行元に変えない |
+
+旧C-start facadeを呼んで返された公開診断から表を作る方式は禁止する。旧C-startと新試験用factoryは、同じprivate construction手順を利用できるが、factory呼出しごとのoriginは別であり、互いのpreparedを採用できない。新factory内では最初に所有した同Snapshot／Borrowを使う。別assemblyの保証を既存C-startの追加保証へ自動的に合算しない。
+
+配置移行は挙動追加より先に別工程として照合する。B／旧C-startのclass内部状態・既存結果schema／計数・期待値を変えず、新入口を使わない場合は追加の表／sourceを生成しない。移動時のclass名衝突等は内部改名に限り、既存cap・期限・検査順を変えない。private値をexportするために梱包設定やsrc／distへfriendを追加しない。
+
+## 3 private供給表の所有契約
+
+内部候補`CanonicalPayloadTable`は同preparedに1つだけ発行する。rootに発行済みtableの同参照を保持し、Object.freezeだけを発行証拠としない。表本体・各bindingもreadonlyで、通常利用権は親のprivate slotに1つだけ置く。
+
+| 対象 | 保持内容・所有者 |
+|---|---|
+| table envelope | 同owner／Snapshot／setId／map／files／rows／prepared／borrow／session origin／budget originと、発行済みtable参照。供給準備ownerが所有 |
+| binding[i] | ordinal i、`files[i]`そのもの、同table origin、file固有source origin、同rootが当該ordinalへ発行したSourceRecord参照 |
+| source registry[i] | canonical file参照・ordinal・source origin・SourceRecordの正規の組。rootが一度pinする非公開identity台帳で、候補表から期待組を作り直さない |
+| SourceRecord | 不変backing bytes、初期可視長、有限metadata／故障script。期待長／期待digest、map／view／session／budgetを保持しない |
+
+ここでregistryのpinとは合成construction内の参照固定であり、実期待値・実artifactのpinではない。表の正しさを確認する基準は、同Snapshotのcanonical配列と、同生成元が固定したregistryである。比較対象のbindingを入れ替えた後、その同じ表から正規registryも作り直して検査を無効化しない。
+
+表は`files`の原順序でN要素（N≤32）。要素iについて、canonical参照===files[i]、ordinal===i、registry[i]の全origin／record参照との一致を検査する。表をID／pathで再索引・sort／dedupして欠落や順序違反を補正しない。既存strict値検査が決めた順序・shapeは維持する。
+
+F01／F02が同じabc配列・長さ・digestでもbinding／source origin／SourceRecordは別にする。不変bytesだけは共有可能だが、origin・handle進行・event消費・候補・結果slotを共有しない。recordだけ、originだけ、または両方を別fileと交換してもregistryとの組合せ不一致で拒否する。
+
+source構築subsetは0〜expectedBytes+1の可視長、各record最大4event、全source容量は期待総量＋N以下を基準にする。strict宣言は1〜1MiB／総和8MiB／最大32fileを維持する。actual≠expected自体はidentity不正ではなく、将来のread／metadata比較で停止させるための正当な合成対照である。外部配列・Proxy・accessor・SharedArrayBuffer・resizable bufferを受領する入口は作らず、固定recipe以外をconstructorへ渡せないようにする。
+
+## 4 非実行viewと同一性
+
+`CanonicalDeclarationView[i]`候補はtable／binding[i]／ordinal／canonical fileを同参照で保持する。期待値はcanonical fileのexpectedBytes／expectedSha256へ直接参照し、初期版ではscalarの重複cacheを設けない。source長・source digest・legacy Fileへ変換した値から期待値を取らない。
+
+`KernelSupplyView`候補は同envelopeと同table／全declaration view、発行元のprivate view identityを束ねるだけである。open／read／hash／takeメソッドやcallbackを持たせず、通常利用の状態はprepared owner側に置く。readonlyという型だけでは同origin・未消費を証明しない。
+
+利用時の検査は、発行済みviewそのもの、同prepared／borrow、同owner／Snapshot／setId／map／files／rows／session／budget origin、同発行table、各canonical／registry対応を照合する。文字列setId・file ID・path・digest一致だけでは受理しない。同値copy・再freeze・再decode・配列wrapper・別constructionの正常viewは拒否する。
+
+将来のkernel宣言adapterはlegacyとcanonicalの別brandを持ち、canonical側はこの同view／file参照を保持する必要がある。現在のB Fileへ値をコピーしてcanonicalだと呼ぶadapterは作らない。本段階でそのadapterをkernelへ渡したり、Bの予算・scratch・SourceOpsをC用に生成したりしない。
+
+## 5 供給準備claim・移譲claimの消費点
+
+開始claim、供給準備claim、下位移譲claimは目的・slotを分ける。いずれも同constructionの利用排他であり、K0／E／S・permit・creditの発行ではない。prepare済みであることだけを移譲・実行の許可にしない。
+
+| 状態系 | 遷移候補・不可逆点 |
+|---|---|
+| 供給準備 | unused → preparing → prepared。失敗はdiscarded。preparingへの同期置換が1回の準備claim消費点で、表／viewの部分生成失敗でも戻さない |
+| 非実行移譲 | unused → taking → held_for_discard → discarded。最後の同一性／停止検査後、takingへ同期置換する点が移譲claimの消費点 |
+| 将来の実kernel受領 | 親設計のkernel_ownedは未接続。非実行holderをkernel_ownedへ昇格する分岐を実装しない |
+
+初期の移譲試験で発行するclaimは`NonExecutingSupplyTransfer`という別brand候補とし、固定の非実行holder／discard consumerしか消費できない。将来のkernel用claim・受領証拠と互換にしない。非実行移譲済みの同viewを後で再takeしてkernelへ渡すことは不可であり、summaryも再利用できない。
+
+固定の移譲順序は次とする。
+
+1. 同ownerの受領用空slot・部分生成保持slotを先行確保する。slot確保失敗はviewを外へ渡さず拒否し、移譲claim消費0。
+2. 先行拒否、同prepared／borrowとtable／view、供給open／closeRequested、未消費claimを検査する。元sessionが失効していればbinding混入とは区別して停止する。
+3. 同期区間でclaimをtakingへ置換する。この時点以後、再入／二重take・生成失敗・post拒否でもunusedへ戻さない。新session／budget／borrow・viewを再発行しない。
+4. 元ownerの通常利用slotを空にし、同table／view参照を先行確保したpending保持slotへ移す。外部callback・await・source操作を挟まない。親の寿命管理用borrowと診断参照は消さない。
+5. 同owner／発行物・停止のpost検査後、固定slot置換で非実行holderへ受理する。これは移譲の公開点で、step3のclaim消費点とは別。公開といってもprivate consumerから見える位置であり、facadeへ参照を返す意味ではない。
+6. 非実行holderの固定discardだけを実施し、source／view／table参照を退役する。kernel生成・scratch確保・open／hashは0。終端診断は非実行移譲／discardの状態だけを示す。
+
+pre検査拒否ではclaimの消費計数を増やさないが、準備ownerは失敗終端へ進むため再利用可能にはならない。準備claimと開始claimも戻さない。taking中の二重takeは新たな移譲0で拒否し、元処理もfail-closedで破棄へ進める。終端後の反復は非記録の固定拒否だけを返し、先行終端を変更しない。
+
+## 6 停止・失敗責務と寿命
+
+| 停止位置 | 保持者・破棄責務・診断 |
+|---|---|
+| 供給生成失敗、開始claim前 | 既存supplyFirstを保持。読取unused、open0。供給closeで未開始readStopを新設しない |
+| 表／registry／viewの部分生成失敗 | 供給準備ownerが作成済み参照を保持し固定discard。既存read_prepare_unavailableを候補理由とし、開始／準備claimを戻さない |
+| 同一性不一致・未発行copy | lifecycleFirst=binding_mismatch、readFirst未設定ならbinding。元sourceを探索し直さず、表を補正せず停止 |
+| 正規close／元run失効 | 同期close latchを保持。開始claim発行後のreadStop=supply_closedは先行理由を上書きしない。cleanupに必要な旧identityは壊さない |
+| taking後、pending／受領post失敗 | 親の先行pending保持slotが未受領分を追跡し、通常利用slotへ返さずdiscard。同上位診断ownerを使い、第2holder／第2budgetへfallbackしない |
+| held_for_discard後の停止 | holderが参照退役を担当し、親は寿命管理と先行診断を保持。受領済みを巻き戻して別consumerへ渡さない |
+| 最終discard／結果準備異常 | 未退役責務を親の先行保持slotへ残しretirement=unconfirmedとする。cleanup確認済み・退役完了へ補完しない |
+
+下位の表／view通常利用を止め、同holder／pendingの参照を切り離し、非実行結果を固定してからborrowを退役する。供給close／供給失敗があれば、その後にSnapshotを退役する。正常discardでは既存readonly check用Snapshotを残せるが、開始／準備／移譲の各claimは消費済みまたは終端拒否のまま。
+
+親の寿命管理参照はsourceを再供給する権限ではない。SourceRecord／表の通常利用参照を複製して、discard済みviewを復元しない。終端後のGCや物理ゼロ化・実FD解放は証明しない。本段階にresourceはなくcleanupDisposition=not_started、resource custodyは空であり、非実行pending保持slotと混同しない。
+
+supplyFirst／lifecycleFirst／readFirst／readStop・参照退役状態を別に保持し、最初の理由だけを記録する。供給準備失敗等の新しい有限診断分類を設ける場合も、旧C-startやBの既存reason unionへ無断で混ぜず、新診断factoryのschemaとして別途固定する。source bytes・digest・path全文・raw例外・private参照は出力しない。
+
+## 7 費目所有・有限境界・未確認事項
+
+| 費目 | 所有者・有限な対象 |
+|---|---|
+| 先行owner／結果／custody、strict map／Snapshot、開始borrow／prepared | 既存C construction。新表側で第2回の生成として課金・計数しない |
+| registry／binding表／declaration view生成と全件照合 | 供給準備側。N≤32・rows12、1回の準備claim内で原順序走査。拒否後の再走査loopなし |
+| private移譲pre／postとpending／holder | 移譲側。発行identity・同tuple・停止、全表の照合回数を固定scheduleへ明示し、準備側と二重所有しない |
+| 通常利用停止・表／view／source参照退役 | それぞれの通常利用owner。親のborrow／Snapshot退役とは別に、最大1の論理退役として計数 |
+| read／hash／retry／受信／resource close | 本段階は0。Bの成功計数・guard・cleanup証拠を流用しない |
+
+上限32／12・event最大4は構造枠であり、実work／実Eの導出済み上界ではない。内部scheduleの各検査点・走査・割当・拒否prefix・固定discardを独立event oracleで数える必要がある。生成前費用を未取得Eに後着課金せず、K0／seed側bootstrapの未確認事項はUnknownのまま。
+
+現行Cのbudget／session origin一致はidentityだけを示す。本段階で実clockを呼んだ・期限を守ることを実証したとはしない。将来の同budget／停止owner連結は別工程で、既存BのD_stop900／D_end1000・cap・guard上界131,524を延長・再計算して接続費を吸収しない。C接続全体のguard／CPU／heap／native上界、実E／Sは未確認。
+
+## 8 独立合成受入条件（未実施）
+
+| ID | 必須対照 |
+|---|---|
+| CV01 | 同Snapshotの4file全件を原順序で表へ対応させる。rowsから未参照でも辞書fileを省かず、全rowsのunimplemented／missingを保持 |
+| CV02 | raw DATA・再decode・同値map／files／rows／file copy、別Snapshot／setId／owner／session／budget／borrow／preparedを個別に混入し拒否 |
+| CV03 | missing／duplicate／extra／ordinal差・表の順序交換を拒否。sort／dedup／ID再検索を足す変異が通らない |
+| CV04 | 同一abc bytes／長さ／digestの2fileでrecordのみ・originのみ・両方を交換し拒否。比較する表から正規registryも作り直す変異を検出 |
+| CV05 | 宣言3にactual2／4・同長abd、正常before後の縮伸scriptを準備できる。actual差をbinding拒否にして将来の読取対照を消す変異を検出。期待値をactualへ補正しない |
+| CV06 | 同値freeze済みtable／view copy、診断summary、旧B File／正常B結果、別constructionの正常viewを未発行として拒否 |
+| CV07 | 供給準備の順序違反・二重準備・再入・全生成失敗prefix。claim最大1、先行理由保持、同origin／map／view再生成なし |
+| CV08 | 移譲pre拒否は移譲claim0、taking後故障は1のまま。二重take／再入／post拒否／別pending・holderを拒否し、第2受領・元slot返却なし |
+| CV09 | closeを開始前・prepared後・表生成途中・移譲pre前・taking中・受領post前後・終端後へ固定scriptで配置。正規closeとidentity不正を分離し、claimと先行診断を保持 |
+| CV10 | 全失敗prefixで通常利用slot→pending／holder→診断固定→borrow退役→必要時Snapshot退役を独立寿命oracleと照合。未退役責務の保持失敗を退役成功にしない |
+| CV11 | 全caseでopen／observe／read／hash／resource cleanup0、readKernel／actualBudget未接続。非実行holder／claimからkernel_ownedやSを発行しない |
+| CV12 | 旧B・C-startの結果／計数・期待値不変、旧export集合・関数参照互換、strict／compiled負対照、tests／新composition／viewの梱包混入0 |
+
+独立oracleは本体の表／registry生成・係数をimportして期待値を作らず、固定canonical ordinalと正規source対応、claim・所有・退役イベントを別記述する。任意のcaller object・callbackを受け入れる試験口は作らず、混入は固定内部scenarioのみ。Cでhashしていないため、正常viewの準備成功を内容一致の証拠にしない。
+
+## 9 推奨する実装分割と停止線
+
+1. 配置だけを移し、既存B／C-startの全挙動・export・compiled／梱包保証を維持する。新規private値の生成はまだ行わない。
+2. 同constructionの正規registry／全file供給表・非実行viewと準備claimを実装する。CV01〜07の純粋identity／生成故障対照を優先し、旧facadeからのpublic再採用は不可とする。
+3. 別brandの非実行移譲claim・pending／holder・固定discardを実装し、CV08〜12と失敗時診断／寿命を確認する。kernel生成／受領は0のまま。
+4. 同budget／停止owner／非空cleanup custodyと接続費目の設計・検証を別途完了してから、改めてC→kernelの実行接続を検討する。非実行holderをそのまま昇格することはしない。
+
+上記は次工程案であり、本書で実装・合成試験を実施していない。実期待値pin・実source照合・行hash集約・S発行・core／runtime接続は別範囲。C実行入口・正式発行口閉鎖、全体受付無効・Unknown・調査保留を維持する。
