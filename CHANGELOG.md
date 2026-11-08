@@ -18,6 +18,8 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 ### Changed
 
+- WF-B snapshot/read preparation adds a separate synthetic-only construction with a prior diagnostic/result owner, preallocated empty cleanup custody, private checked-map borrow and one-shot start claim. Fixed identity/reentry/failure probes retain first diagnoses, forbid origin recreation after failure, and retire borrow references on discard without issuing read or cleanup evidence. The legacy supply and B hash kernel remain unchanged and unconnected; real budgets, pins, row aggregation, core/runtime wiring and formal issuance stay disabled or unknown.
+
 - WF-B read/hash stage B adds synthetic exact-8-MiB success controls (8×1 MiB and 32×256 KiB), last-file excess-byte accounting and pre-open declaration-limit refusals. A separate bounded pure SHA-256 oracle reconstructs the static repeated-byte vectors, while semantic-event/BigInt controls check byte totals, all cleanup reservations and 386/770 success guards without increasing existing caps. Real source pins, snapshot wiring, row aggregation, issuance and whole-run admission remain closed or unknown.
 
 - WF-B read/hash stage B adds a separate synthetic-only owned-scratch SHA-256 assembly with a fixed eight-phase schedule and a 131,524-call guard ceiling. Independent vectors and event/count oracles check received versus successfully hashed prefixes, attempt-bound update reservations, poisoned hash failures, private one-shot candidate acceptance after cleanup/post-guard, and late-stop diagnostics without rewriting committed file observations. Stage A remains unchanged; real pins, source/snapshot wiring, row aggregation, E/S requirements and issuance remain unavailable or closed.

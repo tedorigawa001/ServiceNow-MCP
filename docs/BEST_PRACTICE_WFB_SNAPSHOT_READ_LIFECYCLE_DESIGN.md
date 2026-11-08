@@ -1,12 +1,14 @@
 # WF-B (C)：同snapshot読取接続の所有・停止契約の差分設計
 
-Version: draft-0.2 / Date: 2026-11-08 / 読み取り照合基準HEAD: `e662a21` / レビュー修正の基準HEAD: `a4fd836`。
+Version: draft-0.3 / Date: 2026-11-08 / 読み取り照合基準HEAD: `e662a21` / レビュー修正の基準HEAD: `a4fd836` / 開始準備実装基準HEAD: `9b7ddb9`。
+
+draft-0.3: §10の先行診断owner・private borrow・identity・一度限りの開始claimを新合成rootで実装した。[検証記録](E2E_BEST_PRACTICE_WFB_SNAPSHOT_READ_START_2026-11-08.md)。既存Supply／(B)のkernelへの接続、実読取・cleanupは進めていない。
 
 draft-0.1のレビュー修正: 読取側`stopReason=supply_closed`を、現行Supplyがclose後のcheckに返す同名の非記録戻り値と別物だと明記した（§4／§6）。cleanup custodyの固定1slotを開始順序の先行確保対象に加え、確保失敗をopen0の固定拒否としてSL03へ含めた（§3／§5／§8）。§6のcleanup行で、試行全体の`cleanupReason`（`none`／`close_unconfirmed`）とfile slotの`cleanup`（`closed_confirmed`等）を分けた。設計のみで、実装状態は変わらない。
 
-Status: **設計のみ。同snapshotへの読取接続は未実装。** 親は[private読取・hash設計](BEST_PRACTICE_WFB_PRIVATE_READ_HASH_DESIGN.md)と[固定辞書供給設計](BEST_PRACTICE_WFB_FIXED_DICTIONARY_SUPPLY_DESIGN.md)。既存[(B)の候補確定・容量契約](BEST_PRACTICE_WFB_SCRATCH_CANDIDATE_DESIGN.md)を維持する。[最大8MiBの合成検証](E2E_BEST_PRACTICE_WFB_READ_HASH_CAPACITY_2026-11-08.md)は独立assemblyの保証であり、同snapshot接続済みの証拠にはしない。
+Status: **§10の新合成root内の開始準備・identity結合だけを実装。同snapshotから読取kernelへの接続は未実装。** 親は[private読取・hash設計](BEST_PRACTICE_WFB_PRIVATE_READ_HASH_DESIGN.md)と[固定辞書供給設計](BEST_PRACTICE_WFB_FIXED_DICTIONARY_SUPPLY_DESIGN.md)。既存[(B)の候補確定・容量契約](BEST_PRACTICE_WFB_SCRATCH_CANDIDATE_DESIGN.md)を維持する。[最大8MiBの合成検証](E2E_BEST_PRACTICE_WFB_READ_HASH_CAPACITY_2026-11-08.md)は独立assemblyの保証であり、同snapshot接続済みの証拠にはしない。
 
-正式発行口閉鎖・全体受付無効・Unknown・VM／監視／telemetry調査保留を維持する。今回はMDだけ。実装・実期待値pin・実source照合・S発行・core接続・実接続・実通信・設定変更・Pushは行わない。以下の型・状態・理由名は内部契約案で、既存APIや実行権限を追加したものではない。
+正式発行口閉鎖・全体受付無効・Unknown・VM／監視／telemetry調査保留を維持する。draft-0.1／0.2はMDのみ、draft-0.3の実装は§10の準備fakeだけ。実期待値pin・実source照合・S発行・core接続・実接続・実通信・設定変更・Pushは行わない。§10以外は設計契約であり、既存APIや実行権限を追加したものではない。
 
 ## 1 現行との差分・非目標
 
@@ -125,3 +127,27 @@ private参照の混入やread内停止は固定内部scenarioに限定し、通�
 最初の実装候補は、先行診断／結果保持、private borrow／identity tuple、排他的な開始利用状態と同期close latch、cleanup後の借用退役までを合成依存限定で実装すること。共通kernelの共有範囲・整合した合成セット・追加guard表をその範囲に合わせて確定する。
 
 行のfileId＋testsの和集合、未参照fileも含む辞書全体hash、混在非成功の判定順・集約費は後続設計に残す。今回のMDはこれらの実装・接続・試験完了記録ではなく、SL01〜10も未実施である。
+
+## 10 開始準備だけの新合成root（部分実装）
+
+`tests/review/fixtures/snapshot-read-start-fake.ts`を追加した。既存Supply class／MapSupplySnapshot・(A)・(B)は変更しない。既存のstrict SourceMapDraft純粋値検査だけを再利用し、実行coreには接続しない。新合成rootは固定4file／12rowのstrict mapを検査し、自身が所有する非公開SnapshotとBorrowを生成する。旧Supplyから借用した保証や、(B)の読取kernelとの共通化保証ではない。
+
+先行DiagnosticOwner → 結果保持slot → 空のcleanup custody 1slot → 合成source／strict検査／snapshot、の順で準備する。いずれかの生成故障ではsupplyFirst=supply_invalidを固定し、開始・openを拒否する。owner自体の固定故障ではscalar fallback診断を残すが、実OOM時の返却必着は保証しない。
+
+facadeはcheck／begin／prepare／close／finish／inspectのみ。factoryは引数0個か固定scenario文字列1個、begin／prepareは引数0個だけを受ける。外部map・borrow・budget・reader・callbackを取り込む入口はない。beginはunusedからstartingへ同期的に1回遷移する。prepareは同owner／snapshot／setId／map／files／rows／先頭canonical fileとordinal0／session origin／budget originをprivate tupleで検査し、非実行preparedへ進める。
+
+preparedは§3のactive読取とは別で、scratch・実budget・read／hash kernel・resourceは作らない。budget originは同一性検査用のopaque tokenで、cap／期限・credit・E／S・実budget leaseではない。4file全件のscope生成や候補受理時bindingは後続。全12rowはunimplemented／missingを保持し、行集約はしない。固定abcの合成期待値は使うが、bytes取得・hash照合を実行した証拠にはしない。
+
+starting／preparedの再beginとpreparedの再prepareはduplicate_startで拒否し、元準備もunwindingへ停止する。生成失敗・混入後は先行理由で拒否し、同owner内のorigin／borrowを再生成しない。finish後の開始／準備はread_already_usedという非記録戻り値だけを返し、既存終端を変更しない。prepare前のfinishも固定discardとして読取利用を終了するが、開始claimや読取成功は発行しない。
+
+混入は固定内部scenarioのみで、別owner／snapshot、同値map wrapper／再decode、files／rows／file copy、元の未検査input、setId／ordinal／session／budget差とborrow copyを検査する。元inputは当該対照だけで実際の検査前DATAを保持し、finishで退役する。borrow copy等の負対照用control objectは発行済みborrowに数えず、borrowRetirementsは同constructionで発行したborrow 1つの論理退役を数える。対照用copyも参照を残さない。
+
+本段階のcloseはresourceのない準備状態だけを扱う。closeRequestedを固定し、借用済みならsnapshotを保持してunwindingへ進める。finishで非実行終端を固定後、borrow／session／budget参照を退役し、close要求時はSupply側snapshotも退役する。正常discardではreadonly供給用snapshotを保持できるがread開始claimは戻さない。終端後の供給closeはsnapshotだけを退役し、終端診断を変更しない。
+
+終端のpreparationCountsは開始準備の試行・発行計数だけを保持し、固定参照消去後のretirement計数はinspect側のowner診断へ分ける。これにより退役後の結果再生成・再封印を行わない。cleanupDisposition=not_started、open／read／hash／cleanup呼出し0を維持し、空custodyの存在をcleanup確認や責務移譲済みの証拠にしない。
+
+診断slotはsupplyFirst／lifecycleFirst／readFirst／readStopを分離し、最初の理由だけを保持する。現行Supplyのclose後checkの非記録supply_closedは変えず、新rootのclose中準備に記録するreadStop=supply_closedと区別する。正規生成のsource検査・snapshot・開始claim・session／budget origin・発行borrow・identity検査・準備recordは各最大1、cleanup custodyも固定1slot。負対照用の再decode／copy生成はその正規counterに含めず、実work費の計測済みとは扱わない。故障後の同じ操作反復では計数やlistを増やさない。readonly checkは外側の非I/O操作で、新規claimやoriginを発行しない。
+
+snapshotConnection=identity_only、legacySupply=unchanged、readKernel／actualBudget／rowAggregation=not_connected。実clock guardは呼ばず、(B)の131,524や接続全体のguard上界を検証済みにしない。追加guard表・共通kernel・実budget／scratchへのprivate接続、read中close／hash後停止、非空custodyへの責務移譲、行集約は未実装である。
+
+SL01〜03の開始準備部分、resourceなしのclose／退役・診断保持を合成対照で確認する。SL04〜10全体の完了保証ではない。試験・厳密型検査・梱包の範囲と未確認事項は[開始準備の検証記録](E2E_BEST_PRACTICE_WFB_SNAPSHOT_READ_START_2026-11-08.md)へ分けて記録する。

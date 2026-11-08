@@ -1,5 +1,7 @@
 # WF-B：private読取継続・共有上限・同bytes hashと結果owner
 
+準備実装追記（2026-11-08）: [同snapshot開始準備の新合成root](BEST_PRACTICE_WFB_SNAPSHOT_READ_LIFECYCLE_DESIGN.md)で、先行診断owner・private borrow・identity・一度限り開始claimを実装した。[検証記録](E2E_BEST_PRACTICE_WFB_SNAPSHOT_READ_START_2026-11-08.md)。旧Supply／(B)kernelへの接続、実budget・読取／hash・行集約は進めていない。
+
 差分設計追記（2026-11-08）: [同snapshot読取接続の所有・停止契約](BEST_PRACTICE_WFB_SNAPSHOT_READ_LIFECYCLE_DESIGN.md)へ、同一性tuple・重複開始拒否、読取中closeの同期停止とcleanup後の借用退役、上位診断保持・追加費目を整理した。設計のみで、同snapshot接続・行集約・実source照合は未実装のまま。
 
 容量補完（2026-11-08）: [(B)の8file×1MiB・32file×256KiBと上限境界](BEST_PRACTICE_WFB_SCRATCH_CANDIDATE_DESIGN.md)を、独立hash／計数oracleで確認する合成試験を追加した。[検証記録](E2E_BEST_PRACTICE_WFB_READ_HASH_CAPACITY_2026-11-08.md)。固定cap・guard上界は変更せず、同snapshot接続・行集約・実sourceは未対応のまま。
