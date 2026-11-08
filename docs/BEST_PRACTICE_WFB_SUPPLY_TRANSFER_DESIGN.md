@@ -1,5 +1,7 @@
 # WF-B (C)：下位移譲claim・pending／非実行holderの差分設計
 
+接続差分設計追記（2026-11-09）: [移譲開始後の停止・所有境界とdetach後照合](BEST_PRACTICE_WFB_TRANSFER_TAKING_BOUNDARY_DESIGN.md)で、同controlによるclaim消費／通常利用gate、元clearを経由しない同期停止、anchorと明示payloadの関係検査を具体化した。claim消費→pending記録→detachのF0〜F7と責務・未公開回収／finish保留を定義し、claim消費を有効にする前に失敗回収を必須とした。設計のみでholder公開・C実行・実装状態は変わらない。
+
 Version: draft-0.4 / Date: 2026-11-09 / 読み取り照合基準HEAD: `0e98c56`（レビュー修正基準HEAD: `8b5af60`、preflight実装基準HEAD: `35c1d2a`、preflightレビュー修正基準HEAD: `a888295`）。
 
 draft-0.4のレビュー修正：preflightの`close()`が準備開始前でもfirstReasonを`supply_closed`にしており、元供給ownerの「開始claim前のcloseは停止だけ」と食い違っていた点、準備済みからの正規closeが未試験で状態が`rejected`になっていた点を§12で直した。拒否後のclaim／shell保持・余分な引数・終端後の返答を試験で固定し、到達しない防御条件を等価変異として明記した。
