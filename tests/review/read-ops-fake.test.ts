@@ -25,7 +25,7 @@ describe('A: isolated read operations, no bytes/hash/snapshot connection', () =>
     }
     expect(fake.finish()).toMatchObject({ firstReason: 'none', budget: { open: 2, observe: 4, read: 4, received: 5,
       cleanupReserved: 2, close: 2 }, ops: { open: 2, observe: 4, read: 4, close: 2 } });
-    expect(fake.inspect().slots.every(s => s.hash === 'incomplete' && s.cleanup === 'closed_confirmed')).toBe(true);
+    expect(fake.inspect().slots.every(s => s.hash === 'pending' && s.cleanup === 'closed_confirmed')).toBe(true);
   });
   it('does not dispatch after cancellation and still closes an already owned resource once', () => {
     const early = createReadOpsFake(); early.cancel(); early.openOnce(0);
@@ -124,8 +124,9 @@ describe('A: isolated read operations, no bytes/hash/snapshot connection', () =>
       budget: { open: 1, close: 0, cleanupUnused: 0 }, slots: [{ cleanup: 'close_unconfirmed' }, { cleanup: 'not_attempted' }] });
   });
   it('keeps cleanup failure primary when the closing call also reaches the deadline', () => {
-    const fake = createFixedReadOpsFake('close_throw_late'); fake.openOnce(0); fake.finish();
-    expect(fake.inspect()).toMatchObject({ firstReason: 'source_unavailable', stopReason: 'deadline',
+    const fake = createFixedReadOpsFake('close_throw_late'); fake.openOnce(0); fake.observeOnce();
+    fake.readOnce(0, 3); fake.readOnce(3, 1); fake.observeOnce(); fake.closeOnce(); fake.finish();
+    expect(fake.inspect()).toMatchObject({ firstReason: 'source_unavailable', acceptedFiles: 0, stopReason: 'deadline',
       cleanupReason: 'close_unconfirmed', cleanupTiming: 'expired', ops: { close: 1 } });
   });
   it('handles clock throws, invalid values and reverse time without skipping cleanup', () => {
@@ -170,6 +171,8 @@ describe('A: isolated read operations, no bytes/hash/snapshot connection', () =>
       expect(end.guards).toBe(2 * (open + observe + read + close) + 2);
       expect(end.clockCalls).toBe(end.guards);
       expect(end.cleanupOutstanding).toBe(0);
+      expect(end.firstReason).toBe(prefix >= 1 && prefix <= 6 ? 'incomplete' : 'none');
+      expect(end.acceptedFiles).toBe(prefix >= 7 ? 1 : 0);
     }
   });
   it('rejects invalid order and scalar requests before ReadOps sees them', () => {
@@ -230,5 +233,90 @@ describe('A: isolated read operations, no bytes/hash/snapshot connection', () =>
     const fake = createFixedReadOpsFake('slot_build_failure'); fake.openOnce(0); fake.observeOnce(); fake.readOnce(0, 1);
     expect(fake.finish()).toMatchObject({ firstReason: 'source_unavailable', slotsState: 'unavailable', slots: [],
       budget: { open: 0, cleanupReserved: 0 }, ops: { open: 0, observe: 0, read: 0, close: 0 } });
+  });
+});
+
+describe('A review fixes: completion, late stops and unguarded transitions', () => {
+  type Fake = ReturnType<typeof createReadOpsFake>;
+  const full = (fake: Fake, ordinal: number, size: number) => {
+    fake.openOnce(ordinal); fake.observeOnce(); fake.readOnce(0, size); fake.readOnce(size, 1); fake.observeOnce(); return fake.closeOnce();
+  };
+  it('keeps a completed file pending and counts it as accepted', () => {
+    const fake = createReadOpsFake(); full(fake, 0, 3); full(fake, 1, 2);
+    expect(fake.finish()).toMatchObject({ firstReason: 'none', stopReason: 'none', acceptedFiles: 2,
+      slots: [{ hash: 'pending', cleanup: 'closed_confirmed' }, { hash: 'pending', cleanup: 'closed_confirmed' }] });
+  });
+  it('records an abandoned open file as incomplete instead of a clean finish', () => {
+    const fake = createReadOpsFake(); full(fake, 0, 3); fake.openOnce(1); fake.observeOnce();
+    expect(fake.finish()).toMatchObject({ firstReason: 'incomplete', acceptedFiles: 1,
+      slots: [{ hash: 'pending', cleanup: 'closed_confirmed' }, { hash: 'incomplete', cleanup: 'closed_confirmed' }] });
+  });
+  it('rejects an explicit close in the middle of a read and does not advance to the next file', () => {
+    const fake = createReadOpsFake(); fake.openOnce(0); fake.observeOnce(); fake.readOnce(0, 1);
+    expect(fake.closeOnce()).toMatchObject({ ok: false, reason: 'incomplete' });
+    expect(fake.openOnce(1)).toMatchObject({ ok: false, reason: 'incomplete' });
+    expect(fake.finish()).toMatchObject({ acceptedFiles: 0, ops: { open: 1, close: 1 },
+      slots: [{ hash: 'incomplete', cleanup: 'closed_confirmed' }, { hash: 'not_started', cleanup: 'not_attempted' }] });
+  });
+  it('keeps late stops out of the primary reason once every file is accepted', () => {
+    for (const [late, stopReason, cleanupTiming] of [['window', 'deadline', 'within'], ['end', 'deadline', 'expired'],
+      ['cancel', 'cancelled', 'within']] as const) {
+      const fake = createReadOpsFake(); full(fake, 0, 3); full(fake, 1, 2);
+      if (late === 'cancel') fake.cancel(); else fake.advanceTo(late === 'window' ? 950 : 1000);
+      expect(fake.finish()).toMatchObject({ firstReason: 'none', stopReason, cleanupTiming, acceptedFiles: 2 });
+    }
+    const partial = createReadOpsFake(); full(partial, 0, 3); partial.advanceTo(950);
+    expect(partial.finish()).toMatchObject({ firstReason: 'deadline', acceptedFiles: 1 });
+  });
+  it('does not accept a completed read whose cleanup checkpoint reaches the end deadline', () => {
+    const fake = createReadOpsFake(); fake.openOnce(0); fake.observeOnce(); fake.readOnce(0, 3); fake.readOnce(3, 1); fake.observeOnce();
+    fake.advanceTo(1000);
+    expect(fake.closeOnce()).toMatchObject({ ok: false, reason: 'deadline' });
+    expect(fake.finish()).toMatchObject({ acceptedFiles: 0, slots: [{ hash: 'incomplete', cleanup: 'closed_confirmed' }, { hash: 'not_started' }] });
+  });
+  it('still rejects a non-late misuse after every file is accepted', () => {
+    const fake = createReadOpsFake(); full(fake, 0, 3); full(fake, 1, 2);
+    expect(fake.openOnce(2)).toMatchObject({ ok: false, reason: 'binding' });
+    expect(fake.finish()).toMatchObject({ firstReason: 'binding', acceptedFiles: 2, ops: { open: 2 } });
+  });
+  it('rejects a first open of a later ordinal before ReadOps sees it', () => {
+    const fake = createReadOpsFake();
+    expect(fake.openOnce(1)).toMatchObject({ ok: false, reason: 'binding' });
+    expect(fake.finish()).toMatchObject({ budget: { open: 0, cleanupReserved: 0 }, ops: { open: 0 } });
+  });
+  it('rejects observation while an interrupted read awaits its retry', () => {
+    const fake = createFixedReadOpsFake('interrupt_once'); fake.openOnce(0); fake.observeOnce(); fake.readOnce(0, 3);
+    expect(fake.observeOnce()).toMatchObject({ ok: false, reason: 'operation_invalid' });
+    expect(fake.finish()).toMatchObject({ ops: { observe: 1, read: 1, close: 1 } });
+  });
+  for (const [scenario, reason] of [['after_size', 'source_changed'], ['after_identity', 'source_changed'],
+    ['after_kind', 'source_changed'], ['before_identity', 'binding'], ['before_kind', 'binding']] as const) {
+    it(`classifies ${scenario} metadata as ${reason}`, () => {
+      const fake = createFixedReadOpsFake(scenario); fake.openOnce(0); fake.observeOnce();
+      if (scenario.startsWith('after')) { fake.readOnce(0, 3); fake.readOnce(3, 1); fake.observeOnce(); }
+      expect(fake.finish()).toMatchObject({ firstReason: reason, acceptedFiles: 0, ops: { close: 1 } });
+    });
+  }
+  it('detects a backward clock step between two positive times', () => {
+    const fake = createReadOpsFake(); fake.openOnce(0); fake.advanceTo(500); fake.observeOnce(); fake.advanceTo(400);
+    expect(fake.readOnce(0, 1)).toMatchObject({ ok: false, reason: 'clock_unavailable' });
+    expect(fake.finish()).toMatchObject({ ops: { read: 0, close: 1 }, cleanupTiming: 'unknown' });
+  });
+  it('keeps the first late stop reason when a later deadline also appears', () => {
+    const fake = createReadOpsFake(); fake.openOnce(0); fake.cancel();
+    expect(fake.inspect()).toMatchObject({ firstReason: 'cancelled', stopReason: 'cancelled' });
+    fake.advanceTo(1000);
+    expect(fake.finish()).toMatchObject({ firstReason: 'cancelled', stopReason: 'cancelled', cleanupTiming: 'expired' });
+  });
+  it('reports outstanding cleanup only for an uncertain acquisition', () => {
+    const none = createFixedReadOpsFake('open_no_resource'); none.openOnce(0);
+    expect(none.finish()).toMatchObject({ cleanupOutstanding: 0, budget: { cleanupReserved: 1, cleanupUnused: 1, close: 0 } });
+    const unknown = createFixedReadOpsFake('open_throw_unknown'); unknown.openOnce(0);
+    expect(unknown.finish()).toMatchObject({ cleanupOutstanding: 1 });
+  });
+  it('keeps the core path closed on every result and snapshot', () => {
+    const fake = createReadOpsFake();
+    expect(fake.openOnce(0)).toMatchObject({ coreInvocation: 'not_called' });
+    expect(fake.finish()).toMatchObject({ coreInvocation: 'not_called' });
   });
 });

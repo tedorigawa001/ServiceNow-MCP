@@ -1,6 +1,8 @@
 # WF-B：private読取継続・共有上限・同bytes hashと結果owner
 
-Version: draft-0.3 / Date: 2026-11-08 / 読み取り照合基準HEAD: `77255f2` / レビュー修正の基準HEAD: `72e4745` / (A)実装基準HEAD: `dfc79ff`。
+Version: draft-0.4 / Date: 2026-11-08 / 読み取り照合基準HEAD: `77255f2` / レビュー修正の基準HEAD: `72e4745`・`e235ec9` / (A)実装基準HEAD: `dfc79ff`。
+
+draft-0.3のレビュー修正: (A)のfakeで、完走してclose確認したfileと途中で放棄したfileが同じ`incomplete`／理由なしになっていた。完走fileは`pending`のまま残して`acceptedFiles`へ数え、after観測前のcloseは`incomplete`をprimary理由にした。全file受理後の期限・取消・時計・上限の停止は`stopReason`だけに残す（§11.1／§11.2）。after読取のsize／identity／kind差とbefore読取のidentity／kind差の固定scenarioを追加した。
 
 draft-0.3: §11の(A)共有上限・停止・単発ReadOps・結果slotを純粋fakeで実装した。bytes／scratch／hash・同snapshot借用・行hash集約は接続しない。[検証記録](E2E_BEST_PRACTICE_WFB_READ_OPS_A_2026-11-08.md)。
 
@@ -156,11 +158,11 @@ createReadOpsFakeは固定の2 file（模擬長3／2）だけを使い、factory
 
 操作順はopened→before→reading→eof→after→close。scopeは同時1つだけで、ordinal順の同Resourceに全操作を固定する。readはnだけの有限結果を返し、実bytesを返さない。正の短読取・同offset／要求長のEINTR retry、期待長位置の1 byte EOF probeをモデル化する。hash update未接続なので、offsetは模擬bytes受理後に進むだけでhash進行位置ではない。(B)でhashを接続する際は、readとhash受理区間へclock／cancelを挟まない構造にする必要がある。
 
-各ReadOpsは1呼出し1試行、同期throwも1回。予算とFakeOpsの呼出しcounterは別に保持し、内部retryはない。payload／EOF不一致をcontent_mismatchとし、after観測を呼ばずcloseする。beforeのsize差も同分類。期待長／EOFが一致した後のstamp差だけをsource_changedにする対照を持つ。不正n／read throwで受信量を確定できなければreceivedState=unavailableとし、budget.receivedは既知prefixを残す。
+各ReadOpsは1呼出し1試行、同期throwも1回。予算とFakeOpsの呼出しcounterは別に保持し、内部retryはない。payload／EOF不一致をcontent_mismatchとし、after観測を呼ばずcloseする。beforeのsize差も同分類。期待長／EOFが一致した後のafter観測で、beforeとのsize／stamp差、identity差、kind差をsource_changedにする対照を持つ。before観測のidentity／kind差はbindingとする。不正n／read throwで受信量を確定できなければreceivedState=unavailableとし、budget.receivedは既知prefixを残す。
 
 openのno_resourceは明示された未取得だけを指す。failed_ownedではresourceを保持して停止・close1回。openの非型付きthrowは取得未確認とし、acquisitionUncertain=true／close_unconfirmedを残す。handle不明なのでcloseを作り上げず、cleanup予約も未使用返却したとは扱わない。これは実FD漏れを解決する仕組みではなく、実adapter採用前の未対応を可視化する合成対照である。
 
-file slotのhashはnot_started／pending／incomplete／content_mismatchだけで、hash_matchを発行できない。cleanupは§6の4状態。全12 row slotはnot_aggregatedのまま。finishはcleanupと最終clock確認後に不変snapshotを1回だけ確定し、二重finish・終端後cancel／clock変更・操作で診断やslotを変えない。slotの部分生成故障では部分配列を破棄し、slotsState=unavailableで操作開始を拒否する。
+file slotのhashはnot_started／pending／incomplete／content_mismatchだけで、hash_matchを発行できない。after観測まで完了し、close確認とpost-guardを通ったfileだけをpending（hash待ち）として受理し、acceptedFilesへ数えて次ordinalへ進む。after観測前のcloseやfinishによる回収はincompleteとし、primary理由がなければ`incomplete`を記録する。post-guardで期限等に達したfileも受理しない。cleanupは§6の4状態。全12 row slotはnot_aggregatedのまま。finishはcleanupと最終clock確認後に不変snapshotを1回だけ確定し、二重finish・終端後cancel／clock変更・操作で診断やslotを変えない。slotの部分生成故障では部分配列を破棄し、slotsState=unavailableで操作開始を拒否する。
 
 ### 11.2 共有会計・停止
 
@@ -168,7 +170,7 @@ file slotのhashはnot_started／pending／incomplete／content_mismatchだけ�
 
 EINTRの初回試行はread1／retry0。再試行の呼出し直前にretry1を課金し、32 retryなら最大33回のinterrupted readを観測できる。pending retry中の別offset／要求長は拒否する。cleanupReservedは予約累積、cleanupUnusedは明示未取得時の返却、closeは実試行、cleanupOutstandingはその差。未確認取得の予約を0にしない。
 
-固定clockのT0=0、D_stop=900／D_end=1000 tickを全fileで使う。単位は合成tickのみ。clock例外・非整数／NaN／overflow値・逆行はstickyなclock_unavailableとし、後から正常値に戻して信頼を回復しない。cancel・期限・clock異常・上限超過後は新規通常操作を禁止するが、取得済みresourceの予約済みcloseは1回試す。
+固定clockのT0=0、D_stop=900／D_end=1000 tickを全fileで使う。単位は合成tickのみ。clock例外・非整数／NaN／overflow値・逆行はstickyなclock_unavailableとし、後から正常値に戻して信頼を回復しない。cancel・期限・clock異常・上限超過後は新規通常操作を禁止するが、取得済みresourceの予約済みcloseは1回試す。全fileを受理した後に来たこれらの停止は、終端時間帯（D_stop〜D_end）やD_end以降のfinishでもprimary理由にせず、stopReasonとcleanupTimingだけに残す。全file受理後でも、binding等の誤操作はprimary理由にする。
 
 clock採取上限は131,330回（2×(open32＋observe64＋read65,536＋close32)＋最終2）。これは(A)の模擬操作表からの有限なclock呼出し枠で、(B)のhashや(C)の行集約guardは含まない。未dispatch拒否のpre-guard等も同枠を消費し、不足すればsource_limitで止める。cleanup時に採取できなければcleanupTiming=unknownとし、clockを追加生成せずcloseだけを試す。native CPU・heap・実時間上界を表す数ではない。
 

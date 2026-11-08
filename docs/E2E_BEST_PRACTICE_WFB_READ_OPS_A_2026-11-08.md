@@ -39,6 +39,34 @@ Date: 2026-11-08 / 実装基準HEAD: `dfc79ff` / [実装契約](BEST_PRACTICE_WF
 
 関連対象：read-ops-fake／source-map-supply／source-map-values／carrier-coverage／seed-bootstrap／bridge-work／value-admission／value-core-detailed／snapshot-value／raw-json-boundary／raw-json-syntax／store-recorder-persistence／store-recorder-binding／fixed-evidence-storeの`tests/review/*.test.ts`。全repository回帰は今回実施していない。梱包は一時cacheのdry-runで、script起動・archive生成・公開・設定変更は行っていない。
 
+## レビュー修正（2026-11-08）
+
+`e235ec9`のレビューで、次の2点の欠陥とtestの穴を確認した。上の記録（35件成功、関連14ファイル1,208件成功）は修正前の値として残す。最終節の「今回の変更は未コミット」は記録作成時点の記述で、本体は`e235ec9`としてコミット済み。
+
+- 完走・放棄の区別: 2 fileを完走したsessionと、2 file目をopen／before観測だけしてfinishしたsessionが、ともに`firstReason=none`・両slot `incomplete/closed_confirmed`になった。read途中の`closeOnce()`も`ok: true`で理由を残さなかった。close時にslotを一律`incomplete`にしていたため。after観測まで完了しclose確認・post-guardを通ったfileだけを`pending`として受理し、`acceptedFiles`へ数えるようにした。after観測前のcloseは`incomplete`をprimary理由にする。
+- 終端時間帯のfinish: 全fileを完走した後に`advanceTo(950)`でfinishすると`firstReason=deadline`、完走後の`cancel()`でも`cancelled`がprimaryになった。全file受理後の期限・取消・時計・上限の停止は`stopReason`だけに残す。全file受理後のbinding誤操作はprimaryのまま。
+
+新規試験17件（固定scenario 5件を含む）を追加し、REDを確認してから実装した。最初の15件では9件が失敗した（完走pending、放棄incomplete、途中close、完走後の後着停止、after_size／after_identity／after_kind／before_identity／before_kindのscenario未実装）。残る6件は既存実装で成功したが、修正前の変異の生存を倒すための固定試験である。修正後の変異で生き残った2件（受理条件のpost-guard、全file受理後の誤操作）に対し、さらに2件を追加して各変異が失敗することを確認した。既存試験のうち、完走後のslot期待値を`incomplete`から`pending`へ変更した。close失敗と期限の優先順位を見る試験は、未完了fileのfinish回収では`incomplete`がprimaryになるため、after観測まで完了したfileのcloseで同じ順位を確認する形に変更した。9通りprefixのoracleへ`firstReason`と`acceptedFiles`の照合を加えた。
+
+| 確認 | 修正前 | 修正後 |
+|---|---|---|
+| read-ops-fake単独 | 35件成功 | 52件成功 |
+| 変異（`read-ops-fake.ts`への一時変更） | 63中47を検出 | 74中66を検出（新しいclose・完了判定・scenarioの変異を追加） |
+| 全repository回帰 | 未実施 | 306ファイル、15,247件成功、失敗0 |
+| npm run lint／build／package分類 | 未実施／成功／未実施 | すべてrc=0。新規2ファイルのESLintは問題なし |
+
+生き残った8件は等価と判断した。
+
+- `guard-cleanup-end`: D_end到達時もpost guardのD_stop判定が同じ`deadline`を出す。
+- `guard-expired-nosticky`: clockは単調で、expiredの後にwithinへ戻る時刻を作れない。
+- `open-active`: active中のopenは、ordinal不一致かslotの`pending`で同じbindingになる。
+- `open-slot`: 受理時だけordinalが進み、失敗時はprimary理由で止まるため、現ordinalのslotは常に`not_started`。
+- `open-budget`／`obs-budget`: 再試行なしの状態遷移では、file数32までにopen32・observe64を超えられない。
+- `obs-retry`: interrupted readの後もstageは`before`／`reading`で、observeはstageの検査で拒否される。保留中observeの試験は回帰防止として残す。
+- `close-accept-confirm`: close未確認は`source_unavailable`をprimaryにするため、`firstReason`の条件で同じく受理されない。
+
+hash接続・実bytes・同snapshot借用・行集約は今回も接続していない。正式発行口閉鎖・全体受付無効・Unknown・調査保留を維持する。
+
 ## 未実施
 
 (B)の実scratch・同bytes hash／候補受理、(C)のsnapshot借用・行集約・連続private継続、実期待値pin・実source照合・S発行・core／実接続・実通信・実機操作・設定変更・Pushは未実施。実hash照合を既定テストへ追加していない。正式発行口閉鎖・全体受付無効・Unknown・VM／監視／telemetry調査保留を維持する。今回の変更は未コミット。

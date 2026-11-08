@@ -214,6 +214,8 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 ### Added
 
+- WF-B ReadOps stage-A review keeps a fully read and confirmed-closed file `pending` and counts it in `acceptedFiles`, so a finished session can be told apart from one that stopped partway. Closing a file before its after observation now records `incomplete`. Once every file is accepted, a later deadline, cancel, clock or limit stop is kept only in `stopReason`. New fixed scenarios cover after-read size/identity/kind changes and before-read identity/kind changes, and tests pin the first-open ordinal, backward clock steps, the first late stop reason, outstanding cleanup and the closed core path.
+
 - WF-B map-supply review adds a `map_wrapper` probe that keeps the checked files and rows but changes the map object, so the map identity check is now guarded on its own. Tests also pin that the origin probe holds its input before the check and that a normal supply finishes construction. Supply results stay synthetic and non-executable.
 
 - WF-B source-map review tests now pin array proxies before traps, array-like and subclassed lists, hidden entries and fields, duplicate file IDs, free-text missing points, a thirteenth row, step order within a row, unknown roles and reference bindings that claim a cost step. Two earlier tests were rejecting their input for a different reason than their names stated. The implementation is unchanged.

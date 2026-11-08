@@ -1,13 +1,13 @@
 /** Pure A-stage control model. No buffers, hashing, file I/O, supply, core or runtime imports. */
 type Reason = 'binding' | 'operation_invalid' | 'source_limit' | 'source_unavailable' | 'source_changed'
-  | 'content_mismatch' | 'cancelled' | 'deadline' | 'clock_unavailable' | 'closed';
+  | 'content_mismatch' | 'cancelled' | 'deadline' | 'clock_unavailable' | 'closed' | 'incomplete';
 type Cleanup = 'not_attempted' | 'no_resource' | 'closed_confirmed' | 'close_unconfirmed';
 type FileHash = 'not_started' | 'pending' | 'incomplete' | 'content_mismatch';
 interface Slot { readonly fileId: string; readonly hash: FileHash; readonly cleanup: Cleanup }
 interface Resource { readonly ordinal: number }
 type OpenOutcome = { readonly kind: 'opened'; readonly resource: Resource }
   | { readonly kind: 'no_resource' } | { readonly kind: 'failed_owned'; readonly resource: Resource };
-interface Observation { readonly kind: 'regular'; readonly identity: Resource; readonly size: number; readonly stamp: number }
+interface Observation { readonly kind: 'regular' | 'other'; readonly identity: Resource; readonly size: number; readonly stamp: number }
 type ReadOutcome = { readonly kind: 'bytes'; readonly n: number } | { readonly kind: 'eof' }
   | { readonly kind: 'interrupted' } | { readonly kind: 'failed' };
 interface ReadOps {
@@ -26,7 +26,8 @@ const SCENARIOS = ['normal', 'interrupt_once', 'interrupt_always', 'open_no_reso
   'early_eof', 'extra_byte', 'invalid_n', 'read_throw', 'read_failed', 'observe_throw', 'before_size',
   'cancel_during_read', 'deadline_during_read', 'mismatch_close_failure', 'capacity_files', 'read_limit',
   'open_throw_unknown', 'close_throw_late', 'clock_throw', 'shared_received_cap', 'shared_retry_cap',
-  'bad_file_size', 'bad_total_size', 'after_stamp', 'guard_cap', 'slot_build_failure'] as const;
+  'bad_file_size', 'bad_total_size', 'after_stamp', 'guard_cap', 'slot_build_failure', 'after_size', 'after_identity',
+  'after_kind', 'before_identity', 'before_kind'] as const;
 type Scenario = (typeof SCENARIOS)[number];
 class FakeClock {
   time = 0; calls = 0;
@@ -48,7 +49,9 @@ class FakeOps implements ReadOps {
   observeOnce(resource: Resource, _after: boolean): Observation {
     this.calls.observe++;
     if (this.scenario === 'observe_throw') throw new Error('synthetic_observe');
-    return { kind: 'regular', identity: resource, size: this.sizes[resource.ordinal] + (this.scenario === 'before_size' ? 1 : 0),
+    const changed = (name: string) => this.scenario === `${_after ? 'after' : 'before'}_${name}`;
+    return { kind: changed('kind') ? 'other' : 'regular', identity: changed('identity') ? Object.freeze({ ordinal: resource.ordinal }) : resource,
+      size: this.sizes[resource.ordinal] + (this.scenario === 'before_size' || (_after && this.scenario === 'after_size') ? 1 : 0),
       stamp: this.scenario === 'after_stamp' && _after ? 2 : 1 };
   }
   readOnce(resource: Resource, offset: number, requested: number): ReadOutcome {
@@ -113,8 +116,10 @@ class Session {
       || this.#sizes.reduce((a, b) => a + b, 0) > this.#profile.maxExpected) this.stop('source_limit');
   }
   private result(reason?: Reason): Result { return Object.freeze(reason ? { ...CLOSED, ok: false, reason } : { ...CLOSED, ok: true }); }
+  private complete(): boolean { return this.#slotsState === 'prepared' && this.#sizes.length > 0 && this.#ordinal >= this.#sizes.length; }
   private stop(reason: Reason): Result {
-    if (this.#first === 'none') this.#first = reason;
+    const late = ['cancelled', 'deadline', 'clock_unavailable', 'source_limit'].includes(reason);
+    if (this.#first === 'none' && !(late && this.complete())) this.#first = reason;
     if (this.#stopReason === 'none' && ['cancelled', 'deadline', 'clock_unavailable', 'source_limit'].includes(reason)) this.#stopReason = reason;
     return this.result(this.#first);
   }
@@ -217,21 +222,25 @@ class Session {
   closeOnce(): Result {
     if (this.#terminal) return this.result('closed');
     if (!this.#resource) return this.#first === 'none' ? this.result() : this.result(this.#first);
+    const completed = this.#stage === 'after';
+    if (!completed) this.stop('incomplete');
     this.guard(true);
     this.#budget.close++;
     let confirmed = false;
     try { confirmed = this.#ops.closeOnce(this.#resource); } catch { /* fixed unconfirmed cleanup */ }
-    this.#slots[this.#ordinal] = { ...this.#slots[this.#ordinal], hash: this.#slots[this.#ordinal].hash === 'content_mismatch' ? 'content_mismatch' : 'incomplete',
-      cleanup: confirmed ? 'closed_confirmed' : 'close_unconfirmed' };
     this.#resource = undefined; this.#before = undefined; this.#retry = undefined;
     if (!confirmed) { this.#cleanupReason = 'close_unconfirmed'; this.stop('source_unavailable'); }
     this.guard(true, true);
-    if (confirmed && this.#stage === 'after' && this.#first === 'none') this.#ordinal++;
+    const accepted = completed && confirmed && this.#first === 'none';
+    const hash = this.#slots[this.#ordinal].hash;
+    this.#slots[this.#ordinal] = { ...this.#slots[this.#ordinal], hash: hash === 'content_mismatch' ? 'content_mismatch' : accepted ? 'pending' : 'incomplete',
+      cleanup: confirmed ? 'closed_confirmed' : 'close_unconfirmed' };
+    if (accepted) this.#ordinal++;
     this.#stage = 'none';
     return this.#first === 'none' ? this.result() : this.result(this.#first);
   }
   private snapshot() { return Object.freeze({ ...CLOSED, firstReason: this.#first, retainedResource: this.#resource !== undefined,
-    stopReason: this.#stopReason, cleanupReason: this.#cleanupReason, cleanupTiming: this.#cleanupTiming, guards: this.#guards,
+    stopReason: this.#stopReason, acceptedFiles: this.#ordinal, cleanupReason: this.#cleanupReason, cleanupTiming: this.#cleanupTiming, guards: this.#guards,
     clockCalls: this.#signals.clock.calls, acquisitionUncertain: this.#acquisitionUncertain,
     cleanupOutstanding: this.#budget.cleanupReserved - this.#budget.cleanupUnused - this.#budget.close,
     deadlines: Object.freeze({ stop: this.#profile.stop, end: this.#profile.end }),
