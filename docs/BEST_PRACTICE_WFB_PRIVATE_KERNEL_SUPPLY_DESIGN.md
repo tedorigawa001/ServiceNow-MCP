@@ -1,5 +1,7 @@
 # WF-B (C)：共通読取kernelへのprivate供給境界の詳細設計
 
+詳細化追記（2026-11-08）: [宣言長とactual判定の分離・legacy source故障script化](BEST_PRACTICE_WFB_DECLARED_ACTUAL_SCRIPT_DESIGN.md)で、kernelと単発producerの責務、before後の可視長変化、期待値・期限不変の移管表と独立合成受入条件を具体化した。設計のみで、actual判定の実装・C供給／実行は進めていない。
+
 Version: draft-0.3 / Date: 2026-11-08 / 読み取り照合基準HEAD: `91e4e4e` / レビュー修正の基準HEAD: `ee04dcd` / 機械的抽出基準HEAD: `f6018b5`。
 
 draft-0.3: §11の(B)kernelの機械的抽出と薄い互換factoryだけを実装した。[抽出検証記録](E2E_BEST_PRACTICE_WFB_KERNEL_EXTRACTION_2026-11-08.md)。Cからの実行・private供給表・actual判定への変更は行っていない。
