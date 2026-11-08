@@ -1,5 +1,7 @@
 # WF-B (C)：同canonical fileのprivate供給表・非実行viewの差分設計
 
+差分設計追記（2026-11-08）: [下位移譲claim・pending／非実行holder](BEST_PRACTICE_WFB_SUPPLY_TRANSFER_DESIGN.md)へ、同発行物anchorと通常利用slotの分離、claim消費点／private公開点、固定discard・未確認保持・borrow退役保留を具体化した。既存clear／validate／finishを移動へ直接流用せず、新段階の所有・検査境界を分ける。設計のみで移譲claim・C実行は未実装のまま。
+
 Version: draft-0.5 / Date: 2026-11-08 / 読み取り照合基準HEAD: `e1b3978`（レビュー修正基準HEAD: `fc0c2f3`、配置移行基準HEAD: `3a6b401`、供給準備実装基準HEAD: `98702a9`、供給準備レビュー修正基準HEAD: `70a8d0c`）。
 
 draft-0.5のレビュー修正：post検査の各条件に、その条件だけが外れる固定selector（post_*の21種と有効基点2種）を加え、親lifecycleへの理由写像・claim前close・構築失敗後の直接準備・終端後応答・building slot解放を試験で固定した。table originの保持を`retainedTableOrigin`として診断へ出す。envelopeの10項目照合と`borrow.matches(e)`は相互に冗長で、単独除去は等価、組での除去は全検出とする（§10）。
