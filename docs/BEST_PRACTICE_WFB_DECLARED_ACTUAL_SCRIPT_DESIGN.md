@@ -1,6 +1,8 @@
 # WF-B：宣言長とactual判定の分離・legacy source故障script化の実装境界
 
-Version: draft-0.3 / Date: 2026-11-08 / 読み取り照合基準HEAD: `375826f` / レビュー修正の基準HEAD: `7a40526` / 実装基準HEAD: `1827327`。
+Version: draft-0.4 / Date: 2026-11-08 / 読み取り照合基準HEAD: `375826f` / レビュー修正の基準HEAD: `7a40526`・`e1b3978` / 実装基準HEAD: `1827327`。
+
+draft-0.3のレビュー修正: DA10の不正event／record対照を、有効なbaseから1項目だけ変えた単独対照（非boolean relative・相対長の範囲外・offset上限超過・metadata eventの非0 offset・maxReturn 0／65,537・initialLength超過／負）へ分け、openOnceが不正recordを拒否することも確認するようにした（§10）。read eventが指定offset以外で発火しないこと、after時点のsize差をsource_changedにすること、advance_to_stop／advance_to_endのcleanupTiming差、`sourceProbe`が固定selector以外に出ないことを対照へ追加した。compiled負の対照を既存の梱包runnerから実行するようにした。[検証記録](E2E_BEST_PRACTICE_WFB_DECLARED_ACTUAL_2026-11-08.md)。
 
 draft-0.3: legacy B内の宣言／actual分離・有限source scriptを合成依存限定で実装した。既存のfactory／model／期待値・cap・期限は変更せず、private producerはoriginとactual recordだけを持ち、宣言長・期待digest・停止ownerを保持しない。[検証記録](E2E_BEST_PRACTICE_WFB_DECLARED_ACTUAL_2026-11-08.md)。Cの供給・実行とshared budget連結は未実装のまま。
 
@@ -156,6 +158,6 @@ producer生成・宣言受付・同handle結合の失敗は、取得有無と既
 - 最大4event／handle、可視長・stamp・消費bit、短読取上限と有限故障modeを実装。イベントのstrict項目、値域、5eventの拒否を純粋対照で確認する。retry再適用を観測可能にする固定対照だけは、可視長を相対−1にするeventを使用し、消費bitを外す変異を検出する。
 - source側が正常EOF／bytesをactual長から返す。kernelのremaining／要求長／update予約／probe／final前prefixはdeclaredBytesだけを使う。妥当な返却n以外はhashせず、余剰は受信だけ課金する。停止signalはkernelが固定受理点で反映し、producerから停止ownerへの参照を持たせない。
 - 固定selectorの`da_source_probe`だけは、独立した有限producer対照の75件gridと拒否booleanを`sourceProbe`診断として返す。bytes／digest／handle／opsや任意scriptの登録口は返さない。このgridの費用は通常Bの会計へ合算せず、本番work／E／Sの証拠にしない。旧49selectorにはこの診断fieldを追加しない。
-- DA01〜03／05〜07／09は宣言・可視長の固定対照と独立event oracle、DA04／08は既存digest／故障・停止試験と追加の不正variant／0・小数n／失敗signal、DA10は75件grid・8件不正event・8種変異、DA11は既存試験・新旧入口・strict／compiled／梱包確認へ対応させた。strict SourceMapDraftのexpectedBytes=0拒否は既存試験を維持する。
+- DA01〜03／05〜07／09は宣言・可視長の固定対照と独立event oracle、DA04／08は既存digest／故障・停止試験と追加の不正variant／0・小数n／失敗signal、DA10は75件grid・8件不正event・有効base付きの単独不正対照8件とopenOnce経由の拒否・8種変異（`package-http-classification.mjs`から実行）、DA11は既存試験・新旧入口・strict／compiled／梱包確認へ対応させた。strict SourceMapDraftのexpectedBytes=0拒否は既存試験を維持する。
 
 同snapshotのprivate供給・C用非実行view・移譲claim、行hash集約、実E要求量・S発行はこの実装へ含めていない。

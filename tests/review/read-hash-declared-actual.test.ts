@@ -61,6 +61,32 @@ describe('B declaration and actual source are independent', () => {
     expect(probe?.invalidEvents.every(Boolean)).toBe(true);
     expect(probe?.invalidEvents.length).toBe(8);
   });
+  it('rejects each malformed event/record field in isolation and through openOnce, against a valid base', () => {
+    const probe = createReadHashFake('da_source_probe').inspect().sourceProbe;
+    // The base event/record is valid, so each isolated control below fails only on its own field.
+    expect(probe).toMatchObject({ validBaseAccepted: true, invalidRecordOpenRejected: true });
+    expect(probe?.isolatedInvalid).toEqual({ relativeNotBoolean: true, relativeOutOfRange: true, offsetPastBytes: true,
+      metadataEventOffset: true, maxReturnZero: true, maxReturnOverChunk: true, initialPastBytes: true, initialNegative: true });
+  });
+  it('fires a read event only at its own offset, not at an offset the reader skips', () => {
+    expect(createReadHashFake('da_skip_offset_event').run()).toMatchObject({ firstReason: 'none',
+      counts: { received: 8, hashed: 8, accepted: 3 } });
+  });
+  it('reports an after-metadata size change as source_changed after the declared EOF', () => {
+    expect(createReadHashFake('da_after_size').run()).toMatchObject({ firstReason: 'source_changed',
+      counts: { received: 3, hashed: 3, observe: 2, final: 0, accepted: 0, close: 1 } });
+  });
+  it('maps advance_to_stop and advance_to_end signals to distinct cleanup timing', () => {
+    expect(createReadHashFake('deadline_during_read').run()).toMatchObject({ firstReason: 'deadline', cleanupTiming: 'within' });
+    expect(createReadHashFake('da_bad_n_deadline').run()).toMatchObject({ stopReason: 'deadline', cleanupTiming: 'within' });
+    expect(createReadHashFake('close_late').run()).toMatchObject({ cleanupTiming: 'expired' });
+  });
+  it('adds the source probe diagnostic only to its own fixed selector', () => {
+    for (const scenario of ['normal', 'one_byte', 'early_eof', 'extra_byte', 'interrupt_always', 'before_size', 'after_changed',
+      'invalid_n', 'read_throw', 'close_late', 'da_shrink_two', 'da_grow_probe', 'da_empty']) {
+      expect(Object.keys(createReadHashFake(scenario).run())).not.toContain('sourceProbe');
+    }
+  });
   for (const [scenario, declared, events] of [
     ['da_shrink_two', 3, ['open', 'before', 'init', 'bytes:2', 'eof']],
     ['da_grow_probe', 3, ['open', 'before', 'init', 'bytes:3', 'extra:1']],

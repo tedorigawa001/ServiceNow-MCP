@@ -64,6 +64,29 @@ Bのmodel・全既存cap・D_stop900／D_end1000・guard上界131,524を維持�
 
 C実行入口・正式発行口閉鎖、全体受付無効・Unknown・VM／監視／telemetry調査保留を維持する。実期待値pin・実source照合・S発行・core接続・実接続・実通信・設定変更・Pushは行っていない。今回の変更は未コミット。
 
+## レビュー修正（2026-11-08）
+
+`e1b3978`のレビューで次を確認し、合成fixtureと試験を修正した。上記の19件・関連19ファイル1,355件・686件比較は修正前の記録としてそのまま残す。
+
+- `compiled-declared-actual.mjs`はどのrunnerからも実行されていなかった。他のcompiled fixtureと同じく`package-http-classification.mjs`の末尾から実行するようにし、8種変異の検出を通常の梱包確認で再実行する。
+- 変異試験（kernelへの一時編集51種、終了後に復元）で22種が残った。うち11種は試験の穴として対照を追加した。
+  - 不正event対照の`relative: 'false'`は、length 2が相対範囲外になるために拒否されており、boolean判定を外しても検出できなかった。有効なbase（`validBaseAccepted`）から1項目だけ変えた単独対照8件（非boolean relative・相対長範囲外・offset上限超過・before eventの非0 offset・maxReturn 0／65,537・initialLength 4／−1）を`isolatedInvalid`へ追加した。
+  - `validRecord`は直接呼ばれるだけで、openOnce経由の拒否は未確認だった。不正recordをopenOnceが`none`で拒否する`invalidRecordOpenRejected`を追加した。
+  - 新しい固定selector `da_skip_offset_event`（宣言3byteのread中に通過しないoffset 2の短縮event）は発火せず正常受理3となる。eventのoffset照合を外す変異を検出する。
+  - 新しい固定selector `da_after_size`（after時点だけsize 2）でsource_changed、final0／受理0を確認する。after size比較の除去を検出する。
+  - `deadline_during_read`／`da_bad_n_deadline`のcleanupTiming=within、`close_late`のexpiredを固定し、advance_to_stop／advance_to_endの取り違えを検出する。
+  - 旧selectorと通常のda selectorの終端に`sourceProbe`が出ないことを固定し、全selectorでprobeを生成する変異を検出する。
+- 残る11種は同等変異として扱う。
+  - before／afterのidentity・before kind比較: 固定recipeのmetadataは常に同origin・regularを返す。
+  - nのsafe integer判定: 小数nは`n < 1`で先に拒否され、NaN等を返すrecipeはない。
+  - event適用後の可視長範囲検査・openOnceの`record.origin`照合・readOnceの要求値検査: validRecordと固定kernelにより不正値へ到達しない。
+  - producerの0xa5 scratch埋め: 過剰hashの検出補助で、正しいkernelの結果を変えない。
+  - final前のprefix照合・remainingの0下限・非bytes結果のretry解除: 到達しない防御処理。
+
+RED: 新規5件のうち、単独不正対照・offset対照・after size対照の3件が修正前に失敗した（未登録selector・未出力fieldを含む）。cleanupTiming対照と`sourceProbe`非出力の2件は修正前の挙動を固定する対照で、上記変異で効果を確認した。
+
+修正後は変異51種のうち40種を検出し、残りは上記の同等変異11種。新規declared／actual試験24件、関連B／容量／抽出試験と合わせて4ファイル96件成功。旧49scenarioの基準HEAD kernelとの比較（全完走＋0〜12step後finish、686件）も修正後に再実行し一致した。lint・build・`package-http-classification`（compiled-declared-actualを含む）・全repository回帰（311ファイル、15,382件成功、失敗0）を確認した。cap・期限・旧試験の期待値は変更していない。
+
 ## コミット前の対象限定再検証
 
 上記「未コミット」は記録作成時点の状態。今回の9ファイルだけをindexへ登録し、そのindexを新しい一時作業ツリーへ展開した。依存node_modulesへの参照だけを追加し、元の作業ツリーの未登録変更や既存distを取り込まず、同候補で再検証した。

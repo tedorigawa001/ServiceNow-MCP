@@ -361,4 +361,5 @@ execFileSync(process.execPath,[fileURLToPath(new URL('fixtures/compiled-release-
 execFileSync(process.execPath,[fileURLToPath(new URL('fixtures/compiled-release-time-handoff.mjs',import.meta.url))],{cwd:root,stdio:'inherit'});
 execFileSync(process.execPath,[fileURLToPath(new URL('fixtures/compiled-prefix-relation.mjs',import.meta.url))],{cwd:root,stdio:'inherit'});
 execFileSync(process.execPath,[fileURLToPath(new URL('fixtures/compiled-destination-preparation.mjs',import.meta.url))],{cwd:root,stdio:'inherit'});
+execFileSync(process.execPath,[fileURLToPath(new URL('fixtures/compiled-declared-actual.mjs',import.meta.url))],{cwd:root,stdio:'inherit'});
 console.log('HTTP classification/status terminal/cleanup/context excluded; formal/production adoption disabled; fixture/oracle excluded PASS ('+pack.files.length+' files)');

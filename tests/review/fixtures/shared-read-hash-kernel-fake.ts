@@ -116,7 +116,8 @@ const scenarios = ['normal', 'one_byte', 'interrupt_once', 'interrupt_always', '
   'capacity_8m_8', 'capacity_8m_32', 'capacity_8m_8_extra', 'capacity_8m_32_extra',
   'declared_total_over', 'declared_file_over', 'declared_files_over', 'da_shrink_two', 'da_grow_probe', 'da_interrupt_shrink',
   'da_declared_two', 'da_declared_four', 'da_actual_two', 'da_actual_four', 'da_empty', 'da_empty_grow',
-  'da_zero_n', 'da_fraction_n', 'da_bad_variant', 'da_source_probe', 'da_failed_cancel', 'da_bad_n_deadline'] as const;
+  'da_zero_n', 'da_fraction_n', 'da_bad_variant', 'da_source_probe', 'da_failed_cancel', 'da_bad_n_deadline',
+  'da_skip_offset_event', 'da_after_size'] as const;
 type Scenario = typeof scenarios[number];
 const EMPTY = 'e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855';
 const ABC = 'ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad';
@@ -158,6 +159,9 @@ function sourceRecipe(scenario: Scenario, file: File, seed: SeedFile, ordinal: n
   }
   if (scenario === 'da_interrupt_shrink' && ordinal === 0) events.push({ at: 'read', offset: 0, length: -1, stamp: 0, relative: true });
   if (scenario === 'after_changed') events.push({ at: 'after', offset: 0, length, stamp: 1, relative: false });
+  // A read event at an offset the declared chunk skips must never fire.
+  if (scenario === 'da_skip_offset_event' && ordinal === 0) events.push({ at: 'read', offset: 2, length: 1, stamp: 0, relative: false });
+  if (scenario === 'da_after_size' && ordinal === 0) events.push({ at: 'after', offset: 0, length: length - 1, stamp: 0, relative: false });
   return Object.freeze({ origin: file.origin, bytes: grow || beforeExtra ? Object.freeze([...seed.bytes, 120]) : seed.bytes,
     initialLength: scenario === 'da_actual_two' && ordinal === 0 ? 2 : length + Number(beforeExtra), events: Object.freeze(events.map(e => Object.freeze(e))),
     maxReturn: ['one_byte', 'second_update_throw', 'long_short_reads'].includes(scenario) ? 1 : LIMIT.chunk });
@@ -207,8 +211,20 @@ function sourceProbe() {
     { ...base, length: 0.5 }, { ...base, stamp: 2 }, { ...base, extra: 1 }, { ...base, relative: 'false' }];
   const invalidEvents = invalid.map(e => !validRecord({ ...record, events: [e as SourceEvent] }));
   invalidEvents.push(!validRecord({ ...record, events: Array<SourceEvent>(5).fill(base) }));
+  // Each isolated control differs from the valid base in exactly one field.
+  const validBaseAccepted = validRecord({ ...record, events: [base] });
+  const event = (patch: object) => !validRecord({ ...record, events: [{ ...base, ...patch } as SourceEvent] });
+  const isolatedInvalid = Object.freeze({ relativeNotBoolean: event({ length: 0, relative: 'false' }),
+    relativeOutOfRange: event({ length: 2, relative: true }), offsetPastBytes: event({ offset: 4 }),
+    metadataEventOffset: event({ at: 'before', offset: 1 }), maxReturnZero: !validRecord({ ...record, maxReturn: 0 }),
+    maxReturnOverChunk: !validRecord({ ...record, maxReturn: 65_537 }), initialPastBytes: !validRecord({ ...record, initialLength: 4 }),
+    initialNegative: !validRecord({ ...record, initialLength: -1 }) });
+  const badOrigin = Object.freeze({});
+  const badSource = new SourceOps(new Map([[badOrigin, Object.freeze({ ...record, origin: badOrigin, maxReturn: 0 })]]), sourceFaults('normal'));
+  const invalidRecordOpenRejected = badSource.openOnce(badOrigin).kind === 'none';
   return Object.freeze({ grid: Object.freeze(grid), copiedOriginRejected, foreignHandleRejected, duplicateOpenRejected,
-    duplicateCloseRejected, closedReadRejected, invalidEvents: Object.freeze(invalidEvents) });
+    duplicateCloseRejected, closedReadRejected, invalidEvents: Object.freeze(invalidEvents), validBaseAccepted, isolatedInvalid,
+    invalidRecordOpenRejected });
 }
 class Assembly {
   readonly #files: readonly File[];
