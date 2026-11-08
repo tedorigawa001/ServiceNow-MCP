@@ -1,6 +1,8 @@
 # WF-B (C)：共通読取kernelへのprivate供給境界の詳細設計
 
-Version: draft-0.1 / Date: 2026-11-08 / 読み取り照合基準HEAD: `91e4e4e`。
+Version: draft-0.2 / Date: 2026-11-08 / 読み取り照合基準HEAD: `91e4e4e` / レビュー修正の基準HEAD: `ee04dcd`。
+
+draft-0.1のレビュー修正: 現行(B)の早EOF・余剰byte・before長差・after変更は読取経路内のscenario分岐で起こし、宣言長＝actual（`bytes.length`）であることを明記した。§6のexpectedBytes基準の残量計算とactual source由来のEOF／余剰判定はkernelの挙動変更で、機械的抽出に含めないと§5・§10で区別した。抽出段階はscenario分岐を残したまま移し、actual判定の導入とlegacy adapterの故障script化は別段階とし、その後に(B)既存試験を期待値不変で全件再実行する。設計のみで、実装状態は変わらない。
 
 Status: **設計のみ。共通kernel抽出・private供給・読取接続はいずれも未実装。** 親は[同snapshotの所有・停止契約](BEST_PRACTICE_WFB_SNAPSHOT_READ_LIFECYCLE_DESIGN.md)と[private読取・hash設計](BEST_PRACTICE_WFB_PRIVATE_READ_HASH_DESIGN.md)。[(B)の候補確定契約](BEST_PRACTICE_WFB_SCRATCH_CANDIDATE_DESIGN.md)、[8MiB合成検証](E2E_BEST_PRACTICE_WFB_READ_HASH_CAPACITY_2026-11-08.md)、[開始準備の検証](E2E_BEST_PRACTICE_WFB_SNAPSHOT_READ_START_2026-11-08.md)の保証範囲を合算して、接続完了とはしない。
 
@@ -62,7 +64,7 @@ source bytesはprivateに生成・検査した不変の有限配列等に限定�
 | init／update／final、暫定候補、close／post後のslot確定 | snapshotの期待値、origin binding、同sessionの停止／budget参照 |
 | 固定close試行・部分候補discard・終端診断材料 | 親の診断owner／cleanup custody／borrow寿命管理へのprivate受渡し |
 
-kernel内で`mode=Cなら成功`等の比較省略や別の簡易hash経路を作らない。8MiB容量・既知vector・poisoned prefix・不一致・close故障は抽出後の共通処理を試験する。Bの公開model／診断意味と既存oracleを維持し、mechanical抽出とCの挙動追加を分けて検証する。C側の診断を合わせるためにBの既存期待値を一括変更しない。
+kernel内で`mode=Cなら成功`等の比較省略や別の簡易hash経路を作らない。8MiB容量・既知vector・poisoned prefix・不一致・close故障は抽出後の共通処理を試験する。Bの公開model／診断意味と既存oracleを維持し、mechanical抽出とCの挙動追加を分けて検証する。現行(B)では、早EOF・余剰byte・before長差・after変更をread／metadata経路内のscenario分岐で起こし、残量・EOF位置・final前のhash済長は`file.bytes.length`（宣言長＝actual）から計算している。したがって§6のexpectedBytes基準の残量計算とactual source由来のEOF／余剰判定はkernelの挙動変更であり、機械的抽出に含めない。(B)の既存試験は宣言＝actualの経路しか通らないため、このactual判定の正しさを単独では示さない。C側の診断を合わせるためにBの既存期待値を一括変更しない。
 
 strict用adapterとlegacy B用adapterのbrandは別にし、Bのid／bytes／digest recordがstrict canonicalFileへ紛れないようにする。共通処理を使うことと、originが同じということは別である。旧readonly Supply classの共通化はこのmodule移動に暗黙に含めない。配布manifest・src／distにfriendやdevelopment issuerを追加せず、梱包の負の対照を維持する。
 
@@ -127,6 +129,6 @@ binding点はread→hash受理区間に入れない。metadata／hash／closeの
 
 ## 10 推奨する実装分割と停止状態
 
-最初は(B)の共通kernel抽出と薄い互換factoryだけを行い、Cからの実行入口は閉じたままBの既存試験・型／梱包保証を移す。次に、同canonical参照・静的期待値とpayload binding表・非実行view・移譲claimの純粋合成検査を実装する。共有budget／停止guard・非空custodyへの接続と上界を確定してから、初めて同snapshot→kernelの連続合成試験へ進む。
+最初は(B)の共通kernel抽出と薄い互換factoryだけを行い、Cからの実行入口は閉じたままBの既存試験・型／梱包保証を移す。この段階ではscenario分岐と`bytes.length`基準の計算をそのまま移し、宣言／actualの分離は行わない。次の段階で、kernelへexpectedBytes基準の残量計算とactual source由来のEOF／余剰判定を導入し、(B)のscenario故障をlegacy adapterの固定source record／故障scriptへ置き換える。その直後に(B)の既存試験を期待値・oracleを変えずに全件再実行し、宣言≠actualの経路はKS02相当の合成対照で別に確認する。次に、同canonical参照・静的期待値とpayload binding表・非実行view・移譲claimの純粋合成検査を実装する。共有budget／停止guard・非空custodyへの接続と上界を確定してから、初めて同snapshot→kernelの連続合成試験へ進む。
 
 本書作成時点では上記の抽出・供給表・移譲claim・KS01〜09は未実施。C-startのprepared、B単独のhash_matchをS・実装coverage・正常な接続終端へ昇格しない。row集約、旧Supply classの採用、実期待値pin・実source照合・実resource／runtime・core接続は別範囲のまま、正式発行口閉鎖・全体受付無効・Unknown・調査保留を維持する。
