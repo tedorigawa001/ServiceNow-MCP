@@ -1,6 +1,8 @@
 # WF-B (C)：下位移譲claim・pending／非実行holderの差分設計
 
-Version: draft-0.1 / Date: 2026-11-08 / 読み取り照合基準HEAD: `0e98c56`。
+Version: draft-0.2 / Date: 2026-11-09 / 読み取り照合基準HEAD: `0e98c56`（レビュー修正基準HEAD: `8b5af60`）。
+
+draft-0.2のレビュー修正：現行の供給準備ownerは`finish()`だけでなく`close()`と`fail()`も終端前に無条件で`clear()`を呼ぶため、移譲開始後の停止・失敗がこれらを経由すると元aliasと計数を消してしまう点を§7に明記し、ST07／ST09へ対応する変異対照を加えた。
 
 Status: **設計のみ。下位移譲claim・pending／holder・移譲後discardは未実装。** 親は[canonical供給表・非実行view設計](BEST_PRACTICE_WFB_CANONICAL_SUPPLY_VIEW_DESIGN.md)と[同snapshotの所有・停止契約](BEST_PRACTICE_WFB_SNAPSHOT_READ_LIFECYCLE_DESIGN.md)。[供給準備の検証・post検査レビュー修正](E2E_BEST_PRACTICE_WFB_CANONICAL_SUPPLY_VIEW_2026-11-08.md)を前提とするが、その成功を移譲済み証拠へ転用しない。
 
@@ -108,6 +110,8 @@ discardには専用の一度限り開始状態を持たせ、通常終端・clos
 
 現行finish()の無条件clear→内側finishも、activeな下位移譲へ直接流用しない。新移譲ownerがtaking／held_for_discard／retained_unconfirmedの責務を先に処理し、完了または未確認保持を判定する。旧準備factoryのfinish動作を変えるのではなく、新private経路にだけ停止gateを設ける。
 
+同じ理由で、現行の準備owner `close()`（root closeの後に未終端なら先行理由を設定して`clear()`）と`fail()`（先行理由・親lifecycle停止の後に`clear()`）も、移譲開始後（taking／held_for_discard／retained_unconfirmed）には呼ばない。これらを経由すると、§6で固定failure slotへ保持すべき元aliasや発行済みtable／view／declarations・table origin・作りかけ参照が同期的に消え、discardPasses／`supply_references_cleared`も記録されて、sourceDetachと固定discard試行の分離・discard試行≤1が崩れる。移譲開始後の正規closeは新private経路から同rootのcloseだけを呼び、transferStopを記録して固定discardへ進む。binding／生成失敗も新private経路が親lifecycleの停止（既存の写像）だけを依頼し、元ownerの保持fieldは§6の責務保持者が固定discardで処理する。移譲開始前（claim消費0）の拒否・closeは従来どおり既存`close()`／`fail()`へ委ねてよい。
+
 clear・anchor退役・failure slotへの保持確認が完了しない場合は、borrow／Snapshotをまだ退役させない保守的方針とする。上位結果にはretirement=unconfirmed、保持中slot、borrow退役保留を固定し、内側finishを呼んで「完了」にしない。同failure ownerが参照を保持し、反復finish／closeは追加discard試行・成功化を行わない。後日の回収再試行や外側隔離は別契約まで未対応である。
 
 終端後にconstructionがGC対象になっても、最後のunconfirmed記録をretiredへ変えない。参照消去・alias消滅・GC・物理ゼロ化・実resource解放は別概念とする。確認不能な責務を捨ててborrow退役済みを装う実装は受け入れない。
@@ -148,9 +152,9 @@ clear・anchor退役・failure slotへの保持確認が完了しない場合は
 | ST04 | 移動前の発行anchorを保持したまま元通常slotを空にしてもpost成功。候補からanchorを再生成・書換えする変異、元field依存のままの検査を検出 |
 | ST05 | pending／holder shell／claim／発行根拠・file対応を個別に混入。狙う条件以外を整合した単独対照と有効基点を設け、各検査の感度を確認 |
 | ST06 | 二重take・同期再入・公開直前／直後の故障。消費点と公開点を別イベントで検証し、公開済みを巻き戻さない |
-| ST07 | closeをpre前・taking直後・pending中・post直前・公開後・discard中・終端後へ配置。正規停止とbinding拒否を分け、先行理由と既消費claimを保持 |
+| ST07 | closeをpre前・taking直後・pending中・post直前・公開後・discard中・終端後へ配置。正規停止とbinding拒否を分け、先行理由と既消費claimを保持。移譲開始後のcloseで内側準備ownerの`close()`を呼ぶ変異（元alias・発行参照の同期消去、discardPasses／`supply_references_cleared`の記録）を検出 |
 | ST08 | 未公開・公開後の各固定discard失敗、alias／issued／anchor保持漏れを個別注入。未退役slotを保持し、unconfirmedをretired／空へ補完しない |
-| ST09 | pending／holder／failure slotが未解決ならborrow／Snapshot退役を保留。現行finishを先に呼ぶ変異を検出。反復finishでもdiscard試行≤1・終端不変 |
+| ST09 | pending／holder／failure slotが未解決ならborrow／Snapshot退役を保留。現行finishを先に呼ぶ変異を検出。反復finishでもdiscard試行≤1・終端不変。移譲開始後のbinding／生成失敗で内側準備ownerの`fail()`を呼ぶ変異を検出し、失敗後もfailure slotが元aliasを保持することを確認 |
 | ST10 | 同じtable／view／canonical参照・原順序を維持し、copy／sort／dedup／再decode・期待値補正・第2source生成なし |
 | ST11 | 原因順序を替えて元診断・transferFirst／Stop・公開済み・discard／retirementを照合。終端後応答・秘密非出力を確認 |
 | ST12 | 独立した所有・寿命event oracleで全失敗prefix・有限操作列を照合。構造計数と実費を区別し、10event上限・claim／slot最大1を確認 |
