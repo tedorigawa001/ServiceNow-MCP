@@ -1,6 +1,6 @@
 # WF-B (C)：共通読取kernelへのprivate供給境界の詳細設計
 
-詳細化追記（2026-11-08）: [宣言長とactual判定の分離・legacy source故障script化](BEST_PRACTICE_WFB_DECLARED_ACTUAL_SCRIPT_DESIGN.md)で、kernelと単発producerの責務、before後の可視長変化、期待値・期限不変の移管表と独立合成受入条件を具体化した。設計のみで、actual判定の実装・C供給／実行は進めていない。
+実装追記（2026-11-08）: [宣言長とactual判定の分離・legacy source故障script化](BEST_PRACTICE_WFB_DECLARED_ACTUAL_SCRIPT_DESIGN.md)をlegacy Bの合成依存限定で実装した。kernelが宣言と単発結果から早EOF／余剰・metadata差を判定し、source故障はprivate有限scriptへ移した。[検証記録](E2E_BEST_PRACTICE_WFB_DECLARED_ACTUAL_2026-11-08.md)。C供給／実行・shared budget連結は未実装のまま。以下の旧構造・機械的抽出の説明は、その段階時点の基準として読む。
 
 Version: draft-0.3 / Date: 2026-11-08 / 読み取り照合基準HEAD: `91e4e4e` / レビュー修正の基準HEAD: `ee04dcd` / 機械的抽出基準HEAD: `f6018b5`。
 
@@ -8,7 +8,7 @@ draft-0.3: §11の(B)kernelの機械的抽出と薄い互換factoryだけを実�
 
 draft-0.1のレビュー修正: 現行(B)の早EOF・余剰byte・before長差・after変更は読取経路内のscenario分岐で起こし、宣言長＝actual（`bytes.length`）であることを明記した。§6のexpectedBytes基準の残量計算とactual source由来のEOF／余剰判定はkernelの挙動変更で、機械的抽出に含めないと§5・§10で区別した。抽出段階はscenario分岐を残したまま移し、actual判定の導入とlegacy adapterの故障script化は別段階とし、その後に(B)既存試験を期待値不変で全件再実行する。設計のみで、実装状態は変わらない。
 
-Status: **(B)kernelの機械的抽出だけを実装。private供給・Cからの読取接続は未実装。** 親は[同snapshotの所有・停止契約](BEST_PRACTICE_WFB_SNAPSHOT_READ_LIFECYCLE_DESIGN.md)と[private読取・hash設計](BEST_PRACTICE_WFB_PRIVATE_READ_HASH_DESIGN.md)。[(B)の候補確定契約](BEST_PRACTICE_WFB_SCRATCH_CANDIDATE_DESIGN.md)、[8MiB合成検証](E2E_BEST_PRACTICE_WFB_READ_HASH_CAPACITY_2026-11-08.md)、[開始準備の検証](E2E_BEST_PRACTICE_WFB_SNAPSHOT_READ_START_2026-11-08.md)の保証範囲を合算して、接続完了とはしない。
+Status: **(B)kernelの抽出とlegacy内の宣言／actual分離を実装。private供給・Cからの読取接続は未実装。** 親は[同snapshotの所有・停止契約](BEST_PRACTICE_WFB_SNAPSHOT_READ_LIFECYCLE_DESIGN.md)と[private読取・hash設計](BEST_PRACTICE_WFB_PRIVATE_READ_HASH_DESIGN.md)。[(B)の候補確定契約](BEST_PRACTICE_WFB_SCRATCH_CANDIDATE_DESIGN.md)、[8MiB合成検証](E2E_BEST_PRACTICE_WFB_READ_HASH_CAPACITY_2026-11-08.md)、[開始準備の検証](E2E_BEST_PRACTICE_WFB_SNAPSHOT_READ_START_2026-11-08.md)の保証範囲を合算して、接続完了とはしない。
 
 正式発行口閉鎖・全体受付無効・Unknown・VM／監視／telemetry調査保留を維持する。draft-0.1／0.2はMDのみ、draft-0.3は§11の機械的抽出に限定する。実期待値pin・実source照合・S発行・core接続・実接続・実通信・設定変更・Pushは行わない。§11以外の型名・供給状態は内部案であり、生成済み証拠・公開API・採用済みcapではない。
 

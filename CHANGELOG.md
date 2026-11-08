@@ -18,6 +18,8 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 ### Changed
 
+- WF-B separates immutable legacy declarations from private synthetic source records/handles. A bounded one-attempt source script now supplies actual bytes, metadata changes, interruptions and typed stop signals; the B kernel derives early EOF, excess-byte and metadata diagnoses from declared positions and observed results. Existing scenarios, limits, deadlines and summaries remain unchanged. Independent declaration/actual traces, a 75-case source grid and compiled negative controls add no C execution, source registration, real pinning or issuance authority.
+
 - WF-B mechanically relocates the legacy B read/hash kernel into a package-excluded shared fixture module, leaving its original path as a two-line compatibility factory re-export. The implementation body, fixed scenarios, model, counters, limits and existing expectations remain unchanged. Export/compatibility/C-closed controls introduce no kernel constructor, arbitrary supply registration, canonical adapter or C execution path; issuance, whole-run admission and runtime/core wiring remain closed.
 
 - WF-B snapshot/read preparation adds a separate synthetic-only construction with a prior diagnostic/result owner, preallocated empty cleanup custody, private checked-map borrow and one-shot start claim. Fixed identity/reentry/failure probes retain first diagnoses, forbid origin recreation after failure, and retire borrow references on discard without issuing read or cleanup evidence. The legacy supply and B hash kernel remain unchanged and unconnected; real budgets, pins, row aggregation, core/runtime wiring and formal issuance stay disabled or unknown.

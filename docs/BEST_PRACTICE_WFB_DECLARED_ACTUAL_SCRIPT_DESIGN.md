@@ -1,16 +1,18 @@
 # WF-B：宣言長とactual判定の分離・legacy source故障script化の実装境界
 
-Version: draft-0.2 / Date: 2026-11-08 / 読み取り照合基準HEAD: `375826f` / レビュー修正の基準HEAD: `7a40526`。
+Version: draft-0.3 / Date: 2026-11-08 / 読み取り照合基準HEAD: `375826f` / レビュー修正の基準HEAD: `7a40526` / 実装基準HEAD: `1827327`。
+
+draft-0.3: legacy B内の宣言／actual分離・有限source scriptを合成依存限定で実装した。既存のfactory／model／期待値・cap・期限は変更せず、private producerはoriginとactual recordだけを持ち、宣言長・期待digest・停止ownerを保持しない。[検証記録](E2E_BEST_PRACTICE_WFB_DECLARED_ACTUAL_2026-11-08.md)。Cの供給・実行とshared budget連結は未実装のまま。
 
 draft-0.1のレビュー修正: §6のread pre順序で、update枠の上限受付と予約計上を分けた。read枠・retry枠・受信余裕・update上限・宣言位置をすべて受け付けた後に、予約計上とretry／read試行課金を行う（現行どおり）。また、deadline_during_read／close_lateの時刻更新とcancel_during_read等の取消を、producerが停止ownerの時計・取消状態へ直接書くのでなく、型付き単発結果の固定停止signalとして返し、kernelが同じ受理位置で停止ownerへ反映すると定めた（§3／§5）。設計のみで、実装状態は変わらない。
 
-Status: **設計のみ。宣言／actualの分離とsource script化は未実装。** 親は[private供給境界](BEST_PRACTICE_WFB_PRIVATE_KERNEL_SUPPLY_DESIGN.md)と[private読取・hash設計](BEST_PRACTICE_WFB_PRIVATE_READ_HASH_DESIGN.md)。[kernel機械的抽出の検証](E2E_BEST_PRACTICE_WFB_KERNEL_EXTRACTION_2026-11-08.md)は、今回の挙動変更の証拠へ転用しない。
+Status: **宣言／actual分離・source scriptをlegacy Bの合成依存だけへ実装。** 親は[private供給境界](BEST_PRACTICE_WFB_PRIVATE_KERNEL_SUPPLY_DESIGN.md)と[private読取・hash設計](BEST_PRACTICE_WFB_PRIVATE_READ_HASH_DESIGN.md)。[kernel機械的抽出の検証](E2E_BEST_PRACTICE_WFB_KERNEL_EXTRACTION_2026-11-08.md)は、今回の挙動変更の証拠へ転用しない。
 
-C実行入口・正式発行口閉鎖、全体受付無効・Unknown・VM／監視／telemetry調査保留を維持する。今回はMDのみ。実装・実期待値pin・実source照合・S発行・core接続・実接続・実通信・設定変更・Pushは行わない。内部名・script・試験は将来案で、既存のcap・期限・APIを変更したものではない。
+C実行入口・正式発行口閉鎖、全体受付無効・Unknown・VM／監視／telemetry調査保留を維持する。今回は合成fixture・試験と文書だけ。実期待値pin・実source照合・S発行・core接続・実接続・実通信・設定変更・Pushは行わない。既存のcap・期限・APIを変更したものではない。
 
 ## 1 今回具体化する範囲
 
-現在の`shared-read-hash-kernel-fake.ts`は、宣言長・残量・EOF位置・final前のhash済長を同じFile.bytes.lengthから計算する。早EOF・余剰byte・before長差・after変更はkernel内のscenario分岐で結果を強制している。
+分離前の`shared-read-hash-kernel-fake.ts`は、宣言長・残量・EOF位置・final前のhash済長を同じFile.bytes.lengthから計算していた。早EOF・余剰byte・before長差・after変更はkernel内のscenario分岐で結果を強制していた。以下§2〜9は実装の受入契約として維持し、実装との対応は§10に示す。
 
 次の実装範囲は、legacy B内で宣言と合成sourceを分離し、read／metadataの故障だけを非公開producerの有限scriptへ移すこと。kernelはscenario名でcontent_mismatchやsource_changedを決めず、宣言と単発観測結果から判定する。Bの既存factory・model・結果schema・全既存期待値・guard配置・固定期限は維持する。
 
@@ -119,7 +121,7 @@ metadata・read・hash・close・受理のpre／post位置とfinishの2checkpoin
 
 全cap（files32・1file1MiB・期待総量8MiB・受信8MiB+1・scratch64KiB・read65,536・retry32）、D_stop900／D_end1000と末尾cleanup枠を維持する。script状態・可視長の追加保持を、実work／heap上界の導出や実E／S充足に数えない。
 
-## 8 新規の独立合成対照（未実施）
+## 8 新規の独立合成対照（実施対応は§10）
 
 独立oracleは宣言D・source可視長の事象・返却結果・課金／hash／寿命イベントを本体とは別に列挙する。sourceとkernelが同じ誤ったactual長を使って合格しないよう、宣言とactualを意図的に違わせる。既存の独立SHA-256 vector／容量oracleはそのまま使い、actualから期待digestを作らない。
 
@@ -145,4 +147,15 @@ producer生成・宣言受付・同handle結合の失敗は、取得有無と既
 
 この段階の完了条件は、legacy Bの期待値不変、宣言／actualを分けたDA01〜11の対照、source側scriptとkernel判定の責務分離、同scratch・同handleと共有予算の維持が確認できること。型が分かれただけ、または旧Bだけが合格した状態ではactual判定の完了にしない。
 
-本書では試験・実装を行っていない。C供給表・非実行view・移譲claimとC実行は引き続き閉じ、実期待値pin・実source照合・S発行・core／runtime接続・実通信・設定変更・Pushには進まない。row集約、接続全体のguard上界、native非停止対策・実E／Sも未確認のままとする。
+本段階でもC供給表・非実行view・移譲claimとC実行は引き続き閉じ、実期待値pin・実source照合・S発行・core／runtime接続・実通信・設定変更・Pushには進まない。row集約、接続全体のguard上界、native非停止対策・実E／Sも未確認のままとする。
+
+## 10 draft-0.3の実装対応
+
+- rootが固定seedから不変の`File {id, declaredBytes, digest, origin}`と、別の`SourceRecord`を構築する。kernel scopeは同宣言／同handleを保持し、producerへ渡すのはprivate originだけ。producerの台帳に宣言／期待digestは入れない。
+- `SourceOps`のopen／observe／read／closeは単発。handleのWeakMapとoriginの開始済みWeakSetを分離し、別origin・別handle・二重open／close・close後readを拒否する。metadata差はkind／identity／size／stampをkernelが比較する。
+- 最大4event／handle、可視長・stamp・消費bit、短読取上限と有限故障modeを実装。イベントのstrict項目、値域、5eventの拒否を純粋対照で確認する。retry再適用を観測可能にする固定対照だけは、可視長を相対−1にするeventを使用し、消費bitを外す変異を検出する。
+- source側が正常EOF／bytesをactual長から返す。kernelのremaining／要求長／update予約／probe／final前prefixはdeclaredBytesだけを使う。妥当な返却n以外はhashせず、余剰は受信だけ課金する。停止signalはkernelが固定受理点で反映し、producerから停止ownerへの参照を持たせない。
+- 固定selectorの`da_source_probe`だけは、独立した有限producer対照の75件gridと拒否booleanを`sourceProbe`診断として返す。bytes／digest／handle／opsや任意scriptの登録口は返さない。このgridの費用は通常Bの会計へ合算せず、本番work／E／Sの証拠にしない。旧49selectorにはこの診断fieldを追加しない。
+- DA01〜03／05〜07／09は宣言・可視長の固定対照と独立event oracle、DA04／08は既存digest／故障・停止試験と追加の不正variant／0・小数n／失敗signal、DA10は75件grid・8件不正event・8種変異、DA11は既存試験・新旧入口・strict／compiled／梱包確認へ対応させた。strict SourceMapDraftのexpectedBytes=0拒否は既存試験を維持する。
+
+同snapshotのprivate供給・C用非実行view・移譲claim、行hash集約、実E要求量・S発行はこの実装へ含めていない。
