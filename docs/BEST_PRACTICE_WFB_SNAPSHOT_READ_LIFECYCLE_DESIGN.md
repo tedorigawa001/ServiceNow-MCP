@@ -1,5 +1,7 @@
 # WF-B (C)：同snapshot読取接続の所有・停止契約の差分設計
 
+詳細設計追記（2026-11-08）: [共通読取kernelへのprivate供給境界](BEST_PRACTICE_WFB_PRIVATE_KERNEL_SUPPLY_DESIGN.md)で、同canonical fileと同snapshotの期待値・独立した合成bytes表、共通化module境界・一度限り移譲・失敗時の所有と停止を具体化した。設計のみで、共通kernel抽出・供給・読取接続は進めていない。
+
 Version: draft-0.4 / Date: 2026-11-08 / 読み取り照合基準HEAD: `e662a21` / レビュー修正の基準HEAD: `a4fd836`・`aa6477e` / 開始準備実装基準HEAD: `9b7ddb9`。
 
 draft-0.3のレビュー修正: 供給生成失敗では読取側をunusedのまま保ち、close時のreadStop／readFirst=supply_closedは同constructionが開始claimを発行した後だけ記録すると§10に明記した。生成失敗後や開始claim前の誤用後のcloseは停止診断を追加しない。実装（合成fake）と試験もこれに合わせ、終端後prepare・close由来のrejected・失敗後readonly checkの対照を追加した。[検証記録](E2E_BEST_PRACTICE_WFB_SNAPSHOT_READ_START_2026-11-08.md)。
