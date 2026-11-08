@@ -1,5 +1,7 @@
 # WF-B (C)：共通読取kernelへのprivate供給境界の詳細設計
 
+配置移行追記（2026-11-08）: [canonical供給差分設計の手順1](BEST_PRACTICE_WFB_CANONICAL_SUPPLY_VIEW_DESIGN.md)だけを実装し、B本体とC-startを単一composition moduleへ移した。旧pathは同じfactoryを返す薄いre-exportで、Bの挙動・Cのidentity-only準備・exportを維持する。[検証記録](E2E_BEST_PRACTICE_WFB_COMPOSITION_MOVE_2026-11-08.md)。供給表／view／移譲claimは生成せず、C実行・実budget接続は未実装のまま。
+
 差分設計追記（2026-11-08）: [同canonical fileのprivate供給表・非実行view](BEST_PRACTICE_WFB_CANONICAL_SUPPLY_VIEW_DESIGN.md)へ、legacy Bの宣言／actual分離後の生成元・単一module配置、同canonical／正規source registryの対応、非実行viewの拒否条件、別brand移譲claimの消費点と失敗時所有を具体化した。非実行holderはkernel_ownedへ昇格せず、C実行は閉鎖のまま。設計のみで実装状態は変わらない。
 
 実装追記（2026-11-08）: [宣言長とactual判定の分離・legacy source故障script化](BEST_PRACTICE_WFB_DECLARED_ACTUAL_SCRIPT_DESIGN.md)をlegacy Bの合成依存限定で実装した。kernelが宣言と単発結果から早EOF／余剰・metadata差を判定し、source故障はprivate有限scriptへ移した。[検証記録](E2E_BEST_PRACTICE_WFB_DECLARED_ACTUAL_2026-11-08.md)。C供給／実行・shared budget連結は未実装のまま。以下の旧構造・機械的抽出の説明は、その段階時点の基準として読む。

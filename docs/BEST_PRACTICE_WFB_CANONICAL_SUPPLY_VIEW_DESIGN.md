@@ -1,12 +1,14 @@
 # WF-B (C)：同canonical fileのprivate供給表・非実行viewの差分設計
 
-Version: draft-0.2 / Date: 2026-11-08 / 読み取り照合基準HEAD: `e1b3978`（レビュー修正基準HEAD: `fc0c2f3`）。
+Version: draft-0.3 / Date: 2026-11-08 / 読み取り照合基準HEAD: `e1b3978`（レビュー修正基準HEAD: `fc0c2f3`、配置移行基準HEAD: `3a6b401`）。
+
+draft-0.3: §9手順1の配置移行だけを実装した。B本体はimport／先頭コメントを除き同一、C-startは衝突回避の内部名3つだけを変更し、同composition moduleへ移した。旧入口のexport・factory参照・既存結果を維持する。compiled対照も§2.2どおりscratch ESMへ移行した。[検証記録](E2E_BEST_PRACTICE_WFB_COMPOSITION_MOVE_2026-11-08.md)。供給表・view・下位移譲claimは生成しない。
 
 draft-0.2のレビュー修正：配置移動時に既存compiled対照（`compiled-declared-actual.mjs`）の変異元source読込・module解決・export集合検査が壊れる点を§2.2に明記し、§9手順1の受入条件へ追加した。
 
-Status: **設計のみ。private供給表・非実行view・下位移譲claimは未実装。** 親は[共通kernelのprivate供給境界](BEST_PRACTICE_WFB_PRIVATE_KERNEL_SUPPLY_DESIGN.md)と[同snapshotの所有・停止契約](BEST_PRACTICE_WFB_SNAPSHOT_READ_LIFECYCLE_DESIGN.md)。[宣言／actual分離](BEST_PRACTICE_WFB_DECLARED_ACTUAL_SCRIPT_DESIGN.md)と[その検証記録](E2E_BEST_PRACTICE_WFB_DECLARED_ACTUAL_2026-11-08.md)はlegacy Bの合成保証として維持し、Cへの供給済み証拠にしない。
+Status: **配置移行だけ実装。private供給表・非実行view・下位移譲claimは未実装。** 親は[共通kernelのprivate供給境界](BEST_PRACTICE_WFB_PRIVATE_KERNEL_SUPPLY_DESIGN.md)と[同snapshotの所有・停止契約](BEST_PRACTICE_WFB_SNAPSHOT_READ_LIFECYCLE_DESIGN.md)。[宣言／actual分離](BEST_PRACTICE_WFB_DECLARED_ACTUAL_SCRIPT_DESIGN.md)と[その検証記録](E2E_BEST_PRACTICE_WFB_DECLARED_ACTUAL_2026-11-08.md)はlegacy Bの合成保証として維持し、Cへの供給済み証拠にしない。
 
-C実行入口・正式発行口閉鎖、全体受付無効・Unknown・VM／監視／telemetry調査保留を維持する。今回はMDのみ。実装・実期待値pin・実source照合・S発行・core接続・実接続・実通信・設定変更・Pushは行わない。以下の型名・module名・状態名は実装候補を固定するための内部案で、既存API・診断型・権限の追加ではない。
+C実行入口・正式発行口閉鎖、全体受付無効・Unknown・VM／監視／telemetry調査保留を維持する。今回は合成fixtureの配置移行・検証と文書だけ。実期待値pin・実source照合・S発行・core接続・実接続・実通信・設定変更・Pushは行わない。以下の供給型・状態名は未実装の内部案で、既存API・診断型・権限の追加ではない。
 
 ## 1 現行との差分と到達させない状態
 
@@ -16,7 +18,7 @@ C実行入口・正式発行口閉鎖、全体受付無効・Unknown・VM／監�
 
 今回具体化するのは、このpreparedと同construction内にある全canonical fileへの供給表、期待値を別供給しない非実行view、そのprivate所有と失効・discardである。schemaを緩めず、未参照fileも含め辞書全体を対象とする。rowsのunimplemented／missingはそのまま保持し、行hash集約・実装coverageの充足にしない。
 
-本段階はopen／observe／read／hash／resource cleanupをすべて0に保つ。source recordやviewの生成をopen、論理参照消去をclosed_confirmed、非実行holderへの移譲をkernel_ownedと呼ばない。CのreadKernel／actualBudgetはnot_connected、ready=false／authority=noneのままとする。
+Cの供給準備／非実行移譲段階はopen／observe／read／hash／resource cleanupをすべて0に保つ。source recordやviewの生成をopen、論理参照消去をclosed_confirmed、非実行holderへの移譲をkernel_ownedと呼ばない。CのreadKernel／actualBudgetはnot_connected、ready=false／authority=noneのままとする。独立Bの既存read／hash試験を停止する意味ではない。
 
 ## 2 生成元・配置境界
 
@@ -30,7 +32,7 @@ strict検査でcopy／freezeされたmapの返値をSnapshotが一度所有し�
 
 ### 2.2 配置の選択と互換入口
 
-privateなSnapshot／Borrow／preparedをmodule間のadopt関数で受け渡す案は採らない。将来の物理配置候補を`tests/review/fixtures/snapshot-read-composition-fake.ts`という単一moduleに固定し、B kernel／SourceOps、Cのconstruction／lifecycle、供給表issuer／view／移譲consumerを同じlexical境界に置く。今はそのfileを作らない。
+privateなSnapshot／Borrow／preparedをmodule間のadopt関数で受け渡す案は採らない。`tests/review/fixtures/snapshot-read-composition-fake.ts`という単一moduleへ、B kernel／SourceOpsとCのconstruction／lifecycleの既存本体だけを移した。供給表issuer／view／移譲consumerは将来同じlexical境界に置く案のままで、生成・接続しない。
 
 | 対象 | 移行時の扱いとexport境界 |
 |---|---|
@@ -45,7 +47,7 @@ privateなSnapshot／Borrow／preparedをmodule間のadopt関数で受け渡す�
 
 配置移行は挙動追加より先に別工程として照合する。B／旧C-startのclass内部状態・既存結果schema／計数・期待値を変えず、新入口を使わない場合は追加の表／sourceを生成しない。移動時のclass名衝突等は内部改名に限り、既存cap・期限・検査順を変えない。private値をexportするために梱包設定やsrc／distへfriendを追加しない。
 
-compiled対照の維持は「実行して通る」ことで確認し、文面上の互換扱いにしない。現行`compiled-declared-actual.mjs`は`./shared-read-hash-kernel-fake.ts`の本文を読み、8種の文字列変異（各変異位置が1回だけ現れることを`mutation site drift`で検査）を加えて単一fileをtranspileし、`data:` URLのESMとしてimportする。物理移動後はこの前提が2点で崩れる。
+compiled対照の維持は「実行して通る」ことで確認し、文面上の互換扱いにしない。移動前の`compiled-declared-actual.mjs`は`./shared-read-hash-kernel-fake.ts`の本文を読み、8種の文字列変異（各変異位置が1回だけ現れることを`mutation site drift`で検査）を加えて単一fileをtranspileし、`data:` URLのESMとしてimportしていた。物理移動ではこの前提が3点で崩れるため、以下を実装した。
 
 1. 読込先がre-export 1行になり、変異位置が0回となってdrift検査で停止する。読込先は移動先のcomposition moduleへ切り替え、8変異の置換元が移動後も各1回だけ現れることを確認する。
 2. composition moduleはC-start由来の`./source-map-values-core.js`相対importを含むため、`data:` URLからは解決できない（Nodeは`ERR_UNSUPPORTED_RESOLVE_REQUEST`）。移動工程では、依存moduleを含めて一時directoryへtranspile出力してfile URLでimportする等、相対importを解決できる方式へ改める。composition moduleから相対importを除くために純粋値検査を複製・内包することはしない。
@@ -163,4 +165,4 @@ supplyFirst／lifecycleFirst／readFirst／readStop・参照退役状態を別�
 3. 別brandの非実行移譲claim・pending／holder・固定discardを実装し、CV08〜12と失敗時診断／寿命を確認する。kernel生成／受領は0のまま。
 4. 同budget／停止owner／非空cleanup custodyと接続費目の設計・検証を別途完了してから、改めてC→kernelの実行接続を検討する。非実行holderをそのまま昇格することはしない。
 
-上記は次工程案であり、本書で実装・合成試験を実施していない。実期待値pin・実source照合・行hash集約・S発行・core／runtime接続は別範囲。C実行入口・正式発行口閉鎖、全体受付無効・Unknown・調査保留を維持する。
+手順1の配置移行と旧保証の再検証だけを実施した。手順2以降、CV01〜11とCV12の供給／view固有部分は未実施であり、物理的な同居をC接続完了にしない。実期待値pin・実source照合・行hash集約・S発行・core／runtime接続は別範囲。C実行入口・正式発行口閉鎖、全体受付無効・Unknown・調査保留を維持する。

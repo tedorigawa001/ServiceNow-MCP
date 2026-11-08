@@ -18,6 +18,8 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 ### Changed
 
+- WF-B physically colocates the unchanged B kernel and C-start lifecycle in a package-excluded composition fixture. Old entry points remain thin factory re-exports with identical export sets and function identities; C-start still cannot execute the kernel or create supply tables/views. Scratch ESM compilation now resolves the existing pure source-map dependency, preserves all eight declared/actual mutation controls, and separately checks the combined module and compatibility exports.
+
 - WF-B separates immutable legacy declarations from private synthetic source records/handles. A bounded one-attempt source script now supplies actual bytes, metadata changes, interruptions and typed stop signals; the B kernel derives early EOF, excess-byte and metadata diagnoses from declared positions and observed results. Existing scenarios, limits, deadlines and summaries remain unchanged. Independent declaration/actual traces, a 75-case source grid and compiled negative controls add no C execution, source registration, real pinning or issuance authority.
 
 - WF-B mechanically relocates the legacy B read/hash kernel into a package-excluded shared fixture module, leaving its original path as a two-line compatibility factory re-export. The implementation body, fixed scenarios, model, counters, limits and existing expectations remain unchanged. Export/compatibility/C-closed controls introduce no kernel constructor, arbitrary supply registration, canonical adapter or C execution path; issuance, whole-run admission and runtime/core wiring remain closed.
