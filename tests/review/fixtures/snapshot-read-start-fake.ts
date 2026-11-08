@@ -93,7 +93,8 @@ class Assembly {
   private supplyFailure(reason: Exclude<SupplyReason, 'none'>): void {
     if (this.#diagnostic) { if (this.#diagnostic.supplyFirst === 'none') this.#diagnostic.supplyFirst = reason; }
     else if (this.#fallbackSupply === 'none') this.#fallbackSupply = reason;
-    this.#originInput = undefined; this.#state = 'unwinding'; this.#supplyState = 'closing';
+    // Supply failure precedes any read claim: the read side stays unused while the supply retires.
+    this.#originInput = undefined; this.#supplyState = 'closing';
     if (!this.#borrow) this.retireSnapshot();
   }
   private fail(reason: Exclude<LifecycleReason, 'none'>): Reply {
@@ -176,7 +177,8 @@ class Assembly {
     if (!this.#closeRequested) this.#closeRequested = true;
     if (this.#terminal || !this.#borrow) this.retireSnapshot();
     else this.#supplyState = 'closing';
-    if (!this.#terminal && this.#state !== 'unused') {
+    // A read stop is recorded only after this construction issued its one start claim.
+    if (!this.#terminal && this.#counts.startClaims > 0) {
       if (this.#diagnostic) {
         if (this.#diagnostic.readStop === 'none') this.#diagnostic.readStop = 'supply_closed';
         if (this.#diagnostic.readFirst === 'none') this.#diagnostic.readFirst = 'supply_closed';

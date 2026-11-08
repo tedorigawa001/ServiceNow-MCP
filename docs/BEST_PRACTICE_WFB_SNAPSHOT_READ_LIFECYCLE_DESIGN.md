@@ -1,6 +1,8 @@
 # WF-B (C)：同snapshot読取接続の所有・停止契約の差分設計
 
-Version: draft-0.3 / Date: 2026-11-08 / 読み取り照合基準HEAD: `e662a21` / レビュー修正の基準HEAD: `a4fd836` / 開始準備実装基準HEAD: `9b7ddb9`。
+Version: draft-0.4 / Date: 2026-11-08 / 読み取り照合基準HEAD: `e662a21` / レビュー修正の基準HEAD: `a4fd836`・`aa6477e` / 開始準備実装基準HEAD: `9b7ddb9`。
+
+draft-0.3のレビュー修正: 供給生成失敗では読取側をunusedのまま保ち、close時のreadStop／readFirst=supply_closedは同constructionが開始claimを発行した後だけ記録すると§10に明記した。生成失敗後や開始claim前の誤用後のcloseは停止診断を追加しない。実装（合成fake）と試験もこれに合わせ、終端後prepare・close由来のrejected・失敗後readonly checkの対照を追加した。[検証記録](E2E_BEST_PRACTICE_WFB_SNAPSHOT_READ_START_2026-11-08.md)。
 
 draft-0.3: §10の先行診断owner・private borrow・identity・一度限りの開始claimを新合成rootで実装した。[検証記録](E2E_BEST_PRACTICE_WFB_SNAPSHOT_READ_START_2026-11-08.md)。既存Supply／(B)のkernelへの接続、実読取・cleanupは進めていない。
 
@@ -142,7 +144,7 @@ starting／preparedの再beginとpreparedの再prepareはduplicate_startで拒�
 
 混入は固定内部scenarioのみで、別owner／snapshot、同値map wrapper／再decode、files／rows／file copy、元の未検査input、setId／ordinal／session／budget差とborrow copyを検査する。元inputは当該対照だけで実際の検査前DATAを保持し、finishで退役する。borrow copy等の負対照用control objectは発行済みborrowに数えず、borrowRetirementsは同constructionで発行したborrow 1つの論理退役を数える。対照用copyも参照を残さない。
 
-本段階のcloseはresourceのない準備状態だけを扱う。closeRequestedを固定し、借用済みならsnapshotを保持してunwindingへ進める。finishで非実行終端を固定後、borrow／session／budget参照を退役し、close要求時はSupply側snapshotも退役する。正常discardではreadonly供給用snapshotを保持できるがread開始claimは戻さない。終端後の供給closeはsnapshotだけを退役し、終端診断を変更しない。
+本段階のcloseはresourceのない準備状態だけを扱う。closeRequestedを固定し、借用済みならsnapshotを保持してunwindingへ進める。readStop／readFirst=supply_closedの記録とunwindingへの遷移は、同constructionが開始claimを発行済みで終端前の場合に限る。供給生成失敗は読取側をunusedのまま保ち、生成失敗後・開始claim前の誤用後のcloseは停止診断を追加しない。finishで非実行終端を固定後、borrow／session／budget参照を退役し、close要求時はSupply側snapshotも退役する。正常discardではreadonly供給用snapshotを保持できるがread開始claimは戻さない。終端後の供給closeはsnapshotだけを退役し、終端診断を変更しない。
 
 終端のpreparationCountsは開始準備の試行・発行計数だけを保持し、固定参照消去後のretirement計数はinspect側のowner診断へ分ける。これにより退役後の結果再生成・再封印を行わない。cleanupDisposition=not_started、open／read／hash／cleanup呼出し0を維持し、空custodyの存在をcleanup確認や責務移譲済みの証拠にしない。
 

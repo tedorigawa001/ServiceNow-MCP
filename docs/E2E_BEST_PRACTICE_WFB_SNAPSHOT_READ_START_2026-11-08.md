@@ -51,6 +51,24 @@ factoryの未知値・余分引数・Proxy／callback、begin／prepareへのcal
 
 正式発行口閉鎖・全体受付無効・Unknown・VM／監視／telemetry調査保留を維持し、実期待値pin・実source照合・S発行・core接続・実接続・実通信・設定変更・Pushは行っていない。行hash集約も未実装。今回の変更は未コミット。
 
+## レビュー修正（2026-11-08）
+
+`aa6477e`のレビューで次を確認し、合成fakeと試験を修正した。上記の35件・関連17ファイル1,327件は修正前の記録としてそのまま残す。
+
+- 構築失敗（`source_failure`／`custody_failure`等）後のcloseが、開始claim0の未開始読取にreadFirst／readStop=supply_closedを記録していた。`owner_failure`だけ記録されず、同じ状況で診断が分かれていた。原因は供給失敗が読取側状態までunwindingにし、closeがunused以外で停止を記録していたこと。供給失敗では読取側をunusedのまま保ち、closeの停止記録を開始claim発行後・終端前に限定した。開始claim前の誤用（begin前のprepare）後のcloseも停止診断を追加しない。
+- 変異で検出できなかった3点を対照化した: 正常終端後のprepareが固定拒否だけで診断・計数を変えないこと、close由来の停止がdisposition=rejectedになること、lifecycle／供給失敗後のreadonly checkが先行理由を返すこと。
+
+RED: 新規4件と既存の構築失敗7件（読取側状態unusedへの期待変更）のうち、構築失敗7件と停止診断の新規1件が修正前に失敗した。残る新規3件は修正前の挙動を固定する対照で、下記変異で効果を確認した。
+
+変異試験（一時編集、終了後に復元）: identity比較10項目・開始／準備／close／finish／factory・生成順序等の50変異で46検出。修正前の同系49変異では42検出で、終端後prepare・close由来のrejected・失敗後checkの3変異が残っていた。新設のclaimゲート除去・供給失敗時unwinding復元も検出する。残る4件は同等変異として扱う。
+
+- lifecycleFirstの上書き防止の除去: 先行理由があるとbegin／prepare／引数拒否はfailへ到達しない。
+- factoryのstring型判定の除去: 非文字列は`scenarios.includes`で同じく拒否される。
+- 供給失敗時のorigin消去の除去: origin_inputは構築で失敗しないため到達しない。
+- prepare内のowner／結果slot／custody欠落判定の縮小: 欠落は構築失敗に限られ、先行理由で先に拒否される。
+
+修正後は新規開始準備39件＋既存供給22件の61件成功。lint・build・`package-http-classification`・全repository回帰（309ファイル、15,353件成功、失敗0）を確認した。旧Supply／(B)・実budget・実resourceへの接続は変えていない。
+
 ## コミット前の対象限定再検証
 
 上記「未コミット」は記録作成時点の状態。今回の7ファイルだけをindexに登録し、そのindexを新しい一時作業ツリーへ展開した。既存node_modulesへの参照だけを加え、元の未登録変更・既存distを取り込まず、同候補上で再検証した。

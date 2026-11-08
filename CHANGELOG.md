@@ -220,6 +220,8 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 ### Added
 
+- WF-B snapshot/read preparation review keeps the read side unused when synthetic supply construction fails and records a close-derived read stop only after the construction issued its start claim, so a never-started read no longer reports `supply_closed`. Added controls cover prepare after an ordinary terminal, close-only `rejected` disposition and readonly check returning the first prior reason after lifecycle or supply failure. No legacy supply, B kernel, budget or resource wiring changes.
+
 - WF-B read/hash capacity review measures the concurrent update-reservation peak from the live reservation count instead of assigning a constant 1, and the capacity event oracle now counts reservations and releases separately, so a double reservation is detected. A capacity test name no longer claims package exclusion it does not check.
 
 - WF-B read/hash stage-B review makes the digest-mismatch controls fail through the real comparison against the pinned abc digest instead of a scenario flag, keeps misuse after every file is committed as `binding` even when a late stop was recorded, and admits only zero arguments or one fixed scenario string. New controls step directly after a sticky stop, pin the 900/1000 time boundaries, catch a clock reversal from a non-initial sample, keep the first control stop, and report unknown cleanup timing when the guard ceiling is exhausted.

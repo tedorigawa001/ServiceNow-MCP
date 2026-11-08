@@ -35,7 +35,7 @@ describe('C-start: private snapshot borrow and one-shot synthetic preparation', 
     'map_rejected', 'snapshot_failure', 'after_snapshot_failure']) {
     it(`contains constructor prefix failure before I/O: ${scenario}`, () => {
       const fake = createSnapshotReadStartFake(scenario);
-      expect(fake.inspect()).toMatchObject({ supplyFirst: 'supply_invalid', readState: 'unwinding',
+      expect(fake.inspect()).toMatchObject({ supplyFirst: 'supply_invalid', readState: 'unused',
         supplyState: 'retired', retainedSnapshot: false, counts: { startClaims: 0, sessions: 0, borrows: 0, open: 0 } });
       const before = fake.inspect().counts;
       expect(fake.begin()).toMatchObject({ ok: false, reason: 'supply_invalid' });
@@ -98,6 +98,40 @@ describe('C-start: private snapshot borrow and one-shot synthetic preparation', 
     const starting = createSnapshotReadStartFake(); starting.begin(); starting.close();
     expect(starting.prepare()).toMatchObject({ ok: false, reason: 'supply_closed' });
     expect(starting.finish()).toMatchObject({ supplyFirst: 'none', readFirst: 'supply_closed', readStop: 'supply_closed' });
+  });
+  it('does not record a read stop for close after a supply failure or a pre-claim misuse', () => {
+    for (const scenario of ['owner_failure', 'custody_failure', 'source_failure', 'after_snapshot_failure']) {
+      const fake = createSnapshotReadStartFake(scenario);
+      expect(fake.inspect()).toMatchObject({ supplyState: 'retired', readState: 'unused' });
+      fake.close();
+      expect(fake.inspect()).toMatchObject({ readState: 'unused', readFirst: 'none', readStop: 'none', supplyFirst: 'supply_invalid' });
+      expect(fake.finish()).toMatchObject({ supplyFirst: 'supply_invalid', readFirst: 'none', readStop: 'none', disposition: 'rejected' });
+    }
+    const misuse = createSnapshotReadStartFake(); misuse.prepare(); misuse.close();
+    expect(misuse.inspect()).toMatchObject({ lifecycleFirst: 'binding_mismatch', readFirst: 'binding', readStop: 'none', counts: { startClaims: 0 } });
+  });
+  it('marks a close-only preparation stop as rejected, unlike an ordinary discard', () => {
+    const starting = createSnapshotReadStartFake(); starting.begin(); starting.close();
+    expect(starting.finish()).toMatchObject({ disposition: 'rejected', supplyFirst: 'none', lifecycleFirst: 'none' });
+    const prepared = createSnapshotReadStartFake(); prepared.begin(); prepared.prepare(); prepared.close();
+    expect(prepared.finish()).toMatchObject({ disposition: 'rejected', supplyFirst: 'none', lifecycleFirst: 'none' });
+  });
+  it('returns the first prior reason from readonly check after a lifecycle or supply failure', () => {
+    const misuse = createSnapshotReadStartFake(); misuse.prepare();
+    expect(misuse.check()).toMatchObject({ ok: false, reason: 'binding_mismatch' });
+    const duplicate = createSnapshotReadStartFake(); duplicate.begin(); duplicate.begin();
+    expect(duplicate.check()).toMatchObject({ ok: false, reason: 'duplicate_start' });
+    const partial = createSnapshotReadStartFake('borrow_failure'); partial.begin(); partial.prepare();
+    expect(partial.check()).toMatchObject({ ok: false, reason: 'read_prepare_unavailable' });
+    expect(createSnapshotReadStartFake('source_failure').check()).toMatchObject({ ok: false, reason: 'supply_invalid' });
+  });
+  it('refuses prepare after an ordinary terminal without changing any diagnostic or count', () => {
+    for (const prepared of [false, true]) {
+      const fake = createSnapshotReadStartFake(); fake.begin(); if (prepared) fake.prepare(); const end = fake.finish();
+      const before = fake.inspect();
+      expect(fake.prepare()).toMatchObject({ ok: false, reason: 'read_already_used' });
+      expect(fake.inspect()).toEqual(before); expect(fake.finish()).toBe(end);
+    }
   });
   it('keeps a live borrow during close, retires it at discard, and does not claim cleanup confirmation', () => {
     const fake = createSnapshotReadStartFake(); fake.begin(); fake.prepare(); fake.close(); fake.close();
