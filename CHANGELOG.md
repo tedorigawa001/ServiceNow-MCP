@@ -230,6 +230,8 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 ### Added
 
+- WF-B supply transfer preflight review: a close before any preparation start now records only `stopReason` (as the source owner does) and keeps later preparation closed; a close of a prepared preflight reports state `closed` instead of `rejected`. New tests pin claim/shell retention after every rejection, extra factory arguments and terminal replies. Unreachable capture/state guards are recorded as equivalent mutants.
+
 - WF-B canonical supply review adds fixed `post_*` selectors that each break exactly one post-validation clause (issued table/view, envelopes, table origin, registry/binding/declaration correspondence, lengths, record validity and oversize), two valid re-issue bases, a `retainedTableOrigin` diagnostic, and reason-routing tests for parent lifecycle mapping, claim-less close, direct preparation after construction failure, terminal replies and extra factory arguments. Envelope field checks and `borrow.matches(e)` are documented as mutually redundant.
 
 - WF-B declared/actual review now runs the compiled declared/actual negative controls from the package classification runner, and isolates each malformed source event/record field against a valid base, including rejection through `openOnce`. New fixed selectors check that a read event fires only at its own offset and that an after-metadata size change is `source_changed`; cleanup timing distinguishes stop/end clock signals and the source probe diagnostic stays limited to its selector. Legacy B results, caps and deadlines are unchanged.

@@ -15,7 +15,8 @@ describe('nonexecuting supply transfer preflight', () => {
       const a = createCanonicalSupplyTransferFake(scenario);
       expect(a.prepare()).toMatchObject({ ok: false, reason: 'transfer_prepare_unavailable' });
       const before = a.inspect();
-      expect(before).toMatchObject({ state: 'rejected', retainedAnchor: false, emptyShells: 0, payloadSlots: 0,
+      expect(before).toMatchObject({ state: 'rejected', retainedAnchor: false, retainedClaim: false, retainedShells: 0,
+        emptyShells: 0, payloadSlots: 0,
         counts: { claimsConsumed: 0, sourceDetaches: 0, holderPublications: 0 },
         source: { firstReason: 'supply_prepare_unavailable', retainedRegistry: false,
           root: { lifecycleFirst: 'read_prepare_unavailable' } } });
@@ -31,8 +32,8 @@ describe('nonexecuting supply transfer preflight', () => {
   it.each(identityCases)('rejects isolated %s before spending or moving', scenario => {
     const a = createCanonicalSupplyTransferFake(scenario);
     expect(a.prepare()).toMatchObject({ ok: false, reason: 'binding_mismatch' });
-    expect(a.inspect()).toMatchObject({ firstReason: 'binding_mismatch', retainedAnchor: false, emptyShells: 0,
-      counts: { preparationStarts: 1, anchors: 1, claimsIssued: 1, claimsConsumed: 0, preChecks: 1,
+    expect(a.inspect()).toMatchObject({ firstReason: 'binding_mismatch', retainedAnchor: false, retainedClaim: false,
+      retainedShells: 0, emptyShells: 0, counts: { preparationStarts: 1, anchors: 1, claimsIssued: 1, claimsConsumed: 0, preChecks: 1,
         sourceDetaches: 0, holderPublications: 0 }, source: { firstReason: 'binding_mismatch',
         root: { lifecycleFirst: 'binding_mismatch', readFirst: 'binding' } } });
     const end = a.finish();
@@ -101,5 +102,37 @@ describe('nonexecuting supply transfer preflight', () => {
     a.close(); expect(a.finish()).toBe(end);
     const encoded = JSON.stringify(end);
     for (const secret of ['ba7816bf', 'sourceRecord', 'tableOrigin', 'transferOwner', '"bytes"']) expect(encoded).not.toContain(secret);
+  });
+  it('records a claim-less close only as a stop, then keeps later preparation closed', () => {
+    const a = createCanonicalSupplyTransferFake();
+    expect(a.close()).toMatchObject({ ok: false, reason: 'supply_closed' });
+    expect(a.inspect()).toMatchObject({ state: 'closed', firstReason: 'none', stopReason: 'supply_closed',
+      counts: { preparationStarts: 0, anchors: 0, claimsIssued: 0 }, source: { firstReason: 'none',
+        root: { lifecycleFirst: 'none', readFirst: 'none' } } });
+    expect(a.prepare()).toMatchObject({ reason: 'supply_closed' });
+    expect(a.inspect()).toMatchObject({ firstReason: 'supply_closed', counts: { preparationStarts: 0, claimsIssued: 0 } });
+    expect(a.finish()).toMatchObject({ firstReason: 'supply_closed', stopReason: 'supply_closed' });
+  });
+  it('closes a prepared preflight as closed, not rejected, and retires the unused claim before the borrow', () => {
+    const a = createCanonicalSupplyTransferFake(); a.prepare();
+    expect(a.close()).toMatchObject({ ok: false, reason: 'supply_closed' });
+    expect(a.inspect()).toMatchObject({ state: 'closed', firstReason: 'supply_closed', stopReason: 'supply_closed',
+      claimState: 'retired_unused', retainedAnchor: false, retainedClaim: false, retainedShells: 0,
+      anchorRetiredWithBorrowLive: true, emptyShells: 0, payloadSlots: 0,
+      counts: { preparationStarts: 1, claimsIssued: 1, claimsConsumed: 0, preChecks: 1, sourceDetaches: 0, holderPublications: 0 },
+      source: { firstReason: 'supply_closed', retainedRegistry: false, retainedTable: false, retainedView: false,
+        root: { lifecycleFirst: 'none', readFirst: 'supply_closed', readStop: 'supply_closed', retainedBorrow: true } } });
+    expect(a.prepare()).toMatchObject({ reason: 'supply_closed' });
+    const end = a.finish();
+    expect(end).toMatchObject({ state: 'terminal', firstReason: 'supply_closed', source: { root: { retainedBorrow: false } } });
+  });
+  it('rejects an extra factory argument and fixed replies after the terminal snapshot', () => {
+    const extra = createCanonicalSupplyTransferFake('normal', 'extra');
+    expect(extra.prepare()).toMatchObject({ reason: 'source_rejected' });
+    expect(extra.inspect().counts.claimsIssued).toBe(0); extra.finish();
+    const a = createCanonicalSupplyTransferFake(); a.prepare(); const end = a.finish();
+    expect(a.close()).toMatchObject({ ok: false, reason: 'read_already_used' });
+    expect(a.prepare('x')).toMatchObject({ ok: false, reason: 'read_already_used' });
+    expect(a.inspect()).toBe(end);
   });
 });

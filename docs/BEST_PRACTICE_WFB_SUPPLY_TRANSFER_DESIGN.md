@@ -1,6 +1,8 @@
 # WF-B (C)：下位移譲claim・pending／非実行holderの差分設計
 
-Version: draft-0.3 / Date: 2026-11-09 / 読み取り照合基準HEAD: `0e98c56`（レビュー修正基準HEAD: `8b5af60`、preflight実装基準HEAD: `35c1d2a`）。
+Version: draft-0.4 / Date: 2026-11-09 / 読み取り照合基準HEAD: `0e98c56`（レビュー修正基準HEAD: `8b5af60`、preflight実装基準HEAD: `35c1d2a`、preflightレビュー修正基準HEAD: `a888295`）。
+
+draft-0.4のレビュー修正：preflightの`close()`が準備開始前でもfirstReasonを`supply_closed`にしており、元供給ownerの「開始claim前のcloseは停止だけ」と食い違っていた点、準備済みからの正規closeが未試験で状態が`rejected`になっていた点を§12で直した。拒否後のclaim／shell保持・余分な引数・終端後の返答を試験で固定し、到達しない防御条件を等価変異として明記した。
 
 draft-0.3: §11の第1段階だけを合成依存で実装した。発行anchor・未消費の別brand claim・空のpending／holder／failure shellを同ownerへ結合し、消費前の固定拒否を確認する。通常利用slotからの移動・公開・C実行は未接続。[検証記録](E2E_BEST_PRACTICE_WFB_SUPPLY_TRANSFER_PREFLIGHT_2026-11-09.md)。実装境界は§12を参照。
 
@@ -182,8 +184,8 @@ module-private継続が元ownerのprepared／発行borrow・同envelope、regist
 
 準備の有限順序は元供給の受付→anchor capture→未消費claim発行→pending／holder／failureの空shell結合→pre検査。shell保持用のprivate slotは先行確保し、各shellの生成故障もclaim消費前に止まる。元供給が失敗していればanchor／claim／各shellの発行は0。構造計数は上記の局所生成prefixだけで、全確保費・実E・OOM診断必着の証明ではない。
 
-拒否はsource_rejected／transfer_prepare_unavailable／binding_mismatch／duplicate_transfer_preparation／supply_closed。元診断はsource内の固定snapshotに保持する。失敗後はrejectedのまま再prepareを拒否し、claim消費0でも再準備・再発行を許さない。正規closeはstopReasonへ分離し先行firstReasonを上書きしない。先行確保失敗時に存在しないfailure shellへ移譲済みと報告しない。
+拒否はsource_rejected／transfer_prepare_unavailable／binding_mismatch／duplicate_transfer_preparation／supply_closed。元診断はsource内の固定snapshotに保持する。失敗後はrejectedのまま再prepareを拒否し、claim消費0でも再準備・再発行を許さない。正規closeはstopReasonへ分離し先行firstReasonを上書きしない。準備開始前（preparationStarts=0）のcloseはstopReasonだけを記録してfirstReasonは`none`のまま（元供給ownerと同じ）、その後のprepareは`supply_closed`で拒否する。準備開始後のcloseは先行理由がなければfirstReasonも`supply_closed`とする。closeの後の状態は拒否と区別して`closed`とする。先行確保失敗時に存在しないfailure shellへ移譲済みと報告しない。
 
-全経路が移譲開始前なので、拒否／closeは既存の元ownerの固定clearを利用できる。finishは空shell／claim／anchor参照を消してから元ownerのfinishへ進み、borrow退役後は不変終端診断を返す。これは移譲後discard claim・custody保持・未確認時finish保留の実装ではない。taking以降の処理を追加する前に§7の旧close／fail／finishを迂回する専用境界が必要。
+全経路が移譲開始前なので、拒否／closeは既存の元ownerの固定clearを利用できる。拒否／closeでは元ownerのfail／close（参照clear）の後にanchor・claim・shellをclearする。finishとは逆順だが、どちらもborrow退役より前で、同期呼出し内に閉じるため観測差はない（`anchorRetiredWithBorrowLive`はtrue）。この順序は試験で区別しておらず、taking以降に持ち込まない。finishは空shell／claim／anchor参照を消してから元ownerのfinishへ進み、borrow退役後は不変終端診断を返す。これは移譲後discard claim・custody保持・未確認時finish保留の実装ではない。taking以降の処理を追加する前に§7の旧close／fail／finishを迂回する専用境界が必要。
 
-40種の単独混入対照、6箇所の生成故障prefix、正規close・元供給失敗・二重準備・外部hook非実行・終端不変を確認する。compiled対照はanchor9・claim7・shell共通8の24種と、current／issuedのanchor・claim・shell保持漏れ6種およびborrow先行退役1種の計7退役対照。retainedAnchor／retainedClaim／retainedShellsは発行済みaliasも含め、anchor退役時に元borrowがまだ保持されていたかを固定booleanで記録する。anchor table／viewは元current／issuedの同参照を二箇所で確認するため、その二条件は組で除去し、それ以外は単条件を除去する。これは将来detach後の冗長性を保証しない。ST01／02／05／07／11〜13の消費前部分だけを対象とし、taking・移動・公開・移譲後discard／保持未確認の受入条件は未実施のまま。
+40種の単独混入対照、6箇所の生成故障prefix、正規close・元供給失敗・二重準備・外部hook非実行・終端不変を確認する。compiled対照はanchor9・claim7・shell共通8の24種と、current／issuedのanchor・claim・shell保持漏れ6種およびborrow先行退役1種の計7退役対照。retainedAnchor／retainedClaim／retainedShellsは発行済みaliasも含め、anchor退役時に元borrowがまだ保持されていたかを固定booleanで記録する。anchor table／viewは元current／issuedの同参照を二箇所で確認するため、その二条件は組で除去し、それ以外は単条件を除去する。これは将来detach後の冗長性を保証しない。`capture()`の前提条件、`matches()`の状態guard（terminal／first／state／live）とenvelope・live context照合、anchor／claim／shell未発行時の拒否は、元供給の`prepareSupply()`成功直後に途中操作なしでcaptureするため現fixtureでは到達せず、混入対照を持たない防御条件である（等価変異として記録）。taking等の途中操作を加える段階では、これらへ単独選択子を先に用意する。ST01／02／05／07／11〜13の消費前部分だけを対象とし、taking・移動・公開・移譲後discard／保持未確認の受入条件は未実施のまま。

@@ -57,6 +57,26 @@ bdo node tests/review/package-http-classification.mjs
 
 第2段階のtaking・pendingへの同参照記録・元通常slot detach・post検査、第3段階の非実行holder公開・移譲後discard claim・未確認保持・finish保留は未実装。今後取りかかる際は元ownerのclose／fail／finishがactive移譲の責務を消さない専用境界を先に接続する。今回の成功を移譲済み・cleanup確認済み・C実行可能の証拠にはしない。
 
+## レビュー修正（2026-11-09）
+
+レビュー基準HEAD: `a888295`。修正前は新規54件、全体314ファイル・15,484件成功。
+
+指摘：
+1. preflightの`close()`は準備開始前でもfirstReasonを`supply_closed`にしていた。元供給owner（`createCanonicalSupplyViewFake`）は開始claim前のcloseでfirstReason=`none`のままで、方針が食い違っていた。
+2. 上の「正規close2」は`source_closed`／`close_before_pre`の準備途中closeだけで、準備済みから利用者が呼ぶ正規closeは未試験だった。その経路では状態が`rejected`になっていた。
+3. 拒否経路で`retainedClaim`／`retainedShells`（issued alias含む）を見ておらず、余分なfactory引数と終端後の`close()`／引数付き`prepare()`の返答も未固定だった。
+
+修正：開始前closeはstopReasonだけを記録し、以後のprepareは`supply_closed`で拒否する。開始後は先行理由がなければfirstReasonも`supply_closed`。close後の状態は`closed`とし、拒否と区別する。試験は3件追加し、既存の生成故障6件・単独混入40件にclaim／shell保持なしの確認を加えた。
+
+RED：追加試験のうち、開始前close（firstReason=`none`・state=`closed`）と準備済みclose（state=`closed`）の2件が修正前に失敗。余分な引数・終端後の返答・拒否後の保持確認は修正前から成功し、下記の生存変異を検出する対照として追加した。GREEN：新規57件すべて成功。
+
+一時変異（試験後に元へ戻した）：計33種、検出18、等価15。
+- 修正前に生存し、今回の試験で検出：拒否時の部分clear（claim／issued shellを残す）、終端後closeの返答、終端後の引数付きprepare、余分な引数の受理。
+- 今回の修正点に対する変異6種（開始前closeでもfirstを立てる、firstを立てない、状態を`rejected`に戻す、clearしない、元ownerをcloseしない、stopを記録しない）はすべて検出。
+- 等価15種：`capture()`の前提条件5種、`matches()`の状態guard4種（terminal／first／state／live）、envelopeとlive contextの照合と`borrow.matches(e)`の一括除去1種、anchor未発行時の拒否1種、`valid()`の`!a`／`!shell`2種。いずれも元供給の`prepareSupply()`成功直後に途中操作なしでcaptureするため到達しない。ほかに、失敗後の`prepare()`のfirst gate除去（duplicate経路でも同じ返答・状態になる）と、`clearPreparatory`の条件を`#anchor`だけにする変異（`#issuedAnchor`だけが残る状態がない）。
+
+全体回帰：`npm run lint`・`npm run build`・`package-http-classification.mjs`成功、vitest全体314ファイル・15,487件成功。`compiled-declared-actual.mjs`は旧8＋6、新24＋7を維持。
+
 ## コミット対象だけでの再検証（2026-11-09）
 
 今回の11ファイルだけを明示してstageし、index全体を一時ディレクトリへ展開した。既存node_modulesだけを参照し、作業treeの未stage内容を検証へ持ち込まず、上記と同じ関連22ファイル・1,462件、build、変更TSのstrict noEmit、変更TS／MJSのESLint、compiled-declared-actual、offline梱包確認を再実行してすべて成功した。compiled対照は旧8＋6、新24＋7、梱包441ファイル。再検証後の変更は本段落の記録追記だけで、検証済みコードとstage内容の一致を再照合した。全体回帰・実通信・C実行は追加しておらず、Pushも行わない。

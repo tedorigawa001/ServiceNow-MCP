@@ -1153,7 +1153,7 @@ const transferScenarios = Object.freeze(['normal', 'source_failure', 'source_clo
 class SupplyTransferPreflight {
   readonly #owner = Object.freeze({}); readonly #receiver = Object.freeze({});
   readonly #source: CanonicalSupplyAssembly;
-  #state: 'unused' | 'preparing' | 'prepared' | 'rejected' | 'terminal' = 'unused';
+  #state: 'unused' | 'preparing' | 'prepared' | 'rejected' | 'closed' | 'terminal' = 'unused';
   #first: TransferReason = 'none'; #stop: 'none' | 'supply_closed' = 'none';
   #anchor: SupplyIssuanceAnchor | undefined; #issuedAnchor: SupplyIssuanceAnchor | undefined;
   #claim: NonExecutingSupplyTransfer | undefined; #issuedClaim: NonExecutingSupplyTransfer | undefined;
@@ -1276,7 +1276,10 @@ class SupplyTransferPreflight {
   close() {
     if (this.#terminal) return this.reply('read_already_used');
     this.#stop = 'supply_closed'; this.#source.close();
-    return this.reject('supply_closed');
+    // Like the source owner, a close before any preparation start is a stop only, not a first diagnosis.
+    if (this.#counts.preparationStarts && this.#first === 'none') this.#first = 'supply_closed';
+    this.clearPreparatory(); this.#state = 'closed';
+    return this.reply('supply_closed');
   }
   rejectArguments() { return this.#terminal ? this.reply('read_already_used') : this.reject('binding_mismatch'); }
   private snapshot() {
