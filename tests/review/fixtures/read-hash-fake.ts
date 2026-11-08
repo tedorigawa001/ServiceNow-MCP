@@ -29,7 +29,10 @@ const ABC = 'ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad';
 const HELLO = '2cf24dba5fb0a30e26e83b2ac5b9e29e1b161e5c1fa7425e73043362938b9824';
 function files(scenario: Scenario): readonly File[] {
   const values = scenario === 'capacity_files' ? Array.from({ length: 32 }, () => [97, 98, 99])
-    : scenario === 'long_short_reads' ? [Array<number>(1_048_576).fill(97)] : [[97, 98, 99], [], [104, 101, 108, 108, 111]];
+    : scenario === 'long_short_reads' ? [Array<number>(1_048_576).fill(97)]
+    // Mismatch controls change one payload byte; the pinned abc digest stays the independent expected value.
+    : scenario === 'digest_mismatch' || scenario === 'mismatch_close_failure' ? [[97, 98, 100], [], [104, 101, 108, 108, 111]]
+    : [[97, 98, 99], [], [104, 101, 108, 108, 111]];
   return Object.freeze(values.map((bytes, i) => Object.freeze({ id: `F${String(i + 1).padStart(2, '0')}`,
     bytes: Object.freeze(bytes), digest: bytes.length === 0 ? EMPTY : bytes.length === 5 ? HELLO : ABC })));
 }
@@ -200,8 +203,10 @@ class Assembly {
     }
   }
   step() {
-    if (this.#terminal || this.#first !== 'none' || this.#stop !== 'none') return this.inspect();
+    if (this.#terminal) return this.inspect();
+    // Misuse after every commit stays a contract violation even when a late control stop was recorded.
     if (this.#phase === 'done') { this.fail('binding'); return this.inspect(); }
+    if (this.#first !== 'none' || this.#stop !== 'none') return this.inspect();
     if (this.#phase === 'close') { this.close(); return this.inspect(); }
     if (!this.guard()) return this.inspect();
     const phase = this.#phase;
@@ -224,7 +229,7 @@ class Assembly {
         this.#counts.final++;
         if (this.scenario === 'hash_final_throw') throw Error('synthetic_final');
         const digest = this.#hash!.digest('hex'); this.#hashState = 'finalized';
-        if (digest !== this.#scope!.file.digest || ['digest_mismatch', 'mismatch_close_failure'].includes(this.scenario)) { this.mismatch(); break; }
+        if (digest !== this.#scope!.file.digest) { this.mismatch(); break; }
         if (this.scenario === 'candidate_failure') throw Error('synthetic_candidate');
         const scope = this.#scope!;
         this.#candidate = Object.freeze({ scope: this.scenario === 'foreign_scope' ? Object.freeze({ ...scope }) : scope,
@@ -282,8 +287,9 @@ class Assembly {
   }
 }
 /** Only fixed string selectors, never callbacks, files, buffers, snapshots or live resources. */
-export function createReadHashFake(input: unknown = 'normal') {
-  const admitted = typeof input === 'string' && (scenarios as readonly string[]).includes(input);
+export function createReadHashFake(...args: readonly unknown[]) {
+  const input = args.length === 0 ? 'normal' : args[0];
+  const admitted = args.length <= 1 && typeof input === 'string' && (scenarios as readonly string[]).includes(input);
   const assembly = new Assembly(admitted ? input as Scenario : 'normal', admitted);
   return Object.freeze({ step: () => assembly.step(), run: () => assembly.run(), finish: () => assembly.finish(),
     inspect: () => assembly.inspect(), cancel: () => assembly.cancel(), advanceTo: (value: unknown) => assembly.advanceTo(value) });

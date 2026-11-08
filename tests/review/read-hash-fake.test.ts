@@ -208,6 +208,58 @@ describe('B: fixed synthetic scratch/hash ownership', () => {
       entryRequirement: 'unknown', seedRequirement: 'unknown', nativeCost: 'unknown' });
     expect(end.rows.every(r => r.state === 'not_aggregated')).toBe(true);
   });
+  it('adds no read, update or guard when stepped directly after a sticky stop', () => {
+    const fake = createReadHashFake('hash_update_throw');
+    for (let i = 0; i < 4; i++) fake.step();
+    const stopped = fake.inspect();
+    expect(stopped).toMatchObject({ firstReason: 'hash_unavailable', hashState: 'poisoned', counts: { read: 1, update: 1, guards: 8 } });
+    for (let i = 0; i < 5; i++) fake.step();
+    expect(fake.inspect().counts).toEqual(stopped.counts);
+  });
+  it('records misuse after all commits as binding even after a late stop', () => {
+    for (const late of [false, true]) {
+      const fake = createReadHashFake(); until(fake, 'done', 3);
+      if (late) fake.cancel();
+      fake.step();
+      expect(fake.finish()).toMatchObject({ firstReason: 'binding', stopReason: late ? 'cancelled' : 'none', counts: { accepted: 3 } });
+    }
+  });
+  it('rejects a payload whose real digest differs from the independently pinned value', () => {
+    for (const scenario of ['digest_mismatch', 'mismatch_close_failure'] as const) {
+      expect(createReadHashFake(scenario).run()).toMatchObject({ firstReason: 'content_mismatch',
+        counts: { final: 1, updateCompleted: 1, hashed: 3, candidateCreated: 0, accepted: 0 },
+        slots: [{ hash: 'content_mismatch' }, { hash: 'not_started' }, { hash: 'not_started' }] });
+    }
+  });
+  it('pins the fixed 900 stop and 1000 cleanup boundaries with literal times', () => {
+    for (const [time, read, first] of [[899, 1, 'none'], [900, 0, 'deadline']] as const) {
+      const fake = createReadHashFake(); until(fake, 'read'); fake.advanceTo(time); fake.step();
+      expect(fake.inspect()).toMatchObject({ firstReason: first, counts: { read } });
+    }
+    for (const [time, timing] of [[999, 'within'], [1000, 'expired']] as const) {
+      const fake = createReadHashFake(); until(fake, 'done', 3); fake.advanceTo(time);
+      expect(fake.finish()).toMatchObject({ firstReason: 'none', stopReason: 'deadline', cleanupTiming: timing });
+    }
+  });
+  it('detects a clock reversal between two accepted samples', () => {
+    const fake = createReadHashFake(); fake.advanceTo(500); fake.step(); fake.advanceTo(400); fake.step();
+    expect(fake.finish()).toMatchObject({ firstReason: 'clock_unavailable', cleanupTiming: 'unknown', counts: { open: 1, observe: 0, close: 1 } });
+  });
+  it('keeps the first control stop when a later cleanup deadline also fails', () => {
+    const fake = createReadHashFake(); fake.cancel(); fake.advanceTo(1000);
+    expect(fake.finish()).toMatchObject({ firstReason: 'cancelled', stopReason: 'cancelled', cleanupTiming: 'expired' });
+  });
+  it('marks cleanup timing unknown when the guard ceiling itself is exhausted', () => {
+    expect(createReadHashFake('guard_cap').run()).toMatchObject({ firstReason: 'source_limit', cleanupTiming: 'unknown',
+      counts: { guards: 3, close: 1 } });
+  });
+  it('admits exactly one fixed selector argument, or none for normal', () => {
+    expect(createReadHashFake().run().firstReason).toBe('none');
+    const loose = createReadHashFake as (...args: unknown[]) => ReturnType<typeof createReadHashFake>;
+    for (const args of [[undefined], ['normal', new Uint8Array(3)], ['normal', 'normal']]) {
+      expect(loose(...args).run()).toMatchObject({ firstReason: 'binding', counts: { open: 0, read: 0, init: 0 } });
+    }
+  });
   it('rejects arbitrary suppliers and buffers without evaluating input hooks', () => {
     let hooks = 0; const proxy = new Proxy({}, { get() { hooks++; throw Error('secret'); }, ownKeys() { hooks++; throw Error('secret'); } });
     for (const input of [proxy, new Uint8Array(3), {}, 'unknown']) {

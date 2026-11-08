@@ -1,6 +1,8 @@
 # WF-B：scratch受理区間・進行位置・候補確定点の差分設計
 
-Version: draft-0.3 / Date: 2026-11-08 / 読み取り照合基準HEAD: `692b280` / レビュー修正の基準HEAD: `d80f817` / (B)実装基準HEAD: `6fd83d4`。
+Version: draft-0.4 / Date: 2026-11-08 / 読み取り照合基準HEAD: `692b280` / レビュー修正の基準HEAD: `d80f817`・`2eb2b76` / (B)実装基準HEAD: `6fd83d4`。
+
+draft-0.3のレビュー修正: (B)のdigest不一致対照がscenario名で不一致を強制しており、実digest比較を外しても検出できなかった。対照のpayloadを1 byte変え、固定abc digestとの実比較だけで不一致にした。全file確定後の誤用は後着停止の有無にかかわらず`binding`として保持する。入口は引数0個（normal）または固定scenario文字列1個だけを受け付ける。sticky停止後の直接step、900／1000の固定時刻境界、時計逆行、先行制御理由の保持、guard枠切れ時のcleanup時刻unknownの対照を追加した（§8）。
 
 draft-0.3: §8の(B)独立合成assemblyを実装した。§1〜7の契約に対する実施範囲・残差を§8と[検証記録](E2E_BEST_PRACTICE_WFB_READ_HASH_B_2026-11-08.md)で区別する。
 
@@ -114,7 +116,7 @@ privateな混入が通常入口から作れない場合、検査を公開factory
 
 ## 8 (B)固定操作表・合成実装と残差
 
-`tests/review/fixtures/read-hash-fake.ts`は、既存(A)をimport／変更しない独立assemblyである。唯一の入力は固定scenario文字列、公開facadeはstep／run／inspect／finish／cancel／advanceToのみ。file・buffer・reader・clock callback・candidate・snapshotの登録／採用口を作らない。合成abc・空列・helloの期待digestは静的な既知ベクトルで、actualから生成しない。
+`tests/review/fixtures/read-hash-fake.ts`は、既存(A)をimport／変更しない独立assemblyである。入力は引数なし（normal）か固定scenario文字列1個だけで、`undefined`や追加引数は`binding`で拒否する。公開facadeはstep／run／inspect／finish／cancel／advanceToのみ。file・buffer・reader・clock callback・candidate・snapshotの登録／採用口を作らない。合成abc・空列・helloの期待digestは静的な既知ベクトルで、actualから生成しない。digest不一致の対照はpayloadを1 byte変えた`abd`を固定abc digestと実比較して作り、scenario名で比較結果を上書きしない。全file確定後のstepは、後着の取消・期限・時計停止がstopReasonに残っていても`binding`として記録する。
 
 | 固定phase | session最大操作数 | guard／費目 |
 |---|---|---|

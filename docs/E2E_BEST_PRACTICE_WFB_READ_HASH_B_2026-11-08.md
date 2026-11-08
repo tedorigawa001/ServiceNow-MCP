@@ -49,6 +49,31 @@ private scratchは65,536 byteだが、静的合成source配列・hash内部heap�
 
 (C)の同MapSupplySnapshot／SourceMapDraftへのprivate借用、辞書全fileと行hash集約は未実装。rowsはnot_aggregated、ready=false、authority=none、formalIssuance=closed、wholeRunAdmission=disabled。5 gaps・runtime／native／実E／Sはunknownのまま。実期待値pin・実source照合・S発行・core接続・実接続・実通信・設定変更・Pushは行わず、VM／監視／telemetry調査保留も維持する。今回の変更は未コミット。
 
+## レビュー修正（2026-11-08）
+
+レビュー基準HEAD `2eb2b76`。85 mutantで63件kill・22件生存し、以下を確認した。上記の件数・結果は修正前の記録として残す。
+
+- 欠陥: 全file確定後に後着停止があると、`step()`が停止判定で先に戻り、done後の誤用を`binding`として残さなかった（停止なしでは`binding`）。done判定を停止判定より前に移した。
+- 検出力不足: `digest_mismatch`／`mismatch_close_failure`はscenario名で不一致を強制しており、上記「digest差を確認」は実digest比較の失敗方向を通していなかった。実比較を外しても47件が成功した。対照payloadを`abd`へ変え、固定abc digestとの実比較だけで不一致にした。
+- 検出力不足: sticky停止後に`step()`を直接呼ぶ対照がなく、停止判定を外すとpoisoned後の再read／再updateへ進む変異が生存した。
+- 軽微: 900／1000境界が`LIMIT`参照でしか試されていない、初期値以外からの時計逆行、制御理由2件目の非上書き、guard枠切れ時の`cleanupTiming=unknown`、入口の引数個数（(A)は0個以外を拒否）が未検査だった。
+
+追加8件のうち、done後誤用と入口引数個数の2件が修正前にRED、他6件は既存動作を固定する対照として修正前から成功した。fixture修正後、B55件＋A52件の107件成功。mutantは新パターンを加えた90件で75件kill。
+
+生存15件は等価または防御的重複と判断した。
+
+| mutant | 理由 |
+|---|---|
+| lim-received／ctor-total | 固定合成sourceは最大1 MiBで、受信上限・期待総量に到達しない |
+| guard-expired-nosticky／guard-cleanup-end | stop 900がend 1000より前で、時刻逆行は時計異常になるため、通常guardが先に期限を捕捉する |
+| cancel-nofail | 全経路が後続guardを通り、同じ取消が記録される |
+| guard-interval-count／read-nopoison | 計測・tail毒化の補助。tail hash変異は毒化なしでもdigest差でkillされる |
+| close-accept-anyway／bound-pending／bound-cleanup／final-prefix | 停止判定・close未確認のfail・位置一致が先に成立する防御的重複 |
+| commit-nopost／commit-nofirst／commit-norebound | post失敗は未完了中なら必ずfirstReasonを立て、prepareからpostまでcandidateは変わらない |
+| step-sticky-nostop | firstReason=noneでstopReasonだけが立つのは全file確定後で、直前のdone判定が先に処理する |
+
+全repository回帰: 307 files、15,302件成功、失敗0。lint・build・package-http-classificationも成功。実期待値pin・実source照合・実通信・設定変更・Pushは行っていない。
+
 ## コミット前の対象限定再検証
 
 上記「未コミット」は記録作成時点の状態。コミット候補7ファイルだけをindexへ登録し、そのindex全体を新しい一時作業ツリーへ展開した。既存node_modulesへの参照だけを加え、元の未登録変更や既存distをコピーせずに、同候補上で以下を再実行した。
