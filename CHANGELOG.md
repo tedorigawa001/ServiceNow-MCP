@@ -218,6 +218,8 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 ### Added
 
+- WF-B read/hash capacity review measures the concurrent update-reservation peak from the live reservation count instead of assigning a constant 1, and the capacity event oracle now counts reservations and releases separately, so a double reservation is detected. A capacity test name no longer claims package exclusion it does not check.
+
 - WF-B read/hash stage-B review makes the digest-mismatch controls fail through the real comparison against the pinned abc digest instead of a scenario flag, keeps misuse after every file is committed as `binding` even when a late stop was recorded, and admits only zero arguments or one fixed scenario string. New controls step directly after a sticky stop, pin the 900/1000 time boundaries, catch a clock reversal from a non-initial sample, keep the first control stop, and report unknown cleanup timing when the guard ceiling is exhausted.
 
 - WF-B ReadOps stage-A review keeps a fully read and confirmed-closed file `pending` and counts it in `acceptedFiles`, so a finished session can be told apart from one that stopped partway. Closing a file before its after observation now records `incomplete`. Once every file is accepted, a later deadline, cancel, clock or limit stop is kept only in `stopReason`. New fixed scenarios cover after-read size/identity/kind changes and before-read identity/kind changes, and tests pin the first-open ordinal, backward clock steps, the first late stop reason, outstanding cleanup and the closed core path.

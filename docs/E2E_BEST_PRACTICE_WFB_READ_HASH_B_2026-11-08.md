@@ -67,6 +67,8 @@ private scratchは65,536 byteだが、静的合成source配列・hash内部heap�
 | mutant | 理由 |
 |---|---|
 | lim-received／ctor-total | 固定合成sourceは最大1 MiBで、受信上限・期待総量に到達しない |
+
+後続注記（2026-11-08）: lim-received／ctor-totalの等価判定は当時の固定scenarioに限る。[容量検証](E2E_BEST_PRACTICE_WFB_READ_HASH_CAPACITY_2026-11-08.md)の8MiB＋1byte・宣言超過scenarioで到達可能になり、両変異ともkillされる。
 | guard-expired-nosticky／guard-cleanup-end | stop 900がend 1000より前で、時刻逆行は時計異常になるため、通常guardが先に期限を捕捉する |
 | cancel-nofail | 全経路が後続guardを通り、同じ取消が記録される |
 | guard-interval-count／read-nopoison | 計測・tail毒化の補助。tail hash変異は毒化なしでもdigest差でkillされる |

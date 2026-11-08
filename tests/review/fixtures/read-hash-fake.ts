@@ -138,7 +138,8 @@ class Assembly {
       || (remaining > 0 && (!Number.isSafeInteger(this.#position + requested) || this.#position + requested > scope.file.bytes.length))) {
       this.fail('source_limit'); return;
     }
-    if (remaining) { this.#counts.updateReserved++; this.#counts.updateReservations++; this.#counts.updateReservationPeak = 1; }
+    if (remaining) { this.#counts.updateReserved++; this.#counts.updateReservations++;
+      this.#counts.updateReservationPeak = Math.max(this.#counts.updateReservationPeak, this.#counts.updateReserved); }
     if (this.#retry) this.#counts.retry++;
     this.#counts.read++;
     this.#inInterval = true;

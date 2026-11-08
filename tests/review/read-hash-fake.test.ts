@@ -75,6 +75,14 @@ describe('B: fixed synthetic scratch/hash ownership', () => {
     expect(always).toMatchObject({ firstReason: 'source_limit', position: 0,
       counts: { read: 33, retry: 32, update: 0, updateReleased: 33, updateReserved: 0, close: 1 } });
   });
+  it('measures the concurrent update reservation peak instead of assuming it', () => {
+    for (const [scenario, peak] of [['normal', 1], ['one_byte', 1], ['interrupt_always', 1], ['early_eof', 1],
+      ['update_cap', 0], ['received_cap', 0], ['before_size', 0], ['open_none', 0]] as const) {
+      const c = createReadHashFake(scenario).run().counts;
+      expect([scenario, c.updateReservationPeak]).toEqual([scenario, peak]);
+      expect(c.updateReservationPeak > 0).toBe(c.updateReservations > 0);
+    }
+  });
   it('conserves every attempt-bound update reservation without creating credit', () => {
     for (const scenario of ['normal', 'interrupt_once', 'interrupt_always', 'read_throw', 'hash_partial_throw', 'update_cap']) {
       const s = createReadHashFake(scenario).run(), c = s.counts;

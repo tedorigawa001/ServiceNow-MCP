@@ -6,7 +6,7 @@ import { repeatedByteDigest } from './fixtures/read-hash-capacity-oracle.js';
 function eventOracle(fileCount: number, bytesPerFile: number, extra = false) {
   const c = { open: 0, observe: 0, read: 0, retry: 0, received: 0, init: 0, update: 0,
     updateCompleted: 0, hashed: 0, final: 0, close: 0, cleanupReserved: 0, cleanupUnused: 0,
-    updateReserved: 0, updateReservations: 0, updateReservationPeak: 1, updateReleased: 0,
+    updateReserved: 0, updateReservations: 0, updateReservationPeak: 0, updateReleased: 0,
     candidateCreated: 0, candidateDiscarded: 0, accepted: 0, guards: 0 };
   const action = () => { c.guards += 2; };
   for (let i = 0; i < fileCount; i++) {
@@ -15,7 +15,9 @@ function eventOracle(fileCount: number, bytesPerFile: number, extra = false) {
     action(); c.init++;
     for (let offset = 0; offset < bytesPerFile; offset += 65_536) {
       const n = Math.min(65_536, bytesPerFile - offset);
-      action(); c.read++; c.received += n; c.update++; c.updateCompleted++; c.hashed += n; c.updateReservations++;
+      action(); c.read++; c.updateReservations++; c.updateReserved++; // one attempt-bound reservation
+      c.updateReservationPeak = Math.max(c.updateReservationPeak, c.updateReserved);
+      c.received += n; c.update++; c.updateCompleted++; c.hashed += n; c.updateReserved--;
     }
     action(); c.read++; // declaration-position probe
     if (extra && i === fileCount - 1) { c.received++; action(); c.close++; break; }
@@ -81,7 +83,7 @@ describe('B capacity: independent vectors and exact 8 MiB envelope', () => {
       expect(fake.run()).toMatchObject({ firstReason: 'source_limit', counts: { open: 0, read: 0, close: 0, guards: 2 } });
     });
   }
-  it('keeps the expanded capacity paths synthetic, package-excluded and not connected to supply/core', () => {
+  it('keeps the expanded capacity paths synthetic and not connected to supply/core', () => {
     const s = createReadHashFake('capacity_8m_8').run();
     expect(s).toMatchObject({ authority: 'none', ready: false, formalIssuance: 'closed', wholeRunAdmission: 'disabled',
       snapshotConnection: 'not_connected', rowAggregation: 'not_connected', coreInvocation: 'not_called',

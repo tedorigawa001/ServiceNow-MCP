@@ -1,6 +1,8 @@
 # WF-B：scratch受理区間・進行位置・候補確定点の差分設計
 
-Version: draft-0.5 / Date: 2026-11-08 / 読み取り照合基準HEAD: `692b280` / レビュー修正の基準HEAD: `d80f817`・`2eb2b76` / (B)実装基準HEAD: `6fd83d4` / 容量補完基準HEAD: `92523f2`。
+Version: draft-0.6 / Date: 2026-11-08 / 読み取り照合基準HEAD: `692b280` / レビュー修正の基準HEAD: `d80f817`・`2eb2b76`・`7eac019` / (B)実装基準HEAD: `6fd83d4` / 容量補完基準HEAD: `92523f2`。
+
+draft-0.5のレビュー修正: update予約の同時最大数を定数1の代入で示しており、二重予約を検出できなかった。予約直後の現在予約数から最大値を実測し、容量計数oracleも予約・解除を別に数えて照合する（§8）。
 
 draft-0.5: §9の最大8MiB成功走査・最終fileの余剰byte・宣言上限拒否を合成試験で補完した。[容量検証記録](E2E_BEST_PRACTICE_WFB_READ_HASH_CAPACITY_2026-11-08.md)。同snapshot接続・行集約は進めていない。
 
@@ -135,7 +137,7 @@ privateな混入が通常入口から作れない場合、検査を公開factory
 
 したがって`G ≤ 2(R + 7F) + 2 + 2 = 131,524`。失敗postも当該操作の2枠に含み、preで停止した場合の未使用postを追加枠へ数えない。readとhash updateの間のguardは0。scheduler上限は`R+7F+1` stepで、最初の拒否用stepを含む。guard予算自体を消費し切った場合は追加時計採取を行わず停止し、cleanupの時間確認はunknownでもcloseを1回試す。
 
-同じsession内でopen・observe・close・init・finalはphase順序により上限を守り、read／retry／受信／updateはdispatch前に枠を検査する。公開の任意順ReadOps操作はなく、再入可能な外部hookもない。update予約は同時最大1で、`予約累計 = update試行 + 未使用解除 + 現在予約`、cleanupは`予約累計 = close試行 + 未使用返却`を合成oracleで検査する。init／final成功の計数は今回別slot化せず、init試行・final試行とhashStateで失敗を区別する。
+同じsession内でopen・observe・close・init・finalはphase順序により上限を守り、read／retry／受信／updateはdispatch前に枠を検査する。公開の任意順ReadOps操作はなく、再入可能な外部hookもない。update予約は同時最大1で、最大値は予約直後の現在予約数から実測する（定数代入で示さない）。`予約累計 = update試行 + 未使用解除 + 現在予約`、cleanupは`予約累計 = close試行 + 未使用返却`を合成oracleで検査する。init／final成功の計数は今回別slot化せず、init試行・final試行とhashStateで失敗を区別する。
 
 固定Node SHA-256境界はprivate scratchのsubarrayを同期updateする。Nodeのhash実装を別実装のhashで再検証したものではなく、独立固定ベクトル・分割差・残存tail対照が今回の保証範囲。hash内部の非保持・nativeコスト・OOM／process停止・実時間内の完了保証はUnknown。実sourceのhash採取は行わない。
 
