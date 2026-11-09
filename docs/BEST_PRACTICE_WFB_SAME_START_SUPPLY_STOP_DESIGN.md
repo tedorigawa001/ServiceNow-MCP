@@ -1,5 +1,7 @@
 # WF-B (C)：同startへのprivate結合・配置生成と停止／供給の接続差分
 
+gate／frame継続入口の詳細化（2026-11-09、MDのみ）: [正規rootのgate生成・同owner結合とframe継続入口draft-0.1](BEST_PRACTICE_WFB_GATE_ROOT_CONTINUATION_DESIGN.md)で、RC00〜RC05の配置生成順、同gate seed、正規scope／epoch結合、draftの保持と実行の区別を整理した。全writer coverage前は正規生成bodyを開かず、Journal供給・admission消費・packet生成は閉鎖のままとする。
+
 WriterGateの詳細化（2026-11-09、MDのみ）: [内部型・frame権限・退出確認とclosed確定点draft-0.1](BEST_PRACTICE_WFB_WRITER_GATE_FRAME_DESIGN.md)で、同owner結合、単一生成frame／leaf権限、deferred停止、実行退出とpayload失敗の区別、closedの同期確定・失敗時保持を具体化した。現行SS03をwriter停止・Journal供給の保証へ昇格せず、新経路は未実装のままとする。
 
 Version: draft-0.2 / Date: 2026-11-09 / 基準HEAD: `b8dc4b3`（SS03実装レビュー修正基準HEAD: `69e5fbf`）。

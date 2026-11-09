@@ -1,5 +1,7 @@
 # WF-B (C)：WriterGate内部型・frame権限・退出確認とclosed確定点
 
+正規root入口の詳細化（2026-11-09、MDのみ）: [gate生成・同owner結合とframe継続入口draft-0.1](BEST_PRACTICE_WFB_GATE_ROOT_CONTINUATION_DESIGN.md)で、先行gateから同issuer／startへのprivate構築経路、非実行draft保持、probe-only wrapperと正規生成bodyの分離、失敗時の元参照・未確認継続保持を具体化した。純粋fakeからの権限昇格や実writer／Journal供給は接続しない。
+
 Version: draft-0.2 / Date: 2026-11-09 / 読み取り基準HEAD: `a9fa5fa`（純粋fakeレビュー修正基準HEAD: `dcb00e0`）。
 
 draft-0.2のレビュー修正：純粋fakeの失敗処理は理由によらずgateを`unconfirmed`にしており、§3の「実行権限の退役を確認できない終端」という意味と食い違っていた。退出確認後の重複enterでも`unconfirmed`になって閉鎖できず、frame前の入力拒否・pin不一致でも同様だった。§10で`unconfirmed`の条件を限定し、重複要求を状態を変えないrefusalとした。
