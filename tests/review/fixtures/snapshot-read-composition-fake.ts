@@ -2333,7 +2333,7 @@ class CaptureAdmissionAssembly {
     retained: start.retained, source: start.source }); }
 }
 const CAPTURE_ADMISSION_SCENARIOS = Object.freeze(['normal', 'probe_gates', 'reenter_issue', 'source_unknown', 'frame_exit_failure', 'source_rejected', 'prepare_failure', 'control_unconfirmed',
-  ...['owner', 'construction', 'retention', 'sourceSlot', 'claim'].map(f => 'scope_' + f),
+  ...['owner', 'construction', 'retention', 'sourceSlot', 'claim', 'extra'].map(f => 'scope_' + f),
   ...['copy', 'scope_copy', 'epoch', 'origin', 'source', 'root', 'checkpoint', 'variant', 'extra'].map(f => 'ack_' + f),
   ...['copy', 'scope_copy', 'epoch', 'origin', 'control', 'checkpoint', 'variant', 'extra'].map(f => 'pin_' + f),
   ...['copy', 'scope_copy', 'epoch', 'origin', 'ack', 'pin', 'packet', 'variant', 'extra'].map(f => 'admission_' + f),

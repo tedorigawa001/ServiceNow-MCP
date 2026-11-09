@@ -1,8 +1,10 @@
 # WF-B (C)：停止前提・clear権限・固定capture25cellの生成／確認境界
 
-Version: draft-0.3 / Date: 2026-11-09 / 内部issuer実装基準HEAD: `2e1ab6a`（途中の設計レビュー修正`948f19a`も照合） / 読み取り照合基準HEAD: `1d8e3f7`（レビュー修正基準HEAD: `2e1ab6a`）。
+Version: draft-0.4 / Date: 2026-11-09 / 内部issuer実装基準HEAD: `2e1ab6a`（途中の設計レビュー修正`948f19a`も照合、内部issuerレビュー修正基準HEAD: `f74095c`） / 読み取り照合基準HEAD: `1d8e3f7`（レビュー修正基準HEAD: `2e1ab6a`）。
 
 draft-0.3: §10の停止確認・token-only pin・CaptureAdmission発行と非実行clear draftだけを合成依存で実装した。25cellの生成・capture consumer・field clear・payload退役証拠・root終端は未接続。[検証記録](E2E_BEST_PRACTICE_WFB_CAPTURE_ADMISSION_2026-11-09.md)。
+
+draft-0.4のレビュー修正：(1) `pin_origin`は不正originがadmissionの`a.pin === this.#pinOrigin`で後段拒否され、pin照合の`p.origin`検査を外しても混入試験が`binding_rejected`のまま通っていた。混入試験は拒否した段階を発行数（seal／ack／pin／admission）で固定し、compiledへ`pin_origin`を加えた。(2) 発行途中の例外の理由分類（seal段階は`stop_unconfirmed`、他は`issue_unconfirmed`）を試験で固定した。(3) scopeの余剰key（`scope_extra`）とroot_not_created ackの余剰key（local経路の`ack_extra`）の対照を追加した（§10）。
 
 draft-0.2のレビュー修正：draft-0.1は既知absenceの根拠を`not_minted`と「既存source discardの確認済み履歴」に限りつつ、旧discard計数を根拠にしないとして後者を定義していなかった。正常経路でも空になるC04〜C06（供給準備の成功途中でsource自身がundefinedへ戻すbuilding 3slot）とC17／C20（固定alias scriptでしか代入しないextra alias）が根拠を持てず、25cellがreadyにならなかった。§3へAbsenceJournalの4種の根拠を定義し、§5の照合とCA05を対応させた。capture中closeのpost確認は、retirement sealのepochだけを照合しroot close状態は照合しないと明記した。
 
@@ -195,7 +197,7 @@ rootの専用retirementSealed flagはcontext／open／begin／prepare／checkを
 
 TrustedControlPinはlive生成前に確保するcontrol originから発行する。bindingはcontrol mintのnot_started／attempting／mintedと発行originをprivateに記録し、未捕捉をnot_mintedへ補完しない。source側にcontrolがあれば同issued controlであることも確認する。coreの5field契約を変更せず、不正coreからcontrol originを復元しない。mint不明では元wrapper／anchor／sourceの参照を保持して発行を停止する。
 
-Ack／pin／admissionの同発行slot・scope・epoch・origin・variant・必要field／余剰fieldと各相互結合を確認する。private発行slotの同値copyも拒否する。scopeの期待tokenは同Start ownerから独立に取り、candidate scopeを期待値にしない。共通epochは同ownerの発行世代で、root_not_createdのepochはroot停止済みを意味しない。途中生成物はcurrent／issued slotへ捕捉し、失敗後も除去しない。発行counterは検査完了後だけ増やし、候補がslotへ格納済みでも未確認なら発行0とする。sealAttemptsはhelper前の固定故障を含む論理試行数で、実helper呼出し完了数ではない。
+Ack／pin／admissionの同発行slot・scope・epoch・origin・variant・必要field／余剰fieldと各相互結合を確認する。private発行slotの同値copyも拒否する。scopeの期待tokenは同Start ownerから独立に取り、candidate scopeを期待値にしない。共通epochは同ownerの発行世代で、root_not_createdのepochはroot停止済みを意味しない。途中生成物はcurrent／issued slotへ捕捉し、失敗後も除去しない。発行counterは検査完了後だけ増やし、候補がslotへ格納済みでも未確認なら発行0とする。sealAttemptsはhelper前の固定故障を含む論理試行数で、実helper呼出し完了数ではない。混入対照は拒否した段階も固定し、scope混入はseal前、ack混入はack発行前、pin混入はpin発行前、admission混入はadmission発行前に止まることを発行数で確認する。後段の結合検査が前段の未検査fieldを覆い隠す変異を検出するためである。scopeの余剰keyとroot_not_created ackの余剰keyにも単独対照を持つ。発行途中の例外はseal段階なら`stop_unconfirmed`、それ以外は`issue_unconfirmed`として`admissionFirst`へ残す。
 
 成功後の二重admitはalready_issued、同期再入はin_progressで、追加seal／発行なし。失敗は最初の理由・phase・生成済みslotを保持した固定返答とし、以後のprepare／admit／closeで再試行しない。入力hookを実行せず、引数付き呼出し拒否時も正規controlの通常gateを停止する。raw例外を診断へ出さない。
 

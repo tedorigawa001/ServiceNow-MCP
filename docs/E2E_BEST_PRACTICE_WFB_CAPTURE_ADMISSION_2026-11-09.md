@@ -74,6 +74,30 @@ CaptureAdmissionは発行だけでconsumerを持たず、PreparedClearAuthorityD
 
 次はAbsenceJournal・固定25cell生成／格納／同参照確認の合成実装。clear・全8群final audit・payload退役証拠・root終端は別工程であり、今回の発行counter・seal flag・空pendingを代替証拠にしない。shared fake classへの空origin追加費も含め、実E／S・全CPU／heap／layout・実OOM診断必着はUnknown。runtime source・実予算owner・cap・期限は変更せず、未コミット、Pushなし。
 
+## レビュー修正（2026-11-09）
+
+レビュー基準HEAD: `f74095c`。修正前は新規52件、全体319ファイル・15,731件成功。
+
+指摘：
+1. `pin_origin`は単独対照でなかった。admissionが`pin: this.#pin.origin`を引き継ぐため、不正originは後段の`admissionMatches()`の`a.pin === this.#pinOrigin`でも拒否される。`pinMatches()`の`p.origin !== this.#pinOrigin`を外す変異が生存し、混入試験は`binding_rejected`だけを確認していた。compiledにも`pin_origin`がなかった。
+2. 発行途中の例外の理由分類（seal段階`stop_unconfirmed`／他`issue_unconfirmed`）を常に`issue_unconfirmed`にする変異が生存した。prefix試験は`state`と発行数だけを確認していた。
+3. `scopeMatches()`の余剰key検査と、root_not_created ackの余剰key検査に対照がなかった（`ack_extra`はroot_captured経路だけで実行）。
+
+修正：
+- 混入試験29件（＋`scope_extra`）に、拒否段階の発行数`[sealAttempts, ackIssues, pinIssues, admissionIssues]`を独立に固定した。scope混入は`[0,0,0,0]`、ack混入は`[1,0,0,0]`、pin混入は`[1,1,0,0]`、admission混入は`[1,1,1,0]`。
+- prefix試験9件で`admissionFirst`を確認する。
+- 固定selector`scope_extra`を追加し、`ack_extra`をprepareなし（root_not_created）でも実行する。
+- compiledへ`scope_extra`・`pin_origin`・local `ack_extra`の3対照を加えた（binding 19→22）。
+
+RED：`scope_extra`の試験1件が修正前に失敗した（selector未登録）。compiledも`insensitive condition: scope_extra`で失敗した。段階固定・理由分類・local `ack_extra`の追加assertionは修正前から成功し、下記の生存変異の検出対照として加えた。GREEN：新規53件成功、compiledは22＋root gate 5を全検出。
+
+一時変異（試験後に元へ戻した）：計23種、検出17、等価6。
+- 今回検出4種：scope余剰key、root_not_created ack余剰key、pin origin、例外の理由分類。
+- 修正前から検出13種：ack／pinのscope照合、pin epoch、admissionのepoch／origin／kind／key数／scope、seal no-op、ready gate、mint attempting、余分な引数、失敗後closeの非伝播。
+- 等価6種：ack／pinのkind照合（最終variant式と二重）、seal結果の確認（sealは例外以外で失敗しない）、`ready()`のframe条件（attempt条件と二重）、stopContextの`unknown`分岐（直後の`!s.value`と二重）、bound control不一致（到達しない）。
+
+全体回帰：`npm run lint`・`npm run build`・`package-http-classification.mjs`成功、vitest全体319ファイル・15,733件成功。
+
 ## コミット対象だけでの再検証（2026-11-09）
 
 今回分の11ファイルだけを明示してstageし、index全体を一時ディレクトリへ展開した。既存node_modulesだけを参照し、展開先でbuild、関連27ファイル・1,709件、新入口／testのstrict noEmit／noUnused、変更TS／MJSのESLint、offline梱包とcompiled保証を再実行し、すべて成功した。binding19条件・root通常gate5箇所、旧対照・互換入口10本の同一性、梱包441ファイル・seeded負対照、文書リンク12件を確認した。検証後の変更は本記録の再検証追記だけとし、その他の対象が検証済み展開内容と一致することを再照合する。無関係な変更・capture・field clear・payload退役証拠・root終端・実接続等は追加せず、Pushは行わない。

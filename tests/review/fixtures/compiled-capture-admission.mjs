@@ -19,24 +19,26 @@ try {
   const clauses = [
     ['scope_owner', 's.owner === expected.owner', 'true'], ['scope_construction', 's.construction === expected.construction', 'true'],
     ['scope_retention', 's.retention === expected.retention', 'true'], ['scope_sourceSlot', 's.sourceSlot === expected.sourceSlot', 'true'],
-    ['scope_claim', 's.claim === expected.claim', 'true'],
+    ['scope_claim', 's.claim === expected.claim', 'true'], ['scope_extra', 'Object.keys(s).length === 5', 'true'],
     ['ack_copy', 'a !== this.#issuedAck', 'false'], ['ack_epoch', 'a.epoch !== this.#epoch', 'false'],
     ['ack_origin', 'a.origin !== this.#ackOrigin', 'false'], ['ack_source', 'a.source === c.source', 'true'], ['ack_root', 'a.root === c.root', 'true'],
     ['ack_extra', 'Object.keys(a).length === 6', 'true'], ['ack_checkpoint', 'a.checkpoint === c.checkpoint', 'true'],
-    ['pin_copy', 'p !== this.#issuedPin', 'false'], ['pin_control', 'p.control === c.control.origin', 'true'],
+    ['pin_copy', 'p !== this.#issuedPin', 'false'], ['pin_origin', 'p.origin !== this.#pinOrigin', 'false'],
+    ['ack_extra', 'Object.keys(a).length === 5', 'true', 'local'], ['pin_control', 'p.control === c.control.origin', 'true'],
     ['pin_checkpoint', 'p.checkpoint === c.control.checkpoint', 'true'],
     ['admission_copy', 'a === this.#issuedAdmission', 'true'], ['admission_packet', 'a.packet === this.#packetOrigin', 'true'],
     ['admission_ack', 'a.ack === this.#ackOrigin', 'true'], ['admission_pin', 'a.pin === this.#pinOrigin', 'true'],
   ];
-  for (const [i, [selector, from, to]] of clauses.entries()) {
+  for (const [i, [selector, from, to, mode]] of clauses.entries()) {
+    const local = selector.endsWith('checkpoint') || mode === 'local';
     assert.equal(text.split(from).length, 2, 'anchor drift: ' + selector);
-    const base = original.createCaptureAdmissionFake(selector); if (!selector.endsWith('checkpoint')) base.prepare();
+    const base = original.createCaptureAdmissionFake(selector); if (!local) base.prepare();
     assert.equal(base.admit().ok, false);
     const metric = selector.startsWith('scope_') ? 'sealAttempts' : selector.startsWith('ack_') ? 'ackIssues'
       : selector.startsWith('pin_') ? 'pinIssues' : 'admissionIssues';
     assert.equal(base.inspect()[metric], 0);
     const mutant = await load(text.replace(from, to), 'binding-' + i);
-    const a = mutant.createCaptureAdmissionFake(selector); if (!selector.endsWith('checkpoint')) a.prepare();
+    const a = mutant.createCaptureAdmissionFake(selector); if (!local) a.prepare();
     a.admit(); assert.equal(a.inspect()[metric], 1, 'insensitive condition: ' + selector);
   }
   const gates = [

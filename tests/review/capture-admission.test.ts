@@ -27,7 +27,7 @@ describe('synthetic stop and capture admission', () => {
     expect(a.inspect()).toMatchObject({ rootGates: { context: false, open: false, begin: 'supply_closed',
       prepare: 'supply_closed', check: 'supply_closed' }, firstReason: 'none', source: { root: { readFirst: 'none', lifecycleFirst: 'none' } } });
   });
-  it.each(['scope_owner', 'scope_construction', 'scope_retention', 'scope_sourceSlot', 'scope_claim',
+  it.each(['scope_owner', 'scope_construction', 'scope_retention', 'scope_sourceSlot', 'scope_claim', 'scope_extra',
     'ack_copy', 'ack_scope_copy', 'ack_epoch', 'ack_origin', 'ack_source', 'ack_root', 'ack_variant', 'ack_extra',
     'pin_copy', 'pin_scope_copy', 'pin_epoch', 'pin_origin', 'pin_control', 'pin_variant', 'pin_extra',
     'admission_copy', 'admission_scope_copy', 'admission_epoch', 'admission_origin', 'admission_ack', 'admission_pin', 'admission_packet', 'admission_variant', 'admission_extra'])(
@@ -38,6 +38,10 @@ describe('synthetic stop and capture admission', () => {
       expect(a.inspect()).toEqual(before);
       expect(before).toMatchObject({ fieldWrites: 0, capture: 'not_connected', rootFinish: 'not_called',
         retained: { R1: 3, R2: 5, R3: 2, R4: 2 } });
+      // The rejecting stage is fixed independently, so a later stage cannot mask an unchecked earlier field.
+      const stage = script.startsWith('scope_') ? [0, 0, 0, 0] : script.startsWith('ack_') ? [1, 0, 0, 0]
+        : script.startsWith('pin_') ? [1, 1, 0, 0] : [1, 1, 1, 0];
+      expect([before.sealAttempts, before.ackIssues, before.pinIssues, before.admissionIssues]).toEqual(stage);
     });
   it.each([
     ['seal_before', 1, 0, 0, 0], ['seal_after', 1, 0, 0, 0],
@@ -47,6 +51,7 @@ describe('synthetic stop and capture admission', () => {
   ] as const)('retains independently specified issue prefix %s', (script, seals, ack, pin, admission) => {
     const a = composition.createCaptureAdmissionFake(script); a.prepare(); const r = a.admit();
     expect(r.ok).toBe(false);
+    expect(a.inspect()).toMatchObject({ admissionFirst: script.startsWith('seal_') ? 'stop_unconfirmed' : 'issue_unconfirmed' });
     expect(a.inspect()).toMatchObject({ state: 'unconfirmed', sealAttempts: seals, ackIssues: ack, pinIssues: pin,
       admissionIssues: admission, fieldWrites: 0, source: { root: { retainedBorrow: true, retainedSnapshot: true } } });
     expect(a.admit()).toBe(r); expect(a.close()).toBe(r);
@@ -72,7 +77,7 @@ describe('synthetic stop and capture admission', () => {
     expect(a.inspect()).toMatchObject({ state: 'unconfirmed', sealAttempts: 0, ackIssues: 0, pinIssues: 0,
       source: { root: { retainedBorrow: true, retainedSnapshot: true } } });
   });
-  it.each(['ack_checkpoint', 'pin_checkpoint'])('validates known-absence checkpoints: %s', script => {
+  it.each(['ack_checkpoint', 'pin_checkpoint', 'ack_extra'])('validates the strict known-absence variants: %s', script => {
     const a = composition.createCaptureAdmissionFake(script);
     expect(a.admit()).toMatchObject({ ok: false, disposition: 'binding_rejected' });
     expect(a.inspect()).toMatchObject({ sealAttempts: 0, fieldWrites: 0 });

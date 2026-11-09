@@ -240,6 +240,8 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 ### Added
 
+- WF-B capture admission review: mixing tests now fix the rejecting stage through seal/ack/pin/admission issue counts, so a later binding check can no longer mask an unchecked earlier field (`pin_origin` is now isolated and added to the compiled controls). New controls pin the seal-vs-issue exception classification, a scope extra key and the root-not-created ack extra key.
+
 - WF-B retirement start review: pin field controls (construction, retention, source slot) now install the malformed pin as the issued pin itself, so only the private `matches()` field comparison rejects them, with three compiled single-clause mutants. New tests pin the in-frame retirement request on generation failure (deferred, then started after `finally`) and control stop on argument-bearing rejection.
 
 - WF-B pending source binding review: failures now map to the root by class (generation failures to `read_prepare_unavailable`, binding/duplicate to `binding_mismatch`), and a source-owned `source_rejected` no longer adds a root binding diagnosis. New fixed controls pin close propagation to the control, root and retention root, retired-control refusal at all five source gates, and claim receiver binding (plus a compiled receiver guard).
