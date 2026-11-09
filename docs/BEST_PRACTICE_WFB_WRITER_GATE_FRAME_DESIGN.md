@@ -1,5 +1,7 @@
 # WF-B (C)：WriterGate内部型・frame権限・退出確認とclosed確定点
 
+probe-only段階の接続差分（2026-11-09、MDのみ）: [同startのframe境界・one-shot enter／確認済みexit draft-0.1](BEST_PRACTICE_WFB_PROBE_FRAME_ENTER_EXIT_DESIGN.md)で、同start wrapperの最小共有、grant／退出候補の先行保持、同期退出確定と失敗時custodyを具体化した。先行gate・非実行draftは実装済みだが、正規frame実行／全writer停止／closed確定の保証は依然未接続である。以下の現行SS03や空slotの記述は当初の旧入口基準で、新合成rootの実装状況は[正規root設計§9](BEST_PRACTICE_WFB_GATE_ROOT_CONTINUATION_DESIGN.md#9-限定実装先行gatess03結合非実行draft保持)を参照する。
+
 正規root入口の詳細化（2026-11-09、MDのみ）: [gate生成・同owner結合とframe継続入口draft-0.1](BEST_PRACTICE_WFB_GATE_ROOT_CONTINUATION_DESIGN.md)で、先行gateから同issuer／startへのprivate構築経路、非実行draft保持、probe-only wrapperと正規生成bodyの分離、失敗時の元参照・未確認継続保持を具体化した。純粋fakeからの権限昇格や実writer／Journal供給は接続しない。
 
 Version: draft-0.2 / Date: 2026-11-09 / 読み取り基準HEAD: `a9fa5fa`（純粋fakeレビュー修正基準HEAD: `dcb00e0`）。

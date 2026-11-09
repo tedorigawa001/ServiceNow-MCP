@@ -1,5 +1,7 @@
 # WF-B (C)：正規rootのgate生成・同owner結合とframe継続入口
 
+次段階の接続差分（2026-11-09、MDのみ）: [同startのprobe-only frame・一度限りenter／確認済みexit draft-0.1](BEST_PRACTICE_WFB_PROBE_FRAME_ENTER_EXIT_DESIGN.md)で、旧bodyを保つwrapper共有、別private利用cellとgrant保持、退出確定点、失敗後も残る退出責務を具体化した。非実行draft自体は権限化せず、request合流・実writer・Journal供給は未接続とする。
+
 Version: draft-0.2 / Date: 2026-11-09 / 読み取り基準HEAD: `caa6254`（限定実装レビュー修正基準HEAD: `fb02aab`）。
 
 draft-0.2のレビュー修正：構築frame内closeの返答（`deferred_frame`）が試験されず、frame内deferを外す変異が最終状態の一致で生存した。§9で`closeInFrame`診断により返答を固定し、到達しない二重防御を明記した。
