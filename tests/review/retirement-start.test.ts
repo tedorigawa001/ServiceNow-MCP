@@ -97,4 +97,16 @@ describe('synthetic retirement start boundary', () => {
     expect(Object.keys(a)).toEqual(['prepare', 'request', 'close', 'inspect']);
     expect(a.prepare(input).ok).toBe(false); expect(hooks).toBe(0);
   });
+  it.each(['throw_in_frame', 'prepare_failure'])('requests retirement from inside the failed frame and starts it only after finally: %s', script => {
+    const a = composition.createRetirementStartFake(script);
+    expect(a.prepare()).toMatchObject({ ok: false });
+    expect(a.inspect()).toMatchObject({ requested: true, starts: 1, claim: 'spent', attempt: 'running', frame: 'inactive',
+      deferred: { disposition: 'deferred_frame', starts: 0, claim: 'unused', frame: 'active' }, controlState: 'stopped' });
+  });
+  it('stops the control when an argument-bearing call is rejected', () => {
+    const a = composition.createRetirementStartFake(); a.prepare();
+    expect(a.inspect().controlState).toBe('unused');
+    expect(a.prepare('x')).toMatchObject({ ok: false, disposition: 'input_rejected' });
+    expect(a.inspect()).toMatchObject({ controlState: 'stopped', firstReason: 'binding_mismatch', starts: 0 });
+  });
 });

@@ -238,6 +238,8 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 ### Added
 
+- WF-B retirement start review: pin field controls (construction, retention, source slot) now install the malformed pin as the issued pin itself, so only the private `matches()` field comparison rejects them, with three compiled single-clause mutants. New tests pin the in-frame retirement request on generation failure (deferred, then started after `finally`) and control stop on argument-bearing rejection.
+
 - WF-B pending source binding review: failures now map to the root by class (generation failures to `read_prepare_unavailable`, binding/duplicate to `binding_mismatch`), and a source-owned `source_rejected` no longer adds a root binding diagnosis. New fixed controls pin close propagation to the control, root and retention root, retired-control refusal at all five source gates, and claim receiver binding (plus a compiled receiver guard).
 
 - WF-B unbound pending construction review: snapshots now expose `parentLinks`, `roleOriginsDistinct` and `scopeOriginsDistinct`, read directly from the captured cells so that generation and checking cannot agree on a missing or crossed parent shell or a shared origin. Sealed results record the pre-seal state as `sealedFrom`. New tests pin first-reason retention on argument-bearing retries and the sealed reply.

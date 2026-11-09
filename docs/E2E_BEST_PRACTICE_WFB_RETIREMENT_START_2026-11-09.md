@@ -74,6 +74,26 @@ bdo node tests/review/package-http-classification.mjs
 
 次はcapture25cell・停止前提・field別clear／空確認・失敗prefixの未確認保持。TrustedControlPinによるclear権限、全8群final audit、PayloadGoneEvidenceとroot終端は未接続。本claimの開始1・診断配列・空pending・停止controlをそれらの証拠にしない。全CPU／heap／layout・実E／S・実確保故障・診断必着はUnknown。既存cap・期限・D_stop／D_end・guard上界は変更しない。未コミット、Pushなし。
 
+## レビュー修正（2026-11-09）
+
+レビュー基準HEAD: `e1e30d3`。修正前は新規20件、全体318ファイル・15,676件成功。
+
+指摘：
+1. `pin_construction`／`pin_retention`／`pin_source_slot`は`#pin`を新しいobjectへ置換しており、`this.#pin !== this.#issuedPin`の同一性検査が先に拒否していた。`retirementBindingAccess.matches()`のconstruction／retention／sourceSlot照合を各々外す変異3種と、`matches()`呼出しを外す変異が生存した。上記「個別に置換」は、単独対照としてはpin copyだけが成立していた。
+2. 生成失敗の試験は`prepare()`の後に`request()`を明示的に呼んでおり、catch内の回収要求予約（frame内deferred→finally後開始）を外す変異が生存した。
+3. 引数付き呼出し拒否（`rejectArguments()`）時のcontrol停止を外す変異が生存した。
+
+修正：pin field混入3種は、不正pinを発行pin自身として設置する（`#pin`・`#issuedPin`・claim.pinが同参照）。同一性検査は通り、private `matches()`のfield照合だけが拒否する。compiledへpin field単独変異3種を追加した（frame／claim 6→9）。試験3件を追加した。生成失敗2種で`prepare()`だけを呼び、`requested=true`・starts1・deferred_frame記録・control停止を確認する。引数付き`prepare(x)`後のcontrol停止も確認する。
+
+RED：修正前の実行で、compiledは`surviving mutation: pin field pin_construction`で失敗した。追加unit3件は修正前から成功し、生存変異（catch内の回収要求、`rejectArguments`の停止）の検出対照として追加した。GREEN：新規23件成功、compiledは9変異すべてを検出。
+
+一時変異（試験後に元へ戻した）：計21種、検出18、等価3。
+- 今回検出6種：`matches()`のconstruction／retention／sourceSlot照合と`matches()`呼出し、catch内の回収要求、`rejectArguments`のcontrol停止。
+- 修正前から検出12種：claimの同一性／owner／pin、owner token、catchの`failFrame`、request／closeの停止伝播、prepare／frameの各gate、frameExits、入力拒否、余分な引数。
+- 等価3種：`matches()`のsource identity照合（source slotのidentityは常に自sourceのもの）、`begin()`のspent guardとrunning gate（相互の二重防御、上記のとおり）。
+
+全体回帰：`npm run lint`・`npm run build`・`package-http-classification.mjs`成功、vitest全体318ファイル・15,679件成功。
+
 ## コミット対象だけでの再検証（2026-11-09）
 
 今回分の11ファイルだけを明示してstageし、index全体を一時ディレクトリへ展開した。既存node_modulesだけを参照し、展開先でbuild、関連26ファイル・1,654件、新入口／testのstrict noEmit／noUnused、変更TS／MJSのESLint、offline梱包とcompiled保証を再実行し、すべて成功した。新6変異、旧unbound16＋6・binding9＋5・既存対照、薄い入口9本の同一性、梱包441ファイル・seeded負対照、文書リンク13件を確認した。検証後の変更は本記録の再検証追記だけとし、その他の対象が検証済み展開内容と一致することを再照合する。無関係な変更やfield clear・証拠・root終端・実接続等は追加せず、Pushは行わない。

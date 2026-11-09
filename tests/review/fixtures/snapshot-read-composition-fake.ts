@@ -2030,11 +2030,14 @@ class RetirementStartAssembly {
   constructor(private readonly scenario: string, admitted: boolean) {
     this.#binding = new PendingSourceBinding(scenario === 'prepare_failure' ? 'after_bind_failure'
       : scenario === 'source_rejected' ? 'source_failure' : scenario === 'source_unknown' ? 'source_attempt_failure' : 'normal', admitted);
-    this.#issuedPin = retirementBindingAccess.pin(this.#binding);
-    const p = this.#issuedPin, foreign = Object.freeze({});
-    this.#pin = scenario === 'pin_copy' ? Object.freeze({ ...p }) : scenario === 'pin_construction' ? Object.freeze({ ...p, construction: foreign })
-      : scenario === 'pin_retention' ? Object.freeze({ ...p, retention: foreign })
-        : scenario === 'pin_source_slot' ? Object.freeze({ ...p, sourceSlot: foreign }) : p;
+    const base = retirementBindingAccess.pin(this.#binding), foreign = Object.freeze({});
+    // Field controls install the malformed pin as the issued pin itself (shared by #pin and the claim),
+    // so the identity checks pass and only the private matches() field comparison can reject it.
+    this.#issuedPin = scenario === 'pin_construction' ? Object.freeze({ ...base, construction: foreign })
+      : scenario === 'pin_retention' ? Object.freeze({ ...base, retention: foreign })
+        : scenario === 'pin_source_slot' ? Object.freeze({ ...base, sourceSlot: foreign }) : base;
+    const p = this.#issuedPin;
+    this.#pin = scenario === 'pin_copy' ? Object.freeze({ ...p }) : p;
     this.#claimOwner = scenario === 'owner_copy' ? foreign : this.#owner;
     this.#issuedClaim = new RetirementStartClaim(scenario === 'claim_owner' ? foreign : this.#owner,
       scenario === 'claim_pin' ? Object.freeze({ ...p }) : scenario === 'pin_copy' ? this.#pin : p);

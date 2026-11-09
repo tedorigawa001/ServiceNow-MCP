@@ -1,8 +1,10 @@
 # WF-B (C)：field別固定回収schedule・失敗prefix・診断契約
 
-Version: draft-0.3 / Date: 2026-11-09 / 開始境界の実装基準HEAD: `ab377c1` / 読み取り照合基準HEAD: `07cc830`（着手時は`d361de6`、途中のレビュー修正を再照合。レビュー修正基準HEAD: `cf7e285`）。
+Version: draft-0.4 / Date: 2026-11-09 / 開始境界の実装基準HEAD: `ab377c1`（開始境界レビュー修正基準HEAD: `e1e30d3`） / 読み取り照合基準HEAD: `07cc830`（着手時は`d361de6`、途中のレビュー修正を再照合。レビュー修正基準HEAD: `cf7e285`）。
 
 draft-0.3: §11の回収owner／claim・固定診断・generation-wrapper frame境界だけ合成実装した。field clear・capture・空確認・証拠・root終端は未接続。[検証記録](E2E_BEST_PRACTICE_WFB_RETIREMENT_START_2026-11-09.md)。
+
+draft-0.4のレビュー修正：pin field混入（construction／retention／source slot）は`#pin`を別objectへ置換しており、先に同一性検査で拒否されて`matches()`のfield照合を単独で検証していなかった。不正pinを発行pin自身（`#pin`・claim.pinと同参照）として設置し、`matches()`だけが拒否する対照に直した（§11）。生成失敗時にframe内で回収要求を予約しfinally後に開始する経路と、引数付き呼出し拒否時のcontrol停止も固定した。
 
 draft-0.2のレビュー修正：draft-0.1はS08でcapture packet（F24）を放した後のS09でF25〜F27（両receipt・`#context`）をclearしており、§2の「対応captureの同参照記録を確認するまで元slotをclearしない」と§5の失敗prefix（capture確認後・clear前は元field＋確認済みcapture）がこの3項目で成り立たなかった。receipt／context除去をS08、packet解放をS09へ入れ替えた。また検査だけのF29はcaptureしない（名前付きcellは25個）とし、S10の照合根拠をSourceRootSlotとTrustedControlPinに固定した。
 
@@ -185,6 +187,6 @@ F14／F29／F30はwriteではなく検査項目、F15は専用cell操作、F24�
 
 inactive後の正規requestは同claimを一度だけ消費し、attempt=running、blocked_field_clearへ固定停止する。これはS00の所有／lease／claim部分だけであり、S00全体のroot停止・S01以降の完了証拠ではない。通常requestは正規controlの通常利用gateだけを停止し、root自身を正常終端・close済みとは報告しない。正規close／生成失敗は既存のprivate結合経路を通ってrootへ伝わる。source未捕捉でも開始できるのは局所claimの受付だけで、sourceCapture=unknownを保持し、payload確認やroot操作の権限を付けない。
 
-runningへの同期置換後の再request／同期再入はin_progress、開始は1のまま。生成中のprepare再入はpreparation_in_progressで新frameを作らない。owner／claim／pinの混入はclaim0・binding_rejectedとなり、その固定拒否結果を以後のrequest／closeも同参照で返す。元のfirstReason、retirementFirst、sourceの供給／lifecycle理由を別に保持する。生成失敗はread_prepare_unavailable、source_rejectedは元source診断を維持し、後着closeで上書きしない。不明frameは通常activeと区別する。
+runningへの同期置換後の再request／同期再入はin_progress、開始は1のまま。生成中のprepare再入はpreparation_in_progressで新frameを作らない。owner／claim／pinの混入はclaim0・binding_rejectedとなり、その固定拒否結果を以後のrequest／closeも同参照で返す。元のfirstReason、retirementFirst、sourceの供給／lifecycle理由を別に保持する。生成失敗はread_prepare_unavailable、source_rejectedは元source診断を維持し、後着closeで上書きしない。不明frameは通常activeと区別する。pin field混入3種は不正pinを正規発行pin自身として設置するので、`#pin`／発行pin／claim.pinの同一性は成立し、private `matches()`のconstruction／retention／source slot照合だけが拒否する（pin copyは同一性検査だけを狙う別対照）。生成失敗（throw／準備失敗）ではframe内の回収要求がdeferred_frameとなり、`prepare()`だけでfinally後に一度開始する。
 
 30fieldのpresenceはnot_observed、writeAttempted／emptyConfirmedはfalse、8groupはunverifiedのまま。RetirementCapture25cell・TrustedControlPinによるclear権限・field clear・final audit・証拠・root gateは生成／接続しない。既知参照・borrow／Snapshotを保持し、新経路による旧discard増分0、fieldWrites0、payload=not_started、proofIssuance=closed、rootFinish=not_called、resourceCleanup=not_startedを維持する。回収claimのspent／starts1と下位移譲claim消費0を混同しない。実費・全heap／work・実E／S・診断必着はUnknown。
