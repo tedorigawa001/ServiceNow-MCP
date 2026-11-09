@@ -2,9 +2,9 @@
 
 Version: draft-0.1 / Date: 2026-11-09 / 読み取り開始HEAD: `fb02aab`、文書確認時HEAD: `470679f`。
 
-Status: **MDのみ。以下のframe境界・grant・退出記録は未実装。** 親は[正規gate生成・継続入口](BEST_PRACTICE_WFB_GATE_ROOT_CONTINUATION_DESIGN.md)と[WriterGate／frame権限](BEST_PRACTICE_WFB_WRITER_GATE_FRAME_DESIGN.md)。前工程の実績は[非実行draftの検証記録](E2E_BEST_PRACTICE_WFB_CANONICAL_GATE_DRAFT_2026-11-09.md)。同ownerの正規gate／seed／pinとdraft保持は存在するが、frame実行・grant発行・退出証拠は存在しない。
+Status: **当初draft-0.1に対し、(A)の同start wrapper最小抽出・先行private cell／同bindingだけ合成依存限定で実装。** 実装基準HEAD `74bb73c`、詳細は§11と[検証記録](E2E_BEST_PRACTICE_WFB_PROBE_FRAME_PREPARATION_2026-11-10.md)。親は[正規gate生成・継続入口](BEST_PRACTICE_WFB_GATE_ROOT_CONTINUATION_DESIGN.md)と[WriterGate／frame権限](BEST_PRACTICE_WFB_WRITER_GATE_FRAME_DESIGN.md)。前工程の実績は[非実行draftの検証記録](E2E_BEST_PRACTICE_WFB_CANONICAL_GATE_DRAFT_2026-11-09.md)。新probeのbody起動・grant発行・退出証拠は存在しない。
 
-正式発行口・C実行入口閉鎖、全体受付無効、Unknown、VM／監視／telemetry調査保留を維持する。本書は合成依存限定の将来実装契約であり、今回は実装・ビルド・試験・実接続・実通信・設定変更・Pushを行わない。request／closeの実合流、回収開始、実writer、Journal封印／供給、admission消費、packet生成、field clear、GateClosedRecord、root終端も対象外。
+正式発行口・C実行入口閉鎖、全体受付無効、Unknown、VM／監視／telemetry調査保留を維持する。当初作成時はMDのみ、今回の実装とローカル検証は§11の範囲だけ。実接続・実通信・設定変更・Pushを行わない。新経路のrequest／close実合流、回収開始、実writer、Journal封印／供給、admission消費、packet生成、field clear、GateClosedRecord、root終端も対象外。
 
 ## 1 読み取り基準と今回の差分
 
@@ -110,7 +110,7 @@ enter前stopはbody=0・grant新規発行0。entering中の未捕捉grantはunco
 
 この最大数は構造契約であって実allocation数やwork料金ではない。既存37slotを追加費目込みの上界として流用しない。追加cellの生成schedule・各guard呼出し数・unit係数・実E／S・実確保layout・実OOM・escaped資格なしの実証はUnknown。将来共有予算に接続する際も既存停止owner・D_stop／D_endを引き継ぎ、新予算／残時間起点の期限を導入しない。今回のMDは全体受付を可能にしない。
 
-## 9 独立合成受入条件（全て未実施）
+## 9 独立合成受入条件（段階別実施範囲は§11）
 
 | ID | 受入条件・負の対照 |
 |---|---|
@@ -134,3 +134,17 @@ oracleは本体のbuilder／state表／counterから期待値をimportせず、�
 将来の分割は、(A)同start wrapper最小抽出・先行private cell／同binding・実行閉鎖、(B)one-shot enter／同grant捕捉・固定probe、(C)確認済みexit・失敗後の保持・compiled対照、その後に別承認でrequest／close合流とする。(A)ではbodyを起動せず、(B)は固定退出責務を伴って初めて実行を試験する。enterだけ起動して退出未設計のまま完了としない。
 
 本書と親2文書だけを更新した。今回ビルド・合成試験・compiled試験・梱包は行っていない。3文書のローカルリンク16件に欠落なし、PF01〜12の12条件に重複・欠落なし、PE00〜06／PX00〜06各7段階の順序と差分空白を確認した。ソース／試験のSHA-256は開始時と同一（composition: `b10e59224bb3cdb58252569b68b8020805de0e598cd2fa159dec028b9bca7dad`、試験: `ed193bf428992a394960499dd533e918632894be8195d59c352fa40c5beead50`）。これは文書整合の確認であり、未実装frameの検証成功ではない。本MD変更は未コミット、Pushなし。
+
+## 11 (A)限定実装（2026-11-10）
+
+§10末尾は文書作成時の記録（後に`74bb73c`でコミット）。今回の変更は同composition fixtureの合成経路だけ。既存startのprepareの先行拒否を維持し、その後のframe開始・旧body・catch／finally・旧drain処理をprivate `frameBoundary`へ最小抽出した。旧seedなしfactoryは同wrapperから従来の合成generation bodyへ進む。新seed付きstartとprivate probe_closed経路はwrapperのframe開始前に恒久拒否する。旧回帰試験の合成body実行と、新probe body起動0を区別する。
+
+新factory `createProbeFramePreparationFake`は旧CanonicalGateDraftRootを同lexical配置で利用し、固定scriptだけを受付ける。旧factoryの形と旧互換facadeのexportは変更しない。compositionの試験用export一覧には新factoryを追加する。公開されるのはprepare／check／checkLegacy／close／inspectだけで、checkとcheckLegacyはいずれも実行拒否の確認口。enter／exit／任意callback／grant採用口は存在しない。
+
+追加固定8段階は、1 use cell、2 frame origin、3空grant cell、4未開始body cell、5空exit cell、6固定診断cell、7private bundle、8同binding。1〜7を旧30段階の空slot確保後・gate／seed／issuer構築前に生成・捕捉する。8は既存37段階post照合後に生成・捕捉し、同root／issued参照・brand／固定field数と全関係を照合してから同startへ一度bindする。8のpost確認まで新rootのreadyは立てない。旧37段階と追加8段階は別の保持表で、45回の実allocationという意味ではない。
+
+ProbeCellBundleは同先行rootが所有し、use／frame／grant／body／exit／diagnosticの正規参照を固定。ProbeFrameBindingは同seed・target・gate・pin・scope・owner・epoch・packet・draft・entry／exit・同bundleを保持する。start側も同binding current／issuedと同bundleのprivate捕捉を別々に確認する。二重bindは何も変更せず拒否。初回拒否候補やpost失敗時のstart借用は元rootに保持し、rollbackで消さず再生成しない。
+
+cellの型はこの段階ではunused／empty／not_startedと未使用・未発行だけを表現する。mutable private cellの遷移、attempt claim消費、grant発行／退役、退出候補生成、PX05、request／drainはまだ実装していない。診断cellは先行空slotで、実際の構築失敗first・prefixは既存rootのfailure shellが保持する。既存不変slot37と`executable=false`のdraftは変更しない。
+
+PF01のwrapper共有／新経路body閉鎖部分、PF02の供給・受領同一性部分、PF03の追加8段階構築部分、PF04の構築再入／重複bind部分、PF10〜12の保持・互換・閉鎖部分を検証した。enter／exitのPF03〜09実行部分・正常probe body・退出確定・実request合流・全writer停止は未実施。独立prefix oracle32条件、新65試験、関連1,231件、新旧compiled11本・build・strict検査・梱包結果と初回エラーは[検証記録](E2E_BEST_PRACTICE_WFB_PROBE_FRAME_PREPARATION_2026-11-10.md)。構造枠は全体work受付へ昇格させず、unit係数・実E／S・layout・実OOM・runtime停止はUnknownのまま。

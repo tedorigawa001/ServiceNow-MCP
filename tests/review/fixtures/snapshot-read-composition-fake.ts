@@ -2247,7 +2247,7 @@ const RETIREMENT_START_SCENARIOS = Object.freeze(['normal', 'request_in_frame', 
   'throw_in_frame', 'prepare_failure', 'source_rejected', 'source_unknown', 'control_unconfirmed', 'owner_copy', 'pin_copy', 'pin_construction',
   'pin_retention', 'pin_source_slot', 'claim_copy', 'claim_owner', 'claim_pin', 'frame_exit_failure']);
 type RetirementStartDisposition = 'prepared' | 'preparation_rejected' | 'preparation_in_progress' | 'deferred_frame'
-  | 'frame_unconfirmed' | 'binding_rejected' | 'in_progress' | 'blocked_field_clear' | 'input_rejected';
+  | 'frame_unconfirmed' | 'binding_rejected' | 'in_progress' | 'blocked_field_clear' | 'input_rejected' | 'blocked_frame_execution';
 interface AdmissionScope { readonly owner: object; readonly construction: object; readonly retention: object;
   readonly sourceSlot: object; readonly claim: object }
 let captureStartAccess: Readonly<{ scope(a: RetirementStartAssembly): AdmissionScope; ready(a: RetirementStartAssembly): boolean;
@@ -2255,8 +2255,19 @@ let captureStartAccess: Readonly<{ scope(a: RetirementStartAssembly): AdmissionS
   constructionMatches(a: RetirementStartAssembly, scope: AdmissionScope): boolean;
   context(a: RetirementStartAssembly): OwnedStopContext; seal(a: RetirementStartAssembly): boolean;
   probe(a: RetirementStartAssembly): Readonly<Record<string, boolean | string>> | undefined }>;
+let probeStartAccess: Readonly<{
+  bind(a: RetirementStartAssembly, b: ProbeFrameBinding, issued: ProbeFrameBinding, script: string): boolean;
+  matches(a: RetirementStartAssembly, b: ProbeFrameBinding): boolean;
+  check(a: RetirementStartAssembly): ReturnType<RetirementStartAssembly['prepare']>;
+  legacy(a: RetirementStartAssembly): ReturnType<RetirementStartAssembly['prepare']>;
+  inspect(a: RetirementStartAssembly): Readonly<{ bindingRetained: boolean; bindingAttempted: boolean;
+    wrapperCalls: number; generationBodyCalls: number; frameExits: number; frame: string; starts: number; claim: string }>;
+}>;
 class RetirementStartAssembly {
   readonly #gateSeed: GateConstructionSeed | undefined;
+  #probeBinding: ProbeFrameBinding | undefined; #probeIssuedBinding: ProbeFrameBinding | undefined;
+  #probeCells: ProbeCellBundle | undefined; #probeBindStarted = false;
+  #wrapperCalls = 0; #generationBodyCalls = 0;
   readonly #owner = Object.freeze({});
   readonly #binding: PendingSourceBinding;
   readonly #pin: RetirementBindingPin;
@@ -2276,6 +2287,20 @@ class RetirementStartAssembly {
   #first: PendingBindingReason = 'none';
   #attempt: 'not_started' | 'running' | 'binding_rejected' = 'not_started';
   static {
+    probeStartAccess = Object.freeze({
+      bind(a: RetirementStartAssembly, b: ProbeFrameBinding, issued: ProbeFrameBinding, script: string): boolean {
+        if (a.#probeBindStarted) return false;
+        a.#probeBindStarted = true; a.#probeBinding = b; a.#probeIssuedBinding = issued;
+        a.#probeCells = script === 'start_cells_copy' ? Object.freeze({ ...b.cells }) : b.cells;
+        return a.probeMatches(b);
+      },
+      matches: (a: RetirementStartAssembly, b: ProbeFrameBinding) => a.probeMatches(b),
+      check: (a: RetirementStartAssembly) => a.frameBoundary('probe_closed'),
+      legacy: (a: RetirementStartAssembly) => a.prepare(),
+      inspect: (a: RetirementStartAssembly) => Object.freeze({ bindingRetained: !!a.#probeBinding, bindingAttempted: a.#probeBindStarted,
+        wrapperCalls: a.#wrapperCalls, generationBodyCalls: a.#generationBodyCalls, frameExits: a.#frameExits,
+        frame: a.#frame ? 'active' : 'inactive', starts: a.#starts, claim: a.#claim.spent ? 'spent' : 'unused' }),
+    });
     captureStartAccess = Object.freeze({
       seedMatches: (a: RetirementStartAssembly, seed: GateConstructionSeed) => a.#gateSeed === seed && bindingGateSeedMatches(a.#binding, seed),
       constructionMatches(a: RetirementStartAssembly, s: AdmissionScope): boolean {
@@ -2321,6 +2346,19 @@ class RetirementStartAssembly {
     if (this.#frameUnconfirmed) return this.reply(false, 'frame_unconfirmed');
     if (this.#frame) return this.reply(false, 'preparation_in_progress');
     if (this.#prepared || this.#requested || this.#first !== 'none') return this.reply(false, 'preparation_rejected');
+    return this.frameBoundary('legacy_generation');
+  }
+  private probeMatches(b: ProbeFrameBinding): boolean {
+    return b === this.#probeBinding && b === this.#probeIssuedBinding && b.cells === this.#probeCells
+      && b.target.start === this && b.seed === this.#gateSeed && b.seed.gate === b.gate
+      && b.owner === this.#owner && b.scope === b.target.scope && b.epoch === b.target.epoch && b.packet === b.target.packet
+      && b.pin.scope === b.scope && b.gate.matches(b.pin) && captureStartAccess.constructionMatches(this, b.scope)
+      && b.draft.target === b.target && b.draft.pin === b.pin && b.entry === b.draft.entry && b.exit === b.draft.exit;
+  }
+  private frameBoundary(route: 'legacy_generation' | 'probe_closed') {
+    this.#wrapperCalls++;
+    // The same wrapper is reached, but neither a seeded start nor the probe route can start any body in stage A.
+    if (this.#gateSeed || route === 'probe_closed') return this.reply(false, 'blocked_frame_execution');
     this.#frame = true;
     try { this.generationFrame(); }
     catch { retirementBindingAccess.failFrame(this.#binding); this.syncFirst(); this.request(); }
@@ -2338,6 +2376,7 @@ class RetirementStartAssembly {
     if (this.#first === 'none' && first !== 'none') this.#first = first;
   }
   private generationFrame(): void {
+    this.#generationBodyCalls++;
     if (this.scenario === 'reenter_prepare') this.#prepareReentry = this.prepare().disposition;
     const result = this.#binding.prepare(); this.#prepared = result.ok; this.syncFirst();
     if (this.scenario === 'throw_in_frame') throw new Error('synthetic_private_frame_exception');
@@ -2696,6 +2735,18 @@ interface CanonicalGatePin extends AdmissionScope { readonly [CANONICAL_GATE_PIN
   readonly gate: object; readonly scope: AdmissionScope; readonly epoch: object }
 interface NonExecutingFrameDraft { readonly [CANONICAL_FRAME_DRAFT]: true; readonly kind: 'probe_only'; readonly executable: false;
   readonly gate: object; readonly pin: CanonicalGatePin; readonly target: CanonicalConstructionTarget; readonly entry: object; readonly exit: object }
+const PROBE_CELLS: unique symbol = Symbol('probe-frame-cells');
+const PROBE_BINDING: unique symbol = Symbol('probe-frame-binding');
+interface ProbeUseCell { state: 'unused'; attemptUsed: false }
+interface ProbeGrantCell { stage: 'empty'; current: undefined; issued: undefined; rejected: undefined; unresolved: false }
+interface ProbeBodyCell { state: 'not_started'; outcome: 'none' }
+interface ProbeExitCell { stage: 'empty'; candidate: undefined; issued: undefined; accepted: undefined; revoked: false }
+interface ProbeDiagnosticCell { first: 'none'; frameFirst: 'none'; producerFirst: 'none'; probeFirst: 'none' }
+interface ProbeCellBundle { readonly [PROBE_CELLS]: true; readonly owner: object; readonly use: ProbeUseCell; readonly frame: object;
+  readonly grant: ProbeGrantCell; readonly body: ProbeBodyCell; readonly exit: ProbeExitCell; readonly diagnostic: ProbeDiagnosticCell }
+interface ProbeFrameBinding { readonly [PROBE_BINDING]: true; readonly seed: GateConstructionSeed; readonly target: CanonicalConstructionTarget;
+  readonly gate: CanonicalDraftGate; readonly pin: CanonicalGatePin; readonly scope: AdmissionScope; readonly owner: object;
+  readonly epoch: object; readonly packet: object; readonly draft: NonExecutingFrameDraft; readonly entry: object; readonly exit: object; readonly cells: ProbeCellBundle }
 class CanonicalDraftGate {
   readonly origin = Object.freeze({});
   #scope: AdmissionScope | undefined; #epoch: object | undefined;
@@ -2730,9 +2781,15 @@ class CanonicalGateDraftRoot {
   #started = false; #frame = false; #closed = false; #ready = false;
   #fixed: Readonly<{ ok: boolean; disposition: string; first: string }> | undefined;
   #reentry: string | undefined; #closeInFrame: string | undefined;
-  constructor(private readonly script: string, admitted: boolean) {
+  readonly #probeSlots: { stage: SupplyConstructionStage; value: object | undefined }[];
+  readonly #probeOwner: object | undefined;
+  #issuedCells: ProbeCellBundle | undefined; #issuedFrameBinding: ProbeFrameBinding | undefined;
+  #probePhase = 0; #probeBoundary = 'none'; #bindRefusal: string | undefined;
+  constructor(private readonly script: string, admitted: boolean, private readonly probePreparation = false) {
     this.#failure = { first: admitted ? 'none' : 'input_rejected', phase: 0, boundary: 'none' };
     this.#slots = Array.from({ length: 37 }, () => ({ stage: 'not_started', value: undefined }));
+    this.#probeSlots = probePreparation ? Array.from({ length: 8 }, () => ({ stage: 'not_started', value: undefined })) : [];
+    this.#probeOwner = probePreparation ? Object.freeze({}) : undefined;
   }
   private reply(ok: boolean, disposition: string) { return Object.freeze({ ok, disposition, first: this.#failure.first }); }
   private fail(reason: string) {
@@ -2772,6 +2829,68 @@ class CanonicalGateDraftRoot {
     if (f === 'extra') return Object.freeze({ ...d, extra: true });
     return d;
   }
+  private probePoint(n: number, boundary: string) {
+    this.#probePhase = n; this.#probeBoundary = boundary;
+    if (this.script === `cell_${boundary}_${n}`) throw Error('private_probe_cell_fault');
+  }
+  private probeMint<T extends object>(n: number, operation: () => T): T {
+    this.probePoint(n, 'before'); const cell = this.#probeSlots[n - 1];
+    cell.stage = 'attempting'; this.probePoint(n, 'attempt');
+    const value = operation(); cell.value = value; cell.stage = 'provisional'; this.probePoint(n, 'after');
+    cell.stage = 'confirmed'; this.probePoint(n, 'done'); return value;
+  }
+  private prepareProbeCells() {
+    const use = this.probeMint(1, (): ProbeUseCell => ({ state: 'unused', attemptUsed: false }));
+    const frame = this.probeMint(2, () => Object.freeze({}));
+    const grant = this.probeMint(3, (): ProbeGrantCell => ({ stage: 'empty', current: undefined, issued: undefined, rejected: undefined, unresolved: false }));
+    const body = this.probeMint(4, (): ProbeBodyCell => ({ state: 'not_started', outcome: 'none' }));
+    const exit = this.probeMint(5, (): ProbeExitCell => ({ stage: 'empty', candidate: undefined, issued: undefined, accepted: undefined, revoked: false }));
+    const diagnostic = this.probeMint(6, (): ProbeDiagnosticCell => ({ first: 'none', frameFirst: 'none', producerFirst: 'none', probeFirst: 'none' }));
+    this.probeMint(7, () => {
+      const raw: ProbeCellBundle = Object.freeze({ [PROBE_CELLS]: true as const, owner: this.#probeOwner!, use, frame, grant, body, exit, diagnostic });
+      const f = this.script.startsWith('cells_') ? this.script.slice(6) : '';
+      const value = f === 'brand' ? Object.freeze({ ...raw, [PROBE_CELLS]: false }) as unknown as ProbeCellBundle
+        : f === 'extra' ? Object.freeze({ ...raw, extra: true })
+          : ['owner', 'use', 'frame', 'grant', 'body', 'exit', 'diagnostic'].includes(f)
+            ? Object.freeze({ ...raw, [f]: Object.freeze({}) }) as ProbeCellBundle : raw;
+      this.#issuedCells = value; return f === 'copy' ? Object.freeze({ ...value }) : value;
+    });
+    this.probePoint(7, 'check');
+    return this.probeCellsMatch();
+  }
+  private probeCellsMatch(): boolean {
+    const c = this.#probeSlots[6]?.value as ProbeCellBundle | undefined, s = this.#probeSlots;
+    return !!c && c === this.#issuedCells && Reflect.ownKeys(c).length === 8 && c[PROBE_CELLS] === true && c.owner === this.#probeOwner
+      && c.use === s[0].value && c.frame === s[1].value && c.grant === s[2].value && c.body === s[3].value && c.exit === s[4].value && c.diagnostic === s[5].value;
+  }
+  private prepareProbeBinding(seed: GateConstructionSeed, target: CanonicalConstructionTarget, pin: CanonicalGatePin, draft: NonExecutingFrameDraft) {
+    const value = this.probeMint(8, () => {
+      const raw: ProbeFrameBinding = Object.freeze({ [PROBE_BINDING]: true as const, seed, target, gate: seed.gate, pin, scope: target.scope,
+        owner: target.scope.owner, epoch: target.epoch, packet: target.packet, draft, entry: draft.entry, exit: draft.exit, cells: this.#issuedCells! });
+      const f = this.script.startsWith('frame_') ? this.script.slice(6) : '';
+      const b = f === 'brand' ? Object.freeze({ ...raw, [PROBE_BINDING]: false }) as unknown as ProbeFrameBinding
+        : f === 'extra' ? Object.freeze({ ...raw, extra: true })
+          : ['seed', 'target', 'gate', 'pin', 'scope', 'owner', 'epoch', 'packet', 'draft', 'entry', 'exit', 'cells'].includes(f)
+            ? Object.freeze({ ...raw, [f]: Object.freeze({}) }) as ProbeFrameBinding : raw;
+      this.#issuedFrameBinding = b; return f === 'copy' ? Object.freeze({ ...b }) : b;
+    });
+    this.probePoint(8, 'check');
+    if (!this.probeBindingMatch()) return false;
+    if (!probeStartAccess.bind(target.start, value, this.#issuedFrameBinding!, this.script)) return false;
+    if (this.script === 'duplicate_frame_binding') this.#bindRefusal = probeStartAccess.bind(target.start, value, this.#issuedFrameBinding!, this.script) ? 'not_refused' : 'duplicate_binding';
+    if (this.script === 'reenter_frame_preparation') this.#reentry = this.prepare().disposition;
+    this.probePoint(8, 'post');
+    return probeStartAccess.matches(target.start, value);
+  }
+  private probeBindingMatch(): boolean {
+    const b = this.#probeSlots[7]?.value as ProbeFrameBinding | undefined;
+    const seed = this.#slots[31].value as GateConstructionSeed, target = this.#slots[33].value as CanonicalConstructionTarget;
+    const pin = this.#slots[34].value, draft = this.#slots[35].value;
+    return !!b && b === this.#issuedFrameBinding && Reflect.ownKeys(b).length === 13 && b[PROBE_BINDING] === true && this.probeCellsMatch()
+      && b.seed === seed && b.target === target && b.gate === seed.gate && b.pin === pin && b.scope === target.scope
+      && b.owner === target.scope.owner && b.epoch === target.epoch && b.packet === target.packet && b.draft === draft
+      && b.entry === this.#entry && b.exit === this.#exit && b.cells === this.#issuedCells;
+  }
   prepare() {
     if (this.#fixed) return this.#fixed;
     if (this.#frame) return this.reply(false, 'construction_in_progress');
@@ -2786,6 +2905,7 @@ class CanonicalGateDraftRoot {
       this.mint(4, () => SUPPLY_FIELDS);
       for (let i = 0; i < 25; i++) this.mint(i + 5, () => Object.freeze({ cell: i + 1, field: SUPPLY_FIELDS[i], reference: undefined }));
       this.mint(30, () => Object.freeze({ kind: 'admission_use_slot', state: 'unused' }));
+      if (this.probePreparation && !this.prepareProbeCells()) return this.fail('binding_mismatch');
       const gate = this.mint(31, () => new CanonicalDraftGate());
       const seed = this.mint(32, () => {
         const raw = Object.freeze({ [CANONICAL_GATE_SEED]: true as const, gate, origin: this.#seedOrigin });
@@ -2817,6 +2937,7 @@ class CanonicalGateDraftRoot {
       this.mint(37, () => Object.freeze({ state: 'unused', draft }));
       this.point(37, 'post');
       if (!this.seedMatches() || !issuerConstructionAccess.matches(issuer, target) || !this.draftMatches()) return this.fail('binding_mismatch');
+      if (this.probePreparation && !this.prepareProbeBinding(seed, target, pin, draft)) return this.fail('binding_mismatch');
       (this.#slots[1].value as { state: string }).state = 'bound'; this.#ready = true; return this.reply(true, 'draft_held');
     } catch { return this.fail('construction_unconfirmed'); }
     finally { this.#frame = false; }
@@ -2826,6 +2947,13 @@ class CanonicalGateDraftRoot {
     if (!this.#ready) return this.reply(false, this.#closed ? 'closed' : 'not_ready');
     if (!this.seedMatches() || !this.draftMatches()) return this.fail('binding_mismatch');
     return this.reply(false, 'blocked_frame_execution');
+  }
+  checkFramePreparation(legacy = false) {
+    if (this.#fixed) return this.#fixed;
+    if (!this.#ready || this.#closed) return this.reply(false, 'not_ready');
+    const b = this.#probeSlots[7]?.value as ProbeFrameBinding;
+    if (!this.probeBindingMatch() || !this.seedMatches() || !this.draftMatches() || !probeStartAccess.matches(b.target.start, b)) return this.fail('binding_mismatch');
+    return legacy ? probeStartAccess.legacy(b.target.start) : probeStartAccess.check(b.target.start);
   }
   close() {
     if (this.#fixed) return this.#fixed;
@@ -2840,6 +2968,14 @@ class CanonicalGateDraftRoot {
       stages: Object.freeze(this.#slots.map(s => s.stage)), frame: this.#frame ? 'active' : 'inactive', reentry: this.#reentry,
       closeInFrame: this.#closeInFrame, gate: gate?.inspect(), issuer: issuer?.inspect(), seedRetained: !!this.#issuedSeed, draftRetained: !!this.#issuedDraft,
       continuationUse: this.#slots[36].value ? 'unused' : 'not_created', frameExecutions: 0, grantIssues: 0,
+      ...(this.probePreparation ? { probe: Object.freeze({ phase: this.#probePhase, boundary: this.#probeBoundary,
+        stages: Object.freeze(this.#probeSlots.map(s => s.stage)), retained: this.#probeSlots.filter(s => !!s.value).length,
+        bindingRetained: !!this.#issuedFrameBinding, bindRefusal: this.#bindRefusal,
+        use: this.#probeSlots[0].value ? Object.freeze({ ...this.#probeSlots[0].value }) : undefined,
+        grant: this.#probeSlots[2].value ? Object.freeze({ ...this.#probeSlots[2].value }) : undefined,
+        body: this.#probeSlots[3].value ? Object.freeze({ ...this.#probeSlots[3].value }) : undefined,
+        exit: this.#probeSlots[4].value ? Object.freeze({ ...this.#probeSlots[4].value }) : undefined,
+        start: issuer ? probeStartAccess.inspect(issuerConstructionAccess.target(issuer).start) : undefined }) } : {}),
       realWriterCalls: 0, journalSupply: 'not_connected', admissionConsumptions: 0, packetObjects: 0, closedEvidence: 'not_issued', proofIssuance: 'closed' });
   }
 }
@@ -2855,6 +2991,20 @@ export function createCanonicalGateDraftFake(...args: readonly unknown[]) {
   const a = new CanonicalGateDraftRoot(admitted ? s as string : 'normal', admitted);
   return Object.freeze({ prepare: (...xs: readonly unknown[]) => xs.length ? a.rejectInput() : a.prepare(),
     check: (...xs: readonly unknown[]) => xs.length ? a.rejectInput() : a.check(),
+    close: (...xs: readonly unknown[]) => xs.length ? a.rejectInput() : a.close(), inspect: () => a.inspect() });
+}
+
+export function createProbeFramePreparationFake(...args: readonly unknown[]) {
+  const script = args.length ? args[0] : 'normal';
+  const scripts = ['normal', 'duplicate_frame_binding', 'reenter_frame_preparation', 'start_cells_copy',
+    ...['copy', 'brand', 'extra', 'owner', 'use', 'frame', 'grant', 'body', 'exit', 'diagnostic'].map(f => 'cells_' + f),
+    ...['copy', 'brand', 'extra', 'seed', 'target', 'gate', 'pin', 'scope', 'owner', 'epoch', 'packet', 'draft', 'entry', 'exit', 'cells'].map(f => 'frame_' + f)];
+  const admitted = args.length <= 1 && typeof script === 'string' && (scripts.includes(script)
+    || /^cell_(before|attempt|after|done)_([1-8])$/.test(script) || ['cell_check_7', 'cell_check_8', 'cell_post_8'].includes(script));
+  const a = new CanonicalGateDraftRoot(admitted ? script as string : 'normal', admitted, true);
+  return Object.freeze({ prepare: (...xs: readonly unknown[]) => xs.length ? a.rejectInput() : a.prepare(),
+    check: (...xs: readonly unknown[]) => xs.length ? a.rejectInput() : a.checkFramePreparation(),
+    checkLegacy: (...xs: readonly unknown[]) => xs.length ? a.rejectInput() : a.checkFramePreparation(true),
     close: (...xs: readonly unknown[]) => xs.length ? a.rejectInput() : a.close(), inspect: () => a.inspect() });
 }
 

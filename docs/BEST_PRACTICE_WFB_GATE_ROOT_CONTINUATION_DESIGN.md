@@ -2,6 +2,8 @@
 
 次段階の接続差分（2026-11-09、MDのみ）: [同startのprobe-only frame・一度限りenter／確認済みexit draft-0.1](BEST_PRACTICE_WFB_PROBE_FRAME_ENTER_EXIT_DESIGN.md)で、旧bodyを保つwrapper共有、別private利用cellとgrant保持、退出確定点、失敗後も残る退出責務を具体化した。非実行draft自体は権限化せず、request合流・実writer・Journal供給は未接続とする。
 
+限定実装(A)（2026-11-10）: 上記差分設計§11に、同start wrapperの最小抽出と先行private cell／同bindingを実装した。新seed付き経路はframe開始前に拒否し、body・grant・退出候補を生成しない。[検証記録](E2E_BEST_PRACTICE_WFB_PROBE_FRAME_PREPARATION_2026-11-10.md)。旧合成経路は維持し、enter／exit・request合流・Journal供給の保証へ昇格させない。
+
 Version: draft-0.2 / Date: 2026-11-09 / 読み取り基準HEAD: `caa6254`（限定実装レビュー修正基準HEAD: `fb02aab`）。
 
 draft-0.2のレビュー修正：構築frame内closeの返答（`deferred_frame`）が試験されず、frame内deferを外す変異が最終状態の一致で生存した。§9で`closeInFrame`診断により返答を固定し、到達しない二重防御を明記した。
