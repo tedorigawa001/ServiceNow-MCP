@@ -18,6 +18,8 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 ### Changed
 
+- WF-B adds a package-excluded canonical gate construction root: prior gate capture, private same-seed binding through the existing issuer/start/binding, one-shot owner pin binding, and retention of a non-executable continuation draft. Independent 37-stage failure-prefix tests and compiled identity controls reject mixing before downstream guards can mask it. No frame runner, grant issuance, real writer, Journal supply or formal issuance is connected; legacy factories remain compatible.
+
 - WF-B adds an isolated, import-free WriterGate/pin/grant model with one-shot owner binding and frame-grant attempts, fixed reentry refusals, deferred stop, retained partial grants and separate producer/gate diagnostics. Independent event-word and failure-prefix tests plus twenty compiled identity controls exercise the pure state machine. Model-only closure issues no closed evidence; real frames, leaf writers, Journal supply, admission use, packet generation and formal issuance remain disconnected.
 
 - WF-B extracts a development-only values kernel for the fixed holder layout and finite construction-stage relation, preserving the independent synthetic root's brands and ledger. A separate lexical construction root now preallocates empty holders before constructing the existing CaptureAdmissionAssembly and its actual start, then privately binds its canonical scope/epoch/packet descriptor once. Partial-construction prefixes, identity mixing, reentry and retained failures have independent synthetic and compiled controls. The issuer remains unused; writer stop, Journal supply, supply/admission consumption, packet generation and formal issuance stay disconnected.

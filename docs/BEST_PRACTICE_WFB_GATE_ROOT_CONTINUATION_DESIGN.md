@@ -2,9 +2,9 @@
 
 Version: draft-0.1 / Date: 2026-11-09 / 読み取り基準HEAD: `caa6254`。
 
-Status: **MDのみ。正規gate生成・同owner結合・frame継続供給は未実装。** 親は[WriterGate詳細設計](BEST_PRACTICE_WFB_WRITER_GATE_FRAME_DESIGN.md)と[同start接続差分](BEST_PRACTICE_WFB_SAME_START_SUPPLY_STOP_DESIGN.md)。現行SS03はreadonly descriptor結合、gate保持slotは空。純粋fakeは別brand／別ownerのモデルであり、[その検証記録](E2E_BEST_PRACTICE_WFB_WRITER_GATE_FAKE_2026-11-09.md)を正規経路の停止保証へ昇格させない。
+Status: **当初draft-0.1の設計に対し、正規gate先行生成・SS03同owner結合・非実行draft保持のみ合成依存限定で実装。** 実装基準HEAD `50a7d6f`、範囲と検証は§9と[検証記録](E2E_BEST_PRACTICE_WFB_CANONICAL_GATE_DRAFT_2026-11-09.md)。親は[WriterGate詳細設計](BEST_PRACTICE_WFB_WRITER_GATE_FRAME_DESIGN.md)と[同start接続差分](BEST_PRACTICE_WFB_SAME_START_SUPPLY_STOP_DESIGN.md)。旧SS03入口のreadonly descriptor結合は維持する。純粋fakeは別brand／別ownerのモデルであり、[その検証記録](E2E_BEST_PRACTICE_WFB_WRITER_GATE_FAKE_2026-11-09.md)を正規経路の停止保証へ昇格させない。
 
-正式発行口・C実行入口閉鎖、全体受付無効、Unknown、VM／監視／telemetry調査保留を維持する。今回はMDだけを更新し、実装・ビルド・試験・実接続・実通信・設定変更・Pushを行わない。実writer停止・Journal供給／封印・admission消費・packet生成・値capture・field clear・証拠・root終端も接続しない。以下の継続・型は内部設計案で、OS操作や正式permitではない。
+正式発行口・C実行入口閉鎖、全体受付無効、Unknown、VM／監視／telemetry調査保留を維持する。文書作成時はMDのみ、今回の実装・ローカル検証は§9の限定範囲とする。実接続・実通信・設定変更・Pushは行わない。frame実行・実writer停止・Journal供給／封印・admission消費・packet生成・値capture・field clear・証拠・root終端も接続しない。以下の継続・型はOS操作や正式permitではない。
 
 ## 1 現行との差分・共通化境界
 
@@ -90,7 +90,7 @@ GateBindingPinはpayload-freeだが、private継続保持slotは同start／issue
 
 結果返却・通知の故障でも保持slotを消去しない。producer／construction／binding／gate／frameのfirstと、重複refusal・未確認phaseは分離して固定する。公開診断は値だけで、origin・epoch実値、実source／start／grant参照、本文・raw例外を出さない。
 
-## 7 独立合成受入条件（未実施）
+## 7 独立合成受入条件（段階別の実施範囲は§9）
 
 | ID | 狙う保証・拒否点 |
 |---|---|
@@ -115,6 +115,18 @@ oracleは本体のcounter・state表・descriptor builderから期待値をimpor
 
 実確保layout・unit係数・guard・bootstrap実E／S、constructor部分確保の全参照捕捉、escaped権限がないことの実証、既存requestと全writerへの影響はUnknown。構造枠や純粋fakeの成功を全体work受付に使用しない。
 
-実装分割は(1)正規gateの先行生成・SS03 bindと非実行draft保持、(2)同start wrapperのprobe-only enter／exitとrequest合流、(3)全leaf／WG01〜WG08停止coverage、(4)canonical generationの検証とclosed確定、その後にJournal供給とする。(1)では(2)を起動せず、(2)でも実生成bodyを開かない。今回の承認は文書化だけで、いずれの実装も行わない。
+実装分割は(1)正規gateの先行生成・SS03 bindと非実行draft保持、(2)同start wrapperのprobe-only enter／exitとrequest合流、(3)全leaf／WG01〜WG08停止coverage、(4)canonical generationの検証とclosed確定、その後にJournal供給とする。(1)では(2)を起動せず、(2)でも実生成bodyを開かない。文書作成時の承認は文書化だけ。その後の限定実装(1)は§9に記録する。
 
 今回の参照は`caa6254`の純粋fake修正、正規先行構築、既存start／issuerと親設計。新MDと親2文書のみを更新し、ビルド・試験・梱包は未実施。3文書のローカルリンク14件、RC00〜RC05の6段階、GC01〜GC12の12条件の重複・欠落なしと差分空白を確認した。文書整合の確認であり、未実装経路の試験成功ではない。未コミット、Pushなし。
+
+## 9 限定実装：先行gate・SS03結合・非実行draft保持
+
+上記末尾は文書作成時の記録である。`50a7d6f`からの今回の変更は`tests/review/fixtures/snapshot-read-composition-fake.ts`の同lexical rootに限り、runtime配布物へ入口を追加しない。新factory `createCanonicalGateDraftFake`は固定scriptだけを受け、値診断だけを返す。旧factoryの引数・exportは維持し、compositionの試験用export一覧だけに新factoryを追加する。
+
+固定37段階は、1先行結果／grant／退出の空shell、2供給slot、3packet空holder、4固定field表、5〜29空cell holder、30未使用admission slot、31正規gate、32private seed、33同既存issuer／start／binding、34同target、35pinの一度限り発行／bind、36非実行draft、37未使用継続slotの順序。各段階のbefore／attempt／after／doneを記録し、後二者だけ捕捉済みと数える。constructor内部の未捕捉部分生成や実OOMまで確認済みとはしない。
+
+同seed参照を既存issuer・start・bindingのprivate fieldへ構築時に保持する。新しいscopeやepochで補完せず、既存private target検査で同startのowner／construction／retention／sourceSlot／未消費claimとissuer unusedを照合してからpinを作る。scopeのfresh wrapperと正規参照の区別は維持する。seed・pin・draftは別brand、current／issued同参照・固定field数も検査し、外部登録口や純粋fakeからの昇格口を設けない。
+
+draftは固定`probe_only`／`executable=false`とentry／exit originだけを保持し、関数fieldもframe runnerもない。継続slotは未使用のまま。構築中再入はrefusal、closeは構築区間のdeferred診断として扱い、既存startのprepare／request／closeは呼ばない。late close／失敗後も捕捉prefixを消さず固定拒否を返す。診断の`ready`は構築post到達の履歴であり、close後の実行許可やgate閉鎖証拠ではない。
+
+GC01〜05の構築／結合部分、GC10〜12の非公開・互換・未接続部分を検証した。GC06〜09の実frame／grant／request合流と全writer停止coverageは未実施。37×4の独立prefix対照、29単独identity compiled対照と早期target検査の負の対照、関連1,166試験・build・strict検査・梱包確認の結果は[検証記録](E2E_BEST_PRACTICE_WFB_CANONICAL_GATE_DRAFT_2026-11-09.md)に記録する。構造上界は全体work受付ではなく、実費目・実E／S・native layout・cleanup／停止保証はUnknownのまま。

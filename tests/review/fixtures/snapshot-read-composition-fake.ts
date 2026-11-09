@@ -1984,7 +1984,9 @@ let bindingJournalAccess: Readonly<{
   journal(a: PendingSourceBinding): AbsenceJournal;
   source(a: PendingSourceBinding): CanonicalSupplyAssembly | undefined;
 }>;
+let bindingGateSeedMatches: (a: PendingSourceBinding, seed: GateConstructionSeed) => boolean;
 class PendingSourceBinding {
+  readonly #gateSeed: GateConstructionSeed | undefined;
   readonly #journal: AbsenceJournal;
   readonly #retention: PendingRetentionRoot;
   readonly #sourceSlot: PendingSourceSlot = { origin: Object.freeze({}), stage: 'empty', value: undefined, identity: undefined };
@@ -2005,6 +2007,7 @@ class PendingSourceBinding {
   #attempts = 0; #bound = false; #closed = false;
   #first: PendingBindingReason = 'none';
   static {
+    bindingGateSeedMatches = (a, seed) => a.#gateSeed === seed;
     bindingJournalAccess = Object.freeze({ journal: (a: PendingSourceBinding) => a.#journal,
       source: (a: PendingSourceBinding) => a.#sourceSlot.value });
     retirementBindingAccess = Object.freeze({
@@ -2041,7 +2044,8 @@ class PendingSourceBinding {
     });
   }
   constructor(private readonly scenario: string, admitted: boolean,
-    private readonly journalScript: Readonly<{ bindingFault?: string; sourceFault?: string; sourceScenario?: string }> = {}) {
+    private readonly journalScript: Readonly<{ bindingFault?: string; sourceFault?: string; sourceScenario?: string }> = {}, gateSeed?: GateConstructionSeed) {
+    this.#gateSeed = gateSeed;
     this.#journal = new AbsenceJournal('binding', journalScript.bindingFault);
     this.#retention = new PendingRetentionRoot('normal', admitted);
   }
@@ -2247,10 +2251,12 @@ type RetirementStartDisposition = 'prepared' | 'preparation_rejected' | 'prepara
 interface AdmissionScope { readonly owner: object; readonly construction: object; readonly retention: object;
   readonly sourceSlot: object; readonly claim: object }
 let captureStartAccess: Readonly<{ scope(a: RetirementStartAssembly): AdmissionScope; ready(a: RetirementStartAssembly): boolean;
+  seedMatches(a: RetirementStartAssembly, seed: GateConstructionSeed): boolean;
   constructionMatches(a: RetirementStartAssembly, scope: AdmissionScope): boolean;
   context(a: RetirementStartAssembly): OwnedStopContext; seal(a: RetirementStartAssembly): boolean;
   probe(a: RetirementStartAssembly): Readonly<Record<string, boolean | string>> | undefined }>;
 class RetirementStartAssembly {
+  readonly #gateSeed: GateConstructionSeed | undefined;
   readonly #owner = Object.freeze({});
   readonly #binding: PendingSourceBinding;
   readonly #pin: RetirementBindingPin;
@@ -2271,6 +2277,7 @@ class RetirementStartAssembly {
   #attempt: 'not_started' | 'running' | 'binding_rejected' = 'not_started';
   static {
     captureStartAccess = Object.freeze({
+      seedMatches: (a: RetirementStartAssembly, seed: GateConstructionSeed) => a.#gateSeed === seed && bindingGateSeedMatches(a.#binding, seed),
       constructionMatches(a: RetirementStartAssembly, s: AdmissionScope): boolean {
         return Object.keys(s).length === 5 && s.owner === a.#owner && s.construction === a.#issuedPin.construction
           && s.retention === a.#issuedPin.retention && s.sourceSlot === a.#issuedPin.sourceSlot && s.claim === a.#issuedClaim.origin
@@ -2285,10 +2292,12 @@ class RetirementStartAssembly {
       probe(a: RetirementStartAssembly) { return retirementBindingAccess.probeRoot(a.#binding); },
     });
   }
-  constructor(private readonly scenario: string, admitted: boolean) {
+  constructor(private readonly scenario: string, admitted: boolean, gateSeed?: GateConstructionSeed) {
+    this.#gateSeed = scenario === 'start_seed_copy' && gateSeed ? Object.freeze({ ...gateSeed }) : gateSeed;
     this.#binding = new PendingSourceBinding(scenario === 'prepare_failure' ? 'after_bind_failure'
       : scenario === 'source_rejected' ? 'source_failure' : scenario === 'source_unknown' ? 'source_attempt_failure'
-        : scenario === 'control_unconfirmed' ? 'control_mint_unconfirmed' : 'normal', admitted);
+        : scenario === 'control_unconfirmed' ? 'control_mint_unconfirmed' : 'normal', admitted, {},
+      scenario === 'binding_seed_copy' && gateSeed ? Object.freeze({ ...gateSeed }) : gateSeed);
     const base = retirementBindingAccess.pin(this.#binding), foreign = Object.freeze({});
     // Field controls install the malformed pin as the issued pin itself (shared by #pin and the claim),
     // so the identity checks pass and only the private matches() field comparison can reject it.
@@ -2401,11 +2410,14 @@ interface CanonicalConstructionTarget { readonly start: RetirementStartAssembly;
 let issuerConstructionAccess: Readonly<{
   target(a: CaptureAdmissionAssembly): CanonicalConstructionTarget;
   matches(a: CaptureAdmissionAssembly, t: CanonicalConstructionTarget): boolean;
+  seedMatches(a: CaptureAdmissionAssembly, seed: GateConstructionSeed): boolean;
 }>;
 // Start-internal construction controls used only by the canonical supply construction root.
 const START_MIX_SCENARIOS: readonly string[] = Object.freeze(['start_owner_copy', 'start_claim_copy', 'start_pin_copy', 'start_claim_owner',
   'start_claim_pin', 'start_claim_spent', 'start_pin_construction']);
+const GATE_SEED_MIX_SCENARIOS: readonly string[] = Object.freeze(['issuer_seed_copy', 'start_seed_copy', 'binding_seed_copy']);
 class CaptureAdmissionAssembly {
+  readonly #gateSeed: GateConstructionSeed | undefined;
   readonly #start: RetirementStartAssembly;
   readonly #scope: AdmissionScope;
   readonly #epoch = Object.freeze({}); readonly #packetOrigin = Object.freeze({});
@@ -2422,14 +2434,16 @@ class CaptureAdmissionAssembly {
   #reentry: string | undefined;
   static {
     issuerConstructionAccess = Object.freeze({
+      seedMatches: (a: CaptureAdmissionAssembly, seed: GateConstructionSeed) => a.#gateSeed === seed && captureStartAccess.seedMatches(a.#start, seed),
       target: (a: CaptureAdmissionAssembly) => Object.freeze({ start: a.#start, scope: a.#scope, epoch: a.#epoch, packet: a.#packetOrigin }),
       matches: (a: CaptureAdmissionAssembly, t: CanonicalConstructionTarget) => t.start === a.#start && t.scope === a.#scope
         && t.epoch === a.#epoch && t.packet === a.#packetOrigin && a.#state === 'unused' && !a.#failure
         && a.scopeMatches(t.scope) && captureStartAccess.constructionMatches(a.#start, t.scope),
     });
   }
-  constructor(private readonly scenario: string, admitted: boolean) {
-    this.#start = new RetirementStartAssembly(START_MIX_SCENARIOS.includes(scenario) ? scenario.slice('start_'.length) : ['source_unknown', 'frame_exit_failure', 'source_rejected', 'prepare_failure', 'control_unconfirmed'].includes(scenario) ? scenario : 'normal', admitted);
+  constructor(private readonly scenario: string, admitted: boolean, gateSeed?: GateConstructionSeed) {
+    this.#gateSeed = scenario === 'issuer_seed_copy' && gateSeed ? Object.freeze({ ...gateSeed }) : gateSeed;
+    this.#start = new RetirementStartAssembly(GATE_SEED_MIX_SCENARIOS.includes(scenario) ? scenario : START_MIX_SCENARIOS.includes(scenario) ? scenario.slice('start_'.length) : ['source_unknown', 'frame_exit_failure', 'source_rejected', 'prepare_failure', 'control_unconfirmed'].includes(scenario) ? scenario : 'normal', admitted, gateSeed);
     const base = captureStartAccess.scope(this.#start);
     this.#scope = scenario.startsWith('scope_') ? Object.freeze({ ...base, [scenario.slice(6)]: Object.freeze({}) }) : base;
     if (!admitted) this.reject('input_rejected');
@@ -2669,6 +2683,176 @@ export function createCanonicalSupplyConstructionFake(...args: readonly unknown[
     ...START_MIX_SCENARIOS, 'issuer_rejected'];
   const valid = args.length <= 1 && typeof s === 'string' && (scripts.includes(s) || /^(before|attempt|after|done)_([1-9]|[12][0-9]|3[0-5])$/.test(s));
   const a = new CanonicalSupplyConstruction(valid ? s as string : 'normal', valid);
+  return Object.freeze({ prepare: (...xs: readonly unknown[]) => xs.length ? a.rejectInput() : a.prepare(),
+    check: (...xs: readonly unknown[]) => xs.length ? a.rejectInput() : a.check(),
+    close: (...xs: readonly unknown[]) => xs.length ? a.rejectInput() : a.close(), inspect: () => a.inspect() });
+}
+
+const CANONICAL_GATE_PIN: unique symbol = Symbol('canonical-gate-pin');
+const CANONICAL_GATE_SEED: unique symbol = Symbol('canonical-gate-seed');
+const CANONICAL_FRAME_DRAFT: unique symbol = Symbol('canonical-frame-draft');
+interface GateConstructionSeed { readonly [CANONICAL_GATE_SEED]: true; readonly origin: object; readonly gate: CanonicalDraftGate }
+interface CanonicalGatePin extends AdmissionScope { readonly [CANONICAL_GATE_PIN]: true;
+  readonly gate: object; readonly scope: AdmissionScope; readonly epoch: object }
+interface NonExecutingFrameDraft { readonly [CANONICAL_FRAME_DRAFT]: true; readonly kind: 'probe_only'; readonly executable: false;
+  readonly gate: object; readonly pin: CanonicalGatePin; readonly target: CanonicalConstructionTarget; readonly entry: object; readonly exit: object }
+class CanonicalDraftGate {
+  readonly origin = Object.freeze({});
+  #scope: AdmissionScope | undefined; #epoch: object | undefined;
+  #pin: CanonicalGatePin | undefined; #issued: CanonicalGatePin | undefined;
+  #bound = false;
+  issue(s: AdmissionScope, epoch: object, script: string): CanonicalGatePin {
+    if (this.#scope) throw Error('duplicate_canonical_pin');
+    this.#scope = s; this.#epoch = epoch;
+    const raw = Object.freeze({ [CANONICAL_GATE_PIN]: true as const, gate: this.origin, scope: s, epoch, ...s });
+    const field = script.startsWith('pin_') ? script.slice(4) : '';
+    const candidate = ['gate', 'scope', 'owner', 'construction', 'retention', 'sourceSlot', 'claim', 'epoch'].includes(field)
+      ? Object.freeze({ ...raw, [field]: Object.freeze({}) }) as CanonicalGatePin
+      : field === 'brand' ? Object.freeze({ ...raw, [CANONICAL_GATE_PIN]: false }) as unknown as CanonicalGatePin
+        : field === 'extra' ? Object.freeze({ ...raw, extra: true }) : raw;
+    this.#issued = candidate; this.#pin = field === 'copy' ? Object.freeze({ ...candidate }) : candidate;
+    return this.#pin;
+  }
+  matches(p: CanonicalGatePin): boolean {
+    const s = this.#scope;
+    return !!s && p === this.#pin && p === this.#issued && Reflect.ownKeys(p).length === 9 && p[CANONICAL_GATE_PIN] === true
+      && p.gate === this.origin && p.scope === s && p.owner === s.owner && p.construction === s.construction
+      && p.retention === s.retention && p.sourceSlot === s.sourceSlot && p.claim === s.claim && p.epoch === this.#epoch;
+  }
+  bind(p: CanonicalGatePin): boolean { if (this.#bound || !this.matches(p)) return false; this.#bound = true; return true; }
+  inspect() { return Object.freeze({ state: this.#bound ? 'open' : 'unbound', pinRetained: !!this.#issued, bound: this.#bound }); }
+}
+class CanonicalGateDraftRoot {
+  readonly #failure: { first: string; phase: number; boundary: string };
+  readonly #slots: { stage: SupplyConstructionStage; value: object | undefined }[];
+  readonly #seedOrigin = Object.freeze({}); readonly #entry = Object.freeze({}); readonly #exit = Object.freeze({});
+  #issuedSeed: GateConstructionSeed | undefined; #issuedDraft: NonExecutingFrameDraft | undefined;
+  #started = false; #frame = false; #closed = false; #ready = false;
+  #fixed: Readonly<{ ok: boolean; disposition: string; first: string }> | undefined;
+  #reentry: string | undefined;
+  constructor(private readonly script: string, admitted: boolean) {
+    this.#failure = { first: admitted ? 'none' : 'input_rejected', phase: 0, boundary: 'none' };
+    this.#slots = Array.from({ length: 37 }, () => ({ stage: 'not_started', value: undefined }));
+  }
+  private reply(ok: boolean, disposition: string) { return Object.freeze({ ok, disposition, first: this.#failure.first }); }
+  private fail(reason: string) {
+    if (this.#failure.first === 'none') this.#failure.first = reason;
+    return this.#fixed ??= this.reply(false, reason);
+  }
+  private point(n: number, boundary: string) {
+    this.#failure.phase = n; this.#failure.boundary = boundary;
+    if (this.script === `${boundary}_${n}`) throw Error('private_gate_draft_construction');
+  }
+  private mint<T extends object>(n: number, operation: () => T): T {
+    this.point(n, 'before'); const s = this.#slots[n - 1];
+    if (!supplyStageAllows(s.stage, 'attempting')) throw Error('construction_stage');
+    s.stage = 'attempting'; this.point(n, 'attempt');
+    const v = operation(); s.value = v; s.stage = 'provisional'; this.point(n, 'after');
+    s.stage = 'confirmed'; this.point(n, 'done'); return v;
+  }
+  private seedMatches(): boolean {
+    const gate = this.#slots[30].value, seed = this.#slots[31].value as GateConstructionSeed | undefined;
+    const issuer = this.#slots[32].value as CaptureAdmissionAssembly | undefined;
+    return !!seed && !!issuer && seed === this.#issuedSeed && Reflect.ownKeys(seed).length === 3 && seed[CANONICAL_GATE_SEED] === true
+      && seed.origin === this.#seedOrigin && seed.gate === gate && issuerConstructionAccess.seedMatches(issuer, seed);
+  }
+  private draftMatches(): boolean {
+    const g = this.#slots[30].value as CanonicalDraftGate, t = this.#slots[33].value as CanonicalConstructionTarget;
+    const pin = this.#slots[34].value as CanonicalGatePin, d = this.#slots[35].value as NonExecutingFrameDraft | undefined;
+    return !!d && d === this.#issuedDraft && Reflect.ownKeys(d).length === 8 && d[CANONICAL_FRAME_DRAFT] === true
+      && d.kind === 'probe_only' && d.executable === false && d.gate === g.origin && d.pin === pin
+      && d.target === t && d.entry === this.#entry && d.exit === this.#exit && g.matches(pin);
+  }
+  private probeDraft(d: NonExecutingFrameDraft): NonExecutingFrameDraft {
+    const f = this.script.startsWith('draft_') ? this.script.slice(6) : '';
+    if (['gate', 'pin', 'target', 'entry', 'exit'].includes(f)) return Object.freeze({ ...d, [f]: Object.freeze({}) }) as NonExecutingFrameDraft;
+    if (f === 'brand') return Object.freeze({ ...d, [CANONICAL_FRAME_DRAFT]: false }) as unknown as NonExecutingFrameDraft;
+    if (f === 'kind') return Object.freeze({ ...d, kind: 'canonical_generation' }) as unknown as NonExecutingFrameDraft;
+    if (f === 'executable') return Object.freeze({ ...d, executable: true }) as unknown as NonExecutingFrameDraft;
+    if (f === 'extra') return Object.freeze({ ...d, extra: true });
+    return d;
+  }
+  prepare() {
+    if (this.#fixed) return this.#fixed;
+    if (this.#frame) return this.reply(false, 'construction_in_progress');
+    if (this.#failure.first !== 'none') return this.fail(this.#failure.first);
+    if (this.#closed) return this.reply(false, 'closed');
+    if (this.#started) return this.reply(false, 'duplicate_preparation');
+    this.#started = true; this.#frame = true;
+    try {
+      this.mint(1, () => ({ result: undefined, grant: undefined, frameExit: undefined }));
+      this.mint(2, () => ({ kind: 'supply_slot', state: 'unbound' }));
+      this.mint(3, () => Object.freeze({ kind: 'packet_holder', reference: undefined }));
+      this.mint(4, () => SUPPLY_FIELDS);
+      for (let i = 0; i < 25; i++) this.mint(i + 5, () => Object.freeze({ cell: i + 1, field: SUPPLY_FIELDS[i], reference: undefined }));
+      this.mint(30, () => Object.freeze({ kind: 'admission_use_slot', state: 'unused' }));
+      const gate = this.mint(31, () => new CanonicalDraftGate());
+      const seed = this.mint(32, () => {
+        const raw = Object.freeze({ [CANONICAL_GATE_SEED]: true as const, gate, origin: this.#seedOrigin });
+        const f = this.script.startsWith('seed_') ? this.script.slice(5) : '';
+        const s = f === 'gate' || f === 'origin' ? Object.freeze({ ...raw, [f]: Object.freeze({}) }) as GateConstructionSeed
+          : f === 'brand' ? Object.freeze({ ...raw, [CANONICAL_GATE_SEED]: false }) as unknown as GateConstructionSeed
+            : f === 'extra' ? Object.freeze({ ...raw, extra: true }) : raw;
+        this.#issuedSeed = s; return f === 'copy' ? Object.freeze({ ...s }) : s;
+      });
+      if (this.script === 'reenter') this.#reentry = this.prepare().disposition;
+      if (this.script === 'close_in_frame') this.close();
+      if (this.#closed) return this.fail('closed');
+      const issuer = this.mint(33, () => new CaptureAdmissionAssembly(START_MIX_SCENARIOS.includes(this.script) || GATE_SEED_MIX_SCENARIOS.includes(this.script) || this.script.startsWith('scope_') ? this.script : 'normal', this.script !== 'issuer_rejected', seed));
+      this.point(33, 'seed_check');
+      if (!this.seedMatches()) return this.fail('binding_mismatch');
+      const target = this.mint(34, () => issuerConstructionAccess.target(issuer));
+      this.point(34, 'target_check');
+      if (!issuerConstructionAccess.matches(issuer, target)) return this.fail('binding_mismatch');
+      const pin = this.mint(35, () => gate.issue(target.scope, target.epoch, this.script));
+      this.point(35, 'pin_check');
+      if (!gate.bind(pin)) return this.fail('binding_mismatch');
+      const draft = this.mint(36, () => {
+        const d = this.probeDraft(Object.freeze({ [CANONICAL_FRAME_DRAFT]: true as const, kind: 'probe_only' as const, executable: false as const,
+          gate: gate.origin, pin, target, entry: this.#entry, exit: this.#exit }));
+        this.#issuedDraft = d; return this.script === 'draft_copy' ? Object.freeze({ ...d }) : d;
+      });
+      this.point(36, 'draft_check');
+      if (!this.draftMatches()) return this.fail('binding_mismatch');
+      this.mint(37, () => Object.freeze({ state: 'unused', draft }));
+      this.point(37, 'post');
+      if (!this.seedMatches() || !issuerConstructionAccess.matches(issuer, target) || !this.draftMatches()) return this.fail('binding_mismatch');
+      (this.#slots[1].value as { state: string }).state = 'bound'; this.#ready = true; return this.reply(true, 'draft_held');
+    } catch { return this.fail('construction_unconfirmed'); }
+    finally { this.#frame = false; }
+  }
+  check() {
+    if (this.#fixed) return this.#fixed;
+    if (!this.#ready) return this.reply(false, this.#closed ? 'closed' : 'not_ready');
+    if (!this.seedMatches() || !this.draftMatches()) return this.fail('binding_mismatch');
+    return this.reply(false, 'blocked_frame_execution');
+  }
+  close() {
+    if (this.#fixed) return this.#fixed;
+    this.#closed = true;
+    return this.#frame ? this.reply(false, 'deferred_frame') : this.#started ? this.fail('closed') : this.reply(false, 'closed');
+  }
+  rejectInput() { return this.fail('input_rejected'); }
+  inspect() {
+    const gate = this.#slots[30].value as CanonicalDraftGate | undefined, issuer = this.#slots[32].value as CaptureAdmissionAssembly | undefined;
+    return Object.freeze({ model: 'wfb-canonical-gate-draft-1', first: this.#failure.first, phase: this.#failure.phase,
+      boundary: this.#failure.boundary, ready: this.#ready, retained: this.#slots.filter(s => !!s.value).length,
+      stages: Object.freeze(this.#slots.map(s => s.stage)), frame: this.#frame ? 'active' : 'inactive', reentry: this.#reentry,
+      gate: gate?.inspect(), issuer: issuer?.inspect(), seedRetained: !!this.#issuedSeed, draftRetained: !!this.#issuedDraft,
+      continuationUse: this.#slots[36].value ? 'unused' : 'not_created', frameExecutions: 0, grantIssues: 0,
+      realWriterCalls: 0, journalSupply: 'not_connected', admissionConsumptions: 0, packetObjects: 0, closedEvidence: 'not_issued', proofIssuance: 'closed' });
+  }
+}
+export function createCanonicalGateDraftFake(...args: readonly unknown[]) {
+  const s = args.length ? args[0] : 'normal';
+  const scripts = ['normal', 'reenter', 'close_in_frame', 'issuer_rejected', ...START_MIX_SCENARIOS, ...GATE_SEED_MIX_SCENARIOS,
+    ...['owner', 'construction', 'retention', 'sourceSlot', 'claim', 'extra'].map(f => 'scope_' + f),
+    ...['copy', 'brand', 'extra', 'gate', 'origin'].map(f => 'seed_' + f),
+    ...['copy', 'brand', 'extra', 'gate', 'scope', 'owner', 'construction', 'retention', 'sourceSlot', 'claim', 'epoch'].map(f => 'pin_' + f),
+    ...['copy', 'brand', 'extra', 'gate', 'pin', 'target', 'entry', 'exit', 'kind', 'executable'].map(f => 'draft_' + f)];
+  const admitted = args.length <= 1 && typeof s === 'string' && (scripts.includes(s) || /^(before|attempt|after|done)_([1-9]|[12][0-9]|3[0-7])$/.test(s)
+    || ['seed_check_33', 'target_check_34', 'pin_check_35', 'draft_check_36', 'post_37'].includes(s));
+  const a = new CanonicalGateDraftRoot(admitted ? s as string : 'normal', admitted);
   return Object.freeze({ prepare: (...xs: readonly unknown[]) => xs.length ? a.rejectInput() : a.prepare(),
     check: (...xs: readonly unknown[]) => xs.length ? a.rejectInput() : a.check(),
     close: (...xs: readonly unknown[]) => xs.length ? a.rejectInput() : a.close(), inspect: () => a.inspect() });
