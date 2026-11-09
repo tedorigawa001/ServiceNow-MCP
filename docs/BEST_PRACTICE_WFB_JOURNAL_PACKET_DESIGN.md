@@ -1,8 +1,10 @@
 # WF-B (C)：AbsenceJournal記録点・内部型とadmission消費／packet生成
 
-Version: draft-0.2 / Date: 2026-11-09 / 読み取り照合基準HEAD: `bbc1426`（レビュー修正基準HEAD: `c839766`）。
+Version: draft-0.3 / Date: 2026-11-09 / 読み取り照合基準HEAD: `bbc1426`（レビュー修正基準HEAD: `c839766`、Journal実装レビュー修正基準HEAD: `908fc16`）。
 
 draft-0.2のレビュー修正：§6の受付順は「retirement sealと生成frame終了」を必須段階としていたが、root_not_created由来のlocal_onlyにはseal対象のrootがなく、現行issuerもsealを呼ばない（sealAttempts=0）。§5の「正常利用をsealする前に記録を完了」もlocal_onlyの記録完了点が未定だった。local_onlyではseal段階を正規生成履歴のknown-not-created checkpoint確認と生成frame終了で置き換えると§5・§6に明記した。
+
+draft-0.3のレビュー修正：(1) control live退役（`retireLiveBinding()`）がC14を空にする実書込みなのにJournalを通らず、退役後もC14が`present`のままsealできた。(2) `legacy_clear`対照はroot retirement seal後に旧clearを実行しJournalがfactとして受理しており、§5の「seal後は旧clearを拒否」と逆順だった。旧`CanonicalSupplyAssembly.clear()`自体もretirement sealで止まらず、Journal seal後の書込み拒否も未検証だった。§11へ`released`段階、旧clearのseal gate、対照の順序を明記した。
 
 実装追記（2026-11-09）: §10の第1段階だけを合成依存限定で接続した。固定11+14のJournal内部型・writer記録点・候補commit・先行診断・合成owner／epoch結合を実装。admission consumer・packet生成・既存admission epochへの接続は未実装。[今回の検証記録](E2E_BEST_PRACTICE_WFB_ABSENCE_JOURNAL_2026-11-09.md)。
 
@@ -163,6 +165,8 @@ Journalは25固定field枠、source／bindingのproducer scope各1、epoch bindi
 - 実slot代入前にbegin、代入後にcomplete。C04〜C06はrelease候補にとどめ、最終validate成功・prepared確定後に3枠一括preflightしてcommit。Journalの故障はstickyな別診断にし、元writerや元firstを変更せず、consumer候補側を拒否する。旧clearは実代入後に11個の空booleanを確認し、issued-onlyを含む欠落を拒否。反復noopは同fact／stampを保持する。
 - extra aliasは正規writer開始を記録し、永久に生成入口を閉じたsealでだけ未開始をalias_never_assignedへ確定。各slotのnot_mintedは未開始、または正規helperの確認済み非発行returnから作る。present siblingやcontrolの既存局所記録を流用しない。未捕捉writerはunconfirmedで、先行slotを消去しない。
 - 既存の値混入probeは対象のpresent群を保守的にbegin／completeで囲み、通常のabsence候補へ使わない。故障scriptはJournal生成権限ではない。通常の合成sealは旧clearを呼ばず、`legacy_clear`対照だけが既存writerを明示実行する。新field clear回数は0である。
+- control live退役はC14への実書込みとしてbegin後に`released`段階へ記録する。absenceの4variantのどれにも当たらないためfactは作らず、後続captureでは当該cellをunconfirmedとして扱う。`released`は書込み履歴が記録済みであることを示し、Journal seal／scope結合を妨げない。
+- root retirement seal後の旧`clear()`は実行しない（元sourceの参照を保持）。拒否した旧writerはJournalの通常受付を通して記録し、Journal seal済みなら`journal_sealed`、未sealなら`journal_unconfirmed`とする。`legacy_clear`対照はretirement sealより前に旧writerを実行し、seal後の旧clearは`legacy_clear_after_seal`対照で拒否を確認する。旧factoryはsealしないので挙動は変わらない。
 - JP01〜JP05のJournal段階と、元slot不変・秘密非出力・旧入口維持を部分検証した。JP06〜JP09のadmission消費／packet生成、JP10の新packet経路は未到達。PacketOwnerSlot／SealedJournalView／PacketAllocationReceiptの発行・値capture・CaptureReady・新field clear・root終端は未実装。費用の実モデル・heap/layout・実E/SはUnknownで、既存期限／capは変更しない。
 
 初版§10末尾の「未コミット」は初版作成時点の記録（後に`c839766`で文書をコミット）。今回の実装は別の未コミット変更として扱う。draft-0.2のlocal_onlyレビュー修正を維持し、root未生成時はroot sealを呼ばず正規not-created checkpointで確認する。検証の範囲・初回失敗・未実施事項は上記検証記録へ保持する。

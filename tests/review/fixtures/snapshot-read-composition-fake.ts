@@ -861,7 +861,7 @@ let supplyTransferAccess: {
 // Synthetic-only history. No payload references, public fact adoption, admission consumer or packet builder.
 type JournalProducer = 'source' | 'binding';
 type AbsenceKind = 'preparation_completed' | 'alias_never_assigned' | 'legacy_discard_executed' | 'not_minted';
-type JournalStage = 'not_started' | 'writing' | 'present' | 'candidate' | 'absent' | 'unconfirmed';
+type JournalStage = 'not_started' | 'writing' | 'present' | 'candidate' | 'released' | 'absent' | 'unconfirmed';
 interface JournalScope { readonly producer: JournalProducer; readonly origin: object; readonly epoch: object }
 type SlotProducer = 'source_supply' | 'payload_wrapper' | 'control' | 'transfer_claim' | 'anchor' | 'binding_receipt' | 'scope_context';
 interface FactBase { readonly scope: JournalScope; readonly field: number; readonly stamp: number;
@@ -916,6 +916,19 @@ class AbsenceJournal {
   write(field: number, operation: () => void): void {
     this.begin(field); operation(); this.complete(field);
   }
+  // A recorded write that empties the slot without an admissible absence kind (e.g. control live retirement).
+  retire(field: 14, operation: () => void): void {
+    this.begin(field); operation();
+    if (!this.accepts(field, 'complete')) return;
+    const c = this.cell(field);
+    if (c.stage !== 'writing') { this.fail(field, 'complete'); return; }
+    c.stage = 'released';
+  }
+  // A legacy writer reached the source after the root retirement seal; the write itself is refused upstream.
+  refuseAfterRetirementSeal(): void {
+    // Goes through the normal acceptance check: a sealed journal records journal_sealed, an unsealed one unconfirmed.
+    this.begin(1); if (!this.#sealed) this.fail(1, 'begin');
+  }
   release(field: number, operation: () => void): void {
     this.begin(field); operation();
     if (!this.accepts(field, 'candidate')) return;
@@ -968,7 +981,7 @@ class AbsenceJournal {
   }
   ready(scope: JournalScope): boolean {
     return scope === this.scope && this.#sealed && this.#first === 'none'
-      && this.#cells.every((c, i) => c.stage === 'present' || (c.stage === 'absent' && !!c.fact && c.fact.scope === scope
+      && this.#cells.every((c, i) => c.stage === 'present' || c.stage === 'released' || (c.stage === 'absent' && !!c.fact && c.fact.scope === scope
         && c.fact.field === i + (this.scope.producer === 'source' ? 1 : 12)
         && c.fact.stamp === c.stamp && c.fact.checkpoint === this.#checkpoint));
   }
@@ -1080,6 +1093,8 @@ class CanonicalSupplyAssembly {
     return Object.freeze(reason ? { ...CANONICAL_CLOSED, ok: false, reason } : { ...CANONICAL_CLOSED, ok: true });
   }
   private clear(): void {
+    // Legacy clear is refused once the root is retirement-sealed; the journal records the refused writer.
+    if (rootRetirementAccess.sealed(this.#root)) { this.#journal.refuseAfterRetirementSeal(); return; }
     this.#journal.legacyClear(() => {
     if (this.#envelope || this.#registry || this.#table || this.#view || this.#buildingRegistry
       || this.#buildingBindings || this.#buildingDeclarations) {
@@ -2145,7 +2160,8 @@ class PendingSourceBinding {
         const rootLive = this.scenario === 'retire_binding_root_live' || this.scenario === 'retire_binding_gate_probe';
         if (rootLive) this.#control.stop('binding_mismatch');
         else this.fail('binding_mismatch');
-        if (this.#control.retireLiveBinding()) this.#bindingRetirements++;
+        const control = this.#control;
+        if (control.live()) this.#journal.retire(14, () => { if (control.retireLiveBinding()) this.#bindingRetirements++; });
         if (this.scenario === 'retire_binding_twice' && this.#control.retireLiveBinding()) this.#bindingRetirements++;
         if (this.scenario === 'retire_binding_root_live') {
           this.#retiredSourceAllowed = source.check().ok;
@@ -2517,7 +2533,7 @@ interface GenerationEpochBinding {
 const JOURNAL_SCRIPTS = Object.freeze(['normal', 'before_source_failure', 'source_attempt_failure', 'after_source_failure',
   'before_bind_failure', 'control_mint_unconfirmed', 'retire_binding_with_claim_alias', 'retire_binding_with_control_alias',
   'view_failure', 'post_failure', 'post_registry_missing', 'registry_0_failure', 'bindings_0_failure', 'declarations_0_failure',
-  'metadata_and_source_failure', 'legacy_clear', 'legacy_clear_twice',
+  'metadata_and_source_failure', 'legacy_clear', 'legacy_clear_twice', 'legacy_clear_after_seal',
   'owner_copy', 'pin_copy', 'construction_copy', 'retention_copy', 'source_slot_copy', 'capture_epoch_copy',
   'binding_scope_copy', 'binding_epoch_copy', 'source_identity_copy', 'source_scope_copy', 'source_epoch_copy', 'source_missing',
   ...['begin', 'complete', 'candidate', 'commit', 'seal'].flatMap(boundary =>
@@ -2560,15 +2576,14 @@ class JournalAssembly {
     if (this.#result) return this.#result;
     // Close producer entry before sealing history; this is not a close diagnosis or legacy clear.
     this.#sealed = true;
+    const source = bindingJournalAccess.source(this.#binding), bindingJournal = bindingJournalAccess.journal(this.#binding);
+    if (this.script === 'legacy_clear' || this.script === 'legacy_clear_twice') {
+      // Exercise only the existing legacy writer, and only before the retirement seal; never fill history from the new path.
+      source?.close(); if (this.script === 'legacy_clear_twice') source?.close();
+    }
     const context = retirementBindingAccess.stopContext(this.#binding);
     if (context.kind === 'unconfirmed') this.#first = 'source_unconfirmed';
     else if (context.kind === 'root_captured' && !retirementBindingAccess.sealRoot(this.#binding)) this.#first = 'source_unconfirmed';
-    const source = bindingJournalAccess.source(this.#binding), bindingJournal = bindingJournalAccess.journal(this.#binding);
-    if (this.script === 'legacy_clear' || this.script === 'legacy_clear_twice') {
-      // Exercise only the existing legacy writer, never fill history from the new retirement path.
-      // This diagnostic scenario is isolated from the normal generation binding.
-      source?.close(); if (this.script === 'legacy_clear_twice') source?.close();
-    }
     const sourceReady = source ? sourceJournalAccess(source).seal() : true;
     const bindingReady = bindingJournal.seal();
     if (this.#first === 'none' && (!sourceReady || !bindingReady)) this.#first = 'journal_unconfirmed';
@@ -2589,7 +2604,10 @@ class JournalAssembly {
                       : this.script === 'source_epoch_copy' ? { ...own.source.scope, epoch: copy(own.source.scope.epoch) } : own.source.scope } } : own;
     if (this.#first === 'none' && !this.matches(value)) this.#first = 'binding_mismatch';
     if (this.#first === 'none') this.#generation = own;
-    return this.#result = this.result(this.#first === 'none', this.#first);
+    this.#result = this.result(this.#first === 'none', this.#first);
+    // A late legacy writer after both seals must be refused and detected, not recorded as absence evidence.
+    if (this.script === 'legacy_clear_after_seal') source?.close();
+    return this.#result;
   }
   reject() { if (!this.#result) { this.#first = 'input_rejected'; this.#sealed = true; this.#result = this.result(false, this.#first); } return this.#result; }
   inspect() {

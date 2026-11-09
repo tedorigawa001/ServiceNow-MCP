@@ -242,6 +242,8 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 ### Added
 
+- WF-B absence journal review: control live retirement is now journaled as a `released` write on C14 (no absence fact), and the legacy source `clear()` is refused once the root is retirement-sealed, with the refused writer recorded through the normal journal acceptance (`journal_sealed` after seal). The `legacy_clear` control now runs before the retirement seal, and a new `legacy_clear_after_seal` control pins the refusal.
+
 - WF-B capture admission review: mixing tests now fix the rejecting stage through seal/ack/pin/admission issue counts, so a later binding check can no longer mask an unchecked earlier field (`pin_origin` is now isolated and added to the compiled controls). New controls pin the seal-vs-issue exception classification, a scope extra key and the root-not-created ack extra key.
 
 - WF-B retirement start review: pin field controls (construction, retention, source slot) now install the malformed pin as the issued pin itself, so only the private `matches()` field comparison rejects them, with three compiled single-clause mutants. New tests pin the in-frame retirement request on generation failure (deferred, then started after `finally`) and control stop on argument-bearing rejection.

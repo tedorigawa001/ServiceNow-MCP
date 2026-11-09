@@ -63,6 +63,29 @@ Journal追加費用の実CPU／heap／layout、実E／S、全writer網羅・実O
 
 今回の変更は未コミット。正式発行口閉鎖・全体受付無効・Unknown・調査保留を維持。
 
+## レビュー修正（2026-11-09）
+
+レビュー基準HEAD: `908fc16`。修正前は全体320ファイル・15,838件成功。
+
+指摘：
+1. `retire_binding*`で`retireLiveBinding()`がC14（control `#live`）を空にする書込みはJournalを通らなかった。probeで`retire_binding_with_claim_alias`は退役後もC14が`present`・stamp1のままsealに成功し、`generationBound=true`だった。
+2. `legacy_clear`対照は`JournalAssembly.seal()`内でroot retirement seal後に`source.close()`で旧clearを実行し、Journalがfactとして受理していた（設計§5は「seal後は旧clearを拒否」）。旧`CanonicalSupplyAssembly.close()`／`clear()`自体もretirement sealで止まらなかった。`accepts()`から`#sealed`条件を外す変異も生存していた（seal後の書込み拒否が未検証）。
+3. `construction_copy`／`retention_copy`／`source_slot_copy`はpin objectごと差し替えるため`value.pin === this.#pin`で先に拒否され、実質pin copyと同じ対照である（pin fieldの単独照合は回収開始fixtureで検証済み）。
+
+修正：
+- Journalへ`released`段階と`retire(14, …)`を追加した。live退役を実書込みとしてbegin→`released`で記録し、factは作らない。`ready()`は`released`を記録済み履歴として扱う。
+- 旧`clear()`はrootがretirement-sealedなら実行せず参照を保持する。拒否した書込みは`refuseAfterRetirementSeal()`でJournalの通常受付（`begin`）を通して記録する（seal済みは`journal_sealed`、未sealは`journal_unconfirmed`）。
+- `legacy_clear`／`legacy_clear_twice`はretirement seal前に旧writerを実行する順へ直した。両seal後に旧clearを呼ぶ`legacy_clear_after_seal`対照を追加した。
+
+RED：追加2件（C14の`released`記録、seal後旧clearの拒否）が修正前に失敗した。GREEN：関連8ファイル384件と新規全件が成功し、compiled 6本も維持した。
+
+一時変異（試験後に元へ戻した）：計20種、検出12、等価8。
+- 修正前から検出6種：building3枠の事前確認、反復noop clear、alias写像、余分な引数。stamp上限と旧clearの空確認はcompiledが検出。
+- 今回検出6種：`accepts()`の`#sealed`条件、退役のJournal記録漏れ、退役を`present`として記録、旧clearのseal gate、拒否の非記録、`legacy_clear`をroot seal後へ戻す順序。
+- 等価8種：`ready()`のstamp／checkpoint照合と`complete()`の段階確認（自己整合で到達しない）、seal時のcandidate guardとreleaseの範囲確認（該当入力なし）、generation bindingの`ready()`再確認2種（先のseal結果と二重）、pin field照合（上記3）。
+
+全体回帰：`npm run lint`・`npm run build`・`package-http-classification.mjs`成功、vitest全体320ファイル・15,840件成功、compiled 6本成功。
+
 ## 6 コミット対象だけの隔離再検証（2026-11-09）
 
 HEAD `5b2264d`と今回の8ファイルだけをindexから一時directoryへ展開し、作業treeの他変更や既存distを使用せず再検証した。依存libraryは既存node_modulesを参照し、依存導入・実通信は行っていない。

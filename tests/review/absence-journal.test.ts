@@ -128,4 +128,16 @@ describe('synthetic AbsenceJournal writer history (no admission consumer)', () =
     expect(hooks).toBe(0); expect(Object.keys(createAbsenceJournalFake())).toEqual(['prepare', 'seal', 'inspect']);
     const a = createAbsenceJournalFake(); expect(a.seal(p).ok).toBe(false); expect(a.prepare().ok).toBe(false);
   });
+  it('records the control live retirement as a released write, without inventing an absence fact', () => {
+    const a = createAbsenceJournalFake('retire_binding_with_claim_alias'); a.prepare();
+    expect(a.inspect().binding.cells.find(c => c.field === 14)).toMatchObject({ stage: 'released', stamp: 2, fact: 'none', producer: 'none' });
+    expect(a.seal().ok).toBe(true);
+    expect(a.inspect().binding.cells.find(c => c.field === 14)).toMatchObject({ stage: 'released', fact: 'none' });
+  });
+  it('refuses a legacy clear after the root retirement seal and records it as a sealed-journal write', () => {
+    const a = createAbsenceJournalFake('legacy_clear_after_seal'); a.prepare();
+    expect(a.seal()).toEqual({ ok: true, reason: 'none' });
+    expect(a.inspect()).toMatchObject({ retained: { R1: 3, R2: 5 }, source: { first: 'journal_sealed', firstField: 1 } });
+    expect(a.inspect().source?.cells.filter(c => c.fact === 'legacy_discard_executed')).toHaveLength(0);
+  });
 });
