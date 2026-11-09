@@ -1,5 +1,7 @@
 # WF-B (C)：既存issuerへのJournal private供給・先行保持境界
 
+WriterGate／frame境界の詳細化（2026-11-09、MDのみ）: [WriterGate詳細設計draft-0.1](BEST_PRACTICE_WFB_WRITER_GATE_FRAME_DESIGN.md)で、供給前提となる同ownerの停止権限、frame／leaf退出確認、closed線形化点と診断保持を整理した。closedはJournal封印・payload解放・供給成功の証明ではなく、各後続工程と区別する。
+
 同start接続の詳細化（2026-11-09、MDのみ）: [配置生成・停止／供給の接続差分draft-0.1](BEST_PRACTICE_WFB_SAME_START_SUPPLY_STOP_DESIGN.md)で、値kernelと正規lexical rootの分離、先行構築、WG01〜WG08の実writer gate、停止後の固定Journal終端metadata、部分封印・借用・診断の保持を具体化した。独立shellのbrandを正規権限に昇格せず、既存issuer接続・admission消費・packet生成は未実装のままとする。
 
 Version: draft-0.2 / Date: 2026-11-09 / 読み取り照合HEAD: `d18f4dc`（shellレビュー修正基準HEAD: `b8dc4b3`）。

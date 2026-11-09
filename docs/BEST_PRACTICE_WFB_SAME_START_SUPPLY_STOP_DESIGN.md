@@ -1,5 +1,7 @@
 # WF-B (C)：同startへのprivate結合・配置生成と停止／供給の接続差分
 
+WriterGateの詳細化（2026-11-09、MDのみ）: [内部型・frame権限・退出確認とclosed確定点draft-0.1](BEST_PRACTICE_WFB_WRITER_GATE_FRAME_DESIGN.md)で、同owner結合、単一生成frame／leaf権限、deferred停止、実行退出とpayload失敗の区別、closedの同期確定・失敗時保持を具体化した。現行SS03をwriter停止・Journal供給の保証へ昇格せず、新経路は未実装のままとする。
+
 Version: draft-0.2 / Date: 2026-11-09 / 基準HEAD: `b8dc4b3`（SS03実装レビュー修正基準HEAD: `69e5fbf`）。
 
 draft-0.2のレビュー修正：SS03のstart側照合（`constructionMatches()`）は呼出し全体を外しても試験が通り、start内部のowner／claim／pin／spent／binding pinだけをずらす対照がなかった。`scope_*`は`scopeMatches()`と`constructionMatches()`の両方で拒否され、互いに覆い隠していた。issuerの状態条件にも対照がなかった。§9へstart内部だけの単独対照7種とissuer拒否対照を加え、`scopeMatches()`呼出しの冗長性を明記した。
