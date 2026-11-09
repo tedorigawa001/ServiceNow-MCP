@@ -2,9 +2,11 @@
 
 Version: draft-0.1 / Date: 2026-11-09 / 読み取り基準HEAD: `a9fa5fa`。
 
-Status: **MDのみ。WriterGate本体・writer停止・frame合流は未実装。** 親は[同start接続差分](BEST_PRACTICE_WFB_SAME_START_SUPPLY_STOP_DESIGN.md)と[private供給・先行保持境界](BEST_PRACTICE_WFB_JOURNAL_ISSUER_SUPPLY_DESIGN.md)。現行SS03は正規issuer／同startのreadonly構築結合だけで、WriterGate保持slotは空。[SS03検証記録](E2E_BEST_PRACTICE_WFB_CANONICAL_SUPPLY_CONSTRUCTION_2026-11-09.md)を本gateの保証に昇格させない。
+実装追記（2026-11-09）: §9の第1段階であるgate／pin／grantの型・状態・拒否だけを独立純粋fakeで実装した。[検証記録](E2E_BEST_PRACTICE_WFB_WRITER_GATE_FAKE_2026-11-09.md)。正規frame／writer停止／Journalへの接続・実closed証拠は未実装。
 
-正式発行口・C実行入口閉鎖、全体受付無効、Unknown、VM／監視／telemetry調査保留を維持する。今回の変更はMDだけ。実装・試験・実接続・実通信・設定変更・Pushは行わない。Journal供給／封印、admission消費、packet生成、値capture、field clear、証拠発行、root終端も接続しない。以下のtokenはprivateな合成契約案であり、OS操作や正式permitの権限ではない。
+Status: **独立純粋fakeだけ実装。正規WriterGate・実writer停止・frame合流は未接続。** 親は[同start接続差分](BEST_PRACTICE_WFB_SAME_START_SUPPLY_STOP_DESIGN.md)と[private供給・先行保持境界](BEST_PRACTICE_WFB_JOURNAL_ISSUER_SUPPLY_DESIGN.md)。現行SS03は正規issuer／同startのreadonly構築結合だけで、WriterGate保持slotは空。[SS03検証記録](E2E_BEST_PRACTICE_WFB_CANONICAL_SUPPLY_CONSTRUCTION_2026-11-09.md)を本gateの保証に昇格させない。
+
+正式発行口・C実行入口閉鎖、全体受付無効、Unknown、VM／監視／telemetry調査保留を維持する。初版はMDだけ、今回の純粋fake実装は§10に限定する。正規frame・実writer・実接続・実通信・設定変更・Pushは接続／実施しない。Journal供給／封印、admission消費、packet生成、値capture、field clear、証拠発行、root終端も接続しない。以下のtokenはprivateな合成契約案であり、OS操作や正式permitの権限ではない。
 
 ## 1 現行と追加責務
 
@@ -140,3 +142,17 @@ oracleは本体の状態表・counter・writer catalogueを期待値へimportせ
 次の実装は(1)gate／pin／grant・状態と拒否の純粋fake、(2)正規先行構築へ同gate結合とframe enter／exitの合流、(3)実leaf分割・WG01〜WG08の停止coverage、(4)closed同期確定・連続対照の順とする。全coverage未確認の途中段階では既存正規prepareを開かない。Journal終端metadata・封印／供給はその後の別工程である。
 
 今回の参照は`a9fa5fa`の既存start／SS03と親設計に限定した。新MDと親2文書だけを更新し、ビルド・試験・梱包は未実施。3文書のローカルリンク14件、GF01〜GF12の12条件の重複・欠落なし、差分空白を確認した。文書整合の確認であり、未実装gateの試験成功ではない。未コミット、Pushなし。
+
+## 10 第1段階の独立純粋fake（2026-11-09）
+
+開発専用`tests/review/fixtures/writer-gate-fake.ts`に非exportのWriterGateModel／GateBindingPin／FrameGrant／FailureShellを配置。importなし、独自brand／台帳の別assemblyであり、既存issuer・start・WriterGate保持slotは変更しない。新export `createWriterGateFake`は固定scriptとbind／enter／request／check／exit／closeGate／値診断だけを公開する。token・pin・grantや操作callbackは外へ返さず、任意artifactの採用口も持たない。
+
+純粋状態はunbound／open／stop_requested／closed／unconfirmedと、not_entered／entering／active／exiting／exited／exit_unconfirmedを扱う。pinは同owner／scope各field・gate・epochへ結合し、bindは最大1試行。grantも同pin／gate／owner／epoch／frame／phaseへ結合し、generation attemptは最大1、発行途中失敗でも返却しない。current／issued同参照と各fieldを個別に確認する。pin／grantの不正fieldは正規発行slot側にも入れる対照で検査する。
+
+active中のenter再入はgeneration_in_progress、bind中はbinding_in_progress、exit中はexit_in_progressで追加生成しない。requestは同fakeのstop latchを立て、active中はdeferred_frame、既存active grantの資格確認は継続可能、新frameは不可。entering中の停止は未確認として捕捉済みgrantを保持し、active成功にしない。拒否／故障は固定結果・先行理由・phase／boundaryと保持pin／grantを維持する。
+
+exitはfakeイベントとしてgrantをrevokedへ移し、故障時はexit_unconfirmedに止める。return／throw／cancelは固定outcomeラベルであり、実frameの例外処理や取消を実証したものではない。producer先行理由も別診断として保持する。closeGateのclosed_fakeは状態モデルの遷移だけで、GateClosedRecord／FrameExitRecordを発行せず、closedEvidence=not_issuedを維持する。実coverageや実権限退役の証明ではない。
+
+GF02／GF03／GF04／GF08のモデル部分、GF12の非接続条件だけを部分検証した。実leaf・checked ordinal・同startへのgate結合・退出確認・無allocation closed同期section・coverage・固定drainは未接続。Journal供給／admission消費／packet生成／証拠／root終端は0。正規経路や全体受付をこのモデルで開かない。実OOM・CPU／heap／layout／実E/SはUnknown。
+
+初版§9末尾は文書作成時点の記録（後に`e1258c3`でコミット）。今回分は別の未コミット変更として検証記録へ保持する。
