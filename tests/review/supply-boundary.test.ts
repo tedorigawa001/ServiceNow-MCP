@@ -91,6 +91,25 @@ describe('unused-control supply boundary', () => {
     expect(a.inspect()).toMatchObject({ firstReason: 'supply_closed',
       source: { root: { readFirst: 'supply_closed', readStop: 'supply_closed' }, counts: { discardPasses: 0 } } });
   });
+  it('routes close/failure before any control bind through the existing source contracts', () => {
+    const closed = createSupplyBoundaryFake(); closed.close();
+    expect(closed.checkNormal()).toMatchObject({ ok: false, reason: 'supply_closed' });
+    expect(closed.inspect()).toMatchObject({ firstReason: 'none', controlState: 'not_bound', source: { firstReason: 'none',
+      root: { closeRequested: true, supplyState: 'retired', retainedSnapshot: false } } });
+    const failed = createSupplyBoundaryFake(); failed.fail();
+    expect(failed.inspect()).toMatchObject({ firstReason: 'binding_mismatch', source: { firstReason: 'binding_mismatch',
+      preparationState: 'discarded' } });
+    const rejected = createSupplyBoundaryFake({}); rejected.prepare(); rejected.close();
+    expect(rejected.inspect()).toMatchObject({ firstReason: 'source_rejected', source: { root: { closeRequested: true } } });
+  });
+  it('rejects a copied control at the relation boundary and an extra factory argument', () => {
+    const copy = createSupplyBoundaryFake('control_copy'); copy.prepare();
+    expect(copy.checkRelation()).toMatchObject({ ok: false, reason: 'binding_mismatch' });
+    expect(copy.inspect()).toMatchObject({ controlMatches: false, sourceNormalAllowed: false });
+    const extra = createSupplyBoundaryFake('normal', 'extra');
+    expect(extra.prepare()).toMatchObject({ reason: 'source_rejected' });
+    expect(extra.inspect().source.counts.preparationClaims).toBe(0);
+  });
   it('keeps claimless close as stop only and prevents later generation', () => {
     const a = createSupplyBoundaryFake(); a.close();
     expect(a.inspect().firstReason).toBe('none');

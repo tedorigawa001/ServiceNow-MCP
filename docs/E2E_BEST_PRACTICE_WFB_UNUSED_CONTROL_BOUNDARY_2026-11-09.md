@@ -61,6 +61,26 @@ bdo node tests/review/package-http-classification.mjs
 
 次はpending／failureのprivate active slot・固定回収／未確認保持・finish gateと有限schedule。その安全性確認までclaim消費・pending記録・normal slot集約／detachを接続しない。root finish→retireFailedによる失敗Snapshot退役とdiscard計数分離は設計だけのまま。全work／heap・実E／S・OOM時の診断必着はUnknownである。
 
+## レビュー修正（2026-11-09）
+
+レビュー基準HEAD: `d4e9bff`。修正前は新規47件、全体315ファイル・15,534件成功。
+
+指摘：
+1. control bind前のclose／failureは`#issuedControl`がないため何もせず、元供給ownerへ届かなかった。準備前closeでrootは`closeRequested=false`・`supplyState=open`・Snapshot保持のまま（親`createCanonicalSupplyViewFake`の同操作はroot close・Snapshot退役）、準備前failureでも元ownerは`firstReason=none`だった。
+2. 件数不正3種（registry／binding／declaration）は先頭要素を削っており、添字0のfile／ordinal不一致で拒否されていた。件数検査を外す変異3種は生存し、末尾を欠落させて件数検査を外すと`checkRelation()`が`TypeError`を投げることも未確認だった。
+3. 準備前close後の`checkNormal()`、`control_copy`での`checkRelation()`、余分なfactory引数の拒否が未固定だった。
+
+修正：bind前のcloseは元ownerの既存close（root close・Snapshot退役）へ、bind前のfailureは既存fail＋clearへ送る（何も発行していない消費前の契約）。件数3種は末尾を欠落させ、先頭要素の対応は整合させた。compiledに件数単独変異3種を追加し、件数検査を外すと拒否が消える（受理または例外）ことを検出する。試験2件を追加した。
+
+RED：bind前close／failureの試験1件が失敗（rootの`closeRequested=false`）。compiledは`surviving boundary count control: registry_count`で失敗。`control_copy`の関係検査・余分な引数の試験は修正前から成功し、下記の生存変異の検出対照として追加した。GREEN：新規49件成功、compiledは件数3種を含めて全検出。
+
+一時変異（試験後に元へ戻した）：計29種、検出16、等価13。
+- 修正前に生存し今回検出：件数検査3種、`checkNormal()`の`#closed`条件、余分な引数の受理、`checkRelation()`のcontrol同一性。
+- 今回の修正点への変異2種（bind前closeで元ownerをcloseしない、bind前failureで元ownerをfailしない）も検出。
+- 等価13種：最大32file・rows12の各1種（該当する入力シナリオなし）、bindの前提7種（controlは内部で整合して生成し、copyはbind後に差し替える）、captureの停止gate（captureはbind前だけ）、`normal()`のcontrol状態（`checkNormal()`が停止を先に返す）と元owner検査（control未停止で元ownerが拒否する状態なし）、`boundaryStop`の同一性確認（呼出し側は常に正規control）。
+
+全体回帰：`npm run lint`・`npm run build`・`package-http-classification.mjs`成功、vitest全体315ファイル・15,536件成功。`compiled-declared-actual.mjs`は旧8＋6＋24＋7、境界14＋局所19＋件数3。
+
 ## コミット対象だけでの再検証（2026-11-09）
 
 今回の11ファイルを明示してstageし、indexだけを一時ディレクトリへ展開した。既存node_modulesを参照し、作業treeの未stage内容を含めず、上記の関連23ファイル・1,512件、build、変更TSのstrict noEmit／noUnused、変更TS／MJSのESLint、compiled-declared-actual、offline梱包確認を再実行してすべて成功した。compiledは旧8＋6＋24＋7と新14＋19、梱包441ファイル、文書のローカルリンク31件も確認した。検証後の追加は本段落の記録だけとし、それ以外のstage内容が検証済みの展開内容と一致することを再照合した。全体回帰・claim消費・実通信等は追加せず、Pushは行わない。

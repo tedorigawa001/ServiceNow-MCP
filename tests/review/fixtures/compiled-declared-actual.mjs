@@ -101,7 +101,22 @@ for (const [i, [field, clause]] of boundaryValueControls.entries()) {
   assert.equal(a.checkRelation().ok, true, `surviving boundary value control: ${field}`);
   assert.equal(a.inspect().claimsConsumed, 0);
 }
-const transfer = original.createCanonicalSupplyTransferFake();
+// Tail-truncated count controls: without the count clause the per-entry walk no longer rejects the
+// shortened array cleanly (it either accepts or throws), so the original binding rejection must disappear.
+const boundaryCountControls = [
+  ['registry_count', 'p.registry.length !== files.length'], ['binding_count', 'p.table.bindings.length !== files.length'],
+  ['declaration_count', 'p.declarations.length !== files.length'],
+];
+for (const [i, [field, clause]] of boundaryCountControls.entries()) {
+  assert.equal(source.split(clause).length, 2, `boundary count mutation drift: ${field}`);
+  const kept = original.createSupplyBoundaryFake(`value_${field}`); kept.prepare();
+  assert.equal(kept.checkRelation().reason, 'binding_mismatch');
+  const m = await compile(source.replace(clause, 'false'), `boundary-count-mutant-${i}.js`);
+  const a = m.createSupplyBoundaryFake(`value_${field}`); a.prepare();
+  let outcome; try { outcome = a.checkRelation().reason ?? 'accepted'; } catch { outcome = 'threw'; }
+  assert.notEqual(outcome, 'binding_mismatch', `surviving boundary count control: ${field}`);
+}
+const transfer =original.createCanonicalSupplyTransferFake();
 assert.equal(transfer.prepare().ok, true);
 assert.equal(transfer.inspect().source.retainedView, true);
 assert.equal(transfer.inspect().retainedAnchor, true);
@@ -229,6 +244,6 @@ console.log(JSON.stringify({ compiled: true, sourceGrid: 75, rejectedMutations: 
   supplyMutationControls: supplyControls.length, transferMutationControls: transferControls.length,
   transferRetirementControls: transferRetirementControls.length,
   boundaryMutationControls: boundaryControls.length,
-  boundaryValueMutationControls: boundaryValueControls.length,
+  boundaryValueMutationControls: boundaryValueControls.length, boundaryCountMutationControls: boundaryCountControls.length,
   compatibilityFactories: 6, cExecution: 'not_connected', authority: 'none' }));
 } finally { rmSync(scratch, { recursive: true, force: true }); }

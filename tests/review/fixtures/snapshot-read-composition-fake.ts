@@ -1386,9 +1386,9 @@ function probeRelationValues(original: SupplyIssuanceAnchor, scenario: string): 
     links = Object.freeze(entries.map(x => Object.freeze({ ...x, tableOrigin: original.tableOrigin })));
     decls = Object.freeze(links.map(x => Object.freeze({ file: x.file, ordinal: x.ordinal, binding: x })));
   }
-  if (field === 'registry_count') entries = Object.freeze(entries.slice(1));
-  if (field === 'binding_count') links = Object.freeze(links.slice(1));
-  if (field === 'declaration_count') decls = Object.freeze(decls.slice(1));
+  if (field === 'registry_count') entries = Object.freeze(entries.slice(0, -1));
+  if (field === 'binding_count') links = Object.freeze(links.slice(0, -1));
+  if (field === 'declaration_count') decls = Object.freeze(decls.slice(0, -1));
   if (field === 'registry_file') entries = replace(entries, Object.freeze({ ...entries[0], file: Object.freeze({ ...entries[0].file }) }));
   if (field === 'registry_ordinal') entries = replace(entries, Object.freeze({ ...entries[0], ordinal: 1 }));
   if (['duplicate_origin', 'record_origin', 'record_shape', 'record_size'].includes(field)) {
@@ -1449,7 +1449,9 @@ class SupplyBoundaryAssembly {
   }
   private failBinding() {
     if (this.#first === 'none') this.#first = 'binding_mismatch';
+    // Before a bound control nothing was issued, so the existing pre-consumption fail+clear contract applies.
     if (this.#issuedControl) boundaryStop(this.#source, this.#issuedControl, 'failure');
+    else supplyTransferAccess.fail(this.#source, 'binding_mismatch');
     return this.reply(this.#first);
   }
   prepare() {
@@ -1519,6 +1521,7 @@ class SupplyBoundaryAssembly {
     this.#closed = true;
     if (this.#started && this.#first === 'none') this.#first = 'supply_closed';
     if (this.#issuedControl) boundaryStop(this.#source, this.#issuedControl, 'close');
+    else this.#source.close();
     return this.reply(this.#first !== 'none' ? this.#first : 'supply_closed');
   }
   fail() { return this.failBinding(); }

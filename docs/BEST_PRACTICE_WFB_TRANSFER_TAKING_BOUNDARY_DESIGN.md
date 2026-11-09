@@ -1,8 +1,10 @@
 # WF-B (C)：移譲開始後の停止・所有境界とdetach後照合の差分設計
 
-Version: draft-0.3 / Date: 2026-11-09 / 読み取り照合基準HEAD: `ece8724`（レビュー修正基準HEAD: `ca4dd6d`、第1段階実装基準HEAD: `c91c7d7`）。
+Version: draft-0.4 / Date: 2026-11-09 / 読み取り照合基準HEAD: `ece8724`（レビュー修正基準HEAD: `ca4dd6d`、第1段階実装基準HEAD: `c91c7d7`、第1段階レビュー修正基準HEAD: `d4e9bff`）。
 
 draft-0.3: §10の第1段階だけを合成依存限定で実装した。同controlの通常利用gate、停止だけのprivate継続、anchor＋明示payloadの関係検査を新しい診断入口で確認する。claim消費・normal slot集約／detach・holder公開・回収／finishは未接続。[検証記録](E2E_BEST_PRACTICE_WFB_UNUSED_CONTROL_BOUNDARY_2026-11-09.md)、実装境界は§11を参照。
+
+draft-0.4のレビュー修正：control bind前（準備前・元供給拒否後）のclose／failureが元供給ownerへ届かず、rootのclose・Snapshot退役も失敗理由も起きなかった点を§11で直した。件数不正3種は先頭削除のため添字0のfile／ordinal不一致で拒否されており単独対照でなかった。件数検査がないと末尾欠落で例外になることも未確認だったため、末尾削除へ変えcompiled単独変異3種を追加した。
 
 draft-0.2のレビュー修正：現行で失敗Snapshotを退役させる契機は、root finishの`closeRequested`／supplyFirst条件と、供給準備owner finishの自身のfirst条件（`retireFailed`）だけである。移譲開始後の失敗は供給準備ownerのfailを呼ばずroot lifecycle理由だけを写すため、どちらにも該当せずSnapshotが退役しない。また回収後に供給準備ownerのfinishを使うと、内部の`clear()`が発行根拠として残すenvelopeを見てdiscardPasses／`supply_references_cleared`を記録し、detachとdiscardを混算する。§4・§7・TB05／TB09で、root finish＋`retireFailed`を新private停止継続から呼び、退役判定を移譲側firstとroot lifecycleFirstで行うことを明記した。
 
@@ -145,12 +147,12 @@ draft-0.1／0.2は設計保存と文書照合だけ。draft-0.3は第1段階の�
 
 同CanonicalSupplyAssemblyで既存の開始・供給準備を行い、同anchorと参照だけのPreparedSupplyPayload wrapper、別brandの未消費claim、SupplyUseControlを一度用意する。source側は同controlを一度だけbindする。controlはunused／stoppedしか持たず、消費・reset機能はない。新ownerのnormal gate、sourceのcheck／begin／prepare／prepareSupply／capture／従来matchesが同controlを確認する。旧factoryではcontrolをbindしないので従来の結果を維持する。
 
-別のmodule-private `boundaryStop`だけが、正規controlの同一性を確認してcontrolを停止し、同rootのcloseまたは既存lifecycle理由写像を呼ぶ。供給準備ownerのclose／fail／clear／finishは呼ばず、元のregistry／table／view・発行参照・borrow／Snapshotを保持する。同値copyのcontrolを候補へ混入した場合、停止は候補ではなく発行時にpinした正規controlから依頼する。close開始前はstopだけ、開始後は先行firstがなければsupply_closedとし、後着の失敗で上書きしない。
+別のmodule-private `boundaryStop`だけが、正規controlの同一性を確認してcontrolを停止し、同rootのcloseまたは既存lifecycle理由写像を呼ぶ。供給準備ownerのclose／fail／clear／finishは呼ばず、元のregistry／table／view・発行参照・borrow／Snapshotを保持する。同値copyのcontrolを候補へ混入した場合、停止は候補ではなく発行時にpinした正規controlから依頼する。close開始前はstopだけ、開始後は先行firstがなければsupply_closedとし、後着の失敗で上書きしない。control bind前（準備前・元供給拒否後・bind前の失敗）は何も発行していないため、消費前の既存契約どおり元供給ownerのclose（root close・Snapshot退役を含む）または既存fail＋clearへ送る。新入口の失敗写像はbinding_mismatchだけで、生成失敗のread_prepare_unavailable写像は本段階の範囲外。
 
 関係検査は明示anchor／payloadだけを受けるprivate helperとし、元normal field・現在context・Borrow.matches・clock・gateを読まない。issuer pin／control同一性の受付は外側で行い、停止後も関係検査だけは可能とする。新factoryの関係診断は不変参照に対して一度だけ計算・固定し、反復要求で計数を増やさない。これをpost成功・通常利用権・下位claim消費とは扱わない。
 
-固定値対照`value_*`だけは、helperの局所条件を独立検証するため元の参照値から別の合成anchor／payload組を作る。他条件を整合した22不正条件と、再構築しても内部関係が整合する有効基点1つを用いる。これらはsource／control／正規発行slotへ採用せず、valueOnlyProbe=trueとして区別する。合成値対照の成功を実発行物・正規private identityの証明へ昇格させない。これらの追加合成確保は実費モデルへ計上したものではない。
+固定値対照`value_*`だけは、helperの局所条件を独立検証するため元の参照値から別の合成anchor／payload組を作る。他条件を整合した22不正条件（件数3種は末尾を欠落させ、先頭要素の対応は整合させる）と、再構築しても内部関係が整合する有効基点1つを用いる。これらはsource／control／正規発行slotへ採用せず、valueOnlyProbe=trueとして区別する。合成値対照の成功を実発行物・正規private identityの証明へ昇格させない。これらの追加合成確保は実費モデルへ計上したものではない。
 
-正常sourceは固定4file／12row。file最大32・rows12の関係検査、SourceRecord上限を維持し、actual長=宣言長は追加しない。容量条件の全上限成功走査や現在まだ到達しないbind前提の各単独変異までは、新入口で確認したと主張しない。compiledの局所関係変異は19種、経路／停止／identityの変異は14種であり、複数のalias条件が同じcopyを拒否する箇所は条件群として除去する。
+正常sourceは固定4file／12row。file最大32・rows12の関係検査、SourceRecord上限を維持し、actual長=宣言長は追加しない。容量条件の全上限成功走査や現在まだ到達しないbind前提の各単独変異までは、新入口で確認したと主張しない。compiledの局所関係変異は19種＋件数3種（件数検査を外すと拒否されず受理または例外になることを検出）、経路／停止／identityの変異は14種であり、複数のalias条件が同じcopyを拒否する箇所は条件群として除去する。
 
 claim消費／pending記録／detach／holder公開・resource操作は0。単一normal slotへのfield集約、pending／failureのactive payload、固定回収／未確認保持・finish gate、root finish→retireFailedの継続はまだ作らない。新入口にはfinishを設けず、retirement=not_started・retainedPayload／retainedAnchorとborrow／Snapshot保持を正直に報告する。保持をGCやcleanup成功で補完せず、これらの実装前にtakingへ進まない。
