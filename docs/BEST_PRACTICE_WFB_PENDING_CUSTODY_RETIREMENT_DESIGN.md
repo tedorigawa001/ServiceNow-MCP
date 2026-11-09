@@ -1,8 +1,10 @@
 # WF-B (C)：pending／failure内部型・先行生成と固定回収／finish gateの詳細設計
 
-Version: draft-0.4 / Date: 2026-11-09 / 第2段階の合成結合基準HEAD: `2022cc3` / 読み取り照合基準HEAD: `fbfe6dd` / 第1段階実装基準HEAD: `dc41a70` / 第1段階レビュー修正基準HEAD: `8aa373f`。
+Version: draft-0.5 / Date: 2026-11-09 / 第2段階の合成結合基準HEAD: `2022cc3` / 読み取り照合基準HEAD: `fbfe6dd` / 第1段階実装基準HEAD: `dc41a70` / 第1段階レビュー修正基準HEAD: `8aa373f` / 第2段階レビュー修正基準HEAD: `d361de6`。
 
 draft-0.4: §14へ同construction／source／controlの一度限りprivate結合、payload-free coreとretirable live cell、正規SourceRootSlotと保持表の合成実装を追記した。下位claim消費・回収・root finishは未実装。[検証記録](E2E_BEST_PRACTICE_WFB_PENDING_SOURCE_BINDING_2026-11-09.md)。
+
+draft-0.5のレビュー修正：(1) 新結合の`fail()`が理由によらずrootへ`binding_mismatch`を伝え、生成失敗をbinding扱いにし、元source自身の供給失敗（`source_rejected`）にもroot binding診断を重ねていた。生成失敗は`read_prepare_unavailable`、bindingと重複は`binding_mismatch`へ写し、`source_rejected`ではrootへ伝えないよう§14を直した。(2) closeのcontrol停止・root close・RetentionRoot closeが未試験だった。(3) retired controlの拒否は`check()`だけが裏付けられ、begin／prepare／prepareSupply／capture／matchesのgate拡張が未試験だった。(4) claim receiverの結合が未試験だった。いずれも固定対照を追加した。
 
 draft-0.2: §12の第1段階に限り、独立した合成入口へ先行RetentionRoot、unbound pending／failureの4slot、固定診断／結果slot、一度限りの生成claimを実装した。sourceやpayloadは生成せず、bound化・回収・証拠発行・root finishは未実装。[検証記録](E2E_BEST_PRACTICE_WFB_PENDING_CONSTRUCTION_2026-11-09.md)、配置・保証範囲は§13を参照。
 
@@ -194,13 +196,13 @@ source／anchor／control／通常payloadを一切生成・受領しないので
 
 新ownerは先行RetentionRoot、SourceRootSlot、claim originを持つ。prepareは旧unbound生成→private scope確認→開始claim→source生成・捕捉→既存strict供給準備→同anchor／参照wrapper／未消費claim→control／受領receipt→pre照合→sourceへの一度限りbind→post照合の固定順。scopeは同4cellの実参照・両scope origin・親shell・role originを確認してprivateに供給する。公開summaryや別factoryのownerを引き取る口はない。開始回数は最大1、失敗・同期再入・close後に再生成しない。
 
-controlのidentity coreはowner／construction／retention／source／claimの5tokenだけ。source object・anchor・payload・元claim objectを入れない。別cellへ同source／anchor／claimを保持し、stop後だけ一度clearできる。coreとsource側の同control参照は残し、stateはunused→stopped→retired、liveなしならretiredとなる。全通常gateはunused以外を拒否する。rootがliveかつ先行理由なしでもretired controlでsource checkを通さない独立対照を設けた。旧入口はlive cellを退役させず、従来のunused／stopped挙動を維持する。
+controlのidentity coreはowner／construction／retention／source／claimの5fieldだけ。ownerはこのconstruction自身が移譲ownerなので同construction originを指し、異なるtokenは4個である（owner単独の混入対照は別に持つ）。source object・anchor・payload・元claim objectを入れない。別cellへ同source／anchor／claimを保持し、stop後だけ一度clearできる。coreとsource側の同control参照は残し、stateはunused→stopped→retired、liveなしならretiredとなる。全通常gateはunused以外を拒否する。rootがliveかつ先行理由なしでもretired controlでsource checkを通さない独立対照を設けた。旧入口はlive cellを退役させず、従来のunused／stopped挙動を維持する。retired controlの拒否は`check()`に加え、begin／prepare／prepareSupply／capture／matchesの5gateを、rootがliveで先行理由のない固定対照で個別に確認する。
 
-受領receiptは同construction／retention・正規SourceRootSlot・control／core・同4slot配列へpinする。receipt自体と各field、current／issuedのanchor／wrapper／claimを別参照copyへ置換しても拒否する。claim receiverは同pendingActive origin。既存のanchor／明示payload関係検査とsourceの発行根拠も確認する。4slot自身は凍結されたunbound値のまま保持し、boundは**ownerの結合receiptの受理状態**を意味する。pending／failureのpayloadは空のままで、slotへbound payloadを装填した保証ではない。
+受領receiptは同construction／retention・正規SourceRootSlot・control／core・同4slot配列へpinする。receipt自体と各field、current／issuedのanchor／wrapper／claimを別参照copyへ置換しても拒否する。claim receiverは同pendingActive origin。既存のanchor／明示payload関係検査とsourceの発行根拠も確認する。4slot自身は凍結されたunbound値のまま保持し、boundは**ownerの結合receiptの受理状態**を意味する。pending／failureのpayloadは空のままで、slotへbound payloadを装填した保証ではない。claimのreceiverだけを別originにした固定対照も拒否する。
 
 固定保持表の正常値：R1はsource内registry／table／viewの3参照（building3slotは空）、R2はenvelope／issuedTable／issuedView／issuedDeclarations／tableOriginの5参照、R3とR4はcurrent／issued各2、R5とR6はpayload空、R7はlocal／issued／source controlのlive有無とcontrol／元claim alias数、R8はSourceRootSlotとcurrent／issued receipt有無。各値は対応private fieldから採取し、旧discard計数を空確認へ代用しない。closure内ローカルの一時参照や全heapを列挙した証明ではなく、全8群の退役証拠発行にも使わない。
 
-source生成前の既知故障はempty、呼出し開始後の未捕捉故障はunknown、参照格納後の故障はcaptured。正規source捕捉後の拒否／closeはそのrootの停止だけを呼び、sourceのclear／fail／finishを迂回する。通常alias、発行根拠、wrapper／anchor／claim、borrow／Snapshotを保持し、discardPassesを増やさない。元source自身の供給準備失敗の旧処理は変更せず、元診断も保持する。source生成が戻らなかった内部状態の捕捉・実OOM時診断はUnknownのまま。
+source生成前の既知故障はempty、呼出し開始後の未捕捉故障はunknown、参照格納後の故障はcaptured。正規source捕捉後の拒否／closeはそのrootの停止だけを呼び、sourceのclear／fail／finishを迂回する。通常alias、発行根拠、wrapper／anchor／claim、borrow／Snapshotを保持し、discardPassesを増やさない。元source自身の供給準備失敗の旧処理は変更せず、元診断も保持する。source生成が戻らなかった内部状態の捕捉・実OOM時診断はUnknownのまま。rootへの理由写像は失敗の種類ごとに分ける。生成失敗（generation_unavailable）は`read_prepare_unavailable`、binding不一致・重複開始は`binding_mismatch`。元source自身が供給準備に失敗した`source_rejected`は元sourceが既に自分の診断を記録しているため、rootへ追加の停止を伝えない。closeは正規controlの停止・同rootのclose・RetentionRootのcloseをすべて行う。
 
 cell退役の固定故障scriptは、正規controlだけを一度clearする対照と、元claim alias／control aliasを余分に保持する対照を区別する。同controlの全aliasは同cellを見るが、元claimの強参照は残る。R1〜R4も保持中なので、`retirement=not_started`、`rootFinish=not_called`を維持する。この局所試験を固定回収・PayloadGoneEvidenceやresource cleanup確認へ昇格させない。normal slotの集約・下位claim消費・pending記録・detach・holder公開・C実行は0のまま。全heap／work、実E／S・費目受付もUnknown。
 

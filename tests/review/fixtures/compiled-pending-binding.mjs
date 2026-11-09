@@ -30,6 +30,7 @@ try {
     ['receipt_core', 'r.core !== control.identity'],
     ['receipt_slots', 'r.slots !== scope.slots'],
     ['core_extra_payload', 'Object.keys(core).length !== 5'],
+    ['claim_receiver', 'live.claim.receiver !== scope.slots[1].origin'],
   ];
   for (const [i, [script, clause]] of guards.entries()) {
     assert.equal(text.split(clause).length, 2, `guard drift: ${script}`);
@@ -45,8 +46,8 @@ try {
       a => { a.prepare(); return a.prepare().reason === 'duplicate_binding' && a.inspect().retentionTable.R1 === 3; }],
     ['cell-retirement', 'this.#live = undefined; return true;', 'return true;', 'retire_binding',
       a => { a.prepare(); return a.inspect().retentionTable.R7.sourceControl === false; }],
-    ['source-stop', "else { canonicalSupplyAccess.fail(a.#root, 'binding_mismatch'); }", 'else { /* omitted */ }', 'before_bind_failure',
-      a => { a.prepare(); return a.inspect().source.root.lifecycleFirst === 'binding_mismatch'; }],
+    ['source-stop', 'else { canonicalSupplyAccess.fail(a.#root, action); }', 'else { /* omitted */ }', 'before_bind_failure',
+      a => { a.prepare(); return a.inspect().source.root.lifecycleFirst === 'read_prepare_unavailable'; }],
     ['source-retention', 'normal: [a.#registry, a.#table, a.#view, a.#buildingRegistry, a.#buildingBindings, a.#buildingDeclarations]',
       'normal: [a.#registry, a.#table, a.#buildingRegistry, a.#buildingBindings, a.#buildingDeclarations]', 'normal',
       a => { a.prepare(); return a.inspect().retentionTable.R1 === 3; }],

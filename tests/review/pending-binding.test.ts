@@ -18,7 +18,7 @@ describe('private pending/source binding', () => {
   });
   it.each(['core_owner', 'core_construction', 'core_retention', 'core_source', 'core_claim', 'core_extra_payload',
     'receipt_copy', 'receipt_construction', 'receipt_retention', 'receipt_source_slot', 'receipt_control', 'receipt_core', 'receipt_slots',
-    'anchor_copy', 'payload_copy', 'claim_copy'])(
+    'anchor_copy', 'payload_copy', 'claim_copy', 'claim_receiver'])(
     'refuses %s and stops only the owned source while retaining its obligations', scenario => {
       const a = composition.createPendingBindingFake(scenario);
       expect(a.prepare()).toMatchObject({ ok: false, reason: 'binding_mismatch' });
@@ -125,5 +125,33 @@ describe('private pending/source binding', () => {
           source: { counts: { discardPasses: 0 }, root: { retainedBorrow: true, retainedSnapshot: true } } });
       }
     }
+  });
+  it.each([
+    ['after_source_failure', 'read_prepare_unavailable', 'read_prepare_unavailable'],
+    ['before_bind_failure', 'read_prepare_unavailable', 'read_prepare_unavailable'],
+    ['after_bind_failure', 'read_prepare_unavailable', 'read_prepare_unavailable'],
+    ['reenter_before_bind', 'binding_mismatch', 'binding'],
+  ] as const)('maps %s to the root lifecycle reason of its own failure class', (script, lifecycleFirst, readFirst) => {
+    const a = composition.createPendingBindingFake(script); a.prepare();
+    expect(a.inspect().source?.root).toMatchObject({ lifecycleFirst, readFirst });
+  });
+  it('leaves the source-owned supply failure diagnosis alone instead of adding a binding diagnosis to the root', () => {
+    const a = composition.createPendingBindingFake('source_failure'); a.prepare();
+    expect(a.inspect()).toMatchObject({ firstReason: 'source_rejected', source: { firstReason: 'supply_prepare_unavailable',
+      root: { supplyFirst: 'supply_invalid', lifecycleFirst: 'none', readFirst: 'none' } } });
+  });
+  it.each(['normal', 'close_after_bind'])('propagates close to the control, the owned root and the retention root: %s', script => {
+    const a = composition.createPendingBindingFake(script); a.prepare(); a.close();
+    expect(a.inspect()).toMatchObject({ firstReason: 'supply_closed', controlState: 'stopped', retentionCloseRequested: true,
+      source: { counts: { discardPasses: 0 }, root: { closeRequested: true, readStop: 'supply_closed', retainedBorrow: true } } });
+    const early = composition.createPendingBindingFake(); early.close();
+    expect(early.inspect()).toMatchObject({ firstReason: 'none', retentionCloseRequested: true });
+  });
+  it('refuses a retired control at every source gate, not only check()', () => {
+    const a = composition.createPendingBindingFake('retire_binding_gate_probe'); a.prepare();
+    expect(a.inspect()).toMatchObject({ controlState: 'retired', firstReason: 'none',
+      retiredGateProbe: { capture: 'refused', matches: 'refused', begin: 'supply_closed', prepare: 'supply_closed',
+        prepareSupply: 'supply_closed' }, source: { firstReason: 'none', counts: { discardPasses: 0 },
+        root: { lifecycleFirst: 'none', retainedBorrow: true, retainedSnapshot: true } } });
   });
 });

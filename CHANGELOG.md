@@ -236,6 +236,8 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 ### Added
 
+- WF-B pending source binding review: failures now map to the root by class (generation failures to `read_prepare_unavailable`, binding/duplicate to `binding_mismatch`), and a source-owned `source_rejected` no longer adds a root binding diagnosis. New fixed controls pin close propagation to the control, root and retention root, retired-control refusal at all five source gates, and claim receiver binding (plus a compiled receiver guard).
+
 - WF-B unbound pending construction review: snapshots now expose `parentLinks`, `roleOriginsDistinct` and `scopeOriginsDistinct`, read directly from the captured cells so that generation and checking cannot agree on a missing or crossed parent shell or a shared origin. Sealed results record the pre-seal state as `sealedFrom`. New tests pin first-reason retention on argument-bearing retries and the sealed reply.
 
 - WF-B unused-control boundary review: close/failure before a control is bound now reaches the source owner through its existing close and fail+clear contracts (root close and Snapshot retirement included). Count value controls truncate the tail so they are isolated, and compiled controls confirm that removing each count check makes the rejection disappear. New tests pin the pre-bind close path, copied-control relation rejection and extra factory arguments.

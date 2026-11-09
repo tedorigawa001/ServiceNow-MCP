@@ -810,7 +810,7 @@ interface SupplyControlLive { readonly source: CanonicalSupplyAssembly; readonly
   readonly claim: NonExecutingSupplyTransfer }
 let sourceIdentity: (a: CanonicalSupplyAssembly) => object;
 let sourceControlMatches: (a: CanonicalSupplyAssembly, control: SupplyUseControl) => boolean;
-let sourceStopOwned: (a: CanonicalSupplyAssembly, origin: object, kind: 'close' | 'failure') => boolean;
+let sourceStopOwned: (a: CanonicalSupplyAssembly, origin: object, kind: 'close' | 'binding_mismatch' | 'read_prepare_unavailable') => boolean;
 let sourceRetention: (a: CanonicalSupplyAssembly) => Readonly<{ normal: number; issued: number; controlLive: boolean;
   borrow: boolean; snapshot: boolean; discardPasses: number }>;
 class SupplyUseControl {
@@ -866,7 +866,7 @@ class CanonicalSupplyAssembly {
     sourceStopOwned = (a, origin, action) => {
       if (origin !== a.#sourceOrigin) return false;
       if (action === 'close') { a.#root.close(); }
-      else { canonicalSupplyAccess.fail(a.#root, 'binding_mismatch'); }
+      else { canonicalSupplyAccess.fail(a.#root, action); }
       return true;
     };
     sourceRetention = a => {
@@ -1783,6 +1783,7 @@ type PendingBindingReason = 'none' | 'binding_mismatch' | 'duplicate_binding' | 
 const PENDING_BINDING_SCENARIOS = Object.freeze(['normal', 'core_owner', 'core_construction', 'core_retention', 'core_source', 'core_claim', 'core_extra_payload',
   'receipt_copy', 'receipt_construction', 'receipt_retention', 'receipt_source_slot', 'receipt_control', 'receipt_core', 'receipt_slots',
   'anchor_copy', 'payload_copy', 'claim_copy', 'retire_binding', 'retire_binding_twice', 'retire_binding_with_claim_alias', 'retire_binding_with_control_alias', 'retire_binding_root_live',
+  'claim_receiver', 'retire_binding_gate_probe',
   'source_failure', 'source_attempt_failure', 'before_source_failure', 'after_source_failure', 'before_bind_failure', 'after_bind_failure', 'close_before_bind', 'close_after_bind', 'reenter_before_bind']);
 class PendingSourceBinding {
   readonly #retention: PendingRetentionRoot;
@@ -1797,6 +1798,7 @@ class PendingSourceBinding {
   #extraClaim: NonExecutingSupplyTransfer | undefined; #extraControl: SupplyUseControl | undefined;
   #bindingRetirements = 0;
   #retiredSourceAllowed: boolean | undefined;
+  #retiredGateProbe: Readonly<Record<'capture' | 'matches' | 'begin' | 'prepare' | 'prepareSupply', string>> | undefined;
   #attempts = 0; #bound = false; #closed = false;
   #first: PendingBindingReason = 'none';
   constructor(private readonly scenario: string, admitted: boolean) { this.#retention = new PendingRetentionRoot('normal', admitted); }
@@ -1806,7 +1808,11 @@ class PendingSourceBinding {
   private fail(reason: Exclude<PendingBindingReason, 'none'>) {
     if (this.#first === 'none') this.#first = reason;
     this.#issuedControl?.stop('binding_mismatch');
-    if (this.#sourceSlot.value && this.#sourceSlot.identity) sourceStopOwned(this.#sourceSlot.value, this.#sourceSlot.identity, 'failure');
+    // The source already recorded its own supply failure; adding a root binding diagnosis would misclassify it.
+    if (reason !== 'source_rejected' && this.#sourceSlot.value && this.#sourceSlot.identity) {
+      sourceStopOwned(this.#sourceSlot.value, this.#sourceSlot.identity,
+        reason === 'generation_unavailable' ? 'read_prepare_unavailable' : 'binding_mismatch');
+    }
     return this.reply(this.#first);
   }
   private validReceipt(): boolean {
@@ -1874,7 +1880,8 @@ class PendingSourceBinding {
       this.#payload = Object.freeze({ envelope: a.envelope, registry: a.registry, table: a.table, view: a.view,
         declarations: a.declarations, tableOrigin: a.tableOrigin }); this.#issuedPayload = this.#payload;
       this.#claim = Object.freeze<NonExecutingSupplyTransfer>({ [TRANSFER_BRAND]: true, owner: scope.construction,
-        source, anchor: a, receiver: scope.slots[1].origin, state: 'unused' }); this.#issuedClaim = this.#claim;
+        source, anchor: a, receiver: this.scenario === 'claim_receiver' ? Object.freeze({}) : scope.slots[1].origin, state: 'unused' });
+      this.#issuedClaim = this.#claim;
       const core = this.probeCore(Object.freeze({ owner: scope.construction, construction: scope.construction, retention: scope.retention,
         source: this.#sourceSlot.identity!, claim: this.#claimOrigin }));
       this.#control = new SupplyUseControl(scope.construction, source, a, this.#claim, core); this.#issuedControl = this.#control;
@@ -1892,12 +1899,22 @@ class PendingSourceBinding {
       if (this.scenario.startsWith('retire_binding')) {
         if (this.scenario === 'retire_binding_with_claim_alias') this.#extraClaim = this.#claim;
         if (this.scenario === 'retire_binding_with_control_alias') this.#extraControl = this.#control;
-        if (this.scenario === 'retire_binding_root_live') this.#control.stop('binding_mismatch');
+        const rootLive = this.scenario === 'retire_binding_root_live' || this.scenario === 'retire_binding_gate_probe';
+        if (rootLive) this.#control.stop('binding_mismatch');
         else this.fail('binding_mismatch');
         if (this.#control.retireLiveBinding()) this.#bindingRetirements++;
         if (this.scenario === 'retire_binding_twice' && this.#control.retireLiveBinding()) this.#bindingRetirements++;
         if (this.scenario === 'retire_binding_root_live') {
           this.#retiredSourceAllowed = source.check().ok;
+          return this.reply('supply_closed');
+        }
+        if (this.scenario === 'retire_binding_gate_probe') {
+          // Non-destructive probes first; each later gate must refuse before any legacy rejection/clear runs.
+          const reason = (r: { ok: boolean; reason?: string }) => r.ok ? 'admitted' : r.reason ?? 'refused';
+          const capture = supplyTransferAccess.capture(source, scope.construction) ? 'admitted' : 'refused';
+          const matches = supplyTransferAccess.matches(source, a) ? 'admitted' : 'refused';
+          this.#retiredGateProbe = Object.freeze({ capture, matches, begin: reason(source.begin()), prepare: reason(source.prepare()),
+            prepareSupply: reason(source.prepareSupply()) });
           return this.reply('supply_closed');
         }
         return this.reply(this.#first as Exclude<PendingBindingReason, 'none'>);
@@ -1929,7 +1946,8 @@ class PendingSourceBinding {
       sourceAttached: !!source && !!c && sourceControlMatches(source, c),
       controlState: c?.state ?? 'not_created', controlLiveBinding: !!c?.live(),
       controlBindingRetirements: this.#bindingRetirements,
-      retiredSourceAllowed: this.#retiredSourceAllowed,
+      retiredSourceAllowed: this.#retiredSourceAllowed, retiredGateProbe: this.#retiredGateProbe,
+      retentionCloseRequested: this.#retention.inspect().closeRequested,
       corePayloadFree: !!c && !!this.#context && Object.values(c.identity).every(v =>
         v === this.#context!.construction || v === this.#context!.retention || v === this.#sourceSlot.identity || v === this.#claimOrigin),
       retainedSlots: this.#retention.inspect().retainedSlots, pendingPayload: false, failurePayload: false,

@@ -71,6 +71,32 @@ bdo node tests/review/package-http-classification.mjs
 
 全8群の固定回収、未確認保持、回収claim、PayloadGoneEvidenceのprivate発行／一度限り消費、root finish→retireFailedが次工程。今回のsource結合receiptや保持計数・空pending・cell単独退役をその証拠にしない。正規SourceRootSlotを残す間にsource R1／R2／R7を全て退役する保証もまだない。下位移譲claim消費・pending記録・detach・holder公開・C実行は別工程のまま。
 
+## レビュー修正（2026-11-09）
+
+レビュー基準HEAD: `d361de6`。修正前は新規37件、全体317ファイル・15,647件成功。
+
+指摘：
+1. 新結合の`fail()`は理由によらず`sourceStopOwned('failure')`でrootへ`binding_mismatch`を伝えていた。`after_source_failure`／`before_bind_failure`／`after_bind_failure`の生成失敗がroot上は`lifecycleFirst=binding_mismatch`・`readFirst=binding`になり、設計§9の「生成失敗には`read_prepare_unavailable`系の写像を追加する」に反した。`source_failure`では元sourceが自分の供給失敗（supplyFirst=`supply_invalid`）を記録した後にroot binding診断が重なった。親`createCanonicalSupplyViewFake`の同シナリオではroot `lifecycleFirst=none`。
+2. closeによる正規control停止・root close・RetentionRoot closeを外す変異3種が生存した（`close_after_bind`とlifecycle oracleはfirstReason・sourceAttached・保持表だけを確認）。
+3. retired controlを拒否するgateを「unused以外」へ広げた5箇所のうち、試験の裏付けは`check()`だけだった。begin／prepare／prepareSupply／capture／matchesのgateを「stoppedだけ」に戻す変異4種が生存した。
+4. claim receiverの結合照合を外す変異が生存した。
+5. control coreの「5token」はowner＝constructionで、異なるtokenは4個だった（上記「5個のorigin関係」も同義）。
+
+修正：
+- `fail()`は理由別にrootへ写す。生成失敗は`read_prepare_unavailable`、binding不一致・重複は`binding_mismatch`。`source_rejected`ではrootへ伝えない。`sourceStopOwned`は写像済みのlifecycle理由を受ける。
+- `inspect()`へ`retentionCloseRequested`と、固定対照`retire_binding_gate_probe`の`retiredGateProbe`を追加した。後者はrootがliveで先行理由のないretired controlに対し、非破壊のcapture／matchesを先に、続いてbegin／prepare／prepareSupplyを呼んだ結果を記録する。
+- 固定混入`claim_receiver`を追加し、compiledのguardにもreceiver照合を加えた（binding 8→9）。compiledの`source-stop`対照は新しい停止行と`read_prepare_unavailable`へ合わせた。
+- 設計§14でcoreを「5field・異なるtoken4個（ownerは同construction origin）」と明記した。
+
+RED：追加9件のうち8件が修正前に失敗。`claim_receiver`は選択子なし、生成失敗の写像3件、`source_failure`の写像、close伝播2件、gate probeの1件。`reenter_before_bind`（`binding_mismatch`）は修正前から成功し、写像を一律`read_prepare_unavailable`にする変異の検出対照として残した。GREEN：新規46件成功。
+
+一時変異（試験後に元へ戻した）：計28種、検出17、等価11。
+- 修正前から検出6種：receiptの同一性、coreのkey数、failでのcontrol停止とroot停止、catchでの`unknown`、余分な引数。
+- 今回検出11種：receiver照合、retired gate4種、close伝播3種、`source_rejected`でもrootへ伝える変異、生成失敗をbindingへ写す変異、すべてを`read_prepare_unavailable`へ写す変異。
+- 等価11種：`validReceipt`のlive anchor／claim／sourceの各照合、関係検査とlegacy `matches`（live cellと発行参照は常に同値で生成され、identity照合が先に拒否する）。`pendingConstructionAccess`の親shell・origin照合（RetentionRootは常にnormal）。`retireLiveBinding`の停止前guard（退役は常に停止後）。`sourceStopOwned`のorigin照合（呼出しは常に正規origin）。bind後の`sourceControlMatches`（bindが常に設定）。`check()`の`#bound`条件（未bindでは先行理由／停止が先に返る）。
+
+全体回帰：`npm run lint`・`npm run build`・`package-http-classification.mjs`成功、vitest全体317ファイル・15,656件成功。compiledはpending-binding 9＋5、pending-construction 16＋6、declared-actual既存対照を維持。
+
 ## コミット対象だけでの再検証（2026-11-09）
 
 今回分の14ファイルだけを明示してstageし、index全体を一時ディレクトリへ展開した。既存node_modulesだけを参照し、展開先でbuild、関連25ファイル・1,625件、新／旧入口と新testのstrict noEmit／noUnused、変更TS／MJSのESLint、offline梱包とcompiled保証を再実行し、すべて成功した。梱包441ファイル、binding8＋lifecycle／retention5変異、旧unbound16＋6変異・12prefixと既存対照、MDリンク27件を確認した。検証後の変更は本記録の再検証追記だけとし、残りの対象ファイルが検証済み展開内容と一致することを再照合する。無関係な変更・全体回帰・実通信・C実行等は追加せず、Pushは行わない。
