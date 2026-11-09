@@ -1,5 +1,7 @@
 # WF-B (C)：停止前提・clear権限・固定capture25cellの生成／確認境界
 
+既存issuer供給の差分（2026-11-09、MDのみ）: [Journal private供給・先行保持境界draft-0.1](BEST_PRACTICE_WFB_JOURNAL_ISSUER_SUPPLY_DESIGN.md)で、正規`#scope`とfresh wrapperの区別、同start／bindingのmetadata借用、local-only checkpoint、部分封印と先行診断の保持を整理した。供給preparedはadmission利用権限やCaptureReadyではなく、consumer・packet生成は未接続とする。
+
 Journal／packet生成の詳細化（2026-11-09、MDのみ）: [AbsenceJournal記録点・内部型とadmission消費／packet生成draft-0.1](BEST_PRACTICE_WFB_JOURNAL_PACKET_DESIGN.md)で、writer側のcandidate／commit、generation epochとcapture epochの結合、同admissionの消費点、packet／25cellの部分生成保持を具体化した。not_mintedはcontrolだけでは全local slotを説明できないためproducer／slot別の記録へ拡張する設計とし、記録不足を空へ補完しない。値capture・CaptureReady・field clear・証拠・root終端は追加しない。
 
 Version: draft-0.4 / Date: 2026-11-09 / 内部issuer実装基準HEAD: `2e1ab6a`（途中の設計レビュー修正`948f19a`も照合、内部issuerレビュー修正基準HEAD: `f74095c`） / 読み取り照合基準HEAD: `1d8e3f7`（レビュー修正基準HEAD: `2e1ab6a`）。

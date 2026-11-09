@@ -1,5 +1,7 @@
 # WF-B (C)：AbsenceJournal記録点・内部型とadmission消費／packet生成
 
+既存issuer供給の差分（2026-11-09、MDのみ）: [private供給・先行保持境界draft-0.1](BEST_PRACTICE_WFB_JOURNAL_ISSUER_SUPPLY_DESIGN.md)で、同startからの正規Journal供給、既存scope／epochの再利用、先行slot生成順、停止／封印／発行の二段階結合、借用と固定discardを具体化した。独立JournalAssemblyの診断から昇格せず、admission消費・packet生成・正式発行は閉鎖のままとする。
+
 Version: draft-0.3 / Date: 2026-11-09 / 読み取り照合基準HEAD: `bbc1426`（レビュー修正基準HEAD: `c839766`、Journal実装レビュー修正基準HEAD: `908fc16`）。
 
 draft-0.2のレビュー修正：§6の受付順は「retirement sealと生成frame終了」を必須段階としていたが、root_not_created由来のlocal_onlyにはseal対象のrootがなく、現行issuerもsealを呼ばない（sealAttempts=0）。§5の「正常利用をsealする前に記録を完了」もlocal_onlyの記録完了点が未定だった。local_onlyではseal段階を正規生成履歴のknown-not-created checkpoint確認と生成frame終了で置き換えると§5・§6に明記した。
