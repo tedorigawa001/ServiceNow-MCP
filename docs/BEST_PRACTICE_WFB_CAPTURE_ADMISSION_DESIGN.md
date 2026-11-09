@@ -1,12 +1,14 @@
 # WF-B (C)：停止前提・clear権限・固定capture25cellの生成／確認境界
 
-Version: draft-0.2 / Date: 2026-11-09 / 読み取り照合基準HEAD: `1d8e3f7`（レビュー修正基準HEAD: `2e1ab6a`）。
+Version: draft-0.3 / Date: 2026-11-09 / 内部issuer実装基準HEAD: `2e1ab6a`（途中の設計レビュー修正`948f19a`も照合） / 読み取り照合基準HEAD: `1d8e3f7`（レビュー修正基準HEAD: `2e1ab6a`）。
+
+draft-0.3: §10の停止確認・token-only pin・CaptureAdmission発行と非実行clear draftだけを合成依存で実装した。25cellの生成・capture consumer・field clear・payload退役証拠・root終端は未接続。[検証記録](E2E_BEST_PRACTICE_WFB_CAPTURE_ADMISSION_2026-11-09.md)。
 
 draft-0.2のレビュー修正：draft-0.1は既知absenceの根拠を`not_minted`と「既存source discardの確認済み履歴」に限りつつ、旧discard計数を根拠にしないとして後者を定義していなかった。正常経路でも空になるC04〜C06（供給準備の成功途中でsource自身がundefinedへ戻すbuilding 3slot）とC17／C20（固定alias scriptでしか代入しないextra alias）が根拠を持てず、25cellがreadyにならなかった。§3へAbsenceJournalの4種の根拠を定義し、§5の照合とCA05を対応させた。capture中closeのpost確認は、retirement sealのepochだけを照合しroot close状態は照合しないと明記した。
 
-Status: **MDのみ。停止確認・clear権限・captureは未実装。** 親は[field別固定回収schedule](BEST_PRACTICE_WFB_FIXED_RETIREMENT_SCHEDULE_DESIGN.md)と[回収基盤設計](BEST_PRACTICE_WFB_PENDING_CUSTODY_RETIREMENT_DESIGN.md)。先行実装は[回収開始境界の検証記録](E2E_BEST_PRACTICE_WFB_RETIREMENT_START_2026-11-09.md)。本書はS00の残りとS01を具体化し、S02以降のfield clearを接続しない。
+Status: **停止確認・同ownerの内部発行だけ合成実装。capture／clearは未実装。** 親は[field別固定回収schedule](BEST_PRACTICE_WFB_FIXED_RETIREMENT_SCHEDULE_DESIGN.md)と[回収基盤設計](BEST_PRACTICE_WFB_PENDING_CUSTODY_RETIREMENT_DESIGN.md)。先行実装は[回収開始境界の検証記録](E2E_BEST_PRACTICE_WFB_RETIREMENT_START_2026-11-09.md)。本書はS00の残りとS01を具体化し、S02以降のfield clearを接続しない。
 
-正式発行口閉鎖・C実行入口閉鎖・全体受付無効・Unknown・VM／監視／telemetry調査保留を維持する。今回は文書だけを更新し、実装・合成試験・field clear・証拠発行・root終端・実期待値pin・実source照合・S発行・実接続・実通信・実機操作・設定変更・Pushを行わない。以下の型・flag・issuer・状態・固定操作は設計案であり、正式なpermitや実resource操作の権限ではない。
+正式発行口閉鎖・C実行入口閉鎖・全体受付無効・Unknown・VM／監視／telemetry調査保留を維持する。draft-0.1／0.2はMDのみ、draft-0.3は§10の内部issuerだけ。capture・field clear・payload退役証拠・root終端・実期待値pin・実source照合・S発行・実接続・実通信・実機操作・設定変更・Pushを行わない。§10で実装済みと明記しない型・操作は設計案のままで、正式なpermitや実resource操作の権限ではない。
 
 ## 1 現行の開始claimとS00の分解
 
@@ -182,3 +184,21 @@ packet1・cell25・capture claim1・StopAck1・TrustedControlPin1・ready slot1�
 3. **別工程のclear**：同ready／authorityを固定consumerで消費し、親schedule S02以降へ進む。packetは両receipt／contextの空確認後まで保持する。証拠／root終端はさらに別工程。
 
 `1d8e3f7`の開始境界・private pin／stop継続、sourceのreadonly rootとcontrol／claim／receiptの保持経路、root close／finishの診断副作用を読み取り照合した。先行試験の成功を本契約の実装証拠に転用しない。今回は新設計書と親文書だけを更新し、ビルド・試験・梱包・実費検証は行っていない。関連3文書のローカルMDリンク17件、C01〜C25の一意な25field対応、受入条件10件、fence対応、`git diff --check`を確認した。ソース・fixture・CHANGELOGの変更なし。未コミット、Pushなし。
+
+## 10 同ownerの内部issuer合成実装（draft-0.3）
+
+`createCaptureAdmissionFake`は同compositionのprivate CaptureAdmissionAssemblyだけを生成する。薄い`capture-admission-fake.ts`は同factoryを再exportする。facadeはprepare／admit／close／inspectのみで、Ack／pin／admission／draftそのもの、readerやconsumerを返さない。compositionは9factory・薄い入口10本。既存factoryの呼出し・期待値・期限は維持する。
+
+同RetirementStartAssemblyを内部所有し、そのprivate継続からowner／construction／retention／source slot／開始claim originをpinする。admitは既存開始claimの一度限り予約を再利用し、same-scope照合→正規source／rootのseal→Ack生成・確認→pin生成・確認→admission生成・確認→非実行clear draftの順。開始claimが既にrunningでも追加消費せず、source unknown／frame未確認／control mint未確認から発行しない。source既知未生成はroot_not_created・not_minted・local_onlyで発行し、source readerやroot sealを呼ばない。
+
+rootの専用retirementSealed flagはcontext／open／begin／prepare／checkを拒否する。flag設定はcloseRequested・既存first・supplyState・borrow／Snapshotを変更しない。supplyState=openという旧診断だけを見て通常利用可と判断しない。正規closeでは既存closeRequested／readStopを保持し、source_rejected／generation_unavailableの先行理由も上書きしない。root finish／Snapshot退役は接続しない。shared fake classへroot／control用の空originを追加したが、runtime実classを変更した保証ではなく、追加heap／work費もUnknownのまま。
+
+TrustedControlPinはlive生成前に確保するcontrol originから発行する。bindingはcontrol mintのnot_started／attempting／mintedと発行originをprivateに記録し、未捕捉をnot_mintedへ補完しない。source側にcontrolがあれば同issued controlであることも確認する。coreの5field契約を変更せず、不正coreからcontrol originを復元しない。mint不明では元wrapper／anchor／sourceの参照を保持して発行を停止する。
+
+Ack／pin／admissionの同発行slot・scope・epoch・origin・variant・必要field／余剰fieldと各相互結合を確認する。private発行slotの同値copyも拒否する。scopeの期待tokenは同Start ownerから独立に取り、candidate scopeを期待値にしない。共通epochは同ownerの発行世代で、root_not_createdのepochはroot停止済みを意味しない。途中生成物はcurrent／issued slotへ捕捉し、失敗後も除去しない。発行counterは検査完了後だけ増やし、候補がslotへ格納済みでも未確認なら発行0とする。sealAttemptsはhelper前の固定故障を含む論理試行数で、実helper呼出し完了数ではない。
+
+成功後の二重admitはalready_issued、同期再入はin_progressで、追加seal／発行なし。失敗は最初の理由・phase・生成済みslotを保持した固定返答とし、以後のprepare／admit／closeで再試行しない。入力hookを実行せず、引数付き呼出し拒否時も正規controlの通常gateを停止する。raw例外を診断へ出さない。
+
+PreparedClearAuthorityDraftはsource_backed／local_only、same-scope／epoch／admission origin／packet origin、ready=false・captureReady=not_connectedだけを持つ非実行値。将来packetを結合するための空originだけを用意し、packet／25cell自体は生成しない。CaptureAdmissionを消費する口もなく、内部Ackの発行をPayloadGoneEvidenceや正式発行と混同しない。fieldWrites0、capture／finalAudit=not_connected、payload=not_started、proofIssuance=closed、rootFinish=not_called、resourceCleanup=not_startedを維持する。
+
+CA01の合成root gate、CA02の固定混入・variant確認、CA07のissuer途中故障、CA10の元理由／旧回帰の部分だけを今回検証する。CA03〜06／08〜09の25cell捕捉・比較・consumer・全参照退役は未実施。AbsenceJournalのpreparation_completed／alias_never_assigned／legacy_discard_executedによる25cellのabsence照合も未実装で、元のControlMintJournalだけをその代替にしない。次工程は同admission／空packet originに結合した固定25cell生成・同参照確認で、clear consumerやroot gateは引き続き別工程。

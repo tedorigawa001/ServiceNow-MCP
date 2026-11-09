@@ -361,7 +361,7 @@ execFileSync(process.execPath,[fileURLToPath(new URL('fixtures/compiled-release-
 execFileSync(process.execPath,[fileURLToPath(new URL('fixtures/compiled-release-time-handoff.mjs',import.meta.url))],{cwd:root,stdio:'inherit'});
 execFileSync(process.execPath,[fileURLToPath(new URL('fixtures/compiled-prefix-relation.mjs',import.meta.url))],{cwd:root,stdio:'inherit'});
 execFileSync(process.execPath,[fileURLToPath(new URL('fixtures/compiled-destination-preparation.mjs',import.meta.url))],{cwd:root,stdio:'inherit'});
-const compositionMarkers=['snapshot-read-composition-fake','shared-read-hash-kernel-fake','snapshot-read-start-fake','canonical-supply-view-fake','canonical-supply-transfer-fake','supply-boundary-fake','pending-construction-fake','pending-binding-fake','retirement-start-fake','createReadHashFake','createSnapshotReadStartFake','createCanonicalSupplyViewFake','createCanonicalSupplyTransferFake','createSupplyBoundaryFake','createPendingConstructionFake','createPendingBindingFake','createRetirementStartFake'];
+const compositionMarkers=['snapshot-read-composition-fake','shared-read-hash-kernel-fake','snapshot-read-start-fake','canonical-supply-view-fake','canonical-supply-transfer-fake','supply-boundary-fake','pending-construction-fake','pending-binding-fake','retirement-start-fake','capture-admission-fake','createReadHashFake','createSnapshotReadStartFake','createCanonicalSupplyViewFake','createCanonicalSupplyTransferFake','createSupplyBoundaryFake','createPendingConstructionFake','createPendingBindingFake','createRetirementStartFake','createCaptureAdmissionFake'];
 const noReadComposition=text=>assert(!compositionMarkers.some(marker=>text.includes(marker)),'WF-B composition/factory leaked into package');
 for(const marker of compositionMarkers)assert.throws(()=>noReadComposition(marker),assert.AssertionError);
 for(const f of pack.files){noReadComposition(f.path);if(f.path.startsWith('dist/')&&/\.(?:js|ts|map)$/.test(f.path))noReadComposition(readFileSync(join(root,f.path),'utf8'));}
@@ -377,4 +377,5 @@ for(const seed of ['import x from "x"','require("x")','export * from "x"','fetch
 execFileSync(process.execPath,[fileURLToPath(new URL('fixtures/compiled-pending-construction.mjs',import.meta.url))],{cwd:root,stdio:'inherit'});
 execFileSync(process.execPath,[fileURLToPath(new URL('fixtures/compiled-pending-binding.mjs',import.meta.url))],{cwd:root,stdio:'inherit'});
 execFileSync(process.execPath,[fileURLToPath(new URL('fixtures/compiled-retirement-start.mjs',import.meta.url))],{cwd:root,stdio:'inherit'});
+execFileSync(process.execPath,[fileURLToPath(new URL('fixtures/compiled-capture-admission.mjs',import.meta.url))],{cwd:root,stdio:'inherit'});
 console.log('HTTP classification/status terminal/cleanup/context excluded; formal/production adoption disabled; fixture/oracle excluded PASS ('+pack.files.length+' files)');

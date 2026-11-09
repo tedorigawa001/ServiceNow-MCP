@@ -18,8 +18,8 @@ try {
 writeFileSync(join(scratch, 'package.json'), '{"type":"module"}');
 await compile(readFileSync(new URL('./source-map-values-core.ts', import.meta.url), 'utf8'), 'source-map-values-core.js');
 const original = await compile(source);
-assert.deepEqual(Object.keys(original), ['createCanonicalSupplyTransferFake', 'createCanonicalSupplyViewFake', 'createPendingBindingFake', 'createPendingConstructionFake', 'createReadHashFake', 'createRetirementStartFake', 'createSnapshotReadStartFake', 'createSupplyBoundaryFake']);
-for (const name of ['shared-read-hash-kernel-fake', 'read-hash-fake', 'snapshot-read-start-fake', 'canonical-supply-view-fake', 'canonical-supply-transfer-fake', 'supply-boundary-fake', 'pending-construction-fake', 'pending-binding-fake', 'retirement-start-fake']) {
+assert.deepEqual(Object.keys(original), ['createCanonicalSupplyTransferFake', 'createCanonicalSupplyViewFake', 'createCaptureAdmissionFake', 'createPendingBindingFake', 'createPendingConstructionFake', 'createReadHashFake', 'createRetirementStartFake', 'createSnapshotReadStartFake', 'createSupplyBoundaryFake']);
+for (const name of ['shared-read-hash-kernel-fake', 'read-hash-fake', 'snapshot-read-start-fake', 'canonical-supply-view-fake', 'canonical-supply-transfer-fake', 'supply-boundary-fake', 'pending-construction-fake', 'pending-binding-fake', 'retirement-start-fake', 'capture-admission-fake']) {
   const facade = await compile(readFileSync(new URL(`./${name}.ts`, import.meta.url), 'utf8'), `${name}.js`);
   const factory = name === 'snapshot-read-start-fake' ? 'createSnapshotReadStartFake'
     : name === 'canonical-supply-view-fake' ? 'createCanonicalSupplyViewFake'
@@ -27,7 +27,8 @@ for (const name of ['shared-read-hash-kernel-fake', 'read-hash-fake', 'snapshot-
         : name === 'supply-boundary-fake' ? 'createSupplyBoundaryFake'
           : name === 'pending-construction-fake' ? 'createPendingConstructionFake'
             : name === 'pending-binding-fake' ? 'createPendingBindingFake'
-              : name === 'retirement-start-fake' ? 'createRetirementStartFake' : 'createReadHashFake';
+              : name === 'retirement-start-fake' ? 'createRetirementStartFake'
+                : name === 'capture-admission-fake' ? 'createCaptureAdmissionFake' : 'createReadHashFake';
   assert.deepEqual(Object.keys(facade), [factory]);
   assert.equal(facade[factory], original[factory]);
 }
@@ -248,5 +249,5 @@ console.log(JSON.stringify({ compiled: true, sourceGrid: 75, rejectedMutations: 
   transferRetirementControls: transferRetirementControls.length,
   boundaryMutationControls: boundaryControls.length,
   boundaryValueMutationControls: boundaryValueControls.length, boundaryCountMutationControls: boundaryCountControls.length,
-  compatibilityFactories: 9, cExecution: 'not_connected', authority: 'none' }));
+  compatibilityFactories: 10, cExecution: 'not_connected', authority: 'none' }));
 } finally { rmSync(scratch, { recursive: true, force: true }); }

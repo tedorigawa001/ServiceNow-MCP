@@ -560,6 +560,8 @@ function fixedData() {
     ready: false, runtimeCoverage: 'unknown', nativeCost: 'unknown', entryRequirement: 'unknown', seedRequirement: 'unknown' };
 }
 interface CPreparedContext extends Binding { readonly prepared: object; readonly borrow: Borrow }
+let rootRetirementAccess: Readonly<{ origin(a: CStartAssembly): object; seal(a: CStartAssembly): void;
+  sealed(a: CStartAssembly): boolean }>;
 // Module-private closure: no accessor/adopt method is exposed through a diagnostic facade.
 let canonicalSupplyAccess: Readonly<{
   context(a: CStartAssembly): CPreparedContext | undefined;
@@ -569,8 +571,11 @@ let canonicalSupplyAccess: Readonly<{
 }>;
 class CStartAssembly {
   static {
+    rootRetirementAccess = Object.freeze({ origin: (a: CStartAssembly) => a.#retirementOrigin,
+      seal(a: CStartAssembly): void { a.#retirementSealed = true; }, sealed: (a: CStartAssembly) => a.#retirementSealed });
     canonicalSupplyAccess = Object.freeze({
       context(a: CStartAssembly): CPreparedContext | undefined {
+        if (a.#retirementSealed) return undefined;
         const map = a.#snapshot?.view(), prepared = a.#prepared;
         if (a.#terminal || a.#state !== 'prepared' || a.#closeRequested || a.#supplyState !== 'open'
           || !map || !prepared || !a.#borrow || a.#borrow !== a.#issuedBorrow) return undefined;
@@ -578,12 +583,14 @@ class CStartAssembly {
         if (!a.#borrow.matches(binding)) return undefined;
         return Object.freeze({ ...binding, prepared, borrow: a.#borrow });
       },
-      open: (a: CStartAssembly) => a.#supplyState === 'open' && !a.#closeRequested,
+      open: (a: CStartAssembly) => !a.#retirementSealed && a.#supplyState === 'open' && !a.#closeRequested,
       fail(a: CStartAssembly, reason: Exclude<LifecycleReason, 'none'>): void { a.fail(reason); },
       retireFailed(a: CStartAssembly): void { if (a.#terminal && !a.#borrow) a.retireSnapshot(); },
     });
   }
   #diagnostic: DiagnosticOwner | undefined;
+  readonly #retirementOrigin = Object.freeze({});
+  #retirementSealed = false;
   #fallbackSupply: SupplyReason = 'none';
   #custody: Readonly<{ state: 'empty' }> | undefined;
   #resultSlot: { terminal?: ReturnType<CStartAssembly['endView']> } | undefined;
@@ -642,12 +649,14 @@ class CStartAssembly {
   }
   check(): Reply {
     const prior = this.prior(); if (prior) return this.reply(prior);
+    if (this.#retirementSealed) return this.reply('supply_closed');
     if (this.#supplyState !== 'open') return this.reply('supply_closed');
     return this.#snapshot?.view() ? this.reply() : this.reply('supply_invalid');
   }
   begin(): Reply {
     if (this.#terminal) return this.reply('read_already_used');
     const prior = this.prior(); if (prior) return this.reply(prior);
+    if (this.#retirementSealed) return this.reply('supply_closed');
     if (this.#supplyState !== 'open' || this.#closeRequested) return this.reply('supply_closed');
     if (this.#state !== 'unused') return this.fail('duplicate_start');
     this.#state = 'starting'; this.#counts.startClaims++;
@@ -684,6 +693,7 @@ class CStartAssembly {
   prepare(): Reply {
     if (this.#terminal) return this.reply('read_already_used');
     const prior = this.prior(); if (prior) return this.reply(prior);
+    if (this.#retirementSealed) return this.reply('supply_closed');
     if (this.#closeRequested || this.#supplyState !== 'open') return this.reply('supply_closed');
     if (this.#state !== 'starting') return this.fail(this.#state === 'prepared' ? 'duplicate_start' : 'binding_mismatch');
     try {
@@ -741,6 +751,7 @@ class CStartAssembly {
   }
   inspect() {
     return Object.freeze({ ...CLOSED, supplyState: this.#supplyState, readState: this.#state, closeRequested: this.#closeRequested,
+      retirementSealed: this.#retirementSealed,
       supplyFirst: this.supplyFirst(), lifecycleFirst: this.#diagnostic?.lifecycleFirst ?? 'none',
       readFirst: this.#diagnostic?.readFirst ?? 'none', readStop: this.#diagnostic?.readStop ?? 'none',
       diagnosticOwnerReady: !!this.#diagnostic, resultSlotReady: !!this.#resultSlot, custodyReady: !!this.#custody,
@@ -808,12 +819,18 @@ interface SupplyControlCore { readonly owner: object; readonly construction: obj
   readonly source: object; readonly claim: object }
 interface SupplyControlLive { readonly source: CanonicalSupplyAssembly; readonly anchor: SupplyIssuanceAnchor;
   readonly claim: NonExecutingSupplyTransfer }
+let controlRetirementOrigin: (a: SupplyUseControl) => object;
 let sourceIdentity: (a: CanonicalSupplyAssembly) => object;
+let sourceRootRetirement: Readonly<{ origin(a: CanonicalSupplyAssembly): object;
+  seal(a: CanonicalSupplyAssembly): boolean; probe(a: CanonicalSupplyAssembly): Readonly<Record<string, boolean | string>> }>;
 let sourceControlMatches: (a: CanonicalSupplyAssembly, control: SupplyUseControl) => boolean;
+let sourceBoundControl: (a: CanonicalSupplyAssembly) => SupplyUseControl | undefined;
 let sourceStopOwned: (a: CanonicalSupplyAssembly, origin: object, kind: 'close' | 'binding_mismatch' | 'read_prepare_unavailable') => boolean;
 let sourceRetention: (a: CanonicalSupplyAssembly) => Readonly<{ normal: number; issued: number; controlLive: boolean;
   borrow: boolean; snapshot: boolean; discardPasses: number }>;
 class SupplyUseControl {
+  readonly #retirementOrigin = Object.freeze({});
+  static { controlRetirementOrigin = a => a.#retirementOrigin; }
   #stop: 'none' | 'supply_closed' | 'binding_mismatch' = 'none';
   #live: SupplyControlLive | undefined;
   readonly identity: SupplyControlCore;
@@ -861,8 +878,16 @@ class CanonicalSupplyAssembly {
   readonly #counts = { preparationClaims: 0, registryRecords: 0, bindings: 0, declarations: 0, tables: 0, views: 0,
     validationPasses: 0, fileChecks: 0, discardPasses: 0 };
   static {
+    sourceRootRetirement = Object.freeze({ origin: (a: CanonicalSupplyAssembly) => rootRetirementAccess.origin(a.#root),
+      seal(a: CanonicalSupplyAssembly): boolean { rootRetirementAccess.seal(a.#root); return rootRetirementAccess.sealed(a.#root); },
+      probe(a: CanonicalSupplyAssembly): Readonly<Record<string, boolean | string>> {
+        const r = a.#root, reason = (v: Reply) => v.ok ? 'admitted' : v.reason ?? 'refused';
+        return Object.freeze({ context: !!canonicalSupplyAccess.context(r), open: canonicalSupplyAccess.open(r),
+          begin: reason(r.begin()), prepare: reason(r.prepare()), check: reason(r.check()) });
+      } });
     sourceIdentity = a => a.#sourceOrigin;
     sourceControlMatches = (a, control) => a.#normalControl === control;
+    sourceBoundControl = a => a.#normalControl;
     sourceStopOwned = (a, origin, action) => {
       if (origin !== a.#sourceOrigin) return false;
       if (action === 'close') { a.#root.close(); }
@@ -1788,17 +1813,27 @@ const PENDING_BINDING_SCENARIOS = Object.freeze(['normal', 'core_owner', 'core_c
   'claim_receiver', 'retire_binding_gate_probe',
   'source_failure', 'source_attempt_failure', 'before_source_failure', 'after_source_failure', 'before_bind_failure', 'after_bind_failure', 'close_before_bind', 'close_after_bind', 'reenter_before_bind']);
 interface RetirementBindingPin { readonly construction: object; readonly retention: object; readonly sourceSlot: object }
+type OwnedStopContext = Readonly<{ kind: 'root_captured'; source: object; root: object;
+  control: Readonly<{ kind: 'minted'; origin: object } | { kind: 'not_minted'; checkpoint: object }> }>
+  | Readonly<{ kind: 'root_not_created'; checkpoint: object; control: Readonly<{ kind: 'not_minted'; checkpoint: object }> }>
+  | Readonly<{ kind: 'unconfirmed' }>;
 let retirementBindingAccess: Readonly<{
   pin(a: PendingSourceBinding): RetirementBindingPin;
   matches(a: PendingSourceBinding, pin: RetirementBindingPin): boolean;
   stop(a: PendingSourceBinding): void;
   failFrame(a: PendingSourceBinding): void;
   first(a: PendingSourceBinding): PendingBindingReason;
+  stopContext(a: PendingSourceBinding): OwnedStopContext;
+  sealRoot(a: PendingSourceBinding): boolean;
+  probeRoot(a: PendingSourceBinding): Readonly<Record<string, boolean | string>> | undefined;
 }>;
 class PendingSourceBinding {
   readonly #retention: PendingRetentionRoot;
   readonly #sourceSlot: PendingSourceSlot = { origin: Object.freeze({}), stage: 'empty', value: undefined, identity: undefined };
   readonly #claimOrigin = Object.freeze({});
+  readonly #mintCheckpoint = Object.freeze({});
+  #controlMint: 'not_started' | 'attempting' | 'minted' = 'not_started';
+  #controlMintOrigin: object | undefined;
   #context: PendingScopeContext | undefined;
   #control: SupplyUseControl | undefined; #issuedControl: SupplyUseControl | undefined;
   #anchor: SupplyIssuanceAnchor | undefined; #issuedAnchor: SupplyIssuanceAnchor | undefined;
@@ -1824,6 +1859,25 @@ class PendingSourceBinding {
       stop(a: PendingSourceBinding): void { a.#issuedControl?.stop('supply_closed'); },
       failFrame(a: PendingSourceBinding): void { a.fail('generation_unavailable'); },
       first(a: PendingSourceBinding): PendingBindingReason { return a.#first; },
+      stopContext(a: PendingSourceBinding): OwnedStopContext {
+        const s = a.#sourceSlot;
+        if (s.stage === 'unknown' || s.stage === 'attempting') return Object.freeze({ kind: 'unconfirmed' });
+        if ((a.#controlMint === 'not_started' && !!a.#issuedControl) || a.#controlMint === 'attempting' || (a.#controlMint === 'minted' && (!a.#issuedControl
+          || controlRetirementOrigin(a.#issuedControl) !== a.#controlMintOrigin))) return Object.freeze({ kind: 'unconfirmed' });
+        const absent = Object.freeze({ kind: 'not_minted' as const, checkpoint: a.#mintCheckpoint });
+        if (s.stage === 'empty' && !s.value) return Object.freeze({ kind: 'root_not_created', checkpoint: s.origin, control: absent });
+        if (!s.value || s.identity !== sourceIdentity(s.value)) return Object.freeze({ kind: 'unconfirmed' });
+        const bound = sourceBoundControl(s.value);
+        if (bound && bound !== a.#issuedControl) return Object.freeze({ kind: 'unconfirmed' });
+        return Object.freeze({ kind: 'root_captured', source: s.identity, root: sourceRootRetirement.origin(s.value),
+          control: a.#issuedControl ? Object.freeze({ kind: 'minted', origin: controlRetirementOrigin(a.#issuedControl) }) : absent });
+      },
+      sealRoot(a: PendingSourceBinding): boolean {
+        const s = a.#sourceSlot;
+        if (!s.value || s.identity !== sourceIdentity(s.value)) return false;
+        return sourceRootRetirement.seal(s.value);
+      },
+      probeRoot(a: PendingSourceBinding) { return a.#sourceSlot.value ? sourceRootRetirement.probe(a.#sourceSlot.value) : undefined; },
     });
   }
   constructor(private readonly scenario: string, admitted: boolean) { this.#retention = new PendingRetentionRoot('normal', admitted); }
@@ -1909,7 +1963,10 @@ class PendingSourceBinding {
       this.#issuedClaim = this.#claim;
       const core = this.probeCore(Object.freeze({ owner: scope.construction, construction: scope.construction, retention: scope.retention,
         source: this.#sourceSlot.identity!, claim: this.#claimOrigin }));
+      this.#controlMint = 'attempting';
+      if (this.scenario === 'control_mint_unconfirmed') throw new Error('private_control_mint');
       this.#control = new SupplyUseControl(scope.construction, source, a, this.#claim, core); this.#issuedControl = this.#control;
+      this.#controlMintOrigin = controlRetirementOrigin(this.#control); this.#controlMint = 'minted';
       this.#receipt = Object.freeze({ construction: scope.construction, retention: scope.retention, sourceSlot: this.#sourceSlot,
         control: this.#control, core, slots: scope.slots }); this.#issuedReceipt = this.#receipt;
       this.probeReceipt();
@@ -1996,6 +2053,7 @@ export function createPendingBindingFake(...args: readonly unknown[]) {
 
 // Synthetic start boundary only. No capture, field clear, proof or root termination continuation.
 class RetirementStartClaim {
+  readonly origin = Object.freeze({});
   #spent = false;
   constructor(readonly owner: object, readonly pin: RetirementBindingPin) { Object.freeze(this); }
   get spent() { return this.#spent; }
@@ -2004,10 +2062,15 @@ class RetirementStartClaim {
 const RETIREMENT_START_CLOSED = Object.freeze({ ...PENDING_BINDING_CLOSED, model: 'wfb-retirement-start-fake-1',
   fieldWrites: 0, payload: 'not_started', capture: 'not_connected', finalAudit: 'not_connected' } as const);
 const RETIREMENT_START_SCENARIOS = Object.freeze(['normal', 'request_in_frame', 'close_in_frame', 'reenter_prepare', 'reenter_request',
-  'throw_in_frame', 'prepare_failure', 'source_rejected', 'source_unknown', 'owner_copy', 'pin_copy', 'pin_construction',
+  'throw_in_frame', 'prepare_failure', 'source_rejected', 'source_unknown', 'control_unconfirmed', 'owner_copy', 'pin_copy', 'pin_construction',
   'pin_retention', 'pin_source_slot', 'claim_copy', 'claim_owner', 'claim_pin', 'frame_exit_failure']);
 type RetirementStartDisposition = 'prepared' | 'preparation_rejected' | 'preparation_in_progress' | 'deferred_frame'
   | 'frame_unconfirmed' | 'binding_rejected' | 'in_progress' | 'blocked_field_clear' | 'input_rejected';
+interface AdmissionScope { readonly owner: object; readonly construction: object; readonly retention: object;
+  readonly sourceSlot: object; readonly claim: object }
+let captureStartAccess: Readonly<{ scope(a: RetirementStartAssembly): AdmissionScope; ready(a: RetirementStartAssembly): boolean;
+  context(a: RetirementStartAssembly): OwnedStopContext; seal(a: RetirementStartAssembly): boolean;
+  probe(a: RetirementStartAssembly): Readonly<Record<string, boolean | string>> | undefined }>;
 class RetirementStartAssembly {
   readonly #owner = Object.freeze({});
   readonly #binding: PendingSourceBinding;
@@ -2027,9 +2090,19 @@ class RetirementStartAssembly {
   #rejectedReply: ReturnType<RetirementStartAssembly['reply']> | undefined;
   #first: PendingBindingReason = 'none';
   #attempt: 'not_started' | 'running' | 'binding_rejected' = 'not_started';
+  static {
+    captureStartAccess = Object.freeze({
+      scope(a: RetirementStartAssembly): AdmissionScope { return Object.freeze({ owner: a.#owner, ...a.#issuedPin, claim: a.#issuedClaim.origin }); },
+      ready(a: RetirementStartAssembly): boolean { return a.#attempt === 'running' && !a.#frame && !a.#frameUnconfirmed && !a.#rejectedReply; },
+      context(a: RetirementStartAssembly): OwnedStopContext { return retirementBindingAccess.stopContext(a.#binding); },
+      seal(a: RetirementStartAssembly): boolean { return retirementBindingAccess.sealRoot(a.#binding); },
+      probe(a: RetirementStartAssembly) { return retirementBindingAccess.probeRoot(a.#binding); },
+    });
+  }
   constructor(private readonly scenario: string, admitted: boolean) {
     this.#binding = new PendingSourceBinding(scenario === 'prepare_failure' ? 'after_bind_failure'
-      : scenario === 'source_rejected' ? 'source_failure' : scenario === 'source_unknown' ? 'source_attempt_failure' : 'normal', admitted);
+      : scenario === 'source_rejected' ? 'source_failure' : scenario === 'source_unknown' ? 'source_attempt_failure'
+        : scenario === 'control_unconfirmed' ? 'control_mint_unconfirmed' : 'normal', admitted);
     const base = retirementBindingAccess.pin(this.#binding), foreign = Object.freeze({});
     // Field controls install the malformed pin as the issued pin itself (shared by #pin and the claim),
     // so the identity checks pass and only the private matches() field comparison can reject it.
@@ -2123,5 +2196,153 @@ export function createRetirementStartFake(...args: readonly unknown[]) {
   const a = new RetirementStartAssembly(admitted ? input as string : 'normal', admitted);
   return Object.freeze({ prepare: (...xs: readonly unknown[]) => xs.length ? a.rejectArguments() : a.prepare(),
     request: (...xs: readonly unknown[]) => xs.length ? a.rejectArguments() : a.request(),
+    close: (...xs: readonly unknown[]) => xs.length ? a.rejectArguments() : a.close(), inspect: () => a.inspect() });
+}
+
+interface StopScope { readonly scope: AdmissionScope; readonly epoch: object; readonly origin: object }
+type RootStopAck = Readonly<StopScope & ({ kind: 'root_captured'; source: object; root: object }
+  | { kind: 'root_not_created'; checkpoint: object })>;
+type TrustedControlPin = Readonly<StopScope & ({ kind: 'minted'; control: object } | { kind: 'not_minted'; checkpoint: object })>;
+type CaptureAdmission = Readonly<StopScope & { kind: 'source_backed' | 'local_only'; ack: object; pin: object; packet: object }>;
+interface PreparedClearAuthorityDraft { readonly scope: AdmissionScope; readonly epoch: object; readonly admission: object;
+  readonly kind: 'source_backed' | 'local_only'; readonly packet: object; readonly ready: false; readonly captureReady: 'not_connected' }
+type AdmissionIssueReason = 'none' | 'binding_mismatch' | 'input_rejected' | 'not_ready' | 'stop_unconfirmed' | 'issue_unconfirmed';
+type AdmissionIssueDisposition = Exclude<AdmissionIssueReason, 'none' | 'binding_mismatch'> | 'issued' | 'already_issued' | 'in_progress' | 'binding_rejected';
+class CaptureAdmissionAssembly {
+  readonly #start: RetirementStartAssembly;
+  readonly #scope: AdmissionScope;
+  readonly #epoch = Object.freeze({}); readonly #packetOrigin = Object.freeze({});
+  readonly #ackOrigin = Object.freeze({}); readonly #pinOrigin = Object.freeze({}); readonly #admissionOrigin = Object.freeze({});
+  #ack: RootStopAck | undefined; #pin: TrustedControlPin | undefined; #admission: CaptureAdmission | undefined;
+  #issuedAck: RootStopAck | undefined; #issuedPin: TrustedControlPin | undefined; #issuedAdmission: CaptureAdmission | undefined;
+  #authority: PreparedClearAuthorityDraft | undefined;
+  #state: 'unused' | 'issuing' | 'issued' | 'unconfirmed' | 'rejected' = 'unused';
+  #failure: ReturnType<CaptureAdmissionAssembly['reply']> | undefined;
+  #phase: 'not_started' | 'entry' | 'seal' | 'ack' | 'pin' | 'admission' | 'authority' = 'not_started';
+  #admissionFirst: AdmissionIssueReason = 'none';
+  #seals = 0; #ackIssues = 0; #pinIssues = 0; #admissionIssues = 0;
+  #rootGates: Readonly<Record<string, boolean | string>> | undefined;
+  #reentry: string | undefined;
+  constructor(private readonly scenario: string, admitted: boolean) {
+    this.#start = new RetirementStartAssembly(['source_unknown', 'frame_exit_failure', 'source_rejected', 'prepare_failure', 'control_unconfirmed'].includes(scenario) ? scenario : 'normal', admitted);
+    const base = captureStartAccess.scope(this.#start);
+    this.#scope = scenario.startsWith('scope_') ? Object.freeze({ ...base, [scenario.slice(6)]: Object.freeze({}) }) : base;
+    if (!admitted) this.reject('input_rejected');
+  }
+  private reply(ok: boolean, disposition: AdmissionIssueDisposition) { return Object.freeze({ ...RETIREMENT_START_CLOSED, ok, disposition,
+    firstReason: this.#start.inspect().firstReason, admissionFirst: this.#admissionFirst }); }
+  private reject(reason: Exclude<AdmissionIssueReason, 'none'>) {
+    if (this.#admissionFirst === 'none') this.#admissionFirst = reason;
+    this.#state = reason === 'binding_mismatch' || reason === 'input_rejected' ? 'rejected' : 'unconfirmed';
+    this.#failure = this.reply(false, reason === 'binding_mismatch' ? 'binding_rejected' : reason); return this.#failure;
+  }
+  private fault(at: string): void { if (this.scenario === at) throw new Error('private_capture_issue'); }
+  private scopeMatches(s: AdmissionScope): boolean {
+    const expected = captureStartAccess.scope(this.#start);
+    return s === this.#scope && Object.keys(s).length === 5 && s.owner === expected.owner && s.construction === expected.construction
+      && s.retention === expected.retention && s.sourceSlot === expected.sourceSlot && s.claim === expected.claim;
+  }
+  private probe<T extends StopScope>(value: T, label: string): T {
+    if (this.scenario === label + '_copy') return Object.freeze({ ...value });
+    if (!this.scenario.startsWith(label + '_')) return value;
+    const key = this.scenario.slice(label.length + 1);
+    const fields = label === 'ack' ? ['scope_copy', 'epoch', 'origin', 'source', 'root', 'checkpoint', 'variant', 'extra']
+      : label === 'pin' ? ['scope_copy', 'epoch', 'origin', 'control', 'checkpoint', 'variant', 'extra']
+        : ['scope_copy', 'epoch', 'origin', 'ack', 'pin', 'packet', 'variant', 'extra'];
+    if (!fields.includes(key)) return value;
+    return Object.freeze({ ...value, ...(key === 'scope_copy' ? { scope: Object.freeze({ ...value.scope }) }
+      : key === 'variant' ? { kind: 'invalid' } : key === 'extra' ? { extra: Object.freeze({}) } : { [key]: Object.freeze({}) }) });
+  }
+  private ackMatches(c: Exclude<OwnedStopContext, Readonly<{ kind: 'unconfirmed' }>>): boolean {
+    const a = this.#ack;
+    if (!a || a !== this.#issuedAck || !this.scopeMatches(a.scope) || a.epoch !== this.#epoch || a.origin !== this.#ackOrigin || a.kind !== c.kind) return false;
+    return a.kind === 'root_captured' && c.kind === 'root_captured'
+      ? Object.keys(a).length === 6 && a.source === c.source && a.root === c.root
+      : a.kind === 'root_not_created' && c.kind === 'root_not_created' && Object.keys(a).length === 5 && a.checkpoint === c.checkpoint;
+  }
+  private pinMatches(c: Exclude<OwnedStopContext, Readonly<{ kind: 'unconfirmed' }>>): boolean {
+    const p = this.#pin;
+    if (!p || p !== this.#issuedPin || !this.scopeMatches(p.scope) || p.epoch !== this.#epoch || p.origin !== this.#pinOrigin
+      || Object.keys(p).length !== 5 || p.kind !== c.control.kind) return false;
+    return p.kind === 'minted' && c.control.kind === 'minted' ? p.control === c.control.origin
+      : p.kind === 'not_minted' && c.control.kind === 'not_minted' && p.checkpoint === c.control.checkpoint;
+  }
+  private admissionMatches(kind: 'source_backed' | 'local_only'): boolean {
+    const a = this.#admission;
+    return !!a && a === this.#issuedAdmission && Object.keys(a).length === 7 && this.scopeMatches(a.scope)
+      && a.epoch === this.#epoch && a.origin === this.#admissionOrigin && a.kind === kind
+      && a.ack === this.#ackOrigin && a.pin === this.#pinOrigin && a.packet === this.#packetOrigin;
+  }
+  prepare() { return this.#failure ?? this.#start.prepare(); }
+  admit() {
+    if (this.#failure) return this.#failure;
+    if (this.#state !== 'unused') return this.reply(false, this.#state === 'issuing' ? 'in_progress' : 'already_issued');
+    this.#phase = 'entry';
+    try {
+    this.#start.request();
+    if (!captureStartAccess.ready(this.#start)) return this.reject('not_ready');
+    if (!this.scopeMatches(this.#scope)) return this.reject('binding_mismatch');
+    this.#state = 'issuing';
+    if (this.scenario === 'reenter_issue') this.#reentry = this.admit().disposition;
+    const context = captureStartAccess.context(this.#start);
+    if (context.kind === 'unconfirmed') return this.reject('stop_unconfirmed');
+    if (context.kind === 'root_captured') {
+      this.#phase = 'seal';
+      this.#seals++;
+      this.fault('seal_before');
+      if (!captureStartAccess.seal(this.#start)) return this.reject('stop_unconfirmed');
+      this.fault('seal_after');
+    }
+    this.#phase = 'ack'; this.fault('ack_before');
+    const ack: RootStopAck = context.kind === 'root_captured'
+      ? Object.freeze({ scope: this.#scope, epoch: this.#epoch, origin: this.#ackOrigin, kind: 'root_captured', source: context.source, root: context.root })
+      : Object.freeze({ scope: this.#scope, epoch: this.#epoch, origin: this.#ackOrigin, kind: 'root_not_created', checkpoint: context.checkpoint });
+    this.#ack = this.probe(ack, 'ack'); this.#issuedAck = this.scenario === 'ack_copy' ? ack : this.#ack;
+    if (!this.ackMatches(context)) return this.reject('binding_mismatch');
+    this.#ackIssues++;
+    this.fault('ack_after'); this.#phase = 'pin'; this.fault('pin_before');
+    const pin: TrustedControlPin = context.control.kind === 'minted'
+      ? Object.freeze({ scope: this.#scope, epoch: this.#epoch, origin: this.#pinOrigin, kind: 'minted', control: context.control.origin })
+      : Object.freeze({ scope: this.#scope, epoch: this.#epoch, origin: this.#pinOrigin, kind: 'not_minted', checkpoint: context.control.checkpoint });
+    this.#pin = this.probe(pin, 'pin'); this.#issuedPin = this.scenario === 'pin_copy' ? pin : this.#pin;
+    if (!this.pinMatches(context)) return this.reject('binding_mismatch');
+    this.#pinIssues++;
+    this.fault('pin_after'); this.#phase = 'admission'; this.fault('admission_before');
+    const kind = context.kind === 'root_captured' ? 'source_backed' : 'local_only';
+    const admission: CaptureAdmission = Object.freeze({ scope: this.#scope, epoch: this.#epoch, origin: this.#admissionOrigin,
+      kind, ack: this.#ack.origin, pin: this.#pin.origin, packet: this.#packetOrigin });
+    this.#admission = this.probe(admission, 'admission'); this.#issuedAdmission = this.scenario === 'admission_copy' ? admission : this.#admission;
+    if (!this.admissionMatches(kind)) return this.reject('binding_mismatch');
+    this.#admissionIssues++;
+    this.fault('admission_after'); this.#phase = 'authority'; this.fault('authority_failure');
+    this.#authority = Object.freeze({ scope: this.#scope, epoch: this.#epoch, admission: this.#admission.origin,
+      kind, packet: this.#packetOrigin, ready: false, captureReady: 'not_connected' });
+    if (this.scenario === 'probe_gates') this.#rootGates = captureStartAccess.probe(this.#start);
+    this.#state = 'issued'; return this.reply(true, 'issued');
+    } catch { return this.reject(this.#phase === 'seal' ? 'stop_unconfirmed' : 'issue_unconfirmed'); }
+  }
+  rejectArguments() { if (this.#failure) return this.#failure; this.#start.request(); return this.reject('input_rejected'); }
+  close() { return this.#failure ?? this.#start.close(); }
+  inspect() { const start = this.#start.inspect(); return Object.freeze({ ...RETIREMENT_START_CLOSED, state: this.#state,
+    stopAck: this.#ack?.kind ?? 'not_issued', controlPin: this.#pin?.kind ?? 'not_issued', admission: this.#admission?.kind ?? 'not_issued',
+    clearAuthority: this.#authority?.captureReady ?? 'not_issued', clearAuthorityMode: this.#authority?.kind ?? 'not_issued',
+    firstReason: start.firstReason, rootGates: this.#rootGates, controlState: start.controlState,
+    admissionFirst: this.#admissionFirst, phase: this.#phase, reentry: this.#reentry,
+    retainedProducts: Object.freeze({ ack: !!this.#issuedAck, pin: !!this.#issuedPin, admission: !!this.#issuedAdmission, authority: !!this.#authority }),
+    sealAttempts: this.#seals, ackIssues: this.#ackIssues, pinIssues: this.#pinIssues, admissionIssues: this.#admissionIssues,
+    retained: start.retained, source: start.source }); }
+}
+const CAPTURE_ADMISSION_SCENARIOS = Object.freeze(['normal', 'probe_gates', 'reenter_issue', 'source_unknown', 'frame_exit_failure', 'source_rejected', 'prepare_failure', 'control_unconfirmed',
+  ...['owner', 'construction', 'retention', 'sourceSlot', 'claim'].map(f => 'scope_' + f),
+  ...['copy', 'scope_copy', 'epoch', 'origin', 'source', 'root', 'checkpoint', 'variant', 'extra'].map(f => 'ack_' + f),
+  ...['copy', 'scope_copy', 'epoch', 'origin', 'control', 'checkpoint', 'variant', 'extra'].map(f => 'pin_' + f),
+  ...['copy', 'scope_copy', 'epoch', 'origin', 'ack', 'pin', 'packet', 'variant', 'extra'].map(f => 'admission_' + f),
+  'seal_before', 'seal_after', 'ack_before', 'ack_after', 'pin_before', 'pin_after', 'admission_before', 'admission_after', 'authority_failure']);
+export function createCaptureAdmissionFake(...args: readonly unknown[]) {
+  const input = args.length === 0 ? 'normal' : args[0];
+  const admitted = args.length <= 1 && typeof input === 'string' && CAPTURE_ADMISSION_SCENARIOS.includes(input);
+  const a = new CaptureAdmissionAssembly(admitted ? input as string : 'normal', admitted);
+  return Object.freeze({ prepare: (...xs: readonly unknown[]) => xs.length ? a.rejectArguments() : a.prepare(),
+    admit: (...xs: readonly unknown[]) => xs.length ? a.rejectArguments() : a.admit(),
     close: (...xs: readonly unknown[]) => xs.length ? a.rejectArguments() : a.close(), inspect: () => a.inspect() });
 }
