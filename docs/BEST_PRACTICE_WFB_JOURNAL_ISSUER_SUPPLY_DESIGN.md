@@ -2,9 +2,11 @@
 
 Version: draft-0.1 / Date: 2026-11-09 / 読み取り照合HEAD: `d18f4dc`。
 
-Status: **差分設計のみ。private供給・admission消費・packet生成は未実装。** 親は[Journal／packet設計](BEST_PRACTICE_WFB_JOURNAL_PACKET_DESIGN.md)と[停止確認・capture受付設計](BEST_PRACTICE_WFB_CAPTURE_ADMISSION_DESIGN.md)。先行の[Journal検証記録](E2E_BEST_PRACTICE_WFB_ABSENCE_JOURNAL_2026-11-09.md)は独立合成ownerの保証であり、本書の接続試験を代替しない。
+実装追記（2026-11-09）: §9の第1段階の内部型・生成順だけを独立合成assemblyで実装した。既存issuerへのprivate供給・admission消費・packet生成は未接続。[shell検証記録](E2E_BEST_PRACTICE_WFB_JOURNAL_SUPPLY_SHELL_2026-11-09.md)。
 
-正式発行口・C実行入口閉鎖、全体受付無効、Unknown、VM／監視／telemetry調査保留を維持する。今回はMDだけを更新し、実装・admission消費・packet生成・値capture・field clear・証拠発行・root終端・実接続・実通信・設定変更・Pushを行わない。以下の型・理由・継続名は非実行の設計案である。
+Status: **先行shell／空保持slot・非実行descriptor／未消費claimは合成実装。既存issuerへのprivate供給・admission消費・packet生成は未実装。** 親は[Journal／packet設計](BEST_PRACTICE_WFB_JOURNAL_PACKET_DESIGN.md)と[停止確認・capture受付設計](BEST_PRACTICE_WFB_CAPTURE_ADMISSION_DESIGN.md)。先行の[Journal検証記録](E2E_BEST_PRACTICE_WFB_ABSENCE_JOURNAL_2026-11-09.md)は独立合成ownerの保証であり、本書の接続試験を代替しない。
+
+正式発行口・C実行入口閉鎖、全体受付無効、Unknown、VM／監視／telemetry調査保留を維持する。初版はMDのみ。今回の合成実装は§10に限定し、既存issuer接続・admission消費・packet生成・値capture・field clear・証拠発行・root終端・実接続・実通信・設定変更・Pushを行わない。以下の型・理由・継続名は設計案または非実行の合成契約である。
 
 ## 1 現行差分と接続対象
 
@@ -135,3 +137,17 @@ oracleは本体layout・builder・state counterを期待値にimportせず、構
 次のadmission consumerは別工程で、上記preparedと将来のlive pre検査を前提にする。packet生成はそのさらに後である。公開APIの実source差替えや正式発行口を開く工程は含まない。
 
 今回は`d18f4dc`のproducer Journal、control live退役、旧clear gate、既存issuer／start／独立JournalAssemblyを読み取り照合した。新文書と親2文書だけを更新し、ビルド・試験・梱包は行わない。実装済み保証や過去の591件を本接続の成功へ昇格させない。3文書のローカルリンク14件、生成順B00〜B06の7段階、JS01〜JS12の12条件の重複・欠落なしと差分空白検査を確認した。これは文書整合の確認であり、未実装経路の試験成功ではない。未コミット、Pushなし。
+
+## 10 第1段階の独立合成実装（2026-11-09）
+
+配置は`tests/review/fixtures/journal-supply-shell-fake.ts`。runtime・既存issuer・Journalのimportはなく、別brand／別台帳の独立assemblyである。新exportは`createJournalSupplyShellFake`だけで、prepare／check／close／値診断のみを公開し、任意artifactのadopt・登録・consume口を持たない。既存factory・実classのソースを変更していない。
+
+固定順は、先行FailureShellと34枠の捕捉台帳→結果shell(1)→供給slot(2)→空packet保持slot(3)→静的layout(4)→空cell保持slot25個(5〜29)→未使用admission slot(30)→**合成start代役**(31)→private target descriptor(32)→未消費供給claim(33)→同descriptorの結合先slot(34)。同参照・brand・variant・scope／epoch／packet originを確認後、供給slotをunboundからboundへ一度だけ固定する。B02の実RetirementStartAssembly接続を実装したという意味ではない。
+
+descriptorはB03用の非実行供給先記述であり、issued admission originを持つ最終JournalSupplyAnchorではない。供給claimもunusedで保持するだけで、bound→preparingは未実装。checkはblocked_supplyを返す。packet／cell objectは存在せず、保持slotのreferenceは全てundefined。C→F layoutは親文書の固定25項目（F14・F24等を誤って連番補完しない）を使用する。
+
+各生成点はbefore→attempting→返却参照のprovisional捕捉→confirmedを分離する。故障後は先行first・phase／boundary、捕捉済みprefixとattempt未捕捉の責務を保持し、第2構築を拒否する。最初のFailureShell／固定台帳・module layout自体の実確保失敗や実OOM時の診断必着はUnknown。生成frame中のcloseはdeferred通知で、frame退出までに新start生成を止める。close後も保持slotをclearせず、discard／cleanup確認を主張しない。
+
+JS02の先行保持prefixとJS03／JS08／JS12の非接続部分だけを検証した。合成scopeは参照で照合し、start側の実field再検証、producer Journal借用、frame／停止／封印、同既存admission epochへの結合、live post、固定discardは後工程。別assemblyの成功を実class保証や本番bindingに昇格しない。実費用・layout・E／S・全体work受付はUnknownのままである。
+
+初版§9末尾は初版作成時の記録（文書コミット`f51e246`）。今回の実装は別の未コミット変更として検証記録へ保持する。
