@@ -4,9 +4,11 @@ Version: draft-0.2 / Date: 2026-11-09 / 読み取り照合基準HEAD: `bbc1426`�
 
 draft-0.2のレビュー修正：§6の受付順は「retirement sealと生成frame終了」を必須段階としていたが、root_not_created由来のlocal_onlyにはseal対象のrootがなく、現行issuerもsealを呼ばない（sealAttempts=0）。§5の「正常利用をsealする前に記録を完了」もlocal_onlyの記録完了点が未定だった。local_onlyではseal段階を正規生成履歴のknown-not-created checkpoint確認と生成frame終了で置き換えると§5・§6に明記した。
 
-Status: **MDのみ。Journal・admission consumer・packet生成は未実装。** 親は[停止確認・capture受付設計](BEST_PRACTICE_WFB_CAPTURE_ADMISSION_DESIGN.md)と[field別固定回収schedule](BEST_PRACTICE_WFB_FIXED_RETIREMENT_SCHEDULE_DESIGN.md)。先行実装は[内部issuer検証記録](E2E_BEST_PRACTICE_WFB_CAPTURE_ADMISSION_2026-11-09.md)。本書は生成履歴の真正な記録と空packet生成までを具体化し、25cellの値読取・同参照確認・CaptureReadyは次の工程とする。
+実装追記（2026-11-09）: §10の第1段階だけを合成依存限定で接続した。固定11+14のJournal内部型・writer記録点・候補commit・先行診断・合成owner／epoch結合を実装。admission consumer・packet生成・既存admission epochへの接続は未実装。[今回の検証記録](E2E_BEST_PRACTICE_WFB_ABSENCE_JOURNAL_2026-11-09.md)。
 
-正式発行口閉鎖・C実行入口閉鎖・全体受付無効・Unknown・VM／監視／telemetry調査保留を維持する。今回は文書だけを更新し、実装・合成試験・capture値読取・field clear・payload退役証拠・root終端・実接続・実通信・実機操作・設定変更・Pushを行わない。以下の型・slot・継続・状態・理由は設計案であり、正式なpermitや実resource操作の権限ではない。
+Status: **Journal第1段階は合成実装、admission consumer・packet生成は未実装。** 親は[停止確認・capture受付設計](BEST_PRACTICE_WFB_CAPTURE_ADMISSION_DESIGN.md)と[field別固定回収schedule](BEST_PRACTICE_WFB_FIXED_RETIREMENT_SCHEDULE_DESIGN.md)。先行実装は[内部issuer検証記録](E2E_BEST_PRACTICE_WFB_CAPTURE_ADMISSION_2026-11-09.md)。本書は生成履歴の真正な記録と空packet生成までを具体化し、25cellの値読取・同参照確認・CaptureReadyは次の工程とする。
+
+正式発行口閉鎖・C実行入口閉鎖・全体受付無効・Unknown・VM／監視／telemetry調査保留を維持する。初版は文書のみ、今回の実装は§11に限定し、capture値読取・新field clear・payload退役証拠・root終端・実接続・実通信・実機操作・設定変更・Pushを行わない。以下の型・slot・継続・状態・理由は設計案または合成内部契約であり、正式なpermitや実resource操作の権限ではない。
 
 ## 1 現行との境界
 
@@ -153,3 +155,14 @@ Journalは25固定field枠、source／bindingのproducer scope各1、epoch bindi
 3. **別工程の値capture**：25cellの読取→格納→再読→Journal／epoch post確認へ進む。全25cell確認後だけCaptureReadyを検討する。field clear・証拠・root終端はさらに別工程。
 
 `bbc1426`のsource準備・旧clear、bindingのcontext／anchor／wrapper／claim／control／receiptとextra aliasの代入位置、内部issuerの部分生成保持を読み取り照合した。今回は新設計書と親文書だけを更新し、ビルド・合成試験・梱包・実費検証を行わない。3文書のローカルリンク16件、C01〜C25の重複・欠落なし、absenceの4 variant、JP01〜JP10の存在と差分空白検査を確認した。これは文書整合の確認であり、未実装のJournal／consumer／packetの試験成功を意味しない。未コミット、Pushなし。
+
+## 11 Journal第1段階の合成実装境界（2026-11-09）
+
+- 配置は開発専用の`tests/review/fixtures/snapshot-read-composition-fake.ts`。AbsenceJournal／FactBase／4variant／FieldHistoryCell／GenerationEpochBindingは非export。公開する新factoryは`createAbsenceJournalFake`だけで、`prepare／seal／inspect`の固定操作・値だけの診断を返す。既存互換factoryのexport・関数同一性は維持し、共通moduleのexport集合にはこの新factoryを明示追加する。
+- source11枠とbinding14枠で合計25枠。field別stampは0〜64、上限でwrap／飽和同一視せずunconfirmed。scopeとgeneration epochはproducer生成処理前に確保し、合成先行ownerのcapture epochへprivateに一度だけ結合する。local-onlyはsource scopeを持たず、source attempt未捕捉は結合拒否。既存CaptureAdmissionの発行slotやepochは変更・消費しない。その継続への供給は後工程である。
+- 実slot代入前にbegin、代入後にcomplete。C04〜C06はrelease候補にとどめ、最終validate成功・prepared確定後に3枠一括preflightしてcommit。Journalの故障はstickyな別診断にし、元writerや元firstを変更せず、consumer候補側を拒否する。旧clearは実代入後に11個の空booleanを確認し、issued-onlyを含む欠落を拒否。反復noopは同fact／stampを保持する。
+- extra aliasは正規writer開始を記録し、永久に生成入口を閉じたsealでだけ未開始をalias_never_assignedへ確定。各slotのnot_mintedは未開始、または正規helperの確認済み非発行returnから作る。present siblingやcontrolの既存局所記録を流用しない。未捕捉writerはunconfirmedで、先行slotを消去しない。
+- 既存の値混入probeは対象のpresent群を保守的にbegin／completeで囲み、通常のabsence候補へ使わない。故障scriptはJournal生成権限ではない。通常の合成sealは旧clearを呼ばず、`legacy_clear`対照だけが既存writerを明示実行する。新field clear回数は0である。
+- JP01〜JP05のJournal段階と、元slot不変・秘密非出力・旧入口維持を部分検証した。JP06〜JP09のadmission消費／packet生成、JP10の新packet経路は未到達。PacketOwnerSlot／SealedJournalView／PacketAllocationReceiptの発行・値capture・CaptureReady・新field clear・root終端は未実装。費用の実モデル・heap/layout・実E/SはUnknownで、既存期限／capは変更しない。
+
+初版§10末尾の「未コミット」は初版作成時点の記録（後に`c839766`で文書をコミット）。今回の実装は別の未コミット変更として扱う。draft-0.2のlocal_onlyレビュー修正を維持し、root未生成時はroot sealを呼ばず正規not-created checkpointで確認する。検証の範囲・初回失敗・未実施事項は上記検証記録へ保持する。

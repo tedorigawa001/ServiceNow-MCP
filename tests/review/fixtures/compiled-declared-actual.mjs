@@ -18,7 +18,7 @@ try {
 writeFileSync(join(scratch, 'package.json'), '{"type":"module"}');
 await compile(readFileSync(new URL('./source-map-values-core.ts', import.meta.url), 'utf8'), 'source-map-values-core.js');
 const original = await compile(source);
-assert.deepEqual(Object.keys(original), ['createCanonicalSupplyTransferFake', 'createCanonicalSupplyViewFake', 'createCaptureAdmissionFake', 'createPendingBindingFake', 'createPendingConstructionFake', 'createReadHashFake', 'createRetirementStartFake', 'createSnapshotReadStartFake', 'createSupplyBoundaryFake']);
+assert.deepEqual(Object.keys(original), ['createAbsenceJournalFake', 'createCanonicalSupplyTransferFake', 'createCanonicalSupplyViewFake', 'createCaptureAdmissionFake', 'createPendingBindingFake', 'createPendingConstructionFake', 'createReadHashFake', 'createRetirementStartFake', 'createSnapshotReadStartFake', 'createSupplyBoundaryFake']);
 for (const name of ['shared-read-hash-kernel-fake', 'read-hash-fake', 'snapshot-read-start-fake', 'canonical-supply-view-fake', 'canonical-supply-transfer-fake', 'supply-boundary-fake', 'pending-construction-fake', 'pending-binding-fake', 'retirement-start-fake', 'capture-admission-fake']) {
   const facade = await compile(readFileSync(new URL(`./${name}.ts`, import.meta.url), 'utf8'), `${name}.js`);
   const factory = name === 'snapshot-read-start-fake' ? 'createSnapshotReadStartFake'

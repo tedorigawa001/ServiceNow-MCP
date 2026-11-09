@@ -858,7 +858,131 @@ let supplyTransferAccess: {
   matches(a: CanonicalSupplyAssembly, anchor: SupplyIssuanceAnchor): boolean;
   fail(a: CanonicalSupplyAssembly, reason: 'binding_mismatch' | 'supply_prepare_unavailable'): void;
 };
+// Synthetic-only history. No payload references, public fact adoption, admission consumer or packet builder.
+type JournalProducer = 'source' | 'binding';
+type AbsenceKind = 'preparation_completed' | 'alias_never_assigned' | 'legacy_discard_executed' | 'not_minted';
+type JournalStage = 'not_started' | 'writing' | 'present' | 'candidate' | 'absent' | 'unconfirmed';
+interface JournalScope { readonly producer: JournalProducer; readonly origin: object; readonly epoch: object }
+type SlotProducer = 'source_supply' | 'payload_wrapper' | 'control' | 'transfer_claim' | 'anchor' | 'binding_receipt' | 'scope_context';
+interface FactBase { readonly scope: JournalScope; readonly field: number; readonly stamp: number;
+  readonly origin: object; readonly checkpoint: object }
+type AbsenceFact = Readonly<FactBase & (
+  { kind: 'preparation_completed'; producer: 'source_supply' }
+  | { kind: 'alias_never_assigned'; producer: 'transfer_claim' | 'control' }
+  | { kind: 'legacy_discard_executed'; producer: 'source_supply' }
+  | { kind: 'not_minted'; producer: SlotProducer })>;
+interface FieldHistoryCell { stage: JournalStage; stamp: number; fact: AbsenceFact | undefined }
+class AbsenceJournal {
+  readonly scope: JournalScope;
+  readonly #cells: FieldHistoryCell[];
+  readonly #checkpoint = Object.freeze({});
+  #sealed = false;
+  #first: 'none' | 'journal_unconfirmed' | 'journal_sealed' = 'none';
+  #firstField = 0;
+  #firstBoundary: 'none' | 'begin' | 'complete' | 'candidate' | 'commit' | 'seal' = 'none';
+  #candidates = 0; #preparationCommits = 0;
+  constructor(producer: JournalProducer, private readonly fault = '') {
+    this.scope = Object.freeze({ producer, origin: Object.freeze({}), epoch: Object.freeze({}) });
+    this.#cells = Array.from({ length: producer === 'source' ? 11 : 14 }, () => ({ stage: 'not_started', stamp: 0, fact: undefined }));
+  }
+  private cell(field: number): FieldHistoryCell { return this.#cells[field - (this.scope.producer === 'source' ? 1 : 12)]; }
+  private fail(field: number, boundary: 'begin' | 'complete' | 'candidate' | 'commit' | 'seal') {
+    if (this.#first === 'none') { this.#first = this.#sealed ? 'journal_sealed' : 'journal_unconfirmed'; this.#firstField = field; this.#firstBoundary = boundary; }
+    const c = this.cell(field); if (c) { c.stage = 'unconfirmed'; c.fact = undefined; }
+  }
+  private accepts(field: number, boundary: 'begin' | 'complete' | 'candidate' | 'commit' | 'seal'): boolean {
+    if (!Number.isInteger(field) || field < (this.scope.producer === 'source' ? 1 : 12)
+      || field > (this.scope.producer === 'source' ? 11 : 25)) { this.fail(field, boundary); return false; }
+    if (this.#sealed || this.#first !== 'none' || this.fault === `${boundary}_${field}`) { this.fail(field, boundary); return false; }
+    return true;
+  }
+  begin(field: number): void {
+    if (!this.accepts(field, 'begin')) return;
+    const c = this.cell(field); c.fact = undefined;
+    if (c.stamp >= 64) { this.fail(field, 'begin'); return; }
+    c.stamp++; c.stage = 'writing';
+  }
+  complete(field: number): void {
+    if (!this.accepts(field, 'complete')) return;
+    const c = this.cell(field);
+    if (c.stage !== 'writing') { this.fail(field, 'complete'); return; }
+    c.stage = 'present';
+  }
+  nonpublication(field: 21 | 22 | 25): void {
+    if (!this.accepts(field, 'complete')) return;
+    if (this.cell(field).stage !== 'present') { this.fail(field, 'complete'); return; }
+    this.fact(field, 'not_minted');
+  }
+  write(field: number, operation: () => void): void {
+    this.begin(field); operation(); this.complete(field);
+  }
+  release(field: number, operation: () => void): void {
+    this.begin(field); operation();
+    if (!this.accepts(field, 'candidate')) return;
+    const c = this.cell(field);
+    if (c.stage !== 'writing' || field < 4 || field > 6) { this.fail(field, 'candidate'); return; }
+    c.stage = 'candidate'; this.#candidates++;
+  }
+  commitPreparation(): void {
+    // Preflight all three before publishing any fact. Source prepared is already fixed by its writer.
+    for (const field of [4, 5, 6]) {
+      if (!this.accepts(field, 'commit')) return;
+      if (this.cell(field).stage !== 'candidate') { this.fail(field, 'commit'); return; }
+    }
+    for (const field of [4, 5, 6]) this.fact(field, 'preparation_completed');
+    this.#preparationCommits = 3;
+  }
+  private fact(field: number, kind: AbsenceKind): void {
+    const c = this.cell(field);
+    const base = { scope: this.scope, field, stamp: c.stamp, origin: Object.freeze({}), checkpoint: this.#checkpoint };
+    const producer: SlotProducer = field <= 11 ? 'source_supply' : field <= 13 ? 'payload_wrapper'
+      : field === 14 || field >= 18 && field <= 20 ? 'control' : field <= 17 ? 'transfer_claim'
+        : field <= 22 ? 'anchor' : field <= 24 ? 'binding_receipt' : 'scope_context';
+    if (kind === 'preparation_completed' || kind === 'legacy_discard_executed') c.fact = Object.freeze({ ...base, kind, producer: 'source_supply' });
+    else if (kind === 'alias_never_assigned') c.fact = Object.freeze({ ...base, kind, producer: field === 17 ? 'transfer_claim' : 'control' });
+    else c.fact = Object.freeze({ ...base, kind, producer });
+    c.stage = 'absent';
+  }
+  legacyClear(operation: () => void, emptySlots: () => readonly boolean[]): void {
+    // Repeated noop clear retains the same bounded facts and stamps, not fresh evidence.
+    const repeat = this.#cells.slice(0, 11).every(c => c.fact?.kind === 'legacy_discard_executed');
+    if (!repeat) for (let i = 1; i <= 11; i++) this.begin(i);
+    operation();
+    const empty = emptySlots();
+    for (let i = 1; i <= 11; i++) if (empty.length !== 11 || empty[i - 1] !== true) { this.fail(i, 'complete'); return; }
+    if (repeat) return;
+    for (let i = 1; i <= 11; i++) if (!this.accepts(i, 'complete') || this.cell(i).stage !== 'writing') return;
+    for (let i = 1; i <= 11; i++) this.fact(i, 'legacy_discard_executed');
+  }
+  seal(): boolean {
+    if (this.#sealed) return this.#first === 'none';
+    const lo = this.scope.producer === 'source' ? 1 : 12, hi = this.scope.producer === 'source' ? 11 : 25;
+    for (let i = lo; i <= hi; i++) {
+      if (!this.accepts(i, 'seal')) { this.#sealed = true; return false; }
+      const c = this.cell(i);
+      if (c.stage === 'writing' || c.stage === 'candidate' || c.stage === 'unconfirmed') { this.fail(i, 'seal'); this.#sealed = true; return false; }
+    }
+    for (let i = lo; i <= hi; i++) if (this.cell(i).stage === 'not_started')
+      this.fact(i, i === 17 || i === 20 ? 'alias_never_assigned' : 'not_minted');
+    this.#sealed = true; return true;
+  }
+  ready(scope: JournalScope): boolean {
+    return scope === this.scope && this.#sealed && this.#first === 'none'
+      && this.#cells.every((c, i) => c.stage === 'present' || (c.stage === 'absent' && !!c.fact && c.fact.scope === scope
+        && c.fact.field === i + (this.scope.producer === 'source' ? 1 : 12)
+        && c.fact.stamp === c.stamp && c.fact.checkpoint === this.#checkpoint));
+  }
+  inspect() {
+    const lo = this.scope.producer === 'source' ? 0 : 11;
+    return Object.freeze({ producer: this.scope.producer, sealed: this.#sealed, first: this.#first, firstField: this.#firstField,
+      firstBoundary: this.#firstBoundary, candidates: this.#candidates, preparationCommits: this.#preparationCommits,
+      cells: Object.freeze(this.#cells.map((c, i) => Object.freeze({
+        field: i + lo + 1, stage: c.stage, stamp: c.stamp, fact: c.fact?.kind ?? 'none', producer: c.fact?.producer ?? 'none' }))) });
+  }
+}
+let sourceJournalAccess: (a: CanonicalSupplyAssembly) => AbsenceJournal;
 class CanonicalSupplyAssembly {
+  readonly #journal: AbsenceJournal;
   readonly #root: CStartAssembly;
   readonly #sourceOrigin = Object.freeze({});
   #normalControl: SupplyUseControl | undefined;
@@ -878,6 +1002,7 @@ class CanonicalSupplyAssembly {
   readonly #counts = { preparationClaims: 0, registryRecords: 0, bindings: 0, declarations: 0, tables: 0, views: 0,
     validationPasses: 0, fileChecks: 0, discardPasses: 0 };
   static {
+    sourceJournalAccess = a => a.#journal;
     sourceRootRetirement = Object.freeze({ origin: (a: CanonicalSupplyAssembly) => rootRetirementAccess.origin(a.#root),
       seal(a: CanonicalSupplyAssembly): boolean { rootRetirementAccess.seal(a.#root); return rootRetirementAccess.sealed(a.#root); },
       probe(a: CanonicalSupplyAssembly): Readonly<Record<string, boolean | string>> {
@@ -947,13 +1072,15 @@ class CanonicalSupplyAssembly {
       fail(a: CanonicalSupplyAssembly, reason: 'binding_mismatch' | 'supply_prepare_unavailable'): void { a.fail(reason); },
     });
   }
-  constructor(private readonly scenario: string, admitted: boolean) {
+  constructor(private readonly scenario: string, admitted: boolean, journalFault = '') {
+    this.#journal = new AbsenceJournal('source', journalFault);
     this.#root = new CStartAssembly((cStartScenarios as readonly string[]).includes(scenario) ? scenario as CStartScenario : 'normal', admitted);
   }
   private reply(reason?: Exclude<CanonicalSupplyReason, 'none'> | 'read_already_used') {
     return Object.freeze(reason ? { ...CANONICAL_CLOSED, ok: false, reason } : { ...CANONICAL_CLOSED, ok: true });
   }
   private clear(): void {
+    this.#journal.legacyClear(() => {
     if (this.#envelope || this.#registry || this.#table || this.#view || this.#buildingRegistry
       || this.#buildingBindings || this.#buildingDeclarations) {
       this.#counts.discardPasses++; this.#retirementOrder.push('supply_references_cleared');
@@ -962,6 +1089,10 @@ class CanonicalSupplyAssembly {
     this.#view = undefined; this.#issuedView = undefined; this.#issuedDeclarations = undefined;
     this.#buildingRegistry = undefined; this.#buildingBindings = undefined; this.#buildingDeclarations = undefined;
     this.#tableOrigin = undefined; this.#state = 'discarded';
+    }, () => Object.freeze([this.#registry === undefined, this.#table === undefined, this.#view === undefined,
+      this.#buildingRegistry === undefined, this.#buildingBindings === undefined, this.#buildingDeclarations === undefined,
+      this.#envelope === undefined, this.#issuedTable === undefined, this.#issuedView === undefined,
+      this.#issuedDeclarations === undefined, this.#tableOrigin === undefined]));
   }
   private fail(reason: Exclude<CanonicalSupplyReason, 'none'>) {
     if (this.#first === 'none') this.#first = reason;
@@ -1145,48 +1276,54 @@ class CanonicalSupplyAssembly {
     this.#state = 'preparing'; this.#counts.preparationClaims++;
     try {
       const envelope = this.probeEnvelope(canonical);
-      this.fault('envelope'); this.#envelope = envelope;
-      this.fault('origin'); this.#tableOrigin = Object.freeze({});
+      this.#journal.write(7, () => { this.fault('envelope'); this.#envelope = envelope; });
+      this.#journal.write(11, () => { this.fault('origin'); this.#tableOrigin = Object.freeze({}); });
       if (this.scenario === 'reentrant_preparation') { this.prepareSupply(); return this.reply(this.#first as Exclude<CanonicalSupplyReason, 'none'>); }
       const bytes = Object.freeze([97, 98, 99]);
-      this.#buildingRegistry = [];
+      this.#journal.write(4, () => { this.#buildingRegistry = []; });
       for (let ordinal = 0; ordinal < envelope.files.length; ordinal++) {
         this.fault(`registry_${ordinal}`);
         const file = envelope.files[ordinal];
         const origin = Object.freeze({});
         const source = this.sourceRecord(origin, ordinal, bytes);
-        this.#buildingRegistry.push(Object.freeze({ file, ordinal, origin, source })); this.#counts.registryRecords++;
+        this.#buildingRegistry!.push(Object.freeze({ file, ordinal, origin, source })); this.#counts.registryRecords++;
         if (this.scenario === 'close_during_registry') { this.close(); return this.reply('supply_closed'); }
       }
-      this.#registry = Object.freeze(this.#buildingRegistry); this.#buildingRegistry = undefined;
-      this.#buildingBindings = [];
-      for (let i = 0; i < this.#registry.length; i++) {
-        this.fault(`bindings_${i}`); const r = this.#registry[i];
-        const swapped = this.#registry[i < 2 ? 1 - i : i];
-        this.#buildingBindings.push(Object.freeze({ ...r,
+      this.#journal.write(1, () => { this.#registry = Object.freeze(this.#buildingRegistry!); });
+      this.#journal.release(4, () => { this.#buildingRegistry = undefined; });
+      this.#journal.write(5, () => { this.#buildingBindings = []; });
+      for (let i = 0; i < this.#registry!.length; i++) {
+        this.fault(`bindings_${i}`); const r = this.#registry![i];
+        const swapped = this.#registry![i < 2 ? 1 - i : i];
+        this.#buildingBindings!.push(Object.freeze({ ...r,
           source: (this.scenario === 'record_swap' || this.scenario === 'record_origin_swap') && i < 2 ? swapped.source : r.source,
           origin: (this.scenario === 'origin_swap' || this.scenario === 'record_origin_swap') && i < 2 ? swapped.origin : r.origin,
           tableOrigin: this.#tableOrigin! })); this.#counts.bindings++;
       }
-      const bindings = this.probeBindings(Object.freeze(this.#buildingBindings)); this.#buildingBindings = undefined;
-      this.fault('table');
-      this.#table = Object.freeze({ envelope, origin: this.#tableOrigin, bindings }); this.#issuedTable = this.#table;
+      const bindings = this.probeBindings(Object.freeze(this.#buildingBindings!));
+      this.#journal.release(5, () => { this.#buildingBindings = undefined; });
+      this.#journal.write(2, () => { this.fault('table'); this.#table = Object.freeze({ envelope, origin: this.#tableOrigin!, bindings }); });
+      this.#journal.write(8, () => { this.#issuedTable = this.#table; });
       this.#counts.tables++;
-      this.#buildingDeclarations = [];
+      this.#journal.write(6, () => { this.#buildingDeclarations = []; });
       for (let i = 0; i < bindings.length; i++) {
         this.fault(`declarations_${i}`); const binding = bindings[i];
-        this.#buildingDeclarations.push(Object.freeze({ file: binding.file, ordinal: binding.ordinal, binding })); this.#counts.declarations++;
+        this.#buildingDeclarations!.push(Object.freeze({ file: binding.file, ordinal: binding.ordinal, binding })); this.#counts.declarations++;
       }
-      const declarations = Object.freeze(this.#buildingDeclarations); this.#buildingDeclarations = undefined;
-      this.#issuedDeclarations = declarations;
-      this.fault('view');
-      this.#view = Object.freeze({ envelope, table: this.#table, declarations }); this.#issuedView = this.#view;
+      const declarations = Object.freeze(this.#buildingDeclarations!);
+      this.#journal.release(6, () => { this.#buildingDeclarations = undefined; });
+      this.#journal.write(10, () => { this.#issuedDeclarations = declarations; });
+      this.#journal.write(3, () => { this.fault('view'); this.#view = Object.freeze({ envelope, table: this.#table!, declarations }); });
+      this.#journal.write(9, () => { this.#issuedView = this.#view; });
       this.#counts.views++;
+      // Mutation probes only write present source fields, never the three release candidates.
+      if (this.scenario.startsWith('post_')) for (const field of [1, 2, 3, 7, 8, 9, 10, 11]) this.#journal.begin(field);
       this.probeIssued();
+      if (this.scenario.startsWith('post_')) for (const field of [1, 2, 3, 7, 8, 9, 10, 11]) this.#journal.complete(field);
       if (this.scenario === 'close_before_post') { this.close(); return this.reply('supply_closed'); }
       this.fault('post');
       if (!this.validate()) return this.fail('binding_mismatch');
-      this.#state = 'prepared'; return this.reply();
+      this.#state = 'prepared'; this.#journal.commitPreparation(); return this.reply();
     } catch { return this.fail('supply_prepare_unavailable'); }
   }
   close() {
@@ -1827,7 +1964,12 @@ let retirementBindingAccess: Readonly<{
   sealRoot(a: PendingSourceBinding): boolean;
   probeRoot(a: PendingSourceBinding): Readonly<Record<string, boolean | string>> | undefined;
 }>;
+let bindingJournalAccess: Readonly<{
+  journal(a: PendingSourceBinding): AbsenceJournal;
+  source(a: PendingSourceBinding): CanonicalSupplyAssembly | undefined;
+}>;
 class PendingSourceBinding {
+  readonly #journal: AbsenceJournal;
   readonly #retention: PendingRetentionRoot;
   readonly #sourceSlot: PendingSourceSlot = { origin: Object.freeze({}), stage: 'empty', value: undefined, identity: undefined };
   readonly #claimOrigin = Object.freeze({});
@@ -1847,6 +1989,8 @@ class PendingSourceBinding {
   #attempts = 0; #bound = false; #closed = false;
   #first: PendingBindingReason = 'none';
   static {
+    bindingJournalAccess = Object.freeze({ journal: (a: PendingSourceBinding) => a.#journal,
+      source: (a: PendingSourceBinding) => a.#sourceSlot.value });
     retirementBindingAccess = Object.freeze({
       pin(a: PendingSourceBinding): RetirementBindingPin {
         return Object.freeze({ ...pendingRetentionOrigins(a.#retention), sourceSlot: a.#sourceSlot.origin });
@@ -1880,7 +2024,11 @@ class PendingSourceBinding {
       probeRoot(a: PendingSourceBinding) { return a.#sourceSlot.value ? sourceRootRetirement.probe(a.#sourceSlot.value) : undefined; },
     });
   }
-  constructor(private readonly scenario: string, admitted: boolean) { this.#retention = new PendingRetentionRoot('normal', admitted); }
+  constructor(private readonly scenario: string, admitted: boolean,
+    private readonly journalScript: Readonly<{ bindingFault?: string; sourceFault?: string; sourceScenario?: string }> = {}) {
+    this.#journal = new AbsenceJournal('binding', journalScript.bindingFault);
+    this.#retention = new PendingRetentionRoot('normal', admitted);
+  }
   private reply(reason?: Exclude<PendingBindingReason, 'none'>) {
     return Object.freeze(reason ? { ...PENDING_BINDING_CLOSED, ok: false, reason } : { ...PENDING_BINDING_CLOSED, ok: true });
   }
@@ -1941,35 +2089,48 @@ class PendingSourceBinding {
     if (this.#closed) return this.reply('supply_closed');
     if (this.#attempts) return this.fail('duplicate_binding');
     if (!this.#retention.prepare().ok) return this.fail('binding_mismatch');
-    this.#context = pendingConstructionAccess(this.#retention);
+    this.#journal.write(25, () => { this.#context = pendingConstructionAccess(this.#retention); });
+    if (!this.#context) this.#journal.nonpublication(25);
     if (!this.#context) return this.fail('binding_mismatch');
     this.#attempts = 1;
     try {
       if (this.scenario === 'before_source_failure') return this.fail('generation_unavailable');
       this.#sourceSlot.stage = 'attempting';
       if (this.scenario === 'source_attempt_failure') throw new Error('synthetic_source_unconfirmed');
-      const source = new CanonicalSupplyAssembly(this.scenario === 'source_failure' ? 'source_failure' : 'normal', true);
+      const source = new CanonicalSupplyAssembly(this.journalScript.sourceScenario ?? (this.scenario === 'source_failure' ? 'source_failure' : 'normal'), true,
+        this.journalScript.sourceFault);
       this.#sourceSlot.value = source; this.#sourceSlot.identity = sourceIdentity(source); this.#sourceSlot.stage = 'captured';
       if (this.scenario === 'after_source_failure') return this.fail('generation_unavailable');
       if (!source.begin().ok || !source.prepare().ok || !source.prepareSupply().ok) return this.fail('source_rejected');
       const scope = this.#context;
-      this.#anchor = supplyTransferAccess.capture(source, scope.construction); this.#issuedAnchor = this.#anchor;
+      this.#journal.write(21, () => { this.#anchor = supplyTransferAccess.capture(source, scope.construction); });
+      this.#journal.write(22, () => { this.#issuedAnchor = this.#anchor; });
+      if (!this.#anchor) { this.#journal.nonpublication(21); this.#journal.nonpublication(22); }
       if (!this.#anchor) return this.fail('binding_mismatch');
       const a = this.#anchor;
-      this.#payload = Object.freeze({ envelope: a.envelope, registry: a.registry, table: a.table, view: a.view,
-        declarations: a.declarations, tableOrigin: a.tableOrigin }); this.#issuedPayload = this.#payload;
-      this.#claim = Object.freeze<NonExecutingSupplyTransfer>({ [TRANSFER_BRAND]: true, owner: scope.construction,
-        source, anchor: a, receiver: this.scenario === 'claim_receiver' ? Object.freeze({}) : scope.slots[1].origin, state: 'unused' });
-      this.#issuedClaim = this.#claim;
+      this.#journal.write(12, () => { this.#payload = Object.freeze({ envelope: a.envelope, registry: a.registry, table: a.table, view: a.view,
+        declarations: a.declarations, tableOrigin: a.tableOrigin }); });
+      this.#journal.write(13, () => { this.#issuedPayload = this.#payload; });
+      this.#journal.write(15, () => { this.#claim = Object.freeze<NonExecutingSupplyTransfer>({ [TRANSFER_BRAND]: true, owner: scope.construction,
+        source, anchor: a, receiver: this.scenario === 'claim_receiver' ? Object.freeze({}) : scope.slots[1].origin, state: 'unused' }); });
+      this.#journal.write(16, () => { this.#issuedClaim = this.#claim; });
       const core = this.probeCore(Object.freeze({ owner: scope.construction, construction: scope.construction, retention: scope.retention,
         source: this.#sourceSlot.identity!, claim: this.#claimOrigin }));
       this.#controlMint = 'attempting';
+      this.#journal.begin(18); this.#journal.begin(14);
       if (this.scenario === 'control_mint_unconfirmed') throw new Error('private_control_mint');
-      this.#control = new SupplyUseControl(scope.construction, source, a, this.#claim, core); this.#issuedControl = this.#control;
+      this.#control = new SupplyUseControl(scope.construction, source, a, this.#claim!, core);
+      this.#journal.complete(18); this.#journal.complete(14);
+      this.#journal.write(19, () => { this.#issuedControl = this.#control; });
       this.#controlMintOrigin = controlRetirementOrigin(this.#control); this.#controlMint = 'minted';
-      this.#receipt = Object.freeze({ construction: scope.construction, retention: scope.retention, sourceSlot: this.#sourceSlot,
-        control: this.#control, core, slots: scope.slots }); this.#issuedReceipt = this.#receipt;
+      this.#journal.write(23, () => { this.#receipt = Object.freeze({ construction: scope.construction, retention: scope.retention, sourceSlot: this.#sourceSlot,
+        control: this.#control!, core, slots: scope.slots }); });
+      this.#journal.write(24, () => { this.#issuedReceipt = this.#receipt; });
+      if (['receipt_copy', 'receipt_construction', 'receipt_retention', 'receipt_source_slot', 'receipt_control', 'receipt_core', 'receipt_slots',
+        'anchor_copy', 'payload_copy', 'claim_copy'].includes(this.scenario)) for (const field of [12, 15, 21, 23, 24]) this.#journal.begin(field);
       this.probeReceipt();
+      if (['receipt_copy', 'receipt_construction', 'receipt_retention', 'receipt_source_slot', 'receipt_control', 'receipt_core', 'receipt_slots',
+        'anchor_copy', 'payload_copy', 'claim_copy'].includes(this.scenario)) for (const field of [12, 15, 21, 23, 24]) this.#journal.complete(field);
       if (this.scenario === 'before_bind_failure') return this.fail('generation_unavailable');
       if (this.scenario === 'close_before_bind') return this.close();
       if (this.scenario === 'reenter_before_bind') { this.prepare(); return this.reply(this.#first as Exclude<PendingBindingReason, 'none'>); }
@@ -1979,8 +2140,8 @@ class PendingSourceBinding {
       if (!this.validReceipt() || !sourceControlMatches(source, this.#control)) return this.fail('binding_mismatch');
       this.#bound = true;
       if (this.scenario.startsWith('retire_binding')) {
-        if (this.scenario === 'retire_binding_with_claim_alias') this.#extraClaim = this.#claim;
-        if (this.scenario === 'retire_binding_with_control_alias') this.#extraControl = this.#control;
+        if (this.scenario === 'retire_binding_with_claim_alias') this.#journal.write(17, () => { this.#extraClaim = this.#claim; });
+        if (this.scenario === 'retire_binding_with_control_alias') this.#journal.write(20, () => { this.#extraControl = this.#control; });
         const rootLive = this.scenario === 'retire_binding_root_live' || this.scenario === 'retire_binding_gate_probe';
         if (rootLive) this.#control.stop('binding_mismatch');
         else this.fail('binding_mismatch');
@@ -2345,4 +2506,105 @@ export function createCaptureAdmissionFake(...args: readonly unknown[]) {
   return Object.freeze({ prepare: (...xs: readonly unknown[]) => xs.length ? a.rejectArguments() : a.prepare(),
     admit: (...xs: readonly unknown[]) => xs.length ? a.rejectArguments() : a.admit(),
     close: (...xs: readonly unknown[]) => xs.length ? a.rejectArguments() : a.close(), inspect: () => a.inspect() });
+}
+
+// Diagnostics-only synthetic generation binding. No journal/fact/scope/producer references escape.
+interface GenerationEpochBinding {
+  readonly owner: object; readonly pin: RetirementBindingPin; readonly captureEpoch: object;
+  readonly bindingScope: JournalScope;
+  readonly source: Readonly<{ identity: object; scope: JournalScope }> | undefined;
+}
+const JOURNAL_SCRIPTS = Object.freeze(['normal', 'before_source_failure', 'source_attempt_failure', 'after_source_failure',
+  'before_bind_failure', 'control_mint_unconfirmed', 'retire_binding_with_claim_alias', 'retire_binding_with_control_alias',
+  'view_failure', 'post_failure', 'post_registry_missing', 'registry_0_failure', 'bindings_0_failure', 'declarations_0_failure',
+  'metadata_and_source_failure', 'legacy_clear', 'legacy_clear_twice',
+  'owner_copy', 'pin_copy', 'construction_copy', 'retention_copy', 'source_slot_copy', 'capture_epoch_copy',
+  'binding_scope_copy', 'binding_epoch_copy', 'source_identity_copy', 'source_scope_copy', 'source_epoch_copy', 'source_missing',
+  ...['begin', 'complete', 'candidate', 'commit', 'seal'].flatMap(boundary =>
+    Array.from({ length: 25 }, (_, i) => `${boundary}_${i + 1}`))]);
+class JournalAssembly {
+  readonly #owner = Object.freeze({}); readonly #captureEpoch = Object.freeze({});
+  readonly #binding: PendingSourceBinding; readonly #pin: RetirementBindingPin;
+  #generation: GenerationEpochBinding | undefined;
+  #started = false; #sealed = false;
+  #first: 'none' | 'input_rejected' | 'duplicate_preparation' | 'binding_mismatch' | 'journal_unconfirmed' | 'source_unconfirmed' = 'none';
+  #result: Readonly<{ ok: boolean; reason: string }> | undefined;
+  constructor(private readonly script: string, admitted: boolean) {
+    const fault = /^(begin|complete|candidate|commit|seal)_\d+$/.test(script) ? script : undefined;
+    const field = fault ? Number(fault.split('_')[1]) : 0;
+    this.#binding = new PendingSourceBinding(['before_source_failure', 'source_attempt_failure', 'after_source_failure', 'before_bind_failure',
+      'control_mint_unconfirmed', 'retire_binding_with_claim_alias', 'retire_binding_with_control_alias'].includes(script) ? script : 'normal', admitted,
+    { sourceFault: script === 'metadata_and_source_failure' ? 'complete_7' : field <= 11 ? fault : undefined, bindingFault: field > 11 ? fault : undefined,
+      sourceScenario: script === 'metadata_and_source_failure' ? 'post_failure'
+        : ['view_failure', 'post_failure', 'post_registry_missing', 'registry_0_failure', 'bindings_0_failure', 'declarations_0_failure'].includes(script) ? script : undefined });
+    this.#pin = retirementBindingAccess.pin(this.#binding);
+    if (!admitted) this.#first = 'input_rejected';
+  }
+  private result(ok: boolean, reason: string) {
+    return Object.freeze({ ok, reason });
+  }
+  prepare() {
+    if (this.#result) return this.#result;
+    if (this.#first !== 'none') return this.#result = this.result(false, this.#first);
+    if (this.#started) { this.#first = 'duplicate_preparation'; return this.#result = this.result(false, this.#first); }
+    this.#started = true; return this.#binding.prepare();
+  }
+  private matches(value: GenerationEpochBinding): boolean {
+    const source = bindingJournalAccess.source(this.#binding), b = bindingJournalAccess.journal(this.#binding);
+    return value.owner === this.#owner && value.pin === this.#pin && retirementBindingAccess.matches(this.#binding, value.pin)
+      && value.captureEpoch === this.#captureEpoch && value.bindingScope === b.scope && b.ready(value.bindingScope)
+      && (source ? !!value.source && value.source.identity === sourceIdentity(source)
+        && value.source.scope === sourceJournalAccess(source).scope && sourceJournalAccess(source).ready(value.source.scope) : value.source === undefined);
+  }
+  seal() {
+    if (this.#result) return this.#result;
+    // Close producer entry before sealing history; this is not a close diagnosis or legacy clear.
+    this.#sealed = true;
+    const context = retirementBindingAccess.stopContext(this.#binding);
+    if (context.kind === 'unconfirmed') this.#first = 'source_unconfirmed';
+    else if (context.kind === 'root_captured' && !retirementBindingAccess.sealRoot(this.#binding)) this.#first = 'source_unconfirmed';
+    const source = bindingJournalAccess.source(this.#binding), bindingJournal = bindingJournalAccess.journal(this.#binding);
+    if (this.script === 'legacy_clear' || this.script === 'legacy_clear_twice') {
+      // Exercise only the existing legacy writer, never fill history from the new retirement path.
+      // This diagnostic scenario is isolated from the normal generation binding.
+      source?.close(); if (this.script === 'legacy_clear_twice') source?.close();
+    }
+    const sourceReady = source ? sourceJournalAccess(source).seal() : true;
+    const bindingReady = bindingJournal.seal();
+    if (this.#first === 'none' && (!sourceReady || !bindingReady)) this.#first = 'journal_unconfirmed';
+    const own: GenerationEpochBinding = Object.freeze({ owner: this.#owner, pin: this.#pin, captureEpoch: this.#captureEpoch,
+      bindingScope: bindingJournal.scope, source: source ? Object.freeze({ identity: sourceIdentity(source), scope: sourceJournalAccess(source).scope }) : undefined });
+    const copy = (o: object) => Object.freeze({ ...o });
+    const value: GenerationEpochBinding = this.script === 'owner_copy' ? { ...own, owner: copy(own.owner) }
+      : this.script === 'pin_copy' ? { ...own, pin: { ...own.pin } }
+        : ['construction_copy', 'retention_copy', 'source_slot_copy'].includes(this.script)
+          ? { ...own, pin: { ...own.pin, [this.script === 'source_slot_copy' ? 'sourceSlot' : this.script.split('_')[0]]: Object.freeze({}) } }
+          : this.script === 'capture_epoch_copy' ? { ...own, captureEpoch: copy(own.captureEpoch) }
+            : this.script === 'binding_scope_copy' ? { ...own, bindingScope: { ...own.bindingScope } }
+              : this.script === 'binding_epoch_copy' ? { ...own, bindingScope: { ...own.bindingScope, epoch: copy(own.bindingScope.epoch) } }
+                : this.script === 'source_missing' ? { ...own, source: undefined }
+                  : own.source && this.script.startsWith('source_') ? { ...own, source: {
+                    identity: this.script === 'source_identity_copy' ? copy(own.source.identity) : own.source.identity,
+                    scope: this.script === 'source_scope_copy' ? { ...own.source.scope }
+                      : this.script === 'source_epoch_copy' ? { ...own.source.scope, epoch: copy(own.source.scope.epoch) } : own.source.scope } } : own;
+    if (this.#first === 'none' && !this.matches(value)) this.#first = 'binding_mismatch';
+    if (this.#first === 'none') this.#generation = own;
+    return this.#result = this.result(this.#first === 'none', this.#first);
+  }
+  reject() { if (!this.#result) { this.#first = 'input_rejected'; this.#sealed = true; this.#result = this.result(false, this.#first); } return this.#result; }
+  inspect() {
+    const source = bindingJournalAccess.source(this.#binding);
+    return Object.freeze({ model: 'wfb-absence-journal-fake-1', first: this.#first, started: this.#started, sealed: this.#sealed,
+      generationBound: !!this.#generation, admissionConsumption: 'closed', packetGeneration: 'closed', proofIssuance: 'closed',
+      fieldClears: 0, rootFinish: 'not_called', binding: bindingJournalAccess.journal(this.#binding).inspect(),
+      source: source ? sourceJournalAccess(source).inspect() : undefined, retained: this.#binding.inspect().retentionTable,
+      producerFirst: this.#binding.inspect().firstReason, sourceFirst: this.#binding.inspect().source?.firstReason });
+  }
+}
+export function createAbsenceJournalFake(...args: readonly unknown[]) {
+  const script = args.length === 0 ? 'normal' : args[0];
+  const admitted = args.length <= 1 && typeof script === 'string' && JOURNAL_SCRIPTS.includes(script);
+  const a = new JournalAssembly(admitted ? script as string : 'normal', admitted);
+  return Object.freeze({ prepare: (...xs: readonly unknown[]) => xs.length ? a.reject() : a.prepare(),
+    seal: (...xs: readonly unknown[]) => xs.length ? a.reject() : a.seal(), inspect: () => a.inspect() });
 }
