@@ -18,6 +18,8 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 ### Changed
 
+- WF-B B-01 adds synthetic-only execution-state contracts, prior RunLink/exit-duty preparation and one-shot binding to the existing start. A separate fixed-value projection reports retained references only as booleans and preserves closed execution. Independent prefix/state tables, semantic compile-fail cases and compiled identity/projection mutations cover mixing, duplicate preparation and failure retention. Grant issuance, enter/unwind transitions, body startup, accepted exit evidence and runtime connections remain unimplemented.
+
 - WF-B stage A extracts the existing same-start frame wrapper and adds prior private probe cells with one-shot binding to that same start. A separate package-excluded factory checks the probe and seeded legacy routes without starting a body, issuing a grant or consuming a retirement claim. Independent eight-stage prefix tests and compiled cell/receiver/preflight controls preserve legacy synthetic behavior; formal execution, exit evidence, Journal supply and runtime connections remain closed.
 
 - WF-B adds a package-excluded canonical gate construction root: prior gate capture, private same-seed binding through the existing issuer/start/binding, one-shot owner pin binding, and retention of a non-executable continuation draft. Independent 37-stage failure-prefix tests and compiled identity controls reject mixing before downstream guards can mask it. No frame runner, grant issuance, real writer, Journal supply or formal issuance is connected; legacy factories remain compatible.

@@ -6,7 +6,7 @@ import * as c from './fixtures/snapshot-read-start-fake.js';
 
 describe('physical B/C-start composition move without connection', () => {
   it('preserves both old export sets and factory identities at the new physical boundary', () => {
-    expect(Object.keys(composition).sort()).toEqual(['createAbsenceJournalFake', 'createCanonicalGateDraftFake', 'createCanonicalSupplyConstructionFake', 'createCanonicalSupplyTransferFake', 'createCanonicalSupplyViewFake', 'createCaptureAdmissionFake', 'createPendingBindingFake', 'createPendingConstructionFake', 'createProbeFramePreparationFake', 'createReadHashFake', 'createRetirementStartFake', 'createSnapshotReadStartFake', 'createSupplyBoundaryFake']);
+    expect(Object.keys(composition).sort()).toEqual(['createAbsenceJournalFake', 'createCanonicalGateDraftFake', 'createCanonicalSupplyConstructionFake', 'createCanonicalSupplyTransferFake', 'createCanonicalSupplyViewFake', 'createCaptureAdmissionFake', 'createPendingBindingFake', 'createPendingConstructionFake', 'createProbeFramePreparationFake', 'createProbeRunPreparationFake', 'createReadHashFake', 'createRetirementStartFake', 'createSnapshotReadStartFake', 'createSupplyBoundaryFake']);
     expect(Object.keys(b)).toEqual(['createReadHashFake']);
     expect(Object.keys(shared)).toEqual(['createReadHashFake']);
     expect(Object.keys(c)).toEqual(['createSnapshotReadStartFake']);

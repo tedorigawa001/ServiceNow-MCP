@@ -2,6 +2,8 @@
 
 (B)接続差分の詳細化（2026-11-10、MDのみ）: [内部型・grant捕捉・固定exit責務・公開診断draft-0.1](BEST_PRACTICE_WFB_PROBE_GRANT_EXIT_DUTY_DESIGN.md)で、同RunLinkへのone-shot enter、通常受付と失敗後unwindのguard分離、grant格納前の参照非出力projection、(C)へ渡すheld_unsealed境界を具体化した。body・grant発行・退出処理の実装はまだ行わない。
 
+B-01限定実装（2026-11-10）: 上記設計§12で状態型・RunLink／dutyの先行準備と新入口の固定projectionを実装した。[検証記録](E2E_BEST_PRACTICE_WFB_PROBE_RUN_PREPARATION_2026-11-10.md)。同start結合・準備postまでで、利用claim消費・grant発行・body起動・退出確認は閉鎖を維持する。
+
 Version: draft-0.2 / Date: 2026-11-10 / 読み取り開始HEAD: `fb02aab`、文書確認時HEAD: `470679f`（(A)レビュー修正基準HEAD: `75adab5`）。
 
 draft-0.2のレビュー修正（MDのみ）：(A)のstart側受領物照合のうち単独対照で裏付けられるのはcellsだけで、他は到達しない二重防御である点を§11に明記した。

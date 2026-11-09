@@ -2,9 +2,9 @@
 
 Version: draft-0.1 / Date: 2026-11-10 / 読み取り基準HEAD: `75adab5`。
 
-Status: **MDのみ。(B)の型拡張・grant発行・固定退出処理・診断置換は未実装。** 親は[同startのenter／exit接続差分](BEST_PRACTICE_WFB_PROBE_FRAME_ENTER_EXIT_DESIGN.md)と[正規gate生成・継続入口](BEST_PRACTICE_WFB_GATE_ROOT_CONTINUATION_DESIGN.md)。(A)の実績は[先行cell／同binding検証記録](E2E_BEST_PRACTICE_WFB_PROBE_FRAME_PREPARATION_2026-11-10.md)。同start・同binding・先行空cellは存在するが、probe body／grant／退出記録はまだ生成されない。
+Status: **当初draft-0.1に対し、B-01の状態型・RunLink／duty先行準備・固定projectionだけ合成依存限定で実装。** 基準HEAD `345e114`、詳細は§12と[検証記録](E2E_BEST_PRACTICE_WFB_PROBE_RUN_PREPARATION_2026-11-10.md)。親は[同startのenter／exit接続差分](BEST_PRACTICE_WFB_PROBE_FRAME_ENTER_EXIT_DESIGN.md)と[正規gate生成・継続入口](BEST_PRACTICE_WFB_GATE_ROOT_CONTINUATION_DESIGN.md)。(A)の実績は[先行cell／同binding検証記録](E2E_BEST_PRACTICE_WFB_PROBE_FRAME_PREPARATION_2026-11-10.md)。probe body／grant／退出記録はまだ生成されない。
 
-正式発行口・C実行入口閉鎖、全体受付無効、Unknown、VM／監視／telemetry調査保留を維持する。本書だけで実装・body起動・grant発行を承認しない。今回は文書のみ更新し、実装・ビルド・合成試験・body起動・実接続・実通信・設定変更・Pushを行わない。実writer、request／close実合流、回収claim消費、Journal封印／供給、admission／packet／field clear、GateClosedRecord、root終端も閉鎖のまま。
+正式発行口・C実行入口閉鎖、全体受付無効、Unknown、VM／監視／telemetry調査保留を維持する。当初作成時は文書のみ、今回の実装・ローカル検証は§12のB-01だけ。本書だけでbody起動・grant発行を承認しない。grant発行・新probe body起動・実接続・実通信・設定変更・Pushを行わない。実writer、request／close実合流、回収claim消費、Journal封印／供給、admission／packet／field clear、GateClosedRecord、root終端も閉鎖のまま。
 
 ## 1 (A)との差分と(B)／(C)の分割
 
@@ -124,7 +124,7 @@ RunLink／duty先行構築、guard、grant生成／捕捉／退役、診断proje
 
 共有予算・停止ownerへ将来接続する際は既存D_stop／D_endと同開始点を引き継ぎ、別予算・残時間からの期限再計算を持ち込まない。(A)のpure fakeを実会計・native費用の検証済み証拠にしない。
 
-## 10 独立合成受入条件（全て未実施）
+## 10 独立合成受入条件（B-01の実施範囲は§12）
 
 | ID | 受入条件・負の対照 |
 |---|---|
@@ -152,3 +152,17 @@ private参照の負の対照が必要なら隔離compileしたscratch内だけ�
 将来の順序は、B-01=状態型／RunLink／dutyの先行準備と固定projection（実行閉鎖）、B-02=一度限りenter／同grant捕捉とprefix保持（body閉鎖）、B-03=同start固定probeとBX00〜04の連続接続、その後に(C)の確認済みexit候補・同期確定。B-02もgrantを作ったまま放棄する契約ではなく、同duty／固定退役責務と元ownerへの保持が必要。B-03は全unwind経路が揃う同じ変更でのみbodyを試験する。今は全工程未実装・未承認実行のまま。
 
 本書と親2文書の参照だけを更新した。ソース・試験・CHANGELOG・設定は変更していない。3文書のローカルリンク17件に欠落なし、BG01〜14の14条件に重複・欠落なし、BE00〜06の7段階とBX00〜04の5段階の順序、差分空白を確認した。composition fixture・probe-frame-preparation試験・同compiled fixtureの3ファイルはSHA-256が開始時と一致する。これは文書整合の確認であり、(B)の試験成功ではない。ビルド・試験・body起動は未実施。本MD変更は未コミット、Pushなし。
+
+## 12 B-01限定実装（2026-11-10）
+
+§11末尾は当初文書化時の記録（後に`345e114`でコミット）。今回は同composition lexical rootと同startに、状態型・先行RunLink／duty・固定projectionだけを追加した。型はunusedとattempt未使用、entering以降と使用済み、body結果と固定outcome、grant状態と参照有無等を分離する。CanonicalProbeGrantはprivate型だけで、constructor／issuerは存在しない。内部退出cellのacceptedは常にundefined、finishedを生成する型／関数は置かない。
+
+新factory `createProbeRunPreparationFake`は(A)の同root・cell束・同ProbeFrameBindingを再利用する。旧(A)・旧facade・旧pure fakeは変更せず、新factoryだけをcompositionの試験用export一覧に追加した。公開APIはprepare／check／checkLegacy／checkState／close／inspect。enter／grant／unwind／任意callbackの登録口はない。checkStateは有限scriptの状態事実または現在の未使用事実を純粋検査する値専用口で、その結果を実cellへ採用しない。
+
+追加4段階は1 bindingOrigin、2 RunLink、3 not_owed duty、4非実行準備descriptor。既存37段階＋(A)の8段階の構築・同binding照合後に、この4段階を生成／捕捉する。RunLinkはbrand＋origin／binding／cells／frame／entry／exitの7要素、dutyはbrand／link／state／attemptUsed／phase／boundaryの6要素、準備descriptorはlink／duty／executable=falseの3要素。すべて同rootのcurrent／issuedと正規fieldを個別照合してから、同startへ最大1回結合しpost確認する。これはroot sealや退出証拠の発行ではない。
+
+RunLink／dutyは同rootが保持し、startも同private参照を捕捉する。二重bindはrefusal、同値copy・foreign fieldは固定失敗で、捕捉済みprefixと借用を消さない。4のpostまでreadyを立てず、ready後もexecution=closed。構築readyはenter受付や利用claim消費を意味しない。useはunused、grant／exitはempty、bodyはnot_started、dutyはnot_owedのまま。BE01〜06／BX00〜04の実遷移・固定exit guard・grant発行・body・退役・accepted退出記録は未実装。
+
+新入口の全返答はallowlist値projection。private cellのspread／serializeを使わず、grant current／issued／拒否候補、退出候補、RunLinkは保持有無booleanだけを返す。各enumは固定許可値へ限定し、snapshotのネストもfreezeする。旧(A)の空cell表示は旧入口だけに残し、B-modeで旧inspectを呼ぶと拒否する二重防御を置いた。公開入口は常に新projectionを使うため、この旧inspect拒否は通常経路では未到達である。
+
+BG01の先行同root結合、BG02の型／値整合、BG03の4段階構築部分、BG05の重複準備／bind部分、BG09〜10の参照非出力、BG12の互換／閉鎖を部分検証した。21個の値専用状態対照、4×4の独立prefix、link9／duty8／descriptor5・receiver2のcompiled対照、型不正6件のsemantic compile-failとprojection負の対照を実施。結果・初回失敗・二重防御の範囲は[検証記録](E2E_BEST_PRACTICE_WFB_PROBE_RUN_PREPARATION_2026-11-10.md)。実enter／固定unwind・停止合流・実費目・E／S・layout・runtimeはUnknownのまま。
