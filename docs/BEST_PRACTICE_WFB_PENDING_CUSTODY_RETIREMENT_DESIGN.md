@@ -1,10 +1,12 @@
 # WF-B (C)：pending／failure内部型・先行生成と固定回収／finish gateの詳細設計
 
-Version: draft-0.1 / Date: 2026-11-09 / 読み取り照合基準HEAD: `fbfe6dd`。
+Version: draft-0.2 / Date: 2026-11-09 / 読み取り照合基準HEAD: `fbfe6dd` / 第1段階実装基準HEAD: `dc41a70`。
 
-Status: **設計のみ。** 親は[停止・所有境界／detach後照合設計draft-0.4](BEST_PRACTICE_WFB_TRANSFER_TAKING_BOUNDARY_DESIGN.md)と[下位移譲claim・pending／holder設計](BEST_PRACTICE_WFB_SUPPLY_TRANSFER_DESIGN.md)。[unused controlの検証・レビュー修正](E2E_BEST_PRACTICE_WFB_UNUSED_CONTROL_BOUNDARY_2026-11-09.md)を前提とするが、回収・退役済みの証拠には転用しない。
+draft-0.2: §12の第1段階に限り、独立した合成入口へ先行RetentionRoot、unbound pending／failureの4slot、固定診断／結果slot、一度限りの生成claimを実装した。sourceやpayloadは生成せず、bound化・回収・証拠発行・root finishは未実装。[検証記録](E2E_BEST_PRACTICE_WFB_PENDING_CONSTRUCTION_2026-11-09.md)、配置・保証範囲は§13を参照。
 
-正式発行口閉鎖・全体受付無効・Unknown・VM／監視／telemetry調査保留を維持する。今回の作業はMDだけ。実装・claim消費・pendingへの通常payload移動・detach・holder公開・C実行・実期待値pin・実source照合・S発行・core／実接続・実通信・実機操作・設定変更・Pushは行わない。以下はprivate設計案であり、既存API／権限の追加ではない。
+Status: **独立合成assemblyの先行owner・unbound slot生成だけ実装。source結合・回収・finishは設計のまま。** 親は[停止・所有境界／detach後照合設計draft-0.4](BEST_PRACTICE_WFB_TRANSFER_TAKING_BOUNDARY_DESIGN.md)と[下位移譲claim・pending／holder設計](BEST_PRACTICE_WFB_SUPPLY_TRANSFER_DESIGN.md)。[unused controlの検証・レビュー修正](E2E_BEST_PRACTICE_WFB_UNUSED_CONTROL_BOUNDARY_2026-11-09.md)を前提とするが、回収・退役済みの証拠には転用しない。
+
+正式発行口閉鎖・全体受付無効・Unknown・VM／監視／telemetry調査保留を維持する。draft-0.1はMDだけ、draft-0.2の実装は§13の合成生成だけ。下位claim消費・pendingへの通常payload移動・detach・holder公開・C実行・実期待値pin・実source照合・S発行・core／実接続・実通信・実機操作・設定変更・Pushは行わない。回収・finishの記述は引き続きprivate設計案であり、実行権限の追加ではない。
 
 ## 1 現行との差分と先に解く制約
 
@@ -138,7 +140,7 @@ construction／pending／failure／control live binding／回収claim／payload�
 
 全CPU／heap／native費、各unit係数・実layout、全guard数・実E／S、constructor内部故障の完全捕捉、OOM時の診断必着はUnknown。Bのcap・D_stop900／D_end1000・guard131,524を変更して吸収しない。新段階では下位claim消費／pending通常payload記録／detach／holder公開・open／read／hash／resource cleanupは引き続き0とする。
 
-## 11 独立合成受入条件（未実施）
+## 11 独立合成受入条件（draft-0.2ではunbound生成部分だけ実施）
 
 | ID | 必須対照 |
 |---|---|
@@ -162,4 +164,22 @@ oracleは本体のslot表・clear関数・係数・proof builderをimportして�
 3. unused／stoppedのまま固定回収・未確認保持とPayloadGoneEvidenceの発行／一度限り消費・root終端gateを接続する。正常／失敗Snapshot方針と計数を検証する。下位claimは0のまま。
 4. PC01〜10・全失敗prefix・compiled変異・梱包を確認してから、別工程でtaking／pending記録／normal slot集約・detachの接続を検討する。holder公開・C実行はその工程でも閉じる。
 
-本書では実装・合成試験・実費検証を行っていない。新しいfactory／exportの追加、source内部の配置変更、回収やfinishの起動も行わない。未確認事項を確認済みへ昇格させず、次の範囲は別依頼で確定する。
+draft-0.1では実装・合成試験・実費検証を行っていない。draft-0.2は第1段階だけを§13へ実装し、source内部の配置変更、回収やfinishの起動は行わない。未確認事項を確認済みへ昇格させず、次の範囲は別依頼で確定する。
+
+## 13 第1段階の独立合成生成（draft-0.2）
+
+`tests/review/fixtures/pending-construction-fake.ts`へ、importを持たない独立した`createPendingConstructionFake`だけを追加した。constructor／brand／slot／claimは非export。既存composition moduleと旧入口のexport・本体は変更しない。この段階はsourceを受領しないunbound生成層の保証であり、同実source／controlへ結合済みの保証ではない。後続のprivate配置／結合では同一性を再検証し、公開facade／summaryを採用しない。
+
+constructorでconstruction／retentionの別origin、4roleのorigin、固定capture cell、先行診断／結果slot、生成claimを用意し、prepare開始前に保持する。prepareは入力・先行停止／拒否・診断／結果scope・正規claimの同参照とoriginを確認してから、生成claimを一度だけ開始する。これは下位移譲claimでも回収claimでもない。生成順はpendingShell→pendingActive→failureShell→failureCustody。active／custodyにも通常payloadは受領せず、対応shell参照とundefinedだけを持つ。
+
+各roleは生成直前attempting、生成参照を固定cellへ記録した直後provisional、同constructor／retention／role origin／brand／unbound状態／親shell／payload空の検査後confirmedとなる。mint故障はmint呼出し前の既知故障なのでnot_created。mint内の未捕捉throwはattempting＋capture_unconfirmedとして、参照が見えないことを未生成の証明へ変えない。provisionalでの故障は同cellの参照を保持したまま止める。任意の実constructor・source内部の部分生成を捕捉した保証ではない。
+
+固定混入対照は4role×9条件（construction／retention／role origin／role／state／brand／parent／payload sentinel／同値copy）。不正fieldを同mint内で発行して参照だけの自己照合を避け、copyだけは正規cellと別の候補を照合する。payload sentinelは空の合成objectで、実bytesや元sourceのpayloadではない。診断／結果scopeとclaimにも単独混入を用意する。factory入力のinputValid=trueは固定selectorの受付であり、scope検査の成功や正式な受付権限ではない。
+
+新facadeはprepare／close／seal／inspectのみ。生成中のclose・再入・失敗後の再要求で再生成せず、生成済み／未確認の参照を保持する。開始前closeはfirstを立てず、開始後closeは先行理由がなければsupply_closed。先行拒否があればcloseの返答でもその理由を維持する。
+
+sealは同scopeの固定結果slotへpayload-freeな診断snapshotを一度固定するだけで、slot clear・回収開始・PayloadGoneEvidence発行・root finishを行わない。seal後のprepare／closeは非記録のalready_sealedを返し、seal／inspectは同じ不変結果を返す。診断／結果scope不一致ならseal自体を拒否し結果slotは空のまま。空shellの保持はretainedSlotsへ出し、retirement=not_startedを維持する。
+
+source／anchor／control／通常payloadを一切生成・受領しないので、source=not_created・sourceBinding=not_connectedと下位claim消費／payloadMoves／sourceDetach／holder公開0を報告する。SourceRootSlot、retirable control binding、通常payloadを持つpending／failure active cell、回収claim、証拠／root終端gateはまだ作らない。先行ownerより前の実確保失敗・診断必着・全heap／work・実E／SはUnknown。
+
+新規71件、独立した12生成prefixと64操作列のoracle、compiledのslot／scope16変異とlifecycle6変異を確認する。PC01のunbound部分・PC02の空slot生成部分・PC10の局所計数／旧回帰だけが対象で、source部分生成・bound identity・8群clear・回収／finishのPC条件は未実施のまま。

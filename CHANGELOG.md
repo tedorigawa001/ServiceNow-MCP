@@ -18,6 +18,8 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 ### Changed
 
+- WF-B adds an isolated synthetic unbound-construction factory with a prior RetentionRoot, scoped diagnostic/result slots, one-shot generation claim and four empty pending/failure slots. Fixed mint, uncaptured-attempt and provisional-capture failures retain distinct prefixes; identity mixing, replay, reentry and late-close diagnoses are checked by independent oracles and compiled mutations. Diagnostic sealing does not clear retained slots or imply retirement. Existing source factories are untouched; source binding, payload movement, proof issuance and root finish remain closed.
+
 - WF-B adds a package-excluded, synthetic unused-control boundary. Source gates and the diagnostic owner share one pinned control; a separate private continuation propagates close/failure without clearing payloads or retiring borrows. Explicit anchor/payload relation checks work after stop without consulting live source fields. Value-only fault controls remain distinct from issuance authority. Legacy fixtures stay intact; claim consumption, detach, holder publication, C execution and retirement remain unconnected.
 
 - WF-B adds synthetic-only transfer preflight: a lexical issuer captures the same source owner's issuance anchor and binds an unused, separately branded lower claim to empty pending/holder/failure shells. Fixed refusals preserve source diagnoses and consume no transfer claim; preparation never detaches normal payload slots or publishes a holder. Isolated identity controls, allocation-prefix oracles and compiled mutations preserve legacy factories and package exclusion. C execution, real accounting and formal issuance remain closed or unknown.

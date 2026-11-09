@@ -361,10 +361,14 @@ execFileSync(process.execPath,[fileURLToPath(new URL('fixtures/compiled-release-
 execFileSync(process.execPath,[fileURLToPath(new URL('fixtures/compiled-release-time-handoff.mjs',import.meta.url))],{cwd:root,stdio:'inherit'});
 execFileSync(process.execPath,[fileURLToPath(new URL('fixtures/compiled-prefix-relation.mjs',import.meta.url))],{cwd:root,stdio:'inherit'});
 execFileSync(process.execPath,[fileURLToPath(new URL('fixtures/compiled-destination-preparation.mjs',import.meta.url))],{cwd:root,stdio:'inherit'});
-const compositionMarkers=['snapshot-read-composition-fake','shared-read-hash-kernel-fake','snapshot-read-start-fake','canonical-supply-view-fake','canonical-supply-transfer-fake','supply-boundary-fake','createReadHashFake','createSnapshotReadStartFake','createCanonicalSupplyViewFake','createCanonicalSupplyTransferFake','createSupplyBoundaryFake'];
+const compositionMarkers=['snapshot-read-composition-fake','shared-read-hash-kernel-fake','snapshot-read-start-fake','canonical-supply-view-fake','canonical-supply-transfer-fake','supply-boundary-fake','pending-construction-fake','createReadHashFake','createSnapshotReadStartFake','createCanonicalSupplyViewFake','createCanonicalSupplyTransferFake','createSupplyBoundaryFake','createPendingConstructionFake'];
 const noReadComposition=text=>assert(!compositionMarkers.some(marker=>text.includes(marker)),'WF-B composition/factory leaked into package');
 for(const marker of compositionMarkers)assert.throws(()=>noReadComposition(marker),assert.AssertionError);
 for(const f of pack.files){noReadComposition(f.path);if(f.path.startsWith('dist/')&&/\.(?:js|ts|map)$/.test(f.path))noReadComposition(readFileSync(join(root,f.path),'utf8'));}
 console.log('WF-B composition/compatibility factories excluded; seeded package leak controls PASS');
 execFileSync(process.execPath,[fileURLToPath(new URL('fixtures/compiled-declared-actual.mjs',import.meta.url))],{cwd:root,stdio:'inherit'});
+const noPendingDependencies=text=>assert(!/\bimport\b|\brequire\s*\(|\bexport\s+(?:\*|\{)|\b(?:fetch|Worker|setTimeout|setInterval)\b|\b(?:process|globalThis|window)\s*\.|\b(?:CanonicalSupplyAssembly|createSupplyBoundaryFake|createReadHashFake|PayloadGoneEvidence)\b/.test(text),'unbound construction acquired a dependency/runtime/issuance entry');
+noPendingDependencies(readFileSync(new URL('fixtures/pending-construction-fake.ts',import.meta.url),'utf8'));
+for(const seed of ['import x from "x"','require("x")','export * from "x"','fetch','Worker','setTimeout','setInterval','globalThis.x','process.x','window.x','CanonicalSupplyAssembly','createSupplyBoundaryFake','createReadHashFake','PayloadGoneEvidence'])assert.throws(()=>noPendingDependencies(seed),assert.AssertionError);
+execFileSync(process.execPath,[fileURLToPath(new URL('fixtures/compiled-pending-construction.mjs',import.meta.url))],{cwd:root,stdio:'inherit'});
 console.log('HTTP classification/status terminal/cleanup/context excluded; formal/production adoption disabled; fixture/oracle excluded PASS ('+pack.files.length+' files)');
