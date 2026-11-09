@@ -1,12 +1,14 @@
 # WF-B (C)：field別固定回収schedule・失敗prefix・診断契約
 
-Version: draft-0.2 / Date: 2026-11-09 / 読み取り照合基準HEAD: `07cc830`（着手時は`d361de6`、途中のレビュー修正を再照合。レビュー修正基準HEAD: `cf7e285`）。
+Version: draft-0.3 / Date: 2026-11-09 / 開始境界の実装基準HEAD: `ab377c1` / 読み取り照合基準HEAD: `07cc830`（着手時は`d361de6`、途中のレビュー修正を再照合。レビュー修正基準HEAD: `cf7e285`）。
+
+draft-0.3: §11の回収owner／claim・固定診断・generation-wrapper frame境界だけ合成実装した。field clear・capture・空確認・証拠・root終端は未接続。[検証記録](E2E_BEST_PRACTICE_WFB_RETIREMENT_START_2026-11-09.md)。
 
 draft-0.2のレビュー修正：draft-0.1はS08でcapture packet（F24）を放した後のS09でF25〜F27（両receipt・`#context`）をclearしており、§2の「対応captureの同参照記録を確認するまで元slotをclearしない」と§5の失敗prefix（capture確認後・clear前は元field＋確認済みcapture）がこの3項目で成り立たなかった。receipt／context除去をS08、packet解放をS09へ入れ替えた。また検査だけのF29はcaptureしない（名前付きcellは25個）とし、S10の照合根拠をSourceRootSlotとTrustedControlPinに固定した。
 
-Status: **詳細設計のみ。回収処理・証拠・root終端gateは未実装。** 親は[回収基盤設計](BEST_PRACTICE_WFB_PENDING_CUSTODY_RETIREMENT_DESIGN.md)と[停止・所有境界設計](BEST_PRACTICE_WFB_TRANSFER_TAKING_BOUNDARY_DESIGN.md)。現在の実装・試験範囲は[同source／control結合の検証記録](E2E_BEST_PRACTICE_WFB_PENDING_SOURCE_BINDING_2026-11-09.md)。本書は親設計§5〜10を現行private fieldへ対応付ける差分であり、既存factoryを変更した記録ではない。
+Status: **回収開始境界だけ合成実装。field回収・証拠・root終端gateは未実装。** 親は[回収基盤設計](BEST_PRACTICE_WFB_PENDING_CUSTODY_RETIREMENT_DESIGN.md)と[停止・所有境界設計](BEST_PRACTICE_WFB_TRANSFER_TAKING_BOUNDARY_DESIGN.md)。先行実装・試験範囲は[同source／control結合の検証記録](E2E_BEST_PRACTICE_WFB_PENDING_SOURCE_BINDING_2026-11-09.md)。本書は親設計§5〜10を現行private fieldへ対応付ける差分である。
 
-正式発行口閉鎖・C実行入口閉鎖・全体受付無効・Unknown・VM／監視／telemetry調査保留を維持する。今回はMDだけを更新し、実装・テスト実行・証拠発行・実期待値pin・実source照合・S発行・実接続・実通信・実機操作・設定変更・Pushを行わない。以下の型名・helper・field追加・状態・理由は設計案で、まだ存在しない。
+正式発行口閉鎖・C実行入口閉鎖・全体受付無効・Unknown・VM／監視／telemetry調査保留を維持する。draft-0.1／0.2はMDのみ、draft-0.3は§11の合成開始境界だけ。field clear・証拠発行・root終端・実期待値pin・実source照合・S発行・実接続・実通信・実機操作・設定変更・Pushを行わない。§11で実装済みと明記しない型名・helper・field追加・状態・理由は引き続き設計案。
 
 ## 1 現行との差分・適用範囲
 
@@ -174,3 +176,15 @@ F14／F29／F30はwriteではなく検査項目、F15は専用cell操作、F24�
 ## 10 今回の文書確認
 
 `d361de6`のSupplyUseControl、CanonicalSupplyAssembly、PendingRetentionRoot、PendingSourceBindingと既存root lifecycleを読み取り照合した。途中で反映された`07cc830`の理由写像・close／retired gate・claim receiver対照と、payload-free coreが5field・異なるtoken4個（owner＝construction）である訂正も再照合した。`#retiredGateProbe`は固定文字列の診断で本文参照を持たず、保持を許すmetadataとして扱う。46件等の過去の試験記録は同source結合段階の証拠で、本scheduleの成功証拠ではない。今回はソース・fixture・CHANGELOGを変更せず、ビルド・合成試験・梱包・実費検証は再実行していない。関連3文書のローカルMDリンク19件、11phase・11受入条件の記載、fenceの対応、`git diff --check`を確認した。未コミット、Pushなし。
+
+## 11 回収開始境界の合成実装（draft-0.3）
+
+`createRetirementStartFake`を同compositionへ追加し、薄い`retirement-start-fake.ts`は同factoryだけを再exportする。private RetirementStartAssemblyは先行owner token・固定30field／8group診断を用意し、同PendingSourceBindingの生成前scopeとSourceRootSlot originへprivateにpinする。RetirementStartClaimは同owner／pin、正規発行claimの同参照と未消費を検査する。既存のunbound／binding factoryを呼出し可能な状態で外へ返したり、公開summaryからownerを採用したりしない。constructor・claim・pin・継続は非export。
+
+新facadeはprepare／request／close／inspectの固定診断だけ。prepareはprivate generationFrameをwrapperで囲み、active中のrequest／close／準備失敗はdeferred_frame、claim unused・starts0。固定finallyで生成frameを退出した後だけrequestをdrainする。既存PendingSourceBinding.prepare内部の一時参照はそのreturn前に閉じ、外側は保守的にwrapper全体をactiveとして扱う。既存prepare本体への任意hook追加や、JS engineの全stack探索は行わない。固定frame_exit_failureは終了未確認のまま止め、開始0・再prepare拒否・frame_unconfirmedを保持する。
+
+inactive後の正規requestは同claimを一度だけ消費し、attempt=running、blocked_field_clearへ固定停止する。これはS00の所有／lease／claim部分だけであり、S00全体のroot停止・S01以降の完了証拠ではない。通常requestは正規controlの通常利用gateだけを停止し、root自身を正常終端・close済みとは報告しない。正規close／生成失敗は既存のprivate結合経路を通ってrootへ伝わる。source未捕捉でも開始できるのは局所claimの受付だけで、sourceCapture=unknownを保持し、payload確認やroot操作の権限を付けない。
+
+runningへの同期置換後の再request／同期再入はin_progress、開始は1のまま。生成中のprepare再入はpreparation_in_progressで新frameを作らない。owner／claim／pinの混入はclaim0・binding_rejectedとなり、その固定拒否結果を以後のrequest／closeも同参照で返す。元のfirstReason、retirementFirst、sourceの供給／lifecycle理由を別に保持する。生成失敗はread_prepare_unavailable、source_rejectedは元source診断を維持し、後着closeで上書きしない。不明frameは通常activeと区別する。
+
+30fieldのpresenceはnot_observed、writeAttempted／emptyConfirmedはfalse、8groupはunverifiedのまま。RetirementCapture25cell・TrustedControlPinによるclear権限・field clear・final audit・証拠・root gateは生成／接続しない。既知参照・borrow／Snapshotを保持し、新経路による旧discard増分0、fieldWrites0、payload=not_started、proofIssuance=closed、rootFinish=not_called、resourceCleanup=not_startedを維持する。回収claimのspent／starts1と下位移譲claim消費0を混同しない。実費・全heap／work・実E／S・診断必着はUnknown。

@@ -1,5 +1,7 @@
 # WF-B (C)：pending／failure内部型・先行生成と固定回収／finish gateの詳細設計
 
+回収開始境界の合成実装追記（2026-11-09）: [固定回収schedule §11](BEST_PRACTICE_WFB_FIXED_RETIREMENT_SCHEDULE_DESIGN.md)へ、同生成の回収owner／claim・固定診断・generation-wrapper frame境界を実装した。deferred_frameとfinally後の一度限り開始、再入拒否・先行理由保持を確認する範囲だけで、field clear・capture・証拠・root終端は閉じる。[検証記録](E2E_BEST_PRACTICE_WFB_RETIREMENT_START_2026-11-09.md)。
+
 Version: draft-0.6 / Date: 2026-11-09 / 固定回収scheduleの設計照合基準HEAD: `07cc830` / 第2段階の合成結合基準HEAD: `2022cc3` / 読み取り照合基準HEAD: `fbfe6dd` / 第1段階実装基準HEAD: `dc41a70` / 第1段階レビュー修正基準HEAD: `8aa373f` / 第2段階レビュー修正基準HEAD: `d361de6`。
 
 draft-0.6（MDのみ）: [field別固定回収schedule・失敗prefix・診断契約](BEST_PRACTICE_WFB_FIXED_RETIREMENT_SCHEDULE_DESIGN.md)で、現行R1〜R8の30固定項目、候補core／receipt・生成frameの残留参照、回収claim・capture前clear禁止・未確認保持を具体化した。回収・証拠・root終端は未実装のまま。新結合経路のfield順・所有境界は同差分設計を優先し、旧入口の保証へ自動適用しない。

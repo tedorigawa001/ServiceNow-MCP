@@ -1586,6 +1586,7 @@ export function createSupplyBoundaryFake(...args: readonly unknown[]) {
 interface PendingScopeContext { readonly owner: PendingRetentionRoot; readonly construction: ConstructionOrigin;
   readonly retention: RetentionOrigin; readonly slots: readonly UnboundSlot[] }
 let pendingConstructionAccess: (a: PendingRetentionRoot) => PendingScopeContext | undefined;
+let pendingRetentionOrigins: (a: PendingRetentionRoot) => Readonly<{ construction: object; retention: object }>;
 // BEGIN PENDING CONSTRUCTION CORE
 /** Isolated synthetic construction only: no source, payload, binding, retirement or root operations. */
 const CONSTRUCTION: unique symbol = Symbol('construction');
@@ -1645,6 +1646,7 @@ class PendingRetentionRoot {
   readonly #result = { construction: this.#construction, retention: this.#origin,
     value: undefined as PendingSnapshot | undefined };
   static {
+    pendingRetentionOrigins = a => Object.freeze({ construction: a.#construction, retention: a.#origin });
     pendingConstructionAccess = a => {
       if (a.#result.value || a.#diagnostic.first !== 'none' || a.#diagnostic.stop
         || a.#diagnostic.state !== 'prepared_unbound' || !a.#claim.spent || !a.scopeMatches()) return undefined;
@@ -1785,6 +1787,14 @@ const PENDING_BINDING_SCENARIOS = Object.freeze(['normal', 'core_owner', 'core_c
   'anchor_copy', 'payload_copy', 'claim_copy', 'retire_binding', 'retire_binding_twice', 'retire_binding_with_claim_alias', 'retire_binding_with_control_alias', 'retire_binding_root_live',
   'claim_receiver', 'retire_binding_gate_probe',
   'source_failure', 'source_attempt_failure', 'before_source_failure', 'after_source_failure', 'before_bind_failure', 'after_bind_failure', 'close_before_bind', 'close_after_bind', 'reenter_before_bind']);
+interface RetirementBindingPin { readonly construction: object; readonly retention: object; readonly sourceSlot: object }
+let retirementBindingAccess: Readonly<{
+  pin(a: PendingSourceBinding): RetirementBindingPin;
+  matches(a: PendingSourceBinding, pin: RetirementBindingPin): boolean;
+  stop(a: PendingSourceBinding): void;
+  failFrame(a: PendingSourceBinding): void;
+  first(a: PendingSourceBinding): PendingBindingReason;
+}>;
 class PendingSourceBinding {
   readonly #retention: PendingRetentionRoot;
   readonly #sourceSlot: PendingSourceSlot = { origin: Object.freeze({}), stage: 'empty', value: undefined, identity: undefined };
@@ -1801,6 +1811,21 @@ class PendingSourceBinding {
   #retiredGateProbe: Readonly<Record<'capture' | 'matches' | 'begin' | 'prepare' | 'prepareSupply', string>> | undefined;
   #attempts = 0; #bound = false; #closed = false;
   #first: PendingBindingReason = 'none';
+  static {
+    retirementBindingAccess = Object.freeze({
+      pin(a: PendingSourceBinding): RetirementBindingPin {
+        return Object.freeze({ ...pendingRetentionOrigins(a.#retention), sourceSlot: a.#sourceSlot.origin });
+      },
+      matches(a: PendingSourceBinding, pin: RetirementBindingPin): boolean {
+        const own = pendingRetentionOrigins(a.#retention), s = a.#sourceSlot;
+        return pin.construction === own.construction && pin.retention === own.retention && pin.sourceSlot === s.origin
+          && (!s.value || s.identity === sourceIdentity(s.value));
+      },
+      stop(a: PendingSourceBinding): void { a.#issuedControl?.stop('supply_closed'); },
+      failFrame(a: PendingSourceBinding): void { a.fail('generation_unavailable'); },
+      first(a: PendingSourceBinding): PendingBindingReason { return a.#first; },
+    });
+  }
   constructor(private readonly scenario: string, admitted: boolean) { this.#retention = new PendingRetentionRoot('normal', admitted); }
   private reply(reason?: Exclude<PendingBindingReason, 'none'>) {
     return Object.freeze(reason ? { ...PENDING_BINDING_CLOSED, ok: false, reason } : { ...PENDING_BINDING_CLOSED, ok: true });
@@ -1967,4 +1992,133 @@ export function createPendingBindingFake(...args: readonly unknown[]) {
   const a = new PendingSourceBinding(admitted ? input as string : 'normal', admitted);
   return Object.freeze({ prepare: (...xs: readonly unknown[]) => xs.length ? a.rejectArguments() : a.prepare(),
     check: (...xs: readonly unknown[]) => xs.length ? a.rejectArguments() : a.check(), close: () => a.close(), inspect: () => a.inspect() });
+}
+
+// Synthetic start boundary only. No capture, field clear, proof or root termination continuation.
+class RetirementStartClaim {
+  #spent = false;
+  constructor(readonly owner: object, readonly pin: RetirementBindingPin) { Object.freeze(this); }
+  get spent() { return this.#spent; }
+  begin(): boolean { if (this.#spent) return false; this.#spent = true; return true; }
+}
+const RETIREMENT_START_CLOSED = Object.freeze({ ...PENDING_BINDING_CLOSED, model: 'wfb-retirement-start-fake-1',
+  fieldWrites: 0, payload: 'not_started', capture: 'not_connected', finalAudit: 'not_connected' } as const);
+const RETIREMENT_START_SCENARIOS = Object.freeze(['normal', 'request_in_frame', 'close_in_frame', 'reenter_prepare', 'reenter_request',
+  'throw_in_frame', 'prepare_failure', 'source_rejected', 'source_unknown', 'owner_copy', 'pin_copy', 'pin_construction',
+  'pin_retention', 'pin_source_slot', 'claim_copy', 'claim_owner', 'claim_pin', 'frame_exit_failure']);
+type RetirementStartDisposition = 'prepared' | 'preparation_rejected' | 'preparation_in_progress' | 'deferred_frame'
+  | 'frame_unconfirmed' | 'binding_rejected' | 'in_progress' | 'blocked_field_clear' | 'input_rejected';
+class RetirementStartAssembly {
+  readonly #owner = Object.freeze({});
+  readonly #binding: PendingSourceBinding;
+  readonly #pin: RetirementBindingPin;
+  readonly #claim: RetirementStartClaim;
+  readonly #issuedPin: RetirementBindingPin; readonly #issuedClaim: RetirementStartClaim;
+  readonly #claimOwner: object;
+  readonly #fields = Object.freeze(Array.from({ length: 30 }, (_, i) => Object.freeze({
+    field: `F${String(i + 1).padStart(2, '0')}`, presence: 'not_observed' as const, writeAttempted: false, emptyConfirmed: false })));
+  readonly #groups = Object.freeze(Array.from({ length: 8 }, (_, i) => Object.freeze({ group: `R${i + 1}`, status: 'unverified' as const })));
+  #frame = false; #prepared = false; #requested = false; #starts = 0;
+  #frameExits = 0;
+  #deferred: Readonly<{ disposition: string; starts: number; claim: string; frame: string }> | undefined;
+  #prepareReentry: string | undefined; #requestReentry: string | undefined;
+  #frameUnconfirmed = false;
+  #retirementFirst: 'none' | 'ownership_mismatch' | 'frame_unconfirmed' | 'input_rejected' = 'none';
+  #rejectedReply: ReturnType<RetirementStartAssembly['reply']> | undefined;
+  #first: PendingBindingReason = 'none';
+  #attempt: 'not_started' | 'running' | 'binding_rejected' = 'not_started';
+  constructor(private readonly scenario: string, admitted: boolean) {
+    this.#binding = new PendingSourceBinding(scenario === 'prepare_failure' ? 'after_bind_failure'
+      : scenario === 'source_rejected' ? 'source_failure' : scenario === 'source_unknown' ? 'source_attempt_failure' : 'normal', admitted);
+    this.#issuedPin = retirementBindingAccess.pin(this.#binding);
+    const p = this.#issuedPin, foreign = Object.freeze({});
+    this.#pin = scenario === 'pin_copy' ? Object.freeze({ ...p }) : scenario === 'pin_construction' ? Object.freeze({ ...p, construction: foreign })
+      : scenario === 'pin_retention' ? Object.freeze({ ...p, retention: foreign })
+        : scenario === 'pin_source_slot' ? Object.freeze({ ...p, sourceSlot: foreign }) : p;
+    this.#claimOwner = scenario === 'owner_copy' ? foreign : this.#owner;
+    this.#issuedClaim = new RetirementStartClaim(scenario === 'claim_owner' ? foreign : this.#owner,
+      scenario === 'claim_pin' ? Object.freeze({ ...p }) : scenario === 'pin_copy' ? this.#pin : p);
+    this.#claim = scenario === 'claim_copy' ? new RetirementStartClaim(this.#owner, p) : this.#issuedClaim;
+    if (!admitted) { this.#first = 'binding_mismatch'; this.rejectOwnership('input_rejected'); }
+  }
+  private reply(ok: boolean, disposition: RetirementStartDisposition) { return Object.freeze({ ...RETIREMENT_START_CLOSED, ok, disposition,
+    firstReason: this.#first, retirement: this.#attempt === 'running' ? 'running' : 'not_started' }); }
+  prepare() {
+    if (this.#rejectedReply) return this.#rejectedReply;
+    if (this.#frameUnconfirmed) return this.reply(false, 'frame_unconfirmed');
+    if (this.#frame) return this.reply(false, 'preparation_in_progress');
+    if (this.#prepared || this.#requested || this.#first !== 'none') return this.reply(false, 'preparation_rejected');
+    this.#frame = true;
+    try { this.generationFrame(); }
+    catch { retirementBindingAccess.failFrame(this.#binding); this.syncFirst(); this.request(); }
+    finally {
+      this.#frameExits++;
+      if (this.scenario === 'frame_exit_failure') { this.#frameUnconfirmed = true; this.#retirementFirst = 'frame_unconfirmed'; }
+      else this.#frame = false;
+    }
+    if (this.#frameUnconfirmed) { this.request(); return this.reply(false, 'frame_unconfirmed'); }
+    if (this.#requested) this.request();
+    return this.reply(this.#prepared && this.#first === 'none', this.#first === 'none' && this.#prepared ? 'prepared' : 'preparation_rejected');
+  }
+  private syncFirst() {
+    const first = retirementBindingAccess.first(this.#binding);
+    if (this.#first === 'none' && first !== 'none') this.#first = first;
+  }
+  private generationFrame(): void {
+    if (this.scenario === 'reenter_prepare') this.#prepareReentry = this.prepare().disposition;
+    const result = this.#binding.prepare(); this.#prepared = result.ok; this.syncFirst();
+    if (this.scenario === 'throw_in_frame') throw new Error('synthetic_private_frame_exception');
+    if (!result.ok || this.scenario === 'request_in_frame' || this.scenario === 'close_in_frame') {
+      if (this.scenario === 'close_in_frame') this.close(); else this.request();
+    }
+  }
+  request() {
+    if (this.#rejectedReply) return this.#rejectedReply;
+    this.#requested = true; retirementBindingAccess.stop(this.#binding);
+    if (this.#attempt === 'running') return this.reply(false, 'in_progress');
+    if (this.#attempt === 'binding_rejected') return this.reply(false, 'binding_rejected');
+    if (this.#frameUnconfirmed) return this.reply(false, 'frame_unconfirmed');
+    if (this.#frame) {
+      this.#deferred = Object.freeze({ disposition: 'deferred_frame', starts: this.#starts,
+        claim: this.#claim.spent ? 'spent' : 'unused', frame: 'active' });
+      return this.reply(false, 'deferred_frame');
+    }
+    if (this.#claimOwner !== this.#owner || this.#claim !== this.#issuedClaim || this.#pin !== this.#issuedPin
+      || this.#claim.owner !== this.#owner || this.#claim.pin !== this.#pin || !retirementBindingAccess.matches(this.#binding, this.#pin)) {
+      return this.rejectOwnership('ownership_mismatch');
+    }
+    if (!this.#claim.begin()) return this.reply(false, 'in_progress');
+    this.#starts++; this.#attempt = 'running';
+    if (this.scenario === 'reenter_request') this.#requestReentry = this.request().disposition;
+    return this.reply(true, 'blocked_field_clear');
+  }
+  private rejectOwnership(reason: 'ownership_mismatch' | 'input_rejected') {
+    this.#attempt = 'binding_rejected'; this.#retirementFirst = reason;
+    this.#rejectedReply = this.reply(false, 'binding_rejected'); return this.#rejectedReply;
+  }
+  rejectArguments() {
+    if (this.#rejectedReply) return this.#rejectedReply;
+    if (this.#first === 'none') this.#first = 'binding_mismatch';
+    this.#requested = true; retirementBindingAccess.stop(this.#binding);
+    return this.reply(false, 'input_rejected');
+  }
+  close() { if (this.#rejectedReply) return this.#rejectedReply; this.#binding.close(); this.syncFirst(); return this.request(); }
+  inspect() {
+    const binding = this.#binding.inspect();
+    return Object.freeze({ ...RETIREMENT_START_CLOSED, firstReason: this.#first, attempt: this.#attempt, starts: this.#starts,
+      claim: this.#claim.spent ? 'spent' : 'unused', frame: this.#frameUnconfirmed ? 'unconfirmed' : this.#frame ? 'active' : 'inactive', requested: this.#requested,
+      frameExits: this.#frameExits, deferred: this.#deferred,
+      retirementFirst: this.#retirementFirst, sourceCapture: binding.rootSlot,
+      retirement: this.#attempt === 'running' ? 'running' : 'not_started',
+      prepareReentry: this.#prepareReentry, requestReentry: this.#requestReentry,
+      fields: this.#fields, groups: this.#groups, controlState: binding.controlState, retained: binding.retentionTable, source: binding.source });
+  }
+}
+export function createRetirementStartFake(...args: readonly unknown[]) {
+  const input = args.length === 0 ? 'normal' : args[0];
+  const admitted = args.length <= 1 && typeof input === 'string' && RETIREMENT_START_SCENARIOS.includes(input);
+  const a = new RetirementStartAssembly(admitted ? input as string : 'normal', admitted);
+  return Object.freeze({ prepare: (...xs: readonly unknown[]) => xs.length ? a.rejectArguments() : a.prepare(),
+    request: (...xs: readonly unknown[]) => xs.length ? a.rejectArguments() : a.request(),
+    close: (...xs: readonly unknown[]) => xs.length ? a.rejectArguments() : a.close(), inspect: () => a.inspect() });
 }
