@@ -1,6 +1,8 @@
 # WF-B (C)：既存issuerへのJournal private供給・先行保持境界
 
-Version: draft-0.1 / Date: 2026-11-09 / 読み取り照合HEAD: `d18f4dc`。
+Version: draft-0.2 / Date: 2026-11-09 / 読み取り照合HEAD: `d18f4dc`（shellレビュー修正基準HEAD: `b8dc4b3`）。
+
+draft-0.2のレビュー修正：(1) shellの`close()`は構築開始前でも`first='closed'`を立てており、既存fixtureで統一してきた「開始前closeは停止だけ、開始後は先行理由がなければclosed」と食い違っていた。(2) `matches()`のclaim brand／target／stateとdescriptor brandの照合に混入対照がなく、各条件を外す変異が生存した。§10で開始前closeを停止だけにし、4種の単独混入対照を追加した。
 
 実装追記（2026-11-09）: §9の第1段階の内部型・生成順だけを独立合成assemblyで実装した。既存issuerへのprivate供給・admission消費・packet生成は未接続。[shell検証記録](E2E_BEST_PRACTICE_WFB_JOURNAL_SUPPLY_SHELL_2026-11-09.md)。
 
@@ -144,9 +146,9 @@ oracleは本体layout・builder・state counterを期待値にimportせず、構
 
 固定順は、先行FailureShellと34枠の捕捉台帳→結果shell(1)→供給slot(2)→空packet保持slot(3)→静的layout(4)→空cell保持slot25個(5〜29)→未使用admission slot(30)→**合成start代役**(31)→private target descriptor(32)→未消費供給claim(33)→同descriptorの結合先slot(34)。同参照・brand・variant・scope／epoch／packet originを確認後、供給slotをunboundからboundへ一度だけ固定する。B02の実RetirementStartAssembly接続を実装したという意味ではない。
 
-descriptorはB03用の非実行供給先記述であり、issued admission originを持つ最終JournalSupplyAnchorではない。供給claimもunusedで保持するだけで、bound→preparingは未実装。checkはblocked_supplyを返す。packet／cell objectは存在せず、保持slotのreferenceは全てundefined。C→F layoutは親文書の固定25項目（F14・F24等を誤って連番補完しない）を使用する。
+descriptorはB03用の非実行供給先記述であり、issued admission originを持つ最終JournalSupplyAnchorではない。供給claimもunusedで保持するだけで、bound→preparingは未実装。checkはblocked_supplyを返す。packet／cell objectは存在せず、保持slotのreferenceは全てundefined。C→F layoutは親文書の固定25項目（F14・F24等を誤って連番補完しない）を使用する。claim（brand／target／state）とdescriptor brandは、不正値を唯一の発行slotへ設置する単独対照で、それぞれの照合だけが拒否することを確認する。保持slotの健全性条件（30枠confirmed、packet／cell保持slotのreference空、cell保持slotのkind）は内部で常に正しく生成されるため到達しない防御条件であり、混入対照を持たない。
 
-各生成点はbefore→attempting→返却参照のprovisional捕捉→confirmedを分離する。故障後は先行first・phase／boundary、捕捉済みprefixとattempt未捕捉の責務を保持し、第2構築を拒否する。最初のFailureShell／固定台帳・module layout自体の実確保失敗や実OOM時の診断必着はUnknown。生成frame中のcloseはdeferred通知で、frame退出までに新start生成を止める。close後も保持slotをclearせず、discard／cleanup確認を主張しない。
+各生成点はbefore→attempting→返却参照のprovisional捕捉→confirmedを分離する。故障後は先行first・phase／boundary、捕捉済みprefixとattempt未捕捉の責務を保持し、第2構築を拒否する。最初のFailureShell／固定台帳・module layout自体の実確保失敗や実OOM時の診断必着はUnknown。生成frame中のcloseはdeferred通知（返答`deferred_frame`）で、frame退出までに新start生成を止める。構築開始前のcloseは停止だけを記録し、`first`を立てずに以後のprepare／checkを`closed`で拒否する。開始後のcloseは先行理由がなければ`closed`を固定する。close後も保持slotをclearせず、discard／cleanup確認を主張しない。
 
 JS02の先行保持prefixとJS03／JS08／JS12の非接続部分だけを検証した。合成scopeは参照で照合し、start側の実field再検証、producer Journal借用、frame／停止／封印、同既存admission epochへの結合、live post、固定discardは後工程。別assemblyの成功を実class保証や本番bindingに昇格しない。実費用・layout・E／S・全体work受付はUnknownのままである。
 

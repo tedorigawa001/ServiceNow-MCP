@@ -244,6 +244,8 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 ### Added
 
+- WF-B journal supply shell review: a close before construction now records only the stop (no first diagnosis) and refuses later preparation, matching the other fixtures. Fixed single-field controls for claim brand/target/state and descriptor brand install the malformed value as the only issued slot (four compiled controls added), and the in-frame close reply is pinned.
+
 - WF-B absence journal review: control live retirement is now journaled as a `released` write on C14 (no absence fact), and the legacy source `clear()` is refused once the root is retirement-sealed, with the refused writer recorded through the normal journal acceptance (`journal_sealed` after seal). The `legacy_clear` control now runs before the retirement seal, and a new `legacy_clear_after_seal` control pins the refusal.
 
 - WF-B capture admission review: mixing tests now fix the rejecting stage through seal/ack/pin/admission issue counts, so a later binding check can no longer mask an unchecked earlier field (`pin_origin` is now isolated and added to the compiled controls). New controls pin the seal-vs-issue exception classification, a scope extra key and the root-not-created ack extra key.

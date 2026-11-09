@@ -20,6 +20,8 @@ try {
     ['descriptor_copy', 'd !== issued', 'false'], ['descriptor_extra', 'Reflect.ownKeys(d).length !== 6', 'false'],
     ['descriptor_variant', "d.kind !== 'synthetic_target'", 'false'], ['foreign_start', 'd.start !== start', 'false'],
     ['scope_copy', 'd.scope !== start.scope', 'false'], ['epoch', 'd.epoch !== start.epoch', 'false'], ['packet', 'd.packet !== start.packet', 'false'],
+    ['descriptor_brand', 'd[TARGET_BRAND] !== true', 'false'], ['claim_brand', 'claim[CLAIM_BRAND] !== true', 'false'],
+    ['claim_target', 'claim.target !== issued', 'false'], ['claim_state', "claim.state !== 'unused'", 'false'],
   ];
   for (const [i, [script, from, to]] of clauses.entries()) {
     assert.equal(source.split(from).length, 2, 'anchor drift ' + script);

@@ -23,7 +23,7 @@ class SupplyShellAssembly {
   #frame = false; #started = false; #closeRequested = false; #bindings = 0;
   #state: 'unused' | 'constructing' | 'bound' | 'rejected' = 'unused';
   #fixed: Readonly<{ ok: boolean; disposition: string; first: Reason }> | undefined;
-  #reentry: string | undefined;
+  #reentry: string | undefined; #closeInFrame: string | undefined;
   constructor(private readonly script: string, admitted: boolean) {
     // B00: failure owner exists before any start/descriptor/empty-holder generation below.
     // Failure of this shell or fixed slot-array allocation itself remains real-OOM Unknown.
@@ -58,6 +58,7 @@ class SupplyShellAssembly {
     if (['owner', 'construction', 'retention', 'sourceSlot', 'claim'].includes(this.script))
       return Object.freeze({ ...d, scope: Object.freeze({ ...d.scope, [this.script]: Object.freeze({}) }) });
     if (this.script === 'epoch' || this.script === 'packet') return Object.freeze({ ...d, [this.script]: Object.freeze({}) });
+    if (this.script === 'descriptor_brand') return Object.freeze({ ...d, [TARGET_BRAND]: false }) as unknown as TargetDescriptor;
     return d;
   }
   private matches(): boolean {
@@ -78,6 +79,8 @@ class SupplyShellAssembly {
     if (this.#fixed) return this.#fixed;
     if (this.#frame) return this.reply(false, 'construction_in_progress');
     if (this.#failure.first !== 'none') return this.reject(this.#failure.first);
+    // A close before construction is a stop only: no first diagnosis, and no later construction.
+    if (!this.#started && this.#closeRequested) return this.reply(false, 'closed');
     if (this.#started) return this.reject('duplicate_preparation');
     this.#started = true; this.#frame = true; this.#state = 'constructing';
     try {
@@ -88,7 +91,7 @@ class SupplyShellAssembly {
       for (let i = 0; i < 25; i++) this.mint(i + 5, () => Object.freeze({ kind: 'empty_holder', reference: undefined, cell: i + 1, field: FIELDS[i] }));
       this.mint(30, () => Object.freeze({ kind: 'admission_use_slot', state: 'unused' }));
       if (this.script === 'reenter') this.#reentry = this.prepare().disposition;
-      if (this.script === 'close_in_frame') this.close();
+      if (this.script === 'close_in_frame') this.#closeInFrame = this.close().disposition;
       if (this.#closeRequested) return this.reject('closed');
       const start = this.mint(31, () => this.start());
       const issued = this.mint(32, () => {
@@ -96,7 +99,10 @@ class SupplyShellAssembly {
           start, scope: start.scope, epoch: start.epoch, packet: start.packet });
         return this.script === 'descriptor_copy' ? d : this.probe(d);
       });
-      this.mint(33, () => Object.freeze<SupplyClaim>({ [CLAIM_BRAND]: true, target: issued, state: 'unused' }));
+      // Claim controls install the malformed claim as the only issued claim, so only its own field check can reject it.
+      this.mint(33, () => Object.freeze({ [CLAIM_BRAND]: this.script !== 'claim_brand',
+        target: this.script === 'claim_target' ? Object.freeze({ ...issued }) : issued,
+        state: this.script === 'claim_state' ? 'spent' : 'unused' }) as unknown as SupplyClaim);
       this.mint(34, () => this.script === 'descriptor_copy' ? this.probe(issued) : issued);
       this.#failure.phase = 34; this.#failure.boundary = 'binding';
       if (!this.matches()) return this.reject('binding_mismatch');
@@ -109,6 +115,7 @@ class SupplyShellAssembly {
     if (this.#fixed) return this.#fixed;
     if (this.#frame) return this.reply(false, 'construction_in_progress');
     if (this.#failure.first !== 'none') return this.reject(this.#failure.first);
+    if (!this.#started && this.#closeRequested) return this.reply(false, 'closed');
     if (this.#state !== 'bound') return this.reply(false, 'not_ready');
     if (!this.matches()) return this.reject('binding_mismatch');
     return this.reply(false, 'blocked_supply'); // No bound→preparing/claim consumption in this stage.
@@ -117,13 +124,14 @@ class SupplyShellAssembly {
     if (this.#fixed) return this.#fixed;
     this.#closeRequested = true;
     if (this.#frame) return this.reply(false, 'deferred_frame');
+    if (!this.#started) return this.reply(false, 'closed');
     return this.reject('closed');
   }
   rejectInput() { return this.reject('input_rejected'); }
   inspect() {
     return Object.freeze({ model: 'wfb-journal-supply-shell-fake-1', state: this.#state, first: this.#failure.first,
       phase: this.#failure.phase, boundary: this.#failure.boundary, frame: this.#frame ? 'active' : 'inactive',
-      closeRequested: this.#closeRequested, bindings: this.#bindings, reentry: this.#reentry,
+      closeRequested: this.#closeRequested, bindings: this.#bindings, reentry: this.#reentry, closeInFrame: this.#closeInFrame,
       stages: Object.freeze(this.#products.map(s => s.stage)), retained: this.#products.filter(s => !!s.value).length,
       cellHolders: this.#products.slice(4, 29).filter(s => !!s.value).length,
       layout: this.#products[3].value ? FIELDS : undefined,
@@ -133,7 +141,8 @@ class SupplyShellAssembly {
   }
 }
 const SCRIPTS = Object.freeze(['normal', 'reenter', 'close_in_frame', 'descriptor_copy', 'descriptor_extra', 'descriptor_variant',
-  'foreign_start', 'scope_copy', 'owner', 'construction', 'retention', 'sourceSlot', 'claim', 'epoch', 'packet']);
+  'foreign_start', 'scope_copy', 'owner', 'construction', 'retention', 'sourceSlot', 'claim', 'epoch', 'packet',
+  'descriptor_brand', 'claim_brand', 'claim_target', 'claim_state']);
 export function createJournalSupplyShellFake(...args: readonly unknown[]) {
   const script = args.length ? args[0] : 'normal';
   const fault = typeof script === 'string' ? /^(before|attempt|after|done)_([1-9]|[12][0-9]|3[0-4])$/.test(script) : false;

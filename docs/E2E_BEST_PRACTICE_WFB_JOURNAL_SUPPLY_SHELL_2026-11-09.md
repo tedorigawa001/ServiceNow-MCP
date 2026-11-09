@@ -50,6 +50,29 @@ compiled対照は`bdo node tests/review/fixtures/compiled-journal-supply-shell.m
 
 実接続・実通信・設定変更・Pushは行わず、正式発行口閉鎖・全体受付無効・Unknown・調査保留を維持する。今回分は未コミット。
 
+## レビュー修正（2026-11-09）
+
+レビュー基準HEAD: `b8dc4b3`。修正前は全体321ファイル・15,994件成功。
+
+指摘：
+1. 構築開始前の`close()`が`first='closed'`・`state='rejected'`を立てていた（probe）。既存fixtureで統一してきた「開始前closeは停止だけ、開始後は先行理由がなければclosed」（preflight `ece8724`以降）と食い違い、設計§6の供給理由にも`closed`はない。
+2. `matches()`の`claim[CLAIM_BRAND]`／`claim.target !== issued`／`claim.state !== 'unused'`とdescriptorの`d[TARGET_BRAND]`は、claim（slot 33）とbrandを混入する対照がなく、各条件を外す変異が生存した（`descriptor_variant`はkindだけを変える）。
+3. 保持slotの健全性条件4種は到達しない防御条件。frame内`close()`の返答`deferred_frame`は未確認だった。
+
+修正：
+- 開始前closeは`closeRequested`だけを記録し、`first`を立てない。以後のprepare／checkは`closed`を返して構築しない。開始後のcloseは従来どおり`closed`を固定する。
+- 固定selector`descriptor_brand`／`claim_brand`／`claim_target`／`claim_state`を追加した。不正値を唯一の発行slotへ設置するので、それぞれの照合だけが拒否する。compiledへ4条件を追加した（binding 7→11）。
+- frame内closeの返答を`closeInFrame`診断で確認する。
+
+RED：追加6件（4混入、frame内close返答、開始前close）が修正前に失敗した。compiledは`condition masked descriptor_brand`で失敗した。GREEN：新規159件成功、compiled 11条件を全検出。
+
+一時変異（試験後に元へ戻した）：計14種、検出10、到達しない4。
+- 今回検出7種：claim brand／target／state、descriptor brand、frame内closeのdefer、開始前closeでfirstを立てる変異、開始前close後のprepareを許す変異。
+- 修正前から検出3種：scope field混入（scope copyと同じ参照差で拒否）、frame内closeの確認、余分な引数。
+- 到達しない4種：30枠confirmed、packet保持slotのreference空、cell保持slotのreference空とkind（内部で常に正しく生成される）。
+
+全体回帰：`npm run lint`・`npm run build`・`package-http-classification.mjs`成功、vitest全体321ファイル・15,999件成功。
+
 ## 5 コミット対象だけの隔離再検証（2026-11-09）
 
 HEAD `f51e246`と今回の6ファイルだけをindexから一時directoryへ展開した。既存node_modulesだけを参照し、作業treeの他変更や既存distを使わず検証した。

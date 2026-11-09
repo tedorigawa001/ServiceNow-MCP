@@ -26,7 +26,8 @@ describe('independent prior journal supply shell', () => {
       const before = a.inspect(); expect(a.prepare()).toBe(r); expect(a.check()).toBe(r); expect(a.close()).toBe(r); expect(a.inspect()).toEqual(before);
     });
   it.each(['descriptor_copy', 'descriptor_extra', 'descriptor_variant', 'foreign_start', 'scope_copy',
-    'owner', 'construction', 'retention', 'sourceSlot', 'claim', 'epoch', 'packet'])(
+    'owner', 'construction', 'retention', 'sourceSlot', 'claim', 'epoch', 'packet',
+    'descriptor_brand', 'claim_brand', 'claim_target', 'claim_state'])(
     'rejects %s before binding/claim use and retains both candidate and issued slots', script => {
       const a = module.createJournalSupplyShellFake(script); const r = a.prepare();
       expect(r).toMatchObject({ ok: false, first: 'binding_mismatch' });
@@ -44,7 +45,8 @@ describe('independent prior journal supply shell', () => {
   });
   it('defers in-frame close, retains prior holders and does not create a synthetic start', () => {
     const a = module.createJournalSupplyShellFake('close_in_frame'); const r = a.prepare();
-    expect(r.first).toBe('closed'); expect(a.inspect()).toMatchObject({ ...closed, retained: 30, bindings: 0,
+    expect(r.first).toBe('closed'); expect(a.inspect()).toMatchObject({ closeInFrame: 'deferred_frame' });
+    expect(a.inspect()).toMatchObject({ ...closed, retained: 30, bindings: 0,
       closeRequested: true, frame: 'inactive', supplyClaim: 'not_created' });
     expect(a.close()).toBe(r); expect(a.prepare()).toBe(r);
   });
@@ -64,5 +66,12 @@ describe('independent prior journal supply shell', () => {
     }
     expect(hooks).toBe(0); expect(Object.keys(module)).toEqual(['createJournalSupplyShellFake']);
     expect(Object.keys(module.createJournalSupplyShellFake())).toEqual(['prepare', 'check', 'close', 'inspect']);
+  });
+  it('records a close before construction only as a stop and refuses later preparation without a first diagnosis', () => {
+    const a = module.createJournalSupplyShellFake();
+    expect(a.close()).toMatchObject({ ok: false, disposition: 'closed', first: 'none' });
+    expect(a.prepare()).toMatchObject({ ok: false, disposition: 'closed', first: 'none' });
+    expect(a.check()).toMatchObject({ ok: false, disposition: 'closed', first: 'none' });
+    expect(a.inspect()).toMatchObject({ ...closed, first: 'none', closeRequested: true, retained: 0, bindings: 0 });
   });
 });
