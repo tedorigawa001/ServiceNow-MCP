@@ -1,5 +1,7 @@
 # WF-B (C)：正規rootのgate生成・同owner結合とframe継続入口
 
+(B)の内部接続差分（2026-11-10、MDのみ）: [同startのgrant捕捉・固定exit責務・公開診断draft-0.1](BEST_PRACTICE_WFB_PROBE_GRANT_EXIT_DUTY_DESIGN.md)で、先行RunLink／dutyと一度限り利用、失敗後も残る同grant退役責務、参照を出さない診断と(C)前の未封印保持を定義した。正式発行・body起動・全writer停止・Journal供給を有効化しない。
+
 次段階の接続差分（2026-11-09、MDのみ）: [同startのprobe-only frame・一度限りenter／確認済みexit draft-0.1](BEST_PRACTICE_WFB_PROBE_FRAME_ENTER_EXIT_DESIGN.md)で、旧bodyを保つwrapper共有、別private利用cellとgrant保持、退出確定点、失敗後も残る退出責務を具体化した。非実行draft自体は権限化せず、request合流・実writer・Journal供給は未接続とする。
 
 限定実装(A)（2026-11-10）: 上記差分設計§11に、同start wrapperの最小抽出と先行private cell／同bindingを実装した。新seed付き経路はframe開始前に拒否し、body・grant・退出候補を生成しない。[検証記録](E2E_BEST_PRACTICE_WFB_PROBE_FRAME_PREPARATION_2026-11-10.md)。旧合成経路は維持し、enter／exit・request合流・Journal供給の保証へ昇格させない。
