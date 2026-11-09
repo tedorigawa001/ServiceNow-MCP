@@ -1,5 +1,7 @@
 # WF-B (C)：移譲開始後の停止・所有境界とdetach後照合の差分設計
 
+第2段階詳細化追記（2026-11-09）: [pending／failure内部型・先行生成と固定回収／finish gate](BEST_PRACTICE_WFB_PENDING_CUSTODY_RETIREMENT_DESIGN.md)で、unbound shellからの一度限り結合、生成prefix、8群の保持表、回収claim・未確認保持・PayloadGoneEvidenceとroot終端条件を具体化した。現control／元claim自身のanchor強参照も退役対象とし、payload-free identityとretirable bindingを分離する。設計のみでclaim消費・回収・finishは未実装のまま。
+
 Version: draft-0.4 / Date: 2026-11-09 / 読み取り照合基準HEAD: `ece8724`（レビュー修正基準HEAD: `ca4dd6d`、第1段階実装基準HEAD: `c91c7d7`、第1段階レビュー修正基準HEAD: `d4e9bff`）。
 
 draft-0.3: §10の第1段階だけを合成依存限定で実装した。同controlの通常利用gate、停止だけのprivate継続、anchor＋明示payloadの関係検査を新しい診断入口で確認する。claim消費・normal slot集約／detach・holder公開・回収／finishは未接続。[検証記録](E2E_BEST_PRACTICE_WFB_UNUSED_CONTROL_BOUNDARY_2026-11-09.md)、実装境界は§11を参照。
