@@ -1,6 +1,8 @@
 # WF-B (C)：pending／failure内部型・先行生成と固定回収／finish gateの詳細設計
 
-Version: draft-0.5 / Date: 2026-11-09 / 第2段階の合成結合基準HEAD: `2022cc3` / 読み取り照合基準HEAD: `fbfe6dd` / 第1段階実装基準HEAD: `dc41a70` / 第1段階レビュー修正基準HEAD: `8aa373f` / 第2段階レビュー修正基準HEAD: `d361de6`。
+Version: draft-0.6 / Date: 2026-11-09 / 固定回収scheduleの設計照合基準HEAD: `07cc830` / 第2段階の合成結合基準HEAD: `2022cc3` / 読み取り照合基準HEAD: `fbfe6dd` / 第1段階実装基準HEAD: `dc41a70` / 第1段階レビュー修正基準HEAD: `8aa373f` / 第2段階レビュー修正基準HEAD: `d361de6`。
+
+draft-0.6（MDのみ）: [field別固定回収schedule・失敗prefix・診断契約](BEST_PRACTICE_WFB_FIXED_RETIREMENT_SCHEDULE_DESIGN.md)で、現行R1〜R8の30固定項目、候補core／receipt・生成frameの残留参照、回収claim・capture前clear禁止・未確認保持を具体化した。回収・証拠・root終端は未実装のまま。新結合経路のfield順・所有境界は同差分設計を優先し、旧入口の保証へ自動適用しない。
 
 draft-0.4: §14へ同construction／source／controlの一度限りprivate結合、payload-free coreとretirable live cell、正規SourceRootSlotと保持表の合成実装を追記した。下位claim消費・回収・root finishは未実装。[検証記録](E2E_BEST_PRACTICE_WFB_PENDING_SOURCE_BINDING_2026-11-09.md)。
 
@@ -16,13 +18,13 @@ Status: **先行unbound生成と同source／controlの結合だけ合成実装�
 
 ## 1 現行との差分と先に解く制約
 
-現行新入口はprepare／checkNormal／checkRelation／close／fail／inspectだけで、finishはない。bind後の停止は元ownerのclearを経由せず、payload・anchor・borrow／Snapshotを保持する。bind前close／failureだけは既存の消費前close／fail＋clearへ送る。下位claim消費・pending記録・detach・公開は0。
+先行のunused-control境界入口はprepare／checkNormal／checkRelation／close／fail／inspectだけで、finishはない。bind前close／failureは既存の消費前close／fail＋clearへ送る。一方、§14の後続PendingSourceBinding入口はprepare／check／close／inspectで、正規source捕捉後はbind前後ともroot停止だけにし、payload・anchor・borrow／Snapshotを保持する。両経路を混同しない。下位claim消費・pending記録・detach・公開は0。
 
 今回具体化するのは、容量1のpending active slot／failure custodyと、その生成失敗を含む一度限りの回収・未確認保持・root終端許可である。現行の新入口にはこの機能がなく、takingを有効にする前に整備する。
 
-**空のpendingだけを見て退役成功にはできない。** 現SupplyUseControlはreadonlyなsource／anchor／claimを持ち、claimもanchorを参照する。sourceのnormalControl、local control／issuedControlから同anchor→table→bytesへ到達し得る。local payload／anchorだけをclearしても、controlを残せば本文参照が残る。反対にsourceのnormalControlを単純にundefinedへ戻すと、再bind拒否や同control gateの根拠を失う。
+**空のpendingだけを見て退役成功にはできない。** 分離前のSupplyUseControlはreadonlyなsource／anchor／claimを持っていた。§14でpayload-free coreとretirable live cellへ分離したが、元claim自身のanchor参照とlocal／issued／候補aliasは残る。local payload／anchorまたはcontrol liveだけのclearでは全本文参照の退役にならない。反対にsourceのnormalControlを単純にundefinedへ戻すと、再bind拒否や同control gateの根拠を失う。不正候補coreがpayloadを保持する場合も、live clearだけでは足りない。
 
-このため、payloadを含まない不変identity coreと、退役可能なprivate live bindingを分離する。旧factoryを一括変更せず、新段階のprivate経路で移行・回帰を検証する。通常slot集約や実移譲の安全性は、この回収設計だけでは確認済みにしない。
+先行結合で分離したidentity／live cellを前提に、次は同ownerの固定field回収と空確認を整備する。旧factoryの公開契約・挙動を維持し、新段階のprivate経路で検証する。通常slot集約や実移譲の安全性は、この回収設計だけでは確認済みにしない。
 
 ## 2 内部型・容量・権限
 
@@ -132,9 +134,9 @@ TerminalSlotへpayload-freeな不変結果を一度固定し、その後の新�
 
 ## 9 停止・理由・非出力
 
-bind前closeは元ownerの同期close・必要なSnapshot退役へ、bind前failureは既存failへ伝える。ただし新しく捕捉したlocal参照やshellがあれば、その回収責務はRetentionRootが別に保持する。元ownerのclearが実施されたことだけで新ownerのR3〜R8が空になったとはみなさない。
+先行unused-control入口のbind前close／failureは元ownerの既存close／failへ伝える。§14の新結合入口は正規source捕捉後、bind前でも専用root停止だけとし、旧clearへ送らない。元source自身の供給準備失敗の既存clearとは区別する。いずれも新しく捕捉したlocal参照やshellの回収責務はRetentionRootが別に保持し、元ownerのclearだけで新ownerのR3〜R8が空になったとはみなさない。
 
-bind後は正規controlの停止継続だけで通常利用を閉じる。生成失敗を扱う段階では、現行binding_mismatchだけの写像へread_prepare_unavailable系を追加する必要がある。元のsupplyFirst／lifecycleFirst／readFirst／readStop、上位first／stop、回収理由、root終端理由を別slotで保持し、後着close・二重回収・結果失敗で先行診断を上書きしない。
+bind後は正規controlの停止継続だけで通常利用を閉じる。`07cc830`で新結合入口の生成失敗はread_prepare_unavailable、binding／重複はbinding_mismatchへ写し、source_rejectedでは元sourceの理由を維持するよう修正済み。固定回収でもこの区別を維持する。元のsupplyFirst／lifecycleFirst／readFirst／readStop、上位first／stop、回収理由、root終端理由を別slotで保持し、後着close・二重回収・結果失敗で先行診断を上書きしない。
 
 開始前closeはfirstを立てない、開始後closeは先行firstがなければsupply_closedという現行方針を維持する。回収開始は「新しい通常開始」ではなく、閉鎖／失敗後でも正規identityから実施できる。cleanupDispositionはresource未開始のままで、本文・digest・path全文・raw例外・private参照を診断へ出さない。
 

@@ -1,5 +1,7 @@
 # WF-B (C)：移譲開始後の停止・所有境界とdetach後照合の差分設計
 
+固定回収の詳細設計追記（2026-11-09、MDのみ）: [field別schedule・失敗prefix・診断契約draft-0.1](BEST_PRACTICE_WFB_FIXED_RETIREMENT_SCHEDULE_DESIGN.md)で、同source／control結合後のR1〜R8を固定fieldへ対応付けた。元claim・拒否候補core／receipt・一時frame参照の所有、回収claimの唯一の開始点、capture確認前clear禁止と未確認保持を具体化した。生成frame終了前の完了判定を禁止する。回収・証拠・root終端gateは未実装で、下位claim消費・detach・holder公開・C実行も閉じたまま。
+
 同source結合追記（2026-11-09）: [回収基盤設計§14](BEST_PRACTICE_WFB_PENDING_CUSTODY_RETIREMENT_DESIGN.md)へ、同constructionのprivate結合・payload-free control coreとlive cell・正規SourceRootSlot・保持表を合成実装した。以下の過去追記の「source／control未接続」は当時の範囲。新結合でも下位claim消費・payload移動・detach・holder公開・全回収・root finishは0／未実装で、既存の消費前入口の挙動を維持する。[検証記録](E2E_BEST_PRACTICE_WFB_PENDING_SOURCE_BINDING_2026-11-09.md)。
 
 空shell生成実装追記（2026-11-09）: [回収基盤設計§13](BEST_PRACTICE_WFB_PENDING_CUSTODY_RETIREMENT_DESIGN.md)の独立合成入口へ、先行RetentionRoot・unbound pending／failureの4slot・生成claim・診断結果slotを追加した。既存source／controlには接続せず、生成prefixを保持して診断を封印するだけ。回収・root finish・下位claim消費は未実装。[検証記録](E2E_BEST_PRACTICE_WFB_PENDING_CONSTRUCTION_2026-11-09.md)。
