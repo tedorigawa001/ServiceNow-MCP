@@ -1,6 +1,8 @@
 # WF-B (C)：停止前提・clear権限・固定capture25cellの生成／確認境界
 
-Version: draft-0.1 / Date: 2026-11-09 / 読み取り照合基準HEAD: `1d8e3f7`。
+Version: draft-0.2 / Date: 2026-11-09 / 読み取り照合基準HEAD: `1d8e3f7`（レビュー修正基準HEAD: `2e1ab6a`）。
+
+draft-0.2のレビュー修正：draft-0.1は既知absenceの根拠を`not_minted`と「既存source discardの確認済み履歴」に限りつつ、旧discard計数を根拠にしないとして後者を定義していなかった。正常経路でも空になるC04〜C06（供給準備の成功途中でsource自身がundefinedへ戻すbuilding 3slot）とC17／C20（固定alias scriptでしか代入しないextra alias）が根拠を持てず、25cellがreadyにならなかった。§3へAbsenceJournalの4種の根拠を定義し、§5の照合とCA05を対応させた。capture中closeのpost確認は、retirement sealのepochだけを照合しroot close状態は照合しないと明記した。
 
 Status: **MDのみ。停止確認・clear権限・captureは未実装。** 親は[field別固定回収schedule](BEST_PRACTICE_WFB_FIXED_RETIREMENT_SCHEDULE_DESIGN.md)と[回収基盤設計](BEST_PRACTICE_WFB_PENDING_CUSTODY_RETIREMENT_DESIGN.md)。先行実装は[回収開始境界の検証記録](E2E_BEST_PRACTICE_WFB_RETIREMENT_START_2026-11-09.md)。本書はS00の残りとS01を具体化し、S02以降のfield clearを接続しない。
 
@@ -45,6 +47,7 @@ seal試行・Ack発行のslotは各一度限りで、途中throw／確認不成�
 | RootStopAck | 正規source／rootのprivate停止helper。owner／construction／retention／source-slot／source／root-origin／stop-epoch token、rootDisposition | 一度だけ同capture受付で照合。root instance・anchor・本文・raw claimを保持しない。root known-absentは専用variant |
 | TrustedControlPin | 正規control issuer。control-origin tokenとmint状態、同scope／source-slot origin | coreの5fieldとは別の空origin。候補coreから発行しない。actual control強参照は元slot／capture cellから一時借用するだけ |
 | ControlMintJournal | 同binding issuerの固定記録 | control生成前／捕捉済み／未確認、sourceへのbind前／後を区別。公開件数から再構築しない |
+| AbsenceJournal | 同owner／同source issuerの固定記録。種類はpreparation_completed（供給準備の完了でbuilding 3slotを空へ戻した記録）、alias_never_assigned（extraClaim／extraControlへ代入する固定scriptを実行していない記録）、legacy_discard_executed（元source自身の旧clearを実行した記録とその対象field）、not_minted（ControlMintJournal） | 各記録は対象fieldの集合と生成epochに結合し、該当する書込み経路の内部でだけ立てる。計数・公開inspect・fieldがundefinedであることから後付けで作らない。記録がなければabsenceを認定しない |
 | CaptureAdmission | 同RetirementOwnerのprivate補助slot。開始claim origin・StopAck origin・scope／source／controlのpin・capture epoch | 正規停止確認後に一度発行・一度消費。copy・別owner・別epochを拒否。clearそのものは実行しない |
 | CapturePacketShell | 同RetentionRoot配下、capacity1。packet originと25cellの固定配置 | source生成前に空の保持slotを用意し、生成参照を返す前に捕捉する。runtime登録口を持たない |
 | CaptureCell | 対応するC01〜C25／F項目、stage・presence・値参照1・確認bit | 同cellへ一度だけ格納。overwrite／sort／ID再検索／再生成なし。段階と参照捕捉を別に記録 |
@@ -112,13 +115,13 @@ CaptureAdmissionは同runningの開始claim・inactive frame・RootStopAck／kno
 3. 元slotを同じ正規readerで再読し、objectなら`===`による**同参照**、undefinedなら正規生成履歴を伴う**既知absence**を確認する。同値copy・別cell・候補slot・別epochは拒否する。
 4. 停止とepochをpost確認してからconfirmedへ進め、cursorを一つだけ進める。失敗なら元slotへ書き込まず、provisionalな参照をcellへ保持する。
 
-cellのstageはnot_started／reading／provisional／confirmed_present／confirmed_absent／unconfirmedとする。readingでthrowし値が捕捉できなければunknown、格納後なら参照ありのunconfirmedであり、同じ状態へ潰さない。undefinedという読取結果だけでabsenceを認定せず、not_mintedまたは既存source discardの確認済み履歴と突き合わせる。旧discard計数だけでは確認済み履歴にならない。
+cellのstageはnot_started／reading／provisional／confirmed_present／confirmed_absent／unconfirmedとする。readingでthrowし値が捕捉できなければunknown、格納後なら参照ありのunconfirmedであり、同じ状態へ潰さない。undefinedという読取結果だけでabsenceを認定せず、対象cellに対応するAbsenceJournalの記録と突き合わせる。C04〜C06はpreparation_completed、C17／C20はalias_never_assigned、元source旧clear後のC01〜C11はlegacy_discard_executed、未発行controlに由来するcellはnot_mintedを根拠とする。旧discard計数だけでは確認済み履歴にならず、記録と対象fieldの集合が一致しない場合はunconfirmedとする。
 
 capture epochは通常利用と生成frameを閉じた後に同ownerのprivate発行slotへ一度固定する。両readerの間に元slot・停止・mint状態が変われば同参照確認を拒否する。確認中にawait・clock採取・任意通知・外部hookを挟まない。固定故障scriptで元slotのcopy差替えやepoch差を作り、確認感度を試験する計画とする。
 
 ここでinactiveを要求するframeは生成wrapperと前段の借用frameであり、現在実行中のcapture frame自体ではない。capture frameは自ownerのScratchCarrierへ参照を閉じ、退出前にreadyの固定token-only返答以外を外へ出さない。後続final auditはこのcapture frameと後続clear frameの退出も別に確認する。
 
-capture中の正規closeは二つ目のcaptureを開始しない。通常停止要求を保持し、親の理由優先順に従ってclose理由を記録するだけで、cleanup用epochを通常closeだけで失効させない。同じ停止・元slotが安定していれば現captureは継続可能とする。closeと同時に元slot・mint状態・権限epochが変わった固定対照ではpost確認が不成立となりunconfirmedで止まる。通常closeから旧source.clear／finishへ迂回することは禁止する。
+capture中の正規closeは二つ目のcaptureを開始しない。通常停止要求を保持し、親の理由優先順に従ってclose理由を記録するだけで、cleanup用epochを通常closeだけで失効させない。同じ停止・元slotが安定していれば現captureは継続可能とする。closeと同時に元slot・mint状態・権限epochが変わった固定対照ではpost確認が不成立となりunconfirmedで止まる。通常closeから旧source.clear／finishへ迂回することは禁止する。post確認で照合する「停止」はretirement sealの状態とcapture epochだけであり、root自身のcloseRequested／readStopの変化は照合しない（closeによる理由記録は親の優先順で別軸に残す）。sealの解除・epoch差替え・元slot／mint状態の変化だけがpost確認を不成立にする。
 
 **全25cellの確認が終わるまで、一つも元fieldをclearしない。** これは親設計の「対応capture確認後だけclear」を強めたS01の固定境界である。presentとknown-absentを合わせて全25cellがconfirmed、cursor=25、同epoch・停止・frame条件が成立したときだけCaptureReadyを一度作る。cursorや確認件数だけでreadyにせず、各private cellと正規発行slotを確認する。
 
@@ -163,7 +166,7 @@ packet1・cell25・capture claim1・StopAck1・TrustedControlPin1・ready slot1�
 | CA02 | owner／scope／source slot／source／root／control origin／epoch／claim／発行slotを一条件ずつ混入。狙う条件以外は整合し、foreign method呼出し0を確認 |
 | CA03 | 25cellのC→F対応を独立表で検証。順序入替え・同値copy・同参照だが別field・別packetを拒否。aliasが同じでもfield確認をskipしない |
 | CA04 | 元fieldに別々のsentinelを置いた有効基点で初回読取・格納・再読・post確認を個別に故障注入。元slot無変更とprefix／未確認保持を確認 |
-| CA05 | source empty／unknown、control未発行／未捕捉、既存discard済みを分離。absence bitだけの偽装とunknownの空補完を検出 |
+| CA05 | source empty／unknown、control未発行／未捕捉、既存discard済みを分離。absence bitだけの偽装とunknownの空補完を検出。正常経路のbuilding 3slot・extra alias 2slotがAbsenceJournalで確認され25cellがreadyになる有効基点と、記録なしのundefined・記録と対象field集合の不一致・計数だけのdiscard履歴を拒否する対照を含める |
 | CA06 | admission発行／消費・cell途中・ready生成前後へ再入／closeを配置し、各試行≤1、ready再発行なし、開始claimの追加消費0を確認 |
 | CA07 | packet／mint／StopAck／ready途中生成失敗を区別し、未捕捉を未生成と認定しない。元slot＋provisional packetと未解決責務を保持 |
 | CA08 | 確認bit先行、reader再読省略、epoch／stop post省略、cursorだけのready、25cell確認前clearを変異で検出 |
