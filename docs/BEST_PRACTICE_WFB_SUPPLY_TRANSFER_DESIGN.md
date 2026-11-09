@@ -1,5 +1,7 @@
 # WF-B (C)：下位移譲claim・pending／非実行holderの差分設計
 
+第1境界実装追記（2026-11-09）: [停止・照合設計§11](BEST_PRACTICE_WFB_TRANSFER_TAKING_BOUNDARY_DESIGN.md)のunused control・通常利用gate・停止だけの継続・anchor＋明示payload関係検査を別の合成入口へ実装した。旧preflightのclaim／shellは不変。新入口もclaim消費・pending記録・detach・holder公開は行わず、未退役参照を保持中と報告する。[検証記録](E2E_BEST_PRACTICE_WFB_UNUSED_CONTROL_BOUNDARY_2026-11-09.md)。
+
 接続差分設計追記（2026-11-09）: [移譲開始後の停止・所有境界とdetach後照合](BEST_PRACTICE_WFB_TRANSFER_TAKING_BOUNDARY_DESIGN.md)で、同controlによるclaim消費／通常利用gate、元clearを経由しない同期停止、anchorと明示payloadの関係検査を具体化した。claim消費→pending記録→detachのF0〜F7と責務・未公開回収／finish保留を定義し、claim消費を有効にする前に失敗回収を必須とした。設計のみでholder公開・C実行・実装状態は変わらない。
 
 Version: draft-0.4 / Date: 2026-11-09 / 読み取り照合基準HEAD: `0e98c56`（レビュー修正基準HEAD: `8b5af60`、preflight実装基準HEAD: `35c1d2a`、preflightレビュー修正基準HEAD: `a888295`）。

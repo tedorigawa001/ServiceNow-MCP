@@ -798,6 +798,24 @@ interface SupplyIssuanceAnchor {
   readonly registry: readonly CanonicalRegistryEntry[]; readonly table: CanonicalPayloadTable;
   readonly view: NonExecutingSupplyView; readonly declarations: readonly CanonicalDeclarationView[]; readonly tableOrigin: object;
 }
+interface PreparedSupplyPayload {
+  readonly envelope: CPreparedContext; readonly registry: readonly CanonicalRegistryEntry[];
+  readonly table: CanonicalPayloadTable; readonly view: NonExecutingSupplyView;
+  readonly declarations: readonly CanonicalDeclarationView[]; readonly tableOrigin: object;
+}
+// No taking/consume/reset operation exists in this stage.
+class SupplyUseControl {
+  #stop: 'none' | 'supply_closed' | 'binding_mismatch' = 'none';
+  constructor(readonly owner: object, readonly source: CanonicalSupplyAssembly,
+    readonly anchor: SupplyIssuanceAnchor, readonly claim: NonExecutingSupplyTransfer) { Object.freeze(this); }
+  get state() { return this.#stop === 'none' ? 'unused' as const : 'stopped' as const; }
+  stop(reason: 'supply_closed' | 'binding_mismatch'): void { if (this.#stop === 'none') this.#stop = reason; }
+}
+let boundarySourceAccess: Readonly<{
+  bind(a: CanonicalSupplyAssembly, control: SupplyUseControl): boolean;
+  normal(a: CanonicalSupplyAssembly, control: SupplyUseControl): boolean;
+}>;
+let boundaryStop: (a: CanonicalSupplyAssembly, control: SupplyUseControl, kind: 'close' | 'failure') => boolean;
 // Lexical issuer only: no facade, summary, external callback or registration can supply an anchor.
 let supplyTransferAccess: {
   capture(a: CanonicalSupplyAssembly, transferOwner: object): SupplyIssuanceAnchor | undefined;
@@ -806,6 +824,7 @@ let supplyTransferAccess: {
 };
 class CanonicalSupplyAssembly {
   readonly #root: CStartAssembly;
+  #normalControl: SupplyUseControl | undefined;
   #state: 'unused' | 'preparing' | 'prepared' | 'discarded' = 'unused';
   #first: CanonicalSupplyReason = 'none';
   #envelope: CPreparedContext | undefined;
@@ -822,8 +841,29 @@ class CanonicalSupplyAssembly {
   readonly #counts = { preparationClaims: 0, registryRecords: 0, bindings: 0, declarations: 0, tables: 0, views: 0,
     validationPasses: 0, fileChecks: 0, discardPasses: 0 };
   static {
+    boundarySourceAccess = Object.freeze({
+      bind(a: CanonicalSupplyAssembly, control: SupplyUseControl): boolean {
+        if (a.#normalControl || control.source !== a || control.state !== 'unused'
+          || control.owner !== control.anchor.transferOwner || control.claim.owner !== control.owner
+          || control.claim.source !== a || control.claim.anchor !== control.anchor
+          || !supplyTransferAccess.matches(a, control.anchor)) return false;
+        a.#normalControl = control; return true;
+      },
+      normal(a: CanonicalSupplyAssembly, control: SupplyUseControl): boolean {
+        return a.#normalControl === control && control.state === 'unused' && a.check().ok;
+      },
+    });
+    boundaryStop = (a, control, kind): boolean => {
+      if (a.#normalControl !== control) return false;
+      control.stop(kind === 'close' ? 'supply_closed' : 'binding_mismatch');
+      // Stop only: never call the preparation owner's close/fail/clear/finish.
+      if (kind === 'close') a.#root.close();
+      else canonicalSupplyAccess.fail(a.#root, 'binding_mismatch');
+      return true;
+    };
     supplyTransferAccess = Object.freeze({
       capture(a: CanonicalSupplyAssembly, transferOwner: object): SupplyIssuanceAnchor | undefined {
+        if (a.#normalControl?.state === 'stopped') return undefined;
         if (a.#terminal || a.#first !== 'none' || a.#state !== 'prepared'
           || !canonicalSupplyAccess.context(a.#root) || !a.#envelope || !a.#registry || !a.#table || !a.#view
           || !a.#issuedDeclarations || !a.#tableOrigin) return undefined;
@@ -831,6 +871,7 @@ class CanonicalSupplyAssembly {
           table: a.#issuedTable!, view: a.#issuedView!, declarations: a.#issuedDeclarations, tableOrigin: a.#tableOrigin });
       },
       matches(a: CanonicalSupplyAssembly, anchor: SupplyIssuanceAnchor): boolean {
+        if (a.#normalControl?.state === 'stopped') return false;
         const live = canonicalSupplyAccess.context(a.#root), e = anchor.envelope;
         return !a.#terminal && a.#first === 'none' && a.#state === 'prepared' && !!live
           && anchor.sourceOwner === a && e === a.#envelope && anchor.registry === a.#registry
@@ -870,6 +911,7 @@ class CanonicalSupplyAssembly {
   private baseOperation(kind: 'begin' | 'prepare') {
     if (this.#terminal) return this.reply('read_already_used');
     if (this.#first !== 'none') return this.reply(this.#first);
+    if (this.#normalControl?.state === 'stopped') return this.reply('supply_closed');
     const result = this.#root[kind]();
     if (result.ok) return this.reply();
     return this.fail(result.reason === 'supply_closed' ? 'supply_closed'
@@ -880,6 +922,7 @@ class CanonicalSupplyAssembly {
   check() {
     if (this.#first !== 'none') return this.reply(this.#first);
     const result = this.#root.check();
+    if (result.ok && this.#normalControl?.state === 'stopped') return this.reply('supply_closed');
     return result.ok ? this.reply() : this.reply(result.reason === 'supply_closed' ? 'supply_closed'
       : result.reason === 'supply_invalid' ? 'supply_prepare_unavailable' : 'binding_mismatch');
   }
@@ -1032,6 +1075,7 @@ class CanonicalSupplyAssembly {
   prepareSupply() {
     if (this.#terminal) return this.reply('read_already_used');
     if (this.#first !== 'none') return this.reply(this.#first);
+    if (this.#normalControl?.state === 'stopped') return this.reply('supply_closed');
     if (this.#root.inspect().supplyFirst !== 'none') return this.fail('supply_prepare_unavailable');
     if (!canonicalSupplyAccess.open(this.#root)) return this.fail('supply_closed');
     const canonical = canonicalSupplyAccess.context(this.#root);
@@ -1305,4 +1349,197 @@ export function createCanonicalSupplyTransferFake(...args: readonly unknown[]) {
   const a = new SupplyTransferPreflight(admitted ? input as string : 'normal', admitted);
   return Object.freeze({ prepare: (...input: readonly unknown[]) => input.length ? a.rejectArguments() : a.prepare(),
     close: () => a.close(), finish: () => a.finish(), inspect: () => a.inspect() });
+}
+
+/** Relation-only check: no source owner, live context, Borrow.matches, gate or clock read. */
+function inspectPayloadRelation(anchor: SupplyIssuanceAnchor, p: PreparedSupplyPayload): boolean {
+  if (p.envelope !== anchor.envelope || p.registry !== anchor.registry || p.table !== anchor.table
+    || p.view !== anchor.view || p.declarations !== anchor.declarations || p.tableOrigin !== anchor.tableOrigin
+    || p.table.envelope !== p.envelope || p.view.envelope !== p.envelope || p.view.table !== p.table
+    || p.table.origin !== p.tableOrigin || p.view.declarations !== p.declarations) return false;
+  const files = anchor.envelope.files;
+  if (p.registry.length !== files.length || p.table.bindings.length !== files.length
+    || p.declarations.length !== files.length || files.length > 32 || anchor.envelope.rows.length !== 12) return false;
+  const origins = new Set<object>();
+  for (let ordinal = 0; ordinal < files.length; ordinal++) {
+    const entry = p.registry[ordinal], link = p.table.bindings[ordinal], decl = p.declarations[ordinal], canonical = files[ordinal];
+    if (entry.file !== canonical || entry.ordinal !== ordinal || origins.has(entry.origin)
+      || entry.source.origin !== entry.origin || !validRecord(entry.source)
+      || entry.source.bytes.length > canonical.expectedBytes + 1 || link.file !== canonical || link.ordinal !== ordinal
+      || link.tableOrigin !== p.tableOrigin || link.origin !== entry.origin || link.source !== entry.source
+      || decl.file !== canonical || decl.ordinal !== ordinal || decl.binding !== link) return false;
+    origins.add(entry.origin);
+  }
+  return true;
+}
+const relationValueCases = Object.freeze(['rebuild_control', 'table_envelope', 'view_envelope', 'view_table', 'table_origin',
+  'view_declarations', 'registry_count', 'binding_count', 'declaration_count', 'registry_file', 'registry_ordinal',
+  'duplicate_origin', 'record_origin', 'record_shape', 'record_size', 'link_file', 'link_ordinal', 'link_origin',
+  'link_table_origin', 'link_source', 'declaration_file', 'declaration_ordinal', 'declaration_binding']);
+/** Fixed value controls only: these reconstructed pairs are never installed as issuance/normal slots. */
+function probeRelationValues(original: SupplyIssuanceAnchor, scenario: string): boolean {
+  const field = scenario.slice('value_'.length), foreign = Object.freeze({});
+  let entries = original.registry, links = original.table.bindings, decls = original.declarations;
+  const replace = <T>(items: readonly T[], value: T, at = 0) => Object.freeze(items.map((x, i) => i === at ? value : x));
+  if (field === 'rebuild_control') {
+    entries = Object.freeze(entries.map(x => Object.freeze({ ...x, source: Object.freeze({ ...x.source }) })));
+    links = Object.freeze(entries.map(x => Object.freeze({ ...x, tableOrigin: original.tableOrigin })));
+    decls = Object.freeze(links.map(x => Object.freeze({ file: x.file, ordinal: x.ordinal, binding: x })));
+  }
+  if (field === 'registry_count') entries = Object.freeze(entries.slice(1));
+  if (field === 'binding_count') links = Object.freeze(links.slice(1));
+  if (field === 'declaration_count') decls = Object.freeze(decls.slice(1));
+  if (field === 'registry_file') entries = replace(entries, Object.freeze({ ...entries[0], file: Object.freeze({ ...entries[0].file }) }));
+  if (field === 'registry_ordinal') entries = replace(entries, Object.freeze({ ...entries[0], ordinal: 1 }));
+  if (['duplicate_origin', 'record_origin', 'record_shape', 'record_size'].includes(field)) {
+    const at = field === 'duplicate_origin' ? 1 : 0;
+    const entry = entries[at], origin = field === 'duplicate_origin' ? entries[0].origin : entry.origin;
+    const patch = field === 'record_shape' ? { maxReturn: 0 }
+      : field === 'record_size' ? { bytes: Object.freeze([97, 98, 99, 100, 101]), initialLength: 5 }
+        : { origin: field === 'record_origin' ? foreign : origin };
+    const source = Object.freeze({ ...entry.source, ...patch });
+    entries = replace(entries, Object.freeze({ ...entry, origin, source }), at);
+    const link = Object.freeze({ ...links[at], origin, source }); links = replace(links, link, at);
+    decls = replace(decls, Object.freeze({ ...decls[at], binding: link }), at);
+  }
+  if (field.startsWith('link_')) {
+    const patch = field === 'link_file' ? { file: Object.freeze({ ...links[0].file }) }
+      : field === 'link_ordinal' ? { ordinal: 1 } : field === 'link_origin' ? { origin: foreign }
+        : field === 'link_table_origin' ? { tableOrigin: foreign } : { source: Object.freeze({ ...links[0].source }) };
+    const link = Object.freeze({ ...links[0], ...patch }); links = replace(links, link);
+    decls = replace(decls, Object.freeze({ ...decls[0], binding: link }));
+  }
+  if (field.startsWith('declaration_') && field !== 'declaration_count') {
+    const patch = field === 'declaration_file' ? { file: Object.freeze({ ...decls[0].file }) }
+      : field === 'declaration_ordinal' ? { ordinal: 1 } : { binding: Object.freeze({ ...decls[0].binding }) };
+    decls = replace(decls, Object.freeze({ ...decls[0], ...patch }));
+  }
+  const envelopeCopy = Object.freeze({ ...original.envelope });
+  const table: CanonicalPayloadTable = Object.freeze({ envelope: field === 'table_envelope' ? envelopeCopy : original.envelope,
+    origin: field === 'table_origin' ? foreign : original.tableOrigin, bindings: links });
+  const view: NonExecutingSupplyView = Object.freeze({ envelope: field === 'view_envelope' ? envelopeCopy : original.envelope,
+    table: field === 'view_table' ? Object.freeze({ ...table }) : table,
+    declarations: field === 'view_declarations' ? Object.freeze([...decls]) : decls });
+  const anchor = Object.freeze({ ...original, registry: entries, table, view, declarations: decls });
+  const payload = Object.freeze({ envelope: original.envelope, registry: entries, table, view, declarations: decls, tableOrigin: original.tableOrigin });
+  return inspectPayloadRelation(anchor, payload);
+}
+const BOUNDARY_SCENARIOS = Object.freeze(['normal', 'control_stop_only', 'control_copy', 'duplicate_bind',
+  'close_before_relation', 'failure_before_relation', 'payload_copy', 'anchor_copy', 'envelope_copy',
+  'registry_copy', 'table_copy', 'view_copy', 'declarations_copy', 'table_origin', 'source_short',
+  'source_begin_stopped', 'source_prepare_stopped', 'source_supply_stopped',
+  ...relationValueCases.map(field => `value_${field}`)]);
+const BOUNDARY_CLOSED = Object.freeze({ ...CLOSED, model: 'wfb-unused-control-boundary-fake-1',
+  claimsConsumed: 0, sourceDetaches: 0, holderPublications: 0, cExecution: 'not_connected',
+  cleanupDisposition: 'not_started', retirement: 'not_started', actualBudget: 'not_connected' } as const);
+class SupplyBoundaryAssembly {
+  readonly #owner = Object.freeze({}); readonly #source: CanonicalSupplyAssembly;
+  #anchor: SupplyIssuanceAnchor | undefined; #issuedAnchor: SupplyIssuanceAnchor | undefined;
+  #payload: PreparedSupplyPayload | undefined; #issuedPayload: PreparedSupplyPayload | undefined;
+  #control: SupplyUseControl | undefined; #issuedControl: SupplyUseControl | undefined;
+  #prepared = false; #started = false; #closed = false;
+  #first: 'none' | 'binding_mismatch' | 'source_rejected' | 'supply_closed' = 'none';
+  #relationChecks = 0; #lastRelation: 'not_checked' | 'matched' | 'rejected' = 'not_checked';
+  #sourceProbe: 'not_called' | 'blocked' | 'not_blocked' = 'not_called';
+  constructor(private readonly scenario: string, admitted: boolean) {
+    this.#source = new CanonicalSupplyAssembly(scenario === 'source_short' ? scenario : 'normal', admitted);
+  }
+  private reply(reason?: 'binding_mismatch' | 'source_rejected' | 'supply_closed') {
+    return Object.freeze(reason ? { ...BOUNDARY_CLOSED, ok: false, reason } : { ...BOUNDARY_CLOSED, ok: true });
+  }
+  private failBinding() {
+    if (this.#first === 'none') this.#first = 'binding_mismatch';
+    if (this.#issuedControl) boundaryStop(this.#source, this.#issuedControl, 'failure');
+    return this.reply(this.#first);
+  }
+  prepare() {
+    if (this.#first !== 'none') return this.reply(this.#first);
+    if (this.#closed) return this.reply('supply_closed');
+    if (this.#started) return this.failBinding();
+    this.#started = true;
+    if (!this.#source.begin().ok || !this.#source.prepare().ok || !this.#source.prepareSupply().ok) {
+      this.#first = 'source_rejected'; return this.reply(this.#first);
+    }
+    this.#anchor = supplyTransferAccess.capture(this.#source, this.#owner); this.#issuedAnchor = this.#anchor;
+    if (!this.#anchor) return this.failBinding();
+    const a = this.#anchor;
+    this.#payload = Object.freeze({ envelope: a.envelope, registry: a.registry, table: a.table,
+      view: a.view, declarations: a.declarations, tableOrigin: a.tableOrigin }); this.#issuedPayload = this.#payload;
+    const claim = Object.freeze<NonExecutingSupplyTransfer>({ [TRANSFER_BRAND]: true, owner: this.#owner,
+      source: this.#source, anchor: a, receiver: Object.freeze({}), state: 'unused' });
+    this.#control = new SupplyUseControl(this.#owner, this.#source, a, claim);
+    if (!boundarySourceAccess.bind(this.#source, this.#control)) return this.failBinding();
+    this.#issuedControl = this.#control;
+    this.#prepared = true;
+    if (this.scenario === 'control_stop_only') this.#control.stop('supply_closed');
+    if (this.scenario.startsWith('source_') && this.scenario.endsWith('_stopped')) {
+      this.#control.stop('supply_closed');
+      const result = this.scenario === 'source_begin_stopped' ? this.#source.begin()
+        : this.scenario === 'source_prepare_stopped' ? this.#source.prepare() : this.#source.prepareSupply();
+      this.#sourceProbe = !result.ok && result.reason === 'supply_closed' ? 'blocked' : 'not_blocked';
+    }
+    if (this.scenario === 'control_copy') this.#control = new SupplyUseControl(this.#owner, this.#source, a, claim);
+    if (this.scenario === 'duplicate_bind' && !boundarySourceAccess.bind(this.#source, this.#control)) return this.failBinding();
+    if (this.scenario === 'close_before_relation') this.close();
+    if (this.scenario === 'failure_before_relation') this.failBinding();
+    this.probePayload();
+    return this.#first !== 'none' ? this.reply(this.#first) : this.#closed ? this.reply('supply_closed') : this.reply();
+  }
+  private probePayload(): void {
+    const p = this.#payload!;
+    if (this.scenario === 'anchor_copy') this.#anchor = Object.freeze({ ...this.#anchor! });
+    const patch = this.scenario === 'envelope_copy' ? { envelope: Object.freeze({ ...p.envelope }) }
+      : this.scenario === 'registry_copy' ? { registry: Object.freeze([...p.registry]) }
+      : this.scenario === 'table_copy' ? { table: Object.freeze({ ...p.table }) }
+      : this.scenario === 'view_copy' ? { view: Object.freeze({ ...p.view }) }
+      : this.scenario === 'declarations_copy' ? { declarations: Object.freeze([...p.declarations]) }
+      : this.scenario === 'table_origin' ? { tableOrigin: Object.freeze({}) } : undefined;
+    if (patch || this.scenario === 'payload_copy') {
+      this.#payload = Object.freeze({ ...p, ...patch });
+      if (patch) this.#issuedPayload = this.#payload;
+    }
+  }
+  checkNormal() {
+    if (this.#first !== 'none') return this.reply(this.#first);
+    if (this.#closed || this.#control?.state === 'stopped') return this.reply('supply_closed');
+    return this.#prepared && this.#control && boundarySourceAccess.normal(this.#source, this.#control)
+      ? this.reply() : this.failBinding();
+  }
+  checkRelation() {
+    // A stopped root still needs identity for eventual fixed discard; this is not normal admission.
+    if (this.#lastRelation !== 'not_checked') return this.#lastRelation === 'matched' ? this.reply() : this.reply('binding_mismatch');
+    const ok = !!this.#control && this.#control === this.#issuedControl
+      && !!this.#anchor && this.#anchor === this.#issuedAnchor && !!this.#payload
+      && this.#payload === this.#issuedPayload && (this.scenario.startsWith('value_')
+        ? probeRelationValues(this.#anchor, this.scenario) : inspectPayloadRelation(this.#anchor, this.#payload));
+    this.#relationChecks++; this.#lastRelation = ok ? 'matched' : 'rejected';
+    return ok ? this.reply() : this.failBinding();
+  }
+  close() {
+    this.#closed = true;
+    if (this.#started && this.#first === 'none') this.#first = 'supply_closed';
+    if (this.#issuedControl) boundaryStop(this.#source, this.#issuedControl, 'close');
+    return this.reply(this.#first !== 'none' ? this.#first : 'supply_closed');
+  }
+  fail() { return this.failBinding(); }
+  rejectArguments() { return this.failBinding(); }
+  inspect() {
+    return Object.freeze({ ...BOUNDARY_CLOSED, firstReason: this.#first, closeRequested: this.#closed,
+      prepared: this.#prepared, controlState: this.#issuedControl?.state ?? 'not_bound',
+      controlMatches: !!this.#control && this.#control === this.#issuedControl, valueOnlyProbe: this.scenario.startsWith('value_'),
+      retainedAnchor: !!this.#anchor || !!this.#issuedAnchor, retainedPayload: !!this.#payload || !!this.#issuedPayload,
+      sourceNormalAllowed: this.#prepared && this.#source.check().ok,
+      sourceProbe: this.#sourceProbe,
+      legacyMatches: !!this.#issuedAnchor && supplyTransferAccess.matches(this.#source, this.#issuedAnchor),
+      relationChecks: this.#relationChecks, lastRelation: this.#lastRelation, source: this.#source.inspect() });
+  }
+}
+export function createSupplyBoundaryFake(...args: readonly unknown[]) {
+  const input = args.length === 0 ? 'normal' : args[0];
+  const admitted = args.length <= 1 && typeof input === 'string' && BOUNDARY_SCENARIOS.includes(input);
+  const a = new SupplyBoundaryAssembly(admitted ? input as string : 'normal', admitted);
+  return Object.freeze({ prepare: (...xs: readonly unknown[]) => xs.length ? a.rejectArguments() : a.prepare(),
+    checkNormal: (...xs: readonly unknown[]) => xs.length ? a.rejectArguments() : a.checkNormal(),
+    checkRelation: (...xs: readonly unknown[]) => xs.length ? a.rejectArguments() : a.checkRelation(),
+    close: () => a.close(), fail: () => a.fail(), inspect: () => a.inspect() });
 }

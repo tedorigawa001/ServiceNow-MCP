@@ -1,5 +1,7 @@
 # WF-B (C)：同snapshot読取接続の所有・停止契約の差分設計
 
+第1境界実装追記（2026-11-09）: [unused controlの合成実装](BEST_PRACTICE_WFB_TRANSFER_TAKING_BOUNDARY_DESIGN.md)で、同rootへのclose／lifecycle理由だけのprivate継続と、停止後も使える関係検査を分離した。供給準備ownerのclear／finishを経由せず、borrow／Snapshotは未退役のまま保持する。新入口にfinish・C実行はなく、旧lifecycleの試験を維持する。[検証記録](E2E_BEST_PRACTICE_WFB_UNUSED_CONTROL_BOUNDARY_2026-11-09.md)。
+
 接続差分設計追記（2026-11-09）: [taking後の停止・所有境界／detach後照合](BEST_PRACTICE_WFB_TRANSFER_TAKING_BOUNDARY_DESIGN.md)で、正規closeの同期停止とpayload破棄を分離し、未退役責務があれば元finish・borrow／Snapshot退役を保留する契約を定義した。停止後の回収identityを通常利用権へ昇格せず、pending記録前後・detach前後の責務を固定する。設計のみで旧lifecycleの挙動・実装状態は変更しない。
 
 第1段階実装追記（2026-11-09）: [下位移譲の合成preflight](BEST_PRACTICE_WFB_SUPPLY_TRANSFER_DESIGN.md)で、同ownerのanchor・未消費claimと空shellの結合・消費前拒否を実装した。anchorはstrong referenceとして保持を診断し、固定finishではそれらをclearしてから旧borrow終端へ進む。通常slotからの移動・公開・移譲後discard／未確認保持は未接続。[検証記録](E2E_BEST_PRACTICE_WFB_SUPPLY_TRANSFER_PREFLIGHT_2026-11-09.md)。

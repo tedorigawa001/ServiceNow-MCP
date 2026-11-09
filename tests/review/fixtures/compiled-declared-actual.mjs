@@ -18,12 +18,13 @@ try {
 writeFileSync(join(scratch, 'package.json'), '{"type":"module"}');
 await compile(readFileSync(new URL('./source-map-values-core.ts', import.meta.url), 'utf8'), 'source-map-values-core.js');
 const original = await compile(source);
-assert.deepEqual(Object.keys(original), ['createCanonicalSupplyTransferFake', 'createCanonicalSupplyViewFake', 'createReadHashFake', 'createSnapshotReadStartFake']);
-for (const name of ['shared-read-hash-kernel-fake', 'read-hash-fake', 'snapshot-read-start-fake', 'canonical-supply-view-fake', 'canonical-supply-transfer-fake']) {
+assert.deepEqual(Object.keys(original), ['createCanonicalSupplyTransferFake', 'createCanonicalSupplyViewFake', 'createReadHashFake', 'createSnapshotReadStartFake', 'createSupplyBoundaryFake']);
+for (const name of ['shared-read-hash-kernel-fake', 'read-hash-fake', 'snapshot-read-start-fake', 'canonical-supply-view-fake', 'canonical-supply-transfer-fake', 'supply-boundary-fake']) {
   const facade = await compile(readFileSync(new URL(`./${name}.ts`, import.meta.url), 'utf8'), `${name}.js`);
   const factory = name === 'snapshot-read-start-fake' ? 'createSnapshotReadStartFake'
     : name === 'canonical-supply-view-fake' ? 'createCanonicalSupplyViewFake'
-      : name === 'canonical-supply-transfer-fake' ? 'createCanonicalSupplyTransferFake' : 'createReadHashFake';
+      : name === 'canonical-supply-transfer-fake' ? 'createCanonicalSupplyTransferFake'
+        : name === 'supply-boundary-fake' ? 'createSupplyBoundaryFake' : 'createReadHashFake';
   assert.deepEqual(Object.keys(facade), [factory]);
   assert.equal(facade[factory], original[factory]);
 }
@@ -38,6 +39,68 @@ assert.deepEqual(supply.inspect().fileSlots.map(f => f.id), ['F01', 'F02', 'O01'
 assert.equal(supply.inspect().transferClaim, 'not_issued');
 assert.equal(supply.prepareSupply().reason, 'duplicate_preparation');
 assert.equal(supply.finish().retainedView, false);
+const boundary = original.createSupplyBoundaryFake(); boundary.prepare(); boundary.close();
+assert.equal(boundary.checkNormal().reason, 'supply_closed');
+assert.equal(boundary.checkRelation().ok, true);
+assert.equal(boundary.inspect().source.retainedTable, true);
+assert.equal(boundary.inspect().source.counts.discardPasses, 0);
+const boundaryControls = [
+  ['source gate bypass', [["if (result.ok && this.#normalControl?.state === 'stopped') return this.reply('supply_closed');", '']], 'control_stop_only',
+    a => a.inspect().sourceNormalAllowed === false],
+  ['foreign control admitted', [['a.#normalControl === control && control.state', 'true && control.state']], 'control_copy',
+    a => a.checkNormal().reason === 'binding_mismatch'],
+  ['unissued payload wrapper', [['this.#payload === this.#issuedPayload', 'true']], 'payload_copy', a => a.checkRelation().ok === false],
+  ['unissued anchor wrapper', [['this.#anchor === this.#issuedAnchor', 'true']], 'anchor_copy', a => a.checkRelation().ok === false],
+  ['copied registry', [['p.registry !== anchor.registry', 'false']], 'registry_copy', a => a.checkRelation().ok === false],
+  ['copied envelope', [['p.envelope !== anchor.envelope', 'false'], ['p.table.envelope !== p.envelope', 'false'],
+    ['p.view.envelope !== p.envelope', 'false']], 'envelope_copy', a => a.checkRelation().ok === false],
+  ['copied table', [['p.table !== anchor.table', 'false'], ['p.view.table !== p.table', 'false']], 'table_copy', a => a.checkRelation().ok === false],
+  ['copied view', [['p.view !== anchor.view', 'false']], 'view_copy', a => a.checkRelation().ok === false],
+  ['copied declarations', [['p.declarations !== anchor.declarations', 'false'], ['p.view.declarations !== p.declarations', 'false']],
+    'declarations_copy', a => a.checkRelation().ok === false],
+  ['live-context-dependent relation', [['function inspectPayloadRelation(anchor: SupplyIssuanceAnchor, p: PreparedSupplyPayload): boolean {',
+    'function inspectPayloadRelation(anchor: SupplyIssuanceAnchor, p: PreparedSupplyPayload): boolean { if (!supplyTransferAccess.matches(anchor.sourceOwner, anchor)) return false;']],
+    'close_before_relation', a => a.checkRelation().ok === true],
+  ['close clears source', [["if (kind === 'close') a.#root.close();", "if (kind === 'close') a.close();"]], 'close_before_relation',
+    a => a.inspect().source.retainedRegistry && a.inspect().source.counts.discardPasses === 0],
+  ['failure clears source', [["else canonicalSupplyAccess.fail(a.#root, 'binding_mismatch');", "else a.fail('binding_mismatch');"]],
+    'failure_before_relation', a => a.inspect().source.retainedView && a.inspect().source.counts.discardPasses === 0],
+  ['stopping the untrusted copy', [["if (this.#issuedControl) boundaryStop(this.#source, this.#issuedControl, 'failure');",
+    "if (this.#control) boundaryStop(this.#source, this.#control, 'failure');"]], 'control_copy',
+    a => { a.checkNormal(); return a.inspect().sourceNormalAllowed === false; }],
+  ['control stop omitted', [["control.stop(kind === 'close' ? 'supply_closed' : 'binding_mismatch');", '']], 'close_before_relation',
+    a => a.inspect().controlState === 'stopped'],
+];
+for (const [i, [label, replacements, selector, holds]] of boundaryControls.entries()) {
+  let text = source;
+  for (const [from, to] of replacements) {
+    assert.equal(text.split(from).length, 2, `boundary mutation drift: ${label}`); text = text.replace(from, to);
+  }
+  const m = await compile(text, `boundary-mutant-${i}.js`);
+  const a = m.createSupplyBoundaryFake(selector); a.prepare();
+  assert.equal(holds(a), false, `surviving boundary control: ${label}`);
+}
+const boundaryValueControls = [
+  ['table_envelope', 'p.table.envelope !== p.envelope'], ['view_envelope', 'p.view.envelope !== p.envelope'],
+  ['view_table', 'p.view.table !== p.table'], ['table_origin', 'p.table.origin !== p.tableOrigin'],
+  ['view_declarations', 'p.view.declarations !== p.declarations'], ['registry_file', 'entry.file !== canonical'],
+  ['registry_ordinal', 'entry.ordinal !== ordinal'], ['duplicate_origin', 'origins.has(entry.origin)'],
+  ['record_origin', 'entry.source.origin !== entry.origin'], ['record_shape', '!validRecord(entry.source)'],
+  ['record_size', 'entry.source.bytes.length > canonical.expectedBytes + 1'], ['link_file', 'link.file !== canonical'],
+  ['link_ordinal', 'link.ordinal !== ordinal'], ['link_origin', 'link.origin !== entry.origin'],
+  ['link_table_origin', 'link.tableOrigin !== p.tableOrigin'], ['link_source', 'link.source !== entry.source'],
+  ['declaration_file', 'decl.file !== canonical'], ['declaration_ordinal', 'decl.ordinal !== ordinal'],
+  ['declaration_binding', 'decl.binding !== link'],
+];
+const rebuilt = original.createSupplyBoundaryFake('value_rebuild_control'); rebuilt.prepare();
+assert.equal(rebuilt.checkRelation().ok, true); assert.equal(rebuilt.inspect().valueOnlyProbe, true);
+for (const [i, [field, clause]] of boundaryValueControls.entries()) {
+  assert.equal(source.split(clause).length, 2, `boundary value mutation drift: ${field}`);
+  const m = await compile(source.replace(clause, 'false'), `boundary-value-mutant-${i}.js`);
+  const a = m.createSupplyBoundaryFake(`value_${field}`); a.prepare();
+  assert.equal(a.checkRelation().ok, true, `surviving boundary value control: ${field}`);
+  assert.equal(a.inspect().claimsConsumed, 0);
+}
 const transfer = original.createCanonicalSupplyTransferFake();
 assert.equal(transfer.prepare().ok, true);
 assert.equal(transfer.inspect().source.retainedView, true);
@@ -165,5 +228,7 @@ for (const [i, [name, from, to, holds]] of controls.entries()) {
 console.log(JSON.stringify({ compiled: true, sourceGrid: 75, rejectedMutations: controls.length,
   supplyMutationControls: supplyControls.length, transferMutationControls: transferControls.length,
   transferRetirementControls: transferRetirementControls.length,
-  compatibilityFactories: 5, cExecution: 'not_connected', authority: 'none' }));
+  boundaryMutationControls: boundaryControls.length,
+  boundaryValueMutationControls: boundaryValueControls.length,
+  compatibilityFactories: 6, cExecution: 'not_connected', authority: 'none' }));
 } finally { rmSync(scratch, { recursive: true, force: true }); }

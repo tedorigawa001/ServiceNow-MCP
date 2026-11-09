@@ -18,6 +18,8 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 ### Changed
 
+- WF-B adds a package-excluded, synthetic unused-control boundary. Source gates and the diagnostic owner share one pinned control; a separate private continuation propagates close/failure without clearing payloads or retiring borrows. Explicit anchor/payload relation checks work after stop without consulting live source fields. Value-only fault controls remain distinct from issuance authority. Legacy fixtures stay intact; claim consumption, detach, holder publication, C execution and retirement remain unconnected.
+
 - WF-B adds synthetic-only transfer preflight: a lexical issuer captures the same source owner's issuance anchor and binds an unused, separately branded lower claim to empty pending/holder/failure shells. Fixed refusals preserve source diagnoses and consume no transfer claim; preparation never detaches normal payload slots or publishes a holder. Isolated identity controls, allocation-prefix oracles and compiled mutations preserve legacy factories and package exclusion. C execution, real accounting and formal issuance remain closed or unknown.
 
 - WF-B adds a separate synthetic-only canonical supply diagnostic factory: a module-private continuation binds one C construction's prepared borrow to a pinned source registry, ordered per-file table and non-executing declaration view. One-shot preparation rejects foreign references, equal copies, swapped sources and replay, retains failure diagnoses and clears partial references before borrow retirement. Independent prefix/operation-word oracles and compiled negative controls preserve old B/C-start behavior; transfer claims, C execution, real budgets and formal issuance remain absent or closed.
