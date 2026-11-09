@@ -1,5 +1,7 @@
 # WF-B (C)：AbsenceJournal記録点・内部型とadmission消費／packet生成
 
+同start供給と停止の詳細化（2026-11-09、MDのみ）: [配置生成・停止／供給の接続差分draft-0.1](BEST_PRACTICE_WFB_SAME_START_SUPPLY_STOP_DESIGN.md)で、Journal wrapperの拒否と実writer停止を分離し、正規gate・frame退出・root seal・終端metadata・Journal封印の順序を定義した。control live／旧clear／別cleanupの迂回、fresh scope wrapper、失敗時の元slotと未確認責務を扱う。新しい停止／供給経路や証拠発行を実装した記述ではない。
+
 既存issuer供給の差分（2026-11-09、MDのみ）: [private供給・先行保持境界draft-0.1](BEST_PRACTICE_WFB_JOURNAL_ISSUER_SUPPLY_DESIGN.md)で、同startからの正規Journal供給、既存scope／epochの再利用、先行slot生成順、停止／封印／発行の二段階結合、借用と固定discardを具体化した。独立JournalAssemblyの診断から昇格せず、admission消費・packet生成・正式発行は閉鎖のままとする。
 
 Version: draft-0.3 / Date: 2026-11-09 / 読み取り照合基準HEAD: `bbc1426`（レビュー修正基準HEAD: `c839766`、Journal実装レビュー修正基準HEAD: `908fc16`）。

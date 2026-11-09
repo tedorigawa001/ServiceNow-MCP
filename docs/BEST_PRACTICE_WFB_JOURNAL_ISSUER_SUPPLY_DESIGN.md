@@ -1,5 +1,7 @@
 # WF-B (C)：既存issuerへのJournal private供給・先行保持境界
 
+同start接続の詳細化（2026-11-09、MDのみ）: [配置生成・停止／供給の接続差分draft-0.1](BEST_PRACTICE_WFB_SAME_START_SUPPLY_STOP_DESIGN.md)で、値kernelと正規lexical rootの分離、先行構築、WG01〜WG08の実writer gate、停止後の固定Journal終端metadata、部分封印・借用・診断の保持を具体化した。独立shellのbrandを正規権限に昇格せず、既存issuer接続・admission消費・packet生成は未実装のままとする。
+
 Version: draft-0.2 / Date: 2026-11-09 / 読み取り照合HEAD: `d18f4dc`（shellレビュー修正基準HEAD: `b8dc4b3`）。
 
 draft-0.2のレビュー修正：(1) shellの`close()`は構築開始前でも`first='closed'`を立てており、既存fixtureで統一してきた「開始前closeは停止だけ、開始後は先行理由がなければclosed」と食い違っていた。(2) `matches()`のclaim brand／target／stateとdescriptor brandの照合に混入対照がなく、各条件を外す変異が生存した。§10で開始前closeを停止だけにし、4種の単独混入対照を追加した。
