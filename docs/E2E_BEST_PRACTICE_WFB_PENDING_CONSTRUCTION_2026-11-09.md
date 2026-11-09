@@ -82,6 +82,26 @@ bdo node tests/review/package-http-classification.mjs
 
 先行RetentionRootや診断slot自体の実確保失敗を含む全heap／work・実E／S・OOM時の診断必着はUnknown。捕捉不能なsource constructor内部状態も未確認である。次工程はsourceとのprivate配置・一度限りの結合とcontrol／claim参照の退役可能化であり、下位claim消費・pendingへの通常payload記録・detachはまだ有効化しない。
 
+## レビュー修正（2026-11-09）
+
+レビュー基準HEAD: `8aa373f`（`dc41a70`の設計も照合）。修正前は新規71件、全体316ファイル・15,607件成功。
+
+指摘：
+1. active／custodyの親shell参照は、生成側`mint`と検査側`matches`が同じ`parent()`を使う自己照合だった。親をすべて`undefined`にする変異、failureCustodyの親をpendingShellへ取り違える変異が生存した。`mix_*_parent`はforeign／copyの混入だけを見ていた。
+2. role別originとconstruction／retention originの区別も同じ表を両側で使う自己照合で、4roleのoriginを共有する変異、retention originをconstruction originと同一にする変異が生存した。
+3. 失敗後の引数付き`prepare(x)`（内部`reject`）で先行理由が保持されること、seal後の引数付き`prepare(x)`が`already_sealed`を返すことが未固定。seal結果のstateが常に`sealed`でseal前状態が残らなかった。
+
+修正：snapshotへ、捕捉済みcellを直接読む`parentLinks`（own_shell／none／absent／mismatch）、`roleOriginsDistinct`、`scopeOriginsDistinct`を追加した。`parent()`や照合式を経由しない。seal結果へ`sealedFrom`を追加した。試験3件を追加した。
+
+RED：追加3件が修正前に失敗（新しい診断fieldと`sealedFrom`がない）。GREEN：新規74件成功。compiled-pending-constructionは16＋6を維持。
+
+一時変異（試験後に元へ戻した）：計19種、すべて検出、等価0。
+- 修正前に生存し今回検出：親なし、親取り違え、origin共有、construction／retention同一、`reject`での先行理由上書き、seal後`rejectArguments`の返答。
+- 今回追加した`sealedFrom`を落とす変異も検出。
+- 修正前から検出：close／prepareの各gate、sealのscope検査、入力受付、余分な引数、各stage遷移、失敗理由の写像、seal後close（計12種）。
+
+全体回帰：`npm run lint`・`npm run build`・`package-http-classification.mjs`成功、vitest全体316ファイル・15,610件成功。
+
 ## コミット対象だけでの再検証（2026-11-09）
 
 今回の9ファイルだけを明示してstageし、index全体を一時ディレクトリへ展開した。既存node_modulesだけを参照し、未stageの作業内容を含めず、関連24ファイル・1,585件、build、新fixture／testのstrict noEmit／noUnused、変更TS／MJSのESLint、新compiled対照（16＋6変異・12prefix）、offline梱包確認を再実行してすべて成功した。梱包441ファイルと既存compiled対照、文書リンク22件も確認した。検証後の追記は本段落だけとし、他のstage内容が検証済みの展開内容と一致することを再照合した。全体回帰・source結合・実通信等は追加しておらず、Pushは行わない。

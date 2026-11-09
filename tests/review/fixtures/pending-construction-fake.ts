@@ -31,6 +31,8 @@ type PendingSnapshot = Readonly<typeof CLOSED & { state: State; firstReason: Rea
   inputValid: boolean;
   generationClaim: 'spent' | 'unused'; diagnosticSlot: 'ready'; resultSlot: 'sealed' | 'empty';
   retainedSlots: number; confirmedSlots: number; generationStarts: number;
+  parentLinks: Readonly<Record<Role, 'none' | 'own_shell' | 'absent' | 'mismatch'>>;
+  scopeOriginsDistinct: boolean; roleOriginsDistinct: boolean; sealedFrom?: State;
   stages: readonly Readonly<{ role: Role; stage: Capture; retained: boolean }>[] }>;
 const MIX_FIELDS = ['construction', 'retention', 'origin', 'role', 'state', 'brand', 'parent', 'payload', 'copy'] as const;
 const SCENARIOS = Object.freeze(['normal', 'claim_copy', 'claim_construction', 'claim_retention',
@@ -133,18 +135,29 @@ class RetentionRoot {
   rejectArguments() { return this.#result.value ? this.reply('already_sealed') : this.reject('binding_mismatch'); }
   private snapshot(): PendingSnapshot {
     const stages = Object.freeze(ROLES.map(role => Object.freeze({ role, stage: this.#cells[role].stage, retained: !!this.#cells[role].value })));
+    // Read the captured cells directly (not parent()/#origins) so generation and checking cannot agree on a wrong link.
+    const c = this.#cells;
+    const link = (slot: UnboundSlot | undefined, shell: UnboundSlot | undefined) =>
+      !slot ? 'absent' as const : shell && slot.parent === shell ? 'own_shell' as const : 'mismatch' as const;
+    const unparented = (slot: UnboundSlot | undefined) => !slot ? 'absent' as const : slot.parent === undefined ? 'none' as const : 'mismatch' as const;
+    const parentLinks = Object.freeze({ pendingShell: unparented(c.pendingShell.value), pendingActive: link(c.pendingActive.value, c.pendingShell.value),
+      failureShell: unparented(c.failureShell.value), failureCustody: link(c.failureCustody.value, c.failureShell.value) });
+    const held = ROLES.map(role => c[role].value).filter((s): s is UnboundSlot => !!s);
     return Object.freeze({ ...CLOSED, state: this.#diagnostic.state, firstReason: this.#diagnostic.first, inputValid: this.admitted,
       closeRequested: this.#diagnostic.stop, generationClaim: this.#claim.spent ? 'spent' as const : 'unused' as const,
       diagnosticSlot: 'ready' as const, resultSlot: this.#result.value ? 'sealed' as const : 'empty' as const,
       retainedSlots: stages.filter(s => s.retained).length, confirmedSlots: stages.filter(s => s.stage === 'confirmed').length,
-      generationStarts: this.#claim.spent ? 1 : 0, stages });
+      generationStarts: this.#claim.spent ? 1 : 0, stages, parentLinks,
+      scopeOriginsDistinct: (this.#construction as object) !== (this.#origin as object),
+      roleOriginsDistinct: new Set(held.map(s => s.origin)).size === held.length
+        && new Set(Object.values(this.#origins)).size === ROLES.length });
   }
   inspect() { return this.#result.value ?? this.snapshot(); }
   seal() {
     if (this.#result.value) return this.#result.value;
     if (!this.scopeMatches()) return this.reject('binding_mismatch');
-    this.#diagnostic.state = 'sealed';
-    this.#result.value = Object.freeze({ ...this.snapshot(), resultSlot: 'sealed' }); return this.#result.value;
+    const sealedFrom = this.#diagnostic.state; this.#diagnostic.state = 'sealed';
+    this.#result.value = Object.freeze({ ...this.snapshot(), resultSlot: 'sealed', sealedFrom }); return this.#result.value;
   }
 }
 export function createPendingConstructionFake(...args: readonly unknown[]) {

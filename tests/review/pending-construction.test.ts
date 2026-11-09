@@ -150,4 +150,29 @@ describe('unbound pending construction', () => {
       }
     }
   });
+  it('links each active/custody slot to its own shell, checked against the captured cells rather than the parent helper', () => {
+    const a = createPendingConstructionFake(); a.prepare();
+    expect(a.inspect()).toMatchObject({ parentLinks: { pendingShell: 'none', pendingActive: 'own_shell',
+      failureShell: 'none', failureCustody: 'own_shell' } });
+    const early = createPendingConstructionFake('mint_failureShell_failure'); early.prepare();
+    expect(early.inspect()).toMatchObject({ parentLinks: { pendingShell: 'none', pendingActive: 'own_shell',
+      failureShell: 'absent', failureCustody: 'absent' } });
+  });
+  it('keeps role origins and the construction/retention scopes distinct', () => {
+    const a = createPendingConstructionFake();
+    expect(a.inspect()).toMatchObject({ scopeOriginsDistinct: true, roleOriginsDistinct: true });
+    a.prepare();
+    expect(a.inspect()).toMatchObject({ scopeOriginsDistinct: true, roleOriginsDistinct: true, retainedSlots: 4 });
+  });
+  it('keeps the first diagnosis on an argument-bearing retry and seals the pre-seal state separately', () => {
+    const failed = createPendingConstructionFake('mint_pendingActive_failure'); failed.prepare();
+    expect(failed.prepare('x')).toMatchObject({ ok: false, reason: 'generation_unavailable' });
+    expect(failed.inspect().firstReason).toBe('generation_unavailable');
+    expect(failed.seal()).toMatchObject({ state: 'sealed', sealedFrom: 'rejected' });
+    expect(failed.prepare('x')).toMatchObject({ ok: false, reason: 'already_sealed' });
+    const prepared = createPendingConstructionFake(); prepared.prepare();
+    expect(prepared.seal()).toMatchObject({ sealedFrom: 'prepared_unbound' });
+    const closed = createPendingConstructionFake(); closed.close();
+    expect(closed.seal()).toMatchObject({ sealedFrom: 'closed', firstReason: 'none' });
+  });
 });

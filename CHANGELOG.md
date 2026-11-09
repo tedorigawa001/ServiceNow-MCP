@@ -234,6 +234,8 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 ### Added
 
+- WF-B unbound pending construction review: snapshots now expose `parentLinks`, `roleOriginsDistinct` and `scopeOriginsDistinct`, read directly from the captured cells so that generation and checking cannot agree on a missing or crossed parent shell or a shared origin. Sealed results record the pre-seal state as `sealedFrom`. New tests pin first-reason retention on argument-bearing retries and the sealed reply.
+
 - WF-B unused-control boundary review: close/failure before a control is bound now reaches the source owner through its existing close and fail+clear contracts (root close and Snapshot retirement included). Count value controls truncate the tail so they are isolated, and compiled controls confirm that removing each count check makes the rejection disappear. New tests pin the pre-bind close path, copied-control relation rejection and extra factory arguments.
 
 - WF-B supply transfer preflight review: a close before any preparation start now records only `stopReason` (as the source owner does) and keeps later preparation closed; a close of a prepared preflight reports state `closed` instead of `rejected`. New tests pin claim/shell retention after every rejection, extra factory arguments and terminal replies. Unreachable capture/state guards are recorded as equivalent mutants.
