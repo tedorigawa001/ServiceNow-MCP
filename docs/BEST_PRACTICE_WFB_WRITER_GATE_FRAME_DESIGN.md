@@ -1,6 +1,8 @@
 # WF-B (C)：WriterGate内部型・frame権限・退出確認とclosed確定点
 
-Version: draft-0.1 / Date: 2026-11-09 / 読み取り基準HEAD: `a9fa5fa`。
+Version: draft-0.2 / Date: 2026-11-09 / 読み取り基準HEAD: `a9fa5fa`（純粋fakeレビュー修正基準HEAD: `dcb00e0`）。
+
+draft-0.2のレビュー修正：純粋fakeの失敗処理は理由によらずgateを`unconfirmed`にしており、§3の「実行権限の退役を確認できない終端」という意味と食い違っていた。退出確認後の重複enterでも`unconfirmed`になって閉鎖できず、frame前の入力拒否・pin不一致でも同様だった。§10で`unconfirmed`の条件を限定し、重複要求を状態を変えないrefusalとした。
 
 実装追記（2026-11-09）: §9の第1段階であるgate／pin／grantの型・状態・拒否だけを独立純粋fakeで実装した。[検証記録](E2E_BEST_PRACTICE_WFB_WRITER_GATE_FAKE_2026-11-09.md)。正規frame／writer停止／Journalへの接続・実closed証拠は未実装。
 
@@ -149,7 +151,7 @@ oracleは本体の状態表・counter・writer catalogueを期待値へimportせ
 
 純粋状態はunbound／open／stop_requested／closed／unconfirmedと、not_entered／entering／active／exiting／exited／exit_unconfirmedを扱う。pinは同owner／scope各field・gate・epochへ結合し、bindは最大1試行。grantも同pin／gate／owner／epoch／frame／phaseへ結合し、generation attemptは最大1、発行途中失敗でも返却しない。current／issued同参照と各fieldを個別に確認する。pin／grantの不正fieldは正規発行slot側にも入れる対照で検査する。
 
-active中のenter再入はgeneration_in_progress、bind中はbinding_in_progress、exit中はexit_in_progressで追加生成しない。requestは同fakeのstop latchを立て、active中はdeferred_frame、既存active grantの資格確認は継続可能、新frameは不可。entering中の停止は未確認として捕捉済みgrantを保持し、active成功にしない。拒否／故障は固定結果・先行理由・phase／boundaryと保持pin／grantを維持する。
+active中のenter再入はgeneration_in_progress、bind中はbinding_in_progress、exit中はexit_in_progressで追加生成しない。requestは同fakeのstop latchを立て、active中はdeferred_frame、既存active grantの資格確認は継続可能、新frameは不可。entering中の停止は未確認として捕捉済みgrantを保持し、active成功にしない。拒否／故障は固定結果・先行理由・phase／boundaryと保持pin／grantを維持する。gateを`unconfirmed`にするのは、操作未確認（operation_unconfirmed）か、frameがentering／exitingの間の失敗だけとする。frame前の入力拒否・pin不一致は固定失敗として記録するがgate状態（unbound／open）を保つ。重複bind／重複enterは何も実行しないrefusalで、gate／frame状態と先行firstを変えず、sticky診断`refusal`だけを残す。退出確認後の重複要求があってもcloseGateへ進める。enter／check／exit／closeGateでのpin／grant再照合、closeGateのrevoked条件、checkのgrantStage条件は、混入がbind／enterで固定拒否されるため純粋fakeでは到達しない二重防御である。
 
 exitはfakeイベントとしてgrantをrevokedへ移し、故障時はexit_unconfirmedに止める。return／throw／cancelは固定outcomeラベルであり、実frameの例外処理や取消を実証したものではない。producer先行理由も別診断として保持する。closeGateのclosed_fakeは状態モデルの遷移だけで、GateClosedRecord／FrameExitRecordを発行せず、closedEvidence=not_issuedを維持する。実coverageや実権限退役の証明ではない。
 

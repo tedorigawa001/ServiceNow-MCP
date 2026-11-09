@@ -3,7 +3,7 @@ const PIN: unique symbol = Symbol('fake-writer-pin');
 const GRANT: unique symbol = Symbol('fake-frame-grant');
 type GateState = 'unbound' | 'open' | 'stop_requested' | 'closed' | 'unconfirmed';
 type FrameState = 'not_entered' | 'entering' | 'active' | 'exiting' | 'exited' | 'exit_unconfirmed';
-type Reason = 'none' | 'input_rejected' | 'binding_mismatch' | 'duplicate_binding' | 'duplicate_grant' | 'operation_unconfirmed';
+type Reason = 'none' | 'input_rejected' | 'binding_mismatch' | 'operation_unconfirmed';
 interface FakeScope { readonly owner: object; readonly construction: object; readonly retention: object;
   readonly sourceSlot: object; readonly claim: object; readonly epoch: object }
 interface GateBindingPin extends FakeScope { readonly [PIN]: true; readonly gate: object; readonly scope: FakeScope }
@@ -21,7 +21,7 @@ class WriterGateModel {
   #binding = false; #bound = false; #stop = false; #used = false;
   #bindAttempts = 0; #grantAttempts = 0; #activations = 0; #revocations = 0;
   #fixed: Readonly<{ ok: boolean; disposition: string; first: Reason }> | undefined;
-  #reentry: string | undefined;
+  #reentry: string | undefined; #refusal: 'none' | 'duplicate_binding' | 'duplicate_grant' = 'none';
   constructor(private readonly script: string, admitted: boolean) {
     this.#failure = { first: admitted ? 'none' : 'input_rejected', phase: 'construction', boundary: 'none' };
     this.#scope = Object.freeze({ owner: Object.freeze({}), construction: Object.freeze({}), retention: Object.freeze({}),
@@ -30,9 +30,16 @@ class WriterGateModel {
   private reply(ok: boolean, disposition: string) { return Object.freeze({ ok, disposition, first: this.#failure.first }); }
   private fail(reason: Exclude<Reason, 'none'>) {
     if (this.#failure.first === 'none') this.#failure.first = reason;
-    // A closed model never reopens; a later violation only adds its sticky diagnostic.
-    if (this.#gateState !== 'closed') this.#gateState = 'unconfirmed';
+    // A closed model never reopens. Only an unconfirmed operation, or a failure while the frame is entering/exiting,
+    // leaves execution authority unconfirmed; other refusals keep the gate state.
+    const unconfirmed = reason === 'operation_unconfirmed' || this.#frameState === 'entering' || this.#frameState === 'exiting';
+    if (unconfirmed && this.#gateState !== 'closed') this.#gateState = 'unconfirmed';
     return this.#fixed ??= this.reply(false, reason);
+  }
+  // A duplicate request is refused without executing anything; it keeps gate/frame state and later closure possible.
+  private refuse(reason: 'duplicate_binding' | 'duplicate_grant') {
+    if (this.#refusal === 'none') this.#refusal = reason;
+    return this.reply(false, reason);
   }
   private guard() { return this.#fixed ?? (this.#failure.first !== 'none' ? this.fail(this.#failure.first) : undefined); }
   private point(phase: string, boundary: string) {
@@ -70,7 +77,7 @@ class WriterGateModel {
   bind() {
     const bad = this.guard(); if (bad) return bad;
     if (this.#binding) return this.reply(false, 'binding_in_progress');
-    if (this.#bound) return this.fail('duplicate_binding');
+    if (this.#bound) return this.refuse('duplicate_binding');
     if (this.#stop) return this.reply(false, 'stopped');
     this.#binding = true;
     try {
@@ -88,7 +95,7 @@ class WriterGateModel {
   enter() {
     const bad = this.guard(); if (bad) return bad;
     if (this.#frameState === 'entering' || this.#frameState === 'active') return this.reply(false, 'generation_in_progress');
-    if (this.#used) return this.fail('duplicate_grant');
+    if (this.#used) return this.refuse('duplicate_grant');
     if (!this.#bound) return this.reply(false, 'not_bound');
     if (this.#stop || this.#gateState !== 'open') return this.reply(false, 'stopped');
     if (!this.pinMatches()) return this.fail('binding_mismatch');
@@ -148,7 +155,7 @@ class WriterGateModel {
       first: this.#failure.first, phase: this.#failure.phase, boundary: this.#failure.boundary, stop: this.#stop,
       bound: this.#bound, generationUsed: this.#used, bindAttempts: this.#bindAttempts, grantAttempts: this.#grantAttempts,
       grantStage: this.#grantStage, pinRetained: !!this.#issuedPin, grantRetained: !!this.#issuedGrant,
-      activations: this.#activations, revocations: this.#revocations, reentry: this.#reentry,
+      activations: this.#activations, revocations: this.#revocations, reentry: this.#reentry, refusal: this.#refusal,
       producerFirst: this.script === 'prior_failure' ? 'synthetic_producer_failure' : 'none',
       outcome: this.script === 'outcome_throw' ? 'throw' : this.script === 'outcome_cancel' ? 'cancel' : 'return',
       realFrame: 'not_connected', realWriterCalls: 0, journalSupply: 'not_connected', closedEvidence: 'not_issued',

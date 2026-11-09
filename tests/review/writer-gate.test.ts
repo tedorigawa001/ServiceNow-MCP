@@ -13,7 +13,8 @@ describe('isolated WriterGate/pin/grant pure model', () => {
     const s = a.inspect(); expect(s).toMatchObject({ ...closed, gate: 'closed', frame: 'exited', first: 'none',
       pinRetained: true, grantRetained: true, generationUsed: true, grantAttempts: 1, activations: 1, revocations: 1 });
     a.closeGate(); expect(a.inspect()).toEqual(s);
-    expect(a.enter().first).toBe('duplicate_grant'); expect(a.inspect()).toMatchObject({ gate: 'closed', grantAttempts: 1 });
+    expect(a.enter()).toMatchObject({ ok: false, disposition: 'duplicate_grant', first: 'none' });
+    expect(a.inspect()).toMatchObject({ gate: 'closed', grantAttempts: 1, refusal: 'duplicate_grant' });
   });
   it('can model no-entry closure only after same-owner bind and stop', () => {
     const a = module.createWriterGateFake(); expect(a.closeGate().ok).toBe(false); a.bind(); a.request(); a.closeGate();
@@ -24,7 +25,8 @@ describe('isolated WriterGate/pin/grant pure model', () => {
   it.each(['pin_copy', 'pin_brand', 'pin_extra', 'pin_gate', 'pin_scope', 'pin_owner', 'pin_construction', 'pin_retention', 'pin_sourceSlot', 'pin_claim', 'pin_epoch'])(
     'rejects %s at binding with captured pin retained', script => {
       const a = module.createWriterGateFake(script), r = a.bind(); expect(r.first).toBe('binding_mismatch');
-      expect(a.inspect()).toMatchObject({ ...closed, gate: 'unconfirmed', bound: false, pinRetained: true, grantAttempts: 0 });
+      // A pin mismatch before any frame is a refused binding, not an unconfirmed execution exit.
+      expect(a.inspect()).toMatchObject({ ...closed, gate: 'unbound', bound: false, pinRetained: true, grantAttempts: 0 });
       const s = a.inspect(); expect(a.enter()).toBe(r); expect(a.request()).toBe(r); expect(a.inspect()).toEqual(s);
     });
   it.each(['grant_copy', 'grant_brand', 'grant_extra', 'grant_gate', 'grant_owner', 'grant_pin', 'grant_epoch', 'grant_frame', 'grant_phase'])(
@@ -78,10 +80,9 @@ describe('isolated WriterGate/pin/grant pure model', () => {
       let gate = 'unbound', frame = 'not_entered', bound = false, stop = false, used = false, first = 'none';
       for (const op of [x, y, z, w]) {
         if (first === 'none') {
-          if (op === 'bind') { if (bound) { first = 'duplicate_binding'; if (gate !== 'closed') gate = 'unconfirmed'; }
-            else if (!stop) { bound = true; gate = 'open'; } }
-          if (op === 'enter' && frame !== 'active') { if (used) { first = 'duplicate_grant'; if (gate !== 'closed') gate = 'unconfirmed'; }
-            else if (bound && !stop && gate === 'open') { used = true; frame = 'active'; } }
+          // Duplicate requests are refusals: they never change gate/frame state or the first failure.
+          if (op === 'bind') { if (!bound && !stop) { bound = true; gate = 'open'; } }
+          if (op === 'enter' && frame !== 'active') { if (!used && bound && !stop && gate === 'open') { used = true; frame = 'active'; } }
           if (op === 'request') { stop = true; if (gate !== 'closed') gate = 'stop_requested'; }
           if (op === 'exit' && frame === 'active') frame = 'exited';
           if (op === 'closeGate' && bound && stop && (frame === 'not_entered' || frame === 'exited')) gate = 'closed';
@@ -100,5 +101,18 @@ describe('isolated WriterGate/pin/grant pure model', () => {
       const a = module.createWriterGateFake(); a[op](p); expect(a.bind().first).toBe('input_rejected');
     }
     expect(hooks).toBe(0); expect(Object.keys(module)).toEqual(['createWriterGateFake']);
+  });
+  it('refuses a duplicate grant after a confirmed exit without blocking closure', () => {
+    const a = module.createWriterGateFake(); a.bind(); a.enter(); a.request(); a.exit();
+    expect(a.enter()).toMatchObject({ ok: false, disposition: 'duplicate_grant', first: 'none' });
+    expect(a.bind()).toMatchObject({ ok: false, disposition: 'duplicate_binding', first: 'none' });
+    expect(a.inspect()).toMatchObject({ gate: 'stop_requested', frame: 'exited', grantStage: 'revoked', refusal: 'duplicate_grant' });
+    expect(a.closeGate()).toMatchObject({ ok: true, disposition: 'closed_fake' });
+  });
+  it('keeps the gate state on input rejection instead of claiming an unconfirmed exit', () => {
+    const a = module.createWriterGateFake('normal', 'x'); expect(a.bind().first).toBe('input_rejected');
+    expect(a.inspect()).toMatchObject({ gate: 'unbound', frame: 'not_entered' });
+    const b = module.createWriterGateFake(); b.bind(); b.enter('x');
+    expect(b.inspect()).toMatchObject({ gate: 'open', frame: 'not_entered', first: 'input_rejected' });
   });
 });

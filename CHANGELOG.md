@@ -248,6 +248,8 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 ### Added
 
+- WF-B writer gate fake review: the gate now becomes `unconfirmed` only for unconfirmed operations or failures while a frame is entering/exiting. Duplicate bind/enter are refusals that keep gate/frame state (sticky `refusal` diagnostic), so a duplicate request after a confirmed exit no longer blocks closure, and input rejection or a pre-frame pin mismatch keeps the gate state. The event-word oracle is updated accordingly.
+
 - WF-B canonical supply construction review: seven start-only controls (claim owner, claim and pin identity, claim owner/pin, a pre-spent issued claim, binding pin) keep the issuer scope consistent so only the start-side `constructionMatches()` can reject them, and an `issuer_rejected` control pins the issuer state check; eight compiled controls added. The `scopeMatches()` call is documented as redundant.
 
 - WF-B journal supply shell review: a close before construction now records only the stop (no first diagnosis) and refuses later preparation, matching the other fixtures. Fixed single-field controls for claim brand/target/state and descriptor brand install the malformed value as the only issued slot (four compiled controls added), and the in-frame close reply is pinned.

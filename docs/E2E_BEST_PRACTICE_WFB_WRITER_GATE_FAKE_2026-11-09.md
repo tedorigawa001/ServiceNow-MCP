@@ -44,6 +44,28 @@ FailureShell／scope等の実確保以前のOOM、診断必着、escaped資格�
 
 CHANGELOG・親設計を更新。今回分は未コミットで、実接続・実通信・設定変更・Pushは行っていない。各閉鎖条件・全体受付無効・Unknown・調査保留を維持する。
 
+## レビュー修正（2026-11-09）
+
+レビュー基準HEAD: `dcb00e0`。修正前は全体323ファイル・16,211件成功。
+
+指摘：
+1. `fail()`が理由によらずgateを`unconfirmed`にしていた。設計§3の`unconfirmed`は「実行権限の退役を確認できない終端」である。probeでは、bind→enter→request→exitで退出を確認した（grant revoked・frame exited）後の重複`enter()`が`duplicate_grant`で拒否されつつgateも`unconfirmed`となり、以後`closeGate()`が同じ拒否を返し続けて閉鎖できなかった。frame前の入力拒否・pin不一致でもgateは`unconfirmed`だった。試験のoracleもこの挙動を期待値にしていた。
+2. bind後の再照合6種（enter／check／exit／closeGateのpin・grant再照合、closeGateのrevoked条件、checkのgrantStage条件）は到達しない二重防御だった。
+
+修正：
+- `fail()`がgateを`unconfirmed`にするのは、operation_unconfirmedか、frameがentering／exitingの間の失敗だけとした。frame前の入力拒否・pin不一致はgate状態を保つ（pin混入試験の期待値は`unbound`）。
+- 重複bind／重複enterは`refuse()`へ分け、gate／frame状態とfirstを変えずsticky診断`refusal`だけを残す。固定失敗結果にもしない。理由型から`duplicate_*`を外した。
+- 有限event-word oracleを、重複要求が状態を変えないモデルへ直した。退出確認後の重複要求後も閉鎖できる試験と、入力拒否でgate状態を保つ試験を追加した。
+
+RED：更新・追加した15件が修正前に失敗した（pin混入11件、主経路、oracle、追加2件）。GREEN：新規45件成功、compiled 20対照は維持。
+
+一時変異（試験後に元へ戻した）：計17種、検出11、等価6。
+- 修正前から検出6種：closeGateのbind／stop条件とframe状態、enterの停止gate、exitのrevoke、bindの停止gate、余分な引数。
+- 今回検出5種：常にunconfirmedにする変異、entering中の失敗をunconfirmedにしない変異、重複grant／重複bindを固定失敗にする変異、refusal未記録。
+- 等価6種：上記2の到達しない二重防御。
+
+全体回帰：`npm run lint`・`npm run build`・`package-http-classification.mjs`成功、vitest全体323ファイル・16,213件成功。
+
 ## 5 コミット対象だけの隔離再検証（2026-11-09）
 
 HEAD `e1258c3`と今回の6ファイルだけをindexから一時directoryへ展開した。既存node_modulesだけを参照し、作業treeの他変更や既存distを使用せず検証した。
