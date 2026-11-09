@@ -2816,11 +2816,35 @@ function probeStateFactsValid(f: ProbeStateFacts): boolean {
 const PROBE_SHAPE_SCRIPTS = Object.freeze(['unused', 'entering', 'active', 'exiting', 'unsealed', 'unconfirmed',
   'unused_spent', 'entering_unspent', 'active_empty', 'active_provisional', 'running_revoked', 'accepted', 'finished',
   'duty_unspent', 'unsealed_active', 'empty_reference', 'outcome_mismatch', 'unknown_variant', 'before_use_body',
-  'exiting_empty', 'exiting_provisional_body'].map(s => 'shape_' + s));
+  'exiting_empty', 'exiting_provisional_body', 'unconfirmed_finished', 'active_no_reference', 'active_unresolved', 'returned_cancel',
+  'exiting_exit_unknown', 'active_duty_used', 'entering_active_grant', 'active_body_unconfirmed', 'active_unsealed', 'exiting_running',
+  'exiting_attempting', 'exiting_owed', 'unconfirmed_settled'].map(s => 'shape_' + s));
+// Valid baselines; each isolated shape changes one fact so exactly one relation clause rejects it.
+const SHAPE_BASE: Readonly<Record<'entering' | 'active' | 'exiting' | 'unconfirmed', ProbeStateFacts>> = Object.freeze({
+  entering: { use: 'entering', attempt: true, grant: 'empty', references: false, unresolved: false, body: 'not_started', outcome: 'none',
+    exit: 'empty', accepted: false, duty: 'owed', dutyUsed: false },
+  active: { use: 'active', attempt: true, grant: 'active', references: true, unresolved: false, body: 'running', outcome: 'none',
+    exit: 'empty', accepted: false, duty: 'owed', dutyUsed: false },
+  exiting: { use: 'exiting', attempt: true, grant: 'active', references: true, unresolved: false, body: 'returned', outcome: 'return',
+    exit: 'empty', accepted: false, duty: 'settling', dutyUsed: true },
+  unconfirmed: { use: 'unconfirmed', attempt: true, grant: 'unconfirmed', references: false, unresolved: true, body: 'unconfirmed', outcome: 'none',
+    exit: 'unconfirmed', accepted: false, duty: 'unconfirmed', dutyUsed: true },
+});
+const ISOLATED_SHAPES: Readonly<Record<string, readonly [keyof typeof SHAPE_BASE, Partial<ProbeStateFacts>]>> = Object.freeze({
+  unconfirmed_finished: ['unconfirmed', { use: 'finished' }], active_no_reference: ['active', { references: false }],
+  active_unresolved: ['active', { unresolved: true }], returned_cancel: ['exiting', { outcome: 'cancel' }],
+  exiting_exit_unknown: ['exiting', { exit: 'foreign' }], active_duty_used: ['active', { dutyUsed: true }],
+  entering_active_grant: ['entering', { grant: 'active', references: true }], active_body_unconfirmed: ['active', { body: 'unconfirmed' }],
+  active_unsealed: ['active', { exit: 'unsealed' }], exiting_running: ['exiting', { body: 'running', outcome: 'none' }],
+  exiting_attempting: ['exiting', { body: 'not_started', outcome: 'none', grant: 'attempting', references: false, unresolved: true }],
+  exiting_owed: ['exiting', { duty: 'owed', dutyUsed: false }], unconfirmed_settled: ['unconfirmed', { duty: 'settled_unsealed' }],
+});
 function probeShapeFacts(script: string): ProbeStateFacts {
   const f: ProbeStateFacts = { use: 'unused', attempt: false, grant: 'empty', references: false, unresolved: false,
     body: 'not_started', outcome: 'none', exit: 'empty', accepted: false, duty: 'not_owed', dutyUsed: false };
   const s = script.slice(6);
+  const isolated = ISOLATED_SHAPES[s];
+  if (isolated) return { ...SHAPE_BASE[isolated[0]], ...isolated[1] };
   if (['entering', 'entering_unspent'].includes(s)) Object.assign(f, { use: 'entering', attempt: s !== 'entering_unspent', duty: 'owed' });
   if (['active', 'active_empty', 'active_provisional', 'running_revoked'].includes(s)) Object.assign(f, { use: 'active', attempt: true,
     grant: s === 'active_empty' ? 'empty' : s === 'active_provisional' ? 'provisional' : s === 'running_revoked' ? 'revoked' : 'active',

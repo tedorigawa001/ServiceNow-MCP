@@ -82,6 +82,20 @@ describe('B-01 state types / prior RunLink and duty / fixed non-executable proje
     ['running_revoked', false], ['accepted', false], ['finished', false], ['duty_unspent', false], ['unsealed_active', false],
     ['empty_reference', false], ['outcome_mismatch', false], ['unknown_variant', false], ['before_use_body', false],
     ['exiting_empty', false], ['exiting_provisional_body', false],
+    // One fact changed from a valid baseline, so exactly one relation clause can reject it.
+    ['unconfirmed_finished', false],
+    ['active_no_reference', false],
+    ['active_unresolved', false],
+    ['returned_cancel', false],
+    ['exiting_exit_unknown', false],
+    ['active_duty_used', false],
+    ['entering_active_grant', false],
+    ['active_body_unconfirmed', false],
+    ['active_unsealed', false],
+    ['exiting_running', false],
+    ['exiting_attempting', false],
+    ['exiting_owed', false],
+    ['unconfirmed_settled', false],
   ] as const)('compares value-only shape_%s to an independent relation table', (name, valid) => {
     const a = createProbeRunPreparationFake('shape_' + name);
     expect(a.checkState()).toEqual({ model: 'wfb-probe-state-value-1', authority: 'none', kind: 'value_only', valid });

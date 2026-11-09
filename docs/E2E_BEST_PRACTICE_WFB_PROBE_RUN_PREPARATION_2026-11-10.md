@@ -56,6 +56,23 @@ BE01〜06の利用claim消費・grant生成／捕捉／active・body開始、BX0
 
 型／状態表の成功を退出保証や実権限の退役証拠にしない。start側runMatchesのstable関係再検査のうち、単独対照はcurrent／issuedのlink・duty copyだけ。他はroot preflight／旧probe bindingに遮られる二重防御で、個別runtime効果未実証である。B-modeの旧inspect拒否も通常経路から未到達。実OOM・allocation layout・全ref回収・unit係数・総guard／projection呼出し上界・実E／S・runtime停止はUnknown。全体受付は無効のまま。
 
+## レビュー修正（2026-11-10）
+
+レビュー基準HEAD: `0c9e99b`。修正前は全体326ファイル・16,546件成功。
+
+指摘：状態関係判定`probeStateFactsValid()`の各条件を1つずつ外す変異19種のうち14種が生存した。上記「6適合＋15不適合の独立期待表」は、先に評価される別条件で拒否されるshape（例：`finished`はuse列挙とnot_owedの両方、`entering_unspent`はattempt条件）に偏り、条件別の感度は5条件分だけだった。
+
+修正：
+- 適合基点（entering／active／exiting／unconfirmed）から1事実だけを変えた単独不適合shapeを13種追加した。`unconfirmed_finished`、`active_no_reference`、`active_unresolved`、`returned_cancel`、`exiting_exit_unknown`、`active_duty_used`、`entering_active_grant`、`active_body_unconfirmed`、`active_unsealed`、`exiting_running`、`exiting_attempting`、`exiting_owed`、`unconfirmed_settled`。基点は固定の値表から生成し、本体の判定式を使わない。
+- compiledの状態対照を3→16種へ増やした。各条件を外すと対応shapeが受理へ変わることを確認する。
+- `duty === 'not_owed'`の一律拒否は、各到達分岐がowed以降のdutyを要求するため等価と明記した。
+
+RED：追加13件が修正前に失敗した（selector未登録）。compiledも失敗した。GREEN：新規81件成功、compiled 16状態対照を全検出。
+
+一時変異（試験後に元へ戻した）：計19種、検出18、等価1（not_owed一律拒否）。
+
+全体回帰：`npm run lint`・`npm run build`・`package-http-classification.mjs`成功、vitest全体326ファイル・16,559件成功。
+
 ## コミット候補だけの隔離再確認
 
 同日、HEAD＋今回の9ファイルだけを一時index／object領域でtree化し、別directoryへ展開した。検証対象treeは`bbfa9c666854c45de8166d9deb7612c1a5973daa`（本節追記前）。既存node_modulesだけを参照し、依存導入は行っていない。このコピーでbuild・strict検査・関連20ファイル1,299件・新旧compiled12本（型拒否6件を含む）・梱包dry-runを再実行し、全てexit 0。梱包441ファイル、fixture混入0を再確認した。

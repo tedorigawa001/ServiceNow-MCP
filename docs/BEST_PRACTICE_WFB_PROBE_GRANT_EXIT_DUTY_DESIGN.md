@@ -1,6 +1,8 @@
 # WF-B (B)：内部型・one-shot enter／grant捕捉・固定exit責務・公開診断の接続差分
 
-Version: draft-0.1 / Date: 2026-11-10 / 読み取り基準HEAD: `75adab5`。
+Version: draft-0.2 / Date: 2026-11-10 / 読み取り基準HEAD: `75adab5`（B-01レビュー修正基準HEAD: `0c9e99b`）。
+
+draft-0.2のレビュー修正：B-01の状態関係判定`probeStateFactsValid()`は19条件中14条件が単独検証されていなかった（既存の不適合shapeが先に評価される別条件で拒否されていた）。§12へ、適合基点から1事実だけを変えた単独不適合shape13種とcompiled単独変異を追加したこと、`duty === 'not_owed'`の一律拒否が等価であることを明記した。
 
 Status: **当初draft-0.1に対し、B-01の状態型・RunLink／duty先行準備・固定projectionだけ合成依存限定で実装。** 基準HEAD `345e114`、詳細は§12と[検証記録](E2E_BEST_PRACTICE_WFB_PROBE_RUN_PREPARATION_2026-11-10.md)。親は[同startのenter／exit接続差分](BEST_PRACTICE_WFB_PROBE_FRAME_ENTER_EXIT_DESIGN.md)と[正規gate生成・継続入口](BEST_PRACTICE_WFB_GATE_ROOT_CONTINUATION_DESIGN.md)。(A)の実績は[先行cell／同binding検証記録](E2E_BEST_PRACTICE_WFB_PROBE_FRAME_PREPARATION_2026-11-10.md)。probe body／grant／退出記録はまだ生成されない。
 
@@ -166,3 +168,5 @@ RunLink／dutyは同rootが保持し、startも同private参照を捕捉する�
 新入口の全返答はallowlist値projection。private cellのspread／serializeを使わず、grant current／issued／拒否候補、退出候補、RunLinkは保持有無booleanだけを返す。各enumは固定許可値へ限定し、snapshotのネストもfreezeする。旧(A)の空cell表示は旧入口だけに残し、B-modeで旧inspectを呼ぶと拒否する二重防御を置いた。公開入口は常に新projectionを使うため、この旧inspect拒否は通常経路では未到達である。
 
 BG01の先行同root結合、BG02の型／値整合、BG03の4段階構築部分、BG05の重複準備／bind部分、BG09〜10の参照非出力、BG12の互換／閉鎖を部分検証した。21個の値専用状態対照、4×4の独立prefix、link9／duty8／descriptor5・receiver2のcompiled対照、型不正6件のsemantic compile-failとprojection負の対照を実施。結果・初回失敗・二重防御の範囲は[検証記録](E2E_BEST_PRACTICE_WFB_PROBE_RUN_PREPARATION_2026-11-10.md)。実enter／固定unwind・停止合流・実費目・E／S・layout・runtimeはUnknownのまま。
+
+状態関係判定の条件別感度は、適合基点（entering／active／exiting／unconfirmed）から1事実だけを変えた単独不適合shapeで確認する。対象はuse列挙（unconfirmed＋finished）、provisional以降の参照必須（active＋参照なし）、unresolvedとgrantの関係、returnedとoutcome、exit列挙、owed dutyの未使用、entering分岐（entering＋active grant）、activeのbody非unconfirmed・exit空、exitingのbody列挙・grant条件（attempting）・duty条件（owed）、unconfirmed分岐（settled duty）の13種。各条件を外したcompiled変異で、その不適合が受理へ変わることを確認する（既存3種と合わせ16種）。`duty === 'not_owed'`の一律拒否は、到達し得るentering／active／exiting／unconfirmedの各分岐がowed以降のdutyを要求するため等価である。

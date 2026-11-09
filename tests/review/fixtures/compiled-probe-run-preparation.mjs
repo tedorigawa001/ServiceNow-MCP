@@ -51,7 +51,20 @@ try {
   assert.equal(run(duplicate, 'duplicate_run_binding').construction.bindRefusal, 'none');
   const shapeControls = [['shape_unused_spent', "f.attempt !== (f.use !== 'unused')", 'false'],
     ['shape_accepted', '|| f.accepted) return false;', '|| false) return false;'],
-    ['shape_exiting_empty', "(f.body === 'not_started' || ['active', 'revoked'].includes(f.grant))", 'true']];
+    ['shape_exiting_empty', "(f.body === 'not_started' || ['active', 'revoked'].includes(f.grant))", 'true'],
+    ['shape_unconfirmed_finished', "!['unused', 'entering', 'active', 'exiting', 'unconfirmed'].includes(f.use)", "false"],
+    ['shape_active_no_reference', "['provisional', 'active', 'revoked'].includes(f.grant) && !f.references", "false"],
+    ['shape_active_unresolved', "f.unresolved !== (f.grant === 'attempting' || f.grant === 'unconfirmed')", "false"],
+    ['shape_returned_cancel', "f.body === 'returned' && f.outcome !== 'return'", "false"],
+    ['shape_exiting_exit_unknown', "!['empty', 'unsealed', 'unconfirmed'].includes(f.exit)", "false"],
+    ['shape_active_duty_used', "['not_owed', 'owed'].includes(f.duty) && f.dutyUsed", "false"],
+    ['shape_entering_active_grant', "['empty', 'attempting', 'provisional'].includes(f.grant) && f.body === 'not_started' && f.exit === 'empty' && f.duty === 'owed'", "true"],
+    ['shape_active_body_unconfirmed', "f.duty === 'owed' && f.body !== 'unconfirmed'", "f.duty === 'owed'"],
+    ['shape_active_unsealed', "f.grant === 'active' && f.exit === 'empty'", "f.grant === 'active'"],
+    ['shape_exiting_running', "['not_started', 'returned', 'threw', 'cancelled'].includes(f.body)", "true"],
+    ['shape_exiting_attempting', "!['attempting', 'unconfirmed'].includes(f.grant)", "true"],
+    ['shape_exiting_owed', "includes(f.grant)) && ['settling', 'settled_unsealed'].includes(f.duty)", "includes(f.grant)) && true"],
+    ['shape_unconfirmed_settled', "return f.duty === 'unconfirmed' && f.exit === 'unconfirmed';", "return true;"]];
   for (const [i, [script, clause, to]] of shapeControls.entries()) {
     assert.equal(base.createProbeRunPreparationFake(script).checkState().valid, false);
     const m = await load(replace(text, clause, to), 'shape-' + i);
@@ -100,6 +113,6 @@ const badDuty: FixedExitDuty = { [PROBE_DUTY]: true, link: typeOnlyLink, state: 
   const lines = new Set(diagnostics.map(d => d.file.getLineAndCharacterOfPosition(d.start).line));
   assert.equal(lines.size, 6, 'each illegal internal type must be rejected');
   console.log(JSON.stringify({ compiled: true, linkPreflightControls: 9, dutyPreflightControls: 8, sealControls: 5,
-    receiverControls: 2, oneShotControl: true, shapeControls: 3, projectionControls: 3, spreadHookControl: true,
+    receiverControls: 2, oneShotControl: true, shapeControls: shapeControls.length, projectionControls: 3, spreadHookControl: true,
     typeRejections: 6, grantIssues: 0, bodyStarts: 0, exitRecords: 0 }));
 } finally { rmSync(dir, { recursive: true, force: true }); }

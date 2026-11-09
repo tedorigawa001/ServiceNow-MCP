@@ -254,6 +254,8 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 ### Added
 
+- WF-B probe run preparation review: thirteen isolated invalid state shapes, each changing one fact from a valid entering/active/exiting/unconfirmed baseline, now pin every clause of the state-relation check (16 compiled single-clause controls, up from 3); the blanket `not_owed` rejection is documented as equivalent.
+
 - WF-B canonical gate draft review: the in-frame close reply (`deferred_frame`) is now exposed as a `closeInFrame` diagnostic and pinned by the test, so dropping the in-frame deferral is detected; unreachable double guards are documented.
 
 - WF-B writer gate fake review: the gate now becomes `unconfirmed` only for unconfirmed operations or failures while a frame is entering/exiting. Duplicate bind/enter are refusals that keep gate/frame state (sticky `refusal` diagnostic), so a duplicate request after a confirmed exit no longer blocks closure, and input rejection or a pre-frame pin mismatch keeps the gate state. The event-word oracle is updated accordingly.
