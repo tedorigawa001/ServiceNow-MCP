@@ -1,6 +1,8 @@
 # WF-B (C)：field別固定回収schedule・失敗prefix・診断契約
 
-Version: draft-0.1 / Date: 2026-11-09 / 読み取り照合基準HEAD: `07cc830`（着手時は`d361de6`、途中のレビュー修正を再照合）。
+Version: draft-0.2 / Date: 2026-11-09 / 読み取り照合基準HEAD: `07cc830`（着手時は`d361de6`、途中のレビュー修正を再照合。レビュー修正基準HEAD: `cf7e285`）。
+
+draft-0.2のレビュー修正：draft-0.1はS08でcapture packet（F24）を放した後のS09でF25〜F27（両receipt・`#context`）をclearしており、§2の「対応captureの同参照記録を確認するまで元slotをclearしない」と§5の失敗prefix（capture確認後・clear前は元field＋確認済みcapture）がこの3項目で成り立たなかった。receipt／context除去をS08、packet解放をS09へ入れ替えた。また検査だけのF29はcaptureしない（名前付きcellは25個）とし、S10の照合根拠をSourceRootSlotとTrustedControlPinに固定した。
 
 Status: **詳細設計のみ。回収処理・証拠・root終端gateは未実装。** 親は[回収基盤設計](BEST_PRACTICE_WFB_PENDING_CUSTODY_RETIREMENT_DESIGN.md)と[停止・所有境界設計](BEST_PRACTICE_WFB_TRANSFER_TAKING_BOUNDARY_DESIGN.md)。現在の実装・試験範囲は[同source／control結合の検証記録](E2E_BEST_PRACTICE_WFB_PENDING_SOURCE_BINDING_2026-11-09.md)。本書は親設計§5〜10を現行private fieldへ対応付ける差分であり、既存factoryを変更した記録ではない。
 
@@ -30,7 +32,7 @@ Status: **詳細設計のみ。回収処理・証拠・root終端gateは未実�
 
 captureは既存objectの参照だけを記録する。bytes・map・宣言・digestの再copy／再decode／再hashをしない。各元slotは対応captureの同参照記録を確認するまでclearしない。これは同一の責務を一時的に複数aliasで保持する処理で、下位移譲claim消費や通常slotのdetachではない。
 
-RetirementCaptureはF01〜F13、F15〜F23、F25〜F27、F29に対応する26個の名前付きcellとする。未生成は既知absent、未確認はunknown、捕捉後は同参照presentとして区別する。F14／F30は保持を許すunbound metadataの検査、F24はpacket自身、F28はpacketを借りる一時carrierなのでpacketへ自己捕捉しない。F15で捕捉したraw live tupleはcontrol.#liveを空にした後もpacket内に残るため、F24とF28の確認が終わるまで全退役にはならない。capture cellをslot外へ返す入口は作らない。
+RetirementCaptureはF01〜F13、F15〜F23、F25〜F27に対応する25個の名前付きcellとする。未生成は既知absent、未確認はunknown、捕捉後は同参照presentとして区別する。F14／F29／F30は検査項目（F14／F30は保持を許すunbound metadata、F29はsource側に残すpayload-free controlの確認）で、captureしない、F24はpacket自身、F28はpacketを借りる一時carrierなのでpacketへ自己捕捉しない。F15で捕捉したraw live tupleはcontrol.#liveを空にした後もpacket内に残るため、F24とF28の確認が終わるまで全退役にはならない。capture cellをslot外へ返す入口は作らない。packet（F24）の解放は、capture対象の最後の元slotであるF25〜F27を空確認した後に限る。
 
 root停止・source field clearは、正規SourceRootSlotと同issuerが先に捕捉した権限だけで行う。混入したsource／controlのmethodを呼ばず、その候補を包む自ownerのslotを除去する。source側`#normalControl`はbind済み履歴として残し、undefinedへ戻して再bind可能にしない。controlを残せるのは正規originのcoreがpayload-freeと独立確認でき、liveが空の場合だけである。
 
@@ -70,15 +72,15 @@ S00〜S10は固定phase、F01〜F30は固定field項目。表の順序を実行�
 | S06 | F16〜F18・R7 | binding `#claim`, `#issuedClaim`, `#extraClaim` | 元claim objectへの各直接aliasを除去。claim stateを消費済みへ変更しない |
 | S06 | F19〜F21・R7 | binding `#control`, `#issuedControl`, `#extraControl` | local aliasを各除去。source側正規control履歴は残す。候補core経由の参照はobjectごと放す |
 | S07 | F22〜F23・R4 | binding `#anchor`, `#issuedAnchor` | 各aliasを除去。wrapper／claimから再生成しない |
-| S08 | F24・R6 | RetirementCaptureのlive packet（新） | 先行fieldの確認後に固定packetを放す。packetの自aliasもScratchCarrierへ残さない |
-| S09 | F25〜F26・R8 | binding `#receipt`, `#issuedReceipt` | sourceSlot／control／core／slotsを内包する両receiptを除去。copyも同様 |
-| S09 | F27・R8 | binding `#context` | scope／owner／4slot配列への借用を終了。正規originは先にpayload-free pinへ保存 |
+| S08 | F25〜F26・R8 | binding `#receipt`, `#issuedReceipt` | sourceSlot／control／core／slotsを内包する両receiptを除去。copyも同様 |
+| S08 | F27・R8 | binding `#context` | scope／owner／4slot配列への借用を終了。正規originは先にpayload-free pinへ保存 |
+| S09 | F24・R6 | RetirementCaptureのlive packet（新） | F25〜F27を含む全capture対象fieldの空確認後に固定packetを放す。packetの自aliasもScratchCarrierへ残さない |
 | S09 | F28・R8 | ScratchCarrier／helper返却値／回収中の一時packet（新） | 参照なしのfixed metadataだけを返す。driver frame退出後にfinal auditへ進む |
-| S10 | F29・R7 | source `#normalControl` | bind済みなら同正規control・live空・coreの正規5field対応を確認。bind前は正規履歴とfield空を確認。field自体をclearしない |
+| S10 | F29・R7 | source `#normalControl` | captureせず、正規SourceRootSlot経由のprivate accessorでfieldを読み、TrustedControlPin（token）と照合する。bind済みなら同正規control・live空・coreの正規5field対応を確認。bind前は正規履歴とfield空を確認。field自体をclearしない |
 | S10 | F30・R8 | RetentionRootの4capture cell・固定結果slot | 各cellの既知未生成／同constructionのunbound値・対応親・payload空を直接確認。捕捉不明を空へ補完しない。保持を許すshell/originと、禁止する本文参照を区別する |
 | S10 | 全8群 | F01〜F30とcapture残存、生成／回収frame inactive | private final audit。全確認成立ならpayload_confirmed。証拠／root gateはまだ閉鎖 |
 
-S08でR6を空にしてからもR8がpayloadを保持し得るため、S08時点を回収完了としない。S02〜S09の途中はalias退役の進捗であり、全payload退役ではない。空確認には同source専用のprivate accessorを使い、`inspect()`の計数・aggregate mask・旧clear履歴を入力にしない。F29は五つの正規tokenとの同一性と余分fieldなしを確認し、許可tokenのどれかという値集合だけの検査にしない。
+S08でR8のreceipt／contextを空にしても、R6のpacketとF28の一時carrierがpayloadを保持し得るため、S08・S09時点を回収完了としない。S02〜S09の途中はalias退役の進捗であり、全payload退役ではない。空確認には同source専用のprivate accessorを使い、`inspect()`の計数・aggregate mask・旧clear履歴を入力にしない。F29は五つの正規tokenとの同一性と余分fieldなしを確認し、許可tokenのどれかという値集合だけの検査にしない。
 
 S10は回収本体が終了した後の固定finalizer frameで行う。finalizerはSourceRootSlotとpayload-free pinから対象を特定し、source context／anchor／元claimを再取得しない。core確認は5field・異なるtoken4個（owner＝construction）との正確な対応を検査する。ScratchCarrierが空でも生成／回収frameがactiveなら確認を完了させない。これは管理された保持経路の論理退役であり、GC完了・物理メモリ消去・実行engine内の全stack探索を保証しない。
 
@@ -139,9 +141,9 @@ confirmed／unconfirmedの終端結果は一度だけ固定し、その後のclo
 
 旧計数は回収入口のbaselineとの差分で照合する。元source_rejectedで既存clearが起きていれば、その履歴を0へ戻さず保持し、新回収による旧discard増分が0であることを確認する。全失敗prefixの旧discard絶対値を一律0に固定しない。
 
-固定構造はphase11、field項目30、field記録30、群8、attempt1、capture packet1（名前付きcell26）、source slot1、result slot1。fieldのwrite試行は各最大1、空確認は各段階の1回とfinal auditの固定再確認を区別する。同一controlのlive退役はobject同一性で最大1、local／issued／extraのslot確認はそれぞれ実施する。下位移譲claim消費0と回収attempt1を混算しない。
+固定構造はphase11、field項目30、field記録30、群8、attempt1、capture packet1（名前付きcell25）、source slot1、result slot1。fieldのwrite試行は各最大1、空確認は各段階の1回とfinal auditの固定再確認を区別する。同一controlのlive退役はobject同一性で最大1、local／issued／extraのslot確認はそれぞれ実施する。下位移譲claim消費0と回収attempt1を混算しない。
 
-F14／F29／F30はwriteではなく検査項目、F15は専用cell操作、F24／F28は追加carrierの解放なので、30を実際のwrite回数やworkへ読み替えない。各private helperの検査回数、26cellのcapture／確認費、frame／結果準備費・unit係数は実装前に別の有限操作表として確定する。固定scheduleの存在だけで実E／S・全CPU／heap・layout・OOM保証をKnownへ上げない。Bのcap、D_stop900／D_end1000、guard131,524、実行／テスト期限を変更しない。
+F14／F29／F30はwriteではなく検査項目、F15は専用cell操作、F24／F28は追加carrierの解放なので、30を実際のwrite回数やworkへ読み替えない。各private helperの検査回数、25cellのcapture／確認費、frame／結果準備費・unit係数は実装前に別の有限操作表として確定する。固定scheduleの存在だけで実E／S・全CPU／heap・layout・OOM保証をKnownへ上げない。Bのcap、D_stop900／D_end1000、guard131,524、実行／テスト期限を変更しない。
 
 ## 8 独立合成・compiled受入条件（未実施）
 
