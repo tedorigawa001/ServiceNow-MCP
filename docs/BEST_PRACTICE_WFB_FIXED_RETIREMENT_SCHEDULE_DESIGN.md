@@ -1,5 +1,7 @@
 # WF-B (C)：field別固定回収schedule・失敗prefix・診断契約
 
+停止前提・capture受付の詳細化（2026-11-09、MDのみ）: [停止確認・clear権限・固定capture25cellの生成／確認境界draft-0.1](BEST_PRACTICE_WFB_CAPTURE_ADMISSION_DESIGN.md)で、現行の開始claimを予約として維持し、正規rootの通常利用seal・token-only pin・一度限りadmissionと25cellの同参照確認を具体化した。全25cell確認前のclearを禁止し、失敗時は元slotとprovisional captureを保持する。S00の段階順・S01の受付条件は同差分設計を優先する。実装・field clear・証拠・root終端は追加していない。
+
 Version: draft-0.4 / Date: 2026-11-09 / 開始境界の実装基準HEAD: `ab377c1`（開始境界レビュー修正基準HEAD: `e1e30d3`） / 読み取り照合基準HEAD: `07cc830`（着手時は`d361de6`、途中のレビュー修正を再照合。レビュー修正基準HEAD: `cf7e285`）。
 
 draft-0.3: §11の回収owner／claim・固定診断・generation-wrapper frame境界だけ合成実装した。field clear・capture・空確認・証拠・root終端は未接続。[検証記録](E2E_BEST_PRACTICE_WFB_RETIREMENT_START_2026-11-09.md)。
@@ -54,7 +56,7 @@ R6のcapture packetが同じ不正候補を一時保持するなら、packet自�
 
 現行prepareには`const source`、`scope`、`a`、`core`等の一時参照がある。class fieldだけを空にしても、同frameからanchor→table→bytesへ到達し得る。したがって生成途中のclose／再入からその場で回収完了・証拠発行へ進めない。
 
-将来は、生成本体をprivate frameへ分け、固定入口wrapperが本体return／throwを回収してから回収driverへ進む。内部のclose／failureは通常gateを同期停止し、`retirementRequested`を一つ記録するだけ。frame内では`deferred_frame`を返し、回収claimはまだunused。wrapperは固定finallyでFrameLeaseを退役し、生成本体の返却値・catch保持物にprivate参照がないことを確認する。その後にのみdriverを呼ぶ。callback登録・非同期queue・外部sinkは作らない。frame分離とleaseは未実装である。
+生成本体をprivate frameへ分け、固定入口wrapperが本体return／throwを回収してから回収driverへ進む。内部のclose／failureは通常gateを同期停止し、`retirementRequested`を一つ記録するだけ。frame内では`deferred_frame`を返し、回収claimはまだunused。wrapperは固定finallyでFrameLeaseを退役し、生成本体の返却値・catch保持物にprivate参照がないことを確認する。その後にのみdriverを呼ぶ。callback登録・非同期queue・外部sinkは作らない。§11の保守的wrapperと開始予約までは合成実装済みで、capture／field回収driver・final auditは未実装である。
 
 回収受付順は、終端固定済み→先行診断→回収要求／正規owner→SourceRootSlot・controlの所有権→frame inactive→attempt状態。条件成立後の`unused→running`同期置換が唯一の回収開始点。開始後は再入・close・failure・二重要求でも試行を追加しない。running中の返答はin_progress、confirmed／unconfirmed後は固定結果を返す。通常closeはcleanup権限の失効ではない。
 
@@ -66,7 +68,7 @@ S00〜S10は固定phase、F01〜F30は固定field項目。表の順序を実行�
 
 | Phase | ID・群 | 実field／対象 | 固定操作・確認 |
 |---|---|---|---|
-| S00 | 開始 | 通常gate・正規root停止・FrameLease・回収claim | 正規停止を確認しclaim開始。旧source clear／finishは呼ばない |
+| S00 | 開始 | 通常gate・正規root停止・FrameLease・回収claim | 実装済みの開始予約S00aを一度確保し、S00bで正規停止を確認、S00cでcapture受付へ進む。予約claimを再消費せず、確認前はclear不可。旧source clear／finishは呼ばない |
 | S01 | 捕捉 | 正規SourceRootSlot、TrustedControlPin、RetirementCapture（新） | 既知aliasの同参照捕捉をfieldごとに確認。未知を空として扱わない |
 | S02 | F01〜F06・R1 | source `#registry`, `#table`, `#view`, `#buildingRegistry`, `#buildingBindings`, `#buildingDeclarations` | 左から一つずつundefinedへ。各元slotの空を確認 |
 | S03 | F07〜F11・R2 | source `#envelope`, `#issuedTable`, `#issuedView`, `#issuedDeclarations`, `#tableOrigin` | 左から一つずつ空確認。発行済みaliasも含める |

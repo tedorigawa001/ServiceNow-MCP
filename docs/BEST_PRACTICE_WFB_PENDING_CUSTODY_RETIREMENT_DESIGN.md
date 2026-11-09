@@ -1,5 +1,7 @@
 # WF-B (C)：pending／failure内部型・先行生成と固定回収／finish gateの詳細設計
 
+停止前提・capture受付の詳細化（2026-11-09、MDのみ）: [同ownerの停止確認・clear権限・capture25cell設計draft-0.1](BEST_PRACTICE_WFB_CAPTURE_ADMISSION_DESIGN.md)で、通常回収をcloseへ偽装しないroot seal、開始予約とclear権限の分離、元slotとの同参照確認、一度限り生成と未確認責務の保持を整理した。元slotは全25cell確認まで無変更とし、source unknownから停止済み・空・readyへ補完しない。field clear・証拠・root終端は未実装のまま。
+
 回収開始境界の合成実装追記（2026-11-09）: [固定回収schedule §11](BEST_PRACTICE_WFB_FIXED_RETIREMENT_SCHEDULE_DESIGN.md)へ、同生成の回収owner／claim・固定診断・generation-wrapper frame境界を実装した。deferred_frameとfinally後の一度限り開始、再入拒否・先行理由保持を確認する範囲だけで、field clear・capture・証拠・root終端は閉じる。[検証記録](E2E_BEST_PRACTICE_WFB_RETIREMENT_START_2026-11-09.md)。
 
 Version: draft-0.6 / Date: 2026-11-09 / 固定回収scheduleの設計照合基準HEAD: `07cc830` / 第2段階の合成結合基準HEAD: `2022cc3` / 読み取り照合基準HEAD: `fbfe6dd` / 第1段階実装基準HEAD: `dc41a70` / 第1段階レビュー修正基準HEAD: `8aa373f` / 第2段階レビュー修正基準HEAD: `d361de6`。
