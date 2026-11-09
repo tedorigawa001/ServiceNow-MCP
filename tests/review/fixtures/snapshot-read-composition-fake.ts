@@ -2729,7 +2729,7 @@ class CanonicalGateDraftRoot {
   #issuedSeed: GateConstructionSeed | undefined; #issuedDraft: NonExecutingFrameDraft | undefined;
   #started = false; #frame = false; #closed = false; #ready = false;
   #fixed: Readonly<{ ok: boolean; disposition: string; first: string }> | undefined;
-  #reentry: string | undefined;
+  #reentry: string | undefined; #closeInFrame: string | undefined;
   constructor(private readonly script: string, admitted: boolean) {
     this.#failure = { first: admitted ? 'none' : 'input_rejected', phase: 0, boundary: 'none' };
     this.#slots = Array.from({ length: 37 }, () => ({ stage: 'not_started', value: undefined }));
@@ -2796,7 +2796,7 @@ class CanonicalGateDraftRoot {
         this.#issuedSeed = s; return f === 'copy' ? Object.freeze({ ...s }) : s;
       });
       if (this.script === 'reenter') this.#reentry = this.prepare().disposition;
-      if (this.script === 'close_in_frame') this.close();
+      if (this.script === 'close_in_frame') this.#closeInFrame = this.close().disposition;
       if (this.#closed) return this.fail('closed');
       const issuer = this.mint(33, () => new CaptureAdmissionAssembly(START_MIX_SCENARIOS.includes(this.script) || GATE_SEED_MIX_SCENARIOS.includes(this.script) || this.script.startsWith('scope_') ? this.script : 'normal', this.script !== 'issuer_rejected', seed));
       this.point(33, 'seed_check');
@@ -2838,7 +2838,7 @@ class CanonicalGateDraftRoot {
     return Object.freeze({ model: 'wfb-canonical-gate-draft-1', first: this.#failure.first, phase: this.#failure.phase,
       boundary: this.#failure.boundary, ready: this.#ready, retained: this.#slots.filter(s => !!s.value).length,
       stages: Object.freeze(this.#slots.map(s => s.stage)), frame: this.#frame ? 'active' : 'inactive', reentry: this.#reentry,
-      gate: gate?.inspect(), issuer: issuer?.inspect(), seedRetained: !!this.#issuedSeed, draftRetained: !!this.#issuedDraft,
+      closeInFrame: this.#closeInFrame, gate: gate?.inspect(), issuer: issuer?.inspect(), seedRetained: !!this.#issuedSeed, draftRetained: !!this.#issuedDraft,
       continuationUse: this.#slots[36].value ? 'unused' : 'not_created', frameExecutions: 0, grantIssues: 0,
       realWriterCalls: 0, journalSupply: 'not_connected', admissionConsumptions: 0, packetObjects: 0, closedEvidence: 'not_issued', proofIssuance: 'closed' });
   }

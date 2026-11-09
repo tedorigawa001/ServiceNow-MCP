@@ -1,6 +1,8 @@
 # WF-B (C)：正規rootのgate生成・同owner結合とframe継続入口
 
-Version: draft-0.1 / Date: 2026-11-09 / 読み取り基準HEAD: `caa6254`。
+Version: draft-0.2 / Date: 2026-11-09 / 読み取り基準HEAD: `caa6254`（限定実装レビュー修正基準HEAD: `fb02aab`）。
+
+draft-0.2のレビュー修正：構築frame内closeの返答（`deferred_frame`）が試験されず、frame内deferを外す変異が最終状態の一致で生存した。§9で`closeInFrame`診断により返答を固定し、到達しない二重防御を明記した。
 
 Status: **当初draft-0.1の設計に対し、正規gate先行生成・SS03同owner結合・非実行draft保持のみ合成依存限定で実装。** 実装基準HEAD `50a7d6f`、範囲と検証は§9と[検証記録](E2E_BEST_PRACTICE_WFB_CANONICAL_GATE_DRAFT_2026-11-09.md)。親は[WriterGate詳細設計](BEST_PRACTICE_WFB_WRITER_GATE_FRAME_DESIGN.md)と[同start接続差分](BEST_PRACTICE_WFB_SAME_START_SUPPLY_STOP_DESIGN.md)。旧SS03入口のreadonly descriptor結合は維持する。純粋fakeは別brand／別ownerのモデルであり、[その検証記録](E2E_BEST_PRACTICE_WFB_WRITER_GATE_FAKE_2026-11-09.md)を正規経路の停止保証へ昇格させない。
 
@@ -127,6 +129,6 @@ oracleは本体のcounter・state表・descriptor builderから期待値をimpor
 
 同seed参照を既存issuer・start・bindingのprivate fieldへ構築時に保持する。新しいscopeやepochで補完せず、既存private target検査で同startのowner／construction／retention／sourceSlot／未消費claimとissuer unusedを照合してからpinを作る。scopeのfresh wrapperと正規参照の区別は維持する。seed・pin・draftは別brand、current／issued同参照・固定field数も検査し、外部登録口や純粋fakeからの昇格口を設けない。
 
-draftは固定`probe_only`／`executable=false`とentry／exit originだけを保持し、関数fieldもframe runnerもない。継続slotは未使用のまま。構築中再入はrefusal、closeは構築区間のdeferred診断として扱い、既存startのprepare／request／closeは呼ばない。late close／失敗後も捕捉prefixを消さず固定拒否を返す。診断の`ready`は構築post到達の履歴であり、close後の実行許可やgate閉鎖証拠ではない。
+draftは固定`probe_only`／`executable=false`とentry／exit originだけを保持し、関数fieldもframe runnerもない。継続slotは未使用のまま。構築中再入はrefusal、closeは構築区間のdeferred診断として扱い、既存startのprepare／request／closeは呼ばない。late close／失敗後も捕捉prefixを消さず固定拒否を返す。診断の`ready`は構築post到達の履歴であり、close後の実行許可やgate閉鎖証拠ではない。構築frame内closeの返答は`closeInFrame`診断で`deferred_frame`を確認する。draft照合内の`g.matches(pin)`、gateの`#bound`二重bind guard、`issue()`の重複guard、`check()`での再照合は、混入が各段階で固定拒否されるため到達しない二重防御である。
 
 GC01〜05の構築／結合部分、GC10〜12の非公開・互換・未接続部分を検証した。GC06〜09の実frame／grant／request合流と全writer停止coverageは未実施。37×4の独立prefix対照、29単独identity compiled対照と早期target検査の負の対照、関連1,166試験・build・strict検査・梱包確認の結果は[検証記録](E2E_BEST_PRACTICE_WFB_CANONICAL_GATE_DRAFT_2026-11-09.md)に記録する。構造上界は全体work受付ではなく、実費目・実E／S・native layout・cleanup／停止保証はUnknownのまま。

@@ -250,6 +250,8 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 ### Added
 
+- WF-B canonical gate draft review: the in-frame close reply (`deferred_frame`) is now exposed as a `closeInFrame` diagnostic and pinned by the test, so dropping the in-frame deferral is detected; unreachable double guards are documented.
+
 - WF-B writer gate fake review: the gate now becomes `unconfirmed` only for unconfirmed operations or failures while a frame is entering/exiting. Duplicate bind/enter are refusals that keep gate/frame state (sticky `refusal` diagnostic), so a duplicate request after a confirmed exit no longer blocks closure, and input rejection or a pre-frame pin mismatch keeps the gate state. The event-word oracle is updated accordingly.
 
 - WF-B canonical supply construction review: seven start-only controls (claim owner, claim and pin identity, claim owner/pin, a pre-spent issued claim, binding pin) keep the issuer scope consistent so only the start-side `constructionMatches()` can reject them, and an `issuer_rejected` control pins the issuer state check; eight compiled controls added. The `scopeMatches()` call is documented as redundant.

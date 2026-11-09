@@ -62,7 +62,8 @@ describe('canonical prior gate / SS03 / non-executable continuation draft', () =
   });
   it('keeps pre-start close reason-free, defers construction close and refuses synchronous reentry', () => {
     const a = createCanonicalGateDraftFake(); a.close(); a.prepare(); expect(a.inspect()).toMatchObject({ first: 'none', retained: 0 });
-    const b = createCanonicalGateDraftFake('close_in_frame'); b.prepare(); expect(b.inspect()).toMatchObject({ first: 'closed', retained: 32, gate: { bound: false } });
+    const b = createCanonicalGateDraftFake('close_in_frame'); b.prepare();
+    expect(b.inspect()).toMatchObject({ first: 'closed', retained: 32, gate: { bound: false }, closeInFrame: 'deferred_frame' });
     const c = createCanonicalGateDraftFake('reenter'); c.prepare(); expect(c.inspect()).toMatchObject({ ready: true, reentry: 'construction_in_progress' });
     const r = c.close(); expect(c.check()).toBe(r); expect(c.inspect()).toMatchObject({ ...closed, retained: 37, draftRetained: true });
   });

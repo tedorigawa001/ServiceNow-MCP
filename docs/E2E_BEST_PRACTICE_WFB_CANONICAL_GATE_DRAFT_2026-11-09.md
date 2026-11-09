@@ -43,6 +43,20 @@ strict検査は`bdo npx tsc --noEmit --target ES2022 --module NodeNext --moduleR
 
 GC06〜09の実frame enter／exit・grant・request合流、全writer停止、Journal封印／供給、admission／packet／field clear／root終端、実確保layout・実OOM・shell以前の診断必着・constructor未捕捉部分生成の全参照回収・実E／Sと全体work上界は未確認。37は構築産物slot数であり、実allocation数・work料金ではない。純粋fakeやこの新assemblyの成功をruntime保証・実費目確認済み・全体受付許可へ昇格させない。
 
+## レビュー修正（2026-11-09）
+
+レビュー基準HEAD: `fb02aab`（設計`50a7d6f`も照合）。修正前は全体324ファイル・16,413件成功。
+
+指摘：構築frame内closeの返答（`deferred_frame`）が未確認だった。`close_in_frame`試験は最終`first='closed'`・保持32だけを見ており、frame内deferを外す変異が最終状態の一致で生存した。
+
+修正：`closeInFrame`診断を追加し、試験で`deferred_frame`を確認する。到達しない二重防御4種（draft照合内の`g.matches(pin)`、gateの`#bound`二重bind guard、`issue()`の重複guard、`check()`再照合）を設計§9へ明記した。
+
+RED：更新した1件が修正前に失敗した。GREEN：新規200件成功、compiled 29＋早期target対照を維持。
+
+一時変異（試験後に元へ戻した）：計10種、検出6、等価4。検出はissuer seed連鎖、開始前close、重複prepareの固定化、frame内closeの確認、post再照合（compiled）、今回のframe内close defer。等価は上記の到達しない二重防御4種。
+
+全体回帰：`npm run lint`・`npm run build`・`package-http-classification.mjs`成功、vitest全体324ファイル・16,413件成功（更新は既存試験への期待値追加で件数不変）。
+
 ## コミット候補だけの再確認
 
 同日、HEAD＋今回の8ファイルだけを一時index／一時object領域でtree化し、隔離directoryへ展開した。既存node_modulesだけを参照し、依存導入は行っていない。検証対象treeは`f20da9031a253f90f8c0b05c8c347f7a3a4023ca`（本節追記前）。そのコピーでbuild・strict検査・上記18ファイル1,166件・新旧compiled10本・梱包dry-runを全て再実行し、exit 0。梱包441ファイル、fixture混入0を再確認した。本節以外の候補内容が検証treeと一致することをコミット前に照合する。
