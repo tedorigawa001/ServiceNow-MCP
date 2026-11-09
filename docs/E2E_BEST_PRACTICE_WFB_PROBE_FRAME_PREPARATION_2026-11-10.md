@@ -51,6 +51,16 @@ attemptの一度限り消費・enter active・正常／throw／取消probe body�
 
 実確保layout・実OOM・constructor未捕捉参照の全回収・unit係数・各guard／refusalの全体呼出し上界・実E／S・runtime停止はUnknown。旧37＋追加8は保持産物のscheduleで実allocation数／work料金ではない。新bodyの退出保証を確認済みにせず、次段階(B)は固定exit責務を伴う別承認で進める。
 
+## レビュー修正（2026-11-10、MDのみ）
+
+レビュー基準HEAD: `75adab5`。上記「start側のprivate受領物も別確認する」のうち、単独対照で裏付けられるのはcells（`start_cells_copy`／compiled receiver対照）だけだった。一時変異10種（検出1：probe経路の閉鎖条件をcompiledが検出）で、次の9種は到達しない二重防御として生存した。
+
+- start側`probeMatches()`の`target.start`／seed／owner／`constructionMatches()`／draft関係の5種：root側binding前段が同start・同参照を先に拒否する。
+- bind時の`probeMatches()`結果とpostの`probeStartAccess.matches()`の2種：互いにmaskする。共通のcells条件はcompiled receiver対照で検出済み。
+- `checkFramePreparation()`の再照合と`#closed`条件の2種：到達しない。
+
+設計§11へ同内容を明記した。コード・試験は変更していない（vitest全体325ファイル・16,478件成功のまま）。
+
 ## コミット候補だけの隔離再確認
 
 同日、HEAD＋今回の9ファイルだけを一時index／object領域でtree化し、別directoryへ展開した。検証対象treeは`d7015042a83a7fc45d167d93db61f08b6ee77194`（本節追記前）。既存node_modulesだけを参照し、依存導入なし。そのコピーでbuild・strict検査・関連19ファイル1,231件・新旧compiled11本・梱包dry-runを再実行し、全てexit 0。梱包441ファイル、fixture混入0を再確認した。

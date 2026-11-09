@@ -1,6 +1,8 @@
 # WF-B (C)：同startのprobe-only frame・一度限りenter／確認済みexit接続差分
 
-Version: draft-0.1 / Date: 2026-11-09 / 読み取り開始HEAD: `fb02aab`、文書確認時HEAD: `470679f`。
+Version: draft-0.2 / Date: 2026-11-10 / 読み取り開始HEAD: `fb02aab`、文書確認時HEAD: `470679f`（(A)レビュー修正基準HEAD: `75adab5`）。
+
+draft-0.2のレビュー修正（MDのみ）：(A)のstart側受領物照合のうち単独対照で裏付けられるのはcellsだけで、他は到達しない二重防御である点を§11に明記した。
 
 Status: **当初draft-0.1に対し、(A)の同start wrapper最小抽出・先行private cell／同bindingだけ合成依存限定で実装。** 実装基準HEAD `74bb73c`、詳細は§11と[検証記録](E2E_BEST_PRACTICE_WFB_PROBE_FRAME_PREPARATION_2026-11-10.md)。親は[正規gate生成・継続入口](BEST_PRACTICE_WFB_GATE_ROOT_CONTINUATION_DESIGN.md)と[WriterGate／frame権限](BEST_PRACTICE_WFB_WRITER_GATE_FRAME_DESIGN.md)。前工程の実績は[非実行draftの検証記録](E2E_BEST_PRACTICE_WFB_CANONICAL_GATE_DRAFT_2026-11-09.md)。新probeのbody起動・grant発行・退出証拠は存在しない。
 
@@ -148,3 +150,5 @@ ProbeCellBundleは同先行rootが所有し、use／frame／grant／body／exit�
 cellの型はこの段階ではunused／empty／not_startedと未使用・未発行だけを表現する。mutable private cellの遷移、attempt claim消費、grant発行／退役、退出候補生成、PX05、request／drainはまだ実装していない。診断cellは先行空slotで、実際の構築失敗first・prefixは既存rootのfailure shellが保持する。既存不変slot37と`executable=false`のdraftは変更しない。
 
 PF01のwrapper共有／新経路body閉鎖部分、PF02の供給・受領同一性部分、PF03の追加8段階構築部分、PF04の構築再入／重複bind部分、PF10〜12の保持・互換・閉鎖部分を検証した。enter／exitのPF03〜09実行部分・正常probe body・退出確定・実request合流・全writer停止は未実施。独立prefix oracle32条件、新65試験、関連1,231件、新旧compiled11本・build・strict検査・梱包結果と初回エラーは[検証記録](E2E_BEST_PRACTICE_WFB_PROBE_FRAME_PREPARATION_2026-11-10.md)。構造枠は全体work受付へ昇格させず、unit係数・実E／S・layout・実OOM・runtime停止はUnknownのまま。
+
+start側`probeMatches()`のうち単独対照（`start_cells_copy`、compiled receiver対照）で裏付けられるのは`b.cells === this.#probeCells`だけである。`b.target.start === this`、`b.seed === this.#gateSeed`、`b.owner === this.#owner`、`constructionMatches()`、draft／entry／exitの関係は、root側binding前段と同じstart・同参照を先に検査するため到達しない二重防御。bind時の`probeMatches()`結果とpostの`probeStartAccess.matches()`は互いをmaskする二重防御、`checkFramePreparation()`の再照合と`#closed`条件も到達しない。将来start側だけを変える経路（request合流後の受領物更新等）を追加する際は、これらに単独対照を先に用意する。
