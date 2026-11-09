@@ -54,6 +54,26 @@ grantAttemptsは試行開始点の計数であり、実constructor完了数で�
 
 BE05／06、固定exit guard、局所退役、body帰還／throw／取消、退出候補・accepted同期確定、request実合流・回収claim・drain、実writer／Journal／root終端は未実装。B-03が先行firstに妨げられず同dutyの固定exitを処理する私的継続は別途必要で、固定失敗返答を解除する再開口にはしない。実OOM・layout・実費目・総guard／projection上界・実E／S・runtime停止はUnknown、全体受付は無効のまま。
 
+## レビュー修正（2026-11-10）
+
+レビュー基準HEAD: `ba84ea4`。修正前は全体327ファイル・16,606件成功。
+
+指摘：
+1. `retainProbeCaptureFailure()`は使用開始後の失敗を理由・境界によらずuse／duty／exitをunconfirmed、grant試行後はgrantもunconfirmed／unresolvedへ集約していた。設計§7（BE01後・BE02前はowed duty＋正規未発行checkpoint、provisional拒否は正規履歴の範囲で固定退役）・§6・BG07の区別に反し、current／issued／rejectedを全保持する`grant_*`拒否でも`unknownObligation=true`、`stop_claim_after`等の既知停止もunconfirmedとなった。状態関係ではunconfirmedが終端のため、B-03で退役可能な既知grantを退役不能にしていた。
+2. 到達しない防御条件：start側preflightの事前状態4種（duty state／attemptUsed、use、body／exit）、start側stop前段、root側の状態・binding再確認2種。`cells.diagnostic.first`はprojection外で観測できない。
+
+修正：
+- 失敗prefixを3分類にした。constructor呼出し前は`claimed_not_issued`（entering＋owed＋grant empty）。issuerが候補を保持していれば`grant_known`（未捕捉ならcellへ同参照を補足、provisional・unresolved=false・duty owed、拒否候補保持）。constructor呼出し後に返却を捕捉できない場合だけ`grant_unknown`（use／duty／exit／grantをunconfirmed）。claim前は`not_claimed`。stopと同期faultも既知境界なら同分類。
+- `#grantCallStarted`をconstructor呼出し直前に立て、`issue_attempt`（呼出し前）と`issue_throw`（呼出し後未返却）を区別する。
+- projectionへ`capture.prefix`を追加した。
+- 9観測点×fault／stopの期待値、`grant_*`14種、`issue_throw`の期待値を上記分類へ直した。compiledの払い戻し禁止対照を新しい既知prefixへ移し、既知prefixの集約変異と、未知を既知と誤分類する変異の対照を加えた。
+
+RED：更新した33件が修正前に失敗した。GREEN：関連3ファイル193件、compiled全本成功。
+
+一時変異（試験後に元へ戻した）：今回の修正点への6種（既知の集約、current補足漏れ、既知のunresolved化、未知の既知化、未発行の集約、prefix未記録）を全検出。既存の10種は検出2・到達しない防御条件8（上記2）。
+
+全体回帰：`npm run lint`・`npm run build`・`package-http-classification.mjs`成功、vitest全体327ファイル・16,606件成功（既存試験の期待値更新で件数不変）。
+
 ## コミット前の対象限定再検証（2026-11-10）
 
 B-02の9ファイルだけを明示してindexへ登録し、index全体を一時ディレクトリへ展開した。対象9ファイルの内容hashがindexと一致することを確認し、既存node_modulesだけを借用した検証用コピーで上記のbuild・strict・関連21ファイル1,359件・compiled13本を再実行し、全てexit 0。梱包dry-runも441ファイル・fixture混入0だった。全repository回帰は今回も未実施。最終追記は本節だけで、実装／試験の内容は再検証時から変更していない。他の作業差分・実接続・実通信・設定変更・Pushは含めない。

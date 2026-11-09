@@ -43,7 +43,14 @@ try {
   const issuer = await load(replace(text, 'this.#grantIssued = value; this.#grantIssues++;', 'this.#grantIssues++;'), 'issuer-retention');
   assert.equal(run(base, 'fault_issue_issued').snapshot.grant.issuedRetained, true);
   assert.equal(run(issuer, 'fault_issue_issued').snapshot.grant.issuedRetained, false);
-  const refund = await load(replace(text, "cells.use.state = 'unconfirmed'; duty.state = 'unconfirmed';", "cells.use.state = 'unconfirmed'; cells.use.attemptUsed = false; duty.state = 'unconfirmed';"), 'refund');
+  const refund = await load(replace(text, "  cells.grant.stage = 'empty'; cells.grant.unresolved = false;\n  return 'claimed_not_issued';", "  cells.grant.stage = 'empty'; cells.grant.unresolved = false; cells.use.attemptUsed = false;\n  return 'claimed_not_issued';"), 'refund');
+  // Known prefixes must not collapse into unconfirmed: the duty stays owed for the later fixed exit.
+  const collapse = await load(replace(text, "  if (issued !== undefined) {\n    if (cells.grant.current === undefined)", "  if (false) {\n    if (cells.grant.current === undefined)"), 'collapse');
+  assert.equal(run(base, 'grant_pin').snapshot.duty.state, 'owed');
+  assert.equal(run(collapse, 'grant_pin').snapshot.duty.state, 'unconfirmed');
+  const unknown = await load(replace(text, "      this.#grantCallStarted = true; const issued", "      const issued"), 'unknown');
+  assert.equal(run(base, 'issue_throw').snapshot.capture.prefix, 'grant_unknown');
+  assert.equal(run(unknown, 'issue_throw').snapshot.capture.prefix, 'claimed_not_issued');
   assert.equal(run(base, 'fault_claim_after').snapshot.capture.obligationOwed, true);
   assert.equal(run(refund, 'fault_claim_after').snapshot.capture.obligationOwed, false);
   const lostDuty = await load(replace(text, 'const cells = this.#runLink?.cells, duty = this.#runDuty;', 'this.#runDuty = undefined; const cells = this.#runLink?.cells, duty = this.#runDuty;'), 'lost-duty');
@@ -69,5 +76,5 @@ try {
   assert.equal(a.inspect().duty.state, 'owed'); assert.equal(a.inspect().exit.exitAccepted, false);
   console.log(JSON.stringify({ compiled: true, grantIdentityControls: fields.length, reentryControl: true, duplicateControl: true,
     issuerRetentionControl: true, nonRefundControl: true, sameDutyRetentionControl: true, projectionControls: 3,
-    stopControl: true, bodyTrap: true, bodyStarts: 0, exitRecords: 0 }));
+    stopControl: true, knownPrefixControl: true, unknownPrefixControl: true, bodyTrap: true, bodyStarts: 0, exitRecords: 0 }));
 } finally { rmSync(dir, { recursive: true, force: true }); }

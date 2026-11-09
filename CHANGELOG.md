@@ -256,6 +256,8 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 ### Added
 
+- WF-B probe grant capture review: capture failures after the claim are now classified by boundary instead of collapsing to unconfirmed. Before the constructor call the duty stays owed with an empty grant (`claimed_not_issued`); an issuer-held candidate stays provisional and known with the duty owed for the later fixed exit (`grant_known`); only an uncaptured constructor result is unconfirmed (`grant_unknown`). A `capture.prefix` diagnostic and compiled controls pin the classification.
+
 - WF-B probe run preparation review: thirteen isolated invalid state shapes, each changing one fact from a valid entering/active/exiting/unconfirmed baseline, now pin every clause of the state-relation check (16 compiled single-clause controls, up from 3); the blanket `not_owed` rejection is documented as equivalent.
 
 - WF-B canonical gate draft review: the in-frame close reply (`deferred_frame`) is now exposed as a `closeInFrame` diagnostic and pinned by the test, so dropping the in-frame deferral is detected; unreachable double guards are documented.

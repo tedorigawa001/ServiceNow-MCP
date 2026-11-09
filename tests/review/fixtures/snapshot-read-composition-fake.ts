@@ -2281,7 +2281,7 @@ class RetirementStartAssembly {
   #captureFirst: ProbeRunFirst = 'none'; #capturePhase = 'none'; #captureBoundary = 'none';
   #captureRefusal: 'none' | 'duplicate_enter' = 'none'; #captureReentry = 'none';
   #captureFixed: Readonly<ProbeGrantCaptureReply> | undefined;
-  #captureScript = 'normal';
+  #captureScript = 'normal'; #grantCallStarted = false; #capturePrefix: ProbeCapturePrefix = 'none';
   readonly #owner = Object.freeze({});
   readonly #binding: PendingSourceBinding;
   readonly #pin: RetirementBindingPin;
@@ -2325,7 +2325,7 @@ class RetirementStartAssembly {
       stopCapture: (a: RetirementStartAssembly) => { a.#captureStop = true; },
       captureInspect: (a: RetirementStartAssembly) => Object.freeze({ first: a.#captureFirst, phase: a.#capturePhase, boundary: a.#captureBoundary,
         grantAttempts: a.#grantAttempts, grantIssues: a.#grantIssues, grantChecks: a.#grantChecks, inProgress: a.#captureInProgress,
-        stopRequested: a.#captureStop, refusal: a.#captureRefusal, reentry: a.#captureReentry,
+        stopRequested: a.#captureStop, refusal: a.#captureRefusal, reentry: a.#captureReentry, prefix: a.#capturePrefix,
         issuerRetained: a.#grantIssued !== undefined, obligationOwed: a.#runLink?.cells.use.attemptUsed === true,
         sameDuty: !!a.#runDuty && a.#runDuty === a.#runIssuedDuty && a.#runDuty.link === a.#runLink && a.#runLink === a.#runIssuedLink }),
       inspect: (a: RetirementStartAssembly) => Object.freeze({ bindingRetained: !!a.#probeBinding, bindingAttempted: a.#probeBindStarted,
@@ -2416,7 +2416,8 @@ class RetirementStartAssembly {
   private captureFailure(reason: ProbeRunFirst): Readonly<ProbeGrantCaptureReply> {
     if (this.#captureFirst === 'none') this.#captureFirst = reason;
     const cells = this.#runLink?.cells, duty = this.#runDuty;
-    if (cells && duty && cells.use.attemptUsed) retainProbeCaptureFailure(cells, duty, this.#grantIssued, this.#grantAttempts > 0);
+    if (this.#capturePrefix === 'none' && cells && duty) this.#capturePrefix = cells.use.attemptUsed
+      ? retainProbeCaptureFailure(cells, duty, this.#grantIssued, this.#grantCallStarted) : 'not_claimed';
     if (cells && cells.diagnostic.first === 'none') cells.diagnostic.first = this.#captureFirst;
     return this.#captureFixed ??= this.captureReply(false, this.#captureFirst);
   }
@@ -2468,7 +2469,7 @@ class RetirementStartAssembly {
       this.capturePoint('issue', 'before');
       beginProbeGrantAttempt(link.cells.grant); this.#grantAttempts++;
       this.capturePoint('issue', 'attempt');
-      const issued = this.mintProbeGrant(link);
+      this.#grantCallStarted = true; const issued = this.mintProbeGrant(link);
       this.capturePoint('issue', 'issued');
       this.capturePoint('capture', 'before');
       const current = this.#captureScript === 'grant_copy' ? Object.freeze({ ...issued }) : issued;
@@ -2885,7 +2886,7 @@ interface ProbeStateFacts { use: string; attempt: boolean; grant: string; refere
 interface ProbeGrantCaptureReply { readonly ok: boolean; readonly disposition: string; readonly first: ProbeRunFirst }
 interface ProbeGrantCaptureSnapshot { readonly first: ProbeRunFirst; readonly phase: string; readonly boundary: string;
   readonly grantAttempts: number; readonly grantIssues: number; readonly grantChecks: number; readonly inProgress: boolean;
-  readonly stopRequested: boolean; readonly refusal: string; readonly reentry: string; readonly issuerRetained: boolean;
+  readonly stopRequested: boolean; readonly refusal: string; readonly reentry: string; readonly prefix: string; readonly issuerRetained: boolean;
   readonly obligationOwed: boolean; readonly sameDuty: boolean }
 // Fixed direct assignments on canonical private cells. No allocation, hook, callback or await in the claim section.
 function beginProbeCapture(use: ProbeUseCell, duty: FixedExitDuty): void {
@@ -2896,12 +2897,23 @@ function captureProbeGrantReference(grant: ProbeGrantCell, current: CanonicalPro
   grant.current = current; grant.issued = issued; grant.unresolved = false; grant.stage = 'provisional';
 }
 function rejectProbeGrantReference(grant: ProbeGrantCell, rejected: CanonicalProbeGrant): void { grant.rejected = rejected; }
-function retainProbeCaptureFailure(cells: ProbeCellBundle, duty: FixedExitDuty, issued: CanonicalProbeGrant | undefined, attempted: boolean): void {
-  cells.use.state = 'unconfirmed'; duty.state = 'unconfirmed'; cells.exit.stage = 'unconfirmed';
-  if (attempted) {
+type ProbeCapturePrefix = 'none' | 'not_claimed' | 'claimed_not_issued' | 'grant_known' | 'grant_unknown';
+// Known prefixes keep use=entering and the owed duty for the later fixed exit; only an uncaptured constructor result is unknown.
+function retainProbeCaptureFailure(cells: ProbeCellBundle, duty: FixedExitDuty, issued: CanonicalProbeGrant | undefined,
+  callStarted: boolean): Exclude<ProbeCapturePrefix, 'none' | 'not_claimed'> {
+  if (issued !== undefined) {
+    if (cells.grant.current === undefined) cells.grant.current = issued;
     if (cells.grant.issued === undefined) cells.grant.issued = issued;
-    cells.grant.stage = 'unconfirmed'; cells.grant.unresolved = true;
+    cells.grant.stage = 'provisional'; cells.grant.unresolved = false;
+    return 'grant_known';
   }
+  if (callStarted) {
+    cells.use.state = 'unconfirmed'; duty.state = 'unconfirmed'; cells.exit.stage = 'unconfirmed';
+    cells.grant.stage = 'unconfirmed'; cells.grant.unresolved = true;
+    return 'grant_unknown';
+  }
+  cells.grant.stage = 'empty'; cells.grant.unresolved = false;
+  return 'claimed_not_issued';
 }
 function probeStateFactsValid(f: ProbeStateFacts): boolean {
   if (!['unused', 'entering', 'active', 'exiting', 'unconfirmed'].includes(f.use)
@@ -3350,7 +3362,8 @@ class CanonicalGateDraftRoot {
         grantAttempts: capture?.grantAttempts ?? 0, grantChecks: capture?.grantChecks ?? 0, inProgress: capture?.inProgress === true,
         issuerRetained: capture?.issuerRetained === true, obligationOwed: capture?.obligationOwed === true, sameDuty: capture?.sameDuty === true,
         stopRequested: capture?.stopRequested === true, refusal: runEnum(capture?.refusal, ['none', 'duplicate_enter'], 'none'),
-        reentry: runEnum(capture?.reentry, ['none', 'enter_in_progress'], 'none') }) } : {}),
+        reentry: runEnum(capture?.reentry, ['none', 'enter_in_progress'], 'none'),
+        prefix: runEnum(capture?.prefix, ['none', 'not_claimed', 'claimed_not_issued', 'grant_known', 'grant_unknown'], 'unconfirmed') }) } : {}),
       grantIssues: capture?.grantIssues ?? 0, bodyStarts: 0, exitRecords: 0, realWriterCalls: 0, journalSupply: 'not_connected', rootFinish: 'not_called' });
   }
   close() {

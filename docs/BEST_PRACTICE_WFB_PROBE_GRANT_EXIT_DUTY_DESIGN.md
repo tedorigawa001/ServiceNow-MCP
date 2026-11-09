@@ -1,6 +1,8 @@
 # WF-B (B)：内部型・one-shot enter／grant捕捉・固定exit責務・公開診断の接続差分
 
-Version: draft-0.2 / Date: 2026-11-10 / 読み取り基準HEAD: `75adab5`（B-01レビュー修正基準HEAD: `0c9e99b`）。
+Version: draft-0.3 / Date: 2026-11-10 / 読み取り基準HEAD: `75adab5`（B-01レビュー修正基準HEAD: `0c9e99b`、B-02レビュー修正基準HEAD: `ba84ea4`）。
+
+draft-0.3のレビュー修正：B-02は使用開始後の失敗を理由・境界によらずuse／duty／exit（試行後はgrantも）unconfirmedへ集約しており、§6・§7の「BE01後・BE02前はowed duty＋正規未発行checkpoint」「provisional拒否でも正規履歴の範囲で固定退役」とBG07の区別に反していた。完全に既知の拒否grantまで`unknownObligation`となり、B-03の固定退役を不能にしていた。§13で失敗prefixを3分類に直した。
 
 draft-0.2のレビュー修正：B-01の状態関係判定`probeStateFactsValid()`は19条件中14条件が単独検証されていなかった（既存の不適合shapeが先に評価される別条件で拒否されていた）。§12へ、適合基点から1事実だけを変えた単独不適合shape13種とcompiled単独変異を追加したこと、`duty === 'not_owed'`の一律拒否が等価であることを明記した。
 
@@ -181,7 +183,7 @@ enterは先行post・同canonical参照・状態関係をrootで確認し、同s
 
 固定issuerは返却より先に同ownerのprivate issued参照を保持する。捕捉前の失敗でも既知のissued候補を失わず、cellのissuedが空の場合だけそこへ補足する。receiver-issued等の既存拒否候補を上書きして消さない。constructor試行開始後、未捕捉なら未知の責務を保持する。grantAttemptsは試行開始の計数で、constructor完了数ではない。grantIssuesは内部候補発行数（不正field対照も含む）で、実行資格の発行数ではない。
 
-正常はuse=entering／grant=provisional／body=not_started／duty=owedで止まり、局所退役もaccepted退出記録もない。失敗時、claim未使用なら未使用のまま固定拒否。使用開始済みならuse／同duty／exitをunconfirmedへし、grant試行後は既知のcurrent／issued／拒否候補と未知責務を保持する。attemptは払い戻さず、dutyのattemptUsedはfalse（固定unwind未試行）、同RunLinkへの責務ありを別booleanで診断する。rootとstartが同じdutyを保持し、参照消去・第2ownerへの補完・cleanup成功化はしない。
+正常はuse=entering／grant=provisional／body=not_started／duty=owedで止まり、局所退役もaccepted退出記録もない。失敗時、claim未使用なら未使用のまま固定拒否（prefix=not_claimed）。使用開始後は境界の既知性で3分類する。constructor呼出し前ならuse=entering／duty=owed／grant=empty（claimed_not_issued、正規未発行checkpoint）。issuerが候補を保持していれば、未捕捉ならcellへ同参照を補足し、grant=provisional・unresolved=false・duty=owedのまま拒否候補も保持する（grant_known、B-03の固定退役対象）。constructor呼出し後に返却を捕捉できない場合だけuse／duty／exit／grantをunconfirmed・unknownObligationとする（grant_unknown）。stopと同期faultも境界が既知なら同じ分類で、unconfirmedへ昇格しない。attemptは払い戻さず、dutyのattemptUsedはfalse（固定unwind未試行）、同RunLinkへの責務ありを別booleanで診断する。rootとstartが同じdutyを保持し、参照消去・第2ownerへの補完・cleanup成功化はしない。
 
 closeは新規captureを閉じる同startの固定stop latchにだけ合流し、旧request／close・回収claimへ進まない。正常捕捉後closeでもprovisional grantとowed dutyを保持。途中stopは既存firstを上書きせず固定失敗prefixへ進む。B-03の固定exit guard／退役と(C)の同期確定は引き続き未実装で、通常の固定失敗返答を解除して再開する方式を採らない。
 

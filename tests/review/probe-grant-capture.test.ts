@@ -41,13 +41,15 @@ describe('B-02 one-shot enter / same grant capture / retained exit duty with bod
   it.each(points.flatMap((p, index) => ['fault', 'stop'].map(kind => [kind, p[0], p[1], index] as const)))(
     'keeps independent %s prefix at %s/%s', (kind, phase, boundary, index) => {
       const a = createProbeGrantCaptureFake(`${kind}_${phase}_${boundary}`); a.prepare(); const r = a.enter();
-      const used = index >= 1, attempted = index >= 3, issued = index >= 4, captured = index >= 6, checked = index >= 8;
+      // Every boundary here is a known checkpoint: the constructor is either not yet called or its result is held by the issuer.
+      const used = index >= 1, attempted = index >= 3, issued = index >= 4, checked = index >= 8;
       expect(r.first).toBe(kind === 'stop' ? 'closed' : 'construction_unconfirmed');
       const s = a.inspect(); expect(s).toMatchObject({ ...closed, grantIssues: Number(issued),
-        use: { phase: used ? 'unconfirmed' : 'unused', attemptUsed: used },
-        grant: { stage: attempted ? 'unconfirmed' : 'empty', currentRetained: captured, issuedRetained: issued,
-          rejectedRetained: false, unknownObligation: attempted }, duty: { state: used ? 'unconfirmed' : 'not_owed', attemptUsed: false, linkRetained: true },
-        exit: { stage: used ? 'unconfirmed' : 'empty' }, capture: { phase, boundary, grantAttempts: Number(attempted), grantChecks: Number(checked),
+        use: { phase: used ? 'entering' : 'unused', attemptUsed: used },
+        grant: { stage: issued ? 'provisional' : 'empty', currentRetained: issued, issuedRetained: issued,
+          rejectedRetained: false, unknownObligation: false }, duty: { state: used ? 'owed' : 'not_owed', attemptUsed: false, linkRetained: true },
+        exit: { stage: 'empty' }, capture: { phase, boundary, grantAttempts: Number(attempted), grantChecks: Number(checked),
+          prefix: !used ? 'not_claimed' : issued ? 'grant_known' : 'claimed_not_issued',
           issuerRetained: issued, obligationOwed: used, sameDuty: true, stopRequested: kind === 'stop', inProgress: false } });
       for (const again of [a.enter(), a.check(), a.checkLegacy(), a.close(), a.prepare()]) { expect(again).toBe(r); plainFrozenData(again); }
       expect(a.inspect()).toEqual(s); plainFrozenData(s);
@@ -60,10 +62,11 @@ describe('B-02 one-shot enter / same grant capture / retained exit duty with bod
   it.each(['copy', 'issued_copy', 'brand', 'extra', 'bindingOrigin', 'gate', 'owner', 'pin', 'epoch', 'frame', 'draft', 'entry', 'exit', 'phase'])(
     'retains grant_%s and its duty after validation refuses it', field => {
       const a = createProbeGrantCaptureFake('grant_' + field); a.prepare(); const r = a.enter(); expect(r.first).toBe('binding_mismatch');
-      expect(a.inspect()).toMatchObject({ ...closed, grantIssues: 1, use: { phase: 'unconfirmed', attemptUsed: true },
-        grant: { stage: 'unconfirmed', currentRetained: true, issuedRetained: true, rejectedRetained: true, unknownObligation: true },
-        duty: { state: 'unconfirmed', attemptUsed: false, linkRetained: true },
-        capture: { phase: 'validate', boundary: 'before', grantAttempts: 1, grantChecks: 0, sameDuty: true, obligationOwed: true } });
+      // A rejected but fully captured grant is a known obligation for the later fixed exit, not an unknown one.
+      expect(a.inspect()).toMatchObject({ ...closed, grantIssues: 1, use: { phase: 'entering', attemptUsed: true },
+        grant: { stage: 'provisional', currentRetained: true, issuedRetained: true, rejectedRetained: true, unknownObligation: false },
+        duty: { state: 'owed', attemptUsed: false, linkRetained: true }, exit: { stage: 'empty' },
+        capture: { phase: 'validate', boundary: 'before', grantAttempts: 1, grantChecks: 0, sameDuty: true, obligationOwed: true, prefix: 'grant_known' } });
       expect(a.enter()).toBe(r); plainFrozenData(a.inspect());
     });
   it.each(['preflight_link_copy', 'preflight_duty_copy'])('refuses %s before claim and issue', script => {
@@ -73,8 +76,9 @@ describe('B-02 one-shot enter / same grant capture / retained exit duty with bod
   });
   it('retains an unconfirmed constructor attempt without pretending that no grant was created', () => {
     const a = createProbeGrantCaptureFake('issue_throw'); a.prepare(); expect(a.enter().first).toBe('construction_unconfirmed');
-    expect(a.inspect()).toMatchObject({ ...closed, grantIssues: 0, grant: { stage: 'unconfirmed', currentRetained: false,
-      issuedRetained: false, unknownObligation: true }, capture: { grantAttempts: 1, issuerRetained: false, obligationOwed: true, sameDuty: true } });
+    expect(a.inspect()).toMatchObject({ ...closed, grantIssues: 0, use: { phase: 'unconfirmed' }, duty: { state: 'unconfirmed' }, exit: { stage: 'unconfirmed' },
+      grant: { stage: 'unconfirmed', currentRetained: false, issuedRetained: false, unknownObligation: true },
+      capture: { grantAttempts: 1, issuerRetained: false, obligationOwed: true, sameDuty: true, prefix: 'grant_unknown' } });
   });
   it('closes before enter without issuing, and after capture without releasing the owed duty', () => {
     const a = createProbeGrantCaptureFake(); a.prepare(); const r = a.close(); expect(a.enter()).toBe(r);
