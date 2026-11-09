@@ -4,9 +4,9 @@ Version: draft-0.2 / Date: 2026-11-10 / 読み取り基準HEAD: `75adab5`（B-01
 
 draft-0.2のレビュー修正：B-01の状態関係判定`probeStateFactsValid()`は19条件中14条件が単独検証されていなかった（既存の不適合shapeが先に評価される別条件で拒否されていた）。§12へ、適合基点から1事実だけを変えた単独不適合shape13種とcompiled単独変異を追加したこと、`duty === 'not_owed'`の一律拒否が等価であることを明記した。
 
-Status: **当初draft-0.1に対し、B-01の状態型・RunLink／duty先行準備・固定projectionだけ合成依存限定で実装。** 基準HEAD `345e114`、詳細は§12と[検証記録](E2E_BEST_PRACTICE_WFB_PROBE_RUN_PREPARATION_2026-11-10.md)。親は[同startのenter／exit接続差分](BEST_PRACTICE_WFB_PROBE_FRAME_ENTER_EXIT_DESIGN.md)と[正規gate生成・継続入口](BEST_PRACTICE_WFB_GATE_ROOT_CONTINUATION_DESIGN.md)。(A)の実績は[先行cell／同binding検証記録](E2E_BEST_PRACTICE_WFB_PROBE_FRAME_PREPARATION_2026-11-10.md)。probe body／grant／退出記録はまだ生成されない。
+Status: **B-01の先行準備・固定projectionと、B-02の一度限りenter／同grant捕捉・失敗prefix保持を合成依存限定で実装。** B-01は§12と[その検証記録](E2E_BEST_PRACTICE_WFB_PROBE_RUN_PREPARATION_2026-11-10.md)、B-02の基準HEADは`30d91c0`、詳細は§13と[その検証記録](E2E_BEST_PRACTICE_WFB_PROBE_GRANT_CAPTURE_2026-11-10.md)。親は[同startのenter／exit接続差分](BEST_PRACTICE_WFB_PROBE_FRAME_ENTER_EXIT_DESIGN.md)と[正規gate生成・継続入口](BEST_PRACTICE_WFB_GATE_ROOT_CONTINUATION_DESIGN.md)。(A)の実績は[先行cell／同binding検証記録](E2E_BEST_PRACTICE_WFB_PROBE_FRAME_PREPARATION_2026-11-10.md)。内部grant候補の発行・provisional捕捉までで、active資格・probe body・退出記録は未実装。
 
-正式発行口・C実行入口閉鎖、全体受付無効、Unknown、VM／監視／telemetry調査保留を維持する。当初作成時は文書のみ、今回の実装・ローカル検証は§12のB-01だけ。本書だけでbody起動・grant発行を承認しない。grant発行・新probe body起動・実接続・実通信・設定変更・Pushを行わない。実writer、request／close実合流、回収claim消費、Journal封印／供給、admission／packet／field clear、GateClosedRecord、root終端も閉鎖のまま。
+正式発行口・C実行入口閉鎖、全体受付無効、Unknown、VM／監視／telemetry調査保留を維持する。当初作成時は文書のみ、その後の実装・ローカル検証は§12〜13の限定範囲だけ。本書だけでbodyや実接続を承認しない。B-02で合成専用内部grant候補を最大1回発行するが、正式permitや実writer資格ではない。新probe body起動・実接続・実通信・設定変更・Pushを行わない。実writer、request／close実合流、回収claim消費、Journal封印／供給、admission／packet／field clear、GateClosedRecord、root終端も閉鎖のまま。
 
 ## 1 (A)との差分と(B)／(C)の分割
 
@@ -126,7 +126,7 @@ RunLink／duty先行構築、guard、grant生成／捕捉／退役、診断proje
 
 共有予算・停止ownerへ将来接続する際は既存D_stop／D_endと同開始点を引き継ぎ、別予算・残時間からの期限再計算を持ち込まない。(A)のpure fakeを実会計・native費用の検証済み証拠にしない。
 
-## 10 独立合成受入条件（B-01の実施範囲は§12）
+## 10 独立合成受入条件（実施範囲は§12〜13）
 
 | ID | 受入条件・負の対照 |
 |---|---|
@@ -170,3 +170,19 @@ RunLink／dutyは同rootが保持し、startも同private参照を捕捉する�
 BG01の先行同root結合、BG02の型／値整合、BG03の4段階構築部分、BG05の重複準備／bind部分、BG09〜10の参照非出力、BG12の互換／閉鎖を部分検証した。21個の値専用状態対照、4×4の独立prefix、link9／duty8／descriptor5・receiver2のcompiled対照、型不正6件のsemantic compile-failとprojection負の対照を実施。結果・初回失敗・二重防御の範囲は[検証記録](E2E_BEST_PRACTICE_WFB_PROBE_RUN_PREPARATION_2026-11-10.md)。実enter／固定unwind・停止合流・実費目・E／S・layout・runtimeはUnknownのまま。
 
 状態関係判定の条件別感度は、適合基点（entering／active／exiting／unconfirmed）から1事実だけを変えた単独不適合shapeで確認する。対象はuse列挙（unconfirmed＋finished）、provisional以降の参照必須（active＋参照なし）、unresolvedとgrantの関係、returnedとoutcome、exit列挙、owed dutyの未使用、entering分岐（entering＋active grant）、activeのbody非unconfirmed・exit空、exitingのbody列挙・grant条件（attempting）・duty条件（owed）、unconfirmed分岐（settled duty）の13種。各条件を外したcompiled変異で、その不適合が受理へ変わることを確認する（既存3種と合わせ16種）。`duty === 'not_owed'`の一律拒否は、到達し得るentering／active／exiting／unconfirmedの各分岐がowed以降のdutyを要求するため等価である。
+
+## 13 B-02限定実装：enter／同grant捕捉と同duty保持（2026-11-10）
+
+新factory `createProbeGrantCaptureFake`だけが同root／同binding／RunLink／duty／同startのcapture継続を利用する。旧(A)・B-01入口は引数・公開method・未使用状態を維持し、grantの登録／採用口は追加しない。新入口はprepare／enter／check／checkLegacy／checkState／close／inspectの固定script・値返答だけ。公開modelを`wfb-probe-grant-capture-1`として区別し、execution=closedはbody実行閉鎖の意味を維持する。
+
+enterは先行post・同canonical参照・状態関係をrootで確認し、同startの`frameBoundary('probe_capture')`へ合流する。旧seed拒否を削除せず、probe_capture分岐はgrant準備だけを実行する。startの通常受付は同RunLink／duty current・issuedと同cell、未使用use・not_owed duty・空grant／未開始body／空exitを確認する。同期再入はenter_in_progress、使用済みの重複はduplicate_enterのrefusalで、first・既存資格を壊さない。
+
+固定順序はclaim before→同useをentering／使用済み・同dutyをowedへ無allocationで更新→claim after→issue before→試行開始・attempting→issue attempt→固定constructor→issue issued→capture before→current／receiver-issuedのprovisional捕捉→capture after→validate before→brand＋10field／current・receiver-issued／発行元参照の同一性確認→validate after。9観測点に故障・停止・再入を独立配置する。BE05 activeとBE06 bodyは呼ばない。旧startのframe boolean・finally・frameExits・requestも進めない。
+
+固定issuerは返却より先に同ownerのprivate issued参照を保持する。捕捉前の失敗でも既知のissued候補を失わず、cellのissuedが空の場合だけそこへ補足する。receiver-issued等の既存拒否候補を上書きして消さない。constructor試行開始後、未捕捉なら未知の責務を保持する。grantAttemptsは試行開始の計数で、constructor完了数ではない。grantIssuesは内部候補発行数（不正field対照も含む）で、実行資格の発行数ではない。
+
+正常はuse=entering／grant=provisional／body=not_started／duty=owedで止まり、局所退役もaccepted退出記録もない。失敗時、claim未使用なら未使用のまま固定拒否。使用開始済みならuse／同duty／exitをunconfirmedへし、grant試行後は既知のcurrent／issued／拒否候補と未知責務を保持する。attemptは払い戻さず、dutyのattemptUsedはfalse（固定unwind未試行）、同RunLinkへの責務ありを別booleanで診断する。rootとstartが同じdutyを保持し、参照消去・第2ownerへの補完・cleanup成功化はしない。
+
+closeは新規captureを閉じる同startの固定stop latchにだけ合流し、旧request／close・回収claimへ進まない。正常捕捉後closeでもprovisional grantとowed dutyを保持。途中stopは既存firstを上書きせず固定失敗prefixへ進む。B-03の固定exit guard／退役と(C)の同期確定は引き続き未実装で、通常の固定失敗返答を解除して再開する方式を採らない。
+
+固定projectionを再利用し、capture phase／boundary・試行／発行／検査計数、同duty／責務保持・stop／refusalだけを追加した。実grantやRunLinkを外へ返さない。BG03〜05／07のenter・候補捕捉部分、BG09〜10の実候補保持時の参照非出力、BG11の固定stop部分、BG12〜13の旧入口閉鎖と先行準備を検証した。BG06／08の実body・unwind・局所退役、BG14のbody終了後held_unsealed、全writer停止・実予算接続は未実施。47新試験・関連1,359件・compiled13本の結果は[検証記録](E2E_BEST_PRACTICE_WFB_PROBE_GRANT_CAPTURE_2026-11-10.md)。実費用・E／S・layout・全体work受付はUnknown／無効のまま。

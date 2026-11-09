@@ -4,6 +4,8 @@
 
 B-01限定実装（2026-11-10）: 上記設計§12で状態型・RunLink／dutyの先行準備と新入口の固定projectionを実装した。[検証記録](E2E_BEST_PRACTICE_WFB_PROBE_RUN_PREPARATION_2026-11-10.md)。同start結合・準備postまでで、利用claim消費・grant発行・body起動・退出確認は閉鎖を維持する。
 
+B-02限定実装（2026-11-10）: 上記設計§13で、同startの一度限りenter・合成grant候補の同参照捕捉・失敗prefixと同dutyへの責務保持を接続した。[検証記録](E2E_BEST_PRACTICE_WFB_PROBE_GRANT_CAPTURE_2026-11-10.md)。useはentering、grantはprovisionalまでで、active／body／退役／確認済みexit・正式発行・実接続は閉鎖のまま。
+
 Version: draft-0.2 / Date: 2026-11-10 / 読み取り開始HEAD: `fb02aab`、文書確認時HEAD: `470679f`（(A)レビュー修正基準HEAD: `75adab5`）。
 
 draft-0.2のレビュー修正（MDのみ）：(A)のstart側受領物照合のうち単独対照で裏付けられるのはcellsだけで、他は到達しない二重防御である点を§11に明記した。

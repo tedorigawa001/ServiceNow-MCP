@@ -2263,6 +2263,9 @@ let probeStartAccess: Readonly<{
   bindRun(a: RetirementStartAssembly, link: ProbeRunLink, duty: FixedExitDuty, script: string): boolean;
   matchesRun(a: RetirementStartAssembly, link: ProbeRunLink, duty: FixedExitDuty): boolean;
   runInspect(a: RetirementStartAssembly): Readonly<{ linkRetained: boolean; dutyRetained: boolean; bindAttempted: boolean }>;
+  captureGrant(a: RetirementStartAssembly): Readonly<ProbeGrantCaptureReply>;
+  stopCapture(a: RetirementStartAssembly): void;
+  captureInspect(a: RetirementStartAssembly): Readonly<ProbeGrantCaptureSnapshot>;
   inspect(a: RetirementStartAssembly): Readonly<{ bindingRetained: boolean; bindingAttempted: boolean;
     wrapperCalls: number; generationBodyCalls: number; frameExits: number; frame: string; starts: number; claim: string }>;
 }>;
@@ -2273,6 +2276,12 @@ class RetirementStartAssembly {
   #runLink: ProbeRunLink | undefined; #runIssuedLink: ProbeRunLink | undefined;
   #runDuty: FixedExitDuty | undefined; #runIssuedDuty: FixedExitDuty | undefined; #runBindStarted = false;
   #wrapperCalls = 0; #generationBodyCalls = 0;
+  #grantIssued: CanonicalProbeGrant | undefined;
+  #grantAttempts = 0; #grantIssues = 0; #grantChecks = 0; #captureInProgress = false; #captureStop = false;
+  #captureFirst: ProbeRunFirst = 'none'; #capturePhase = 'none'; #captureBoundary = 'none';
+  #captureRefusal: 'none' | 'duplicate_enter' = 'none'; #captureReentry = 'none';
+  #captureFixed: Readonly<ProbeGrantCaptureReply> | undefined;
+  #captureScript = 'normal';
   readonly #owner = Object.freeze({});
   readonly #binding: PendingSourceBinding;
   readonly #pin: RetirementBindingPin;
@@ -2305,12 +2314,20 @@ class RetirementStartAssembly {
       bindRun(a: RetirementStartAssembly, link: ProbeRunLink, duty: FixedExitDuty, script: string): boolean {
         if (a.#runBindStarted) return false;
         a.#runBindStarted = true; a.#runIssuedLink = link; a.#runIssuedDuty = duty;
+        a.#captureScript = script;
         a.#runLink = script === 'start_run_link_copy' ? Object.freeze({ ...link }) : link;
         a.#runDuty = script === 'start_run_duty_copy' ? { ...duty } : duty;
         return a.runMatches(link, duty);
       },
       matchesRun: (a: RetirementStartAssembly, link: ProbeRunLink, duty: FixedExitDuty) => a.runMatches(link, duty),
       runInspect: (a: RetirementStartAssembly) => Object.freeze({ linkRetained: !!a.#runLink, dutyRetained: !!a.#runDuty, bindAttempted: a.#runBindStarted }),
+      captureGrant: (a: RetirementStartAssembly) => a.frameBoundary('probe_capture'),
+      stopCapture: (a: RetirementStartAssembly) => { a.#captureStop = true; },
+      captureInspect: (a: RetirementStartAssembly) => Object.freeze({ first: a.#captureFirst, phase: a.#capturePhase, boundary: a.#captureBoundary,
+        grantAttempts: a.#grantAttempts, grantIssues: a.#grantIssues, grantChecks: a.#grantChecks, inProgress: a.#captureInProgress,
+        stopRequested: a.#captureStop, refusal: a.#captureRefusal, reentry: a.#captureReentry,
+        issuerRetained: a.#grantIssued !== undefined, obligationOwed: a.#runLink?.cells.use.attemptUsed === true,
+        sameDuty: !!a.#runDuty && a.#runDuty === a.#runIssuedDuty && a.#runDuty.link === a.#runLink && a.#runLink === a.#runIssuedLink }),
       inspect: (a: RetirementStartAssembly) => Object.freeze({ bindingRetained: !!a.#probeBinding, bindingAttempted: a.#probeBindStarted,
         wrapperCalls: a.#wrapperCalls, generationBodyCalls: a.#generationBodyCalls, frameExits: a.#frameExits,
         frame: a.#frame ? 'active' : 'inactive', starts: a.#starts, claim: a.#claim.spent ? 'spent' : 'unused' }),
@@ -2369,8 +2386,11 @@ class RetirementStartAssembly {
       && b.pin.scope === b.scope && b.gate.matches(b.pin) && captureStartAccess.constructionMatches(this, b.scope)
       && b.draft.target === b.target && b.draft.pin === b.pin && b.entry === b.draft.entry && b.exit === b.draft.exit;
   }
-  private frameBoundary(route: 'legacy_generation' | 'probe_closed') {
+  private frameBoundary(route: 'legacy_generation' | 'probe_closed'): ReturnType<RetirementStartAssembly['reply']>;
+  private frameBoundary(route: 'probe_capture'): Readonly<ProbeGrantCaptureReply>;
+  private frameBoundary(route: 'legacy_generation' | 'probe_closed' | 'probe_capture') {
     this.#wrapperCalls++;
+    if (route === 'probe_capture') return this.captureProbeGrant();
     // The same wrapper is reached, but neither a seeded start nor the probe route can start any body in stage A.
     if (this.#gateSeed || route === 'probe_closed') return this.reply(false, 'blocked_frame_execution');
     this.#frame = true;
@@ -2389,6 +2409,80 @@ class RetirementStartAssembly {
     return link === this.#runLink && link === this.#runIssuedLink && duty === this.#runDuty && duty === this.#runIssuedDuty
       && link.binding === this.#probeBinding && link.cells === this.#probeCells && duty.link === link
       && this.probeMatches(link.binding);
+  }
+  private captureReply(ok: boolean, disposition: string): Readonly<ProbeGrantCaptureReply> {
+    return Object.freeze({ ok, disposition, first: this.#captureFirst });
+  }
+  private captureFailure(reason: ProbeRunFirst): Readonly<ProbeGrantCaptureReply> {
+    if (this.#captureFirst === 'none') this.#captureFirst = reason;
+    const cells = this.#runLink?.cells, duty = this.#runDuty;
+    if (cells && duty && cells.use.attemptUsed) retainProbeCaptureFailure(cells, duty, this.#grantIssued, this.#grantAttempts > 0);
+    if (cells && cells.diagnostic.first === 'none') cells.diagnostic.first = this.#captureFirst;
+    return this.#captureFixed ??= this.captureReply(false, this.#captureFirst);
+  }
+  private capturePoint(phase: string, boundary: string) {
+    this.#capturePhase = phase; this.#captureBoundary = boundary;
+    if (this.#captureScript === `stop_${phase}_${boundary}`) this.#captureStop = true;
+    if (this.#captureStop) { this.#captureFirst = this.#captureFirst === 'none' ? 'closed' : this.#captureFirst; throw Error('probe_capture_stopped'); }
+    if (this.#captureScript === `fault_${phase}_${boundary}`) throw Error('probe_capture_fault');
+    if (this.#captureScript === `reenter_${phase}_${boundary}`) this.#captureReentry = this.frameBoundary('probe_capture').disposition;
+  }
+  private mintProbeGrant(link: ProbeRunLink): CanonicalProbeGrant {
+    if (this.#captureScript === 'issue_throw') throw Error('probe_grant_constructor_unconfirmed');
+    const b = link.binding;
+    const raw: CanonicalProbeGrant = Object.freeze({ [PROBE_GRANT]: true as const, bindingOrigin: link.origin, gate: b.gate.origin,
+      owner: b.owner, pin: b.pin, epoch: b.epoch, frame: link.frame, draft: b.draft, entry: link.entry, exit: link.exit, phase: 'probe_only' as const });
+    const f = this.#captureScript.startsWith('grant_') ? this.#captureScript.slice(6) : '';
+    const value = f === 'brand' ? Object.freeze({ ...raw, [PROBE_GRANT]: false }) as unknown as CanonicalProbeGrant
+      : f === 'extra' ? Object.freeze({ ...raw, extra: true })
+        : f === 'phase' ? Object.freeze({ ...raw, phase: 'foreign' }) as unknown as CanonicalProbeGrant
+          : ['bindingOrigin', 'gate', 'owner', 'pin', 'epoch', 'frame', 'draft', 'entry', 'exit'].includes(f)
+            ? Object.freeze({ ...raw, [f]: Object.freeze({}) }) as CanonicalProbeGrant : raw;
+    // Issuer retention precedes return; a later capture fault must not lose this known reference.
+    this.#grantIssued = value; this.#grantIssues++;
+    return value;
+  }
+  private capturedGrantMatches(link: ProbeRunLink): boolean {
+    const g = link.cells.grant.current, b = link.binding;
+    return !!g && g === link.cells.grant.issued && g === this.#grantIssued && Reflect.ownKeys(g).length === 11 && g[PROBE_GRANT] === true
+      && g.bindingOrigin === link.origin && g.gate === b.gate.origin && g.owner === b.owner && g.pin === b.pin && g.epoch === b.epoch
+      && g.frame === link.frame && g.draft === b.draft && g.entry === link.entry && g.exit === link.exit && g.phase === 'probe_only';
+  }
+  private captureProbeGrant(): Readonly<ProbeGrantCaptureReply> {
+    if (this.#captureFixed) return this.#captureFixed;
+    if (this.#captureInProgress) return this.captureReply(false, 'enter_in_progress');
+    const link = this.#runLink, duty = this.#runDuty;
+    if (link?.cells.use.attemptUsed) { this.#captureRefusal = 'duplicate_enter'; return this.captureReply(false, 'duplicate_enter'); }
+    if (this.#captureStop) return this.captureFailure('closed');
+    this.#capturePhase = 'preflight'; this.#captureBoundary = 'check';
+    if (this.#captureScript === 'preflight_link_copy' && link) this.#runLink = Object.freeze({ ...link });
+    if (this.#captureScript === 'preflight_duty_copy' && duty) this.#runDuty = { ...duty };
+    if (!link || !duty || !this.runMatches(link, duty) || duty.state !== 'not_owed' || duty.attemptUsed
+      || link.cells.use.state !== 'unused' || link.cells.grant.stage !== 'empty' || link.cells.body.state !== 'not_started'
+      || link.cells.exit.stage !== 'empty' || link.cells.exit.accepted !== undefined) return this.captureFailure('binding_mismatch');
+    this.#captureInProgress = true;
+    try {
+      this.capturePoint('claim', 'before');
+      beginProbeCapture(link.cells.use, duty);
+      this.capturePoint('claim', 'after');
+      this.capturePoint('issue', 'before');
+      beginProbeGrantAttempt(link.cells.grant); this.#grantAttempts++;
+      this.capturePoint('issue', 'attempt');
+      const issued = this.mintProbeGrant(link);
+      this.capturePoint('issue', 'issued');
+      this.capturePoint('capture', 'before');
+      const current = this.#captureScript === 'grant_copy' ? Object.freeze({ ...issued }) : issued;
+      const receiverIssued = this.#captureScript === 'grant_issued_copy' ? Object.freeze({ ...issued }) : current;
+      captureProbeGrantReference(link.cells.grant, current, receiverIssued);
+      this.capturePoint('capture', 'after');
+      this.capturePoint('validate', 'before');
+      if (!this.capturedGrantMatches(link)) { rejectProbeGrantReference(link.cells.grant, current); return this.captureFailure('binding_mismatch'); }
+      this.#grantChecks++;
+      this.capturePoint('validate', 'after');
+      // No active qualification, body, grant revocation, exit record or request in B-02.
+      return this.captureReply(true, 'grant_captured_body_closed');
+    } catch { return this.captureFailure(this.#captureFirst === 'none' ? 'construction_unconfirmed' : this.#captureFirst); }
+    finally { this.#captureInProgress = false; }
   }
   private syncFirst() {
     const first = retirementBindingAccess.first(this.#binding);
@@ -2758,7 +2852,7 @@ const PROBE_CELLS: unique symbol = Symbol('probe-frame-cells');
 const PROBE_BINDING: unique symbol = Symbol('probe-frame-binding');
 type ProbeUseCell = { state: 'unused'; attemptUsed: false }
   | { state: 'entering' | 'active' | 'exiting' | 'unconfirmed'; attemptUsed: true };
-const PROBE_GRANT: unique symbol = Symbol('private-probe-grant-type'); // Type contract only: no issuer in B-01.
+const PROBE_GRANT: unique symbol = Symbol('private-probe-grant-type'); // Issuance is restricted to the separate synthetic B-02 entry.
 interface CanonicalProbeGrant { readonly [PROBE_GRANT]: true; readonly bindingOrigin: object; readonly gate: object; readonly owner: object;
   readonly pin: CanonicalGatePin; readonly epoch: object; readonly frame: object; readonly draft: NonExecutingFrameDraft;
   readonly entry: object; readonly exit: object; readonly phase: 'probe_only' }
@@ -2788,6 +2882,27 @@ type FixedExitDuty = ExitDutyState & { readonly [PROBE_DUTY]: true; readonly lin
 interface ProbeRunSeal { readonly link: ProbeRunLink; readonly duty: FixedExitDuty; readonly executable: false }
 interface ProbeStateFacts { use: string; attempt: boolean; grant: string; references: boolean; unresolved: boolean;
   body: string; outcome: string; exit: string; accepted: boolean; duty: string; dutyUsed: boolean }
+interface ProbeGrantCaptureReply { readonly ok: boolean; readonly disposition: string; readonly first: ProbeRunFirst }
+interface ProbeGrantCaptureSnapshot { readonly first: ProbeRunFirst; readonly phase: string; readonly boundary: string;
+  readonly grantAttempts: number; readonly grantIssues: number; readonly grantChecks: number; readonly inProgress: boolean;
+  readonly stopRequested: boolean; readonly refusal: string; readonly reentry: string; readonly issuerRetained: boolean;
+  readonly obligationOwed: boolean; readonly sameDuty: boolean }
+// Fixed direct assignments on canonical private cells. No allocation, hook, callback or await in the claim section.
+function beginProbeCapture(use: ProbeUseCell, duty: FixedExitDuty): void {
+  use.state = 'entering'; use.attemptUsed = true; duty.state = 'owed';
+}
+function beginProbeGrantAttempt(grant: ProbeGrantCell): void { grant.stage = 'attempting'; grant.unresolved = true; }
+function captureProbeGrantReference(grant: ProbeGrantCell, current: CanonicalProbeGrant, issued: CanonicalProbeGrant): void {
+  grant.current = current; grant.issued = issued; grant.unresolved = false; grant.stage = 'provisional';
+}
+function rejectProbeGrantReference(grant: ProbeGrantCell, rejected: CanonicalProbeGrant): void { grant.rejected = rejected; }
+function retainProbeCaptureFailure(cells: ProbeCellBundle, duty: FixedExitDuty, issued: CanonicalProbeGrant | undefined, attempted: boolean): void {
+  cells.use.state = 'unconfirmed'; duty.state = 'unconfirmed'; cells.exit.stage = 'unconfirmed';
+  if (attempted) {
+    if (cells.grant.issued === undefined) cells.grant.issued = issued;
+    cells.grant.stage = 'unconfirmed'; cells.grant.unresolved = true;
+  }
+}
 function probeStateFactsValid(f: ProbeStateFacts): boolean {
   if (!['unused', 'entering', 'active', 'exiting', 'unconfirmed'].includes(f.use)
     || f.attempt !== (f.use !== 'unused') || f.accepted) return false;
@@ -2865,7 +2980,7 @@ function probeShapeFacts(script: string): ProbeStateFacts {
   if (s === 'before_use_body') { f.body = 'returned'; f.outcome = 'return'; }
   return f;
 }
-interface ProbeRunReply { readonly model: 'wfb-probe-run-preparation-1'; readonly ok: boolean; readonly disposition: string;
+interface ProbeRunReply { readonly model: 'wfb-probe-run-preparation-1' | 'wfb-probe-grant-capture-1'; readonly ok: boolean; readonly disposition: string;
   readonly first: ProbeRunFirst; readonly authority: 'none'; readonly execution: 'closed'; readonly formalIssuance: 'closed';
   readonly wholeRunAdmission: 'disabled'; readonly implementation: 'unknown'; readonly investigations: 'on_hold' }
 function runFirst(value: string): ProbeRunFirst {
@@ -2917,7 +3032,8 @@ class CanonicalGateDraftRoot {
   #issuedRunLink: ProbeRunLink | undefined; #issuedRunDuty: FixedExitDuty | undefined; #issuedRunSeal: ProbeRunSeal | undefined;
   #runPhase = 0; #runBoundary = 'none'; #runBindRefusal: 'none' | 'duplicate_binding' = 'none';
   #runFixedReply: Readonly<ProbeRunReply> | undefined;
-  constructor(private readonly script: string, admitted: boolean, private readonly probePreparation = false, private readonly runPreparation = false) {
+  constructor(private readonly script: string, admitted: boolean, private readonly probePreparation = false, private readonly runPreparation = false,
+    private readonly grantCapture = false) {
     this.#failure = { first: admitted ? 'none' : 'input_rejected', phase: 0, boundary: 'none' };
     this.#slots = Array.from({ length: 37 }, () => ({ stage: 'not_started', value: undefined }));
     this.#probeSlots = probePreparation ? Array.from({ length: 8 }, () => ({ stage: 'not_started', value: undefined })) : [];
@@ -3168,11 +3284,29 @@ class CanonicalGateDraftRoot {
       || !probeStartAccess.matchesRun(b.target.start, this.#issuedRunLink!, this.#issuedRunDuty!)) return this.fail('binding_mismatch');
     return this.checkFramePreparation(legacy);
   }
+  enterGrantCapture(): Readonly<{ ok: boolean; disposition: string }> {
+    if (this.#fixed) return this.#fixed;
+    if (!this.grantCapture) return this.reply(false, 'blocked_frame_execution');
+    if (!this.#ready || this.#closed) return this.reply(false, 'not_ready');
+    const b = this.#issuedFrameBinding!;
+    if (!this.runLinkMatches() || !this.probeBindingMatch() || !this.seedMatches() || !this.draftMatches()) return this.fail('binding_mismatch');
+    if (!probeStateFactsValid(this.liveRunFacts())) return this.fail('state_invalid');
+    const r = probeStartAccess.captureGrant(b.target.start);
+    return r.first !== 'none' ? this.fail(r.first) : r;
+  }
+  checkGrantBodyClosed(legacy = false): Readonly<{ ok: boolean; disposition: string }> {
+    if (this.#fixed) return this.#fixed;
+    if (!this.#ready || this.#closed) return this.reply(false, 'not_ready');
+    const b = this.#issuedFrameBinding!;
+    if (!this.runLinkMatches() || !this.probeBindingMatch()
+      || !probeStartAccess.matchesRun(b.target.start, this.#issuedRunLink!, this.#issuedRunDuty!)) return this.fail('binding_mismatch');
+    return legacy ? probeStartAccess.legacy(b.target.start) : probeStartAccess.check(b.target.start);
+  }
   runReply(ok: boolean, disposition: string): Readonly<ProbeRunReply> {
     if (this.#runFixedReply) return this.#runFixedReply;
-    const value = Object.freeze({ model: 'wfb-probe-run-preparation-1' as const, ok,
+    const value = Object.freeze({ model: this.grantCapture ? 'wfb-probe-grant-capture-1' as const : 'wfb-probe-run-preparation-1' as const, ok,
       disposition: runEnum(disposition, ['draft_held', 'duplicate_preparation', 'construction_in_progress', 'blocked_frame_execution', 'closed', 'not_ready',
-        'input_rejected', 'binding_mismatch', 'construction_unconfirmed'], 'internal_unconfirmed'),
+        'input_rejected', 'binding_mismatch', 'construction_unconfirmed', 'state_invalid', 'grant_captured_body_closed', 'duplicate_enter', 'enter_in_progress'], 'internal_unconfirmed'),
       first: runFirst(this.#failure.first), authority: 'none' as const, execution: 'closed' as const, formalIssuance: 'closed' as const,
       wholeRunAdmission: 'disabled' as const, implementation: 'unknown' as const, investigations: 'on_hold' as const });
     if (this.#fixed) this.#runFixedReply = value;
@@ -3188,7 +3322,8 @@ class CanonicalGateDraftRoot {
     const grant = cells?.grant, body = cells?.body, exit = cells?.exit, use = cells?.use, duty = this.#issuedRunDuty;
     const start = this.#issuedFrameBinding?.target.start;
     const si = start ? probeStartAccess.inspect(start) : undefined, ri = start ? probeStartAccess.runInspect(start) : undefined;
-    return Object.freeze({ model: 'wfb-probe-run-preparation-1', schema: 1, authority: 'none', execution: 'closed',
+    const capture = this.grantCapture && start ? probeStartAccess.captureInspect(start) : undefined;
+    return Object.freeze({ model: this.grantCapture ? 'wfb-probe-grant-capture-1' : 'wfb-probe-run-preparation-1', schema: 1, authority: 'none', execution: 'closed',
       formalIssuance: 'closed', wholeRunAdmission: 'disabled', implementation: 'unknown', investigations: 'on_hold', first: runFirst(this.#failure.first),
       construction: Object.freeze({ ready: this.#ready, phase: this.#runPhase,
         boundary: runEnum(this.#runBoundary, ['none', 'before', 'attempt', 'after', 'done', 'check', 'post'], 'unconfirmed'),
@@ -3209,11 +3344,19 @@ class CanonicalGateDraftRoot {
       start: Object.freeze({ linkRetained: ri?.linkRetained === true, dutyRetained: ri?.dutyRetained === true, bindAttempted: ri?.bindAttempted === true,
         wrapperCalls: si?.wrapperCalls ?? 0, generationBodyCalls: si?.generationBodyCalls ?? 0, frameExits: si?.frameExits ?? 0,
         retirementStarts: si?.starts ?? 0, retirementClaimUnused: !si || si.claim === 'unused' }),
-      grantIssues: 0, bodyStarts: 0, exitRecords: 0, realWriterCalls: 0, journalSupply: 'not_connected', rootFinish: 'not_called' });
+      ...(this.grantCapture ? { capture: Object.freeze({ first: capture?.first ?? 'none',
+        phase: runEnum(capture?.phase, ['none', 'preflight', 'claim', 'issue', 'capture', 'validate'], 'unconfirmed'),
+        boundary: runEnum(capture?.boundary, ['none', 'check', 'before', 'after', 'attempt', 'issued'], 'unconfirmed'),
+        grantAttempts: capture?.grantAttempts ?? 0, grantChecks: capture?.grantChecks ?? 0, inProgress: capture?.inProgress === true,
+        issuerRetained: capture?.issuerRetained === true, obligationOwed: capture?.obligationOwed === true, sameDuty: capture?.sameDuty === true,
+        stopRequested: capture?.stopRequested === true, refusal: runEnum(capture?.refusal, ['none', 'duplicate_enter'], 'none'),
+        reentry: runEnum(capture?.reentry, ['none', 'enter_in_progress'], 'none') }) } : {}),
+      grantIssues: capture?.grantIssues ?? 0, bodyStarts: 0, exitRecords: 0, realWriterCalls: 0, journalSupply: 'not_connected', rootFinish: 'not_called' });
   }
   close() {
     if (this.#fixed) return this.#fixed;
     this.#closed = true;
+    if (this.grantCapture && this.#issuedFrameBinding) probeStartAccess.stopCapture(this.#issuedFrameBinding.target.start);
     return this.#frame ? this.reply(false, 'deferred_frame') : this.#started ? this.fail('closed') : this.reply(false, 'closed');
   }
   rejectInput() { return this.fail('input_rejected'); }
@@ -3280,6 +3423,24 @@ export function createProbeRunPreparationFake(...args: readonly unknown[]) {
   return Object.freeze({ prepare: (...xs: readonly unknown[]) => call(xs, () => a.prepare()),
     check: (...xs: readonly unknown[]) => call(xs, () => a.checkRunPreparation()),
     checkLegacy: (...xs: readonly unknown[]) => call(xs, () => a.checkRunPreparation(true)),
+    checkState: (...xs: readonly unknown[]) => { if (xs.length) a.rejectInput(); return a.checkRunShape(); },
+    close: (...xs: readonly unknown[]) => call(xs, () => a.close()), inspect: () => a.inspectRun() });
+}
+
+export function createProbeGrantCaptureFake(...args: readonly unknown[]) {
+  const script = args.length ? args[0] : 'normal';
+  const points = ['claim_before', 'claim_after', 'issue_before', 'issue_attempt', 'issue_issued', 'capture_before', 'capture_after', 'validate_before', 'validate_after'];
+  const scripts = ['normal', 'issue_throw', 'preflight_link_copy', 'preflight_duty_copy', ...points.flatMap(p => ['fault_' + p, 'stop_' + p, 'reenter_' + p]),
+    ...['copy', 'issued_copy', 'brand', 'extra', 'bindingOrigin', 'gate', 'owner', 'pin', 'epoch', 'frame', 'draft', 'entry', 'exit', 'phase'].map(f => 'grant_' + f)];
+  const admitted = args.length <= 1 && typeof script === 'string' && scripts.includes(script);
+  const a = new CanonicalGateDraftRoot(admitted ? script as string : 'normal', admitted, true, true, true);
+  const call = (xs: readonly unknown[], op: () => Readonly<{ ok: boolean; disposition: string }>) => {
+    const r = xs.length ? a.rejectInput() : op(); return a.runReply(r.ok, r.disposition);
+  };
+  return Object.freeze({ prepare: (...xs: readonly unknown[]) => call(xs, () => a.prepare()),
+    enter: (...xs: readonly unknown[]) => call(xs, () => a.enterGrantCapture()),
+    check: (...xs: readonly unknown[]) => call(xs, () => a.checkGrantBodyClosed()),
+    checkLegacy: (...xs: readonly unknown[]) => call(xs, () => a.checkGrantBodyClosed(true)),
     checkState: (...xs: readonly unknown[]) => { if (xs.length) a.rejectInput(); return a.checkRunShape(); },
     close: (...xs: readonly unknown[]) => call(xs, () => a.close()), inspect: () => a.inspectRun() });
 }
