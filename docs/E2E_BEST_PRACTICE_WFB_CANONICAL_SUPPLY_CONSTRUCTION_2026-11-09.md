@@ -45,6 +45,30 @@ strict検査は`bdo npx tsc --noEmit --target ES2022 --module NodeNext --moduleR
 
 今回の変更は未コミット。正式発行口閉鎖・全体受付無効・Unknown・調査保留、Pushなしを維持する。
 
+## レビュー修正（2026-11-09）
+
+レビュー基準HEAD: `69e5fbf`。修正前は全体322ファイル・16,160件成功。
+
+指摘：
+1. SS03のstart側照合（`captureStartAccess.constructionMatches()`）は、呼出し全体を外す変異と、各条件（`#claimOwner`、claim同一性、pin同一性、claim owner／pin、`!spent`、binding `matches`）を外す変異6種が全て生存した。`scope_*`はissuerの`#scope`自体を差し替えるので`scopeMatches()`と`constructionMatches()`の両方で拒否され、互いをmaskしていた。start内部だけをずらす対照がなく、上記の「正規start側のfield検査を区別」は試験で裏付けられていなかった。
+2. issuerの状態条件（`a.#state === 'unused' && !a.#failure`）に、使用済み／失敗済みissuerを拒否する対照がなかった。
+3. 31枠confirmedの確認とkernelのstage遷移guardは到達しない防御条件。
+
+修正：
+- start内部だけの固定対照7種を追加した。`start_owner_copy`／`start_claim_copy`／`start_pin_copy`／`start_claim_owner`／`start_claim_pin`／`start_claim_spent`／`start_pin_construction`。CaptureAdmissionAssemblyへ`start_`付き名を渡すとRetirementStartAssemblyの既存固定scriptへ写る。`start_claim_spent`は構築時に発行claimを消費済みにする新しい固定scriptで、request／frameを呼ばない。issuer scopeは整合するため`constructionMatches()`だけが拒否する。
+- `issuer_rejected`（構築時に入力拒否したissuer）を追加した。issuer状態条件だけが拒否する。
+- compiledへ上記8条件を追加した（binding 9→17）。`!a.#claim.spent`は別箇所（pending construction access）にも出現するため、一意な長いanchorを使った。
+- `scopeMatches()`呼出しは同参照検査と`constructionMatches()`で同じ内容を確認するため冗長と明記した。
+
+RED：追加8件が修正前に失敗した（selector未登録）。compiledも`masked check start_owner_copy`で失敗した。GREEN：関連5ファイル359件、compiled 8本が成功。
+
+一時変異（試験後に元へ戻した）：計12種、検出9、等価3。
+- 今回検出8種：`constructionMatches()`呼出し全体、同内の6条件、issuer状態条件。
+- 修正前から検出1種：開始前closeでfirstを立てる変異。
+- 等価3種：`scopeMatches()`呼出し（冗長）、31枠confirmed、stage遷移guard（到達しない）。
+
+全体回帰：`npm run lint`・`npm run build`・`package-http-classification.mjs`成功、vitest全体322ファイル・16,168件成功、compiled 8本成功。
+
 ## 5 コミット対象だけの隔離再検証（2026-11-09）
 
 HEAD `5d16867`と今回の16ファイルだけをindexから一時directoryへ展開した。既存node_modulesだけを参照し、作業treeの他変更や既存distを使用せず検証した。

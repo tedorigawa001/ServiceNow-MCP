@@ -21,6 +21,12 @@ try {
     ['claim_brand', 'claim[CONSTRUCTION_CLAIM_BRAND] === true', 'true'], ['claim_target', 'claim.target === issued', 'true'],
     ['claim_state', "claim.state === 'unused'", 'true'], ['start_copy', 't.start === a.#start', 'true'],
     ['epoch', 't.epoch === a.#epoch', 'true'], ['packet', 't.packet === a.#packetOrigin', 'true'],
+    // Start-only controls keep the issuer scope consistent, so only constructionMatches() can reject them.
+    ['start_owner_copy', 'a.#claimOwner === a.#owner', 'true'], ['start_claim_copy', 'a.#claim === a.#issuedClaim', 'true'],
+    ['start_pin_copy', 'a.#pin === a.#issuedPin', 'true'], ['start_claim_owner', 'a.#claim.owner === a.#owner', 'true'],
+    ['start_claim_pin', 'a.#claim.pin === a.#pin', 'true'], ['start_claim_spent', 'a.#claim.pin === a.#pin && !a.#claim.spent', 'a.#claim.pin === a.#pin'],
+    ['start_pin_construction', 'retirementBindingAccess.matches(a.#binding, a.#pin)', 'true'],
+    ['issuer_rejected', "a.#state === 'unused' && !a.#failure", 'true'],
   ];
   for (const [i, [s, from, to]] of clauses.entries()) {
     assert.equal(text.split(from).length, 2, 'anchor drift ' + s);

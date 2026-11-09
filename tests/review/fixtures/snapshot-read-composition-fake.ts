@@ -2301,6 +2301,8 @@ class RetirementStartAssembly {
     this.#issuedClaim = new RetirementStartClaim(scenario === 'claim_owner' ? foreign : this.#owner,
       scenario === 'claim_pin' ? Object.freeze({ ...p }) : scenario === 'pin_copy' ? this.#pin : p);
     this.#claim = scenario === 'claim_copy' ? new RetirementStartClaim(this.#owner, p) : this.#issuedClaim;
+    // Fixed construction-binding control only: an already spent issued claim, without request/frame side effects.
+    if (scenario === 'claim_spent') this.#issuedClaim.begin();
     if (!admitted) { this.#first = 'binding_mismatch'; this.rejectOwnership('input_rejected'); }
   }
   private reply(ok: boolean, disposition: RetirementStartDisposition) { return Object.freeze({ ...RETIREMENT_START_CLOSED, ok, disposition,
@@ -2400,6 +2402,9 @@ let issuerConstructionAccess: Readonly<{
   target(a: CaptureAdmissionAssembly): CanonicalConstructionTarget;
   matches(a: CaptureAdmissionAssembly, t: CanonicalConstructionTarget): boolean;
 }>;
+// Start-internal construction controls used only by the canonical supply construction root.
+const START_MIX_SCENARIOS: readonly string[] = Object.freeze(['start_owner_copy', 'start_claim_copy', 'start_pin_copy', 'start_claim_owner',
+  'start_claim_pin', 'start_claim_spent', 'start_pin_construction']);
 class CaptureAdmissionAssembly {
   readonly #start: RetirementStartAssembly;
   readonly #scope: AdmissionScope;
@@ -2424,7 +2429,7 @@ class CaptureAdmissionAssembly {
     });
   }
   constructor(private readonly scenario: string, admitted: boolean) {
-    this.#start = new RetirementStartAssembly(['source_unknown', 'frame_exit_failure', 'source_rejected', 'prepare_failure', 'control_unconfirmed'].includes(scenario) ? scenario : 'normal', admitted);
+    this.#start = new RetirementStartAssembly(START_MIX_SCENARIOS.includes(scenario) ? scenario.slice('start_'.length) : ['source_unknown', 'frame_exit_failure', 'source_rejected', 'prepare_failure', 'control_unconfirmed'].includes(scenario) ? scenario : 'normal', admitted);
     const base = captureStartAccess.scope(this.#start);
     this.#scope = scenario.startsWith('scope_') ? Object.freeze({ ...base, [scenario.slice(6)]: Object.freeze({}) }) : base;
     if (!admitted) this.reject('input_rejected');
@@ -2614,7 +2619,8 @@ class CanonicalSupplyConstruction {
       if (this.script === 'reenter') this.#reentry = this.prepare().disposition;
       if (this.script === 'close_in_frame') this.close();
       if (this.#closed) return this.reject('closed');
-      const issuer = this.mint(32, () => new CaptureAdmissionAssembly(this.script.startsWith('scope_') && this.script !== 'scope_copy' ? this.script : 'normal', true));
+      const issuer = this.mint(32, () => new CaptureAdmissionAssembly((this.script.startsWith('scope_') && this.script !== 'scope_copy')
+        || START_MIX_SCENARIOS.includes(this.script) ? this.script : 'normal', this.script !== 'issuer_rejected'));
       const issued = this.mint(33, () => {
         const t = Object.freeze({ ...issuerConstructionAccess.target(issuer), [CONSTRUCTION_TARGET_BRAND]: true as const });
         return this.probe(t);
@@ -2659,7 +2665,8 @@ class CanonicalSupplyConstruction {
 export function createCanonicalSupplyConstructionFake(...args: readonly unknown[]) {
   const s = args.length ? args[0] : 'normal';
   const scripts = ['normal', 'reenter', 'close_in_frame', 'target_copy', 'target_brand', 'target_extra', 'start_copy', 'scope_copy', 'epoch', 'packet',
-    'claim_brand', 'claim_target', 'claim_state', 'scope_owner', 'scope_construction', 'scope_retention', 'scope_sourceSlot', 'scope_claim', 'scope_extra'];
+    'claim_brand', 'claim_target', 'claim_state', 'scope_owner', 'scope_construction', 'scope_retention', 'scope_sourceSlot', 'scope_claim', 'scope_extra',
+    ...START_MIX_SCENARIOS, 'issuer_rejected'];
   const valid = args.length <= 1 && typeof s === 'string' && (scripts.includes(s) || /^(before|attempt|after|done)_([1-9]|[12][0-9]|3[0-5])$/.test(s));
   const a = new CanonicalSupplyConstruction(valid ? s as string : 'normal', valid);
   return Object.freeze({ prepare: (...xs: readonly unknown[]) => xs.length ? a.rejectInput() : a.prepare(),

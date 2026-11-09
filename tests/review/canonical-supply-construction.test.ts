@@ -27,11 +27,13 @@ describe('canonical prior construction only (SS03)', () => {
       const snapshot = a.inspect(); expect(a.prepare()).toBe(r); expect(a.close()).toBe(r); expect(a.check()).toBe(r); expect(a.inspect()).toEqual(snapshot);
     });
   it.each(['target_copy', 'target_brand', 'target_extra', 'start_copy', 'scope_copy', 'epoch', 'packet',
-    'claim_brand', 'claim_target', 'claim_state', 'scope_owner', 'scope_construction', 'scope_retention', 'scope_sourceSlot', 'scope_claim', 'scope_extra'])(
+    'claim_brand', 'claim_target', 'claim_state', 'scope_owner', 'scope_construction', 'scope_retention', 'scope_sourceSlot', 'scope_claim', 'scope_extra',
+    'start_owner_copy', 'start_claim_copy', 'start_pin_copy', 'start_claim_owner', 'start_claim_pin', 'start_claim_spent', 'start_pin_construction', 'issuer_rejected'])(
     'rejects %s without invoking the real start or dropping candidates', script => {
       const a = createCanonicalSupplyConstructionFake(script), r = a.prepare();
       expect(r).toMatchObject({ first: 'binding_mismatch' });
-      expect(a.inspect()).toMatchObject({ ...closed, bound: false, retained: 35, boundary: 'binding', issuer: { state: 'unused', admissionIssues: 0 } });
+      expect(a.inspect()).toMatchObject({ ...closed, bound: false, retained: 35, boundary: 'binding',
+        issuer: { state: script === 'issuer_rejected' ? 'rejected' : 'unused', admissionIssues: 0, sealAttempts: 0 } });
       expect(a.check()).toBe(r);
     });
   it('keeps the independent synthetic brand/root unchanged', () => {

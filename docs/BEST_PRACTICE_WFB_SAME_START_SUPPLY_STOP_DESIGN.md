@@ -1,6 +1,8 @@
 # WF-B (C)：同startへのprivate結合・配置生成と停止／供給の接続差分
 
-Version: draft-0.1 / Date: 2026-11-09 / 基準HEAD: `b8dc4b3`。
+Version: draft-0.2 / Date: 2026-11-09 / 基準HEAD: `b8dc4b3`（SS03実装レビュー修正基準HEAD: `69e5fbf`）。
+
+draft-0.2のレビュー修正：SS03のstart側照合（`constructionMatches()`）は呼出し全体を外しても試験が通り、start内部のowner／claim／pin／spent／binding pinだけをずらす対照がなかった。`scope_*`は`scopeMatches()`と`constructionMatches()`の両方で拒否され、互いに覆い隠していた。issuerの状態条件にも対照がなかった。§9へstart内部だけの単独対照7種とissuer拒否対照を加え、`scopeMatches()`呼出しの冗長性を明記した。
 
 実装追記（2026-11-09）: 最小値kernel配置と実issuer／同startの先行構築・SS03のdescriptor結合部分だけを合成依存で実装した。writer停止・Journal供給は未接続。[今回の検証記録](E2E_BEST_PRACTICE_WFB_CANONICAL_SUPPLY_CONSTRUCTION_2026-11-09.md)。
 
@@ -139,6 +141,8 @@ producer source／binding／Journalの所有権は同startに残り、metadata�
 - 先行FailureShellと固定35捕捉枠→結果shell(1)→供給slot(2)→packet空保持(3)→layout(4)→cell空保持25個(5〜29)→admission未使用slot(30)→WriterGate**空保持slot**(31)→既存CaptureAdmissionAssemblyの構築・捕捉(32)→同start／正規scope／既存epoch／packet originのdescriptor(33)→未消費claim(34)→同参照の結合先(35)という順序。
 - SS02のwriter gate本体と停止権限はまだ作らず、31は予約保持slotだけ。SS03もreadonly descriptor結合に限定する。新しい正規rootは既存issuer constructorを一度呼ぶため、そのissuerが所有する実RetirementStartAssemblyを使い、合成start代役・第2startは作らない。issuer／startのprepare／request／admit／closeは呼ばず、source未生成・内部admission未発行・root seal0のまま。
 - issuerの正規scope参照・epoch・packet originをprivate static継続で取得・照合する。start側は正規owner／issued pin／claimの各fieldと未消費状態も再確認する。fresh scope wrapperは値再確認用で、正規`#scope`の参照を置換しない。別brand・同値copy・余剰field・別start／scope／epochは結合前に拒否する。
+- start内部の照合は、issuerのscopeを整合させたままstart側だけをずらす単独対照で確認する。対象は`start_owner_copy`（claimOwner）、`start_claim_copy`（claim同一性）、`start_pin_copy`（pin同一性）、`start_claim_owner`、`start_claim_pin`、`start_claim_spent`（構築時に発行claimを消費済みにする固定script。request／frameは呼ばない）、`start_pin_construction`（binding pin照合だけが拒否）。`issuer_rejected`は構築時に入力拒否したissuerで、状態条件だけが拒否する。いずれもcompiledで対象条件を外すとboundへ進むことを確認する。
+- `scopeMatches()`の呼出しは、`t.scope === a.#scope`の同参照検査と`constructionMatches()`のfield照合と論理的に同じ内容を確認するため冗長であり、単独で外しても検出されない（等価）。31枠confirmedの確認とkernelのstage遷移guardは到達しない防御条件である。
 - 全生成点はbefore／attempt／provisional捕捉／confirmedを分離し、未捕捉と保持済みprefixを保持する。issuerCapturesは返却済みissuerの捕捉数であり、attempting時の内部確保を未生成と断定する件数ではない。元FailureShell以前の実OOM、constructor内部の未捕捉参照・診断必着はUnknown。
 - ST01／ST02の構築部分とST11／ST12を部分検証。WG01〜WG08の停止、Journal reader／封印、SS04〜SS07、final anchor／view、供給claim消費・admission消費・packet生成は未接続。closeも外側診断の停止だけで、既存issuer.closeを呼んで停止処理を先取りしない。
 
