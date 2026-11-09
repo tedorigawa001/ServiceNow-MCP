@@ -1,6 +1,8 @@
 # WF-B (C)：AbsenceJournal記録点・内部型とadmission消費／packet生成
 
-Version: draft-0.1 / Date: 2026-11-09 / 読み取り照合基準HEAD: `bbc1426`。
+Version: draft-0.2 / Date: 2026-11-09 / 読み取り照合基準HEAD: `bbc1426`（レビュー修正基準HEAD: `c839766`）。
+
+draft-0.2のレビュー修正：§6の受付順は「retirement sealと生成frame終了」を必須段階としていたが、root_not_created由来のlocal_onlyにはseal対象のrootがなく、現行issuerもsealを呼ばない（sealAttempts=0）。§5の「正常利用をsealする前に記録を完了」もlocal_onlyの記録完了点が未定だった。local_onlyではseal段階を正規生成履歴のknown-not-created checkpoint確認と生成frame終了で置き換えると§5・§6に明記した。
 
 Status: **MDのみ。Journal・admission consumer・packet生成は未実装。** 親は[停止確認・capture受付設計](BEST_PRACTICE_WFB_CAPTURE_ADMISSION_DESIGN.md)と[field別固定回収schedule](BEST_PRACTICE_WFB_FIXED_RETIREMENT_SCHEDULE_DESIGN.md)。先行実装は[内部issuer検証記録](E2E_BEST_PRACTICE_WFB_CAPTURE_ADMISSION_2026-11-09.md)。本書は生成履歴の真正な記録と空packet生成までを具体化し、25cellの値読取・同参照確認・CaptureReadyは次の工程とする。
 
@@ -78,7 +80,7 @@ SealedJournalViewのscope結合が確認できることと、全fieldに必要�
 
 ## 5 generation epochからcapture epochへの封印
 
-同ownerの停止確認後に、正規private source／binding readerからJournal scopeと既存recordを借りる。GenerationEpochBindingは正規source origin・両producer epochと既存admission scope／epochを一度結合し、任意sourceや公開snapshotを受け付けない。正常利用をsealする前に記録を完了し、seal後はproducerのpresent代入・旧clear・新しいmintを拒否する。
+同ownerの停止確認後に、正規private source／binding readerからJournal scopeと既存recordを借りる。GenerationEpochBindingは正規source origin・両producer epochと既存admission scope／epochを一度結合し、任意sourceや公開snapshotを受け付けない。正常利用をsealする前に記録を完了し、seal後はproducerのpresent代入・旧clear・新しいmintを拒否する。local_only（root_not_created）にはsealするrootがないため、記録完了点はsource生成を行わずに生成frameが終了し、known-not-created checkpointを固定した時点とする。以後のsource生成・present代入・旧clear・新しいmintは同checkpointに反するため拒否する。
 
 記録には固定write stampを付け、candidate作成時・commit時・seal時の同fieldを照合する。stampは有限のwriter段階／ordinalで、数値を使う場合はchecked演算・overflow時unconfirmed、wrapや飽和を同一世代と認定しない。反復要求に応じた新token／履歴list追加はしない。捕捉したJournalをcapture epochに書き換えず、正規bindingを介して照合する。
 
@@ -88,7 +90,7 @@ SealedJournalViewのscope結合が確認できることと、全fieldに必要�
 
 consumerは既存issuerのprivate生成継続として同assembly内へ置き、正規issuedAdmissionを値で外へ渡さない。候補、Ack、pin、非実行clear draft、Journal bindingを同ownerの先行slotから借りるだけで、public inspectやfactoryの返答から再構築しない。
 
-受付順は、固定終端→既存first保持→同owner／scope→issuer issued状態→正規current／issued admission同参照→variant／epoch／origin／packet origin→Ack／pin／draftの結合→retirement sealと生成frame終了→Journal scope結合・必須metadata・故障なし→未消費／packet未開始。local_onlyではroot／source readerを呼ばず、対応するknown-not-created checkpointを確認する。source unknown・失効epoch・wrong variant・同値copy・別ownerは消費前に拒否する。
+受付順は、固定終端→既存first保持→同owner／scope→issuer issued状態→正規current／issued admission同参照→variant／epoch／origin／packet origin→Ack／pin／draftの結合→retirement sealと生成frame終了（local_onlyではsealの代わりに正規生成履歴のknown-not-created checkpointと生成frame終了を確認する）→Journal scope結合・必須metadata・故障なし→未消費／packet未開始。local_onlyではroot／source readerを呼ばず、対応するknown-not-created checkpointを確認する。source unknown・失効epoch・wrong variant・同値copy・別ownerは消費前に拒否する。
 
 全条件成立後の`AdmissionUseSlot.unused→consumed`と`PacketOwnerSlot.not_started→attempting`の同期確定を消費点とする。途中にawait・任意hook・clock・外部通知を置かない。これは既存の回収開始claimとは別の内部利用状態で、回収開始回数を増やしたりCaptureAdmissionを再発行したりしない。
 
