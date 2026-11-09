@@ -1,5 +1,7 @@
 # WF-B (C)：停止前提・clear権限・固定capture25cellの生成／確認境界
 
+Journal／packet生成の詳細化（2026-11-09、MDのみ）: [AbsenceJournal記録点・内部型とadmission消費／packet生成draft-0.1](BEST_PRACTICE_WFB_JOURNAL_PACKET_DESIGN.md)で、writer側のcandidate／commit、generation epochとcapture epochの結合、同admissionの消費点、packet／25cellの部分生成保持を具体化した。not_mintedはcontrolだけでは全local slotを説明できないためproducer／slot別の記録へ拡張する設計とし、記録不足を空へ補完しない。値capture・CaptureReady・field clear・証拠・root終端は追加しない。
+
 Version: draft-0.4 / Date: 2026-11-09 / 内部issuer実装基準HEAD: `2e1ab6a`（途中の設計レビュー修正`948f19a`も照合、内部issuerレビュー修正基準HEAD: `f74095c`） / 読み取り照合基準HEAD: `1d8e3f7`（レビュー修正基準HEAD: `2e1ab6a`）。
 
 draft-0.3: §10の停止確認・token-only pin・CaptureAdmission発行と非実行clear draftだけを合成依存で実装した。25cellの生成・capture consumer・field clear・payload退役証拠・root終端は未接続。[検証記録](E2E_BEST_PRACTICE_WFB_CAPTURE_ADMISSION_2026-11-09.md)。
@@ -108,7 +110,7 @@ sourceがknown-not-createdならC01〜C11は正規source生成履歴とSourceRoo
 
 ## 5 packet生成・一度限りcapture・同参照確認
 
-先行ownerはpacket保持slot、25cell配置、capture受付slot、固定診断をsource生成前に用意する。空slotがあることとpacket生成成功を分け、packetの生成開始前はnot_started、生成呼出し後に返らなければallocation_unconfirmed、返った参照を同ownerへ記録した直後はprovisionalとする。実OOMでこの先行owner自体を確保できない場合はUnknownで、診断必着を保証しない。
+先行ownerはpacket保持slot、静的25cell layoutと各cell保持slot、capture受付slot、固定診断をsource生成前に用意する。実packet／cell objectは同admissionの消費後に生成する。空slotがあることとpacket生成成功を分け、packetの生成開始前はnot_started、生成呼出し後に返らなければallocation_unconfirmed、返った参照を同ownerへ記録した直後はprovisionalとする。実OOMでこの先行owner自体を確保できない場合はUnknownで、診断必着を保証しない。
 
 CaptureAdmissionは同runningの開始claim・inactive frame・RootStopAck／known-not-created・正規control mint状態を確認して一度だけ発行する。正規発行slotとの同参照と全tokenをconsumerで照合し、unused→capturingの同期置換がcapture開始点。既存の回収開始claimは追加消費しない。再入はcapture_in_progress、完了／失敗後は固定結果を返し、packet再生成・再準備をしない。
 

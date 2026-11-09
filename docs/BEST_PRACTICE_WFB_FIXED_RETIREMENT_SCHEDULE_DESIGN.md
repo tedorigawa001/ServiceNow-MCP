@@ -1,5 +1,7 @@
 # WF-B (C)：field別固定回収schedule・失敗prefix・診断契約
 
+Journal／packet生成の詳細化（2026-11-09、MDのみ）: [固定Journal記録点・同admission消費・packet生成設計draft-0.1](BEST_PRACTICE_WFB_JOURNAL_PACKET_DESIGN.md)で、building release候補と準備成功commit、extra alias／旧clear／未発行の根拠、同ownerのepoch結合、一度限り消費と部分生成責務を整理した。元25対象fieldは無変更とし、allocated_onlyをcapture／退役成功へ昇格させない。実装・field clear・証拠・root終端は行わない。
+
 内部issuer合成実装追記（2026-11-09）: [停止確認・capture受付設計§10](BEST_PRACTICE_WFB_CAPTURE_ADMISSION_DESIGN.md)へ、同ownerのRootStopAck／TrustedControlPin／CaptureAdmissionと非実行clear draftを接続した。通常回収専用sealでclose理由を偽造せず、部分生成物・先行理由を保持する。25cell生成・capture consumer・field clear・payload退役証拠・root終端は閉鎖のまま。[検証記録](E2E_BEST_PRACTICE_WFB_CAPTURE_ADMISSION_2026-11-09.md)。
 
 停止前提・capture受付の詳細化（2026-11-09、MDのみ）: [停止確認・clear権限・固定capture25cellの生成／確認境界draft-0.1](BEST_PRACTICE_WFB_CAPTURE_ADMISSION_DESIGN.md)で、現行の開始claimを予約として維持し、正規rootの通常利用seal・token-only pin・一度限りadmissionと25cellの同参照確認を具体化した。全25cell確認前のclearを禁止し、失敗時は元slotとprovisional captureを保持する。S00の段階順・S01の受付条件は同差分設計を優先する。実装・field clear・証拠・root終端は追加していない。
