@@ -804,12 +804,31 @@ interface PreparedSupplyPayload {
   readonly declarations: readonly CanonicalDeclarationView[]; readonly tableOrigin: object;
 }
 // No taking/consume/reset operation exists in this stage.
+interface SupplyControlCore { readonly owner: object; readonly construction: object; readonly retention: object;
+  readonly source: object; readonly claim: object }
+interface SupplyControlLive { readonly source: CanonicalSupplyAssembly; readonly anchor: SupplyIssuanceAnchor;
+  readonly claim: NonExecutingSupplyTransfer }
+let sourceIdentity: (a: CanonicalSupplyAssembly) => object;
+let sourceControlMatches: (a: CanonicalSupplyAssembly, control: SupplyUseControl) => boolean;
+let sourceStopOwned: (a: CanonicalSupplyAssembly, origin: object, kind: 'close' | 'failure') => boolean;
+let sourceRetention: (a: CanonicalSupplyAssembly) => Readonly<{ normal: number; issued: number; controlLive: boolean;
+  borrow: boolean; snapshot: boolean; discardPasses: number }>;
 class SupplyUseControl {
   #stop: 'none' | 'supply_closed' | 'binding_mismatch' = 'none';
-  constructor(readonly owner: object, readonly source: CanonicalSupplyAssembly,
-    readonly anchor: SupplyIssuanceAnchor, readonly claim: NonExecutingSupplyTransfer) { Object.freeze(this); }
-  get state() { return this.#stop === 'none' ? 'unused' as const : 'stopped' as const; }
+  #live: SupplyControlLive | undefined;
+  readonly identity: SupplyControlCore;
+  constructor(readonly owner: object, source: CanonicalSupplyAssembly,
+    anchor: SupplyIssuanceAnchor, claim: NonExecutingSupplyTransfer, core?: SupplyControlCore) {
+    this.identity = core ?? Object.freeze({ owner, construction: owner, retention: Object.freeze({}), source: sourceIdentity(source), claim: Object.freeze({}) });
+    this.#live = Object.freeze({ source, anchor, claim }); Object.freeze(this);
+  }
+  get state() { return !this.#live ? 'retired' as const : this.#stop === 'none' ? 'unused' as const : 'stopped' as const; }
+  live() { return this.#live; }
   stop(reason: 'supply_closed' | 'binding_mismatch'): void { if (this.#stop === 'none') this.#stop = reason; }
+  retireLiveBinding(): boolean {
+    if (this.#stop === 'none' || !this.#live) return false;
+    this.#live = undefined; return true;
+  }
 }
 let boundarySourceAccess: Readonly<{
   bind(a: CanonicalSupplyAssembly, control: SupplyUseControl): boolean;
@@ -824,6 +843,7 @@ let supplyTransferAccess: {
 };
 class CanonicalSupplyAssembly {
   readonly #root: CStartAssembly;
+  readonly #sourceOrigin = Object.freeze({});
   #normalControl: SupplyUseControl | undefined;
   #state: 'unused' | 'preparing' | 'prepared' | 'discarded' = 'unused';
   #first: CanonicalSupplyReason = 'none';
@@ -841,12 +861,28 @@ class CanonicalSupplyAssembly {
   readonly #counts = { preparationClaims: 0, registryRecords: 0, bindings: 0, declarations: 0, tables: 0, views: 0,
     validationPasses: 0, fileChecks: 0, discardPasses: 0 };
   static {
+    sourceIdentity = a => a.#sourceOrigin;
+    sourceControlMatches = (a, control) => a.#normalControl === control;
+    sourceStopOwned = (a, origin, action) => {
+      if (origin !== a.#sourceOrigin) return false;
+      if (action === 'close') { a.#root.close(); }
+      else { canonicalSupplyAccess.fail(a.#root, 'binding_mismatch'); }
+      return true;
+    };
+    sourceRetention = a => {
+      const root = a.#root.inspect();
+      return Object.freeze({ normal: [a.#registry, a.#table, a.#view, a.#buildingRegistry, a.#buildingBindings, a.#buildingDeclarations].filter(Boolean).length,
+        issued: [a.#envelope, a.#issuedTable, a.#issuedView, a.#issuedDeclarations, a.#tableOrigin].filter(Boolean).length,
+        controlLive: !!a.#normalControl?.live(), borrow: root.retainedBorrow, snapshot: root.retainedSnapshot, discardPasses: a.#counts.discardPasses });
+    };
     boundarySourceAccess = Object.freeze({
       bind(a: CanonicalSupplyAssembly, control: SupplyUseControl): boolean {
-        if (a.#normalControl || control.source !== a || control.state !== 'unused'
-          || control.owner !== control.anchor.transferOwner || control.claim.owner !== control.owner
-          || control.claim.source !== a || control.claim.anchor !== control.anchor
-          || !supplyTransferAccess.matches(a, control.anchor)) return false;
+        const live = control.live();
+        if (a.#normalControl || !live || live.source !== a || control.state !== 'unused'
+          || control.identity.owner !== control.owner || control.identity.source !== a.#sourceOrigin
+          || control.owner !== live.anchor.transferOwner || live.claim.owner !== control.owner
+          || live.claim.source !== a || live.claim.anchor !== live.anchor
+          || !supplyTransferAccess.matches(a, live.anchor)) return false;
         a.#normalControl = control; return true;
       },
       normal(a: CanonicalSupplyAssembly, control: SupplyUseControl): boolean {
@@ -863,7 +899,7 @@ class CanonicalSupplyAssembly {
     };
     supplyTransferAccess = Object.freeze({
       capture(a: CanonicalSupplyAssembly, transferOwner: object): SupplyIssuanceAnchor | undefined {
-        if (a.#normalControl?.state === 'stopped') return undefined;
+        if (a.#normalControl && a.#normalControl.state !== 'unused') return undefined;
         if (a.#terminal || a.#first !== 'none' || a.#state !== 'prepared'
           || !canonicalSupplyAccess.context(a.#root) || !a.#envelope || !a.#registry || !a.#table || !a.#view
           || !a.#issuedDeclarations || !a.#tableOrigin) return undefined;
@@ -871,7 +907,7 @@ class CanonicalSupplyAssembly {
           table: a.#issuedTable!, view: a.#issuedView!, declarations: a.#issuedDeclarations, tableOrigin: a.#tableOrigin });
       },
       matches(a: CanonicalSupplyAssembly, anchor: SupplyIssuanceAnchor): boolean {
-        if (a.#normalControl?.state === 'stopped') return false;
+        if (a.#normalControl && a.#normalControl.state !== 'unused') return false;
         const live = canonicalSupplyAccess.context(a.#root), e = anchor.envelope;
         return !a.#terminal && a.#first === 'none' && a.#state === 'prepared' && !!live
           && anchor.sourceOwner === a && e === a.#envelope && anchor.registry === a.#registry
@@ -911,7 +947,7 @@ class CanonicalSupplyAssembly {
   private baseOperation(kind: 'begin' | 'prepare') {
     if (this.#terminal) return this.reply('read_already_used');
     if (this.#first !== 'none') return this.reply(this.#first);
-    if (this.#normalControl?.state === 'stopped') return this.reply('supply_closed');
+    if (this.#normalControl && this.#normalControl.state !== 'unused') return this.reply('supply_closed');
     const result = this.#root[kind]();
     if (result.ok) return this.reply();
     return this.fail(result.reason === 'supply_closed' ? 'supply_closed'
@@ -922,7 +958,7 @@ class CanonicalSupplyAssembly {
   check() {
     if (this.#first !== 'none') return this.reply(this.#first);
     const result = this.#root.check();
-    if (result.ok && this.#normalControl?.state === 'stopped') return this.reply('supply_closed');
+    if (result.ok && this.#normalControl && this.#normalControl.state !== 'unused') return this.reply('supply_closed');
     return result.ok ? this.reply() : this.reply(result.reason === 'supply_closed' ? 'supply_closed'
       : result.reason === 'supply_invalid' ? 'supply_prepare_unavailable' : 'binding_mismatch');
   }
@@ -1075,7 +1111,7 @@ class CanonicalSupplyAssembly {
   prepareSupply() {
     if (this.#terminal) return this.reply('read_already_used');
     if (this.#first !== 'none') return this.reply(this.#first);
-    if (this.#normalControl?.state === 'stopped') return this.reply('supply_closed');
+    if (this.#normalControl && this.#normalControl.state !== 'unused') return this.reply('supply_closed');
     if (this.#root.inspect().supplyFirst !== 'none') return this.fail('supply_prepare_unavailable');
     if (!canonicalSupplyAccess.open(this.#root)) return this.fail('supply_closed');
     const canonical = canonicalSupplyAccess.context(this.#root);
@@ -1545,4 +1581,372 @@ export function createSupplyBoundaryFake(...args: readonly unknown[]) {
     checkNormal: (...xs: readonly unknown[]) => xs.length ? a.rejectArguments() : a.checkNormal(),
     checkRelation: (...xs: readonly unknown[]) => xs.length ? a.rejectArguments() : a.checkRelation(),
     close: () => a.close(), fail: () => a.fail(), inspect: () => a.inspect() });
+}
+
+interface PendingScopeContext { readonly owner: PendingRetentionRoot; readonly construction: ConstructionOrigin;
+  readonly retention: RetentionOrigin; readonly slots: readonly UnboundSlot[] }
+let pendingConstructionAccess: (a: PendingRetentionRoot) => PendingScopeContext | undefined;
+// BEGIN PENDING CONSTRUCTION CORE
+/** Isolated synthetic construction only: no source, payload, binding, retirement or root operations. */
+const CONSTRUCTION: unique symbol = Symbol('construction');
+const RETENTION: unique symbol = Symbol('retention');
+const SLOT: unique symbol = Symbol('unbound-slot');
+type ConstructionOrigin = Readonly<{ [CONSTRUCTION]: true }>;
+type RetentionOrigin = Readonly<{ [RETENTION]: true }>;
+const PENDING_ROLES = Object.freeze(['pendingShell', 'pendingActive', 'failureShell', 'failureCustody'] as const);
+type PendingRole = typeof PENDING_ROLES[number];
+type PendingReason = 'none' | 'binding_mismatch' | 'duplicate_generation' | 'supply_closed' | 'generation_unavailable' | 'capture_unconfirmed';
+interface UnboundSlot {
+  readonly [SLOT]: true; readonly construction: ConstructionOrigin; readonly retention: RetentionOrigin;
+  readonly origin: object; readonly role: PendingRole; readonly state: 'unbound';
+  readonly parent: UnboundSlot | undefined; readonly payload: undefined;
+}
+type Capture = 'not_started' | 'not_created' | 'attempting' | 'provisional' | 'confirmed';
+interface CaptureCell { stage: Capture; value: UnboundSlot | undefined }
+class PendingGenerationClaim {
+  #spent = false;
+  constructor(readonly construction: ConstructionOrigin, readonly retention: RetentionOrigin) { Object.freeze(this); }
+  get spent() { return this.#spent; }
+  begin(): boolean { if (this.#spent) return false; this.#spent = true; return true; }
+}
+const PENDING_CLOSED = Object.freeze({ model: 'wfb-pending-construction-fake-1', authority: 'none', ready: false,
+  formalIssuance: 'closed', wholeRunAdmission: 'disabled', implementation: 'unknown', nativeCost: 'unknown',
+  entryRequirement: 'unknown', seedRequirement: 'unknown', investigations: 'on_hold',
+  source: 'not_created', sourceBinding: 'not_connected', payloadMoves: 0, claimsConsumed: 0, sourceDetaches: 0,
+  holderPublications: 0, proofIssuance: 'closed', rootFinish: 'not_called', retirement: 'not_started',
+  resourceCleanup: 'not_started', actualBudget: 'not_connected' } as const);
+type PendingState = 'unused' | 'generating' | 'prepared_unbound' | 'rejected' | 'closed' | 'sealed';
+type PendingSnapshot = Readonly<typeof PENDING_CLOSED & { state: PendingState; firstReason: PendingReason; closeRequested: boolean;
+  inputValid: boolean;
+  generationClaim: 'spent' | 'unused'; diagnosticSlot: 'ready'; resultSlot: 'sealed' | 'empty';
+  retainedSlots: number; confirmedSlots: number; generationStarts: number;
+  parentLinks: Readonly<Record<PendingRole, 'none' | 'own_shell' | 'absent' | 'mismatch'>>;
+  scopeOriginsDistinct: boolean; roleOriginsDistinct: boolean; sealedFrom?: PendingState;
+  stages: readonly Readonly<{ role: PendingRole; stage: Capture; retained: boolean }>[] }>;
+const MIX_FIELDS = ['construction', 'retention', 'origin', 'role', 'state', 'brand', 'parent', 'payload', 'copy'] as const;
+const PENDING_SCENARIOS = Object.freeze(['normal', 'claim_copy', 'claim_construction', 'claim_retention',
+  'diagnostic_construction', 'diagnostic_retention', 'result_construction', 'result_retention',
+  ...PENDING_ROLES.flatMap(role => [`mint_${role}_failure`, `attempt_${role}_failure`, `capture_${role}_failure`,
+    `close_after_${role}`, `reenter_after_${role}`,
+  ...MIX_FIELDS.map(field => `mix_${role}_${field}`)])]);
+
+class PendingRetentionRoot {
+  readonly #construction = Object.freeze<ConstructionOrigin>({ [CONSTRUCTION]: true });
+  readonly #origin = Object.freeze<RetentionOrigin>({ [RETENTION]: true });
+  readonly #claim: PendingGenerationClaim;
+  readonly #origins = Object.freeze({ pendingShell: Object.freeze({}), pendingActive: Object.freeze({}),
+    failureShell: Object.freeze({}), failureCustody: Object.freeze({}) });
+  readonly #cells: Record<PendingRole, CaptureCell> = {
+    pendingShell: { stage: 'not_started', value: undefined }, pendingActive: { stage: 'not_started', value: undefined },
+    failureShell: { stage: 'not_started', value: undefined }, failureCustody: { stage: 'not_started', value: undefined },
+  };
+  readonly #diagnostic = { construction: this.#construction, retention: this.#origin,
+    first: 'none' as PendingReason, stop: false, state: 'unused' as PendingState };
+  readonly #result = { construction: this.#construction, retention: this.#origin,
+    value: undefined as PendingSnapshot | undefined };
+  static {
+    pendingConstructionAccess = a => {
+      if (a.#result.value || a.#diagnostic.first !== 'none' || a.#diagnostic.stop
+        || a.#diagnostic.state !== 'prepared_unbound' || !a.#claim.spent || !a.scopeMatches()) return undefined;
+      const c = a.#cells;
+      for (const role of PENDING_ROLES) if (c[role].stage !== 'confirmed' || !c[role].value || !a.matches(role, c[role].value!)) return undefined;
+      if (c.pendingShell.value!.parent !== undefined || c.failureShell.value!.parent !== undefined
+        || c.pendingActive.value!.parent !== c.pendingShell.value || c.failureCustody.value!.parent !== c.failureShell.value) return undefined;
+      const slots = Object.freeze(PENDING_ROLES.map(role => c[role].value!));
+      if (new Set(slots.map(s => s.origin)).size !== 4 || (a.#construction as object) === (a.#origin as object)) return undefined;
+      return Object.freeze({ owner: a, construction: a.#construction, retention: a.#origin, slots });
+    };
+  }
+  constructor(private readonly scenario: string, private readonly admitted: boolean) {
+    this.#claim = new PendingGenerationClaim(scenario === 'claim_construction' ? Object.freeze({ ...this.#construction }) : this.#construction,
+      scenario === 'claim_retention' ? Object.freeze({ ...this.#origin }) : this.#origin);
+    if (scenario === 'diagnostic_construction') this.#diagnostic.construction = Object.freeze({ ...this.#construction });
+    if (scenario === 'diagnostic_retention') this.#diagnostic.retention = Object.freeze({ ...this.#origin });
+    if (scenario === 'result_construction') this.#result.construction = Object.freeze({ ...this.#construction });
+    if (scenario === 'result_retention') this.#result.retention = Object.freeze({ ...this.#origin });
+    if (!admitted) this.reject('binding_mismatch');
+  }
+  private scopeMatches(): boolean {
+    return this.#diagnostic.construction === this.#construction && this.#diagnostic.retention === this.#origin
+      && this.#result.construction === this.#construction && this.#result.retention === this.#origin;
+  }
+  private reply(reason?: Exclude<PendingReason, 'none'> | 'already_sealed') {
+    return Object.freeze(reason ? { ...PENDING_CLOSED, ok: false, reason } : { ...PENDING_CLOSED, ok: true });
+  }
+  private reject(reason: Exclude<PendingReason, 'none'>) {
+    if (this.#diagnostic.first === 'none') this.#diagnostic.first = reason;
+    this.#diagnostic.state = 'rejected'; return this.reply(this.#diagnostic.first as Exclude<PendingReason, 'none'>);
+  }
+  private parent(role: PendingRole): UnboundSlot | undefined {
+    return role === 'pendingActive' ? this.#cells.pendingShell.value
+      : role === 'failureCustody' ? this.#cells.failureShell.value : undefined;
+  }
+  private mint(role: PendingRole): UnboundSlot {
+    if (this.scenario === `attempt_${role}_failure`) throw new Error('synthetic_attempt_unconfirmed');
+    const slot: UnboundSlot = Object.freeze({ [SLOT]: true as const, construction: this.#construction, retention: this.#origin,
+      origin: this.#origins[role], role, state: 'unbound' as const, parent: this.parent(role), payload: undefined });
+    if (!this.scenario.startsWith(`mix_${role}_`)) return slot;
+    const field = this.scenario.slice(`mix_${role}_`.length), foreign = Object.freeze({});
+    const patch = field === 'construction' ? { construction: Object.freeze({ ...slot.construction }) }
+      : field === 'retention' ? { retention: Object.freeze({ ...slot.retention }) }
+        : field === 'origin' ? { origin: foreign } : field === 'role' ? { role: 'foreign' }
+          : field === 'state' ? { state: 'bound' } : field === 'brand' ? { [SLOT]: false }
+            : field === 'parent' ? { parent: slot.parent ? Object.freeze({ ...slot.parent }) : foreign }
+              : field === 'payload' ? { payload: foreign } : undefined;
+    // Fixed malformed issuance controls only; no caller values or actual payload are accepted.
+    return patch ? Object.freeze({ ...slot, ...patch }) as unknown as UnboundSlot : slot;
+  }
+  private matches(role: PendingRole, value: UnboundSlot): boolean {
+    return value === this.#cells[role].value && value[SLOT] === true && value.construction === this.#construction
+      && value.retention === this.#origin && value.origin === this.#origins[role] && value.role === role
+      && value.state === 'unbound' && value.payload === undefined && value.parent === this.parent(role);
+  }
+  prepare() {
+    if (this.#result.value) return this.reply('already_sealed');
+    if (this.#diagnostic.first !== 'none') return this.reply(this.#diagnostic.first);
+    if (this.#diagnostic.stop) return this.reply('supply_closed');
+    if (!this.scopeMatches()) return this.reject('binding_mismatch');
+    const claim = this.scenario === 'claim_copy' ? new PendingGenerationClaim(this.#construction, this.#origin) : this.#claim;
+    if (claim !== this.#claim || claim.construction !== this.#construction || claim.retention !== this.#origin) return this.reject('binding_mismatch');
+    if (!claim.begin()) return this.reject('duplicate_generation');
+    this.#diagnostic.state = 'generating';
+    for (const role of PENDING_ROLES) {
+      const cell = this.#cells[role]; cell.stage = 'attempting';
+      if (this.scenario === `mint_${role}_failure`) { cell.stage = 'not_created'; return this.reject('generation_unavailable'); }
+      try { cell.value = this.mint(role); }
+      catch { return this.reject('capture_unconfirmed'); }
+      cell.stage = 'provisional';
+      if (this.scenario === `capture_${role}_failure`) return this.reject('capture_unconfirmed');
+      const candidate = this.scenario === `mix_${role}_copy` ? Object.freeze({ ...cell.value }) : cell.value;
+      if (!this.matches(role, candidate)) return this.reject('binding_mismatch');
+      cell.stage = 'confirmed';
+      if (this.scenario === `close_after_${role}`) { this.close(); return this.reply('supply_closed'); }
+      if (this.scenario === `reenter_after_${role}`) {
+        this.prepare(); return this.reply(this.#diagnostic.first as Exclude<PendingReason, 'none'>);
+      }
+    }
+    this.#diagnostic.state = 'prepared_unbound'; return this.reply();
+  }
+  close() {
+    if (this.#result.value) return this.reply('already_sealed');
+    this.#diagnostic.stop = true;
+    if (this.#claim.spent && this.#diagnostic.first === 'none') this.#diagnostic.first = 'supply_closed';
+    this.#diagnostic.state = 'closed';
+    return this.reply(this.#diagnostic.first === 'none' ? 'supply_closed' : this.#diagnostic.first);
+  }
+  rejectArguments() { return this.#result.value ? this.reply('already_sealed') : this.reject('binding_mismatch'); }
+  private snapshot(): PendingSnapshot {
+    const stages = Object.freeze(PENDING_ROLES.map(role => Object.freeze({ role, stage: this.#cells[role].stage, retained: !!this.#cells[role].value })));
+    // Read the captured cells directly (not parent()/#origins) so generation and checking cannot agree on a wrong link.
+    const c = this.#cells;
+    const link = (slot: UnboundSlot | undefined, shell: UnboundSlot | undefined) =>
+      !slot ? 'absent' as const : shell && slot.parent === shell ? 'own_shell' as const : 'mismatch' as const;
+    const unparented = (slot: UnboundSlot | undefined) => !slot ? 'absent' as const : slot.parent === undefined ? 'none' as const : 'mismatch' as const;
+    const parentLinks = Object.freeze({ pendingShell: unparented(c.pendingShell.value), pendingActive: link(c.pendingActive.value, c.pendingShell.value),
+      failureShell: unparented(c.failureShell.value), failureCustody: link(c.failureCustody.value, c.failureShell.value) });
+    const held = PENDING_ROLES.map(role => c[role].value).filter((s): s is UnboundSlot => !!s);
+    return Object.freeze({ ...PENDING_CLOSED, state: this.#diagnostic.state, firstReason: this.#diagnostic.first, inputValid: this.admitted,
+      closeRequested: this.#diagnostic.stop, generationClaim: this.#claim.spent ? 'spent' as const : 'unused' as const,
+      diagnosticSlot: 'ready' as const, resultSlot: this.#result.value ? 'sealed' as const : 'empty' as const,
+      retainedSlots: stages.filter(s => s.retained).length, confirmedSlots: stages.filter(s => s.stage === 'confirmed').length,
+      generationStarts: this.#claim.spent ? 1 : 0, stages, parentLinks,
+      scopeOriginsDistinct: (this.#construction as object) !== (this.#origin as object),
+      roleOriginsDistinct: new Set(held.map(s => s.origin)).size === held.length
+        && new Set(Object.values(this.#origins)).size === PENDING_ROLES.length });
+  }
+  inspect() { return this.#result.value ?? this.snapshot(); }
+  seal() {
+    if (this.#result.value) return this.#result.value;
+    if (!this.scopeMatches()) return this.reject('binding_mismatch');
+    const sealedFrom = this.#diagnostic.state; this.#diagnostic.state = 'sealed';
+    this.#result.value = Object.freeze({ ...this.snapshot(), resultSlot: 'sealed', sealedFrom }); return this.#result.value;
+  }
+}
+export function createPendingConstructionFake(...args: readonly unknown[]) {
+  const input = args.length === 0 ? 'normal' : args[0];
+  const admitted = args.length <= 1 && typeof input === 'string' && PENDING_SCENARIOS.includes(input);
+  const a = new PendingRetentionRoot(admitted ? input as string : 'normal', admitted);
+  return Object.freeze({ prepare: (...xs: readonly unknown[]) => xs.length ? a.rejectArguments() : a.prepare(),
+    close: () => a.close(), seal: () => a.seal(), inspect: () => a.inspect() });
+}
+// END PENDING CONSTRUCTION CORE
+
+interface PendingSourceSlot { readonly origin: object; stage: 'empty' | 'attempting' | 'captured' | 'unknown';
+  value: CanonicalSupplyAssembly | undefined; identity: object | undefined }
+interface PendingBindingReceipt { readonly construction: object; readonly retention: object;
+  readonly sourceSlot: PendingSourceSlot; readonly control: SupplyUseControl; readonly core: SupplyControlCore;
+  readonly slots: readonly UnboundSlot[] }
+const PENDING_BINDING_CLOSED = Object.freeze({ ...CLOSED, model: 'wfb-pending-source-binding-fake-1',
+  claimsConsumed: 0, payloadMoves: 0, sourceDetaches: 0, holderPublications: 0,
+  proofIssuance: 'closed', rootFinish: 'not_called', retirement: 'not_started', resourceCleanup: 'not_started' } as const);
+type PendingBindingReason = 'none' | 'binding_mismatch' | 'duplicate_binding' | 'source_rejected' | 'generation_unavailable' | 'supply_closed';
+const PENDING_BINDING_SCENARIOS = Object.freeze(['normal', 'core_owner', 'core_construction', 'core_retention', 'core_source', 'core_claim', 'core_extra_payload',
+  'receipt_copy', 'receipt_construction', 'receipt_retention', 'receipt_source_slot', 'receipt_control', 'receipt_core', 'receipt_slots',
+  'anchor_copy', 'payload_copy', 'claim_copy', 'retire_binding', 'retire_binding_twice', 'retire_binding_with_claim_alias', 'retire_binding_with_control_alias', 'retire_binding_root_live',
+  'source_failure', 'source_attempt_failure', 'before_source_failure', 'after_source_failure', 'before_bind_failure', 'after_bind_failure', 'close_before_bind', 'close_after_bind', 'reenter_before_bind']);
+class PendingSourceBinding {
+  readonly #retention: PendingRetentionRoot;
+  readonly #sourceSlot: PendingSourceSlot = { origin: Object.freeze({}), stage: 'empty', value: undefined, identity: undefined };
+  readonly #claimOrigin = Object.freeze({});
+  #context: PendingScopeContext | undefined;
+  #control: SupplyUseControl | undefined; #issuedControl: SupplyUseControl | undefined;
+  #anchor: SupplyIssuanceAnchor | undefined; #issuedAnchor: SupplyIssuanceAnchor | undefined;
+  #payload: PreparedSupplyPayload | undefined; #issuedPayload: PreparedSupplyPayload | undefined;
+  #claim: NonExecutingSupplyTransfer | undefined; #issuedClaim: NonExecutingSupplyTransfer | undefined;
+  #receipt: PendingBindingReceipt | undefined; #issuedReceipt: PendingBindingReceipt | undefined;
+  #extraClaim: NonExecutingSupplyTransfer | undefined; #extraControl: SupplyUseControl | undefined;
+  #bindingRetirements = 0;
+  #retiredSourceAllowed: boolean | undefined;
+  #attempts = 0; #bound = false; #closed = false;
+  #first: PendingBindingReason = 'none';
+  constructor(private readonly scenario: string, admitted: boolean) { this.#retention = new PendingRetentionRoot('normal', admitted); }
+  private reply(reason?: Exclude<PendingBindingReason, 'none'>) {
+    return Object.freeze(reason ? { ...PENDING_BINDING_CLOSED, ok: false, reason } : { ...PENDING_BINDING_CLOSED, ok: true });
+  }
+  private fail(reason: Exclude<PendingBindingReason, 'none'>) {
+    if (this.#first === 'none') this.#first = reason;
+    this.#issuedControl?.stop('binding_mismatch');
+    if (this.#sourceSlot.value && this.#sourceSlot.identity) sourceStopOwned(this.#sourceSlot.value, this.#sourceSlot.identity, 'failure');
+    return this.reply(this.#first);
+  }
+  private validReceipt(): boolean {
+    const r = this.#receipt, scope = this.#context, control = this.#issuedControl, slot = this.#sourceSlot;
+    if (!r || r !== this.#issuedReceipt || !scope || scope.owner !== this.#retention || !control || !slot.value || !slot.identity
+      || r.construction !== scope.construction || r.retention !== scope.retention || r.sourceSlot !== slot
+      || r.control !== control || r.core !== control.identity || r.slots !== scope.slots || r.slots.length !== 4) return false;
+    const core = r.core, live = control.live();
+    if (Object.keys(core).length !== 5 || core.owner !== scope.construction || core.construction !== scope.construction
+      || core.retention !== scope.retention || core.source !== slot.identity || this.#claimOrigin !== core.claim
+      || !live || live.source !== slot.value || live.anchor !== this.#issuedAnchor || live.claim !== this.#issuedClaim
+      || this.#anchor !== this.#issuedAnchor || this.#payload !== this.#issuedPayload
+      || this.#claim !== this.#issuedClaim || live.claim.receiver !== scope.slots[1].origin
+      || !this.#anchor || !this.#payload || !inspectPayloadRelation(this.#anchor, this.#payload)) return false;
+    return supplyTransferAccess.matches(slot.value, this.#anchor);
+  }
+  private probeCore(core: SupplyControlCore): SupplyControlCore {
+    const foreign = Object.freeze({}), scope = this.#context!;
+    switch (this.scenario) {
+      case 'core_owner': return Object.freeze({ ...core, owner: foreign });
+      case 'core_construction': return Object.freeze({ ...core, construction: Object.freeze({ ...scope.construction }) });
+      case 'core_retention': return Object.freeze({ ...core, retention: Object.freeze({ ...scope.retention }) });
+      case 'core_source': return Object.freeze({ ...core, source: this.#sourceSlot.value! });
+      case 'core_claim': return Object.freeze({ ...core, claim: this.#claim! });
+      case 'core_extra_payload': return Object.freeze({ ...core, payload: this.#payload });
+      default: return core;
+    }
+  }
+  private probeReceipt(): void {
+    const r = this.#receipt!, foreign = Object.freeze({});
+    const patch = this.scenario === 'receipt_construction' ? { construction: Object.freeze({ ...this.#context!.construction }) }
+      : this.scenario === 'receipt_retention' ? { retention: foreign }
+        : this.scenario === 'receipt_source_slot' ? { sourceSlot: { ...r.sourceSlot } }
+          : this.scenario === 'receipt_control' ? { control: new SupplyUseControl(this.#context!.construction, this.#sourceSlot.value!, this.#anchor!, this.#claim!, r.core) }
+            : this.scenario === 'receipt_core' ? { core: Object.freeze({ ...r.core }) }
+              : this.scenario === 'receipt_slots' ? { slots: Object.freeze([...r.slots]) } : undefined;
+    if (patch || this.scenario === 'receipt_copy') {
+      this.#receipt = Object.freeze({ ...r, ...patch });
+      if (patch) this.#issuedReceipt = this.#receipt;
+    }
+    if (this.scenario === 'anchor_copy') this.#anchor = Object.freeze({ ...this.#anchor! });
+    if (this.scenario === 'payload_copy') this.#payload = Object.freeze({ ...this.#payload! });
+    if (this.scenario === 'claim_copy') this.#claim = Object.freeze({ ...this.#claim! });
+  }
+  prepare() {
+    if (this.#first !== 'none') return this.reply(this.#first);
+    if (this.#closed) return this.reply('supply_closed');
+    if (this.#attempts) return this.fail('duplicate_binding');
+    if (!this.#retention.prepare().ok) return this.fail('binding_mismatch');
+    this.#context = pendingConstructionAccess(this.#retention);
+    if (!this.#context) return this.fail('binding_mismatch');
+    this.#attempts = 1;
+    try {
+      if (this.scenario === 'before_source_failure') return this.fail('generation_unavailable');
+      this.#sourceSlot.stage = 'attempting';
+      if (this.scenario === 'source_attempt_failure') throw new Error('synthetic_source_unconfirmed');
+      const source = new CanonicalSupplyAssembly(this.scenario === 'source_failure' ? 'source_failure' : 'normal', true);
+      this.#sourceSlot.value = source; this.#sourceSlot.identity = sourceIdentity(source); this.#sourceSlot.stage = 'captured';
+      if (this.scenario === 'after_source_failure') return this.fail('generation_unavailable');
+      if (!source.begin().ok || !source.prepare().ok || !source.prepareSupply().ok) return this.fail('source_rejected');
+      const scope = this.#context;
+      this.#anchor = supplyTransferAccess.capture(source, scope.construction); this.#issuedAnchor = this.#anchor;
+      if (!this.#anchor) return this.fail('binding_mismatch');
+      const a = this.#anchor;
+      this.#payload = Object.freeze({ envelope: a.envelope, registry: a.registry, table: a.table, view: a.view,
+        declarations: a.declarations, tableOrigin: a.tableOrigin }); this.#issuedPayload = this.#payload;
+      this.#claim = Object.freeze<NonExecutingSupplyTransfer>({ [TRANSFER_BRAND]: true, owner: scope.construction,
+        source, anchor: a, receiver: scope.slots[1].origin, state: 'unused' }); this.#issuedClaim = this.#claim;
+      const core = this.probeCore(Object.freeze({ owner: scope.construction, construction: scope.construction, retention: scope.retention,
+        source: this.#sourceSlot.identity!, claim: this.#claimOrigin }));
+      this.#control = new SupplyUseControl(scope.construction, source, a, this.#claim, core); this.#issuedControl = this.#control;
+      this.#receipt = Object.freeze({ construction: scope.construction, retention: scope.retention, sourceSlot: this.#sourceSlot,
+        control: this.#control, core, slots: scope.slots }); this.#issuedReceipt = this.#receipt;
+      this.probeReceipt();
+      if (this.scenario === 'before_bind_failure') return this.fail('generation_unavailable');
+      if (this.scenario === 'close_before_bind') return this.close();
+      if (this.scenario === 'reenter_before_bind') { this.prepare(); return this.reply(this.#first as Exclude<PendingBindingReason, 'none'>); }
+      if (!this.validReceipt() || !boundarySourceAccess.bind(source, this.#control)) return this.fail('binding_mismatch');
+      if (this.scenario === 'after_bind_failure') return this.fail('generation_unavailable');
+      if (this.scenario === 'close_after_bind') return this.close();
+      if (!this.validReceipt() || !sourceControlMatches(source, this.#control)) return this.fail('binding_mismatch');
+      this.#bound = true;
+      if (this.scenario.startsWith('retire_binding')) {
+        if (this.scenario === 'retire_binding_with_claim_alias') this.#extraClaim = this.#claim;
+        if (this.scenario === 'retire_binding_with_control_alias') this.#extraControl = this.#control;
+        if (this.scenario === 'retire_binding_root_live') this.#control.stop('binding_mismatch');
+        else this.fail('binding_mismatch');
+        if (this.#control.retireLiveBinding()) this.#bindingRetirements++;
+        if (this.scenario === 'retire_binding_twice' && this.#control.retireLiveBinding()) this.#bindingRetirements++;
+        if (this.scenario === 'retire_binding_root_live') {
+          this.#retiredSourceAllowed = source.check().ok;
+          return this.reply('supply_closed');
+        }
+        return this.reply(this.#first as Exclude<PendingBindingReason, 'none'>);
+      }
+      return this.reply();
+    } catch {
+      if (!this.#sourceSlot.value) this.#sourceSlot.stage = 'unknown';
+      return this.fail('generation_unavailable');
+    }
+  }
+  check() {
+    if (this.#first !== 'none') return this.reply(this.#first);
+    if (this.#closed || (this.#issuedControl && this.#issuedControl.state !== 'unused')) return this.reply('supply_closed');
+    return this.#bound && this.#sourceSlot.value && this.#issuedControl
+      && boundarySourceAccess.normal(this.#sourceSlot.value, this.#issuedControl) ? this.reply() : this.fail('binding_mismatch');
+  }
+  close() {
+    this.#closed = true; this.#retention.close();
+    if (this.#attempts && this.#first === 'none') this.#first = 'supply_closed';
+    this.#issuedControl?.stop('supply_closed');
+    if (this.#sourceSlot.value && this.#sourceSlot.identity) sourceStopOwned(this.#sourceSlot.value, this.#sourceSlot.identity, 'close');
+    return this.reply(this.#first === 'none' ? 'supply_closed' : this.#first);
+  }
+  rejectArguments() { return this.fail('binding_mismatch'); }
+  inspect() {
+    const source = this.#sourceSlot.value, c = this.#issuedControl, retained = source ? sourceRetention(source) : undefined;
+    return Object.freeze({ ...PENDING_BINDING_CLOSED, state: this.#closed ? 'closed' : this.#first !== 'none' ? 'rejected' : this.#bound ? 'bound' : 'unused',
+      firstReason: this.#first, bound: this.#bound, bindingStarts: this.#attempts, rootSlot: this.#sourceSlot.stage,
+      sourceAttached: !!source && !!c && sourceControlMatches(source, c),
+      controlState: c?.state ?? 'not_created', controlLiveBinding: !!c?.live(),
+      controlBindingRetirements: this.#bindingRetirements,
+      retiredSourceAllowed: this.#retiredSourceAllowed,
+      corePayloadFree: !!c && !!this.#context && Object.values(c.identity).every(v =>
+        v === this.#context!.construction || v === this.#context!.retention || v === this.#sourceSlot.identity || v === this.#claimOrigin),
+      retainedSlots: this.#retention.inspect().retainedSlots, pendingPayload: false, failurePayload: false,
+      retentionTable: Object.freeze({ R1: retained?.normal ?? 0, R2: retained?.issued ?? 0,
+        R3: Number(!!this.#payload) + Number(!!this.#issuedPayload), R4: Number(!!this.#anchor) + Number(!!this.#issuedAnchor),
+        R5: 0, R6: 0, R7: Object.freeze({ localControl: !!this.#control?.live(), issuedControl: !!c?.live(),
+          sourceControl: retained?.controlLive ?? false, extraControl: !!this.#extraControl?.live(),
+          controlAliases: Number(!!this.#control) + Number(!!c) + Number(!!this.#extraControl),
+          claimAliases: Number(!!this.#claim) + Number(!!this.#issuedClaim) + Number(!!this.#extraClaim) }),
+        R8: Object.freeze({ sourceRootSlot: !!source, boundReceipt: !!this.#receipt, issuedReceipt: !!this.#issuedReceipt }) }),
+      source: source?.inspect() });
+  }
+}
+export function createPendingBindingFake(...args: readonly unknown[]) {
+  const input = args.length === 0 ? 'normal' : args[0];
+  const admitted = args.length <= 1 && typeof input === 'string' && PENDING_BINDING_SCENARIOS.includes(input);
+  const a = new PendingSourceBinding(admitted ? input as string : 'normal', admitted);
+  return Object.freeze({ prepare: (...xs: readonly unknown[]) => xs.length ? a.rejectArguments() : a.prepare(),
+    check: (...xs: readonly unknown[]) => xs.length ? a.rejectArguments() : a.check(), close: () => a.close(), inspect: () => a.inspect() });
 }

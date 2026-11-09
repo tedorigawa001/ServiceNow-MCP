@@ -18,13 +18,15 @@ try {
 writeFileSync(join(scratch, 'package.json'), '{"type":"module"}');
 await compile(readFileSync(new URL('./source-map-values-core.ts', import.meta.url), 'utf8'), 'source-map-values-core.js');
 const original = await compile(source);
-assert.deepEqual(Object.keys(original), ['createCanonicalSupplyTransferFake', 'createCanonicalSupplyViewFake', 'createReadHashFake', 'createSnapshotReadStartFake', 'createSupplyBoundaryFake']);
-for (const name of ['shared-read-hash-kernel-fake', 'read-hash-fake', 'snapshot-read-start-fake', 'canonical-supply-view-fake', 'canonical-supply-transfer-fake', 'supply-boundary-fake']) {
+assert.deepEqual(Object.keys(original), ['createCanonicalSupplyTransferFake', 'createCanonicalSupplyViewFake', 'createPendingBindingFake', 'createPendingConstructionFake', 'createReadHashFake', 'createSnapshotReadStartFake', 'createSupplyBoundaryFake']);
+for (const name of ['shared-read-hash-kernel-fake', 'read-hash-fake', 'snapshot-read-start-fake', 'canonical-supply-view-fake', 'canonical-supply-transfer-fake', 'supply-boundary-fake', 'pending-construction-fake', 'pending-binding-fake']) {
   const facade = await compile(readFileSync(new URL(`./${name}.ts`, import.meta.url), 'utf8'), `${name}.js`);
   const factory = name === 'snapshot-read-start-fake' ? 'createSnapshotReadStartFake'
     : name === 'canonical-supply-view-fake' ? 'createCanonicalSupplyViewFake'
       : name === 'canonical-supply-transfer-fake' ? 'createCanonicalSupplyTransferFake'
-        : name === 'supply-boundary-fake' ? 'createSupplyBoundaryFake' : 'createReadHashFake';
+        : name === 'supply-boundary-fake' ? 'createSupplyBoundaryFake'
+          : name === 'pending-construction-fake' ? 'createPendingConstructionFake'
+            : name === 'pending-binding-fake' ? 'createPendingBindingFake' : 'createReadHashFake';
   assert.deepEqual(Object.keys(facade), [factory]);
   assert.equal(facade[factory], original[factory]);
 }
@@ -45,7 +47,7 @@ assert.equal(boundary.checkRelation().ok, true);
 assert.equal(boundary.inspect().source.retainedTable, true);
 assert.equal(boundary.inspect().source.counts.discardPasses, 0);
 const boundaryControls = [
-  ['source gate bypass', [["if (result.ok && this.#normalControl?.state === 'stopped') return this.reply('supply_closed');", '']], 'control_stop_only',
+  ['source gate bypass', [["if (result.ok && this.#normalControl && this.#normalControl.state !== 'unused') return this.reply('supply_closed');", '']], 'control_stop_only',
     a => a.inspect().sourceNormalAllowed === false],
   ['foreign control admitted', [['a.#normalControl === control && control.state', 'true && control.state']], 'control_copy',
     a => a.checkNormal().reason === 'binding_mismatch'],
@@ -245,5 +247,5 @@ console.log(JSON.stringify({ compiled: true, sourceGrid: 75, rejectedMutations: 
   transferRetirementControls: transferRetirementControls.length,
   boundaryMutationControls: boundaryControls.length,
   boundaryValueMutationControls: boundaryValueControls.length, boundaryCountMutationControls: boundaryCountControls.length,
-  compatibilityFactories: 6, cExecution: 'not_connected', authority: 'none' }));
+  compatibilityFactories: 8, cExecution: 'not_connected', authority: 'none' }));
 } finally { rmSync(scratch, { recursive: true, force: true }); }

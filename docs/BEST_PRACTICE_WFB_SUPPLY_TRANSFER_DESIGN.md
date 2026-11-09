@@ -1,5 +1,7 @@
 # WF-B (C)：下位移譲claim・pending／非実行holderの差分設計
 
+同source結合追記（2026-11-09）: [回収基盤設計§14](BEST_PRACTICE_WFB_PENDING_CUSTODY_RETIREMENT_DESIGN.md)へ、同construction／source／controlのprivate結合、payload-free core／live cell、SourceRootSlotと保持表を合成実装した。旧unbound生成は同compositionへ配置し薄い旧入口を維持する。以下の過去追記の「source本体不変・bound化未実装」は当時の範囲であり、現状は§14を優先する。下位claim消費・回収・root finishは未実装。[検証記録](E2E_BEST_PRACTICE_WFB_PENDING_SOURCE_BINDING_2026-11-09.md)。
+
 空shell生成実装追記（2026-11-09）: [pending／failureの第1段階](BEST_PRACTICE_WFB_PENDING_CUSTODY_RETIREMENT_DESIGN.md)で、先行owner・固定scope・一度限り生成・部分capture保持を独立合成assemblyへ実装した。旧preflightとsourceの本体・exportは変更せず、bound化・payload移動・証拠発行・回収・finishは閉じたまま。[検証記録](E2E_BEST_PRACTICE_WFB_PENDING_CONSTRUCTION_2026-11-09.md)。
 
 回収境界詳細化追記（2026-11-09）: [pending／failureの型・生成順・固定回収条件](BEST_PRACTICE_WFB_PENDING_CUSTODY_RETIREMENT_DESIGN.md)で、先行RetentionRoot、部分生成、control／claimの参照退役、同root限定の一度限り終端許可を定義した。pending空だけを回収成功とせず、未確認時は保持とfinish保留を維持する。設計のみで移動・holder公開・C実行を追加しない。

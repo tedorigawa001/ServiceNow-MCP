@@ -1,5 +1,7 @@
 # WF-B (C)：移譲開始後の停止・所有境界とdetach後照合の差分設計
 
+同source結合追記（2026-11-09）: [回収基盤設計§14](BEST_PRACTICE_WFB_PENDING_CUSTODY_RETIREMENT_DESIGN.md)へ、同constructionのprivate結合・payload-free control coreとlive cell・正規SourceRootSlot・保持表を合成実装した。以下の過去追記の「source／control未接続」は当時の範囲。新結合でも下位claim消費・payload移動・detach・holder公開・全回収・root finishは0／未実装で、既存の消費前入口の挙動を維持する。[検証記録](E2E_BEST_PRACTICE_WFB_PENDING_SOURCE_BINDING_2026-11-09.md)。
+
 空shell生成実装追記（2026-11-09）: [回収基盤設計§13](BEST_PRACTICE_WFB_PENDING_CUSTODY_RETIREMENT_DESIGN.md)の独立合成入口へ、先行RetentionRoot・unbound pending／failureの4slot・生成claim・診断結果slotを追加した。既存source／controlには接続せず、生成prefixを保持して診断を封印するだけ。回収・root finish・下位claim消費は未実装。[検証記録](E2E_BEST_PRACTICE_WFB_PENDING_CONSTRUCTION_2026-11-09.md)。
 
 第2段階詳細化追記（2026-11-09）: [pending／failure内部型・先行生成と固定回収／finish gate](BEST_PRACTICE_WFB_PENDING_CUSTODY_RETIREMENT_DESIGN.md)で、unbound shellからの一度限り結合、生成prefix、8群の保持表、回収claim・未確認保持・PayloadGoneEvidenceとroot終端条件を具体化した。現control／元claim自身のanchor強参照も退役対象とし、payload-free identityとretirable bindingを分離する。設計のみでclaim消費・回収・finishは未実装のまま。

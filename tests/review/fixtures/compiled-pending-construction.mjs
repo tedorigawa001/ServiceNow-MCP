@@ -6,15 +6,21 @@ import { join } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import ts from 'typescript';
 
-const source = readFileSync(new URL('./pending-construction-fake.ts', import.meta.url), 'utf8');
+const source = readFileSync(new URL('./snapshot-read-composition-fake.ts', import.meta.url), 'utf8');
 const scratch = mkdtempSync(join(tmpdir(), 'wfb-pending-construction-'));
 async function compile(text, name) {
   const js = ts.transpileModule(text, { compilerOptions: { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.ES2022 } }).outputText;
-  const file = join(scratch, `${name}.mjs`); writeFileSync(file, js); return import(pathToFileURL(file).href);
+  const file = join(scratch, `${name}.js`); writeFileSync(file, js); return import(pathToFileURL(file).href);
 }
 try {
-  const m = await compile(source, 'original');
-  assert.deepEqual(Object.keys(m), ['createPendingConstructionFake']);
+  const dependency = ts.transpileModule(readFileSync(new URL('./source-map-values-core.ts', import.meta.url), 'utf8'),
+    { compilerOptions: { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.ES2022 } }).outputText;
+  writeFileSync(join(scratch, 'package.json'), '{"type":"module"}');
+  writeFileSync(join(scratch, 'source-map-values-core.js'), dependency);
+  const m = await compile(source, 'snapshot-read-composition-fake');
+  const facade = await compile(readFileSync(new URL('./pending-construction-fake.ts', import.meta.url), 'utf8'), 'facade');
+  assert.deepEqual(Object.keys(facade), ['createPendingConstructionFake']);
+  assert.equal(facade.createPendingConstructionFake, m.createPendingConstructionFake);
   const a = m.createPendingConstructionFake(); assert.equal(a.prepare().ok, true);
   assert.deepEqual(Object.keys(a), ['prepare', 'close', 'seal', 'inspect']);
   assert.equal(a.inspect().retainedSlots, 4); assert.equal(a.inspect().confirmedSlots, 4);
