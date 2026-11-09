@@ -12,6 +12,7 @@ async function load(text, name) { const f = join(dir, name + '.js'); writeFileSy
 try {
   writeFileSync(join(dir, 'package.json'), '{"type":"module"}');
   writeFileSync(join(dir, 'source-map-values-core.js'), emit(readFileSync(new URL('./source-map-values-core.ts', import.meta.url), 'utf8')));
+  writeFileSync(join(dir, 'supply-construction-kernel.js'), emit(readFileSync(new URL('./supply-construction-kernel.ts', import.meta.url), 'utf8')));
   const original = await load(source, 'original');
   const run = (m, script) => { const a = m.createAbsenceJournalFake(script); a.prepare(); a.seal(); return a.inspect(); };
   const normal = run(original, 'normal');

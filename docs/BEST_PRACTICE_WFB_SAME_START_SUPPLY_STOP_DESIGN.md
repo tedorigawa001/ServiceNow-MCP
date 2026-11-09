@@ -2,9 +2,11 @@
 
 Version: draft-0.1 / Date: 2026-11-09 / 基準HEAD: `b8dc4b3`。
 
-Status: **MDのみ。既存issuerへの接続・writer gate・正規metadata供給は未実装。** 親は[private供給・先行保持境界](BEST_PRACTICE_WFB_JOURNAL_ISSUER_SUPPLY_DESIGN.md)と[Journal／packet設計](BEST_PRACTICE_WFB_JOURNAL_PACKET_DESIGN.md)。[先行shell検証記録](E2E_BEST_PRACTICE_WFB_JOURNAL_SUPPLY_SHELL_2026-11-09.md)は独立合成assemblyの保証であって、同start接続の保証ではない。
+実装追記（2026-11-09）: 最小値kernel配置と実issuer／同startの先行構築・SS03のdescriptor結合部分だけを合成依存で実装した。writer停止・Journal供給は未接続。[今回の検証記録](E2E_BEST_PRACTICE_WFB_CANONICAL_SUPPLY_CONSTRUCTION_2026-11-09.md)。
 
-正式発行口・C実行入口閉鎖、全体受付無効、Unknown、VM／監視／telemetry調査保留を維持する。今回は実装・試験・実接続・実通信・設定変更・Pushを行わない。以下の内部型・gate・継続・理由は設計案であり、admission消費・packet生成・値capture・field clear・証拠・root終端を許可しない。
+Status: **先行構築・readonly private結合だけ合成実装。writer gate・正規metadata供給は未実装。** 親は[private供給・先行保持境界](BEST_PRACTICE_WFB_JOURNAL_ISSUER_SUPPLY_DESIGN.md)と[Journal／packet設計](BEST_PRACTICE_WFB_JOURNAL_PACKET_DESIGN.md)。[先行shell検証記録](E2E_BEST_PRACTICE_WFB_JOURNAL_SUPPLY_SHELL_2026-11-09.md)は独立合成assemblyの保証であって、同start接続の保証ではない。
+
+正式発行口・C実行入口閉鎖、全体受付無効、Unknown、VM／監視／telemetry調査保留を維持する。初版はMDのみ、今回の実装は§9に限定する。writer停止・Journal供給・実接続・実通信・設定変更・Pushを行わない。以下の内部型・gate・継続・理由は設計案または合成契約であり、admission消費・packet生成・値capture・field clear・証拠・root終端を許可しない。
 
 ## 1 読み取り差分と採用する配置
 
@@ -129,3 +131,15 @@ producer source／binding／Journalの所有権は同startに残り、metadata�
 実装は(1)最小kernel配置と正規先行構築／SS03、(2)全writer gate・frame合流と停止coverage、(3)同startの正規metadata reader・Journal封印、(4)既存発行後のanchor／view postと借用退役の順に分割する。停止coverageが未確認ならmetadata供給へ進めない。admission consumer・packet生成はさらに別工程である。
 
 今回は着手時HEAD `b8dc4b3`のcompositionと既存設計を読み取り確認した。着手時に作業中だった`journal-supply-shell.test.ts`と`compiled-journal-supply-shell.mjs`は変更せず、内容hashの一致を確認した（終了前に別コミット`132b1b7`へ収録済み）。本作業では試験を実行せず、その別作業の試験保証を新接続の根拠に使わない。新MDと親2文書のみを更新。ビルド・試験・梱包・実装は未実施。3文書のローカルリンク14件、SS00〜SS07の8段階、WG01〜WG08の8群、ST01〜ST12の12条件の重複・欠落なしと差分空白を確認した。文書整合の確認であり実装coverageの証明ではない。今回のMDは未コミット、Pushなし。
+
+## 9 最小kernelと正規先行構築の実装境界（2026-11-09）
+
+- 共通kernelは開発専用`tests/review/fixtures/supply-construction-kernel.ts`。固定25項目のC→F値配列とstage遷移関係だけを共有し、identity発行・payload・constructor callback・登録口を持たない。旧shellは独立module／brand／台帳を維持し、値kernelだけをimportする。
+- 正規rootはcomposition内のCanonicalSupplyConstruction。新factory `createCanonicalSupplyConstructionFake`がprepare／check／close／値診断だけを返す。旧互換factoryのexportは不変、共通compositionのexport集合には新factoryを明示追加する。実start／issuerを外から受け取るadopt口はない。
+- 先行FailureShellと固定35捕捉枠→結果shell(1)→供給slot(2)→packet空保持(3)→layout(4)→cell空保持25個(5〜29)→admission未使用slot(30)→WriterGate**空保持slot**(31)→既存CaptureAdmissionAssemblyの構築・捕捉(32)→同start／正規scope／既存epoch／packet originのdescriptor(33)→未消費claim(34)→同参照の結合先(35)という順序。
+- SS02のwriter gate本体と停止権限はまだ作らず、31は予約保持slotだけ。SS03もreadonly descriptor結合に限定する。新しい正規rootは既存issuer constructorを一度呼ぶため、そのissuerが所有する実RetirementStartAssemblyを使い、合成start代役・第2startは作らない。issuer／startのprepare／request／admit／closeは呼ばず、source未生成・内部admission未発行・root seal0のまま。
+- issuerの正規scope参照・epoch・packet originをprivate static継続で取得・照合する。start側は正規owner／issued pin／claimの各fieldと未消費状態も再確認する。fresh scope wrapperは値再確認用で、正規`#scope`の参照を置換しない。別brand・同値copy・余剰field・別start／scope／epochは結合前に拒否する。
+- 全生成点はbefore／attempt／provisional捕捉／confirmedを分離し、未捕捉と保持済みprefixを保持する。issuerCapturesは返却済みissuerの捕捉数であり、attempting時の内部確保を未生成と断定する件数ではない。元FailureShell以前の実OOM、constructor内部の未捕捉参照・診断必着はUnknown。
+- ST01／ST02の構築部分とST11／ST12を部分検証。WG01〜WG08の停止、Journal reader／封印、SS04〜SS07、final anchor／view、供給claim消費・admission消費・packet生成は未接続。closeも外側診断の停止だけで、既存issuer.closeを呼んで停止処理を先取りしない。
+
+初版§8末尾は文書作成時の記録（後に`5d16867`でコミット）。今回の実装は別の未コミット変更として検証記録へ保持する。追加費用・layout・実E／S・全体work受付はUnknownを維持する。

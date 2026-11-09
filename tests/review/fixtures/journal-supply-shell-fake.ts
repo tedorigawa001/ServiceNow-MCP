@@ -1,7 +1,7 @@
-/** Independent synthetic construction only. No imports, issuer adoption, source, Journal or I/O. */
+/** Independent synthetic construction. Only the values kernel is shared; no issuer/source/Journal/I/O. */
+import { SUPPLY_FIELDS as FIELDS, supplyStageAllows, type SupplyConstructionStage as Stage } from './supply-construction-kernel.js';
 const TARGET_BRAND: unique symbol = Symbol('synthetic-journal-target');
 const CLAIM_BRAND: unique symbol = Symbol('synthetic-supply-claim');
-type Stage = 'not_started' | 'attempting' | 'provisional' | 'confirmed';
 type Reason = 'none' | 'input_rejected' | 'construction_unconfirmed' | 'binding_mismatch' | 'duplicate_preparation' | 'closed';
 interface Scope { readonly owner: object; readonly construction: object; readonly retention: object;
   readonly sourceSlot: object; readonly claim: object }
@@ -14,7 +14,6 @@ interface CellHolder extends EmptyHolder { readonly cell: number; readonly field
 interface JournalSupplySlot { readonly kind: 'supply_slot'; state: 'unbound' | 'bound' }
 interface FailureShell { first: Reason; phase: number; boundary: 'none' | 'before' | 'attempt' | 'after' | 'done' | 'binding'; }
 interface ProductSlot { stage: Stage; value: object | undefined }
-const FIELDS = Object.freeze([1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 15, 16, 17, 18, 19, 20, 21, 22, 23, 25, 26, 27]);
 // 1 result shell, 2 supply slot, 3 packet holder, 4 layout, 5..29 cell holders,
 // 30 admission use slot, 31 synthetic start, 32 target descriptor, 33 supply claim, 34 bound descriptor.
 class SupplyShellAssembly {
@@ -41,7 +40,9 @@ class SupplyShellAssembly {
   }
   private mint<T extends object>(n: number, operation: () => T): T {
     this.fault(n, 'before');
-    const slot = this.#products[n - 1]; slot.stage = 'attempting'; this.fault(n, 'attempt');
+    const slot = this.#products[n - 1];
+    if (!supplyStageAllows(slot.stage, 'attempting')) throw Error('construction_stage');
+    slot.stage = 'attempting'; this.fault(n, 'attempt');
     const value = operation(); slot.value = value; slot.stage = 'provisional'; this.fault(n, 'after');
     slot.stage = 'confirmed'; this.fault(n, 'done'); return value;
   }

@@ -12,6 +12,7 @@ async function load(source, name) { const f = join(dir, name + '.js'); writeFile
 try {
   writeFileSync(join(dir, 'package.json'), '{"type":"module"}');
   writeFileSync(join(dir, 'source-map-values-core.js'), emit(readFileSync(new URL('./source-map-values-core.ts', import.meta.url), 'utf8')));
+  writeFileSync(join(dir, 'supply-construction-kernel.js'), emit(readFileSync(new URL('./supply-construction-kernel.ts', import.meta.url), 'utf8')));
   const original = await load(text, 'snapshot-read-composition-fake');
   const thin = await load(readFileSync(new URL('./capture-admission-fake.ts', import.meta.url), 'utf8'), 'thin');
   assert.deepEqual(Object.keys(thin), ['createCaptureAdmissionFake']);
@@ -19,7 +20,7 @@ try {
   const clauses = [
     ['scope_owner', 's.owner === expected.owner', 'true'], ['scope_construction', 's.construction === expected.construction', 'true'],
     ['scope_retention', 's.retention === expected.retention', 'true'], ['scope_sourceSlot', 's.sourceSlot === expected.sourceSlot', 'true'],
-    ['scope_claim', 's.claim === expected.claim', 'true'], ['scope_extra', 'Object.keys(s).length === 5', 'true'],
+    ['scope_claim', 's.claim === expected.claim', 'true'], ['scope_extra', 'return s === this.#scope && Object.keys(s).length === 5', 'return s === this.#scope && true'],
     ['ack_copy', 'a !== this.#issuedAck', 'false'], ['ack_epoch', 'a.epoch !== this.#epoch', 'false'],
     ['ack_origin', 'a.origin !== this.#ackOrigin', 'false'], ['ack_source', 'a.source === c.source', 'true'], ['ack_root', 'a.root === c.root', 'true'],
     ['ack_extra', 'Object.keys(a).length === 6', 'true'], ['ack_checkpoint', 'a.checkpoint === c.checkpoint', 'true'],

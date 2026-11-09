@@ -12,6 +12,7 @@ async function load(source, name) { const f = join(dir, name + '.js'); writeFile
 try {
   writeFileSync(join(dir, 'package.json'), '{"type":"module"}');
   writeFileSync(join(dir, 'source-map-values-core.js'), emit(readFileSync(new URL('./source-map-values-core.ts', import.meta.url), 'utf8')));
+  writeFileSync(join(dir, 'supply-construction-kernel.js'), emit(readFileSync(new URL('./supply-construction-kernel.ts', import.meta.url), 'utf8')));
   const m = await load(text, 'snapshot-read-composition-fake');
   const thin = await load(readFileSync(new URL('./retirement-start-fake.ts', import.meta.url), 'utf8'), 'thin');
   assert.deepEqual(Object.keys(thin), ['createRetirementStartFake']);

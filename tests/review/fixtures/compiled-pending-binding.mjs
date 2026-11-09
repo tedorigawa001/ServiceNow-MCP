@@ -14,6 +14,7 @@ async function load(source, name) {
 try {
   writeFileSync(join(scratch, 'package.json'), '{"type":"module"}');
   writeFileSync(join(scratch, 'source-map-values-core.js'), emit(readFileSync(new URL('./source-map-values-core.ts', import.meta.url), 'utf8')));
+  writeFileSync(join(scratch, 'supply-construction-kernel.js'), emit(readFileSync(new URL('./supply-construction-kernel.ts', import.meta.url), 'utf8')));
   const m = await load(text, 'snapshot-read-composition-fake');
   const thin = await load(readFileSync(new URL('./pending-binding-fake.ts', import.meta.url), 'utf8'), 'thin');
   assert.deepEqual(Object.keys(thin), ['createPendingBindingFake']);

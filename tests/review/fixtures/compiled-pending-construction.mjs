@@ -17,6 +17,7 @@ try {
     { compilerOptions: { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.ES2022 } }).outputText;
   writeFileSync(join(scratch, 'package.json'), '{"type":"module"}');
   writeFileSync(join(scratch, 'source-map-values-core.js'), dependency);
+  await compile(readFileSync(new URL('./supply-construction-kernel.ts', import.meta.url), 'utf8'), 'supply-construction-kernel');
   const m = await compile(source, 'snapshot-read-composition-fake');
   const facade = await compile(readFileSync(new URL('./pending-construction-fake.ts', import.meta.url), 'utf8'), 'facade');
   assert.deepEqual(Object.keys(facade), ['createPendingConstructionFake']);

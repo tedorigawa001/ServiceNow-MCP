@@ -13,7 +13,11 @@ async function load(text, name) {
   return import(pathToFileURL(file).href);
 }
 try {
-  assert(!/^import /m.test(source), 'construction must not adopt issuer/runtime dependencies');
+  const imports = source.match(/^import .*$/gm);
+  assert.equal(imports?.length, 1); assert(imports[0].endsWith("from './supply-construction-kernel.js';"));
+  writeFileSync(join(dir, 'supply-construction-kernel.js'), ts.transpileModule(readFileSync(new URL('./supply-construction-kernel.ts', import.meta.url), 'utf8'),
+    { compilerOptions: { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.ES2022 } }).outputText);
+  writeFileSync(join(dir, 'package.json'), '{"type":"module"}');
   const base = await load(source, 'base');
   assert.deepEqual(Object.keys(base), ['createJournalSupplyShellFake']);
   const clauses = [

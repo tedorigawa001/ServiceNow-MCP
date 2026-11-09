@@ -1,6 +1,7 @@
 /** Synthetic B and C preparation only. C execution, transfer and formal issuance remain closed. */
 import { createHash, type Hash } from 'node:crypto';
 import { inspectSourceMapDraft } from './source-map-values-core.js';
+import { SUPPLY_FIELDS, supplyStageAllows, type SupplyConstructionStage } from './supply-construction-kernel.js';
 
 
 type Reason = 'none' | 'binding' | 'incomplete' | 'source_limit' | 'source_unavailable' | 'source_changed'
@@ -2246,6 +2247,7 @@ type RetirementStartDisposition = 'prepared' | 'preparation_rejected' | 'prepara
 interface AdmissionScope { readonly owner: object; readonly construction: object; readonly retention: object;
   readonly sourceSlot: object; readonly claim: object }
 let captureStartAccess: Readonly<{ scope(a: RetirementStartAssembly): AdmissionScope; ready(a: RetirementStartAssembly): boolean;
+  constructionMatches(a: RetirementStartAssembly, scope: AdmissionScope): boolean;
   context(a: RetirementStartAssembly): OwnedStopContext; seal(a: RetirementStartAssembly): boolean;
   probe(a: RetirementStartAssembly): Readonly<Record<string, boolean | string>> | undefined }>;
 class RetirementStartAssembly {
@@ -2269,6 +2271,13 @@ class RetirementStartAssembly {
   #attempt: 'not_started' | 'running' | 'binding_rejected' = 'not_started';
   static {
     captureStartAccess = Object.freeze({
+      constructionMatches(a: RetirementStartAssembly, s: AdmissionScope): boolean {
+        return Object.keys(s).length === 5 && s.owner === a.#owner && s.construction === a.#issuedPin.construction
+          && s.retention === a.#issuedPin.retention && s.sourceSlot === a.#issuedPin.sourceSlot && s.claim === a.#issuedClaim.origin
+          && a.#claimOwner === a.#owner && a.#claim === a.#issuedClaim && a.#pin === a.#issuedPin
+          && a.#claim.owner === a.#owner && a.#claim.pin === a.#pin && !a.#claim.spent
+          && retirementBindingAccess.matches(a.#binding, a.#pin);
+      },
       scope(a: RetirementStartAssembly): AdmissionScope { return Object.freeze({ owner: a.#owner, ...a.#issuedPin, claim: a.#issuedClaim.origin }); },
       ready(a: RetirementStartAssembly): boolean { return a.#attempt === 'running' && !a.#frame && !a.#frameUnconfirmed && !a.#rejectedReply; },
       context(a: RetirementStartAssembly): OwnedStopContext { return retirementBindingAccess.stopContext(a.#binding); },
@@ -2385,6 +2394,12 @@ interface PreparedClearAuthorityDraft { readonly scope: AdmissionScope; readonly
   readonly kind: 'source_backed' | 'local_only'; readonly packet: object; readonly ready: false; readonly captureReady: 'not_connected' }
 type AdmissionIssueReason = 'none' | 'binding_mismatch' | 'input_rejected' | 'not_ready' | 'stop_unconfirmed' | 'issue_unconfirmed';
 type AdmissionIssueDisposition = Exclude<AdmissionIssueReason, 'none' | 'binding_mismatch'> | 'issued' | 'already_issued' | 'in_progress' | 'binding_rejected';
+interface CanonicalConstructionTarget { readonly start: RetirementStartAssembly; readonly scope: AdmissionScope;
+  readonly epoch: object; readonly packet: object }
+let issuerConstructionAccess: Readonly<{
+  target(a: CaptureAdmissionAssembly): CanonicalConstructionTarget;
+  matches(a: CaptureAdmissionAssembly, t: CanonicalConstructionTarget): boolean;
+}>;
 class CaptureAdmissionAssembly {
   readonly #start: RetirementStartAssembly;
   readonly #scope: AdmissionScope;
@@ -2400,6 +2415,14 @@ class CaptureAdmissionAssembly {
   #seals = 0; #ackIssues = 0; #pinIssues = 0; #admissionIssues = 0;
   #rootGates: Readonly<Record<string, boolean | string>> | undefined;
   #reentry: string | undefined;
+  static {
+    issuerConstructionAccess = Object.freeze({
+      target: (a: CaptureAdmissionAssembly) => Object.freeze({ start: a.#start, scope: a.#scope, epoch: a.#epoch, packet: a.#packetOrigin }),
+      matches: (a: CaptureAdmissionAssembly, t: CanonicalConstructionTarget) => t.start === a.#start && t.scope === a.#scope
+        && t.epoch === a.#epoch && t.packet === a.#packetOrigin && a.#state === 'unused' && !a.#failure
+        && a.scopeMatches(t.scope) && captureStartAccess.constructionMatches(a.#start, t.scope),
+    });
+  }
   constructor(private readonly scenario: string, admitted: boolean) {
     this.#start = new RetirementStartAssembly(['source_unknown', 'frame_exit_failure', 'source_rejected', 'prepare_failure', 'control_unconfirmed'].includes(scenario) ? scenario : 'normal', admitted);
     const base = captureStartAccess.scope(this.#start);
@@ -2522,6 +2545,126 @@ export function createCaptureAdmissionFake(...args: readonly unknown[]) {
   return Object.freeze({ prepare: (...xs: readonly unknown[]) => xs.length ? a.rejectArguments() : a.prepare(),
     admit: (...xs: readonly unknown[]) => xs.length ? a.rejectArguments() : a.admit(),
     close: (...xs: readonly unknown[]) => xs.length ? a.rejectArguments() : a.close(), inspect: () => a.inspect() });
+}
+
+const CONSTRUCTION_TARGET_BRAND: unique symbol = Symbol('canonical-supply-construction');
+const CONSTRUCTION_CLAIM_BRAND: unique symbol = Symbol('canonical-supply-claim');
+interface BoundConstruction extends CanonicalConstructionTarget { readonly [CONSTRUCTION_TARGET_BRAND]: true }
+interface ConstructionClaim { readonly [CONSTRUCTION_CLAIM_BRAND]: true; readonly target: BoundConstruction; readonly state: 'unused' }
+// The same real issuer/start, but no calls to prepare/request/admit/close or Journal readers.
+class CanonicalSupplyConstruction {
+  readonly #failure: { first: 'none' | 'input_rejected' | 'construction_unconfirmed' | 'binding_mismatch' | 'duplicate_preparation' | 'closed'; phase: number; boundary: string };
+  readonly #slots: { stage: SupplyConstructionStage; value: object | undefined }[];
+  #frame = false; #started = false; #closed = false; #bound = false;
+  #reply: Readonly<{ ok: boolean; disposition: string; first: string }> | undefined;
+  #reentry: string | undefined;
+  constructor(private readonly script: string, admitted: boolean) {
+    this.#failure = { first: admitted ? 'none' : 'input_rejected', phase: 0, boundary: 'none' };
+    this.#slots = Array.from({ length: 35 }, () => ({ stage: 'not_started', value: undefined }));
+  }
+  private result(ok: boolean, disposition: string) { return Object.freeze({ ok, disposition, first: this.#failure.first }); }
+  private reject(reason: 'input_rejected' | 'construction_unconfirmed' | 'binding_mismatch' | 'duplicate_preparation' | 'closed') {
+    if (this.#failure.first === 'none') this.#failure.first = reason;
+    return this.#reply ??= this.result(false, reason);
+  }
+  private fault(phase: number, boundary: string) {
+    this.#failure.phase = phase; this.#failure.boundary = boundary;
+    if (this.script === `${boundary}_${phase}`) throw Error('private_canonical_construction');
+  }
+  private mint<T extends object>(n: number, operation: () => T): T {
+    this.fault(n, 'before'); const s = this.#slots[n - 1];
+    if (!supplyStageAllows(s.stage, 'attempting')) throw Error('construction_stage');
+    s.stage = 'attempting'; this.fault(n, 'attempt');
+    const v = operation(); s.value = v; s.stage = 'provisional'; this.fault(n, 'after');
+    s.stage = 'confirmed'; this.fault(n, 'done'); return v;
+  }
+  private probe(t: BoundConstruction): BoundConstruction {
+    if (this.script === 'target_brand') return Object.freeze({ ...t, [CONSTRUCTION_TARGET_BRAND]: false }) as unknown as BoundConstruction;
+    if (this.script === 'target_extra') return Object.freeze({ ...t, extra: true });
+    if (this.script === 'start_copy') return Object.freeze({ ...t, start: Object.freeze({}) }) as unknown as BoundConstruction;
+    if (this.script === 'scope_copy') return Object.freeze({ ...t, scope: Object.freeze({ ...t.scope }) });
+    if (this.script === 'epoch' || this.script === 'packet') return Object.freeze({ ...t, [this.script]: Object.freeze({}) });
+    return t;
+  }
+  private matches(): boolean {
+    const issuer = this.#slots[31].value as CaptureAdmissionAssembly | undefined;
+    const issued = this.#slots[32].value as BoundConstruction | undefined;
+    const claim = this.#slots[33].value as ConstructionClaim | undefined;
+    const t = this.#slots[34].value as BoundConstruction | undefined;
+    return !!issuer && !!issued && !!claim && !!t && t === issued && Reflect.ownKeys(t).length === 5
+      && t[CONSTRUCTION_TARGET_BRAND] === true && claim[CONSTRUCTION_CLAIM_BRAND] === true && claim.target === issued && claim.state === 'unused'
+      && issuerConstructionAccess.matches(issuer, t)
+      && this.#slots.slice(0, 31).every(s => s.stage === 'confirmed' && !!s.value);
+  }
+  prepare() {
+    if (this.#reply) return this.#reply;
+    if (this.#frame) return this.result(false, 'construction_in_progress');
+    if (this.#failure.first !== 'none') return this.reject(this.#failure.first);
+    if (this.#closed) return this.result(false, 'closed');
+    if (this.#started) return this.reject('duplicate_preparation');
+    this.#started = true; this.#frame = true;
+    try {
+      this.mint(1, () => Object.freeze({ kind: 'result_shell', value: undefined }));
+      this.mint(2, () => ({ kind: 'supply_slot', state: 'unbound' }));
+      this.mint(3, () => Object.freeze({ kind: 'packet_holder', reference: undefined }));
+      this.mint(4, () => SUPPLY_FIELDS);
+      for (let i = 0; i < 25; i++) this.mint(i + 5, () => Object.freeze({ cell: i + 1, field: SUPPLY_FIELDS[i], reference: undefined }));
+      this.mint(30, () => Object.freeze({ kind: 'admission_use_slot', state: 'unused' }));
+      this.mint(31, () => Object.freeze({ kind: 'writer_gate_holder', reference: undefined }));
+      if (this.script === 'reenter') this.#reentry = this.prepare().disposition;
+      if (this.script === 'close_in_frame') this.close();
+      if (this.#closed) return this.reject('closed');
+      const issuer = this.mint(32, () => new CaptureAdmissionAssembly(this.script.startsWith('scope_') && this.script !== 'scope_copy' ? this.script : 'normal', true));
+      const issued = this.mint(33, () => {
+        const t = Object.freeze({ ...issuerConstructionAccess.target(issuer), [CONSTRUCTION_TARGET_BRAND]: true as const });
+        return this.probe(t);
+      });
+      this.mint(34, () => Object.freeze({ [CONSTRUCTION_CLAIM_BRAND]: this.script !== 'claim_brand',
+        target: this.script === 'claim_target' ? Object.freeze({ ...issued }) : issued,
+        state: this.script === 'claim_state' ? 'spent' : 'unused' }) as unknown as ConstructionClaim);
+      this.mint(35, () => this.script === 'target_copy' ? Object.freeze({ ...issued }) : issued);
+      this.#failure.phase = 35; this.#failure.boundary = 'binding';
+      if (!this.matches()) return this.reject('binding_mismatch');
+      (this.#slots[1].value as { state: string }).state = 'bound'; this.#bound = true;
+      return this.result(true, 'bound_only');
+    } catch { return this.reject('construction_unconfirmed'); }
+    finally { this.#frame = false; }
+  }
+  check() {
+    if (this.#reply) return this.#reply;
+    if (this.#frame) return this.result(false, 'construction_in_progress');
+    if (this.#failure.first !== 'none') return this.reject(this.#failure.first);
+    if (!this.#started && this.#closed) return this.result(false, 'closed');
+    if (!this.#bound) return this.result(false, 'not_ready');
+    if (!this.matches()) return this.reject('binding_mismatch');
+    return this.result(false, 'blocked_supply');
+  }
+  close() {
+    if (this.#reply) return this.#reply;
+    this.#closed = true; // Outer stop only. Do not invoke existing issuer.close()/request().
+    if (this.#frame) return this.result(false, 'deferred_frame');
+    return this.#started ? this.reject('closed') : this.result(false, 'closed');
+  }
+  rejectInput() { return this.reject('input_rejected'); }
+  inspect() {
+    const issuer = this.#slots[31].value as CaptureAdmissionAssembly | undefined;
+    return Object.freeze({ model: 'wfb-canonical-supply-construction-1', bound: this.#bound, first: this.#failure.first,
+      phase: this.#failure.phase, boundary: this.#failure.boundary, retained: this.#slots.filter(s => !!s.value).length,
+      stages: Object.freeze(this.#slots.map(s => s.stage)), frame: this.#frame ? 'active' : 'inactive', reentry: this.#reentry,
+      issuer: issuer?.inspect(), layout: this.#slots[3].value ? SUPPLY_FIELDS : undefined,
+      issuerCaptures: Number(!!issuer), sourcePreparations: 0, writerStop: 'not_connected', journalSupply: 'not_connected',
+      supplyConsumptions: 0, admissionConsumptions: 0, packetObjects: 0, cellObjects: 0, finalAnchor: 'not_issued', proofIssuance: 'closed' });
+  }
+}
+export function createCanonicalSupplyConstructionFake(...args: readonly unknown[]) {
+  const s = args.length ? args[0] : 'normal';
+  const scripts = ['normal', 'reenter', 'close_in_frame', 'target_copy', 'target_brand', 'target_extra', 'start_copy', 'scope_copy', 'epoch', 'packet',
+    'claim_brand', 'claim_target', 'claim_state', 'scope_owner', 'scope_construction', 'scope_retention', 'scope_sourceSlot', 'scope_claim', 'scope_extra'];
+  const valid = args.length <= 1 && typeof s === 'string' && (scripts.includes(s) || /^(before|attempt|after|done)_([1-9]|[12][0-9]|3[0-5])$/.test(s));
+  const a = new CanonicalSupplyConstruction(valid ? s as string : 'normal', valid);
+  return Object.freeze({ prepare: (...xs: readonly unknown[]) => xs.length ? a.rejectInput() : a.prepare(),
+    check: (...xs: readonly unknown[]) => xs.length ? a.rejectInput() : a.check(),
+    close: (...xs: readonly unknown[]) => xs.length ? a.rejectInput() : a.close(), inspect: () => a.inspect() });
 }
 
 // Diagnostics-only synthetic generation binding. No journal/fact/scope/producer references escape.
