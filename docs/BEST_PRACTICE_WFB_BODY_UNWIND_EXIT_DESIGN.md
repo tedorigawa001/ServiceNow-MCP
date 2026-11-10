@@ -1,6 +1,8 @@
 # WF-B B03後半：active後・body未開始／完了と同duty固定exit契約
 
-Version: draft-0.1 / Date: 2026-11-10 / 読み取り基準HEAD: `5939864`。
+Version: draft-0.2 / Date: 2026-11-10 / 読み取り基準HEAD: `5939864`（レビュー修正基準HEAD: `42e3053`）。
+
+draft-0.1のレビュー修正（MDのみ）：§5表の1行目「正規未呼出し」は、B03-Cの`not_called`（grant生成器の未呼出し）と同じ語でbody未呼出しを表していた。この行はgrantなしと正規provisionalの両方を含むため、「body未呼出し」へ改めた。§12のコミット前の記述には、コミット後の注記を追加した。
 
 Status: **詳細設計のみ。未実装・受入試験未実施・body起動未承認。** 親は[B03前半・同target局所退役](BEST_PRACTICE_WFB_FIXED_EXIT_LOCAL_RETIREMENT_DESIGN.md)と[(B) grant／固定exit責務](BEST_PRACTICE_WFB_PROBE_GRANT_EXIT_DUTY_DESIGN.md)。(C)との境界は[同startのenter／確認済みexit](BEST_PRACTICE_WFB_PROBE_FRAME_ENTER_EXIT_DESIGN.md)、前工程の実績は[B03-C検証・再検査レビュー](E2E_BEST_PRACTICE_WFB_PROBE_LOCAL_EXIT_2026-11-10.md)を参照する。
 
@@ -70,7 +72,7 @@ BA02の予約から唯一のprivate呼出しまでに任意hook／通知／await
 
 | 履歴variant | 必須のprivate事実 | body結果／理由 | 全post後にだけ許す局所終端 |
 |---|---|---|---|
-| capture後・active未達の正規未呼出し | 既存B03-C相当の正規履歴。grantなし、または正規provisional | not_started／none。元capture first保持 | 既存held_not_started。grantなしはnot_required、それ以外は同target退役確認が必要 |
+| capture後・active未達のbody未呼出し | 既存B03-C相当の正規履歴。grantなし、または正規provisional | not_started／none。元capture first保持 | 既存held_not_started。grantなしはnot_required、それ以外は同target退役確認が必要 |
 | active後・body call未予約 | 同grantのactivationConfirmed、同固定入口での未呼出し確認、入口閉鎖 | not_started／none。active後故障／stopは別診断 | 退役confirmed＋settled_not_started／held_not_started。body完了型へcast不可 |
 | body予約済み・先頭未到達を確認 | 上段＋callReserved=true、同call siteから呼ばれなかった正規prefix | not_started／none。予約は払い戻さない | 同上。未到達を確認できなければ次の未確認枝 |
 | 正常return | 同body originで実entry、同call siteへのnormal帰還と捕捉を確認 | returned／return、probe理由none | 退役confirmed＋settled_unsealed／held_unsealed |
@@ -194,3 +196,5 @@ compiledはscratch内だけで故障注入し、個々のguardを外すと「そ
 今回は本書と親2文書の参照だけを変更する。確認対象はローカルリンク、BA00〜03／BU00〜10／BH01〜14のID整合、前工程からの変更範囲、差分空白。ソース・試験・CHANGELOG・設定は変更せず、build／合成・compiled試験・body起動を行わない。§10は将来の受入条件であり、成功済み記録ではない。未コミット・Pushなし。
 
 文書検証結果：3文書のローカルリンク26件に欠落なし。BA4段階・BU11段階・BH14条件の順序／重複／欠落なし、全22表の列数と新規文書を含む空白／末尾改行に異常なし。src／tests／CHANGELOG／package manifest・lockfile／梱包・TypeScript設定はHEADと差分なし。index登録・ソース変更・試験実行・body起動は行っていない。
+
+上記の「未コミット・Pushなし」「index登録は行っていない」はコミット前の記録である。本書はその後`42e3053`としてコミットされ、draft-0.2のレビュー修正もMDのみで行った（Pushなし）。
