@@ -62,6 +62,27 @@ sourceのBP00〜04生成／固定化／private pin・claim消費・receiver占�
 
 最終確認では関連28ファイル2,164件、build、strictを再実行して成功し、全compiled20本の成功と、新compiledのprimitiveOnlyFields=19を追加した再実行の成功を確認した。全体lintはerror 0／既存warning 374。変更は合成fixture／試験／compiledとexport期待値・CHANGELOG・設計／検証文書の10ファイルだけで、src・manifest／lockfile・配布／TypeScript設定に差分なし。実接続・実通信・設定変更・index登録・コミット・Pushは行っていない。
 
+## レビュー修正（2026-11-11）
+
+基準HEADは`41ac31f`。修正前の全体検証は、lint・build・梱包分類・全vitest（334ファイル17,411件成功・失敗0）・compiled6本（bind-fields／body-bundle／body-live／body-seed／declared-actual／canonical-gate-draft）・差分空白検査のすべてが成功した。
+
+一時mutant11種を流した。killされたのは2種（返答cache、ループ内のclose判定）だけだった。両方で生存した9種の内訳は次のとおり。
+
+- `bodyFieldsIntact`のroot側2節：元baseの未使用、BC用shell未生成
+- root側inspectのallowlist 4種：`state`／`phase`／`failurePhase`／`reentry`
+- `bodyStarts`のprojection：固定0に戻しても落ちない
+- 等価と判断した2種：
+  - 最初の失敗位置の上書き防止。2回目のfailは同じphaseで起こる。
+  - `checkBodyBindFields`冒頭の`#fixed`返却。外側の`bodyBindFieldsReply`が失敗後の返答を必ずcacheするため、公開APIからは区別できない。
+
+修正として、compiledへ次を追加した。
+
+- root側intact 2節の対照（`rootIntactControls`）。beforeへの単一注入（bodyの`running`化、shellの混入）を当該節が`binding_mismatch`で拒否し、節を外すとbind_fields_heldになることを確認する。
+- `bodyStarts`の対照。bodyが`running`なら1と投影され、固定0の変異では0になることを確認する。
+- root側allowlist 4種の対照（`rootAllowlists`）。許可外値を`unconfirmed`と投影し、allowlistを外すと生の値が漏れることを確認する。
+
+RED／GREEN：修正前は上記7種が両方で生存した（RED）。修正後は7種すべてが新対照の期待値assertでkillされた（GREEN）。shell節の外部mutantは隣のbase対照のanchorも消したためanchor検査で止まった。そこでanchor文字列を保った同義mutantで再確認し、`seed-shell`対照の期待値assertで落ちることを確認した。
+
 ## コミット前の対象限定再検証（2026-11-11）
 
 上記の未コミット・index未登録という記述は前回作成時点の記録である。今回の対象10ファイルだけをindexへ登録し、そのindexの全追跡ファイルを新しい一時フォルダへ展開した。登録対象名が指定10件と一致し、各対象の内容がindexとbyte単位で同じであることを確認した。未登録・未追跡の他の作業内容はコピーせず、依存は既存のローカルnode_modulesを参照し、取得／導入は行っていない。

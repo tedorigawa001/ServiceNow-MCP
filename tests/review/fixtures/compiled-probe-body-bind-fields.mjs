@@ -84,6 +84,39 @@ try {
       `    this.#${field} = 'private_secret' as never;\n    return this.#bodyExpectedSourceIssued`);
     assert.equal(run(await load(corrupt, 'allowlist-' + i)).s.receiver[keys[i]], 'unconfirmed');
   }
+  // Root-side intact clauses: each rejects a single injected fault on its own; removing it lets the run hold.
+  const rootIntact = [
+    ['base', "this.#issuedCells!.body.state = 'running';", 'this.bodySeedBaseMatches() && ', ''],
+    ['seed-shell', 'this.#bodySeedShell = {} as never;', ' && this.#bodySeedShell === undefined', ''],
+  ];
+  for (const [name, code, a, b] of rootIntact) {
+    const injected = at(code), rejected = run(await load(injected, 'root-intact-' + name));
+    assert.equal(`${rejected.r.first}/${rejected.s.failurePhase}`, 'binding_mismatch/before', name);
+    assert.equal(run(await load(method(injected, 'bodyFieldsIntact', a, b), 'root-intact-mutant-' + name)).r.disposition, 'bind_fields_held', name);
+  }
+  // bodyStarts is derived from the real body cell; a fixed 0 would misreport a started body.
+  const started = run(await load(at("this.#issuedCells!.body.state = 'running';"), 'body-started'));
+  assert.equal(started.s.bodyStarts, 1);
+  const fixedZero = replace(at("this.#issuedCells!.body.state = 'running';"), "bodyStarts: this.#issuedCells?.body.state === 'running' ? 1 : 0,", 'bodyStarts: 0,');
+  assert.equal(run(await load(fixedZero, 'body-started-fixed-zero')).s.bodyStarts, 0);
+  // Root-side projection allowlists never echo an unexpected private scalar.
+  const atPhase = (p, code) => method(source, 'bodyFieldsPoint', '    this.#bodyFieldsPhase = phase;',
+    `    this.#bodyFieldsPhase = phase;\n    if (phase === '${p}') { ${code} }`);
+  const rootProjection = [
+    ['state', replace(source, "    this.#bodyFieldsState = 'held';\n    return this.reply(false, 'bind_fields_held');",
+      "    this.#bodyFieldsState = 'private_state' as never;\n    return this.reply(false, 'bind_fields_held');"),
+      "state: runEnum(this.#bodyFieldsState, ['not_started', 'checking', 'held', 'failed'], 'unconfirmed')", 'state: this.#bodyFieldsState', 'private_state'],
+    ['phase', atPhase('after', "this.#bodyFieldsPhase = 'private_phase';"),
+      "      phase: runEnum(this.#bodyFieldsPhase, ['none', 'before', 'checked', 'after'], 'unconfirmed'),", '      phase: this.#bodyFieldsPhase,', 'private_phase'],
+    ['failurePhase', atPhase('before', "this.#bodyFieldsPhase = 'private_phase'; throw Error('private_fault');"),
+      "      failurePhase: runEnum(this.#bodyFieldsFailurePhase, ['none', 'before', 'checked', 'after'], 'unconfirmed'),", '      failurePhase: this.#bodyFieldsFailurePhase,', 'private_phase'],
+    ['reentry', atPhase('before', "this.#bodyFieldsReentry = 'private_reentry';"),
+      "      reentry: runEnum(this.#bodyFieldsReentry, ['none', 'construction_in_progress'], 'unconfirmed'),", '      reentry: this.#bodyFieldsReentry,', 'private_reentry'],
+  ];
+  for (const [key, injected, a, b, secret] of rootProjection) {
+    assert.equal(run(await load(injected, 'root-projection-' + key)).s[key], 'unconfirmed', key);
+    assert.equal(run(await load(replace(injected, a, b), 'root-projection-echo-' + key)).s[key], secret, key);
+  }
   const prior = base.createProbeBodyBindFieldsFake('bf_prior_diagnostic'), first = prior.prepare();
   assert.equal(first.first, 'state_invalid'); assert.equal(prior.check({}), first); assert.equal(prior.inspect().receiver.first, 'state_invalid');
   const file = fileURLToPath(new URL('./snapshot-read-composition-fake.ts', import.meta.url));
@@ -120,5 +153,6 @@ const badCallback: BodyBindSourceInitial = { ...sourceInitial, execute: () => 1 
   assert.ok(diagnostics.every(d => d.file?.fileName === file && d.start >= source.length), 'baseline semantic diagnostic');
   assert.equal(new Set(diagnostics.map(d => d.file.getLineAndCharacterOfPosition(d.start).line)).size, 21);
   console.log(JSON.stringify({ compiled: true, receiverFieldControls: controls, primitiveOnlyFields: 19, sourceAbsentControls: 4, lateDrift: 2,
-    refusalDespiteReady: true, noSourceOrBCGeneration: true, receiverAllowlists: 9, firstDiagnosis: true, semanticRejections: 21 }));
+    refusalDespiteReady: true, noSourceOrBCGeneration: true, receiverAllowlists: 9, firstDiagnosis: true, semanticRejections: 21,
+    rootIntactControls: rootIntact.length, bodyStartsProjection: true, rootAllowlists: rootProjection.length }));
 } finally { rmSync(dir, { recursive: true, force: true }); }

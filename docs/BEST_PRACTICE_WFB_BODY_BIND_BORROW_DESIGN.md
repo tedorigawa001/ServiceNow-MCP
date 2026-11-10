@@ -1,6 +1,8 @@
 # WF-B body bind：状態型・phase検査と同startの先行borrow／診断slot
 
-Version: draft-0.2 / Date: 2026-11-10 / 設計基準HEAD: `29c53e1` / レビュー追加: `5ec73dd` / 原始field限定実装基準HEAD: `e6cc8cd`。
+Version: draft-0.3 / Date: 2026-11-11 / 設計基準HEAD: `29c53e1` / レビュー追加: `5ec73dd` / 原始field限定実装基準HEAD: `e6cc8cd` / 原始field実装レビュー修正基準HEAD: `41ac31f`。
+
+draft-0.2のレビュー修正：`bodyFieldsIntact`のroot側2節（元baseの未使用、BC用shell未生成）は、単独で外しても試験が落ちなかった。root側inspectの`state`／`phase`／`failurePhase`／`reentry`のallowlistと、実body cellから導く`bodyStarts`の投影も観測していなかった。各節の単一注入と除去の対照、4つのallowlistと`bodyStarts`の対照をcompiledへ追加した。最初の失敗位置の上書き防止と、`checkBodyBindFields`冒頭の`#fixed`返却は等価と判断し、§10に記録した。
 
 Status: **§9の分割(1)に限り、内部型・原始先行field・固定診断／projectionと実行拒否を合成依存限定で実装。** 実装範囲は§10と[field限定検証記録](E2E_BEST_PRACTICE_WFB_BODY_BIND_FIELDS_2026-11-10.md)を基準とする。source生成・pin・claim消費・bindは未接続、§1〜9はdraft-0.1時点の将来接続設計で、受入表全体の成功を意味しない。親は[先行slot／固定構築設計](BEST_PRACTICE_WFB_BODY_SLOT_CONSTRUCTION_DESIGN.md)と[live slot／bundle生成設計](BEST_PRACTICE_WFB_BODY_LIVE_SLOT_BUNDLE_DESIGN.md)。前工程の実績は[BC12／13検証記録](E2E_BEST_PRACTICE_WFB_BODY_BUNDLE_DRAFT_2026-11-10.md)を参照する。
 
@@ -199,3 +201,5 @@ field検査のbefore／checked／afterはBP／BDではなく、この段階だ�
 独立テストは9参照のsemantic名・初期値・故障位置を本体からimportせず比較する。compiledはreceiver19field・root source不在4条件を単独破壊し、当該最初の拒否と条件除去による見逃しを対照にする。後段2位置の変化、unknown scalarのallowlist、先行理由、型拒否21行、field initializerが9つの無初期化参照＋10literalだけであることも確認する。scopeは空の先行保持先と実行拒否であり、同値source copyの発行元確認・expected-source pin・BP／BDの状態遷移・payload受領・source診断のruntime発行は未検証のまま。
 
 BB10〜12の型／projection／旧入口維持に関する部分だけを検証し、BB01〜09やBB10〜12全体を合格にしない。実allocation／E／S／OOM時の診断必着・実予算更新・全体work上界はUnknown。pin・claim消費・bind・構築ready・body起動・request／回収・正式発行・実接続は未接続、全体受付無効・調査保留を維持する。
+
+レビュー修正（`41ac31f`）：root側の`bodyFieldsIntact`は、元base未使用とBC用shell未生成の各節がbeforeで単独に拒否することを固定する。root側projectionの`state`／`phase`／`failurePhase`／`reentry`は許可外値を`unconfirmed`へ投影する。`bodyStarts`は実body cellが`running`なら1と投影する。最初の失敗位置の上書き防止は、2回目のfailが同じphaseで起こるため等価とする。`checkBodyBindFields`冒頭の`#fixed`返却は、外側の`bodyBindFieldsReply`が失敗後の返答を必ずcacheするため、公開APIからは区別できず等価とする。
