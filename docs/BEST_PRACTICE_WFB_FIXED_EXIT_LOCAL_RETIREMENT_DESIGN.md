@@ -14,6 +14,8 @@ Status: **B03-A／Bに加え、B03-Cの同target局所退役・全post・body未
 
 正式発行口・C実行入口・body起動閉鎖、全体受付無効、Unknown、VM／監視／telemetry調査保留を維持する。実接続・実通信・設定変更・Pushを行わない。実writer、request／close実合流、回収claim、Journal封印／供給、admission／packet、field clear、borrow退役・owner解放、GateClosedRecord・root終端も対象外。
 
+B03後半の詳細化（2026-11-10、MDのみ）: [active後・body未開始／完了と同duty固定exit契約draft-0.1](BEST_PRACTICE_WFB_BODY_UNWIND_EXIT_DESIGN.md)。基準HEADは`5939864`。現行の未開始専用guardを緩めず、active後未呼出しとnormal／throw／cancelの実帰還、同owner／grant／frame／dutyの結合、退役・診断保持を別variantとして具体化した。§14の実装済み範囲は不変。後半body・active化・(C)証拠は未実装／未承認のまま。
+
 ## 1 基準差分と前回答からの訂正
 
 `ba84ea4`後に`08e8fa6`でB-02の失敗分類が修正された。本書はこの修正を取り込み、既知prefixを一律unconfirmedにする旧挙動へ戻さない。
