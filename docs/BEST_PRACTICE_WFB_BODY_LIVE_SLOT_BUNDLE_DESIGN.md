@@ -1,12 +1,12 @@
 # WF-B B03後半：BC06〜11 live slotとBC12／13 bundle／draft生成境界
 
-Version: draft-0.4 / Date: 2026-11-10 / 読み取り基準HEAD: `94d7fde`（レビュー修正基準HEAD: `cc0e3c6`、Initial実装基準HEAD: `435b348`、Initial実装レビュー修正基準HEAD: `14de3f7`）。
+Version: draft-0.5 / Date: 2026-11-10 / 読み取り基準HEAD: `94d7fde`（レビュー修正基準HEAD: `cc0e3c6`、Initial実装基準HEAD: `435b348`、Initial実装レビュー修正基準HEAD: `14de3f7`、BC12／13実装基準HEAD: `df6aa19`）。
 
 draft-0.3のレビュー修正：live経路専用の`bodyLivePrefixMatches`は、shellのfailure同一性／building／shape、carrierのshape／index／kind、後段carrierのissued／current／rejected空を単独で外しても試験が落ちなかった。seed側の対照は別関数のため効かない。`isSealed`と`configurable===false`は互いを覆い隠し、`enumerable===true`を単独で破るfaultもなかった。inspectのphase allowlistと`live[].initial`／`sealed`のprojectionも観測していなかった。これらへ単独注入のcompiled対照とvitestのprojection検査を追加した。`configurable===false`はisSealedに包含されるため、除去を等価として§11へ記録した。
 
 draft-0.1のレビュー修正（MDのみ）：§10の「コミット・Pushも行わない」は、コミット後も現在形で残る記述だった。同節の文書検証結果と同じく作成時点の記録であることを明示し、コミット後の注記を追加した。
 
-Status: **BC06〜11のInitial内部型・live参照固定化と全前段検査だけを合成依存限定で実装。** §11と[Initial実装の検証記録](E2E_BEST_PRACTICE_WFB_BODY_LIVE_INITIAL_2026-11-10.md)を参照。BC12／13・BD／構築ready・BA／body・BU実操作は未接続。§1〜10はdraft-0.1作成時の詳細設計で、未実装／将来の記述は§11の限定実装と区別する。親は[先行slot物理配置・固定構築schedule・失敗保持](BEST_PRACTICE_WFB_BODY_SLOT_CONSTRUCTION_DESIGN.md)と[B03後半の固定exit契約](BEST_PRACTICE_WFB_BODY_UNWIND_EXIT_DESIGN.md)。先行seedと再検査レビューは[検証記録](E2E_BEST_PRACTICE_WFB_BODY_SLOT_SEED_2026-11-10.md)を参照する。
+Status: **BC06〜11のInitial構築とBC12／13の同参照bundle／draft生成・全postまでを合成依存限定で実装。** §11と[Initial検証記録](E2E_BEST_PRACTICE_WFB_BODY_LIVE_INITIAL_2026-11-10.md)、§12と[bundle／draft検証記録](E2E_BEST_PRACTICE_WFB_BODY_BUNDLE_DRAFT_2026-11-10.md)を参照。BD／bind・構築ready・BA／body・BU実操作は未接続。§1〜10はdraft-0.1作成時の詳細設計で、未実装／将来の記述は§11〜12の限定実装と区別する。親は[先行slot物理配置・固定構築schedule・失敗保持](BEST_PRACTICE_WFB_BODY_SLOT_CONSTRUCTION_DESIGN.md)と[B03後半の固定exit契約](BEST_PRACTICE_WFB_BODY_UNWIND_EXIT_DESIGN.md)。先行seedと再検査レビューは[検証記録](E2E_BEST_PRACTICE_WFB_BODY_SLOT_SEED_2026-11-10.md)を参照する。
 
 正式発行口・C実行入口・body起動は閉鎖、全体受付無効、Unknown、VM／監視／telemetry調査保留を維持する。本書は実装・構築ready・body起動・実接続・実通信・設定変更・Pushの承認ではない。BDのbind／借用field追加、BAのactive／body、BUの退役／終端、実grant／Permit発行、実session／transport／worker・実writer・Journal／packet・field clear・root終端は対象外。
 
@@ -188,3 +188,15 @@ package除外のcomposition fixtureへcreateProbeBodyLiveFakeを追加した。�
 LB01〜12のBC06〜11部分を合成・compiled対照で検証する。BC12／13・BD依存条件の成功は主張しない。基準HEADで正規に単独破壊できなかったcapture試行0・exit slot照合・matchesRunの元base節は、引き続き単独対照の範囲外である。実allocation／E／S／OOM・全guard／全体work上界はUnknown、正式発行口閉鎖・全体受付無効・調査保留を維持する。
 
 レビュー修正（`14de3f7`）：live経路の前段検査はshellのfailure／state／shape、carrierのshape／index／kind、後段のissued／current／rejectedの9節をBC08 beforeへの単一注入で個別に確認し、節を外すと拒否位置が移るかlive_heldになることを固定する。descriptorは非列挙の進行fieldを`enumerable`節だけが、拡張可能かつ全non-configurableの値を`isSealed`節だけが拒否する対照を持つ。own data propertyの`configurable===false`はisSealedに包含され、単独除去は等価。phaseの許可外値はunconfirmedへ投影し、不正currentを保持した`live[]`はinitial=false、未sealならsealed=falseと投影する。
+
+## 12 BC12／13の合成限定生成・全post（2026-11-10）
+
+新createProbeBodyBundleFakeは同rootの構築保護区間でBC01〜11を再利用し、BC11後のheld確定前からBC12／13へ進む。旧seed／liveの正常終端・model／suffix条件は維持し、再prepareによる追加・外部artifact登録・任意callbackを設けない。新model=wfb-body-bundle-draft-1は正常でもbundle_held／ok=falseで、参照を返さない固定値診断だけである。
+
+BC12は専用brandと同context／route pin／progress／closure／診断／retirement／terminal／unwindの8参照、BC13は別brandと同bundle／既存run seal・固定kind／executable=falseを持つ。own key数は9／5、全field readonlyのplain dataで、余分なkey・不正descriptor・同値copy・別参照を拒否する。issued捕捉後に集約物自身だけをshallow freezeし、同currentを保持してから検査する。live子やroot／dutyを再帰freezeせず、元参照の進行fieldはwritableのままInitial値を維持する。
+
+各mintは全前段のstage／予約／call到達・issued=current／拒否なし・全dataと未使用suffix、元baseを確認してから1回だけproducerへ進む。共通prefix検査のdata振分けをBC12／13の専用検査へ拡張し、count=11以下の旧経路では12／13を引き続き空として検査する。BC12後の子変化はBC13のbeforeで、BC13後の13行全体の変化は最終postで拒否する。
+
+各dataの6境界にfreeze直後のfrozenを加え、BC13の全post直前／直後をpost_before／post_afterとする。計16位置の故障／close／再入と、producer／freeze throwの未確認prefixを検証する。失敗時は発行済み参照・初回拒否・確認済みprefix・元firstを残し、slot clear／再生成・借用解消・第2owner補完を行わない。
+
+全post後もshell held、root／shell ready=false、bind claim未試行・start body borrowなし。bundle／draftは同rootの不変descriptorであり、構築ready・所有権移譲receipt・正式証拠ではない。BD00以後・BA／BU・実予算更新・実接続は未実装。費目は同構築ownerに帰属し、2つの論理data／16観測位置を実allocation／全guard費・E／S・work capへ昇格しない。Unknown・全体受付無効・調査保留を維持する。

@@ -3623,6 +3623,25 @@ const BODY_LIVE_PROGRESS = Object.freeze([
 ]);
 const BODY_LIVE_PHASES = Object.freeze([...BODY_SEED_PHASES, 'BC06', 'BC07', 'BC08', 'BC09', 'BC10', 'BC11']);
 const BODY_LIVE_BOUNDARIES = Object.freeze([...BODY_SEED_BOUNDARIES, ...Array.from({ length: 9 }, (_, i) => `fix_${i}`), 'sealed']);
+const BODY_PREPARATION_BUNDLE: unique symbol = Symbol('body-preparation-bundle');
+const BODY_PREPARATION_DRAFT: unique symbol = Symbol('body-preparation-draft');
+interface BodyPreparationBundle {
+  readonly [BODY_PREPARATION_BUNDLE]: true; readonly context: BodyConstructionContext; readonly pin: FixedBodyRoutePin;
+  readonly progress: BodyProgressInitial; readonly closure: BodyRouteClosureInitial; readonly diagnostic: BodyDiagnosticInitial;
+  readonly retirement: BodyRetirementInitial; readonly terminal: BodyTerminalInitial; readonly unwind: BodyUnwindInitial;
+}
+interface BodyPreparationDraft {
+  readonly [BODY_PREPARATION_DRAFT]: true; readonly bundle: BodyPreparationBundle; readonly runSeal: ProbeRunSeal;
+  readonly kind: 'body_unwind_prepared'; readonly executable: false;
+}
+interface BodyBundleReply extends Omit<BodySeedReply, 'model'> { readonly model: 'wfb-body-bundle-draft-1' }
+const BODY_BUNDLE_BRANDS = Object.freeze([BODY_PREPARATION_BUNDLE, BODY_PREPARATION_DRAFT]);
+const BODY_BUNDLE_FIELDS = Object.freeze([
+  ['context', 'pin', 'progress', 'closure', 'diagnostic', 'retirement', 'terminal', 'unwind'],
+  ['bundle', 'runSeal', 'kind', 'executable'],
+]);
+const BODY_BUNDLE_PHASES = Object.freeze([...BODY_LIVE_PHASES, 'BC12', 'BC13']);
+const BODY_BUNDLE_BOUNDARIES = Object.freeze([...BODY_LIVE_BOUNDARIES, 'frozen', 'post_before', 'post_after']);
 class CanonicalGateDraftRoot {
   readonly #failure: { first: string; phase: number; boundary: string };
   readonly #slots: { stage: SupplyConstructionStage; value: object | undefined }[];
@@ -3651,9 +3670,10 @@ class CanonicalGateDraftRoot {
   #bodySeedPhase = 'none'; #bodySeedBoundary = 'none'; #bodySeedFailurePhase = 'none'; #bodySeedFailureBoundary = 'none';
   #bodySeedReentry = 'none'; #bodySeedHookCalls = 0; #bodySeedFixed: Readonly<BodySeedReply> | undefined;
   #bodyLiveFixed: Readonly<BodyLiveReply> | undefined;
+  #bodyBundleFixed: Readonly<BodyBundleReply> | undefined;
   constructor(private readonly script: string, admitted: boolean, private readonly probePreparation = false, private readonly runPreparation = false,
     private readonly grantCapture = false, private readonly exitPreparation = false, private readonly exitGuard = false, private readonly localExit = false,
-    private readonly bodySeed = false, private readonly bodyLive = false) {
+    private readonly bodySeed = false, private readonly bodyLive = false, private readonly bodyBundle = false) {
     this.#failure = { first: admitted ? 'none' : 'input_rejected', phase: 0, boundary: 'none' };
     this.#slots = Array.from({ length: 37 }, () => ({ stage: 'not_started', value: undefined }));
     this.#probeSlots = probePreparation ? Array.from({ length: 8 }, () => ({ stage: 'not_started', value: undefined })) : [];
@@ -4126,7 +4146,7 @@ class CanonicalGateDraftRoot {
       if (i >= count) return c.stage === 'not_started' && c.attemptReserved === false && c.callBoundaryReached === false
         && c.issued === undefined && c.current === undefined && c.rejected === undefined;
       return c.stage === 'confirmed' && c.attemptReserved === true && c.callBoundaryReached === true
-        && (i < 5 ? this.bodySeedDataMatches(i + 1) : this.bodyLiveDataMatches(i + 1));
+        && (i >= 11 ? this.bodyBundleDataMatches(i + 1) : (i < 5 ? this.bodySeedDataMatches(i + 1) : this.bodyLiveDataMatches(i + 1)));
     });
   }
   private bodyLiveProduce(n: number, create: () => object, fault: string): object {
@@ -4188,8 +4208,88 @@ class CanonicalGateDraftRoot {
     this.bodyLiveMint(11, (): BodyUnwindInitial => ({ [BODY_UNWIND]: true, context: ctx, pin, progress,
       closure: slots[6]!.current as BodyRouteClosureInitial, diagnostic: slots[7]!.current as BodyDiagnosticInitial,
       retirement, terminal: slots[9]!.current as BodyTerminalInitial, state: 'idle', routeUsed: false, inProgress: false, phase: 'none', boundary: 'none', fixedReply: undefined }));
+    if (this.bodyBundle) return this.prepareBodyBundle();
     if (!this.bodySeedBaseMatches() || !this.bodyLivePrefixMatches(11)) return this.fail('binding_mismatch');
     this.#bodySeedShell!.state = 'held'; return this.reply(false, 'live_held');
+  }
+  private bodyBundleDataMatches(n: number): boolean {
+    const slots = this.#bodySeedShell!.slots!, cell = slots[n - 1]!, value = cell.current, i = n - 12;
+    if (!value || value !== cell.issued || cell.rejected !== undefined
+      || !bodySeedShape(value, [BODY_BUNDLE_BRANDS[i], ...BODY_BUNDLE_FIELDS[i]]) || !Object.isFrozen(value)
+      || ![BODY_BUNDLE_BRANDS[i], ...BODY_BUNDLE_FIELDS[i]].every(k => Object.getOwnPropertyDescriptor(value, k)?.enumerable === true)) return false;
+    if (n === 12) { const v = value as BodyPreparationBundle;
+      return v[BODY_PREPARATION_BUNDLE] === true && v.context === slots[0]!.current && v.pin === slots[4]!.current
+        && v.progress === slots[5]!.current && v.closure === slots[6]!.current && v.diagnostic === slots[7]!.current
+        && v.retirement === slots[8]!.current && v.terminal === slots[9]!.current && v.unwind === slots[10]!.current; }
+    const v = value as BodyPreparationDraft;
+    return n === 13 && v[BODY_PREPARATION_DRAFT] === true && v.bundle === slots[11]!.current
+      && v.runSeal === (slots[0]!.current as BodyConstructionContext).runSeal && v.kind === 'body_unwind_prepared' && v.executable === false;
+  }
+  private bodyBundleProduce(n: 12 | 13, create: () => object, fault: string): object {
+    const raw = create(), i = n - 12;
+    if (['', 'copy', 'unfrozen'].includes(fault)) return raw;
+    const candidate = { ...raw } as Record<PropertyKey, unknown>;
+    if (fault === 'brand') candidate[BODY_BUNDLE_BRANDS[i]] = false;
+    else if (fault === 'extra') candidate.extra = true;
+    else if (fault === 'missing') delete candidate[BODY_BUNDLE_FIELDS[i][0]];
+    else if (fault === 'prototype') Object.setPrototypeOf(candidate, Object.create(null));
+    else if (fault === 'getter') Object.defineProperty(candidate, BODY_BUNDLE_FIELDS[i][0], {
+      get: () => { this.#bodySeedHookCalls++; throw Error('private_bundle_hook'); }, enumerable: true });
+    else if (fault === 'non_enumerable') Object.defineProperty(candidate, BODY_BUNDLE_FIELDS[i][0], { enumerable: false });
+    else if (fault.startsWith('child_copy_')) { const key = fault.slice(11); candidate[key] = Object.freeze({ ...(candidate[key] as object) }); }
+    else candidate[fault] = Object.freeze({});
+    return candidate;
+  }
+  private bodyBundleMint(n: 12 | 13, create: () => object): void {
+    const phase = `BC${n}`, cell = this.#bodySeedShell!.slots![n - 1]!;
+    this.bodySeedPoint(phase, 'before');
+    if (!this.bodySeedBaseMatches() || !this.bodyLivePrefixMatches(n - 1)) {
+      this.fail('binding_mismatch'); throw Error('body_bundle_preflight');
+    }
+    cell.attemptReserved = true; cell.stage = 'attempting'; this.bodySeedPoint(phase, 'attempt');
+    const fault = this.script.startsWith(`s_bundle_mix_${n}_`) ? this.script.slice(`s_bundle_mix_${n}_`.length) : '';
+    const producerThrows = this.script === `s_bundle_producer_throw_${n}`, freezeThrows = this.script === `s_bundle_freeze_throw_${n}`;
+    cell.callBoundaryReached = true;
+    if (producerThrows) throw Error('body_bundle_producer');
+    const raw = this.bodyBundleProduce(n, create, fault); cell.issued = raw; cell.stage = 'issued'; this.bodySeedPoint(phase, 'issued');
+    if (freezeThrows) throw Error('body_bundle_freeze');
+    if (fault === 'unfrozen') Object.seal(raw); else Object.freeze(raw);
+    this.bodySeedPoint(phase, 'frozen');
+    const current = fault === 'copy' ? Object.freeze({ ...raw }) : raw;
+    cell.current = current; cell.stage = 'provisional'; this.bodySeedPoint(phase, 'captured');
+    if (!this.bodyBundleDataMatches(n)) {
+      if (!cell.rejected) cell.rejected = current;
+      this.fail('binding_mismatch'); throw Error('body_bundle_mismatch');
+    }
+    this.bodySeedPoint(phase, 'checked'); cell.stage = 'confirmed'; this.bodySeedPoint(phase, 'confirmed');
+  }
+  private prepareBodyBundle(): Readonly<{ ok: boolean; disposition: string }> {
+    const slots = this.#bodySeedShell!.slots!, ctx = slots[0]!.current as BodyConstructionContext;
+    this.bodyBundleMint(12, (): BodyPreparationBundle => ({ [BODY_PREPARATION_BUNDLE]: true, context: ctx,
+      pin: slots[4]!.current as FixedBodyRoutePin, progress: slots[5]!.current as BodyProgressInitial,
+      closure: slots[6]!.current as BodyRouteClosureInitial, diagnostic: slots[7]!.current as BodyDiagnosticInitial,
+      retirement: slots[8]!.current as BodyRetirementInitial, terminal: slots[9]!.current as BodyTerminalInitial,
+      unwind: slots[10]!.current as BodyUnwindInitial }));
+    this.bodyBundleMint(13, (): BodyPreparationDraft => ({ [BODY_PREPARATION_DRAFT]: true,
+      bundle: slots[11]!.current as BodyPreparationBundle, runSeal: ctx.runSeal, kind: 'body_unwind_prepared', executable: false }));
+    this.bodySeedPoint('BC13', 'post_before');
+    if (!this.bodySeedBaseMatches() || !this.bodyLivePrefixMatches(13)) return this.fail('binding_mismatch');
+    this.bodySeedPoint('BC13', 'post_after');
+    this.#bodySeedShell!.state = 'held'; return this.reply(false, 'bundle_held');
+  }
+  bodyBundleReply(disposition: string): Readonly<BodyBundleReply> {
+    if (this.#bodyBundleFixed) return this.#bodyBundleFixed;
+    const prior = this.bodyLiveReply(disposition === 'bundle_held' ? 'live_held' : disposition);
+    const r: Readonly<BodyBundleReply> = Object.freeze({ ...prior, model: 'wfb-body-bundle-draft-1', disposition: disposition === 'bundle_held' ? 'bundle_held' : prior.disposition });
+    if (this.#fixed) this.#bodyBundleFixed = r; return r;
+  }
+  inspectBodyBundle() {
+    const prior = this.inspectBodyLive(), slots = this.#bodySeedShell?.slots;
+    return Object.freeze({ ...prior, model: 'wfb-body-bundle-draft-1', dataLimit: 13,
+      phase: runEnum(this.#bodySeedPhase, BODY_BUNDLE_PHASES, 'unconfirmed'), boundary: runEnum(this.#bodySeedBoundary, BODY_BUNDLE_BOUNDARIES, 'unconfirmed'),
+      failurePhase: runEnum(this.#bodySeedFailurePhase, BODY_BUNDLE_PHASES, 'unconfirmed'), failureBoundary: runEnum(this.#bodySeedFailureBoundary, BODY_BUNDLE_BOUNDARIES, 'unconfirmed'),
+      aggregates: Object.freeze([12, 13].map(n => { const v = slots?.[n - 1]?.current;
+        return Object.freeze({ index: n, valid: !!v && this.bodyBundleDataMatches(n), frozen: !!v && Object.isFrozen(v) }); })) });
   }
   bodyLiveReply(disposition: string): Readonly<BodyLiveReply> {
     if (this.#bodyLiveFixed) return this.#bodyLiveFixed;
@@ -4693,6 +4793,27 @@ export function createProbeBodySeedFake(...args: readonly unknown[]) {
     checkLegacy: (...xs: readonly unknown[]) => call(xs, () => a.checkFramePreparation(true)),
     close: (...xs: readonly unknown[]) => call(xs, () => a.close()),
     inspect: (...xs: readonly unknown[]) => { if (xs.length) a.rejectInput(); return a.inspectBodySeed(); } });
+}
+
+export function createProbeBodyBundleFake(...args: readonly unknown[]) {
+  const script = args.length ? args[0] : 's_normal';
+  const points = ['BC12', 'BC13'].flatMap(p => ['before', 'attempt', 'issued', 'frozen', 'captured', 'checked', 'confirmed'].map(b => `${p}_${b}`));
+  points.push('BC13_post_before', 'BC13_post_after');
+  const scripts = ['s_normal', ...points.flatMap(p => ['fault', 'close', 'reenter'].map(k => `s_${k}_${p}`)),
+    ...[12, 13].flatMap(n => [`s_bundle_producer_throw_${n}`, `s_bundle_freeze_throw_${n}`]),
+    ...BODY_BUNDLE_FIELDS.flatMap((row, i) => [...row, 'brand', 'extra', 'copy', 'getter', 'missing', 'prototype', 'unfrozen', 'non_enumerable',
+      ...(i === 0 ? row : ['bundle', 'runSeal']).map(f => `child_copy_${f}`)]
+      .map(f => `s_bundle_mix_${i + 12}_${f}`))];
+  const admitted = args.length <= 1 && typeof script === 'string' && scripts.includes(script);
+  const a = new CanonicalGateDraftRoot(admitted ? script as string : 's_normal', admitted, true, true, false, true, false, false, true, true, true);
+  const call = (xs: readonly unknown[], op: () => Readonly<{ ok: boolean; disposition: string }>) => {
+    const r = xs.length ? a.rejectInput() : op(); return a.bodyBundleReply(r.disposition);
+  };
+  return Object.freeze({ prepare: (...xs: readonly unknown[]) => call(xs, () => a.prepare()),
+    check: (...xs: readonly unknown[]) => call(xs, () => ({ ok: false, disposition: 'blocked_frame_execution' })),
+    checkLegacy: (...xs: readonly unknown[]) => call(xs, () => a.checkFramePreparation(true)),
+    close: (...xs: readonly unknown[]) => call(xs, () => a.close()),
+    inspect: (...xs: readonly unknown[]) => { if (xs.length) a.rejectInput(); return a.inspectBodyBundle(); } });
 }
 
 export function createProbeBodyLiveFake(...args: readonly unknown[]) {

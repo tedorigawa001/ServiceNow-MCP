@@ -1,6 +1,6 @@
 # WF-B B03後半：先行slot物理配置・固定構築schedule・失敗保持
 
-Version: draft-0.5 / Date: 2026-11-10 / 読み取り基準HEAD: `bf63f16`（レビュー修正基準HEAD: `0932af9`、先行seed実装基準HEAD: `b3f1f3e`、先行seedレビュー修正基準HEAD: `55d4347`、live Initial実装基準HEAD: `435b348`）。
+Version: draft-0.6 / Date: 2026-11-10 / 読み取り基準HEAD: `bf63f16`（レビュー修正基準HEAD: `0932af9`、先行seed実装基準HEAD: `b3f1f3e`、先行seedレビュー修正基準HEAD: `55d4347`、live Initial実装基準HEAD: `435b348`、BC12／13実装基準HEAD: `df6aa19`）。
 
 draft-0.3のレビュー修正：§12は「SC01〜05の先行構築部分を検証」としていた。しかしSC05が求めるBC00 base条件・前段confirmedの個別破壊を含め、BC00／各mint前／bootstrap／最終再検査の大半の節は、単独で外しても試験が落ちなかった。freeze・初回rejectedの同一性・slot stage projectionのallowlistも観測していなかった。各節が最初に拒否する位置を`failurePhase`で固定するcompiled対照20件と、freeze・rejected同一性・stage allowlistの対照を追加した。単独で注入できないbase節（capture試行0・exit slot照合・`matchesRun`）は§12に範囲外として明記した。
 
@@ -8,11 +8,11 @@ draft-0.3：§12で先行shell／13carrier・BC01〜05の内部型と保持だ�
 
 draft-0.1のレビュー修正（MDのみ）：§11の「未コミット・Pushなし」はコミット前の時点の記述だったため、作成時点の記録であることを明示し、コミット後の注記を追加した。B03前半の文書から本書へのリンク文言「後半slot物理配置」を本書の表題「先行slot物理配置」へ揃えた。
 
-Status: **先行shell／13carrier・BC01〜05とBC06〜11のInitial構築だけを合成依存限定で実装。** §12と[seed検証記録](E2E_BEST_PRACTICE_WFB_BODY_SLOT_SEED_2026-11-10.md)、§13と[live Initial検証記録](E2E_BEST_PRACTICE_WFB_BODY_LIVE_INITIAL_2026-11-10.md)を参照。BC12／13・BD／構築ready・BA／body・BU実unwindは未実装。親は[B03後半の固定exit契約draft-0.2](BEST_PRACTICE_WFB_BODY_UNWIND_EXIT_DESIGN.md)と[B03前半の固定exit／同target局所退役](BEST_PRACTICE_WFB_FIXED_EXIT_LOCAL_RETIREMENT_DESIGN.md)。元の所有／費目契約は[(B) grant／固定exit責務](BEST_PRACTICE_WFB_PROBE_GRANT_EXIT_DUTY_DESIGN.md)を維持する。
+Status: **先行shell／13carrier・BC01〜11のInitial構築とBC12／13の集約・全postまでを合成依存限定で実装。** §12と[seed検証記録](E2E_BEST_PRACTICE_WFB_BODY_SLOT_SEED_2026-11-10.md)、§13と[live Initial検証記録](E2E_BEST_PRACTICE_WFB_BODY_LIVE_INITIAL_2026-11-10.md)、§14と[bundle／draft検証記録](E2E_BEST_PRACTICE_WFB_BODY_BUNDLE_DRAFT_2026-11-10.md)を参照。BD／bind・構築ready・BA／body・BU実unwindは未実装。親は[B03後半の固定exit契約draft-0.2](BEST_PRACTICE_WFB_BODY_UNWIND_EXIT_DESIGN.md)と[B03前半の固定exit／同target局所退役](BEST_PRACTICE_WFB_FIXED_EXIT_LOCAL_RETIREMENT_DESIGN.md)。元の所有／費目契約は[(B) grant／固定exit責務](BEST_PRACTICE_WFB_PROBE_GRANT_EXIT_DUTY_DESIGN.md)を維持する。
 
 BC06〜13の詳細化（2026-11-10、MDのみ）: [live slotの内部型・更新権限とbundle／draft生成境界draft-0.1](BEST_PRACTICE_WFB_BODY_LIVE_SLOT_BUNDLE_DESIGN.md)で、`94d7fde`を基準に§4〜5を具体化した。BC06〜11の初期variant／private writer境界、liveの参照固定と進行fieldの分離、BC12／13の同参照集約・固定順・失敗保持を定義する。既存seedの全freeze・空suffix検査は維持し、追加経路を別に扱う。BD／構築ready・BA／BUは未接続のまま。
 
-正式発行口・C実行入口・body起動閉鎖、全体受付無効、Unknown、VM／監視／telemetry調査保留を維持する。§12〜13以外の実装・合成body起動・実接続・実通信・設定変更・Pushを行わない。§1〜11の新型／field名は設計案で、未接続経路の実行承認ではない。実grant／permit、実session／transport／worker、実writer、request／drain、Journal供給、admission／packet／field clear、borrow退役／owner解放・root終端は対象外。
+正式発行口・C実行入口・body起動閉鎖、全体受付無効、Unknown、VM／監視／telemetry調査保留を維持する。§12〜14以外の実装・合成body起動・実接続・実通信・設定変更・Pushを行わない。§1〜11の新型／field名は設計案で、未接続経路の実行承認ではない。実grant／permit、実session／transport／worker、実writer、request／drain、Journal供給、admission／packet／field clear、borrow退役／owner解放・root終端は対象外。
 
 ## 1 同ownerの意味と既存配置への接続位置
 
@@ -211,3 +211,9 @@ contextのbindingOwnerは同binding／start側owner、cellOwnerは同rootの既�
 §12の旧seed入口を維持し、同root内の別の固定合成継続でBC06〜11を追加生成する。詳細は[live slot設計§11](BEST_PRACTICE_WFB_BODY_LIVE_SLOT_BUNDLE_DESIGN.md)、結果は[検証記録](E2E_BEST_PRACTICE_WFB_BODY_LIVE_INITIAL_2026-11-10.md)。Initial型・brand／参照のnon-writable固定・writableな初期進行field・sealed shapeを分離し、全前段と未使用suffixを各producer前・最終で再検査する。旧BC01〜05の全freeze／空suffix条件は緩めない。
 
 正常もlive_held／ok=falseで保持するだけで、BC12／13・start borrow／bind・構築ready・BA／body・BU実操作は追加しない。carrier12／13は空、実grant追加・active／body・duty退出・退役・terminal commit・正式証拠は0のまま。失敗・close・再入は元failureとprefix／初回候補を保持し、slot clear／再生成／別owner補完を行わない。追加6行の6境界と固定化substepの対照は論理構築の保証であり、実allocation／全guard費・E／S・全体work上界はUnknown。
+
+## 14 BC12／13の合成限定集約（2026-11-10）
+
+§13の旧live入口を維持し、同rootの固定継続でBC12／13を生成する。詳細は[live／bundle設計§12](BEST_PRACTICE_WFB_BODY_LIVE_SLOT_BUNDLE_DESIGN.md)、結果は[検証記録](E2E_BEST_PRACTICE_WFB_BODY_BUNDLE_DRAFT_2026-11-10.md)。全子の同参照と同run sealをprivate brand付きの不変descriptorへ集約し、issued捕捉後にshallow freezeする。全前段／未使用suffixと、最後の全13行・元baseを再検査する。BC06〜11の進行fieldはwritableなInitial値のままで、再帰freeze・castによるbody資格生成は行わない。
+
+正常はbundle_held／ok=falseで止まり、bind claim未試行、start body borrowなし、root／shell ready=falseを維持する。途中故障・close・再入・全post拒否は元firstと保持prefix・未確認責務を残し、clear／再供給／別owner補完をしない。BD／構築ready・BA／body・BU実unwindと正式証拠は未接続であり、全体受付無効・Unknown・調査保留を維持する。
