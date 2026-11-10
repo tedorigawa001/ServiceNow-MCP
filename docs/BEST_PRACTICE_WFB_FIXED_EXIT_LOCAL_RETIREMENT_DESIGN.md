@@ -1,6 +1,8 @@
 # WF-B B-03前半：固定exit・局所退役・同duty責務保持の接続差分
 
-Version: draft-0.2 / Date: 2026-11-10 / 読み取り基準HEAD: `08e8fa6`（B03-Aレビュー修正基準HEAD: `50c31be`）。
+Version: draft-0.3 / Date: 2026-11-10 / 読み取り基準HEAD: `08e8fa6`（B03-Aレビュー修正基準HEAD: `50c31be`、B03-Bレビュー修正基準HEAD: `ff7e38b`）。
+
+draft-0.3のレビュー修正（MDのみ）：B03-Bのguard条件のうち、現行fixtureでは到達しないか他条件と冗長な防御条件9種を§13に列挙し、後工程で単独対照を先に用意する対象とした。
 
 draft-0.2のレビュー修正：B03-Aの公開projectionは不在のslotや許可外の値を肯定的な状態へ既定値化していた（未生成dutyを`not_owed`、未構築のknowledgeを`callStarted=false`の`unknown`、未生成slotを`unconfirmed`）。dutyの許可値に`settled_not_started`がなく、将来その状態を`not_owed`と誤報する余地もあった。§12で既定値の規則を明記した。
 
@@ -218,3 +220,5 @@ privateなconstructor呼出し直前flag、issuerの保持参照、current／rec
 新projectionはA全体の固定0計数を流用せず、anchor部分と実進行を分け、発行／試行数と保持booleanをprivate状態から投影する。未生成はnot_created、許可外はunconfirmed。private first／参照を外へ出さない。identity17条件、capture後のgrant14条件、履歴境界9条件のcompiled対照、呼出し境界／unknown誤昇格／first短絡／再入／非返却／参照保持／二段projectionの負の対照、型拒否5件を追加した。76新試験・関連1,624件等は[検証記録](E2E_BEST_PRACTICE_WFB_PROBE_EXIT_GUARD_2026-11-10.md)。B03-Cの実退役・全post・terminal確定、BE05／06、(C)、実会計・全体受付は未接続／無効、費用・実E／S・layout・OOMはUnknownのまま。
 
 公開projectionの既定値規則：slotやreceiverが存在しない場合は`not_created`、存在するが許可値外の場合は`unconfirmed`とし、`not_owed`・`unknown`等の肯定的または意味を持つ状態へ既定値化しない。dutyの許可値には本書で追加した`settled_not_started`を含める。prepare前のinspect、許可値外dutyの注入、`settled_not_started`の注入を独立対照で確認する。
+
+到達しない／冗長な防御条件（現行fixtureで単独対照を持たない）：履歴境界の`!this.#claim.spent`（回収claimはこの経路で消費されない）、exit stageの`empty`／`unconfirmed`確認（常に成立）、unconfirmed useの`grantCallStarted`／`grantIssued`条件（unconfirmedはgrant_unknown由来だけ）、`guardHistory()`のnot_entered／not_called分岐の条件（該当時は常に成立）、known分岐のstage／rejected条件（rejectedを持つ候補は`capturedGrantMatches`でも必ず不一致）、use未使用時の不正履歴guard（not_entered分岐が先に成立）、`routeUsed`重複（root側`#guardRunReply`が先に返す）。B03-C以降でrequest合流・body起動・root側キャッシュを経由しない経路を追加する際は、これらへ単独対照を先に用意する。

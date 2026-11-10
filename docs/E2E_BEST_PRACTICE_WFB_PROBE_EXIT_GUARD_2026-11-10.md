@@ -67,6 +67,20 @@ B03-Cの同target利用禁止latch・局所退役・全post・not_required確定
 
 設計書・親設計書・本記録のローカルリンク20件に欠落なし。差分空白エラーなし。src／package manifest／lockfile／lint設定に変更なし。
 
+## レビュー修正（2026-11-10、MDのみ）
+
+レビュー基準HEAD: `ff7e38b`。guardの条件を1つずつ外す一時変異22種のうち、vitestまたはcompiledで13種を検出した。残る9種は現行fixtureでは到達しないか冗長な防御条件である。
+
+- 履歴境界の`!this.#claim.spent`：回収claimはこの経路で消費されない。
+- exit stageの`empty`／`unconfirmed`確認：常に成立する。
+- unconfirmed useの`grantCallStarted`／`grantIssued`条件：unconfirmedはgrant_unknown由来だけ。
+- `guardHistory()`のnot_entered／not_called分岐の条件：該当時は常に成立する。
+- known分岐のstage／rejected条件：rejectedを持つ候補は`capturedGrantMatches`でも必ず不一致となり、そちらがmaskする。
+- use未使用時の不正履歴guard：not_entered分岐が先に成立する。
+- `routeUsed`重複：root側`#guardRunReply`が先に返すためfacade経由で到達しない。
+
+設計§13へ同内容を明記した。コード・試験は変更していない（vitest全体329ファイル・16,871件成功のまま）。
+
 ## コミット前の対象限定再検証（2026-11-10）
 
 前節までの未コミット方針は実装時点の記録。本節はその後のコミット依頼に対する確認である。B03-B関連9ファイルだけを明示してindexへ登録し、indexを一時ディレクトリへ展開した。対象9ファイルの内容がindexと一致することを確認し、既存node_modulesだけを借用した検証用コピーでbuild・strict・関連23ファイル1,624件・compiled15本を再実行して全てexit 0。全体lintもerror 0／warning 374でexit 0、梱包dry-runは441ファイル・fixture混入0、3文書のローカルリンク20件に欠落なしだった。全repositoryのvitest回帰は今回も未実施。最終追記は本節のみで、実装／試験内容は再検証時から変更していない。他の作業差分・実接続・実通信・設定変更・Pushは含めない。
