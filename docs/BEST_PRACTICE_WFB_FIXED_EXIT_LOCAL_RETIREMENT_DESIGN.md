@@ -1,6 +1,8 @@
 # WF-B B-03前半：固定exit・局所退役・同duty責務保持の接続差分
 
-Version: draft-0.4 / Date: 2026-11-10 / 読み取り基準HEAD: `08e8fa6`（B03-Aレビュー修正基準HEAD: `50c31be`、B03-Bレビュー修正基準HEAD: `ff7e38b`、B03-Cコミット前検証基準HEAD: `a1b7be6`）。
+Version: draft-0.5 / Date: 2026-11-10 / 読み取り基準HEAD: `08e8fa6`（B03-Aレビュー修正基準HEAD: `50c31be`、B03-Bレビュー修正基準HEAD: `ff7e38b`、B03-Cコミット前検証基準HEAD: `a1b7be6`、B03-Cレビュー修正基準HEAD: `5af89f1`）。
+
+draft-0.4のレビュー修正：B03-Cの`localFinish`はphaseごとに再検査するが、現行のphaseフックは状態を書き換えず、compiledの注入もprepare／confirm／postのbeforeだけだった。そのためhistory初回・attempt（ready／history／used／target open）・block文脈・confirm ready・not_required（ready／history）・absence ready・commit直前の全post再検査の12条件は、単独で外しても後段の重複検査が拒否し、試験が落ちなかった。各phaseのbeforeへ注入する12対照を追加し、最初に拒否したphaseを`failurePhase`で固定した。§7の「状態検査」の専用条件はB03-Aの軸検査（shapeのみ）で表し、旧B-01の`probeStateFactsValid`は変更しない。B03-Cのcommit後のlive状態はB-01検査へ渡さず、§14にその範囲を明記した。
 
 draft-0.4：§14でB03-Cの合成依存限定実装を記録した。§12〜13の未接続記述は各段階の履歴で、最新の同target局所退役・body未開始terminalの範囲は§14を基準とする。body開始・(C)の退出証拠・全writer停止・cleanup完了は有効化しない。
 
@@ -240,5 +242,9 @@ recordは空の非公開terminalへpreparedだけを記録する。全postは上
 commit前故障は同duty／use／exitを未確認とし、最初の理由／phase／boundaryを保持する。used・blockedTarget・実revoked・confirmedTarget・not_required確定は到達済み事実として払い戻さない。commit後のprojection故障はdeliveryUnconfirmedだけを追加し、held／settled_not_startedを巻き戻さず、再退役／再commitを許可しない。通常captureのfirstとCのfirstは別に保持する。再入はrun_in_progress、後続run／closeは元固定返答で再実行しない。
 
 公開APIはprepare／run／check／checkLegacy／close／inspectの固定script・値診断だけ。すべてok=false／authority=none／execution=closedで、terminal保持は成功受付ではない。Aの固定0診断をCの実計数として流用せず、元anchorと進行・実grant／exit／body状態を分けた二段projectionとする。不在はnot_created、許可外はunconfirmed、参照は厳密booleanのみ。任意artifact／Proxy／body／callbackは採用しない。
+
+状態検査の範囲：commit後のlive状態（exiting＋settled_not_started＋body not_started）は、旧B-01の`probeStateFactsValid`へ渡さない。B-01のduty許可値は`settled_not_started`を含まないまま維持し、body未開始terminalの専用条件はB03-Aの`probeExitAxesValid`（shapeのみ・同rootへ採用しない）で表す。Cの`check`／`checkLegacy`は`checkGuardBodyClosed`を通り、B-01検査を呼ばない。live状態をB-01相当で検査する枝を追加するときは、旧条件を緩めず専用枝と単独対照を同時に追加する。
+
+phaseごとの再検査：history・attempt・block・confirm・not_required・absence・commitの各beforeで、そのphaseの検査が最初に拒否することをcompiled 12対照で固定する（レビュー修正）。
 
 新113件・関連24ファイル1,737件、compiled16本（新規は同一性16・全post10・後段境界18等）の結果、独立prefix・対照の独立性と限界、初回試験側の問題は[検証記録](E2E_BEST_PRACTICE_WFB_PROBE_LOCAL_EXIT_2026-11-10.md)。BX00〜04のbody未開始部分だけを補完した。body return／throw／cancel、active後故障、request／closeの実frame合流、(C)証拠、全writer停止・Journal供給・field clear・root終端は未接続。追加4slotと各1回の操作は構造上の上界であり、実allocation／guard費・E／S・layout・OOM・全体work上界はUnknown、全体受付は無効のまま。

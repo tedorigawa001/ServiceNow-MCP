@@ -63,6 +63,34 @@ bodyのactive化・起動・return／throw／cancel、active後故障、(C)の�
 
 最終sourceで関連24ファイル1,737件・strict・build・全体lintを再実行し成功。compiled16本に加え、stage許可値対照追加後の新compiledもexit 0。3文書のローカルリンク22件に欠落なし、差分空白エラーなし。変更は合成fixture／試験・CHANGELOG・設計／検証文書だけで、index登録・コミット・Pushなし。
 
+## レビュー修正（2026-11-10）
+
+基準HEADは`5af89f1`。修正前の全体検証は、lint・build・梱包分類・全vitest（330ファイル16,984件成功・失敗0）・compiled4本・差分空白検査のすべてが成功した。
+
+一時mutant21種を流した。vitestだけで6種、compiledで6種（`localAllPost`のknown confirm／absence／prepared、`localRetirementPost`のblocked／stage／latch。compiled対照の担当範囲どおり）がkillされた。残る9種はvitest・compiledの両方で生存した。外した条件は次のとおり。
+
+- history初回検査
+- attempt再検査の全体／`r.used`／`localTargetOpen`
+- blockの`localContextMatches`
+- confirmの`localUnsealedReady`
+- not_requiredのready／history再検査
+- absenceの`localUnsealedReady`
+- commit直前の`localAllPost`再検査
+
+phaseフック（fault／stop／reenter）は状態を書き換えない。そのため隣接phase間の再検査は注入でしか到達しない。既存の注入はprepare／confirm／postのbeforeだけで、重複した後段の検査が欠落を隠していた。等価mutantではなく、対照の不足と判断した。
+
+修正として、compiledへphaseごとの再検査対照12件（`phaseRecheckControls`）を追加した。
+
+- 対象はhistory（known／未呼出し）・attempt（ready／history／used／target open）・block文脈・confirm ready・not_required（ready／history）・absence ready・commit全post。
+- 各phaseのbeforeへ単一条件を注入し、`failurePhase`が当該phaseで、commitが0であることを確認する。
+- 該当する検査だけを外したmutantでは、`failurePhase`が別phaseへ移ることを確認する。commitだけはcommit 1も確認する。
+
+RED／GREEN：修正前のcompiledでは上記9種がすべてpassした（RED）。修正後は21種すべてがkillされた（GREEN：vitest kill 6、compiled kill 15）。等価として残したmutantはない。
+
+文書：設計§7の「状態検査」の専用条件はB03-Aの軸検査（shapeのみ）で表す。commit後のlive状態は旧B-01の`probeStateFactsValid`へ渡さず、B-01のduty許可値も変えない。このことを設計draft-0.5の§14へ明記した。Cの`check`は`checkGuardBodyClosed`を通り、B-01検査を呼ばない。
+
+修正後の全体検証：lint・build・梱包分類・全vitest（330ファイル16,984件成功・失敗0）・compiled4本（local-exitは`phaseRecheckControls: 12`）・差分空白検査のすべてが成功した。
+
 ## コミット前の対象限定再検証（2026-11-10）
 
 前節までの未コミット方針は実装時点の記録。本節はその後のコミット依頼に対する検証である。基準HEADは`a1b7be6`（B03-B本体は`ff7e38b`、その後のMDのみのレビュー記録を含む）。B03-C関連9ファイルだけを明示してindexへ登録し、index全体を一時ディレクトリへ展開した。対象9ファイルが作業内容とbyte一致することを確認し、既存node_modulesだけを借用した検証用コピーでbuild・strict・関連24ファイル1,737件・compiled16本を再実行し、全てexit 0。

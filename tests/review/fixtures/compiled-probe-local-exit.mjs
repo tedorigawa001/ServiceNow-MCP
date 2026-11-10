@@ -117,6 +117,32 @@ try {
   const lateGrant = inject(text, 'confirm', 'const cp = Object.freeze({ ...this.#grantIssued! }); this.#probeCells!.grant.current = cp; this.#probeCells!.grant.issued = cp;');
   assert.equal(run(await load(lateGrant, 'late-grant')).s.terminalCommits, 0);
   assert.equal(run(await load(method(lateGrant, 'localRetirementPost', 'this.capturedGrantMatches(this.#runIssuedLink!)', 'true'), 'late-grant-mutant')).s.terminalCommits, 1);
+  // Each per-phase recheck must be the one that stops the run. Rechecks overlap, so a missing one would
+  // otherwise be masked by a later phase; failurePhase pins the first rejecting phase.
+  const owed = "this.#runIssuedDuty!.state = 'owed';", rejected = 'this.#probeCells!.grant.rejected = this.#grantIssued;';
+  const attemptLine = "        if (!this.localUnsealedReady(p, g) || !this.localHistoryMatches(g) || r.used || !this.localTargetOpen(this.#grantIssued!)) {";
+  const emptyLine = "        if (!this.localUnsealedReady(p, g) || !this.localHistoryMatches(g)) { this.localFailure(p, g, 'state_invalid'); return; }\n        r.kind = 'not_required';";
+  const phaseRecheck = [
+    ['history-known', 'c_normal', 'history', rejected, "      if (!this.localHistoryMatches(g)) { this.localFailure(p, g, 'state_invalid'); return; }\n      this.localPoint(p, 'history', 'after');", "      this.localPoint(p, 'history', 'after');"],
+    ['history-empty', 'c_not_called', 'history', 'this.#probeCells!.grant.unresolved = true;', "      if (!this.localHistoryMatches(g)) { this.localFailure(p, g, 'state_invalid'); return; }\n      this.localPoint(p, 'history', 'after');", "      this.localPoint(p, 'history', 'after');"],
+    ['attempt-ready', 'c_normal', 'attempt', owed, attemptLine, attemptLine.replace('!this.localUnsealedReady(p, g) || ', '')],
+    ['attempt-history', 'c_normal', 'attempt', rejected, attemptLine, attemptLine.replace(' || !this.localHistoryMatches(g)', '')],
+    ['attempt-used', 'c_normal', 'attempt', 'p.retirement.used = true;', attemptLine, attemptLine.replace(' || r.used', '')],
+    ['attempt-open', 'c_normal', 'attempt', 'p.retirement.blocked = true; p.retirement.blockedTarget = this.#grantIssued;', attemptLine, attemptLine.replace(' || !this.localTargetOpen(this.#grantIssued!)', '')],
+    ['block-context', 'c_normal', 'block', "Object.defineProperty(p, 'guard', { value: { ...p.guard } });", '!this.localContextMatches(p, g) || r.target', 'r.target'],
+    ['confirm-ready', 'c_normal', 'confirm', owed, '!this.localUnsealedReady(p, g) || !this.localRetirementPost(p)', '!this.localRetirementPost(p)'],
+    ['empty-ready', 'c_not_called', 'not_required', owed, emptyLine, emptyLine.replace('!this.localUnsealedReady(p, g) || ', '')],
+    ['empty-history', 'c_not_called', 'not_required', 'this.#probeCells!.grant.unresolved = true;', emptyLine, emptyLine.replace(' || !this.localHistoryMatches(g)', '')],
+    ['absence-ready', 'c_normal', 'absence', owed, "      if (!this.localUnsealedReady(p, g)) { this.localFailure(p, g, 'state_invalid'); return; }\n      p.absence.kind", '      p.absence.kind'],
+    ['commit-all-post', 'c_normal', 'commit', 'p.absence.routeClosed = false;', "      this.localPoint(p, 'commit', 'before');\n      if (!this.localAllPost(p, g)) { this.localFailure(p, g, 'state_invalid'); return; }", "      this.localPoint(p, 'commit', 'before');"],
+  ];
+  for (const [i, [name, script, phase, code, from, to]] of phaseRecheck.entries()) {
+    const source = inject(text, phase, code), checked = run(await load(source, 'phase-recheck-' + i), script).s;
+    assert.equal(checked.local.failurePhase, phase, name); assert.equal(checked.terminalCommits, 0, name);
+    const masked = run(await load(method(source, 'localFinish', from, to), 'phase-recheck-mutant-' + i), script).s;
+    assert.notEqual(masked.local.failurePhase, phase, 'masked recheck ' + name);
+    if (phase === 'commit') assert.equal(masked.terminalCommits, 1, 'masked recheck ' + name);
+  }
   // Compare before/after the direct linearization point, not just final error text.
   assert.equal(run(base, 'c_fault_commit_before').s.terminal.committed, false);
   const committed = run(base, 'c_fault_project_after');
@@ -169,7 +195,7 @@ const badActive: ProbeLocalExitState = { ...localState, state: 'active' };
   assert.ok(diagnostics.every(d => d.file?.fileName === file && d.start >= text.length), 'unexpected baseline semantic diagnostic');
   assert.equal(new Set(diagnostics.map(d => d.file.getLineAndCharacterOfPosition(d.start).line)).size, 6);
   console.log(JSON.stringify({ compiled: true, oneShotBinding: true, contextControls: identity.length, retirementPostControls: post.length,
-    targetLatchControl: true, allPostControls: allPost.length, lateBoundaryControls: lateBoundary.length, lateGrantRecheck: true,
+    targetLatchControl: true, allPostControls: allPost.length, lateBoundaryControls: lateBoundary.length, lateGrantRecheck: true, phaseRecheckControls: phaseRecheck.length,
     commitBoundary: true, noRollback: true, sameDutyCommit: true,
     confirmedRetention: true, noRepeat: true, defensiveProjectionControls: projection.length, stageAllowlist: true, bodyTrap: true, typeRejections: 6 }));
 } finally { rmSync(dir, { recursive: true, force: true }); }

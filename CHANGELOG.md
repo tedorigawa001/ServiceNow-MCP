@@ -262,6 +262,8 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 ### Added
 
+- WF-B probe local exit review: twelve compiled injection controls now pin each per-phase recheck in `localFinish` (history, attempt ready/history/used/target open, block context, confirm ready, not-required ready/history, absence ready and the commit all-post recheck) to the phase that first rejects. Overlapping later checks had masked their removal. The design now states that the committed live state stays outside the B-01 state validator.
+
 - WF-B probe exit preparation review: the public projection now reports absent slots as `not_created` and present out-of-allowlist values as `unconfirmed`, instead of defaulting to `not_owed` or `unknown`; `settled_not_started` is added to the duty allowlist. A pre-preparation inspect test and two compiled injection controls pin the rule.
 
 - WF-B probe grant capture review: capture failures after the claim are now classified by boundary instead of collapsing to unconfirmed. Before the constructor call the duty stays owed with an empty grant (`claimed_not_issued`); an issuer-held candidate stays provisional and known with the duty owed for the later fixed exit (`grant_known`); only an uncaptured constructor result is unconfirmed (`grant_unknown`). A `capture.prefix` diagnostic and compiled controls pin the classification.
