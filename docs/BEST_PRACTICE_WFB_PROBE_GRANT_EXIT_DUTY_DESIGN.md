@@ -8,6 +8,8 @@ draft-0.2のレビュー修正：B-01の状態関係判定`probeStateFactsValid(
 
 Status: **B-01の先行準備・固定projectionと、B-02の一度限りenter／同grant捕捉・失敗prefix保持を合成依存限定で実装。** B-01は§12と[その検証記録](E2E_BEST_PRACTICE_WFB_PROBE_RUN_PREPARATION_2026-11-10.md)、B-02の基準HEADは`30d91c0`、詳細は§13と[その検証記録](E2E_BEST_PRACTICE_WFB_PROBE_GRANT_CAPTURE_2026-11-10.md)。親は[同startのenter／exit接続差分](BEST_PRACTICE_WFB_PROBE_FRAME_ENTER_EXIT_DESIGN.md)と[正規gate生成・継続入口](BEST_PRACTICE_WFB_GATE_ROOT_CONTINUATION_DESIGN.md)。(A)の実績は[先行cell／同binding検証記録](E2E_BEST_PRACTICE_WFB_PROBE_FRAME_PREPARATION_2026-11-10.md)。内部grant候補の発行・provisional捕捉までで、active資格・probe body・退出記録は未実装。
 
+B-03前半の差分詳細設計（2026-11-10、MDのみ）: [固定exit・局所退役・同duty責務保持draft-0.1](BEST_PRACTICE_WFB_FIXED_EXIT_LOCAL_RETIREMENT_DESIGN.md)で、`08e8fa6`の既知prefix分類を前提に、通常返答とprivate exitの分離、固定guard、knownと退役未確認の区別、body未開始専用terminalを具体化した。本書§6のBX00〜04を前半から詳細化する提案で、実装・body起動・正式証拠は未承認のまま。
+
 正式発行口・C実行入口閉鎖、全体受付無効、Unknown、VM／監視／telemetry調査保留を維持する。当初作成時は文書のみ、その後の実装・ローカル検証は§12〜13の限定範囲だけ。本書だけでbodyや実接続を承認しない。B-02で合成専用内部grant候補を最大1回発行するが、正式permitや実writer資格ではない。新probe body起動・実接続・実通信・設定変更・Pushを行わない。実writer、request／close実合流、回収claim消費、Journal封印／供給、admission／packet／field clear、GateClosedRecord、root終端も閉鎖のまま。
 
 ## 1 (A)との差分と(B)／(C)の分割

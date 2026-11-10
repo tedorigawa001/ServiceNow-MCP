@@ -6,6 +6,8 @@ B-01限定実装（2026-11-10）: 上記設計§12で状態型・RunLink／duty�
 
 B-02限定実装（2026-11-10）: 上記設計§13で、同startの一度限りenter・合成grant候補の同参照捕捉・失敗prefixと同dutyへの責務保持を接続した。[検証記録](E2E_BEST_PRACTICE_WFB_PROBE_GRANT_CAPTURE_2026-11-10.md)。useはentering、grantはprovisionalまでで、active／body／退役／確認済みexit・正式発行・実接続は閉鎖のまま。
 
+B-03前半の詳細化（2026-11-10、MDのみ）: [固定exit・局所退役・同duty責務保持draft-0.1](BEST_PRACTICE_WFB_FIXED_EXIT_LOCAL_RETIREMENT_DESIGN.md)で、先行first／stop後も同dutyだけを処理するprivate境界と、body未開始のheld_not_startedを設計した。本文のbody完了後held_unsealed／PX05とは別で、body起動・確認済みexit・正式発行は追加しない。
+
 Version: draft-0.2 / Date: 2026-11-10 / 読み取り開始HEAD: `fb02aab`、文書確認時HEAD: `470679f`（(A)レビュー修正基準HEAD: `75adab5`）。
 
 draft-0.2のレビュー修正（MDのみ）：(A)のstart側受領物照合のうち単独対照で裏付けられるのはcellsだけで、他は到達しない二重防御である点を§11に明記した。
