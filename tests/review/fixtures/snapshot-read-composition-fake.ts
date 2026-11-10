@@ -3573,6 +3573,56 @@ function bodySeedShape(value: object, keys: readonly PropertyKey[]): boolean {
   return Object.getPrototypeOf(value) === Object.prototype && Reflect.ownKeys(value).length === keys.length
     && keys.every(key => { const d = Object.getOwnPropertyDescriptor(value, key); return !!d && 'value' in d; });
 }
+const BODY_PROGRESS: unique symbol = Symbol('body-initial-progress');
+const BODY_CLOSURE: unique symbol = Symbol('body-initial-closure');
+const BODY_DIAGNOSTIC: unique symbol = Symbol('body-initial-diagnostic');
+const BODY_RETIREMENT: unique symbol = Symbol('body-initial-retirement');
+const BODY_TERMINAL: unique symbol = Symbol('body-initial-terminal');
+const BODY_UNWIND: unique symbol = Symbol('body-initial-unwind');
+interface BodyProgressInitial {
+  readonly [BODY_PROGRESS]: true; readonly pin: FixedBodyRoutePin; readonly bodyCell: ProbeBodyCell;
+  activationConfirmed: false; callReserved: false; entryObserved: false; returnCaptured: false; callPhase: 'body_not_called'; outcome: 'none';
+}
+interface BodyRouteClosureInitial {
+  readonly [BODY_CLOSURE]: true; readonly pin: FixedBodyRoutePin; readonly progress: BodyProgressInitial;
+  bodyEntryClosed: false; controlReturned: false; continuationState: 'unobserved';
+}
+interface BodyDiagnosticInitial {
+  readonly [BODY_DIAGNOSTIC]: true; readonly context: BodyConstructionContext;
+  readonly rootFailure: { first: string; phase: number; boundary: string }; readonly cellDiagnostic: ProbeDiagnosticCell;
+  probeFirst: 'none'; exitFirst: 'none'; deliveryFirst: 'none'; failurePhase: 'none'; failureBoundary: 'none'; refusal: 'none';
+}
+interface BodyRetirementInitial {
+  readonly [BODY_RETIREMENT]: true; readonly pin: FixedBodyRoutePin; readonly duty: FixedExitDuty; readonly control: ProbeExitControl;
+  kind: 'not_attempted'; used: false; blocked: false; confirmed: false;
+  target: undefined; blockedTarget: undefined; confirmedTarget: undefined;
+}
+interface BodyTerminalInitial {
+  readonly [BODY_TERMINAL]: true; readonly pin: FixedBodyRoutePin; readonly duty: FixedExitDuty; readonly progress: BodyProgressInitial;
+  readonly retirement: BodyRetirementInitial; readonly terminalAnchor: ProbeNotStartedTerminalSlot;
+  kind: 'none'; prepared: false; committed: false; readonly candidate: undefined; readonly issued: undefined; readonly accepted: undefined;
+}
+interface BodyUnwindInitial {
+  readonly [BODY_UNWIND]: true; readonly context: BodyConstructionContext; readonly pin: FixedBodyRoutePin;
+  readonly progress: BodyProgressInitial; readonly closure: BodyRouteClosureInitial; readonly diagnostic: BodyDiagnosticInitial;
+  readonly retirement: BodyRetirementInitial; readonly terminal: BodyTerminalInitial;
+  state: 'idle'; routeUsed: false; inProgress: false; phase: 'none'; boundary: 'none'; fixedReply: undefined;
+}
+interface BodyLiveReply extends Omit<BodySeedReply, 'model'> { readonly model: 'wfb-body-live-initial-1' }
+const BODY_LIVE_BRANDS = Object.freeze([BODY_PROGRESS, BODY_CLOSURE, BODY_DIAGNOSTIC, BODY_RETIREMENT, BODY_TERMINAL, BODY_UNWIND]);
+const BODY_LIVE_REFS = Object.freeze([
+  ['pin', 'bodyCell'], ['pin', 'progress'], ['context', 'rootFailure', 'cellDiagnostic'], ['pin', 'duty', 'control'],
+  ['pin', 'duty', 'progress', 'retirement', 'terminalAnchor', 'candidate', 'issued', 'accepted'],
+  ['context', 'pin', 'progress', 'closure', 'diagnostic', 'retirement', 'terminal'],
+]);
+const BODY_LIVE_PROGRESS = Object.freeze([
+  ['activationConfirmed', 'callReserved', 'entryObserved', 'returnCaptured', 'callPhase', 'outcome'],
+  ['bodyEntryClosed', 'controlReturned', 'continuationState'], ['probeFirst', 'exitFirst', 'deliveryFirst', 'failurePhase', 'failureBoundary', 'refusal'],
+  ['kind', 'used', 'blocked', 'confirmed', 'target', 'blockedTarget', 'confirmedTarget'], ['kind', 'prepared', 'committed'],
+  ['state', 'routeUsed', 'inProgress', 'phase', 'boundary', 'fixedReply'],
+]);
+const BODY_LIVE_PHASES = Object.freeze([...BODY_SEED_PHASES, 'BC06', 'BC07', 'BC08', 'BC09', 'BC10', 'BC11']);
+const BODY_LIVE_BOUNDARIES = Object.freeze([...BODY_SEED_BOUNDARIES, ...Array.from({ length: 9 }, (_, i) => `fix_${i}`), 'sealed']);
 class CanonicalGateDraftRoot {
   readonly #failure: { first: string; phase: number; boundary: string };
   readonly #slots: { stage: SupplyConstructionStage; value: object | undefined }[];
@@ -3600,9 +3650,10 @@ class CanonicalGateDraftRoot {
   #bodySeedShell: BodyPreparationShell | undefined;
   #bodySeedPhase = 'none'; #bodySeedBoundary = 'none'; #bodySeedFailurePhase = 'none'; #bodySeedFailureBoundary = 'none';
   #bodySeedReentry = 'none'; #bodySeedHookCalls = 0; #bodySeedFixed: Readonly<BodySeedReply> | undefined;
+  #bodyLiveFixed: Readonly<BodyLiveReply> | undefined;
   constructor(private readonly script: string, admitted: boolean, private readonly probePreparation = false, private readonly runPreparation = false,
     private readonly grantCapture = false, private readonly exitPreparation = false, private readonly exitGuard = false, private readonly localExit = false,
-    private readonly bodySeed = false) {
+    private readonly bodySeed = false, private readonly bodyLive = false) {
     this.#failure = { first: admitted ? 'none' : 'input_rejected', phase: 0, boundary: 'none' };
     this.#slots = Array.from({ length: 37 }, () => ({ stage: 'not_started', value: undefined }));
     this.#probeSlots = probePreparation ? Array.from({ length: 8 }, () => ({ stage: 'not_started', value: undefined })) : [];
@@ -4025,8 +4076,135 @@ class CanonicalGateDraftRoot {
     this.bodySeedMint(5, (): FixedBodyRoutePin => ({ [BODY_ROUTE_PIN]: true, context: ctx, bodyOrigin: origin,
       throwSentinel: shell.slots![2]!.current as FixedBodySentinel<'throw'>, cancelSentinel: shell.slots![3]!.current as FixedBodySentinel<'cancel'>,
       grantSlot: this.#issuedCells!.grant, kind: 'fixed_body', executable: false }));
+    if (this.bodyLive) return this.prepareBodyLive();
     if (!this.bodySeedCarriersMatch() || !this.bodySeedBaseMatches() || ![1, 2, 3, 4, 5].every(n => this.bodySeedDataMatches(n))) return this.fail('binding_mismatch');
     shell.state = 'held'; return this.reply(false, 'seed_held'); // BC06+, bind, root ready and body remain unconnected.
+  }
+  private bodyLiveDescriptors(value: object, n: number, fixed: boolean): boolean {
+    const i = n - 6, keys: readonly PropertyKey[] = fixed ? [BODY_LIVE_BRANDS[i], ...BODY_LIVE_REFS[i]] : BODY_LIVE_PROGRESS[i];
+    return keys.every(key => { const d = Object.getOwnPropertyDescriptor(value, key);
+      return !!d && 'value' in d && d.enumerable === true && d.configurable === false && d.writable === !fixed; });
+  }
+  private bodyLiveDataMatches(n: number): boolean {
+    const slots = this.#bodySeedShell!.slots!, cell = slots[n - 1]!, value = cell.current, i = n - 6;
+    if (!value || value !== cell.issued || cell.rejected !== undefined
+      || !bodySeedShape(value, [BODY_LIVE_BRANDS[i], ...BODY_LIVE_REFS[i], ...BODY_LIVE_PROGRESS[i]])
+      || !Object.isSealed(value) || !this.bodyLiveDescriptors(value, n, true) || !this.bodyLiveDescriptors(value, n, false)) return false;
+    const ctx = slots[0]!.current as BodyConstructionContext, pin = slots[4]!.current as FixedBodyRoutePin;
+    if (n === 6) { const v = value as BodyProgressInitial;
+      return v[BODY_PROGRESS] === true && v.pin === pin && v.bodyCell === ctx.cells.body && v.activationConfirmed === false
+        && v.callReserved === false && v.entryObserved === false && v.returnCaptured === false && v.callPhase === 'body_not_called' && v.outcome === 'none'; }
+    if (n === 7) { const v = value as BodyRouteClosureInitial;
+      return v[BODY_CLOSURE] === true && v.pin === pin && v.progress === slots[5]!.current
+        && v.bodyEntryClosed === false && v.controlReturned === false && v.continuationState === 'unobserved'; }
+    if (n === 8) { const v = value as BodyDiagnosticInitial;
+      return v[BODY_DIAGNOSTIC] === true && v.context === ctx && v.rootFailure === this.#failure && v.cellDiagnostic === ctx.cells.diagnostic
+        && v.probeFirst === 'none' && v.exitFirst === 'none' && v.deliveryFirst === 'none' && v.failurePhase === 'none'
+        && v.failureBoundary === 'none' && v.refusal === 'none'; }
+    if (n === 9) { const v = value as BodyRetirementInitial;
+      return v[BODY_RETIREMENT] === true && v.pin === pin && v.duty === ctx.duty && v.control === ctx.control
+        && v.kind === 'not_attempted' && v.used === false && v.blocked === false && v.confirmed === false
+        && v.target === undefined && v.blockedTarget === undefined && v.confirmedTarget === undefined; }
+    if (n === 10) { const v = value as BodyTerminalInitial;
+      return v[BODY_TERMINAL] === true && v.pin === pin && v.duty === ctx.duty && v.progress === slots[5]!.current
+        && v.retirement === slots[8]!.current && v.terminalAnchor === ctx.exitBundle.terminal
+        && v.kind === 'none' && v.prepared === false && v.committed === false && v.candidate === undefined && v.issued === undefined && v.accepted === undefined; }
+    const v = value as BodyUnwindInitial;
+    return n === 11 && v[BODY_UNWIND] === true && v.context === ctx && v.pin === pin && v.progress === slots[5]!.current
+      && v.closure === slots[6]!.current && v.diagnostic === slots[7]!.current && v.retirement === slots[8]!.current && v.terminal === slots[9]!.current
+      && v.state === 'idle' && v.routeUsed === false && v.inProgress === false && v.phase === 'none' && v.boundary === 'none' && v.fixedReply === undefined;
+  }
+  private bodyLivePrefixMatches(count: number): boolean {
+    const s = this.#bodySeedShell, slots = s?.slots;
+    if (!s || !bodySeedShape(s, ['failure', 'slots', 'state', 'ready', 'execution', 'bindAttemptUsed', 'bindStage'])
+      || s.failure !== this.#failure || s.state !== 'building' || s.ready !== false || s.execution !== 'closed'
+      || s.bindAttemptUsed !== false || s.bindStage !== 'not_attempted' || !Array.isArray(slots) || slots.length !== 13) return false;
+    return BODY_CARRIER_KINDS.every((kind, i) => {
+      const c = slots[i];
+      if (!c || !bodySeedShape(c, ['index', 'kind', 'stage', 'attemptReserved', 'callBoundaryReached', 'issued', 'current', 'rejected'])
+        || c.index !== i + 1 || c.kind !== kind) return false;
+      if (i >= count) return c.stage === 'not_started' && c.attemptReserved === false && c.callBoundaryReached === false
+        && c.issued === undefined && c.current === undefined && c.rejected === undefined;
+      return c.stage === 'confirmed' && c.attemptReserved === true && c.callBoundaryReached === true
+        && (i < 5 ? this.bodySeedDataMatches(i + 1) : this.bodyLiveDataMatches(i + 1));
+    });
+  }
+  private bodyLiveProduce(n: number, create: () => object, fault: string): object {
+    const raw = create(), i = n - 6;
+    if (['', 'copy', 'mutable_ref', 'unsealed'].includes(fault)) return raw;
+    if (fault === 'freeze') return Object.freeze(raw);
+    const candidate = { ...raw } as Record<PropertyKey, unknown>;
+    if (fault === 'brand') candidate[BODY_LIVE_BRANDS[i]] = false;
+    else if (fault === 'extra') candidate.extra = true;
+    else if (fault === 'missing') delete candidate[BODY_LIVE_PROGRESS[i][0]];
+    else if (fault === 'prototype') Object.setPrototypeOf(candidate, Object.create(null));
+    else if (fault === 'getter') Object.defineProperty(candidate, BODY_LIVE_REFS[i][0], {
+      get: () => { this.#bodySeedHookCalls++; throw Error('private_live_hook'); }, configurable: true, enumerable: true });
+    else candidate[fault] = Object.freeze({});
+    return candidate;
+  }
+  private bodyLiveMint(n: number, create: () => object): void {
+    const phase = `BC${String(n).padStart(2, '0')}`, i = n - 6, cell = this.#bodySeedShell!.slots![n - 1]!;
+    this.bodySeedPoint(phase, 'before');
+    if (!this.bodySeedBaseMatches() || !this.bodyLivePrefixMatches(n - 1)) {
+      this.fail('binding_mismatch'); throw Error('body_live_preflight');
+    }
+    cell.attemptReserved = true; cell.stage = 'attempting'; this.bodySeedPoint(phase, 'attempt');
+    const fault = this.script.startsWith(`s_live_mix_${n}_`) ? this.script.slice(`s_live_mix_${n}_`.length) : '';
+    const producerThrows = this.script === `s_live_producer_throw_${n}`;
+    cell.callBoundaryReached = true;
+    if (producerThrows) throw Error('body_live_producer');
+    const raw = this.bodyLiveProduce(n, create, fault); cell.issued = raw; cell.stage = 'issued'; this.bodySeedPoint(phase, 'issued');
+    const fixed: readonly PropertyKey[] = [BODY_LIVE_BRANDS[i], ...BODY_LIVE_REFS[i]];
+    for (let j = 0; j < fixed.length; j++) {
+      const d = Object.getOwnPropertyDescriptor(raw, fixed[j]);
+      if (d && 'value' in d && !(fault === 'mutable_ref' && j === 1)) Object.defineProperty(raw, fixed[j], { writable: false, configurable: false });
+      this.bodySeedPoint(phase, `fix_${j}`);
+    }
+    if (fault !== 'unsealed') Object.seal(raw);
+    this.bodySeedPoint(phase, 'sealed');
+    const current = fault === 'copy' ? Object.seal(Object.defineProperties({}, Object.getOwnPropertyDescriptors(raw))) : raw;
+    cell.current = current; cell.stage = 'provisional'; this.bodySeedPoint(phase, 'captured');
+    if (!this.bodyLiveDataMatches(n)) {
+      if (!cell.rejected) cell.rejected = current;
+      this.fail('binding_mismatch'); throw Error('body_live_mismatch');
+    }
+    this.bodySeedPoint(phase, 'checked'); cell.stage = 'confirmed'; this.bodySeedPoint(phase, 'confirmed');
+  }
+  private prepareBodyLive(): Readonly<{ ok: boolean; disposition: string }> {
+    const slots = this.#bodySeedShell!.slots!, ctx = slots[0]!.current as BodyConstructionContext, pin = slots[4]!.current as FixedBodyRoutePin;
+    this.bodyLiveMint(6, (): BodyProgressInitial => ({ [BODY_PROGRESS]: true, pin, bodyCell: ctx.cells.body,
+      activationConfirmed: false, callReserved: false, entryObserved: false, returnCaptured: false, callPhase: 'body_not_called', outcome: 'none' }));
+    const progress = slots[5]!.current as BodyProgressInitial;
+    this.bodyLiveMint(7, (): BodyRouteClosureInitial => ({ [BODY_CLOSURE]: true, pin, progress,
+      bodyEntryClosed: false, controlReturned: false, continuationState: 'unobserved' }));
+    this.bodyLiveMint(8, (): BodyDiagnosticInitial => ({ [BODY_DIAGNOSTIC]: true, context: ctx, rootFailure: this.#failure,
+      cellDiagnostic: ctx.cells.diagnostic, probeFirst: 'none', exitFirst: 'none', deliveryFirst: 'none', failurePhase: 'none', failureBoundary: 'none', refusal: 'none' }));
+    this.bodyLiveMint(9, (): BodyRetirementInitial => ({ [BODY_RETIREMENT]: true, pin, duty: ctx.duty, control: ctx.control,
+      kind: 'not_attempted', used: false, blocked: false, confirmed: false, target: undefined, blockedTarget: undefined, confirmedTarget: undefined }));
+    const retirement = slots[8]!.current as BodyRetirementInitial;
+    this.bodyLiveMint(10, (): BodyTerminalInitial => ({ [BODY_TERMINAL]: true, pin, duty: ctx.duty, progress, retirement,
+      terminalAnchor: ctx.exitBundle.terminal, kind: 'none', prepared: false, committed: false, candidate: undefined, issued: undefined, accepted: undefined }));
+    this.bodyLiveMint(11, (): BodyUnwindInitial => ({ [BODY_UNWIND]: true, context: ctx, pin, progress,
+      closure: slots[6]!.current as BodyRouteClosureInitial, diagnostic: slots[7]!.current as BodyDiagnosticInitial,
+      retirement, terminal: slots[9]!.current as BodyTerminalInitial, state: 'idle', routeUsed: false, inProgress: false, phase: 'none', boundary: 'none', fixedReply: undefined }));
+    if (!this.bodySeedBaseMatches() || !this.bodyLivePrefixMatches(11)) return this.fail('binding_mismatch');
+    this.#bodySeedShell!.state = 'held'; return this.reply(false, 'live_held');
+  }
+  bodyLiveReply(disposition: string): Readonly<BodyLiveReply> {
+    if (this.#bodyLiveFixed) return this.#bodyLiveFixed;
+    const prior = this.bodySeedReply(disposition === 'live_held' ? 'seed_held' : disposition);
+    const r: Readonly<BodyLiveReply> = Object.freeze({ ...prior, model: 'wfb-body-live-initial-1', disposition: disposition === 'live_held' ? 'live_held' : prior.disposition });
+    if (this.#fixed) this.#bodyLiveFixed = r; return r;
+  }
+  inspectBodyLive() {
+    const prior = this.inspectBodySeed(), slots = this.#bodySeedShell?.slots;
+    return Object.freeze({ ...prior, model: 'wfb-body-live-initial-1', dataLimit: 11,
+      phase: runEnum(this.#bodySeedPhase, BODY_LIVE_PHASES, 'unconfirmed'), boundary: runEnum(this.#bodySeedBoundary, BODY_LIVE_BOUNDARIES, 'unconfirmed'),
+      failurePhase: runEnum(this.#bodySeedFailurePhase, BODY_LIVE_PHASES, 'unconfirmed'), failureBoundary: runEnum(this.#bodySeedFailureBoundary, BODY_LIVE_BOUNDARIES, 'unconfirmed'),
+      live: Object.freeze(Array.from({ length: 6 }, (_, i) => { const value = slots?.[i + 5]?.current;
+        return Object.freeze({ index: i + 6, initial: !!value && this.bodyLiveDataMatches(i + 6), sealed: !!value && Object.isSealed(value),
+          referencesFixed: !!value && this.bodyLiveDescriptors(value, i + 6, true), progressWritable: !!value && this.bodyLiveDescriptors(value, i + 6, false) }); })) });
   }
   bodySeedReply(disposition: string): Readonly<BodySeedReply> {
     if (this.#bodySeedFixed) return this.#bodySeedFixed;
@@ -4515,6 +4693,27 @@ export function createProbeBodySeedFake(...args: readonly unknown[]) {
     checkLegacy: (...xs: readonly unknown[]) => call(xs, () => a.checkFramePreparation(true)),
     close: (...xs: readonly unknown[]) => call(xs, () => a.close()),
     inspect: (...xs: readonly unknown[]) => { if (xs.length) a.rejectInput(); return a.inspectBodySeed(); } });
+}
+
+export function createProbeBodyLiveFake(...args: readonly unknown[]) {
+  const script = args.length ? args[0] : 's_normal';
+  const phases = ['BC06', 'BC07', 'BC08', 'BC09', 'BC10', 'BC11'];
+  const points = phases.flatMap((p, i) => ['before', 'attempt', 'issued', 'captured', 'checked', 'confirmed',
+    ...Array.from({ length: BODY_LIVE_REFS[i].length + 1 }, (_, j) => `fix_${j}`), 'sealed'].map(b => `${p}_${b}`));
+  const scripts = ['s_normal', ...points.flatMap(p => ['fault', 'close', 'reenter'].map(k => `s_${k}_${p}`)),
+    ...[6, 7, 8, 9, 10, 11].map(n => `s_live_producer_throw_${n}`),
+    ...BODY_LIVE_REFS.flatMap((refs, i) => [...refs, ...BODY_LIVE_PROGRESS[i], 'brand', 'extra', 'copy', 'getter', 'missing', 'prototype',
+      'freeze', 'mutable_ref', 'unsealed'].map(f => `s_live_mix_${i + 6}_${f}`))];
+  const admitted = args.length <= 1 && typeof script === 'string' && scripts.includes(script);
+  const a = new CanonicalGateDraftRoot(admitted ? script as string : 's_normal', admitted, true, true, false, true, false, false, true, true);
+  const call = (xs: readonly unknown[], op: () => Readonly<{ ok: boolean; disposition: string }>) => {
+    const r = xs.length ? a.rejectInput() : op(); return a.bodyLiveReply(r.disposition);
+  };
+  return Object.freeze({ prepare: (...xs: readonly unknown[]) => call(xs, () => a.prepare()),
+    check: (...xs: readonly unknown[]) => call(xs, () => ({ ok: false, disposition: 'blocked_frame_execution' })),
+    checkLegacy: (...xs: readonly unknown[]) => call(xs, () => a.checkFramePreparation(true)),
+    close: (...xs: readonly unknown[]) => call(xs, () => a.close()),
+    inspect: (...xs: readonly unknown[]) => { if (xs.length) a.rejectInput(); return a.inspectBodyLive(); } });
 }
 
 export function createProbeLocalExitFake(...args: readonly unknown[]) {

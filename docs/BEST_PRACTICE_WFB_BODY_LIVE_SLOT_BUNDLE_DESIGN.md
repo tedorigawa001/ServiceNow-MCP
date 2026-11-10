@@ -1,10 +1,10 @@
 # WF-B B03後半：BC06〜11 live slotとBC12／13 bundle／draft生成境界
 
-Version: draft-0.2 / Date: 2026-11-10 / 読み取り基準HEAD: `94d7fde`（レビュー修正基準HEAD: `cc0e3c6`）。
+Version: draft-0.3 / Date: 2026-11-10 / 読み取り基準HEAD: `94d7fde`（レビュー修正基準HEAD: `cc0e3c6`、Initial実装基準HEAD: `435b348`）。
 
 draft-0.1のレビュー修正（MDのみ）：§10の「コミット・Pushも行わない」は、コミット後も現在形で残る記述だった。同節の文書検証結果と同じく作成時点の記録であることを明示し、コミット後の注記を追加した。
 
-Status: **詳細設計のみ。BC06〜13は未実装・受入試験未実施。** 親は[先行slot物理配置・固定構築schedule・失敗保持](BEST_PRACTICE_WFB_BODY_SLOT_CONSTRUCTION_DESIGN.md)と[B03後半の固定exit契約](BEST_PRACTICE_WFB_BODY_UNWIND_EXIT_DESIGN.md)。現行の先行seedと再検査レビューは[検証記録](E2E_BEST_PRACTICE_WFB_BODY_SLOT_SEED_2026-11-10.md)を参照する。
+Status: **BC06〜11のInitial内部型・live参照固定化と全前段検査だけを合成依存限定で実装。** §11と[Initial実装の検証記録](E2E_BEST_PRACTICE_WFB_BODY_LIVE_INITIAL_2026-11-10.md)を参照。BC12／13・BD／構築ready・BA／body・BU実操作は未接続。§1〜10はdraft-0.1作成時の詳細設計で、未実装／将来の記述は§11の限定実装と区別する。親は[先行slot物理配置・固定構築schedule・失敗保持](BEST_PRACTICE_WFB_BODY_SLOT_CONSTRUCTION_DESIGN.md)と[B03後半の固定exit契約](BEST_PRACTICE_WFB_BODY_UNWIND_EXIT_DESIGN.md)。先行seedと再検査レビューは[検証記録](E2E_BEST_PRACTICE_WFB_BODY_SLOT_SEED_2026-11-10.md)を参照する。
 
 正式発行口・C実行入口・body起動は閉鎖、全体受付無効、Unknown、VM／監視／telemetry調査保留を維持する。本書は実装・構築ready・body起動・実接続・実通信・設定変更・Pushの承認ではない。BDのbind／借用field追加、BAのactive／body、BUの退役／終端、実grant／Permit発行、実session／transport／worker・実writer・Journal／packet・field clear・root終端は対象外。
 
@@ -172,3 +172,15 @@ oracleは本体のbuilder／生成表／関係表／counterを期待値へimport
 文書検証結果：3文書のローカルリンク16件に欠落なし、22表の列数・末尾改行・空白に異常なし。BC06〜13の8行とcarrier番号、直接依存の先行順、48観測境界、LB01〜12の重複／欠落を確認した。作成時点の変更は本書と親2文書のみで、ソース／試験／CHANGELOG／設定はHEADと差分なし。これは文書整合の確認であり、将来の実装・受入試験の成功を意味しない。
 
 本書はその後`cc0e3c6`としてコミットされ、draft-0.2のレビュー修正もMDのみで行った（Pushなし）。
+
+## 11 BC06〜11 Initial限定実装（2026-11-10）
+
+package除外のcomposition fixtureへcreateProbeBodyLiveFakeを追加した。同既存CanonicalGateDraftRootの保護された構築中にBS／BC01〜05を再利用し、held確定前の固定継続からBC06〜11だけを生成する。公開APIはprepare／check／checkLegacy／close／inspectの固定scriptと有限値返答で、model=wfb-body-live-initial-1、正常もlive_held／ok=false。旧createProbeBodySeedFakeはBC05まで・旧model／旧freeze／旧suffix検査のまま維持する。
+
+新しいInitial型6つは別brandと§3の全field／厳密初期値を持ち、同context・body cell・root failure／cell診断・duty／control／terminal anchorへ結合する。issuedへ即時保持後、brand／binding参照と退出候補3fieldをnon-writable／non-configurableへ固定し、progress fieldはwritable、全shapeはsealして同currentへ保持する。Object.freezeをlive全体へ流用せず、progressを進めるwriterも追加しない。固定化はbrandを先頭に表のreadonly field順で行い、各直後をfix_0〜fix_k、seal直後をsealedとして故障／close／再入対照にする。
+
+新prefix検査は対象carrierの空・予約なし／call未到達、全前段confirmed・予約済み／call到達済み・issued=current／rejectedなし・各dataの関係／Initial値、全後段の空を固定13位置で確認する。元baseの未使用条件も各producer前と最終で照合する。BC11後の全再検査を通ってもheldだけで、carrier12／13は空、root／shell ready=false、bind未試行、body borrowなし。BA／BU・退出証拠・request／回収・実会計は接続しない。
+
+構築失敗は元root first・最初のBC位置と各carrierのprefixを保持する。BC08にbody理由を捏造せず、発行済み参照・初回rejectedはclear／copy補完しない。公開snapshotは同一性／descriptor／Initial一致をbooleanへ投影するだけで、live参照・brand・setterを返さない。新理由enum・実行用状態union／writerは未実装のまま。
+
+LB01〜12のBC06〜11部分を合成・compiled対照で検証する。BC12／13・BD依存条件の成功は主張しない。基準HEADで正規に単独破壊できなかったcapture試行0・exit slot照合・matchesRunの元base節は、引き続き単独対照の範囲外である。実allocation／E／S／OOM・全guard／全体work上界はUnknown、正式発行口閉鎖・全体受付無効・調査保留を維持する。
