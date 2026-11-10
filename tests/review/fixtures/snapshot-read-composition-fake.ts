@@ -3532,6 +3532,47 @@ class CanonicalDraftGate {
   bind(p: CanonicalGatePin): boolean { if (this.#bound || !this.matches(p)) return false; this.#bound = true; return true; }
   inspect() { return Object.freeze({ state: this.#bound ? 'open' : 'unbound', pinRetained: !!this.#issued, bound: this.#bound }); }
 }
+const BODY_CONTEXT: unique symbol = Symbol('body-seed-context');
+const BODY_ORIGIN: unique symbol = Symbol('body-seed-origin');
+const BODY_SENTINEL: unique symbol = Symbol('body-seed-sentinel');
+const BODY_ROUTE_PIN: unique symbol = Symbol('body-seed-route-pin');
+interface BodyConstructionContext {
+  readonly [BODY_CONTEXT]: true; readonly seed: GateConstructionSeed; readonly binding: ProbeFrameBinding;
+  readonly cells: ProbeCellBundle; readonly link: ProbeRunLink; readonly duty: FixedExitDuty; readonly control: ProbeExitControl;
+  readonly start: RetirementStartAssembly; readonly bindingOwner: object; readonly cellOwner: object; readonly scope: AdmissionScope;
+  readonly pin: CanonicalGatePin; readonly epoch: object; readonly packet: object; readonly frame: object; readonly entry: object; readonly exit: object;
+  readonly runSeal: ProbeRunSeal; readonly exitBundle: ProbeExitPreparationBundle;
+}
+interface FixedBodyOrigin { readonly [BODY_ORIGIN]: true; readonly context: BodyConstructionContext; readonly kind: 'fixed_probe_body' }
+interface FixedBodySentinel<K extends 'throw' | 'cancel'> { readonly [BODY_SENTINEL]: true; readonly context: BodyConstructionContext;
+  readonly bodyOrigin: FixedBodyOrigin; readonly kind: K }
+interface FixedBodyRoutePin { readonly [BODY_ROUTE_PIN]: true; readonly context: BodyConstructionContext; readonly bodyOrigin: FixedBodyOrigin;
+  readonly throwSentinel: FixedBodySentinel<'throw'>; readonly cancelSentinel: FixedBodySentinel<'cancel'>;
+  readonly grantSlot: ProbeGrantCell; readonly kind: 'fixed_body'; readonly executable: false }
+type BodyConstructionStage = 'not_started' | 'attempting' | 'issued' | 'provisional' | 'confirmed';
+type BodyCarrierIndex = 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10 | 11 | 12 | 13;
+const BODY_CARRIER_KINDS = Object.freeze(['context', 'origin', 'throw_sentinel', 'cancel_sentinel', 'route_pin', 'progress', 'closure',
+  'diagnostic', 'retirement', 'terminal', 'unwind', 'bundle', 'draft'] as const);
+interface BodyConstructionCell { readonly index: BodyCarrierIndex; readonly kind: typeof BODY_CARRIER_KINDS[number]; stage: BodyConstructionStage;
+  attemptReserved: boolean; callBoundaryReached: boolean; issued: object | undefined; current: object | undefined; rejected: object | undefined }
+interface BodyPreparationShell { readonly failure: { first: string; phase: number; boundary: string };
+  slots: (BodyConstructionCell | undefined)[] | undefined; state: 'building' | 'held' | 'failed'; readonly ready: false;
+  readonly execution: 'closed'; readonly bindAttemptUsed: false; readonly bindStage: 'not_attempted' }
+interface BodySeedReply { readonly model: 'wfb-body-slot-seed-1'; readonly ok: false; readonly first: ProbeRunFirst; readonly disposition: string;
+  readonly authority: 'none'; readonly execution: 'closed'; readonly formalIssuance: 'closed'; readonly wholeRunAdmission: 'disabled';
+  readonly implementation: 'unknown'; readonly investigations: 'on_hold' }
+const BODY_CONTEXT_FIELDS = Object.freeze(['seed', 'binding', 'cells', 'link', 'duty', 'control', 'start', 'bindingOwner', 'cellOwner',
+  'scope', 'pin', 'epoch', 'packet', 'frame', 'entry', 'exit', 'runSeal', 'exitBundle']);
+const BODY_DATA_FIELDS = Object.freeze([BODY_CONTEXT_FIELDS, ['context', 'kind'], ['context', 'bodyOrigin', 'kind'],
+  ['context', 'bodyOrigin', 'kind'], ['context', 'bodyOrigin', 'throwSentinel', 'cancelSentinel', 'grantSlot', 'kind', 'executable']]);
+const BODY_DATA_BRANDS = Object.freeze([BODY_CONTEXT, BODY_ORIGIN, BODY_SENTINEL, BODY_SENTINEL, BODY_ROUTE_PIN]);
+const BODY_SEED_PHASES = Object.freeze(['none', ...Array.from({ length: 15 }, (_, i) => `BS${String(i).padStart(2, '0')}`),
+  ...Array.from({ length: 6 }, (_, i) => `BC${String(i).padStart(2, '0')}`)]);
+const BODY_SEED_BOUNDARIES = Object.freeze(['none', 'before', 'attempt', 'retained', 'done', 'after', 'issued', 'captured', 'checked', 'confirmed']);
+function bodySeedShape(value: object, keys: readonly PropertyKey[]): boolean {
+  return Object.getPrototypeOf(value) === Object.prototype && Reflect.ownKeys(value).length === keys.length
+    && keys.every(key => { const d = Object.getOwnPropertyDescriptor(value, key); return !!d && 'value' in d; });
+}
 class CanonicalGateDraftRoot {
   readonly #failure: { first: string; phase: number; boundary: string };
   readonly #slots: { stage: SupplyConstructionStage; value: object | undefined }[];
@@ -3556,8 +3597,12 @@ class CanonicalGateDraftRoot {
   readonly #localSlots: { stage: SupplyConstructionStage; value: object | undefined }[];
   #localOwn: ProbeLocalExitState | undefined; #localPhase = 0; #localBoundary = 'none';
   #localReply: Readonly<ProbeLocalExitReply> | undefined;
+  #bodySeedShell: BodyPreparationShell | undefined;
+  #bodySeedPhase = 'none'; #bodySeedBoundary = 'none'; #bodySeedFailurePhase = 'none'; #bodySeedFailureBoundary = 'none';
+  #bodySeedReentry = 'none'; #bodySeedHookCalls = 0; #bodySeedFixed: Readonly<BodySeedReply> | undefined;
   constructor(private readonly script: string, admitted: boolean, private readonly probePreparation = false, private readonly runPreparation = false,
-    private readonly grantCapture = false, private readonly exitPreparation = false, private readonly exitGuard = false, private readonly localExit = false) {
+    private readonly grantCapture = false, private readonly exitPreparation = false, private readonly exitGuard = false, private readonly localExit = false,
+    private readonly bodySeed = false) {
     this.#failure = { first: admitted ? 'none' : 'input_rejected', phase: 0, boundary: 'none' };
     this.#slots = Array.from({ length: 37 }, () => ({ stage: 'not_started', value: undefined }));
     this.#probeSlots = probePreparation ? Array.from({ length: 8 }, () => ({ stage: 'not_started', value: undefined })) : [];
@@ -3570,6 +3615,10 @@ class CanonicalGateDraftRoot {
   private reply(ok: boolean, disposition: string) { return Object.freeze({ ok, disposition, first: this.#failure.first }); }
   private fail(reason: string) {
     if (this.#failure.first === 'none') this.#failure.first = reason;
+    if (this.bodySeed) {
+      if (this.#bodySeedFailurePhase === 'none') { this.#bodySeedFailurePhase = this.#bodySeedPhase; this.#bodySeedFailureBoundary = this.#bodySeedBoundary; }
+      if (this.#bodySeedShell) this.#bodySeedShell.state = 'failed';
+    }
     if (this.exitPreparation && this.#exitPhase > 0 && this.#exitFirst === 'none') this.#exitFirst = runFirst(reason);
     return this.#fixed ??= this.reply(false, reason);
   }
@@ -3846,6 +3895,168 @@ class CanonicalGateDraftRoot {
     if (!probeStartAccess.bindLocal(this.#issuedFrameBinding!.target.start, p, this.script)) return false;
     this.localConstructionPoint(4, 'post'); return true;
   }
+  private bodySeedPoint(phase: string, boundary: string): void {
+    this.#bodySeedPhase = phase; this.#bodySeedBoundary = boundary;
+    if (this.script === `s_reenter_${phase}_${boundary}`) this.#bodySeedReentry = this.prepare().disposition;
+    if (this.script === `s_close_${phase}_${boundary}`) this.close();
+    if (this.#closed) throw Error('private_body_seed_closed');
+    if (this.script === `s_fault_${phase}_${boundary}`) throw Error('private_body_seed_fault');
+  }
+  private bodySeedBoot(phase: string, create: () => object, retain: (v: object) => void): void {
+    this.bodySeedPoint(phase, 'before'); this.bodySeedPoint(phase, 'attempt');
+    const v = create(); retain(v); this.bodySeedPoint(phase, 'retained');
+    if (!this.bodySeedBootMatches(phase, v)) { this.fail('binding_mismatch'); throw Error('body_seed_bootstrap_mismatch'); }
+    this.bodySeedPoint(phase, 'done');
+  }
+  private bodySeedBootMatches(phase: string, issued: object): boolean {
+    const shell = this.#bodySeedShell;
+    if (!shell || !bodySeedShape(shell, ['failure', 'slots', 'state', 'ready', 'execution', 'bindAttemptUsed', 'bindStage'])
+      || shell.failure !== this.#failure || shell.state !== 'building' || shell.ready !== false
+      || shell.execution !== 'closed' || shell.bindAttemptUsed !== false || shell.bindStage !== 'not_attempted') return false;
+    if (phase === 'BS00') return shell === issued && shell.slots === undefined;
+    if (!shell.slots || !Array.isArray(shell.slots) || shell.slots.length !== 13) return false;
+    if (phase === 'BS01') return shell.slots === issued && Array.from({ length: 13 }, (_, i) => i).every(i => !Object.hasOwn(shell.slots!, i));
+    const index = Number(phase.slice(2)) - 2;
+    return shell.slots[index] === issued && Array.from({ length: index + 1 }, (_, i) => i).every(i => {
+      const c = shell.slots![i];
+      return !!c && bodySeedShape(c, ['index', 'kind', 'stage', 'attemptReserved', 'callBoundaryReached', 'issued', 'current', 'rejected'])
+        && c.index === i + 1 && c.kind === BODY_CARRIER_KINDS[i] && c.stage === 'not_started' && c.attemptReserved === false
+        && c.callBoundaryReached === false && c.issued === undefined && c.current === undefined && c.rejected === undefined;
+    });
+  }
+  private bodySeedBaseMatches(): boolean {
+    const c = this.#issuedCells!, b = this.#issuedFrameBinding!, d = this.#issuedRunDuty!;
+    const capture = probeStartAccess.captureInspect(b.target.start);
+    return this.seedMatches() && this.probeBindingMatch() && this.runSealMatches()
+      && [1, 2, 3, 4, 5].every(n => this.exitPreparationSlotMatches(n))
+      && probeStartAccess.matchesRun(b.target.start, this.#issuedRunLink!, d)
+      && probeStartAccess.matchesExit(b.target.start, this.#exitSlots[4].value as ProbeExitPreparationBundle)
+      && c.use.state === 'unused' && c.use.attemptUsed === false && c.grant.stage === 'empty'
+      && c.grant.current === undefined && c.grant.issued === undefined && c.grant.rejected === undefined && !c.grant.unresolved
+      && c.body.state === 'not_started' && c.body.outcome === 'none' && c.exit.stage === 'empty'
+      && c.exit.candidate === undefined && c.exit.issued === undefined && c.exit.accepted === undefined && !c.exit.revoked
+      && capture.grantAttempts === 0 && capture.issuerRetained === false;
+  }
+  private bodySeedCarriersMatch(): boolean {
+    const s = this.#bodySeedShell, slots = s?.slots;
+    return !!s && s.failure === this.#failure && s.state === 'building' && s.ready === false && s.execution === 'closed' && s.bindAttemptUsed === false
+      && s.bindStage === 'not_attempted' && !!slots && slots.length === 13 && BODY_CARRIER_KINDS.every((kind, i) => {
+        const c = slots[i]; return !!c && bodySeedShape(c, ['index', 'kind', 'stage', 'attemptReserved', 'callBoundaryReached', 'issued', 'current', 'rejected'])
+          && c.index === i + 1 && c.kind === kind
+          && (i < 5 || c.stage === 'not_started' && c.attemptReserved === false && c.callBoundaryReached === false
+            && c.issued === undefined && c.current === undefined && c.rejected === undefined);
+      });
+  }
+  private bodySeedDataMatches(n: number): boolean {
+    const slots = this.#bodySeedShell!.slots!, cell = slots[n - 1]!, value = cell.current;
+    if (!value || value !== cell.issued || cell.rejected !== undefined || !bodySeedShape(value, [BODY_DATA_BRANDS[n - 1], ...BODY_DATA_FIELDS[n - 1]])) return false;
+    const ctx = slots[0]!.current as BodyConstructionContext, origin = slots[1]!.current as FixedBodyOrigin;
+    if (n === 1) { const v = value as BodyConstructionContext, b = this.#issuedFrameBinding!, c = this.#issuedCells!;
+      return v[BODY_CONTEXT] === true && this.#issuedSeed === v.seed && v.binding === b && v.cells === c
+        && v.link === this.#issuedRunLink && v.duty === this.#issuedRunDuty && v.control === this.#exitSlots[0].value
+        && v.start === b.target.start && v.bindingOwner === b.owner && v.cellOwner === this.#probeOwner
+        && v.scope === b.scope && v.pin === b.pin && v.epoch === b.epoch && v.packet === b.packet
+        && v.frame === c.frame && v.entry === b.entry && v.exit === b.exit && v.runSeal === this.#issuedRunSeal && v.exitBundle === this.#exitSlots[4].value;
+    }
+    if (n === 2) { const v = value as FixedBodyOrigin; return v[BODY_ORIGIN] === true && v.context === ctx && v.kind === 'fixed_probe_body'; }
+    if (n === 3 || n === 4) { const v = value as FixedBodySentinel<'throw' | 'cancel'>;
+      return v[BODY_SENTINEL] === true && v.context === ctx && v.bodyOrigin === origin && v.kind === (n === 3 ? 'throw' : 'cancel');
+    }
+    const v = value as FixedBodyRoutePin;
+    return n === 5 && v[BODY_ROUTE_PIN] === true && v.context === ctx && v.bodyOrigin === origin
+      && v.throwSentinel === slots[2]!.current && v.cancelSentinel === slots[3]!.current
+      && v.grantSlot === this.#issuedCells!.grant && v.kind === 'fixed_body' && v.executable === false;
+  }
+  private bodySeedProduce(n: number, create: () => object, f: string): object {
+    let raw = create();
+    if (f && f !== 'copy') {
+      const cp = { ...raw } as Record<PropertyKey, unknown>;
+      if (f === 'brand') cp[BODY_DATA_BRANDS[n - 1]] = false;
+      else if (f === 'extra') cp.extra = true;
+      else if (f === 'getter') Object.defineProperty(cp, BODY_DATA_FIELDS[n - 1][0], { get: () => { this.#bodySeedHookCalls++; throw Error('private_hook'); } });
+      else if (f !== 'copy') cp[f] = Object.freeze({});
+      raw = cp; // Fixed malformed producer returns this candidate before the issuer boundary.
+    }
+    return raw;
+  }
+  private bodySeedMint(n: number, create: () => object): void {
+    const phase = `BC${String(n).padStart(2, '0')}`, cell = this.#bodySeedShell!.slots![n - 1]!;
+    this.bodySeedPoint(phase, 'before');
+    if (!this.bodySeedCarriersMatch() || !this.bodySeedBaseMatches() || cell.stage !== 'not_started'
+      || cell.attemptReserved || cell.callBoundaryReached || !Array.from({ length: n - 1 }, (_, i) => i + 1).every(i =>
+        this.#bodySeedShell!.slots![i - 1]!.stage === 'confirmed' && this.bodySeedDataMatches(i))) {
+      this.fail('binding_mismatch'); throw Error('body_seed_preflight');
+    }
+    cell.attemptReserved = true; cell.stage = 'attempting'; this.bodySeedPoint(phase, 'attempt');
+    const f = this.script.startsWith(`s_mix_${n}_`) ? this.script.slice(`s_mix_${n}_`.length) : '';
+    const producerThrows = this.script === `s_producer_throw_${n}`;
+    cell.callBoundaryReached = true;
+    if (producerThrows) throw Error('body_seed_producer');
+    const raw = this.bodySeedProduce(n, create, f);
+    cell.issued = raw; cell.stage = 'issued'; this.bodySeedPoint(phase, 'issued');
+    Object.freeze(raw);
+    const current = f === 'copy' ? Object.freeze({ ...raw }) : raw;
+    cell.current = current; cell.stage = 'provisional'; this.bodySeedPoint(phase, 'captured');
+    if (!this.bodySeedDataMatches(n)) { if (!cell.rejected) cell.rejected = current; this.fail('binding_mismatch'); throw Error('body_seed_mismatch'); }
+    this.bodySeedPoint(phase, 'checked'); cell.stage = 'confirmed'; this.bodySeedPoint(phase, 'confirmed');
+  }
+  private prepareBodySeed(): Readonly<{ ok: boolean; disposition: string }> {
+    this.bodySeedBoot('BS00', (): BodyPreparationShell => ({ failure: this.#failure, slots: undefined, state: 'building', ready: false,
+      execution: 'closed', bindAttemptUsed: false, bindStage: 'not_attempted' }), v => { this.#bodySeedShell = v as BodyPreparationShell; });
+    const shell = this.#bodySeedShell!;
+    this.bodySeedBoot('BS01', () => Array(13), v => { shell.slots = v as (BodyConstructionCell | undefined)[]; });
+    for (let i = 0; i < 13; i++) this.bodySeedBoot(`BS${String(i + 2).padStart(2, '0')}`, (): BodyConstructionCell => ({ index: (i + 1) as BodyCarrierIndex,
+      kind: BODY_CARRIER_KINDS[i], stage: 'not_started', attemptReserved: false, callBoundaryReached: false,
+      issued: undefined, current: undefined, rejected: undefined }), v => { shell.slots![i] = v as BodyConstructionCell; });
+    this.bodySeedPoint('BC00', 'before');
+    if (!this.bodySeedCarriersMatch() || !this.bodySeedBaseMatches()) return this.fail('binding_mismatch');
+    this.bodySeedPoint('BC00', 'after');
+    this.bodySeedMint(1, (): BodyConstructionContext => { const b = this.#issuedFrameBinding!, cells = this.#issuedCells!;
+      return { [BODY_CONTEXT]: true, seed: this.#issuedSeed!, binding: b, cells, link: this.#issuedRunLink!, duty: this.#issuedRunDuty!,
+        control: this.#exitSlots[0].value as ProbeExitControl, start: b.target.start, bindingOwner: b.owner, cellOwner: this.#probeOwner!,
+        scope: b.scope, pin: b.pin, epoch: b.epoch, packet: b.packet, frame: cells.frame, entry: b.entry, exit: b.exit,
+        runSeal: this.#issuedRunSeal!, exitBundle: this.#exitSlots[4].value as ProbeExitPreparationBundle };
+    });
+    const ctx = shell.slots![0]!.current as BodyConstructionContext;
+    this.bodySeedMint(2, (): FixedBodyOrigin => ({ [BODY_ORIGIN]: true, context: ctx, kind: 'fixed_probe_body' }));
+    const origin = shell.slots![1]!.current as FixedBodyOrigin;
+    this.bodySeedMint(3, (): FixedBodySentinel<'throw'> => ({ [BODY_SENTINEL]: true, context: ctx, bodyOrigin: origin, kind: 'throw' }));
+    this.bodySeedMint(4, (): FixedBodySentinel<'cancel'> => ({ [BODY_SENTINEL]: true, context: ctx, bodyOrigin: origin, kind: 'cancel' }));
+    this.bodySeedMint(5, (): FixedBodyRoutePin => ({ [BODY_ROUTE_PIN]: true, context: ctx, bodyOrigin: origin,
+      throwSentinel: shell.slots![2]!.current as FixedBodySentinel<'throw'>, cancelSentinel: shell.slots![3]!.current as FixedBodySentinel<'cancel'>,
+      grantSlot: this.#issuedCells!.grant, kind: 'fixed_body', executable: false }));
+    if (!this.bodySeedCarriersMatch() || !this.bodySeedBaseMatches() || ![1, 2, 3, 4, 5].every(n => this.bodySeedDataMatches(n))) return this.fail('binding_mismatch');
+    shell.state = 'held'; return this.reply(false, 'seed_held'); // BC06+, bind, root ready and body remain unconnected.
+  }
+  bodySeedReply(disposition: string): Readonly<BodySeedReply> {
+    if (this.#bodySeedFixed) return this.#bodySeedFixed;
+    const r = Object.freeze({ model: 'wfb-body-slot-seed-1', ok: false, first: runFirst(this.#failure.first),
+      disposition: runEnum(disposition, ['seed_held', 'duplicate_preparation', 'construction_in_progress', 'blocked_frame_execution',
+        'closed', 'not_ready', 'input_rejected', 'binding_mismatch', 'state_invalid', 'construction_unconfirmed', 'deferred_frame'], 'internal_unconfirmed'),
+      authority: 'none', execution: 'closed', formalIssuance: 'closed', wholeRunAdmission: 'disabled', implementation: 'unknown', investigations: 'on_hold' });
+    if (this.#fixed) this.#bodySeedFixed = r; return r;
+  }
+  inspectBodySeed() {
+    const s = this.#bodySeedShell, start = this.#issuedFrameBinding?.target.start, capture = start ? probeStartAccess.captureInspect(start) : undefined;
+    return Object.freeze({ model: 'wfb-body-slot-seed-1', authority: 'none', execution: 'closed', formalIssuance: 'closed',
+      wholeRunAdmission: 'disabled', implementation: 'unknown', investigations: 'on_hold', first: runFirst(this.#failure.first),
+      state: s ? runEnum(s.state, ['building', 'held', 'failed'], 'unconfirmed') : 'not_created', ready: false, rootReady: this.#ready,
+      phase: runEnum(this.#bodySeedPhase, BODY_SEED_PHASES, 'unconfirmed'),
+      boundary: runEnum(this.#bodySeedBoundary, BODY_SEED_BOUNDARIES, 'unconfirmed'),
+      failurePhase: runEnum(this.#bodySeedFailurePhase, BODY_SEED_PHASES, 'unconfirmed'), failureBoundary: runEnum(this.#bodySeedFailureBoundary, BODY_SEED_BOUNDARIES, 'unconfirmed'),
+      reentry: runEnum(this.#bodySeedReentry, ['none', 'construction_in_progress'], 'unconfirmed'), hookCalls: this.#bodySeedHookCalls,
+      shellRetained: s !== undefined, arrayRetained: s?.slots !== undefined,
+      slots: Object.freeze(Array.from({ length: 13 }, (_, i) => { const c = s?.slots?.[i]; return Object.freeze({ index: i + 1, kind: BODY_CARRIER_KINDS[i],
+        carrierRetained: c !== undefined, stage: c ? runEnum(c.stage, ['not_started', 'attempting', 'issued', 'provisional', 'confirmed'], 'unconfirmed') : 'not_created',
+        attemptReserved: c?.attemptReserved === true, callBoundaryReached: c?.callBoundaryReached === true,
+        issuedRetained: c?.issued !== undefined, currentRetained: c?.current !== undefined, rejectedRetained: c?.rejected !== undefined,
+        sameReference: c?.current !== undefined && c.current === c.issued }); })),
+      bindAttemptUsed: (s?.bindAttemptUsed as boolean | undefined) === true, bindStage: s ? runEnum(s.bindStage, ['not_attempted'], 'unconfirmed') : 'not_created',
+      borrowRetained: false, dataLimit: 5, sameOwnerBindings: s?.slots?.[0]?.stage === 'confirmed' && this.bodySeedDataMatches(1),
+      grantAttempts: capture?.grantAttempts ?? 0, grantIssues: capture?.grantIssues ?? 0, enterUsed: this.#issuedCells?.use.attemptUsed === true,
+      dutyUsed: this.#issuedRunDuty?.attemptUsed === true, bodyStarts: 0, retirementAttempts: 0, terminalCommits: 0,
+      journalSupply: 'not_connected', rootFinish: 'not_called' });
+  }
   prepare() {
     if (this.#fixed) return this.#fixed;
     if (this.#frame) return this.reply(false, 'construction_in_progress');
@@ -3897,6 +4108,7 @@ class CanonicalGateDraftRoot {
       if (this.exitPreparation && !this.prepareExitSlots()) return this.fail('binding_mismatch');
       if (this.exitGuard && !this.prepareGuardState()) return this.fail('binding_mismatch');
       if (this.localExit && !this.prepareLocalState()) return this.fail('binding_mismatch');
+      if (this.bodySeed) return this.prepareBodySeed();
       (this.#slots[1].value as { state: string }).state = 'bound'; this.#ready = true; return this.reply(true, 'draft_held');
     } catch { return this.fail(this.exitPreparation && this.#closed ? 'closed' : 'construction_unconfirmed'); }
     finally { this.#frame = false; }
@@ -4282,6 +4494,27 @@ export function createProbeExitGuardFake(...args: readonly unknown[]) {
     checkLegacy: (...xs: readonly unknown[]) => call(xs, () => a.checkGuardBodyClosed(true)),
     close: (...xs: readonly unknown[]) => { if (xs.length) return call(xs, () => a.close()); return a.closeExitGuard(); },
     inspect: (...xs: readonly unknown[]) => { if (xs.length) a.rejectInput(); return a.inspectExitGuard(); } });
+}
+
+export function createProbeBodySeedFake(...args: readonly unknown[]) {
+  const script = args.length ? args[0] : 's_normal';
+  const bootstrap = Array.from({ length: 15 }, (_, i) => `BS${String(i).padStart(2, '0')}`);
+  const data = Array.from({ length: 5 }, (_, i) => `BC${String(i + 1).padStart(2, '0')}`);
+  const points = [...bootstrap.flatMap(p => ['before', 'attempt', 'retained', 'done'].map(b => `${p}_${b}`)),
+    ...['before', 'after'].map(b => `BC00_${b}`), ...data.flatMap(p => ['before', 'attempt', 'issued', 'captured', 'checked', 'confirmed'].map(b => `${p}_${b}`))];
+  const scripts = ['s_normal', ...points.flatMap(p => ['fault', 'close', 'reenter'].map(k => `s_${k}_${p}`)),
+    ...[1, 2, 3, 4, 5].map(n => `s_producer_throw_${n}`),
+    ...BODY_DATA_FIELDS.flatMap((fields, i) => [...fields, 'brand', 'extra', 'copy', 'getter'].map(f => `s_mix_${i + 1}_${f}`))];
+  const admitted = args.length <= 1 && typeof script === 'string' && scripts.includes(script);
+  const a = new CanonicalGateDraftRoot(admitted ? script as string : 's_normal', admitted, true, true, false, true, false, false, true);
+  const call = (xs: readonly unknown[], op: () => Readonly<{ ok: boolean; disposition: string }>) => {
+    const r = xs.length ? a.rejectInput() : op(); return a.bodySeedReply(r.disposition);
+  };
+  return Object.freeze({ prepare: (...xs: readonly unknown[]) => call(xs, () => a.prepare()),
+    check: (...xs: readonly unknown[]) => call(xs, () => ({ ok: false, disposition: 'blocked_frame_execution' })),
+    checkLegacy: (...xs: readonly unknown[]) => call(xs, () => a.checkFramePreparation(true)),
+    close: (...xs: readonly unknown[]) => call(xs, () => a.close()),
+    inspect: (...xs: readonly unknown[]) => { if (xs.length) a.rejectInput(); return a.inspectBodySeed(); } });
 }
 
 export function createProbeLocalExitFake(...args: readonly unknown[]) {

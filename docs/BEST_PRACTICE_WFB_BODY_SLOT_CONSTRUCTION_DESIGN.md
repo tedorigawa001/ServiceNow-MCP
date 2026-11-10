@@ -1,12 +1,14 @@
 # WF-B B03後半：先行slot物理配置・固定構築schedule・失敗保持
 
-Version: draft-0.2 / Date: 2026-11-10 / 読み取り基準HEAD: `bf63f16`（レビュー修正基準HEAD: `0932af9`）。
+Version: draft-0.3 / Date: 2026-11-10 / 読み取り基準HEAD: `bf63f16`（レビュー修正基準HEAD: `0932af9`、先行seed実装基準HEAD: `b3f1f3e`）。
+
+draft-0.3：§12で先行shell／13carrier・BC01〜05の内部型と保持だけの限定実装を記録した。§1〜11の「未実装」「文書のみ」は設計作成時点の範囲であり、今回の実装範囲は§12を基準とする。bind・構築ready・body・正式発行は未接続のまま。
 
 draft-0.1のレビュー修正（MDのみ）：§11の「未コミット・Pushなし」はコミット前の時点の記述だったため、作成時点の記録であることを明示し、コミット後の注記を追加した。B03前半の文書から本書へのリンク文言「後半slot物理配置」を本書の表題「先行slot物理配置」へ揃えた。
 
-Status: **MDによる配置・構築契約のみ。未実装・受入試験未実施。** 親は[B03後半の固定exit契約draft-0.2](BEST_PRACTICE_WFB_BODY_UNWIND_EXIT_DESIGN.md)と[B03前半の固定exit／同target局所退役](BEST_PRACTICE_WFB_FIXED_EXIT_LOCAL_RETIREMENT_DESIGN.md)。元の所有／費目契約は[(B) grant／固定exit責務](BEST_PRACTICE_WFB_PROBE_GRANT_EXIT_DUTY_DESIGN.md)を維持する。
+Status: **先行shell／13carrierとBC01〜05のcontext／origin／sentinel／pinだけを合成依存限定で実装。** §12と[検証記録](E2E_BEST_PRACTICE_WFB_BODY_SLOT_SEED_2026-11-10.md)を参照。BC06〜13・BD／構築ready・BA／body・BU実unwindは未実装。親は[B03後半の固定exit契約draft-0.2](BEST_PRACTICE_WFB_BODY_UNWIND_EXIT_DESIGN.md)と[B03前半の固定exit／同target局所退役](BEST_PRACTICE_WFB_FIXED_EXIT_LOCAL_RETIREMENT_DESIGN.md)。元の所有／費目契約は[(B) grant／固定exit責務](BEST_PRACTICE_WFB_PROBE_GRANT_EXIT_DUTY_DESIGN.md)を維持する。
 
-正式発行口・C実行入口・body起動閉鎖、全体受付無効、Unknown、VM／監視／telemetry調査保留を維持する。実装・合成body起動・実接続・実通信・設定変更・Pushを行わない。新型／field名は将来の合成依存限定配置案で、既存sourceの変更・実行承認ではない。実grant／permit、実session／transport／worker、実writer、request／drain、Journal供給、admission／packet／field clear、borrow退役／owner解放・root終端は対象外。
+正式発行口・C実行入口・body起動閉鎖、全体受付無効、Unknown、VM／監視／telemetry調査保留を維持する。§12以外の実装・合成body起動・実接続・実通信・設定変更・Pushを行わない。§1〜11の新型／field名は設計案で、未接続経路の実行承認ではない。実grant／permit、実session／transport／worker、実writer、request／drain、Journal供給、admission／packet／field clear、borrow退役／owner解放・root終端は対象外。
 
 ## 1 同ownerの意味と既存配置への接続位置
 
@@ -183,3 +185,17 @@ oracleは本体の生成表・builder・state表・counterを期待値へimport�
 文書検証結果：3文書のローカルリンク19件に欠落なし、23表の列数・空白・末尾改行に異常なし。BC01〜13とcarrier1〜13の対応、data依存33辺の先行順／非循環、bootstrap15操作、BD7段階、SC12条件の重複／欠落を確認した。src／tests／CHANGELOG／manifest・lockfile／梱包・TypeScript設定はHEADと差分なし。index登録・実装・build／合成・compiled試験・body起動・実接続・実通信・設定変更・Pushは行っていない。
 
 上記の「未コミット」「index登録…は行っていない」は作成時点の記録である。本書はその後`0932af9`としてコミットされ、draft-0.2のレビュー修正もMDのみで行った（Pushなし）。
+
+## 12 先行seed限定実装（2026-11-10）
+
+新`createProbeBodySeedFake`だけが同既存CanonicalGateDraftRootを利用し、base37段階／probe8段階／run4段階／exit anchor5段階のpost後に追加構築へ進む。B03-Bのguard state・B03-Cのlocal stateを生成／bindせず、body用のstart borrow fieldも追加しない。旧factory・旧分岐は維持する。新APIはprepare／check／checkLegacy／close／inspectの固定script・値返答だけで、run／bind／body／artifact登録口はない。
+
+BS00 shell、BS01長さ13のhole array、BS02〜14の空carrierをrootへ即時捕捉する。各before／attempt／retained／doneの60点と、保持直後の同参照／固定field確認を持つ。shellは既存root failureを参照し、子を先にfield initializerへ確保しない。追加stageは5値、indexは1〜13の有限型。holeと空carrierを分ける固定13位置のprojectionを使う。
+
+BC00でbase未使用・空grant／未開始body・空exit・同shell／carrierを確認する。その後BC01 context、BC02 body origin、BC03 throw sentinel、BC04 cancel sentinel、BC05非実行pinだけを生成。各before／attempt／issued／captured／checked／confirmedの30点を持ち、試行予約とcall境界を分離する。issued保持後にfreeze、同current捕捉、descriptor／brand／field数・全関係検査、confirmedへ進む。初回拒否候補と元issuedは保持し、後続producerを呼ばない。malformed producer対照は発行境界より前に固定候補を作り、copy対照だけは正規issuedと同値copy currentを区別する。
+
+contextのbindingOwnerは同binding／start側owner、cellOwnerは同rootの既存probeOwnerへ照合する。別identityを一つに揃えず、同seed／binding／cells／link／duty／control／start／scope／pin／epoch／packet／frame／entry／exitとrun seal／exit bundleを固定する。pinは同cells.grantを参照し、grant本体は発行しない。sentinelはimmutableな内部値だけで、実throw／cancel／bodyを呼ばない。
+
+正常でもshell.state=held／返答seed_held・ok=falseで止め、root ready／shell ready=false、bind未試行を維持する。carrier6〜13は空、BC06〜13・BD00〜06・BA／BUは未接続。重複prepareはrefusal、失敗後は元固定返答、close／再入は元prefixとfirstを保持し、再生成・clear・borrow解消は行わない。返答とsnapshotはfinite plain data・freeze・許可値／strict booleanだけで参照を返さない。
+
+新154件、関連25ファイル1,891件、compiled17本等と初回の型エラー／旧文字列anchor衝突は[検証記録](E2E_BEST_PRACTICE_WFB_BODY_SLOT_SEED_2026-11-10.md)。SC01〜05／09〜12の先行構築部分だけの検証で、BD／readyに依存するSC06〜08等の成功は主張しない。全guard・各BC00節・全再検査の単独感度や実allocation／E／S／OOM・全体work上界はUnknown。正式発行口閉鎖・全体受付無効・調査保留を維持する。

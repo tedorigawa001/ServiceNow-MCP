@@ -10,6 +10,8 @@ Status: **詳細設計のみ。未実装・受入試験未実施・body起動未
 
 先行配置の詳細化（2026-11-10、MDのみ）: [先行slot物理配置・固定構築schedule・失敗保持draft-0.1](BEST_PRACTICE_WFB_BODY_SLOT_CONSTRUCTION_DESIGN.md)で、`bf63f16`を基準に§2／§11-1の配置を具体化した。binding ownerとcell ownerの正規結合を区別し、先行shell／13carrier・data生成順・source／receiver bind・未確認prefix保持を定義する。body／active継続・実unwindは未実装／未承認のまま。
 
+先行seed限定実装（2026-11-10）: 上記配置設計§12で、同rootの先行shell／13carrierとBC01〜05のcontext／origin／sentinel／pinだけを合成依存限定で実装した。[検証記録](E2E_BEST_PRACTICE_WFB_BODY_SLOT_SEED_2026-11-10.md)。正常でもready=false／bind未試行／body0で保持する。BC06以後、BD／構築ready、BA／body、BU実unwindと正式発行は閉鎖のまま。
+
 ## 1 現行との差分と流用禁止
 
 `5939864`のB03-Cは同startのcapture実帰還からguard／同duty settling／同target局所退役へ進み、body未開始のheld_not_startedを保持する。phase再検査12対照は追加済みで、本書では未対応扱いに戻さない。
