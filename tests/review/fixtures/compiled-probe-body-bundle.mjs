@@ -99,6 +99,16 @@ try {
   const badBase = at('BC13', 'post_before', "this.#issuedCells!.body.state = 'running';");
   assert.equal(run(await load(badBase, 'post-base')).s.failureBoundary, 'post_before');
   assert.equal(run(await load(method(badBase, 'prepareBodyBundle', '!this.bodySeedBaseMatches() || ', ''), 'post-base-mutant')).r.disposition, 'bundle_held');
+  // The per-mint base preflight rejects before the BC12/13 producer; the final post must not be the first to notice.
+  for (const n of [12, 13]) {
+    const phase = `BC${n}`, mintBase = at(phase, 'before', "this.#issuedCells!.body.state = 'running';");
+    const checked = run(await load(mintBase, 'mint-base-' + n));
+    assert.equal(`${checked.r.first}/${checked.s.failurePhase}/${checked.s.failureBoundary}`, `binding_mismatch/${phase}/before`);
+    assert.equal(checked.s.slots[n - 1].callBoundaryReached, false);
+    const late = run(await load(method(mintBase, 'bodyBundleMint', '!this.bodySeedBaseMatches() || ', ''), 'mint-base-mutant-' + n));
+    assert.ok(late.r.disposition === 'bundle_held' || late.s.failurePhase !== phase || late.s.failureBoundary !== 'before', 'masked mint base ' + n);
+    assert.equal(late.s.slots[n - 1].callBoundaryReached, true);
+  }
   // A recursive freeze would corrupt the live Initial storage and is refused at the next guard.
   const deep = method(source, 'bodyBundleMint', 'else Object.freeze(raw);',
     'else { Object.freeze(raw); for (let i = 5; i < 11; i++) Object.freeze(this.#bodySeedShell!.slots![i]!.current); }');
@@ -148,5 +158,5 @@ d.executable = false;
   console.log(JSON.stringify({ compiled: true, fieldControls, childCopyControls, aggregateCopies: 2, brands: 2, frozenControls: 2,
     enumerableControls: 2, priorStageControls: priorControls, priorIdentityControls: priorControls, betweenLiveControls: 6,
     finalPostStageControls: 13, finalPostIdentityControls: 13, finalBase: true, shallowFreeze: true, issuedRetention: true,
-    rejectedIdentity: true, firstDiagnosis: true, extraKeyControls: 2, projectionAllowlists: projections.length, referenceLeak: true, typeRejections: 12 }));
+    rejectedIdentity: true, firstDiagnosis: true, extraKeyControls: 2, projectionAllowlists: projections.length, referenceLeak: true, typeRejections: 12, mintBaseControls: 2 }));
 } finally { rmSync(dir, { recursive: true, force: true }); }

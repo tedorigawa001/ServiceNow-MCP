@@ -1,12 +1,16 @@
 # WF-B B03後半：BC06〜11 live slotとBC12／13 bundle／draft生成境界
 
-Version: draft-0.5 / Date: 2026-11-10 / 読み取り基準HEAD: `94d7fde`（レビュー修正基準HEAD: `cc0e3c6`、Initial実装基準HEAD: `435b348`、Initial実装レビュー修正基準HEAD: `14de3f7`、BC12／13実装基準HEAD: `df6aa19`）。
+Version: draft-0.6 / Date: 2026-11-10 / 読み取り基準HEAD: `94d7fde`（レビュー修正基準HEAD: `cc0e3c6`、Initial実装基準HEAD: `435b348`、Initial実装レビュー修正基準HEAD: `14de3f7`、BC12／13実装基準HEAD: `df6aa19`、BC12／13レビュー修正基準HEAD: `29c53e1`）。
+
+draft-0.5のレビュー修正：`bodyBundleMint`の元base照合は、BC12／13のbeforeで単独に壊す対照がなかった。外すと拒否が最終postまで遅れ、producerが先に呼ばれる。BC12／13それぞれのbeforeへの単一注入で、当該beforeが最初に拒否しproducer未呼出しであること、照合を外すと拒否位置が移りproducerが呼ばれることを固定した。`bodyLiveDataMatches`／`bodyBundleDataMatches`の`cell.rejected !== undefined`節は、rejectedが付いた時点で構築が止まるため等価な防御条件とし、§12に記録した。
 
 draft-0.3のレビュー修正：live経路専用の`bodyLivePrefixMatches`は、shellのfailure同一性／building／shape、carrierのshape／index／kind、後段carrierのissued／current／rejected空を単独で外しても試験が落ちなかった。seed側の対照は別関数のため効かない。`isSealed`と`configurable===false`は互いを覆い隠し、`enumerable===true`を単独で破るfaultもなかった。inspectのphase allowlistと`live[].initial`／`sealed`のprojectionも観測していなかった。これらへ単独注入のcompiled対照とvitestのprojection検査を追加した。`configurable===false`はisSealedに包含されるため、除去を等価として§11へ記録した。
 
 draft-0.1のレビュー修正（MDのみ）：§10の「コミット・Pushも行わない」は、コミット後も現在形で残る記述だった。同節の文書検証結果と同じく作成時点の記録であることを明示し、コミット後の注記を追加した。
 
 Status: **BC06〜11のInitial構築とBC12／13の同参照bundle／draft生成・全postまでを合成依存限定で実装。** §11と[Initial検証記録](E2E_BEST_PRACTICE_WFB_BODY_LIVE_INITIAL_2026-11-10.md)、§12と[bundle／draft検証記録](E2E_BEST_PRACTICE_WFB_BODY_BUNDLE_DRAFT_2026-11-10.md)を参照。BD／bind・構築ready・BA／body・BU実操作は未接続。§1〜10はdraft-0.1作成時の詳細設計で、未実装／将来の記述は§11〜12の限定実装と区別する。親は[先行slot物理配置・固定構築schedule・失敗保持](BEST_PRACTICE_WFB_BODY_SLOT_CONSTRUCTION_DESIGN.md)と[B03後半の固定exit契約](BEST_PRACTICE_WFB_BODY_UNWIND_EXIT_DESIGN.md)。先行seedと再検査レビューは[検証記録](E2E_BEST_PRACTICE_WFB_BODY_SLOT_SEED_2026-11-10.md)を参照する。
+
+後続bindの差分設計（2026-11-10、MDのみ）: [bind用状態型・先行borrow／診断slot draft-0.1](BEST_PRACTICE_WFB_BODY_BIND_BORROW_DESIGN.md)で、同rootの専用source状態、同startへの事前pinと一度限りのpayload格納、安定／phase別検査・失敗時の保持責務を具体化した。BC01〜13の既存生成・検証を維持する案であり、bind実装・構築ready・body起動の承認ではない。
 
 正式発行口・C実行入口・body起動は閉鎖、全体受付無効、Unknown、VM／監視／telemetry調査保留を維持する。本書は実装・構築ready・body起動・実接続・実通信・設定変更・Pushの承認ではない。BDのbind／借用field追加、BAのactive／body、BUの退役／終端、実grant／Permit発行、実session／transport／worker・実writer・Journal／packet・field clear・root終端は対象外。
 
@@ -200,3 +204,5 @@ BC12は専用brandと同context／route pin／progress／closure／診断／reti
 各dataの6境界にfreeze直後のfrozenを加え、BC13の全post直前／直後をpost_before／post_afterとする。計16位置の故障／close／再入と、producer／freeze throwの未確認prefixを検証する。失敗時は発行済み参照・初回拒否・確認済みprefix・元firstを残し、slot clear／再生成・借用解消・第2owner補完を行わない。
 
 全post後もshell held、root／shell ready=false、bind claim未試行・start body borrowなし。bundle／draftは同rootの不変descriptorであり、構築ready・所有権移譲receipt・正式証拠ではない。BD00以後・BA／BU・実予算更新・実接続は未実装。費目は同構築ownerに帰属し、2つの論理data／16観測位置を実allocation／全guard費・E／S・work capへ昇格しない。Unknown・全体受付無効・調査保留を維持する。
+
+レビュー修正（`29c53e1`）：BC12／13のmint前の元base照合は、各beforeへの単一注入で最初の拒否位置とproducer未呼出しを固定する。live／bundleのdata照合にある`cell.rejected !== undefined`節は、rejectedが不一致によるfailと同時にしか付かず構築が停止するため到達不能で、等価な防御条件とする。

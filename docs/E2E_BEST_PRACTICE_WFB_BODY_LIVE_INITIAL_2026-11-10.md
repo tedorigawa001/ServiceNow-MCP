@@ -66,6 +66,7 @@ LB01〜12のBC06〜11構築部分だけが対象。BC12／13・bind／構築read
 
 - vitestで3種：fixループの短縮、返答cache、seal抜き
 - compiledだけで3種：rejected節、前段のreserved／call、rejectedの差替え
+  - 訂正（`29c53e1`のレビュー）：このうち`bodyLiveDataMatches`のrejected節は、外部mutantが既存copy対照のanchorも消したためにcompiledが止まったもので、意味上のkillではない。rejectedが付くのは不一致でfailした時だけで構築はそこで止まるため、「rejected付きで正規」という状態は作れない。等価な防御条件と記録し直す。
 
 11種は両方で生存した。
 

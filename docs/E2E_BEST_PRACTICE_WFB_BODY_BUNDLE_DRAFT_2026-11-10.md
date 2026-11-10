@@ -58,6 +58,29 @@ semantic compile-fail12行はdraft kind／executable、不正run seal／bundle�
 
 最終確認時の変更は合成fixture／試験・compiled対照・export期待値・CHANGELOG・設計／検証文書の9ファイルだけ。src・manifest／lockfile・TypeScript／配布設定に差分なし。初期の3つのRED以外に未解消の試験失敗はなく、失敗保持／同参照／shallow freezeの確認をbody利用や全体受付の承認へ昇格しない。本記録作成時点ではindex登録・コミット・Pushは行っていない。
 
+## レビュー修正（2026-11-10）
+
+基準HEADは`29c53e1`。修正前の全体検証は、lint・build・梱包分類・全vitest（333ファイル17,393件成功・失敗0）・compiled5本（body-bundle／body-live／body-seed／declared-actual／canonical-gate-draft）・差分空白検査のすべてが成功した。
+
+一時mutant9種を流した。意味上でkillされたのは7種だった。
+
+- 返答cache
+- 集約物のfrozen projection
+- freeze→seal
+- draftのrunSeal
+- 最終postの無効化
+- rejectedの差替え
+- bundle data振分けのスキップ。外部mutantはanchor消失で止まったが、anchor文字列を保った同義mutantで期待値assertによるkillを確認した。
+
+生存は2種だった。
+
+- `bodyBundleMint`の元base照合：BC12／13のbeforeで単独に壊す対照がなかった。外すと拒否は最終postまで遅れ、producerが先に呼ばれる。
+- `bodyBundleDataMatches`の`cell.rejected !== undefined`節：外部mutantではcompiledが止まったが、理由は既存copy対照のanchor消失だった。rejectedが付くのは不一致でfailした時だけで、構築はそこで止まる。「rejected付きで正規」という状態は作れないため、等価とした。live経路の同じ節も同じ理由で等価であり、live記録の「compiledだけでkill」を訂正した。
+
+修正：compiledへBC12／13それぞれのmint前base対照2件（`mintBaseControls`）を追加した。各beforeへ元bodyの`running`化を単一注入し、当該beforeが最初に`binding_mismatch`で拒否すること、BC12／13のproducerが未呼出しであることを確認する。照合を外した変異では、拒否位置が移り、producerが呼ばれることを確認する。
+
+RED／GREEN：修正前は照合を外した変異がvitest・compiledとも生存した（RED）。修正後は新対照の期待値assertでkillされる（GREEN）。修正後の全体検証も、lint・build・梱包分類・全vitest・compiled5本・差分空白検査のすべてが成功した。
+
 ## コミット前の対象限定再検証（2026-11-10）
 
 対象9ファイルだけをindexへ登録し、そのindexの全追跡ファイルを新しい一時フォルダへ展開して再検証した。未登録・未追跡の作業中変更はコピーせず、対象9件の内容がindexとbyte単位で一致することを確認した。依存は既存のローカルnode_modulesを参照し、導入／取得は行っていない。

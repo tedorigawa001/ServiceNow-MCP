@@ -268,6 +268,8 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 ### Added
 
+- WF-B body bundle/draft review: two compiled single-injection controls pin the BC12/BC13 mint base preflight to its own `before`, before the producer is called; removing it previously delayed rejection to the final post. The `cell.rejected` clause of the live and bundle data checks is recorded as an equivalent defensive condition, correcting an earlier live-path record that counted an anchor-only failure as a kill.
+
 - WF-B body live-slot review: nine compiled single-injection controls now pin each shell, carrier and suffix clause of the live-path prefix check to the first rejecting phase. Two further controls isolate the `enumerable` and `isSealed` descriptor clauses, which previously masked each other. The phase projection allowlist and the per-slot `initial`/`sealed` live projection are now asserted. The redundant `configurable` clause is recorded as equivalent.
 
 - WF-B body slot seed review: twenty compiled single-injection controls now pin each BC00 base clause, per-mint preflight, bootstrap check and the final recheck to the phase/boundary that first rejects; removing a clause moves the rejection or reaches `seed_held`. Further controls cover freeze-after-issued, the identity of the first rejected candidate and the slot-stage projection allowlist. The design now lists the start-side base clauses that have no single injection point.
