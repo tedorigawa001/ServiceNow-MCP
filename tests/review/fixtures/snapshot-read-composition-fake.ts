@@ -2268,6 +2268,9 @@ let probeStartAccess: Readonly<{
   captureInspect(a: RetirementStartAssembly): Readonly<ProbeGrantCaptureSnapshot>;
   bindExit(a: RetirementStartAssembly, bundle: ProbeExitPreparationBundle, script: string): boolean;
   matchesExit(a: RetirementStartAssembly, bundle: ProbeExitPreparationBundle): boolean;
+  bindGuard(a: RetirementStartAssembly, state: ProbeExitGuardState, script: string): boolean;
+  runGuard(a: RetirementStartAssembly): Readonly<ProbeExitGuardReply>;
+  guardInspect(a: RetirementStartAssembly): Readonly<ProbeExitGuardSnapshot> | undefined;
   exitInspect(a: RetirementStartAssembly): Readonly<{ attempted: boolean; retained: boolean; sameDuty: boolean;
     knowledge: 'not_called' | 'known' | 'unknown'; callStarted: boolean; issuerRetained: boolean; receiverRetained: boolean }>;
   inspect(a: RetirementStartAssembly): Readonly<{ bindingRetained: boolean; bindingAttempted: boolean;
@@ -2288,6 +2291,7 @@ class RetirementStartAssembly {
   #captureScript = 'normal'; #grantCallStarted = false; #capturePrefix: ProbeCapturePrefix = 'none';
   #exitBundle: ProbeExitPreparationBundle | undefined; #exitIssuedBundle: ProbeExitPreparationBundle | undefined;
   #exitBindStarted = false;
+  #guardState: ProbeExitGuardState | undefined; #guardIssued: ProbeExitGuardState | undefined; #guardBindStarted = false; #guardScript = 'g_normal';
   readonly #owner = Object.freeze({});
   readonly #binding: PendingSourceBinding;
   readonly #pin: RetirementBindingPin;
@@ -2341,6 +2345,14 @@ class RetirementStartAssembly {
         return a.exitPreparationMatches(bundle);
       },
       matchesExit: (a: RetirementStartAssembly, bundle: ProbeExitPreparationBundle) => a.exitPreparationMatches(bundle),
+      bindGuard(a: RetirementStartAssembly, state: ProbeExitGuardState, script: string): boolean {
+        if (a.#guardBindStarted) return false;
+        a.#guardBindStarted = true; a.#guardState = state; a.#guardIssued = state; a.#guardScript = script;
+        a.#captureScript = guardCaptureScript(script);
+        return a.guardIdentityMatches(state);
+      },
+      runGuard: (a: RetirementStartAssembly) => a.frameBoundary('probe_guard'),
+      guardInspect: (a: RetirementStartAssembly) => a.guardSnapshot(),
       exitInspect: (a: RetirementStartAssembly) => Object.freeze({ attempted: a.#exitBindStarted, retained: !!a.#exitBundle,
         sameDuty: !!a.#exitBundle && a.#exitBundle.duty === a.#runDuty && a.#runDuty === a.#runIssuedDuty,
         knowledge: a.#grantIssued ? 'known' as const : a.#grantCallStarted ? 'unknown' as const : 'not_called' as const,
@@ -2405,8 +2417,10 @@ class RetirementStartAssembly {
   }
   private frameBoundary(route: 'legacy_generation' | 'probe_closed'): ReturnType<RetirementStartAssembly['reply']>;
   private frameBoundary(route: 'probe_capture'): Readonly<ProbeGrantCaptureReply>;
-  private frameBoundary(route: 'legacy_generation' | 'probe_closed' | 'probe_capture') {
+  private frameBoundary(route: 'probe_guard'): Readonly<ProbeExitGuardReply>;
+  private frameBoundary(route: 'legacy_generation' | 'probe_closed' | 'probe_capture' | 'probe_guard') {
     this.#wrapperCalls++;
+    if (route === 'probe_guard') return this.guardFrame();
     if (route === 'probe_capture') return this.captureProbeGrant();
     // The same wrapper is reached, but neither a seeded start nor the probe route can start any body in stage A.
     if (this.#gateSeed || route === 'probe_closed') return this.reply(false, 'blocked_frame_execution');
@@ -2430,6 +2444,112 @@ class RetirementStartAssembly {
   private exitPreparationMatches(bundle: ProbeExitPreparationBundle): boolean {
     return bundle === this.#exitBundle && bundle === this.#exitIssuedBundle && bundle.start === this
       && this.#runLink === bundle.link && this.#runDuty === bundle.duty && this.runMatches(bundle.link, bundle.duty);
+  }
+  private guardIdentityMatches(s: ProbeExitGuardState): boolean {
+    const b = this.#probeBinding, link = this.#runIssuedLink, duty = this.#runIssuedDuty, bundle = this.#exitIssuedBundle;
+    return !!b && !!link && !!duty && !!bundle && s === this.#guardState && s === this.#guardIssued && s[PROBE_EXIT_GUARD] === true
+      && s.bundle === bundle && this.#exitBundle === bundle && s.control === bundle.control
+      && s.link === link && this.#runLink === link && s.duty === duty && this.#runDuty === duty && duty.link === link
+      && s.binding === b && this.#probeIssuedBinding === b && link.binding === b && s.cells === this.#probeCells && this.#probeCells === b.cells
+      && link.cells === b.cells
+      && s.gate === b.gate && s.scope === b.scope && s.owner === this.#owner && s.pin === b.pin && s.epoch === b.epoch
+      && s.packet === b.packet && s.frame === link.frame && s.entry === link.entry && s.exit === link.exit
+      && this === b.target.start && this.#owner === b.owner && link.frame === b.cells.frame;
+  }
+  private guardReply(s: ProbeExitGuardState, disposition: string): Readonly<ProbeExitGuardReply> {
+    return Object.freeze({ model: 'wfb-probe-exit-guard-1', ok: false, disposition,
+      first: s.first, captureFirst: s.captureFirst, authority: 'none', execution: 'closed', formalIssuance: 'closed',
+      wholeRunAdmission: 'disabled', implementation: 'unknown', investigations: 'on_hold' });
+  }
+  private guardFailure(s: ProbeExitGuardState, first: ProbeRunFirst): Readonly<ProbeExitGuardReply> {
+    if (s.first === 'none') { s.first = first; s.failurePhase = s.phase; s.failureBoundary = s.boundary; }
+    // Only the already validated same-duty claim may change canonical state on failure.
+    if (s.exitUsed) { const c = this.#probeCells!, duty = this.#runIssuedDuty!;
+      duty.state = 'unconfirmed'; c.use.state = 'unconfirmed'; c.exit.stage = 'unconfirmed';
+    }
+    s.state = 'failed'; return s.fixed ??= this.guardReply(s, 'exit_unconfirmed');
+  }
+  private guardPoint(s: ProbeExitGuardState, phase: GuardPhase, boundary: GuardBoundary): void {
+    s.phase = phase; s.boundary = boundary;
+    if (this.#guardScript === `g_stop_${phase}_${boundary}`) this.#captureStop = true;
+    if (this.#guardScript === `g_fault_${phase}_${boundary}`) throw Error('private_exit_guard_fault');
+    if (this.#guardScript === `g_reenter_${phase}_${boundary}`) s.reentry = this.guardFrame().disposition;
+  }
+  private guardMix(s: ProbeExitGuardState): void {
+    const f = this.#guardScript.startsWith('g_mix_') ? this.#guardScript.slice(6) : '';
+    if (GUARD_IDENTITY_FIELDS.includes(f)) {
+      const original = (s as unknown as Readonly<Record<string, object>>)[f];
+      Object.defineProperty(s, f, { value: Object.freeze({ ...original }), configurable: true });
+    }
+    if (f === 'copy') this.#guardState = { ...s };
+    if (f === 'brand') Object.defineProperty(s, PROBE_EXIT_GUARD, { value: false });
+    if (f === 'body') Object.defineProperty(this.#probeCells!.body, 'state', { value: 'running' });
+    if (this.#guardScript === 'g_history_unreturned') s.returned = false;
+  }
+  private guardHistoryBoundary(s: ProbeExitGuardState): boolean {
+    const c = this.#probeCells!, d = this.#runIssuedDuty!;
+    const usePhase = !c.use.attemptUsed ? c.use.state === 'unused' && d.state === 'not_owed'
+      : c.use.state === 'entering' && d.state === 'owed'
+        || c.use.state === 'unconfirmed' && d.state === 'unconfirmed' && this.#grantCallStarted && this.#grantIssued === undefined;
+    return s.returned && !this.#captureInProgress && c.body.state === 'not_started' && c.body.outcome === 'none' && !this.#claim.spent
+      && !d.attemptUsed && d.phase === 'none' && d.boundary === 'none'
+      && c.exit.candidate === undefined && c.exit.issued === undefined && c.exit.accepted === undefined && !c.exit.revoked
+      && (c.exit.stage === 'empty' || c.exit.stage === 'unconfirmed') && usePhase;
+  }
+  private guardHistory(): GuardBranch {
+    const c = this.#probeCells!, d = this.#runIssuedDuty!;
+    if (!c.use.attemptUsed) return !this.#grantCallStarted && this.#grantIssued === undefined && c.grant.stage === 'empty'
+      && d.state === 'not_owed' && !d.attemptUsed ? 'not_entered' : 'invalid';
+    if (!this.#grantCallStarted) return this.#grantIssued === undefined && c.grant.stage === 'empty'
+      && c.grant.current === undefined && c.grant.issued === undefined && c.grant.rejected === undefined && !c.grant.unresolved ? 'not_called' : 'invalid';
+    if (this.#grantIssued === undefined) return c.grant.stage === 'unconfirmed' && c.grant.unresolved
+      && c.grant.current === undefined && c.grant.issued === undefined && c.grant.rejected === undefined ? 'unknown' : 'invalid';
+    return c.grant.stage === 'provisional' && !c.grant.unresolved && c.grant.rejected === undefined
+      && this.capturedGrantMatches(this.#runIssuedLink!) ? 'known' : 'invalid';
+  }
+  private guardFrame(): Readonly<ProbeExitGuardReply> {
+    const s = this.#guardState;
+    if (!s) return Object.freeze({ ...PROBE_GUARD_CLOSED, first: 'binding_mismatch', captureFirst: 'none', disposition: 'not_ready' });
+    if (s.inProgress) return this.guardReply(s, 'run_in_progress');
+    if (s.fixed) return s.fixed;
+    if (s.routeUsed) return this.guardReply(s, 'duplicate_run');
+    s.routeUsed = true; s.inProgress = true; s.state = 'capturing';
+    try {
+      this.guardPoint(s, 'capture', 'before');
+      const captured = this.captureProbeGrant(); s.captureFirst = captured.first; s.captureReply = captured;
+      s.returned = true; s.state = 'checking';
+      this.guardPoint(s, 'return', 'after'); this.guardMix(s);
+      this.guardPoint(s, 'identity', 'before');
+      if (!this.guardIdentityMatches(s)) return this.guardFailure(s, 'binding_mismatch');
+      this.guardPoint(s, 'identity', 'after');
+      this.guardPoint(s, 'history', 'before');
+      if (!this.guardHistoryBoundary(s)) return this.guardFailure(s, 'state_invalid');
+      s.branch = this.guardHistory();
+      this.guardPoint(s, 'history', 'after');
+      if (s.branch === 'not_entered') { s.state = 'not_entered'; return s.fixed = this.guardReply(s, 'not_entered'); }
+      // A bad history without a use obligation must not consume an unrelated duty.
+      if (!this.#probeCells!.use.attemptUsed) return this.guardFailure(s, 'state_invalid');
+      this.guardPoint(s, 'claim', 'before');
+      beginProbeSettling(s, this.#probeCells!, this.#runIssuedDuty!);
+      this.guardPoint(s, 'claim', 'after');
+      this.guardPoint(s, 'branch', 'before');
+      if (s.branch === 'unknown' || s.branch === 'invalid') return this.guardFailure(s, 'state_invalid');
+      this.guardPoint(s, 'branch', 'after');
+      // B03-B deliberately stops at settling. No retirement operation or terminal success.
+      return s.fixed = this.guardReply(s, 'settling_held');
+    } catch { s.captureFirst = this.#captureFirst; return this.guardFailure(s, 'construction_unconfirmed'); }
+    finally { s.inProgress = false; }
+  }
+  private guardSnapshot(): Readonly<ProbeExitGuardSnapshot> | undefined {
+    const s = this.#guardIssued; if (!s) return undefined;
+    return Object.freeze({ state: s.state, first: s.first, captureFirst: s.captureFirst, branch: s.branch,
+      phase: s.phase, boundary: s.boundary, failurePhase: s.failurePhase, failureBoundary: s.failureBoundary,
+      routeUsed: s.routeUsed, returned: s.returned, inProgress: s.inProgress, exitUsed: s.exitUsed, reentry: s.reentry,
+      sameDuty: s.duty === this.#runIssuedDuty && s.control.duty === this.#runIssuedDuty,
+      knowledge: this.#grantIssued ? 'known' : this.#grantCallStarted ? 'unknown' : 'not_called',
+      issuerRetained: this.#grantIssued !== undefined, currentRetained: this.#probeCells?.grant.current !== undefined,
+      issuedRetained: this.#probeCells?.grant.issued !== undefined, rejectedRetained: this.#probeCells?.grant.rejected !== undefined,
+      captureReplyRetained: s.captureReply !== undefined, stopRequested: this.#captureStop });
   }
   private captureReply(ok: boolean, disposition: string): Readonly<ProbeGrantCaptureReply> {
     return Object.freeze({ ok, disposition, first: this.#captureFirst });
@@ -2941,6 +3061,45 @@ interface ProbeExitPreparationBundle { readonly [PROBE_EXIT_BUNDLE]: true; reado
 interface ProbeExitPreparationReply { readonly model: 'wfb-probe-exit-preparation-1'; readonly ok: boolean; readonly disposition: string;
   readonly first: ProbeRunFirst; readonly execution: 'closed'; readonly formalIssuance: 'closed'; readonly authority: 'none';
   readonly wholeRunAdmission: 'disabled'; readonly implementation: 'unknown'; readonly investigations: 'on_hold' }
+const PROBE_EXIT_GUARD: unique symbol = Symbol('private-probe-exit-guard');
+type GuardPhase = 'none' | 'capture' | 'return' | 'identity' | 'history' | 'claim' | 'branch';
+type GuardBoundary = 'none' | 'before' | 'after';
+type GuardBranch = 'none' | 'not_entered' | 'not_called' | 'known' | 'unknown' | 'invalid';
+interface ProbeExitGuardState {
+  readonly [PROBE_EXIT_GUARD]: true; readonly bundle: ProbeExitPreparationBundle; readonly link: ProbeRunLink; readonly duty: FixedExitDuty;
+  readonly control: ProbeExitControl; readonly binding: ProbeFrameBinding; readonly cells: ProbeCellBundle;
+  readonly gate: CanonicalDraftGate; readonly scope: AdmissionScope; readonly owner: object; readonly pin: CanonicalGatePin;
+  readonly epoch: object; readonly packet: object; readonly frame: object; readonly entry: object; readonly exit: object;
+  state: 'idle' | 'capturing' | 'checking' | 'settling' | 'not_entered' | 'failed';
+  routeUsed: boolean; returned: boolean; inProgress: boolean; exitUsed: boolean;
+  first: ProbeRunFirst; captureFirst: ProbeRunFirst; branch: GuardBranch; phase: GuardPhase; boundary: GuardBoundary;
+  failurePhase: GuardPhase; failureBoundary: GuardBoundary; reentry: string;
+  fixed: Readonly<ProbeExitGuardReply> | undefined; captureReply: Readonly<ProbeGrantCaptureReply> | undefined;
+}
+const PROBE_GUARD_CLOSED = Object.freeze({ model: 'wfb-probe-exit-guard-1' as const, ok: false as const, authority: 'none' as const,
+  execution: 'closed' as const, formalIssuance: 'closed' as const, wholeRunAdmission: 'disabled' as const,
+  implementation: 'unknown' as const, investigations: 'on_hold' as const });
+interface ProbeExitGuardReply { readonly model: 'wfb-probe-exit-guard-1'; readonly ok: false; readonly disposition: string;
+  readonly first: ProbeRunFirst; readonly captureFirst: ProbeRunFirst; readonly authority: 'none'; readonly execution: 'closed';
+  readonly formalIssuance: 'closed'; readonly wholeRunAdmission: 'disabled'; readonly implementation: 'unknown'; readonly investigations: 'on_hold' }
+interface ProbeExitGuardSnapshot { readonly state: string; readonly first: ProbeRunFirst; readonly captureFirst: ProbeRunFirst;
+  readonly branch: GuardBranch; readonly phase: GuardPhase; readonly boundary: GuardBoundary; readonly failurePhase: GuardPhase;
+  readonly failureBoundary: GuardBoundary; readonly routeUsed: boolean; readonly returned: boolean; readonly inProgress: boolean;
+  readonly exitUsed: boolean; readonly reentry: string; readonly sameDuty: boolean; readonly knowledge: 'known' | 'unknown' | 'not_called';
+  readonly issuerRetained: boolean; readonly currentRetained: boolean; readonly issuedRetained: boolean; readonly rejectedRetained: boolean;
+  readonly captureReplyRetained: boolean; readonly stopRequested: boolean }
+const GUARD_IDENTITY_FIELDS = Object.freeze(['bundle', 'control', 'link', 'duty', 'binding', 'cells', 'gate', 'scope', 'owner', 'pin',
+  'epoch', 'packet', 'frame', 'entry', 'exit']);
+function guardCaptureScript(script: string): string {
+  const plans: Readonly<Record<string, string>> = { g_not_called: 'fault_claim_after', g_reserved_not_called: 'fault_issue_attempt',
+    g_known_issuer: 'fault_issue_issued', g_unknown: 'issue_throw', g_not_entered: 'fault_claim_before',
+    g_stop_capture_before: 'stop_claim_before', g_stop_capture_claim: 'stop_claim_after', g_stop_capture_known: 'stop_capture_after' };
+  return script.startsWith('g_invalid_') ? 'grant_' + script.slice(10) : plans[script] ?? 'normal';
+}
+function beginProbeSettling(s: ProbeExitGuardState, cells: ProbeCellBundle, duty: FixedExitDuty): void {
+  duty.state = 'settling'; duty.attemptUsed = true; duty.phase = 'guard'; duty.boundary = 'after';
+  cells.use.state = 'exiting'; s.exitUsed = true; s.state = 'settling';
+}
 interface ProbeExitAxisFacts { knowledge: ProbeExitKnowledgeValue['kind'] | 'foreign'; callStarted: boolean; issuer: boolean; receiver: boolean; canonical: boolean;
   retirement: ProbeLocalRetirementValue['kind'] | 'foreign'; retireUsed: boolean; blocked: boolean; target: boolean;
   body: ProbeBodyAbsenceValue['kind'] | 'foreign'; started: boolean; returned: boolean; outcome: string;
@@ -3188,8 +3347,9 @@ class CanonicalGateDraftRoot {
   readonly #exitIssued: (object | undefined)[];
   #exitPhase = 0; #exitBoundary = 'none'; #exitFirst: ProbeRunFirst = 'none';
   #exitBindRefusal = 'none'; #exitReentry = 'none'; #exitFixed: Readonly<ProbeExitPreparationReply> | undefined;
+  #guardOwn: ProbeExitGuardState | undefined; #guardConstruction = 'not_started'; #guardRunReply: Readonly<ProbeExitGuardReply> | undefined;
   constructor(private readonly script: string, admitted: boolean, private readonly probePreparation = false, private readonly runPreparation = false,
-    private readonly grantCapture = false, private readonly exitPreparation = false) {
+    private readonly grantCapture = false, private readonly exitPreparation = false, private readonly exitGuard = false) {
     this.#failure = { first: admitted ? 'none' : 'input_rejected', phase: 0, boundary: 'none' };
     this.#slots = Array.from({ length: 37 }, () => ({ stage: 'not_started', value: undefined }));
     this.#probeSlots = probePreparation ? Array.from({ length: 8 }, () => ({ stage: 'not_started', value: undefined })) : [];
@@ -3437,6 +3597,22 @@ class CanonicalGateDraftRoot {
     this.exitPreparationPoint(5, 'post');
     return probeStartAccess.matchesExit(start, bundle);
   }
+  private prepareGuardState(): boolean {
+    this.#guardConstruction = 'before';
+    if (this.script === 'g_setup_before') throw Error('private_guard_setup');
+    const link = this.#issuedRunLink!, duty = this.#issuedRunDuty!, b = this.#issuedFrameBinding!;
+    const bundle = this.#exitSlots[4].value as ProbeExitPreparationBundle;
+    const s: ProbeExitGuardState = { [PROBE_EXIT_GUARD]: true, bundle, link, duty, control: bundle.control, binding: b, cells: b.cells,
+      gate: b.gate, scope: b.scope, owner: b.owner, pin: b.pin, epoch: b.epoch, packet: b.packet, frame: link.frame, entry: link.entry, exit: link.exit,
+      state: 'idle', routeUsed: false, returned: false, inProgress: false, exitUsed: false, first: 'none', captureFirst: 'none', branch: 'none',
+      phase: 'none', boundary: 'none', failurePhase: 'none', failureBoundary: 'none', reentry: 'none', fixed: undefined, captureReply: undefined };
+    this.#guardOwn = s; this.#guardConstruction = 'retained';
+    if (this.script === 'g_setup_after') throw Error('private_guard_setup');
+    if (!probeStartAccess.bindGuard(b.target.start, s, this.script)) return false;
+    this.#guardConstruction = 'bound';
+    if (this.script === 'g_setup_post') throw Error('private_guard_setup');
+    this.#guardConstruction = 'confirmed'; return true;
+  }
   prepare() {
     if (this.#fixed) return this.#fixed;
     if (this.#frame) return this.reply(false, 'construction_in_progress');
@@ -3486,6 +3662,7 @@ class CanonicalGateDraftRoot {
       if (this.probePreparation && !this.prepareProbeBinding(seed, target, pin, draft)) return this.fail('binding_mismatch');
       if (this.runPreparation && !this.prepareRun()) return this.fail('binding_mismatch');
       if (this.exitPreparation && !this.prepareExitSlots()) return this.fail('binding_mismatch');
+      if (this.exitGuard && !this.prepareGuardState()) return this.fail('binding_mismatch');
       (this.#slots[1].value as { state: string }).state = 'bound'; this.#ready = true; return this.reply(true, 'draft_held');
     } catch { return this.fail(this.exitPreparation && this.#closed ? 'closed' : 'construction_unconfirmed'); }
     finally { this.#frame = false; }
@@ -3536,6 +3713,45 @@ class CanonicalGateDraftRoot {
     if (![1, 2, 3, 4, 5].every(n => this.exitPreparationSlotMatches(n))
       || !probeStartAccess.matchesExit(bundle.start, bundle)) return this.fail('binding_mismatch');
     return this.checkRunPreparation(legacy);
+  }
+  runExitGuard(): Readonly<ProbeExitGuardReply> {
+    if (this.#guardRunReply) return this.#guardRunReply;
+    if (this.#fixed || !this.exitGuard || !this.#ready || this.#closed) return Object.freeze({ ...PROBE_GUARD_CLOSED,
+      first: runFirst(this.#failure.first), captureFirst: 'none', disposition: this.#fixed ? runFirst(this.#failure.first) : this.#closed ? 'closed' : 'not_ready' });
+    return this.#guardRunReply = probeStartAccess.runGuard(this.#issuedFrameBinding!.target.start);
+  }
+  closeExitGuard(): Readonly<ProbeExitGuardReply> {
+    this.#closed = true;
+    if (this.#issuedFrameBinding) probeStartAccess.stopCapture(this.#issuedFrameBinding.target.start);
+    return this.#guardRunReply ?? Object.freeze({ ...PROBE_GUARD_CLOSED, first: runFirst(this.#failure.first), captureFirst: 'none', disposition: 'closed' });
+  }
+  checkGuardBodyClosed(legacy = false): Readonly<{ ok: boolean; disposition: string }> {
+    return this.checkFramePreparation(legacy);
+  }
+  inspectExitGuard() {
+    const start = this.#issuedFrameBinding?.target.start, s = start ? probeStartAccess.guardInspect(start) : undefined;
+    const anchor = this.inspectExitPreparation(), capture = start ? probeStartAccess.captureInspect(start) : undefined;
+    return Object.freeze({ model: 'wfb-probe-exit-guard-1', authority: 'none', execution: 'closed', formalIssuance: 'closed',
+      wholeRunAdmission: 'disabled', implementation: 'unknown', investigations: 'on_hold', constructionFirst: anchor.first,
+      anchor: Object.freeze({ preparation: anchor.preparation, binding: anchor.binding, duty: anchor.duty, control: anchor.control,
+        retirement: anchor.retirement, body: anchor.body, terminal: anchor.terminal, start: anchor.start }),
+      construction: runEnum(this.#guardConstruction, ['not_started', 'before', 'retained', 'bound', 'confirmed'], 'unconfirmed'),
+      retained: this.#guardOwn !== undefined,
+      progress: Object.freeze({ state: s ? runEnum(s.state, ['idle', 'capturing', 'checking', 'settling', 'not_entered', 'failed'], 'unconfirmed') : 'not_created',
+        first: s ? runFirst(s.first) : 'none', captureFirst: s ? runFirst(s.captureFirst) : 'none',
+        branch: s ? runEnum(s.branch, ['none', 'not_entered', 'not_called', 'known', 'unknown', 'invalid'], 'unconfirmed') : 'not_created',
+        phase: s ? runEnum(s.phase, ['none', 'capture', 'return', 'identity', 'history', 'claim', 'branch'], 'unconfirmed') : 'not_created',
+        boundary: s ? runEnum(s.boundary, ['none', 'before', 'after'], 'unconfirmed') : 'not_created',
+        failurePhase: s ? runEnum(s.failurePhase, ['none', 'capture', 'return', 'identity', 'history', 'claim', 'branch'], 'unconfirmed') : 'not_created',
+        failureBoundary: s ? runEnum(s.failureBoundary, ['none', 'before', 'after'], 'unconfirmed') : 'not_created',
+        routeUsed: s?.routeUsed === true, returned: s?.returned === true, inProgress: s?.inProgress === true, exitUsed: s?.exitUsed === true,
+        reentry: runEnum(s?.reentry, ['none', 'run_in_progress'], 'unconfirmed'), sameDuty: s?.sameDuty === true,
+        knowledge: s ? runEnum(s.knowledge, ['not_called', 'known', 'unknown'], 'unconfirmed') : 'not_created',
+        issuerRetained: s?.issuerRetained === true, currentRetained: s?.currentRetained === true, issuedRetained: s?.issuedRetained === true,
+        rejectedRetained: s?.rejectedRetained === true, captureReplyRetained: s?.captureReplyRetained === true, stopRequested: s?.stopRequested === true }),
+      enterUsed: anchor.enterUsed, grantIssues: capture?.grantIssues ?? 0, grantAttempts: capture?.grantAttempts ?? 0,
+      capturePrefix: capture ? runEnum(capture.prefix, ['none', 'not_claimed', 'claimed_not_issued', 'grant_known', 'grant_unknown'], 'unconfirmed') : 'not_created',
+      exitAttempts: s?.exitUsed === true ? 1 : 0, retirementAttempts: 0, terminalCommits: 0, bodyStarts: 0, exitRecords: 0 });
   }
   exitPreparationReply(ok: boolean, disposition: string): Readonly<ProbeExitPreparationReply> {
     if (this.#exitFixed) return this.#exitFixed;
@@ -3751,6 +3967,30 @@ export function createProbeExitPreparationFake(...args: readonly unknown[]) {
     checkAxes: (...xs: readonly unknown[]) => { if (xs.length) a.rejectInput(); return a.checkExitAxes(); },
     close: (...xs: readonly unknown[]) => call(xs, () => a.close()),
     inspect: (...xs: readonly unknown[]) => { if (xs.length) a.rejectInput(); return a.inspectExitPreparation(); } });
+}
+
+export function createProbeExitGuardFake(...args: readonly unknown[]) {
+  const script = args.length ? args[0] : 'g_normal';
+  const points = ['capture_before', 'return_after', 'identity_before', 'identity_after', 'history_before', 'history_after', 'claim_before', 'claim_after', 'branch_before', 'branch_after'];
+  const scripts = ['g_normal', 'g_not_called', 'g_reserved_not_called', 'g_known_issuer', 'g_unknown', 'g_not_entered',
+    'g_stop_capture_before', 'g_stop_capture_claim', 'g_stop_capture_known', 'g_setup_before', 'g_setup_after', 'g_setup_post', 'g_history_unreturned',
+    ...GUARD_IDENTITY_FIELDS.map(f => 'g_mix_' + f), 'g_mix_copy', 'g_mix_brand', 'g_mix_body',
+    ...['copy', 'issued_copy', 'brand', 'extra', 'bindingOrigin', 'gate', 'owner', 'pin', 'epoch', 'frame', 'draft', 'entry', 'exit', 'phase'].map(f => 'g_invalid_' + f),
+    ...points.flatMap(p => ['g_fault_' + p, 'g_stop_' + p, 'g_reenter_' + p])];
+  const admitted = args.length <= 1 && typeof script === 'string' && scripts.includes(script);
+  const a = new CanonicalGateDraftRoot(admitted ? script as string : 'g_normal', admitted, true, true, false, true, true);
+  const call = (xs: readonly unknown[], op: () => Readonly<{ ok: boolean; disposition: string }>) => {
+    const r = xs.length ? a.rejectInput() : op();
+    return Object.freeze({ ...PROBE_GUARD_CLOSED, first: a.exitPreparationReply(r.ok, r.disposition).first,
+      captureFirst: 'none', disposition: runEnum(r.disposition, ['draft_held', 'duplicate_preparation', 'blocked_frame_execution', 'not_ready', 'closed',
+        'input_rejected', 'binding_mismatch', 'construction_unconfirmed'], 'internal_unconfirmed') });
+  };
+  return Object.freeze({ prepare: (...xs: readonly unknown[]) => call(xs, () => a.prepare()),
+    run: (...xs: readonly unknown[]) => { if (xs.length) return call(xs, () => a.prepare()); return a.runExitGuard(); },
+    check: (...xs: readonly unknown[]) => call(xs, () => a.checkGuardBodyClosed()),
+    checkLegacy: (...xs: readonly unknown[]) => call(xs, () => a.checkGuardBodyClosed(true)),
+    close: (...xs: readonly unknown[]) => { if (xs.length) return call(xs, () => a.close()); return a.closeExitGuard(); },
+    inspect: (...xs: readonly unknown[]) => { if (xs.length) a.rejectInput(); return a.inspectExitGuard(); } });
 }
 
 // Diagnostics-only synthetic generation binding. No journal/fact/scope/producer references escape.

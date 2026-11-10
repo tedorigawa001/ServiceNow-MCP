@@ -12,6 +12,8 @@ B-03前半の差分詳細設計（2026-11-10、MDのみ）: [固定exit・局所
 
 B03-A限定実装（2026-11-10）: 上記差分設計§12で、同dutyの有限phase・三軸値契約・先行5slotの同startへのprivate結合・固定拒否／projectionだけを実装した。[検証記録](E2E_BEST_PRACTICE_WFB_PROBE_EXIT_PREPARATION_2026-11-10.md)。新入口にenter／exitはなく、局所退役・成功terminal・body・正式発行は閉鎖を維持する。
 
+B03-B限定実装（2026-11-10）: 上記差分設計§13で、同immutable controlに結合した先行進行cell、同startのcapture実帰還から安定identity／private履歴guard、同dutyの一度限りsettlingと4分岐を接続した。[検証記録](E2E_BEST_PRACTICE_WFB_PROBE_EXIT_GUARD_2026-11-10.md)。同dutyと先行診断を保持するだけで、局所退役・成功terminal・body・正式発行は未接続。
+
 正式発行口・C実行入口閉鎖、全体受付無効、Unknown、VM／監視／telemetry調査保留を維持する。当初作成時は文書のみ、その後の実装・ローカル検証は§12〜13の限定範囲だけ。本書だけでbodyや実接続を承認しない。B-02で合成専用内部grant候補を最大1回発行するが、正式permitや実writer資格ではない。新probe body起動・実接続・実通信・設定変更・Pushを行わない。実writer、request／close実合流、回収claim消費、Journal封印／供給、admission／packet／field clear、GateClosedRecord、root終端も閉鎖のまま。
 
 ## 1 (A)との差分と(B)／(C)の分割

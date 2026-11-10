@@ -18,6 +18,8 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 ### Changed
 
+- WF-B B03-B adds a separate synthetic-only same-start capture-to-exit-guard route. A prior progress cell is privately bound to the unchanged immutable control anchor and existing duty; stable identities, actual constructor/capture history and one-shot settling distinguish not-called, known, unknown and rejected grants without losing earlier diagnoses. Late-grant and identity mutations, independent failure-prefix controls and semantic compile-fail tests keep retirement operations, successful terminals, body startup, formal issuance and runtime connections closed.
+
 - WF-B B03-A adds a package-excluded synthetic-only exit-preparation entry with five prior slots privately bound to the existing start, RunLink and unspent duty. Finite duty progress and separate knowledge/retirement/body value contracts have independent shape and semantic compile-fail controls; live slots remain idle, not-attempted, unobserved and terminal-none. Fixed rejection and explicit value projections preserve partial custody and legacy behavior. No enter, exit attempt, local retirement, successful terminal, body startup, formal issuance or runtime connection is enabled.
 
 - WF-B B-02 adds a separate synthetic-only one-shot enter/grant-capture entry on the same start and RunLink. A fixed issuer retains its reference before return; provisional capture, identity validation, stop/fault prefixes and non-refunded duty obligations have independent synthetic and compiled controls. The grant never becomes active, body startup and formal issuance remain closed, and no revocation, exit record, retirement, Journal supply or runtime connection is performed.

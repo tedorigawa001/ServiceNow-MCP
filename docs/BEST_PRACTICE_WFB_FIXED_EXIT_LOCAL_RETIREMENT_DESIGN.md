@@ -4,7 +4,7 @@ Version: draft-0.2 / Date: 2026-11-10 / 読み取り基準HEAD: `08e8fa6`（B03-
 
 draft-0.2のレビュー修正：B03-Aの公開projectionは不在のslotや許可外の値を肯定的な状態へ既定値化していた（未生成dutyを`not_owed`、未構築のknowledgeを`callStarted=false`の`unknown`、未生成slotを`unconfirmed`）。dutyの許可値に`settled_not_started`がなく、将来その状態を`not_owed`と誤報する余地もあった。§12で既定値の規則を明記した。
 
-Status: **B03-Aの有限内部型・先行slotのprivate結合・固定拒否／値projectionだけ合成依存限定で実装。** 基準HEAD `297570a`、実施範囲は§12と[検証記録](E2E_BEST_PRACTICE_WFB_PROBE_EXIT_PREPARATION_2026-11-10.md)。§1〜11は当初の差分設計で、退役・terminal成功・body起動の承認ではない。親は[(B) grant／固定exit責務](BEST_PRACTICE_WFB_PROBE_GRANT_EXIT_DUTY_DESIGN.md)と[同startのenter／確認済みexit](BEST_PRACTICE_WFB_PROBE_FRAME_ENTER_EXIT_DESIGN.md)。B-02の実績とレビュー修正は[捕捉検証記録](E2E_BEST_PRACTICE_WFB_PROBE_GRANT_CAPTURE_2026-11-10.md)を参照する。本書は親のBX00〜04をbody未開始経路から詳細化し、BE05／06と(C)の候補・同期確定は追加承認まで閉じる。
+Status: **B03-Aの先行準備とB03-Bの安定identity／履歴guard・同dutyの一度限りsettlingを合成依存限定で実装。** B03-Aは§12と[その検証記録](E2E_BEST_PRACTICE_WFB_PROBE_EXIT_PREPARATION_2026-11-10.md)、B03-Bの基準HEADは`dd9108b`、範囲は§13と[その検証記録](E2E_BEST_PRACTICE_WFB_PROBE_EXIT_GUARD_2026-11-10.md)。§1〜11は当初の差分設計で、退役・terminal成功・body起動の承認ではない。親は[(B) grant／固定exit責務](BEST_PRACTICE_WFB_PROBE_GRANT_EXIT_DUTY_DESIGN.md)と[同startのenter／確認済みexit](BEST_PRACTICE_WFB_PROBE_FRAME_ENTER_EXIT_DESIGN.md)。B-02の実績とレビュー修正は[捕捉検証記録](E2E_BEST_PRACTICE_WFB_PROBE_GRANT_CAPTURE_2026-11-10.md)を参照する。本書は親のBX00〜04をbody未開始経路から詳細化し、BE05／06と(C)の候補・同期確定は追加承認まで閉じる。
 
 正式発行口・C実行入口・body起動閉鎖、全体受付無効、Unknown、VM／監視／telemetry調査保留を維持する。実接続・実通信・設定変更・Pushを行わない。実writer、request／close実合流、回収claim、Journal封印／供給、admission／packet、field clear、borrow退役・owner解放、GateClosedRecord・root終端も対象外。
 
@@ -200,5 +200,21 @@ checkAxesは50固定shape（適合9・不適合41）と10個のphase/boundary適
 新projectionは全fieldを明示した有限plain dataで、参照は保持有無booleanだけ。既知不正slotのused／blocked／started／returned等の故障値を隠さず保持するが、ready=false・binding_mismatchであり実操作の証明ではない。実操作計数と別に扱い、terminalの不正accepted候補はacceptedRetainedだけへ投影し、exitAcceptedはfalse固定。全返答・拒否・closeの先行firstとprefixを保持する。任意object／Proxy／callbackはhookを実行せず拒否する。
 
 FX01の先行結合・混入、FX02の三軸値区別、FX03〜05の構築故障／stop／再入／重複結合、FX08の値・型上の交差禁止、FX10〜12の参照非出力・旧経路閉鎖を部分検証した。188新試験・関連1,547件・compiled14本・strict／build／lint・梱包の結果と初回問題は[検証記録](E2E_BEST_PRACTICE_WFB_PROBE_EXIT_PREPARATION_2026-11-10.md)。BX00のsettling・実履歴供給・固定exit継続、局所退役・terminal成功・BE05／06・(C)・実会計は未接続。実E／S・work／layout／OOMはUnknown、全体受付は無効のまま。
+
+## 13 B03-B限定実装：安定identity・履歴guardとsettling（2026-11-10）
+
+新`createProbeExitGuardFake`だけが同既存root／start／RunLink／dutyとB03-Aの先行5slotを利用する。B03-Aのimmutable controlは同一性anchorのまま保持し、同controlへ直接結合したprivate進行cellを1つ先行生成・捕捉・同startへ結合してからreadyにする。進行cellは別owner／別duty／別予算ではない。旧controlのidle型を広げず、旧Aのclosed入口・試験・projectionのnot_created／unconfirmed規則を維持する。
+
+新APIはprepare／run／check／checkLegacy／close／inspect。runは同start wrapperのprobe_guard経路から既存B-02 captureを最大1回呼び、その実帰還後に同private guardへ進む。capture firstや固定失敗返答を再開・消去せず、その返答自体も同進行cellに保持する。任意artifact／body／callbackの登録口はない。checkとcloseはrunにならず、seed付き旧prepare・旧body／finally／requestは閉鎖のまま。
+
+固定順序はcapture before→capture実帰還→return after→identity before/after→history before/after→claim before→無allocationの同duty settling固定→claim after→branch before/afterの10観測点。exit処理では通常enterのfirstなし・stopなし・not_owed条件を再使用しない。安定guardはcurrent／issued進行cell・同bundle／control／link／duty／binding／cell束・gate／scope／owner／pin／epoch／packet／frame／entry／exitを照合する。body未開始・capture帰還と非進行中・回収claim未使用・use/duty phase・空候補／acceptedなし・局所退役前を別の履歴境界として照合する。
+
+privateなconstructor呼出し直前flag、issuerの保持参照、current／receiver-issued／rejected、同grantの全fieldを使い、未呼出し／known／unknown／不正を分類する。予約件数やpublic prefixを発行証拠にしない。not_claimedはnot_entered診断のみでduty claimを消費しない。正規未呼出しとknownは同dutyをsettlingへ進めたまま保持する。unknown／不正既知も、安定identityと履歴境界を確認できる場合だけ同dutyの一度限り試行を記録し、未確認で停止する。知識unknownはunknown、既知の不正候補はprovisional／unresolved=falseと全参照を保持する。identity／body境界自体の不一致はclaim前に停止し、canonical dutyを変更しない。
+
+利用開始時のuse claimと退出試行時のduty claimは別。後者の開始点で同dutyのstate=settling／attemptUsed=true／guard-afterとuse=exiting、進行cellのexitUsed mirrorを同期固定する。mirrorは第2の利用資格ではなくprefix診断用で、独立対照でcanonical dutyとの一致を確認する。途中故障はclaim前後を区別し、claim後だけ同canonical duty／use／exitを未確認へする。claimを払い戻さず、grant生成結果の既知性や先行firstを消さない。再入はrun_in_progress、完了した一度のrunは同一の固定返答で再実行しない。失敗後の参照破棄・owner解放も追加しない。
+
+正規分岐でも返答はok=false／settling_heldで、成功terminalではない。retirement slotはnot_attempted、body確認slotはunobserved、terminal slotはnoneのまま。局所退役、not_requiredの確定、settled_not_started、held_not_started、accepted／finished／確認済みinactiveは生成しない。stopは新規captureを閉じるが、既存使用後のguardを止める条件にはせず、元capture firstとguard firstを分離する。
+
+新projectionはA全体の固定0計数を流用せず、anchor部分と実進行を分け、発行／試行数と保持booleanをprivate状態から投影する。未生成はnot_created、許可外はunconfirmed。private first／参照を外へ出さない。identity17条件、capture後のgrant14条件、履歴境界9条件のcompiled対照、呼出し境界／unknown誤昇格／first短絡／再入／非返却／参照保持／二段projectionの負の対照、型拒否5件を追加した。76新試験・関連1,624件等は[検証記録](E2E_BEST_PRACTICE_WFB_PROBE_EXIT_GUARD_2026-11-10.md)。B03-Cの実退役・全post・terminal確定、BE05／06、(C)、実会計・全体受付は未接続／無効、費用・実E／S・layout・OOMはUnknownのまま。
 
 公開projectionの既定値規則：slotやreceiverが存在しない場合は`not_created`、存在するが許可値外の場合は`unconfirmed`とし、`not_owed`・`unknown`等の肯定的または意味を持つ状態へ既定値化しない。dutyの許可値には本書で追加した`settled_not_started`を含める。prepare前のinspect、許可値外dutyの注入、`settled_not_started`の注入を独立対照で確認する。
