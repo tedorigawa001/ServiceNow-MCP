@@ -1,6 +1,8 @@
 # WF-B B03後半：先行slot物理配置・固定構築schedule・失敗保持
 
-Version: draft-0.3 / Date: 2026-11-10 / 読み取り基準HEAD: `bf63f16`（レビュー修正基準HEAD: `0932af9`、先行seed実装基準HEAD: `b3f1f3e`）。
+Version: draft-0.4 / Date: 2026-11-10 / 読み取り基準HEAD: `bf63f16`（レビュー修正基準HEAD: `0932af9`、先行seed実装基準HEAD: `b3f1f3e`、先行seedレビュー修正基準HEAD: `55d4347`）。
+
+draft-0.3のレビュー修正：§12は「SC01〜05の先行構築部分を検証」としていた。しかしSC05が求めるBC00 base条件・前段confirmedの個別破壊を含め、BC00／各mint前／bootstrap／最終再検査の大半の節は、単独で外しても試験が落ちなかった。freeze・初回rejectedの同一性・slot stage projectionのallowlistも観測していなかった。各節が最初に拒否する位置を`failurePhase`で固定するcompiled対照20件と、freeze・rejected同一性・stage allowlistの対照を追加した。単独で注入できないbase節（capture試行0・exit slot照合・`matchesRun`）は§12に範囲外として明記した。
 
 draft-0.3：§12で先行shell／13carrier・BC01〜05の内部型と保持だけの限定実装を記録した。§1〜11の「未実装」「文書のみ」は設計作成時点の範囲であり、今回の実装範囲は§12を基準とする。bind・構築ready・body・正式発行は未接続のまま。
 
@@ -197,5 +199,7 @@ BC00でbase未使用・空grant／未開始body・空exit・同shell／carrier�
 contextのbindingOwnerは同binding／start側owner、cellOwnerは同rootの既存probeOwnerへ照合する。別identityを一つに揃えず、同seed／binding／cells／link／duty／control／start／scope／pin／epoch／packet／frame／entry／exitとrun seal／exit bundleを固定する。pinは同cells.grantを参照し、grant本体は発行しない。sentinelはimmutableな内部値だけで、実throw／cancel／bodyを呼ばない。
 
 正常でもshell.state=held／返答seed_held・ok=falseで止め、root ready／shell ready=false、bind未試行を維持する。carrier6〜13は空、BC06〜13・BD00〜06・BA／BUは未接続。重複prepareはrefusal、失敗後は元固定返答、close／再入は元prefixとfirstを保持し、再生成・clear・borrow解消は行わない。返答とsnapshotはfinite plain data・freeze・許可値／strict booleanだけで参照を返さない。
+
+再検査の単独感度（レビュー修正）：BC00のbase節（use／grant／body／exit）、BC00でのbase照合、各mint前のbase／carrier／stage／予約／call境界／前段confirmed／前段data、bootstrapのfailure同一性／building／shell shape／BS00のslots未生成／BS01のhole／前段carrier未使用、最終再検査のbase／dataの20節は、単一注入で当該phase／boundaryが最初に拒否し、節を外すと拒否位置が移るかseed_heldになることをcompiledで確認する。freeze後の遅延書込みはTypeErrorで止まり、初回rejectedは捕捉したcurrentと同一参照、許可外のslot stageはunconfirmedと投影する。capture試行0・exit slot照合・`matchesRun`は同start側の状態を単独で壊す正規注入点がなく、単独対照の範囲外とする。最初の失敗位置の上書き防止は、現行経路では2回目のfailが同じphase／boundaryで起こるため等価。
 
 新154件、関連25ファイル1,891件、compiled17本等と初回の型エラー／旧文字列anchor衝突は[検証記録](E2E_BEST_PRACTICE_WFB_BODY_SLOT_SEED_2026-11-10.md)。SC01〜05／09〜12の先行構築部分だけの検証で、BD／readyに依存するSC06〜08等の成功は主張しない。全guard・各BC00節・全再検査の単独感度や実allocation／E／S／OOM・全体work上界はUnknown。正式発行口閉鎖・全体受付無効・調査保留を維持する。

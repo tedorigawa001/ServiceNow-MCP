@@ -82,6 +82,60 @@ try {
   assert.equal(typeof run(await load(leaked, 'leaked-context')).s.sameOwnerBindings, 'object');
   const premature = replace(source, 'if (this.bodySeed) return this.prepareBodySeed();', 'if (this.bodySeed) { this.#ready = true; return this.prepareBodySeed(); }');
   assert.equal(run(await load(premature, 'premature-ready')).s.rootReady, true); assert.equal(run(base).s.rootReady, false);
+  // Each preflight/recheck must be the guard that first rejects a single injected fault. Guards overlap
+  // (BC00 / every mint / final recheck), so a removed clause must move failurePhase or reach seed_held.
+  const at = (phase, boundary, code) => method(source, 'bodySeedPoint', '    this.#bodySeedPhase = phase; this.#bodySeedBoundary = boundary;',
+    `    this.#bodySeedPhase = phase; this.#bodySeedBoundary = boundary;\n    if (phase === '${phase}' && boundary === '${boundary}') { ${code} }`);
+  const cellsAt = "this.#issuedCells!", slotAt = i => `this.#bodySeedShell!.slots![${i}]!`;
+  const recheck = [
+    ['base-use', 'BC00', 'before', `${cellsAt}.use.state = 'entering';`, 'bodySeedBaseMatches', "c.use.state === 'unused'", 'true'],
+    ['base-grant', 'BC00', 'before', `${cellsAt}.grant.stage = 'provisional';`, 'bodySeedBaseMatches', "c.grant.stage === 'empty'", 'true'],
+    ['base-body', 'BC00', 'before', `${cellsAt}.body.state = 'running';`, 'bodySeedBaseMatches', "c.body.state === 'not_started'", 'true'],
+    ['base-exit', 'BC00', 'before', `${cellsAt}.exit.stage = 'unsealed';`, 'bodySeedBaseMatches', "c.exit.stage === 'empty'", 'true'],
+    ['bc00-base', 'BC00', 'before', `${cellsAt}.use.state = 'entering';`, 'prepareBodySeed',
+      "    if (!this.bodySeedCarriersMatch() || !this.bodySeedBaseMatches()) return", '    if (!this.bodySeedCarriersMatch()) return'],
+    ['mint-base', 'BC02', 'before', `${cellsAt}.use.state = 'entering';`, 'bodySeedMint', '!this.bodySeedBaseMatches() || cell.stage', 'cell.stage'],
+    ['mint-carriers', 'BC02', 'before', "this.#bodySeedShell!.state = 'held';", 'bodySeedMint',
+      '!this.bodySeedCarriersMatch() || !this.bodySeedBaseMatches()', '!this.bodySeedBaseMatches()'],
+    ['mint-stage', 'BC02', 'before', `${slotAt(1)}.stage = 'attempting';`, 'bodySeedMint', "cell.stage !== 'not_started'", 'false'],
+    ['mint-reserved', 'BC02', 'before', `${slotAt(1)}.attemptReserved = true;`, 'bodySeedMint', 'cell.attemptReserved || cell.callBoundaryReached', 'cell.callBoundaryReached'],
+    ['mint-call', 'BC02', 'before', `${slotAt(1)}.callBoundaryReached = true;`, 'bodySeedMint', 'cell.attemptReserved || cell.callBoundaryReached', 'cell.attemptReserved'],
+    ['mint-prior-stage', 'BC03', 'before', `${slotAt(1)}.stage = 'provisional';`, 'bodySeedMint', "this.#bodySeedShell!.slots![i - 1]!.stage === 'confirmed' && ", ''],
+    ['mint-prior-data', 'BC03', 'before', `${slotAt(0)}.current = Object.freeze({ ...${slotAt(0)}.current });`, 'bodySeedMint', '&& this.bodySeedDataMatches(i))) {', ')) {'],
+    ['boot-failure', 'BS02', 'retained', "Object.defineProperty(this.#bodySeedShell!, 'failure', { value: { ...this.#failure } });", 'bodySeedBootMatches', 'shell.failure !== this.#failure', 'false'],
+    ['boot-state', 'BS02', 'retained', "this.#bodySeedShell!.state = 'held';", 'bodySeedBootMatches', "shell.state !== 'building'", 'false'],
+    ['boot-shape', 'BS02', 'retained', '(this.#bodySeedShell! as any).extra = true;', 'bodySeedBootMatches',
+      "!bodySeedShape(shell, ['failure', 'slots', 'state', 'ready', 'execution', 'bindAttemptUsed', 'bindStage'])", 'false'],
+    ['boot-bs00-slots', 'BS00', 'retained', 'this.#bodySeedShell!.slots = [];', 'bodySeedBootMatches', 'shell === issued && shell.slots === undefined', 'shell === issued'],
+    ['boot-bs01-holes', 'BS01', 'retained', 'this.#bodySeedShell!.slots![0] = undefined;', 'bodySeedBootMatches',
+      ' && Array.from({ length: 13 }, (_, i) => i).every(i => !Object.hasOwn(shell.slots!, i))', ''],
+    ['boot-prior-carrier', 'BS03', 'retained', `${slotAt(0)}.attemptReserved = true;`, 'bodySeedBootMatches', 'c.attemptReserved === false', 'true'],
+    ['final-base', 'BC05', 'confirmed', `${cellsAt}.use.state = 'entering';`, 'prepareBodySeed',
+      '    if (!this.bodySeedCarriersMatch() || !this.bodySeedBaseMatches() || ![1, 2, 3, 4, 5]', '    if (!this.bodySeedCarriersMatch() || ![1, 2, 3, 4, 5]'],
+    ['final-data', 'BC05', 'confirmed', `${slotAt(0)}.current = Object.freeze({ ...${slotAt(0)}.current });`, 'prepareBodySeed',
+      ' || ![1, 2, 3, 4, 5].every(n => this.bodySeedDataMatches(n))) return', ') return'],
+  ];
+  for (const [i, [name, phase, boundary, code, target, from, to]] of recheck.entries()) {
+    const injected = at(phase, boundary, code), checked = run(await load(injected, 'recheck-' + i));
+    assert.equal(checked.r.first, 'binding_mismatch', name);
+    assert.equal(`${checked.s.failurePhase}/${checked.s.failureBoundary}`, `${phase}/${boundary}`, name);
+    const masked = run(await load(method(injected, target, from, to), 'recheck-mutant-' + i));
+    assert.ok(masked.r.disposition === 'seed_held' || `${masked.s.failurePhase}/${masked.s.failureBoundary}` !== `${phase}/${boundary}`, 'masked recheck ' + name);
+  }
+  // Freeze after issued: a late write to confirmed data throws instead of reaching the next relation check.
+  const lateWrite = at('BC02', 'before', `(${slotAt(0)}.current as any).seed = Object.freeze({});`);
+  assert.equal(run(await load(lateWrite, 'late-write')).r.first, 'construction_unconfirmed');
+  assert.equal(run(await load(method(lateWrite, 'bodySeedMint', '    Object.freeze(raw);\n', ''), 'late-write-mutant')).r.first, 'binding_mismatch');
+  // The first rejected candidate is the same captured current reference, not a replacement marker.
+  const sameRejected = replace(source, 'rejectedRetained: c?.rejected !== undefined,', 'rejectedRetained: c?.rejected !== undefined, rejectedSame: c?.rejected !== undefined && c.rejected === c.current,');
+  for (const script of ['s_mix_2_extra', 's_mix_5_copy']) assert.equal(run(await load(sameRejected, 'rejected-same'), script).s.slots[script === 's_mix_2_extra' ? 1 : 4].rejectedSame, true);
+  const replacedRejected = method(sameRejected, 'bodySeedMint', 'if (!cell.rejected) cell.rejected = current;', 'if (!cell.rejected) cell.rejected = Object.freeze({});');
+  assert.equal(run(await load(replacedRejected, 'rejected-replaced'), 's_mix_2_extra').s.slots[1].rejectedSame, false);
+  // Stage projection allowlist: an out-of-allowlist live stage is unconfirmed, never echoed.
+  const badStageSource = at('BC05', 'confirmed', `${slotAt(12)}.stage = 'ready' as never;`);
+  assert.equal(run(await load(badStageSource, 'bad-stage')).s.slots[12].stage, 'unconfirmed');
+  const echoed = replace(badStageSource, "stage: c ? runEnum(c.stage, ['not_started', 'attempting', 'issued', 'provisional', 'confirmed'], 'unconfirmed') : 'not_created'", "stage: c ? c.stage : 'not_created'");
+  assert.equal(run(await load(echoed, 'bad-stage-echo')).s.slots[12].stage, 'ready');
   const trap = replace(source, '    this.#frame = true;\n    try { this.generationFrame(); }', "    throw Error('forbidden_body');\n    this.#frame = true;\n    try { this.generationFrame(); }");
   const trapped = run(await load(trap, 'body-trap')); trapped.a.check(); trapped.a.checkLegacy(); trapped.a.close(); assert.equal(trapped.s.bodyStarts, 0);
   const file = fileURLToPath(new URL('./snapshot-read-composition-fake.ts', import.meta.url));
@@ -107,5 +161,6 @@ const badSentinel: FixedBodySentinel<'throw'> = { [BODY_SENTINEL]: true, context
   assert.ok(diagnostics.every(d => d.file?.fileName === file && d.start >= source.length), 'unexpected baseline semantic diagnostic');
   assert.equal(new Set(diagnostics.map(d => d.file.getLineAndCharacterOfPosition(d.start).line)).size, 9);
   console.log(JSON.stringify({ compiled: true, fieldControls: fields, copyControls: 5, brandControls: 5, extraControls: 5, getterControls: 5,
-    shellControls: 2, ownerDomains: true, duplicateRefusal: true, priorRetentionControls: 2, carrierIdentity: true, unusedCarrier: true, referenceLeak: true, rootReady: true, bodyTrap: true, typeRejections: 9 }));
+    shellControls: 2, ownerDomains: true, duplicateRefusal: true, priorRetentionControls: 2, carrierIdentity: true, unusedCarrier: true, referenceLeak: true, rootReady: true, bodyTrap: true, typeRejections: 9,
+    recheckControls: recheck.length, freezeControl: true, rejectedIdentity: true, stageAllowlist: true }));
 } finally { rmSync(dir, { recursive: true, force: true }); }

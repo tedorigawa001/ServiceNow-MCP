@@ -61,6 +61,42 @@ SC01〜05／09〜12のBS／BC01〜05部分だけが対象。BC06〜13のlive bod
 
 最終確認：最終ソースで関連25ファイル1,891件・compiled17本・strict／build／全体lintを再実行し、全てexit 0。梱包dry-runは441ファイル・fixture混入0。設計／検証3文書のローカルリンク13件に欠落なし、新規ファイルを含め末尾改行／空白と差分空白に異常なし。src・manifest／lockfile・梱包／TypeScript設定に差分なし。対象は合成fixture／試験・CHANGELOG・設計／検証文書の9ファイルだけで、index登録・コミット・Pushは行っていない。
 
+## レビュー修正（2026-11-10）
+
+基準HEADは`55d4347`。修正前・修正後の全体検証はいずれも、lint・build・梱包分類・全vitest（331ファイル17,138件成功・失敗0）・compiled3本（body-seed／local-exit／declared-actual）・差分空白検査のすべてが成功した。
+
+一時mutant27種を流した。修正前にkillされたのは4種だけだった。vitestで3種（失敗時のshell failed化・返答cache・state allowlist）、compiledだけで1種（未使用carrier条件）。22種は両方で生存した。最終再検査の除去1種もcompiledが落ちたが、理由はanchor消失で、意味上は生存だった。
+
+両方で生存した内訳：
+
+- BC00 base節7種：use／grant／body／exit／capture試行0／exit slot照合／`matchesRun`
+- mint前の検査4種
+- bootstrap検査6種
+- BC00検査の全体
+- 最初の失敗位置の上書き防止
+- 初回rejectedの差替え
+- freezeの除去
+- slot stage allowlistの除去
+
+設計§12はSC01〜05の検証を主張していた。しかしSC05が求めるbase条件の個別破壊は未対照だった。
+
+修正として、compiledへ次の対照を追加した。
+
+- 単一注入20件（`recheckControls`）。対象はBC00 base 4節、BC00でのbase照合、mint前7節、bootstrap 6節、最終再検査のbase／data。注入した故障を当該phase／boundaryが最初に`binding_mismatch`で拒否することを確認する。その節を外した変異では、拒否位置が移るかseed_heldになることを確認する。
+- freeze後の遅延書込み対照。freezeありならTypeErrorで`construction_unconfirmed`、freezeを外すと次の関係検査で`binding_mismatch`になる。
+- 初回rejectedが捕捉したcurrentと同一参照であることの対照。extra／copyの両方で確認する。
+- 許可外のslot stageを`unconfirmed`と投影する対照。allowlistを外すと生の値が漏れることを検出する。
+
+RED／GREEN：修正前は上記22種が両方で生存した（RED）。修正後は次のとおり（GREEN）。
+
+- 22種のうち18種を新対照がkillした。うち17種は、新対照の注入・期待値assertで落ちたことを確認した。
+- 残る1種（mint stage系）と、22種の外で数えた最終再検査除去は、外部mutantが新対照のanchorも消すためanchor検査で止まる。同じ節の除去は、compiled内のmint-stage／mint-reserved／mint-call／final-base／final-data対照が意味上で検出する。
+
+両方で生存のまま残したもの：
+
+- capture試行0・exit slot照合・`matchesRun`の3種。同start側の状態を単独で壊す正規の注入点がないため、設計§12に範囲外として明記した。
+- 最初の失敗位置の上書き防止1種。現行経路では2回目のfailが同じphase／boundaryで起こるため、等価と判断した。
+
 ## コミット前の対象限定再検証（2026-11-10）
 
 前節までの未コミット／index未登録の記述は実装時点の記録。本節はその後のコミット依頼に対する確認である。基準HEADは`b3f1f3e`。対象9ファイルだけを明示してindexへ登録し、index全体を一時ディレクトリへ展開した。対象9ファイルのbyte一致を確認し、既存node_modulesだけを借用した検証用コピーでbuild・strict・関連25ファイル1,891件・compiled17本を再実行し、全てexit 0。
