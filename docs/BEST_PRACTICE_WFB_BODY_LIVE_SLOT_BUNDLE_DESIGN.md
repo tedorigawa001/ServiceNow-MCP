@@ -1,6 +1,6 @@
 # WF-B B03後半：BC06〜11 live slotとBC12／13 bundle／draft生成境界
 
-Version: draft-0.6 / Date: 2026-11-10 / 読み取り基準HEAD: `94d7fde`（レビュー修正基準HEAD: `cc0e3c6`、Initial実装基準HEAD: `435b348`、Initial実装レビュー修正基準HEAD: `14de3f7`、BC12／13実装基準HEAD: `df6aa19`、BC12／13レビュー修正基準HEAD: `29c53e1`）。
+Version: draft-0.7 / Date: 2026-11-10 / 読み取り基準HEAD: `94d7fde`（レビュー修正基準HEAD: `cc0e3c6`、Initial実装基準HEAD: `435b348`、Initial実装レビュー修正基準HEAD: `14de3f7`、BC12／13実装基準HEAD: `df6aa19`、BC12／13レビュー修正基準HEAD: `29c53e1`、bind原始field実装基準HEAD: `e6cc8cd`）。
 
 draft-0.5のレビュー修正：`bodyBundleMint`の元base照合は、BC12／13のbeforeで単独に壊す対照がなかった。外すと拒否が最終postまで遅れ、producerが先に呼ばれる。BC12／13それぞれのbeforeへの単一注入で、当該beforeが最初に拒否しproducer未呼出しであること、照合を外すと拒否位置が移りproducerが呼ばれることを固定した。`bodyLiveDataMatches`／`bodyBundleDataMatches`の`cell.rejected !== undefined`節は、rejectedが付いた時点で構築が止まるため等価な防御条件とし、§12に記録した。
 
@@ -11,6 +11,8 @@ draft-0.1のレビュー修正（MDのみ）：§10の「コミット・Pushも�
 Status: **BC06〜11のInitial構築とBC12／13の同参照bundle／draft生成・全postまでを合成依存限定で実装。** §11と[Initial検証記録](E2E_BEST_PRACTICE_WFB_BODY_LIVE_INITIAL_2026-11-10.md)、§12と[bundle／draft検証記録](E2E_BEST_PRACTICE_WFB_BODY_BUNDLE_DRAFT_2026-11-10.md)を参照。BD／bind・構築ready・BA／body・BU実操作は未接続。§1〜10はdraft-0.1作成時の詳細設計で、未実装／将来の記述は§11〜12の限定実装と区別する。親は[先行slot物理配置・固定構築schedule・失敗保持](BEST_PRACTICE_WFB_BODY_SLOT_CONSTRUCTION_DESIGN.md)と[B03後半の固定exit契約](BEST_PRACTICE_WFB_BODY_UNWIND_EXIT_DESIGN.md)。先行seedと再検査レビューは[検証記録](E2E_BEST_PRACTICE_WFB_BODY_SLOT_SEED_2026-11-10.md)を参照する。
 
 後続bindの差分設計（2026-11-10、MDのみ）: [bind用状態型・先行borrow／診断slot draft-0.1](BEST_PRACTICE_WFB_BODY_BIND_BORROW_DESIGN.md)で、同rootの専用source状態、同startへの事前pinと一度限りのpayload格納、安定／phase別検査・失敗時の保持責務を具体化した。BC01〜13の既存生成・検証を維持する案であり、bind実装・構築ready・body起動の承認ではない。
+
+bind原始fieldの限定実装（2026-11-10）: [同設計§10 draft-0.2](BEST_PRACTICE_WFB_BODY_BIND_BORROW_DESIGN.md)と[field限定検証記録](E2E_BEST_PRACTICE_WFB_BODY_BIND_FIELDS_2026-11-10.md)に従い、型宣言・同rootの空source参照・同startの9空参照と原始診断だけを追加した。source不在と未消費を区別する固定projection・実行拒否の別factoryであり、BCの旧入口・data検査・modelを変えない。source生成・expected-source pin・claim消費・bind・構築readyは未接続。本書の将来field追加という記述は、この限定範囲を除く将来接続を指す。
 
 正式発行口・C実行入口・body起動は閉鎖、全体受付無効、Unknown、VM／監視／telemetry調査保留を維持する。本書は実装・構築ready・body起動・実接続・実通信・設定変更・Pushの承認ではない。BDのbind／借用field追加、BAのactive／body、BUの退役／終端、実grant／Permit発行、実session／transport／worker・実writer・Journal／packet・field clear・root終端は対象外。
 

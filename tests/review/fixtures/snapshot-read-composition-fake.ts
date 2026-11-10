@@ -2273,6 +2273,9 @@ let probeStartAccess: Readonly<{
   guardInspect(a: RetirementStartAssembly): Readonly<ProbeExitGuardSnapshot> | undefined;
   bindLocal(a: RetirementStartAssembly, state: ProbeLocalExitState, script: string): boolean;
   localInspect(a: RetirementStartAssembly): Readonly<ProbeLocalExitSnapshot> | undefined;
+  bodyFieldsInitial(a: RetirementStartAssembly): boolean;
+  bodyFieldsInspect(a: RetirementStartAssembly): Readonly<BodyReceiverProjection>;
+  bodyFieldsReject(a: RetirementStartAssembly): void;
   exitInspect(a: RetirementStartAssembly): Readonly<{ attempted: boolean; retained: boolean; sameDuty: boolean;
     knowledge: 'not_called' | 'known' | 'unknown'; callStarted: boolean; issuerRetained: boolean; receiverRetained: boolean }>;
   inspect(a: RetirementStartAssembly): Readonly<{ bindingRetained: boolean; bindingAttempted: boolean;
@@ -2295,6 +2298,21 @@ class RetirementStartAssembly {
   #exitBindStarted = false;
   #guardState: ProbeExitGuardState | undefined; #guardIssued: ProbeExitGuardState | undefined; #guardBindStarted = false; #guardScript = 'g_normal';
   #localState: ProbeLocalExitState | undefined; #localIssued: ProbeLocalExitState | undefined; #localBindStarted = false; #localScript = 'c_normal';
+  // Prior receiver storage only: no source pin, claim consumer or bind operation exists here yet.
+  #bodyExpectedSourceIssued: BodyBindSourceShell | undefined;
+  #bodyExpectedSourceCurrent: BodyBindSourceShell | undefined;
+  #bodyExpectedSourceRejected: BodyBindSourceShell | undefined;
+  #bodyBundleIssued: BodyPreparationBundle | undefined;
+  #bodyBundleCurrent: BodyPreparationBundle | undefined;
+  #bodyRejectedBundle: BodyPreparationBundle | undefined;
+  #bodyDraftIssued: BodyPreparationDraft | undefined;
+  #bodyDraftCurrent: BodyPreparationDraft | undefined;
+  #bodyRejectedDraft: BodyPreparationDraft | undefined;
+  #bodyPinAttemptUsed = false; #bodyPinStage: BodyPinStage = 'empty';
+  #bodyOccupancy: BodyOccupancy = 'free'; #bodyBindingState: BodyBindingState = 'empty';
+  #bodyBindPrefix: BodyBindPrefix = 'none'; #bodyBindFirst: BodyReceiverFirst = 'none';
+  #bodyBindFailurePhase: BodyReceiverFailurePhase = 'none'; #bodyBindFailurePrefix: BodyBindPrefix = 'none';
+  #bodyBindFailureBoundary: BodyReceiverFailureBoundary = 'none'; #bodyBindRefusal: BodyBindRefusal = 'none';
   readonly #owner = Object.freeze({});
   readonly #binding: PendingSourceBinding;
   readonly #pin: RetirementBindingPin;
@@ -2315,6 +2333,9 @@ class RetirementStartAssembly {
   #attempt: 'not_started' | 'running' | 'binding_rejected' = 'not_started';
   static {
     probeStartAccess = Object.freeze({
+      bodyFieldsInitial: (a: RetirementStartAssembly) => a.bodyFieldsInitial(),
+      bodyFieldsInspect: (a: RetirementStartAssembly) => a.bodyFieldsInspect(),
+      bodyFieldsReject: (a: RetirementStartAssembly) => { if (a.#bodyBindFirst === 'none') a.#bodyBindFirst = 'state_invalid'; },
       bind(a: RetirementStartAssembly, b: ProbeFrameBinding, issued: ProbeFrameBinding, script: string): boolean {
         if (a.#probeBindStarted) return false;
         a.#probeBindStarted = true; a.#probeBinding = b; a.#probeIssuedBinding = issued;
@@ -2385,6 +2406,30 @@ class RetirementStartAssembly {
       seal(a: RetirementStartAssembly): boolean { return retirementBindingAccess.sealRoot(a.#binding); },
       probe(a: RetirementStartAssembly) { return retirementBindingAccess.probeRoot(a.#binding); },
     });
+  }
+  private bodyFieldsInitial(): boolean {
+    return this.#bodyExpectedSourceIssued === undefined && this.#bodyExpectedSourceCurrent === undefined && this.#bodyExpectedSourceRejected === undefined
+      && this.#bodyBundleIssued === undefined && this.#bodyBundleCurrent === undefined && this.#bodyRejectedBundle === undefined
+      && this.#bodyDraftIssued === undefined && this.#bodyDraftCurrent === undefined && this.#bodyRejectedDraft === undefined
+      && this.#bodyPinAttemptUsed === false && this.#bodyPinStage === 'empty' && this.#bodyOccupancy === 'free'
+      && this.#bodyBindingState === 'empty' && this.#bodyBindPrefix === 'none' && this.#bodyBindFirst === 'none'
+      && this.#bodyBindFailurePhase === 'none' && this.#bodyBindFailurePrefix === 'none'
+      && this.#bodyBindFailureBoundary === 'none' && this.#bodyBindRefusal === 'none';
+  }
+  private bodyFieldsInspect(): Readonly<BodyReceiverProjection> {
+    const refs = [this.#bodyExpectedSourceIssued, this.#bodyExpectedSourceCurrent, this.#bodyExpectedSourceRejected,
+      this.#bodyBundleIssued, this.#bodyBundleCurrent, this.#bodyRejectedBundle, this.#bodyDraftIssued, this.#bodyDraftCurrent, this.#bodyRejectedDraft];
+    return Object.freeze({ available: true, pinAttemptUsed: this.#bodyPinAttemptUsed === true,
+      pinStage: runEnum(this.#bodyPinStage, ['empty', 'attempting', 'issued', 'captured', 'confirmed'], 'unconfirmed'),
+      occupancy: runEnum(this.#bodyOccupancy, ['free', 'used'], 'unconfirmed'),
+      bindingState: runEnum(this.#bodyBindingState, ['empty', 'binding', 'confirmed', 'failed'], 'unconfirmed'),
+      prefix: runEnum(this.#bodyBindPrefix, BODY_BIND_PREFIXES, 'unconfirmed'),
+      first: runEnum(this.#bodyBindFirst, BODY_RECEIVER_FIRSTS, 'unconfirmed'),
+      failurePhase: runEnum(this.#bodyBindFailurePhase, ['none', 'pin', 'bind', 'post'], 'unconfirmed'),
+      failurePrefix: runEnum(this.#bodyBindFailurePrefix, BODY_BIND_PREFIXES, 'unconfirmed'),
+      failureBoundary: runEnum(this.#bodyBindFailureBoundary, ['none', 'before', 'after'], 'unconfirmed'),
+      refusal: runEnum(this.#bodyBindRefusal, BODY_BIND_REFUSALS, 'unconfirmed'),
+      references: Object.freeze(BODY_RECEIVER_REFS.map((field, i) => Object.freeze({ field, retained: refs[i] !== undefined }))) });
   }
   constructor(private readonly scenario: string, admitted: boolean, gateSeed?: GateConstructionSeed) {
     this.#gateSeed = scenario === 'start_seed_copy' && gateSeed ? Object.freeze({ ...gateSeed }) : gateSeed;
@@ -3642,6 +3687,58 @@ const BODY_BUNDLE_FIELDS = Object.freeze([
 ]);
 const BODY_BUNDLE_PHASES = Object.freeze([...BODY_LIVE_PHASES, 'BC12', 'BC13']);
 const BODY_BUNDLE_BOUNDARIES = Object.freeze([...BODY_LIVE_BOUNDARIES, 'frozen', 'post_before', 'post_after']);
+// Type-only future source contract. This stage does not mint a source or install an expected-source pin.
+declare const BODY_BIND_SOURCE: unique symbol;
+type BodySourceFirst = 'none' | 'binding_mismatch' | 'state_invalid' | 'closed' | 'construction_unconfirmed' | 'receiver_unconfirmed' | 'post_unconfirmed';
+type BodyBindRefusal = 'none' | 'in_progress' | 'duplicate_pin' | 'duplicate_bind' | 'foreign_source';
+type BodySourcePhase = 'none' | 'BP00' | 'BP01' | 'BP02' | 'BP03' | 'BP04' | 'BD00' | 'BD01' | 'BD02' | 'BD03' | 'BD04';
+type BodySourceBoundary = 'none' | 'before' | 'attempt' | 'issued' | 'captured' | 'checked' | 'call' | 'after' | 'held';
+interface BodyBindSourceMetadata {
+  readonly [BODY_BIND_SOURCE]: true; readonly custodian: CanonicalGateDraftRoot; readonly construction: BodyPreparationShell;
+  readonly binding: ProbeFrameBinding; readonly link: ProbeRunLink; readonly duty: FixedExitDuty;
+  readonly control: ProbeExitControl; readonly start: RetirementStartAssembly;
+  readonly rootFailure: { first: string; phase: number; boundary: string };
+}
+type BodySourceHistory =
+  | (Pick<BodyBindSourceInitial, 'state' | 'claim' | 'bindCallReached' | 'postConfirmed'> & { pinCallReached: boolean })
+  | { state: 'preparing'; claim: 'unused'; pinCallReached: true; bindCallReached: false; postConfirmed: false }
+  | { state: 'binding'; claim: 'spent'; pinCallReached: true; bindCallReached: boolean; postConfirmed: false }
+  | { state: 'held_unready'; claim: 'spent'; pinCallReached: true; bindCallReached: true; postConfirmed: true };
+type BodyFailedHistory<T = BodySourceHistory> = T extends BodySourceHistory ? Omit<T, 'state'> & { state: 'failed' } : never;
+interface BodySourceDiagnostics {
+  stopRequested: boolean; phase: BodySourcePhase; boundary: BodySourceBoundary; first: BodySourceFirst;
+  failurePhase: BodySourcePhase; failureBoundary: BodySourceBoundary; refusal: BodyBindRefusal;
+  deliveryFirst: 'none' | 'delivery_unconfirmed';
+}
+type BodyBindSourceShell = BodyBindSourceMetadata & BodySourceDiagnostics & (BodySourceHistory | BodyFailedHistory);
+type BodyBindSourceInitial = BodyBindSourceMetadata & {
+  state: 'initializing'; claim: 'unused'; pinCallReached: false; bindCallReached: false; stopRequested: false; postConfirmed: false;
+  phase: 'none'; boundary: 'none'; first: 'none'; failurePhase: 'none'; failureBoundary: 'none'; refusal: 'none'; deliveryFirst: 'none';
+};
+type BodyPinStage = 'empty' | 'attempting' | 'issued' | 'captured' | 'confirmed';
+type BodyOccupancy = 'free' | 'used';
+type BodyBindingState = 'empty' | 'binding' | 'confirmed' | 'failed';
+type BodyBindPrefix = 'none' | 'occupied' | 'bundle_issued' | 'bundle_current' | 'draft_issued' | 'draft_current' | 'checked';
+type BodyReceiverFirst = 'none' | 'binding_mismatch' | 'state_invalid' | 'closed' | 'receiver_unconfirmed';
+type BodyReceiverFailurePhase = 'none' | 'pin' | 'bind' | 'post';
+type BodyReceiverFailureBoundary = 'none' | 'before' | 'after';
+const BODY_BIND_PREFIXES = Object.freeze(['none', 'occupied', 'bundle_issued', 'bundle_current', 'draft_issued', 'draft_current', 'checked']);
+const BODY_RECEIVER_FIRSTS = Object.freeze(['none', 'binding_mismatch', 'state_invalid', 'closed', 'receiver_unconfirmed']);
+const BODY_BIND_REFUSALS = Object.freeze(['none', 'in_progress', 'duplicate_pin', 'duplicate_bind', 'foreign_source']);
+const BODY_RECEIVER_REFS = Object.freeze(['bodyExpectedSourceIssued', 'bodyExpectedSourceCurrent', 'bodyExpectedSourceRejected',
+  'bodyBundleIssued', 'bodyBundleCurrent', 'bodyRejectedBundle', 'bodyDraftIssued', 'bodyDraftCurrent', 'bodyRejectedDraft']);
+interface BodyReceiverProjection {
+  readonly available: boolean; readonly pinAttemptUsed: boolean; readonly pinStage: string; readonly occupancy: string;
+  readonly bindingState: string; readonly prefix: string; readonly first: string; readonly failurePhase: string;
+  readonly failurePrefix: string; readonly failureBoundary: string; readonly refusal: string;
+  readonly references: readonly Readonly<{ field: string; retained: boolean }>[];
+}
+function bodyReceiverAbsent(): Readonly<BodyReceiverProjection> {
+  return Object.freeze({ available: false, pinAttemptUsed: false, pinStage: 'not_created', occupancy: 'not_created', bindingState: 'not_created',
+    prefix: 'not_created', first: 'none', failurePhase: 'none', failurePrefix: 'none', failureBoundary: 'none', refusal: 'none',
+    references: Object.freeze(BODY_RECEIVER_REFS.map(field => Object.freeze({ field, retained: false }))) });
+}
+interface BodyBindFieldsReply extends Omit<BodySeedReply, 'model'> { readonly model: 'wfb-body-bind-fields-1' }
 class CanonicalGateDraftRoot {
   readonly #failure: { first: string; phase: number; boundary: string };
   readonly #slots: { stage: SupplyConstructionStage; value: object | undefined }[];
@@ -3671,9 +3768,14 @@ class CanonicalGateDraftRoot {
   #bodySeedReentry = 'none'; #bodySeedHookCalls = 0; #bodySeedFixed: Readonly<BodySeedReply> | undefined;
   #bodyLiveFixed: Readonly<BodyLiveReply> | undefined;
   #bodyBundleFixed: Readonly<BodyBundleReply> | undefined;
+  #bodySourceIssued: BodyBindSourceShell | undefined; #bodySourceCurrent: BodyBindSourceShell | undefined;
+  #bodySourceRejected: BodyBindSourceShell | undefined; #bodySourceMetadataConfirmed = false;
+  #bodyFieldsState: 'not_started' | 'checking' | 'held' | 'failed' = 'not_started';
+  #bodyFieldsPhase = 'none'; #bodyFieldsFailurePhase = 'none'; #bodyFieldsReentry = 'none';
+  #bodyFieldsFixed: Readonly<BodyBindFieldsReply> | undefined;
   constructor(private readonly script: string, admitted: boolean, private readonly probePreparation = false, private readonly runPreparation = false,
     private readonly grantCapture = false, private readonly exitPreparation = false, private readonly exitGuard = false, private readonly localExit = false,
-    private readonly bodySeed = false, private readonly bodyLive = false, private readonly bodyBundle = false) {
+    private readonly bodySeed = false, private readonly bodyLive = false, private readonly bodyBundle = false, private readonly bodyBindFields = false) {
     this.#failure = { first: admitted ? 'none' : 'input_rejected', phase: 0, boundary: 'none' };
     this.#slots = Array.from({ length: 37 }, () => ({ stage: 'not_started', value: undefined }));
     this.#probeSlots = probePreparation ? Array.from({ length: 8 }, () => ({ stage: 'not_started', value: undefined })) : [];
@@ -3686,6 +3788,10 @@ class CanonicalGateDraftRoot {
   private reply(ok: boolean, disposition: string) { return Object.freeze({ ok, disposition, first: this.#failure.first }); }
   private fail(reason: string) {
     if (this.#failure.first === 'none') this.#failure.first = reason;
+    if (this.bodyBindFields) {
+      if (this.#bodyFieldsState !== 'failed') this.#bodyFieldsFailurePhase = this.#bodyFieldsPhase;
+      this.#bodyFieldsState = 'failed';
+    }
     if (this.bodySeed) {
       if (this.#bodySeedFailurePhase === 'none') { this.#bodySeedFailurePhase = this.#bodySeedPhase; this.#bodySeedFailureBoundary = this.#bodySeedBoundary; }
       if (this.#bodySeedShell) this.#bodySeedShell.state = 'failed';
@@ -3994,6 +4100,63 @@ class CanonicalGateDraftRoot {
         && c.index === i + 1 && c.kind === BODY_CARRIER_KINDS[i] && c.stage === 'not_started' && c.attemptReserved === false
         && c.callBoundaryReached === false && c.issued === undefined && c.current === undefined && c.rejected === undefined;
     });
+  }
+  private bodyFieldsPoint(phase: string): void {
+    this.#bodyFieldsPhase = phase;
+    if (this.script === `bf_reenter_${phase}`) this.#bodyFieldsReentry = this.prepare().disposition;
+    if (this.script === `bf_close_${phase}`) this.close();
+    if (this.script === 'bf_prior_diagnostic' && phase === 'checked') {
+      probeStartAccess.bodyFieldsReject(this.#issuedFrameBinding!.target.start);
+      this.fail('state_invalid');
+      throw Error('later_private_fault');
+    }
+    if (this.script === `bf_fault_${phase}`) throw Error('private_field_preparation');
+  }
+  private bodyFieldsIntact(): boolean {
+    return this.bodySeedBaseMatches() && this.#bodySeedShell === undefined
+      && this.#bodySourceIssued === undefined && this.#bodySourceCurrent === undefined && this.#bodySourceRejected === undefined
+      && this.#bodySourceMetadataConfirmed === false
+      && probeStartAccess.bodyFieldsInitial(this.#issuedFrameBinding!.target.start);
+  }
+  private prepareBodyBindFields() {
+    this.#bodyFieldsState = 'checking';
+    for (const phase of ['before', 'checked', 'after']) {
+      this.bodyFieldsPoint(phase);
+      if (this.#closed) return this.fail('closed');
+      if (!this.bodyFieldsIntact()) return this.fail('binding_mismatch');
+    }
+    this.#bodyFieldsState = 'held';
+    return this.reply(false, 'bind_fields_held');
+  }
+  bodyBindFieldsReply(disposition: string): Readonly<BodyBindFieldsReply> {
+    if (this.#bodyFieldsFixed) return this.#bodyFieldsFixed;
+    const r: Readonly<BodyBindFieldsReply> = Object.freeze({ model: 'wfb-body-bind-fields-1', ok: false,
+      disposition, first: runFirst(this.#failure.first), authority: 'none', execution: 'closed', formalIssuance: 'closed',
+      wholeRunAdmission: 'disabled', implementation: 'unknown', investigations: 'on_hold' });
+    if (this.#failure.first !== 'none') this.#bodyFieldsFixed = r;
+    return r;
+  }
+  checkBodyBindFields(legacy = false) {
+    if (this.#fixed) return this.#fixed;
+    return this.reply(false, this.#closed ? 'closed' : legacy ? 'not_ready' : 'blocked_frame_execution');
+  }
+  inspectBodyBindFields() {
+    const start = this.#issuedFrameBinding?.target.start;
+    const absent = this.#bodySourceIssued === undefined && this.#bodySourceCurrent === undefined && this.#bodySourceRejected === undefined
+      && this.#bodySourceMetadataConfirmed === false;
+    return Object.freeze({ model: 'wfb-body-bind-fields-1', authority: 'none', execution: 'closed', formalIssuance: 'closed',
+      wholeRunAdmission: 'disabled', implementation: 'unknown', investigations: 'on_hold', first: runFirst(this.#failure.first),
+      state: runEnum(this.#bodyFieldsState, ['not_started', 'checking', 'held', 'failed'], 'unconfirmed'), rootReady: this.#ready, closed: this.#closed,
+      phase: runEnum(this.#bodyFieldsPhase, ['none', 'before', 'checked', 'after'], 'unconfirmed'),
+      failurePhase: runEnum(this.#bodyFieldsFailurePhase, ['none', 'before', 'checked', 'after'], 'unconfirmed'),
+      reentry: runEnum(this.#bodyFieldsReentry, ['none', 'construction_in_progress'], 'unconfirmed'),
+      source: Object.freeze({ state: absent ? 'not_created' : 'unconfirmed', claim: absent ? 'not_created' : 'unconfirmed',
+        issuedRetained: this.#bodySourceIssued !== undefined, currentRetained: this.#bodySourceCurrent !== undefined,
+        rejectedRetained: this.#bodySourceRejected !== undefined, metadataConfirmed: this.#bodySourceMetadataConfirmed === true }),
+      receiver: start ? probeStartAccess.bodyFieldsInspect(start) : bodyReceiverAbsent(),
+      sourceIssuance: 'not_connected', pin: 'not_connected', claimConsumption: 'not_connected', binding: 'not_connected', constructionReady: 'not_connected',
+      bodyStarts: this.#issuedCells?.body.state === 'running' ? 1 : 0, grantAttempts: start ? probeStartAccess.captureInspect(start).grantAttempts : 0,
+      dutyUsed: this.#issuedRunDuty?.attemptUsed === true, dataCreated: this.#bodySeedShell?.slots?.filter(c => c?.issued !== undefined).length ?? 0 });
   }
   private bodySeedBaseMatches(): boolean {
     const c = this.#issuedCells!, b = this.#issuedFrameBinding!, d = this.#issuedRunDuty!;
@@ -4386,6 +4549,7 @@ class CanonicalGateDraftRoot {
       if (this.exitPreparation && !this.prepareExitSlots()) return this.fail('binding_mismatch');
       if (this.exitGuard && !this.prepareGuardState()) return this.fail('binding_mismatch');
       if (this.localExit && !this.prepareLocalState()) return this.fail('binding_mismatch');
+      if (this.bodyBindFields) return this.prepareBodyBindFields();
       if (this.bodySeed) return this.prepareBodySeed();
       (this.#slots[1].value as { state: string }).state = 'bound'; this.#ready = true; return this.reply(true, 'draft_held');
     } catch { return this.fail(this.exitPreparation && this.#closed ? 'closed' : 'construction_unconfirmed'); }
@@ -4793,6 +4957,23 @@ export function createProbeBodySeedFake(...args: readonly unknown[]) {
     checkLegacy: (...xs: readonly unknown[]) => call(xs, () => a.checkFramePreparation(true)),
     close: (...xs: readonly unknown[]) => call(xs, () => a.close()),
     inspect: (...xs: readonly unknown[]) => { if (xs.length) a.rejectInput(); return a.inspectBodySeed(); } });
+}
+
+export function createProbeBodyBindFieldsFake(...args: readonly unknown[]) {
+  const script = args.length ? args[0] : 'bf_normal';
+  const scripts = ['bf_normal', 'bf_prior_diagnostic',
+    ...['before', 'checked', 'after'].flatMap(p => ['fault', 'close', 'reenter'].map(k => `bf_${k}_${p}`))];
+  const admitted = args.length <= 1 && typeof script === 'string' && scripts.includes(script);
+  const a = new CanonicalGateDraftRoot(admitted ? script as string : 'bf_normal', admitted,
+    true, true, false, true, false, false, false, false, false, true);
+  const call = (xs: readonly unknown[], op: () => Readonly<{ ok: boolean; disposition: string }>) => {
+    const r = xs.length ? a.rejectInput() : op(); return a.bodyBindFieldsReply(r.disposition);
+  };
+  return Object.freeze({ prepare: (...xs: readonly unknown[]) => call(xs, () => a.prepare()),
+    check: (...xs: readonly unknown[]) => call(xs, () => a.checkBodyBindFields()),
+    checkLegacy: (...xs: readonly unknown[]) => call(xs, () => a.checkBodyBindFields(true)),
+    close: (...xs: readonly unknown[]) => call(xs, () => a.close()),
+    inspect: (...xs: readonly unknown[]) => { if (xs.length) a.rejectInput(); return a.inspectBodyBindFields(); } });
 }
 
 export function createProbeBodyBundleFake(...args: readonly unknown[]) {

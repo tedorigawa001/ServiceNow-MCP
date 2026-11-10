@@ -1,8 +1,8 @@
 # WF-B body bind：状態型・phase検査と同startの先行borrow／診断slot
 
-Version: draft-0.1 / Date: 2026-11-10 / 読み取り基準HEAD: `29c53e1` / 確認中のレビュー追加: `5ec73dd`。
+Version: draft-0.2 / Date: 2026-11-10 / 設計基準HEAD: `29c53e1` / レビュー追加: `5ec73dd` / 原始field限定実装基準HEAD: `e6cc8cd`。
 
-Status: **接続差分設計のみ。未実装・受入試験未実施。** 親は[先行slot／固定構築設計](BEST_PRACTICE_WFB_BODY_SLOT_CONSTRUCTION_DESIGN.md)と[live slot／bundle生成設計](BEST_PRACTICE_WFB_BODY_LIVE_SLOT_BUNDLE_DESIGN.md)。前工程の実績は[BC12／13検証記録](E2E_BEST_PRACTICE_WFB_BODY_BUNDLE_DRAFT_2026-11-10.md)を参照する。
+Status: **§9の分割(1)に限り、内部型・原始先行field・固定診断／projectionと実行拒否を合成依存限定で実装。** 実装範囲は§10と[field限定検証記録](E2E_BEST_PRACTICE_WFB_BODY_BIND_FIELDS_2026-11-10.md)を基準とする。source生成・pin・claim消費・bindは未接続、§1〜9はdraft-0.1時点の将来接続設計で、受入表全体の成功を意味しない。親は[先行slot／固定構築設計](BEST_PRACTICE_WFB_BODY_SLOT_CONSTRUCTION_DESIGN.md)と[live slot／bundle生成設計](BEST_PRACTICE_WFB_BODY_LIVE_SLOT_BUNDLE_DESIGN.md)。前工程の実績は[BC12／13検証記録](E2E_BEST_PRACTICE_WFB_BODY_BUNDLE_DRAFT_2026-11-10.md)を参照する。
 
 `5ec73dd`のBC12／13 mint前base対照と、rejected節の等価性に関する既存レビュー訂正は保持する。同commitで先に取り込まれたlive／bundle親文書の本書への参照も維持する。ソースの生成／保持経路に変更はなく、本書はこれらの検証実績をbind成功の保証へ拡張しない。
 
@@ -185,3 +185,17 @@ oracleは本体のbuilder／状態表／counterを期待値へimportせず、固
 今回は本書と親2文書の参照更新だけを行う。ローカルリンク・表の列数・BP／BD順序、状態／保持条件・差分空白を文書として確認する。ソース／試験／CHANGELOG／設定は変更せず、build・合成／compiled試験・梱包操作は行わない。BB01〜12は未実施であり、成功済みと記録しない。本書作成時点では未コミット・Pushなし。
 
 文書検証結果：本書と親2文書のローカルリンク22件に欠落なし、23表の列数・空白・末尾改行に異常なし。BP00〜04の5段階、BD00〜04の5段階とBD02内3substep、BB01〜12の順序／重複／欠落、sourceの22 own keyとclaim／occupancy／post履歴の区分を確認した。live／bundle親の参照は確認中の`5ec73dd`へ取り込み済みで、同レビュー修正を保持した。文書作成終了時の未コミット差分は本書と構築親の参照更新だけで、ソース／試験／CHANGELOG／設定に未コミット差分なし。こちらでindex登録・コミット・Pushは行っていない。これは文書整合の確認であり、将来のbind／受入試験の成功を意味しない。
+
+## 10 内部型・原始fieldだけの合成限定実装（2026-11-10）
+
+package除外のcomposition fixtureにcreateProbeBodyBindFieldsFakeを追加した。新APIはprepare／check／checkLegacy／close／inspectの5つだけで、model=wfb-body-bind-fields-1、正常でもbind_fields_held／ok=false／authority=none／execution=closed。同既存rootのbase37・probe8・run4・exit anchor5の準備後、body用BS／BCの生成前に止まる。既存baseのgate pin／RunLink等の準備は従来どおり行うが、新しいexpected-source pin・source claim・body bindは接続しない。旧seed／live／bundle経路のhold条件・検査・modelを変えない。
+
+BodyBindSourceShell／狭いInitial型、有限state×claim×call／post履歴、readonly metadata、source／receiverの固定理由型を宣言した。これは型だけであり、private brandのruntime発行・BP00のsource生成・private issuer登録はない。同rootへsource issued／current／rejectedの空参照とmetadataConfirmed=false、field検査の位置／初回失敗位置／状態scalarを先行する。source不在はstate／claimともnot_createdとし、unusedの実体があるように投影しない。予期しないsource参照はunconfirmed・保持booleanだけを出し、未知sourceのgetter／keyを読まない。
+
+同RetirementStartAssemblyには§2.2の9参照をundefined、pinAttemptUsed=false、pinStage=empty、occupancy=free、bindingState=empty、prefix／診断をnoneとして直接先行した。新たなreceiver object／array／Promise／関数をfield initializerに作らない。新module-private継続は初期値のreadonly検査・有限projectionと固定診断記録だけで、pin／payloadの格納継続は存在しない。公開snapshotの配列は診断生成時だけの固定9位置であり、receiver／source参照は外へ出さない。
+
+field検査のbefore／checked／afterはBP／BDではなく、この段階だけの位置である。各点の故障・close・再入で元root firstと最初の失敗位置を保持する。診断専用の有限scriptはreceiver firstをstate_invalidと記録してから後続throwを起こすが、pin／borrowの履歴を捏造しないためreceiver failurePhase／prefix／boundaryはnoneのまま。失敗後の返答は固定し、重複prepareは再生成しない。check／checkLegacyは旧frame wrapperを呼ばず固定拒否し、rootReadyを誤ってtrueにするscratch対照でも実行資格を与えない。
+
+独立テストは9参照のsemantic名・初期値・故障位置を本体からimportせず比較する。compiledはreceiver19field・root source不在4条件を単独破壊し、当該最初の拒否と条件除去による見逃しを対照にする。後段2位置の変化、unknown scalarのallowlist、先行理由、型拒否21行、field initializerが9つの無初期化参照＋10literalだけであることも確認する。scopeは空の先行保持先と実行拒否であり、同値source copyの発行元確認・expected-source pin・BP／BDの状態遷移・payload受領・source診断のruntime発行は未検証のまま。
+
+BB10〜12の型／projection／旧入口維持に関する部分だけを検証し、BB01〜09やBB10〜12全体を合格にしない。実allocation／E／S／OOM時の診断必着・実予算更新・全体work上界はUnknown。pin・claim消費・bind・構築ready・body起動・request／回収・正式発行・実接続は未接続、全体受付無効・調査保留を維持する。

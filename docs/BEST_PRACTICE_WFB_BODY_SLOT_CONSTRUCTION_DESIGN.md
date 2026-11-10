@@ -1,6 +1,6 @@
 # WF-B B03後半：先行slot物理配置・固定構築schedule・失敗保持
 
-Version: draft-0.6 / Date: 2026-11-10 / 読み取り基準HEAD: `bf63f16`（レビュー修正基準HEAD: `0932af9`、先行seed実装基準HEAD: `b3f1f3e`、先行seedレビュー修正基準HEAD: `55d4347`、live Initial実装基準HEAD: `435b348`、BC12／13実装基準HEAD: `df6aa19`）。
+Version: draft-0.7 / Date: 2026-11-10 / 読み取り基準HEAD: `bf63f16`（レビュー修正基準HEAD: `0932af9`、先行seed実装基準HEAD: `b3f1f3e`、先行seedレビュー修正基準HEAD: `55d4347`、live Initial実装基準HEAD: `435b348`、BC12／13実装基準HEAD: `df6aa19`、bind原始field実装基準HEAD: `e6cc8cd`）。
 
 draft-0.3のレビュー修正：§12は「SC01〜05の先行構築部分を検証」としていた。しかしSC05が求めるBC00 base条件・前段confirmedの個別破壊を含め、BC00／各mint前／bootstrap／最終再検査の大半の節は、単独で外しても試験が落ちなかった。freeze・初回rejectedの同一性・slot stage projectionのallowlistも観測していなかった。各節が最初に拒否する位置を`failurePhase`で固定するcompiled対照20件と、freeze・rejected同一性・stage allowlistの対照を追加した。単独で注入できないbase節（capture試行0・exit slot照合・`matchesRun`）は§12に範囲外として明記した。
 
@@ -14,7 +14,7 @@ BC06〜13の詳細化（2026-11-10、MDのみ）: [live slotの内部型・更�
 
 bind差分の詳細化（2026-11-10、MDのみ）: [bind状態型・phase検査と同startの先行borrow／診断slot draft-0.1](BEST_PRACTICE_WFB_BODY_BIND_BORROW_DESIGN.md)で、`29c53e1`を基準に§2／§6〜8を具体化した。旧BC用shellの狭い型を維持し、BD01のclaimを同rootの専用source状態へ分離する案、先行expected-source pin／bundleとdraftのborrow、生成順・private発行元確認・失敗prefix保持を定義する。本文のsource shell案はこの差分を優先し、実装・BD05／構築ready・body起動は未承認のまま。
 
-正式発行口・C実行入口・body起動閉鎖、全体受付無効、Unknown、VM／監視／telemetry調査保留を維持する。§12〜14以外の実装・合成body起動・実接続・実通信・設定変更・Pushを行わない。§1〜11の新型／field名は設計案で、未接続経路の実行承認ではない。実grant／permit、実session／transport／worker、実writer、request／drain、Journal供給、admission／packet／field clear、borrow退役／owner解放・root終端は対象外。
+正式発行口・C実行入口・body起動閉鎖、全体受付無効、Unknown、VM／監視／telemetry調査保留を維持する。§12〜15以外の実装・合成body起動・実接続・実通信・設定変更・Pushを行わない。§1〜11の新型／field名は設計案で、未接続経路の実行承認ではない。実grant／permit、実session／transport／worker、実writer、request／drain、Journal供給、admission／packet／field clear、borrow退役／owner解放・root終端は対象外。
 
 ## 1 同ownerの意味と既存配置への接続位置
 
@@ -219,3 +219,9 @@ contextのbindingOwnerは同binding／start側owner、cellOwnerは同rootの既�
 §13の旧live入口を維持し、同rootの固定継続でBC12／13を生成する。詳細は[live／bundle設計§12](BEST_PRACTICE_WFB_BODY_LIVE_SLOT_BUNDLE_DESIGN.md)、結果は[検証記録](E2E_BEST_PRACTICE_WFB_BODY_BUNDLE_DRAFT_2026-11-10.md)。全子の同参照と同run sealをprivate brand付きの不変descriptorへ集約し、issued捕捉後にshallow freezeする。全前段／未使用suffixと、最後の全13行・元baseを再検査する。BC06〜11の進行fieldはwritableなInitial値のままで、再帰freeze・castによるbody資格生成は行わない。
 
 正常はbundle_held／ok=falseで止まり、bind claim未試行、start body borrowなし、root／shell ready=falseを維持する。途中故障・close・再入・全post拒否は元firstと保持prefix・未確認責務を残し、clear／再供給／別owner補完をしない。BD／構築ready・BA／body・BU実unwindと正式証拠は未接続であり、全体受付無効・Unknown・調査保留を維持する。
+
+## 15 bindの内部型・原始先行field限定（2026-11-10）
+
+[bind差分設計§10 draft-0.2](BEST_PRACTICE_WFB_BODY_BIND_BORROW_DESIGN.md)と[field限定検証記録](E2E_BEST_PRACTICE_WFB_BODY_BIND_FIELDS_2026-11-10.md)の範囲だけを追加した。sourceは型宣言・同rootの空参照／scalarのみで生成せず、同startへ9つの空参照と原始診断を先行する。別の閉鎖factoryは従来のbase／probe／run／exit anchor準備後、BS／BC生成前にbind_fields_held／ok=falseで止まる。既存seed／live／bundleを再開／変更しない。
+
+新expected-source pin・source claim消費・borrow格納・bind・構築ready・body起動は未接続。不在のsourceをunusedへ既定値化せず、診断は有限原始値のみで、旧frame wrapper／requestを起動しない。実allocation／全体work capはUnknown、正式発行口閉鎖・全体受付無効・調査保留を維持する。§1〜11と既存各段階にある「未実装」「field未追加」は各作成時点の範囲であり、現在の限定field追加は本節を基準とする。
