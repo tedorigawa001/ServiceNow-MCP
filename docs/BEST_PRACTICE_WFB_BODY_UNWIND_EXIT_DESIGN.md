@@ -12,6 +12,8 @@ Status: **詳細設計のみ。未実装・受入試験未実施・body起動未
 
 先行seed限定実装（2026-11-10）: 上記配置設計§12で、同rootの先行shell／13carrierとBC01〜05のcontext／origin／sentinel／pinだけを合成依存限定で実装した。[検証記録](E2E_BEST_PRACTICE_WFB_BODY_SLOT_SEED_2026-11-10.md)。正常でもready=false／bind未試行／body0で保持する。BC06以後、BD／構築ready、BA／body、BU実unwindと正式発行は閉鎖のまま。
 
+live構築境界の詳細化（2026-11-10、MDのみ）: [BC06〜11の内部型・更新権限とBC12／13のbundle／draft生成境界draft-0.1](BEST_PRACTICE_WFB_BODY_LIVE_SLOT_BUNDLE_DESIGN.md)で、§2の先行slotを同owner／dutyの初期variant・固定生成順へ落とし込んだ。構築中は進行更新0、将来のBA／BU writerは未接続とし、元診断参照と失敗prefixを保持する。live storageのsealとimmutable aggregateのfreezeを区別する設計であり、構築ready・bind・body起動を許可しない。
+
 ## 1 現行との差分と流用禁止
 
 `5939864`のB03-Cは同startのcapture実帰還からguard／同duty settling／同target局所退役へ進み、body未開始のheld_not_startedを保持する。phase再検査12対照は追加済みで、本書では未対応扱いに戻さない。

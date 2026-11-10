@@ -10,6 +10,8 @@ draft-0.1のレビュー修正（MDのみ）：§11の「未コミット・Push�
 
 Status: **先行shell／13carrierとBC01〜05のcontext／origin／sentinel／pinだけを合成依存限定で実装。** §12と[検証記録](E2E_BEST_PRACTICE_WFB_BODY_SLOT_SEED_2026-11-10.md)を参照。BC06〜13・BD／構築ready・BA／body・BU実unwindは未実装。親は[B03後半の固定exit契約draft-0.2](BEST_PRACTICE_WFB_BODY_UNWIND_EXIT_DESIGN.md)と[B03前半の固定exit／同target局所退役](BEST_PRACTICE_WFB_FIXED_EXIT_LOCAL_RETIREMENT_DESIGN.md)。元の所有／費目契約は[(B) grant／固定exit責務](BEST_PRACTICE_WFB_PROBE_GRANT_EXIT_DUTY_DESIGN.md)を維持する。
 
+BC06〜13の詳細化（2026-11-10、MDのみ）: [live slotの内部型・更新権限とbundle／draft生成境界draft-0.1](BEST_PRACTICE_WFB_BODY_LIVE_SLOT_BUNDLE_DESIGN.md)で、`94d7fde`を基準に§4〜5を具体化した。BC06〜11の初期variant／private writer境界、liveの参照固定と進行fieldの分離、BC12／13の同参照集約・固定順・失敗保持を定義する。既存seedの全freeze・空suffix検査は維持し、追加経路を別に扱う。BD／構築ready・BA／BUは未接続のまま。
+
 正式発行口・C実行入口・body起動閉鎖、全体受付無効、Unknown、VM／監視／telemetry調査保留を維持する。§12以外の実装・合成body起動・実接続・実通信・設定変更・Pushを行わない。§1〜11の新型／field名は設計案で、未接続経路の実行承認ではない。実grant／permit、実session／transport／worker、実writer、request／drain、Journal供給、admission／packet／field clear、borrow退役／owner解放・root終端は対象外。
 
 ## 1 同ownerの意味と既存配置への接続位置
