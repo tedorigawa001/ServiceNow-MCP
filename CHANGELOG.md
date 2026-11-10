@@ -18,6 +18,8 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 ### Changed
 
+- WF-B minimally separates package-excluded BS storage construction from BC data construction. The unchanged seed/live/bundle entries synchronously pass the same retained shell through a two-call private wrapper, preserving checkpoints, failures, models and closed execution. Independent synthetic regressions and compiled event-word, boundary-stop, same-reference and mutation controls add no public entry or source issuer; source generation, pinning, claim consumption, binding, construction-ready and body startup remain disconnected.
+
 - WF-B adds package-excluded synthetic-only body-bind source/receiver contracts, nine empty prior receiver references and primitive diagnostics on the same start. A separate closed preparation checks the untouched initial fields and reports finite projections without minting a source, installing a pin, consuming a claim or borrowing a bundle/draft. Independent fault, close, reentry, field-mutation and semantic compile-fail controls preserve earlier diagnoses and the old seed/live/bundle entries; binding, construction-ready, body startup and formal issuance remain disconnected.
 
 - WF-B adds a package-excluded synthetic-only BC12/13 bundle/draft continuation on the same construction root. Immutable, shallow-frozen aggregates retain the original Initial live slots and run seal without freezing children, transferring custody or granting execution. Independent malformed/child-copy, failure-prefix, all-predecessor and full-post compiled controls preserve partial ownership and earlier diagnoses. Old seed/live entries remain unchanged; binding, construction-ready, body startup, formal issuance and runtime connections stay closed.

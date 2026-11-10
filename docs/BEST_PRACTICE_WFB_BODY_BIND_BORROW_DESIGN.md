@@ -1,6 +1,6 @@
 # WF-B body bind：状態型・phase検査と同startの先行borrow／診断slot
 
-Version: draft-0.4 / Date: 2026-11-11 / 設計基準HEAD: `29c53e1` / レビュー追加: `5ec73dd` / 原始field限定実装基準HEAD: `e6cc8cd` / 原始field実装レビュー修正基準HEAD: `41ac31f` / source生成・停止の設計基準HEAD: `5873d16`。
+Version: draft-0.5 / Date: 2026-11-11 / 設計基準HEAD: `29c53e1` / レビュー追加: `5ec73dd` / 原始field限定実装基準HEAD: `e6cc8cd` / 原始field実装レビュー修正基準HEAD: `41ac31f` / source生成・停止の設計基準HEAD: `5873d16` / BS／BC分離実装基準HEAD: `f3b3721`。
 
 draft-0.2のレビュー修正：`bodyFieldsIntact`のroot側2節（元baseの未使用、BC用shell未生成）は、単独で外しても試験が落ちなかった。root側inspectの`state`／`phase`／`failurePhase`／`reentry`のallowlistと、実body cellから導く`bodyStarts`の投影も観測していなかった。各節の単一注入と除去の対照、4つのallowlistと`bodyStarts`の対照をcompiledへ追加した。最初の失敗位置の上書き防止と、`checkBodyBindFields`冒頭の`#fixed`返却は等価と判断し、§10に記録した。
 
@@ -209,3 +209,7 @@ BB10〜12の型／projection／旧入口維持に関する部分だけを検証�
 [正規生成位置・private issuerと同期停止・失敗時保持 draft-0.1](BEST_PRACTICE_WFB_BODY_SOURCE_ISSUER_STOP_DESIGN.md)で、§3のBP00〜01と§6の停止責務を対に具体化した。BS00〜14とBC00以降の最小分離、元literalの即時issued保持・private発行元照合、metadata未確認時のroot-only停止、失敗cache後も先に停止を記録する新経路専用closeを定義する。
 
 既存field限定入口のshell／source不在検査・旧seed／live／bundleの順序／返答と、`5873d16`のレビュー対照は保持する。旧経路で等価とした節の評価を、失敗後close・別BP位置の履歴を持つ新経路へ流用しない。source生成と停止を対で接続する将来案であり、今回実装は行わない。BP02〜04 pin・claim消費・payload bind・構築ready・body起動・正式発行は未接続、全体受付無効・Unknown・調査保留を維持する。
+
+## 12 (A) BS／BCのprivate最小分離（2026-11-11）
+
+[生成・停止設計§11](BEST_PRACTICE_WFB_BODY_SOURCE_ISSUER_STOP_DESIGN.md)と[分離検証記録](E2E_BEST_PRACTICE_WFB_BODY_STORAGE_DATA_SPLIT_2026-11-11.md)の範囲で、BS storageとBC dataをprivate関数へ最小抽出した。旧prepareBodySeedは同frame／同shellを渡す2呼出しのwrapperだけとなり、旧seed／live／bundleの期待値・検査・exportとfield限定入口のsource／shell不在検査を維持する。正規source生成・private pin・新同期停止はまだ実装せず、claim消費・bind・構築ready・body起動・正式発行は閉じたままである。

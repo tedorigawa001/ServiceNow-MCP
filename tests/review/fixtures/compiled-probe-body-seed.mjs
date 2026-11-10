@@ -40,7 +40,7 @@ try {
     duty: 'v.duty === this.#issuedRunDuty', control: 'v.control === this.#exitSlots[0].value', start: 'v.start === b.target.start', bindingOwner: 'v.bindingOwner === b.owner',
     cellOwner: 'v.cellOwner === this.#probeOwner', scope: 'v.scope === b.scope', pin: 'v.pin === b.pin', epoch: 'v.epoch === b.epoch', packet: 'v.packet === b.packet',
     frame: 'v.frame === c.frame', entry: 'v.entry === b.entry', exit: 'v.exit === b.exit', runSeal: 'v.runSeal === this.#issuedRunSeal', exitBundle: 'v.exitBundle === this.#exitSlots[4].value' };
-  const unified = method(source, 'prepareBodySeed', 'cellOwner: this.#probeOwner!,', 'cellOwner: b.owner,');
+  const unified = method(source, 'prepareBodyData', 'cellOwner: this.#probeOwner!,', 'cellOwner: b.owner,');
   assert.equal(run(await load(unified, 'unified-owners')).r.first, 'binding_mismatch');
   assert.equal(run(await load(dataCase(unified, 1, 'v.cellOwner === this.#probeOwner', 'true'), 'unified-owners-mutant')).r.disposition, 'seed_held');
   const rows = [Object.entries(context), [['context', 'v.context === ctx'], ['kind', "v.kind === 'fixed_probe_body'"]],
@@ -75,7 +75,7 @@ try {
   const changed = injectBoot('this.#bodySeedShell!.slots![0] = { ...this.#bodySeedShell!.slots![0]! };');
   assert.equal(run(await load(changed, 'carrier-copy')).s.failurePhase, 'BS02');
   assert.equal(run(await load(method(changed, 'bodySeedBootMatches', 'shell.slots[index] === issued', 'true'), 'carrier-copy-mutant')).r.disposition, 'seed_held');
-  const emptyChanged = method(source, 'prepareBodySeed', "    if (!this.bodySeedCarriersMatch() || !this.bodySeedBaseMatches() || ![1, 2, 3, 4, 5].every", "    this.#bodySeedShell!.slots![12]!.attemptReserved = true;\n    if (!this.bodySeedCarriersMatch() || !this.bodySeedBaseMatches() || ![1, 2, 3, 4, 5].every");
+  const emptyChanged = method(source, 'prepareBodyData', "    if (!this.bodySeedCarriersMatch() || !this.bodySeedBaseMatches() || ![1, 2, 3, 4, 5].every", "    this.#bodySeedShell!.slots![12]!.attemptReserved = true;\n    if (!this.bodySeedCarriersMatch() || !this.bodySeedBaseMatches() || ![1, 2, 3, 4, 5].every");
   assert.equal(run(await load(emptyChanged, 'unused-carrier')).r.first, 'binding_mismatch');
   assert.equal(run(await load(method(emptyChanged, 'bodySeedCarriersMatch', 'c.attemptReserved === false', 'true'), 'unused-carrier-mutant')).r.disposition, 'seed_held');
   const leaked = replace(source, "sameOwnerBindings: s?.slots?.[0]?.stage === 'confirmed' && this.bodySeedDataMatches(1)", 'sameOwnerBindings: s?.slots?.[0]?.current');
@@ -92,7 +92,7 @@ try {
     ['base-grant', 'BC00', 'before', `${cellsAt}.grant.stage = 'provisional';`, 'bodySeedBaseMatches', "c.grant.stage === 'empty'", 'true'],
     ['base-body', 'BC00', 'before', `${cellsAt}.body.state = 'running';`, 'bodySeedBaseMatches', "c.body.state === 'not_started'", 'true'],
     ['base-exit', 'BC00', 'before', `${cellsAt}.exit.stage = 'unsealed';`, 'bodySeedBaseMatches', "c.exit.stage === 'empty'", 'true'],
-    ['bc00-base', 'BC00', 'before', `${cellsAt}.use.state = 'entering';`, 'prepareBodySeed',
+    ['bc00-base', 'BC00', 'before', `${cellsAt}.use.state = 'entering';`, 'prepareBodyData',
       "    if (!this.bodySeedCarriersMatch() || !this.bodySeedBaseMatches()) return", '    if (!this.bodySeedCarriersMatch()) return'],
     ['mint-base', 'BC02', 'before', `${cellsAt}.use.state = 'entering';`, 'bodySeedMint', '!this.bodySeedBaseMatches() || cell.stage', 'cell.stage'],
     ['mint-carriers', 'BC02', 'before', "this.#bodySeedShell!.state = 'held';", 'bodySeedMint',
@@ -110,9 +110,9 @@ try {
     ['boot-bs01-holes', 'BS01', 'retained', 'this.#bodySeedShell!.slots![0] = undefined;', 'bodySeedBootMatches',
       ' && Array.from({ length: 13 }, (_, i) => i).every(i => !Object.hasOwn(shell.slots!, i))', ''],
     ['boot-prior-carrier', 'BS03', 'retained', `${slotAt(0)}.attemptReserved = true;`, 'bodySeedBootMatches', 'c.attemptReserved === false', 'true'],
-    ['final-base', 'BC05', 'confirmed', `${cellsAt}.use.state = 'entering';`, 'prepareBodySeed',
+    ['final-base', 'BC05', 'confirmed', `${cellsAt}.use.state = 'entering';`, 'prepareBodyData',
       '    if (!this.bodySeedCarriersMatch() || !this.bodySeedBaseMatches() || ![1, 2, 3, 4, 5]', '    if (!this.bodySeedCarriersMatch() || ![1, 2, 3, 4, 5]'],
-    ['final-data', 'BC05', 'confirmed', `${slotAt(0)}.current = Object.freeze({ ...${slotAt(0)}.current });`, 'prepareBodySeed',
+    ['final-data', 'BC05', 'confirmed', `${slotAt(0)}.current = Object.freeze({ ...${slotAt(0)}.current });`, 'prepareBodyData',
       ' || ![1, 2, 3, 4, 5].every(n => this.bodySeedDataMatches(n))) return', ') return'],
   ];
   for (const [i, [name, phase, boundary, code, target, from, to]] of recheck.entries()) {

@@ -1,6 +1,6 @@
 # WF-B B03後半：先行slot物理配置・固定構築schedule・失敗保持
 
-Version: draft-0.8 / Date: 2026-11-11 / 読み取り基準HEAD: `bf63f16`（レビュー修正基準HEAD: `0932af9`、先行seed実装基準HEAD: `b3f1f3e`、先行seedレビュー修正基準HEAD: `55d4347`、live Initial実装基準HEAD: `435b348`、BC12／13実装基準HEAD: `df6aa19`、bind原始field実装基準HEAD: `e6cc8cd`、source生成・停止設計基準HEAD: `5873d16`）。
+Version: draft-0.9 / Date: 2026-11-11 / 読み取り基準HEAD: `bf63f16`（レビュー修正基準HEAD: `0932af9`、先行seed実装基準HEAD: `b3f1f3e`、先行seedレビュー修正基準HEAD: `55d4347`、live Initial実装基準HEAD: `435b348`、BC12／13実装基準HEAD: `df6aa19`、bind原始field実装基準HEAD: `e6cc8cd`、source生成・停止設計基準HEAD: `5873d16`、BS／BC分離実装基準HEAD: `f3b3721`）。
 
 draft-0.3のレビュー修正：§12は「SC01〜05の先行構築部分を検証」としていた。しかしSC05が求めるBC00 base条件・前段confirmedの個別破壊を含め、BC00／各mint前／bootstrap／最終再検査の大半の節は、単独で外しても試験が落ちなかった。freeze・初回rejectedの同一性・slot stage projectionのallowlistも観測していなかった。各節が最初に拒否する位置を`failurePhase`で固定するcompiled対照20件と、freeze・rejected同一性・stage allowlistの対照を追加した。単独で注入できないbase節（capture試行0・exit slot照合・`matchesRun`）は§12に範囲外として明記した。
 
@@ -16,7 +16,7 @@ bind差分の詳細化（2026-11-10、MDのみ）: [bind状態型・phase検査�
 
 正規source生成と停止の具体化（2026-11-11、MDのみ）: [生成位置・private issuerと同期停止・失敗時保持 draft-0.1](BEST_PRACTICE_WFB_BODY_SOURCE_ISSUER_STOP_DESIGN.md)で、BS先行storageとBC dataの最小分離・全13空carrierの再検査を定義した。同BS shellをBP00〜01のsourceへ結合し、未確認sourceを触らない停止と、固定失敗返答後closeの停止記録を対にする。現行の旧入口と原始fieldレビュー修正を保持する設計案であり、ソース生成・pin・bind・構築ready・bodyの接続は今回行わない。
 
-正式発行口・C実行入口・body起動閉鎖、全体受付無効、Unknown、VM／監視／telemetry調査保留を維持する。§12〜15以外の実装・合成body起動・実接続・実通信・設定変更・Pushを行わない。§1〜11の新型／field名は設計案で、未接続経路の実行承認ではない。実grant／permit、実session／transport／worker、実writer、request／drain、Journal供給、admission／packet／field clear、borrow退役／owner解放・root終端は対象外。
+正式発行口・C実行入口・body起動閉鎖、全体受付無効、Unknown、VM／監視／telemetry調査保留を維持する。§12〜16以外の実装・合成body起動・実接続・実通信・設定変更・Pushを行わない。§1〜11の新型／field名は設計案で、未接続経路の実行承認ではない。実grant／permit、実session／transport／worker、実writer、request／drain、Journal供給、admission／packet／field clear、borrow退役／owner解放・root終端は対象外。
 
 ## 1 同ownerの意味と既存配置への接続位置
 
@@ -227,3 +227,7 @@ contextのbindingOwnerは同binding／start側owner、cellOwnerは同rootの既�
 [bind差分設計§10 draft-0.2](BEST_PRACTICE_WFB_BODY_BIND_BORROW_DESIGN.md)と[field限定検証記録](E2E_BEST_PRACTICE_WFB_BODY_BIND_FIELDS_2026-11-10.md)の範囲だけを追加した。sourceは型宣言・同rootの空参照／scalarのみで生成せず、同startへ9つの空参照と原始診断を先行する。別の閉鎖factoryは従来のbase／probe／run／exit anchor準備後、BS／BC生成前にbind_fields_held／ok=falseで止まる。既存seed／live／bundleを再開／変更しない。
 
 新expected-source pin・source claim消費・borrow格納・bind・構築ready・body起動は未接続。不在のsourceをunusedへ既定値化せず、診断は有限原始値のみで、旧frame wrapper／requestを起動しない。実allocation／全体work capはUnknown、正式発行口閉鎖・全体受付無効・調査保留を維持する。§1〜11と既存各段階にある「未実装」「field未追加」は各作成時点の範囲であり、現在の限定field追加は本節を基準とする。
+
+## 16 (A) BS storage／BC dataの最小分離（2026-11-11）
+
+[生成・停止設計§11](BEST_PRACTICE_WFB_BODY_SOURCE_ISSUER_STOP_DESIGN.md)に従い、元BS00〜14をprivate storage関数へ、BC00以降を同shell引数のprivate data関数へ抽出した。旧wrapperが同保護frame内で続けて1回ずつ呼び、BS失敗時にdataへ進まない。新しいsource入口・BootstrapReady・issuer／pin・同期停止は追加せず、旧生成／失敗保持・API／export・期待値は維持する。合成・compiled対照の結果は[分離検証記録](E2E_BEST_PRACTICE_WFB_BODY_STORAGE_DATA_SPLIT_2026-11-11.md)を参照する。構築ready・body起動・正式発行は未接続、全体受付無効・Unknown・調査保留を維持する。

@@ -1,8 +1,8 @@
 # WF-B body source：正規生成位置・private issuerと同期停止・失敗時保持
 
-Version: draft-0.1 / Date: 2026-11-11 / 読み取り基準HEAD: `5873d16`。
+Version: draft-0.2 / Date: 2026-11-11 / 設計基準HEAD: `5873d16` / (A)最小分離実装基準HEAD: `f3b3721`。
 
-Status: **接続差分設計のみ。未実装・受入試験未実施。** 親は[bind状態型・先行borrow設計](BEST_PRACTICE_WFB_BODY_BIND_BORROW_DESIGN.md)と[先行slot・固定構築設計](BEST_PRACTICE_WFB_BODY_SLOT_CONSTRUCTION_DESIGN.md)。現行の限定実装とレビューは[field検証記録](E2E_BEST_PRACTICE_WFB_BODY_BIND_FIELDS_2026-11-10.md)を参照する。`5873d16`のroot側検査・projection対照と、等価と判断した節の注記は維持する。
+Status: **(A)のBS／BC最小分離だけを合成依存限定で実装。** 実装範囲は§11と[分離検証記録](E2E_BEST_PRACTICE_WFB_BODY_STORAGE_DATA_SPLIT_2026-11-11.md)を基準とする。§1〜10はdraft-0.1作成時の接続設計・文書検証で、(B)source生成／同期停止・(C)private pinと、その受入条件全体は未実装・未実施のまま。親は[bind状態型・先行borrow設計](BEST_PRACTICE_WFB_BODY_BIND_BORROW_DESIGN.md)と[先行slot・固定構築設計](BEST_PRACTICE_WFB_BODY_SLOT_CONSTRUCTION_DESIGN.md)。先行実装とレビューは[field検証記録](E2E_BEST_PRACTICE_WFB_BODY_BIND_FIELDS_2026-11-10.md)を参照する。`5873d16`のroot側検査・projection対照と、等価と判断した節の注記は維持する。
 
 正式発行口・C実行入口・body起動閉鎖、全体受付無効、Unknown、VM／監視／telemetry調査保留を維持する。本書は実装・実接続・実通信・設定変更・Pushの承認ではない。将来も合成依存だけとし、今回の設計範囲はBS／BCの最小分離、BP00〜01のsource生成／確認とその前後の同期停止・保持まで。BP02〜04のprivate pinは接続先の前提だけを定義し、pin実行・source利用claim消費・payload借用／bind・構築ready・body／退出・正式証拠・実予算更新は含めない。
 
@@ -166,3 +166,15 @@ oracleは本体のbuilder／schema／状態表を期待値へimportしない。�
 今回は本書と親2文書の参照更新だけを行う。ローカルリンク・表列数・固定22key／9metadata／13進行field・BP観測順・BS／BC分離と停止／所有条件・差分空白を文書として確認する。ソース／試験／CHANGELOG／設定は変更せず、build・合成／compiled試験・梱包操作は行わない。SS01〜12は未実施であり、実装済み・受入成功と記録しない。本書作成時点では未コミット・Pushなし。
 
 文書検証結果：本書と親2文書のローカルリンク24件に欠落なし、22表の列数・末尾改行／空白に異常なし。本書の10節・SS01〜12・schedule8行の順序／重複／欠落を確認し、現行内部型からmetadata9keyと進行13fieldの計22keyを照合した。現行ソースのBS→BC連続配置とcloseの#fixed早期返却も読み取りで再確認した。作業中の差分は新設計書と親2文書だけで、ソース／試験／CHANGELOG／manifest・lockfile／設定はHEADから変更していない。これは文書整合の確認であり、将来の生成・停止・受入試験の成功を意味しない。index登録・コミット・Pushは行っていない。
+
+## 11 (A) BS／BCの最小分離だけの実装（2026-11-11）
+
+既存composition fixture内のprepareBodySeedを2呼出しのprivate wrapperにし、prepareBodyStorageがBS00〜14を実行して元shellをそのまま返し、prepareBodyData(shell)がBC00以降を実行するよう最小抽出した。追加の実装行は7行で、元の生成操作・検査・checkpoint・holdを移動しただけである。wrapperから同shellを直接引数で渡し、再読取による別shellへの付替え・copy・新receipt／callback・汎用runnerを追加しない。
+
+旧seed／live／bundleは同じ既存保護frame内でstorage→dataを1回ずつ続けて呼ぶ。BSの例外は元の外側catchへそのまま伝わり、dataを呼ばない。dataの例外も元のcatch／finallyと最初の失敗位置・返答cacheで処理する。正常5／11／13dataの旧hold・model／API／export、途中prefix、close／再入、元base・descriptor／freeze検査は維持する。BS／BC間にhook・await・新たな公開観測点を挟まない。
+
+compiledはscratch内だけに有限event観測を足し、正常3経路の全checkpoint列と同shell／同frameの受渡しを独立oracle比較する。storage直後とBC00 beforeで故障させる計6対照により、全13空carrierを保持したままdata未呼出し／未生成で止まることを確認する。storage／data省略・二重呼出し、返却／引数のcopy、storage側の早いBCを検出し、2つの抽出methodへの外部呼出しをsemantic compile-failで拒否する。copy対照は受渡しの同参照観測を失うことで検出し、任意入力のruntime拒否を追加したという保証ではない。
+
+旧compiled-probe-body-seedの5箇所は、移動したdata操作への注入先をprepareBodySeedからprepareBodyDataへ変更しただけで、assert・期待値・20再検査対照を削除／緩和していない。旧export期待値も変更していない。結果と初回REDは[分離検証記録](E2E_BEST_PRACTICE_WFB_BODY_STORAGE_DATA_SPLIT_2026-11-11.md)を参照する。
+
+SS01の最小分離に関する範囲だけを確認し、SS02〜12のsource生成／停止／pin依存条件を合格へ昇格しない。新source用BootstrapReady・BP00〜01・同期停止・BP02〜04・claim消費・bind・構築ready・body起動は未接続。field限定入口は引き続きBS未生成・source不在で停止する。rootのデータ生成数／順序は同じだが、追加private call／moduleのmethod配置を実allocation・E／S／work上界の同一性証明にはしない。正式発行口閉鎖・全体受付無効・Unknown・調査保留を維持する。

@@ -4235,6 +4235,10 @@ class CanonicalGateDraftRoot {
     this.bodySeedPoint(phase, 'checked'); cell.stage = 'confirmed'; this.bodySeedPoint(phase, 'confirmed');
   }
   private prepareBodySeed(): Readonly<{ ok: boolean; disposition: string }> {
+    const shell = this.prepareBodyStorage();
+    return this.prepareBodyData(shell);
+  }
+  private prepareBodyStorage(): BodyPreparationShell {
     this.bodySeedBoot('BS00', (): BodyPreparationShell => ({ failure: this.#failure, slots: undefined, state: 'building', ready: false,
       execution: 'closed', bindAttemptUsed: false, bindStage: 'not_attempted' }), v => { this.#bodySeedShell = v as BodyPreparationShell; });
     const shell = this.#bodySeedShell!;
@@ -4242,6 +4246,9 @@ class CanonicalGateDraftRoot {
     for (let i = 0; i < 13; i++) this.bodySeedBoot(`BS${String(i + 2).padStart(2, '0')}`, (): BodyConstructionCell => ({ index: (i + 1) as BodyCarrierIndex,
       kind: BODY_CARRIER_KINDS[i], stage: 'not_started', attemptReserved: false, callBoundaryReached: false,
       issued: undefined, current: undefined, rejected: undefined }), v => { shell.slots![i] = v as BodyConstructionCell; });
+    return shell;
+  }
+  private prepareBodyData(shell: BodyPreparationShell): Readonly<{ ok: boolean; disposition: string }> {
     this.bodySeedPoint('BC00', 'before');
     if (!this.bodySeedCarriersMatch() || !this.bodySeedBaseMatches()) return this.fail('binding_mismatch');
     this.bodySeedPoint('BC00', 'after');
