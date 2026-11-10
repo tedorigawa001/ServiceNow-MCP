@@ -1,6 +1,6 @@
 # WF-B body bind：状態型・phase検査と同startの先行borrow／診断slot
 
-Version: draft-0.3 / Date: 2026-11-11 / 設計基準HEAD: `29c53e1` / レビュー追加: `5ec73dd` / 原始field限定実装基準HEAD: `e6cc8cd` / 原始field実装レビュー修正基準HEAD: `41ac31f`。
+Version: draft-0.4 / Date: 2026-11-11 / 設計基準HEAD: `29c53e1` / レビュー追加: `5ec73dd` / 原始field限定実装基準HEAD: `e6cc8cd` / 原始field実装レビュー修正基準HEAD: `41ac31f` / source生成・停止の設計基準HEAD: `5873d16`。
 
 draft-0.2のレビュー修正：`bodyFieldsIntact`のroot側2節（元baseの未使用、BC用shell未生成）は、単独で外しても試験が落ちなかった。root側inspectの`state`／`phase`／`failurePhase`／`reentry`のallowlistと、実body cellから導く`bodyStarts`の投影も観測していなかった。各節の単一注入と除去の対照、4つのallowlistと`bodyStarts`の対照をcompiledへ追加した。最初の失敗位置の上書き防止と、`checkBodyBindFields`冒頭の`#fixed`返却は等価と判断し、§10に記録した。
 
@@ -203,3 +203,9 @@ field検査のbefore／checked／afterはBP／BDではなく、この段階だ�
 BB10〜12の型／projection／旧入口維持に関する部分だけを検証し、BB01〜09やBB10〜12全体を合格にしない。実allocation／E／S／OOM時の診断必着・実予算更新・全体work上界はUnknown。pin・claim消費・bind・構築ready・body起動・request／回収・正式発行・実接続は未接続、全体受付無効・調査保留を維持する。
 
 レビュー修正（`41ac31f`）：root側の`bodyFieldsIntact`は、元base未使用とBC用shell未生成の各節がbeforeで単独に拒否することを固定する。root側projectionの`state`／`phase`／`failurePhase`／`reentry`は許可外値を`unconfirmed`へ投影する。`bodyStarts`は実body cellが`running`なら1と投影する。最初の失敗位置の上書き防止は、2回目のfailが同じphaseで起こるため等価とする。`checkBodyBindFields`冒頭の`#fixed`返却は、外側の`bodyBindFieldsReply`が失敗後の返答を必ずcacheするため、公開APIからは区別できず等価とする。
+
+## 11 正規source生成・同期停止の差分設計（2026-11-11、MDのみ）
+
+[正規生成位置・private issuerと同期停止・失敗時保持 draft-0.1](BEST_PRACTICE_WFB_BODY_SOURCE_ISSUER_STOP_DESIGN.md)で、§3のBP00〜01と§6の停止責務を対に具体化した。BS00〜14とBC00以降の最小分離、元literalの即時issued保持・private発行元照合、metadata未確認時のroot-only停止、失敗cache後も先に停止を記録する新経路専用closeを定義する。
+
+既存field限定入口のshell／source不在検査・旧seed／live／bundleの順序／返答と、`5873d16`のレビュー対照は保持する。旧経路で等価とした節の評価を、失敗後close・別BP位置の履歴を持つ新経路へ流用しない。source生成と停止を対で接続する将来案であり、今回実装は行わない。BP02〜04 pin・claim消費・payload bind・構築ready・body起動・正式発行は未接続、全体受付無効・Unknown・調査保留を維持する。

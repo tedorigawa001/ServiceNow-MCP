@@ -1,6 +1,6 @@
 # WF-B B03後半：先行slot物理配置・固定構築schedule・失敗保持
 
-Version: draft-0.7 / Date: 2026-11-10 / 読み取り基準HEAD: `bf63f16`（レビュー修正基準HEAD: `0932af9`、先行seed実装基準HEAD: `b3f1f3e`、先行seedレビュー修正基準HEAD: `55d4347`、live Initial実装基準HEAD: `435b348`、BC12／13実装基準HEAD: `df6aa19`、bind原始field実装基準HEAD: `e6cc8cd`）。
+Version: draft-0.8 / Date: 2026-11-11 / 読み取り基準HEAD: `bf63f16`（レビュー修正基準HEAD: `0932af9`、先行seed実装基準HEAD: `b3f1f3e`、先行seedレビュー修正基準HEAD: `55d4347`、live Initial実装基準HEAD: `435b348`、BC12／13実装基準HEAD: `df6aa19`、bind原始field実装基準HEAD: `e6cc8cd`、source生成・停止設計基準HEAD: `5873d16`）。
 
 draft-0.3のレビュー修正：§12は「SC01〜05の先行構築部分を検証」としていた。しかしSC05が求めるBC00 base条件・前段confirmedの個別破壊を含め、BC00／各mint前／bootstrap／最終再検査の大半の節は、単独で外しても試験が落ちなかった。freeze・初回rejectedの同一性・slot stage projectionのallowlistも観測していなかった。各節が最初に拒否する位置を`failurePhase`で固定するcompiled対照20件と、freeze・rejected同一性・stage allowlistの対照を追加した。単独で注入できないbase節（capture試行0・exit slot照合・`matchesRun`）は§12に範囲外として明記した。
 
@@ -13,6 +13,8 @@ Status: **先行shell／13carrier・BC01〜11のInitial構築とBC12／13の集�
 BC06〜13の詳細化（2026-11-10、MDのみ）: [live slotの内部型・更新権限とbundle／draft生成境界draft-0.1](BEST_PRACTICE_WFB_BODY_LIVE_SLOT_BUNDLE_DESIGN.md)で、`94d7fde`を基準に§4〜5を具体化した。BC06〜11の初期variant／private writer境界、liveの参照固定と進行fieldの分離、BC12／13の同参照集約・固定順・失敗保持を定義する。既存seedの全freeze・空suffix検査は維持し、追加経路を別に扱う。BD／構築ready・BA／BUは未接続のまま。
 
 bind差分の詳細化（2026-11-10、MDのみ）: [bind状態型・phase検査と同startの先行borrow／診断slot draft-0.1](BEST_PRACTICE_WFB_BODY_BIND_BORROW_DESIGN.md)で、`29c53e1`を基準に§2／§6〜8を具体化した。旧BC用shellの狭い型を維持し、BD01のclaimを同rootの専用source状態へ分離する案、先行expected-source pin／bundleとdraftのborrow、生成順・private発行元確認・失敗prefix保持を定義する。本文のsource shell案はこの差分を優先し、実装・BD05／構築ready・body起動は未承認のまま。
+
+正規source生成と停止の具体化（2026-11-11、MDのみ）: [生成位置・private issuerと同期停止・失敗時保持 draft-0.1](BEST_PRACTICE_WFB_BODY_SOURCE_ISSUER_STOP_DESIGN.md)で、BS先行storageとBC dataの最小分離・全13空carrierの再検査を定義した。同BS shellをBP00〜01のsourceへ結合し、未確認sourceを触らない停止と、固定失敗返答後closeの停止記録を対にする。現行の旧入口と原始fieldレビュー修正を保持する設計案であり、ソース生成・pin・bind・構築ready・bodyの接続は今回行わない。
 
 正式発行口・C実行入口・body起動閉鎖、全体受付無効、Unknown、VM／監視／telemetry調査保留を維持する。§12〜15以外の実装・合成body起動・実接続・実通信・設定変更・Pushを行わない。§1〜11の新型／field名は設計案で、未接続経路の実行承認ではない。実grant／permit、実session／transport／worker、実writer、request／drain、Journal供給、admission／packet／field clear、borrow退役／owner解放・root終端は対象外。
 
