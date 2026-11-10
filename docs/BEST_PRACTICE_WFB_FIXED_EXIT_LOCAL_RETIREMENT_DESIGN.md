@@ -16,6 +16,8 @@ Status: **B03-A／Bに加え、B03-Cの同target局所退役・全post・body未
 
 B03後半の詳細化（2026-11-10、MDのみ）: [active後・body未開始／完了と同duty固定exit契約draft-0.1](BEST_PRACTICE_WFB_BODY_UNWIND_EXIT_DESIGN.md)。基準HEADは`5939864`。現行の未開始専用guardを緩めず、active後未呼出しとnormal／throw／cancelの実帰還、同owner／grant／frame／dutyの結合、退役・診断保持を別variantとして具体化した。§14の実装済み範囲は不変。後半body・active化・(C)証拠は未実装／未承認のまま。
 
+先行配置の詳細化（2026-11-10、MDのみ）: [後半slot物理配置・固定構築schedule・失敗保持draft-0.1](BEST_PRACTICE_WFB_BODY_SLOT_CONSTRUCTION_DESIGN.md)。既存anchorを維持し、後半専用の先行shell／carrierとdataを同rootから同startへ結合する位置・生成順・故障時の保持を具体化した。後半分岐は既存B03-B／Cの完了済み進行状態を流用せず、本書§14の旧経路・保証は変更しない。
+
 ## 1 基準差分と前回答からの訂正
 
 `ba84ea4`後に`08e8fa6`でB-02の失敗分類が修正された。本書はこの修正を取り込み、既知prefixを一律unconfirmedにする旧挙動へ戻さない。

@@ -8,6 +8,8 @@ Status: **詳細設計のみ。未実装・受入試験未実施・body起動未
 
 正式発行口・C実行入口・body起動閉鎖、全体受付無効、Unknown、VM／監視／telemetry調査保留を維持する。本書は将来の合成依存限定仕様案であり、実装・合成body起動・実接続・実通信・設定変更・Pushの承認ではない。実session／transport／worker・実writer・正規generation・Journal供給・admission／packet・field clear・borrow退役・owner解放・GateClosedRecord／root終端は対象外。
 
+先行配置の詳細化（2026-11-10、MDのみ）: [先行slot物理配置・固定構築schedule・失敗保持draft-0.1](BEST_PRACTICE_WFB_BODY_SLOT_CONSTRUCTION_DESIGN.md)で、`bf63f16`を基準に§2／§11-1の配置を具体化した。binding ownerとcell ownerの正規結合を区別し、先行shell／13carrier・data生成順・source／receiver bind・未確認prefix保持を定義する。body／active継続・実unwindは未実装／未承認のまま。
+
 ## 1 現行との差分と流用禁止
 
 `5939864`のB03-Cは同startのcapture実帰還からguard／同duty settling／同target局所退役へ進み、body未開始のheld_not_startedを保持する。phase再検査12対照は追加済みで、本書では未対応扱いに戻さない。
