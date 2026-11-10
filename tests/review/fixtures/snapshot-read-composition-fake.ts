@@ -2271,6 +2271,8 @@ let probeStartAccess: Readonly<{
   bindGuard(a: RetirementStartAssembly, state: ProbeExitGuardState, script: string): boolean;
   runGuard(a: RetirementStartAssembly): Readonly<ProbeExitGuardReply>;
   guardInspect(a: RetirementStartAssembly): Readonly<ProbeExitGuardSnapshot> | undefined;
+  bindLocal(a: RetirementStartAssembly, state: ProbeLocalExitState, script: string): boolean;
+  localInspect(a: RetirementStartAssembly): Readonly<ProbeLocalExitSnapshot> | undefined;
   exitInspect(a: RetirementStartAssembly): Readonly<{ attempted: boolean; retained: boolean; sameDuty: boolean;
     knowledge: 'not_called' | 'known' | 'unknown'; callStarted: boolean; issuerRetained: boolean; receiverRetained: boolean }>;
   inspect(a: RetirementStartAssembly): Readonly<{ bindingRetained: boolean; bindingAttempted: boolean;
@@ -2292,6 +2294,7 @@ class RetirementStartAssembly {
   #exitBundle: ProbeExitPreparationBundle | undefined; #exitIssuedBundle: ProbeExitPreparationBundle | undefined;
   #exitBindStarted = false;
   #guardState: ProbeExitGuardState | undefined; #guardIssued: ProbeExitGuardState | undefined; #guardBindStarted = false; #guardScript = 'g_normal';
+  #localState: ProbeLocalExitState | undefined; #localIssued: ProbeLocalExitState | undefined; #localBindStarted = false; #localScript = 'c_normal';
   readonly #owner = Object.freeze({});
   readonly #binding: PendingSourceBinding;
   readonly #pin: RetirementBindingPin;
@@ -2353,6 +2356,12 @@ class RetirementStartAssembly {
       },
       runGuard: (a: RetirementStartAssembly) => a.frameBoundary('probe_guard'),
       guardInspect: (a: RetirementStartAssembly) => a.guardSnapshot(),
+      bindLocal(a: RetirementStartAssembly, state: ProbeLocalExitState, script: string): boolean {
+        if (a.#localBindStarted) return false;
+        a.#localBindStarted = true; a.#localState = state; a.#localIssued = state; a.#localScript = script;
+        return a.localContextMatches(state, state.guard);
+      },
+      localInspect: (a: RetirementStartAssembly) => a.localSnapshot(),
       exitInspect: (a: RetirementStartAssembly) => Object.freeze({ attempted: a.#exitBindStarted, retained: !!a.#exitBundle,
         sameDuty: !!a.#exitBundle && a.#exitBundle.duty === a.#runDuty && a.#runDuty === a.#runIssuedDuty,
         knowledge: a.#grantIssued ? 'known' as const : a.#grantCallStarted ? 'unknown' as const : 'not_called' as const,
@@ -2467,7 +2476,9 @@ class RetirementStartAssembly {
     if (s.exitUsed) { const c = this.#probeCells!, duty = this.#runIssuedDuty!;
       duty.state = 'unconfirmed'; c.use.state = 'unconfirmed'; c.exit.stage = 'unconfirmed';
     }
-    s.state = 'failed'; return s.fixed ??= this.guardReply(s, 'exit_unconfirmed');
+    s.state = 'failed';
+    if (this.#localIssued && !this.#localIssued.terminal.committed) this.localFailure(this.#localIssued, s, first);
+    return s.fixed ??= this.guardReply(s, 'exit_unconfirmed');
   }
   private guardPoint(s: ProbeExitGuardState, phase: GuardPhase, boundary: GuardBoundary): void {
     s.phase = phase; s.boundary = boundary;
@@ -2526,7 +2537,10 @@ class RetirementStartAssembly {
       if (!this.guardHistoryBoundary(s)) return this.guardFailure(s, 'state_invalid');
       s.branch = this.guardHistory();
       this.guardPoint(s, 'history', 'after');
-      if (s.branch === 'not_entered') { s.state = 'not_entered'; return s.fixed = this.guardReply(s, 'not_entered'); }
+      if (s.branch === 'not_entered') {
+        s.state = 'not_entered'; if (this.#localIssued) this.#localIssued.state = 'not_entered';
+        return s.fixed = this.guardReply(s, 'not_entered');
+      }
       // A bad history without a use obligation must not consume an unrelated duty.
       if (!this.#probeCells!.use.attemptUsed) return this.guardFailure(s, 'state_invalid');
       this.guardPoint(s, 'claim', 'before');
@@ -2535,9 +2549,20 @@ class RetirementStartAssembly {
       this.guardPoint(s, 'branch', 'before');
       if (s.branch === 'unknown' || s.branch === 'invalid') return this.guardFailure(s, 'state_invalid');
       this.guardPoint(s, 'branch', 'after');
+      if (this.#localIssued) {
+        this.localFinish(this.#localIssued, s);
+        return s.fixed = this.guardReply(s, this.#localIssued.terminal.committed ? 'held_not_started' : 'exit_unconfirmed');
+      }
       // B03-B deliberately stops at settling. No retirement operation or terminal success.
       return s.fixed = this.guardReply(s, 'settling_held');
-    } catch { s.captureFirst = this.#captureFirst; return this.guardFailure(s, 'construction_unconfirmed'); }
+    } catch {
+      s.captureFirst = this.#captureFirst;
+      if (this.#localIssued?.terminal.committed) {
+        this.localFailure(this.#localIssued, s, 'construction_unconfirmed');
+        return this.guardReply(s, 'held_not_started');
+      }
+      return this.guardFailure(s, 'construction_unconfirmed');
+    }
     finally { s.inProgress = false; }
   }
   private guardSnapshot(): Readonly<ProbeExitGuardSnapshot> | undefined {
@@ -2550,6 +2575,145 @@ class RetirementStartAssembly {
       issuerRetained: this.#grantIssued !== undefined, currentRetained: this.#probeCells?.grant.current !== undefined,
       issuedRetained: this.#probeCells?.grant.issued !== undefined, rejectedRetained: this.#probeCells?.grant.rejected !== undefined,
       captureReplyRetained: s.captureReply !== undefined, stopRequested: this.#captureStop });
+  }
+  private localContextMatches(p: ProbeLocalExitState, g: ProbeExitGuardState): boolean {
+    return p === this.#localState && p === this.#localIssued && p[PROBE_LOCAL_EXIT] === true
+      && g === this.#guardIssued && this.guardIdentityMatches(g) && p.guard === g && p.bundle === g.bundle
+      && p.duty === this.#runIssuedDuty && p.control === g.control && p.retirement.duty === p.duty && p.retirement.control === p.control
+      && p.absence.guard === g && p.absence.control === p.control && p.terminal.duty === p.duty && p.terminal.guard === g
+      && p.terminal.absence === p.absence && p.terminal.retirement === p.retirement && p.terminal.anchor === g.bundle.terminal;
+  }
+  private localRouteAbsent(g: ProbeExitGuardState): boolean {
+    const c = this.#probeCells!;
+    return g.returned && g.routeUsed && g.inProgress && !this.#captureInProgress
+      && c.body.state === 'not_started' && c.body.outcome === 'none' && g.binding.draft.executable === false && !this.#claim.spent;
+  }
+  private localUnsealedReady(p: ProbeLocalExitState, g: ProbeExitGuardState): boolean {
+    const c = this.#probeCells!, d = this.#runIssuedDuty!;
+    return this.localContextMatches(p, g) && this.localRouteAbsent(g) && g.state === 'settling' && g.exitUsed
+      && d.state === 'settling' && d.attemptUsed && c.use.state === 'exiting' && c.use.attemptUsed
+      && c.exit.stage === 'empty' && c.exit.candidate === undefined && c.exit.issued === undefined && c.exit.accepted === undefined
+      && !c.exit.revoked && !p.terminal.committed;
+  }
+  private localHistoryMatches(g: ProbeExitGuardState): boolean {
+    const c = this.#probeCells!;
+    if (g.branch === 'not_called') return !this.#grantCallStarted && this.#grantIssued === undefined && c.grant.stage === 'empty'
+      && c.grant.current === undefined && c.grant.issued === undefined && c.grant.rejected === undefined && !c.grant.unresolved;
+    return g.branch === 'known' && this.#grantCallStarted && this.#grantIssued !== undefined && c.grant.stage === 'provisional'
+      && !c.grant.unresolved && c.grant.rejected === undefined && this.capturedGrantMatches(this.#runIssuedLink!);
+  }
+  private localTargetOpen(target: CanonicalProbeGrant): boolean {
+    // Owner-local qualification only; the immutable grant object and all custody references survive.
+    const r = this.#localIssued?.retirement;
+    return target === this.#grantIssued && !(r?.blocked === true && r.blockedTarget === target);
+  }
+  private localRetirementPost(p: ProbeLocalExitState): boolean {
+    const r = p.retirement, c = this.#probeCells!;
+    return r.used && r.blocked && r.target !== undefined && r.target === this.#grantIssued && r.blockedTarget === r.target
+      && !this.localTargetOpen(r.target) && c.grant.stage === 'revoked' && !c.grant.unresolved && c.grant.rejected === undefined
+      && this.capturedGrantMatches(this.#runIssuedLink!);
+  }
+  private localAllPost(p: ProbeLocalExitState, g: ProbeExitGuardState): boolean {
+    const r = p.retirement;
+    if (!this.localUnsealedReady(p, g) || p.absence.kind !== 'not_started' || !p.absence.returned || !p.absence.routeClosed
+      || !p.terminal.prepared || p.terminal.kind !== 'none' || p.terminal.candidate !== undefined
+      || p.terminal.issued !== undefined || p.terminal.accepted !== undefined) return false;
+    if (g.branch === 'known') return r.kind === 'confirmed' && r.confirmed && r.confirmedTarget === this.#grantIssued && this.localRetirementPost(p);
+    return g.branch === 'not_called' && r.kind === 'not_required' && r.confirmed && !r.used && !r.blocked
+      && r.target === undefined && r.blockedTarget === undefined && r.confirmedTarget === undefined && this.localHistoryMatches(g);
+  }
+  private localFailure(p: ProbeLocalExitState, g: ProbeExitGuardState, reason: ProbeRunFirst): void {
+    if (p.first === 'none') { p.first = reason; p.failurePhase = p.phase; p.failureBoundary = p.boundary; }
+    if (p.terminal.committed) { p.deliveryUnconfirmed = true; return; }
+    p.state = 'failed'; p.terminal.kind = 'exit_unconfirmed';
+    if (!p.retirement.confirmed) p.retirement.kind = 'unconfirmed';
+    if (g.first === 'none') g.first = reason;
+    g.state = 'failed';
+    if (g.exitUsed) { const d = this.#runIssuedDuty!, c = this.#probeCells!;
+      d.state = 'unconfirmed'; c.use.state = 'unconfirmed'; c.exit.stage = 'unconfirmed';
+    }
+  }
+  private localPoint(p: ProbeLocalExitState, phase: LocalPhase, boundary: Exclude<GuardBoundary, 'none'>): void {
+    p.phase = phase; p.boundary = boundary;
+    const d = this.#runIssuedDuty!;
+    d.phase = ['prepare', 'history'].includes(phase) ? 'history' : ['attempt', 'block', 'revoke', 'confirm'].includes(phase) ? 'retire'
+      : phase === 'project' ? 'project' : 'record'; d.boundary = boundary;
+    const suffix = this.#localScript.replace(/^c_(?:empty_|known_first_)?/, '');
+    if (suffix === `stop_${phase}_${boundary}`) this.#captureStop = true;
+    if (suffix === `fault_${phase}_${boundary}`) throw Error('private_local_exit_fault');
+    if (suffix === `reenter_${phase}_${boundary}`) p.reentry = this.guardFrame().disposition;
+    if (phase === 'prepare' && boundary === 'before') {
+      const f = this.#localScript.startsWith('c_context_') ? this.#localScript.slice(10) : '';
+      if (['guard', 'bundle', 'duty', 'control'].includes(f)) Object.defineProperty(p, f, { value: Object.freeze({ ...(p as unknown as Record<string, object>)[f] }) });
+      if (f === 'copy') this.#localState = { ...p };
+      if (f === 'brand') Object.defineProperty(p, PROBE_LOCAL_EXIT, { value: false });
+    }
+    if (this.#localScript === 'c_mix_target' && phase === 'block' && boundary === 'before') p.retirement.target = Object.freeze({ ...p.retirement.target! });
+    if (this.#localScript === 'c_mix_post_target' && phase === 'post' && boundary === 'before') p.retirement.target = Object.freeze({ ...p.retirement.target! });
+    if (this.#localScript === 'c_mix_terminal_duty' && phase === 'post' && boundary === 'before') Object.defineProperty(p.terminal, 'duty', { value: { ...p.duty } });
+  }
+  private localFinish(p: ProbeLocalExitState, g: ProbeExitGuardState): void {
+    p.state = 'running';
+    try {
+      this.localPoint(p, 'prepare', 'before');
+      if (!this.localUnsealedReady(p, g)) { this.localFailure(p, g, 'binding_mismatch'); return; }
+      this.localPoint(p, 'prepare', 'after');
+      this.localPoint(p, 'history', 'before');
+      if (!this.localHistoryMatches(g)) { this.localFailure(p, g, 'state_invalid'); return; }
+      this.localPoint(p, 'history', 'after');
+      const r = p.retirement;
+      if (g.branch === 'known') {
+        this.localPoint(p, 'attempt', 'before');
+        if (!this.localUnsealedReady(p, g) || !this.localHistoryMatches(g) || r.used || !this.localTargetOpen(this.#grantIssued!)) {
+          this.localFailure(p, g, 'state_invalid'); return;
+        }
+        r.target = this.#grantIssued!; r.used = true; r.kind = 'attempting';
+        this.localPoint(p, 'attempt', 'after');
+        this.localPoint(p, 'block', 'before');
+        if (!this.localContextMatches(p, g) || r.target !== this.#grantIssued) { this.localFailure(p, g, 'binding_mismatch'); return; }
+        r.blockedTarget = r.target; r.blocked = true;
+        this.localPoint(p, 'block', 'after');
+        this.localPoint(p, 'revoke', 'before'); this.#probeCells!.grant.stage = 'revoked';
+        this.localPoint(p, 'revoke', 'after');
+        this.localPoint(p, 'confirm', 'before');
+        if (!this.localUnsealedReady(p, g) || !this.localRetirementPost(p)) { this.localFailure(p, g, 'state_invalid'); return; }
+        r.confirmedTarget = r.target; r.confirmed = true; r.kind = 'confirmed';
+        this.localPoint(p, 'confirm', 'after');
+      } else {
+        this.localPoint(p, 'not_required', 'before');
+        if (!this.localUnsealedReady(p, g) || !this.localHistoryMatches(g)) { this.localFailure(p, g, 'state_invalid'); return; }
+        r.kind = 'not_required'; r.confirmed = true;
+        this.localPoint(p, 'not_required', 'after');
+      }
+      this.localPoint(p, 'absence', 'before');
+      if (!this.localUnsealedReady(p, g)) { this.localFailure(p, g, 'state_invalid'); return; }
+      p.absence.kind = 'not_started'; p.absence.returned = true; p.absence.routeClosed = true;
+      this.localPoint(p, 'absence', 'after');
+      this.localPoint(p, 'record', 'before'); p.terminal.prepared = true; this.localPoint(p, 'record', 'after');
+      this.localPoint(p, 'post', 'before');
+      if (!this.localAllPost(p, g)) { this.localFailure(p, g, 'state_invalid'); return; }
+      this.localPoint(p, 'post', 'after');
+      this.localPoint(p, 'commit', 'before');
+      if (!this.localAllPost(p, g)) { this.localFailure(p, g, 'state_invalid'); return; }
+      commitLocalNotStarted(p, this.#probeCells!, this.#runIssuedDuty!);
+      this.localPoint(p, 'commit', 'after');
+      this.localPoint(p, 'project', 'before'); this.localPoint(p, 'project', 'after');
+    } catch { this.localFailure(p, g, 'construction_unconfirmed'); }
+  }
+  private localSnapshot(): Readonly<ProbeLocalExitSnapshot> | undefined {
+    const p = this.#localIssued; if (!p) return undefined;
+    const r = p.retirement, a = p.absence, t = p.terminal;
+    return Object.freeze({ state: p.state, first: p.first, phase: p.phase, boundary: p.boundary,
+      failurePhase: p.failurePhase, failureBoundary: p.failureBoundary, deliveryUnconfirmed: p.deliveryUnconfirmed, reentry: p.reentry,
+      sameDuty: p.duty === this.#runIssuedDuty && t.duty === this.#runIssuedDuty,
+      retirement: Object.freeze({ kind: r.kind, used: r.used, blocked: r.blocked, confirmed: r.confirmed, targetRetained: r.target !== undefined,
+        blockedTargetRetained: r.blockedTarget !== undefined, confirmedTargetRetained: r.confirmedTarget !== undefined,
+        sameTarget: r.target !== undefined && r.target === r.blockedTarget && r.target === r.confirmedTarget && r.target === this.#grantIssued,
+        targetOpen: this.#grantIssued !== undefined && this.localTargetOpen(this.#grantIssued) }),
+      absence: Object.freeze({ kind: a.kind, returned: a.returned, routeClosed: a.routeClosed }),
+      terminal: Object.freeze({ kind: t.kind, prepared: t.prepared, committed: t.committed, sameDuty: t.duty === this.#runIssuedDuty,
+        sameAbsence: t.absence === a, sameRetirement: t.retirement === r, candidateRetained: t.candidate !== undefined,
+        issuedRetained: t.issued !== undefined, acceptedRetained: t.accepted !== undefined }) });
   }
   private captureReply(ok: boolean, disposition: string): Readonly<ProbeGrantCaptureReply> {
     return Object.freeze({ ok, disposition, first: this.#captureFirst });
@@ -3019,7 +3183,7 @@ const PROBE_DUTY: unique symbol = Symbol('probe-exit-duty');
 interface ProbeRunLink { readonly [PROBE_RUN_LINK]: true; readonly origin: object; readonly binding: ProbeFrameBinding;
   readonly cells: ProbeCellBundle; readonly frame: object; readonly entry: object; readonly exit: object }
 type ExitDutyState = { state: 'not_owed'; attemptUsed: false } | { state: 'owed'; attemptUsed: false }
-  | { state: 'settling' | 'settled_unsealed'; attemptUsed: true } | { state: 'unconfirmed'; attemptUsed: boolean };
+  | { state: 'settling' | 'settled_not_started' | 'settled_unsealed'; attemptUsed: true } | { state: 'unconfirmed'; attemptUsed: boolean };
 type DutyExitPhase = 'none' | 'guard' | 'history' | 'retire' | 'record' | 'project';
 type DutyExitBoundary = 'none' | 'before' | 'after';
 type DutyExitProgress = { phase: 'none'; boundary: 'none' }
@@ -3090,6 +3254,47 @@ interface ProbeExitGuardSnapshot { readonly state: string; readonly first: Probe
   readonly captureReplyRetained: boolean; readonly stopRequested: boolean }
 const GUARD_IDENTITY_FIELDS = Object.freeze(['bundle', 'control', 'link', 'duty', 'binding', 'cells', 'gate', 'scope', 'owner', 'pin',
   'epoch', 'packet', 'frame', 'entry', 'exit']);
+const PROBE_LOCAL_EXIT: unique symbol = Symbol('private-probe-local-exit');
+type LocalPhase = 'none' | 'prepare' | 'history' | 'attempt' | 'block' | 'revoke' | 'confirm' | 'not_required' | 'absence' | 'record' | 'post' | 'commit' | 'project';
+interface LocalRetirementStorage {
+  readonly duty: FixedExitDuty; readonly control: ProbeExitControl;
+  kind: 'not_attempted' | 'attempting' | 'confirmed' | 'not_required' | 'unconfirmed'; used: boolean; blocked: boolean; confirmed: boolean;
+  target: CanonicalProbeGrant | undefined; blockedTarget: CanonicalProbeGrant | undefined; confirmedTarget: CanonicalProbeGrant | undefined;
+}
+interface LocalAbsenceStorage { readonly guard: ProbeExitGuardState; readonly control: ProbeExitControl;
+  kind: 'unobserved' | 'not_started'; returned: boolean; routeClosed: boolean }
+interface LocalTerminalStorage { readonly duty: FixedExitDuty; readonly guard: ProbeExitGuardState; readonly absence: LocalAbsenceStorage;
+  readonly retirement: LocalRetirementStorage; readonly anchor: ProbeNotStartedTerminalSlot;
+  kind: 'none' | 'held_not_started' | 'exit_unconfirmed'; prepared: boolean; committed: boolean;
+  readonly candidate: undefined; readonly issued: undefined; readonly accepted: undefined }
+interface ProbeLocalExitState { readonly [PROBE_LOCAL_EXIT]: true; readonly guard: ProbeExitGuardState; readonly bundle: ProbeExitPreparationBundle;
+  readonly duty: FixedExitDuty; readonly control: ProbeExitControl; readonly retirement: LocalRetirementStorage; readonly absence: LocalAbsenceStorage;
+  readonly terminal: LocalTerminalStorage; state: 'idle' | 'running' | 'held_not_started' | 'failed' | 'not_entered';
+  first: ProbeRunFirst; phase: LocalPhase; boundary: GuardBoundary; failurePhase: LocalPhase; failureBoundary: GuardBoundary;
+  deliveryUnconfirmed: boolean; reentry: string }
+interface ProbeLocalExitSnapshot { readonly state: string; readonly first: ProbeRunFirst; readonly phase: LocalPhase; readonly boundary: GuardBoundary;
+  readonly failurePhase: LocalPhase; readonly failureBoundary: GuardBoundary; readonly deliveryUnconfirmed: boolean; readonly reentry: string;
+  readonly sameDuty: boolean; readonly retirement: Readonly<{ kind: string; used: boolean; blocked: boolean; confirmed: boolean; targetRetained: boolean;
+    blockedTargetRetained: boolean; confirmedTargetRetained: boolean; sameTarget: boolean; targetOpen: boolean }>;
+  readonly absence: Readonly<{ kind: string; returned: boolean; routeClosed: boolean }>;
+  readonly terminal: Readonly<{ kind: string; prepared: boolean; committed: boolean; sameDuty: boolean; sameAbsence: boolean; sameRetirement: boolean;
+    candidateRetained: boolean; issuedRetained: boolean; acceptedRetained: boolean }> }
+interface ProbeLocalExitReply { readonly model: 'wfb-probe-local-exit-1'; readonly ok: false; readonly authority: 'none'; readonly execution: 'closed';
+  readonly formalIssuance: 'closed'; readonly wholeRunAdmission: 'disabled'; readonly implementation: 'unknown'; readonly investigations: 'on_hold';
+  readonly first: ProbeRunFirst; readonly captureFirst: ProbeRunFirst; readonly disposition: string }
+function commitLocalNotStarted(p: ProbeLocalExitState, cells: ProbeCellBundle, duty: FixedExitDuty): void {
+  // Direct writes only: the last all-post guard precedes this private linearization point.
+  duty.state = 'settled_not_started'; cells.use.state = 'exiting'; cells.exit.stage = 'unsealed'; cells.exit.revoked = p.retirement.kind === 'confirmed';
+  p.terminal.kind = 'held_not_started'; p.terminal.committed = true; p.state = 'held_not_started';
+}
+const LOCAL_KNOWN_PHASES = Object.freeze(['prepare', 'history', 'attempt', 'block', 'revoke', 'confirm', 'absence', 'record', 'post', 'commit', 'project'] as const);
+const LOCAL_EMPTY_PHASES = Object.freeze(['prepare', 'history', 'not_required', 'absence', 'record', 'post', 'commit', 'project'] as const);
+function localGuardScript(script: string): string {
+  if (script.startsWith('c_empty_')) return 'g_not_called';
+  if (script.startsWith('c_known_first_')) return 'g_known_issuer';
+  return ['c_not_called', 'c_reserved_not_called', 'c_known_issuer', 'c_unknown', 'c_not_entered', 'c_stop_capture_before', 'c_stop_capture_claim', 'c_stop_capture_known'].includes(script)
+    || script.startsWith('c_invalid_') ? 'g_' + script.slice(2) : 'g_normal';
+}
 function guardCaptureScript(script: string): string {
   const plans: Readonly<Record<string, string>> = { g_not_called: 'fault_claim_after', g_reserved_not_called: 'fault_issue_attempt',
     g_known_issuer: 'fault_issue_issued', g_unknown: 'issue_throw', g_not_entered: 'fault_claim_before',
@@ -3348,8 +3553,11 @@ class CanonicalGateDraftRoot {
   #exitPhase = 0; #exitBoundary = 'none'; #exitFirst: ProbeRunFirst = 'none';
   #exitBindRefusal = 'none'; #exitReentry = 'none'; #exitFixed: Readonly<ProbeExitPreparationReply> | undefined;
   #guardOwn: ProbeExitGuardState | undefined; #guardConstruction = 'not_started'; #guardRunReply: Readonly<ProbeExitGuardReply> | undefined;
+  readonly #localSlots: { stage: SupplyConstructionStage; value: object | undefined }[];
+  #localOwn: ProbeLocalExitState | undefined; #localPhase = 0; #localBoundary = 'none';
+  #localReply: Readonly<ProbeLocalExitReply> | undefined;
   constructor(private readonly script: string, admitted: boolean, private readonly probePreparation = false, private readonly runPreparation = false,
-    private readonly grantCapture = false, private readonly exitPreparation = false, private readonly exitGuard = false) {
+    private readonly grantCapture = false, private readonly exitPreparation = false, private readonly exitGuard = false, private readonly localExit = false) {
     this.#failure = { first: admitted ? 'none' : 'input_rejected', phase: 0, boundary: 'none' };
     this.#slots = Array.from({ length: 37 }, () => ({ stage: 'not_started', value: undefined }));
     this.#probeSlots = probePreparation ? Array.from({ length: 8 }, () => ({ stage: 'not_started', value: undefined })) : [];
@@ -3357,6 +3565,7 @@ class CanonicalGateDraftRoot {
     this.#runSlots = runPreparation ? Array.from({ length: 4 }, () => ({ stage: 'not_started', value: undefined })) : [];
     this.#exitSlots = exitPreparation ? Array.from({ length: 5 }, () => ({ stage: 'not_started', value: undefined })) : [];
     this.#exitIssued = exitPreparation ? Array(5).fill(undefined) : [];
+    this.#localSlots = localExit ? Array.from({ length: 4 }, () => ({ stage: 'not_started', value: undefined })) : [];
   }
   private reply(ok: boolean, disposition: string) { return Object.freeze({ ok, disposition, first: this.#failure.first }); }
   private fail(reason: string) {
@@ -3608,10 +3817,34 @@ class CanonicalGateDraftRoot {
       phase: 'none', boundary: 'none', failurePhase: 'none', failureBoundary: 'none', reentry: 'none', fixed: undefined, captureReply: undefined };
     this.#guardOwn = s; this.#guardConstruction = 'retained';
     if (this.script === 'g_setup_after') throw Error('private_guard_setup');
-    if (!probeStartAccess.bindGuard(b.target.start, s, this.script)) return false;
+    if (!probeStartAccess.bindGuard(b.target.start, s, this.localExit ? localGuardScript(this.script) : this.script)) return false;
     this.#guardConstruction = 'bound';
     if (this.script === 'g_setup_post') throw Error('private_guard_setup');
     this.#guardConstruction = 'confirmed'; return true;
+  }
+  private localConstructionPoint(n: number, boundary: string): void {
+    this.#localPhase = n; this.#localBoundary = boundary;
+    if (this.script === `c_setup_${boundary}_${n}`) throw Error('private_local_setup');
+  }
+  private localMint<T extends object>(n: number, operation: () => T): T {
+    this.localConstructionPoint(n, 'before'); const slot = this.#localSlots[n - 1];
+    slot.stage = 'attempting'; this.localConstructionPoint(n, 'attempt');
+    const value = operation(); slot.value = value; slot.stage = 'provisional'; this.localConstructionPoint(n, 'after');
+    slot.stage = 'confirmed'; this.localConstructionPoint(n, 'done'); return value;
+  }
+  private prepareLocalState(): boolean {
+    // A's immutable slots remain anchors. These prior live views share their owner/control/duty.
+    const guard = this.#guardOwn!, duty = this.#issuedRunDuty!, control = guard.control, bundle = guard.bundle;
+    const retirement = this.localMint(1, (): LocalRetirementStorage => ({ duty, control, kind: 'not_attempted', used: false,
+      blocked: false, confirmed: false, target: undefined, blockedTarget: undefined, confirmedTarget: undefined }));
+    const absence = this.localMint(2, (): LocalAbsenceStorage => ({ guard, control, kind: 'unobserved', returned: false, routeClosed: false }));
+    const terminal = this.localMint(3, (): LocalTerminalStorage => ({ duty, guard, absence, retirement, anchor: bundle.terminal, kind: 'none',
+      prepared: false, committed: false, candidate: undefined, issued: undefined, accepted: undefined }));
+    const p = this.localMint(4, (): ProbeLocalExitState => ({ [PROBE_LOCAL_EXIT]: true, guard, bundle, duty, control, retirement, absence, terminal,
+      state: 'idle', first: 'none', phase: 'none', boundary: 'none', failurePhase: 'none', failureBoundary: 'none', deliveryUnconfirmed: false, reentry: 'none' }));
+    this.#localOwn = p; this.localConstructionPoint(4, 'bind');
+    if (!probeStartAccess.bindLocal(this.#issuedFrameBinding!.target.start, p, this.script)) return false;
+    this.localConstructionPoint(4, 'post'); return true;
   }
   prepare() {
     if (this.#fixed) return this.#fixed;
@@ -3663,6 +3896,7 @@ class CanonicalGateDraftRoot {
       if (this.runPreparation && !this.prepareRun()) return this.fail('binding_mismatch');
       if (this.exitPreparation && !this.prepareExitSlots()) return this.fail('binding_mismatch');
       if (this.exitGuard && !this.prepareGuardState()) return this.fail('binding_mismatch');
+      if (this.localExit && !this.prepareLocalState()) return this.fail('binding_mismatch');
       (this.#slots[1].value as { state: string }).state = 'bound'; this.#ready = true; return this.reply(true, 'draft_held');
     } catch { return this.fail(this.exitPreparation && this.#closed ? 'closed' : 'construction_unconfirmed'); }
     finally { this.#frame = false; }
@@ -3752,6 +3986,63 @@ class CanonicalGateDraftRoot {
       enterUsed: anchor.enterUsed, grantIssues: capture?.grantIssues ?? 0, grantAttempts: capture?.grantAttempts ?? 0,
       capturePrefix: capture ? runEnum(capture.prefix, ['none', 'not_claimed', 'claimed_not_issued', 'grant_known', 'grant_unknown'], 'unconfirmed') : 'not_created',
       exitAttempts: s?.exitUsed === true ? 1 : 0, retirementAttempts: 0, terminalCommits: 0, bodyStarts: 0, exitRecords: 0 });
+  }
+  localExitReply(disposition: string, captureFirst: ProbeRunFirst = 'none', priorFirst: ProbeRunFirst = 'none'): Readonly<ProbeLocalExitReply> {
+    const start = this.#issuedFrameBinding?.target.start, p = start ? probeStartAccess.localInspect(start) : undefined;
+    return Object.freeze({ model: 'wfb-probe-local-exit-1', ok: false, authority: 'none', execution: 'closed', formalIssuance: 'closed',
+      wholeRunAdmission: 'disabled', implementation: 'unknown', investigations: 'on_hold',
+      first: p?.first !== undefined && p.first !== 'none' ? runFirst(p.first) : priorFirst !== 'none' ? priorFirst : runFirst(this.#failure.first),
+      captureFirst, disposition: runEnum(disposition, ['draft_held', 'duplicate_preparation', 'blocked_frame_execution', 'not_ready', 'closed',
+        'input_rejected', 'binding_mismatch', 'construction_unconfirmed', 'held_not_started', 'exit_unconfirmed', 'not_entered'], 'internal_unconfirmed') });
+  }
+  runLocalExit(): Readonly<ProbeLocalExitReply> {
+    if (this.#localReply) return this.#localReply;
+    const r = this.runExitGuard(), value = this.localExitReply(r.disposition, r.captureFirst, r.first);
+    if (this.#guardOwn?.routeUsed || this.#fixed) this.#localReply = value; return value;
+  }
+  closeLocalExit(): Readonly<ProbeLocalExitReply> {
+    const r = this.closeExitGuard(); return this.#localReply ?? this.localExitReply(r.disposition, r.captureFirst, r.first);
+  }
+  inspectLocalExit() {
+    const base = this.inspectExitGuard(), start = this.#issuedFrameBinding?.target.start;
+    const p = start ? probeStartAccess.localInspect(start) : undefined;
+    return Object.freeze({ model: 'wfb-probe-local-exit-1', authority: 'none', execution: 'closed', formalIssuance: 'closed',
+      wholeRunAdmission: 'disabled', implementation: 'unknown', investigations: 'on_hold', constructionFirst: base.constructionFirst,
+      construction: Object.freeze({ ready: this.#ready, phase: this.#localPhase,
+        boundary: runEnum(this.#localBoundary, ['none', 'before', 'attempt', 'after', 'done', 'bind', 'post'], 'unconfirmed'),
+        stages: Object.freeze(this.#localSlots.map(s => runEnum(s.stage, ['not_started', 'attempting', 'provisional', 'confirmed'], 'unconfirmed'))),
+        retained: this.#localSlots.filter(s => s.value !== undefined).length }),
+      anchors: Object.freeze({ preparation: base.anchor.preparation, binding: base.anchor.binding, control: base.anchor.control }),
+      duty: base.anchor.duty, start: base.anchor.start, guard: base.progress,
+      local: Object.freeze({ state: p ? runEnum(p.state, ['idle', 'running', 'held_not_started', 'failed', 'not_entered'], 'unconfirmed') : 'not_created',
+        first: p ? runFirst(p.first) : 'none',
+        phase: p ? runEnum(p.phase, ['none', ...LOCAL_KNOWN_PHASES, 'not_required'], 'unconfirmed') : 'not_created',
+        boundary: p ? runEnum(p.boundary, ['none', 'before', 'after'], 'unconfirmed') : 'not_created',
+        failurePhase: p ? runEnum(p.failurePhase, ['none', ...LOCAL_KNOWN_PHASES, 'not_required'], 'unconfirmed') : 'not_created',
+        failureBoundary: p ? runEnum(p.failureBoundary, ['none', 'before', 'after'], 'unconfirmed') : 'not_created',
+        deliveryUnconfirmed: p?.deliveryUnconfirmed === true, sameDuty: p?.sameDuty === true,
+        reentry: runEnum(p?.reentry, ['none', 'run_in_progress'], 'unconfirmed') }),
+      retirement: Object.freeze({ kind: p ? runEnum(p.retirement.kind, ['not_attempted', 'attempting', 'confirmed', 'not_required', 'unconfirmed'], 'unconfirmed') : 'not_created',
+        attemptUsed: p?.retirement.used === true, blocked: p?.retirement.blocked === true, confirmed: p?.retirement.confirmed === true,
+        targetRetained: p?.retirement.targetRetained === true, blockedTargetRetained: p?.retirement.blockedTargetRetained === true,
+        confirmedTargetRetained: p?.retirement.confirmedTargetRetained === true, sameTarget: p?.retirement.sameTarget === true,
+        targetOpen: p?.retirement.targetOpen === true }),
+      absence: Object.freeze({ kind: p ? runEnum(p.absence.kind, ['unobserved', 'not_started'], 'unconfirmed') : 'not_created',
+        returned: p?.absence.returned === true, routeClosed: p?.absence.routeClosed === true }),
+      terminal: Object.freeze({ kind: p ? runEnum(p.terminal.kind, ['none', 'held_not_started', 'exit_unconfirmed'], 'unconfirmed') : 'not_created',
+        prepared: p?.terminal.prepared === true, committed: p?.terminal.committed === true, sameDuty: p?.terminal.sameDuty === true,
+        sameAbsence: p?.terminal.sameAbsence === true, sameRetirement: p?.terminal.sameRetirement === true,
+        candidateRetained: p?.terminal.candidateRetained === true, issuedRetained: p?.terminal.issuedRetained === true,
+        acceptedRetained: p?.terminal.acceptedRetained === true, exitAccepted: false }),
+      enterUsed: base.enterUsed, grantIssues: base.grantIssues, grantAttempts: base.grantAttempts, exitAttempts: base.exitAttempts,
+      grantState: this.#issuedCells ? runEnum(this.#issuedCells.grant.stage, ['empty', 'attempting', 'provisional', 'active', 'revoked', 'unconfirmed'], 'unconfirmed') : 'not_created',
+      grantUnresolved: this.#issuedCells?.grant.unresolved === true,
+      probeExit: Object.freeze({ stage: this.#issuedCells ? runEnum(this.#issuedCells.exit.stage, ['empty', 'unsealed', 'unconfirmed'], 'unconfirmed') : 'not_created',
+        revoked: this.#issuedCells?.exit.revoked === true, acceptedRetained: this.#issuedCells?.exit.accepted !== undefined }),
+      probeBody: Object.freeze({ state: this.#issuedCells ? runEnum(this.#issuedCells.body.state, ['not_started', 'running', 'returned', 'threw', 'cancelled', 'unconfirmed'], 'unconfirmed') : 'not_created',
+        outcome: this.#issuedCells ? runEnum(this.#issuedCells.body.outcome, ['none', 'return', 'throw', 'cancel'], 'unconfirmed') : 'not_created' }),
+      retirementAttempts: p?.retirement.used === true ? 1 : 0, terminalCommits: p?.terminal.committed === true ? 1 : 0,
+      bodyStarts: 0, exitRecords: 0, journalSupply: 'not_connected', rootFinish: 'not_called' });
   }
   exitPreparationReply(ok: boolean, disposition: string): Readonly<ProbeExitPreparationReply> {
     if (this.#exitFixed) return this.#exitFixed;
@@ -3991,6 +4282,28 @@ export function createProbeExitGuardFake(...args: readonly unknown[]) {
     checkLegacy: (...xs: readonly unknown[]) => call(xs, () => a.checkGuardBodyClosed(true)),
     close: (...xs: readonly unknown[]) => { if (xs.length) return call(xs, () => a.close()); return a.closeExitGuard(); },
     inspect: (...xs: readonly unknown[]) => { if (xs.length) a.rejectInput(); return a.inspectExitGuard(); } });
+}
+
+export function createProbeLocalExitFake(...args: readonly unknown[]) {
+  const script = args.length ? args[0] : 'c_normal';
+  const scripts = ['c_normal', 'c_not_called', 'c_reserved_not_called', 'c_known_issuer', 'c_unknown', 'c_not_entered',
+    'c_stop_capture_before', 'c_stop_capture_claim', 'c_stop_capture_known', 'c_mix_target', 'c_mix_post_target', 'c_mix_terminal_duty',
+    ...['guard', 'bundle', 'duty', 'control', 'copy', 'brand'].map(f => 'c_context_' + f),
+    ...['copy', 'issued_copy', 'brand', 'extra', 'bindingOrigin', 'gate', 'owner', 'pin', 'epoch', 'frame', 'draft', 'entry', 'exit', 'phase'].map(f => 'c_invalid_' + f),
+    ...[1, 2, 3, 4].flatMap(n => ['before', 'attempt', 'after', 'done', ...(n === 4 ? ['bind', 'post'] : [])].map(b => `c_setup_${b}_${n}`)),
+    ...[['', LOCAL_KNOWN_PHASES], ['empty_', LOCAL_EMPTY_PHASES], ['known_first_', LOCAL_KNOWN_PHASES]].flatMap(([prefix, phases]) =>
+      (phases as readonly string[]).flatMap(p => ['before', 'after'].flatMap(b => ['fault', 'stop', 'reenter'].map(k => `c_${prefix}${k}_${p}_${b}`))))];
+  const admitted = args.length <= 1 && typeof script === 'string' && scripts.includes(script);
+  const a = new CanonicalGateDraftRoot(admitted ? script as string : 'c_normal', admitted, true, true, false, true, true, true);
+  const call = (xs: readonly unknown[], op: () => Readonly<{ ok: boolean; disposition: string }>) => {
+    const r = xs.length ? a.rejectInput() : op(); return a.localExitReply(r.disposition);
+  };
+  return Object.freeze({ prepare: (...xs: readonly unknown[]) => call(xs, () => a.prepare()),
+    run: (...xs: readonly unknown[]) => { if (xs.length) return call(xs, () => a.prepare()); return a.runLocalExit(); },
+    check: (...xs: readonly unknown[]) => call(xs, () => a.checkGuardBodyClosed()),
+    checkLegacy: (...xs: readonly unknown[]) => call(xs, () => a.checkGuardBodyClosed(true)),
+    close: (...xs: readonly unknown[]) => { if (xs.length) return call(xs, () => a.close()); return a.closeLocalExit(); },
+    inspect: (...xs: readonly unknown[]) => { if (xs.length) a.rejectInput(); return a.inspectLocalExit(); } });
 }
 
 // Diagnostics-only synthetic generation binding. No journal/fact/scope/producer references escape.

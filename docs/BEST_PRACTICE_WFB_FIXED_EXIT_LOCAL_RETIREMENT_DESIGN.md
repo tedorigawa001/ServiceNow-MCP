@@ -1,12 +1,14 @@
 # WF-B B-03前半：固定exit・局所退役・同duty責務保持の接続差分
 
-Version: draft-0.3 / Date: 2026-11-10 / 読み取り基準HEAD: `08e8fa6`（B03-Aレビュー修正基準HEAD: `50c31be`、B03-Bレビュー修正基準HEAD: `ff7e38b`）。
+Version: draft-0.4 / Date: 2026-11-10 / 読み取り基準HEAD: `08e8fa6`（B03-Aレビュー修正基準HEAD: `50c31be`、B03-Bレビュー修正基準HEAD: `ff7e38b`、B03-Cコミット前検証基準HEAD: `a1b7be6`）。
+
+draft-0.4：§14でB03-Cの合成依存限定実装を記録した。§12〜13の未接続記述は各段階の履歴で、最新の同target局所退役・body未開始terminalの範囲は§14を基準とする。body開始・(C)の退出証拠・全writer停止・cleanup完了は有効化しない。
 
 draft-0.3のレビュー修正（MDのみ）：B03-Bのguard条件のうち、現行fixtureでは到達しないか他条件と冗長な防御条件9種を§13に列挙し、後工程で単独対照を先に用意する対象とした。
 
 draft-0.2のレビュー修正：B03-Aの公開projectionは不在のslotや許可外の値を肯定的な状態へ既定値化していた（未生成dutyを`not_owed`、未構築のknowledgeを`callStarted=false`の`unknown`、未生成slotを`unconfirmed`）。dutyの許可値に`settled_not_started`がなく、将来その状態を`not_owed`と誤報する余地もあった。§12で既定値の規則を明記した。
 
-Status: **B03-Aの先行準備とB03-Bの安定identity／履歴guard・同dutyの一度限りsettlingを合成依存限定で実装。** B03-Aは§12と[その検証記録](E2E_BEST_PRACTICE_WFB_PROBE_EXIT_PREPARATION_2026-11-10.md)、B03-Bの基準HEADは`dd9108b`、範囲は§13と[その検証記録](E2E_BEST_PRACTICE_WFB_PROBE_EXIT_GUARD_2026-11-10.md)。§1〜11は当初の差分設計で、退役・terminal成功・body起動の承認ではない。親は[(B) grant／固定exit責務](BEST_PRACTICE_WFB_PROBE_GRANT_EXIT_DUTY_DESIGN.md)と[同startのenter／確認済みexit](BEST_PRACTICE_WFB_PROBE_FRAME_ENTER_EXIT_DESIGN.md)。B-02の実績とレビュー修正は[捕捉検証記録](E2E_BEST_PRACTICE_WFB_PROBE_GRANT_CAPTURE_2026-11-10.md)を参照する。本書は親のBX00〜04をbody未開始経路から詳細化し、BE05／06と(C)の候補・同期確定は追加承認まで閉じる。
+Status: **B03-A／Bに加え、B03-Cの同target局所退役・全post・body未開始terminalを合成依存限定で実装。** B03-Aは§12と[その検証記録](E2E_BEST_PRACTICE_WFB_PROBE_EXIT_PREPARATION_2026-11-10.md)、B03-Bは§13と[その検証記録](E2E_BEST_PRACTICE_WFB_PROBE_EXIT_GUARD_2026-11-10.md)、B03-Cは§14と[その検証記録](E2E_BEST_PRACTICE_WFB_PROBE_LOCAL_EXIT_2026-11-10.md)。§1〜11は当初の差分設計で、body起動の承認ではない。親は[(B) grant／固定exit責務](BEST_PRACTICE_WFB_PROBE_GRANT_EXIT_DUTY_DESIGN.md)と[同startのenter／確認済みexit](BEST_PRACTICE_WFB_PROBE_FRAME_ENTER_EXIT_DESIGN.md)。B-02の実績とレビュー修正は[捕捉検証記録](E2E_BEST_PRACTICE_WFB_PROBE_GRANT_CAPTURE_2026-11-10.md)を参照する。本書は親のBX00〜04をbody未開始経路から詳細化し、BE05／06と(C)の候補・同期確定は追加承認まで閉じる。
 
 正式発行口・C実行入口・body起動閉鎖、全体受付無効、Unknown、VM／監視／telemetry調査保留を維持する。実接続・実通信・設定変更・Pushを行わない。実writer、request／close実合流、回収claim、Journal封印／供給、admission／packet、field clear、borrow退役・owner解放、GateClosedRecord・root終端も対象外。
 
@@ -222,3 +224,21 @@ privateなconstructor呼出し直前flag、issuerの保持参照、current／rec
 公開projectionの既定値規則：slotやreceiverが存在しない場合は`not_created`、存在するが許可値外の場合は`unconfirmed`とし、`not_owed`・`unknown`等の肯定的または意味を持つ状態へ既定値化しない。dutyの許可値には本書で追加した`settled_not_started`を含める。prepare前のinspect、許可値外dutyの注入、`settled_not_started`の注入を独立対照で確認する。
 
 到達しない／冗長な防御条件（現行fixtureで単独対照を持たない）：履歴境界の`!this.#claim.spent`（回収claimはこの経路で消費されない）、exit stageの`empty`／`unconfirmed`確認（常に成立）、unconfirmed useの`grantCallStarted`／`grantIssued`条件（unconfirmedはgrant_unknown由来だけ）、`guardHistory()`のnot_entered／not_called分岐の条件（該当時は常に成立）、known分岐のstage／rejected条件（rejectedを持つ候補は`capturedGrantMatches`でも必ず不一致）、use未使用時の不正履歴guard（not_entered分岐が先に成立）、`routeUsed`重複（root側`#guardRunReply`が先に返す）。B03-C以降でrequest合流・body起動・root側キャッシュを経由しない経路を追加する際は、これらへ単独対照を先に用意する。
+
+## 14 B03-C限定実装：同target局所退役・全post・body未開始terminal（2026-11-10）
+
+新`createProbeLocalExitFake`だけが同root／同start／同RunLink／同dutyを利用し、B03-Bのcapture実帰還→安定guard→settlingの直後へ接続する。Aのcontrol／retirement／absence／terminalはimmutableな初期anchorとしてそのまま保持する。Cのlive retirement／absence／terminalと進行stateは、同control・同duty・同B guard・同terminal anchorへ直接結合した先行4slotであり、第2owner・第2予算・代替proofではない。4×before／attempt／after／doneとbind／postの18点で部分生成prefixを保持し、最終post前はreadyにしない。同startへのprivate bindは一度だけ。
+
+同targetは既存private issuerの保持参照からのみ選ぶ。knownの固定順序はprepare→history→attempt→block→revoke→confirm→absence→record→post→commit→project、各before／afterの22点。正規未呼出しはattempt〜confirmの代わりにnot_requiredを通る16点で、retirement attempt=0／kind=not_requiredとなる。unknown・known不正は既存B guardで止め、not_enteredではduty／退役／terminalを捏造しない。元capture first・返答を保持したまま必要なexitへ進み、stopは新規利用を閉じても既存dutyを免除しない。
+
+knownでは同retirement.usedを一度消費し、targetを捕捉する。blockはblockedTargetへ同参照を保持し、owner-localの利用禁止latchを閉じる。immutable grant object自体へmethodを追加／変更せず、同cellのgrant.stageをrevokedへ進める。confirmは同owner／同duty、target／private issuer／current／receiver-issuedの同一性、全grant field、禁止latchが実際に閉じていること、revoked／unresolvedなし／拒否候補なしを照合する。confirmedTargetは確認時の同参照として別に保持し、後続故障でcandidate targetが壊れても禁止対象／確認対象を失わない。これはbody経路を有効にする汎用grant admissionやOS資源の解放確認ではない。将来bodyを接続する場合は、その利用境界でも同latchを検査する必要がある。
+
+absenceは同captureの実帰還・非実行中・同routeの開始中、実bodyのnot_started／outcome=none、非実行draft・回収claim未使用を確認してnot_startedとする。routeClosedは本段階のcapture専用・body実行閉鎖を表す。wrapperがinactiveへ退出したこと、実bodyが返ったこと、全writerが停止したことの証明にはしない。元slotと全参照は保持し、clear／discard／borrow退役は行わない。
+
+recordは空の非公開terminalへpreparedだけを記録する。全postは上記の安定関係・同dutyのsettling／使用済み・use=exiting／使用済み、空の退出cell、同absence／retirement／terminalの参照と空候補、knownの実確認または正規未呼出しの全参照不在を照合し、commit直前にも再検査する。その後の線形化点はhook／allocation／awaitなしの固定代入だけで、同canonical duty=settled_not_started、use=exiting、exit=unsealed、同terminal=held_not_started／committed、同C stateを同期固定する。正式candidate／issued／acceptedは型でもundefined固定。body完了・finished・確認済みinactive・(C)のaccepted退出記録は生成しない。
+
+commit前故障は同duty／use／exitを未確認とし、最初の理由／phase／boundaryを保持する。used・blockedTarget・実revoked・confirmedTarget・not_required確定は到達済み事実として払い戻さない。commit後のprojection故障はdeliveryUnconfirmedだけを追加し、held／settled_not_startedを巻き戻さず、再退役／再commitを許可しない。通常captureのfirstとCのfirstは別に保持する。再入はrun_in_progress、後続run／closeは元固定返答で再実行しない。
+
+公開APIはprepare／run／check／checkLegacy／close／inspectの固定script・値診断だけ。すべてok=false／authority=none／execution=closedで、terminal保持は成功受付ではない。Aの固定0診断をCの実計数として流用せず、元anchorと進行・実grant／exit／body状態を分けた二段projectionとする。不在はnot_created、許可外はunconfirmed、参照は厳密booleanのみ。任意artifact／Proxy／body／callbackは採用しない。
+
+新113件・関連24ファイル1,737件、compiled16本（新規は同一性16・全post10・後段境界18等）の結果、独立prefix・対照の独立性と限界、初回試験側の問題は[検証記録](E2E_BEST_PRACTICE_WFB_PROBE_LOCAL_EXIT_2026-11-10.md)。BX00〜04のbody未開始部分だけを補完した。body return／throw／cancel、active後故障、request／closeの実frame合流、(C)証拠、全writer停止・Journal供給・field clear・root終端は未接続。追加4slotと各1回の操作は構造上の上界であり、実allocation／guard費・E／S・layout・OOM・全体work上界はUnknown、全体受付は無効のまま。

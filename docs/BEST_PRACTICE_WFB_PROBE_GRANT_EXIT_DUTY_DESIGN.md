@@ -14,6 +14,8 @@ B03-A限定実装（2026-11-10）: 上記差分設計§12で、同dutyの有限p
 
 B03-B限定実装（2026-11-10）: 上記差分設計§13で、同immutable controlに結合した先行進行cell、同startのcapture実帰還から安定identity／private履歴guard、同dutyの一度限りsettlingと4分岐を接続した。[検証記録](E2E_BEST_PRACTICE_WFB_PROBE_EXIT_GUARD_2026-11-10.md)。同dutyと先行診断を保持するだけで、局所退役・成功terminal・body・正式発行は未接続。
 
+B03-C限定実装（2026-11-10）: 上記差分設計§14で、同targetの利用禁止latch・実revokedと確認参照保持、全post、同dutyのsettled_not_started／privateなheld_not_startedを接続した。[検証記録](E2E_BEST_PRACTICE_WFB_PROBE_LOCAL_EXIT_2026-11-10.md)。旧A/Bと同immutable anchorを維持し、先行live viewを同ownerへ結合する。確定前後の故障・stop・再入・一度限り利用を区別し、全返答ok=false／body起動閉鎖のまま。§12〜13と上記A/Bの未接続記述は各段階の履歴であり、最新範囲は差分設計§14を基準とする。body完了、(C)のaccepted退出証拠、cleanup完了・実会計・全writer停止は未接続。
+
 正式発行口・C実行入口閉鎖、全体受付無効、Unknown、VM／監視／telemetry調査保留を維持する。当初作成時は文書のみ、その後の実装・ローカル検証は§12〜13の限定範囲だけ。本書だけでbodyや実接続を承認しない。B-02で合成専用内部grant候補を最大1回発行するが、正式permitや実writer資格ではない。新probe body起動・実接続・実通信・設定変更・Pushを行わない。実writer、request／close実合流、回収claim消費、Journal封印／供給、admission／packet／field clear、GateClosedRecord、root終端も閉鎖のまま。
 
 ## 1 (A)との差分と(B)／(C)の分割
