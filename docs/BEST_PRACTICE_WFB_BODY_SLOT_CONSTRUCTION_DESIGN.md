@@ -12,6 +12,8 @@ Status: **先行shell／13carrier・BC01〜11のInitial構築とBC12／13の集�
 
 BC06〜13の詳細化（2026-11-10、MDのみ）: [live slotの内部型・更新権限とbundle／draft生成境界draft-0.1](BEST_PRACTICE_WFB_BODY_LIVE_SLOT_BUNDLE_DESIGN.md)で、`94d7fde`を基準に§4〜5を具体化した。BC06〜11の初期variant／private writer境界、liveの参照固定と進行fieldの分離、BC12／13の同参照集約・固定順・失敗保持を定義する。既存seedの全freeze・空suffix検査は維持し、追加経路を別に扱う。BD／構築ready・BA／BUは未接続のまま。
 
+bind差分の詳細化（2026-11-10、MDのみ）: [bind状態型・phase検査と同startの先行borrow／診断slot draft-0.1](BEST_PRACTICE_WFB_BODY_BIND_BORROW_DESIGN.md)で、`29c53e1`を基準に§2／§6〜8を具体化した。旧BC用shellの狭い型を維持し、BD01のclaimを同rootの専用source状態へ分離する案、先行expected-source pin／bundleとdraftのborrow、生成順・private発行元確認・失敗prefix保持を定義する。本文のsource shell案はこの差分を優先し、実装・BD05／構築ready・body起動は未承認のまま。
+
 正式発行口・C実行入口・body起動閉鎖、全体受付無効、Unknown、VM／監視／telemetry調査保留を維持する。§12〜14以外の実装・合成body起動・実接続・実通信・設定変更・Pushを行わない。§1〜11の新型／field名は設計案で、未接続経路の実行承認ではない。実grant／permit、実session／transport／worker、実writer、request／drain、Journal供給、admission／packet／field clear、borrow退役／owner解放・root終端は対象外。
 
 ## 1 同ownerの意味と既存配置への接続位置
