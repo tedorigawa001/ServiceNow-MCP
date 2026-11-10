@@ -1,6 +1,8 @@
 # WF-B B03後半：先行slot物理配置・固定構築schedule・失敗保持
 
-Version: draft-0.1 / Date: 2026-11-10 / 読み取り基準HEAD: `bf63f16`。
+Version: draft-0.2 / Date: 2026-11-10 / 読み取り基準HEAD: `bf63f16`（レビュー修正基準HEAD: `0932af9`）。
+
+draft-0.1のレビュー修正（MDのみ）：§11の「未コミット・Pushなし」はコミット前の時点の記述だったため、作成時点の記録であることを明示し、コミット後の注記を追加した。B03前半の文書から本書へのリンク文言「後半slot物理配置」を本書の表題「先行slot物理配置」へ揃えた。
 
 Status: **MDによる配置・構築契約のみ。未実装・受入試験未実施。** 親は[B03後半の固定exit契約draft-0.2](BEST_PRACTICE_WFB_BODY_UNWIND_EXIT_DESIGN.md)と[B03前半の固定exit／同target局所退役](BEST_PRACTICE_WFB_FIXED_EXIT_LOCAL_RETIREMENT_DESIGN.md)。元の所有／費目契約は[(B) grant／固定exit責務](BEST_PRACTICE_WFB_PROBE_GRANT_EXIT_DUTY_DESIGN.md)を維持する。
 
@@ -176,6 +178,8 @@ oracleは本体の生成表・builder・state表・counterを期待値へimport�
 
 次の実装を別途承認した場合も、まずshell／固定carrier・context／origin／sentinel／pin等の値型と先行保持に限定し、内部bind／構築readyまでの追加範囲を明示する。BA00〜03のactivation／body・BU00〜10の実unwind、正式証拠、実予算／実接続はその承認に含めない。全body経路とunwindを同じ変更で接続する親契約を維持する。
 
-今回は本書と親2文書の参照だけを変更し、ローカルリンク・ID／表／生成依存順・保持関係と変更範囲・空白を検証する。ソース／試験／CHANGELOG／設定、build・合成／compiled試験・body起動は対象外。受入条件は成功済みとしない。未コミット・Pushなし。
+今回は本書と親2文書の参照だけを変更し、ローカルリンク・ID／表／生成依存順・保持関係と変更範囲・空白を検証する。ソース／試験／CHANGELOG／設定、build・合成／compiled試験・body起動は対象外。受入条件は成功済みとしない。作成時点では未コミット・Pushなし。
 
 文書検証結果：3文書のローカルリンク19件に欠落なし、23表の列数・空白・末尾改行に異常なし。BC01〜13とcarrier1〜13の対応、data依存33辺の先行順／非循環、bootstrap15操作、BD7段階、SC12条件の重複／欠落を確認した。src／tests／CHANGELOG／manifest・lockfile／梱包・TypeScript設定はHEADと差分なし。index登録・実装・build／合成・compiled試験・body起動・実接続・実通信・設定変更・Pushは行っていない。
+
+上記の「未コミット」「index登録…は行っていない」は作成時点の記録である。本書はその後`0932af9`としてコミットされ、draft-0.2のレビュー修正もMDのみで行った（Pushなし）。
