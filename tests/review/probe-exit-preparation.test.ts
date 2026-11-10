@@ -31,6 +31,12 @@ describe('B03-A same-duty prior exit preparation, with every execution boundary 
     ['copy', 'extra', 'duty', 'control', 'absence', 'kind', 'candidate', 'issued', 'accepted'],
     ['copy', 'brand', 'extra', 'link', 'duty', 'start', 'control', 'retirement', 'absence', 'terminal'],
   ];
+  it('reports absent slots as not_created before preparation, never as a positive or unconfirmed state', () => {
+    const s = createProbeExitPreparationFake().inspect(); fixedData(s);
+    expect(s).toMatchObject({ duty: { state: 'not_created', phase: 'not_created', boundary: 'not_created', linkRetained: false },
+      knowledge: { kind: 'not_created', callStarted: false }, control: { state: 'not_created' }, retirement: { kind: 'not_created' },
+      body: { kind: 'not_created' }, terminal: { kind: 'not_created' } });
+  });
   it('binds all five prior slots to the existing same start and unspent duty, without entering', () => {
     const a = createProbeExitPreparationFake(); fixedData(a.inspect()); expect(a.check().disposition).toBe('not_ready');
     expect(a.prepare()).toMatchObject({ ok: true, model: 'wfb-probe-exit-preparation-1', first: 'none', execution: 'closed' });

@@ -62,6 +62,20 @@ B03-Bの固定exit identity／履歴供給・同dutyのsettling、一度限り�
 
 設計書・親設計書・本記録のローカルリンク16件に欠落なし。差分空白エラーなし。src／package manifest／lockfile／lint設定に変更なし。
 
+## レビュー修正（2026-11-10）
+
+レビュー基準HEAD: `50c31be`。修正前は全体328ファイル・16,794件成功。3軸値契約`probeExitAxesValid()`の各条件を外す一時変異17種は全て検出された（axis 41対照）。
+
+指摘：公開projectionの既定値が、不在／許可値外を肯定的な状態として報告していた。prepare前の`inspect()`で`duty.state='not_owed'`（B-01の`inspectRun()`は`not_created`）、`knowledge.kind='unknown'`かつ`callStarted=false`（自身のaxis契約で不適合）、`retirement`／`body`を`unconfirmed`と報告した。dutyの許可値に`settled_not_started`がなく、B03-B/Cでその状態になると`not_owed`と誤報する余地があった。既定値を変える一時変異2種が生存した。
+
+修正：不在は`not_created`、存在するが許可値外は`unconfirmed`とした（duty／phase／boundary／control／knowledge／retirement／body／terminal）。dutyの許可値へ`settled_not_started`を追加した。prepare前inspectの試験1件と、compiledでduty状態を`settled_not_started`／許可値外へ注入する対照2種を追加した。
+
+RED：追加試験1件とcompiled注入対照が修正前に失敗した。GREEN：関連3ファイル317件、compiled全本成功。
+
+一時変異（試験後に元へ戻した）：修正点への6種（不在dutyのnot_owed化、許可値外dutyのnot_owed化、settled_not_startedの許可値漏れ、不在knowledgeのunknown化、不在retirement／terminalのunconfirmed化）を全検出（2種はcompiled側）。
+
+全体回帰：`npm run lint`・`npm run build`・`package-http-classification.mjs`成功、vitest全体328ファイル・16,795件成功。
+
 ## コミット前の対象限定再検証（2026-11-10）
 
 前節までの未コミット方針は実装時点の記録。本節はその後のコミット依頼に対する確認である。B03-A関連9ファイルだけを明示してindexへ登録し、indexを一時ディレクトリへ展開した。対象9ファイルの内容がindexと一致することを確認し、既存node_modulesだけを借用した検証用コピーでbuild・strict・関連22ファイル1,547件・compiled14本を再実行して全てexit 0。全体lintもerror 0／warning 374でexit 0、梱包dry-runは441ファイル・fixture混入0、3文書のローカルリンク16件に欠落なしだった。全repositoryのvitest回帰は今回も未実施。最終追記は本節のみで、実装／試験内容は再検証時から変更していない。他の作業差分・実接続・実通信・設定変更・Pushは含めない。

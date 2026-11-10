@@ -113,6 +113,13 @@ try {
   const projections = [['controlRetained: control !== undefined', 'controlRetained: control', s => typeof s.binding.controlRetained === 'boolean'],
     ['bundleRetained: this.#exitSlots[4]?.value !== undefined', 'bundleRetained: this.#exitSlots[4]?.value', s => typeof s.binding.bundleRetained === 'boolean'],
     ['linkRetained: Boolean(duty)', 'linkRetained: duty?.link', s => typeof s.duty.linkRetained === 'boolean']];
+  // Out-of-allowlist values must project as unconfirmed, and the future settled_not_started duty must stay visible.
+  const injectAt = '    const control = this.#exitSlots[0]?.value as ProbeExitControl | undefined;';
+  for (const [i, [state, expected]] of [['settled_not_started', 'settled_not_started'], ['foreign', 'unconfirmed']].entries()) {
+    const injected = await load(replace(text, injectAt, `    if (duty) (duty as unknown as { state: string }).state = '${state}';\n` + injectAt), 'duty-allowlist-' + i);
+    const a = injected.createProbeExitPreparationFake(); a.prepare();
+    assert.equal(a.inspect().duty.state, expected, 'duty projection for ' + state);
+  }
   for (const [i, [from, to, safe]] of projections.entries()) {
     assert.equal(safe(baseline), true);
     const m = await load(method(text, 'inspectExitPreparation', from, to), 'projection-' + i);
@@ -162,5 +169,5 @@ const badAbsenceSlot: ProbeBodyAbsenceSlot = { ...typedAbsence, kind: 'not_start
   assert.ok(diagnostics.every(d => d.file?.fileName === file && d.start >= text.length + extra.indexOf('const badPhase:')), 'unexpected baseline/positive semantic diagnostic');
   assert.equal(new Set(diagnostics.map(d => d.file.getLineAndCharacterOfPosition(d.start).line)).size, 14, 'each illegal type must be rejected');
   console.log(JSON.stringify({ compiled: true, slotControls, receiverControls: 1, duplicateControl: true, axisControls: axisControls.length,
-    projectionControls: projections.length, bodyTrap: true, captureTrap: true, typeRejections: 14, exitAttempts: 0, retirementAttempts: 0, terminalCommits: 0 }));
+    projectionControls: projections.length, allowlistControls: 2, bodyTrap: true, captureTrap: true, typeRejections: 14, exitAttempts: 0, retirementAttempts: 0, terminalCommits: 0 }));
 } finally { rmSync(dir, { recursive: true, force: true }); }

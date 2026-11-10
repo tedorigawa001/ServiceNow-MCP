@@ -1,6 +1,8 @@
 # WF-B B-03前半：固定exit・局所退役・同duty責務保持の接続差分
 
-Version: draft-0.1 / Date: 2026-11-10 / 読み取り基準HEAD: `08e8fa6`。
+Version: draft-0.2 / Date: 2026-11-10 / 読み取り基準HEAD: `08e8fa6`（B03-Aレビュー修正基準HEAD: `50c31be`）。
+
+draft-0.2のレビュー修正：B03-Aの公開projectionは不在のslotや許可外の値を肯定的な状態へ既定値化していた（未生成dutyを`not_owed`、未構築のknowledgeを`callStarted=false`の`unknown`、未生成slotを`unconfirmed`）。dutyの許可値に`settled_not_started`がなく、将来その状態を`not_owed`と誤報する余地もあった。§12で既定値の規則を明記した。
 
 Status: **B03-Aの有限内部型・先行slotのprivate結合・固定拒否／値projectionだけ合成依存限定で実装。** 基準HEAD `297570a`、実施範囲は§12と[検証記録](E2E_BEST_PRACTICE_WFB_PROBE_EXIT_PREPARATION_2026-11-10.md)。§1〜11は当初の差分設計で、退役・terminal成功・body起動の承認ではない。親は[(B) grant／固定exit責務](BEST_PRACTICE_WFB_PROBE_GRANT_EXIT_DUTY_DESIGN.md)と[同startのenter／確認済みexit](BEST_PRACTICE_WFB_PROBE_FRAME_ENTER_EXIT_DESIGN.md)。B-02の実績とレビュー修正は[捕捉検証記録](E2E_BEST_PRACTICE_WFB_PROBE_GRANT_CAPTURE_2026-11-10.md)を参照する。本書は親のBX00〜04をbody未開始経路から詳細化し、BE05／06と(C)の候補・同期確定は追加承認まで閉じる。
 
@@ -198,3 +200,5 @@ checkAxesは50固定shape（適合9・不適合41）と10個のphase/boundary適
 新projectionは全fieldを明示した有限plain dataで、参照は保持有無booleanだけ。既知不正slotのused／blocked／started／returned等の故障値を隠さず保持するが、ready=false・binding_mismatchであり実操作の証明ではない。実操作計数と別に扱い、terminalの不正accepted候補はacceptedRetainedだけへ投影し、exitAcceptedはfalse固定。全返答・拒否・closeの先行firstとprefixを保持する。任意object／Proxy／callbackはhookを実行せず拒否する。
 
 FX01の先行結合・混入、FX02の三軸値区別、FX03〜05の構築故障／stop／再入／重複結合、FX08の値・型上の交差禁止、FX10〜12の参照非出力・旧経路閉鎖を部分検証した。188新試験・関連1,547件・compiled14本・strict／build／lint・梱包の結果と初回問題は[検証記録](E2E_BEST_PRACTICE_WFB_PROBE_EXIT_PREPARATION_2026-11-10.md)。BX00のsettling・実履歴供給・固定exit継続、局所退役・terminal成功・BE05／06・(C)・実会計は未接続。実E／S・work／layout／OOMはUnknown、全体受付は無効のまま。
+
+公開projectionの既定値規則：slotやreceiverが存在しない場合は`not_created`、存在するが許可値外の場合は`unconfirmed`とし、`not_owed`・`unknown`等の肯定的または意味を持つ状態へ既定値化しない。dutyの許可値には本書で追加した`settled_not_started`を含める。prepare前のinspect、許可値外dutyの注入、`settled_not_started`の注入を独立対照で確認する。
