@@ -50,6 +50,9 @@ describe('B03 BC06..11 Initial live construction without bind or execution', () 
     expect(s.slots[n - 1]).toMatchObject({ stage: 'provisional', issuedRetained: true, currentRetained: true, rejectedRetained: true,
       sameReference: field !== 'copy' });
     expect(s.slots.slice(n).every(c => c.stage === 'not_started' && !c.issuedRetained)).toBe(true);
+    // The live projection reports the retained malformed current as not Initial, independent of slot stage.
+    expect(s.live[n - 6]).toMatchObject({ initial: false, sealed: field !== 'unsealed' });
+    expect(s.live.slice(0, n - 6).every(c => c.initial && c.sealed)).toBe(true);
     expect(a.prepare()).toBe(r); expect(a.close()).toBe(r);
   });
   it.each(checkpoints)('retains the independent partial-generation prefix %i/%s', (n, boundary) => {

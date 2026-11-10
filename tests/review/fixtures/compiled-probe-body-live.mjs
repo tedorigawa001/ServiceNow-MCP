@@ -120,6 +120,41 @@ try {
   assert.equal(run(await load(sameRejected, 'rejected'), 's_live_mix_10_copy').s.slots[9].rejectedSame, true);
   const diag = inject('BC09', 'before', "this.fail('state_invalid'); throw Error('after_diagnostic');");
   const diagOut = run(await load(diag, 'diag-first')); assert.equal(diagOut.r.first, 'state_invalid'); assert.equal(diagOut.a.close(), diagOut.r);
+  // Live-path prefix: shell/carrier/suffix clauses of bodyLivePrefixMatches each reject first at the next before.
+  const livePrefix = [
+    ['shell-failure', "Object.defineProperty(this.#bodySeedShell!, 'failure', { value: { ...this.#failure } });", 's.failure !== this.#failure', 'false'],
+    ['shell-state', "this.#bodySeedShell!.state = 'held';", "s.state !== 'building'", 'false'],
+    ['shell-shape', '(this.#bodySeedShell! as any).extra = true;', "!bodySeedShape(s, ['failure', 'slots', 'state', 'ready', 'execution', 'bindAttemptUsed', 'bindStage'])", 'false'],
+    ['carrier-shape', `(${slot(12)} as any).extra = true;`, "!bodySeedShape(c, ['index', 'kind', 'stage', 'attemptReserved', 'callBoundaryReached', 'issued', 'current', 'rejected'])", 'false'],
+    ['carrier-index', `(${slot(12)} as any).index = 99;`, 'c.index !== i + 1', 'false'],
+    ['carrier-kind', `(${slot(12)} as any).kind = 'draft';`, 'c.kind !== kind', 'false'],
+    ['suffix-issued', `${slot(13)}.issued = Object.freeze({});`, 'c.issued === undefined && ', ''],
+    ['suffix-current', `${slot(13)}.current = Object.freeze({});`, 'c.current === undefined && ', ''],
+    ['suffix-rejected', `${slot(13)}.rejected = Object.freeze({});`, ' && c.rejected === undefined;', ';'],
+  ];
+  for (const [name, code, a, b] of livePrefix) {
+    const bad = inject('BC08', 'before', code), checked = run(await load(bad, 'live-prefix-' + name));
+    assert.equal(checked.r.first, 'binding_mismatch', name); assert.equal(`${checked.s.failurePhase}/${checked.s.failureBoundary}`, 'BC08/before', name);
+    const masked = run(await load(method(bad, 'bodyLivePrefixMatches', a, b), 'live-prefix-mutant-' + name));
+    assert.ok(masked.r.disposition === 'live_held' || `${masked.s.failurePhase}/${masked.s.failureBoundary}` !== 'BC08/before', 'masked ' + name);
+  }
+  // Descriptor isolation. A non-enumerable progress field is only caught by the enumerable clause; an extensible
+  // object whose properties are all non-configurable is only caught by isSealed. configurable===false is implied by
+  // isSealed for own data properties, so its removal is equivalent and not counted as a control.
+  const hidden = inject('BC06', 'fix_2', `Object.defineProperty(${slot(6)}.issued!, 'callReserved', { enumerable: false });`);
+  const hiddenOut = run(await load(hidden, 'non-enumerable'));
+  assert.equal(`${hiddenOut.r.first}/${hiddenOut.s.failurePhase}/${hiddenOut.s.failureBoundary}`, 'binding_mismatch/BC06/captured');
+  assert.equal(run(await load(method(hidden, 'bodyLiveDescriptors', 'd.enumerable === true && ', ''), 'non-enumerable-mutant')).r.disposition, 'live_held');
+  const extensible = method(source, 'bodyLiveMint', "    if (fault !== 'unsealed') Object.seal(raw);",
+    "    if (n === 7) { for (const k of Reflect.ownKeys(raw)) Object.defineProperty(raw, k, { configurable: false }); } else if (fault !== 'unsealed') Object.seal(raw);");
+  const extensibleOut = run(await load(extensible, 'extensible'));
+  assert.equal(`${extensibleOut.r.first}/${extensibleOut.s.failurePhase}/${extensibleOut.s.failureBoundary}`, 'binding_mismatch/BC07/captured');
+  assert.equal(run(await load(method(extensible, 'bodyLiveDataMatches', '      || !Object.isSealed(value) || ', '      || '), 'extensible-mutant')).r.disposition, 'live_held');
+  // Phase projection allowlist: an out-of-allowlist live phase is unconfirmed, never echoed.
+  const rogue = inject('BC11', 'confirmed', "this.#bodySeedPhase = 'rogue_phase';");
+  assert.equal(run(await load(rogue, 'rogue-phase')).s.phase, 'unconfirmed');
+  const echoed = replace(rogue, "      phase: runEnum(this.#bodySeedPhase, BODY_LIVE_PHASES, 'unconfirmed'), boundary:", '      phase: this.#bodySeedPhase, boundary:');
+  assert.equal(run(await load(echoed, 'rogue-phase-echo')).s.phase, 'rogue_phase');
   const file = fileURLToPath(new URL('./snapshot-read-composition-fake.ts', import.meta.url));
   const extra = `
 declare const p: BodyProgressInitial;
@@ -156,5 +191,6 @@ u.terminal = t;
   assert.equal(new Set(diagnostics.map(d => d.file.getLineAndCharacterOfPosition(d.start).line)).size, 19);
   console.log(JSON.stringify({ compiled: true, fields, brands: 6, copies: 6, fixedReferenceControls: 6, writableControls: 6,
     priorStageControls: prefix, priorIdentityControls: prefix, preflightControls: preflights.length, issuedRetention: true,
-    readonlyRuntime: true, liveInitialRecheck: true, rejectedIdentity: true, priorDiagnosis: true, typeRejections: 19 }));
+    readonlyRuntime: true, liveInitialRecheck: true, rejectedIdentity: true, priorDiagnosis: true, typeRejections: 19,
+    livePrefixControls: livePrefix.length, enumerableControl: true, sealedControl: true, phaseAllowlist: true }));
 } finally { rmSync(dir, { recursive: true, force: true }); }

@@ -266,6 +266,8 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 ### Added
 
+- WF-B body live-slot review: nine compiled single-injection controls now pin each shell, carrier and suffix clause of the live-path prefix check to the first rejecting phase. Two further controls isolate the `enumerable` and `isSealed` descriptor clauses, which previously masked each other. The phase projection allowlist and the per-slot `initial`/`sealed` live projection are now asserted. The redundant `configurable` clause is recorded as equivalent.
+
 - WF-B body slot seed review: twenty compiled single-injection controls now pin each BC00 base clause, per-mint preflight, bootstrap check and the final recheck to the phase/boundary that first rejects; removing a clause moves the rejection or reaches `seed_held`. Further controls cover freeze-after-issued, the identity of the first rejected candidate and the slot-stage projection allowlist. The design now lists the start-side base clauses that have no single injection point.
 
 - WF-B probe local exit review: twelve compiled injection controls now pin each per-phase recheck in `localFinish` (history, attempt ready/history/used/target open, block context, confirm ready, not-required ready/history, absence ready and the commit all-post recheck) to the phase that first rejects. Overlapping later checks had masked their removal. The design now states that the committed live state stays outside the B-01 state validator.

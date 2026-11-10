@@ -58,6 +58,36 @@ LB01〜12のBC06〜11構築部分だけが対象。BC12／13・bind／構築read
 
 固定化substepの論理位置は73点まで検証するが、これを実heap allocation数やwork capへ昇格しない。公開inspect／拒否の任意回数全体も有限workとは主張しない。保持はcleanup確認／解放済みではなく、将来の責務解消契約まで同rootへ未確認責務を残すことを意味する。
 
+## レビュー修正（2026-11-10）
+
+基準HEADは`14de3f7`。修正前の全体検証は、lint・build・梱包分類・全vitest（332ファイル17,331件成功・失敗0）・compiled5本（body-live／body-seed／local-exit／declared-actual／canonical-gate-draft）・差分空白検査のすべてが成功した。
+
+一時mutant17種を流した。修正前のkillは次の6種だった。
+
+- vitestで3種：fixループの短縮、返答cache、seal抜き
+- compiledだけで3種：rejected節、前段のreserved／call、rejectedの差替え
+
+11種は両方で生存した。
+
+- live経路の`bodyLivePrefixMatches`の5種：shellのfailure同一性・building state・shape、carrierのshape／index／kind、後段のissued／current／rejected空。seed側の同型検査への対照は別関数なので効かない。
+- descriptor／sealの3種：`isSealed`、`enumerable===true`、`configurable===false`。isSealedとconfigurableは互いを覆い隠し、enumerableとisSealedを単独で破るfaultもなかった。
+- inspectのprojectionの3種：phase allowlist、`live[].initial`、`live[].sealed`。
+
+修正として次を追加した。
+
+- compiledの単独注入9件（`livePrefixControls`）。BC08 beforeへの単一注入を、`bodyLivePrefixMatches`の当該節が最初に`binding_mismatch`で拒否することを確認する。節を外すと拒否位置が移るか、live_heldになる。
+- 非列挙の進行field対照。`enumerable`節だけが拒否する。
+- 拡張可能かつ全property non-configurableの値の対照。`isSealed`節だけが拒否する。
+- 許可外phaseを`unconfirmed`と投影する対照。
+- vitestのmix試験で、不正currentを保持する`live[]`の`initial=false`と、未sealのときの`sealed=false`、それ以前のliveが`initial`かつ`sealed`であることを確認する。
+
+RED／GREEN：修正前は上記11種が両方で生存した（RED）。修正後は10種がkillされた（GREEN）。
+
+- vitestで2種（initial／sealed projection）。
+- compiledで8種。いずれも外部mutantが新対照の注入済みsourceへの期待値assertで落ちることを確認した。anchor消失による停止ではない。
+
+残る1種の`configurable===false`は、own data propertyではisSealedに包含されるため等価とした。修正後の全体検証も、lint・build・梱包分類・全vitest・compiled5本・差分空白検査のすべてが成功した。
+
 ## コミット前の対象限定再検証（2026-11-10）
 
 対象9ファイルだけをindexへ登録し、indexの全追跡ファイルを新しい一時フォルダへ展開して再検証した。依存は既存のローカルnode_modulesを参照し、導入／取得は行っていない。未登録・未追跡の作業中変更をコピーせず、対象9件の内容がindexとbyte単位で一致することも確認した。

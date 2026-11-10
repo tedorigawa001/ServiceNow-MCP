@@ -1,6 +1,8 @@
 # WF-B B03後半：BC06〜11 live slotとBC12／13 bundle／draft生成境界
 
-Version: draft-0.3 / Date: 2026-11-10 / 読み取り基準HEAD: `94d7fde`（レビュー修正基準HEAD: `cc0e3c6`、Initial実装基準HEAD: `435b348`）。
+Version: draft-0.4 / Date: 2026-11-10 / 読み取り基準HEAD: `94d7fde`（レビュー修正基準HEAD: `cc0e3c6`、Initial実装基準HEAD: `435b348`、Initial実装レビュー修正基準HEAD: `14de3f7`）。
+
+draft-0.3のレビュー修正：live経路専用の`bodyLivePrefixMatches`は、shellのfailure同一性／building／shape、carrierのshape／index／kind、後段carrierのissued／current／rejected空を単独で外しても試験が落ちなかった。seed側の対照は別関数のため効かない。`isSealed`と`configurable===false`は互いを覆い隠し、`enumerable===true`を単独で破るfaultもなかった。inspectのphase allowlistと`live[].initial`／`sealed`のprojectionも観測していなかった。これらへ単独注入のcompiled対照とvitestのprojection検査を追加した。`configurable===false`はisSealedに包含されるため、除去を等価として§11へ記録した。
 
 draft-0.1のレビュー修正（MDのみ）：§10の「コミット・Pushも行わない」は、コミット後も現在形で残る記述だった。同節の文書検証結果と同じく作成時点の記録であることを明示し、コミット後の注記を追加した。
 
@@ -184,3 +186,5 @@ package除外のcomposition fixtureへcreateProbeBodyLiveFakeを追加した。�
 構築失敗は元root first・最初のBC位置と各carrierのprefixを保持する。BC08にbody理由を捏造せず、発行済み参照・初回rejectedはclear／copy補完しない。公開snapshotは同一性／descriptor／Initial一致をbooleanへ投影するだけで、live参照・brand・setterを返さない。新理由enum・実行用状態union／writerは未実装のまま。
 
 LB01〜12のBC06〜11部分を合成・compiled対照で検証する。BC12／13・BD依存条件の成功は主張しない。基準HEADで正規に単独破壊できなかったcapture試行0・exit slot照合・matchesRunの元base節は、引き続き単独対照の範囲外である。実allocation／E／S／OOM・全guard／全体work上界はUnknown、正式発行口閉鎖・全体受付無効・調査保留を維持する。
+
+レビュー修正（`14de3f7`）：live経路の前段検査はshellのfailure／state／shape、carrierのshape／index／kind、後段のissued／current／rejectedの9節をBC08 beforeへの単一注入で個別に確認し、節を外すと拒否位置が移るかlive_heldになることを固定する。descriptorは非列挙の進行fieldを`enumerable`節だけが、拡張可能かつ全non-configurableの値を`isSealed`節だけが拒否する対照を持つ。own data propertyの`configurable===false`はisSealedに包含され、単独除去は等価。phaseの許可外値はunconfirmedへ投影し、不正currentを保持した`live[]`はinitial=false、未sealならsealed=falseと投影する。
