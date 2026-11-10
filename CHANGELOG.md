@@ -18,6 +18,8 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 ### Changed
 
+- WF-B B03-A adds a package-excluded synthetic-only exit-preparation entry with five prior slots privately bound to the existing start, RunLink and unspent duty. Finite duty progress and separate knowledge/retirement/body value contracts have independent shape and semantic compile-fail controls; live slots remain idle, not-attempted, unobserved and terminal-none. Fixed rejection and explicit value projections preserve partial custody and legacy behavior. No enter, exit attempt, local retirement, successful terminal, body startup, formal issuance or runtime connection is enabled.
+
 - WF-B B-02 adds a separate synthetic-only one-shot enter/grant-capture entry on the same start and RunLink. A fixed issuer retains its reference before return; provisional capture, identity validation, stop/fault prefixes and non-refunded duty obligations have independent synthetic and compiled controls. The grant never becomes active, body startup and formal issuance remain closed, and no revocation, exit record, retirement, Journal supply or runtime connection is performed.
 
 - WF-B B-01 adds synthetic-only execution-state contracts, prior RunLink/exit-duty preparation and one-shot binding to the existing start. A separate fixed-value projection reports retained references only as booleans and preserves closed execution. Independent prefix/state tables, semantic compile-fail cases and compiled identity/projection mutations cover mixing, duplicate preparation and failure retention. Grant issuance, enter/unwind transitions, body startup, accepted exit evidence and runtime connections remain unimplemented.

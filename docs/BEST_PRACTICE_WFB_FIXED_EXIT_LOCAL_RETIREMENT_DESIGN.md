@@ -2,7 +2,7 @@
 
 Version: draft-0.1 / Date: 2026-11-10 / 読み取り基準HEAD: `08e8fa6`。
 
-Status: **詳細設計のみ。実装・試験実行・body起動の承認ではない。** 親は[(B) grant／固定exit責務](BEST_PRACTICE_WFB_PROBE_GRANT_EXIT_DUTY_DESIGN.md)と[同startのenter／確認済みexit](BEST_PRACTICE_WFB_PROBE_FRAME_ENTER_EXIT_DESIGN.md)。B-02の実績とレビュー修正は[捕捉検証記録](E2E_BEST_PRACTICE_WFB_PROBE_GRANT_CAPTURE_2026-11-10.md)を参照する。本書は親のBX00〜04をbody未開始経路から詳細化し、BE05／06と(C)の候補・同期確定は追加承認まで閉じる。
+Status: **B03-Aの有限内部型・先行slotのprivate結合・固定拒否／値projectionだけ合成依存限定で実装。** 基準HEAD `297570a`、実施範囲は§12と[検証記録](E2E_BEST_PRACTICE_WFB_PROBE_EXIT_PREPARATION_2026-11-10.md)。§1〜11は当初の差分設計で、退役・terminal成功・body起動の承認ではない。親は[(B) grant／固定exit責務](BEST_PRACTICE_WFB_PROBE_GRANT_EXIT_DUTY_DESIGN.md)と[同startのenter／確認済みexit](BEST_PRACTICE_WFB_PROBE_FRAME_ENTER_EXIT_DESIGN.md)。B-02の実績とレビュー修正は[捕捉検証記録](E2E_BEST_PRACTICE_WFB_PROBE_GRANT_CAPTURE_2026-11-10.md)を参照する。本書は親のBX00〜04をbody未開始経路から詳細化し、BE05／06と(C)の候補・同期確定は追加承認まで閉じる。
 
 正式発行口・C実行入口・body起動閉鎖、全体受付無効、Unknown、VM／監視／telemetry調査保留を維持する。実接続・実通信・設定変更・Pushを行わない。実writer、request／close実合流、回収claim、Journal封印／供給、admission／packet、field clear、borrow退役・owner解放、GateClosedRecord・root終端も対象外。
 
@@ -182,3 +182,19 @@ body return／throw／cancelの直積、BE05 active後故障、実body帰還・�
 本書と親2文書の参照だけを更新する。今回の検証はローカルリンク・ID／scheduleの文書整合・差分空白・source／試験内容の不変確認に限る。ビルド・合成／compiled試験・body起動は行わず、受入条件を成功済みにしない。未コミット、Pushなし。
 
 文書検証結果：3文書のローカルリンク20件に欠落なし、FX01〜12の12条件とBX00〜04の5段階に重複・欠落なし、差分空白エラーなし。開始時からcomposition fixture・B-02試験・同compiled fixtureのSHA-256が一致することを確認した（順に`ff07a0a249fc3b914e5ae38b4279dd835dec4e59b9e6e28361b2e9506c0f288d`、`b6a57616cd7a19cc9db3642d2d7f75634491435aabff905a2652e7c3a822eee3`、`2baa15df55334f22876f7025877701439157c5c8867f0966f276dd7557d82411`）。これは文書と変更範囲の検証であり、未実装exit／退役の試験成功ではない。
+
+## 12 B03-A限定実装（2026-11-10）
+
+§11末尾は設計作成時の記録（`297570a`でコミット）。今回は同composition lexical root・既存CanonicalGateDraftRoot／RetirementStartAssemblyを再利用し、新`createProbeExitPreparationFake`だけを追加した。旧factory／facade／B-02の同grant捕捉と既知prefix分類は維持する。公開methodはprepare／check／checkLegacy／checkAxes／close／inspectで、enter／exit／settle／retire／任意body・artifact登録口はない。
+
+追加先行scheduleは1 idle ExitControl、2 not_attempted LocalRetirement、3 unobserved BodyAbsence、4 none NotStartedTerminal、5同参照bundleの5段階。同rootの既存failure shell・固定診断fieldを先行させ、既存37＋8＋4段階・同RunLink／duty結合後に追加slotを生成／捕捉する。各段階before／attempt／after／done／checkと最終bind／postの27点を固定し、最後の受領postまでreadyを立てない。これは実allocation数や実Eの確定ではない。
+
+slotは同duty／controlへ直接結合する。controlはbrand／link／duty／binding／cells／同start／idle／captureReturned=falseの8要素、retirementは6要素、absenceは5要素、terminalは7要素、bundleはbrandを含む8要素。rootのcurrent／issued同参照・固定field数・全関係を段階ごとに検査し、同startもbundleを一度だけprivate捕捉する。初回拒否候補・部分生成prefix・受領後post失敗の借用を保持し、二重bindは何も置換せずrefusalとする。
+
+同既存FixedExitDutyのphaseをnone／guard／history／retire／record／project、boundaryをnoneまたはbefore／afterへ有限化し、none/noneと非none/before-or-afterの組合せを型で分離した。値専用のExitControl状態型・GrantKnowledge／LocalRetirement／BodyAbsence／terminal型は将来の合法variantを表すが、live control／retirement／absence／terminal slotの型と生成関数はidle／not_attempted／unobserved／noneだけ。dutyはnot_owed・attempt未使用・none/noneから動かず、body未開始の確認証拠すら生成しない。
+
+checkAxesは50固定shape（適合9・不適合41）と10個のphase/boundary適合対照を純粋検査し、authority=none・value_only・validだけを返す。held_not_started／held_unsealed等が適合する値例でも、同rootのslotへ採用せず、成功terminal・proof・後工程権限にしない。生成結果known、退役未確認、body未観測を別軸として扱う。既存B-01の状態検査は変更していない。
+
+新projectionは全fieldを明示した有限plain dataで、参照は保持有無booleanだけ。既知不正slotのused／blocked／started／returned等の故障値を隠さず保持するが、ready=false・binding_mismatchであり実操作の証明ではない。実操作計数と別に扱い、terminalの不正accepted候補はacceptedRetainedだけへ投影し、exitAcceptedはfalse固定。全返答・拒否・closeの先行firstとprefixを保持する。任意object／Proxy／callbackはhookを実行せず拒否する。
+
+FX01の先行結合・混入、FX02の三軸値区別、FX03〜05の構築故障／stop／再入／重複結合、FX08の値・型上の交差禁止、FX10〜12の参照非出力・旧経路閉鎖を部分検証した。188新試験・関連1,547件・compiled14本・strict／build／lint・梱包の結果と初回問題は[検証記録](E2E_BEST_PRACTICE_WFB_PROBE_EXIT_PREPARATION_2026-11-10.md)。BX00のsettling・実履歴供給・固定exit継続、局所退役・terminal成功・BE05／06・(C)・実会計は未接続。実E／S・work／layout／OOMはUnknown、全体受付は無効のまま。

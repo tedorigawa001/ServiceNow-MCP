@@ -2266,6 +2266,10 @@ let probeStartAccess: Readonly<{
   captureGrant(a: RetirementStartAssembly): Readonly<ProbeGrantCaptureReply>;
   stopCapture(a: RetirementStartAssembly): void;
   captureInspect(a: RetirementStartAssembly): Readonly<ProbeGrantCaptureSnapshot>;
+  bindExit(a: RetirementStartAssembly, bundle: ProbeExitPreparationBundle, script: string): boolean;
+  matchesExit(a: RetirementStartAssembly, bundle: ProbeExitPreparationBundle): boolean;
+  exitInspect(a: RetirementStartAssembly): Readonly<{ attempted: boolean; retained: boolean; sameDuty: boolean;
+    knowledge: 'not_called' | 'known' | 'unknown'; callStarted: boolean; issuerRetained: boolean; receiverRetained: boolean }>;
   inspect(a: RetirementStartAssembly): Readonly<{ bindingRetained: boolean; bindingAttempted: boolean;
     wrapperCalls: number; generationBodyCalls: number; frameExits: number; frame: string; starts: number; claim: string }>;
 }>;
@@ -2282,6 +2286,8 @@ class RetirementStartAssembly {
   #captureRefusal: 'none' | 'duplicate_enter' = 'none'; #captureReentry = 'none';
   #captureFixed: Readonly<ProbeGrantCaptureReply> | undefined;
   #captureScript = 'normal'; #grantCallStarted = false; #capturePrefix: ProbeCapturePrefix = 'none';
+  #exitBundle: ProbeExitPreparationBundle | undefined; #exitIssuedBundle: ProbeExitPreparationBundle | undefined;
+  #exitBindStarted = false;
   readonly #owner = Object.freeze({});
   readonly #binding: PendingSourceBinding;
   readonly #pin: RetirementBindingPin;
@@ -2328,6 +2334,17 @@ class RetirementStartAssembly {
         stopRequested: a.#captureStop, refusal: a.#captureRefusal, reentry: a.#captureReentry, prefix: a.#capturePrefix,
         issuerRetained: a.#grantIssued !== undefined, obligationOwed: a.#runLink?.cells.use.attemptUsed === true,
         sameDuty: !!a.#runDuty && a.#runDuty === a.#runIssuedDuty && a.#runDuty.link === a.#runLink && a.#runLink === a.#runIssuedLink }),
+      bindExit(a: RetirementStartAssembly, bundle: ProbeExitPreparationBundle, script: string): boolean {
+        if (a.#exitBindStarted) return false;
+        a.#exitBindStarted = true; a.#exitIssuedBundle = bundle;
+        a.#exitBundle = script === 'exit_receiver_copy' ? Object.freeze({ ...bundle }) : bundle;
+        return a.exitPreparationMatches(bundle);
+      },
+      matchesExit: (a: RetirementStartAssembly, bundle: ProbeExitPreparationBundle) => a.exitPreparationMatches(bundle),
+      exitInspect: (a: RetirementStartAssembly) => Object.freeze({ attempted: a.#exitBindStarted, retained: !!a.#exitBundle,
+        sameDuty: !!a.#exitBundle && a.#exitBundle.duty === a.#runDuty && a.#runDuty === a.#runIssuedDuty,
+        knowledge: a.#grantIssued ? 'known' as const : a.#grantCallStarted ? 'unknown' as const : 'not_called' as const,
+        callStarted: a.#grantCallStarted, issuerRetained: a.#grantIssued !== undefined, receiverRetained: a.#probeCells?.grant.current !== undefined }),
       inspect: (a: RetirementStartAssembly) => Object.freeze({ bindingRetained: !!a.#probeBinding, bindingAttempted: a.#probeBindStarted,
         wrapperCalls: a.#wrapperCalls, generationBodyCalls: a.#generationBodyCalls, frameExits: a.#frameExits,
         frame: a.#frame ? 'active' : 'inactive', starts: a.#starts, claim: a.#claim.spent ? 'spent' : 'unused' }),
@@ -2409,6 +2426,10 @@ class RetirementStartAssembly {
     return link === this.#runLink && link === this.#runIssuedLink && duty === this.#runDuty && duty === this.#runIssuedDuty
       && link.binding === this.#probeBinding && link.cells === this.#probeCells && duty.link === link
       && this.probeMatches(link.binding);
+  }
+  private exitPreparationMatches(bundle: ProbeExitPreparationBundle): boolean {
+    return bundle === this.#exitBundle && bundle === this.#exitIssuedBundle && bundle.start === this
+      && this.#runLink === bundle.link && this.#runDuty === bundle.duty && this.runMatches(bundle.link, bundle.duty);
   }
   private captureReply(ok: boolean, disposition: string): Readonly<ProbeGrantCaptureReply> {
     return Object.freeze({ ok, disposition, first: this.#captureFirst });
@@ -2879,8 +2900,127 @@ interface ProbeRunLink { readonly [PROBE_RUN_LINK]: true; readonly origin: objec
   readonly cells: ProbeCellBundle; readonly frame: object; readonly entry: object; readonly exit: object }
 type ExitDutyState = { state: 'not_owed'; attemptUsed: false } | { state: 'owed'; attemptUsed: false }
   | { state: 'settling' | 'settled_unsealed'; attemptUsed: true } | { state: 'unconfirmed'; attemptUsed: boolean };
-type FixedExitDuty = ExitDutyState & { readonly [PROBE_DUTY]: true; readonly link: ProbeRunLink; phase: 'none'; boundary: 'none' };
+type DutyExitPhase = 'none' | 'guard' | 'history' | 'retire' | 'record' | 'project';
+type DutyExitBoundary = 'none' | 'before' | 'after';
+type DutyExitProgress = { phase: 'none'; boundary: 'none' }
+  | { phase: Exclude<DutyExitPhase, 'none'>; boundary: Exclude<DutyExitBoundary, 'none'> };
+type FixedExitDuty = ExitDutyState & { readonly [PROBE_DUTY]: true; readonly link: ProbeRunLink } & DutyExitProgress;
 interface ProbeRunSeal { readonly link: ProbeRunLink; readonly duty: FixedExitDuty; readonly executable: false }
+// Value contracts are not proof constructors. B03-A live slots can only be idle/unobserved/none.
+type ProbeExitKnowledgeValue = { kind: 'not_called'; callStarted: false; issuer: false; receiver: false; canonical: false }
+  | { kind: 'known'; callStarted: true; issuer: true } & ({ receiver: boolean; canonical: false } | { receiver: true; canonical: true })
+  | { kind: 'unknown'; callStarted: true; issuer: false; receiver: false; canonical: false };
+type ProbeLocalRetirementValue = { kind: 'not_attempted'; used: false; blocked: false; target: false }
+  | { kind: 'not_required'; used: false; blocked: boolean; target: false }
+  | { kind: 'confirmed'; used: true; blocked: true; target: true }
+  | { kind: 'unconfirmed'; used: boolean; blocked: boolean; target: boolean };
+type ProbeBodyAbsenceValue = { kind: 'unobserved'; started: false; returned: false; outcome: 'none' }
+  | { kind: 'not_started'; started: false; returned: true; outcome: 'none' }
+  | { kind: 'completed'; started: true; returned: true; outcome: 'return' | 'throw' | 'cancel' }
+  | { kind: 'unconfirmed'; started: boolean; returned: boolean; outcome: 'none' | 'return' | 'throw' | 'cancel' };
+type ProbeExitTerminalValue = { kind: 'none'; accepted: false }
+  | { kind: 'held_not_started'; accepted: false; body: 'not_started'; duty: 'settled_not_started'; exitUsed: true }
+  | { kind: 'held_unsealed'; accepted: false; body: 'completed'; duty: 'settled_unsealed'; exitUsed: true }
+  | { kind: 'exit_unconfirmed'; accepted: false; duty: 'unconfirmed'; exitUsed: boolean };
+const PROBE_EXIT_CONTROL: unique symbol = Symbol('private-probe-exit-control');
+const PROBE_EXIT_BUNDLE: unique symbol = Symbol('private-probe-exit-preparation');
+type ProbeExitControlValue = { readonly state: 'idle'; readonly captureReturned: false }
+  | { readonly state: 'checking' | 'settling' | 'terminal'; readonly captureReturned: true };
+type ProbeExitControl = { readonly [PROBE_EXIT_CONTROL]: true; readonly link: ProbeRunLink; readonly duty: FixedExitDuty;
+  readonly binding: ProbeFrameBinding; readonly cells: ProbeCellBundle; readonly start: RetirementStartAssembly;
+} & Extract<ProbeExitControlValue, { state: 'idle' }>;
+interface ProbeLocalRetirementSlot { readonly duty: FixedExitDuty; readonly control: ProbeExitControl;
+  readonly kind: 'not_attempted'; readonly used: false; readonly blocked: false; readonly target: undefined }
+interface ProbeBodyAbsenceSlot { readonly duty: FixedExitDuty; readonly control: ProbeExitControl;
+  readonly kind: 'unobserved'; readonly started: false; readonly returned: false }
+interface ProbeNotStartedTerminalSlot { readonly duty: FixedExitDuty; readonly control: ProbeExitControl; readonly absence: ProbeBodyAbsenceSlot;
+  readonly kind: 'none'; readonly candidate: undefined; readonly issued: undefined; readonly accepted: undefined }
+interface ProbeExitPreparationBundle { readonly [PROBE_EXIT_BUNDLE]: true; readonly link: ProbeRunLink; readonly duty: FixedExitDuty;
+  readonly start: RetirementStartAssembly; readonly control: ProbeExitControl; readonly retirement: ProbeLocalRetirementSlot;
+  readonly absence: ProbeBodyAbsenceSlot; readonly terminal: ProbeNotStartedTerminalSlot }
+interface ProbeExitPreparationReply { readonly model: 'wfb-probe-exit-preparation-1'; readonly ok: boolean; readonly disposition: string;
+  readonly first: ProbeRunFirst; readonly execution: 'closed'; readonly formalIssuance: 'closed'; readonly authority: 'none';
+  readonly wholeRunAdmission: 'disabled'; readonly implementation: 'unknown'; readonly investigations: 'on_hold' }
+interface ProbeExitAxisFacts { knowledge: ProbeExitKnowledgeValue['kind'] | 'foreign'; callStarted: boolean; issuer: boolean; receiver: boolean; canonical: boolean;
+  retirement: ProbeLocalRetirementValue['kind'] | 'foreign'; retireUsed: boolean; blocked: boolean; target: boolean;
+  body: ProbeBodyAbsenceValue['kind'] | 'foreign'; started: boolean; returned: boolean; outcome: string;
+  terminal: ProbeExitTerminalValue['kind'] | 'foreign'; accepted: boolean; duty: string; exitUsed: boolean; phase: string; boundary: string }
+function probeExitAxesValid(f: ProbeExitAxisFacts): boolean {
+  if (f.accepted) return false;
+  if (!['none', 'guard', 'history', 'retire', 'record', 'project'].includes(f.phase)
+    || !['none', 'before', 'after'].includes(f.boundary) || (f.phase === 'none') !== (f.boundary === 'none')) return false;
+  if (!['not_called', 'known', 'unknown'].includes(f.knowledge)
+    || f.callStarted !== (f.knowledge !== 'not_called') || f.issuer !== (f.knowledge === 'known')
+    || f.knowledge !== 'known' && (f.receiver || f.canonical) || f.canonical && !f.receiver) return false;
+  if (!['not_attempted', 'not_required', 'confirmed', 'unconfirmed'].includes(f.retirement)
+    || f.retirement === 'not_attempted' && (f.retireUsed || f.blocked || f.target)
+    || f.retirement === 'not_required' && (f.retireUsed || f.target || f.knowledge !== 'not_called')
+    || f.retirement === 'confirmed' && (!f.retireUsed || !f.blocked || !f.target || !f.canonical)) return false;
+  if (!['unobserved', 'not_started', 'completed', 'unconfirmed'].includes(f.body)
+    || !['none', 'return', 'throw', 'cancel'].includes(f.outcome)
+    || f.body === 'unobserved' && (f.started || f.returned || f.outcome !== 'none')
+    || f.body === 'not_started' && (f.started || !f.returned || f.outcome !== 'none')
+    || f.body === 'completed' && (!f.started || !f.returned || f.outcome === 'none')) return false;
+  if (!['not_owed', 'owed', 'settling', 'settled_not_started', 'settled_unsealed', 'unconfirmed'].includes(f.duty)
+    || ['not_owed', 'owed'].includes(f.duty) && f.exitUsed
+    || ['settling', 'settled_not_started', 'settled_unsealed'].includes(f.duty) && !f.exitUsed) return false;
+  if (f.terminal === 'none') return !['settled_not_started', 'settled_unsealed'].includes(f.duty);
+  if (f.terminal === 'exit_unconfirmed') return f.duty === 'unconfirmed';
+  if (f.terminal === 'held_not_started') return f.body === 'not_started' && f.duty === 'settled_not_started'
+    && ['confirmed', 'not_required'].includes(f.retirement);
+  if (f.terminal === 'held_unsealed') return f.body === 'completed' && f.duty === 'settled_unsealed' && f.retirement === 'confirmed';
+  return false;
+}
+function probeExitAxisShape(script: string): ProbeExitAxisFacts {
+  const f: ProbeExitAxisFacts = { knowledge: 'not_called', callStarted: false, issuer: false, receiver: false, canonical: false,
+    retirement: 'not_attempted', retireUsed: false, blocked: false, target: false, body: 'unobserved', started: false, returned: false,
+    outcome: 'none', terminal: 'none', accepted: false, duty: 'not_owed', exitUsed: false, phase: 'none', boundary: 'none' };
+  const s = script.startsWith('axis_') ? script.slice(5) : 'idle';
+  if (['known', 'known_rejected', 'retirement_unknown', 'retired', 'held_known', 'held_body', 'confirmed_unspent', 'confirmed_unblocked',
+    'confirmed_targetless', 'confirmed_uncanonical', 'held_wrong_body', 'held_wrong_duty', 'completed_none', 'completed_unreturned', 'completed_unstarted',
+    'not_required_known', 'held_body_unretired'].includes(s)) {
+    Object.assign(f, { knowledge: 'known', callStarted: true, issuer: true, receiver: true, canonical: true });
+  }
+  if (s === 'known_rejected') f.canonical = false;
+  if (s === 'unknown' || s === 'unknown_issuer') { f.knowledge = 'unknown'; f.callStarted = true; }
+  if (['retired', 'held_known', 'held_body', 'confirmed_unspent', 'confirmed_unblocked', 'confirmed_targetless', 'held_wrong_body',
+    'held_wrong_duty', 'completed_none', 'completed_unreturned', 'completed_unstarted', 'confirmed_uncanonical'].includes(s)) Object.assign(f, { retirement: 'confirmed', retireUsed: true, blocked: true, target: true });
+  if (s === 'retirement_unknown') f.retirement = 'unconfirmed';
+  if (['held_empty', 'held_known', 'held_wrong_body', 'held_wrong_duty', 'held_unretired'].includes(s)) Object.assign(f, {
+    body: 'not_started', returned: true, terminal: 'held_not_started', duty: 'settled_not_started', exitUsed: true });
+  if (s === 'held_empty') f.retirement = 'not_required';
+  if (['held_body', 'completed_none', 'completed_unreturned', 'completed_unstarted', 'held_body_unretired'].includes(s)) Object.assign(f, {
+    body: 'completed', started: true, returned: true, outcome: 'return', terminal: 'held_unsealed', duty: 'settled_unsealed', exitUsed: true });
+  const bad: Readonly<Record<string, Partial<ProbeExitAxisFacts>>> = {
+    phase: { phase: 'foreign', boundary: 'before' }, boundary: { phase: 'guard', boundary: 'foreign' }, phase_pair: { phase: 'guard' }, accepted: { accepted: true },
+    knowledge: { knowledge: 'foreign', callStarted: true }, not_called_started: { callStarted: true }, unknown_issuer: { issuer: true },
+    receiver_without_issuer: { receiver: true }, canonical_without_receiver: { knowledge: 'known', callStarted: true, issuer: true, canonical: true },
+    retirement: { retirement: 'foreign' }, unused_retirement_used: { retireUsed: true }, unused_retirement_blocked: { blocked: true },
+    unused_retirement_target: { target: true }, confirmed_unspent: { retireUsed: false }, confirmed_unblocked: { blocked: false },
+    not_required_used: { retirement: 'not_required', retireUsed: true }, not_required_target: { retirement: 'not_required', target: true },
+    not_required_known: { retirement: 'not_required' },
+    confirmed_targetless: { target: false }, confirmed_uncanonical: { canonical: false }, body: { body: 'foreign' }, unobserved_started: { started: true },
+    unobserved_returned: { returned: true }, unobserved_outcome: { outcome: 'return' }, completed_none: { outcome: 'none' },
+    completed_unreturned: { returned: false }, terminal: { terminal: 'foreign' }, duty: { duty: 'foreign' }, duty_unowed_spent: { exitUsed: true },
+    not_started_started: { body: 'not_started', started: true, returned: true }, not_started_unreturned: { body: 'not_started' },
+    not_started_outcome: { body: 'not_started', returned: true, outcome: 'throw' }, completed_unstarted: { started: false },
+    outcome: { body: 'unconfirmed', outcome: 'foreign' }, settled_without_terminal: { duty: 'settled_not_started', exitUsed: true },
+    unconfirmed_wrong_duty: { terminal: 'exit_unconfirmed' },
+    duty_settling_unspent: { duty: 'settling' }, held_wrong_body: { body: 'unobserved', returned: false }, held_wrong_duty: { duty: 'settled_unsealed' },
+  };
+  Object.assign(f, bad[s]);
+  const phase = /^phase_(guard|history|retire|record|project)_(before|after)$/.exec(s);
+  if (phase) { f.phase = phase[1]; f.boundary = phase[2]; }
+  return f;
+}
+const PROBE_EXIT_AXIS_SCRIPTS = Object.freeze(['idle', 'known', 'known_rejected', 'unknown', 'retirement_unknown', 'retired', 'held_empty', 'held_known',
+  'held_body', 'phase', 'boundary', 'phase_pair', 'accepted', 'knowledge', 'not_called_started', 'unknown_issuer', 'receiver_without_issuer',
+  'canonical_without_receiver', 'retirement', 'unused_retirement_used', 'unused_retirement_blocked', 'unused_retirement_target', 'confirmed_unspent',
+  'confirmed_unblocked', 'confirmed_targetless', 'confirmed_uncanonical', 'body', 'unobserved_started', 'unobserved_returned', 'unobserved_outcome', 'completed_none',
+  'completed_unreturned', 'terminal', 'duty', 'duty_unowed_spent', 'duty_settling_unspent', 'held_wrong_body', 'held_wrong_duty',
+  'not_required_used', 'not_required_target', 'not_required_known', 'not_started_started', 'not_started_unreturned', 'not_started_outcome',
+  'completed_unstarted', 'outcome', 'settled_without_terminal', 'unconfirmed_wrong_duty', 'held_unretired', 'held_body_unretired',
+  ...['guard', 'history', 'retire', 'record', 'project'].flatMap(p => ['before', 'after'].map(b => `phase_${p}_${b}`))].map(s => 'axis_' + s));
 interface ProbeStateFacts { use: string; attempt: boolean; grant: string; references: boolean; unresolved: boolean;
   body: string; outcome: string; exit: string; accepted: boolean; duty: string; dutyUsed: boolean }
 interface ProbeGrantCaptureReply { readonly ok: boolean; readonly disposition: string; readonly first: ProbeRunFirst }
@@ -3044,17 +3184,24 @@ class CanonicalGateDraftRoot {
   #issuedRunLink: ProbeRunLink | undefined; #issuedRunDuty: FixedExitDuty | undefined; #issuedRunSeal: ProbeRunSeal | undefined;
   #runPhase = 0; #runBoundary = 'none'; #runBindRefusal: 'none' | 'duplicate_binding' = 'none';
   #runFixedReply: Readonly<ProbeRunReply> | undefined;
+  readonly #exitSlots: { stage: SupplyConstructionStage; value: object | undefined }[];
+  readonly #exitIssued: (object | undefined)[];
+  #exitPhase = 0; #exitBoundary = 'none'; #exitFirst: ProbeRunFirst = 'none';
+  #exitBindRefusal = 'none'; #exitReentry = 'none'; #exitFixed: Readonly<ProbeExitPreparationReply> | undefined;
   constructor(private readonly script: string, admitted: boolean, private readonly probePreparation = false, private readonly runPreparation = false,
-    private readonly grantCapture = false) {
+    private readonly grantCapture = false, private readonly exitPreparation = false) {
     this.#failure = { first: admitted ? 'none' : 'input_rejected', phase: 0, boundary: 'none' };
     this.#slots = Array.from({ length: 37 }, () => ({ stage: 'not_started', value: undefined }));
     this.#probeSlots = probePreparation ? Array.from({ length: 8 }, () => ({ stage: 'not_started', value: undefined })) : [];
     this.#probeOwner = probePreparation ? Object.freeze({}) : undefined;
     this.#runSlots = runPreparation ? Array.from({ length: 4 }, () => ({ stage: 'not_started', value: undefined })) : [];
+    this.#exitSlots = exitPreparation ? Array.from({ length: 5 }, () => ({ stage: 'not_started', value: undefined })) : [];
+    this.#exitIssued = exitPreparation ? Array(5).fill(undefined) : [];
   }
   private reply(ok: boolean, disposition: string) { return Object.freeze({ ok, disposition, first: this.#failure.first }); }
   private fail(reason: string) {
     if (this.#failure.first === 'none') this.#failure.first = reason;
+    if (this.exitPreparation && this.#exitPhase > 0 && this.#exitFirst === 'none') this.#exitFirst = runFirst(reason);
     return this.#fixed ??= this.reply(false, reason);
   }
   private point(n: number, boundary: string) {
@@ -3223,6 +3370,73 @@ class CanonicalGateDraftRoot {
       unresolved: c.grant.unresolved, body: c.body.state, outcome: c.body.outcome, exit: c.exit.stage,
       accepted: c.exit.accepted !== undefined, duty: duty?.state ?? 'not_owed', dutyUsed: duty?.attemptUsed ?? false };
   }
+  private exitPreparationPoint(n: number, boundary: string): void {
+    this.#exitPhase = n; this.#exitBoundary = boundary;
+    if (this.script === `exit_${boundary}_${n}`) throw Error('private_exit_preparation_fault');
+    if (this.script === `exit_stop_${boundary}_${n}`) { this.#closed = true; throw Error('private_exit_preparation_stopped'); }
+    if (this.script === `exit_reenter_${boundary}_${n}`) this.#exitReentry = this.prepare().disposition;
+  }
+  private exitPreparationMint<T extends object>(n: number, operation: () => T): T {
+    this.exitPreparationPoint(n, 'before'); const slot = this.#exitSlots[n - 1];
+    slot.stage = 'attempting'; this.exitPreparationPoint(n, 'attempt');
+    const raw = operation(), field = this.script.startsWith(`exit_slot_${n}_`) ? this.script.slice(`exit_slot_${n}_`.length) : '';
+    const brand = n === 1 ? PROBE_EXIT_CONTROL : PROBE_EXIT_BUNDLE;
+    const value = field === 'brand' ? Object.freeze({ ...raw, [brand]: false })
+      : field === 'extra' ? Object.freeze({ ...raw, extra: true })
+        : field && field !== 'copy' ? Object.freeze({ ...raw, [field]: typeof (raw as Record<string, unknown>)[field] === 'boolean'
+          ? !(raw as Record<string, unknown>)[field] : typeof (raw as Record<string, unknown>)[field] === 'string' ? 'foreign' : Object.freeze({}) }) : raw;
+    this.#exitIssued[n - 1] = value;
+    slot.value = field === 'copy' ? Object.freeze({ ...value }) : value;
+    slot.stage = 'provisional'; this.exitPreparationPoint(n, 'after');
+    slot.stage = 'confirmed'; this.exitPreparationPoint(n, 'done'); return slot.value as T;
+  }
+  private exitPreparationSlotMatches(n: number): boolean {
+    const value = this.#exitSlots[n - 1]?.value, link = this.#issuedRunLink!, duty = this.#issuedRunDuty!, b = this.#issuedFrameBinding!;
+    if (!value || value !== this.#exitIssued[n - 1]) return false;
+    const control = this.#exitSlots[0].value as ProbeExitControl;
+    if (n === 1) { const v = value as ProbeExitControl;
+      return Reflect.ownKeys(v).length === 8 && v[PROBE_EXIT_CONTROL] === true && v.link === link && v.duty === duty
+        && v.binding === b && v.cells === this.#issuedCells && v.start === b.target.start && v.state === 'idle' && v.captureReturned === false;
+    }
+    if (n === 2) { const v = value as ProbeLocalRetirementSlot;
+      return Reflect.ownKeys(v).length === 6 && v.duty === duty && v.control === control && v.kind === 'not_attempted'
+        && v.used === false && v.blocked === false && v.target === undefined;
+    }
+    if (n === 3) { const v = value as ProbeBodyAbsenceSlot;
+      return Reflect.ownKeys(v).length === 5 && v.duty === duty && v.control === control && v.kind === 'unobserved'
+        && v.started === false && v.returned === false;
+    }
+    if (n === 4) { const v = value as ProbeNotStartedTerminalSlot;
+      return Reflect.ownKeys(v).length === 7 && v.duty === duty && v.control === control && v.absence === this.#exitSlots[2].value
+        && v.kind === 'none' && v.candidate === undefined && v.issued === undefined && v.accepted === undefined;
+    }
+    const v = value as ProbeExitPreparationBundle;
+    return n === 5 && Reflect.ownKeys(v).length === 8 && v[PROBE_EXIT_BUNDLE] === true && v.link === link && v.duty === duty
+      && v.start === b.target.start && v.control === control && v.retirement === this.#exitSlots[1].value
+      && v.absence === this.#exitSlots[2].value && v.terminal === this.#exitSlots[3].value;
+  }
+  private prepareExitSlots(): boolean {
+    const link = this.#issuedRunLink!, duty = this.#issuedRunDuty!, binding = this.#issuedFrameBinding!, start = binding.target.start;
+    const control = this.exitPreparationMint(1, (): ProbeExitControl => Object.freeze({ [PROBE_EXIT_CONTROL]: true as const, link, duty,
+      binding, cells: this.#issuedCells!, start, state: 'idle', captureReturned: false }));
+    this.exitPreparationPoint(1, 'check'); if (!this.exitPreparationSlotMatches(1)) return false;
+    const retirement = this.exitPreparationMint(2, (): ProbeLocalRetirementSlot => Object.freeze({ duty, control, kind: 'not_attempted',
+      used: false, blocked: false, target: undefined }));
+    this.exitPreparationPoint(2, 'check'); if (!this.exitPreparationSlotMatches(2)) return false;
+    const absence = this.exitPreparationMint(3, (): ProbeBodyAbsenceSlot => Object.freeze({ duty, control, kind: 'unobserved', started: false, returned: false }));
+    this.exitPreparationPoint(3, 'check'); if (!this.exitPreparationSlotMatches(3)) return false;
+    const terminal = this.exitPreparationMint(4, (): ProbeNotStartedTerminalSlot => Object.freeze({ duty, control, absence,
+      kind: 'none', candidate: undefined, issued: undefined, accepted: undefined }));
+    this.exitPreparationPoint(4, 'check'); if (!this.exitPreparationSlotMatches(4)) return false;
+    const bundle = this.exitPreparationMint(5, (): ProbeExitPreparationBundle => Object.freeze({ [PROBE_EXIT_BUNDLE]: true as const,
+      link, duty, start, control, retirement, absence, terminal }));
+    this.exitPreparationPoint(5, 'check'); if (!this.exitPreparationSlotMatches(5)) return false;
+    this.exitPreparationPoint(5, 'bind');
+    if (!probeStartAccess.bindExit(start, bundle, this.script)) return false;
+    if (this.script === 'exit_duplicate_binding') this.#exitBindRefusal = probeStartAccess.bindExit(start, bundle, this.script) ? 'not_refused' : 'duplicate_binding';
+    this.exitPreparationPoint(5, 'post');
+    return probeStartAccess.matchesExit(start, bundle);
+  }
   prepare() {
     if (this.#fixed) return this.#fixed;
     if (this.#frame) return this.reply(false, 'construction_in_progress');
@@ -3271,8 +3485,9 @@ class CanonicalGateDraftRoot {
       if (!this.seedMatches() || !issuerConstructionAccess.matches(issuer, target) || !this.draftMatches()) return this.fail('binding_mismatch');
       if (this.probePreparation && !this.prepareProbeBinding(seed, target, pin, draft)) return this.fail('binding_mismatch');
       if (this.runPreparation && !this.prepareRun()) return this.fail('binding_mismatch');
+      if (this.exitPreparation && !this.prepareExitSlots()) return this.fail('binding_mismatch');
       (this.#slots[1].value as { state: string }).state = 'bound'; this.#ready = true; return this.reply(true, 'draft_held');
-    } catch { return this.fail('construction_unconfirmed'); }
+    } catch { return this.fail(this.exitPreparation && this.#closed ? 'closed' : 'construction_unconfirmed'); }
     finally { this.#frame = false; }
   }
   check() {
@@ -3313,6 +3528,60 @@ class CanonicalGateDraftRoot {
     if (!this.runLinkMatches() || !this.probeBindingMatch()
       || !probeStartAccess.matchesRun(b.target.start, this.#issuedRunLink!, this.#issuedRunDuty!)) return this.fail('binding_mismatch');
     return legacy ? probeStartAccess.legacy(b.target.start) : probeStartAccess.check(b.target.start);
+  }
+  checkExitPreparation(legacy = false): Readonly<{ ok: boolean; disposition: string }> {
+    if (this.#fixed) return this.#fixed;
+    if (!this.exitPreparation || !this.#ready || this.#closed) return this.reply(false, 'not_ready');
+    const bundle = this.#exitSlots[4].value as ProbeExitPreparationBundle;
+    if (![1, 2, 3, 4, 5].every(n => this.exitPreparationSlotMatches(n))
+      || !probeStartAccess.matchesExit(bundle.start, bundle)) return this.fail('binding_mismatch');
+    return this.checkRunPreparation(legacy);
+  }
+  exitPreparationReply(ok: boolean, disposition: string): Readonly<ProbeExitPreparationReply> {
+    if (this.#exitFixed) return this.#exitFixed;
+    const value = Object.freeze({ model: 'wfb-probe-exit-preparation-1' as const, ok,
+      disposition: runEnum(disposition, ['draft_held', 'duplicate_preparation', 'construction_in_progress', 'not_ready', 'closed',
+        'blocked_frame_execution', 'input_rejected', 'binding_mismatch', 'construction_unconfirmed'], 'internal_unconfirmed'),
+      first: runFirst(this.#failure.first), authority: 'none' as const, execution: 'closed' as const, formalIssuance: 'closed' as const,
+      wholeRunAdmission: 'disabled' as const, implementation: 'unknown' as const, investigations: 'on_hold' as const });
+    if (this.#fixed) this.#exitFixed = value; return value;
+  }
+  checkExitAxes() {
+    return Object.freeze({ model: 'wfb-probe-exit-axes-value-1', kind: 'value_only', authority: 'none',
+      valid: this.#failure.first === 'none' && probeExitAxesValid(probeExitAxisShape(this.script)) });
+  }
+  inspectExitPreparation() {
+    const b = this.#issuedFrameBinding, start = b?.target.start, receiver = start ? probeStartAccess.exitInspect(start) : undefined;
+    const si = start ? probeStartAccess.inspect(start) : undefined, duty = this.#issuedRunDuty;
+    const control = this.#exitSlots[0]?.value as ProbeExitControl | undefined;
+    const retirement = this.#exitSlots[1]?.value as ProbeLocalRetirementSlot | undefined;
+    const absence = this.#exitSlots[2]?.value as ProbeBodyAbsenceSlot | undefined;
+    const terminal = this.#exitSlots[3]?.value as ProbeNotStartedTerminalSlot | undefined;
+    return Object.freeze({ model: 'wfb-probe-exit-preparation-1', schema: 1, authority: 'none', execution: 'closed', formalIssuance: 'closed',
+      wholeRunAdmission: 'disabled', implementation: 'unknown', investigations: 'on_hold', first: runFirst(this.#failure.first),
+      preparation: Object.freeze({ ready: this.#ready, phase: this.#exitPhase,
+        boundary: runEnum(this.#exitBoundary, ['none', 'before', 'attempt', 'after', 'done', 'check', 'bind', 'post'], 'unconfirmed'),
+        first: this.#exitFirst, retained: this.#exitSlots.filter(s => s.value !== undefined).length,
+        stages: Object.freeze(this.#exitSlots.map(s => runEnum(s.stage, ['not_started', 'attempting', 'provisional', 'confirmed'], 'unconfirmed'))),
+        issuedRetained: Object.freeze(this.#exitIssued.map(v => v !== undefined)), bindRefusal: runEnum(this.#exitBindRefusal, ['none', 'duplicate_binding'], 'unconfirmed'),
+        reentry: runEnum(this.#exitReentry, ['none', 'construction_in_progress'], 'unconfirmed') }),
+      binding: Object.freeze({ receiverAttempted: receiver?.attempted === true, receiverRetained: receiver?.retained === true,
+        sameDuty: receiver?.sameDuty === true, controlRetained: control !== undefined, bundleRetained: this.#exitSlots[4]?.value !== undefined }),
+      duty: Object.freeze({ state: runEnum(duty?.state, ['not_owed', 'owed', 'settling', 'settled_unsealed', 'unconfirmed'], 'not_owed'),
+        attemptUsed: duty?.attemptUsed === true, phase: runEnum(duty?.phase, ['none', 'guard', 'history', 'retire', 'record', 'project'], 'unconfirmed'),
+        boundary: runEnum(duty?.boundary, ['none', 'before', 'after'], 'unconfirmed'), linkRetained: Boolean(duty) }),
+      control: Object.freeze({ state: runEnum(control?.state, ['idle'], 'unconfirmed'), captureReturned: Boolean(control?.captureReturned) }),
+      knowledge: Object.freeze({ kind: runEnum(receiver?.knowledge, ['not_called', 'known', 'unknown'], 'unknown'), callStarted: receiver?.callStarted === true,
+        issuerRetained: receiver?.issuerRetained === true, receiverRetained: receiver?.receiverRetained === true }),
+      retirement: Object.freeze({ kind: runEnum(retirement?.kind, ['not_attempted'], 'unconfirmed'), attemptUsed: Boolean(retirement?.used),
+        blocked: Boolean(retirement?.blocked), targetRetained: retirement?.target !== undefined }),
+      body: Object.freeze({ kind: runEnum(absence?.kind, ['unobserved'], 'unconfirmed'), started: Boolean(absence?.started), returned: Boolean(absence?.returned) }),
+      terminal: Object.freeze({ kind: runEnum(terminal?.kind, ['none'], 'unconfirmed'), candidateRetained: terminal?.candidate !== undefined,
+        issuedRetained: terminal?.issued !== undefined, acceptedRetained: terminal?.accepted !== undefined, exitAccepted: false }),
+      start: Object.freeze({ wrapperCalls: si?.wrapperCalls ?? 0, generationBodyCalls: si?.generationBodyCalls ?? 0, frameExits: si?.frameExits ?? 0,
+        retirementStarts: si?.starts ?? 0, retirementClaimUnused: !si || si.claim === 'unused' }),
+      enterUsed: this.#issuedCells?.use.attemptUsed === true, grantIssues: 0, exitAttempts: 0, retirementAttempts: 0, terminalCommits: 0,
+      bodyStarts: 0, exitRecords: 0, journalSupply: 'not_connected', rootFinish: 'not_called' });
   }
   runReply(ok: boolean, disposition: string): Readonly<ProbeRunReply> {
     if (this.#runFixedReply) return this.#runFixedReply;
@@ -3456,6 +3725,30 @@ export function createProbeGrantCaptureFake(...args: readonly unknown[]) {
     checkLegacy: (...xs: readonly unknown[]) => call(xs, () => a.checkGrantBodyClosed(true)),
     checkState: (...xs: readonly unknown[]) => { if (xs.length) a.rejectInput(); return a.checkRunShape(); },
     close: (...xs: readonly unknown[]) => call(xs, () => a.close()), inspect: () => a.inspectRun() });
+}
+
+export function createProbeExitPreparationFake(...args: readonly unknown[]) {
+  const script = args.length ? args[0] : 'normal';
+  const fields = [['copy', 'brand', 'extra', 'link', 'duty', 'binding', 'cells', 'start', 'state', 'captureReturned'],
+    ['copy', 'extra', 'duty', 'control', 'kind', 'used', 'blocked', 'target'],
+    ['copy', 'extra', 'duty', 'control', 'kind', 'started', 'returned'],
+    ['copy', 'extra', 'duty', 'control', 'absence', 'kind', 'candidate', 'issued', 'accepted'],
+    ['copy', 'brand', 'extra', 'link', 'duty', 'start', 'control', 'retirement', 'absence', 'terminal']];
+  const scripts = ['normal', 'exit_receiver_copy', 'exit_duplicate_binding', ...PROBE_EXIT_AXIS_SCRIPTS,
+    ...fields.flatMap((fs, i) => fs.map(f => `exit_slot_${i + 1}_${f}`)),
+    ...[1, 2, 3, 4, 5].flatMap(n => ['before', 'attempt', 'after', 'done', 'check', ...(n === 5 ? ['bind', 'post'] : [])]
+      .flatMap(b => [`exit_${b}_${n}`, `exit_stop_${b}_${n}`, `exit_reenter_${b}_${n}`]))];
+  const admitted = args.length <= 1 && typeof script === 'string' && scripts.includes(script);
+  const a = new CanonicalGateDraftRoot(admitted ? script as string : 'normal', admitted, true, true, false, true);
+  const call = (xs: readonly unknown[], op: () => Readonly<{ ok: boolean; disposition: string }>) => {
+    const r = xs.length ? a.rejectInput() : op(); return a.exitPreparationReply(r.ok, r.disposition);
+  };
+  return Object.freeze({ prepare: (...xs: readonly unknown[]) => call(xs, () => a.prepare()),
+    check: (...xs: readonly unknown[]) => call(xs, () => a.checkExitPreparation()),
+    checkLegacy: (...xs: readonly unknown[]) => call(xs, () => a.checkExitPreparation(true)),
+    checkAxes: (...xs: readonly unknown[]) => { if (xs.length) a.rejectInput(); return a.checkExitAxes(); },
+    close: (...xs: readonly unknown[]) => call(xs, () => a.close()),
+    inspect: (...xs: readonly unknown[]) => { if (xs.length) a.rejectInput(); return a.inspectExitPreparation(); } });
 }
 
 // Diagnostics-only synthetic generation binding. No journal/fact/scope/producer references escape.
