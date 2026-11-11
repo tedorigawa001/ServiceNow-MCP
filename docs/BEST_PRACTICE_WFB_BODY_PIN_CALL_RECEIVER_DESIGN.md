@@ -1,6 +1,8 @@
 # WF-B C-02後半：固定private call・receiver入口と同start試行／格納
 
-Version: draft-0.5 / Date: 2026-11-11 / 読み取り基準HEAD: `ff866f9`（C-02前半実装 `4f70522`、前半レビュー対照 `ff866f9`、draft-0.1レビュー修正基準HEAD: `0f3fae0`、内部契約の限定実装基準HEAD: `3fc15ab`、draft-0.3レビュー修正基準HEAD: `983fa24`、固定call／receiver入場の実装基準HEAD: `9f4361c`）。
+Version: draft-0.6 / Date: 2026-11-11 / 読み取り基準HEAD: `ff866f9`（C-02前半実装 `4f70522`、前半レビュー対照 `ff866f9`、draft-0.1レビュー修正基準HEAD: `0f3fae0`、内部契約の限定実装基準HEAD: `3fc15ab`、draft-0.3レビュー修正基準HEAD: `983fa24`、固定call／receiver入場の実装基準HEAD: `9f4361c`、draft-0.5レビュー修正基準HEAD: `1b929dc`）。
+
+draft-0.5のレビュー修正：§15の固定call・receiver入場は、43件の一時変異のうち28件でVitest・compiledの両方が通っていた。dispatchの呼出し前検査（PC02再検査・entryBusy・call回数）、receiverの初回条件（active資格・初期field）とpreflight前後の2回の入場検査、rootの停止判定のsource側2節と、停止だけの理由を閉鎖へ写す節は、後段の検査が同じ理由で受けるか、一点だけを壊す注入がなかった。compiledには一点注入9件を追加した。before_callでroute境界・busy flag・call回数・source停止要求・source firstを、dispatchの直接記録でroute境界を、before_callで初期field flagを、preflight前後でsource境界を壊し、節を除くと最初の理由・call有無・試行有無・失敗点のいずれかが動くことを確かめる。これで10件をkillした。残る18件は§16で等価と判断した。
 
 draft-0.3のレビュー修正：§13のbridge準備は、23件の一時変異のうち12件でVitest・compiledの両方が通っていた。prepareBodyPinBridgeのbefore／checked／blocked各点にあるPC02再検査・identity再照合・callActive／entryBusyの節と、bodyPinBridgeIdentityのcaller照合は、どれも後段の検査が同じ拒否理由で受けるか、注入対照がなかった。compiledには3点への単独注入9件を追加した。callActive・busy・receiver関係（固定accessのflag）・route境界・metadata固定化数のいずれかを壊し、節を除くと最初の拒否理由かbridge位置が動くことを確かめる。callActiveのliteral初期値の対照も追加した。Vitestにはclose時の`build.stopFirst`=closedと`stopRequested`を追加した。残る3件は§14で等価と判断した。
 
@@ -229,3 +231,18 @@ private固定accessはmodule static初期化で一度固定し、readonly同一�
 compiledは実ownerのactive正例、finally除去2対照、counterだけ残してcalleeを省く対照、live区間のforeign／copy無書込み、停止優先、27fieldの狭いphase view単独故障とchecker迂回、attempting接続、同期8直接代入→固定call、禁止参照／claim writer=0と型拒否8行を確認する。phase view故障は値checker接続の検査であり、実保持slot全fieldの改竄耐性の代替ではない。callActiveとintervalの重なる条件は、実call中にcallActive=falseへした負例と両条件を除く対照で共同の責務を確認する。単独節感度又はTS失敗だけのkillとはしない。§14の他の等価判断を新格納writerに自動継承しない。
 
 CE01〜07・09〜13の今回境界に関係する部分だけを[検証記録](E2E_BEST_PRACTICE_WFB_BODY_PIN_CALL_2026-11-11.md)へ記録し、CE全体の完了にはしない。CR05〜08の参照捕捉／confirmed・PC08・C-03・payload借用／bind・構築ready・body・Journal供給・root終端・正式発行は未接続。保持は未解決責務でありcleanup証拠ではない。
+
+## 16 draft-0.5レビューの等価判断（2026-11-11）
+
+いずれも現行の所有経路だけでの判断で、CR05以降で参照格納・PC08・第2のwriterを接続するときは単独対照で改めて評価する。
+
+| 区分 | 節 | 等価の根拠 |
+|---|---|---|
+| 同値の先行検査 | receiver初回条件のentryBusy・step・failureStep | 直前のbusy拒否と、dispatchがhookなしで直前に行うPC02 callReady（receiver step／failureStep none）が同じ値を検査する |
+| 同値の先行検査 | dispatchの2回目のcallActive検査 | 直前のrefusal分岐がcallActive=trueを先に受ける |
+| 到達しない経路 | receiverのattemptUsedによる重複拒否、dispatchのpinCallReachedによる拒否 | 入場中はentryBusy／callActiveが先に成立し、復帰後はrootが必ず失敗済みでstopped判定が先に受ける |
+| 到達しない経路 | dispatchの`bodyPinCall`、active資格の`bodyPinCall`、refusal／eventのidentity | 呼出し元がconstructor固定modeか、identity確認済みの組だけで呼ぶ |
+| 単一writer | receiver初回診断の保持guard、refusalの初回保持 | 各入場経路でfailBodyPinReceiverは1回だけ呼ばれ、refusalは常にin_progressで同値 |
+| 同時記録の組 | storage拒否条件のattemptUsedとstage | CR04で同じ直接記録の組として立ち、片方だけが成立する状態がない |
+| 同一の理由写像 | 復帰後のinherited／receiver理由の選択、sourceReasonの選択 | receiverの理由は同じroot／source状態からreasonで写像されるため、現行scriptでは両経路が同値になる |
+| 到達しない経路 | catch内の`fixedCalls === 0`と初回保持guard | catchへ来るのはbefore_call（未call）か、sourceReason記録済みのreturnedだけ |

@@ -106,6 +106,38 @@ try {
   const ay = run(await load(method(noAttemptCheck, 'bodyPinReceiverMatches', 'BODY_PIN_PHASE_CHECKS.attempting(values)', 'true'), 'attempt-control'));
   assert.equal(ay.s.build.receiver.first, 'receiver_unconfirmed'); assert.equal(ax.s.receiverPin.failureStep, 'attempt');
 
+  // Single-point controls: each injection reaches one guard first, so removing that guard moves the first observable rejection.
+  const flagged = replace(replace(source, 'bodyPinEntryBusy: (a: RetirementStartAssembly) => a.#bodyPinEntryBusy,',
+    'bodyPinEntryBusy: (a: RetirementStartAssembly) => (globalThis as any).__ecBusy ?? a.#bodyPinEntryBusy,'),
+  '  private bodyFieldsInitial(): boolean {\n    return ', '  private bodyFieldsInitial(): boolean {\n    return !(globalThis as any).__ecInit && ');
+  const atPoint = (s, point, code) => method(s, 'bodyPinCallPoint', '    this.#bodyPinCallPoint = point;',
+    `    this.#bodyPinCallPoint = point;\n    if (point === '${point}') { ${code} }`);
+  const notCalled = { fixedCalls: 0, pinCallReached: false, attemptUsed: false };
+  const enteredOnly = { fixedCalls: 1, pinCallReached: true, attemptUsed: false, receiverFirst: 'none', step: 'none' };
+  const pointControls = [
+    ['dispatch-preflight', atPoint(flagged, 'before_call', "this.#bodyPinRouteBoundary = 'before';"), { first: 'binding_mismatch', ...notCalled }],
+    ['dispatch-busy', atPoint(flagged, 'before_call', '(globalThis as any).__ecBusy = true;'), { first: 'binding_mismatch', ...notCalled }],
+    ['dispatch-counter', atPoint(flagged, 'before_call', 'this.#bodyPinFixedCalls = 1;'), { pinCallReached: false, attemptUsed: false }],
+    ['stop-source-request', atPoint(flagged, 'before_call', 'source.stopRequested = true;'), { first: 'closed', ...notCalled }],
+    ['stop-source-first', atPoint(flagged, 'before_call', "source.first = 'closed';"), { first: 'closed', ...notCalled }],
+    ['receiver-active', replace(flagged, "this.#bodyPinRouteStep = 'call'; this.#bodyPinRouteBoundary = 'before';",
+      "this.#bodyPinRouteStep = 'call'; this.#bodyPinRouteBoundary = 'after';"), enteredOnly],
+    ['receiver-fields', atPoint(flagged, 'before_call', '(globalThis as any).__ecInit = true;'), enteredOnly],
+    ['receiver-entry-before', atPoint(flagged, 'preflight_before', "source.boundary = 'before';"),
+      { first: 'state_invalid', attemptUsed: false, receiverFirst: 'state_invalid', receiverBoundary: 'before', failurePoint: 'preflight_before' }],
+    ['receiver-entry-after', atPoint(flagged, 'preflight_after', "source.boundary = 'before';"),
+      { first: 'state_invalid', attemptUsed: false, receiverFirst: 'state_invalid', receiverBoundary: 'before', failurePoint: 'preflight_after' }],
+  ];
+  for (const [name, text, expected] of pointControls) {
+    try {
+      const x = run(await load(text, 'point-' + name)), rv = x.s.build.receiver;
+      const actual = { first: x.r.first, fixedCalls: x.s.fixedCalls, pinCallReached: x.s.build.source.pinCallReached, attemptUsed: rv.pinAttemptUsed,
+        receiverFirst: rv.first, step: x.s.receiverPin.step, receiverBoundary: rv.failureBoundary, failurePoint: x.s.failurePoint };
+      for (const [key, value] of Object.entries(expected)) assert.equal(actual[key], value, name + ' ' + key);
+      assert.equal(x.s.callActive, false); assert.ok(rv.references.every(v => !v.retained));
+    } finally { delete globalThis.__ecBusy; delete globalThis.__ecInit; }
+  }
+
   const ast = ts.createSourceFile('fixture.ts', source, ts.ScriptTarget.Latest, true);
   const cls = name => ast.statements.find(n => ts.isClassDeclaration(n) && n.name.text === name);
   const member = (owner, name) => cls(owner).members.find(n => ts.isMethodDeclaration(n) && n.name.getText(ast) === name);
@@ -165,6 +197,6 @@ try {
   assert.ok(diagnostics.every(d => d.file?.fileName === file && d.start >= source.length), 'baseline semantic errors');
   assert.equal(new Set(diagnostics.map(d => d.file.getLineAndCharacterOfPosition(d.start).line)).size, 8);
   console.log(JSON.stringify({ compiled: true, owningWindow: true, activeWindowCombinedControl: true, finallyControls: 2, noCallControl: true, forgedAcceptanceRejected: true, foreignUnchanged: 2,
-    stopBeforeReentry: true, phaseFields, attemptingControl: true, directAssignments: 8, priorScalars: Object.keys(defaults).length,
+    stopBeforeReentry: true, phaseFields, attemptingControl: true, pointControls: pointControls.length, directAssignments: 8, priorScalars: Object.keys(defaults).length,
     callFlagWrites, trialWrites, accessWrites, storageAndClaimWrites: 0, projectionAllowlists: allowlists.length, semanticRejections: 8 }));
 } finally { rmSync(dir, { recursive: true, force: true }); }

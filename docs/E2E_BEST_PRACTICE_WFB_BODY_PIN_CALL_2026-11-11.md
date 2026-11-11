@@ -88,6 +88,19 @@ strictは`bdo npx --no-install tsc --noEmit --target ES2022 --module NodeNext --
 
 差分は合成fixture・新43件・新compiled・旧compiled3本の限定AST更新・開発export期待値2箇所・CHANGELOG・設計3文書と本記録の13ファイル。src／manifest／lockfile／TypeScript／配布設定・旧facadeは基準HEADから変更しない。
 
+## レビュー修正（2026-11-11）
+
+`1b929dc`のレビューで、固定call・receiver入場の一時変異43件のうち28件がVitest・compiledの両方を通った。最初の実行は変異scriptの変数衝突で一時ファイルを書いていたため無効とし、修正して全件を再実行した結果である。
+
+| 追加 | 一点注入と期待 | kill |
+|---|---|---|
+| dispatch前検査3件 | before_callでroute境界before／busy flag／call回数1。binding_mismatch又は未call・未試行 | PC02再検査・entryBusy・call回数の節 |
+| 停止判定2件 | before_callでsource.stopRequested／source.first=closed。closed・未call | sourceの停止2節、停止だけの理由をclosedへ写す節 |
+| receiver初回2件 | dispatch直接記録のroute境界をafter、before_callで初期field flag。call1回でreceiver無書込み | active資格・初期fieldの節 |
+| 入場検査2件 | preflight前／後でsource境界をbefore。state_invalid・未試行、失敗点がその観測点 | 1回目・2回目の入場検査 |
+
+修正後に対象12件を再実行し、10件をanchorを保ったまま意味的なassertでkillした。receiver初回条件のstep／failureStepは、literal初期値の対照がC-01の検査で先に拒否され、dispatchのPC02でも同値を検査するため等価とした。残りを含む18件の根拠は設計§16に記録した。fixture本体は変更していない。
+
 ## コミット対象だけの隔離再検証（2026-11-11）
 
 上記は実装時の記録。本節はその後のコミット依頼に対する再検証で、基準HEADは同じ`9f4361c`。対象13ファイルだけを明示してindexへ登録し、全indexを一時フォルダへ展開した。全1,520ファイルのGit blob hashと実行属性がindexと一致することを確認し、未登録の作業中変更を対象へ含めなかった。既存node_modulesへの参照だけを再利用し、依存取得・導入・設定変更はしていない。

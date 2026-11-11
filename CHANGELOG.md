@@ -282,6 +282,8 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 ### Added
 
+- WF-B pin-call review: compiled controls now inject single faults before the fixed call (route boundary, busy flag, call counter, source stop request and source first), into the direct call-window record and receiver initial fields, and before/after receiver preflight, so removing each dispatch precheck, receiver initial clause, entry recheck or source stop clause moves the first rejection, call or trial outcome. The remaining duplicate, single-writer or unreachable clauses are documented as equivalent; no fixture behavior changed.
+
 - WF-B pin-bridge review: compiled controls now inject the call-active flag, receiver busy flag, receiver relation flag, PC02 route boundary and source metadata count at single bridge points, so removing each before/checked/blocked recheck or the caller identity clause moves the first rejection. A literal control covers the call-active initializer, and the vitest close cases assert the root stop-first record. Remaining duplicate or unreachable clauses are documented as equivalent; no fixture behavior changed.
 
 - WF-B C-02 pin-start review: compiled controls now inject each of the 13 root route scalars before the entry check and at PC02 preflight, so the start-unused and preflight route clauses are pinned to their first rejecting step and boundary. The base, storage, payload and provenance context calls, the second caller identity check at entry/after (same-value source copy), first-refusal retention across two reentries, and `refusal: none` on internal context rejections are also checked. Vitest compares storage state after pin-start failures. Two clauses are recorded as equivalent or unobservable.
