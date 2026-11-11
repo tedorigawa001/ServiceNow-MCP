@@ -1,6 +1,6 @@
 # WF-B (C)：BP02〜04段階別検査・同root／同startのprivate pin接続差分
 
-Version: draft-0.7 / Date: 2026-11-11 / 読み取り基準HEAD: `b3776da`（(B)実装: `c28b423`、再検査／不在projectionレビュー修正: `b3776da`、C-01実装基準HEAD: `554ef9a`、C-01レビュー修正基準HEAD: `86d2560`、C-02前半実装基準HEAD: `a3f1f66`、C-02前半レビュー修正基準HEAD: `4f70522`、後半接続差分設計基準HEAD: `ff866f9`） / bridge内部契約実装基準HEAD: `3fc15ab`。
+Version: draft-0.7 / Date: 2026-11-11 / 読み取り基準HEAD: `b3776da`（(B)実装: `c28b423`、再検査／不在projectionレビュー修正: `b3776da`、C-01実装基準HEAD: `554ef9a`、C-01レビュー修正基準HEAD: `86d2560`、C-02前半実装基準HEAD: `a3f1f66`、C-02前半レビュー修正基準HEAD: `4f70522`、後半接続差分設計基準HEAD: `ff866f9`、bridge内部契約実装基準HEAD: `3fc15ab`）。
 
 draft-0.4のレビュー修正：C-02前半の開始前route未使用条件`bodyPinStartRouteUnused`の10節と、PC02の`bodyPinStartPreflightMatches`のroute 9節は、単独で外してもvitest・compiledの両方が通っていた。compiledのphase対照はsource 13fieldだけを壊し、route scalarを壊す対照がなかった。context条件のbase／storage／payload／来歴の4呼出し、entry/after の2回目caller照合、非accepted時の`#fixed`先行返却（内部拒否のrefusalを`foreign_source`へ上書きしない）、admit内refusalの初回保持、pin-start失敗時のshell failed反映も固定されていなかった。route 13scalarをentry/beforeとpreflight/beforeへ単独注入する26対照（節除去で拒否位置が動く）、context 4呼出しの注入と除去対照、同値copyへの差替えでcallerの再照合を確かめる対照、2回の再入でrefusalの初回保持を確かめる対照をcompiledへ追加した。context拒否8件ではrefusal=noneも比較する。vitestにはpin-start失敗後の`storage.state`=failedを追加した。等価・観測不能な節は§14に記録した。
 

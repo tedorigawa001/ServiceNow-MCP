@@ -71,6 +71,32 @@ try {
   }
   const late = run(await load(at('blocked', "this.#bodySourceIssued!.boundary = 'before';"), 'late-source'));
   assert.equal(late.r.first, 'binding_mismatch'); assert.equal(late.s.failurePhase, 'blocked');
+  const callInit = run(await load(replace(source, '#bodyPinCallActive = false;', "#bodyPinCallActive = 'private_truthy' as never;"), 'call-type'));
+  assert.equal(callInit.r.first, 'state_invalid'); assert.equal(callInit.s.failurePhase, 'before');
+  const flagged = replace(replace(source, 'bodyPinEntryBusy: (a: RetirementStartAssembly) => a.#bodyPinEntryBusy,',
+    'bodyPinEntryBusy: (a: RetirementStartAssembly) => (globalThis as any).__pbBusy ?? a.#bodyPinEntryBusy,'),
+  '        a.#probeIssuedBinding === b && a.#probeBinding === b', '        !(globalThis as any).__pbRelation && a.#probeIssuedBinding === b && a.#probeBinding === b');
+  const flaggedAt = (phase, code) => method(flagged, 'bodyPinBridgePoint', '    this.#bodyPinBridgePhase = phase;',
+    `    this.#bodyPinBridgePhase = phase;\n    if (phase === '${phase}') { ${code} }`);
+  // Each injection lands on one guard; removing that guard must move the first rejection (reason or bridge position).
+  const pointControls = [
+    ['before', 'this.#bodyPinCallActive = true;', 'state_invalid', 'before'],
+    ['blocked', 'this.#bodyPinCallActive = true;', 'binding_mismatch', 'blocked'],
+    ['before', '(globalThis as any).__pbBusy = true;', 'state_invalid', 'before'],
+    ['blocked', '(globalThis as any).__pbBusy = true;', 'binding_mismatch', 'blocked'],
+    ['checked', '(globalThis as any).__pbRelation = true;', 'binding_mismatch', 'checked'],
+    ['blocked', '(globalThis as any).__pbRelation = true;', 'binding_mismatch', 'blocked'],
+    ['before', "this.#bodyPinRouteBoundary = 'before';", 'state_invalid', 'before'],
+    ['checked', "this.#bodyPinRouteBoundary = 'before';", 'binding_mismatch', 'checked'],
+    ['before', 'this.#bodySourceMetadataFixedCount = 8;', 'binding_mismatch', 'before'],
+  ];
+  for (const [phase, code, reason, position] of pointControls) {
+    try {
+      const x = run(await load(flaggedAt(phase, code), 'point-' + used.size));
+      assert.equal(x.r.first, reason, phase + ' ' + code); assert.equal(x.s.failurePhase, position, phase + ' ' + code);
+      assert.equal(x.s.build.receiver.pinAttemptUsed, false); assert.equal(x.s.build.source.pinCallReached, false);
+    } finally { delete globalThis.__pbBusy; delete globalThis.__pbRelation; }
+  }
   const falseActive = run(await load(method(source, 'bodyPinBridgeActive',
     'if (!this.bodyPinBridgeIdentity(source, start)) return false;', 'return true;\n    if (!this.bodyPinBridgeIdentity(source, start)) return false;'), 'active-bypass'));
   assert.equal(falseActive.r.first, 'state_invalid'); assert.equal(falseActive.s.failurePhase, 'checked');
@@ -139,7 +165,7 @@ try {
   assert.ok(diagnostics.every(d => d.file?.fileName === file && d.start >= source.length), 'baseline semantic errors');
   assert.equal(new Set(diagnostics.map(d => d.file.getLineAndCharacterOfPosition(d.start).line)).size, 7);
   console.log(JSON.stringify({ compiled: true, busyStrict: true, intervalCases, positionCases, validPositions,
-    receiverRelations: relations.length, lateRecheck: true, inactiveGuard: true, firstPosition: true, unconfirmedSource: true,
+    receiverRelations: relations.length, callActiveLiteral: true, pointControls: pointControls.length, lateRecheck: true, inactiveGuard: true, firstPosition: true, unconfirmedSource: true,
     projectionAllowlists: projections.length, strictBooleans: booleans.length, priorRootScalars: Object.keys(defaults).length,
     receiverBusyLiteral: true, forbiddenWrites: 0, rootAccessWrites, semanticRejections: 7 }));
 } finally { rmSync(dir, { recursive: true, force: true }); }

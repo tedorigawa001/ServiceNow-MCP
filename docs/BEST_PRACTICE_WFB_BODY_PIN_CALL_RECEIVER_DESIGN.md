@@ -1,6 +1,8 @@
 # WF-B C-02後半：固定private call・receiver入口と同start試行／格納
 
-Version: draft-0.3 / Date: 2026-11-11 / 読み取り基準HEAD: `ff866f9`（C-02前半実装 `4f70522`、前半レビュー対照 `ff866f9`、draft-0.1レビュー修正基準HEAD: `0f3fae0`、内部契約の限定実装基準HEAD: `3fc15ab`）。
+Version: draft-0.4 / Date: 2026-11-11 / 読み取り基準HEAD: `ff866f9`（C-02前半実装 `4f70522`、前半レビュー対照 `ff866f9`、draft-0.1レビュー修正基準HEAD: `0f3fae0`、内部契約の限定実装基準HEAD: `3fc15ab`、draft-0.3レビュー修正基準HEAD: `983fa24`）。
+
+draft-0.3のレビュー修正：§13のbridge準備は、23件の一時変異のうち12件でVitest・compiledの両方が通っていた。prepareBodyPinBridgeのbefore／checked／blocked各点にあるPC02再検査・identity再照合・callActive／entryBusyの節と、bodyPinBridgeIdentityのcaller照合は、どれも後段の検査が同じ拒否理由で受けるか、注入対照がなかった。compiledには3点への単独注入9件を追加した。callActive・busy・receiver関係（固定accessのflag）・route境界・metadata固定化数のいずれかを壊し、節を除くと最初の拒否理由かbridge位置が動くことを確かめる。callActiveのliteral初期値の対照も追加した。Vitestにはclose時の`build.stopFirst`=closedと`stopRequested`を追加した。残る3件は§14で等価と判断した。
 
 draft-0.1のレビュー修正：§8の2か所で、境界の軸を取り違えていた。receiver行の「failurePrefix=none／before又はafter」は、before／afterが`BodyBindPrefix`の値に読めるが、before／afterを持つのは`failureBoundary`（`BodyReceiverFailureBoundary`）である。冒頭の「未callは既存BP02 before／checked」は、現行`failBodyPinStart`がroot側`#bodyPinFailureBoundary`へbefore／after、source側（`#bodyPinStartFailureSourceBoundary`と元sourceの`failureBoundary`）へbefore／checkedを書く2軸を混ぜていた。どちらも軸ごとに書き分けた。文書だけの修正で、契約・CR／CE・未実装範囲は変えない。
 
@@ -196,3 +198,9 @@ BodyPinIntervalはbefore／calling／returnedのstrict値組、BodyPinFailurePos
 内部busyの検査は原値を厳密比較する。公開projectionのstrict boolean化で不正値をfalseへ潰して資格判定に戻さない。公開値は別にallowlist／strict boolean／凍結plain graphへ投影し、参照・brand・raw Errorは出さない。C-01／前半compiledの書込み禁止は、新root診断writerの6caller fieldだけを明示追加し、receiver／payload／source claimは禁止したまま。追加flagへの書込み0も新compiledで確認する。
 
 結果とRED／GREEN・未検証範囲は[今回の検証記録](E2E_BEST_PRACTICE_WFB_BODY_PIN_BRIDGE_2026-11-11.md)。CE条件全体の受入やactive ownerの節ごとの感度を主張しない。CR02以降の固定call、receiver entryBusy予約／一度限り試行・issued/current格納、PC08／C-03は未接続。全体受付無効・Unknown・調査保留、実接続・実通信・設定変更・Push禁止を維持する。
+
+## 14 draft-0.3レビューの等価判断（2026-11-11）
+
+`bodyPinBridgeIdentity`冒頭の`source !== this.#bodySourceCurrent`は、直後の`bodyPinCallerMatches`が同じ比較を同じ理由で行うため、単独で外しても観測できない重複防御と判断した。`this.bodyPinBridge === true`は、identityを呼ぶ唯一の経路`prepareBodyPinBridge`がconstructor固定の同flagでだけ分岐するため、現行の所有経路では到達しない。`failBodyPinBridge`の`source.first === 'none'`による初回保持は、元sourceのfirstを書くwriterがこの継続ではfailBodyPinBridgeだけで、`#bodyPinFirst`と位置はfailureRecordedで固定済みのため、再書込みでも同値になる。
+
+`bodyPinBridgeActive`のcallActive／interval節を外す変異は、calling組の型（`true`）へbooleanを渡すTS2345でだけ落ちる。実ownerではactive資格が成立しないため、節ごとの実行時感度は§13のとおり主張しない。これらの判断はcall未接続の現行経路に限り、CR02以降でcallActive・entryBusyのwriterやsource firstの別writerを接続するときは単独対照で改めて評価する。

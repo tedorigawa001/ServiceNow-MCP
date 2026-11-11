@@ -47,6 +47,7 @@ describe('closed pin bridge preparation', () => {
         reentry: kind === 'reenter' ? 'construction_in_progress' : 'none', callActive: false, entryBusy: false, activeQualification: false,
         route: { attempted: true, first, failurePhase: 'BP02', failureStep: 'preflight', failureBoundary: 'after' },
         build: { phase: 'BP01', failureRecorded: false, storage: { state: 'failed', dataCreated: 0 }, rootReady: false,
+          stopRequested: kind === 'close', stopFirst: kind === 'close' ? 'closed' : 'none',
           source: { claim: 'unused', pinCallReached: false, failurePhase: 'BP02', failureBoundary: 'checked', stopMirrored: kind === 'close' },
           receiver: { pinAttemptUsed: false, pinStage: 'empty', occupancy: 'free' }, grantAttempts: 0, dutyUsed: false, bodyStarts: 0 } });
       expect(s.build.receiver.references.every(r => !r.retained)).toBe(true);

@@ -83,6 +83,20 @@ CR02の固定call・callActive=trueとcall到達flag、receiver entryBusy予約�
 
 差分は合成fixture・新30件・新compiled・旧compiled2本の限定AST更新・開発export期待値2箇所・CHANGELOG・設計3文書と本記録の12ファイル。src／manifest／lockfile／TypeScript／配布設定は基準HEADから変更しない。
 
+## レビュー修正（2026-11-11）
+
+`983fa24`のレビューで、bridge準備の一時変異23件のうち12件がVitest・compiledの両方を通った。before／checked／blocked各点のPC02再検査（2）・identity再照合（2）・callActive（2）・entryBusy（1）、identityのcaller照合（1）、close時の`#bodySourceStopFirst`記録（1）、および§14の等価3件である。
+
+| 追加 | 内容 | 結果 |
+|---|---|---|
+| callActive literal | `#bodyPinCallActive`の初期値を非booleanにするとbeforeでstate_invalid | 下の注入と併せてbefore callActive除去を検出 |
+| 3点単独注入9件 | before／blockedのcallActive=true、busy flag、checked／blockedのreceiver関係flag、before／checkedのroute境界before、beforeのmetadata固定化数8。期待理由とbridge位置、試行false・未call | 各節除去で最初の理由か位置が動き、8件をkill |
+| Vitest stop | close時の`build.stopRequested`と`stopFirst`=closed | stopFirst記録除去をkill |
+
+修正後に12件を再実行し、9件はanchorを保ったまま意味的なassertでkillした。残る3件（identityのcurrent重複比較、bridge flag、元source firstの初回保持guard）は設計§14で等価と判断した。activeのcallActive／interval節はTS2345でだけ落ち、実行時感度は引き続き主張しない。fixture本体は変更していない。
+
+修正後の確認：新Vitest30件成功、新compiled exit 0（pointControls 9）、lint・build・package-http・全Vitest・関連compiledは本節のコミット前に再実行した。private pin親のVersion行で括弧外にあったbridge基準HEADを括弧内へ移した。
+
 ## コミット対象だけの隔離再検証（2026-11-11）
 
 上記は実装時の記録。本節はその後のコミット依頼に対する再検証で、基準HEADは同じ`3fc15ab`。今回の12ファイルだけを明示してindexへ登録し、全indexを一時フォルダへ展開した。全1,517ファイルのGit blob hashがindexと一致することを確認し、他の未登録変更は検証対象へ含めなかった。既存node_modulesへの参照だけを再利用し、依存取得・導入・設定変更はしていない。
