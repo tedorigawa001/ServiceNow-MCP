@@ -1,6 +1,6 @@
 # WF-B B03後半：先行slot物理配置・固定構築schedule・失敗保持
 
-Version: draft-0.9 / Date: 2026-11-11 / 読み取り基準HEAD: `bf63f16`（レビュー修正基準HEAD: `0932af9`、先行seed実装基準HEAD: `b3f1f3e`、先行seedレビュー修正基準HEAD: `55d4347`、live Initial実装基準HEAD: `435b348`、BC12／13実装基準HEAD: `df6aa19`、bind原始field実装基準HEAD: `e6cc8cd`、source生成・停止設計基準HEAD: `5873d16`、BS／BC分離実装基準HEAD: `f3b3721`）。
+Version: draft-0.10 / Date: 2026-11-11 / 読み取り基準HEAD: `bf63f16`（レビュー修正基準HEAD: `0932af9`、先行seed実装基準HEAD: `b3f1f3e`、先行seedレビュー修正基準HEAD: `55d4347`、live Initial実装基準HEAD: `435b348`、BC12／13実装基準HEAD: `df6aa19`、bind原始field実装基準HEAD: `e6cc8cd`、source生成・停止設計基準HEAD: `5873d16`、BS／BC分離実装基準HEAD: `f3b3721`、合成source生成・停止実装基準HEAD: `311d3ef`）。
 
 draft-0.3のレビュー修正：§12は「SC01〜05の先行構築部分を検証」としていた。しかしSC05が求めるBC00 base条件・前段confirmedの個別破壊を含め、BC00／各mint前／bootstrap／最終再検査の大半の節は、単独で外しても試験が落ちなかった。freeze・初回rejectedの同一性・slot stage projectionのallowlistも観測していなかった。各節が最初に拒否する位置を`failurePhase`で固定するcompiled対照20件と、freeze・rejected同一性・stage allowlistの対照を追加した。単独で注入できないbase節（capture試行0・exit slot照合・`matchesRun`）は§12に範囲外として明記した。
 
@@ -9,6 +9,8 @@ draft-0.3：§12で先行shell／13carrier・BC01〜05の内部型と保持だ�
 draft-0.1のレビュー修正（MDのみ）：§11の「未コミット・Pushなし」はコミット前の時点の記述だったため、作成時点の記録であることを明示し、コミット後の注記を追加した。B03前半の文書から本書へのリンク文言「後半slot物理配置」を本書の表題「先行slot物理配置」へ揃えた。
 
 Status: **先行shell／13carrier・BC01〜11のInitial構築とBC12／13の集約・全postまでを合成依存限定で実装。** §12と[seed検証記録](E2E_BEST_PRACTICE_WFB_BODY_SLOT_SEED_2026-11-10.md)、§13と[live Initial検証記録](E2E_BEST_PRACTICE_WFB_BODY_LIVE_INITIAL_2026-11-10.md)、§14と[bundle／draft検証記録](E2E_BEST_PRACTICE_WFB_BODY_BUNDLE_DRAFT_2026-11-10.md)を参照。BD／bind・構築ready・BA／body・BU実unwindは未実装。親は[B03後半の固定exit契約draft-0.2](BEST_PRACTICE_WFB_BODY_UNWIND_EXIT_DESIGN.md)と[B03前半の固定exit／同target局所退役](BEST_PRACTICE_WFB_FIXED_EXIT_LOCAL_RETIREMENT_DESIGN.md)。元の所有／費目契約は[(B) grant／固定exit責務](BEST_PRACTICE_WFB_PROBE_GRANT_EXIT_DUTY_DESIGN.md)を維持する。
+
+追加実装の現行範囲は§15〜17も参照する。§17では同BS shellを使うBP00〜01の合成source生成／確認・同期停止だけを追加し、BC00以降を新source経路へ繋がない。各過去段階の「型だけ」「未生成」は当時の記録である。
 
 BC06〜13の詳細化（2026-11-10、MDのみ）: [live slotの内部型・更新権限とbundle／draft生成境界draft-0.1](BEST_PRACTICE_WFB_BODY_LIVE_SLOT_BUNDLE_DESIGN.md)で、`94d7fde`を基準に§4〜5を具体化した。BC06〜11の初期variant／private writer境界、liveの参照固定と進行fieldの分離、BC12／13の同参照集約・固定順・失敗保持を定義する。既存seedの全freeze・空suffix検査は維持し、追加経路を別に扱う。BD／構築ready・BA／BUは未接続のまま。
 
@@ -231,3 +233,9 @@ contextのbindingOwnerは同binding／start側owner、cellOwnerは同rootの既�
 ## 16 (A) BS storage／BC dataの最小分離（2026-11-11）
 
 [生成・停止設計§11](BEST_PRACTICE_WFB_BODY_SOURCE_ISSUER_STOP_DESIGN.md)に従い、元BS00〜14をprivate storage関数へ、BC00以降を同shell引数のprivate data関数へ抽出した。旧wrapperが同保護frame内で続けて1回ずつ呼び、BS失敗時にdataへ進まない。新しいsource入口・BootstrapReady・issuer／pin・同期停止は追加せず、旧生成／失敗保持・API／export・期待値は維持する。合成・compiled対照の結果は[分離検証記録](E2E_BEST_PRACTICE_WFB_BODY_STORAGE_DATA_SPLIT_2026-11-11.md)を参照する。構築ready・body起動・正式発行は未接続、全体受付無効・Unknown・調査保留を維持する。
+
+## 17 (B) 同BS shellの正規source生成／確認・同期停止（2026-11-11）
+
+[生成・停止設計§12](BEST_PRACTICE_WFB_BODY_SOURCE_ISSUER_STOP_DESIGN.md)と[source検証記録](E2E_BEST_PRACTICE_WFB_BODY_SOURCE_ISSUER_2026-11-11.md)の範囲だけを追加した。同root／startのbase・BS15段階を再利用し、全13carrier未開始・元failure／receiver初期値を確認してからBP00のsourceを生成する。sourceのissuedを即時保持し、9metadata固定化と全22keyの厳密確認後、BP01 metadata確認済み・未pinで閉鎖保持する。BC01〜13を既存新source経路へ先取りせず、データ生成数は0のままである。
+
+未確認sourceはroot scalarと元参照だけを保持し、closeで確認を再試行しない。確認済み元sourceへだけ同期停止を反映し、cache済み失敗返答・初回first／生成位置・初回候補を壊さない。BS途中の未確認shellと、同rootとして確認済みshellのfailed記録も区別する。実source／Permit／runtime接続・pin・source claim消費・bind・構築ready・body起動は追加しない。実allocation／E／S／全体work・OOMでの診断必着はUnknown、正式発行口閉鎖・全体受付無効・調査保留を維持する。

@@ -1,8 +1,8 @@
 # WF-B body source：正規生成位置・private issuerと同期停止・失敗時保持
 
-Version: draft-0.2 / Date: 2026-11-11 / 設計基準HEAD: `5873d16` / (A)最小分離実装基準HEAD: `f3b3721`。
+Version: draft-0.3 / Date: 2026-11-11 / 設計基準HEAD: `5873d16` / (A)最小分離実装基準HEAD: `f3b3721` / (B)合成source実装基準HEAD: `311d3ef`。
 
-Status: **(A)のBS／BC最小分離だけを合成依存限定で実装。** 実装範囲は§11と[分離検証記録](E2E_BEST_PRACTICE_WFB_BODY_STORAGE_DATA_SPLIT_2026-11-11.md)を基準とする。§1〜10はdraft-0.1作成時の接続設計・文書検証で、(B)source生成／同期停止・(C)private pinと、その受入条件全体は未実装・未実施のまま。親は[bind状態型・先行borrow設計](BEST_PRACTICE_WFB_BODY_BIND_BORROW_DESIGN.md)と[先行slot・固定構築設計](BEST_PRACTICE_WFB_BODY_SLOT_CONSTRUCTION_DESIGN.md)。先行実装とレビューは[field検証記録](E2E_BEST_PRACTICE_WFB_BODY_BIND_FIELDS_2026-11-10.md)を参照する。`5873d16`のroot側検査・projection対照と、等価と判断した節の注記は維持する。
+Status: **(A)のBS／BC最小分離と(B)のroot先行scalar・BP00〜01正規生成／確認・同期停止／失敗保持を合成依存限定で実装。** 実装範囲は§11〜12と[分離検証記録](E2E_BEST_PRACTICE_WFB_BODY_STORAGE_DATA_SPLIT_2026-11-11.md)・[source生成／停止検証記録](E2E_BEST_PRACTICE_WFB_BODY_SOURCE_ISSUER_2026-11-11.md)を基準とする。§1〜10はdraft-0.1作成時の接続設計・文書検証であり、当時の「型だけ」「将来」「未実装」はその時点の記録。(C)private pinと受入条件全体は未実装・未実施のまま。親は[bind状態型・先行borrow設計](BEST_PRACTICE_WFB_BODY_BIND_BORROW_DESIGN.md)と[先行slot・固定構築設計](BEST_PRACTICE_WFB_BODY_SLOT_CONSTRUCTION_DESIGN.md)。先行実装とレビューは[field検証記録](E2E_BEST_PRACTICE_WFB_BODY_BIND_FIELDS_2026-11-10.md)を参照する。`5873d16`のroot側検査・projection対照と、等価と判断した節の注記は維持する。
 
 正式発行口・C実行入口・body起動閉鎖、全体受付無効、Unknown、VM／監視／telemetry調査保留を維持する。本書は実装・実接続・実通信・設定変更・Pushの承認ではない。将来も合成依存だけとし、今回の設計範囲はBS／BCの最小分離、BP00〜01のsource生成／確認とその前後の同期停止・保持まで。BP02〜04のprivate pinは接続先の前提だけを定義し、pin実行・source利用claim消費・payload借用／bind・構築ready・body／退出・正式証拠・実予算更新は含めない。
 
@@ -138,7 +138,7 @@ public graphにroot／source／shell／start／owner／brand／descriptor・raw 
 
 これらは論理上の有限枠で、実allocation数／layout・全guard数／E／S係数・実予算・停止後解消予約・全体work上界の証明ではない。Unknownを維持し、実予算更新・cap投入・新期限・残時間からのdeadline再計算を行わない。
 
-## 9 将来の独立合成受入条件（全て未実施）
+## 9 設計時点の独立合成受入条件（現行の部分検証は§12）
 
 | ID | 必須条件と負の対照 |
 |---|---|
@@ -178,3 +178,19 @@ compiledはscratch内だけに有限event観測を足し、正常3経路の全ch
 旧compiled-probe-body-seedの5箇所は、移動したdata操作への注入先をprepareBodySeedからprepareBodyDataへ変更しただけで、assert・期待値・20再検査対照を削除／緩和していない。旧export期待値も変更していない。結果と初回REDは[分離検証記録](E2E_BEST_PRACTICE_WFB_BODY_STORAGE_DATA_SPLIT_2026-11-11.md)を参照する。
 
 SS01の最小分離に関する範囲だけを確認し、SS02〜12のsource生成／停止／pin依存条件を合格へ昇格しない。新source用BootstrapReady・BP00〜01・同期停止・BP02〜04・claim消費・bind・構築ready・body起動は未接続。field限定入口は引き続きBS未生成・source不在で停止する。rootのデータ生成数／順序は同じだが、追加private call／moduleのmethod配置を実allocation・E／S／work上界の同一性証明にはしない。正式発行口閉鎖・全体受付無効・Unknown・調査保留を維持する。
+
+## 12 (B) 正規sourceの生成／確認・同期停止・失敗保持（2026-11-11）
+
+package除外の同composition moduleにcreateProbeBodySourceIssuerFakeを追加した。固定scriptだけを受ける閉鎖factoryで、APIはprepare／check／checkLegacy／close／inspectの5つ、model=wfb-body-source-issuer-1、正常もsource_held_unpinned／ok=falseである。先行scalarは同CanonicalGateDraftRootに直接置き、同RetirementStartAssembly・元binding／link／duty／control／failure・同BS shellを再利用する。別root／owner／frame／予算・登録台帳・任意producer／callbackを追加しない。BS00〜14後に全13carrierの未生成と元base／receiver初期値を検査し、BC00は呼ばない。
+
+private symbolと同rootの固定literal producerで22keyのsourceを一度だけ生成し、hardeningや故障観測より先に元literalをissuedへ保持する。brand＋8metadataを固定順にreadonly化し、進行13fieldをwritableなdata propertyのままsealする。currentの捕捉後、issuedとの同参照を反射より先に検査し、元literalのshape／descriptor・全metadata関係／Initial値を確認する。BP01 afterはInitialと明示的に区別した確認済みvariantを使い、確認済み事実を後の故障で巻き戻さない。初回不一致candidateは最後のpost検査でもrejectedへ参照だけを保持する。issuedはcopy／Proxy候補で置換しない。
+
+root側の32固定位置で故障・close・再入を区別する。producer throwは試行済み・未捕捉で止まり、source不在／claim unusedを再生成資格にしない。二重private発行は既存sourceを壊さないduplicate_creation拒否。正常のsourceはinitializing／unused、pin／bind／post未到達、receiver9参照空・free／empty、BS shellはbuilding・13carrier空のまま保持する。準備後の再prepareでも先へ継続しない。
+
+新経路のcloseだけは返答cacheの前にroot停止を同期記録する。metadata未確認のissued／current／rejectedはfieldを読み書きせず保持し、確認済みの場合だけ元issuedの進行fieldへ停止／failedを反映する。失敗だけでclose履歴を捏造しない。先行first・初回生成位置・元返答同一性を保持し、失敗後closeでもroot停止が省略されない。同rootとして検査済みBS shellだけをfailedにし、BS途中の未確認shellは補修／再検査しない。保持はcleanup完了／解放済みを意味しない。
+
+公開診断は有限enum／strict boolean・0〜9の固定化数（許可外は-1）と参照保持booleanだけ。未確認sourceのstate／claimはunconfirmedで、元参照・symbol・raw例外・任意入力は出さない。既存旧factory／model・close順序・field限定のsource不在検査は維持する。module export期待値に新しい開発専用factory名を1件だけ追加し、配布物のexport／設定は変更しない。
+
+独立合成200件とcompiled対照の範囲・初回失敗／重複guardの観測訂正は[source検証記録](E2E_BEST_PRACTICE_WFB_BODY_SOURCE_ISSUER_2026-11-11.md)を参照する。SS02〜11の本段階に該当する部分を検証しただけで、全guard・全SS合格とはしない。getter拒否のshapeとwritable descriptorの重複防御は、各単独除去でも安全な場合を明記し、二重除去対照と区別する。固定metadata／進行fieldの不正関係・属性、全13空carrier・元base／shell／receiver初期値の対照はあるが、あらゆる私有slotの任意破損や任意foreign rootへの書込み安全性を証明するものではない。
+
+BP02〜04 pin・source claim消費・payload borrow／bind・構築ready・body起動・回収／Journal・正式証拠は未接続。実allocation／layout・全guard費・E／S係数・実予算・OOMでの診断配送必着はUnknown。sourceDeliveryFirstは予約された有限診断scalarであり、実配送失敗の保証は追加しない。正式発行口閉鎖・全体受付無効・調査保留を維持する。

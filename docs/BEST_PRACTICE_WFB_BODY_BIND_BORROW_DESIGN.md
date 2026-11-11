@@ -1,10 +1,10 @@
 # WF-B body bind：状態型・phase検査と同startの先行borrow／診断slot
 
-Version: draft-0.5 / Date: 2026-11-11 / 設計基準HEAD: `29c53e1` / レビュー追加: `5ec73dd` / 原始field限定実装基準HEAD: `e6cc8cd` / 原始field実装レビュー修正基準HEAD: `41ac31f` / source生成・停止の設計基準HEAD: `5873d16` / BS／BC分離実装基準HEAD: `f3b3721`。
+Version: draft-0.6 / Date: 2026-11-11 / 設計基準HEAD: `29c53e1` / レビュー追加: `5ec73dd` / 原始field限定実装基準HEAD: `e6cc8cd` / 原始field実装レビュー修正基準HEAD: `41ac31f` / source生成・停止の設計基準HEAD: `5873d16` / BS／BC分離実装基準HEAD: `f3b3721` / 合成source生成・停止実装基準HEAD: `311d3ef`。
 
 draft-0.2のレビュー修正：`bodyFieldsIntact`のroot側2節（元baseの未使用、BC用shell未生成）は、単独で外しても試験が落ちなかった。root側inspectの`state`／`phase`／`failurePhase`／`reentry`のallowlistと、実body cellから導く`bodyStarts`の投影も観測していなかった。各節の単一注入と除去の対照、4つのallowlistと`bodyStarts`の対照をcompiledへ追加した。最初の失敗位置の上書き防止と、`checkBodyBindFields`冒頭の`#fixed`返却は等価と判断し、§10に記録した。
 
-Status: **§9の分割(1)に限り、内部型・原始先行field・固定診断／projectionと実行拒否を合成依存限定で実装。** 実装範囲は§10と[field限定検証記録](E2E_BEST_PRACTICE_WFB_BODY_BIND_FIELDS_2026-11-10.md)を基準とする。source生成・pin・claim消費・bindは未接続、§1〜9はdraft-0.1時点の将来接続設計で、受入表全体の成功を意味しない。親は[先行slot／固定構築設計](BEST_PRACTICE_WFB_BODY_SLOT_CONSTRUCTION_DESIGN.md)と[live slot／bundle生成設計](BEST_PRACTICE_WFB_BODY_LIVE_SLOT_BUNDLE_DESIGN.md)。前工程の実績は[BC12／13検証記録](E2E_BEST_PRACTICE_WFB_BODY_BUNDLE_DRAFT_2026-11-10.md)を参照する。
+Status: **内部型・原始先行field・固定診断／projectionと実行拒否、およびBS／BC最小分離・BP00〜01合成source生成／確認・同期停止までを合成依存限定で実装。** 実装範囲は§10・12〜13と[field限定検証記録](E2E_BEST_PRACTICE_WFB_BODY_BIND_FIELDS_2026-11-10.md)・[source生成／停止検証記録](E2E_BEST_PRACTICE_WFB_BODY_SOURCE_ISSUER_2026-11-11.md)を基準とする。pin・claim消費・bindは未接続、§1〜9と各段階の記述は作成当時の範囲で、受入表全体の成功を意味しない。親は[先行slot／固定構築設計](BEST_PRACTICE_WFB_BODY_SLOT_CONSTRUCTION_DESIGN.md)と[live slot／bundle生成設計](BEST_PRACTICE_WFB_BODY_LIVE_SLOT_BUNDLE_DESIGN.md)。前工程の実績は[BC12／13検証記録](E2E_BEST_PRACTICE_WFB_BODY_BUNDLE_DRAFT_2026-11-10.md)を参照する。
 
 `5ec73dd`のBC12／13 mint前base対照と、rejected節の等価性に関する既存レビュー訂正は保持する。同commitで先に取り込まれたlive／bundle親文書の本書への参照も維持する。ソースの生成／保持経路に変更はなく、本書はこれらの検証実績をbind成功の保証へ拡張しない。
 
@@ -213,3 +213,9 @@ BB10〜12の型／projection／旧入口維持に関する部分だけを検証�
 ## 12 (A) BS／BCのprivate最小分離（2026-11-11）
 
 [生成・停止設計§11](BEST_PRACTICE_WFB_BODY_SOURCE_ISSUER_STOP_DESIGN.md)と[分離検証記録](E2E_BEST_PRACTICE_WFB_BODY_STORAGE_DATA_SPLIT_2026-11-11.md)の範囲で、BS storageとBC dataをprivate関数へ最小抽出した。旧prepareBodySeedは同frame／同shellを渡す2呼出しのwrapperだけとなり、旧seed／live／bundleの期待値・検査・exportとfield限定入口のsource／shell不在検査を維持する。正規source生成・private pin・新同期停止はまだ実装せず、claim消費・bind・構築ready・body起動・正式発行は閉じたままである。
+
+## 13 (B) BP00〜01の合成source生成／確認・同期停止（2026-11-11）
+
+[生成・停止設計§12 draft-0.3](BEST_PRACTICE_WFB_BODY_SOURCE_ISSUER_STOP_DESIGN.md)と[source検証記録](E2E_BEST_PRACTICE_WFB_BODY_SOURCE_ISSUER_2026-11-11.md)の範囲で、同rootの先行scalar・同BS shellへの結合・固定literalの即時issued保持、9metadata固定化・22key検査とBP01確認を追加した。新しい閉鎖した開発専用factoryだけがsource_held_unpinnedで止まり、旧field限定入口はsource／BS不在のまま、旧seed／live／bundleの生成順・返答・close契約も維持する。
+
+新経路のcloseは失敗返答cacheより先にroot停止を記録し、未確認sourceを読まず、確認済み元issuedだけへ同期反映する。copy／Proxy候補は同参照確認で止め、初回rejectedと部分生成prefix・初回first／位置を保持する。失敗後close・重複生成・再入を旧field限定の等価節へ流用しない。保持は解放確認ではなく、配送／実費用のUnknownは維持する。BP02〜04 pin・claim消費・bind・構築ready・body起動・正式発行は未接続、全体受付無効・調査保留を維持する。

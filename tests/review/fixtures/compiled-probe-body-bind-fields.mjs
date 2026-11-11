@@ -10,8 +10,8 @@ const source = readFileSync(new URL('./snapshot-read-composition-fake.ts', impor
 const dir = mkdtempSync(join(tmpdir(), 'probe-body-bind-fields-')), used = new Set();
 const emit = s => ts.transpileModule(s, { compilerOptions: { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.ES2022 } }).outputText;
 function replace(s, a, b) { assert.equal(s.split(a).length, 2, 'unique anchor: ' + a); return s.replace(a, b); }
-function method(s, name, a, b) {
-  const start = s.indexOf(`  private ${name}(`), end = s.indexOf('\n  }\n', start) + 5;
+function method(s, name, a, b, priv = true) {
+  const start = s.indexOf(`  ${priv ? 'private ' : ''}${name}(`), end = s.indexOf('\n  }\n', start) + 5;
   assert.ok(start >= 0 && end > start, name); return s.slice(0, start) + replace(s.slice(start, end), a, b) + s.slice(end);
 }
 async function load(s, name) {
@@ -97,7 +97,8 @@ try {
   // bodyStarts is derived from the real body cell; a fixed 0 would misreport a started body.
   const started = run(await load(at("this.#issuedCells!.body.state = 'running';"), 'body-started'));
   assert.equal(started.s.bodyStarts, 1);
-  const fixedZero = replace(at("this.#issuedCells!.body.state = 'running';"), "bodyStarts: this.#issuedCells?.body.state === 'running' ? 1 : 0,", 'bodyStarts: 0,');
+  const fixedZero = method(at("this.#issuedCells!.body.state = 'running';"), 'inspectBodyBindFields',
+    "bodyStarts: this.#issuedCells?.body.state === 'running' ? 1 : 0,", 'bodyStarts: 0,', false);
   assert.equal(run(await load(fixedZero, 'body-started-fixed-zero')).s.bodyStarts, 0);
   // Root-side projection allowlists never echo an unexpected private scalar.
   const atPhase = (p, code) => method(source, 'bodyFieldsPoint', '    this.#bodyFieldsPhase = phase;',

@@ -3687,8 +3687,8 @@ const BODY_BUNDLE_FIELDS = Object.freeze([
 ]);
 const BODY_BUNDLE_PHASES = Object.freeze([...BODY_LIVE_PHASES, 'BC12', 'BC13']);
 const BODY_BUNDLE_BOUNDARIES = Object.freeze([...BODY_LIVE_BOUNDARIES, 'frozen', 'post_before', 'post_after']);
-// Type-only future source contract. This stage does not mint a source or install an expected-source pin.
-declare const BODY_BIND_SOURCE: unique symbol;
+// Private synthetic issuer only; no expected-source pin or runtime authority is installed.
+const BODY_BIND_SOURCE: unique symbol = Symbol('body-bind-source');
 type BodySourceFirst = 'none' | 'binding_mismatch' | 'state_invalid' | 'closed' | 'construction_unconfirmed' | 'receiver_unconfirmed' | 'post_unconfirmed';
 type BodyBindRefusal = 'none' | 'in_progress' | 'duplicate_pin' | 'duplicate_bind' | 'foreign_source';
 type BodySourcePhase = 'none' | 'BP00' | 'BP01' | 'BP02' | 'BP03' | 'BP04' | 'BD00' | 'BD01' | 'BD02' | 'BD03' | 'BD04';
@@ -3739,6 +3739,23 @@ function bodyReceiverAbsent(): Readonly<BodyReceiverProjection> {
     references: Object.freeze(BODY_RECEIVER_REFS.map(field => Object.freeze({ field, retained: false }))) });
 }
 interface BodyBindFieldsReply extends Omit<BodySeedReply, 'model'> { readonly model: 'wfb-body-bind-fields-1' }
+interface BodySourceIssuerReply extends Omit<BodySeedReply, 'model'> { readonly model: 'wfb-body-source-issuer-1' }
+type BodySourceBuildPhase = 'none' | 'BP00' | 'BP01';
+type BodySourceBuildStep = 'none' | 'before' | 'attempt' | 'issued' | 'fix_0' | 'fix_1' | 'fix_2' | 'fix_3' | 'fix_4'
+  | 'fix_5' | 'fix_6' | 'fix_7' | 'fix_8' | 'sealed' | 'captured' | 'checked' | 'after';
+type BodySourceBuildBoundary = 'none' | 'before' | 'after';
+type BodySourceBuildStage = 'not_started' | 'attempting' | 'issued' | 'hardened' | 'captured' | 'confirmed';
+const BODY_SOURCE_METADATA = Object.freeze([BODY_BIND_SOURCE, 'custodian', 'construction', 'binding', 'link', 'duty', 'control', 'start', 'rootFailure'] as const);
+const BODY_SOURCE_PROGRESS = Object.freeze(['state', 'claim', 'pinCallReached', 'bindCallReached', 'stopRequested', 'postConfirmed',
+  'phase', 'boundary', 'first', 'failurePhase', 'failureBoundary', 'refusal', 'deliveryFirst'] as const);
+const BODY_SOURCE_STEPS = Object.freeze(['none', 'before', 'attempt', 'issued', ...Array.from({ length: 9 }, (_, i) => 'fix_' + i), 'sealed', 'captured', 'checked', 'after']);
+const BODY_SOURCE_FIRSTS = Object.freeze(['none', 'binding_mismatch', 'state_invalid', 'closed', 'construction_unconfirmed', 'receiver_unconfirmed', 'post_unconfirmed']);
+const BODY_SOURCE_POINTS = Object.freeze([
+  ...['before', 'after'].map(b => 'BP00_before_' + b), 'BP00_attempt_before', 'BP00_issued_after',
+  ...Array.from({ length: 9 }, (_, i) => i).flatMap(i => ['before', 'after'].map(b => 'BP00_fix_' + i + '_' + b)),
+  ...['sealed', 'captured'].flatMap(p => ['before', 'after'].map(b => 'BP00_' + p + '_' + b)),
+  ...['before', 'checked', 'after'].flatMap(p => ['before', 'after'].map(b => 'BP01_' + p + '_' + b)),
+]);
 class CanonicalGateDraftRoot {
   readonly #failure: { first: string; phase: number; boundary: string };
   readonly #slots: { stage: SupplyConstructionStage; value: object | undefined }[];
@@ -3773,9 +3790,21 @@ class CanonicalGateDraftRoot {
   #bodyFieldsState: 'not_started' | 'checking' | 'held' | 'failed' = 'not_started';
   #bodyFieldsPhase = 'none'; #bodyFieldsFailurePhase = 'none'; #bodyFieldsReentry = 'none';
   #bodyFieldsFixed: Readonly<BodyBindFieldsReply> | undefined;
+  #bodySourceCreationAttempted = false; #bodySourceBuildStage: BodySourceBuildStage = 'not_started';
+  #bodySourceBuildPhase: BodySourceBuildPhase = 'none'; #bodySourceBuildStep: BodySourceBuildStep = 'none';
+  #bodySourceBuildBoundary: BodySourceBuildBoundary = 'none'; #bodySourceMetadataFixedCount = 0;
+  #bodySourceFailureRecorded = false; #bodySourceFailurePhase: BodySourceBuildPhase = 'none';
+  #bodySourceFailureStep: BodySourceBuildStep = 'none'; #bodySourceFailureBoundary: BodySourceBuildBoundary = 'none';
+  #bodySourceStopRequested = false; #bodySourceStopFirst: 'none' | 'closed' = 'none';
+  #bodySourceDeliveryFirst: 'none' | 'delivery_unconfirmed' = 'none';
+  #bodySourceStorageConfirmed = false; #bodySourceState: 'not_started' | 'building' | 'held' | 'failed' = 'not_started';
+  #bodySourceReentry = 'none'; #bodySourceHookCalls = 0;
+  #bodySourceIssueRefusal: 'none' | 'duplicate_creation' = 'none';
+  #bodySourceFixed: Readonly<BodySourceIssuerReply> | undefined;
   constructor(private readonly script: string, admitted: boolean, private readonly probePreparation = false, private readonly runPreparation = false,
     private readonly grantCapture = false, private readonly exitPreparation = false, private readonly exitGuard = false, private readonly localExit = false,
-    private readonly bodySeed = false, private readonly bodyLive = false, private readonly bodyBundle = false, private readonly bodyBindFields = false) {
+    private readonly bodySeed = false, private readonly bodyLive = false, private readonly bodyBundle = false, private readonly bodyBindFields = false,
+    private readonly bodySourceIssuer = false) {
     this.#failure = { first: admitted ? 'none' : 'input_rejected', phase: 0, boundary: 'none' };
     this.#slots = Array.from({ length: 37 }, () => ({ stage: 'not_started', value: undefined }));
     this.#probeSlots = probePreparation ? Array.from({ length: 8 }, () => ({ stage: 'not_started', value: undefined })) : [];
@@ -3788,6 +3817,7 @@ class CanonicalGateDraftRoot {
   private reply(ok: boolean, disposition: string) { return Object.freeze({ ok, disposition, first: this.#failure.first }); }
   private fail(reason: string) {
     if (this.#failure.first === 'none') this.#failure.first = reason;
+    if (this.bodySourceIssuer) this.failBodySource(this.#failure.first);
     if (this.bodyBindFields) {
       if (this.#bodyFieldsState !== 'failed') this.#bodyFieldsFailurePhase = this.#bodyFieldsPhase;
       this.#bodyFieldsState = 'failed';
@@ -4157,6 +4187,216 @@ class CanonicalGateDraftRoot {
       sourceIssuance: 'not_connected', pin: 'not_connected', claimConsumption: 'not_connected', binding: 'not_connected', constructionReady: 'not_connected',
       bodyStarts: this.#issuedCells?.body.state === 'running' ? 1 : 0, grantAttempts: start ? probeStartAccess.captureInspect(start).grantAttempts : 0,
       dutyUsed: this.#issuedRunDuty?.attemptUsed === true, dataCreated: this.#bodySeedShell?.slots?.filter(c => c?.issued !== undefined).length ?? 0 });
+  }
+  private bodySourceTrustedFailure(reason: string): void {
+    // Only the never-replaced producer slot may be written; current/rejected can be hostile candidates.
+    if (!this.#bodySourceMetadataConfirmed || !this.#bodySourceIssued) return;
+    const v = this.#bodySourceIssued;
+    if (v.first === 'none') {
+      v.first = reason === 'binding_mismatch' || reason === 'state_invalid' || reason === 'closed' ? reason
+        : reason === 'input_rejected' ? 'state_invalid' : 'construction_unconfirmed';
+      v.failurePhase = this.#bodySourceBuildPhase; v.failureBoundary = this.#bodySourceBuildBoundary;
+    }
+    v.state = 'failed';
+  }
+  private failBodySource(reason: string): void {
+    if (!this.#bodySourceFailureRecorded) {
+      this.#bodySourceFailureRecorded = true; this.#bodySourceFailurePhase = this.#bodySourceBuildPhase;
+      this.#bodySourceFailureStep = this.#bodySourceBuildStep; this.#bodySourceFailureBoundary = this.#bodySourceBuildBoundary;
+      this.#bodySeedFailurePhase = this.#bodySeedPhase; this.#bodySeedFailureBoundary = this.#bodySeedBoundary;
+    }
+    this.#bodySourceState = 'failed'; this.bodySourceTrustedFailure(reason);
+    if (this.#bodySourceStorageConfirmed && this.#bodySeedShell) this.#bodySeedShell.state = 'failed';
+  }
+  private stopBodySource(): void {
+    this.#closed = true; this.#bodySourceStopRequested = true;
+    if (this.#bodySourceStopFirst === 'none') this.#bodySourceStopFirst = 'closed';
+    if (this.#bodySourceMetadataConfirmed && this.#bodySourceIssued) {
+      this.#bodySourceIssued.stopRequested = true; this.bodySourceTrustedFailure('closed');
+    }
+  }
+  private bodySourcePoint(phase: Exclude<BodySourceBuildPhase, 'none'>, step: Exclude<BodySourceBuildStep, 'none'>,
+    boundary: Exclude<BodySourceBuildBoundary, 'none'>): void {
+    this.#bodySourceBuildPhase = phase; this.#bodySourceBuildStep = step; this.#bodySourceBuildBoundary = boundary;
+    const point = phase + '_' + step + '_' + boundary;
+    if (this.script === 'si_reenter_' + point) this.#bodySourceReentry = this.prepare().disposition;
+    if (this.script === 'si_close_' + point) this.close();
+    if (this.script === 'si_retry_after_failure' && point === 'BP00_issued_after') {
+      this.fail('state_invalid'); this.issueBodySource(this.#bodySeedShell!);
+    }
+    if (this.script === 'si_fault_' + point) throw Error('private_body_source_fault');
+    if (this.#closed || this.#bodySourceStopRequested || this.#failure.first !== 'none') throw Error('body_source_stopped');
+  }
+  private bodySourceStorageMatches(shell: BodyPreparationShell): boolean {
+    return shell === this.#bodySeedShell && bodySeedShape(shell, ['failure', 'slots', 'state', 'ready', 'execution', 'bindAttemptUsed', 'bindStage'])
+      && shell.failure === this.#failure && shell.state === 'building' && shell.ready === false && shell.execution === 'closed'
+      && shell.bindAttemptUsed === false && shell.bindStage === 'not_attempted' && !!shell.slots && Array.isArray(shell.slots)
+      && Object.getPrototypeOf(shell.slots) === Array.prototype && shell.slots.length === 13 && Reflect.ownKeys(shell.slots).length === 14
+      && BODY_CARRIER_KINDS.every((kind, i) => {
+        const d = Object.getOwnPropertyDescriptor(shell.slots!, i); const c = d && 'value' in d ? d.value as BodyConstructionCell : undefined;
+        return !!c && bodySeedShape(c, ['index', 'kind', 'stage', 'attemptReserved', 'callBoundaryReached', 'issued', 'current', 'rejected'])
+          && c.index === i + 1 && c.kind === kind && c.stage === 'not_started' && c.attemptReserved === false
+          && c.callBoundaryReached === false && c.issued === undefined && c.current === undefined && c.rejected === undefined;
+      });
+  }
+  private bodySourceStableMatches(shell: BodyPreparationShell): boolean {
+    return !this.#closed && !this.#bodySourceStopRequested && this.#failure.first === 'none' && !this.#ready
+      && this.bodySeedBaseMatches() && this.bodySourceStorageMatches(shell)
+      && probeStartAccess.bodyFieldsInitial(this.#issuedFrameBinding!.target.start);
+  }
+  private bodySourcePreIssueMatches(shell: BodyPreparationShell): boolean {
+    return this.bodySourceStableMatches(shell) && !this.#bodySourceCreationAttempted && this.#bodySourceBuildStage === 'not_started'
+      && this.#bodySourceIssued === undefined && this.#bodySourceCurrent === undefined && this.#bodySourceRejected === undefined
+      && this.#bodySourceMetadataConfirmed === false && this.#bodySourceMetadataFixedCount === 0;
+  }
+  private bodySourceDataMatches(shell: BodyPreparationShell, confirmed: boolean): boolean {
+    const v = this.#bodySourceIssued;
+    // Identity/provenance precede all reflection. No candidate getter/prototype/ownKeys is consulted.
+    if (!v || v !== this.#bodySourceCurrent || !this.#bodySourceCreationAttempted || this.#bodySourceRejected !== undefined
+      || this.#bodySourceMetadataFixedCount !== 9 || this.#bodySourceMetadataConfirmed !== confirmed
+      || this.#bodySourceBuildStage !== (confirmed ? 'confirmed' : 'captured')) return false;
+    if (!bodySeedShape(v, [...BODY_SOURCE_METADATA, ...BODY_SOURCE_PROGRESS]) || !Object.isSealed(v)) return false;
+    if (!BODY_SOURCE_METADATA.every(key => { const d = Object.getOwnPropertyDescriptor(v, key)!;
+      return d.enumerable === true && d.configurable === false && d.writable === false; })) return false;
+    if (!BODY_SOURCE_PROGRESS.every(key => { const d = Object.getOwnPropertyDescriptor(v, key)!;
+      return d.enumerable === true && d.configurable === false && d.writable === true; })) return false;
+    const b = this.#issuedFrameBinding!;
+    return v[BODY_BIND_SOURCE] === true && v.custodian === this && v.construction === shell && v.binding === b
+      && v.link === this.#issuedRunLink && v.duty === this.#issuedRunDuty && v.control === this.#exitSlots[0].value
+      && v.start === b.target.start && v.rootFailure === this.#failure
+      && v.state === 'initializing' && v.claim === 'unused' && v.pinCallReached === false && v.bindCallReached === false
+      && v.stopRequested === false && v.postConfirmed === false && v.first === 'none' && v.failurePhase === 'none'
+      && v.failureBoundary === 'none' && v.refusal === 'none' && v.deliveryFirst === 'none'
+      && v.phase === (confirmed ? 'BP01' : 'none') && v.boundary === (confirmed ? 'after' : 'none')
+      && this.bodySourceStableMatches(shell);
+  }
+  private bodySourceDistort(raw: BodyBindSourceInitial): void {
+    const f = this.script.startsWith('si_mix_') ? this.script.slice(7) : '';
+    const key = f === 'brand' ? BODY_BIND_SOURCE : f;
+    if ((BODY_SOURCE_METADATA as readonly PropertyKey[]).includes(key) || (BODY_SOURCE_PROGRESS as readonly PropertyKey[]).includes(key)) {
+      const d = Object.getOwnPropertyDescriptor(raw, key)!;
+      Object.defineProperty(raw, key, { ...d, value: f === 'brand' ? false : typeof d.value === 'boolean' ? true
+        : typeof d.value === 'string' ? 'foreign' : Object.freeze({}) });
+    }
+    if (f === 'extra') Object.defineProperty(raw, 'extra', { value: true, enumerable: true });
+    if (f === 'prototype') Object.setPrototypeOf(raw, null);
+    if (this.script === 'si_missing_claim') Reflect.deleteProperty(raw, 'claim');
+    if (this.script === 'si_getter_first') Object.defineProperty(raw, 'first', { configurable: true, enumerable: true,
+      get: () => { this.#bodySourceHookCalls++; throw Error('private_source_getter'); } });
+    if (this.script === 'si_frozen') Object.freeze(raw);
+  }
+  private rejectBodySourceCandidate(): false {
+    this.#bodySourceRejected ??= this.#bodySourceCurrent;
+    this.fail('binding_mismatch'); return false;
+  }
+  private issueBodySource(shell: BodyPreparationShell): boolean {
+    if (this.#bodySourceCreationAttempted) { this.#bodySourceIssueRefusal = 'duplicate_creation'; return false; }
+    this.bodySourcePoint('BP00', 'before', 'before');
+    if (!this.bodySourcePreIssueMatches(shell)) { this.fail('binding_mismatch'); return false; }
+    this.#bodySourceStorageConfirmed = true;
+    this.bodySourcePoint('BP00', 'before', 'after');
+    this.bodySourcePoint('BP00', 'attempt', 'before');
+    if (!this.bodySourcePreIssueMatches(shell)) { this.fail('binding_mismatch'); return false; }
+    this.#bodySourceCreationAttempted = true; this.#bodySourceBuildStage = 'attempting';
+    if (this.script === 'si_producer_throw') throw Error('private_source_producer');
+    const b = this.#issuedFrameBinding!;
+    const raw: BodyBindSourceInitial = { [BODY_BIND_SOURCE]: true, custodian: this, construction: shell, binding: b,
+      link: this.#issuedRunLink!, duty: this.#issuedRunDuty!, control: this.#exitSlots[0].value as ProbeExitControl,
+      start: b.target.start, rootFailure: this.#failure, state: 'initializing', claim: 'unused', pinCallReached: false,
+      bindCallReached: false, stopRequested: false, postConfirmed: false, phase: 'none', boundary: 'none', first: 'none',
+      failurePhase: 'none', failureBoundary: 'none', refusal: 'none', deliveryFirst: 'none' };
+    this.#bodySourceIssued = raw; this.#bodySourceBuildStage = 'issued';
+    this.bodySourcePoint('BP00', 'issued', 'after');
+    this.bodySourceDistort(raw);
+    for (let i = 0; i < 9; i++) {
+      const step = ('fix_' + i) as BodySourceBuildStep & Exclude<BodySourceBuildStep, 'none'>;
+      this.bodySourcePoint('BP00', step, 'before');
+      Object.defineProperty(raw, BODY_SOURCE_METADATA[i], { writable: false, configurable: false });
+      this.#bodySourceMetadataFixedCount = i + 1;
+      this.bodySourcePoint('BP00', step, 'after');
+    }
+    this.bodySourcePoint('BP00', 'sealed', 'before');
+    if (this.script !== 'si_unsealed') Object.seal(raw);
+    this.#bodySourceBuildStage = 'hardened';
+    this.bodySourcePoint('BP00', 'sealed', 'after');
+    this.bodySourcePoint('BP00', 'captured', 'before'); this.#bodySourceCurrent = raw; this.#bodySourceBuildStage = 'captured';
+    if (this.script === 'si_copy') this.#bodySourceCurrent = Object.seal(Object.defineProperties({}, Object.getOwnPropertyDescriptors(raw))) as BodyBindSourceShell;
+    if (this.script === 'si_proxy') this.#bodySourceCurrent = new Proxy(raw, {
+      get: () => { this.#bodySourceHookCalls++; throw Error('private_source_proxy'); },
+      set: () => { this.#bodySourceHookCalls++; throw Error('private_source_proxy'); },
+      ownKeys: () => { this.#bodySourceHookCalls++; throw Error('private_source_proxy'); },
+      getPrototypeOf: () => { this.#bodySourceHookCalls++; throw Error('private_source_proxy'); },
+    });
+    this.bodySourcePoint('BP00', 'captured', 'after');
+    this.bodySourcePoint('BP01', 'before', 'before');
+    if (!this.bodySourceDataMatches(shell, false)) return this.rejectBodySourceCandidate();
+    this.bodySourcePoint('BP01', 'before', 'after'); this.bodySourcePoint('BP01', 'checked', 'before');
+    if (!this.bodySourceDataMatches(shell, false)) return this.rejectBodySourceCandidate();
+    this.bodySourcePoint('BP01', 'checked', 'after'); this.bodySourcePoint('BP01', 'after', 'before');
+    if (!this.bodySourceDataMatches(shell, false)) return this.rejectBodySourceCandidate();
+    this.#bodySourceMetadataConfirmed = true; this.#bodySourceBuildStage = 'confirmed';
+    this.#bodySourceIssued.phase = 'BP01'; this.#bodySourceIssued.boundary = 'after';
+    this.bodySourcePoint('BP01', 'after', 'after');
+    if (!this.bodySourceDataMatches(shell, true)) return this.rejectBodySourceCandidate();
+    return true;
+  }
+  private prepareBodySourceIssuer() {
+    this.#bodySourceState = 'building';
+    const shell = this.prepareBodyStorage();
+    if (!this.issueBodySource(shell)) return this.#fixed ?? this.fail('state_invalid');
+    if (this.script === 'si_duplicate_after' && this.issueBodySource(shell)) return this.fail('state_invalid');
+    this.#bodySourceState = 'held'; return this.reply(false, 'source_held_unpinned');
+  }
+  bodySourceIssuerReply(disposition: string): Readonly<BodySourceIssuerReply> {
+    if (this.#bodySourceFixed) return this.#bodySourceFixed;
+    const r: Readonly<BodySourceIssuerReply> = Object.freeze({ model: 'wfb-body-source-issuer-1', ok: false,
+      disposition: runEnum(disposition, ['source_held_unpinned', 'duplicate_preparation', 'construction_in_progress', 'blocked_frame_execution',
+        'closed', 'not_ready', 'input_rejected', 'binding_mismatch', 'state_invalid', 'construction_unconfirmed', 'deferred_frame'], 'internal_unconfirmed'),
+      first: runFirst(this.#failure.first), authority: 'none', execution: 'closed', formalIssuance: 'closed',
+      wholeRunAdmission: 'disabled', implementation: 'unknown', investigations: 'on_hold' });
+    if (this.#failure.first !== 'none') this.#bodySourceFixed = r; return r;
+  }
+  inspectBodySourceIssuer() {
+    const v = this.#bodySourceMetadataConfirmed ? this.#bodySourceIssued : undefined, start = this.#issuedFrameBinding?.target.start;
+    const s = this.#bodySourceStorageConfirmed ? this.#bodySeedShell : undefined;
+    return Object.freeze({ model: 'wfb-body-source-issuer-1', authority: 'none', execution: 'closed', formalIssuance: 'closed',
+      wholeRunAdmission: 'disabled', implementation: 'unknown', investigations: 'on_hold', first: runFirst(this.#failure.first),
+      state: runEnum(this.#bodySourceState, ['not_started', 'building', 'held', 'failed'], 'unconfirmed'),
+      stage: runEnum(this.#bodySourceBuildStage, ['not_started', 'attempting', 'issued', 'hardened', 'captured', 'confirmed'], 'unconfirmed'),
+      phase: runEnum(this.#bodySourceBuildPhase, ['none', 'BP00', 'BP01'], 'unconfirmed'),
+      step: runEnum(this.#bodySourceBuildStep, BODY_SOURCE_STEPS, 'unconfirmed'),
+      boundary: runEnum(this.#bodySourceBuildBoundary, ['none', 'before', 'after'], 'unconfirmed'),
+      creationAttempted: this.#bodySourceCreationAttempted === true,
+      fixedCount: Number.isSafeInteger(this.#bodySourceMetadataFixedCount) && this.#bodySourceMetadataFixedCount >= 0 && this.#bodySourceMetadataFixedCount <= 9 ? this.#bodySourceMetadataFixedCount : -1,
+      metadataConfirmed: this.#bodySourceMetadataConfirmed === true, failureRecorded: this.#bodySourceFailureRecorded === true,
+      failurePhase: runEnum(this.#bodySourceFailurePhase, ['none', 'BP00', 'BP01'], 'unconfirmed'),
+      failureStep: runEnum(this.#bodySourceFailureStep, BODY_SOURCE_STEPS, 'unconfirmed'),
+      failureBoundary: runEnum(this.#bodySourceFailureBoundary, ['none', 'before', 'after'], 'unconfirmed'),
+      stopRequested: this.#bodySourceStopRequested === true, stopFirst: runEnum(this.#bodySourceStopFirst, ['none', 'closed'], 'unconfirmed'),
+      deliveryFirst: runEnum(this.#bodySourceDeliveryFirst, ['none', 'delivery_unconfirmed'], 'unconfirmed'),
+      reentry: runEnum(this.#bodySourceReentry, ['none', 'construction_in_progress'], 'unconfirmed'),
+      issueRefusal: runEnum(this.#bodySourceIssueRefusal, ['none', 'duplicate_creation'], 'unconfirmed'), hookCalls: this.#bodySourceHookCalls,
+      storage: Object.freeze({ retained: this.#bodySeedShell !== undefined, confirmed: this.#bodySourceStorageConfirmed === true,
+        state: s ? runEnum(s.state, ['building', 'failed'], 'unconfirmed') : this.#bodySeedShell ? 'unconfirmed' : 'not_created',
+        carrierCount: s?.slots?.length ?? 0, dataCreated: s?.slots?.filter(c => c?.issued !== undefined).length ?? 0,
+        phase: runEnum(this.#bodySeedPhase, BODY_SEED_PHASES, 'unconfirmed'), boundary: runEnum(this.#bodySeedBoundary, BODY_SEED_BOUNDARIES, 'unconfirmed'),
+        reentry: runEnum(this.#bodySeedReentry, ['none', 'construction_in_progress'], 'unconfirmed') }),
+      source: Object.freeze({ state: v ? runEnum(v.state, ['initializing', 'preparing', 'binding', 'held_unready', 'failed'], 'unconfirmed') : this.#bodySourceIssued ? 'unconfirmed' : 'not_created',
+        claim: v ? runEnum(v.claim, ['unused', 'spent'], 'unconfirmed') : this.#bodySourceIssued ? 'unconfirmed' : 'not_created',
+        first: v ? runEnum(v.first, BODY_SOURCE_FIRSTS, 'unconfirmed') : 'unconfirmed',
+        phase: v ? runEnum(v.phase, ['none', 'BP00', 'BP01', 'BP02', 'BP03', 'BP04', 'BD00', 'BD01', 'BD02', 'BD03', 'BD04'], 'unconfirmed') : 'unconfirmed',
+        boundary: v ? runEnum(v.boundary, ['none', 'before', 'attempt', 'issued', 'captured', 'checked', 'call', 'after', 'held'], 'unconfirmed') : 'unconfirmed',
+        failurePhase: v ? runEnum(v.failurePhase, ['none', 'BP00', 'BP01', 'BP02', 'BP03', 'BP04', 'BD00', 'BD01', 'BD02', 'BD03', 'BD04'], 'unconfirmed') : 'unconfirmed',
+        failureBoundary: v ? runEnum(v.failureBoundary, ['none', 'before', 'attempt', 'issued', 'captured', 'checked', 'call', 'after', 'held'], 'unconfirmed') : 'unconfirmed',
+        refusal: v ? runEnum(v.refusal, BODY_BIND_REFUSALS, 'unconfirmed') : 'unconfirmed',
+        deliveryFirst: v ? runEnum(v.deliveryFirst, ['none', 'delivery_unconfirmed'], 'unconfirmed') : 'unconfirmed',
+        stopRequested: v?.stopRequested === true, stopMirrored: v?.stopRequested === true && this.#bodySourceStopRequested === true,
+        pinCallReached: v?.pinCallReached === true, bindCallReached: v?.bindCallReached === true, postConfirmed: v?.postConfirmed === true,
+        issuedRetained: this.#bodySourceIssued !== undefined, currentRetained: this.#bodySourceCurrent !== undefined,
+        rejectedRetained: this.#bodySourceRejected !== undefined, sameReference: this.#bodySourceIssued !== undefined && this.#bodySourceIssued === this.#bodySourceCurrent }),
+      receiver: start ? probeStartAccess.bodyFieldsInspect(start) : bodyReceiverAbsent(), rootReady: this.#ready,
+      bodyStarts: this.#issuedCells?.body.state === 'running' ? 1 : 0, grantAttempts: start ? probeStartAccess.captureInspect(start).grantAttempts : 0,
+      dutyUsed: this.#issuedRunDuty?.attemptUsed === true, pin: 'not_connected', claimConsumption: 'not_connected', binding: 'not_connected', constructionReady: 'not_connected' });
   }
   private bodySeedBaseMatches(): boolean {
     const c = this.#issuedCells!, b = this.#issuedFrameBinding!, d = this.#issuedRunDuty!;
@@ -4556,6 +4796,7 @@ class CanonicalGateDraftRoot {
       if (this.exitPreparation && !this.prepareExitSlots()) return this.fail('binding_mismatch');
       if (this.exitGuard && !this.prepareGuardState()) return this.fail('binding_mismatch');
       if (this.localExit && !this.prepareLocalState()) return this.fail('binding_mismatch');
+      if (this.bodySourceIssuer) return this.prepareBodySourceIssuer();
       if (this.bodyBindFields) return this.prepareBodyBindFields();
       if (this.bodySeed) return this.prepareBodySeed();
       (this.#slots[1].value as { state: string }).state = 'bound'; this.#ready = true; return this.reply(true, 'draft_held');
@@ -4806,6 +5047,7 @@ class CanonicalGateDraftRoot {
       grantIssues: capture?.grantIssues ?? 0, bodyStarts: 0, exitRecords: 0, realWriterCalls: 0, journalSupply: 'not_connected', rootFinish: 'not_called' });
   }
   close() {
+    if (this.bodySourceIssuer) this.stopBodySource();
     if (this.#fixed) return this.#fixed;
     this.#closed = true;
     if (this.grantCapture && this.#issuedFrameBinding) probeStartAccess.stopCapture(this.#issuedFrameBinding.target.start);
@@ -4981,6 +5223,27 @@ export function createProbeBodyBindFieldsFake(...args: readonly unknown[]) {
     checkLegacy: (...xs: readonly unknown[]) => call(xs, () => a.checkBodyBindFields(true)),
     close: (...xs: readonly unknown[]) => call(xs, () => a.close()),
     inspect: (...xs: readonly unknown[]) => { if (xs.length) a.rejectInput(); return a.inspectBodyBindFields(); } });
+}
+
+export function createProbeBodySourceIssuerFake(...args: readonly unknown[]) {
+  const script = args.length ? args[0] : 'si_normal';
+  const scripts = ['si_normal', 'si_producer_throw', 'si_copy', 'si_proxy', 'si_missing_claim', 'si_getter_first', 'si_unsealed', 'si_frozen',
+    'si_duplicate_after', 'si_retry_after_failure',
+    ...['brand', ...BODY_SOURCE_METADATA.slice(1), ...BODY_SOURCE_PROGRESS, 'extra', 'prototype'].map(f => 'si_mix_' + String(f)),
+    ...BODY_SOURCE_POINTS.flatMap(p => ['fault', 'close', 'reenter'].map(k => 'si_' + k + '_' + p)),
+    ...Array.from({ length: 15 }, (_, i) => 'BS' + String(i).padStart(2, '0')).flatMap(p =>
+      ['before', 'attempt', 'retained', 'done'].flatMap(b => ['fault', 'close', 'reenter'].map(k => 's_' + k + '_' + p + '_' + b)))];
+  const admitted = args.length <= 1 && typeof script === 'string' && scripts.includes(script);
+  const a = new CanonicalGateDraftRoot(admitted ? script as string : 'si_normal', admitted,
+    true, true, false, true, false, false, false, false, false, false, true);
+  const call = (xs: readonly unknown[], op: () => Readonly<{ ok: boolean; disposition: string }>) => {
+    const r = xs.length ? a.rejectInput() : op(); return a.bodySourceIssuerReply(r.disposition);
+  };
+  return Object.freeze({ prepare: (...xs: readonly unknown[]) => call(xs, () => a.prepare()),
+    check: (...xs: readonly unknown[]) => call(xs, () => a.checkBodyBindFields()),
+    checkLegacy: (...xs: readonly unknown[]) => call(xs, () => a.checkBodyBindFields(true)),
+    close: (...xs: readonly unknown[]) => call(xs, () => a.close()),
+    inspect: (...xs: readonly unknown[]) => { if (xs.length) a.rejectInput(); return a.inspectBodySourceIssuer(); } });
 }
 
 export function createProbeBodyBundleFake(...args: readonly unknown[]) {
