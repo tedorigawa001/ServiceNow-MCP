@@ -1,12 +1,14 @@
 # WF-B body source：正規生成位置・private issuerと同期停止・失敗時保持
 
-Version: draft-0.4 / Date: 2026-11-11 / 設計基準HEAD: `5873d16` / (A)最小分離実装基準HEAD: `f3b3721` / (B)合成source実装基準HEAD: `311d3ef` / (B)レビュー修正基準HEAD: `c28b423`。
+Version: draft-0.5 / Date: 2026-11-11 / 設計基準HEAD: `5873d16` / (A)最小分離実装基準HEAD: `f3b3721` / (B)合成source実装基準HEAD: `311d3ef` / (B)レビュー修正基準HEAD: `c28b423` / (C)差分設計基準HEAD: `b3776da`。
 
 draft-0.3のレビュー修正：BP00 attemptの2回目の発行前検査と`!creationAttempted`節、BP01の`bodySourceDataMatches`にある来歴4節（creationAttempted、fixedCount=9、metadataConfirmed、buildStage）と安定再検査の呼出しは、単独で外しても試験が落ちなかった。既存のstable対照はBP00の発行前検査に掛かる位置へ注入していたためである。metadata／進行fieldの`enumerable`節を単独で破るfaultもなかった。sourceが無いときの`first`等7軸は`unconfirmed`を返し、「不在→not_created」の規則と食い違っていた。各節への単一注入対照、非列挙field対照を追加し、不在の投影を`not_created`へ直した。§12に等価・観測不能な節を記録した。
 
 Status: **(A)のBS／BC最小分離と(B)のroot先行scalar・BP00〜01正規生成／確認・同期停止／失敗保持を合成依存限定で実装。** 実装範囲は§11〜12と[分離検証記録](E2E_BEST_PRACTICE_WFB_BODY_STORAGE_DATA_SPLIT_2026-11-11.md)・[source生成／停止検証記録](E2E_BEST_PRACTICE_WFB_BODY_SOURCE_ISSUER_2026-11-11.md)を基準とする。§1〜10はdraft-0.1作成時の接続設計・文書検証であり、当時の「型だけ」「将来」「未実装」はその時点の記録。(C)private pinと受入条件全体は未実装・未実施のまま。親は[bind状態型・先行borrow設計](BEST_PRACTICE_WFB_BODY_BIND_BORROW_DESIGN.md)と[先行slot・固定構築設計](BEST_PRACTICE_WFB_BODY_SLOT_CONSTRUCTION_DESIGN.md)。先行実装とレビューは[field検証記録](E2E_BEST_PRACTICE_WFB_BODY_BIND_FIELDS_2026-11-10.md)を参照する。`5873d16`のroot側検査・projection対照と、等価と判断した節の注記は維持する。
 
 正式発行口・C実行入口・body起動閉鎖、全体受付無効、Unknown、VM／監視／telemetry調査保留を維持する。本書は実装・実接続・実通信・設定変更・Pushの承認ではない。将来も合成依存だけとし、今回の設計範囲はBS／BCの最小分離、BP00〜01のsource生成／確認とその前後の同期停止・保持まで。BP02〜04のprivate pinは接続先の前提だけを定義し、pin実行・source利用claim消費・payload借用／bind・構築ready・body／退出・正式証拠・実予算更新は含めない。
+
+(C)の詳細化（MDのみ）は[BP02〜04段階別検査・同root／同startのprivate pin接続差分 draft-0.1](BEST_PRACTICE_WFB_BODY_PRIVATE_PIN_CONNECTION_DESIGN.md)と§13を参照する。生成診断とpin位置の分離・private call／試行／停止保持を具体化しただけで、pinは引き続き未実装。BP04後もBC00へ進めない閉鎖保持を設計上の到達点とする。
 
 ## 1 現行から必要になる差分
 
@@ -198,3 +200,11 @@ root側の32固定位置で故障・close・再入を区別する。producer thr
 BP02〜04 pin・source claim消費・payload borrow／bind・構築ready・body起動・回収／Journal・正式証拠は未接続。実allocation／layout・全guard費・E／S係数・実予算・OOMでの診断配送必着はUnknown。sourceDeliveryFirstは予約された有限診断scalarであり、実配送失敗の保証は追加しない。正式発行口閉鎖・全体受付無効・調査保留を維持する。
 
 レビュー修正（`c28b423`）：BP00 attemptとBP01の再検査は、各節への単一注入で最初の拒否位置（`failurePhase`／`failureStep`／`failureBoundary`）を固定する。非列挙のmetadata／進行fieldは、それぞれの`enumerable`節だけが拒否する。source不在時は、state／claimに加えてfirst／phase／boundary／failurePhase／failureBoundary／refusal／deliveryFirstも`not_created`と投影し、`unconfirmed`は発行済み・metadata未確認の場合に限る。`bodySourceDataMatches`の`rejected`節は、rejectedが失敗時にだけ付き構築が止まるため等価とする。sourceの最初の失敗位置の上書き防止は、新経路でも2回目のfailが同じ位置か、close後は`#fixed`返却、held後は初回failになるため等価と確認した。shellのfailed化をstorage確認済みに限るgateは、未確認shellがinspectで常に`unconfirmed`と投影されるため外部から観測できず、防御条件として残す。
+
+## 13 (C) 段階別検査・private pin呼出し境界（2026-11-11、MDのみ）
+
+[private pin接続差分設計](BEST_PRACTICE_WFB_BODY_PRIVATE_PIN_CONNECTION_DESIGN.md)で、同root／同start・同sourceの来歴確認とBP02〜04の狭い検査、call到達／receiver試行／参照保持／確認を分けた固定scheduleを定義する。現行(B)の全空／BP01専用検査をpin後へOR緩和せず、生成時のsourceBuild／sourceFailure位置を保存したままpin専用位置・初回理由を記録する。生成側failure writerをそのままpin失敗へ流し、BP01の失敗と誤記録する接続は禁止する。
+
+固定private call・同startの既存expected-source3参照とpin履歴だけを利用し、source利用claim消費・payload6参照／occupancyの変更は行わない。試行後の失敗／closeでpin解除・試行返却／別source補完をせず、confirmedは後発失敗でも保持する。BP04後の正常案はsource preparing／unused・pin confirmed・payload空／free・BC00未開始の閉鎖保持で、構築ready／body起動の成功ではない。
+
+本節と差分設計は文書のみであり、実装・pin試験の受入成功を示さない。`b3776da`の再検査／不在projection訂正と等価・観測不能の範囲を保持し、その評価を新pin経路へ自動移植しない。正式発行口閉鎖・全体受付無効・Unknown・調査保留、実接続／実通信・設定変更・Pushの禁止を維持する。
