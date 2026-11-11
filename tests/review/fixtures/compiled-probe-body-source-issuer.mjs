@@ -139,6 +139,43 @@ try {
       "    this.#" + field + " = 'private_enum' as never;\n    const v = this.#bodySourceMetadataConfirmed", false);
     assert.equal(run(await load(injected, 'projection-' + key)).s[key], 'unconfirmed');
   }
+  // BP00 attempt / BP01 rechecks: each clause is the first to reject its single injected fault; removing it
+  // lets the run hold or moves the first rejection. Earlier stable controls hit BP00 preIssue, not these.
+  const where = s => `${s.failurePhase}/${s.failureStep}/${s.failureBoundary}`;
+  const recheck = [
+    ['preissue-call', ['BP00', 'attempt', 'before'], "this.#issuedCells!.body.state = 'running';", 'issueBodySource',
+      "    this.bodySourcePoint('BP00', 'attempt', 'before');\n    if (!this.bodySourcePreIssueMatches(shell)) { this.fail('binding_mismatch'); return false; }\n",
+      "    this.bodySourcePoint('BP00', 'attempt', 'before');\n"],
+    ['preissue-attempted', ['BP00', 'attempt', 'before'], 'this.#bodySourceCreationAttempted = true;', 'bodySourcePreIssueMatches',
+      ' && !this.#bodySourceCreationAttempted', ''],
+    ['bp01-stable', ['BP01', 'before', 'before'], "this.#issuedCells!.body.state = 'running';", 'bodySourceDataMatches',
+      "\n      && this.bodySourceStableMatches(shell);", ';'],
+    ['bp01-attempted', ['BP01', 'before', 'before'], 'this.#bodySourceCreationAttempted = false;', 'bodySourceDataMatches',
+      ' || !this.#bodySourceCreationAttempted', ''],
+    ['bp01-fixed-count', ['BP01', 'before', 'before'], 'this.#bodySourceMetadataFixedCount = 8;', 'bodySourceDataMatches',
+      '      || this.#bodySourceMetadataFixedCount !== 9 || ', '      || '],
+    ['bp01-confirmed', ['BP01', 'before', 'before'], 'this.#bodySourceMetadataConfirmed = true;', 'bodySourceDataMatches',
+      ' || this.#bodySourceMetadataConfirmed !== confirmed', ''],
+    ['bp01-stage', ['BP01', 'before', 'before'], "this.#bodySourceBuildStage = 'hardened';", 'bodySourceDataMatches',
+      "\n      || this.#bodySourceBuildStage !== (confirmed ? 'confirmed' : 'captured')) return false;", ') return false;'],
+  ];
+  for (const [name, [phase, step, boundary], code, target, a, b] of recheck) {
+    const injected = at(phase, step, boundary, code), checked = run(await load(injected, 'recheck-' + name));
+    assert.equal(`${checked.r.first}@${where(checked.s)}`, `binding_mismatch@${phase}/${step}/${boundary}`, name);
+    const masked = run(await load(method(injected, target, a, b), 'recheck-mutant-' + name));
+    assert.ok(masked.r.disposition === 'source_held_unpinned' || where(masked.s) !== `${phase}/${step}/${boundary}`, 'masked ' + name);
+  }
+  // Enumerable descriptors: a non-enumerable metadata or progress key is caught only by its enumerable clause.
+  const hidden = [['metadata', 'custodian', 'return d.enumerable === true && d.configurable === false && d.writable === false;',
+    'return d.configurable === false && d.writable === false;'],
+  ['progress', 'claim', 'return d.enumerable === true && d.configurable === false && d.writable === true;',
+    'return d.configurable === false && d.writable === true;']];
+  for (const [name, key, a, b] of hidden) {
+    const injected = at('BP00', 'issued', 'after', `Object.defineProperty(this.#bodySourceIssued!, '${key}', { enumerable: false });`);
+    const checked = run(await load(injected, 'hidden-' + name));
+    assert.equal(`${checked.r.first}@${where(checked.s)}`, 'binding_mismatch@BP01/before/before', name);
+    assert.equal(run(await load(method(injected, 'bodySourceDataMatches', a, b), 'hidden-mutant-' + name)).r.disposition, 'source_held_unpinned', name);
+  }
   const file = fileURLToPath(new URL('./snapshot-read-composition-fake.ts', import.meta.url));
   const extra = '\ndeclare const sourceRoot: CanonicalGateDraftRoot;\nsourceRoot.issueBodySource({});\nsourceRoot.stopBodySource();\nconst badBuildPhase: BodySourceBuildPhase = "BD00";\nconst badBuildStep: BodySourceBuildStep = "fix_9";\nconst badBuildBoundary: BodySourceBuildBoundary = "call";\nconst badBuildStage: BodySourceBuildStage = "failed";\n';
   const options = { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.NodeNext, moduleResolution: ts.ModuleResolutionKind.NodeNext,
@@ -152,5 +189,5 @@ try {
     candidateIdentity: 2, shapeControls: 3, sealedControl: true, metadataWritableControls: 9, progressWritableControls: 13,
     emptyCarrierControls: 13, stableBase: true, shellIdentity: true, receiverInitial: true, issuedRetention: true,
     failureCloseStop: true, stopMirror: true, untrustedWriteRefusal: true, firstRetention: true, duplicateRefusal: true,
-    rootAllowlists: projections.length, semanticRejections: 6 }));
+    rootAllowlists: projections.length, semanticRejections: 6, recheckControls: recheck.length, enumerableControls: hidden.length }));
 } finally { rmSync(dir, { recursive: true, force: true }); }

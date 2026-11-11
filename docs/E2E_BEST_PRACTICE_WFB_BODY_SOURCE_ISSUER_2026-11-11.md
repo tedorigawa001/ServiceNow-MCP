@@ -75,6 +75,35 @@ SS01〜12の本段階に該当する部分だけの検証で、全受入表・�
 
 最終の作業中差分は合成fixture・新試験・compiled対照・開発export一覧・CHANGELOG・設計／検証文書の11ファイルだけ。src・manifest／lockfile・TypeScript／配布設定に差分なし。indexは空のまま。途中のREDと試験側の訂正を上記に保持し、最終確認時に未解消の検証失敗はない。次段階のpin／claim消費／bind・構築ready・body起動を有効化していない。
 
+## レビュー修正（2026-11-11）
+
+基準HEADは`c28b423`。修正前の全体検証は、lint・build・梱包分類・全vitest（336ファイル17,620件成功・失敗0）・compiled7本・差分空白検査のすべてが成功した。
+
+一時mutant28種を流した。killされたのは16種だった。両方で生存した12種の内訳は次のとおり。
+
+- BP01の`bodySourceDataMatches`の来歴4節：creationAttempted、fixedCount=9、metadataConfirmed=confirmed、buildStage。
+- `bodySourceDataMatches`内の安定再検査の呼出し。既存のstable対照はBP00の発行前検査に掛かる位置へ注入していた。
+- BP00 attemptの2回目の発行前検査と、その`!creationAttempted`節。
+- metadata／進行fieldの`enumerable`節。単独で破るfaultがなかった。
+- 等価・観測不能の3種：
+  - `rejected`節。rejectedが付くのは失敗時だけで、構築はそこで止まる。
+  - sourceの最初の失敗位置の上書き防止。新経路でも、2回目のfailは同じ位置か、close後は`#fixed`返却、held後は初回failになる。
+  - shellのfailed化をstorage確認済みに限るgate。未確認shellはinspectで常に`unconfirmed`と投影されるため、外部から観測できない。
+
+あわせて、source不在時の`first`／`phase`／`boundary`／`failurePhase`／`failureBoundary`／`refusal`／`deliveryFirst`が`unconfirmed`を返し、「不在→not_created」の規則と食い違っていた。
+
+修正として次を行った。
+
+- compiledへ単一注入の再検査対照7件（`recheckControls`）を追加した。BP00 attempt beforeとBP01 before beforeへ1つずつ故障を注入し、当該節が最初に`binding_mismatch`で拒否する位置（`failurePhase`／`failureStep`／`failureBoundary`）を固定する。節を外すと`source_held_unpinned`になるか、拒否位置が移ることを確認する。
+- 非列挙field対照2件（`enumerableControls`）を追加した。metadataの`custodian`と進行fieldの`claim`を非列挙にすると、それぞれの`enumerable`節だけが拒否する。
+- fixtureのsource投影7軸を、不在なら`not_created`、発行済み・metadata未確認なら`unconfirmed`に直した。
+
+RED／GREEN：
+
+- projectionはvitestへ不在／未確認の両方の期待値を先に加えた。不在側が失敗し（RED、1件失敗・199件成功）、fixture修正後は200件すべて成功した（GREEN）。
+- 再検査とenumerableの9種は、修正前はvitest・compiledとも生存した（RED）。修正後は9種すべてが新対照の期待値assertでkillされた（GREEN）。
+  - metadataConfirmed節の外部mutantは隣のfixedCount対照のanchorも消したため、anchor検査で止まった。anchor文字列を保った同義mutantで再確認し、`bp01-confirmed`対照の期待値assertで落ちることを確認した。
+
 ## コミット前の対象限定再検証（2026-11-11）
 
 上記の未コミット・index未登録という記述は実装完了時点の記録である。今回の11ファイルだけをindexへ登録し、対象名が指定11件と一致することを確認した。そのindexの全追跡ファイルを新しい一時フォルダへ展開し、各対象がindexとbyte単位で一致することを確認した。未登録・未追跡の作業内容や既存distはコピーせず、ローカルnode_modulesだけを参照した。依存の取得・導入は行っていない。

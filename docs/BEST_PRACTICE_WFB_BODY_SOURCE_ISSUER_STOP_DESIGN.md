@@ -1,6 +1,8 @@
 # WF-B body source：正規生成位置・private issuerと同期停止・失敗時保持
 
-Version: draft-0.3 / Date: 2026-11-11 / 設計基準HEAD: `5873d16` / (A)最小分離実装基準HEAD: `f3b3721` / (B)合成source実装基準HEAD: `311d3ef`。
+Version: draft-0.4 / Date: 2026-11-11 / 設計基準HEAD: `5873d16` / (A)最小分離実装基準HEAD: `f3b3721` / (B)合成source実装基準HEAD: `311d3ef` / (B)レビュー修正基準HEAD: `c28b423`。
+
+draft-0.3のレビュー修正：BP00 attemptの2回目の発行前検査と`!creationAttempted`節、BP01の`bodySourceDataMatches`にある来歴4節（creationAttempted、fixedCount=9、metadataConfirmed、buildStage）と安定再検査の呼出しは、単独で外しても試験が落ちなかった。既存のstable対照はBP00の発行前検査に掛かる位置へ注入していたためである。metadata／進行fieldの`enumerable`節を単独で破るfaultもなかった。sourceが無いときの`first`等7軸は`unconfirmed`を返し、「不在→not_created」の規則と食い違っていた。各節への単一注入対照、非列挙field対照を追加し、不在の投影を`not_created`へ直した。§12に等価・観測不能な節を記録した。
 
 Status: **(A)のBS／BC最小分離と(B)のroot先行scalar・BP00〜01正規生成／確認・同期停止／失敗保持を合成依存限定で実装。** 実装範囲は§11〜12と[分離検証記録](E2E_BEST_PRACTICE_WFB_BODY_STORAGE_DATA_SPLIT_2026-11-11.md)・[source生成／停止検証記録](E2E_BEST_PRACTICE_WFB_BODY_SOURCE_ISSUER_2026-11-11.md)を基準とする。§1〜10はdraft-0.1作成時の接続設計・文書検証であり、当時の「型だけ」「将来」「未実装」はその時点の記録。(C)private pinと受入条件全体は未実装・未実施のまま。親は[bind状態型・先行borrow設計](BEST_PRACTICE_WFB_BODY_BIND_BORROW_DESIGN.md)と[先行slot・固定構築設計](BEST_PRACTICE_WFB_BODY_SLOT_CONSTRUCTION_DESIGN.md)。先行実装とレビューは[field検証記録](E2E_BEST_PRACTICE_WFB_BODY_BIND_FIELDS_2026-11-10.md)を参照する。`5873d16`のroot側検査・projection対照と、等価と判断した節の注記は維持する。
 
@@ -194,3 +196,5 @@ root側の32固定位置で故障・close・再入を区別する。producer thr
 独立合成200件とcompiled対照の範囲・初回失敗／重複guardの観測訂正は[source検証記録](E2E_BEST_PRACTICE_WFB_BODY_SOURCE_ISSUER_2026-11-11.md)を参照する。SS02〜11の本段階に該当する部分を検証しただけで、全guard・全SS合格とはしない。getter拒否のshapeとwritable descriptorの重複防御は、各単独除去でも安全な場合を明記し、二重除去対照と区別する。固定metadata／進行fieldの不正関係・属性、全13空carrier・元base／shell／receiver初期値の対照はあるが、あらゆる私有slotの任意破損や任意foreign rootへの書込み安全性を証明するものではない。
 
 BP02〜04 pin・source claim消費・payload borrow／bind・構築ready・body起動・回収／Journal・正式証拠は未接続。実allocation／layout・全guard費・E／S係数・実予算・OOMでの診断配送必着はUnknown。sourceDeliveryFirstは予約された有限診断scalarであり、実配送失敗の保証は追加しない。正式発行口閉鎖・全体受付無効・調査保留を維持する。
+
+レビュー修正（`c28b423`）：BP00 attemptとBP01の再検査は、各節への単一注入で最初の拒否位置（`failurePhase`／`failureStep`／`failureBoundary`）を固定する。非列挙のmetadata／進行fieldは、それぞれの`enumerable`節だけが拒否する。source不在時は、state／claimに加えてfirst／phase／boundary／failurePhase／failureBoundary／refusal／deliveryFirstも`not_created`と投影し、`unconfirmed`は発行済み・metadata未確認の場合に限る。`bodySourceDataMatches`の`rejected`節は、rejectedが失敗時にだけ付き構築が止まるため等価とする。sourceの最初の失敗位置の上書き防止は、新経路でも2回目のfailが同じ位置か、close後は`#fixed`返却、held後は初回failになるため等価と確認した。shellのfailed化をstorage確認済みに限るgateは、未確認shellがinspectで常に`unconfirmed`と投影されるため外部から観測できず、防御条件として残す。

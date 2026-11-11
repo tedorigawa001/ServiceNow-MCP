@@ -32,6 +32,9 @@ describe('BP00/01 synthetic source issuer with synchronous stop', () => {
   it('confirms the same root source without issuing a pin, consuming a claim or creating BC data', () => {
     const a = createProbeBodySourceIssuerFake();
     expect(a.inspect().source.state).toBe('not_created');
+    // Absent is not_created on every source axis; unconfirmed is reserved for an issued-but-unverified source.
+    expect(a.inspect().source).toMatchObject({ claim: 'not_created', first: 'not_created', phase: 'not_created', boundary: 'not_created',
+      failurePhase: 'not_created', failureBoundary: 'not_created', refusal: 'not_created', deliveryFirst: 'not_created' });
     expect(a.prepare()).toMatchObject({ model: 'wfb-body-source-issuer-1', disposition: 'source_held_unpinned', first: 'none', ok: false });
     const s = a.inspect();
     expect(s).toMatchObject({ state: 'held', stage: 'confirmed', phase: 'BP01', step: 'after', boundary: 'after',
@@ -56,6 +59,8 @@ describe('BP00/01 synthetic source issuer with synchronous stop', () => {
     expect(a.inspect()).toMatchObject({ stage: 'issued', fixedCount: 0, creationAttempted: true, metadataConfirmed: false,
       failureRecorded: true, failurePhase: 'BP00', failureStep: 'issued', failureBoundary: 'after', stopRequested: false,
       source: { state: 'unconfirmed', claim: 'unconfirmed', issuedRetained: true, currentRetained: false, stopMirrored: false } });
+    expect(a.inspect().source).toMatchObject({ first: 'unconfirmed', phase: 'unconfirmed', boundary: 'unconfirmed', failurePhase: 'unconfirmed',
+      failureBoundary: 'unconfirmed', refusal: 'unconfirmed', deliveryFirst: 'unconfirmed' });
     expect(a.close()).toBe(r);
     expect(a.inspect()).toMatchObject({ first: 'construction_unconfirmed', stopRequested: true, stopFirst: 'closed',
       failurePhase: 'BP00', failureStep: 'issued', source: { state: 'unconfirmed', stopMirrored: false }, hookCalls: 0 });

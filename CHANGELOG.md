@@ -274,6 +274,8 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 ### Added
 
+- WF-B body source issuer review: seven compiled single-injection controls pin the BP00 attempt pre-issue recheck and the BP01 provenance/stable clauses to the first rejecting phase/step/boundary, and two controls isolate the metadata and progress `enumerable` descriptor clauses. An absent source now projects `not_created` on every source axis; `unconfirmed` is reserved for an issued but unverified source.
+
 - WF-B body bind-field review: compiled single-injection controls now pin the two root-side `bodyFieldsIntact` clauses (base unused, no BC shell), the root-side `state`/`phase`/`failurePhase`/`reentry` projection allowlists, and the `bodyStarts` projection derived from the real body cell. Two remaining mutants are recorded as equivalent.
 
 - WF-B body bundle/draft review: two compiled single-injection controls pin the BC12/BC13 mint base preflight to its own `before`, before the producer is called; removing it previously delayed rejection to the final post. The `cell.rejected` clause of the live and bundle data checks is recorded as an equivalent defensive condition, correcting an earlier live-path record that counted an anchor-only failure as a kill.
