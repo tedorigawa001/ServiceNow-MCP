@@ -1,6 +1,8 @@
 # WF-B C-02後半：固定private call・receiver入口と同start試行／格納
 
-Version: draft-0.1 / Date: 2026-11-11 / 読み取り基準HEAD: `ff866f9`（C-02前半実装 `4f70522`、前半レビュー対照 `ff866f9`）。
+Version: draft-0.2 / Date: 2026-11-11 / 読み取り基準HEAD: `ff866f9`（C-02前半実装 `4f70522`、前半レビュー対照 `ff866f9`、draft-0.1レビュー修正基準HEAD: `0f3fae0`）。
+
+draft-0.1のレビュー修正：§8の2か所で、境界の軸を取り違えていた。receiver行の「failurePrefix=none／before又はafter」は、before／afterが`BodyBindPrefix`の値に読めるが、before／afterを持つのは`failureBoundary`（`BodyReceiverFailureBoundary`）である。冒頭の「未callは既存BP02 before／checked」は、現行`failBodyPinStart`がroot側`#bodyPinFailureBoundary`へbefore／after、source側（`#bodyPinStartFailureSourceBoundary`と元sourceの`failureBoundary`）へbefore／checkedを書く2軸を混ぜていた。どちらも軸ごとに書き分けた。文書だけの修正で、契約・CR／CE・未実装範囲は変えない。
 
 Status: **接続差分の設計のみ。PC03固定call・receiver試行／格納・本書の新field／accessは未実装。** 親は[private pin設計](BEST_PRACTICE_WFB_BODY_PRIVATE_PIN_CONNECTION_DESIGN.md)と[bind・先行borrow設計](BEST_PRACTICE_WFB_BODY_BIND_BORROW_DESIGN.md)。生成の来歴は[source生成・停止設計](BEST_PRACTICE_WFB_BODY_SOURCE_ISSUER_STOP_DESIGN.md)、既存の実績は[C-02前半検証記録](E2E_BEST_PRACTICE_WFB_BODY_PIN_START_2026-11-11.md)を参照する。
 
@@ -109,14 +111,14 @@ callerのtry／finallyはCR02の直接記録より外側で用意し、flag記�
 
 ## 8 BP03診断・closeと失敗時保持
 
-現行failBodyPinStartをそのまま再利用するとBP03失敗までBP02／preflightへ誤記録する。本書の将来実装では、生成writer・C-01準備writerを変更せず、rootが実保持しているcaller phase／step／boundaryからpin初回位置を固定する。未callは既存BP02 before／checked、call中又はthrowで正常復帰未確認ならroot BP03／call／before、primitiveが戻った後ならcall／after、sourceの粗い失敗位置はどちらもBP03／call。callee内部位置をcallerの進行へcopyしない。
+現行failBodyPinStartをそのまま再利用するとBP03失敗までBP02／preflightへ誤記録する。本書の将来実装では、生成writer・C-01準備writerを変更せず、rootが実保持しているcaller phase／step／boundaryからpin初回位置を固定する。未callは既存のroot BP02／preflight／before又はafter、source BP02／before又はchecked、call中又はthrowで正常復帰未確認ならroot BP03／call／before、primitiveが戻った後ならcall／after、sourceの粗い失敗位置はどちらもBP03／call。callee内部位置をcallerの進行へcopyしない。
 
 | 軸 | 最初に記録する内容 | 後発失敗／closeで維持する内容 |
 |---|---|---|
 | 生成 | BP00〜01の事実・固定化数・metadata確認・build stage | BP03を生成失敗位置へ入れず、生成failureRecordedをpin失敗で立てない |
 | root共通／pin | binding_mismatch／state_invalid／closed／construction_unconfirmedと実caller位置 | 共通first・pin first／初回位置を上書きしない。call離脱後も未確認を成功へ変えない |
 | 元source | 確認済み元issuedだけにfailedとpin側理由・caller BP位置 | source first／初回位置／pinCall履歴、unused claim。未知current／rejectedへ書かない |
-| receiver | 正規入場後の実操作位置と最初の理由、failurePhase=pin／failurePrefix=none／before又はafter | bodyPinFailureStep・first、試行／最後の保持prefix。confirmedをfailed／emptyへ変えない |
+| receiver | 正規入場後の実操作位置と最初の理由、failurePhase=pin／failurePrefix=none／failureBoundary=before又はafter | bodyPinFailureStep・first、試行／最後の保持prefix。confirmedをfailed／emptyへ変えない |
 | 停止／配送／refusal | root stopと元source stop、既存delivery軸、専用root refusalを別々に記録 | 失敗だけでclose履歴を作らず、closeだけでreceiverへ新firstを強制しない |
 
 最小同一性不一致はcaller binding_mismatch、正規の状態違反はstate_invalid、停止はclosed、捕捉／確認／復帰未確認はconstruction_unconfirmedへ写像する。source firstは必要なら既存receiver_unconfirmedを使いrootの理由へ写像するが、新しいProbeRunFirstは増やさない。正規receiverのfirstは既存BodyReceiverFirstで表す。sourceとrootのfirstは別軸で、元の非noneを保持する。
