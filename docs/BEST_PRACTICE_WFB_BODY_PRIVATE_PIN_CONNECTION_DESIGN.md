@@ -1,6 +1,6 @@
 # WF-B (C)：BP02〜04段階別検査・同root／同startのprivate pin接続差分
 
-Version: draft-0.5 / Date: 2026-11-11 / 読み取り基準HEAD: `b3776da`（(B)実装: `c28b423`、再検査／不在projectionレビュー修正: `b3776da`、C-01実装基準HEAD: `554ef9a`、C-01レビュー修正基準HEAD: `86d2560`、C-02前半実装基準HEAD: `a3f1f66`、C-02前半レビュー修正基準HEAD: `4f70522`）。
+Version: draft-0.6 / Date: 2026-11-11 / 読み取り基準HEAD: `b3776da`（(B)実装: `c28b423`、再検査／不在projectionレビュー修正: `b3776da`、C-01実装基準HEAD: `554ef9a`、C-01レビュー修正基準HEAD: `86d2560`、C-02前半実装基準HEAD: `a3f1f66`、C-02前半レビュー修正基準HEAD: `4f70522`、後半接続差分設計基準HEAD: `ff866f9`）。
 
 draft-0.4のレビュー修正：C-02前半の開始前route未使用条件`bodyPinStartRouteUnused`の10節と、PC02の`bodyPinStartPreflightMatches`のroute 9節は、単独で外してもvitest・compiledの両方が通っていた。compiledのphase対照はsource 13fieldだけを壊し、route scalarを壊す対照がなかった。context条件のbase／storage／payload／来歴の4呼出し、entry/after の2回目caller照合、非accepted時の`#fixed`先行返却（内部拒否のrefusalを`foreign_source`へ上書きしない）、admit内refusalの初回保持、pin-start失敗時のshell failed反映も固定されていなかった。route 13scalarをentry/beforeとpreflight/beforeへ単独注入する26対照（節除去で拒否位置が動く）、context 4呼出しの注入と除去対照、同値copyへの差替えでcallerの再照合を確かめる対照、2回の再入でrefusalの初回保持を確かめる対照をcompiledへ追加した。context拒否8件ではrefusal=noneも比較する。vitestにはpin-start失敗後の`storage.state`=failedを追加した。等価・観測不能な節は§14に記録した。
 
@@ -208,3 +208,11 @@ compiledは実root同士の混入・停止優先順・phase値13fieldを4境界�
 `bodyPinStartContextMatches`の`#closed === false`は、各呼出しの直前にある`bodyPinStartPoint`末尾の停止guardが同条件で先にthrowするため到達できず、等価と判断した。`#started === true`は、prepare冒頭で`#frame`と同時に立ち、以後戻す経路がないため、`#frame === true`が成立する限り観測不能である。
 
 この判断はC-02前半の固定停止経路に限る。C-02後半以降で固定call・格納・再開経路を接続するときは同じ節を改めて単独対照で評価し、§12・本節の等価判断を自動移植しない。
+
+## 15 C-02後半のcall・receiver試行／格納の差分設計（2026-11-11）
+
+[固定private call・receiver入口の接続差分設計draft-0.1](BEST_PRACTICE_WFB_BODY_PIN_CALL_RECEIVER_DESIGN.md)で、PC03の同期callとPC04〜07の一度限り試行・元sourceのissued/current捕捉を対に具体化した。信頼済みroot anchorはlexical thisからだけ供給し、module-private固定accessでrootの実発行slot／同start／call区間を照合する。未知候補からrootを探索せず、公開資格・callback・registry／friendを作らない。
+
+callActiveとreceiver entryBusyを別の先行scalarとし、前者のcall区間／後者のpreflight再入と、返却しないcall／attempt履歴を分離する。BP03 caller位置とreceiver実位置を別writerで保持し、issued／captured／confirmed後のthrow・closeでも参照／試行prefixを巻き戻さない。旧9参照全空checkerをpin後に流用せず、安定部分と狭いphaseの固定検査を使う。
+
+本節と差分設計は文書だけ。現在の実装は引き続きC-02前半のPC02固定停止までで、call・receiver試行／格納・新field／access、PC08復帰照合、C-03のBP04は未接続。CE01〜14は未実施で、§12／14の等価判断を後半へ自動移植しない。正式発行口閉鎖・全体受付無効・Unknown・調査保留、実装・実接続・実通信・設定変更・Push禁止を維持する。

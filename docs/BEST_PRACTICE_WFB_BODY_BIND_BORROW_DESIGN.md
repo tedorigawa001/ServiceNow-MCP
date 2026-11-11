@@ -1,6 +1,6 @@
 # WF-B body bind：状態型・phase検査と同startの先行borrow／診断slot
 
-Version: draft-0.9 / Date: 2026-11-11 / 設計基準HEAD: `29c53e1` / レビュー追加: `5ec73dd` / 原始field限定実装基準HEAD: `e6cc8cd` / 原始field実装レビュー修正基準HEAD: `41ac31f` / source生成・停止の設計基準HEAD: `5873d16` / BS／BC分離実装基準HEAD: `f3b3721` / 合成source生成・停止実装基準HEAD: `311d3ef` / (C)pin差分設計基準HEAD: `b3776da` / C-01実装基準HEAD: `554ef9a` / C-02前半実装基準HEAD: `a3f1f66`。
+Version: draft-0.10 / Date: 2026-11-11 / 設計基準HEAD: `29c53e1` / レビュー追加: `5ec73dd` / 原始field限定実装基準HEAD: `e6cc8cd` / 原始field実装レビュー修正基準HEAD: `41ac31f` / source生成・停止の設計基準HEAD: `5873d16` / BS／BC分離実装基準HEAD: `f3b3721` / 合成source生成・停止実装基準HEAD: `311d3ef` / (C)pin差分設計基準HEAD: `b3776da` / C-01実装基準HEAD: `554ef9a` / C-02前半実装基準HEAD: `a3f1f66` / 後半接続差分設計基準HEAD: `ff866f9`。
 
 draft-0.2のレビュー修正：`bodyFieldsIntact`のroot側2節（元baseの未使用、BC用shell未生成）は、単独で外しても試験が落ちなかった。root側inspectの`state`／`phase`／`failurePhase`／`reentry`のallowlistと、実body cellから導く`bodyStarts`の投影も観測していなかった。各節の単一注入と除去の対照、4つのallowlistと`bodyStarts`の対照をcompiledへ追加した。最初の失敗位置の上書き防止と、`checkBodyBindFields`冒頭の`#fixed`返却は等価と判断し、§10に記録した。
 
@@ -241,3 +241,9 @@ BB10〜12の型／projection／旧入口維持に関する部分だけを検証�
 [private pin設計§13](BEST_PRACTICE_WFB_BODY_PRIVATE_PIN_CONNECTION_DESIGN.md)と[C-02前半検証記録](E2E_BEST_PRACTICE_WFB_BODY_PIN_START_2026-11-11.md)の範囲を合成依存限定で実装した。元root／issued=current source／正規startのidentity-first private資格と同frameの一度限り開始を接続し、busyはfinallyで解除するがrouteAttemptedは戻さない。これはcaller sequenceの予約で、receiver pinAttemptUsedやsource利用claimとは異なる。rootごとのbindingOwner／cellOwnerの正規関係を維持する。
 
 PC02の前後と最後のblocked境界で同参照・安定条件・狭い未call組を再検査し、pin_call_not_connected／construction_unconfirmedで固定停止する。生成・C-01準備・pin失敗を別軸で保持し、失敗後closeでも先行診断／返答を維持する。receiver9参照は空、pinAttemptUsed=false／pinStage empty、claim unused、data／grant／duty／body／ready0。PC03固定call・格納・claim消費・bindは未接続、正式発行口閉鎖・全体受付無効・Unknown・調査保留を維持する。
+
+## 17 C-02後半のreceiver入口・元参照捕捉の差分設計（2026-11-11）
+
+[固定private call・receiver入口の接続差分設計draft-0.1](BEST_PRACTICE_WFB_BODY_PIN_CALL_RECEIVER_DESIGN.md)で、同root／source／startの発行元照合・call記録→固定callの同期区間と、同startのentryBusy・一度限りattempt・issued→current→confirmedの保持を定義した。source所有権は元rootに残り、expected-source捕捉は利用claim消費・payload借用／occupancy変更ではない。異なるowner種を同一化しない。
+
+caller BP03位置・callee実位置・生成BP01履歴を分離し、途中失敗／closeで部分pinと先行診断を保持する。foreignは相手を無書込み拒否、同source再入は元prefixを汚さず拒否する。前半の返却済みrootを再開せず、PC08とC-03は別境界とした。本節は文書のみで、固定call・試行／格納・新field／accessは未実装、全CE条件未実施。claim消費・bind・構築ready・body・正式発行は閉鎖、全体受付無効・Unknown・調査保留を維持する。
