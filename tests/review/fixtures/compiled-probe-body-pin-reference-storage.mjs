@@ -100,6 +100,40 @@ try {
   const badHoldResult = run(await load(badHold, 'hold-projection'));
   assert.equal(badHoldResult.r.first, 'state_invalid'); assert.equal(badHoldResult.s.reference.hold, 'unconfirmed');
 
+  // Single-point controls: one fault right after a fixed observation point reaches one guard first.
+  const recvAt = (point, code) => {
+    const owner = point.startsWith('rejected_') ? 'retainBodyPinRejected' : 'storeBodyPinReferences';
+    const anchor = `probeBodyPinRootAccess.referenceEvent(root, source, this, '${point}');`;
+    return method(source, owner, anchor, anchor + ' ' + code);
+  };
+  const rootAt = (point, code) => method(source, 'bodyPinReferencePoint', '    this.#bodyPinReferencePoint = point;',
+    `    this.#bodyPinReferencePoint = point;\n    if (point === '${point}') { ${code} }`, 'CanonicalGateDraftRoot');
+  const pointControls = [
+    ['store-before-issued', recvAt('before_issued', "this.#bodyPinStorageBoundary = 'after';"), '', { first: 'state_invalid', failurePoint: 'before_issued', refs: 0 }],
+    ['store-blocked', recvAt('blocked', "this.#bodyPinStorageBoundary = 'before';"), '', { first: 'state_invalid', failurePoint: 'blocked', postChecked: false, refs: 2 }],
+    ['check-active', rootAt('issued', 'this.#bodyPinCallActive = false;'), '', { first: 'state_invalid', failurePoint: 'issued', refs: 1 }],
+    ['check-busy', recvAt('issued', 'this.#bodyPinEntryBusy = false;'), '', { first: 'state_invalid', failurePoint: 'issued', refs: 1 }],
+    ['check-post', recvAt('issued', 'this.#bodyPinReferencePostChecked = true;'), '', { first: 'state_invalid', failurePoint: 'issued', refs: 1 }],
+    ['rejected-before-active', rootAt('rejected_before', 'this.#bodyPinCallActive = false;'), 'rs_copy_current', { first: 'state_invalid', hold: 'not_started', refs: 2 }],
+    ['rejected-before-busy', recvAt('rejected_before', 'this.#bodyPinEntryBusy = false;'), 'rs_copy_current', { first: 'state_invalid', hold: 'not_started', refs: 2 }],
+    ['rejected-before-post', recvAt('rejected_before', 'this.#bodyPinReferencePostChecked = true;'), 'rs_copy_current', { first: 'state_invalid', hold: 'not_started', refs: 2 }],
+    ['rejected-before-refusal', recvAt('rejected_before', "this.#bodyBindRefusal = 'in_progress' as never;"), 'rs_copy_current', { first: 'state_invalid', hold: 'not_started', refs: 2 }],
+    ['rejected-after-active', rootAt('rejected_after', 'this.#bodyPinCallActive = false;'), 'rs_copy_current', { first: 'binding_mismatch', hold: 'retained_unconfirmed', refs: 3 }],
+    ['rejected-after-issued', recvAt('rejected_after', 'this.#bodyExpectedSourceIssued = {} as never;'), 'rs_copy_current', { first: 'binding_mismatch', hold: 'retained_unconfirmed', refs: 3 }],
+    ['rejected-after-hold', recvAt('rejected_after', "this.#bodyPinRejectedHold = 'not_started';"), 'rs_copy_current', { first: 'binding_mismatch', hold: 'not_started', refs: 3 }],
+    ['rejected-after-boundary', recvAt('rejected_after', "this.#bodyPinStorageBoundary = 'before';"), 'rs_copy_current', { first: 'binding_mismatch', hold: 'retained_unconfirmed', refs: 3 }],
+    ['rejected-after-stage', recvAt('rejected_after', "this.#bodyPinStage = 'issued';"), 'rs_copy_current', { first: 'binding_mismatch', hold: 'retained_unconfirmed', refs: 3 }],
+    ['rejected-after-diagnosis', recvAt('rejected_after', "this.#bodyPinFailureStep = 'issued';"), 'rs_copy_current', { first: 'binding_mismatch', hold: 'retained_unconfirmed', refs: 3 }],
+    ['rejected-after-refusal', recvAt('rejected_after', "this.#bodyBindRefusal = 'in_progress' as never;"), 'rs_copy_current', { first: 'binding_mismatch', hold: 'retained_unconfirmed', refs: 3 }],
+  ];
+  for (const [name, text, script, expected] of pointControls) {
+    const x = run(await load(text, 'point-' + name), script || undefined);
+    const actual = { first: x.r.first, failurePoint: x.s.reference.failurePoint, postChecked: x.s.reference.postChecked,
+      hold: x.s.reference.hold, refs: x.s.build.receiver.references.filter(v => v.retained).length };
+    for (const [key, value] of Object.entries(expected)) assert.equal(actual[key], value, name + ' ' + key);
+    assert.equal(x.s.callActive, false); assert.equal(x.s.entryBusy, false);
+  }
+
   const ast = ts.createSourceFile('fixture.ts', source, ts.ScriptTarget.Latest, true, ts.ScriptKind.TS);
   const cls = name => ast.statements.find(n => ts.isClassDeclaration(n) && n.name?.text === name);
   const start = cls('RetirementStartAssembly'), root = cls('CanonicalGateDraftRoot');
@@ -145,5 +179,5 @@ try {
   assert.equal(new Set(diagnostics.map(d => d.file.getLineAndCharacterOfPosition(d.start).line)).size, 9);
   console.log(JSON.stringify({ compiled: true, actualPair: true, fieldCases, rawControls, fixedGroups: 3, referenceWrites: writes.length,
     priorScalars: 5, firstDiagnosticControl: true, finallyControls: 2, acceptedRejected: true, rejectedPostControl: true,
-    classificationControl: true, invalidPostSeeds: 2, projectionControls: projectionControls + 1, semanticRejections: 9 }));
+    classificationControl: true, invalidPostSeeds: 2, pointControls: pointControls.length, projectionControls: projectionControls + 1, semanticRejections: 9 }));
 } finally { rmSync(dir, { recursive: true, force: true }); }

@@ -86,7 +86,7 @@ describe('closed synthetic source reference storage', () => {
   it('does not treat an absent current as a candidate to retain', () => {
     const a = createProbeBodyPinReferenceStorageFake('rs_missing_current'); expect(a.prepare().first).toBe('state_invalid');
     expect(retained(a.inspect())).toEqual(['bodyExpectedSourceIssued']);
-    expect(a.inspect().reference.hold).toBe('not_started');
+    expect(a.inspect().reference).toMatchObject({ hold: 'not_started', point: 'captured', failurePoint: 'captured', boundary: 'after' });
   });
   it('does not label an unverified captured prefix as the normal blocked result', () => {
     const a = createProbeBodyPinReferenceStorageFake('rs_fault_captured');

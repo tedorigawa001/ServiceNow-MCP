@@ -77,6 +77,20 @@ pin checked／confirmed・accepted／PC08・C-03／BP04・source claim消費・p
 
 最終確認：文書4ファイルのローカルリンク38件・表22件に欠落／列ずれなし。設計14／16／20節、RW01〜06／RE01〜12の順序・重複／欠落、末尾改行・行末空白を確認した。最新の関連回帰も38ファイル2,894件成功、strict TypeScriptも再実行してexit 0。作業差分は上記15ファイルだけ、indexは空、HEADは`ad00f28`のままである。
 
+## レビュー修正（2026-11-12）
+
+`ebe739e`のレビューで、新writerに49件の一時変異を入れ、31件がVitest・compiledの両方を通った。
+
+| 追加 | 一点注入と期待 | kill |
+|---|---|---|
+| store再検査2件 | before_issued直後に境界after、blocked直後に境界before。state_invalid・その失敗点、postChecked false | before_issued再検査、blocked再検査 |
+| referenceCheck 3件 | issued直後にroot callActive=false、receiver busy=false、postChecked=true。state_invalid・失敗点issued・参照1 | rootのactive／busy節、receiver照合のhold／post節 |
+| rejected_before 4件 | 直後にcallActive=false／busy=false／postChecked=true／refusal。state_invalid・hold not_started・J未保持 | retainのbase、baseのcontext・hold／post・初回診断、referenceContextのactive／busy |
+| rejected_after 7件 | 直後にcallActive=false／issued差替え／hold not_started／境界before／stage／failureStep／refusal。binding_mismatchのままhold未確認 | post照合の7節 |
+| Vitest 1件 | `rs_missing_current`で参照点captured・境界afterを比較 | captured base（外すとretain側へ進み点・境界が変わる） |
+
+修正後に対象19件を再実行し、すべてanchorを保ったまま意味的なassertでkillした。残る12件（到達しない比較1、値checkerと重なる節1、固定mode節1、postChecked後に必ず成立する分類4、identity系5）は[設計§16](BEST_PRACTICE_WFB_BODY_PIN_REFERENCE_STORAGE_DESIGN.md)に根拠を記録した。fixture本体は変更していない。
+
 ## コミット対象だけの隔離再検証（2026-11-12）
 
 上記は実装時の記録。本節はその後のコミット依頼に対する再検証で、基準HEADは`ad00f28`。今回の15ファイルだけを明示してindexへ登録し、全indexを一時フォルダへ展開した。全1,528ファイルのGit blob hash・実行属性がindexと一致し、未登録の作業中変更を含めていないことを確認した。既存node_modulesへの参照だけを再利用し、依存取得・導入・設定変更はしていない。

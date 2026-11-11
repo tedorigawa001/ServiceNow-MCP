@@ -286,6 +286,8 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 ### Added
 
+- WF-B pin reference-storage review: compiled controls now inject one fault right after each fixed observation point (store before-issued/blocked rechecks, root reference check, rejected_before qualification and the seven rejected_after post clauses), and the missing-current vitest case compares the reference point and boundary, so removing each guard moves the first rejection, failure point or rejected-hold state. The remaining unreachable, duplicate or co-recorded clauses are documented as equivalent; no fixture behavior changed.
+
 - WF-B pin-call review: compiled controls now inject single faults before the fixed call (route boundary, busy flag, call counter, source stop request and source first), into the direct call-window record and receiver initial fields, and before/after receiver preflight, so removing each dispatch precheck, receiver initial clause, entry recheck or source stop clause moves the first rejection, call or trial outcome. The remaining duplicate, single-writer or unreachable clauses are documented as equivalent; no fixture behavior changed.
 
 - WF-B pin-bridge review: compiled controls now inject the call-active flag, receiver busy flag, receiver relation flag, PC02 route boundary and source metadata count at single bridge points, so removing each before/checked/blocked recheck or the caller identity clause moves the first rejection. A literal control covers the call-active initializer, and the vitest close cases assert the root stop-first record. Remaining duplicate or unreachable clauses are documented as equivalent; no fixture behavior changed.

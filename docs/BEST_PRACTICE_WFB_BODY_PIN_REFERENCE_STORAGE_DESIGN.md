@@ -1,6 +1,8 @@
 # WF-B：同issued/current格納・private実参照照合と初回rejected保持の接続差分
 
-Version: draft-0.4 / Date: 2026-11-12 / 読み取り基準HEAD: `1f41240`（格納前準備実装: `10e2f96`、等価判断の文書更新: `1f41240`、draft-0.1レビュー修正基準HEAD: `5525b2f`、§14の限定実装基準HEAD: `ad00f28`、§15の完了／未接続停止差分設計基準HEAD: `ebe739e`）。
+Version: draft-0.5 / Date: 2026-11-12 / 読み取り基準HEAD: `1f41240`（格納前準備実装: `10e2f96`、等価判断の文書更新: `1f41240`、draft-0.1レビュー修正基準HEAD: `5525b2f`、§14の限定実装基準HEAD: `ad00f28`、§15の完了／未接続停止差分設計基準HEAD: `ebe739e`、§14実装のレビュー修正基準HEAD: `40e75c6`）。
+
+draft-0.4のレビュー修正：§14の限定実装（`ebe739e`）に49件の一時変異を入れたところ、31件がVitest・compiledの両方を通った。storeのbefore_issued再検査とblocked再検査、captured base、rejected_beforeの資格（retain側のbaseと、その中のcontext／hold・post／初回診断の各節）、rejected_afterのpost 7節、rootのreferenceCheckのactive／busy、receiver照合のhold／post、referenceContextのactive／busyである。いずれも該当点だけを壊す注入がなかった。compiledに観測点直後への一点注入16件を、Vitestの`rs_missing_current`に参照点・境界の比較を追加し、この19件を意味的なassertでkillした。残る12件は§16で等価と判断した。fixtureの挙動は変えていない。
 
 draft-0.1のレビュー修正：§5の表のrejected_before行は、現在境界をどうするかを書いていなかった。RW05の時点で境界はすでにafterなので、G_Jの「境界after」が何の変化を記録するのかが読み取れなかった。§4の「各beforeでは最後のstepを維持して境界before」と揃え、rejected_beforeでstep currentのまま境界をbeforeへ移してから資格を再確認すると明記した。G_Jの記録内容と初回失敗位置（failureStep current／failureBoundary after）は変えない。
 
@@ -175,3 +177,16 @@ before_final_postをconfirmed／step confirmed／境界beforeの専用phaseと�
 現行callerのreceiver first none→receiver_unconfirmed写像・accepted一律拒否と、割当てを含む失敗位置生成は新modeで専用に分離する。上位の初回理由／実位置・sourceReasonを非割当てで先に固定し、返答生成失敗でも元参照・callee正常完了・未確認責務を残す。既存の初回J保持はcapturedの前段条件のままで、checked／confirmedの混入を新Jへ追加しない。
 
 本節と子設計は文書だけ。§14の実装・旧factory・期限は変えず、新最終marker／確認writer／返却・caller分岐は未実装、FC／FEは未実施である。正式発行口閉鎖・全体受付無効・Unknown・調査保留を維持する。
+
+## 16 §14実装レビューの等価判断（2026-11-12）
+
+§14の格納・初回rejected保持の現行所有経路だけでの判断である。§15以降でchecked／confirmedのwriter・最終postを接続し、呼出し元や診断要求が増えるときは単独対照で改めて評価する。
+
+| 節 | 等価の根拠 |
+|---|---|
+| retainBodyPinRejectedの`current === source`拒否 | retainへ来るのはcurrent≠issuedのときだけで、直前のcaptured baseがissued＝sourceを確認済み |
+| receiver照合のrejected空節 | 同じreferenceCheck内の値checkerがreceiverのrejected＝falseを同時に要求する |
+| referenceContextの固定mode節 | 呼出し元はreference modeのstore／retainだけで、constructor固定mode以外から到達しない |
+| rootのdisposition分類のissuedSame・currentSame・rejected・stage | 分類の前提となるpostCheckedは、captured照合とblocked再照合をすべて通った直後にだけ立つ。その時点でこれらは必ず成立している |
+| referenceModeのidentity | 唯一の呼出し元が直前のstorage検査で同じ組の同一性を確認済み |
+| referenceEventの固定mode節・identity、referenceScriptのidentity、bodyPinReferencePointのidentity | 確認済みの元root／source／startの組だけで呼ばれ、途中で組を差し替える経路がない。前段storage §14と同じ構造 |
