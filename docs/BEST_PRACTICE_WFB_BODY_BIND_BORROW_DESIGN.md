@@ -1,6 +1,6 @@
 # WF-B body bind：状態型・phase検査と同startの先行borrow／診断slot
 
-Version: draft-0.7 / Date: 2026-11-11 / 設計基準HEAD: `29c53e1` / レビュー追加: `5ec73dd` / 原始field限定実装基準HEAD: `e6cc8cd` / 原始field実装レビュー修正基準HEAD: `41ac31f` / source生成・停止の設計基準HEAD: `5873d16` / BS／BC分離実装基準HEAD: `f3b3721` / 合成source生成・停止実装基準HEAD: `311d3ef` / (C)pin差分設計基準HEAD: `b3776da`。
+Version: draft-0.8 / Date: 2026-11-11 / 設計基準HEAD: `29c53e1` / レビュー追加: `5ec73dd` / 原始field限定実装基準HEAD: `e6cc8cd` / 原始field実装レビュー修正基準HEAD: `41ac31f` / source生成・停止の設計基準HEAD: `5873d16` / BS／BC分離実装基準HEAD: `f3b3721` / 合成source生成・停止実装基準HEAD: `311d3ef` / (C)pin差分設計基準HEAD: `b3776da` / C-01実装基準HEAD: `554ef9a`。
 
 draft-0.2のレビュー修正：`bodyFieldsIntact`のroot側2節（元baseの未使用、BC用shell未生成）は、単独で外しても試験が落ちなかった。root側inspectの`state`／`phase`／`failurePhase`／`reentry`のallowlistと、実body cellから導く`bodyStarts`の投影も観測していなかった。各節の単一注入と除去の対照、4つのallowlistと`bodyStarts`の対照をcompiledへ追加した。最初の失敗位置の上書き防止と、`checkBodyBindFields`冒頭の`#fixed`返却は等価と判断し、§10に記録した。
 
@@ -229,3 +229,9 @@ BB10〜12の型／projection／旧入口維持に関する部分だけを検証�
 生成時診断はBP01完了のまま残し、rootのpin進行／初回失敗とreceiverの実操作位置を別に先行する。試行記録・固定call・issued/current保持の順、再入／重複とforeign拒否、失敗後closeの同期停止・部分pin／confirmed保持を定義した。accepted返答だけではBP04を省略できず、正常案もsource preparing／unused・payload空／free・BC00開始0である。
 
 今回の更新は文書だけで、CP01〜14は全て未実施。旧field／seed／live／bundle・(B)入口とレビュー対照を維持し、実装・claim消費・bind・構築ready・body起動・正式発行・実接続を接続しない。費目は論理上の追加分だけを整理し、実E／S／全体work上界はUnknown、全体受付無効・調査保留を維持する。
+
+## 15 C-01の内部型・先行scalarと検査器（2026-11-11）
+
+[private pin設計§11](BEST_PRACTICE_WFB_BODY_PRIVATE_PIN_CONNECTION_DESIGN.md)と[C-01検証記録](E2E_BEST_PRACTICE_WFB_BODY_PIN_CONTRACTS_2026-11-11.md)の範囲だけを実装した。同rootにpin用13scalarと検査準備用6scalar・空返答参照、同startにpin操作位置／初回位置の2scalarを先行する。既存9参照・10scalarの初期値と旧19field検査は変更しない。来歴／安定検査と13段階の値checkerを分け、同ownerへ繋ぐのは未pinentryだけである。
+
+新modelはwfb-body-pin-contracts-1、正常もpin_contracts_held／ok=false。PC01のroute試行記録・固定receiver call・pin格納・claim消費・bindは実行せず、将来pin状態を実ownerへ書いて試験成功にしない。検査失敗は生成診断／pin診断と別に保持し、失敗後closeでも元返答・先行理由を保持する。全CP受入やpin後の資格を保証せず、構築ready・body起動・正式発行閉鎖、全体受付無効・Unknown・調査保留を維持する。

@@ -1,10 +1,10 @@
 # WF-B (C)：BP02〜04段階別検査・同root／同startのprivate pin接続差分
 
-Version: draft-0.1 / Date: 2026-11-11 / 読み取り基準HEAD: `b3776da`（(B)実装: `c28b423`、再検査／不在projectionレビュー修正: `b3776da`）。
+Version: draft-0.2 / Date: 2026-11-11 / 読み取り基準HEAD: `b3776da`（(B)実装: `c28b423`、再検査／不在projectionレビュー修正: `b3776da`、C-01実装基準HEAD: `554ef9a`）。
 
-Status: **MDによる差分設計だけ。実装・試験実行・pin発行／格納は未実施。** 親は[生成・停止設計](BEST_PRACTICE_WFB_BODY_SOURCE_ISSUER_STOP_DESIGN.md)と[bind・先行borrow設計](BEST_PRACTICE_WFB_BODY_BIND_BORROW_DESIGN.md)。前工程の実績は[(B)検証記録](E2E_BEST_PRACTICE_WFB_BODY_SOURCE_ISSUER_2026-11-11.md)を参照する。本書の型／field／method名・開発modelは将来の内部契約案であり、現行exportや実装済みAPIを表さない。
+Status: **C-01の内部型・先行scalar・安定／段階別checker・固定診断だけを合成依存限定で実装。** 現行範囲は§11と[C-01検証記録](E2E_BEST_PRACTICE_WFB_BODY_PIN_CONTRACTS_2026-11-11.md)。§1〜10はdraft-0.1時点の将来設計／文書検証であり、pin試行・格納とBP02〜04の実状態遷移は引き続き未接続。親は[生成・停止設計](BEST_PRACTICE_WFB_BODY_SOURCE_ISSUER_STOP_DESIGN.md)と[bind・先行borrow設計](BEST_PRACTICE_WFB_BODY_BIND_BORROW_DESIGN.md)。前工程の実績は[(B)検証記録](E2E_BEST_PRACTICE_WFB_BODY_SOURCE_ISSUER_2026-11-11.md)を参照する。将来model案とC-01の実装済み閉鎖modelは区別する。
 
-正式発行口・既存C実行入口・body起動閉鎖、全体受付無効、Unknown、VM／監視／telemetry調査保留を維持する。本書の(C)はprivate pinの設計区分であり、既存C実行入口の解禁ではない。今回の許可は本書と親2文書の更新だけ。実装・source利用claim消費・payload借用／bind・構築ready・body起動・実接続・実通信・設定変更・Pushは行わない。
+正式発行口・既存C実行入口・body起動閉鎖、全体受付無効、Unknown、VM／監視／telemetry調査保留を維持する。本書の(C)はprivate pinの設計区分であり、既存C実行入口の解禁ではない。draft-0.1は文書更新だけで、現在の実装許可も§11のC-01に限る。pin試行・格納・source利用claim消費・payload借用／bind・構築ready・body起動・実接続・実通信・設定変更・Pushは行わない。
 
 ## 1 現行からの差分と今回の正常到達点
 
@@ -158,3 +158,21 @@ oracleは本体のbuilder／状態表／checker／counterをimportしない。�
 今回は本書と親2文書のMDだけを変更する。ローカルリンク・表列数・PC01〜10／CP01〜14の順序、生成用有限型とpin位置の分離、同root／同startと停止／保持条件、差分空白を文書として確認する。ソース／試験／CHANGELOG／manifest／lockfile／設定は変更せず、build・合成／compiled試験・梱包操作は行わない。上表は全て未実施であり、設計の整合確認を実装・受入成功にしない。本書作成時点ではindex登録・コミット・Pushなし。
 
 文書検証結果：本書と親2文書のローカルリンク24件に欠落なし、21表の列数・末尾改行／空白に異常なし。本書の10節、PC01〜10・CP01〜14の順序／重複／欠落を確認した。現行ソースを読み取り、metadata9key＋進行13field、生成用phaseがnone／BP00／BP01に限定されること、現行failure writerが生成位置を使うことを照合した。作業中差分はこの3つのMDだけで、実装・試験・CHANGELOG・設定に差分なし。これは文書整合の確認であり、将来の(C)実装・pin受入の成功ではない。
+
+## 11 C-01：内部契約・readonly入口検査と固定診断（2026-11-11）
+
+package除外の同composition fixtureにcreateProbeBodyPinContractsFakeを追加した。固定合成script以外を受けず、APIはprepare／check／checkLegacy／close／inspectの5つだけ。model=wfb-body-pin-contracts-1、正常もpin_contracts_held／ok=false／authority=noneで、将来§7のsource_pinned_unreadyとは別である。同root／同startで既存BS→BP00〜01を再利用し、その同sourceを未pinのままreadonly検査して保持する。旧(B)factory・生成checker・返答は維持し、返却済み(B)rootの再開口は作らない。
+
+rootへ将来のpin用13scalarと、C-01検査準備専用6scalar・空の返答参照を先行した。同startへpin操作位置／初回位置の2scalarをnoneで先行し、既存9参照・10scalarは変更しない。追加field initializerはliteral／undefinedだけ。rootのpin routeAttempted・state／位置・失敗位置・preparingConfirmed／postCheckedは全て初期値のままで、PC01の開始記録さえ実行しない。receiverのpinAttemptUsed／pinStage・expected-source3参照も書かない。
+
+SourceProvenanceは元write-once issuedとの同一性をreflectionより先に確認し、生成来歴・全22key／descriptor・元root／shell／binding／link／duty／control／start／failureを照合する。BaseUnusedとStorageEmptyは既存の厳密なreadonly検査を再利用し、PayloadEmptyは6参照・free／empty／prefix noneを別に検査する。receiverのprivate primitive viewは同startからだけ作り、公開snapshotから復元しない。BP02 entry値checkerだけを同ownerに接続し、active保護frameと未停止・先行理由なし・root pin scalar全初期値も3位置で再確認する。
+
+段階別値checkerはentry／callReady／receiverEntry／attempting／issued／captured／checked／confirmed／returned／pre／commit／post／heldの13個。各固定関数がsource／receiverの狭い組を検査し、caller指定の汎用phase文字列を受ける公開口はない。後段12個の正例はcompiled scratch内の原始値モデルだけで検証し、実source／receiverへpin flag・格納・confirmed／preparingを書き込んで正例を作らない。この値検査の成功はpin来歴・実観測・資格証拠ではなく、C-02以降の同ownerへの接続を代替しない。
+
+検査準備位置はnone／before／checked／after／heldで、BP02〜04の進行位置とは別。C-01検査失敗はこの位置と初回理由を保持し、既存sourceFailureRecorded／生成失敗位置や将来pinFailureRecordedを更新しない。sourceは確認済み元issuedだけをfailedにするが、粗いsource位置は未pinの最後のBP01／afterのまま。これをBP01の生成失敗と解釈せず、C-01 preparation診断を原因位置として読む。生成中の失敗は従来(B)診断のままで、C-01検査は未開始と投影する。
+
+build区分は既存(B)projectionの再利用であり、そのfirstは共通root first、source.firstはsourceの理由である。生成失敗かどうかはfailureRecordedと生成失敗位置で区別し、build内の共通理由だけを生成失敗と読み替えない。
+
+closeは(B)同様に固定返答cacheより先にroot停止／元確認済みsourceへの反映を行い、返答同一性・先行理由・検査準備の初回位置を保持する。未確認sourceには触れず、receiverのpin位置や格納を補修しない。新projectionは生成・検査準備・将来pin route・receiver pin位置を別に固定allowlist／strict booleanで出し、参照・brand・raw例外は出さない。チェック済みという診断値をreadyや再開資格にしない。
+
+合成・compiled範囲と初回RED／試験側訂正は[C-01検証記録](E2E_BEST_PRACTICE_WFB_BODY_PIN_CONTRACTS_2026-11-11.md)。CP01〜04／07／10／12〜14の該当部分だけの確認で、CP表全体・PC01〜10の実操作成功ではない。複製したprivate slotをscratchで故障させる対照はguard感度用であり、任意private-slot改竄に対する発行来歴の証明ではない。実allocation／E／S／全体work・OOM配送必着はUnknown。C-02／C-03、pin試行・格納・claim消費・bind・構築ready・body起動・正式発行・実接続は未接続、全体受付無効・調査保留を維持する。

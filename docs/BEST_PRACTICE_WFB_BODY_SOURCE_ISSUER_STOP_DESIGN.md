@@ -1,6 +1,6 @@
 # WF-B body source：正規生成位置・private issuerと同期停止・失敗時保持
 
-Version: draft-0.5 / Date: 2026-11-11 / 設計基準HEAD: `5873d16` / (A)最小分離実装基準HEAD: `f3b3721` / (B)合成source実装基準HEAD: `311d3ef` / (B)レビュー修正基準HEAD: `c28b423` / (C)差分設計基準HEAD: `b3776da`。
+Version: draft-0.6 / Date: 2026-11-11 / 設計基準HEAD: `5873d16` / (A)最小分離実装基準HEAD: `f3b3721` / (B)合成source実装基準HEAD: `311d3ef` / (B)レビュー修正基準HEAD: `c28b423` / (C)差分設計基準HEAD: `b3776da` / C-01実装基準HEAD: `554ef9a`。
 
 draft-0.3のレビュー修正：BP00 attemptの2回目の発行前検査と`!creationAttempted`節、BP01の`bodySourceDataMatches`にある来歴4節（creationAttempted、fixedCount=9、metadataConfirmed、buildStage）と安定再検査の呼出しは、単独で外しても試験が落ちなかった。既存のstable対照はBP00の発行前検査に掛かる位置へ注入していたためである。metadata／進行fieldの`enumerable`節を単独で破るfaultもなかった。sourceが無いときの`first`等7軸は`unconfirmed`を返し、「不在→not_created」の規則と食い違っていた。各節への単一注入対照、非列挙field対照を追加し、不在の投影を`not_created`へ直した。§12に等価・観測不能な節を記録した。
 
@@ -208,3 +208,9 @@ BP02〜04 pin・source claim消費・payload borrow／bind・構築ready・body�
 固定private call・同startの既存expected-source3参照とpin履歴だけを利用し、source利用claim消費・payload6参照／occupancyの変更は行わない。試行後の失敗／closeでpin解除・試行返却／別source補完をせず、confirmedは後発失敗でも保持する。BP04後の正常案はsource preparing／unused・pin confirmed・payload空／free・BC00未開始の閉鎖保持で、構築ready／body起動の成功ではない。
 
 本節と差分設計は文書のみであり、実装・pin試験の受入成功を示さない。`b3776da`の再検査／不在projection訂正と等価・観測不能の範囲を保持し、その評価を新pin経路へ自動移植しない。正式発行口閉鎖・全体受付無効・Unknown・調査保留、実接続／実通信・設定変更・Pushの禁止を維持する。
+
+## 14 C-01のreadonly検査準備だけの接続（2026-11-11）
+
+[private pin設計§11 draft-0.2](BEST_PRACTICE_WFB_BODY_PRIVATE_PIN_CONNECTION_DESIGN.md)と[C-01検証記録](E2E_BEST_PRACTICE_WFB_BODY_PIN_CONTRACTS_2026-11-11.md)の範囲で、同sourceの来歴・元base／全BS空carrier・payload空とBP02入口の値検査を接続した。旧(B)生成checkerを緩めず、新閉鎖factoryだけがpin_contracts_heldで止まる。生成診断・C-01検査準備の診断・将来pin診断を分離し、pin用scalarは全初期値のまま保持する。
+
+後段13variant中12個はscratch原始値モデルの検査だけで、実pinの試行／格納・private call・preparing／confirmedへの遷移を行わない。sourceは未pinのinitializing／unused、receiver9参照空・free／empty、BC00開始0。正式発行口閉鎖・全体受付無効・Unknown・調査保留、claim消費・bind・構築ready・body起動・実接続の禁止は維持する。§13の文書のみという記述は設計作成時点であり、現在の限定実装は本節を基準とする。

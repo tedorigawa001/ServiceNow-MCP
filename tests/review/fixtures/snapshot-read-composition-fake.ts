@@ -2276,6 +2276,8 @@ let probeStartAccess: Readonly<{
   bodyFieldsInitial(a: RetirementStartAssembly): boolean;
   bodyFieldsInspect(a: RetirementStartAssembly): Readonly<BodyReceiverProjection>;
   bodyFieldsReject(a: RetirementStartAssembly): void;
+  bodyPinPayloadEmpty(a: RetirementStartAssembly): boolean;
+  bodyPinValues(a: RetirementStartAssembly, source: BodyBindSourceShell): Readonly<BodyPinReceiverValues>;
   exitInspect(a: RetirementStartAssembly): Readonly<{ attempted: boolean; retained: boolean; sameDuty: boolean;
     knowledge: 'not_called' | 'known' | 'unknown'; callStarted: boolean; issuerRetained: boolean; receiverRetained: boolean }>;
   inspect(a: RetirementStartAssembly): Readonly<{ bindingRetained: boolean; bindingAttempted: boolean;
@@ -2313,6 +2315,7 @@ class RetirementStartAssembly {
   #bodyBindPrefix: BodyBindPrefix = 'none'; #bodyBindFirst: BodyReceiverFirst = 'none';
   #bodyBindFailurePhase: BodyReceiverFailurePhase = 'none'; #bodyBindFailurePrefix: BodyBindPrefix = 'none';
   #bodyBindFailureBoundary: BodyReceiverFailureBoundary = 'none'; #bodyBindRefusal: BodyBindRefusal = 'none';
+  #bodyPinStep: BodyPinReceiverStep = 'none'; #bodyPinFailureStep: BodyPinReceiverStep = 'none';
   readonly #owner = Object.freeze({});
   readonly #binding: PendingSourceBinding;
   readonly #pin: RetirementBindingPin;
@@ -2336,6 +2339,8 @@ class RetirementStartAssembly {
       bodyFieldsInitial: (a: RetirementStartAssembly) => a.bodyFieldsInitial(),
       bodyFieldsInspect: (a: RetirementStartAssembly) => a.bodyFieldsInspect(),
       bodyFieldsReject: (a: RetirementStartAssembly) => { if (a.#bodyBindFirst === 'none') a.#bodyBindFirst = 'state_invalid'; },
+      bodyPinPayloadEmpty: (a: RetirementStartAssembly) => a.bodyPinPayloadEmpty(),
+      bodyPinValues: (a: RetirementStartAssembly, source: BodyBindSourceShell) => a.bodyPinValues(source),
       bind(a: RetirementStartAssembly, b: ProbeFrameBinding, issued: ProbeFrameBinding, script: string): boolean {
         if (a.#probeBindStarted) return false;
         a.#probeBindStarted = true; a.#probeBinding = b; a.#probeIssuedBinding = issued;
@@ -2415,6 +2420,19 @@ class RetirementStartAssembly {
       && this.#bodyBindingState === 'empty' && this.#bodyBindPrefix === 'none' && this.#bodyBindFirst === 'none'
       && this.#bodyBindFailurePhase === 'none' && this.#bodyBindFailurePrefix === 'none'
       && this.#bodyBindFailureBoundary === 'none' && this.#bodyBindRefusal === 'none';
+  }
+  private bodyPinPayloadEmpty(): boolean {
+    return this.#bodyBundleIssued === undefined && this.#bodyBundleCurrent === undefined && this.#bodyRejectedBundle === undefined
+      && this.#bodyDraftIssued === undefined && this.#bodyDraftCurrent === undefined && this.#bodyRejectedDraft === undefined
+      && this.#bodyOccupancy === 'free' && this.#bodyBindingState === 'empty' && this.#bodyBindPrefix === 'none';
+  }
+  private bodyPinValues(source: BodyBindSourceShell): Readonly<BodyPinReceiverValues> {
+    return { attemptUsed: this.#bodyPinAttemptUsed, stage: this.#bodyPinStage,
+      issued: this.#bodyExpectedSourceIssued !== undefined, current: this.#bodyExpectedSourceCurrent !== undefined,
+      rejected: this.#bodyExpectedSourceRejected !== undefined, issuedSame: this.#bodyExpectedSourceIssued === source,
+      currentSame: this.#bodyExpectedSourceCurrent === source, step: this.#bodyPinStep, failureStep: this.#bodyPinFailureStep,
+      first: this.#bodyBindFirst, failurePhase: this.#bodyBindFailurePhase, failurePrefix: this.#bodyBindFailurePrefix,
+      failureBoundary: this.#bodyBindFailureBoundary, refusal: this.#bodyBindRefusal };
   }
   private bodyFieldsInspect(): Readonly<BodyReceiverProjection> {
     const refs = [this.#bodyExpectedSourceIssued, this.#bodyExpectedSourceCurrent, this.#bodyExpectedSourceRejected,
@@ -3756,6 +3774,83 @@ const BODY_SOURCE_POINTS = Object.freeze([
   ...['sealed', 'captured'].flatMap(p => ['before', 'after'].map(b => 'BP00_' + p + '_' + b)),
   ...['before', 'checked', 'after'].flatMap(p => ['before', 'after'].map(b => 'BP01_' + p + '_' + b)),
 ]);
+// C-01 value contracts only. They cannot issue a pin or write a receiver.
+type BodyPinRoutePhase = 'none' | 'BP02' | 'BP03' | 'BP04';
+type BodyPinRouteStep = 'none' | 'preflight' | 'call' | 'returned' | 'recheck' | 'commit' | 'post' | 'held';
+type BodyPinRouteState = 'not_started' | 'running' | 'held' | 'failed';
+type BodyPinRouteBoundary = 'none' | 'before' | 'after';
+type BodyPinReceiverStep = 'none' | 'preflight' | 'attempt' | 'issued' | 'current' | 'checked' | 'confirmed';
+type BodyPinRefusal = 'none' | 'in_progress' | 'duplicate_pin' | 'foreign_source';
+type BodyPinPreparationPhase = 'none' | 'before' | 'checked' | 'after' | 'held';
+type BodyPinSourceValues = Readonly<Pick<BodyBindSourceShell, typeof BODY_SOURCE_PROGRESS[number]>>;
+interface BodyPinReceiverValues {
+  readonly attemptUsed: boolean; readonly stage: BodyPinStage;
+  readonly issued: boolean; readonly current: boolean; readonly rejected: boolean;
+  readonly issuedSame: boolean; readonly currentSame: boolean;
+  readonly step: BodyPinReceiverStep; readonly failureStep: BodyPinReceiverStep;
+  readonly first: BodyReceiverFirst; readonly failurePhase: BodyReceiverFailurePhase;
+  readonly failurePrefix: BodyBindPrefix; readonly failureBoundary: BodyReceiverFailureBoundary; readonly refusal: BodyBindRefusal;
+}
+interface BodyPinPhaseValues { readonly source: BodyPinSourceValues; readonly receiver: BodyPinReceiverValues }
+type BodyPinSourceAt<S extends 'initializing' | 'preparing', P extends BodySourcePhase, B extends BodySourceBoundary, C extends boolean> =
+  BodyPinSourceValues & Readonly<{ state: S; phase: P; boundary: B; pinCallReached: C; claim: 'unused'; bindCallReached: false;
+    postConfirmed: false; stopRequested: false; first: 'none'; failurePhase: 'none'; failureBoundary: 'none'; refusal: 'none'; deliveryFirst: 'none' }>;
+type BodyPinReceiverAt<S extends BodyPinStage, T extends BodyPinReceiverStep> = BodyPinReceiverValues & Readonly<{
+  stage: S; step: T; attemptUsed: S extends 'empty' ? false : true; issued: S extends 'empty' | 'attempting' ? false : true;
+  current: S extends 'captured' | 'confirmed' ? true : false; rejected: false;
+  issuedSame: S extends 'empty' | 'attempting' ? false : true; currentSame: S extends 'captured' | 'confirmed' ? true : false;
+  failureStep: 'none'; first: 'none'; failurePhase: 'none'; failurePrefix: 'none'; failureBoundary: 'none'; refusal: 'none' }>;
+type BodyPinEntryValues = Readonly<{ source: BodyPinSourceAt<'initializing', 'BP01', 'after', false>; receiver: BodyPinReceiverAt<'empty', 'none'> }>;
+const BODY_PIN_RECEIVER_FIELDS = Object.freeze(['attemptUsed', 'stage', 'issued', 'current', 'rejected', 'issuedSame', 'currentSame',
+  'step', 'failureStep', 'first', 'failurePhase', 'failurePrefix', 'failureBoundary', 'refusal']);
+const BODY_PIN_ROUTE_STEPS = Object.freeze(['none', 'preflight', 'call', 'returned', 'recheck', 'commit', 'post', 'held']);
+const BODY_PIN_RECEIVER_STEPS = Object.freeze(['none', 'preflight', 'attempt', 'issued', 'current', 'checked', 'confirmed']);
+function bodyPinSourceAt<S extends 'initializing' | 'preparing', P extends BodySourcePhase, B extends BodySourceBoundary, C extends boolean>(
+  v: BodyPinSourceValues, state: S, phase: P, boundary: B, call: C): v is BodyPinSourceAt<S, P, B, C> {
+  return bodySeedShape(v, BODY_SOURCE_PROGRESS) && v.state === state && v.phase === phase && v.boundary === boundary
+    && v.pinCallReached === call && v.claim === 'unused' && v.bindCallReached === false && v.postConfirmed === false
+    && v.stopRequested === false && v.first === 'none' && v.failurePhase === 'none' && v.failureBoundary === 'none'
+    && v.refusal === 'none' && v.deliveryFirst === 'none';
+}
+function bodyPinReceiverAt<S extends BodyPinStage, T extends BodyPinReceiverStep>(v: BodyPinReceiverValues, stage: S, step: T): v is BodyPinReceiverAt<S, T> {
+  const issued = stage !== 'empty' && stage !== 'attempting', current = stage === 'captured' || stage === 'confirmed';
+  return bodySeedShape(v, BODY_PIN_RECEIVER_FIELDS) && v.stage === stage && v.step === step
+    && v.attemptUsed === (stage !== 'empty') && v.issued === issued && v.current === current && v.rejected === false
+    && v.issuedSame === issued && v.currentSame === current && v.failureStep === 'none' && v.first === 'none'
+    && v.failurePhase === 'none' && v.failurePrefix === 'none' && v.failureBoundary === 'none' && v.refusal === 'none';
+}
+function bodyPinEntryValues(v: BodyPinPhaseValues): v is BodyPinEntryValues {
+  return bodySeedShape(v, ['source', 'receiver']) && bodyPinSourceAt(v.source, 'initializing', 'BP01', 'after', false)
+    && bodyPinReceiverAt(v.receiver, 'empty', 'none');
+}
+type BodyPinSourceContract = BodyPinEntryValues['source']
+  | BodyPinSourceAt<'initializing', 'BP02', 'checked', false>
+  | BodyPinSourceAt<'initializing', 'BP03', 'call' | 'after', true>
+  | BodyPinSourceAt<'initializing', 'BP04', 'before' | 'checked', true>
+  | BodyPinSourceAt<'preparing', 'BP04', 'after' | 'held', true>;
+type BodyPinReceiverContract = BodyPinReceiverAt<'empty', 'none' | 'preflight'> | BodyPinReceiverAt<'attempting', 'attempt'>
+  | BodyPinReceiverAt<'issued', 'issued'> | BodyPinReceiverAt<'captured', 'current' | 'checked'> | BodyPinReceiverAt<'confirmed', 'confirmed'>;
+function bodyPinValuesAt(v: BodyPinPhaseValues, state: BodyPinSourceContract['state'], phase: BodyPinSourceContract['phase'],
+  boundary: BodyPinSourceContract['boundary'], call: boolean, stage: BodyPinReceiverContract['stage'], step: BodyPinReceiverContract['step']): boolean {
+  return bodySeedShape(v, ['source', 'receiver']) && bodyPinSourceAt(v.source, state, phase, boundary, call)
+    && bodyPinReceiverAt(v.receiver, stage, step);
+}
+const BODY_PIN_PHASE_CHECKS = Object.freeze({
+  entry: bodyPinEntryValues,
+  callReady: (v: BodyPinPhaseValues) => bodyPinValuesAt(v, 'initializing', 'BP02', 'checked', false, 'empty', 'none'),
+  receiverEntry: (v: BodyPinPhaseValues) => bodyPinValuesAt(v, 'initializing', 'BP03', 'call', true, 'empty', 'preflight'),
+  attempting: (v: BodyPinPhaseValues) => bodyPinValuesAt(v, 'initializing', 'BP03', 'call', true, 'attempting', 'attempt'),
+  issued: (v: BodyPinPhaseValues) => bodyPinValuesAt(v, 'initializing', 'BP03', 'call', true, 'issued', 'issued'),
+  captured: (v: BodyPinPhaseValues) => bodyPinValuesAt(v, 'initializing', 'BP03', 'call', true, 'captured', 'current'),
+  checked: (v: BodyPinPhaseValues) => bodyPinValuesAt(v, 'initializing', 'BP03', 'call', true, 'captured', 'checked'),
+  confirmed: (v: BodyPinPhaseValues) => bodyPinValuesAt(v, 'initializing', 'BP03', 'call', true, 'confirmed', 'confirmed'),
+  returned: (v: BodyPinPhaseValues) => bodyPinValuesAt(v, 'initializing', 'BP03', 'after', true, 'confirmed', 'confirmed'),
+  pre: (v: BodyPinPhaseValues) => bodyPinValuesAt(v, 'initializing', 'BP04', 'before', true, 'confirmed', 'confirmed'),
+  commit: (v: BodyPinPhaseValues) => bodyPinValuesAt(v, 'initializing', 'BP04', 'checked', true, 'confirmed', 'confirmed'),
+  post: (v: BodyPinPhaseValues) => bodyPinValuesAt(v, 'preparing', 'BP04', 'after', true, 'confirmed', 'confirmed'),
+  held: (v: BodyPinPhaseValues) => bodyPinValuesAt(v, 'preparing', 'BP04', 'held', true, 'confirmed', 'confirmed'),
+});
+interface BodyPinContractsReply extends Omit<BodySeedReply, 'model'> { readonly model: 'wfb-body-pin-contracts-1' }
 class CanonicalGateDraftRoot {
   readonly #failure: { first: string; phase: number; boundary: string };
   readonly #slots: { stage: SupplyConstructionStage; value: object | undefined }[];
@@ -3801,10 +3896,20 @@ class CanonicalGateDraftRoot {
   #bodySourceReentry = 'none'; #bodySourceHookCalls = 0;
   #bodySourceIssueRefusal: 'none' | 'duplicate_creation' = 'none';
   #bodySourceFixed: Readonly<BodySourceIssuerReply> | undefined;
+  #bodyPinRouteAttempted = false; #bodyPinRouteState: BodyPinRouteState = 'not_started';
+  #bodyPinRoutePhase: BodyPinRoutePhase = 'none'; #bodyPinRouteStep: BodyPinRouteStep = 'none';
+  #bodyPinRouteBoundary: BodyPinRouteBoundary = 'none'; #bodyPinFailureRecorded = false;
+  #bodyPinFirst: BodySourceFirst = 'none'; #bodyPinFailurePhase: BodyPinRoutePhase = 'none';
+  #bodyPinFailureStep: BodyPinRouteStep = 'none'; #bodyPinFailureBoundary: BodyPinRouteBoundary = 'none';
+  #bodyPinPreparingConfirmed = false; #bodyPinPostChecked = false; #bodyPinRefusal: BodyPinRefusal = 'none';
+  #bodyPinPreparationState: 'not_started' | 'checking' | 'held' | 'failed' = 'not_started';
+  #bodyPinPreparationPhase: BodyPinPreparationPhase = 'none'; #bodyPinPreparationFailurePhase: BodyPinPreparationPhase = 'none';
+  #bodyPinPreparationFirst: ProbeRunFirst = 'none'; #bodyPinPreparationChecked = false; #bodyPinPreparationReentry = 'none';
+  #bodyPinContractsFixed: Readonly<BodyPinContractsReply> | undefined;
   constructor(private readonly script: string, admitted: boolean, private readonly probePreparation = false, private readonly runPreparation = false,
     private readonly grantCapture = false, private readonly exitPreparation = false, private readonly exitGuard = false, private readonly localExit = false,
     private readonly bodySeed = false, private readonly bodyLive = false, private readonly bodyBundle = false, private readonly bodyBindFields = false,
-    private readonly bodySourceIssuer = false) {
+    private readonly bodySourceIssuer = false, private readonly bodyPinContracts = false) {
     this.#failure = { first: admitted ? 'none' : 'input_rejected', phase: 0, boundary: 'none' };
     this.#slots = Array.from({ length: 37 }, () => ({ stage: 'not_started', value: undefined }));
     this.#probeSlots = probePreparation ? Array.from({ length: 8 }, () => ({ stage: 'not_started', value: undefined })) : [];
@@ -3817,7 +3922,8 @@ class CanonicalGateDraftRoot {
   private reply(ok: boolean, disposition: string) { return Object.freeze({ ok, disposition, first: this.#failure.first }); }
   private fail(reason: string) {
     if (this.#failure.first === 'none') this.#failure.first = reason;
-    if (this.bodySourceIssuer) this.failBodySource(this.#failure.first);
+    if (this.bodyPinContracts && this.#bodyPinPreparationPhase !== 'none') this.failBodyPinContracts(this.#failure.first);
+    else if (this.bodySourceIssuer) this.failBodySource(this.#failure.first);
     if (this.bodyBindFields) {
       if (this.#bodyFieldsState !== 'failed') this.#bodyFieldsFailurePhase = this.#bodyFieldsPhase;
       this.#bodyFieldsState = 'failed';
@@ -4398,6 +4504,102 @@ class CanonicalGateDraftRoot {
       bodyStarts: this.#issuedCells?.body.state === 'running' ? 1 : 0, grantAttempts: start ? probeStartAccess.captureInspect(start).grantAttempts : 0,
       dutyUsed: this.#issuedRunDuty?.attemptUsed === true, pin: 'not_connected', claimConsumption: 'not_connected', binding: 'not_connected', constructionReady: 'not_connected' });
   }
+  private bodyPinProvenanceMatches(shell: BodyPreparationShell): boolean {
+    const v = this.#bodySourceIssued, b = this.#issuedFrameBinding;
+    if (!v || v !== this.#bodySourceCurrent || this.#bodySourceRejected !== undefined || !b
+      || this.#bodySourceCreationAttempted !== true || this.#bodySourceMetadataFixedCount !== 9
+      || this.#bodySourceMetadataConfirmed !== true || this.#bodySourceBuildStage !== 'confirmed') return false;
+    if (!bodySeedShape(v, [...BODY_SOURCE_METADATA, ...BODY_SOURCE_PROGRESS]) || !Object.isSealed(v)) return false;
+    if (!BODY_SOURCE_METADATA.every(k => { const d = Object.getOwnPropertyDescriptor(v, k)!;
+      return d.enumerable === true && d.configurable === false && d.writable === false; })) return false;
+    if (!BODY_SOURCE_PROGRESS.every(k => { const d = Object.getOwnPropertyDescriptor(v, k)!;
+      return d.enumerable === true && d.configurable === false && d.writable === true; })) return false;
+    return v[BODY_BIND_SOURCE] === true && v.custodian === this && v.construction === shell && v.binding === b
+      && v.link === this.#issuedRunLink && v.duty === this.#issuedRunDuty && v.control === this.#exitSlots[0].value
+      && v.start === b.target.start && v.rootFailure === this.#failure;
+  }
+  private bodyPinRouteInitial(): boolean {
+    return this.#bodyPinRouteAttempted === false && this.#bodyPinRouteState === 'not_started'
+      && this.#bodyPinRoutePhase === 'none' && this.#bodyPinRouteStep === 'none' && this.#bodyPinRouteBoundary === 'none'
+      && this.#bodyPinFailureRecorded === false && this.#bodyPinFirst === 'none' && this.#bodyPinFailurePhase === 'none'
+      && this.#bodyPinFailureStep === 'none' && this.#bodyPinFailureBoundary === 'none'
+      && this.#bodyPinPreparingConfirmed === false && this.#bodyPinPostChecked === false && this.#bodyPinRefusal === 'none';
+  }
+  private bodyPinSourceValues(v: BodyBindSourceShell): BodyPinSourceValues {
+    return { state: v.state, claim: v.claim, pinCallReached: v.pinCallReached, bindCallReached: v.bindCallReached,
+      postConfirmed: v.postConfirmed, stopRequested: v.stopRequested, phase: v.phase, boundary: v.boundary,
+      first: v.first, failurePhase: v.failurePhase, failureBoundary: v.failureBoundary, refusal: v.refusal, deliveryFirst: v.deliveryFirst };
+  }
+  private bodyPinContractsMatch(): boolean {
+    const shell = this.#bodySeedShell, start = this.#issuedFrameBinding?.target.start;
+    if (!shell || !start || !this.bodyPinProvenanceMatches(shell)) return false;
+    return this.#frame === true && this.#closed === false && this.#bodySourceStopRequested === false && this.#failure.first === 'none'
+      && this.#ready === false && this.bodySeedBaseMatches() && this.bodySourceStorageMatches(shell)
+      && this.bodyPinRouteInitial() && probeStartAccess.bodyPinPayloadEmpty(start)
+      && BODY_PIN_PHASE_CHECKS.entry({ source: this.bodyPinSourceValues(this.#bodySourceIssued!), receiver: probeStartAccess.bodyPinValues(start, this.#bodySourceIssued!) });
+  }
+  private failBodyPinContracts(reason: string): void {
+    if (this.#bodyPinPreparationFirst === 'none') {
+      this.#bodyPinPreparationFirst = runFirst(reason); this.#bodyPinPreparationFailurePhase = this.#bodyPinPreparationPhase;
+    }
+    this.#bodyPinPreparationState = 'failed'; this.bodySourceTrustedFailure(reason);
+    if (this.#bodySourceStorageConfirmed && this.#bodySeedShell) this.#bodySeedShell.state = 'failed';
+  }
+  private bodyPinContractsPoint(phase: 'before' | 'checked' | 'after'): void {
+    this.#bodyPinPreparationPhase = phase;
+    if (this.script === 'pc_reenter_' + phase) this.#bodyPinPreparationReentry = this.prepare().disposition;
+    if (this.script === 'pc_close_' + phase) this.close();
+    if (this.script === 'pc_prior_' + phase) { this.fail('state_invalid'); throw Error('private_later_failure'); }
+    if (this.script === 'pc_fault_' + phase) throw Error('private_contract_failure');
+    if (this.#closed || this.#bodySourceStopRequested || this.#failure.first !== 'none') throw Error('pin_contracts_stopped');
+  }
+  private prepareBodyPinContracts() {
+    const shell = this.prepareBodyStorage();
+    if (!this.issueBodySource(shell)) return this.#fixed ?? this.fail('state_invalid');
+    this.#bodySourceState = 'held'; this.#bodyPinPreparationState = 'checking';
+    this.bodyPinContractsPoint('before'); if (!this.bodyPinContractsMatch()) return this.fail('binding_mismatch');
+    this.bodyPinContractsPoint('checked'); if (!this.bodyPinContractsMatch()) return this.fail('binding_mismatch');
+    this.bodyPinContractsPoint('after'); if (!this.bodyPinContractsMatch()) return this.fail('binding_mismatch');
+    this.#bodyPinPreparationChecked = true; this.#bodyPinPreparationState = 'held'; this.#bodyPinPreparationPhase = 'held';
+    return this.reply(false, 'pin_contracts_held');
+  }
+  bodyPinContractsReply(disposition: string): Readonly<BodyPinContractsReply> {
+    if (this.#bodyPinContractsFixed) return this.#bodyPinContractsFixed;
+    const r: Readonly<BodyPinContractsReply> = Object.freeze({ model: 'wfb-body-pin-contracts-1', ok: false,
+      disposition: runEnum(disposition, ['pin_contracts_held', 'duplicate_preparation', 'construction_in_progress', 'blocked_frame_execution',
+        'closed', 'not_ready', 'input_rejected', 'binding_mismatch', 'state_invalid', 'construction_unconfirmed', 'deferred_frame'], 'internal_unconfirmed'),
+      first: runFirst(this.#failure.first), authority: 'none', execution: 'closed', formalIssuance: 'closed',
+      wholeRunAdmission: 'disabled', implementation: 'unknown', investigations: 'on_hold' });
+    if (this.#failure.first !== 'none') this.#bodyPinContractsFixed = r; return r;
+  }
+  inspectBodyPinContracts() {
+    const source = this.#bodySourceIssued, start = this.#issuedFrameBinding?.target.start;
+    // Only the canonical start's private primitive fields are read. No source field is read here.
+    const receiver = source && start ? probeStartAccess.bodyPinValues(start, source) : undefined;
+    return Object.freeze({ model: 'wfb-body-pin-contracts-1', authority: 'none', execution: 'closed', formalIssuance: 'closed',
+      wholeRunAdmission: 'disabled', implementation: 'unknown', investigations: 'on_hold', first: runFirst(this.#failure.first),
+      state: runEnum(this.#bodyPinPreparationState, ['not_started', 'checking', 'held', 'failed'], 'unconfirmed'),
+      phase: runEnum(this.#bodyPinPreparationPhase, ['none', 'before', 'checked', 'after', 'held'], 'unconfirmed'),
+      preparationFirst: runFirst(this.#bodyPinPreparationFirst),
+      failurePhase: runEnum(this.#bodyPinPreparationFailurePhase, ['none', 'before', 'checked', 'after', 'held'], 'unconfirmed'),
+      checked: this.#bodyPinPreparationChecked === true,
+      reentry: runEnum(this.#bodyPinPreparationReentry, ['none', 'construction_in_progress'], 'unconfirmed'),
+      route: Object.freeze({ attempted: this.#bodyPinRouteAttempted === true,
+        state: runEnum(this.#bodyPinRouteState, ['not_started', 'running', 'held', 'failed'], 'unconfirmed'),
+        phase: runEnum(this.#bodyPinRoutePhase, ['none', 'BP02', 'BP03', 'BP04'], 'unconfirmed'),
+        step: runEnum(this.#bodyPinRouteStep, BODY_PIN_ROUTE_STEPS, 'unconfirmed'),
+        boundary: runEnum(this.#bodyPinRouteBoundary, ['none', 'before', 'after'], 'unconfirmed'),
+        failureRecorded: this.#bodyPinFailureRecorded === true, first: runEnum(this.#bodyPinFirst, BODY_SOURCE_FIRSTS, 'unconfirmed'),
+        failurePhase: runEnum(this.#bodyPinFailurePhase, ['none', 'BP02', 'BP03', 'BP04'], 'unconfirmed'),
+        failureStep: runEnum(this.#bodyPinFailureStep, BODY_PIN_ROUTE_STEPS, 'unconfirmed'),
+        failureBoundary: runEnum(this.#bodyPinFailureBoundary, ['none', 'before', 'after'], 'unconfirmed'),
+        preparingConfirmed: this.#bodyPinPreparingConfirmed === true, postChecked: this.#bodyPinPostChecked === true,
+        refusal: runEnum(this.#bodyPinRefusal, ['none', 'in_progress', 'duplicate_pin', 'foreign_source'], 'unconfirmed') }),
+      receiverPin: Object.freeze({ step: receiver ? runEnum(receiver.step, BODY_PIN_RECEIVER_STEPS, 'unconfirmed') : 'not_created',
+        failureStep: receiver ? runEnum(receiver.failureStep, BODY_PIN_RECEIVER_STEPS, 'unconfirmed') : 'not_created' }),
+      build: this.inspectBodySourceIssuer(), pinAttempt: 'not_connected', pinStorage: 'not_connected',
+      claimConsumption: 'not_connected', binding: 'not_connected', constructionReady: 'not_connected' });
+  }
   private bodySeedBaseMatches(): boolean {
     const c = this.#issuedCells!, b = this.#issuedFrameBinding!, d = this.#issuedRunDuty!;
     const capture = probeStartAccess.captureInspect(b.target.start);
@@ -4796,6 +4998,7 @@ class CanonicalGateDraftRoot {
       if (this.exitPreparation && !this.prepareExitSlots()) return this.fail('binding_mismatch');
       if (this.exitGuard && !this.prepareGuardState()) return this.fail('binding_mismatch');
       if (this.localExit && !this.prepareLocalState()) return this.fail('binding_mismatch');
+      if (this.bodyPinContracts) return this.prepareBodyPinContracts();
       if (this.bodySourceIssuer) return this.prepareBodySourceIssuer();
       if (this.bodyBindFields) return this.prepareBodyBindFields();
       if (this.bodySeed) return this.prepareBodySeed();
@@ -5223,6 +5426,23 @@ export function createProbeBodyBindFieldsFake(...args: readonly unknown[]) {
     checkLegacy: (...xs: readonly unknown[]) => call(xs, () => a.checkBodyBindFields(true)),
     close: (...xs: readonly unknown[]) => call(xs, () => a.close()),
     inspect: (...xs: readonly unknown[]) => { if (xs.length) a.rejectInput(); return a.inspectBodyBindFields(); } });
+}
+
+export function createProbeBodyPinContractsFake(...args: readonly unknown[]) {
+  const script = args.length ? args[0] : 'pc_normal';
+  const scripts = ['pc_normal', ...['before', 'checked', 'after'].flatMap(p => ['fault', 'close', 'reenter', 'prior'].map(k => 'pc_' + k + '_' + p)),
+    'si_producer_throw', 'si_getter_first', 'si_proxy'];
+  const admitted = args.length <= 1 && typeof script === 'string' && scripts.includes(script);
+  const a = new CanonicalGateDraftRoot(admitted ? script as string : 'pc_normal', admitted,
+    true, true, false, true, false, false, false, false, false, false, true, true);
+  const call = (xs: readonly unknown[], op: () => Readonly<{ ok: boolean; disposition: string }>) => {
+    const r = xs.length ? a.rejectInput() : op(); return a.bodyPinContractsReply(r.disposition);
+  };
+  return Object.freeze({ prepare: (...xs: readonly unknown[]) => call(xs, () => a.prepare()),
+    check: (...xs: readonly unknown[]) => call(xs, () => a.checkBodyBindFields()),
+    checkLegacy: (...xs: readonly unknown[]) => call(xs, () => a.checkBodyBindFields(true)),
+    close: (...xs: readonly unknown[]) => call(xs, () => a.close()),
+    inspect: (...xs: readonly unknown[]) => { if (xs.length) a.rejectInput(); return a.inspectBodyPinContracts(); } });
 }
 
 export function createProbeBodySourceIssuerFake(...args: readonly unknown[]) {
