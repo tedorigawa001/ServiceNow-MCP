@@ -1,6 +1,8 @@
 # WF-B：同issued/current格納・private実参照照合と初回rejected保持の接続差分
 
-Version: draft-0.1 / Date: 2026-11-12 / 読み取り基準HEAD: `1f41240`（格納前準備実装: `10e2f96`、等価判断の文書更新: `1f41240`）。
+Version: draft-0.2 / Date: 2026-11-12 / 読み取り基準HEAD: `1f41240`（格納前準備実装: `10e2f96`、等価判断の文書更新: `1f41240`、draft-0.1レビュー修正基準HEAD: `5525b2f`）。
+
+draft-0.1のレビュー修正：§5の表のrejected_before行は、現在境界をどうするかを書いていなかった。RW05の時点で境界はすでにafterなので、G_Jの「境界after」が何の変化を記録するのかが読み取れなかった。§4の「各beforeでは最後のstepを維持して境界before」と揃え、rejected_beforeでstep currentのまま境界をbeforeへ移してから資格を再確認すると明記した。G_Jの記録内容と初回失敗位置（failureStep current／failureBoundary after）は変えない。
 
 Status: **詳細設計だけ。参照writer・rejected保持は未実装。** 親は[格納・PC08未接続停止設計](BEST_PRACTICE_WFB_BODY_PIN_STORAGE_RETURN_STOP_DESIGN.md)と[private pin設計](BEST_PRACTICE_WFB_BODY_PRIVATE_PIN_CONNECTION_DESIGN.md)。前段実績は[準備検証記録](E2E_BEST_PRACTICE_WFB_BODY_PIN_STORAGE_PREPARATION_2026-11-12.md)。親の全確認設計を一括実装せず、本書はissued/currentの実格納・照合と、同試行の初回rejected保持・失敗責務を対にした中間境界を定める。
 
@@ -59,7 +61,7 @@ rejectedを記録できる条件は、正規R/S/T・同call／trialが活動中�
 
 | 境界 | 固定処理と責務 |
 |---|---|
-| rejected_before | 許可観測の後に上記資格を最後まで再確認。close／priorがあれば追加保持せず既存Cと未確認責務を残す |
+| rejected_before | step currentを維持して現在境界をbeforeへ移し、許可観測の後に上記資格を最後まで再確認。close／priorがあれば追加保持せず、既存Cと未確認責務・境界beforeを残す |
 | G_J | J=C→hold state retained_unconfirmed→境界after→receiver初回binding_mismatch／phase pin／failurePrefix none／failureStep current／failureBoundary afterを固定記録 |
 | rejected_after | 失敗専用postで同owner・元I・C/J同参照・狭い保持状態／既知診断を照合。成功した直後にhold state confirmedとする |
 | 固定復帰 | 必ずrejected_attempt。保持確認済みでも通常比較・pin confirmed・PC08へ戻さない |
