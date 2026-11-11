@@ -1,14 +1,14 @@
 # WF-B C-02後半：固定private call・receiver入口と同start試行／格納
 
-Version: draft-0.4 / Date: 2026-11-11 / 読み取り基準HEAD: `ff866f9`（C-02前半実装 `4f70522`、前半レビュー対照 `ff866f9`、draft-0.1レビュー修正基準HEAD: `0f3fae0`、内部契約の限定実装基準HEAD: `3fc15ab`、draft-0.3レビュー修正基準HEAD: `983fa24`）。
+Version: draft-0.5 / Date: 2026-11-11 / 読み取り基準HEAD: `ff866f9`（C-02前半実装 `4f70522`、前半レビュー対照 `ff866f9`、draft-0.1レビュー修正基準HEAD: `0f3fae0`、内部契約の限定実装基準HEAD: `3fc15ab`、draft-0.3レビュー修正基準HEAD: `983fa24`、固定call／receiver入場の実装基準HEAD: `9f4361c`）。
 
 draft-0.3のレビュー修正：§13のbridge準備は、23件の一時変異のうち12件でVitest・compiledの両方が通っていた。prepareBodyPinBridgeのbefore／checked／blocked各点にあるPC02再検査・identity再照合・callActive／entryBusyの節と、bodyPinBridgeIdentityのcaller照合は、どれも後段の検査が同じ拒否理由で受けるか、注入対照がなかった。compiledには3点への単独注入9件を追加した。callActive・busy・receiver関係（固定accessのflag）・route境界・metadata固定化数のいずれかを壊し、節を除くと最初の拒否理由かbridge位置が動くことを確かめる。callActiveのliteral初期値の対照も追加した。Vitestにはclose時の`build.stopFirst`=closedと`stopRequested`を追加した。残る3件は§14で等価と判断した。
 
 draft-0.1のレビュー修正：§8の2か所で、境界の軸を取り違えていた。receiver行の「failurePrefix=none／before又はafter」は、before／afterが`BodyBindPrefix`の値に読めるが、before／afterを持つのは`failureBoundary`（`BodyReceiverFailureBoundary`）である。冒頭の「未callは既存BP02 before／checked」は、現行`failBodyPinStart`がroot側`#bodyPinFailureBoundary`へbefore／after、source側（`#bodyPinStartFailureSourceBoundary`と元sourceの`failureBoundary`）へbefore／checkedを書く2軸を混ぜていた。どちらも軸ごとに書き分けた。文書だけの修正で、契約・CR／CE・未実装範囲は変えない。
 
-Status: **§13の内部型・先行field・readonly private bridgeと診断位置写像だけを合成依存限定で実装。PC03固定call・receiver試行／格納は未接続。** 親は[private pin設計](BEST_PRACTICE_WFB_BODY_PRIVATE_PIN_CONNECTION_DESIGN.md)と[bind・先行borrow設計](BEST_PRACTICE_WFB_BODY_BIND_BORROW_DESIGN.md)。生成の来歴は[source生成・停止設計](BEST_PRACTICE_WFB_BODY_SOURCE_ISSUER_STOP_DESIGN.md)、前半の実績は[C-02前半検証記録](E2E_BEST_PRACTICE_WFB_BODY_PIN_START_2026-11-11.md)、今回の実績は[bridge内部契約検証記録](E2E_BEST_PRACTICE_WFB_BODY_PIN_BRIDGE_2026-11-11.md)を参照する。
+Status: **§13の内部契約に加え、§15の固定private call・receiver入場・一度限り試行記録までを合成依存限定で実装。参照格納・PC08・C-03は未接続。** 親は[private pin設計](BEST_PRACTICE_WFB_BODY_PRIVATE_PIN_CONNECTION_DESIGN.md)と[bind・先行borrow設計](BEST_PRACTICE_WFB_BODY_BIND_BORROW_DESIGN.md)。生成の来歴は[source生成・停止設計](BEST_PRACTICE_WFB_BODY_SOURCE_ISSUER_STOP_DESIGN.md)、前半の実績は[C-02前半検証記録](E2E_BEST_PRACTICE_WFB_BODY_PIN_START_2026-11-11.md)、前段は[bridge内部契約検証記録](E2E_BEST_PRACTICE_WFB_BODY_PIN_BRIDGE_2026-11-11.md)、最新の限定範囲は[固定call検証記録](E2E_BEST_PRACTICE_WFB_BODY_PIN_CALL_2026-11-11.md)を参照する。
 
-正式発行口・既存C実行入口・body起動は閉鎖、全体受付無効、Unknown、VM／監視／telemetry調査保留を維持する。現在の実装許可は§13の限定範囲だけで、固定call・試行／格納・実接続・実通信・実機操作・設定変更・Pushは行わない。§1〜12は作成時の将来設計／文書検証であり、そこで述べるactive call・格納成功を実装済みとはしない。
+正式発行口・既存C実行入口・body起動は閉鎖、全体受付無効、Unknown、VM／監視／telemetry調査保留を維持する。現在の実装許可は§15までの合成限定範囲だけで、参照格納・実接続・実通信・実機操作・設定変更・Pushは行わない。§1〜12は作成時の将来設計／文書検証、§13〜14は前段時点の限定範囲である。格納成功・PC08・C-03を実装済みとはしない。
 
 ## 1 現行との差分・適用範囲
 
@@ -204,3 +204,28 @@ BodyPinIntervalはbefore／calling／returnedのstrict値組、BodyPinFailurePos
 `bodyPinBridgeIdentity`冒頭の`source !== this.#bodySourceCurrent`は、直後の`bodyPinCallerMatches`が同じ比較を同じ理由で行うため、単独で外しても観測できない重複防御と判断した。`this.bodyPinBridge === true`は、identityを呼ぶ唯一の経路`prepareBodyPinBridge`がconstructor固定の同flagでだけ分岐するため、現行の所有経路では到達しない。`failBodyPinBridge`の`source.first === 'none'`による初回保持は、元sourceのfirstを書くwriterがこの継続ではfailBodyPinBridgeだけで、`#bodyPinFirst`と位置はfailureRecordedで固定済みのため、再書込みでも同値になる。
 
 `bodyPinBridgeActive`のcallActive／interval節を外す変異は、calling組の型（`true`）へbooleanを渡すTS2345でだけ落ちる。実ownerではactive資格が成立しないため、節ごとの実行時感度は§13のとおり主張しない。これらの判断はcall未接続の現行経路に限り、CR02以降でcallActive・entryBusyのwriterやsource firstの別writerを接続するときは単独対照で改めて評価する。
+
+## 15 固定private call・receiver入場までの限定接続（2026-11-11）
+
+新createProbeBodyPinCallFake／wfb-body-pin-call-1だけが、既存同constructor・同prepare・同active frameのbridge最終確認から固定calleeへ進む。旧factoryの固定停止・期待値は維持し、返却済みrootを再開しない。固定script以外の入力・外部root／source／start・public診断からの昇格口は作らない。
+
+| 境界 | 今回の接続 | 未接続／保持責務 |
+|---|---|---|
+| CR01〜02 | 元root／source／startをidentity-firstで照合。未停止・PC02・厳密falseを確認し、call用tryを先に作る | 不一致はcall=0。相手field／hookを読まず元ownerで拒否 |
+| 同期call区間 | root BP03／call／before、source BP03／call・pinCallReached=true、callActive=trueを直接記録し、直後に固定bridgeから同startを呼ぶ | 直接記録とcall間にscript／guard／view生成／callback／awaitなし。途中checkpointを作らない |
+| CR03 | 最小同一性→停止→既存busy／試行履歴→active／初期field検査の順。entryBusy=trueをreceiver自身のtry／finallyで囲む | foreignは無書込み。再入はrefused_existing、停止後は先にrejected_attempt。元prefix／firstを変えない |
+| CR04 | preflight前後の固定検査後、step attempt・attemptUsed=true・stage attemptingを直接記録 | 一度限り。利用claimではない。issued/current/rejectedを含む9参照は空のまま |
+| 今回の固定停止 | attempting全検査後、receiver_unconfirmed／pin／attempt／afterを保持しrejected_attemptで戻る | pin_storage_not_connected。accepted・confirmed・preparing・held成功を返さない |
+| 離脱 | receiver finallyはentryBusy、caller finallyはcallActiveだけをfalseへ戻す | pinCallReached・試行・stage・診断は巻き戻さず、slot clear／解放確認へ昇格しない |
+
+private固定accessはmodule static初期化で一度固定し、readonly同一性／活動検査に加えて、固定entry・停止／理由照合・refusalと有限合成観測を持つ。rootはlexical this、source／startは元保持slotからだけ供給する。stopped／reasonの読取りは同一性確認済みの元組に限定し、unknown候補を運ぶ入口はない。
+
+正常な合成到達でもroot firstはconstruction_unconfirmed、source／receiver firstはreceiver_unconfirmedである。callerはprimitiveの復帰を確認してBP03／call／afterを記録するが、sourceはBP03／callを保持し、PC08のreturned／afterへ進めない。calleeのpreflight又はattemptの実位置、生成BP01／after・failureRecorded=falseとは独立である。calleeのbinding_mismatch／state_invalid／closedは固定allowlistで同じ上位理由へ、未知／未確認だけをconstruction_unconfirmedへ写像し、既存root／sourceの先行理由を優先する。returned観測はこの初回診断を記録した後だけに置く。
+
+新しい保持は同rootの先行8原始scalarと空reply参照、constructor固定mode、既存固定accessの狭い継続である。既存callActive／entryBusy・source／receiver進行fieldを再利用し、新owner／token／Pin・receiver参照field・source keyを増やさない。追加のcall・有限再検査・試行記録・finally・診断／projection費は独立費目だが、実E／S・allocation／GC／OOM・全guard数／全体work上界はUnknownのまま。
+
+合成43件は5観測点の独立prefix oracle、close／throw／先行理由／root再入、callee再入、foreign／copy／Proxy・入力hook非実行、先行失敗・cache同一性を確認する。観測点はcall前、callee preflight前後、attempt全記録後、復帰診断後だけ。before_callのroot再入は既存PC01開始資格で拒否し、callee再入は実call区間だけに置く。fixedCallsは正規dispatcherの到達数で、拒否を確かめる合成侵入callまで1回と数えた値ではない。
+
+compiledは実ownerのactive正例、finally除去2対照、counterだけ残してcalleeを省く対照、live区間のforeign／copy無書込み、停止優先、27fieldの狭いphase view単独故障とchecker迂回、attempting接続、同期8直接代入→固定call、禁止参照／claim writer=0と型拒否8行を確認する。phase view故障は値checker接続の検査であり、実保持slot全fieldの改竄耐性の代替ではない。callActiveとintervalの重なる条件は、実call中にcallActive=falseへした負例と両条件を除く対照で共同の責務を確認する。単独節感度又はTS失敗だけのkillとはしない。§14の他の等価判断を新格納writerに自動継承しない。
+
+CE01〜07・09〜13の今回境界に関係する部分だけを[検証記録](E2E_BEST_PRACTICE_WFB_BODY_PIN_CALL_2026-11-11.md)へ記録し、CE全体の完了にはしない。CR05〜08の参照捕捉／confirmed・PC08・C-03・payload借用／bind・構築ready・body・Journal供給・root終端・正式発行は未接続。保持は未解決責務でありcleanup証拠ではない。

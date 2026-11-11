@@ -2280,6 +2280,7 @@ let probeStartAccess: Readonly<{
   bodyPinValues(a: RetirementStartAssembly, source: BodyBindSourceShell): Readonly<BodyPinReceiverValues>;
   bodyPinBridgeMatches(a: RetirementStartAssembly, binding: ProbeFrameBinding, link: ProbeRunLink, duty: FixedExitDuty, exit: ProbeExitPreparationBundle): boolean;
   bodyPinEntryBusy(a: RetirementStartAssembly): boolean;
+  bodyPinEnter(a: RetirementStartAssembly, root: CanonicalGateDraftRoot, source: BodyBindSourceShell): BodyPinAdmission;
   exitInspect(a: RetirementStartAssembly): Readonly<{ attempted: boolean; retained: boolean; sameDuty: boolean;
     knowledge: 'not_called' | 'known' | 'unknown'; callStarted: boolean; issuerRetained: boolean; receiverRetained: boolean }>;
   inspect(a: RetirementStartAssembly): Readonly<{ bindingRetained: boolean; bindingAttempted: boolean;
@@ -2349,6 +2350,7 @@ class RetirementStartAssembly {
         && a.#runIssuedLink === link && a.#runLink === link && a.#runIssuedDuty === duty && a.#runDuty === duty
         && a.#exitIssuedBundle === exit && a.#exitBundle === exit,
       bodyPinEntryBusy: (a: RetirementStartAssembly) => a.#bodyPinEntryBusy,
+      bodyPinEnter: (a: RetirementStartAssembly, root: CanonicalGateDraftRoot, source: BodyBindSourceShell) => a.bodyPinReceiverEntry(root, source),
       bind(a: RetirementStartAssembly, b: ProbeFrameBinding, issued: ProbeFrameBinding, script: string): boolean {
         if (a.#probeBindStarted) return false;
         a.#probeBindStarted = true; a.#probeBinding = b; a.#probeIssuedBinding = issued;
@@ -2441,6 +2443,38 @@ class RetirementStartAssembly {
       currentSame: this.#bodyExpectedSourceCurrent === source, step: this.#bodyPinStep, failureStep: this.#bodyPinFailureStep,
       first: this.#bodyBindFirst, failurePhase: this.#bodyBindFailurePhase, failurePrefix: this.#bodyBindFailurePrefix,
       failureBoundary: this.#bodyBindFailureBoundary, refusal: this.#bodyBindRefusal };
+  }
+  private failBodyPinReceiver(reason: Exclude<BodyReceiverFirst, 'none'>, boundary: Exclude<BodyReceiverFailureBoundary, 'none'>): void {
+    if (this.#bodyBindFirst === 'none') {
+      this.#bodyBindFirst = reason; this.#bodyBindFailurePhase = 'pin'; this.#bodyBindFailurePrefix = 'none';
+      this.#bodyBindFailureBoundary = boundary; this.#bodyPinFailureStep = this.#bodyPinStep;
+    }
+  }
+  private bodyPinReceiverEntry(root: CanonicalGateDraftRoot, source: BodyBindSourceShell): BodyPinAdmission {
+    if (!probeBodyPinRootAccess.identity(root, source, this)) return 'rejected_attempt';
+    if (probeBodyPinRootAccess.stopped(root, source)) return 'rejected_attempt';
+    if (this.#bodyPinEntryBusy === true || this.#bodyPinAttemptUsed === true) {
+      probeBodyPinRootAccess.refuse(root, source, this, this.#bodyPinEntryBusy);
+      return 'refused_existing';
+    }
+    if (!probeBodyPinRootAccess.active(root, source, this) || !this.bodyFieldsInitial()
+      || this.#bodyPinEntryBusy !== false || this.#bodyPinStep !== 'none' || this.#bodyPinFailureStep !== 'none') return 'rejected_attempt';
+    this.#bodyPinEntryBusy = true;
+    try {
+      this.#bodyPinStep = 'preflight';
+      probeBodyPinRootAccess.event(root, source, this, 'preflight_before');
+      if (!probeBodyPinRootAccess.entry(root, source, this)) { this.failBodyPinReceiver('state_invalid', 'before'); return 'rejected_attempt'; }
+      probeBodyPinRootAccess.event(root, source, this, 'preflight_after');
+      if (!probeBodyPinRootAccess.entry(root, source, this)) { this.failBodyPinReceiver('state_invalid', 'before'); return 'rejected_attempt'; }
+      this.#bodyPinStep = 'attempt'; this.#bodyPinAttemptUsed = true; this.#bodyPinStage = 'attempting';
+      probeBodyPinRootAccess.event(root, source, this, 'attempt_after');
+      if (!probeBodyPinRootAccess.attempting(root, source, this)) { this.failBodyPinReceiver('state_invalid', 'after'); return 'rejected_attempt'; }
+      this.failBodyPinReceiver('receiver_unconfirmed', 'after');
+      return 'rejected_attempt';
+    } catch {
+      this.failBodyPinReceiver(probeBodyPinRootAccess.reason(root, source), this.#bodyPinStep === 'attempt' ? 'after' : 'before');
+      return 'rejected_attempt';
+    } finally { this.#bodyPinEntryBusy = false; }
   }
   private bodyFieldsInspect(): Readonly<BodyReceiverProjection> {
     const refs = [this.#bodyExpectedSourceIssued, this.#bodyExpectedSourceCurrent, this.#bodyExpectedSourceRejected,
@@ -3891,15 +3925,40 @@ function bodyPinFailurePosition(v: Readonly<{ phase: string; step: string; rootB
 }
 type BodyPinBridgePhase = 'none' | 'before' | 'checked' | 'blocked';
 interface BodyPinBridgeReply extends Omit<BodySeedReply, 'model'> { readonly model: 'wfb-body-pin-bridge-1' }
+type BodyPinCallPhase = 'none' | 'before' | 'calling' | 'returned';
+type BodyPinCallPoint = 'none' | 'before_call' | 'preflight_before' | 'preflight_after' | 'attempt_after' | 'returned';
+interface BodyPinCallReply extends Omit<BodySeedReply, 'model'> { readonly model: 'wfb-body-pin-call-1' }
 let probeBodyPinRootAccess: Readonly<{
   identity(root: CanonicalGateDraftRoot, source: BodyBindSourceShell, start: RetirementStartAssembly): boolean;
   active(root: CanonicalGateDraftRoot, source: BodyBindSourceShell, start: RetirementStartAssembly): boolean;
+  stopped(root: CanonicalGateDraftRoot, source: BodyBindSourceShell): boolean;
+  reason(root: CanonicalGateDraftRoot, source: BodyBindSourceShell): Exclude<BodyReceiverFirst, 'none'>;
+  refuse(root: CanonicalGateDraftRoot, source: BodyBindSourceShell, start: RetirementStartAssembly, busy: boolean): void;
+  entry(root: CanonicalGateDraftRoot, source: BodyBindSourceShell, start: RetirementStartAssembly): boolean;
+  attempting(root: CanonicalGateDraftRoot, source: BodyBindSourceShell, start: RetirementStartAssembly): boolean;
+  event(root: CanonicalGateDraftRoot, source: BodyBindSourceShell, start: RetirementStartAssembly, point: Exclude<BodyPinCallPoint, 'none'>): void;
 }>;
 class CanonicalGateDraftRoot {
   static {
     probeBodyPinRootAccess = Object.freeze({
       identity: (root: CanonicalGateDraftRoot, source: BodyBindSourceShell, start: RetirementStartAssembly) => root.bodyPinBridgeIdentity(source, start),
       active: (root: CanonicalGateDraftRoot, source: BodyBindSourceShell, start: RetirementStartAssembly) => root.bodyPinBridgeActive(source, start),
+      stopped: (root: CanonicalGateDraftRoot, source: BodyBindSourceShell) => root.#closed || root.#bodySourceStopRequested
+        || root.#failure.first !== 'none' || source.stopRequested || source.first !== 'none',
+      reason: (root: CanonicalGateDraftRoot, source: BodyBindSourceShell) => {
+        const first = root.#failure.first !== 'none' ? root.#failure.first : source.first;
+        return first === 'binding_mismatch' || first === 'state_invalid' || first === 'closed' ? first
+          : root.#closed || root.#bodySourceStopRequested || source.stopRequested ? 'closed' : 'receiver_unconfirmed';
+      },
+      refuse: (root: CanonicalGateDraftRoot, source: BodyBindSourceShell, start: RetirementStartAssembly, busy: boolean) => {
+        root.bodyPinCallRefuse(source, start, busy);
+      },
+      entry: (root: CanonicalGateDraftRoot, source: BodyBindSourceShell, start: RetirementStartAssembly) => root.bodyPinReceiverMatches(source, start, false),
+      attempting: (root: CanonicalGateDraftRoot, source: BodyBindSourceShell, start: RetirementStartAssembly) => root.bodyPinReceiverMatches(source, start, true),
+      event: (root: CanonicalGateDraftRoot, source: BodyBindSourceShell, start: RetirementStartAssembly, point: Exclude<BodyPinCallPoint, 'none'>) => {
+        if (!root.bodyPinBridgeIdentity(source, start)) throw Error('private_pin_event_identity');
+        root.bodyPinCallPoint(point, source, start);
+      },
     });
   }
   readonly #failure: { first: string; phase: number; boundary: string };
@@ -3968,11 +4027,16 @@ class CanonicalGateDraftRoot {
   #bodyPinBridgeIdentityConfirmed = false; #bodyPinBridgeChecked = false; #bodyPinBridgeActiveQualification = false;
   #bodyPinBridgeReentry = 'none';
   #bodyPinBridgeFixed: Readonly<BodyPinBridgeReply> | undefined;
+  #bodyPinCallPhase: BodyPinCallPhase = 'none'; #bodyPinCallFailurePhase: BodyPinCallPhase = 'none';
+  #bodyPinFixedCalls = 0; #bodyPinCallResult: 'none' | BodyPinAdmission = 'none';
+  #bodyPinCallSourceReason: BodySourceFirst = 'none'; #bodyPinCallFixed: Readonly<BodyPinCallReply> | undefined;
+  #bodyPinCallPoint: BodyPinCallPoint = 'none'; #bodyPinCallFailurePoint: BodyPinCallPoint = 'none';
+  #bodyPinCallReentry: 'none' | BodyPinAdmission = 'none';
   constructor(private readonly script: string, admitted: boolean, private readonly probePreparation = false, private readonly runPreparation = false,
     private readonly grantCapture = false, private readonly exitPreparation = false, private readonly exitGuard = false, private readonly localExit = false,
     private readonly bodySeed = false, private readonly bodyLive = false, private readonly bodyBundle = false, private readonly bodyBindFields = false,
     private readonly bodySourceIssuer = false, private readonly bodyPinContracts = false, private readonly bodyPinStart = false,
-    private readonly bodyPinBridge = false) {
+    private readonly bodyPinBridge = false, private readonly bodyPinCall = false) {
     this.#failure = { first: admitted ? 'none' : 'input_rejected', phase: 0, boundary: 'none' };
     this.#slots = Array.from({ length: 37 }, () => ({ stage: 'not_started', value: undefined }));
     this.#probeSlots = probePreparation ? Array.from({ length: 8 }, () => ({ stage: 'not_started', value: undefined })) : [];
@@ -4814,6 +4878,7 @@ class CanonicalGateDraftRoot {
   }
   private bodyPinBridgeActive(source: BodyBindSourceShell, start: RetirementStartAssembly): boolean {
     if (!this.bodyPinBridgeIdentity(source, start)) return false;
+    if (this.bodyPinCall !== true) return false;
     const values = this.bodyPinSourceValues(source);
     return this.bodyPinStartContextMatches() && this.#bodyPinCallActive === true
       && this.#bodyPinRouteAttempted === true && this.#bodyPinRouteState === 'running'
@@ -4830,6 +4895,7 @@ class CanonicalGateDraftRoot {
         ? this.#bodyPinRouteStep === 'returned' ? 'after' : 'call' : 'checked' });
     if (!this.#bodyPinFailureRecorded) {
       this.#bodyPinFailureRecorded = true; this.#bodyPinBridgeFailurePhase = this.#bodyPinBridgePhase;
+      if (this.bodyPinCall) { this.#bodyPinCallFailurePhase = this.#bodyPinCallPhase; this.#bodyPinCallFailurePoint = this.#bodyPinCallPoint; }
       this.#bodyPinFirst = reason === 'binding_mismatch' || reason === 'closed' ? reason
         : reason === 'state_invalid' || reason === 'input_rejected' ? 'state_invalid' : 'construction_unconfirmed';
       this.#bodyPinFailurePhase = p?.phase ?? 'none'; this.#bodyPinFailureStep = p?.step ?? 'none';
@@ -4838,7 +4904,8 @@ class CanonicalGateDraftRoot {
     this.#bodyPinRouteState = 'failed';
     if (source) {
       if (source.first === 'none') {
-        source.first = this.#bodyPinFirst; source.failurePhase = this.#bodyPinFailurePhase;
+        source.first = this.bodyPinCall && this.#bodyPinCallSourceReason !== 'none' ? this.#bodyPinCallSourceReason : this.#bodyPinFirst;
+        source.failurePhase = this.#bodyPinFailurePhase;
         source.failureBoundary = p?.sourceBoundary ?? 'none';
       }
       source.state = 'failed';
@@ -4859,7 +4926,101 @@ class CanonicalGateDraftRoot {
     this.#bodyPinBridgeChecked = true; this.bodyPinBridgePoint('blocked');
     if (!probeBodyPinRootAccess.identity(this, source, start) || !this.bodyPinStartPreflightMatches(true)
       || this.#bodyPinCallActive !== false || probeStartAccess.bodyPinEntryBusy(start) !== false) return this.fail('binding_mismatch');
+    if (this.bodyPinCall) return this.prepareBodyPinCall(source, start);
     this.fail('construction_unconfirmed'); return this.reply(false, 'pin_bridge_not_connected');
+  }
+  private bodyPinReceiverMatches(source: BodyBindSourceShell, start: RetirementStartAssembly, attempted: boolean): boolean {
+    if (!this.bodyPinBridgeActive(source, start) || probeStartAccess.bodyPinEntryBusy(start) !== true) return false;
+    const values = { source: this.bodyPinSourceValues(source), receiver: probeStartAccess.bodyPinValues(start, source) };
+    return attempted ? BODY_PIN_PHASE_CHECKS.attempting(values) : BODY_PIN_PHASE_CHECKS.receiverEntry(values);
+  }
+  private bodyPinCallRefuse(source: BodyBindSourceShell, start: RetirementStartAssembly, busy: boolean): void {
+    if (this.bodyPinBridgeIdentity(source, start) && this.#bodyPinRefusal === 'none') this.#bodyPinRefusal = busy === true ? 'in_progress' : 'duplicate_pin';
+  }
+  private bodyPinCallPoint(point: Exclude<BodyPinCallPoint, 'none'>, source: BodyBindSourceShell, start: RetirementStartAssembly): void {
+    this.#bodyPinCallPoint = point;
+    if (this.script === 'ec_reenter_' + point) this.#bodyPinCallReentry = probeStartAccess.bodyPinEnter(start, this, source);
+    if (this.script === 'ec_root_reenter_' + point) this.#bodyPinCallReentry = point === 'before_call'
+      ? this.admitBodyPinCaller(this, source, start) : this.dispatchBodyPin(source, start);
+    if (this.script === 'ec_close_' + point) this.close();
+    if (this.script === 'ec_prior_' + point) { this.fail('state_invalid'); throw Error('private_pin_later_fault'); }
+    if (this.script === 'ec_fault_' + point) throw Error('private_pin_call_fault');
+    if (point !== 'returned' && probeBodyPinRootAccess.stopped(this, source)) throw Error('private_pin_call_stopped');
+  }
+  private dispatchBodyPin(source: BodyBindSourceShell, start: RetirementStartAssembly): BodyPinAdmission {
+    if (!this.bodyPinCall || !probeBodyPinRootAccess.identity(this, source, start)) return 'rejected_attempt';
+    if (probeBodyPinRootAccess.stopped(this, source)) return 'rejected_attempt';
+    if (this.#bodyPinCallActive === true || source.pinCallReached === true) {
+      probeBodyPinRootAccess.refuse(this, source, start, this.#bodyPinCallActive); return 'refused_existing';
+    }
+    if (!this.bodyPinStartPreflightMatches(true) || this.#bodyPinCallActive !== false
+      || this.#bodyPinFixedCalls !== 0 || probeStartAccess.bodyPinEntryBusy(start) !== false) return 'rejected_attempt';
+    this.#bodyPinFixedCalls++;
+    try {
+      this.#bodyPinCallPhase = 'calling'; this.#bodyPinRoutePhase = 'BP03'; this.#bodyPinRouteStep = 'call'; this.#bodyPinRouteBoundary = 'before';
+      source.phase = 'BP03'; source.boundary = 'call'; source.pinCallReached = true; this.#bodyPinCallActive = true;
+      return probeStartAccess.bodyPinEnter(start, this, source);
+    } finally { this.#bodyPinCallActive = false; }
+  }
+  private prepareBodyPinCall(source: BodyBindSourceShell, start: RetirementStartAssembly) {
+    this.#bodyPinCallPhase = 'before';
+    try {
+      this.bodyPinCallPoint('before_call', source, start);
+      const candidateSource = this.bodyPinCallCandidate('source', source) as BodyBindSourceShell;
+      const candidateStart = this.bodyPinCallCandidate('start', start) as RetirementStartAssembly;
+      this.#bodyPinCallResult = this.dispatchBodyPin(candidateSource, candidateStart);
+      if (this.#bodyPinFixedCalls === 0) { this.#bodyPinCallSourceReason = 'binding_mismatch'; return this.fail('binding_mismatch'); }
+      if (this.#bodyPinFixedCalls === 1) { this.#bodyPinCallPhase = 'returned'; this.#bodyPinRouteBoundary = 'after'; }
+      const v = probeStartAccess.bodyPinValues(start, source), inherited = probeBodyPinRootAccess.reason(this, source);
+      const receiverReason = v.first === 'binding_mismatch' || v.first === 'state_invalid' || v.first === 'closed' ? v.first : 'receiver_unconfirmed';
+      const reason = inherited === 'receiver_unconfirmed' ? receiverReason : inherited;
+      this.#bodyPinCallSourceReason = v.first !== 'none' ? receiverReason : reason;
+      if (this.#bodyPinCallResult === 'accepted') return this.fail('state_invalid');
+      const failure = this.fail(reason === 'receiver_unconfirmed' ? 'construction_unconfirmed' : reason);
+      this.bodyPinCallPoint('returned', source, start);
+      return v.first === 'receiver_unconfirmed' && v.attemptUsed === true && v.stage === 'attempting'
+        ? this.reply(false, 'pin_storage_not_connected') : failure;
+    } catch {
+      const reason = probeBodyPinRootAccess.reason(this, source);
+      if (this.#bodyPinCallSourceReason === 'none') this.#bodyPinCallSourceReason = reason === 'receiver_unconfirmed'
+        && this.#bodyPinFixedCalls === 0 ? 'construction_unconfirmed' : reason;
+      return this.fail(reason === 'receiver_unconfirmed' ? 'construction_unconfirmed' : reason);
+    }
+  }
+  private bodyPinCallCandidate(kind: 'source' | 'start', expected: object): object {
+    if (this.script === 'ec_foreign_' + kind) return Object.freeze({});
+    if (kind === 'source' && this.script === 'ec_copy_source') return Object.seal(Object.defineProperties({}, Object.getOwnPropertyDescriptors(expected)));
+    if (this.script === 'ec_proxy_' + kind) return new Proxy(expected, {
+      get: () => { this.#bodyPinStartHookObserved = true; throw Error('private_call_getter'); },
+      ownKeys: () => { this.#bodyPinStartHookObserved = true; throw Error('private_call_keys'); },
+      getPrototypeOf: () => { this.#bodyPinStartHookObserved = true; throw Error('private_call_prototype'); },
+    });
+    return expected;
+  }
+  bodyPinCallReply(disposition: string): Readonly<BodyPinCallReply> {
+    if (this.#bodyPinCallFixed) return this.#bodyPinCallFixed;
+    const r: Readonly<BodyPinCallReply> = Object.freeze({ model: 'wfb-body-pin-call-1', ok: false,
+      disposition: runEnum(disposition, ['pin_storage_not_connected', 'closed', 'not_ready', 'input_rejected', 'binding_mismatch',
+        'state_invalid', 'construction_unconfirmed', 'deferred_frame', 'construction_in_progress', 'duplicate_preparation'], 'internal_unconfirmed'),
+      first: runFirst(this.#failure.first), authority: 'none', execution: 'closed', formalIssuance: 'closed',
+      wholeRunAdmission: 'disabled', implementation: 'unknown', investigations: 'on_hold' });
+    if (this.#failure.first !== 'none') this.#bodyPinCallFixed = r; return r;
+  }
+  inspectBodyPinCall() {
+    const c = this.inspectBodyPinBridge();
+    return Object.freeze({ model: 'wfb-body-pin-call-1', authority: 'none', execution: 'closed', formalIssuance: 'closed',
+      wholeRunAdmission: 'disabled', implementation: 'unknown', investigations: 'on_hold', first: c.first,
+      phase: runEnum(this.#bodyPinCallPhase, ['none', 'before', 'calling', 'returned'], 'unconfirmed'),
+      failurePhase: runEnum(this.#bodyPinCallFailurePhase, ['none', 'before', 'calling', 'returned'], 'unconfirmed'),
+      fixedCalls: this.#bodyPinFixedCalls === 0 ? 0 : this.#bodyPinFixedCalls === 1 ? 1 : 'unconfirmed',
+      result: runEnum(this.#bodyPinCallResult, ['none', 'accepted', 'refused_existing', 'rejected_attempt'], 'unconfirmed'),
+      sourceReason: runEnum(this.#bodyPinCallSourceReason, BODY_SOURCE_FIRSTS, 'unconfirmed'),
+      point: runEnum(this.#bodyPinCallPoint, ['none', 'before_call', 'preflight_before', 'preflight_after', 'attempt_after', 'returned'], 'unconfirmed'),
+      failurePoint: runEnum(this.#bodyPinCallFailurePoint, ['none', 'before_call', 'preflight_before', 'preflight_after', 'attempt_after', 'returned'], 'unconfirmed'),
+      reentry: runEnum(this.#bodyPinCallReentry, ['none', 'accepted', 'refused_existing', 'rejected_attempt'], 'unconfirmed'),
+      hookObserved: c.hookObserved,
+      callActive: c.callActive, entryBusy: c.entryBusy, route: c.route, build: c.build, receiverPin: c.receiverPin,
+      pinStorage: 'not_connected', claimConsumption: 'not_connected', binding: 'not_connected', constructionReady: 'not_connected' });
   }
   private bodyPinBridgePoint(phase: Exclude<BodyPinBridgePhase, 'none'>): void {
     this.#bodyPinBridgePhase = phase;
@@ -5754,6 +5915,26 @@ export function createProbeBodyBindFieldsFake(...args: readonly unknown[]) {
     checkLegacy: (...xs: readonly unknown[]) => call(xs, () => a.checkBodyBindFields(true)),
     close: (...xs: readonly unknown[]) => call(xs, () => a.close()),
     inspect: (...xs: readonly unknown[]) => { if (xs.length) a.rejectInput(); return a.inspectBodyBindFields(); } });
+}
+
+export function createProbeBodyPinCallFake(...args: readonly unknown[]) {
+  const script = args.length ? args[0] : 'ec_normal';
+  const scripts = ['ec_normal', 'si_producer_throw', 'pc_fault_checked', 'ps_fault_entry_before', 'pb_fault_checked',
+    'ec_foreign_source', 'ec_copy_source', 'ec_proxy_source', 'ec_foreign_start', 'ec_proxy_start',
+    ...['before_call', 'preflight_before', 'preflight_after', 'attempt_after', 'returned']
+    .flatMap(p => ['fault', 'close', 'prior', 'root_reenter'].map(k => 'ec_' + k + '_' + p)),
+    ...['preflight_before', 'preflight_after', 'attempt_after', 'returned'].map(p => 'ec_reenter_' + p)];
+  const admitted = args.length <= 1 && typeof script === 'string' && scripts.includes(script);
+  const a = new CanonicalGateDraftRoot(admitted ? script as string : 'ec_normal', admitted,
+    true, true, false, true, false, false, false, false, false, false, true, true, true, true, true);
+  const call = (xs: readonly unknown[], op: () => Readonly<{ ok: boolean; disposition: string }>) => {
+    const r = xs.length ? a.rejectInput() : op(); return a.bodyPinCallReply(r.disposition);
+  };
+  return Object.freeze({ prepare: (...xs: readonly unknown[]) => call(xs, () => a.prepare()),
+    check: (...xs: readonly unknown[]) => call(xs, () => a.checkBodyBindFields()),
+    checkLegacy: (...xs: readonly unknown[]) => call(xs, () => a.checkBodyBindFields(true)),
+    close: (...xs: readonly unknown[]) => call(xs, () => a.close()),
+    inspect: (...xs: readonly unknown[]) => { if (xs.length) a.rejectInput(); return a.inspectBodyPinCall(); } });
 }
 
 export function createProbeBodyPinBridgeFake(...args: readonly unknown[]) {

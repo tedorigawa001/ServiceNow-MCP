@@ -27,10 +27,10 @@ try {
   for (const n of ['source-map-values-core', 'supply-construction-kernel'])
     writeFileSync(join(dir, n + '.js'), emit(readFileSync(new URL('./' + n + '.ts', import.meta.url), 'utf8')));
   const base = await load(source, 'base'); assert.equal(run(base).r.disposition, 'pin_bridge_not_connected');
-  const busy = run(await load(replace(source, '#bodyPinEntryBusy = false;', "#bodyPinEntryBusy = 'private_truthy' as never;"), 'busy-type'));
+  const busy = run(await load(replace(source, '  #bodyPinEntryBusy = false;', "  #bodyPinEntryBusy = 'private_truthy' as never;"), 'busy-type'));
   assert.equal(busy.r.first, 'state_invalid', 'an internal non-boolean busy field must not be sanitized into admission');
   for (const value of ['0', "''", 'null']) {
-    const x = run(await load(replace(source, '#bodyPinEntryBusy = false;', `#bodyPinEntryBusy = ${value} as never;`), 'busy-' + used.size));
+    const x = run(await load(replace(source, '  #bodyPinEntryBusy = false;', `  #bodyPinEntryBusy = ${value} as never;`), 'busy-' + used.size));
     assert.equal(x.r.first, 'state_invalid');
   }
   let intervalCases = 0, positionCases = 0, validPositions = 0;
@@ -71,7 +71,7 @@ try {
   }
   const late = run(await load(at('blocked', "this.#bodySourceIssued!.boundary = 'before';"), 'late-source'));
   assert.equal(late.r.first, 'binding_mismatch'); assert.equal(late.s.failurePhase, 'blocked');
-  const callInit = run(await load(replace(source, '#bodyPinCallActive = false;', "#bodyPinCallActive = 'private_truthy' as never;"), 'call-type'));
+  const callInit = run(await load(replace(source, '  #bodyPinCallActive = false;', "  #bodyPinCallActive = 'private_truthy' as never;"), 'call-type'));
   assert.equal(callInit.r.first, 'state_invalid'); assert.equal(callInit.s.failurePhase, 'before');
   const flagged = replace(replace(source, 'bodyPinEntryBusy: (a: RetirementStartAssembly) => a.#bodyPinEntryBusy,',
     'bodyPinEntryBusy: (a: RetirementStartAssembly) => (globalThis as any).__pbBusy ?? a.#bodyPinEntryBusy,'),
@@ -142,16 +142,24 @@ try {
     '#bodyBundleIssued', '#bodyBundleCurrent', '#bodyRejectedBundle', '#bodyDraftIssued', '#bodyDraftCurrent', '#bodyRejectedDraft',
     '#bodyPinAttemptUsed', '#bodyPinStage', '#bodyPinStep', 'pinCallReached', 'bindCallReached', 'postConfirmed', 'claim']);
   let rootAccessWrites = 0;
-  function scan(n) {
+  const entryWrites = new Map([
+    ['CanonicalGateDraftRoot.dispatchBodyPin', new Set(['#bodyPinCallActive', 'pinCallReached'])],
+    ['RetirementStartAssembly.bodyPinReceiverEntry', new Set(['#bodyPinEntryBusy', '#bodyPinAttemptUsed', '#bodyPinStage', '#bodyPinStep'])],
+  ]);
+  function scan(n, scope = '', owner = '') {
+    if (ts.isClassDeclaration(n)) scope = n.name?.text ?? '';
+    if (ts.isMethodDeclaration(n)) owner = n.name.getText(ast);
     if (ts.isBinaryExpression(n) && ts.isAssignmentOperator(n.operatorToken.kind) || ts.isPrefixUnaryExpression(n) || ts.isPostfixUnaryExpression(n)) {
       const lhs = ts.isBinaryExpression(n) ? n.left : n.operand;
-      if (ts.isPropertyAccessExpression(lhs)) assert.ok(!forbidden.has(lhs.name.getText(ast)), 'forbidden write');
+      if (ts.isPropertyAccessExpression(lhs)) assert.ok(!forbidden.has(lhs.name.getText(ast))
+        || entryWrites.get(scope + '.' + owner)?.has(lhs.name.getText(ast)), 'forbidden write');
       if (ts.isIdentifier(lhs) && lhs.text === 'probeBodyPinRootAccess') rootAccessWrites++;
     }
-    ts.forEachChild(n, scan);
+    ts.forEachChild(n, child => scan(child, scope, owner));
   }
   scan(ast); assert.equal(rootAccessWrites, 1);
-  assert.ok(!source.includes('bodyPinDispatch:')); assert.ok(!source.includes('bodyPinReceiverEntry('));
+  assert.equal(start.members.filter(n => ts.isMethodDeclaration(n) && n.name.getText(ast) === 'bodyPinReceiverEntry').length, 1);
+  assert.ok(source.includes('bodyPinEnter: (a: RetirementStartAssembly, root: CanonicalGateDraftRoot, source: BodyBindSourceShell) => a.bodyPinReceiverEntry(root, source)'));
   const writer = root.members.find(n => ts.isMethodDeclaration(n) && n.name.getText(ast) === 'failBodyPinBridge').getText(ast);
   for (const clause of ["this.#bodyPinFailurePhase = p?.phase ?? 'none'", "this.#bodyPinFailureStep = p?.step ?? 'none'",
     "this.#bodyPinFailureBoundary = p?.rootBoundary ?? 'none'"]) assert.ok(writer.includes(clause));

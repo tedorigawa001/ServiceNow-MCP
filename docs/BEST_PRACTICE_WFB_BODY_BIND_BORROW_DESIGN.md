@@ -1,10 +1,10 @@
 # WF-B body bind：状態型・phase検査と同startの先行borrow／診断slot
 
-Version: draft-0.11 / Date: 2026-11-11 / 設計基準HEAD: `29c53e1` / レビュー追加: `5ec73dd` / 原始field限定実装基準HEAD: `e6cc8cd` / 原始field実装レビュー修正基準HEAD: `41ac31f` / source生成・停止の設計基準HEAD: `5873d16` / BS／BC分離実装基準HEAD: `f3b3721` / 合成source生成・停止実装基準HEAD: `311d3ef` / (C)pin差分設計基準HEAD: `b3776da` / C-01実装基準HEAD: `554ef9a` / C-02前半実装基準HEAD: `a3f1f66` / 後半接続差分設計基準HEAD: `ff866f9` / bridge内部契約実装基準HEAD: `3fc15ab`。
+Version: draft-0.12 / Date: 2026-11-11 / 設計基準HEAD: `29c53e1` / レビュー追加: `5ec73dd` / 原始field限定実装基準HEAD: `e6cc8cd` / 原始field実装レビュー修正基準HEAD: `41ac31f` / source生成・停止の設計基準HEAD: `5873d16` / BS／BC分離実装基準HEAD: `f3b3721` / 合成source生成・停止実装基準HEAD: `311d3ef` / (C)pin差分設計基準HEAD: `b3776da` / C-01実装基準HEAD: `554ef9a` / C-02前半実装基準HEAD: `a3f1f66` / 後半接続差分設計基準HEAD: `ff866f9` / bridge内部契約実装基準HEAD: `3fc15ab` / 固定call／入場実装基準HEAD: `9f4361c`。
 
 draft-0.2のレビュー修正：`bodyFieldsIntact`のroot側2節（元baseの未使用、BC用shell未生成）は、単独で外しても試験が落ちなかった。root側inspectの`state`／`phase`／`failurePhase`／`reentry`のallowlistと、実body cellから導く`bodyStarts`の投影も観測していなかった。各節の単一注入と除去の対照、4つのallowlistと`bodyStarts`の対照をcompiledへ追加した。最初の失敗位置の上書き防止と、`checkBodyBindFields`冒頭の`#fixed`返却は等価と判断し、§10に記録した。
 
-Status: **内部型・原始先行field・固定診断／projectionと実行拒否、およびBS／BC最小分離・BP00〜01合成source生成／確認・同期停止、C-01／C-02前半と§18のreadonly bridge準備までを合成依存限定で実装。** 実装範囲は§10・12〜13・15〜16・18と[field限定検証記録](E2E_BEST_PRACTICE_WFB_BODY_BIND_FIELDS_2026-11-10.md)・[source生成／停止検証記録](E2E_BEST_PRACTICE_WFB_BODY_SOURCE_ISSUER_2026-11-11.md)を基準とする。pin・claim消費・bindは未接続、§1〜9と各段階の記述は作成当時の範囲で、受入表全体の成功を意味しない。親は[先行slot／固定構築設計](BEST_PRACTICE_WFB_BODY_SLOT_CONSTRUCTION_DESIGN.md)と[live slot／bundle生成設計](BEST_PRACTICE_WFB_BODY_LIVE_SLOT_BUNDLE_DESIGN.md)。前工程の実績は[BC12／13検証記録](E2E_BEST_PRACTICE_WFB_BODY_BUNDLE_DRAFT_2026-11-10.md)を参照する。
+Status: **内部型・原始先行field・固定診断／projectionと実行拒否、およびBS／BC最小分離・BP00〜01合成source生成／確認・同期停止、C-01／C-02前半・§18のbridgeと§19の固定call／入場までを合成依存限定で実装。** 実装範囲は§10・12〜13・15〜16・18〜19と[field限定検証記録](E2E_BEST_PRACTICE_WFB_BODY_BIND_FIELDS_2026-11-10.md)・[source生成／停止検証記録](E2E_BEST_PRACTICE_WFB_BODY_SOURCE_ISSUER_2026-11-11.md)・[固定call検証記録](E2E_BEST_PRACTICE_WFB_BODY_PIN_CALL_2026-11-11.md)を基準とする。pin参照格納・claim消費・bindは未接続、§1〜9と各段階の記述は作成当時の範囲で、受入表全体の成功を意味しない。親は[先行slot／固定構築設計](BEST_PRACTICE_WFB_BODY_SLOT_CONSTRUCTION_DESIGN.md)と[live slot／bundle生成設計](BEST_PRACTICE_WFB_BODY_LIVE_SLOT_BUNDLE_DESIGN.md)。前工程の実績は[BC12／13検証記録](E2E_BEST_PRACTICE_WFB_BODY_BUNDLE_DRAFT_2026-11-10.md)を参照する。
 
 `5ec73dd`のBC12／13 mint前base対照と、rejected節の等価性に関する既存レビュー訂正は保持する。同commitで先に取り込まれたlive／bundle親文書の本書への参照も維持する。ソースの生成／保持経路に変更はなく、本書はこれらの検証実績をbind成功の保証へ拡張しない。
 
@@ -252,4 +252,12 @@ caller BP03位置・callee実位置・生成BP01履歴を分離し、途中失�
 
 [call・receiver設計§13](BEST_PRACTICE_WFB_BODY_PIN_CALL_RECEIVER_DESIGN.md)と[bridge検証記録](E2E_BEST_PRACTICE_WFB_BODY_PIN_BRIDGE_2026-11-11.md)の範囲だけを実装した。元root／source／startをidentity-firstで照合し、receiverのbinding／cells／run link／duty／exit bundleの元関係をreadonlyに比較する。receiver entryBusyは先行falseのみで、試行予約／格納入口は作らない。calling／returnedとBP03の正例は非実行の値モデルに限定する。
 
-新閉鎖factoryは同prepareのPC02後で検査し固定停止する。生成・C-01準備・pin初回診断を分け、失敗後closeでも元返答／初回位置・空receiverを保持する。root側before／after、source側before／checked／callの異なる型と写像を区別する。source利用claim・payload・bind・構築ready・body・正式発行は未接続、全体受付無効・Unknown・調査保留を維持する。§17の文書のみは設計作成時点の記録で、現在の限定実装は本節に限る。
+新閉鎖factoryは同prepareのPC02後で検査し固定停止する。生成・C-01準備・pin初回診断を分け、失敗後closeでも元返答／初回位置・空receiverを保持する。root側before／after、source側before／checked／callの異なる型と写像を区別する。source利用claim・payload・bind・構築ready・body・正式発行は未接続、全体受付無効・Unknown・調査保留を維持する。§17の文書のみと本節の未活動条件は各作成時点の記録で、最新の限定接続は§19に分ける。
+
+## 19 同ownerの固定private call・receiver入場（2026-11-11）
+
+[call・receiver設計§15](BEST_PRACTICE_WFB_BODY_PIN_CALL_RECEIVER_DESIGN.md)と[今回の検証記録](E2E_BEST_PRACTICE_WFB_BODY_PIN_CALL_2026-11-11.md)に従い、新合成factoryだけで固定callを接続した。元root／source／startを先に照合し、callerのtry内でBP03・call到達・callActiveを直接記録して直ちに固定calleeへ入る。receiverは同一性→停止→既存busy／試行→active／初期状態の順で確認し、busy予約・前後検査と一度限りattemptingを自分のfinallyへ結ぶ。
+
+正常到達も参照格納前で固定拒否する。source利用claimはunused、expected-source3参照・payload6参照はすべて空、occupancy free・bindingState empty・prefix none、grant／duty消費／body／readyは0である。finallyはcallActive／entryBusyだけを解除し、call／試行履歴・初回理由・callerとcalleeの異なる失敗位置は保持する。新しいsource key・owner・frame・token・借用能力は発行しない。
+
+旧factoryと実classは変更しない。参照格納・PC08・C-03・payload借用／bind・構築ready・body起動・cleanup証拠・root終端・正式発行は未接続で、CE受入全体の完了ではない。全体受付無効・Unknown・VM／監視／telemetry調査保留を維持し、実接続・実通信・設定変更・Pushは行わない。

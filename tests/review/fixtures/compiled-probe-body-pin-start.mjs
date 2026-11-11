@@ -218,7 +218,10 @@ try {
       if (ts.isPropertyAccessExpression(lhs)) {
         const field = lhs.name.getText(ast);
         assert.ok(!neverWrite.has(field) || field === '#bodyPinFailureStep' && scope === 'CanonicalGateDraftRoot'
-          && ['failBodyPinStart', 'failBodyPinBridge'].includes(owner),
+          && ['failBodyPinStart', 'failBodyPinBridge'].includes(owner)
+          || scope === 'CanonicalGateDraftRoot' && owner === 'dispatchBodyPin' && field === 'pinCallReached'
+          || scope === 'RetirementStartAssembly' && owner === 'bodyPinReceiverEntry' && ['#bodyPinStep', '#bodyPinAttemptUsed', '#bodyPinStage'].includes(field)
+          || scope === 'RetirementStartAssembly' && owner === 'failBodyPinReceiver' && field === '#bodyPinFailureStep',
           'forbidden receiver/claim write ' + field);
         if (field === '#bodyPinRouteAttempted') {
           reservations++; assert.equal(owner, 'admitBodyPinCaller'); assert.equal(n.right.getText(ast), 'true');
@@ -239,7 +242,7 @@ try {
   assert.equal(new Set(diagnostics.map(d => d.file.getLineAndCharacterOfPosition(d.start).line)).size, 6);
   console.log(JSON.stringify({ compiled: true, actualForeignControls: 3, stopPriorityControls: priority.length, phaseRejections,
     contextRejections: contexts.length, recheckControls: rechecks.length, firstPosition: true, priorScalars: Object.keys(defaults).length,
-    reservationSites: reservations, receiverAndClaimWrites: 0, semanticRejections: 6,
+    reservationSites: reservations, unauthorizedReceiverAndClaimWrites: 0, entryControlWritersAllowed: true, semanticRejections: 6,
     projectionAllowlists: projection.length, strictBooleans: booleans.length, finalCallReadyRecheck: true,
     routeUnusedControls: routeFields.length, preflightRouteControls: routeFields.length, contextCallControls: contextCalls.length,
     callerRecheckControl: true, refusalFirstControl: true, internalRefusalNone: contexts.length }));
