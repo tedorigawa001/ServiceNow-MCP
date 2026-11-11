@@ -1,6 +1,8 @@
 # WF-B：同start参照格納・全確認とPC08未接続停止の接続差分
 
-Version: draft-0.2 / Date: 2026-11-12 / 読み取り基準HEAD: `8d95d5c`（固定call実装: `1b929dc`、一点対照・等価判断のレビュー追加: `8d95d5c`、限定準備実装の基準HEAD: `7a9a613`）。
+Version: draft-0.3 / Date: 2026-11-12 / 読み取り基準HEAD: `8d95d5c`（固定call実装: `1b929dc`、一点対照・等価判断のレビュー追加: `8d95d5c`、限定準備実装の基準HEAD: `7a9a613`、draft-0.2レビュー修正基準HEAD: `10e2f96`）。
+
+draft-0.2のレビュー修正：§13の格納準備に23件の一時変異を入れたところ、18件はstorage又はcall側のVitest・compiledの意味的なassertで落ちた（busy節はanchorを保った変異で再確認）。残る5件は試験変更なしで通ったが、いずれも重複防御か単一writerであり、検証記録は「単一の失敗診断要求」「到達不能／重複防御」とまとめて書くだけで節を特定していなかった。§14に節ごとの根拠を記録した。文書だけの修正で、fixture・試験・契約は変えない。
 
 Status: **§13の狭い状態型・先行境界scalar・格納前後の値検査と、格納直前までの合成準備を限定実装。参照格納・PC08・C-03は未実装／未接続。** 親は[call／receiver設計](BEST_PRACTICE_WFB_BODY_PIN_CALL_RECEIVER_DESIGN.md)と[private pin設計](BEST_PRACTICE_WFB_BODY_PRIVATE_PIN_CONNECTION_DESIGN.md)（設計読み取り時の版はdraft-0.6／draft-0.8）。前段は[固定call検証記録](E2E_BEST_PRACTICE_WFB_BODY_PIN_CALL_2026-11-11.md)、今回の限定範囲は[準備検証記録](E2E_BEST_PRACTICE_WFB_BODY_PIN_STORAGE_PREPARATION_2026-11-12.md)。§1〜12はdraft-0.1時点の将来設計／文書検証であり、格納成功・証拠発行・PC08受理を与えない。
 
@@ -194,3 +196,17 @@ BodyPinStorageStateはentry／attempted／before_issued／issued／before_curren
 追加保持はreceiver境界1scalar、rootの準備点／初回失敗点／再入結果3scalar・空reply参照とconstructor固定mode。既存callActive／entryBusy・source22key／metadata9・receiver9参照・PC01／試行予約を再発行しない。純粋検査の固定field走査・view生成・owner再照合・固定拒否／診断／projectionは追加費目だが、実E／S・allocation／GC／OOM・全guard数／全体work上界はUnknownのまま。
 
 SE01／02／04／06／07／09〜12の今回境界に関係する部分だけを[検証記録](E2E_BEST_PRACTICE_WFB_BODY_PIN_STORAGE_PREPARATION_2026-11-12.md)へ記録する。新35件、値専用10状態の270field拒否・100交差組、実準備4点のchecker迂回対照等は、実格納・初回rejected保持・confirmed最終post・accepted後停止の成功を証明しない。§9の等価判断も準備範囲だけで再評価し、格納後へ自動継承しない。参照格納・PC08・C-03・claim消費・body起動・正式発行は未接続、全体受付無効・Unknown・調査保留を維持する。
+
+## 14 draft-0.2レビューの等価判断（2026-11-12）
+
+格納前準備の現行所有経路だけでの判断である。(2)以降で参照格納・初回rejected保持・confirmed最終postを接続し、診断要求や呼出し元が増えるときは単独対照で改めて評価する。
+
+| 節 | 等価の根拠 |
+|---|---|
+| `failBodyPinStorageReceiver`の`#bodyBindFirst === 'none'`による初回保持 | 準備の各失敗経路はwriterを1回呼んで直ちに戻り、catchへ来るのは未記録のthrowだけである。現行では2回目の診断要求がない |
+| `storageMode`の`bodyPinBridgeIdentity` | 唯一の呼出し元`bodyPinReceiverEntry`が、入場時に同じ組の最小同一性を確認済みで、その後hookなしでattempting検査まで進む |
+| `storageEvent`の`bodyPinStorage !== true` | 呼出し元`prepareBodyPinStorage`は、`storageMode`がtrueのとき（constructor固定mode）にだけ到達する |
+| `storageEvent`の`bodyPinBridgeIdentity` | 同じく確認済みの元root／source／startの組だけで呼ばれ、準備中に組を差し替える経路がない |
+| `bodyPinStoragePoint`の`bodyPinBridgeIdentity` | `storageEvent`が直前に同じ組の同一性を検査しており、その間にscriptはない |
+
+`storageMode`の固定mode節は、storage側の試験では観測できないが、旧call factoryで外すと格納準備へ進むためcall側のVitestで落ちる。等価ではないので本表に含めない。

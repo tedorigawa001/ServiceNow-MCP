@@ -84,6 +84,12 @@ strictは`bdo npx --no-install tsc --noEmit --target ES2022 --module NodeNext --
 
 差分は合成fixture・新35件・新compiled・旧compiled2本の限定AST更新・開発export期待値2箇所・CHANGELOG・設計3文書と本記録の12ファイル。src／manifest／lockfile／TypeScript／配布設定・旧facadeは基準HEADから変更しない。index登録・コミットは行っておらず、今回の検証は未コミット作業内容に対するもので、コミット対象だけを隔離したものではない。
 
+## レビュー修正（2026-11-12）
+
+`10e2f96`のレビューで、格納準備の新コードに23件の一時変異を入れた。18件は意味的なassertで落ちた。内訳はstorageのVitest又はcompiled、busy節（anchorを保った変異で再確認）、固定mode節（旧call factoryが格納準備へ進むためcallのVitestで検出）である。
+
+残る5件（storage receiver診断の初回保持guard、storageModeのidentity、storageEventのmode／identity、bodyPinStoragePointのidentity）は試験変更なしで通った。上の「等価判断の範囲」は単一の失敗診断要求と重複防御をまとめて書くだけで節を特定していなかったため、節ごとの根拠を[設計§14](BEST_PRACTICE_WFB_BODY_PIN_STORAGE_RETURN_STOP_DESIGN.md)に記録した。文書だけの修正で、fixture・試験・CHANGELOGは変更していない。
+
 ## コミット対象だけの隔離再検証（2026-11-12）
 
 上記は実装時の記録。本節はその後のコミット依頼に対する再検証で、基準HEADは同じ`7a9a613`。今回の12ファイルだけを明示してindexへ登録し、全indexを一時フォルダへ展開した。全1,524ファイルのGit blob hash・実行属性がindexと一致することを確認し、未登録の作業中変更を対象へ含めなかった。既存node_modulesへの参照だけを再利用し、依存取得・導入・設定変更はしていない。
