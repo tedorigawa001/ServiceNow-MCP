@@ -221,7 +221,11 @@ try {
           && ['failBodyPinStart', 'failBodyPinBridge'].includes(owner)
           || scope === 'CanonicalGateDraftRoot' && owner === 'dispatchBodyPin' && field === 'pinCallReached'
           || scope === 'RetirementStartAssembly' && owner === 'bodyPinReceiverEntry' && ['#bodyPinStep', '#bodyPinAttemptUsed', '#bodyPinStage'].includes(field)
-          || scope === 'RetirementStartAssembly' && ['failBodyPinReceiver', 'failBodyPinStorageReceiver'].includes(owner) && field === '#bodyPinFailureStep',
+          || scope === 'RetirementStartAssembly' && ['failBodyPinReceiver', 'failBodyPinStorageReceiver'].includes(owner) && field === '#bodyPinFailureStep'
+          || scope === 'RetirementStartAssembly' && owner === 'storeBodyPinReferences'
+            && ['#bodyExpectedSourceIssued', '#bodyExpectedSourceCurrent', '#bodyPinStep', '#bodyPinStage'].includes(field)
+          || scope === 'RetirementStartAssembly' && owner === 'bodyPinReferenceFault' && field === '#bodyExpectedSourceCurrent'
+          || scope === 'RetirementStartAssembly' && owner === 'retainBodyPinRejected' && ['#bodyExpectedSourceRejected', '#bodyPinFailureStep'].includes(field),
           'forbidden receiver/claim write ' + field);
         if (field === '#bodyPinRouteAttempted') {
           reservations++; assert.equal(owner, 'admitBodyPinCaller'); assert.equal(n.right.getText(ast), 'true');

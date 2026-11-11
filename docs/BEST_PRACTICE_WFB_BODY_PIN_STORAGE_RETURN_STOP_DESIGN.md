@@ -1,12 +1,12 @@
 # WF-B：同start参照格納・全確認とPC08未接続停止の接続差分
 
-Version: draft-0.4 / Date: 2026-11-12 / 読み取り基準HEAD: `8d95d5c`（固定call実装: `1b929dc`、一点対照・等価判断のレビュー追加: `8d95d5c`、限定準備実装の基準HEAD: `7a9a613`、draft-0.2レビュー修正基準HEAD: `10e2f96`、§15の差分設計基準HEAD: `1f41240`）。
+Version: draft-0.5 / Date: 2026-11-12 / 読み取り基準HEAD: `8d95d5c`（固定call実装: `1b929dc`、一点対照・等価判断のレビュー追加: `8d95d5c`、限定準備実装の基準HEAD: `7a9a613`、draft-0.2レビュー修正基準HEAD: `10e2f96`、§15の差分設計基準HEAD: `1f41240`、§16の限定格納実装基準HEAD: `ad00f28`）。
 
 draft-0.2のレビュー修正：§13の格納準備に23件の一時変異を入れたところ、18件はstorage又はcall側のVitest・compiledの意味的なassertで落ちた（busy節はanchorを保った変異で再確認）。残る5件は試験変更なしで通ったが、いずれも重複防御か単一writerであり、検証記録は「単一の失敗診断要求」「到達不能／重複防御」とまとめて書くだけで節を特定していなかった。§14に節ごとの根拠を記録した。文書だけの修正で、fixture・試験・契約は変えない。
 
-Status: **§13の狭い状態型・先行境界scalar・格納前後の値検査と、格納直前までの合成準備を限定実装。参照格納・PC08・C-03は未実装／未接続。** 親は[call／receiver設計](BEST_PRACTICE_WFB_BODY_PIN_CALL_RECEIVER_DESIGN.md)と[private pin設計](BEST_PRACTICE_WFB_BODY_PRIVATE_PIN_CONNECTION_DESIGN.md)（設計読み取り時の版はdraft-0.6／draft-0.8）。前段は[固定call検証記録](E2E_BEST_PRACTICE_WFB_BODY_PIN_CALL_2026-11-11.md)、今回の限定範囲は[準備検証記録](E2E_BEST_PRACTICE_WFB_BODY_PIN_STORAGE_PREPARATION_2026-11-12.md)。§1〜12はdraft-0.1時点の将来設計／文書検証であり、格納成功・証拠発行・PC08受理を与えない。
+Status: **§13の格納前準備を維持し、§16の同issued/current格納・初回rejected保持を別合成modeで限定実装。pin confirmed・PC08・C-03は未接続。** 親は[call／receiver設計](BEST_PRACTICE_WFB_BODY_PIN_CALL_RECEIVER_DESIGN.md)と[private pin設計](BEST_PRACTICE_WFB_BODY_PRIVATE_PIN_CONNECTION_DESIGN.md)（設計読み取り時の版はdraft-0.6／draft-0.8）。前段は[固定call検証記録](E2E_BEST_PRACTICE_WFB_BODY_PIN_CALL_2026-11-11.md)、準備範囲は[準備検証記録](E2E_BEST_PRACTICE_WFB_BODY_PIN_STORAGE_PREPARATION_2026-11-12.md)。§1〜12はdraft-0.1時点の将来設計／文書検証であり、全確認・証拠発行・PC08受理を与えない。
 
-正式発行口・既存C実行入口・body起動は閉鎖、全体受付無効、Unknown、VM／監視／telemetry調査保留を維持する。実装・実接続・実通信・実機操作・設定変更・Pushは行わない。
+正式発行口・既存C実行入口・body起動は閉鎖、全体受付無効、Unknown、VM／監視／telemetry調査保留を維持する。実装は§13／16の合成依存に限り、実接続・実通信・実機操作・設定変更・Pushは行わない。
 
 ## 1 現行と今回設計する到達点
 
@@ -220,3 +220,9 @@ SE01／02／04／06／07／09〜12の今回境界に関係する部分だけを[
 初回rejectedは停止／firstのない正規試行で既に捕捉した候補だけが対象である。保持と保持post確認を分け、失敗後も元I/C/J・初回理由・未確認責務を保持する。同期close後の追加保持、foreign候補格納、第2候補置換、finallyでの参照clearは許さない。§14の5節は新writer／失敗専用postの実経路ごとに再評価し、等価・非等価を自動継承しない。
 
 本節と子設計は文書だけ。§13の限定準備実装は変更せず、新writer・保持scalar・新mode・RE01〜12は未実装／未実施である。正式発行口閉鎖・全体受付無効・Unknown・調査保留を維持する。
+
+## 16 同issued/current格納・実参照照合と初回rejected保持（2026-11-12）
+
+[子設計§14](BEST_PRACTICE_WFB_BODY_PIN_REFERENCE_STORAGE_DESIGN.md)の中間範囲だけを別の閉鎖合成factoryへ実装し、[検証記録](E2E_BEST_PRACTICE_WFB_BODY_PIN_REFERENCE_STORAGE_2026-11-12.md)へ結果と初回失敗を記録した。元rootがsourceを所有したまま同startのI/Cへ同参照を保持し、実slotとphase値を対に照合する。captured／step currentまでで固定停止し、pin confirmed・最終post・PC08・C-03へ進めない。§15の未実装記述は設計作成時の履歴である。
+
+初回rejectedは同正規trialで捕捉済みの不一致Cだけを保持し、G_Jの前後で境界before／afterを分ける。保持post未確認でもJと初回診断をclearしない。中間post完了の先行scalarを加え、捕捉直後のthrowを通常の未接続到達と誤分類しない。旧準備の空参照・固定拒否は維持する。§14の初回保持guardは新G_J後のcatchで非等価になる対照を追加し、残る4節の重複防御と区別した。正式発行口閉鎖・全体受付無効・Unknown・調査保留は不変。

@@ -165,7 +165,10 @@ try {
     if (ts.isMethodDeclaration(n)) owner = n.name.getText(ast);
     if (ts.isBinaryExpression(n) && ts.isAssignmentOperator(n.operatorToken.kind)) {
       if (ts.isPropertyAccessExpression(n.left)) {
-        const f = n.left.name.getText(ast); assert.ok(!unused.has(f), 'disconnected field write ' + f);
+        const f = n.left.name.getText(ast); assert.ok(!unused.has(f)
+          || scope === receiver && owner === 'storeBodyPinReferences' && ['#bodyExpectedSourceIssued', '#bodyExpectedSourceCurrent'].includes(f)
+          || scope === receiver && owner === 'bodyPinReferenceFault' && f === '#bodyExpectedSourceCurrent'
+          || scope === receiver && owner === 'retainBodyPinRejected' && f === '#bodyExpectedSourceRejected', 'disconnected field write ' + f);
         if (f === 'pinCallReached') { callFlagWrites++; assert.equal(scope + '.' + owner, 'CanonicalGateDraftRoot.dispatchBodyPin'); assert.equal(n.right.getText(ast), 'true'); }
         if (f === '#bodyPinAttemptUsed') { trialWrites++; assert.equal(scope + '.' + owner, receiver + '.bodyPinReceiverEntry'); assert.equal(n.right.getText(ast), 'true'); }
       }

@@ -1,4 +1,4 @@
-/** Later storage phases are value-only contracts, never populated receiver evidence. */
+/** This preparation mode remains empty; later real storage belongs to a separate closed mode. */
 import assert from 'node:assert/strict';
 import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -134,12 +134,19 @@ try {
     if (ts.isMethodDeclaration(n)) owner = n.name.getText(ast);
     if (ts.isBinaryExpression(n) && ts.isAssignmentOperator(n.operatorToken.kind)) {
       if (ts.isPropertyAccessExpression(n.left)) {
-        const key = n.left.name.getText(ast); assert.ok(!forbidden.has(key), 'forbidden write ' + key);
+        const key = n.left.name.getText(ast); assert.ok(!forbidden.has(key)
+          || scope === 'RetirementStartAssembly' && owner === 'storeBodyPinReferences' && ['#bodyExpectedSourceIssued', '#bodyExpectedSourceCurrent'].includes(key)
+          || scope === 'RetirementStartAssembly' && owner === 'bodyPinReferenceFault' && key === '#bodyExpectedSourceCurrent'
+          || scope === 'RetirementStartAssembly' && owner === 'retainBodyPinRejected' && key === '#bodyExpectedSourceRejected', 'forbidden write ' + key);
         if (key === '#bodyPinStorageBoundary') {
-          boundaryWrites++; assert.equal(scope + '.' + owner, 'RetirementStartAssembly.prepareBodyPinStorage');
+          assert.equal(scope, 'RetirementStartAssembly');
+          assert.ok(['prepareBodyPinStorage', 'storeBodyPinReferences', 'retainBodyPinRejected'].includes(owner));
+          if (owner === 'prepareBodyPinStorage') boundaryWrites++;
           assert.ok(["'after'", "'before'"].includes(n.right.getText(ast)));
         }
-        if (key === '#bodyPinStage') assert.equal(n.right.getText(ast), "'attempting'", 'no real later-stage positive');
+        if (key === '#bodyPinStage') assert.ok(scope === 'RetirementStartAssembly' &&
+          (owner === 'bodyPinReceiverEntry' && n.right.getText(ast) === "'attempting'"
+          || owner === 'storeBodyPinReferences' && ["'issued'", "'captured'"].includes(n.right.getText(ast))), 'no confirmation writer');
       }
     }
     ts.forEachChild(n, c => scan(c, scope, owner));

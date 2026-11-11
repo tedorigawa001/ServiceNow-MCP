@@ -145,6 +145,9 @@ try {
   const entryWrites = new Map([
     ['CanonicalGateDraftRoot.dispatchBodyPin', new Set(['#bodyPinCallActive', 'pinCallReached'])],
     ['RetirementStartAssembly.bodyPinReceiverEntry', new Set(['#bodyPinEntryBusy', '#bodyPinAttemptUsed', '#bodyPinStage', '#bodyPinStep'])],
+    ['RetirementStartAssembly.storeBodyPinReferences', new Set(['#bodyExpectedSourceIssued', '#bodyExpectedSourceCurrent', '#bodyPinStep', '#bodyPinStage'])],
+    ['RetirementStartAssembly.bodyPinReferenceFault', new Set(['#bodyExpectedSourceCurrent'])],
+    ['RetirementStartAssembly.retainBodyPinRejected', new Set(['#bodyExpectedSourceRejected'])],
   ]);
   function scan(n, scope = '', owner = '') {
     if (ts.isClassDeclaration(n)) scope = n.name?.text ?? '';
