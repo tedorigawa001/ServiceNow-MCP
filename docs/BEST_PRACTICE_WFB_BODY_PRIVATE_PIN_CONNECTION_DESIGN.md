@@ -1,12 +1,12 @@
 # WF-B (C)：BP02〜04段階別検査・同root／同startのprivate pin接続差分
 
-Version: draft-0.3 / Date: 2026-11-11 / 読み取り基準HEAD: `b3776da`（(B)実装: `c28b423`、再検査／不在projectionレビュー修正: `b3776da`、C-01実装基準HEAD: `554ef9a`、C-01レビュー修正基準HEAD: `86d2560`）。
+Version: draft-0.4 / Date: 2026-11-11 / 読み取り基準HEAD: `b3776da`（(B)実装: `c28b423`、再検査／不在projectionレビュー修正: `b3776da`、C-01実装基準HEAD: `554ef9a`、C-01レビュー修正基準HEAD: `86d2560`、C-02前半実装基準HEAD: `a3f1f66`）。
 
 draft-0.2のレビュー修正：§11は「BP02 entry値checkerだけを同ownerに接続し…3位置で再確認」としていたが、`bodyPinContractsMatch`のentry呼出しを`true`へ置き換えても、vitestとcompiledの両方が通っていた。compiledの対照が来歴・属性・初期値・安定性・payload6参照にしか注入しておらず、source進行13fieldとreceiver pin値を同owner経路で壊す対照がなかったためである。同じく、PayloadEmptyのoccupancy／bindingState／bindPrefixの3節、checked位置の再検査、失敗時のshell failed反映、source不在時の`receiverPin`の`not_created`とallowlist、冒頭の`#bodySourceState = 'held'`も固定されていなかった。source13field・receiver12fieldの単一注入と写像除去の対照、checked位置の4注入（除去で拒否位置がafterへ移る）、payload scalar3節の対照、receiver投影allowlistの対照をcompiledへ追加した。vitestにはstorage.state・build.state・`receiverPin`の不在投影を追加した。等価・観測不能な節は§12に記録した。
 
-Status: **C-01の内部型・先行scalar・安定／段階別checker・固定診断だけを合成依存限定で実装。** 現行範囲は§11と[C-01検証記録](E2E_BEST_PRACTICE_WFB_BODY_PIN_CONTRACTS_2026-11-11.md)。§1〜10はdraft-0.1時点の将来設計／文書検証であり、pin試行・格納とBP02〜04の実状態遷移は引き続き未接続。親は[生成・停止設計](BEST_PRACTICE_WFB_BODY_SOURCE_ISSUER_STOP_DESIGN.md)と[bind・先行borrow設計](BEST_PRACTICE_WFB_BODY_BIND_BORROW_DESIGN.md)。前工程の実績は[(B)検証記録](E2E_BEST_PRACTICE_WFB_BODY_SOURCE_ISSUER_2026-11-11.md)を参照する。将来model案とC-01の実装済み閉鎖modelは区別する。
+Status: **C-01とC-02前半のcaller資格・一度限り開始・pin専用失敗診断を合成依存限定で実装。** 現行範囲は§11〜13と[C-02前半検証記録](E2E_BEST_PRACTICE_WFB_BODY_PIN_START_2026-11-11.md)。§1〜10はdraft-0.1時点の将来設計／文書検証。rootのPC01開始とPC02 preflightまでを接続し、PC03の固定call・receiver試行／格納とBP04は未接続。親は[生成・停止設計](BEST_PRACTICE_WFB_BODY_SOURCE_ISSUER_STOP_DESIGN.md)と[bind・先行borrow設計](BEST_PRACTICE_WFB_BODY_BIND_BORROW_DESIGN.md)。前工程の実績は[(B)検証記録](E2E_BEST_PRACTICE_WFB_BODY_SOURCE_ISSUER_2026-11-11.md)と[C-01検証記録](E2E_BEST_PRACTICE_WFB_BODY_PIN_CONTRACTS_2026-11-11.md)。将来の正常modelと現在の固定拒否modelは区別する。
 
-正式発行口・既存C実行入口・body起動閉鎖、全体受付無効、Unknown、VM／監視／telemetry調査保留を維持する。本書の(C)はprivate pinの設計区分であり、既存C実行入口の解禁ではない。draft-0.1は文書更新だけで、現在の実装許可も§11のC-01に限る。pin試行・格納・source利用claim消費・payload借用／bind・構築ready・body起動・実接続・実通信・設定変更・Pushは行わない。
+正式発行口・既存C実行入口・body起動閉鎖、全体受付無効、Unknown、VM／監視／telemetry調査保留を維持する。本書の(C)はprivate pinの設計区分であり、既存C実行入口の解禁ではない。現在の実装許可は§11のC-01と§13のC-02前半に限る。固定call・receiver試行／格納・source利用claim消費・payload借用／bind・構築ready・body起動・実接続・実通信・設定変更・Pushは行わない。
 
 ## 1 現行からの差分と今回の正常到達点
 
@@ -184,3 +184,19 @@ closeは(B)同様に固定返答cacheより先にroot停止／元確認済みsou
 `bodyPinContractsMatch`の`#closed === false`と`#failure.first === 'none'`は、直前の`bodyPinContractsPoint`末尾の停止guardが同条件で先にthrowするため到達できず、等価と判断した。`#ready === false`は、C-01の閉鎖経路にreadyを立てる経路がなく観測不能である。receiver値の`issuedSame`／`currentSame`は、entryでは`issued`／`current`がfalseであることに含意されるため、entry単独では等価である（後段variantの区別には必要で、値checker側の単独除去対照は維持する）。
 
 これらの判断はC-01の閉鎖準備だけに限る。C-02以降でpin試行・格納・ready経路を接続するときは、同じ節を改めて単独対照で評価し、本節の等価判断を自動移植しない。
+
+## 13 C-02前半：private caller資格・開始予約とpin失敗（2026-11-11）
+
+新しいpackage除外factory createProbeBodyPinStartFakeは固定scriptだけを受け、prepare／check／checkLegacy／close／inspectの5methodを公開する。同constructorで選択した固定継続がBS→BP00〜01→C-01のreadonly準備を同active frame内で再利用する。元root／issued=current source／同startをprivate引数として直接照合し、外部context・summary・callback・cap／registryは受けない。bindingOwnerとcellOwnerの別々の正規関係を維持する。
+
+callerの拒否順は元参照の同一性／来歴→停止／先行理由→同sourceのbusy／開始済み→初回entry全条件。foreignは候補のfield・getter・ownKeys・prototypeを読まず無書込み拒否し、外側固定継続だけが自分の失敗を記録する。同source再入はroot専用refusal=in_progress／duplicate_pinで、元source／receiver firstやC-01診断を更新しない。entry初期値の検査は正規in_progress履歴だけを許し、C-01の全初期値checkerは変更しない。
+
+rootへ10原始scalarと空reply参照を先行する。start用busyはfinallyで必ず解除するが、PC01のrouteAttempted=true／running／BP02／preflightと元sourceのBP02／beforeは返却しない。同区間は同期の直接代入だけで、hook・await・新carrier生成を挟まない。これはrootのsequence開始予約であり、receiver pinAttemptUsed・sourceの利用claim・新しいgrantとは別である。
+
+PC02はsource initializing／unused・未call、receiver全空と安定条件をBP02／before、checked後、最後のblocked境界で検査する。blocked境界でも最後のPC02 route boundary=afterを維持してcallReady全条件を再検査する。固定call直前の遅延混入をContextMatchesだけで受け入れない。固定停止はmodel=wfb-body-pin-start-1／pin_call_not_connected／ok=false、first=construction_unconfirmed。callBlockedはこの最後の検査を通った診断であり、pin成功・資格証拠・source_pinned_unreadyを意味しない。PC03固定call／receiver格納は0のまま。
+
+pin側の失敗はrootのBP02／preflight／before又はafterに加え、identity／entry／started／preflight／blockedの詳細位置を保持する。確認済み元sourceだけにfirst／failedとBP02の粗いbefore／checkedを反映し、生成履歴BP01／after・sourceFailureRecorded=false、C-01 held／checked／preparationFirst=noneを変更しない。失敗後closeはcacheより先に元sourceの停止を同期記録し、pinの先行理由・初回位置・開始予約・返答同一性を保持する。開始前closeは従来どおり停止のみでfirst未記録。保持はcleanup／解放確認ではない。
+
+compiledは実root同士の混入・停止優先順・phase値13fieldを4境界で壊す対照、active frame／C-01履歴・caller確認、各再検査の除去、初回位置保持、private型拒否を区別する。旧C-01 compiledのmodule全体「pin関連書込み0」は、新callerの4固定method・caller fieldへの15直接代入箇所だけを明示許可する。C-01／receiver／payload／source利用claimへの禁止は継続し、新compiledは開始予約のwriterが1箇所・trueのみであることを確認する。静的代入箇所数は実work費用ではない。§12の等価判断を新履歴へ自動適用せず、全guardの単独感度・任意private-slot改竄安全性を主張しない。
+
+詳細なRED／GREEN・試験側訂正と結果は[C-02前半検証記録](E2E_BEST_PRACTICE_WFB_BODY_PIN_START_2026-11-11.md)。残りはC-02後半のPC03〜08固定call／同start捕捉、C-03のBP04全post／閉鎖保持である。claim消費・bind・構築ready・body起動・正式発行・実接続は未接続。実allocation／E／S／全体work・停止後解消予約・OOM診断必着はUnknown、全体受付無効・調査保留を維持する。

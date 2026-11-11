@@ -1,6 +1,6 @@
 # WF-B body source：正規生成位置・private issuerと同期停止・失敗時保持
 
-Version: draft-0.6 / Date: 2026-11-11 / 設計基準HEAD: `5873d16` / (A)最小分離実装基準HEAD: `f3b3721` / (B)合成source実装基準HEAD: `311d3ef` / (B)レビュー修正基準HEAD: `c28b423` / (C)差分設計基準HEAD: `b3776da` / C-01実装基準HEAD: `554ef9a`。
+Version: draft-0.7 / Date: 2026-11-11 / 設計基準HEAD: `5873d16` / (A)最小分離実装基準HEAD: `f3b3721` / (B)合成source実装基準HEAD: `311d3ef` / (B)レビュー修正基準HEAD: `c28b423` / (C)差分設計基準HEAD: `b3776da` / C-01実装基準HEAD: `554ef9a` / C-02前半実装基準HEAD: `a3f1f66`。
 
 draft-0.3のレビュー修正：BP00 attemptの2回目の発行前検査と`!creationAttempted`節、BP01の`bodySourceDataMatches`にある来歴4節（creationAttempted、fixedCount=9、metadataConfirmed、buildStage）と安定再検査の呼出しは、単独で外しても試験が落ちなかった。既存のstable対照はBP00の発行前検査に掛かる位置へ注入していたためである。metadata／進行fieldの`enumerable`節を単独で破るfaultもなかった。sourceが無いときの`first`等7軸は`unconfirmed`を返し、「不在→not_created」の規則と食い違っていた。各節への単一注入対照、非列挙field対照を追加し、不在の投影を`not_created`へ直した。§12に等価・観測不能な節を記録した。
 
@@ -214,3 +214,9 @@ BP02〜04 pin・source claim消費・payload borrow／bind・構築ready・body�
 [private pin設計§11 draft-0.2](BEST_PRACTICE_WFB_BODY_PRIVATE_PIN_CONNECTION_DESIGN.md)と[C-01検証記録](E2E_BEST_PRACTICE_WFB_BODY_PIN_CONTRACTS_2026-11-11.md)の範囲で、同sourceの来歴・元base／全BS空carrier・payload空とBP02入口の値検査を接続した。旧(B)生成checkerを緩めず、新閉鎖factoryだけがpin_contracts_heldで止まる。生成診断・C-01検査準備の診断・将来pin診断を分離し、pin用scalarは全初期値のまま保持する。
 
 後段13variant中12個はscratch原始値モデルの検査だけで、実pinの試行／格納・private call・preparing／confirmedへの遷移を行わない。sourceは未pinのinitializing／unused、receiver9参照空・free／empty、BC00開始0。正式発行口閉鎖・全体受付無効・Unknown・調査保留、claim消費・bind・構築ready・body起動・実接続の禁止は維持する。§13の文書のみという記述は設計作成時点であり、現在の限定実装は本節を基準とする。
+
+## 15 C-02前半のcaller開始とpin専用停止（2026-11-11）
+
+[private pin設計§13](BEST_PRACTICE_WFB_BODY_PRIVATE_PIN_CONNECTION_DESIGN.md)と[C-02前半検証記録](E2E_BEST_PRACTICE_WFB_BODY_PIN_START_2026-11-11.md)の範囲で、同root／source／startのprivate呼出し資格、PC01の返却しない開始予約とPC02再検査を接続した。元constructorの同frameからだけ進め、旧(B)／C-01返却済みrootは再開しない。最小同一性でforeignを無書込み拒否し、停止／先行理由を同source再入／重複より先に扱う。
+
+新modelはpin_call_not_connectedで固定停止する。生成位置BP01／after・生成failureRecorded=falseとC-01準備診断を保存し、pin専用初回位置から確認済み元sourceへBP02／before又はcheckedを反映する。closeはcacheより先に同期停止を反映し、pin先行診断と予約履歴を保持する。receiver call／試行／格納・source利用claimは未接続、BC00／grant／duty消費／ready／body開始0。PC03以降・正式発行口は閉鎖、全体受付無効・Unknown・調査保留を維持する。

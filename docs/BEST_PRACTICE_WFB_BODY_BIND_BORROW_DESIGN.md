@@ -1,6 +1,6 @@
 # WF-B body bind：状態型・phase検査と同startの先行borrow／診断slot
 
-Version: draft-0.8 / Date: 2026-11-11 / 設計基準HEAD: `29c53e1` / レビュー追加: `5ec73dd` / 原始field限定実装基準HEAD: `e6cc8cd` / 原始field実装レビュー修正基準HEAD: `41ac31f` / source生成・停止の設計基準HEAD: `5873d16` / BS／BC分離実装基準HEAD: `f3b3721` / 合成source生成・停止実装基準HEAD: `311d3ef` / (C)pin差分設計基準HEAD: `b3776da` / C-01実装基準HEAD: `554ef9a`。
+Version: draft-0.9 / Date: 2026-11-11 / 設計基準HEAD: `29c53e1` / レビュー追加: `5ec73dd` / 原始field限定実装基準HEAD: `e6cc8cd` / 原始field実装レビュー修正基準HEAD: `41ac31f` / source生成・停止の設計基準HEAD: `5873d16` / BS／BC分離実装基準HEAD: `f3b3721` / 合成source生成・停止実装基準HEAD: `311d3ef` / (C)pin差分設計基準HEAD: `b3776da` / C-01実装基準HEAD: `554ef9a` / C-02前半実装基準HEAD: `a3f1f66`。
 
 draft-0.2のレビュー修正：`bodyFieldsIntact`のroot側2節（元baseの未使用、BC用shell未生成）は、単独で外しても試験が落ちなかった。root側inspectの`state`／`phase`／`failurePhase`／`reentry`のallowlistと、実body cellから導く`bodyStarts`の投影も観測していなかった。各節の単一注入と除去の対照、4つのallowlistと`bodyStarts`の対照をcompiledへ追加した。最初の失敗位置の上書き防止と、`checkBodyBindFields`冒頭の`#fixed`返却は等価と判断し、§10に記録した。
 
@@ -235,3 +235,9 @@ BB10〜12の型／projection／旧入口維持に関する部分だけを検証�
 [private pin設計§11](BEST_PRACTICE_WFB_BODY_PRIVATE_PIN_CONNECTION_DESIGN.md)と[C-01検証記録](E2E_BEST_PRACTICE_WFB_BODY_PIN_CONTRACTS_2026-11-11.md)の範囲だけを実装した。同rootにpin用13scalarと検査準備用6scalar・空返答参照、同startにpin操作位置／初回位置の2scalarを先行する。既存9参照・10scalarの初期値と旧19field検査は変更しない。来歴／安定検査と13段階の値checkerを分け、同ownerへ繋ぐのは未pinentryだけである。
 
 新modelはwfb-body-pin-contracts-1、正常もpin_contracts_held／ok=false。PC01のroute試行記録・固定receiver call・pin格納・claim消費・bindは実行せず、将来pin状態を実ownerへ書いて試験成功にしない。検査失敗は生成診断／pin診断と別に保持し、失敗後closeでも元返答・先行理由を保持する。全CP受入やpin後の資格を保証せず、構築ready・body起動・正式発行閉鎖、全体受付無効・Unknown・調査保留を維持する。
+
+## 16 C-02前半の同start caller資格と固定停止（2026-11-11）
+
+[private pin設計§13](BEST_PRACTICE_WFB_BODY_PRIVATE_PIN_CONNECTION_DESIGN.md)と[C-02前半検証記録](E2E_BEST_PRACTICE_WFB_BODY_PIN_START_2026-11-11.md)の範囲を合成依存限定で実装した。元root／issued=current source／正規startのidentity-first private資格と同frameの一度限り開始を接続し、busyはfinallyで解除するがrouteAttemptedは戻さない。これはcaller sequenceの予約で、receiver pinAttemptUsedやsource利用claimとは異なる。rootごとのbindingOwner／cellOwnerの正規関係を維持する。
+
+PC02の前後と最後のblocked境界で同参照・安定条件・狭い未call組を再検査し、pin_call_not_connected／construction_unconfirmedで固定停止する。生成・C-01準備・pin失敗を別軸で保持し、失敗後closeでも先行診断／返答を維持する。receiver9参照は空、pinAttemptUsed=false／pinStage empty、claim unused、data／grant／duty／body／ready0。PC03固定call・格納・claim消費・bindは未接続、正式発行口閉鎖・全体受付無効・Unknown・調査保留を維持する。

@@ -254,12 +254,27 @@ try {
     '#bodyExpectedSourceIssued', '#bodyExpectedSourceCurrent', '#bodyExpectedSourceRejected', '#bodyPinAttemptUsed', '#bodyPinStage',
     '#bodyPinStep', '#bodyPinFailureStep', '#bodyOccupancy', '#bodyBindingState', '#bodyBindPrefix',
     'pinCallReached', 'bindCallReached', 'postConfirmed', 'claim']);
-  function noOperationalWrites(n) {
+  const callerWriters = new Map([
+    ['admitBodyPinCaller', new Set(['#bodyPinRouteAttempted', '#bodyPinRouteState', '#bodyPinRoutePhase',
+      '#bodyPinRouteStep', '#bodyPinRouteBoundary', '#bodyPinRefusal'])],
+    ['bodyPinStartPoint', new Set(['#bodyPinRouteBoundary'])],
+    ['failBodyPinStart', new Set(['#bodyPinFailureRecorded', '#bodyPinFirst', '#bodyPinFailurePhase',
+      '#bodyPinFailureStep', '#bodyPinFailureBoundary', '#bodyPinRouteState'])],
+    ['prepareBodyPinStart', new Set(['#bodyPinRefusal'])],
+  ]);
+  for (const name of callerWriters.keys()) assert.equal(root.members.filter(n => ts.isMethodDeclaration(n) && n.name.getText(ast) === name).length, 1);
+  let callerWriteSites = 0;
+  function noOperationalWrites(n, owner = '', scope = '') {
+    if (ts.isClassDeclaration(n)) scope = n.name?.text ?? '';
+    if (ts.isMethodDeclaration(n)) owner = n.name.getText(ast);
     if (ts.isBinaryExpression(n) && ts.isAssignmentOperator(n.operatorToken.kind) || ts.isPrefixUnaryExpression(n) || ts.isPostfixUnaryExpression(n)) {
       const lhs = ts.isBinaryExpression(n) ? n.left : n.operand;
-      if (ts.isPropertyAccessExpression(lhs)) assert.ok(!protectedFields.has(lhs.name.getText(ast)), 'forbidden operational write');
+      if (ts.isPropertyAccessExpression(lhs) && protectedFields.has(lhs.name.getText(ast))) {
+        assert.ok(scope === 'CanonicalGateDraftRoot' && callerWriters.get(owner)?.has(lhs.name.getText(ast)), 'forbidden operational write');
+        callerWriteSites++;
+      }
     }
-    ts.forEachChild(n, noOperationalWrites);
+    ts.forEachChild(n, child => noOperationalWrites(child, owner, scope));
   }
   noOperationalWrites(ast);
   const file = fileURLToPath(new URL('./snapshot-read-composition-fake.ts', import.meta.url));
@@ -275,7 +290,8 @@ try {
     valueClauseControls: sf.length + rf.length, provenanceControls: provenance.length + origins.length, initialControls: initial.length,
     stableControls: 4, payloadControls: payload.length, attributeControls: attributes.length, firstPosition: true,
     projectionAllowlists: projection.length, strictBooleans: 5, priorRootScalars: Object.keys(scalarDefaults).length,
-    priorReceiverScalars: 2, operationalWrites: 0, semanticRejections: 12,
+    priorReceiverScalars: 2, operationalWrites: 0, c01AndReceiverProtected: true,
+    c02CallerWriteSites: callerWriteSites, semanticRejections: 12,
     entrySourceControls: entrySource.length, entryReceiverControls: entryReceiver.length, checkedRecheckControls: checkedRecheck.length,
     payloadScalarControls: payloadScalars.length, receiverProjectionAllowlists: 2 }));
 } finally { rmSync(dir, { recursive: true, force: true }); }
