@@ -1,6 +1,6 @@
 # WF-B C-02後半：固定private call・receiver入口と同start試行／格納
 
-Version: draft-0.7 / Date: 2026-11-12 / 読み取り基準HEAD: `ff866f9`（C-02前半実装 `4f70522`、前半レビュー対照 `ff866f9`、draft-0.1レビュー修正基準HEAD: `0f3fae0`、内部契約の限定実装基準HEAD: `3fc15ab`、draft-0.3レビュー修正基準HEAD: `983fa24`、固定call／receiver入場の実装基準HEAD: `9f4361c`、draft-0.5レビュー修正基準HEAD: `1b929dc`、格納／未接続停止差分の設計基準HEAD: `8d95d5c`）。
+Version: draft-0.8 / Date: 2026-11-12 / 読み取り基準HEAD: `ff866f9`（C-02前半実装 `4f70522`、前半レビュー対照 `ff866f9`、draft-0.1レビュー修正基準HEAD: `0f3fae0`、内部契約の限定実装基準HEAD: `3fc15ab`、draft-0.3レビュー修正基準HEAD: `983fa24`、固定call／receiver入場の実装基準HEAD: `9f4361c`、draft-0.5レビュー修正基準HEAD: `1b929dc`、格納／未接続停止差分の設計基準HEAD: `8d95d5c`）。
 
 draft-0.5のレビュー修正：§15の固定call・receiver入場は、43件の一時変異のうち28件でVitest・compiledの両方が通っていた。dispatchの呼出し前検査（PC02再検査・entryBusy・call回数）、receiverの初回条件（active資格・初期field）とpreflight前後の2回の入場検査、rootの停止判定のsource側2節と、停止だけの理由を閉鎖へ写す節は、後段の検査が同じ理由で受けるか、一点だけを壊す注入がなかった。compiledには一点注入9件を追加した。before_callでroute境界・busy flag・call回数・source停止要求・source firstを、dispatchの直接記録でroute境界を、before_callで初期field flagを、preflight前後でsource境界を壊し、節を除くと最初の理由・call有無・試行有無・失敗点のいずれかが動くことを確かめる。これで10件をkillした。残る18件は§16で等価と判断した。
 
@@ -8,9 +8,9 @@ draft-0.3のレビュー修正：§13のbridge準備は、23件の一時変異�
 
 draft-0.1のレビュー修正：§8の2か所で、境界の軸を取り違えていた。receiver行の「failurePrefix=none／before又はafter」は、before／afterが`BodyBindPrefix`の値に読めるが、before／afterを持つのは`failureBoundary`（`BodyReceiverFailureBoundary`）である。冒頭の「未callは既存BP02 before／checked」は、現行`failBodyPinStart`がroot側`#bodyPinFailureBoundary`へbefore／after、source側（`#bodyPinStartFailureSourceBoundary`と元sourceの`failureBoundary`）へbefore／checkedを書く2軸を混ぜていた。どちらも軸ごとに書き分けた。文書だけの修正で、契約・CR／CE・未実装範囲は変えない。
 
-Status: **§13の内部契約に加え、§15の固定private call・receiver入場・一度限り試行記録までを合成依存限定で実装。参照格納・PC08・C-03は未接続。** §17の格納・未接続停止は詳細設計のみ。親は[private pin設計](BEST_PRACTICE_WFB_BODY_PRIVATE_PIN_CONNECTION_DESIGN.md)と[bind・先行borrow設計](BEST_PRACTICE_WFB_BODY_BIND_BORROW_DESIGN.md)。生成の来歴は[source生成・停止設計](BEST_PRACTICE_WFB_BODY_SOURCE_ISSUER_STOP_DESIGN.md)、前半の実績は[C-02前半検証記録](E2E_BEST_PRACTICE_WFB_BODY_PIN_START_2026-11-11.md)、前段は[bridge内部契約検証記録](E2E_BEST_PRACTICE_WFB_BODY_PIN_BRIDGE_2026-11-11.md)、最新の限定範囲は[固定call検証記録](E2E_BEST_PRACTICE_WFB_BODY_PIN_CALL_2026-11-11.md)を参照する。
+Status: **§13の内部契約に加え、§15の固定private call・receiver入場・一度限り試行記録までを合成依存限定で実装。参照格納・PC08・C-03は未接続。** §17の差分のうち狭い状態・先行境界・格納前準備だけを子設計§13で限定実装。親は[private pin設計](BEST_PRACTICE_WFB_BODY_PRIVATE_PIN_CONNECTION_DESIGN.md)と[bind・先行borrow設計](BEST_PRACTICE_WFB_BODY_BIND_BORROW_DESIGN.md)。生成の来歴は[source生成・停止設計](BEST_PRACTICE_WFB_BODY_SOURCE_ISSUER_STOP_DESIGN.md)、前半の実績は[C-02前半検証記録](E2E_BEST_PRACTICE_WFB_BODY_PIN_START_2026-11-11.md)、前段は[bridge内部契約検証記録](E2E_BEST_PRACTICE_WFB_BODY_PIN_BRIDGE_2026-11-11.md)、最新の限定範囲は[固定call検証記録](E2E_BEST_PRACTICE_WFB_BODY_PIN_CALL_2026-11-11.md)を参照する。
 
-正式発行口・既存C実行入口・body起動は閉鎖、全体受付無効、Unknown、VM／監視／telemetry調査保留を維持する。現在の実装許可は§15までの合成限定範囲だけで、参照格納・実接続・実通信・実機操作・設定変更・Pushは行わない。§1〜12は作成時の将来設計／文書検証、§13〜14は前段時点の限定範囲である。格納成功・PC08・C-03を実装済みとはしない。
+正式発行口・既存C実行入口・body起動は閉鎖、全体受付無効、Unknown、VM／監視／telemetry調査保留を維持する。既存call実装は§15まで、新準備は子設計§13の合成限定範囲だけで、参照格納・実接続・実通信・実機操作・設定変更・Pushは行わない。§1〜12は作成時の将来設計／文書検証、§13〜14は前段時点の限定範囲である。格納成功・PC08・C-03を実装済みとはしない。
 
 ## 1 現行との差分・適用範囲
 
@@ -255,4 +255,4 @@ CE01〜07・09〜13の今回境界に関係する部分だけを[検証記録](E
 
 callee通常完了後もcallerはPC08未接続としてconstruction_unconfirmedで固定停止する。receiver confirmed／first noneとsource failedは別軸であり、receiver_unconfirmedへ誤写像しない。BP03 caller call／afterとsource callを保持し、returned step・source after・BP04は未接続のまま。§14・16の等価判断は新prefix・理由写像ごとに再評価する条件を差分設計へ記録した。
 
-今回の変更はMDのみ。参照格納・PC08・C-03・新factory／field・全SE受入は未実装／未実施で、正式発行口閉鎖・全体受付無効・Unknown・調査保留を維持する。body起動・実接続・実通信・実機操作・設定変更・Pushは行わない。
+本節のMDのみは設計作成時点の記録。現在の準備範囲は[子設計§13](BEST_PRACTICE_WFB_BODY_PIN_STORAGE_RETURN_STOP_DESIGN.md)と[準備検証記録](E2E_BEST_PRACTICE_WFB_BODY_PIN_STORAGE_PREPARATION_2026-11-12.md)に限り、実receiverはattempting／参照空のまま格納直前で固定拒否する。参照格納・PC08・C-03・全SE受入は未実装／未実施で、正式発行口閉鎖・全体受付無効・Unknown・調査保留を維持する。body起動・実接続・実通信・実機操作・設定変更・Pushは行わない。

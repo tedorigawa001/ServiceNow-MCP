@@ -1,8 +1,8 @@
 # WF-B：同start参照格納・全確認とPC08未接続停止の接続差分
 
-Version: draft-0.1 / Date: 2026-11-12 / 読み取り基準HEAD: `8d95d5c`（固定call実装: `1b929dc`、一点対照・等価判断のレビュー追加: `8d95d5c`）。
+Version: draft-0.2 / Date: 2026-11-12 / 読み取り基準HEAD: `8d95d5c`（固定call実装: `1b929dc`、一点対照・等価判断のレビュー追加: `8d95d5c`、限定準備実装の基準HEAD: `7a9a613`）。
 
-Status: **詳細設計のみ。参照格納・PC08・C-03は未実装／未接続。** 親は[call／receiver設計](BEST_PRACTICE_WFB_BODY_PIN_CALL_RECEIVER_DESIGN.md)と[private pin設計](BEST_PRACTICE_WFB_BODY_PRIVATE_PIN_CONNECTION_DESIGN.md)（読み取り時の版はdraft-0.6／draft-0.8）。現行の実績は[固定call検証記録](E2E_BEST_PRACTICE_WFB_BODY_PIN_CALL_2026-11-11.md)。本書は合成依存限定の将来差分を定め、実装許可・証拠発行・PC08受理を与えない。
+Status: **§13の狭い状態型・先行境界scalar・格納前後の値検査と、格納直前までの合成準備を限定実装。参照格納・PC08・C-03は未実装／未接続。** 親は[call／receiver設計](BEST_PRACTICE_WFB_BODY_PIN_CALL_RECEIVER_DESIGN.md)と[private pin設計](BEST_PRACTICE_WFB_BODY_PRIVATE_PIN_CONNECTION_DESIGN.md)（設計読み取り時の版はdraft-0.6／draft-0.8）。前段は[固定call検証記録](E2E_BEST_PRACTICE_WFB_BODY_PIN_CALL_2026-11-11.md)、今回の限定範囲は[準備検証記録](E2E_BEST_PRACTICE_WFB_BODY_PIN_STORAGE_PREPARATION_2026-11-12.md)。§1〜12はdraft-0.1時点の将来設計／文書検証であり、格納成功・証拠発行・PC08受理を与えない。
 
 正式発行口・既存C実行入口・body起動は閉鎖、全体受付無効、Unknown、VM／監視／telemetry調査保留を維持する。実装・実接続・実通信・実機操作・設定変更・Pushは行わない。
 
@@ -178,3 +178,19 @@ PC08の復帰後受理、C-03のBP04 preparing／全post、source利用claim消�
 今回は本書と親2文書のMDだけを更新する。ソース・試験・compiled fixture・CHANGELOG・既存検証記録・manifest／lockfile・設定は変更せず、build・合成／compiled試験・梱包操作・index登録・コミット・Pushは行わない。文書整合の確認結果は本節へ追記し、将来の格納経路の受入成功とは区別する。
 
 文書検証結果（2026-11-12）：変更3文書のローカルリンク29件に欠落なし、24表の列数・末尾改行／行末空白に異常なし。本書12節・親17／18節の順序、SG01〜09とSE01〜12の重複／欠落なしを確認した。現行の空参照・attempting固定停止・accepted拒否、狭い値checkerと元来歴／空payload境界、既存catchの位置判定、レビュー§16の等価判断を読み取り照合した。作業中差分はMD3ファイルだけ、indexは空、HEADは基準の`8d95d5c`から変更していない。これは文書整合の確認であり、将来の参照格納・復帰後受理・全費用の検証成功を意味しない。
+
+## 13 (1) 狭い状態・境界と格納前準備の限定実装（2026-11-12）
+
+新createProbeBodyPinStorageFake／wfb-body-pin-storage-1をpackage除外compositionだけへ追加した。固定script以外の引数はhookを呼ばず拒否し、APIは凍結prepare／check／checkLegacy／close／inspectのみ。旧factory・model・期待値は維持し、新modeは元constructor／prepare／frameの同attempting検査後、旧格納前失敗writerより前にだけ分岐する。返却済みrootの再開・新owner／registry／friendは作らない。
+
+BodyPinStorageStateはentry／attempted／before_issued／issued／before_current／captured／before_checked／checked／before_confirmed／confirmedの10variantで、source BP03／call／unusedとreceiver stage／step・境界を型と純粋検査で対にする。後続7variantは原始値だけの検証であり、実receiverへissued／currentやconfirmedを偽装して正例を作らない。実ownerのprivate checkerへ渡せるphase型はentry／attempted／before_issuedの3つだけ。
+
+同startへ先行境界noneを追加し、新準備はbeforeでentryを検査→境界after／checkedでattemptedを検査→境界before／before_issuedで格納前条件を検査→blockedでも再検査して固定拒否する。各検査は同root／source／start・固定mode・実callActive／entryBusy、元来歴・同frame／未停止・空BS／空payloadと、同時点のsource／receiver／境界原値を照合する。issued/current/rejected・stageの新writerはなく、元参照はすべて空、stage attemptingのまま。
+
+通常到達はpin_storage_not_connected／root first construction_unconfirmed、source／receiver first receiver_unconfirmed、receiver step attempt／failureBoundary beforeである。§7のpin_return_not_connected／receiver confirmed・first noneへは進めない。境界は正規owning経路でnone→after→beforeだけ、新しいfinallyは作らず元receiver／caller finallyでbusyだけを解除する。初回境界が不正ならstate_invalid、失敗位置が未確認ならfailureBoundary noneであり、未知値をbeforeへ丸めない。
+
+有限観測はbefore／checked／before_issued／blockedの4点で、throw／close／prior／再入を比較する。新receiver診断writerは初回first／pin位置だけを保持し、rootが先に停止した場合のBP03 call beforeと、primitive復帰後のcall afterを分ける。先行生成診断・unused claim・返答cache・未解決custodyを保持し、後発closeはcacheより先に同期停止する。
+
+追加保持はreceiver境界1scalar、rootの準備点／初回失敗点／再入結果3scalar・空reply参照とconstructor固定mode。既存callActive／entryBusy・source22key／metadata9・receiver9参照・PC01／試行予約を再発行しない。純粋検査の固定field走査・view生成・owner再照合・固定拒否／診断／projectionは追加費目だが、実E／S・allocation／GC／OOM・全guard数／全体work上界はUnknownのまま。
+
+SE01／02／04／06／07／09〜12の今回境界に関係する部分だけを[検証記録](E2E_BEST_PRACTICE_WFB_BODY_PIN_STORAGE_PREPARATION_2026-11-12.md)へ記録する。新35件、値専用10状態の270field拒否・100交差組、実準備4点のchecker迂回対照等は、実格納・初回rejected保持・confirmed最終post・accepted後停止の成功を証明しない。§9の等価判断も準備範囲だけで再評価し、格納後へ自動継承しない。参照格納・PC08・C-03・claim消費・body起動・正式発行は未接続、全体受付無効・Unknown・調査保留を維持する。

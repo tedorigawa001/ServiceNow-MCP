@@ -221,7 +221,7 @@ try {
           && ['failBodyPinStart', 'failBodyPinBridge'].includes(owner)
           || scope === 'CanonicalGateDraftRoot' && owner === 'dispatchBodyPin' && field === 'pinCallReached'
           || scope === 'RetirementStartAssembly' && owner === 'bodyPinReceiverEntry' && ['#bodyPinStep', '#bodyPinAttemptUsed', '#bodyPinStage'].includes(field)
-          || scope === 'RetirementStartAssembly' && owner === 'failBodyPinReceiver' && field === '#bodyPinFailureStep',
+          || scope === 'RetirementStartAssembly' && ['failBodyPinReceiver', 'failBodyPinStorageReceiver'].includes(owner) && field === '#bodyPinFailureStep',
           'forbidden receiver/claim write ' + field);
         if (field === '#bodyPinRouteAttempted') {
           reservations++; assert.equal(owner, 'admitBodyPinCaller'); assert.equal(n.right.getText(ast), 'true');

@@ -270,6 +270,7 @@ try {
   const receiverWriters = new Map([
     ['bodyPinReceiverEntry', new Set(['#bodyPinStep', '#bodyPinAttemptUsed', '#bodyPinStage'])],
     ['failBodyPinReceiver', new Set(['#bodyPinFailureStep'])],
+    ['failBodyPinStorageReceiver', new Set(['#bodyPinFailureStep'])],
   ]);
   for (const name of callerWriters.keys()) assert.equal(root.members.filter(n => ts.isMethodDeclaration(n) && n.name.getText(ast) === name).length, 1);
   for (const name of receiverWriters.keys()) assert.equal(startClass.members.filter(n => ts.isMethodDeclaration(n) && n.name.getText(ast) === name).length, 1);
