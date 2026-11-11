@@ -1,6 +1,6 @@
 # WF-B：同start参照格納・全確認とPC08未接続停止の接続差分
 
-Version: draft-0.5 / Date: 2026-11-12 / 読み取り基準HEAD: `8d95d5c`（固定call実装: `1b929dc`、一点対照・等価判断のレビュー追加: `8d95d5c`、限定準備実装の基準HEAD: `7a9a613`、draft-0.2レビュー修正基準HEAD: `10e2f96`、§15の差分設計基準HEAD: `1f41240`、§16の限定格納実装基準HEAD: `ad00f28`）。
+Version: draft-0.6 / Date: 2026-11-12 / 読み取り基準HEAD: `8d95d5c`（固定call実装: `1b929dc`、一点対照・等価判断のレビュー追加: `8d95d5c`、限定準備実装の基準HEAD: `7a9a613`、draft-0.2レビュー修正基準HEAD: `10e2f96`、§15の差分設計基準HEAD: `1f41240`、§16の限定格納実装基準HEAD: `ad00f28`、§17の完了／未接続停止差分設計基準HEAD: `ebe739e`）。
 
 draft-0.2のレビュー修正：§13の格納準備に23件の一時変異を入れたところ、18件はstorage又はcall側のVitest・compiledの意味的なassertで落ちた（busy節はanchorを保った変異で再確認）。残る5件は試験変更なしで通ったが、いずれも重複防御か単一writerであり、検証記録は「単一の失敗診断要求」「到達不能／重複防御」とまとめて書くだけで節を特定していなかった。§14に節ごとの根拠を記録した。文書だけの修正で、fixture・試験・契約は変えない。
 
@@ -226,3 +226,11 @@ SE01／02／04／06／07／09〜12の今回境界に関係する部分だけを[
 [子設計§14](BEST_PRACTICE_WFB_BODY_PIN_REFERENCE_STORAGE_DESIGN.md)の中間範囲だけを別の閉鎖合成factoryへ実装し、[検証記録](E2E_BEST_PRACTICE_WFB_BODY_PIN_REFERENCE_STORAGE_2026-11-12.md)へ結果と初回失敗を記録した。元rootがsourceを所有したまま同startのI/Cへ同参照を保持し、実slotとphase値を対に照合する。captured／step currentまでで固定停止し、pin confirmed・最終post・PC08・C-03へ進めない。§15の未実装記述は設計作成時の履歴である。
 
 初回rejectedは同正規trialで捕捉済みの不一致Cだけを保持し、G_Jの前後で境界before／afterを分ける。保持post未確認でもJと初回診断をclearしない。中間post完了の先行scalarを加え、捕捉直後のthrowを通常の未接続到達と誤分類しない。旧準備の空参照・固定拒否は維持する。§14の初回保持guardは新G_J後のcatchで非等価になる対照を追加し、残る4節の重複防御と区別した。正式発行口閉鎖・全体受付無効・Unknown・調査保留は不変。
+
+## 17 confirmed・最終postとcaller固定停止の接続差分設計（2026-11-12）
+
+[完了・PC08未接続停止の差分設計draft-0.1](BEST_PRACTICE_WFB_BODY_PIN_CONFIRM_RETURN_DESIGN.md)で、SG06〜09の内部境界を具体化した。最終post前の境界before／専用phaseと、成功後の境界after・最終marker true→literal returnを分け、既存値型のconfirmed／afterを緩めない。G_K／G_M／G_Pと固定wrapper／finallyは非介在を維持し、confirmed記録だけから完了通知を作らない。
+
+PC08未接続停止ではcallee first noneを維持し、root call after・source callでconstruction_unconfirmedを固定する。新mode専用の最小primitive分類、非割当ての上位診断固定、後続の返答生成／cacheを分離し、現行のallocating位置生成／receiver失敗写像をそのまま流用しない。実primitive未復帰、callee最終post失敗、正常callee→上位未接続、返答生成失敗のprefix／所有責務を別に残す。
+
+本節と子設計は文書だけ。§16の限定格納実装・旧入口は不変、新確認／最終post／caller分岐・FC／FEは未実装／未実施。PC08のreturned検査・C-03・claim消費・payload借用／bind・ready／body・正式発行は未接続のまま、全体受付無効・Unknown・調査保留を維持する。

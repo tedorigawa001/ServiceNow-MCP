@@ -1,6 +1,6 @@
 # WF-B：同issued/current格納・private実参照照合と初回rejected保持の接続差分
 
-Version: draft-0.3 / Date: 2026-11-12 / 読み取り基準HEAD: `1f41240`（格納前準備実装: `10e2f96`、等価判断の文書更新: `1f41240`、draft-0.1レビュー修正基準HEAD: `5525b2f`、§14の限定実装基準HEAD: `ad00f28`）。
+Version: draft-0.4 / Date: 2026-11-12 / 読み取り基準HEAD: `1f41240`（格納前準備実装: `10e2f96`、等価判断の文書更新: `1f41240`、draft-0.1レビュー修正基準HEAD: `5525b2f`、§14の限定実装基準HEAD: `ad00f28`、§15の完了／未接続停止差分設計基準HEAD: `ebe739e`）。
 
 draft-0.1のレビュー修正：§5の表のrejected_before行は、現在境界をどうするかを書いていなかった。RW05の時点で境界はすでにafterなので、G_Jの「境界after」が何の変化を記録するのかが読み取れなかった。§4の「各beforeでは最後のstepを維持して境界before」と揃え、rejected_beforeでstep currentのまま境界をbeforeへ移してから資格を再確認すると明記した。G_Jの記録内容と初回失敗位置（failureStep current／failureBoundary after）は変えない。
 
@@ -165,3 +165,13 @@ catch／close／再入後もI/C/J・trial・初回理由／step／境界・未�
 [今回の検証記録](E2E_BEST_PRACTICE_WFB_BODY_PIN_REFERENCE_STORAGE_2026-11-12.md)に、独立prefixの新50件、実slot故障・値view偽装の対照、固定3群・先行5scalar・private型拒否等を記録する。RE条件はこの中間範囲だけで照合し、全費用・全節感度・正式発行の証明にはしない。前段の診断初回guardはG_J→throw→catchの新経路で非等価となり、除去で先行理由喪失を確認した。他の4重複identity／mode節の旧等価判断は新caller増設だけで一律変更せず、固定組・固定modeの前提が続く範囲に限定する。
 
 追加保持はstartのhold／中間post完了2scalar、rootの観測点／初回失敗点／再入結果3scalar・空返答参照と固定mode。新private検査・固定走査／診断・合成copy準備の費目を分け、既存owner／source22field／BS13carrier／9参照／call・trial予約を二重計上しない。実E／S・unit係数・layout／GC／OOM・全guard数／全体work上界はUnknown。pin checked／confirmed・accepted・PC08・C-03・claim消費・payload借用／bind・ready・body起動・Journal供給・clear／root終端・正式発行は未接続、全体受付無効・調査保留を維持する。
+
+## 15 pin confirmed・最終postとPC08未接続停止の差分設計（2026-11-12）
+
+[完了・未接続停止の接続差分draft-0.1](BEST_PRACTICE_WFB_BODY_PIN_CONFIRM_RETURN_DESIGN.md)で、§12の次段階のうちchecked／confirmed・最終postとcallerの固定未接続停止を対にした。新継続の入口は同格納の中間post成功直後・既存receiver_unconfirmed記録前だけとし、失敗済みrootの再開やreferencePostCheckedの意味変更は行わない。hold confirmed・pinStage confirmed・最終post履歴も区別する。
+
+before_final_postをconfirmed／step confirmed／境界beforeの専用phaseとして明示し、最終成功後は境界after・先行最終marker trueの固定群からliteral acceptedへ直結する。wrapperの復帰とfinallyは既存busy解除だけで、callback／allocation／新観測点を挟まない。callerは実primitiveとprivate原値の最小分類だけでPC08未接続停止へ合流し、returnedの全検査やBP04へ進まない。
+
+現行callerのreceiver first none→receiver_unconfirmed写像・accepted一律拒否と、割当てを含む失敗位置生成は新modeで専用に分離する。上位の初回理由／実位置・sourceReasonを非割当てで先に固定し、返答生成失敗でも元参照・callee正常完了・未確認責務を残す。既存の初回J保持はcapturedの前段条件のままで、checked／confirmedの混入を新Jへ追加しない。
+
+本節と子設計は文書だけ。§14の実装・旧factory・期限は変えず、新最終marker／確認writer／返却・caller分岐は未実装、FC／FEは未実施である。正式発行口閉鎖・全体受付無効・Unknown・調査保留を維持する。

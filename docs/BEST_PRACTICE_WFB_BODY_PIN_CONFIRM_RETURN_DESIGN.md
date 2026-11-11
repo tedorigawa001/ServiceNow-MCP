@@ -1,0 +1,175 @@
+# WF-B：pin confirmed・最終postとPC08未接続停止の接続差分
+
+Version: draft-0.1 / Date: 2026-11-12 / 読み取り基準HEAD: `ebe739e`。
+
+Status: **詳細設計だけ。新しい確認writer・最終post・完了通知・caller分岐は未実装。** 親は[格納・初回rejected保持設計](BEST_PRACTICE_WFB_BODY_PIN_REFERENCE_STORAGE_DESIGN.md)と[全確認・未接続停止設計](BEST_PRACTICE_WFB_BODY_PIN_STORAGE_RETURN_STOP_DESIGN.md)。前段実績は[格納・保持検証記録](E2E_BEST_PRACTICE_WFB_BODY_PIN_REFERENCE_STORAGE_2026-11-12.md)。既存の[private pin全体schedule](BEST_PRACTICE_WFB_BODY_PRIVATE_PIN_CONNECTION_DESIGN.md)のPC07までと、PC08未接続時の失敗合流を対にする。PC08そのもの・BP04／C-03は接続しない。
+
+正式発行口・既存C実行入口・body起動閉鎖、全体受付無効、Unknown、VM／監視／telemetry調査保留を維持する。今回はMarkdownだけを変更し、実装・実接続・実通信・実機操作・設定変更・Pushは行わない。
+
+## 1 現行との差分と正常停止点
+
+現行createProbeBodyPinReferenceStorageFakeは同R/S/TのI=C=S・J空を実照合し、stage captured／step currentでreferencePostChecked=trueを記録した後、receiver_unconfirmed／rejected_attemptへ固定停止する。callerはacceptedを一律state_invalidとして拒否する。BodyPinReferencePhaseはissued／before_current／capturedだけであり、checked／confirmedの正例は値専用である。
+
+将来の新入口案はpackage除外のcreateProbeBodyPinConfirmationFake／wfb-body-pin-confirmation-1。constructor固定の別合成modeとし、元constructor／prepare／frame・同source／同startの格納を再利用する。現行の中間post成功直後、**receiver_unconfirmedを記録する前**だけから新継続へ分岐する。返答済み／失敗済みrootの再開・firstの解除・claim再発行はしない。旧reference／storage／call入口の挙動・返答・期限・runtime／旧facade exportは維持する。
+
+新しい正常到達はcalleeのpin confirmed＋最終post成功まで。literal acceptedは内部完了通知だけで、callerがPC08を受理した証拠ではない。callerはpin_return_not_connected／construction_unconfirmedで固定停止し、ok=falseを返す。receiver firstはnoneのまま、sourceは確認済みの場合だけfailedへ移る。preparing・ready・bodyへは進まない。
+
+## 2 同一性・所有と三つの完了指標
+
+Rは元root、Sはその正規source、Tは同binding.target.start、I/C/JはTのexpected-source issued/current/rejected実slot。元rootのsource issued=current=S・rejected不在、同shell／binding／link／duty／control／failure／frameとmetadata9／進行13fieldの正規関係を保つ。bindingOwnerとcellOwnerは各元関係で検査し、同一objectへ統一しない。RはSの所有者、TのI/C/Jは借用と未解決の保持責務である。
+
+| 指標 | 意味 | 新確認経路での扱い |
+|---|---|---|
+| referencePostChecked | captured／blockedまでの既存中間照合 | trueが新継続の入口条件。最終post成功へ読み替えず、意味／旧writerを変えない |
+| rejected hold confirmed | 初回Jの局所保持を確認済み | 失敗経路専用。J又はholdが非初期なら新確認へ入れない |
+| pinFinalPostChecked（新案） | 当該T／同試行の最終post成功履歴 | constructor前のliteral false。最後のpost通過後だけtrue。公開値・引数から供給しない |
+
+pinStage confirmedは「confirmed記録群まで到達した」という事実で、pinFinalPostCheckedと別である。新scalarはTの既存一度限りtrialと正規R/S/Tに結合し、新owner／receipt／token／source利用claimではない。sourceの22keyに追加せず、source.postConfirmedやrootのBP04用pinPostCheckedも変更しない。
+
+## 3 狭い段階型とprivate実参照検査
+
+新継続専用の有限phaseを提案する。全行でreferencePostChecked=true、hold not_started、J空、I=C=S、trial=true、receiver診断初期値・payload6参照空を要求する。rootは同活動frame／running／BP03 call before／callActive=true、TはentryBusy=true、Sはinitializing／unused／BP03 call／pinCallReached=true・bindCall／post=false・未停止／firstなしである。
+
+| phase案 | stage／step | 現在境界 | pinFinalPostChecked |
+|---|---|---|---|
+| captured_ready | captured／current | after | false |
+| before_checked | captured／current | before | false |
+| checked | captured／checked | after | false |
+| before_confirmed | captured／checked | before | false |
+| confirmed | confirmed／confirmed | after | false |
+| before_final_post | confirmed／confirmed | before | false |
+| post_returning | confirmed／confirmed | after | true |
+
+post_returningは返却直前の固定記録後の到達値であり、return前に追加checkerを呼ぶためのphaseではない。callerが停止してsource failed／busy解除となった後のinspectは履歴であり、この活動中の値契約を再利用して受理しない。before_final_postは既存10variantにないconfirmed／beforeの組なので、新専用型／値検査で明示する。旧BodyPinStorageStateのconfirmed／afterを緩めず、旧positive／negativeを維持する。
+
+正規R/S/Tの最小同一性を候補field読取りより先に確認し、元来歴・停止／先行first・未使用base・空BS13carrier・空payload・当該phase原値と実I/C/Jを固定に再検査する。現在のprivate reference checkerはreferencePostChecked=falseを要求するため、後段へそのまま流用しない。新checkerは同じ元安定境界と実slotを再利用し、初期全空checkerや公開sameReference／strict booleanで代用しない。未知候補の属性探索・getter／Proxy trap・deep equalityは禁止する。
+
+## 4 固定確認scheduleと同期群
+
+FC01〜09は有限な操作種別であり、全guard数／実費の確定値ではない。sourceの位置は最後までBP03／call、claimはunusedである。
+
+| ID | 固定処理 | 直後の事実 |
+|---|---|---|
+| FC01 | 同格納の中間post成功→referencePostChecked=trueの直後だけ新継続へ入り、captured_readyを照合 | 同I/C、stage captured／step current、final=false |
+| FC02 | 境界before→before_checked観測→全条件／実参照を再照合 | current／before。次stepを先取りしない |
+| FC03 | G_K：step checked→境界afterの2直接代入。checked観測後にchecked専用post | stage captured／step checked |
+| FC04 | 境界before→before_confirmed観測→checked／同参照／全安定／停止を再照合 | checked／before |
+| FC05 | G_M：stage confirmed→step confirmed→境界afterの3直接代入 | confirmed記録済み、final=false |
+| FC06 | confirmed観測後にconfirmed専用post。境界before→final_post_before観測 | confirmed／before、最終post未確認 |
+| FC07 | before_final_postで最終の全条件／実参照を照合。成功時G_P：境界after→pinFinalPostChecked=true、直ちにliteral acceptedをreturn | post_returning、receiver first none |
+| FC08 | 既存の固定wrapperを復帰し、receiver finallyはentryBusy=false、dispatcher finallyはcallActive=falseだけ。実primitiveをrootへ格納→callPhase returned／route境界after | BP03／route step callのまま。PC08未受理 |
+| FC09 | 新modeの最小結果分類→無割当ての上位未接続診断固定→その後だけ返答生成／cache | route failed／pin_return_not_connected。BP04未開始 |
+
+G_K／G_M／G_Pは既知private fieldへのliteral代入だけとし、群内にguard・allocation・access呼出し・getter・script・通知・callback・awaitを挟まない。I/Cを書き直さず、J保持やsource claim消費も行わない。群途中を通常の故障checkpointにせず、before又は全代入完了後のprefixだけを観測する。同期的な非介在の契約であり、OOM／プロセス停止等に対する物理atomicityは保証しない。
+
+## 5 最終postからreturnまでの非介在
+
+最後の許可観測はfinal_post_beforeで、境界beforeを記録してから実行する。その後に最終checkerが停止・first・同owner・実I/C/J・phase原値・未使用／空の全条件を再確認する。観測点でclose／throw／priorが起きればconfirmedは保持するがG_P／acceptedは実行しない。
+
+最終checkerのtrueからG_P・literal returnまで、追加post／projection／返答生成／診断通知／clock読取り／script／hook／awaitは置かない。確認後のmarker trueを外部へ渡す関数も呼ばない。G_Pの直後に許可されたpost_after観測点は作らず、完了は復帰後の診断からだけ観測する。
+
+store→格納準備wrapper→receiver入口→dispatcherは固定primitiveをそのまま返す既存同期鎖を再利用する。中間wrapperで結果を変換・再構築・消費せず、finallyは自分の既知busyへのfalse代入だけとする。参照・trial・最終post履歴・firstはclearしない。正常鎖のfinallyは既知thisのprivate代入だけであり、任意の退出callbackを導入しない。
+
+finallyへのthrow挿入・返却値差替えは局所compiled負の対照に限る。実装へ配送故障hookを追加してこの区間を観測可能にしない。finally等で実primitiveがrootへ戻らなければ、calleeのfinal=trueだけからacceptedを復元せず、callerはcall beforeの復帰未確認として止める。両busyの解放未確認をfalseへ補完しない。
+
+## 6 callerの最小分類とPC08未接続境界
+
+現行prepareBodyPinCallは、primitive復帰後にbodyPinValuesのobjectを生成し、receiver first noneもreceiver_unconfirmedへ畳み、acceptedをstate_invalidとして拒否する。新modeはこの既存共通分岐の**前**に専用分類を置く。旧modeのaccepted拒否や旧途中失敗の期待値は変更しない。
+
+分類に使えるのはconstructor固定mode、実固定call数、当該callから格納されたprimitive、実呼出し対象Tのprivate final marker／firstという有限の原始値だけ。Tはcall前に正規供給された同targetであり、公開診断から再取得しない。private読取りは固定accessの非割当て・非hookな原値読取りに限る。
+
+| 実結果 | 新modeの固定分類 |
+|---|---|
+| accepted・実call=1・同Tのfinal marker原値true・receiver first原値none | 内部完了通知の経路だけを識別し、PC08未接続停止へ。source／rootの先行理由があればそれを保持 |
+| acceptedだがmarker false／不正、receiver first既存、実callなし等 | 完了通知不整合としてstate_invalid又は元binding不一致で拒否。先行理由を保持し、confirmed／完了履歴を補完しない |
+| rejected_attempt | 同Tの既知firstと元root／sourceの先行理由を保持。receiver_unconfirmedだけをroot construction_unconfirmedへ写像 |
+| nested refused_existing | 元callの成功へ混ぜず、既存refusal／元prefixを保持。第2call／再pinなし |
+| throwで実結果未格納 | 最後のcaller位置を保持してconstruction_unconfirmed等へ。final marker／call回数から復帰成功を推定しない |
+
+marker読取りは完了通知の最小分類であり、PC08のreturned checkerではない。復帰後のsource／metadata／実保持の全再検査、root route step returned、source境界after、BP04への受理は一切行わない。markerだけ又はliteral acceptedだけを偽装した対照でも、PC08／ready／C-03へ進む経路はない。
+
+FC08の実復帰記録からFC09の初回診断固定まで、任意checkpoint・reentry／close script・projection・reply生成を挟まない。必要な先行理由の原値読取りと固定分類以外の観測は、診断固定後だけに置く。最小分類で不整合を認めた場合も同じ診断先行順を使う。
+
+## 7 上位診断の固定と返答生成の分離
+
+現行failはroot firstを更新した後、failBodyPinBridge→bodyPinFailurePositionのobject／Object.freezeを経てsource診断やcacheを生成する。そのままでは割当て失敗が上位の位置・sourceReason固定より先に起き得る。新modeは既存rootの先行failure slotを再利用し、**非割当ての固定診断writer**と、その後の返答materializationを分ける。別FailureOwner／slot予約／結果tokenは作らない。
+
+| 軸 | 正常な完了通知→未接続停止の固定値と順序 |
+|---|---|
+| 元firstの選択 | 既存root firstを最優先。確認済み元source first・既存停止があれば尊重し、なければconstruction_unconfirmed。receiver first noneを失敗理由へ変換しない |
+| root | 共通firstを先行保持し、pin初回理由／実caller位置・call側sourceReason・route failedを固定。通常はBP03／call／after、callPhase returned。BP04用preparingConfirmed／pinPostCheckedはfalse |
+| source | metadata確認済みかつ元issued/currentが同Sである既知の範囲だけ、first noneならconstruction_unconfirmed・failurePhase BP03／boundary callを記録し、state failed。既存first／位置は不変 |
+| BS shell | 既存storage確認済みの元shellだけを既存失敗契約に沿って保持／failedへ。13carrierやdataを生成しない |
+| receiver | stage／step confirmed、I=C=S・J空・final=true、first／failure位置noneのまま。上位停止をcalleeの新失敗へ強制伝播しない |
+| 返答 | 上記固定後だけ、model案wfb-body-pin-confirmation-1、ok=false、pin_return_not_connected、first construction_unconfirmedと閉鎖定数を凍結／cache |
+
+固定診断writerは既存の原始fieldと確認済みplain data fieldへの条件付き直接代入だけ。位置は実際に保持するcaller before／afterから選び、allocatingなposition object／配列／view、Object.freeze、Error生成、任意method／通知を呼ばない。すでにあるfirst・初回位置・sourceReasonは後発要求で上書きしない。未確認sourceはfield読取り／書込みを増やさず、元root側が既知診断と未確認責務を保持する。
+
+call側sourceReasonはroot firstの単純copyにしない。rejectedでは実Tの既知firstを独立に残し、正常acceptedでT first noneならconstruction_unconfirmedとする。例えばT binding_mismatchの後にroot closedが先行記録されれば、root closed・T binding_mismatch・既存source firstを各軸で保持する。現行reason helperはroot firstなしの場合にsource.firstを読むため、metadata確認を失った新modeの経路へ無条件流用しない。固定の信頼確認と原値分類を先行させる。
+
+新modeには先行空のprivate返答cacheを一つ用意する案とする。既存の先行失敗cacheがあれば尊重し、同じ失敗の返答を後から別理由へ差し替えない。新規返答の割当て・凍結が成功した後だけcacheへ保持し、必要な既存generic cacheとの結合も同じ返答参照で行う。生成throw／OOMでは診断・位置・元参照が先に残り、再prepare／再pinの資格を作らない。固定返答の必着・inspectの割当て成功はUnknownである。
+
+診断固定後の返答前観測・materialization故障・後発closeは、元root／source firstとcallee完了履歴を維持する。closeは既存どおりcache返却より先に停止を単調記録し、失敗をclose扱いへ作り替えない。配送／refusalが記録可能な場合は既存の別軸を用い、pinの最初の操作位置へ上書きしない。
+
+## 8 失敗prefixと保持責務
+
+| 失敗位置 | Tに残すprefix | 上位の扱い・禁止 |
+|---|---|---|
+| 新継続前／captured_ready | captured／current・I/C・referencePostChecked=true、final=false | 固定失敗済みrootへ後付け接続しない |
+| before_checked | captured／current／before | checkedを先取りせず元I/Cと最初の理由を保持 |
+| G_K後／checked post | captured／checked／after | stage capturedとstep checkedを区別。G_Mへ進めない |
+| before_confirmed | captured／checked／before | 元prefixを払い戻さず同duty／ownerへ保持 |
+| G_M後／confirmed post | confirmed／confirmed／after・final=false | confirmedをempty／capturedへ戻さず、acceptedも出さない |
+| final_post_before／最終検査失敗 | confirmed／confirmed／before・final=false | 実境界beforeを初回位置へ保持。最終post完了と推定しない |
+| G_P後・primitive復帰未確認 | confirmed／after・final=true、実I/C。callee自身に失敗がなければfirst none | caller call before、復帰未確認。markerからacceptedを復元しない |
+| 実accepted復帰・PC08未接続 | confirmed／after・final=true・receiver first none | root call afterの固定未接続停止。source failedとreceiver正常完了を併存させる |
+| 上位診断固定後・返答生成／配送失敗 | 全到達履歴・参照・callee診断を維持 | 上位first／位置と未確認配送・未解決責務を残す。cache未生成を再試行許可にしない |
+
+途中の実I不一致・C copyはbinding_mismatch、phase／原値・空slot条件の不正はstate_invalid、停止は元理由／closed、未知確認throwはreceiver_unconfirmed→root construction_unconfirmedを基本とし、先行firstを優先する。callee正常完了後のwrapper離脱失敗はcalleeの新receiver_unconfirmedにせず、上位の復帰未確認として区別する。
+
+既存J保持はcaptured／step current・referencePostChecked=falseの正規試行に限る。新継続のchecked／confirmedでC混入を見つけても、旧retainerを緩めて新Jへ格納しない。実I/C・既存Jと未確認責務を元slotに残して停止し、Cを元Sへ修復しない。Rは元Sを、Tは各保持参照と局所責務を保持する。clear／cleanup確認／最終discard／root終端は別工程である。
+
+## 9 非昇格・旧契約と公開診断
+
+旧reference入口の正常固定停止・新50件の中間post区分と、旧storage／call入口の空参照・accepted拒否を維持する。新constructor固定mode以外に最終確認継続を供給せず、runtime friend／登録口／外部callbackを作らない。既存source22key・metadata9、利用claim unused、payload6参照空・free／empty／bind prefix none、BC00／ready／body開始0を維持する。
+
+新公開projectionは有限enum・strict boolean・保持有無・閉鎖定数だけとする。中間post・hold確認・最終post・caller primitive実復帰・PC08未受理を別項目で示し、pin confirmedだけで最終post成功を表示しない。raw参照・owner／brand・source値・Error／message・秘密は出力せず、診断からprivate資格を復元する入口も作らない。旧projectionのallowlistは変更しない。
+
+## 10 等価判断の再評価
+
+[親の等価判断](BEST_PRACTICE_WFB_BODY_PIN_STORAGE_RETURN_STOP_DESIGN.md)は元到達範囲に限定する。格納段階で非等価を確認済みのreceiver初回guardは維持する。残る重複mode／identity節は、元固定tuple・唯一caller・非介在が続く箇所と、新しい段階／結果分岐で再検査を要する箇所を個別に区別する。
+
+特に、receiver first none→上位未接続、confirmed記録後のcallee失敗、final=trueだがprimitive未復帰、復帰後の先行root／source理由、返答生成失敗では軸が分かれる。receiverReason／sourceReasonの同値写像やcatchの到達不能という旧根拠を自動継承しない。節除去の対照は、最初の理由・実位置・最後のprefix・最終marker・未実施suffixの変化を比較し、構文／型エラー・anchor消失・外側timeoutや単なる後段固定拒否だけをkillに数えない。
+
+## 11 独立合成・compiled受入条件（すべて未実施）
+
+| ID | 必須条件と負の対照 |
+|---|---|
+| FE01 | 旧reference／storage／callの正常停止・copy保持・script・期限・export期待値を維持。新modeだけ同callでcaptured→checked→confirmed→最終postへ |
+| FE02 | R/S/Tと元来歴・各owner関係・I/C/Jを個別混入。public confirmed／同値copy／Proxyから昇格せず、相手のslot／first不変、hook 0 |
+| FE03 | 独立原始event oracleで各許可点×throw／close／prior／再入のstage／step／境界・marker／first・未実施suffixを予測。confirmed後の最終post失敗を分離 |
+| FE04 | G_K／G_M／G_Pの直接代入・固定順と、最終true→G_P→literal return→固定wrapper／finallyの非介在をASTと実経路で確認。禁止区間へ故障hookを追加しない |
+| FE05 | 最終post前の実slot／原値・source停止／firstを単独故障。最終checker省略で誤accepted／marker trueとなる対照。marker trueだけを最終post実行の証明にしない |
+| FE06 | before_final_postのconfirmed／beforeを新型で受け、旧confirmed／afterを維持。不正stage／step／境界／boolean、marker初期trueを拒否し、public strict化で原値を丸めない |
+| FE07 | 実primitive accepted＋同Tのfinal原値trueを新modeだけで分類。callee省略・marker false／不正・結果差替え・第2call／nested refusalでPC08／C-03／readyへ進めない |
+| FE08 | finallyへの局所compiled throw／返値上書きで実復帰未確認を再現。final=trueでもcaller beforeを保持し、実結果／busy解除を補完しない |
+| FE09 | 正常callee first noneとroot／source construction_unconfirmedの併存、上位先行closed／state_invalid・source先行理由・生成BP01位置を個別確認。新writerの初回guard除去で理由／位置喪失を検出 |
+| FE10 | 診断固定前のallocating view／position／replyがないことを構造確認。診断固定後の返答生成throwでfirst／位置・参照・履歴を保持し、キャッシュ又は再prepareから再開不可 |
+| FE11 | semantic compile-failでprivate継続／最終checker／診断writer利用、狭いphase不正組、source metadata更新、診断／markerからの実資格復元を拒否 |
+| FE12 | 新projectionのallowlist／strict値・有限凍結plain graph・秘密非出力。class／method／field単位のwriter監査、禁止書込み0、配布物fixture混入0と負の対照 |
+
+oracleは実装のbuilder／schedule／checker／counterをimportせず、固定原始eventと独立条件式から期待値を計算する。実slot故障と値view偽装を分け、旧値専用positiveや前段2,894件／compiled28本の実績を新完了経路の成功数へ足さない。全FE・正式発行・全費用の受入成功は未確認のままである。
+
+## 12 追加費目・実装の分割と未接続
+
+追加論理費目はTの先行最終post scalar、新rootのconstructor固定mode・有限観測点／初回点／再入結果・空返答cache、固定private原値access、各phase／実参照の検査、G_K/G_M/G_P、非割当て診断固定と返答生成／投影である。元owner／source22field／BS13carrier／receiver9参照・中間post／hold scalar／call・trial予約は再発行／二重計上しない。非割当て区間の設計を、runtime全体の無割当て保証へ広げない。
+
+実E／S、unit係数・実layout／allocation／GC／OOM、全guard数／全体work上界・停止後解消予約・診断必着はUnknown。期限・開始時刻／全deadline・設定・本番capは変えない。PC08の全returned検査、BP04／C-03、source利用claim消費・payload借用／bind・BC00・構築ready・body・Journal供給・field clear／root終端・正式発行は未接続のまま。
+
+別承認後の分割案は、(A)狭い状態型・最終marker先行field・新caller分類／非割当て診断契約を実行閉鎖で準備、(B)同ownerのchecked／confirmedと各postを固定拒否まで接続、(C)最終post→literal returnとPC08未接続停止を対に接続して全prefixを検証、の順とする。途中版でacceptedだけを先に解禁せず、旧失敗済みsequenceを使い回さない。各段階でテスト・compiled・CHANGELOG・設計／検証記録・梱包除外を更新する。
+
+## 13 今回の文書検証範囲
+
+今回は本書と親2文書のMarkdownだけを更新する。ソース・テスト・compiled fixture・CHANGELOG・既存検証記録・manifest／lockfile・設定は変更せず、build・合成／compiled試験・梱包・index登録・コミット・Pushは行わない。FC01〜09／FE01〜12は将来の操作／受入条件であり、現行の実装・試験結果とは区別する。
+
+文書検証結果（2026-11-12）：当方が編集した3文書のローカルリンク23件に欠落なし、21表の列数・末尾改行／行末空白に異常なし。本書13節・親15／17節の順序、FC01〜09／FE01〜12の重複・欠落なしを確認した。照合基準`ebe739e`の中間post後固定拒否・実checkerの3phase・accepted一律拒否・receiver／dispatcher finally、失敗位置／返答生成の割当てを読み取り確認した。当方の編集はMarkdown3ファイルだけ。最終確認時に別の作業中変更がcomposition fixture・reference試験・reference compiledの3ファイルへ現れたため、その内容は変更せず保持し、本書の実装根拠へは含めない。indexは空、HEADは`ebe739e`から変更していない。これは文書整合の確認で、新確認経路・非割当てwriter・全FE／費用の検証成功を意味しない。
