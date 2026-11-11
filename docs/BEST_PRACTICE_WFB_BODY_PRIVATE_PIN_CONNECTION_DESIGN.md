@@ -1,6 +1,8 @@
 # WF-B (C)：BP02〜04段階別検査・同root／同startのprivate pin接続差分
 
-Version: draft-0.2 / Date: 2026-11-11 / 読み取り基準HEAD: `b3776da`（(B)実装: `c28b423`、再検査／不在projectionレビュー修正: `b3776da`、C-01実装基準HEAD: `554ef9a`）。
+Version: draft-0.3 / Date: 2026-11-11 / 読み取り基準HEAD: `b3776da`（(B)実装: `c28b423`、再検査／不在projectionレビュー修正: `b3776da`、C-01実装基準HEAD: `554ef9a`、C-01レビュー修正基準HEAD: `86d2560`）。
+
+draft-0.2のレビュー修正：§11は「BP02 entry値checkerだけを同ownerに接続し…3位置で再確認」としていたが、`bodyPinContractsMatch`のentry呼出しを`true`へ置き換えても、vitestとcompiledの両方が通っていた。compiledの対照が来歴・属性・初期値・安定性・payload6参照にしか注入しておらず、source進行13fieldとreceiver pin値を同owner経路で壊す対照がなかったためである。同じく、PayloadEmptyのoccupancy／bindingState／bindPrefixの3節、checked位置の再検査、失敗時のshell failed反映、source不在時の`receiverPin`の`not_created`とallowlist、冒頭の`#bodySourceState = 'held'`も固定されていなかった。source13field・receiver12fieldの単一注入と写像除去の対照、checked位置の4注入（除去で拒否位置がafterへ移る）、payload scalar3節の対照、receiver投影allowlistの対照をcompiledへ追加した。vitestにはstorage.state・build.state・`receiverPin`の不在投影を追加した。等価・観測不能な節は§12に記録した。
 
 Status: **C-01の内部型・先行scalar・安定／段階別checker・固定診断だけを合成依存限定で実装。** 現行範囲は§11と[C-01検証記録](E2E_BEST_PRACTICE_WFB_BODY_PIN_CONTRACTS_2026-11-11.md)。§1〜10はdraft-0.1時点の将来設計／文書検証であり、pin試行・格納とBP02〜04の実状態遷移は引き続き未接続。親は[生成・停止設計](BEST_PRACTICE_WFB_BODY_SOURCE_ISSUER_STOP_DESIGN.md)と[bind・先行borrow設計](BEST_PRACTICE_WFB_BODY_BIND_BORROW_DESIGN.md)。前工程の実績は[(B)検証記録](E2E_BEST_PRACTICE_WFB_BODY_SOURCE_ISSUER_2026-11-11.md)を参照する。将来model案とC-01の実装済み閉鎖modelは区別する。
 
@@ -176,3 +178,9 @@ build区分は既存(B)projectionの再利用であり、そのfirstは共通roo
 closeは(B)同様に固定返答cacheより先にroot停止／元確認済みsourceへの反映を行い、返答同一性・先行理由・検査準備の初回位置を保持する。未確認sourceには触れず、receiverのpin位置や格納を補修しない。新projectionは生成・検査準備・将来pin route・receiver pin位置を別に固定allowlist／strict booleanで出し、参照・brand・raw例外は出さない。チェック済みという診断値をreadyや再開資格にしない。
 
 合成・compiled範囲と初回RED／試験側訂正は[C-01検証記録](E2E_BEST_PRACTICE_WFB_BODY_PIN_CONTRACTS_2026-11-11.md)。CP01〜04／07／10／12〜14の該当部分だけの確認で、CP表全体・PC01〜10の実操作成功ではない。複製したprivate slotをscratchで故障させる対照はguard感度用であり、任意private-slot改竄に対する発行来歴の証明ではない。実allocation／E／S／全体work・OOM配送必着はUnknown。C-02／C-03、pin試行・格納・claim消費・bind・構築ready・body起動・正式発行・実接続は未接続、全体受付無効・調査保留を維持する。
+
+## 12 C-01の等価・観測不能な節（2026-11-11、`86d2560`レビュー）
+
+`bodyPinContractsMatch`の`#closed === false`と`#failure.first === 'none'`は、直前の`bodyPinContractsPoint`末尾の停止guardが同条件で先にthrowするため到達できず、等価と判断した。`#ready === false`は、C-01の閉鎖経路にreadyを立てる経路がなく観測不能である。receiver値の`issuedSame`／`currentSame`は、entryでは`issued`／`current`がfalseであることに含意されるため、entry単独では等価である（後段variantの区別には必要で、値checker側の単独除去対照は維持する）。
+
+これらの判断はC-01の閉鎖準備だけに限る。C-02以降でpin試行・格納・ready経路を接続するときは、同じ節を改めて単独対照で評価し、本節の等価判断を自動移植しない。

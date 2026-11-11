@@ -80,6 +80,25 @@ pin試行・格納・source claim消費・payload borrow／bind・構築ready・
 
 最終の作業中差分は合成fixture・新24件・新compiled・開発export期待値2箇所・CHANGELOG・設計3文書と本記録の10ファイルだけ。src・manifest／lockfile・TypeScript／配布設定はHEADから変更していない。これは未コミット作業内容の検証であり、コミット対象だけを別コピーで確認した記録ではない。
 
+## レビュー修正（2026-11-11）
+
+基準HEAD `86d2560` のレビューで、23個の一時mutantのうち17個がvitestで残った。主因は、`bodyPinContractsMatch`のBP02 entry値checker呼出しを`true`へ置き換えても全試験が通ることだった。compiledの対照が来歴・属性・初期値・安定性・payload6参照にだけ注入しており、source進行fieldとreceiver pin値を同owner経路で壊す対照がなかった。`bodySeedBaseMatches`はreceiver初期値を含まないため、これらの値の同owner検査はentryだけが担っている。
+
+追加した対照：
+
+| 対象 | 内容 |
+|---|---|
+| entry（source） | 進行13fieldを1つずつbefore位置で壊し`binding_mismatch`／beforeを確認。`bodyPinSourceValues`の該当写像を正値の定数へ置き換えると保持へ戻る |
+| entry（receiver） | `bodyPinValues`内で12値（attemptUsed／stage／expected-source3参照／step／failureStep／bind first系5）を1つずつ壊し同様に確認。写像除去で保持へ戻る |
+| checked再検査 | source claim・route試行記録・frame・receiver stage（2回目の値取得時）をchecked位置で壊し`binding_mismatch`／checked。checked直後の再検査を除くと拒否位置がafterへ移る |
+| PayloadEmpty | occupancy／bindingState／bindPrefixの3節を単独注入と節除去で確認 |
+| receiver投影 | held後のinspectでreceiverのstep／failureStepへ許可外値を注入し、両方`unconfirmed`になることを確認 |
+| vitest | 正常／失敗後の`build.state`=held、C-01失敗後とheld後closeの`storage.state`=failed（再入はbuilding）、source不在（生成throw・準備前close）の`receiverPin`=`not_created` |
+
+再実行の結果、23個中19個がvitestまたはcompiledで落ちた。compiledでの検出は全て当該対照の意味的なassert失敗であり、anchor消失ではない。残る4個は等価・観測不能として設計§12に記録した：`#closed === false`と`#failure.first === 'none'`（直前の停止guardが先にthrow）、`#ready === false`（C-01にready経路なし）、entryでの`issuedSame`写像（`issued`=falseに含意）。
+
+compiled出力にentrySourceControls 13／entryReceiverControls 12／checkedRecheckControls 4／payloadScalarControls 3／receiverProjectionAllowlists 2を追加した。新vitestは24件のまま（assert追加のみ）。製品コード・fixture本体・期限・並列度は変更していない。pin試行・格納・claim消費・bind・構築ready・body起動・正式発行は未接続、全体受付無効・Unknown・調査保留を維持する。
+
 ## コミット前の対象限定再検証（2026-11-11）
 
 上記のindex未登録・別コピー未検証という記述は実装完了時点の記録である。今回の10ファイルだけをindexへ登録し、対象名が指定10件と一致することを確認した。そのindexの全追跡ファイルを新しい一時フォルダへ展開し、対象内容がindexとbyte単位で一致することを確認した。未登録・未追跡の作業内容や既存distをコピーせず、ローカルnode_modulesだけを参照した。依存の取得・導入はしていない。

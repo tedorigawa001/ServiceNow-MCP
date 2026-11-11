@@ -151,6 +151,68 @@ try {
     // The fault is in a private scratch receiver, not a borrow or pin operation.
     assert.equal(run(await load(method(changed, 'bodyPinPayloadEmpty', `this.#${field} === undefined`, 'true', true, 'RetirementStartAssembly'), 'payload-mutant-' + field)).r.disposition, 'pin_contracts_held');
   }
+  const atPhase = (p, code) => method(source, 'bodyPinContractsPoint', '    this.#bodyPinPreparationPhase = phase;',
+    `    this.#bodyPinPreparationPhase = phase;\n    if (phase === "${p}") { ${code} }`);
+  const rxHead = '  private bodyPinValues(source: BodyBindSourceShell): Readonly<BodyPinReceiverValues> {';
+  const rxAt = code => replace(source, rxHead, rxHead + '\n    ' + code);
+  const entrySource = [['state', "'preparing'", "'initializing'"], ['phase', "'BP02'", "'BP01'"], ['boundary', "'checked'", "'after'"],
+    ['pinCallReached', 'true', 'false'], ['claim', "'spent'", "'unused'"], ['bindCallReached', 'true', 'false'], ['postConfirmed', 'true', 'false'],
+    ['stopRequested', 'true', 'false'], ['first', "'closed'", "'none'"], ['failurePhase', "'BP00'", "'none'"], ['failureBoundary', "'before'", "'none'"],
+    ['refusal', "'duplicate_creation'", "'none'"], ['deliveryFirst', "'closed'", "'none'"]];
+  for (const [key, bad, good] of entrySource) {
+    const changed = at(`(this.#bodySourceIssued as any).${key} = ${bad};`), r = run(await load(changed, 'entry-source-' + key));
+    assert.equal(`${r.r.first}/${r.s.failurePhase}`, 'binding_mismatch/before', 'entry source ' + key);
+    assert.equal(run(await load(method(changed, 'bodyPinSourceValues', `${key}: v.${key}`, `${key}: ${good}`), 'entry-source-mutant-' + key)).r.disposition, 'pin_contracts_held', key);
+  }
+  const entryReceiver = [
+    ['attemptUsed', 'this.#bodyPinAttemptUsed = true;', 'attemptUsed: this.#bodyPinAttemptUsed', 'false'],
+    ['stage', "this.#bodyPinStage = 'attempting';", 'stage: this.#bodyPinStage', "'empty'"],
+    ['issued', 'this.#bodyExpectedSourceIssued = {} as never;', 'issued: this.#bodyExpectedSourceIssued !== undefined', 'false'],
+    ['current', 'this.#bodyExpectedSourceCurrent = {} as never;', 'current: this.#bodyExpectedSourceCurrent !== undefined', 'false'],
+    ['rejected', 'this.#bodyExpectedSourceRejected = {} as never;', 'rejected: this.#bodyExpectedSourceRejected !== undefined', 'false'],
+    ['step', "this.#bodyPinStep = 'preflight';", 'step: this.#bodyPinStep,', "'none',"],
+    ['failureStep', "this.#bodyPinFailureStep = 'attempt';", 'failureStep: this.#bodyPinFailureStep', "'none'"],
+    ['first', "this.#bodyBindFirst = 'state_invalid';", 'first: this.#bodyBindFirst', "'none'"],
+    ['failurePhase', "this.#bodyBindFailurePhase = 'private_invalid' as never;", 'failurePhase: this.#bodyBindFailurePhase', "'none'"],
+    ['failurePrefix', "this.#bodyBindFailurePrefix = 'private_invalid' as never;", 'failurePrefix: this.#bodyBindFailurePrefix', "'none'"],
+    ['failureBoundary', "this.#bodyBindFailureBoundary = 'private_invalid' as never;", 'failureBoundary: this.#bodyBindFailureBoundary', "'none'"],
+    ['refusal', "this.#bodyBindRefusal = 'private_invalid' as never;", 'refusal: this.#bodyBindRefusal', "'none'"],
+  ];
+  for (const [key, code, mapped, good] of entryReceiver) {
+    const changed = rxAt(code), r = run(await load(changed, 'entry-receiver-' + key));
+    assert.equal(`${r.r.first}/${r.s.failurePhase}`, 'binding_mismatch/before', 'entry receiver ' + key);
+    assert.equal(run(await load(method(changed, 'bodyPinValues', mapped, `${key}: ${good}`, true, 'RetirementStartAssembly'), 'entry-receiver-mutant-' + key)).r.disposition, 'pin_contracts_held', key);
+  }
+  const checkedRecheck = [
+    ['source', atPhase('checked', "(this.#bodySourceIssued as any).claim = 'spent';")],
+    ['route', atPhase('checked', 'this.#bodyPinRouteAttempted = true;')],
+    ['frame', atPhase('checked', 'this.#frame = false;')],
+    ['receiver', rxAt("if (++(globalThis as any).__pinValueCalls === 2) this.#bodyPinStage = 'attempting';")],
+  ];
+  const noChecked = s => method(s, 'prepareBodyPinContracts', "    this.bodyPinContractsPoint('checked'); if (!this.bodyPinContractsMatch()) return this.fail('binding_mismatch');",
+    "    this.bodyPinContractsPoint('checked');");
+  for (const [name, changed] of checkedRecheck) {
+    globalThis.__pinValueCalls = 0; const r = run(await load(changed, 'checked-' + name));
+    assert.equal(`${r.r.first}/${r.s.failurePhase}`, 'binding_mismatch/checked', 'checked ' + name);
+    globalThis.__pinValueCalls = 0; const moved = run(await load(noChecked(changed), 'checked-mutant-' + name));
+    assert.equal(`${moved.r.first}/${moved.s.failurePhase}`, 'binding_mismatch/after', 'checked moved ' + name);
+  }
+  delete globalThis.__pinValueCalls;
+  const payloadScalars = [['bodyOccupancy', "this.#bodyOccupancy === 'free'"], ['bodyBindingState', "this.#bodyBindingState === 'empty'"],
+    ['bodyBindPrefix', "this.#bodyBindPrefix === 'none'"]];
+  for (const [field, clause] of payloadScalars) {
+    const changed = replace(source, '  private bodyPinPayloadEmpty(): boolean {', `  private bodyPinPayloadEmpty(): boolean {\n    this.#${field} = 'private_invalid' as never;`);
+    const r = run(await load(changed, 'payload-scalar-' + field));
+    assert.equal(`${r.r.first}/${r.s.failurePhase}`, 'binding_mismatch/before', field);
+    assert.equal(run(await load(method(changed, 'bodyPinPayloadEmpty', clause, 'true', true, 'RetirementStartAssembly'), 'payload-scalar-mutant-' + field)).r.disposition, 'pin_contracts_held', field);
+  }
+  {
+    const m = await load(rxAt("if ((globalThis as any).__pinInspect) { this.#bodyPinStep = 'private_enum' as never; this.#bodyPinFailureStep = 'private_enum' as never; }"), 'receiver-projection');
+    const a = m.createProbeBodyPinContractsFake(); assert.equal(a.prepare().disposition, 'pin_contracts_held');
+    globalThis.__pinInspect = true; let s;
+    try { s = a.inspect(); } finally { delete globalThis.__pinInspect; }
+    assert.deepEqual({ ...s.receiverPin }, { step: 'unconfirmed', failureStep: 'unconfirmed' });
+  }
   const twice = at("this.fail('state_invalid'); this.#bodyPinPreparationPhase = 'after'; this.fail('closed');");
   const first = run(await load(twice, 'first-position')); assert.equal(first.s.failurePhase, 'before');
   assert.equal(run(await load(method(twice, 'failBodyPinContracts', "if (this.#bodyPinPreparationFirst === 'none')", 'if (true)'), 'first-position-mutant')).s.failurePhase, 'after');
@@ -213,5 +275,7 @@ try {
     valueClauseControls: sf.length + rf.length, provenanceControls: provenance.length + origins.length, initialControls: initial.length,
     stableControls: 4, payloadControls: payload.length, attributeControls: attributes.length, firstPosition: true,
     projectionAllowlists: projection.length, strictBooleans: 5, priorRootScalars: Object.keys(scalarDefaults).length,
-    priorReceiverScalars: 2, operationalWrites: 0, semanticRejections: 12 }));
+    priorReceiverScalars: 2, operationalWrites: 0, semanticRejections: 12,
+    entrySourceControls: entrySource.length, entryReceiverControls: entryReceiver.length, checkedRecheckControls: checkedRecheck.length,
+    payloadScalarControls: payloadScalars.length, receiverProjectionAllowlists: 2 }));
 } finally { rmSync(dir, { recursive: true, force: true }); }

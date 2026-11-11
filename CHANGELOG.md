@@ -276,6 +276,8 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 ### Added
 
+- WF-B C-01 pin-contract review: compiled controls now inject each of the 13 source progress fields and 12 receiver pin values through the owner path, so the BP02 entry checker connection and its value mappings are pinned to `binding_mismatch` at `before`. Four `checked`-position injections move the rejection to `after` when that recheck is removed, three controls isolate the PayloadEmpty occupancy/binding-state/prefix clauses, and the receiver pin projection allowlist is checked. Vitest now compares storage and source state after failures and the `not_created` receiver pin projection when no source exists. Three root clauses and the entry `issuedSame`/`currentSame` mappings are recorded as equivalent or unobservable.
+
 - WF-B body source issuer review: seven compiled single-injection controls pin the BP00 attempt pre-issue recheck and the BP01 provenance/stable clauses to the first rejecting phase/step/boundary, and two controls isolate the metadata and progress `enumerable` descriptor clauses. An absent source now projects `not_created` on every source axis; `unconfirmed` is reserved for an issued but unverified source.
 
 - WF-B body bind-field review: compiled single-injection controls now pin the two root-side `bodyFieldsIntact` clauses (base unused, no BC shell), the root-side `state`/`phase`/`failurePhase`/`reentry` projection allowlists, and the `bodyStarts` projection derived from the real body cell. Two remaining mutants are recorded as equivalent.

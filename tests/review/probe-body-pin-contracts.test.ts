@@ -20,7 +20,7 @@ describe('C-01 closed pin contracts without pin attempts', () => {
     expect(s).toMatchObject({ state: 'held', phase: 'held', checked: true,
       route: { attempted: false, state: 'not_started', phase: 'none', first: 'none', preparingConfirmed: false, postChecked: false },
       receiverPin: { step: 'none', failureStep: 'none' },
-      build: { metadataConfirmed: true, stage: 'confirmed', failureRecorded: false, phase: 'BP01', step: 'after',
+      build: { state: 'held', metadataConfirmed: true, stage: 'confirmed', failureRecorded: false, phase: 'BP01', step: 'after',
         source: { state: 'initializing', claim: 'unused', pinCallReached: false },
         storage: { state: 'building', dataCreated: 0 }, receiver: { pinAttemptUsed: false, pinStage: 'empty', occupancy: 'free' } },
       pinAttempt: 'not_connected', pinStorage: 'not_connected', execution: 'closed', formalIssuance: 'closed',
@@ -56,23 +56,25 @@ describe('C-01 closed pin contracts without pin attempts', () => {
       expect(a.inspect()).toMatchObject({ route: { attempted: false, state: 'not_started', phase: 'none', step: 'none',
         failureRecorded: false, first: 'none', failurePhase: 'none', preparingConfirmed: false, postChecked: false },
       receiverPin: { step: 'none', failureStep: 'none' }, build: { source: { claim: 'unused', pinCallReached: false, bindCallReached: false, postConfirmed: false },
-        receiver: { pinAttemptUsed: false, pinStage: 'empty', occupancy: 'free' }, storage: { dataCreated: 0 },
-        rootReady: false, bodyStarts: 0, grantAttempts: 0, dutyUsed: false } });
+        receiver: { pinAttemptUsed: false, pinStage: 'empty', occupancy: 'free' }, state: 'held',
+        storage: { state: mode === 'reenter' ? 'building' : 'failed', dataCreated: 0 }, rootReady: false, bodyStarts: 0, grantAttempts: 0, dutyUsed: false } });
       expect(a.inspect().build.receiver.references.every(r => !r.retained)).toBe(true); finite(a.inspect());
     });
   it.each(['si_producer_throw', 'si_getter_first', 'si_proxy'])('keeps original generation failure %s separate', script => {
     const a = createProbeBodyPinContractsFake(script), r = a.prepare();
     expect(r.first).toBe(script === 'si_producer_throw' ? 'construction_unconfirmed' : 'binding_mismatch');
     expect(a.inspect()).toMatchObject({ state: 'not_started', preparationFirst: 'none', failurePhase: 'none', checked: false,
-      route: { attempted: false, first: 'none' }, build: { failureRecorded: true, hookCalls: 0 } });
+      route: { attempted: false, first: 'none' }, build: { failureRecorded: true, hookCalls: 0 },
+      receiverPin: script === 'si_producer_throw' ? { step: 'not_created', failureStep: 'not_created' } : { step: 'none', failureStep: 'none' } });
     expect(a.close()).toBe(r); expect(a.inspect().build.hookCalls).toBe(0); finite(a.inspect());
   });
   it('keeps close before preparation empty and close after hold diagnosed without pin progress', () => {
     const before = createProbeBodyPinContractsFake(); before.close(); expect(before.prepare().disposition).toBe('closed');
-    expect(before.inspect()).toMatchObject({ state: 'not_started', route: { attempted: false }, build: { source: { state: 'not_created' } } });
+    expect(before.inspect()).toMatchObject({ state: 'not_started', route: { attempted: false },
+      receiverPin: { step: 'not_created', failureStep: 'not_created' }, build: { source: { state: 'not_created' } } });
     const a = createProbeBodyPinContractsFake(); a.prepare(); const r = a.close();
     expect(r.first).toBe('closed'); expect(a.inspect()).toMatchObject({ state: 'failed', checked: true, failurePhase: 'held',
-      route: { failureRecorded: false }, build: { failureRecorded: false, source: { stopMirrored: true, claim: 'unused' } } });
+      route: { failureRecorded: false }, build: { state: 'held', failureRecorded: false, storage: { state: 'failed' }, source: { stopMirrored: true, claim: 'unused' } } });
     expect(a.close()).toBe(r); finite(a.inspect());
   });
   it('rejects summaries, callbacks and hostile objects without evaluating them', () => {
