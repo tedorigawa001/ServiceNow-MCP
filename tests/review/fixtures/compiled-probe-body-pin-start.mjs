@@ -76,6 +76,7 @@ try {
   for (let i = 0; i < contexts.length; i++) {
     const x = run(await load(at('entry', 'after', contexts[i]), 'context-' + i));
     assert.equal(x.r.first, 'state_invalid'); assert.equal(x.s.route.attempted, false); assert.equal(x.s.failureStep, 'entry');
+    assert.equal(x.s.route.refusal, 'none', 'internal rejection is not a foreign refusal ' + i);
   }
   // Removing each actual phase-check call must let its otherwise isolated bad value pass that boundary.
   const rechecks = [
@@ -95,6 +96,67 @@ try {
     assert.equal(before.s.failureStep, step); assert.equal(before.s.boundary, boundary);
     assert.ok(after.s.failureStep !== step || after.s.boundary !== boundary || after.s.callBlocked, 'recheck sensitivity ' + i);
   }
+  const syncLine = "    if (this.#bodyPinRouteAttempted && step !== 'blocked') this.#bodyPinRouteBoundary = boundary;";
+  const atIn = (s, step, boundary, code) => method(s, 'bodyPinStartPoint', syncLine,
+    `${syncLine}\n    if (step === '${step}' && boundary === '${boundary}') { ${code} }`);
+  const where = x => `${x.r.first}/${x.s.step}/${x.s.boundary}`;
+  const routeFields = ['bodyPinRouteAttempted', 'bodyPinRouteState', 'bodyPinRoutePhase', 'bodyPinRouteStep', 'bodyPinRouteBoundary',
+    'bodyPinFailureRecorded', 'bodyPinFirst', 'bodyPinFailurePhase', 'bodyPinFailureStep', 'bodyPinFailureBoundary',
+    'bodyPinPreparingConfirmed', 'bodyPinPostChecked', 'bodyPinRefusal'];
+  const unusedBad = ['true', "'running'", "'BP02'", "'preflight'", "'before'", 'true', "'closed'", "'BP02'", "'call'", "'after'", 'true', 'true', "'duplicate_pin'"];
+  const unusedClauses = ['this.#bodyPinRouteAttempted === false', "this.#bodyPinRouteState === 'not_started'", "this.#bodyPinRoutePhase === 'none'",
+    "this.#bodyPinRouteStep === 'none'", "this.#bodyPinRouteBoundary === 'none'", 'this.#bodyPinFailureRecorded === false', "this.#bodyPinFirst === 'none'",
+    "this.#bodyPinFailurePhase === 'none'", "this.#bodyPinFailureStep === 'none'", "this.#bodyPinFailureBoundary === 'none'",
+    'this.#bodyPinPreparingConfirmed === false', 'this.#bodyPinPostChecked === false',
+    "(this.#bodyPinRefusal === 'none' || this.#bodyPinRefusal === 'in_progress')"];
+  for (let i = 0; i < routeFields.length; i++) {
+    const changed = atIn(source, 'entry', 'before', `this.#${routeFields[i]} = ${unusedBad[i]};`);
+    assert.equal(where(run(await load(changed, 'unused-' + i))), 'state_invalid/entry/before', 'route unused ' + routeFields[i]);
+    const moved = run(await load(method(changed, 'bodyPinStartRouteUnused', unusedClauses[i], 'true'), 'unused-control-' + i));
+    assert.notEqual(where(moved), 'state_invalid/entry/before', 'route unused sensitivity ' + routeFields[i]);
+  }
+  const preflightBad = ['false', "'held'", "'BP03'", "'call'", "'after'", 'true', "'closed'", "'BP02'", "'call'", "'after'", 'true', 'true', "'foreign_source'"];
+  const preflightClauses = ['this.#bodyPinRouteAttempted !== true', "this.#bodyPinRouteState !== 'running'", "this.#bodyPinRoutePhase !== 'BP02'",
+    "this.#bodyPinRouteStep !== 'preflight'", "this.#bodyPinRouteBoundary !== (checked ? 'after' : 'before')", 'this.#bodyPinFailureRecorded !== false',
+    "this.#bodyPinFirst !== 'none'", "this.#bodyPinFailurePhase !== 'none'", "this.#bodyPinFailureStep !== 'none'",
+    "this.#bodyPinFailureBoundary !== 'none'", 'this.#bodyPinPreparingConfirmed !== false', 'this.#bodyPinPostChecked !== false',
+    "!['none', 'in_progress', 'duplicate_pin'].includes(this.#bodyPinRefusal)"];
+  for (let i = 0; i < routeFields.length; i++) {
+    const changed = atIn(source, 'preflight', 'before', `this.#${routeFields[i]} = ${preflightBad[i]};`);
+    assert.equal(where(run(await load(changed, 'preflight-route-' + i))), 'binding_mismatch/preflight/before', 'preflight route ' + routeFields[i]);
+    const moved = run(await load(method(changed, 'bodyPinStartPreflightMatches', preflightClauses[i], 'false'), 'preflight-route-control-' + i));
+    assert.notEqual(where(moved), 'binding_mismatch/preflight/before', 'preflight route sensitivity ' + routeFields[i]);
+  }
+  const payloadHead = '  private bodyPinPayloadEmpty(): boolean {';
+  const contextCalls = [
+    ['base', 'entry', 'after', "this.#issuedCells!.body.state = 'running';", s => s, 'this.bodySeedBaseMatches() && '],
+    ['storage', 'entry', 'after', "this.#bodySeedShell!.slots![0]!.stage = 'confirmed';", s => s, 'this.bodySourceStorageMatches(shell) && '],
+    ['payload', 'entry', 'after', '(globalThis as any).__pinPayload = true;',
+      s => replace(s, payloadHead, payloadHead + '\n    if ((globalThis as any).__pinPayload) this.#bodyBundleIssued = {} as never;'),
+      ' && probeStartAccess.bodyPinPayloadEmpty(start)'],
+    ['provenance', 'entry', 'before', 'const ds = Object.getOwnPropertyDescriptors(this.#bodySourceIssued!); ds.custodian.value = {}; const copy = Object.seal(Object.defineProperties({}, ds)); this.#bodySourceIssued = copy as BodyBindSourceShell; this.#bodySourceCurrent = copy as BodyBindSourceShell;',
+      s => s, ' && this.bodyPinProvenanceMatches(shell)'],
+  ];
+  for (const [name, step, boundary, code, prep, clause] of contextCalls) {
+    const changed = prep(at(step, boundary, code));
+    try {
+      assert.equal(where(run(await load(changed, 'context-call-' + name))), `state_invalid/${step}/${boundary}`, 'context ' + name);
+      delete globalThis.__pinPayload;
+      const moved = run(await load(method(changed, 'bodyPinStartContextMatches', clause, ''), 'context-call-control-' + name));
+      assert.notEqual(where(moved), `state_invalid/${step}/${boundary}`, 'context sensitivity ' + name);
+    } finally { delete globalThis.__pinPayload; }
+  }
+  const sameValueCopy = at('entry', 'after', 'const copy = Object.seal(Object.defineProperties({}, Object.getOwnPropertyDescriptors(this.#bodySourceIssued!))); this.#bodySourceIssued = copy as BodyBindSourceShell; this.#bodySourceCurrent = copy as BodyBindSourceShell;');
+  assert.equal(where(run(await load(sameValueCopy, 'caller-recheck'))), 'binding_mismatch/entry/after', 'caller identity recheck');
+  const noCallerRecheck = method(sameValueCopy, 'admitBodyPinCaller',
+    "      if (!this.bodyPinCallerMatches(root, source, start)) { this.fail('binding_mismatch'); return 'rejected_attempt'; }\n", '');
+  assert.notEqual(where(run(await load(noCallerRecheck, 'caller-recheck-control'))), 'binding_mismatch/entry/after', 'caller recheck sensitivity');
+  const reenter = 'this.#bodyPinStartReentry = this.admitBodyPinCaller(this, this.#bodySourceIssued!, this.#issuedFrameBinding!.target.start);';
+  const twiceRefused = atIn(atIn(source, 'started', 'after', reenter), 'preflight', 'before', reenter);
+  const kept = run(await load(twiceRefused, 'refusal-first'));
+  assert.equal(kept.s.route.refusal, 'in_progress'); assert.equal(kept.s.reentry, 'refused_existing');
+  const overwritten = run(await load(method(twiceRefused, 'admitBodyPinCaller', "if (this.#bodyPinRefusal === 'none') this.#bodyPinRefusal", 'this.#bodyPinRefusal'), 'refusal-first-control'));
+  assert.equal(overwritten.s.route.refusal, 'duplicate_pin');
   const first = run(await load(at('entry', 'before', `this.fail('state_invalid'); this.#bodyPinStartStep = 'blocked';
     this.#bodyPinStartBoundary = 'after'; this.fail('closed');`), 'first-position'));
   assert.equal(first.r.first, 'state_invalid'); assert.equal(first.s.failureStep, 'entry');
@@ -177,5 +239,7 @@ try {
   console.log(JSON.stringify({ compiled: true, actualForeignControls: 3, stopPriorityControls: priority.length, phaseRejections,
     contextRejections: contexts.length, recheckControls: rechecks.length, firstPosition: true, priorScalars: Object.keys(defaults).length,
     reservationSites: reservations, receiverAndClaimWrites: 0, semanticRejections: 6,
-    projectionAllowlists: projection.length, strictBooleans: booleans.length, finalCallReadyRecheck: true }));
+    projectionAllowlists: projection.length, strictBooleans: booleans.length, finalCallReadyRecheck: true,
+    routeUnusedControls: routeFields.length, preflightRouteControls: routeFields.length, contextCallControls: contextCalls.length,
+    callerRecheckControl: true, refusalFirstControl: true, internalRefusalNone: contexts.length }));
 } finally { rmSync(dir, { recursive: true, force: true }); }

@@ -79,6 +79,25 @@ C-02後半のPC03固定receiver call・同startの試行／格納と、C-03のBP
 
 作業中差分は合成fixture・新49件・新compiled・旧C-01 compiledの限定AST更新・開発export期待値2箇所・CHANGELOG・設計3文書と本記録の11ファイルだけ。src・manifest／lockfile・TypeScript／配布設定はHEADから変更していない。これは未コミット作業内容の検証であり、コミット対象だけを別コピーで確認した記録ではない。
 
+## レビュー修正（2026-11-11）
+
+基準HEAD `4f70522` のレビューで、50個の一時mutant（anchor消失だった2個は anchorを残す等価mutantで作り直した数）のうち29個がvitest・compiledの両方で残った。主因は、route scalarを壊す対照がなく、開始前の未使用条件10節とPC02のroute条件9節が単独で外せたことである。
+
+追加した対照：
+
+| 対象 | 内容 |
+|---|---|
+| 開始前route未使用 | route 13scalarをentry/beforeで1つずつ壊し`state_invalid`／entry／before。`bodyPinStartRouteUnused`の該当節を除くと拒否位置が動く |
+| PC02 route | 同13scalarをpreflight/before（境界同期の後）で壊し`binding_mismatch`／preflight／before。`bodyPinStartPreflightMatches`の該当節を除くと拒否位置が動く |
+| context呼出し | base・storage・payload（entry/after）と来歴（entry/before、custodian差替えcopy）を注入し`state_invalid`。各呼出しを除くと拒否位置が動く |
+| callerの再照合 | entry/afterでissued／currentを同値copyへ差し替えると`binding_mismatch`／entry／after。2回目のcaller照合を除くとpreflightまで進む |
+| refusal | started/afterとpreflight/beforeで2回再入し`in_progress`を保持。初回保持条件を除くと`duplicate_pin`。context拒否8件でもrefusal=noneを比較 |
+| vitest | 正常固定停止・7位置×4mode・foreign拒否後の`build.storage.state`=failed |
+
+再実行の結果、50個中48個がvitest又はcompiledで落ちた。compiledでの検出は全て当該対照の意味的なassert失敗であり、anchor消失ではない。残る2個は設計§14に記録した：`#closed === false`（直前の停止guardが先にthrow）と`#started === true`（`#frame`と同時に立ち戻らない）。
+
+compiled出力にrouteUnusedControls 13／preflightRouteControls 13／contextCallControls 4／callerRecheckControl／refusalFirstControl／internalRefusalNone 8を追加した。新vitestは49件のまま（assert追加のみ）。製品コード・fixture本体・期限・並列度は変更していない。固定call・格納・claim消費・bind・構築ready・body起動・正式発行は未接続、全体受付無効・Unknown・調査保留を維持する。
+
 ## コミット対象だけの隔離再検証（2026-11-11）
 
 上記は実装時の記録。本節は、その後のコミット依頼に対する再検証である。基準HEADは同じ`a3f1f66`。対象11ファイルだけを明示してindexへ登録し、indexの全内容を一時フォルダへ展開した。全1,513ファイルのGit blob hashがindexと一致し、他の未登録変更を含まないことを確認した。既存node_modulesへの参照だけを再利用し、依存取得・導入・設定変更は行っていない。

@@ -1,6 +1,8 @@
 # WF-B (C)：BP02〜04段階別検査・同root／同startのprivate pin接続差分
 
-Version: draft-0.4 / Date: 2026-11-11 / 読み取り基準HEAD: `b3776da`（(B)実装: `c28b423`、再検査／不在projectionレビュー修正: `b3776da`、C-01実装基準HEAD: `554ef9a`、C-01レビュー修正基準HEAD: `86d2560`、C-02前半実装基準HEAD: `a3f1f66`）。
+Version: draft-0.5 / Date: 2026-11-11 / 読み取り基準HEAD: `b3776da`（(B)実装: `c28b423`、再検査／不在projectionレビュー修正: `b3776da`、C-01実装基準HEAD: `554ef9a`、C-01レビュー修正基準HEAD: `86d2560`、C-02前半実装基準HEAD: `a3f1f66`、C-02前半レビュー修正基準HEAD: `4f70522`）。
+
+draft-0.4のレビュー修正：C-02前半の開始前route未使用条件`bodyPinStartRouteUnused`の10節と、PC02の`bodyPinStartPreflightMatches`のroute 9節は、単独で外してもvitest・compiledの両方が通っていた。compiledのphase対照はsource 13fieldだけを壊し、route scalarを壊す対照がなかった。context条件のbase／storage／payload／来歴の4呼出し、entry/after の2回目caller照合、非accepted時の`#fixed`先行返却（内部拒否のrefusalを`foreign_source`へ上書きしない）、admit内refusalの初回保持、pin-start失敗時のshell failed反映も固定されていなかった。route 13scalarをentry/beforeとpreflight/beforeへ単独注入する26対照（節除去で拒否位置が動く）、context 4呼出しの注入と除去対照、同値copyへの差替えでcallerの再照合を確かめる対照、2回の再入でrefusalの初回保持を確かめる対照をcompiledへ追加した。context拒否8件ではrefusal=noneも比較する。vitestにはpin-start失敗後の`storage.state`=failedを追加した。等価・観測不能な節は§14に記録した。
 
 draft-0.2のレビュー修正：§11は「BP02 entry値checkerだけを同ownerに接続し…3位置で再確認」としていたが、`bodyPinContractsMatch`のentry呼出しを`true`へ置き換えても、vitestとcompiledの両方が通っていた。compiledの対照が来歴・属性・初期値・安定性・payload6参照にしか注入しておらず、source進行13fieldとreceiver pin値を同owner経路で壊す対照がなかったためである。同じく、PayloadEmptyのoccupancy／bindingState／bindPrefixの3節、checked位置の再検査、失敗時のshell failed反映、source不在時の`receiverPin`の`not_created`とallowlist、冒頭の`#bodySourceState = 'held'`も固定されていなかった。source13field・receiver12fieldの単一注入と写像除去の対照、checked位置の4注入（除去で拒否位置がafterへ移る）、payload scalar3節の対照、receiver投影allowlistの対照をcompiledへ追加した。vitestにはstorage.state・build.state・`receiverPin`の不在投影を追加した。等価・観測不能な節は§12に記録した。
 
@@ -200,3 +202,9 @@ pin側の失敗はrootのBP02／preflight／before又はafterに加え、identit
 compiledは実root同士の混入・停止優先順・phase値13fieldを4境界で壊す対照、active frame／C-01履歴・caller確認、各再検査の除去、初回位置保持、private型拒否を区別する。旧C-01 compiledのmodule全体「pin関連書込み0」は、新callerの4固定method・caller fieldへの15直接代入箇所だけを明示許可する。C-01／receiver／payload／source利用claimへの禁止は継続し、新compiledは開始予約のwriterが1箇所・trueのみであることを確認する。静的代入箇所数は実work費用ではない。§12の等価判断を新履歴へ自動適用せず、全guardの単独感度・任意private-slot改竄安全性を主張しない。
 
 詳細なRED／GREEN・試験側訂正と結果は[C-02前半検証記録](E2E_BEST_PRACTICE_WFB_BODY_PIN_START_2026-11-11.md)。残りはC-02後半のPC03〜08固定call／同start捕捉、C-03のBP04全post／閉鎖保持である。claim消費・bind・構築ready・body起動・正式発行・実接続は未接続。実allocation／E／S／全体work・停止後解消予約・OOM診断必着はUnknown、全体受付無効・調査保留を維持する。
+
+## 14 C-02前半の等価・観測不能な節（2026-11-11、`4f70522`レビュー）
+
+`bodyPinStartContextMatches`の`#closed === false`は、各呼出しの直前にある`bodyPinStartPoint`末尾の停止guardが同条件で先にthrowするため到達できず、等価と判断した。`#started === true`は、prepare冒頭で`#frame`と同時に立ち、以後戻す経路がないため、`#frame === true`が成立する限り観測不能である。
+
+この判断はC-02前半の固定停止経路に限る。C-02後半以降で固定call・格納・再開経路を接続するときは同じ節を改めて単独対照で評価し、§12・本節の等価判断を自動移植しない。

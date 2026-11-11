@@ -26,7 +26,7 @@ describe('C-02 front: private caller admission without a fixed pin call', () => 
       build: { phase: 'BP01', step: 'after', failureRecorded: false, stopRequested: false,
         source: { state: 'failed', claim: 'unused', phase: 'BP02', boundary: 'checked', pinCallReached: false,
           failurePhase: 'BP02', failureBoundary: 'checked' },
-        receiver: { pinAttemptUsed: false, pinStage: 'empty', occupancy: 'free' }, storage: { dataCreated: 0 } },
+        receiver: { pinAttemptUsed: false, pinStage: 'empty', occupancy: 'free' }, storage: { state: 'failed', dataCreated: 0 } },
       fixedCall: 'not_connected', pinStorage: 'not_connected', formalIssuance: 'closed', wholeRunAdmission: 'disabled',
       implementation: 'unknown', investigations: 'on_hold' });
     expect(a.inspect().build.receiver.references.every(r => !r.retained)).toBe(true);
@@ -96,7 +96,7 @@ describe('C-02 front: private caller admission without a fixed pin call', () => 
         busy: false, hookObserved: false, callBlocked: false, step: 'identity', failureStep: 'identity',
         route: { attempted: false, state: 'failed', first: 'binding_mismatch', refusal: 'foreign_source', failurePhase: 'BP02' },
         contracts: { preparationFirst: 'none', failurePhase: 'none' },
-        build: { failureRecorded: false, source: { pinCallReached: false, claim: 'unused', sameReference: true } } });
+        build: { failureRecorded: false, storage: { state: 'failed' }, source: { pinCallReached: false, claim: 'unused', sameReference: true } } });
       expect(a.close()).toBe(r); expect(a.prepare()).toBe(r); finite(a.inspect());
     });
   it.each(points.flatMap(([step, boundary, started, qualified], i) => ['fault', 'close', 'prior', 'reenter'].map(mode =>
@@ -117,7 +117,7 @@ describe('C-02 front: private caller admission without a fixed pin call', () => 
       expect(s).toMatchObject({ busy: false, contracts: { state: 'held', checked: true, preparationFirst: 'none', failurePhase: 'none' },
         build: { phase: 'BP01', step: 'after', failureRecorded: false, rootReady: false, grantAttempts: 0, dutyUsed: false, bodyStarts: 0,
           source: { claim: 'unused', pinCallReached: false, bindCallReached: false, postConfirmed: false },
-          receiver: { pinAttemptUsed: false, pinStage: 'empty', occupancy: 'free' }, storage: { dataCreated: 0 } } });
+          receiver: { pinAttemptUsed: false, pinStage: 'empty', occupancy: 'free' }, storage: { state: 'failed', dataCreated: 0 } } });
       expect(s.build.receiver.references.every(r => !r.retained)).toBe(true);
       expect(a.close()).toBe(r); expect(a.prepare()).toBe(r); expect(a.checkLegacy()).toBe(r); finite(a.inspect());
     });
