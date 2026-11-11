@@ -260,6 +260,8 @@ try {
     ['bodyPinStartPoint', new Set(['#bodyPinRouteBoundary'])],
     ['failBodyPinStart', new Set(['#bodyPinFailureRecorded', '#bodyPinFirst', '#bodyPinFailurePhase',
       '#bodyPinFailureStep', '#bodyPinFailureBoundary', '#bodyPinRouteState'])],
+    ['failBodyPinBridge', new Set(['#bodyPinFailureRecorded', '#bodyPinFirst', '#bodyPinFailurePhase',
+      '#bodyPinFailureStep', '#bodyPinFailureBoundary', '#bodyPinRouteState'])],
     ['prepareBodyPinStart', new Set(['#bodyPinRefusal'])],
   ]);
   for (const name of callerWriters.keys()) assert.equal(root.members.filter(n => ts.isMethodDeclaration(n) && n.name.getText(ast) === name).length, 1);

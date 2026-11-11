@@ -1,12 +1,12 @@
 # WF-B C-02後半：固定private call・receiver入口と同start試行／格納
 
-Version: draft-0.2 / Date: 2026-11-11 / 読み取り基準HEAD: `ff866f9`（C-02前半実装 `4f70522`、前半レビュー対照 `ff866f9`、draft-0.1レビュー修正基準HEAD: `0f3fae0`）。
+Version: draft-0.3 / Date: 2026-11-11 / 読み取り基準HEAD: `ff866f9`（C-02前半実装 `4f70522`、前半レビュー対照 `ff866f9`、draft-0.1レビュー修正基準HEAD: `0f3fae0`、内部契約の限定実装基準HEAD: `3fc15ab`）。
 
 draft-0.1のレビュー修正：§8の2か所で、境界の軸を取り違えていた。receiver行の「failurePrefix=none／before又はafter」は、before／afterが`BodyBindPrefix`の値に読めるが、before／afterを持つのは`failureBoundary`（`BodyReceiverFailureBoundary`）である。冒頭の「未callは既存BP02 before／checked」は、現行`failBodyPinStart`がroot側`#bodyPinFailureBoundary`へbefore／after、source側（`#bodyPinStartFailureSourceBoundary`と元sourceの`failureBoundary`）へbefore／checkedを書く2軸を混ぜていた。どちらも軸ごとに書き分けた。文書だけの修正で、契約・CR／CE・未実装範囲は変えない。
 
-Status: **接続差分の設計のみ。PC03固定call・receiver試行／格納・本書の新field／accessは未実装。** 親は[private pin設計](BEST_PRACTICE_WFB_BODY_PRIVATE_PIN_CONNECTION_DESIGN.md)と[bind・先行borrow設計](BEST_PRACTICE_WFB_BODY_BIND_BORROW_DESIGN.md)。生成の来歴は[source生成・停止設計](BEST_PRACTICE_WFB_BODY_SOURCE_ISSUER_STOP_DESIGN.md)、既存の実績は[C-02前半検証記録](E2E_BEST_PRACTICE_WFB_BODY_PIN_START_2026-11-11.md)を参照する。
+Status: **§13の内部型・先行field・readonly private bridgeと診断位置写像だけを合成依存限定で実装。PC03固定call・receiver試行／格納は未接続。** 親は[private pin設計](BEST_PRACTICE_WFB_BODY_PRIVATE_PIN_CONNECTION_DESIGN.md)と[bind・先行borrow設計](BEST_PRACTICE_WFB_BODY_BIND_BORROW_DESIGN.md)。生成の来歴は[source生成・停止設計](BEST_PRACTICE_WFB_BODY_SOURCE_ISSUER_STOP_DESIGN.md)、前半の実績は[C-02前半検証記録](E2E_BEST_PRACTICE_WFB_BODY_PIN_START_2026-11-11.md)、今回の実績は[bridge内部契約検証記録](E2E_BEST_PRACTICE_WFB_BODY_PIN_BRIDGE_2026-11-11.md)を参照する。
 
-正式発行口・既存C実行入口・body起動は閉鎖、全体受付無効、Unknown、VM／監視／telemetry調査保留を維持する。実装・実接続・実通信・実機操作・設定変更・Pushは行わない。以下の契約名・固定script・modelは将来案で、現行API／試験結果ではない。
+正式発行口・既存C実行入口・body起動は閉鎖、全体受付無効、Unknown、VM／監視／telemetry調査保留を維持する。現在の実装許可は§13の限定範囲だけで、固定call・試行／格納・実接続・実通信・実機操作・設定変更・Pushは行わない。§1〜12は作成時の将来設計／文書検証であり、そこで述べるactive call・格納成功を実装済みとはしない。
 
 ## 1 現行との差分・適用範囲
 
@@ -180,3 +180,19 @@ oracleは実装builder／schedule／checker／counterをimportしない。原始
 今回は本書と親2文書の参照更新だけ。ソース・試験・CHANGELOG・既存検証記録・manifest／lockfile・設定は変更せず、build・合成／compiled試験・梱包操作は行わない。実装・実接続・実通信・実機操作・設定変更・index登録・コミット・Pushは行わない。
 
 文書検証結果：3文書のローカルリンク29件に欠落なし、23表の列数・末尾改行／空白に異常なし。本書12節・親15節／17節の順序、CR01〜08とCE01〜14の重複／欠落を確認した。現行ソースを読み取り、PC02後の固定拒否・BP02固定writer・receiverの空先行参照とreadonly viewだけという未実装境界を照合した。作業中差分は本書と親2文書のMDだけで、indexは空。これは文書整合の確認であり、将来のcall／試行／格納の受入成功ではない。
+
+## 13 内部型・readonly bridgeとBP03診断位置の限定実装（2026-11-11）
+
+createProbeBodyPinBridgeFake／model=wfb-body-pin-bridge-1をpackage除外compositionだけへ追加した。APIは従来同様のprepare／check／checkLegacy／close／inspectで、固定script以外のroot／source／start・任意callback・summaryを受け取らない。既存prepareBodyPinStartのPC02最終検査後、旧固定停止より前にだけ新constructor継続を分岐する。前段の順序・旧factoryの固定停止／期待値はそのままで、返却済み／failed sourceを再開しない。前段自体の抽出は今回不要とした。
+
+rootへcallActiveを含む7原始scalarと空reply参照、同startへentryBusy=falseを先行した。2活動flagにはinitializer以外のwriterがなく、trueへする継続・finally・receiver実行入口は未実装。残りはbridge検査の位置／初回失敗位置・identity確認／checked・active資格の観測・再入拒否診断である。source22key／metadata・receiver9参照・旧field契約は増やさない。constructorの新固定modeも外部boolean引数として公開しない。
+
+module-private probeBodyPinRootAccessはroot static初期化で一度だけ固定し、identity／activeのreadonly検査だけを持つ。信頼済みrootはlexical thisから供給し、元issued=current／正規startを候補field読取りより先に比較する。receiverの正規binding／cells／run link／duty／exit bundleを9関係で照合するが、receiver入口を呼ばない。active検査は元来歴／未停止／active frame・BP03 caller位置・厳密source値・interval組を要求する。現在の実ownerはPC02・callActive=falseなのでactive資格は成立しない。
+
+BodyPinIntervalはbefore／calling／returnedのstrict値組、BodyPinFailurePositionはrootとsourceの異なる境界を保つBP02／preflight、BP03／call、BP03／returnedのstrict値組である。後2つの正例は純粋な原始値だけのcompiled oracleで確認し、実root／sourceへactive flag・call到達・receiver prefixを格納して正例を作らない。failBodyPinBridgeはこの位置写像を使いroot初回位置を保持するが、現在のowning経路で成立するのはBP02だけ。BP03の実call／復帰位置との結合は後段で別途検証する。
+
+新継続はbefore／checked／blockedの有限観測点で同identity・PC02条件・活動flag=falseを確認し、pin_bridge_not_connected／construction_unconfirmedで固定停止する。失敗／closeは新writerに限定し、生成BP01／after・生成failureRecorded=false、C-01準備診断を保持する。root側failureBoundary=afterとsource側failureBoundary=checkedを区別し、metadata確認を失った元sourceには書かずroot側だけで診断を保持する。closeはcacheより先に同期停止し、先行理由／初回位置／返答同一性を保持する。
+
+内部busyの検査は原値を厳密比較する。公開projectionのstrict boolean化で不正値をfalseへ潰して資格判定に戻さない。公開値は別にallowlist／strict boolean／凍結plain graphへ投影し、参照・brand・raw Errorは出さない。C-01／前半compiledの書込み禁止は、新root診断writerの6caller fieldだけを明示追加し、receiver／payload／source claimは禁止したまま。追加flagへの書込み0も新compiledで確認する。
+
+結果とRED／GREEN・未検証範囲は[今回の検証記録](E2E_BEST_PRACTICE_WFB_BODY_PIN_BRIDGE_2026-11-11.md)。CE条件全体の受入やactive ownerの節ごとの感度を主張しない。CR02以降の固定call、receiver entryBusy予約／一度限り試行・issued/current格納、PC08／C-03は未接続。全体受付無効・Unknown・調査保留、実接続・実通信・設定変更・Push禁止を維持する。

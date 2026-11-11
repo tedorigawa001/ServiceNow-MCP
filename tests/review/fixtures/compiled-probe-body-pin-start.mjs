@@ -217,7 +217,8 @@ try {
       const lhs = ts.isBinaryExpression(n) ? n.left : n.operand;
       if (ts.isPropertyAccessExpression(lhs)) {
         const field = lhs.name.getText(ast);
-        assert.ok(!neverWrite.has(field) || field === '#bodyPinFailureStep' && scope === 'CanonicalGateDraftRoot' && owner === 'failBodyPinStart',
+        assert.ok(!neverWrite.has(field) || field === '#bodyPinFailureStep' && scope === 'CanonicalGateDraftRoot'
+          && ['failBodyPinStart', 'failBodyPinBridge'].includes(owner),
           'forbidden receiver/claim write ' + field);
         if (field === '#bodyPinRouteAttempted') {
           reservations++; assert.equal(owner, 'admitBodyPinCaller'); assert.equal(n.right.getText(ast), 'true');

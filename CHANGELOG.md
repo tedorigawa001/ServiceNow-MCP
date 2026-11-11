@@ -18,6 +18,8 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 ### Changed
 
+- WF-B adds package-excluded synthetic-only call-window/receiver-busy value contracts, a read-only private bridge and separate BP03 caller/source failure-position mapping. The preparation reuses the same root/source/start and preserves earlier diagnoses while rejecting mixed candidates without hooks. Both live activity flags remain false and have no writers; active/returned positive cases are value-only tests, not call evidence. Fixed receiver dispatch, attempts/storage, claim consumption, body startup and formal issuance remain disconnected.
+
 - WF-B C-02 front adds package-excluded synthetic-only private caller qualification for the original root/source/start, a nonrefundable one-shot start reservation, and pin-specific failure positions. Identity-first rejection, stop-before-duplicate ordering and preflight rechecks preserve generation/preparation diagnoses separately. The fixed continuation intentionally stops before any receiver call; pin storage, source-use claim consumption, binding, construction-ready, body startup and formal issuance remain disconnected.
 
 - WF-B C-01 adds package-excluded synthetic-only pin contracts, prior scalar diagnostics and a closed preparation on the existing unpinned source/start. Read-only provenance, unused-base, empty-storage/payload and phase-specific checks preserve generation diagnoses separately from preparation failures. Thirteen later-state value contracts have independent compiled oracles; they do not populate a receiver or grant authority. Pin attempts/storage, claim consumption, binding, construction-ready, body startup and formal issuance remain disconnected.

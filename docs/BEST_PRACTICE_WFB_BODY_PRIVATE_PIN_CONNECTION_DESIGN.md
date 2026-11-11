@@ -1,14 +1,14 @@
 # WF-B (C)：BP02〜04段階別検査・同root／同startのprivate pin接続差分
 
-Version: draft-0.6 / Date: 2026-11-11 / 読み取り基準HEAD: `b3776da`（(B)実装: `c28b423`、再検査／不在projectionレビュー修正: `b3776da`、C-01実装基準HEAD: `554ef9a`、C-01レビュー修正基準HEAD: `86d2560`、C-02前半実装基準HEAD: `a3f1f66`、C-02前半レビュー修正基準HEAD: `4f70522`、後半接続差分設計基準HEAD: `ff866f9`）。
+Version: draft-0.7 / Date: 2026-11-11 / 読み取り基準HEAD: `b3776da`（(B)実装: `c28b423`、再検査／不在projectionレビュー修正: `b3776da`、C-01実装基準HEAD: `554ef9a`、C-01レビュー修正基準HEAD: `86d2560`、C-02前半実装基準HEAD: `a3f1f66`、C-02前半レビュー修正基準HEAD: `4f70522`、後半接続差分設計基準HEAD: `ff866f9`） / bridge内部契約実装基準HEAD: `3fc15ab`。
 
 draft-0.4のレビュー修正：C-02前半の開始前route未使用条件`bodyPinStartRouteUnused`の10節と、PC02の`bodyPinStartPreflightMatches`のroute 9節は、単独で外してもvitest・compiledの両方が通っていた。compiledのphase対照はsource 13fieldだけを壊し、route scalarを壊す対照がなかった。context条件のbase／storage／payload／来歴の4呼出し、entry/after の2回目caller照合、非accepted時の`#fixed`先行返却（内部拒否のrefusalを`foreign_source`へ上書きしない）、admit内refusalの初回保持、pin-start失敗時のshell failed反映も固定されていなかった。route 13scalarをentry/beforeとpreflight/beforeへ単独注入する26対照（節除去で拒否位置が動く）、context 4呼出しの注入と除去対照、同値copyへの差替えでcallerの再照合を確かめる対照、2回の再入でrefusalの初回保持を確かめる対照をcompiledへ追加した。context拒否8件ではrefusal=noneも比較する。vitestにはpin-start失敗後の`storage.state`=failedを追加した。等価・観測不能な節は§14に記録した。
 
 draft-0.2のレビュー修正：§11は「BP02 entry値checkerだけを同ownerに接続し…3位置で再確認」としていたが、`bodyPinContractsMatch`のentry呼出しを`true`へ置き換えても、vitestとcompiledの両方が通っていた。compiledの対照が来歴・属性・初期値・安定性・payload6参照にしか注入しておらず、source進行13fieldとreceiver pin値を同owner経路で壊す対照がなかったためである。同じく、PayloadEmptyのoccupancy／bindingState／bindPrefixの3節、checked位置の再検査、失敗時のshell failed反映、source不在時の`receiverPin`の`not_created`とallowlist、冒頭の`#bodySourceState = 'held'`も固定されていなかった。source13field・receiver12fieldの単一注入と写像除去の対照、checked位置の4注入（除去で拒否位置がafterへ移る）、payload scalar3節の対照、receiver投影allowlistの対照をcompiledへ追加した。vitestにはstorage.state・build.state・`receiverPin`の不在投影を追加した。等価・観測不能な節は§12に記録した。
 
-Status: **C-01とC-02前半のcaller資格・一度限り開始・pin専用失敗診断を合成依存限定で実装。** 現行範囲は§11〜13と[C-02前半検証記録](E2E_BEST_PRACTICE_WFB_BODY_PIN_START_2026-11-11.md)。§1〜10はdraft-0.1時点の将来設計／文書検証。rootのPC01開始とPC02 preflightまでを接続し、PC03の固定call・receiver試行／格納とBP04は未接続。親は[生成・停止設計](BEST_PRACTICE_WFB_BODY_SOURCE_ISSUER_STOP_DESIGN.md)と[bind・先行borrow設計](BEST_PRACTICE_WFB_BODY_BIND_BORROW_DESIGN.md)。前工程の実績は[(B)検証記録](E2E_BEST_PRACTICE_WFB_BODY_SOURCE_ISSUER_2026-11-11.md)と[C-01検証記録](E2E_BEST_PRACTICE_WFB_BODY_PIN_CONTRACTS_2026-11-11.md)。将来の正常modelと現在の固定拒否modelは区別する。
+Status: **C-01とC-02前半、および§16のcall／busy内部型・readonly bridge・診断位置写像を合成依存限定で実装。** 現行範囲は§11〜13・16と[C-02前半検証記録](E2E_BEST_PRACTICE_WFB_BODY_PIN_START_2026-11-11.md)。§1〜10はdraft-0.1時点の将来設計／文書検証。rootのPC01開始とPC02 preflightまでを接続し、PC03の固定call・receiver試行／格納とBP04は未接続。親は[生成・停止設計](BEST_PRACTICE_WFB_BODY_SOURCE_ISSUER_STOP_DESIGN.md)と[bind・先行borrow設計](BEST_PRACTICE_WFB_BODY_BIND_BORROW_DESIGN.md)。前工程の実績は[(B)検証記録](E2E_BEST_PRACTICE_WFB_BODY_SOURCE_ISSUER_2026-11-11.md)と[C-01検証記録](E2E_BEST_PRACTICE_WFB_BODY_PIN_CONTRACTS_2026-11-11.md)。将来の正常modelと現在の固定拒否modelは区別する。
 
-正式発行口・既存C実行入口・body起動閉鎖、全体受付無効、Unknown、VM／監視／telemetry調査保留を維持する。本書の(C)はprivate pinの設計区分であり、既存C実行入口の解禁ではない。現在の実装許可は§11のC-01と§13のC-02前半に限る。固定call・receiver試行／格納・source利用claim消費・payload借用／bind・構築ready・body起動・実接続・実通信・設定変更・Pushは行わない。
+正式発行口・既存C実行入口・body起動閉鎖、全体受付無効、Unknown、VM／監視／telemetry調査保留を維持する。本書の(C)はprivate pinの設計区分であり、既存C実行入口の解禁ではない。現在の実装許可は§11のC-01・§13のC-02前半・§16の限定bridge準備に限る。固定call・receiver試行／格納・source利用claim消費・payload借用／bind・構築ready・body起動・実接続・実通信・設定変更・Pushは行わない。
 
 ## 1 現行からの差分と今回の正常到達点
 
@@ -216,3 +216,11 @@ compiledは実root同士の混入・停止優先順・phase値13fieldを4境界�
 callActiveとreceiver entryBusyを別の先行scalarとし、前者のcall区間／後者のpreflight再入と、返却しないcall／attempt履歴を分離する。BP03 caller位置とreceiver実位置を別writerで保持し、issued／captured／confirmed後のthrow・closeでも参照／試行prefixを巻き戻さない。旧9参照全空checkerをpin後に流用せず、安定部分と狭いphaseの固定検査を使う。
 
 本節と差分設計は文書だけ。現在の実装は引き続きC-02前半のPC02固定停止までで、call・receiver試行／格納・新field／access、PC08復帰照合、C-03のBP04は未接続。CE01〜14は未実施で、§12／14の等価判断を後半へ自動移植しない。正式発行口閉鎖・全体受付無効・Unknown・調査保留、実装・実接続・実通信・設定変更・Push禁止を維持する。
+
+## 16 call／busy内部型・readonly bridge・診断写像の限定接続（2026-11-11）
+
+[call・receiver差分設計§13](BEST_PRACTICE_WFB_BODY_PIN_CALL_RECEIVER_DESIGN.md)と[今回の検証記録](E2E_BEST_PRACTICE_WFB_BODY_PIN_BRIDGE_2026-11-11.md)の範囲だけを合成依存限定で実装した。新factoryはPC02最終検査までを同prepareで再利用し、module-privateな元root／source／startのreadonly照合を行ってpin_bridge_not_connectedで止まる。root callActiveとreceiver entryBusyはliteral falseの先行fieldだけで、trueへのwriter・固定receiver callはない。
+
+calling／returnedの値契約とBP03 caller／sourceの境界写像の正例は純粋な原始値試験だけ。実ownerをactive／pin済みに偽装して受入成功にしない。新診断writerはroot実位置の写像を読み、前半用のbefore／afterとsource before／checkedの軸を混同せず先行診断を保持する。内部busyは原値、公開診断はstrict booleanに分けた。旧C-01／前半の禁止は新writerの6caller診断fieldに限って拡張し、receiver・source claim・payloadは未書込みを維持する。
+
+§15の文書のみは設計作成時の記録。現在もCR02以降のcall・receiver試行／格納・PC08／C-03は未接続、CE全体は未受入。全体受付無効・Unknown・正式発行口閉鎖・調査保留を維持する。
