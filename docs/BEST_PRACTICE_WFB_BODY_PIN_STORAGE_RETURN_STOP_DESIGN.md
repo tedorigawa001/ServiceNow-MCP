@@ -1,6 +1,6 @@
 # WF-B：同start参照格納・全確認とPC08未接続停止の接続差分
 
-Version: draft-0.3 / Date: 2026-11-12 / 読み取り基準HEAD: `8d95d5c`（固定call実装: `1b929dc`、一点対照・等価判断のレビュー追加: `8d95d5c`、限定準備実装の基準HEAD: `7a9a613`、draft-0.2レビュー修正基準HEAD: `10e2f96`）。
+Version: draft-0.4 / Date: 2026-11-12 / 読み取り基準HEAD: `8d95d5c`（固定call実装: `1b929dc`、一点対照・等価判断のレビュー追加: `8d95d5c`、限定準備実装の基準HEAD: `7a9a613`、draft-0.2レビュー修正基準HEAD: `10e2f96`、§15の差分設計基準HEAD: `1f41240`）。
 
 draft-0.2のレビュー修正：§13の格納準備に23件の一時変異を入れたところ、18件はstorage又はcall側のVitest・compiledの意味的なassertで落ちた（busy節はanchorを保った変異で再確認）。残る5件は試験変更なしで通ったが、いずれも重複防御か単一writerであり、検証記録は「単一の失敗診断要求」「到達不能／重複防御」とまとめて書くだけで節を特定していなかった。§14に節ごとの根拠を記録した。文書だけの修正で、fixture・試験・契約は変えない。
 
@@ -210,3 +210,13 @@ SE01／02／04／06／07／09〜12の今回境界に関係する部分だけを[
 | `bodyPinStoragePoint`の`bodyPinBridgeIdentity` | `storageEvent`が直前に同じ組の同一性を検査しており、その間にscriptはない |
 
 `storageMode`の固定mode節は、storage側の試験では観測できないが、旧call factoryで外すと格納準備へ進むためcall側のVitestで落ちる。等価ではないので本表に含めない。
+
+## 15 同issued/currentの格納writer・実参照照合と初回rejected保持の差分設計（2026-11-12）
+
+[格納・初回rejected保持の接続差分設計draft-0.1](BEST_PRACTICE_WFB_BODY_PIN_REFERENCE_STORAGE_DESIGN.md)で、§12の(2)をさらに分割し、同root／source／startの実issued→current保持と、同試行で捕捉済みの不一致currentだけを初回rejectedへ保持する境界を対にした。正規source所有はrootに残し、receiverの保持は借用責務であってsource利用claim消費ではない。固定同期群とprivate実参照照合を組にし、公開view／同値copyからの昇格口を作らない。
+
+新中間継続の到達点はcaptured／step currentまでとし、checked／confirmed・最終post・accepted・PC08・C-03は接続しない。正常中間でもreceiver_unconfirmed／pin_confirmation_not_connectedで固定停止する別mode案であり、§7〜8の将来の全確認後のreceiver first none／pin_return_not_connectedとは区別する。既存準備factoryの空参照・attempting固定停止は維持する。
+
+初回rejectedは停止／firstのない正規試行で既に捕捉した候補だけが対象である。保持と保持post確認を分け、失敗後も元I/C/J・初回理由・未確認責務を保持する。同期close後の追加保持、foreign候補格納、第2候補置換、finallyでの参照clearは許さない。§14の5節は新writer／失敗専用postの実経路ごとに再評価し、等価・非等価を自動継承しない。
+
+本節と子設計は文書だけ。§13の限定準備実装は変更せず、新writer・保持scalar・新mode・RE01〜12は未実装／未実施である。正式発行口閉鎖・全体受付無効・Unknown・調査保留を維持する。
