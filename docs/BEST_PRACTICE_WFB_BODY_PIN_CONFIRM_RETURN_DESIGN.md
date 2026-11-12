@@ -247,3 +247,11 @@ throw／close／prior後も到達段階・post履歴・I/C/Jを保持する。�
 | 段階matcherの観測点一致節 | 常に同じpointのevent直後に呼ばれ、event内の再入（refused_existing）はpointを変えない |
 | confirmationStagesModeとbodyPinConfirmationStagePointのidentity（2） | 確認済みの元root／source／startの組だけで呼ばれ、途中で組を差し替える経路がない |
 | dispositionのclassification条件 | stagesCheckedが立つのはreceiverが全段階後にreceiver_unconfirmedを記録した経路だけで、分類は常にreceiver_unconfirmed（§15と同じ構造） |
+
+## 18 (C)最終post・内部返却と単一cache所有の差分詳細設計（2026-11-12）
+
+[最終返却・診断・cache所有の差分詳細設計draft-0.1](BEST_PRACTICE_WFB_BODY_PIN_FINAL_RETURN_CACHE_DESIGN.md)で、§16の成功したblocked再照合直後・固定拒否前からfresh C modeだけを分岐する契約を具体化した。最終post→G_P→literal acceptedと、実primitive復帰後のPC08未接続停止を対に扱い、Bの失敗済みinstanceを再開しない。callee first noneと上位construction_unconfirmed、final trueだがprimitive未復帰というprefixを別に保持する。
+
+C終端objectは元rootの既存#fixedだけが所有し、mode別cacheへ複製しない。診断seal・一度限りの生成・非公開保持・外側入口の実復帰確認・公開を分ける。生成throwとcache保持後の外側finally throwは別状態で保持し、generic fail／catch／早期cache読取りもC専用方針へ集約する。開始前closeの確定first none、後発close／入力拒否、非終端view、元source／I/C/Jの未解決責務を区別する。
+
+本節は開始時のdraft-0.5レビュー変更を保持した参照追記であり、同レビューは別作業で`7eb7b9b`へ保存された。§17までの内容は変更せず、既存A/B実装・期待値・期限は不変である。新Cの全writer／reader・外側公開gate・最終post／返却は未実装、FRC／FRT条件も未実施。PC08・BP04／C-03・claim消費・構築ready・body・正式発行は接続せず、全体受付無効・Unknown・調査保留を維持する。

@@ -1,6 +1,6 @@
 # WF-B：同start参照格納・全確認とPC08未接続停止の接続差分
 
-Version: draft-0.8 / Date: 2026-11-12 / 読み取り基準HEAD: `8d95d5c`（固定call実装: `1b929dc`、一点対照・等価判断のレビュー追加: `8d95d5c`、限定準備実装の基準HEAD: `7a9a613`、draft-0.2レビュー修正基準HEAD: `10e2f96`、§15の差分設計基準HEAD: `1f41240`、§16の限定格納実装基準HEAD: `ad00f28`、§17の完了／未接続停止差分設計基準HEAD: `ebe739e`、§18の(A)準備実装基準HEAD: `d7d3055`、§19の(B)段階接続基準HEAD: `201b1f7`）。
+Version: draft-0.9 / Date: 2026-11-12 / 読み取り基準HEAD: `8d95d5c`（固定call実装: `1b929dc`、一点対照・等価判断のレビュー追加: `8d95d5c`、限定準備実装の基準HEAD: `7a9a613`、draft-0.2レビュー修正基準HEAD: `10e2f96`、§15の差分設計基準HEAD: `1f41240`、§16の限定格納実装基準HEAD: `ad00f28`、§17の完了／未接続停止差分設計基準HEAD: `ebe739e`、§18の(A)準備実装基準HEAD: `d7d3055`、§19の(B)段階接続基準HEAD: `201b1f7`、§20の(C)詳細設計基準HEAD: `7343af3`）。
 
 draft-0.2のレビュー修正：§13の格納準備に23件の一時変異を入れたところ、18件はstorage又はcall側のVitest・compiledの意味的なassertで落ちた（busy節はanchorを保った変異で再確認）。残る5件は試験変更なしで通ったが、いずれも重複防御か単一writerであり、検証記録は「単一の失敗診断要求」「到達不能／重複防御」とまとめて書くだけで節を特定していなかった。§14に節ごとの根拠を記録した。文書だけの修正で、fixture・試験・契約は変えない。
 
@@ -246,3 +246,9 @@ PC08未接続停止ではcallee first noneを維持し、root call after・sourc
 [確認差分設計§16](BEST_PRACTICE_WFB_BODY_PIN_CONFIRM_RETURN_DESIGN.md)の(B)を合成依存限定で実装した。元owner／source／startでchecked／confirmedと各postを照合し、固定拒否前のblocked再検査まで進む。stage confirmed・各post完了・最終post完了は別であり、最終markerはfalseのまま。正常でもreceiver_unconfirmed／rejected_attemptと上位pin_final_post_not_connectedで停止する。
 
 途中のthrow／close／再入でも実参照と診断を保持し、借用を修復・clear・新Jへ変換しない。元call／trial・利用claimを再発行せず、旧(A)・格納／保持・固定callの保証は維持する。[(B)検証記録](E2E_BEST_PRACTICE_WFB_BODY_PIN_CONFIRMATION_STAGES_2026-11-12.md)に新旧合成・compiled・梱包確認を記録した。最終post・accepted返却・PC08・C-03・claim消費・構築ready・body・正式発行は未接続、全体受付無効・Unknown・調査保留を維持する。
+
+## 20 (C)最終返却・PC08未接続停止と返答所有（2026-11-12）
+
+[Cの差分詳細設計draft-0.1](BEST_PRACTICE_WFB_BODY_PIN_FINAL_RETURN_CACHE_DESIGN.md)で、最終postと内部accepted返却を、上位の固定未接続停止・返却失敗・診断seal・単一cache所有と一体にした。同ownerの最終checkerからG_P／literal returnまでの非介在を保ち、復帰未確認final trueから成功を推定しない。正常でもPC08のreturned全照合やBP04へ進めない。
+
+返答は同rootの#fixedだけへ非公開保持し、外側固定入口の実復帰を確認してから公開する。生成失敗と保持後の外側退出失敗を分け、first・位置・callee完了履歴・元借用／未確認責務を保持する。早期失敗・close・非終端viewもC専用writer／reader方針へ集約し、旧A/Bのmode別cacheやgeneric早期返却をそのまま流用しない。本節は文書だけで、新C・PC08・C-03・構築ready・body・正式発行は未接続。全体受付無効・Unknown・調査保留、実装・実接続・実通信・設定変更・Pushの禁止は不変。
