@@ -1,6 +1,8 @@
 # WF-B：(C)最終post・内部accepted返却・PC08未接続停止と返答cache所有の差分詳細設計
 
-Version: draft-0.2 / Date: 2026-11-12 / 設計読み取り基準HEAD: `7343af3ec1befe854326d43a32fbfbe833be692f`（レビュー`7eb7b9b`を維持）。§15の(C-a)限定実装基準HEAD: `8e3f043140ba3f824c507ebd9ad57d782aa89570`。
+Version: draft-0.3 / Date: 2026-11-12 / 設計読み取り基準HEAD: `7343af3ec1befe854326d43a32fbfbe833be692f`（レビュー`7eb7b9b`を維持）。§15の(C-a)限定実装基準HEAD: `8e3f043140ba3f824c507ebd9ad57d782aa89570`。§15実装のレビュー修正基準HEAD: `76f3d0f`。
+
+draft-0.2のレビュー修正：§15の公開projectionは「凍結plainな有限診断値のみ」としていたが、`inspectFinalContracts`はfirst・disposition・phase・rootEntryExit・deliveryFirst・現在点／初回点・completionをprivate原値のまま、sealed・publicEntryBusy・stoppedを非strictのまま出していた。型で有限なだけで、実行時allowlistと対照がなかった。既存factoryと同じく固定allowlist（範囲外はunconfirmed）と`=== true`へ投影し直し、compiledにprivate不正値11件の非echo対照を追加した（修正前はfirstで`private_secret`がそのまま出てRED）。Vitestにはseal後の`check()`がpublication_not_connectedを返すことを追加した。28件の一時変異のうち等価な5件は§16に記録した。投影以外のfixture挙動は変えていない。
 
 Status: **§15の(C-a)狭い型・先行scalar・seal／単一cacheの閉鎖契約だけ合成実装。C-bの全入口routing／実公開、C-cの最終post・accepted返却は未接続。** 親は[確認・返却設計](BEST_PRACTICE_WFB_BODY_PIN_CONFIRM_RETURN_DESIGN.md)と[格納・PC08未接続停止設計](BEST_PRACTICE_WFB_BODY_PIN_STORAGE_RETURN_STOP_DESIGN.md)。実績は[(B)検証記録](E2E_BEST_PRACTICE_WFB_BODY_PIN_CONFIRMATION_STAGES_2026-11-12.md)と[(C-a)検証記録](E2E_BEST_PRACTICE_WFB_BODY_PIN_FINAL_CONTRACTS_2026-11-12.md)。本書は親のFC06〜09／FE05〜12を、現在の(B)と診断／cache実装からの差分として具体化する。既存の[private pin全体設計](BEST_PRACTICE_WFB_BODY_PRIVATE_PIN_CONNECTION_DESIGN.md)のPC08／BP04／C-03は接続しない。
 
@@ -232,3 +234,13 @@ package除外のcreateProbeBodyPinFinalContractsFakeを追加した。同Canonic
 旧modeのgeneric #fixed writer／early reader・source／calleeとの接続をC-aのfactoryへ流用していない。したがって§8の全入口routingが完成したという保証ではない。C-bで全writer／readerの分岐と実外側frame境界を一体接続し、C-cで最終post・内部acceptedと元callerの固定停止を一体接続する必要がある。C-aのseal()は合成の固定construction_unconfirmed、close()は合成の開始前closeであり、未観測のcallee結果をsealする入口ではない。
 
 追加費目はrootの固定flagと先行10scalar、有限check／seal／原始code、最大1回の終端object生成／freeze、固定catch診断、固定projectionと凍結facade。新scalarは同classの先行fieldなので旧modeのrootにも初期化されるが、旧分岐・期待値・期限は変更しない。inspectionの都度生成する非終端診断viewは単一終端cacheの数に隠さず別費目とする。実layout・allocation／GC／OOM・unit／全体work上界・破棄予約・診断必着はUnknown。FRC01〜06／08〜09とFRT全体の受入成功は主張しない。詳細は[(C-a)検証記録](E2E_BEST_PRACTICE_WFB_BODY_PIN_FINAL_CONTRACTS_2026-11-12.md)。
+
+## 16 §15実装レビューの等価判断（2026-11-12）
+
+C-aの閉鎖契約shellだけでの判断である。C-b以降で公開wrapperやfresh C入口から同じmethodを呼ぶときは単独対照で改めて評価する。
+
+| 節 | 等価の根拠 |
+|---|---|
+| `finalContractRejectInput`の`first === 'none'`guard | seal前のfirstはnone又はinput_rejectedだけで、どちらでも結果はinput_rejectedになる |
+| `finalContractSeal`／`finalContractMaterialize`の固定mode節（2） | 呼出し元はこの閉鎖factoryだけで、constructor固定flagは常にtrue |
+| materializeの`sealed`節と`disposition === 'none'`節（2） | sealが両方を同時に記録するため、片方だけが成立する状態がない。両節をまとめた除去はcompiledの`no-pre`対照が検出する |

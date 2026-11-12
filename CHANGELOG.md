@@ -292,6 +292,8 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 ### Added
 
+- WF-B pin final-contracts review: the C-a inspect projection now maps every private enum through a fixed allowlist (out-of-range becomes unconfirmed) and every flag through strict boolean, matching earlier factories; eleven compiled controls inject invalid private values and confirm nothing echoes. Vitest also pins the sealed `check()` result, and the remaining fixed-mode and co-recorded clauses are documented as equivalent.
+
 - WF-B pin confirmation-stages review: a compiled control now drops the receiver busy flag right before the owning prepared check and confirms the run stops with state_invalid without entering the stage continuation (stage point stays none), so removing the prepared-validity condition on the stage branch is detected. The remaining fixed-mode, same-point, identity and same-value clauses are documented as equivalent; no fixture behavior changed.
 
 - WF-B pin confirmation-preparation review: vitest now compares the per-point disposition, the pre-call source failure boundary, the failed seed shell and the exact reply re-materialization error, and compiled controls inject a single fault right before the owning prepared check (busy, inactive call window, rejected slot) and lose the primitive return after the receiver call, so removing each guard moves the disposition, first reason or return classification. The remaining fixed-mode, unreachable or same-value clauses are documented as equivalent; no fixture behavior changed.

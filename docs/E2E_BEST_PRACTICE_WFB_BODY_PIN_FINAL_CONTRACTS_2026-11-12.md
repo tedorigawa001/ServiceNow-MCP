@@ -54,6 +54,15 @@ publishはpublication_not_connectedだけ。publicEntryBusy=false／rootEntryExi
 
 次段階はC-bのfresh C入口・全早期失敗／cache reader集約・実外側入場／復帰境界を固定拒否のまま接続すること。C-cの最終post→literal accepted→元callerの未接続停止はその後に一体接続する。旧A/Bの等価節は元範囲の履歴であり、C-b／C-cの保証へ自動転用しない。
 
+## レビュー修正（2026-11-12）
+
+`76f3d0f`のレビューで2点を直した。
+
+1. 公開projectionの実行時allowlist：`inspectFinalContracts`がprivate原値（first・disposition・phase・rootEntryExit・deliveryFirst・現在点／初回点・completion）と非strictのboolean（sealed・publicEntryBusy・stopped）をそのまま出していた。compiledに、各privateへ不正値を入れてinspectする11件の対照を先に追加し、firstで`private_secret`がそのまま出るREDを確認した。その後、固定allowlist（範囲外unconfirmed）と`=== true`へ投影し直してGREEN。全11件で値が漏れないことも確認する。
+2. 一時変異28件のうち、seal後の`check()`の戻り値分岐が試験なしで通っていた。Vitestにpublication_not_connectedの比較を追加してkillした。
+
+残る5件（rejectInputのfirst guard、固定mode節2、materializeのsealed／disposition節）は[設計§16](BEST_PRACTICE_WFB_BODY_PIN_FINAL_RETURN_CACHE_DESIGN.md)で等価と判断した。materializeの2節は、compiledが行全体をanchorにしているため、片方だけの除去はanchor消失で落ちる。これを意味的killには数えていない。
+
 ## コミット対象だけの隔離再検証（2026-11-12）
 
 同じ基準HEADを一時ディレクトリへ書き出し、今回の10ファイルだけを反映した。既存node_modulesだけを参照し、依存の導入・設定変更は行わない。worktreeと隔離コピーの10ファイルのSHA-256一致を確認し、その他の未コミット内容を持ち込まず、隔離コピー上で再実行した。

@@ -9,6 +9,7 @@ describe('C-a closed final reply contracts, without final post or public deliver
     expect(a.seal()).toBe('sealed');
     expect(a.materialize()).toBe('private_cached');
     expect(a.publish()).toBe('publication_not_connected');
+    expect(a.check()).toBe('publication_not_connected');
     expect(a.inspect()).toMatchObject({ sealed: true, first: 'construction_unconfirmed',
       disposition: 'construction_unconfirmed', phase: 'private_cached', attempts: 1, cacheRetained: true,
       publicEntryBusy: false, rootEntryExit: 'not_observed', finalPost: false,

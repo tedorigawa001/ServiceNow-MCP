@@ -132,6 +132,20 @@ const capability = createProbeBodyPinFinalContractsFake().publish().source;
   const ds = ts.getPreEmitDiagnostics(ts.createProgram([file], opts, host));
   assert.ok(ds.every(d => d.file?.fileName === file && d.start >= source.length), 'no baseline diagnostics');
   assert.equal(new Set(ds.map(d => d.file.getLineAndCharacterOfPosition(d.start).line)).size, 12);
-  console.log(JSON.stringify({ compiled: true, mutationControls: 6, valueControls, typeRejections: 12,
+  // Public projection is a finite allowlist: corrupted private values never echo and booleans stay strict.
+  const anchor = "    return Object.freeze({ model: 'wfb-body-pin-final-contracts-1',";
+  const enumFields = [['#failure.first', 'first'], ['#finalTerminalDisposition', 'disposition'], ['#finalReplyPhase', 'phase'],
+    ['#finalRootEntryExit', 'rootEntryExit'], ['#finalDeliveryFirst', 'deliveryFirst'], ['#finalPoint', 'currentPoint'],
+    ['#finalFailurePoint', 'failurePoint'], ['#finalCompletion', 'completion']];
+  const boolFields = [['#finalTerminalSealed', 'sealed'], ['#finalPublicEntryBusy', 'publicEntryBusy'], ['#closed', 'stopped']];
+  let projectionControls = 0;
+  for (const [field, key] of [...enumFields, ...boolFields]) {
+    const bad = boolFields.some(([f]) => f === field) ? "'private_truthy'" : "'private_secret'";
+    const m = await load(edit('inspectFinalContracts', anchor, `    this.${field} = ${bad} as never;\n` + anchor), 'projection-' + key);
+    const view = m.createProbeBodyPinFinalContractsFake().inspect();
+    assert.equal(view[key], boolFields.some(([f]) => f === field) ? false : 'unconfirmed', key);
+    assert.ok(!JSON.stringify(view).includes('private_'), key + ' echo'); projectionControls++;
+  }
+  console.log(JSON.stringify({ compiled: true, projectionControls, mutationControls: 6, valueControls, typeRejections: 12,
     singleCache: true, publicationWriters: 0, finalPostWriters: 0, bodyStarts: 0 }));
 } finally { rmSync(dir, { recursive: true, force: true }); }
