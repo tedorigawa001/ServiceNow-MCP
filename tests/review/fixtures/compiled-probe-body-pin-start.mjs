@@ -218,7 +218,7 @@ try {
       if (ts.isPropertyAccessExpression(lhs)) {
         const field = lhs.name.getText(ast);
         assert.ok(!neverWrite.has(field) || field === '#bodyPinFailureStep' && scope === 'CanonicalGateDraftRoot'
-          && ['failBodyPinStart', 'failBodyPinBridge'].includes(owner)
+          && ['failBodyPinStart', 'failBodyPinBridge', 'recordBodyPinConfirmationFailure'].includes(owner)
           || scope === 'CanonicalGateDraftRoot' && owner === 'dispatchBodyPin' && field === 'pinCallReached'
           || scope === 'RetirementStartAssembly' && owner === 'bodyPinReceiverEntry' && ['#bodyPinStep', '#bodyPinAttemptUsed', '#bodyPinStage'].includes(field)
           || scope === 'RetirementStartAssembly' && ['failBodyPinReceiver', 'failBodyPinStorageReceiver'].includes(owner) && field === '#bodyPinFailureStep'

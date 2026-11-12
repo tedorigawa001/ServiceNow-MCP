@@ -1,10 +1,10 @@
 # WF-B：pin confirmed・最終postとPC08未接続停止の接続差分
 
-Version: draft-0.1 / Date: 2026-11-12 / 読み取り基準HEAD: `ebe739e`。
+Version: draft-0.2 / Date: 2026-11-12 / 読み取り基準HEAD: `ebe739e`（§14の(A)限定実装基準HEAD: `d7d3055`）。
 
-Status: **詳細設計だけ。新しい確認writer・最終post・完了通知・caller分岐は未実装。** 親は[格納・初回rejected保持設計](BEST_PRACTICE_WFB_BODY_PIN_REFERENCE_STORAGE_DESIGN.md)と[全確認・未接続停止設計](BEST_PRACTICE_WFB_BODY_PIN_STORAGE_RETURN_STOP_DESIGN.md)。前段実績は[格納・保持検証記録](E2E_BEST_PRACTICE_WFB_BODY_PIN_REFERENCE_STORAGE_2026-11-12.md)。既存の[private pin全体schedule](BEST_PRACTICE_WFB_BODY_PRIVATE_PIN_CONNECTION_DESIGN.md)のPC07までと、PC08未接続時の失敗合流を対にする。PC08そのもの・BP04／C-03は接続しない。
+Status: **§14の(A)型・先行marker・caller分類／非割当て診断契約だけを合成依存限定で実装。checked／confirmed writer・最終post・accepted返却は未接続。** 親は[格納・初回rejected保持設計](BEST_PRACTICE_WFB_BODY_PIN_REFERENCE_STORAGE_DESIGN.md)と[全確認・未接続停止設計](BEST_PRACTICE_WFB_BODY_PIN_STORAGE_RETURN_STOP_DESIGN.md)。前段実績は[格納・保持検証記録](E2E_BEST_PRACTICE_WFB_BODY_PIN_REFERENCE_STORAGE_2026-11-12.md)、今回実績は[(A)準備検証記録](E2E_BEST_PRACTICE_WFB_BODY_PIN_CONFIRMATION_PREPARATION_2026-11-12.md)。既存の[private pin全体schedule](BEST_PRACTICE_WFB_BODY_PRIVATE_PIN_CONNECTION_DESIGN.md)のPC07までと、PC08未接続時の失敗合流を対にする。PC08そのもの・BP04／C-03は接続しない。
 
-正式発行口・既存C実行入口・body起動閉鎖、全体受付無効、Unknown、VM／監視／telemetry調査保留を維持する。今回はMarkdownだけを変更し、実装・実接続・実通信・実機操作・設定変更・Pushは行わない。
+正式発行口・既存C実行入口・body起動閉鎖、全体受付無効、Unknown、VM／監視／telemetry調査保留を維持する。§1〜13はdraft-0.1の将来契約／文書検証履歴、今回の限定実装は§14で区別する。実接続・実通信・実機操作・設定変更・Pushは行わない。
 
 ## 1 現行との差分と正常停止点
 
@@ -141,7 +141,7 @@ call側sourceReasonはroot firstの単純copyにしない。rejectedでは実T�
 
 特に、receiver first none→上位未接続、confirmed記録後のcallee失敗、final=trueだがprimitive未復帰、復帰後の先行root／source理由、返答生成失敗では軸が分かれる。receiverReason／sourceReasonの同値写像やcatchの到達不能という旧根拠を自動継承しない。節除去の対照は、最初の理由・実位置・最後のprefix・最終marker・未実施suffixの変化を比較し、構文／型エラー・anchor消失・外側timeoutや単なる後段固定拒否だけをkillに数えない。
 
-## 11 独立合成・compiled受入条件（すべて未実施）
+## 11 全接続時の独立合成・compiled受入条件（(A)の限定結果は§14）
 
 | ID | 必須条件と負の対照 |
 |---|---|
@@ -168,8 +168,24 @@ oracleは実装のbuilder／schedule／checker／counterをimportせず、固定
 
 別承認後の分割案は、(A)狭い状態型・最終marker先行field・新caller分類／非割当て診断契約を実行閉鎖で準備、(B)同ownerのchecked／confirmedと各postを固定拒否まで接続、(C)最終post→literal returnとPC08未接続停止を対に接続して全prefixを検証、の順とする。途中版でacceptedだけを先に解禁せず、旧失敗済みsequenceを使い回さない。各段階でテスト・compiled・CHANGELOG・設計／検証記録・梱包除外を更新する。
 
-## 13 今回の文書検証範囲
+## 13 draft-0.1の文書検証履歴
 
 今回は本書と親2文書のMarkdownだけを更新する。ソース・テスト・compiled fixture・CHANGELOG・既存検証記録・manifest／lockfile・設定は変更せず、build・合成／compiled試験・梱包・index登録・コミット・Pushは行わない。FC01〜09／FE01〜12は将来の操作／受入条件であり、現行の実装・試験結果とは区別する。
 
 文書検証結果（2026-11-12）：当方が編集した3文書のローカルリンク23件に欠落なし、21表の列数・末尾改行／行末空白に異常なし。本書13節・親15／17節の順序、FC01〜09／FE01〜12の重複・欠落なしを確認した。照合基準`ebe739e`の中間post後固定拒否・実checkerの3phase・accepted一律拒否・receiver／dispatcher finally、失敗位置／返答生成の割当てを読み取り確認した。当方の編集はMarkdown3ファイルだけ。最終確認時に別の作業中変更がcomposition fixture・reference試験・reference compiledの3ファイルへ現れたため、その内容は変更せず保持し、本書の実装根拠へは含めない。indexは空、HEADは`ebe739e`から変更していない。これは文書整合の確認で、新確認経路・非割当てwriter・全FE／費用の検証成功を意味しない。
+
+## 14 (A)狭い値契約・先行marker・閉鎖caller準備（2026-11-12）
+
+package除外のcreateProbeBodyPinConfirmationPreparationFake／wfb-body-pin-confirmation-preparation-1を追加した。constructor固定の別合成modeで、元root／source／startと参照格納・中間postを再利用する。実ownerが照合するphaseはcaptured_readyだけであり、正常でもcaptured／step currentのままreceiver_unconfirmed／rejected_attempt、上位construction_unconfirmed／pin_confirmation_not_connectedで停止する。checked／confirmedのwriter・G_K／G_M／G_P・最終post・literal acceptedは実装していない。
+
+BodyPinConfirmationStateは§3の7組を狭いunionにし、source13／receiver14の全原値・境界・中間post／hold／markerを純粋に検査する。before_final_post等の後段正例は値専用で、実ownerを進める資格ではない。同startのpinFinalPostCheckedはconstructor前のliteral falseで、初期化後のwriterは0。既存referencePostChecked・rejected hold confirmed・source22fieldの意味を変えない。
+
+新callerの分類器はprimitiveだけを受ける。accepted＋call=1＋final=true＋receiver first noneの値正例もcompleted_value_onlyであり、実callerではacceptedを引き続きstate_invalidへ固定拒否する。元callの結果を格納した後、raw private first／markerだけを読み、診断前にallocatingなreceiver view・position・replyを生成しない。実結果noneはunreturnedのまま、call数やmarkerから返却成功を補完しない。
+
+非割当てwriterは既存rootのfirst／pin初回位置／sourceReason／route失敗と、metadata確認済みの**元Sがissued/currentと双方同参照**である範囲だけのsource診断を直接保持する。issued=currentを同値copyへ同時置換しても相手を更新しない。未確認sourceは属性を読まない。実位置はBP02／preflight又はBP03／callとbefore／afterの正規組だけ、それ以外は全noneとし、BP03／preflight等の既知位置を捏造しない。先行root／source firstとsourceReasonは後発理由で上書きしない。
+
+診断固定後に既存generic返答と新modeの閉鎖返答を生成する。今回の(A)は既存generic cacheを維持して新modeの先行空cache／終端返答試行scalarを足す準備実装であり、§7の将来の同一返答参照への統一は未接続。失敗first又はcloseがある終端だけをcacheし、未開始check／checkLegacyは終端試行を消費しない。開始前closeはfirst noneでも終端として保持する。新終端返答生成throwでは診断・I/C/J・元source／未確認責務を保持し、その返答の再materializationを拒否する。診断必着・OOM／inspect成功・全runtimeの無割当ては保証しない。
+
+[(A)検証記録](E2E_BEST_PRACTICE_WFB_BODY_PIN_CONFIRMATION_PREPARATION_2026-11-12.md)に新50件、値7組／field189／cross49・caller80／不正7、private型拒否10行、原値読取り／非割当て構造・元S限定／初回guardの対照と回帰を記録する。前段`d7d3055`の一点注入16件と親§16の12等価節は保持した。今回追加writerのfirst／sourceReason guardは別の後発要求対照で必要性を確認したが、旧12節や全FE／全費用を一律に非等価・検証済みとしない。
+
+追加費目はstartの1scalar、rootのprepared／診断記録／分類／返答試行4scalar・空cacheと固定mode、原値access・7状態検査・固定診断／返答／投影である。元source所有・receiver借用・call／trial予約を再発行しない。実E／S・unit係数・実layout／GC／OOM・全guard数／全体work上界はUnknown。次は(B)のchecked／confirmedと各post、続いて(C)の最終post→返却と未接続停止を別承認で扱う。PC08・C-03・source利用claim・payload借用／bind・ready・body・Journal供給・clear／root終端・正式発行は未接続のままである。

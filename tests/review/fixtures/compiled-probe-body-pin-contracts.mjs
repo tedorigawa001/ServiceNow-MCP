@@ -266,6 +266,8 @@ try {
     ['dispatchBodyPin', new Set(['#bodyPinRoutePhase', '#bodyPinRouteStep', '#bodyPinRouteBoundary', 'pinCallReached'])],
     ['prepareBodyPinCall', new Set(['#bodyPinRouteBoundary'])],
     ['bodyPinCallRefuse', new Set(['#bodyPinRefusal'])],
+    ['recordBodyPinConfirmationFailure', new Set(['#bodyPinFailureRecorded', '#bodyPinFirst', '#bodyPinFailurePhase', '#bodyPinFailureStep', '#bodyPinFailureBoundary', '#bodyPinRouteState'])],
+    ['prepareBodyPinConfirmationCaller', new Set(['#bodyPinRouteBoundary'])],
   ]);
   const receiverWriters = new Map([
     ['bodyPinReceiverEntry', new Set(['#bodyPinStep', '#bodyPinAttemptUsed', '#bodyPinStage'])],

@@ -1,14 +1,14 @@
 # WF-B：同issued/current格納・private実参照照合と初回rejected保持の接続差分
 
-Version: draft-0.5 / Date: 2026-11-12 / 読み取り基準HEAD: `1f41240`（格納前準備実装: `10e2f96`、等価判断の文書更新: `1f41240`、draft-0.1レビュー修正基準HEAD: `5525b2f`、§14の限定実装基準HEAD: `ad00f28`、§15の完了／未接続停止差分設計基準HEAD: `ebe739e`、§14実装のレビュー修正基準HEAD: `40e75c6`）。
+Version: draft-0.6 / Date: 2026-11-12 / 読み取り基準HEAD: `1f41240`（格納前準備実装: `10e2f96`、等価判断の文書更新: `1f41240`、draft-0.1レビュー修正基準HEAD: `5525b2f`、§14の限定実装基準HEAD: `ad00f28`、§15の完了／未接続停止差分設計基準HEAD: `ebe739e`、§14実装のレビュー修正基準HEAD: `40e75c6`、§17の(A)準備実装基準HEAD: `d7d3055`）。
 
 draft-0.4のレビュー修正：§14の限定実装（`ebe739e`）に49件の一時変異を入れたところ、31件がVitest・compiledの両方を通った。storeのbefore_issued再検査とblocked再検査、captured base、rejected_beforeの資格（retain側のbaseと、その中のcontext／hold・post／初回診断の各節）、rejected_afterのpost 7節、rootのreferenceCheckのactive／busy、receiver照合のhold／post、referenceContextのactive／busyである。いずれも該当点だけを壊す注入がなかった。compiledに観測点直後への一点注入16件を、Vitestの`rs_missing_current`に参照点・境界の比較を追加し、この19件を意味的なassertでkillした。残る12件は§16で等価と判断した。fixtureの挙動は変えていない。
 
 draft-0.1のレビュー修正：§5の表のrejected_before行は、現在境界をどうするかを書いていなかった。RW05の時点で境界はすでにafterなので、G_Jの「境界after」が何の変化を記録するのかが読み取れなかった。§4の「各beforeでは最後のstepを維持して境界before」と揃え、rejected_beforeでstep currentのまま境界をbeforeへ移してから資格を再確認すると明記した。G_Jの記録内容と初回失敗位置（failureStep current／failureBoundary after）は変えない。
 
-Status: **§14の参照writer・実照合・初回rejected保持を合成依存限定で実装。pin confirmed・PC08・C-03は未接続。** 親は[格納・PC08未接続停止設計](BEST_PRACTICE_WFB_BODY_PIN_STORAGE_RETURN_STOP_DESIGN.md)と[private pin設計](BEST_PRACTICE_WFB_BODY_PRIVATE_PIN_CONNECTION_DESIGN.md)。前段実績は[準備検証記録](E2E_BEST_PRACTICE_WFB_BODY_PIN_STORAGE_PREPARATION_2026-11-12.md)、今回実績は[格納・保持検証記録](E2E_BEST_PRACTICE_WFB_BODY_PIN_REFERENCE_STORAGE_2026-11-12.md)。§1〜13はdraft-0.1／0.2時点の設計／文書確認であり、未実装・未実施の記述は当時の状態。最新の限定範囲を§14で区別する。
+Status: **§14の参照writer・実照合・初回rejected保持と、§17の(A)確認値型・閉鎖caller準備を合成依存限定で実装。pin confirmed・PC08・C-03は未接続。** 親は[格納・PC08未接続停止設計](BEST_PRACTICE_WFB_BODY_PIN_STORAGE_RETURN_STOP_DESIGN.md)と[private pin設計](BEST_PRACTICE_WFB_BODY_PRIVATE_PIN_CONNECTION_DESIGN.md)。前段実績は[準備検証記録](E2E_BEST_PRACTICE_WFB_BODY_PIN_STORAGE_PREPARATION_2026-11-12.md)、格納実績は[格納・保持検証記録](E2E_BEST_PRACTICE_WFB_BODY_PIN_REFERENCE_STORAGE_2026-11-12.md)。§1〜13はdraft-0.1／0.2時点の設計／文書確認であり、未実装・未実施の記述は当時の状態。最新の限定範囲を§14／17で区別する。
 
-正式発行口・既存C実行入口・body起動閉鎖、全体受付無効、Unknown、VM／監視／telemetry調査保留を維持する。実装は§14の合成依存に限り、実接続・実通信・実機操作・設定変更・Pushは行わない。
+正式発行口・既存C実行入口・body起動閉鎖、全体受付無効、Unknown、VM／監視／telemetry調査保留を維持する。実装は§14／17の合成依存に限り、実接続・実通信・実機操作・設定変更・Pushは行わない。
 
 ## 1 現行との差分と閉鎖到達点
 
@@ -190,3 +190,11 @@ before_final_postをconfirmed／step confirmed／境界beforeの専用phaseと�
 | rootのdisposition分類のissuedSame・currentSame・rejected・stage | 分類の前提となるpostCheckedは、captured照合とblocked再照合をすべて通った直後にだけ立つ。その時点でこれらは必ず成立している |
 | referenceModeのidentity | 唯一の呼出し元が直前のstorage検査で同じ組の同一性を確認済み |
 | referenceEventの固定mode節・identity、referenceScriptのidentity、bodyPinReferencePointのidentity | 確認済みの元root／source／startの組だけで呼ばれ、途中で組を差し替える経路がない。前段storage §14と同じ構造 |
+
+## 17 (A)確認値型・先行markerと閉鎖caller準備（2026-11-12）
+
+[子設計§14](BEST_PRACTICE_WFB_BODY_PIN_CONFIRM_RETURN_DESIGN.md)の(A)だけを別合成modeへ実装した。7段階の狭い値契約と同startの先行final markerを用意するが、実ownerはcaptured_ready照合後の固定拒否だけで、markerはfalse・checked／confirmed writerなし。後段の正例とcompleted_value_onlyは値専用であり、accepted返却・PC08受理ではない。
+
+新callerは元Tのprivate原値だけで分類し、既存診断slotを直接固定してから返答を生成する。元Sとissued/currentの双方同参照・metadata確認を条件にsourceだけを更新し、未確認／混入候補は読まず書かない。正規caller位置の組と先行first／sourceReasonを保持する。返答throwでも元参照・未確認責務を失わず、再materialization／再pinを認めない。
+
+[(A)検証記録](E2E_BEST_PRACTICE_WFB_BODY_PIN_CONFIRMATION_PREPARATION_2026-11-12.md)に旧reference試験・一点注入対照を含む回帰と新compiled保証を記録する。§15の未実装記述は設計時の履歴、§16の等価判断は元到達範囲のまま保持し、今回の値正例で最終経路を確認済みにしない。最終post・accepted返却・PC08・C-03・ready／body・正式発行は未接続、全体受付無効・Unknown・調査保留は不変。
