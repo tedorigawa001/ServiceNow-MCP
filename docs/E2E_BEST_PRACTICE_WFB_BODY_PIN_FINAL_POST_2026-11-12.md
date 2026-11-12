@@ -75,6 +75,20 @@ acceptedは内部通知だけであり、source受理／利用資格・PC08・cl
 
 PC08・BP04／C-03の同source全安定／returned全照合・利用claim消費、payload借用／bind、構築ready・body・Journal供給・field clear／root終端、正式発行と全体受付は未接続のまま。今回のcallee完了・閉鎖診断再読を、その解禁条件として扱わない。調査保留を維持する。実装時点ではindex登録・コミット・Pushは行っていない。
 
+## レビュー修正（2026-11-12）
+
+レビュー基準HEAD `8ffaf0a`。C-c専用コードへの73件の一時変異（各変異の後でfixtureを復元）と、C-bの172 scriptをC-c modeで流す一時比較を行った。fixtureの挙動・期待値は変えていない。
+
+| 観測 | 対応 |
+|---|---|
+| 一時変異73件：Vitest kill 15件・compiledだけでkill 23件・両方通過35件 | 35件のうち3件は既存compiled対照のassert不足。残る32件は[C詳細設計§20](BEST_PRACTICE_WFB_BODY_PIN_FINAL_RETURN_CACHE_DESIGN.md)に等価節として記録 |
+| callerの`observed`からmarker条件を外すと、marker writer欠落対照でcompletionが`completion_observed`になった | marker欠落対照にcompletion inconsistent・finalPost falseのassertを追加し、kill |
+| 公開投影のacceptedReturnsから実call数1の条件を外すと、第2call対照で1を数えた | 第2call対照にfinalPost true・acceptedReturns 0・completion inconsistentのassertを追加し、kill |
+| callerの理由から`#closed`節を外すと、root closeだけの状態がpin_return_not_connectedになった | callee完了後・caller分類前に`#closed`だけを立てる対照を追加（first／disposition closed、finalPost true・acceptedReturns 1・completion_observed）し、kill |
+| C-bの172 script（prefix148件を含む）をC-c modeで実行 | 最終postへ進む`cb_*`5件以外は、公開値・診断がC-bと完全一致（C-c接続表示4項目と追加投影2項目を除く）。前段の単一記録経路は変わっていない |
+
+修正後の検証：lint・build・梱包分類はexit 0。全体Vitestは347ファイル18,196件成功・失敗0。compiled 14本（新C-cを含む）は全exit 0で、C-cの出力に`callerControls: 3`を追加した。`git diff --check`成功。正式発行口閉鎖・全体受付無効・Unknown・調査保留とPC08／C-03／body未接続を維持し、実接続・実通信・実機操作・設定変更・Pushは行わない。
+
 ## コミット対象だけの隔離再検証（2026-11-12）
 
 基準HEADを一時ディレクトリへ書き出し、今回の15ファイル（合成fixture／試験・compiled監査10件、CHANGELOG・設計3文書・本記録5件）だけを反映した。既存node_modulesだけを参照し、依存導入・設定変更・他の未コミット内容の取込みはない。作業元と隔離コピーの15ファイルのSHA-256一致を確認した。
