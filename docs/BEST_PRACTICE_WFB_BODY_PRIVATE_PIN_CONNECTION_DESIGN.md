@@ -1,6 +1,6 @@
 # WF-B (C)：BP02〜04段階別検査・同root／同startのprivate pin接続差分
 
-Version: draft-0.12 / Date: 2026-11-12 / 読み取り基準HEAD: `b3776da`（(B)実装: `c28b423`、再検査／不在projectionレビュー修正: `b3776da`、C-01実装基準HEAD: `554ef9a`、C-01レビュー修正基準HEAD: `86d2560`、C-02前半実装基準HEAD: `a3f1f66`、C-02前半レビュー修正基準HEAD: `4f70522`、後半接続差分設計基準HEAD: `ff866f9`、bridge内部契約実装基準HEAD: `3fc15ab`、固定call／入場実装基準HEAD: `9f4361c`、格納／未接続停止差分の設計基準HEAD: `8d95d5c`、§19の格納／初回rejected差分設計基準HEAD: `1f41240`、§20の限定格納実装基準HEAD: `ad00f28`）。
+Version: draft-0.13 / Date: 2026-11-12 / 読み取り基準HEAD: `b3776da`（(B)実装: `c28b423`、再検査／不在projectionレビュー修正: `b3776da`、C-01実装基準HEAD: `554ef9a`、C-01レビュー修正基準HEAD: `86d2560`、C-02前半実装基準HEAD: `a3f1f66`、C-02前半レビュー修正基準HEAD: `4f70522`、後半接続差分設計基準HEAD: `ff866f9`、bridge内部契約実装基準HEAD: `3fc15ab`、固定call／入場実装基準HEAD: `9f4361c`、格納／未接続停止差分の設計基準HEAD: `8d95d5c`、§19の格納／初回rejected差分設計基準HEAD: `1f41240`、§20の限定格納実装基準HEAD: `ad00f28`、§21のPC08差分設計基準HEAD: `e7bda02`）。
 
 draft-0.4のレビュー修正：C-02前半の開始前route未使用条件`bodyPinStartRouteUnused`の10節と、PC02の`bodyPinStartPreflightMatches`のroute 9節は、単独で外してもvitest・compiledの両方が通っていた。compiledのphase対照はsource 13fieldだけを壊し、route scalarを壊す対照がなかった。context条件のbase／storage／payload／来歴の4呼出し、entry/after の2回目caller照合、非accepted時の`#fixed`先行返却（内部拒否のrefusalを`foreign_source`へ上書きしない）、admit内refusalの初回保持、pin-start失敗時のshell failed反映も固定されていなかった。route 13scalarをentry/beforeとpreflight/beforeへ単独注入する26対照（節除去で拒否位置が動く）、context 4呼出しの注入と除去対照、同値copyへの差替えでcallerの再照合を確かめる対照、2回の再入でrefusalの初回保持を確かめる対照をcompiledへ追加した。context拒否8件ではrefusal=noneも比較する。vitestにはpin-start失敗後の`storage.state`=failedを追加した。等価・観測不能な節は§14に記録した。
 
@@ -256,3 +256,11 @@ rejectedはforeign入場の受け皿ではなく、正規試行で既にcurrent�
 [子設計§14](BEST_PRACTICE_WFB_BODY_PIN_REFERENCE_STORAGE_DESIGN.md)の実格納・実参照照合と初回rejected保持を、元constructor／prepare／frameの別閉鎖合成入口へ接続した。[今回の検証記録](E2E_BEST_PRACTICE_WFB_BODY_PIN_REFERENCE_STORAGE_2026-11-12.md)で、原始eventからのprefix予測、実slot故障／値view偽装、初回診断・finallyと型拒否を区別して確認する。§19の未実装記述は設計時の履歴である。
 
 同sourceのI→C保持と局所J保持だけであり、source所有権・利用claimを移さない。正常中間でもcapturedでpin_confirmation_not_connectedへ止め、照合未完了のcapturedは別の失敗として保持する。hold confirmedは局所保持確認だけ。旧入口・旧projection・期限、正式発行口閉鎖・全体受付無効・Unknown・調査保留を維持する。pin checked／confirmed・accepted・PC08・BP04／C-03・payload借用／bind・構築ready・body起動・実接続は未接続。
+
+## 21 後続C-cとPC08 returned受理・診断sealの設計境界（2026-11-12）
+
+§1〜20は前段の設計・限定実装の到達履歴として保持する。後続の[C-c実装・レビュー](BEST_PRACTICE_WFB_BODY_PIN_FINAL_RETURN_CACHE_DESIGN.md)ではcallee最終post／実acceptedまで進むが、callerはBP03 call after・source callで固定未接続停止する。したがって本書PC08／PC09〜10の全操作を実装済みとは扱わない。
+
+[PC08 returned全照合と受理・失敗・sealの差分設計draft-0.1](BEST_PRACTICE_WFB_BODY_PIN_RETURNED_ACCEPT_SEAL_DESIGN.md)で、元R/S/Tの実復帰と同参照を再検査する新fresh合成mode、root／source位置の固定更新群、PC08受理確定点、先行停止・単一cache／失敗時の保持責務を具体化した。受理後もBP04前で固定停止する案であり、failed／seal済みsourceの再開・claim消費・bind・bodyへの解禁ではない。
+
+今回は参照設計だけで、PC08・C-03と新mode／writerは未実装。旧本文・レビュー・実装・試験・CHANGELOG・期限は変えない。正式発行口・既存C実行入口・body起動閉鎖、全体受付無効・Unknown・調査保留を維持し、実接続・実通信・実機操作・設定変更・Pushは行わない。

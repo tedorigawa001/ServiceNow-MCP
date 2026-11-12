@@ -1,6 +1,6 @@
 # WF-B：(C)最終post・内部accepted返却・PC08未接続停止と返答cache所有の差分詳細設計
 
-Version: draft-0.7 / Date: 2026-11-12 / 設計読み取り基準HEAD: `7343af3ec1befe854326d43a32fbfbe833be692f`（レビュー`7eb7b9b`を維持）。§15の(C-a)限定実装基準HEAD: `8e3f043140ba3f824c507ebd9ad57d782aa89570`。§15実装のレビュー修正基準HEAD: `76f3d0f`。§17実装のレビュー修正基準HEAD: `194525a`。§19の(C-c)限定実装基準HEAD: `b4a0c677ad2291aa8ec7a6fb0c8ce7553a41c4cb`。§19実装のレビュー修正基準HEAD: `8ffaf0a`。
+Version: draft-0.8 / Date: 2026-11-12 / 設計読み取り基準HEAD: `7343af3ec1befe854326d43a32fbfbe833be692f`（レビュー`7eb7b9b`を維持）。§15の(C-a)限定実装基準HEAD: `8e3f043140ba3f824c507ebd9ad57d782aa89570`。§15実装のレビュー修正基準HEAD: `76f3d0f`。§17実装のレビュー修正基準HEAD: `194525a`。§19の(C-c)限定実装基準HEAD: `b4a0c677ad2291aa8ec7a6fb0c8ce7553a41c4cb`。§19実装のレビュー修正基準HEAD: `8ffaf0a`。§21のPC08差分設計基準HEAD: `e7bda02`。
 
 draft-0.2のレビュー修正：§15の公開projectionは「凍結plainな有限診断値のみ」としていたが、`inspectFinalContracts`はfirst・disposition・phase・rootEntryExit・deliveryFirst・現在点／初回点・completionをprivate原値のまま、sealed・publicEntryBusy・stoppedを非strictのまま出していた。型で有限なだけで、実行時allowlistと対照がなかった。既存factoryと同じく固定allowlist（範囲外はunconfirmed）と`=== true`へ投影し直し、compiledにprivate不正値11件の非echo対照を追加した（修正前はfirstで`private_secret`がそのまま出てRED）。Vitestにはseal後の`check()`がpublication_not_connectedを返すことを追加した。28件の一時変異のうち等価な5件は§16に記録した。投影以外のfixture挙動は変えていない。
 
@@ -336,3 +336,11 @@ C-c専用の追加コード（`completeBodyPinFinalPost`、最終mode判定、`b
 | callerの分類・信頼・理由・disposition節（6） | 分類の初回guardはcaller以外が書かない。metadata確認・同start・trusted・first construction_unconfirmed・input_rejected写像は、前段の失敗で既にfirstが決まっているか、到達時に固定値になる |
 
 compiledだけで検出した23件は、最終post前後の境界・mode判定・root／receiver実field対照・実参照対照・C-c記録分岐・observed accepted・失敗点のcall数で確認した。§16／18の等価節は従来の履歴のまま維持する。
+
+## 21 PC08 returned全照合・受理と診断sealの差分設計（2026-11-12）
+
+[returned全照合・受理／失敗／seal境界draft-0.1](BEST_PRACTICE_WFB_BODY_PIN_RETURNED_ACCEPT_SEAL_DESIGN.md)で、C-cの固定失敗writerより前の新fresh合成mode案を具体化した。実primitive復帰、元R/S/Tのreturned pre／post全照合、PC08受理と終端sealを別にする。rootは同外側frame内で、内側callActive／entryBusyがfalseであることを検査し、calling専用matcherをORで緩めない。
+
+元source call→afterとroot returned位置のG_R、post受理のG_Aを固定直接群に分ける。受理後もC-03未接続の固定境界で停止し、正常callee・PC08受理履歴とroot/sourceのconstruction_unconfirmedを併存させる。旧C-cのfailed／seal済みinstanceやcacheを再開せず、同#fixedだけの終端・外側復帰／再読条件、同期停止と元借用／未確認責務の保持を維持する。
+
+本節と子設計は文書だけ。既存§1〜20の本文・レビュー・実装／試験・CHANGELOGは変更しない。新mode・新scalar・PC08・BP04／C-03・構築ready・bodyは未実装／未接続。正式発行口閉鎖・全体受付無効・Unknown・調査保留を維持し、実接続・実通信・実機操作・設定変更・Pushは行わない。
