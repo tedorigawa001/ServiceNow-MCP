@@ -1,6 +1,6 @@
 # WF-B：同start参照格納・全確認とPC08未接続停止の接続差分
 
-Version: draft-0.9 / Date: 2026-11-12 / 読み取り基準HEAD: `8d95d5c`（固定call実装: `1b929dc`、一点対照・等価判断のレビュー追加: `8d95d5c`、限定準備実装の基準HEAD: `7a9a613`、draft-0.2レビュー修正基準HEAD: `10e2f96`、§15の差分設計基準HEAD: `1f41240`、§16の限定格納実装基準HEAD: `ad00f28`、§17の完了／未接続停止差分設計基準HEAD: `ebe739e`、§18の(A)準備実装基準HEAD: `d7d3055`、§19の(B)段階接続基準HEAD: `201b1f7`、§20の(C)詳細設計基準HEAD: `7343af3`）。
+Version: draft-0.10 / Date: 2026-11-12 / 読み取り基準HEAD: `8d95d5c`（固定call実装: `1b929dc`、一点対照・等価判断のレビュー追加: `8d95d5c`、限定準備実装の基準HEAD: `7a9a613`、draft-0.2レビュー修正基準HEAD: `10e2f96`、§15の差分設計基準HEAD: `1f41240`、§16の限定格納実装基準HEAD: `ad00f28`、§17の完了／未接続停止差分設計基準HEAD: `ebe739e`、§18の(A)準備実装基準HEAD: `d7d3055`、§19の(B)段階接続基準HEAD: `201b1f7`、§20の(C)詳細設計基準HEAD: `7343af3`）。
 
 draft-0.2のレビュー修正：§13の格納準備に23件の一時変異を入れたところ、18件はstorage又はcall側のVitest・compiledの意味的なassertで落ちた（busy節はanchorを保った変異で再確認）。残る5件は試験変更なしで通ったが、いずれも重複防御か単一writerであり、検証記録は「単一の失敗診断要求」「到達不能／重複防御」とまとめて書くだけで節を特定していなかった。§14に節ごとの根拠を記録した。文書だけの修正で、fixture・試験・契約は変えない。
 
@@ -252,3 +252,9 @@ PC08未接続停止ではcallee first noneを維持し、root call after・sourc
 [Cの差分詳細設計draft-0.1](BEST_PRACTICE_WFB_BODY_PIN_FINAL_RETURN_CACHE_DESIGN.md)で、最終postと内部accepted返却を、上位の固定未接続停止・返却失敗・診断seal・単一cache所有と一体にした。同ownerの最終checkerからG_P／literal returnまでの非介在を保ち、復帰未確認final trueから成功を推定しない。正常でもPC08のreturned全照合やBP04へ進めない。
 
 返答は同rootの#fixedだけへ非公開保持し、外側固定入口の実復帰を確認してから公開する。生成失敗と保持後の外側退出失敗を分け、first・位置・callee完了履歴・元借用／未確認責務を保持する。早期失敗・close・非終端viewもC専用writer／reader方針へ集約し、旧A/Bのmode別cacheやgeneric早期返却をそのまま流用しない。本節は文書だけで、新C・PC08・C-03・構築ready・body・正式発行は未接続。全体受付無効・Unknown・調査保留、実装・実接続・実通信・設定変更・Pushの禁止は不変。
+
+## 21 (C-a)閉鎖した診断seal・private cache契約（2026-11-12）
+
+[C詳細設計§15](BEST_PRACTICE_WFB_BODY_PIN_FINAL_RETURN_CACHE_DESIGN.md)と[確認・返却設計§19](BEST_PRACTICE_WFB_BODY_PIN_CONFIRM_RETURN_DESIGN.md)のC-aだけを合成依存限定で実装した。狭いphase／診断型・先行scalarと一度限りseal／生成を同rootに置き、既存#fixedの単一保持・failed_empty／failed_cachedの非再試行を検証する。新factoryの全旧構築flagはfalseで、source／frame／bodyの生成・既存入口の差替えはない。
+
+cacheは非公開のまま、公開methodは固定未接続codeだけを返す。公開phase正例の値検査を実入場・実復帰・公開成功へ昇格しない。旧A/Bの返答・期待値・期限は維持し、最終post・accepted返却・PC08・C-03・構築ready・body・正式発行は未接続、全体受付無効・Unknown・調査保留を維持する。[(C-a)検証記録](E2E_BEST_PRACTICE_WFB_BODY_PIN_FINAL_CONTRACTS_2026-11-12.md)を参照。C-bのwriter／reader集約・外側退出保証、C-cの最終同期群は別段階である。

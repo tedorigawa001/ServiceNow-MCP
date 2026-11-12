@@ -1,10 +1,10 @@
 # WF-B：(C)最終post・内部accepted返却・PC08未接続停止と返答cache所有の差分詳細設計
 
-Version: draft-0.1 / Date: 2026-11-12 / 実装読み取り基準HEAD: `7343af3ec1befe854326d43a32fbfbe833be692f`（確認中に既存レビュー変更が`7eb7b9b9d56823330bea2468f1e78eee53efda69`へ保存。実装ソースは不変）。
+Version: draft-0.2 / Date: 2026-11-12 / 設計読み取り基準HEAD: `7343af3ec1befe854326d43a32fbfbe833be692f`（レビュー`7eb7b9b`を維持）。§15の(C-a)限定実装基準HEAD: `8e3f043140ba3f824c507ebd9ad57d782aa89570`。
 
-Status: **詳細設計だけ。最終post・accepted返却・C専用caller／cache方針は未実装。** 親は[確認・返却設計](BEST_PRACTICE_WFB_BODY_PIN_CONFIRM_RETURN_DESIGN.md)と[格納・PC08未接続停止設計](BEST_PRACTICE_WFB_BODY_PIN_STORAGE_RETURN_STOP_DESIGN.md)。実績は[(B)検証記録](E2E_BEST_PRACTICE_WFB_BODY_PIN_CONFIRMATION_STAGES_2026-11-12.md)。本書は親のFC06〜09／FE05〜12を、現在の(B)と診断／cache実装からの差分として具体化する。既存の[private pin全体設計](BEST_PRACTICE_WFB_BODY_PRIVATE_PIN_CONNECTION_DESIGN.md)のPC08／BP04／C-03は接続しない。
+Status: **§15の(C-a)狭い型・先行scalar・seal／単一cacheの閉鎖契約だけ合成実装。C-bの全入口routing／実公開、C-cの最終post・accepted返却は未接続。** 親は[確認・返却設計](BEST_PRACTICE_WFB_BODY_PIN_CONFIRM_RETURN_DESIGN.md)と[格納・PC08未接続停止設計](BEST_PRACTICE_WFB_BODY_PIN_STORAGE_RETURN_STOP_DESIGN.md)。実績は[(B)検証記録](E2E_BEST_PRACTICE_WFB_BODY_PIN_CONFIRMATION_STAGES_2026-11-12.md)と[(C-a)検証記録](E2E_BEST_PRACTICE_WFB_BODY_PIN_FINAL_CONTRACTS_2026-11-12.md)。本書は親のFC06〜09／FE05〜12を、現在の(B)と診断／cache実装からの差分として具体化する。既存の[private pin全体設計](BEST_PRACTICE_WFB_BODY_PRIVATE_PIN_CONNECTION_DESIGN.md)のPC08／BP04／C-03は接続しない。
 
-合成依存限定。正式発行口・既存C実行入口・body起動閉鎖、全体受付無効、Unknown、VM／監視／telemetry調査保留を維持する。今回はMarkdownだけを更新し、実装・実接続・実通信・実機操作・設定変更・Pushは行わない。以下の型名／field名は内部案であり、現行export／型の存在や試験成功を意味しない。
+合成依存限定。正式発行口・既存C実行入口・body起動閉鎖、全体受付無効、Unknown、VM／監視／telemetry調査保留を維持する。§1〜14はdraft-0.1の将来接続契約・当時の検証履歴であり、今回の実装を示すのは§15だけ。実接続・実通信・実機操作・設定変更・Pushは行わない。
 
 ## 1 現行との差分と限定到達点
 
@@ -167,7 +167,7 @@ source所有はR、I/C/Jの借用と未解決責務はTに残す。cache生成�
 
 materializing／private_cached中の再入は公開gateで固定拒否し、別cacheを作らない。publicEntryBusy中のcloseは停止の単調反映だけを先に行い、元入場の復帰／cache公開を代行しない。非終端viewの正常復帰後に次の入場を予約するときだけrootEntryExitを初期化でき、seal済み／cacheあり／失敗済みの入場状態は払い戻さない。failed_empty／failed_cachedからのprepare・close・checkで再生成・再pinは行わず、公開返答を生成できない場合は固定のprivate delivery不明コードで離脱する。新Errorの生成・inspectの成功まで無割当て／必着と主張しない。生Error／messageは公開projectionや秘密出力へ流さない。
 
-## 11 独立合成・compiled受入条件（すべて未実施）
+## 11 C全体の独立合成・compiled受入条件（C-a限定結果は§15）
 
 | ID | 必須条件・負の対照 |
 |---|---|
@@ -204,10 +204,31 @@ oracleは実装のschedule／builder／checker／counterをimportせず、固定
 
 PC08のreturned全照合・BP04／C-03 preparing／専用post・source利用claim消費・payload借用／bind・BC00／構築ready・body・Journal供給・field clear／root終端・正式発行・全体受付は別承認。literal acceptedや返答再読をその解禁条件にしない。
 
-## 14 今回の文書検証と変更範囲
+## 14 draft-0.1時の文書検証と変更範囲（履歴）
 
 今回は本書と親2文書の参照だけを更新する。開始時にはCHANGELOG・親確認設計・(B)検証記録・compiled試験の4ファイルに作業中変更があった。親確認設計は既存draft-0.5の全byteを保持して末尾へ参照節だけを追加し、他3ファイルは編集しない。そのレビュー変更は確認中に別作業で`7eb7b9b`へ保存され、当方の3文書差分とは分離された。レビューの34変異／8等価節はその記述を保持するが、今回再実行・再承認した結果とはしない。
 
 ソース・テスト・compiled fixture・CHANGELOG・既存検証記録・manifest／lockfile・設定は当方では変更せず、build・合成／compiled試験・梱包・index登録・コミット・Pushは行わない。FRC01〜09／FRT01〜16は設計上の条件で、未実施のまま。HEAD移動は上記の別作業として記録し、当方によるコミットとはしない。
 
 文書整合確認（2026-11-12）：当方が編集した3文書のローカルリンク30件に欠落なし、27表の列数・末尾改行／行末空白に異常なし。節順は本書14・親18／20、FRC01〜09／FRT01〜16の重複・欠落なし。親確認設計の開始時39,491byteのSHA-256一致と、他の既存3変更ファイルの全byteのSHA-256一致を確認した。現在の差分は当方のMarkdown3件だけ、indexは空。初回のHEAD不変チェックは別作業の`7eb7b9b`保存により失敗したため、履歴と変更4件を読み取り、既存内容が保持されたことを確認して記録を訂正した。これは文書／保持の確認であり、新Cの実装・合成受入・正式発行の検証成功ではない。
+
+## 15 (C-a)閉鎖契約だけの合成実装（2026-11-12）
+
+package除外のcreateProbeBodyPinFinalContractsFakeを追加した。同CanonicalGateDraftRootのconstructor固定flagだけを立て、旧A/B／source／frameの生成flagは全falseとする。既存rootの#failure／#closed／#fixedを使い、source・owner・pin・receipt・実行資格を新規発行しない。旧prepare／close／fail／replyは呼ばない。C-bの新公開wrapperではなく、固定原始操作を検証する合成契約shellである。
+
+| 今回の内部境界 | 実装・受入範囲 |
+|---|---|
+| 狭い値型 | 7終端disposition、2最終点、6completion分類、5delivery理由、6cache phase。cacheのretained／attemptedはphase別のliteral型で結合 |
+| 先行scalar | constructorより前にseal／disposition／phase／attempt／public busy／root exit／delivery first／現在点／初回点／completionを初期化。最終点・completion・公開入場・退出は初期値のまま |
+| 診断seal | 同rootのsealを一度だけ固定。開始前closeではfirst noneを保持し、後発入力はdeliveryFirst=input_refusedへ分離。先行input_rejectedはclose／生成失敗で置換しない |
+| 単一materializer | seal前はnot_ready。attemptを先に消費し、生成／freeze後、G_Cの2直接代入だけで既存#fixed／private_cachedへ。再試行・任意object登録・mode別cacheの利用なし |
+| 失敗保持 | 生成／freeze前後の合成throwはfailed_empty、保持直後の合成throwはfailed_cached。診断・既存cache参照は保持し、再生成・clear・cleanup扱いにしない |
+| 公開の閉鎖 | publishはprimitive publication_not_connectedだけ。#fixedを返さず、publicEntryBusy／rootEntryExit／replayable writerは0。実outer finallyのthrowや復帰確認は未接続 |
+| 値だけのphase oracle | 672組の独立条件式で空／生成中／非公開保持／公開可能値／失敗値を検査。replayable正例は値検査だけで、同入口の実復帰証拠ではない |
+| 公開projection | 凍結plainな有限診断値のみ。実cache・owner・source・能力tokenなし。操作返値も原始codeだけで、第2の終端objectを作らない |
+
+固定合成scriptは通常・生成throw・freeze throw・保持後throw・materializing中の再入だけ。入力object／callbackは参照せず、引数個数と有限文字列だけを受付判定する。cache内部schemaはstrict10項目・ok=false・全閉鎖値で、cache同一性／別rootの同値copyはscratch compiled注入だけで観測する。公開slotや登録口は追加しない。
+
+旧modeのgeneric #fixed writer／early reader・source／calleeとの接続をC-aのfactoryへ流用していない。したがって§8の全入口routingが完成したという保証ではない。C-bで全writer／readerの分岐と実外側frame境界を一体接続し、C-cで最終post・内部acceptedと元callerの固定停止を一体接続する必要がある。C-aのseal()は合成の固定construction_unconfirmed、close()は合成の開始前closeであり、未観測のcallee結果をsealする入口ではない。
+
+追加費目はrootの固定flagと先行10scalar、有限check／seal／原始code、最大1回の終端object生成／freeze、固定catch診断、固定projectionと凍結facade。新scalarは同classの先行fieldなので旧modeのrootにも初期化されるが、旧分岐・期待値・期限は変更しない。inspectionの都度生成する非終端診断viewは単一終端cacheの数に隠さず別費目とする。実layout・allocation／GC／OOM・unit／全体work上界・破棄予約・診断必着はUnknown。FRC01〜06／08〜09とFRT全体の受入成功は主張しない。詳細は[(C-a)検証記録](E2E_BEST_PRACTICE_WFB_BODY_PIN_FINAL_CONTRACTS_2026-11-12.md)。

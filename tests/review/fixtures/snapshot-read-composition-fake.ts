@@ -4195,6 +4195,32 @@ let probeBodyPinRootAccess: Readonly<{
   confirmationStageEvent(root: CanonicalGateDraftRoot, source: BodyBindSourceShell, start: RetirementStartAssembly, point: Exclude<BodyPinConfirmationStagePoint, 'none'>): void;
   event(root: CanonicalGateDraftRoot, source: BodyBindSourceShell, start: RetirementStartAssembly, point: Exclude<BodyPinCallPoint, 'none'>): void;
 }>;
+type BodyPinFinalDisposition = 'pin_return_not_connected' | 'closed' | 'input_rejected' | 'binding_mismatch'
+  | 'state_invalid' | 'construction_unconfirmed' | 'internal_unconfirmed';
+type BodyPinFinalPoint = 'none' | 'final_post_before';
+type BodyPinFinalCompletion = 'none' | 'completion_observed' | 'rejected' | 'refused' | 'unreturned' | 'inconsistent';
+type BodyPinFinalDelivery = 'none' | 'view_unconfirmed' | 'root_exit_unconfirmed' | 'input_refused' | 'reentrant_reply';
+type BodyPinFinalCacheState =
+  | { phase: 'empty'; retained: false; attempted: false }
+  | { phase: 'materializing' | 'failed_empty'; retained: false; attempted: true }
+  | { phase: 'private_cached' | 'replayable' | 'failed_cached'; retained: true; attempted: true };
+type BodyPinFinalReply = Readonly<{ model: 'wfb-body-pin-confirmation-1'; ok: false; disposition: BodyPinFinalDisposition;
+  first: ProbeRunFirst; authority: 'none'; execution: 'closed'; formalIssuance: 'closed'; wholeRunAdmission: 'disabled';
+  implementation: 'unknown'; investigations: 'on_hold' }>;
+
+// Known private finite values only. Positive replayable values are not runtime exit evidence.
+function bodyPinFinalCacheMatches(s: BodyPinFinalCacheState, sealed: boolean, busy: boolean,
+  exit: 'not_observed' | 'returned' | 'threw', frame: boolean): boolean {
+  if (typeof sealed !== 'boolean' || typeof busy !== 'boolean' || typeof frame !== 'boolean') return false;
+  if (!['not_observed', 'returned', 'threw'].includes(exit)) return false;
+  if (Reflect.ownKeys(s).length !== 3) return false;
+  if (s.phase === 'empty') return s.retained === false && s.attempted === false;
+  if (!sealed || s.attempted !== true) return false;
+  if (s.phase === 'materializing' || s.phase === 'failed_empty') return s.retained === false;
+  if (!['private_cached', 'replayable', 'failed_cached'].includes(s.phase) || s.retained !== true) return false;
+  return s.phase !== 'replayable' || (!busy && exit === 'returned' && !frame);
+}
+
 class CanonicalGateDraftRoot {
   static {
     probeBodyPinRootAccess = Object.freeze({
@@ -4336,12 +4362,20 @@ class CanonicalGateDraftRoot {
   #bodyPinConfirmationStageReentry: 'none' | BodyPinAdmission = 'none';
   #bodyPinConfirmationStagesChecked = false;
   #bodyPinConfirmationStagesFixed: Readonly<BodyPinConfirmationStagesReply> | undefined;
+  // C-a: prior scalar contracts only. The C-b wrapper and all C-c writers remain absent.
+  #finalTerminalSealed = false; #finalTerminalDisposition: 'none' | BodyPinFinalDisposition = 'none';
+  #finalReplyPhase: BodyPinFinalCacheState['phase'] = 'empty'; #finalReplyAttempted = false;
+  #finalPublicEntryBusy = false; #finalRootEntryExit: 'not_observed' | 'returned' | 'threw' = 'not_observed';
+  #finalDeliveryFirst: BodyPinFinalDelivery = 'none';
+  #finalPoint: BodyPinFinalPoint = 'none'; #finalFailurePoint: BodyPinFinalPoint = 'none';
+  #finalCompletion: BodyPinFinalCompletion = 'none';
   constructor(private readonly script: string, admitted: boolean, private readonly probePreparation = false, private readonly runPreparation = false,
     private readonly grantCapture = false, private readonly exitPreparation = false, private readonly exitGuard = false, private readonly localExit = false,
     private readonly bodySeed = false, private readonly bodyLive = false, private readonly bodyBundle = false, private readonly bodyBindFields = false,
     private readonly bodySourceIssuer = false, private readonly bodyPinContracts = false, private readonly bodyPinStart = false,
     private readonly bodyPinBridge = false, private readonly bodyPinCall = false, private readonly bodyPinStorage = false,
-    private readonly bodyPinReferenceStorage = false, private readonly bodyPinConfirmationPreparation = false, private readonly bodyPinConfirmationStages = false) {
+    private readonly bodyPinReferenceStorage = false, private readonly bodyPinConfirmationPreparation = false, private readonly bodyPinConfirmationStages = false,
+    private readonly bodyPinFinalContracts = false) {
     this.#failure = { first: admitted ? 'none' : 'input_rejected', phase: 0, boundary: 'none' };
     this.#slots = Array.from({ length: 37 }, () => ({ stage: 'not_started', value: undefined }));
     this.#probeSlots = probePreparation ? Array.from({ length: 8 }, () => ({ stage: 'not_started', value: undefined })) : [];
@@ -4350,6 +4384,69 @@ class CanonicalGateDraftRoot {
     this.#exitSlots = exitPreparation ? Array.from({ length: 5 }, () => ({ stage: 'not_started', value: undefined })) : [];
     this.#exitIssued = exitPreparation ? Array(5).fill(undefined) : [];
     this.#localSlots = localExit ? Array.from({ length: 4 }, () => ({ stage: 'not_started', value: undefined })) : [];
+  }
+  private finalDelivery(reason: BodyPinFinalDelivery): void {
+    if (this.#finalDeliveryFirst === 'none') this.#finalDeliveryFirst = reason;
+  }
+  finalContractRejectInput(): 'input_refused' {
+    if (this.#finalTerminalSealed) this.finalDelivery('input_refused');
+    else if (this.#failure.first === 'none') this.#failure.first = 'input_rejected';
+    return 'input_refused';
+  }
+  finalContractCheck(): 'not_ready' | 'publication_not_connected' {
+    return this.#finalTerminalSealed ? 'publication_not_connected' : 'not_ready';
+  }
+  finalContractSeal(close = false): 'sealed' | 'already_sealed' | 'mode_closed' {
+    if (!this.bodyPinFinalContracts) return 'mode_closed';
+    if (close) this.#closed = true;
+    if (this.#finalTerminalSealed) return 'already_sealed';
+    if (!close && this.#failure.first === 'none') this.#failure.first = 'construction_unconfirmed';
+    this.#finalTerminalDisposition = this.#failure.first === 'input_rejected' ? 'input_rejected'
+      : close ? 'closed' : 'construction_unconfirmed';
+    this.#finalTerminalSealed = true;
+    return 'sealed';
+  }
+  finalContractMaterialize(): 'mode_closed' | 'not_ready' | 'attempt_refused' | 'private_cached' | 'materialization_failed' {
+    if (!this.bodyPinFinalContracts) return 'mode_closed';
+    if (!this.#finalTerminalSealed || this.#finalTerminalDisposition === 'none') return 'not_ready';
+    if (this.#finalReplyAttempted) {
+      if (this.#finalReplyPhase === 'materializing') this.finalDelivery('reentrant_reply');
+      return 'attempt_refused';
+    }
+    this.#finalReplyAttempted = true; this.#finalReplyPhase = 'materializing';
+    try {
+      if (this.script === 'ca_materialize_throw') throw 'private_materialization';
+      if (this.script === 'ca_reenter_materializing') this.finalContractMaterialize();
+      const candidate: BodyPinFinalReply = { model: 'wfb-body-pin-confirmation-1', ok: false,
+        disposition: this.#finalTerminalDisposition, first: runFirst(this.#failure.first), authority: 'none', execution: 'closed',
+        formalIssuance: 'closed', wholeRunAdmission: 'disabled', implementation: 'unknown', investigations: 'on_hold' };
+      if (this.script === 'ca_freeze_throw') throw 'private_freeze';
+      Object.freeze(candidate);
+      // G_C: the existing root cache is the sole owner; no hook or allocation intervenes.
+      this.#fixed = candidate; this.#finalReplyPhase = 'private_cached';
+      if (this.script === 'ca_after_cache_throw') throw 'private_after_cache';
+      return 'private_cached';
+    } catch {
+      this.#finalReplyPhase = this.#fixed === undefined ? 'failed_empty' : 'failed_cached';
+      this.finalDelivery(this.#fixed === undefined ? 'view_unconfirmed' : 'root_exit_unconfirmed');
+      return 'materialization_failed';
+    }
+  }
+  finalContractPublish(): 'publication_not_connected' {
+    // No public-entry reservation, root-exit writer, replayable writer or cache return in C-a.
+    return 'publication_not_connected';
+  }
+  inspectFinalContracts() {
+    return Object.freeze({ model: 'wfb-body-pin-final-contracts-1', authority: 'none', execution: 'closed',
+      formalIssuance: 'closed', wholeRunAdmission: 'disabled', implementation: 'unknown', investigations: 'on_hold',
+      first: this.#failure.first, sealed: this.#finalTerminalSealed, disposition: this.#finalTerminalDisposition,
+      phase: this.#finalReplyPhase, attempts: Number(this.#finalReplyAttempted), cacheRetained: this.#fixed !== undefined,
+      publicEntryBusy: this.#finalPublicEntryBusy, rootEntryExit: this.#finalRootEntryExit, deliveryFirst: this.#finalDeliveryFirst,
+      stopped: this.#closed, currentPoint: this.#finalPoint, failurePoint: this.#finalFailurePoint, completion: this.#finalCompletion,
+      finalPost: false, acceptedReturns: 0, bodyStarts: 0, sourceGenerations: 0, pc08: 'not_connected', c03: 'not_connected',
+      cacheValid: bodyPinFinalCacheMatches({ phase: this.#finalReplyPhase, retained: this.#fixed !== undefined,
+        attempted: this.#finalReplyAttempted } as BodyPinFinalCacheState,
+      this.#finalTerminalSealed, this.#finalPublicEntryBusy, this.#finalRootEntryExit, this.#frame) });
   }
   private reply(ok: boolean, disposition: string) { return Object.freeze({ ok, disposition, first: this.#failure.first }); }
   private fail(reason: string) {
@@ -6429,6 +6526,22 @@ export function createProbeBodyBindFieldsFake(...args: readonly unknown[]) {
     checkLegacy: (...xs: readonly unknown[]) => call(xs, () => a.checkBodyBindFields(true)),
     close: (...xs: readonly unknown[]) => call(xs, () => a.close()),
     inspect: (...xs: readonly unknown[]) => { if (xs.length) a.rejectInput(); return a.inspectBodyBindFields(); } });
+}
+
+/** C-a contract shell only: no call into prepare/close/fail or the actual C-b public wrapper. */
+export function createProbeBodyPinFinalContractsFake(...args: readonly unknown[]) {
+  const script = args.length ? args[0] : 'ca_normal';
+  const admitted = args.length <= 1 && typeof script === 'string'
+    && ['ca_normal', 'ca_materialize_throw', 'ca_freeze_throw', 'ca_after_cache_throw', 'ca_reenter_materializing'].includes(script);
+  const a = new CanonicalGateDraftRoot(admitted ? script as string : 'ca_normal', admitted,
+    false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, true);
+  const call = <T>(xs: readonly unknown[], op: () => T): T | 'input_refused' => xs.length ? a.finalContractRejectInput() : op();
+  return Object.freeze({ check: (...xs: readonly unknown[]) => call(xs, () => a.finalContractCheck()),
+    seal: (...xs: readonly unknown[]) => call(xs, () => a.finalContractSeal()),
+    materialize: (...xs: readonly unknown[]) => call(xs, () => a.finalContractMaterialize()),
+    publish: (...xs: readonly unknown[]) => call(xs, () => a.finalContractPublish()),
+    close: (...xs: readonly unknown[]) => call(xs, () => a.finalContractSeal(true)),
+    inspect: (...xs: readonly unknown[]) => { if (xs.length) a.finalContractRejectInput(); return a.inspectFinalContracts(); } });
 }
 
 export function createProbeBodyPinConfirmationStagesFake(...args: readonly unknown[]) {
