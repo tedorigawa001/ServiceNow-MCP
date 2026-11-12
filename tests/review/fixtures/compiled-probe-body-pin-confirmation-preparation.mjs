@@ -109,6 +109,30 @@ try {
     const x = (await load(unsafe, 'unsafe')).createProbeBodyPinConfirmationPreparationFake(); x.prepare();
     assert.equal(globalThis.__confirmUnsafeReads, 0); assert.equal(x.inspect().confirmation.diagnosticRecorded, true);
   } finally { delete globalThis.__confirmUnsafeReads; }
+  // Single faults right before the owning prepared check, and a lost primitive return.
+  const beforePrepared = code => method(source, 'storeBodyPinReferences', '      this.#bodyPinReferencePostChecked = true;',
+    '      this.#bodyPinReferencePostChecked = true; ' + code, 'RetirementStartAssembly');
+  const inactive = replace(beforePrepared('(globalThis as any).__cpInactive = true;'),
+    '  private bodyPinBridgeActive(source: BodyBindSourceShell, start: RetirementStartAssembly): boolean {\n',
+    '  private bodyPinBridgeActive(source: BodyBindSourceShell, start: RetirementStartAssembly): boolean {\n    if ((globalThis as any).__cpInactive) return false;\n');
+  let preparedControls = 0;
+  for (const [name, text] of [['busy', beforePrepared('this.#bodyPinEntryBusy = false;')], ['inactive', inactive],
+    ['rejected-slot', beforePrepared('this.#bodyExpectedSourceRejected = {} as never;')]]) {
+    try {
+      const m = await load(text, 'prepared-' + name), x = m.createProbeBodyPinConfirmationPreparationFake(), r = x.prepare(), s = x.inspect();
+      assert.equal(r.first, 'state_invalid', name); assert.equal(r.disposition, 'state_invalid', name);
+      assert.equal(s.route.first, 'state_invalid', name); assert.equal(s.build.receiver.first, 'state_invalid', name);
+      assert.equal(s.confirmation.prepared, false, name); assert.equal(s.confirmation.classification, 'state_invalid', name);
+      preparedControls++;
+    } finally { delete globalThis.__cpInactive; }
+  }
+  const lostReturn = method(source, 'dispatchBodyPin', '      return probeStartAccess.bodyPinEnter(start, this, source);',
+    "      probeStartAccess.bodyPinEnter(start, this, source); throw Error('private_return_lost');");
+  const lx = (await load(lostReturn, 'lost-return')).createProbeBodyPinConfirmationPreparationFake(); lx.prepare();
+  const ls = lx.inspect();
+  assert.equal(ls.fixedCalls, 1); assert.equal(ls.result, 'none'); assert.equal(ls.phase, 'calling');
+  assert.equal(ls.route.failureBoundary, 'before'); assert.equal(ls.confirmation.classification, 'unreturned');
+
   const ast = ts.createSourceFile('fixture.ts', source, ts.ScriptTarget.Latest, true, ts.ScriptKind.TS);
   const cls = name => ast.statements.find(n => ts.isClassDeclaration(n) && n.name?.text === name);
   const root = cls('CanonicalGateDraftRoot'), start = cls('RetirementStartAssembly');
@@ -158,7 +182,7 @@ try {
   const diagnostics = ts.getPreEmitDiagnostics(ts.createProgram([file], options, host));
   assert.ok(diagnostics.every(d => d.file?.fileName === file && d.start >= source.length), 'baseline semantic errors');
   assert.equal(new Set(diagnostics.map(d => d.file.getLineAndCharacterOfPosition(d.start).line)).size, 10);
-  console.log(JSON.stringify({ compiled: true, valueStates: cases.length, valueFields, crossCases, callerCases, invalidCallerCases: 7,
+  console.log(JSON.stringify({ compiled: true, preparedControls, lostReturnControl: true, valueStates: cases.length, valueFields, crossCases, callerCases, invalidCallerCases: 7,
     markerWrites, finalMarkerFalse: true, noReturnView: true, noAllocation: true, primitiveCallerPrefix: true, foreignSourceUntouched: true, untrustedSourceReads: 0,
     firstAndReasonControls: 2, invalidPositionRejected: true, acceptedRejected: true, semanticRejections: 10 }));
 } finally { delete globalThis.__confirmNoView; delete globalThis.__confirmMixed; rmSync(dir, { recursive: true, force: true }); }

@@ -20,6 +20,7 @@ describe('closed confirmation contract preparation', () => {
       diagnosticRecorded: true, acceptedReturn: 'not_connected', finalPost: 'not_connected' },
       build: { receiver: { pinStage: 'captured', first: 'receiver_unconfirmed' }, rootReady: false, bodyStarts: 0 },
       route: { failurePhase: 'BP03', failureStep: 'call', failureBoundary: 'after', preparingConfirmed: false, postChecked: false } });
+    expect(s.build.storage.state).toBe('failed');
     expect(a.prepare()).toBe(r); expect(a.close()).toBe(r);
   });
   it('retains the recorded diagnosis when later reply materialization fails', () => {
@@ -28,7 +29,7 @@ describe('closed confirmation contract preparation', () => {
     const s = a.inspect();
     expect(s).toMatchObject({ first: 'construction_unconfirmed', confirmation: { diagnosticRecorded: true, replyAttempted: true, finalPostChecked: false },
       build: { receiver: { pinStage: 'captured' }, source: { first: 'receiver_unconfirmed', claim: 'unused' }, bodyStarts: 0 } });
-    expect(() => a.prepare()).toThrow('private_confirmation_reply');
+    expect(() => a.prepare()).toThrow('private_confirmation_reply_unconfirmed');
     expect(a.inspect().route).toEqual(s.route);
   });
   it('does not overwrite the first root, source or source-reason slot', () => {
@@ -44,6 +45,7 @@ describe('closed confirmation contract preparation', () => {
       const a = createProbeBodyPinConfirmationPreparationFake('rs_' + kind + '_' + point), r = a.prepare(), s = a.inspect();
       const completed = kind === 'reenter', end = completed ? 4 : i;
       expect(r.first).toBe(kind === 'close' ? 'closed' : kind === 'prior' ? 'state_invalid' : 'construction_unconfirmed');
+      expect(r.disposition).toBe(completed ? 'pin_confirmation_not_connected' : kind === 'close' ? 'closed' : kind === 'prior' ? 'state_invalid' : 'construction_unconfirmed');
       expect(s).toMatchObject({ confirmation: { prepared: completed, finalPostChecked: false, diagnosticRecorded: true },
         callActive: false, entryBusy: false, route: { preparingConfirmed: false, postChecked: false },
         build: { receiver: { pinStage: end === 0 ? 'attempting' : end < 3 ? 'issued' : 'captured' },
@@ -64,7 +66,8 @@ describe('closed confirmation contract preparation', () => {
   it('keeps a pre-call throw separate from a returned result', () => {
     const a = createProbeBodyPinConfirmationPreparationFake('ec_fault_before_call'); a.prepare();
     expect(a.inspect()).toMatchObject({ fixedCalls: 0, phase: 'before', result: 'none', confirmation: { classification: 'unreturned', finalPostChecked: false },
-      route: { failurePhase: 'BP02', failureStep: 'preflight', failureBoundary: 'after' } });
+      route: { failurePhase: 'BP02', failureStep: 'preflight', failureBoundary: 'after' },
+      build: { source: { failurePhase: 'BP02', failureBoundary: 'checked' } } });
   });
   it.each(['ec_foreign_source', 'ec_copy_source', 'ec_proxy_source', 'ec_foreign_start', 'ec_proxy_start'])(
     'rejects %s without touching a receiver', script => {

@@ -78,6 +78,20 @@ packはbuild後、一時cacheで`bdo proxy npm pack --dry-run --json --ignore-sc
 
 最終整合確認：設計3文書＋本記録のローカルリンク31件に欠落なし、24表の列数・末尾改行／行末空白に異常なし。設計の節順は14／17／18、親の既存§16の等価判断はHEADと同一である。差分の空白確認、追加3ファイルの末尾／空白確認、変更範囲12ファイル、HEAD `d7d3055`・空index不変を確認した。これは(A)の限定検証で、全repository回帰・全FE／最終post／正式発行の成功を意味しない。
 
+## レビュー修正（2026-11-12）
+
+`1b74bff`のレビューで、新しいcaller／receiver／記録writer／返答に43件の一時変異を入れ、24件がVitest・compiledの両方を通った。
+
+| 追加 | 内容 | kill |
+|---|---|---|
+| Vitest disposition | 参照点ごとにfault→construction_unconfirmed、close→closed、prior→state_invalid、再入完了→pin_confirmation_not_connected | prepared条件のdisposition分類 |
+| Vitest source／shell | pre-call throwでsource failurePhase BP02・boundary checked、通常停止でBS shell failed | source境界写像、shell failed |
+| Vitest返答再試行 | 2回目のErrorを`private_confirmation_reply_unconfirmed`と完全一致 | 再materialization拒否guard |
+| compiled prepared直前3件 | busy=false、active不成立flag、rejected slot混入。state_invalid・prepared false・route first state_invalid | valid写像、busy／active節、pin first写像 |
+| compiled復帰喪失 | bodyPinEnter後にthrowしresult none／call 1。phase calling・境界before・unreturned | returned判定のguard |
+
+修正後に対象10件を再実行し、9件をanchorを保ったまま意味的なassertでkillした。実参照節はrejected slot混入でも値checkerが先に拒否するため等価と確認した。残る15件の根拠は[設計§15](BEST_PRACTICE_WFB_BODY_PIN_CONFIRM_RETURN_DESIGN.md)に記録した。fixture本体は変更していない。
+
 ## コミット前の対象限定検証（2026-11-12）
 
 上記は実装時点の履歴である。今回、ユーザーのコミット指示に従い、(A)の12ファイルだけを明示してindexへ登録した。基準HEADは同じ`d7d3055`、検証対象treeは`0364912b3b5797976bc5712ee11f24599049e16b`。そのindex全体を一時ディレクトリへ切り出し、既存node_modulesだけを参照して検証した。追跡対象1,532ファイルのGit blob hashがindexと全件一致し、未登録の作業中変更や元作業ツリーの生成済みdistを混ぜていないことを確認した。依存取得・設定変更は行っていない。

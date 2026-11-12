@@ -1,6 +1,8 @@
 # WF-B：pin confirmed・最終postとPC08未接続停止の接続差分
 
-Version: draft-0.2 / Date: 2026-11-12 / 読み取り基準HEAD: `ebe739e`（§14の(A)限定実装基準HEAD: `d7d3055`）。
+Version: draft-0.3 / Date: 2026-11-12 / 読み取り基準HEAD: `ebe739e`（§14の(A)限定実装基準HEAD: `d7d3055`、§14実装のレビュー修正基準HEAD: `1b74bff`）。
+
+draft-0.2のレビュー修正：§14の(A)実装（`1b74bff`）に43件の一時変異を入れたところ、24件がVitest・compiledの両方を通った（うち1件は型エラーでだけ落ちたため生存扱い）。参照点の失敗でprepared未成立ならconstruction_unconfirmedを返す分類、BP02失敗時のsource境界checked、BS shellのfailed、返答再materializationの拒否、prepared検査のbusy／active節とstate_invalid写像・pin first、primitive未復帰時のreturned判定である。Vitestは参照点ごとのdisposition・source境界・shell状態を比較し、返答再試行のErrorを完全一致にした。compiledにはprepared検査直前の一点注入3件と、bodyPinEnter後に復帰を失わせる局所対照を追加し、この9件を意味的なassertでkillした。残る15件は§15で等価と判断した。fixtureの挙動は変えていない。
 
 Status: **§14の(A)型・先行marker・caller分類／非割当て診断契約だけを合成依存限定で実装。checked／confirmed writer・最終post・accepted返却は未接続。** 親は[格納・初回rejected保持設計](BEST_PRACTICE_WFB_BODY_PIN_REFERENCE_STORAGE_DESIGN.md)と[全確認・未接続停止設計](BEST_PRACTICE_WFB_BODY_PIN_STORAGE_RETURN_STOP_DESIGN.md)。前段実績は[格納・保持検証記録](E2E_BEST_PRACTICE_WFB_BODY_PIN_REFERENCE_STORAGE_2026-11-12.md)、今回実績は[(A)準備検証記録](E2E_BEST_PRACTICE_WFB_BODY_PIN_CONFIRMATION_PREPARATION_2026-11-12.md)。既存の[private pin全体schedule](BEST_PRACTICE_WFB_BODY_PRIVATE_PIN_CONNECTION_DESIGN.md)のPC07までと、PC08未接続時の失敗合流を対にする。PC08そのもの・BP04／C-03は接続しない。
 
@@ -189,3 +191,21 @@ BodyPinConfirmationStateは§3の7組を狭いunionにし、source13／receiver1
 [(A)検証記録](E2E_BEST_PRACTICE_WFB_BODY_PIN_CONFIRMATION_PREPARATION_2026-11-12.md)に新50件、値7組／field189／cross49・caller80／不正7、private型拒否10行、原値読取り／非割当て構造・元S限定／初回guardの対照と回帰を記録する。前段`d7d3055`の一点注入16件と親§16の12等価節は保持した。今回追加writerのfirst／sourceReason guardは別の後発要求対照で必要性を確認したが、旧12節や全FE／全費用を一律に非等価・検証済みとしない。
 
 追加費目はstartの1scalar、rootのprepared／診断記録／分類／返答試行4scalar・空cacheと固定mode、原値access・7状態検査・固定診断／返答／投影である。元source所有・receiver借用・call／trial予約を再発行しない。実E／S・unit係数・実layout／GC／OOM・全guard数／全体work上界はUnknown。次は(B)のchecked／confirmedと各post、続いて(C)の最終post→返却と未接続停止を別承認で扱う。PC08・C-03・source利用claim・payload借用／bind・ready・body・Journal供給・clear／root終端・正式発行は未接続のままである。
+
+## 15 §14実装レビューの等価判断（2026-11-12）
+
+(A)の現行所有経路だけでの判断である。(B)以降でfinal post・accepted復帰・第2のwriterを接続するときは単独対照で改めて評価する。
+
+| 節 | 等価の根拠 |
+|---|---|
+| prepared検査とconfirmationPreparationModeの固定mode節（2） | 呼出し経路がconstructor固定modeの継続だけで、旧modeからは到達しない |
+| confirmationPreparationModeのidentity | 唯一の呼出し元が直前の参照照合で同じ組の同一性を確認済み |
+| prepared検査の実参照節`bodyPinConfirmationReferences` | 同じ検査内のcaptured値checkerがissuedSame／currentSame／rejected空を同時に要求する。rejected slotを注入しても値checkerが先に拒否した |
+| callerのreceiver first読取りの`calls === 1`条件 | call 0ではreceiverに書込みがなく、firstは常にnone |
+| 分類の初回保持guard | 新callerは1回のprepareで1回だけ分類する |
+| inheritedのtrusted source.first、mixed→binding_mismatch、source信頼条件の`=== current` | 新callerへ渡るsourceは常に元issued=currentで、root firstなしにsource firstだけが立つ経路もない |
+| reasonのclosed分岐 | closeは既存経路でroot firstをclosedに記録しており、先のinherited分岐が受ける |
+| dispositionのclassification条件 | preparedが立つのはreceiverが全照合後にreceiver_unconfirmedを記録した経路だけで、分類は常にreceiver_unconfirmed |
+| 記録writerのfailureRecorded guard | 2回目の要求（cp_later_reason）でも同じ位置・pin firstを再計算するだけで値が変わらない |
+| 記録writerの位置妥当性guard | 新callerに来るroute位置は常にBP02 preflight又はBP03 callのbefore／after |
+| source firstの初回guardと理由写像 | 先行のfail経路が既にsource firstを同じ値で記録しているか、写像前後が同値になる。写像の除去は型エラーでだけ検出される |
