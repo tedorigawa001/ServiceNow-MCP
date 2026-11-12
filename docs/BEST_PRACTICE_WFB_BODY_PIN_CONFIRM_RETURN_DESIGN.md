@@ -1,6 +1,8 @@
 # WF-B：pin confirmed・最終postとPC08未接続停止の接続差分
 
-Version: draft-0.4 / Date: 2026-11-12 / 読み取り基準HEAD: `ebe739e`（§14の(A)限定実装基準HEAD: `d7d3055`、§14実装のレビュー修正基準HEAD: `1b74bff`、§16の(B)限定実装基準HEAD: `201b1f7`）。
+Version: draft-0.5 / Date: 2026-11-12 / 読み取り基準HEAD: `ebe739e`（§14の(A)限定実装基準HEAD: `d7d3055`、§14実装のレビュー修正基準HEAD: `1b74bff`、§16の(B)限定実装基準HEAD: `201b1f7`、§16実装のレビュー修正基準HEAD: `7343af3`）。
+
+draft-0.4のレビュー修正：§16の(B)実装（`7343af3`）に34件の一時変異を入れたところ、9件がVitest・compiledの両方を通った。そのうち検出できたのは、段階継続へ入る分岐の`valid &&`条件である。prepared検査が失敗した場合、この条件を外しても最初の理由は同じstate_invalidだが、段階継続へ進んで`stages.point`がbefore_checkedへ動く。compiledにprepared検査直前でbusyを落とす対照を追加し、`stages.point`がnoneのまま、receiver first state_invalid・prepared falseであることを確認してkillした。残る8件は§17で等価と判断した。fixtureの挙動は変えていない。
 
 draft-0.2のレビュー修正：§14の(A)実装（`1b74bff`）に43件の一時変異を入れたところ、24件がVitest・compiledの両方を通った（うち1件は型エラーでだけ落ちたため生存扱い）。参照点の失敗でprepared未成立ならconstruction_unconfirmedを返す分類、BP02失敗時のsource境界checked、BS shellのfailed、返答再materializationの拒否、prepared検査のbusy／active節とstate_invalid写像・pin first、primitive未復帰時のreturned判定である。Vitestは参照点ごとのdisposition・source境界・shell状態を比較し、返答再試行のErrorを完全一致にした。compiledにはprepared検査直前の一点注入3件と、bodyPinEnter後に復帰を失わせる局所対照を追加し、この9件を意味的なassertでkillした。残る15件は§15で等価と判断した。fixtureの挙動は変えていない。
 
@@ -233,3 +235,15 @@ throw／close／prior後も到達段階・post履歴・I/C/Jを保持する。�
 [(B)検証記録](E2E_BEST_PRACTICE_WFB_BODY_PIN_CONFIRMATION_STAGES_2026-11-12.md)に新48件、実field故障50件・checker省略5対照・安定境界8件・実slot／値view対照・固定2群・型拒否7行等を記録する。§15は(A)の元範囲に保持し、Bの新checker／post履歴／分類を自動的に等価としない。既存の一点注入・復帰喪失対照も維持する。全新節感度・全FE／費目の証明ではない。
 
 追加費目はstartの2scalar、rootの観測点／初回点／再入結果／中間完了4scalar・空返答cacheと固定mode、5回の段階検査／有限event・診断／投影。(A)の終端返答試行scalarを再利用し、元owner・source22field・BS13carrier・9参照・call／trialを二重発行しない。実E／S・unit係数・実layout／GC／OOM・全guard数／全体work上界・解消予約はUnknown。(C)の最終post→accepted返却・PC08未接続停止は別承認に残し、正式発行口閉鎖・全体受付無効・調査保留を維持する。
+
+## 17 §16実装レビューの等価判断（2026-11-12）
+
+(B)の現行所有経路だけでの判断である。(C)以降でfinal post・accepted復帰を接続し、呼出し元や段階が増えるときは単独対照で改めて評価する。
+
+| 節 | 等価の根拠 |
+|---|---|
+| 段階matcherの`#bodyPinConfirmationPrepared`節 | 段階継続へ入る分岐の`valid &&`がprepared成立を先に要求し、その分岐はcompiled対照で検出される |
+| 段階matcher・confirmationStagesMode・bodyPinConfirmationStagePointの固定mode節（3） | 呼出しはconstructor固定modeの継続からだけで、旧modeからは到達しない |
+| 段階matcherの観測点一致節 | 常に同じpointのevent直後に呼ばれ、event内の再入（refused_existing）はpointを変えない |
+| confirmationStagesModeとbodyPinConfirmationStagePointのidentity（2） | 確認済みの元root／source／startの組だけで呼ばれ、途中で組を差し替える経路がない |
+| dispositionのclassification条件 | stagesCheckedが立つのはreceiverが全段階後にreceiver_unconfirmedを記録した経路だけで、分類は常にreceiver_unconfirmed（§15と同じ構造） |

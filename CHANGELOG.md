@@ -290,6 +290,8 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 ### Added
 
+- WF-B pin confirmation-stages review: a compiled control now drops the receiver busy flag right before the owning prepared check and confirms the run stops with state_invalid without entering the stage continuation (stage point stays none), so removing the prepared-validity condition on the stage branch is detected. The remaining fixed-mode, same-point, identity and same-value clauses are documented as equivalent; no fixture behavior changed.
+
 - WF-B pin confirmation-preparation review: vitest now compares the per-point disposition, the pre-call source failure boundary, the failed seed shell and the exact reply re-materialization error, and compiled controls inject a single fault right before the owning prepared check (busy, inactive call window, rejected slot) and lose the primitive return after the receiver call, so removing each guard moves the disposition, first reason or return classification. The remaining fixed-mode, unreachable or same-value clauses are documented as equivalent; no fixture behavior changed.
 
 - WF-B pin reference-storage review: compiled controls now inject one fault right after each fixed observation point (store before-issued/blocked rechecks, root reference check, rejected_before qualification and the seven rejected_after post clauses), and the missing-current vitest case compares the reference point and boundary, so removing each guard moves the first rejection, failure point or rejected-hold state. The remaining unreachable, duplicate or co-recorded clauses are documented as equivalent; no fixture behavior changed.

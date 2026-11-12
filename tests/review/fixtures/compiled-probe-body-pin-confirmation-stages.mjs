@@ -95,6 +95,15 @@ try {
     const key = field.endsWith('FailurePoint') ? 'failurePoint' : field.endsWith('Reentry') ? 'reentry' : 'point';
     assert.equal(x.s.stages[key], 'unconfirmed'); projectionControls++;
   }
+  // A failed prepared check must not enter the stage continuation at all.
+  const preparedFail = method(source, 'storeBodyPinReferences', '      this.#bodyPinReferencePostChecked = true;',
+    '      this.#bodyPinReferencePostChecked = true; this.#bodyPinEntryBusy = false;');
+  const pf = run(await load(preparedFail, 'prepared-fail'));
+  assert.equal(pf.r.first, 'state_invalid'); assert.equal(pf.r.disposition, 'state_invalid');
+  assert.equal(pf.s.stages.point, 'none'); assert.equal(pf.s.stages.failurePoint, 'none');
+  assert.equal(pf.s.build.receiver.first, 'state_invalid'); assert.equal(pf.s.confirmation.prepared, false);
+  assert.equal(pf.s.stages.checkedPostChecked, false);
+
   const ast = ts.createSourceFile('fixture.ts', source, ts.ScriptTarget.Latest, true, ts.ScriptKind.TS);
   const cls = name => ast.statements.find(n => ts.isClassDeclaration(n) && n.name?.text === name);
   const start = cls('RetirementStartAssembly'), root = cls('CanonicalGateDraftRoot');
@@ -134,6 +143,6 @@ try {
   const diagnostics = ts.getPreEmitDiagnostics(ts.createProgram([file], options, host));
   assert.ok(diagnostics.every(d => d.file?.fileName === file && d.start >= source.length), 'baseline semantic errors');
   assert.equal(new Set(diagnostics.map(d => d.file.getLineAndCharacterOfPosition(d.start).line)).size, 7);
-  console.log(JSON.stringify({ compiled: true, actualFieldCases, guardControls, stableCases, projectionControls, rawViewControl: true,
+  console.log(JSON.stringify({ compiled: true, preparedFailControl: true, actualFieldCases, guardControls, stableCases, projectionControls, rawViewControl: true,
     actualPair: true, fixedGroups: 2, markerWrites, postWrites, lostReturn: true, acceptedRejected: true, semanticRejections: 7 }));
 } finally { rmSync(dir, { recursive: true, force: true }); }

@@ -77,6 +77,14 @@ packはbuild後、一時cacheで`bdo proxy npm pack --dry-run --json --ignore-sc
 
 最終文書整合：設計3文書＋本記録のローカルリンク38件に欠落なし、26表の列数・末尾改行／行末空白に異常なし。設計の節順は16／18／19。親の既存等価節（確認設計§15・参照格納設計§16）がHEADと同一であることを照合した。変更範囲15ファイル、HEAD `201b1f7`と空indexの不変、差分と追加ファイルの空白を確認した。この限定検証を全repository回帰・最終post・全FE／正式発行の成功へ読み替えない。
 
+## レビュー修正（2026-11-12）
+
+`7343af3`のレビューで、段階writer・段階matcher・観測点・返答に34件の一時変異を入れ、25件は検出、9件がVitest・compiledの両方を通った。
+
+検出できた1件は段階継続へ入る分岐の`valid &&`条件である。compiledにprepared検査の直前でreceiver busyを落とす対照を追加した。state_invalid・prepared falseで止まり、`stages.point`／`failurePoint`がnone、checked post未記録のままであることを比較する。条件を外すと段階継続へ進み`stages.point`がbefore_checkedになるため、anchorを保ったまま意味的なassertでkillした。
+
+残る8件（prepared節、固定mode節3、観測点一致節、identity 2、dispositionのclassification条件）は[設計§17](BEST_PRACTICE_WFB_BODY_PIN_CONFIRM_RETURN_DESIGN.md)に根拠を記録した。fixture本体・Vitestは変更していない。
+
 ## コミット前の対象限定検証（2026-11-12）
 
 上記は実装時点の履歴。今回、コミット指示に従い(B)の15ファイルだけを明示してindexへ登録した。検証対象treeは`e390b9486183f4c4cdf2f295e2d6e86eacbc33a0`、基準HEADは同じ`201b1f7`。index全体を一時ディレクトリへ切り出し、追跡対象1,535ファイルのGit blob hashがindexと全件一致することを確認した。既存node_modulesだけを参照し、元作業ツリーのdistや未登録変更は混ぜず、依存取得・設定変更は行っていない。
