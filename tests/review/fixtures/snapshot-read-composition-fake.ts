@@ -4209,6 +4209,68 @@ let probeBodyPinRootAccess: Readonly<{
 type BodyPinFinalDisposition = 'pin_return_not_connected' | 'closed' | 'input_rejected' | 'binding_mismatch'
   | 'state_invalid' | 'construction_unconfirmed' | 'internal_unconfirmed';
 type BodyPinFinalPoint = 'none' | 'final_post_before';
+// R-a value contracts only. No returned admission or G_R/G_A writer is connected.
+type BodyPinReturnedPoint = 'none' | 'identity' | 'pre' | 'post' | 'blocked';
+type BodyPinReturnedState =
+  | Readonly<{ phase: 'not_started'; postChecked: false; point: 'none' | 'identity'; failurePoint: 'none' }>
+  | Readonly<{ phase: 'checking'; postChecked: false; point: 'pre' | 'post'; failurePoint: 'none' }>
+  | Readonly<{ phase: 'accepted'; postChecked: true; point: 'post' | 'blocked'; failurePoint: 'none' }>
+  | Readonly<{ phase: 'blocked'; postChecked: true; point: 'blocked'; failurePoint: 'none' }>
+  | Readonly<{ phase: 'failed'; postChecked: false; point: 'identity'; failurePoint: 'identity' }>
+  | Readonly<{ phase: 'failed'; postChecked: false; point: 'pre'; failurePoint: 'pre' }>
+  | Readonly<{ phase: 'failed'; postChecked: false; point: 'post'; failurePoint: 'post' }>
+  | Readonly<{ phase: 'failed'; postChecked: true; point: 'blocked'; failurePoint: 'blocked' }>;
+function bodyPinReturnedStateMatches(v: Readonly<{ phase: string; postChecked: boolean; point: string; failurePoint: string }>): v is BodyPinReturnedState {
+  if (!bodySeedShape(v, ['phase', 'postChecked', 'point', 'failurePoint']) || typeof v.postChecked !== 'boolean') return false;
+  if (v.phase === 'failed') return v.failurePoint === v.point && (v.postChecked === false
+    ? v.point === 'identity' || v.point === 'pre' || v.point === 'post' : v.point === 'blocked');
+  if (v.failurePoint !== 'none') return false;
+  if (v.phase === 'not_started') return v.postChecked === false && (v.point === 'none' || v.point === 'identity');
+  if (v.phase === 'checking') return v.postChecked === false && (v.point === 'pre' || v.point === 'post');
+  if (v.phase === 'accepted') return v.postChecked === true && (v.point === 'post' || v.point === 'blocked');
+  return v.phase === 'blocked' && v.postChecked === true && v.point === 'blocked';
+}
+const BODY_PIN_RETURNED_ROOT_FIXED = Object.freeze({ stopped: false, first: 'none', frameActive: true, ready: false,
+  publicBusy: true, rootExit: 'not_observed', calls: 1, result: 'accepted', callPhase: 'returned', callActive: false, entryBusy: false,
+  classification: 'completed_value_only', completion: 'completion_observed', routeAttempted: true, routeState: 'running', routePhase: 'BP03',
+  failureRecorded: false, sourceReason: 'none', diagnosticRecorded: false, preparingConfirmed: false, pinPostChecked: false,
+  terminalSealed: false, replyAttempted: false, replyPhase: 'empty', terminalDisposition: 'none', cacheRetained: false,
+  finalFailurePoint: 'none', prepared: true, stagesChecked: true } as const);
+const BODY_PIN_RETURNED_ROOT_KEYS = Object.freeze(Object.keys(BODY_PIN_RETURNED_ROOT_FIXED) as (keyof typeof BODY_PIN_RETURNED_ROOT_FIXED)[]);
+const BODY_PIN_RETURNED_ROOT_FIELDS = Object.freeze([...BODY_PIN_RETURNED_ROOT_KEYS, 'routeStep', 'routeBoundary']);
+const BODY_PIN_RETURNED_CALLEE_FIXED = Object.freeze({ boundary: 'after', hold: 'not_started', referencePost: true,
+  checkedPost: true, confirmedPost: true, finalPost: true } as const);
+const BODY_PIN_RETURNED_CALLEE_KEYS = Object.freeze(Object.keys(BODY_PIN_RETURNED_CALLEE_FIXED) as (keyof typeof BODY_PIN_RETURNED_CALLEE_FIXED)[]);
+interface BodyPinReturnedCheckInput extends BodyPinPhaseValues {
+  readonly state: Readonly<{ phase: string; postChecked: boolean; point: string; failurePoint: string }>;
+  readonly root: Readonly<Record<keyof typeof BODY_PIN_RETURNED_ROOT_FIXED | 'routeStep' | 'routeBoundary', unknown>>;
+  readonly callee: Readonly<Record<keyof typeof BODY_PIN_RETURNED_CALLEE_FIXED, unknown>>;
+}
+type BodyPinReturnedPreInput = Readonly<{ state: Extract<BodyPinReturnedState, { phase: 'checking' }> & { point: 'pre' };
+  source: BodyPinSourceAt<'initializing', 'BP03', 'call', true>; receiver: BodyPinReceiverAt<'confirmed', 'confirmed'>;
+  root: typeof BODY_PIN_RETURNED_ROOT_FIXED & { routeStep: 'call'; routeBoundary: 'after' }; callee: typeof BODY_PIN_RETURNED_CALLEE_FIXED }>;
+type BodyPinReturnedPostInput = Readonly<{ state: Extract<BodyPinReturnedState, { phase: 'checking' }> & { point: 'post' };
+  source: BodyPinSourceAt<'initializing', 'BP03', 'after', true>; receiver: BodyPinReceiverAt<'confirmed', 'confirmed'>;
+  root: typeof BODY_PIN_RETURNED_ROOT_FIXED & { routeStep: 'returned'; routeBoundary: 'before' }; callee: typeof BODY_PIN_RETURNED_CALLEE_FIXED }>;
+function bodyPinReturnedCommonValues(v: BodyPinReturnedCheckInput): boolean {
+  return bodySeedShape(v, ['state', 'source', 'receiver', 'root', 'callee'])
+    && !!v.state && !!v.root && !!v.callee && !!v.source && !!v.receiver
+    && bodyPinReturnedStateMatches(v.state) && v.state.phase === 'checking'
+    && bodySeedShape(v.root, BODY_PIN_RETURNED_ROOT_FIELDS)
+    && BODY_PIN_RETURNED_ROOT_KEYS.every(k => v.root[k] === BODY_PIN_RETURNED_ROOT_FIXED[k])
+    && bodySeedShape(v.callee, BODY_PIN_RETURNED_CALLEE_KEYS)
+    && BODY_PIN_RETURNED_CALLEE_KEYS.every(k => v.callee[k] === BODY_PIN_RETURNED_CALLEE_FIXED[k]);
+}
+// eslint-disable-next-line @typescript-eslint/no-unused-vars -- R-a compiled-only contract; the owning continuation remains disconnected.
+function bodyPinReturnedPreValues(v: BodyPinReturnedCheckInput): v is BodyPinReturnedPreInput {
+  return bodyPinReturnedCommonValues(v) && v.state.point === 'pre' && v.root.routeStep === 'call' && v.root.routeBoundary === 'after'
+    && BODY_PIN_PHASE_CHECKS.confirmed({ source: v.source, receiver: v.receiver });
+}
+// eslint-disable-next-line @typescript-eslint/no-unused-vars -- R-a compiled-only contract; the owning continuation remains disconnected.
+function bodyPinReturnedPostValues(v: BodyPinReturnedCheckInput): v is BodyPinReturnedPostInput {
+  return bodyPinReturnedCommonValues(v) && v.state.point === 'post' && v.root.routeStep === 'returned' && v.root.routeBoundary === 'before'
+    && BODY_PIN_PHASE_CHECKS.returned({ source: v.source, receiver: v.receiver });
+}
 type BodyPinFinalCompletion = 'none' | 'completion_observed' | 'rejected' | 'refused' | 'unreturned' | 'inconsistent';
 type BodyPinFinalDelivery = 'none' | 'view_unconfirmed' | 'root_exit_unconfirmed' | 'input_refused' | 'reentrant_reply';
 type BodyPinFinalCacheState =
@@ -4395,13 +4457,18 @@ class CanonicalGateDraftRoot {
   #finalDeliveryFirst: BodyPinFinalDelivery = 'none';
   #finalPoint: BodyPinFinalPoint = 'none'; #finalFailurePoint: BodyPinFinalPoint = 'none';
   #finalCompletion: BodyPinFinalCompletion = 'none';
+  #bodyPinReturnedPhase: BodyPinReturnedState['phase'] = 'not_started';
+  #bodyPinReturnedPostChecked = false;
+  #bodyPinReturnedPoint: BodyPinReturnedPoint = 'none';
+  #bodyPinReturnedFailurePoint: BodyPinReturnedPoint = 'none';
   constructor(private readonly script: string, admitted: boolean, private readonly probePreparation = false, private readonly runPreparation = false,
     private readonly grantCapture = false, private readonly exitPreparation = false, private readonly exitGuard = false, private readonly localExit = false,
     private readonly bodySeed = false, private readonly bodyLive = false, private readonly bodyBundle = false, private readonly bodyBindFields = false,
     private readonly bodySourceIssuer = false, private readonly bodyPinContracts = false, private readonly bodyPinStart = false,
     private readonly bodyPinBridge = false, private readonly bodyPinCall = false, private readonly bodyPinStorage = false,
     private readonly bodyPinReferenceStorage = false, private readonly bodyPinConfirmationPreparation = false, private readonly bodyPinConfirmationStages = false,
-    private readonly bodyPinFinalContracts = false, private readonly bodyPinFinalEntry = false, private readonly bodyPinFinalPost = false) {
+    private readonly bodyPinFinalContracts = false, private readonly bodyPinFinalEntry = false, private readonly bodyPinFinalPost = false,
+    private readonly bodyPinReturnedPreparation = false) {
     this.#failure = { first: admitted ? 'none' : 'input_rejected', phase: 0, boundary: 'none' };
     this.#slots = Array.from({ length: 37 }, () => ({ stage: 'not_started', value: undefined }));
     this.#probeSlots = probePreparation ? Array.from({ length: 8 }, () => ({ stage: 'not_started', value: undefined })) : [];
@@ -4410,6 +4477,51 @@ class CanonicalGateDraftRoot {
     this.#exitSlots = exitPreparation ? Array.from({ length: 5 }, () => ({ stage: 'not_started', value: undefined })) : [];
     this.#exitIssued = exitPreparation ? Array(5).fill(undefined) : [];
     this.#localSlots = localExit ? Array.from({ length: 4 }, () => ({ stage: 'not_started', value: undefined })) : [];
+  }
+  private returnedPreparationInitialMatches(): boolean {
+    return this.bodyPinReturnedPreparation === true && this.#bodyPinReturnedPhase === 'not_started'
+      && this.#bodyPinReturnedPostChecked === false && this.#bodyPinReturnedPoint === 'none' && this.#bodyPinReturnedFailurePoint === 'none'
+      && this.#started === false && this.#frame === false && this.#ready === false
+      && this.#issuedSeed === undefined && this.#issuedDraft === undefined && this.#probeOwner === undefined
+      && this.#issuedCells === undefined && this.#issuedFrameBinding === undefined
+      && this.#issuedRunLink === undefined && this.#issuedRunDuty === undefined && this.#issuedRunSeal === undefined
+      && this.#bodySeedShell === undefined && this.#bodySourceCreationAttempted === false && this.#bodySourceMetadataConfirmed === false
+      && this.#bodySourceBuildStage === 'not_started' && this.#bodyPinRouteAttempted === false
+      && this.#bodySourceIssued === undefined && this.#bodySourceCurrent === undefined && this.#bodySourceRejected === undefined
+      && this.#bodyPinFixedCalls === 0 && this.#bodyPinCallResult === 'none'
+      && this.#bodyPinCallActive === false && this.#finalTerminalSealed === false && this.#finalReplyAttempted === false
+      && this.#finalReplyPhase === 'empty' && this.#fixed === undefined;
+  }
+  returnedPreparationPrepare(): string {
+    if (!this.bodyPinReturnedPreparation) return 'state_invalid';
+    if (this.#closed || this.#failure.first !== 'none') return this.returnedPreparationResult();
+    this.#failure.first = this.returnedPreparationInitialMatches() ? 'construction_unconfirmed' : 'state_invalid';
+    return this.returnedPreparationResult();
+  }
+  private returnedPreparationResult(): string {
+    if (this.#closed) return 'closed';
+    const first = this.#failure.first;
+    return first === 'none' ? 'not_ready' : first === 'construction_unconfirmed' ? 'returned_not_connected'
+      : first === 'input_rejected' || first === 'binding_mismatch' || first === 'state_invalid' ? first : 'internal_unconfirmed';
+  }
+  returnedPreparationCheck(): string { return this.bodyPinReturnedPreparation ? this.returnedPreparationResult() : 'state_invalid'; }
+  returnedPreparationClose(): 'closed' { if (this.bodyPinReturnedPreparation) this.#closed = true; return 'closed'; }
+  returnedPreparationReject(): 'input_refused' {
+    if (this.bodyPinReturnedPreparation && this.#failure.first === 'none' && !this.#closed) this.#failure.first = 'input_rejected';
+    return 'input_refused';
+  }
+  inspectReturnedPreparation() {
+    return Object.freeze({ model: 'wfb-body-pin-returned-preparation-1', first: runFirst(this.#failure.first), stopped: this.#closed === true,
+      phase: runEnum(this.#bodyPinReturnedPhase, ['not_started', 'checking', 'accepted', 'blocked', 'failed'], 'unconfirmed'),
+      point: runEnum(this.#bodyPinReturnedPoint, ['none', 'identity', 'pre', 'post', 'blocked'], 'unconfirmed'),
+      failurePoint: runEnum(this.#bodyPinReturnedFailurePoint, ['none', 'identity', 'pre', 'post', 'blocked'], 'unconfirmed'),
+      postChecked: this.#bodyPinReturnedPostChecked === true,
+      stateValid: bodyPinReturnedStateMatches({ phase: this.#bodyPinReturnedPhase, postChecked: this.#bodyPinReturnedPostChecked,
+        point: this.#bodyPinReturnedPoint, failurePoint: this.#bodyPinReturnedFailurePoint }),
+      sourceGenerations: this.#bodySourceIssued !== undefined ? 1 : 0, fixedCalls: this.#bodyPinFixedCalls === 0 ? 0 : -1,
+      cacheRetained: this.#fixed !== undefined, sealed: this.#finalTerminalSealed === true, attempts: this.#finalReplyAttempted === true ? 1 : 0,
+      gr: 'not_connected', ga: 'not_connected', acceptance: 'not_connected', c03: 'not_connected', bodyStarts: this.#issuedCells?.body.state === 'running' ? 1 : 0,
+      authority: 'none', execution: 'closed', formalIssuance: 'closed', wholeRunAdmission: 'disabled', implementation: 'unknown', investigations: 'on_hold' });
   }
   private finalDelivery(reason: BodyPinFinalDelivery): void {
     if (this.#finalDeliveryFirst === 'none') this.#finalDeliveryFirst = reason;
@@ -6782,6 +6894,19 @@ export function createProbeBodyPinFinalContractsFake(...args: readonly unknown[]
     publish: (...xs: readonly unknown[]) => call(xs, () => a.finalContractPublish()),
     close: (...xs: readonly unknown[]) => call(xs, () => a.finalContractSeal(true)),
     inspect: (...xs: readonly unknown[]) => { if (xs.length) a.finalContractRejectInput(); return a.inspectFinalContracts(); } });
+}
+
+/** R-a initial-only preparation. Pure later-state checks cannot create a source or accept a return. */
+export function createProbeBodyPinReturnedPreparationFake(...args: readonly unknown[]) {
+  const a = new CanonicalGateDraftRoot('rp_normal', args.length === 0,
+    false, false, false, false, false, false,
+    false, false, false, false, false, false, false,
+    false, false, false, false, false, false,
+    false, false, false, true);
+  return Object.freeze({ prepare: (...xs: readonly unknown[]) => xs.length ? a.returnedPreparationReject() : a.returnedPreparationPrepare(),
+    check: (...xs: readonly unknown[]) => xs.length ? a.returnedPreparationReject() : a.returnedPreparationCheck(),
+    close: (...xs: readonly unknown[]) => xs.length ? a.returnedPreparationReject() : a.returnedPreparationClose(),
+    inspect: (...xs: readonly unknown[]) => { if (xs.length) a.returnedPreparationReject(); return a.inspectReturnedPreparation(); } });
 }
 
 /** C-c synthetic only. The C-b factory and its fixed rejection behavior stay unchanged. */

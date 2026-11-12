@@ -1,12 +1,12 @@
 # WF-B：PC08 returned全照合と受理・失敗・診断sealの接続差分
 
-Version: draft-0.2 / Date: 2026-11-13 / 読み取り基準HEAD: `e7bda024e1298c18707be6fca248ef8ba1299421`（C-c実装`8ffaf0a`と、そのレビュー補強`e7bda02`を維持）。レビュー修正基準HEAD: `ed37be3`。
+Version: draft-0.3 / Date: 2026-11-13 / 読み取り基準HEAD: `e7bda024e1298c18707be6fca248ef8ba1299421`（C-c実装`8ffaf0a`と、そのレビュー補強`e7bda02`を維持）。レビュー修正基準HEAD: `ed37be3`。§15のR-a限定実装基準HEAD: `d9002e02026451f55b1e1767701dbc02b2c1507d`。
 
 draft-0.1のレビュー修正：§7のinput_rejected写像（rootはそのまま、sourceはstate_invalid）を現行fixtureと照合したところ、旧`fail()`系は同じだが、C-cの最終観測中の記録分岐はsource側をconstruction_unconfirmedにしていた。到達するscriptはないが、本書を正としてC-c分岐を直し、compiled対照を追加した（[C詳細設計draft-0.9](BEST_PRACTICE_WFB_BODY_PIN_FINAL_RETURN_CACHE_DESIGN.md)）。これにより旧C-cの等価節は31件になったため、RT16の件数を合わせた。他の本文・R08／RT条件は変えていない。
 
-Status: **差分詳細設計のみ。PC08 returned全照合・受理writer・新mode・C-03は未実装／未接続。** 親は[C-c最終返却・単一cache設計](BEST_PRACTICE_WFB_BODY_PIN_FINAL_RETURN_CACHE_DESIGN.md)と[private pin接続設計](BEST_PRACTICE_WFB_BODY_PRIVATE_PIN_CONNECTION_DESIGN.md)。[confirmed・内部返却契約](BEST_PRACTICE_WFB_BODY_PIN_CONFIRM_RETURN_DESIGN.md)と[C-c検証記録](E2E_BEST_PRACTICE_WFB_BODY_PIN_FINAL_POST_2026-11-12.md)は既存到達点の根拠であり、本書の受入実績ではない。
+Status: **§15のR-a狭い値型・returned専用値検査・先行scalar・初期状態だけの固定拒否を合成依存限定で実装。実PC08開始claim／受理・G_R／G_A・C-03は未接続。** 親は[C-c最終返却・単一cache設計](BEST_PRACTICE_WFB_BODY_PIN_FINAL_RETURN_CACHE_DESIGN.md)と[private pin接続設計](BEST_PRACTICE_WFB_BODY_PRIVATE_PIN_CONNECTION_DESIGN.md)。[confirmed・内部返却契約](BEST_PRACTICE_WFB_BODY_PIN_CONFIRM_RETURN_DESIGN.md)と[C-c検証記録](E2E_BEST_PRACTICE_WFB_BODY_PIN_FINAL_POST_2026-11-12.md)は前段実績、[R-a検証記録](E2E_BEST_PRACTICE_WFB_BODY_PIN_RETURNED_PREPARATION_2026-11-13.md)が今回の限定範囲である。§1〜14の将来接続契約と文書作業履歴は保持し、実装済みへ読み替えない。
 
-正式発行口・既存C実行入口・body起動閉鎖、全体受付無効、Unknown、VM／監視／telemetry調査保留を維持する。実装・body起動・実接続・実通信・実機操作・設定変更・Pushは行わない。source利用claim消費・payload借用／bind・BC00・構築ready・Journal供給・field clear／root終端も対象外である。
+正式発行口・既存C実行入口・body起動閉鎖、全体受付無効、Unknown、VM／監視／telemetry調査保留を維持する。今回の実装は§15の合成準備だけ。実受理・body起動・実接続・実通信・実機操作・設定変更・Pushは行わない。source利用claim消費・payload借用／bind・BC00・構築ready・Journal供給・field clear／root終端も対象外である。
 
 ## 1 C-cとの差分と二つの受理境界
 
@@ -214,3 +214,23 @@ calling用安定関数の最小抽出が必要なら、その互換移行を先�
 ローカル参照・表列数・節順・R08-01〜09／RT01〜16の欠落／重複、親の既存本文／レビュー保持、変更対象・HEAD／indexを文書として検証する。build・合成／compiled試験・梱包・index登録・コミット・Pushは行わない。RT条件はすべて未実施で、PC08受理・C-03・cleanupの受入成功ではない。文書整合の結果は作業終了前に本節へ追記する。
 
 文書検証結果：3文書のローカル参照35件に欠落なし、29表の列数と末尾改行／行末空白に異常なし。節数は本書14・親各21、R08-01〜09／RT01〜16の順序・重複・欠落なし。親2文書の既存§1以降の本文・レビューの全byte保持、変更がMarkdown3件だけであること、基準HEAD不変・index空とdiff --checkを確認した。これは設計文書の整合確認だけで、新modeの実装・受入・実機操作を行った結果ではない。
+
+## 15 R-aの値契約・初期owner確認と固定診断（2026-11-13）
+
+package除外のcreateProbeBodyPinReturnedPreparationFakeを追加した。同CanonicalGateDraftRootへconstructor固定flagと本書の4scalarをliteralで先行するが、source／frame／C-c実行等の既存22flagは全false。正規source生成・call・returned開始claimは呼ばず、実ownerはnot_started／point none／post falseの初期状態確認だけを行う。旧C-cは入力拒否のsource写像修正`d9002e0`も含め不変である。
+
+| R-aの実装境界 | 限定契約 |
+|---|---|
+| 狭い状態型 | not_started／checking／accepted／blocked／failed。失敗前post=falseのidentity／pre／postは現在点と初回点が一致する狭い枝、受理後失敗の値枝はblocked／post=true。未接続の後段正例は値だけ |
+| 専用pre／post値検査 | strictなstate／source／receiver／root／calleeの5区分。preはsource call・root call after、postはsource after・root returned before。旧値coreを使うが旧calling入力集合を拡大しない |
+| 来歴の限界 | root／calleeのboolean・issuedSame等は値契約だけ。同R/S/Tのprivate来歴・metadata／実I/C/Jを確認するowner検査ではなく、受理・実発行証拠へ昇格しない |
+| 先行4scalar | phase not_started、post false、point／failurePoint none。全classでoperational writer 0、G_R／G_A／checking移行なし。初期条件破損はstate_invalidで拒否 |
+| 新入口 | prepare／check／close／inspectの4固定method。引数は全拒否、callbackやraw値の受付なし。prepareは初期owner／source不在／未call／空cache等を直接検査しconstruction_unconfirmed／returned_not_connectedで固定拒否 |
+| 診断保持 | 既存root firstだけを先行記録し、直接分岐で原始codeへ投影。開始前closeはfirst noneを保持、先行input_rejected・construction_unconfirmedを後発close／入力で置換しない。source診断・callee first・seal／cacheは未接続 |
+| projection | 固定allowlist／strict boolean・frozen plainな有限値だけ。実source保持有無／call数／cache保持有無・body状態を読み、raw参照・能力を返さない。破損値4対照で秘密をechoしない |
+
+pre／postの値正例を実ownerへ挿入しない。実rootでcheckingやpost状態を作る公開slot／登録口はなく、準備shellが返すのは原始拒否codeだけ。1終端objectを作る段階でもないため、単一#fixedは空・seal／生成attemptは未使用のまま。後段のfull returned model／pin_prepare_not_connectedはまだ発行しない。新入口のmodelは診断用wfb-body-pin-returned-preparation-1で区別する。
+
+追加費目は固定flag・先行4scalar、module固定の凍結値表／key表5個、有限state／pre／post検査、初期ownerの直接比較、非割当て固定診断分岐と有限projection／facade。値表はroot31項目・callee6項目、source13／receiver14と状態4項目の有限shapeへ限定し、任意graphを走査しない。既存rootの37slot等の確保、source／owner／利用claim／#fixedを二重発行しない。JS物理allocation・GC／OOM・unit／E／S／全体work・解消予約・診断必着はUnknown。
+
+R-aの450状態組、pre／postの独立位置oracle81組・単項破損136件・shape60件、実初期条件15件・未知参照hook 0・projection4件・semantic拒否9行、公開入口の合成68件は[R-a検証記録](E2E_BEST_PRACTICE_WFB_BODY_PIN_RETURNED_PREPARATION_2026-11-13.md)へ分離する。RT全体の成功、同R/S/Tの実returned全照合、受理claim／G_R／G_A・C-03・bodyは未接続のまま。次のR-bでは元call接続・private来歴／実参照の全照合・診断seal／単一cacheを改めて一体検証する。

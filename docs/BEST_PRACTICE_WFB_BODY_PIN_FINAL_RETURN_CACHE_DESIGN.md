@@ -1,6 +1,6 @@
 # WF-B：(C)最終post・内部accepted返却・PC08未接続停止と返答cache所有の差分詳細設計
 
-Version: draft-0.9 / Date: 2026-11-12 / 設計読み取り基準HEAD: `7343af3ec1befe854326d43a32fbfbe833be692f`（レビュー`7eb7b9b`を維持）。§15の(C-a)限定実装基準HEAD: `8e3f043140ba3f824c507ebd9ad57d782aa89570`。§15実装のレビュー修正基準HEAD: `76f3d0f`。§17実装のレビュー修正基準HEAD: `194525a`。§19の(C-c)限定実装基準HEAD: `b4a0c677ad2291aa8ec7a6fb0c8ce7553a41c4cb`。§19実装のレビュー修正基準HEAD: `8ffaf0a`。§21のPC08差分設計基準HEAD: `e7bda02`。§21のレビュー修正基準HEAD: `ed37be3`。
+Version: draft-0.10 / Date: 2026-11-13 / 設計読み取り基準HEAD: `7343af3ec1befe854326d43a32fbfbe833be692f`（レビュー`7eb7b9b`を維持）。§15の(C-a)限定実装基準HEAD: `8e3f043140ba3f824c507ebd9ad57d782aa89570`。§15実装のレビュー修正基準HEAD: `76f3d0f`。§17実装のレビュー修正基準HEAD: `194525a`。§19の(C-c)限定実装基準HEAD: `b4a0c677ad2291aa8ec7a6fb0c8ce7553a41c4cb`。§19実装のレビュー修正基準HEAD: `8ffaf0a`。§21のPC08差分設計基準HEAD: `e7bda02`。§21のレビュー修正基準HEAD: `ed37be3`。 R-a限定実装基準HEAD: `d9002e0`。
 
 draft-0.2のレビュー修正：§15の公開projectionは「凍結plainな有限診断値のみ」としていたが、`inspectFinalContracts`はfirst・disposition・phase・rootEntryExit・deliveryFirst・現在点／初回点・completionをprivate原値のまま、sealed・publicEntryBusy・stoppedを非strictのまま出していた。型で有限なだけで、実行時allowlistと対照がなかった。既存factoryと同じく固定allowlist（範囲外はunconfirmed）と`=== true`へ投影し直し、compiledにprivate不正値11件の非echo対照を追加した（修正前はfirstで`private_secret`がそのまま出てRED）。Vitestにはseal後の`check()`がpublication_not_connectedを返すことを追加した。28件の一時変異のうち等価な5件は§16に記録した。投影以外のfixture挙動は変えていない。
 
@@ -348,3 +348,9 @@ draft-0.9の補正：上表の`finalEntryRecord`のC-c分岐（5）のうち、f
 元source call→afterとroot returned位置のG_R、post受理のG_Aを固定直接群に分ける。受理後もC-03未接続の固定境界で停止し、正常callee・PC08受理履歴とroot/sourceのconstruction_unconfirmedを併存させる。旧C-cのfailed／seal済みinstanceやcacheを再開せず、同#fixedだけの終端・外側復帰／再読条件、同期停止と元借用／未確認責務の保持を維持する。
 
 本節と子設計は文書だけ。既存§1〜20の本文・レビュー・実装／試験・CHANGELOGは変更しない。新mode・新scalar・PC08・BP04／C-03・構築ready・bodyは未実装／未接続。正式発行口閉鎖・全体受付無効・Unknown・調査保留を維持し、実接続・実通信・実機操作・設定変更・Pushは行わない。
+
+## 22 R-aのreturned値契約と実行閉鎖の初期確認（2026-11-13）
+
+[returned差分設計§15](BEST_PRACTICE_WFB_BODY_PIN_RETURNED_ACCEPT_SEAL_DESIGN.md)の狭い状態型・pre／post専用値検査・root先行4scalar・固定診断を合成依存限定で実装した。新しい準備shellは既存22構築flagを全falseとして、初期ownerと空source／未call／未seal／空cacheだけを確認し、原始codeで固定拒否する。値正例はcompiled対照だけで、元C-cの実acceptedやPC08へ接続しない。
+
+既存C-cのinput_rejected→source state_invalid写像とレビュー対照は維持する。新modeもsource／claim／callee／終端cacheを発行せず、returned phase writer 0、G_R／G_A・C-03・body未接続。今回の限定受入と初回失敗は[R-a検証記録](E2E_BEST_PRACTICE_WFB_BODY_PIN_RETURNED_PREPARATION_2026-11-13.md)へ記録する。正式発行口閉鎖・全体受付無効・Unknown・調査保留と実接続・実通信・設定変更・Pushの禁止は不変。
