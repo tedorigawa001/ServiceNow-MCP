@@ -163,7 +163,8 @@ try {
       const f = n.left.name.getText(ast);
       if (refs.has(f)) { assert.equal(scope, 'RetirementStartAssembly'); writes.push(owner + '/' + f); }
       if (['#bodyBundleIssued', '#bodyBundleCurrent', '#bodyRejectedBundle', '#bodyDraftIssued', '#bodyDraftCurrent', '#bodyRejectedDraft', 'bindCallReached', 'postConfirmed', 'claim'].includes(f)) assert.fail('forbidden write ' + f);
-      if (f === '#bodyPinStage') assert.ok(["'attempting'", "'issued'", "'captured'"].includes(n.right.getText(ast)));
+      if (f === '#bodyPinStage') assert.ok(["'attempting'", "'issued'", "'captured'"].includes(n.right.getText(ast))
+        || scope === 'RetirementStartAssembly' && owner === 'advanceBodyPinConfirmationStages' && n.right.getText(ast) === "'confirmed'");
     }
     ts.forEachChild(n, c => scan(c, scope, owner));
   }

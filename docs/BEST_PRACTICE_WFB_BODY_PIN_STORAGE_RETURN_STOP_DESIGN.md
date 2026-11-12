@@ -1,12 +1,12 @@
 # WF-B：同start参照格納・全確認とPC08未接続停止の接続差分
 
-Version: draft-0.7 / Date: 2026-11-12 / 読み取り基準HEAD: `8d95d5c`（固定call実装: `1b929dc`、一点対照・等価判断のレビュー追加: `8d95d5c`、限定準備実装の基準HEAD: `7a9a613`、draft-0.2レビュー修正基準HEAD: `10e2f96`、§15の差分設計基準HEAD: `1f41240`、§16の限定格納実装基準HEAD: `ad00f28`、§17の完了／未接続停止差分設計基準HEAD: `ebe739e`、§18の(A)準備実装基準HEAD: `d7d3055`）。
+Version: draft-0.8 / Date: 2026-11-12 / 読み取り基準HEAD: `8d95d5c`（固定call実装: `1b929dc`、一点対照・等価判断のレビュー追加: `8d95d5c`、限定準備実装の基準HEAD: `7a9a613`、draft-0.2レビュー修正基準HEAD: `10e2f96`、§15の差分設計基準HEAD: `1f41240`、§16の限定格納実装基準HEAD: `ad00f28`、§17の完了／未接続停止差分設計基準HEAD: `ebe739e`、§18の(A)準備実装基準HEAD: `d7d3055`、§19の(B)段階接続基準HEAD: `201b1f7`）。
 
 draft-0.2のレビュー修正：§13の格納準備に23件の一時変異を入れたところ、18件はstorage又はcall側のVitest・compiledの意味的なassertで落ちた（busy節はanchorを保った変異で再確認）。残る5件は試験変更なしで通ったが、いずれも重複防御か単一writerであり、検証記録は「単一の失敗診断要求」「到達不能／重複防御」とまとめて書くだけで節を特定していなかった。§14に節ごとの根拠を記録した。文書だけの修正で、fixture・試験・契約は変えない。
 
-Status: **§13の格納前準備を維持し、§16の参照格納・初回rejected保持と§18の(A)確認値型・閉鎖caller準備を別合成modeで限定実装。pin confirmed・PC08・C-03は未接続。** 親は[call／receiver設計](BEST_PRACTICE_WFB_BODY_PIN_CALL_RECEIVER_DESIGN.md)と[private pin設計](BEST_PRACTICE_WFB_BODY_PRIVATE_PIN_CONNECTION_DESIGN.md)（設計読み取り時の版はdraft-0.6／draft-0.8）。前段は[固定call検証記録](E2E_BEST_PRACTICE_WFB_BODY_PIN_CALL_2026-11-11.md)、準備範囲は[準備検証記録](E2E_BEST_PRACTICE_WFB_BODY_PIN_STORAGE_PREPARATION_2026-11-12.md)。§1〜12はdraft-0.1時点の将来設計／文書検証であり、全確認・証拠発行・PC08受理を与えない。
+Status: **§13／16の準備・格納、§18の(A)を維持し、§19の(B)checked／confirmed・段階別postを合成依存限定で接続。最終post・accepted返却・PC08・C-03は未接続。** 親は[call／receiver設計](BEST_PRACTICE_WFB_BODY_PIN_CALL_RECEIVER_DESIGN.md)と[private pin設計](BEST_PRACTICE_WFB_BODY_PRIVATE_PIN_CONNECTION_DESIGN.md)（設計読み取り時の版はdraft-0.6／draft-0.8）。前段は[固定call検証記録](E2E_BEST_PRACTICE_WFB_BODY_PIN_CALL_2026-11-11.md)、準備範囲は[準備検証記録](E2E_BEST_PRACTICE_WFB_BODY_PIN_STORAGE_PREPARATION_2026-11-12.md)。§1〜12はdraft-0.1時点の将来設計／文書検証であり、全確認・証拠発行・PC08受理を与えない。
 
-正式発行口・既存C実行入口・body起動は閉鎖、全体受付無効、Unknown、VM／監視／telemetry調査保留を維持する。実装は§13／16／18の合成依存に限り、実接続・実通信・実機操作・設定変更・Pushは行わない。
+正式発行口・既存C実行入口・body起動は閉鎖、全体受付無効、Unknown、VM／監視／telemetry調査保留を維持する。実装は§13／16／18／19の合成依存に限り、実接続・実通信・実機操作・設定変更・Pushは行わない。
 
 ## 1 現行と今回設計する到達点
 
@@ -240,3 +240,9 @@ PC08未接続停止ではcallee first noneを維持し、root call after・sourc
 [確認差分設計§14](BEST_PRACTICE_WFB_BODY_PIN_CONFIRM_RETURN_DESIGN.md)の(A)を合成依存限定で実装した。実ownerの到達は従来どおりcaptured／currentでの固定拒否であり、先行final markerはfalseのまま。7状態と完了分類の正例は値専用、acceptedは実callerで拒否し、checked／confirmed・最終postはまだ接続しない。
 
 元source／startのprimitive分類と診断先行writerを専用modeに限定し、元Sの同一性・未確認source非読取り・先行理由／正規位置を保持する。返答生成失敗とI/C/Jの借用責務を別に残し、cache不在を再試行資格へ変えない。[(A)検証記録](E2E_BEST_PRACTICE_WFB_BODY_PIN_CONFIRMATION_PREPARATION_2026-11-12.md)に新旧合成・compiled・梱包除外を記録する。§17は設計時の履歴であり、全FC／FEや最終受理の実績へ読み替えない。PC08・C-03・claim消費・payload借用／bind・構築ready・body・正式発行は未接続、全体受付無効・Unknown・調査保留は維持する。
+
+## 19 (B)同ownerの段階遷移と中間postの固定拒否（2026-11-12）
+
+[確認差分設計§16](BEST_PRACTICE_WFB_BODY_PIN_CONFIRM_RETURN_DESIGN.md)の(B)を合成依存限定で実装した。元owner／source／startでchecked／confirmedと各postを照合し、固定拒否前のblocked再検査まで進む。stage confirmed・各post完了・最終post完了は別であり、最終markerはfalseのまま。正常でもreceiver_unconfirmed／rejected_attemptと上位pin_final_post_not_connectedで停止する。
+
+途中のthrow／close／再入でも実参照と診断を保持し、借用を修復・clear・新Jへ変換しない。元call／trial・利用claimを再発行せず、旧(A)・格納／保持・固定callの保証は維持する。[(B)検証記録](E2E_BEST_PRACTICE_WFB_BODY_PIN_CONFIRMATION_STAGES_2026-11-12.md)に新旧合成・compiled・梱包確認を記録した。最終post・accepted返却・PC08・C-03・claim消費・構築ready・body・正式発行は未接続、全体受付無効・Unknown・調査保留を維持する。

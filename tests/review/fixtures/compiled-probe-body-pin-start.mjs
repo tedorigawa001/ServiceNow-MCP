@@ -221,6 +221,7 @@ try {
           && ['failBodyPinStart', 'failBodyPinBridge', 'recordBodyPinConfirmationFailure'].includes(owner)
           || scope === 'CanonicalGateDraftRoot' && owner === 'dispatchBodyPin' && field === 'pinCallReached'
           || scope === 'RetirementStartAssembly' && owner === 'bodyPinReceiverEntry' && ['#bodyPinStep', '#bodyPinAttemptUsed', '#bodyPinStage'].includes(field)
+          || scope === 'RetirementStartAssembly' && owner === 'advanceBodyPinConfirmationStages' && ['#bodyPinStep', '#bodyPinStage'].includes(field)
           || scope === 'RetirementStartAssembly' && ['failBodyPinReceiver', 'failBodyPinStorageReceiver'].includes(owner) && field === '#bodyPinFailureStep'
           || scope === 'RetirementStartAssembly' && owner === 'storeBodyPinReferences'
             && ['#bodyExpectedSourceIssued', '#bodyExpectedSourceCurrent', '#bodyPinStep', '#bodyPinStage'].includes(field)

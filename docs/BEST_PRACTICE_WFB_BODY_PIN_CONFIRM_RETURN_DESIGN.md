@@ -1,12 +1,12 @@
 # WF-B：pin confirmed・最終postとPC08未接続停止の接続差分
 
-Version: draft-0.3 / Date: 2026-11-12 / 読み取り基準HEAD: `ebe739e`（§14の(A)限定実装基準HEAD: `d7d3055`、§14実装のレビュー修正基準HEAD: `1b74bff`）。
+Version: draft-0.4 / Date: 2026-11-12 / 読み取り基準HEAD: `ebe739e`（§14の(A)限定実装基準HEAD: `d7d3055`、§14実装のレビュー修正基準HEAD: `1b74bff`、§16の(B)限定実装基準HEAD: `201b1f7`）。
 
 draft-0.2のレビュー修正：§14の(A)実装（`1b74bff`）に43件の一時変異を入れたところ、24件がVitest・compiledの両方を通った（うち1件は型エラーでだけ落ちたため生存扱い）。参照点の失敗でprepared未成立ならconstruction_unconfirmedを返す分類、BP02失敗時のsource境界checked、BS shellのfailed、返答再materializationの拒否、prepared検査のbusy／active節とstate_invalid写像・pin first、primitive未復帰時のreturned判定である。Vitestは参照点ごとのdisposition・source境界・shell状態を比較し、返答再試行のErrorを完全一致にした。compiledにはprepared検査直前の一点注入3件と、bodyPinEnter後に復帰を失わせる局所対照を追加し、この9件を意味的なassertでkillした。残る15件は§15で等価と判断した。fixtureの挙動は変えていない。
 
-Status: **§14の(A)型・先行marker・caller分類／非割当て診断契約だけを合成依存限定で実装。checked／confirmed writer・最終post・accepted返却は未接続。** 親は[格納・初回rejected保持設計](BEST_PRACTICE_WFB_BODY_PIN_REFERENCE_STORAGE_DESIGN.md)と[全確認・未接続停止設計](BEST_PRACTICE_WFB_BODY_PIN_STORAGE_RETURN_STOP_DESIGN.md)。前段実績は[格納・保持検証記録](E2E_BEST_PRACTICE_WFB_BODY_PIN_REFERENCE_STORAGE_2026-11-12.md)、今回実績は[(A)準備検証記録](E2E_BEST_PRACTICE_WFB_BODY_PIN_CONFIRMATION_PREPARATION_2026-11-12.md)。既存の[private pin全体schedule](BEST_PRACTICE_WFB_BODY_PRIVATE_PIN_CONNECTION_DESIGN.md)のPC07までと、PC08未接続時の失敗合流を対にする。PC08そのもの・BP04／C-03は接続しない。
+Status: **§14の(A)を維持し、§16の(B)同ownerのchecked／confirmed・段階別postを固定拒否まで合成依存限定で実装。最終post・accepted返却は未接続。** 親は[格納・初回rejected保持設計](BEST_PRACTICE_WFB_BODY_PIN_REFERENCE_STORAGE_DESIGN.md)と[全確認・未接続停止設計](BEST_PRACTICE_WFB_BODY_PIN_STORAGE_RETURN_STOP_DESIGN.md)。前段実績は[格納・保持検証記録](E2E_BEST_PRACTICE_WFB_BODY_PIN_REFERENCE_STORAGE_2026-11-12.md)、(A)実績は[(A)準備検証記録](E2E_BEST_PRACTICE_WFB_BODY_PIN_CONFIRMATION_PREPARATION_2026-11-12.md)。(B)実績は[段階別post検証記録](E2E_BEST_PRACTICE_WFB_BODY_PIN_CONFIRMATION_STAGES_2026-11-12.md)。既存の[private pin全体schedule](BEST_PRACTICE_WFB_BODY_PRIVATE_PIN_CONNECTION_DESIGN.md)のPC07までと、PC08未接続時の失敗合流を対にする。PC08そのもの・BP04／C-03は接続しない。
 
-正式発行口・既存C実行入口・body起動閉鎖、全体受付無効、Unknown、VM／監視／telemetry調査保留を維持する。§1〜13はdraft-0.1の将来契約／文書検証履歴、今回の限定実装は§14で区別する。実接続・実通信・実機操作・設定変更・Pushは行わない。
+正式発行口・既存C実行入口・body起動閉鎖、全体受付無効、Unknown、VM／監視／telemetry調査保留を維持する。§1〜13はdraft-0.1の将来契約／文書検証履歴、限定実装は§14／16で区別する。実接続・実通信・実機操作・設定変更・Pushは行わない。
 
 ## 1 現行との差分と正常停止点
 
@@ -143,7 +143,7 @@ call側sourceReasonはroot firstの単純copyにしない。rejectedでは実T�
 
 特に、receiver first none→上位未接続、confirmed記録後のcallee失敗、final=trueだがprimitive未復帰、復帰後の先行root／source理由、返答生成失敗では軸が分かれる。receiverReason／sourceReasonの同値写像やcatchの到達不能という旧根拠を自動継承しない。節除去の対照は、最初の理由・実位置・最後のprefix・最終marker・未実施suffixの変化を比較し、構文／型エラー・anchor消失・外側timeoutや単なる後段固定拒否だけをkillに数えない。
 
-## 11 全接続時の独立合成・compiled受入条件（(A)の限定結果は§14）
+## 11 全接続時の独立合成・compiled受入条件（限定結果は§14／16）
 
 | ID | 必須条件と負の対照 |
 |---|---|
@@ -209,3 +209,27 @@ BodyPinConfirmationStateは§3の7組を狭いunionにし、source13／receiver1
 | 記録writerのfailureRecorded guard | 2回目の要求（cp_later_reason）でも同じ位置・pin firstを再計算するだけで値が変わらない |
 | 記録writerの位置妥当性guard | 新callerに来るroute位置は常にBP02 preflight又はBP03 callのbefore／after |
 | source firstの初回guardと理由写像 | 先行のfail経路が既にsource firstを同じ値で記録しているか、写像前後が同値になる。写像の除去は型エラーでだけ検出される |
+
+## 16 (B)同ownerのchecked／confirmedと段階別postの限定接続（2026-11-12）
+
+package除外のcreateProbeBodyPinConfirmationStagesFake／wfb-body-pin-confirmation-stages-1を追加した。constructor固定の別合成modeで、同R/S/T・(A)のcaptured_ready照合成功直後だけから継続する。旧(A)・reference／storage／call入口の動作・期待値・期限は不変。失敗済みrootの再開や、新source／claim／ownerの発行はしない。
+
+| Bの観測点 | 到達prefix／現在境界 | checked後post／confirmed後post |
+|---|---|---|
+| before_checked | captured／current／before | false／false |
+| checked | G_K後のcaptured／checked／after | false／false。この後の照合成功でchecked後post=true |
+| before_confirmed | captured／checked／before | true／false |
+| confirmed | G_M後のconfirmed／confirmed／after | true／false。この後の照合成功でconfirmed後post=true |
+| blocked | confirmed／confirmed／after | true／true。固定拒否前に同条件を再照合 |
+
+G_Kはstep checked→境界afterの2直接代入、G_Mはstage confirmed→step confirmed→境界afterの3直接代入。群内に呼出し・hook・allocation・観測を挟まない。I/C/Jは書き換えず、source claimはunused、payload6参照とBS13carrier dataは空のまま。before_final_postへの移行・G_P・最終marker true writer・literal acceptedはない。
+
+新checkerは同mode・(A)準備履歴・現在観測点・元source/startの活動binding・entry busy・実I=C=S／J空と、狭い段階の全原値・各post履歴を組にする。元来歴・未停止／firstなし・同frame／link／duty／control・空payload／BSは既存active検査から再利用する。current欠落はstate_invalid、存在する不一致I/Cはbinding_mismatchとして拒否し、元slotを修復／clearしない。J既存も拒否し、新段階から旧rejected保持へ流さない。正しい値viewを偽装しても実参照検査を省略しない。
+
+startへliteral falseのcheckedPostChecked／confirmedPostCheckedを先行配置し、各専用post成功直後だけtrueにする。rootのstages.completedはblocked再照合済みという**中間範囲だけの履歴**であり、最終post・accepted／PC08・run完了ではない。通常もreceiver_unconfirmed／rejected_attempt、root construction_unconfirmed／pin_final_post_not_connectedで停止する。preparedだけが立った途中失敗は通常返答へ分類しない。
+
+throw／close／prior後も到達段階・post履歴・I/C/Jを保持する。新rootの観測点／初回点／再入結果・中間完了は先行scalar。段階別失敗位置は共有非割当てwriterだけでなく、close／priorが先に診断を確定する既存failBodyPinBridgeの初回区間でも保持する。後発理由で上書きせず、返却後は(A)のprimitive分類・診断先行順を再利用する。新終端返答throwでも元参照・三者診断・履歴を残し、再materializationを拒否する。既存finallyは元busy解除だけ。
+
+[(B)検証記録](E2E_BEST_PRACTICE_WFB_BODY_PIN_CONFIRMATION_STAGES_2026-11-12.md)に新48件、実field故障50件・checker省略5対照・安定境界8件・実slot／値view対照・固定2群・型拒否7行等を記録する。§15は(A)の元範囲に保持し、Bの新checker／post履歴／分類を自動的に等価としない。既存の一点注入・復帰喪失対照も維持する。全新節感度・全FE／費目の証明ではない。
+
+追加費目はstartの2scalar、rootの観測点／初回点／再入結果／中間完了4scalar・空返答cacheと固定mode、5回の段階検査／有限event・診断／投影。(A)の終端返答試行scalarを再利用し、元owner・source22field・BS13carrier・9参照・call／trialを二重発行しない。実E／S・unit係数・実layout／GC／OOM・全guard数／全体work上界・解消予約はUnknown。(C)の最終post→accepted返却・PC08未接続停止は別承認に残し、正式発行口閉鎖・全体受付無効・調査保留を維持する。

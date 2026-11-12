@@ -140,13 +140,14 @@ try {
           || scope === 'RetirementStartAssembly' && owner === 'retainBodyPinRejected' && key === '#bodyExpectedSourceRejected', 'forbidden write ' + key);
         if (key === '#bodyPinStorageBoundary') {
           assert.equal(scope, 'RetirementStartAssembly');
-          assert.ok(['prepareBodyPinStorage', 'storeBodyPinReferences', 'retainBodyPinRejected'].includes(owner));
+          assert.ok(['prepareBodyPinStorage', 'storeBodyPinReferences', 'retainBodyPinRejected', 'advanceBodyPinConfirmationStages'].includes(owner));
           if (owner === 'prepareBodyPinStorage') boundaryWrites++;
           assert.ok(["'after'", "'before'"].includes(n.right.getText(ast)));
         }
         if (key === '#bodyPinStage') assert.ok(scope === 'RetirementStartAssembly' &&
           (owner === 'bodyPinReceiverEntry' && n.right.getText(ast) === "'attempting'"
-          || owner === 'storeBodyPinReferences' && ["'issued'", "'captured'"].includes(n.right.getText(ast))), 'no confirmation writer');
+          || owner === 'storeBodyPinReferences' && ["'issued'", "'captured'"].includes(n.right.getText(ast))
+          || owner === 'advanceBodyPinConfirmationStages' && n.right.getText(ast) === "'confirmed'"), 'unexpected pin-stage writer');
       }
     }
     ts.forEachChild(n, c => scan(c, scope, owner));

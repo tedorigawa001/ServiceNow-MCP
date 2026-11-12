@@ -2285,6 +2285,8 @@ let probeStartAccess: Readonly<{
   bodyPinRejectedHold(a: RetirementStartAssembly): BodyPinRejectedHold;
   bodyPinReferencePostChecked(a: RetirementStartAssembly): boolean;
   bodyPinFinalPostChecked(a: RetirementStartAssembly): boolean;
+  bodyPinCheckedPostChecked(a: RetirementStartAssembly): boolean;
+  bodyPinConfirmedPostChecked(a: RetirementStartAssembly): boolean;
   bodyPinReceiverFirst(a: RetirementStartAssembly): BodyReceiverFirst;
   bodyPinConfirmationReferences(a: RetirementStartAssembly, source: BodyBindSourceShell): boolean;
   bodyPinEnter(a: RetirementStartAssembly, root: CanonicalGateDraftRoot, source: BodyBindSourceShell): BodyPinAdmission;
@@ -2331,6 +2333,7 @@ class RetirementStartAssembly {
   #bodyPinRejectedHold: BodyPinRejectedHold = 'not_started';
   #bodyPinReferencePostChecked = false;
   #bodyPinFinalPostChecked = false;
+  #bodyPinCheckedPostChecked = false; #bodyPinConfirmedPostChecked = false;
   readonly #owner = Object.freeze({});
   readonly #binding: PendingSourceBinding;
   readonly #pin: RetirementBindingPin;
@@ -2366,6 +2369,8 @@ class RetirementStartAssembly {
       bodyPinRejectedHold: (a: RetirementStartAssembly) => a.#bodyPinRejectedHold,
       bodyPinReferencePostChecked: (a: RetirementStartAssembly) => a.#bodyPinReferencePostChecked,
       bodyPinFinalPostChecked: (a: RetirementStartAssembly) => a.#bodyPinFinalPostChecked,
+      bodyPinCheckedPostChecked: (a: RetirementStartAssembly) => a.#bodyPinCheckedPostChecked,
+      bodyPinConfirmedPostChecked: (a: RetirementStartAssembly) => a.#bodyPinConfirmedPostChecked,
       bodyPinReceiverFirst: (a: RetirementStartAssembly) => a.#bodyBindFirst,
       bodyPinConfirmationReferences: (a: RetirementStartAssembly, source: BodyBindSourceShell) =>
         a.#bodyExpectedSourceIssued === source && a.#bodyExpectedSourceCurrent === source && a.#bodyExpectedSourceRejected === undefined,
@@ -2611,7 +2616,33 @@ class RetirementStartAssembly {
   }
   private prepareBodyPinConfirmationContracts(root: CanonicalGateDraftRoot, source: BodyBindSourceShell): BodyPinAdmission {
     const valid = probeBodyPinRootAccess.confirmationPreparationCheck(root, source, this);
+    if (valid && probeBodyPinRootAccess.confirmationStagesMode(root, source, this)) return this.advanceBodyPinConfirmationStages(root, source);
     this.failBodyPinStorageReceiver(valid ? 'receiver_unconfirmed' : 'state_invalid');
+    return 'rejected_attempt';
+  }
+  private rejectBodyPinConfirmationStage(source: BodyBindSourceShell): BodyPinAdmission {
+    this.failBodyPinStorageReceiver(this.#bodyExpectedSourceIssued !== source
+      || this.#bodyExpectedSourceCurrent !== undefined && this.#bodyExpectedSourceCurrent !== source ? 'binding_mismatch' : 'state_invalid');
+    return 'rejected_attempt';
+  }
+  private advanceBodyPinConfirmationStages(root: CanonicalGateDraftRoot, source: BodyBindSourceShell): BodyPinAdmission {
+    this.#bodyPinStorageBoundary = 'before';
+    probeBodyPinRootAccess.confirmationStageEvent(root, source, this, 'before_checked');
+    if (!probeBodyPinRootAccess.confirmationStageCheck(root, source, this, 'before_checked')) return this.rejectBodyPinConfirmationStage(source);
+    this.#bodyPinStep = 'checked'; this.#bodyPinStorageBoundary = 'after';
+    probeBodyPinRootAccess.confirmationStageEvent(root, source, this, 'checked');
+    if (!probeBodyPinRootAccess.confirmationStageCheck(root, source, this, 'checked')) return this.rejectBodyPinConfirmationStage(source);
+    this.#bodyPinCheckedPostChecked = true;
+    this.#bodyPinStorageBoundary = 'before';
+    probeBodyPinRootAccess.confirmationStageEvent(root, source, this, 'before_confirmed');
+    if (!probeBodyPinRootAccess.confirmationStageCheck(root, source, this, 'before_confirmed')) return this.rejectBodyPinConfirmationStage(source);
+    this.#bodyPinStage = 'confirmed'; this.#bodyPinStep = 'confirmed'; this.#bodyPinStorageBoundary = 'after';
+    probeBodyPinRootAccess.confirmationStageEvent(root, source, this, 'confirmed');
+    if (!probeBodyPinRootAccess.confirmationStageCheck(root, source, this, 'confirmed')) return this.rejectBodyPinConfirmationStage(source);
+    this.#bodyPinConfirmedPostChecked = true;
+    probeBodyPinRootAccess.confirmationStageEvent(root, source, this, 'blocked');
+    if (!probeBodyPinRootAccess.confirmationStageCheck(root, source, this, 'blocked')) return this.rejectBodyPinConfirmationStage(source);
+    this.failBodyPinStorageReceiver('receiver_unconfirmed');
     return 'rejected_attempt';
   }
   private bodyFieldsInspect(): Readonly<BodyReceiverProjection> {
@@ -4139,6 +4170,8 @@ function bodyPinCallerClassification(result: 'none' | BodyPinAdmission, calls: n
   return first === 'none' ? 'receiver_unconfirmed' : first;
 }
 interface BodyPinConfirmationPreparationReply extends Omit<BodySeedReply, 'model'> { readonly model: 'wfb-body-pin-confirmation-preparation-1' }
+type BodyPinConfirmationStagePoint = 'none' | 'before_checked' | 'checked' | 'before_confirmed' | 'confirmed' | 'blocked';
+interface BodyPinConfirmationStagesReply extends Omit<BodySeedReply, 'model'> { readonly model: 'wfb-body-pin-confirmation-stages-1' }
 let probeBodyPinRootAccess: Readonly<{
   identity(root: CanonicalGateDraftRoot, source: BodyBindSourceShell, start: RetirementStartAssembly): boolean;
   active(root: CanonicalGateDraftRoot, source: BodyBindSourceShell, start: RetirementStartAssembly): boolean;
@@ -4157,6 +4190,9 @@ let probeBodyPinRootAccess: Readonly<{
   referenceEvent(root: CanonicalGateDraftRoot, source: BodyBindSourceShell, start: RetirementStartAssembly, point: Exclude<BodyPinReferencePoint, 'none'>): void;
   confirmationPreparationMode(root: CanonicalGateDraftRoot, source: BodyBindSourceShell, start: RetirementStartAssembly): boolean;
   confirmationPreparationCheck(root: CanonicalGateDraftRoot, source: BodyBindSourceShell, start: RetirementStartAssembly): boolean;
+  confirmationStagesMode(root: CanonicalGateDraftRoot, source: BodyBindSourceShell, start: RetirementStartAssembly): boolean;
+  confirmationStageCheck(root: CanonicalGateDraftRoot, source: BodyBindSourceShell, start: RetirementStartAssembly, point: Exclude<BodyPinConfirmationStagePoint, 'none'>): boolean;
+  confirmationStageEvent(root: CanonicalGateDraftRoot, source: BodyBindSourceShell, start: RetirementStartAssembly, point: Exclude<BodyPinConfirmationStagePoint, 'none'>): void;
   event(root: CanonicalGateDraftRoot, source: BodyBindSourceShell, start: RetirementStartAssembly, point: Exclude<BodyPinCallPoint, 'none'>): void;
 }>;
 class CanonicalGateDraftRoot {
@@ -4188,6 +4224,12 @@ class CanonicalGateDraftRoot {
         root.bodyPinConfirmationPreparation === true && root.bodyPinBridgeIdentity(source, start),
       confirmationPreparationCheck: (root: CanonicalGateDraftRoot, source: BodyBindSourceShell, start: RetirementStartAssembly) =>
         root.bodyPinConfirmationPreparedMatches(source, start),
+      confirmationStagesMode: (root: CanonicalGateDraftRoot, source: BodyBindSourceShell, start: RetirementStartAssembly) =>
+        root.bodyPinConfirmationStages === true && root.bodyPinBridgeIdentity(source, start),
+      confirmationStageCheck: (root: CanonicalGateDraftRoot, source: BodyBindSourceShell, start: RetirementStartAssembly, point: Exclude<BodyPinConfirmationStagePoint, 'none'>) =>
+        root.bodyPinConfirmationStageMatches(source, start, point),
+      confirmationStageEvent: (root: CanonicalGateDraftRoot, source: BodyBindSourceShell, start: RetirementStartAssembly, point: Exclude<BodyPinConfirmationStagePoint, 'none'>) =>
+        root.bodyPinConfirmationStagePoint(point, source, start),
       referenceContext: (root: CanonicalGateDraftRoot, source: BodyBindSourceShell, start: RetirementStartAssembly) =>
         root.bodyPinReferenceStorage === true && root.bodyPinBridgeActive(source, start) && probeStartAccess.bodyPinEntryBusy(start) === true,
       referenceScript: (root: CanonicalGateDraftRoot, source: BodyBindSourceShell, start: RetirementStartAssembly) => {
@@ -4289,12 +4331,17 @@ class CanonicalGateDraftRoot {
   #bodyPinConfirmationClassification: BodyPinCallerClassification = 'none';
   #bodyPinConfirmationReplyAttempted = false;
   #bodyPinConfirmationFixed: Readonly<BodyPinConfirmationPreparationReply> | undefined;
+  #bodyPinConfirmationStagePoint: BodyPinConfirmationStagePoint = 'none';
+  #bodyPinConfirmationStageFailurePoint: BodyPinConfirmationStagePoint = 'none';
+  #bodyPinConfirmationStageReentry: 'none' | BodyPinAdmission = 'none';
+  #bodyPinConfirmationStagesChecked = false;
+  #bodyPinConfirmationStagesFixed: Readonly<BodyPinConfirmationStagesReply> | undefined;
   constructor(private readonly script: string, admitted: boolean, private readonly probePreparation = false, private readonly runPreparation = false,
     private readonly grantCapture = false, private readonly exitPreparation = false, private readonly exitGuard = false, private readonly localExit = false,
     private readonly bodySeed = false, private readonly bodyLive = false, private readonly bodyBundle = false, private readonly bodyBindFields = false,
     private readonly bodySourceIssuer = false, private readonly bodyPinContracts = false, private readonly bodyPinStart = false,
     private readonly bodyPinBridge = false, private readonly bodyPinCall = false, private readonly bodyPinStorage = false,
-    private readonly bodyPinReferenceStorage = false, private readonly bodyPinConfirmationPreparation = false) {
+    private readonly bodyPinReferenceStorage = false, private readonly bodyPinConfirmationPreparation = false, private readonly bodyPinConfirmationStages = false) {
     this.#failure = { first: admitted ? 'none' : 'input_rejected', phase: 0, boundary: 'none' };
     this.#slots = Array.from({ length: 37 }, () => ({ stage: 'not_started', value: undefined }));
     this.#probeSlots = probePreparation ? Array.from({ length: 8 }, () => ({ stage: 'not_started', value: undefined })) : [];
@@ -5156,6 +5203,7 @@ class CanonicalGateDraftRoot {
       if (this.bodyPinCall) { this.#bodyPinCallFailurePhase = this.#bodyPinCallPhase; this.#bodyPinCallFailurePoint = this.#bodyPinCallPoint; }
       if (this.bodyPinStorage) this.#bodyPinStorageFailurePoint = this.#bodyPinStoragePoint;
       if (this.bodyPinReferenceStorage) this.#bodyPinReferenceFailurePoint = this.#bodyPinReferencePoint;
+      if (this.bodyPinConfirmationStages) this.#bodyPinConfirmationStageFailurePoint = this.#bodyPinConfirmationStagePoint;
       this.#bodyPinFirst = reason === 'binding_mismatch' || reason === 'closed' ? reason
         : reason === 'state_invalid' || reason === 'input_rejected' ? 'state_invalid' : 'construction_unconfirmed';
       this.#bodyPinFailurePhase = p?.phase ?? 'none'; this.#bodyPinFailureStep = p?.step ?? 'none';
@@ -5234,6 +5282,29 @@ class CanonicalGateDraftRoot {
     if (valid) this.#bodyPinConfirmationPrepared = true;
     return valid;
   }
+  private bodyPinConfirmationStageMatches(source: BodyBindSourceShell, start: RetirementStartAssembly, point: Exclude<BodyPinConfirmationStagePoint, 'none'>): boolean {
+    if (this.bodyPinConfirmationStages !== true || this.#bodyPinConfirmationPrepared !== true
+      || this.#bodyPinConfirmationStagePoint !== point || !this.bodyPinBridgeActive(source, start)
+      || probeStartAccess.bodyPinEntryBusy(start) !== true || !probeStartAccess.bodyPinConfirmationReferences(start, source)) return false;
+    const checked = point === 'before_confirmed' || point === 'confirmed' || point === 'blocked';
+    const valid = probeStartAccess.bodyPinCheckedPostChecked(start) === checked
+      && probeStartAccess.bodyPinConfirmedPostChecked(start) === (point === 'blocked')
+      && bodyPinConfirmationState({ phase: point === 'blocked' ? 'confirmed' : point,
+        boundary: probeStartAccess.bodyPinStorageBoundary(start), referencePostChecked: probeStartAccess.bodyPinReferencePostChecked(start),
+        hold: probeStartAccess.bodyPinRejectedHold(start), pinFinalPostChecked: probeStartAccess.bodyPinFinalPostChecked(start),
+        source: this.bodyPinSourceValues(source), receiver: probeStartAccess.bodyPinValues(start, source) });
+    if (valid && point === 'blocked') this.#bodyPinConfirmationStagesChecked = true;
+    return valid;
+  }
+  private bodyPinConfirmationStagePoint(point: Exclude<BodyPinConfirmationStagePoint, 'none'>, source: BodyBindSourceShell, start: RetirementStartAssembly): void {
+    if (!this.bodyPinBridgeIdentity(source, start) || this.bodyPinConfirmationStages !== true) throw Error('private_stage_identity');
+    this.#bodyPinConfirmationStagePoint = point;
+    if (this.script === 'cs_reenter_' + point) this.#bodyPinConfirmationStageReentry = probeStartAccess.bodyPinEnter(start, this, source);
+    if (this.script === 'cs_close_' + point) this.close();
+    if (this.script === 'cs_prior_' + point) { this.fail('state_invalid'); throw Error('private_stage_later_fault'); }
+    if (this.script === 'cs_fault_' + point) throw Error('private_stage_fault');
+    if (probeBodyPinRootAccess.stopped(this, source)) throw Error('private_stage_stopped');
+  }
   private recordBodyPinConfirmationFailure(reason: Exclude<BodySourceFirst, 'none'>, sourceReason: Exclude<BodySourceFirst, 'none'>, source: BodyBindSourceShell | undefined): void {
     if (this.#failure.first === 'none') this.#failure.first = reason;
     if (this.#bodyPinCallSourceReason === 'none') this.#bodyPinCallSourceReason = sourceReason;
@@ -5241,6 +5312,7 @@ class CanonicalGateDraftRoot {
       this.#bodyPinFailureRecorded = true; this.#bodyPinBridgeFailurePhase = this.#bodyPinBridgePhase;
       this.#bodyPinCallFailurePhase = this.#bodyPinCallPhase; this.#bodyPinCallFailurePoint = this.#bodyPinCallPoint;
       this.#bodyPinStorageFailurePoint = this.#bodyPinStoragePoint; this.#bodyPinReferenceFailurePoint = this.#bodyPinReferencePoint;
+      this.#bodyPinConfirmationStageFailurePoint = this.#bodyPinConfirmationStagePoint;
       this.#bodyPinFirst = this.#failure.first === 'binding_mismatch' || this.#failure.first === 'closed' || this.#failure.first === 'state_invalid'
         ? this.#failure.first : 'construction_unconfirmed';
       if ((this.#bodyPinRoutePhase === 'BP02' && this.#bodyPinRouteStep === 'preflight'
@@ -5284,6 +5356,9 @@ class CanonicalGateDraftRoot {
       ? first : 'construction_unconfirmed';
     this.recordBodyPinConfirmationFailure(reason, sourceReason, trusted ? source : undefined);
     if (this.script === 'cp_later_reason') this.recordBodyPinConfirmationFailure('state_invalid', 'state_invalid', trusted ? source : undefined);
+    if (this.bodyPinConfirmationStages) return this.#fixed ??= this.reply(false,
+      reason === 'construction_unconfirmed' && classification === 'receiver_unconfirmed' && this.#bodyPinConfirmationStagesChecked
+        ? 'pin_final_post_not_connected' : reason);
     return this.#fixed ??= this.reply(false, reason === 'construction_unconfirmed' && classification === 'receiver_unconfirmed'
       && this.#bodyPinConfirmationPrepared ? 'pin_confirmation_not_connected' : reason);
   }
@@ -5308,6 +5383,29 @@ class CanonicalGateDraftRoot {
       classification: runEnum(this.#bodyPinConfirmationClassification, ['none', 'completed_value_only', 'unreturned', 'refused_existing', 'binding_mismatch', 'state_invalid', 'closed', 'receiver_unconfirmed'], 'unconfirmed'),
       diagnosticRecorded: this.#bodyPinConfirmationDiagnosticRecorded === true, replyAttempted: this.#bodyPinConfirmationReplyAttempted === true,
       stateContract: 'value_only', callerCompletion: 'value_only', finalPost: 'not_connected', acceptedReturn: 'not_connected' }) });
+  }
+  bodyPinConfirmationStagesReply(disposition: string): Readonly<BodyPinConfirmationStagesReply> {
+    if (this.#bodyPinConfirmationStagesFixed) return this.#bodyPinConfirmationStagesFixed;
+    const terminal = this.#failure.first !== 'none' || this.#closed;
+    if (terminal && this.#bodyPinConfirmationReplyAttempted) throw Error('private_confirmation_reply_unconfirmed');
+    if (terminal) this.#bodyPinConfirmationReplyAttempted = true;
+    if (this.script === 'cs_reply_throw' && this.#bodyPinConfirmationDiagnosticRecorded) throw Error('private_confirmation_reply_fault');
+    const r: Readonly<BodyPinConfirmationStagesReply> = Object.freeze({ model: 'wfb-body-pin-confirmation-stages-1', ok: false,
+      disposition: runEnum(disposition, ['pin_final_post_not_connected', 'closed', 'not_ready', 'input_rejected', 'binding_mismatch',
+        'state_invalid', 'construction_unconfirmed', 'deferred_frame', 'construction_in_progress', 'duplicate_preparation'], 'internal_unconfirmed'),
+      first: runFirst(this.#failure.first), authority: 'none', execution: 'closed', formalIssuance: 'closed',
+      wholeRunAdmission: 'disabled', implementation: 'unknown', investigations: 'on_hold' });
+    if (terminal) this.#bodyPinConfirmationStagesFixed = r; return r;
+  }
+  inspectBodyPinConfirmationStages() {
+    const c = this.inspectBodyPinConfirmationPreparation(), start = this.#issuedFrameBinding?.target.start;
+    return Object.freeze({ ...c, model: 'wfb-body-pin-confirmation-stages-1', stages: Object.freeze({
+      point: runEnum(this.#bodyPinConfirmationStagePoint, ['none', 'before_checked', 'checked', 'before_confirmed', 'confirmed', 'blocked'], 'unconfirmed'),
+      failurePoint: runEnum(this.#bodyPinConfirmationStageFailurePoint, ['none', 'before_checked', 'checked', 'before_confirmed', 'confirmed', 'blocked'], 'unconfirmed'),
+      reentry: runEnum(this.#bodyPinConfirmationStageReentry, ['none', 'accepted', 'refused_existing', 'rejected_attempt'], 'unconfirmed'),
+      checkedPostChecked: start ? probeStartAccess.bodyPinCheckedPostChecked(start) === true : false,
+      confirmedPostChecked: start ? probeStartAccess.bodyPinConfirmedPostChecked(start) === true : false,
+      completed: this.#bodyPinConfirmationStagesChecked === true, finalPost: 'not_connected' }) });
   }
   bodyPinReferenceReply(disposition: string): Readonly<BodyPinReferenceReply> {
     if (this.#bodyPinReferenceFixed) return this.#bodyPinReferenceFixed;
@@ -6331,6 +6429,25 @@ export function createProbeBodyBindFieldsFake(...args: readonly unknown[]) {
     checkLegacy: (...xs: readonly unknown[]) => call(xs, () => a.checkBodyBindFields(true)),
     close: (...xs: readonly unknown[]) => call(xs, () => a.close()),
     inspect: (...xs: readonly unknown[]) => { if (xs.length) a.rejectInput(); return a.inspectBodyBindFields(); } });
+}
+
+export function createProbeBodyPinConfirmationStagesFake(...args: readonly unknown[]) {
+  const script = args.length ? args[0] : 'cs_normal';
+  const scripts = ['cs_normal', 'cs_reply_throw', 'si_producer_throw', 'pc_fault_checked', 'ps_fault_entry_before', 'pb_fault_checked',
+    'ec_foreign_source', 'ec_copy_source', 'ec_proxy_source', 'ec_foreign_start', 'ec_proxy_start', 'ec_fault_before_call',
+    'ec_close_preflight_before', 'rs_copy_current', 'rs_missing_current', ...['before_checked', 'checked', 'before_confirmed', 'confirmed', 'blocked']
+    .flatMap(p => ['fault', 'close', 'prior', 'reenter'].map(k => 'cs_' + k + '_' + p))];
+  const admitted = args.length <= 1 && typeof script === 'string' && scripts.includes(script);
+  const a = new CanonicalGateDraftRoot(admitted ? script as string : 'cs_normal', admitted,
+    true, true, false, true, false, false, false, false, false, false, true, true, true, true, true, true, true, true, true);
+  const call = (xs: readonly unknown[], op: () => Readonly<{ ok: boolean; disposition: string }>) => {
+    const r = xs.length ? a.rejectInput() : op(); return a.bodyPinConfirmationStagesReply(r.disposition);
+  };
+  return Object.freeze({ prepare: (...xs: readonly unknown[]) => call(xs, () => a.prepare()),
+    check: (...xs: readonly unknown[]) => call(xs, () => a.checkBodyBindFields()),
+    checkLegacy: (...xs: readonly unknown[]) => call(xs, () => a.checkBodyBindFields(true)),
+    close: (...xs: readonly unknown[]) => call(xs, () => a.close()),
+    inspect: (...xs: readonly unknown[]) => { if (xs.length) a.rejectInput(); return a.inspectBodyPinConfirmationStages(); } });
 }
 
 export function createProbeBodyPinConfirmationPreparationFake(...args: readonly unknown[]) {

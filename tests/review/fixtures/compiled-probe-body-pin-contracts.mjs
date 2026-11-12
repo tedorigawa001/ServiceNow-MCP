@@ -270,6 +270,7 @@ try {
     ['prepareBodyPinConfirmationCaller', new Set(['#bodyPinRouteBoundary'])],
   ]);
   const receiverWriters = new Map([
+    ['advanceBodyPinConfirmationStages', new Set(['#bodyPinStep', '#bodyPinStage'])],
     ['bodyPinReceiverEntry', new Set(['#bodyPinStep', '#bodyPinAttemptUsed', '#bodyPinStage'])],
     ['failBodyPinReceiver', new Set(['#bodyPinFailureStep'])],
     ['failBodyPinStorageReceiver', new Set(['#bodyPinFailureStep'])],

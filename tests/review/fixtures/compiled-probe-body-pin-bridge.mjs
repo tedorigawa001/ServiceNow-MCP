@@ -143,6 +143,7 @@ try {
     '#bodyPinAttemptUsed', '#bodyPinStage', '#bodyPinStep', 'pinCallReached', 'bindCallReached', 'postConfirmed', 'claim']);
   let rootAccessWrites = 0;
   const entryWrites = new Map([
+    ['RetirementStartAssembly.advanceBodyPinConfirmationStages', new Set(['#bodyPinStep', '#bodyPinStage'])],
     ['CanonicalGateDraftRoot.dispatchBodyPin', new Set(['#bodyPinCallActive', 'pinCallReached'])],
     ['RetirementStartAssembly.bodyPinReceiverEntry', new Set(['#bodyPinEntryBusy', '#bodyPinAttemptUsed', '#bodyPinStage', '#bodyPinStep'])],
     ['RetirementStartAssembly.storeBodyPinReferences', new Set(['#bodyExpectedSourceIssued', '#bodyExpectedSourceCurrent', '#bodyPinStep', '#bodyPinStage'])],
