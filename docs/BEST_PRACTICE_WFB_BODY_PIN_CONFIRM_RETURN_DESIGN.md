@@ -1,14 +1,14 @@
 # WF-B：pin confirmed・最終postとPC08未接続停止の接続差分
 
-Version: draft-0.7 / Date: 2026-11-12 / 読み取り基準HEAD: `ebe739e`（§14の(A)限定実装基準HEAD: `d7d3055`、§14実装のレビュー修正基準HEAD: `1b74bff`、§16の(B)限定実装基準HEAD: `201b1f7`、§16実装のレビュー修正基準HEAD: `7343af3`）。
+Version: draft-0.8 / Date: 2026-11-12 / 読み取り基準HEAD: `ebe739e`（§14の(A)限定実装基準HEAD: `d7d3055`、§14実装のレビュー修正基準HEAD: `1b74bff`、§16の(B)限定実装基準HEAD: `201b1f7`、§16実装のレビュー修正基準HEAD: `7343af3`、§21の(C-c)限定実装基準HEAD: `b4a0c67`）。
 
 draft-0.4のレビュー修正：§16の(B)実装（`7343af3`）に34件の一時変異を入れたところ、9件がVitest・compiledの両方を通った。そのうち検出できたのは、段階継続へ入る分岐の`valid &&`条件である。prepared検査が失敗した場合、この条件を外しても最初の理由は同じstate_invalidだが、段階継続へ進んで`stages.point`がbefore_checkedへ動く。compiledにprepared検査直前でbusyを落とす対照を追加し、`stages.point`がnoneのまま、receiver first state_invalid・prepared falseであることを確認してkillした。残る8件は§17で等価と判断した。fixtureの挙動は変えていない。
 
 draft-0.2のレビュー修正：§14の(A)実装（`1b74bff`）に43件の一時変異を入れたところ、24件がVitest・compiledの両方を通った（うち1件は型エラーでだけ落ちたため生存扱い）。参照点の失敗でprepared未成立ならconstruction_unconfirmedを返す分類、BP02失敗時のsource境界checked、BS shellのfailed、返答再materializationの拒否、prepared検査のbusy／active節とstate_invalid写像・pin first、primitive未復帰時のreturned判定である。Vitestは参照点ごとのdisposition・source境界・shell状態を比較し、返答再試行のErrorを完全一致にした。compiledにはprepared検査直前の一点注入3件と、bodyPinEnter後に復帰を失わせる局所対照を追加し、この9件を意味的なassertでkillした。残る15件は§15で等価と判断した。fixtureの挙動は変えていない。
 
-Status: **§14の(A)を維持し、§16の(B)同ownerのchecked／confirmed・段階別postを固定拒否まで合成依存限定で実装。最終post・accepted返却は未接続。** 親は[格納・初回rejected保持設計](BEST_PRACTICE_WFB_BODY_PIN_REFERENCE_STORAGE_DESIGN.md)と[全確認・未接続停止設計](BEST_PRACTICE_WFB_BODY_PIN_STORAGE_RETURN_STOP_DESIGN.md)。前段実績は[格納・保持検証記録](E2E_BEST_PRACTICE_WFB_BODY_PIN_REFERENCE_STORAGE_2026-11-12.md)、(A)実績は[(A)準備検証記録](E2E_BEST_PRACTICE_WFB_BODY_PIN_CONFIRMATION_PREPARATION_2026-11-12.md)。(B)実績は[段階別post検証記録](E2E_BEST_PRACTICE_WFB_BODY_PIN_CONFIRMATION_STAGES_2026-11-12.md)。既存の[private pin全体schedule](BEST_PRACTICE_WFB_BODY_PRIVATE_PIN_CONNECTION_DESIGN.md)のPC07までと、PC08未接続時の失敗合流を対にする。PC08そのもの・BP04／C-03は接続しない。
+Status: **§14の(A)・§16の(B)と既存レビューを維持し、§21の(C-c)最終post・内部accepted・元caller固定未接続停止を合成依存限定で接続。PC08／C-03は未接続。** 親は[格納・初回rejected保持設計](BEST_PRACTICE_WFB_BODY_PIN_REFERENCE_STORAGE_DESIGN.md)と[全確認・未接続停止設計](BEST_PRACTICE_WFB_BODY_PIN_STORAGE_RETURN_STOP_DESIGN.md)。前段実績は[格納・保持検証記録](E2E_BEST_PRACTICE_WFB_BODY_PIN_REFERENCE_STORAGE_2026-11-12.md)、(A)実績は[(A)準備検証記録](E2E_BEST_PRACTICE_WFB_BODY_PIN_CONFIRMATION_PREPARATION_2026-11-12.md)。(B)実績は[段階別post検証記録](E2E_BEST_PRACTICE_WFB_BODY_PIN_CONFIRMATION_STAGES_2026-11-12.md)。既存の[private pin全体schedule](BEST_PRACTICE_WFB_BODY_PRIVATE_PIN_CONNECTION_DESIGN.md)のPC07までと、PC08未接続時の失敗合流を対にする。PC08そのもの・BP04／C-03は接続しない。
 
-正式発行口・既存C実行入口・body起動閉鎖、全体受付無効、Unknown、VM／監視／telemetry調査保留を維持する。§1〜13はdraft-0.1の将来契約／文書検証履歴、限定実装は§14／16で区別する。実接続・実通信・実機操作・設定変更・Pushは行わない。
+正式発行口・既存C実行入口・body起動閉鎖、全体受付無効、Unknown、VM／監視／telemetry調査保留を維持する。§1〜13はdraft-0.1の将来契約／文書検証履歴、限定実装は§14／16／19〜21で区別する。実接続・実通信・実機操作・設定変更・Pushは行わない。
 
 ## 1 現行との差分と正常停止点
 
@@ -267,3 +267,11 @@ C終端objectは元rootの既存#fixedだけが所有し、mode別cacheへ複製
 [C詳細設計§17](BEST_PRACTICE_WFB_BODY_PIN_FINAL_RETURN_CACHE_DESIGN.md)を実装した。別のconstructor固定modeから既存構築へ入り、generic fail／reply・check・closeを終端cacheより先に分岐する。active中のclose／inputは先行診断だけを記録し、元calleeの返値分類後、prepare内の固定終端でseal／単一生成へ合流する。未確認metadata候補を読まず、既存A／BとC-aの非echo修正を保持する。
 
 同public入場に属する固定入口が実際に戻り、frame=false・元#fixed同参照・private_cached等を確認した後だけ、ok=falseの同じ閉鎖診断を再読できる。外側finally throw／異なる返答参照／活動frameでは非公開のまま保持する。これは実行・正式発行・外部受領ackではない。最終post・accepted返却・PC08・C-03・bodyは未接続、全体受付無効・Unknown・調査保留を維持する。[C-b検証記録](E2E_BEST_PRACTICE_WFB_BODY_PIN_FINAL_ENTRY_2026-11-12.md)を参照。
+
+## 21 (C-c)最終post・内部acceptedと上位未接続停止（2026-11-12）
+
+[C詳細設計§19](BEST_PRACTICE_WFB_BODY_PIN_FINAL_RETURN_CACHE_DESIGN.md)を別のfresh合成modeへ実装した。B blocked成功直後の同root／source／startを最終checkerで照合し、G_Pの境界after・既存marker true・literal acceptedだけを連続実行する。原始値の実復帰を元callerが分類し、callee first noneのままroot/source construction_unconfirmed・pin_return_not_connected／ok=falseで固定停止する。PC08のreturned全照合は行わない。
+
+最終post前close／priorは先行診断とbefore位置だけを同ownerへ保持する。C-bの前段failRecord単一経路を変更せず、旧入口は最終marker false・accepted拒否を維持する。marker true後のprimitive喪失・finally未完了を成功へ補完しない。返答生成／外側復帰失敗は既存単一cacheのfailed_empty／failed_cachedへ分離し、元借用・未確認責務を保持して再生成しない。
+
+[C-c検証記録](E2E_BEST_PRACTICE_WFB_BODY_PIN_FINAL_POST_2026-11-12.md)に関連合成・compiled・梱包と初回失敗を記録する。§15／17と子設計の過去の等価判断を新最終checker全体の保証へ転用しない。PC08・BP04／C-03・利用claim消費・payload借用／bind・構築ready・body・正式発行は未接続、全体受付無効・Unknown・調査保留を維持する。

@@ -114,11 +114,15 @@ try {
     const i = statements.indexOf(group[0]); assert.ok(i >= 0); assert.deepEqual(statements.slice(i, i + group.length), group);
   }
   assert.ok(!advance.getText(ast).includes('before_final_post')); assert.ok(!advance.getText(ast).includes("return 'accepted'"));
+  // Count legacy writes only; C-c's exact final group has a separate whole-module audit.
   let markerWrites = 0, postWrites = 0;
   function scan(n, owner = '') {
     if (ts.isMethodDeclaration(n)) owner = n.name.getText(ast);
     if (ts.isBinaryExpression(n) && ts.isAssignmentOperator(n.operatorToken.kind) && ts.isPropertyAccessExpression(n.left)) {
-      const f = n.left.name.getText(ast); if (f === '#bodyPinFinalPostChecked') markerWrites++;
+      const f = n.left.name.getText(ast); if (f === '#bodyPinFinalPostChecked') {
+        if (owner === 'completeBodyPinFinalPost') assert.equal(n.right.getText(ast), 'true');
+        else markerWrites++;
+      }
       if (f === '#bodyPinCheckedPostChecked' || f === '#bodyPinConfirmedPostChecked') { assert.equal(owner, 'advanceBodyPinConfirmationStages'); assert.equal(n.right.getText(ast), 'true'); postWrites++; }
     }
     ts.forEachChild(n, c => scan(c, owner));

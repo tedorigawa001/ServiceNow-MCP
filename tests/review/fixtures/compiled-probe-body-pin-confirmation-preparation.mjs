@@ -155,12 +155,18 @@ try {
       && !ts.isAwaitExpression(n) && !ts.isTemplateExpression(n), 'allocation before diagnosis');
     ts.forEachChild(n, primitivePrefix);
   }
-  caller.body.statements.slice(0, diagnosticIndex).forEach(primitivePrefix);
+  assert.equal(caller.body.statements[0].getText(ast), 'if (this.bodyPinFinalPost) return this.prepareBodyPinFinalCaller(source, start);');
+  caller.body.statements.slice(1, diagnosticIndex).forEach(primitivePrefix);
+  // Legacy modes still have no marker writer; the sole C-c helper is audited by its own compiled control.
   let markerWrites = 0;
-  function scan(n) {
+  function scan(n, owner = '') {
+    if (ts.isMethodDeclaration(n)) owner = n.name.getText(ast);
     if (ts.isBinaryExpression(n) && ts.isAssignmentOperator(n.operatorToken.kind) && ts.isPropertyAccessExpression(n.left)
-      && n.left.name.getText(ast) === '#bodyPinFinalPostChecked') markerWrites++;
-    ts.forEachChild(n, scan);
+      && n.left.name.getText(ast) === '#bodyPinFinalPostChecked') {
+      if (owner === 'completeBodyPinFinalPost') assert.equal(n.right.getText(ast), 'true');
+      else markerWrites++;
+    }
+    ts.forEachChild(n, c => scan(c, owner));
   }
   scan(ast); assert.equal(markerWrites, 0);
   const field = start.members.find(n => ts.isPropertyDeclaration(n) && n.name.getText(ast) === '#bodyPinFinalPostChecked');

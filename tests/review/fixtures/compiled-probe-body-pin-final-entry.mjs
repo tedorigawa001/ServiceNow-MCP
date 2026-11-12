@@ -93,11 +93,15 @@ try {
     if (ts.isBinaryExpression(n) && n.operatorToken.kind === ts.SyntaxKind.EqualsToken) writes.push({ field: n.left.getText(sf), owner, text: n.getText(sf) });
     ts.forEachChild(n, x => walk(x, owner));
   } walk(root);
-  const allow = { '#finalPublicEntryBusy': ['finalEntry'], '#finalRootEntryExit': ['finalEntry'], '#finalCompletion': ['prepareBodyPinConfirmationCaller'],
-    '#finalTerminalSealed': ['finalContractSeal', 'finalEntryTerminal'], '#finalTerminalDisposition': ['finalContractSeal', 'finalEntryTerminal'],
+  const allow = { '#finalPublicEntryBusy': ['finalEntry'], '#finalRootEntryExit': ['finalEntry'], '#finalCompletion': ['prepareBodyPinConfirmationCaller', 'prepareBodyPinFinalCaller'],
+    '#finalTerminalSealed': ['finalContractSeal', 'finalEntryTerminal', 'prepareBodyPinFinalCaller'], '#finalTerminalDisposition': ['finalContractSeal', 'finalEntryTerminal', 'prepareBodyPinFinalCaller'],
     '#finalReplyAttempted': ['finalContractMaterialize'], '#finalReplyPhase': ['finalContractMaterialize', 'finalEntry'], '#finalDeliveryFirst': ['finalDelivery'] };
   for (const [field, owners] of Object.entries(allow)) for (const w of writes.filter(w => w.field === 'this.' + field)) assert.ok(owners.includes(w.owner), w.owner + '/' + field);
-  assert.equal(writes.filter(w => /^this\.#final(Point|FailurePoint)$/.test(w.field)).length, 0);
+  for (const w of writes.filter(w => /^this\.#final(Point|FailurePoint)$/.test(w.field))) {
+    assert.ok(w.field === 'this.#finalPoint' && w.owner === 'bodyPinFinalPostPoint'
+      || w.field === 'this.#finalFailurePoint' && ['finalEntryRecord', 'prepareBodyPinFinalCaller'].includes(w.owner), w.owner + '/' + w.field);
+    assert.ok(w.text.endsWith("= 'final_post_before'"));
+  }
   const entry = method('finalEntry'); assert.ok(!entry.body.statements.some(n => ts.isTryStatement(n) && n.finallyBlock));
   const tail = entry.body.statements.slice(-3).map(n => n.getText(sf));
   assert.deepEqual(tail, ['this.#finalPublicEntryBusy = false;', "this.#finalReplyPhase = 'replayable';", 'return this.#fixed!;']);

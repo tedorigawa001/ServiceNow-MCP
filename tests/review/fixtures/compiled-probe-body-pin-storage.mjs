@@ -140,7 +140,7 @@ try {
           || scope === 'RetirementStartAssembly' && owner === 'retainBodyPinRejected' && key === '#bodyExpectedSourceRejected', 'forbidden write ' + key);
         if (key === '#bodyPinStorageBoundary') {
           assert.equal(scope, 'RetirementStartAssembly');
-          assert.ok(['prepareBodyPinStorage', 'storeBodyPinReferences', 'retainBodyPinRejected', 'advanceBodyPinConfirmationStages'].includes(owner));
+          assert.ok(['prepareBodyPinStorage', 'storeBodyPinReferences', 'retainBodyPinRejected', 'advanceBodyPinConfirmationStages', 'completeBodyPinFinalPost'].includes(owner));
           if (owner === 'prepareBodyPinStorage') boundaryWrites++;
           assert.ok(["'after'", "'before'"].includes(n.right.getText(ast)));
         }
