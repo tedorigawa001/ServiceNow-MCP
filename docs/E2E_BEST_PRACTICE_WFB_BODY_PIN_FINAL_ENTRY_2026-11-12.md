@@ -64,6 +64,20 @@ C-cの最終post→非介在のliteral accepted→元callerの固定未接続停
 
 固定mode／4通知／wrapper・有限op選択／入場・退出・seal・公開・再読guard、既存slotへの有限診断書込みと37slotのprefix投影を追加費目へ置く。新source・owner・利用claim・本文は二重発行しない。全体work上界・実unit・layout／allocation／GC／OOM・停止後解消予約・診断必着はUnknownのまま。cleanup・退役・責務解消も未確認のまま保持する。
 
+## レビュー修正（2026-11-12）
+
+`194525a`のレビューで、C-bの`finalEntryRecord`が旧`fail()`の単一記録経路と異なることを確認した。`pc_fault_checked`ではsource構築がheld・failureRecorded falseのはずが、failed・BP01/afterの失敗記録に変わっていた。`pb_fault_checked`ではsourceReasonとconfirmation診断が旧Bより先に記録されていた。旧`fail()`の記録部分を`failRecord`へ抽出し、C-bも同じ経路を通るよう直した。旧factoryの返答生成と期待値は変えていない。
+
+| 追加した確認 | 件数・結果 |
+|---|---|
+| 旧Bとのpipeline全体一致（replyAttemptedのみ除外） | 9件。修正前はpc_fault_checked・pb_fault_checkedの2件がRED |
+| bridge／start factoryとの共有field一致 | 3件（修正前も一致、回帰防止） |
+| pc_fault_checkedのbuild保持 | 1件。修正前RED |
+| completion・準備前check・新規入力・inspect入力→check・seal後inspect入力 | 9件 |
+| compiledの公開／再読guard一点対照 | 9件。各条件を外した変異をkill |
+
+新Vitestは174件から196件になった。修正後のC-b節70件の一時変異では、Vitest 28件、compiledだけ17件を検出し、残る25件の等価根拠を[C詳細設計§18](BEST_PRACTICE_WFB_BODY_PIN_FINAL_RETURN_CACHE_DESIGN.md)へ記録した。最終post・accepted返却・PC08・C-03・bodyは未接続、正式発行口閉鎖・全体受付無効・Unknown・調査保留を維持する。
+
 ## コミット対象だけの隔離再検証（2026-11-12）
 
 同じ基準HEADを一時ディレクトリへ書き出し、今回の11ファイルだけを反映した。依存は既存node_modulesだけを参照し、追加導入・設定変更は行わない。worktreeと隔離コピーの11ファイルのSHA-256一致を確認し、その他の未コミット内容を持ち込まず再実行した。

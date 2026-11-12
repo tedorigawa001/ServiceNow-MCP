@@ -68,6 +68,25 @@ try {
   assert.notEqual(np.inspect().startStep, 'none');
   const goodPrefix = base.createProbeBodyPinConfirmationFake('si_proxy'); goodPrefix.prepare();
   assert.equal(goodPrefix.inspect().startStep, 'none');
+  // Single-point controls: each publication/replay clause alone refuses one corrupted owning-entry fact.
+  const guardControls = [];
+  for (const [name, fault] of [['publish-busy', 'this.#finalPublicEntryBusy = false;'], ['publish-exit', "this.#finalRootEntryExit = 'not_observed';"],
+    ['publish-phase', "this.#finalReplyPhase = 'materializing';"], ['publish-sealed', 'this.#finalTerminalSealed = false;'],
+    ['publish-attempted', 'this.#finalReplyAttempted = false;']]) {
+    const anchor = 'if (!this.finalEntryPublishMatches(result)) {';
+    const m = await load(probe(edit('finalEntry', anchor, fault + ' ' + anchor)), name);
+    const a = failed(m); assert.equal(a.inspect().contract.phase, 'failed_cached', name); assert.ok(a.inspect().cacheObject, name);
+    guardControls.push(name);
+  }
+  for (const [name, fault] of [['replay-busy', 'this.#finalPublicEntryBusy = true;'], ['replay-frame', 'this.#frame = true;'],
+    ['replay-sealed', 'this.#finalTerminalSealed = false;'], ['replay-attempted', 'this.#finalReplyAttempted = false;']]) {
+    const anchor = 'if (this.finalEntryReplayMatches()) return this.#fixed!;';
+    const m = await load(probe(edit('finalEntry', anchor, fault + ' ' + anchor)), name);
+    const a = m.createProbeBodyPinConfirmationFake(); const r = a.prepare(); assert.equal(r.ok, false, name);
+    assert.throws(() => a.check(), e => e === 'private_final_delivery_unconfirmed', name);
+    assert.equal(a.inspect().contract.phase, 'failed_cached', name); assert.equal(a.inspect().contract.deliveryFirst, 'root_exit_unconfirmed', name);
+    guardControls.push(name);
+  }
   // Explicit writer audit: extension is method- and field-scoped, not a blanket C-a relaxation.
   const writes = []; function walk(n, owner = '') {
     if (ts.isMethodDeclaration(n)) owner = n.name.getText(sf);
@@ -104,5 +123,5 @@ const capability = createProbeBodyPinConfirmationFake().prepare().source;
   assert.ok(ds.every(d => d.file?.fileName === file && d.start >= source.length));
   assert.equal(new Set(ds.map(d => d.file.getLineAndCharacterOfPosition(d.start).line)).size, 6);
   console.log(JSON.stringify({ compiled: true, terminalIsolation: 7, activeCloseUnsealed: true, fixedPublicationGroup: true,
-    semanticRejections: 6, finalPostWriters: 0, bodyStarts: 0 }));
+    semanticRejections: 6, finalPostWriters: 0, bodyStarts: 0, guardControls }));
 } finally { rmSync(dir, { recursive: true, force: true }); }

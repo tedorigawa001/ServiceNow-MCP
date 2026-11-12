@@ -1,8 +1,10 @@
 # WF-B：(C)最終post・内部accepted返却・PC08未接続停止と返答cache所有の差分詳細設計
 
-Version: draft-0.4 / Date: 2026-11-12 / 設計読み取り基準HEAD: `7343af3ec1befe854326d43a32fbfbe833be692f`（レビュー`7eb7b9b`を維持）。§15の(C-a)限定実装基準HEAD: `8e3f043140ba3f824c507ebd9ad57d782aa89570`。§15実装のレビュー修正基準HEAD: `76f3d0f`。
+Version: draft-0.5 / Date: 2026-11-12 / 設計読み取り基準HEAD: `7343af3ec1befe854326d43a32fbfbe833be692f`（レビュー`7eb7b9b`を維持）。§15の(C-a)限定実装基準HEAD: `8e3f043140ba3f824c507ebd9ad57d782aa89570`。§15実装のレビュー修正基準HEAD: `76f3d0f`。§17実装のレビュー修正基準HEAD: `194525a`。
 
 draft-0.2のレビュー修正：§15の公開projectionは「凍結plainな有限診断値のみ」としていたが、`inspectFinalContracts`はfirst・disposition・phase・rootEntryExit・deliveryFirst・現在点／初回点・completionをprivate原値のまま、sealed・publicEntryBusy・stoppedを非strictのまま出していた。型で有限なだけで、実行時allowlistと対照がなかった。既存factoryと同じく固定allowlist（範囲外はunconfirmed）と`=== true`へ投影し直し、compiledにprivate不正値11件の非echo対照を追加した（修正前はfirstで`private_secret`がそのまま出てRED）。Vitestにはseal後の`check()`がpublication_not_connectedを返すことを追加した。28件の一時変異のうち等価な5件は§16に記録した。投影以外のfixture挙動は変えていない。
+
+draft-0.4のレビュー修正：§17のC-b記録関数`finalEntryRecord`は、source構築の失敗記録とcontracts失敗を常に両方書き、BP02／BP03ではconfirmation診断へ直接送っていた。旧`fail()`はbridge→start→contracts→sourceのうち1つだけへ記録するため、`pc_fault_checked`で旧Bのbuild（held・failureRecorded false）が、C-bではfailed・BP01/afterの失敗記録に変わり、`pb_fault_checked`ではsourceReason・confirmation診断が旧Bと異なっていた。旧`fail()`の記録部分を`failRecord`へ抽出し（旧返答生成はそのまま）、C-bは同じ単一経路を通るよう直した。Vitestに旧Bとのpipeline全体一致9件・既存factoryとの共有field一致3件・pc build保持1件を追加し、修正前に2件+1件がREDであることを確認した。あわせてcompletion 5件、準備前check・新規入力・inspect入力→check・seal後inspect入力の4件、compiledに公開／再読guardの一点対照9件を追加した。等価と判断した節は§18に記録した。
 
 Status: **§15の(C-a)を維持し、§17の(C-b)fresh入口・終端集約・元外側復帰後の閉鎖診断再読を合成実装。C-cの最終post・accepted返却は未接続。** 親は[確認・返却設計](BEST_PRACTICE_WFB_BODY_PIN_CONFIRM_RETURN_DESIGN.md)と[格納・PC08未接続停止設計](BEST_PRACTICE_WFB_BODY_PIN_STORAGE_RETURN_STOP_DESIGN.md)。実績は[(B)検証記録](E2E_BEST_PRACTICE_WFB_BODY_PIN_CONFIRMATION_STAGES_2026-11-12.md)と[(C-a)検証記録](E2E_BEST_PRACTICE_WFB_BODY_PIN_FINAL_CONTRACTS_2026-11-12.md)。本書は親のFC06〜09／FE05〜12を、現在の(B)と診断／cache実装からの差分として具体化する。既存の[private pin全体設計](BEST_PRACTICE_WFB_BODY_PRIVATE_PIN_CONNECTION_DESIGN.md)のPC08／BP04／C-03は接続しない。
 
@@ -269,3 +271,26 @@ C-aの閉鎖契約shellだけでの判断である。C-b以降で公開wrapper�
 C-aの全class writer=0監査はC-a methodだけの閉鎖監査へ限定し、新C-b compiledでfield別／method別の許可先・固定公開群を追加した。C-aの投影非echo・672組・12行の型拒否は削除しない。§16の5等価節はC-aの履歴のまま。新modeの入場・公開・停止条件は新たに対照を置き、source位置／元early failureがpin初回位置へ変換されないことをprefixで区別する。
 
 追加費目は固定mode、4凍結通知、固定wrapper／op選択・入場／退出・seal／公開／再読guard、元slotへの有限診断書込み、有限inspect。source・利用claim・owner・本文は追加発行しない。非終端inspectの割当てとprefix37slot走査は別費目。実layout／allocation・GC／OOM・全guard数／全体work上界・解消予約・診断必着はUnknown。[C-b検証記録](E2E_BEST_PRACTICE_WFB_BODY_PIN_FINAL_ENTRY_2026-11-12.md)に受入範囲・初回失敗・未実施範囲を記録する。C-cと全FRT成功は主張しない。
+
+## 18 §17実装レビューの一時変異と等価判断（2026-11-12）
+
+修正前のC-b新節へ79件の一時変異を入れたところ、Vitestで18件、compiledだけで12件を検出し、49件は両方を通った。修正後は、旧`finalEntryRecord`本体の15件を共有`failRecord`へ置き換わったため外し、写像4件・公開attempted 1件・seal guard 1件を加えた70件で再実行した。Vitest 28件、compiledだけ17件で検出し、残る25件を以下の理由で等価と判断した。共有`failRecord`は旧factoryの既存試験が所有するため、この表の対象外とする。
+
+| 通過した節（件数） | 等価の根拠 |
+|---|---|
+| `finalEntry`・`finalEntryTerminal`の固定mode節（2） | 呼出し元はC-b factoryだけで、`bodyPinFinalEntry`は常にtrue |
+| `finalEntryTerminal`のbusy・call活動節、`prepare`のbusy節、materializeのbusy節（4） | 固定public入口が予約した後だけ到達し、call活動中の終端経路はない |
+| `finalEntry`のempty／attempted guard（2）、`prepare`のsealed・started節（2）、終端のseal guard（1） | 入場はphase emptyの1回だけで、2回目以降はreplayable又はfailed_*の分岐で先に戻る |
+| `finalEntry`の退出初期化（1） | 入場が1回だけなので、初期値not_observedの再設定と同じ |
+| `finalEntryTerminal`の既定記録・materialize結果検査（2） | 全経路で終端前にfirstが設定済み。materialize失敗は`#fixed`不在の併記節が同じく拒否する |
+| `prepare`のcatch再送出（1） | 外しても次の終端呼出しがattempt guardで同じ例外を送出する |
+| `finalEntryRecord`のsealed guard（1） | 全呼出し元（入力・inspect・stop・fail）が先にseal済みを判定する |
+| `finalEntryStop`の`#started`節（1） | started後にframe外で未sealの状態は、閉鎖要求の時点で既にseal済み |
+| `finalEntryStop`のmetadata確認節（1） | source発行後・metadata確認前にcloseする台本がなく、現行試験では到達しない（旧`stopBodySource`と同じ重複防御） |
+| `finalEntryInvoke`のclosed節（1） | close時点でsealされるため、未seal・closed・first noneでcheckが到達しない |
+| 通知短絡のsealed・frame節（2） | sealed又はframe活動中に通知viewが返る経路がない |
+| `point`の停止節・closed節（2） | 既存の段階ごとの停止検査が同じ位置で構築を止め、全台本で結果が同じ |
+| catchのdelivery選択（1） | materialize側が先にview_unconfirmedを記録し、deliveryは最初の値を保持する |
+| inspect prefixの範囲節（1） | `#failure.phase`の書込みは0〜37の固定値だけ |
+
+compiledだけで検出した17件は、7経路の終端分離・外側復帰・legacy混入・prefix停止・公開／再読guardの一点対照（9）で確認した。§16の5等価節はC-aの履歴のまま維持する。

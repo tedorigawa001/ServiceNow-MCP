@@ -294,6 +294,8 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 ### Added
 
+- WF-B C-b review fix: the fresh pin-confirmation entry now records failures through the same single-owner routing as the legacy `fail()` (extracted as `failRecord`), so a contract- or bridge-phase failure no longer rewrites the held source build or the confirmation diagnosis. Vitest adds whole-pipeline parity with legacy B, shared-field parity with the bridge/start factories, completion and pre-preparation/input entry cases; the compiled harness adds nine single-point publication/replay guard controls. Remaining equivalent clauses are documented.
+
 - WF-B pin final-contracts review: the C-a inspect projection now maps every private enum through a fixed allowlist (out-of-range becomes unconfirmed) and every flag through strict boolean, matching earlier factories; eleven compiled controls inject invalid private values and confirm nothing echoes. Vitest also pins the sealed `check()` result, and the remaining fixed-mode and co-recorded clauses are documented as equivalent.
 
 - WF-B pin confirmation-stages review: a compiled control now drops the receiver busy flag right before the owning prepared check and confirms the run stops with state_invalid without entering the stage continuation (stage point stays none), so removing the prepared-validity condition on the stage branch is detected. The remaining fixed-mode, same-point, identity and same-value clauses are documented as equivalent; no fixture behavior changed.

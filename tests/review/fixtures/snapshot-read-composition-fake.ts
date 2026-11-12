@@ -4468,39 +4468,9 @@ class CanonicalGateDraftRoot {
   }
   private finalEntryRecord(reason: string): void {
     if (this.#finalTerminalSealed) return;
-    if (this.#failure.first === 'none') this.#failure.first = reason === 'closed' || reason === 'input_rejected'
-      || reason === 'binding_mismatch' || reason === 'state_invalid' ? reason : 'construction_unconfirmed';
-    const source = this.#bodySourceMetadataConfirmed === true && this.#bodySourceIssued === this.#bodySourceCurrent
-      ? this.#bodySourceIssued : undefined;
-    if (this.#bodyPinRoutePhase === 'BP02' || this.#bodyPinRoutePhase === 'BP03') {
-      const first = this.#failure.first === 'closed' || this.#failure.first === 'binding_mismatch' || this.#failure.first === 'state_invalid'
-        ? this.#failure.first : 'construction_unconfirmed';
-      this.recordBodyPinConfirmationFailure(first, first, source); return;
-    }
-    if (!this.#bodySourceFailureRecorded) {
-      this.#bodySourceFailureRecorded = true; this.#bodySourceFailurePhase = this.#bodySourceBuildPhase;
-      this.#bodySourceFailureStep = this.#bodySourceBuildStep; this.#bodySourceFailureBoundary = this.#bodySourceBuildBoundary;
-      this.#bodySeedFailurePhase = this.#bodySeedPhase; this.#bodySeedFailureBoundary = this.#bodySeedBoundary;
-    }
-    this.#bodySourceState = 'failed';
-    if (this.#bodyPinPreparationPhase !== 'none') {
-      if (this.#bodyPinPreparationFirst === 'none') {
-        this.#bodyPinPreparationFirst = this.#failure.first === 'input_rejected' ? 'input_rejected'
-          : this.#failure.first === 'closed' || this.#failure.first === 'binding_mismatch' || this.#failure.first === 'state_invalid'
-            ? this.#failure.first : 'construction_unconfirmed';
-        this.#bodyPinPreparationFailurePhase = this.#bodyPinPreparationPhase;
-      }
-      this.#bodyPinPreparationState = 'failed';
-    }
-    if (source) {
-      if (source.first === 'none') {
-        source.first = this.#failure.first === 'closed' || this.#failure.first === 'binding_mismatch' || this.#failure.first === 'state_invalid'
-          ? this.#failure.first : 'construction_unconfirmed';
-        source.failurePhase = this.#bodySourceBuildPhase; source.failureBoundary = this.#bodySourceBuildBoundary;
-      }
-      source.state = 'failed';
-    }
-    if (this.#bodySourceStorageConfirmed && this.#bodySeedShell) this.#bodySeedShell.state = 'failed';
+    // Same single-owner routing as the legacy fail(); only the legacy reply allocation is withheld.
+    this.failRecord(reason === 'closed' || reason === 'input_rejected' || reason === 'binding_mismatch' || reason === 'state_invalid'
+      ? reason : 'construction_unconfirmed');
   }
   private finalEntryStop(): void {
     this.#closed = true; this.#bodySourceStopRequested = true;
@@ -4593,6 +4563,10 @@ class CanonicalGateDraftRoot {
   }
   private fail(reason: string) {
     if (this.bodyPinFinalEntry) { this.finalEntryRecord(reason); return BODY_PIN_FINAL_VIEWS.deferred_frame; }
+    this.failRecord(reason);
+    return this.#fixed ??= this.reply(false, reason);
+  }
+  private failRecord(reason: string): void {
     if (this.#failure.first === 'none') this.#failure.first = reason;
     if (this.bodyPinBridge && this.#bodyPinBridgePhase !== 'none') this.failBodyPinBridge(this.#failure.first);
     else if (this.bodyPinStart && this.#bodyPinStartStep !== 'none') this.failBodyPinStart(this.#failure.first);
@@ -4607,7 +4581,6 @@ class CanonicalGateDraftRoot {
       if (this.#bodySeedShell) this.#bodySeedShell.state = 'failed';
     }
     if (this.exitPreparation && this.#exitPhase > 0 && this.#exitFirst === 'none') this.#exitFirst = runFirst(reason);
-    return this.#fixed ??= this.reply(false, reason);
   }
   private point(n: number, boundary: string) {
     this.#failure.phase = n; this.#failure.boundary = boundary;
@@ -6217,7 +6190,7 @@ class CanonicalGateDraftRoot {
     if (this.#started) return this.reply(false, 'duplicate_preparation');
     this.#started = true; this.#frame = true;
     try {
-        const result = this.constructClosed();
+      const result = this.constructClosed();
       return this.bodyPinFinalEntry ? this.finalEntryTerminal() : result;
     } catch {
       if (this.bodyPinFinalEntry && (this.#finalTerminalSealed || this.#finalReplyAttempted)) throw 'private_final_delivery_unconfirmed';
