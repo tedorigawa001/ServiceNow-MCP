@@ -1,6 +1,6 @@
 # WF-B：同start参照格納・全確認とPC08未接続停止の接続差分
 
-Version: draft-0.10 / Date: 2026-11-12 / 読み取り基準HEAD: `8d95d5c`（固定call実装: `1b929dc`、一点対照・等価判断のレビュー追加: `8d95d5c`、限定準備実装の基準HEAD: `7a9a613`、draft-0.2レビュー修正基準HEAD: `10e2f96`、§15の差分設計基準HEAD: `1f41240`、§16の限定格納実装基準HEAD: `ad00f28`、§17の完了／未接続停止差分設計基準HEAD: `ebe739e`、§18の(A)準備実装基準HEAD: `d7d3055`、§19の(B)段階接続基準HEAD: `201b1f7`、§20の(C)詳細設計基準HEAD: `7343af3`）。
+Version: draft-0.11 / Date: 2026-11-12 / 読み取り基準HEAD: `8d95d5c`（固定call実装: `1b929dc`、一点対照・等価判断のレビュー追加: `8d95d5c`、限定準備実装の基準HEAD: `7a9a613`、draft-0.2レビュー修正基準HEAD: `10e2f96`、§15の差分設計基準HEAD: `1f41240`、§16の限定格納実装基準HEAD: `ad00f28`、§17の完了／未接続停止差分設計基準HEAD: `ebe739e`、§18の(A)準備実装基準HEAD: `d7d3055`、§19の(B)段階接続基準HEAD: `201b1f7`、§20の(C)詳細設計基準HEAD: `7343af3`）。
 
 draft-0.2のレビュー修正：§13の格納準備に23件の一時変異を入れたところ、18件はstorage又はcall側のVitest・compiledの意味的なassertで落ちた（busy節はanchorを保った変異で再確認）。残る5件は試験変更なしで通ったが、いずれも重複防御か単一writerであり、検証記録は「単一の失敗診断要求」「到達不能／重複防御」とまとめて書くだけで節を特定していなかった。§14に節ごとの根拠を記録した。文書だけの修正で、fixture・試験・契約は変えない。
 
@@ -258,3 +258,9 @@ PC08未接続停止ではcallee first noneを維持し、root call after・sourc
 [C詳細設計§15](BEST_PRACTICE_WFB_BODY_PIN_FINAL_RETURN_CACHE_DESIGN.md)と[確認・返却設計§19](BEST_PRACTICE_WFB_BODY_PIN_CONFIRM_RETURN_DESIGN.md)のC-aだけを合成依存限定で実装した。狭いphase／診断型・先行scalarと一度限りseal／生成を同rootに置き、既存#fixedの単一保持・failed_empty／failed_cachedの非再試行を検証する。新factoryの全旧構築flagはfalseで、source／frame／bodyの生成・既存入口の差替えはない。
 
 cacheは非公開のまま、公開methodは固定未接続codeだけを返す。公開phase正例の値検査を実入場・実復帰・公開成功へ昇格しない。旧A/Bの返答・期待値・期限は維持し、最終post・accepted返却・PC08・C-03・構築ready・body・正式発行は未接続、全体受付無効・Unknown・調査保留を維持する。[(C-a)検証記録](E2E_BEST_PRACTICE_WFB_BODY_PIN_FINAL_CONTRACTS_2026-11-12.md)を参照。C-bのwriter／reader集約・外側退出保証、C-cの最終同期群は別段階である。
+
+## 22 (C-b)先行診断・単一終端と元入口の実復帰（2026-11-12）
+
+[C詳細設計§17](BEST_PRACTICE_WFB_BODY_PIN_FINAL_RETURN_CACHE_DESIGN.md)の合成fresh入口を接続した。元のsource・pin・borrow・利用claimを再発行せず、失敗の生成位置・初回理由を保持する。cache不在を構築成功へ読み替えず、active中はseal／生成を保留し、元prepare終端からだけ単一cacheへ合流する。同public入場の実復帰とframe非活動・返値同一性が揃った後だけ、閉鎖診断の同参照再読を許す。
+
+返答保持後のroot finally throwと生成失敗は区別し、元cache・未確認責務を保持する。busy解除・閉鎖返答の再読をcleanup・参照退役・正式資格にしない。最終post・literal accepted・PC08・BP04／C-03・構築ready・bodyは未接続。正式発行口閉鎖・全体受付無効・Unknown・調査保留を維持する。範囲と初回失敗は[C-b検証記録](E2E_BEST_PRACTICE_WFB_BODY_PIN_FINAL_ENTRY_2026-11-12.md)へ分離した。

@@ -1,6 +1,6 @@
 # WF-B：pin confirmed・最終postとPC08未接続停止の接続差分
 
-Version: draft-0.6 / Date: 2026-11-12 / 読み取り基準HEAD: `ebe739e`（§14の(A)限定実装基準HEAD: `d7d3055`、§14実装のレビュー修正基準HEAD: `1b74bff`、§16の(B)限定実装基準HEAD: `201b1f7`、§16実装のレビュー修正基準HEAD: `7343af3`）。
+Version: draft-0.7 / Date: 2026-11-12 / 読み取り基準HEAD: `ebe739e`（§14の(A)限定実装基準HEAD: `d7d3055`、§14実装のレビュー修正基準HEAD: `1b74bff`、§16の(B)限定実装基準HEAD: `201b1f7`、§16実装のレビュー修正基準HEAD: `7343af3`）。
 
 draft-0.4のレビュー修正：§16の(B)実装（`7343af3`）に34件の一時変異を入れたところ、9件がVitest・compiledの両方を通った。そのうち検出できたのは、段階継続へ入る分岐の`valid &&`条件である。prepared検査が失敗した場合、この条件を外しても最初の理由は同じstate_invalidだが、段階継続へ進んで`stages.point`がbefore_checkedへ動く。compiledにprepared検査直前でbusyを落とす対照を追加し、`stages.point`がnoneのまま、receiver first state_invalid・prepared falseであることを確認してkillした。残る8件は§17で等価と判断した。fixtureの挙動は変えていない。
 
@@ -261,3 +261,9 @@ C終端objectは元rootの既存#fixedだけが所有し、mode別cacheへ複製
 [C詳細設計draft-0.2 §15](BEST_PRACTICE_WFB_BODY_PIN_FINAL_RETURN_CACHE_DESIGN.md)の合成契約shellだけを実装した。同rootにconstructor固定flag・先行10scalarを置き、既存#failure／#fixedを使って診断seal・最大1回のprivate cache生成・失敗後の保持を検証する。first noneでの開始前closeを後発inputで変えず、delivery診断を分離する。旧prepare／fail／reply／closeへのroutingは行わず、旧A/Bのmode別cacheはそのまま維持する。
 
 公開APIは有限原始codeと非終端projectionだけで、実cacheを返さない。replayableの正例は値検査のみ、公開入場／実退出／公開writerは0。保持直後の合成throwを実outer finallyの検証とは扱わない。[(C-a)検証記録](E2E_BEST_PRACTICE_WFB_BODY_PIN_FINAL_CONTRACTS_2026-11-12.md)に合成・compiled・梱包結果を分離して記録する。C-bの全入口routingと外側frame、C-cの最終post・accepted返却・PC08未接続停止は次段階で、今回接続しない。正式発行口閉鎖・全体受付無効・Unknown・調査保留を維持する。§15／17の過去の等価判断をC全体へ転用しない。
+
+## 20 (C-b)fresh入口・固定終端・元外側復帰の合成接続（2026-11-12）
+
+[C詳細設計§17](BEST_PRACTICE_WFB_BODY_PIN_FINAL_RETURN_CACHE_DESIGN.md)を実装した。別のconstructor固定modeから既存構築へ入り、generic fail／reply・check・closeを終端cacheより先に分岐する。active中のclose／inputは先行診断だけを記録し、元calleeの返値分類後、prepare内の固定終端でseal／単一生成へ合流する。未確認metadata候補を読まず、既存A／BとC-aの非echo修正を保持する。
+
+同public入場に属する固定入口が実際に戻り、frame=false・元#fixed同参照・private_cached等を確認した後だけ、ok=falseの同じ閉鎖診断を再読できる。外側finally throw／異なる返答参照／活動frameでは非公開のまま保持する。これは実行・正式発行・外部受領ackではない。最終post・accepted返却・PC08・C-03・bodyは未接続、全体受付無効・Unknown・調査保留を維持する。[C-b検証記録](E2E_BEST_PRACTICE_WFB_BODY_PIN_FINAL_ENTRY_2026-11-12.md)を参照。

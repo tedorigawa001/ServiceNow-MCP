@@ -99,7 +99,7 @@ try {
   const wholeAssignments = []; const walk = n => {
     if (ts.isBinaryExpression(n) && n.operatorToken.kind === ts.SyntaxKind.EqualsToken) wholeAssignments.push(n.getText(sf));
     ts.forEachChild(n, walk);
-  }; walk(root);
+  }; for (const n of ca) walk(n); // C-a writers stay closed; C-b writers have their own owning-entry audit.
   assert.equal(wholeAssignments.filter(x => /^this\.#final(PublicEntryBusy|RootEntryExit|Point|FailurePoint|Completion) =/.test(x)).length, 0);
   assert.equal(wholeAssignments.filter(x => x === "this.#finalReplyPhase = 'replayable'").length, 0);
   const factory = sf.statements.find(n => ts.isFunctionDeclaration(n) && n.name.text === 'createProbeBodyPinFinalContractsFake');

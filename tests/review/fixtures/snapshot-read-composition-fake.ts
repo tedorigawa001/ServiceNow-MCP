@@ -4207,6 +4207,15 @@ type BodyPinFinalCacheState =
 type BodyPinFinalReply = Readonly<{ model: 'wfb-body-pin-confirmation-1'; ok: false; disposition: BodyPinFinalDisposition;
   first: ProbeRunFirst; authority: 'none'; execution: 'closed'; formalIssuance: 'closed'; wholeRunAdmission: 'disabled';
   implementation: 'unknown'; investigations: 'on_hold' }>;
+type BodyPinFinalOperation = 'prepare' | 'check' | 'legacy' | 'close' | 'input';
+type BodyPinFinalView = Readonly<Omit<BodyPinFinalReply, 'disposition'> & {
+  disposition: 'not_ready' | 'blocked_frame_execution' | 'construction_in_progress' | 'deferred_frame' }>;
+// Nonterminal notifications are not snapshots of the operation diagnosis and never enter #fixed.
+const BODY_PIN_FINAL_VIEWS = Object.freeze(Object.fromEntries(
+  ['not_ready', 'blocked_frame_execution', 'construction_in_progress', 'deferred_frame'].map(disposition => [disposition,
+    Object.freeze({ model: 'wfb-body-pin-confirmation-1', ok: false, disposition, first: 'none', authority: 'none', execution: 'closed',
+      formalIssuance: 'closed', wholeRunAdmission: 'disabled', implementation: 'unknown', investigations: 'on_hold' })]))
+) as Readonly<Record<BodyPinFinalView['disposition'], BodyPinFinalView>>;
 
 // Known private finite values only. Positive replayable values are not runtime exit evidence.
 function bodyPinFinalCacheMatches(s: BodyPinFinalCacheState, sealed: boolean, busy: boolean,
@@ -4375,7 +4384,7 @@ class CanonicalGateDraftRoot {
     private readonly bodySourceIssuer = false, private readonly bodyPinContracts = false, private readonly bodyPinStart = false,
     private readonly bodyPinBridge = false, private readonly bodyPinCall = false, private readonly bodyPinStorage = false,
     private readonly bodyPinReferenceStorage = false, private readonly bodyPinConfirmationPreparation = false, private readonly bodyPinConfirmationStages = false,
-    private readonly bodyPinFinalContracts = false) {
+    private readonly bodyPinFinalContracts = false, private readonly bodyPinFinalEntry = false) {
     this.#failure = { first: admitted ? 'none' : 'input_rejected', phase: 0, boundary: 'none' };
     this.#slots = Array.from({ length: 37 }, () => ({ stage: 'not_started', value: undefined }));
     this.#probeSlots = probePreparation ? Array.from({ length: 8 }, () => ({ stage: 'not_started', value: undefined })) : [];
@@ -4407,7 +4416,8 @@ class CanonicalGateDraftRoot {
     return 'sealed';
   }
   finalContractMaterialize(): 'mode_closed' | 'not_ready' | 'attempt_refused' | 'private_cached' | 'materialization_failed' {
-    if (!this.bodyPinFinalContracts) return 'mode_closed';
+    if (!this.bodyPinFinalContracts && !this.bodyPinFinalEntry) return 'mode_closed';
+    if (this.bodyPinFinalEntry && this.#finalPublicEntryBusy !== true) return 'mode_closed';
     if (!this.#finalTerminalSealed || this.#finalTerminalDisposition === 'none') return 'not_ready';
     if (this.#finalReplyAttempted) {
       if (this.#finalReplyPhase === 'materializing') this.finalDelivery('reentrant_reply');
@@ -4415,12 +4425,12 @@ class CanonicalGateDraftRoot {
     }
     this.#finalReplyAttempted = true; this.#finalReplyPhase = 'materializing';
     try {
-      if (this.script === 'ca_materialize_throw') throw 'private_materialization';
+      if (this.script === 'ca_materialize_throw' || this.script === 'cb_materialize_throw') throw 'private_materialization';
       if (this.script === 'ca_reenter_materializing') this.finalContractMaterialize();
       const candidate: BodyPinFinalReply = { model: 'wfb-body-pin-confirmation-1', ok: false,
         disposition: this.#finalTerminalDisposition, first: runFirst(this.#failure.first), authority: 'none', execution: 'closed',
         formalIssuance: 'closed', wholeRunAdmission: 'disabled', implementation: 'unknown', investigations: 'on_hold' };
-      if (this.script === 'ca_freeze_throw') throw 'private_freeze';
+      if (this.script === 'ca_freeze_throw' || this.script === 'cb_freeze_throw') throw 'private_freeze';
       Object.freeze(candidate);
       // G_C: the existing root cache is the sole owner; no hook or allocation intervenes.
       this.#fixed = candidate; this.#finalReplyPhase = 'private_cached';
@@ -4456,8 +4466,133 @@ class CanonicalGateDraftRoot {
         attempted: this.#finalReplyAttempted } as BodyPinFinalCacheState,
       this.#finalTerminalSealed, this.#finalPublicEntryBusy, this.#finalRootEntryExit, this.#frame) });
   }
-  private reply(ok: boolean, disposition: string) { return Object.freeze({ ok, disposition, first: this.#failure.first }); }
+  private finalEntryRecord(reason: string): void {
+    if (this.#finalTerminalSealed) return;
+    if (this.#failure.first === 'none') this.#failure.first = reason === 'closed' || reason === 'input_rejected'
+      || reason === 'binding_mismatch' || reason === 'state_invalid' ? reason : 'construction_unconfirmed';
+    const source = this.#bodySourceMetadataConfirmed === true && this.#bodySourceIssued === this.#bodySourceCurrent
+      ? this.#bodySourceIssued : undefined;
+    if (this.#bodyPinRoutePhase === 'BP02' || this.#bodyPinRoutePhase === 'BP03') {
+      const first = this.#failure.first === 'closed' || this.#failure.first === 'binding_mismatch' || this.#failure.first === 'state_invalid'
+        ? this.#failure.first : 'construction_unconfirmed';
+      this.recordBodyPinConfirmationFailure(first, first, source); return;
+    }
+    if (!this.#bodySourceFailureRecorded) {
+      this.#bodySourceFailureRecorded = true; this.#bodySourceFailurePhase = this.#bodySourceBuildPhase;
+      this.#bodySourceFailureStep = this.#bodySourceBuildStep; this.#bodySourceFailureBoundary = this.#bodySourceBuildBoundary;
+      this.#bodySeedFailurePhase = this.#bodySeedPhase; this.#bodySeedFailureBoundary = this.#bodySeedBoundary;
+    }
+    this.#bodySourceState = 'failed';
+    if (this.#bodyPinPreparationPhase !== 'none') {
+      if (this.#bodyPinPreparationFirst === 'none') {
+        this.#bodyPinPreparationFirst = this.#failure.first === 'input_rejected' ? 'input_rejected'
+          : this.#failure.first === 'closed' || this.#failure.first === 'binding_mismatch' || this.#failure.first === 'state_invalid'
+            ? this.#failure.first : 'construction_unconfirmed';
+        this.#bodyPinPreparationFailurePhase = this.#bodyPinPreparationPhase;
+      }
+      this.#bodyPinPreparationState = 'failed';
+    }
+    if (source) {
+      if (source.first === 'none') {
+        source.first = this.#failure.first === 'closed' || this.#failure.first === 'binding_mismatch' || this.#failure.first === 'state_invalid'
+          ? this.#failure.first : 'construction_unconfirmed';
+        source.failurePhase = this.#bodySourceBuildPhase; source.failureBoundary = this.#bodySourceBuildBoundary;
+      }
+      source.state = 'failed';
+    }
+    if (this.#bodySourceStorageConfirmed && this.#bodySeedShell) this.#bodySeedShell.state = 'failed';
+  }
+  private finalEntryStop(): void {
+    this.#closed = true; this.#bodySourceStopRequested = true;
+    if (this.#bodySourceStopFirst === 'none') this.#bodySourceStopFirst = 'closed';
+    if (this.#bodySourceMetadataConfirmed === true && this.#bodySourceIssued !== undefined
+      && this.#bodySourceIssued === this.#bodySourceCurrent) this.#bodySourceIssued.stopRequested = true;
+    if (!this.#finalTerminalSealed && (this.#started || this.#frame)) this.finalEntryRecord('closed');
+  }
+  private finalEntryTerminal(): Readonly<{ ok: boolean; disposition: string; first: string }> {
+    if (!this.bodyPinFinalEntry || !this.#finalPublicEntryBusy || this.#bodyPinCallActive) throw 'private_final_delivery_unconfirmed';
+    if (!this.#finalTerminalSealed) {
+      if (this.#failure.first === 'none' && !this.#closed) this.finalEntryRecord('construction_unconfirmed');
+      this.#finalTerminalDisposition = this.#failure.first === 'none' && this.#closed ? 'closed'
+        : this.#failure.first === 'input_rejected' || this.#failure.first === 'closed' || this.#failure.first === 'binding_mismatch'
+          || this.#failure.first === 'state_invalid' || this.#failure.first === 'construction_unconfirmed'
+          ? this.#failure.first : 'internal_unconfirmed';
+      this.#finalTerminalSealed = true;
+    }
+    if (this.#finalReplyAttempted || this.#fixed !== undefined) throw 'private_final_delivery_unconfirmed';
+    if (this.finalContractMaterialize() !== 'private_cached' || this.#fixed === undefined) throw 'private_final_delivery_unconfirmed';
+    return this.#fixed;
+  }
+  private finalEntryInvoke(operation: BodyPinFinalOperation): Readonly<{ ok: boolean; disposition: string }> {
+    if (operation === 'prepare') return this.prepare();
+    if (operation === 'close') return this.close();
+    if (operation === 'input') return this.finalEntryTerminal();
+    const view = this.checkBodyBindFields(operation === 'legacy');
+    return this.#failure.first !== 'none' || this.#closed ? this.finalEntryTerminal() : view;
+  }
+  private finalEntryPublishMatches(result: Readonly<{ ok: boolean; disposition: string }>): boolean {
+    return this.bodyPinFinalEntry === true && this.#finalPublicEntryBusy === true && this.#finalRootEntryExit === 'returned'
+      && this.#frame === false && this.#finalReplyPhase === 'private_cached' && this.#finalTerminalSealed === true
+      && this.#finalReplyAttempted === true && this.#fixed !== undefined && result === this.#fixed;
+  }
+  private finalEntryReplayMatches(): boolean {
+    return this.bodyPinFinalEntry === true && this.#finalPublicEntryBusy === false && this.#finalRootEntryExit === 'returned'
+      && this.#frame === false && this.#finalTerminalSealed === true && this.#finalReplyAttempted === true && this.#fixed !== undefined;
+  }
+  finalEntry(operation: BodyPinFinalOperation): Readonly<{ ok: boolean; disposition: string; first: string }> {
+    if (!this.bodyPinFinalEntry) return BODY_PIN_FINAL_VIEWS.blocked_frame_execution;
+    if (operation === 'close') this.finalEntryStop();
+    if (operation === 'input') {
+      if (this.#finalTerminalSealed) this.finalDelivery('input_refused'); else this.finalEntryRecord('input_rejected');
+    }
+    if (this.#finalPublicEntryBusy) return operation === 'close' ? BODY_PIN_FINAL_VIEWS.deferred_frame : BODY_PIN_FINAL_VIEWS.construction_in_progress;
+    if (this.#finalReplyPhase === 'replayable') {
+      if (this.finalEntryReplayMatches()) return this.#fixed!;
+      this.#finalReplyPhase = this.#fixed === undefined ? 'failed_empty' : 'failed_cached';
+      this.finalDelivery('root_exit_unconfirmed'); throw 'private_final_delivery_unconfirmed';
+    }
+    if (this.#finalReplyPhase !== 'empty' || this.#finalReplyAttempted) throw 'private_final_delivery_unconfirmed';
+    this.#finalPublicEntryBusy = true; this.#finalRootEntryExit = 'not_observed';
+    let result: Readonly<{ ok: boolean; disposition: string }>;
+    try { result = this.finalEntryInvoke(operation); }
+    catch {
+      this.#finalRootEntryExit = 'threw';
+      this.#finalReplyPhase = this.#fixed === undefined ? 'failed_empty' : 'failed_cached';
+      this.finalDelivery(this.#finalReplyAttempted && this.#fixed === undefined ? 'view_unconfirmed' : 'root_exit_unconfirmed');
+      this.#finalPublicEntryBusy = false; throw 'private_final_delivery_unconfirmed';
+    }
+    this.#finalRootEntryExit = 'returned';
+    if (this.#finalReplyPhase === 'empty' && this.#fixed === undefined && !this.#finalTerminalSealed && !this.#frame
+      && (result === BODY_PIN_FINAL_VIEWS.not_ready || result === BODY_PIN_FINAL_VIEWS.blocked_frame_execution)) {
+      this.#finalPublicEntryBusy = false; return result as BodyPinFinalView;
+    }
+    if (!this.finalEntryPublishMatches(result)) {
+      this.#finalReplyPhase = this.#fixed === undefined ? 'failed_empty' : 'failed_cached';
+      this.finalDelivery('root_exit_unconfirmed'); this.#finalPublicEntryBusy = false; throw 'private_final_delivery_unconfirmed';
+    }
+    // Owning entry only. No public finally/hook/allocation follows the publication guard.
+    this.#finalPublicEntryBusy = false; this.#finalReplyPhase = 'replayable'; return this.#fixed!;
+  }
+  inspectFinalEntry(reject = false) {
+    if (reject) {
+      if (this.#finalTerminalSealed) this.finalDelivery('input_refused'); else this.finalEntryRecord('input_rejected');
+    }
+    return Object.freeze({ model: 'wfb-body-pin-confirmation-1',
+      contract: Object.freeze({ ...this.inspectFinalContracts(), sourceGenerations: this.#bodySourceIssued !== undefined ? 1 : 0 }),
+      pipeline: this.inspectBodyPinConfirmationStages(), frame: this.#frame === true ? 'active' : 'inactive',
+      prefix: Object.freeze({ phase: Number.isSafeInteger(this.#failure.phase) && this.#failure.phase >= 0 && this.#failure.phase <= 37 ? this.#failure.phase : -1,
+        boundary: runEnum(this.#failure.boundary, ['none', 'before', 'attempt', 'after', 'done', 'seed_check', 'target_check', 'pin_check', 'draft_check', 'post'], 'unconfirmed'),
+        retained: this.#slots.filter(s => s.value !== undefined).length }),
+      reentry: runEnum(this.#reentry, ['construction_in_progress', 'deferred_frame', 'not_ready'], 'none') });
+  }
+  private reply(ok: boolean, disposition: string) {
+    if (this.bodyPinFinalEntry) return disposition === 'not_ready' ? BODY_PIN_FINAL_VIEWS.not_ready
+      : disposition === 'construction_in_progress' ? BODY_PIN_FINAL_VIEWS.construction_in_progress
+        : disposition === 'deferred_frame' ? BODY_PIN_FINAL_VIEWS.deferred_frame : BODY_PIN_FINAL_VIEWS.blocked_frame_execution;
+    return Object.freeze({ ok, disposition, first: this.#failure.first });
+  }
   private fail(reason: string) {
+    if (this.bodyPinFinalEntry) { this.finalEntryRecord(reason); return BODY_PIN_FINAL_VIEWS.deferred_frame; }
     if (this.#failure.first === 'none') this.#failure.first = reason;
     if (this.bodyPinBridge && this.#bodyPinBridgePhase !== 'none') this.failBodyPinBridge(this.#failure.first);
     else if (this.bodyPinStart && this.#bodyPinStartStep !== 'none') this.failBodyPinStart(this.#failure.first);
@@ -4476,6 +4611,13 @@ class CanonicalGateDraftRoot {
   }
   private point(n: number, boundary: string) {
     this.#failure.phase = n; this.#failure.boundary = boundary;
+    if (this.bodyPinFinalEntry && n === 33 && boundary === 'seed_check' && this.script === 'cb_close_frame') {
+      this.#reentry = this.finalEntry('close').disposition;
+    }
+    if (this.bodyPinFinalEntry && n === 33 && boundary === 'seed_check' && this.script === 'cb_reenter_frame') {
+      this.#reentry = this.finalEntry('check').disposition;
+    }
+    if (this.bodyPinFinalEntry && (this.#closed || this.#failure.first !== 'none')) throw 'private_final_construction_stopped';
     if (this.script === `${boundary}_${n}`) throw Error('private_gate_draft_construction');
   }
   private mint<T extends object>(n: number, operation: () => T): T {
@@ -4812,6 +4954,7 @@ class CanonicalGateDraftRoot {
     return r;
   }
   checkBodyBindFields(legacy = false) {
+    if (this.bodyPinFinalEntry) return legacy ? BODY_PIN_FINAL_VIEWS.not_ready : BODY_PIN_FINAL_VIEWS.blocked_frame_execution;
     if (this.#fixed) return this.#fixed;
     return this.reply(false, this.#closed ? 'closed' : legacy ? 'not_ready' : 'blocked_frame_execution');
   }
@@ -5248,7 +5391,7 @@ class CanonicalGateDraftRoot {
     if (this.#closed || this.#bodySourceStopRequested || this.#failure.first !== 'none') throw Error('pin_start_stopped');
   }
   private prepareBodyPinStart() {
-    const prepared = this.prepareBodyPinContracts(); if (this.#fixed) return prepared;
+    const prepared = this.prepareBodyPinContracts(); if (this.#fixed || this.bodyPinFinalEntry && this.#failure.first !== 'none') return prepared;
     const source = this.#bodySourceIssued!, start = this.#issuedFrameBinding!.target.start;
     this.#bodyPinStartStep = 'identity'; this.#bodyPinStartBoundary = 'before'; this.#bodyPinAdmissionResult = 'pending';
     const result = this.admitBodyPinCaller(this.bodyPinStartCandidate('root', this) as CanonicalGateDraftRoot,
@@ -5460,6 +5603,11 @@ class CanonicalGateDraftRoot {
     const sourceReason = first === 'closed' || first === 'binding_mismatch' || first === 'state_invalid' || first === 'receiver_unconfirmed'
       ? first : 'construction_unconfirmed';
     this.recordBodyPinConfirmationFailure(reason, sourceReason, trusted ? source : undefined);
+    if (this.bodyPinFinalEntry) {
+      this.#finalCompletion = this.#bodyPinCallResult === 'none' ? 'unreturned' : this.#bodyPinCallResult === 'rejected_attempt' ? 'rejected'
+        : this.#bodyPinCallResult === 'refused_existing' ? 'refused' : 'inconsistent';
+      return BODY_PIN_FINAL_VIEWS.deferred_frame;
+    }
     if (this.script === 'cp_later_reason') this.recordBodyPinConfirmationFailure('state_invalid', 'state_invalid', trusted ? source : undefined);
     if (this.bodyPinConfirmationStages) return this.#fixed ??= this.reply(false,
       reason === 'construction_unconfirmed' && classification === 'receiver_unconfirmed' && this.#bodyPinConfirmationStagesChecked
@@ -6055,6 +6203,13 @@ class CanonicalGateDraftRoot {
       journalSupply: 'not_connected', rootFinish: 'not_called' });
   }
   prepare() {
+    if (this.bodyPinFinalEntry) {
+      if (this.#frame) return BODY_PIN_FINAL_VIEWS.construction_in_progress;
+      if (!this.#finalPublicEntryBusy) return BODY_PIN_FINAL_VIEWS.blocked_frame_execution;
+      if (this.#finalTerminalSealed || this.#finalReplyAttempted || this.#fixed !== undefined) throw 'private_final_delivery_unconfirmed';
+      if (this.#failure.first !== 'none' || this.#closed) return this.finalEntryTerminal();
+      if (this.#started) { this.finalEntryRecord('state_invalid'); return this.finalEntryTerminal(); }
+    }
     if (this.#fixed) return this.#fixed;
     if (this.#frame) return this.reply(false, 'construction_in_progress');
     if (this.#failure.first !== 'none') return this.fail(this.#failure.first);
@@ -6062,7 +6217,20 @@ class CanonicalGateDraftRoot {
     if (this.#started) return this.reply(false, 'duplicate_preparation');
     this.#started = true; this.#frame = true;
     try {
-      this.mint(1, () => ({ result: undefined, grant: undefined, frameExit: undefined }));
+        const result = this.constructClosed();
+      return this.bodyPinFinalEntry ? this.finalEntryTerminal() : result;
+    } catch {
+      if (this.bodyPinFinalEntry && (this.#finalTerminalSealed || this.#finalReplyAttempted)) throw 'private_final_delivery_unconfirmed';
+      const failure = this.fail(this.exitPreparation && this.#closed ? 'closed' : 'construction_unconfirmed');
+      return this.bodyPinFinalEntry ? this.finalEntryTerminal() : failure;
+    } finally {
+      this.#frame = false;
+      if (this.bodyPinFinalEntry && this.script === 'cb_reenter_cached') this.#reentry = this.finalEntry('check').disposition;
+      if (this.bodyPinFinalEntry && this.script === 'cb_root_finally_throw') throw 'private_root_finally';
+    }
+  }
+  private constructClosed() {
+    this.mint(1, () => ({ result: undefined, grant: undefined, frameExit: undefined }));
       this.mint(2, () => ({ kind: 'supply_slot', state: 'unbound' }));
       this.mint(3, () => Object.freeze({ kind: 'packet_holder', reference: undefined }));
       this.mint(4, () => SUPPLY_FIELDS);
@@ -6111,8 +6279,6 @@ class CanonicalGateDraftRoot {
       if (this.bodyBindFields) return this.prepareBodyBindFields();
       if (this.bodySeed) return this.prepareBodySeed();
       (this.#slots[1].value as { state: string }).state = 'bound'; this.#ready = true; return this.reply(true, 'draft_held');
-    } catch { return this.fail(this.exitPreparation && this.#closed ? 'closed' : 'construction_unconfirmed'); }
-    finally { this.#frame = false; }
   }
   check() {
     if (this.#fixed) return this.#fixed;
@@ -6358,6 +6524,9 @@ class CanonicalGateDraftRoot {
       grantIssues: capture?.grantIssues ?? 0, bodyStarts: 0, exitRecords: 0, realWriterCalls: 0, journalSupply: 'not_connected', rootFinish: 'not_called' });
   }
   close() {
+    if (this.bodyPinFinalEntry) {
+      this.finalEntryStop(); return this.#frame ? BODY_PIN_FINAL_VIEWS.deferred_frame : this.finalEntryTerminal();
+    }
     if (this.bodySourceIssuer) this.stopBodySource();
     if (this.#fixed) return this.#fixed;
     this.#closed = true;
@@ -6550,6 +6719,24 @@ export function createProbeBodyPinFinalContractsFake(...args: readonly unknown[]
     publish: (...xs: readonly unknown[]) => call(xs, () => a.finalContractPublish()),
     close: (...xs: readonly unknown[]) => call(xs, () => a.finalContractSeal(true)),
     inspect: (...xs: readonly unknown[]) => { if (xs.length) a.finalContractRejectInput(); return a.inspectFinalContracts(); } });
+}
+
+/** C-b: only this fresh fixed entry owns the outer return and closed diagnostic replay. */
+export function createProbeBodyPinConfirmationFake(...args: readonly unknown[]) {
+  const script = args.length ? args[0] : 'cb_normal';
+  const admitted = args.length <= 1 && typeof script === 'string'
+    && (['cb_normal', 'cb_freeze_throw', 'cb_close_frame', 'cb_root_finally_throw', 'cb_reenter_frame', 'cb_reenter_cached',
+      'si_producer_throw', 'si_fault_BP00_issued_after', 'si_fault_BP00_fix_2_after', 'si_fault_BP01_checked_after', 'si_copy', 'si_proxy',
+      'pc_fault_checked', 'pc_close_checked', 'ps_fault_preflight_before', 'ps_prior_preflight_after', 'pb_fault_checked', 'ec_fault_before_call',
+      'ec_foreign_source', 'ec_proxy_source', 'cs_fault_checked', 'cs_close_confirmed', 'cs_prior_blocked', 'rs_copy_current'].includes(script)
+      || Array.from({ length: 37 }, (_, i) => i + 1).some(n => ['before', 'attempt', 'after', 'done'].some(p => script === `${p}_${n}`)));
+  const a = new CanonicalGateDraftRoot(admitted ? script as string : 'cb_normal', admitted,
+    true, true, false, true, false, false, false, false, false, false, true, true, true, true, true, true, true, true, true, false, true);
+  return Object.freeze({ prepare: (...xs: readonly unknown[]) => a.finalEntry(xs.length ? 'input' : 'prepare'),
+    check: (...xs: readonly unknown[]) => a.finalEntry(xs.length ? 'input' : 'check'),
+    checkLegacy: (...xs: readonly unknown[]) => a.finalEntry(xs.length ? 'input' : 'legacy'),
+    close: (...xs: readonly unknown[]) => a.finalEntry(xs.length ? 'input' : 'close'),
+    inspect: (...xs: readonly unknown[]) => a.inspectFinalEntry(xs.length !== 0) });
 }
 
 export function createProbeBodyPinConfirmationStagesFake(...args: readonly unknown[]) {

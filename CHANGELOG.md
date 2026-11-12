@@ -18,6 +18,8 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 ### Changed
 
+- WF-B adds a package-excluded synthetic-only fresh pin-confirmation entry, reusing the existing fixed construction and a single private terminal cache. Early failures and active close preserve prior diagnostics without premature sealing; only the owning entry's verified outer return permits replay of the same closed diagnostic. Prefix/oracle, mixed-source, outer-finally, copied-result, reentry and compiled controls preserve legacy A/B and the C-a allowlisted projection. Final post, accepted return, PC08, C-03, body startup, runtime connections and formal issuance remain disconnected.
+
 - WF-B adds package-excluded synthetic-only final-reply contracts on the existing root: prior narrow state scalars, one-shot diagnostic sealing (including sealed first-none), one privately owned cache and separate delivery failures. Independent prefix/oracle and compiled controls cover no-retry failure custody and closed publication; legacy A/B behavior is retained. Actual public-entry routing, final post, accepted return, PC08, C-03, body startup and formal issuance remain disconnected.
 
 - WF-B adds package-excluded synthetic-only same-owner checked/confirmed transitions and separate intermediate post checks. Fixed synchronous groups preserve original borrows, and a final blocked recheck still returns rejection with the final marker false. Independent prefix, actual-slot/view-forgery, checker-bypass and semantic compile-fail controls retain earlier diagnoses, partial progress and legacy entries. Final post, accepted return, PC08, C-03, body startup and formal issuance remain disconnected.

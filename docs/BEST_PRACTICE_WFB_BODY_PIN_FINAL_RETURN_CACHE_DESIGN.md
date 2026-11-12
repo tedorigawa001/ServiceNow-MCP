@@ -1,12 +1,12 @@
 # WF-B：(C)最終post・内部accepted返却・PC08未接続停止と返答cache所有の差分詳細設計
 
-Version: draft-0.3 / Date: 2026-11-12 / 設計読み取り基準HEAD: `7343af3ec1befe854326d43a32fbfbe833be692f`（レビュー`7eb7b9b`を維持）。§15の(C-a)限定実装基準HEAD: `8e3f043140ba3f824c507ebd9ad57d782aa89570`。§15実装のレビュー修正基準HEAD: `76f3d0f`。
+Version: draft-0.4 / Date: 2026-11-12 / 設計読み取り基準HEAD: `7343af3ec1befe854326d43a32fbfbe833be692f`（レビュー`7eb7b9b`を維持）。§15の(C-a)限定実装基準HEAD: `8e3f043140ba3f824c507ebd9ad57d782aa89570`。§15実装のレビュー修正基準HEAD: `76f3d0f`。
 
 draft-0.2のレビュー修正：§15の公開projectionは「凍結plainな有限診断値のみ」としていたが、`inspectFinalContracts`はfirst・disposition・phase・rootEntryExit・deliveryFirst・現在点／初回点・completionをprivate原値のまま、sealed・publicEntryBusy・stoppedを非strictのまま出していた。型で有限なだけで、実行時allowlistと対照がなかった。既存factoryと同じく固定allowlist（範囲外はunconfirmed）と`=== true`へ投影し直し、compiledにprivate不正値11件の非echo対照を追加した（修正前はfirstで`private_secret`がそのまま出てRED）。Vitestにはseal後の`check()`がpublication_not_connectedを返すことを追加した。28件の一時変異のうち等価な5件は§16に記録した。投影以外のfixture挙動は変えていない。
 
-Status: **§15の(C-a)狭い型・先行scalar・seal／単一cacheの閉鎖契約だけ合成実装。C-bの全入口routing／実公開、C-cの最終post・accepted返却は未接続。** 親は[確認・返却設計](BEST_PRACTICE_WFB_BODY_PIN_CONFIRM_RETURN_DESIGN.md)と[格納・PC08未接続停止設計](BEST_PRACTICE_WFB_BODY_PIN_STORAGE_RETURN_STOP_DESIGN.md)。実績は[(B)検証記録](E2E_BEST_PRACTICE_WFB_BODY_PIN_CONFIRMATION_STAGES_2026-11-12.md)と[(C-a)検証記録](E2E_BEST_PRACTICE_WFB_BODY_PIN_FINAL_CONTRACTS_2026-11-12.md)。本書は親のFC06〜09／FE05〜12を、現在の(B)と診断／cache実装からの差分として具体化する。既存の[private pin全体設計](BEST_PRACTICE_WFB_BODY_PRIVATE_PIN_CONNECTION_DESIGN.md)のPC08／BP04／C-03は接続しない。
+Status: **§15の(C-a)を維持し、§17の(C-b)fresh入口・終端集約・元外側復帰後の閉鎖診断再読を合成実装。C-cの最終post・accepted返却は未接続。** 親は[確認・返却設計](BEST_PRACTICE_WFB_BODY_PIN_CONFIRM_RETURN_DESIGN.md)と[格納・PC08未接続停止設計](BEST_PRACTICE_WFB_BODY_PIN_STORAGE_RETURN_STOP_DESIGN.md)。実績は[(B)検証記録](E2E_BEST_PRACTICE_WFB_BODY_PIN_CONFIRMATION_STAGES_2026-11-12.md)と[(C-a)検証記録](E2E_BEST_PRACTICE_WFB_BODY_PIN_FINAL_CONTRACTS_2026-11-12.md)。本書は親のFC06〜09／FE05〜12を、現在の(B)と診断／cache実装からの差分として具体化する。既存の[private pin全体設計](BEST_PRACTICE_WFB_BODY_PRIVATE_PIN_CONNECTION_DESIGN.md)のPC08／BP04／C-03は接続しない。
 
-合成依存限定。正式発行口・既存C実行入口・body起動閉鎖、全体受付無効、Unknown、VM／監視／telemetry調査保留を維持する。§1〜14はdraft-0.1の将来接続契約・当時の検証履歴であり、今回の実装を示すのは§15だけ。実接続・実通信・実機操作・設定変更・Pushは行わない。
+合成依存限定。正式発行口・既存C実行入口・body起動閉鎖、全体受付無効、Unknown、VM／監視／telemetry調査保留を維持する。§1〜14はdraft-0.1の将来接続契約・当時の検証履歴、限定実装は§15(C-a)／§17(C-b)、既存レビューは§16で区別する。実接続・実通信・実機操作・設定変更・Pushは行わない。
 
 ## 1 現行との差分と限定到達点
 
@@ -244,3 +244,28 @@ C-aの閉鎖契約shellだけでの判断である。C-b以降で公開wrapper�
 | `finalContractRejectInput`の`first === 'none'`guard | seal前のfirstはnone又はinput_rejectedだけで、どちらでも結果はinput_rejectedになる |
 | `finalContractSeal`／`finalContractMaterialize`の固定mode節（2） | 呼出し元はこの閉鎖factoryだけで、constructor固定flagは常にtrue |
 | materializeの`sealed`節と`disposition === 'none'`節（2） | sealが両方を同時に記録するため、片方だけが成立する状態がない。両節をまとめた除去はcompiledの`no-pre`対照が検出する |
+
+## 17 (C-b)fresh固定入口・終端集約・外側復帰の合成接続（2026-11-12）
+
+基準HEADは`3d4fe96`。C-aの公開allowlist／strict boolean・11非echo対照を維持し、createProbeBodyPinConfirmationFakeを別constructor固定modeとして追加した。旧A/B instanceや公開objectから切り替える入口はない。元root／source／startの既存固定構築を再利用し、prepareのtry本体だけをconstructClosedへ最小抽出した。元frame・生成順・旧factoryの返答と期待値を維持する。
+
+| C-bの固定経路 | 接続・停止契約 |
+|---|---|
+| 公開prepare／check／checkLegacy／close／余分な引数 | 同rootのfinalEntryだけへ固定接続。callback／foreign root／返答objectを受領しない |
+| 入場予約 | publicEntryBusyを固定private入口より先に記録。busy中は別methodでも非終端通知だけ。rootEntryExitを代筆しない |
+| generic fail／reply | legacyの位置object／返答生成より前にC-b分岐。先行理由・元source生成位置・元pin位置を直接保持。途中failは終端を生成しない |
+| source／BP02／BP03 | metadata未確認候補は読まない。source診断・stopは確認済みissued=currentだけへ反映。uncached失敗を#fixed不在だけで成功扱いせず、pin開始前に停止 |
+| active close／input | stop・先行理由だけを保持。callee実返値がnoneの間はseal=false／attempt=false／cache空。元callerの原始値分類と診断記録の後、外側prepareの固定終端へ合流 |
+| 終端seal・生成 | finalEntryTerminalが同mode／元入場／call非活動を検査。seal後の初回だけC-a materializerへ接続し、同#fixedへ保持。失敗catchは再seal・再生成しない |
+| 固定入口の実復帰 | private finalEntryInvokeから実際に戻ってからrootEntryExit=returned。throwならthrewとfailed_empty／failed_cachedを保持し、自分のbusyだけ解除 |
+| 閉鎖診断の公開 | 同busy／returned／frame=false／private_cached／seal／attempt／戻り値===元#fixedを全確認。最後はbusy=false→replayable→同#fixed returnの3直接操作だけ。公開wrapper finallyなし |
+| 再読 | replayableでも元退出・frame非活動・seal／attempt／cache保持を確認。closeは再読より先にstopを反映するが、seal済みfirst none／既存cacheを変えない |
+| inspect | C-aのallowlisted診断と既存有限pipeline view、37slotの固定prefixだけ。raw cache・資格を返さない。余分な引数は診断だけ記録し、その場で公開入場を代行しない |
+
+4種の非終端通知はmodule生成時の凍結定数で、not_ready／blocked_frame_execution／construction_in_progress／deferred_frameだけ。first=noneは通知自身の定数であり、操作診断snapshotや終端ではない。途中の実firstは元ownerへ保持し、inspect又は元終端で確認する。通知は#fixed・seal・生成claimを使わず、第2の終端cacheにならない。
+
+正常でも既存Bのconfirmed・中間post2個・blocked再照合まででreceiver_unconfirmed／rejected_attempt。元callerはconstruction_unconfirmedを固定し、C-b終端dispositionもconstruction_unconfirmedとなる。最終markerはfalse、completion_observed／literal accepted・PC08／BP04／C-03・構築ready・bodyは未接続。replayableはok=falseの閉鎖診断の再読だけで、正式発行・source利用・外部受領ackではない。
+
+C-aの全class writer=0監査はC-a methodだけの閉鎖監査へ限定し、新C-b compiledでfield別／method別の許可先・固定公開群を追加した。C-aの投影非echo・672組・12行の型拒否は削除しない。§16の5等価節はC-aの履歴のまま。新modeの入場・公開・停止条件は新たに対照を置き、source位置／元early failureがpin初回位置へ変換されないことをprefixで区別する。
+
+追加費目は固定mode、4凍結通知、固定wrapper／op選択・入場／退出・seal／公開／再読guard、元slotへの有限診断書込み、有限inspect。source・利用claim・owner・本文は追加発行しない。非終端inspectの割当てとprefix37slot走査は別費目。実layout／allocation・GC／OOM・全guard数／全体work上界・解消予約・診断必着はUnknown。[C-b検証記録](E2E_BEST_PRACTICE_WFB_BODY_PIN_FINAL_ENTRY_2026-11-12.md)に受入範囲・初回失敗・未実施範囲を記録する。C-cと全FRT成功は主張しない。
