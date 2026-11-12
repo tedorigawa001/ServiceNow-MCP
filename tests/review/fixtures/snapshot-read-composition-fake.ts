@@ -4488,8 +4488,9 @@ class CanonicalGateDraftRoot {
     if (this.bodyPinFinalPost && this.#finalPoint === 'final_post_before' && this.#bodyPinCallActive === true) {
       if (this.#failure.first === 'none') this.#failure.first = reason === 'closed' || reason === 'input_rejected'
         || reason === 'binding_mismatch' || reason === 'state_invalid' ? reason : 'construction_unconfirmed';
+      // Source first has no input_rejected value; the legacy owners map it to state_invalid.
       const first = this.#failure.first === 'closed' || this.#failure.first === 'binding_mismatch' || this.#failure.first === 'state_invalid'
-        ? this.#failure.first : 'construction_unconfirmed';
+        ? this.#failure.first : this.#failure.first === 'input_rejected' ? 'state_invalid' : 'construction_unconfirmed';
       if (this.#finalFailurePoint === 'none') this.#finalFailurePoint = 'final_post_before';
       this.recordBodyPinConfirmationFailure(first, first, this.#bodySourceMetadataConfirmed === true
         && this.#bodySourceIssued === this.#bodySourceCurrent ? this.#bodySourceIssued : undefined);

@@ -1,12 +1,14 @@
 # WF-B：(C)最終post・内部accepted返却・PC08未接続停止と返答cache所有の差分詳細設計
 
-Version: draft-0.8 / Date: 2026-11-12 / 設計読み取り基準HEAD: `7343af3ec1befe854326d43a32fbfbe833be692f`（レビュー`7eb7b9b`を維持）。§15の(C-a)限定実装基準HEAD: `8e3f043140ba3f824c507ebd9ad57d782aa89570`。§15実装のレビュー修正基準HEAD: `76f3d0f`。§17実装のレビュー修正基準HEAD: `194525a`。§19の(C-c)限定実装基準HEAD: `b4a0c677ad2291aa8ec7a6fb0c8ce7553a41c4cb`。§19実装のレビュー修正基準HEAD: `8ffaf0a`。§21のPC08差分設計基準HEAD: `e7bda02`。
+Version: draft-0.9 / Date: 2026-11-12 / 設計読み取り基準HEAD: `7343af3ec1befe854326d43a32fbfbe833be692f`（レビュー`7eb7b9b`を維持）。§15の(C-a)限定実装基準HEAD: `8e3f043140ba3f824c507ebd9ad57d782aa89570`。§15実装のレビュー修正基準HEAD: `76f3d0f`。§17実装のレビュー修正基準HEAD: `194525a`。§19の(C-c)限定実装基準HEAD: `b4a0c677ad2291aa8ec7a6fb0c8ce7553a41c4cb`。§19実装のレビュー修正基準HEAD: `8ffaf0a`。§21のPC08差分設計基準HEAD: `e7bda02`。§21のレビュー修正基準HEAD: `ed37be3`。
 
 draft-0.2のレビュー修正：§15の公開projectionは「凍結plainな有限診断値のみ」としていたが、`inspectFinalContracts`はfirst・disposition・phase・rootEntryExit・deliveryFirst・現在点／初回点・completionをprivate原値のまま、sealed・publicEntryBusy・stoppedを非strictのまま出していた。型で有限なだけで、実行時allowlistと対照がなかった。既存factoryと同じく固定allowlist（範囲外はunconfirmed）と`=== true`へ投影し直し、compiledにprivate不正値11件の非echo対照を追加した（修正前はfirstで`private_secret`がそのまま出てRED）。Vitestにはseal後の`check()`がpublication_not_connectedを返すことを追加した。28件の一時変異のうち等価な5件は§16に記録した。投影以外のfixture挙動は変えていない。
 
 draft-0.4のレビュー修正：§17のC-b記録関数`finalEntryRecord`は、source構築の失敗記録とcontracts失敗を常に両方書き、BP02／BP03ではconfirmation診断へ直接送っていた。旧`fail()`はbridge→start→contracts→sourceのうち1つだけへ記録するため、`pc_fault_checked`で旧Bのbuild（held・failureRecorded false）が、C-bではfailed・BP01/afterの失敗記録に変わり、`pb_fault_checked`ではsourceReason・confirmation診断が旧Bと異なっていた。旧`fail()`の記録部分を`failRecord`へ抽出し（旧返答生成はそのまま）、C-bは同じ単一経路を通るよう直した。Vitestに旧Bとのpipeline全体一致9件・既存factoryとの共有field一致3件・pc build保持1件を追加し、修正前に2件+1件がREDであることを確認した。あわせてcompletion 5件、準備前check・新規入力・inspect入力→check・seal後inspect入力の4件、compiledに公開／再読guardの一点対照9件を追加した。等価と判断した節は§18に記録した。
 
 draft-0.6のレビュー修正：§19の(C-c)実装（`8ffaf0a`）のC-c専用コードに73件の一時変異を入れたところ、Vitestで15件、compiledだけで23件が落ち、35件が両方を通った。そのうち3件は既存のcompiled対照にassertが足りないだけだった。marker writerを外した対照ではcompletionを確認しておらず、callerの`observed`からmarker条件を外すとmarkerなしで`completion_observed`を報告した。第2call対照ではacceptedReturnsを確認しておらず、公開投影から実call数1の条件を外すと1を数えた。rootの`#closed`だけが立った場合、callerの理由からその節を外すとclosedが`pin_return_not_connected`へ変わった。前2対照へcompletion inconsistent・finalPost・acceptedReturns 0のassertを足し、callee完了後・caller分類前に`#closed`だけを立てる対照（first／disposition closed、finalPost true・acceptedReturns 1・completion_observed）を追加して3件をkillした。残る32件の等価判断は§20に記録した。あわせて、C-bが受け付ける172 scriptをC-c modeで実行し、最終postへ進む`cb_*`5件以外の公開値・診断がC-bと完全一致することを確認した（試験には追加していない一時比較）。fixtureの挙動は変えていない。
+
+draft-0.8のレビュー修正：§21の子設計（`ed37be3`）§7は、rootのinput_rejectedをsource firstへ反映する場合はstate_invalidとする。旧`fail()`系の写像も同じだが、§19のC-c記録分岐は最終観測中のinput_rejectedをsource側でconstruction_unconfirmedへ写像していた。現scriptでは最終観測中に入力経路がなく到達しないが、子設計と旧ownerに揃えてstate_invalidへ直した。compiledに最終観測点で入力拒否を記録する対照（root first／disposition input_rejected、source first・sourceReason state_invalid、failurePoint final_post_before、finalPost false・acceptedReturns 0）を追加し、修正前はsource firstがconstruction_unconfirmedでREDだった。この対照は§20で等価とした「input_rejected写像」節もkillするため、等価節は31件になった（下記）。
 
 Status: **§15の(C-a)・§17の(C-b)と既存レビューを維持し、§19の(C-c)最終post・内部accepted・元callerの固定未接続停止を別のfresh合成modeで接続。PC08／C-03は未接続。** 親は[確認・返却設計](BEST_PRACTICE_WFB_BODY_PIN_CONFIRM_RETURN_DESIGN.md)と[格納・PC08未接続停止設計](BEST_PRACTICE_WFB_BODY_PIN_STORAGE_RETURN_STOP_DESIGN.md)。実績は[(B)検証記録](E2E_BEST_PRACTICE_WFB_BODY_PIN_CONFIRMATION_STAGES_2026-11-12.md)・[(C-a)検証記録](E2E_BEST_PRACTICE_WFB_BODY_PIN_FINAL_CONTRACTS_2026-11-12.md)・[(C-c)検証記録](E2E_BEST_PRACTICE_WFB_BODY_PIN_FINAL_POST_2026-11-12.md)。本書は親のFC06〜09／FE05〜12を、(B)と診断／cache実装からの差分として具体化する。既存の[private pin全体設計](BEST_PRACTICE_WFB_BODY_PRIVATE_PIN_CONNECTION_DESIGN.md)のPC08／BP04／C-03は接続しない。
 
@@ -336,6 +338,8 @@ C-c専用の追加コード（`completeBodyPinFinalPost`、最終mode判定、`b
 | callerの分類・信頼・理由・disposition節（6） | 分類の初回guardはcaller以外が書かない。metadata確認・同start・trusted・first construction_unconfirmed・input_rejected写像は、前段の失敗で既にfirstが決まっているか、到達時に固定値になる |
 
 compiledだけで検出した23件は、最終post前後の境界・mode判定・root／receiver実field対照・実参照対照・C-c記録分岐・observed accepted・失敗点のcall数で確認した。§16／18の等価節は従来の履歴のまま維持する。
+
+draft-0.9の補正：上表の`finalEntryRecord`のC-c分岐（5）のうち、first写像からinput_rejectedを外す変異は、最終観測点の入力拒否対照でkillされるようになった（rootのfirstがconstruction_unconfirmedに変わる）。同時に追加したsource写像の変異（input_rejected→state_invalidを外す）も同対照でkillする。この節の等価は4件、§19の等価節は合計31件とする。上表は判断時の履歴として残す。
 
 ## 21 PC08 returned全照合・受理と診断sealの差分設計（2026-11-12）
 

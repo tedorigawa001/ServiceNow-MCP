@@ -99,6 +99,11 @@ try {
   const closedOnly = edit(source, 'prepareBodyPinFinalCaller', '    const sameStart =', '    this.#closed = true;\n    const sameStart =');
   const co = run(await load(closedOnly, 'closed-only')); assert.equal(co.r.first, 'closed'); assert.equal(co.r.disposition, 'closed');
   assert.equal(co.s.contract.finalPost, true); assert.equal(co.s.contract.acceptedReturns, 1); assert.equal(co.s.contract.completion, 'completion_observed');
+  // Input rejected while the final observation is active keeps the root reason and maps the source like the legacy owners.
+  const ix = run(await load(rootAt("this.finalEntryRecord('input_rejected');"), 'final-input'));
+  assert.equal(ix.r.first, 'input_rejected'); assert.equal(ix.r.disposition, 'input_rejected');
+  assert.equal(ix.s.pipeline.build.source.first, 'state_invalid'); assert.equal(ix.s.pipeline.sourceReason, 'state_invalid');
+  assert.equal(ix.s.contract.failurePoint, 'final_post_before'); assert.equal(ix.s.contract.finalPost, false); assert.equal(ix.s.contract.acceptedReturns, 0);
   const outer = run(base, 'cb_root_finally_throw'); assert.equal(outer.thrown, 'private_final_delivery_unconfirmed');
   assert.equal(outer.s.contract.phase, 'failed_cached'); assert.equal(outer.s.contract.finalPost, true); assert.equal(outer.s.contract.acceptedReturns, 1);
   assert.ok(outer.s.cacheObject); assert.equal(outer.s.cacheObject.disposition, 'pin_return_not_connected');
@@ -162,6 +167,6 @@ const badOperation: BodyPinFinalOperation = 'accepted';
   host.getSourceFile = (n,l,e,f) => n === file ? ts.createSourceFile(n, source + extra, l, true) : get(n,l,e,f);
   const ds = ts.getPreEmitDiagnostics(ts.createProgram([file],opts,host)); assert.ok(ds.every(d => d.file?.fileName === file && d.start >= source.length));
   assert.equal(new Set(ds.map(d => d.file.getLineAndCharacterOfPosition(d.start).line)).size, 8);
-  console.log(JSON.stringify({ compiled: true, fieldCases, markerWrites, fixedPrimitiveGroup: true, semanticRejections: 8, callerControls: 3,
+  console.log(JSON.stringify({ compiled: true, fieldCases, markerWrites, fixedPrimitiveGroup: true, semanticRejections: 8, callerControls: 3, finalInput: true,
     lostReturn: true, stuckReceiver: true, rawReferenceControl: true, singleCache: true, bodyStarts: 0 }));
 } finally { rmSync(dir, { recursive: true, force: true }); }

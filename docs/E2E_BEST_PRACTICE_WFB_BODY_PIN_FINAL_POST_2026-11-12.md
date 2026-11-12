@@ -89,6 +89,17 @@ PC08・BP04／C-03の同source全安定／returned全照合・利用claim消費�
 
 修正後の検証：lint・build・梱包分類はexit 0。全体Vitestは347ファイル18,196件成功・失敗0。compiled 14本（新C-cを含む）は全exit 0で、C-cの出力に`callerControls: 3`を追加した。`git diff --check`成功。正式発行口閉鎖・全体受付無効・Unknown・調査保留とPC08／C-03／body未接続を維持し、実接続・実通信・実機操作・設定変更・Pushは行わない。
 
+## レビュー修正（2026-11-13）
+
+レビュー基準HEAD `ed37be3`（PC08差分設計）。子設計§7の写像を現行fixtureと照合した結果、C-cの最終観測中の記録分岐だけが旧ownerと異なっていた。
+
+| 観測 | 対応 |
+|---|---|
+| 最終観測中のinput_rejectedを、source first／sourceReasonでconstruction_unconfirmedへ写像していた（旧`fail()`系と子設計はstate_invalid）。現scriptからは到達しない | 最終観測点で入力拒否を記録するcompiled対照を先に追加し、source firstがconstruction_unconfirmedでREDになることを確認。記録分岐のsource写像にinput_rejected→state_invalidを追加してGREEN |
+| 同対照による一時変異の再確認 | first写像からinput_rejectedを外す変異と、新しいsource写像を外す変異をkill。C詳細設計§20の等価節は32件から31件へ |
+
+対照の確認値はroot first／disposition input_rejected、source first・sourceReason state_invalid、failurePoint final_post_before、finalPost false・acceptedReturns 0。C-cの出力に`finalInput: true`を追加した。他のscriptの挙動・期待値は変わらない。
+
 ## コミット対象だけの隔離再検証（2026-11-12）
 
 基準HEADを一時ディレクトリへ書き出し、今回の15ファイル（合成fixture／試験・compiled監査10件、CHANGELOG・設計3文書・本記録5件）だけを反映した。既存node_modulesだけを参照し、依存導入・設定変更・他の未コミット内容の取込みはない。作業元と隔離コピーの15ファイルのSHA-256一致を確認した。

@@ -1,6 +1,8 @@
 # WF-B：PC08 returned全照合と受理・失敗・診断sealの接続差分
 
-Version: draft-0.1 / Date: 2026-11-12 / 読み取り基準HEAD: `e7bda024e1298c18707be6fca248ef8ba1299421`（C-c実装`8ffaf0a`と、そのレビュー補強`e7bda02`を維持）。
+Version: draft-0.2 / Date: 2026-11-13 / 読み取り基準HEAD: `e7bda024e1298c18707be6fca248ef8ba1299421`（C-c実装`8ffaf0a`と、そのレビュー補強`e7bda02`を維持）。レビュー修正基準HEAD: `ed37be3`。
+
+draft-0.1のレビュー修正：§7のinput_rejected写像（rootはそのまま、sourceはstate_invalid）を現行fixtureと照合したところ、旧`fail()`系は同じだが、C-cの最終観測中の記録分岐はsource側をconstruction_unconfirmedにしていた。到達するscriptはないが、本書を正としてC-c分岐を直し、compiled対照を追加した（[C詳細設計draft-0.9](BEST_PRACTICE_WFB_BODY_PIN_FINAL_RETURN_CACHE_DESIGN.md)）。これにより旧C-cの等価節は31件になったため、RT16の件数を合わせた。他の本文・R08／RT条件は変えていない。
 
 Status: **差分詳細設計のみ。PC08 returned全照合・受理writer・新mode・C-03は未実装／未接続。** 親は[C-c最終返却・単一cache設計](BEST_PRACTICE_WFB_BODY_PIN_FINAL_RETURN_CACHE_DESIGN.md)と[private pin接続設計](BEST_PRACTICE_WFB_BODY_PRIVATE_PIN_CONNECTION_DESIGN.md)。[confirmed・内部返却契約](BEST_PRACTICE_WFB_BODY_PIN_CONFIRM_RETURN_DESIGN.md)と[C-c検証記録](E2E_BEST_PRACTICE_WFB_BODY_PIN_FINAL_POST_2026-11-12.md)は既存到達点の根拠であり、本書の受入実績ではない。
 
@@ -195,7 +197,7 @@ pin_prepare_not_connectedはR08-07正常通過後・C-03未接続の固定境界
 | RT13 | semantic compile-failでprivate returned継続／受理writer／phase更新・metadata書込み・不正状態組／newmode外disposition・公開値からの能力復元を拒否 |
 | RT14 | strict10終端・非終端通知の分離、全allowlist／strict boolean・凍結plain graph・秘密非出力・fixture梱包混入0。新公開値を復帰・受理の入力へ使わない |
 | RT15 | C-03未接続時BP04／preparingConfirmed／pinPostChecked／BC00／利用claim消費／bind／ready／body／正式発行0を実field・trapで確認。単なる固定0投影を証拠にしない |
-| RT16 | 旧C-cの32等価節とC-a／C-bの判断を新returned経路で再評価し、等価／重複／到達不能／未確認を節ごとに記録。固定費目・保持／解消未確認とUnknownを維持 |
+| RT16 | 旧C-cの31等価節とC-a／C-bの判断を新returned経路で再評価し、等価／重複／到達不能／未確認を節ごとに記録。固定費目・保持／解消未確認とUnknownを維持 |
 
 oracleは本体のbuilder／checker／状態表／counterをimportせず、有限な意味eventから期待値を計算する。pre失敗・post失敗・受理後の失敗・正常未接続・配送失敗を別に持つ。型／構文エラー、注入anchor不一致、別guardだけで落ちた変異を目的節のkillへ数えない。C-cまでの通過件数・過去の一時比較を本RTの実績に加算しない。
 
