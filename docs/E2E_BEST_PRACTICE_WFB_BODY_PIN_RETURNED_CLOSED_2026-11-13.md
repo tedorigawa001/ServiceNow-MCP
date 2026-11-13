@@ -74,7 +74,24 @@ oracleは実装のbuilder／検査表をimportせず独自literal集合から期
 
 差分確認では、新規分の設計／本記録3文書のローカル参照19件・表25個・節順、既存設計の§1以降本文保持を確認した。既存404method本文は基準HEADと一致し、src／配布runtime・設定・manifest／lockfileは変更していない。index登録・今回変更のコミット・Pushは行わず、途中で保存された前段レビューcommitは保持している。
 
-## 6 コミット前の再確認（2026-11-13）
+## 6 レビュー修正（2026-11-13）
+
+レビュー基準HEAD `eebc1f1`。§3の閉鎖契約へ78件の一時変異を入れ（各変異の後でfixtureを復元）、両方を通った節に単独のcompiled対照を足した。fixtureの挙動・既存対照の期待値は変えていない。
+
+| 観測 | 対応 |
+|---|---|
+| 一時変異78件：Vitest kill 1件・compiledだけでkill 39件・両方通過38件 | 11件は対照の不足としてkill。残る27件は[開始claim／失敗終端設計§16](BEST_PRACTICE_WFB_BODY_PIN_RETURNED_CLAIM_FAILURE_DESIGN.md)に等価節として記録 |
+| 停止／先行失敗の注入はroot／sourceだけで、T.first（receiver）の先行失敗・不正値の分岐を外しても通過 | scratch copyのprivate accessor隣にだけsetterを置き、T.firstへreceiver_unconfirmed（prior_failure・root construction_unconfirmed）、不正literalとreceiverで許可されないconstruction_unconfirmed（invalid_state・state_invalid）を注入。元fixtureのaccessorは読取り専用のまま |
+| 停止flagが非booleanのときのCL08 invalid_state 3分岐を外しても通過 | root closed・root sourceStopRequested・S.stopRequestedへ非boolean値を1つずつ入れ、stoppedへ補完せずinvalid_stateになることを要求 |
+| origin単項14件にissued source（currentは不変）・C/E control・root failure objectを単独で壊す対照がなかった | 3件を追加しorigin単項は17件。各々で拒否と旧caller返答不変を要求 |
+| 記録の`point === identity`許可を外しても通過 | identity点からの拒否が正常対照と同じcontinuation_unconnected／construction_unconfirmedになることを要求 |
+| 不正slot対照はfirstだけを見ており、rejectClassのinvalid_state化と不正状態でのsourceRecord非書込みを外しても通過 | 不正slot5件にrejectClass／sourceRecordのassertを追加。不正状態×foreign source（withheld経路）3件でsourceRecordがnot_attemptedのままであることを要求 |
+
+修正後のcompiled出力は`originControls: 17`・`refusalCases: 13`・`malformedForeign: 3`・`identityPoint: true`となる。他の件数（54診断組・48role組・84理由写像・foreign4件／固定拒否4件・不正slot5件・使用済み7件・semantic拒否9行・hook0・開始／受理writer 0・運用拒否caller 0）は変わらない。
+
+レビュー時の全体検証（lint・build・梱包判定・Vitest全件・compiled 27script・`git diff --check`）はすべて成功した。§2／4でtimeoutしたbody-liveを含む既存compiled群27scriptも、期限60,000msを変えずに成功し、残存processは0だった。これは記録時の高負荷との関連を支持するが、記録時の停止原因を確定するものではない。
+
+## 7 コミット前の再確認（2026-11-13）
 
 基準HEAD `f4f410e496b886a2948accbd7c4bde420c1242fd`に対し、今回の8fileだけを対象とした。関連合成20file／1,282件と新closed compiled対照を再実行し、双方exit 0。新compiledの54診断組・48role組・84理由写像・origin14件・foreign4件／固定拒否4件・不正slot5件・semantic拒否9行、開始／受理writer 0・運用拒否caller 0を再確認した。
 

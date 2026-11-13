@@ -302,6 +302,8 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 ### Added
 
+- WF-B R-b closed-contract review controls: the compiled closed harness now injects T.first through a scratch setter (receiver prior, invalid and source-only first), feeds non-boolean stop flags, breaks the issued source, C/E control and root failure origin slots on their own, checks the identity point as a valid pre-start point, and asserts the reject class and source record for malformed state, including the withheld path. These kill 11 surviving temporary mutants; the other 27 of 78 are recorded as equivalent in the claim/failure design §16. Fixture behaviour is unchanged.
+
 - WF-B R-b preparation review controls now scope the forged receiver view to the private supply call and assert that the legacy caller still reaches the capture point; previously the forged accessor stopped C-c earlier and counted an unreached capture as a refusal. Receiver qualification slots must refuse, start-side bridge relations are broken one at a time, and foreign controls assert reachability. Twelve remaining equivalent clauses are recorded; fixture behavior is unchanged.
 
 - WF-B R-a review fixes: the compiled returned-preparation harness now breaks each remaining initial-owner absence clause on its own (14 controls), moves the real slots behind seven finite projections, and checks that a valid `accepted` state is still refused by the pre/post value checks. These kill 22 surviving temporary mutants; the other 5 of 84 are recorded as equivalent in the returned design §16. Fixture behaviour is unchanged.

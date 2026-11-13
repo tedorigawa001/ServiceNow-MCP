@@ -52,18 +52,30 @@ try {
     ['source-prior',"source.first='post_unconfirmed';",'construction_unconfirmed','prior_failure'],
     ['root-invalid',"this.#failure.first='private_secret';",'private_secret','invalid_state'],
     ['source-invalid',"source.first='private_secret' as never;",'state_invalid','invalid_state'],
+    // T.first is reached only through a scratch setter beside the one private accessor; the shipped accessor stays read-only.
+    ['receiver-prior',"(probeStartAccess as any).setReceiverFirst(start,'receiver_unconfirmed');",'construction_unconfirmed','prior_failure'],
+    ['receiver-invalid',"(probeStartAccess as any).setReceiverFirst(start,'private_secret');",'state_invalid','invalid_state'],
+    ['receiver-cross',"(probeStartAccess as any).setReceiverFirst(start,'construction_unconfirmed');",'state_invalid','invalid_state'],
+    // Non-boolean stop flags are not completed to true or false (CL08).
+    ['root-close-invalid',"this.#closed='yes' as never;",'state_invalid','invalid_state'],
+    ['root-stop-invalid',"this.#bodySourceStopRequested=1 as never;",'state_invalid','invalid_state'],
+    ['source-stop-invalid',"source.stopRequested='true' as never;",'state_invalid','invalid_state'],
   ];
+  const accessor='      bodyPinReceiverFirst: (a: RetirementStartAssembly) => a.#bodyBindFirst,\n';
+  const withReceiverSetter=s=>replace(s,accessor,accessor+'      setReceiverFirst: (a: RetirementStartAssembly, v: never) => { a.#bodyBindFirst = v; },\n');
   const code=probes.map(([name,pre])=>`case '${name}': { ${pre} const origin=this.bodyPinReturnedOriginMatches(this,source,start);
     const healthy=this.bodyPinReturnedSupplyMatches(this,source,start); const before=JSON.stringify(this.bodyPinSourceValues(source));
     const code=this.returnedClosedRefusal(this,source,start); captured={...${snapshots},origin,healthy,sourceUnchanged:before===JSON.stringify(this.bodyPinSourceValues(source))};break;}`).join('\n');
-  const pm=await load(instrument(`    switch(fault){${code}}`)+ '\nexport let fault=""; export function select(v:string){fault=v;captured=undefined;}','probes');
+  const pm=await load(withReceiverSetter(instrument(`    switch(fault){${code}}`))+ '\nexport let fault=""; export function select(v:string){fault=v;captured=undefined;}','probes');
   for(const [name,,first,reject]of probes){pm.select(name);const x=run(pm);assert.ok(x.v,name);assert.equal(x.v.first,first,name);assert.equal(x.v.reject,reject,name);
     assert.equal(x.v.origin,true,name);assert.equal(x.v.healthy,false,name);assert.equal(x.v.phase,'not_started');assert.equal(x.v.record,'not_attempted');
     assert.equal(x.v.sourceUnchanged,true,name);assert.ok(!JSON.stringify(x.a.inspect()).includes('private_secret'));}
   const changed=[['bodySourceCurrent','{} as never'],['bodySourceRejected','{} as never'],['bodySourceMetadataFixedCount','8'],
     ['bodySourceMetadataConfirmed','false'],['bodySourceStorageConfirmed','false'],['bodySourceBuildStage',"'captured'"],['bodySourceCreationAttempted','false'],
     ['bodySourceBuildPhase',"'BP00'"],['bodySourceBuildStep',"'checked'"],['bodySourceBuildBoundary',"'before'"],
-    ['issuedFrameBinding','{} as never'],['bodySeedShell','{} as never'],['issuedRunLink','{} as never'],['issuedRunDuty','{} as never']];
+    ['issuedFrameBinding','{} as never'],['bodySeedShell','{} as never'],['issuedRunLink','{} as never'],['issuedRunDuty','{} as never'],
+    // Each remaining root-held origin slot is broken alone: issued (current unchanged), C/E control and the root failure object.
+    ['bodySourceIssued','{} as never'],['exitSlots','[{ stage: "confirmed", value: {} }] as never'],['failure','{ ...this.#failure } as never']];
   const changes=changed.map(([field,value])=>`case '${field}': {const old=this.#${field};this.#${field}=${value};
     try{captured=this.bodyPinReturnedOriginMatches(this,source,start);}finally{this.#${field}=old;}break;}`).join('\n');
   const cm=await load(instrument(`    switch(fault){${changes}}`)+ '\nexport let fault=""; export function select(v:string){fault=v;captured=undefined;}','origin-fields');
@@ -86,7 +98,20 @@ try {
   const malformedModule=await load(instrument(`    switch(fault){${malformedCode}}`)
     +'\nexport let fault="";export function select(v:string){fault=v;captured=undefined;}','malformed');
   for(let i=0;i<malformed.length;i++){malformedModule.select(String(i));const x=run(malformedModule);assert.equal(x.v.first,'state_invalid');
-    assert.equal(x.v.code,'failure_pending');assert.equal(x.v.phase,'not_started');assert.ok(!JSON.stringify(x.a.inspect()).includes('private_secret'));}
+    assert.equal(x.v.code,'failure_pending');assert.equal(x.v.phase,'not_started');assert.ok(!JSON.stringify(x.a.inspect()).includes('private_secret'));
+    // An occupied reject slot is kept; otherwise the class is invalid_state. A malformed state never writes the source record.
+    assert.equal(x.v.reject,i===3?'private_secret':'invalid_state',String(i));assert.equal(x.v.record,i===4?'written':'not_attempted',String(i));}
+  // Malformed state on the withheld path: the foreign source would select 'withheld', which must stay unwritten.
+  const malformedForeignCode=malformed.slice(0,3).map(([field,value],i)=>`case '${i}':{const old=this.#${field};this.#${field}=${value};
+    try{const code=this.returnedClosedRefusal(this,{...source},start);captured=${snapshots};}finally{this.#${field}=old;}break;}`).join('\n');
+  const malformedForeign=await load(instrument(`    switch(fault){${malformedForeignCode}}`)
+    +'\nexport let fault="";export function select(v:string){fault=v;captured=undefined;}','malformed-foreign');
+  for(let i=0;i<3;i++){malformedForeign.select(String(i));const x=run(malformedForeign);assert.equal(x.v.code,'failure_pending',String(i));
+    assert.equal(x.v.first,'state_invalid');assert.equal(x.v.reject,'invalid_state');assert.equal(x.v.record,'not_attempted',String(i));}
+  // The identity point is a valid pre-start point: it must reach the ordinary unconnected rejection, not state_invalid.
+  const identity=await load(instrument(`    const old=this.#bodyPinReturnedPoint;this.#bodyPinReturnedPoint='identity';
+    try{const code=this.returnedClosedRefusal(this,source,start);captured=${snapshots};}finally{this.#bodyPinReturnedPoint=old;}`),'identity');
+  const ix=run(identity),{sourceUnchanged:_,...base}=normal.v;assert.deepEqual(ix.v,{...base,point:'identity'});assert.deepEqual(ix.r,normal.r);
   const again=await load(instrument(`    const firstCode=this.returnedClosedRecord('binding_mismatch','withheld');
     const secondCode=this.returnedClosedRecord('stopped','unconfirmed');const code=secondCode;captured={...${snapshots},firstCode};`),'first');
   const kept=run(again).v;assert.equal(kept.first,'binding_mismatch');assert.equal(kept.reject,'binding_mismatch');assert.equal(kept.record,'withheld');
@@ -146,6 +171,6 @@ const badFuture:BodyPinReturnedClosedDiagnostic={rejectClass:'stopped',sourceRec
   const ds=ts.getPreEmitDiagnostics(ts.createProgram([file],opts,host));assert.ok(ds.every(d=>d.file?.fileName===file&&d.start>=source.length));
   assert.equal(new Set(ds.map(d=>d.file.getLineAndCharacterOfPosition(d.start).line)).size,9);
   assert.equal(ds.length,9);assert.equal(ds.filter(d=>d.code===2341).length,3);assert.equal(ds.filter(d=>d.code===18013).length,1);
-  console.log(JSON.stringify({pairs,roles,reasons,originControls:changed.length,foreign:foreign.length,foreignRefusals:foreign.length,malformed:malformed.length,hooks:fm.hooks,
+  console.log(JSON.stringify({pairs,roles,reasons,originControls:changed.length,foreign:foreign.length,foreignRefusals:foreign.length,malformed:malformed.length,malformedForeign:3,identityPoint:true,hooks:fm.hooks,
     refusalCases:probes.length,usedCases:used.length,firstPreserved:true,originThrow:true,noAllocationHelpers:noAlloc,semanticRejections:9,acceptanceWrites,refusalCallers}));
 } finally { rmSync(dir,{recursive:true,force:true}); }

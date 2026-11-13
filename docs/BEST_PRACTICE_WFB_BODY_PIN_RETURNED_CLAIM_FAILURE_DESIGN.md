@@ -1,6 +1,8 @@
 # WF-B：R-b開始claim・拒否診断と失敗終端ownerへの受渡し
 
-Version: draft-0.2 / Date: 2026-11-13 / 読み取り基準HEAD: `0e35e852e1a84aa864b86b8d60dd05704f1b6a36`。§15の閉鎖契約限定実装基準HEAD: `2790830`。
+Version: draft-0.3 / Date: 2026-11-13 / 読み取り基準HEAD: `0e35e852e1a84aa864b86b8d60dd05704f1b6a36`。§15の閉鎖契約限定実装基準HEAD: `2790830`。§15実装のレビュー修正基準HEAD: `eebc1f1`。
+
+draft-0.2のレビュー修正：§15の閉鎖契約（`eebc1f1`）に78件の一時変異を入れたところ、Vitestで1件、compiledだけで39件が落ち、38件が両方を通った。不足していた対照は次の11件。T.first（receiver）の先行失敗・不正値の2分岐（root／sourceにしか注入がなかった）、停止flagが非booleanのときのCL08 invalid_state 3分岐、origin比較のうちissued source・C/E control・root failureの単独破損3件、記録の`point === identity`許可1件、不正状態でのrejectClass invalid_state化1件とsourceRecord非書込み（`valid &&`）1件である。compiled closed対照に、scratch setterによるT.first注入3件（receiver_unconfirmed／不正literal／receiverで許可されないconstruction_unconfirmed）、非boolean停止3件、origin単独破損3件、identity点の正常拒否、不正slot対照のrejectClass／sourceRecord assertと、不正状態×foreign source（withheld経路）3件を追加し、11件をkillした。残る27件の等価判断と、CL07の判定位置は§16に記録した。fixtureの挙動は変えていない。
 
 Status: **§15の狭い内部型・先行2scalar・origin leaf・固定拒否／root-only診断保持だけを合成依存限定で実装。開始claim・source書込み・失敗終端受渡しは未接続。** [R-b接続差分設計](BEST_PRACTICE_WFB_BODY_PIN_RETURNED_BINDING_TERMINAL_DESIGN.md)の§3／6〜10を、同書§15のreadonly準備境界から先の差分として具体化する。[PC08全体設計](BEST_PRACTICE_WFB_BODY_PIN_RETURNED_ACCEPT_SEAL_DESIGN.md)のR08順序、既存C-c／R-aの閉鎖挙動を維持する。
 
@@ -234,3 +236,21 @@ origin確認のtrueはprivateな読取り結果だけで、停止／失敗writer
 旧R-b準備試験の「開始／受理writer 0」監査は、元の4scalarを明示して新診断2scalarと分けた。作業中に加わった前段レビュー補強（到達確認・偽装view対照・等価節等）は保持し、その変異監査を今回の実績へ加算しない。今回の独立対照・初回失敗・関連回帰は[閉鎖契約検証記録](E2E_BEST_PRACTICE_WFB_BODY_PIN_RETURNED_CLOSED_2026-11-13.md)へ分離する。
 
 CFV全体、同modeの運用入場・開始claim・返却全照合・G_R／G_A・受理・C-03・body・実接続は未完了のまま。root／source／callee／delivery診断の役割、単一cache、停止後の保持責務は将来契約として残す。物理allocation 0・実E／S・全体work上界・cleanup／借用退役はUnknownである。
+
+## 16 閉鎖契約の等価節と判定順（レビュー修正、2026-11-13）
+
+§15の閉鎖契約への一時変異78件のうち、修正後のcompiledでも検出できない27件を等価として記録する。いずれも現在の到達範囲で観測値が変わらないことを根拠とし、開始claim・失敗終端を実接続するとき又は呼出し元を増やすときに再評価する。
+
+| 変異（件数） | 等価の根拠 |
+|---|---|
+| 入口検査の二重化（12）：拒否methodの所有4節（finalPost／finalEntry／frame／public入場）・使用済み3節（seal／reply attempt／cache）・phase非not_started節、記録methodの所有・使用済み・checking・phase非not_startedの各節 | 拒否methodと記録methodが同じ所有・seal・attempt・cache・phase検査を持つ。拒否method側を外しても記録methodが同じ固定codeを返し、記録method側を外しても拒否methodが先に返す。記録methodの呼出し元は拒否methodだけで、単独の入口にはなっていない |
+| originの存在検査（6）：`source === undefined`・binding・BS・link・duty・exit slot値の真偽 | 直後の参照比較（issued／current一致、`source.binding === b`等）が先に偽になり、参照外しへ到達しない。undefined候補もissued比較で拒否される |
+| originの固定mode節`bodyPinFinalPost === true`（1） | 呼び出せるのはscratchで既存C-c継続へ挿入した観測だけで、C-c factoryは常にtrueを渡す。新R-b modeを発行する時点で再評価する |
+| 生成後に変更できないmetadata（2）：brand・custodian | sourceの生成時に固定され、issued=current参照一致を通った候補では常に成立する。同値copyや未知候補は参照比較で拒否済み |
+| startの相互重複（2）：`source.start === start`と`b.target.start === start` | 正規sourceではsource.startとbinding.target.startが同じTを保持するため、片方を外しても他方が同じ候補を拒否する |
+| 型で固定されたliteral引数（3）：記録methodのkind／record有限検査、`RejectableKnown`のnone除外 | 呼出しはすべて拒否method内の固定literalで、noneや未知値を渡すsiteがない。不正呼出しはsemantic compile-fail対照で拒否される |
+| sourceRecordのnot_attempted条件（1） | 書込みはrejectClassがnoneのときだけで、そのとき診断組検査（noneにはnot_attemptedのみ）を通っているため、sourceRecordは常にnot_attemptedである |
+
+判定順の注記：§4の表ではCL07（checking中／使用済み）がCL06の後に並ぶが、実装はCL02の直後、root first検査（CL03）より前で判定する。後発要求で元firstとrejectClassを変えないという§4の趣旨には、この順序の方が合う。CL01〜10の全順序は開始claimを接続するときにCFV03で確認する。
+
+修正後にcompiledだけで検出する50件は、診断組・role・理由写像oracle、origin単項17件・foreign、停止／先行失敗13件（receiver 3件・非boolean停止3件を含む）、不正slot5件と不正状態×withheld経路3件、identity点、使用済み7件、初回記録保持、origin throw、最先行AST・非割当て・semantic拒否で確認した。Vitestで検出する1件は先行2scalarの初期値である。
