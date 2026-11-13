@@ -92,9 +92,24 @@ try {
     try { captured = ${supply}; } finally { probeStartAccess.scratchFault(start, true); }`), accessor,
     accessor + `\n      scratchFault: (a: RetirementStartAssembly, restore: boolean) => { switch (fault) { ${tc} } },`)
     + '\nlet old: unknown; export let fault = ""; export function select(v: string) { fault = v; captured = undefined; }\n', 'receiver-fields');
+  // Identity, receiver-first and payload slots are qualification gates; a changed view is not enough there.
+  const receiverGated = ['bodyExpectedSourceIssued', 'bodyExpectedSourceCurrent', 'bodyExpectedSourceRejected', 'bodyBindFirst', 'bodyBundleCurrent'];
   for (const field of receiverFields) {
     tm.select(field); const x = run(tm);
-    assert.ok(x.v === undefined || JSON.stringify(x.v) !== JSON.stringify(expected), field); assert.deepEqual(x.r, normal.r);
+    if (receiverGated.includes(field)) assert.equal(x.v, undefined, 'receiver gate ' + field);
+    else { assert.ok(x.v, field); assert.notEqual(JSON.stringify(x.v), JSON.stringify(expected), field); }
+    assert.deepEqual(x.r, normal.r);
+  }
+  // Start-side bridge relations are read only by the bridge identity check; break each one alone.
+  const bridgeFields = ['probeIssuedBinding', 'probeBinding', 'probeCells', 'runIssuedLink', 'runLink', 'runIssuedDuty', 'runDuty'];
+  const bc = bridgeFields.map(field => `case '${field}': if (restore) a.#${field} = old as never; else { old = a.#${field}; a.#${field} = {} as never; } break;`).join('\n');
+  const bm = await load(replace(instrument(`    probeStartAccess.scratchFault(start, false);
+    try { captured = ${supply}; } finally { probeStartAccess.scratchFault(start, true); }`), accessor,
+    accessor + `\n      scratchFault: (a: RetirementStartAssembly, restore: boolean) => { switch (fault) { ${bc} } },`)
+    + '\nlet old: unknown; export let fault = ""; export function select(v: string) { fault = v; captured = undefined; }\n', 'bridge-fields');
+  for (const field of bridgeFields) {
+    bm.select(field); const x = run(bm);
+    assert.equal(x.v, undefined, 'bridge ' + field); assert.deepEqual(x.r, normal.r);
   }
   const hostile = 'new Proxy({}, { get() { hooks++; throw "private_secret"; }, ownKeys() { hooks++; throw "private_secret"; }, getPrototypeOf() { hooks++; throw "private_secret"; } })';
   const foreignCode = [
@@ -107,18 +122,22 @@ try {
   ];
   const fm = await load(instrument(`    switch (fault) { ${foreignCode.map((s,i) => `case '${i}': { ${s} break; }`).join('\n')} }`)
     + '\nexport let fault = ""; export function select(v: string) { fault = v; captured = undefined; }\n', 'foreign');
-  for (let i = 0; i < foreignCode.length; i++) { fm.select(String(i)); assert.equal(run(fm).v, undefined); }
+  for (let i = 0; i < foreignCode.length; i++) {
+    fm.select(String(i)); const x = run(fm); assert.equal(x.v, undefined, 'foreign ' + i); assert.deepEqual(x.r, normal.r);
+  }
   assert.equal(fm.hooks, 0);
   // Public-looking value forgery cannot replace the actual I/C pair.
-  const forged = replace(source, accessor, accessor.replace('a.bodyPinValues(source)', '({ ...a.bodyPinValues(source), issuedSame: true, currentSame: true })'));
+  const forged = replace(source, accessor, accessor.replace('a.bodyPinValues(source)', '(forging ? { ...a.bodyPinValues(source), issuedSame: true, currentSame: true } : a.bodyPinValues(source))'));
   const forgedModule = await load(replace(forged, anchor, `    const old = probeStartAccess.scratchSwap(start);
-    try { captured = ${supply}; } finally { probeStartAccess.scratchRestore(start, old); }\n` + anchor)
-    .replace(accessor.replace('a.bodyPinValues(source)', '({ ...a.bodyPinValues(source), issuedSame: true, currentSame: true })'),
-      accessor.replace('a.bodyPinValues(source)', '({ ...a.bodyPinValues(source), issuedSame: true, currentSame: true })')
+    forging = true; try { captured = ${supply}; } finally { forging = false; probeStartAccess.scratchRestore(start, old); }\n` + anchor)
+    .replace(accessor.replace('a.bodyPinValues(source)', '(forging ? { ...a.bodyPinValues(source), issuedSame: true, currentSame: true } : a.bodyPinValues(source))'),
+      accessor.replace('a.bodyPinValues(source)', '(forging ? { ...a.bodyPinValues(source), issuedSame: true, currentSame: true } : a.bodyPinValues(source))')
       + '\n      scratchSwap: (a: RetirementStartAssembly) => { const old = a.#bodyExpectedSourceCurrent; a.#bodyExpectedSourceCurrent = {} as never; return old; },'
       + '\n      scratchRestore: (a: RetirementStartAssembly, old: BodyBindSourceShell) => { a.#bodyExpectedSourceCurrent = old; },')
-      + '\nexport let captured: unknown;\n', 'forged');
-  assert.equal(run(forgedModule).v, undefined);
+      + '\nexport let captured: unknown;\nlet forging = false;\n', 'forged');
+  // The forged view exists only inside the supply call; the legacy caller must still reach the capture point.
+  const forgedRun = run(forgedModule);
+  assert.equal(forgedRun.v, undefined); assert.deepEqual(forgedRun.r, normal.r);
   const ast = ts.createSourceFile('fixture.ts', source, ts.ScriptTarget.ES2022, true);
   const root = ast.statements.find(n => ts.isClassDeclaration(n) && n.name.text === 'CanonicalGateDraftRoot');
   const methods = ['bodyPinStableStorageMatches', 'bodyPinReturnedSupplyMatches', 'bodyPinReturnedInput'];
@@ -134,7 +153,7 @@ try {
   function walk(n) {
     if (ts.isCallExpression(n) && n.expression.getText(ast).endsWith('.bodyPinReturnedInput')) inputCalls++;
     if (ts.isBinaryExpression(n) && ts.isAssignmentOperator(n.operatorToken.kind)
-      && /^this\.#bodyPinReturned/.test(n.left.getText(ast))) returnedWrites++;
+      && /^this\.#bodyPinReturned(?:Phase|PostChecked|Point|FailurePoint)$/.test(n.left.getText(ast))) returnedWrites++;
     ts.forEachChild(n, walk);
   } walk(ast); assert.equal(inputCalls, 0); assert.equal(returnedWrites, 0);
   const extra = '\ndeclare const r: CanonicalGateDraftRoot; declare const s: BodyBindSourceShell; declare const t: RetirementStartAssembly; declare const shell: BodyPreparationShell;\nr.bodyPinReturnedInput(r, s, t);\nr.bodyPinReturnedSupplyMatches(r, s, t);\nr.bodyPinStableStorageMatches(shell, t);\n';
@@ -147,6 +166,6 @@ try {
   assert.ok(ds.every(d => d.file?.fileName === file && d.start >= source.length));
   assert.ok(ds.every(d => d.code === 2341), JSON.stringify(ds.map(d => ({ code: d.code, message: ts.flattenDiagnosticMessageText(d.messageText, ' ') }))));
   assert.equal(new Set(ds.map(d => d.file.getLineAndCharacterOfPosition(d.start).line)).size, 3);
-  console.log(JSON.stringify({ canonicalFields: 68, rootControls: roots.length, sourceControls: 13, receiverControls: receiverFields.length,
-    foreignControls: foreignCode.length, foreignHooks: fm.hooks, forgedViewRejected: true, privateRejections: 3, inputCalls, returnedWrites }));
+  console.log(JSON.stringify({ canonicalFields: 68, rootControls: roots.length, sourceControls: 13, receiverControls: receiverFields.length, receiverGated: receiverGated.length, bridgeControls: bridgeFields.length,
+    foreignControls: foreignCode.length, foreignHooks: fm.hooks, forgedViewRejected: true, forgedReached: true, privateRejections: 3, inputCalls, returnedWrites }));
 } finally { rmSync(dir, { recursive: true, force: true }); }

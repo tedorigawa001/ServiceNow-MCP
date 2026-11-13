@@ -58,7 +58,21 @@ Sは元R、I/C/Jは元Tの既存責務に残る。readonly viewは元参照を�
 
 次はconstructor固定の新R-b継続と開始／全照合・失敗診断／単一cacheの接続範囲を別承認で扱う。G_R／G_AやC-03を部分有効化せず、R-a等価5節・C-c等価31節を接続時に再評価する。今回のcompiled単項対照は、全節の変異監査や将来RBV全体の完了を意味しない。
 
-## 6 コミット対象だけの再検証（2026-11-13）
+## 6 レビュー修正（2026-11-13）
+
+レビュー基準HEAD `2790830`。§3の準備境界へ64件の一時変異を入れ（各変異の後でfixtureを復元）、両方を通った節に単独のcompiled対照を足した。fixtureの挙動・期待値は変えていない。
+
+| 観測 | 対応 |
+|---|---|
+| 一時変異64件：Vitest kill 3件・compiledだけでkill 46件・両方通過15件 | 3件は対照の不足としてkill。残る12件は[R-b差分設計§17](BEST_PRACTICE_WFB_BODY_PIN_RETURNED_BINDING_TERMINAL_DESIGN.md)に等価節として記録 |
+| §3の「forged値view」は偽装accessorを試験全体に効かせていた。既存C-cが前段でbinding_mismatch・finalPost falseへ停止し、供給境界へ到達しないままundefinedを拒否と数えていた。元I/C参照検査を外しても通過 | 偽装を供給呼出し中だけに限定し、旧callerの返答が正常対照と一致する（到達した）ことをassert。修正後は参照検査を外すと偽装した正常viewが返りkill |
+| receiver単項対照は「入力差又は資格拒否」だけを見ていたため、T.first検査を外しても変更後のviewが返って通過 | 資格slot5件（expected-source issued／current／rejected・T.first・bundle current）は拒否を、他15件は到達と入力差を要求 |
+| `bodyPinBridgeIdentity`全体を外しても通過。T側のprobe binding／cells・run link／dutyを単独で壊す対照がなかった | T側bridge7件を1fieldずつ壊す対照を追加。旧callerの返答不変と拒否を要求し、検査除去時は読取りthrowで返答が変わりkill |
+| foreign5件は拒否だけを見て到達を確認していなかった | 各試行で旧callerの返答が正常対照と一致することを追加 |
+
+修正後のcompiled出力は`receiverGated: 5`・`bridgeControls: 7`・`forgedReached: true`を加える。他の件数（68項目・root40・source13・receiver20・foreign5・hook0・private拒否3）は変わらない。
+
+## 7 コミット対象だけの再検証（2026-11-13）
 
 基準HEAD `3ab8caf53d5e56a20ae1aba11a78172e930061d1`の内容へ、今回の8fileだけを反映した一時検証copyを作った。既存node_modulesはリンクで再利用し、別の作業中差分・元作業場所のdistは取り込まない。対象8fileのSHA-256と元作業場所のbyte一致を確認してから検証した。最初のcopy準備はarchiveを受けるchild_processの既定出力bufferでENOBUFSとなり中断したが、archiveを一時fileへ出す方式へ変更して完了した。製品・試験の期限／設定／実装を変更した失敗ではない。
 

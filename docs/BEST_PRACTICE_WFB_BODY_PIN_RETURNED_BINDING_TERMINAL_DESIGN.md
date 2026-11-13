@@ -1,6 +1,8 @@
 # WF-B：R-bのprivate供給・returned実field全照合・終端所有の接続差分
 
-Version: draft-0.3 / Date: 2026-11-13 / 読み取り基準HEAD: `fe1e2484f41fdd4ad710071fd5bc32072604e9e1`。§15の準備限定実装基準HEAD: `3ab8caf`。§16の開始claim／失敗終端詳細設計基準HEAD: `0e35e85`。
+Version: draft-0.4 / Date: 2026-11-13 / 読み取り基準HEAD: `fe1e2484f41fdd4ad710071fd5bc32072604e9e1`。§15の準備限定実装基準HEAD: `3ab8caf`。§16の開始claim／失敗終端詳細設計基準HEAD: `0e35e85`。§15実装のレビュー修正基準HEAD: `2790830`。
+
+draft-0.3のレビュー修正：§15の準備境界（`0e35e85`）に64件の一時変異を入れたところ、Vitestで3件、compiledだけで46件が落ち、15件が両方を通った。forged値view対照は偽装accessorを試験全体へ効かせていたため、既存C-cが前段でbinding_mismatch・finalPost falseへ停止し、供給境界へ到達しないまま「拒否」と数えていた（元I/C参照検査を外しても通過）。また、receiver単項対照は「入力差又は拒否」だけを見ていたため、T.first検査を外しても通り、T側bridge関係（probe binding／cells・run link／duty）を単独で壊す対照もなかった。偽装を供給呼出し中だけに限定して到達をassertし、receiverの資格slot5件（I/C/J・T.first・bundle current）に拒否を要求、T側bridge7件の単独破損対照とforeign5件の到達assertを追加して3件をkillした。残る12件の等価判断は§17に記録した。fixtureの挙動は変えていない。
 
 Status: **§15のprivate供給・最小安定検査抽出・実field入力化だけを合成準備として実装。運用継続からの呼出し・受理・終端routingは未接続。** [PC08 returned全体設計](BEST_PRACTICE_WFB_BODY_PIN_RETURNED_ACCEPT_SEAL_DESIGN.md)の§2／4／5と§7〜9を、R-a値契約・レビュー補強後の実装からの差分として具体化する。[C-c単一cache設計](BEST_PRACTICE_WFB_BODY_PIN_FINAL_RETURN_CACHE_DESIGN.md)の既存所有権は維持する。
 
@@ -217,3 +219,16 @@ RBV全体、同owner開始claim・pre／post全照合の運用呼出し、G_R／
 追加2原始scalar案で初回拒否種別とsource記録未確認を保持し、source／Tのslot・新FailureOwner／cacheは増やさない。失敗診断→同終端ownerのseal→既存単一cache→実外側復帰の境界を分離し、後発要求の拒否と元callerの終端所有を混同しない。開始だけ通る閉鎖段階では後続未接続の固定失敗へ進み、受理後専用dispositionは使わない。
 
 今回は詳細設計と参照だけ。§1〜15の本文・レビュー／実装記録は保持し、現行入力化call site／returned状態writerは各0のまま。実装・実受理・G_R／G_A・C-03・body・実接続は未着手、正式発行口閉鎖・全体受付無効・Unknown・調査保留を維持する。実通信・実機操作・設定変更・Pushは行わない。
+
+## 17 準備境界の等価節（レビュー修正、2026-11-13）
+
+§15の準備境界への一時変異64件のうち、修正後のcompiledでも検出できない12件を等価として記録する。いずれも現在の到達範囲で観測値が変わらないことを根拠とし、R-bの開始／終端を実接続するときに再評価する。
+
+| 変異（件数） | 等価の根拠 |
+|---|---|
+| 供給先頭の参照比較issued／current／startの各除去（3） | 直後の`bodyPinBridgeIdentity`が同じ3参照を候補field読取り前に比較する。先頭比較の間にある`bodyPinFinalPost`はRの固定flagで候補を読まないため、無読取り拒否の順序も変わらない |
+| 固定mode節`bodyPinFinalPost === true`の除去（1） | 入力化を呼ぶのはscratchで既存C-c継続に挿入した観測だけで、C-c factoryは常にtrueを渡す。新R-b modeを発行する時点で固定mode節として再評価する |
+| root stoppedの固定値化・片側化（3）、first・frameActive・readyの固定値化（3） | `bodyPinStartContextMatches`がclosed／sourceStopRequested=false、first none、frame true、ready falseを要求するため、資格を通った入力ではこれらが常に同値。片方だけの停止や不正booleanは資格で拒否される |
+| source値のfirst／stopRequested上書き（1）、receiver値のI/C/J・first上書き（1） | 同値を供給資格（source.first／stop、元I/C参照・J空、T.first）が要求するため、通過時は常に上書き値と一致する。資格側の除去は今回の対照でkillされる |
+
+修正後にcompiledだけで検出する49件は、root40・source13・receiver20（資格拒否5件を含む）・T側bridge7・foreign5（到達assertあり）・供給呼出し中だけの偽装view・readonly AST・semantic拒否で確認した。Vitestで検出する3件は安定検査抽出の呼出し順AST監査である。
