@@ -1,12 +1,12 @@
 # WF-B body-live：compiled試験の反復変換・import見直し
 
-Version: draft-0.4 / Date: 2026-11-13 / 元設計の読み取り基準HEAD: `b6682faad7bf33f1f36b0c85214a17dc3d7bf116`。レビュー修正基準HEAD: `8087efd`（draft-0.1）／`4c0c1f9`（draft-0.3）。BL-A実装開始HEAD: `8087efd`（文書更新時に別作業の`dcfc6f8`を保持）。
+Version: draft-0.5 / Date: 2026-11-13 / 元設計の読み取り基準HEAD: `b6682faad7bf33f1f36b0c85214a17dc3d7bf116`。レビュー修正基準HEAD: `8087efd`（draft-0.1）／`4c0c1f9`（draft-0.3）。BL-A実装開始HEAD: `8087efd`（文書更新時に別作業の`dcfc6f8`を保持）。BL-B基準HEAD: `967c7d8`。
 
 draft-0.3のレビュー修正：§9のBL-A境界に一時変異17件を入れ、12件が生存した。入力から到達できる生存5件（BC06〜10分岐の重複、branch 11の`v`束縛と`n === 11`先頭の2条件、TS側anchorの一意性、入力上限の境界値）へ対照を追加し、各対照が該当変異をkillすることを確認した。試験側の形比較が単項演算子の種類を比べていなかったため、比較に追加した。生存の残り7件は固定台帳では到達できない防御、または等価で、§10に区分を記録した。契約・BR01〜10は変えていない。
 
 draft-0.1のレビュー修正：§2の304module内訳を一時コピーの実行で照合した（固有module名304個、群別件数・最終summaryとも一致）。同じ実行でload区間を段階別に計測したところ、変換が支配的でimportは小さかったため、§1に計測値と、それに基づくA／Bの見込みを追記した。設計時に比較していなかった代替変換器の案と計測値を§1の比較表に加え、§8末尾の「作成時点でコミット未実施」を記録後の状態に合わせた。§2〜7の契約・受入条件は変えていない。
 
-Status: **§9のBL-A値境界だけ合成依存限定で実装。通常経路・mutant実行・BL-B／Cは未接続。** §1〜8は元設計・文書作業の履歴であり、将来形と未実施記述を保持する。正式発行口・C実行入口・body起動は閉鎖、全体受付無効、Unknown、VM／監視／telemetry調査保留を維持する。実接続・実通信・設定変更・Pushの承認ではない。
+Status: **BL-Aに加え、§11のBL-B別試験経路を合成依存限定で接続。通常経路は未切替、BL-Cの全体採用判定は未実施。** §1〜10の未実施記述は各作成時点の履歴として保持し、最新の実装範囲は§11を参照する。正式発行口・C実行入口・body起動は閉鎖、全体受付無効、Unknown、VM／監視／telemetry調査保留を維持する。実接続・実通信・設定変更・Pushの承認ではない。
 
 対象は `tests/review/fixtures/compiled-probe-body-live.mjs` の試験設計だけ。製品・composition fixtureの生成／停止／所有権契約、既存factory／export、BC06〜11の期待値、独立Vitest、意味診断19行、各compiled processの60,000ms期限は変えない。親は[live slot／bundle設計](BEST_PRACTICE_WFB_BODY_LIVE_SLOT_BUNDLE_DESIGN.md)、履歴は[Initial検証記録](E2E_BEST_PRACTICE_WFB_BODY_LIVE_INITIAL_2026-11-10.md)、性能根拠は[HEAD対照・レビュー再計測§8〜9](E2E_BEST_PRACTICE_WFB_BODY_PIN_RETURNED_CLOSED_2026-11-13.md)とする。
 
@@ -162,3 +162,21 @@ drift／入力・recipe不変の合成試験と全304局所比較、新境界の
 試験側の形比較は前置・後置演算子をnodeの属性として持つため、`!a` と `-a` を同じ形と判定していた。演算子の種類を比較へ加え、旧比較では失敗する対照で確認した。別途、読み取りだけの照合として、全304caseで旧方式（TS変異後に全体emit）の出力と新しいJS値を比べ、対象member外のbyte一致と、単項演算子を含む対象memberのAST一致を確認した（byte全体一致は65件）。これは一時scriptでの確認で、リポジトリの試験には追加していない。
 
 anchor系のdriftでは、既知case IDを付ける箇所をそろえた。BL-B／C、mutant import、通常経路の切替は引き続き未実施で、正式発行口閉鎖・全体受付無効・Unknown・調査保留を維持する。
+
+## 11 BL-B：固有ESMと旧assertを使う別経路（2026-11-13）
+
+`compiled-body-live-b.mjs`はopt-inの合成試験入口であり、旧`compiled-probe-body-live.mjs`や通常の呼出し元を変更しない。`body-live-driver.ts`が固定hashの旧scriptからscratch driverを派生し、loadのI/O部分・run結果の相関採取・一時領域・終了処理だけを差し替える。旧assert式の本文／順序と、意味診断19行の入力・options・assertは保持する。旧方式の対照も同じdriverでTS変異後の全体emitを行い、新方式と同じ相関観測を付す。旧entryそのものの無観測実行との時間比較ではない。
+
+`body-live-esm-loader.ts`のsessionは試験用のload ownerであり実認証sessionではない。同source・固定台帳・同runの一時URLに結合し、case順序と渡されたTS変異が独立oracleの参照と一致してからwrite／importする。JS方式はBL-Aの基準JSから生成し、旧方式は従来のtscで変換する。URLはwrite前に一度だけ予約し、再利用・別case／別ownerのnamespace・factory再利用を拒否する。予約を失敗後やstop後に返さず、ESM cacheを再採用しない。
+
+同じ絶対deadlineを全pre／postで使い、時計例外／逆行／期限、再入、I/O失敗、import中のstop、最終時計観測中の同期stopを固定firstに残す。停止後のnamespace公開・再開始は拒否する。通常経路の設定・実予算や正式なclaimを更新しない。
+
+全304moduleに異なるESM URLとfactory identityを要求する。元run helperが返す385組の有限公開reply／snapshotを同じ順で採り、全体とcase別のSHA-256で照合する。観測は凍結plain data・dense array・有限primitiveだけ、1,024組／4MiBまで。getter／関数／Proxy・不完全graphをserializeせず拒否し、raw参照は出力しない。SHA-256照合は暗号学的digestによる照合であり、全観測値を永続保存したbyte比較とは区別する。
+
+追加の2moduleは隔離対照だけで、304個の実caseには観測hookや混入口を加えない。この2つのscratch copyだけにprivate currentの差替え／capture継続を追加し、brandの別identity、close／診断の非波及、双方向のforeign参照・同値copy・Proxyの拒否、元参照のdescriptor不変、入力hook 0を確認する。これらのfriendは元fixture・runtimeへ追加せず、配布物に含めない。offerはfinallyで外すが、ESM cache／heapの物理退役済みとは主張しない。
+
+payloadのtranspileは旧306（主304＋補助2）から新3（主1＋補助2）へ減る。別にdriver用support4moduleを各runで変換し、その費用も起動からの60秒に含める。304caseと補助2のimportは維持し、隔離対照2だけを追加する。Bのcapsule集約・参考Cの変換器変更は採用しない。
+
+`compiled-body-live-compare.mjs`は旧→新→新→旧を直列で起動する。各childの起動前から60,000msを計り、64KiBずつのstdout／stderrを上限後もdrainし、期限後は所有groupだけをSIGTERM／必要ならSIGKILLする。最大3秒の後始末枠は実行期限の追加ではない。exit／closeとgroup不在2回を確認し、未確認なら次の試行を始めない。親が所有する一時TMPDIR内の生成物だけを終了確認後に削除する。
+
+新旧実行・意味診断・停止試験の結果と初回失敗は[BL-B検証記録](E2E_BEST_PRACTICE_WFB_BODY_LIVE_LOADER_BLB_2026-11-13.md)を参照。BL-Cの安定3run／repository全体の通常並列回帰・通常経路への採用判断は残る。BR01〜10の全完了、任意負荷での60秒保証、実E／S／work上界・GC／OOM／診断必着へ昇格しない。
