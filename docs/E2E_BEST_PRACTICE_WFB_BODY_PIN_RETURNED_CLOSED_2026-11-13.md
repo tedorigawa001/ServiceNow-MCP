@@ -96,3 +96,63 @@ oracleは実装のbuilder／検査表をimportせず独自literal集合から期
 基準HEAD `f4f410e496b886a2948accbd7c4bde420c1242fd`に対し、今回の8fileだけを対象とした。関連合成20file／1,282件と新closed compiled対照を再実行し、双方exit 0。新compiledの54診断組・48role組・84理由写像・origin14件・foreign4件／固定拒否4件・不正slot5件・semantic拒否9行、開始／受理writer 0・運用拒否caller 0を再確認した。
 
 既存compiled群は今回再実行せず、§2／4のtimeout・原因未確定・後続未実施と子process終端未確認をそのまま残す。27script全成功や環境起因の確定へ読み替えない。新たなsource／runtime変更、期限緩和、実受理・開始消費・終端接続・Pushは行わない。
+
+## 8 同条件の基準HEAD対照によるtimeout切り分け（2026-11-13）
+
+### 8.1 比較条件と観測範囲
+
+採取時に固定した対象HEAD `eebc1f1566a97076e4c4d24ebb68a634c91b378a`と、その直前の基準HEAD `f4f410e496b886a2948accbd7c4bde420c1242fd`を比較した。本節の「現行」はこの固定対象を指す。§7の「今回再実行せず」はコミット前確認時の履歴として残し、本節を後続の独立した再確認とする。§6の全群成功履歴も今回のtimeoutを上書きする根拠にはしない。
+
+最終scope検査ではHEAD不変のassertが失敗し、別作業のcommit `fb75e1b089e937e2171bb9af2c20d6e1ee068956`への前進を検出した。同commitは既存の閉鎖対照と関連文書のレビュー更新であり、巻き戻していない。今回実行した2script・入力fixture・共有2module・package／lockfileは固定対象HEADと一致することを再確認した。更新済み§6等も保持する。ただし最新HEAD全体を実行したとは言わず、本節の8試行は固定した2HEADの結果として扱う。
+
+両HEADのtracked内容を一時領域へ別々に展開し、同じ既存node_modulesを参照した。Node `v24.18.0`・TypeScript `5.9.3`・arm64・利用可能CPU数10、NODE_OPTIONSなし。各試行のTMPDIRだけを別の同長pathへ分離し、他の環境条件・起動方法・試験内容を共通にした。build／型検査／他の重い検証は同時起動せず、対象2scriptごとに **基準→現行→現行→基準** の順で直列実行した。外部の自然負荷・空きメモリ・cache状態は固定していないため、完全に同一の負荷を再現した試験ではない。
+
+両HEADで2script・source-map-values-core.ts・supply-construction-kernel.ts・package.json・package-lock.jsonのSHA-256一致を確認した。比較対象の大型fixtureだけは前commitとの差分を含む。
+
+| 入力 | 基準／現行のbyte長 | SHA-256（基準／現行、共通は1値） |
+|---|---|---|
+| compiled-declared-actual.mjs | 同一 | `c80320de81bbc8d56508e93224e019f3f62e6ed5425274a0abf339034c3c0e26` |
+| compiled-probe-body-live.mjs | 同一 | `d78c192b304fa73d7e5f70d467564f0dea1a5b3d9cbff3736fd4fab1c0075f07` |
+| snapshot-read-composition-fake.ts | 590,230／598,807 | 基準 `4fe7e303b4359d0996b6b5f58fa0adc63989025586981cd1dbfda75bb617e0be`／現行 `f0f38d7bd4dc87cd7f1c5ebda00e91f64c9f8408a975864e8369e035426be890` |
+
+fixtureの実行期限は各 **60,000msのまま**。期限到達時は今回起動したprocess groupだけへSIGTERMを送り、1,000ms後も残る場合のSIGKILLと、別枠の有限cleanup確認を用意した。cleanup枠は試験継続時間の延長ではない。今回はSIGKILL不要だった。既存／未知processにはsignalを送っていない。
+
+### 8.2 8試行の結果
+
+所要時間は起動直前から親processのexit／closeまでの単調時計値。loadは開始／終了時の1分値、RSSは5秒間隔で観測した単一processの最大値で、真のpeak・group合計・確保上界ではない。
+
+| ID | script | HEAD | exit／close（ms） | 終了理由 | load開始→終了 | 観測最大RSS（KiB） |
+|---|---|---|---|---|---|---|
+| r01 | declared-actual | 基準 | 14,364／14,364 | code 0・signalなし | 5.52→5.32 | 602,512 |
+| r02 | declared-actual | 現行 | 13,950／13,950 | code 0・signalなし | 5.32→6.11 | 654,768 |
+| r03 | declared-actual | 現行 | 14,405／14,405 | code 0・signalなし | 6.11→6.01 | 570,320 |
+| r04 | declared-actual | 基準 | 14,583／14,583 | code 0・signalなし | 6.01→6.15 | 619,440 |
+| r05 | body-live | 基準 | 58,435／58,435 | code 0・signalなし | 6.15→5.99 | 1,051,728 |
+| r06 | body-live | 現行 | 60,001／60,097 | 60,000msにSIGTERM・code null | 5.99→7.79 | 1,022,112 |
+| r07 | body-live | 現行 | 60,002／60,046 | 60,001msにSIGTERM・code null | 7.79→7.41 | 1,331,296 |
+| r08 | body-live | 基準 | 58,169／58,169 | code 0・signalなし | 7.41→6.97 | 1,233,760 |
+
+declared-actualは基準2回・現行2回とも期限内にcode 0。body-liveは基準2回が期限内code 0、現行2回が期限到達で停止した。現行timeoutをassert失敗や試験完了として数えない。
+
+body-liveの最後の生存sampleはいずれも約55.1秒時点でNodeがR状態だった。順にr05／r06／r07／r08のCPU累積時間は69.18／68.48／69.69／70.52秒、CPU使用率は114.8／123.6／118.9／116.6%。両HEADとも終了近傍までCPU活動が見え、待機だけが原因とする証拠ではない。一方、どの変異・emit／import・semantic検査の途中だったかは未観測であり、CPU値だけでその位置を推定しない。
+
+同4試行のsample中の1分load範囲は5.77〜6.27／5.64〜7.79／7.15〜8.10／7.14〜7.81、最小free memoryは73／67／74／68MiBだった。r08の基準は現行に近いload域でも成功した。ただしmacOSのfree memoryは利用可能メモリやmemory pressureを直接表さず、swap・GC・CPU割当て等の差を除去できていない。
+
+### 8.3 終了・子process確認と観測器の制約
+
+全8試行で親のexitとstdio closeを別々に確認し、その後、同PGIDのprocessが0件かつgroupへの存在照会がESRCHとなることを、間隔を空けて2回確認した。今回のgroup内で観測したprocessはbdoとNodeだけ。監督processもcode 0で終了し、全試行後の再照会でも、観測した17個のPID（負の対照を含む）の残存は0だった。
+
+監督側の負の対照c00は、試験本体とは別の使い捨て待機processに500msの監督期限を設定し、501msにSIGTERM、exit 502ms／close 504ms・group消滅を確認した。この500msはfixtureの60,000ms期限を変更したものではない。監督器の検査対象は今回所有するgroup／観測PIDであり、別groupへの離脱を含む全OS processの不在や、過去のtimeout子processの終了を遡及的に証明するものではない。
+
+観測器レビューで、stdout／stderr pipeのdata listenerが未接続と判明した。結果JSONのstdoutBytes／stderrBytesが0なのは**未採取**であり、「試験が出力しなかった」「最終件数まで完走した」という根拠には使わない。code 0・signal・exit／close・負荷・group消滅は独立に採取できたが、出力本文による最終assert件数と停止caseの確認は未実施。pipeが未drainだった点も観測器の制約として残す（対象scriptは終端で小さいJSONを1回出す構造だが、その構造だけで影響ゼロと断定しない）。§2の過去の出力空という記録は別wrapperの観測であり、本節の未採取と混同しない。
+
+一時監督器／結果は `/private/tmp/rb-timeout-ab-cMzsDY/` に保持した。これは既存の承認済み永続保管先への保存ではなく、作業用一時出力である。監督器SHA-256は `2eed9f9333b2287fe4b1222b59870834a96e4ffef394ef560ed24a61de3ce011`、結果JSONは `cc4741c6bbe97efdadf3920f99afef19895b889c2c5dee0d7eb584a00d17dfee`。再現条件・結果・制約は本MDに記録し、一時pathの存続を検証根拠の必須条件にしない。
+
+### 8.4 判定と残課題
+
+1. **declared-actualの今回の再現なし**：両HEADが同程度の約14秒で成功した。過去の高負荷時timeoutの原因は未確定のまま。
+2. **body-liveの現行差分に連動するtimeoutを観測**：基準2成功／現行2timeoutであり、環境制約だけとして退行候補を除外しない。基準も60秒まで約1.6〜1.8秒しか余裕がなく、自然負荷変動下の2反復だけで特定コードの性能退行を確定しない。
+3. **候補機序と未観測点**：body-liveは大型fixture全体を変異ごとにtranspileModule→別URL importし、最後に意味診断を行う構造。現行fixtureは8,577byte増えているため累積compile／load費の増加は調査候補だが、実測内訳は未取得。追加型・field・methodのruntime挙動、compile／import／GC／semantic処理のどれが支配的かはUnknown。次の採取では両HEADへ等しい一時観測を適用し、出力drainと有限な進行点を確認してから、同じ60秒のまま停止位置・費用内訳を比較する。実装修正や期限延長は本調査では行わない。
+4. **確認済み／未確認を分離**：今回の所有group終端は確認済み。過去の子process終端は未確認のまま。既存compiled全27script・全体回帰は今回実行しておらず、2scriptの対照で全群完了に置き換えない。
+
+本節では検証記録だけを更新した。製品・fixture・試験script・設定・依存関係は変更せず、開始claim消費・実受理・G_R／G_A・C-03・body起動・実接続／実通信・Pushを行っていない。正式発行口閉鎖・全体受付無効・Unknown・VM／監視／telemetry調査保留を維持する。コミットも未実施。
