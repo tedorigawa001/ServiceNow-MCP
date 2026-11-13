@@ -1,6 +1,6 @@
 # WF-B：R-bのprivate供給・returned実field全照合・終端所有の接続差分
 
-Version: draft-0.2 / Date: 2026-11-13 / 読み取り基準HEAD: `fe1e2484f41fdd4ad710071fd5bc32072604e9e1`。§15の準備限定実装基準HEAD: `3ab8caf`。
+Version: draft-0.3 / Date: 2026-11-13 / 読み取り基準HEAD: `fe1e2484f41fdd4ad710071fd5bc32072604e9e1`。§15の準備限定実装基準HEAD: `3ab8caf`。§16の開始claim／失敗終端詳細設計基準HEAD: `0e35e85`。
 
 Status: **§15のprivate供給・最小安定検査抽出・実field入力化だけを合成準備として実装。運用継続からの呼出し・受理・終端routingは未接続。** [PC08 returned全体設計](BEST_PRACTICE_WFB_BODY_PIN_RETURNED_ACCEPT_SEAL_DESIGN.md)の§2／4／5と§7〜9を、R-a値契約・レビュー補強後の実装からの差分として具体化する。[C-c単一cache設計](BEST_PRACTICE_WFB_BODY_PIN_FINAL_RETURN_CACHE_DESIGN.md)の既存所有権は維持する。
 
@@ -209,3 +209,11 @@ R-b実装の承認も合成依存までで、C-03・実session／source差替え
 全68項目の独立literal oracle、root40・source13・receiver20の単項変更、foreign／copy／Proxy5件・hook0、実I/C不一致を正常値viewで隠す対照、private3methodのsemantic拒否をcompiledで確認した。試験用のslot操作／捕捉変数／追加accessorはscratch生成物にだけ存在し、元factory・export・受領口へ追加しない。型検査・回帰・初回の試験側不備と梱包制約は[準備境界検証記録](E2E_BEST_PRACTICE_WFB_BODY_PIN_RETURNED_SUPPLY_2026-11-13.md)へ分離する。
 
 RBV全体、同owner開始claim・pre／post全照合の運用呼出し、G_R／G_A、accepted後guard、R-b診断seal／単一cache、新mode終端・C-03は未実装／未接続。不足証拠・費目上界・cleanupはUnknownで、§1〜14の将来契約を実績へ読み替えない。
+
+## 16 開始claimと失敗終端ownerへの受渡しの詳細設計（2026-11-13）
+
+[開始claim／拒否診断・失敗終端詳細設計draft-0.1](BEST_PRACTICE_WFB_BODY_PIN_RETURNED_CLAIM_FAILURE_DESIGN.md)で、not_started→checkingの一度限り消費と元callerの失敗終端を対にした。拒否分類と原始診断保持、正常供給から分離した停止／失敗書込みのorigin資格、資格喪失時のroot-only保持を具体化した。
+
+追加2原始scalar案で初回拒否種別とsource記録未確認を保持し、source／Tのslot・新FailureOwner／cacheは増やさない。失敗診断→同終端ownerのseal→既存単一cache→実外側復帰の境界を分離し、後発要求の拒否と元callerの終端所有を混同しない。開始だけ通る閉鎖段階では後続未接続の固定失敗へ進み、受理後専用dispositionは使わない。
+
+今回は詳細設計と参照だけ。§1〜15の本文・レビュー／実装記録は保持し、現行入力化call site／returned状態writerは各0のまま。実装・実受理・G_R／G_A・C-03・body・実接続は未着手、正式発行口閉鎖・全体受付無効・Unknown・調査保留を維持する。実通信・実機操作・設定変更・Pushは行わない。
