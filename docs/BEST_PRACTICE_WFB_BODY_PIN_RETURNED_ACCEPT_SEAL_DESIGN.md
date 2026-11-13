@@ -1,6 +1,6 @@
 # WF-B：PC08 returned全照合と受理・失敗・診断sealの接続差分
 
-Version: draft-0.4 / Date: 2026-11-13 / 読み取り基準HEAD: `e7bda024e1298c18707be6fca248ef8ba1299421`（C-c実装`8ffaf0a`と、そのレビュー補強`e7bda02`を維持）。レビュー修正基準HEAD: `ed37be3`。§15のR-a限定実装基準HEAD: `d9002e02026451f55b1e1767701dbc02b2c1507d`。§15実装のレビュー修正基準HEAD: `88204c5`。
+Version: draft-0.5 / Date: 2026-11-13 / 読み取り基準HEAD: `e7bda024e1298c18707be6fca248ef8ba1299421`（C-c実装`8ffaf0a`と、そのレビュー補強`e7bda02`を維持）。レビュー修正基準HEAD: `ed37be3`。§15のR-a限定実装基準HEAD: `d9002e02026451f55b1e1767701dbc02b2c1507d`。§15実装のレビュー修正基準HEAD: `88204c5`。§17のR-b差分設計基準HEAD: `fe1e248`。
 
 draft-0.1のレビュー修正：§7のinput_rejected写像（rootはそのまま、sourceはstate_invalid）を現行fixtureと照合したところ、旧`fail()`系は同じだが、C-cの最終観測中の記録分岐はsource側をconstruction_unconfirmedにしていた。到達するscriptはないが、本書を正としてC-c分岐を直し、compiled対照を追加した（[C詳細設計draft-0.9](BEST_PRACTICE_WFB_BODY_PIN_FINAL_RETURN_CACHE_DESIGN.md)）。これにより旧C-cの等価節は31件になったため、RT16の件数を合わせた。他の本文・R08／RT条件は変えていない。
 
@@ -247,3 +247,11 @@ R-aの追加コード（`bodyPinReturnedStateMatches`、`bodyPinReturnedCommonVa
 | result写像のbinding_mismatch節（1） | R-aのroot firstはconstruction_unconfirmed／state_invalid／input_rejectedだけが書かれ、binding_mismatchは到達しない。外してもinternal_unconfirmedへ落ちるだけで公開入口から観測できない |
 
 compiledだけで検出した67件（修正後）は、450状態・136leaf・60shape・81位置組・accepted状態3件・初期owner29件・投影11件・AST／非割当て監査で確認した。R-bで実ownerへ接続するときは、固定mode節と到達しない写像を含めて再評価する。
+
+## 17 R-bのprivate供給・実field照合と終端所有の差分設計（2026-11-13）
+
+[R-b接続差分設計draft-0.1](BEST_PRACTICE_WFB_BODY_PIN_RETURNED_BINDING_TERMINAL_DESIGN.md)で、同constructor／prepareのR/S/T供給・元参照／metadata資格と、実fieldからの5区分値入力・returned全照合を具体化した。期待表や公開summaryを証拠入力にせず、calling専用matcherをORで緩めない。既存C-cの最初の失敗writerより前のfresh合成mode案であり、R-aの拒否済みshellやseal済みrootは再開しない。
+
+元callerだけの失敗診断／seal、同#fixedの一度限り生成、外側frame実復帰後の公開を分離した。source資格喪失はroot-only記録と元参照保持、post後の失敗は到達履歴保持、生成／公開失敗は配送軸で再試行禁止とする。R-a等価5節とC-c等価31節は新経路で再評価する。
+
+今回の追加は文書だけで、§1〜16の本文・レビューを変更しない。実受理・G_R／G_A・C-03・body・実接続は未接続。正式発行口閉鎖・全体受付無効・Unknown・調査保留と、実装・実通信・実機操作・設定変更・Pushの禁止を維持する。
