@@ -1,10 +1,10 @@
 # WF-B body-live：compiled試験の反復変換・import見直し
 
-Version: draft-0.2 / Date: 2026-11-13 / 読み取り基準HEAD: `b6682faad7bf33f1f36b0c85214a17dc3d7bf116`。レビュー修正基準HEAD: `8087efd`。
+Version: draft-0.3 / Date: 2026-11-13 / 元設計の読み取り基準HEAD: `b6682faad7bf33f1f36b0c85214a17dc3d7bf116`。レビュー修正基準HEAD: `8087efd`。BL-A実装開始HEAD: `8087efd`（文書更新時に別作業の`dcfc6f8`を保持）。
 
 draft-0.1のレビュー修正：§2の304module内訳を一時コピーの実行で照合した（固有module名304個、群別件数・最終summaryとも一致）。同じ実行でload区間を段階別に計測したところ、変換が支配的でimportは小さかったため、§1に計測値と、それに基づくA／Bの見込みを追記した。設計時に比較していなかった代替変換器の案と計測値を§1の比較表に加え、§8末尾の「作成時点でコミット未実施」を記録後の状態に合わせた。§2〜7の契約・受入条件は変えていない。
 
-Status: **MDのみ・未実装・受入試験未実施。** 正式発行口・C実行入口・body起動は閉鎖、全体受付無効、Unknown、VM／監視／telemetry調査保留を維持する。実装・実接続・実通信・設定変更・Pushの承認ではない。
+Status: **§9のBL-A値境界だけ合成依存限定で実装。通常経路・mutant実行・BL-B／Cは未接続。** §1〜8は元設計・文書作業の履歴であり、将来形と未実施記述を保持する。正式発行口・C実行入口・body起動は閉鎖、全体受付無効、Unknown、VM／監視／telemetry調査保留を維持する。実接続・実通信・設定変更・Pushの承認ではない。
 
 対象は `tests/review/fixtures/compiled-probe-body-live.mjs` の試験設計だけ。製品・composition fixtureの生成／停止／所有権契約、既存factory／export、BC06〜11の期待値、独立Vitest、意味診断19行、各compiled processの60,000ms期限は変えない。親は[live slot／bundle設計](BEST_PRACTICE_WFB_BODY_LIVE_SLOT_BUNDLE_DESIGN.md)、履歴は[Initial検証記録](E2E_BEST_PRACTICE_WFB_BODY_LIVE_INITIAL_2026-11-10.md)、性能根拠は[HEAD対照・レビュー再計測§8〜9](E2E_BEST_PRACTICE_WFB_BODY_PIN_RETURNED_CLOSED_2026-11-13.md)とする。
 
@@ -133,3 +133,15 @@ factory内へ元moduleのclass・mutableなaccess継続・Symbol・Map／Set・�
 残る未確認事項は、JS patchとの可換性の全case実証、実時間／GC／メモリ改善、自然負荷下の余裕、Bの隔離変換、実OOMと診断必着である。正式発行口閉鎖・全体受付無効・Unknown・調査保留を維持し、開始claim消費・実受理・G_R／G_A・C-03・構築ready・body起動・実接続／実通信・設定変更・Pushは行わない。draft-0.1は作成時点でコミット未実施で、その後 `8087efd` として保存された。
 
 文書検証：本書・親設計・既存検証記録の3文書で、ローカルリンク15件、表18個の列数、304moduleの内訳、BR01〜10の連番、末尾改行／差分空白を確認した。親設計の追加参照以外の本文と既存検証記録の履歴は保持し、src／tests／package／lockfile／CHANGELOGに差分なし。これは文書整合だけの確認であり、短縮・case等価性・将来受入試験の成功ではない。
+
+## 9 BL-Aの値境界・移行台帳限定実装（2026-11-13）
+
+package除外fixture `body-live-migration.ts` に、固定順の304caseとmember／branch／from／toの局所patch列を追加した。全caseとpatch列はfreezeし、任意patch・外部callbackの登録口は設けない。`createBodyLivePatchBoundary` はprimitiveな元TS文字列（最大1,048,576 UTF-16 code unit）を受け、同runで一度だけES2022へemitする。元TS／JSの唯一のCanonicalGateDraftRoot、唯一のmember・BC分岐、全caseの一意anchorを検査してから値生成口を返す。入力hookは実行しない。
+
+元sourceはASTの実token位置から照合し、comment／string／regexp本文を式anchorにしない。TSのnon-null assertionと固定recipe中のas anyだけをJS用に消去する。各caseは保存した同じ基準JSから独立に構成し、変更範囲の重なり・no-op・不正構文・未知IDを固定transform_driftへ分類する。公開診断は固定pointと内部の既知case IDだけで、未知入力やraw例外をechoしない。返すJSは値であり、書込み・import・eval・source owner／実runへの登録は行わない。
+
+独立oracle `body-live-migration-oracle.ts` は新builder／patcherをimportせず、旧scriptのSHA-256を固定し、旧literal表を限定AST decoderで読み、旧TS文字列のreplace／method／relation方式から参照変異を作る。全304caseのID・順序・script・member対応、局所JS AST、対象member以外の出力byte不変を照合した。局所参照memberだけをemitする監査であり、通常試験を別枠へ移した高速化ではない。旧script変更時は自動追従せずlegacy_script_driftで止め、台帳とoracleのレビューを要求する。
+
+この段階では新規ESM URLへのmutant importを一度も行わず、source／namespace／brandの実行同等性、旧304caseの実行結果比較、既存19行の意味診断再実行、通常並列での期限達成・30秒目標は未確認。BR01の値対応・局所変化の部分を検証しただけで、BR01〜10全完了ではない。BL-Bで旧試験と同じ実行・感度・fresh module保証を接続し、BL-Cで性能／回帰を判断する。通常経路・既存fixture・既存compiled scriptは変更していない。別作業の§1の段階計測と参考C案を保持したが、今回参考Cの実装・採用は行わない。
+
+drift／入力・recipe不変の合成試験と全304局所比較、新境界のcompiled値生成と7行の型拒否を追加した。詳細な初回失敗・修正・保証の限界は[BL-A検証記録](E2E_BEST_PRACTICE_WFB_BODY_LIVE_MIGRATION_BLA_2026-11-13.md)に記載する。正式発行口閉鎖・全体受付無効・Unknown・調査保留を維持する。
