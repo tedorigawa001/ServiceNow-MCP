@@ -35,7 +35,7 @@ describe('R-b private read preparation without returned admission', () => {
     function visit(n: ts.Node) {
       if (ts.isCallExpression(n) && n.expression.getText(ast).endsWith('.bodyPinReturnedInput')) calls++;
       if (ts.isBinaryExpression(n) && n.operatorToken.kind >= ts.SyntaxKind.FirstAssignment && n.operatorToken.kind <= ts.SyntaxKind.LastAssignment
-        && /^this\.#bodyPinReturned/.test(n.left.getText(ast))) writes++;
+        && /^this\.#bodyPinReturned(?:Phase|PostChecked|Point|FailurePoint)$/.test(n.left.getText(ast))) writes++;
       ts.forEachChild(n, visit);
     }
     visit(ast); expect(calls).toBe(0); expect(writes).toBe(0);

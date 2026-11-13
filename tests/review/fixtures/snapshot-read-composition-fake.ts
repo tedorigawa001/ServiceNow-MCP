@@ -4211,6 +4211,47 @@ type BodyPinFinalDisposition = 'pin_return_not_connected' | 'closed' | 'input_re
 type BodyPinFinalPoint = 'none' | 'final_post_before';
 // R-a value contracts only. No returned admission or G_R/G_A writer is connected.
 type BodyPinReturnedPoint = 'none' | 'identity' | 'pre' | 'post' | 'blocked';
+type BodyPinReturnedRejectClass = 'none' | 'binding_mismatch' | 'stopped' | 'prior_failure' | 'invalid_state'
+  | 'observation_unconfirmed' | 'continuation_unconnected';
+type BodyPinReturnedSourceRecord = 'not_attempted' | 'written' | 'prior_preserved' | 'withheld' | 'unconfirmed';
+type BodyPinReturnedClosedRecord = Extract<BodyPinReturnedSourceRecord, 'not_attempted' | 'withheld' | 'unconfirmed'>;
+type BodyPinReturnedClosedCode = 'refused_in_progress' | 'refused_used' | 'owner_rejected' | 'failure_pending';
+type BodyPinReturnedClosedDiagnostic =
+  | Readonly<{ rejectClass: 'none'; sourceRecord: 'not_attempted' }>
+  | Readonly<{ rejectClass: Exclude<BodyPinReturnedRejectClass, 'none'>; sourceRecord: BodyPinReturnedClosedRecord }>;
+function bodyPinReturnedRejectKnown(v: unknown): v is BodyPinReturnedRejectClass {
+  return v === 'none' || v === 'binding_mismatch' || v === 'stopped' || v === 'prior_failure' || v === 'invalid_state'
+    || v === 'observation_unconfirmed' || v === 'continuation_unconnected';
+}
+function bodyPinReturnedRejectableKnown(v: unknown): v is Exclude<BodyPinReturnedRejectClass, 'none'> {
+  return bodyPinReturnedRejectKnown(v) && v !== 'none';
+}
+function bodyPinReturnedClosedRecordKnown(v: unknown): v is BodyPinReturnedClosedRecord {
+  return v === 'not_attempted' || v === 'withheld' || v === 'unconfirmed';
+}
+function bodyPinReturnedClosedDiagnosticValid(reject: unknown, record: unknown): boolean {
+  return bodyPinReturnedRejectKnown(reject) && bodyPinReturnedClosedRecordKnown(record)
+    && (reject !== 'none' || record === 'not_attempted');
+}
+function bodyPinReturnedFirstKnown(v: unknown): v is ProbeRunFirst | BodySourceFirst {
+  return v === 'none' || v === 'input_rejected' || v === 'binding_mismatch' || v === 'state_invalid' || v === 'closed'
+    || v === 'construction_unconfirmed' || v === 'internal_unconfirmed' || v === 'receiver_unconfirmed' || v === 'post_unconfirmed';
+}
+function bodyPinReturnedFirstAllowed(v: unknown, role: 'root' | 'source' | 'receiver'): v is ProbeRunFirst | BodySourceFirst {
+  if (!bodyPinReturnedFirstKnown(v)) return false;
+  if (role === 'root') return v !== 'receiver_unconfirmed' && v !== 'post_unconfirmed';
+  if (role === 'source') return v !== 'input_rejected' && v !== 'internal_unconfirmed';
+  if (role === 'receiver') return v !== 'input_rejected' && v !== 'internal_unconfirmed' && v !== 'post_unconfirmed' && v !== 'construction_unconfirmed';
+  return false;
+}
+function bodyPinReturnedRejectFirst(kind: BodyPinReturnedRejectClass, inherited: unknown): ProbeRunFirst {
+  if (kind === 'prior_failure' && inherited !== 'none' && bodyPinReturnedFirstKnown(inherited))
+    return inherited === 'receiver_unconfirmed' || inherited === 'post_unconfirmed' ? 'construction_unconfirmed' : inherited;
+  if (kind === 'binding_mismatch') return 'binding_mismatch';
+  if (kind === 'stopped') return 'closed';
+  if (kind === 'observation_unconfirmed' || kind === 'continuation_unconnected' || kind === 'prior_failure') return 'construction_unconfirmed';
+  return 'state_invalid';
+}
 type BodyPinReturnedState =
   | Readonly<{ phase: 'not_started'; postChecked: false; point: 'none' | 'identity'; failurePoint: 'none' }>
   | Readonly<{ phase: 'checking'; postChecked: false; point: 'pre' | 'post'; failurePoint: 'none' }>
@@ -4364,6 +4405,9 @@ class CanonicalGateDraftRoot {
       },
     });
   }
+  // Literal diagnostic storage precedes all instance field allocations and partial construction.
+  #bodyPinReturnedRejectClass: BodyPinReturnedClosedDiagnostic['rejectClass'] = 'none';
+  #bodyPinReturnedSourceRecord: BodyPinReturnedSourceRecord = 'not_attempted';
   readonly #failure: { first: string; phase: number; boundary: string };
   readonly #slots: { stage: SupplyConstructionStage; value: object | undefined }[];
   readonly #seedOrigin = Object.freeze({}); readonly #entry = Object.freeze({}); readonly #exit = Object.freeze({});
@@ -5447,6 +5491,65 @@ class CanonicalGateDraftRoot {
       && source.stopRequested === false && source.first === 'none'
       && probeStartAccess.bodyPinReceiverFirst(start) === 'none'
       && probeStartAccess.bodyPinConfirmationReferences(start, source);
+  }
+  private bodyPinReturnedOriginMatches(root: CanonicalGateDraftRoot, source: BodyBindSourceShell, start: RetirementStartAssembly): boolean {
+    // The original issued slot is private and never replaced by the producer. Unknown arguments are compared only.
+    if (root !== this || source === undefined || source !== this.#bodySourceIssued || source !== this.#bodySourceCurrent
+      || this.#bodySourceRejected !== undefined) return false;
+    const b = this.#issuedFrameBinding, shell = this.#bodySeedShell;
+    if (!b || !shell || !this.#issuedRunLink || !this.#issuedRunDuty || !this.#exitSlots[0]?.value
+      || this.bodyPinFinalPost !== true || this.#bodySourceStorageConfirmed !== true
+      || this.#bodySourceCreationAttempted !== true || this.#bodySourceMetadataConfirmed !== true
+      || this.#bodySourceMetadataFixedCount !== 9 || this.#bodySourceBuildStage !== 'confirmed'
+      || this.#bodySourceBuildPhase !== 'BP01' || this.#bodySourceBuildStep !== 'after' || this.#bodySourceBuildBoundary !== 'after') return false;
+    // Fixed readonly metadata only: no shape/reflection, healthy-state test, receiver access or progress write.
+    return source[BODY_BIND_SOURCE] === true && source.custodian === this && source.construction === shell && source.binding === b
+      && source.link === this.#issuedRunLink && source.duty === this.#issuedRunDuty && source.control === this.#exitSlots[0].value
+      && source.start === start && source.rootFailure === this.#failure && b.target.start === start;
+  }
+  private returnedClosedRecord(kind: Exclude<BodyPinReturnedRejectClass, 'none'>, record: BodyPinReturnedClosedRecord,
+    inherited: ProbeRunFirst | BodySourceFirst = 'none'): BodyPinReturnedClosedCode {
+    if (!this.bodyPinFinalPost || !this.bodyPinFinalEntry || this.#frame !== true || this.#finalPublicEntryBusy !== true) return 'owner_rejected';
+    if (this.#finalTerminalSealed || this.#finalReplyAttempted || this.#fixed !== undefined) return 'refused_used';
+    if (this.#bodyPinReturnedPhase === 'checking') return 'refused_in_progress';
+    if (this.#bodyPinReturnedPhase !== 'not_started') return 'refused_used';
+    const valid = this.#bodyPinReturnedPostChecked === false
+      && (this.#bodyPinReturnedPoint === 'none' || this.#bodyPinReturnedPoint === 'identity') && this.#bodyPinReturnedFailurePoint === 'none'
+      && bodyPinReturnedRejectableKnown(kind)
+      && bodyPinReturnedClosedRecordKnown(record)
+      && bodyPinReturnedClosedDiagnosticValid(this.#bodyPinReturnedRejectClass, this.#bodyPinReturnedSourceRecord);
+    if (this.#failure.first === 'none') this.#failure.first = valid ? bodyPinReturnedRejectFirst(kind, inherited) : 'state_invalid';
+    if (this.#bodyPinReturnedRejectClass === 'none') {
+      this.#bodyPinReturnedRejectClass = valid ? kind : 'invalid_state';
+      if (valid && this.#bodyPinReturnedSourceRecord === 'not_attempted') this.#bodyPinReturnedSourceRecord = record;
+    }
+    return 'failure_pending';
+  }
+  // Closed preparation only. There is no operational caller, start-consumption writer, source writer or terminal handoff.
+  private returnedClosedRefusal(root: CanonicalGateDraftRoot, source: BodyBindSourceShell,
+    start: RetirementStartAssembly): BodyPinReturnedClosedCode {
+    if (root !== this || !this.bodyPinFinalPost || !this.bodyPinFinalEntry || this.#frame !== true || this.#finalPublicEntryBusy !== true) return 'owner_rejected';
+    if (this.#finalTerminalSealed || this.#finalReplyAttempted || this.#fixed !== undefined) return 'refused_used';
+    if (this.#bodyPinReturnedPhase === 'checking') return 'refused_in_progress';
+    if (this.#bodyPinReturnedPhase !== 'not_started') return 'refused_used';
+    if (!bodyPinReturnedFirstAllowed(this.#failure.first, 'root'))
+      return this.returnedClosedRecord('invalid_state', 'not_attempted');
+    if (this.#failure.first !== 'none') return this.returnedClosedRecord('prior_failure', 'not_attempted', this.#failure.first);
+    try {
+      if (!this.bodyPinReturnedOriginMatches(root, source, start)) return this.returnedClosedRecord('binding_mismatch', 'withheld');
+      const first = source.first;
+      if (!bodyPinReturnedFirstAllowed(first, 'source'))
+        return this.returnedClosedRecord('invalid_state', 'not_attempted');
+      if (first !== 'none') return this.returnedClosedRecord('prior_failure', 'not_attempted', first);
+      const receiverFirst = probeStartAccess.bodyPinReceiverFirst(start);
+      if (!bodyPinReturnedFirstAllowed(receiverFirst, 'receiver')) return this.returnedClosedRecord('invalid_state', 'not_attempted');
+      if (receiverFirst !== 'none') return this.returnedClosedRecord('prior_failure', 'not_attempted', receiverFirst);
+      if (this.#closed === true || this.#bodySourceStopRequested === true || source.stopRequested === true)
+        return this.returnedClosedRecord('stopped', 'not_attempted');
+      if (this.#closed !== false || this.#bodySourceStopRequested !== false || source.stopRequested !== false)
+        return this.returnedClosedRecord('invalid_state', 'not_attempted');
+      return this.returnedClosedRecord('continuation_unconnected', 'not_attempted');
+    } catch { return this.returnedClosedRecord('observation_unconfirmed', 'unconfirmed'); }
   }
   // R-b preparation only: scratch compiled controls call this boundary. No owning continuation is connected.
   private bodyPinReturnedInput(root: CanonicalGateDraftRoot, source: BodyBindSourceShell,

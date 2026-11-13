@@ -1,10 +1,10 @@
 # WF-B：R-b開始claim・拒否診断と失敗終端ownerへの受渡し
 
-Version: draft-0.1 / Date: 2026-11-13 / 読み取り基準HEAD: `0e35e852e1a84aa864b86b8d60dd05704f1b6a36`。
+Version: draft-0.2 / Date: 2026-11-13 / 読み取り基準HEAD: `0e35e852e1a84aa864b86b8d60dd05704f1b6a36`。§15の閉鎖契約限定実装基準HEAD: `2790830`。
 
-Status: **詳細設計だけ。開始claim・失敗記録・終端受渡しは未実装。** [R-b接続差分設計](BEST_PRACTICE_WFB_BODY_PIN_RETURNED_BINDING_TERMINAL_DESIGN.md)の§3／6〜10を、§15のreadonly準備境界から先の差分として具体化する。[PC08全体設計](BEST_PRACTICE_WFB_BODY_PIN_RETURNED_ACCEPT_SEAL_DESIGN.md)のR08順序、既存C-c／R-aの閉鎖挙動を維持する。
+Status: **§15の狭い内部型・先行2scalar・origin leaf・固定拒否／root-only診断保持だけを合成依存限定で実装。開始claim・source書込み・失敗終端受渡しは未接続。** [R-b接続差分設計](BEST_PRACTICE_WFB_BODY_PIN_RETURNED_BINDING_TERMINAL_DESIGN.md)の§3／6〜10を、同書§15のreadonly準備境界から先の差分として具体化する。[PC08全体設計](BEST_PRACTICE_WFB_BODY_PIN_RETURNED_ACCEPT_SEAL_DESIGN.md)のR08順序、既存C-c／R-aの閉鎖挙動を維持する。
 
-正式発行口・既存C実行入口・body起動は閉鎖、全体受付は無効、Unknown、VM／監視／telemetry調査保留を維持する。今回はMDだけを更新する。実装・実受理・G_R／G_A・C-03・body起動・実接続・実通信・実機操作・設定変更・Pushは行わない。以下の型・field・関数・writerは将来の合成依存限定案であり、追加済みのAPI／資格ではない。
+正式発行口・既存C実行入口・body起動は閉鎖、全体受付は無効、Unknown、VM／監視／telemetry調査保留を維持する。§1〜14はdraft-0.1の将来契約／文書履歴、今回の限定実装は§15で区別する。開始claim消費・実受理・G_R／G_A・C-03・body起動・実接続・実通信・実機操作・設定変更・Pushは行わない。
 
 ## 1 現状と今回の解消対象
 
@@ -214,3 +214,23 @@ R-a等価5節・C-c等価31節と従来の単一owner判断は、新modeの到�
 ローカル参照・表列数・節順、CL01〜10／FD01〜07／CFV01〜12の欠落／重複・順序、親本文保持、MD3件だけの差分・基準HEAD／index・行末整合を確認する。build・試験・梱包・実装・index登録・コミット・Pushは行わない。文書整合は開始claim・失敗終端・cleanupの受入結果ではない。
 
 文書検証結果：3文書のローカル参照21件、30表の列数、節順（本書14・親16／19）、CL／FD／CFVの計29IDに欠落／重複なし。親2文書の既存§1以降の本文・レビュー／実装記録の全byte保持、Markdown3件だけの変更、基準HEAD不変・index空、diff --checkを確認した。将来の受入条件は未実施である。
+
+## 15 閉鎖契約だけの合成実装（2026-11-13）
+
+package除外の既存classへprivate3method、module-privateの有限検査／理由写像7関数、先行2scalarを追加した。新factory／export／constructor flagは追加せず、既存404method本文を変更していない。2scalarは同classの最初のinstance fieldとしてliteralで初期化し、既存のfield確保／constructor部分生成より前に保持する。
+
+| 限定実装 | 今回の意味と非接続部分 |
+|---|---|
+| 狭い型 | RejectClass7値、SourceRecord5値と閉鎖段階のsubset3値、claimedを含まないClosedCode4値、noneにはnot_attemptedだけを許す診断組。written／prior_preservedの実証拠や生成口は作らない |
+| origin leaf | 元R／issued=currentのS・rejected不在、生成前提／BP01履歴、不変metadata9と元binding／BS／link／duty／control／T／failureを固定比較。source state／stop／first・rootの健康状態・receiver状態は資格に含めず、反射・配列・値view・進行更新なし |
+| 固定拒否 | 同合成C-c元frameのscratch観測からだけ呼ぶprivate準備method。非所有／seal済み／使用済みを固定拒否し、初期段階のroot／source／callee先行理由・停止・origin不一致・観測throwを有限分類。正常でもcontinuation_unconnectedでfailure_pendingへ閉じる |
+| 非割当て記録 | root firstと先行2scalarだけを記録し、初回理由・分類・sourceRecordを後発拒否で上書きしない。sourceRecordはnot_attempted／withheld／unconfirmedだけで、sourceを書いた／先行記録を確認したという完了値は出さない |
+| 実行閉鎖 | 元fixtureのreturnedClosedRefusal呼出しsite 0。returned4scalarの代入site 0。source／BS／T、claim・route・failure位置／diagnosticRecorded・seal／attempt／cacheには書かない |
+
+origin確認のtrueはprivateな読取り結果だけで、停止／失敗writerの発行口ではない。先行source first・stop trueでもoriginは保持される一方、healthy供給は拒否される。未知候補・同値copy・元保持参照の喪失はoriginで拒否する。旧modeへこのleafを先行適用したり、古いqualified値を持ち込んだりしない。
+
+既存C-cの正規来歴をscratchで使う限定正例であり、新R-b mode・実callerの所有証明は未追加。固定拒否のchecking／使用済み枝も値注入対照だけで、開始消費を伴うCL全順序・FD01〜07全体の実装ではない。root-onlyの原始診断を保持するところまでで、phase failedへの退役、source書込み、元終端ownerへの受渡し・sealは次の未接続範囲である。
+
+旧R-b準備試験の「開始／受理writer 0」監査は、元の4scalarを明示して新診断2scalarと分けた。作業中に加わった前段レビュー補強（到達確認・偽装view対照・等価節等）は保持し、その変異監査を今回の実績へ加算しない。今回の独立対照・初回失敗・関連回帰は[閉鎖契約検証記録](E2E_BEST_PRACTICE_WFB_BODY_PIN_RETURNED_CLOSED_2026-11-13.md)へ分離する。
+
+CFV全体、同modeの運用入場・開始claim・返却全照合・G_R／G_A・受理・C-03・body・実接続は未完了のまま。root／source／callee／delivery診断の役割、単一cache、停止後の保持責務は将来契約として残す。物理allocation 0・実E／S・全体work上界・cleanup／借用退役はUnknownである。

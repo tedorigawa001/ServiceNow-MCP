@@ -1,6 +1,6 @@
 # WF-B：PC08 returned全照合と受理・失敗・診断sealの接続差分
 
-Version: draft-0.7 / Date: 2026-11-13 / 読み取り基準HEAD: `e7bda024e1298c18707be6fca248ef8ba1299421`（C-c実装`8ffaf0a`と、そのレビュー補強`e7bda02`を維持）。レビュー修正基準HEAD: `ed37be3`。§15のR-a限定実装基準HEAD: `d9002e02026451f55b1e1767701dbc02b2c1507d`。§15実装のレビュー修正基準HEAD: `88204c5`。§17のR-b差分設計基準HEAD: `fe1e248`。§18の準備限定実装基準HEAD: `3ab8caf`。§19の開始claim／失敗終端詳細設計基準HEAD: `0e35e85`。
+Version: draft-0.8 / Date: 2026-11-13 / 読み取り基準HEAD: `e7bda024e1298c18707be6fca248ef8ba1299421`（C-c実装`8ffaf0a`と、そのレビュー補強`e7bda02`を維持）。レビュー修正基準HEAD: `ed37be3`。§15のR-a限定実装基準HEAD: `d9002e02026451f55b1e1767701dbc02b2c1507d`。§15実装のレビュー修正基準HEAD: `88204c5`。§17のR-b差分設計基準HEAD: `fe1e248`。§18の準備限定実装基準HEAD: `3ab8caf`。§19の開始claim／失敗終端詳細設計基準HEAD: `0e35e85`。§20の閉鎖契約限定実装基準HEAD: `2790830`。
 
 draft-0.1のレビュー修正：§7のinput_rejected写像（rootはそのまま、sourceはstate_invalid）を現行fixtureと照合したところ、旧`fail()`系は同じだが、C-cの最終観測中の記録分岐はsource側をconstruction_unconfirmedにしていた。到達するscriptはないが、本書を正としてC-c分岐を直し、compiled対照を追加した（[C詳細設計draft-0.9](BEST_PRACTICE_WFB_BODY_PIN_FINAL_RETURN_CACHE_DESIGN.md)）。これにより旧C-cの等価節は31件になったため、RT16の件数を合わせた。他の本文・R08／RT条件は変えていない。
 
@@ -267,3 +267,9 @@ compiledだけで検出した67件（修正後）は、450状態・136leaf・60s
 [開始claim／失敗終端詳細設計draft-0.1](BEST_PRACTICE_WFB_BODY_PIN_RETURNED_CLAIM_FAILURE_DESIGN.md)で、R08開始消費と元callerの失敗診断／終端受渡しを対にした。元phaseのchecking記録を消費点とし、前拒否・消費後失敗・再入拒否を区別する。正常供給がundefinedになる停止後も、元originを確認できるsourceへの限定書込みと、資格喪失時のroot-only保持を分ける。
 
 拒否種別／source記録結果の先行2scalar案、非割当て記録、元callerだけのseal・同cacheへの最大1回生成／実外側復帰を具体化した。旧C-c／R-aの挙動・§1〜18の本文／レビューを変えず、実装・実受理・G_R／G_A・C-03・bodyは未接続。正式発行口閉鎖・全体受付無効・Unknown・調査保留を維持し、実接続・実通信・実機操作・設定変更・Pushは行わない。
+
+## 20 R-bの内部型・origin leaf・固定拒否の閉鎖契約（2026-11-13）
+
+[開始claim／失敗終端設計§15](BEST_PRACTICE_WFB_BODY_PIN_RETURNED_CLAIM_FAILURE_DESIGN.md)の準備部分を合成依存限定で実装した。狭い型・最先行2scalar、健康状態と独立した元sourceのreadonly origin leaf、固定拒否とroot-onlyの非割当て診断保持だけである。sourceを書いたことを表す値や新FailureOwner／cache・公開入口は作らない。
+
+新拒否継続の運用call siteとreturned4scalarの代入siteは各0、既存404method本文は不変。開始消費・実受理・G_R／G_A・source書込み・終端受渡し／seal・C-03・bodyは未接続。[今回の検証記録](E2E_BEST_PRACTICE_WFB_BODY_PIN_RETURNED_CLOSED_2026-11-13.md)と将来CFV全体を区別し、正式発行口閉鎖・全体受付無効・Unknown・調査保留を維持する。
