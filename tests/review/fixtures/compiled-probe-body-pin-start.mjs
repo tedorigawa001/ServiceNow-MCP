@@ -142,7 +142,8 @@ try {
     try {
       assert.equal(where(run(await load(changed, 'context-call-' + name))), `state_invalid/${step}/${boundary}`, 'context ' + name);
       delete globalThis.__pinPayload;
-      const moved = run(await load(method(changed, 'bodyPinStartContextMatches', clause, ''), 'context-call-control-' + name));
+      const owner = name === 'provenance' ? 'bodyPinStartContextMatches' : 'bodyPinStableStorageMatches';
+      const moved = run(await load(method(changed, owner, clause, ''), 'context-call-control-' + name));
       assert.notEqual(where(moved), `state_invalid/${step}/${boundary}`, 'context sensitivity ' + name);
     } finally { delete globalThis.__pinPayload; }
   }

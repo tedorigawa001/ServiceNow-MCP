@@ -1,14 +1,14 @@
 # WF-B：PC08 returned全照合と受理・失敗・診断sealの接続差分
 
-Version: draft-0.5 / Date: 2026-11-13 / 読み取り基準HEAD: `e7bda024e1298c18707be6fca248ef8ba1299421`（C-c実装`8ffaf0a`と、そのレビュー補強`e7bda02`を維持）。レビュー修正基準HEAD: `ed37be3`。§15のR-a限定実装基準HEAD: `d9002e02026451f55b1e1767701dbc02b2c1507d`。§15実装のレビュー修正基準HEAD: `88204c5`。§17のR-b差分設計基準HEAD: `fe1e248`。
+Version: draft-0.6 / Date: 2026-11-13 / 読み取り基準HEAD: `e7bda024e1298c18707be6fca248ef8ba1299421`（C-c実装`8ffaf0a`と、そのレビュー補強`e7bda02`を維持）。レビュー修正基準HEAD: `ed37be3`。§15のR-a限定実装基準HEAD: `d9002e02026451f55b1e1767701dbc02b2c1507d`。§15実装のレビュー修正基準HEAD: `88204c5`。§17のR-b差分設計基準HEAD: `fe1e248`。§18の準備限定実装基準HEAD: `3ab8caf`。
 
 draft-0.1のレビュー修正：§7のinput_rejected写像（rootはそのまま、sourceはstate_invalid）を現行fixtureと照合したところ、旧`fail()`系は同じだが、C-cの最終観測中の記録分岐はsource側をconstruction_unconfirmedにしていた。到達するscriptはないが、本書を正としてC-c分岐を直し、compiled対照を追加した（[C詳細設計draft-0.9](BEST_PRACTICE_WFB_BODY_PIN_FINAL_RETURN_CACHE_DESIGN.md)）。これにより旧C-cの等価節は31件になったため、RT16の件数を合わせた。他の本文・R08／RT条件は変えていない。
 
 draft-0.3のレビュー修正：§15のR-a実装（`88204c5`）に84件の一時変異を入れたところ、Vitestで12件、compiledだけで45件が落ち、27件が両方を通った。そのうち22件はcompiled対照が当該節を単独で壊していなかっただけである。初期owner確認の不在節14件（seed・draft・probe owner・binding・run link／duty／seal・seed shell・source生成試行・metadata確認・build段階・route試行・source current／rejected）は、残存cellとsource issued以外に単独対照がなかった。公開projectionの7件（stateValid・fixedCalls・sourceGenerations・cacheRetained・sealed・attempts・bodyStarts）は初期値でしか観測されていなかった。共通値検査のphase checking節は、状態型として正しいaccepted（post=true、現在点post／blocked）をpre／postへ渡す対照がなく、外してもpost検査がacceptedを通した。compiledに初期owner単独破損14件、実slotを動かす投影7件、accepted状態3件の対照を追加し、22件をkillした。残る5件の等価判断は§16に記録した。fixtureの挙動は変えていない。
 
-Status: **§15のR-a狭い値型・returned専用値検査・先行scalar・初期状態だけの固定拒否を合成依存限定で実装。実PC08開始claim／受理・G_R／G_A・C-03は未接続。** 親は[C-c最終返却・単一cache設計](BEST_PRACTICE_WFB_BODY_PIN_FINAL_RETURN_CACHE_DESIGN.md)と[private pin接続設計](BEST_PRACTICE_WFB_BODY_PRIVATE_PIN_CONNECTION_DESIGN.md)。[confirmed・内部返却契約](BEST_PRACTICE_WFB_BODY_PIN_CONFIRM_RETURN_DESIGN.md)と[C-c検証記録](E2E_BEST_PRACTICE_WFB_BODY_PIN_FINAL_POST_2026-11-12.md)は前段実績、[R-a検証記録](E2E_BEST_PRACTICE_WFB_BODY_PIN_RETURNED_PREPARATION_2026-11-13.md)が今回の限定範囲である。§1〜14の将来接続契約と文書作業履歴は保持し、実装済みへ読み替えない。
+Status: **§15のR-a狭い値型・初期拒否と、§18のR-b readonly供給／入力化準備を合成依存限定で実装。実PC08開始claim／受理・G_R／G_A・C-03は未接続。** 親は[C-c最終返却・単一cache設計](BEST_PRACTICE_WFB_BODY_PIN_FINAL_RETURN_CACHE_DESIGN.md)と[private pin接続設計](BEST_PRACTICE_WFB_BODY_PRIVATE_PIN_CONNECTION_DESIGN.md)。[confirmed・内部返却契約](BEST_PRACTICE_WFB_BODY_PIN_CONFIRM_RETURN_DESIGN.md)と[C-c検証記録](E2E_BEST_PRACTICE_WFB_BODY_PIN_FINAL_POST_2026-11-12.md)は前段実績、[R-a検証記録](E2E_BEST_PRACTICE_WFB_BODY_PIN_RETURNED_PREPARATION_2026-11-13.md)はR-a限定範囲、R-b準備は§18と別記録で区別する。§1〜14の将来接続契約と文書作業履歴は保持し、実装済みへ読み替えない。
 
-正式発行口・既存C実行入口・body起動閉鎖、全体受付無効、Unknown、VM／監視／telemetry調査保留を維持する。今回の実装は§15の合成準備だけ。実受理・body起動・実接続・実通信・実機操作・設定変更・Pushは行わない。source利用claim消費・payload借用／bind・BC00・構築ready・Journal供給・field clear／root終端も対象外である。
+正式発行口・既存C実行入口・body起動閉鎖、全体受付無効、Unknown、VM／監視／telemetry調査保留を維持する。限定実装は§15／18の合成準備だけ。実受理・body起動・実接続・実通信・実機操作・設定変更・Pushは行わない。source利用claim消費・payload借用／bind・BC00・構築ready・Journal供給・field clear／root終端も対象外である。
 
 ## 1 C-cとの差分と二つの受理境界
 
@@ -255,3 +255,9 @@ compiledだけで検出した67件（修正後）は、450状態・136leaf・60s
 元callerだけの失敗診断／seal、同#fixedの一度限り生成、外側frame実復帰後の公開を分離した。source資格喪失はroot-only記録と元参照保持、post後の失敗は到達履歴保持、生成／公開失敗は配送軸で再試行禁止とする。R-a等価5節とC-c等価31節は新経路で再評価する。
 
 今回の追加は文書だけで、§1〜16の本文・レビューを変更しない。実受理・G_R／G_A・C-03・body・実接続は未接続。正式発行口閉鎖・全体受付無効・Unknown・調査保留と、実装・実通信・実機操作・設定変更・Pushの禁止を維持する。
+
+## 18 R-bの供給・安定検査・実field入力化の準備限定実装（2026-11-13）
+
+[R-b差分設計§15](BEST_PRACTICE_WFB_BODY_PIN_RETURNED_BINDING_TERMINAL_DESIGN.md)のprivate読取り境界を追加した。既存provenanceを再利用し、BaseUnused／StorageEmpty／PayloadEmptyだけを旧順序で最小抽出。同R/S/T・生成履歴・停止／実I/C/Jを先に確認して、同fieldから5区分68項目を作る。値viewは受理資格ではなく、実stateはnot_startedのまま。未知参照は無読取り拒否し、prepare／source／cacheを操作しない。
+
+元fixtureの新入力化call siteとreturned状態writerは各0、新export／factory／modeなし。scratch compiledだけで既存C-cの正規復帰点を観測し、実field変更・混入・偽装viewを検査する。元C-c／R-aの固定停止と旧callingを維持し、実受理・G_R／G_A・診断／cacheの新routing・C-03・bodyは未接続。[検証記録](E2E_BEST_PRACTICE_WFB_BODY_PIN_RETURNED_SUPPLY_2026-11-13.md)と将来RBV条件を区別する。正式発行口閉鎖・全体受付無効・Unknown・調査保留は不変。

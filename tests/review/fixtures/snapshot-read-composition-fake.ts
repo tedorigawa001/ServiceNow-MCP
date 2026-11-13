@@ -5432,7 +5432,46 @@ class CanonicalGateDraftRoot {
       && this.#bodySourceStopRequested === false && this.#failure.first === 'none' && this.#bodyPinCallerConfirmed === true
       && this.#bodyPinPreparationState === 'held' && this.#bodyPinPreparationPhase === 'held'
       && this.#bodyPinPreparationChecked === true && this.#bodyPinPreparationFirst === 'none' && this.#bodyPinPreparationFailurePhase === 'none'
-      && this.bodySeedBaseMatches() && this.bodySourceStorageMatches(shell) && probeStartAccess.bodyPinPayloadEmpty(start);
+      && this.bodyPinStableStorageMatches(shell, start);
+  }
+  private bodyPinStableStorageMatches(shell: BodyPreparationShell, start: RetirementStartAssembly): boolean {
+    // Preserve the original calling order and short-circuit behavior; no phase relaxation.
+    return this.bodySeedBaseMatches() && this.bodySourceStorageMatches(shell) && probeStartAccess.bodyPinPayloadEmpty(start);
+  }
+  private bodyPinReturnedSupplyMatches(root: CanonicalGateDraftRoot, source: BodyBindSourceShell, start: RetirementStartAssembly): boolean {
+    // Compare candidates before accessing any candidate field, including a private start accessor.
+    if (root !== this || source !== this.#bodySourceIssued || source !== this.#bodySourceCurrent
+      || start !== this.#issuedFrameBinding?.target.start) return false;
+    return this.bodyPinFinalPost === true && this.bodyPinBridgeIdentity(source, start) && this.bodyPinStartContextMatches()
+      && this.#bodySourceBuildPhase === 'BP01' && this.#bodySourceBuildStep === 'after' && this.#bodySourceBuildBoundary === 'after'
+      && source.stopRequested === false && source.first === 'none'
+      && probeStartAccess.bodyPinReceiverFirst(start) === 'none'
+      && probeStartAccess.bodyPinConfirmationReferences(start, source);
+  }
+  // R-b preparation only: scratch compiled controls call this boundary. No owning continuation is connected.
+  private bodyPinReturnedInput(root: CanonicalGateDraftRoot, source: BodyBindSourceShell,
+    start: RetirementStartAssembly): BodyPinReturnedCheckInput | undefined {
+    if (!this.bodyPinReturnedSupplyMatches(root, source, start)) return undefined;
+    return {
+      state: { phase: this.#bodyPinReturnedPhase, postChecked: this.#bodyPinReturnedPostChecked,
+        point: this.#bodyPinReturnedPoint, failurePoint: this.#bodyPinReturnedFailurePoint },
+      source: this.bodyPinSourceValues(source), receiver: probeStartAccess.bodyPinValues(start, source),
+      root: { stopped: this.#closed || this.#bodySourceStopRequested, first: this.#failure.first, frameActive: this.#frame,
+        ready: this.#ready, publicBusy: this.#finalPublicEntryBusy, rootExit: this.#finalRootEntryExit,
+        calls: this.#bodyPinFixedCalls, result: this.#bodyPinCallResult, callPhase: this.#bodyPinCallPhase,
+        callActive: this.#bodyPinCallActive, entryBusy: probeStartAccess.bodyPinEntryBusy(start),
+        classification: this.#bodyPinConfirmationClassification, completion: this.#finalCompletion,
+        routeAttempted: this.#bodyPinRouteAttempted, routeState: this.#bodyPinRouteState, routePhase: this.#bodyPinRoutePhase,
+        routeStep: this.#bodyPinRouteStep, routeBoundary: this.#bodyPinRouteBoundary, failureRecorded: this.#bodyPinFailureRecorded,
+        sourceReason: this.#bodyPinCallSourceReason, diagnosticRecorded: this.#bodyPinConfirmationDiagnosticRecorded,
+        preparingConfirmed: this.#bodyPinPreparingConfirmed, pinPostChecked: this.#bodyPinPostChecked,
+        terminalSealed: this.#finalTerminalSealed, replyAttempted: this.#finalReplyAttempted, replyPhase: this.#finalReplyPhase,
+        terminalDisposition: this.#finalTerminalDisposition, cacheRetained: this.#fixed !== undefined,
+        finalFailurePoint: this.#finalFailurePoint, prepared: this.#bodyPinConfirmationPrepared, stagesChecked: this.#bodyPinConfirmationStagesChecked },
+      callee: { boundary: probeStartAccess.bodyPinStorageBoundary(start), hold: probeStartAccess.bodyPinRejectedHold(start),
+        referencePost: probeStartAccess.bodyPinReferencePostChecked(start), checkedPost: probeStartAccess.bodyPinCheckedPostChecked(start),
+        confirmedPost: probeStartAccess.bodyPinConfirmedPostChecked(start), finalPost: probeStartAccess.bodyPinFinalPostChecked(start) },
+    };
   }
   private bodyPinStartInitialMatches(): boolean {
     const start = this.#issuedFrameBinding?.target.start, source = this.#bodySourceIssued;

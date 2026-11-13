@@ -1,10 +1,10 @@
 # WF-B：R-bのprivate供給・returned実field全照合・終端所有の接続差分
 
-Version: draft-0.1 / Date: 2026-11-13 / 読み取り基準HEAD: `fe1e2484f41fdd4ad710071fd5bc32072604e9e1`。
+Version: draft-0.2 / Date: 2026-11-13 / 読み取り基準HEAD: `fe1e2484f41fdd4ad710071fd5bc32072604e9e1`。§15の準備限定実装基準HEAD: `3ab8caf`。
 
-Status: **詳細設計だけ。R-bのprivate供給・owner検査・受理・終端routingは未実装。** [PC08 returned全体設計](BEST_PRACTICE_WFB_BODY_PIN_RETURNED_ACCEPT_SEAL_DESIGN.md)の§2／4／5と§7〜9を、R-a値契約・レビュー補強後の実装からの差分として具体化する。[C-c単一cache設計](BEST_PRACTICE_WFB_BODY_PIN_FINAL_RETURN_CACHE_DESIGN.md)の既存所有権は維持する。
+Status: **§15のprivate供給・最小安定検査抽出・実field入力化だけを合成準備として実装。運用継続からの呼出し・受理・終端routingは未接続。** [PC08 returned全体設計](BEST_PRACTICE_WFB_BODY_PIN_RETURNED_ACCEPT_SEAL_DESIGN.md)の§2／4／5と§7〜9を、R-a値契約・レビュー補強後の実装からの差分として具体化する。[C-c単一cache設計](BEST_PRACTICE_WFB_BODY_PIN_FINAL_RETURN_CACHE_DESIGN.md)の既存所有権は維持する。
 
-正式発行口・既存C実行入口・body起動は閉鎖、全体受付は無効、Unknown、VM／監視／telemetry調査保留を維持する。今回はMDだけを更新し、実装・実受理・G_R／G_A・C-03・body起動・実接続・実通信・実機操作・設定変更・Pushは行わない。以下の状態遷移・関数名・新modeは将来の合成依存限定契約であり、実装済みの記録ではない。
+正式発行口・既存C実行入口・body起動は閉鎖、全体受付は無効、Unknown、VM／監視／telemetry調査保留を維持する。§1〜14はdraft-0.1の将来契約／文書履歴、今回の限定実装は§15で区別する。実受理・G_R／G_A・C-03・body起動・実接続・実通信・実機操作・設定変更・Pushは行わない。
 
 ## 1 現状と変更しない境界
 
@@ -197,3 +197,15 @@ R-b実装の承認も合成依存までで、C-03・実session／source差替え
 検証対象はローカルリンク・表列数・節順・RB01〜05／RBV01〜13の一意順序、親本文保持、差分範囲・HEAD／indexと行末整合。build・合成／compiled試験・梱包・再採取・保管操作・index登録・コミット・Pushは行わない。文書整合はR-b実装／受理／cleanupの成功証拠ではない。
 
 文書検証結果：Markdown3件のローカル参照25件、表34個の列数、節順（本書14・親17／23）、契約ID18件の一意順序に異常なし。親2文書の既存§1以降の本文・レビュー全byte保持、変更範囲が当該MD3件だけ、基準HEAD不変・index空とdiff --checkを確認した。これは文書だけの検証で、RBV条件は未実施である。
+
+## 15 R-b準備限定のprivate読取り境界（2026-11-13）
+
+既存package除外classへprivateな3methodだけを追加した。`bodyPinStableStorageMatches`はBaseUnused→StorageEmpty→PayloadEmptyの既存3呼出しを同じ短絡順で包み、`bodyPinStartContextMatches`の末尾だけを置換する。SourceProvenanceは既存`bodyPinProvenanceMatches`をそのまま再利用し、calling専用matcherをORで拡張しない。既存400method本文は不変、変更する既存methodはこの末尾抽出1件だけである。
+
+`bodyPinReturnedSupplyMatches`は同R/S/Tを参照だけで先に照合し、元bridge関係・source生成確認／metadata・同start文脈／安定検査、BP01生成履歴・停止／first、実I/C=S／J空を確認する。`bodyPinReturnedInput`は成功時だけ同fieldから5区分68項目を作るreadonlyな内部境界であり、受理証拠ではない。資格拒否はundefined、検査／確保throwはそのまま元継続へ伝わり、この準備method自身は失敗診断・source・cacheを更新しない。終端合流は§7〜10の未接続課題である。
+
+今回は新R-b factory／modeを発行しない。正規来歴の正例には**scratch内だけ**で既存C-cの実復帰・completion分類後／失敗writer前に観測を挿入する。同private生成鎖の実fieldを読む試験であり、元fixtureには`bodyPinReturnedInput`のcall siteが0、returned4scalarのoperational writerも0である。実stateはnot_started／point none／post=falseのままなので、R-aのchecking専用pre／post入力として受理できない。C-cは従来どおりpin_return_not_connectedへ失敗／sealし、R-aも初期拒否のままである。
+
+全68項目の独立literal oracle、root40・source13・receiver20の単項変更、foreign／copy／Proxy5件・hook0、実I/C不一致を正常値viewで隠す対照、private3methodのsemantic拒否をcompiledで確認した。試験用のslot操作／捕捉変数／追加accessorはscratch生成物にだけ存在し、元factory・export・受領口へ追加しない。型検査・回帰・初回の試験側不備と梱包制約は[準備境界検証記録](E2E_BEST_PRACTICE_WFB_BODY_PIN_RETURNED_SUPPLY_2026-11-13.md)へ分離する。
+
+RBV全体、同owner開始claim・pre／post全照合の運用呼出し、G_R／G_A、accepted後guard、R-b診断seal／単一cache、新mode終端・C-03は未実装／未接続。不足証拠・費目上界・cleanupはUnknownで、§1〜14の将来契約を実績へ読み替えない。
