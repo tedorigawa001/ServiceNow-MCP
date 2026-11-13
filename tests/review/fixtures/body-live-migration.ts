@@ -126,15 +126,9 @@ interface Token { readonly kind: ts.SyntaxKind; readonly value: string; readonly
 function tokens(text: string): readonly Token[] {
   const scan = ts.createScanner(ts.ScriptTarget.ES2022, true, ts.LanguageVariant.Standard, text);
   const out: Token[] = [];
-  const templates: number[] = [];
+  // Only fixed recipe/branch text is scanned here (source members use AST tokens). Template literals are not
+  // re-scanned; a recipe containing one is refused by locate() instead of being matched approximately.
   for (let kind = scan.scan(); kind !== ts.SyntaxKind.EndOfFileToken; kind = scan.scan()) {
-    if (kind === ts.SyntaxKind.CloseBraceToken && templates.length) {
-      if (templates[templates.length - 1] === 0) {
-        kind = scan.reScanTemplateToken(false);
-        if (kind === ts.SyntaxKind.TemplateTail) templates.pop();
-      } else templates[templates.length - 1]--;
-    } else if (kind === ts.SyntaxKind.OpenBraceToken && templates.length) templates[templates.length - 1]++;
-    if (kind === ts.SyntaxKind.TemplateHead) templates.push(0);
     out.push({ kind, value: kind === ts.SyntaxKind.StringLiteral ? scan.getTokenValue() : scan.getTokenText(),
       start: scan.getTokenPos(), end: scan.getTextPos() });
   }
@@ -190,7 +184,7 @@ function memberTokens(file: ts.SourceFile, owner: ts.ClassDeclaration): Readonly
 }
 function locate(pool: readonly Token[], range: readonly [number, number], needle: string): readonly [number, number] | undefined {
   const source = pool.filter(t => t.start >= range[0] && t.end <= range[1]), target = tokens(needle);
-  if (!target.length) return undefined;
+  if (!target.length || target.some(t => t.kind === ts.SyntaxKind.NoSubstitutionTemplateLiteral || t.kind === ts.SyntaxKind.TemplateHead)) return undefined;
   const positions: number[] = [];
   for (let i = 0; i + target.length <= source.length; i++) {
     if (target.every((t, j) => source[i + j].kind === t.kind && source[i + j].value === t.value)) positions.push(i);
@@ -223,11 +217,12 @@ export function createBodyLivePatchBoundary(source: unknown): BodyLivePatchBound
       const jsPosition = locate(emittedTokens.get(p.member) ?? [], jr, jsRecipe(p.from));
       if (!tsPosition || !jsPosition) return drift('anchor', c.id);
       const replacement = jsRecipe(p.to);
-      if (tokens(jsRecipe(p.from)).map(t => t.value).join(' ') === tokens(replacement).map(t => t.value).join(' ')) return drift('anchor');
+      if (tokens(jsRecipe(p.from)).map(t => t.value).join(' ') === tokens(replacement).map(t => t.value).join(' ')) return drift('anchor', c.id);
       edits.push({ start: jsPosition[0], end: jsPosition[1], replacement });
     }
     edits.sort((a, b) => b.start - a.start);
-    if (edits.some((e, i) => i > 0 && e.end > edits[i - 1].start)) return drift('anchor');
+    // Fixed-ledger defences: unreachable from source input today, kept fail-closed for ledger edits.
+    if (edits.some((e, i) => i > 0 && e.end > edits[i - 1].start)) return drift('anchor', c.id);
     plans.set(c.id, Object.freeze(edits.map(e => Object.freeze(e))));
   }
   return Object.freeze({ ok: true, patch(id: unknown): BodyLivePatchResult {

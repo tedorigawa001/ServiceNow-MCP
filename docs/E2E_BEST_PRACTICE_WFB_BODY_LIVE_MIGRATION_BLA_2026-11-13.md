@@ -86,3 +86,20 @@ package除外fixtureへ次の値境界を追加した。src／製品runtime・co
 同コピーでbuild、関連6file／753件、strict型検査、追加4fileのlintが全てexit 0。新compiledは304値・7行の意味拒否・mutantImports 0を維持し、60,000ms枠内の7,939ms（終了確認込み）、code 0／signal nullで終了した。stdout／stderrをdrainし、所有group不在を2回確認、終了signalは不要だった。offline梱包dry-runは441file、review-workerあり、src／tests／今回fixture混入0、archive生成なし。文書のリンク5件／表8個と差分空白も再確認した。
 
 元body-liveの実行・性能比較やcompiled全群／repository全体回帰はこの再検証でも未実施。検証後の追加は本節等の記録だけで、検証したコード／試験を変更せずにコミット対象を再確認する。通常経路未切替・正式発行口閉鎖・全体受付無効・Unknown・調査保留とPush禁止を維持する。
+
+## 7 レビュー修正（2026-11-13）
+
+基準HEAD `4c0c1f9` のレビューで、一時変異17件中12件が生存した。区分と等価の根拠は[設計§10](BEST_PRACTICE_WFB_BODY_LIVE_COMPILED_REDESIGN.md)に記録した。入力から到達できる生存5件に対し、新試験へ次の対照を追加した。
+
+| 追加対照 | killした変異 |
+|---|---|
+| BC06分岐の重複をbranch driftで拒否 | 分岐数の検査を「1件以上」へ緩める |
+| branch 11の末尾宣言が`v`でないとbranch drift | `v`束縛検査の除去 |
+| branch 11のreturnが`n === 11`で始まらないとbranch drift | 先頭検査の除去（除去時はanchor driftへ変わり失敗） |
+| non-null assertionを消したTSはJSが同一でもfield-9のanchor drift | TS側anchor検査の除去 |
+| 1,048,576単位はinputを通過（class driftで停止）、1単位多いとinput drift | 上限の1単位縮小 |
+| 形比較が`!a`／`-a`、`a++`／`a--`を区別し、括弧は無視 | 比較から演算子の種類を外す（旧比較の状態） |
+
+fixtureでは、AST token移行後に使われていなかったrecipe走査のtemplate再走査を削除し、templateを含むrecipeはlocateで拒否するようにした。no-op／重なりのanchor driftにも既知case IDを付けた。固定台帳だけの防御4件（no-op、重なり、出力不変、出力構文）は、現在の台帳と入力からは到達しないため、試験済みの保証には数えない。
+
+レビュー時の読み取りだけの照合では、全304caseで旧方式の全体emitと新JS値を比べ、対象member外のbyte一致と、単項演算子を含む対象memberのAST一致を確認した（一時script、約64秒、リポジトリ試験には未追加）。新試験は326件になった。BL-B／C、mutant import、通常経路の切替は未実施のままで、正式発行口閉鎖・全体受付無効・Unknown・調査保留とPush禁止を維持する。

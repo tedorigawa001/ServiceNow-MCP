@@ -17,7 +17,8 @@ function shape(n: ts.Node): unknown {
   if (ts.isParenthesizedExpression(n)) return shape(n.expression);
   const children: unknown[] = [];
   ts.forEachChild(n, child => { children.push(shape(child)); });
-  return [n.kind, 'text' in n ? n.text : undefined, children];
+  // Prefix/postfix operators are node properties, not children: compare them explicitly.
+  return [n.kind, 'text' in n ? n.text : undefined, 'operator' in n ? n.operator : undefined, children];
 }
 const baseline = boundary.ok ? boundary.patch('base') : boundary;
 const baselineMethods = baseline.ok ? methods(baseline.js) : undefined;
@@ -79,6 +80,11 @@ describe('BL-A migration ledger without switching the legacy runner', () => {
     ['branch missing', (s: string) => s.replace('if (n === 6) { const v = value as BodyProgressInitial;', 'if (n === 99) { const v = value as BodyProgressInitial;'), 'branch'],
     ['anchor missing', (s: string) => s.replace('v.activationConfirmed === false', 'v.activationConfirmed !== true'), 'anchor'],
     ['anchor repeated', (s: string) => s.replace('v.activationConfirmed === false', '(v.activationConfirmed === false && v.activationConfirmed === false)'), 'anchor'],
+    ['branch repeated', (s: string) => s.replace('if (n === 6) { const v = value as BodyProgressInitial;',
+      'if (n === 6) { void 0; }\n    if (n === 6) { const v = value as BodyProgressInitial;'), 'branch'],
+    ['final branch binding renamed', (s: string) => s.replace('    const v = value as BodyUnwindInitial;\n    return n === 11 && v[BODY_UNWIND]',
+      '    const v = value as BodyUnwindInitial; const w = v;\n    return n === 11 && v[BODY_UNWIND]'), 'branch'],
+    ['final branch guard moved', (s: string) => s.replace('    return n === 11 && v[BODY_UNWIND]', '    return v[BODY_UNWIND] === true && n === 11 && v[BODY_UNWIND]'), 'branch'],
   ] as const)('refuses %s drift before even exposing the baseline', (_, change, point) => {
     expect(createBodyLivePatchBoundary(change(source))).toMatchObject({ ok: false, reason: 'transform_drift', point });
     if (boundary.ok) expect(boundary.patch('base').ok).toBe(true);
@@ -95,6 +101,21 @@ describe('BL-A migration ledger without switching the legacy runner', () => {
       .replace('if (n === 6) { const v = value as BodyProgressInitial;',
         'if (n === 6) { const v = value as BodyProgressInitial; const marker = /v.activationConfirmed === false/; void marker;');
     expect(createBodyLivePatchBoundary(changed)).toMatchObject({ ok: false, reason: 'transform_drift', point: 'anchor', id: 'field-2' });
+  });
+  it('requires the TS anchor itself, not only the type-erased JS spelling', () => {
+    // Without the non-null assertion the JS emit is identical, but the pinned TS recipe no longer exists.
+    const changed = source.replace('v.progress === slots[5]!.current', 'v.progress === slots[5].current');
+    expect(createBodyLivePatchBoundary(changed)).toMatchObject({ ok: false, reason: 'transform_drift', point: 'anchor', id: 'field-9' });
+  });
+  it('accepts exactly the input limit as input and refuses one more unit', () => {
+    expect(createBodyLivePatchBoundary('x'.repeat(1_048_576))).toEqual({ ok: false, reason: 'transform_drift', point: 'class' });
+    expect(createBodyLivePatchBoundary('x'.repeat(1_048_577))).toEqual({ ok: false, reason: 'transform_drift', point: 'input' });
+  });
+  it('keeps the shape comparator sensitive to unary operators', () => {
+    const one = (t: string) => shape(ts.createSourceFile('u.js', t, ts.ScriptTarget.ES2022, true, ts.ScriptKind.JS).statements[0]);
+    expect(one('!a;')).not.toEqual(one('-a;'));
+    expect(one('a++;')).not.toEqual(one('a--;'));
+    expect(one('(!a);')).toEqual(one('!a;'));
   });
   it('retains the canonical recipes when a caller tries to change the ledger', () => {
     const cases = bodyLiveMigrationCases(), p = cases[1].patches[0];
