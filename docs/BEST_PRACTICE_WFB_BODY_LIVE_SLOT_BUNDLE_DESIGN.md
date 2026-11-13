@@ -16,6 +16,8 @@ bind原始fieldの限定実装（2026-11-10）: [同設計§10 draft-0.2](BEST_P
 
 正式発行口・C実行入口・body起動は閉鎖、全体受付無効、Unknown、VM／監視／telemetry調査保留を維持する。本書は実装・構築ready・body起動・実接続・実通信・設定変更・Pushの承認ではない。BDのbind／借用field追加、BAのactive／body、BUの退役／終端、実grant／Permit発行、実session／transport／worker・実writer・Journal／packet・field clear・root終端は対象外。
 
+compiled試験見直し（2026-11-13、MDのみ）: [body-live反復変換・import見直し draft-0.1](BEST_PRACTICE_WFB_BODY_LIVE_COMPILED_REDESIGN.md)で、基準1＋変異・観測303の対応台帳、emit-onceと固有ESM維持、条件付きimport削減案、独立性・負の対照と60秒受入条件を整理した。BC06〜11の保証・本書の構築契約は変更せず、試験実装やbody起動を承認するものではない。
+
 ## 1 現行と今回固定する差分
 
 現行は同CanonicalGateDraftRootにshell／13carrierを先行し、BC01 context・BC02 origin・BC03 throw sentinel・BC04 cancel sentinel・BC05非実行pinを保持する。正常でもseed_held／ok=false、root／shell ready=false、bind未試行で止まる。carrier6〜13は空で、body用start borrowは存在しない。
