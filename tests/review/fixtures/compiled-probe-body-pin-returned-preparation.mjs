@@ -43,6 +43,11 @@ try {
   const post = structuredClone(pre); post.state.point = 'post'; post.source.boundary = 'after'; post.root.routeStep = 'returned'; post.root.routeBoundary = 'before';
   assert.equal(v.preCheck(pre), true); assert.equal(v.postCheck(post), true);
   assert.equal(v.preCheck(post), false); assert.equal(v.postCheck(pre), false);
+  // A valid but later state (accepted after G_A) is never a checking-phase pre/post input.
+  for (const [input, check, point] of [[pre, v.preCheck, 'post'], [post, v.postCheck, 'post'], [post, v.postCheck, 'blocked']]) {
+    const x = structuredClone(input); x.state = { phase: 'accepted', postChecked: true, point, failurePoint: 'none' };
+    assert.equal(m.stateCheck(x.state), true); assert.equal(check(x), false, 'accepted/' + point);
+  }
   let fields = 0, shapes = 0, grid = 0;
   for (const [input, check] of [[pre, v.preCheck], [post, v.postCheck]]) {
     for (const group of ['state', 'source', 'receiver', 'root', 'callee']) {
@@ -84,7 +89,12 @@ try {
   for (const [field, literal] of [['bodyPinReturnedPhase', "'checking'"], ['bodyPinReturnedPostChecked', 'true'],
     ['bodyPinReturnedPoint', "'pre'"], ['bodyPinReturnedFailurePoint', "'pre'"], ['started', 'true'], ['frame', 'true'], ['ready', 'true'],
     ['bodyPinFixedCalls', '1'], ['bodyPinCallResult', "'accepted'"], ['bodyPinCallActive', 'true'], ['finalTerminalSealed', 'true'],
-    ['finalReplyAttempted', 'true'], ['finalReplyPhase', "'private_cached'"], ['fixed', '{} as never']]) {
+    ['finalReplyAttempted', 'true'], ['finalReplyPhase', "'private_cached'"], ['fixed', '{} as never'],
+    // Each remaining absence clause of the initial owner check gets its own single-field control.
+    ['issuedSeed', '{} as never'], ['issuedDraft', '{} as never'], ['probeOwner', '{} as never'], ['issuedFrameBinding', '{} as never'],
+    ['issuedRunLink', '{} as never'], ['issuedRunDuty', '{} as never'], ['issuedRunSeal', '{} as never'], ['bodySeedShell', '{} as never'],
+    ['bodySourceCreationAttempted', 'true'], ['bodySourceMetadataConfirmed', 'true'], ['bodySourceBuildStage', "'captured'"],
+    ['bodyPinRouteAttempted', 'true'], ['bodySourceCurrent', '{} as never'], ['bodySourceRejected', '{} as never']]) {
     const x = await load(injectPrepare(`this.#${field} = ${literal};`), 'initial-' + field), a = x.createProbeBodyPinReturnedPreparationFake();
     assert.equal(a.prepare(), 'state_invalid', field); assert.equal(a.inspect().first, 'state_invalid'); initial++;
   }
@@ -95,7 +105,12 @@ try {
   for (const [field, value, key, expected] of [['bodyPinReturnedPhase', '"private_secret" as never', 'phase', 'unconfirmed'],
     ['bodyPinReturnedPoint', '"private_secret" as never', 'point', 'unconfirmed'],
     ['bodyPinReturnedFailurePoint', '"private_secret" as never', 'failurePoint', 'unconfirmed'],
-    ['bodyPinReturnedPostChecked', '"private_secret" as never', 'postChecked', false]]) {
+    ['bodyPinReturnedPostChecked', '"private_secret" as never', 'postChecked', false],
+    // Finite projections must follow the real slots, not fixed initial literals.
+    ['bodyPinReturnedPhase', "'checking'", 'stateValid', false], ['bodyPinFixedCalls', '1', 'fixedCalls', -1],
+    ['bodySourceIssued', '{} as never', 'sourceGenerations', 1], ['fixed', '{} as never', 'cacheRetained', true],
+    ['finalTerminalSealed', 'true', 'sealed', true], ['finalReplyAttempted', 'true', 'attempts', 1],
+    ['issuedCells', "{ body: { state: 'running' } } as never", 'bodyStarts', 1]]) {
     const s = source.replace('  inspectReturnedPreparation() {', `  inspectReturnedPreparation() {\n    this.#${field} = ${value};`);
     const a = (await load(s, 'projection-' + field)).createProbeBodyPinReturnedPreparationFake(), d = a.inspect();
     assert.equal(d[key], expected); assert.equal(JSON.stringify(d).includes('private_secret'), false); projection++;
@@ -141,6 +156,6 @@ const invalidPoint: BodyPinReturnedPoint = 'returned';
   const ds = ts.getPreEmitDiagnostics(ts.createProgram([file], opts, host));
   assert.ok(ds.every(d => d.file?.fileName === file && d.start >= source.length));
   assert.equal(new Set(ds.map(d => d.file.getLineAndCharacterOfPosition(d.start).line)).size, 9);
-  console.log(JSON.stringify({ compiled: true, states, fields, shapes, grid, initial, projection, operationalWrites,
+  console.log(JSON.stringify({ compiled: true, states, fields, shapes, grid, laterStates: 3, initial, projection, operationalWrites,
     semanticRejections: 9, foreignHooks: 0, noAllocation: true, sourceFlagsClosed: 22, acceptance: 'not_connected' }));
 } finally { rmSync(dir, { recursive: true, force: true }); }

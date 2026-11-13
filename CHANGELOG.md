@@ -298,6 +298,8 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 ### Added
 
+- WF-B R-a review fixes: the compiled returned-preparation harness now breaks each remaining initial-owner absence clause on its own (14 controls), moves the real slots behind seven finite projections, and checks that a valid `accepted` state is still refused by the pre/post value checks. These kill 22 surviving temporary mutants; the other 5 of 84 are recorded as equivalent in the returned design §16. Fixture behaviour is unchanged.
+
 - WF-B C-c review fix: an input rejection recorded during the final-post observation now maps the source first reason to `state_invalid`, matching the legacy owners and the PC08 design §7 (previously `construction_unconfirmed`; no current script reaches it). A new compiled control was RED before the fix; it also kills one mutant previously recorded as equivalent, leaving 31 in the C design §20.
 
 - WF-B C-c review fixes: the compiled final-post harness now asserts that a missing final marker is reported as an inconsistent completion, that a second call never counts an accepted return, and that a root close flag alone still yields a closed first reason after the callee completed. These kill three surviving temporary mutants; the remaining 32 survivors of 73 are recorded as equivalent in the C design §20. Fixture behaviour is unchanged.

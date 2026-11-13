@@ -1,8 +1,10 @@
 # WF-B：PC08 returned全照合と受理・失敗・診断sealの接続差分
 
-Version: draft-0.3 / Date: 2026-11-13 / 読み取り基準HEAD: `e7bda024e1298c18707be6fca248ef8ba1299421`（C-c実装`8ffaf0a`と、そのレビュー補強`e7bda02`を維持）。レビュー修正基準HEAD: `ed37be3`。§15のR-a限定実装基準HEAD: `d9002e02026451f55b1e1767701dbc02b2c1507d`。
+Version: draft-0.4 / Date: 2026-11-13 / 読み取り基準HEAD: `e7bda024e1298c18707be6fca248ef8ba1299421`（C-c実装`8ffaf0a`と、そのレビュー補強`e7bda02`を維持）。レビュー修正基準HEAD: `ed37be3`。§15のR-a限定実装基準HEAD: `d9002e02026451f55b1e1767701dbc02b2c1507d`。§15実装のレビュー修正基準HEAD: `88204c5`。
 
 draft-0.1のレビュー修正：§7のinput_rejected写像（rootはそのまま、sourceはstate_invalid）を現行fixtureと照合したところ、旧`fail()`系は同じだが、C-cの最終観測中の記録分岐はsource側をconstruction_unconfirmedにしていた。到達するscriptはないが、本書を正としてC-c分岐を直し、compiled対照を追加した（[C詳細設計draft-0.9](BEST_PRACTICE_WFB_BODY_PIN_FINAL_RETURN_CACHE_DESIGN.md)）。これにより旧C-cの等価節は31件になったため、RT16の件数を合わせた。他の本文・R08／RT条件は変えていない。
+
+draft-0.3のレビュー修正：§15のR-a実装（`88204c5`）に84件の一時変異を入れたところ、Vitestで12件、compiledだけで45件が落ち、27件が両方を通った。そのうち22件はcompiled対照が当該節を単独で壊していなかっただけである。初期owner確認の不在節14件（seed・draft・probe owner・binding・run link／duty／seal・seed shell・source生成試行・metadata確認・build段階・route試行・source current／rejected）は、残存cellとsource issued以外に単独対照がなかった。公開projectionの7件（stateValid・fixedCalls・sourceGenerations・cacheRetained・sealed・attempts・bodyStarts）は初期値でしか観測されていなかった。共通値検査のphase checking節は、状態型として正しいaccepted（post=true、現在点post／blocked）をpre／postへ渡す対照がなく、外してもpost検査がacceptedを通した。compiledに初期owner単独破損14件、実slotを動かす投影7件、accepted状態3件の対照を追加し、22件をkillした。残る5件の等価判断は§16に記録した。fixtureの挙動は変えていない。
 
 Status: **§15のR-a狭い値型・returned専用値検査・先行scalar・初期状態だけの固定拒否を合成依存限定で実装。実PC08開始claim／受理・G_R／G_A・C-03は未接続。** 親は[C-c最終返却・単一cache設計](BEST_PRACTICE_WFB_BODY_PIN_FINAL_RETURN_CACHE_DESIGN.md)と[private pin接続設計](BEST_PRACTICE_WFB_BODY_PRIVATE_PIN_CONNECTION_DESIGN.md)。[confirmed・内部返却契約](BEST_PRACTICE_WFB_BODY_PIN_CONFIRM_RETURN_DESIGN.md)と[C-c検証記録](E2E_BEST_PRACTICE_WFB_BODY_PIN_FINAL_POST_2026-11-12.md)は前段実績、[R-a検証記録](E2E_BEST_PRACTICE_WFB_BODY_PIN_RETURNED_PREPARATION_2026-11-13.md)が今回の限定範囲である。§1〜14の将来接続契約と文書作業履歴は保持し、実装済みへ読み替えない。
 
@@ -234,3 +236,14 @@ pre／postの値正例を実ownerへ挿入しない。実rootでcheckingやpost�
 追加費目は固定flag・先行4scalar、module固定の凍結値表／key表5個、有限state／pre／post検査、初期ownerの直接比較、非割当て固定診断分岐と有限projection／facade。値表はroot31項目・callee6項目、source13／receiver14と状態4項目の有限shapeへ限定し、任意graphを走査しない。既存rootの37slot等の確保、source／owner／利用claim／#fixedを二重発行しない。JS物理allocation・GC／OOM・unit／E／S／全体work・解消予約・診断必着はUnknown。
 
 R-aの450状態組、pre／postの独立位置oracle81組・単項破損136件・shape60件、実初期条件15件・未知参照hook 0・projection4件・semantic拒否9行、公開入口の合成68件は[R-a検証記録](E2E_BEST_PRACTICE_WFB_BODY_PIN_RETURNED_PREPARATION_2026-11-13.md)へ分離する。RT全体の成功、同R/S/Tの実returned全照合、受理claim／G_R／G_A・C-03・bodyは未接続のまま。次のR-bでは元call接続・private来歴／実参照の全照合・診断seal／単一cacheを改めて一体検証する。
+
+## 16 §15実装の一時変異と等価節（2026-11-13）
+
+R-aの追加コード（`bodyPinReturnedStateMatches`、`bodyPinReturnedCommonValues`、pre／post値検査、`returnedPreparationInitialMatches`、prepare／result／check／close／reject、`inspectReturnedPreparation`、factoryの入力判定）へ84件の一時変異を入れた。Vitest（`probe-body-pin-returned-preparation`）で12件、compiled（`compiled-probe-body-pin-returned-preparation`）だけで45件が落ち、27件が両方を通った。レビュー修正で22件をkillし、残る5件を次の理由で等価と判断した。各変異の後でfixtureを元に戻した。
+
+| 節（件数） | 等価の根拠 |
+|---|---|
+| 固定mode flag（4） | 初期matcher・prepare・check・closeの`bodyPinReturnedPreparation`判定。唯一のfactoryがconstructor引数でtrueに固定し、他factoryからこれらmethodを呼ぶ経路がない |
+| result写像のbinding_mismatch節（1） | R-aのroot firstはconstruction_unconfirmed／state_invalid／input_rejectedだけが書かれ、binding_mismatchは到達しない。外してもinternal_unconfirmedへ落ちるだけで公開入口から観測できない |
+
+compiledだけで検出した67件（修正後）は、450状態・136leaf・60shape・81位置組・accepted状態3件・初期owner29件・投影11件・AST／非割当て監査で確認した。R-bで実ownerへ接続するときは、固定mode節と到達しない写像を含めて再評価する。

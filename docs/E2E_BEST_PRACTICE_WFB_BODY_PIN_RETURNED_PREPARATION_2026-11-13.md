@@ -78,6 +78,19 @@ Date: 2026-11-13 / 基準HEAD: `d9002e02026451f55b1e1767701dbc02b2c1507d` / 合�
 
 次のR-bは元R/S/Tのprivate供給・元callの実復帰・実参照／全安定条件・失敗prefixとseal／単一cacheを一体接続する必要がある。今回のpure positiveや初期診断から復元しない。実受理・G_R／G_A・C-03・body・正式発行は未接続、全体受付無効・調査保留を維持する。実E／S・unit／全体work・layout／allocation／GC／OOM・停止後解消予約・診断必着・cleanup／借用退役はUnknown。実装時点ではindex登録・コミット・Pushは行っていない。
 
+## レビュー修正（2026-11-13）
+
+レビュー基準HEAD `88204c5`。R-aの追加コードへ84件の一時変異を入れ（各変異の後でfixtureを復元）、両方を通った節に単独のcompiled対照を足した。fixtureの挙動・期待値は変えていない。
+
+| 観測 | 対応 |
+|---|---|
+| 一時変異84件：Vitest kill 12件・compiledだけでkill 45件・両方通過27件 | 22件は単独対照の不足としてkill。残る5件は[returned差分設計§16](BEST_PRACTICE_WFB_BODY_PIN_RETURNED_ACCEPT_SEAL_DESIGN.md)に等価節として記録 |
+| 初期owner確認の不在節14件が単独で外れても、残存cell・source issued・4scalar等の既存15対照では拒否位置が変わらなかった | seed・draft・probe owner・binding・run link／duty／seal・seed shell・生成試行・metadata確認・build段階・route試行・source current／rejectedを1fieldずつ壊す対照を追加（初期owner対照15件→29件） |
+| 公開projectionの7項目を初期値の固定literalへ置き換えても通った | stateValid・fixedCalls・sourceGenerations・cacheRetained・sealed・attempts・bodyStartsの実slotを動かす投影対照を追加（投影対照4件→11件） |
+| 共通値検査からphase checking節を外すと、post検査が状態型として正しいacceptedを通した | accepted（post=true、現在点post／blocked）をpre／postへ渡す3対照を追加し、状態型としては有効でもpre／postでは拒否することを確認 |
+
+修正後のcompiled出力は`laterStates: 3`・`initial: 29`・`projection: 11`。他の件数（450状態・136leaf・60shape・81位置組・型拒否9行）は変わらない。
+
 ## コミット対象だけの隔離再検証（2026-11-13）
 
 基準HEADを一時ディレクトリへ書き出し、今回の10ファイルだけを反映した。既存node_modulesだけを参照し、追加導入・設定変更・他の未コミット内容の取込みはない。対象10ファイルの作業元／隔離コピーのSHA-256一致を確認した。
