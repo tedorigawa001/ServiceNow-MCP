@@ -95,7 +95,8 @@ export function createBodyLiveLoadSession(source: string, script: string, mode: 
       let nodes = 0;
       function finite(v: unknown, depth: number): unknown {
         if (++nodes > 1000 || depth > 16) return refuse('observation');
-        if (typeof v === 'string' && v.length <= 128 || typeof v === 'boolean' || typeof v === 'number' && Number.isFinite(v)) return v;
+        // JSON would fold -0 into 0, so it cannot enter the digest as a distinct value: refuse it instead.
+        if (typeof v === 'string' && v.length <= 128 || typeof v === 'boolean' || typeof v === 'number' && Number.isFinite(v) && !Object.is(v, -0)) return v;
         if (!v || typeof v !== 'object' || types.isProxy(v)) return refuse('observation');
         const array = Array.isArray(v), proto = Object.getPrototypeOf(v);
         if (proto !== (array ? Array.prototype : Object.prototype) || !Object.isFrozen(v)) return refuse('observation');

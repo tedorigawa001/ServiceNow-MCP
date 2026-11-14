@@ -1,6 +1,8 @@
 # WF-B body-live：compiled試験の反復変換・import見直し
 
-Version: draft-0.5 / Date: 2026-11-13 / 元設計の読み取り基準HEAD: `b6682faad7bf33f1f36b0c85214a17dc3d7bf116`。レビュー修正基準HEAD: `8087efd`（draft-0.1）／`4c0c1f9`（draft-0.3）。BL-A実装開始HEAD: `8087efd`（文書更新時に別作業の`dcfc6f8`を保持）。BL-B基準HEAD: `967c7d8`。
+Version: draft-0.6 / Date: 2026-11-13 / 元設計の読み取り基準HEAD: `b6682faad7bf33f1f36b0c85214a17dc3d7bf116`。レビュー修正基準HEAD: `8087efd`（draft-0.1）／`4c0c1f9`（draft-0.3）／`8b0e0b9`（draft-0.5）。BL-A実装開始HEAD: `8087efd`（文書更新時に別作業の`dcfc6f8`を保持）。BL-B基準HEAD: `967c7d8`。
+
+draft-0.5のレビュー修正：§11のloaderに一時変異25件を入れ、20件が生存した。入力から到達できる拒否経路（観測値の検査、scenario／namespace結合、観測数・byte上限、isolation前提、入口契約、負の時刻）へ対照を追加した。JSONで0と区別できない-0は拒否に変えた。比較器は、旧方式の対照childが自身の60秒期限に届かない場合を「比較不能」として区別し、出力上限をbyte単位にした。§12に区分と負荷下の観測を記録した。期限・旧assert・BR01〜10は変えていない。
 
 draft-0.3のレビュー修正：§9のBL-A境界に一時変異17件を入れ、12件が生存した。入力から到達できる生存5件（BC06〜10分岐の重複、branch 11の`v`束縛と`n === 11`先頭の2条件、TS側anchorの一意性、入力上限の境界値）へ対照を追加し、各対照が該当変異をkillすることを確認した。試験側の形比較が単項演算子の種類を比べていなかったため、比較に追加した。生存の残り7件は固定台帳では到達できない防御、または等価で、§10に区分を記録した。契約・BR01〜10は変えていない。
 
@@ -180,3 +182,19 @@ payloadのtranspileは旧306（主304＋補助2）から新3（主1＋補助2）
 `compiled-body-live-compare.mjs`は旧→新→新→旧を直列で起動する。各childの起動前から60,000msを計り、64KiBずつのstdout／stderrを上限後もdrainし、期限後は所有groupだけをSIGTERM／必要ならSIGKILLする。最大3秒の後始末枠は実行期限の追加ではない。exit／closeとgroup不在2回を確認し、未確認なら次の試行を始めない。親が所有する一時TMPDIR内の生成物だけを終了確認後に削除する。
 
 新旧実行・意味診断・停止試験の結果と初回失敗は[BL-B検証記録](E2E_BEST_PRACTICE_WFB_BODY_LIVE_LOADER_BLB_2026-11-13.md)を参照。BL-Cの安定3run／repository全体の通常並列回帰・通常経路への採用判断は残る。BR01〜10の全完了、任意負荷での60秒保証、実E／S／work上界・GC／OOM／診断必着へ昇格しない。
+
+## 12 draft-0.5のレビュー修正（2026-11-14）
+
+基準HEAD `8b0e0b9` のloaderに一時変異25件を入れ、unit試験を実行した（終了後に復元）。killは5件（有限数、import後と公開直前の時刻確認、namespaceのProxy検査、factoryOwners）、生存は20件だった。
+
+| 区分 | 変異 | 対応 |
+|---|---|---|
+| 入力到達・対照不足 | scenarioの不一致／長さ、nodes／depth上限、文字列長、prototype／凍結、array長、symbol／列挙不可key、観測数1,024／4MiB上限、未登録namespaceのrecord、304件前のisolation、isolation未確認のfinish、期限上限・baseURLのfile:、負の時刻 | 対照を追加し、各変異で該当試験が失敗することを確認 |
+| unitでは単独に到達しない | finishの観測0件case検査 | isolation確認には実moduleのimportが要り、unitのfake I/Oでは他条件と分離できない。compiled経路は正常順序だけを通るため、保証には数えない |
+| 等価 | 同一session内の`factories` | module共有の`factoryOwners`が同じ再利用を拒否する |
+
+観測値の`-0`はJSON化で`0`へ畳まれ、digestで区別できなかった。区別可能な符号化を足す代わりに、有限primitiveの受理から外して固定のobservation拒否とした。現在の385観測に`-0`はなく、新旧の全体digestは変わらない。
+
+比較器の旧方式の対照childは、旧scriptと同等の仕事を同じ60,000ms期限で実行する。レビュー時は別アプリのCPU使用でload平均が約6〜7あり、元の`compiled-probe-body-live`（自身は無期限）が103秒、旧方式の対照childが60秒で期限停止、新JS patch経路が25秒だった。この場合のABBAは新経路の退行を示さないが、比較も成立しない。比較器は旧方式の対照childの期限停止を、所有group終了の確認後に`comparison: 'inconclusive'`／reason `control_deadline`／exit code 2として区別し、成功にも新経路の失敗にも数えない。新JS経路の期限停止・出力不正・観測不一致は従来どおり失敗である。期限は延長しない。
+
+stdout／stderrの上限は、UTF-16文字数ではなくbyteで64KiBまで保持し、超過分もdrainして数える。BL-C、通常経路の切替、安定3run／30秒目標の受入は引き続き未実施で、正式発行口閉鎖・全体受付無効・Unknown・調査保留を維持する。

@@ -15,12 +15,15 @@ async function run(mode, ordinal) {
   const work = mkdtempSync(join(root, 'run-')), start = performance.now(), before = environment();
   const child = spawn(process.execPath, [fileURLToPath(new URL('./compiled-body-live-b.mjs', import.meta.url)), ...(mode === 'reference' ? ['--reference'] : [])],
     { detached: true, stdio: ['ignore', 'pipe', 'pipe'], env: { ...process.env, TMPDIR: work } });
-  let stdout = '', stderr = '', outBytes = 0, errBytes = 0, closed, exited, spawnError, timedOut = false, killTimer;
+  const out = [], err = [];
+  let outBytes = 0, errBytes = 0, closed, exited, spawnError, timedOut = false, killTimer;
   const signals = [];
   const absent = () => { if (!child.pid) return false; try { process.kill(-child.pid, 0); return false; } catch (e) { return e.code === 'ESRCH'; } };
   const signal = name => { if (child.pid > 1) { try { process.kill(-child.pid, name); signals.push({ name, ms: Math.round(performance.now() - start) }); } catch (e) { if (e.code !== 'ESRCH') spawnError = e.code; } } };
-  child.stdout.on('data', data => { outBytes += data.length; if (stdout.length < 65536) stdout += data.toString('utf8').slice(0, 65536 - stdout.length); });
-  child.stderr.on('data', data => { errBytes += data.length; if (stderr.length < 65536) stderr += data.toString('utf8').slice(0, 65536 - stderr.length); });
+  // Keep at most 64 KiB per stream in bytes; the rest is still drained (counted, not stored).
+  const keep = (chunks, total, data) => { if (total < 65536) chunks.push(data.subarray(0, 65536 - total)); };
+  child.stdout.on('data', data => { keep(out, outBytes, data); outBytes += data.length; });
+  child.stderr.on('data', data => { keep(err, errBytes, data); errBytes += data.length; });
   let deadlineTimer, ceilingTimer;
   const done = new Promise(resolve => {
     child.once('error', e => { spawnError = e.code; });
@@ -42,6 +45,10 @@ async function run(mode, ordinal) {
     truncated: outBytes > 65536 || errBytes > 65536, before, after: environment() };
   console.log(JSON.stringify({ phase: 'ended', ...report }));
   assert.ok(cleanupConfirmed, 'owned_group_cleanup_unconfirmed');
+  const stdout = Buffer.concat(out).toString('utf8'), stderr = Buffer.concat(err).toString('utf8');
+  // The legacy-cost control arm cannot be compared once it misses its own unchanged deadline. That is an
+  // inconclusive comparison, never a pass and never a regression verdict for the JS path.
+  if (timedOut && mode === 'reference') throw Object.assign(Error('control_deadline'), { inconclusive: { ordinal, mode, closedMs: closed?.ms, load: before.load } });
   assert.ok(!timedOut && closed.code === 0 && closed.signal === null, 'child_failed: ' + stderr.slice(-512));
   assert.ok(!report.truncated && errBytes === 0, 'child_output_invalid');
   const lines = stdout.trim().split('\n').map(line => JSON.parse(line));
@@ -61,6 +68,7 @@ async function run(mode, ordinal) {
   assert.equal(result.loader.imports, 304); assert.equal(result.loader.isolationImports, 2);
   return { report, legacy, execution: result.execution, isolation: result.isolation };
 }
+let inconclusive;
 try {
   const results = [];
   for (const mode of ['reference', 'js', 'js', 'reference']) results.push(await run(mode, results.length + 1));
@@ -72,4 +80,9 @@ try {
   console.log(JSON.stringify({ comparison: 'passed', childBudgetMs: 60000, comparedCases: 304, observations: 385,
     semanticRejections: 19, digest: results[0].execution.digest, cleanupConfirmed: true,
     runs: results.map(r => ({ mode: r.report.mode, elapsedMs: r.report.closed.ms })) }));
+} catch (e) {
+  if (!e?.inconclusive) throw e;
+  inconclusive = e.inconclusive;
+  console.log(JSON.stringify({ comparison: 'inconclusive', reason: 'control_deadline', childBudgetMs: 60000, ...inconclusive }));
+  process.exitCode = 2;
 } finally { if (cleanupSafe) rmSync(root, { recursive: true, force: true }); }

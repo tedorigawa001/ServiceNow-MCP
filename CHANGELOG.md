@@ -306,6 +306,8 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 ### Added
 
+- WF-B BL-B review controls: the body-live loader test now covers every reachable observation refusal (string/key length, prototype, freeze, symbol and non-enumerable keys, array length, depth, node, count and byte limits), scenario/namespace binding, isolation and seal preconditions, the entry contract and a negative clock. Observations refuse -0 because JSON digests cannot distinguish it from 0. The ABBA comparator reports a legacy-control deadline as inconclusive (exit 2) instead of a pass or a JS-path failure, and caps retained output in bytes. Deadlines are unchanged.
+
 - WF-B BL-A review controls: the body-live migration test now refuses a duplicated BC06 branch, a renamed or reordered final branch, a TS-only anchor loss hidden by type erasure, and checks the exact input limit; its shape comparator distinguishes unary operators. The dead template rescan is removed (template-bearing recipes fail closed) and anchor drift carries the known case ID. Fixed-ledger defences remain uncounted, and BL-B/C, mutant import and the normal-route switch stay disconnected.
 
 - WF-B R-b closed-contract review controls: the compiled closed harness now injects T.first through a scratch setter (receiver prior, invalid and source-only first), feeds non-boolean stop flags, breaks the issued source, C/E control and root failure origin slots on their own, checks the identity point as a valid pre-start point, and asserts the reject class and source record for malformed state, including the withheld path. These kill 11 surviving temporary mutants; the other 27 of 78 are recorded as equivalent in the claim/failure design §16. Fixture behaviour is unchanged.

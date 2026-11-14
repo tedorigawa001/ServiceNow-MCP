@@ -139,6 +139,63 @@ describe('BL-B synthetic-only sequential ESM load session', () => {
     await expect(a.load(source, 'base')).rejects.toThrow(/^io$/);
     expect(probes).toBe(1); expect(a.inspect().first).toBe('io');
   });
+  it('refuses invalid entry contracts and a negative clock', () => {
+    const ops = { now: () => 0, write: () => undefined, load: async () => namespace(), emit: () => '' };
+    expect(() => createBodyLiveLoadSession(source, legacy, 'reference', `file:///synthetic/c-${++serial}/`, 60_001, ops)).toThrow('load_contract');
+    expect(() => createBodyLiveLoadSession(source, legacy, 'reference', `https://synthetic/c-${++serial}/`, 60_000, ops)).toThrow('load_contract');
+    expect(() => createBodyLiveLoadSession(source, legacy, 'reference', `file:///synthetic/c-${++serial}/`, 60_000, { ...ops, now: () => -1 })).toThrow('clock');
+  });
+  const f = Object.freeze, long = 'x'.repeat(129);
+  const nested = (n: number): unknown => n === 0 ? 0 : f([nested(n - 1)]);
+  const invalid: readonly (readonly [string, unknown])[] = [
+    ['long string', long], ['negative zero', -0], ['mutable object', {}], ['null prototype', f(Object.create(null))],
+    ['symbol key', f({ [Symbol('k')]: 1 })], ['non-enumerable key', f(Object.defineProperty({}, 'k', { value: 1, enumerable: false }))],
+    ['long key', f({ [long]: 1 })], ['array over 650', f(Array.from({ length: 651 }, () => 0))],
+    ['depth over 16', nested(18)], ['over 1000 nodes', f([f(Array.from({ length: 600 }, () => 0)), f(Array.from({ length: 600 }, () => 0))])],
+  ];
+  it.each(invalid)('refuses %s observations with the fixed reason', async (_, value) => {
+    const { a } = session(), ns = await a.load(source, 'base');
+    expect(() => a.record(ns, 's_normal', f({}), value)).toThrow(/^observation$/);
+    expect(a.inspect()).toMatchObject({ first: 'observation', observations: 0 });
+  });
+  it('binds observations to the loaded namespace and its legacy scenario', async () => {
+    const one = session(), base = await one.a.load(source, 'base');
+    expect(() => one.a.record(base, 'x'.repeat(129), f({}), f({}))).toThrow(/^observation$/);
+    const two = session(); await two.a.load(source, 'base');
+    const field = await two.a.load(oracle[1].reference(source), oracle[1].id);
+    expect(() => two.a.record(field, 's_normal', f({}), f({}))).toThrow(/^observation$/);
+    const three = session(); await three.a.load(source, 'base');
+    expect(() => three.a.record(namespace(), 's_normal', f({}), f({}))).toThrow(/^observation$/);
+  });
+  it.each(['count', 'bytes'] as const)('refuses observations beyond the %s limit', async limit => {
+    const { a } = session(), ns = await a.load(source, 'base');
+    // reply + snapshot share the 1,000-node budget: 2 × 451 nodes stays under it, so only bytes accumulate.
+    const big = f(Array.from({ length: 450 }, () => 'x'.repeat(128))), value = limit === 'count' ? 0 : big;
+    let accepted = 0;
+    expect(() => { for (;;) { a.record(ns, 's_normal', value, value); accepted++; } }).toThrow(/^observation$/);
+    if (limit === 'count') expect(accepted).toBe(1024);
+    else {
+      expect(accepted).toBeGreaterThan(0);
+      expect(accepted).toBeLessThan(1024);
+    }
+    expect(a.inspect().observations).toBe(accepted);
+  });
+  it('refuses isolation before all 304 cases without writing a control module', async () => {
+    const ts5 = (t: string) => ts.transpileModule(t, { compilerOptions: { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.ES2022 } }).outputText;
+    const { a, writes } = session({ emit: ts5 });
+    await a.load(source, 'base');
+    await expect(a.isolation()).rejects.toThrow(/^isolation$/);
+    expect(writes).toHaveLength(1);
+  });
+  it('never seals before isolation even when every case is loaded and observed', async () => {
+    const { a } = session();
+    for (const c of oracle) {
+      const ns = await a.load(c.reference(source), c.id);
+      a.record(ns, c.script, f({}), f({}));
+    }
+    expect(a.inspect()).toMatchObject({ completed: 304, observations: 304 });
+    expect(() => a.finish()).toThrow(/^incomplete$/);
+  });
   it('never seals incomplete case or observation sets', () => {
     const { a } = session();
     expect(() => a.finish()).toThrow('incomplete');

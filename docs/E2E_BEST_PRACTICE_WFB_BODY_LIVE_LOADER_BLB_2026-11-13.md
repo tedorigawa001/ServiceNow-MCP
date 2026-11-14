@@ -82,3 +82,33 @@ payloadのtranspileは旧306回（主304＋補助2）から新3回（主1＋補�
 同コピーでbuild、関連7file／785件、strict型検査、追加5fileのlintが全てexit 0。新旧のABBA再実行は旧44,559ms→新11,754ms→新12,200ms→旧43,883ms（各childのcloseまで）で、全て60,000ms枠内、code 0／signal nullだった。全304case・385観測・case別digest・旧summary・意味拒否19行・隔離対照が一致し、全体digestは§3と同じ。stdout／stderrはdrain済み・truncated false／stderr 0、各所有groupの不在を2回確認し、終了signalは不要だった。
 
 offline・ignore-scriptsの梱包dry-runは441file、review-workerあり、src／tests／今回fixture混入0、archive生成なし。一時cacheはfinallyで除去した。文書のローカルリンク6件／表9個・差分空白と、コミット対象だけのscopeを確認する。検証後の追加は本節の記録のみで、検証したコード／試験を変更せずにコミット対象を再確認する。通常経路未切替・正式発行口閉鎖・全体受付無効・Unknown・調査保留を維持し、BL-Cの未確認事項を今回の成功で完了扱いしない。Pushは行わない。
+
+## 7 レビュー修正（2026-11-14）
+
+基準HEAD `8b0e0b9` のレビューで、loaderの一時変異25件中20件が生存し、比較器はload平均約6〜7の環境で旧方式の対照childが期限停止して完走しなかった。区分・根拠は[設計§12](BEST_PRACTICE_WFB_BODY_LIVE_COMPILED_REDESIGN.md)に記録した。
+
+| 追加対照（unit） | killした変異 |
+|---|---|
+| 期限60,001ms・https baseURLのload_contract、負の時刻のclock | 期限上限・file:検査・負時刻検査の除去 |
+| 129文字の文字列／key、可変object、null prototype、symbol key、列挙不可key、651要素array、depth 17超、1,203node、-0を固定observation拒否 | 各検査の除去（-0は修正前の実装でRED） |
+| 129文字のscenario、別caseのscenario、未登録namespaceのrecord | scenario長／一致・namespace結合の除去 |
+| 1,024観測で停止、4MiB到達で1,024未満で停止 | 観測数・byte上限の除去 |
+| 304件前のisolationは制御moduleを書かない | isolation前提の除去 |
+| 全304件をload・観測してもisolation未確認ならfinish拒否 | finishのisolation条件の除去 |
+
+finishの観測0件case検査は、unitでは他条件と分離できないため未対照のまま残す（設計§12）。
+
+比較器は、旧方式の対照childの期限停止を所有group終了の確認後に`inconclusive`（exit code 2）として区別するようにした。出力の保持上限をbyte単位に直した。修正後の新unitは42件（追加16件）。負荷下の観測値と修正後の比較器の結果は、次の検証で取得した値だけを§8に記す。
+
+## 8 レビュー修正後の検証（2026-11-14）
+
+| 検証 | 結果 |
+|---|---|
+| lint／build／梱包分類／差分空白 | 全てexit 0 |
+| repository全体のvitest（maxWorkers=3） | 352file／18,646件成功・失敗0 |
+| compiled全群＋declared-actual＋BL-A compiled | 全てexit 0 |
+| ABBA比較器（修正後） | passed。旧59,348→新15,352→新17,027→旧52,776ms、全体digest `f44fd5a59a65702e26f960ab9c26715342f06bae2615ea9f4d3aed0be099fdb2` は§3と同じ。開始時load平均約5.8〜9.4 |
+| 一時変異の再実行 | 25件中23件kill。生存はfinishの観測0件条件（unitで分離不可）とfactoriesの等価の2件 |
+| 比較不能の経路（一時copyで期限だけ3秒へ短縮） | 旧方式の対照childの期限停止は`inconclusive`／`control_deadline`／exit 2。新JS childの期限停止は従来どおりexit 1の失敗 |
+
+修正前のレビュー時（load平均約6〜7）は旧方式の対照childが2回とも60,000msで期限停止した。修正後の旧方式の1本目も59,348msで、期限との余裕はほぼない。新JS経路は15〜17秒で期限内だったが、静かな環境の約10.7秒より長い。どちらの値も上界ではなく、BL-Cの安定3run／30秒目標の受入には使わない。短縮copyは検証用の一時ファイルで、リポジトリの期限は60,000msのまま変えていない。
