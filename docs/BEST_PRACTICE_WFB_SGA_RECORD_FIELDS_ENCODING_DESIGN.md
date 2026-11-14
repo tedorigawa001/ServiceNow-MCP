@@ -1,6 +1,8 @@
 # WF-B SG-A後：record別strict field契約・固定encoding規則
 
-Version: draft-0.2 / Date: 2026-11-14 / 読取り基準HEAD: `dffbc32` / レビュー修正基準HEAD: `283033e`。
+Version: draft-0.3 / Date: 2026-11-14 / 読取り基準HEAD: `dffbc32` / レビュー修正基準HEAD: `283033e`、`f6574e7`。
+
+draft-0.2のレビュー修正：Countsの型はU64で、profile別の上限を超えた値を拒否する規則がなく、§11のvariant別byte上界設計のCounts 175byteが成り立たなかった。§4に、各Counts値が当該profileの上限以下であることを値域条件とし、超過はencoding前に拒否すると明記した。上限値・回数候補・選択状態は変えていない。
 
 draft-0.1のレビュー修正：回数・式・byte値の誤りはなかった。固定schedule設計§6の「通知throw」等をどのreceipt.state／reasonへ写すかが決まっておらず、FE08／09の期待値が一つに定まらなかった。また§5の`scheduled ≤ entered`に対し、timerが予定より早く発火した場合の扱いが未記載だった。§6に通知結果ごとの写像表を加え、§5に早期入場を待機・再timer・許容幅なしで入場拒否とする候補と、その頻度・誤失敗の可能性がUnknownであることを明記した。回数候補・選択状態は変えていない。
 
@@ -80,7 +82,7 @@ slotはkind別に`H`、`S0`〜`S5`、`L`、`I1`〜`I5`、`SUM`、`TERM`だけ。
 | Counts | 下記9 key、全てU64 | snapshot時点のprefix。計数fieldを省略して0推定しない |
 | Custody | `payload,workspace,scratch,terminal`、各enum | `not_created,retained,transferred,cleared,unconfirmed`。値だけからclear証拠を再発行しない |
 
-Countsのkey順は`cpu_getter,light_getter,mono_read,utc_read,sample_visit,delta_visit,encode_attempt,notify_attempt,record_seal`。本schedule候補の上限は順にLOAD6で`6,24,26,6,7680,6400,14,1,14`、LOAD7で`6,28,29,7,7680,6400,15,1,15`。数値はU64文字列で出力する。これらは列挙済み操作の候補で、全命令／全費目の上界ではない。
+Countsのkey順は`cpu_getter,light_getter,mono_read,utc_read,sample_visit,delta_visit,encode_attempt,notify_attempt,record_seal`。本schedule候補の上限は順にLOAD6で`6,24,26,6,7680,6400,14,1,14`、LOAD7で`6,28,29,7,7680,6400,15,1,15`。数値はU64文字列で出力する。各値は当該profileの対応する上限以下であることを値域条件とし、上限を超えた値はU64として表せてもencoding前に`invalid`（`capacity`）として拒否する。丸め・clipして上限内へ収めない。これらは列挙済み操作の候補で、全命令／全費目の上界ではない。
 
 `mono_read`はSの12回／Lを含む14回に追加clock14／15回を加えた26／29回。nAckとhの関係を二つのclock読取として数えない。SUMはFS07封印前、TERMはFS13封印前のCountsであり、自身のseal／encodingやz_postを未来の成功数として足さない。Countsのphase関係はsnapshotの時点までの実prefixと照合する必要がある。
 

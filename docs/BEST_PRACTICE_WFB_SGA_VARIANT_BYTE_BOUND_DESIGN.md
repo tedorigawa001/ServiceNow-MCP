@@ -1,10 +1,12 @@
 # WF-B SG-A後：variant別byte積上げ・保守上界と合法最大の区別
 
-Version: draft-0.1 / Date: 2026-11-14 / 読取り基準HEAD: `39ed840`。
+Version: draft-0.2 / Date: 2026-11-14 / 読取り基準HEAD: `39ed840` / レビュー修正基準HEAD: `f6574e7`。
+
+draft-0.1のレビュー修正：数値の誤りはなかった。§4のCounts 175byteは各値がprofile別上限以下であることを前提としていたが、親のrecord field契約draft-0.2はCountsをU64型とするだけで超過値の拒否を定めていなかった。親をdraft-0.3として上限超過の拒否を明記し、§4にこの前提と、型だけで計算した場合の336byte（SUM／TERMのU_indは各161byte増）を記した。各上界値は変えていない。
 
 Status: **文書・定数の算定のみ。LOAD6／LOAD7の選択・format・容量の採用は未承認。** 元のtest 5,000ms・既定並列度、通常経路未切替、正式発行口・C実行入口・body起動閉鎖、全体受付無効、Unknown、VM／監視／telemetry調査保留を維持する。実装・負荷採取・試験再実行・実process対照・実接続・実通信・設定変更・Pushは行わない。
 
-親は[record別strict field契約draft-0.2](BEST_PRACTICE_WFB_SGA_RECORD_FIELDS_ENCODING_DESIGN.md)と[固定schedule設計draft-0.2](BEST_PRACTICE_WFB_SGA_FIXED_SCHEDULE_SLOT_ENCODING_DESIGN.md)。前者のASCII限定・key順・値域・LFと、後者の封印／失敗prefixを前提に、record単位の**保守的なencoded長上界**を算定する。合法最大・packet総量の確定・最大同時保持・allocation／work／wall時間の実証は別の課題として残す。
+親は[record別strict field契約draft-0.3](BEST_PRACTICE_WFB_SGA_RECORD_FIELDS_ENCODING_DESIGN.md)と[固定schedule設計draft-0.2](BEST_PRACTICE_WFB_SGA_FIXED_SCHEDULE_SLOT_ENCODING_DESIGN.md)。前者のASCII限定・key順・値域・LFと、後者の封印／失敗prefixを前提に、record単位の**保守的なencoded長上界**を算定する。合法最大・packet総量の確定・最大同時保持・allocation／work／wall時間の実証は別の課題として残す。
 
 ## 1 三つの量を区別する
 
@@ -73,7 +75,7 @@ Pairの55byteはU64型だけの局所値域から求めた長さで、CPU集計�
 | Schedule | samples=6、period_ms=1000、pre／totalは13／14または14／15 | 両案とも66byte |
 | interval_states | 5要素を各not_started等の11文字stateへ緩和 | 71byte |
 
-Countsに全field一律20桁は使わず、既存の上限`6,24,26,6,7680,6400,14,1,14`／`6,28,29,7,7680,6400,15,1,15`の桁数を使う。ただしSUM／TERMの封印時点までにその全上限へ同時到達できるとはしない。例えばSUMのnotify_attempt／encode_attemptは後続の実行結果を先取りできない。
+Countsに全field一律20桁は使わず、既存の上限`6,24,26,6,7680,6400,14,1,14`／`6,28,29,7,7680,6400,15,1,15`の桁数を使う。これは親draft-0.3の、上限を超えるCountsをencoding前に拒否する値域条件に依存する。その条件がなければU64型だけで`2＋8＋101＋27＋9×22＝336byte`となり、SUM／TERMのU_indは各161byte大きい1,411／1,668byteになる。ただしSUM／TERMの封印時点までにその全上限へ同時到達できるとはしない。例えばSUMのnotify_attempt／encode_attemptは後続の実行結果を先取りできない。
 
 DiagFlags全falseはbyte数として長い一方、FirstFailure=setの具体的故障とその対応flagを同時に反映する場合には短くなる。この表の選択をまとめて合法な入力例とは呼ばない。FirstFailureとstep／opの対応、Scopeと各variant等も別途制約する必要がある。
 
