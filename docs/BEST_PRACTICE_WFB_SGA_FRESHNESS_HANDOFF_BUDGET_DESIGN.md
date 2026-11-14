@@ -1,6 +1,8 @@
 # WF-B SG-A後：鮮度要求・L取得所要時間・起動までの時間配賦
 
-Version: draft-0.1 / Date: 2026-11-14 / 読取り基準HEAD: `cb3c871`。コミット前の親文書整合確認基準: `4066e48`（LOAD6の実read開始基準）。
+Version: draft-0.2 / Date: 2026-11-14 / 読取り基準HEAD: `cb3c871`。レビュー修正基準HEAD: `72806c2`。コミット前の親文書整合確認基準: `4066e48`（LOAD6の実read開始基準）。
+
+draft-0.1のレビュー修正：記述の誤りはなかった。§5の入場判定がstrictの親期限とinclusiveの鮮度期限だけを挙げ、LOAD6のstrictな鮮度期限D6の扱いを書いていなかったため、D6もstrictで判定し、`D_parent ≤ D6`から親期限の判定に含まれることを明記した。条件・配賦例・選択状態は変えていない。
 
 Status: **詳細設計のみ。LOAD6／LOAD7の選択・要件値・配賦値は未承認。** 元のtest 5,000ms・既定並列度、通常経路未切替、正式発行口・C実行入口・body起動閉鎖、全体受付無効、Unknown、VM／監視／telemetry調査保留を維持する。実装・負荷採取・試験再実行・実process対照・実接続・実通信・設定変更・Pushは行わない。
 
@@ -85,7 +87,7 @@ J=100msは例の保守的な配賦幅で、S開始遅れの既存候補 `j < 100
 
 `D_parent = a + 6,000ms`を一度固定する。LOAD6の既存鮮度候補は別のstrict期限 `D6 = b5 + 1,000ms` である。`b5 ≥ p`なので `D_parent ≤ D6`となり、両方の制約下では親起動期限がより早いか等しいが、両者を同じ起点と記録しない。LOAD7はさらに取得後 `D_return = eL + 100ms`、追加のデータage要求が別途選択された場合は両案とも `D_data = bF + AF` を同frameへ結合する。追加要求はLOAD6の既存strict条件を置換しない。相対残時間から新しいdeadlineを作らず、起点・上限・strict／inclusive種別を保持する。
 
-各段階への入場では、観測時刻nとその後に残る固定費用予約を使い、親のstrict期限には `n + B_remaining < D_parent`、inclusive鮮度期限には `n + B_remaining ≤ D_fresh` が必要という案とする。L開始前にはLmax・R・Tを先取りし、eLで残時間を見てL上限・R・Tを膨らませない。残る必須操作費が未導出なら「余りがある」とみなさず、実行許可を閉じたままとする。
+各段階への入場では、観測時刻nとその後に残る固定費用予約を使い、親のstrict期限には `n + B_remaining < D_parent`、inclusive鮮度期限には `n + B_remaining ≤ D_fresh` が必要という案とする。LOAD6のD6はstrictな鮮度期限なので `n + B_remaining < D6` で判定する。`b5 ≥ p`から`D_parent ≤ D6`が成り立つため、親期限を満たせばD6も満たすが、記録では二つの判定を別fieldに残す。L開始前にはLmax・R・Tを先取りし、eLで残時間を見てL上限・R・Tを膨らませない。残る必須操作費が未導出なら「余りがある」とみなさず、実行許可を閉じたままとする。
 
 最終guardもTを含めて判定する。単に `g < D_parent`／`g − eL ≤ 100ms` を確認するだけでは、call試行入口iが期限内にある証明にならない。成功receiptだけで最終guardを省略せず、別ownerの停止・pin失効も再確認する。
 
