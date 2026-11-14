@@ -202,3 +202,5 @@ stdout／stderrの上限は、UTF-16文字数ではなくbyteで64KiBまで保�
 ## 13 BL-C前工程：親supervisorの故障対照設計（2026-11-14）
 
 [親supervisor故障注入matrix・受入条件draft-0.1](BEST_PRACTICE_WFB_BODY_LIVE_SUPERVISOR_FAULT_DESIGN.md)で、四軸終端、SF01〜25、判定優先順、固定60秒と別cleanup枠、2summary／将来checkpointの境界を具体化した。旧対照timeoutの比較不能が監視・出力・cleanup異常を隠さないことを必須とする。純粋fake・承認が必要なprocess対照・安定3run・通常並列回帰を分け、未実施をBR09完了にしない。今回は文書だけで、通常経路未切替・正式発行口閉鎖・全体受付無効・Unknown・調査保留を維持する。
+
+その後、[同設計§10](BEST_PRACTICE_WFB_BODY_LIVE_SUPERVISOR_FAULT_DESIGN.md)のSG-A純粋event kernel・strict 2summary検査・fake対照を実装した。[SG-A検証記録](E2E_BEST_PRACTICE_WFB_SUPERVISOR_SGA_2026-11-14.md)に初回失敗と並列回帰の未解消timeoutを記録する。実process adapter・通常経路は未切替、SG-B／SG-P・安定3run・全体受入・BR09完了は未確認のまま維持する。

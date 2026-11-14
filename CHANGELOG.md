@@ -18,6 +18,8 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 ### Changed
 
+- WF-B SG-A adds a package-excluded, pure event supervisor kernel with four-axis termination, fixed per-child 60-second deadlines, bounded stream retention, strict two-summary validation, one-shot signals and independent fake fault oracles. Sticky diagnoses, finite cleanup/report acknowledgements and serial ABBA admission keep control timeouts from masking supervision faults. The process adapter and normal runner are not switched; no native process controls, formal issuance or whole-run admission are enabled.
+
 - WF-B BL-B adds an opt-in, package-excluded synthetic ESM loader and a pinned legacy-driver derivation, preserving every old assertion and the original 19-line semantic rejection contract. All 304 cases retain unique module URLs, same-source binding, sticky stop/failure checks and bounded public-observation digests. Separate scratch-only foreign-reference/copy/Proxy controls check namespace and owner isolation, while an ABBA comparator retains a 60-second limit per child and confirms child-group termination. The old runner and normal route remain unchanged; formal issuance and whole-run admission stay closed/disabled.
 
 - WF-B BL-A adds a package-excluded, value-only 304-case body-live migration ledger and emit-once JS patch boundary. A separately pinned legacy TS-text oracle compares every local AST and unchanged surrounding output; strict owner/member/branch/anchor checks reject drift, literal lookalikes and input hooks. The original runner and fixture remain unchanged: no mutant loader, normal-route switch, body startup, formal issuance or whole-run admission is enabled, and performance/cleanup guarantees remain Unknown.

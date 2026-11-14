@@ -1,10 +1,10 @@
 # WF-B BL-C：親supervisorの故障注入matrix・受入条件
 
-Version: draft-0.2 / Date: 2026-11-14 / 読取り基準HEAD: `8c2e9d7`。レビュー修正基準HEAD: `9817f6e`。
+Version: draft-0.3 / Date: 2026-11-14 / 読取り基準HEAD: `8c2e9d7`。レビュー修正基準HEAD: `9817f6e`。SG-Aの基準: `51d763b`（作業開始時は同レビュー変更が未コミット、作業中の保存を保持）。
 
 draft-0.1のレビュー修正：§1が「今後確定する」とした判定順について、基準HEADの比較器がすでに旧対照の期限停止を出力超過・stderrより先に`inconclusive`へ分類しており、SF17の併発異常を隠していたことを一時copyの偽childで確認した（stderr 70,000byte・TERM無視でexit 2）。判定を純粋関数へ切り出して順序を直し、ceilingのSIGKILL再送と、timerだけに頼る期限判定も合わせて直した。§1の表を修正後の現状へ更新し、§9に内容と限界を記録した。SF01〜25とgateは変えていない。
 
-Status: **詳細設計のみ。故障注入・実装・再実行は未実施。** 通常経路未切替、正式発行口・C実行入口・body起動閉鎖、全体受付無効、Unknown、VM／監視／telemetry調査保留を維持する。実接続・実通信・設定変更・Pushを許可する文書ではない。
+Status: **§10のSG-A純粋event kernel・fake対照を実装。実process adapterへの接続・SG-B／SG-P・BL-Cの正式受入は未実施。** §8〜9は各作業時点の履歴。通常経路未切替、正式発行口・C実行入口・body起動閉鎖、全体受付無効、Unknown、VM／監視／telemetry調査保留を維持する。実接続・実通信・設定変更・Pushを許可する文書ではない。
 
 親は[body-live試験見直し設計§5〜7・11〜12](BEST_PRACTICE_WFB_BODY_LIVE_COMPILED_REDESIGN.md)、既存結果は[BL-B検証記録§5・7〜8](E2E_BEST_PRACTICE_WFB_BODY_LIVE_LOADER_BLB_2026-11-13.md)。対象は試験専用の `tests/review/fixtures/compiled-body-live-compare.mjs` と、その将来の合成対照である。製品のworker／session／認証／予算ownerへ接続しない。
 
@@ -63,7 +63,7 @@ stdout／stderrは別々に65,536byteまで保持し、65,537byte目からtrunca
 
 ## 5 故障注入matrix
 
-全行は未実施。まずfake clock／process event／stream／group照会で決定的に検証する。参照oracleはsupervisorの判定関数から期待値を生成せず、下表の手書きevent列・期待分類・signal列・起動数・保持byte／終端を基準とする。実childを使う段階は後述の別工程である。
+以下は固定の受入matrix。SG-Aのfake実装・検証範囲は§10と検証記録を参照し、実childを使う段階は引き続き未実施。参照oracleはsupervisorの判定関数から期待値を生成せず、下表の手書きevent列・期待分類・signal列・起動数・保持byte／終端を基準とする。
 
 | ID | 注入／対照 | 必須の期待観測・受入条件 |
 |---|---|---|
@@ -116,7 +116,7 @@ SG-A→SG-B／SG-Pの未確認を整理→SG-C→SG-Dを優先する。SG-Cで30
 
 記録は各SF ID、基準HEAD・Node／依存・起動経路、有限入力event列、期待／実際の分類、t0／停止／exit／close／signal／照会、stream別seen／retained／採取状態、次child起動数、残存責務を残す。未実施を空配列・0件成功にしない。保存先・実採取／保管の追加権限は本書で承認しない。
 
-## 8 今回の範囲・Unknown
+## 8 draft-0.1作成時の範囲・Unknown
 
 新規MDと親設計・BL-B記録への参照だけを更新する。コード・fixture・CHANGELOG・package／lockfile／設定は変更しない。build・合成試験・fault注入・再採取・梱包は未実行。文書整合の確認は故障時の動作実証ではない。
 
@@ -138,3 +138,19 @@ OS別のprocess group／signal／stdio挙動、親hard終了時の外側回収�
 修正後の同じ一時copyは`failed`／`child_output_truncated`／exit 1、stderrなしでSIGTERMを無視する偽childは`inconclusive`／`control_deadline`／exit 2となった。これらの偽childは一時copyで期限だけ短縮したレビュー用の確認であり、リポジトリの試験ではない。§2・§6の方針どおり、OS processを使う対照はSG-Bの承認後に行う。
 
 単体試験は判定関数の写しではなく手書きの報告と期待値を使う。ただし判定関数とsupervisorのevent採取（exit／close・byte計数・group照会）との結合は、正常ABBAとレビュー用一時copy以外では検証していない。SF01〜25の純粋fake（SG-A）、取消・早期停止・checkpointは未実装のままで、この修正をBR09やSG-Aの完了とはしない。60秒期限、通常経路未切替、正式発行口閉鎖、全体受付無効、Unknown、調査保留を維持する。
+
+## 10 SG-A：純粋event kernelとfake故障対照（2026-11-14）
+
+`tests/review/fixtures/body-live-supervisor.ts` は、時刻と同run tokenに結合した有限eventから、prepare／spawn／listen／probe／signal／remove／reportという**値だけの命令**を返す。clock／process／filesystem／timerの実操作を内包せず、生成rootは固定ABBAだけを直列に準備する。対応する実process adapterは未接続で、既存 `compiled-body-live-compare.mjs`・旧runner・loaderは今回変更しない。これは将来adapterが使うevent kernelの実装であり、現在の比較器の全event採取を検証済みという意味ではない。
+
+各runはprivate token・ordinal・mode・t0・同じ全deadlineに結合。四軸snapshotは最初の理由、有限flags、exit／close、stream別採取／保持／EOF／異常、group照会・不在時刻、signal試行時刻と結果を固定値として返す。copy／別root／旧run tokenを受理せず、terminal後はeventを採用しない。fakeのpidは意図的に同じ数値を使い、pid一致だけでなくrun tokenへ結合していることを検証する。
+
+- stdout／stderrは各64KiBの先行bufferへ同bytesをcopyし、超過後もseen byteを計数する。安全整数の飽和計算は同じ実計数経路から使う。受信byteの変異・単byte分割・多byte文字を別々に確認する。
+- event計数は最大131,200（2stream×65,536byteを単byteeventで受ける量＋control 128件）、未回収命令は最大32、run履歴は最大4、signalは各1回。event上界到達後も新起動を拒否し、cleanup診断を失わない。これらは試験kernelの有限境界であり、製品のwork capやOS allocationの実証ではない。
+- stop／正常closeから同じ最大3秒、t0から最大63秒でcleanup・remove／reportの応答待ちも終端させる。期限後のack・取消・失効で成功へ復帰せず、欠ける証拠・削除責務・報告未達は残す。時計故障は時刻保証をUnknownとして有限な未確認終端へ進める。
+- SIGKILLは停止1秒後**以降に採った**alive照会を要求し、以前のalive cacheだけで発行しない。命令発行・結果受領・group不在2回を別々に保持する。
+- `body-live-supervisor-protocol.ts` は同じ上限内のUTF-8と既存2summaryを値として厳密検査する。期待field・型・case／観測件数・意味19行・隔離・loader状態を検査し、case順を保持したfingerprintをrun間で比較する。空／欠落を正規空結果へ変換しない。旧対照の期限による未完成と、不正な完成summaryを分ける。
+- 期限による未完成の分類には64KiB・depth 16以内のJSON構文prefix検査を用い、先に完成した旧summaryは固定値として検査する。これは途中の値・未知fieldを受理する境界ではなく、比較不能の未完了診断に限る。不正な完成値・完成行の構文異常・不正UTF-8を未完成へ畳まない。
+- fakeで回収／reportを確認しても、OS group消滅・stdio閉鎖・物理heap退役・診断必着の証拠にはしない。対照と感度監査の詳細・初回失敗・並列timeoutは[SG-A検証記録](E2E_BEST_PRACTICE_WFB_SUPERVISOR_SGA_2026-11-14.md)に残す。
+
+SF01〜24は手書きのevent列・期待分類を純粋fakeへ接続し、SF25は未知checkpointを現行2行契約が拒否する境界だけを確認する。SG-BのOS機構・外側observer・SG-Pの22checkpoint、安定3run・全体通常並列の正式受入は未実施。SG-Aの結果だけでBR09全完了や通常経路切替を宣言しない。正式発行口閉鎖・全体受付無効・Unknown・調査保留を維持する。
