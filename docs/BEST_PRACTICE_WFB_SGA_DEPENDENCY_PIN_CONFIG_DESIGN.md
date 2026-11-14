@@ -154,3 +154,7 @@ pin不一致・供給元混入・解決漏れ・設定値差・未採取は、�
 本MDと親2文書の参照だけを更新する。実行binaryのhash採取・依存tree scan・対象依存のmodule import／resolver実行・config評価・tokenの読取り／発行・copy作成・導入・build・試験再実行・実process対照・設定変更・実接続／実通信・Pushは行わない。今回の確認はsource／宣言の静的読取りと文書整合だけで、正式発行口閉鎖・全体受付無効・Unknown・調査保留を維持する。
 
 文書整合として3文書のローカルリンク11件・表20個の列数・末尾改行・差分空白と変更対象MD3件を確認した。package／lockfileの宣言値との一致も静的に確認したが、展開物・Node・実解決先のpinやC1／C2の起動評価ではない。作成時点でコミット・Pushは未実施。
+
+## 12 後続の終了owner・時間枠設計（2026-11-14）
+
+[終了確認・外側時間枠・cleanup予約の詳細設計draft-0.1](BEST_PRACTICE_WFB_SGA_TERMINATION_OUTER_BUDGET_DESIGN.md)で、C1を含む主対照起動より前に保持するowner、部分生成・worker／stdioの終端と未確認責務、候補の外側枠を具体化した。pin／post-pinの費用は未導出のまま、候補予約に収まると実証したものではない。§6の主対照内C1と別起動評価の承認区分を維持し、今回は実装・pin採取・設定評価・再実行を行わない。

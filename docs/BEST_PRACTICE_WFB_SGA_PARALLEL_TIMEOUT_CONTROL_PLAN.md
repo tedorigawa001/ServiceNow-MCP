@@ -172,3 +172,7 @@ H1の未変更sourceでP9の9fileを既定の並列度で1回実行すると、9
 ## 11 実施前gate：依存pin・実効設定の確認境界（2026-11-14）
 
 [依存pin方式・実効設定確認の詳細設計draft-0.1](BEST_PRACTICE_WFB_SGA_DEPENDENCY_PIN_CONFIG_DESIGN.md)に、Node／wrapper実体、依存code imageと実解決先、宣言・設定解決・worker適用の境界、元の5秒／既定並列度の確認方法を整理した。設定解決を読み取り専用と仮定せず、副作用と承認を分離する。H0／H1・元条件は変更せず、pin採取・設定評価・実装・再実行を今回承認したものではない。
+
+## 12 実施前gate：終了確認・外側時間枠（2026-11-14）
+
+[終了確認・外側時間枠・cleanup予約の詳細設計draft-0.1](BEST_PRACTICE_WFB_SGA_TERMINATION_OUTER_BUDGET_DESIGN.md)に、runner／worker／stdioの独立終端、先行custody・未確認保持、起点と候補の時間配賦を整理した。候補値は未承認で、元の5秒・既定並列度を変更しない。test失敗と監視失敗の次trial条件を分離し、late確認で成功へ戻さない。今回の文書は起動・強制終了・再実行・SG-Bの承認ではない。
