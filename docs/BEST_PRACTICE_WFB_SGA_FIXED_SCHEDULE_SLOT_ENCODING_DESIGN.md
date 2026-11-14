@@ -185,3 +185,7 @@ oracleは固定のrecord ID列・clock観測点列・失敗indexごとの期待p
 ## 14 後続のwriter frame合流・参照退役（2026-11-14）
 
 [同backingの所有・容量確認境界とwriter退出／borrow退役draft-0.1](BEST_PRACTICE_WFB_SGA_BACKING_OWNERSHIP_WRITER_EXIT_DESIGN.md)で、同Anchor／attemptの先行ExitSlot、finally候補→固定caller join→post退役→同backing昇格の境界を整理した。停止要求やpacket receiptだけで退出・全borrow解放とせず、未確認backing／sealed TERM／先行ownerの保持を維持する。方式・選択未承認、各閉鎖条件・Unknown・調査保留を保ち、実装・採取・再実行は行わない。
+
+## 15 後続のphase別保持・最小値域対応（2026-11-14）
+
+[phase別保持・多重度と内部slot最小値域draft-0.1](BEST_PRACTICE_WFB_SGA_PHASE_RETENTION_SLOT_DOMAIN_DESIGN.md)で、FS00〜14・失敗prefixの保持対象を内部slotへ対応付けた。早期診断batchとFS08の排他、sealed TERMと未encodingの区別、既存観測位置／予定値／aliasを保ち、追加clockや早期解放を仮定しない。最大実保持・費用はUnknown、選択未承認・元5秒／既定並列度・各閉鎖条件・調査保留を維持し、実装・採取・再実行は行わない。
