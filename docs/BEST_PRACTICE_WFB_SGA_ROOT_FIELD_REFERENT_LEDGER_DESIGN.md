@@ -1,6 +1,8 @@
 # WF-B SG-A後：全root field台帳・参照先分類と最小shell失敗責務
 
-Version: draft-0.1 / Date: 2026-11-14 / 読取り基準HEAD: `e276ea1`。
+Version: draft-0.2 / Date: 2026-11-15 / 読取り基準HEAD: `e276ea1` / レビュー修正基準HEAD: `102ad86`。
+
+draft-0.1のレビュー修正：数値の誤りはなかった。§1の記法Iが12Nの上限を「record管理群位置」と呼んでいたが、本書のRG09と親の論理配置設計§3では「管理群」をLC01〜07の7N位置に使い、12Nは管理7群・4role・値cellを合わせたrecord群位置である。上限値12Nは変えず、名称を「record群位置（管理7群・4role・値cell）」へ改め、管理7群の上限7Nを併記した。選択状態・field列・定数は変えていない。
 
 Status: **field台帳・所有境界の詳細設計のみ。LOAD6／LOAD7の選択・内部配置・storage／writer方式・容量capは未承認。** 元のtest 5,000ms・既定並列度、通常経路未切替、正式発行口・C実行入口・body起動閉鎖、全体受付無効、Unknown、VM／監視／telemetry調査保留を維持する。実装・負荷採取・試験再実行・実process対照・実接続・実通信・設定変更・Pushは行わない。
 
@@ -16,7 +18,7 @@ Status: **field台帳・所有境界の詳細設計のみ。LOAD6／LOAD7の選�
 |---|---|---|
 | T | 閉じたtagの1byte候補 | stateは未開始／準備中／保持／確認済み／拒否／失敗／未確認／退役／非適用の有限区別。phaseはFS、subphaseはWX、原因は固定理由、kindは固定分類。field別の合法遷移を満たさない値は拒否し、tag幅だけで通さない |
 | B | Boolの1byte候補 | 初期falseは未発生の意味だけ。確認物の代用にしない |
-| I | 非負整数の2byte候補 | field別上限を併用。record位置≤N、role位置≤4N、record管理群位置≤12N、出力credit≤既存予約和。overflow／clipなし |
+| I | 非負整数の2byte候補 | field別上限を併用。record位置≤N、role位置≤4N、record管理群位置≤7N、record群位置（管理7群・4role・値cell）≤12N、出力credit≤既存予約和。overflow／clipなし |
 | R | private参照保持位置1個、幅ρはUnknown | 未生成／保持未確認を周辺state・生成prefixと対で扱う。nullだけで不存在・解放済みと判定しない |
 | R[k] | 固定indexの参照保持位置k個 | 論理上のinline位置としてkρ。実装で別配列objectを使う場合のcontainer参照・header・capacityは別算定。可変長map／growを許す記法ではない |
 
