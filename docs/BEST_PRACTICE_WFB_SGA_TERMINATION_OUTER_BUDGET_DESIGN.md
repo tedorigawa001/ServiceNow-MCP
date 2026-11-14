@@ -173,3 +173,7 @@ fakeは値・clock・event・受理結果だけで検証する将来案とし、
 ## 11 後続の開始前sampler設計（2026-11-14）
 
 [開始時負荷採取・CPU busy・有限保持の詳細設計draft-0.1](BEST_PRACTICE_WFB_SGA_START_LOAD_CAPTURE_DESIGN.md)で、t_armからの6点に別の起動直前Lを加える代替候補、欠測／鮮度不足でのspawn 0、固定容量と受理前の保持責務を具体化した。本書§4.3の現行候補は6点目S5をsnapshotとする方式であり、7frame案との選択・統一は未完了。本書の5秒採取＋1秒handoff候補を延長せず、sampler予約を実行中の観測やcleanupへ流用しない。候補profileの実証・実装・採取・再実行は未実施で、終了owner／custody等のgateを満たしたとはしない。
+
+## 12 採取profileの比較・未選択条件（2026-11-14）
+
+[6点案・7frame案の比較と選択条件draft-0.1](BEST_PRACTICE_WFB_SGA_LOAD_PROFILE_COMPARISON.md)で、S5による6点候補と別Lを加える代替候補の相違・鮮度の時刻基準・保持上限・選択後の統一範囲を明記した。現在は選択未承認のまま、本書の6点／1,000ms未満条件や外側枠を上書きしない。追加取得の実証・実装・採取・再実行は未実施で、各gate・Unknown・調査保留を維持する。

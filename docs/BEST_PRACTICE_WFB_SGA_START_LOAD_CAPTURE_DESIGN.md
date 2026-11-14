@@ -163,3 +163,7 @@ provider／Nodeの実内容pin・OS counter集合の安定性・非atomic読取�
 今回の変更は本MDと親2文書の参照だけ。実装・OS getter実行・CPU／memory／load採取・設定評価・copy作成・build・試験再実行・実process対照・実接続・実通信・設定変更・Pushは行わない。元の5秒期限・既定並列度と各閉鎖条件・Unknown・調査保留を維持する。
 
 文書整合では3文書のローカルリンク14件・表19個の列数、LC01〜14の計画ID連番、15record・getter55回・encoded配賦27,136byte≤32KiB等の算式、末尾改行・差分空白と変更対象MD3件を確認した。算式の検算は実測・合成試験・profile承認ではない。作成時点でコミット・Pushは未実施。
+
+## 11 6点案・7frame案の比較と選択条件（2026-11-14）
+
+[6点案・7frame案の比較と選択条件draft-0.1](BEST_PRACTICE_WFB_SGA_LOAD_PROFILE_COMPARISON.md)に、共通のCPU窓、light値の返却後ageとデータage、追加費・保持の再計算を整理した。LOAD6／LOAD7は未選択のままで、7frameのLがCPU busyを更新するとはしない。L spanや6点案のschema等も未確定であり、本書の代替案・元の5秒／既定並列度・各閉鎖条件を変更せず、実装・採取・再実行は行わない。
