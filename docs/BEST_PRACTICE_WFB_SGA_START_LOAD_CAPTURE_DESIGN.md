@@ -167,3 +167,7 @@ provider／Nodeの実内容pin・OS counter集合の安定性・非atomic読取�
 ## 11 6点案・7frame案の比較と選択条件（2026-11-14）
 
 [6点案・7frame案の比較と選択条件draft-0.1](BEST_PRACTICE_WFB_SGA_LOAD_PROFILE_COMPARISON.md)に、共通のCPU窓、light値の返却後ageとデータage、追加費・保持の再計算を整理した。LOAD6／LOAD7は未選択のままで、7frameのLがCPU busyを更新するとはしない。L spanや6点案のschema等も未確定であり、本書の代替案・元の5秒／既定並列度・各閉鎖条件を変更せず、実装・採取・再実行は行わない。
+
+## 12 後続の鮮度・時間配賦の詳細設計（2026-11-14）
+
+[鮮度要求・L取得所要時間・起動までの時間配賦draft-0.1](BEST_PRACTICE_WFB_SGA_FRESHNESS_HANDOFF_BUDGET_DESIGN.md)で、Lの取得区間と返却後費用・データageの関係、Q／R／Tの分離と未確認費、call前拒否とcall済み時刻違反を整理した。55回はframe取得数であり、境界観測等を含む全操作数へ昇格させない。既存profile・L span・容量の採用や変更はせず、選択未承認・各閉鎖条件・Unknown・調査保留と、実装・採取・再実行未実施を維持する。
