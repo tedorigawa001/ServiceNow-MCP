@@ -175,3 +175,7 @@ root直接fieldの列挙が閉じても、参照先の全形状／同時位置�
 ## 10 後続のgraph境界・canonical値／protocol形状（2026-11-15）
 
 [graph境界とcanonical値／protocol参照先の形状契約draft-0.1](BEST_PRACTICE_WFB_SGA_GRAPH_BOUNDARY_CANONICAL_PROTOCOL_SHAPE_DESIGN.md)で、共有・寿命延長・追加保持と、RF04／05の値snapshot／private bindingを分けた。parent graphを境界外で0にせず、封印値の可変root参照・二重claim・上位引受未確認を具体化する。選択未承認・元5秒／既定並列度・各閉鎖条件・Unknown・調査保留を維持し、実装・採取・再実行は行わない。
+
+## 11 後続の正規claim位置と同義field対応（2026-11-15）
+
+[canonical発行位置・同一性・多重度／消費対応台帳draft-0.1](BEST_PRACTICE_WFB_SGA_CANONICAL_ISSUANCE_CLAIM_LEDGER_DESIGN.md)で、OSlot.claim／RG06.claim、LC09.encode_claim／LC01.claim、LC08.writer enter／LC04.enter_claimの正規位置とprojection案を整理した。R1の既出field費を消さず、未消費mirrorから第二の開始権限を作らない。対応案・選択未承認・各閉鎖条件・元5秒／既定並列度・Unknown・調査保留を維持し、実装・発行・消費・採取・再実行は行わない。

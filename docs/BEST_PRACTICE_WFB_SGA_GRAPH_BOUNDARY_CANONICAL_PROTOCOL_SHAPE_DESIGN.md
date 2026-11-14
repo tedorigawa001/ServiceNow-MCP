@@ -173,3 +173,7 @@ R1のdirect field・protocol facetを追加実装したと仮定せず、source 
 全て未承認。本MDと親2文書の参照更新だけを行う。元の5秒期限・既定並列度、通常経路未切替、正式発行口・C実行入口・body起動閉鎖、全体受付無効、Unknown、VM／監視／telemetry調査保留を維持する。実装・負荷採取・試験再実行・実process対照・実接続・実通信・設定変更・コミット・Pushは行わない。
 
 文書整合として対象3文書のローカルリンク18件・表26個の列数、GB01〜07／CV01〜06／PR01〜08／GP01〜10のID連番、未承認チェック5項目、6kindのexact追加keyと親strict設計の一致、上位key個数・record／role／直接edge位置・既存予約和の定数関係、費目OP00〜19の記載、末尾改行・差分空白を確認した。文書と定数の静的検算のみで、実装・合成試験・負荷採取・試験再実行・実graph同一性／参照先容量／最大同時保持／実費／退出・解放の実証ではない。
+
+## 10 後続のcanonical位置・同義projectionと一度限り消費（2026-11-15）
+
+[canonical発行位置・同一性・多重度／消費対応台帳draft-0.1](BEST_PRACTICE_WFB_SGA_CANONICAL_ISSUANCE_CLAIM_LEDGER_DESIGN.md)で、親construction・record encode／取得・writer enterの正規位置と、同義fieldのprojectionを具体化した。claim消費・frame進入・finally／join・受理／退役を分離し、配置数を実object数や容量へ昇格しない。対応案・選択未承認、元5秒／既定並列度・各閉鎖条件・Unknown・調査保留を維持し、実装・発行・消費・採取・再実行は行わない。
