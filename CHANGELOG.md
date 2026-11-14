@@ -308,6 +308,8 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 ### Added
 
+- WF-B SG-A review controls: the supervisor test now refuses spawned pid 0/1 (no listen or signal command can target the parent or every process), rejects single-field protocol changes (mode, payloadEmits, loader state, case-digest format/count, execution keys) and three-line incomplete output, and covers the t0+63 s cleanup ceiling, no SIGKILL on an Unknown probe, no signal to an absent group, unconfirmed cleanup after post-collection clock/escape faults, the 32-command queue limit and exit/close conflict diagnosis. The kernel itself is unchanged.
+
 - WF-B BL-B comparator verdict fix: per-child classification moves into a pure, package-excluded function that reports cleanup, spawn/signal, unclosed, output-overflow and stderr anomalies as failures before a legacy-control deadline can be called inconclusive (SF17). A close at or after 60,000 ms counts as the deadline even if the timer has not fired, each signal is sent at most once per child, and hand-written reports cover the order. Deadlines are unchanged; supervisor fault injection (SG-A/SG-B) remains unimplemented.
 
 - WF-B BL-B review controls: the body-live loader test now covers every reachable observation refusal (string/key length, prototype, freeze, symbol and non-enumerable keys, array length, depth, node, count and byte limits), scenario/namespace binding, isolation and seal preconditions, the entry contract and a negative clock. Observations refuse -0 because JSON digests cannot distinguish it from 0. The ABBA comparator reports a legacy-control deadline as inconclusive (exit 2) instead of a pass or a JS-path failure, and caps retained output in bytes. Deadlines are unchanged.

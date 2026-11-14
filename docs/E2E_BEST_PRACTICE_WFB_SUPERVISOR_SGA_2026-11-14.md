@@ -89,3 +89,30 @@ SFごとの期待値はkernelの判定結果から作らず、試験内の固定
 ## 7 コミット前の再確認（2026-11-14）
 
 SG-Aの変更対象7fileだけが作業treeの差分であることを確認した。期限不変・maxWorkers=1の関連9file／908件が21.41秒で成功し、strict型検査・lint・buildがexit 0。offline・ignore-scriptsの梱包dry-runは441file、正規review-workerあり、新fixture／tests混入0。文書3件のリンク12件・表16個・SF01〜25連番・差分空白を確認した。再検証後の変更は本節等の文書追記だけで、実装・試験は変更していない。通常並列の既存3件timeoutは未解消のまま、実process対照・実接続・実通信・設定変更・Pushは行わない。
+
+## 8 レビュー修正（2026-11-14）
+
+基準HEAD `a9d1e4c` のレビューで、一時変異26件中15件が入力から到達できるのに対照のないまま生存した。区分は[設計§11](BEST_PRACTICE_WFB_BODY_LIVE_SUPERVISOR_FAULT_DESIGN.md)に記録した。kernel／protocolは変更せず、試験に対照16件を追加した。各対照は対応する変異で失敗し（RED）、元の実装で成功する。
+
+| 追加対照 | 件数 |
+|---|---|
+| pid 0／1の拒否（listen・signal命令0） | 2 |
+| protocolの単一要素変更の拒否（mode・payloadEmits・loader・caseDigest形式／件数・executionのkey） | 6 |
+| 3行目を含む出力を未完成としない | 1 |
+| 期限後に初めて停止してもcleanup期限は63,000ms | 1 |
+| Unknown照会でKILLしない、不在groupへsignalしない | 2 |
+| 回収後のclock／escaped faultでcleanup未確認 | 2 |
+| 命令32件の上限とevent_limit | 1 |
+| exit／close不一致をevent_conflictとして記録 | 1 |
+
+SG-Aの試験は109件（動作・境界101＋感度8）になった。生存の残り2件（不在確認の間隔、removing／reporting中のdata）は等価である。§5の並列timeoutは、レビュー時の関連9file・既定並列度・load平均約5では再現しなかった（908件成功）。修正後の検証値は、検証で得た値だけを本節の後に追記する。
+
+| 修正後の検証 | 結果 |
+|---|---|
+| lint／build／梱包分類／差分空白、strict型検査（試験file） | 全てexit 0 |
+| repository全体のvitest（maxWorkers=3） | 354file／18,769件成功・失敗0 |
+| compiled全群＋declared-actual＋BL-A compiled | 全てexit 0 |
+| 一時変異の再実行 | 生存15件を全てkill、残り2件は等価 |
+| ABBA比較器（今回の変更対象外） | `inconclusive`／`control_deadline`／exit 2。開始時load平均約6.65で旧対照の1本目が期限に達した（SIGTERM 60,001ms、close 60,063ms、所有group終了確認済み、stderr 0・truncated false）。後続childは起動していない |
+
+比較器・kernel・protocolのコードは今回変更しておらず、ABBAの比較不能は試験追加の回帰ではない。新経路との比較はこの実行では成立していない。

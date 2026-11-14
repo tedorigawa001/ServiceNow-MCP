@@ -1,6 +1,8 @@
 # WF-B BL-C：親supervisorの故障注入matrix・受入条件
 
-Version: draft-0.3 / Date: 2026-11-14 / 読取り基準HEAD: `8c2e9d7`。レビュー修正基準HEAD: `9817f6e`。SG-Aの基準: `51d763b`（作業開始時は同レビュー変更が未コミット、作業中の保存を保持）。
+Version: draft-0.4 / Date: 2026-11-14 / 読取り基準HEAD: `8c2e9d7`。レビュー修正基準HEAD: `9817f6e`（draft-0.1）／`a9d1e4c`（draft-0.3）。SG-Aの基準: `51d763b`（作業開始時は同レビュー変更が未コミット、作業中の保存を保持）。
+
+draft-0.3のレビュー修正：§10のSG-A kernel／protocolに一時変異26件を入れ、15件が入力から到達できるのに対照のないまま生存した（pid下限、protocolの6検査、3行目の未完成判定、63秒のcleanup上限、Unknown照会でのKILL、不在groupへのsignal、回収後のclock／離脱、命令32件上限、exit／close不一致の診断）。kernelの実装はすでに各条件を拒否しており、対照16件を追加して各変異をkillした。§11に区分を記録した。
 
 draft-0.1のレビュー修正：§1が「今後確定する」とした判定順について、基準HEADの比較器がすでに旧対照の期限停止を出力超過・stderrより先に`inconclusive`へ分類しており、SF17の併発異常を隠していたことを一時copyの偽childで確認した（stderr 70,000byte・TERM無視でexit 2）。判定を純粋関数へ切り出して順序を直し、ceilingのSIGKILL再送と、timerだけに頼る期限判定も合わせて直した。§1の表を修正後の現状へ更新し、§9に内容と限界を記録した。SF01〜25とgateは変えていない。
 
@@ -154,3 +156,21 @@ OS別のprocess group／signal／stdio挙動、親hard終了時の外側回収�
 - fakeで回収／reportを確認しても、OS group消滅・stdio閉鎖・物理heap退役・診断必着の証拠にはしない。対照と感度監査の詳細・初回失敗・並列timeoutは[SG-A検証記録](E2E_BEST_PRACTICE_WFB_SUPERVISOR_SGA_2026-11-14.md)に残す。
 
 SF01〜24は手書きのevent列・期待分類を純粋fakeへ接続し、SF25は未知checkpointを現行2行契約が拒否する境界だけを確認する。SG-BのOS機構・外側observer・SG-Pの22checkpoint、安定3run・全体通常並列の正式受入は未実施。SG-Aの結果だけでBR09全完了や通常経路切替を宣言しない。正式発行口閉鎖・全体受付無効・Unknown・調査保留を維持する。
+
+## 11 draft-0.3のレビュー修正（2026-11-14）
+
+基準HEAD `a9d1e4c` のkernel／protocolに一時変異26件を入れ、SG-Aの試験を実行した（終了後に復元）。killは11件、生存は15件だった。実装は変えず、試験に対照16件を追加した（93件→109件）。
+
+| 区分 | 変異 | 追加対照 |
+|---|---|---|
+| 安全性 | spawnedのpid≤1検査の除去 | pid 0／1をevent_conflictで拒否し、listen・signal命令0。将来のadapterが`process.kill(-pid)`で親groupや全processへ送る経路を閉じる |
+| protocol | mode・payloadEmits・loader状態・caseDigestの形式／件数・executionのkey集合の各検査の除去 | 正規wireの受理を対照に、各1要素だけ変えたwireを拒否 |
+| 未完成判定 | 3行以上の拒否の除去 | 旧summary＋途中の2行目は未完成、さらに3行目があれば未完成としない |
+| cleanup上限 | `t0 + 63,000ms`の除去 | 期限後の最初のevent（60,500ms）で停止してもcleanup期限は63,000ms |
+| signal | KILL条件のalive要求、不在groupでのsignal抑止の除去 | 1秒後のUnknown照会でKILL 0、不在確認後の取消でsignal 0 |
+| 終端 | cleanupConfirmedのtimeKnown／escaped条件の除去 | 回収済み（removing）後のclock／escaped faultでcleanupConfirmed false・retainedDuty true |
+| 有限境界 | 命令32件上限の除去 | drainしないfakeで命令がちょうど32件、event_limitを記録 |
+| 診断 | exit／close不一致検査の除去 | 不一致をchild失敗だけでなくevent_conflictとして記録 |
+| 等価 | 不在確認の100ms間隔（照会命令自体が100ms以上空けて出る）、removing／reporting中のdata拒否（stream終了が前提で別検査が止める） | 等価として記録 |
+
+関連9fileを既定の並列度で再実行すると、load平均約5で908件成功、3秒超の試験はなかった。§5の記録にあるload平均約10での3件timeoutは今回の条件では再現せず、原因は未確定のまま残す。SG-B／SG-P、実process adapterへの接続、BL-Cの受入は未実施で、正式発行口閉鎖・全体受付無効・Unknown・調査保留を維持する。

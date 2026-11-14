@@ -346,6 +346,68 @@ describe('SG-A pure supervisor', () => {
     expect(r.run).toMatchObject({ phase: 'done', verdict: 'failed', first: point, reportDelivered: false });
     expect(r.s.start(r.now)).toBeUndefined();
   });
+  it.each([0, 1])('SF11/SF14: refuses pid %i so no group signal can target the parent or every process', pid => {
+    const r = new Rig(); r.start(); r.event({ type: 'prepared', ok: true }); r.event({ type: 'spawned', pid });
+    r.event({ type: 'cancel' });
+    expect(r.run).toMatchObject({ first: 'event_conflict', process: { spawned: false } });
+    expect(r.log.filter(x => x.kind === 'listen' || x.kind === 'signal')).toHaveLength(0);
+  });
+  it.each([
+    ['mode', (_: Record<string, unknown>, x: Record<string, unknown>) => { x.mode = 'js'; }],
+    ['payloadEmits', (_: Record<string, unknown>, x: Record<string, unknown>) => { x.payloadEmits = 2; }],
+    ['loader', (_: Record<string, unknown>, x: Record<string, unknown>) => { (x.loader as { writes: number }).writes = 303; }],
+    ['caseDigest format', (_: Record<string, unknown>, x: Record<string, unknown>) => { (x.execution as { caseDigests: string[] }).caseDigests[0] = 'x'; }],
+    ['caseDigest count', (_: Record<string, unknown>, x: Record<string, unknown>) => { (x.execution as { caseDigests: string[] }).caseDigests.push('f'.repeat(64)); }],
+    ['execution keys', (_: Record<string, unknown>, x: Record<string, unknown>) => { (x.execution as Record<string, unknown>).extra = 1; }],
+  ] as const)('SF06: the strict summary check rejects a %s change on its own', (_, change) => {
+    const encode = (t: string) => new TextEncoder().encode(t);
+    expect(inspectBodyLiveProtocol(encode(wire('reference')), 'reference').ok).toBe(true);
+    expect(inspectBodyLiveProtocol(encode(wire('reference', change)), 'reference')).toEqual({ ok: false });
+  });
+  it('SF16/SF17: a third line is never an incomplete control prefix', () => {
+    const first = wire('reference').split('\n')[0];
+    expect(isIncompleteBodyLiveControl(new TextEncoder().encode(first + '\n{"blb":'))).toBe(true);
+    expect(isIncompleteBodyLiveControl(new TextEncoder().encode(first + '\n{"blb":\n{'))).toBe(false);
+  });
+  it('SF21: a stop first observed after the deadline still ends cleanup at t0 + 63 s', () => {
+    const r = new Rig().boot(); r.event({ type: 'tick' }, 60_500);
+    expect(r.run).toMatchObject({ first: 'deadline', cleanupDeadline: 63_000 });
+  });
+  it('SF12/SF13: an Unknown group answer after one second never authorizes SIGKILL', () => {
+    const r = new Rig().boot(); r.event({ type: 'cancel' }); r.event({ type: 'signal', name: 'SIGTERM', result: 'ok' });
+    r.event({ type: 'group', state: 'unknown' }, 1_000); r.event({ type: 'tick' }, 1_500);
+    expect(r.log.filter(x => x.signal === 'SIGKILL')).toHaveLength(0);
+    expect(r.run.execution.flags).toContain('group');
+  });
+  it('SF13: no signal is sent to a group already observed absent', () => {
+    const r = new Rig().boot(); r.output();
+    r.event({ type: 'end', stream: 'stdout' }); r.event({ type: 'end', stream: 'stderr' });
+    r.event({ type: 'exit', code: 0, signal: null }); r.event({ type: 'close', code: 0, signal: null }, 100);
+    r.event({ type: 'group', state: 'absent' }); r.event({ type: 'cancel' }, 150);
+    expect(r.run.first).toBe('cancelled');
+    expect(r.log.filter(x => x.kind === 'signal')).toHaveLength(0);
+  });
+  it.each(['clock', 'escaped'] as const)('SF19/SF24: a %s fault after full collection leaves cleanup unconfirmed', point => {
+    const r = new Rig().boot(); r.output();
+    r.event({ type: 'end', stream: 'stdout' }); r.event({ type: 'end', stream: 'stderr' });
+    r.event({ type: 'exit', code: 0, signal: null }); r.event({ type: 'close', code: 0, signal: null });
+    r.event({ type: 'group', state: 'absent' }); r.event({ type: 'tick' }, 100); r.event({ type: 'group', state: 'absent' });
+    expect(r.run.phase).toBe('removing');
+    r.event({ type: 'fault', point });
+    expect(r.run).toMatchObject({ first: point, cleanupConfirmed: false, retainedDuty: true });
+  });
+  it('SF20: the undrained command queue stops at 32 values and records the limit', () => {
+    const s = createBodyLiveSupervisor(), token = s.start(0)!;
+    s.send(token, 0, { type: 'prepared', ok: true }); s.send(token, 0, { type: 'spawned', pid: 42 });
+    s.send(token, 0, { type: 'cancel' });
+    for (let t = 100; t < 3_000; t += 100) { s.send(token, t, { type: 'tick' }); s.send(token, t, { type: 'group', state: 'alive' }); }
+    expect(s.drain()).toHaveLength(32);
+    expect(s.inspect().run?.execution.flags).toContain('event_limit');
+  });
+  it('SF20: an exit/close disagreement is diagnosed as a conflict, not only as a child failure', () => {
+    const r = new Rig().boot(); r.event({ type: 'exit', code: 0, signal: null }); r.event({ type: 'close', code: 0, signal: 'SIGTERM' });
+    expect(r.run.execution.flags).toEqual(expect.arrayContaining(['event_conflict', 'child']));
+  });
   it('SF04/SF20: a missing stderr listener cannot be supplied after terminal classification', () => {
     const r = new Rig(); r.start(); r.event({ type: 'prepared', ok: true }); r.event({ type: 'spawned', pid: 42 });
     r.event({ type: 'attach', stream: 'stdout' }); r.output();
