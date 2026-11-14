@@ -175,3 +175,7 @@ oracleは固定のrecord ID列・clock観測点列・失敗indexごとの期待p
 ## 12 後続のrecord長の保守算定（2026-11-14）
 
 [variant別byte積上げ・保守上界と合法最大の区別draft-0.1](BEST_PRACTICE_WFB_SGA_VARIANT_BYTE_BOUND_DESIGN.md)で、完成record lineのU_indと一部制約付きU_relを整理した。FS08／13／14の封印・失敗prefixを変えず、未encoding TERMや部分bufferを完成wire長だけで保持不要としない。合法最大・総量・最大同時保持・実allocation／費用は未確定のまま、選択未承認・各閉鎖条件・Unknown・調査保留と実装／採取／再実行未実施を維持する。
+
+## 13 後続の出力予約・部分write境界（2026-11-14）
+
+[packet総量の保守算定・部分bufferの予約境界draft-0.1](BEST_PRACTICE_WFB_SGA_PACKET_TOTAL_BUFFER_RESERVATION_DESIGN.md)で、固定record順に対応する出力予約と、workspace→同backingの成功slot昇格・failed_heldの保持を具体化した。FS08失敗時のTERM封印／FS14未試行を維持し、未使用予約で次encodingを再開しない。最大同時保持・退出確認・実allocation／費用はUnknownのまま、選択未承認・各閉鎖条件・調査保留と実装／採取／再実行未実施を維持する。

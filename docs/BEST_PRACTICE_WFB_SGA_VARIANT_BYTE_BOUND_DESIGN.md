@@ -184,3 +184,7 @@ record長Uは成功した完成lineの上界で、失敗encoderの確保容量�
 全て未承認。本MDと親2文書の参照更新だけを行い、選択・format・容量capを採用しない。元の5秒期限・既定並列度、各閉鎖条件・全体受付無効・Unknown・調査保留を維持する。実装・負荷採取・試験再実行・実process対照・実接続・実通信・設定変更・コミット・Pushは今回行わない。
 
 文書整合として対象3文書のローカルリンク11件・表23個の列数、VB01〜10の計画ID連番、未承認チェック5項目、variant長・入れ子式とrecordのkey税／value和の二経路検算、SUM／TERMの差分23／25byteと上界1,227／1,482byte、末尾改行と差分空白を確認した。文書と定数の静的検算のみで、record生成・encoder／検査器実装・合成試験・負荷採取・試験再実行・合法最大／総量／保持上界の実証ではない。
+
+## 11 後続のpacket総量・部分buffer予約（2026-11-14）
+
+[packet総量の保守算定・部分bufferの予約境界draft-0.1](BEST_PRACTICE_WFB_SGA_PACKET_TOTAL_BUFFER_RESERVATION_DESIGN.md)で、Counts上限拒否を前提にPrePacketとTERM込みのU_ind／U_relを集計し、record別出力予約・write前受付・同backing昇格と失敗保持を対にした。合法最大・最大同時保持・実allocator／費用は未確定で、旧32KiBや差分を実memory適合へ昇格させない。選択未承認・元5秒・既定並列度・各閉鎖条件・Unknown・調査保留と実装／採取／再実行未実施を維持する。
