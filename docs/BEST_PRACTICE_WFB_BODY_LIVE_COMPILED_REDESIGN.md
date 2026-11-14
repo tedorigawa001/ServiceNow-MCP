@@ -198,3 +198,7 @@ payloadのtranspileは旧306（主304＋補助2）から新3（主1＋補助2）
 比較器の旧方式の対照childは、旧scriptと同等の仕事を同じ60,000ms期限で実行する。レビュー時は別アプリのCPU使用でload平均が約6〜7あり、元の`compiled-probe-body-live`（自身は無期限）が103秒、旧方式の対照childが60秒で期限停止、新JS patch経路が25秒だった。この場合のABBAは新経路の退行を示さないが、比較も成立しない。比較器は旧方式の対照childの期限停止を、所有group終了の確認後に`comparison: 'inconclusive'`／reason `control_deadline`／exit code 2として区別し、成功にも新経路の失敗にも数えない。新JS経路の期限停止・出力不正・観測不一致は従来どおり失敗である。期限は延長しない。
 
 stdout／stderrの上限は、UTF-16文字数ではなくbyteで64KiBまで保持し、超過分もdrainして数える。BL-C、通常経路の切替、安定3run／30秒目標の受入は引き続き未実施で、正式発行口閉鎖・全体受付無効・Unknown・調査保留を維持する。
+
+## 13 BL-C前工程：親supervisorの故障対照設計（2026-11-14）
+
+[親supervisor故障注入matrix・受入条件draft-0.1](BEST_PRACTICE_WFB_BODY_LIVE_SUPERVISOR_FAULT_DESIGN.md)で、四軸終端、SF01〜25、判定優先順、固定60秒と別cleanup枠、2summary／将来checkpointの境界を具体化した。旧対照timeoutの比較不能が監視・出力・cleanup異常を隠さないことを必須とする。純粋fake・承認が必要なprocess対照・安定3run・通常並列回帰を分け、未実施をBR09完了にしない。今回は文書だけで、通常経路未切替・正式発行口閉鎖・全体受付無効・Unknown・調査保留を維持する。
