@@ -174,3 +174,7 @@ SF01〜24は手書きのevent列・期待分類を純粋fakeへ接続し、SF25�
 | 等価 | 不在確認の100ms間隔（照会命令自体が100ms以上空けて出る）、removing／reporting中のdata拒否（stream終了が前提で別検査が止める） | 等価として記録 |
 
 関連9fileを既定の並列度で再実行すると、load平均約5で908件成功、3秒超の試験はなかった。§5の記録にあるload平均約10での3件timeoutは今回の条件では再現せず、原因は未確定のまま残す。SG-B／SG-P、実process adapterへの接続、BL-Cの受入は未実施で、正式発行口閉鎖・全体受付無効・Unknown・調査保留を維持する。
+
+## 12 SG-A後：通常並列3件timeoutの対照計画（2026-11-14）
+
+[通常並列3件timeoutの基準HEAD対照計画draft-0.1](BEST_PRACTICE_WFB_SGA_PARALLEL_TIMEOUT_CONTROL_PLAN.md)に、H0／H1、9file主対照と共通8fileの補助対照、開始前負荷・元の5秒／既定並列度、最初の遅延区間・終了確認を整理した。SG-Aの93→109件というworkload差を明示し、後続の未再現を解消済みとしない。compiled旧対照の60秒timeoutとは分離する。今回は文書だけで、観測実装・再実行・SG-B・実比較器接続を承認せず、各閉鎖条件・Unknown・調査保留を維持する。

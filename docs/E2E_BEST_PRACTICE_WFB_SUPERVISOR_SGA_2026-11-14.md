@@ -116,3 +116,7 @@ SG-Aの試験は109件（動作・境界101＋感度8）になった。生存の
 | ABBA比較器（今回の変更対象外） | `inconclusive`／`control_deadline`／exit 2。開始時load平均約6.65で旧対照の1本目が期限に達した（SIGTERM 60,001ms、close 60,063ms、所有group終了確認済み、stderr 0・truncated false）。後続childは起動していない |
 
 比較器・kernel・protocolのコードは今回変更しておらず、ABBAの比較不能は試験追加の回帰ではない。新経路との比較はこの実行では成立していない。
+
+## 9 後続の通常並列対照計画（2026-11-14・未実行）
+
+[通常並列3件timeoutの基準HEAD対照計画draft-0.1](BEST_PRACTICE_WFB_SGA_PARALLEL_TIMEOUT_CONTROL_PLAN.md)を追加した。保存済みH0／H1と当初の途中版を区別し、開始時負荷・元の5秒期限／既定並列度・局所遅延区間・終了確認を揃える方針を定める。9file内のSG-A件数差は補正せず明記し、共通8fileは別の補助対照とする。今回の実行・成功件数を追加するものではなく、当初3件の原因／恒久解消は未確定のまま。実装・試験再実行・実process対照・実接続・実通信・設定変更・Pushは行わない。
