@@ -1,10 +1,12 @@
 # WF-B SG-A後：packet総量の保守算定・部分bufferの予約境界
 
-Version: draft-0.1 / Date: 2026-11-14 / 読取り基準HEAD: `fa169bf`。
+Version: draft-0.2 / Date: 2026-11-14 / 読取り基準HEAD: `fa169bf` / レビュー修正基準HEAD: `8b21ff9`。
+
+draft-0.1のレビュー修正：数値の誤りはなかった。固定schedule設計§6の、FS08未到達の早期失敗でFS13のz前に行う診断batchが予約の対象に入っておらず、使う予約とclaim、途中失敗時のTERM encodingの扱いが未記載だった。§6に、診断batchは同じslotのB[j]とclaimを一度だけ使い（FS08と排他）、途中失敗はFS08失敗と同じ扱いとすることを明記し、失敗表とPB08へ加えた。各上界値・予約和は変えていない。
 
 Status: **文書・定数の算定と予約契約案のみ。LOAD6／LOAD7の選択・format・容量capは未承認。** 元のtest 5,000ms・既定並列度、通常経路未切替、正式発行口・C実行入口・body起動閉鎖、全体受付無効、Unknown、VM／監視／telemetry調査保留を維持する。実装・負荷採取・試験再実行・実process対照・実接続・実通信・設定変更・Pushは行わない。
 
-親は[variant別byte積上げdraft-0.2](BEST_PRACTICE_WFB_SGA_VARIANT_BYTE_BOUND_DESIGN.md)と[固定schedule設計draft-0.2](BEST_PRACTICE_WFB_SGA_FIXED_SCHEDULE_SLOT_ENCODING_DESIGN.md)。[strict field契約draft-0.3](BEST_PRACTICE_WFB_SGA_RECORD_FIELDS_ENCODING_DESIGN.md)のCounts上限超過をencoding前に拒否する条件を含め、完成line総量と部分bufferの受付条件を対にする。本書は実allocator・encoder・台帳・証拠issuer・保存経路を実装しない。
+親は[variant別byte積上げdraft-0.2](BEST_PRACTICE_WFB_SGA_VARIANT_BYTE_BOUND_DESIGN.md)と[固定schedule設計draft-0.3](BEST_PRACTICE_WFB_SGA_FIXED_SCHEDULE_SLOT_ENCODING_DESIGN.md)。[strict field契約draft-0.3](BEST_PRACTICE_WFB_SGA_RECORD_FIELDS_ENCODING_DESIGN.md)のCounts上限超過をencoding前に拒否する条件を含め、完成line総量と部分bufferの受付条件を対にする。本書は実allocator・encoder・台帳・証拠issuer・保存経路を実装しない。
 
 ## 1 算定前提と適用できない場合
 
@@ -107,10 +109,13 @@ viewの長さがB[j]以下でも、共有poolのbackingがより大きければ�
 | post／writer退出未確認 | 公開しないbacking・borrow／write責務 | buffer clear／reuseで停止成功を捏造 |
 | encoded成功 | 同backingを同slotへ昇格。長さと容量を別記録 | workspaceとslotを別allocationとして二重生成 |
 | 通知throw／ack欠落 | 完成PrePacketの元参照・未受理custody | 失敗した通知のためのconcat copy／再encoding |
+| FS08未到達の診断batchでrecord jが失敗 | failed_held、成功prefix、未試行suffix、sealedのままencoding未試行のTERM | 次workspace、TERM encoding（FS14）、z_post、未使用creditでの再開 |
 
 停止は新しいwrite／encodingを禁止する。同時に、既に始まったwriteの即時中断を保証したとはせず、退出未確認なら元backingとborrowを保持する。失効後の遅い復帰が新しいslotを復活させないよう同owner／同attemptの資格を退役させる。具体機構と費用は未接続のままである。
 
 FS08のrecord jで失敗したら、そのbatchを停止し、次workspace・上位通知を開始しない。FS13のzとTERM封印は既存設計どおり残すが、TERM encoding（FS14）・z_postは行わない。TERM予約が未使用でも、失敗bufferの保持中に第二workspaceを作る根拠にはしない。TERM自身の失敗も同様に保持し、予備の診断JSONを追加しない。
+
+FS08未到達の早期失敗でFS13のz前に行う診断batchは、そのrecordの固定slotに割り当てたB[j]とrecord claimを一度だけ使う。FS08とこの診断batchは同じtrialで排他なので、slotごとの予約は高々一度しか消費されず、予約和はR_totalのままである。診断batchのために別の予約・第二の予約表・追加creditを作らない。共通identityが揃わず封印できないrecordは予約を消費せずnot_attemptedとして保持する。診断batchの途中でrecord jが失敗した場合はFS08失敗と同じく、batchを停止し、zとTERM封印は行うが、TERM encoding（FS14）とz_postは行わない。
 
 ## 7 出力用容量の条件付き不変式
 
@@ -143,7 +148,7 @@ BR01〜07はOP12／13／18／19に、reserve・claim・buffer取得・固定toke
 | PB05 | 空／満杯／ちょうど残容量／1byte超過のwrite | 超過tokenをwrite前に拒否。LFもB[j]へ含める |
 | PB06 | 各token途中throw、buffer取得・post失敗 | confirmed prefixと未確認extentを分け、全backingと責務を保持 |
 | PB07 | 同backing昇格と別copyによる偽装 | 同一allocationの継続だけを予約内とし、copy費を落とさない |
-| PB08 | FS08の各jで失敗・TERM封印 | 次encoding／TERM encodingなし。未使用TERM creditで再開しない |
+| PB08 | FS08、またはFS08未到達の診断batchの各jで失敗・TERM封印 | 次encoding／TERM encodingなし。診断batchは同slotのB[j]とclaimを一度だけ使い、FS08と二重消費しない。未使用TERM creditで再開しない |
 | PB09 | 取消・退出未確認・遅い復帰 | clear／reuseせず、旧writerが新slotへ書けない境界を確認 |
 | PB10 | backingがviewより大きい・concat／受領copy | 物理容量・copyを無視してR_total保証としない |
 | PB11 | 受理済みだが元borrow未解放 | wire受理・停止・custody・解放を別状態で保持 |

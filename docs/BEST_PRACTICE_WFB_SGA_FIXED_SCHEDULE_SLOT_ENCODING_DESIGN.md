@@ -1,6 +1,8 @@
 # WF-B SG-A後：固定schedule・最小field／slot形状・encoding確定点
 
-Version: draft-0.2 / Date: 2026-11-14 / 読取り基準HEAD: `8d48bfc` / レビュー修正基準HEAD: `e058407`。
+Version: draft-0.3 / Date: 2026-11-14 / 読取り基準HEAD: `8d48bfc` / レビュー修正基準HEAD: `e058407`、`8b21ff9`。
+
+draft-0.2のレビュー修正：FS08未到達の早期失敗で行う診断batchの途中でrecord jが失敗した場合に、TERM encoding（FS14）とz_postを行うかが未記載だった。§6で、FS08のrecord j失敗と同じくbatchを停止し、zとTERM封印までを行ってFS14とz_postは行わないと明記した。回数候補・選択状態は変えていない。
 
 draft-0.1のレビュー修正：回数・式の誤りはなかった。§4がencodingをFS08／14に限定すると書く一方で、§6はFS08未到達の早期失敗の診断batchをFS13のz前に置いており、FS13の費目にOP13がなかった。またFS08失敗時の「TERM試行もskip」が封印とencodingのどちらを指すか曖昧で、§4の「FS13〜14へ合流」とも合わなかった。早期失敗の診断encodingをFS13とOP13に明記し、FS08失敗ではzとTERM封印までを行い、TERM encoding（FS14）とz_postは行わないと統一した。回数候補・選択状態は変えていない。
 
@@ -113,7 +115,7 @@ getter・通知の実行中取消は先行停止scalarへ一度記録するだ�
 | TERMの生成／封印失敗 | TERM encodingなし | 先行Failureと部分TERM。rootを「記録できたので解放済み」としない |
 | TERM encoding／z_post異常 | TERM再生成・再encodingなし | 成功したTERM bytesまたは部分buffer、封印後の成否、未解放責務をownerに保持 |
 
-早期失敗分岐のPrePacket診断encodingはFS13のz前に配置し、その費用を失敗終端へ割り当てる。失敗時だけ新しい「予備JSON」を追加しない。workspace確保・出力上界・停止予約を満たさない場合はその試行も行わず、先行ownerに未encoding状態を保持する。encoding完了を、保存済み・上位受理済み・cleanup済みの証拠にしない。
+早期失敗分岐のPrePacket診断encodingはFS13のz前に配置し、その費用を失敗終端へ割り当てる。失敗時だけ新しい「予備JSON」を追加しない。workspace確保・出力上界・停止予約を満たさない場合はその試行も行わず、先行ownerに未encoding状態を保持する。encoding完了を、保存済み・上位受理済み・cleanup済みの証拠にしない。診断batchの途中でrecord jが失敗した場合はFS08のrecord j失敗と同じ扱いとし、batchを停止して未試行suffixを保持する。zの採取とTERM封印は行うが、TERM encoding（FS14）とz_postは行わない。
 
 失敗時のslot確定は、同ownerの終端writerが未封印の空fieldを非ok variantへ閉じるだけである。既に封印した正常prefixを変更せず、getterを再実行したり欠測の実値を補ったりしない。部分取得中のdraftは値検査済みのokへ昇格せず、元slot／scratchの未解放責務とともに保持する。TERM encodingを試行しない分岐ではz_postもnot_startedとし、新しい終了観測を追加しない。
 
