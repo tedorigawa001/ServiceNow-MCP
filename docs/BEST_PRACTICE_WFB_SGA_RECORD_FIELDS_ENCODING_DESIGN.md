@@ -1,6 +1,8 @@
 # WF-B SG-A後：record別strict field契約・固定encoding規則
 
-Version: draft-0.1 / Date: 2026-11-14 / 読取り基準HEAD: `dffbc32`。
+Version: draft-0.2 / Date: 2026-11-14 / 読取り基準HEAD: `dffbc32` / レビュー修正基準HEAD: `283033e`。
+
+draft-0.1のレビュー修正：回数・式・byte値の誤りはなかった。固定schedule設計§6の「通知throw」等をどのreceipt.state／reasonへ写すかが決まっておらず、FE08／09の期待値が一つに定まらなかった。また§5の`scheduled ≤ entered`に対し、timerが予定より早く発火した場合の扱いが未記載だった。§6に通知結果ごとの写像表を加え、§5に早期入場を待機・再timer・許容幅なしで入場拒否とする候補と、その頻度・誤失敗の可能性がUnknownであることを明記した。回数候補・選択状態は変えていない。
 
 Status: **詳細設計のみ。LOAD6／LOAD7の選択・本field／encoding契約・値域は未承認。** 元のtest 5,000ms・既定並列度、通常経路未切替、正式発行口・C実行入口・body起動閉鎖、全体受付無効、Unknown、VM／監視／telemetry調査保留を維持する。実装・負荷採取・試験再実行・実process対照・実接続・実通信・設定変更・Pushは行わない。
 
@@ -97,6 +99,8 @@ Countsのkey順は`cpu_getter,light_getter,mono_read,utc_read,sample_visit,delta
 
 sampleの時刻が全てokなら `a + k×1,000ms = scheduled ≤ entered ≤ begin ≤ end` を同domainで検査する。enteredはbSの代用ではない。armが非okならscheduledを計算して補完せずnot_started等にする。Lもentered≤begin≤endを検査する。時刻variantとmetric variantは独立で、metric値が正しくても時刻不足なら起動適合へ使わない。
 
+timerが予定より早く発火し `entered < scheduled` となった場合、本候補は待機・再timer・clock poll・許容幅の導入をせず、FS02の入場拒否として扱う。観測したenteredはok値のまま残し、そのslotのbegin／end／utc／cpu_count／cpu_check／lightsは`not_started`（`stopped_before_step`）、FirstFailureは`order_invalid`・FS02・OP04とする。以後のgetterは行わない。timer判定の時刻源と高分解能monoとの差でこれがどの程度起きるかは未実測であり、正常な実行を誤って失敗させ得る。許容幅や待機を設けるかは別承認の事項で、実行時に緩めない。
+
 cpu_checkの`validated`は局所入力検査結果であり、scope安定性・実provider証拠・承認を意味しない。Scopeのchanged／unconfirmedは隠さない。I[k].busyのokには対応S双方のCPU入力検査・同scope／epochのprivate根拠が必要で、serialized labelだけでは証明不能である。
 
 SUMのbusyがokなら全5 intervalがokであり、pairは同区間pairの和と一致する。区間percentの単純平均・欠測bridgeなし。value_candidateは純粋な値候補に限り、Unknown・正式発行口閉鎖・全体受付無効を解除しない。provider／scope／clock／要件証拠不足なら、数値があっても適合証拠として採用しない。
@@ -111,6 +115,19 @@ Receiptは下表のexact keysとする。全て状態値のsnapshotで、実rece
 | unconfirmed | `state,reason` | reasonは`receipt_missing,cancelled,timing_unconfirmed`のどれか。h非ok |
 | rejected | `state,reason` | reasonは`receipt_invalid,binding_mismatch`のどちらか。h非ok |
 | received | `state,packet` | packetは同envelopeのId。n_ackがok、hは下記の参照variant |
+
+固定schedule設計§6の通知結果は、次の一つにだけ写す。DiagFlagsとFirstFailureは同じ原因で別途立てる。
+
+| 通知の結果 | receipt | 補足 |
+|---|---|---|
+| nN guard拒否・先行失敗で通知未試行 | `not_sent` | notify_attempt＝0 |
+| 通知の同期throw・失敗settle（receiptなし） | `unconfirmed`／`receipt_missing` | notify_attempt＝1、FirstFailureはOP14。rejectedにしない |
+| ack期限到達・応答なし | `unconfirmed`／`receipt_missing` | DiagFlagsのlateも立てる。timeoutを受理へ補完しない |
+| 通知中の取消 | `unconfirmed`／`cancelled` | 取消後に届いた応答は重複状態として保持するだけ |
+| settleはあったがnAckの採取失敗・順序が検査不能 | `unconfirmed`／`timing_unconfirmed` | receipt内容が正しくてもreceivedにしない |
+| 応答はあるがreceiptの形式・内容が不正 | `rejected`／`receipt_invalid` | — |
+| 別packet／別trialへのreceipt | `rejected`／`binding_mismatch` | — |
+| 同packetへの正規receiptとnAck正常 | `received` | hは下記の参照variant |
 
 hは`V<固定文字列"n_ack">`とし、receivedの場合だけ`{state:"ok",value:"n_ack"}`を置く。hの時刻値は同TERMのn_ack.valueを参照する。別の時計採取も、同値時刻の無制限copyも増やさない。received以外は原因に合う非ok variantで、n_ackがokでもhを自動的にokへしない。
 
@@ -156,10 +173,10 @@ FS08失敗時もTERMはas-of-zでsealedになり得るが、TERM encodingとz_po
 | FE02 | okにreason／非okにvalue、stateとreason不一致 | 8状態・固定28 reasonの対応外を拒否。欠測を0にしない |
 | FE03 | Id境界64／65、quote／backslash／非ASCII | 不正値をescape救済せず拒否。内部参照へ復元しない |
 | FE04 | U53／U64最大・一桁超過・先頭0・指数 | 長さと値域両方を確認。最大22byteのU64 string等を独立計算 |
-| FE05 | Mono単位違い・lossy変換・誤差不明 | ns表現だけで実clock適合とせずUnknown／停止 |
+| FE05 | Mono単位違い・lossy変換・誤差不明、timerの早期発火（entered＜scheduled） | ns表現だけで実clock適合とせずUnknown／停止。早期入場は待機・再timerなしで入場拒否 |
 | FE06 | loadの負0・負値・非finite・大小文字違い | 16hex候補の値域・固定3要素。10進丸め／missing補完なし |
 | FE07 | summaryの区間不足・pair合計不一致・T=0 | 不正pairを拒否。value_candidateを実受付へ昇格しない |
-| FE08 | received以外のh=ok・別packet・nAck二重採取 | 同TERMのn_ack参照だけ。receipt／時刻／実体同一性は分離 |
+| FE08 | received以外のh=ok・別packet・nAck二重採取、通知throw／timeout／取消 | 同TERMのn_ack参照だけ。通知結果は§6の写像表どおり一つのreceiptへ。receipt／時刻／実体同一性は分離 |
 | FE09 | call済み時刻不明・guard未到達・診断branch | attempted／zero／unconfirmedを保存し、正常受理へ偽装しない |
 | FE10 | FS08失敗でsealed TERMだけが残る | 内部値とwire bytesを分離。TERM自己成否・z_postを追加しない |
 | FE11 | key順・空白・LF／framing・array順の変異 | 固定token列・58byteのload array等の独立期待値と照合 |
@@ -177,4 +194,4 @@ oracleは対象encoderのkey列・長さhelper・enum一覧をそのまま再利
 
 全て未承認。選択・値域・formatの採用、旧入口／通常経路の差替え、証拠／permit発行は行わない。本MDと親2文書の参照更新だけとし、元の5秒期限・既定並列度、正式発行口閉鎖・全体受付無効・Unknown・調査保留を維持する。実装・負荷採取・試験再実行・実process対照・実接続・実通信・設定変更・コミット・Pushは今回行わない。
 
-文書整合として対象3文書のローカルリンク12件・表20個の列数、FE01〜12の計画ID連番、未承認チェック5項目、共通整数16／20桁・reason集合28種、string最大66／18／22／26byte・load配列58byte・列挙取得62／70の定数式、末尾改行と差分空白を確認した。文書と定数の静的検算のみで、encoder／検査器実装・合成試験・実clock確認・負荷採取・試験再実行・総byte／保持上界の実証ではない。
+文書整合として対象3文書のローカルリンク12件・表20個（draft-0.2で§6の写像表を加え21個）の列数、FE01〜12の計画ID連番、未承認チェック5項目、共通整数16／20桁・reason集合28種、string最大66／18／22／26byte・load配列58byte・列挙取得62／70の定数式、末尾改行と差分空白を確認した。文書と定数の静的検算のみで、encoder／検査器実装・合成試験・実clock確認・負荷採取・試験再実行・総byte／保持上界の実証ではない。
