@@ -1,6 +1,8 @@
 # WF-B SG-A後：固定schedule・最小field／slot形状・encoding確定点
 
-Version: draft-0.1 / Date: 2026-11-14 / 読取り基準HEAD: `8d48bfc`。
+Version: draft-0.2 / Date: 2026-11-14 / 読取り基準HEAD: `8d48bfc` / レビュー修正基準HEAD: `e058407`。
+
+draft-0.1のレビュー修正：回数・式の誤りはなかった。§4がencodingをFS08／14に限定すると書く一方で、§6はFS08未到達の早期失敗の診断batchをFS13のz前に置いており、FS13の費目にOP13がなかった。またFS08失敗時の「TERM試行もskip」が封印とencodingのどちらを指すか曖昧で、§4の「FS13〜14へ合流」とも合わなかった。早期失敗の診断encodingをFS13とOP13に明記し、FS08失敗ではzとTERM封印までを行い、TERM encoding（FS14）とz_postは行わないと統一した。回数候補・選択状態は変えていない。
 
 Status: **詳細設計のみ。LOAD6／LOAD7の選択・本schedule・field／上限の採用は未承認。** 元のtest 5,000ms・既定並列度、通常経路未切替、正式発行口・C実行入口・body起動閉鎖、全体受付無効、Unknown、VM／監視／telemetry調査保留を維持する。実装・負荷採取・試験再実行・実process対照・実接続・実通信・設定変更・Pushは行わない。
 
@@ -69,12 +71,12 @@ PrePacketはLOAD6で13record、LOAD7で14record、TERMを含む全体は14／15r
 | FS10 | 最初のsettleでnAckを一度採取し同receiptを確認 | 正常受理時だけ同じ値をhとして採用。timeout／不正応答でhを捏造しない | OP14／15、R |
 | FS11 | gで最終pin／停止／鮮度／T予約guard | D_parent・strict D6・必要なinclusive期限を別に検査 | OP16／15、R終端〜T |
 | FS12 | 固定call入口のi観測と試行分類の境界 | callは将来案のみ。試行済み／時刻未確認を0へ変換しない | OP17／15、Tと起動後を分離 |
-| FS13 | 正常／拒否／throw／取消の受渡し結果を合流、zを一度採取 | 未開始slot・責務を固定、TERMをas-of-zで一度封印 | OP18／19／15、sampler終端 |
+| FS13 | 正常／拒否／throw／取消の受渡し結果を合流、zを一度採取 | 未開始slot・責務を固定、TERMをas-of-zで一度封印。FS08未到達の早期失敗だけ、z前に診断batchを最大一度encoding（§6） | OP18／19／15、早期失敗時のみOP13、sampler終端 |
 | FS14 | TERMを一度encodingし、z_postを一度観測 | 封印後の成否・遅延はControl／Failureへ。TERMへ追記しない | OP13／15／19、固定終端費 |
 
-FS02〜04だけが固定6回／5回の反復であり、他は分岐ごとに最大1回の候補とする。FS08は固定13／14recordの走査である。進行前の停止や失敗時は後続の正常stepを飛ばし、FS13〜14の終端へ一度だけ合流する。失敗した通知や最終guardを起点にFS05へ戻らない。
+FS02〜04だけが固定6回／5回の反復であり、他は分岐ごとに最大1回の候補とする。FS08は固定13／14recordの走査である。進行前の停止や失敗時は後続の正常stepを飛ばし、FS13の終端へ一度だけ合流する。FS14はTERM encodingを試行できる分岐だけで行い、FS08で失敗した分岐ではFS13のTERM封印で止める（§6）。失敗した通知や最終guardを起点にFS05へ戻らない。
 
-Hをarm前にencodingしてaを後付けしたり、S0より前にheader encodingを挟んでその費用を隠したりしない。本案では全recordのencodingをFS08／14に限定し、S0〜S4ではprojection・局所検査・差分だけを行う。この選択は**Rに全PrePacket encoding費を計上する未承認候補**であり、特にLOAD7の返却後100msに収まる実費根拠はない。収まらなければ未適合とし、実行中に前半encode方式へ切り替えない。
+Hをarm前にencodingしてaを後付けしたり、S0より前にheader encodingを挟んでその費用を隠したりしない。本案ではrecordのencodingを、正常経路のFS08／14と、FS08未到達の早期失敗だけが使うFS13のz前の診断batch（§6）に限定し、S0〜S4ではprojection・局所検査・差分だけを行う。この選択は**Rに全PrePacket encoding費を計上する未承認候補**であり、特にLOAD7の返却後100msに収まる実費根拠はない。収まらなければ未適合とし、実行中に前半encode方式へ切り替えない。
 
 ## 5 境界clockの有限観測点候補
 
@@ -106,14 +108,14 @@ getter・通知の実行中取消は先行停止scalarへ一度記録するだ�
 |---|---|---|
 | sample／差分取得の途中失敗 | 後続取得を停止。未開始slotを非okで固定し、FS13へ | 取得済みprefix・scratch責務・先行理由 |
 | FS08へ未到達の早期失敗 | 上位通知なし。封印可能なPrePacket診断を同固定batchで最大一度encodingする終端分岐案 | 未受理payloadと不足。正常経路のFS08と二重実行しない |
-| FS08のrecord jで失敗 | そのbatchを停止。未試行suffixを保持し、上位通知なし。TERM試行もskip | 成功bytes prefix・sealed入力・失敗buffer・未試行record／TERM。workspaceが未解放のまま次を作らない |
+| FS08のrecord jで失敗 | そのbatchを停止。未試行suffixを保持し、上位通知なし。FS13でzを採取しTERMをas-of-zで封印するが、TERM encoding（FS14）とz_postは行わない | 成功bytes prefix・sealed入力・失敗buffer・未試行record、`sealed`のままencoding `not_attempted`のTERM。workspaceが未解放のまま次を作らない |
 | 通知throw／取消／ack欠落／不正receipt | 正常stepを停止しTERM封印へ。再通知なし | 元PrePacket・受理未確認・同ownerの先行理由 |
 | TERMの生成／封印失敗 | TERM encodingなし | 先行Failureと部分TERM。rootを「記録できたので解放済み」としない |
 | TERM encoding／z_post異常 | TERM再生成・再encodingなし | 成功したTERM bytesまたは部分buffer、封印後の成否、未解放責務をownerに保持 |
 
 早期失敗分岐のPrePacket診断encodingはFS13のz前に配置し、その費用を失敗終端へ割り当てる。失敗時だけ新しい「予備JSON」を追加しない。workspace確保・出力上界・停止予約を満たさない場合はその試行も行わず、先行ownerに未encoding状態を保持する。encoding完了を、保存済み・上位受理済み・cleanup済みの証拠にしない。
 
-失敗時のslot確定は、同ownerの終端writerが未封印の空fieldを非ok variantへ閉じるだけである。既に封印した正常prefixを変更せず、getterを再実行したり欠測の実値を補ったりしない。部分取得中のdraftは値検査済みのokへ昇格せず、元slot／scratchの未解放責務とともに保持する。TERMを試行しない分岐ではz_postもnot_startedとし、新しい終了観測を追加しない。
+失敗時のslot確定は、同ownerの終端writerが未封印の空fieldを非ok variantへ閉じるだけである。既に封印した正常prefixを変更せず、getterを再実行したり欠測の実値を補ったりしない。部分取得中のdraftは値検査済みのokへ昇格せず、元slot／scratchの未解放責務とともに保持する。TERM encodingを試行しない分岐ではz_postもnot_startedとし、新しい終了観測を追加しない。
 
 全recordのencoding試行上限はLOAD6 14／LOAD7 15の候補で、正常経路はPrePacket 13／14＋TERM 1。途中失敗ではこれ以下のprefixとなる。再入・重複・取消で消費したclaimは復元しない。一度も呼ばれていないrecordを`failed`へ書換えず、`not_attempted`として区別する。
 
