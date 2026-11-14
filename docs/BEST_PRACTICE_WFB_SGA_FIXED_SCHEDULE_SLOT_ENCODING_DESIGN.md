@@ -181,3 +181,7 @@ oracleは固定のrecord ID列・clock観測点列・失敗indexごとの期待p
 ## 13 後続の出力予約・部分write境界（2026-11-14）
 
 [packet総量の保守算定・部分bufferの予約境界draft-0.1](BEST_PRACTICE_WFB_SGA_PACKET_TOTAL_BUFFER_RESERVATION_DESIGN.md)で、固定record順に対応する出力予約と、workspace→同backingの成功slot昇格・failed_heldの保持を具体化した。FS08失敗時のTERM封印／FS14未試行を維持し、未使用予約で次encodingを再開しない。最大同時保持・退出確認・実allocation／費用はUnknownのまま、選択未承認・各閉鎖条件・調査保留と実装／採取／再実行未実施を維持する。
+
+## 14 後続のwriter frame合流・参照退役（2026-11-14）
+
+[同backingの所有・容量確認境界とwriter退出／borrow退役draft-0.1](BEST_PRACTICE_WFB_SGA_BACKING_OWNERSHIP_WRITER_EXIT_DESIGN.md)で、同Anchor／attemptの先行ExitSlot、finally候補→固定caller join→post退役→同backing昇格の境界を整理した。停止要求やpacket receiptだけで退出・全borrow解放とせず、未確認backing／sealed TERM／先行ownerの保持を維持する。方式・選択未承認、各閉鎖条件・Unknown・調査保留を保ち、実装・採取・再実行は行わない。

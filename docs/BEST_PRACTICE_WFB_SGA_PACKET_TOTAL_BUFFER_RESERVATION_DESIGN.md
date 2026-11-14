@@ -167,3 +167,7 @@ BR01〜07はOP12／13／18／19に、reserve・claim・buffer取得・固定toke
 全て未承認。本MDと親2文書の参照更新だけを行い、選択・format・容量capを採用しない。元の5秒期限・既定並列度、各閉鎖条件・全体受付無効・Unknown・調査保留を維持する。実装・負荷採取・試験再実行・実process対照・実接続・実通信・設定変更・コミット・Pushは今回行わない。
 
 文書整合として対象3文書のローカルリンク12件・表22個の列数、BR01〜07／PB01〜12のID連番、未承認チェック5項目、PrePacket11,893／12,802・TERM込み13,400／14,309byteと参考U_rel、LF数、record別予約和・prefix不等式・残容量ちょうど／1byte超過の定数関係、末尾改行と差分空白を確認した。文書と定数の静的検算のみで、encoder／予約台帳／writer実装・合成試験・負荷採取・試験再実行・部分bufferの実上界や最大同時保持の実証ではない。
+
+## 11 後続の同backing所有・writer退出／borrow退役（2026-11-14）
+
+[同backingの所有・容量確認境界とwriter退出／borrow退役draft-0.1](BEST_PRACTICE_WFB_SGA_BACKING_OWNERSHIP_WRITER_EXIT_DESIGN.md)で、request／view／backing extent／allocator charge、finally候補とcaller join、固定roleのborrow退役を分離した。retiredや参照解除をGC／native解放／OS返却と同義にせず、物理解放未確認ならphysical live量から減算しない。既存の予約和・FS08／早期診断batchの排他・失敗保持を保ち、選択未承認・元5秒・既定並列度・各閉鎖条件・Unknown・調査保留と実装／採取／再実行未実施を維持する。
