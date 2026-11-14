@@ -176,3 +176,7 @@ H1の未変更sourceでP9の9fileを既定の並列度で1回実行すると、9
 ## 12 実施前gate：終了確認・外側時間枠（2026-11-14）
 
 [終了確認・外側時間枠・cleanup予約の詳細設計draft-0.1](BEST_PRACTICE_WFB_SGA_TERMINATION_OUTER_BUDGET_DESIGN.md)に、runner／worker／stdioの独立終端、先行custody・未確認保持、起点と候補の時間配賦を整理した。候補値は未承認で、元の5秒・既定並列度を変更しない。test失敗と監視失敗の次trial条件を分離し、late確認で成功へ戻さない。今回の文書は起動・強制終了・再実行・SG-Bの承認ではない。
+
+## 13 実施前gate：開始時負荷採取（2026-11-14）
+
+[開始時負荷採取・CPU busy・有限保持の詳細設計draft-0.1](BEST_PRACTICE_WFB_SGA_START_LOAD_CAPTURE_DESIGN.md)に、7frameの代替候補、累積5bucket差分の重み付きbusy、取得候補・上限・欠測・停止と上位保持を整理した。本計画の現行6点／S5 snapshot案とは別profileで、選択・統一は未完了。値は未承認候補で、OS負荷は今回採っていない。5秒test期限・既定並列度・負荷適合条件は変更せず、実行中／終端負荷の取得や試験再実行も未接続・未承認のまま残す。
