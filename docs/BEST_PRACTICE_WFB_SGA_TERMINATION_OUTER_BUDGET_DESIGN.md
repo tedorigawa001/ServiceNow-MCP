@@ -1,6 +1,8 @@
 # WF-B SG-A後：終了確認・外側時間枠・cleanup予約
 
-Version: draft-0.2 / Date: 2026-11-14 / 読取り基準HEAD: `668a276`。レビュー修正基準HEAD: `fe6db9a`。
+Version: draft-0.3 / Date: 2026-11-14 / 読取り基準HEAD: `668a276`。レビュー修正基準HEAD: `fe6db9a`（draft-0.1）／`cb3c871`（draft-0.2の基準時刻）。
+
+draft-0.2のレビュー修正：§4.3の「起動直前snapshot」の1,000ms未満が、予定時刻と実際の読取り時刻のどちらを基準にするか未定義だった（[profile比較§4](BEST_PRACTICE_WFB_SGA_LOAD_PROFILE_COMPARISON.md)の指摘）。この6点候補（LOAD6）での基準を実read時刻と定めた。LOAD6／LOAD7の選択は行っていない。
 
 draft-0.1のレビュー修正：対照計画§5の「起動直前snapshot」と、本書§4.3のsample schedule（最後のsampleからspawnまで最大1秒）の対応が未定義だった。最後のsampleを起動直前snapshotとし、許容する古さを受渡し枠の1秒（＝sampling間隔）に限ることを§4.3に明記した。候補値・算式・gateは変えていない。
 
@@ -76,6 +78,8 @@ compiled旧対照の60秒、SG-A kernelの60秒／cleanup3秒、real-hostの30�
 sampleは`t_arm`から5秒を覆う同じscheduleとし、`t_spawn`は`t_arm + 5,000ms`以降かつ`t_arm + 6,000ms`未満に入ることを候補条件とする。欠測・受渡し遅延時は新しく5秒を採り直さず、当該trialを起動前不適合として残す。
 
 **起動直前snapshotの定義**：sampleは`t_arm`、`t_arm + 1,000ms`、…、`t_arm + 5,000ms`の6時点とし、最後の`t_arm + 5,000ms`のsampleを対照計画§5の「起動直前snapshot」とする。このsampleから`t_spawn`までの間隔は受渡し枠の1,000ms未満（sampling間隔と同じ）に限り、その間隔を同trialに記録する。負荷適合の比較（load1／load5・CPU busy）はこのsampleを使い、spawn後のsampleや次の採取で置き換えない。最後のsampleが欠けた、または間隔が1,000ms以上になった場合は、起動前不適合としてspawnしない。spawnの直前にもう1回sampleを追加する方式は、候補profile（5秒・1秒間隔）を変えるため採らない。
+
+**基準時刻（LOAD6候補）**：1,000ms未満の間隔は予定時刻ではなく、S5の実際の読取り開始`read_begin(S5)`から`t_spawn`までで測る（`data_age_upper = t_spawn − read_begin(S5)`）。S5の読取りは予定`t_arm + 5,000ms`以降に開始することを必須とし、予定より早く読んだsampleで条件を満たしたことにしない。この条件と`t_spawn < t_arm + 6,000ms`から`data_age_upper < 1,000ms`が導かれる。返却後の経過`return_age = t_spawn − read_end(S5)`も別fieldで記録するが、条件判定には`data_age_upper`を使う。S5のgetter群は非atomicなので、`read_end`を全fieldの取得時点とはみなさない。
 
 `D_observe = t_spawn + 120,000ms`、`D_cycle = t_arm + 156,000ms`。cleanupの最終上限は`D_final = min(D_observe + 30,000ms, D_cycle)`とする。早期停止／exit後は`D_cleanup = min(t_clean + 30,000ms, D_final)`を一度だけ固定し、後続event・retry・closeで更新しない。
 
