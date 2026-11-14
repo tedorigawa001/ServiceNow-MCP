@@ -171,3 +171,7 @@ oracleは固定のrecord ID列・clock観測点列・失敗indexごとの期待p
 ## 11 後続のrecord別strict field・固定encoding（2026-11-14）
 
 [record別strict field契約・固定encoding規則draft-0.1](BEST_PRACTICE_WFB_SGA_RECORD_FIELDS_ENCODING_DESIGN.md)で、共通scalar・variant・exact key、opaque参照と相関label、hのn_ack参照、ASCII限定の候補出力規則とbyte式を具体化した。FS08失敗時のsealed／未encoding TERMと自己成否非追記を維持し、record最大byte・総量・最大同時保持は未計算のまま残す。選択・format／値域は未承認、元5秒・既定並列度・各閉鎖条件・Unknown・調査保留を維持し、実装・採取・再実行は行わない。
+
+## 12 後続のrecord長の保守算定（2026-11-14）
+
+[variant別byte積上げ・保守上界と合法最大の区別draft-0.1](BEST_PRACTICE_WFB_SGA_VARIANT_BYTE_BOUND_DESIGN.md)で、完成record lineのU_indと一部制約付きU_relを整理した。FS08／13／14の封印・失敗prefixを変えず、未encoding TERMや部分bufferを完成wire長だけで保持不要としない。合法最大・総量・最大同時保持・実allocation／費用は未確定のまま、選択未承認・各閉鎖条件・Unknown・調査保留と実装／採取／再実行未実施を維持する。
