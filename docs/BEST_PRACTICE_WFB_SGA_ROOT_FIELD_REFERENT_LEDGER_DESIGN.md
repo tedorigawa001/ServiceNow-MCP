@@ -171,3 +171,7 @@ root直接fieldの列挙が閉じても、参照先の全形状／同時位置�
 全て未承認。本MDと親2文書の参照更新だけを行う。元の5秒期限・既定並列度、通常経路未切替、正式発行口・C実行入口・body起動閉鎖、全体受付無効、Unknown、VM／監視／telemetry調査保留を維持する。実装・負荷採取・試験再実行・実process対照・実接続・実通信・設定変更・コミット・Pushは行わない。
 
 文書整合として対象3文書のローカルリンク17件・表22個の列数、RG00〜15／RF01〜09／SF01〜07／RS01〜07／RT01〜10のID連番、未承認チェック5項目、group内のfield名重複なし、directoryの15参照先と生成順の一致、alias13位置・registry206／222位置の定数関係、末尾改行・差分空白を確認した。文書と定数の静的検算のみで、実装・合成試験・負荷採取・試験再実行・実参照先容量／最大同時保持／診断保存／回収／終了保証の実証ではない。
+
+## 10 後続のgraph境界・canonical値／protocol形状（2026-11-15）
+
+[graph境界とcanonical値／protocol参照先の形状契約draft-0.1](BEST_PRACTICE_WFB_SGA_GRAPH_BOUNDARY_CANONICAL_PROTOCOL_SHAPE_DESIGN.md)で、共有・寿命延長・追加保持と、RF04／05の値snapshot／private bindingを分けた。parent graphを境界外で0にせず、封印値の可変root参照・二重claim・上位引受未確認を具体化する。選択未承認・元5秒／既定並列度・各閉鎖条件・Unknown・調査保留を維持し、実装・採取・再実行は行わない。

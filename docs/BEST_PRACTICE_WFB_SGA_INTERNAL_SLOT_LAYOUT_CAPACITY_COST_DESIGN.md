@@ -166,3 +166,7 @@ oracleは対象のlayout／cost helperから期待値を生成せず、独立し
 ## 10 後続の全root field・参照先分類とshell失敗境界（2026-11-14）
 
 [全root field台帳・参照先分類と最小shell失敗責務draft-0.1](BEST_PRACTICE_WFB_SGA_ROOT_FIELD_REFERENT_LEDGER_DESIGN.md)で、非実行配置案R1のdirect field、L0の既出位置／追加参照位置、親OSlotと生成prefixの保持・費目を具体化した。参照先payloadや外側slotの実容量を0とせず、最小shell失敗時の完全捕捉・診断保存を無条件に保証しない。選択未承認・元5秒／既定並列度・各閉鎖条件・Unknown・調査保留を維持し、実装・採取・再実行は行わない。
+
+## 11 後続の参照先graph・形状／寿命と費目（2026-11-15）
+
+[graph境界とcanonical値／protocol参照先の形状契約draft-0.1](BEST_PRACTICE_WFB_SGA_GRAPH_BOUNDARY_CANONICAL_PROTOCOL_SHAPE_DESIGN.md)で、同payloadと別参照cell、純dataとissuer／frameへの到達先、canonical claimの同義／別義を対応付けた。L0部分和をgraph容量へ昇格せず、共有先・snapshot copy・部分生成・上位保持の費用を残す。方式・選択未承認、各閉鎖条件・元5秒／既定並列度・Unknown・調査保留を維持し、実装・採取・再実行は行わない。
