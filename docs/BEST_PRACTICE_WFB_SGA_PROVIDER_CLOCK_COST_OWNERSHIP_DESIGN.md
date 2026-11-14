@@ -172,3 +172,7 @@ oracleは対象の費目分類helperを再利用せず、固定操作列と独�
 ## 12 後続のstrict field・encoding値契約（2026-11-14）
 
 [record別strict field契約・固定encoding規則draft-0.1](BEST_PRACTICE_WFB_SGA_RECORD_FIELDS_ENCODING_DESIGN.md)で、確認区分を含む有限field・variant・出力順、時刻ns／load hex等の未承認表現案とbyte計算の入口を整理した。serialized label一致をprivate同一性や実clock品質の証拠に昇格させず、総byte／保持／実workの不足はUnknownのまま残す。実provider・clock・formatやLOAD6／LOAD7を採用せず、各閉鎖条件・調査保留と実装／採取／再実行未実施を維持する。
+
+## 13 後続の内部配置・容量fieldと費目の対応（2026-11-14）
+
+[内部slotの論理配置・容量算定規則と費目所有draft-0.1](BEST_PRACTICE_WFB_SGA_INTERNAL_SLOT_LAYOUT_CAPACITY_COST_DESIGN.md)で、先行空位置・管理field・参照先・未列挙残項を分け、生成／binding／時刻／guard／receipt／失敗／custodyの主費目を整理した。OP03／04／15とOP14／16／17／19を区別し、同occurrenceの重複計上や未導出費の0扱いをしない。方式・選択は未承認、各閉鎖条件・Unknown・調査保留を維持し、実装・採取・再実行は行わない。
