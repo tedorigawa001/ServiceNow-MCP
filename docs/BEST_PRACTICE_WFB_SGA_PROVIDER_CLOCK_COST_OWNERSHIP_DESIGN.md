@@ -168,3 +168,7 @@ oracleは対象の費目分類helperを再利用せず、固定操作列と独�
 ## 11 後続の固定schedule・slot形状・encoding確定点（2026-11-14）
 
 [固定schedule・最小field／slot形状・encoding確定点draft-0.1](BEST_PRACTICE_WFB_SGA_FIXED_SCHEDULE_SLOT_ENCODING_DESIGN.md)で、PrePacketとas-of-zのTERM、固定encoding batch・追加clock観測点・失敗prefixの保持を対にした。record／encoding試行14／15、追加clock14／15は新しい未承認scheduleからの候補で、48／55取得を全費用へ昇格させず、実装coverage・byte／allocation上界・実費は未導出のまま残す。選択未承認・元5秒・既定並列度・各閉鎖条件・Unknown・調査保留と実装／採取／再実行未実施を維持する。
+
+## 12 後続のstrict field・encoding値契約（2026-11-14）
+
+[record別strict field契約・固定encoding規則draft-0.1](BEST_PRACTICE_WFB_SGA_RECORD_FIELDS_ENCODING_DESIGN.md)で、確認区分を含む有限field・variant・出力順、時刻ns／load hex等の未承認表現案とbyte計算の入口を整理した。serialized label一致をprivate同一性や実clock品質の証拠に昇格させず、総byte／保持／実workの不足はUnknownのまま残す。実provider・clock・formatやLOAD6／LOAD7を採用せず、各閉鎖条件・調査保留と実装／採取／再実行未実施を維持する。

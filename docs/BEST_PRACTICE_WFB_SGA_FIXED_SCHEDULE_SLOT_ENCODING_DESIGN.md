@@ -167,3 +167,7 @@ oracleは固定のrecord ID列・clock観測点列・失敗indexごとの期待p
 全て未承認。今回の変更は本MDと親2文書の参照更新だけ。選択未承認、元の5秒期限・既定並列度、各閉鎖条件・全体受付無効・Unknown・調査保留を維持する。実装・負荷採取・試験再実行・実process対照・実接続・実通信・設定変更・コミット・Pushは行わない。
 
 文書整合として対象3文書のローカルリンク12件・表20個の列数、FS00〜14／SE01〜12のID連番、未承認チェック5項目、PrePacket13／14・全record／encoding試行14／15・追加clock14／15・列挙取得62／70の定数式、末尾改行と差分空白を確認した。文書と定数の静的検算のみで、実装・合成試験・負荷採取・試験再実行・実費／容量上界の実証ではない。
+
+## 11 後続のrecord別strict field・固定encoding（2026-11-14）
+
+[record別strict field契約・固定encoding規則draft-0.1](BEST_PRACTICE_WFB_SGA_RECORD_FIELDS_ENCODING_DESIGN.md)で、共通scalar・variant・exact key、opaque参照と相関label、hのn_ack参照、ASCII限定の候補出力規則とbyte式を具体化した。FS08失敗時のsealed／未encoding TERMと自己成否非追記を維持し、record最大byte・総量・最大同時保持は未計算のまま残す。選択・format／値域は未承認、元5秒・既定並列度・各閉鎖条件・Unknown・調査保留を維持し、実装・採取・再実行は行わない。
