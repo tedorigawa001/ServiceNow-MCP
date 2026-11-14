@@ -147,3 +147,7 @@ Timingは既存の採取位置に対応付ける。Sのbegin／end／UTCが18位
 ## 9 後続の論理配置・容量算定と費目所有（2026-11-14）
 
 [内部slotの論理配置・容量算定規則と費目所有draft-0.1](BEST_PRACTICE_WFB_SGA_INTERNAL_SLOT_LAYOUT_CAPACITY_COST_DESIGN.md)で、root／record／roleの管理field列挙部分と未列挙残項、参照cell幅と参照先payloadを分け、構築・更新・失敗保持をOPへ対応付けた。L0は未承認の算定候補であり、部分和を完全なslot／実memory上界へ昇格しない。選択未承認・元5秒／既定並列度・各閉鎖条件・Unknown・調査保留を維持し、実装・採取・再実行は行わない。
+
+## 10 後続のroot台帳・参照先と先行失敗保持（2026-11-14）
+
+[全root field台帳・参照先分類と最小shell失敗責務draft-0.1](BEST_PRACTICE_WFB_SGA_ROOT_FIELD_REFERENT_LEDGER_DESIGN.md)で、root直接保持位置と参照先graphを分け、未入場・部分生成・格納未確認・上位引受未確認の責務を整理した。L0既出位置を再加算せず、aliasの追加cell・外側owner／元frameの保持を残す。最大実保持はUnknown、選択未承認・各閉鎖条件・元5秒／既定並列度・調査保留を維持し、実装・採取・再実行は行わない。
