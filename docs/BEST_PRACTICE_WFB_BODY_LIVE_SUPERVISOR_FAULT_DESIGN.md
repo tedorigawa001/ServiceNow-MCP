@@ -178,3 +178,7 @@ SF01〜24は手書きのevent列・期待分類を純粋fakeへ接続し、SF25�
 ## 12 SG-A後：通常並列3件timeoutの対照計画（2026-11-14）
 
 [通常並列3件timeoutの基準HEAD対照計画draft-0.1](BEST_PRACTICE_WFB_SGA_PARALLEL_TIMEOUT_CONTROL_PLAN.md)に、H0／H1、9file主対照と共通8fileの補助対照、開始前負荷・元の5秒／既定並列度、最初の遅延区間・終了確認を整理した。SG-Aの93→109件というworkload差を明示し、後続の未再現を解消済みとしない。compiled旧対照の60秒timeoutとは分離する。今回は文書だけで、観測実装・再実行・SG-B・実比較器接続を承認せず、各閉鎖条件・Unknown・調査保留を維持する。
+
+## 13 対照の前提：依存pinと実効設定（2026-11-14）
+
+[依存pin方式・実効設定確認の詳細設計draft-0.1](BEST_PRACTICE_WFB_SGA_DEPENDENCY_PIN_CONFIG_DESIGN.md)で、Node／依存実体と実解決先、設定の静的読取り／同runnerでの解決／worker適用を分離した。5秒・既定並列度をoverrideせず確認し、取得不能・副作用未承認・pin不一致ならgateを満たさない。実施前の終了owner／外側枠やSG-Bは未接続・未承認のまま、今回は文書と参照更新だけとする。
