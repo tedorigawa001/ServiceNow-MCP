@@ -161,3 +161,7 @@ oracleは候補実装の残時間helperを再利用せず、固定の境界時�
 ## 11 後続のprovider／clock確認・操作費目所有（2026-11-14）
 
 [provider／clock確認契約・操作一覧と費目所有draft-0.1](BEST_PRACTICE_WFB_SGA_PROVIDER_CLOCK_COST_OWNERSHIP_DESIGN.md)で、静的整合・合成確認・実確認・承認を分離し、provider／clock確認matrixとOP00〜19の費目ownerを対応付けた。48／55取得の外にある境界clock・通知・encoding等の未導出費と追加field込みの容量上界はUnknownのまま残す。案の選択・実装coverage完成・実費の実証ではなく、元5秒・既定並列度・各閉鎖条件・調査保留と実装／採取／再実行未実施を維持する。
+
+## 12 後続のrecord確定・固定encoding配置（2026-11-14）
+
+[固定schedule・最小field／slot形状・encoding確定点draft-0.1](BEST_PRACTICE_WFB_SGA_FIXED_SCHEDULE_SLOT_ENCODING_DESIGN.md)で、起動前PrePacketを封印してから通知する境界と、h／g／iを含む後続TERMを分離した。全PrePacket encodingを最終Rへ置く案は未承認・実費未確認で、L返却後100msに収まる保証ではない。TERMの自己成否を再encodingせず先行ownerへ保持し、strict D6を含む原期限・選択未承認・各閉鎖条件・Unknown・調査保留を維持する。実装・採取・再実行は行わない。

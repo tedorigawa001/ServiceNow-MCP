@@ -164,3 +164,7 @@ oracleは対象の費目分類helperを再利用せず、固定操作列と独�
 全項目は未承認。LOAD6／LOAD7・clock primitive・Lmax・誤差値・取得費・32KiB profileを採用しない。本MDと親2文書の参照のみを更新し、元の5秒期限・既定並列度、正式発行口閉鎖・全体受付無効・Unknown・調査保留を維持する。実装・負荷採取・試験再実行・実接続・実通信・設定変更・コミット・Pushは今回行わない。
 
 文書整合として対象3文書のローカルリンク12件・表20個の列数、PV01〜07／CK01〜06／OP00〜19／PCV01〜12のID連番、未承認チェック5項目、取得48／55回・CPU field候補7,680／差分6,400・誤差例101msの定数式、末尾改行と差分空白を確認した。文書と定数の静的検算のみで、実装・合成試験・実体pin・clock確認・負荷採取・試験再実行・費用上界の実証ではない。
+
+## 11 後続の固定schedule・slot形状・encoding確定点（2026-11-14）
+
+[固定schedule・最小field／slot形状・encoding確定点draft-0.1](BEST_PRACTICE_WFB_SGA_FIXED_SCHEDULE_SLOT_ENCODING_DESIGN.md)で、PrePacketとas-of-zのTERM、固定encoding batch・追加clock観測点・失敗prefixの保持を対にした。record／encoding試行14／15、追加clock14／15は新しい未承認scheduleからの候補で、48／55取得を全費用へ昇格させず、実装coverage・byte／allocation上界・実費は未導出のまま残す。選択未承認・元5秒・既定並列度・各閉鎖条件・Unknown・調査保留と実装／採取／再実行未実施を維持する。
