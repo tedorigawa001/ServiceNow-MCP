@@ -158,3 +158,7 @@ pin不一致・供給元混入・解決漏れ・設定値差・未採取は、�
 ## 12 後続の終了owner・時間枠設計（2026-11-14）
 
 [終了確認・外側時間枠・cleanup予約の詳細設計draft-0.1](BEST_PRACTICE_WFB_SGA_TERMINATION_OUTER_BUDGET_DESIGN.md)で、C1を含む主対照起動より前に保持するowner、部分生成・worker／stdioの終端と未確認責務、候補の外側枠を具体化した。pin／post-pinの費用は未導出のまま、候補予約に収まると実証したものではない。§6の主対照内C1と別起動評価の承認区分を維持し、今回は実装・pin採取・設定評価・再実行を行わない。
+
+## 13 後続のprovider／clock確認契約（2026-11-14）
+
+[provider／clock確認契約・操作一覧と費目所有draft-0.1](BEST_PRACTICE_WFB_SGA_PROVIDER_CLOCK_COST_OWNERSHIP_DESIGN.md)で、固定供給元・実体／実load／scope・clock品質の確認境界と、pin費・取得費・境界観測費・失敗保持のownerを整理した。source／型定義の静的整合を実providerの証拠に昇格せず、C0／C1／C2とtoken非読取り・別承認の境界を変更しない。選択未承認・Unknown・各閉鎖条件・調査保留を維持し、実体pin・getter・設定評価・採取・再実行は未実施のままとする。
