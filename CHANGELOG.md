@@ -306,6 +306,8 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 ### Added
 
+- WF-B BL-B comparator verdict fix: per-child classification moves into a pure, package-excluded function that reports cleanup, spawn/signal, unclosed, output-overflow and stderr anomalies as failures before a legacy-control deadline can be called inconclusive (SF17). A close at or after 60,000 ms counts as the deadline even if the timer has not fired, each signal is sent at most once per child, and hand-written reports cover the order. Deadlines are unchanged; supervisor fault injection (SG-A/SG-B) remains unimplemented.
+
 - WF-B BL-B review controls: the body-live loader test now covers every reachable observation refusal (string/key length, prototype, freeze, symbol and non-enumerable keys, array length, depth, node, count and byte limits), scenario/namespace binding, isolation and seal preconditions, the entry contract and a negative clock. Observations refuse -0 because JSON digests cannot distinguish it from 0. The ABBA comparator reports a legacy-control deadline as inconclusive (exit 2) instead of a pass or a JS-path failure, and caps retained output in bytes. Deadlines are unchanged.
 
 - WF-B BL-A review controls: the body-live migration test now refuses a duplicated BC06 branch, a renamed or reordered final branch, a TS-only anchor loss hidden by type erasure, and checks the exact input limit; its shape comparator distinguishes unary operators. The dead template rescan is removed (template-bearing recipes fail closed) and anchor drift carries the known case ID. Fixed-ledger defences remain uncounted, and BL-B/C, mutant import and the normal-route switch stay disconnected.

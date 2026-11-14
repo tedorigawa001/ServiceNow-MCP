@@ -1,6 +1,8 @@
 # WF-B BL-C：親supervisorの故障注入matrix・受入条件
 
-Version: draft-0.1 / Date: 2026-11-14 / 読取り基準HEAD: `8c2e9d7`。
+Version: draft-0.2 / Date: 2026-11-14 / 読取り基準HEAD: `8c2e9d7`。レビュー修正基準HEAD: `9817f6e`。
+
+draft-0.1のレビュー修正：§1が「今後確定する」とした判定順について、基準HEADの比較器がすでに旧対照の期限停止を出力超過・stderrより先に`inconclusive`へ分類しており、SF17の併発異常を隠していたことを一時copyの偽childで確認した（stderr 70,000byte・TERM無視でexit 2）。判定を純粋関数へ切り出して順序を直し、ceilingのSIGKILL再送と、timerだけに頼る期限判定も合わせて直した。§1の表を修正後の現状へ更新し、§9に内容と限界を記録した。SF01〜25とgateは変えていない。
 
 Status: **詳細設計のみ。故障注入・実装・再実行は未実施。** 通常経路未切替、正式発行口・C実行入口・body起動閉鎖、全体受付無効、Unknown、VM／監視／telemetry調査保留を維持する。実接続・実通信・設定変更・Pushを許可する文書ではない。
 
@@ -13,9 +15,9 @@ BL-Bで正常ABBAの観測一致・exit／close・所有group不在2回を確認
 | 境界 | 基準HEADにある機構／記録 | 今後必要な対照・差分 |
 |---|---|---|
 | 出力 | stdout／stderr各64KiBまでbyte保持、超過後もdrain、正常出力を照合 | 分割・多byte・超過・stream error・未採取を分離して注入する |
-| 時間 | spawn直前起点60,000ms、SIGTERM後1秒で必要ならSIGKILL、起点63,000msの外側ceiling | 境界時刻・遅延timer・取消・早期異常後のcleanupを同一状態機械で検証する |
+| 時間 | spawn直前起点60,000ms、SIGTERM後1秒で必要ならSIGKILL、起点63,000msの外側ceiling。各signalはchildごとに最大1回。close時刻が60,000ms以上ならtimer未発火でも期限到達 | 境界時刻・遅延timer・取消・早期異常後のcleanupを同一状態機械で検証する |
 | 終了 | exitとcloseを別採取、group不在2回、未確認なら次childを起動しない | close欠落・子孫生存・照会／signal失敗・重複eventの対照を追加する |
-| 判定 | 旧対照timeoutを終了確認後にcontrol_deadline／exit 2へ分類 | 併発する監視異常を比較不能へ隠さない優先順を確定する |
+| 判定 | 純粋関数`classifyChildRun`で、cleanup未確認→spawn／signal error→close未観測→出力超過→stderr→期限→exit code／signalの順に判定。旧対照の期限は他の異常がない場合だけcontrol_deadline／exit 2 | 併発する監視異常を比較不能へ隠さない優先順を確定する |
 | 進行 | childは旧summary＋BL-B summaryの最終2JSON | 最大22checkpointは未接続。2行契約を暗黙に緩めず、別protocolとして設計・検証する |
 
 現行ではerrorとsignal例外に同じ変数を使うなど、診断軸を完全に独立して検査できる内部契約は未確認。外部取消、早期close後にgroupが残った場合の即時停止、出力超過時の早期停止も、本書によって実装済みとはしない。
@@ -121,3 +123,18 @@ SG-A→SG-B／SG-Pの未確認を整理→SG-C→SG-Dを優先する。SG-Cで30
 OS別のprocess group／signal／stdio挙動、親hard終了時の外側回収、group離脱、物理allocation／GC／OOM／診断必着、停止後heap退役、実E／S／全体work capはUnknown。loaderのfinishにおける観測0件caseの独立対照も別残課題で、本supervisor matrixの成功で代替しない。正式発行口閉鎖・全体受付無効・調査保留を維持する。
 
 文書整合として、本書と親2文書のローカルリンク11件・表16個の列数、SF01〜25の一意連番、末尾改行・差分空白を確認した。変更は新規MD1件と参照追記2件だけであり、実装・試験の成功やBR09完了を意味しない。コミット・Pushは未実施。
+
+## 9 draft-0.1のレビュー修正（2026-11-14）
+
+基準HEAD `9817f6e` の比較器は、旧対照childの期限停止を、group終了確認の直後、出力上限・stderrの検査より前に`inconclusive`として返していた。一時copyで、SIGTERMを無視しstderrへ70,000byte書く偽childを期限2秒で動かすと、`truncated: true`のまま`control_deadline`／exit 2になった。これはSF17の禁止する隠蔽であり、`8c2e9d7`で比較不能の分類を導入した際に生じた。
+
+| 修正 | 内容 | 確認 |
+|---|---|---|
+| 判定順 | `tests/review/fixtures/body-live-compare-verdict.mjs`の純粋関数へ切り出し、cleanup・spawn／signal error・close未観測・出力超過・stderrを期限より先に判定 | 手書き報告の単体14件。修正前の順序で8件がRED、修正後に全件成功 |
+| 期限判定 | timerの発火に加え、close時刻60,000ms以上も期限到達（新経路は失敗、旧対照は比較不能） | 59,999ms通過、60,000／60,001ms拒否 |
+| signal | 各signalをchildごとに最大1回とし、ceilingが先行SIGKILLを再送しない | 一時copyでTERM無視の偽childに対しSIGTERM 1回・SIGKILL 1回 |
+| 一時領域 | spawn／signal errorがある場合は親一時rootを削除しない | コード上の変更。故障注入での確認は未実施 |
+
+修正後の同じ一時copyは`failed`／`child_output_truncated`／exit 1、stderrなしでSIGTERMを無視する偽childは`inconclusive`／`control_deadline`／exit 2となった。これらの偽childは一時copyで期限だけ短縮したレビュー用の確認であり、リポジトリの試験ではない。§2・§6の方針どおり、OS processを使う対照はSG-Bの承認後に行う。
+
+単体試験は判定関数の写しではなく手書きの報告と期待値を使う。ただし判定関数とsupervisorのevent採取（exit／close・byte計数・group照会）との結合は、正常ABBAとレビュー用一時copy以外では検証していない。SF01〜25の純粋fake（SG-A）、取消・早期停止・checkpointは未実装のままで、この修正をBR09やSG-Aの完了とはしない。60秒期限、通常経路未切替、正式発行口閉鎖、全体受付無効、Unknown、調査保留を維持する。

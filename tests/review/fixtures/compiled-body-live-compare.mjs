@@ -6,6 +6,7 @@ import { tmpdir, loadavg, availableParallelism, freemem } from 'node:os';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { performance } from 'node:perf_hooks';
+import { classifyChildRun } from './body-live-compare-verdict.mjs';
 
 const root = mkdtempSync(join(tmpdir(), 'body-live-compare-'));
 const sleep = ms => new Promise(resolve => setTimeout(resolve, ms));
@@ -19,7 +20,8 @@ async function run(mode, ordinal) {
   let outBytes = 0, errBytes = 0, closed, exited, spawnError, timedOut = false, killTimer;
   const signals = [];
   const absent = () => { if (!child.pid) return false; try { process.kill(-child.pid, 0); return false; } catch (e) { return e.code === 'ESRCH'; } };
-  const signal = name => { if (child.pid > 1) { try { process.kill(-child.pid, name); signals.push({ name, ms: Math.round(performance.now() - start) }); } catch (e) { if (e.code !== 'ESRCH') spawnError = e.code; } } };
+  // Each signal is sent at most once per child: the ceiling never repeats an earlier SIGKILL.
+  const signal = name => { if (child.pid > 1 && !signals.some(s => s.name === name)) { try { process.kill(-child.pid, name); signals.push({ name, ms: Math.round(performance.now() - start) }); } catch (e) { if (e.code !== 'ESRCH') spawnError = e.code; } } };
   // Keep at most 64 KiB per stream in bytes; the rest is still drained (counted, not stored).
   const keep = (chunks, total, data) => { if (total < 65536) chunks.push(data.subarray(0, 65536 - total)); };
   child.stdout.on('data', data => { keep(out, outBytes, data); outBytes += data.length; });
@@ -39,18 +41,18 @@ async function run(mode, ordinal) {
     empty = absent() ? empty + 1 : 0;
     if (empty < 2) await sleep(100);
   }
-  const cleanupConfirmed = Boolean(closed && empty === 2 && !spawnError);
-  if (!cleanupConfirmed) cleanupSafe = false;
-  const report = { ordinal, mode, timedOut, exited, closed, signals, cleanupConfirmed, outBytes, errBytes,
+  const cleanupConfirmed = Boolean(closed && empty === 2);
+  if (!cleanupConfirmed || spawnError) cleanupSafe = false;
+  const report = { ordinal, mode, timedOut, exited, closed, signals, cleanupConfirmed, spawnError, outBytes, errBytes,
     truncated: outBytes > 65536 || errBytes > 65536, before, after: environment() };
-  console.log(JSON.stringify({ phase: 'ended', ...report }));
-  assert.ok(cleanupConfirmed, 'owned_group_cleanup_unconfirmed');
+  const verdict = classifyChildRun(report);
+  console.log(JSON.stringify({ phase: 'ended', ...report, verdict }));
   const stdout = Buffer.concat(out).toString('utf8'), stderr = Buffer.concat(err).toString('utf8');
   // The legacy-cost control arm cannot be compared once it misses its own unchanged deadline. That is an
-  // inconclusive comparison, never a pass and never a regression verdict for the JS path.
-  if (timedOut && mode === 'reference') throw Object.assign(Error('control_deadline'), { inconclusive: { ordinal, mode, closedMs: closed?.ms, load: before.load } });
-  assert.ok(!timedOut && closed.code === 0 && closed.signal === null, 'child_failed: ' + stderr.slice(-512));
-  assert.ok(!report.truncated && errBytes === 0, 'child_output_invalid');
+  // inconclusive comparison, never a pass and never a regression verdict for the JS path; any concurrent
+  // supervision, output or cleanup anomaly has already been classified as a failure by classifyChildRun.
+  if (verdict.verdict === 'inconclusive') throw Object.assign(Error('control_deadline'), { inconclusive: { ordinal, mode, closedMs: closed?.ms, load: before.load } });
+  assert.equal(verdict.verdict, 'ok', verdict.reason + ': ' + stderr.slice(-512));
   const lines = stdout.trim().split('\n').map(line => JSON.parse(line));
   assert.equal(lines.length, 2);
   const [legacy, result] = lines;

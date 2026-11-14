@@ -116,3 +116,18 @@ finishの観測0件case検査は、unitでは他条件と分離できないた�
 ## 9 後続の故障注入設計（2026-11-14・未実行）
 
 [親supervisor故障注入matrix・受入条件draft-0.1](BEST_PRACTICE_WFB_BODY_LIVE_SUPERVISOR_FAULT_DESIGN.md)を追加した。SF01〜25の期待分類、出力／期限／取消／exit・close／groupの対照と、監視異常をcontrol_deadlineへ隠さない判定順を定める。これは設計参照の追加であり、本記録の実測や成功件数への加算ではない。fault注入・安定3run・通常並列の正式受入は未実施。60秒期限・通常経路未切替・正式発行口閉鎖・全体受付無効・Unknown・調査保留を維持し、コード変更・再実行・実接続・実通信・設定変更・Pushは行わない。
+
+## 10 比較器の判定順の修正（2026-11-14）
+
+`8c2e9d7`で導入した比較不能の分類は、旧対照childの期限停止を出力超過・stderrより先に判定しており、併発異常を`inconclusive`に隠していた（[故障注入設計§9](BEST_PRACTICE_WFB_BODY_LIVE_SUPERVISOR_FAULT_DESIGN.md)）。判定を純粋関数へ切り出して順序を直し、close時刻による期限判定とsignalの1回限りを加えた。§7〜8の比較不能の記述は、他の異常がない旧対照の期限停止に限って有効である。修正後の検証値は、検証で得た値だけを本節の後に追記する。
+
+| 修正後の検証 | 結果 |
+|---|---|
+| lint／build／梱包分類／差分空白 | 全てexit 0 |
+| repository全体のvitest（maxWorkers=3） | 353file／18,660件成功・失敗0（判定の単体14件を含む） |
+| compiled全群＋declared-actual＋BL-A compiled | 全てexit 0 |
+| ABBA比較器 | passed。旧47,757→新12,089→新11,749→旧45,656ms、各child verdict ok・signal 0、全体digestは§3と同じ。開始時load平均約4.2〜4.5 |
+
+これらは修正の回帰確認であり、BL-Cの安定3run／30秒目標の受入ではない。
+
+コミット対象だけをindexから一時コピーへ展開した再検証（作業tree上の未登録の別作業fileは含まない）では、lint／build／梱包分類が成功し、全体vitestは353file／18,660件成功・失敗0だった。同コピーのABBAは、開始時load平均約8.5で旧対照の1本目が期限に達し（SIGTERM 60,092ms・close 60,402ms、所有group終了確認済み、stderr 0・truncated false）、`inconclusive`／`control_deadline`／exit 2で終了した。後続childは起動していない。これは他の異常がない旧対照の期限停止を実負荷で比較不能へ分類した例であり、新経路の比較結果ではない。同じコードの比較一致は上表の作業tree上の実行に限る。
