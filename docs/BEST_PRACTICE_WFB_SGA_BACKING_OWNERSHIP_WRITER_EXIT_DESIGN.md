@@ -1,6 +1,8 @@
 # WF-B SG-A後：同backingの所有・容量確認境界とwriter退出／borrow退役
 
-Version: draft-0.1 / Date: 2026-11-14 / 読取り基準HEAD: `ab0c216`。
+Version: draft-0.2 / Date: 2026-11-14 / 読取り基準HEAD: `ab0c216` / レビュー修正基準HEAD: `6429276`。
+
+draft-0.1のレビュー修正：数値の誤りはなかった。packet予約設計§7の不変式は同時active workspaceを全体で最大1とするが、WX01／02は同recordの条件だけで、直前recordのwriterがcaller join未確認やpost_check未退役のまま次recordのwriterを開始してよいかが未記載だった。WX01に、同trialで直前にencodingを試みたrecordがencodedへ昇格済み（writer／post_check退役確認済み）であることを開始条件として加え、WX02を全体で最大1へ改め、BW04へ対照を加えた。選択状態・予約値は変えていない。
 
 Status: **詳細設計のみ。LOAD6／LOAD7の選択・storage／writer方式・容量capは未承認。** 元のtest 5,000ms・既定並列度、通常経路未切替、正式発行口・C実行入口・body起動閉鎖、全体受付無効、Unknown、VM／監視／telemetry調査保留を維持する。実装・負荷採取・試験再実行・実process対照・実接続・実通信・設定変更・Pushは行わない。
 
@@ -56,8 +58,8 @@ buffer取得後に確認する区間は、同Holderへ実参照を先に保持�
 
 | ID | 境界 | 状態・責務 |
 |---|---|---|
-| WX01 | enter前に同Anchor／容量確認済み／Grant・epoch・停止状態を検査 | 拒否ならwriter frame未開始。claimを復元して再入しない |
-| WX02 | enterを先行slotへ記録してから固定writer本体へ入る | active frameは同recordに最大1。再入・別origin・別Grantを拒否 |
+| WX01 | enter前に同Anchor／容量確認済み／Grant・epoch・停止状態を検査。加えて、同trialで直前にencodingを試みたrecord（TERMではPrePacketの最後のrecord）がWX08の昇格まで完了し、そのwriter_frame／post_checkの退役が確認済みであること | 拒否ならwriter frame未開始。claimを復元して再入しない。直前recordがexit_unconfirmed／post未退役なら、正常に戻っていても次recordを開始せず、そのbatchを停止して保持する |
+| WX02 | enterを先行slotへ記録してから固定writer本体へ入る | active frameは同trial全体で最大1（record間でwriter／post_checkを重ねない）。再入・別origin・別Grantを拒否 |
 | WX03 | 各新token前にGrant／停止と既存BR04の範囲を確認 | 停止後は新tokenを開始しない。新clockやpollを追加しない |
 | WX04 | 正常／throw／取消のfinallyでGrantを失効し、exit candidateを同slotへ記録 | active frameを退出確定へ置換しない。in-flight extent・先行理由を保持 |
 | WX05 | 固定callerの復帰／catch継続で、同frameから戻ったことと同exit candidateを合流 | 別frameのreturn・Ack copy・Promise settleだけを代用にしない |
@@ -151,7 +153,7 @@ writerのsource非漏出・固定復帰境界・実capacity確認の保証、全
 | BW01 | 同値bytes・別Anchor／owner／slot／版 | 実参照結合を拒否し、旧元slotの責務を保持 |
 | BW02 | 同backingの別view・別recordへの重複採用 | aliasとcopyを分け、record間共有を自動許可しない |
 | BW03 | request／viewだけB[j]、backing大・shared／resize／unknown | capacity適合にせずwriteなし。既発生allocationを消さない |
-| BW04 | enter前拒否・二重enter・別Grant／epoch | 一度限りframe／role。再bindで再利用しない |
+| BW04 | enter前拒否・二重enter・別Grant／epoch、直前recordのjoin未確認／post未退役のまま次recordへenter | 一度限りframe／role。再bindで再利用しない。直前recordが昇格・退役確認済みでなければ次recordのWX01を拒否し、batchを停止 |
 | BW05 | finally候補だけ／別frame return／Ack copy | joinedへ昇格せずactive／raw参照不足を保持 |
 | BW06 | token途中取消・遅い復帰・finally throw | revokeと退出を分離。次encoding／clear／reuseなし |
 | BW07 | writer joined後のpost失敗／未退出 | encoded公開なし。同backingとpost責務保持 |
