@@ -1,6 +1,8 @@
 # WF-B SG-A後：phase別保持・多重度と内部slotの最小値域
 
-Version: draft-0.1 / Date: 2026-11-14 / 読取り基準HEAD: `1c21435`。
+Version: draft-0.2 / Date: 2026-11-14 / 読取り基準HEAD: `1c21435` / レビュー修正基準HEAD: `28dec7e`。
+
+draft-0.1のレビュー修正：数値の誤りはなかった。§6の費目入口にOP03（arm clock a）・OP04（S0〜S5予定slotの入場確認）・OP15（追加clock・境界記録・診断更新）がなく、§4のTiming／Control phase／Failure更新と追加clock14／15回の費目が対応付けられていなかった。また「receipt・上位custody」行がOP16／17（guard／call入口の分類）を当て、上位custodyの解放確認（OP19）とずれていた。Timing・phase・Failure更新の行を加え、receipt行をOP14、guard／call行をOP16／17、上位custody・固定退役をOP19へ分けた。選択状態・数値・保持表は変えていない。
 
 Status: **対応表と内部値域の詳細設計のみ。LOAD6／LOAD7の選択・storage／writer方式・容量capは未承認。** 元のtest 5,000ms・既定並列度、通常経路未切替、正式発行口・C実行入口・body起動閉鎖、全体受付無効、Unknown、VM／監視／telemetry調査保留を維持する。実装・負荷採取・試験再実行・実process対照・実接続・実通信・設定変更・Pushは行わない。
 
@@ -106,8 +108,10 @@ Timingは既存の採取位置に対応付ける。Sのbegin／end／UTCが18位
 | root／record／4roleの先行cell・部分生成 | OP00〜02 | 実生成順・prefix・空slotのcapacity・参照保持先。生成を無料にしない |
 | 値projection・scratch・差分・封印 | OP05〜12 | 同値のalias／copy、token／演算途中値、provider配列の寿命 |
 | capacity・Grant・enter／finally／join／post／昇格 | OP12／13 | 同期復帰・非漏出、前record退役から次enterまでの固定条件 |
-| receipt・上位custody | OP14／16／17 | 同packetの通知一度、受理とborrow退役の別責務、段階別保持 |
-| failure／TERM／固定退役 | OP18／19、該当encodingはOP13 | 初回理由・部分backing・sealed TERM・未確認取得／解放の保持と費目 |
+| Timing（a・nS・nA・nL・nN・nAck・g・i・z・z_post）・予定slot入場・Control phase・Failure／診断更新 | OP03／04／15 | arm一度・予定slot6位置・追加clock14／15回（OP03の1回＋OP15の13／14回）の固定記録先と境界更新費。clock throwも1試行として保持し、再clockしない |
+| receipt | OP14 | 同packetの通知一度、受理とborrow退役の別責務、段階別保持 |
+| guard／call入口の分類（PH08） | OP16／17 | 最終pin／停止／鮮度／T予約guardと試行分類の保持。実callは未接続のまま、試行・時刻未確認を0へ補完しない |
+| failure／TERM／上位custody・固定退役 | OP18／19、該当encodingはOP13 | 初回理由・部分backing・sealed TERM・未確認custody／取得／解放の保持と費目。receiptだけで解放確認にしない |
 
 この対応表はsource coverageの完成ではない。新guardのためのclock／pollを足さず、既存列挙取得62／70候補・期限・並列度を維持する。必要な操作が増える場合は別版でschedule／費用／保持を再算定し、未承認の実行へ進まない。
 
