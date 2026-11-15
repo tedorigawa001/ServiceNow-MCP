@@ -132,3 +132,7 @@ oracleは対象issuer／slot／identity／容量helperを再利用せず、EC全
 全て未承認。本MDと親2文書の参照更新のみ。元の5秒期限・既定並列度、通常経路未切替、正式発行口・C実行入口・body起動閉鎖、全体受付無効、Unknown、VM／監視／telemetry調査保留を維持する。実装・発行・claim消費・body起動・負荷採取・試験再実行・実process対照・実接続・実通信・設定変更・コミット・Pushは行わない。
 
 文書整合として対象3文書のローカルリンク22件・表21個の列数、EC01〜07／EG01〜09／EH01〜07／ES01〜05／EL01〜07／EQ01〜10の45行のID連番、ECの7型と親EV全fieldの一致、参照field数6／6／7／8／4／5／4・全参照fieldのEG対応、型別2+qρ・未承認チェック5項目、費目OP00〜19、末尾改行・差分空白を静的に確認した。7型の参照列総計40は列定義の検算であって同時object数／保持位置総数ではない。実source／実slotの存在・捕捉／共有／解放・全参照先容量・最大同時保持の実証ではなく、合成試験・製品試験・採取・実通信は実行していない。
+
+## 10 後続のissuer／canonical位置参照と先行保持（2026-11-15）
+
+[issuer／canonical位置参照の全field・到達境界と先行保持責務draft-0.1](BEST_PRACTICE_WFB_SGA_ISSUER_SLOT_REFERENCE_BOUNDARY_DESIGN.md)で、EG01／07の共通形状と、既存owner／container利用・別private payloadの案別追加分を分けた。元claim／停止／予算を二重化せず、専用保持先・slot selector・到達先graphの不足をUnknownに残す。方式・選択未承認、元5秒／既定並列度・各閉鎖条件・調査保留を維持し、実装・発行・消費・採取・再実行は行わない。

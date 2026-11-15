@@ -135,3 +135,7 @@ oracleは対象issuer／join／adoption／費目helperを再利用せず、固�
 ## 10 後続の参照先形状・保持slot容量境界（2026-11-15）
 
 [確認物の参照先形状・候補／採用済み保持slotの容量境界draft-0.1](BEST_PRACTICE_WFB_SGA_EVIDENCE_REFERENT_HOLD_CAPACITY_DESIGN.md)で、EV自身の直接fieldと参照先graph、C／A／M・元局所／上位保持、同payloadと別cellを分けた。専用候補slot・slot handle不足とJoin二案は未承認、寿命延長・失敗prefix・実容量はUnknownを残す。選択未承認、元5秒／既定並列度・各閉鎖条件・調査保留を維持し、実装・発行・消費・採取・再実行は行わない。
+
+## 11 後続のprivate issuer／位置参照の共通・案別境界（2026-11-15）
+
+[issuer／canonical位置参照の全field・到達境界と先行保持責務draft-0.1](BEST_PRACTICE_WFB_SGA_ISSUER_SLOT_REFERENCE_BOUNDARY_DESIGN.md)で、EVの参照元とI0／K0共通field・元container／selector対応を整理した。非writerの確認点やroot退役範囲は未確定で、形状だけの受理・scalarからの証拠生成を認めない。方式・選択未承認、元5秒／既定並列度・各閉鎖条件・Unknown・調査保留を維持し、実装・発行・消費・採取・再実行は行わない。
