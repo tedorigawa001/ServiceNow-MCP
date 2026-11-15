@@ -157,3 +157,7 @@ oracleは対象のframe／capture／issuer／join helperを流用せず、固定
 全て未承認。本MDと親2文書の参照更新だけを行う。元の5秒期限・既定並列度、通常経路未切替、正式発行口・C実行入口・body起動閉鎖、全体受付無効、Unknown、VM／監視／telemetry調査保留を維持する。実装・発行・claim消費・body起動・負荷採取・試験再実行・実process対照・実接続・実通信・設定変更・コミット・Pushは行わない。
 
 文書整合として対象3文書のローカルリンク20件・表26個の列数、FF01〜03／FK01〜06／EV01〜07／FSF01〜08／FH01〜08／FT01〜10のID連番、field名の重複なし・kind別captureの許可範囲、未承認チェック5項目、Duty配置／適用位置と形式部分和41+42ρ、費目OP00〜19、末尾改行・差分空白を静的に確認した。初回の文言検査では「選択」の明示が不足していたため、LOAD6／LOAD7の選択未承認を冒頭へ明記し、再確認した。これは文書・定数の検算のみで、合成試験・実frame／capture照合・発行・実費／容量／最大同時保持の実証ではない。
+
+## 11 後続の確認物・正規slot／確定境界（2026-11-15）
+
+[確認物の正規slot・生成元・確定境界draft-0.1](BEST_PRACTICE_WFB_SGA_EVIDENCE_CANONICAL_SLOT_MAPPING_DESIGN.md)で、EV01〜07の生成元・採用先・事実確認とF0観測edge、constructor／root・4roleの適用を分けた。LC05.joinの状態facetと追加JoinFact payloadは未選択で、元候補・partial採用・未確認責務を保持する。選択未承認、元5秒／既定並列度・各閉鎖条件・Unknown・調査保留を維持し、実装・発行・消費・採取・再実行は行わない。

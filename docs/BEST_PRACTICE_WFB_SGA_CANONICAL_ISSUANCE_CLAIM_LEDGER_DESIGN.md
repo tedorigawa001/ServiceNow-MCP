@@ -161,3 +161,7 @@ oracleは対象のclaim／identity／projection helperを流用せず、CMとMP�
 ## 11 後続のframe全field・capture／確認物境界（2026-11-15）
 
 [frame／capture台帳・確認物slot対応draft-0.1](BEST_PRACTICE_WFB_SGA_FRAME_CAPTURE_EVIDENCE_SLOT_DESIGN.md)で、非証拠の先行保持と、enter事実／finally候補／join／退役／上位受理の正規位置を分離した。CM消費をbody進入・退出成功にせず、追加DutyやJoinFactが必要な場合のfield／容量／費目を残す。配置・選択未承認、各閉鎖条件・元5秒／既定並列度・Unknown・調査保留を維持し、実装・発行・消費・採取・再実行は行わない。
+
+## 12 後続の確認物ごとの正規採用・失敗prefix（2026-11-15）
+
+[確認物の正規slot・生成元・確定境界draft-0.1](BEST_PRACTICE_WFB_SGA_EVIDENCE_CANONICAL_SLOT_MAPPING_DESIGN.md)で、CM消費・実事実・canonical採用・F0反映を分離し、各EVの同一性と保持責務を具体化した。新しいclaimを追加せず、role退役・packet受理・root custody・親入場を相互代用しない。追加payload／配置・選択未承認、元5秒／既定並列度・各閉鎖条件・Unknown・調査保留を維持し、実装・発行・消費・採取・再実行は行わない。
