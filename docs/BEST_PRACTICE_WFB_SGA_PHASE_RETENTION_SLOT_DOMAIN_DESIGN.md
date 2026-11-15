@@ -151,3 +151,7 @@ Timingは既存の採取位置に対応付ける。Sのbegin／end／UTCが18位
 ## 10 後続のroot台帳・参照先と先行失敗保持（2026-11-14）
 
 [全root field台帳・参照先分類と最小shell失敗責務draft-0.1](BEST_PRACTICE_WFB_SGA_ROOT_FIELD_REFERENT_LEDGER_DESIGN.md)で、root直接保持位置と参照先graphを分け、未入場・部分生成・格納未確認・上位引受未確認の責務を整理した。L0既出位置を再加算せず、aliasの追加cell・外側owner／元frameの保持を残す。最大実保持はUnknown、選択未承認・各閉鎖条件・元5秒／既定並列度・調査保留を維持し、実装・採取・再実行は行わない。
+
+## 11 後続の固定対象テンプレート・lane別prefix（2026-11-16）
+
+[固定対象別の準備数・生成prefixとPH保持数対応draft-0.1](BEST_PRACTICE_WFB_SGA_FIXED_TARGET_PREFIX_PHASE_HOLD_DESIGN.md)で、PH01〜11にrole開始累積と準備・生成・採用・未確認保持を別軸で対応付けた。writer／post直列条件とTERM非適用を維持し、過去の確認物・元frame・上位保持をphase進行だけで減算しない。方式・選択未承認、元5秒／既定並列度・各閉鎖条件・Unknown・調査保留を維持し、実装・発行・消費・採取・再実行は行わない。
