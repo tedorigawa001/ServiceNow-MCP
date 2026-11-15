@@ -161,3 +161,7 @@ oracleは対象のframe／capture／issuer／join helperを流用せず、固定
 ## 11 後続の確認物・正規slot／確定境界（2026-11-15）
 
 [確認物の正規slot・生成元・確定境界draft-0.1](BEST_PRACTICE_WFB_SGA_EVIDENCE_CANONICAL_SLOT_MAPPING_DESIGN.md)で、EV01〜07の生成元・採用先・事実確認とF0観測edge、constructor／root・4roleの適用を分けた。LC05.joinの状態facetと追加JoinFact payloadは未選択で、元候補・partial採用・未確認責務を保持する。選択未承認、元5秒／既定並列度・各閉鎖条件・Unknown・調査保留を維持し、実装・発行・消費・採取・再実行は行わない。
+
+## 12 後続の確認payload・候補／採用済み保持（2026-11-15）
+
+[確認物の参照先形状・候補／採用済み保持slotの容量境界draft-0.1](BEST_PRACTICE_WFB_SGA_EVIDENCE_REFERENT_HOLD_CAPACITY_DESIGN.md)で、F0の確認参照とEVの直接field・到達先を対応付け、元frameの局所保持・専用候補slot不足・同実体の複数edgeを分離した。確認物から元frameへの保持延長を残し、退役事実だけでcapture／実解放を成功化しない。選択未承認、元5秒／既定並列度・各閉鎖条件・Unknown・調査保留を維持し、実装・発行・消費・採取・再実行は行わない。

@@ -131,3 +131,7 @@ oracleは対象issuer／join／adoption／費目helperを再利用せず、固�
 全て未承認。本MDと親2文書の参照更新のみ。元の5秒期限・既定並列度、通常経路未切替、正式発行口・C実行入口・body起動閉鎖、全体受付無効、Unknown、VM／監視／telemetry調査保留を維持する。実装・発行・claim消費・body起動・負荷採取・試験再実行・実process対照・実接続・実通信・設定変更・コミット・Pushは行わない。
 
 文書整合として対象3文書のローカルリンク21件・表23個の列数、EM01〜07／EA01〜06／EP01〜04／ES01〜08／ER01〜08／ET01〜10の43行のID連番、EV01〜07と対応先の記載、enter_fact_ref表記、未承認チェック5項目、4N／4P+2とenter／retire参照位置数112／120・108／116、費目OP00〜19、末尾改行・差分空白を静的に確認した。これは文書と定数の検算のみで、実source同一性・issuer／slotの実在・同期更新・全参照捕捉・容量／最大同時保持の実証ではない。合成試験・製品試験・実通信は実行していない。
+
+## 10 後続の参照先形状・保持slot容量境界（2026-11-15）
+
+[確認物の参照先形状・候補／採用済み保持slotの容量境界draft-0.1](BEST_PRACTICE_WFB_SGA_EVIDENCE_REFERENT_HOLD_CAPACITY_DESIGN.md)で、EV自身の直接fieldと参照先graph、C／A／M・元局所／上位保持、同payloadと別cellを分けた。専用候補slot・slot handle不足とJoin二案は未承認、寿命延長・失敗prefix・実容量はUnknownを残す。選択未承認、元5秒／既定並列度・各閉鎖条件・調査保留を維持し、実装・発行・消費・採取・再実行は行わない。
