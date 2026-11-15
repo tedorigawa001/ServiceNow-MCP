@@ -153,3 +153,7 @@ oracleは対象のclaim／identity／projection helperを流用せず、CMとMP�
 全て未承認。本MDと親2文書の参照更新だけを行う。元の5秒期限・既定並列度、通常経路未切替、正式発行口・C実行入口・body起動閉鎖、全体受付無効、Unknown、VM／監視／telemetry調査保留を維持する。実装・発行・claim消費・body起動・負荷採取・試験再実行・実process対照・実接続・実通信・設定変更・コミット・Pushは行わない。
 
 文書整合として対象3文書のローカルリンク18件・表26個の列数、CM00〜12／MP01〜03／CE01〜06／IB01〜09／CI01〜10のID連番、未承認チェック5項目、CMの正規位置名、canonical／projection／適用位置／親側位置とepoch参照位置の定数関係、費目OP00〜19の記載、末尾改行・差分空白を確認した。文書と定数の静的検算のみで、実装・source同位置対応・発行／claim消費・合成試験・負荷採取・試験再実行・実object個数／参照先容量／最大同時保持／実費の実証ではない。
+
+## 10 後続のorigin／epoch生成・失効・共有（2026-11-15）
+
+[origin／epoch生成元・結合・失効範囲と共有条件draft-0.1](BEST_PRACTICE_WFB_SGA_ORIGIN_EPOCH_BINDING_REVOCATION_DESIGN.md)で、由来の親と失効の親、通常開始と旧対象の退出／固定terminal、binding位置と不変pin共有を分けた。CM／MPの正規位置を変更せず、D／S方式・source保証・実容量は未承認／Unknownのまま残す。元5秒／既定並列度・各閉鎖条件・調査保留を維持し、実装・発行・消費・採取・再実行は行わない。

@@ -177,3 +177,7 @@ R1のdirect field・protocol facetを追加実装したと仮定せず、source 
 ## 10 後続のcanonical位置・同義projectionと一度限り消費（2026-11-15）
 
 [canonical発行位置・同一性・多重度／消費対応台帳draft-0.1](BEST_PRACTICE_WFB_SGA_CANONICAL_ISSUANCE_CLAIM_LEDGER_DESIGN.md)で、親construction・record encode／取得・writer enterの正規位置と、同義fieldのprojectionを具体化した。claim消費・frame進入・finally／join・受理／退役を分離し、配置数を実object数や容量へ昇格しない。対応案・選択未承認、元5秒／既定並列度・各閉鎖条件・Unknown・調査保留を維持し、実装・発行・消費・採取・再実行は行わない。
+
+## 11 後続のorigin site・epoch domainと共有保持（2026-11-15）
+
+[origin／epoch生成元・結合・失効範囲と共有条件draft-0.1](BEST_PRACTICE_WFB_SGA_ORIGIN_EPOCH_BINDING_REVOCATION_DESIGN.md)で、同一性・role lifecycleのorigin・不変pinと可変失効state・上位保持の境界を具体化した。site／domain／参照位置を実object数へ昇格せず、source・partial保持・実費をUnknownに残す。方式・選択未承認、各閉鎖条件・元5秒／既定並列度・調査保留を維持し、実装・発行・消費・採取・再実行は行わない。
