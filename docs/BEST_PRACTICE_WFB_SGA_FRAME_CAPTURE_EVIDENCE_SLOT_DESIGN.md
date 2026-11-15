@@ -1,6 +1,8 @@
 # WF-B SG-A後：frame／capture台帳と確認物・正規slot対応
 
-Version: draft-0.1 / Date: 2026-11-15 / 読取り基準HEAD: `a171926`。
+Version: draft-0.2 / Date: 2026-11-15 / 読取り基準HEAD: `a171926` / レビュー修正基準HEAD: `17eb896`。
+
+draft-0.1のレビュー修正：数値・field数の誤りはなかった。§3のFF01の参照列が`entry_fact_ref`で、§5の「enter_fact」や既存の`canonical_enter_ref`・`enter_state`・`enter_slot_ref`・EV01 EnterFact・LC08.enter_evidenceの`enter`表記と一致せず、名前で対応をたどれなかった。field数・形式部分和`41+42ρ`は変えず、FF01を`enter_fact_ref`へ統一した。
 
 Status: **非実行frame／capture配置案F0と確認物入口の詳細設計のみ。LOAD6／LOAD7の選択・追加payload／配置・共有方式・容量capは未承認。** 元のtest 5,000ms・既定並列度、通常経路未切替、正式発行口・C実行入口・body起動閉鎖、全体受付無効、Unknown、VM／監視／telemetry調査保留を維持する。実装・発行・claim消費・body起動・負荷採取・試験再実行・実process対照・実接続・実通信・設定変更・Pushは行わない。
 
@@ -33,7 +35,7 @@ RootDutyとRoleDutyの参照directoryも追加referent payloadの候補で、glo
 
 | ID／形状 | scalar／固定state位置 | private参照位置 | 所有・非適用 |
 |---|---|---|---|
-| FF01 FrameCarrier | `kind:T,phase:T,lifecycle:T,body_state:T,exit_state:T,join_state:T,capture_state:T,failure_state:T,pending_kind:T,record_index:I,role_index:I` | `owner_ref:R,context_ref:R,subject_ref:R,origin_ref:R,epoch_binding_ref:R,canonical_enter_ref:R,terminal_claim_ref:R,duty_ref:R,grant_ref:R,entry_fact_ref:R,exit_candidate_ref:R,join_fact_ref:R,capture_ref:R,pending_ref:R,failure_ref:R,caller_origin_ref:R` | 固定frame owner。constructorやrootにGrant／roleがなければ非適用。未開始のframe carrierから進入確認物を生成しない |
+| FF01 FrameCarrier | `kind:T,phase:T,lifecycle:T,body_state:T,exit_state:T,join_state:T,capture_state:T,failure_state:T,pending_kind:T,record_index:I,role_index:I` | `owner_ref:R,context_ref:R,subject_ref:R,origin_ref:R,epoch_binding_ref:R,canonical_enter_ref:R,terminal_claim_ref:R,duty_ref:R,grant_ref:R,enter_fact_ref:R,exit_candidate_ref:R,join_fact_ref:R,capture_ref:R,pending_ref:R,failure_ref:R,caller_origin_ref:R` | 固定frame owner。constructorやrootにGrant／roleがなければ非適用。未開始のframe carrierから進入確認物を生成しない |
 | FF02 CaptureCapsule | `kind:T,scope_state:T`と下記12参照それぞれの固定`capture_status:T` | `root_ref:R,outer_slot_ref:R,context_ref:R,subject_ref:R,holder_ref:R,value_ref:R,packet_ref:R,pending_ref:R,work_ref:R,failure_ref:R,caller_ref:R,upstream_ref:R` | 1frameの宣言済み直接capture。statusは未取得／保持／非適用／退役確認／未確認。kind別許可にない位置は非適用 |
 | FF03 DutyHolder | `kind:T,phase:T,prepare_state:T,enter_state:T,body_state:T,exit_state:T,join_state:T,retire_state:T,capture_state:T,fault_class:T,record_index:I,role_index:I` | `owner_ref:R,subject_ref:R,origin_ref:R,epoch_binding_ref:R,canonical_enter_ref:R,terminal_claim_ref:R,frame_candidate_ref:R,frame_ref:R,capture_candidate_ref:R,capture_ref:R,exit_candidate_ref:R,join_fact_ref:R,retire_fact_ref:R,upstream_ref:R` | frame生成／進入前に保持する非証拠shell。元candidate／採用済み同参照を区別し、失敗後も消さない |
 
