@@ -176,3 +176,7 @@ oracleは対象のepoch／identity／共有／失効helperを流用せず、固�
 全て未承認。本MDと親2文書の参照更新だけを行う。元の5秒期限・既定並列度、通常経路未切替、正式発行口・C実行入口・body起動閉鎖、全体受付無効、Unknown、VM／監視／telemetry調査保留を維持する。実装・発行・claim消費・body起動・負荷採取・試験再実行・実process対照・実接続・実通信・設定変更・コミット・Pushは行わない。
 
 文書整合として対象3文書のローカルリンク20件・表28個の列数、OE01〜06／EB01〜06／RV01〜07／EH01〜09／EO01〜10のID連番、未承認チェック5項目、D／S候補のdomain・pin・epoch参照位置とprotocol／時刻origin siteの定数関係、費目OP00〜19の記載、末尾改行・差分空白を確認した。文書と定数の静的検算のみで、実装・発行・claim消費・合成試験・負荷採取・試験再実行・実pin／source同一性／同期失効／実object数／最大同時保持／実費の実証ではない。
+
+## 11 後続のframe／captureと確認物slot（2026-11-15）
+
+[frame／capture台帳・確認物slot対応draft-0.1](BEST_PRACTICE_WFB_SGA_FRAME_CAPTURE_EVIDENCE_SLOT_DESIGN.md)で、constructor／root／固定roleのcarrier・捕捉先・先行非証拠Dutyと、同旧origin／epochの進入／join／退役を具体化した。追加payloadは未承認で、既存R1への安全な経路・実stack／capture容量を確認済みとしない。元5秒／既定並列度・各閉鎖条件・Unknown・調査保留を維持し、実装・発行・消費・採取・再実行は行わない。

@@ -157,3 +157,7 @@ oracleは対象のclaim／identity／projection helperを流用せず、CMとMP�
 ## 10 後続のorigin／epoch生成・失効・共有（2026-11-15）
 
 [origin／epoch生成元・結合・失効範囲と共有条件draft-0.1](BEST_PRACTICE_WFB_SGA_ORIGIN_EPOCH_BINDING_REVOCATION_DESIGN.md)で、由来の親と失効の親、通常開始と旧対象の退出／固定terminal、binding位置と不変pin共有を分けた。CM／MPの正規位置を変更せず、D／S方式・source保証・実容量は未承認／Unknownのまま残す。元5秒／既定並列度・各閉鎖条件・調査保留を維持し、実装・発行・消費・採取・再実行は行わない。
+
+## 11 後続のframe全field・capture／確認物境界（2026-11-15）
+
+[frame／capture台帳・確認物slot対応draft-0.1](BEST_PRACTICE_WFB_SGA_FRAME_CAPTURE_EVIDENCE_SLOT_DESIGN.md)で、非証拠の先行保持と、enter事実／finally候補／join／退役／上位受理の正規位置を分離した。CM消費をbody進入・退出成功にせず、追加DutyやJoinFactが必要な場合のfield／容量／費目を残す。配置・選択未承認、各閉鎖条件・元5秒／既定並列度・Unknown・調査保留を維持し、実装・発行・消費・採取・再実行は行わない。
