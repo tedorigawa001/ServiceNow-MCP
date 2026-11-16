@@ -55,10 +55,12 @@ it.each(['controlPreparation','rootControlLink','resourceDuty','joinCell'])('doe
 
 it('keeps run/cleanup kinds, null work and empty duty narrow and readonly at the semantic type boundary',()=>{
   const text=readFileSync(new URL('../../src/review/abort-scope-evidence-native-diagnostic.ts',import.meta.url),'utf8');
-  const ast=ts.createSourceFile('root.ts',text,ts.ScriptTarget.Latest,true),fn=ast.statements.find(n=>ts.isFunctionDeclaration(n)&&n.name?.text==='constructInjectedNativeDiagnosticWorkflow') as ts.FunctionDeclaration;
+  const ast=ts.createSourceFile('root.ts',text,ts.ScriptTarget.Latest,true);let fn!:ts.FunctionDeclaration;
+  function find(n:ts.Node){if(ts.isFunctionDeclaration(n)&&n.name?.text==='initializeLegacyWorkflow')fn=n;ts.forEachChild(n,find);}find(ast);
   const prefix=text.slice(fn.body!.getStart(ast)+1,text.indexOf('// CF-PREP:'));
   const name=fileURLToPath(new URL('./__cf-private-types.ts',import.meta.url));
-  const head="import {createNativeDiagnosticState,type Binding} from '../../src/review/abort-scope-evidence-native-diagnostic-state.js';\nexport function prepare(){"+prefix;
+  const head="import {createNativeDiagnosticState,type Binding} from '../../src/review/abort-scope-evidence-native-diagnostic-state.js';\nexport function prepare(){"+
+    "const state=createNativeDiagnosticState();state.owner.bind(state.binding);const recovery:{state:typeof state;writer:ReturnType<typeof state.owner.writers>;preparation?:object;checkpoint?:string;status:'building'|'ready'|'failed'}={state,writer:state.owner.writers('release'),status:'building'};"+prefix;
   const compile=(extra:string)=>{
     const source=head+extra+'\nreturn controlOwnerMatched;}',options:ts.CompilerOptions={target:ts.ScriptTarget.ES2022,module:ts.ModuleKind.ESNext,moduleResolution:ts.ModuleResolutionKind.Bundler,strict:true,noEmit:true,skipLibCheck:true};
     const host=ts.createCompilerHost(options),get=host.getSourceFile;

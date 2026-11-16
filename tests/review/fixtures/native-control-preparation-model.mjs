@@ -5,7 +5,8 @@ export const marker='// CF-PREP: empty control slots retained; dispatch remains 
 const names=['controlRoot','controlRun','controlDuty','controlRunJoin','controlCleanupJoin'];
 export function preparationPrefix(js){
   const ast=parse(js,{ecmaVersion:'latest',sourceType:'module'});
-  const creator=ast.body.find(n=>n.type==='FunctionDeclaration'&&n.id.name==='constructInjectedNativeDiagnosticWorkflow');
+  let creator;const pending=[ast];while(pending.length){const n=pending.pop();if(n.type==='FunctionDeclaration'&&n.id?.name==='initializeLegacyWorkflow')creator=n;
+    for(const v of Object.values(n)){if(Array.isArray(v))pending.push(...v.filter(x=>x&&typeof x.type==='string'));else if(v&&typeof v==='object'&&typeof v.type==='string')pending.push(v);}}
   assert(creator,'creator drift');assert.equal(js.split(marker).length-1,1,'boundary drift');
   const end=js.indexOf(marker);assert(end>creator.body.start&&end<creator.body.end);
   const prefix=js.slice(creator.body.start+1,end);
@@ -20,11 +21,13 @@ export function preparationPrefix(js){
 export function derivePreparation(js,createNativeDiagnosticState){
   const prefix=preparationPrefix(js);
   // Test-only lexical probe: no product export or runtime registration is added.
-  return Function('createNativeDiagnosticState',`return function prepare(){${prefix}
+  return Function('createNativeDiagnosticState',`return function prepare(){${setup}${prefix}
     return {parts:[${names.join(',')}],holder:controlPreparation,origin:controlOrigin,
       check:sameControlOwner,matched:controlOwnerMatched,upper};
   }`)(createNativeDiagnosticState);
 }
+const setup=`const state=createNativeDiagnosticState();state.owner.bind(state.binding);
+  const recovery={state,writer:state.owner.writers('release'),status:'building'};`;
 export function verifyPreparation(create){
   const a=create(),b=create(),copyBefore=JSON.stringify(b.upper.snapshot());
   assert.equal(a.matched,true);assert.equal(b.matched,true);assert.equal(a.check(...a.parts),true);
@@ -98,7 +101,7 @@ export function verifyPartialPreparation(js,createState){
   for(let i=0;i<6;i++){
     const body=prefix.slice(start,freezes[i].start-wrap.length);
     // Only the scratch consumer catches this fixed interruption. Product recovery is still disconnected.
-    const run=Function('createNativeDiagnosticState',`return function(){${before}
+    const run=Function('createNativeDiagnosticState',`return function(){${setup}${before}
       try {${body}throw 'PRIVATE_FIXED_INTERRUPTION';}catch{
         return {held:Object.keys(controlPreparation).map(k=>controlPreparation[k]!==null),
           frozen:Object.keys(controlPreparation).map(k=>controlPreparation[k]!==null&&Object.isFrozen(controlPreparation[k])),

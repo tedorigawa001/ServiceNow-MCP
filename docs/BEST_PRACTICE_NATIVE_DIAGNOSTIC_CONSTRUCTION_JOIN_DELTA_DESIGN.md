@@ -1,13 +1,13 @@
 # 旧rootの部分生成回収とJoinCell生成公開の差分詳細設計
 
-Version: native-diagnostic-construction-join-delta-draft-0.1 / Date: 2026-11-16。
-Status: 詳細設計のみ。基準HEADは`79aef94`。[CF制御設計](BEST_PRACTICE_NATIVE_DIAGNOSTIC_CF_CONTROL_RESOURCE_DESIGN.md)§3／5／7／10に対する差分であり、保護区間・failure copy・active JoinCell・dispatchは未実装。本書の合成受入条件も未実行である。
+Version: native-diagnostic-construction-join-delta-draft-0.2 / Date: 2026-11-16。
+Status: CP00〜05の回収anchor・保護区間・failure copy・失敗専用closeだけ限定実装（§11）。設計基準HEADは`79aef94`、実装基準は`1707e8d`。[CF制御設計](BEST_PRACTICE_NATIVE_DIAGNOSTIC_CF_CONTROL_RESOURCE_DESIGN.md)§3／5／7／10に対する差分であり、active JoinCell生成・公開・dispatchとCP06は未接続である。
 
 部分生成の失敗を同ownerへ戻す経路を先に作り、その回収先を確保できた場合だけJoinCellを生成・先行保持する。空cellの存在、Promiseのsettle、public診断のsealは、生成完了・resource解放・正式受理の証拠ではない。
 
-旧入口・旧試験・期待値を維持する。正式発行口／新LM03／C実行入口／body起動閉鎖、全体受付無効、Unknown、通常経路未切替、VM／監視／telemetry調査保留、LOAD6／LOAD7選択とAP01〜06未承認を維持する。実装・試験再実行・native操作・build／runner設定変更・実接続・実通信・実機操作・公開・コミット・Pushは行わない。
+旧入口・旧試験・期待値を維持する。正式発行口／新LM03／C実行入口／body起動閉鎖、全体受付無効、Unknown、通常経路未切替、VM／監視／telemetry調査保留、LOAD6／LOAD7選択とAP01〜06未承認を維持する。§11の合成依存による限定実装・検証以外は進めず、build／runner設定変更・実接続・実通信・実機操作・公開・コミット・Pushは行わない。
 
-## 1 現行と今回の差分
+## 1 draft 0.1時点の現行と設計差分
 
 | 対象 | 現行の事実 | 追加する契約 |
 |---|---|---|
@@ -50,7 +50,7 @@ Status: 詳細設計のみ。基準HEADは`79aef94`。[CF制御設計](BEST_PRAC
 | CP05 | 全post成功後、同facadeに正常継続をprivateに結合し、最後にreadyを一度確定する | ready確定前の任意失敗は失敗facadeのまま。bindの再試行・別normal ownerへの差替え・失敗後ready化をしない |
 | CP06 | 初回executeで同ready確認→元startedを消費→同runのJoinRuntime生成区間へ入る | 正常継続へ入れない場合はfailure copyまたは既存再execute拒否。第二workで救済しない |
 
-CP02の保持は同旧root内の直接代入で行い、callback／installerをcallerから渡す方式にしない。ND-02 wrapperは同facadeを保持してからprivate初期化へ進む。ND-03のdriver beginもowner slotへ同facadeを保持してから初期化し、constructor復帰待ちの代入だけに依存しない。これらの配置変更は将来の実装範囲であり、現行コードの保証とはしない。
+CP02の保持は同旧root内の直接代入で行い、callback／installerをcallerから渡す方式にしない。ND-02 wrapperは同facadeを保持してからprivate初期化へ進む。ND-03のdriver beginもowner slotへ同facadeを保持してから初期化し、constructor復帰待ちの代入だけに依存しない。§11の限定実装でこの配置へ変更し、未接続のCP06以降とは分ける。
 
 ND-02では保護対象の失敗後も同じ失敗専用facadeを返せるが、ND-03のbeginはprivate readyが成立しなければ固定BoundedReadErrorをthrowし、実class側のcatch／finallyへ進める。codeは既存upperのpublic写像に合わせ、コピー診断をready資格へ昇格しない。停止通知が失敗してもbeginを正常復帰させず、後続のreserve／parent／release dispatchを止める。失敗facadeはowner slotに残るので、closeと診断取得は別に可能な範囲で行う。
 
@@ -133,9 +133,9 @@ closeの試行履歴は割当て・通知・awaitより前に消費する。再�
 
 upperの診断終端とprivate保持の退役は別である。slotを空にするには当該producer／callbackの退出・同work終端・所有退役の確認が必要で、失敗copyの返却だけでは十分でない。未確認prefixはanchor／dutyに残し、GCやcallerの参照破棄を最終discardの確認に数えない。外側custodyへの移譲と最終discardは別gateのままである。
 
-ND-03は旧root内のdriver.close・parent bytes disposeと、実class側session close／予約解放の所有者を分ける。実classの[既存probe finally](../src/servicenow/bounded-read.ts)にはclose→dispose→session closeの独立finallyがある。一方、旧rootの外側finallyは現在`await driver.close(); driver.dispose();`なので、closeがrejectすると後者を省略し得る。将来の回収接続では、この外側もdisposeを独立finallyで一度試みることを受入条件とする。製品変更は本書では行わず、解放成功は試行だけで補わない。
+ND-03は旧root内のdriver.close・parent bytes disposeと、実class側session close／予約解放の所有者を分ける。実classの[既存probe finally](../src/servicenow/bounded-read.ts)にはclose→dispose→session closeの独立finallyがある。draft 0.1時点の旧root外側は`await driver.close(); driver.dispose();`で、closeのreject時に後者を省略し得た。§11で外側も独立finallyへ変更したが、解放成功は試行だけで補わない。
 
-現行driver.disposeは内外のfinallyから呼ばれ得て、毎回bytes.fillを行う。将来は同driverの固定disposal claimを処理前に消費し、重複入口は同じ試行結果へ合流する。一度目のfill失敗も成功へ補正せず、二度目のfillで救済しない。session close／予約返却のreceiptとは共有しない。
+draft 0.1時点のdriver.disposeは内外のfinallyから呼ばれ得て、毎回bytes.fillを行っていた。§11では同driverの固定disposal claimを処理前に消費し、重複入口を同じ試行結果へ合流させる。一度目のfill失敗も成功へ補正せず、二度目のfillで救済しない。session close／予約返却のreceiptとは共有しない。
 
 旧bridgeのstopは元の先行理由を固定し、notifyingのfinallyで通知中状態だけを解除する。構築失敗通知がthrow／再入しても同anchorを失わず、外側停止／closeを省略しない。新しいbridge call site／任意通知口は作らず、旧rootの固定stop継続だけから通知する。
 
@@ -164,16 +164,28 @@ ND-03は旧root内のdriver.close・parent bytes disposeと、実class側session
 
 ## 9 実装順と停止gate
 
-最初はCP00〜05の先行保持・保護区間・failure copy・失敗専用closeを合成依存で実装し、CJ01〜05／12／14を中心に確認する。JoinRuntimeの段階型・非実行生成slotは同時に準備できるが、queueへ接続しない。bootstrapの回収限界とcopy不能時の公開拒否を確認できない場合はここで停止する。
+CP00〜05の先行保持・保護区間・failure copy・失敗専用closeを§11で合成依存に限定して実装し、CJ01〜05／12／14のうち検証した条件を記録した。全matrix完了とはしない。JoinRuntimeの段階型・生成／公開は次工程で、queueへ接続しない。bootstrapの回収限界とcopy不能時の公開拒否を維持できない場合はここで停止する。
 
 次に同Promise／resolverの生成とpublishedまでを接続し、CJ06／07をsource／compiledで確認する。その後だけdispatch／entry／settleへ進み、CJ08〜11／13と既存回帰を確認する。cleanupのqueue失敗は正常処理の単なる移動ではなく追加の故障契約として扱う。
 
 active resourceとの全結合、RetainedDuty・外側custody／最終discard、新LM03、旧UN62移行、専用build／実行／stdio終端、friend撤去・AP承認は別gateに残る。正常経路の切替や正式発行を、このMDの作成で承認したことにはしない。
 
-## 10 静的確認と未実施範囲
+## 10 draft 0.1の静的確認と未実施範囲
 
 旧rootの先行6slot、同owner checker、run／cleanup executor内のqueue、外側driverの生成／close、stateのreject／stop／seal／snapshot、実classの独立finallyと既存6prefix試験を読んで対応付けた。CP00〜06とCJ01〜14は設計IDであり、試験成功件数ではない。
 
 sourceの構文解析でexecutor内のqueueを持つjoin代入2か所とbridge call site 4か所を照合し、旧root外側のclose→disposeの連続とscratch専用catchを確認した。3文書のローカルリンク28件・表20個、CPの7行とCJの14行の重複／欠落0、末尾改行・差分空白を静的確認した。ソース・試験・CHANGELOG・package／build／runner設定の差分は0である。
 
 本書と親2文書だけを更新する。製品moduleのimport／実行、試験再実行、build／pack、native操作、依存導入、実接続・実通信・設定変更・コミット・Pushは行わない。以前の222件・compiled6本成功は履歴であり、本書の新契約の検証結果として再掲しない。
+
+## 11 CP00からCP05の限定実装
+
+[旧root](../src/review/abort-scope-evidence-native-diagnostic.ts)のprivate allocate／initializeに分け、同anchorへstate・writer・失敗facadeを先に保持する。正常継続は空seed・raw strict検査・正常aggregateのfreezeと最終同owner post後にだけ結合する。旧wrapperは同facadeを返し、ND-03 beginはfacadeをowner slotへ保持してから一度初期化し、private ready不成立なら固定拒否する。公開stopは引数なしの取消に固定し、既存内部driverのcode付きstopとは分離する。新export・採用口・登録台帳はない。
+
+最初のprimary・revoked・sealed・phaseは正常継続と同じclosureに1組だけ置く。構築失敗ではそれらを先に固定し、upper reject／stop、既存stop通知、seal／copyの固定順を個別tryで進める。copyは同upperの停止・seal・理由整合を確認できた時だけ完成する。copy不能は固定拒否に終端し、再close・再execute・初期化再入で再生成／再sealしない。anchorと部分準備はclearせず保持する。
+
+ND-03の外側closeとdisposeは独立したfinallyにし、同driverのdisposal claimを処理前に消費する。内外からの重複disposeは同結果へ合流し、fill失敗を再試行しない。先行HTTP／構築理由をcleanup異常で上書きせず、実class側の既存session close／予約返却とは別責務のままである。
+
+[source試験](../tests/review/native-construction-recovery.test.ts)は実constructorのfreeze失敗・copy不能と実class／fake I/Oのbegin失敗・close失敗・dispose失敗を確認する。[固定oracle](../tests/review/fixtures/native-construction-recovery-model.mjs)は実ソース／出力JSのallocate関数を試験側だけで抽出し、24条件、通知再入・最終同owner不一致、6つの構文正常な変異を検査する。新しい故障引数や観測portは製品に追加しない。既存27拒否・9変異・6prefix・型境界のprobeはprivate初期化位置へ追従し、期待値を維持した。
+
+CP00〜02のbootstrap未成立、state creator復帰前の内部部分生成、process障害の回復は保証しない。取得可能なanchor／upper／facadeのprefixだけを保持し、native操作0と診断回収成立を混同しない。runPending／cleanupPendingはnull、空seedはreadonlyのまま。active JoinCell生成・公開・dispatch、resourceとの新結合、外側custodyと新LM03は未接続である。実行結果・初回失敗・compiled／配布境界と未実施範囲は[検証記録](E2E_BEST_PRACTICE_NATIVE_CONSTRUCTION_RECOVERY_CP00_CP05_2026-11-16.md)へ分離する。
