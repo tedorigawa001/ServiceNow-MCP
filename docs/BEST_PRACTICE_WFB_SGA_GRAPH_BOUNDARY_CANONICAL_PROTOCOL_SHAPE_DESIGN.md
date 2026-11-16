@@ -181,3 +181,7 @@ R1のdirect field・protocol facetを追加実装したと仮定せず、source 
 ## 11 後続のorigin site・epoch domainと共有保持（2026-11-15）
 
 [origin／epoch生成元・結合・失効範囲と共有条件draft-0.1](BEST_PRACTICE_WFB_SGA_ORIGIN_EPOCH_BINDING_REVOCATION_DESIGN.md)で、同一性・role lifecycleのorigin・不変pinと可変失効state・上位保持の境界を具体化した。site／domain／参照位置を実object数へ昇格せず、source・partial保持・実費をUnknownに残す。方式・選択未承認、各閉鎖条件・元5秒／既定並列度・調査保留を維持し、実装・発行・消費・採取・再実行は行わない。
+
+## 12 後続の全容量対象と到達境界の残項（2026-11-16）
+
+[テンプレート内外の容量対象node／edge・未導出残項台帳draft-0.1](BEST_PRACTICE_WFB_SGA_CAPACITY_NODE_EDGE_RESIDUAL_LEDGER_DESIGN.md)で、既出field／一意payload・各保持edgeと、元producer／上位ownerへ残る不足を分類した。親graphやopaque参照先を0にせず、横断残項と既出payloadの二重加算を分離する。全graphの閉包・実容量／解放は未実証で、選択未承認、元5秒／既定並列度・各閉鎖条件・Unknown・調査保留を維持し、実装・発行・消費・採取・再実行は行わない。
