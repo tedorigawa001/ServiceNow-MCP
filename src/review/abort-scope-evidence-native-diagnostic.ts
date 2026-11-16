@@ -5,6 +5,7 @@ import { BoundedReadError, takeNativeStatusCompositionProbe, type NativeStatusPr
 
 import { createNativeDiagnosticState, permissions, type Binding, type Attempt, type Http,
     type NativeFacts, type NativeCleanup, type NativeReason, type Code, type Stage } from './abort-scope-evidence-native-diagnostic-state.js';
+import { nativeCleanupReason, nativeCleanupFactsEligible } from './abort-scope-evidence-native-diagnostic-facts.js';
 
 const id = (): object => Object.freeze(Object.create(null));
 const makeBinding = (): Binding => Object.freeze({ run: id(), session: id(), snapshot: id(), lease: id(), core: id(),
@@ -129,10 +130,7 @@ function constructInjectedNativeDiagnosticWorkflow(raw: NativeInput, fault?: Nat
                 r.reader = undefined;
             }
             issue ??= sample(r.anchor.window.cleanup_floor_ms);
-            const reason: NativeReason | null = !r.stream ? issue : !before.reader_owned || !before.closed_captured ? 'reader_owner_unknown' :
-                before.cancel === 'pending' || before.cancel === 'not_requested' ? 'cancel_pending' : before.cancel === 'rejected' ? 'cancel_rejected' :
-                before.closed !== 'fulfilled' ? before.closed === 'rejected' ? 'closed_rejected' : 'closed_pending' :
-                r.release !== 'succeeded' ? 'lock_release_failed' : issue;
+            const reason = nativeCleanupReason(!!r.stream, before, r.release, issue);
             r.cleanup = Object.freeze({ disposition: reason ? 'unconfirmed' : 'confirmed', kind: reason ? null : r.stream ? 'cancelled' : 'no_body',
                 reason, wait_issue: issue, facts: Object.freeze({ ...before, release: r.release }) });
             writer.cleanup(r.anchor.attempt, reason ? 'unconfirmed' : 'confirmed', r.cleanup.kind, reason, r.cleanup);
@@ -141,12 +139,10 @@ function constructInjectedNativeDiagnosticWorkflow(raw: NativeInput, fault?: Nat
         return r.cleanupWork;
     }
     function eligible(r: Record): boolean {
-        const c = r.cleanup, f = c?.facts;
-        if (!c || !f || c.disposition !== 'confirmed' || c.reason || c.wait_issue || operations.read !== 0 || r.reader ||
+        const c = r.cleanup;
+        if (!c || !c.facts || r.reader ||
             ![403, 404].includes(r.anchor.header.status) || r.anchor.binding !== binding) return false;
-        return r.stream ? c.kind === 'cancelled' && f.reader_owned && f.closed_captured && f.cancel === 'fulfilled' && f.closed === 'fulfilled' &&
-            f.release === 'succeeded' && operations.get_reader === 1 && operations.closed === 1 && operations.cancel === 1 && operations.release_lock === 1 :
-            c.kind === 'no_body' && f.cancel === 'not_applicable' && f.closed === 'not_applicable' && f.release === 'not_applicable' && Object.values(operations).every(n => n === 0);
+        return nativeCleanupFactsEligible(!!r.stream, c, operations);
     }
     function guard(r: Record): boolean {
         if (bridge) { const error = bridge.check(bridge.binding); if (error) { stop(error as Code); return false; } }
