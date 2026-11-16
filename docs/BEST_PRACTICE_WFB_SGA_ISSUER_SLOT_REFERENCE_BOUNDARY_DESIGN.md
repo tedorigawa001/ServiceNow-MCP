@@ -158,3 +158,7 @@ oracleは対象issuer／handle／selector／identity／容量helperを再利用�
 ## 11 後続の固定対象・準備prefixとPH保持数（2026-11-16）
 
 [固定対象別の準備数・生成prefixとPH保持数対応draft-0.1](BEST_PRACTICE_WFB_SGA_FIXED_TARGET_PREFIX_PHASE_HOLD_DESIGN.md)で、I0／K0の参照元ラベルと共有class、空準備位置・生成物・C／A／M／L／Uを分け、PH01〜11へ条件付きで対応させた。selector種数・参照数を実object数やactive数に置換せず、未照合経路・テンプレート外保持はUnknownを残す。方式・選択未承認、元5秒／既定並列度・各閉鎖条件・調査保留を維持し、実装・発行・消費・採取・再実行は行わない。
+
+## 12 後続のI0／K0元field・案別追加位置（2026-11-16）
+
+[元field／生成siteとnode／edgeの案別対応・重複判定draft-0.1](BEST_PRACTICE_WFB_SGA_FIELD_SITE_VARIANT_IDENTITY_MAPPING_DESIGN.md)で、I0／K0の全15参照を元位置／経路へ対応させ、既存利用案と別payload案のcell差分・元graphの寿命延長を分けた。論理対応を実source／実共有の確認へ昇格せず、追加保持先・埋込み差分は未承認／Unknownに残す。方式・選択未承認、元5秒／既定並列度・各閉鎖条件・調査保留を維持し、実装・発行・消費・採取・再実行は行わない。
