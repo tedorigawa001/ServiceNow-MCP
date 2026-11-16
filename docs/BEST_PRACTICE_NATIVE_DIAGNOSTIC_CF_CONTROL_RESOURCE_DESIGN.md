@@ -1,6 +1,6 @@
 # BG02 CF01〜05 制御継続とresource所有の詳細設計
 
-Version: native-diagnostic-cf-control-resource-draft-0.4 / Date: 2026-11-16。
+Version: native-diagnostic-cf-control-resource-draft-0.5 / Date: 2026-11-17。
 Status: 旧root内部のLink／duty／空JoinCellの先行保持・同owner検査（§12）とCP00〜05の構築回収だけ限定実装。設計基準HEADは`4189d33`、空準備の実装基準は`02aac7c`。[共有境界設計](BEST_PRACTICE_NATIVE_DIAGNOSTIC_BG02_BOUNDARY_DESIGN.md)CF01〜05を具体化する。[VK01／02](E2E_BEST_PRACTICE_NATIVE_FACTS_VK01_VK02_2026-11-16.md)以外の実制御・resource結合・先行join dispatchは未接続である。
 
 先行案は、制御継続とresource責務の結合を**旧root内部で明示する**ことに限る。bridge・権限処理・同一性検査を外へ渡す共通constructorやinstallerは作らない。新LM03へのmodule搬出は別gateとし、本書でBG02全体の分離可能性やfriend撤去を確定したことにはしない。
@@ -151,7 +151,9 @@ public ownerへの全参照消失やGCは契約上の解放確認に数えない
 
 moduleを跨ぐprivate継続の受渡し、未解決dutyの外側custody、新LM03、専用build・compiled childの有限終了／stdio契約、friend撤去は残る。共通化のためにoptional bridgeや汎用phase acknowledgementをexportする、旧workflowを複製する、台帳を共有する変更は不採用のままである。
 
-[部分生成回収・JoinCell生成公開の差分詳細設計draft-0.2](BEST_PRACTICE_NATIVE_DIAGNOSTIC_CONSTRUCTION_JOIN_DELTA_DESIGN.md)に、先行回収anchor／失敗facade、保護区間、failure copy不能時の拒否、同workの公開確定点とclose責務を対にして整理した。同書§11でCP00〜05の保護・copy・失敗専用closeとND-03の先行保持／独立disposeだけ限定実装した。空seedは保持し、active Promise生成・公開・dispatchとCP06は未接続である。bootstrap未成立とcopy不能を回収成功に数えず、[検証記録](E2E_BEST_PRACTICE_NATIVE_CONSTRUCTION_RECOVERY_CP00_CP05_2026-11-16.md)に保証範囲を分ける。
+[部分生成回収・JoinCell生成公開の差分詳細設計draft-0.4](BEST_PRACTICE_NATIVE_DIAGNOSTIC_CONSTRUCTION_JOIN_DELTA_DESIGN.md)に、先行回収anchor／失敗facade、保護区間、failure copy不能時の拒否、同workの公開確定点とclose責務を対にして整理した。同書§11でCP00〜05の保護・copy・失敗専用closeとND-03の先行保持／独立disposeだけ限定実装した。空seedは保持し、active Promise生成・公開・dispatchとCP06は未接続である。bootstrap未成立とcopy不能を回収成功に数えず、[検証記録](E2E_BEST_PRACTICE_NATIVE_CONSTRUCTION_RECOVERY_CP00_CP05_2026-11-16.md)に保証範囲を分ける。
+
+[JoinRuntime段階型・生成資格とPromise保持失敗境界の詳細設計draft-0.1](BEST_PRACTICE_NATIVE_DIAGNOSTIC_JOIN_RUNTIME_GENERATION_DESIGN.md)で、同ownerのrole別生成資格・固定claim／pending・同Promise／settler・失敗prefixを詳細化した。停止下のcleanupを新runと同じ条件で拒否せず、構築ready・private公開・dispatch・native cleanup確認を別にする。今回はMDのみで、旧join／bridge・補強試験と各閉鎖条件を維持する。
 
 ## 11 draft 0.1の静的照合
 

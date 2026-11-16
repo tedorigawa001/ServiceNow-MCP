@@ -1,6 +1,6 @@
 # 旧rootの部分生成回収とJoinCell生成公開の差分詳細設計
 
-Version: native-diagnostic-construction-join-delta-draft-0.3 / Date: 2026-11-17。
+Version: native-diagnostic-construction-join-delta-draft-0.4 / Date: 2026-11-17。
 Status: CP00〜05の回収anchor・保護区間・failure copy・失敗専用closeだけ限定実装（§11）。設計基準HEADは`79aef94`、実装基準は`1707e8d`。[CF制御設計](BEST_PRACTICE_NATIVE_DIAGNOSTIC_CF_CONTROL_RESOURCE_DESIGN.md)§3／5／7／10に対する差分であり、active JoinCell生成・公開・dispatchとCP06は未接続である。
 
 draft-0.2のレビュー修正：レビュー修正の基準HEADは`75b5d02`。旧入口の構築時raw不正もfailure facadeへ送るため、execute前のdiagnosticsがprepared／未sealedからclosed／sealedへ、executeのteardownがconfirmedからnot_startedへ、再executeの`request_rejected`がinvalid_stateからnullへ変わる。これを旧期待値の維持と記していたため、§4・§11に公開差分として明記し、§4表の再execute行をready owner限定へ直した。あわせて、停止通知自体が失敗した場合のND-03 begin拒否と、正常aggregate生成後のcopy不能でも正常snapshotへfallbackしないことを固定する試験を追加した（§11）。
@@ -171,6 +171,8 @@ draft 0.1時点のdriver.disposeは内外のfinallyから呼ばれ得て、毎�
 CP00〜05の先行保持・保護区間・failure copy・失敗専用closeを§11で合成依存に限定して実装し、CJ01〜05／12／14のうち検証した条件を記録した。全matrix完了とはしない。JoinRuntimeの段階型・生成／公開は次工程で、queueへ接続しない。bootstrapの回収限界とcopy不能時の公開拒否を維持できない場合はここで停止する。
 
 次に同Promise／resolverの生成とpublishedまでを接続し、CJ06／07をsource／compiledで確認する。その後だけdispatch／entry／settleへ進み、CJ08〜11／13と既存回帰を確認する。cleanupのqueue失敗は正常処理の単なる移動ではなく追加の故障契約として扱う。
+
+[JoinRuntime段階型・生成資格とPromise保持失敗境界の詳細設計draft-0.1](BEST_PRACTICE_NATIVE_DIAGNOSTIC_JOIN_RUNTIME_GENERATION_DESIGN.md)で、構築readyとrun／cleanupの生成資格を分け、同role claim・半捕捉prefix・同candidate／work／settler・private公開確定点を具体化した。CP構築failure copyのresource取得後への流用を禁止し、公開拒否とprivate終端未確認を分離する。新JoinRuntime生成・公開・dispatchと旧work採用は引き続き未実装・未接続で、補強試験は維持する。
 
 active resourceとの全結合、RetainedDuty・外側custody／最終discard、新LM03、旧UN62移行、専用build／実行／stdio終端、friend撤去・AP承認は別gateに残る。正常経路の切替や正式発行を、このMDの作成で承認したことにはしない。
 
