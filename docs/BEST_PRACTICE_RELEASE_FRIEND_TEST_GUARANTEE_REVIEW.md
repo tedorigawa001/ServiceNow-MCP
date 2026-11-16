@@ -75,6 +75,10 @@ Status: **静的整理のみ。旧試験・期待値を維持し、試験移行�
 
 [private結合・後続release試験のcase別移行台帳draft-0.1](BEST_PRACTICE_RELEASE_PRIVATE_CASE_MIGRATION_LEDGER.md)に、GT04〜07の旧176行と後続4ファイルの28宣言／52入力variantを対応付けた。旧候補の正規参照を維持し、後続の比較・unknown／conflict試験を追加参照したが、元classのrejectとDのunknown／withheldは同等に扱わない。後続52variantの静的分類は部分17／未対応34／通常経路維持1であり、実行成功数・置換完了件数ではない。RG01の文書照合を進めた記録で、未代替保証のレビュー・保証低下の承認・B-03・撤去・再実行は未完了のまま。
 
+### RG02の個別レビュー案（2026-11-16）
+
+2026-11-16：[未代替保証の回復・非提供範囲・互換変更レビュー案draft-0.1](BEST_PRACTICE_RELEASE_GUARANTEE_RECOVERY_SCOPE_REVIEW.md)でRG02の判断材料を追加した。通常本番経路の保証は維持し、閉鎖fake laneの非提供・実class保証低下は未承認の候補として分離する。既存ReleasePermit／C方式を新しい正式発行／status用fallbackと混同しない。RG02の承認・B-03・撤去・再検証・公開は未完了のまま。
+
 ### 先行整理の静的確認（e454d0f時点）
 
 旧12試験の基準差分0、現行sourceのfriend／synthetic分岐、旧表外の4つのsynthetic試験とND診断試験のimport時依存、PK01／02の既存同梱期待とfixture呼出しを読み取った。3文書のローカルリンク236件・表26個・本書の固定20行ID・未承認5項目を静的確認し、直接synthetic参照7試験（旧表内3／表外4）、module評価時取得2箇所、梱包検査の対象参照と差分空白を照合した。これは実行同等性・最新成功数・安全性全体・配布物の実体検証ではない。製品コード・試験・設定は変更せず、build・試験再実行・梱包・コミット・Pushは行っていない。
