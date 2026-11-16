@@ -75,6 +75,8 @@ compiled試験はproduction／developmentを別プロセスで走らせる。前
 
 ## 6 次の実装単位と承認条件
 
+2026-11-16：[B-03 compiled移行・import分離・故障条件表draft-0.1](BEST_PRACTICE_RELEASE_B03_COMPILED_MIGRATION_FAULT_DESIGN.md)に専用artifactと旧UN62行の受入matrixを具体化した。純粋診断の先行抽出と無bridge workflow分離を分け、後者の共通化境界・新規権限口禁止・build／終了枠の承認をgateにする。別assemblyの成功で実class保証を継承せず、旧試験・friend・現行buildは維持したまま。今回の実装・再実行・撤去の承認ではない。
+
 1. **B-01（限定実装済み、§7）：生成入口と独立realm**。同じconstruction kernelを使う新規root、別brand／登録／admission、固定cleanupを追加。旧試験は置換せず、実classとの状態不変・枠不変を試験する。
 2. **B-02：source・会計・nativeの移行**。[移行範囲・共通化境界draft-0.13](BEST_PRACTICE_ABORT_SCOPE_DEVELOPMENT_MIGRATION_B02_DESIGN.md)で、値検査と開発lifecycle→同core会計・固定200 transcript→同reader cleanupの順へ分ける。B-02-01〜03を限定実装し旧試験を併存。case単位対応表・RC-01／02の純粋値実装に加え、§12にRC-03のD先行／R別承認の採用差分設計を追加した。実class保証と別assembly保証を別集計し、全旧case／release判断のsource移行は未実施。既存の大きな本番classを開発用に丸ごとcopyしない。必要な追加共通化は最小の純粋部分として別差分でレビューする。
 3. **B-03：compiled・保証表の確定**。新版と本番回帰を別実行し、各caseを「維持」「別assemblyへ移行」「本番側未確認」「入口廃止検査へ変更」で確定する。
