@@ -1,7 +1,7 @@
 # B-03：compiled移行・import分離・故障条件表
 
-Version: release-b03-compiled-migration-fault-draft-0.1 / Date: 2026-11-16。
-Status: **詳細設計のみ。下記module・artifact・fixture名は案で、未作成・未実行。** 旧試験・期待値を維持し、AP01〜06の非提供／保証低下／互換変更は未承認のまま。通常経路未切替、正式発行口閉鎖、C実行入口／body起動閉鎖、全体受付無効、Unknown、VM／監視／telemetry調査保留、LOAD6／LOAD7選択未承認を維持する。実装・試験変更・friend撤去・build設定変更・試験再実行・負荷採取・実process対照・実接続・実通信・実機操作・設定変更・公開・Pushは行わない。
+Version: release-b03-compiled-migration-fault-draft-0.2 / Date: 2026-11-16。
+Status: **BG01のLM01／02のみ限定実装・検証（§10）。LM03以降・専用artifact・切替は設計段階。** 旧試験・期待値を維持し、AP01〜06の非提供／保証低下／互換変更は未承認のまま。通常経路未切替、正式発行口閉鎖、C実行入口／body起動閉鎖、全体受付無効、Unknown、VM／監視／telemetry調査保留、LOAD6／LOAD7選択未承認を維持する。friend撤去・build設定変更・負荷採取・実process対照・実接続・実通信・実機操作・設定変更・公開・Pushは行わない。
 
 ## 1 基準・目的・現行の不足
 
@@ -20,7 +20,7 @@ Status: **詳細設計のみ。下記module・artifact・fixture名は案で、�
 
 ## 2 importと所有権の分離境界（配置案）
 
-新規名を既存ファイルへのリンクとして扱わない。下表は最小抽出の責務であり、全workflowを新本番kernelへ昇格する案ではない。`abort-scope-evidence*`の現行非同梱方針を維持し、本番rootが以下の試験専用層をimportしないことを別途検査する。
+下表は最小抽出の責務であり、全workflowを新本番kernelへ昇格する案ではない。LM01／02は§10で作成したが、LM03以降の新規名・artifactは引き続き案である。`abort-scope-evidence*`の現行非同梱方針を維持し、本番rootが以下の試験専用層をimportしないことを別途検査する。
 
 | ID | 配置／責務の案 | 固定する境界 |
 |---|---|---|
@@ -129,14 +129,28 @@ fake budget／schedulerでphaseを進め、未解決cancel／closed・late settl
 | BG04 | 専用build／固定fixture entry／I非干渉 | rootDir・入力／出力閉包・source fallbackなし、親child終端契約を先に確定。設定変更・child実行には別承認 |
 | BG05 | AP01〜05承認後の旧入口／fixture切替とEF-03C／D | 旧ID→新artifact→残差→承認を一つずつ確認。P正対照・NC03〜08、実tarballを満たすまで撤去完了・公開可としない |
 
-- [ ] BG01の最小純粋抽出範囲・固定export surfaceをレビューする。
+- [x] BG01の最小純粋抽出範囲・固定export surfaceを限定実装し、旧試験併存で検証する（§10）。
 - [ ] BG02のbridge分岐を新しい権限受付口なしで分離できることを確認する。
 - [ ] U/D/Iの専用build・入力manifest・固定entryを承認する。
 - [ ] child上限・外側時間枠・stdio／終了確認・記録の有限保持を承認する。
 - [ ] AP01〜05と旧case／fixture切替の順序を個別承認する。
 
-現時点で次に実装可能な候補はBG01のみだが、本書は実装指示・承認ではない。BG02以降の未解決gate、保証低下・公開範囲の未承認、通常並列timeoutの未確定を保持する。
+BG01の成功はBG02以降の実装指示・承認ではない。bridge共通化の未解決gate、保証低下・公開範囲の未承認、通常並列timeoutの未確定を保持する。
 
 ## 9 今回の静的確認
 
 旧ND sourceと6つの主要compiled fixture、pack scriptの直接呼出しと本番tsconfigを読み、43scenario・5faultのsource列挙とfixtureの部分範囲を区別した。3文書のローカルリンク74件・表14個、本書61行ID、FAによるUN62行の重複／欠落0、未承認5項目・差分空白を静的確認した。sourceの43scenario・5faultは構文解析だけで照合し、packのfixture直接参照と現行rootDir／出力／除外も確認した。製品moduleのimport／実行、build、試験再実行、pack、依存導入、child起動、実通信、設定変更・コミット・Pushは未実施。移行済み件数・compiled成功・終了確認済みという新実績は追加しない。
+
+## 10 BG01限定実装・併存検証（2026-11-16）
+
+§9はdraft-0.1作成時の静的確認であり、以下の後続実績と区別する。[state](../src/review/abort-scope-evidence-native-diagnostic-state.ts)は固定3purposeの既存状態機械を移し、引数なしの`createNativeDiagnosticState`でbindingとownerを毎回新規生成する。内部exportは同creatorとreadonlyの`permissions`だけ（型exportは別）。外部binding・既存session・公開診断を採用する口や登録台帳は追加しない。
+
+[pure fixture](../src/review/abort-scope-evidence-native-diagnostic-pure-fixture.ts)のruntime exportは`runSyntheticNativeDiagnosticFixture`だけで、43scenarioのstrict入力・イベント順・返値を維持する。[旧root](../src/review/abort-scope-evidence-native-diagnostic.ts)は同関数を再exportし、元の4exportを維持。旧注入workflowも同じstate creatorを使うが、resource／bridge本文は生成元を置換した1行以外不変である。prototype捕捉位置、Response／Streamsの台帳、旧friendの取得、停止・cleanup・発行／消費分岐には手を入れない。
+
+[独立oracle](../tests/review/fixtures/native-diagnostic-pure-oracle.mjs)は旧runnerの出力から生成せず、43scenarioのprimary／local／refusal・purpose slot・cleanup・acceptance・later数を固定する。[合成試験](../tests/review/native-diagnostic-pure.test.ts)はruntime取得口を拒否するmockとclock／native constructorを使えない条件で新入口を実行し、strict拒否・trap非実行・同値診断の再投入拒否・fresh owner・封印copyとoracleの負の対照を確認する。旧ND純粋試験55件は変更せず併存する。
+
+[新compiled fixture](../tests/review/fixtures/compiled-native-diagnostic-pure.mjs)は現行buildの固定dist `.js`を直接importし、同じ43件の独立値oracle・fresh identity・依存／能力漏出の変異を検査する。TS／source fallbackはない。旧compiled ND-01も変更せず実行した。これは専用U artifactの完成・新child supervisorの実装・旧UN62の移行完了ではない。
+
+型検査・対象lint・build、合成105件、新旧の純粋compiled fixtureが成功。既存除外を維持したoffline梱包dry-runは441file中436のruntime artifactも走査し、新2層の混入0を確認した。`package-http-classification.mjs`へ新2層の除外監査名を追記しただけで、同script全体／全回帰は未実行。詳細と初回試験側誤検出は[検証記録](E2E_BEST_PRACTICE_NATIVE_DIAGNOSTIC_PURE_BG01_2026-11-16.md)へ分離する。
+
+BG02の無bridge resource境界レビュー、UN62の注入故障matrix、専用build・実行／終了契約、P/U/D/I/Hの保証分離、AP01〜06とfriend撤去は残る。通常並列timeoutの解消、正式binding・実認証・実通信・本番の保証回復を今回の結果から主張しない。

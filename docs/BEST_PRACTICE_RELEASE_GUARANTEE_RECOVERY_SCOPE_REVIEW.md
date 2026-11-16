@@ -100,6 +100,8 @@ Status: **静的レビュー案。振分けは推奨で、保証低下・非提�
 
 [compiled移行・import分離・故障条件表draft-0.1](BEST_PRACTICE_RELEASE_B03_COMPILED_MIGRATION_FAULT_DESIGN.md)へ、RV12／14のpure／injected／bridge分離、P/U/D/I/Hのartifact、旧UN62条件の24群とfixture切替条件を分離した。同一processの非干渉を別process成功で代替せず、bridge分岐・専用build・child終了枠は未解決／未承認のgateとして保持する。AP01〜06の承認、実装・旧試験置換・撤去・試験再実行・公開は行っていない。
 
+同日後続の[BG01限定実装](BEST_PRACTICE_RELEASE_B03_COMPILED_MIGRATION_FAULT_DESIGN.md#10-bg01限定実装併存検証2026-11-16)で、friendを取得しない純粋state／43scenario入口を併存追加した。[検証記録](E2E_BEST_PRACTICE_NATIVE_DIAGNOSTIC_PURE_BG01_2026-11-16.md)は合成105件・新旧純粋compiled・梱包dry-runを扱う。RV12全体・RV14の専用artifact・Pのprivate保証を回復済みとはせず、AP01〜06と旧入口／試験を保持する。
+
 ### 先行レビューの静的確認（5348e38時点）
 
 現HEADの通常client／adapter／source生成、composition省略時とfake branch、通常Permit・C方式・canonical会計の試験本文を読み、台帳の責務先を静的に振り分けた。source名検索はsrc／binの直接参照確認で、配布物全閉包・外部利用者・実行到達性の完全証明ではない。3文書のローカルリンク511件・表24個、本書43行ID（EV5／RV14／MP18／AP6）、元台帳228行への範囲分割が重複・欠落0、未承認6項目・差分空白を確認した。通常adapter／wrapperのsource構築が第3引数なしで、adapterがcomposition入口を呼ばないことも静的構文／参照で照合した。製品codeの実行・試験再実行・build・梱包・依存導入・通信は行わない。実行同等性・成功件数・回復完了・撤去済みという新たな実績は追加しない。
