@@ -79,6 +79,8 @@ compiled試験はproduction／developmentを別プロセスで走らせる。前
 
 同日後続：[draft-0.2 §10](BEST_PRACTICE_RELEASE_B03_COMPILED_MIGRATION_FAULT_DESIGN.md#10-bg01限定実装併存検証2026-11-16)でBG01の純粋state／43scenarioだけを抽出し、旧wrapper・試験を維持した。[合成105件・新旧純粋compiled・梱包dry-run](E2E_BEST_PRACTICE_NATIVE_DIAGNOSTIC_PURE_BG01_2026-11-16.md)は限定実績であり、無bridge workflow・専用build・friend撤去・本番private保証の移行完了ではない。各未承認事項は維持する。
 
+同日後続：[BG02共有境界draft-0.1](BEST_PRACTICE_NATIVE_DIAGNOSTIC_BG02_BOUNDARY_DESIGN.md)に、bridgeの4呼出し位置と旧realm・sample／joinの責務を整理した。次の候補はcleanup理由／native factsの値抽出だけで、制御frame・権限は旧rootに残す。新LM03入口・resource移行・専用build・friend撤去は未実装のまま、旧試験・期待値と閉鎖条件を維持する。
+
 1. **B-01（限定実装済み、§7）：生成入口と独立realm**。同じconstruction kernelを使う新規root、別brand／登録／admission、固定cleanupを追加。旧試験は置換せず、実classとの状態不変・枠不変を試験する。
 2. **B-02：source・会計・nativeの移行**。[移行範囲・共通化境界draft-0.13](BEST_PRACTICE_ABORT_SCOPE_DEVELOPMENT_MIGRATION_B02_DESIGN.md)で、値検査と開発lifecycle→同core会計・固定200 transcript→同reader cleanupの順へ分ける。B-02-01〜03を限定実装し旧試験を併存。case単位対応表・RC-01／02の純粋値実装に加え、§12にRC-03のD先行／R別承認の採用差分設計を追加した。実class保証と別assembly保証を別集計し、全旧case／release判断のsource移行は未実施。既存の大きな本番classを開発用に丸ごとcopyしない。必要な追加共通化は最小の純粋部分として別差分でレビューする。
 3. **B-03：compiled・保証表の確定**。新版と本番回帰を別実行し、各caseを「維持」「別assemblyへ移行」「本番側未確認」「入口廃止検査へ変更」で確定する。

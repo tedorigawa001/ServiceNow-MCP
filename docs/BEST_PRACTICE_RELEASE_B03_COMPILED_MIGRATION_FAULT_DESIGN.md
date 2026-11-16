@@ -1,6 +1,6 @@
 # B-03：compiled移行・import分離・故障条件表
 
-Version: release-b03-compiled-migration-fault-draft-0.2 / Date: 2026-11-16。
+Version: release-b03-compiled-migration-fault-draft-0.3 / Date: 2026-11-16。
 Status: **BG01のLM01／02のみ限定実装・検証（§10）。LM03以降・専用artifact・切替は設計段階。** 旧試験・期待値を維持し、AP01〜06の非提供／保証低下／互換変更は未承認のまま。通常経路未切替、正式発行口閉鎖、C実行入口／body起動閉鎖、全体受付無効、Unknown、VM／監視／telemetry調査保留、LOAD6／LOAD7選択未承認を維持する。friend撤去・build設定変更・負荷採取・実process対照・実接続・実通信・実機操作・設定変更・公開・Pushは行わない。
 
 ## 1 基準・目的・現行の不足
@@ -31,6 +31,8 @@ Status: **BG01のLM01／02のみ限定実装・検証（§10）。LM03以降・�
 | LM05 | `tests/support/review/ef03/`：既存assemblyと試験用固定driver | 自分のfresh rootだけを作る。LM03のunit realmと既存ST cleanup realmも別台帳として扱う。Dの値summaryを旧ND終端やPの証拠として採用しない |
 
 **bridge分岐の切出しは未解決の実装前gate**である。現行`constructInjectedNativeDiagnosticWorkflow`はbridgeなし／ありで同じprivate関数を使い、停止・guard・acceptにbridge分岐がある。LM03へそのままoptional bridge引数をexportする案は不可。無bridge部分の抽出で旧bridge側の同じ状態機械を丸ごと複製する必要が生じた場合も、copyで進めず最小共通部分を再レビューする。まずLM01／02を先行できるが、これだけでLM03／B-03が完了したとは扱わない。
+
+BG01後の[BG02共有境界draft-0.1](BEST_PRACTICE_NATIVE_DIAGNOSTIC_BG02_BOUNDARY_DESIGN.md)で、4か所のbridge呼出し、旧ND-02／ND-03の共有realm、cleanup／sample／joinの結合を具体化した。先行候補は理由優先順・native factsの値判定だけで、同一性・権限・制御frameを旧rootに残す。resource／private継続が未確定の間は新LM03入口を作らず、BG02完了扱いもしない。
 
 intrinsicの捕捉位置も移行条件に含む。純粋LM01／02ではnative prototypeに触れない。LM03は固定resource層がResponse／stream／readerの操作を捕捉し、実行中にinstance methodやprototypeを引き直さない。旧試験の「prototype故障を注入してからmoduleをfresh import」と同じ捕捉順を維持する。捕捉をownerごとへ移すなどの挙動変更は別レビューで、単なる配置変更と呼ばない。
 
@@ -124,7 +126,7 @@ fake budget／schedulerでphaseを進め、未解決cancel／closed・late settl
 | ID | 次工程の案 | 完了条件と禁止 |
 |---|---|---|
 | BG01 | LM01／02の純粋診断抽出・旧wrapperとの共有 | 旧固定scenario・理由・freeze／sealと旧試験を維持し、friendを取らない新entryを追加併存。resource層・bridge・build切替はまだ触らない |
-| BG02 | LM03の無bridge注入workflow境界 | optional bridgeの新export・旧workflow丸ごとcopy・fixture台帳共有なしで抽出可能な最小境界を先にレビュー。未確定ならBG01の成功で進めない |
+| BG02 | LM03の無bridge注入workflow境界 | [共有境界設計](BEST_PRACTICE_NATIVE_DIAGNOSTIC_BG02_BOUNDARY_DESIGN.md)の値kernel抽出を先行候補とし、resource／制御継続はgate維持。optional bridgeの新export・旧workflow丸ごとcopy・fixture台帳共有は不可。BG01や値抽出の成功で新LM03へ進めない |
 | BG03 | UのFA01〜24／NC01〜02とDの固定driverを併存 | 独立oracle・元条件を固定し、旧Uと新U、UとDの保証を別記録。Pのprivate連続性を回復したとは扱わない |
 | BG04 | 専用build／固定fixture entry／I非干渉 | rootDir・入力／出力閉包・source fallbackなし、親child終端契約を先に確定。設定変更・child実行には別承認 |
 | BG05 | AP01〜05承認後の旧入口／fixture切替とEF-03C／D | 旧ID→新artifact→残差→承認を一つずつ確認。P正対照・NC03〜08、実tarballを満たすまで撤去完了・公開可としない |
