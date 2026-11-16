@@ -1,13 +1,13 @@
 # 旧rootの部分生成回収とJoinCell生成公開の差分詳細設計
 
-Version: native-diagnostic-construction-join-delta-draft-0.4 / Date: 2026-11-17。
-Status: CP00〜05の回収anchor・保護区間・failure copy・失敗専用closeだけ限定実装（§11）。設計基準HEADは`79aef94`、実装基準は`1707e8d`。[CF制御設計](BEST_PRACTICE_NATIVE_DIAGNOSTIC_CF_CONTROL_RESOURCE_DESIGN.md)§3／5／7／10に対する差分であり、active JoinCell生成・公開・dispatchとCP06は未接続である。
+Version: native-diagnostic-construction-join-delta-draft-0.5 / Date: 2026-11-17。
+Status: CP00〜05の回収anchor・保護区間・failure copy・失敗専用close（§11）とJR-Aの閉鎖した型／claim／資格検査だけ限定実装。設計基準HEADは`79aef94`、CP実装基準は`1707e8d`。[CF制御設計](BEST_PRACTICE_NATIVE_DIAGNOSTIC_CF_CONTROL_RESOURCE_DESIGN.md)§3／5／7／10に対する差分であり、active JoinCell生成・公開・dispatchとCP06は未接続である。
 
 draft-0.2のレビュー修正：レビュー修正の基準HEADは`75b5d02`。旧入口の構築時raw不正もfailure facadeへ送るため、execute前のdiagnosticsがprepared／未sealedからclosed／sealedへ、executeのteardownがconfirmedからnot_startedへ、再executeの`request_rejected`がinvalid_stateからnullへ変わる。これを旧期待値の維持と記していたため、§4・§11に公開差分として明記し、§4表の再execute行をready owner限定へ直した。あわせて、停止通知自体が失敗した場合のND-03 begin拒否と、正常aggregate生成後のcopy不能でも正常snapshotへfallbackしないことを固定する試験を追加した（§11）。
 
 部分生成の失敗を同ownerへ戻す経路を先に作り、その回収先を確保できた場合だけJoinCellを生成・先行保持する。空cellの存在、Promiseのsettle、public診断のsealは、生成完了・resource解放・正式受理の証拠ではない。
 
-旧入口・旧試験・期待値を維持する。正式発行口／新LM03／C実行入口／body起動閉鎖、全体受付無効、Unknown、通常経路未切替、VM／監視／telemetry調査保留、LOAD6／LOAD7選択とAP01〜06未承認を維持する。§11の合成依存による限定実装・検証以外は進めず、build／runner設定変更・実接続・実通信・実機操作・公開・コミット・Pushは行わない。
+旧入口・旧試験・期待値を維持する。正式発行口／新LM03／C実行入口／body起動閉鎖、全体受付無効、Unknown、通常経路未切替、VM／監視／telemetry調査保留、LOAD6／LOAD7選択とAP01〜06未承認を維持する。§11とJR-Aの合成依存による限定実装・検証以外は進めず、build／runner設定変更・実接続・実通信・実機操作・公開・コミット・Pushは行わない。
 
 ## 1 draft 0.1時点の現行と設計差分
 
@@ -168,11 +168,11 @@ draft 0.1時点のdriver.disposeは内外のfinallyから呼ばれ得て、毎�
 
 ## 9 実装順と停止gate
 
-CP00〜05の先行保持・保護区間・failure copy・失敗専用closeを§11で合成依存に限定して実装し、CJ01〜05／12／14のうち検証した条件を記録した。全matrix完了とはしない。JoinRuntimeの段階型・生成／公開は次工程で、queueへ接続しない。bootstrapの回収限界とcopy不能時の公開拒否を維持できない場合はここで停止する。
+CP00〜05の先行保持・保護区間・failure copy・失敗専用closeを§11で合成依存に限定して実装し、CJ01〜05／12／14のうち検証した条件を記録した。全matrix完了とはしない。JR-Aの段階型・slot・claim／資格検査以降のJoinRuntime実体生成／公開は次工程で、queueへ接続しない。bootstrapの回収限界とcopy不能時の公開拒否を維持できない場合はここで停止する。
 
 次に同Promise／resolverの生成とpublishedまでを接続し、CJ06／07をsource／compiledで確認する。その後だけdispatch／entry／settleへ進み、CJ08〜11／13と既存回帰を確認する。cleanupのqueue失敗は正常処理の単なる移動ではなく追加の故障契約として扱う。
 
-[JoinRuntime段階型・生成資格とPromise保持失敗境界の詳細設計draft-0.1](BEST_PRACTICE_NATIVE_DIAGNOSTIC_JOIN_RUNTIME_GENERATION_DESIGN.md)で、構築readyとrun／cleanupの生成資格を分け、同role claim・半捕捉prefix・同candidate／work／settler・private公開確定点を具体化した。CP構築failure copyのresource取得後への流用を禁止し、公開拒否とprivate終端未確認を分離する。新JoinRuntime生成・公開・dispatchと旧work採用は引き続き未実装・未接続で、補強試験は維持する。
+[JoinRuntime段階型・生成資格とPromise保持失敗境界の詳細設計draft-0.2](BEST_PRACTICE_NATIVE_DIAGNOSTIC_JOIN_RUNTIME_GENERATION_DESIGN.md)で、構築readyとrun／cleanupの生成資格を分け、同role claim・半捕捉prefix・同candidate／work／settler・private公開確定点を具体化した。同書§12のJR-Aでprivate型・先行slot・claim・資格検査だけを合成依存に限定して実装した。CP構築failure copyのresource取得後への流用を禁止し、新JoinRuntime実体／Promise生成・公開・dispatchと旧work採用は未実装・未接続、補強試験は維持する。
 
 active resourceとの全結合、RetainedDuty・外側custody／最終discard、新LM03、旧UN62移行、専用build／実行／stdio終端、friend撤去・AP承認は別gateに残る。正常経路の切替や正式発行を、このMDの作成で承認したことにはしない。
 

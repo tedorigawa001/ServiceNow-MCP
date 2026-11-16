@@ -1,11 +1,11 @@
 # JoinRuntimeの段階型と生成資格およびPromise保持失敗境界の詳細設計
 
-Version: native-diagnostic-join-runtime-generation-draft-0.1 / Date: 2026-11-17。
-Status: 詳細設計のみ。基準HEADは`c466b75`。[構築回収・Join公開設計](BEST_PRACTICE_NATIVE_DIAGNOSTIC_CONSTRUCTION_JOIN_DELTA_DESIGN.md)§5〜7の生成・保持部分を具体化する。JoinRuntime、生成claim、同Promise／settler生成、private公開はいずれも未実装・未接続である。
+Version: native-diagnostic-join-runtime-generation-draft-0.2 / Date: 2026-11-17。
+Status: JR-Aの内部型・固定slot・一度限りclaim・生成資格検査だけを合成依存に限定して実装（§12）。設計基準HEADは`c466b75`、JR-Aの基準HEADは`b770e59`。[構築回収・Join公開設計](BEST_PRACTICE_NATIVE_DIAGNOSTIC_CONSTRUCTION_JOIN_DELTA_DESIGN.md)§5〜7の生成・保持部分を具体化する。JoinRuntime実体、同Promise／settler生成、private公開は未実装・未接続である。
 
 生成資格の確認と失敗の保持先を、Promiseの生成より先に確保する。構築readyはrunの生存資格ではなく、Promiseの保持・終端はnative cleanupや正式受理の証拠ではない。runとcleanupを同じ停止条件で扱わず、既存の単一状態・元floor・同ownerの責務を維持する。
 
-正式発行口／新LM03／C実行入口／body起動閉鎖、全体受付無効、Unknown、通常経路未切替、VM／監視／telemetry調査保留、LOAD6／LOAD7選択とAP01〜06未承認を維持する。実装・試験再実行・Promise生成試験・dispatch接続・実接続・実通信・実機操作・設定変更・build／runner変更・公開・コミット・Pushは行わない。
+正式発行口／新LM03／C実行入口／body起動閉鎖、全体受付無効、Unknown、通常経路未切替、VM／監視／telemetry調査保留、LOAD6／LOAD7選択とAP01〜06未承認を維持する。§12の限定実装・合成検証以外は進めず、Promise生成試験・dispatch接続・実接続・実通信・実機操作・設定変更・build／runner設定変更・公開・コミット・Pushは行わない。
 
 ## 1 現行の事実と対象範囲
 
@@ -22,7 +22,7 @@ Status: 詳細設計のみ。基準HEADは`c466b75`。[構築回収・Join公開
 
 ## 2 唯一の所有者と固定slot
 
-以下の型名・field群は実装前の内部契約である。structural copyやreadonly viewはauthorityではなく、生成・消費の入口は同rootの固定closureだけにする。
+以下の型名・field群は最終形の内部契約である。JR-Aで実装した部分と未接続部分は§12で区別する。structural copyやreadonly viewはauthorityではなく、生成・消費の入口は同rootの固定closureだけにする。
 
 | 内部契約 | 固定field群 | writerと同一性 |
 |---|---|---|
@@ -142,7 +142,7 @@ publishedだけではdispatch資格・entry・cleanup確認・正式発行を与
 
 ## 9 将来の独立合成受入条件
 
-以下は将来の試験契約で、今回は実行しない。親のCJ06／07を中心に、固定位置・合法variant・所有関係・role別終端からoracleを作る。旧runnerのactualを期待値へcopyしない。
+以下は全工程の試験契約であり、JR-Aで実施した部分だけを§12と検証記録に記す。親のCJ06／07を中心に、固定位置・合法variant・所有関係・role別終端からoracleを作る。旧runnerのactualを期待値へcopyしない。
 
 | ID | 対照 | 受入条件 |
 |---|---|---|
@@ -167,10 +167,22 @@ JR-Aはrole別内部型・先行slot／claim・不変／段階検査・生成資
 
 生成前の保持先、必要settlerの捕捉、未観測拒否への有限処理、resource取得後の責務保持を確認できなければ、後段を接続しない。外側custody、新LM03、専用artifact／終了契約、旧UN62移行、friend撤去・AP承認・全体回帰は別gateとする。
 
-## 11 静的確認と未実施範囲
+## 11 draft-0.1作成時の静的確認と未実施範囲
 
 基準のRecoveryAnchor、構築ready、空seed checker、started／current、旧run／cleanup executor、sample／finally、失敗facadeと既存補強試験を読み、現行の事実と本書の未実装契約を分けた。QJ01〜07、GJ01〜08、FJ01〜07、TJ01〜12は設計IDであり、試験成功件数ではない。
 
 sourceの構文解析でexecutor内のqueueを持つjoin代入2か所、bridge call site 4か所、nullのpending初期値2か所、statusだけを見る構築ready判定1か所を照合した。3文書のローカルリンク23件・表21個、QJ 7行／GJ 8行／FJ 7行／TJ 12行の重複／欠落0、末尾改行・差分空白を静的確認した。補強試験fileの内容hashは開始時と同一で、ソース・試験・CHANGELOG・設定の差分は0である。
 
 変更は本書と親2文書の参照だけとする。ソース・補強試験・CHANGELOG・build／package／runner設定に変更を加えない。製品moduleのimport／実行、試験再実行、build／pack、Promise生成試験、dispatch接続、実接続・実通信・設定変更・コミット・Pushは行わない。既存CP検証の実績を新JoinRuntimeの保証へ加算しない。
+
+## 12 JR-Aの限定実装
+
+[旧root](../src/review/abort-scope-evidence-native-diagnostic.ts)のCP00側へrun／cleanup各1個のRoleGenerationSlotを先行保持する。empty／claimed_unheld／failed_retainedは別variantで、pending／publishedはliteral nullのまま。既存runPending／cleanupPendingもnull、空seedのreadonly型・checkerは変更しない。JoinIdentity、role別settler／結果型、run半pairを含むJoinRuntime段階型はprivate型だけで、runtimeやPromiseの実体は割り当てない。checked／publishedの値検査は将来形の非権限検査であり、同Promiseや発行資格を証明しない。
+
+同closureのcanonical anchor／role slot／root／seedを先に照合する。foreign／copy／Proxyのfieldを読まず、自ownerのslotだけに固定faultを保持する。runは構築readyに加えて既存started／revoked／primary／sealedと未使用slotを検査し、started→claim→position→claimed_unheldの固定同期群だけを進める。通知・sample・scheduler・native操作は呼ばない。失敗はclaim／positionを戻さず、slotの先行faultと元rootのprimaryを保持して同期revokedにする。upperへの通知・終端はJR-B以降の別責務で、CP failure facadeや架空のcleanup factsを生成しない。
+
+cleanupは同closureのcurrent recordとそのanchor実参照、同binding、元started、構築ready、未sealed、未使用slotを検査する。revoked／先行HTTP理由だけでは拒否しない。recordはcallerから採用せず、unknown引数は保持済みcurrentとの照合対象に限る。JR-A試験のfake recordは実resource所有・解放の保証ではない。正規published workへの再合流はJR-C以降であり、JR-Aは再生成を拒否するだけである。
+
+新private継続はlegacy execute／cleanから呼ばない。scratch copyだけが同closureの関数を呼ぶ。製品のexport・friend・raw入力・登録口を増やさず、旧14関数・4exportを維持する。[新試験](../tests/review/native-join-generation.test.ts)、[独立oracle／scratch抽出](../tests/review/fixtures/native-join-generation-model.mjs)、[固定dist検査](../tests/review/fixtures/compiled-native-join-generation.mjs)で、資格拒否27・同一性拒否32／hook 0・phase値121・構文正常な変異11、semantic正対照と8不正型を確認した。各数値は別の保証単位で、244件のsource試験へ足して成功件数を水増ししない。
+
+初回の変異anchor不一致と型検査反復による5秒timeout、修正後の結果・未実施範囲は[JR-A検証記録](E2E_BEST_PRACTICE_NATIVE_JOIN_GENERATION_JRA_2026-11-17.md)へ分離する。Promise／settler生成・観測・失敗終端・private公開・dispatch・正常採用は未接続、全解放はUnknownのままである。

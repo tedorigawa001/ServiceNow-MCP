@@ -23,12 +23,20 @@ type WorkflowSnapshot = Readonly<{ kind: 'injected_native_diagnostic_workflow'; 
 type NativeWorkflow = Readonly<{ execute(response: unknown, descriptor: unknown): Promise<WorkflowSnapshot>; stop(code?: Code): void;
     close(): Promise<WorkflowSnapshot>; diagnostics(): WorkflowSnapshot }>;
 type NativeFacade = Readonly<Omit<NativeWorkflow, 'stop'> & { stop(): void }>;
+type JoinRole = 'run' | 'cleanup';
+type JoinGenerationFault = 'invalid_state' | 'evidence_binding_mismatch' | 'internal_review_error';
+type RoleGenerationSlot<K extends JoinRole> = { readonly role: K; pending: null; published: null } & (
+    | { phase: 'empty'; claimed: false; position: 'empty'; fault: null }
+    | { phase: 'claimed_unheld'; claimed: true; position: 'claimed'; fault: null }
+    | { phase: 'failed_retained'; claimed: boolean; position: 'empty' | 'claimed'; fault: JoinGenerationFault }
+);
 type RecoveryAnchor = { state?: NativeState; writer?: ReturnType<NativeState['owner']['writers']>; preparation?: object;
     normal?: NativeWorkflow; facade?: NativeFacade; status: 'building' | 'ready' | 'failed';
     checkpoint: 'anchor' | 'state' | 'bound' | 'writer' | 'facade' | 'preparation' | 'origin' | 'root' | 'runJoin' | 'run' | 'cleanupJoin' | 'duty' | 'normal' | 'ready';
     initializeClaim: boolean; copyPhase: 'unused' | 'building' | 'ready' | 'failed'; copy?: WorkflowSnapshot;
     closePhase: 'unused' | 'closing' | 'closed' | 'unconfirmed'; rejectRecorded: boolean; stopRecorded: boolean; notified: boolean; sealRecorded: boolean;
-    operations: WorkflowSnapshot['operations']; counts: WorkflowSnapshot['counts']; runPending: null; cleanupPending: null };
+    operations: WorkflowSnapshot['operations']; counts: WorkflowSnapshot['counts']; runPending: null; cleanupPending: null;
+    runGeneration: RoleGenerationSlot<'run'>; cleanupGeneration: RoleGenerationSlot<'cleanup'> };
 declare const terminalBrand: unique symbol;
 const P = Promise, promiseThen = P.prototype.then, promiseRace = P.race, promiseAll = P.all, enqueue = queueMicrotask;
 const pinned = (() => {
@@ -181,6 +189,90 @@ function allocateNativeDiagnosticConstruction(raw: NativeInput, fault?: NativeFa
     let issueClaim = false, consumeClaim = false, live: Terminal | undefined, current: Record | undefined;
     let foreignUnchanged = true;
     let last: number | undefined, runWork: Promise<ReturnType<typeof snapshot>> | undefined;
+    // JR-A-BEGIN: closed lexical generation contracts; no Promise, publication or dispatch.
+    const joinRecovery = recovery!, runGeneration = joinRecovery.runGeneration, cleanupGeneration = joinRecovery.cleanupGeneration;
+    type JoinIdentity<K extends JoinRole> = Readonly<{ recovery: RecoveryAnchor; root: RootControlLink;
+        seed: K extends 'run' ? RunLink : ResourceDuty; kind: K;
+        context: K extends 'run' ? null : Readonly<{ record: Record; anchor: Anchor }> }>;
+    type JoinResolve<K extends JoinRole> = (value: K extends 'run' ? WorkflowSnapshot : void) => void;
+    type JoinReject<K extends JoinRole> = K extends 'run' ? (reason: BoundedReadError) => void : null;
+    type JoinEmpty = { candidate: null; work: null; resolve: null; reject: null; observerAck: null };
+    type JoinCaptured<K extends JoinRole> = { resolve: JoinResolve<K>; reject: JoinReject<K> };
+    type JoinWork<K extends JoinRole> = Promise<K extends 'run' ? WorkflowSnapshot : void>;
+    type JoinRuntime<K extends JoinRole> = Readonly<{ identity: JoinIdentity<K>; kind: K }> & {
+        dispatchStarted: false; entered: false; settleClaim: boolean; fault: Code | null;
+    } & (
+        | ({ phase: 'building'; prefix: 'runtime'; executor: 'not_entered' } & JoinEmpty)
+        | ({ phase: 'capturing'; prefix: 'executor'; executor: 'running' } & JoinEmpty)
+        | (K extends 'run' ? { phase: 'capturing'; prefix: 'reject'; executor: 'running'; candidate: null; work: null;
+            resolve: null; reject: (reason: BoundedReadError) => void; observerAck: null } : never)
+        | ({ phase: 'captured'; prefix: 'resolve'; executor: 'normal_exit'; candidate: null; work: null; observerAck: null } & JoinCaptured<K>)
+        | ({ phase: 'candidate_held'; prefix: 'candidate'; executor: 'normal_exit'; candidate: unknown; work: null; observerAck: null } & JoinCaptured<K>)
+        | (({ phase: 'checked'; prefix: 'checked' } | { phase: 'published'; prefix: 'published' }) & { executor: 'normal_exit';
+            candidate: JoinWork<K>; work: JoinWork<K>; observerAck: Promise<void> } & JoinCaptured<K>)
+        | { phase: 'failed_retained'; prefix: 'runtime' | 'executor' | 'reject' | 'resolve' | 'candidate' | 'checked' | 'published';
+            executor: 'not_entered' | 'running' | 'normal_exit' | 'abnormal'; candidate: unknown; work: JoinWork<K> | null;
+            resolve: JoinResolve<K> | null; reject: JoinReject<K> | null; observerAck: Promise<void> | null }
+    );
+    // Value-only phase inspection is not an issuer or adoption gate. Later phases have no writer in JR-A.
+    function joinRuntimePhaseValid(v: JoinRuntime<'run'> | JoinRuntime<'cleanup'>): boolean {
+        if (v.dispatchStarted !== false || v.entered !== false || typeof v.settleClaim !== 'boolean') return false;
+        if (v.kind !== 'run' && v.kind !== 'cleanup' || v.kind === 'cleanup' && v.reject !== null) return false;
+        if (v.phase === 'failed_retained') return (v.fault === 'invalid_state' || v.fault === 'evidence_binding_mismatch' ||
+            v.fault === 'internal_review_error') && ['runtime', 'executor', 'reject', 'resolve', 'candidate', 'checked', 'published'].includes(v.prefix) &&
+            ['not_entered', 'running', 'normal_exit', 'abnormal'].includes(v.executor);
+        if (v.fault !== null || v.settleClaim) return false;
+        if (v.phase === 'building' || v.phase === 'capturing') {
+            if (v.candidate !== null || v.work !== null || v.resolve !== null || v.observerAck !== null) return false;
+            if (v.phase === 'building') return v.prefix === 'runtime' && v.executor === 'not_entered' && v.reject === null;
+            return v.executor === 'running' && (v.prefix === 'executor' && v.reject === null ||
+                v.prefix === 'reject' && v.kind === 'run' && typeof v.reject === 'function');
+        }
+        if (v.executor !== 'normal_exit' || typeof v.resolve !== 'function' || v.kind === 'run' && typeof v.reject !== 'function') return false;
+        if (v.phase === 'captured') return v.prefix === 'resolve' && v.candidate === null && v.work === null && v.observerAck === null;
+        if (v.phase === 'candidate_held') return v.prefix === 'candidate' && v.work === null && v.observerAck === null;
+        if (v.phase === 'checked' || v.phase === 'published') return v.prefix === v.phase && v.work !== null && v.work !== undefined &&
+            v.candidate === v.work && v.observerAck !== null && v.observerAck !== undefined;
+        return false;
+    }
+    function sameJoinGenerationOwner(slot: unknown, root: unknown, seed: unknown, role: JoinRole): boolean {
+        // Compare all supplied references before reading any supplied field, including revoked Proxies.
+        if (role === 'run' ? slot !== runGeneration || seed !== controlRun :
+            role === 'cleanup' ? slot !== cleanupGeneration || seed !== controlDuty : true) return false;
+        return root === controlRoot && recovery === joinRecovery && joinRecovery.runGeneration === runGeneration &&
+            joinRecovery.cleanupGeneration === cleanupGeneration && runGeneration.role === 'run' && cleanupGeneration.role === 'cleanup' &&
+            sameControlOwner(controlRoot, controlRun, controlDuty, controlRunJoin, controlCleanupJoin);
+    }
+    function rejectJoinGeneration(slot: RoleGenerationSlot<JoinRole>, code: JoinGenerationFault): false {
+        slot.fault ??= code; slot.phase = 'failed_retained';
+        primary ??= code; revoked = true;
+        // No notification/callback inside the synchronous claim group; no CP failure facade or fictional cleanup facts.
+        return false;
+    }
+    function unusedJoinGeneration(slot: RoleGenerationSlot<JoinRole>): boolean {
+        return slot.phase === 'empty' && !slot.claimed && slot.position === 'empty' && slot.fault === null &&
+            slot.pending === null && slot.published === null;
+    }
+    function beginRunGeneration(slot: unknown, root: unknown, seed: unknown): boolean {
+        if (!sameJoinGenerationOwner(slot, root, seed, 'run')) return rejectJoinGeneration(runGeneration, 'evidence_binding_mismatch');
+        if (joinRecovery.status !== 'ready' || started || revoked || primary !== null || sealed || !unusedJoinGeneration(runGeneration))
+            return rejectJoinGeneration(runGeneration, 'invalid_state');
+        started = true;
+        runGeneration.claimed = true; runGeneration.position = 'claimed'; runGeneration.phase = 'claimed_unheld';
+        return true;
+    }
+    function beginCleanupGeneration(slot: unknown, root: unknown, seed: unknown, record: unknown, anchor: unknown): boolean {
+        if (!sameJoinGenerationOwner(slot, root, seed, 'cleanup') || !current || record !== current || anchor !== current.anchor)
+            return rejectJoinGeneration(cleanupGeneration, 'evidence_binding_mismatch');
+        if (current.anchor.binding !== binding) return rejectJoinGeneration(cleanupGeneration, 'evidence_binding_mismatch');
+        if (joinRecovery.status !== 'ready' || !started || sealed || !unusedJoinGeneration(cleanupGeneration))
+            return rejectJoinGeneration(cleanupGeneration, 'invalid_state');
+        cleanupGeneration.claimed = true; cleanupGeneration.position = 'claimed'; cleanupGeneration.phase = 'claimed_unheld';
+        return true;
+    }
+    // Keep these private continuations uncalled by legacy execute/clean; scratch-only probes exercise the same code.
+    void joinRuntimePhaseValid; void beginRunGeneration; void beginCleanupGeneration;
+    // JR-A-END: pending/publication slots remain null; legacy work is unchanged.
     function stop(code: Code = 'cancelled', stage: Stage = 'stop') {
         if (sealed) return;
         primary ??= code; upper.stop(primary, stage);
@@ -382,7 +474,9 @@ function allocateNativeDiagnosticConstruction(raw: NativeInput, fault?: NativeFa
         recovery = { status: 'building', checkpoint: 'anchor', initializeClaim: false, copyPhase: 'unused', closePhase: 'unused',
             rejectRecorded: false, stopRecorded: false, notified: false, sealRecorded: false,
             operations: { get_reader: 0, closed: 0, cancel: 0, release_lock: 0, read: 0 }, counts: { issued: 0, consume_attempts: 0, consumed: 0 },
-            runPending: null, cleanupPending: null };
+            runPending: null, cleanupPending: null,
+            runGeneration: { role: 'run', claimed: false, phase: 'empty', position: 'empty', fault: null, pending: null, published: null },
+            cleanupGeneration: { role: 'cleanup', claimed: false, phase: 'empty', position: 'empty', fault: null, pending: null, published: null } };
         recovery.state = createNativeDiagnosticState(); recovery.checkpoint = 'state';
         recovery.state.owner.bind(recovery.state.binding); recovery.checkpoint = 'bound';
         recovery.writer = recovery.state.owner.writers('release'); recovery.checkpoint = 'writer';
