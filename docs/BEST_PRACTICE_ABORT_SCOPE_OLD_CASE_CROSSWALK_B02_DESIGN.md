@@ -469,6 +469,8 @@ PC-01は実session／登録owner／実sourceの同private継続、PC-02は実認
 
 ## 4 新case参照カタログ（本表の参照先）
 
+2026-11-16：[private結合・後続release試験のcase別移行台帳draft-0.1](BEST_PRACTICE_RELEASE_PRIVATE_CASE_MIGRATION_LEDGER.md)は本表のSA／SAB／ND／NDB／ACK／ACKB／UNの176行を正規参照し、追加のD側固定比較試験・後続4ファイル52入力variantを分離して照合する。本表の330件・139件は当時の母集団／記録のまま保持し、値判断の追加を実class保証の置換完了としない。試験削除・friend撤去・実行同等性は未承認／未確認。
+
 以下は同じ既存JSONから抽出した139件。新IDはfullName／fileへ解決するための参照であり、139件を旧330件へ一対一で対応させたという意味ではない。参照されない新caseも省略せず載せる。
 
 ### DR — development-root
