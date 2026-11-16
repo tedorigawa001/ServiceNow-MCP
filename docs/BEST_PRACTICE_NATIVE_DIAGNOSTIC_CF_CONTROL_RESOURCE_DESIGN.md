@@ -1,6 +1,6 @@
 # BG02 CF01〜05 制御継続とresource所有の詳細設計
 
-Version: native-diagnostic-cf-control-resource-draft-0.2 / Date: 2026-11-16。
+Version: native-diagnostic-cf-control-resource-draft-0.3 / Date: 2026-11-16。
 Status: 旧root内部のLink／duty／空JoinCellの先行保持・同owner検査だけ限定実装（§12）。設計基準HEADは`4189d33`、今回の実装基準は`02aac7c`。[共有境界設計](BEST_PRACTICE_NATIVE_DIAGNOSTIC_BG02_BOUNDARY_DESIGN.md)CF01〜05を具体化する。[VK01／02](E2E_BEST_PRACTICE_NATIVE_FACTS_VK01_VK02_2026-11-16.md)以外の実制御・resource結合・先行join dispatchは未接続である。
 
 先行案は、制御継続とresource責務の結合を**旧root内部で明示する**ことに限る。bridge・権限処理・同一性検査を外へ渡す共通constructorやinstallerは作らない。新LM03へのmodule搬出は別gateとし、本書でBG02全体の分離可能性やfriend撤去を確定したことにはしない。
@@ -150,6 +150,8 @@ public ownerへの全参照消失やGCは契約上の解放確認に数えない
 旧root内のLink／duty／空JoinCell保持と同owner検査だけを§12で限定実装した。旧4export・public返値・bridge4call site・既存native操作を維持する。その後の先行join dispatch、固定cleanup／guard／終端への接続は、既存caseとCT01〜12の差分を対にして別承認の実装で進める。生成途中の失敗copyと公開写像は、先行診断を壊さない固定契約ができるまで実行へ接続しない。
 
 moduleを跨ぐprivate継続の受渡し、未解決dutyの外側custody、新LM03、専用build・compiled childの有限終了／stdio契約、friend撤去は残る。共通化のためにoptional bridgeや汎用phase acknowledgementをexportする、旧workflowを複製する、台帳を共有する変更は不採用のままである。
+
+[部分生成回収・JoinCell生成公開の差分詳細設計draft-0.1](BEST_PRACTICE_NATIVE_DIAGNOSTIC_CONSTRUCTION_JOIN_DELTA_DESIGN.md)に、先行回収anchor／失敗facade、保護区間、failure copy不能時の拒否、同workの公開確定点とclose責務を対にして整理した。空seedは保持し、active用の段階検査を別にする。旧root外側のclose失敗でもdisposeを省略しない条件を含むが、保護区間・Promise生成・dispatch・driver変更はいずれも未実装である。
 
 ## 11 draft 0.1の静的照合
 

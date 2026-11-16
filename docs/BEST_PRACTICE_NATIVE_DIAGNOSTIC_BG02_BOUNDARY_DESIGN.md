@@ -1,6 +1,6 @@
 # BG02 無bridge注入workflowの共有境界設計
 
-Version: native-diagnostic-bg02-boundary-draft-0.4 / Date: 2026-11-16。
+Version: native-diagnostic-bg02-boundary-draft-0.5 / Date: 2026-11-16。
 Status: VK01／02（§9）と旧rootの空Link／duty／JoinCell準備（§10）だけ限定実装・合成検証。resource／制御継続の実接続と新LM03は未実装。設計基準HEADは`a6dbe01`、VK限定実装基準は`02ed9f7`、空準備の基準は`02aac7c`。対象は[B-03設計](BEST_PRACTICE_RELEASE_B03_COMPILED_MIGRATION_FAULT_DESIGN.md)BG02で、[BG01](E2E_BEST_PRACTICE_NATIVE_DIAGNOSTIC_PURE_BG01_2026-11-16.md)の純粋state／43scenario抽出を前提にする。
 
 共有したのはcleanupの理由優先順とnative事実の値判定だけである。bridgeを含むworkflow全体の移動、任意policyの注入、旧workflowの複製は採用しない。resource／制御境界の未解決条件を満たすまで新LM03入口を実装しない。
@@ -57,7 +57,9 @@ VK01の理由選択とsnapshot組立てを一つにしない。`before`に捕捉
 | CF04 | `guard`とbridge受理の同期群 | BS02／03の位置、復帰後sample／guard、再入時の先行理由を保つ。外側wrapperがexecute前後だけをcheckする方式は不可 |
 | CF05 | finallyのcleanup・自token退役・upper seal | HTTP／cleanup理由を保持しつつ自laneのteardownを区別する。実classのclose・予約返却は旧driverと実class側に残し、native側のconfirmedで代替しない |
 
-[CF01〜05詳細設計draft-0.2](BEST_PRACTICE_NATIVE_DIAGNOSTIC_CF_CONTROL_RESOURCE_DESIGN.md)で、旧root内部の同owner Link／duty、元floor・join公開点、固定継続と失敗prefixの保持を具体化した。空の先行保持だけを§10で実装し、active JoinCellとdispatchは追加契約案のまま、現行のqueue保証へ遡及しない。moduleを跨ぐprivate受渡し、外側custodyと新LM03は未確定のまま、resource owner／phase acknowledgement／policy／stop／accept口を新たにexportしない。
+[CF01〜05詳細設計draft-0.3](BEST_PRACTICE_NATIVE_DIAGNOSTIC_CF_CONTROL_RESOURCE_DESIGN.md)で、旧root内部の同owner Link／duty、元floor・join公開点、固定継続と失敗prefixの保持を具体化した。空の先行保持だけを§10で実装し、active JoinCellとdispatchは追加契約案のまま、現行のqueue保証へ遡及しない。moduleを跨ぐprivate受渡し、外側custodyと新LM03は未確定のまま、resource owner／phase acknowledgement／policy／stop／accept口を新たにexportしない。
+
+[部分生成回収・JoinCell生成公開の差分詳細設計draft-0.1](BEST_PRACTICE_NATIVE_DIAGNOSTIC_CONSTRUCTION_JOIN_DELTA_DESIGN.md)は、同ownerの先行保持・failure copyと、Promise生成→private公開→dispatchの境界を具体化する。copy不能・bootstrap未成立・close失敗を区別し、空slot試験を製品回収保証へ昇格しない。旧root内の将来変更だけを対象とし、新LM03／正式binding・friend撤去・配布切替のgateは開かない。
 
 ## 5 Intrinsicとrealmの所有
 
