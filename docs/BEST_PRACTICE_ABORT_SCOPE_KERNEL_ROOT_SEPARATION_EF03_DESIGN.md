@@ -105,6 +105,10 @@ EF-03の境界は§1の閉包（friend・callback branch・`synthetic_io`・fake
 
 EF-03Aではnative orchestration／認証／source発行をまとめて共通化しない。限定実装の実績は§9と別の検証記録で分ける。EF-03全体の分離・配布物からの撤去完了を示す記録ではない。
 
+### 2026-11-16：撤去前の試験保証とリリース検証への引渡し
+
+[friend撤去前の試験保証・配布境界の再照合draft-0.1](BEST_PRACTICE_RELEASE_FRIEND_TEST_GUARANTEE_REVIEW.md)に、維持する本番class保証、別assemblyの未代替部分、旧表外のsynthetic／import時取得依存と梱包検査の既存期待を整理した。GT／ADのcase対応・保証低下の個別承認・B-03のcompiled移行を先行gateとし、EF-03C／Dや最終リリース検証は別承認・未実施のまま。正式発行口閉鎖・全体受付無効・Unknown・調査保留と元期限を維持する。
+
 ## 9 EF-03A：純粋construction状態と既存classの接続
 
 [construction-state kernel](../src/servicenow/review-kernel/construction-state.ts)へ固定10resourceの状態、固定理由の正規化／公開写像、first reason、commit・copy・sealを抽出した。importは0、factoryは引数なしで自分の新規状態だけを生成する。clock／日時／controller／timer／I/O・session登録・実handle・credentialは持たない。内部3理由は公開internal_review_errorへ写像し、未知の値は読取／文字列化せず固定理由へ正規化する。既存ReadFailureCodeは同じunionの型aliasで維持する。
