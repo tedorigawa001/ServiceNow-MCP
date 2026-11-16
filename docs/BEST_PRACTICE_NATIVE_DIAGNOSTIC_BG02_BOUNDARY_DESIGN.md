@@ -1,7 +1,7 @@
 # BG02 無bridge注入workflowの共有境界設計
 
-Version: native-diagnostic-bg02-boundary-draft-0.3 / Date: 2026-11-16。
-Status: VK01／02のみ限定実装・合成検証（§9）。resource／制御継続と新LM03は未実装。設計基準HEADは`a6dbe01`、限定実装基準は`02ed9f7`。対象は[B-03設計](BEST_PRACTICE_RELEASE_B03_COMPILED_MIGRATION_FAULT_DESIGN.md)BG02で、[BG01](E2E_BEST_PRACTICE_NATIVE_DIAGNOSTIC_PURE_BG01_2026-11-16.md)の純粋state／43scenario抽出を前提にする。
+Version: native-diagnostic-bg02-boundary-draft-0.4 / Date: 2026-11-16。
+Status: VK01／02（§9）と旧rootの空Link／duty／JoinCell準備（§10）だけ限定実装・合成検証。resource／制御継続の実接続と新LM03は未実装。設計基準HEADは`a6dbe01`、VK限定実装基準は`02ed9f7`、空準備の基準は`02aac7c`。対象は[B-03設計](BEST_PRACTICE_RELEASE_B03_COMPILED_MIGRATION_FAULT_DESIGN.md)BG02で、[BG01](E2E_BEST_PRACTICE_NATIVE_DIAGNOSTIC_PURE_BG01_2026-11-16.md)の純粋state／43scenario抽出を前提にする。
 
 共有したのはcleanupの理由優先順とnative事実の値判定だけである。bridgeを含むworkflow全体の移動、任意policyの注入、旧workflowの複製は採用しない。resource／制御境界の未解決条件を満たすまで新LM03入口を実装しない。
 
@@ -57,7 +57,7 @@ VK01の理由選択とsnapshot組立てを一つにしない。`before`に捕捉
 | CF04 | `guard`とbridge受理の同期群 | BS02／03の位置、復帰後sample／guard、再入時の先行理由を保つ。外側wrapperがexecute前後だけをcheckする方式は不可 |
 | CF05 | finallyのcleanup・自token退役・upper seal | HTTP／cleanup理由を保持しつつ自laneのteardownを区別する。実classのclose・予約返却は旧driverと実class側に残し、native側のconfirmedで代替しない |
 
-[CF01〜05詳細設計draft-0.1](BEST_PRACTICE_NATIVE_DIAGNOSTIC_CF_CONTROL_RESOURCE_DESIGN.md)で、旧root内部の同owner Link／duty、元floor・join公開点、固定継続と失敗prefixの保持を具体化した。先行JoinCellは追加契約案で未実装であり、現行のqueue保証へ遡及しない。moduleを跨ぐprivate受渡し、外側custodyと新LM03は未確定のまま、resource owner／phase acknowledgement／policy／stop／accept口を新たにexportしない。
+[CF01〜05詳細設計draft-0.2](BEST_PRACTICE_NATIVE_DIAGNOSTIC_CF_CONTROL_RESOURCE_DESIGN.md)で、旧root内部の同owner Link／duty、元floor・join公開点、固定継続と失敗prefixの保持を具体化した。空の先行保持だけを§10で実装し、active JoinCellとdispatchは追加契約案のまま、現行のqueue保証へ遡及しない。moduleを跨ぐprivate受渡し、外側custodyと新LM03は未確定のまま、resource owner／phase acknowledgement／policy／stop／accept口を新たにexportしない。
 
 ## 5 Intrinsicとrealmの所有
 
@@ -109,3 +109,9 @@ VK01／02の値kernelと旧rootへの接続は§9で限定実装した。VK03・
 [値試験](../tests/review/native-diagnostic-facts.test.ts)・[旧root連続試験](../tests/review/native-diagnostic-facts-workflow.test.ts)を追加し、既存197件を変更せず、計211件が成功した。旧2入口間のResponse再利用4caseと、値判定に通るcopyがprivate provenanceの代わりにならない4caseを含む。[compiled値検査](../tests/review/fixtures/compiled-native-diagnostic-facts.mjs)と旧ND-01／02／03・BG01の固定fixtureも成功。初回試験側の失敗・負の対照・梱包dry-runと未実施範囲は[検証記録](E2E_BEST_PRACTICE_NATIVE_FACTS_VK01_VK02_2026-11-16.md)へ分離する。
 
 CF01〜05、新LM03、専用artifactとcompiled実行／終了契約、friend撤去・AP承認は残る。値kernelの完成をBG02全体の完了や本番の正式binding保証へ昇格しない。
+
+## 10 旧root内の空制御準備
+
+[CF詳細§12](BEST_PRACTICE_NATIVE_DIAGNOSTIC_CF_CONTROL_RESOURCE_DESIGN.md#12-空の内部保持と同owner検査の限定実装)のRootControlLink／RunLink／ResourceDutyとrun／cleanupの空JoinCellを、旧creator内だけに追加した。holderへの先行保持、canonical実参照との照合とshallow freezeを確認し、既存execute closureで寿命を保持する。実window／attempt／record／reader、Promise／resolver・dispatchとは結合せず、既存runWork／cleanupWorkは不変である。
+
+sourceと固定dist prefixの27拒否・9変異・6部分生成prefix、semantic型拒否6件、旧試験併存の222件とcompiled計6本を確認した。scratch fixtureの保持は製品の部分生成失敗回収の証拠ではない。配布非同梱・新権限口なしと未実施範囲は[検証記録](E2E_BEST_PRACTICE_NATIVE_CONTROL_PREPARATION_2026-11-16.md)へ分離する。CF実制御、LM03・専用artifact・friend撤去のgateは開かない。

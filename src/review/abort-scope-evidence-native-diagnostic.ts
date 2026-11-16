@@ -38,6 +38,51 @@ function constructInjectedNativeDiagnosticWorkflow(raw: NativeInput, fault?: Nat
     // Bind the upper owner before inspecting injected dependencies or observing Response/clock/native state.
     const { binding, owner: upper } = createNativeDiagnosticState(); upper.bind(binding);
     const writer = upper.writers('release');
+    type RootControlLink = Readonly<{ origin: object; binding: Binding; upper: typeof upper; writer: typeof writer }>;
+    type EmptyJoinCell<K extends 'run' | 'cleanup'> = Readonly<{ root: RootControlLink; kind: K; work: null; resolver: null;
+        dispatchStarted: false; entered: false; settled: false }>;
+    type RunLink = Readonly<{ root: RootControlLink; join: EmptyJoinCell<'run'>; window: null; attempt: null; record: null; startClaimed: false }>;
+    type ResourceDuty = Readonly<{ root: RootControlLink; run: RunLink; join: EmptyJoinCell<'cleanup'>; anchor: null;
+        record: null; readerIdentity: undefined; retention: 'empty' }>;
+    // Field-first custody is local to this creator; no active Promise, claim or resource is created here.
+    const controlPreparation: { origin: object | null; root: RootControlLink | null; runJoin: EmptyJoinCell<'run'> | null;
+        run: RunLink | null; cleanupJoin: EmptyJoinCell<'cleanup'> | null; duty: ResourceDuty | null } =
+        { origin: null, root: null, runJoin: null, run: null, cleanupJoin: null, duty: null };
+    const controlOrigin = controlPreparation.origin = Object.create(null) as object;
+    Object.freeze(controlOrigin);
+    const controlRoot: RootControlLink = controlPreparation.root = { origin: controlOrigin, binding, upper, writer };
+    Object.freeze(controlRoot);
+    const controlRunJoin: EmptyJoinCell<'run'> = controlPreparation.runJoin = { root: controlRoot, kind: 'run', work: null,
+        resolver: null, dispatchStarted: false, entered: false, settled: false };
+    Object.freeze(controlRunJoin);
+    const controlRun: RunLink = controlPreparation.run = { root: controlRoot, join: controlRunJoin, window: null,
+        attempt: null, record: null, startClaimed: false };
+    Object.freeze(controlRun);
+    const controlCleanupJoin: EmptyJoinCell<'cleanup'> = controlPreparation.cleanupJoin = { root: controlRoot, kind: 'cleanup', work: null,
+        resolver: null, dispatchStarted: false, entered: false, settled: false };
+    Object.freeze(controlCleanupJoin);
+    const controlDuty: ResourceDuty = controlPreparation.duty = { root: controlRoot, run: controlRun, join: controlCleanupJoin,
+        anchor: null, record: null, readerIdentity: undefined, retention: 'empty' };
+    Object.freeze(controlDuty);
+    function sameControlOwner(root: unknown, run: unknown, duty: unknown, runJoin: unknown, cleanupJoin: unknown): boolean {
+        // Reject foreign/copy/Proxy values before any property read. Canonical pins are not taken from the mutable holder.
+        if (root !== controlRoot || run !== controlRun || duty !== controlDuty || runJoin !== controlRunJoin || cleanupJoin !== controlCleanupJoin) return false;
+        if (controlPreparation.origin !== controlOrigin || controlPreparation.root !== controlRoot || controlPreparation.runJoin !== controlRunJoin ||
+            controlPreparation.run !== controlRun || controlPreparation.cleanupJoin !== controlCleanupJoin || controlPreparation.duty !== controlDuty) return false;
+        return Object.isFrozen(controlOrigin) && Object.isFrozen(controlRoot) && Object.isFrozen(controlRunJoin) && Object.isFrozen(controlRun) &&
+            Object.isFrozen(controlCleanupJoin) && Object.isFrozen(controlDuty) &&
+            controlRoot.origin === controlOrigin && controlRoot.binding === binding && controlRoot.upper === upper && controlRoot.writer === writer &&
+            controlRun.root === controlRoot && controlRun.join === controlRunJoin && controlRun.window === null && controlRun.attempt === null &&
+            controlRun.record === null && controlRun.startClaimed === false && controlDuty.root === controlRoot && controlDuty.run === controlRun &&
+            controlDuty.join === controlCleanupJoin && controlDuty.anchor === null && controlDuty.record === null && controlDuty.readerIdentity === undefined &&
+            controlDuty.retention === 'empty' && controlRunJoin.root === controlRoot && controlRunJoin.kind === 'run' &&
+            controlRunJoin.work === null && controlRunJoin.resolver === null && controlRunJoin.dispatchStarted === false &&
+            controlRunJoin.entered === false && controlRunJoin.settled === false && controlCleanupJoin.root === controlRoot && controlCleanupJoin.kind === 'cleanup' &&
+            controlCleanupJoin.work === null && controlCleanupJoin.resolver === null && controlCleanupJoin.dispatchStarted === false &&
+            controlCleanupJoin.entered === false && controlCleanupJoin.settled === false;
+    }
+    const controlOwnerMatched = sameControlOwner(controlRoot, controlRun, controlDuty, controlRunJoin, controlCleanupJoin);
+    // CF-PREP: empty control slots retained; dispatch remains disconnected.
     const d = data(raw, ['fake_io', 'deadline_ms', 'budget', 'schedule']), b = data(d?.budget, ['read']);
     const deadline = d?.deadline_ms;
     const validInput = !!d && !!b && d.fake_io === true && Number.isInteger(deadline) && Number(deadline) > 0 && Number(deadline) <= 60000 &&
@@ -70,6 +115,7 @@ function constructInjectedNativeDiagnosticWorkflow(raw: NativeInput, fault?: Nat
         }
     }
     function fail(code: Code, stage: Stage) { upper.reject(code, stage); stop(code, stage); }
+    if (!controlOwnerMatched) fail('evidence_binding_mismatch', 'binding');
     if (!validInput) fail('invalid_input', 'binding');
     function sample(floor: number): NativeReason | null {
         if (sampling) { fail('invalid_state', 'stop'); return 'observation_invalid'; }
@@ -188,6 +234,9 @@ function constructInjectedNativeDiagnosticWorkflow(raw: NativeInput, fault?: Nat
             request_rejected: null as 'invalid_state' | null, foreign_unchanged: foreignUnchanged, permissions });
     }
     function execute(response: unknown, descriptor: unknown) {
+        // The existing owner closure retains preparation custody; it does not dispatch either empty JoinCell.
+        if (!sameControlOwner(controlRoot, controlRun, controlDuty, controlRunJoin, controlCleanupJoin) && !sealed)
+            fail('evidence_binding_mismatch', 'binding');
         if (started || sealed) {
             if (!sealed) fail('invalid_state', 'acceptance');
             return new P<ReturnType<typeof snapshot>>(resolve => {

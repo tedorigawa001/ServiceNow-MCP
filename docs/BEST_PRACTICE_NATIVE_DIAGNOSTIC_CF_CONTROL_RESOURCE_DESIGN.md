@@ -1,11 +1,11 @@
 # BG02 CF01〜05 制御継続とresource所有の詳細設計
 
-Version: native-diagnostic-cf-control-resource-draft-0.1 / Date: 2026-11-16。
-Status: 詳細設計のみ。基準HEADは`4189d33`。[共有境界設計](BEST_PRACTICE_NATIVE_DIAGNOSTIC_BG02_BOUNDARY_DESIGN.md)CF01〜05を具体化する。[VK01／02](E2E_BEST_PRACTICE_NATIVE_FACTS_VK01_VK02_2026-11-16.md)は実装済みだが、本書の型・slot・生成順・故障条件は未実装・未実行である。
+Version: native-diagnostic-cf-control-resource-draft-0.2 / Date: 2026-11-16。
+Status: 旧root内部のLink／duty／空JoinCellの先行保持・同owner検査だけ限定実装（§12）。設計基準HEADは`4189d33`、今回の実装基準は`02aac7c`。[共有境界設計](BEST_PRACTICE_NATIVE_DIAGNOSTIC_BG02_BOUNDARY_DESIGN.md)CF01〜05を具体化する。[VK01／02](E2E_BEST_PRACTICE_NATIVE_FACTS_VK01_VK02_2026-11-16.md)以外の実制御・resource結合・先行join dispatchは未接続である。
 
 先行案は、制御継続とresource責務の結合を**旧root内部で明示する**ことに限る。bridge・権限処理・同一性検査を外へ渡す共通constructorやinstallerは作らない。新LM03へのmodule搬出は別gateとし、本書でBG02全体の分離可能性やfriend撤去を確定したことにはしない。
 
-旧入口・試験・期待値・元期限を維持する。正式発行口／新LM03／C実行入口／body起動閉鎖、全体受付無効、Unknown、通常経路未切替、VM／監視／telemetry調査保留、LOAD6／LOAD7とAP01〜06の未承認を維持する。実装・試験再実行・native操作・build／設定変更・実接続・実通信・実機操作・公開・コミット・Pushは行わない。
+旧入口・試験・期待値・元期限を維持する。正式発行口／新LM03／C実行入口／body起動閉鎖、全体受付無効、Unknown、通常経路未切替、VM／監視／telemetry調査保留、LOAD6／LOAD7とAP01〜06の未承認を維持する。§12の合成依存での限定実装・検証以外は進めず、build／runner設定変更・実接続・実通信・実機操作・公開・コミット・Pushは行わない。
 
 ## 1 現行の境界と変更案の区別
 
@@ -23,7 +23,7 @@ CF02の先行JoinCellは現状の単なる配置変更ではなく、queue登録
 
 ## 2 private型と唯一のowner
 
-名称は内部型案で、exportや公開引数を追加するものではない。生成は同じ`constructInjectedNativeDiagnosticWorkflow`の中で完結させる。structural copyや外部診断を型assertionしても資格にならない。
+以下は実制御まで含む内部型案で、§12の空型とは区別する。exportや公開引数を追加せず、生成は同じ`constructInjectedNativeDiagnosticWorkflow`の中で完結させる。structural copyや外部診断を型assertionしても資格にならない。
 
 | 内部型案 | 固定fieldと生成元 | 検査と禁止 |
 |---|---|---|
@@ -126,7 +126,7 @@ public ownerへの全参照消失やGCは契約上の解放確認に数えない
 
 ## 9 将来の合成受入条件
 
-以下は固定fake依存・注入Response／Streamsで行う将来試験の契約で、今回は実行しない。旧UN62／既存caseを残し、新しい失敗caseは追加分として記録する。
+以下は固定fake依存・注入Response／Streamsで行う実制御の将来試験の契約である。§12ではCT01／12の空参照境界とCT04の部分生成prefixだけを限定検証し、dispatch・resource結合・製品failure copyの検証へ数えない。旧UN62／既存caseを残し、新しい失敗caseは追加分として記録する。
 
 | ID | 条件 | 独立oracleの確認点 |
 |---|---|---|
@@ -147,10 +147,27 @@ public ownerへの全参照消失やGCは契約上の解放確認に数えない
 
 ## 10 実装への引渡しと停止条件
 
-最初の実装候補は旧root内のLink／duty／空JoinCell保持と同owner検査だけとし、旧4export・public返値・bridge4call site・既存native操作を維持する。その後の先行join dispatch、固定cleanup／guard／終端への接続は、既存caseとCT01〜12の差分を対にして別承認の実装で進める。生成途中の失敗copyと公開写像は、先行診断を壊さない固定契約ができるまで実行へ接続しない。
+旧root内のLink／duty／空JoinCell保持と同owner検査だけを§12で限定実装した。旧4export・public返値・bridge4call site・既存native操作を維持する。その後の先行join dispatch、固定cleanup／guard／終端への接続は、既存caseとCT01〜12の差分を対にして別承認の実装で進める。生成途中の失敗copyと公開写像は、先行診断を壊さない固定契約ができるまで実行へ接続しない。
 
 moduleを跨ぐprivate継続の受渡し、未解決dutyの外側custody、新LM03、専用build・compiled childの有限終了／stdio契約、friend撤去は残る。共通化のためにoptional bridgeや汎用phase acknowledgementをexportする、旧workflowを複製する、台帳を共有する変更は不採用のままである。
 
-## 11 静的照合
+## 11 draft 0.1の静的照合
 
 対象は旧ND rootのcreator／sample／wait／clean／guard／consume／execute／close、実classのscope生成／失効／予約解放、既存source試験とVK記録。記述を「現行の事実」「内部契約案」「将来の合成条件」に分けた。構文解析でqueue登録をexecutor内に持つjoin代入2か所とbridge呼出し4か所、sampleの等号／非増加、元delay、release前factsと後の理由確定、closeの同work合流を照合した。3文書のローカルリンク46件・表19個、CT01〜12の重複／欠落0、末尾改行・差分空白を確認した。source・試験・CHANGELOG・build／package設定の差分は0。製品moduleのimport・試験再実行・build・pack・native操作は行っておらず、以前の211件成功を今回の新規結果には数えない。
+
+## 12 空の内部保持と同owner検査の限定実装
+
+旧creatorで既存upper／writerを得た直後、依存rawの検査より前に6fieldの`controlPreparation`を作る。origin→RootControlLink→run用EmptyJoinCell→RunLink→cleanup用EmptyJoinCell→ResourceDutyの固定順で、各実参照を先にholderへ保持し、それからshallow freezeする。追加はholder 1個とreadonly object 6個で、upper／writerの子へdeep freezeしない。
+
+| 内部型 | 今回固定する範囲 |
+|---|---|
+| RootControlLink | creator固有origin・同binding・同upper・同writerを保持。外部から採用しない |
+| RunLink | 同rootとrun用空cellだけを結合。window／attempt／recordはnull、startClaimedはliteral falseで、旧startedの複製や新live claimではない |
+| ResourceDuty | 同root／runとcleanup用空cellだけを結合。anchor／recordはnull、readerIdentityはundefined、retentionはempty |
+| EmptyJoinCell&lt;K&gt; | run／cleanupの別kind、work／resolverはnull、dispatchStarted／entered／settledはfalse。§5のactive JoinCellとは別であり、Promiseを作らない |
+
+`sameControlOwner`は引数5参照を生成時のcanonical constと先に比較し、次にholderの6参照を同constへ照合する。copy・foreign・Proxyはpropertyを読む前に拒否する。正規参照だけについてfreeze・全field・結合の一致を検査し、holder自体をcanonical identityの代わりにしない。constructorと既存execute入口の2か所で、失敗を既存のevidence_binding_mismatch／bindingへ写す。execute closureが同pins／holderを保持し、新しいpublic観測口を作らない。
+
+旧runWork／cleanupWork・bridge・元sample・cleanup・claim・finallyは変更せず、新metadataは旧workflowの実行中も空のままである。旧4export・constructorの受付field・5faultを維持し、同window／attempt／record／readerへの実結合、先行Promise／resolverとdispatch、RetainedDuty、外側custodyは未実装とする。
+
+[新試験](../tests/review/native-control-preparation.test.ts)はsourceから閉じたprefixだけを取り出す試験用fixtureで、同owner正対照と27拒否、hook 0、9変異拒否、6部分生成prefix、semantic型拒否6件を確認する。部分生成のcatchは試験側だけにあり、製品の生成失敗copy／回収の保証ではない。[compiled検査](../tests/review/fixtures/compiled-native-control-preparation.mjs)は固定dist JSの同prefixと宣言非公開を検査し、製品側へfriendやexportを追加しない。旧試験併存の計222件・compiled計6本、梱包範囲と初回の試験側失敗は[検証記録](E2E_BEST_PRACTICE_NATIVE_CONTROL_PREPARATION_2026-11-16.md)に記載する。
