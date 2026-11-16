@@ -1,6 +1,6 @@
 # BG02 無bridge注入workflowの共有境界設計
 
-Version: native-diagnostic-bg02-boundary-draft-0.2 / Date: 2026-11-16。
+Version: native-diagnostic-bg02-boundary-draft-0.3 / Date: 2026-11-16。
 Status: VK01／02のみ限定実装・合成検証（§9）。resource／制御継続と新LM03は未実装。設計基準HEADは`a6dbe01`、限定実装基準は`02ed9f7`。対象は[B-03設計](BEST_PRACTICE_RELEASE_B03_COMPILED_MIGRATION_FAULT_DESIGN.md)BG02で、[BG01](E2E_BEST_PRACTICE_NATIVE_DIAGNOSTIC_PURE_BG01_2026-11-16.md)の純粋state／43scenario抽出を前提にする。
 
 共有したのはcleanupの理由優先順とnative事実の値判定だけである。bridgeを含むworkflow全体の移動、任意policyの注入、旧workflowの複製は採用しない。resource／制御境界の未解決条件を満たすまで新LM03入口を実装しない。
@@ -52,12 +52,12 @@ VK01の理由選択とsnapshot組立てを一つにしない。`before`に捕捉
 | ID | 現行で結び付いている処理 | 分離前に固定すべき条件 |
 |---|---|---|
 | CF01 | `clean`開始時のphase・writer pending・sample・cancel | pendingはbudget／scheduler／native callbackより前。結果だけを後で通知する方式は、同期callbackから観測するphase／診断を変えるため同等ではない |
-| CF02 | `cleanupWork`と`runWork`の先行join | queueへ渡す前に同Promiseを保持し、stop／close／execute再入が同じ処理へ合流する。新しいawaitや別queueを増やしていないことが必要 |
+| CF02 | `cleanupWork`と`runWork`のjoin公開点 | 現行はPromise executorでenqueueした後に代入され、通常のnative callbackより前に保持される。enqueue呼出し前の先行公開とは区別し、将来のprivate JoinCellとdispatch失敗責務を固定する |
 | CF03 | `sample`の`last`／`sampling` | cleanup→issue→pre→postを跨いで同じ単調非増加履歴を使う。独立resource ownerとworkflow ownerが別々に残時間を保持しない |
 | CF04 | `guard`とbridge受理の同期群 | BS02／03の位置、復帰後sample／guard、再入時の先行理由を保つ。外側wrapperがexecute前後だけをcheckする方式は不可 |
 | CF05 | finallyのcleanup・自token退役・upper seal | HTTP／cleanup理由を保持しつつ自laneのteardownを区別する。実classのclose・予約返却は旧driverと実class側に残し、native側のconfirmedで代替しない |
 
-CF01〜05を保つ制御継続のprivate生成元・受渡し・失敗時保持が未確定のため、resource ownerやphase acknowledgementのexportはまだ設計確定しない。とくに「同じcallbackを渡せば共有できる」という理由でpolicy／stop／accept口を新設しない。値kernelの完了後もこのgateを残す。
+[CF01〜05詳細設計draft-0.1](BEST_PRACTICE_NATIVE_DIAGNOSTIC_CF_CONTROL_RESOURCE_DESIGN.md)で、旧root内部の同owner Link／duty、元floor・join公開点、固定継続と失敗prefixの保持を具体化した。先行JoinCellは追加契約案で未実装であり、現行のqueue保証へ遡及しない。moduleを跨ぐprivate受渡し、外側custodyと新LM03は未確定のまま、resource owner／phase acknowledgement／policy／stop／accept口を新たにexportしない。
 
 ## 5 Intrinsicとrealmの所有
 

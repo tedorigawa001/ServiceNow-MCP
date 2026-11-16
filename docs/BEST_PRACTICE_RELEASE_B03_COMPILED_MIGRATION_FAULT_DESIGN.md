@@ -1,6 +1,6 @@
 # B-03：compiled移行・import分離・故障条件表
 
-Version: release-b03-compiled-migration-fault-draft-0.4 / Date: 2026-11-16。
+Version: release-b03-compiled-migration-fault-draft-0.5 / Date: 2026-11-16。
 Status: **BG01のLM01／02とBG02のVK01／02だけ限定実装・検証。LM03・専用artifact・切替は未実装。** 旧試験・期待値を維持し、AP01〜06の非提供／保証低下／互換変更は未承認のまま。通常経路未切替、正式発行口閉鎖、C実行入口／body起動閉鎖、全体受付無効、Unknown、VM／監視／telemetry調査保留、LOAD6／LOAD7選択未承認を維持する。friend撤去・build設定変更・負荷採取・実process対照・実接続・実通信・実機操作・設定変更・公開・Pushは行わない。
 
 ## 1 基準・目的・現行の不足
@@ -35,6 +35,8 @@ Status: **BG01のLM01／02とBG02のVK01／02だけ限定実装・検証。LM03�
 BG01後の[BG02共有境界draft-0.1](BEST_PRACTICE_NATIVE_DIAGNOSTIC_BG02_BOUNDARY_DESIGN.md)で、4か所のbridge呼出し、旧ND-02／ND-03の共有realm、cleanup／sample／joinの結合を具体化した。先行候補は理由優先順・native factsの値判定だけで、同一性・権限・制御frameを旧rootに残す。resource／private継続が未確定の間は新LM03入口を作らず、BG02完了扱いもしない。
 
 後続の[同draft-0.2 §9](BEST_PRACTICE_NATIVE_DIAGNOSTIC_BG02_BOUNDARY_DESIGN.md)でVK01／02だけを限定実装した。理由5,760・eligibility752通りの独立oracle、旧試験併存の計211件、compiled値／旧ND検査を確認した。bridge・private claim・制御frame・resource台帳は旧rootに保持し、新LM03とBG02全体の完了判定は保留する。
+
+[CF01〜05の制御継続・resource所有詳細設計draft-0.1](BEST_PRACTICE_NATIVE_DIAGNOSTIC_CF_CONTROL_RESOURCE_DESIGN.md)に、同owner Linkと未確認duty、元floor・同sample履歴、run／cleanup join公開点、固定継続・失敗prefix・終端後の保持を整理した。現行のnative queueによるcallback前保持と、将来のenqueue前JoinCell公開案を区別する。内部型・保持slotだけを先行候補とし、新LM03・外側custody・専用build・friend撤去のgateは開かない。今回の変更はMDのみである。
 
 intrinsicの捕捉位置も移行条件に含む。純粋LM01／02ではnative prototypeに触れない。LM03は固定resource層がResponse／stream／readerの操作を捕捉し、実行中にinstance methodやprototypeを引き直さない。旧試験の「prototype故障を注入してからmoduleをfresh import」と同じ捕捉順を維持する。捕捉をownerごとへ移すなどの挙動変更は別レビューで、単なる配置変更と呼ばない。
 
