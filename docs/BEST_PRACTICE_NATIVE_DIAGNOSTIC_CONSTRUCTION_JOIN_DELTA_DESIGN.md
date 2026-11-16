@@ -1,7 +1,9 @@
 # 旧rootの部分生成回収とJoinCell生成公開の差分詳細設計
 
-Version: native-diagnostic-construction-join-delta-draft-0.2 / Date: 2026-11-16。
+Version: native-diagnostic-construction-join-delta-draft-0.3 / Date: 2026-11-17。
 Status: CP00〜05の回収anchor・保護区間・failure copy・失敗専用closeだけ限定実装（§11）。設計基準HEADは`79aef94`、実装基準は`1707e8d`。[CF制御設計](BEST_PRACTICE_NATIVE_DIAGNOSTIC_CF_CONTROL_RESOURCE_DESIGN.md)§3／5／7／10に対する差分であり、active JoinCell生成・公開・dispatchとCP06は未接続である。
+
+draft-0.2のレビュー修正：レビュー修正の基準HEADは`75b5d02`。旧入口の構築時raw不正もfailure facadeへ送るため、execute前のdiagnosticsがprepared／未sealedからclosed／sealedへ、executeのteardownがconfirmedからnot_startedへ、再executeの`request_rejected`がinvalid_stateからnullへ変わる。これを旧期待値の維持と記していたため、§4・§11に公開差分として明記し、§4表の再execute行をready owner限定へ直した。あわせて、停止通知自体が失敗した場合のND-03 begin拒否と、正常aggregate生成後のcopy不能でも正常snapshotへfallbackしないことを固定する試験を追加した（§11）。
 
 部分生成の失敗を同ownerへ戻す経路を先に作り、その回収先を確保できた場合だけJoinCellを生成・先行保持する。空cellの存在、Promiseのsettle、public診断のsealは、生成完了・resource解放・正式受理の証拠ではない。
 
@@ -67,11 +69,13 @@ ND-02では保護対象の失敗後も同じ失敗専用facadeを返せるが、
 | 構築・freeze・copy前段の例外 | internal_review_error／binding | 例外のname／message／stack／未知値は保存・出力しない |
 | 同owner／canonical参照不一致 | evidence_binding_mismatch／binding | public_codeは既存upperのinternal_review_error写像を使う。foreignの理由・台帳には触れない |
 | raw不正 | invalid_input／binding | 未読rawを後から検査して、先行構築失敗をinvalid_inputへ置換しない |
-| 再execute | 既存invalid_state／acceptanceとrequest_rejected | cleanupへの正規合流まで重複として拒否しない |
+| ready ownerの再execute | 既存invalid_state／acceptanceとrequest_rejected | cleanupへの正規合流まで重複として拒否しない。failure facadeの再executeは同copyを返し、新しいrefusal／request_rejectedを記録しない |
 | runのPromise／queue制御異常 | internal_review_error／stop | 構築理由・既存HTTP理由が先なら保持する |
 | cleanupのPromise／queue制御異常 | internal_review_error／cleanup | native cleanup理由を新しい制御理由で上書きしない。未実行操作をconfirmedへしない |
 
 failure copyの公開shapeは既存kind／scope／phase／upper／operations／counts／token_held／request_rejected／foreign_unchanged／7permissions=falseを維持する。CP03〜05の取得前失敗ならphase=closed、operations／countsは0、token_held=false。upperのHTTPは未観測、cleanup・teardownはnot_startedを維持する。noResponse、no_body、cleanup confirmed、self-teardown confirmedを捏造しない。
+
+旧入口の構築時raw不正もこのcopyへ終端する。draft 0.1以前の旧ownerはprepared／未sealedで復帰し、初回executeでteardown confirmed、再executeでrequest_rejected=invalid_stateを返していた。§11以降はexecute前からclosed／sealed、teardown not_started、再execute・closeも同copyで、`primary`／`refusal`のinvalid_inputとcounts 0は変えない。未実行のself-teardownをconfirmedと報告しないための意図した公開差分であり、旧期待値の維持には数えない。
 
 copyは同upperの封印snapshotを取得できた場合だけ完成とする。同upperのprimaryが元の先行理由と既存public写像に整合し、stopped／sealedを確認できることも必要である。upper記録が失敗してprimary未設定のままなら、正常に見えるsnapshotをfailure copyとして返さずcopy不能とする。upper.sealが内部scalarを更新した後にthrowする可能性も扱い、「sealを呼んだ」「sealedになった」だけでcopy readyにしない。上位停止通知、upper記録、seal、copy組立ての各成否は固定scalarへ分離し、後段の処理は可能な範囲で一度ずつ試みる。
 
@@ -180,12 +184,12 @@ sourceの構文解析でexecutor内のqueueを持つjoin代入2か所とbridge c
 
 ## 11 CP00からCP05の限定実装
 
-[旧root](../src/review/abort-scope-evidence-native-diagnostic.ts)のprivate allocate／initializeに分け、同anchorへstate・writer・失敗facadeを先に保持する。正常継続は空seed・raw strict検査・正常aggregateのfreezeと最終同owner post後にだけ結合する。旧wrapperは同facadeを返し、ND-03 beginはfacadeをowner slotへ保持してから一度初期化し、private ready不成立なら固定拒否する。公開stopは引数なしの取消に固定し、既存内部driverのcode付きstopとは分離する。新export・採用口・登録台帳はない。
+[旧root](../src/review/abort-scope-evidence-native-diagnostic.ts)のprivate allocate／initializeに分け、同anchorへstate・writer・失敗facadeを先に保持する。正常継続は空seed・raw strict検査・正常aggregateのfreezeと最終同owner post後にだけ結合する。旧wrapperは同facadeを返し、ND-03 beginはfacadeをowner slotへ保持してから一度初期化し、private ready不成立なら固定拒否する。公開stopは引数なしの取消に固定し、既存内部driverのcode付きstopとは分離する。新export・採用口・登録台帳はない。旧入口の構築時raw不正もfailure copyへ終端し、§4のとおりexecute前のphase／sealed、teardown、再executeの`request_rejected`が変わる。
 
 最初のprimary・revoked・sealed・phaseは正常継続と同じclosureに1組だけ置く。構築失敗ではそれらを先に固定し、upper reject／stop、既存stop通知、seal／copyの固定順を個別tryで進める。copyは同upperの停止・seal・理由整合を確認できた時だけ完成する。copy不能は固定拒否に終端し、再close・再execute・初期化再入で再生成／再sealしない。anchorと部分準備はclearせず保持する。
 
 ND-03の外側closeとdisposeは独立したfinallyにし、同driverのdisposal claimを処理前に消費する。内外からの重複disposeは同結果へ合流し、fill失敗を再試行しない。先行HTTP／構築理由をcleanup異常で上書きせず、実class側の既存session close／予約返却とは別責務のままである。
 
-[source試験](../tests/review/native-construction-recovery.test.ts)は実constructorのfreeze失敗・copy不能と実class／fake I/Oのbegin失敗・close失敗・dispose失敗を確認する。[固定oracle](../tests/review/fixtures/native-construction-recovery-model.mjs)は実ソース／出力JSのallocate関数を試験側だけで抽出し、24条件、通知再入・最終同owner不一致、6つの構文正常な変異を検査する。新しい故障引数や観測portは製品に追加しない。既存27拒否・9変異・6prefix・型境界のprobeはprivate初期化位置へ追従し、期待値を維持した。
+[source試験](../tests/review/native-construction-recovery.test.ts)は実constructorのfreeze失敗・copy不能と実class／fake I/Oのbegin失敗・close失敗・dispose失敗を確認する。[固定oracle](../tests/review/fixtures/native-construction-recovery-model.mjs)は実ソース／出力JSのallocate関数を試験側だけで抽出し、24条件、通知再入・最終同owner不一致、6つの構文正常な変異を検査する。新しい故障引数や観測portは製品に追加しない。既存27拒否・9変異・6prefix・型境界のprobeはprivate初期化位置へ追従し、期待値を維持した。レビュー修正で、raw不正の同copy終端、停止通知throw下のbegin拒否（reserve／request 0）、正常aggregate生成後のcopy不能時の固定拒否（正常snapshot fallbackなし）の3件を追加した。
 
 CP00〜02のbootstrap未成立、state creator復帰前の内部部分生成、process障害の回復は保証しない。取得可能なanchor／upper／facadeのprefixだけを保持し、native操作0と診断回収成立を混同しない。runPending／cleanupPendingはnull、空seedはreadonlyのまま。active JoinCell生成・公開・dispatch、resourceとの新結合、外側custodyと新LM03は未接続である。実行結果・初回失敗・compiled／配布境界と未実施範囲は[検証記録](E2E_BEST_PRACTICE_NATIVE_CONSTRUCTION_RECOVERY_CP00_CP05_2026-11-16.md)へ分離する。

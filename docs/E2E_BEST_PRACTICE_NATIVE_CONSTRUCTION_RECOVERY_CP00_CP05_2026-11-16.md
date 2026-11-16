@@ -73,3 +73,18 @@ JoinRuntimeの段階型と同Promise／settler生成・private公開、dispatch�
 ## コミット前の対象限定再検証 2026年11月17日
 
 今回の11fileだけをstageし、index全体を別の空directoryへ展開した。既存dist／`.git`は持ち込まず、導入済み依存だけを参照した。build・型検査・対象3 TS fileのlintはexit 0、関連8file・229件が成功（1.67秒）。新回収と既存空準備／VK01／02／BG01／旧ND-01／02／03のcompiled計7本、新旧`.mjs`4fileの構文検査もexit 0だった。offline梱包dry-runは441file・436 runtime artifact、対象7fileの非同梱・3markerのruntime参照0、10負対照拒否で成功した。設計3文書と本記録のリンク38件・表23個も欠落／列ずれ0。元の期限・並列度、JoinCell生成／dispatch未接続と各閉鎖条件を維持する。再検証後の変更は本節だけで、実装・試験入力は変更しない。全体回帰・実tarball展開は未実施のまま、Pushは行わない。
+
+## レビュー修正 2026年11月17日
+
+基準HEADは`75b5d02`。旧入口の構築時raw不正（余剰key・deadline超過）もfailure facadeへ送るため、execute前のdiagnosticsがprepared／未sealedからclosed／sealedへ、初回executeのteardownがconfirmedからnot_startedへ、再executeの`request_rejected`がinvalid_stateからnullへ変わる。既存試験は`primary`・counts中心で通っており、本記録の「旧workflowの期待値は変更していない」はこの公開差分を含まなかった。未実行のself-teardownをconfirmedと報告しない意図した差分として[設計draft-0.3](BEST_PRACTICE_NATIVE_DIAGNOSTIC_CONSTRUCTION_JOIN_DELTA_DESIGN.md)§4・§11へ明記し、製品コードは変更していない。
+
+source試験を3件追加した（計10件）。raw不正2種で同copyへの終端とexecute／close再入の同参照、停止通知（実classのsession stop）が1回throwしてもND-03 beginがready不成立で終了しreserve／request 0となること、正常aggregate生成後にcopyが作れない場合も正常snapshotへfallbackせず固定拒否しcopy試行1回であることを確認する。追加前に、修正前ソースでは3件とも失敗し、beginのready検査削除と正常snapshot fallbackの各変異でも対応する1件が失敗することを確認した。
+
+| 検査 | 結果 |
+|---|---|
+| lint・型検査・build・HTTP pack | exit 0 |
+| Vitest全体（`--maxWorkers=3`） | 359file・18,854件成功・失敗0 |
+| compiled probe群・declared-actual・migration・native 8本 | すべてexit 0 |
+| compiled比較 | inconclusive（control_deadline、load avg 7〜9）。ND moduleを読まない比較で、成功には数えない |
+
+copy内`sealed`検査と初期化claimの削除は、sealが`sealed=true`かthrowのどちらかで、初期化が各入口で一度だけ呼ばれるため等価変異として残る。distでbegin検査・disposal claimを外す変異はcompiled fixtureでは検出されず、source試験だけが検出する。全体受付無効・正式発行口閉鎖・JoinCell未接続などの条件は変えていない。

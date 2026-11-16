@@ -2,7 +2,7 @@ import {afterEach,expect,it,vi} from 'vitest';
 import {readFileSync} from 'node:fs';
 import ts from 'typescript';
 import {createInjectedNativeDiagnosticWorkflow as create,probeNativeStatusComposition} from '../../src/review/abort-scope-evidence-native-diagnostic.js';
-import {BoundedReadError} from '../../src/servicenow/bounded-read.js';
+import {BoundedReadError,BoundedReadSession} from '../../src/servicenow/bounded-read.js';
 import {createNativeDiagnosticState,permissions} from '../../src/review/abort-scope-evidence-native-diagnostic-state.js';
 import {verifyRecovery,verifyRecoveryMutants} from './fixtures/native-construction-recovery-model.mjs';
 
@@ -101,4 +101,53 @@ it('does not retry failed disposal or overwrite an earlier HTTP failure',async()
   vi.restoreAllMocks();expect(fills).toBe(1);
   const next=await probeNativeStatusComposition({instanceUrl:'https://synthetic.invalid',authMode:'per-user',perUserBearerToken:'PRIVATE_TOKEN',oauth:{}},
     {update_set_sys_id:id},{parent_bytes:bytes,response:new Response(null,{status:403})});expect(next.ok).toBe(true);
+});
+
+it('routes constructor input rejection to the same sealed failure copy without inventing teardown or a second rejection',async()=>{
+  const read=vi.fn(()=>({remaining_ms:60000})),schedule=vi.fn(()=>()=>{});
+  const window={purpose:'release',ordinal:1,window_origin_ms:60000,cleanup_floor_ms:50000} as const;
+  for(const raw of [{fake_io:true,deadline_ms:60000,budget:{read},schedule,session:{}},{fake_io:true,deadline_ms:60001,budget:{read},schedule}]){
+    const owner=create(raw as never),before=owner.diagnostics();
+    expect(before.phase).toBe('closed');expect(before.upper.sealed).toBe(true);expect(before.upper.primary?.code).toBe('invalid_input');
+    expect(before.upper.teardown).toBe('not_started');expect(before.request_rejected).toBeNull();
+    const first=await owner.execute(new Response(null,{status:403}),window),second=await owner.execute(new Response(null,{status:403}),window);
+    expect(first).toBe(before);expect(second).toBe(before);expect(await owner.close()).toBe(before);
+  }
+  expect(read).not.toHaveBeenCalled();expect(schedule).not.toHaveBeenCalled();
+});
+
+it('ends ND-03 begin on failed private readiness even when the stop notification itself throws',async()=>{
+  const freeze=Object.freeze,response=new Response(null,{status:403}),id='a'.repeat(32);
+  const bytes=new TextEncoder().encode(JSON.stringify({result:{sys_id:id,state:'in progress',application:'global',sys_updated_on:'2026-11-16',sys_mod_count:'0'}}));
+  // The first session stop is the native bridge notification; later stops keep the real implementation.
+  vi.spyOn(BoundedReadSession.prototype as unknown as {stop(code:string):void},'stop').mockImplementationOnce(()=>{throw Error('PRIVATE_NOTIFY');});
+  vi.spyOn(Object,'freeze').mockImplementation((value:unknown)=>{
+    if(value&&typeof value==='object'&&Object.hasOwn(value,'root')&&Object.hasOwn(value,'work')&&(value as {kind?:string}).kind==='run')
+      throw Error('PRIVATE_DRIVER_CONSTRUCTION');
+    return freeze(value);
+  });
+  const result=await probeNativeStatusComposition({instanceUrl:'https://synthetic.invalid',authMode:'per-user',perUserBearerToken:'PRIVATE_TOKEN',oauth:{}},
+    {update_set_sys_id:id},{parent_bytes:bytes,response});
+  vi.restoreAllMocks();
+  expect(result.code).toBe('internal_review_error');expect(result.budget.requests).toBe(0);expect(result.reserved).toBe(0);
+  expect(result.native?.upper.primary?.code).toBe('internal_review_error');expect(result.native?.counts.issued).toBe(0);
+  expect(result.native?.upper.slots.release.http).toBeNull();expect(JSON.stringify(result)).not.toContain('PRIVATE');
+});
+
+it('does not fall back to the normal snapshot when copy creation fails after the normal aggregate exists',async()=>{
+  const freeze=Object.freeze,read=vi.fn(()=>({remaining_ms:60000})),schedule=vi.fn(()=>()=>{});let copies=0;
+  const spy=vi.spyOn(Object,'freeze').mockImplementation((value:unknown)=>{
+    if(value&&typeof value==='object'&&['execute','stop','close','diagnostics'].every(k=>Object.hasOwn(value,k))&&Reflect.ownKeys(value).length===4&&
+      (value as {stop:unknown}).stop!==undefined&&!Object.hasOwn(value,'kind')&&typeof (value as {diagnostics:unknown}).diagnostics==='function'&&
+      (value as {diagnostics:{name:string}}).diagnostics.name==='snapshot') throw Error('PRIVATE_NORMAL');
+    if(value&&typeof value==='object'&&(value as {kind?:string}).kind==='injected_native_diagnostic_workflow'){copies++;throw Error('PRIVATE_COPY');}
+    return freeze(value);
+  });
+  let owner:ReturnType<typeof create>;
+  try {owner=create({fake_io:true,deadline_ms:60000,budget:{read},schedule});}
+  finally {spy.mockRestore();}
+  expect(copies).toBe(1);expect(()=>owner!.diagnostics()).toThrow('internal_review_error');
+  await expect(owner!.execute(new Response(null,{status:403}),{purpose:'release',ordinal:1,window_origin_ms:60000,cleanup_floor_ms:50000})).rejects.toThrow('internal_review_error');
+  await expect(owner!.close()).rejects.toThrow('internal_review_error');expect(copies).toBe(1);
+  expect(read).not.toHaveBeenCalled();expect(schedule).not.toHaveBeenCalled();
 });
