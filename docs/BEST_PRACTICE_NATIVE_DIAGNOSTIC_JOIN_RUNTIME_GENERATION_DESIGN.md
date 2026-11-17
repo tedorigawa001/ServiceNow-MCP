@@ -1,6 +1,6 @@
 # JoinRuntimeの段階型と生成資格およびPromise保持失敗境界の詳細設計
 
-Version: native-diagnostic-join-runtime-generation-draft-0.3 / Date: 2026-11-17。
+Version: native-diagnostic-join-runtime-generation-draft-0.4 / Date: 2026-11-17。
 Status: JR-Aの内部型・固定slot・一度限りclaim・生成資格検査だけを合成依存に限定して実装（§12）。設計基準HEADは`c466b75`、JR-Aの基準HEADは`b770e59`。[構築回収・Join公開設計](BEST_PRACTICE_NATIVE_DIAGNOSTIC_CONSTRUCTION_JOIN_DELTA_DESIGN.md)§5〜7の生成・保持部分を具体化する。JoinRuntime実体、同Promise／settler生成、private公開は未実装・未接続である。
 
 draft-0.2のレビュー修正：レビュー修正の基準HEADは`ec7b768`。§12は拒否時に同期revokedへすると定めていたが、独立oracleは拒否後のprimaryだけを確認しており、`rejectJoinGeneration`の`revoked = true`を外した変異がsource・compiledの両対照を通過した。全ての資格／同一性拒否と失敗保持でrevokedを確認し、同期失効を外す変異を構文正常な変異の12件目に加えた（§12）。製品コードは変更していない。
@@ -15,7 +15,7 @@ draft-0.2のレビュー修正：レビュー修正の基準HEADは`ec7b768`。�
 |---|---|---|
 | 構築ready | [旧root](../src/review/abort-scope-evidence-native-diagnostic.ts)のready判定はRecoveryAnchor.statusだけを見る。正常stop／closeは別のrevoked／sealed等を更新する | readyだけで生成を許可しない。正規identityと同closureのrun／cleanup別資格を併せて検査する |
 | 空seed | RootControlLink／RunLink／ResourceDuty／2空JoinCellはreadonly。現checkerはnull／falseも要求する | 空seedは変更せず、新slotの段階別検査を別にする。不変identityの検査は省略しない |
-| 保持slot | RecoveryAnchorのrunPending／cleanupPendingは現在literal null | 将来は各roleの正規pendingへの参照を保持する。生成前のclaimと失敗scalarはslot割当て前に用意する |
+| 保持slot | RecoveryAnchorのrunPending／cleanupPendingと、各role slotのpendingは現在literal null | JR-Bの主保持先は同anchorが持つ各RoleGenerationSlot.pendingとする。旧anchor直下のpendingは未接続のnull fieldのまま残し、第二writerにしない。claimと失敗scalarを先行準備する |
 | 実work | runWork／record.cleanupWorkは旧Promise executor内でenqueueする | 今回は変更しない。新旧workを同時生成せず、将来の採用時に唯一のworkへ統一する |
 | 構築failure copy | CP00〜05は取得前失敗をclosed／sealedの同copyまたは固定拒否へ終端する | run／cleanupの生成失敗へそのまま流用しない。特にresource取得後に構築失敗としてseal・空扱いにしない |
 | 補強試験 | raw不正の同copy終端、通知throw下のbegin拒否、正常aggregate後のcopy不能の3件は基準HEADに含まれる | [既存試験](../tests/review/native-construction-recovery.test.ts)を変更・削除せず保持する。今回の新契約の成功数には加算しない |
@@ -118,7 +118,7 @@ CP00〜05のfailConstructionは取得前の構築失敗専用である。Join生
 
 失敗理由の原始値保持と新規利用の同期失効を先に行い、その後に既存固定stop通知とrole別の終端を一度試みる。内部の不正遷移／二重生成はinvalid_state、同一性不一致はevidence_binding_mismatch、constructor／観測等の制御異常はinternal_review_errorを使い、既存public写像を維持する。run生成はstop、cleanup生成はcleanupのstageを使い、先行HTTP／取消／期限理由を上書きしない。通知等の後処理は生成の同期群の外で行い、元の単一budget／停止ownerへ従う。
 
-runは同ownerの正常終端手順から得た検証済みsnapshotをresolveし、copy不能なら保持済みrejectで固定internal_review_errorを返す。構築時の0計数copyを流用せず、先行診断・実計数・token退役を反映する。cleanupは制御失敗を先に記録してから、同workをresolve(undefined)で終端する。void終端はcleanup confirmedでなく、後続issueは元guardと実factsで拒否する。制御異常を架空のNativeCleanup factsへ変換しない。
+runは同ownerの正常終端手順から得た検証済みsnapshotをresolveし、copy不能なら保持済みrejectで固定internal_review_errorを返す。構築時の0計数copyを流用せず、先行診断・実計数・token退役を反映する。cleanupは制御失敗を先に記録してから、まだpendingで適格なresolveを保持する同workをresolve(undefined)で終端する。既にrejectした候補を後続resolveで正常化したとは報告せず、実際の失敗終端を保持する。void終端もcleanup confirmedでなく、後続issueは元guardと実factsで拒否する。制御異常を架空のNativeCleanup factsへ変換しない。
 
 settle claimはsettler呼出し前に消費する。work未取得・未確認、必要settler不足、観測不能等で同workを安全に終端できない場合はfailed_retained／終端未確認として保持する。公開API側は固定拒否し、未知workへの無期限joinで失敗応答を代替しない。APIの拒否wrapperを新たなJoinRuntime workとして登録せず、同workの終端確認ができたとも報告しない。process障害や未知候補の完全回収はUnknownのままである。
 
@@ -188,3 +188,7 @@ cleanupは同closureのcurrent recordとそのanchor実参照、同binding、元
 新private継続はlegacy execute／cleanから呼ばない。scratch copyだけが同closureの関数を呼ぶ。製品のexport・friend・raw入力・登録口を増やさず、旧14関数・4exportを維持する。[新試験](../tests/review/native-join-generation.test.ts)、[独立oracle／scratch抽出](../tests/review/fixtures/native-join-generation-model.mjs)、[固定dist検査](../tests/review/fixtures/compiled-native-join-generation.mjs)で、資格拒否27・同一性拒否32／hook 0・phase値121・構文正常な変異12（レビュー修正で同期revoked省略を追加）、semantic正対照と8不正型を確認した。資格／同一性の各拒否と失敗保持では、primaryとともに同期revokedも確認する。各数値は別の保証単位で、244件のsource試験へ足して成功件数を水増ししない。
 
 初回の変異anchor不一致と型検査反復による5秒timeout、修正後の結果・未実施範囲は[JR-A検証記録](E2E_BEST_PRACTICE_NATIVE_JOIN_GENERATION_JRA_2026-11-17.md)へ分離する。Promise／settler生成・観測・失敗終端・private公開・dispatch・正常採用は未接続、全解放はUnknownのままである。
+
+## 13 JR-Bの先行保持・固定pinへの差分
+
+[先行runtime・失敗保持先とPromise固定pin・観測前提の接続差分設計draft-0.1](BEST_PRACTICE_NATIVE_DIAGNOSTIC_JRB_RUNTIME_PIN_DELTA_DESIGN.md)で、同roleのpendingを唯一の主保持先とし、shell→context／identity→owner pin→同P生成→候補・観測の保持順を具体化した。module基準とowner pinを分け、生成成功と失敗候補の安全な拒否観測も区別する。先行primary／同期revoked・半捕捉prefix・ack未確認を保持し、CP構築回収へ戻さない。MDのみの追加であり、runtime実体・Promise生成・拒否観測・失敗終端・private公開・dispatchは未実装・未接続のままである。
