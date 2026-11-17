@@ -31,12 +31,39 @@ type JoinHandlersFault = 'entry' | 'executor_hold' | 'fulfilled_hold' | 'rejecte
 type JoinExecutorHandler = (resolve: unknown, reject: unknown) => undefined;
 type JoinObserverHandler = (value: unknown) => undefined;
 type JoinObserverArgs = readonly [JoinObserverHandler, JoinObserverHandler];
+type JoinConstructorState = 'not_called' | 'calling' | 'returned' | 'threw';
+type JoinCandidateSafety = 'unchecked' | 'safe_same_work' | 'unsafe_retained';
+type JoinRegistrationState = 'unstarted' | 'registering' | 'returned' | 'threw' | 'refused';
+type JoinAckState = 'empty' | 'held' | 'verified' | 'unsafe_retained' | 'return_lost';
+type JoinCallbackState = 'not_entered' | 'inside' | 'exited' | 'unconfirmed';
+type JoinDrainState = 'unstarted' | 'inside' | 'exited' | 'unconfirmed';
+type JoinDrainKind = 'none' | 'fixed_abort' | 'fault';
+type JoinUpperRecordState = 'unattempted' | 'calling' | 'returned' | 'threw' | 'skipped_sealed';
+type JoinNotifyState = 'unattempted' | 'calling' | 'returned' | 'threw' | 'skipped_shared';
+type JoinRunCopyState = 'unattempted' | 'building' | 'verified' | 'failed' | 'skipped_cleanup';
+type JoinRejectPayloadState = 'unattempted' | 'building' | 'held' | 'failed' | 'skipped';
+type JoinWorkObservation = 'unobserved' | 'fulfilled' | 'rejected';
+type JoinExecutionPosition = JoinPreparationPosition | 'executor' | 'reject' | 'resolve' | 'candidate' | 'checked';
+type JoinFaultSite = JoinExecutionPosition | 'constructor_pre' | 'constructor_call' | 'executor_entry' | 'reject_capture' | 'resolve_capture' |
+    'executor_exit' | 'candidate_check' | 'observer_pre' | 'observer_call' | 'ack_hold' | 'observer_post' | 'callback_entry' | 'callback_write' |
+    'drain_entry' | 'upper_record' | 'notify' | 'run_copy' | 'reject_payload' | 'settle_pre' | 'settle_call';
+/** Closed initial projection only. Runtime transitions and all operational references stay disconnected. */
+type JoinExecutionSeed = {
+    constructorClaim: false; constructorState: Extract<JoinConstructorState, 'not_called'>; executorEntryClaim: false;
+    candidateHeld: false; candidateSafety: Extract<JoinCandidateSafety, 'unchecked'>; registrationWork: null; registrationReached: false;
+    ackHeld: false; ackState: Extract<JoinAckState, 'empty'>; callbackClaim: false; callbackState: Extract<JoinCallbackState, 'not_entered'>;
+    failureDrainClaim: false; failureDrainState: Extract<JoinDrainState, 'unstarted'>; drainKind: Extract<JoinDrainKind, 'none'>;
+    upperRecordAttempted: false; upperRecordState: Extract<JoinUpperRecordState, 'unattempted'>; notifyState: Extract<JoinNotifyState, 'unattempted'>;
+    copyHeld: false; runCopyState: Extract<JoinRunCopyState, 'unattempted'>; terminalCopy: null;
+    rejectPayloadAttempted: false; rejectPayloadState: Extract<JoinRejectPayloadState, 'unattempted'>; rejectPayload: null;
+    ackTerminal: Extract<JoinWorkObservation, 'unobserved'>; retention: 'held' | 'unconfirmed';
+};
 type JoinShellContext = Readonly<{ record: object; anchor: object }>;
 type JoinShellIdentity<K extends JoinRole> = Readonly<{ recovery: RecoveryAnchor; root: object; seed: object; kind: K;
     context: K extends 'run' ? null : JoinShellContext }>;
 type OwnerPromisePin<K extends JoinRole> = Readonly<{ runtime: JoinRuntimeShell<K>; identity: JoinShellIdentity<K>;
     basis: typeof joinPromiseBasis }>;
-type JoinRuntimeShell<K extends JoinRole> = {
+type JoinRuntimeShell<K extends JoinRole> = JoinExecutionSeed & {
     readonly recovery: RecoveryAnchor; readonly root: object; readonly seed: object; readonly kind: K;
     readonly contextRecord: object | null; readonly contextAnchor: object | null;
     readiness: 'shell' | 'identity_ready' | 'pin_ready' | 'handlers_ready' | 'failed_retained';
@@ -47,11 +74,11 @@ type JoinRuntimeShell<K extends JoinRole> = {
     executor: 'not_entered'; executorHandler: JoinExecutorHandler | null; fulfilledHandler: JoinObserverHandler | null;
     rejectedHandler: JoinObserverHandler | null; observerArgs: JoinObserverArgs | null;
     candidate: null; work: null; resolve: null; reject: null;
-    observerClaim: false; observerState: 'unstarted'; observerBusy: false; observed: 'unobserved'; callbackFault: null;
+    observerClaim: false; observerState: Extract<JoinRegistrationState, 'unstarted'>; observerBusy: false; observed: 'unobserved'; callbackFault: null;
     observerAckCandidate: null; observerAck: null; settleClaim: false; settleState: 'unattempted'; terminal: 'unobserved';
     notifyAttempted: false; copyAttempted: false; dispatchStarted: false; entered: false;
 };
-type RoleGenerationSlot<K extends JoinRole> = { readonly role: K; published: null; faultAt: JoinPreparationPosition | null } & (
+type RoleGenerationSlot<K extends JoinRole> = { readonly role: K; published: null; faultAt: JoinFaultSite | null } & (
     | { phase: 'empty'; claimed: false; position: 'empty'; fault: null; pending: null }
     | { phase: 'claimed_unheld'; claimed: true; position: 'claimed'; fault: null; pending: null }
     | { phase: 'building'; claimed: true; position: 'runtime' | 'context' | 'identity' | 'pin' | 'handlers'; fault: null; pending: JoinRuntimeShell<K> }
@@ -356,7 +383,7 @@ function allocateNativeDiagnosticConstruction(raw: NativeInput, fault?: NativeFa
             controlCleanupJoin.root === controlRoot && controlCleanupJoin.kind === 'cleanup' && controlCleanupJoin.work === null &&
             controlCleanupJoin.resolver === null && controlCleanupJoin.dispatchStarted === false && controlCleanupJoin.entered === false && controlCleanupJoin.settled === false;
     }
-    function failPreparedJoin(slot: RoleGenerationSlot<JoinRole>, at: JoinPreparationPosition, code: JoinGenerationFault): false {
+    function failPreparedJoin(slot: RoleGenerationSlot<JoinRole>, at: JoinFaultSite, code: JoinGenerationFault): false {
         slot.faultAt ??= at;
         const shell = slot.role === 'run' ? runShellExpected : cleanupShellExpected;
         if (shell) { shell.readiness = 'failed_retained'; if (at === 'pin') { shell.pinState = 'rejected'; shell.pinFault ??= at; } }
@@ -366,6 +393,11 @@ function allocateNativeDiagnosticConstruction(raw: NativeInput, fault?: NativeFa
         return { recovery: joinRecovery, root: controlRoot, seed, kind, contextRecord: record, contextAnchor: anchor,
             readiness: 'shell', context: null, identity: null, pin: null, pinState: 'unprepared', pinFault: null,
             handlersClaim: false, handlersBusy: false, handlersState: 'unstarted', handlersDetail: 'none', handlersFault: null,
+            constructorClaim: false, constructorState: 'not_called', executorEntryClaim: false, candidateHeld: false, candidateSafety: 'unchecked',
+            registrationWork: null, registrationReached: false, ackHeld: false, ackState: 'empty', callbackClaim: false, callbackState: 'not_entered',
+            failureDrainClaim: false, failureDrainState: 'unstarted', drainKind: 'none', upperRecordAttempted: false, upperRecordState: 'unattempted',
+            notifyState: 'unattempted', copyHeld: false, runCopyState: 'unattempted', terminalCopy: null,
+            rejectPayloadAttempted: false, rejectPayloadState: 'unattempted', rejectPayload: null, ackTerminal: 'unobserved', retention: 'held',
             executor: 'not_entered', executorHandler: null, fulfilledHandler: null, rejectedHandler: null, observerArgs: null,
             candidate: null, work: null, resolve: null, reject: null, observerClaim: false, observerState: 'unstarted', observerBusy: false,
             observed: 'unobserved', callbackFault: null, observerAckCandidate: null, observerAck: null, settleClaim: false,
@@ -381,6 +413,22 @@ function allocateNativeDiagnosticConstruction(raw: NativeInput, fault?: NativeFa
             (s.kind === 'run' ? s.contextRecord === null && s.contextAnchor === null :
                 !!current && s.contextRecord === current && s.contextAnchor === current.anchor && current.anchor.binding === binding);
     }
+    function joinSeedData(shell: JoinRuntimeShell<JoinRole>, key: keyof JoinExecutionSeed, value: unknown): boolean {
+        const d = jbGet(shell, key);
+        return !!d && jbOwn(d, 'value') && d.value === value && d.writable === true && d.enumerable === true && d.configurable === true;
+    }
+    function joinExecutionFieldsUnused(shell: JoinRuntimeShell<JoinRole>): boolean {
+        return joinSeedData(shell, 'constructorClaim', false) && joinSeedData(shell, 'constructorState', 'not_called') &&
+            joinSeedData(shell, 'executorEntryClaim', false) && joinSeedData(shell, 'candidateHeld', false) && joinSeedData(shell, 'candidateSafety', 'unchecked') &&
+            joinSeedData(shell, 'registrationWork', null) && joinSeedData(shell, 'registrationReached', false) &&
+            joinSeedData(shell, 'ackHeld', false) && joinSeedData(shell, 'ackState', 'empty') && joinSeedData(shell, 'callbackClaim', false) &&
+            joinSeedData(shell, 'callbackState', 'not_entered') && joinSeedData(shell, 'failureDrainClaim', false) &&
+            joinSeedData(shell, 'failureDrainState', 'unstarted') && joinSeedData(shell, 'drainKind', 'none') &&
+            joinSeedData(shell, 'upperRecordAttempted', false) && joinSeedData(shell, 'upperRecordState', 'unattempted') && joinSeedData(shell, 'notifyState', 'unattempted') &&
+            joinSeedData(shell, 'copyHeld', false) && joinSeedData(shell, 'runCopyState', 'unattempted') && joinSeedData(shell, 'terminalCopy', null) &&
+            joinSeedData(shell, 'rejectPayloadAttempted', false) && joinSeedData(shell, 'rejectPayloadState', 'unattempted') && joinSeedData(shell, 'rejectPayload', null) &&
+            joinSeedData(shell, 'ackTerminal', 'unobserved') && joinSeedData(shell, 'retention', 'held');
+    }
     function preparedShellMatched(rawShell: unknown, rawIdentity: unknown, rawPin: unknown, role: JoinRole): boolean {
         const s = role === 'run' ? runShellExpected : cleanupShellExpected,
             identity = role === 'run' ? runIdentityExpected : cleanupIdentityExpected, pin = role === 'run' ? runPinExpected : cleanupPinExpected,
@@ -392,7 +440,7 @@ function allocateNativeDiagnosticConstruction(raw: NativeInput, fault?: NativeFa
             s.kind === role && s.seed === (role === 'run' ? controlRun : controlDuty) && s.identity === identity && s.pin === pin &&
             identity.recovery === joinRecovery && identity.root === controlRoot && identity.seed === s.seed && identity.kind === role &&
             identity.context === s.context && jbFrozen(identity) && jbFrozen(pin) && pin.runtime === s && pin.identity === identity &&
-            pin.basis === joinPromiseBasis && s.readiness === 'pin_ready' && s.pinState === 'ready' && s.pinFault === null &&
+            pin.basis === joinPromiseBasis && s.readiness === 'pin_ready' && s.pinState === 'ready' && s.pinFault === null && joinExecutionFieldsUnused(s) &&
             s.handlersClaim === false && s.handlersBusy === false && s.handlersState === 'unstarted' && s.handlersDetail === 'none' && s.handlersFault === null &&
             (role === 'run' ? s.context === null && s.contextRecord === null && s.contextAnchor === null :
                 !!current && s.contextRecord === current && s.contextAnchor === current.anchor && current.anchor.binding === binding &&
@@ -485,7 +533,7 @@ function allocateNativeDiagnosticConstruction(raw: NativeInput, fault?: NativeFa
             fulfilled = role === 'run' ? runFulfilledExpected : cleanupFulfilledExpected,
             rejected = role === 'run' ? runRejectedExpected : cleanupRejectedExpected, args = role === 'run' ? runArgsExpected : cleanupArgsExpected;
         if (!shellPreparationLive(shell) || shell.kind !== role || shell.pinState !== 'ready' || shell.pinFault !== null ||
-            shell.handlersClaim !== true || shell.handlersFault !== null || shell.handlersDetail !== detail || !joinPromisePinLive()) return false;
+            shell.handlersClaim !== true || shell.handlersFault !== null || shell.handlersDetail !== detail || !joinExecutionFieldsUnused(shell) || !joinPromisePinLive()) return false;
         if (detail === 'complete' ? shell.handlersBusy !== false || shell.handlersState !== 'ready' || shell.readiness !== 'handlers_ready' || slot.position !== 'handlers' :
             shell.handlersBusy !== true || shell.handlersState !== 'preparing' || shell.readiness !== 'pin_ready' || slot.position !== 'pin') return false;
         if (role === 'cleanup' && (!current || !shell.context || !jbFrozen(shell.context) || current !== shell.context.record || shell.context.anchor !== current.anchor)) return false;
@@ -562,6 +610,39 @@ function allocateNativeDiagnosticConstruction(raw: NativeInput, fault?: NativeFa
     }
     void prepareJoinHandlers; void preparedHandlersMatched;
     // JR-B-HANDLERS-END
+    // JR-B-SEED-BEGIN: unused fields and refusal only; no execution.
+    const runCapturedResolveExpected = null, runCapturedRejectExpected = null, runCandidateExpected = null, runRegistrationWorkExpected = null,
+        runAckExpected = null, runTerminalCopyExpected = null, runRejectPayloadExpected = null;
+    const cleanupCapturedResolveExpected = null, cleanupCapturedRejectExpected = null, cleanupCandidateExpected = null, cleanupRegistrationWorkExpected = null,
+        cleanupAckExpected = null, cleanupTerminalCopyExpected = null, cleanupRejectPayloadExpected = null;
+    function executionSeedUnused(rawShell: unknown, rawIdentity: unknown, rawPin: unknown, role: JoinRole): boolean {
+        if (!handlerOriginMatched(rawShell, rawIdentity, rawPin, role)) return false;
+        return preparedHandlersMatched(rawShell, rawIdentity, rawPin, role) && (role === 'run' ?
+            runCapturedResolveExpected === null && runCapturedRejectExpected === null && runCandidateExpected === null && runRegistrationWorkExpected === null &&
+            runAckExpected === null && runTerminalCopyExpected === null && runRejectPayloadExpected === null :
+            cleanupCapturedResolveExpected === null && cleanupCapturedRejectExpected === null && cleanupCandidateExpected === null && cleanupRegistrationWorkExpected === null &&
+            cleanupAckExpected === null && cleanupTerminalCopyExpected === null && cleanupRejectPayloadExpected === null);
+    }
+    function failExecutionSeed(role: JoinRole, code: JoinGenerationFault): false {
+        const held = role === 'run' ? runShellExpected : cleanupShellExpected, slot = role === 'run' ? runGeneration : cleanupGeneration;
+        slot.faultAt ??= 'constructor_pre';
+        if (held) {
+            held.readiness = 'failed_retained';
+            const d = jbGet(held, 'retention');
+            if (d && jbOwn(d, 'value') && d.writable === true) held.retention = 'unconfirmed';
+        }
+        return rejectJoinGeneration(slot, code);
+    }
+    function requestJoinExecution(rawShell: unknown, rawIdentity: unknown, rawPin: unknown, role: JoinRole): false {
+        try {
+            if (!handlerOriginMatched(rawShell, rawIdentity, rawPin, role)) return failExecutionSeed(role, 'evidence_binding_mismatch');
+            if (!executionSeedUnused(rawShell, rawIdentity, rawPin, role)) return failExecutionSeed(role, 'invalid_state');
+            // A ready seed never authorizes a constructor or a retained closure in this slice.
+            return failExecutionSeed(role, 'invalid_state');
+        } catch { return failExecutionSeed(role, 'internal_review_error'); }
+    }
+    void executionSeedUnused; void requestJoinExecution;
+    // JR-B-SEED-END
     function stop(code: Code = 'cancelled', stage: Stage = 'stop') {
         if (sealed) return;
         primary ??= code; upper.stop(primary, stage);

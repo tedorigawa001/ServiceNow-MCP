@@ -32,9 +32,12 @@ it.each(handlerMutants.map((m:unknown[],i:number)=>[m[0],i]))('rejects the synta
   verifyHandlerMutant(emitted(),createNativeDiagnosticState,index as number);
 });
 it('keeps preparation uncalled by legacy callers and never calls a retained closure',()=>{
-  const tree=ts.createSourceFile('root.ts',source(),ts.ScriptTarget.Latest,true),calls:string[]=[];
-  function visit(n:ts.Node){if(ts.isCallExpression(n)&&ts.isIdentifier(n.expression)&&['prepareJoinHandlers','preparedHandlersMatched'].includes(n.expression.text))calls.push(n.expression.text);ts.forEachChild(n,visit);}visit(tree);
-  expect(calls).toEqual([]);
+  const tree=ts.createSourceFile('root.ts',source(),ts.ScriptTarget.Latest,true),calls:string[][]=[];
+  function visit(n:ts.Node){if(ts.isCallExpression(n)&&ts.isIdentifier(n.expression)&&['prepareJoinHandlers','preparedHandlersMatched'].includes(n.expression.text)){
+    let parent:ts.Node|undefined=n.parent;while(parent&&!ts.isFunctionDeclaration(parent))parent=parent.parent;
+    calls.push([n.expression.text,parent&&ts.isFunctionDeclaration(parent)?parent.name?.text??'':'']);
+  }ts.forEachChild(n,visit);}visit(tree);
+  expect(calls).toEqual([['preparedHandlersMatched','executionSeedUnused']]);
   expect(verifyHandlerAuditNegatives(emitted())).toBe(6);
 });
 it('keeps readonly tuple, finite stage/role and all future work/observation capabilities closed at the semantic boundary',()=>{

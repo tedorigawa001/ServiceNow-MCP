@@ -58,7 +58,7 @@ export function auditHandlers(js){
   const block=between(js,begin,end),tree=parse('function closed(){'+block+'}',{ecmaVersion:'latest'}),stack=[tree];
   let closures=0;
   const calls=new Set(['failJoinHandlers','failPreparedJoin','handlerOriginMatched','shellPreparationLive','jbFrozen','jbKeys','jbGet','jbProxy','jbProto',
-    'joinPromisePinLive','preparedShellMatched','handlerStageMatched','rejectClosedJoinHandler','jbFreeze']);
+    'joinPromisePinLive','preparedShellMatched','handlerStageMatched','rejectClosedJoinHandler','jbFreeze','joinExecutionFieldsUnused']);
   while(stack.length){const n=stack.pop();assert(!['NewExpression','AwaitExpression','ImportExpression'].includes(n.type));
     if(n.type==='CallExpression')assert(n.callee.type==='Identifier'&&calls.has(n.callee.name),'closed call capability');
     if(n.type==='ArrowFunctionExpression'){

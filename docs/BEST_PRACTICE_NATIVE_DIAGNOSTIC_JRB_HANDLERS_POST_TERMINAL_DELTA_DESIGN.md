@@ -1,6 +1,6 @@
 # JR-B 固定closure・tupleと段階別post・失敗後writer／終端責務の接続差分設計
 
-Version: native-diagnostic-jrb-handlers-post-terminal-draft-0.3 / Date: 2026-11-17。
+Version: native-diagnostic-jrb-handlers-post-terminal-draft-0.4 / Date: 2026-11-17。
 Status: §11のclosure／tuple先行準備・段階別postだけを合成依存限定で実装。設計基準HEADは`15e360d`、限定実装の基準HEADは`b167d09`。[先行shell・pin設計](BEST_PRACTICE_NATIVE_DIAGNOSTIC_JRB_RUNTIME_PIN_DELTA_DESIGN.md)RH07〜09・RS05〜10と[JoinRuntime設計](BEST_PRACTICE_NATIVE_DIAGNOSTIC_JOIN_RUNTIME_GENERATION_DESIGN.md)§4〜8・10への差分である。closure呼出し、HP04以降のPromise生成・観測・失敗終端は未実装・未接続である。
 
 正式発行口／新LM03／C実行入口／body起動閉鎖、全体受付無効、通常経路未切替、Unknown、VM／監視／telemetry調査保留、LOAD6／LOAD7選択・AP01〜06未承認を維持する。draft-0.1はMDだけの設計だった。draft-0.2の限定実装・合成検証は§11と検証記録へ分離し、closure呼出し・Promise生成・観測登録・private公開・dispatch・実接続・実通信・実機操作・設定変更・コミット・Pushは行わない。
@@ -183,4 +183,4 @@ closure本体は同shell／identity／pin／slot／roleを捕捉した固定拒�
 
 ## 12 実行前の内部契約・先行slotへの差分
 
-[JR-B実行前内部契約・先行slotと失敗後writer資格の差分詳細設計draft-0.1](BEST_PRACTICE_NATIVE_DIAGNOSTIC_JRB_EXECUTION_SEED_CONTRACT_DESIGN.md)で、未実装HC06〜08を同shellの全先行field、role型・保持位置／fault site、固定配置順とchecker／writer資格へ具体化した。constructor・観測・drain／settleの試行と実終端を分離し、非実行の初期field／値契約だけを先行できる境界と、生成＋安全観測＋固定abortを一体接続する後続境界を定める。MDだけの更新で、Promise生成・closure呼出し・通知／終端・private公開・dispatchは有効化しない。
+[JR-B実行前内部契約・先行slotと失敗後writer資格の差分詳細設計draft-0.2](BEST_PRACTICE_NATIVE_DIAGNOSTIC_JRB_EXECUTION_SEED_CONTRACT_DESIGN.md)で、HC06〜08を同shellの全先行field、role型・保持位置／fault site、固定配置順とchecker／writer資格へ具体化した。同書§10は25初期field・未使用検査・固定拒否だけの限定実装であり、先行準備postへ初期data検査を追加する。constructor・観測・drain／settleの実行状態は未接続とし、生成＋安全観測＋固定abortを一体接続する後続境界を維持する。Promise生成・closure呼出し・通知／終端・private公開・dispatchは有効化しない。

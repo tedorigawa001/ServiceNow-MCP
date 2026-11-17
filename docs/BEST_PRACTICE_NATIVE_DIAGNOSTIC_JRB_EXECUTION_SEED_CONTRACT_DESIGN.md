@@ -1,9 +1,9 @@
 # JR-B実行前内部契約・先行slotと失敗後writer資格の差分詳細設計
 
-Version: native-diagnostic-jrb-execution-seed-contract-draft-0.1 / Date: 2026-11-17。
-Status: 詳細設計のみ。基準HEADは`48900ac`。[closure／tuple・post設計](BEST_PRACTICE_NATIVE_DIAGNOSTIC_JRB_HANDLERS_POST_TERMINAL_DELTA_DESIGN.md)HC06〜08・HP04〜09・HW02〜05・HT01〜07を、[JoinRuntime設計](BEST_PRACTICE_NATIVE_DIAGNOSTIC_JOIN_RUNTIME_GENERATION_DESIGN.md)の同role pendingと[固定pin設計](BEST_PRACTICE_NATIVE_DIAGNOSTIC_JRB_RUNTIME_PIN_DELTA_DESIGN.md)RS05後半〜RS10へ接続する前の内部契約へ具体化する。以下の型・field・checker名は将来契約であり、今回の実装ではない。
+Version: native-diagnostic-jrb-execution-seed-contract-draft-0.2 / Date: 2026-11-17。
+Status: §10の初期field・狭い値型・未使用seed検査・固定拒否だけを合成依存限定で実装。基準HEADは`48900ac`。[closure／tuple・post設計](BEST_PRACTICE_NATIVE_DIAGNOSTIC_JRB_HANDLERS_POST_TERMINAL_DELTA_DESIGN.md)HC06〜08・HP04〜09・HW02〜05・HT01〜07を、[JoinRuntime設計](BEST_PRACTICE_NATIVE_DIAGNOSTIC_JOIN_RUNTIME_GENERATION_DESIGN.md)の同role pendingと[固定pin設計](BEST_PRACTICE_NATIVE_DIAGNOSTIC_JRB_RUNTIME_PIN_DELTA_DESIGN.md)RS05後半〜RS10へ接続する前の内部契約へ具体化する。native実行状態への遷移・参照取得は未実装・未接続である。
 
-正式発行口／新LM03／C実行入口／body起動閉鎖、全体受付無効、通常経路未切替、Unknown、VM／監視／telemetry調査保留、LOAD6／LOAD7選択・AP01〜06未承認を維持する。今回はMDだけを変更し、実装・製品moduleのimport／実行・Promise生成・closure呼出し・試験再実行・build／pack・private公開・dispatch・実接続・実通信・実機操作・設定変更・stage・コミット・Pushは行わない。
+正式発行口／新LM03／C実行入口／body起動閉鎖、全体受付無効、通常経路未切替、Unknown、VM／監視／telemetry調査保留、LOAD6／LOAD7選択・AP01〜06未承認を維持する。draft-0.1はMDだけの設計だった。draft-0.2の先行実装・合成検証は§10へ分離し、Promise生成・closure呼出し・観測登録・通知／copy／settler呼出し・private公開・dispatch・実接続・実通信・実機操作・設定変更・stage・コミット・Pushは行わない。
 
 ## 1 現行との対応と非実行の実装境界
 
@@ -157,10 +157,24 @@ EA01〜04は実Promise・closure呼出しなしに実装可能な先行単位で
 
 先行fieldは同run／単一予算ownerの費用に属する。roleごとにshell1・既存3closure／tuple1・candidate／work同参照1組・ack同参照最大1組、runのterminalCopy最大1・固定fallback payload最大1と固定primitiveだけを保持する。aliasは別生成objectとして数えず、到達可能性による寿命延長は別に扱う。primitive数が有限でも閉包／Promise内部／Error／copy／native resourceを含む実backing容量や完全回収はUnknownである。
 
-## 9 今回の静的確認と未実施範囲
+## 9 draft-0.1作成時の静的確認と未実施範囲
 
 基準HEADのshell割当て・同owner／post・固定拒否closure、既存notifyStop／snapshot／execute／close、CPのfailure copy、private role型と親設計を読み、現行と将来fieldを区別した。EI／EF／ES／EW／ET／ER／EAは設計IDであり、試験成功件数ではない。
 
-今回の変更は本書と親2文書の参照・工程境界だけとする。文書link／表／ID・末尾改行・差分と変更範囲を静的確認し、ソース・試験・CHANGELOG・依存・設定は変更しない。製品moduleのimport／実行、試験再実行・build／pack、Promise生成・closure呼出し、private公開・dispatch・実接続・実通信・設定変更・stage・コミット・Pushは行わない。
+draft-0.1作成時の変更は本書と親2文書の参照・工程境界だけとした。文書link／表／ID・末尾改行・差分と変更範囲を静的確認し、ソース・試験・CHANGELOG・依存・設定は変更しなかった。製品moduleのimport／実行、試験再実行・build／pack、Promise生成・closure呼出し、private公開・dispatch・実接続・実通信・設定変更・stage・コミット・Pushは行わなかった。
 
 3文書のlocal link26件・表21個、新設計ID53個の順序／重複／欠落と末尾改行・差分空白を静的確認した。旧rootの内容は基準HEADと一致し、文書3file以外の変更・stageはない。これらは文書整合の結果であり、将来の生成／観測／終端試験を実施した結果ではない。
+
+## 10 未使用seedの限定実装
+
+[旧root](../src/review/abort-scope-evidence-native-diagnostic.ts)のshell object literalへEFの追加25fieldを先行配置した。constructor／candidate／登録／ack／callback／drain／通知／copy／payload／終端の未来の有限値語彙はprivate型として宣言するが、runtime seedはExtractによる初期literalの投影とし、既存work／settler／観測claim等もnull／falseのまま維持する。native参照を保持できる完成variantへの型拡張は行わない。retentionだけは固定拒否時にheldからunconfirmedへ進める。
+
+EI04の有限JoinExecutionPositionは型語彙だけで、実slot.positionの範囲はhandlersまでのままである。faultAtをJoinFaultSiteへ分離し、新しい固定拒否ではconstructor_preを最初のsiteとして記録する。先行handlersFault／detail・slotのfault／faultAt・root primaryを上書きしない。
+
+joinExecutionFieldsUnusedは捕捉済みown descriptorで25fieldのdata属性・値・writable／enumerable／configurableを確認し、getterを読まない。旧preparedShellMatchedとhandlerStageMatchedへこの未使用検査を追加し、旧null／false・同owner・停止／record／pinの検査は削っていない。14個の期待aliasはconst nullで先行宣言し、未消費の参照取得資格にはしない。
+
+executionSeedUnusedはcanonical shell／identity／pin照合を先に行い、同ownerのhandlers完了と14alias未使用だけを確認する。戻り値はbooleanで、呼出し証拠ではない。requestJoinExecutionは正常seedも不正seedも必ず固定拒否し、constructorClaim・entry／observer／drain／settle claimは消費しない。最初のconstructor_preまたは先行faultを残し、同shell／identity／pin／closure／tupleを保持、同期revokedへ合流する。retentionのdata書込み資格が不成立ならhookを呼ばず当該slotを保持し、role slotの固定失敗を残す。通常利用へ戻すreset口はない。
+
+新要求・seed checkerはlegacyから呼ばず、seed checkerの唯一の内部callerはこの固定拒否要求である。旧handler完了checkerの唯一の追加callerもseed checkerに限定する。closure本体は従前の固定拒否のままで呼び出さない。EW02〜04／EW06とETの実行遷移、callback反応、通知／copy／限定settle・実終端は未接続である。EA02の将来全遷移oracleを実装済みとせず、現段階の値保証は有限型・初期field・固定拒否に限定する。
+
+[source試験](../tests/review/native-join-execution-seed.test.ts)、[独立oracle](../tests/review/fixtures/native-join-execution-seed-model.mjs)、[固定dist検査](../tests/review/fixtures/compiled-native-join-execution-seed.mjs)で、field別拒否・混入・停止／先行理由・descriptor継承getter・38構文正常変異とsemantic不正15行を検査した。初回RED・旧試験の移行差分・試験側の不備、結果と未実施範囲は[検証記録](E2E_BEST_PRACTICE_NATIVE_JOIN_EXECUTION_SEED_2026-11-17.md)へ分離する。作業中だったdraft-0.1と親文書の内容を保持してこの実装節・状態更新を追加し、stage・コミット・Pushは行わない。

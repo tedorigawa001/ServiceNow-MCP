@@ -1,6 +1,6 @@
 # JoinRuntimeの段階型と生成資格およびPromise保持失敗境界の詳細設計
 
-Version: native-diagnostic-join-runtime-generation-draft-0.8 / Date: 2026-11-17。
+Version: native-diagnostic-join-runtime-generation-draft-0.9 / Date: 2026-11-17。
 Status: JR-A（§12）、JR-Bの先行shell／非実行pin／失敗保持とclosure／tuple先行準備・段階別post（§13）だけを合成依存に限定して実装。設計基準HEADは`c466b75`、JR-Aの基準HEADは`b770e59`。[構築回収・Join公開設計](BEST_PRACTICE_NATIVE_DIAGNOSTIC_CONSTRUCTION_JOIN_DELTA_DESIGN.md)§5〜7の生成・保持部分を具体化する。closure呼出し・同Promise／settler生成・拒否観測・失敗終端・private公開は未実装・未接続である。
 
 draft-0.2のレビュー修正：レビュー修正の基準HEADは`ec7b768`。§12は拒否時に同期revokedへすると定めていたが、独立oracleは拒否後のprimaryだけを確認しており、`rejectJoinGeneration`の`revoked = true`を外した変異がsource・compiledの両対照を通過した。全ての資格／同一性拒否と失敗保持でrevokedを確認し、同期失効を外す変異を構文正常な変異の12件目に加えた（§12）。製品コードは変更していない。
@@ -193,6 +193,6 @@ cleanupは同closureのcurrent recordとそのanchor実参照、同binding、元
 
 [先行runtime・失敗保持先とPromise固定pin・観測前提の接続差分設計draft-0.6](BEST_PRACTICE_NATIVE_DIAGNOSTIC_JRB_RUNTIME_PIN_DELTA_DESIGN.md)で、同roleのpendingを唯一の主保持先とし、保持順と観測前提を具体化した。同書§12で先行shell／context／identity／owner pinの保持・非実行検査・失敗保持、§13でclosure／tuple準備だけ限定実装した。module基準とowner pin、生成成功と失敗候補の観測を分け、先行primary／同期revokedを維持する。closure呼出し・Promise生成・拒否観測・失敗終端・private公開・dispatchは未実装・未接続のままである。
 
-[固定closure・tuple／段階別post／失敗後writer・終端責務の接続差分設計draft-0.3](BEST_PRACTICE_NATIVE_DIAGNOSTIC_JRB_HANDLERS_POST_TERMINAL_DELTA_DESIGN.md)では、handler準備claimと入場履歴を分け、現行postを緩めず段階別に検査する。同書§11の限定実装は、非実行の3closure・凍結tupleと同owner／停止／段階別postまでである。失敗後・sealed後の観測writer、通知／copy／settle試行と実終端は設計だけを保持し、private公開・dispatchは行わない。
+[固定closure・tuple／段階別post／失敗後writer・終端責務の接続差分設計draft-0.4](BEST_PRACTICE_NATIVE_DIAGNOSTIC_JRB_HANDLERS_POST_TERMINAL_DELTA_DESIGN.md)では、handler準備claimと入場履歴を分け、現行postを緩めず段階別に検査する。同書§11の限定実装は、非実行の3closure・凍結tupleと同owner／停止／段階別postまでである。失敗後・sealed後の観測writer、通知／copy／settle試行と実終端は設計だけを保持し、private公開・dispatchは行わない。
 
-[実行前内部契約・先行slotの差分詳細設計draft-0.1](BEST_PRACTICE_NATIVE_DIAGNOSTIC_JRB_EXECUTION_SEED_CONTRACT_DESIGN.md)で、同role shellに配置するconstructor／executor・登録／callback・drain／settleの全初期fieldと、保持位置とは別の最初のfault、失敗後writer資格を具体化した。先行field単位では実行を閉鎖したままとし、実Promiseを生成する単位では候補観測と固定abort／失敗終端も対にする。新しい書込み先・authority ticket・正常公開・dispatchは作らない。
+[実行前内部契約・先行slotの差分詳細設計draft-0.2](BEST_PRACTICE_NATIVE_DIAGNOSTIC_JRB_EXECUTION_SEED_CONTRACT_DESIGN.md)で、同role shellに配置するconstructor／executor・登録／callback・drain／settleの全初期fieldと、保持位置とは別の最初のfault、失敗後writer資格を具体化した。同書§10で初期25field・未使用seed検査・固定拒否だけを実装し、実行は閉鎖したままとする。実Promiseを生成する後続単位では候補観測と固定abort／失敗終端も対にする。新しい書込み先・authority ticket・正常公開・dispatchは作らない。
