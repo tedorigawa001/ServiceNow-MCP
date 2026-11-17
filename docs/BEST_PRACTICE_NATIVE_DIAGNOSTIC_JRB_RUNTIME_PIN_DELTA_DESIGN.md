@@ -193,4 +193,4 @@ run／cleanupのprivate準備だけがJR-A beginを一度呼ぶ。shell→cleanu
 
 ## 13 固定closure・tupleと段階別post／終端責務への差分
 
-[固定executor／観測closure・tupleと段階別post・失敗後writer／終端責務の接続差分設計draft-0.2](BEST_PRACTICE_NATIVE_DIAGNOSTIC_JRB_HANDLERS_POST_TERMINAL_DELTA_DESIGN.md)で、同ownerの3関数・tupleの先行保持、handlersとexecutorの位置、非返却の準備／入場／観測／drain／settle試行を対応付けた。同書§11で準備だけを限定実装し、現行全null postと途中／完了postを分離、部分参照・最初のfault・一度限りの試行を保持する。closure呼出し・Promise生成・観測・通知／copy／終端・private公開・dispatchは接続しない。後半の失敗／sealed後writerと実終端の契約は未実装のままである。
+[固定executor／観測closure・tupleと段階別post・失敗後writer／終端責務の接続差分設計draft-0.5](BEST_PRACTICE_NATIVE_DIAGNOSTIC_JRB_HANDLERS_POST_TERMINAL_DELTA_DESIGN.md)で、同ownerの3関数・tupleの先行保持、handlersとexecutorの位置、非返却の準備／入場／観測／drain／settle試行を対応付けた。同書§11で準備だけを限定実装し、現行全null postと途中／完了postを分離、部分参照・最初のfault・一度限りの試行を保持する。closure呼出し・Promise生成・観測・通知／copy／終端・private公開・dispatchは接続しない。後半の失敗／sealed後writerと実終端の契約は未実装のままである。

@@ -3,7 +3,7 @@ import {readFileSync} from 'node:fs';
 import {fileURLToPath} from 'node:url';
 import ts from 'typescript';
 import {createNativeDiagnosticState} from '../../src/review/abort-scope-evidence-native-diagnostic-state.js';
-import {verifyHandlers,auditHandlers,verifyHandlerIdentity,verifyHandlerPrefixes,verifyHandlerPosts,verifyHandlerStops,verifyHandlerTuples,
+import {verifyHandlers,auditHandlers,verifyHandlerIdentity,verifyHandlerPrefixes,verifyHandlerPosts,verifyHandlerStops,verifyHandlerTuples,verifyHandlerClosedCalls,
   handlerMutants,verifyHandlerMutant,verifyHandlerAuditNegatives,end} from './fixtures/native-join-handlers-model.mjs';
 
 const source=()=>readFileSync(new URL('../../src/review/abort-scope-evidence-native-diagnostic.ts',import.meta.url),'utf8');
@@ -20,13 +20,16 @@ it('retains all partial hold/freeze prefixes and the first failure without reacq
   expect(verifyHandlerPrefixes(emitted(),createNativeDiagnosticState)).toEqual({prefixes:24,regenerated:0,closureCalls:0});
 });
 it('uses distinct stage posts and rejects field, owner, stop, record and live-pin drift',()=>{
-  expect(verifyHandlerPosts(emitted(),createNativeDiagnosticState)).toEqual({posts:62,entries:10,drifts:7,hooks:0});
+  expect(verifyHandlerPosts(emitted(),createNativeDiagnosticState)).toEqual({posts:64,entries:10,drifts:7,hooks:0});
 });
 it('stops at each retained prefix, keeps read-only cleanup and prevents a nested finally from stealing busy custody',()=>{
   expect(verifyHandlerStops(emitted(),createNativeDiagnosticState)).toEqual({stops:24,reentries:2,closureCalls:0});
 });
 it('rejects holes, extra keys, wrong order, prototype changes and accessors without invoking tuple hooks',()=>{
-  expect(verifyHandlerTuples(emitted(),createNativeDiagnosticState)).toEqual({refusals:12,hooks:0});
+  expect(verifyHandlerTuples(emitted(),createNativeDiagnosticState)).toEqual({refusals:16,hooks:0});
+});
+it('refuses direct calls of every retained closure with a fixed primitive failure and keeps references and the first fault',()=>{
+  expect(verifyHandlerClosedCalls(emitted(),createNativeDiagnosticState)).toEqual({calls:6,mismatches:2,hooks:0,settlers:0});
 });
 it.each(handlerMutants.map((m:unknown[],i:number)=>[m[0],i]))('rejects the syntactically valid handler %s mutation',(_name,index)=>{
   verifyHandlerMutant(emitted(),createNativeDiagnosticState,index as number);

@@ -193,6 +193,6 @@ cleanupは同closureのcurrent recordとそのanchor実参照、同binding、元
 
 [先行runtime・失敗保持先とPromise固定pin・観測前提の接続差分設計draft-0.6](BEST_PRACTICE_NATIVE_DIAGNOSTIC_JRB_RUNTIME_PIN_DELTA_DESIGN.md)で、同roleのpendingを唯一の主保持先とし、保持順と観測前提を具体化した。同書§12で先行shell／context／identity／owner pinの保持・非実行検査・失敗保持、§13でclosure／tuple準備だけ限定実装した。module基準とowner pin、生成成功と失敗候補の観測を分け、先行primary／同期revokedを維持する。closure呼出し・Promise生成・拒否観測・失敗終端・private公開・dispatchは未実装・未接続のままである。
 
-[固定closure・tuple／段階別post／失敗後writer・終端責務の接続差分設計draft-0.4](BEST_PRACTICE_NATIVE_DIAGNOSTIC_JRB_HANDLERS_POST_TERMINAL_DELTA_DESIGN.md)では、handler準備claimと入場履歴を分け、現行postを緩めず段階別に検査する。同書§11の限定実装は、非実行の3closure・凍結tupleと同owner／停止／段階別postまでである。失敗後・sealed後の観測writer、通知／copy／settle試行と実終端は設計だけを保持し、private公開・dispatchは行わない。
+[固定closure・tuple／段階別post／失敗後writer・終端責務の接続差分設計draft-0.5](BEST_PRACTICE_NATIVE_DIAGNOSTIC_JRB_HANDLERS_POST_TERMINAL_DELTA_DESIGN.md)では、handler準備claimと入場履歴を分け、現行postを緩めず段階別に検査する。同書§11の限定実装は、非実行の3closure・凍結tupleと同owner／停止／段階別postまでである。失敗後・sealed後の観測writer、通知／copy／settle試行と実終端は設計だけを保持し、private公開・dispatchは行わない。
 
 [実行前内部契約・先行slotの差分詳細設計draft-0.2](BEST_PRACTICE_NATIVE_DIAGNOSTIC_JRB_EXECUTION_SEED_CONTRACT_DESIGN.md)で、同role shellに配置するconstructor／executor・登録／callback・drain／settleの全初期fieldと、保持位置とは別の最初のfault、失敗後writer資格を具体化した。同書§10で初期25field・未使用seed検査・固定拒否だけを実装し、実行は閉鎖したままとする。実Promiseを生成する後続単位では候補観測と固定abort／失敗終端も対にする。新しい書込み先・authority ticket・正常公開・dispatchは作らない。

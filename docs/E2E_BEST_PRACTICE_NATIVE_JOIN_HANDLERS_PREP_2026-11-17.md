@@ -1,6 +1,6 @@
 # JR-B固定closure／tupleの先行準備・段階別postの検証記録
 
-Date: 2026-11-17。基準HEAD: `b167d09`。設計：[固定closure／tuple・段階別post差分draft-0.2](BEST_PRACTICE_NATIVE_DIAGNOSTIC_JRB_HANDLERS_POST_TERMINAL_DELTA_DESIGN.md#11-closuretuple準備段階別postの限定実装)。
+Date: 2026-11-17。基準HEAD: `15624ca`（設計基準は`b167d09`）。設計：[固定closure／tuple・段階別post差分draft-0.2](BEST_PRACTICE_NATIVE_DIAGNOSTIC_JRB_HANDLERS_POST_TERMINAL_DELTA_DESIGN.md#11-closuretuple準備段階別postの限定実装)。
 
 ## 限定実装と非実行境界
 
@@ -73,3 +73,18 @@ JR-Cのprivate公開、正規cleanup合流、legacy work統一・dispatch／entr
 展開先で新しく生成した固定distのcompiled10本はすべてexit 0・signalなしで、各外側60秒内に終了した。offline・ignore-scriptsの梱包dry-runは当該コマンド専用一時cacheで成功、441file・配布JS109本。旧root群／試験は非同梱、新private準備／model参照0。cacheは終了後に削除し、設定は変更しなかった。実tarball生成・展開は未実施である。
 
 親HEADとのAST比較で旧14関数本文・4exportが一致し、文書local link33件・表23個を確認した。再検証後の追加は本節だけで、ソース・試験・設定は変更しない。最終indexと展開先の内容一致・対象10file・差分空白を再確認してコミットする。全体回帰・closure呼出し・Promise生成・private公開・dispatchは未実施／未接続、各閉鎖条件・Unknown・調査保留を維持し、Pushは行わない。
+
+## レビュー修正 2026年11月17日
+
+レビュー修正の基準HEADは`48900ac`、修正時のHEADは`f3746c4`。製品コードは変更せず、[独立oracle](../tests/review/fixtures/native-join-handlers-model.mjs)・[source試験](../tests/review/native-join-handlers.test.ts)・[固定dist検査](../tests/review/fixtures/compiled-native-join-handlers.mjs)だけを補強した。冒頭の基準HEADは実際の親`15624ca`へ訂正した。
+
+| 区分 | 内容 |
+|---|---|
+| 指摘 | 3 closureの固定拒否は製品動作だが試験はclosureを呼ばず、拒否本体の無効化・拒否code入替え・fault位置変更が通過した。tuple 2番目のdescriptor照合と完了時`slot.position`照合を外す変異も通過した |
+| 先行RED | 上記5変異を出力JSへ適用し、HEADの旧oracle（6検証関数）が5件とも通過することを確認した。新oracleでは5件とも拒否 |
+| closure直接呼出し6・origin不一致2 | 2role×3関数を準備完了後に直接呼ぶ。undefined復帰、handlersFault=closed_call、slot fault=invalid_state・faultAt=handlers・position=handlers、同期revoked・primary=invalid_state、failed_retained、完了checker false。引数のsettler呼出し0・value／reasonのhook 0、通知等の操作0、upper診断不変。別closureの後続呼出しでも最初のfaultと全保持参照は不変。identity holderを同値copyにすると拒否codeはevidence_binding_mismatch |
+| tuple・post追加 | tuple 2番目の差替え・accessor化を拒否（tuple不正12→16、getter hook 0）。完了後に`slot.position`をpinへ変えたpostを拒否（field post 62→64） |
+| 変異 | 構文正常な変異を17件から22件へ |
+| 件数 | handler source試験25件→31件（closure直接呼出しの対照1件と、変異5件をそれぞれ1件として実行）。closureを呼ぶのは本対照だけで、他の対照のclosure呼出し0は維持 |
+
+検証は作業tree上で行い、lint・型検査・build・package分類・全vitest・compiled-probe群・declared-actual・body-live migration／compare・native compiled 12本を実行した。結果はレビュー報告に記す。Promise生成・executor入場・観測・private公開・dispatch未接続、各閉鎖条件・調査保留を維持する。Pushは行わない。

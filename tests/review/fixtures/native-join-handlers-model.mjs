@@ -161,6 +161,7 @@ export function verifyHandlerPosts(js,createState){
       const saved=holder[key];holder[key]={...saved};assert.equal(a.check(role),false,key);holder[key]=saved;assert(a.check(role));posts++;
     }
     const args=s.observerArgs;s.observerArgs=[...args];assert.equal(a.check(role),false);s.observerArgs=args;posts++;
+    const position=slot.position;slot.position='pin';assert.equal(a.check(role),false,'position');slot.position=position;assert(a.check(role));posts++;
     for(const key of ['handlersClaim','handlersBusy','handlersState','handlersDetail','handlersFault']){
       const b=create();if(role==='cleanup')b.resource();assert(b.pin(role));const shell=b[role+'Slot'].pending;
       shell[key]=undefined;assert.equal(b.prepare(role),false,key);assert.equal(shell.handlersState,'failed_retained');
@@ -199,7 +200,8 @@ export function verifyHandlerTuples(js,createState){
   let refusals=0;
   for(const role of ['run','cleanup'])for(const action of [
     "Object.defineProperty(args,'0',{get(){hooks++;throw Error('PRIVATE_TUPLE_GETTER');}});",
-    'args.length=3;', 'args.extra=true;', 'delete args[1];', 'Object.setPrototypeOf(args,{});', 'args[0]=rejected;',
+    'args.length=3;', 'args.extra=true;', 'delete args[1];', 'Object.setPrototypeOf(args,{});', 'args[0]=rejected;', 'args[1]=fulfilled;',
+    "Object.defineProperty(args,'1',{get(){hooks++;throw Error('PRIVATE_TUPLE_GETTER');}});",
   ]){
     const create=deriveHandlers(injectHandler(js,"s.handlersDetail = 'tuple_held';",action),createState),a=create();if(role==='cleanup')a.resource();assert(a.pin(role));
     assert.equal(a.prepare(role),false);const s=a[role+'Slot'].pending;
@@ -227,10 +229,45 @@ export const handlerMutants=[
   ['tuple own size','jbKeys(args).length !== 3','false'],
   ['tuple first descriptor',"!first || !('value' in first) || first.value !== fulfilled",'false'],
   ['claim precheck','s.handlersClaim === false &&','true &&'],
+  ['closed call body',/failJoinHandlers\(role, 'closed_call', [^;]+;/g,'void 0;'],
+  ['closed call codes',"? 'invalid_state' : 'evidence_binding_mismatch'","? 'evidence_binding_mismatch' : 'invalid_state'"],
+  ['closed call fault',"failJoinHandlers(role, 'closed_call',","failJoinHandlers(role, 'entry',"],
+  ['tuple second descriptor',"!second || !('value' in second) || second.value !== rejected ||",''],
+  ['complete position',"slot.position !== 'handlers'",'false'],
 ];
 export function verifyHandlerMutant(js,createState,index){
   const [label,from,to]=handlerMutants[index];assert.equal(typeof from==='string'?js.split(from).length-1:[...js.matchAll(from)].length,1,'mutant drift: '+label);
   const changed=js.replace(from,to);parse(changed,{ecmaVersion:'latest',sourceType:'module'});
   assert.throws(()=>{verifyHandlers(changed,createState);verifyHandlerIdentity(changed,createState);verifyHandlerPrefixes(changed,createState);
-    verifyHandlerPosts(changed,createState);verifyHandlerStops(changed,createState);verifyHandlerTuples(changed,createState);},assert.AssertionError,label);
+    verifyHandlerPosts(changed,createState);verifyHandlerStops(changed,createState);verifyHandlerTuples(changed,createState);
+    verifyHandlerClosedCalls(changed,createState);},assert.AssertionError,label);
+}
+
+// Direct calls of the retained closures: fixed refusal and primitive failure custody only.
+const closureKeys=['executorHandler','fulfilledHandler','rejectedHandler'];
+export function verifyHandlerClosedCalls(js,createState){
+  let calls=0,mismatches=0,hooks=0,settlers=0;
+  const trap=new Proxy({}, {get(){hooks++;throw Error('PRIVATE_HOOK');},getPrototypeOf(){hooks++;throw Error('PRIVATE_HOOK');}});
+  const settler=()=>{settlers++;throw Error('PRIVATE_SETTLER');};
+  for(const role of ['run','cleanup'])for(const [index,key]of closureKeys.entries()){
+    const create=deriveHandlers(js,createState),a=create();create.closeExecution();if(role==='cleanup')a.resource();assert(a.pin(role));assert(a.prepare(role));
+    const slot=a[role+'Slot'],s=slot.pending,refs=[...closureKeys,'observerArgs','identity','pin'].map(k=>s[k]),upper=JSON.stringify(a.upper());
+    const args=index===0?[settler,settler]:[trap];let result='unset';
+    assert.doesNotThrow(()=>{result=s[key](...args);});assert.equal(result,undefined);
+    assert.equal(s.handlersFault,'closed_call',role+key);assert.equal(s.handlersState,'failed_retained');assert.equal(s.readiness,'failed_retained');
+    assert.equal(slot.fault,'invalid_state',role+key);assert.equal(slot.faultAt,'handlers');assert.equal(slot.phase,'failed_retained');assert.equal(slot.position,'handlers');
+    assert.equal(a.flags().revoked,true);assert.equal(a.flags().primary,'invalid_state');assert.equal(a.check(role),false);
+    // A later call of another closure keeps the first fault and changes no retained reference.
+    const other=closureKeys[(index+1)%3];assert.equal(s[other](...(other==='executorHandler'?[settler,settler]:[trap])),undefined);
+    assert.equal(s.handlersFault,'closed_call');assert.equal(slot.fault,'invalid_state');
+    [...closureKeys,'observerArgs','identity','pin'].forEach((k,i)=>assert.equal(s[k],refs[i],k));assert.equal(slot.pending,s);closed(s);
+    assert.equal(JSON.stringify(a.upper()),upper);assert.equal(create.counts().operations,0);calls++;
+  }
+  for(const role of ['run','cleanup']){
+    const create=deriveHandlers(js,createState),a=create();if(role==='cleanup')a.resource();assert(a.pin(role));assert(a.prepare(role));
+    const slot=a[role+'Slot'],s=slot.pending;s.identity={...s.identity};
+    assert.equal(s.fulfilledHandler(trap),undefined);assert.equal(s.handlersFault,'closed_call');assert.equal(slot.fault,'evidence_binding_mismatch',role);
+    assert.equal(a.flags().revoked,true);mismatches++;
+  }
+  assert.equal(hooks,0);assert.equal(settlers,0);return {calls,mismatches,hooks,settlers};
 }
