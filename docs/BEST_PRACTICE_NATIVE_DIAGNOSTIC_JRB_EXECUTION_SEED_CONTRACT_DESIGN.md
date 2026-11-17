@@ -181,4 +181,4 @@ executionSeedUnusedはcanonical shell／identity／pin照合を先に行い、�
 
 ## 11 seedから実行状態への接続差分
 
-[seedから実行状態へのclaim・settler保持・post接続差分詳細設計draft-0.2](BEST_PRACTICE_NATIVE_DIAGNOSTIC_JRB_SEED_EXECUTION_TRANSITION_DELTA_DESIGN.md)で、同objectのunused／claim済み／calling／捕捉／返却／失敗variantとconstructor／entry claimの順序、role別settler保持、段階postを具体化した。同書§9ではreadonlyの8variant・同保持origin leaf・段階別値postだけを限定実装する。実shellのliteral型・未使用checker・14null alias・request／3closureの固定拒否は変更せず、値一致から実行権限を生成しない。constructor／entryの消費・native参照取得・生成／安全観測／固定終端は未接続で、一体接続の条件を維持する。
+[seedから実行状態へのclaim・settler保持・post接続差分詳細設計draft-0.3](BEST_PRACTICE_NATIVE_DIAGNOSTIC_JRB_SEED_EXECUTION_TRANSITION_DELTA_DESIGN.md)で、同objectのunused／claim済み／calling／捕捉／返却／失敗variantとconstructor／entry claimの順序、role別settler保持、段階postを具体化した。同書§9ではreadonlyの8variant・同保持origin leaf・段階別値postだけを限定実装する。実shellのliteral型・未使用checker・14null alias・request／3closureの固定拒否は変更せず、値一致から実行権限を生成しない。constructor／entryの消費・native参照取得・生成／安全観測／固定終端は未接続で、一体接続の条件を維持する。

@@ -1,7 +1,9 @@
 # JR-B seedから実行状態へのclaim・settler保持・post接続差分詳細設計
 
-Version: native-diagnostic-jrb-seed-execution-transition-draft-0.2 / Date: 2026-11-17。
+Version: native-diagnostic-jrb-seed-execution-transition-draft-0.3 / Date: 2026-11-18。
 Status: §9の実行variant・origin leaf・段階別値postだけを合成依存限定で実装。設計基準HEADは`07b4c45`、限定実装の基準HEADは`a477987`。[未使用seed設計](BEST_PRACTICE_NATIVE_DIAGNOSTIC_JRB_EXECUTION_SEED_CONTRACT_DESIGN.md)EI02〜06・ES05〜06・EW02〜06と、[closure／tuple設計](BEST_PRACTICE_NATIVE_DIAGNOSTIC_JRB_HANDLERS_POST_TERMINAL_DELTA_DESIGN.md)HP04〜09を具体化する。[JoinRuntime設計](BEST_PRACTICE_NATIVE_DIAGNOSTIC_JOIN_RUNTIME_GENERATION_DESIGN.md)と[固定pin設計](BEST_PRACTICE_NATIVE_DIAGNOSTIC_JRB_RUNTIME_PIN_DELTA_DESIGN.md)の同owner・同P・観測／固定終端の一体接続は変更しない。
+
+draft-0.3のレビュー修正：レビュー修正の基準HEADは`a477987`（修正時のHEADは`3755cba`）。§2はslot.phaseをbuildingからchecked、slot.positionをexecutor／reject／resolve／candidate／checkedへ進める前提だったが、現行RoleGenerationSlotはbuildingのpositionがruntime〜handlersに限られ、checked phaseも持たない。§2はshell型の拡張方針だけを定め、実slot型の扱いを書いていなかった。§2へ実slot型の限定拡張条件を追記した。§9の値投影・実装・試験は変更していない。
 
 正式発行口／新LM03／C実行入口／body起動閉鎖、全体受付無効、通常経路未切替、Unknown、VM／監視／telemetry調査保留、LOAD6／LOAD7選択・AP01〜06未承認を維持する。draft-0.1のMDだけの設計・静的確認は§8に残す。draft-0.2は非実行の値検査と合成／compiled検査だけを追加し、Promise生成・private公開・dispatch・実接続・実通信・実機操作・設定変更・stage・コミット・Pushは行わない。
 
@@ -33,6 +35,8 @@ advanceJoinCandidateの存在や型・boolean postだけではconstructor資格�
 | SV08 | failed_retained | 各claim・最後の保持prefix・最初のfault・取得済み参照を保持。constructorのthrew／executorのabnormal・半pair・候補未取得も区別。安全な同候補観測と限定終端は別資格で、成功phaseへ戻さない |
 
 shell.readiness=handlers_readyは3closure／tupleの準備履歴であり、constructor／観測を包括して許可するreadyではない。失敗時はfailed_retainedへ移すが、handlersState／detail／handlersFaultへ後段の失敗を混ぜない。slot.phaseはbuildingから全post後のchecked、またはfailed_retainedとし、published=null・dispatchStarted=false・entered=falseを維持する。
+
+実slotのRoleGenerationSlotも同じ方針で扱う。現行のbuilding variantはposition runtime〜handlers、failed_retainedはJoinPreparationPositionだけを持ち、checked phaseはない。後続の一体実装では、constructor claim消費後のbuilding position executor／reject／resolve／candidate、phase checked（position checked・pending同shell・fault null）、実行位置を保持するfailed_retainedを判別可能なvariantとして追加する。既存のempty／claimed_unheld／building（runtime〜handlers）とJR-A・pin・handler・未使用postの期待値は緩めず、新variantを書けるのは§4の固定writerだけとする。type assertionや値投影（§9のJoinExecutionValue）の一致だけで実slotを昇格しない。
 
 期待alias14個のconst nullは、後続の一体実装で必要な取得fieldだけを同roleのwrite-once保持型へ限定拡張する。cleanupのcapturedRejectExpected／terminalCopyExpected／rejectPayloadExpectedはnull固定。copy／payload aliasをexecutorが書いたり、別ownerの期待値へ交換したりしない。未使用postには従来の全null確認を残す。
 
