@@ -1,7 +1,9 @@
 # JR-B実行前内部契約・先行slotと失敗後writer資格の差分詳細設計
 
-Version: native-diagnostic-jrb-execution-seed-contract-draft-0.4 / Date: 2026-11-17。
+Version: native-diagnostic-jrb-execution-seed-contract-draft-0.5 / Date: 2026-11-18。
 Status: §10の初期field・狭い値型・未使用seed検査・固定拒否と、§11参照先の非実行variant／origin／値postだけを合成依存限定で実装。seedの基準HEADは`48900ac`。[closure／tuple・post設計](BEST_PRACTICE_NATIVE_DIAGNOSTIC_JRB_HANDLERS_POST_TERMINAL_DELTA_DESIGN.md)HC06〜08・HP04〜09・HW02〜05・HT01〜07を、[JoinRuntime設計](BEST_PRACTICE_NATIVE_DIAGNOSTIC_JOIN_RUNTIME_GENERATION_DESIGN.md)の同role pendingと[固定pin設計](BEST_PRACTICE_NATIVE_DIAGNOSTIC_JRB_RUNTIME_PIN_DELTA_DESIGN.md)RS05後半〜RS10へ接続する前の内部契約へ具体化する。native実行状態への遷移・参照取得は未実装・未接続である。
+
+draft-0.5のレビュー修正：レビュー修正の基準HEADは`6c798d9`。§12に受渡し設計への参照節（2026-11-18追記）を加えた一方、版はdraft-0.4、Dateは2026-11-17のままだった。版と日付を更新し、参照元のJoinRuntime設計・handler設計・構築Join設計・受渡し設計の版参照を直した。内容・実装・試験は変更していない。
 
 正式発行口／新LM03／C実行入口／body起動閉鎖、全体受付無効、通常経路未切替、Unknown、VM／監視／telemetry調査保留、LOAD6／LOAD7選択・AP01〜06未承認を維持する。draft-0.1はMDだけの設計だった。draft-0.2の先行実装・合成検証は§10へ分離し、Promise生成・closure呼出し・観測登録・通知／copy／settler呼出し・private公開・dispatch・実接続・実通信・実機操作・設定変更・stage・コミット・Pushは行わない。
 
@@ -181,7 +183,7 @@ executionSeedUnusedはcanonical shell／identity／pin照合を先に行い、�
 
 ## 11 seedから実行状態への接続差分
 
-[seedから実行状態へのclaim・settler保持・post接続差分詳細設計draft-0.3](BEST_PRACTICE_NATIVE_DIAGNOSTIC_JRB_SEED_EXECUTION_TRANSITION_DELTA_DESIGN.md)で、同objectのunused／claim済み／calling／捕捉／返却／失敗variantとconstructor／entry claimの順序、role別settler保持、段階postを具体化した。同書§9ではreadonlyの8variant・同保持origin leaf・段階別値postだけを限定実装する。実shellのliteral型・未使用checker・14null alias・request／3closureの固定拒否は変更せず、値一致から実行権限を生成しない。constructor／entryの消費・native参照取得・生成／安全観測／固定終端は未接続で、一体接続の条件を維持する。
+[seedから実行状態へのclaim・settler保持・post接続差分詳細設計draft-0.4](BEST_PRACTICE_NATIVE_DIAGNOSTIC_JRB_SEED_EXECUTION_TRANSITION_DELTA_DESIGN.md)で、同objectのunused／claim済み／calling／捕捉／返却／失敗variantとconstructor／entry claimの順序、role別settler保持、段階postを具体化した。同書§9ではreadonlyの8variant・同保持origin leaf・段階別値postだけを限定実装する。実shellのliteral型・未使用checker・14null alias・request／3closureの固定拒否は変更せず、値一致から実行権限を生成しない。constructor／entryの消費・native参照取得・生成／安全観測／固定終端は未接続で、一体接続の条件を維持する。
 
 ## 12 実field writerと安全観測／固定終端の受渡し（2026-11-18追記）
 

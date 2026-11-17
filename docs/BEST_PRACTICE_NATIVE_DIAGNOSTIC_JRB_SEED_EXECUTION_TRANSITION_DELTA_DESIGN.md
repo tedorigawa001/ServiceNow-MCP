@@ -1,7 +1,9 @@
 # JR-B seedから実行状態へのclaim・settler保持・post接続差分詳細設計
 
-Version: native-diagnostic-jrb-seed-execution-transition-draft-0.3 / Date: 2026-11-18。
+Version: native-diagnostic-jrb-seed-execution-transition-draft-0.4 / Date: 2026-11-18。
 Status: §9の実行variant・origin leaf・段階別値postだけを合成依存限定で実装。設計基準HEADは`07b4c45`、限定実装の基準HEADは`a477987`。[未使用seed設計](BEST_PRACTICE_NATIVE_DIAGNOSTIC_JRB_EXECUTION_SEED_CONTRACT_DESIGN.md)EI02〜06・ES05〜06・EW02〜06と、[closure／tuple設計](BEST_PRACTICE_NATIVE_DIAGNOSTIC_JRB_HANDLERS_POST_TERMINAL_DELTA_DESIGN.md)HP04〜09を具体化する。[JoinRuntime設計](BEST_PRACTICE_NATIVE_DIAGNOSTIC_JOIN_RUNTIME_GENERATION_DESIGN.md)と[固定pin設計](BEST_PRACTICE_NATIVE_DIAGNOSTIC_JRB_RUNTIME_PIN_DELTA_DESIGN.md)の同owner・同P・観測／固定終端の一体接続は変更しない。
+
+draft-0.4のレビュー修正：レビュー修正の基準HEADは`6c798d9`。§10に受渡し設計への参照節を加えた一方、版はdraft-0.3のままだった。版を更新し、参照元のJoinRuntime設計・seed設計・構築Join設計・受渡し設計の版参照を直した。内容・実装・試験は変更していない。
 
 draft-0.3のレビュー修正：レビュー修正の基準HEADは`a477987`（修正時のHEADは`3755cba`）。§2はslot.phaseをbuildingからchecked、slot.positionをexecutor／reject／resolve／candidate／checkedへ進める前提だったが、現行RoleGenerationSlotはbuildingのpositionがruntime〜handlersに限られ、checked phaseも持たない。§2はshell型の拡張方針だけを定め、実slot型の扱いを書いていなかった。§2へ実slot型の限定拡張条件を追記した。§9の値投影・実装・試験は変更していない。
 
