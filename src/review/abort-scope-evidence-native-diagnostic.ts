@@ -720,10 +720,12 @@ function allocateNativeDiagnosticConstruction(raw: NativeInput, fault?: NativeFa
         if (v.observerClaim === false) return v.observerState === 'unstarted' && v.observerBusy === false && v.registrationReached === false &&
             v.registrationWork === null && v.ackHeld === false && v.ackState === 'empty' && v.observerAckCandidate === null && v.observerAck === null;
         if (v.observerClaim !== true || v.candidateSafety !== 'safe_same_work' || v.registrationWork !== v.work ||
-            (v.observerState === 'registering' ? v.observerBusy !== true || v.registrationReached !== true :
-                v.observerBusy !== false || (v.observerState !== 'returned' && v.observerState !== 'threw' && v.observerState !== 'refused') ||
-                v.observerState !== 'refused' && v.registrationReached !== true)) return false;
-        if (v.ackHeld === false) return (v.ackState === 'empty' || v.ackState === 'return_lost') && v.observerAckCandidate === null && v.observerAck === null;
+            (v.observerState === 'registering' ? v.observerBusy !== true :
+                v.observerBusy !== false || (v.observerState !== 'returned' && v.observerState !== 'threw' && v.observerState !== 'refused')) ||
+            // refused stops before the call; returned implies the call was reached; registering/threw keep either side of the reach point.
+            v.observerState === 'refused' && v.registrationReached !== false || v.observerState === 'returned' && v.registrationReached !== true) return false;
+        if (v.ackHeld === false) return (v.ackState === 'empty' || v.ackState === 'return_lost' && v.registrationReached === true) &&
+            v.observerAckCandidate === null && v.observerAck === null;
         if (v.observerState !== 'returned') return false;
         if (v.ackState === 'held' || v.ackState === 'unsafe_retained') return v.observerAck === null;
         return v.ackState === 'verified' && v.observerAck !== null && (typeof v.observerAck === 'object' || typeof v.observerAck === 'function') &&

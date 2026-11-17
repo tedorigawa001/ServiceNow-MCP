@@ -54,6 +54,7 @@ export function valueCases(role){
     {...failed.at(-2),executor:'abnormal'}, {...failed.at(-2),candidate:null}, {...failed.at(-2),candidate:undefined});
   return [...rows,...failed].map(v=>[v,{resolve:v.resolve,reject:v.reject,candidate:v.candidate,work:v.work,ack:v.observerAckCandidate}]);
 }
+const stableVariants=['unused','claimed_pre_call','calling_before_entry','capturing','captured_before_return','returned_candidate','checked_unpublished'];
 export function verifyValueStages(js,state){
   const api=deriveExecutionValues(js,state)();let valid=0,refusals=0;
   for(const role of ['run','cleanup'])for(const [v,e]of valueCases(role)){
@@ -65,6 +66,10 @@ export function verifyValueStages(js,state){
     }
     for(const key of ['resolve','reject','candidate','work','ack']){
       assert.equal(api.post(v,{...e,[key]:{}}),false,'alias '+role+'/'+v.variant+'/'+key);refusals++;
+    }
+    // A stable row is valid for exactly one non-failure label; relabelling it must not borrow another stage.
+    if(v.variant!=='failed_retained')for(const label of stableVariants)if(label!==v.variant){
+      assert.equal(api.post({...v,variant:label},e),false,'relabel '+role+'/'+v.variant+'->'+label);refusals++;
     }
     assert.deepEqual(v,before);assert.deepEqual(e,aliasesBefore);
   }
@@ -79,6 +84,11 @@ export function verifyOriginLeaf(js,state){
     for(let i=0;i<4;i++)for(const foreign of [other[i],{...refs[i]},proxy,dead.proxy]){
       const raw=[...refs];raw[i]=foreign;assert.equal(a.origin(role,...raw),false);refusals++;
     }
+    // Writable retained fields and the anchor's slot links are part of the same origin, not caller-supplied data.
+    const tamper=(obj,key,value)=>{const old=obj[key];obj[key]=value;assert.equal(a.origin(role),false,'tamper '+role+'/'+key);refusals++;obj[key]=old;assert.equal(a.origin(role),true);};
+    tamper(shell,'executorHandler',()=>undefined);tamper(shell,'observerArgs',Object.freeze([...shell.observerArgs]));
+    tamper(shell.recovery,'runGeneration',{...shell.recovery.runGeneration});
+    if(role==='cleanup')tamper(shell,'contextRecord',{});
     a.stop();assert.equal(a.origin(role),true);own++;
     // Origin survives failed custody, but does not recover admission or change a diagnostic.
     refs[3].phase='failed_retained';refs[3].fault='invalid_state';shell.readiness='failed_retained';
@@ -91,12 +101,13 @@ export function verifyOriginLeaf(js,state){
 export function verifyValueBoundaries(js,state){
   const api=deriveExecutionValues(js,state)();let valid=0,refusals=0;
   for(const role of ['run','cleanup']){
-    const rows=valueCases(role),returned=rows.find(([v])=>v.variant==='returned_candidate')[0],checked=rows.find(([v])=>v.variant==='checked_unpublished')[0];
+    const rows=valueCases(role),claimed=rows.find(([v])=>v.variant==='claimed_pre_call')[0],ack=Object.freeze({}),returned=rows.find(([v])=>v.variant==='returned_candidate')[0],checked=rows.find(([v])=>v.variant==='checked_unpublished')[0];
     const expected=v=>({resolve:v.resolve,reject:v.reject,candidate:v.candidate,work:v.work,ack:v.observerAckCandidate});
     const failed={...returned,variant:'failed_retained',fault:'internal_review_error',faultAt:'observer_call',retention:'unconfirmed',candidateSafety:'safe_same_work',work:returned.candidate,
       observerClaim:true,observerState:'threw',registrationWork:returned.candidate,registrationReached:true};
     for(const v of [
       {...failed,observerState:'registering',observerBusy:true},
+      {...failed,observerState:'registering',observerBusy:true,registrationReached:false}, {...failed,observerState:'threw',registrationReached:false},
       {...failed,observerState:'threw',ackState:'return_lost'},
       {...failed,observerState:'refused',registrationReached:false},
       {...failed,observerState:'returned',ackHeld:true,ackState:'held',observerAckCandidate:undefined},
@@ -110,7 +121,13 @@ export function verifyValueBoundaries(js,state){
       {...returned,variant:'capturing',constructorState:'calling',executor:'running',candidateHeld:false,candidate:null,position:'resolve',reject:role==='run'?null:()=>{}},
       {...returned,variant:'captured_before_return'}, {...returned,variant:'unused'}, {...returned,constructorClaim:false},
       {...returned,fault:'invalid_state'}, {...returned,faultAt:'constructor_call'},
-      {...failed,observerState:'registering',observerBusy:false}, {...failed,observerState:'threw',registrationReached:false},
+      {...failed,observerState:'registering',observerBusy:false},
+      {...failed,observerState:'refused',registrationReached:true}, {...failed,observerState:'refused',registrationReached:false,ackState:'return_lost'},
+      {...failed,observerState:'threw',registrationReached:false,ackState:'return_lost'}, {...failed,observerState:'returned',registrationReached:false},
+      {...claimed,variant:'failed_retained',fault:'invalid_state',faultAt:'constructor_pre',retention:'unconfirmed',executorEntryClaim:true,executor:'running',position:'executor'},
+      {...claimed,variant:'failed_retained',fault:'invalid_state',faultAt:'constructor_pre',retention:'unconfirmed',constructorClaim:false,candidateSafety:'unsafe_retained'},
+      {...failed,candidate:0,work:0,registrationWork:0}, {...failed,observerState:'returned',ackHeld:true,ackState:'held',observerAckCandidate:ack,observerAck:ack},
+      {...returned,registrationWork:returned.candidate},
       {...failed,observerState:'returned',ackHeld:true,ackState:'empty'}, {...failed,observerState:'returned',ackHeld:false,ackState:'held'},
       {...failed,observerClaim:false}, {...failed,candidateSafety:'unchecked',work:null},
       {...failed,observerState:'threw',ackHeld:true,ackState:'held'},
@@ -155,6 +172,20 @@ export const valueMutants=[
   ['fault site','joinValueFaultSite(v.faultAt)','true'],
   ['failure retention',"v.retention === 'unconfirmed'",'true'],
   ['unused claim',"case 'unused': return v.constructorClaim === false", "case 'unused': return true"],
+  ['refused unreached',"v.observerState === 'refused' && v.registrationReached !== false ||",''],
+  ['returned reached',"v.observerState === 'returned' && v.registrationReached !== true",'false'],
+  ['lost after reach',"v.ackState === 'return_lost' && v.registrationReached === true","v.ackState === 'return_lost'"],
+  ['calling before entry',"v.constructorState === 'calling' && v.executorEntryClaim === false && v.position === 'handlers'","v.constructorState === 'calling'"],
+  ['capturing running',"v.executorEntryClaim === true && v.executor === 'running';",'true;'],
+  ['uncalled no entry',"v.executorEntryClaim !== false || v.candidateHeld !== false",'false'],
+  ['unsafe held candidate',"v.candidateSafety === 'unsafe_retained' && !v.candidateHeld ||",''],
+  ['work object',"(typeof v.work !== 'object' && typeof v.work !== 'function') ||",''],
+  ['held ack unverified','return v.observerAck === null;','return true;'],
+  ['unclaimed registration',"v.registrationWork === null && v.ackHeld === false","v.ackHeld === false"],
+  ['executor origin','shell.executorHandler === executor &&',''],
+  ['tuple origin','shell.observerArgs === args;','true;'],
+  ['cleanup record origin','shell.context.record === shell.contextRecord &&',''],
+  ['recovery run slot','joinRecovery.runGeneration === runGeneration &&',''],
 ];
 export function mutateValue(js,from,to){const b=between(js,begin,end);assert.equal(b.split(from).length,2,'value mutation drift '+from);
   const changed=js.replace(b,b.replace(from,to));parse(changed,{ecmaVersion:'latest',sourceType:'module'});return changed;}

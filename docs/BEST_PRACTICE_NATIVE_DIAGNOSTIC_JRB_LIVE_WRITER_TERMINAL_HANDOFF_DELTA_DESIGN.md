@@ -1,7 +1,7 @@
 # JR-B同shellの実行writer・安全観測・固定終端受渡しの差分詳細設計
 
 Version: native-diagnostic-jrb-live-writer-terminal-handoff-draft-0.1 / Date: 2026-11-18。
-Status: MDだけの差分設計。基準HEADは`f7e3889`。値契約の実装commitは`3755cba`。[seed→実行設計draft-0.4](BEST_PRACTICE_NATIVE_DIAGNOSTIC_JRB_SEED_EXECUTION_TRANSITION_DELTA_DESIGN.md)§2〜6・9と、[先行field契約draft-0.5](BEST_PRACTICE_NATIVE_DIAGNOSTIC_JRB_EXECUTION_SEED_CONTRACT_DESIGN.md)EI／EF／EW／ETを、同shellの固定writerと後段責務の受渡しへ具体化する。追加済みのRoleGenerationSlot限定拡張方針は維持する。[固定pin設計](BEST_PRACTICE_NATIVE_DIAGNOSTIC_JRB_RUNTIME_PIN_DELTA_DESIGN.md)の安全な同候補・同P／then前提を置き換えない。
+Status: MDだけの差分設計。基準HEADは`f7e3889`。値契約の実装commitは`3755cba`。[seed→実行設計draft-0.5](BEST_PRACTICE_NATIVE_DIAGNOSTIC_JRB_SEED_EXECUTION_TRANSITION_DELTA_DESIGN.md)§2〜6・9と、[先行field契約draft-0.5](BEST_PRACTICE_NATIVE_DIAGNOSTIC_JRB_EXECUTION_SEED_CONTRACT_DESIGN.md)EI／EF／EW／ETを、同shellの固定writerと後段責務の受渡しへ具体化する。追加済みのRoleGenerationSlot限定拡張方針は維持する。[固定pin設計](BEST_PRACTICE_NATIVE_DIAGNOSTIC_JRB_RUNTIME_PIN_DELTA_DESIGN.md)の安全な同候補・同P／then前提を置き換えない。
 
 正式発行口／新LM03／C実行入口／body起動閉鎖、全体受付無効、通常経路未切替、Unknown、VM／監視／telemetry調査保留、LOAD6／LOAD7選択・AP01〜06未承認を維持する。本書は実装・Promise生成・closure呼出し・観測登録・通知／copy／settler呼出し・private公開・dispatch・実接続・実通信・実機操作・設定変更を承認しない。今回は試験再実行・build／pack・stage・コミット・Pushも行わない。
 

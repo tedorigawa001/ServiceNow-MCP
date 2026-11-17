@@ -13,13 +13,13 @@ it('keeps unused values distinct from a consumed constructor claim without chang
   expect(verifyUnusedValues(emitted(),createNativeDiagnosticState)).toEqual({roles:2});
 });
 it('validates role-specific acquisition stages and retained failures without adopting or calling their references',()=>{
-  expect(verifyValueStages(emitted(),createNativeDiagnosticState)).toEqual({valid:44,refusals:836});
+  expect(verifyValueStages(emitted(),createNativeDiagnosticState)).toEqual({valid:44,refusals:938});
 });
 it('rejects foreign raw origins first but keeps the same retained origin independent of healthy/live state',()=>{
-  expect(verifyOriginLeaf(emitted(),createNativeDiagnosticState)).toEqual({own:6,refusals:34,hooks:0});
+  expect(verifyOriginLeaf(emitted(),createNativeDiagnosticState)).toEqual({own:6,refusals:41,hooks:0});
 });
 it('keeps falsey returned references, partial observation custody and fault sites distinct from success',()=>{
-  expect(verifyValueBoundaries(emitted(),createNativeDiagnosticState)).toEqual({valid:16,refusals:76});
+  expect(verifyValueBoundaries(emitted(),createNativeDiagnosticState)).toEqual({valid:20,refusals:92});
 });
 it('has no operational writer, invocation, reflection or raw-origin field access',()=>{
   expect(auditExecutionValues(emitted())).toEqual({calls:2,originCalls:0,writes:0});expect(verifyValueAuditNegatives(emitted())).toBe(6);

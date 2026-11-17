@@ -51,3 +51,18 @@ readonlyの8variant、反射・live状態に依存しない同保持origin leaf�
 - 旧14関数本文・4exportは基準HEADと一致。検証記録の本追記もsnapshotへ反映して文書整合を確認し、対象外の変更は含めない。
 
 この再検証は正式発行・全体受付・実Promise／実resourceの新経路・実接続の承認ではない。固定拒否・Unknown・調査保留を維持し、Pushは行わない。
+
+## レビュー修正 2026年11月18日
+
+レビュー修正の基準HEADは`3755cba`、修正時のHEADは`50a2ef1`。[旧root](../src/review/abort-scope-evidence-native-diagnostic.ts)の観測値post、[独立oracle](../tests/review/fixtures/native-join-execution-values-model.mjs)・[source試験](../tests/review/native-join-execution-values.test.ts)・[固定dist検査](../tests/review/fixtures/compiled-native-join-execution-values.mjs)と[接続差分設計draft-0.5](BEST_PRACTICE_NATIVE_DIAGNOSTIC_JRB_SEED_EXECUTION_TRANSITION_DELTA_DESIGN.md)を直した。
+
+- 設計との不一致：値postはrefused・到達trueと、未到達refusedのreturn_lostを受理し、ET01が区別する到達前throw（threw・未到達）とregistering／busy・未到達を拒否していた。oracleも到達前throwを不正値として期待していた。refused＝未到達、returned＝到達、registering／threw＝到達前後とも可、return_lost＝到達後だけに直した。
+- 追加対照：
+  - 安定な各行を他の6variant名へ付け替える拒否102件（段階拒否は836件から938件）。
+  - 境界の正常値を16件から20件（到達前throwと到達前registeringを各role）、拒否を76件から92件にした。追加した拒否は、refusedの到達、未到達のreturn_lost、到達なしのreturned、未呼出しconstructorでのentry、候補なしのunsafe_retained、原始値のsafe_same_work、held ackのobserverAck、未claimの登録workである。
+  - origin leafで、保持field（executor closure・tuple・RecoveryAnchorのrun slot参照、cleanupのcontext record）を書き換えると拒否し、戻すと同originへ戻ることを確認（拒否は34件から41件）。
+- RED：上の補強に対応する11変異（variant付け替え2件、失敗保持・観測関係5件、origin保持field 4件）は、HEADのoracleで11件とも素通りし、新oracleで全て検出した。新oracleをHEADの製品コードへ当てると境界対照が失敗し、修正後に通過した。
+- 構文正常変異は14件から28件（上の11件と、到達関係の3件）。pinのbasisとidentityのcontextの照合は、凍結objectのため外から書き換えられず等価として変異に含めない。
+- 最終確認：lint・型検査・build・`package-http-classification`はexit 0。vitestは全体で失敗0、compiled検査は全本成功し、各childの元60,000ms期限・元の個別5秒期限・既定並列度は変更していない。
+
+この修正は値検査の整合だけで、constructor／entry消費・Promise生成・観測登録・固定終端・private公開・dispatchは引き続き未接続である。

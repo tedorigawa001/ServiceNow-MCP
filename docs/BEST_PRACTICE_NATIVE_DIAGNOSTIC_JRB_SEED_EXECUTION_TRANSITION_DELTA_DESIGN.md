@@ -1,7 +1,9 @@
 # JR-B seedから実行状態へのclaim・settler保持・post接続差分詳細設計
 
-Version: native-diagnostic-jrb-seed-execution-transition-draft-0.4 / Date: 2026-11-18。
+Version: native-diagnostic-jrb-seed-execution-transition-draft-0.5 / Date: 2026-11-18。
 Status: §9の実行variant・origin leaf・段階別値postだけを合成依存限定で実装。設計基準HEADは`07b4c45`、限定実装の基準HEADは`a477987`。[未使用seed設計](BEST_PRACTICE_NATIVE_DIAGNOSTIC_JRB_EXECUTION_SEED_CONTRACT_DESIGN.md)EI02〜06・ES05〜06・EW02〜06と、[closure／tuple設計](BEST_PRACTICE_NATIVE_DIAGNOSTIC_JRB_HANDLERS_POST_TERMINAL_DELTA_DESIGN.md)HP04〜09を具体化する。[JoinRuntime設計](BEST_PRACTICE_NATIVE_DIAGNOSTIC_JOIN_RUNTIME_GENERATION_DESIGN.md)と[固定pin設計](BEST_PRACTICE_NATIVE_DIAGNOSTIC_JRB_RUNTIME_PIN_DELTA_DESIGN.md)の同owner・同P・観測／固定終端の一体接続は変更しない。
+
+draft-0.5のレビュー修正：レビュー修正の基準HEADは`3755cba`（修正時のHEADは`50a2ef1`）。§9の観測値postは、refusedに登録到達trueを、到達前のrefusedにreturn_lostを受理し、逆にET01が到達の有無で区別する到達前throw（threw・未到達）と最終post前のregistering／busy・未到達を拒否していた。独立oracleも到達前throwを不正値へ入れていた。refused＝未到達、returned＝到達、registering／threw＝到達前後のいずれも可、return_lost＝到達後に限定するよう値postを直し、oracleを設計側へ揃えた。あわせてvariant名の付け替え、失敗保持・観測fieldの関係、origin leafが照合する保持field（executor closure・tuple・cleanup record・anchorのslot参照）の改ざんを拒否する対照を加え、構文正常変異を14件から28件へ増やした。
 
 draft-0.4のレビュー修正：レビュー修正の基準HEADは`6c798d9`。§10に受渡し設計への参照節を加えた一方、版はdraft-0.3のままだった。版を更新し、参照元のJoinRuntime設計・seed設計・構築Join設計・受渡し設計の版参照を直した。内容・実装・試験は変更していない。
 
@@ -149,6 +151,8 @@ joinExecutionOriginLeafは同roleのshell／identity／pin／slotとcanonical al
 joinExecutionValuePostはcreator内部のdata投影を対象とする。raw JSON／外部object用の入口ではなく、入力の型やboolean一致からauthorityを発行しない。値と期待aliasの同参照、constructor claim／entry／returnedとcandidateHeldの関係、runのrejectのみ→pair・cleanupのreject=null、保持位置とfaultAtの独立、失敗時unconfirmedを検査する。返却値はunknownのままなので、null／undefined／0を取得済みとして保持でき、未取得nullとcandidateHeldで区別する。値postは一切の入力・元slot・診断を書き換えない。
 
 観測部分の値postは、未試行・registering・returned／threw／refused、ack未取得／喪失・候補保持・verifiedの関係を区別する。work・registrationWork・ackの同参照と有限値を比較するだけで、safe_same_work／verifiedという値をnative brand確認や登録実績へ昇格しない。PP06のnative安全検査、PP07の正規reaction入場とwriter、PP08の実drain／終端は未実装である。取得prefix・返却・未公開checked・失敗保持の値検査を、それらの実行成功とは扱わない。
+
+登録状態と到達の関係は[未使用seed設計](BEST_PRACTICE_NATIVE_DIAGNOSTIC_JRB_EXECUTION_SEED_CONTRACT_DESIGN.md)EF06・ET01・ET02に従う。refusedは最終post拒否で到達false、returnedは到達true、registering（busy中）とthrewは到達前後のどちらも保持し得る。ackState=return_lostは到達後だけで、未到達のrefused／threw／registeringには置けない。値postはこの関係だけを確認し、実登録・ack実体の確認ではない。
 
 既存requestJoinExecutionと3closureの本文は固定拒否のまま、新2検査への製品callerは0である。正常なchecked投影を検査しても元shellのclaimはfalse、candidate等はnullのままで、request2経路とclosure6経路は従前の最初のfault／同期失効を保持する。新export・friend・raw mode・fake event writer・fixture台帳の共有は追加しない。
 
