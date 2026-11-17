@@ -1,9 +1,9 @@
 # JR-B 固定closure・tupleと段階別post・失敗後writer／終端責務の接続差分設計
 
-Version: native-diagnostic-jrb-handlers-post-terminal-draft-0.1 / Date: 2026-11-17。
-Status: 詳細設計のみ。基準HEADは`15e360d`。[先行shell・pin設計](BEST_PRACTICE_NATIVE_DIAGNOSTIC_JRB_RUNTIME_PIN_DELTA_DESIGN.md)RH07〜09・RS05〜10と[JoinRuntime設計](BEST_PRACTICE_NATIVE_DIAGNOSTIC_JOIN_RUNTIME_GENERATION_DESIGN.md)§4〜8・10への差分である。先行shell・非実行pinと準備後postの試験補強は既存実装。以下のclosure／tuple生成、段階別writer、Promise生成・観測・失敗終端は未実装である。
+Version: native-diagnostic-jrb-handlers-post-terminal-draft-0.2 / Date: 2026-11-17。
+Status: §11のclosure／tuple先行準備・段階別postだけを合成依存限定で実装。設計基準HEADは`15e360d`、限定実装の基準HEADは`b167d09`。[先行shell・pin設計](BEST_PRACTICE_NATIVE_DIAGNOSTIC_JRB_RUNTIME_PIN_DELTA_DESIGN.md)RH07〜09・RS05〜10と[JoinRuntime設計](BEST_PRACTICE_NATIVE_DIAGNOSTIC_JOIN_RUNTIME_GENERATION_DESIGN.md)§4〜8・10への差分である。closure呼出し、HP04以降のPromise生成・観測・失敗終端は未実装・未接続である。
 
-正式発行口／新LM03／C実行入口／body起動閉鎖、全体受付無効、通常経路未切替、Unknown、VM／監視／telemetry調査保留、LOAD6／LOAD7選択・AP01〜06未承認を維持する。今回の変更は本書と親2文書のMDだけである。実装・製品moduleのimport／実行・closure／Promise生成・観測登録・試験再実行・build／pack・private公開・dispatch・実接続・実通信・実機操作・設定変更・コミット・Pushは行わない。
+正式発行口／新LM03／C実行入口／body起動閉鎖、全体受付無効、通常経路未切替、Unknown、VM／監視／telemetry調査保留、LOAD6／LOAD7選択・AP01〜06未承認を維持する。draft-0.1はMDだけの設計だった。draft-0.2の限定実装・合成検証は§11と検証記録へ分離し、closure呼出し・Promise生成・観測登録・private公開・dispatch・実接続・実通信・実機操作・設定変更・コミット・Pushは行わない。
 
 ## 1 現行と差分、先行実装の上限
 
@@ -15,7 +15,7 @@ Status: 詳細設計のみ。基準HEADは`15e360d`。[先行shell・pin設計](
 
 ## 2 内部型・固定slotと同owner結合
 
-以下は未実装の内部field契約である。同role pendingだけを主保持先とし、既存canonical shell／identity／pinのaliasを再利用する。旧anchor直下pending、空seed、run開始claim、primary／revoked／sealed／currentと予算履歴に第二writerを作らない。
+以下は全工程の内部field契約である。限定実装はHC01〜05とHP01〜03の準備境界だけで、HC06〜08の実行履歴は未接続。同role pendingだけを主保持先とし、既存canonical shell／identity／pinのaliasを再利用する。旧anchor直下pending、空seed、run開始claim、primary／revoked／sealed／currentと予算履歴に第二writerを作らない。
 
 | ID | 固定対象 | 型・生成元・照合 |
 |---|---|---|
@@ -163,8 +163,20 @@ roleごとに準備する関数objectは3、tupleは1で、再試行列を作ら
 
 JR-Cのprivate公開・最終post、正規published cleanup合流、legacy work統一・dispatch／entry・正常finish、新LM03・friend撤去・AP承認、外側custody／最終discardは別工程である。今回のMD作成はそれらの承認ではない。
 
-## 10 今回の静的確認と未実施範囲
+## 10 draft-0.1作成時の静的確認と未実施範囲
 
 基準HEADのliteral閉鎖field、preparedShellMatched／shellPreparationLive／failPreparedJoin、既存notifyStop・snapshot／execute／closeと、準備後post補強の記録を読み、現行実装と将来の契約を分けた。HC／HS／HP／HW／HT／HF／HXは設計IDであり、試験成功件数ではない。
 
-今回実行するのは文書link／表／IDとsource構文・変更対象の静的確認だけである。製品moduleのimport・closure／Promise生成・試験再実行・build／packは行わない。変更は本書と親2文書の参照・工程境界の明記のみとし、ソース・試験・CHANGELOG・依存・設定を変更せず、コミット・Pushも行わない。
+draft-0.1作成時は文書link／表／IDとsource構文・変更対象だけを静的確認した。製品moduleのimport・closure／Promise生成・試験再実行・build／packは行わなかった。設計作成時の変更は本書と親2文書だけであり、以下の限定実装・検証とは区別する。
+
+## 11 closure／tuple準備・段階別postの限定実装
+
+[旧root](../src/review/abort-scope-evidence-native-diagnostic.ts)へ、準備claim／busy／状態／保持detail／最初のfaultをshell割当て時に先行配置した。閉鎖したprepareJoinHandlersは同shell／identity／pinを実参照で照合し、既存全null postが成立してからclaimを消費する。executor→fulfilled→rejected→tuple保持→shallow freezeの固定順で、各保持後・freeze後・完了直前に同owner・停止・同record・live pinと段階別fieldを検査する。
+
+3関数とtupleのcanonical aliasは同割当てから記録する参照であり、mutable fieldを期待値へ再採取しない。tupleは同2関数の順序・own data 0／1・length=2・own key数・正規prototype・freeze段階を検査し、getterを実行しない。preparedShellMatchedの全null契約を緩めず、preparedHandlersMatchedを完了専用に分けた。完了直前post後の原始同期更新でdetail=complete／state=ready／readiness=handlers_ready／position=handlersとし、finallyはその試行が獲得したbusyだけを解除する。
+
+失敗時はslot.faultAt=handlersと細分化した最初のhandlersFaultを別に保持し、未完了ならposition=pinを維持する。取得済みclosure／tuple・identity／pinをclearせず、重複・再入・条件復旧後も再準備しない。run停止と停止下の同record cleanupのread-only条件を区別し、先行primaryを上書きせず同期revokedへ合流する。不正entryで未消費claimが残ってもfailed_retainedを解除しない。
+
+closure本体は同shell／identity／pin／slot／roleを捕捉した固定拒否だけで、executor入場・settler捕捉・callback観測writerではない。今回のsource／compiled試験でもclosureを呼び出さず、構文監査の負対照としてのみ禁止callを検査する。新準備・完了checkerを旧execute／cleanから呼ばない。Promise／candidate／work／settler／観測claim／ack・通知／copy・dispatch／entry・publishedは未使用literalを維持する。
+
+[source試験](../tests/review/native-join-handlers.test.ts)・[独立oracle](../tests/review/fixtures/native-join-handlers-model.mjs)・[固定dist検査](../tests/review/fixtures/compiled-native-join-handlers.mjs)は、同owner、partial prefix、field別post、停止／再入、tuple不正と構文正常17変異を確認する。旧pinのsemantic負対照1行だけを、null専用から新しいundefined-return handler型に対する不正戻り値へ更新し、旧8負対照の件数・行別診断と他の期待値は維持する。結果・初回失敗・梱包の環境制約は[検証記録](E2E_BEST_PRACTICE_NATIVE_JOIN_HANDLERS_PREP_2026-11-17.md)へ記す。全体回帰、closure実行、HP04以降とHW／HTの本接続は未実施である。

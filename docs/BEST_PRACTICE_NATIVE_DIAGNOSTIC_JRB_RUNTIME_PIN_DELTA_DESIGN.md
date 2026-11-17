@@ -1,7 +1,7 @@
 # JR-B 先行runtime・失敗保持先とPromise固定pin・観測前提の接続差分設計
 
-Version: native-diagnostic-jrb-runtime-pin-delta-draft-0.5 / Date: 2026-11-17。
-Status: 先行shell・固定slot・pinの非実行検査と失敗保持だけを合成依存に限定して実装（§12）。設計基準HEADは`2db2da5`、限定実装の基準HEADは`a3bb804`。[JoinRuntime設計](BEST_PRACTICE_NATIVE_DIAGNOSTIC_JOIN_RUNTIME_GENERATION_DESIGN.md)§2〜6・8・10・12と[構築・Join設計](BEST_PRACTICE_NATIVE_DIAGNOSTIC_CONSTRUCTION_JOIN_DELTA_DESIGN.md)§2・5〜7への差分である。JR-Aの型・claim・資格検査と同期失効の補強を維持し、Promise／handler生成・観測・失敗終端は未実装・未接続のままである。
+Version: native-diagnostic-jrb-runtime-pin-delta-draft-0.6 / Date: 2026-11-17。
+Status: 先行shell・固定slot・pinの非実行検査と失敗保持（§12）、closure／tuple先行準備・段階別post（§13）だけを合成依存に限定して実装。設計基準HEADは`2db2da5`、shell／pin限定実装の基準HEADは`a3bb804`。[JoinRuntime設計](BEST_PRACTICE_NATIVE_DIAGNOSTIC_JOIN_RUNTIME_GENERATION_DESIGN.md)§2〜6・8・10・12と[構築・Join設計](BEST_PRACTICE_NATIVE_DIAGNOSTIC_CONSTRUCTION_JOIN_DELTA_DESIGN.md)§2・5〜7への差分である。JR-Aの型・claim・資格検査と同期失効の補強を維持し、closure呼出し・Promise生成・観測・失敗終端は未実装・未接続のままである。
 
 draft-0.4のレビュー修正：レビュー修正の基準HEADは`5436ae0`。§12のpostは準備後もowner・停止・同record・pinのlive条件を再確認するが、対照は準備前のpin変更とshell／identity／pinの差替えだけだった。そのため、post側のpin live再確認、sealed確認（2か所）、cleanupのrecord／context照合（3か所）、module基準のready判定とconstructor一致、pin失敗位置`pinFault`の記録を外す変異が、source・compiledの両対照を通過した。準備後のsealed・run停止・cleanup record差替え・then／species変更の7対照（停止下の同record cleanupは許可を維持）、基準捕捉前にconstructor／speciesを変えた合成realmの2対照、drift時の`pinFault`確認を追加し、該当6変異を構文正常な変異へ加えて23件とした（§12）。基準のthen一致は同時捕捉したpromiseThenとの比較で、捕捉前の改変では両者が一致するため等価変異として扱う。製品コードは変更していない。
 
@@ -193,4 +193,4 @@ run／cleanupのprivate準備だけがJR-A beginを一度呼ぶ。shell→cleanu
 
 ## 13 固定closure・tupleと段階別post／終端責務への差分
 
-[固定executor／観測closure・tupleと段階別post・失敗後writer／終端責務の接続差分設計draft-0.1](BEST_PRACTICE_NATIVE_DIAGNOSTIC_JRB_HANDLERS_POST_TERMINAL_DELTA_DESIGN.md)で、同ownerの3関数・tupleの先行保持、handlersとexecutorの位置、非返却の準備／入場／観測／drain／settle試行を対応付けた。現行の全null postは維持し、生成資格と失敗・sealed後のprivate観測writerを分ける。通知の共有履歴、copy／settleの成否と実終端・未確認保持を別に扱う。MDだけの更新で、closure生成・Promise生成・観測・終端・private公開・dispatchは接続しない。
+[固定executor／観測closure・tupleと段階別post・失敗後writer／終端責務の接続差分設計draft-0.2](BEST_PRACTICE_NATIVE_DIAGNOSTIC_JRB_HANDLERS_POST_TERMINAL_DELTA_DESIGN.md)で、同ownerの3関数・tupleの先行保持、handlersとexecutorの位置、非返却の準備／入場／観測／drain／settle試行を対応付けた。同書§11で準備だけを限定実装し、現行全null postと途中／完了postを分離、部分参照・最初のfault・一度限りの試行を保持する。closure呼出し・Promise生成・観測・通知／copy／終端・private公開・dispatchは接続しない。後半の失敗／sealed後writerと実終端の契約は未実装のままである。

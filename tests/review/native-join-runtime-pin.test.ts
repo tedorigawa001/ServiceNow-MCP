@@ -34,7 +34,7 @@ it('keeps role identity, readonly pins and literal closed fields strict at the s
   const positive=`function positive(s:JoinRuntimeShell<'run'>){const work:null=s.work;const off:false=s.observerClaim;void work;void off;}\n`;
   const bad=["function bad(s:JoinRuntimeShell<'cleanup'>){const r:JoinRuntimeShell<'run'>=s;}",
     "function bad(s:JoinRuntimeShell<'run'>){s.work=Promise.resolve();}",
-    "function bad(s:JoinRuntimeShell<'run'>){s.executorHandler=()=>{};}",
+    "function bad(s:JoinRuntimeShell<'run'>){s.executorHandler=()=>1;}",
     "function bad(s:JoinRuntimeShell<'run'>){s.observerClaim=true;}",
     "function bad(s:JoinRuntimeShell<'run'>){s.dispatchStarted=true;}",
     "function bad(p:OwnerPromisePin<'run'>){p.runtime=null!;}",

@@ -25,7 +25,12 @@ type NativeWorkflow = Readonly<{ execute(response: unknown, descriptor: unknown)
 type NativeFacade = Readonly<Omit<NativeWorkflow, 'stop'> & { stop(): void }>;
 type JoinRole = 'run' | 'cleanup';
 type JoinGenerationFault = 'invalid_state' | 'evidence_binding_mismatch' | 'internal_review_error';
-type JoinPreparationPosition = 'empty' | 'claimed' | 'runtime' | 'context' | 'identity' | 'pin';
+type JoinPreparationPosition = 'empty' | 'claimed' | 'runtime' | 'context' | 'identity' | 'pin' | 'handlers';
+type JoinHandlersDetail = 'none' | 'executor_held' | 'fulfilled_held' | 'three_held' | 'tuple_held' | 'tuple_frozen' | 'complete';
+type JoinHandlersFault = 'entry' | 'executor_hold' | 'fulfilled_hold' | 'rejected_hold' | 'tuple_hold' | 'tuple_freeze' | 'handlers_post' | 'closed_call';
+type JoinExecutorHandler = (resolve: unknown, reject: unknown) => undefined;
+type JoinObserverHandler = (value: unknown) => undefined;
+type JoinObserverArgs = readonly [JoinObserverHandler, JoinObserverHandler];
 type JoinShellContext = Readonly<{ record: object; anchor: object }>;
 type JoinShellIdentity<K extends JoinRole> = Readonly<{ recovery: RecoveryAnchor; root: object; seed: object; kind: K;
     context: K extends 'run' ? null : JoinShellContext }>;
@@ -34,10 +39,13 @@ type OwnerPromisePin<K extends JoinRole> = Readonly<{ runtime: JoinRuntimeShell<
 type JoinRuntimeShell<K extends JoinRole> = {
     readonly recovery: RecoveryAnchor; readonly root: object; readonly seed: object; readonly kind: K;
     readonly contextRecord: object | null; readonly contextAnchor: object | null;
-    readiness: 'shell' | 'identity_ready' | 'pin_ready' | 'failed_retained';
+    readiness: 'shell' | 'identity_ready' | 'pin_ready' | 'handlers_ready' | 'failed_retained';
     context: JoinShellContext | null; identity: JoinShellIdentity<K> | null; pin: OwnerPromisePin<K> | null;
     pinState: 'unprepared' | 'preparing' | 'ready' | 'rejected'; pinFault: JoinPreparationPosition | null;
-    executor: 'not_entered'; executorHandler: null; fulfilledHandler: null; rejectedHandler: null; observerArgs: null;
+    handlersClaim: boolean; handlersBusy: boolean; handlersState: 'unstarted' | 'preparing' | 'ready' | 'failed_retained';
+    handlersDetail: JoinHandlersDetail; handlersFault: JoinHandlersFault | null;
+    executor: 'not_entered'; executorHandler: JoinExecutorHandler | null; fulfilledHandler: JoinObserverHandler | null;
+    rejectedHandler: JoinObserverHandler | null; observerArgs: JoinObserverArgs | null;
     candidate: null; work: null; resolve: null; reject: null;
     observerClaim: false; observerState: 'unstarted'; observerBusy: false; observed: 'unobserved'; callbackFault: null;
     observerAckCandidate: null; observerAck: null; settleClaim: false; settleState: 'unattempted'; terminal: 'unobserved';
@@ -46,7 +54,7 @@ type JoinRuntimeShell<K extends JoinRole> = {
 type RoleGenerationSlot<K extends JoinRole> = { readonly role: K; published: null; faultAt: JoinPreparationPosition | null } & (
     | { phase: 'empty'; claimed: false; position: 'empty'; fault: null; pending: null }
     | { phase: 'claimed_unheld'; claimed: true; position: 'claimed'; fault: null; pending: null }
-    | { phase: 'building'; claimed: true; position: 'runtime' | 'context' | 'identity' | 'pin'; fault: null; pending: JoinRuntimeShell<K> }
+    | { phase: 'building'; claimed: true; position: 'runtime' | 'context' | 'identity' | 'pin' | 'handlers'; fault: null; pending: JoinRuntimeShell<K> }
     | { phase: 'failed_retained'; claimed: boolean; position: JoinPreparationPosition; fault: JoinGenerationFault; pending: JoinRuntimeShell<K> | null }
 );
 type RecoveryAnchor = { state?: NativeState; writer?: ReturnType<NativeState['owner']['writers']>; preparation?: object;
@@ -61,7 +69,7 @@ const P = Promise, promiseThen = P.prototype.then, promiseRace = P.race, promise
 // JR-B-BASE-BEGIN: module-private reflection baseline, no Promise construction.
 const jbGlobal = globalThis, jbObject = Object, jbGet = Object.getOwnPropertyDescriptor, jbProto = Object.getPrototypeOf, jbOwn = Object.hasOwn,
     jbFreeze = Object.freeze, jbFrozen = Object.isFrozen, jbProxy = types.isProxy, jbIsPromise = types.isPromise,
-    jbApply = Reflect.apply, jbSpecies = Symbol.species;
+    jbApply = Reflect.apply, jbSpecies = Symbol.species, jbKeys = Reflect.ownKeys, jbArrayProto = Array.prototype;
 const joinPromiseBasis = (() => {
     const pd = jbGet(P, 'prototype'), proto: unknown = pd && 'value' in pd ? pd.value : null;
     const usable = typeof P === 'function' && !jbProxy(P) && !!proto && typeof proto === 'object' && !jbProxy(proto);
@@ -357,6 +365,7 @@ function allocateNativeDiagnosticConstruction(raw: NativeInput, fault?: NativeFa
     function allocateJoinShell<K extends JoinRole>(kind: K, seed: object, record: object | null, anchor: object | null): JoinRuntimeShell<K> {
         return { recovery: joinRecovery, root: controlRoot, seed, kind, contextRecord: record, contextAnchor: anchor,
             readiness: 'shell', context: null, identity: null, pin: null, pinState: 'unprepared', pinFault: null,
+            handlersClaim: false, handlersBusy: false, handlersState: 'unstarted', handlersDetail: 'none', handlersFault: null,
             executor: 'not_entered', executorHandler: null, fulfilledHandler: null, rejectedHandler: null, observerArgs: null,
             candidate: null, work: null, resolve: null, reject: null, observerClaim: false, observerState: 'unstarted', observerBusy: false,
             observed: 'unobserved', callbackFault: null, observerAckCandidate: null, observerAck: null, settleClaim: false,
@@ -384,6 +393,7 @@ function allocateNativeDiagnosticConstruction(raw: NativeInput, fault?: NativeFa
             identity.recovery === joinRecovery && identity.root === controlRoot && identity.seed === s.seed && identity.kind === role &&
             identity.context === s.context && jbFrozen(identity) && jbFrozen(pin) && pin.runtime === s && pin.identity === identity &&
             pin.basis === joinPromiseBasis && s.readiness === 'pin_ready' && s.pinState === 'ready' && s.pinFault === null &&
+            s.handlersClaim === false && s.handlersBusy === false && s.handlersState === 'unstarted' && s.handlersDetail === 'none' && s.handlersFault === null &&
             (role === 'run' ? s.context === null && s.contextRecord === null && s.contextAnchor === null :
                 !!current && s.contextRecord === current && s.contextAnchor === current.anchor && current.anchor.binding === binding &&
                 !!s.context && jbFrozen(s.context) && s.context.record === current && s.context.anchor === current.anchor) &&
@@ -450,6 +460,108 @@ function allocateNativeDiagnosticConstruction(raw: NativeInput, fault?: NativeFa
     }
     void prepareRunShell; void prepareCleanupShell;
     // JR-B-PREP-END
+    // JR-B-HANDLERS-BEGIN: preparation only; closures stay uncalled.
+    let runExecutorExpected: JoinExecutorHandler | null = null, cleanupExecutorExpected: JoinExecutorHandler | null = null;
+    let runFulfilledExpected: JoinObserverHandler | null = null, cleanupFulfilledExpected: JoinObserverHandler | null = null;
+    let runRejectedExpected: JoinObserverHandler | null = null, cleanupRejectedExpected: JoinObserverHandler | null = null;
+    let runArgsExpected: JoinObserverArgs | null = null, cleanupArgsExpected: JoinObserverArgs | null = null;
+    function failJoinHandlers(role: JoinRole, at: JoinHandlersFault, code: JoinGenerationFault): false {
+        const shell = role === 'run' ? runShellExpected : cleanupShellExpected, slot = role === 'run' ? runGeneration : cleanupGeneration;
+        if (shell) { shell.handlersFault ??= at; shell.handlersState = 'failed_retained'; }
+        return failPreparedJoin(slot, 'handlers', code);
+    }
+    function handlerOriginMatched(rawShell: unknown, rawIdentity: unknown, rawPin: unknown, role: JoinRole): boolean {
+        const shell = role === 'run' ? runShellExpected : cleanupShellExpected,
+            identity = role === 'run' ? runIdentityExpected : cleanupIdentityExpected, pin = role === 'run' ? runPinExpected : cleanupPinExpected;
+        return !!shell && rawShell === shell && !!identity && rawIdentity === identity && !!pin && rawPin === pin &&
+            shell.identity === identity && shell.pin === pin && identity.recovery === joinRecovery && identity.root === controlRoot &&
+            identity.seed === shell.seed && identity.kind === role && identity.context === shell.context && jbFrozen(identity) &&
+            pin.runtime === shell && pin.identity === identity && pin.basis === joinPromiseBasis && jbFrozen(pin);
+    }
+    function handlerStageMatched(rawShell: unknown, rawIdentity: unknown, rawPin: unknown, role: JoinRole, detail: JoinHandlersDetail): boolean {
+        if (!handlerOriginMatched(rawShell, rawIdentity, rawPin, role)) return false;
+        const shell = (role === 'run' ? runShellExpected : cleanupShellExpected)!, slot = role === 'run' ? runGeneration : cleanupGeneration,
+            executor = role === 'run' ? runExecutorExpected : cleanupExecutorExpected,
+            fulfilled = role === 'run' ? runFulfilledExpected : cleanupFulfilledExpected,
+            rejected = role === 'run' ? runRejectedExpected : cleanupRejectedExpected, args = role === 'run' ? runArgsExpected : cleanupArgsExpected;
+        if (!shellPreparationLive(shell) || shell.kind !== role || shell.pinState !== 'ready' || shell.pinFault !== null ||
+            shell.handlersClaim !== true || shell.handlersFault !== null || shell.handlersDetail !== detail || !joinPromisePinLive()) return false;
+        if (detail === 'complete' ? shell.handlersBusy !== false || shell.handlersState !== 'ready' || shell.readiness !== 'handlers_ready' || slot.position !== 'handlers' :
+            shell.handlersBusy !== true || shell.handlersState !== 'preparing' || shell.readiness !== 'pin_ready' || slot.position !== 'pin') return false;
+        if (role === 'cleanup' && (!current || !shell.context || !jbFrozen(shell.context) || current !== shell.context.record || shell.context.anchor !== current.anchor)) return false;
+        const hasExecutor = detail !== 'none', hasFulfilled = hasExecutor && detail !== 'executor_held',
+            hasRejected = hasFulfilled && detail !== 'fulfilled_held', hasArgs = hasRejected && detail !== 'three_held';
+        if (shell.executorHandler !== executor || shell.fulfilledHandler !== fulfilled || shell.rejectedHandler !== rejected || shell.observerArgs !== args ||
+            (hasExecutor ? typeof executor !== 'function' : executor !== null) || (hasFulfilled ? typeof fulfilled !== 'function' : fulfilled !== null) ||
+            (hasRejected ? typeof rejected !== 'function' : rejected !== null) || (hasArgs ? args === null : args !== null) ||
+            hasFulfilled && executor === fulfilled || hasRejected && (executor === rejected || fulfilled === rejected)) return false;
+        if (hasArgs) {
+            if (!args || jbProxy(args) || jbProto(args) !== jbArrayProto || jbKeys(args).length !== 3) return false;
+            const first = jbGet(args, '0'), second = jbGet(args, '1'), length = jbGet(args, 'length');
+            if (!first || !('value' in first) || first.value !== fulfilled || !second || !('value' in second) || second.value !== rejected ||
+                !length || !('value' in length) || length.value !== 2 || (detail === 'tuple_held' ? jbFrozen(args) : !jbFrozen(args))) return false;
+        }
+        return shell.executor === 'not_entered' && shell.candidate === null && shell.work === null && shell.resolve === null && shell.reject === null &&
+            shell.observerClaim === false && shell.observerState === 'unstarted' && shell.observerBusy === false && shell.observed === 'unobserved' &&
+            shell.callbackFault === null && shell.observerAckCandidate === null && shell.observerAck === null && shell.settleClaim === false &&
+            shell.settleState === 'unattempted' && shell.terminal === 'unobserved' && shell.notifyAttempted === false && shell.copyAttempted === false &&
+            shell.dispatchStarted === false && shell.entered === false;
+    }
+    function preparedHandlersMatched(shell: unknown, identity: unknown, pin: unknown, role: JoinRole): boolean {
+        return handlerStageMatched(shell, identity, pin, role, 'complete');
+    }
+    function rejectClosedJoinHandler(shell: JoinRuntimeShell<JoinRole>, identity: JoinShellIdentity<JoinRole>, pin: OwnerPromisePin<JoinRole>,
+        slot: RoleGenerationSlot<JoinRole>, role: JoinRole): void {
+        const ownSlot = role === 'run' ? runGeneration : cleanupGeneration;
+        failJoinHandlers(role, 'closed_call', slot === ownSlot && handlerOriginMatched(shell, identity, pin, role) ? 'invalid_state' : 'evidence_binding_mismatch');
+    }
+    function prepareJoinHandlers(rawShell: unknown, rawIdentity: unknown, rawPin: unknown, role: JoinRole): boolean {
+        let at: JoinHandlersFault = 'entry';
+        let ownsBusy = false;
+        const shell = role === 'run' ? runShellExpected : cleanupShellExpected, slot = role === 'run' ? runGeneration : cleanupGeneration;
+        try {
+            if (!handlerOriginMatched(rawShell, rawIdentity, rawPin, role)) return failJoinHandlers(role, at, 'evidence_binding_mismatch');
+            if (!preparedShellMatched(rawShell, rawIdentity, rawPin, role)) return failJoinHandlers(role, at, 'invalid_state');
+            const s = shell!, identity = s.identity!, pin = s.pin!;
+            s.handlersClaim = true; s.handlersBusy = true; s.handlersState = 'preparing';
+            ownsBusy = true;
+            if (!handlerStageMatched(s, identity, pin, role, 'none')) return failJoinHandlers(role, at, 'invalid_state');
+            at = 'executor_hold';
+            const executor = s.executorHandler = (_resolve: unknown, _reject: unknown): undefined => {
+                rejectClosedJoinHandler(s, identity, pin, slot, role); return undefined;
+            };
+            if (role === 'run') runExecutorExpected = executor; else cleanupExecutorExpected = executor;
+            s.handlersDetail = 'executor_held';
+            if (!handlerStageMatched(s, identity, pin, role, 'executor_held')) return failJoinHandlers(role, at, 'invalid_state');
+            at = 'fulfilled_hold';
+            const fulfilled = s.fulfilledHandler = (_value: unknown): undefined => {
+                rejectClosedJoinHandler(s, identity, pin, slot, role); return undefined;
+            };
+            if (role === 'run') runFulfilledExpected = fulfilled; else cleanupFulfilledExpected = fulfilled;
+            s.handlersDetail = 'fulfilled_held';
+            if (!handlerStageMatched(s, identity, pin, role, 'fulfilled_held')) return failJoinHandlers(role, at, 'invalid_state');
+            at = 'rejected_hold';
+            const rejected = s.rejectedHandler = (_reason: unknown): undefined => {
+                rejectClosedJoinHandler(s, identity, pin, slot, role); return undefined;
+            };
+            if (role === 'run') runRejectedExpected = rejected; else cleanupRejectedExpected = rejected;
+            s.handlersDetail = 'three_held';
+            if (!handlerStageMatched(s, identity, pin, role, 'three_held')) return failJoinHandlers(role, at, 'invalid_state');
+            at = 'tuple_hold'; const args = s.observerArgs = [fulfilled, rejected] as const;
+            if (role === 'run') runArgsExpected = args; else cleanupArgsExpected = args;
+            s.handlersDetail = 'tuple_held';
+            if (!handlerStageMatched(s, identity, pin, role, 'tuple_held')) return failJoinHandlers(role, at, 'invalid_state');
+            at = 'tuple_freeze'; jbFreeze(args); s.handlersDetail = 'tuple_frozen';
+            if (!handlerStageMatched(s, identity, pin, role, 'tuple_frozen')) return failJoinHandlers(role, at, 'invalid_state');
+            at = 'handlers_post';
+            if (!handlerStageMatched(s, identity, pin, role, 'tuple_frozen')) return failJoinHandlers(role, at, 'invalid_state');
+            s.handlersDetail = 'complete'; s.handlersState = 'ready'; s.readiness = 'handlers_ready'; slot.position = 'handlers';
+            return true;
+        } catch { return failJoinHandlers(role, at, 'internal_review_error'); }
+        finally { if (ownsBusy && shell) shell.handlersBusy = false; }
+    }
+    void prepareJoinHandlers; void preparedHandlersMatched;
+    // JR-B-HANDLERS-END
     function stop(code: Code = 'cancelled', stage: Stage = 'stop') {
         if (sealed) return;
         primary ??= code; upper.stop(primary, stage);
