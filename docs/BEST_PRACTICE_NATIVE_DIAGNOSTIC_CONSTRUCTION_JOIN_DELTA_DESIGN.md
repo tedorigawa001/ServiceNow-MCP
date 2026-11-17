@@ -174,7 +174,7 @@ CP00〜05の先行保持・保護区間・failure copy・失敗専用closeを§1
 
 [JoinRuntime段階型・生成資格とPromise保持失敗境界の詳細設計draft-0.4](BEST_PRACTICE_NATIVE_DIAGNOSTIC_JOIN_RUNTIME_GENERATION_DESIGN.md)で、構築readyとrun／cleanupの生成資格を分け、同role claim・半捕捉prefix・同candidate／work／settler・private公開確定点を具体化した。同書§12のJR-Aでprivate型・先行slot・claim・資格検査だけを合成依存に限定して実装した。CP構築failure copyのresource取得後への流用を禁止し、新JoinRuntime実体／Promise生成・公開・dispatchと旧work採用は未実装・未接続、補強試験は維持する。
 
-[JR-Bの先行runtime・失敗保持先と固定pin・観測前提の接続差分設計draft-0.1](BEST_PRACTICE_NATIVE_DIAGNOSTIC_JRB_RUNTIME_PIN_DELTA_DESIGN.md)で、同anchorのRoleGenerationSlot.pendingを唯一の主保持先に固定し、旧anchor直下pendingの第二writer化を禁止した。shellをcontext／identity／pinより先に保持し、同realm基準とowner結合・生成／観測の別資格・失敗prefixと未確認ackを具体化する。今回はMDのみで、Promise生成・private公開・dispatchと旧work採用は接続しない。
+[JR-Bの先行runtime・失敗保持先と固定pin・観測前提の接続差分設計draft-0.2](BEST_PRACTICE_NATIVE_DIAGNOSTIC_JRB_RUNTIME_PIN_DELTA_DESIGN.md)で、同anchorのRoleGenerationSlot.pendingを唯一の主保持先に固定し、旧anchor直下pendingの第二writer化を禁止した。shellをcontext／identity／pinより先に保持し、同realm基準とowner結合・生成／観測の別資格・失敗prefixと未確認ackを具体化する。今回はMDのみで、Promise生成・private公開・dispatchと旧work採用は接続しない。
 
 active resourceとの全結合、RetainedDuty・外側custody／最終discard、新LM03、旧UN62移行、専用build／実行／stdio終端、friend撤去・AP承認は別gateに残る。正常経路の切替や正式発行を、このMDの作成で承認したことにはしない。
 

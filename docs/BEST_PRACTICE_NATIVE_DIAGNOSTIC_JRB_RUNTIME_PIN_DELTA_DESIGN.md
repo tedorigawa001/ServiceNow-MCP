@@ -1,7 +1,9 @@
 # JR-B 先行runtime・失敗保持先とPromise固定pin・観測前提の接続差分設計
 
-Version: native-diagnostic-jrb-runtime-pin-delta-draft-0.1 / Date: 2026-11-17。
+Version: native-diagnostic-jrb-runtime-pin-delta-draft-0.2 / Date: 2026-11-17。
 Status: 詳細設計のみ。基準HEADは`2db2da5`。[JoinRuntime設計](BEST_PRACTICE_NATIVE_DIAGNOSTIC_JOIN_RUNTIME_GENERATION_DESIGN.md)§2〜6・8・10・12と[構築・Join設計](BEST_PRACTICE_NATIVE_DIAGNOSTIC_CONSTRUCTION_JOIN_DELTA_DESIGN.md)§2・5〜7への差分である。JR-Aの型・claim・資格検査と同期失効の試験補強は既存実装であり、本書のruntime実体・pin・観測・失敗終端は未実装である。
+
+draft-0.2のレビュー修正：レビュー修正の基準HEADは`a98d255`。§2の将来位置の列挙はpin→handlers→executorの順だったが、RS05は固定executor closureを2観測closure・引数tupleより先に保持すると定め、JR-A既存の`executor` prefixは保持ではなくexecutor入場を指すため、executor closure保持の位置と「最後に保持した位置」の判定が曖昧だった。`handlers`をRS05の固定executor closure・2観測closure・引数tupleの保持完了、`executor`をRS06の入場履歴と書き分け、cleanup contextの保持はshell準備状態でなく位置`context`で表すことを明記した（§2・§5）。MDのみの修正で、ソース・試験・CHANGELOGは変更していない。
 
 正式発行口／新LM03／C実行入口／body起動は閉鎖、全体受付無効、通常経路未切替、Unknown、VM／監視／telemetry調査保留、LOAD6／LOAD7選択・AP01〜06未承認を維持する。今回は本書と親2文書だけを更新する。実装・製品moduleのimport／実行・Promise生成・観測登録・試験再実行・build／pack・private公開・dispatch・実接続・実通信・実機操作・設定変更・コミット・Pushは行わない。
 
@@ -36,7 +38,7 @@ JR-Aの[記録](E2E_BEST_PRACTICE_NATIVE_JOIN_GENERATION_JRA_2026-11-17.md)に�
 
 shell自体を割り当てられなければRH01のclaim・位置・faultだけが保持先である。shellを作れたらpendingへ直ちに保持し、identity／context／pinの生成やfreezeより前に到達可能にする。それ以降の失敗でshellをnullへ戻さない。部分生成物は同shellの固定fieldへ直接代入してから次操作へ進み、未保持pairやfreeze返却待ちの一時objectへauthorityを置かない。
 
-先行shellはidentity必須の既存JoinRuntime型とは別の初期variantとする。shellの準備状態はshell／identity_ready／pin_ready／failed_retainedの有限値で、identityとpinの不在をnullとして明示する。同じobjectを保持したまま実fieldを確認し、identityとpinが揃ってからbuilding variantへ進む。非null assertionや別完成objectへの差替えで準備を省略しない。RoleGenerationSlotの将来形はempty／claimed_unheld／building／checked／failed_retainedまでとし、published variantはJR-Bで作らない。位置には既存claimedに加えてruntime／context／identity／pin／handlers／executor／reject／resolve／candidate／checkedを固定列挙し、最後の保持位置と最初の失敗位置を混ぜない。これらは未実装の型差分である。
+先行shellはidentity必須の既存JoinRuntime型とは別の初期variantとする。shellの準備状態はshell／identity_ready／pin_ready／failed_retainedの有限値で、identityとpinの不在をnullとして明示する。同じobjectを保持したまま実fieldを確認し、identityとpinが揃ってからbuilding variantへ進む。非null assertionや別完成objectへの差替えで準備を省略しない。RoleGenerationSlotの将来形はempty／claimed_unheld／building／checked／failed_retainedまでとし、published variantはJR-Bで作らない。位置には既存claimedに加えてruntime／context／identity／pin／handlers／executor／reject／resolve／candidate／checkedを固定列挙し、最後の保持位置と最初の失敗位置を混ぜない。`handlers`はRS05の固定executor closure・2観測closure・引数tupleを全て直接保持・確認し終えた位置で、途中の失敗では直前の`pin`のまま最初のfault位置を`handlers`とする。`executor`はJR-Aの既存prefixと同じくRS06のexecutor入場を指し、executor closureの保持を意味しない。cleanup contextの保持は準備状態を増やさず位置`context`で表し、runでは`context`を経由しない。これらは未実装の型差分である。
 
 照合はcanonical anchor／root／seed／role slot／pending実参照が先で、その後に自分の固定dataだけを読む。同値copy・foreign・Proxyのpropertyを読まない。元EmptyJoinCell／ResourceDutyのnull fieldを実recordへ書き換えず、既存primary／revoked／sealed／started／current／sample履歴も増やさない。
 
@@ -80,7 +82,7 @@ pin readyは一回の生成が終了まで安全という免許ではない。co
 | RS02 | 初期JoinRuntimeShellを同role pendingへ直接保持 | 次のcontext／identity／pin割当て・freeze・constructorより前。保持不能ならRH01のclaimed_unheld失敗だけを残す |
 | RS03 | 同context候補→同identity候補を順に保持・確認・shallow freeze | 正規参照を失敗prefixにも残す。runはrecordなし、cleanupは同current／anchorのみ |
 | RS04 | 同OwnerPromisePin候補を保持し、PI01〜07を確認 | rejectedならPromise生成0。期待値の再採取・第二pin生成で救済しない |
-| RS05 | 固定executor・2観測closure・引数tupleを順に直接保持／確認→生成中専用post→同Pで一度だけconstructor呼出し | 保持前／途中の割当て失敗ならPromise生成0。tupleは保持後にfreezeする。claim済みstarted=trueを新規資格として再消費せず、run／cleanup別停止条件を維持。caller callback／await／sample／native 0 |
+| RS05 | 固定executor・2観測closure・引数tupleを順に直接保持／確認→生成中専用post→同Pで一度だけconstructor呼出し | 3関数とtupleの保持完了で位置`handlers`（executor closureの保持は位置`executor`ではない）。保持前／途中の割当て失敗ならPromise生成0。tupleは保持後にfreezeする。claim済みstarted=trueを新規資格として再消費せず、run／cleanup別停止条件を維持。caller callback／await／sample／native 0 |
 | RS06 | executor入場履歴→run reject／resolveまたはcleanup resolveを直接記録→退出履歴 | executorはqueue・正常settle・外部通知を呼ばない。半捕捉・二重入場・異常退出も保持し、正常退出と補完しない |
 | RS07 | constructor復帰参照をcandidateへ即保持→観測安全性を確認 | 既に失敗していても候補を消さない。失敗候補の観測資格と生成成功を分ける。constructor未復帰なら候補を推定しない |
 | RS08 | 安全な同candidateへのwork alias→一度の拒否観測登録とack保持 | workは同候補だけ。登録claim／busyを先に更新し、ack返却参照は検査より前に保持する |

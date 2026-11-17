@@ -191,4 +191,4 @@ cleanupは同closureのcurrent recordとそのanchor実参照、同binding、元
 
 ## 13 JR-Bの先行保持・固定pinへの差分
 
-[先行runtime・失敗保持先とPromise固定pin・観測前提の接続差分設計draft-0.1](BEST_PRACTICE_NATIVE_DIAGNOSTIC_JRB_RUNTIME_PIN_DELTA_DESIGN.md)で、同roleのpendingを唯一の主保持先とし、shell→context／identity→owner pin→同P生成→候補・観測の保持順を具体化した。module基準とowner pinを分け、生成成功と失敗候補の安全な拒否観測も区別する。先行primary／同期revoked・半捕捉prefix・ack未確認を保持し、CP構築回収へ戻さない。MDのみの追加であり、runtime実体・Promise生成・拒否観測・失敗終端・private公開・dispatchは未実装・未接続のままである。
+[先行runtime・失敗保持先とPromise固定pin・観測前提の接続差分設計draft-0.2](BEST_PRACTICE_NATIVE_DIAGNOSTIC_JRB_RUNTIME_PIN_DELTA_DESIGN.md)で、同roleのpendingを唯一の主保持先とし、shell→context／identity→owner pin→同P生成→候補・観測の保持順を具体化した。module基準とowner pinを分け、生成成功と失敗候補の安全な拒否観測も区別する。先行primary／同期revoked・半捕捉prefix・ack未確認を保持し、CP構築回収へ戻さない。MDのみの追加であり、runtime実体・Promise生成・拒否観測・失敗終端・private公開・dispatchは未実装・未接続のままである。
