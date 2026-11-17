@@ -1,6 +1,6 @@
 # JR-B先行shell・固定slot・非実行Promise pinの検証記録
 
-Date: 2026-11-17。基準HEAD: `a3bb804`。設計：[先行runtime・pin差分 draft-0.3](BEST_PRACTICE_NATIVE_DIAGNOSTIC_JRB_RUNTIME_PIN_DELTA_DESIGN.md#12-先行shell非実行pinの限定実装)。
+Date: 2026-11-17。基準HEAD: `a3bb804`。設計：[先行runtime・pin差分 draft-0.4](BEST_PRACTICE_NATIVE_DIAGNOSTIC_JRB_RUNTIME_PIN_DELTA_DESIGN.md#12-先行shell非実行pinの限定実装)。
 
 ## 限定実装
 
@@ -73,3 +73,17 @@ module捕捉前の改変、Promise／nativeの実backing容量、OOM／process�
 展開先で生成した固定distによる新旧compiled 9本がすべてexit 0・signalなしで終了した。外側60秒を延長せず、新MJS 2本の構文もexit 0。offline・ignore-scriptsの梱包dry-runは441file・436 runtime artifactで、旧root群・試験非同梱と新private継続／basis／modelのruntime参照0を確認した。旧14関数本文・4exportも基準HEADと一致した。
 
 再検証後の追加は本節だけで、ソース・試験入力・設定は変更しない。最終indexと展開先の一致・対象11file・文書link／表・差分空白を再確認する。全体回帰・実tarball展開は未実施のままであり、Promise生成・観測・private公開・dispatch未接続、各閉鎖条件・Unknown・調査保留を維持する。Pushは行わない。
+
+## レビュー修正 2026年11月17日
+
+レビュー修正の基準HEADは`5436ae0`。製品コードは変更せず、[独立oracle](../tests/review/fixtures/native-join-runtime-pin-model.mjs)・[source試験](../tests/review/native-join-runtime-pin.test.ts)・[固定dist検査](../tests/review/fixtures/compiled-native-join-runtime-pin.mjs)だけを補強した。
+
+| 区分 | 内容 |
+|---|---|
+| 指摘 | 準備後のpostはlive条件を再確認するが、対照は準備前の変更と参照差替えだけだった。post側のpin live再確認、sealed確認2か所、cleanup record／context照合3か所、基準ready判定、基準constructor一致、`pinFault`記録を外す変異が旧oracleを通過した |
+| 先行RED | 上記6変異を出力JSへ適用し、HEADの旧oracle（4検証関数）が6件とも通過することを確認した。新oracleでは6件とも拒否 |
+| 追加対照 | 準備後のpost変更7件：runのsealed・停止・then data化・species getter化、cleanupのrecord差替え・sealedを拒否し、停止下の同record cleanupは許可。getter hook 0、pending不変。基準捕捉前のconstructor／species改変2件はpinでinternal_review_error・failed_retained・`pinFault`=pin、生成0。pin変更16件でも`pinFault`を確認 |
+| 変異 | 構文正常な変異を17件から23件へ。基準then一致は同時捕捉のpromiseThenとの比較で、捕捉前改変では一致するため等価として加えない |
+| 件数 | 新source試験26件→34件（変異6件と対照2件）。関連source群は278件 |
+
+検証は作業tree上で行い、lint・型検査・build・package分類・全vitest・compiled-probe群・declared-actual・body-live migration／compare・native compiled 10本を実行した。結果はレビュー報告に記す。基準捕捉前の任意改変・module初期化不能はUnknownのまま、Promise生成・観測・private公開・dispatch未接続、各閉鎖条件・調査保留を維持する。Pushは行わない。

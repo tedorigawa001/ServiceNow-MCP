@@ -4,7 +4,7 @@ import {fileURLToPath} from 'node:url';
 import ts from 'typescript';
 import {createNativeDiagnosticState} from '../../src/review/abort-scope-evidence-native-diagnostic-state.js';
 import {deriveRuntimePin,faultRuntimePin,verifyRuntimePins,verifyRuntimeIdentity,verifyRuntimePrefixes,verifyRuntimeDrifts,
-  auditRuntimePreparation,runtimePinMutants,verifyRuntimeMutant,end} from './fixtures/native-join-runtime-pin-model.mjs';
+  verifyRuntimePost,verifyRuntimeBaseline,auditRuntimePreparation,runtimePinMutants,verifyRuntimeMutant,end} from './fixtures/native-join-runtime-pin-model.mjs';
 
 const source=()=>readFileSync(new URL('../../src/review/abort-scope-evidence-native-diagnostic.ts',import.meta.url),'utf8');
 let js:string|undefined;
@@ -61,6 +61,13 @@ it('retains every allocation/freeze prefix, first failure and the stopped run/cl
 });
 it('rejects all live descriptor/prototype changes without invoking getter hooks or re-pinning',()=>{
   expect(verifyRuntimeDrifts(emitted(),createNativeDiagnosticState)).toEqual({refusals:16,hooks:0});
+});
+
+it('rejects later sealing, stop, record replacement and pin drift at the post without hooks, keeping stopped cleanup read-only',()=>{
+  expect(verifyRuntimePost(emitted(),createNativeDiagnosticState)).toEqual({post:7,hooks:0});
+});
+it('stops at the pin when the module baseline was captured from an already altered realm',()=>{
+  expect(verifyRuntimeBaseline(emitted(),createNativeDiagnosticState)).toEqual({refusals:2,hooks:0});
 });
 
 it('stops at the retained identity on synchronous cancellation without allocating the pin or losing the prefix',()=>{

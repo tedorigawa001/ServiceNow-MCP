@@ -1,7 +1,9 @@
 # JR-B 先行runtime・失敗保持先とPromise固定pin・観測前提の接続差分設計
 
-Version: native-diagnostic-jrb-runtime-pin-delta-draft-0.3 / Date: 2026-11-17。
+Version: native-diagnostic-jrb-runtime-pin-delta-draft-0.4 / Date: 2026-11-17。
 Status: 先行shell・固定slot・pinの非実行検査と失敗保持だけを合成依存に限定して実装（§12）。設計基準HEADは`2db2da5`、限定実装の基準HEADは`a3bb804`。[JoinRuntime設計](BEST_PRACTICE_NATIVE_DIAGNOSTIC_JOIN_RUNTIME_GENERATION_DESIGN.md)§2〜6・8・10・12と[構築・Join設計](BEST_PRACTICE_NATIVE_DIAGNOSTIC_CONSTRUCTION_JOIN_DELTA_DESIGN.md)§2・5〜7への差分である。JR-Aの型・claim・資格検査と同期失効の補強を維持し、Promise／handler生成・観測・失敗終端は未実装・未接続のままである。
+
+draft-0.4のレビュー修正：レビュー修正の基準HEADは`5436ae0`。§12のpostは準備後もowner・停止・同record・pinのlive条件を再確認するが、対照は準備前のpin変更とshell／identity／pinの差替えだけだった。そのため、post側のpin live再確認、sealed確認（2か所）、cleanupのrecord／context照合（3か所）、module基準のready判定とconstructor一致、pin失敗位置`pinFault`の記録を外す変異が、source・compiledの両対照を通過した。準備後のsealed・run停止・cleanup record差替え・then／species変更の7対照（停止下の同record cleanupは許可を維持）、基準捕捉前にconstructor／speciesを変えた合成realmの2対照、drift時の`pinFault`確認を追加し、該当6変異を構文正常な変異へ加えて23件とした（§12）。基準のthen一致は同時捕捉したpromiseThenとの比較で、捕捉前の改変では両者が一致するため等価変異として扱う。製品コードは変更していない。
 
 draft-0.2のレビュー修正：レビュー修正の基準HEADは`a98d255`。§2の将来位置の列挙はpin→handlers→executorの順だったが、RS05は固定executor closureを2観測closure・引数tupleより先に保持すると定め、JR-A既存の`executor` prefixは保持ではなくexecutor入場を指すため、executor closure保持の位置と「最後に保持した位置」の判定が曖昧だった。`handlers`をRS05の固定executor closure・2観測closure・引数tupleの保持完了、`executor`をRS06の入場履歴と書き分け、cleanup contextの保持はshell準備状態でなく位置`context`で表すことを明記した（§2・§5）。MDのみの修正で、ソース・試験・CHANGELOGは変更していない。
 
@@ -179,10 +181,10 @@ JR-Cのprivate公開・最終post、正規published cleanup再合流、legacy wo
 
 CP00のrole slotへfaultAtを先行追加し、最後の保持位置と最初の失敗位置を分けた。slotのbuildingは同shellを保持した状態であり、旧JoinRuntimeのwork確認済みvariantへassertionしない。canonical shell／identity／pinのclosure内参照は、同割当てから一度だけ記録するaliasで、pendingと別の生成・更新cacheではない。holderと同値copyを入れ替えても実参照照合で拒否する。
 
-module基準は既存P／thenに加え、descriptor 6個（prototype／constructor／then／species／Object.isFrozen／global Object）、prototype参照と捕捉済み操作を一度だけ保持する。Objectのglobal binding自体もdescriptorで確認し、getter化を直接のObject参照で評価しない。新checkerは捕捉済みisFrozen等で旧readonly topology全fieldを確認する。既存JR-A beginの直前にはglobal ObjectとisFrozenのdata条件も確認するため、旧checkerへの新規到達で未確認getterを呼ばない。基準捕捉前のrealm改変とmodule初期化不能のUnknownは§3のままである。
+module基準は既存P／thenに加え、descriptor 6個（prototype／constructor／then／species／Object.isFrozen／global Object）、prototype参照と捕捉済み操作を一度だけ保持する。Objectのglobal binding自体もdescriptorで確認し、getter化を直接のObject参照で評価しない。新checkerは捕捉済みisFrozen等で旧readonly topology全fieldを確認する。既存JR-A beginの直前にはglobal ObjectとisFrozenのdata条件も確認するため、旧checkerへの新規到達で未確認getterを呼ばない。基準捕捉前の改変はconstructor／species等の自己矛盾をready=falseとしてpinで止める対照だけを持ち、それ以外の捕捉前改変とmodule初期化不能のUnknownは§3のままである。
 
 run／cleanupのprivate準備だけがJR-A beginを一度呼ぶ。shell→cleanup context（runは省略）→identity→pinを保持直後に位置へ記録し、各保持／freeze後に同owner・同期停止・同recordを確認する。停止したrunは後段へ進めず、同recordのread-only cleanupは先行取消／HTTP理由だけでは拒否しない。重複要求と部分失敗では既存shellをfailed_retainedにし、claim・先行faultAt・root primary／revoked・部分参照を保持する。upper通知・失敗copy・Promise終端は未接続である。
 
-[新source試験](../tests/review/native-join-runtime-pin.test.ts)と[独立oracle](../tests/review/fixtures/native-join-runtime-pin-model.mjs)は、新しい製品friendを作らず、出力JSの固定区間だけをscratchへ導出する。管理された新しい合成JS realmを使い、descriptor故障がrunnerや後続caseへ漏れないようにする。固定slot・実参照・14失敗prefix／2停止対照・16種類のpin変更・17構文正常変異・8 semantic不正型を検査する。[compiled検査](../tests/review/fixtures/compiled-native-join-runtime-pin.mjs)は固定distだけを使う。各件数は別保証で、270件のsource成功へ足し合わせない。
+[新source試験](../tests/review/native-join-runtime-pin.test.ts)と[独立oracle](../tests/review/fixtures/native-join-runtime-pin-model.mjs)は、新しい製品friendを作らず、出力JSの固定区間だけをscratchへ導出する。管理された新しい合成JS realmを使い、descriptor故障がrunnerや後続caseへ漏れないようにする。固定slot・実参照・14失敗prefix／2停止対照・16種類のpin変更・準備後の7 post変更・基準捕捉前の2改変・23構文正常変異・8 semantic不正型を検査する。準備後のpostでも同owner・停止・同record・pinを再確認し、ready済みpinを生成までの免許にしない。[compiled検査](../tests/review/fixtures/compiled-native-join-runtime-pin.mjs)は固定distだけを使う。各件数は別保証で、278件のsource成功へ足し合わせない。
 
 旧JR-AはfaultAt初期fieldと、beginの唯一の内部callerが閉鎖した準備関数になった点だけを試験へ反映し、27資格拒否・32同一性拒否・121 phase値・同期失効を含む12変異を維持する。旧execute／clean等14関数・4export、元期限・既定並列度は維持した。初回RED・追加対照で判明した保持不備・故障注入位置の修正、検証結果と未実施範囲は[検証記録](E2E_BEST_PRACTICE_NATIVE_JOIN_RUNTIME_PIN_PREP_2026-11-17.md)へ分離する。

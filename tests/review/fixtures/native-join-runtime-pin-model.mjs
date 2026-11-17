@@ -27,10 +27,11 @@ export function faultRuntimePin(js,role,point){
   const modified=block.slice(0,from)+body.replace(anchor,replacement)+block.slice(to);
   return js.replace(block,modified);
 }
-export function deriveRuntimePin(js,createNativeDiagnosticState){
+export function deriveRuntimePin(js,createNativeDiagnosticState,pre=''){
   const parts=generationParts(js),base=between(js,baseBegin,baseEnd),block=between(js,begin,end);
   // Fresh synthetic realm; mutations never touch the runner realm. No product export/friend/registration.
-  return runInNewContext(`(()=>{const P=Promise,promiseThen=P.prototype.then;let hooks=0,operations=0;${base}
+  // `pre` alters only that realm before the module baseline is captured.
+  return runInNewContext(`(()=>{${pre}const P=Promise,promiseThen=P.prototype.then;let hooks=0,operations=0;${base}
     const create=function(){let recovery;${parts.allocation};
       recovery.state=createNativeDiagnosticState();recovery.state.owner.bind(recovery.state.binding);recovery.writer=recovery.state.owner.writers('release');
       ${parts.preparation}
@@ -100,12 +101,19 @@ export const runtimePinMutants=[
   ['writable flags','a.writable === b.writable','true',1],
   ['enumerable flags','a.enumerable !== b.enumerable','false',1],
   ['configurable flags','a.configurable !== b.configurable','false',1],
+  ['post pin drift','s.dispatchStarted === false && s.entered === false && joinPromisePinLive()','s.dispatchStarted === false && s.entered === false',1],
+  ['post sealed',/(joinRecovery\.status === 'ready' &&(?: started &&)?) !sealed &&/g,'$1',2],
+  ['post cleanup record',/!!current && s\.contextRecord === current && s\.contextAnchor === current\.anchor && current\.anchor\.binding === binding|s\.context\.record === current && s\.context\.anchor === current\.anchor/g,'true',3],
+  ['baseline ready','return joinPromiseBasis.ready && joinLegacyReflectionSafe()','return joinLegacyReflectionSafe()',1],
+  ['baseline constructor',"'value' in cd && cd.value === P &&","'value' in cd &&",1],
+  ['pin fault position','shell.pinFault ??= at;','',1],
   ['intermediate stops',/if \(!shellPreparationLive\(s\)\)\s+return failPreparedJoin\((?:run|cleanup)Generation, at, 'invalid_state'\);/g,'',5],
 ];
 export function verifyRuntimeMutant(js,createState,index){
   const [label,from,to,count]=runtimePinMutants[index];assert.equal(typeof from==='string'?js.split(from).length-1:[...js.matchAll(from)].length,count,'mutant drift: '+label);
   const changed=typeof from==='string'?js.replaceAll(from,to):js.replace(from,to);parse(changed,{ecmaVersion:'latest',sourceType:'module'});
-  assert.throws(()=>{verifyRuntimePins(changed,createState);verifyRuntimeIdentity(changed,createState);verifyRuntimePrefixes(changed,createState);verifyRuntimeDrifts(changed,createState);},assert.AssertionError,label);
+  assert.throws(()=>{verifyRuntimePins(changed,createState);verifyRuntimeIdentity(changed,createState);verifyRuntimePrefixes(changed,createState);verifyRuntimeDrifts(changed,createState);
+    verifyRuntimePost(changed,createState);verifyRuntimeBaseline(changed,createState);},assert.AssertionError,label);
 }
 
 const closedFields={executor:'not_entered',executorHandler:null,fulfilledHandler:null,rejectedHandler:null,observerArgs:null,
@@ -188,8 +196,32 @@ export function verifyRuntimeDrifts(js,createState){
   for(const name of pinDrifts){const create=deriveRuntimePin(js,createState),a=create();create.mutate(name);
     assert.equal(call(a,'run'),false,name);assert.equal(a.runSlot.fault,'internal_review_error');assert.equal(a.runSlot.faultAt,'pin');
     assert.equal(a.flags().revoked,true);assert.equal(a.runSlot.published,null);
-    assert.equal(create.counts().hooks,0,name);if(a.runSlot.pending){closed(a.runSlot.pending);assert.equal(a.runSlot.pending.pinState,'rejected');}
+    assert.equal(create.counts().hooks,0,name);if(a.runSlot.pending){closed(a.runSlot.pending);assert.equal(a.runSlot.pending.pinState,'rejected');assert.equal(a.runSlot.pending.pinFault,'pin');}
     const first=a.runSlot.pending;assert.equal(call(a,'run'),false);assert.equal(a.runSlot.pending,first);refusals++;
   }
+  return {refusals,hooks:0};
+}
+// Post-preparation drift: a ready pin is not a licence; the same post must reject later owner/pin changes.
+const postCases=[['run','sealed',false],['run','stopped',false],['run','then_value',false],['run','species_get',false],
+  ['cleanup','record',false],['cleanup','sealed',false],['cleanup','stopped',true]];
+export function verifyRuntimePost(js,createState){
+  let post=0;
+  for(const [role,change,expected]of postCases){const create=deriveRuntimePin(js,createState),a=create();if(role==='cleanup')a.resource();
+    assert.equal(call(a,role),true);const s=a[role+'Slot'].pending;assert(a.check(s,s.identity,s.pin,role));
+    if(change==='sealed')a.set({sealed:true});else if(change==='stopped')a.set({revoked:true,primary:'cancelled'});
+    else if(change==='record')a.resource();else create.mutate(change);
+    let result;assert.doesNotThrow(()=>{result=a.check(s,s.identity,s.pin,role);});assert.equal(result,expected,role+' '+change);
+    assert.equal(create.counts().hooks,0,change);assert.equal(a[role+'Slot'].pending,s);post++;}
+  return {post,hooks:0};
+}
+// Baseline captured in an already altered realm: preparation must stop at the pin without generating or re-pinning.
+const baselineCases=["Object.defineProperty(Promise.prototype,'constructor',{value:function Other(){},writable:true,enumerable:false,configurable:true});",
+  "Object.defineProperty(Promise,Symbol.species,{value:Promise,configurable:true});"];
+export function verifyRuntimeBaseline(js,createState){
+  let refusals=0;
+  for(const pre of baselineCases){const create=deriveRuntimePin(js,createState,pre),a=create();
+    assert.equal(call(a,'run'),false);assert.equal(a.runSlot.fault,'internal_review_error');assert.equal(a.runSlot.faultAt,'pin');
+    const s=a.runSlot.pending;assert(s);assert.equal(s.pinState,'rejected');assert.equal(s.pinFault,'pin');assert.equal(s.readiness,'failed_retained');
+    assert.equal(a.flags().revoked,true);assert.equal(a.runSlot.published,null);closed(s);assert.equal(create.counts().hooks,0);refusals++;}
   return {refusals,hooks:0};
 }

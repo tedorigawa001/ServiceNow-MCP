@@ -320,6 +320,8 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 ### Added
 
+- BG02 JR-B review controls: the independent preparation oracle now re-runs the post after preparation (sealing, run stop, cleanup record replacement, then/species drift, with same-record cleanup under stop still accepted) and builds two realms whose Promise constructor/species were altered before the module baseline was captured, which must stop at the pin. Drift cases also assert the retained pin failure position. Six previously surviving syntactically valid mutants (post pin re-check, both sealed checks, all cleanup record/context checks, baseline readiness and constructor identity, pin failure position) are now rejected, for 23 in total, in source and fixed-dist controls. Product code is unchanged.
+
 - BG02 JR-A review controls: every qualification/identity refusal and retained failure in the independent generation oracle now checks that the owner is synchronously revoked as well as keeping the first reason, and a twelfth syntactically valid mutant that drops the synchronous revocation is rejected by the source and compiled controls.
 
 - BG02 CP00-05 review controls: constructor input rejection on the legacy ND-02 entry is pinned to the same sealed failure copy (closed before execute, teardown not started, no second rejection on re-execute) and documented as an intentional public difference; ND-03 begin is checked to refuse failed private readiness even when the stop notification throws, with no reservation or request; and copy failure after the normal aggregate exists is checked to refuse without falling back to the normal snapshot.
