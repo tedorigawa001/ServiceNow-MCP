@@ -20,7 +20,7 @@ it('checks role-specific half captures and every phase while rejecting impossibl
   expect(verifyGenerationPhases(deriveGeneration(emitted(),createNativeDiagnosticState))).toBe(121);
 });
 it('detects syntactically valid owner/qualification/claim/diagnosis/phase mutations with the independent oracle',()=>{
-  expect(verifyGenerationMutants(emitted(),createNativeDiagnosticState)).toBe(11);
+  expect(verifyGenerationMutants(emitted(),createNativeDiagnosticState)).toBe(12);
 });
 it('does not construct a Promise, dispatch, read a budget/clock, allocate a resource or invoke an injected operation',()=>{
   const js=emitted(),forbidden=vi.fn(()=>{throw Error('PRIVATE_GENERATION_CAPABILITY');});

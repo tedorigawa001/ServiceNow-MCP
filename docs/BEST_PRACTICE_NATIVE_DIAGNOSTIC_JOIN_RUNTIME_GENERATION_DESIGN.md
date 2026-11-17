@@ -1,7 +1,9 @@
 # JoinRuntimeの段階型と生成資格およびPromise保持失敗境界の詳細設計
 
-Version: native-diagnostic-join-runtime-generation-draft-0.2 / Date: 2026-11-17。
+Version: native-diagnostic-join-runtime-generation-draft-0.3 / Date: 2026-11-17。
 Status: JR-Aの内部型・固定slot・一度限りclaim・生成資格検査だけを合成依存に限定して実装（§12）。設計基準HEADは`c466b75`、JR-Aの基準HEADは`b770e59`。[構築回収・Join公開設計](BEST_PRACTICE_NATIVE_DIAGNOSTIC_CONSTRUCTION_JOIN_DELTA_DESIGN.md)§5〜7の生成・保持部分を具体化する。JoinRuntime実体、同Promise／settler生成、private公開は未実装・未接続である。
+
+draft-0.2のレビュー修正：レビュー修正の基準HEADは`ec7b768`。§12は拒否時に同期revokedへすると定めていたが、独立oracleは拒否後のprimaryだけを確認しており、`rejectJoinGeneration`の`revoked = true`を外した変異がsource・compiledの両対照を通過した。全ての資格／同一性拒否と失敗保持でrevokedを確認し、同期失効を外す変異を構文正常な変異の12件目に加えた（§12）。製品コードは変更していない。
 
 生成資格の確認と失敗の保持先を、Promiseの生成より先に確保する。構築readyはrunの生存資格ではなく、Promiseの保持・終端はnative cleanupや正式受理の証拠ではない。runとcleanupを同じ停止条件で扱わず、既存の単一状態・元floor・同ownerの責務を維持する。
 
@@ -183,6 +185,6 @@ sourceの構文解析でexecutor内のqueueを持つjoin代入2か所、bridge c
 
 cleanupは同closureのcurrent recordとそのanchor実参照、同binding、元started、構築ready、未sealed、未使用slotを検査する。revoked／先行HTTP理由だけでは拒否しない。recordはcallerから採用せず、unknown引数は保持済みcurrentとの照合対象に限る。JR-A試験のfake recordは実resource所有・解放の保証ではない。正規published workへの再合流はJR-C以降であり、JR-Aは再生成を拒否するだけである。
 
-新private継続はlegacy execute／cleanから呼ばない。scratch copyだけが同closureの関数を呼ぶ。製品のexport・friend・raw入力・登録口を増やさず、旧14関数・4exportを維持する。[新試験](../tests/review/native-join-generation.test.ts)、[独立oracle／scratch抽出](../tests/review/fixtures/native-join-generation-model.mjs)、[固定dist検査](../tests/review/fixtures/compiled-native-join-generation.mjs)で、資格拒否27・同一性拒否32／hook 0・phase値121・構文正常な変異11、semantic正対照と8不正型を確認した。各数値は別の保証単位で、244件のsource試験へ足して成功件数を水増ししない。
+新private継続はlegacy execute／cleanから呼ばない。scratch copyだけが同closureの関数を呼ぶ。製品のexport・friend・raw入力・登録口を増やさず、旧14関数・4exportを維持する。[新試験](../tests/review/native-join-generation.test.ts)、[独立oracle／scratch抽出](../tests/review/fixtures/native-join-generation-model.mjs)、[固定dist検査](../tests/review/fixtures/compiled-native-join-generation.mjs)で、資格拒否27・同一性拒否32／hook 0・phase値121・構文正常な変異12（レビュー修正で同期revoked省略を追加）、semantic正対照と8不正型を確認した。資格／同一性の各拒否と失敗保持では、primaryとともに同期revokedも確認する。各数値は別の保証単位で、244件のsource試験へ足して成功件数を水増ししない。
 
 初回の変異anchor不一致と型検査反復による5秒timeout、修正後の結果・未実施範囲は[JR-A検証記録](E2E_BEST_PRACTICE_NATIVE_JOIN_GENERATION_JRA_2026-11-17.md)へ分離する。Promise／settler生成・観測・失敗終端・private公開・dispatch・正常採用は未接続、全解放はUnknownのままである。

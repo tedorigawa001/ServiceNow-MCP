@@ -318,6 +318,8 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 ### Added
 
+- BG02 JR-A review controls: every qualification/identity refusal and retained failure in the independent generation oracle now checks that the owner is synchronously revoked as well as keeping the first reason, and a twelfth syntactically valid mutant that drops the synchronous revocation is rejected by the source and compiled controls.
+
 - BG02 CP00-05 review controls: constructor input rejection on the legacy ND-02 entry is pinned to the same sealed failure copy (closed before execute, teardown not started, no second rejection on re-execute) and documented as an intentional public difference; ND-03 begin is checked to refuse failed private readiness even when the stop notification throws, with no reservation or request; and copy failure after the normal aggregate exists is checked to refuse without falling back to the normal snapshot.
 
 - WF-B SG-A review controls: the supervisor test now refuses spawned pid 0/1 (no listen or signal command can target the parent or every process), rejects single-field protocol changes (mode, payloadEmits, loader state, case-digest format/count, execution keys) and three-line incomplete output, and covers the t0+63 s cleanup ceiling, no SIGKILL on an Unknown probe, no signal to an absent group, unconfirmed cleanup after post-collection clock/escape faults, the 32-command queue limit and exit/close conflict diagnosis. The kernel itself is unchanged.

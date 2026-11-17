@@ -55,27 +55,27 @@ export function verifyGeneration(create){
   assert.equal(a.held().runSlot,a.runSlot);assert.equal(a.held().cleanupSlot,a.cleanupSlot);
   assert.equal(a.run(),true);assert.deepEqual(a.runSlot,{...empty('run'),claimed:true,position:'claimed',phase:'claimed_unheld'});
   assert.deepEqual(a.flags(),{started:true,primary:null,revoked:false,sealed:false,status:'ready'});
-  assert.equal(a.run(),false);refusals++;assert.equal(a.runSlot.claimed,true);assert.equal(a.runSlot.position,'claimed');
+  assert.equal(a.run(),false);refusals++;assert.equal(a.flags().revoked,true);assert.equal(a.runSlot.claimed,true);assert.equal(a.runSlot.position,'claimed');
   assert.equal(a.runSlot.phase,'failed_retained');assert.equal(a.runSlot.fault,'invalid_state');
   for(const flags of [{started:true},{revoked:true},{sealed:true},{primary:'authentication_failed'},{status:'building'},{status:'failed'}]){
     const x=create();x.set(flags);assert.equal(x.run(),false);assert.equal(x.runSlot.claimed,false);
-    assert.equal(x.runSlot.fault,'invalid_state');assert.equal(x.flags().primary,flags.primary??'invalid_state');refusals++;
+    assert.equal(x.runSlot.fault,'invalid_state');assert.equal(x.flags().primary,flags.primary??'invalid_state');assert.equal(x.flags().revoked,true);refusals++;
     x.set({started:false,revoked:false,sealed:false,status:'ready',primary:null});assert.equal(x.run(),false);refusals++;
   }
   // Each local slot corruption is independent and never grants an operational work.
   for(const patch of [{claimed:true},{position:'claimed'},{phase:'claimed_unheld'},{fault:'internal_review_error'},{pending:{}},{published:{}}]){
-    const x=create();Object.assign(x.runSlot,patch);assert.equal(x.run(),false);refusals++;
+    const x=create();Object.assign(x.runSlot,patch);assert.equal(x.run(),false);assert.equal(x.flags().revoked,true);refusals++;
   }
   const c=create();c.resource();c.set({revoked:true,primary:'authentication_failed'});
   assert.equal(c.cleanup(),true);assert.equal(c.flags().primary,'authentication_failed');assert.equal(c.cleanupSlot.claimed,true);
   assert.equal(c.cleanup(),false);assert.equal(c.flags().primary,'authentication_failed');assert.equal(c.cleanupSlot.position,'claimed');refusals++;
   for(const flags of [{sealed:true},{status:'building'},{status:'failed'},{started:false}]){
-    const x=create();x.resource();x.set(flags);assert.equal(x.cleanup(),false);assert.equal(x.cleanupSlot.claimed,false);refusals++;
+    const x=create();x.resource();x.set(flags);assert.equal(x.cleanup(),false);assert.equal(x.cleanupSlot.claimed,false);assert.equal(x.flags().revoked,true);refusals++;
   }
-  const missing=create();assert.equal(missing.cleanup(),false);refusals++;
-  const wrongBinding=create();wrongBinding.resource().anchor.binding={};assert.equal(wrongBinding.cleanup(),false);refusals++;
+  const missing=create();assert.equal(missing.cleanup(),false);assert.equal(missing.flags().revoked,true);refusals++;
+  const wrongBinding=create();wrongBinding.resource().anchor.binding={};assert.equal(wrongBinding.cleanup(),false);assert.equal(wrongBinding.flags().revoked,true);refusals++;
   assert.equal(wrongBinding.cleanupSlot.fault,'evidence_binding_mismatch');
-  const failed=create();assert(failed.run());failed.failRun('internal_review_error');failed.failRun('invalid_state');
+  const failed=create();assert(failed.run());failed.failRun('internal_review_error');assert.equal(failed.flags().revoked,true);failed.failRun('invalid_state');
   assert.equal(failed.runSlot.fault,'internal_review_error');assert.equal(failed.flags().primary,'internal_review_error');
   assert.equal(failed.runSlot.claimed,true);assert.equal(failed.runSlot.pending,null);assert.equal(failed.runSlot.published,null);
   assert.equal(failed.run(),false);refusals++;
@@ -92,7 +92,7 @@ export function verifyGenerationIdentity(create){
     const before=JSON.stringify({flags:b.flags(),slot:b[role+'Slot'],upper:b.upper()});
     own[position]=variant==='foreign'?foreign[position]:variant==='copy'?{...own[position]}:variant==='proxy'?trap:revoked.proxy;
     assert.equal(a[role](...own),false);assert.equal(a[role+'Slot'].fault,'evidence_binding_mismatch');
-    assert.equal(a[role+'Slot'].claimed,false);assert.equal(JSON.stringify({flags:b.flags(),slot:b[role+'Slot'],upper:b.upper()}),before);refusals++;
+    assert.equal(a[role+'Slot'].claimed,false);assert.equal(a.flags().revoked,true);assert.equal(JSON.stringify({flags:b.flags(),slot:b[role+'Slot'],upper:b.upper()}),before);refusals++;
   }
   assert.equal(hooks,0);return {refusals,hooks};
 }
@@ -133,7 +133,8 @@ export function verifyGenerationMutants(js,createState){
     ['cleanup identity','record !== current','false'],
     ['cleanup stop asymmetry',"if (current.anchor.binding !== binding)","if (revoked || current.anchor.binding !== binding)"],
     ['cleanup sealed',"joinRecovery.status !== 'ready' || !started || sealed","joinRecovery.status !== 'ready' || !started || false"],
-    ['phase dispatch','v.dispatchStarted !== false','false']];
+    ['phase dispatch','v.dispatchStarted !== false','false'],
+    ['sync revoke',/(primary \?\?= code;\s+)revoked = true;(\s+\/\/ No notification)/g,'$1$2']];
   for(const [label,from,to] of changes){assert.equal(typeof from==='string'?js.split(from).length-1:[...js.matchAll(from)].length,1,'mutation drift: '+label);
     const changed=js.replace(from,to);parse(changed,{ecmaVersion:'latest',sourceType:'module'});
     assert.throws(()=>{const create=deriveGeneration(changed,createState);verifyGeneration(create);verifyGenerationIdentity(create);verifyGenerationPhases(create);},assert.AssertionError,label);}

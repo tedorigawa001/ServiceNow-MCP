@@ -70,3 +70,18 @@ JR-Aに関係する9fileだけをstageし、index全体を別の空directoryへ�
 新JR-Aと既存CP00〜05／空準備／VK01・02／BG01／旧ND-01・02・03のcompiled計8本は、展開先で生成した固定distを用いてすべてexit 0・signalなしで終了した。各外側60秒は延長せず、新MJS 2本の構文もexit 0。offline・ignore-scriptsの梱包dry-runは441file・436 runtime artifactで、旧root群・試験の非同梱と新private継続／modelのruntime参照0を確認した。実tarball展開・全体回帰は未実施のままである。
 
 再検証後の追加は本節だけで、ソース・試験入力・設定は変更しない。最終indexと展開先の一致、対象9file、文書link／表・差分空白を再確認してからコミットする。Promise生成・private公開・dispatch未接続、各閉鎖条件・Unknown・調査保留は維持し、Pushは行わない。
+
+## レビュー修正 2026年11月17日
+
+基準HEADは`ec7b768`。拒否時の同期revokedは本記録・設計§12に記していたが、独立oracleは拒否後のprimaryだけを確認しており、`rejectJoinGeneration`から`revoked = true`を外す変異がsource 244件・新compiledの両方を通過した。JR-A内ではrunの再要求がprimaryで先に拒否され、cleanupはrevokedを見ないため現時点の挙動差はないが、JR-B以降の通知・終端の前提になるため固定した。製品コードは変更していない。
+
+[独立oracle](../tests/review/fixtures/native-join-generation-model.mjs)で、資格拒否（二重開始・条件不成立・slot不整合・cleanup条件・record欠落・binding不一致）、同一性拒否32件、`failRun`による失敗保持の後に`revoked`がtrueであることを確認する。同期失効を外す構文正常な変異を12件目に加え、source／compiledの期待値を11から12へ更新した。追加前に、修正前のoracleが同変異を通すこと、修正後は新source 12件中4件が同変異で失敗することを確認した。
+
+| 検査 | 結果 |
+|---|---|
+| lint・型検査・build・HTTP pack | exit 0 |
+| Vitest全体（`--maxWorkers=3`） | 360file・18,866件成功・失敗0 |
+| compiled probe群・declared-actual・migration・比較・native 9本 | すべてexit 0。比較は304case・cleanup confirmed |
+| 固定distで`revoked = true`を外す変異 | 新compiledがexit 1で拒否 |
+
+資格27・同一性32／hook 0・phase 121の件数は変えていない。join側の同owner検査から`sameControlOwner`を外す変異は、照合値が作成関数内のconstと未公開holderのため常に成立する等価変異として残る。
