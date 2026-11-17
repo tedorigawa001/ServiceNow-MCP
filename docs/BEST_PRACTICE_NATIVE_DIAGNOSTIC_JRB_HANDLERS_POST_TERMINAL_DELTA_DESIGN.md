@@ -1,13 +1,13 @@
 # JR-B 固定closure・tupleと段階別post・失敗後writer／終端責務の接続差分設計
 
-Version: native-diagnostic-jrb-handlers-post-terminal-draft-0.2 / Date: 2026-11-17。
+Version: native-diagnostic-jrb-handlers-post-terminal-draft-0.3 / Date: 2026-11-17。
 Status: §11のclosure／tuple先行準備・段階別postだけを合成依存限定で実装。設計基準HEADは`15e360d`、限定実装の基準HEADは`b167d09`。[先行shell・pin設計](BEST_PRACTICE_NATIVE_DIAGNOSTIC_JRB_RUNTIME_PIN_DELTA_DESIGN.md)RH07〜09・RS05〜10と[JoinRuntime設計](BEST_PRACTICE_NATIVE_DIAGNOSTIC_JOIN_RUNTIME_GENERATION_DESIGN.md)§4〜8・10への差分である。closure呼出し、HP04以降のPromise生成・観測・失敗終端は未実装・未接続である。
 
 正式発行口／新LM03／C実行入口／body起動閉鎖、全体受付無効、通常経路未切替、Unknown、VM／監視／telemetry調査保留、LOAD6／LOAD7選択・AP01〜06未承認を維持する。draft-0.1はMDだけの設計だった。draft-0.2の限定実装・合成検証は§11と検証記録へ分離し、closure呼出し・Promise生成・観測登録・private公開・dispatch・実接続・実通信・実機操作・設定変更・コミット・Pushは行わない。
 
 ## 1 現行と差分、先行実装の上限
 
-[旧root](../src/review/abort-scope-evidence-native-diagnostic.ts)のJoinRuntimeShellはexecutor／fulfilled／rejected handler・tuple・candidate／work／settler／ackをnull、観測／settle claimをfalseへ固定している。現行preparedShellMatchedはその全未使用状態と同owner・停止・同record・live pinを併せて検査する。failPreparedJoinは原始failure保持だけで、upper通知・copy・Promise終端は行わない。
+[旧root](../src/review/abort-scope-evidence-native-diagnostic.ts)のJoinRuntimeShellは割当て時にexecutor／fulfilled／rejected handler・tuple・candidate／work／settler／ackをnull、観測／settle claimをfalseへ固定している。現行preparedShellMatchedはその全未使用状態と同owner・停止・同record・live pinを併せて検査する。failPreparedJoinは原始failure保持だけで、upper通知・copy・Promise終端は行わない。
 
 本差分は「handlerが存在しても現行postをtrueにする」変更ではない。pin準備postを残し、handler準備・constructor捕捉・候補観測・失敗保持ごとの条件を分ける。3関数＋tupleを準備して固定拒否するPromise生成0の工程は単独で検証できる。その後のPromise生成・拒否観測・固定abort／失敗終端は対で接続し、未観測reject／無期限pendingの解消を後工程へ先送りしない。
 
@@ -180,3 +180,7 @@ draft-0.1作成時は文書link／表／IDとsource構文・変更対象だけ�
 closure本体は同shell／identity／pin／slot／roleを捕捉した固定拒否だけで、executor入場・settler捕捉・callback観測writerではない。今回のsource／compiled試験でもclosureを呼び出さず、構文監査の負対照としてのみ禁止callを検査する。新準備・完了checkerを旧execute／cleanから呼ばない。Promise／candidate／work／settler／観測claim／ack・通知／copy・dispatch／entry・publishedは未使用literalを維持する。
 
 [source試験](../tests/review/native-join-handlers.test.ts)・[独立oracle](../tests/review/fixtures/native-join-handlers-model.mjs)・[固定dist検査](../tests/review/fixtures/compiled-native-join-handlers.mjs)は、同owner、partial prefix、field別post、停止／再入、tuple不正と構文正常17変異を確認する。旧pinのsemantic負対照1行だけを、null専用から新しいundefined-return handler型に対する不正戻り値へ更新し、旧8負対照の件数・行別診断と他の期待値は維持する。結果・初回失敗・梱包の環境制約は[検証記録](E2E_BEST_PRACTICE_NATIVE_JOIN_HANDLERS_PREP_2026-11-17.md)へ記す。全体回帰、closure実行、HP04以降とHW／HTの本接続は未実施である。
+
+## 12 実行前の内部契約・先行slotへの差分
+
+[JR-B実行前内部契約・先行slotと失敗後writer資格の差分詳細設計draft-0.1](BEST_PRACTICE_NATIVE_DIAGNOSTIC_JRB_EXECUTION_SEED_CONTRACT_DESIGN.md)で、未実装HC06〜08を同shellの全先行field、role型・保持位置／fault site、固定配置順とchecker／writer資格へ具体化した。constructor・観測・drain／settleの試行と実終端を分離し、非実行の初期field／値契約だけを先行できる境界と、生成＋安全観測＋固定abortを一体接続する後続境界を定める。MDだけの更新で、Promise生成・closure呼出し・通知／終端・private公開・dispatchは有効化しない。
