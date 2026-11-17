@@ -1,6 +1,6 @@
 # JR-B 先行runtime・失敗保持先とPromise固定pin・観測前提の接続差分設計
 
-Version: native-diagnostic-jrb-runtime-pin-delta-draft-0.4 / Date: 2026-11-17。
+Version: native-diagnostic-jrb-runtime-pin-delta-draft-0.5 / Date: 2026-11-17。
 Status: 先行shell・固定slot・pinの非実行検査と失敗保持だけを合成依存に限定して実装（§12）。設計基準HEADは`2db2da5`、限定実装の基準HEADは`a3bb804`。[JoinRuntime設計](BEST_PRACTICE_NATIVE_DIAGNOSTIC_JOIN_RUNTIME_GENERATION_DESIGN.md)§2〜6・8・10・12と[構築・Join設計](BEST_PRACTICE_NATIVE_DIAGNOSTIC_CONSTRUCTION_JOIN_DELTA_DESIGN.md)§2・5〜7への差分である。JR-Aの型・claim・資格検査と同期失効の補強を維持し、Promise／handler生成・観測・失敗終端は未実装・未接続のままである。
 
 draft-0.4のレビュー修正：レビュー修正の基準HEADは`5436ae0`。§12のpostは準備後もowner・停止・同record・pinのlive条件を再確認するが、対照は準備前のpin変更とshell／identity／pinの差替えだけだった。そのため、post側のpin live再確認、sealed確認（2か所）、cleanupのrecord／context照合（3か所）、module基準のready判定とconstructor一致、pin失敗位置`pinFault`の記録を外す変異が、source・compiledの両対照を通過した。準備後のsealed・run停止・cleanup record差替え・then／species変更の7対照（停止下の同record cleanupは許可を維持）、基準捕捉前にconstructor／speciesを変えた合成realmの2対照、drift時の`pinFault`確認を追加し、該当6変異を構文正常な変異へ加えて23件とした（§12）。基準のthen一致は同時捕捉したpromiseThenとの比較で、捕捉前の改変では両者が一致するため等価変異として扱う。製品コードは変更していない。
@@ -163,6 +163,8 @@ work生成とobserver由来ack、API wrapper、試験用awaitの内部Promiseを
 
 最初にRHの先行shell／固定slotとPIの非実行pin検査・失敗保持を対にして実装・検証する。これが成立してから、RS05〜09の同P生成・安全な候補観測と、RS10の固定abort／失敗終端を対に接続する。Promiseだけを先に作って未観測reject／無期限pendingを後工程へ残す分割はしない。
 
+RS05前半の固定closure・tuple準備だけは、Promise生成0・closure未呼出しの境界で先行検証できる。その段階別postと失敗後writer／終端責務は§13の差分で具体化する。準備成功をconstructor有効化の承認にしない。
+
 module基準の信頼、同ownerの保持、失敗候補の観測条件、ackの有限保持、通知／終端失敗時の責務を説明・検証できなければ、その位置で接続を止める。未来のphase値成功やintrinsic descriptor一致だけで停止gateを通過しない。
 
 JR-Cのprivate公開・最終post、正規published cleanup再合流、legacy work統一・dispatch／entry・正常finish、外側custody、新LM03・旧UN62移行・friend撤去・AP承認は別工程である。既存のruntime friendを新rootへ持ち込む・本番受付を開く承認は含まない。
@@ -188,3 +190,7 @@ run／cleanupのprivate準備だけがJR-A beginを一度呼ぶ。shell→cleanu
 [新source試験](../tests/review/native-join-runtime-pin.test.ts)と[独立oracle](../tests/review/fixtures/native-join-runtime-pin-model.mjs)は、新しい製品friendを作らず、出力JSの固定区間だけをscratchへ導出する。管理された新しい合成JS realmを使い、descriptor故障がrunnerや後続caseへ漏れないようにする。固定slot・実参照・14失敗prefix／2停止対照・16種類のpin変更・準備後の7 post変更・基準捕捉前の2改変・23構文正常変異・8 semantic不正型を検査する。準備後のpostでも同owner・停止・同record・pinを再確認し、ready済みpinを生成までの免許にしない。[compiled検査](../tests/review/fixtures/compiled-native-join-runtime-pin.mjs)は固定distだけを使う。各件数は別保証で、278件のsource成功へ足し合わせない。
 
 旧JR-AはfaultAt初期fieldと、beginの唯一の内部callerが閉鎖した準備関数になった点だけを試験へ反映し、27資格拒否・32同一性拒否・121 phase値・同期失効を含む12変異を維持する。旧execute／clean等14関数・4export、元期限・既定並列度は維持した。初回RED・追加対照で判明した保持不備・故障注入位置の修正、検証結果と未実施範囲は[検証記録](E2E_BEST_PRACTICE_NATIVE_JOIN_RUNTIME_PIN_PREP_2026-11-17.md)へ分離する。
+
+## 13 固定closure・tupleと段階別post／終端責務への差分
+
+[固定executor／観測closure・tupleと段階別post・失敗後writer／終端責務の接続差分設計draft-0.1](BEST_PRACTICE_NATIVE_DIAGNOSTIC_JRB_HANDLERS_POST_TERMINAL_DELTA_DESIGN.md)で、同ownerの3関数・tupleの先行保持、handlersとexecutorの位置、非返却の準備／入場／観測／drain／settle試行を対応付けた。現行の全null postは維持し、生成資格と失敗・sealed後のprivate観測writerを分ける。通知の共有履歴、copy／settleの成否と実終端・未確認保持を別に扱う。MDだけの更新で、closure生成・Promise生成・観測・終端・private公開・dispatchは接続しない。

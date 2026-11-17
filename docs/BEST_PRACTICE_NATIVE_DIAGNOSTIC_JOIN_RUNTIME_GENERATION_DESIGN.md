@@ -1,6 +1,6 @@
 # JoinRuntimeの段階型と生成資格およびPromise保持失敗境界の詳細設計
 
-Version: native-diagnostic-join-runtime-generation-draft-0.5 / Date: 2026-11-17。
+Version: native-diagnostic-join-runtime-generation-draft-0.6 / Date: 2026-11-17。
 Status: JR-A（§12）とJR-Bの先行shell／非実行pin／失敗保持だけを合成依存に限定して実装。設計基準HEADは`c466b75`、JR-Aの基準HEADは`b770e59`。[構築回収・Join公開設計](BEST_PRACTICE_NATIVE_DIAGNOSTIC_CONSTRUCTION_JOIN_DELTA_DESIGN.md)§5〜7の生成・保持部分を具体化する。同Promise／settler生成・拒否観測・失敗終端・private公開は未実装・未接続である。
 
 draft-0.2のレビュー修正：レビュー修正の基準HEADは`ec7b768`。§12は拒否時に同期revokedへすると定めていたが、独立oracleは拒否後のprimaryだけを確認しており、`rejectJoinGeneration`の`revoked = true`を外した変異がsource・compiledの両対照を通過した。全ての資格／同一性拒否と失敗保持でrevokedを確認し、同期失効を外す変異を構文正常な変異の12件目に加えた（§12）。製品コードは変更していない。
@@ -191,4 +191,6 @@ cleanupは同closureのcurrent recordとそのanchor実参照、同binding、元
 
 ## 13 JR-Bの先行保持・固定pinへの差分
 
-[先行runtime・失敗保持先とPromise固定pin・観測前提の接続差分設計draft-0.4](BEST_PRACTICE_NATIVE_DIAGNOSTIC_JRB_RUNTIME_PIN_DELTA_DESIGN.md)で、同roleのpendingを唯一の主保持先とし、保持順と観測前提を具体化した。同書§12で先行shell／context／identity／owner pinの保持・非実行検査・失敗保持だけ限定実装した。module基準とowner pin、生成成功と失敗候補の観測を分け、先行primary／同期revokedを維持する。Promise／handler生成・拒否観測・失敗終端・private公開・dispatchは未実装・未接続のままである。
+[先行runtime・失敗保持先とPromise固定pin・観測前提の接続差分設計draft-0.5](BEST_PRACTICE_NATIVE_DIAGNOSTIC_JRB_RUNTIME_PIN_DELTA_DESIGN.md)で、同roleのpendingを唯一の主保持先とし、保持順と観測前提を具体化した。同書§12で先行shell／context／identity／owner pinの保持・非実行検査・失敗保持だけ限定実装した。module基準とowner pin、生成成功と失敗候補の観測を分け、先行primary／同期revokedを維持する。Promise／handler生成・拒否観測・失敗終端・private公開・dispatchは未実装・未接続のままである。
+
+[固定closure・tuple／段階別post／失敗後writer・終端責務の接続差分設計draft-0.1](BEST_PRACTICE_NATIVE_DIAGNOSTIC_JRB_HANDLERS_POST_TERMINAL_DELTA_DESIGN.md)では、handler準備claimと入場履歴を分け、現行postを緩めず段階別に検査する。失敗後・sealed後も保持済み同workのprivate観測だけを別資格で扱い、通知／copy／settle試行と実終端を区別する。今回はMDのみで、実装・private公開・dispatchは行わない。
