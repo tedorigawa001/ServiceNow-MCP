@@ -1,9 +1,9 @@
 # JR-B seedから実行状態へのclaim・settler保持・post接続差分詳細設計
 
-Version: native-diagnostic-jrb-seed-execution-transition-draft-0.1 / Date: 2026-11-17。
-Status: 詳細設計のみ。基準HEADは`07b4c45`。[未使用seed設計](BEST_PRACTICE_NATIVE_DIAGNOSTIC_JRB_EXECUTION_SEED_CONTRACT_DESIGN.md)EI02〜06・ES05〜06・EW02〜06と、[closure／tuple設計](BEST_PRACTICE_NATIVE_DIAGNOSTIC_JRB_HANDLERS_POST_TERMINAL_DELTA_DESIGN.md)HP04〜09を具体化する。[JoinRuntime設計](BEST_PRACTICE_NATIVE_DIAGNOSTIC_JOIN_RUNTIME_GENERATION_DESIGN.md)と[固定pin設計](BEST_PRACTICE_NATIVE_DIAGNOSTIC_JRB_RUNTIME_PIN_DELTA_DESIGN.md)の同owner・同P・観測／固定終端の一体接続は変更しない。
+Version: native-diagnostic-jrb-seed-execution-transition-draft-0.2 / Date: 2026-11-17。
+Status: §9の実行variant・origin leaf・段階別値postだけを合成依存限定で実装。設計基準HEADは`07b4c45`、限定実装の基準HEADは`a477987`。[未使用seed設計](BEST_PRACTICE_NATIVE_DIAGNOSTIC_JRB_EXECUTION_SEED_CONTRACT_DESIGN.md)EI02〜06・ES05〜06・EW02〜06と、[closure／tuple設計](BEST_PRACTICE_NATIVE_DIAGNOSTIC_JRB_HANDLERS_POST_TERMINAL_DELTA_DESIGN.md)HP04〜09を具体化する。[JoinRuntime設計](BEST_PRACTICE_NATIVE_DIAGNOSTIC_JOIN_RUNTIME_GENERATION_DESIGN.md)と[固定pin設計](BEST_PRACTICE_NATIVE_DIAGNOSTIC_JRB_RUNTIME_PIN_DELTA_DESIGN.md)の同owner・同P・観測／固定終端の一体接続は変更しない。
 
-正式発行口／新LM03／C実行入口／body起動閉鎖、全体受付無効、通常経路未切替、Unknown、VM／監視／telemetry調査保留、LOAD6／LOAD7選択・AP01〜06未承認を維持する。今回は本書と親2文書のMDだけを変更する。実装・製品moduleのimport／実行・Promise生成・closure呼出し・試験再実行・build／pack・private公開・dispatch・実接続・実通信・実機操作・設定変更・stage・コミット・Pushは行わない。
+正式発行口／新LM03／C実行入口／body起動閉鎖、全体受付無効、通常経路未切替、Unknown、VM／監視／telemetry調査保留、LOAD6／LOAD7選択・AP01〜06未承認を維持する。draft-0.1のMDだけの設計・静的確認は§8に残す。draft-0.2は非実行の値検査と合成／compiled検査だけを追加し、Promise生成・private公開・dispatch・実接続・実通信・実機操作・設定変更・stage・コミット・Pushは行わない。
 
 ## 1 現行と差分の決定
 
@@ -126,10 +126,24 @@ workの正規反応、callback退出、ackの実終端は別事実である。ru
 
 費目は同run／単一予算ownerのままで、新C/G/P/R成功credit・別予算・新clock／sample／floorを追加しない。同Pのconstructor試行、実返却candidate／work、観測派生ack、API／試験用wrapperのPromiseを別に計数する。aliasは別object数にしないが、保持参照による寿命延長は別に扱う。実backing容量、任意intrinsic破壊・OOM／process障害での完全回収、外側custody／最終discardはUnknownである。
 
-## 8 今回の静的確認と未実施範囲
+## 8 draft-0.1作成時の静的確認と未実施範囲
 
 基準HEADのliteral seed・同owner／unused post・閉鎖request／3closure、既存role型と先行保持、最新の閉鎖call oracleを読み、現行の拒否動作と将来の実行窓を分けた。SV／GW／CS／PP／FF／TAは設計IDであり、試験成功件数ではない。
 
-今回の変更は本書と親2文書だけとし、文書link／表／ID・差分・末尾改行・変更範囲を静的確認する。ソース・試験・CHANGELOG・依存・設定を変更せず、製品moduleのimport／実行、試験再実行・build／pack、Promise生成・closure呼出し、private公開・dispatch・実接続・実通信・設定変更・stage・コミット・Pushは行わない。
+draft-0.1作成時の変更は本書と親2文書だけとし、文書link／表／ID・差分・末尾改行・変更範囲を静的確認した。ソース・試験・CHANGELOG・依存・設定を変更せず、製品moduleのimport／実行、試験再実行・build／pack、Promise生成・closure呼出し、private公開・dispatch・実接続・実通信・設定変更・stage・コミット・Pushは行わなかった。
 
 3文書のlocal link34件・表20個、新設計ID49個の順序／欠落／重複と末尾改行・差分空白を静的確認した。旧rootの内容は基準HEADと一致し、変更はMD3fileだけ、stage0である。これは文書整合の確認であり、将来のconstructor／executor・観測・終端を実行した結果ではない。
+
+## 9 非実行variant・origin leaf・値postの限定実装
+
+[旧root](../src/review/abort-scope-evidence-native-diagnostic.ts)へreadonlyのJoinExecutionInspection／JoinExecutionValue／JoinExecutionAliasesを追加した。SV01〜08を判別する値投影であり、JoinExecutionSeedへのintersectionによるfalse／nullの解除はしない。実shell・RoleGenerationSlot・14個の期待aliasは従前のliteral閉鎖のままで、実行variantへのwriter・変換口・新shellは作らない。
+
+joinExecutionOriginLeafは同roleのshell／identity／pin／slotとcanonical aliasを先に照合し、foreign・同値copy・Proxyのfieldを読まない。以後は保持済みの同root／seed／context・3closure／tuple参照だけを原始比較し、反射・live pin・時計・予算・snapshot・関数呼出しをしない。停止・sealed・current交換・failed_retained後も同保持originを照合できるが、新規生成やcallback書込みの資格ではない。元pendingを失えば、古い実参照を渡してもfalseである。既存handlerOriginMatchedや未使用checkerは変更しない。
+
+joinExecutionValuePostはcreator内部のdata投影を対象とする。raw JSON／外部object用の入口ではなく、入力の型やboolean一致からauthorityを発行しない。値と期待aliasの同参照、constructor claim／entry／returnedとcandidateHeldの関係、runのrejectのみ→pair・cleanupのreject=null、保持位置とfaultAtの独立、失敗時unconfirmedを検査する。返却値はunknownのままなので、null／undefined／0を取得済みとして保持でき、未取得nullとcandidateHeldで区別する。値postは一切の入力・元slot・診断を書き換えない。
+
+観測部分の値postは、未試行・registering・returned／threw／refused、ack未取得／喪失・候補保持・verifiedの関係を区別する。work・registrationWork・ackの同参照と有限値を比較するだけで、safe_same_work／verifiedという値をnative brand確認や登録実績へ昇格しない。PP06のnative安全検査、PP07の正規reaction入場とwriter、PP08の実drain／終端は未実装である。取得prefix・返却・未公開checked・失敗保持の値検査を、それらの実行成功とは扱わない。
+
+既存requestJoinExecutionと3closureの本文は固定拒否のまま、新2検査への製品callerは0である。正常なchecked投影を検査しても元shellのclaimはfalse、candidate等はnullのままで、request2経路とclosure6経路は従前の最初のfault／同期失効を保持する。新export・friend・raw mode・fake event writer・fixture台帳の共有は追加しない。
+
+[source試験](../tests/review/native-join-execution-values.test.ts)、[独立値表／scratch境界](../tests/review/fixtures/native-join-execution-values-model.mjs)、[固定dist検査](../tests/review/fixtures/compiled-native-join-execution-values.mjs)と[検証記録](E2E_BEST_PRACTICE_NATIVE_JOIN_EXECUTION_VALUES_2026-11-17.md)を追加した。実行variantは将来契約の値検査であり、constructor／entry claim消費・settler捕捉・Promise生成・安全観測・固定abort／失敗終端・private公開・dispatchは引き続き未接続である。

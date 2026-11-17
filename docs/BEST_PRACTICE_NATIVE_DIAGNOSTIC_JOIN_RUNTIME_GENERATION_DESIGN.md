@@ -1,7 +1,7 @@
 # JoinRuntimeの段階型と生成資格およびPromise保持失敗境界の詳細設計
 
-Version: native-diagnostic-join-runtime-generation-draft-0.10 / Date: 2026-11-17。
-Status: JR-A（§12）、JR-Bの先行shell／非実行pin／失敗保持とclosure／tuple先行準備・段階別post（§13）だけを合成依存に限定して実装。設計基準HEADは`c466b75`、JR-Aの基準HEADは`b770e59`。[構築回収・Join公開設計](BEST_PRACTICE_NATIVE_DIAGNOSTIC_CONSTRUCTION_JOIN_DELTA_DESIGN.md)§5〜7の生成・保持部分を具体化する。closure呼出し・同Promise／settler生成・拒否観測・失敗終端・private公開は未実装・未接続である。
+Version: native-diagnostic-join-runtime-generation-draft-0.11 / Date: 2026-11-17。
+Status: JR-A（§12）、JR-Bの先行shell／非実行pin／失敗保持・closure／tuple準備と非実行variant／origin／段階別値post（§13）だけを合成依存に限定して実装。設計基準HEADは`c466b75`、JR-Aの基準HEADは`b770e59`。[構築回収・Join公開設計](BEST_PRACTICE_NATIVE_DIAGNOSTIC_CONSTRUCTION_JOIN_DELTA_DESIGN.md)§5〜7の生成・保持部分を具体化する。closureの実捕捉／観測body・同Promise／settler生成・拒否観測・失敗終端・private公開は未実装・未接続である。
 
 draft-0.2のレビュー修正：レビュー修正の基準HEADは`ec7b768`。§12は拒否時に同期revokedへすると定めていたが、独立oracleは拒否後のprimaryだけを確認しており、`rejectJoinGeneration`の`revoked = true`を外した変異がsource・compiledの両対照を通過した。全ての資格／同一性拒否と失敗保持でrevokedを確認し、同期失効を外す変異を構文正常な変異の12件目に加えた（§12）。製品コードは変更していない。
 
@@ -195,6 +195,6 @@ cleanupは同closureのcurrent recordとそのanchor実参照、同binding、元
 
 [固定closure・tuple／段階別post／失敗後writer・終端責務の接続差分設計draft-0.5](BEST_PRACTICE_NATIVE_DIAGNOSTIC_JRB_HANDLERS_POST_TERMINAL_DELTA_DESIGN.md)では、handler準備claimと入場履歴を分け、現行postを緩めず段階別に検査する。同書§11の限定実装は、非実行の3closure・凍結tupleと同owner／停止／段階別postまでである。失敗後・sealed後の観測writer、通知／copy／settle試行と実終端は設計だけを保持し、private公開・dispatchは行わない。
 
-[実行前内部契約・先行slotの差分詳細設計draft-0.3](BEST_PRACTICE_NATIVE_DIAGNOSTIC_JRB_EXECUTION_SEED_CONTRACT_DESIGN.md)で、同role shellに配置するconstructor／executor・登録／callback・drain／settleの全初期fieldと、保持位置とは別の最初のfault、失敗後writer資格を具体化した。同書§10で初期25field・未使用seed検査・固定拒否だけを実装し、実行は閉鎖したままとする。実Promiseを生成する後続単位では候補観測と固定abort／失敗終端も対にする。新しい書込み先・authority ticket・正常公開・dispatchは作らない。
+[実行前内部契約・先行slotの差分詳細設計draft-0.4](BEST_PRACTICE_NATIVE_DIAGNOSTIC_JRB_EXECUTION_SEED_CONTRACT_DESIGN.md)で、同role shellに配置するconstructor／executor・登録／callback・drain／settleの全初期fieldと、保持位置とは別の最初のfault、失敗後writer資格を具体化した。同書§10で初期25field・未使用seed検査・固定拒否だけを実装し、実行は閉鎖したままとする。実Promiseを生成する後続単位では候補観測と固定abort／失敗終端も対にする。新しい書込み先・authority ticket・正常公開・dispatchは作らない。
 
-[seedから実行状態への接続差分詳細設計draft-0.1](BEST_PRACTICE_NATIVE_DIAGNOSTIC_JRB_SEED_EXECUTION_TRANSITION_DELTA_DESIGN.md)で、constructor／entry claim・role別捕捉prefix・段階postと、閉鎖要求を維持したまま許可し得るprivate同期窓を明記した。型／値検査だけの先行単位と、実生成・安全観測・固定終端を対にする呼出し単位を分け、後者が整うまで拒否を外さない。MDだけの更新で、実装・private公開・dispatchは行わない。
+[seedから実行状態への接続差分詳細設計draft-0.2](BEST_PRACTICE_NATIVE_DIAGNOSTIC_JRB_SEED_EXECUTION_TRANSITION_DELTA_DESIGN.md)で、constructor／entry claim・role別捕捉prefix・段階postと、閉鎖要求を維持したまま許可し得るprivate同期窓を明記した。同書§9で非実行8variant・origin leaf・段階値検査だけを追加し、literal-closed seed・requestと3closureの拒否・既存14本文／4exportを維持する。実生成・安全観測・固定終端を対にする後続単位が整うまで拒否を外さず、private公開・dispatchは行わない。
