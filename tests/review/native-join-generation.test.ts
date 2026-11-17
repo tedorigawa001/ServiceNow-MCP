@@ -44,11 +44,13 @@ it.each(['runGeneration','cleanupGeneration','joinRuntime','generationSlot'])('a
   const result=await owner.execute(null,null);expect(result.upper.primary?.code).toBe('invalid_input');
   expect(Object.values(result.operations)).toEqual([0,0,0,0,0]);expect(read).not.toHaveBeenCalled();expect(schedule).not.toHaveBeenCalled();
 });
-it('keeps the private continuations uncalled in the product and the legacy four-method surface unchanged',async()=>{
+it('keeps JR-A calls confined to closed preparation continuations and the legacy four-method surface unchanged',async()=>{
   generationParts(emitted());
   const ast=ts.createSourceFile('root.ts',source(),ts.ScriptTarget.Latest,true),calls:string[]=[];
-  function visit(n:ts.Node){if(ts.isCallExpression(n)&&ts.isIdentifier(n.expression))calls.push(n.expression.text);ts.forEachChild(n,visit);}visit(ast);
-  for(const name of ['beginRunGeneration','beginCleanupGeneration','joinRuntimePhaseValid'])expect(calls).not.toContain(name);
+  function visit(n:ts.Node,owner=''){if(ts.isFunctionDeclaration(n))owner=n.name?.text??'';
+    if(ts.isCallExpression(n)&&ts.isIdentifier(n.expression)&&['beginRunGeneration','beginCleanupGeneration','joinRuntimePhaseValid'].includes(n.expression.text))
+      calls.push(n.expression.text+':'+owner);ts.forEachChild(n,child=>visit(child,owner));}visit(ast);
+  expect(calls).toEqual(['beginRunGeneration:prepareRunShell','beginCleanupGeneration:prepareCleanupShell']);
   const read=vi.fn(()=>({remaining_ms:60000})),schedule=vi.fn(()=>()=>{});
   const owner=createInjectedNativeDiagnosticWorkflow({fake_io:true,deadline_ms:60000,budget:{read},schedule});
   expect(Object.keys(owner)).toEqual(['execute','stop','close','diagnostics']);expect((await owner.close()).counts.issued).toBe(0);
@@ -75,7 +77,7 @@ it('keeps strict roles, contexts, half-pairs, phase prefixes and null publicatio
     "const x:JoinRuntime<'cleanup'>={identity:null!,kind:'cleanup',phase:'capturing',prefix:'reject',executor:'running',candidate:null,work:null,resolve:null,reject:()=>{},observerAck:null,dispatchStarted:false,entered:false,settleClaim:false,fault:null};",
     "const x:JoinRuntime<'run'>={identity:null!,kind:'run',phase:'checked',prefix:'published',executor:'normal_exit',candidate:null!,work:null!,resolve:()=>{},reject:()=>{},observerAck:null!,dispatchStarted:false,entered:false,settleClaim:false,fault:null};",
     "const x:JoinRuntime<'run'>={identity:null!,kind:'run',phase:'captured',prefix:'resolve',executor:'normal_exit',candidate:null,work:null,resolve:()=>{},reject:null,observerAck:null,dispatchStarted:false,entered:false,settleClaim:false,fault:null};",
-    "const x:RoleGenerationSlot<'run'>={role:'run',claimed:true,phase:'empty',position:'empty',fault:null,pending:null,published:null};"];
+    "const x:RoleGenerationSlot<'run'>={role:'run',claimed:true,phase:'empty',position:'empty',fault:null,pending:null,published:null,faultAt:null};"];
   // One semantic program checks both positives and all separately scoped negatives; no repeated transpile/import loop.
   const extra=positive+'\n'+bad.map(code=>'{'+code+'}').join('\n'),diagnostics=compile(extra);
   expect(diagnostics).toHaveLength(bad.length);

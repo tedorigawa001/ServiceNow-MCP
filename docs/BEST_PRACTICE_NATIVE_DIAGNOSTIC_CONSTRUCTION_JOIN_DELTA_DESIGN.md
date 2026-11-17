@@ -1,7 +1,7 @@
 # 旧rootの部分生成回収とJoinCell生成公開の差分詳細設計
 
-Version: native-diagnostic-construction-join-delta-draft-0.6 / Date: 2026-11-17。
-Status: CP00〜05の回収anchor・保護区間・failure copy・失敗専用close（§11）とJR-Aの閉鎖した型／claim／資格検査だけ限定実装。設計基準HEADは`79aef94`、CP実装基準は`1707e8d`。[CF制御設計](BEST_PRACTICE_NATIVE_DIAGNOSTIC_CF_CONTROL_RESOURCE_DESIGN.md)§3／5／7／10に対する差分であり、active JoinCell生成・公開・dispatchとCP06は未接続である。
+Version: native-diagnostic-construction-join-delta-draft-0.7 / Date: 2026-11-17。
+Status: CP00〜05の回収（§11）、JR-Aの型／claim／資格検査とJR-Bの先行shell／非実行pin／失敗保持だけ限定実装。設計基準HEADは`79aef94`、CP実装基準は`1707e8d`。[CF制御設計](BEST_PRACTICE_NATIVE_DIAGNOSTIC_CF_CONTROL_RESOURCE_DESIGN.md)§3／5／7／10に対する差分であり、active Promise生成・公開・dispatchとCP06は未接続である。
 
 draft-0.2のレビュー修正：レビュー修正の基準HEADは`75b5d02`。旧入口の構築時raw不正もfailure facadeへ送るため、execute前のdiagnosticsがprepared／未sealedからclosed／sealedへ、executeのteardownがconfirmedからnot_startedへ、再executeの`request_rejected`がinvalid_stateからnullへ変わる。これを旧期待値の維持と記していたため、§4・§11に公開差分として明記し、§4表の再execute行をready owner限定へ直した。あわせて、停止通知自体が失敗した場合のND-03 begin拒否と、正常aggregate生成後のcopy不能でも正常snapshotへfallbackしないことを固定する試験を追加した（§11）。
 
@@ -172,9 +172,9 @@ CP00〜05の先行保持・保護区間・failure copy・失敗専用closeを§1
 
 次にJR-Bの同Promise／resolver生成・拒否観測・失敗終端を対に接続し、CJ06／07の該当部分をsource／compiledで確認する。private公開・最終postはJR-C、その後のdispatch／entry／正常settleは別工程で、CJ08〜11／13と既存回帰を確認する。cleanupのqueue失敗は正常処理の単なる移動ではなく追加の故障契約として扱う。
 
-[JoinRuntime段階型・生成資格とPromise保持失敗境界の詳細設計draft-0.4](BEST_PRACTICE_NATIVE_DIAGNOSTIC_JOIN_RUNTIME_GENERATION_DESIGN.md)で、構築readyとrun／cleanupの生成資格を分け、同role claim・半捕捉prefix・同candidate／work／settler・private公開確定点を具体化した。同書§12のJR-Aでprivate型・先行slot・claim・資格検査だけを合成依存に限定して実装した。CP構築failure copyのresource取得後への流用を禁止し、新JoinRuntime実体／Promise生成・公開・dispatchと旧work採用は未実装・未接続、補強試験は維持する。
+[JoinRuntime段階型・生成資格とPromise保持失敗境界の詳細設計draft-0.5](BEST_PRACTICE_NATIVE_DIAGNOSTIC_JOIN_RUNTIME_GENERATION_DESIGN.md)で、構築readyとrun／cleanupの生成資格を分け、同role claim・半捕捉prefix・同candidate／work／settler・private公開確定点を具体化した。同書§12のJR-Aでprivate型・先行slot・claim・資格検査だけを合成依存に限定して実装した。CP構築failure copyのresource取得後への流用を禁止し、Promise生成・公開・dispatchと旧work採用は未実装・未接続、補強試験は維持する。
 
-[JR-Bの先行runtime・失敗保持先と固定pin・観測前提の接続差分設計draft-0.2](BEST_PRACTICE_NATIVE_DIAGNOSTIC_JRB_RUNTIME_PIN_DELTA_DESIGN.md)で、同anchorのRoleGenerationSlot.pendingを唯一の主保持先に固定し、旧anchor直下pendingの第二writer化を禁止した。shellをcontext／identity／pinより先に保持し、同realm基準とowner結合・生成／観測の別資格・失敗prefixと未確認ackを具体化する。今回はMDのみで、Promise生成・private公開・dispatchと旧work採用は接続しない。
+[JR-Bの先行runtime・失敗保持先と固定pin・観測前提の接続差分設計draft-0.3](BEST_PRACTICE_NATIVE_DIAGNOSTIC_JRB_RUNTIME_PIN_DELTA_DESIGN.md)§12で、同role pendingへの先行shell／context／identity／pin保持と、非実行検査・失敗保持だけ限定実装した。旧anchor直下のnull fieldを第二writerにせず、旧制御・実workは維持する。Promise／handler生成・観測・失敗終端・private公開・dispatchと旧work採用は接続しない。
 
 active resourceとの全結合、RetainedDuty・外側custody／最終discard、新LM03、旧UN62移行、専用build／実行／stdio終端、friend撤去・AP承認は別gateに残る。正常経路の切替や正式発行を、このMDの作成で承認したことにはしない。
 

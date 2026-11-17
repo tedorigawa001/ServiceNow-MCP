@@ -1,11 +1,11 @@
 # JR-B 先行runtime・失敗保持先とPromise固定pin・観測前提の接続差分設計
 
-Version: native-diagnostic-jrb-runtime-pin-delta-draft-0.2 / Date: 2026-11-17。
-Status: 詳細設計のみ。基準HEADは`2db2da5`。[JoinRuntime設計](BEST_PRACTICE_NATIVE_DIAGNOSTIC_JOIN_RUNTIME_GENERATION_DESIGN.md)§2〜6・8・10・12と[構築・Join設計](BEST_PRACTICE_NATIVE_DIAGNOSTIC_CONSTRUCTION_JOIN_DELTA_DESIGN.md)§2・5〜7への差分である。JR-Aの型・claim・資格検査と同期失効の試験補強は既存実装であり、本書のruntime実体・pin・観測・失敗終端は未実装である。
+Version: native-diagnostic-jrb-runtime-pin-delta-draft-0.3 / Date: 2026-11-17。
+Status: 先行shell・固定slot・pinの非実行検査と失敗保持だけを合成依存に限定して実装（§12）。設計基準HEADは`2db2da5`、限定実装の基準HEADは`a3bb804`。[JoinRuntime設計](BEST_PRACTICE_NATIVE_DIAGNOSTIC_JOIN_RUNTIME_GENERATION_DESIGN.md)§2〜6・8・10・12と[構築・Join設計](BEST_PRACTICE_NATIVE_DIAGNOSTIC_CONSTRUCTION_JOIN_DELTA_DESIGN.md)§2・5〜7への差分である。JR-Aの型・claim・資格検査と同期失効の補強を維持し、Promise／handler生成・観測・失敗終端は未実装・未接続のままである。
 
 draft-0.2のレビュー修正：レビュー修正の基準HEADは`a98d255`。§2の将来位置の列挙はpin→handlers→executorの順だったが、RS05は固定executor closureを2観測closure・引数tupleより先に保持すると定め、JR-A既存の`executor` prefixは保持ではなくexecutor入場を指すため、executor closure保持の位置と「最後に保持した位置」の判定が曖昧だった。`handlers`をRS05の固定executor closure・2観測closure・引数tupleの保持完了、`executor`をRS06の入場履歴と書き分け、cleanup contextの保持はshell準備状態でなく位置`context`で表すことを明記した（§2・§5）。MDのみの修正で、ソース・試験・CHANGELOGは変更していない。
 
-正式発行口／新LM03／C実行入口／body起動は閉鎖、全体受付無効、通常経路未切替、Unknown、VM／監視／telemetry調査保留、LOAD6／LOAD7選択・AP01〜06未承認を維持する。今回は本書と親2文書だけを更新する。実装・製品moduleのimport／実行・Promise生成・観測登録・試験再実行・build／pack・private公開・dispatch・実接続・実通信・実機操作・設定変更・コミット・Pushは行わない。
+正式発行口／新LM03／C実行入口／body起動は閉鎖、全体受付無効、通常経路未切替、Unknown、VM／監視／telemetry調査保留、LOAD6／LOAD7選択・AP01〜06未承認を維持する。§12の合成依存による限定実装・検証以外は進めず、Promise生成・観測登録・private公開・dispatch・実接続・実通信・実機操作・設定変更・コミット・Pushは行わない。
 
 ## 1 現行の事実と差分の限界
 
@@ -22,7 +22,7 @@ JR-Aの[記録](E2E_BEST_PRACTICE_NATIVE_JOIN_GENERATION_JRA_2026-11-17.md)に�
 
 ## 2 唯一の保持先・同owner結合
 
-主保持先は`RecoveryAnchor.runGeneration.pending`／`cleanupGeneration.pending`とする。これは設計上の選択で、今回は型を変更しない。旧`RecoveryAnchor.runPending`／`cleanupPending`は未接続のnull fieldのまま残し、第二のmutable writerや同runtimeの独立cacheにはしない。将来削除・読取りprojectionへ変える場合も別差分とする。親設計にある「pending」は以下のrole slotの主保持先を指す。
+主保持先は`RecoveryAnchor.runGeneration.pending`／`cleanupGeneration.pending`とする。§12で先行shellを保持できる型へ限定拡張した。旧`RecoveryAnchor.runPending`／`cleanupPending`は未接続のnull fieldのまま残し、第二のmutable writerや同runtimeの独立cacheにはしない。将来削除・読取りprojectionへ変える場合も別差分とする。親設計にある「pending」は以下のrole slotの主保持先を指す。
 
 | ID | 保持対象・生成元 | 固定field・参照の条件 |
 |---|---|---|
@@ -165,10 +165,24 @@ module基準の信頼、同ownerの保持、失敗候補の観測条件、ackの
 
 JR-Cのprivate公開・最終post、正規published cleanup再合流、legacy work統一・dispatch／entry・正常finish、外側custody、新LM03・旧UN62移行・friend撤去・AP承認は別工程である。既存のruntime friendを新rootへ持ち込む・本番受付を開く承認は含まない。
 
-## 11 今回の確認範囲
+## 11 draft-0.1／0.2作成時の確認範囲
 
 基準HEADのRecoveryAnchor／RoleGenerationSlot／JoinIdentity／JoinRuntime、JR-Aの資格・同期拒否、moduleのP／then捕捉、旧observe／clean／run executor、CP00の割当てを読み、現行と未実装契約を分けた。sourceのAST・文書link／表・ID・変更対象だけを静的確認する。RH／PI／RS／RF／RTは設計IDで、試験成功件数ではない。
 
 3文書のlocal link 24件・表20個、RH 9／PI 7／RS 10／RF 8／RT 12の計46設計行に欠落・重複・列ずれがないことを確認した。source ASTでは新JR-A継続への製品call 0、旧anchor直下pendingのnull初期値2か所と、sourceがHEADと同一であることを確認した。末尾改行・差分空白を確認し、stageは行っていない。
 
 既存のsource／compiled成功件数や全体回帰は履歴であり、本書の新契約の成功とはしない。今回は実装・製品moduleのimport／実行・Promise生成／観測・試験再実行・build／packを行わない。変更は本書と親2文書の参照・pending保持先・既reject候補と工程境界の訂正だけで、ソース・試験・CHANGELOG・依存・設定を変更せず、コミット・Pushも行わない。
+
+## 12 先行shell・非実行pinの限定実装
+
+[旧root](../src/review/abort-scope-evidence-native-diagnostic.ts)のJR-B閉鎖区間に、先行shell、context／identity、owner pinの保持と非実行検査を追加した。RS01〜04の準備範囲に限り、RS05の固定executor／観測closure・tupleは作らない。work／candidate／settler／ackはnull、観測claim・dispatch／entry・通知／copy／settle試行はfalseのままである。戻り値trueはpin準備の確認だけで、実行・観測・発行の権限ではない。
+
+CP00のrole slotへfaultAtを先行追加し、最後の保持位置と最初の失敗位置を分けた。slotのbuildingは同shellを保持した状態であり、旧JoinRuntimeのwork確認済みvariantへassertionしない。canonical shell／identity／pinのclosure内参照は、同割当てから一度だけ記録するaliasで、pendingと別の生成・更新cacheではない。holderと同値copyを入れ替えても実参照照合で拒否する。
+
+module基準は既存P／thenに加え、descriptor 6個（prototype／constructor／then／species／Object.isFrozen／global Object）、prototype参照と捕捉済み操作を一度だけ保持する。Objectのglobal binding自体もdescriptorで確認し、getter化を直接のObject参照で評価しない。新checkerは捕捉済みisFrozen等で旧readonly topology全fieldを確認する。既存JR-A beginの直前にはglobal ObjectとisFrozenのdata条件も確認するため、旧checkerへの新規到達で未確認getterを呼ばない。基準捕捉前のrealm改変とmodule初期化不能のUnknownは§3のままである。
+
+run／cleanupのprivate準備だけがJR-A beginを一度呼ぶ。shell→cleanup context（runは省略）→identity→pinを保持直後に位置へ記録し、各保持／freeze後に同owner・同期停止・同recordを確認する。停止したrunは後段へ進めず、同recordのread-only cleanupは先行取消／HTTP理由だけでは拒否しない。重複要求と部分失敗では既存shellをfailed_retainedにし、claim・先行faultAt・root primary／revoked・部分参照を保持する。upper通知・失敗copy・Promise終端は未接続である。
+
+[新source試験](../tests/review/native-join-runtime-pin.test.ts)と[独立oracle](../tests/review/fixtures/native-join-runtime-pin-model.mjs)は、新しい製品friendを作らず、出力JSの固定区間だけをscratchへ導出する。管理された新しい合成JS realmを使い、descriptor故障がrunnerや後続caseへ漏れないようにする。固定slot・実参照・14失敗prefix／2停止対照・16種類のpin変更・17構文正常変異・8 semantic不正型を検査する。[compiled検査](../tests/review/fixtures/compiled-native-join-runtime-pin.mjs)は固定distだけを使う。各件数は別保証で、270件のsource成功へ足し合わせない。
+
+旧JR-AはfaultAt初期fieldと、beginの唯一の内部callerが閉鎖した準備関数になった点だけを試験へ反映し、27資格拒否・32同一性拒否・121 phase値・同期失効を含む12変異を維持する。旧execute／clean等14関数・4export、元期限・既定並列度は維持した。初回RED・追加対照で判明した保持不備・故障注入位置の修正、検証結果と未実施範囲は[検証記録](E2E_BEST_PRACTICE_NATIVE_JOIN_RUNTIME_PIN_PREP_2026-11-17.md)へ分離する。

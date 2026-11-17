@@ -48,7 +48,7 @@ export function deriveGeneration(js,createNativeDiagnosticState){
   }`)(createNativeDiagnosticState);
 }
 // Independent event expectations: no output copied from the implementation.
-const empty=role=>({role,claimed:false,phase:'empty',position:'empty',fault:null,pending:null,published:null});
+const empty=role=>({role,claimed:false,phase:'empty',position:'empty',fault:null,pending:null,published:null,faultAt:null});
 export function verifyGeneration(create){
   let refusals=0;
   const a=create();assert.deepEqual(a.runSlot,empty('run'));assert.deepEqual(a.cleanupSlot,empty('cleanup'));

@@ -25,10 +25,29 @@ type NativeWorkflow = Readonly<{ execute(response: unknown, descriptor: unknown)
 type NativeFacade = Readonly<Omit<NativeWorkflow, 'stop'> & { stop(): void }>;
 type JoinRole = 'run' | 'cleanup';
 type JoinGenerationFault = 'invalid_state' | 'evidence_binding_mismatch' | 'internal_review_error';
-type RoleGenerationSlot<K extends JoinRole> = { readonly role: K; pending: null; published: null } & (
-    | { phase: 'empty'; claimed: false; position: 'empty'; fault: null }
-    | { phase: 'claimed_unheld'; claimed: true; position: 'claimed'; fault: null }
-    | { phase: 'failed_retained'; claimed: boolean; position: 'empty' | 'claimed'; fault: JoinGenerationFault }
+type JoinPreparationPosition = 'empty' | 'claimed' | 'runtime' | 'context' | 'identity' | 'pin';
+type JoinShellContext = Readonly<{ record: object; anchor: object }>;
+type JoinShellIdentity<K extends JoinRole> = Readonly<{ recovery: RecoveryAnchor; root: object; seed: object; kind: K;
+    context: K extends 'run' ? null : JoinShellContext }>;
+type OwnerPromisePin<K extends JoinRole> = Readonly<{ runtime: JoinRuntimeShell<K>; identity: JoinShellIdentity<K>;
+    basis: typeof joinPromiseBasis }>;
+type JoinRuntimeShell<K extends JoinRole> = {
+    readonly recovery: RecoveryAnchor; readonly root: object; readonly seed: object; readonly kind: K;
+    readonly contextRecord: object | null; readonly contextAnchor: object | null;
+    readiness: 'shell' | 'identity_ready' | 'pin_ready' | 'failed_retained';
+    context: JoinShellContext | null; identity: JoinShellIdentity<K> | null; pin: OwnerPromisePin<K> | null;
+    pinState: 'unprepared' | 'preparing' | 'ready' | 'rejected'; pinFault: JoinPreparationPosition | null;
+    executor: 'not_entered'; executorHandler: null; fulfilledHandler: null; rejectedHandler: null; observerArgs: null;
+    candidate: null; work: null; resolve: null; reject: null;
+    observerClaim: false; observerState: 'unstarted'; observerBusy: false; observed: 'unobserved'; callbackFault: null;
+    observerAckCandidate: null; observerAck: null; settleClaim: false; settleState: 'unattempted'; terminal: 'unobserved';
+    notifyAttempted: false; copyAttempted: false; dispatchStarted: false; entered: false;
+};
+type RoleGenerationSlot<K extends JoinRole> = { readonly role: K; published: null; faultAt: JoinPreparationPosition | null } & (
+    | { phase: 'empty'; claimed: false; position: 'empty'; fault: null; pending: null }
+    | { phase: 'claimed_unheld'; claimed: true; position: 'claimed'; fault: null; pending: null }
+    | { phase: 'building'; claimed: true; position: 'runtime' | 'context' | 'identity' | 'pin'; fault: null; pending: JoinRuntimeShell<K> }
+    | { phase: 'failed_retained'; claimed: boolean; position: JoinPreparationPosition; fault: JoinGenerationFault; pending: JoinRuntimeShell<K> | null }
 );
 type RecoveryAnchor = { state?: NativeState; writer?: ReturnType<NativeState['owner']['writers']>; preparation?: object;
     normal?: NativeWorkflow; facade?: NativeFacade; status: 'building' | 'ready' | 'failed';
@@ -39,6 +58,42 @@ type RecoveryAnchor = { state?: NativeState; writer?: ReturnType<NativeState['ow
     runGeneration: RoleGenerationSlot<'run'>; cleanupGeneration: RoleGenerationSlot<'cleanup'> };
 declare const terminalBrand: unique symbol;
 const P = Promise, promiseThen = P.prototype.then, promiseRace = P.race, promiseAll = P.all, enqueue = queueMicrotask;
+// JR-B-BASE-BEGIN: module-private reflection baseline, no Promise construction.
+const jbGlobal = globalThis, jbObject = Object, jbGet = Object.getOwnPropertyDescriptor, jbProto = Object.getPrototypeOf, jbOwn = Object.hasOwn,
+    jbFreeze = Object.freeze, jbFrozen = Object.isFrozen, jbProxy = types.isProxy, jbIsPromise = types.isPromise,
+    jbApply = Reflect.apply, jbSpecies = Symbol.species;
+const joinPromiseBasis = (() => {
+    const pd = jbGet(P, 'prototype'), proto: unknown = pd && 'value' in pd ? pd.value : null;
+    const usable = typeof P === 'function' && !jbProxy(P) && !!proto && typeof proto === 'object' && !jbProxy(proto);
+    const cd = usable ? jbGet(proto, 'constructor') : undefined, td = usable ? jbGet(proto, 'then') : undefined,
+        sd = usable ? jbGet(P, jbSpecies) : undefined, fd = jbGet(jbObject, 'isFrozen'), od = jbGet(jbGlobal, 'Object');
+    const ready = !!usable && !!pd && 'value' in pd && !!cd && 'value' in cd && cd.value === P &&
+        !!td && 'value' in td && td.value === promiseThen && !!sd && !('value' in sd) &&
+        typeof sd.get === 'function' && sd.set === undefined && !!fd && 'value' in fd && fd.value === jbFrozen &&
+        !!od && 'value' in od && od.value === jbObject;
+    return jbFreeze({ ready, p: P, proto, then: promiseThen, pd: pd && jbFreeze(pd), cd: cd && jbFreeze(cd),
+        td: td && jbFreeze(td), sd: sd && jbFreeze(sd), fd: fd && jbFreeze(fd), od: od && jbFreeze(od),
+        pParent: usable ? jbProto(P) : null, protoParent: usable ? jbProto(proto) : null,
+        isPromise: jbIsPromise, apply: jbApply });
+})();
+function sameJoinDescriptor(a: PropertyDescriptor | undefined, b: PropertyDescriptor | undefined): boolean {
+    if (!a || !b || a.enumerable !== b.enumerable || a.configurable !== b.configurable) return false;
+    const dataA = jbOwn(a, 'value'), dataB = jbOwn(b, 'value');
+    return dataA === dataB && (dataA ? a.value === b.value && a.writable === b.writable : a.get === b.get && a.set === b.set);
+}
+function joinLegacyReflectionSafe(): boolean {
+    return sameJoinDescriptor(jbGet(jbGlobal, 'Object'), joinPromiseBasis.od) &&
+        sameJoinDescriptor(jbGet(jbObject, 'isFrozen'), joinPromiseBasis.fd);
+}
+function joinPromisePinLive(): boolean {
+    return joinPromiseBasis.ready && joinLegacyReflectionSafe() &&
+        sameJoinDescriptor(jbGet(P, 'prototype'), joinPromiseBasis.pd) &&
+        sameJoinDescriptor(jbGet(joinPromiseBasis.proto, 'constructor'), joinPromiseBasis.cd) &&
+        sameJoinDescriptor(jbGet(joinPromiseBasis.proto, 'then'), joinPromiseBasis.td) &&
+        sameJoinDescriptor(jbGet(P, jbSpecies), joinPromiseBasis.sd) && jbProto(P) === joinPromiseBasis.pParent &&
+        jbProto(joinPromiseBasis.proto) === joinPromiseBasis.protoParent;
+}
+// JR-B-BASE-END
 const pinned = (() => {
     const rp = Response.prototype, sp = Stream.prototype, dp = Reader.prototype;
     const getter = (p: object, key: string) => Object.getOwnPropertyDescriptor(p, key)!.get!;
@@ -244,6 +299,7 @@ function allocateNativeDiagnosticConstruction(raw: NativeInput, fault?: NativeFa
             sameControlOwner(controlRoot, controlRun, controlDuty, controlRunJoin, controlCleanupJoin);
     }
     function rejectJoinGeneration(slot: RoleGenerationSlot<JoinRole>, code: JoinGenerationFault): false {
+        slot.faultAt ??= slot.position;
         slot.fault ??= code; slot.phase = 'failed_retained';
         primary ??= code; revoked = true;
         // No notification/callback inside the synchronous claim group; no CP failure facade or fictional cleanup facts.
@@ -273,6 +329,127 @@ function allocateNativeDiagnosticConstruction(raw: NativeInput, fault?: NativeFa
     // Keep these private continuations uncalled by legacy execute/clean; scratch-only probes exercise the same code.
     void joinRuntimePhaseValid; void beginRunGeneration; void beginCleanupGeneration;
     // JR-A-END: pending/publication slots remain null; legacy work is unchanged.
+    // JR-B-PREP-BEGIN: shell and pin only; no Promise, handlers, publication or dispatch.
+    let runShellExpected: JoinRuntimeShell<'run'> | null = null, cleanupShellExpected: JoinRuntimeShell<'cleanup'> | null = null;
+    let runIdentityExpected: JoinShellIdentity<'run'> | null = null, cleanupIdentityExpected: JoinShellIdentity<'cleanup'> | null = null;
+    let runPinExpected: OwnerPromisePin<'run'> | null = null, cleanupPinExpected: OwnerPromisePin<'cleanup'> | null = null;
+    function samePreparedControl(): boolean {
+        return recovery === joinRecovery && joinRecovery.runGeneration === runGeneration && joinRecovery.cleanupGeneration === cleanupGeneration &&
+            runGeneration.role === 'run' && cleanupGeneration.role === 'cleanup' &&
+            controlPreparation.origin === controlOrigin && controlPreparation.root === controlRoot && controlPreparation.run === controlRun &&
+            controlPreparation.duty === controlDuty && controlPreparation.runJoin === controlRunJoin && controlPreparation.cleanupJoin === controlCleanupJoin &&
+            jbFrozen(controlOrigin) && jbFrozen(controlRoot) && jbFrozen(controlRun) && jbFrozen(controlDuty) && jbFrozen(controlRunJoin) && jbFrozen(controlCleanupJoin) &&
+            controlRoot.origin === controlOrigin && controlRoot.binding === binding && controlRoot.upper === upper && controlRoot.writer === writer &&
+            controlRun.root === controlRoot && controlRun.join === controlRunJoin && controlRun.window === null && controlRun.attempt === null &&
+            controlRun.record === null && controlRun.startClaimed === false && controlDuty.root === controlRoot && controlDuty.run === controlRun &&
+            controlDuty.join === controlCleanupJoin && controlDuty.anchor === null && controlDuty.record === null && controlDuty.readerIdentity === undefined &&
+            controlDuty.retention === 'empty' && controlRunJoin.root === controlRoot && controlRunJoin.kind === 'run' && controlRunJoin.work === null &&
+            controlRunJoin.resolver === null && controlRunJoin.dispatchStarted === false && controlRunJoin.entered === false && controlRunJoin.settled === false &&
+            controlCleanupJoin.root === controlRoot && controlCleanupJoin.kind === 'cleanup' && controlCleanupJoin.work === null &&
+            controlCleanupJoin.resolver === null && controlCleanupJoin.dispatchStarted === false && controlCleanupJoin.entered === false && controlCleanupJoin.settled === false;
+    }
+    function failPreparedJoin(slot: RoleGenerationSlot<JoinRole>, at: JoinPreparationPosition, code: JoinGenerationFault): false {
+        slot.faultAt ??= at;
+        const shell = slot.role === 'run' ? runShellExpected : cleanupShellExpected;
+        if (shell) { shell.readiness = 'failed_retained'; if (at === 'pin') { shell.pinState = 'rejected'; shell.pinFault ??= at; } }
+        return rejectJoinGeneration(slot, code);
+    }
+    function allocateJoinShell<K extends JoinRole>(kind: K, seed: object, record: object | null, anchor: object | null): JoinRuntimeShell<K> {
+        return { recovery: joinRecovery, root: controlRoot, seed, kind, contextRecord: record, contextAnchor: anchor,
+            readiness: 'shell', context: null, identity: null, pin: null, pinState: 'unprepared', pinFault: null,
+            executor: 'not_entered', executorHandler: null, fulfilledHandler: null, rejectedHandler: null, observerArgs: null,
+            candidate: null, work: null, resolve: null, reject: null, observerClaim: false, observerState: 'unstarted', observerBusy: false,
+            observed: 'unobserved', callbackFault: null, observerAckCandidate: null, observerAck: null, settleClaim: false,
+            settleState: 'unattempted', terminal: 'unobserved', notifyAttempted: false, copyAttempted: false, dispatchStarted: false, entered: false };
+    }
+    function shellPreparationLive(s: JoinRuntimeShell<'run'> | JoinRuntimeShell<'cleanup'>): boolean {
+        if (s !== runShellExpected && s !== cleanupShellExpected) return false;
+        const slot = s.kind === 'run' ? runGeneration : cleanupGeneration;
+        return samePreparedControl() && slot.pending === s && slot.claimed && slot.phase === 'building' && slot.fault === null &&
+            slot.faultAt === null && slot.published === null && joinRecovery.status === 'ready' && started && !sealed &&
+            (s.kind === 'cleanup' || !revoked && primary === null) && s.recovery === joinRecovery && s.root === controlRoot &&
+            s.seed === (s.kind === 'run' ? controlRun : controlDuty) &&
+            (s.kind === 'run' ? s.contextRecord === null && s.contextAnchor === null :
+                !!current && s.contextRecord === current && s.contextAnchor === current.anchor && current.anchor.binding === binding);
+    }
+    function preparedShellMatched(rawShell: unknown, rawIdentity: unknown, rawPin: unknown, role: JoinRole): boolean {
+        const s = role === 'run' ? runShellExpected : cleanupShellExpected,
+            identity = role === 'run' ? runIdentityExpected : cleanupIdentityExpected, pin = role === 'run' ? runPinExpected : cleanupPinExpected,
+            slot = role === 'run' ? runGeneration : cleanupGeneration;
+        if (!s || rawShell !== s || !identity || rawIdentity !== identity || !pin || rawPin !== pin) return false;
+        return shellPreparationLive(s) && slot.pending === s && slot.claimed && slot.phase === 'building' && slot.position === 'pin' &&
+            slot.fault === null && slot.faultAt === null && slot.published === null && joinRecovery.status === 'ready' && !sealed &&
+            (role === 'cleanup' || !revoked && primary === null) && s.recovery === joinRecovery && s.root === controlRoot &&
+            s.kind === role && s.seed === (role === 'run' ? controlRun : controlDuty) && s.identity === identity && s.pin === pin &&
+            identity.recovery === joinRecovery && identity.root === controlRoot && identity.seed === s.seed && identity.kind === role &&
+            identity.context === s.context && jbFrozen(identity) && jbFrozen(pin) && pin.runtime === s && pin.identity === identity &&
+            pin.basis === joinPromiseBasis && s.readiness === 'pin_ready' && s.pinState === 'ready' && s.pinFault === null &&
+            (role === 'run' ? s.context === null && s.contextRecord === null && s.contextAnchor === null :
+                !!current && s.contextRecord === current && s.contextAnchor === current.anchor && current.anchor.binding === binding &&
+                !!s.context && jbFrozen(s.context) && s.context.record === current && s.context.anchor === current.anchor) &&
+            s.executor === 'not_entered' && s.executorHandler === null && s.fulfilledHandler === null && s.rejectedHandler === null && s.observerArgs === null &&
+            s.candidate === null && s.work === null && s.resolve === null && s.reject === null && s.observerClaim === false && s.observerState === 'unstarted' &&
+            s.observerBusy === false && s.observed === 'unobserved' && s.callbackFault === null && s.observerAckCandidate === null && s.observerAck === null &&
+            s.settleClaim === false && s.settleState === 'unattempted' && s.terminal === 'unobserved' && s.notifyAttempted === false && s.copyAttempted === false &&
+            s.dispatchStarted === false && s.entered === false && joinPromisePinLive();
+    }
+    function prepareRunShell(slot: unknown, root: unknown, seed: unknown): boolean {
+        if (slot !== runGeneration || root !== controlRoot || seed !== controlRun || !samePreparedControl())
+            return failPreparedJoin(runGeneration, 'empty', 'evidence_binding_mismatch');
+        if (!joinLegacyReflectionSafe())
+            return failPreparedJoin(runGeneration, 'pin', 'internal_review_error');
+        if (!beginRunGeneration(slot, root, seed))
+            return failPreparedJoin(runGeneration, runGeneration.faultAt ?? 'claimed', runGeneration.fault ?? 'invalid_state');
+        let at: JoinPreparationPosition = 'runtime';
+        try {
+            const s = runShellExpected = runGeneration.pending = allocateJoinShell('run', controlRun, null, null);
+            runGeneration.position = 'runtime'; runGeneration.phase = 'building';
+            if (!shellPreparationLive(s)) return failPreparedJoin(runGeneration, at, 'invalid_state');
+            at = 'identity';
+            const identity = runIdentityExpected = s.identity = { recovery: joinRecovery, root: controlRoot, seed: controlRun, kind: 'run', context: null };
+            runGeneration.position = 'identity'; jbFreeze(identity); s.readiness = 'identity_ready';
+            if (!shellPreparationLive(s)) return failPreparedJoin(runGeneration, at, 'invalid_state');
+            at = 'pin'; s.pinState = 'preparing';
+            const pin = runPinExpected = s.pin = { runtime: s, identity, basis: joinPromiseBasis };
+            runGeneration.position = 'pin';
+            if (!joinPromisePinLive()) return failPreparedJoin(runGeneration, at, 'internal_review_error');
+            jbFreeze(pin); s.pinState = 'ready'; s.readiness = 'pin_ready';
+            if (!preparedShellMatched(s, identity, pin, 'run')) return failPreparedJoin(runGeneration, at, 'invalid_state');
+            return true;
+        } catch { return failPreparedJoin(runGeneration, at, 'internal_review_error'); }
+    }
+    function prepareCleanupShell(slot: unknown, root: unknown, seed: unknown, record: unknown, anchor: unknown): boolean {
+        if (slot !== cleanupGeneration || root !== controlRoot || seed !== controlDuty || !samePreparedControl())
+            return failPreparedJoin(cleanupGeneration, 'empty', 'evidence_binding_mismatch');
+        if (!joinLegacyReflectionSafe())
+            return failPreparedJoin(cleanupGeneration, 'pin', 'internal_review_error');
+        if (!beginCleanupGeneration(slot, root, seed, record, anchor))
+            return failPreparedJoin(cleanupGeneration, cleanupGeneration.faultAt ?? 'claimed', cleanupGeneration.fault ?? 'invalid_state');
+        const r = current;
+        if (!r) return failPreparedJoin(cleanupGeneration, 'context', 'evidence_binding_mismatch');
+        let at: JoinPreparationPosition = 'runtime';
+        try {
+            const s = cleanupShellExpected = cleanupGeneration.pending = allocateJoinShell('cleanup', controlDuty, r, r.anchor);
+            cleanupGeneration.position = 'runtime'; cleanupGeneration.phase = 'building';
+            if (!shellPreparationLive(s)) return failPreparedJoin(cleanupGeneration, at, 'invalid_state');
+            at = 'context'; const context = s.context = { record: r, anchor: r.anchor };
+            cleanupGeneration.position = 'context'; jbFreeze(context);
+            if (!shellPreparationLive(s)) return failPreparedJoin(cleanupGeneration, at, 'invalid_state');
+            at = 'identity';
+            const identity = cleanupIdentityExpected = s.identity = { recovery: joinRecovery, root: controlRoot, seed: controlDuty, kind: 'cleanup', context };
+            cleanupGeneration.position = 'identity'; jbFreeze(identity); s.readiness = 'identity_ready';
+            if (!shellPreparationLive(s)) return failPreparedJoin(cleanupGeneration, at, 'invalid_state');
+            at = 'pin'; s.pinState = 'preparing';
+            const pin = cleanupPinExpected = s.pin = { runtime: s, identity, basis: joinPromiseBasis };
+            cleanupGeneration.position = 'pin';
+            if (!joinPromisePinLive()) return failPreparedJoin(cleanupGeneration, at, 'internal_review_error');
+            jbFreeze(pin); s.pinState = 'ready'; s.readiness = 'pin_ready';
+            if (!preparedShellMatched(s, identity, pin, 'cleanup')) return failPreparedJoin(cleanupGeneration, at, 'invalid_state');
+            return true;
+        } catch { return failPreparedJoin(cleanupGeneration, at, 'internal_review_error'); }
+    }
+    void prepareRunShell; void prepareCleanupShell;
+    // JR-B-PREP-END
     function stop(code: Code = 'cancelled', stage: Stage = 'stop') {
         if (sealed) return;
         primary ??= code; upper.stop(primary, stage);
@@ -475,8 +652,8 @@ function allocateNativeDiagnosticConstruction(raw: NativeInput, fault?: NativeFa
             rejectRecorded: false, stopRecorded: false, notified: false, sealRecorded: false,
             operations: { get_reader: 0, closed: 0, cancel: 0, release_lock: 0, read: 0 }, counts: { issued: 0, consume_attempts: 0, consumed: 0 },
             runPending: null, cleanupPending: null,
-            runGeneration: { role: 'run', claimed: false, phase: 'empty', position: 'empty', fault: null, pending: null, published: null },
-            cleanupGeneration: { role: 'cleanup', claimed: false, phase: 'empty', position: 'empty', fault: null, pending: null, published: null } };
+            runGeneration: { role: 'run', claimed: false, phase: 'empty', position: 'empty', fault: null, pending: null, published: null, faultAt: null },
+            cleanupGeneration: { role: 'cleanup', claimed: false, phase: 'empty', position: 'empty', fault: null, pending: null, published: null, faultAt: null } };
         recovery.state = createNativeDiagnosticState(); recovery.checkpoint = 'state';
         recovery.state.owner.bind(recovery.state.binding); recovery.checkpoint = 'bound';
         recovery.writer = recovery.state.owner.writers('release'); recovery.checkpoint = 'writer';

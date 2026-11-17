@@ -1,13 +1,13 @@
 # JoinRuntimeの段階型と生成資格およびPromise保持失敗境界の詳細設計
 
-Version: native-diagnostic-join-runtime-generation-draft-0.4 / Date: 2026-11-17。
-Status: JR-Aの内部型・固定slot・一度限りclaim・生成資格検査だけを合成依存に限定して実装（§12）。設計基準HEADは`c466b75`、JR-Aの基準HEADは`b770e59`。[構築回収・Join公開設計](BEST_PRACTICE_NATIVE_DIAGNOSTIC_CONSTRUCTION_JOIN_DELTA_DESIGN.md)§5〜7の生成・保持部分を具体化する。JoinRuntime実体、同Promise／settler生成、private公開は未実装・未接続である。
+Version: native-diagnostic-join-runtime-generation-draft-0.5 / Date: 2026-11-17。
+Status: JR-A（§12）とJR-Bの先行shell／非実行pin／失敗保持だけを合成依存に限定して実装。設計基準HEADは`c466b75`、JR-Aの基準HEADは`b770e59`。[構築回収・Join公開設計](BEST_PRACTICE_NATIVE_DIAGNOSTIC_CONSTRUCTION_JOIN_DELTA_DESIGN.md)§5〜7の生成・保持部分を具体化する。同Promise／settler生成・拒否観測・失敗終端・private公開は未実装・未接続である。
 
 draft-0.2のレビュー修正：レビュー修正の基準HEADは`ec7b768`。§12は拒否時に同期revokedへすると定めていたが、独立oracleは拒否後のprimaryだけを確認しており、`rejectJoinGeneration`の`revoked = true`を外した変異がsource・compiledの両対照を通過した。全ての資格／同一性拒否と失敗保持でrevokedを確認し、同期失効を外す変異を構文正常な変異の12件目に加えた（§12）。製品コードは変更していない。
 
 生成資格の確認と失敗の保持先を、Promiseの生成より先に確保する。構築readyはrunの生存資格ではなく、Promiseの保持・終端はnative cleanupや正式受理の証拠ではない。runとcleanupを同じ停止条件で扱わず、既存の単一状態・元floor・同ownerの責務を維持する。
 
-正式発行口／新LM03／C実行入口／body起動閉鎖、全体受付無効、Unknown、通常経路未切替、VM／監視／telemetry調査保留、LOAD6／LOAD7選択とAP01〜06未承認を維持する。§12の限定実装・合成検証以外は進めず、Promise生成試験・dispatch接続・実接続・実通信・実機操作・設定変更・build／runner設定変更・公開・コミット・Pushは行わない。
+正式発行口／新LM03／C実行入口／body起動閉鎖、全体受付無効、Unknown、通常経路未切替、VM／監視／telemetry調査保留、LOAD6／LOAD7選択とAP01〜06未承認を維持する。§12・13の限定実装・合成検証以外は進めず、Promise生成試験・dispatch接続・実接続・実通信・実機操作・設定変更・build／runner設定変更・公開・コミット・Pushは行わない。
 
 ## 1 現行の事実と対象範囲
 
@@ -15,7 +15,7 @@ draft-0.2のレビュー修正：レビュー修正の基準HEADは`ec7b768`。�
 |---|---|---|
 | 構築ready | [旧root](../src/review/abort-scope-evidence-native-diagnostic.ts)のready判定はRecoveryAnchor.statusだけを見る。正常stop／closeは別のrevoked／sealed等を更新する | readyだけで生成を許可しない。正規identityと同closureのrun／cleanup別資格を併せて検査する |
 | 空seed | RootControlLink／RunLink／ResourceDuty／2空JoinCellはreadonly。現checkerはnull／falseも要求する | 空seedは変更せず、新slotの段階別検査を別にする。不変identityの検査は省略しない |
-| 保持slot | RecoveryAnchorのrunPending／cleanupPendingと、各role slotのpendingは現在literal null | JR-Bの主保持先は同anchorが持つ各RoleGenerationSlot.pendingとする。旧anchor直下のpendingは未接続のnull fieldのまま残し、第二writerにしない。claimと失敗scalarを先行準備する |
+| 保持slot | 旧anchor直下のrunPending／cleanupPendingはliteral null。各roleのpendingはJR-B閉鎖準備でだけ先行shellを保持する | 同anchorが持つ各RoleGenerationSlot.pendingを主保持先とする。旧anchor直下のpendingを第二writerにせず、claimと失敗scalarを先行準備する |
 | 実work | runWork／record.cleanupWorkは旧Promise executor内でenqueueする | 今回は変更しない。新旧workを同時生成せず、将来の採用時に唯一のworkへ統一する |
 | 構築failure copy | CP00〜05は取得前失敗をclosed／sealedの同copyまたは固定拒否へ終端する | run／cleanupの生成失敗へそのまま流用しない。特にresource取得後に構築失敗としてseal・空扱いにしない |
 | 補強試験 | raw不正の同copy終端、通知throw下のbegin拒否、正常aggregate後のcopy不能の3件は基準HEADに含まれる | [既存試験](../tests/review/native-construction-recovery.test.ts)を変更・削除せず保持する。今回の新契約の成功数には加算しない |
@@ -191,4 +191,4 @@ cleanupは同closureのcurrent recordとそのanchor実参照、同binding、元
 
 ## 13 JR-Bの先行保持・固定pinへの差分
 
-[先行runtime・失敗保持先とPromise固定pin・観測前提の接続差分設計draft-0.2](BEST_PRACTICE_NATIVE_DIAGNOSTIC_JRB_RUNTIME_PIN_DELTA_DESIGN.md)で、同roleのpendingを唯一の主保持先とし、shell→context／identity→owner pin→同P生成→候補・観測の保持順を具体化した。module基準とowner pinを分け、生成成功と失敗候補の安全な拒否観測も区別する。先行primary／同期revoked・半捕捉prefix・ack未確認を保持し、CP構築回収へ戻さない。MDのみの追加であり、runtime実体・Promise生成・拒否観測・失敗終端・private公開・dispatchは未実装・未接続のままである。
+[先行runtime・失敗保持先とPromise固定pin・観測前提の接続差分設計draft-0.3](BEST_PRACTICE_NATIVE_DIAGNOSTIC_JRB_RUNTIME_PIN_DELTA_DESIGN.md)で、同roleのpendingを唯一の主保持先とし、保持順と観測前提を具体化した。同書§12で先行shell／context／identity／owner pinの保持・非実行検査・失敗保持だけ限定実装した。module基準とowner pin、生成成功と失敗候補の観測を分け、先行primary／同期revokedを維持する。Promise／handler生成・拒否観測・失敗終端・private公開・dispatchは未実装・未接続のままである。
