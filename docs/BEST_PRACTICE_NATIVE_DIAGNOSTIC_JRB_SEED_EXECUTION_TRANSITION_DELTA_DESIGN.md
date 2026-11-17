@@ -151,3 +151,7 @@ joinExecutionValuePostはcreator内部のdata投影を対象とする。raw JSON
 既存requestJoinExecutionと3closureの本文は固定拒否のまま、新2検査への製品callerは0である。正常なchecked投影を検査しても元shellのclaimはfalse、candidate等はnullのままで、request2経路とclosure6経路は従前の最初のfault／同期失効を保持する。新export・friend・raw mode・fake event writer・fixture台帳の共有は追加しない。
 
 [source試験](../tests/review/native-join-execution-values.test.ts)、[独立値表／scratch境界](../tests/review/fixtures/native-join-execution-values-model.mjs)、[固定dist検査](../tests/review/fixtures/compiled-native-join-execution-values.mjs)と[検証記録](E2E_BEST_PRACTICE_NATIVE_JOIN_EXECUTION_VALUES_2026-11-17.md)を追加した。実行variantは将来契約の値検査であり、constructor／entry claim消費・settler捕捉・Promise生成・安全観測・固定abort／失敗終端・private公開・dispatchは引き続き未接続である。
+
+## 10 同shellの実writer・安全観測／固定終端への受渡し（2026-11-18追記）
+
+[同shellの実行writer・安全観測・固定終端受渡しの差分詳細設計draft-0.1](BEST_PRACTICE_NATIVE_DIAGNOSTIC_JRB_LIVE_WRITER_TERMINAL_HANDOFF_DELTA_DESIGN.md)で、§2の実shell／slot限定拡張と§4〜6を、実field post・writer資格・claim消費点・失敗prefixの受渡しへ具体化した。readonly値postをwriterにせず、ack保持途中と登録完了postを分離し、同pending／取得時alias・先行診断と未確認責務を保持する。追加済みのslot拡張方針と既存固定拒否は維持する。今回はMDだけで、生成・観測・固定drain・private公開・dispatchは接続しない。
