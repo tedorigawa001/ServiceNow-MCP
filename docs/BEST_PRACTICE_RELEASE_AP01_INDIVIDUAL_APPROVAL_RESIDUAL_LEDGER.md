@@ -191,6 +191,8 @@ Dの3variantは全てok=false／code=invalid_response、budget.requests=1／rece
 
 この順序は宣言名の「before creating authority」の静的根拠であり、元6variantがsession未生成・friend未呼出し・時計0・timer0・global fetch未呼出しを計測した証拠ではない。`probeNewStatusAcceptance`はasync関数なので、拒否はPromiseのrejectとして返る。同期throwかどうかは元caseの対象外である。SA-06〜08と違い、後続のfresh probe成功もこのcaseはassertしていない。
 
+ここでの「friend呼出し前」は各probe呼出しからfresh生成継続へ入る前という意味に限る。module評価時の一度限りfriend取得は既に別の段階で行われ、取得0・権限不存在・撤去済みを意味しない。この6入力はprofileのkey／値検査でbytes copy・fake保持へ到達しないが、元testは例外text／秘密非出力・入力不変・run／construction／native診断も直接assertしていない。wrapperのcatchによる固定codeへの写像を、診断の全保持・全graph解放・失敗後再利用拒否の実測へ拡大しない。新規runを作らず拒否する位置と、既存moduleが保持するfriendの寿命・撤去責務（AP02）を分けて残す。
+
 #### 独立D候補・compiledとの対応と残差
 
 | 比較先 | 直接assertion | 元Pとの差・回復条件 |
@@ -319,5 +321,7 @@ AP01の判断材料が揃っても、保証回復・配布閉包撤去・最終�
 ### draft-0.4：SA-09〜14の個別本文照合（2026-11-19）
 
 基準`6c6123e`の元宣言／helper・6入力と直接1assertion、開発専用probeの最上位options／profile pinとfriend呼出し前の拒否順序、DN-04／05・DN-14・DS-25・DR-20の該当本文、既存compiled SA fixtureを静的に読んだ。6variantがprofileへの上書き合成であること、拒否位置の静的根拠と元caseの直接assertion（invalid_inputのrejectだけ）、Dの別入口・強い別assertionを分離した。session未生成・時計0・friend未呼出し・後続fresh成功を推測補完しない。
+
+今回の開始時点で既に同2MDにdraft-0.4の未コミット変更があったため、その内容を保持して元本文・正規台帳と再照合した。照合中に既存分が`e1caa41`としてコミットされたことを確認したが、本作業ではstage／commitを実行していない。module評価時のfriend取得と各probeのfriend呼出しを区別する保持責務を補足し、AP01親文書のdraft-0.3時点の件数を履歴と明記した。補足は同2MDの未コミット差分として残し、元case・source／試験・承認欄は変更していない。
 
 2MDの表20・ローカルlink138・明示anchor84、A1設計ID94（従来82＋S12）、正規228／6レビュー延べ123・重複除外119／重複4を確認。追加12旧caseは既存119と重複せず部分対応8／未対応4で正規台帳と一致、現文書対応131、閉鎖lane126／未レビュー32、全区分の専用行なし97（32＋入口3＋別gate62）と一致した。初稿U44の索引・重複4旧caseの両参照、通常K5群・AP01〜06未承認・処遇未選択を保持。ローカル参照・表列数・末尾改行・差分空白を静的確認した。変更はtrackedのMD2件だけで、製品・試験・設定変更0。製品module import／friend取得・試験再実行・build／pack・発行・Pushはせず、保証回復・実行同等性・個別承認・公開可の実績は追加しない。
