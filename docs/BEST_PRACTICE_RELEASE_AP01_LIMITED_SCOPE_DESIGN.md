@@ -88,4 +88,4 @@ AP01が将来個別承認されても、AP02の撤去、AP03の入力／返却�
 
 ## 7 NS01の個別レビュー（draft-0.2）
 
-[同constructor・core・登録ready世代と偽ready拒否の保証レビューdraft-0.1](BEST_PRACTICE_RELEASE_AP01_NS01_BINDING_GUARANTEE_REVIEW.md)で、NS01の主要6旧caseと隣接8旧caseを、元assertion・Dの候補・未代替の残差・将来回復条件へ対応付けた。SAB-08の最終rejectとNDB-08のrequest／native操作0の差、DS-07のduplicate readyとの非同等性、same_core／same_sourceの診断projectionと私有実参照の違いを整理する。§6は初稿作成時の履歴で、今回の変更は本追記と別紙MDだけ。保証低下・旧試験削除・friend撤去・設定変更・公開は未承認のままで、新しい試験結果・回復完了・公開可の実績は追加しない。
+[同constructor・core・登録ready世代と偽ready拒否の保証レビューdraft-0.2](BEST_PRACTICE_RELEASE_AP01_NS01_BINDING_GUARANTEE_REVIEW.md)で、NS01の主要6旧caseと隣接8旧caseを、元assertion・Dの候補・未代替の残差・将来回復条件へ対応付けた。SAB-08の最終rejectとNDB-08のrequest／native操作0の差、DS-07のduplicate readyとの非同等性、same_core／same_sourceの診断projectionと私有実参照の違いを整理する。§6は初稿作成時の履歴で、今回の変更は本追記と別紙MDだけ。保証低下・旧試験削除・friend撤去・設定変更・公開は未承認のままで、新しい試験結果・回復完了・公開可の実績は追加しない。
