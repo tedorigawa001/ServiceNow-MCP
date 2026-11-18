@@ -1,6 +1,6 @@
 # AP01：限定リリースの非提供範囲・未代替保証と将来の回復条件
 
-Version: release-ap01-limited-scope-draft-0.7 / Date: 2026-11-19。
+Version: release-ap01-limited-scope-draft-0.8 / Date: 2026-11-19。
 Status: **限定リリース案を公開方針として採用。AP01の保証低下・旧試験の処遇は未承認で、公開可の判定ではない。** 読取り基準HEADは`76fa545`。今回のユーザー指示を公開方針の決定根拠とし、個別承認の代行や将来の撤去許可へ広げない。
 
 正式発行口閉鎖・全体受付無効・通常経路未切替・C実行入口／body起動閉鎖・Unknown・VM／監視／telemetry調査保留を維持する。LOAD6／LOAD7選択も未承認のまま。今回はMDと親文書の参照整理だけであり、保証低下・旧試験削除／skip／期待値弱化・friend撤去・実装・発行／claim消費・負荷採取・試験再実行・build／pack・実接続・実通信・実機操作・設定変更・版変更・公開・コミット・Pushは行わない。
@@ -109,3 +109,7 @@ AP01が将来個別承認されても、AP02の撤去、AP03の入力／返却�
 ## 12 NS06の個別レビュー（draft-0.7）
 
 [同acceptedの上位時刻移譲・sourceClosed／discardとpost-O取消の保証レビューdraft-0.1](BEST_PRACTICE_RELEASE_AP01_NS06_TIME_HANDOFF_GUARANTEE_REVIEW.md)にTH01〜06の6台帳variantを対応付けた。同acceptedの一度消費、正常source解放とrun失効、選択3点のsync／queued取消と全post-O同期sweep、固定discard・私有診断を分ける。finally全解放sectionの継続はrollback救済と区別した未確認責務として残し、合成worker issuerの値保証を実session／job・実終了への接続と数えない。編集は本追記・版更新と別紙MDだけで、旧分類・試験結果とNS01〜05のレビューは維持。保証低下・旧試験削除・friend撤去・設定変更・公開は未承認、各閉鎖条件・Unknown・調査保留も維持する。
+
+## 13 個別承認用の残差台帳（draft-0.8）
+
+[未レビュー／重複・通常維持・個別残差台帳draft-0.1](BEST_PRACTICE_RELEASE_AP01_INDIVIDUAL_APPROVAL_RESIDUAL_LEDGER.md)で、正規228行と6レビューの延べ123行・重複除外119旧caseを文書上で照合した。閉鎖lane候補158行の専用行なし44、入口7行の専用行なし3、通常維持SP25、別gateのUN62を分離し、全caseレビュー完了・移行率にはしない。重複4旧caseの両条件、KP01〜05の維持、失われ得る直接assertion・役割上の責務先・将来回復条件と未選択／未承認の個別票を整理する。編集は本追記・版更新と別紙MDだけ。保証低下・旧試験削除・friend撤去・設定変更・公開は未承認、各閉鎖条件・Unknown・調査保留を維持し、実装・Pushは行わない。
