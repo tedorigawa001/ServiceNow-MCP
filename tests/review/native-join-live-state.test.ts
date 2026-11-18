@@ -54,7 +54,8 @@ it('has no operational caller and only shares primitive read predicates inside t
     if(ts.isCallExpression(n)&&ts.isIdentifier(n.expression)&&['joinLiveFieldPost','recordJoinExecutionFailure','holdJoinExecutionUnconfirmed',
       'joinLiveTailUnused','joinLiveAcquisitionPost','joinLiveObservationPost'].includes(n.expression.text))calls.push(n.expression.text+':'+owner);
     ts.forEachChild(n,c=>visit(c,owner));}visit(tree);
-  expect(calls).toEqual(['joinLiveTailUnused:joinLiveFieldPost','joinLiveAcquisitionPost:joinLiveFieldPost','joinLiveObservationPost:joinLiveFieldPost']);
+  expect(calls).toEqual(['joinLiveTailUnused:joinLiveFieldPost','joinLiveAcquisitionPost:joinLiveFieldPost','joinLiveObservationPost:joinLiveFieldPost',
+    'recordJoinExecutionFailure:reflectJoinPrecallFailure','holdJoinExecutionUnconfirmed:reflectJoinPrecallFailure']);
 });
 it('widens only the internal same-shell view and executable slot positions while retaining role and literal-closed seed contracts',()=>{
   const text=source(),name=fileURLToPath(new URL('../../src/review/__live_state_types.ts',import.meta.url));

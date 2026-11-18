@@ -1,6 +1,9 @@
 # JR-B seedから実行状態へのclaim・settler保持・post接続差分詳細設計
 
-Version: native-diagnostic-jrb-seed-execution-transition-draft-0.7 / Date: 2026-11-18。
+Version: native-diagnostic-jrb-seed-execution-transition-draft-0.8 / Date: 2026-11-18。
+
+draft-0.8追記：§11参照先の先行診断・一度限り固定拒否・安全なfailure反映を限定実装した。全field受付・alias供給・constructor／entry claim消費は接続せず、旧固定拒否・Unknownを維持する。
+
 Status: §9の実行variant・origin leaf・段階別値postと、§10参照先の閉鎖実運用型／実field post／failure保持だけを合成依存限定で実装。設計基準HEADは`07b4c45`、値契約限定実装の基準HEADは`a477987`。[未使用seed設計](BEST_PRACTICE_NATIVE_DIAGNOSTIC_JRB_EXECUTION_SEED_CONTRACT_DESIGN.md)EI02〜06・ES05〜06・EW02〜06と、[closure／tuple設計](BEST_PRACTICE_NATIVE_DIAGNOSTIC_JRB_HANDLERS_POST_TERMINAL_DELTA_DESIGN.md)HP04〜09を具体化する。[JoinRuntime設計](BEST_PRACTICE_NATIVE_DIAGNOSTIC_JOIN_RUNTIME_GENERATION_DESIGN.md)と[固定pin設計](BEST_PRACTICE_NATIVE_DIAGNOSTIC_JRB_RUNTIME_PIN_DELTA_DESIGN.md)の同owner・同P・観測／固定終端の一体接続は変更しない。
 
 draft-0.7のレビュー修正：レビュー修正の基準HEADは`2ecb117`（修正時のHEADは`2ecb117`）。§11にpre-call受付設計への参照節（2026-11-18追記）を加えた一方、版はdraft-0.6のままだった。版を上げ、参照元の構築Join設計・JoinRuntime設計・先行field契約・受渡し設計の版参照を直した。受渡し設計への参照もdraft-0.4へ更新した。内容・実装は変更していない。
@@ -164,8 +167,8 @@ joinExecutionValuePostはcreator内部のdata投影を対象とする。raw JSON
 
 ## 10 同shellの実writer・安全観測／固定終端への受渡し（2026-11-18追記）
 
-[同shellの実行writer・安全観測・固定終端受渡しの差分詳細設計draft-0.4](BEST_PRACTICE_NATIVE_DIAGNOSTIC_JRB_LIVE_WRITER_TERMINAL_HANDOFF_DELTA_DESIGN.md)で、§2の実shell／slot限定拡張と§4〜6を、実field post・writer資格・claim消費点・失敗prefixの受渡しへ具体化した。同書§9で同shellの実運用型・実field post・原始failure／cold未確認保持だけを合成依存限定で実装し、readonly値postをwriterにせず、ack保持途中と登録完了postを分離する。追加済みのslot拡張方針と既存固定拒否を維持し、取得claim・生成・観測・固定drain・private公開・dispatchは接続しない。
+[同shellの実行writer・安全観測・固定終端受渡しの差分詳細設計draft-0.5](BEST_PRACTICE_NATIVE_DIAGNOSTIC_JRB_LIVE_WRITER_TERMINAL_HANDOFF_DELTA_DESIGN.md)で、§2の実shell／slot限定拡張と§4〜6を、実field post・writer資格・claim消費点・失敗prefixの受渡しへ具体化した。同書§9で同shellの実運用型・実field post・原始failure／cold未確認保持だけを合成依存限定で実装し、readonly値postをwriterにせず、ack保持途中と登録完了postを分離する。追加済みのslot拡張方針と既存固定拒否を維持し、取得claim・生成・観測・固定drain・private公開・dispatchは接続しない。
 
 ## 11 pre-call data受付・alias供給とcall 0停止（2026-11-18追記）
 
-[pre-call受付・write-once aliasとconstructor call 0停止の差分詳細設計draft-0.1](BEST_PRACTICE_NATIVE_DIAGNOSTIC_JRB_PRECALL_ADMISSION_ALIAS_DELTA_DESIGN.md)で、CS01〜04／PP01〜03の生成前資格を、全field・同owner・停止／live pin・先行拒否保持と対にした。必要な観測／固定abort・失敗終端を欠く現在はcall 0であり、14null aliasや正常postだけから呼出し権限を作らない。追加scalar／write-once producer・受付scheduleは設計だけで、既存固定拒否・各閉鎖条件・Unknown・調査保留を維持する。
+[pre-call受付・write-once aliasとconstructor call 0停止の差分詳細設計draft-0.2](BEST_PRACTICE_NATIVE_DIAGNOSTIC_JRB_PRECALL_ADMISSION_ALIAS_DELTA_DESIGN.md)で、CS01〜04／PP01〜03の生成前資格を、全field・同owner・停止／live pin・先行拒否保持と対にした。同書§9では先行scalar・一度限りの固定拒否・安全なfailure反映だけを合成依存限定で実装する。必要な観測／固定abort・失敗終端を欠く現在はcall 0であり、14null aliasや正常postだけから呼出し権限を作らない。全field受付・write-once producer・生成scheduleは未接続で、既存固定拒否・各閉鎖条件・Unknown・調査保留を維持する。

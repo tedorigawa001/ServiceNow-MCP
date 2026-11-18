@@ -25,6 +25,7 @@ type NativeWorkflow = Readonly<{ execute(response: unknown, descriptor: unknown)
 type NativeFacade = Readonly<Omit<NativeWorkflow, 'stop'> & { stop(): void }>;
 type JoinRole = 'run' | 'cleanup';
 type JoinGenerationFault = 'invalid_state' | 'evidence_binding_mismatch' | 'internal_review_error';
+type JoinPrecallCheck = 'busy' | 'attempted' | 'owner' | 'composition' | 'control';
 type JoinPreparationPosition = 'empty' | 'claimed' | 'runtime' | 'context' | 'identity' | 'pin' | 'handlers';
 type JoinHandlersDetail = 'none' | 'executor_held' | 'fulfilled_held' | 'three_held' | 'tuple_held' | 'tuple_frozen' | 'complete';
 type JoinHandlersFault = 'entry' | 'executor_hold' | 'fulfilled_hold' | 'rejected_hold' | 'tuple_hold' | 'tuple_freeze' | 'handlers_post' | 'closed_call';
@@ -261,6 +262,12 @@ function allocateNativeDiagnosticConstruction(raw: NativeInput, fault?: NativeFa
         } catch { failConstruction(primary ?? 'internal_review_error'); }
     }
     function initializeLegacyWorkflow(): NativeWorkflow {
+    // JR-B-PRECALL-SCALARS-BEGIN: prior primitive custody only.
+    let runPrecallAttempted = false, runPrecallBusy = false;
+    let runPrecallRefusalCheck: JoinPrecallCheck | null = null, runPrecallRefusalCode: JoinGenerationFault | null = null;
+    let cleanupPrecallAttempted = false, cleanupPrecallBusy = false;
+    let cleanupPrecallRefusalCheck: JoinPrecallCheck | null = null, cleanupPrecallRefusalCode: JoinGenerationFault | null = null;
+    // JR-B-PRECALL-SCALARS-END
     // Reuse the same prior bound owner; never reconstruct it after a partial failure.
     const { binding, owner: upper } = recovery!.state!;
     const writer = recovery!.writer!;
@@ -909,6 +916,61 @@ function allocateNativeDiagnosticConstruction(raw: NativeInput, fault?: NativeFa
     }
     void joinLiveFieldPost; void recordJoinExecutionFailure; void holdJoinExecutionUnconfirmed;
     // JR-B-LIVE-END
+    // JR-B-PRECALL-BEGIN: admission refusal only; no field admission or execution.
+    function recordJoinPrecallRefusal(role: JoinRole, check: JoinPrecallCheck, code: JoinGenerationFault): false {
+        if (role === 'run') {
+            runPrecallRefusalCheck ??= check; runPrecallRefusalCode ??= code;
+            primary ??= runPrecallRefusalCode;
+        } else {
+            cleanupPrecallRefusalCheck ??= check; cleanupPrecallRefusalCode ??= code;
+            primary ??= cleanupPrecallRefusalCode;
+        }
+        revoked = true;
+        return false;
+    }
+    function reflectJoinPrecallFailure(role: JoinRole): false {
+        const own = role === 'run' ? runGeneration : cleanupGeneration;
+        // Only canonical slot data is eligible; no raw/copy/Proxy property is read.
+        if (jbProxy(own)) return false;
+        let d = jbGet(own, 'faultAt');
+        if (!d || !jbOwn(d, 'value') || d.writable !== true || d.value !== null && !joinValueFaultSite(d.value)) return false;
+        d = jbGet(own, 'fault');
+        if (!d || !jbOwn(d, 'value') || d.writable !== true || d.value !== null && d.value !== 'invalid_state' &&
+            d.value !== 'evidence_binding_mismatch' && d.value !== 'internal_review_error') return false;
+        d = jbGet(own, 'phase');
+        if (!d || !jbOwn(d, 'value') || d.writable !== true || d.value !== 'empty' && d.value !== 'claimed_unheld' &&
+            d.value !== 'building' && d.value !== 'checked' && d.value !== 'failed_retained') return false;
+        d = undefined;
+        const code = role === 'run' ? runPrecallRefusalCode : cleanupPrecallRefusalCode;
+        if (code === null) return false;
+        recordJoinExecutionFailure(role, 'constructor_pre', code);
+        const subject = role === 'run' ? runShellExpected : cleanupShellExpected;
+        if (subject && !jbProxy(subject)) holdJoinExecutionUnconfirmed(role);
+        return false;
+    }
+    function requestJoinPrecall(rawShell: unknown, rawIdentity: unknown, rawPin: unknown, rawSlot: unknown, role: JoinRole): false {
+        if (role !== 'run' && role !== 'cleanup') return false;
+        if (role === 'run' ? runPrecallBusy : cleanupPrecallBusy) return recordJoinPrecallRefusal(role, 'busy', 'invalid_state');
+        if (role === 'run' ? runPrecallAttempted : cleanupPrecallAttempted) return recordJoinPrecallRefusal(role, 'attempted', 'invalid_state');
+        if (role === 'run') { runPrecallAttempted = true; runPrecallBusy = true; }
+        else { cleanupPrecallAttempted = true; cleanupPrecallBusy = true; }
+        try {
+            const heldShell = role === 'run' ? runShellExpected : cleanupShellExpected,
+                heldIdentity = role === 'run' ? runIdentityExpected : cleanupIdentityExpected,
+                heldPin = role === 'run' ? runPinExpected : cleanupPinExpected,
+                own = role === 'run' ? runGeneration : cleanupGeneration;
+            if (recovery !== joinRecovery || !heldShell || rawShell !== heldShell || !heldIdentity || rawIdentity !== heldIdentity ||
+                !heldPin || rawPin !== heldPin || rawSlot !== own) recordJoinPrecallRefusal(role, 'owner', 'evidence_binding_mismatch');
+            else recordJoinPrecallRefusal(role, 'composition', 'invalid_state');
+            // All-field admission, live pin and safe observation/termination are absent: constructor call 0.
+            return reflectJoinPrecallFailure(role);
+        } catch { return recordJoinPrecallRefusal(role, 'control', 'internal_review_error'); }
+        finally {
+            if (role === 'run') runPrecallBusy = false; else cleanupPrecallBusy = false;
+        }
+    }
+    void requestJoinPrecall;
+    // JR-B-PRECALL-END
     function stop(code: Code = 'cancelled', stage: Stage = 'stop') {
         if (sealed) return;
         primary ??= code; upper.stop(primary, stage);

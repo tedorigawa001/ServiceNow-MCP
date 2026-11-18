@@ -199,9 +199,13 @@ export function auditLiveState(js){
       assert.equal(parts[2].operator,'===');assert.equal(parts[2].left.object?.name,'meta');assert.equal(parts[2].left.property?.name,'writable');assert.equal(parts[2].right.value,true);metadataGuards++;
     }
   });assert.equal(writes,7);assert.equal(primitiveCalls,0);assert.equal(coldCalls,4);assert.equal(metadataGuards,2);
-  let operationalCallers=0;walk(parse(js,{ecmaVersion:'latest',sourceType:'module'}),n=>{
-    if(n.type==='CallExpression'&&n.callee.type==='Identifier'&&['joinLiveFieldPost','recordJoinExecutionFailure','holdJoinExecutionUnconfirmed'].includes(n.callee.name))operationalCallers++;
-  });assert.equal(operationalCallers,0,'closed live contract called by product');return {writes,primitiveCalls,coldCalls};
+  const callers=[];function inspect(n,owner=''){
+    if(n.type==='FunctionDeclaration')owner=n.id?.name??'';
+    if(n.type==='CallExpression'&&n.callee.type==='Identifier'&&['joinLiveFieldPost','recordJoinExecutionFailure','holdJoinExecutionUnconfirmed'].includes(n.callee.name))callers.push(n.callee.name+':'+owner);
+    for(const v of Object.values(n)){if(Array.isArray(v)){for(const c of v)if(c?.type)inspect(c,owner);}else if(v?.type)inspect(v,owner);}
+  }inspect(parse(js,{ecmaVersion:'latest',sourceType:'module'}));
+  assert.deepEqual(callers,['recordJoinExecutionFailure:reflectJoinPrecallFailure','holdJoinExecutionUnconfirmed:reflectJoinPrecallFailure'],
+    'only the disconnected pre-call refusal may reflect qualified failure');return {writes,primitiveCalls,coldCalls};
 }
 export const liveMutants=[
   ['origin','!joinExecutionOriginLeaf(rawShell, rawIdentity, rawPin, rawSlot, role)','false'],

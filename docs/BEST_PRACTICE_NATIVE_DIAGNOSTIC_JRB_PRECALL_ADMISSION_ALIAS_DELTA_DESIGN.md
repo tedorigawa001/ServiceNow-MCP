@@ -1,17 +1,17 @@
 # JR-B pre-call受付・write-once aliasとconstructor call 0停止の差分詳細設計
 
-Version: native-diagnostic-jrb-precall-admission-alias-draft-0.1 / Date: 2026-11-18。
-Status: MDだけの詳細設計。実装の照合基準は`f9a8be2`。作業中に補強試験・参照更新が別コミット`681bdd4`へ入り、旧rootの製品ソースは不変である。その変更は本作業へ含めず保持する。[実writer／終端受渡し設計](BEST_PRACTICE_NATIVE_DIAGNOSTIC_JRB_LIVE_WRITER_TERMINAL_HANDOFF_DELTA_DESIGN.md)WH01・WC02・§9と、[seed→実行設計](BEST_PRACTICE_NATIVE_DIAGNOSTIC_JRB_SEED_EXECUTION_TRANSITION_DELTA_DESIGN.md)CS01〜04／PP01〜03への差分である。[固定pin設計](BEST_PRACTICE_NATIVE_DIAGNOSTIC_JRB_RUNTIME_PIN_DELTA_DESIGN.md)の管理された同realm・同P／then前提と、[先行field契約](BEST_PRACTICE_NATIVE_DIAGNOSTIC_JRB_EXECUTION_SEED_CONTRACT_DESIGN.md)EF／EW／ETの一度限り試行・保持責務は変更しない。
+Version: native-diagnostic-jrb-precall-admission-alias-draft-0.2 / Date: 2026-11-18。
+Status: §9の先行診断・一度限り受付・固定拒否・安全なfailure反映だけを合成依存限定で実装。限定実装の基準HEADは`2ecb117`。draft-0.1の実装照合基準は`f9a8be2`、補強試験・参照更新は別コミット`681bdd4`で保持した。[実writer／終端受渡し設計](BEST_PRACTICE_NATIVE_DIAGNOSTIC_JRB_LIVE_WRITER_TERMINAL_HANDOFF_DELTA_DESIGN.md)WH01・WC02・§9と、[seed→実行設計](BEST_PRACTICE_NATIVE_DIAGNOSTIC_JRB_SEED_EXECUTION_TRANSITION_DELTA_DESIGN.md)CS01〜04／PP01〜03への差分である。[固定pin設計](BEST_PRACTICE_NATIVE_DIAGNOSTIC_JRB_RUNTIME_PIN_DELTA_DESIGN.md)の管理された同realm・同P／then前提と、[先行field契約](BEST_PRACTICE_NATIVE_DIAGNOSTIC_JRB_EXECUTION_SEED_CONTRACT_DESIGN.md)EF／EW／ETの一度限り試行・保持責務は変更しない。
 
-正式発行口／新LM03／C実行入口／body起動閉鎖、全体受付無効、通常経路未切替、Unknown、VM／監視／telemetry調査保留、LOAD6／LOAD7選択・AP01〜06未承認を維持する。今回は実装・製品moduleのimport／実行・Promise生成・closure呼出し・観測／終端・試験再実行・build／pack・private公開・dispatch・実接続・実通信・実機操作・設定変更・stage・コミット・Pushを行わない。
+正式発行口／新LM03／C実行入口／body起動閉鎖、全体受付無効、通常経路未切替、Unknown、VM／監視／telemetry調査保留、LOAD6／LOAD7選択・AP01〜06未承認を維持する。draft-0.1はMDだけで作成した。draft-0.2の限定実装・合成検証以外は進めず、全field受付・alias供給・Promise生成・closure呼出し・観測／終端・private公開・dispatch・実接続・実通信・実機操作・設定変更・stage・コミット・Pushは行わない。
 
 ## 1 現行との差分・受付の意味
 
-[旧root](../src/review/abort-scope-evidence-native-diagnostic.ts)は同shellの実運用型view・実field post・原始failure／cold未確認保持までを閉鎖実装した。実field postはcanonical dataの関係検査であり、全write対象のown writable data受付・停止／live pin資格・native安全性の証明ではない。14期待aliasはconst null、requestと3closureは固定拒否、新3継続の製品callerは0である。[既存検証記録](E2E_BEST_PRACTICE_NATIVE_JOIN_LIVE_STATE_2026-11-18.md)を生成資格・native取得・有限終端の保証へ加算しない。
+[旧root](../src/review/abort-scope-evidence-native-diagnostic.ts)はdraft-0.1時点で同shellの実運用型view・実field post・原始failure／cold未確認保持までを閉鎖実装した。実field postはcanonical dataの関係検査であり、全write対象のown writable data受付・停止／live pin資格・native安全性の証明ではない。14期待aliasはconst null、旧requestと3closureは固定拒否のままである。§9の限定追加により、failure／cold保持への呼出しは未接続のpre-call拒否継続内だけに2か所あるが、実field postとpre-call入口への製品callerは0である。[既存検証記録](E2E_BEST_PRACTICE_NATIVE_JOIN_LIVE_STATE_2026-11-18.md)を生成資格・native取得・有限終端の保証へ加算しない。
 
 pre-callは、同private継続のconstructor呼出し直前までの受付を指す。data受付だけで呼出しを許可せず、§6の安全観測・固定abort／失敗終端の構成が一つでも不足すればconstructor call 0で拒否する。現HEADでは実executor／観測／drainが未接続なので、layoutや値postが正しくても生成へ進めない。成功ticket・公開permit・raw mode・設定flagを新設しない。
 
-先行の後続実装単位を受付・拒否・診断保持だけに分割する場合も、呼出し可能なreadyを外へ返さず固定拒否を維持する。実呼出しは生成→安全観測→固定終端を備えた一体単位だけで接続する。以下の段階・scalar名は契約上の呼称であり、今回の実装ではない。
+先行の後続実装単位を受付・拒否・診断保持だけに分割する場合も、呼出し可能なreadyを外へ返さず固定拒否を維持する。実呼出しは生成→安全観測→固定終端を備えた一体単位だけで接続する。§2〜8は全体接続の契約であり、§9に明記した先行拒否の範囲以外は未実装である。
 
 ## 2 同ownerの読取り順と先行拒否保持
 
@@ -154,6 +154,18 @@ ownKeys／prototype／freeze／Proxy predicate・scalar比較は別費目とし�
 | PT07 | 拒否理由・費目・保持上界 | first check／code・先行primary／slot故障は不変。descriptor／列挙の固定上界を独立計数し、期限／予算を再起算しない |
 | PT08 | source／fixed dist・semantic・配布 | guard省略・順序交換・再試行・早期call・unsafe failure書戻しを構文正常変異で拒否。新export／raw writer／fixture台帳共有0、旧14本文／4export・元期限／並列度を維持 |
 
-PTは将来の受入条件で、今回は実行しない。受付・拒否の先行実装ではPS診断と不足gateを検証し、生成の正対照は作らない。native呼出しの正対照はPGを満たす一体単位に限り、旧requestのfalseやreadonly値postをconstructor入口へ転用しない。
+PTは全体接続の将来受入条件で、draft-0.1では実行しなかった。§9の先行実装ではPS診断と不足gateの固定拒否・安全なfailure反映に範囲を絞り、全field受付や生成の正対照は作らない。native呼出しの正対照はPGを満たす一体単位に限り、旧requestのfalseやreadonly値postをconstructor入口へ転用しない。
 
-静的確認（2026-11-18）：source ASTの割当てとshell65項目・各role slot8項目が一致し、重複／欠落0、role別write許容はrun42／cleanup36。設計ID64、3文書の相対link34・表19の整合、descriptor上界の算術、末尾改行・差分空白を確認した。親2文書は既存本文の後への参照追記だけで、旧root製品ソースは照合基準／更新後HEADと同一、stage済み差分0。本作業の編集は新設計書と親2文書だけで、別作業の補強試験・文書更新を変更していない。これは静的整合確認であり、契約の実装保証・native取得証拠ではない。ソース・試験・CHANGELOG・依存・設定に本作業の変更を加えず、Promise生成・製品moduleのimport／実行・試験再実行・build／pack・private公開・dispatch・実接続・実通信・設定変更・stage・コミット・Pushは行わない。
+draft-0.1の静的確認（2026-11-18）：source ASTの割当てとshell65項目・各role slot8項目が一致し、重複／欠落0、role別write許容はrun42／cleanup36。設計ID64、3文書の相対link34・表19の整合、descriptor上界の算術、末尾改行・差分空白を確認した。親2文書は既存本文の後への参照追記だけで、旧root製品ソースは照合基準／更新後HEADと同一、stage済み差分0。本作業の編集は新設計書と親2文書だけで、別作業の補強試験・文書更新を変更していない。これは静的整合確認であり、契約の実装保証・native取得証拠ではない。ソース・試験・CHANGELOG・依存・設定に本作業の変更を加えず、Promise生成・製品moduleのimport／実行・試験再実行・build／pack・private公開・dispatch・実接続・実通信・設定変更・stage・コミット・Pushは行わない。
+
+## 9 先行診断・閉鎖受付・安全なfailure反映の限定実装
+
+draft-0.2では、initializeLegacyWorkflowの先頭でPS01〜04をroleごとに初期化し、control objectの生成と依存検査より前に8scalarを保持する。新しいprivate requestJoinPrecallはliteral falseだけを返し、製品callerを追加しない。旧requestJoinExecutionと3closureの固定拒否本文、14const null aliasは変更しない。
+
+最初に固定role、当該busy／attemptedを判定し、初回だけattemptedとbusyを消費する。raw4参照を同shell／identity／pin／slotのlexical期待参照と照合し、不足・混入はowner／evidence_binding_mismatch、それ以外もcomposition／invalid_stateで固定拒否する。この参照比較は全owner fieldの資格検査ではない。先行check／code・空の場合だけ元primary・revokedをproperty検査より前に原始記録し、最初の理由を維持する。再入／二度目は原始拒否だけで、descriptor・helperを再試行せず、外側busyを解除しない。初回frameのfinallyだけがbusyを戻す。
+
+reflectJoinPrecallFailureはcanonical slotの非Proxy確認後、faultAt→fault→phaseの3descriptorを順番に取得する。各fieldがown writable dataで有限値域を満たす場合だけ、既存recordJoinExecutionFailureへconstructor_preと保持済み理由を渡す。途中の不適格・例外ではhelperを呼ばず、slot／shellの元参照とlexical拒否だけを残す。最後のdescriptor参照も明示的に退役してから、同canonical shellが非Proxyである場合だけ既存cold保持へ進む。cold保持が失敗しても先行slot診断を上書きしない。sealedなupperへの追記・通知・copy・settlerは0である。
+
+この閉鎖単位のdescriptor上界は初回3＋cold最大2＝5回、再入／二度目0回。一時descriptorは逐次扱い、coldへ持ち越さない。§7のrun138／cleanup143等は全field受付を含む将来上界であり、今回の実装coverageではない。全fieldのgetterを個別に変えた対照も固定拒否を保つが、それらを検査して合格させた証拠にはしない。停止／live pin・元期限の資格はまだ判定せず、生成call 0を維持する。
+
+[source試験](../tests/review/native-join-precall.test.ts)、[独立対照／strict scratch](../tests/review/fixtures/native-join-precall-model.mjs)、[固定dist検査](../tests/review/fixtures/compiled-native-join-precall.mjs)、[検証記録](E2E_BEST_PRACTICE_NATIVE_JOIN_PRECALL_2026-11-18.md)を追加する。全field受付・alias writer・Promise／観測／固定終端は未実装・未接続で、PS診断から成功ticketや公開診断への昇格口は作らない。不足証拠・実backing容量・完全解放はUnknownのままである。

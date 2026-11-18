@@ -58,8 +58,12 @@ it('keeps run/cleanup kinds, null work and empty duty narrow and readonly at the
   const ast=ts.createSourceFile('root.ts',text,ts.ScriptTarget.Latest,true);let fn!:ts.FunctionDeclaration;
   function find(n:ts.Node){if(ts.isFunctionDeclaration(n)&&n.name?.text==='initializeLegacyWorkflow')fn=n;ts.forEachChild(n,find);}find(ast);
   const prefix=text.slice(fn.body!.getStart(ast)+1,text.indexOf('// CF-PREP:'));
+  // The prior primitive refusal slots refer to these private finite types; keep the extracted prefix's type context intact.
+  const priorTypes=ast.statements.filter((n):n is ts.TypeAliasDeclaration=>ts.isTypeAliasDeclaration(n)&&['JoinPrecallCheck','JoinGenerationFault'].includes(n.name.text));
+  expect(priorTypes).toHaveLength(2);
   const name=fileURLToPath(new URL('./__cf-private-types.ts',import.meta.url));
-  const head="import {createNativeDiagnosticState,type Binding} from '../../src/review/abort-scope-evidence-native-diagnostic-state.js';\nexport function prepare(){"+
+  const head="import {createNativeDiagnosticState,type Binding} from '../../src/review/abort-scope-evidence-native-diagnostic-state.js';\n"+
+    priorTypes.map(n=>n.getText(ast)).join('\n')+'\nexport function prepare(){'+
     "const state=createNativeDiagnosticState();state.owner.bind(state.binding);const recovery:{state:typeof state;writer:ReturnType<typeof state.owner.writers>;preparation?:object;checkpoint?:string;status:'building'|'ready'|'failed'}={state,writer:state.owner.writers('release'),status:'building'};"+prefix;
   const compile=(extra:string)=>{
     const source=head+extra+'\nreturn controlOwnerMatched;}',options:ts.CompilerOptions={target:ts.ScriptTarget.ES2022,module:ts.ModuleKind.ESNext,moduleResolution:ts.ModuleResolutionKind.Bundler,strict:true,noEmit:true,skipLibCheck:true};

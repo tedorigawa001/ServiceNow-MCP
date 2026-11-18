@@ -1,7 +1,10 @@
 # JR-B同shellの実行writer・安全観測・固定終端受渡しの差分詳細設計
 
-Version: native-diagnostic-jrb-live-writer-terminal-handoff-draft-0.4 / Date: 2026-11-18。
-Status: §9の同shell実運用型・実field post・原始failure／未確認保持だけを合成依存限定で実装。設計基準HEADは`f7e3889`、限定実装の基準HEADは`dffd871`。値契約の実装commitは`3755cba`。[seed→実行設計draft-0.7](BEST_PRACTICE_NATIVE_DIAGNOSTIC_JRB_SEED_EXECUTION_TRANSITION_DELTA_DESIGN.md)§2〜6・9と、[先行field契約draft-0.7](BEST_PRACTICE_NATIVE_DIAGNOSTIC_JRB_EXECUTION_SEED_CONTRACT_DESIGN.md)EI／EF／EW／ETを、同shellの固定writerと後段責務の受渡しへ具体化する。追加済みのRoleGenerationSlot限定拡張方針は維持する。[固定pin設計](BEST_PRACTICE_NATIVE_DIAGNOSTIC_JRB_RUNTIME_PIN_DELTA_DESIGN.md)の安全な同候補・同P／then前提を置き換えない。
+Version: native-diagnostic-jrb-live-writer-terminal-handoff-draft-0.5 / Date: 2026-11-18。
+
+draft-0.5追記：§10参照先の先行pre-call拒否が、適格な最小slotにだけ既存failure／cold保持を反映する。§9のcaller0記述を当時の事実として整理し、現時点のentry／post caller0と、未接続継続内の限定2call siteを分けた。取得・生成・観測／固定終端は接続しない。
+
+Status: §9の同shell実運用型・実field post・原始failure／未確認保持だけを合成依存限定で実装。設計基準HEADは`f7e3889`、限定実装の基準HEADは`dffd871`。値契約の実装commitは`3755cba`。[seed→実行設計draft-0.8](BEST_PRACTICE_NATIVE_DIAGNOSTIC_JRB_SEED_EXECUTION_TRANSITION_DELTA_DESIGN.md)§2〜6・9と、[先行field契約draft-0.7](BEST_PRACTICE_NATIVE_DIAGNOSTIC_JRB_EXECUTION_SEED_CONTRACT_DESIGN.md)EI／EF／EW／ETを、同shellの固定writerと後段責務の受渡しへ具体化する。追加済みのRoleGenerationSlot限定拡張方針は維持する。[固定pin設計](BEST_PRACTICE_NATIVE_DIAGNOSTIC_JRB_RUNTIME_PIN_DELTA_DESIGN.md)の安全な同候補・同P／then前提を置き換えない。
 
 draft-0.4のレビュー修正：レビュー修正の基準HEADは`2ecb117`（修正時のHEADは`2ecb117`）。§10にpre-call受付設計への参照節（2026-11-18追記）を加えた一方、版はdraft-0.3のままだった。版を上げ、参照元のJoinRuntime設計・先行field契約・seed→実行設計の版参照を直した。seed→実行設計への参照もdraft-0.7へ更新した。内容・実装・試験は変更していない。
 
@@ -154,10 +157,10 @@ recordJoinExecutionFailureは自roleのcanonical slotだけへ最初のfaultAt�
 
 holdJoinExecutionUnconfirmedは原始failureが残っている場合だけ、constructor／reaction frame外でreadinessとretentionを各1回のdescriptor取得とown data／writable guardで独立に保持する。片方がreadonly／accessor／missing／frozen、またはdescriptor取得が失敗しても、slotの先行失敗・同期失効を失わず、もう片方の適格保持を妨げない。これはcold側の最大2個の一時descriptorであって、executor内の非割当てwriterではない。必要metadataを保持できない場合は元slot／canonical参照のまま未確認であり、failed_retained全post成立・全解放に補正しない。
 
-新post・原始failure・cold保持の製品callerはいずれも0で、origin leafの追加callerは新しい読み取り専用postだけである。既存request・3closure・旧14本文／4exportは維持し、実行claim／observer／drainの消費・参照取得・Promise生成・安全観測・固定abort／失敗終端・private公開・dispatchは未接続である。
+本節の限定実装時点では、新post・原始failure・cold保持の製品callerはいずれも0だった。後続§10で原始failure／cold保持の呼出しを未接続pre-call拒否内だけへ追加し、post自体のcallerは0を維持する。origin leafの追加callerは新しい読み取り専用postだけである。既存request・3closure・旧14本文／4exportは維持し、実行claim／observer／drainの消費・参照取得・Promise生成・安全観測・固定abort／失敗終端・private公開・dispatchは未接続である。
 
 [source試験](../tests/review/native-join-live-state.test.ts)、[strict scratch／独立表](../tests/review/fixtures/native-join-live-state-model.mjs)、[固定dist検査](../tests/review/fixtures/compiled-native-join-live-state.mjs)と[検証記録](E2E_BEST_PRACTICE_NATIVE_JOIN_LIVE_STATE_2026-11-18.md)を追加した。実行prefixの正対照は、scratch内だけで14aliasのconst宣言をletへ限定置換し、独立表の合成参照を同shellへ固定したもの。製品へ取得writer・test event受付・friend・fixture台帳は追加せず、この正対照をnative取得の証拠にしない。draft-0.3のレビュー修正で、受理される行から準備・slot・失敗・取得／観測のguardを1つずつ崩す対照（610拒否）と構文正常変異25件（計55件）を加えた。metadataを書けない失敗はfailure_recordedだけを満たし、failed_retainedのpostは成立しないことも確認する。先行型の拡張とread-only postを確認する工程であり、実生成はWH01〜08の一体接続まで閉じる。
 
 ## 10 pre-call受付・aliasと不足時call 0（2026-11-18追記）
 
-[pre-call受付・write-once aliasとconstructor call 0停止の差分詳細設計draft-0.1](BEST_PRACTICE_NATIVE_DIAGNOSTIC_JRB_PRECALL_ADMISSION_ALIAS_DELTA_DESIGN.md)で、同ownerと全fieldのown writable data受付、run／cleanup別write許容、14aliasのproducerと一度限り保持、停止／live pinの最終確認を具体化した。slotの故障欄自体が不適格な場合は未検査slotへfailureを書かず、先行lexical拒否と安全な書戻し条件を使う。観測／固定終端の一体構成が不足すればconstructor call 0で停止し、既存の実field postを生成資格へ転用しない。今回はMDだけで、取得writer・claim消費・生成・観測・終端は接続しない。
+[pre-call受付・write-once aliasとconstructor call 0停止の差分詳細設計draft-0.2](BEST_PRACTICE_NATIVE_DIAGNOSTIC_JRB_PRECALL_ADMISSION_ALIAS_DELTA_DESIGN.md)で、同ownerと全fieldのown writable data受付、run／cleanup別write許容、14aliasのproducerと一度限り保持、停止／live pinの最終確認を具体化した。同書§9では先行8scalar・一度限り固定拒否と、最小slot3fieldの確認後だけ既存failure／cold保持へ反映する継続を合成依存限定で実装した。pre-call入口の製品callerは0、全field受付・alias供給・取得claim・生成・観測・終端は未接続である。slotが不適格ならlexical拒否と同期停止だけを保持し、既存postを生成資格へ転用しない。
