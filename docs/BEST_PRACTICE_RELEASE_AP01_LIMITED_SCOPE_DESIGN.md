@@ -1,6 +1,6 @@
 # AP01：限定リリースの非提供範囲・未代替保証と将来の回復条件
 
-Version: release-ap01-limited-scope-draft-0.9 / Date: 2026-11-19。
+Version: release-ap01-limited-scope-draft-0.10 / Date: 2026-11-19。
 Status: **限定リリース案を公開方針として採用。AP01の保証低下・旧試験の処遇は未承認で、公開可の判定ではない。** 読取り基準HEADは`76fa545`。今回のユーザー指示を公開方針の決定根拠とし、個別承認の代行や将来の撤去許可へ広げない。
 
 正式発行口閉鎖・全体受付無効・通常経路未切替・C実行入口／body起動閉鎖・Unknown・VM／監視／telemetry調査保留を維持する。LOAD6／LOAD7選択も未承認のまま。今回はMDと親文書の参照整理だけであり、保証低下・旧試験削除／skip／期待値弱化・friend撤去・実装・発行／claim消費・負荷採取・試験再実行・build／pack・実接続・実通信・実機操作・設定変更・版変更・公開・コミット・Pushは行わない。
@@ -112,4 +112,4 @@ AP01が将来個別承認されても、AP02の撤去、AP03の入力／返却�
 
 ## 13 個別承認用の残差台帳（draft-0.8）
 
-[未レビュー／重複・通常維持・個別残差台帳draft-0.2](BEST_PRACTICE_RELEASE_AP01_INDIVIDUAL_APPROVAL_RESIDUAL_LEDGER.md)の初稿で、正規228行と6レビューの延べ123行・重複除外119旧caseを文書上で照合した。閉鎖lane候補158行の専用行なし44、入口7行の専用行なし3、通常維持SP25、別gateのUN62を分離し、全caseレビュー完了・移行率にはしない。draft-0.2でSA-02〜04を台帳内の追加専用行に個別照合し、6レビュー基準は変えず現在の文書対応122・閉鎖lane残未レビュー41を別集計した。403/404 no_body返値の5項目と、実prototype4method非再入、診断の未assert範囲・D／compiledとの差を分ける。重複4旧case・KP01〜05・処遇未選択／未承認は維持。保証低下・旧試験削除・friend撤去・設定変更・公開は未承認、各閉鎖条件・Unknown・調査保留を維持し、編集はMDだけで実装・Pushは行わない。
+[未レビュー／重複・通常維持・個別残差台帳draft-0.3](BEST_PRACTICE_RELEASE_AP01_INDIVIDUAL_APPROVAL_RESIDUAL_LEDGER.md)の初稿で、正規228行と6レビューの延べ123行・重複除外119旧caseを文書上で照合した。閉鎖lane候補158行の専用行なし44、入口7行の専用行なし3、通常維持SP25、別gateのUN62を分離し、全caseレビュー完了・移行率にはしない。draft-0.2でSA-02〜04を追加専用行に個別照合し、その時点の文書対応122・閉鎖lane残未レビュー41を記録した。draft-0.3でSA-06〜08のff／完全親のforeign sys_id／余剰scriptを追加し、6レビュー基準は変えず追加6・現文書対応125・閉鎖lane残未レビュー38を別集計する。元3variantの直接assertはinvalid_response拒否と別freshのcleanup=closedで、元失敗runのcleanup完了・診断保持・status操作0を実測した扱いにはしない。拒否位置の静的根拠と、別Dの会計／非露出assert・既存compiled fixtureの未収録variantを分ける。以前の403/404 no_body返値5項目・実prototype4method非再入のレビューも保持。重複4旧case・KP01〜05・処遇未選択／未承認は維持。保証低下・旧試験削除・friend撤去・設定変更・公開は未承認、各閉鎖条件・Unknown・調査保留を維持し、編集はMDだけで実装・Pushは行わない。
