@@ -163,3 +163,7 @@ joinExecutionValuePostはcreator内部のdata投影を対象とする。raw JSON
 ## 10 同shellの実writer・安全観測／固定終端への受渡し（2026-11-18追記）
 
 [同shellの実行writer・安全観測・固定終端受渡しの差分詳細設計draft-0.3](BEST_PRACTICE_NATIVE_DIAGNOSTIC_JRB_LIVE_WRITER_TERMINAL_HANDOFF_DELTA_DESIGN.md)で、§2の実shell／slot限定拡張と§4〜6を、実field post・writer資格・claim消費点・失敗prefixの受渡しへ具体化した。同書§9で同shellの実運用型・実field post・原始failure／cold未確認保持だけを合成依存限定で実装し、readonly値postをwriterにせず、ack保持途中と登録完了postを分離する。追加済みのslot拡張方針と既存固定拒否を維持し、取得claim・生成・観測・固定drain・private公開・dispatchは接続しない。
+
+## 11 pre-call data受付・alias供給とcall 0停止（2026-11-18追記）
+
+[pre-call受付・write-once aliasとconstructor call 0停止の差分詳細設計draft-0.1](BEST_PRACTICE_NATIVE_DIAGNOSTIC_JRB_PRECALL_ADMISSION_ALIAS_DELTA_DESIGN.md)で、CS01〜04／PP01〜03の生成前資格を、全field・同owner・停止／live pin・先行拒否保持と対にした。必要な観測／固定abort・失敗終端を欠く現在はcall 0であり、14null aliasや正常postだけから呼出し権限を作らない。追加scalar／write-once producer・受付scheduleは設計だけで、既存固定拒否・各閉鎖条件・Unknown・調査保留を維持する。

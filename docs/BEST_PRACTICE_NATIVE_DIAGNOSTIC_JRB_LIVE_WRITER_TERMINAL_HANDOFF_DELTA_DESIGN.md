@@ -155,3 +155,7 @@ holdJoinExecutionUnconfirmedは原始failureが残っている場合だけ、con
 新post・原始failure・cold保持の製品callerはいずれも0で、origin leafの追加callerは新しい読み取り専用postだけである。既存request・3closure・旧14本文／4exportは維持し、実行claim／observer／drainの消費・参照取得・Promise生成・安全観測・固定abort／失敗終端・private公開・dispatchは未接続である。
 
 [source試験](../tests/review/native-join-live-state.test.ts)、[strict scratch／独立表](../tests/review/fixtures/native-join-live-state-model.mjs)、[固定dist検査](../tests/review/fixtures/compiled-native-join-live-state.mjs)と[検証記録](E2E_BEST_PRACTICE_NATIVE_JOIN_LIVE_STATE_2026-11-18.md)を追加した。実行prefixの正対照は、scratch内だけで14aliasのconst宣言をletへ限定置換し、独立表の合成参照を同shellへ固定したもの。製品へ取得writer・test event受付・friend・fixture台帳は追加せず、この正対照をnative取得の証拠にしない。draft-0.3のレビュー修正で、受理される行から準備・slot・失敗・取得／観測のguardを1つずつ崩す対照（610拒否）と構文正常変異25件（計55件）を加えた。metadataを書けない失敗はfailure_recordedだけを満たし、failed_retainedのpostは成立しないことも確認する。先行型の拡張とread-only postを確認する工程であり、実生成はWH01〜08の一体接続まで閉じる。
+
+## 10 pre-call受付・aliasと不足時call 0（2026-11-18追記）
+
+[pre-call受付・write-once aliasとconstructor call 0停止の差分詳細設計draft-0.1](BEST_PRACTICE_NATIVE_DIAGNOSTIC_JRB_PRECALL_ADMISSION_ALIAS_DELTA_DESIGN.md)で、同ownerと全fieldのown writable data受付、run／cleanup別write許容、14aliasのproducerと一度限り保持、停止／live pinの最終確認を具体化した。slotの故障欄自体が不適格な場合は未検査slotへfailureを書かず、先行lexical拒否と安全な書戻し条件を使う。観測／固定終端の一体構成が不足すればconstructor call 0で停止し、既存の実field postを生成資格へ転用しない。今回はMDだけで、取得writer・claim消費・生成・観測・終端は接続しない。
