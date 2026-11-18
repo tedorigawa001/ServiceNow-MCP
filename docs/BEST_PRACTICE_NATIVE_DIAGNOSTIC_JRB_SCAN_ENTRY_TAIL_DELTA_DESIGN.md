@@ -1,7 +1,9 @@
 # JR-B同ownerの一度限りscan入場・entry捕捉と固定failure tail／退出の差分詳細設計
 
-Version: native-diagnostic-jrb-scan-entry-tail-draft-0.4 / Date: 2026-11-18。
+Version: native-diagnostic-jrb-scan-entry-tail-draft-0.5 / Date: 2026-11-18。
 Status: MDだけの差分設計。基準HEADは`93383af`。閉鎖値契約の実装は`47cb9ec`。[固定台帳・scan設計](BEST_PRACTICE_NATIVE_DIAGNOSTIC_JRB_FIELD_ADMISSION_SCAN_DELTA_DESIGN.md)SQ01〜03／07〜08・§9、[先行拒否設計](BEST_PRACTICE_NATIVE_DIAGNOSTIC_JRB_PRECALL_ADMISSION_ALIAS_DELTA_DESIGN.md)PS／PC、[閉鎖値契約の検証記録](E2E_BEST_PRACTICE_NATIVE_JOIN_SCAN_VALUES_2026-11-18.md)への差分である。draft-0.1では本書だけを追加し、既存ソース・試験・CHANGELOG・検証記録は変更しなかった。
+
+draft-0.5のレビュー修正：レビュー修正の基準HEADは`644eeea`（修正時のHEADは`644eeea`）。TL02が現行sourceの再代入なしの根拠に未実装のRI04を含めていたため、現行の根拠をconstと一度限りのclaim（同creator内にclaimedを戻すwriterがないこと）だけに改め、RI04は接続後の準備再開を防ぐ将来の防御として分けた。slotは凍結されていない通常objectであり、その不変性は凍結ではなくwriter不在による点も明記した。製品ソース・試験・CHANGELOG・検証記録は変更していない。
 
 draft-0.4のレビュー修正：レビュー修正の基準HEADは`5d1da03`（修正時のHEADは`5d1da03`）。draft-0.3はlet／constの構文差でdrift対象を分けたが、現行sourceではshell／identity／pinの期待参照も一度限りのclaim（unusedJoinGeneration）後の準備処理でだけ代入され、null戻しもなく、recoveryも初期化の1回だけ代入される。よって7参照はいずれもentry後に再代入されない。TL02・§6本文・AC07を、drift停止は将来・未知のwriterへの防御であり、その対照はsource変異で確認し、現行経路で再現できるシナリオとは呼ばない記述へ改めた。製品ソース・試験・CHANGELOG・検証記録は変更していない。
 
@@ -95,7 +97,7 @@ innerは外側のbusy／owner／tail claim・entry facts・計数を更新せず
 | ID | 順序・条件 | 許可する操作・拒否時保持 |
 |---|---|---|
 | TL01 | 最初の完全pair確定→phase=refusing | active用のcheck=null guardを再利用しない。先行理由があるため成立しない正常guardを、例外で迂回しない |
-| TL02 | frame退出権・実共有owner・同role claim／busy・捕捉参照の継続を照合 | root／recovery／seed／slot／shell／identity／pinの7参照を捕捉値と照合し、不一致ならnative操作前に止め、元refと未確認を保持。現行sourceでは7参照ともentry後に再代入されない（const、または一度限りclaim後の単一代入とRI04の準備再開拒否）。照合は将来・未知のwriterへの防御で、drift検出の実績とは呼ばない。拒否によるprimary／revoked変更は正常guardとの差として許す |
+| TL02 | frame退出権・実共有owner・同role claim／busy・捕捉参照の継続を照合 | root／recovery／seed／slot／shell／identity／pinの7参照を捕捉値と照合し、不一致ならnative操作前に止め、元refと未確認を保持。現行sourceでは7参照ともentry後に再代入されない（const、または一度限りclaim後の単一代入。slotは凍結されない通常objectで、同creator内にclaimedを戻すwriterがないことだけが根拠）。RI04の準備再開拒否は接続後に加わる将来の防御で、現行の根拠に数えない。照合は将来・未知のwriterへの防御で、drift検出の実績とは呼ばない。拒否によるprimary／revoked変更は正常guardとの差として許す |
 | TL03 | tail claim=true→phase=tail | native操作より前の唯一の消費点。throw・再入・部分結果・catchから二度目を起動しない |
 | TL04 | 捕捉slotの非Proxy確認→捕捉subjectの非Proxy可否を固定 | subject不在／不適格はcold不可であり、適格slotへのprimitive反映まで一律放棄する理由にはしない。subject選び直し0 |
 | TL05 | faultAt→fault→phaseの3descriptorを順次再取得 | own data／writableと既存の有限fault／phase値域を確認。通常scanの古いwritable結果や正常seed値を再利用しない |
@@ -155,3 +157,5 @@ draft-0.2のレビュー修正の静的確認（2026-11-18）：基準HEAD `cd01
 draft-0.3のレビュー修正の静的確認（2026-11-18）：基準HEAD `5099c20`のsourceで、shell／identity／pinの期待参照がlet（runShellExpected等）、recoveryがletで、root・seed・slot・joinRecoveryがconstであることを再確認した。本書の設計ID47・表6・相対link4を確認した。製品ソース・試験・CHANGELOG・検証記録は変更していない。
 
 draft-0.4のレビュー修正の静的確認（2026-11-18）：基準HEAD `5d1da03`のsourceで、run／cleanupのshell／identity／pin期待参照への代入が準備処理内の各1か所だけで、beginRunGeneration／beginCleanupGenerationのunusedJoinGeneration確認後にしか到達せず、null戻しの代入もないこと、recoveryへの代入が初期化の1か所だけであることを確認した。本書の設計ID47・表6・相対link4を確認した。製品ソース・試験・CHANGELOG・検証記録は変更していない。
+
+draft-0.5のレビュー修正の静的確認（2026-11-18）：基準HEAD `644eeea`のsourceで、run／cleanupのslotのclaimedへの代入がbeginRunGeneration／beginCleanupGenerationのtrue代入だけで、falseへ戻す代入がなく、slotをfreeze／preventExtensionsする呼出しもないことを確認した。RI04に当たる共有owner合流は現行の準備入口に存在しない。本書の設計ID47・表6・相対link4を確認した。製品ソース・試験・CHANGELOG・検証記録は変更していない。
