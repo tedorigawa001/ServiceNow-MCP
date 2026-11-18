@@ -1,9 +1,9 @@
 # AP01：個別承認用の残差台帳・未レビュー／重複と通常経路の維持条件
 
-Version: release-ap01-individual-approval-residual-ledger-draft-0.4 / Date: 2026-11-19。
+Version: release-ap01-individual-approval-residual-ledger-draft-0.5 / Date: 2026-11-19。
 Status: **個別承認の材料。公開方針だけ採用済みで、保証低下の受容は全件未承認・処遇未選択。** 基準HEADは`5dec892`。[AP01親文書](BEST_PRACTICE_RELEASE_AP01_LIMITED_SCOPE_DESIGN.md)の①審査対象／範囲、②通常経路の維持、③失われ得るassertionと回復責務を一体で整理する。文書完成・明示対応・旧試験の存在を、保証回復や承認可能との判定にしない。
 
-draft-0.2の個別照合基準は`ff18189`。初稿の44行索引からSA-02〜04を本書の追加専用行A1-S01〜03へ対応付け、その時点の文書対応122・閉鎖laneの残未レビュー41を記録した。draft-0.3は`2f8d3f0`を基準にSA-06〜08をA1-S04〜06へ追加。6レビューの明示119旧caseという基準値は書き換えず、本書追加6を含む文書対応125・閉鎖laneの残未レビュー38を記録した。draft-0.4は`6c6123e`を基準にSA-09〜14をA1-S07〜12へ追加。6レビューの明示119旧caseという基準値は書き換えず、本書追加12を含む現文書対応131・閉鎖laneの残未レビュー32を別集計する。追加12行の旧case分類は部分対応8（SA-02〜04・06〜08・11・12）／未対応4（SA-09・10・13・14）のままで、保証回復・実行同等性・個別承認は追加しない。
+draft-0.2の個別照合基準は`ff18189`。初稿の44行索引からSA-02〜04を本書の追加専用行A1-S01〜03へ対応付け、その時点の文書対応122・閉鎖laneの残未レビュー41を記録した。draft-0.3は`2f8d3f0`を基準にSA-06〜08をA1-S04〜06へ追加。6レビューの明示119旧caseという基準値は書き換えず、本書追加6を含む文書対応125・閉鎖laneの残未レビュー38を記録した。draft-0.4は`6c6123e`を基準にSA-09〜14をA1-S07〜12へ追加。6レビューの明示119旧caseという基準値は書き換えず、本書追加12を含む文書対応131・閉鎖laneの残未レビュー32を記録した。draft-0.5は`8e8dbdf`を基準にSA-15〜24をA1-S13〜22へ追加。6レビューの明示119旧caseという基準値は書き換えず、本書追加22を含む現文書対応141・閉鎖laneの残未レビュー22を別集計する。追加22行の旧case分類は部分対応18（SA-02〜04・06〜08・11・12・15〜24）／未対応4（SA-09・10・13・14）のままで、保証回復・実行同等性・個別承認は追加しない。
 
 保証低下・旧試験削除／skip／期待値弱化・friend撤去・設定変更・公開は未承認。正式発行口閉鎖・全体受付無効・通常経路未切替・C実行入口／body起動閉鎖・Unknown・VM／監視／telemetry調査保留を維持する。LOAD6／LOAD7選択、元5秒期限・既定並列度、旧比較childの60秒・製品全体60秒・元attempt floorも変更しない。今回はMDと親文書参照だけ。実装・発行／claim消費・試験再実行・build／pack・負荷採取・実接続・実通信・実機操作・コミット・Pushは行わない。
 
@@ -55,21 +55,21 @@ draft-0.2の個別照合基準は`ff18189`。初稿の44行索引からSA-02〜0
 
 158＋7＋1＋62＝228、114＋4＋1＝119、44＋3＋62＝109。区分は[保証回復レビュー](BEST_PRACTICE_RELEASE_GUARANTEE_RECOVERY_SCOPE_REVIEW.md)MP01〜18／RV01〜14の責務分離に沿う本書の審査用索引で、元台帳分類を書き換えない。109全てをAP01未承認の同一理由にまとめず、44の個別照合不足と、3の入口審査不足、62の別gateを分ける。
 
-### 本書の追加個別照合を含む現在値（draft-0.4）
+### 本書の追加個別照合を含む現在値（draft-0.5）
 
 | 区分 | 正規行数 | 6レビュー基準 | 本書の追加対応（旧case重複なし） | 現文書対応／専用行なし |
 |---|---|---|---|---|
-| 閉鎖lane | 158 | 114 | SA-02〜04・06〜14の12 | 126／32 |
+| 閉鎖lane | 158 | 114 | SA-02〜04・06〜24の22 | 136／22 |
 | 入口境界 | 7 | 4 | 0 | 4／3 |
 | 通常維持 | 1 | 1 | 0 | 1／0 |
 | 別gate UN | 62 | 0 | 0 | 0／62 |
-| 合計 | 228 | 119 | 12 | 131／97 |
+| 合計 | 228 | 119 | 22 | 141／87 |
 
-既存レビュー延べ123＋本書追加12＝135専用行、重複4旧caseを除き131。現在の97は32＋3＋62であり、全てをAP01の同じ未レビュー理由にまとめない。12行を個別照合しただけで、旧試験の実行・新旧同等性・保証低下受容を増やしたとは数えない。
+既存レビュー延べ123＋本書追加22＝145専用行、重複4旧caseを除き141。現在の87は22＋3＋62であり、全てをAP01の同じ未レビュー理由にまとめない。22行を個別照合しただけで、旧試験の実行・新旧同等性・保証低下受容を増やしたとは数えない。
 
-## 3 初稿の未レビュー44行の追跡：個別照合12・残32
+## 3 初稿の未レビュー44行の追跡：個別照合22・残22
 
-次表は初稿の44行とA1-U-IDを保持する追跡索引。A1-U01〜12は追加専用行A1-S01〜12で元test本文を個別照合した。残るA1-U13〜44の32行は正規台帳の**検査主題・残差の引継ぎだけ**で、直接assertion未個別照合のまま。全候補の処遇未選択・保証低下未承認は変わらない。未照合のcode・count・成功／拒否位置を主題から推測補完しない。元revision／fullName／variant・注入位置・直接assertion・診断層を個別票へ記録し、その後に同位置の独立対照か、失う範囲の受容可否を審査する。現在の試験は保持する。
+次表は初稿の44行とA1-U-IDを保持する追跡索引。A1-U01〜22は追加専用行A1-S01〜22で元test本文を個別照合した。残るA1-U23〜44の22行（ND-03〜29の未照合分）は正規台帳の**検査主題・残差の引継ぎだけ**で、直接assertion未個別照合のまま。全候補の処遇未選択・保証低下未承認は変わらない。未照合のcode・count・成功／拒否位置を主題から推測補完しない。元revision／fullName／variant・注入位置・直接assertion・診断層を個別票へ記録し、その後に同位置の独立対照か、失う範囲の受容可否を審査する。現在の試験は保持する。
 
 責務先は**実装上のownerとレビュー引継先の役割**で、人名の割当て・実装依頼ではない。担当者・承認者・期限は未割当／未確定。通常の会計・停止・Permit等に関わる共通部分は§5の維持条件が優先する。
 
@@ -87,16 +87,16 @@ draft-0.2の個別照合基準は`ff18189`。初稿の44行索引からSA-02〜0
 | A1-U10／[SA-12](BEST_PRACTICE_RELEASE_PRIVATE_CASE_MIGRATION_LEDGER.md#c-sa-12) | profileのsession field拒否。元本文を個別照合済み（文書のみ） | A1-S10へ明示対応。status profile入口→NS01／AP03。同名field・同入口で照合 |
 | A1-U11／[SA-13](BEST_PRACTICE_RELEASE_PRIVATE_CASE_MIGRATION_LEDGER.md#c-sa-13) | profileのfetch=function拒否。元本文を個別照合済み（文書のみ） | A1-S11へ明示対応。同入口→NS01／AP03。通常の既存fetch注入は維持して閉鎖profileだけを区別 |
 | A1-U12／[SA-14](BEST_PRACTICE_RELEASE_PRIVATE_CASE_MIGRATION_LEDGER.md#c-sa-14) | delay_ms=10001拒否。元本文を個別照合済み（文書のみ） | A1-S12へ明示対応。合成profile境界→NS01／AP03。元上限入力を維持し期限を延ばさない |
-| A1-U13／[SA-15](BEST_PRACTICE_RELEASE_PRIVATE_CASE_MIGRATION_LEDGER.md#c-sa-15) | 既存fixed-200 transcript guard維持 | fake pin／session→NS01／02。入力status指定とdispatch後非200拒否を分離 |
-| A1-U14／[SA-16](BEST_PRACTICE_RELEASE_PRIVATE_CASE_MIGRATION_LEDGER.md#c-sa-16) | await前の親bytes copy・caller改変非採用 | 親bytes pin→NS01／02。同内容性を別pin実装の成功だけで代替しない |
-| A1-U15／[SA-17](BEST_PRACTICE_RELEASE_PRIVATE_CASE_MIGRATION_LEDGER.md#c-sa-17) | status観測delay中取消・timer／admission | 元run停止／status待機→NS01／03。同delay位置と先行理由を保持 |
-| A1-U16／[SA-18](BEST_PRACTICE_RELEASE_PRIVATE_CASE_MIGRATION_LEDGER.md#c-sa-18) | 事前取消・ready／受理前停止 | constructor／run owner→NS01／03。元factory形状と取得前効果を個別照合 |
-| A1-U17／[SA-19](BEST_PRACTICE_RELEASE_PRIVATE_CASE_MIGRATION_LEDGER.md#c-sa-19) | 低減responseBytes上限 | canonical会計／status取得→NS01。通常KP01も維持し、native同条件不足を残す |
-| A1-U18／[SA-20](BEST_PRACTICE_RELEASE_PRIVATE_CASE_MIGRATION_LEDGER.md#c-sa-20) | 低減totalBytes上限 | 同会計→NS01。response capとの別条件を保持 |
-| A1-U19／[SA-21](BEST_PRACTICE_RELEASE_PRIVATE_CASE_MIGRATION_LEDGER.md#c-sa-21) | request cap4のfinal4枠 | 予約owner→NS01。元登録owner・status経路で枠の維持を照合 |
-| A1-U20／[SA-22](BEST_PRACTICE_RELEASE_PRIVATE_CASE_MIGRATION_LEDGER.md#c-sa-22) | request cap5のfinal4枠 | 同予約owner→NS01。cap4だけへ統合しない |
-| A1-U21／[SA-23](BEST_PRACTICE_RELEASE_PRIVATE_CASE_MIGRATION_LEDGER.md#c-sa-23) | 元attempt floor・新期限を作らない | 同run／attempt停止owner→NS03。floorと全run期限の理由写像を分離 |
-| A1-U22／[SA-24](BEST_PRACTICE_RELEASE_PRIVATE_CASE_MIGRATION_LEDGER.md#c-sa-24) | 低減hard deadline・pending fake I/O取消 | canonical停止owner→NS01／03。元の低減値・実入力を本文で確定し、別期限へ置換しない |
+| A1-U13／[SA-15](BEST_PRACTICE_RELEASE_PRIVATE_CASE_MIGRATION_LEDGER.md#c-sa-15) | 既存fixed-200 transcript guard維持。元本文を個別照合済み（文書のみ） | A1-S13へ明示対応。fake pin／session→NS01／02。入力status指定とdispatch後非200拒否を分離 |
+| A1-U14／[SA-16](BEST_PRACTICE_RELEASE_PRIVATE_CASE_MIGRATION_LEDGER.md#c-sa-16) | await前の親bytes copy・caller改変非採用。元本文を個別照合済み（文書のみ） | A1-S14へ明示対応。親bytes pin→NS01／02。同内容性を別pin実装の成功だけで代替しない |
+| A1-U15／[SA-17](BEST_PRACTICE_RELEASE_PRIVATE_CASE_MIGRATION_LEDGER.md#c-sa-17) | status観測delay中取消・timer／admission。元本文を個別照合済み（文書のみ） | A1-S15へ明示対応。元run停止／status待機→NS01／03。同delay位置と先行理由を保持 |
+| A1-U16／[SA-18](BEST_PRACTICE_RELEASE_PRIVATE_CASE_MIGRATION_LEDGER.md#c-sa-18) | 事前取消・ready／受理前停止。元本文を個別照合済み（文書のみ） | A1-S16へ明示対応。constructor／run owner→NS01／03。取得前効果は直接未assert |
+| A1-U17／[SA-19](BEST_PRACTICE_RELEASE_PRIVATE_CASE_MIGRATION_LEDGER.md#c-sa-19) | 低減responseBytes上限。元本文を個別照合済み（文書のみ） | A1-S17へ明示対応。canonical会計／status取得→NS01。通常KP01も維持し、native同条件不足を残す |
+| A1-U18／[SA-20](BEST_PRACTICE_RELEASE_PRIVATE_CASE_MIGRATION_LEDGER.md#c-sa-20) | 低減totalBytes上限。元本文を個別照合済み（文書のみ） | A1-S18へ明示対応。同会計→NS01。response capとの別条件を保持 |
+| A1-U19／[SA-21](BEST_PRACTICE_RELEASE_PRIVATE_CASE_MIGRATION_LEDGER.md#c-sa-21) | request cap4のfinal4枠。元本文を個別照合済み（文書のみ） | A1-S19へ明示対応。予約owner→NS01。元登録owner・status経路で枠の維持を照合 |
+| A1-U20／[SA-22](BEST_PRACTICE_RELEASE_PRIVATE_CASE_MIGRATION_LEDGER.md#c-sa-22) | request cap5のfinal4枠。元本文を個別照合済み（文書のみ） | A1-S20へ明示対応。同予約owner→NS01。cap4だけへ統合しない |
+| A1-U21／[SA-23](BEST_PRACTICE_RELEASE_PRIVATE_CASE_MIGRATION_LEDGER.md#c-sa-23) | 元attempt floor・新期限を作らない。元本文を個別照合済み（文書のみ） | A1-S21へ明示対応。同run／attempt停止owner→NS03。floorと全run期限の理由写像を分離 |
+| A1-U22／[SA-24](BEST_PRACTICE_RELEASE_PRIVATE_CASE_MIGRATION_LEDGER.md#c-sa-24) | 低減hard deadline・pending fake I/O取消。元本文を個別照合済み（文書のみ） | A1-S22へ明示対応。canonical停止owner→NS01／03。元の低減値deadlineMs=10を別期限へ置換しない |
 | A1-U23／[ND-03](BEST_PRACTICE_RELEASE_PRIVATE_CASE_MIGRATION_LEDGER.md#c-nd-03) | 403/body=trueの一度受理・公開release判断なし | native issuer／consumer／上位診断→NS01／03。旧ND ownerと同reader由来を保持 |
 | A1-U24／[ND-04](BEST_PRACTICE_RELEASE_PRIVATE_CASE_MIGRATION_LEDGER.md#c-nd-04) | 404/body=trueの正常受理 | 同owner→NS01／03。body403・no_body404・取消404の別対照で代替しない |
 | A1-U25／[ND-05](BEST_PRACTICE_RELEASE_PRIVATE_CASE_MIGRATION_LEDGER.md#c-nd-05) | 403/body=false・purpose slot／issue | 同owner→NS01／03。旧slot／countの直接assertを本文で確定 |
@@ -203,6 +203,49 @@ Dの3variantは全てok=false／code=invalid_response、budget.requests=1／rece
 
 SA-13（fetch=function）とSA-14（delay_ms=10001）には台帳上のD候補がない。[既存compiled SA fixture](../tests/review/fixtures/compiled-source-status-binding.mjs)は403／cancelled受理と404／unconfirmed拒否等を記述し、この6variantは収録していない。今回compiledの実行実績は追加しない。正規分類はSA-11／12が部分対応、SA-09／10／13／14が未対応で、A1-P07の処遇未選択・P09未承認。元入力・拒否codeの回復と、session未生成・時計0・friend未呼出し等の追加対照を分け、同元位置・正負対照・compiled artifactと終了確認を別承認後に揃える。旧試験・通常K01〜05を維持し、新friend・公開supplierを回復口にしない。
 
+### SA-15〜24の追加個別照合（draft-0.5）
+
+元artifactは同じP（実class＋fake I/O）、基準`8e8dbdf`の[source-status-binding.test.ts](../tests/review/source-status-binding.test.ts)。SA-15だけはstatus probeではなく既存の[固定fake composition入口](../src/servicenow/bounded-read.ts)（`prepareNewReviewComposition`）を直接呼ぶ。SA-16〜24は前節のhelper（`probe(change, options)`）を使い、profileのchange、または最上位optionsのsignal／limitsを変える。SA-19／20とSA-21／22は同じ`it.each`の別variantで、宣言の%s／%iを推測展開したfullNameは作らない。
+
+| ID／正規旧case・入力／注入位置 | 直接assertion | 直接assertしていない範囲 | 責務先・将来回復条件 |
+|---|---|---|---|
+| A1-S13／[SA-15](BEST_PRACTICE_RELEASE_PRIVATE_CASE_MIGRATION_LEDGER.md#c-sa-15)。composition入口のsynthetic_ioで、release応答行へ`status:403`を追加（bytesは`{}`） | 呼出しが同期に`invalid_input`をthrowする | session未生成・dispatch0・既存guardの各位置は直接未assert。status probe側の入口ではない | fake pin／session→NS01／02。入力行のstatus fieldを拒否する条件として維持し、dispatch後の非200拒否（ACKB-02）や親行のstatus追加（ACK-33）とは別variantとして扱う |
+| A1-S14／[SA-16](BEST_PRACTICE_RELEASE_PRIVATE_CASE_MIGRATION_LEDGER.md#c-sa-16)。parent_bytesとdelay_ms=1を渡し、probe呼出し直後にcaller側bytesを`fill(0)` | 返値のconsumptions=1、budget.requests=2、received_bytes=改変前の長さ | 解析した親内容が改変前と同じであること、copyの位置は直接未assert（成功したことからの間接証拠だけ）。fake timerは使っていない | 親bytes pin→NS01／02。await前copyと同内容からの解析を回復。総量一致だけで同内容性を証明しない |
+| A1-S15／[SA-17](BEST_PRACTICE_RELEASE_PRIVATE_CASE_MIGRATION_LEDGER.md#c-sa-17)。fake timerでdelay_ms=1000、1ms進めてから外部signalをabort | reject `cancelled`、timer0、後続のfresh probeが`cleanup:'closed'`、その後もtimer0 | 取消された先行runのcleanup・予約返却・診断は直接未assert。fresh成功は新runの確認 | 元run停止／status待機→NS01／03。status観測delay中の同期失効を回復し、parent／release待機の取消（ACK-23／24）と統合しない |
+| A1-S16／[SA-18](BEST_PRACTICE_RELEASE_PRIVATE_CASE_MIGRATION_LEDGER.md#c-sa-18)。既に取消済みのsignalを渡す | reject `cancelled`、timer0 | ready前・受理前・dispatch0・construction診断は直接未assert | constructor／run owner→NS01／03。取消済みsignalで生成と停止を分ける元factory互換を回復 |
+| A1-S17／[SA-19](BEST_PRACTICE_RELEASE_PRIVATE_CASE_MIGRATION_LEDGER.md#c-sa-19)。limits.responseBytes=1 | reject `receive_budget_exceeded` | 課金後に超過したこと、失敗budget、後続fresh成功は直接未assert | canonical会計／status取得→NS01。response capを独立variantで維持 |
+| A1-S18／[SA-20](BEST_PRACTICE_RELEASE_PRIVATE_CASE_MIGRATION_LEDGER.md#c-sa-20)。limits.totalBytes=1 | reject `receive_budget_exceeded` | A1-S17と同じ | 同会計→NS01。total capをresponse capと別条件で維持 |
+| A1-S19／[SA-21](BEST_PRACTICE_RELEASE_PRIVATE_CASE_MIGRATION_LEDGER.md#c-sa-21)。limits.requests=4 | reject `request_budget_exceeded` | final4枠の予約数・拒否位置・後続fresh成功は直接未assert | 予約owner→NS01。cap4で枠を侵食しない受付を回復 |
+| A1-S20／[SA-22](BEST_PRACTICE_RELEASE_PRIVATE_CASE_MIGRATION_LEDGER.md#c-sa-22)。limits.requests=5 | reject `request_budget_exceeded` | A1-S19と同じ | 同予約owner→NS01。cap5の進行prefixをcap4と同一視しない |
+| A1-S21／[SA-23](BEST_PRACTICE_RELEASE_PRIVATE_CASE_MIGRATION_LEDGER.md#c-sa-23)。fake timerでdelay_ms=1000、1ms後に`performance.now`を10000へ進める | reject `upstream_unavailable`、timer0 | 新しい期限を作らないことは直接未assert（理由codeとtimer0からの間接証拠だけ）。deadline_exceededとの区別も1variant | 同run／attempt停止owner→NS03。元floor等号での写像を回復し、全run期限（deadline_exceeded）と分ける |
+| A1-S22／[SA-24](BEST_PRACTICE_RELEASE_PRIVATE_CASE_MIGRATION_LEDGER.md#c-sa-24)。limits.deadlineMs=10、delay_ms=1000、`performance.now`を10へ進め10ms経過 | reject `deadline_exceeded`、timer0 | 期限を延ばさないこと・pending I/O取消の内部は直接未assert | canonical停止owner→NS01／03。低減deadlineMs=10を別期限へ置換せず、元timerでの停止を回復 |
+
+#### 停止位置の静的根拠と、確認していない範囲
+
+- **SA-15：** `prepareNewReviewComposition`は、session生成より前に`pinCompositionFakeIO`で応答行を検査する。行の許可keyはpurpose／bytes／delay_msだけで、statusを持つ行は`invalid_input`になる。fakeのdispatchは常にstatus 200のResponseを返す。これがfixed-200 guardの静的根拠である。
+- **SA-16：** `probeNewStatusAcceptance`は、最初のawaitより前にprofileを検査してparent_bytesをcopyする。そのため、呼出し直後のcallerの`fill(0)`は内部copyに届かない。
+- **SA-18：** session constructorは、取消済みsignalを受けると`construction.fail('commit','cancelled')`を記録し、`stop('cancelled')`した停止済みinstanceを返す。後続の処理はguardで止まる。
+- **SA-19〜22：** canonical会計の`dispatchAt`は`requests >= cap−4`で`request_budget_exceeded`、`chunk`は累計がtotalBytesを超えると`receive_budget_exceeded`を返す。session側は親bytesを計上した後にresponseBytesを比べる。静的に読むと、cap4は親dispatchで、cap5は親1件の後のstatus dispatchで止まる。bytes上限は、どちらも親bytesを計上した後に止まる。
+- **SA-23：** status windowのfloorは、開始時の残り時間から10000を引いた値（下限はreserveMs）で、観測後に残り時間がfloor以下なら`upstream_unavailable`になる。既定deadline 60000で10000進めると、ちょうど等号になる。
+- **SA-24：** session生成時に、deadlineMsからの経過で`deadline_exceeded`を出すtimerが1つだけ設定される。fake observeのdelay timerはsignalのabortで解除される。
+
+これらは実装を読んだ順序であり、元10caseが拒否位置・dispatch数・予約数・失敗runのcleanupを計測した証拠ではない。後続fresh成功をassertするのはSA-17だけで、他のcaseに足して数えない。
+
+#### 独立D候補・compiledとの対応と残差
+
+| 比較先 | 直接assertion | 元Pとの差・回復条件 |
+|---|---|---|
+| [DB-06](BEST_PRACTICE_ABORT_SCOPE_OLD_CASE_CROSSWALK_B02_DESIGN.md#n-db-06)、[development-bootstrap.test.ts](../tests/review/development-bootstrap.test.ts)のrefuses caller-supplied status %i（403／200） | 全応答行にstatusを付けた入力が`invalid_input`、requests=0／received_bytes=0 | Dは独立rootのsummaryで、会計0まで直接assertする。元SA-15は同期throwの1点で、入口・入力（release行だけにstatus）も異なる |
+| [DB-35](BEST_PRACTICE_ABORT_SCOPE_OLD_CASE_CROSSWALK_B02_DESIGN.md#n-db-35)、同ファイルのpins all bytes before await | run呼出し直後に全行bytesを`fill(0)`、ok、requests=2、received_bytes=改変前の合計、bootstrap凍結 | 対象は全transcriptで、元SA-16はstatus profileのparent_bytesだけ。別pin実装の成功で元copyを代替しない |
+| [DB-37](BEST_PRACTICE_ABORT_SCOPE_OLD_CASE_CROSSWALK_B02_DESIGN.md#n-db-37)、同ファイルのcancels pending %s with no later charges（parent／release）、[DN-09](BEST_PRACTICE_ABORT_SCOPE_OLD_CASE_CROSSWALK_B02_DESIGN.md#n-dn-09)、[development-native.test.ts](../tests/review/development-native.test.ts)のjoins the same pending cleanup | DB-37はparent／release待機中の取消でcancelled、reserved=0、requests・received_bytesの値。DN-09はnative cleanup待機中の取消で同じcleanupにjoinし、confirmed・active=0・timer0 | どちらもstatus観測delayそのものではない。元SA-17の位置での失効を代替しない |
+| [DN-12](BEST_PRACTICE_ABORT_SCOPE_OLD_CASE_CROSSWALK_B02_DESIGN.md#n-dn-12)、同ファイルのnever acquires an injected reader、[DR-17](BEST_PRACTICE_ABORT_SCOPE_OLD_CASE_CROSSWALK_B02_DESIGN.md#n-dr-17)、[development-root.test.ts](../tests/review/development-root.test.ts)のkeeps %s cancellation separate | DN-12は事前取消でcancelled、requests=0、native=null、release_attempts=0。DR-17のpreは実session状態不変と、construction primary＝commit／cancelled | Dは会計0や診断まで直接assertする。元SA-18はcodeとtimer0だけで、実factory互換は旧caseにだけある |
+| [DB-27](BEST_PRACTICE_ABORT_SCOPE_OLD_CASE_CROSSWALK_B02_DESIGN.md#n-db-27)／[DB-26](BEST_PRACTICE_ABORT_SCOPE_OLD_CASE_CROSSWALK_B02_DESIGN.md#n-db-26)、development-bootstrap.test.tsのcharges the first whole chunk | 上限1で`receive_budget_exceeded`、requests=1、received_bytes=親の長さ、reserved=0 | 課金後超過をDは直接assertする。元SA-19／20はcodeだけで、Dの強い会計assertを元の保証に加算しない |
+| [DB-21](BEST_PRACTICE_ABORT_SCOPE_OLD_CASE_CROSSWALK_B02_DESIGN.md#n-db-21)／[DB-22](BEST_PRACTICE_ABORT_SCOPE_OLD_CASE_CROSSWALK_B02_DESIGN.md#n-db-22)、同ファイルのkeeps four requests unavailable（4／5／6） | cap4／5で`request_budget_exceeded`、committed=min(2,cap−4)、reserved_peak=4、reserved=0 | Dは進行prefixと予約peakを直接assertする。元SA-21／22はcodeだけで、同じ登録owner・status経路での枠は旧caseにだけある |
+| [DB-02](BEST_PRACTICE_ABORT_SCOPE_OLD_CASE_CROSSWALK_B02_DESIGN.md#n-db-02)、同ファイルのuses the original clock（10000／50000／60000）、[DN-10](BEST_PRACTICE_ABORT_SCOPE_OLD_CASE_CROSSWALK_B02_DESIGN.md#n-dn-10)、development-native.test.tsのbounds pending cleanup by the original floor | DB-02はelapsed 10000でupstream_unavailable、50000でphase_deadline_exceeded、60000でdeadline_exceeded。DN-10はnative cleanup待機中のfloor | 同じfloorの関連試験。nativeの取消なしfloor→upstream写像を元status経路と同条件では検証していない |
+| [DR-19](BEST_PRACTICE_ABORT_SCOPE_OLD_CASE_CROSSWALK_B02_DESIGN.md#n-dr-19)、development-root.test.tsのuses the original lowered deadline、[DN-11](BEST_PRACTICE_ABORT_SCOPE_OLD_CASE_CROSSWALK_B02_DESIGN.md#n-dn-11)、development-native.test.tsのkeeps the shared run deadline distinct | DR-19はdeadline_ms=10で`deadline_exceeded`、run_primary、active=0、timer0。DN-11は60000でdeadline_exceeded、run_stop、cleanup unconfirmed | 低減deadlineとnative run期限は別case。元SA-24のstatus delay中の低減10msと同条件ではない |
+
+[既存compiled SA fixture](../tests/review/fixtures/compiled-source-status-binding.mjs)は正常403／cancelledの受理と404／unconfirmedの拒否等を記述し、この10caseの入力・limits・signal・時計注入は収録していない。今回compiledの実行実績は追加しない。10行とも正規分類は部分対応で、A1-P07の処遇未選択・P09未承認。元入力・code・timer0・fresh成功（SA-17）の回復と、拒否位置・dispatch数・予約数・失敗runの診断／cleanup等の追加対照を分け、同元位置・正負対照・compiled artifactと終了確認を別承認後に揃える。旧試験・通常K01〜05を維持し、新friend・公開supplierを回復口にしない。
+
 ### 未個別照合の入口3行と別gate62行
 
 | ID／対象 | 未レビューの検査主題・責務先 | 扱い |
@@ -243,7 +286,7 @@ NS05の空O保持とNS06の上位移譲、NS02のackとNS04のprojectionは依�
 
 ## 6 明示対応済みcaseの残差・失われ得るassertionと責務先
 
-以下は専用case行への審査入口であり、6行を一括で受容する表ではない。6レビューの専用case行を本台帳の明細参照とし、原文を再copyして条件を二重管理しない。各旧case／assertionは当該行の元assertion列と将来条件を参照して個別票へ結合する。全行「旧試験維持／処遇未選択／保証低下未承認」。本書追加のSA-02〜04・06〜14はA1-S01〜12を参照し、残未レビュー32行は§3で個別照合する。
+以下は専用case行への審査入口であり、6行を一括で受容する表ではない。6レビューの専用case行を本台帳の明細参照とし、原文を再copyして条件を二重管理しない。各旧case／assertionは当該行の元assertion列と将来条件を参照して個別票へ結合する。全行「旧試験維持／処遇未選択／保証低下未承認」。本書追加のSA-02〜04・06〜24はA1-S01〜22を参照し、残未レビュー22行は§3で個別照合する。
 
 | ID／NS・case参照 | 旧直接assertと連続保証の残差（区別して審査） | 責務先・将来回復条件 | 通常維持との境界 |
 |---|---|---|---|
@@ -268,13 +311,13 @@ NS05の空O保持とNS06の上位移譲、NS02のackとNS04のprojectionは依�
 
 ## 7 個別票の固定項目・現在値
 
-個別票は文書dataであり、runtime証拠・claim・発行口ではない。A1-R／Uの要約から自動で「受容」を選択しない。NS専用行119＋本書追加12の計131旧caseにも、まだ人の個別承認はない。
+個別票は文書dataであり、runtime証拠・claim・発行口ではない。A1-R／Uの要約から自動で「受容」を選択しない。NS専用行119＋本書追加22の計141旧caseにも、まだ人の個別承認はない。
 
 | ID／欄 | 必須内容 | 現在値・未記入時の扱い |
 |---|---|---|
 | A1-P01 識別 | 正規旧ID・元revision／宣言テンプレート／入力variant、対象lane・artifact、assertion列の参照 | IDは§2〜4／6へ結合。実行fullName・fault位置を推測生成しない |
 | A1-P02 維持境界 | 該当K01〜05と共通source／owner・影響しない根拠 | 維持必須。影響不明はUnknownで審査保留 |
-| A1-P03 保証／喪失 | 旧testが直接assertするcode／count／shape／診断・故障位置、何を失い何は残るか | 明示対応caseは元レビュー列／追加専用行を参照。残未レビュー32＋入口3は本文個別照合待ち。喪失は将来変更時の可能性で現在の退行判定ではない |
+| A1-P03 保証／喪失 | 旧testが直接assertするcode／count／shape／診断・故障位置、何を失い何は残るか | 明示対応caseは元レビュー列／追加専用行を参照。残未レビュー22＋入口3は本文個別照合待ち。喪失は将来変更時の可能性で現在の退行判定ではない |
 | A1-P04 代替と残差 | 新case・共有部分・異なる入力／時点／owner・未代替assertion | 旧分類を維持。Dの成功数・似たcodeで同等としない |
 | A1-P05 所有／失敗 | 実装上owner、停止・未公開値・未確認cleanup／custody・診断の保持先 | §3／5／6の役割へ引継ぎ。人の担当者は未割当。全解放・実容量は未確認ならUnknown |
 | A1-P06 回復 | 同入力・同元位置・正負対照・元期限・source／compiled artifact・終了確認と再レビュー条件 | 将来条件だけ記載。未実施を成功へ変えない。新friend・台帳共有を回復口にしない |
@@ -288,7 +331,7 @@ NS05の空O保持とNS06の上位移譲、NS02のackとNS04のprojectionは依�
 ## 8 優先順と停止条件
 
 1. §2の排他的区分と§5のK条件を先に確認し、非提供と通常維持を混ぜない。旧case・variant・artifactを固定して重複4行の両参照を保つ。
-2. §3の初稿44行のうちSA-02〜04・06〜14を個別照合した文書記録として保持し、残32行を個別に照合する。次はSA-15〜24のfixed-200 guard・bytes pin・取消・予算／floor・期限から、入力拒否と実行中停止を分けて確認する。取消・元floor／予算・診断、native／bytes・再利用境界も元variantで照合する。入口3行はAP02／03の別票へ渡す。未レビューが残る行は未承認・審査保留のままとし、群全体の受容で覆わない。
+2. §3の初稿44行のうちSA-02〜04・06〜24を個別照合した文書記録として保持し、残22行（ND-03〜29の未照合分）を個別に照合する。次はND-03〜06のnative正常受理から、body有無・status別のvariantを分けて確認する。取消・元floor／予算・診断、native／bytes・再利用境界も元variantで照合する。入口3行はAP02／03の別票へ渡す。未レビューが残る行は未承認・審査保留のままとし、群全体の受容で覆わない。
 3. 明示対応済みの各旧caseもA1-P01〜10へ結合し、通常維持への影響・失われ得る直接assert・残差所有と回復条件を確定する。追加条件F01〜05と別gateを、失う旧保証へ混入しない。
 4. 個別受容の可否はユーザーの別承認へ渡す。受容できなければ回復先行または候補リリース停止。旧試験削除・friend撤去・設定変更・実装・公開はここから開始しない。
 
@@ -296,7 +339,7 @@ AP01の判断材料が揃っても、保証回復・配布閉包撤去・最終�
 
 ## 9 今回の静的確認
 
-以下は初稿draft-0.1時の記録。追加個別照合の現在値・確認範囲は§2の追加表・§3のA1-S01〜12と末尾のdraft-0.4記録を参照する。draft-0.1〜0.3の件数は各時点の履歴として保持する。
+以下は初稿draft-0.1時の記録。追加個別照合の現在値・確認範囲は§2の追加表・§3のA1-S01〜22と末尾のdraft-0.5記録を参照する。draft-0.1〜0.4の件数は各時点の履歴として保持する。
 
 正規228行のanchorと、6レビューの専用case行の最初の正規旧caseリンクを照合した。本文参照・D候補リンク・同名だが別入力の行を重複として数えず、旧case IDをanchorから確定した。未レビュー表は旧台帳の主題と残差の索引で、44行の直接assertionレビュー完了ではない。実装・製品module import／実行・試験再実行・build／pack・発行・保証回復判定は行っていない。
 
@@ -325,3 +368,9 @@ AP01の判断材料が揃っても、保証回復・配布閉包撤去・最終�
 今回の開始時点で既に同2MDにdraft-0.4の未コミット変更があったため、その内容を保持して元本文・正規台帳と再照合した。照合中に既存分が`e1caa41`としてコミットされたことを確認したが、本作業ではstage／commitを実行していない。module評価時のfriend取得と各probeのfriend呼出しを区別する保持責務を補足し、AP01親文書のdraft-0.3時点の件数を履歴と明記した。補足は同2MDの未コミット差分として残し、元case・source／試験・承認欄は変更していない。
 
 2MDの表20・ローカルlink138・明示anchor84、A1設計ID94（従来82＋S12）、正規228／6レビュー延べ123・重複除外119／重複4を確認。追加12旧caseは既存119と重複せず部分対応8／未対応4で正規台帳と一致、現文書対応131、閉鎖lane126／未レビュー32、全区分の専用行なし97（32＋入口3＋別gate62）と一致した。初稿U44の索引・重複4旧caseの両参照、通常K5群・AP01〜06未承認・処遇未選択を保持。ローカル参照・表列数・末尾改行・差分空白を静的確認した。変更はtrackedのMD2件だけで、製品・試験・設定変更0。製品module import／friend取得・試験再実行・build／pack・発行・Pushはせず、保証回復・実行同等性・個別承認・公開可の実績は追加しない。
+
+### draft-0.5：SA-15〜24の個別本文照合（2026-11-19）
+
+基準`8e8dbdf`の元9宣言／10variant（SA-19／20とSA-21／22は同じ`it.each`）、composition入口のfake pin、status probeのprofile pin、session constructorの取消済みsignal処理、canonical会計のdispatchAt／chunk、status windowのfloor、session deadline timer、D候補12件（DB-02／06／21／22／26／27／35／37、DN-09〜12、DR-17／19）の該当本文、既存compiled SA fixtureを静的に読んだ。元caseの直接assertion（code、timer0、SA-16の返値3項目、SA-17のfresh成功）と、停止位置の静的根拠・Dの強い別assertionを分けた。拒否位置・dispatch数・予約数・失敗runのcleanupを推測補完しない。
+
+2MDの表22・ローカルlink168・明示anchor108、A1設計ID104（従来82＋S22）、正規228／6レビュー延べ123・重複除外119／重複4を確認。追加22旧caseは既存119と重複せず部分対応18／未対応4で正規台帳と一致、現文書対応141、閉鎖lane136／未レビュー22、全区分の専用行なし87（22＋入口3＋別gate62）と一致した。初稿U44の索引・重複4旧caseの両参照、通常K5群・AP01〜06未承認・処遇未選択を保持。ローカル参照・表列数・末尾改行・差分空白を静的確認した。変更はtrackedのMD2件だけで、製品・試験・設定変更0。製品module import／friend取得・試験再実行・build／pack・発行・Pushはせず、保証回復・実行同等性・個別承認・公開可の実績は追加しない。
