@@ -1,7 +1,9 @@
 # JR-B pre-call受付・write-once aliasとconstructor call 0停止の差分詳細設計
 
-Version: native-diagnostic-jrb-precall-admission-alias-draft-0.4 / Date: 2026-11-18。
+Version: native-diagnostic-jrb-precall-admission-alias-draft-0.5 / Date: 2026-11-18。
 Status: §9の先行診断・一度限り受付・固定拒否・安全なfailure反映だけを合成依存限定で実装。限定実装の基準HEADは`2ecb117`。draft-0.1の実装照合基準は`f9a8be2`、補強試験・参照更新は別コミット`681bdd4`で保持した。[実writer／終端受渡し設計](BEST_PRACTICE_NATIVE_DIAGNOSTIC_JRB_LIVE_WRITER_TERMINAL_HANDOFF_DELTA_DESIGN.md)WH01・WC02・§9と、[seed→実行設計](BEST_PRACTICE_NATIVE_DIAGNOSTIC_JRB_SEED_EXECUTION_TRANSITION_DELTA_DESIGN.md)CS01〜04／PP01〜03への差分である。[固定pin設計](BEST_PRACTICE_NATIVE_DIAGNOSTIC_JRB_RUNTIME_PIN_DELTA_DESIGN.md)の管理された同realm・同P／then前提と、[先行field契約](BEST_PRACTICE_NATIVE_DIAGNOSTIC_JRB_EXECUTION_SEED_CONTRACT_DESIGN.md)EF／EW／ETの一度限り試行・保持責務は変更しない。
+
+draft-0.5のレビュー修正：レビュー修正の基準HEADは`47cb9ec`（修正時のHEADは`47cb9ec`）。同コミットでscan設計がdraft-0.2になり、有限ID・固定schema・先行scalar／guardの閉鎖値契約を同書§9で実装した。ところが§10は参照をdraft-0.1のまま残し、「MDだけの設計で、scanの実装…は接続せず」と書いていた。§10の参照と記述を現状に合わせ、版を上げて参照元の版参照を直した。実装・試験は変更していない。
 
 draft-0.4のレビュー修正：レビュー修正の基準HEADは`a81534a`（修正時のHEADは`a81534a`）。同コミットで、本書のPS／PF／PR／PCと§9を差分元とする固定検査台帳・scan設計を追加した一方、本書からの参照がなかった。§10に参照節を加えて版を上げ、参照元の受渡し設計・seed→実行設計の版参照を直した。内容・実装・試験は変更していない。
 
@@ -176,4 +178,4 @@ reflectJoinPrecallFailureはcanonical slotの非Proxy確認後、faultAt→fault
 
 ## 10 固定検査台帳・有限失敗IDと拒否確定前scan（2026-11-18追記）
 
-[固定検査台帳・有限失敗IDと拒否確定前scanの差分詳細設計draft-0.1](BEST_PRACTICE_NATIVE_DIAGNOSTIC_JRB_FIELD_ADMISSION_SCAN_DELTA_DESIGN.md)で、§3〜4の全field・参照先検査を19nodeの固定schedule・192個の有限失敗IDへ具体化し、§9の現行拒否より前に置く拒否未確定のscan区間を定めた。共有再入通知と計数の先行scalar、run／cleanupのdescriptor・native操作の予約上界、§7の「14alias」「最大65key」の読み方も同書で補足する。MDだけの設計で、scanの実装・停止／live pin資格・alias供給・constructor callは接続せず、§9の固定拒否を維持する。
+[固定検査台帳・有限失敗IDと拒否確定前scanの差分詳細設計draft-0.2](BEST_PRACTICE_NATIVE_DIAGNOSTIC_JRB_FIELD_ADMISSION_SCAN_DELTA_DESIGN.md)で、§3〜4の全field・参照先検査を19nodeの固定schedule・192個の有限失敗IDへ具体化し、§9の現行拒否より前に置く拒否未確定のscan区間を定めた。共有再入通知と計数の先行scalar、run／cleanupのdescriptor・native操作の予約上界、§7の「14alias」「最大65key」の読み方も同書で補足する。同書§9で有限ID・固定schema・先行6scalar／guardの閉鎖値契約だけを実装した。scanの実行・scalar writer・停止／live pin資格・alias供給・constructor callは接続せず、§9の固定拒否を維持する。

@@ -171,4 +171,4 @@ joinExecutionValuePostはcreator内部のdata投影を対象とする。raw JSON
 
 ## 11 pre-call data受付・alias供給とcall 0停止（2026-11-18追記）
 
-[pre-call受付・write-once aliasとconstructor call 0停止の差分詳細設計draft-0.4](BEST_PRACTICE_NATIVE_DIAGNOSTIC_JRB_PRECALL_ADMISSION_ALIAS_DELTA_DESIGN.md)で、CS01〜04／PP01〜03の生成前資格を、全field・同owner・停止／live pin・先行拒否保持と対にした。同書§9では先行scalar・一度限りの固定拒否・安全なfailure反映だけを合成依存限定で実装する。必要な観測／固定abort・失敗終端を欠く現在はcall 0であり、14null aliasや正常postだけから呼出し権限を作らない。全field受付・write-once producer・生成scheduleは未接続で、既存固定拒否・各閉鎖条件・Unknown・調査保留を維持する。
+[pre-call受付・write-once aliasとconstructor call 0停止の差分詳細設計draft-0.5](BEST_PRACTICE_NATIVE_DIAGNOSTIC_JRB_PRECALL_ADMISSION_ALIAS_DELTA_DESIGN.md)で、CS01〜04／PP01〜03の生成前資格を、全field・同owner・停止／live pin・先行拒否保持と対にした。同書§9では先行scalar・一度限りの固定拒否・安全なfailure反映だけを合成依存限定で実装する。必要な観測／固定abort・失敗終端を欠く現在はcall 0であり、14null aliasや正常postだけから呼出し権限を作らない。全field受付・write-once producer・生成scheduleは未接続で、既存固定拒否・各閉鎖条件・Unknown・調査保留を維持する。
