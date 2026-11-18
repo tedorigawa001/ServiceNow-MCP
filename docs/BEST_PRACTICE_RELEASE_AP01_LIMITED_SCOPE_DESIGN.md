@@ -1,6 +1,6 @@
 # AP01：限定リリースの非提供範囲・未代替保証と将来の回復条件
 
-Version: release-ap01-limited-scope-draft-0.5 / Date: 2026-11-19。
+Version: release-ap01-limited-scope-draft-0.6 / Date: 2026-11-19。
 Status: **限定リリース案を公開方針として採用。AP01の保証低下・旧試験の処遇は未承認で、公開可の判定ではない。** 読取り基準HEADは`76fa545`。今回のユーザー指示を公開方針の決定根拠とし、個別承認の代行や将来の撤去許可へ広げない。
 
 正式発行口閉鎖・全体受付無効・通常経路未切替・C実行入口／body起動閉鎖・Unknown・VM／監視／telemetry調査保留を維持する。LOAD6／LOAD7選択も未承認のまま。今回はMDと親文書の参照整理だけであり、保証低下・旧試験削除／skip／期待値弱化・friend撤去・実装・発行／claim消費・負荷採取・試験再実行・build／pack・実接続・実通信・実機操作・設定変更・版変更・公開・コミット・Pushは行わない。
@@ -101,3 +101,7 @@ AP01が将来個別承認されても、AP02の撤去、AP03の入力／返却�
 ## 10 NS04の個別レビュー（draft-0.5）
 
 [同sessionのstartedAt・全deadline・pin済みpolicyと実field照合の保証レビューdraft-0.1](BEST_PRACTICE_RELEASE_AP01_NS04_SESSION_PROJECTION_GUARANTEE_REVIEW.md)にSP01〜25の台帳variantを対応付けた。全duration Lと残時間、開始UTC Sとmonotonic起点、元policy参照と同値copy、getter副作用後／pending消費時の現在field再照合、設定expiry等号と実測時limitationsを分ける。SP25は通常source維持で非提供・削除候補へ含めない。編集は本追記・版／日付更新と別紙MDだけで、旧分類・実行結果は維持。保証低下・旧試験削除・friend撤去・設定変更・公開は未承認、各閉鎖条件・Unknown・調査保留も維持する。
+
+## 11 NS05の個別レビュー（draft-0.6）
+
+[観測UTCの一度限り採取・空200保持と比較候補の時刻整合の保証レビューdraft-0.1](BEST_PRACTICE_RELEASE_AP01_NS05_OBSERVATION_COMPARISON_GUARANTEE_REVIEW.md)にOU01〜16／CR01〜05の21台帳variantを対応付けた。開始UTCとOのISO総数、取得後採取と事前入力、空Oの内部保持と公開field不在、値ownerの直接assertと元classの接続、legacy拒否と非実行unknown候補を分ける。CR04はAP02／03の入口責務、上位移譲・worker時刻はNS06の別責務へ残す。編集は本追記・版更新と別紙MDだけで、旧分類・試験結果とNS01〜04のレビューは維持。保証低下・旧試験削除・friend撤去・設定変更・公開は未承認、各閉鎖条件・Unknown・調査保留も維持する。
