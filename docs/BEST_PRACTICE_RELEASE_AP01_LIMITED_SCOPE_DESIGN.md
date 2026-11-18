@@ -92,4 +92,4 @@ AP01が将来個別承認されても、AP02の撤去、AP03の入力／返却�
 
 ## 8 NS03の個別レビュー（draft-0.3）
 
-[一度限り消費・draft後失効・return／close取消と診断保持の保証レビューdraft-0.2](BEST_PRACTICE_RELEASE_AP01_NS03_CONSUMPTION_REVOCATION_GUARANTEE_REVIEW.md)で、主要12旧caseと診断／cleanupの隣接6旧caseを、旧assertion・注入位置・残差・将来回復条件へ対応付けた。同期consumerの返却と非同期probeの復帰、freeze spyの形状条件と特定post位置、session受領数とnative最終消費数、cleanup／construction診断を分離する。編集は本追記・版更新と別紙MDのみで、NS01の旧レビューとcase分類・実行結果は維持。保証低下・旧試験削除・friend撤去・設定変更・公開は未承認、各閉鎖条件・Unknown・調査保留を維持する。
+[一度限り消費・draft後失効・return／close取消と診断保持の保証レビューdraft-0.3](BEST_PRACTICE_RELEASE_AP01_NS03_CONSUMPTION_REVOCATION_GUARANTEE_REVIEW.md)で、主要12旧caseと診断／cleanupの隣接6旧caseを、旧assertion・注入位置・残差・将来回復条件へ対応付けた。同期consumerの返却と非同期probeの復帰、freeze spyの形状条件と特定post位置、session受領数とnative最終消費数、cleanup／construction診断を分離する。編集は本追記・版更新と別紙MDのみで、NS01の旧レビューとcase分類・実行結果は維持。保証低下・旧試験削除・friend撤去・設定変更・公開は未承認、各閉鎖条件・Unknown・調査保留を維持する。

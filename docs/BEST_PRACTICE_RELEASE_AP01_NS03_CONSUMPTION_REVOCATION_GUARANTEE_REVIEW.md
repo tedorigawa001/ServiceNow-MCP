@@ -1,7 +1,9 @@
 # AP01 NS03：一度限り消費・draft後失効・return／close取消と診断保持の保証レビュー
 
-Version: release-ap01-ns03-consumption-revocation-guarantee-draft-0.2 / Date: 2026-11-18。
+Version: release-ap01-ns03-consumption-revocation-guarantee-draft-0.3 / Date: 2026-11-18。
 Status: **MDによる個別承認前整理。限定リリースの公開方針だけ採用済みで、NS03の保証低下は未承認。** 基準HEADは`ba793d6`。[AP01詳細](BEST_PRACTICE_RELEASE_AP01_LIMITED_SCOPE_DESIGN.md)NS03／RV08を具体化する。旧caseのID・分類・期待値を変更せず、今回の試験成功・保証回復を主張しない。
+
+draft-0.3のレビュー修正：レビュー修正の基準HEADは`2316550`（修正時のHEADは`2316550`）。§3の重複対応付けの段落が、両文書の条件を誤って要約していた。NS01側のN1AD03〜06の回復条件にforeign履歴不変・同constructor／登録世代は含まれず（それらはN1RG03〜06の条件）、本書側の重複4行（二重消費とclose後再利用）に取消の条件はない（取消はN3-C03〜C10）。要約をやめ、両文書の該当行の将来回復条件の列を行IDで指す形に改めた。表の本文・旧分類・ID・確認順は変えていない。
 
 draft-0.2のレビュー修正：レビュー修正の基準HEADは`21dffc0`（修正時のHEADは`21dffc0`）。§3のN3-C01／C02／C11／C12は、[NS01レビュー](BEST_PRACTICE_RELEASE_AP01_NS01_BINDING_GUARANTEE_REVIEW.md)§4のN1AD03〜06と同じ旧case（SAB-03・NDB-03・SAB-06・NDB-07）であるのに、本書に重複の対応付けがなかった。将来の個別承認で二重に数えたり、片方だけ更新して条件がずれたりしないよう、§3に対応付けと扱いを追記した。表の本文・旧分類・ID・確認順は変えていない。
 
@@ -59,7 +61,7 @@ driver close／dispose中、診断copy生成中・生成後等への専用取消
 | N3-C11／[SAB-06](BEST_PRACTICE_RELEASE_PRIVATE_CASE_MIGRATION_LEDGER.md#c-sab-06) `cannot reuse the real source consumer after close or recover a permit from its draft` | 返却後consumer.statusはclosed、releasePortForはundefined、結果凍結・Permit unavailable・terminal fieldなし | DN-19／DS-17は部分対応。実consumerのclose後拒否とPermit回復不可を維持。通常Permitの正規経路は非提供・削除候補へ含めない |
 | N3-C12／[NDB-07](BEST_PRACTICE_RELEASE_PRIVATE_CASE_MIGRATION_LEDGER.md#c-ndb-07) `rejects all source consumers after close and does not return source/core identity handles` | 正常probe後consumer拒否・binding診断と秘密非出力 | DN-19／DS-17は部分対応。実consumerの寿命・非公開handle境界を回復。診断booleanやfreezeは全private graphの解放証拠ではない |
 
-N3-C01／C02／C11／C12は、NS01レビューのN1AD03〜06（SAB-03・NDB-03・SAB-06・NDB-07）と同じ旧caseである。件数は旧case単位で1回だけ数え、片方の文書の回復条件を満たしただけで完了としない。回復時は、本書の一度消費・close・取消の条件と、NS01側の同constructor／core／source・foreign履歴不変の条件を、同じ元位置で合わせて満たす。どちらかの条件を変えるときは、もう一方の文書も同時に照合する。
+N3-C01／C02／C11／C12は、NS01レビューのN1AD03〜06（SAB-03・NDB-03・SAB-06・NDB-07）と同じ旧caseである。件数は旧case単位で1回だけ数え、片方の文書の回復条件を満たしただけで完了としない。回復時は、本書のN3-C01／C02／C11／C12と、NS01レビューのN1AD03〜06の将来回復条件の列を、同じ元位置で合わせて満たす。どちらかの条件を変えるときは、もう一方の文書も同時に照合する。
 
 DN-19の一度消費／close後proof拒否はDの独自issuerに対する保証である。旧native issuerのconsumeClaim、session receiptの退役、source状態のconsuming、最終公開copyの間を一本化して数えない。二重消費・取消は既に使ったclaimや診断を返却せず、失敗したrunから候補を再採用しない。
 
@@ -101,3 +103,5 @@ source fallbackなしの専用artifactと元故障位置のcompiled対照、P／
 2026-11-18の静的確認：本書とAP01親文書の2MDについて表6・ローカルlink49・明示anchor27、N3設計ID26（B8／C12／D6）、18旧caseのID・fullNameと正規台帳の一致を確認した。SAB-10／11・NDB-06の未対応と他15件の部分対応は旧分類のままで、queue／freeze注入の本文・既存compiled2fixtureの対象外条件も照合した。末尾改行・差分空白・AP01〜06の未承認欄維持を確認し、tracked差分はAP01親MD1件、新規は本書1MD、stage0、製品・試験・設定の変更0だった。製品moduleのimport／実行、試験再実行、build／packは行っていない。これは文書の静的整合であって、全境界網羅・保証回復・保証低下受容・公開可の証拠ではない。
 
 2026-11-18の静的確認（draft-0.2）：N3-C01／C02／C11／C12とN1AD03〜06の旧case ID・アンカー・fullNameが一致すること、両文書の期待値と回復条件に矛盾がないことを確認した。表の本文・旧分類・設計ID26は変えていない。2MDの表6（列数のずれなし）・ローカルlink50（注記の1件を追加）・明示anchor27の解決、末尾改行・差分空白を再確認した。製品・試験・設定の変更はない。
+
+2026-11-18の静的確認（draft-0.3）：§3の重複段落が、本書N3-C01／C02／C11／C12とNS01のN1AD03〜06の行だけを指し、foreign履歴不変（N1RG05／06）や取消（N3-C03〜C10）の条件を持ち込まないことを、両文書の該当行と照合した。上段のdraft-0.2記録の「回復条件に矛盾がない」は、旧要約文の誤りを検出していなかった。表の本文・旧分類・設計ID26は変えていない。2MDの表6（列数のずれなし）・ローカルlink50・明示anchor27の解決、末尾改行・差分空白を再確認した。製品・試験・設定の変更はない。
