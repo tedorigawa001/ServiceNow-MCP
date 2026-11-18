@@ -1,11 +1,11 @@
 # JR-B固定検査台帳・有限失敗IDと拒否確定前scanの差分詳細設計
 
-Version: native-diagnostic-jrb-field-admission-scan-draft-0.1 / Date: 2026-11-18。
-Status: MDだけの差分設計。基準HEADは`08e646a`。[pre-call設計](BEST_PRACTICE_NATIVE_DIAGNOSTIC_JRB_PRECALL_ADMISSION_ALIAS_DELTA_DESIGN.md)PS／PF／PR／PCと§9、[先行拒否の検証記録](E2E_BEST_PRACTICE_NATIVE_JOIN_PRECALL_2026-11-18.md)への差分である。現行の8scalar・最小3fieldの安全なfailure反映を、全field受付が実装済みであるとは扱わない。
+Version: native-diagnostic-jrb-field-admission-scan-draft-0.2 / Date: 2026-11-18。
+Status: §9の有限ID・固定schema・先行scalar／guardの閉鎖値契約だけを合成依存限定で実装。値契約の実装基準HEADは`a81534a`、draft-0.1の設計基準HEADは`08e646a`。[pre-call設計](BEST_PRACTICE_NATIVE_DIAGNOSTIC_JRB_PRECALL_ADMISSION_ALIAS_DELTA_DESIGN.md)PS／PF／PR／PCと§9、[先行拒否の検証記録](E2E_BEST_PRACTICE_NATIVE_JOIN_PRECALL_2026-11-18.md)への差分である。8scalar・最小3fieldのfailure反映や今回のschema照会を、全field受付が実装済みであるとは扱わない。
 
-作業中に入った別作業の補強試験・親文書更新8fileは、そのまま別コミット`d147d18`へ入った内容を保持し、今回の編集は本書の追加だけに限定する。親設計のalias数・ownKeys容量に関する補足は本書§4・§7で明記し、親文書や検証記録・CHANGELOGを上書きしない。
+draft-0.1では、別作業の補強試験・親文書更新8fileを別コミット`d147d18`のまま保持して本書だけを追加した。親設計のalias数・ownKeys容量に関する補足は§4・§7のまま維持する。draft-0.2では§9に明記した限定実装・検証とCHANGELOGを更新し、既存の先行拒否試験・実装を変更しない。
 
-正式発行口／新LM03／C実行入口／body起動閉鎖、全体受付無効、通常経路未切替、Unknown、VM／監視／telemetry調査保留、LOAD6／LOAD7選択・AP01〜06未承認を維持する。今回はMDだけを編集する。実装・製品moduleのimport／実行・試験再実行・build／pack・Promise生成・alias供給・closure呼出し・private公開・dispatch・実接続・実通信・実機操作・設定変更・stage・コミット・Pushは行わない。
+正式発行口／新LM03／C実行入口／body起動閉鎖、全体受付無効、通常経路未切替、Unknown、VM／監視／telemetry調査保留、LOAD6／LOAD7選択・AP01〜06未承認を維持する。§9の閉鎖値契約・合成検証以外は進めず、scan実行・全field受付・Promise生成・alias供給・closure呼出し・private公開・dispatch・実接続・実通信・実機操作・設定変更・stage・コミット・Pushは行わない。
 
 ## 1 現行との違い・確定点
 
@@ -167,6 +167,20 @@ effect予算303／319とtail比較予約256を、取得前に同ownerの固定�
 
 最初の実装単位は、有限ID・固定node schemaと先行scalar／guardの閉鎖値契約までに分けられる。次に固定操作のscanと現行tailの一度限り接続を合成依存で検証する。停止／live pin・元期限との正式資格、write-once producer、安全観測／固定終端の一体接続は別単位で、今回の設計承認から実装・試験実行・発行を推定しない。
 
-今回の確認は文書の静的整合に限る。実装・実Promise・native安全性・実会計・実backing容量の証拠は発行せず、全体受付無効・Unknown・調査保留を維持する。
+draft-0.1の確認は文書の静的整合に限った。draft-0.2の値契約検査も実Promise・native安全性・実会計・実backing容量の証拠へ昇格させず、全体受付無効・Unknown・調査保留を維持する。
 
-静的確認（2026-11-18）：source ASTとN01の65field、既存slot／control／identity／pin／contextのobject形状を照合し、19node・31設計ID・192失敗ID、126／131descriptorと303／319操作予約、key比較・guard・論理比較予約の算術を確認した。相対link3・表7・末尾改行・差分空白を確認し、製品ソースは基準HEADと同一、他作業8fileのSHA-256も保持、stage0である。これは文書台帳と予約値の整合確認であり、新scannerの実装・試験成功を示さない。今回の編集は本書だけで、実装・試験再実行・Promise生成・private公開・dispatch・実接続・実通信・設定変更・コミット・Pushは行わない。
+draft-0.1の静的確認（2026-11-18）：source ASTとN01の65field、既存slot／control／identity／pin／contextのobject形状を照合し、19node・31設計ID・192失敗ID、126／131descriptorと303／319操作予約、key比較・guard・論理比較予約の算術を確認した。相対link3・表7・末尾改行・差分空白を確認し、製品ソースは基準HEADと同一、他作業8fileのSHA-256も保持、stage0だった。これは文書台帳と予約値の整合確認であり、新scannerの実装・試験成功を示さない。当時の編集は本書だけで、実装・試験再実行・Promise生成・private公開・dispatch・実接続・実通信・設定変更・コミット・Pushは行わなかった。
+
+## 9 有限ID・schema・先行scalar／guardの閉鎖値契約
+
+draft-0.2では、旧rootにreadonlyのJoinScanFields／初期値型、192文字列literalの失敗ID型とswitch判定、19nodeの固定metadata照会・131個のkey照会を追加した。metadataはfield_count・key_count・frozen・prototype・role・kind・orderの固定原始値だけで、schema object／arrayやauthority ticketを生成しない。subset／functionのkey_countは−1、null prototype期待値は文字列null、無効照会は実値nullで区別する。照会が成立しても対象objectの検査は0である。
+
+同creator先頭にSL01〜04の6scalarを先行配置し、元の8scalarを維持する。実際の値はnone／false／0だけで、新しいowner取得・中断bit更新・加算・完了writerは置かない。initial postは同rootと6初期値を読むだけで、先行拒否後にtrueでも未使用scan配置の一致を示すだけである。
+
+guard postはrawRootとcanonical controlRootの同一性を最初に照合し、同recovery・共有owner／中断・同roleの先行claim／busy／拒否欄・計数値とentryStarted／primary／revoked／sealed／currentの同値を検査する。counter値はrun291／cleanup307以内の整数、0≦completed≦effectsである。全てlexical原始値／参照の比較であり、未確認objectのfield・descriptor・prototypeを取得しない。entry値の実捕捉・guardのpre/post呼出し・再入時の中断writerは未接続で、同値の冪等stopを新eventとして検出したとは扱わない。
+
+既存JoinPrecallCheckは5値のまま、既存拒否writerへ新192IDを渡す接続も行わない。9つのcontrol IDのcodeだけを固定照会し、field IDから失敗原因・取得証拠を推定する関数は作らない。新guard／initial／ID／schema／key／control照会の製品callerは0、pure helper内のnode判定1callとguard内counter判定2callだけがある。native操作・反射・状態write・可変trace・new／await・公開／登録口は0。
+
+これらのselectorを将来のscanのruntime dispatchとして組み込んだ証拠はない。ID／schemaのswitch比較・helper呼出し費を§7のsite予約へ自動的に含めず、後続で使う場合は別途coverageへ加算するか、固定siteへ展開する。現在のprobe費0と、将来の291／307操作予約・比較上界の実装適合を混同しない。
+
+[source試験](../tests/review/native-join-scan-values.test.ts)、[独立oracle／strict scratch](../tests/review/fixtures/native-join-scan-values-model.mjs)、[固定dist検査](../tests/review/fixtures/compiled-native-join-scan-values.mjs)、[検証記録](E2E_BEST_PRACTICE_NATIVE_JOIN_SCAN_VALUES_2026-11-18.md)で、schema全欄・割当てAST・有限ID／意味境界・guard単独変化・変異を確認する。active guardの正対照はscratchだけで6scalarと既存claimの値を置いたもので、製品のscan開始・一度限りclaim・再入処理・停止資格・probe費の実測を示さない。scan実行・alias供給・生成／観測／固定終端・root終端は未接続で、実backing容量・完全回収はUnknownのままである。

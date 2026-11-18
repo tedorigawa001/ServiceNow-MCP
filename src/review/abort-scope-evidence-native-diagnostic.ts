@@ -26,6 +26,56 @@ type NativeFacade = Readonly<Omit<NativeWorkflow, 'stop'> & { stop(): void }>;
 type JoinRole = 'run' | 'cleanup';
 type JoinGenerationFault = 'invalid_state' | 'evidence_binding_mismatch' | 'internal_review_error';
 type JoinPrecallCheck = 'busy' | 'attempted' | 'owner' | 'composition' | 'control';
+type JoinScanOwner = 'none' | JoinRole;
+type JoinScanInitialValue = Readonly<{ owner: 'none'; interrupted: false; runEffects: 0; runCompleted: 0; cleanupEffects: 0; cleanupCompleted: 0 }>;
+type JoinScanFields = {
+    readonly N01: readonly ['recovery', 'root', 'seed', 'kind', 'contextRecord', 'contextAnchor', 'context', 'identity', 'pin', 'pinState', 'pinFault', 'handlersClaim', 'handlersBusy', 'handlersState', 'handlersDetail', 'handlersFault', 'executorHandler', 'fulfilledHandler', 'rejectedHandler', 'observerArgs', 'readiness', 'retention', 'constructorClaim', 'constructorState', 'executorEntryClaim', 'executor', 'resolve', 'reject', 'candidateHeld', 'candidateSafety', 'candidate', 'work', 'registrationWork', 'registrationReached', 'observerClaim', 'observerState', 'observerBusy', 'ackHeld', 'ackState', 'observerAckCandidate', 'observerAck', 'callbackClaim', 'callbackState', 'callbackFault', 'observed', 'terminal', 'failureDrainClaim', 'failureDrainState', 'drainKind', 'upperRecordAttempted', 'upperRecordState', 'notifyAttempted', 'notifyState', 'copyAttempted', 'copyHeld', 'runCopyState', 'terminalCopy', 'rejectPayloadAttempted', 'rejectPayloadState', 'rejectPayload', 'settleClaim', 'settleState', 'ackTerminal', 'dispatchStarted', 'entered'];
+    readonly N02: readonly ['role', 'claimed', 'phase', 'position', 'fault', 'pending', 'published', 'faultAt'];
+    readonly N03: readonly ['notified', 'status', 'runGeneration', 'cleanupGeneration', 'preparation'];
+    readonly N04: readonly ['origin', 'root', 'run', 'duty', 'runJoin', 'cleanupJoin'];
+    readonly N05: readonly ['origin', 'binding', 'upper', 'writer'];
+    readonly N06: readonly ['root', 'join', 'window', 'attempt', 'record', 'startClaimed'];
+    readonly N07: readonly ['root', 'run', 'join', 'anchor', 'record', 'readerIdentity', 'retention'];
+    readonly N08: readonly ['root', 'kind', 'work', 'resolver', 'dispatchStarted', 'entered', 'settled'];
+    readonly N09: readonly ['root', 'kind', 'work', 'resolver', 'dispatchStarted', 'entered', 'settled'];
+    readonly N10: readonly ['recovery', 'root', 'seed', 'kind', 'context'];
+    readonly N11: readonly ['runtime', 'identity', 'basis'];
+    readonly N12: readonly ['record', 'anchor'];
+    readonly N13: readonly ['anchor', 'cleanupWork'];
+    readonly N14: readonly ['binding'];
+    readonly N15: readonly ['0', '1', 'length'];
+    readonly N16: readonly [];
+    readonly N17: readonly [];
+    readonly N18: readonly [];
+    readonly N19: readonly [];
+};
+type JoinScanFieldKey = JoinScanFields[JoinScanNode][number];
+type JoinScanSchemaColumn = 'field_count' | 'key_count' | 'frozen' | 'prototype' | 'role' | 'kind' | 'order';
+type JoinScanSchemaValue = number | boolean | 'array' | 'null' | 'none' | 'cleanup' | 'both' | 'function' | 'object';
+type JoinScanNode = 'N01' | 'N02' | 'N03' | 'N04' | 'N05' | 'N06' | 'N07' | 'N08' | 'N09' | 'N10' | 'N11' | 'N12' | 'N13' | 'N14' | 'N15' | 'N16' | 'N17' | 'N18' | 'N19';
+type JoinScanFieldFailureId =
+    | 'N01.D01' | 'N01.D02' | 'N01.D03' | 'N01.D04' | 'N01.D05' | 'N01.D06' | 'N01.D07' | 'N01.D08'
+    | 'N01.D09' | 'N01.D10' | 'N01.D11' | 'N01.D12' | 'N01.D13' | 'N01.D14' | 'N01.D15' | 'N01.D16'
+    | 'N01.D17' | 'N01.D18' | 'N01.D19' | 'N01.D20' | 'N01.D21' | 'N01.D22' | 'N01.D23' | 'N01.D24'
+    | 'N01.D25' | 'N01.D26' | 'N01.D27' | 'N01.D28' | 'N01.D29' | 'N01.D30' | 'N01.D31' | 'N01.D32'
+    | 'N01.D33' | 'N01.D34' | 'N01.D35' | 'N01.D36' | 'N01.D37' | 'N01.D38' | 'N01.D39' | 'N01.D40'
+    | 'N01.D41' | 'N01.D42' | 'N01.D43' | 'N01.D44' | 'N01.D45' | 'N01.D46' | 'N01.D47' | 'N01.D48'
+    | 'N01.D49' | 'N01.D50' | 'N01.D51' | 'N01.D52' | 'N01.D53' | 'N01.D54' | 'N01.D55' | 'N01.D56'
+    | 'N01.D57' | 'N01.D58' | 'N01.D59' | 'N01.D60' | 'N01.D61' | 'N01.D62' | 'N01.D63' | 'N01.D64'
+    | 'N01.D65' | 'N02.D01' | 'N02.D02' | 'N02.D03' | 'N02.D04' | 'N02.D05' | 'N02.D06' | 'N02.D07'
+    | 'N02.D08' | 'N03.D01' | 'N03.D02' | 'N03.D03' | 'N03.D04' | 'N03.D05' | 'N04.D01' | 'N04.D02'
+    | 'N04.D03' | 'N04.D04' | 'N04.D05' | 'N04.D06' | 'N05.D01' | 'N05.D02' | 'N05.D03' | 'N05.D04'
+    | 'N06.D01' | 'N06.D02' | 'N06.D03' | 'N06.D04' | 'N06.D05' | 'N06.D06' | 'N07.D01' | 'N07.D02'
+    | 'N07.D03' | 'N07.D04' | 'N07.D05' | 'N07.D06' | 'N07.D07' | 'N08.D01' | 'N08.D02' | 'N08.D03'
+    | 'N08.D04' | 'N08.D05' | 'N08.D06' | 'N08.D07' | 'N09.D01' | 'N09.D02' | 'N09.D03' | 'N09.D04'
+    | 'N09.D05' | 'N09.D06' | 'N09.D07' | 'N10.D01' | 'N10.D02' | 'N10.D03' | 'N10.D04' | 'N10.D05'
+    | 'N11.D01' | 'N11.D02' | 'N11.D03' | 'N12.D01' | 'N12.D02' | 'N13.D01' | 'N13.D02' | 'N14.D01'
+    | 'N15.D01' | 'N15.D02' | 'N15.D03';
+type JoinScanFailureId = JoinPrecallCheck | JoinScanFieldFailureId | `${JoinScanNode}.proxy` |
+    `${'N01' | 'N02' | 'N04' | 'N05' | 'N06' | 'N07' | 'N08' | 'N09' | 'N10' | 'N11' | 'N12' | 'N15' | 'N16'}.keys` |
+    `${'N05' | 'N06' | 'N07' | 'N08' | 'N09' | 'N10' | 'N11' | 'N12' | 'N14' | 'N15' | 'N16'}.frozen` |
+    'N15.proto' | 'N16.proto' | 'A01' | 'A02' | 'A03' | 'A04' | 'A05' | 'A06' | 'A07' |
+    'scan_interrupted' | 'scan_state' | 'scan_counter' | 'scan_context';
 type JoinPreparationPosition = 'empty' | 'claimed' | 'runtime' | 'context' | 'identity' | 'pin' | 'handlers';
 type JoinHandlersDetail = 'none' | 'executor_held' | 'fulfilled_held' | 'three_held' | 'tuple_held' | 'tuple_frozen' | 'complete';
 type JoinHandlersFault = 'entry' | 'executor_hold' | 'fulfilled_hold' | 'rejected_hold' | 'tuple_hold' | 'tuple_freeze' | 'handlers_post' | 'closed_call';
@@ -262,6 +312,10 @@ function allocateNativeDiagnosticConstruction(raw: NativeInput, fault?: NativeFa
         } catch { failConstruction(primary ?? 'internal_review_error'); }
     }
     function initializeLegacyWorkflow(): NativeWorkflow {
+    // JR-B-SCAN-SCALARS-BEGIN: closed values only; no scan owner claim.
+    let joinScanOwner: 'none' | 'run' | 'cleanup' = 'none', joinScanInterrupted = false;
+    let runScanEffectAttempts = 0, runScanLastCompleted = 0, cleanupScanEffectAttempts = 0, cleanupScanLastCompleted = 0;
+    // JR-B-SCAN-SCALARS-END
     // JR-B-PRECALL-SCALARS-BEGIN: prior primitive custody only.
     let runPrecallAttempted = false, runPrecallBusy = false;
     let runPrecallRefusalCheck: JoinPrecallCheck | null = null, runPrecallRefusalCode: JoinGenerationFault | null = null;
@@ -971,6 +1025,383 @@ function allocateNativeDiagnosticConstruction(raw: NativeInput, fault?: NativeFa
     }
     void requestJoinPrecall;
     // JR-B-PRECALL-END
+    // JR-B-SCAN-VALUES-BEGIN: finite schema and guards only; no scan.
+    function joinScanInitialPost(rawRoot: unknown): boolean {
+        const none: JoinScanInitialValue['owner'] = 'none';
+        return rawRoot === controlRoot && recovery === joinRecovery && joinScanOwner === none && joinScanInterrupted === false &&
+            runScanEffectAttempts === 0 && runScanLastCompleted === 0 && cleanupScanEffectAttempts === 0 && cleanupScanLastCompleted === 0;
+    }
+    void joinScanInitialPost;
+    function joinScanFailureIdValue(value: unknown): value is JoinScanFailureId {
+        switch (value) {
+            case 'busy': case 'attempted': case 'owner': case 'composition':
+            case 'control': case 'N01.D01': case 'N01.D02': case 'N01.D03':
+            case 'N01.D04': case 'N01.D05': case 'N01.D06': case 'N01.D07':
+            case 'N01.D08': case 'N01.D09': case 'N01.D10': case 'N01.D11':
+            case 'N01.D12': case 'N01.D13': case 'N01.D14': case 'N01.D15':
+            case 'N01.D16': case 'N01.D17': case 'N01.D18': case 'N01.D19':
+            case 'N01.D20': case 'N01.D21': case 'N01.D22': case 'N01.D23':
+            case 'N01.D24': case 'N01.D25': case 'N01.D26': case 'N01.D27':
+            case 'N01.D28': case 'N01.D29': case 'N01.D30': case 'N01.D31':
+            case 'N01.D32': case 'N01.D33': case 'N01.D34': case 'N01.D35':
+            case 'N01.D36': case 'N01.D37': case 'N01.D38': case 'N01.D39':
+            case 'N01.D40': case 'N01.D41': case 'N01.D42': case 'N01.D43':
+            case 'N01.D44': case 'N01.D45': case 'N01.D46': case 'N01.D47':
+            case 'N01.D48': case 'N01.D49': case 'N01.D50': case 'N01.D51':
+            case 'N01.D52': case 'N01.D53': case 'N01.D54': case 'N01.D55':
+            case 'N01.D56': case 'N01.D57': case 'N01.D58': case 'N01.D59':
+            case 'N01.D60': case 'N01.D61': case 'N01.D62': case 'N01.D63':
+            case 'N01.D64': case 'N01.D65': case 'N02.D01': case 'N02.D02':
+            case 'N02.D03': case 'N02.D04': case 'N02.D05': case 'N02.D06':
+            case 'N02.D07': case 'N02.D08': case 'N03.D01': case 'N03.D02':
+            case 'N03.D03': case 'N03.D04': case 'N03.D05': case 'N04.D01':
+            case 'N04.D02': case 'N04.D03': case 'N04.D04': case 'N04.D05':
+            case 'N04.D06': case 'N05.D01': case 'N05.D02': case 'N05.D03':
+            case 'N05.D04': case 'N06.D01': case 'N06.D02': case 'N06.D03':
+            case 'N06.D04': case 'N06.D05': case 'N06.D06': case 'N07.D01':
+            case 'N07.D02': case 'N07.D03': case 'N07.D04': case 'N07.D05':
+            case 'N07.D06': case 'N07.D07': case 'N08.D01': case 'N08.D02':
+            case 'N08.D03': case 'N08.D04': case 'N08.D05': case 'N08.D06':
+            case 'N08.D07': case 'N09.D01': case 'N09.D02': case 'N09.D03':
+            case 'N09.D04': case 'N09.D05': case 'N09.D06': case 'N09.D07':
+            case 'N10.D01': case 'N10.D02': case 'N10.D03': case 'N10.D04':
+            case 'N10.D05': case 'N11.D01': case 'N11.D02': case 'N11.D03':
+            case 'N12.D01': case 'N12.D02': case 'N13.D01': case 'N13.D02':
+            case 'N14.D01': case 'N15.D01': case 'N15.D02': case 'N15.D03':
+            case 'N01.proxy': case 'N02.proxy': case 'N03.proxy': case 'N04.proxy':
+            case 'N05.proxy': case 'N06.proxy': case 'N07.proxy': case 'N08.proxy':
+            case 'N09.proxy': case 'N10.proxy': case 'N11.proxy': case 'N12.proxy':
+            case 'N13.proxy': case 'N14.proxy': case 'N15.proxy': case 'N16.proxy':
+            case 'N17.proxy': case 'N18.proxy': case 'N19.proxy': case 'N01.keys':
+            case 'N02.keys': case 'N04.keys': case 'N05.keys': case 'N06.keys':
+            case 'N07.keys': case 'N08.keys': case 'N09.keys': case 'N10.keys':
+            case 'N11.keys': case 'N12.keys': case 'N15.keys': case 'N16.keys':
+            case 'N05.frozen': case 'N06.frozen': case 'N07.frozen': case 'N08.frozen':
+            case 'N09.frozen': case 'N10.frozen': case 'N11.frozen': case 'N12.frozen':
+            case 'N14.frozen': case 'N15.frozen': case 'N16.frozen': case 'N15.proto':
+            case 'N16.proto': case 'A01': case 'A02': case 'A03':
+            case 'A04': case 'A05': case 'A06': case 'A07':
+            case 'scan_interrupted': case 'scan_state': case 'scan_counter': case 'scan_context':
+                return true;
+            default: return false;
+        }
+    }
+    void joinScanFailureIdValue;
+    function joinScanNodeValue(value: unknown): value is JoinScanNode {
+        switch (value) {
+            case 'N01': case 'N02': case 'N03': case 'N04': case 'N05':
+            case 'N06': case 'N07': case 'N08': case 'N09': case 'N10':
+            case 'N11': case 'N12': case 'N13': case 'N14': case 'N15':
+            case 'N16': case 'N17': case 'N18': case 'N19':
+                return true;
+            default: return false;
+        }
+    }
+    function joinScanSchemaValue(node: JoinScanNode, column: JoinScanSchemaColumn): JoinScanSchemaValue | null {
+        if (!joinScanNodeValue(node)) return null;
+        switch (column) {
+            case 'field_count':
+                switch (node) {
+                    case 'N01': return 65;
+                    case 'N02': return 8;
+                    case 'N03': case 'N10': return 5;
+                    case 'N04': case 'N06': return 6;
+                    case 'N05': return 4;
+                    case 'N07': case 'N08': case 'N09': return 7;
+                    case 'N11': case 'N15': return 3;
+                    case 'N12': case 'N13': return 2;
+                    case 'N14': return 1;
+                    case 'N16': case 'N17': case 'N18': case 'N19': return 0;
+                }
+                return null;
+            case 'key_count':
+                switch (node) {
+                    case 'N01': return 65;
+                    case 'N02': return 8;
+                    case 'N03': case 'N13': case 'N14': case 'N17': case 'N18': case 'N19': return -1;
+                    case 'N04': case 'N06': return 6;
+                    case 'N05': return 4;
+                    case 'N07': case 'N08': case 'N09': return 7;
+                    case 'N10': return 5;
+                    case 'N11': case 'N15': return 3;
+                    case 'N12': return 2;
+                    case 'N16': return 0;
+                }
+                return null;
+            case 'frozen':
+                switch (node) {
+                    case 'N01': case 'N02': case 'N03': case 'N04': case 'N13': case 'N17': case 'N18': case 'N19': return false;
+                    case 'N05': case 'N06': case 'N07': case 'N08': case 'N09': case 'N10': case 'N11': case 'N12': case 'N14': case 'N15': case 'N16': return true;
+                }
+                return null;
+            case 'prototype':
+                switch (node) {
+                    case 'N01': case 'N02': case 'N03': case 'N04': case 'N05': case 'N06': case 'N07': case 'N08': case 'N09': case 'N10': case 'N11': case 'N12': case 'N13': case 'N14': case 'N17': case 'N18': case 'N19': return 'none';
+                    case 'N15': return 'array';
+                    case 'N16': return 'null';
+                }
+                return null;
+            case 'role':
+                switch (node) {
+                    case 'N01': case 'N02': case 'N03': case 'N04': case 'N05': case 'N06': case 'N07': case 'N08': case 'N09': case 'N10': case 'N11': case 'N15': case 'N16': case 'N17': case 'N18': case 'N19': return 'both';
+                    case 'N12': case 'N13': case 'N14': return 'cleanup';
+                }
+                return null;
+            case 'kind':
+                switch (node) {
+                    case 'N01': case 'N02': case 'N03': case 'N04': case 'N05': case 'N06': case 'N07': case 'N08': case 'N09': case 'N10': case 'N11': case 'N12': case 'N13': case 'N14': case 'N15': case 'N16': return 'object';
+                    case 'N17': case 'N18': case 'N19': return 'function';
+                }
+                return null;
+            case 'order':
+                switch (node) {
+                    case 'N01': return 19;
+                    case 'N02': return 18;
+                    case 'N03': return 2;
+                    case 'N04': return 3;
+                    case 'N05': return 4;
+                    case 'N06': return 5;
+                    case 'N07': return 6;
+                    case 'N08': return 7;
+                    case 'N09': return 8;
+                    case 'N10': return 9;
+                    case 'N11': return 10;
+                    case 'N12': return 11;
+                    case 'N13': return 12;
+                    case 'N14': return 13;
+                    case 'N15': return 17;
+                    case 'N16': return 1;
+                    case 'N17': return 14;
+                    case 'N18': return 15;
+                    case 'N19': return 16;
+                }
+                return null;
+            default: return null;
+        }
+    }
+    function joinScanFieldKey(node: JoinScanNode, position: number): JoinScanFieldKey | null {
+        if (typeof position !== 'number' || position % 1 !== 0 || position < 1 || position > 65) return null;
+        switch (node) {
+            case 'N01':
+                switch (position) {
+                    case 1: return 'recovery';
+                    case 2: return 'root';
+                    case 3: return 'seed';
+                    case 4: return 'kind';
+                    case 5: return 'contextRecord';
+                    case 6: return 'contextAnchor';
+                    case 7: return 'context';
+                    case 8: return 'identity';
+                    case 9: return 'pin';
+                    case 10: return 'pinState';
+                    case 11: return 'pinFault';
+                    case 12: return 'handlersClaim';
+                    case 13: return 'handlersBusy';
+                    case 14: return 'handlersState';
+                    case 15: return 'handlersDetail';
+                    case 16: return 'handlersFault';
+                    case 17: return 'executorHandler';
+                    case 18: return 'fulfilledHandler';
+                    case 19: return 'rejectedHandler';
+                    case 20: return 'observerArgs';
+                    case 21: return 'readiness';
+                    case 22: return 'retention';
+                    case 23: return 'constructorClaim';
+                    case 24: return 'constructorState';
+                    case 25: return 'executorEntryClaim';
+                    case 26: return 'executor';
+                    case 27: return 'resolve';
+                    case 28: return 'reject';
+                    case 29: return 'candidateHeld';
+                    case 30: return 'candidateSafety';
+                    case 31: return 'candidate';
+                    case 32: return 'work';
+                    case 33: return 'registrationWork';
+                    case 34: return 'registrationReached';
+                    case 35: return 'observerClaim';
+                    case 36: return 'observerState';
+                    case 37: return 'observerBusy';
+                    case 38: return 'ackHeld';
+                    case 39: return 'ackState';
+                    case 40: return 'observerAckCandidate';
+                    case 41: return 'observerAck';
+                    case 42: return 'callbackClaim';
+                    case 43: return 'callbackState';
+                    case 44: return 'callbackFault';
+                    case 45: return 'observed';
+                    case 46: return 'terminal';
+                    case 47: return 'failureDrainClaim';
+                    case 48: return 'failureDrainState';
+                    case 49: return 'drainKind';
+                    case 50: return 'upperRecordAttempted';
+                    case 51: return 'upperRecordState';
+                    case 52: return 'notifyAttempted';
+                    case 53: return 'notifyState';
+                    case 54: return 'copyAttempted';
+                    case 55: return 'copyHeld';
+                    case 56: return 'runCopyState';
+                    case 57: return 'terminalCopy';
+                    case 58: return 'rejectPayloadAttempted';
+                    case 59: return 'rejectPayloadState';
+                    case 60: return 'rejectPayload';
+                    case 61: return 'settleClaim';
+                    case 62: return 'settleState';
+                    case 63: return 'ackTerminal';
+                    case 64: return 'dispatchStarted';
+                    case 65: return 'entered';
+                }
+                return null;
+            case 'N02':
+                switch (position) {
+                    case 1: return 'role';
+                    case 2: return 'claimed';
+                    case 3: return 'phase';
+                    case 4: return 'position';
+                    case 5: return 'fault';
+                    case 6: return 'pending';
+                    case 7: return 'published';
+                    case 8: return 'faultAt';
+                }
+                return null;
+            case 'N03':
+                switch (position) {
+                    case 1: return 'notified';
+                    case 2: return 'status';
+                    case 3: return 'runGeneration';
+                    case 4: return 'cleanupGeneration';
+                    case 5: return 'preparation';
+                }
+                return null;
+            case 'N04':
+                switch (position) {
+                    case 1: return 'origin';
+                    case 2: return 'root';
+                    case 3: return 'run';
+                    case 4: return 'duty';
+                    case 5: return 'runJoin';
+                    case 6: return 'cleanupJoin';
+                }
+                return null;
+            case 'N05':
+                switch (position) {
+                    case 1: return 'origin';
+                    case 2: return 'binding';
+                    case 3: return 'upper';
+                    case 4: return 'writer';
+                }
+                return null;
+            case 'N06':
+                switch (position) {
+                    case 1: return 'root';
+                    case 2: return 'join';
+                    case 3: return 'window';
+                    case 4: return 'attempt';
+                    case 5: return 'record';
+                    case 6: return 'startClaimed';
+                }
+                return null;
+            case 'N07':
+                switch (position) {
+                    case 1: return 'root';
+                    case 2: return 'run';
+                    case 3: return 'join';
+                    case 4: return 'anchor';
+                    case 5: return 'record';
+                    case 6: return 'readerIdentity';
+                    case 7: return 'retention';
+                }
+                return null;
+            case 'N08':
+                switch (position) {
+                    case 1: return 'root';
+                    case 2: return 'kind';
+                    case 3: return 'work';
+                    case 4: return 'resolver';
+                    case 5: return 'dispatchStarted';
+                    case 6: return 'entered';
+                    case 7: return 'settled';
+                }
+                return null;
+            case 'N09':
+                switch (position) {
+                    case 1: return 'root';
+                    case 2: return 'kind';
+                    case 3: return 'work';
+                    case 4: return 'resolver';
+                    case 5: return 'dispatchStarted';
+                    case 6: return 'entered';
+                    case 7: return 'settled';
+                }
+                return null;
+            case 'N10':
+                switch (position) {
+                    case 1: return 'recovery';
+                    case 2: return 'root';
+                    case 3: return 'seed';
+                    case 4: return 'kind';
+                    case 5: return 'context';
+                }
+                return null;
+            case 'N11':
+                switch (position) {
+                    case 1: return 'runtime';
+                    case 2: return 'identity';
+                    case 3: return 'basis';
+                }
+                return null;
+            case 'N12':
+                switch (position) {
+                    case 1: return 'record';
+                    case 2: return 'anchor';
+                }
+                return null;
+            case 'N13':
+                switch (position) {
+                    case 1: return 'anchor';
+                    case 2: return 'cleanupWork';
+                }
+                return null;
+            case 'N14':
+                switch (position) {
+                    case 1: return 'binding';
+                }
+                return null;
+            case 'N15':
+                switch (position) {
+                    case 1: return '0';
+                    case 2: return '1';
+                    case 3: return 'length';
+                }
+                return null;
+            default: return null;
+        }
+    }
+    void joinScanNodeValue; void joinScanSchemaValue; void joinScanFieldKey;
+    function joinScanCounterValue(role: Exclude<JoinScanOwner, 'none'>, effects: number, completed: number): boolean {
+        if (role !== 'run' && role !== 'cleanup') return false;
+        return typeof effects === 'number' && typeof completed === 'number' && effects % 1 === 0 && completed % 1 === 0 &&
+            effects >= 0 && effects <= (role === 'run' ? 291 : 307) && completed >= 0 && completed <= effects;
+    }
+    function joinScanControlCodeValue(id: JoinScanFailureId): JoinGenerationFault | null {
+        switch (id) {
+            case 'busy': case 'attempted': case 'composition': case 'scan_interrupted': return 'invalid_state';
+            case 'owner': case 'scan_context': return 'evidence_binding_mismatch';
+            case 'control': case 'scan_state': case 'scan_counter': return 'internal_review_error';
+            default: return null;
+        }
+    }
+    function joinScanGuardPost(rawRoot: unknown, role: JoinRole, entryStarted: boolean, entryPrimary: Code | null,
+        entryRevoked: boolean, entrySealed: boolean, entryCurrent: unknown): boolean {
+        if (rawRoot !== controlRoot || role !== 'run' && role !== 'cleanup') return false;
+        return recovery === joinRecovery && joinScanOwner === role && joinScanInterrupted === false &&
+            (role === 'run' ? runPrecallAttempted === true && runPrecallBusy === true && runPrecallRefusalCheck === null && runPrecallRefusalCode === null &&
+                joinScanCounterValue(role, runScanEffectAttempts, runScanLastCompleted) :
+                cleanupPrecallAttempted === true && cleanupPrecallBusy === true && cleanupPrecallRefusalCheck === null && cleanupPrecallRefusalCode === null &&
+                joinScanCounterValue(role, cleanupScanEffectAttempts, cleanupScanLastCompleted)) &&
+            started === entryStarted && primary === entryPrimary && revoked === entryRevoked && sealed === entrySealed && current === entryCurrent;
+    }
+    void joinScanCounterValue; void joinScanControlCodeValue; void joinScanGuardPost;
+    // JR-B-SCAN-VALUES-END
     function stop(code: Code = 'cancelled', stage: Stage = 'stop') {
         if (sealed) return;
         primary ??= code; upper.stop(primary, stage);
