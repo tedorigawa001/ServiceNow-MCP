@@ -11,7 +11,8 @@ export const end='// JR-B-SEED-END';
 function between(js,start,finish){assert.equal(js.split(start).length,2,start+' drift');assert.equal(js.split(finish).length,2,finish+' drift');return js.slice(js.indexOf(start)+start.length,js.indexOf(finish));}
 export function deriveExecutionSeed(js,createNativeDiagnosticState){
   const parts=generationParts(js),base=between(js,baseBegin,baseEnd),pin=between(js,pinBegin,pinEnd),handlers=between(js,handlersBegin,handlersEnd),seed=between(js,begin,end);
-  return runInNewContext(`(()=>{const P=Promise,promiseThen=P.prototype.then;let operations=0,hooks=0;${base}
+  // The product is an ES module, so the derived realm runs in strict mode: read-only/accessor writes must not be silently ignored.
+  return runInNewContext(`(()=>{'use strict';const P=Promise,promiseThen=P.prototype.then;let operations=0,hooks=0;${base}
     const create=()=>{let recovery;${parts.allocation};
       recovery.state=createNativeDiagnosticState();recovery.state.owner.bind(recovery.state.binding);recovery.writer=recovery.state.owner.writers('release');
       ${parts.preparation}
@@ -32,6 +33,7 @@ export function deriveExecutionSeed(js,createNativeDiagnosticState){
       Date.now=bad;globalThis.performance={now:bad};};
     create.mutate=()=>Object.defineProperty(P,Symbol.species,{get(){hooks++;throw Error('PRIVATE_GETTER');},configurable:true});
     create.poisonDescriptorPrototype=()=>Object.defineProperty(Object.prototype,'value',{get(){hooks++;throw Error('PRIVATE_DESCRIPTOR_GETTER');},configurable:true});
+    create.poisonDescriptorWritable=()=>Object.defineProperty(Object.prototype,'writable',{get(){hooks++;throw Error('PRIVATE_DESCRIPTOR_GETTER');},configurable:true});
     create.counts=()=>({operations,hooks});return create;
   })()`,{createNativeDiagnosticState,types});
 }
@@ -137,6 +139,25 @@ export function verifySeedDescriptorPrototype(js,createState){
   return {cases,hooks:0};
 }
 
+// Failure writers must skip read-only/accessor fields without hooks, so the fixed refusal still records the slot fault and revocation.
+export const failureWriterCases=[['readiness','readonly'],['retention','readonly'],['retention','accessor'],['retention','inherited']];
+export function verifySeedFailureWriters(js,createState){
+  let cases=0,fieldHooks=0;const written={readiness:'failed_retained',retention:'unconfirmed'};
+  for(const role of ['run','cleanup'])for(const [field,change] of failureWriterCases){
+    const create=deriveExecutionSeed(js,createState);create.closeExecution();const a=create();if(role==='cleanup')a.resource();assert(a.pin(role));assert(a.prepare(role));
+    const slot=a[role+'Slot'],s=slot.pending,other=field==='readiness'?'retention':'readiness';
+    if(change==='readonly')Object.defineProperty(s,field,{value:s[field],writable:false,enumerable:true,configurable:true});
+    else Object.defineProperty(s,field,{get(){fieldHooks++;throw Error('PRIVATE_SEED_GETTER');},set(){fieldHooks++;throw Error('PRIVATE_SEED_SETTER');},configurable:true});
+    const kept=Object.getOwnPropertyDescriptor(s,field);if(change==='inherited')create.poisonDescriptorWritable();
+    let result;assert.doesNotThrow(()=>{result=a.request(role);},role+' '+field+' '+change);assert.equal(result,false);
+    assert.equal(slot.fault,'invalid_state');assert.equal(slot.faultAt,'constructor_pre');assert.equal(slot.phase,'failed_retained');assert.equal(slot.pending,s);
+    assert.equal(a.flags().revoked,true);assert.equal(a.flags().primary,'invalid_state');
+    const now=Object.getOwnPropertyDescriptor(s,field);assert.equal(now.value,kept.value);assert.equal(now.get,kept.get);assert.equal(now.set,kept.set);assert.equal(now.writable,kept.writable);
+    assert.equal(s[other],written[other]);assert.equal(s.constructorClaim,false);assert.equal(s.handlersState,'ready');assert.equal(create.counts().hooks,0);cases++;
+  }
+  assert.equal(fieldHooks,0);return {cases,hooks:0};
+}
+
 export function auditExecutionSeed(js){
   const block=between(js,begin,end),tree=parse('function closed(){'+block+'}',{ecmaVersion:'latest'}),stack=[tree];
   const allowed=new Set(['handlerOriginMatched','preparedHandlersMatched','executionSeedUnused','failExecutionSeed','rejectJoinGeneration','jbGet','jbOwn']);
@@ -165,10 +186,15 @@ export const seedMutants=[
   ['retention',"held.retention = 'unconfirmed';",'void held;',1],
   ['root stop','return rejectJoinGeneration(slot, code);','return false;',1],
   ['captured alias','runCapturedResolveExpected = null','runCapturedResolveExpected = {}',1],
+  ['readiness writer guard',"if (r && jbOwn(r, 'value') && r.writable === true)",'if (true)',1],
+  ['readiness writable guard',"jbOwn(r, 'value') && r.writable === true)","jbOwn(r, 'value'))",1],
+  ['retention writer guard',"if (d && jbOwn(d, 'value') && d.writable === true)",'if (true)',1],
+  ['retention writable guard',"jbOwn(d, 'value') && d.writable === true)","jbOwn(d, 'value'))",1],
+  ['retention data tag',"d && jbOwn(d, 'value') && d.writable","d && d.writable",1],
 ];
 export function verifySeedMutant(js,createState,index){
   const [,from,to,count]=seedMutants[index],changed=mutateSeed(js,from,to,count);
-  assert.throws(()=>{verifyExecutionSeed(changed,createState);verifySeedIdentity(changed,createState);verifySeedStop(changed,createState);auditExecutionSeed(changed);},assert.AssertionError);
+  assert.throws(()=>{verifyExecutionSeed(changed,createState);verifySeedIdentity(changed,createState);verifySeedStop(changed,createState);verifySeedFailureWriters(changed,createState);auditExecutionSeed(changed);},assert.AssertionError);
 }
 export function verifySeedFieldMutant(js,createState,key){
   const pattern=new RegExp("joinSeedData\\(shell, '"+key+"', (?:false|null|'[^']*')\\)",'g');

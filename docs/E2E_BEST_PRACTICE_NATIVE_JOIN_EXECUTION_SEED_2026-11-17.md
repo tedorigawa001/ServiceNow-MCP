@@ -75,3 +75,18 @@ executionSeedUnusedの唯一の製品内部callerは閉鎖したrequestJoinExecu
 展開先で新たに生成した固定distのcompiled11本はすべてexit 0・signalなしで、各外側60秒内に終了した。新MJS2本の構文検査もexit 0。offline／ignore-scripts・コマンド専用一時cacheの梱包dry-runは441file・配布JS109本で成功し、旧root群／試験非同梱・新seed／model参照0を確認した。一時cacheは終了後に削除した。実tarball生成・展開は未実施である。
 
 親HEADとのAST比較で旧14関数本文・4exportが一致し、文書link36件・表24個を確認した。再検証後の追加は本節だけで、検証済みのソース・試験・設定は変更しない。最終indexと展開先の内容一致・対象11file・差分空白を再確認して実装コミットを作成する。全体回帰、Promise生成・closure呼出し・観測・終端処理・private公開・dispatchは未実施／未接続、各閉鎖条件・Unknown・調査保留を維持し、Pushは行わない。
+
+## レビュー修正 2026年11月18日
+
+レビュー基準は`f3746c4`、修正時のHEADは`ed57855`。設計は[実行前内部契約・先行slot draft-0.6](BEST_PRACTICE_NATIVE_DIAGNOSTIC_JRB_EXECUTION_SEED_CONTRACT_DESIGN.md#10-未使用seedの限定実装)。
+
+| 指摘 | 原因と対応 |
+|---|---|
+| 合成realmが非strict | 独立oracleが製品を非strictのscriptとして実行していた。書込み不可・getterだけのaccessorへの代入が黙って無視され、retention書込み条件の省略（常に書込み／writable省略／dataタグ省略）の3変異がsource・compiledの両対照を通過した。setter付きaccessorを使う対照もなかった。導出realmを製品と同じstrictへ改めた |
+| readiness書込みの例外脱出 | strictでreadinessを書込み不可にすると、failExecutionSeedの代入が例外を出し、catch内の再記録でも同じ例外が出て要求の外へ抜けた。slot faultはnull、phaseはbuilding、revokedはfalseのままだった。readinessにもretentionと同じown data・writableの書込み資格を課し、不成立なら書込みを飛ばして固定失敗・同期revokedを記録する |
+
+追加した失敗writer対照は2role×4の8件である。readiness書込み不可、retention書込み不可、retentionのgetter／setter付きaccessor、同accessorでdescriptorが継承するwritable getterを用意する。要求が例外を出さずにfalseを返し、invalid_state・constructor_pre・failed_retained・revoked・primaryを記録すること、当該descriptorを保持し他方fieldだけを書くこと、hook 0を確認する。構文正常な変異は38件から43件になった（readinessの書込み資格2件、retentionの書込み資格3件）。
+
+先行REDとして、新しい対照をHEADの製品コードへ当てると「run readiness readonly」で例外が出て失敗した。修正後のコードでは8件とも成功した。新しい変異5件は旧oracleで5件とも通過し、新oracleで12件の固定変異がすべて検出された。strict化後も既存の正対照・field拒否・同一性・停止・descriptor継承の各対照は変更なしで成功した。
+
+catch経路のinternal_review_errorを無効化する変異は、要求内で例外を起こせる合成入力がないため未検出のまま残る。handler／pin／値postの各oracleも非strictの合成realmを使っており、本修正の範囲外として残る。Promise生成・closure呼出し・観測・終端処理・private公開・dispatchは未接続のままで、各閉鎖条件・Unknown・調査保留を維持する。

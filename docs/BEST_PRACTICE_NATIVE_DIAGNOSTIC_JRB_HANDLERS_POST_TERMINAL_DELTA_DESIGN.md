@@ -185,4 +185,4 @@ closure本体は同shell／identity／pin／slot／roleを捕捉した固定拒�
 
 ## 12 実行前の内部契約・先行slotへの差分
 
-[JR-B実行前内部契約・先行slotと失敗後writer資格の差分詳細設計draft-0.5](BEST_PRACTICE_NATIVE_DIAGNOSTIC_JRB_EXECUTION_SEED_CONTRACT_DESIGN.md)で、HC06〜08を同shellの全先行field、role型・保持位置／fault site、固定配置順とchecker／writer資格へ具体化した。同書§10は25初期field・未使用検査・固定拒否だけの限定実装であり、先行準備postへ初期data検査を追加する。constructor・観測・drain／settleの実行状態は未接続とし、生成＋安全観測＋固定abortを一体接続する後続境界を維持する。Promise生成・closure呼出し・通知／終端・private公開・dispatchは有効化しない。
+[JR-B実行前内部契約・先行slotと失敗後writer資格の差分詳細設計draft-0.6](BEST_PRACTICE_NATIVE_DIAGNOSTIC_JRB_EXECUTION_SEED_CONTRACT_DESIGN.md)で、HC06〜08を同shellの全先行field、role型・保持位置／fault site、固定配置順とchecker／writer資格へ具体化した。同書§10は25初期field・未使用検査・固定拒否だけの限定実装であり、先行準備postへ初期data検査を追加する。constructor・観測・drain／settleの実行状態は未接続とし、生成＋安全観測＋固定abortを一体接続する後続境界を維持する。Promise生成・closure呼出し・通知／終端・private公開・dispatchは有効化しない。

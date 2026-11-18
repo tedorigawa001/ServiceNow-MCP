@@ -4,7 +4,7 @@ import {fileURLToPath} from 'node:url';
 import ts from 'typescript';
 import {createNativeDiagnosticState} from '../../src/review/abort-scope-evidence-native-diagnostic-state.js';
 import {verifyExecutionSeed,seedFields,verifySeedField,verifySeedIdentity,verifySeedStop,auditExecutionSeed,seedMutants,verifySeedMutant,
-  verifySeedFieldMutant,seedBoundaryMutants,verifySeedBoundaryMutant,verifySeedAuditNegatives,verifySeedDescriptorPrototype,end} from './fixtures/native-join-execution-seed-model.mjs';
+  verifySeedFieldMutant,seedBoundaryMutants,verifySeedBoundaryMutant,verifySeedAuditNegatives,verifySeedDescriptorPrototype,verifySeedFailureWriters,end} from './fixtures/native-join-execution-seed-model.mjs';
 
 const source=()=>readFileSync(new URL('../../src/review/abort-scope-evidence-native-diagnostic.ts',import.meta.url),'utf8');
 let js:string|undefined;
@@ -27,6 +27,9 @@ it('keeps 14 null aliases and the whole seed continuation free of operational ca
 });
 it('rejects seed accessors even when a descriptor inherits a hostile value getter',()=>{
   expect(verifySeedDescriptorPrototype(emitted(),createNativeDiagnosticState)).toEqual({cases:2,hooks:0});
+});
+it('records the fixed refusal without throwing or hooks when readiness/retention are read-only or accessors',()=>{
+  expect(verifySeedFailureWriters(emitted(),createNativeDiagnosticState)).toEqual({cases:8,hooks:0});
 });
 it.each(Object.keys(seedFields))('detects removal of the %s initial-field check',key=>{
   verifySeedFieldMutant(emitted(),createNativeDiagnosticState,key);

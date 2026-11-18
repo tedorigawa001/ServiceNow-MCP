@@ -1,7 +1,9 @@
 # JR-B実行前内部契約・先行slotと失敗後writer資格の差分詳細設計
 
-Version: native-diagnostic-jrb-execution-seed-contract-draft-0.5 / Date: 2026-11-18。
+Version: native-diagnostic-jrb-execution-seed-contract-draft-0.6 / Date: 2026-11-18。
 Status: §10の初期field・狭い値型・未使用seed検査・固定拒否と、§11参照先の非実行variant／origin／値postだけを合成依存限定で実装。seedの基準HEADは`48900ac`。[closure／tuple・post設計](BEST_PRACTICE_NATIVE_DIAGNOSTIC_JRB_HANDLERS_POST_TERMINAL_DELTA_DESIGN.md)HC06〜08・HP04〜09・HW02〜05・HT01〜07を、[JoinRuntime設計](BEST_PRACTICE_NATIVE_DIAGNOSTIC_JOIN_RUNTIME_GENERATION_DESIGN.md)の同role pendingと[固定pin設計](BEST_PRACTICE_NATIVE_DIAGNOSTIC_JRB_RUNTIME_PIN_DELTA_DESIGN.md)RS05後半〜RS10へ接続する前の内部契約へ具体化する。native実行状態への遷移・参照取得は未実装・未接続である。
+
+draft-0.6のレビュー修正：レビュー修正の基準HEADは`f3746c4`（修正時のHEADは`ed57855`）。§10は固定拒否を「必ず」とし、retentionの書込み資格不成立ではhookを呼ばないと定めていた。ところが独立oracleは製品を非strictの合成realmで実行しており、書込み不可・accessorへの代入が黙って無視されていた。このためretention書込み条件を外す変異3件がsource・compiledの両対照を通過した。また実際のES module（strict）では、readinessを書込み不可にすると固定拒否の記録中に例外が出る。catch内の再記録でも同じ例外が出るため要求の外へ抜け、slot fault・同期revokedが残らなかった。readinessにもretentionと同じown data・writableの書込み資格を課し、合成realmをstrictへ改めた。readiness／retentionの書込み不可・setter付きaccessor・descriptorが継承するwritable getterの8対照と、書込み資格の構文正常変異5件を加えた（§10）。
 
 draft-0.5のレビュー修正：レビュー修正の基準HEADは`6c798d9`。§12に受渡し設計への参照節（2026-11-18追記）を加えた一方、版はdraft-0.4、Dateは2026-11-17のままだった。版と日付を更新し、参照元のJoinRuntime設計・handler設計・構築Join設計・受渡し設計の版参照を直した。内容・実装・試験は変更していない。
 
@@ -175,11 +177,11 @@ EI04の有限JoinExecutionPositionは型語彙だけで、実slot.positionの範
 
 joinExecutionFieldsUnusedは捕捉済みown descriptorで25fieldのdata属性・値・writable／enumerable／configurableを確認し、getterを読まない。旧preparedShellMatchedとhandlerStageMatchedへこの未使用検査を追加し、旧null／false・同owner・停止／record／pinの検査は削っていない。14個の期待aliasはconst nullで先行宣言し、未消費の参照取得資格にはしない。
 
-executionSeedUnusedはcanonical shell／identity／pin照合を先に行い、同ownerのhandlers完了と14alias未使用だけを確認する。戻り値はbooleanで、呼出し証拠ではない。requestJoinExecutionは正常seedも不正seedも必ず固定拒否し、constructorClaim・entry／observer／drain／settle claimは消費しない。最初のconstructor_preまたは先行faultを残し、同shell／identity／pin／closure／tupleを保持、同期revokedへ合流する。retentionのdata書込み資格が不成立ならhookを呼ばず当該slotを保持し、role slotの固定失敗を残す。通常利用へ戻すreset口はない。
+executionSeedUnusedはcanonical shell／identity／pin照合を先に行い、同ownerのhandlers完了と14alias未使用だけを確認する。戻り値はbooleanで、呼出し証拠ではない。requestJoinExecutionは正常seedも不正seedも必ず固定拒否し、constructorClaim・entry／observer／drain／settle claimは消費しない。最初のconstructor_preまたは先行faultを残し、同shell／identity／pin／closure／tupleを保持、同期revokedへ合流する。readiness／retentionのdata書込み資格（own data・writable）が不成立ならhookを呼ばず当該fieldを保持し、例外を出さずにrole slotの固定失敗と同期revokedを残す。通常利用へ戻すreset口はない。
 
 新要求・seed checkerはlegacyから呼ばず、seed checkerの唯一の内部callerはこの固定拒否要求である。旧handler完了checkerの唯一の追加callerもseed checkerに限定する。closure本体は従前の固定拒否のままで呼び出さない。EW02〜04／EW06とETの実行遷移、callback反応、通知／copy／限定settle・実終端は未接続である。EA02の将来全遷移oracleを実装済みとせず、現段階の値保証は有限型・初期field・固定拒否に限定する。
 
-[source試験](../tests/review/native-join-execution-seed.test.ts)、[独立oracle](../tests/review/fixtures/native-join-execution-seed-model.mjs)、[固定dist検査](../tests/review/fixtures/compiled-native-join-execution-seed.mjs)で、field別拒否・混入・停止／先行理由・descriptor継承getter・38構文正常変異とsemantic不正15行を検査した。初回RED・旧試験の移行差分・試験側の不備、結果と未実施範囲は[検証記録](E2E_BEST_PRACTICE_NATIVE_JOIN_EXECUTION_SEED_2026-11-17.md)へ分離する。作業中だったdraft-0.1と親文書の内容を保持してこの実装節・状態更新を追加し、stage・コミット・Pushは行わない。
+[source試験](../tests/review/native-join-execution-seed.test.ts)、[独立oracle](../tests/review/fixtures/native-join-execution-seed-model.mjs)、[固定dist検査](../tests/review/fixtures/compiled-native-join-execution-seed.mjs)で、field別拒否・混入・停止／先行理由・descriptor継承getter・38構文正常変異とsemantic不正15行を検査した。draft-0.6のレビュー修正で、合成realmを製品と同じstrictにし、失敗writerの8対照と構文正常変異5件（計43件）を加えた。初回RED・旧試験の移行差分・試験側の不備、結果と未実施範囲は[検証記録](E2E_BEST_PRACTICE_NATIVE_JOIN_EXECUTION_SEED_2026-11-17.md)へ分離する。作業中だったdraft-0.1と親文書の内容を保持してこの実装節・状態更新を追加し、stage・コミット・Pushは行わない。
 
 ## 11 seedから実行状態への接続差分
 

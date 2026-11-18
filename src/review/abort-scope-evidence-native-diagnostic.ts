@@ -664,8 +664,9 @@ function allocateNativeDiagnosticConstruction(raw: NativeInput, fault?: NativeFa
         const held = role === 'run' ? runShellExpected : cleanupShellExpected, slot = role === 'run' ? runGeneration : cleanupGeneration;
         slot.faultAt ??= 'constructor_pre';
         if (held) {
-            held.readiness = 'failed_retained';
-            const d = jbGet(held, 'retention');
+            // Strict-mode writes to a read-only or accessor field would throw past the catch; skip them so the slot fault and revocation still land.
+            const r = jbGet(held, 'readiness'), d = jbGet(held, 'retention');
+            if (r && jbOwn(r, 'value') && r.writable === true) held.readiness = 'failed_retained';
             if (d && jbOwn(d, 'value') && d.writable === true) held.retention = 'unconfirmed';
         }
         return rejectJoinGeneration(slot, code);
