@@ -4,7 +4,7 @@ import ts from 'typescript';
 import {fileURLToPath} from 'node:url';
 import {createNativeDiagnosticState} from '../../src/review/abort-scope-evidence-native-diagnostic-state.js';
 import {verifyLiveUnused,verifyLiveStages,verifyLiveFailure,verifyLiveBoundaries,verifyLiveMetadata,verifyLiveIdentity,verifyLiveClosedCalls,verifyLiveGuards,
-  auditLiveState,verifyLiveAuditNegatives,liveMutants,verifyLiveMutant,verifyLiveRelations,verifyLiveStageLabels,end} from './fixtures/native-join-live-state-model.mjs';
+  auditLiveState,verifyLiveAuditNegatives,liveMutants,verifyLiveMutant,verifyLiveRelations,verifyLiveStageLabels,verifyLivePostGuards,end} from './fixtures/native-join-live-state-model.mjs';
 
 const source=()=>readFileSync(new URL('../../src/review/abort-scope-evidence-native-diagnostic.ts',import.meta.url),'utf8');
 let js:string|undefined;
@@ -14,6 +14,9 @@ it('inspects the actual same-shell unused fields without adopting a copy or chan
 });
 it('rejects changed acquisition/registration/tail fields and expected-alias drift rather than re-pinning holders',()=>{
   expect(verifyLiveBoundaries(emitted(),createNativeDiagnosticState)).toEqual({refusals:2236});
+});
+it('refuses each preparation, slot, failure and acquisition/observation guard drift from an otherwise accepted row',()=>{
+  expect(verifyLivePostGuards(emitted(),createNativeDiagnosticState)).toEqual({accepted:661,refusals:610});
 });
 it('keeps same-reference aliases and role pairs distinct even when another local relationship still matches',()=>{
   expect(verifyLiveRelations(emitted(),createNativeDiagnosticState)).toEqual({refusals:12});

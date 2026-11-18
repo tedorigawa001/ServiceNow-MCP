@@ -1,7 +1,9 @@
 # JR-B seedから実行状態へのclaim・settler保持・post接続差分詳細設計
 
-Version: native-diagnostic-jrb-seed-execution-transition-draft-0.5 / Date: 2026-11-18。
+Version: native-diagnostic-jrb-seed-execution-transition-draft-0.6 / Date: 2026-11-18。
 Status: §9の実行variant・origin leaf・段階別値postと、§10参照先の閉鎖実運用型／実field post／failure保持だけを合成依存限定で実装。設計基準HEADは`07b4c45`、値契約限定実装の基準HEADは`a477987`。[未使用seed設計](BEST_PRACTICE_NATIVE_DIAGNOSTIC_JRB_EXECUTION_SEED_CONTRACT_DESIGN.md)EI02〜06・ES05〜06・EW02〜06と、[closure／tuple設計](BEST_PRACTICE_NATIVE_DIAGNOSTIC_JRB_HANDLERS_POST_TERMINAL_DELTA_DESIGN.md)HP04〜09を具体化する。[JoinRuntime設計](BEST_PRACTICE_NATIVE_DIAGNOSTIC_JOIN_RUNTIME_GENERATION_DESIGN.md)と[固定pin設計](BEST_PRACTICE_NATIVE_DIAGNOSTIC_JRB_RUNTIME_PIN_DELTA_DESIGN.md)の同owner・同P・観測／固定終端の一体接続は変更しない。
+
+draft-0.6のレビュー修正：レビュー修正の基準HEADは`f9a8be2`（修正時のHEADは`f9a8be2`）。同コミットで、Statusと§9の製品caller記述を実field postの限定実装に合わせて書き換えた一方、版はdraft-0.5のままだった。版を上げ、参照元の版参照を直した。受渡し設計への参照もdraft-0.3へ更新した。内容・実装は変更していない。
 
 draft-0.5のレビュー修正：レビュー修正の基準HEADは`3755cba`（修正時のHEADは`50a2ef1`）。§9の観測値postは、refusedに登録到達trueを、到達前のrefusedにreturn_lostを受理し、逆にET01が到達の有無で区別する到達前throw（threw・未到達）と最終post前のregistering／busy・未到達を拒否していた。独立oracleも到達前throwを不正値へ入れていた。refused＝未到達、returned＝到達、registering／threw＝到達前後のいずれも可、return_lost＝到達後に限定するよう値postを直し、oracleを設計側へ揃えた。あわせてvariant名の付け替え、失敗保持・観測fieldの関係、origin leafが照合する保持field（executor closure・tuple・cleanup record・anchorのslot参照）の改ざんを拒否する対照を加え、構文正常変異を14件から28件へ増やした。
 
@@ -160,4 +162,4 @@ joinExecutionValuePostはcreator内部のdata投影を対象とする。raw JSON
 
 ## 10 同shellの実writer・安全観測／固定終端への受渡し（2026-11-18追記）
 
-[同shellの実行writer・安全観測・固定終端受渡しの差分詳細設計draft-0.2](BEST_PRACTICE_NATIVE_DIAGNOSTIC_JRB_LIVE_WRITER_TERMINAL_HANDOFF_DELTA_DESIGN.md)で、§2の実shell／slot限定拡張と§4〜6を、実field post・writer資格・claim消費点・失敗prefixの受渡しへ具体化した。同書§9で同shellの実運用型・実field post・原始failure／cold未確認保持だけを合成依存限定で実装し、readonly値postをwriterにせず、ack保持途中と登録完了postを分離する。追加済みのslot拡張方針と既存固定拒否を維持し、取得claim・生成・観測・固定drain・private公開・dispatchは接続しない。
+[同shellの実行writer・安全観測・固定終端受渡しの差分詳細設計draft-0.3](BEST_PRACTICE_NATIVE_DIAGNOSTIC_JRB_LIVE_WRITER_TERMINAL_HANDOFF_DELTA_DESIGN.md)で、§2の実shell／slot限定拡張と§4〜6を、実field post・writer資格・claim消費点・失敗prefixの受渡しへ具体化した。同書§9で同shellの実運用型・実field post・原始failure／cold未確認保持だけを合成依存限定で実装し、readonly値postをwriterにせず、ack保持途中と登録完了postを分離する。追加済みのslot拡張方針と既存固定拒否を維持し、取得claim・生成・観測・固定drain・private公開・dispatchは接続しない。

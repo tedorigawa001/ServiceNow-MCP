@@ -135,6 +135,51 @@ export function verifyLiveGuards(js,state){
     const before={...s};assert.equal(a.retain(role),false);assert.deepEqual({...s},before);refusals++;
   }return {refusals};
 }
+// Each guard is varied alone from a row the same post accepts, so every refusal is attributable to that guard.
+const preparationBad=[['readiness','failed_retained'],['retention','unconfirmed'],['pinState','rejected'],['pinFault','pin'],['handlersClaim',false],
+  ['handlersBusy',true],['handlersState','preparing'],['handlersDetail','tuple_frozen'],['handlersFault','closed_call']];
+export function verifyLivePostGuards(js,state){
+  const create=deriveLiveState(js,state);let refusals=0,accepted=0;
+  const run=(role,row,stage,change,expected,label)=>{const a=create();assert(a.prepare(role));a.fixture(role,row);
+    assert.equal(a.post(role,stage),true,role+'/'+stage+' base '+label);accepted++;
+    if(!change)return;const [s,,,slot]=a.args(role);change(s,slot,a);assert.equal(a.post(role,stage),expected,role+'/'+stage+'/'+label);if(!expected)refusals++;};
+  for(const role of ['run','cleanup'])for(const [stage,row]of liveCases(role)){
+    if(stage!=='failed_retained'){
+      for(const [key,value]of preparationBad)run(role,row,stage,s=>{s[key]=value;},false,key);
+      for(const [key,value]of [['fault','invalid_state'],['faultAt','executor_exit'],['claimed',false]])run(role,row,stage,(_s,slot)=>{slot[key]=value;},false,'slot '+key);
+      run(role,row,stage,(_s,slot)=>{slot.phase=stage==='checked_unpublished'?'building':'checked';},false,'slot phase');continue;
+    }
+    for(const failure of ['failure_recorded','failed_retained']){
+      run(role,row,failure,(_s,_slot,a)=>a.set({revoked:false}),false,'revoked');run(role,row,failure,(_s,_slot,a)=>a.set({primary:null}),false,'primary');
+      run(role,row,failure,(_s,slot)=>{slot.faultAt='arbitrary';},false,'site');run(role,row,failure,(_s,slot)=>{slot.phase='building';},false,'phase');
+    }
+    // Missing metadata keeps the primitive failure but never completes the retained post.
+    for(const [key,value]of [['readiness','handlers_ready'],['retention','held']]){
+      run(role,row,'failure_recorded',s=>{s[key]=value;},true,key+' recorded');run(role,row,'failed_retained',s=>{s[key]=value;},false,key+' retained');
+    }
+  }
+  for(const role of ['run','cleanup'])for(const field of ['readiness','retention']){
+    const a=create();assert(a.prepare(role));const [s]=a.args(role);Object.defineProperty(s,field,{value:s[field],writable:false,enumerable:true,configurable:true});
+    a.record(role,'executor_exit','internal_review_error');a.retain(role);assert.equal(a.post(role,'failure_recorded'),true);accepted++;
+    assert.equal(a.post(role,'failed_retained'),false,role+' unwritable '+field);refusals++;
+  }
+  for(const role of ['run','cleanup']){
+    const rows=Object.fromEntries(liveCases(role).filter(([stage])=>stage!=='failed_retained')),failed=(row,faultAt)=>({...row,variant:'failed_retained',fault:'invalid_state',faultAt,retention:'unconfirmed'});
+    const ack={},reach=failed(rows.registering_reached,'ack_hold'),captured=failed(rows.captured_before_return,'executor_exit'),calling=failed(rows.calling_before_entry,'constructor_call');
+    // Each pair is accepted as written and refused after the single listed change.
+    const pairs=[
+      ['ack after reach',{...reach,ackHeld:true,ackState:'held',observerAckCandidate:ack},{registrationReached:false}],
+      ['unsafe ack after return',{...reach,observerState:'returned',observerBusy:false,ackHeld:true,ackState:'unsafe_retained',observerAckCandidate:ack},{observerState:'registering',observerBusy:true}],
+      ['settler pair at normal exit',{...captured,executor:'abnormal',resolve:null,reject:null,position:'executor'},{executor:'normal_exit'}],
+      ['unsafe needs candidate',calling,{candidateSafety:'unsafe_retained'}],
+    ];
+    for(const [label,good,bad]of pairs){run(role,good,'failure_recorded',null,true,label);
+      const a=create();assert(a.prepare(role));a.fixture(role,{...good,...bad});assert.equal(a.post(role,'failure_recorded'),false,role+' '+label);refusals++;}
+    for(const key of role==='run'?['resolve','reject']:['resolve']){const a=create();assert(a.prepare(role));a.fixture(role,{...rows.resolve_prefix,[key]:{}});
+      assert.equal(a.post(role,'resolve_prefix'),false,role+' non-function '+key);refusals++;}
+  }
+  return {accepted,refusals};
+}
 function walk(n,visit){visit(n);for(const v of Object.values(n)){if(Array.isArray(v)){for(const c of v)if(c?.type)walk(c,visit);}else if(v?.type)walk(v,visit);}}
 export function auditLiveState(js){
   const block=between(js,begin,end),tree=parse('function root(){'+block+'}',{ecmaVersion:'latest'});let writes=0,primitiveCalls=0,coldCalls=0,metadataGuards=0;
@@ -176,11 +221,26 @@ export const liveMutants=[
   ['tail dispatch','state.dispatchStarted === false','true'],['tail entry','state.entered === false','true'],
   ['tail callback','state.callbackClaim === false','true'],['tail drain','state.failureDrainClaim === false','true'],
   ['tail copy','state.copyAttempted === false','true'],['tail settle','state.settleClaim === false','true'],
+  ['slot claimed','ownSlot.claimed !== true || ',''],['ready readiness',"state.readiness !== 'handlers_ready' || ",''],['held retention',"state.retention !== 'held' ||",''],
+  ['ready pin',"state.pinState !== 'ready' || ",''],['pin fault','state.pinFault !== null || ',''],['handlers claim','state.handlersClaim !== true || ',''],
+  ['handlers busy','state.handlersBusy !== false ||',''],['handlers state',"state.handlersState !== 'ready' || ",''],
+  ['handlers detail',"state.handlersDetail !== 'complete' || ",''],['handlers fault',' || state.handlersFault !== null)',')'],
+  ['slot fault','if (ownSlot.fault !== null || ','if ('],['slot site','ownSlot.faultAt !== null || ',''],['building phase',"if (ownSlot.phase !== 'building')",'if (false)'],
+  ['failure revoked','revoked === true && primary !== null','primary !== null'],['failure primary','revoked === true && primary !== null','revoked === true'],
+  ['failure site','joinValueFaultSite(ownSlot.faultAt) && ',''],['failure phase',"ownSlot.phase === 'failed_retained' &&",'true &&'],
+  ['retained readiness',"state.readiness === 'failed_retained' && state.retention === 'unconfirmed'","state.retention === 'unconfirmed'"],
+  ['retained retention',"state.readiness === 'failed_retained' && state.retention === 'unconfirmed'","state.readiness === 'failed_retained'"],
+  ['resolve function',"(state.resolve !== null && typeof state.resolve !== 'function') || ",''],
+  ['reject function',"(state.reject !== null && typeof state.reject !== 'function') ||",''],
+  ['unsafe candidate',"state.candidateSafety === 'unsafe_retained' && state.candidateHeld === true","state.candidateSafety === 'unsafe_retained'"],
+  ['ack reach','if (state.registrationReached !== true || (state.observerState','if ((state.observerState'],
+  ['unsafe ack return',"return state.observerState === 'returned' && state.observerAck === null;",'return state.observerAck === null;'],
+  ['normal exit pair',"if (state.executor === 'normal_exit' && (state.resolve === null || role === 'run' && state.reject === null))",'if (false)'],
 ];
 function mutate(js,from,to,count=1){const b=between(js,begin,end);assert.equal(b.split(from).length-1,count,'live mutation drift '+from);
   const changed=js.replace(b,b.replaceAll(from,to));parse(changed,{ecmaVersion:'latest',sourceType:'module'});return changed;}
 export function verifyLiveMutant(js,state,i){const [name,from,to,count]=liveMutants[i],changed=mutate(js,from,to,count);
-  const behavior=()=>{verifyLiveUnused(changed,state);verifyLiveStages(changed,state);verifyLiveBoundaries(changed,state);verifyLiveRelations(changed,state);verifyLiveFailure(changed,state);verifyLiveMetadata(changed,state);verifyLiveGuards(changed,state);verifyLiveIdentity(changed,state);};
+  const behavior=()=>{verifyLivePostGuards(changed,state);verifyLiveUnused(changed,state);verifyLiveStages(changed,state);verifyLiveBoundaries(changed,state);verifyLiveRelations(changed,state);verifyLiveFailure(changed,state);verifyLiveMetadata(changed,state);verifyLiveGuards(changed,state);verifyLiveIdentity(changed,state);};
   // Strict-mode readonly writes are caught: omitting this guard is behaviorally equivalent here,
   // but violates the fixed skip-without-attempt contract. Do not count that as behavioral detection.
   if(name==='metadata writable'){assert.doesNotThrow(behavior);assert.throws(()=>auditLiveState(changed),assert.AssertionError);}

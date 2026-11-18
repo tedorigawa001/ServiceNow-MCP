@@ -1,7 +1,9 @@
 # JR-B同shellの実行writer・安全観測・固定終端受渡しの差分詳細設計
 
-Version: native-diagnostic-jrb-live-writer-terminal-handoff-draft-0.2 / Date: 2026-11-18。
-Status: §9の同shell実運用型・実field post・原始failure／未確認保持だけを合成依存限定で実装。設計基準HEADは`f7e3889`、限定実装の基準HEADは`dffd871`。値契約の実装commitは`3755cba`。[seed→実行設計draft-0.5](BEST_PRACTICE_NATIVE_DIAGNOSTIC_JRB_SEED_EXECUTION_TRANSITION_DELTA_DESIGN.md)§2〜6・9と、[先行field契約draft-0.6](BEST_PRACTICE_NATIVE_DIAGNOSTIC_JRB_EXECUTION_SEED_CONTRACT_DESIGN.md)EI／EF／EW／ETを、同shellの固定writerと後段責務の受渡しへ具体化する。追加済みのRoleGenerationSlot限定拡張方針は維持する。[固定pin設計](BEST_PRACTICE_NATIVE_DIAGNOSTIC_JRB_RUNTIME_PIN_DELTA_DESIGN.md)の安全な同候補・同P／then前提を置き換えない。
+Version: native-diagnostic-jrb-live-writer-terminal-handoff-draft-0.3 / Date: 2026-11-18。
+Status: §9の同shell実運用型・実field post・原始failure／未確認保持だけを合成依存限定で実装。設計基準HEADは`f7e3889`、限定実装の基準HEADは`dffd871`。値契約の実装commitは`3755cba`。[seed→実行設計draft-0.6](BEST_PRACTICE_NATIVE_DIAGNOSTIC_JRB_SEED_EXECUTION_TRANSITION_DELTA_DESIGN.md)§2〜6・9と、[先行field契約draft-0.7](BEST_PRACTICE_NATIVE_DIAGNOSTIC_JRB_EXECUTION_SEED_CONTRACT_DESIGN.md)EI／EF／EW／ETを、同shellの固定writerと後段責務の受渡しへ具体化する。追加済みのRoleGenerationSlot限定拡張方針は維持する。[固定pin設計](BEST_PRACTICE_NATIVE_DIAGNOSTIC_JRB_RUNTIME_PIN_DELTA_DESIGN.md)の安全な同候補・同P／then前提を置き換えない。
+
+draft-0.3のレビュー修正：レビュー修正の基準HEADは`f9a8be2`（修正時のHEADは`f9a8be2`）。§9の実field postは、準備field（readiness／retention・pin・handlers）、slotのfault／faultAt／claimed／phase、失敗段階のrevoked／primary／site／phaseとmetadata、取得・観測の関係（settlerの関数型、未保持候補のunsafe、到達前のack保持、registering中の不正ack、normal_exitのsettler組）を検査していた。ところが独立oracleはこれらを1条件ずつ崩す対照を持たず、各条件を外す25変異がsource・compiledの両対照を通過した。受理される行から1条件だけを変える610拒否の対照と、25変異を加えた（§9）。製品コードは変更していない。
 
 正式発行口／新LM03／C実行入口／body起動閉鎖、全体受付無効、通常経路未切替、Unknown、VM／監視／telemetry調査保留、LOAD6／LOAD7選択・AP01〜06未承認を維持する。draft-0.1のMDだけの確認は§8に残す。draft-0.2は閉鎖した§9の型／検査／failureと合成検証だけに限定し、新経路のPromise生成・executor／reaction body・観測登録・通知／copy／settler・drain呼出し・private公開・dispatch・実接続・実通信・実機操作・設定変更・stage・コミット・Pushは行わない。
 
@@ -152,4 +154,4 @@ holdJoinExecutionUnconfirmedは原始failureが残っている場合だけ、con
 
 新post・原始failure・cold保持の製品callerはいずれも0で、origin leafの追加callerは新しい読み取り専用postだけである。既存request・3closure・旧14本文／4exportは維持し、実行claim／observer／drainの消費・参照取得・Promise生成・安全観測・固定abort／失敗終端・private公開・dispatchは未接続である。
 
-[source試験](../tests/review/native-join-live-state.test.ts)、[strict scratch／独立表](../tests/review/fixtures/native-join-live-state-model.mjs)、[固定dist検査](../tests/review/fixtures/compiled-native-join-live-state.mjs)と[検証記録](E2E_BEST_PRACTICE_NATIVE_JOIN_LIVE_STATE_2026-11-18.md)を追加した。実行prefixの正対照は、scratch内だけで14aliasのconst宣言をletへ限定置換し、独立表の合成参照を同shellへ固定したもの。製品へ取得writer・test event受付・friend・fixture台帳は追加せず、この正対照をnative取得の証拠にしない。先行型の拡張とread-only postを確認する工程であり、実生成はWH01〜08の一体接続まで閉じる。
+[source試験](../tests/review/native-join-live-state.test.ts)、[strict scratch／独立表](../tests/review/fixtures/native-join-live-state-model.mjs)、[固定dist検査](../tests/review/fixtures/compiled-native-join-live-state.mjs)と[検証記録](E2E_BEST_PRACTICE_NATIVE_JOIN_LIVE_STATE_2026-11-18.md)を追加した。実行prefixの正対照は、scratch内だけで14aliasのconst宣言をletへ限定置換し、独立表の合成参照を同shellへ固定したもの。製品へ取得writer・test event受付・friend・fixture台帳は追加せず、この正対照をnative取得の証拠にしない。draft-0.3のレビュー修正で、受理される行から準備・slot・失敗・取得／観測のguardを1つずつ崩す対照（610拒否）と構文正常変異25件（計55件）を加えた。metadataを書けない失敗はfailure_recordedだけを満たし、failed_retainedのpostは成立しないことも確認する。先行型の拡張とread-only postを確認する工程であり、実生成はWH01〜08の一体接続まで閉じる。

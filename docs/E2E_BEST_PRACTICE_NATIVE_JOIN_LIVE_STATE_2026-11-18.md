@@ -54,3 +54,23 @@ sourceの新規試験は43件。上記の内部assert数をsource成功件数へ
 - 旧14関数と6個の割当て／固定拒否関連関数、4exportは基準HEADと一致。新MJS2fileの構文確認も通過。
 
 検証後の追記は本節と親2文書のStatus整合だけで、実装・試験・設定は検証済み内容から変えていない。このMD追記もsnapshotへ反映して静的確認する。対象外変更は含めず、各閉鎖条件・Unknown・調査保留を維持し、Pushは行わない。
+
+## レビュー修正 2026年11月18日
+
+レビュー基準と修正時のHEADはどちらも`f9a8be2`。設計は[受渡し設計draft-0.3](BEST_PRACTICE_NATIVE_DIAGNOSTIC_JRB_LIVE_WRITER_TERMINAL_HANDOFF_DELTA_DESIGN.md)§9。製品コードは変更していない。
+
+| 指摘 | 原因と対応 |
+|---|---|
+| 試験が見逃す条件25件 | 一時変異61件のうち32件が全oracleを通過し、25件は非等価だった。境界対照が崩すのは取得系と末尾fieldだけで、準備field・slot・失敗段階・一部の取得／観測関係を崩す行がなかった。受理される行から1条件だけを変える対照を加え、25件を構文正常変異へ追加した |
+| 版参照の更新漏れ | JoinRuntime設計が受渡し設計をdraft-0.1として参照していた。seed契約設計とseed→実行設計はStatus・本文を書き換えたのに版が据え置かれていた。受渡し0.3、seed契約0.7、seed→実行0.6へ上げ、設計文書の版参照を直した。過去の検証記録の版表記は当時のまま残す |
+
+追加した対照は次の610拒否である。
+
+- 通常段階の25行（run13・cleanup12）×13条件＝325。readiness／retention・pinState／pinFault・handlersの5field、slotのfault／faultAt／claimed／phase。
+- 失敗段階の27行（run14・cleanup13）×10＝270。failure_recorded／failed_retainedの両方でrevoked／primary／site／phase、failed_retainedだけでreadiness／retention。後者はfailure_recordedでは受理のままであることも確認する。
+- 書込み不可のreadiness／retentionで原始failureを記録した4件。failure_recordedは成立し、failed_retainedは成立しない。
+- 取得／観測の関係11件。到達前のack保持、registering中の不正ack、normal_exitでsettler組が欠ける場合、未保持候補のunsafe（各role）と、関数でないresolve／run reject。各対は変更前の行が受理されることも確認する。
+
+先行REDとして、追加した25変異は旧oracleで25件とも通過した。新oracleでは55変異（behavior54・構造1）がすべて検出され、変異1件あたり1.5秒未満だった。関連のlive／value試験は105件成功（live 69件）。
+
+等価として扱った7変異：registering／checkedのbusy・ack保持・位置の条件は観測postまたは保持位置の照合が先に同じ結論を出す。terminalCopy／rejectPayloadの期待aliasは製品でconst null。cold保持のsubject null判定とrecord側のrole判定は、try／catchと型付きcallerのため結果が変わらない。Promise生成・closure呼出し・観測・終端処理・private公開・dispatchは未接続のままで、各閉鎖条件・Unknown・調査保留を維持する。
