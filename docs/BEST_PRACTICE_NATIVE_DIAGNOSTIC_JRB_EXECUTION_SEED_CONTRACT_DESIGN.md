@@ -1,7 +1,7 @@
 # JR-B実行前内部契約・先行slotと失敗後writer資格の差分詳細設計
 
 Version: native-diagnostic-jrb-execution-seed-contract-draft-0.6 / Date: 2026-11-18。
-Status: §10の初期field・狭い値型・未使用seed検査・固定拒否と、§11参照先の非実行variant／origin／値postだけを合成依存限定で実装。seedの基準HEADは`48900ac`。[closure／tuple・post設計](BEST_PRACTICE_NATIVE_DIAGNOSTIC_JRB_HANDLERS_POST_TERMINAL_DELTA_DESIGN.md)HC06〜08・HP04〜09・HW02〜05・HT01〜07を、[JoinRuntime設計](BEST_PRACTICE_NATIVE_DIAGNOSTIC_JOIN_RUNTIME_GENERATION_DESIGN.md)の同role pendingと[固定pin設計](BEST_PRACTICE_NATIVE_DIAGNOSTIC_JRB_RUNTIME_PIN_DELTA_DESIGN.md)RS05後半〜RS10へ接続する前の内部契約へ具体化する。native実行状態への遷移・参照取得は未実装・未接続である。
+Status: §10の初期field・狭い値型・未使用seed検査・固定拒否、§11参照先の非実行variant／origin／値postと、§12参照先の閉鎖実運用型／実field post／failure保持だけを合成依存限定で実装。seedの基準HEADは`48900ac`。[closure／tuple・post設計](BEST_PRACTICE_NATIVE_DIAGNOSTIC_JRB_HANDLERS_POST_TERMINAL_DELTA_DESIGN.md)HC06〜08・HP04〜09・HW02〜05・HT01〜07を、[JoinRuntime設計](BEST_PRACTICE_NATIVE_DIAGNOSTIC_JOIN_RUNTIME_GENERATION_DESIGN.md)の同role pendingと[固定pin設計](BEST_PRACTICE_NATIVE_DIAGNOSTIC_JRB_RUNTIME_PIN_DELTA_DESIGN.md)RS05後半〜RS10へ接続する前の内部契約へ具体化する。native実行状態への遷移・参照取得は未実装・未接続である。
 
 draft-0.6のレビュー修正：レビュー修正の基準HEADは`f3746c4`（修正時のHEADは`ed57855`）。§10は固定拒否を「必ず」とし、retentionの書込み資格不成立ではhookを呼ばないと定めていた。ところが独立oracleは製品を非strictの合成realmで実行しており、書込み不可・accessorへの代入が黙って無視されていた。このためretention書込み条件を外す変異3件がsource・compiledの両対照を通過した。また実際のES module（strict）では、readinessを書込み不可にすると固定拒否の記録中に例外が出る。catch内の再記録でも同じ例外が出るため要求の外へ抜け、slot fault・同期revokedが残らなかった。readinessにもretentionと同じown data・writableの書込み資格を課し、合成realmをstrictへ改めた。readiness／retentionの書込み不可・setter付きaccessor・descriptorが継承するwritable getterの8対照と、書込み資格の構文正常変異5件を加えた（§10）。
 
@@ -189,4 +189,4 @@ executionSeedUnusedはcanonical shell／identity／pin照合を先に行い、�
 
 ## 12 実field writerと安全観測／固定終端の受渡し（2026-11-18追記）
 
-[同shellの実行writer・安全観測・固定終端受渡しの差分詳細設計draft-0.1](BEST_PRACTICE_NATIVE_DIAGNOSTIC_JRB_LIVE_WRITER_TERMINAL_HANDOFF_DELTA_DESIGN.md)で、EI／EFの同object保持、EWの操作別writerとETの非返却claim・固定drainを具体化した。元shell／slot・取得時aliasだけを読み、完了値postと途中実field postを分ける。call throwと復帰後post失敗、最初のfaultと最後の保持位置、後着private事実とsealed上位診断を混同しない。生成・安全観測・固定終端の一体接続条件、Unknown・全体受付無効・各閉鎖条件は不変で、この追記はMDだけとする。
+[同shellの実行writer・安全観測・固定終端受渡しの差分詳細設計draft-0.2](BEST_PRACTICE_NATIVE_DIAGNOSTIC_JRB_LIVE_WRITER_TERMINAL_HANDOFF_DELTA_DESIGN.md)で、EI／EFの同object保持、EWの操作別writerとETの非返却claim・固定drainを具体化した。同書§9では同shellへの実運用型view・実field post・原始failure／cold未確認保持だけを限定実装し、取得claimやnative参照を生成するwriterは置かない。call throwと復帰後post失敗、最初のfaultと最後の保持位置、後着private事実とsealed上位診断を混同しない。生成・安全観測・固定終端の一体接続条件、Unknown・全体受付無効・各閉鎖条件は不変とする。

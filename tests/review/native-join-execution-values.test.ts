@@ -27,10 +27,11 @@ it('has no operational writer, invocation, reflection or raw-origin field access
 it.each(valueMutants.map((m:unknown[],i:number)=>[m[0],i]))('detects value/origin %s drift',(_name,index)=>{
   verifyValueMutant(emitted(),createNativeDiagnosticState,index as number);
 });
-it('has no product callers and keeps all requests/closures closed',()=>{
+it('limits origin inspection to the closed same-shell post and keeps all requests/closures closed',()=>{
   const tree=ts.createSourceFile('root.ts',source(),ts.ScriptTarget.Latest,true),calls:string[]=[];
-  function visit(n:ts.Node){if(ts.isCallExpression(n)&&ts.isIdentifier(n.expression)&&['joinExecutionOriginLeaf','joinExecutionValuePost'].includes(n.expression.text))calls.push(n.expression.text);ts.forEachChild(n,visit);}
-  visit(tree);expect(calls).toEqual([]);
+  function visit(n:ts.Node,owner=''){if(ts.isFunctionDeclaration(n))owner=n.name?.text??'';
+    if(ts.isCallExpression(n)&&ts.isIdentifier(n.expression)&&['joinExecutionOriginLeaf','joinExecutionValuePost'].includes(n.expression.text))calls.push(n.expression.text+':'+owner);ts.forEachChild(n,child=>visit(child,owner));}
+  visit(tree);expect(calls).toEqual(['joinExecutionOriginLeaf:joinLiveFieldPost']);
 });
 it('cannot turn a valid checked value projection into a live request or retained closure capability',()=>{
   expect(verifyValuesHaveNoAuthority(emitted(),createNativeDiagnosticState)).toEqual({requests:2,closures:6});

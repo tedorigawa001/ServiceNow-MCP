@@ -100,7 +100,7 @@ type JoinShellIdentity<K extends JoinRole> = Readonly<{ recovery: RecoveryAnchor
     context: K extends 'run' ? null : JoinShellContext }>;
 type OwnerPromisePin<K extends JoinRole> = Readonly<{ runtime: JoinRuntimeShell<K>; identity: JoinShellIdentity<K>;
     basis: typeof joinPromiseBasis }>;
-type JoinRuntimeShell<K extends JoinRole> = JoinExecutionSeed & {
+type JoinShellPreparation<K extends JoinRole> = {
     readonly recovery: RecoveryAnchor; readonly root: object; readonly seed: object; readonly kind: K;
     readonly contextRecord: object | null; readonly contextAnchor: object | null;
     readiness: 'shell' | 'identity_ready' | 'pin_ready' | 'handlers_ready' | 'failed_retained';
@@ -108,18 +108,43 @@ type JoinRuntimeShell<K extends JoinRole> = JoinExecutionSeed & {
     pinState: 'unprepared' | 'preparing' | 'ready' | 'rejected'; pinFault: JoinPreparationPosition | null;
     handlersClaim: boolean; handlersBusy: boolean; handlersState: 'unstarted' | 'preparing' | 'ready' | 'failed_retained';
     handlersDetail: JoinHandlersDetail; handlersFault: JoinHandlersFault | null;
-    executor: 'not_entered'; executorHandler: JoinExecutorHandler | null; fulfilledHandler: JoinObserverHandler | null;
+    executorHandler: JoinExecutorHandler | null; fulfilledHandler: JoinObserverHandler | null;
     rejectedHandler: JoinObserverHandler | null; observerArgs: JoinObserverArgs | null;
+};
+type JoinRuntimeShell<K extends JoinRole> = JoinShellPreparation<K> & JoinExecutionSeed & {
+    executor: 'not_entered';
     candidate: null; work: null; resolve: null; reject: null;
     observerClaim: false; observerState: Extract<JoinRegistrationState, 'unstarted'>; observerBusy: false; observed: 'unobserved'; callbackFault: null;
     observerAckCandidate: null; observerAck: null; settleClaim: false; settleState: 'unattempted'; terminal: 'unobserved';
     notifyAttempted: false; copyAttempted: false; dispatchStarted: false; entered: false;
 };
+/** Same physical shell, a wider internal view; no operational acquisition writer exists in this slice. */
+type JoinOperationalShell<K extends JoinRole> = JoinShellPreparation<K> & {
+    constructorClaim: boolean; constructorState: JoinConstructorState; executorEntryClaim: boolean;
+    executor: 'not_entered' | 'running' | 'normal_exit' | 'abnormal';
+    resolve: JoinExecutionResolve<K> | null; reject: JoinExecutionReject<K> | null;
+    candidateHeld: boolean; candidate: unknown; candidateSafety: JoinCandidateSafety; work: unknown;
+    registrationWork: unknown; registrationReached: boolean; observerClaim: boolean; observerState: JoinRegistrationState; observerBusy: boolean;
+    ackHeld: boolean; ackState: JoinAckState; observerAckCandidate: unknown; observerAck: unknown;
+    callbackClaim: boolean; callbackState: JoinCallbackState; callbackFault: 'early' | 'synchronous' | 'duplicate' | 'origin_mismatch' | 'write_unconfirmed' | null;
+    observed: JoinWorkObservation; terminal: JoinWorkObservation; ackTerminal: JoinWorkObservation;
+    failureDrainClaim: boolean; failureDrainState: JoinDrainState; drainKind: JoinDrainKind;
+    upperRecordAttempted: boolean; upperRecordState: JoinUpperRecordState; notifyAttempted: boolean; notifyState: JoinNotifyState;
+    copyAttempted: boolean; copyHeld: boolean; runCopyState: JoinRunCopyState; terminalCopy: K extends 'cleanup' ? null : unknown;
+    rejectPayloadAttempted: boolean; rejectPayloadState: JoinRejectPayloadState; rejectPayload: K extends 'cleanup' ? null : unknown;
+    settleClaim: boolean; settleState: 'unattempted' | 'calling' | 'returned' | 'threw' | 'skipped_terminal' | 'unavailable';
+    retention: 'held' | 'unconfirmed'; dispatchStarted: false; entered: false;
+};
+type JoinLiveBuildingPosition<K extends JoinRole> = 'handlers' | 'executor' | 'resolve' | 'candidate' | (K extends 'run' ? 'reject' : never);
+type JoinLivePostStage = Exclude<JoinExecutionVariant, 'capturing'> | 'executor_prefix' | 'reject_prefix' | 'resolve_prefix' |
+    'registering_before_reach' | 'registering_reached' | 'ack_held' | 'ack_verified' | 'failure_recorded';
 type RoleGenerationSlot<K extends JoinRole> = { readonly role: K; published: null; faultAt: JoinFaultSite | null } & (
     | { phase: 'empty'; claimed: false; position: 'empty'; fault: null; pending: null }
     | { phase: 'claimed_unheld'; claimed: true; position: 'claimed'; fault: null; pending: null }
     | { phase: 'building'; claimed: true; position: 'runtime' | 'context' | 'identity' | 'pin' | 'handlers'; fault: null; pending: JoinRuntimeShell<K> }
-    | { phase: 'failed_retained'; claimed: boolean; position: JoinPreparationPosition; fault: JoinGenerationFault; pending: JoinRuntimeShell<K> | null }
+    | { phase: 'building'; claimed: true; position: JoinLiveBuildingPosition<K>; fault: null; pending: JoinOperationalShell<K> & { constructorClaim: true } }
+    | { phase: 'checked'; claimed: true; position: 'checked'; fault: null; pending: JoinOperationalShell<K> & { constructorClaim: true } }
+    | { phase: 'failed_retained'; claimed: boolean; position: JoinExecutionPosition; fault: JoinGenerationFault; pending: JoinOperationalShell<K> | null }
 );
 type RecoveryAnchor = { state?: NativeState; writer?: ReturnType<NativeState['owner']['writers']>; preparation?: object;
     normal?: NativeWorkflow; facade?: NativeFacade; status: 'building' | 'ready' | 'failed';
@@ -774,6 +799,116 @@ function allocateNativeDiagnosticConstruction(raw: NativeInput, fault?: NativeFa
     }
     void joinExecutionOriginLeaf; void joinExecutionValuePost;
     // JR-B-VALUES-END
+    // JR-B-LIVE-BEGIN: same-shell posts and failure custody only; no execution.
+    function joinLiveTailUnused(state: JoinOperationalShell<'run'> | JoinOperationalShell<'cleanup'>, role: JoinRole): boolean {
+        return state.dispatchStarted === false && state.entered === false && state.callbackClaim === false && state.callbackState === 'not_entered' &&
+            state.callbackFault === null && state.observed === 'unobserved' && state.terminal === 'unobserved' && state.ackTerminal === 'unobserved' &&
+            state.failureDrainClaim === false && state.failureDrainState === 'unstarted' && state.drainKind === 'none' &&
+            state.upperRecordAttempted === false && state.upperRecordState === 'unattempted' && state.notifyAttempted === false && state.notifyState === 'unattempted' &&
+            state.copyAttempted === false && state.copyHeld === false && state.runCopyState === 'unattempted' && state.terminalCopy === null &&
+            state.rejectPayloadAttempted === false && state.rejectPayloadState === 'unattempted' && state.rejectPayload === null &&
+            state.settleClaim === false && state.settleState === 'unattempted' && (role === 'run' ?
+                runTerminalCopyExpected === null && runRejectPayloadExpected === null : cleanupTerminalCopyExpected === null && cleanupRejectPayloadExpected === null);
+    }
+    function joinLiveAcquisitionPost(state: JoinOperationalShell<'run'> | JoinOperationalShell<'cleanup'>, role: JoinRole): boolean {
+        const resolveAlias = role === 'run' ? runCapturedResolveExpected : cleanupCapturedResolveExpected,
+            rejectAlias = role === 'run' ? runCapturedRejectExpected : cleanupCapturedRejectExpected,
+            candidateAlias = role === 'run' ? runCandidateExpected : cleanupCandidateExpected,
+            workAlias = role === 'run' ? runRegistrationWorkExpected : cleanupRegistrationWorkExpected;
+        if ((state.constructorClaim !== true && state.constructorClaim !== false) || (state.executorEntryClaim !== true && state.executorEntryClaim !== false) ||
+            (state.candidateHeld !== true && state.candidateHeld !== false) || state.resolve !== resolveAlias || state.reject !== rejectAlias ||
+            (state.resolve !== null && typeof state.resolve !== 'function') || (state.reject !== null && typeof state.reject !== 'function') ||
+            role === 'cleanup' && state.reject !== null || role === 'run' && state.resolve !== null && state.reject === null) return false;
+        if (state.executorEntryClaim === false ? state.executor !== 'not_entered' || state.resolve !== null || state.reject !== null :
+            state.constructorClaim !== true || (state.executor !== 'running' && state.executor !== 'normal_exit' && state.executor !== 'abnormal')) return false;
+        if (state.executor === 'normal_exit' && (state.resolve === null || role === 'run' && state.reject === null)) return false;
+        if (state.constructorState === 'not_called' ? state.executorEntryClaim !== false || state.candidateHeld !== false :
+            state.constructorClaim !== true || (state.constructorState !== 'calling' && state.constructorState !== 'returned' && state.constructorState !== 'threw')) return false;
+        if (state.constructorState === 'returned' ? state.candidateHeld !== true : state.candidateHeld !== false) return false;
+        if (state.candidateHeld ? state.candidate !== candidateAlias : state.candidate !== null || candidateAlias !== null) return false;
+        if (state.candidateSafety === 'safe_same_work') return state.candidateHeld === true && state.work !== null &&
+            (typeof state.work === 'object' || typeof state.work === 'function') && state.work === state.candidate && state.work === workAlias;
+        return (state.candidateSafety === 'unchecked' || state.candidateSafety === 'unsafe_retained' && state.candidateHeld === true) &&
+            state.work === null && workAlias === null;
+    }
+    function joinLiveObservationPost(state: JoinOperationalShell<'run'> | JoinOperationalShell<'cleanup'>, role: JoinRole): boolean {
+        const ackAlias = role === 'run' ? runAckExpected : cleanupAckExpected;
+        if ((state.observerBusy !== true && state.observerBusy !== false) || (state.registrationReached !== true && state.registrationReached !== false) ||
+            (state.ackHeld !== true && state.ackHeld !== false) || state.observerAckCandidate !== ackAlias) return false;
+        if (state.observerClaim === false) return state.observerState === 'unstarted' && state.observerBusy === false && state.registrationReached === false &&
+            state.registrationWork === null && state.ackHeld === false && state.ackState === 'empty' && state.observerAckCandidate === null && state.observerAck === null;
+        if (state.observerClaim !== true || state.candidateSafety !== 'safe_same_work' || state.registrationWork !== state.work ||
+            (state.observerState === 'registering' ? state.observerBusy !== true : state.observerBusy !== false ||
+                (state.observerState !== 'returned' && state.observerState !== 'threw' && state.observerState !== 'refused')) ||
+            state.observerState === 'refused' && state.registrationReached !== false || state.observerState === 'returned' && state.registrationReached !== true) return false;
+        if (state.ackHeld === false) return (state.ackState === 'empty' || state.ackState === 'return_lost' && state.registrationReached === true) &&
+            state.observerAckCandidate === null && state.observerAck === null;
+        if (state.registrationReached !== true || (state.observerState !== 'registering' && state.observerState !== 'returned')) return false;
+        if (state.ackState === 'held') return state.observerAck === null;
+        if (state.ackState === 'unsafe_retained') return state.observerState === 'returned' && state.observerAck === null;
+        return state.ackState === 'verified' && state.observerAck !== null && (typeof state.observerAck === 'object' || typeof state.observerAck === 'function') &&
+            state.observerAck === state.observerAckCandidate;
+    }
+    function joinLiveFieldPost(rawShell: unknown, rawIdentity: unknown, rawPin: unknown, rawSlot: unknown, role: JoinRole, stage: JoinLivePostStage): boolean {
+        if (!joinExecutionOriginLeaf(rawShell, rawIdentity, rawPin, rawSlot, role)) return false;
+        const state: JoinOperationalShell<'run'> | JoinOperationalShell<'cleanup'> = (role === 'run' ? runShellExpected : cleanupShellExpected)!,
+            ownSlot = role === 'run' ? runGeneration : cleanupGeneration;
+        if (ownSlot.claimed !== true || ownSlot.published !== null || !joinLiveTailUnused(state, role) ||
+            !joinLiveAcquisitionPost(state, role) || !joinLiveObservationPost(state, role)) return false;
+        const heldPosition = state.candidateHeld ? 'candidate' : state.resolve !== null ? 'resolve' : state.reject !== null ? 'reject' : state.executorEntryClaim ? 'executor' : 'handlers';
+        if (ownSlot.position === 'checked' ? heldPosition !== 'candidate' || state.candidateSafety !== 'safe_same_work' ||
+            state.observerState !== 'returned' || state.ackState !== 'verified' : ownSlot.position !== heldPosition) return false;
+        if (stage === 'failure_recorded' || stage === 'failed_retained') return ownSlot.phase === 'failed_retained' &&
+            (ownSlot.fault === 'invalid_state' || ownSlot.fault === 'evidence_binding_mismatch' || ownSlot.fault === 'internal_review_error') &&
+            joinValueFaultSite(ownSlot.faultAt) && revoked === true && primary !== null && (stage === 'failure_recorded' ||
+                state.readiness === 'failed_retained' && state.retention === 'unconfirmed');
+        if (ownSlot.fault !== null || ownSlot.faultAt !== null || state.readiness !== 'handlers_ready' || state.retention !== 'held' ||
+            state.pinState !== 'ready' || state.pinFault !== null || state.handlersClaim !== true || state.handlersBusy !== false ||
+            state.handlersState !== 'ready' || state.handlersDetail !== 'complete' || state.handlersFault !== null) return false;
+        if (stage === 'checked_unpublished') return ownSlot.phase === 'checked' && ownSlot.position === 'checked' &&
+            state.constructorClaim === true && state.constructorState === 'returned' && state.executorEntryClaim === true && state.executor === 'normal_exit' &&
+            state.observerClaim === true && state.observerState === 'returned' && state.observerBusy === false && state.ackHeld === true && state.ackState === 'verified';
+        if (ownSlot.phase !== 'building') return false;
+        if (stage === 'registering_before_reach' || stage === 'registering_reached' || stage === 'ack_held' || stage === 'ack_verified') {
+            return state.constructorClaim === true && state.constructorState === 'returned' && state.executorEntryClaim === true && state.executor === 'normal_exit' &&
+                ownSlot.position === 'candidate' && state.observerClaim === true && state.observerState === 'registering' && state.observerBusy === true &&
+                (stage === 'registering_before_reach' ? state.registrationReached === false && state.ackHeld === false : state.registrationReached === true &&
+                    (stage === 'registering_reached' ? state.ackHeld === false : state.ackHeld === true && state.ackState === (stage === 'ack_held' ? 'held' : 'verified')));
+        }
+        if (state.candidateSafety !== 'unchecked' || state.observerClaim !== false) return false;
+        switch (stage) {
+            case 'unused': return state.constructorClaim === false && state.constructorState === 'not_called' && ownSlot.position === 'handlers';
+            case 'claimed_pre_call': return state.constructorClaim === true && state.constructorState === 'not_called' && ownSlot.position === 'handlers';
+            case 'calling_before_entry': return state.constructorClaim === true && state.constructorState === 'calling' && state.executorEntryClaim === false && ownSlot.position === 'handlers';
+            case 'executor_prefix': return state.constructorState === 'calling' && state.executorEntryClaim === true && state.executor === 'running' && ownSlot.position === 'executor';
+            case 'reject_prefix': return role === 'run' && state.constructorState === 'calling' && state.executorEntryClaim === true && state.executor === 'running' && ownSlot.position === 'reject';
+            case 'resolve_prefix': return state.constructorState === 'calling' && state.executorEntryClaim === true && state.executor === 'running' && ownSlot.position === 'resolve';
+            case 'captured_before_return': return state.constructorState === 'calling' && state.executorEntryClaim === true && state.executor === 'normal_exit' && ownSlot.position === 'resolve';
+            case 'returned_candidate': return state.constructorState === 'returned' && state.executorEntryClaim === true && state.executor === 'normal_exit' && ownSlot.position === 'candidate';
+            default: return false;
+        }
+    }
+    // Trusted role-slot data only. Optional shell metadata is deliberately outside this primitive group.
+    function recordJoinExecutionFailure(role: JoinRole, site: JoinFaultSite, reason: JoinGenerationFault): false {
+        if (role !== 'run' && role !== 'cleanup') return false;
+        const own = role === 'run' ? runGeneration : cleanupGeneration;
+        own.faultAt ??= site; own.fault ??= reason;
+        primary ??= reason; revoked = true; own.phase = 'failed_retained';
+        return false;
+    }
+    // Cold, outside constructor/reaction frames: skip malformed metadata without blocking primitive custody.
+    function holdJoinExecutionUnconfirmed(role: JoinRole): false {
+        if (role !== 'run' && role !== 'cleanup') return false;
+        const subject = role === 'run' ? runShellExpected : cleanupShellExpected, own = role === 'run' ? runGeneration : cleanupGeneration;
+        if (!subject || own.phase !== 'failed_retained' || own.fault === null || own.faultAt === null || !revoked || primary === null) return false;
+        try { const meta = jbGet(subject, 'readiness'); if (meta && jbOwn(meta, 'value') && meta.writable === true) subject.readiness = 'failed_retained'; }
+        catch { /* Keep the slot fault and continue the independent metadata hold. */ }
+        try { const meta = jbGet(subject, 'retention'); if (meta && jbOwn(meta, 'value') && meta.writable === true) subject.retention = 'unconfirmed'; }
+        catch { /* No retry, replacement shell, normal copy or success credit. */ }
+        return false;
+    }
+    void joinLiveFieldPost; void recordJoinExecutionFailure; void holdJoinExecutionUnconfirmed;
+    // JR-B-LIVE-END
     function stop(code: Code = 'cancelled', stage: Stage = 'stop') {
         if (sealed) return;
         primary ??= code; upper.stop(primary, stage);
