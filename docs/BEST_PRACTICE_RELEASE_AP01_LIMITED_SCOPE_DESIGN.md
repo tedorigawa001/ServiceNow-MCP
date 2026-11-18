@@ -1,6 +1,6 @@
 # AP01：限定リリースの非提供範囲・未代替保証と将来の回復条件
 
-Version: release-ap01-limited-scope-draft-0.2 / Date: 2026-11-18。
+Version: release-ap01-limited-scope-draft-0.3 / Date: 2026-11-18。
 Status: **限定リリース案を公開方針として採用。AP01の保証低下・旧試験の処遇は未承認で、公開可の判定ではない。** 読取り基準HEADは`76fa545`。今回のユーザー指示を公開方針の決定根拠とし、個別承認の代行や将来の撤去許可へ広げない。
 
 正式発行口閉鎖・全体受付無効・通常経路未切替・C実行入口／body起動閉鎖・Unknown・VM／監視／telemetry調査保留を維持する。LOAD6／LOAD7選択も未承認のまま。今回はMDと親文書の参照整理だけであり、保証低下・旧試験削除／skip／期待値弱化・friend撤去・実装・発行／claim消費・負荷採取・試験再実行・build／pack・実接続・実通信・実機操作・設定変更・版変更・公開・コミット・Pushは行わない。
@@ -89,3 +89,7 @@ AP01が将来個別承認されても、AP02の撤去、AP03の入力／返却�
 ## 7 NS01の個別レビュー（draft-0.2）
 
 [同constructor・core・登録ready世代と偽ready拒否の保証レビューdraft-0.2](BEST_PRACTICE_RELEASE_AP01_NS01_BINDING_GUARANTEE_REVIEW.md)で、NS01の主要6旧caseと隣接8旧caseを、元assertion・Dの候補・未代替の残差・将来回復条件へ対応付けた。SAB-08の最終rejectとNDB-08のrequest／native操作0の差、DS-07のduplicate readyとの非同等性、same_core／same_sourceの診断projectionと私有実参照の違いを整理する。§6は初稿作成時の履歴で、今回の変更は本追記と別紙MDだけ。保証低下・旧試験削除・friend撤去・設定変更・公開は未承認のままで、新しい試験結果・回復完了・公開可の実績は追加しない。
+
+## 8 NS03の個別レビュー（draft-0.3）
+
+[一度限り消費・draft後失効・return／close取消と診断保持の保証レビューdraft-0.1](BEST_PRACTICE_RELEASE_AP01_NS03_CONSUMPTION_REVOCATION_GUARANTEE_REVIEW.md)で、主要12旧caseと診断／cleanupの隣接6旧caseを、旧assertion・注入位置・残差・将来回復条件へ対応付けた。同期consumerの返却と非同期probeの復帰、freeze spyの形状条件と特定post位置、session受領数とnative最終消費数、cleanup／construction診断を分離する。編集は本追記・版更新と別紙MDのみで、NS01の旧レビューとcase分類・実行結果は維持。保証低下・旧試験削除・friend撤去・設定変更・公開は未承認、各閉鎖条件・Unknown・調査保留を維持する。
