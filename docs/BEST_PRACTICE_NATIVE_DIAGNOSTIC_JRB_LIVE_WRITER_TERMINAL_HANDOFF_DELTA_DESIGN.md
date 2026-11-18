@@ -1,7 +1,9 @@
 # JR-B同shellの実行writer・安全観測・固定終端受渡しの差分詳細設計
 
-Version: native-diagnostic-jrb-live-writer-terminal-handoff-draft-0.3 / Date: 2026-11-18。
-Status: §9の同shell実運用型・実field post・原始failure／未確認保持だけを合成依存限定で実装。設計基準HEADは`f7e3889`、限定実装の基準HEADは`dffd871`。値契約の実装commitは`3755cba`。[seed→実行設計draft-0.6](BEST_PRACTICE_NATIVE_DIAGNOSTIC_JRB_SEED_EXECUTION_TRANSITION_DELTA_DESIGN.md)§2〜6・9と、[先行field契約draft-0.7](BEST_PRACTICE_NATIVE_DIAGNOSTIC_JRB_EXECUTION_SEED_CONTRACT_DESIGN.md)EI／EF／EW／ETを、同shellの固定writerと後段責務の受渡しへ具体化する。追加済みのRoleGenerationSlot限定拡張方針は維持する。[固定pin設計](BEST_PRACTICE_NATIVE_DIAGNOSTIC_JRB_RUNTIME_PIN_DELTA_DESIGN.md)の安全な同候補・同P／then前提を置き換えない。
+Version: native-diagnostic-jrb-live-writer-terminal-handoff-draft-0.4 / Date: 2026-11-18。
+Status: §9の同shell実運用型・実field post・原始failure／未確認保持だけを合成依存限定で実装。設計基準HEADは`f7e3889`、限定実装の基準HEADは`dffd871`。値契約の実装commitは`3755cba`。[seed→実行設計draft-0.7](BEST_PRACTICE_NATIVE_DIAGNOSTIC_JRB_SEED_EXECUTION_TRANSITION_DELTA_DESIGN.md)§2〜6・9と、[先行field契約draft-0.7](BEST_PRACTICE_NATIVE_DIAGNOSTIC_JRB_EXECUTION_SEED_CONTRACT_DESIGN.md)EI／EF／EW／ETを、同shellの固定writerと後段責務の受渡しへ具体化する。追加済みのRoleGenerationSlot限定拡張方針は維持する。[固定pin設計](BEST_PRACTICE_NATIVE_DIAGNOSTIC_JRB_RUNTIME_PIN_DELTA_DESIGN.md)の安全な同候補・同P／then前提を置き換えない。
+
+draft-0.4のレビュー修正：レビュー修正の基準HEADは`2ecb117`（修正時のHEADは`2ecb117`）。§10にpre-call受付設計への参照節（2026-11-18追記）を加えた一方、版はdraft-0.3のままだった。版を上げ、参照元のJoinRuntime設計・先行field契約・seed→実行設計の版参照を直した。seed→実行設計への参照もdraft-0.7へ更新した。内容・実装・試験は変更していない。
 
 draft-0.3のレビュー修正：レビュー修正の基準HEADは`f9a8be2`（修正時のHEADは`f9a8be2`）。§9の実field postは、準備field（readiness／retention・pin・handlers）、slotのfault／faultAt／claimed／phase、失敗段階のrevoked／primary／site／phaseとmetadata、取得・観測の関係（settlerの関数型、未保持候補のunsafe、到達前のack保持、registering中の不正ack、normal_exitのsettler組）を検査していた。ところが独立oracleはこれらを1条件ずつ崩す対照を持たず、各条件を外す25変異がsource・compiledの両対照を通過した。受理される行から1条件だけを変える610拒否の対照と、25変異を加えた（§9）。製品コードは変更していない。
 

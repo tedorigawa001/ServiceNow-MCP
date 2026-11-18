@@ -187,8 +187,8 @@ executionSeedUnusedはcanonical shell／identity／pin照合を先に行い、�
 
 ## 11 seedから実行状態への接続差分
 
-[seedから実行状態へのclaim・settler保持・post接続差分詳細設計draft-0.6](BEST_PRACTICE_NATIVE_DIAGNOSTIC_JRB_SEED_EXECUTION_TRANSITION_DELTA_DESIGN.md)で、同objectのunused／claim済み／calling／捕捉／返却／失敗variantとconstructor／entry claimの順序、role別settler保持、段階postを具体化した。同書§9ではreadonlyの8variant・同保持origin leaf・段階別値postだけを限定実装する。実shellのliteral型・未使用checker・14null alias・request／3closureの固定拒否は変更せず、値一致から実行権限を生成しない。constructor／entryの消費・native参照取得・生成／安全観測／固定終端は未接続で、一体接続の条件を維持する。
+[seedから実行状態へのclaim・settler保持・post接続差分詳細設計draft-0.7](BEST_PRACTICE_NATIVE_DIAGNOSTIC_JRB_SEED_EXECUTION_TRANSITION_DELTA_DESIGN.md)で、同objectのunused／claim済み／calling／捕捉／返却／失敗variantとconstructor／entry claimの順序、role別settler保持、段階postを具体化した。同書§9ではreadonlyの8variant・同保持origin leaf・段階別値postだけを限定実装する。実shellのliteral型・未使用checker・14null alias・request／3closureの固定拒否は変更せず、値一致から実行権限を生成しない。constructor／entryの消費・native参照取得・生成／安全観測／固定終端は未接続で、一体接続の条件を維持する。
 
 ## 12 実field writerと安全観測／固定終端の受渡し（2026-11-18追記）
 
-[同shellの実行writer・安全観測・固定終端受渡しの差分詳細設計draft-0.3](BEST_PRACTICE_NATIVE_DIAGNOSTIC_JRB_LIVE_WRITER_TERMINAL_HANDOFF_DELTA_DESIGN.md)で、EI／EFの同object保持、EWの操作別writerとETの非返却claim・固定drainを具体化した。同書§9では同shellへの実運用型view・実field post・原始failure／cold未確認保持だけを限定実装し、取得claimやnative参照を生成するwriterは置かない。call throwと復帰後post失敗、最初のfaultと最後の保持位置、後着private事実とsealed上位診断を混同しない。生成・安全観測・固定終端の一体接続条件、Unknown・全体受付無効・各閉鎖条件は不変とする。
+[同shellの実行writer・安全観測・固定終端受渡しの差分詳細設計draft-0.4](BEST_PRACTICE_NATIVE_DIAGNOSTIC_JRB_LIVE_WRITER_TERMINAL_HANDOFF_DELTA_DESIGN.md)で、EI／EFの同object保持、EWの操作別writerとETの非返却claim・固定drainを具体化した。同書§9では同shellへの実運用型view・実field post・原始failure／cold未確認保持だけを限定実装し、取得claimやnative参照を生成するwriterは置かない。call throwと復帰後post失敗、最初のfaultと最後の保持位置、後着private事実とsealed上位診断を混同しない。生成・安全観測・固定終端の一体接続条件、Unknown・全体受付無効・各閉鎖条件は不変とする。

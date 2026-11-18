@@ -199,6 +199,6 @@ cleanupは同closureのcurrent recordとそのanchor実参照、同binding、元
 
 [実行前内部契約・先行slotの差分詳細設計draft-0.7](BEST_PRACTICE_NATIVE_DIAGNOSTIC_JRB_EXECUTION_SEED_CONTRACT_DESIGN.md)で、同role shellに配置するconstructor／executor・登録／callback・drain／settleの全初期fieldと、保持位置とは別の最初のfault、失敗後writer資格を具体化した。同書§10で初期25field・未使用seed検査・固定拒否だけを実装し、実行は閉鎖したままとする。実Promiseを生成する後続単位では候補観測と固定abort／失敗終端も対にする。新しい書込み先・authority ticket・正常公開・dispatchは作らない。
 
-[seedから実行状態への接続差分詳細設計draft-0.6](BEST_PRACTICE_NATIVE_DIAGNOSTIC_JRB_SEED_EXECUTION_TRANSITION_DELTA_DESIGN.md)で、constructor／entry claim・role別捕捉prefix・段階postと、閉鎖要求を維持したまま許可し得るprivate同期窓を明記した。同書§9で非実行8variant・origin leaf・段階値検査だけを追加し、literal-closed seed・requestと3closureの拒否・既存14本文／4exportを維持する。実生成・安全観測・固定終端を対にする後続単位が整うまで拒否を外さず、private公開・dispatchは行わない。
+[seedから実行状態への接続差分詳細設計draft-0.7](BEST_PRACTICE_NATIVE_DIAGNOSTIC_JRB_SEED_EXECUTION_TRANSITION_DELTA_DESIGN.md)で、constructor／entry claim・role別捕捉prefix・段階postと、閉鎖要求を維持したまま許可し得るprivate同期窓を明記した。同書§9で非実行8variant・origin leaf・段階値検査だけを追加し、literal-closed seed・requestと3closureの拒否・既存14本文／4exportを維持する。実生成・安全観測・固定終端を対にする後続単位が整うまで拒否を外さず、private公開・dispatchは行わない。
 
-[同shellの実行writer・安全観測・固定終端受渡しの差分詳細設計draft-0.3](BEST_PRACTICE_NATIVE_DIAGNOSTIC_JRB_LIVE_WRITER_TERMINAL_HANDOFF_DELTA_DESIGN.md)で、同pendingの実field writerとclaim消費点、生成→安全観測→固定abort／失敗終端の受渡し順、失敗prefixと未確認保持を具体化した。MDだけの設計で、実装・Promise生成・closure呼出し・private公開・dispatchは行わない。
+[同shellの実行writer・安全観測・固定終端受渡しの差分詳細設計draft-0.4](BEST_PRACTICE_NATIVE_DIAGNOSTIC_JRB_LIVE_WRITER_TERMINAL_HANDOFF_DELTA_DESIGN.md)で、同pendingの実field writerとclaim消費点、生成→安全観測→固定abort／失敗終端の受渡し順、失敗prefixと未確認保持を具体化した。MDだけの設計で、実装・Promise生成・closure呼出し・private公開・dispatchは行わない。
