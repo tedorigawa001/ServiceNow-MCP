@@ -1,6 +1,6 @@
 # AP01：限定リリースの非提供範囲・未代替保証と将来の回復条件
 
-Version: release-ap01-limited-scope-draft-0.1 / Date: 2026-11-18。
+Version: release-ap01-limited-scope-draft-0.2 / Date: 2026-11-18。
 Status: **限定リリース案を公開方針として採用。AP01の保証低下・旧試験の処遇は未承認で、公開可の判定ではない。** 読取り基準HEADは`76fa545`。今回のユーザー指示を公開方針の決定根拠とし、個別承認の代行や将来の撤去許可へ広げない。
 
 正式発行口閉鎖・全体受付無効・通常経路未切替・C実行入口／body起動閉鎖・Unknown・VM／監視／telemetry調査保留を維持する。LOAD6／LOAD7選択も未承認のまま。今回はMDと親文書の参照整理だけであり、保証低下・旧試験削除／skip／期待値弱化・friend撤去・実装・発行／claim消費・負荷採取・試験再実行・build／pack・実接続・実通信・実機操作・設定変更・版変更・公開・コミット・Pushは行わない。
@@ -85,3 +85,7 @@ AP01が将来個別承認されても、AP02の撤去、AP03の入力／返却�
 既存のRV06〜11・GT04〜07／AD01〜04・正規case台帳を参照し、公開方針の採用と個別保証低下の未承認を分離した。client／adapterの通常生成と、sessionのsynthetic overload・旧NDのmodule評価時friend取得はsourceの静的読取りで確認しただけである。旧caseの同等性分類・成功数・実行結果は更新していない。
 
 2026-11-18の静的確認：本書と親2文書の計3MDについて、表11・ローカルlink83・本書からの明示case anchor6、KP5群・NS6群とRV06〜11の一対一対応、AP01〜06の未承認欄維持、末尾改行・差分空白を確認した。tracked差分は親2MD、新規は本書1MD、stage0で、製品・試験・設定の変更は0。製品moduleの実行・試験再実行・build／packは行っていない。これは方針・参照の静的整合であり、移行完了・保証回復・撤去済み・公開可の証拠ではない。
+
+## 7 NS01の個別レビュー（draft-0.2）
+
+[同constructor・core・登録ready世代と偽ready拒否の保証レビューdraft-0.1](BEST_PRACTICE_RELEASE_AP01_NS01_BINDING_GUARANTEE_REVIEW.md)で、NS01の主要6旧caseと隣接8旧caseを、元assertion・Dの候補・未代替の残差・将来回復条件へ対応付けた。SAB-08の最終rejectとNDB-08のrequest／native操作0の差、DS-07のduplicate readyとの非同等性、same_core／same_sourceの診断projectionと私有実参照の違いを整理する。§6は初稿作成時の履歴で、今回の変更は本追記と別紙MDだけ。保証低下・旧試験削除・friend撤去・設定変更・公開は未承認のままで、新しい試験結果・回復完了・公開可の実績は追加しない。
