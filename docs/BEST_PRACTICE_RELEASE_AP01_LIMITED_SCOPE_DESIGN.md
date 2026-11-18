@@ -1,6 +1,6 @@
 # AP01：限定リリースの非提供範囲・未代替保証と将来の回復条件
 
-Version: release-ap01-limited-scope-draft-0.12 / Date: 2026-11-19。
+Version: release-ap01-limited-scope-draft-0.13 / Date: 2026-11-19。
 Status: **限定リリース案を公開方針として採用。AP01の保証低下・旧試験の処遇は未承認で、公開可の判定ではない。** 読取り基準HEADは`76fa545`。今回のユーザー指示を公開方針の決定根拠とし、個別承認の代行や将来の撤去許可へ広げない。
 
 正式発行口閉鎖・全体受付無効・通常経路未切替・C実行入口／body起動閉鎖・Unknown・VM／監視／telemetry調査保留を維持する。LOAD6／LOAD7選択も未承認のまま。今回はMDと親文書の参照整理だけであり、保証低下・旧試験削除／skip／期待値弱化・friend撤去・実装・発行／claim消費・負荷採取・試験再実行・build／pack・実接続・実通信・実機操作・設定変更・版変更・公開・コミット・Pushは行わない。
@@ -113,3 +113,7 @@ AP01が将来個別承認されても、AP02の撤去、AP03の入力／返却�
 ## 13 個別承認用の残差台帳（draft-0.8）
 
 [未レビュー／重複・通常維持・個別残差台帳draft-0.5](BEST_PRACTICE_RELEASE_AP01_INDIVIDUAL_APPROVAL_RESIDUAL_LEDGER.md)の初稿で、正規228行と6レビューの延べ123行・重複除外119旧caseを文書上で照合した。閉鎖lane候補158行の専用行なし44、入口7行の専用行なし3、通常維持SP25、別gateのUN62を分離し、全caseレビュー完了・移行率にはしない。draft-0.2でSA-02〜04を追加専用行に個別照合し、その時点の文書対応122・閉鎖lane残未レビュー41を記録した。draft-0.3でSA-06〜08のff／完全親のforeign sys_id／余剰scriptを追加し、6レビュー基準は変えず追加6・その時点の文書対応125・閉鎖lane残未レビュー38を記録した。元3variantの直接assertはinvalid_response拒否と別freshのcleanup=closedで、元失敗runのcleanup完了・診断保持・status操作0を実測した扱いにはしない。拒否位置の静的根拠と、別Dの会計／非露出assert・既存compiled fixtureの未収録variantを分ける。draft-0.4でSA-09〜14のprofile値／余剰field拒否6variantを追加し、追加12・現文書対応131・閉鎖lane残未レビュー32を別集計する。直接assertはinvalid_inputのrejectだけで、friend呼出し前という拒否位置は静的根拠として分け、HTTP到着後のnative分類やDの余剰field／live session拒否と同等にしない。module評価時のfriend取得・保持は別段階で未撤去のままである。draft-0.5でSA-15〜24（fixed-200 guard、親bytes copy、status delay中／事前の取消、bytes／request上限、元floor、低減deadline）を追加し、追加22・現文書対応141・閉鎖lane残未レビュー22を別集計する。直接assertはcode・timer0等に限られ、停止位置・dispatch数・予約数は静的根拠として分け、Dの会計／予約peakの強いassertを元の保証に加算しない。以前の403/404 no_body返値5項目・実prototype4method非再入、ff／foreign／余剰scriptのレビューも保持。重複4旧case・KP01〜05・処遇未選択／未承認は維持。保証低下・旧試験削除・friend撤去・設定変更・公開は未承認、各閉鎖条件・Unknown・調査保留を維持し、編集はMDだけで実装・Pushは行わない。
+
+## 14 AP02／AP03の撤去・互換性の承認材料（draft-0.13）
+
+[friend閉包の撤去範囲・通常経路維持と入力／返却互換性draft-0.1](BEST_PRACTICE_RELEASE_AP02_AP03_REMOVAL_COMPATIBILITY_DESIGN.md)で、取得関数だけでなくslot／登録／callback／synthetic実行／artifactまでの候補を分離した。通常source／Permit・既存fetch・省略時compositionの同期summary／C=0／固定closeは維持する。syntheticの正常Promiseから同期invalid_inputへの候補変更、own descriptorの存在判定、型／deep importの破壊、JS第3引数を型削除だけで拒否できない点を個別判断へ渡す。継承／Proxy optionsと第3引数の詳細仕様は未選択で、AP02／03は未承認。入口7行と別索引FR6、閉鎖lane未レビュー22行／入口未照合3行／別gate UN62を同じ保証免除にまとめず、AP01／04／05とB-03の責務を維持する。今回の変更は本追記・版更新と親レビュー参照・別紙MDだけ。実装・旧試験変更・撤去・設定変更・公開・Pushは行わない。

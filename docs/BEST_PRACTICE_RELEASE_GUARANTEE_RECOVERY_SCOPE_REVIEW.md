@@ -1,6 +1,6 @@
 # リリース準備：未代替保証の回復・非提供範囲・互換変更レビュー案
 
-Version: release-guarantee-recovery-scope-review-draft-0.2 / Date: 2026-11-18。
+Version: release-guarantee-recovery-scope-review-draft-0.3 / Date: 2026-11-19。
 Status: **限定リリースの公開方針だけ採用。AP01の個別保証低下・非提供範囲の詳細審査、互換変更・撤去・公開は未承認。** 旧試験・期待値、通常経路未切替、正式発行口閉鎖、C実行入口／body起動閉鎖、全体受付無効、Unknown、VM／監視／telemetry調査保留を維持する。LOAD6／LOAD7の選択も未承認。実装・試験変更・発行・claim消費・負荷採取・試験再実行・実process対照・実接続・実通信・実機操作・設定変更・コミット・公開・Pushは行わない。
 
 ## 1 今回の判断対象と推奨
@@ -79,6 +79,8 @@ Status: **限定リリースの公開方針だけ採用。AP01の個別保証低
 | AP06 | package公開版・互換性の扱い・最終検証／公開審査 | 既存versionや公開済みAPIの利用実態だけで破壊的変更の許否を決めない。今回npm registry・利用者調査・CIの実行状態は確認しておらず、SemVer区分・次版番号・公開可否は未決定 |
 
 本書のAPは承認依頼の材料であり、チェック済み決定ではない。AIの推奨だけでcoverage低下・公開範囲・互換変更を承認しない。通常経路のRV01〜05と配布のRV14を保留したまま「既存機能だけなら公開可」と判定しない。
+
+[AP02／AP03の撤去範囲・通常経路維持と入力／返却互換性draft-0.1](BEST_PRACTICE_RELEASE_AP02_AP03_REMOVAL_COMPATIBILITY_DESIGN.md)に、2取得口とslot／登録／callback／synthetic branchの候補閉包、維持する省略時summaryと通常Permit、own keyの拒否・同期throw／Promise拒否・型／deep importの差を具体化した。継承／Proxy optionsとJS source第3引数の扱いは未選択で、AP01の残差審査・AP04／05・B-03を代替しない。AP01〜06のチェック欄は未承認のまま、撤去・互換変更・旧試験切替・設定変更・公開は開始しない。
 
 ## 6 次の着手順と停止条件
 
