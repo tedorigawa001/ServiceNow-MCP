@@ -147,6 +147,10 @@ export const precallMutants=[
   ['descriptor borrow not retired','d = undefined;','void d;'],
   ['busy not released','runPrecallBusy = false; else cleanupPrecallBusy = false','void runPrecallBusy; else cleanupPrecallBusy = false'],
   ['false acceptance','return reflectJoinPrecallFailure(role)','return true'],
+  ['claimed phase refused',"d.value !== 'claimed_unheld' &&",''],['checked phase refused',"d.value !== 'checked' && ",''],
+  ['failed phase refused'," && d.value !== 'failed_retained')",')'],['prior invalid fault refused',"d.value !== 'invalid_state' &&",''],
+  ['prior mismatch fault refused',"d.value !== 'evidence_binding_mismatch' && ",''],['prior internal fault refused'," && d.value !== 'internal_review_error')",')'],
+  ['null held shell accepted','!heldShell || rawShell','rawShell'],
 ];
 export function verifyPrecallMutant(js,state,index){
   const [name,from,to,count=1]=precallMutants[index],block=between(js,begin,end);
@@ -156,7 +160,8 @@ export function verifyPrecallMutant(js,state,index){
   assert.throws(()=>{
     auditPrecall(changed);verifyPrecallInitial(changed,state);verifyPrecallOnce(changed,state);verifyPrecallSlots(changed,state);
     verifyPrecallOrigins(changed,state);verifyPrecallReentry(changed,state);verifyPrecallMetadata(changed,state);
-  },undefined,name+' escaped');
+    verifyPrecallSlotDomains(changed,state);verifyPrecallCustody(changed,state);
+  },assert.AssertionError,name+' escaped');
 }
 export function verifyPrecallOrigins(js,state){
   const create=derivePrecall(js,state);let cases=0,hooks=0;
@@ -225,6 +230,26 @@ export function verifyPrecallCustody(js,state){
   const a=create(),before=JSON.stringify(a.flags());assert.equal(a.request('foreign'),false);assert.equal(JSON.stringify(a.flags()),before);
   assert.equal(a.diagnostic('run').attempted,false);assert.equal(a.diagnostic('cleanup').attempted,false);cases++;
   return {cases,hooks};
+}
+// Each accepted slot phase and prior fault must still reflect the refusal; a null held shell stays an owner mismatch.
+export function verifyPrecallSlotDomains(js,state){
+  const create=derivePrecall(js,state);let cases=0;
+  for(const role of ['run','cleanup']){
+    for(const phase of ['claimed_unheld','checked','failed_retained']){
+      const a=create();assert(a.prepare(role));const [s,,,slot]=a.args(role);slot.phase=phase;assert.equal(a.request(role),false);
+      assert.equal(slot.fault,'invalid_state',role+' '+phase);assert.equal(slot.faultAt,'constructor_pre');assert.equal(slot.phase,'failed_retained');
+      assert.equal(slot.pending,s);assert.equal(s.retention,'unconfirmed');cases++;
+    }
+    for(const fault of ['invalid_state','evidence_binding_mismatch','internal_review_error']){
+      const a=create();assert(a.prepare(role));const [s,,,slot]=a.args(role);slot.fault=fault;slot.faultAt='executor_exit';assert.equal(a.request(role),false);
+      assert.equal(slot.fault,fault,role+' '+fault);assert.equal(slot.faultAt,'executor_exit');assert.equal(slot.phase,'failed_retained');
+      assert.equal(s.readiness,'failed_retained');assert.equal(s.retention,'unconfirmed');cases++;
+    }
+    const a=create();assert(a.prepare(role));const [s,identity,pin,slot]=a.args(role);a.dropShell(role);
+    assert.equal(a.request(role,null,identity,pin,slot),false);
+    assert.deepEqual({...a.diagnostic(role)},{attempted:true,busy:false,check:'owner',code:'evidence_binding_mismatch'});
+    assert.equal(slot.fault,'evidence_binding_mismatch');assert.equal(slot.pending,s);cases++;
+  }return {cases};
 }
 export function verifyPrecallAuditNegatives(js){
   const block=between(js,begin,end);let rejected=0;

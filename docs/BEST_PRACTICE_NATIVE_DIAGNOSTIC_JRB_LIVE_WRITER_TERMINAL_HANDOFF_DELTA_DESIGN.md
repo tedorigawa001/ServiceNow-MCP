@@ -163,4 +163,4 @@ holdJoinExecutionUnconfirmedは原始failureが残っている場合だけ、con
 
 ## 10 pre-call受付・aliasと不足時call 0（2026-11-18追記）
 
-[pre-call受付・write-once aliasとconstructor call 0停止の差分詳細設計draft-0.2](BEST_PRACTICE_NATIVE_DIAGNOSTIC_JRB_PRECALL_ADMISSION_ALIAS_DELTA_DESIGN.md)で、同ownerと全fieldのown writable data受付、run／cleanup別write許容、14aliasのproducerと一度限り保持、停止／live pinの最終確認を具体化した。同書§9では先行8scalar・一度限り固定拒否と、最小slot3fieldの確認後だけ既存failure／cold保持へ反映する継続を合成依存限定で実装した。pre-call入口の製品callerは0、全field受付・alias供給・取得claim・生成・観測・終端は未接続である。slotが不適格ならlexical拒否と同期停止だけを保持し、既存postを生成資格へ転用しない。
+[pre-call受付・write-once aliasとconstructor call 0停止の差分詳細設計draft-0.3](BEST_PRACTICE_NATIVE_DIAGNOSTIC_JRB_PRECALL_ADMISSION_ALIAS_DELTA_DESIGN.md)で、同ownerと全fieldのown writable data受付、run／cleanup別write許容、14aliasのproducerと一度限り保持、停止／live pinの最終確認を具体化した。同書§9では先行8scalar・一度限り固定拒否と、最小slot3fieldの確認後だけ既存failure／cold保持へ反映する継続を合成依存限定で実装した。pre-call入口の製品callerは0、全field受付・alias供給・取得claim・生成・観測・終端は未接続である。slotが不適格ならlexical拒否と同期停止だけを保持し、既存postを生成資格へ転用しない。

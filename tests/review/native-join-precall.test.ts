@@ -4,7 +4,7 @@ import ts from 'typescript';
 import {fileURLToPath} from 'node:url';
 import {createNativeDiagnosticState} from '../../src/review/abort-scope-evidence-native-diagnostic-state.js';
 import {verifyPrecallInitial,verifyPrecallOnce,verifyPrecallSlots,verifyPrecallOrigins,verifyPrecallReentry,verifyPrecallMetadata,
-  auditPrecall,precallMutants,verifyPrecallMutant,verifyPrecallCustody,verifyPrecallAuditNegatives,end} from './fixtures/native-join-precall-model.mjs';
+  auditPrecall,precallMutants,verifyPrecallMutant,verifyPrecallCustody,verifyPrecallAuditNegatives,verifyPrecallSlotDomains,end} from './fixtures/native-join-precall-model.mjs';
 
 const source=()=>readFileSync(new URL('../../src/review/abort-scope-evidence-native-diagnostic.ts',import.meta.url),'utf8');
 let js:string|undefined;
@@ -33,6 +33,9 @@ it('has eight prior primitive scalars, three minimal descriptor probes, no opera
 });
 it('preserves prior faults and sealed upper custody while all field acquisition and operational claims remain disconnected',()=>{
   expect(verifyPrecallCustody(emitted(),createNativeDiagnosticState)).toEqual({cases:135,hooks:0});
+});
+it('reflects the refusal from every accepted slot phase and prior fault, and keeps a null held shell an owner mismatch',()=>{
+  expect(verifyPrecallSlotDomains(emitted(),createNativeDiagnosticState)).toEqual({cases:14});
 });
 it.each(precallMutants.map((m:unknown[],i:number)=>[m[0],i]))('detects %s mutation without enabling constructor or alias supply',(_name,i)=>{
   verifyPrecallMutant(emitted(),createNativeDiagnosticState,i as number);

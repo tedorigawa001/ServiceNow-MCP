@@ -1,7 +1,9 @@
 # JR-B pre-call受付・write-once aliasとconstructor call 0停止の差分詳細設計
 
-Version: native-diagnostic-jrb-precall-admission-alias-draft-0.2 / Date: 2026-11-18。
+Version: native-diagnostic-jrb-precall-admission-alias-draft-0.3 / Date: 2026-11-18。
 Status: §9の先行診断・一度限り受付・固定拒否・安全なfailure反映だけを合成依存限定で実装。限定実装の基準HEADは`2ecb117`。draft-0.1の実装照合基準は`f9a8be2`、補強試験・参照更新は別コミット`681bdd4`で保持した。[実writer／終端受渡し設計](BEST_PRACTICE_NATIVE_DIAGNOSTIC_JRB_LIVE_WRITER_TERMINAL_HANDOFF_DELTA_DESIGN.md)WH01・WC02・§9と、[seed→実行設計](BEST_PRACTICE_NATIVE_DIAGNOSTIC_JRB_SEED_EXECUTION_TRANSITION_DELTA_DESIGN.md)CS01〜04／PP01〜03への差分である。[固定pin設計](BEST_PRACTICE_NATIVE_DIAGNOSTIC_JRB_RUNTIME_PIN_DELTA_DESIGN.md)の管理された同realm・同P／then前提と、[先行field契約](BEST_PRACTICE_NATIVE_DIAGNOSTIC_JRB_EXECUTION_SEED_CONTRACT_DESIGN.md)EF／EW／ETの一度限り試行・保持責務は変更しない。
+
+draft-0.3のレビュー修正：レビュー修正の基準HEADは`08e646a`（修正時のHEADは`08e646a`）。§9の反映は、slotのphaseがempty／claimed_unheld／building／checked／failed_retained、先行faultがnullまたは3つの固定codeのとき既存failureへ渡し、期待shellがnullならowner拒否とする。ところが独立oracleは、phaseがbuilding以外、または先行faultを持つbuildingのslotからの拒否と、期待shell・rawがともにnullの場合を試していなかった。phaseの許容値3つ・先行faultの3つ・null shellの判定を外す7変異がsource・compiledの両対照を通過した。各値から拒否を反映する14対照と7変異を加え、変異の検出をAssertionErrorに限定し、保持135対照も変異の判定へ含めた（§9）。製品コードは変更していない。
 
 正式発行口／新LM03／C実行入口／body起動閉鎖、全体受付無効、通常経路未切替、Unknown、VM／監視／telemetry調査保留、LOAD6／LOAD7選択・AP01〜06未承認を維持する。draft-0.1はMDだけで作成した。draft-0.2の限定実装・合成検証以外は進めず、全field受付・alias供給・Promise生成・closure呼出し・観測／終端・private公開・dispatch・実接続・実通信・実機操作・設定変更・stage・コミット・Pushは行わない。
 
@@ -168,4 +170,4 @@ reflectJoinPrecallFailureはcanonical slotの非Proxy確認後、faultAt→fault
 
 この閉鎖単位のdescriptor上界は初回3＋cold最大2＝5回、再入／二度目0回。一時descriptorは逐次扱い、coldへ持ち越さない。§7のrun138／cleanup143等は全field受付を含む将来上界であり、今回の実装coverageではない。全fieldのgetterを個別に変えた対照も固定拒否を保つが、それらを検査して合格させた証拠にはしない。停止／live pin・元期限の資格はまだ判定せず、生成call 0を維持する。
 
-[source試験](../tests/review/native-join-precall.test.ts)、[独立対照／strict scratch](../tests/review/fixtures/native-join-precall-model.mjs)、[固定dist検査](../tests/review/fixtures/compiled-native-join-precall.mjs)、[検証記録](E2E_BEST_PRACTICE_NATIVE_JOIN_PRECALL_2026-11-18.md)を追加する。全field受付・alias writer・Promise／観測／固定終端は未実装・未接続で、PS診断から成功ticketや公開診断への昇格口は作らない。不足証拠・実backing容量・完全解放はUnknownのままである。
+[source試験](../tests/review/native-join-precall.test.ts)、[独立対照／strict scratch](../tests/review/fixtures/native-join-precall-model.mjs)、[固定dist検査](../tests/review/fixtures/compiled-native-join-precall.mjs)、[検証記録](E2E_BEST_PRACTICE_NATIVE_JOIN_PRECALL_2026-11-18.md)を追加する。draft-0.3のレビュー修正で、許容するphase／先行faultの各値とnull shellのowner拒否を確かめる14対照と、構文正常変異7件（計28件）を加えた。全field受付・alias writer・Promise／観測／固定終端は未実装・未接続で、PS診断から成功ticketや公開診断への昇格口は作らない。不足証拠・実backing容量・完全解放はUnknownのままである。

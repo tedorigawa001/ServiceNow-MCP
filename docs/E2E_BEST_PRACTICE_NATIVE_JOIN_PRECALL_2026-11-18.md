@@ -62,3 +62,16 @@ strict scratchは固定source／distから閉鎖区間を抽出し、試験コ�
 - offline／ignore-scriptsの梱包dry-runは441file・配布JS109fileで、tests／private evidence root／新継続名の混入0。操作専用の一時cacheは削除した。
 
 検証後の変更は本節と、JoinRuntime設計の古い「MDだけ」を限定実装の現状へ訂正した1段落だけで、ソース・試験・依存・設定は検証済み内容から変えていない。このMD差分もsnapshotへ反映して、link・表・差分空白と全対象の内容一致を確認する。各閉鎖条件・Unknown・調査保留を維持し、Pushは行わない。
+
+## レビュー修正 2026年11月18日
+
+レビュー基準と修正時のHEADはどちらも`08e646a`。設計は[pre-call設計draft-0.3](BEST_PRACTICE_NATIVE_DIAGNOSTIC_JRB_PRECALL_ADMISSION_ALIAS_DELTA_DESIGN.md)§9。製品コードは変更していない。
+
+| 指摘 | 原因と対応 |
+|---|---|
+| 許容値とnull shellの見逃し7件 | 一時変異25件のうち12件が全oracleを通過し、7件は非等価だった。phaseの許容値claimed_unheld／checked／failed_retainedを外すとfaultが記録されず、先行faultの許容値invalid_state／evidence_binding_mismatch／internal_review_errorを外すとphaseがbuildingのまま残り、期待shellのnull判定を外すとowner拒否がcompositionになる。どの差も既存対照に現れなかった。各値から拒否を反映する14対照（2role×7）と7変異を加えた |
+| 変異判定の幅 | 変異試験が任意の例外を検出扱いにしていた。判定をAssertionErrorに限り、保持135対照と新しい14対照も変異の判定に含めた |
+
+先行REDとして、追加した7変異は旧oracle（保持対照を含めても）で7件とも通過した。新oracleでは28変異すべてがAssertionErrorで検出され、変異1件あたり1.5秒未満だった。
+
+等価として扱った5変異：canonical slotとshellのProxy確認、shellのnull確認、反映前のcode null確認、recoveryの照合。いずれもlexicalな自owner参照か、直前の固定拒否で値が決まるため、この閉鎖単位では結果が変わらない。全field受付・alias供給・Promise生成・観測・終端処理・private公開・dispatchは未接続のままで、各閉鎖条件・Unknown・調査保留を維持する。
