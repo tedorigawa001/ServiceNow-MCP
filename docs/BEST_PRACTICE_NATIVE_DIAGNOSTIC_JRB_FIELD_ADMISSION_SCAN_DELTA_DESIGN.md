@@ -1,7 +1,9 @@
 # JR-B固定検査台帳・有限失敗IDと拒否確定前scanの差分詳細設計
 
-Version: native-diagnostic-jrb-field-admission-scan-draft-0.2 / Date: 2026-11-18。
+Version: native-diagnostic-jrb-field-admission-scan-draft-0.3 / Date: 2026-11-18。
 Status: §9の有限ID・固定schema・先行scalar／guardの閉鎖値契約だけを合成依存限定で実装。値契約の実装基準HEADは`a81534a`、draft-0.1の設計基準HEADは`08e646a`。[pre-call設計](BEST_PRACTICE_NATIVE_DIAGNOSTIC_JRB_PRECALL_ADMISSION_ALIAS_DELTA_DESIGN.md)PS／PF／PR／PCと§9、[先行拒否の検証記録](E2E_BEST_PRACTICE_NATIVE_JOIN_PRECALL_2026-11-18.md)への差分である。8scalar・最小3fieldのfailure反映や今回のschema照会を、全field受付が実装済みであるとは扱わない。
+
+draft-0.3のレビュー修正：レビュー修正の基準HEADは`cd01d73`（修正時のHEADは`cd01d73`）。同コミットで追加された後続の入場・tail設計を参照する文書がなかったため、§8の後続単位の段落から[入場・tail設計](BEST_PRACTICE_NATIVE_DIAGNOSTIC_JRB_SCAN_ENTRY_TAIL_DELTA_DESIGN.md)への逆参照を追加した。§9の閉鎖値契約・実装・試験は変更していない。
 
 draft-0.1では、別作業の補強試験・親文書更新8fileを別コミット`d147d18`のまま保持して本書だけを追加した。親設計のalias数・ownKeys容量に関する補足は§4・§7のまま維持する。draft-0.2では§9に明記した限定実装・検証とCHANGELOGを更新し、既存の先行拒否試験・実装を変更しない。
 
@@ -165,7 +167,7 @@ effect予算303／319とtail比較予約256を、取得前に同ownerの固定�
 | AT07 | 7alias／readonly借用・同値copy／peer混入 | 同roleだけを検査。mutable holderから期待値再発行0、借用元不足ならscan_context拒否、失敗後に補完しない |
 | AT08 | 全scan通過・各gate不足・source／fixed dist／semantic／配布 | 末尾composition拒否、literal false、constructor／closure／新alias取得／public caller0。変異はdrift・構文確認を期待失敗の外で検査 |
 
-最初の実装単位は、有限ID・固定node schemaと先行scalar／guardの閉鎖値契約までに分けられる。次に固定操作のscanと現行tailの一度限り接続を合成依存で検証する。停止／live pin・元期限との正式資格、write-once producer、安全観測／固定終端の一体接続は別単位で、今回の設計承認から実装・試験実行・発行を推定しない。
+最初の実装単位は、有限ID・固定node schemaと先行scalar／guardの閉鎖値契約までに分けられる。次に固定操作のscanと現行tailの一度限り接続を合成依存で検証する。その前段となる同owner入場・entry捕捉・対象固定tail・外側退出の形状と失敗prefixは[入場・tail設計](BEST_PRACTICE_NATIVE_DIAGNOSTIC_JRB_SCAN_ENTRY_TAIL_DELTA_DESIGN.md)で定め、固定検査へは進めずcomposition拒否で終える。停止／live pin・元期限との正式資格、write-once producer、安全観測／固定終端の一体接続は別単位で、今回の設計承認から実装・試験実行・発行を推定しない。
 
 draft-0.1の確認は文書の静的整合に限った。draft-0.2の値契約検査も実Promise・native安全性・実会計・実backing容量の証拠へ昇格させず、全体受付無効・Unknown・調査保留を維持する。
 

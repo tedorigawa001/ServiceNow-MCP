@@ -1,7 +1,9 @@
 # JR-B同ownerの一度限りscan入場・entry捕捉と固定failure tail／退出の差分詳細設計
 
-Version: native-diagnostic-jrb-scan-entry-tail-draft-0.1 / Date: 2026-11-18。
-Status: MDだけの差分設計。基準HEADは`93383af`。閉鎖値契約の実装は`47cb9ec`。[固定台帳・scan設計](BEST_PRACTICE_NATIVE_DIAGNOSTIC_JRB_FIELD_ADMISSION_SCAN_DELTA_DESIGN.md)SQ01〜03／07〜08・§9、[先行拒否設計](BEST_PRACTICE_NATIVE_DIAGNOSTIC_JRB_PRECALL_ADMISSION_ALIAS_DELTA_DESIGN.md)PS／PC、[閉鎖値契約の検証記録](E2E_BEST_PRACTICE_NATIVE_JOIN_SCAN_VALUES_2026-11-18.md)への差分である。今回は本書だけを追加し、既存ソース・試験・CHANGELOG・検証記録は変更しない。
+Version: native-diagnostic-jrb-scan-entry-tail-draft-0.2 / Date: 2026-11-18。
+Status: MDだけの差分設計。基準HEADは`93383af`。閉鎖値契約の実装は`47cb9ec`。[固定台帳・scan設計](BEST_PRACTICE_NATIVE_DIAGNOSTIC_JRB_FIELD_ADMISSION_SCAN_DELTA_DESIGN.md)SQ01〜03／07〜08・§9、[先行拒否設計](BEST_PRACTICE_NATIVE_DIAGNOSTIC_JRB_PRECALL_ADMISSION_ALIAS_DELTA_DESIGN.md)PS／PC、[閉鎖値契約の検証記録](E2E_BEST_PRACTICE_NATIVE_JOIN_SCAN_VALUES_2026-11-18.md)への差分である。draft-0.1では本書だけを追加し、既存ソース・試験・CHANGELOG・検証記録は変更しなかった。
+
+draft-0.2のレビュー修正：レビュー修正の基準HEADは`cd01d73`（修正時のHEADは`cd01d73`）。CT02で捕捉するseedに照合先がなかったため、EN07・TL02で同roleのlexical seed（run＝controlRun、cleanup＝controlDuty）を捕捉値と照合する位置を明記した。raw seedは引き続き受けない。あわせて、scan設計をdraft-0.3へ上げて§8から本書への逆参照を追加し、先行拒否設計§10の版参照をdraft-0.3へ揃えた。製品ソース・試験・CHANGELOG・検証記録は変更していない。
 
 正式発行口／新LM03／C実行入口／body起動閉鎖、全体受付無効、通常経路未切替、Unknown、VM／監視／telemetry調査保留、LOAD6／LOAD7選択・AP01〜06未承認を維持する。実装・製品moduleのimport／実行・試験再実行・build／pack・scan実行・alias供給・Promise生成・closure呼出し・private公開・dispatch・実接続・実通信・実機操作・設定変更・stage・コミット・Pushは行わない。
 
@@ -43,7 +45,7 @@ private入口は同root・同roleに固定し、外部設定やcallback／操作
 | EN04 | CT02の期待参照→CT03の5値を同frameへ捕捉 | current.anchorやidentity.contextを直接読まない。捕捉自体は同creatorのlexical値だけ。未成立ownerのbootstrap限界はUnknown |
 | EN05 | 外側の退出権をtrue、phase=reservedへ先行設定 | 永続writerより前に退出責務を持つ。ここ以降のcatch／finallyで履歴を返却しない |
 | EN06 | own attempted=true→own busy=true→interrupted=false→scanOwner=role | 同期原始群。最後のscanOwner書込みを共有入場の線形化点とする。途中にcallback／await／反射／sampleを挟まない |
-| EN07 | phase=owned→raw参照を捕捉済み期待参照と照合 | root／slot／shell／identity／pinのforeign・copy・Proxyに触れず拒否。shell／identity／pinのnull期待値は必ずowner拒否 |
+| EN07 | phase=owned→raw参照を捕捉済み期待参照と照合 | root／slot／shell／identity／pinのforeign・copy・Proxyに触れず拒否。shell／identity／pinのnull期待値は必ずowner拒否。raw seedは受けず、捕捉seedと同roleのlexical seedの同一性だけを確認 |
 | EN08 | 同entryのreadonly guardを確認 | guardへ渡すのは捕捉済み5値だけ。現在値を再採取してpostを成立させない。不整合なら最初の拒否を保持 |
 | EN09 | 固定検査未接続としてcomposition拒否 | 現単位の終点。scan probe／alias取得／constructor claimは0のまま対象固定tailへ最大1回移る |
 | EN10 | 外側finallyで§7の退出 | local退出権と実際の共有ownerを照合し、共有状態を解放する。attempted・理由・計数は保持 |
@@ -89,7 +91,7 @@ innerは外側のbusy／owner／tail claim・entry facts・計数を更新せず
 | ID | 順序・条件 | 許可する操作・拒否時保持 |
 |---|---|---|
 | TL01 | 最初の完全pair確定→phase=refusing | active用のcheck=null guardを再利用しない。先行理由があるため成立しない正常guardを、例外で迂回しない |
-| TL02 | frame退出権・実共有owner・同role claim／busy・捕捉参照の継続を照合 | root／recovery／slot／shell／identity／pinの期待参照がentryから変わればnative操作前に止め、元refと未確認を保持。拒否によるprimary／revoked変更は正常guardとの差として許す |
+| TL02 | frame退出権・実共有owner・同role claim／busy・捕捉参照の継続を照合 | root／recovery／seed／slot／shell／identity／pinの期待参照がentryから変わればnative操作前に止め、元refと未確認を保持。拒否によるprimary／revoked変更は正常guardとの差として許す |
 | TL03 | tail claim=true→phase=tail | native操作より前の唯一の消費点。throw・再入・部分結果・catchから二度目を起動しない |
 | TL04 | 捕捉slotの非Proxy確認→捕捉subjectの非Proxy可否を固定 | subject不在／不適格はcold不可であり、適格slotへのprimitive反映まで一律放棄する理由にはしない。subject選び直し0 |
 | TL05 | faultAt→fault→phaseの3descriptorを順次再取得 | own data／writableと既存の有限fault／phase値域を確認。通常scanの古いwritable結果や正常seed値を再利用しない |
@@ -143,3 +145,5 @@ ownerが別role等へ不正に変わった場合、outerはそのownerやpeer bu
 ## 9 今回の静的確認
 
 2026-11-18：基準HEAD `93383af`のsourceと照合し、現行失敗ID判定192値・legacy拒否型5値、本文47設計ID・表6・相対link4の整合を確認した。入場制御17 local値・root14scalar・tail最大12 native操作と192値域の内訳の算術、表の列数・末尾改行・空白も確認した。製品ソースは基準HEADと同一で、tracked差分0・stage0、新規文書は本書1件だけだった。これは文書の静的確認であり、合成試験・compiled検査・build／packは実施していない。実装・scan・発行・コミット・Pushは行っていない。
+
+draft-0.2のレビュー修正の静的確認（2026-11-18）：基準HEAD `cd01d73`のsourceで、seed期待参照がconst lexicalのcontrolRun／controlDutyであり、root・slot・joinRecoveryもconstであることを確認した。本書の設計ID47・表6・相対link4、scan設計の逆参照と先行拒否設計の版参照を確認した。製品ソース・試験・CHANGELOG・検証記録は変更していない。

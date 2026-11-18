@@ -178,4 +178,4 @@ reflectJoinPrecallFailureはcanonical slotの非Proxy確認後、faultAt→fault
 
 ## 10 固定検査台帳・有限失敗IDと拒否確定前scan（2026-11-18追記）
 
-[固定検査台帳・有限失敗IDと拒否確定前scanの差分詳細設計draft-0.2](BEST_PRACTICE_NATIVE_DIAGNOSTIC_JRB_FIELD_ADMISSION_SCAN_DELTA_DESIGN.md)で、§3〜4の全field・参照先検査を19nodeの固定schedule・192個の有限失敗IDへ具体化し、§9の現行拒否より前に置く拒否未確定のscan区間を定めた。共有再入通知と計数の先行scalar、run／cleanupのdescriptor・native操作の予約上界、§7の「14alias」「最大65key」の読み方も同書で補足する。同書§9で有限ID・固定schema・先行6scalar／guardの閉鎖値契約だけを実装した。scanの実行・scalar writer・停止／live pin資格・alias供給・constructor callは接続せず、§9の固定拒否を維持する。
+[固定検査台帳・有限失敗IDと拒否確定前scanの差分詳細設計draft-0.3](BEST_PRACTICE_NATIVE_DIAGNOSTIC_JRB_FIELD_ADMISSION_SCAN_DELTA_DESIGN.md)で、§3〜4の全field・参照先検査を19nodeの固定schedule・192個の有限失敗IDへ具体化し、§9の現行拒否より前に置く拒否未確定のscan区間を定めた。共有再入通知と計数の先行scalar、run／cleanupのdescriptor・native操作の予約上界、§7の「14alias」「最大65key」の読み方も同書で補足する。同書§9で有限ID・固定schema・先行6scalar／guardの閉鎖値契約だけを実装した。scanの実行・scalar writer・停止／live pin資格・alias供給・constructor callは接続せず、§9の固定拒否を維持する。
