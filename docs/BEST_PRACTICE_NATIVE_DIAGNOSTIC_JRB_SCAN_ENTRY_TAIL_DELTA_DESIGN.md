@@ -1,7 +1,9 @@
 # JR-B同ownerの一度限りscan入場・entry捕捉と固定failure tail／退出の差分詳細設計
 
-Version: native-diagnostic-jrb-scan-entry-tail-draft-0.2 / Date: 2026-11-18。
+Version: native-diagnostic-jrb-scan-entry-tail-draft-0.3 / Date: 2026-11-18。
 Status: MDだけの差分設計。基準HEADは`93383af`。閉鎖値契約の実装は`47cb9ec`。[固定台帳・scan設計](BEST_PRACTICE_NATIVE_DIAGNOSTIC_JRB_FIELD_ADMISSION_SCAN_DELTA_DESIGN.md)SQ01〜03／07〜08・§9、[先行拒否設計](BEST_PRACTICE_NATIVE_DIAGNOSTIC_JRB_PRECALL_ADMISSION_ALIAS_DELTA_DESIGN.md)PS／PC、[閉鎖値契約の検証記録](E2E_BEST_PRACTICE_NATIVE_JOIN_SCAN_VALUES_2026-11-18.md)への差分である。draft-0.1では本書だけを追加し、既存ソース・試験・CHANGELOG・検証記録は変更しなかった。
+
+draft-0.3のレビュー修正：レビュー修正の基準HEADは`5099c20`（修正時のHEADは`5099c20`）。root・seed・slot・joinRecoveryはconst lexicalで、entry捕捉値と常に同一参照になるため、TL02・§6本文・AC07のdrift停止をshell／identity／pinの期待参照（let）とrecovery変数だけに限定した。const参照の照合は常に成立する固定の同一性確認として残し、drift検出・合成drift試験の対象とは扱わない。製品ソース・試験・CHANGELOG・検証記録は変更していない。
 
 draft-0.2のレビュー修正：レビュー修正の基準HEADは`cd01d73`（修正時のHEADは`cd01d73`）。CT02で捕捉するseedに照合先がなかったため、EN07・TL02で同roleのlexical seed（run＝controlRun、cleanup＝controlDuty）を捕捉値と照合する位置を明記した。raw seedは引き続き受けない。あわせて、scan設計をdraft-0.3へ上げて§8から本書への逆参照を追加し、先行拒否設計§10の版参照をdraft-0.3へ揃えた。製品ソース・試験・CHANGELOG・検証記録は変更していない。
 
@@ -91,7 +93,7 @@ innerは外側のbusy／owner／tail claim・entry facts・計数を更新せず
 | ID | 順序・条件 | 許可する操作・拒否時保持 |
 |---|---|---|
 | TL01 | 最初の完全pair確定→phase=refusing | active用のcheck=null guardを再利用しない。先行理由があるため成立しない正常guardを、例外で迂回しない |
-| TL02 | frame退出権・実共有owner・同role claim／busy・捕捉参照の継続を照合 | root／recovery／seed／slot／shell／identity／pinの期待参照がentryから変わればnative操作前に止め、元refと未確認を保持。拒否によるprimary／revoked変更は正常guardとの差として許す |
+| TL02 | frame退出権・実共有owner・同role claim／busy・捕捉参照の継続を照合 | shell／identity／pinの期待参照（let）とrecovery変数がentryから変わればnative操作前に止め、元refと未確認を保持。const lexicalのroot／seed／slot／joinRecoveryは捕捉値との同一性を固定確認するだけで、drift検出とは呼ばない。拒否によるprimary／revoked変更は正常guardとの差として許す |
 | TL03 | tail claim=true→phase=tail | native操作より前の唯一の消費点。throw・再入・部分結果・catchから二度目を起動しない |
 | TL04 | 捕捉slotの非Proxy確認→捕捉subjectの非Proxy可否を固定 | subject不在／不適格はcold不可であり、適格slotへのprimitive反映まで一律放棄する理由にはしない。subject選び直し0 |
 | TL05 | faultAt→fault→phaseの3descriptorを順次再取得 | own data／writableと既存の有限fault／phase値域を確認。通常scanの古いwritable結果や正常seed値を再利用しない |
@@ -99,7 +101,7 @@ innerは外側のbusy／owner／tail claim・entry facts・計数を更新せず
 | TL07 | primitive反映済み・対象固定・cold可の分岐だけでreadiness→retention | private継続は捕捉subject／slotとの同一性を先に照合し、対象をroleから再選択しない。各1descriptorとown data／writable guard後のwriteだけ |
 | TL08 | 固定tail終了または途中拒否→phase=exiting | native tailの完了・false復帰をcleanup確認済み／全解放へ昇格させない。catchは最初の理由とclaimを保持するだけ |
 
-tail-specific guardは共有中断=trueを許す。中断後の通常進行を再開するのではなく、既に保持した失敗を固定対象へ限定反映する責務である。innerはRI表により対象slot／metadataを変更できないため、tail内の再入でも第二tailや対象変更は起きない。canonical期待参照が実際に変わる・pairが部分化する等の不整合では残りのtailを止める。
+tail-specific guardは共有中断=trueを許す。中断後の通常進行を再開するのではなく、既に保持した失敗を固定対象へ限定反映する責務である。innerはRI表により対象slot／metadataを変更できないため、tail内の再入でも第二tailや対象変更は起きない。shell／identity／pinの期待参照またはrecovery変数が実際に変わる・pairが部分化する等の不整合では残りのtailを止める。
 
 cold継続はprimitive反映の直後に対象固定で呼び、旧helperの可変globalからのsubject再選択や未確認slot fieldの直接読取りを持ち込まない。metadata異常は各field独立の未確認保持とし、片方の失敗でslot理由を失わず、もう片方を試す順も固定する。native操作がthrowしても外部message／stack／codeを保存しない。
 
@@ -133,7 +135,7 @@ ownerが別role等へ不正に変わった場合、outerはそのownerやpeer bu
 | AC04 | 192ID全てが同じ既存role欄へ保持可能で、旧5値へ縮退しない。最初のID／code／primary・拒否siteを上書きせず、部分pairを補完しない |
 | AC05 | entry5値の各driftと、同値の先行HTTP／失効factsを分離する。値一致を全停止event検出・本番live pinと報告しない |
 | AC06 | tail中の再入・descriptor各位置throw・不適格slot・shell欠落・各metadata異常で、対象選び直し・第二tail・未知helper呼出し0 |
-| AC07 | normal guardとtail-specific guardを分離し、拒否後の中断bitがtrueでも固定失敗保持だけが可能。canonical期待参照driftなら残tailを停止 |
+| AC07 | normal guardとtail-specific guardを分離し、拒否後の中断bitがtrueでも固定失敗保持だけが可能。shell／identity／pinの期待参照またはrecovery変数のdriftなら残tailを停止。const参照の固定確認をdrift対照に数えない |
 | AC08 | 外側finallyの各prefixで、peer owner／busyを解除せず、自role attempted・pair・計数・元refを保持する。解放不明を成功へ補正しない |
 | AC09 | 旧request・準備入口・3closureの非active期待値と新prefixの動作を両方確認。source／fixed dist・semantic・構文正常変異・配布の負の対照で新公開口／fixture共有0 |
 | AC10 | 全entry通過でもcomposition拒否・false復帰、scan probe／alias供給／constructor／公開／dispatch0。native tail費と追加比較費・予約と実行数を区別 |
@@ -147,3 +149,5 @@ ownerが別role等へ不正に変わった場合、outerはそのownerやpeer bu
 2026-11-18：基準HEAD `93383af`のsourceと照合し、現行失敗ID判定192値・legacy拒否型5値、本文47設計ID・表6・相対link4の整合を確認した。入場制御17 local値・root14scalar・tail最大12 native操作と192値域の内訳の算術、表の列数・末尾改行・空白も確認した。製品ソースは基準HEADと同一で、tracked差分0・stage0、新規文書は本書1件だけだった。これは文書の静的確認であり、合成試験・compiled検査・build／packは実施していない。実装・scan・発行・コミット・Pushは行っていない。
 
 draft-0.2のレビュー修正の静的確認（2026-11-18）：基準HEAD `cd01d73`のsourceで、seed期待参照がconst lexicalのcontrolRun／controlDutyであり、root・slot・joinRecoveryもconstであることを確認した。本書の設計ID47・表6・相対link4、scan設計の逆参照と先行拒否設計の版参照を確認した。製品ソース・試験・CHANGELOG・検証記録は変更していない。
+
+draft-0.3のレビュー修正の静的確認（2026-11-18）：基準HEAD `5099c20`のsourceで、shell／identity／pinの期待参照がlet（runShellExpected等）、recoveryがletで、root・seed・slot・joinRecoveryがconstであることを再確認した。本書の設計ID47・表6・相対link4を確認した。製品ソース・試験・CHANGELOG・検証記録は変更していない。
