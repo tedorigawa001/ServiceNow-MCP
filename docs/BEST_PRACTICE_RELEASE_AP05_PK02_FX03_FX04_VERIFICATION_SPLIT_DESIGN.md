@@ -1,7 +1,9 @@
 # AP05：PK02／FX03・04の旧compiled保証とfriend不在・開発補完
 
-Version: release-ap05-pk02-fx03-fx04-verification-split-draft-0.2 / Date: 2026-11-19。
+Version: release-ap05-pk02-fx03-fx04-verification-split-draft-0.3 / Date: 2026-11-19。
 Status: **試験分離の設計案。旧試験の変更・撤去・移行は未承認。** 静的基準HEADは`06e8d34`。[PK02の保証レビュー](BEST_PRACTICE_RELEASE_FRIEND_TEST_GUARANTEE_REVIEW.md)、[B-03のFX03／04](BEST_PRACTICE_RELEASE_B03_COMPILED_MIGRATION_FAULT_DESIGN.md)、[AP02の範囲基準](BEST_PRACTICE_RELEASE_AP02_REMOVAL_SCOPE_BASELINE_DESIGN.md)のS01／02／06／07、K01〜04を接続する。[PK01／FX05](BEST_PRACTICE_RELEASE_AP05_PK01_FX05_VERIFICATION_SPLIT_DESIGN.md)は参照のみ。PK02 scriptに共存するPK03／FX06、旧ND単体UN62・LM03、既存値kernelの梱包／移行判定は対象外。
+
+draft-0.3のレビュー修正：レビュー修正の基準HEADは`ea16456`（修正時のHEADは`ea16456`）。§5の照合範囲「EF3-N01〜07」は、本文が参照しない・照合していないEF3-N05を含む表記だったため、実際の参照どおり「EF3-N01〜04・06・07」に訂正した。件数・各行・承認状態は変更しない。
 
 draft-0.2のレビュー修正：レビュー修正の基準HEADは`8b6e464`（修正時のHEADは`8b6e464`）。他の設計文書と同じく、末尾に静的確認の記録（§5）を追加した。H／P／N／Dの各行、旧assertion、未代替範囲、承認状態は変更しない。B-03とfriend試験レビューにある本書への参照（draft-0.1）は作業中の変更と重なるため、今回は更新していない。
 
@@ -52,4 +54,4 @@ Dは本番と別brand／別台帳・別buildとし、旧friendを取得したり
 
 ## 5 静的確認
 
-基準`8b6e464`で、[SA compiled](../tests/review/fixtures/compiled-source-status-binding.mjs)・[ND compiled](../tests/review/fixtures/compiled-native-session-composition.mjs)の各assertion（H01〜04）、現行PK02のpack dry-runによるtests／wrapper除外と明示timeoutのないchild起動、Dの403／404 no_body・bodyあり・401＋cancel拒否の対照（D02）と、D01の候補試験の存在、NC03〜05・EF3-N01〜07の参照先を静的に照合した。本書のID13行（H4／P3／N4／D2）、表4・ローカル参照13・明示anchor0、参照先・表列数・末尾改行・差分空白を確認し、変更は本書1件のみ、stage0、製品・試験・設定の差分はない。製品module import・試験再実行・build／pack・実展開は行っていない。
+基準`8b6e464`で、[SA compiled](../tests/review/fixtures/compiled-source-status-binding.mjs)・[ND compiled](../tests/review/fixtures/compiled-native-session-composition.mjs)の各assertion（H01〜04）、現行PK02のpack dry-runによるtests／wrapper除外と明示timeoutのないchild起動、Dの403／404 no_body・bodyあり・401＋cancel拒否の対照（D02）と、D01の候補試験の存在、NC03〜05・EF3-N01〜04・06・07の参照先を静的に照合した。本書のID13行（H4／P3／N4／D2）、表4・ローカル参照13・明示anchor0、参照先・表列数・末尾改行・差分空白を確認し、変更は本書1件のみ、stage0、製品・試験・設定の差分はない。製品module import・試験再実行・build／pack・実展開は行っていない。
