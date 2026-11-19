@@ -27,6 +27,8 @@ Status: **未承認の判断材料。現行仕様・旧試験を維持。** 基�
 
 [C07比較設計 draft-0.1](BEST_PRACTICE_RELEASE_AP03_C07_SOURCE_CONSTRUCTOR_ARGUMENT_DESIGN.md)でED01／04／05／07の第3引数と共有呼出しの影響、同期拒否・通常2引数の受入条件を分離した。ACK-34のcreation内keyのvariantを第3引数そのものには読み替えない。採用仕様・実施結果・旧試験の処遇は未決のまま、C05は別途比較する。
 
+[AP02の撤去範囲基準 draft-0.1](BEST_PRACTICE_RELEASE_AP02_REMOVAL_SCOPE_BASELINE_DESIGN.md)に、実名の撤去境界・残す通常結合と、PK01〜03／FX03〜06の現行期待との衝突を記録した。対象patch・AP05の処遇・配布結果は未実施。入口7件の旧試験・保証分類を変更しない。
+
 ## 3 判断の記録
 
 ED01〜07の各行に、対象revision／候補patch、AP02で切る辺と維持K契約、AP03の選択と観測差、AP05で残す元assertion・候補artifact・正負対照、残差ownerと将来回復条件、承認者／日付／除外条件を結ぶ。**候補patch・選択・実施結果・承認は未記入**。旧試験維持、AP01の保証低下受容およびAP04の結果差も別票。FR6は別索引、UN62はB-03、通常並列と最終配布判定はAP06へ残し、入口7件の文書対応で繰り上げない。

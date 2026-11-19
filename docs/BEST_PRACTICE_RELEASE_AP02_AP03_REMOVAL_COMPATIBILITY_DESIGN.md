@@ -37,6 +37,8 @@ Status: **個別承認用の設計案。撤去・互換変更・保証低下・�
 
 初期sourceのkey照合と通常Permit照合は同じ権限ではない。外部claim helperを消す際も、元rootによる初期sourceの一度結合・失敗時の失効と返却を保持する。開発rootの台帳を本番へ共有する、diagnostic／summary／同値copyからbindingを再建する、既存runを外部から採用する口で補わない。
 
+[AP02の撤去範囲基準 draft-0.1](BEST_PRACTICE_RELEASE_AP02_REMOVAL_SCOPE_BASELINE_DESIGN.md)で、R01〜08を実名の専用入口／field／実行辺、通常K01〜06、配布／旧試験の責務へ対応付けた。省略時にも使うstatus binding／会計接続を維持し、fake専用の時刻引渡しをsessionから分離しても既存packが期待する値moduleは初回撤去対象外とする。設計範囲の確定のみで、対象patch・全到達辺・実tarball・旧試験処遇は未承認／未確認。
+
 ## 3 通常経路で維持するもの
 
 | ID | 維持する契約 | 将来の正対照と不許可の影響 |
