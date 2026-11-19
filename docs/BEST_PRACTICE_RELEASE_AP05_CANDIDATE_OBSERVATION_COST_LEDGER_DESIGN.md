@@ -1,7 +1,9 @@
 # AP05：候補検証の固定終了観測点と費目台帳の入口
 
-Version: release-ap05-candidate-observation-cost-ledger-draft-0.2 / Date: 2026-11-19。
+Version: release-ap05-candidate-observation-cost-ledger-draft-0.3 / Date: 2026-11-19。
 Status: **詳細設計のみ。上限・係数・時間の数値、観測provider、保全方式・保全先、実行は未承認。** 静的照合基準は `c637ddc`。候補revisionの実測・終了確認はない。
+
+draft-0.3のレビュー修正：レビュー修正の基準HEADは`2f486e5`（修正時のHEADは`e55b1b4`）。AP5-V01行の句点後の余分な半角空白を削除し、§5に静的確認を追加した。各V／L行・判定は変更していない。
 
 [外側時間枠・cleanup予約設計 draft-0.2](BEST_PRACTICE_RELEASE_AP05_CANDIDATE_OUTER_BUDGET_CUSTODY_DESIGN.md)のAP5-O01〜04／C01〜07と、[共通受入設計](BEST_PRACTICE_RELEASE_AP05_PK01_PK04_CANDIDATE_ACCEPTANCE_DESIGN.md)のAP5-T01〜04を結ぶ。対象はPK01〜04の候補P系列。H／D・UN62／LM03・AP06の通常並列対照は別枠。[B-03](BEST_PRACTICE_RELEASE_B03_COMPILED_MIGRATION_FAULT_DESIGN.md)の終了・有限保持契約を維持する。
 
@@ -13,7 +15,7 @@ Status: **詳細設計のみ。上限・係数・時間の数値、観測provide
 
 | 観測ID／対象 | 現行sourceで確認できる範囲 | 候補Pで追加が必要な観測点｜受入条件 |
 |---|---|---|
-| AP5-V01／runner・command（T01） | [PK01](../tests/review/package-canonical-budget.mjs)・[PK02／03](../tests/review/package-http-classification.mjs)は同期呼出しの復帰／throwを利用。 [PK04](../tests/review/package-worker.mjs)では同期戻り値をassertし、外部コマンドとsmoke childで個別timeoutを持つ | spawn前に同候補／slot／attemptと終端用の保持欄を確保。spawnの呼出し直前、同handle受領、停止要求、exit観測、回収確認を別に観測する。復帰／throw・timeout・停止要求を一律にexitや未生成にしない。PID単独・別attemptからの通知は不可 |
+| AP5-V01／runner・command（T01） | [PK01](../tests/review/package-canonical-budget.mjs)・[PK02／03](../tests/review/package-http-classification.mjs)は同期呼出しの復帰／throwを利用。[PK04](../tests/review/package-worker.mjs)では同期戻り値をassertし、外部コマンドとsmoke childで個別timeoutを持つ | spawn前に同候補／slot／attemptと終端用の保持欄を確保。spawnの呼出し直前、同handle受領、停止要求、exit観測、回収確認を別に観測する。復帰／throw・timeout・停止要求を一律にexitや未生成にしない。PID単独・別attemptからの通知は不可 |
 | AP5-V02／子・孫・worker thread（T02） | [ReviewWorker](../src/review/worker-supervisor.ts)は内部Workerの `error`／`exit` を扱い、`close()` は `terminate()` の正常解決後にlistener／streamを処理する。[adapter](../src/review/update-set-adapter.ts)は内部の `cpu.close()` を待つ。PK04のsmoke出力は解析／集約等のassert成功であり、外側台帳のjoin記録ではない | 親に結び付いた作成試行・handle／generation受領・退出／joinを対象ごとに記録し、生成側の受付閉鎖と登録集合の完全性を照合する。processの親子identityとthreadのowner／generationを区別。runner exit、ready／finish返答、既知件数ゼロで未登録tailを消さない。確認済み未生成には正規生成点の未通過または生成しなかった証拠が要る |
 | AP5-V03／stdio（T03） | PK01〜03のcompiled childはinheritであり、scriptに各streamの独立終端記録はない。PK04はsmokeのstdout文字列をassertする。ReviewWorkerの内部stdout／stderrは `resume()` で流し、closeの正常経路で `destroy()` する | 起動前にstdinの所有mode・stdout／stderr個別の観測枠を確保し、親のcommand pipeとworker側streamを混同しない。取得可能ならEOF／close、error、保持打切りを別々に記録し、所有stdinのcloseまたは非所有の根拠を確認。listener解除・destroy要求・exit・成功文字列は正常EOFの代用にしない。保持停止とdrain停止は別 |
 | AP5-V04／保全・解放（T04） | PK04は一時展開先を `finally` の `rmSync` で処理する。現行のpack／smoke結果には、上位受理・排他的な処理権限交替・所有範囲の空確認の個別結果はない | 起動前の上位枠確保、資源の棚卸し、同slotの受理commitとreceipt照合、唯一のownerでの許可済み処理と独立した空確認、最終記録封印を分けて観測する。受理不明・消去途中・親喪失では既知prefixと未解決責務を保持。ackや削除要求だけを解放成功にしない |
@@ -56,3 +58,7 @@ Status: **詳細設計のみ。上限・係数・時間の数値、観測provide
 - **別途決めること：** 正規観測providerと通知の到達・完全性、対象同一性の実際の供給点、操作・件数・bytes・待受の数値と根拠、保全方式／保全先・保持期間・移譲と削除の権限、観測不能時の責務の独立保持。これらが揃うまでは候補Pを起動しない。この設計はAP05検証・旧試験切替・AP06・閉鎖条件の解除を承認しない。
 
 [観測手段比較・取得証拠と費目の対応 draft-0.2](BEST_PRACTICE_RELEASE_AP05_CANDIDATE_OBSERVATION_METHOD_COMPARISON.md)で、V01〜04ごとの観測手段を直接候補・補助・現行のみに分け、取得できる証拠・欠落時の扱い・対応するL行を比較した。観測provider・数値・採用は未承認のまま。
+
+## 5 静的確認
+
+基準`2f486e5`で、PK01（package-canonical-budget）とPK02／03（package-http-classification）のcompiled childが`execFileSync`／`stdio: 'inherit'`で明示timeoutを持たず、pipe／`maxBuffer`がdry-run側だけに付くこと、PK04（package-worker）の個別timeout・stdoutのassert・一時展開先の`finally`／`rmSync`、`ReviewWorker`の`error`／`exit`処理、内部stdout／stderrの`resume()`と`close()`での`terminate()`解決後のlistener解除・`destroy()`、adapterの`cpu.close()`待ち、外側時間枠設計のO01〜04／C01〜07／R1〜R7とL01〜11の対応を静的に照合した。以下の数はdraft-0.3時点で、本書のID15行（V4／L11）が他文書のIDと衝突しないこと、表2・ローカル参照9（`2f486e5`時点の8に観測手段比較への1件を加えたもの）・明示anchor0、参照先・表列数・末尾改行・差分空白を確認した。製品・試験・設定の差分はなく、実行・build／pack・process／保全操作は行っていない。
