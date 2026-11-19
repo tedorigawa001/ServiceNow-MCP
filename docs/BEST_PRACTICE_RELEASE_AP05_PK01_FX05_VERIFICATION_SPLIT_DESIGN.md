@@ -1,9 +1,11 @@
 # AP05：PK01／FX05の旧試験・候補配布物の正対照／不在検査
 
-Version: release-ap05-pk01-fx05-verification-split-draft-0.2 / Date: 2026-11-19。
+Version: release-ap05-pk01-fx05-verification-split-draft-0.3 / Date: 2026-11-19。
 Status: **試験分離の設計案。旧試験の移行・変更・撤去は未承認。** 静的基準HEADは`5f2a053`。[PK01の保証レビュー](BEST_PRACTICE_RELEASE_FRIEND_TEST_GUARANTEE_REVIEW.md)、[B-03のFX05](BEST_PRACTICE_RELEASE_B03_COMPILED_MIGRATION_FAULT_DESIGN.md)、[AP02の範囲基準](BEST_PRACTICE_RELEASE_AP02_REMOVAL_SCOPE_BASELINE_DESIGN.md)のS03／05、K01／04を接続する。先行AP03の採用記録・未コミット差分は保持し、候補検査の基準に採るrevisionは別途固定する。PK02／03・FX03／04／06と旧ND単体UN62は対象外。
 
-draft-0.2のレビュー修正：レビュー修正の基準HEADは`06e8d34`（修正時のHEADは`84dac4e`）。他の設計文書と同じく、末尾に静的確認の記録（§5）を追加した。H／P／N／Dの各行、旧assertion、承認状態は変更しない。B-03とfriend試験レビューにある本書への参照（draft-0.1）は作業中の変更と重なるため、今回は更新していない。
+draft-0.3のレビュー修正：レビュー修正の基準HEADは`7e6fdfe`（修正時のHEADは`7e6fdfe`）。draft-0.2の注記にあった「H／P／N／Dの各行」は、D区分をID付きの行ではなく§4の文章で扱う本書の構成と合わなかったため、「H／P／Nの各行と§4のD補完」に訂正した。§5の照合範囲・件数・各行・承認状態は変更しない。
+
+draft-0.2のレビュー修正：レビュー修正の基準HEADは`06e8d34`（修正時のHEADは`84dac4e`）。他の設計文書と同じく、末尾に静的確認の記録（§5）を追加した。H／P／Nの各行と§4のD補完、旧assertion、承認状態は変更しない。B-03とfriend試験レビューにある本書への参照（draft-0.1）は作業中の変更と重なるため、今回は更新していない。
 
 正式発行口・C実行入口／body起動閉鎖、全体受付無効、通常経路未切替、Unknown・調査保留、元期限と既定並列度を維持する。MDのみ。旧試験の変更／skip・実装・撤去・再実行・build／梱包・混入操作・実接続・実通信・設定変更・公開・コミット・Pushは行わない。
 
