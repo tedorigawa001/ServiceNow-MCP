@@ -1,7 +1,9 @@
 # AP05：保全方式の候補比較・喪失時照会と一度限り処理
 
-Version: release-ap05-custody-method-comparison-draft-0.1 / Date: 2026-11-19。
+Version: release-ap05-custody-method-comparison-draft-0.2 / Date: 2026-11-19。
 Status: **比較設計のみ。数値・観測手段・保全方式・保全先は未承認。** 静的照合基準は `eb45b8d`。方式の採用・実測・障害対照はいずれも未実施。表は成立に必要な条件を示し、記録の存続や排他を確認済みとはしない。
+
+draft-0.2のレビュー修正：レビュー修正の基準HEADは`fe36a64`（修正時のHEADは`fe36a64`）。§5に静的確認を追加し、保全方式の選定条件から本書への参照段落を追加した。各CM／CF行・判定は変更していない。
 
 [保全方式の選定条件](BEST_PRACTICE_RELEASE_AP05_CUSTODY_SELECTION_CONDITIONS_DESIGN.md)のAP5-KS01〜09を方式候補へ当てはめる。[観測手段比較](BEST_PRACTICE_RELEASE_AP05_CANDIDATE_OBSERVATION_METHOD_COMPARISON.md)のAP5-VM09〜11、[費目台帳](BEST_PRACTICE_RELEASE_AP05_CANDIDATE_OBSERVATION_COST_LEDGER_DESIGN.md)のAP5-L01／03／08〜11、[外側時間枠・cleanup予約](BEST_PRACTICE_RELEASE_AP05_CANDIDATE_OUTER_BUDGET_CUSTODY_DESIGN.md)のAP5-C04〜07／U01〜04を引き継ぐ。対象は[共通受入設計](BEST_PRACTICE_RELEASE_AP05_PK01_PK04_CANDIDATE_ACCEPTANCE_DESIGN.md)の候補P系列のみ。H／D・UN62／LM03・AP06と手段・責務・予算を共有しない。
 
@@ -43,3 +45,7 @@ CM01／02は同じホストの仮定でも、確定の根拠（履歴の確定�
 `W_i` と、系列で一度だけの `R4〜R7` の区分を維持し、応答待ちで予約を増やさない。回復後の照会費用も無償とせず、`D_end` 後は別承認・別上限の読み取りによる解放確認に限る。未解決の記録は期限や容量不足だけで削除せず、必要な保持量を確保できない方式は新規受付を止める。
 
 **採用判断を保留する条件：** 障害範囲・正規照会元・同じ受理票の照合・削除の実操作側の排他・費目上界・権限／保持期間のいずれかが未確認なら、方式を選定せず候補Pを起動しない。次の審査は、候補ごとの不足と費目上界の根拠を提示するまで。数値・観測手段・保全方式・保全先は未承認のまま、閉鎖条件とUnknown・調査保留を維持する。
+
+## 5 静的確認
+
+基準`fe36a64`で、保全方式の選定条件のAP5-KS01〜09と§1の3前提（同じ先行枠の照会、上位commitによる一度限りの移譲、操作前に一度だけ確定する削除claim）の対応、観測手段比較のAP5-VM09〜11、費目台帳のAP5-L01／03／08〜11、外側時間枠設計のAP5-C04〜07／U01〜04と `W_i`／`R4〜R7`、CM04のL03と現行PK04の `finally` の扱いを静的に照合した。本書のID9行（CM4／CF5）が他文書のIDと衝突しないこと、表2・ローカル参照6・明示anchor0、参照先・表列数・末尾改行・差分空白を確認した。製品・試験・設定の差分はなく、実行・build／pack・観測／process／保全操作は行っていない。
