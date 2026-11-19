@@ -1,7 +1,9 @@
 # AP05：PK02／FX03・04の旧compiled保証とfriend不在・開発補完
 
-Version: release-ap05-pk02-fx03-fx04-verification-split-draft-0.1 / Date: 2026-11-19。
+Version: release-ap05-pk02-fx03-fx04-verification-split-draft-0.2 / Date: 2026-11-19。
 Status: **試験分離の設計案。旧試験の変更・撤去・移行は未承認。** 静的基準HEADは`06e8d34`。[PK02の保証レビュー](BEST_PRACTICE_RELEASE_FRIEND_TEST_GUARANTEE_REVIEW.md)、[B-03のFX03／04](BEST_PRACTICE_RELEASE_B03_COMPILED_MIGRATION_FAULT_DESIGN.md)、[AP02の範囲基準](BEST_PRACTICE_RELEASE_AP02_REMOVAL_SCOPE_BASELINE_DESIGN.md)のS01／02／06／07、K01〜04を接続する。[PK01／FX05](BEST_PRACTICE_RELEASE_AP05_PK01_FX05_VERIFICATION_SPLIT_DESIGN.md)は参照のみ。PK02 scriptに共存するPK03／FX06、旧ND単体UN62・LM03、既存値kernelの梱包／移行判定は対象外。
+
+draft-0.2のレビュー修正：レビュー修正の基準HEADは`8b6e464`（修正時のHEADは`8b6e464`）。他の設計文書と同じく、末尾に静的確認の記録（§5）を追加した。H／P／N／Dの各行、旧assertion、未代替範囲、承認状態は変更しない。B-03とfriend試験レビューにある本書への参照（draft-0.1）は作業中の変更と重なるため、今回は更新していない。
 
 先行AP03差分、正式発行口・C実行入口／body起動閉鎖、全体受付無効、通常経路未切替、Unknown・調査保留、元期限と既定並列度を維持する。今回はMDのみ。旧試験変更／skip・実装・撤去・試験再実行・build／梱包・混入操作・実接続・実通信・設定変更・公開・コミット・Pushは行わない。
 
@@ -47,3 +49,7 @@ Hは同revisionの旧build・旧wrapper・旧fixtureの組で保持し、候補P
 | PKF2-D02／FX03 | 既存Dには403／bodyありの同reader（read=0、cancel／closed／release_lock各1）、403／404 no_body時の操作0、401＋cancel失敗時のHTTP理由・cleanup未確認の分離がある。正常404／bodyありは、既存の404取消対照を正常成功と数えず別compiled受入行にする | Dの401故障はcancelのPromise拒否で、旧401＋同期throwと注入位置を分ける。Dのsource／core・上位診断は旧実sessionの私有実体、外側close／診断保持、旧NDの台帳と非同等。UN62／LM03を回復済みにしない |
 
 Dは本番と別brand／別台帳・別buildとし、旧friendを取得したりPのsession／Permit／証拠を採用したりしない。同一processの非干渉はB-03のI対照、子processの終了・stdio／cleanup・外側時間枠は別承認。H／P／Dの結果・元assertion・未代替範囲・候補manifest・失敗理由を個別記録する。AP01／04の保証差とAP05の切替／旧試験処遇が未承認の間は、旧期待値・試験・梱包設定を維持する。
+
+## 5 静的確認
+
+基準`8b6e464`で、[SA compiled](../tests/review/fixtures/compiled-source-status-binding.mjs)・[ND compiled](../tests/review/fixtures/compiled-native-session-composition.mjs)の各assertion（H01〜04）、現行PK02のpack dry-runによるtests／wrapper除外と明示timeoutのないchild起動、Dの403／404 no_body・bodyあり・401＋cancel拒否の対照（D02）と、D01の候補試験の存在、NC03〜05・EF3-N01〜07の参照先を静的に照合した。本書のID13行（H4／P3／N4／D2）、表4・ローカル参照13・明示anchor0、参照先・表列数・末尾改行・差分空白を確認し、変更は本書1件のみ、stage0、製品・試験・設定の差分はない。製品module import・試験再実行・build／pack・実展開は行っていない。
