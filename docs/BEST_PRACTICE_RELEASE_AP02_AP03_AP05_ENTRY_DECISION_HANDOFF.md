@@ -1,6 +1,6 @@
 # AP02／03／05：入口7件の個別判断への引渡し
 
-Version: release-entry-decision-handoff-draft-0.1 / Date: 2026-11-19。
+Version: release-entry-decision-handoff-draft-0.2 / Date: 2026-11-19。
 Status: **未承認の判断材料。現行仕様・旧試験を維持。** 基準HEADは `b1b594c`。[AP01残差台帳 draft-0.14](BEST_PRACTICE_RELEASE_AP01_INDIVIDUAL_APPROVAL_RESIDUAL_LEDGER.md)で文書照合した入口7件を、[AP02／03設計](BEST_PRACTICE_RELEASE_AP02_AP03_REMOVAL_COMPATIBILITY_DESIGN.md)の撤去・互換案とAP05の旧試験／配布物の処遇へ渡す。正規228件のうち文書対応166（閉鎖lane158・入口7・通常維持1）、別gate UN62。入口7件の正規分類は全て**未対応**であり、同等移行・保証回復・個別承認は0件追加。
 
 正式発行口・C実行入口／body起動は閉鎖、全体受付無効、通常経路未切替、Unknown、VM／監視／telemetry調査保留を維持する。LOAD6／LOAD7選択、元5秒期限・既定並列度、旧比較childと製品全体の60秒・元attempt floorは変更しない。実装・旧試験変更／再実行・設定変更・実接続・実通信・実機操作・配布／公開・コミット・Pushは行わない。
@@ -24,6 +24,8 @@ Status: **未承認の判断材料。現行仕様・旧試験を維持。** 基�
 1. **AP03の未選択セルを先に確定する。** C07は通常2引数、明示undefined、null、false、旧creation object、getter付きobjectの「受付／同期結果／拒否位置／callback・元sessionへの影響」を分ける。引数個数で拒否する案と非undefined値を拒否する案のどちらを採るかは未決。C05の継承・Proxy・prototype、C02〜04のsynthetic own key・複合不正の理由優先、C06の型／JS named・namespace・deep importの観測も個別に判断する。開発rootでの成功や現行の型エラーだけから、外部互換性を推定しない。
 2. **AP02の対象閉包を同revisionで固定する。** 定義・登録slot・static／reexport／動的参照・生成／解放責務・JS／宣言／map・通常K01〜06を結ぶ。外部claimを切ることと、通常2引数source、同session／ownerの一度結合・Permit、既存fetch・会計・停止・省略時同期summaryを残すことを同じ候補で確認する。共有経路の所有者や影響が不明ならUnknownで停止し、設定・期限で通さない。
 3. **AP05の試験処遇と配布物の負対照を分離する。** [PK01〜04](BEST_PRACTICE_RELEASE_FRIEND_TEST_GUARANTEE_REVIEW.md)と[B-03のFX03〜06](BEST_PRACTICE_RELEASE_B03_COMPILED_MIGRATION_FAULT_DESIGN.md)を基準に、旧fixtureの元assertion、Pの通常正対照／到達不能確認、別artifactの連続試験を対応付ける。現行PK02は指定ファイルの除外と配布外distの旧fixtureを検査する。候補では空buildと隔離tarballを同revisionで結び、通常import成功、禁止閉包不在、別名／再export／stale JS・宣言・map混入の意図した失敗を別々に要求する。必要kernel欠落や検査未起動を不在成功にしない。旧試験削除・skip・期待値変更・梱包設定変更は別承認まで行わない。
+
+[C07比較設計 draft-0.1](BEST_PRACTICE_RELEASE_AP03_C07_SOURCE_CONSTRUCTOR_ARGUMENT_DESIGN.md)でED01／04／05／07の第3引数と共有呼出しの影響、同期拒否・通常2引数の受入条件を分離した。ACK-34のcreation内keyのvariantを第3引数そのものには読み替えない。採用仕様・実施結果・旧試験の処遇は未決のまま、C05は別途比較する。
 
 ## 3 判断の記録
 

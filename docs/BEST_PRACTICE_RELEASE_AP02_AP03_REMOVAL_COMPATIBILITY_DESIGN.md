@@ -1,6 +1,6 @@
 # AP02／AP03：friend閉包の撤去範囲・通常経路維持と入力／返却互換性
 
-Version: release-ap02-ap03-removal-compatibility-draft-0.2 / Date: 2026-11-19。
+Version: release-ap02-ap03-removal-compatibility-draft-0.3 / Date: 2026-11-19。
 Status: **個別承認用の設計案。撤去・互換変更・保証低下・旧試験の処遇は未承認。** 静的読取り基準HEADは`b0d6055`。今回の「具体化」は判断材料のMD化に限り、AP02／03の承認・実装開始を意味しない。
 
 正式発行口閉鎖・通常経路未切替・C実行入口／body起動閉鎖・全体受付無効・Unknown・VM／監視／telemetry調査保留を維持する。LOAD6／LOAD7選択、元5秒期限・既定並列度、旧比較child60秒・製品全体60秒・元attempt floorは変更しない。実装・発行／claim消費・試験変更／再実行・build／pack・採取／保管・実process対照・実接続・実通信・実機操作・設定変更・版変更・公開・コミット・Pushは行わない。
@@ -64,6 +64,8 @@ K06は「何も生成しない入口」ではない。新規session・同owner�
 | A23-C06 | TypeScript import・overload・返値型、JS／deep import・namespace参照 | synthetic overloadとCompositionFakeIO依存、2取得関数・claim export・source第3引数の型／実体がsourceにある。外部利用実態はUnknown | synthetic overload／専用型依存と取得exportを宣言からも削除する候補。名前付きESM importはlink時失敗、namespace上の不在はプロパティ不在となり、旧2回目takeのruntime codeと非同等。同期invalid_inputだけで全互換影響を説明しない |
 | A23-C07 | JSからsource constructorへ第3引数creationを渡す | truthy creationはclaim／callback branch、falsy creationはそのbranchを通らない。現行のguess key拒否は旧私有結合に依存 | 型の第3引数を消すだけではJS余剰引数を拒否できない。引数個数で拒否する案と非undefined値を拒否する案、明示undefined／null／falseの扱いは**未選択**。いずれもcallbackを実行・保持せず、通常2引数を維持。constructor冒頭の固定拒否位置を承認前に確定 |
 | A23-C08 | fake lane内のthrow／取消／期限／HTTP失敗とreject／unknown／withheld | fake pin後のPromise側故障と、入口の同期throwは別。Dの非実行draft summaryは別owner／別返値 | 撤去で元laneのfailureを一律unknown成功へ変換しない。AP04の非同等性・AP01の未代替保証を別審査。通常sourceのunknown／mismatchedはK03／04で維持 |
+
+[C07の第3引数・互換差と拒否境界 draft-0.1](BEST_PRACTICE_RELEASE_AP03_C07_SOURCE_CONSTRUCTOR_ARGUMENT_DESIGN.md)に、3個以上拒否と明示undefinedの3個だけ許容の比較、共有の省略時呼出しが現状3引数になる点、型とJS受付・emit順・通常正対照を分けて記録した。第3／第4引数の採用仕様・C05は未選択で、C07の比較は撤去・互換変更・旧試験処遇の承認ではない。
 
 ### 副作用前拒否の候補境界
 
