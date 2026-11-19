@@ -1,7 +1,9 @@
 # AP05：候補検証の外側時間枠・cleanup予約・終了未確認時の保全責務
 
-Version: release-ap05-candidate-outer-budget-custody-draft-0.1 / Date: 2026-11-19。
+Version: release-ap05-candidate-outer-budget-custody-draft-0.2 / Date: 2026-11-19。
 Status: **詳細設計のみ。時間・件数・容量の数値、保全先・保全方式、実行・停止・保全操作は未承認。** 静的照合基準は `0a7d7f1`。製品候補のrevision・実行結果・終了確認は未取得。
+
+draft-0.2のレビュー修正：レビュー修正の基準HEADは`38e9bef`（修正時のHEADは`38e9bef`）。§1末尾の「PK01〜03の一部childに明示timeoutがない」は、PK01・PK02（PK03を含む）のscriptのどのchild起動にもtimeout指定がない実態より弱い表記だったため、「PK01〜03のchild起動に明示timeoutがない」に訂正した。あわせて[AP05共通受入設計](BEST_PRACTICE_RELEASE_AP05_PK01_PK04_CANDIDATE_ACCEPTANCE_DESIGN.md)の§4から本書への参照を追加し、末尾に静的確認の記録（§5）を置いた。時間枠・予約・保全の各規則とID、承認状態は変更しない。
 
 [AP05共通受入設計](BEST_PRACTICE_RELEASE_AP05_PK01_PK04_CANDIDATE_ACCEPTANCE_DESIGN.md)のAP5-G03／04、AP5-T01〜04、§5を具体化する。対象はPK01〜04の**候補P系列**で、候補準備・P+／P0／PΔ・後始末まで。同じ承認票にH／Dを含める場合も、別の実行元・所有・時間枠・結果とし、Pの残り時間や終了確認を借りない。[B-03の終了条件](BEST_PRACTICE_RELEASE_B03_COMPILED_MIGRATION_FAULT_DESIGN.md)を継承する。[通常並列の終了設計](BEST_PRACTICE_WFB_SGA_TERMINATION_OUTER_BUDGET_DESIGN.md)は責務分離の参照に限り、数値・採取profile・停止権限・保全先を移さない。
 
@@ -21,7 +23,7 @@ Status: **詳細設計のみ。時間・件数・容量の数値、保全先・�
 | AP5-O03／展開・依存準備 | 展開、必要な本番依存と実解決先の固定、展開manifestと検査用fixture添付の分離。展開後の件数／bytes・ローカル依存準備費 | 元の配布payloadが固定され、別dist・ソース／tsx・隣のnode_modules・registryにfallbackしない。依存不足は環境不適合 |
 | AP5-O04／P+・P0・PΔ | P+／P0の固定検査、PΔの隔離copy／一変異／所定理由の確認を、対照IDごとの有限slotとして積む。copy費・解決／走査費・子processと報告の上界を含む | 元候補のP+／P0成立後にだけPΔへ進む。期待どおりの負対照は「指定理由を検出し完全終端」で成功扱い。判定不能・未終端では次slotなし |
 
-承認票では固定slot数と各上界、slot間の手渡し費を列挙し、系列の観測枠に収まる根拠を結果を見る前に示す。上界未導出は「適合未確認」とし、観測値の平均や過去の最速値で埋めない。現行PK04のコマンド／smoke個別timeout、PK01〜03の一部childに明示timeoutがない事実、AP06の元5秒・既定並列度、旧比較childの60秒、製品期限はこの系列の時間値の代用にしない。
+承認票では固定slot数と各上界、slot間の手渡し費を列挙し、系列の観測枠に収まる根拠を結果を見る前に示す。上界未導出は「適合未確認」とし、観測値の平均や過去の最速値で埋めない。現行PK04のコマンド／smoke個別timeout、PK01〜03のchild起動に明示timeoutがない事実、AP06の元5秒・既定並列度、旧比較childの60秒、製品期限はこの系列の時間値の代用にしない。
 
 通常のslot退出で必要な子worker・stdioの確認、上位受理、slot専有物の処理は `W_i` に含める。`R_cleanup` は系列全体に一つだけ置き、失敗したslotの残存責務と、どの生成prefixでも残り得る系列共有物の最終回収に充てる。正常slotごとに `R_cleanup` を使い直さず、前slotが未確認なら系列を閉じて予約側へ移る。すでに確認・処理した項目を最終回収で再実行しない。
 
@@ -65,3 +67,7 @@ Status: **詳細設計のみ。時間・件数・容量の数値、保全先・�
 - **未承認のまま残すもの：** 候補revision／固定slot表の承認、`B_obs`・`R_cleanup`・各 `W_i`／`Rk` の値と根拠、監視と停止方法、process／stream／保全の容量・対象、保全先・保持期間・アクセス・上位受理と障害時の責務、削除範囲。いずれもこの設計で承認・設定しない。
 - **将来の合成受入：** `t_i + W_i = D_obs` は起動0、早期停止でも締切不変。runner code 0先行でworker／stdioが残る、保管応答不明、部分生成、取消後に遅いexit／EOF、clockの逆行を別対照で確認する。終了間際の記録だけで先行理由を上書きしない。合成対照の実行も今回は未実施。
 - **判定条件：** 検査結果の合否と物理終端／保全を別軸にする。P+／P0／各PΔの所定判定、元候補とのpin、各slotの期限内終了、後始末・判定の確認が全て揃った場合にのみ候補検証として受理する。未確認はUnknown・調査保留のまま、次slotの起動・候補採用・旧試験切替を止める。AP06と各閉鎖条件をこの受入で解除しない。
+
+## 5 静的確認
+
+基準`38e9bef`で、`D_obs`／`D_end`と`L_k`の累積、slot入場の厳密不等号と§4の境界対照、受渡し順序の整合、共通受入設計のAP5-G03／04・AP5-T01〜04・§5、B-03と通常並列の終了設計の存在、PK04（package-worker）の120秒／15秒指定とPK01〜03のchild起動にtimeout指定がないことを静的に照合した。本書のID15行（O4／C7／U4）が他文書のIDと衝突しないこと、表4・ローカル参照4・明示anchor0、参照先・表列数・末尾改行・差分空白を確認した。製品・試験・設定の差分はなく、実行・build／pack・process操作は行っていない。

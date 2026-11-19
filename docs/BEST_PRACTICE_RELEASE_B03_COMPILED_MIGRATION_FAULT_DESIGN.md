@@ -71,9 +71,9 @@ P／U／D／I／Hは生成・実行結果を別記録する。P/U/Dを原則別c
 
 FX03〜06はAP01〜05の承認後に最終切替する。B-03準備のために旧fixtureをskip／削除する、新しいD結果を旧Pの期待値へ強制変換する、失ったassertionを成功数から省略することは禁止する。
 
-[AP05 PK01／FX05の試験分離設計 draft-0.1](BEST_PRACTICE_RELEASE_AP05_PK01_FX05_VERIFICATION_SPLIT_DESIGN.md)で、FX05が直接assertする旧prepared／会計・非露出をHのまま保持し、Pの通常経路と不在・混入検査、Dの補完に分けた。実展開・専用build・終了確認・切替は未実施で、FX03／04／06・UN62の状態は変更しない。
+[AP05 PK01／FX05の試験分離設計 draft-0.3](BEST_PRACTICE_RELEASE_AP05_PK01_FX05_VERIFICATION_SPLIT_DESIGN.md)で、FX05が直接assertする旧prepared／会計・非露出をHのまま保持し、Pの通常経路と不在・混入検査、Dの補完に分けた。実展開・専用build・終了確認・切替は未実施で、FX03／04／06・UN62の状態は変更しない。
 
-[AP05 PK02／FX03・04の試験分離設計 draft-0.1](BEST_PRACTICE_RELEASE_AP05_PK02_FX03_FX04_VERIFICATION_SPLIT_DESIGN.md)で、FX03の4正常variant／401異常、FX04の通常受理／unconfirmed拒否、2取得口の旧assertionをHで保持する。Pの通常経路とfriend不在／混入、Dの別brand補完は別実績とし、正常404／bodyあり・旧実session結合などの残差を明示した。専用build・実展開・終了確認・切替は未実施、FX06・UN62／LM03は対象外。
+[AP05 PK02／FX03・04の試験分離設計 draft-0.3](BEST_PRACTICE_RELEASE_AP05_PK02_FX03_FX04_VERIFICATION_SPLIT_DESIGN.md)で、FX03の4正常variant／401異常、FX04の通常受理／unconfirmed拒否、2取得口の旧assertionをHで保持する。Pの通常経路とfriend不在／混入、Dの別brand補完は別実績とし、正常404／bodyあり・旧実session結合などの残差を明示した。専用build・実展開・終了確認・切替は未実施、FX06・UN62／LM03は対象外。
 
 [AP05 PK03／FX06の試験分離設計 draft-0.1](BEST_PRACTICE_RELEASE_AP05_PK03_FX06_VERIFICATION_SPLIT_DESIGN.md)で、同childの純粋handoffと実class syntheticの直接assertionをHとして分けた。Pは隔離展開物で値moduleのみのcompiled正対照と通常sessionの維持、旧session接続の不在／混入を別に確認する。Dは事前Oと比較保留の補完に限り、旧実classの採取・移譲／discardとpost-O取消は未代替。旧試験と既存梱包期待は維持し、候補build・展開・実行・切替は未実施。
 
