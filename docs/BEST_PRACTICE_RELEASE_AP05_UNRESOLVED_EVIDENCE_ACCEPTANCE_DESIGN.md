@@ -1,7 +1,9 @@
 # AP05：未導出項目の静的確認・実確認と証拠の受入条件
 
-Version: release-ap05-unresolved-evidence-acceptance-draft-0.1 / Date: 2026-11-19。
+Version: release-ap05-unresolved-evidence-acceptance-draft-0.2 / Date: 2026-11-19。
 Status: **審査設計のみ。候補revision・digestは未確定。数値・観測手段・保全方式・保全先は未承認。** 静的照合基準は `a6a49ba`。候補固定・実測・方式選定・証拠受入は未実施。
+
+draft-0.2のレビュー修正：レビュー修正の基準HEADは`9f8479e`（修正時のHEADは`9f8479e`）。どのEV行からも引用されていなかったFP02をEV01に、保全方式比較のCF04をEV09、CF05をEV08に割り当てた。§4に静的確認を追加し、費目・上界設計から本書への参照段落を追加した。各EV行の確認・受入条件は変更していない。
 
 [共通受入設計](BEST_PRACTICE_RELEASE_AP05_PK01_PK04_CANDIDATE_ACCEPTANCE_DESIGN.md)の候補P系列に対し、[固定slot・変異manifest](BEST_PRACTICE_RELEASE_AP05_FIXED_SLOT_MUTATION_MANIFEST_DESIGN.md)のSL／MT、[操作site・失敗prefix](BEST_PRACTICE_RELEASE_AP05_OPERATION_SITE_FAILURE_PREFIX_DESIGN.md)のSP／FP／SR、[費目と上界](BEST_PRACTICE_RELEASE_AP05_CANDIDATE_COST_UPPER_BOUND_DESIGN.md)のL01〜11／UB01〜04を結ぶ。[観測手段比較](BEST_PRACTICE_RELEASE_AP05_CANDIDATE_OBSERVATION_METHOD_COMPARISON.md)・[保全方式比較](BEST_PRACTICE_RELEASE_AP05_CUSTODY_METHOD_COMPARISON.md)は未選定のまま。[外側時間枠](BEST_PRACTICE_RELEASE_AP05_CANDIDATE_OUTER_BUDGET_CUSTODY_DESIGN.md)と[保全選定条件](BEST_PRACTICE_RELEASE_AP05_CUSTODY_SELECTION_CONDITIONS_DESIGN.md)の締切・一度限り・失敗時保持を変更しない。H／D・UN62／LM03・AP06は別枠。
 
@@ -19,15 +21,15 @@ Status: **審査設計のみ。候補revision・digestは未確定。数値・�
 
 | ID／未導出項目・対応 | 静的に確認できる範囲 | 別承認後に必要な実確認と証拠 | 受入条件／不成立時 |
 |---|---|---|---|
-| AP5-EV01／候補・artifactの同一性（L01〜04／08、SP01〜05） | AP5-G01〜04、SL01〜04の順序、追跡済みsource／lock・固定entryの候補。作業ツリーの状態と候補pinの区別 | 承認記録付きcommit／tree・実Node／依存・検査器のpin、空buildの出力manifest、同tarballと隔離展開manifest、添付物・実解決先、開始前後の照合 | 各段階で得る証拠だけを同候補へ結び、別dist／tsx／隣の依存・registryへのfallbackなし。未確定pin・driftは後段へ進めない |
+| AP5-EV01／候補・artifactの同一性（L01〜04／08、SP01〜05、FP02） | AP5-G01〜04、SL01〜04の順序、追跡済みsource／lock・固定entryの候補。作業ツリーの状態と候補pinの区別 | 承認記録付きcommit／tree・実Node／依存・検査器のpin、空buildの出力manifest、同tarballと隔離展開manifest、添付物・実解決先、開始前後の照合 | 各段階で得る証拠だけを同候補へ結び、別dist／tsx／隣の依存・registryへのfallbackなし。未確定pin・driftは後段へ進めない |
 | AP5-EV02／slot・変異・呼出しの網羅（L02〜04、SP05〜10、FP03／06） | SL22枠とMT56行の案、所定理由・構造判定のID、SPの順序、P+／P0前後関係、複数入力を分離する箇所。具体site・対象の一意性は未確定 | 同候補での固定entry／subcheck、実siteと有界な内部呼出しの対応、変異前後の同copy pin・単一差分、指定predicateの結果と独立終端 | 元候補の全P+／P0を確認してからPΔ。一変異ごとの所定理由・終端に一致し、変異artifactは実行しない。他の失敗・一般起動不能は不合格。不明な生成元・retryをゼロにしない |
 | AP5-EV03／実I/O・bytes・同時保持（L01〜04／07〜11、UB01〜03） | 対象種別×上限・pass別計上、記録型と符号化の最大幅の算式、共有／別copy／失敗prefixごとの保持欄。既存buffer指定は別の量 | 固定入力と実出力manifest、圧縮／展開・読取／copy・通過／廃棄・保持bytesの別記録、到達可能な重なりと実backing／scratchの境界、上限直前・一致・超過での消費証拠 | 受付guardと最大通過回数から上界を説明し、遅延・部分生成・超過時にも費目を捨てない。測定ピークやファイルの宣言長、保持capで通過量・heap上界を代用しない |
 | AP5-EV04／時計・待受・外側owner独立性（UB04、FP10〜12） | `T0`、`D_obs`／`D_end`、`W_i` と `R1〜R7`、固定guard・受付不等号、時計domain／故障時の規則。既存timeoutの適用箇所 | 承認済みprovider、同一単調時計の開始・受理・cutoff記録、対象側の同期停滞／clock不良／通知遅着時の外側停止、引継ぎとR7の封印。稼働条件・処理時間と待受は別計測 | 等号を含め `t_i + W_i < D_obs` を満たさなければ起動0、締切を更新しない。時計不明なら期限内確認なし。待受終了を実退出にせず、外側owner喪失時も別保全の責務があること |
 | AP5-EV05／停止・runner／子孫・threadの観測（L05〜06、VM01／03〜05、FP04） | 既存の同期起動、worker生成元・exit／terminate処理は位置候補。runner復帰・ready等だけでは子集合や回収を示さない | 同attemptの生成試行・handle／世代と登録完全性、承認済み停止の到達、runnerのexit／回収、子／孫・threadそれぞれのjoin。handle遅着・未登録tail・runnerだけ終了の対照 | 既知の全退出と生成受付の閉鎖を別に確認。PID単独やcode 0、成功ログで埋めない。観測不能・対象不明ならUnknown、追加停止・削除なし |
 | AP5-EV06／stdio・drain（L07、VM06〜08、FP05） | inherit／pipe等の既存設定、worker内部streamの所有・cleanup候補。line数やtimeoutは通過量・EOFの根拠ではない | 同対象／streamのstdout・stderrそれぞれの通過／保持、EOF・close・error、所有stdinの状態、worker側streamとの区別、片側だけ終端・保持打切り・drain遅延対照 | 並走の根拠と各上限があり、未採取・切詰め・片側未closeを区別。drain／保持打切りで正常EOFを認定せず、未確認は同枠へ |
 | AP5-EV07／棚卸し・post-pin（L08、SP12、FP07） | 生成prefix別の所有台帳、元候補／借用／専有copyの境界、再実行しない操作、対象の限定を設計できる | 同候補・同対象のpost-pin、既知生成prefixと未受領・未退役の資源記録、照合できた範囲・読取量・費用。部分生成・不一致・安全に読めないケースを対照 | 原本とcopyの混同なし。触れられない対象・借用未退役は未確認と記録して削除対象外。照合失敗を仮の不在・空確認にしない |
-| AP5-EV08／独立保全・同票照会（L01／08〜09、VM09、CM01〜04、FP01／08／12） | KS01〜06／CF01〜03の受理・照会条件、各CMの障害範囲と受理点、費目の差。記録の存続・一意性・上界は未確認 | 先行枠をもとに、監視側のみ／runnerとの双方喪失後の同枠照会、commit前失敗／commit後応答消失、並行受理・別世代・古い記録・遅延要求の独立対照。CMごとの保持範囲と復旧照会費 | 正規の同commit・同slot／世代／snapshot・同票を認め、照会に再移譲・削除権を伴わせない。確定していない非受理・不達を再試行へ変えずUnknown。選定・保全先は別審査 |
-| AP5-EV09／実資源の排他と空確認（L10、VM10／11、KS07〜09、FP09） | 同ownerの単発claimと実操作・独立空確認の分離、借用退役と共有原本除外、現行PK04の `finally` と非同等であること | 同受理票・現owner世代・同一対象と排他、claim記録と実操作結果・別の安全な照会証拠。途絶・部分処理・担当交替・対象の置換対照 | 前提未確認なら削除0。試行後の結果不明は残存責務を保持し、再削除なし。後日の不在を元操作の成功にしない。台帳の排他だけで実資源の排他を認定しない |
+| AP5-EV08／独立保全・同票照会（L01／08〜09、VM09、CM01〜04、FP01／08／12） | KS01〜06／CF01〜03・05の受理・照会条件、各CMの障害範囲と受理点、費目の差。記録の存続・一意性・上界は未確認 | 先行枠をもとに、監視側のみ／runnerとの双方喪失後の同枠照会、commit前失敗／commit後応答消失、並行受理・別世代・古い記録・遅延要求の独立対照。CMごとの保持範囲と復旧照会費 | 正規の同commit・同slot／世代／snapshot・同票を認め、照会に再移譲・削除権を伴わせない。確定していない非受理・不達を再試行へ変えずUnknown。選定・保全先は別審査 |
+| AP5-EV09／実資源の排他と空確認（L10、VM10／11、KS07〜09、CF04、FP09） | 同ownerの単発claimと実操作・独立空確認の分離、借用退役と共有原本除外、現行PK04の `finally` と非同等であること | 同受理票・現owner世代・同一対象と排他、claim記録と実操作結果・別の安全な照会証拠。途絶・部分処理・担当交替・対象の置換対照 | 前提未確認なら削除0。試行後の結果不明は残存責務を保持し、再削除なし。後日の不在を元操作の成功にしない。台帳の排他だけで実資源の排他を認定しない |
 | AP5-EV10／判定封印と配賦（L11・L05〜10、SP15、FP10〜12） | 正常slotの `W_i` と系列で一度の `R_cleanup`、各費目のsite／FPと先行理由・四軸、R7優先。集計式は書けるが時間値は未導出 | 各段階の消費／未到達／未確認、上位の封印応答と先行責務、slot・prefix別の上界根拠と費用残差、締切超過・記録不達・遅い確認対照 | Wで消費済みの操作をRで再計上せず、残存観測・保全は漏らさない。R7を前段待受に貸さず、遅い証拠で元判定を更新しない。上界・確認・承認不足なら候補Pは起動しない |
 
 ## 3 証拠の採否と承認への引渡し
@@ -39,3 +41,7 @@ Status: **審査設計のみ。候補revision・digestは未確定。数値・�
 1. **先に静的な不足表を審査する。** 固定slot／対象・実siteの候補、数式に必要な入力、正規の終了供給点、方式ごとの条件とUnknownを列挙する。審査に必要な実確認だけを別の承認票に切り出す。
 2. **別承認でのみ評価する。** 対象・環境・許可範囲、独立対照と想定外での停止、費用と保全責務、禁止操作を事前固定する。承認を拡張せず、承認外の通信・候補生成・保全操作にfallbackしない。
 3. **候補入場の可否を別に審査する。** 全行で必要根拠と該当する承認が揃い、通常枠と一度だけのcleanup予約が各prefixで説明できて初めて候補入場を審査する。方式の適合・採用・実行・公開を互いに代替しない。未確定／未承認／証拠不足は各欄を保持し、候補Pの起動、旧試験切替、閉鎖条件の解除は行わない。
+
+## 4 静的確認
+
+基準`9f8479e`で、各EV行が引用するAP5-G01〜04、SL01〜04・SL22／MT56、SP01〜10・12・15、FP01〜12、UB01〜04、VM01・03〜11（VM02は引用なし）、CM01〜04、KS01〜09、CF01〜05が参照先に実在し主題が合うこと、FP01〜12とCF01〜05がいずれかのEV行から一度以上引用されること、EV04の `t_i + W_i < D_obs`（等号では入場不可）が外側時間枠設計の厳密不等号と一致すること、現行PK04の `finally` と台帳上の排他を実資源の排他と同等に扱わないことを静的に照合した。本書のID10行（EV01〜10）が他文書のIDと衝突しないこと、表1・ローカル参照8・明示anchor0、参照先・表列数・末尾改行・差分空白を確認した。製品・試験・設定の差分はなく、実行・build／pack・変異・計測・process／保全操作は行っていない。
