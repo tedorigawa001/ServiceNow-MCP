@@ -1,7 +1,9 @@
 # AP05：PK01〜04の共通受入表・候補固定・終了確認
 
-Version: release-ap05-pk01-pk04-candidate-acceptance-draft-0.2 / Date: 2026-11-19。
+Version: release-ap05-pk01-pk04-candidate-acceptance-draft-0.3 / Date: 2026-11-19。
 Status: **設計のみ。検証開始・旧試験切替・撤去・公開は未承認。** 静的照合基準は `e4da77f`。これはPK03分離設計までの文書基準で、製品の候補revisionではない。候補patch・実行結果・終了確認はいずれも未取得。
+
+draft-0.3のレビュー修正：レビュー修正の基準HEADは`6cc608b`（修正時のHEADは`6cc608b`）。§4末尾の外側時間枠設計への参照段落が具体化対象からAP5-G03／04を落としていたため、外側時間枠設計の冒頭の記載に合わせて「§1のAP5-G03／04、本節のAP5-T01〜04と§5」とした。他の行・ID・判定は変更していない。
 
 [PK01／FX05](BEST_PRACTICE_RELEASE_AP05_PK01_FX05_VERIFICATION_SPLIT_DESIGN.md)、[PK02／FX03・04](BEST_PRACTICE_RELEASE_AP05_PK02_FX03_FX04_VERIFICATION_SPLIT_DESIGN.md)、[PK03／FX06](BEST_PRACTICE_RELEASE_AP05_PK03_FX06_VERIFICATION_SPLIT_DESIGN.md)の直接assertionは各原文を正とする。本書は[PK04の標準梱包検査](../tests/review/package-worker.mjs)を正対照に加え、[friend試験保証レビュー](BEST_PRACTICE_RELEASE_FRIEND_TEST_GUARANTEE_REVIEW.md)のRG03／04と[B-03](BEST_PRACTICE_RELEASE_B03_COMPILED_MIGRATION_FAULT_DESIGN.md)のartifact・終了条件を、同じ候補の判定手順に結ぶ。UN62／新LM03は別gate。
 
@@ -56,7 +58,7 @@ AP03の横断対照は、通常options／継承getterの未読・許可own値の
 
 採取値は候補ID・manifest／slot ID・PK／対照ID・到達位置・固定結果理由・終了4軸・残存責務への参照に限定し、stdout／stderrも固定件数／byte上限と欠落状態を持たせる。token・URL・payload・例外本文は保存しない。上限、保全先、親喪失時に引き継ぐ方法が未確定なら、heap内保持や削除結果を推測して開始しない。[B-03の終了条件](BEST_PRACTICE_RELEASE_B03_COMPILED_MIGRATION_FAULT_DESIGN.md)を優先し、[通常並列用の終了・外側時間枠設計](BEST_PRACTICE_WFB_SGA_TERMINATION_OUTER_BUDGET_DESIGN.md)からは「判定と物理終端・責務移譲を分ける」原則だけを参照する。
 
-[外側時間枠・cleanup予約・保全責務の詳細設計 draft-0.2](BEST_PRACTICE_RELEASE_AP05_CANDIDATE_OUTER_BUDGET_CUSTODY_DESIGN.md)で、本節のAP5-T01〜04と§5を、一本の絶対時間枠・slot入場条件・cleanup予約R1〜R7・終了未確認時の保全と受渡しへ具体化した。数値・保全先・実行は未承認のまま。
+[外側時間枠・cleanup予約・保全責務の詳細設計 draft-0.2](BEST_PRACTICE_RELEASE_AP05_CANDIDATE_OUTER_BUDGET_CUSTODY_DESIGN.md)で、§1のAP5-G03／04、本節のAP5-T01〜04と§5を、一本の絶対時間枠・slot入場条件・cleanup予約R1〜R7・終了未確認時の保全と受渡しへ具体化した。数値・保全先・実行は未承認のまま。
 
 ## 5 判定と次に進まない条件
 
