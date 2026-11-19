@@ -1,6 +1,6 @@
 # B-03：compiled移行・import分離・故障条件表
 
-Version: release-b03-compiled-migration-fault-draft-0.6 / Date: 2026-11-16。
+Version: release-b03-compiled-migration-fault-draft-0.7 / Date: 2026-11-19。
 Status: **BG01のLM01／02、BG02のVK01／02と旧rootの空制御準備だけ限定実装・検証。LM03・専用artifact・切替は未実装。** 旧試験・期待値を維持し、AP01〜06の非提供／保証低下／互換変更は未承認のまま。通常経路未切替、正式発行口閉鎖、C実行入口／body起動閉鎖、全体受付無効、Unknown、VM／監視／telemetry調査保留、LOAD6／LOAD7選択未承認を維持する。friend撤去・build設定変更・負荷採取・実process対照・実接続・実通信・実機操作・設定変更・公開・Pushは行わない。
 
 ## 1 基準・目的・現行の不足
@@ -70,6 +70,8 @@ P／U／D／I／Hは生成・実行結果を別記録する。P/U/Dを原則別c
 | FX08 | [標準worker pack](../tests/review/package-worker.mjs)と通常source／release gate | P側で維持。通常import・Permit／C方式・worker正対照を伴わせ、必要なruntime依存欠落とfriend不在を区別する。実通信を許可する手順ではない |
 
 FX03〜06はAP01〜05の承認後に最終切替する。B-03準備のために旧fixtureをskip／削除する、新しいD結果を旧Pの期待値へ強制変換する、失ったassertionを成功数から省略することは禁止する。
+
+[AP05 PK01／FX05の試験分離設計 draft-0.1](BEST_PRACTICE_RELEASE_AP05_PK01_FX05_VERIFICATION_SPLIT_DESIGN.md)で、FX05が直接assertする旧prepared／会計・非露出をHのまま保持し、Pの通常経路と不在・混入検査、Dの補完に分けた。実展開・専用build・終了確認・切替は未実施で、FX03／04／06・UN62の状態は変更しない。
 
 ## 5 U：旧UN62条件のcompiled故障matrix
 
