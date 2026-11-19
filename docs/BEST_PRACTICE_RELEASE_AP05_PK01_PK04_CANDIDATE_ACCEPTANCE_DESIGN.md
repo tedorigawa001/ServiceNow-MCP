@@ -1,7 +1,9 @@
 # AP05：PK01〜04の共通受入表・候補固定・終了確認
 
-Version: release-ap05-pk01-pk04-candidate-acceptance-draft-0.4 / Date: 2026-11-19。
+Version: release-ap05-pk01-pk04-candidate-acceptance-draft-0.5 / Date: 2026-11-19。
 Status: **設計のみ。検証開始・旧試験切替・撤去・公開は未承認。** 静的照合基準は `e4da77f`。これはPK03分離設計までの文書基準で、製品の候補revisionではない。候補patch・実行結果・終了確認はいずれも未取得。
+
+draft-0.5のレビュー修正：レビュー修正の基準HEADは`9f80c10`（修正時のHEADは`9f80c10`）。§6の参照数14は`0a7d7f1`時点の13ではなく外側時間枠設計への参照を含む数だったため、数の時点と内訳を明記し、照合対象に外側時間枠設計への参照を加えた。各ID行・判定は変更していない。
 
 draft-0.4のレビュー修正：レビュー修正の基準HEADは`0a7d7f1`（修正時のHEADは`3806686`）。§4の「明示timeoutのない起動箇所がある」はPK01〜03の全child起動に該当するため、外側時間枠設計draft-0.2に合わせて「起動には明示timeoutがない」とした。§6に静的確認を追加した。各ID行・判定は変更していない。
 
@@ -70,4 +72,4 @@ AP03の横断対照は、通常options／継承getterの未読・許可own値の
 
 ## 6 静的確認
 
-基準`0a7d7f1`で、PK04（package-worker）の外部コマンド120秒・smoke child3件各15秒・`--prefer-offline`、PK01（package-canonical-budget）とPK02・03（package-http-classification）に`timeout`指定がないこと、PK01の`review-composition-fake-io`検査、AP02のS01〜07／K01〜04、入口ED01〜07、friend試験レビューのRG03／04、AP01残差台帳・AP04・標準梱包設計・B-03・通常並列終了設計の存在を静的に照合した。本書のID8行（G4／T4）、表3・ローカル参照14・明示anchor0、参照先・表列数・末尾改行・差分空白を確認した。製品・試験・設定の差分はなく、実行・build／pack・process操作は行っていない。
+基準`0a7d7f1`で、PK04（package-worker）の外部コマンド120秒・smoke child3件各15秒・`--prefer-offline`、PK01（package-canonical-budget）とPK02・03（package-http-classification）に`timeout`指定がないこと、PK01の`review-composition-fake-io`検査、AP02のS01〜07／K01〜04、入口ED01〜07、friend試験レビューのRG03／04、AP01残差台帳・AP04・標準梱包設計・B-03・通常並列終了設計の存在と、`6cc608b`で§4末尾に追加した外側時間枠設計への参照を静的に照合した。以下の数はdraft-0.5時点で、本書のID8行（G4／T4）、表3・ローカル参照14（`0a7d7f1`時点の13に外側時間枠設計への1件を加えたもの）・明示anchor0、参照先・表列数・末尾改行・差分空白を確認した。製品・試験・設定の差分はなく、実行・build／pack・process操作は行っていない。
