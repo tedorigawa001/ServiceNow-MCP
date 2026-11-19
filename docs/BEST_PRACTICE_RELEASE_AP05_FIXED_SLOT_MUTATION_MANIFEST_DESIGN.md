@@ -1,7 +1,9 @@
 # AP05：PK01〜04の固定slot・変異manifest案
 
-Version: release-ap05-fixed-slot-mutation-manifest-draft-0.1 / Date: 2026-11-19。
+Version: release-ap05-fixed-slot-mutation-manifest-draft-0.2 / Date: 2026-11-19。
 Status: **設計案のみ。候補revision・digestは未確定。数値・観測手段・保全方式・保全先は未承認。** 静的照合基準は `3df3cd5`。以下のID・順序はレビュー案で、対象をpin済み・承認済み・実行済みとはしない。
+
+draft-0.2のレビュー修正：レビュー修正の基準HEADは`9d9033a`（修正時のHEADは`9d9033a`）。MT15／16が `statusProbe`／`nativeStatusProbe` を「class static slot」としていたが、実体はmoduleの `let` 変数で、クラスの `static {}` から代入される（bounded-read.ts:85・89・339〜341）。対象を「module上の旧登録slot」、理由ラベルを `sa_probe_slot_present`／`nd_probe_slot_present` とし、登録代入はMT19／20と分けた。§2の参照先不明の「②」を費目・上界設計の次工程へのリンクに改め、§5に静的確認を追加した。他のSL／MT／SP／SR行・判定は変更していない。
 
 [共通受入設計](BEST_PRACTICE_RELEASE_AP05_PK01_PK04_CANDIDATE_ACCEPTANCE_DESIGN.md)と[PK01／FX05](BEST_PRACTICE_RELEASE_AP05_PK01_FX05_VERIFICATION_SPLIT_DESIGN.md)・[PK02／FX03・04](BEST_PRACTICE_RELEASE_AP05_PK02_FX03_FX04_VERIFICATION_SPLIT_DESIGN.md)・[PK03／FX06](BEST_PRACTICE_RELEASE_AP05_PK03_FX06_VERIFICATION_SPLIT_DESIGN.md)、[PK04現行検査](../tests/review/package-worker.mjs)を参照する。候補Pのみを対象とし、H／Dの元試験・成果物・期待値を変更しない。[AP02撤去範囲](BEST_PRACTICE_RELEASE_AP02_REMOVAL_SCOPE_BASELINE_DESIGN.md)と先行AP03の採用記録は候補仕様へ後日結合する。未コミット差分を現HEADへ合成して候補とみなさない。
 
@@ -43,7 +45,7 @@ Status: **設計案のみ。候補revision・digestは未確定。数値・観�
 | AP5-SL21／P0 PK04 | 本番の隔離解決、開発loader／依存／src・tests・既存除外物・fixture authority不在。検査時添付物は基準payloadと別 | SP05〜07 | SR02〜05 |
 | AP5-SL22／系列末尾（全MT後） | 最終pinと系列共有物の保全・固定回収・確定記録。R4〜R7を使用し、新しい検査slotを起動しない | SP12〜15 | SR02、SR06〜08 |
 
-表内の複数入力は別照合欄を持つ。実entry・入力variantの固定リストと最大通過回数は②で詰め、slot名だけから一律に費用や件数を確定しない。どの通常slotにもSP12〜15／SR06〜08の該当する出口・保全判定を適用する。記載がないSP11／SR04〜05も、実runner・worker・streamを生成したprefixには必要。SL22が未開始でも、停止prefixからの予約済み保全責務は消えない。
+表内の複数入力は別照合欄を持つ。実entry・入力variantの固定リストと最大通過回数は[費目・上界設計](BEST_PRACTICE_RELEASE_AP05_CANDIDATE_COST_UPPER_BOUND_DESIGN.md)の次工程で詰め、slot名だけから一律に費用や件数を確定しない。どの通常slotにもSP12〜15／SR06〜08の該当する出口・保全判定を適用する。記載がないSP11／SR04〜05も、実runner・worker・streamを生成したprefixには必要。SL22が未開始でも、停止prefixからの予約済み保全責務は消えない。
 
 ## 3 PΔ変異manifest案：表順に一行一変異
 
@@ -67,8 +69,8 @@ Status: **設計案のみ。候補revision・digestは未確定。数値・観�
 | AP5-MT12／SL05 | `dist/servicenow/review-canonical-budget.js` のみ欠落 | `required_canonical_kernel_missing`：P+の必須kernel未取得。P0成功ではない | SP05／SR03（P+の構造判定） |
 | AP5-MT13／SL18 | SESSION.js のSA旧named取得口 `takeStatusAcceptanceProbe` 一つ | `sa_named_export_present`：残る通常moduleの旧SA named境界を検出 | SP05／SR03 |
 | AP5-MT14／SL19 | SESSION.js のND旧named取得口 `takeNativeStatusCompositionProbe` 一つ | `nd_named_export_present`：残る通常moduleの旧ND named境界を検出 | SP05／SR03 |
-| AP5-MT15／SL18 | SESSION.js のSA旧class static slot `statusProbe` 一つ | `sa_static_probe_present`：SA class上の禁止口を検出 | SP05／SR03 |
-| AP5-MT16／SL19 | SESSION.js のND旧class static slot `nativeStatusProbe` 一つ | `nd_static_probe_present`：ND class上の禁止口を検出 | SP05／SR03 |
+| AP5-MT15／SL18 | SESSION.js のmodule上のSA旧登録slot（`let statusProbe`）一つ。`static {}` 内の登録代入はMT19 | `sa_probe_slot_present`：module上の旧SA登録slotを検出 | SP05／SR03 |
+| AP5-MT16／SL19 | SESSION.js のmodule上のND旧登録slot（`let nativeStatusProbe`）一つ。`static {}` 内の登録代入はMT20 | `nd_probe_slot_present`：module上の旧ND登録slotを検出 | SP05／SR03 |
 | AP5-MT17／SL18 | SESSION.js のSA専用runner `#runStatusAcceptanceProbe` だけを未exportの構造片で表す | `sa_private_runner_retained`：named不在でも旧SA runnerが残る | SP05／SR03 |
 | AP5-MT18／SL19 | SESSION.js のND専用runner `#runNativeStatusProbe` だけを未exportの構造片で表す | `nd_private_runner_retained`：named不在でも旧ND runnerが残る | SP05／SR03 |
 | AP5-MT19／SL18 | SESSION.js のSA登録用代入の一箇所（取得口とrunnerは別） | `sa_probe_registration_retained`：旧SA登録本体が残る | SP05／SR03 |
@@ -137,3 +139,7 @@ Status: **設計案のみ。候補revision・digestは未確定。数値・観�
 | AP5-SR08 | 系列／上位：期限・時計・記録不達 | 先行理由・既知prefixと四軸／未確認を保持。遅い確認は別記録、元判定と次slot閉鎖を戻さない |
 
 次工程の各行に、`slot_id／subcheck_id／predicate_id`、`site_ref／実行主体・相対位置・操作／L行`、`失敗prefix／最後に確定したsite／消費済み・未到達・未確認`、`residual_ref／対象ID・owner世代・受理票・次の権限` を設ける。原本／借用／コピー、生成試行／実体受領、受理／削除／空確認は別欄。候補pinと除外理由にも未確定値を明示し、上限・観測・保全の不足を零で補わない。通常slotの終了費は `W_i`、失敗後と共有物の後始末は一度だけの系列cleanup予約。方式や数値の決定・候補起動は別承認で、数値・観測手段・保全方式・保全先、候補revision・digestは確定しない。
+
+## 5 静的確認
+
+基準`9d9033a`で、bounded-read.tsの `takeStatusAcceptanceProbe`／`takeNativeStatusCompositionProbe`、module上の `statusProbe`／`nativeStatusProbe`（85・89行）と `static {}` 内の登録代入（339〜341行）、`#runStatusAcceptanceProbe`／`#runNativeStatusProbe`、`ReleaseInputProjection`、変異対象（FAKE／SESSION／SAWRAP、native-diagnostic、review-canonical-budget、source-values、release-time-handoff／owner、review-worker、review-evidence-lifecycle、dev-worker-bootstrap）の元srcの存在、PK04（package-worker）の本番依存3件（acorn／saxes／zod）・`registerPreparedFixtureSource`・dev-worker-bootstrap除外の検査、欠落対照がP+ slot、混入対照がP0 slotに結ぶこと、SP行と費目台帳L01〜11・SL22と `R4〜R7` の対応を静的に照合した。本書のID92行（SL22／MT56／SP6／SR8、SL・MTは欠番なし）が他文書のIDと衝突しないこと、表4・ローカル参照10・明示anchor0、参照先・表列数・末尾改行・差分空白を確認した。製品・試験・設定の差分はなく、実行・build／pack・変異・process／保全操作は行っていない。

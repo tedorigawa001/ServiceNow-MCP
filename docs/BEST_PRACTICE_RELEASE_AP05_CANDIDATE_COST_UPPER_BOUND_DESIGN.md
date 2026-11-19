@@ -1,6 +1,6 @@
 # AP05：共通費目・方式固有費目と上界の導出根拠
 
-Version: release-ap05-candidate-cost-upper-bound-draft-0.1 / Date: 2026-11-19。
+Version: release-ap05-candidate-cost-upper-bound-draft-0.2 / Date: 2026-11-19。
 Status: **算定設計のみ。数値・観測手段・保全方式・保全先は未承認。** 静的照合基準は `ae7b96d`。候補revision・固定slot表・実測は未確定。本書の式は上界を導くための条件であり、数値が得られた、または起動可能という意味ではない。
 
 [固定終了観測点・費目台帳](BEST_PRACTICE_RELEASE_AP05_CANDIDATE_OBSERVATION_COST_LEDGER_DESIGN.md)のAP5-L01〜11に、[観測手段比較](BEST_PRACTICE_RELEASE_AP05_CANDIDATE_OBSERVATION_METHOD_COMPARISON.md)のAP5-VM01〜11と[保全方式比較](BEST_PRACTICE_RELEASE_AP05_CUSTODY_METHOD_COMPARISON.md)のAP5-CM01〜04を重ねる。[外側時間枠・cleanup予約](BEST_PRACTICE_RELEASE_AP05_CANDIDATE_OUTER_BUDGET_CUSTODY_DESIGN.md)の `W_i`・`D_obs`・`D_end`・`R1〜R7` と、[保全方式の選定条件](BEST_PRACTICE_RELEASE_AP05_CUSTODY_SELECTION_CONDITIONS_DESIGN.md)のAP5-KS01〜09は変更しない。対象は[共通受入設計](BEST_PRACTICE_RELEASE_AP05_PK01_PK04_CANDIDATE_ACCEPTANCE_DESIGN.md)の候補P系列。H／D・UN62／LM03・AP06の費用・結果と合算しない。
@@ -58,3 +58,5 @@ Status: **算定設計のみ。数値・観測手段・保全方式・保全先�
 配賦は、通常slotの退出・受理・専有物解放を各 `W_i`、失敗時の未完了prefixと系列の共有物を一度だけの `R_cleanup` に入れる。通常パスはslot列と手渡し費の和、失敗側は**到達可能な各prefixについて**、残った当該slotと共有物・最終記録が各 `Rk` の範囲に収まるかを審査する。排他的な経路の量は根拠がある場合だけ最大値で比較し、すでに支払った費用を戻したり、互いに不足するphase間で予約を貸借したりしない。共有物は同一ownerと寿命を確認して一重計上し、保全による保持延長は含める。`R1〜R7` の既定順・各cutoff、`t_i + W_i < D_obs` と `D_end` を維持し、観測停止後に次slotを起動しない。期限後の照会は元予算外で、別承認・別上限の解放確認に限る。
 
 将来のレビューでは、固定表から独立に数えた正常・失敗prefix、境界一致／超過、未知値の混入、通知と物理終了のずれ、別copyと共有、失敗時の費用残差、無応答でも再移譲・再削除しないことを比較する。未導出または未承認の費目があれば**候補は起動しない**。測定・実行・方式選定はいずれも別承認で、数値・観測手段・保全方式・保全先は未承認、閉鎖条件・Unknown・調査保留を維持する。
+
+[PK01〜04の固定slot・変異manifest案 draft-0.2](BEST_PRACTICE_RELEASE_AP05_FIXED_SLOT_MUTATION_MANIFEST_DESIGN.md)で、固定slot SL01〜22、一行一変異のPΔ MT01〜56、操作site SP01〜15と残存責務 SR01〜08をL01〜11へ渡す中継IDとして定義した。実site・入力variant・最大通過回数・数値は未確定のまま。
