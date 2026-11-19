@@ -1,7 +1,9 @@
 # AP05：PK01〜04の共通受入表・候補固定・終了確認
 
-Version: release-ap05-pk01-pk04-candidate-acceptance-draft-0.5 / Date: 2026-11-19。
+Version: release-ap05-pk01-pk04-candidate-acceptance-draft-0.6 / Date: 2026-11-19。
 Status: **設計のみ。検証開始・旧試験切替・撤去・公開は未承認。** 静的照合基準は `e4da77f`。これはPK03分離設計までの文書基準で、製品の候補revisionではない。候補patch・実行結果・終了確認はいずれも未取得。
+
+draft-0.6のレビュー修正：レビュー修正の基準HEADは`7ad19c9`（修正時のHEADは`7ad19c9`）。`7ad19c9`で追加された候補入場設計への参照がどの文書にもなかったため、§5末尾に参照段落を加えた。これに伴い§6のローカル参照数を15とし、数の時点と内訳を更新した。各ID行・判定は変更していない。
 
 draft-0.5のレビュー修正：レビュー修正の基準HEADは`9f80c10`（修正時のHEADは`9f80c10`）。§6の参照数14は`0a7d7f1`時点の13ではなく外側時間枠設計への参照を含む数だったため、数の時点と内訳を明記し、照合対象に外側時間枠設計への参照を加えた。各ID行・判定は変更していない。
 
@@ -70,6 +72,8 @@ AP03の横断対照は、通常options／継承getterの未読・許可own値の
 2. **実行停止：** P+不成立ならその候補の不在／混入を成功扱いにしない。想定外の判定、取消、clock不明・逆行、`D_obs` 到達、同一性の破れでは新規slotを止め、確保済みのcleanup・保全だけへ進む。`D_end` までに終端が揃わなければ、最初の理由と未確認軸を封印し、次slotを開始しない。遅いexit／EOFは解放記録にのみ追加し、元判定を成功へ戻さない。
 3. **候補受入：** 必須のP+／P0／PΔが全て予定判定で、同revision・同配布物由来、展開物のpost-pin、および各終了軸・cleanupが期限内に確認された場合のみ、AP05の候補配布物確認として記録する。H／Dの結果と残差は別添とし、元assertionを廃止・代替済みにはしない。旧試験切替、AP06の通常並列3件timeout対照・版・公開は別途承認。閉鎖条件・Unknown・調査保留は候補受入だけでは解除しない。
 
+[候補入場条件・必要証拠・起動0の停止条件 draft-0.2](BEST_PRACTICE_RELEASE_AP05_CANDIDATE_ADMISSION_DESIGN.md)で、AP5-G01〜04とT01〜04を、段階別pin・前slotの終了確認・通常枠とcleanup予約の入場判定へ具体化した。候補未確定・承認未了のため、現時点はSL01から起動0。
+
 ## 6 静的確認
 
-基準`0a7d7f1`で、PK04（package-worker）の外部コマンド120秒・smoke child3件各15秒・`--prefer-offline`、PK01（package-canonical-budget）とPK02・03（package-http-classification）に`timeout`指定がないこと、PK01の`review-composition-fake-io`検査、AP02のS01〜07／K01〜04、入口ED01〜07、friend試験レビューのRG03／04、AP01残差台帳・AP04・標準梱包設計・B-03・通常並列終了設計の存在と、`6cc608b`で§4末尾に追加した外側時間枠設計への参照を静的に照合した。以下の数はdraft-0.5時点で、本書のID8行（G4／T4）、表3・ローカル参照14（`0a7d7f1`時点の13に外側時間枠設計への1件を加えたもの）・明示anchor0、参照先・表列数・末尾改行・差分空白を確認した。製品・試験・設定の差分はなく、実行・build／pack・process操作は行っていない。
+基準`0a7d7f1`で、PK04（package-worker）の外部コマンド120秒・smoke child3件各15秒・`--prefer-offline`、PK01（package-canonical-budget）とPK02・03（package-http-classification）に`timeout`指定がないこと、PK01の`review-composition-fake-io`検査、AP02のS01〜07／K01〜04、入口ED01〜07、friend試験レビューのRG03／04、AP01残差台帳・AP04・標準梱包設計・B-03・通常並列終了設計の存在と、`6cc608b`で§4末尾に追加した外側時間枠設計への参照、`7ad19c9`の候補入場設計（G01〜04・T01〜04の行キーと名前が本書と一致すること）を静的に照合した。以下の数はdraft-0.6時点で、本書のID8行（G4／T4）、表3・ローカル参照15（`0a7d7f1`時点の13に外側時間枠設計と候補入場設計への各1件を加えたもの）・明示anchor0、参照先・表列数・末尾改行・差分空白を確認した。製品・試験・設定の差分はなく、実行・build／pack・process操作は行っていない。
