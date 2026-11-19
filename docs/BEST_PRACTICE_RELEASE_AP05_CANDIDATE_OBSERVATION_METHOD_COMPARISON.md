@@ -1,7 +1,9 @@
 # AP05：候補検証の観測手段比較・取得証拠と費目の対応
 
-Version: release-ap05-candidate-observation-method-comparison-draft-0.1 / Date: 2026-11-19。
+Version: release-ap05-candidate-observation-method-comparison-draft-0.2 / Date: 2026-11-19。
 Status: **比較設計のみ。数値・観測手段・保全方式・保全先は未承認。** 静的照合基準は `90a2019`。候補revision、実測、候補Pの終了証拠は未取得。表の「取得できる証拠」は前提を満たした場合の受入契約であり、現行で取得済みという意味ではない。
+
+draft-0.2のレビュー修正：レビュー修正の基準HEADは`a83dc77`（修正時のHEADは`a83dc77`）。§4に静的確認を追加し、費目台帳と保全方式の選定条件から本書への参照段落を追加した。各VM行・判定は変更していない。
 
 [固定終了観測点・費目台帳](BEST_PRACTICE_RELEASE_AP05_CANDIDATE_OBSERVATION_COST_LEDGER_DESIGN.md)のV01〜04／L01〜11を比較単位とし、[外側時間枠・cleanup予約](BEST_PRACTICE_RELEASE_AP05_CANDIDATE_OUTER_BUDGET_CUSTODY_DESIGN.md)の `W_i`・`R1〜R7`、[保全方式の選定条件](BEST_PRACTICE_RELEASE_AP05_CUSTODY_SELECTION_CONDITIONS_DESIGN.md)のKS01〜09に接続する。対象は[共通受入設計](BEST_PRACTICE_RELEASE_AP05_PK01_PK04_CANDIDATE_ACCEPTANCE_DESIGN.md)のPK01〜04候補P。H／D・UN62／LM03・AP06とは観測の由来・責務・時間枠を分ける。
 
@@ -39,3 +41,7 @@ Status: **比較設計のみ。数値・観測手段・保全方式・保全先�
 4. **採用前に観測による差を確認する。** 予定する配布外entry・対応環境・観測できる生成／閉鎖点、観測なしの通常対照との差、secret非保持、未確認時の引継ぎ先を比較票に残す。候補本体の差替え、friend／採用口、無制限の列挙・出力捕捉、引継ぎや停止権の暗黙付与を必要とする案で穴を埋めない。変更・実測・保全方式の比較と採用は別gateとし、この表で合格・実装・実行を承認しない。
 
 将来の独立対照は、即時spawn失敗／handle遅着、親exit後に残る子・thread、片streamの終端先行／出力上限、保全commit後の応答消失／別世代の票、claim後に結果不明、期限後の通知を分ける。費目別上界および保全方式の比較へは不足理由も含めて渡し、未確認値を0に置き換えない。
+
+## 4 静的確認
+
+基準`a83dc77`で、PK01（package-canonical-budget）とPK02／03（package-http-classification）のcompiled childが`execFileSync`／`stdio: 'inherit'`で明示timeoutを持たず、`maxBuffer`／pipeがdry-runの`npm pack`だけに付くこと、PK04（package-worker）の外部コマンド120秒・smoke child3件各15秒・stdoutの`assert.equal`・一時領域の`finally`／`rmSync`、worker supervisorの`exit`処理と`terminate()`解決後のlistener解除・stream `destroy()`、WF-A文書の存在、費目台帳のV01〜04／L01〜11、保全方式の選定条件のKS01〜09、外側時間枠設計の`W_i`／`R1〜R7`と各VM行の対応費目を静的に照合した。本書のID11行（VM01〜11）が他文書のIDと衝突しないこと、表1・ローカル参照9・明示anchor0、参照先・表列数・末尾改行・差分空白を確認した。製品・試験・設定の差分はなく、実行・build／pack・観測／process／保全操作は行っていない。

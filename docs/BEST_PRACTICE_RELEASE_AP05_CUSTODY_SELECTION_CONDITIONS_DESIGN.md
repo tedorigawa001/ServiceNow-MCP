@@ -1,6 +1,6 @@
 # AP05：保全方式の選定条件・同一受理票の照会・二重処理防止
 
-Version: release-ap05-custody-selection-conditions-draft-0.1 / Date: 2026-11-19。
+Version: release-ap05-custody-selection-conditions-draft-0.2 / Date: 2026-11-19。
 Status: **選定条件の設計のみ。数値・観測手段・保全方式・保全先は未承認。** 静的照合基準は `2f486e5`。候補検証・方式比較の実測・保全操作は未実施。
 
 [外側時間枠・cleanup予約設計](BEST_PRACTICE_RELEASE_AP05_CANDIDATE_OUTER_BUDGET_CUSTODY_DESIGN.md)のAP5-C04〜07／U01〜04、[固定終了観測点・費目台帳](BEST_PRACTICE_RELEASE_AP05_CANDIDATE_OBSERVATION_COST_LEDGER_DESIGN.md)のAP5-V04／L08〜11を具体化する。[共通受入設計](BEST_PRACTICE_RELEASE_AP05_PK01_PK04_CANDIDATE_ACCEPTANCE_DESIGN.md)の候補P系列だけが対象。H／D・UN62／LM03・AP06には方式・権限・時間枠を持ち込まない。
@@ -57,3 +57,5 @@ Status: **選定条件の設計のみ。数値・観測手段・保全方式・�
 通常slotでは各 `W_i`、系列の残存責務では `R4〜R7` の元cutoffを使い、同じ操作を再実行しない。外側時間枠を使い切っても元の理由・未確認を維持し、`D_end` 後の照会は別の承認・上限・権限の下で行う解放確認のみ。確定済みの候補判定を遡及更新せず、不明なら次slot・候補採用を止める。論理的な独立保持枠が必要という条件は、具体的な媒体・場所・サービスの選定ではない。
 
 将来の受入では、監視側のみの喪失／両側喪失、commit前の失敗／commit後のack消失、古い照会応答、別枠・別世代の票、並行受理、削除claim直後の喪失、部分削除、保全先の不通と遅い応答を、それぞれ独立対照にする。期待するのは、同じ枠の照会以外を増やさず、重複移譲・二重削除・期限の更新を拒否し、確認不能の責務を保持すること。選定・計測・実行は別承認であり、未承認の間は候補を起動しない。正式発行口等の閉鎖条件・Unknown・調査保留を解除しない。
+
+[観測手段比較・取得証拠と費目の対応 draft-0.2](BEST_PRACTICE_RELEASE_AP05_CANDIDATE_OBSERVATION_METHOD_COMPARISON.md)で、V04の保全枠・受理票の照会、処理と独立した空確認、現行の後始末（AP5-VM09〜11）を、L08〜L11の費目と比較した。保全方式・保全先・採用は未承認のまま。
