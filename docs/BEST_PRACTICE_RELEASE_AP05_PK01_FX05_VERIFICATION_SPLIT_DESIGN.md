@@ -1,7 +1,9 @@
 # AP05：PK01／FX05の旧試験・候補配布物の正対照／不在検査
 
-Version: release-ap05-pk01-fx05-verification-split-draft-0.1 / Date: 2026-11-19。
+Version: release-ap05-pk01-fx05-verification-split-draft-0.2 / Date: 2026-11-19。
 Status: **試験分離の設計案。旧試験の移行・変更・撤去は未承認。** 静的基準HEADは`5f2a053`。[PK01の保証レビュー](BEST_PRACTICE_RELEASE_FRIEND_TEST_GUARANTEE_REVIEW.md)、[B-03のFX05](BEST_PRACTICE_RELEASE_B03_COMPILED_MIGRATION_FAULT_DESIGN.md)、[AP02の範囲基準](BEST_PRACTICE_RELEASE_AP02_REMOVAL_SCOPE_BASELINE_DESIGN.md)のS03／05、K01／04を接続する。先行AP03の採用記録・未コミット差分は保持し、候補検査の基準に採るrevisionは別途固定する。PK02／03・FX03／04／06と旧ND単体UN62は対象外。
+
+draft-0.2のレビュー修正：レビュー修正の基準HEADは`06e8d34`（修正時のHEADは`84dac4e`）。他の設計文書と同じく、末尾に静的確認の記録（§5）を追加した。H／P／N／Dの各行、旧assertion、承認状態は変更しない。B-03とfriend試験レビューにある本書への参照（draft-0.1）は作業中の変更と重なるため、今回は更新していない。
 
 正式発行口・C実行入口／body起動閉鎖、全体受付無効、通常経路未切替、Unknown・調査保留、元期限と既定並列度を維持する。MDのみ。旧試験の変更／skip・実装・撤去・再実行・build／梱包・混入操作・実接続・実通信・設定変更・公開・コミット・Pushは行わない。
 
@@ -41,3 +43,7 @@ Hは旧revisionのソース・build・旧fixtureの組を記録する区分。�
 [開発bootstrapの既存対照](../tests/review/development-bootstrap.test.ts)には固定200の親／release、同coreのC/G/P、一時予約とsource受理がある。Dの別compiled成果物ではこの会計・ack・非実行の比較summaryを独立に確認する案を残す。Dの別brand・用意済み時刻／入力・unknown／mismatchedは、旧実classの登録ready・同bytesからのprivate ack→元source／Permit／owner→prepared・停止／診断保持を回復しない。FX05の旧保証はH、移行候補のD保証はD、Pの通常保証／入口不在はPと別集計する。
 
 切替前に、対象revision・元assertion・候補manifestと正負試験・残差owner・AP01／04の判断・AP05の試験処遇と承認を同じ票に結ぶ。子processの終了・stdio／cleanup・固有の外側時間枠、梱包／設定の変更は別途承認を得る。Hの成功をPに足す、旧期待値を反転・skipする、未確認を完了にすることは不可。今回の受入条件・実施結果は未承認／未実施。
+
+## 5 静的確認
+
+基準`06e8d34`で、PK01のpack dry-runによる3module×4種の同梱必須とtests／`dist/review/abort-scope-evidence*`の非同梱、リポジトリ`dist`の静的検査と明示timeoutのない4本のchild起動（H01／02）、FX05の各直接assertionとfetch呼出し回数の未検査（H03）、compiled canonical sessionのC/G/P=1／2／6と省略時summary（P02）、compiled typed dispatchのshape拒否C=0・throw／reject C=1・G=2（P03）、NC03〜05・EF3-N01〜07の参照先を静的に照合した。本書のID10行（H3／P3／N4）、表3・ローカル参照11・明示anchor0、参照先・表列数・末尾改行・差分空白を確認し、変更は本書1件のみ、stage0、製品・試験・設定の差分はない。製品module import・試験再実行・build／pack・実展開は行っていない。
