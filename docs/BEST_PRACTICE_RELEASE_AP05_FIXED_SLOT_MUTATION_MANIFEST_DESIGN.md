@@ -1,7 +1,9 @@
 # AP05：PK01〜04の固定slot・変異manifest案
 
-Version: release-ap05-fixed-slot-mutation-manifest-draft-0.2 / Date: 2026-11-19。
+Version: release-ap05-fixed-slot-mutation-manifest-draft-0.3 / Date: 2026-11-19。
 Status: **設計案のみ。候補revision・digestは未確定。数値・観測手段・保全方式・保全先は未承認。** 静的照合基準は `3df3cd5`。以下のID・順序はレビュー案で、対象をpin済み・承認済み・実行済みとはしない。
+
+draft-0.3のレビュー修正：レビュー修正の基準HEADは`28f574c`（修正時のHEADは`d4b0941`）。§4末尾に操作site・失敗prefix設計への参照段落を追加し、§5の参照数をdraft-0.3時点の11に更新した。各SL／MT／SP／SR行・判定は変更していない。
 
 draft-0.2のレビュー修正：レビュー修正の基準HEADは`9d9033a`（修正時のHEADは`9d9033a`）。MT15／16が `statusProbe`／`nativeStatusProbe` を「class static slot」としていたが、実体はmoduleの `let` 変数で、クラスの `static {}` から代入される（bounded-read.ts:85・89・339〜341）。対象を「module上の旧登録slot」、理由ラベルを `sa_probe_slot_present`／`nd_probe_slot_present` とし、登録代入はMT19／20と分けた。§2の参照先不明の「②」を費目・上界設計の次工程へのリンクに改め、§5に静的確認を追加した。他のSL／MT／SP／SR行・判定は変更していない。
 
@@ -140,6 +142,8 @@ draft-0.2のレビュー修正：レビュー修正の基準HEADは`9d9033a`（�
 
 次工程の各行に、`slot_id／subcheck_id／predicate_id`、`site_ref／実行主体・相対位置・操作／L行`、`失敗prefix／最後に確定したsite／消費済み・未到達・未確認`、`residual_ref／対象ID・owner世代・受理票・次の権限` を設ける。原本／借用／コピー、生成試行／実体受領、受理／削除／空確認は別欄。候補pinと除外理由にも未確定値を明示し、上限・観測・保全の不足を零で補わない。通常slotの終了費は `W_i`、失敗後と共有物の後始末は一度だけの系列cleanup予約。方式や数値の決定・候補起動は別承認で、数値・観測手段・保全方式・保全先、候補revision・digestは確定しない。
 
+[操作site・失敗prefix設計 draft-0.2](BEST_PRACTICE_RELEASE_AP05_OPERATION_SITE_FAILURE_PREFIX_DESIGN.md)で、SP01〜15を小操作の順序siteへ展開し、消費・到達・結果確認・保持責務の区別と、失敗prefix FP01〜12からSR01〜08・`W_i`／`R1〜R7` への引渡しを定義した。実site・係数・数値は未確定のまま。
+
 ## 5 静的確認
 
-基準`9d9033a`で、bounded-read.tsの `takeStatusAcceptanceProbe`／`takeNativeStatusCompositionProbe`、module上の `statusProbe`／`nativeStatusProbe`（85・89行）と `static {}` 内の登録代入（339〜341行）、`#runStatusAcceptanceProbe`／`#runNativeStatusProbe`、`ReleaseInputProjection`、変異対象（FAKE／SESSION／SAWRAP、native-diagnostic、review-canonical-budget、source-values、release-time-handoff／owner、review-worker、review-evidence-lifecycle、dev-worker-bootstrap）の元srcの存在、PK04（package-worker）の本番依存3件（acorn／saxes／zod）・`registerPreparedFixtureSource`・dev-worker-bootstrap除外の検査、欠落対照がP+ slot、混入対照がP0 slotに結ぶこと、SP行と費目台帳L01〜11・SL22と `R4〜R7` の対応を静的に照合した。本書のID92行（SL22／MT56／SP6／SR8、SL・MTは欠番なし）が他文書のIDと衝突しないこと、表4・ローカル参照10・明示anchor0、参照先・表列数・末尾改行・差分空白を確認した。製品・試験・設定の差分はなく、実行・build／pack・変異・process／保全操作は行っていない。
+基準`9d9033a`で、bounded-read.tsの `takeStatusAcceptanceProbe`／`takeNativeStatusCompositionProbe`、module上の `statusProbe`／`nativeStatusProbe`（85・89行）と `static {}` 内の登録代入（339〜341行）、`#runStatusAcceptanceProbe`／`#runNativeStatusProbe`、`ReleaseInputProjection`、変異対象（FAKE／SESSION／SAWRAP、native-diagnostic、review-canonical-budget、source-values、release-time-handoff／owner、review-worker、review-evidence-lifecycle、dev-worker-bootstrap）の元srcの存在、PK04（package-worker）の本番依存3件（acorn／saxes／zod）・`registerPreparedFixtureSource`・dev-worker-bootstrap除外の検査、欠落対照がP+ slot、混入対照がP0 slotに結ぶこと、SP行と費目台帳L01〜11・SL22と `R4〜R7` の対応を静的に照合した。本書のID92行（SL22／MT56／SP6／SR8、SL・MTは欠番なし）が他文書のIDと衝突しないこと、表4・ローカル参照11（draft-0.3時点。`9d9033a`時点の9に費目・上界設計と操作site設計への各1件を加えたもの）・明示anchor0、参照先・表列数・末尾改行・差分空白を確認した。製品・試験・設定の差分はなく、実行・build／pack・変異・process／保全操作は行っていない。

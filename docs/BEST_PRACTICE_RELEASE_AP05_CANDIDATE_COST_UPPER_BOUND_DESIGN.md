@@ -61,7 +61,7 @@ draft-0.3のレビュー修正：レビュー修正の基準HEADは`3df3cd5`（�
 
 将来のレビューでは、固定表から独立に数えた正常・失敗prefix、境界一致／超過、未知値の混入、通知と物理終了のずれ、別copyと共有、失敗時の費用残差、無応答でも再移譲・再削除しないことを比較する。未導出または未承認の費目があれば**候補は起動しない**。測定・実行・方式選定はいずれも別承認で、数値・観測手段・保全方式・保全先は未承認、閉鎖条件・Unknown・調査保留を維持する。
 
-[PK01〜04の固定slot・変異manifest案 draft-0.2](BEST_PRACTICE_RELEASE_AP05_FIXED_SLOT_MUTATION_MANIFEST_DESIGN.md)で、固定slot SL01〜22、一行一変異のPΔ MT01〜56、操作site SP01〜15と残存責務 SR01〜08をL01〜11へ渡す中継IDとして定義した。実site・入力variant・最大通過回数・数値は未確定のまま。
+[PK01〜04の固定slot・変異manifest案 draft-0.3](BEST_PRACTICE_RELEASE_AP05_FIXED_SLOT_MUTATION_MANIFEST_DESIGN.md)で、固定slot SL01〜22、一行一変異のPΔ MT01〜56、操作site SP01〜15と残存責務 SR01〜08をL01〜11へ渡す中継IDとして定義した。実site・入力variant・最大通過回数・数値は未確定のまま。
 
 ## 5 静的確認
 

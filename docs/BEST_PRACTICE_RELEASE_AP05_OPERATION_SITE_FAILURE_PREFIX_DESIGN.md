@@ -1,9 +1,11 @@
 # AP05：固定slot・変異manifestの操作siteと失敗prefix
 
-Version: release-ap05-operation-site-failure-prefix-draft-0.1 / Date: 2026-11-19。
+Version: release-ap05-operation-site-failure-prefix-draft-0.2 / Date: 2026-11-19。
 Status: **詳細設計のみ。候補revision・digestは未確定。数値・観測手段・保全方式・保全先は未承認。** 静的照合基準は `aedd2c6`。記号site・状態・費目の対応は案であり、実呼出し位置や実行結果ではない。
 
-[固定slot・変異manifest draft-0.2](BEST_PRACTICE_RELEASE_AP05_FIXED_SLOT_MUTATION_MANIFEST_DESIGN.md)のSL01〜22・MT01〜56・SP01〜15・SR01〜08を正とする。[共通受入設計](BEST_PRACTICE_RELEASE_AP05_PK01_PK04_CANDIDATE_ACCEPTANCE_DESIGN.md)の判定を変えず、[費目台帳](BEST_PRACTICE_RELEASE_AP05_CANDIDATE_OBSERVATION_COST_LEDGER_DESIGN.md)のL01〜11と[上界設計](BEST_PRACTICE_RELEASE_AP05_CANDIDATE_COST_UPPER_BOUND_DESIGN.md)、[外側時間枠](BEST_PRACTICE_RELEASE_AP05_CANDIDATE_OUTER_BUDGET_CUSTODY_DESIGN.md)の `W_i`／`R1〜R7`、[保全方式の選定条件](BEST_PRACTICE_RELEASE_AP05_CUSTODY_SELECTION_CONDITIONS_DESIGN.md)の同枠・同票・一度限り境界へ渡す。候補P系列だけが対象で、H／D・UN62／LM03・AP06とは別枠。
+draft-0.2のレビュー修正：レビュー修正の基準HEADは`28f574c`（修正時のHEADは`d4b0941`）。§5に静的確認を追加し、manifestから本書への参照段落の追加に合わせてmanifestの参照表記をdraft-0.3にした。各SP／FP行・判定は変更していない。
+
+[固定slot・変異manifest draft-0.3](BEST_PRACTICE_RELEASE_AP05_FIXED_SLOT_MUTATION_MANIFEST_DESIGN.md)のSL01〜22・MT01〜56・SP01〜15・SR01〜08を正とする。[共通受入設計](BEST_PRACTICE_RELEASE_AP05_PK01_PK04_CANDIDATE_ACCEPTANCE_DESIGN.md)の判定を変えず、[費目台帳](BEST_PRACTICE_RELEASE_AP05_CANDIDATE_OBSERVATION_COST_LEDGER_DESIGN.md)のL01〜11と[上界設計](BEST_PRACTICE_RELEASE_AP05_CANDIDATE_COST_UPPER_BOUND_DESIGN.md)、[外側時間枠](BEST_PRACTICE_RELEASE_AP05_CANDIDATE_OUTER_BUDGET_CUSTODY_DESIGN.md)の `W_i`／`R1〜R7`、[保全方式の選定条件](BEST_PRACTICE_RELEASE_AP05_CUSTODY_SELECTION_CONDITIONS_DESIGN.md)の同枠・同票・一度限り境界へ渡す。候補P系列だけが対象で、H／D・UN62／LM03・AP06とは別枠。
 
 先行AP03の未コミット差分、通常経路未切替、正式発行口・C実行入口／body起動閉鎖、全体受付無効、Unknown・VM／監視／telemetry調査保留、元期限・既定並列度を維持する。今回はMDのみ。旧試験変更・実装・試験実行・build／梱包／展開・変異操作・process／保全操作・実接続・実通信・設定変更・公開・コミット・Pushは行わない。
 
@@ -70,3 +72,7 @@ prefixは「最後に確定した順序site」「次に消費した不確定site
 次の台帳欄に、`site_ref／実site相対位置／entry・fixture／対象同一性／L行`、`試行消費の確定点／到達証拠／結果根拠／未到達suffix`、`SR参照／最後に確定したsite／残存対象・現owner世代／受理票照合／次に許す処理`、`W・R別の回数・件数・通過／保持bytes・待受根拠` を持たせる。具体のrevision・digest・実site、操作係数／上限、観測手段と独立性、保全先・方式・権限は未確定または未承認。未知を零にしない。候補Pの起動には別承認と、全siteの根拠が必要。
 
 将来の設計対照では、同じprefixからW/R二重課金・逆に漏れがないこと、登録不明時の起動0、PΔの差分不一致、終了通知の前後入替え、ack消失、部分削除、期限境界を独立に確認する。所定の失敗を検出したPΔでも、独立終端が足りなければ次は起動しない。ここでは対照の実行・候補検証・閉鎖条件解除を行わない。
+
+## 5 静的確認
+
+基準`28f574c`で、§2のSP01〜15がmanifestのsite表の範囲と一致し、各SPの費目（SP01→L01、SP02・03→L02、SP04→L03、SP05・06・08〜10→L04、SP11→L05〜07、SP12→L08、SP13〜15→L09〜11）がmanifestの対応と合うこと、構造のみのSL16・20、全MTのSP08→SP09→SP10（SP05）、SL22のSP12〜15、FP01のSR01／06がmanifestのSL01行と一致すること、FP01〜12の引継ぎ先と外側時間枠設計のR1〜R7の主題、`t_i + W_i < D_obs`・`R_cleanup` の実在を静的に照合した。本書のID12行（FP01〜12、欠番なし）が他文書のIDと衝突しないこと、表3・ローカル参照6・明示anchor0、参照先・表列数・末尾改行・差分空白を確認した。製品・試験・設定の差分はなく、実行・build／pack・変異・process／保全操作は行っていない。
