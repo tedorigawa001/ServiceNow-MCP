@@ -1,7 +1,9 @@
 # AP01：個別承認用の残差台帳・未レビュー／重複と通常経路の維持条件
 
-Version: release-ap01-individual-approval-residual-ledger-draft-0.10 / Date: 2026-11-19。
+Version: release-ap01-individual-approval-residual-ledger-draft-0.11 / Date: 2026-11-19。
 Status: **個別承認の材料。公開方針だけ採用済みで、保証低下の受容は全件未承認・処遇未選択。** 基準HEADは`5dec892`。[AP01親文書](BEST_PRACTICE_RELEASE_AP01_LIMITED_SCOPE_DESIGN.md)の①審査対象／範囲、②通常経路の維持、③失われ得るassertionと回復責務を一体で整理する。文書完成・明示対応・旧試験の存在を、保証回復や承認可能との判定にしない。
+
+draft-0.11のレビュー修正：レビュー修正の基準HEADは`8801437`（修正時のHEADは`8801437`）。ND-21〜26節の行番号付きリンク3件（元P試験・旧native wrapper・DN-14の元試験）を、本書の他の参照と同じファイル単位のリンクへ戻した。行番号はコード編集でずれ、旧wrapperへのリンクは入口検査ではなくmodule評価時のfriend取得行に着地していたため、検査を行う関数は本文で`probeNativeStatusComposition`と名指しする。draft-0.10の静的確認記録へ、提出時の表27・ローカル参照235・明示anchor146と差分空白の確認を補い、文末を他の記録と同じ実施済みの否定形へ揃えた。修正後の2MDは表27・ローカル参照235・明示anchor143。照合内容・件数・旧分類・処遇未選択・承認状態は変更しない。
 
 draft-0.2の個別照合基準は`ff18189`。初稿の44行索引からSA-02〜04を本書の追加専用行A1-S01〜03へ対応付け、その時点の文書対応122・閉鎖laneの残未レビュー41を記録した。draft-0.3は`2f8d3f0`を基準にSA-06〜08をA1-S04〜06へ追加。6レビューの明示119旧caseという基準値は書き換えず、本書追加6を含む文書対応125・閉鎖laneの残未レビュー38を記録した。draft-0.4は`6c6123e`を基準にSA-09〜14をA1-S07〜12へ追加。6レビューの明示119旧caseという基準値は書き換えず、本書追加12を含む文書対応131・閉鎖laneの残未レビュー32を記録した。draft-0.5は`8e8dbdf`を基準にSA-15〜24をA1-S13〜22へ追加。6レビューの明示119旧caseという基準値は書き換えず、本書追加22を含む当時の文書対応141・閉鎖laneの残未レビュー22を別集計する。追加22行の旧case分類は部分対応18（SA-02〜04・06〜08・11・12・15〜24）／未対応4（SA-09・10・13・14）のままで、保証回復・実行同等性・個別承認は追加しない。
 
@@ -340,7 +342,7 @@ DN-13は[開発専用delivery](../tests/support/review/ef03/native.ts)で同Resp
 
 ### ND-21〜26の追加個別照合（draft-0.10）
 
-基準`cafe86e`の[元P試験](../tests/review/native-session-composition.test.ts#L90)は、`rejects caller %s supply`の6 variant。`probe(undefined, { [key]: {} })`で、正常な合成per-user snapshot／固定target／親JSON bytesと既定のfresh `Response(null, { status: 403 })`を用意し、第3引数オブジェクトの最上位にown data propertyを1つ加える。各値は空オブジェクトで、実session・関数・cleanup証拠等を作って渡す試験ではない。唯一の直接assertionは各variantで **Promiseがrejectし、errorの`code`が`invalid_input`**。正常返却物・上位診断copy・error本文・操作／計数、getterやcallbackの非呼出しは直接検査しない。
+基準`cafe86e`の[元P試験](../tests/review/native-session-composition.test.ts)は、`rejects caller %s supply`の6 variant。`probe(undefined, { [key]: {} })`で、正常な合成per-user snapshot／固定target／親JSON bytesと既定のfresh `Response(null, { status: 403 })`を用意し、第3引数オブジェクトの最上位にown data propertyを1つ加える。各値は空オブジェクトで、実session・関数・cleanup証拠等を作って渡す試験ではない。唯一の直接assertionは各variantで **Promiseがrejectし、errorの`code`が`invalid_input`**。正常返却物・上位診断copy・error本文・操作／計数、getterやcallbackの非呼出しは直接検査しない。
 
 | ID／正規case・fullName | 注入する余剰field | 旧分類・移行候補との差と回復時に保つ境界 |
 |---|---|---|
@@ -351,9 +353,9 @@ DN-13は[開発専用delivery](../tests/support/review/ef03/native.ts)で同Resp
 | A1-S40／[ND-25](BEST_PRACTICE_RELEASE_PRIVATE_CASE_MIGRATION_LEDGER.md#c-nd-25) <code>rejects caller binding supply</code> | `binding:{}` | 未対応。同入口でcaller `binding` を拒否する対照なし。`same_core`／`same_source`の診断や、生成済みのforeign handle拒否を入口の代替にしない |
 | A1-S41／[ND-26](BEST_PRACTICE_RELEASE_PRIVATE_CASE_MIGRATION_LEDGER.md#c-nd-26) <code>rejects caller fetch supply</code> | `fetch:{}` | 未対応。同入口の`fetch:{}`拒否。SA-13の関数値や、通常sessionの`BoundedReadOptions.fetch`とは別。関数型fetchやglobal fetchの呼出し数は未assertで、通常fetch注入（KP05）は維持する |
 
-**停止位置（静的根拠）。** [旧native wrapper](../src/review/abort-scope-evidence-native-diagnostic.ts#L1648)は`raw`の型／Proxyを検査し、`data`でprototype・own keyとdescriptorを調べ、data値を私有の一時オブジェクトに写す。その後の固定許可key（`signal`／`limits`／`parent_bytes`／`response`）照合で6件とも弾かれ、同じ条件式の親のtyped-array型検査、native getterによる親bytes copy、driver組立て、`nativeCompositionProbe`呼出しの前に`invalid_input`で止まる。よってその呼出しの実session／source生成・native owner生成・Response取得／reader・会計・driverのclose／disposeには入らない。rawの検査やhelperによるbytes／Responseの準備自体は行われ、module評価時に行う`takeNativeStatusCompositionProbe()`も別段階。『無割当て』『friend未取得』『操作0／cleanup完了を直接assert』とは記録しない。
+**停止位置（静的根拠）。** [旧native wrapper](../src/review/abort-scope-evidence-native-diagnostic.ts)の`probeNativeStatusComposition`は`raw`の型／Proxyを検査し、`data`でprototype・own keyとdescriptorを調べ、data値を私有の一時オブジェクトに写す。その後の固定許可key（`signal`／`limits`／`parent_bytes`／`response`）照合で6件とも弾かれ、同じ条件式の親のtyped-array型検査、native getterによる親bytes copy、driver組立て、`nativeCompositionProbe`呼出しの前に`invalid_input`で止まる。よってその呼出しの実session／source生成・native owner生成・Response取得／reader・会計・driverのclose／disposeには入らない。rawの検査やhelperによるbytes／Responseの準備自体は行われ、module評価時に行う`takeNativeStatusCompositionProbe()`も別段階。『無割当て』『friend未取得』『操作0／cleanup完了を直接assert』とは記録しない。
 
-[DN-14の元試験](../tests/review/development-native.test.ts#L92)はcleanup申告のほかraw／proxy／copyのdeliveryとgetterの混入を組にし、各`invalid_input`、getter読み取り0、正規deliveryの後続成功を検査する。[Dの固定profile](../tests/support/review/ef03/native.ts)は`target`／`parent_bytes`／`delivery`の3keyで、cleanup追加はdeliveryの取得／消費前に弾かれる。getter計数はgetter variant用であり、cleanup variantに旧Pの直接assertとして足さない。共通入口・同一コードの共有はない。[旧compiled fixture](../tests/review/fixtures/compiled-native-session-composition.mjs)は正常受理／401故障／friend再取得拒否を持つが、6つの余剰fieldは収録していない。
+[DN-14の元試験](../tests/review/development-native.test.ts)はcleanup申告のほかraw／proxy／copyのdeliveryとgetterの混入を組にし、各`invalid_input`、getter読み取り0、正規deliveryの後続成功を検査する。[Dの固定profile](../tests/support/review/ef03/native.ts)は`target`／`parent_bytes`／`delivery`の3keyで、cleanup追加はdeliveryの取得／消費前に弾かれる。getter計数はgetter variant用であり、cleanup variantに旧Pの直接assertとして足さない。共通入口・同一コードの共有はない。[旧compiled fixture](../tests/review/fixtures/compiled-native-session-composition.mjs)は正常受理／401故障／friend再取得拒否を持つが、6つの余剰fieldは収録していない。
 
 **回復条件・責務。** 元probe入力を維持するなら、wrapper owner／NS01（cleanupはNS03も）で同6入力と`invalid_input`のPromise拒否を個別に揃え、固定許可keyのみの合成正対照を置く。driver／constructor／nativeの未到達を主張するなら別の独立対照で観測し、元の直接assertに加算しない。入口を撤去する案では、AP02のartifact上の不在とAP03のimport／返却互換性を別判断し、失われる旧拒否を不在検査や他methodの同期throwで代替済みにしない。通常経路の維持は§5、旧試験の処遇はAP05の別承認。6行とも旧分類と処遇未選択・保証低下未承認を保持する。
 
@@ -512,4 +514,6 @@ AP01の判断材料が揃っても、保証回復・配布閉包撤去・最終�
 
 ### draft-0.10：ND-21〜26の個別本文照合（2026-11-19）
 
-基準`cafe86e`で元6入力・各1直接assertion、固定allowlistの停止位置、DN-14と別artifactの検査範囲を静的に照合した。確認対象はAP01の2MD、正規228行・重複除外119＋追加41＝160、閉鎖lane残3／入口3／別gate62。旧試験・閉鎖条件・処遇未選択・承認状態は維持。製品module import・試験再実行・build／pack・発行・コミット・Pushは行わない。
+基準`cafe86e`で元6入力・各1直接assertion、固定allowlistの停止位置、DN-14と別artifactの検査範囲を静的に照合した。確認対象はAP01の2MD、正規228行・重複除外119＋追加41＝160、閉鎖lane残3／入口3／別gate62。旧試験・閉鎖条件・処遇未選択・承認状態は維持。製品module import・試験再実行・build／pack・発行・コミット・Pushは行っていない。
+
+静的確認では、2MDの表27・ローカル参照235・明示anchor146、差分空白とstage0を確認した。製品・試験・設定の差分はない。
