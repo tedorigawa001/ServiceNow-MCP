@@ -1,6 +1,6 @@
 # リリース準備：friend撤去前の試験保証・配布境界の再照合
 
-Version: release-friend-test-guarantee-review-draft-0.3 / Date: 2026-11-19。
+Version: release-friend-test-guarantee-review-draft-0.4 / Date: 2026-11-19。
 Status: **限定リリースの公開方針だけ採用し、AP01の個別保証低下は未承認。旧試験・期待値を維持し、本書による試験移行・friend撤去・build設定変更・再実行・梱包は未実施。** 通常経路未切替・正式発行口閉鎖・C実行入口／body起動閉鎖・全体受付無効・Unknown・VM／監視／telemetry調査保留を維持する。LOAD6／LOAD7等の方式選択は未承認のまま。実接続・実通信・実機操作・設定変更・公開・Pushは行わない。
 
 ## 1 目的・基準・判定の限界
@@ -53,6 +53,8 @@ Status: **限定リリースの公開方針だけ採用し、AP01の個別保証
 新compiled保証は空の専用出力・本番／開発の別artifact・ソース／tsx fallbackなしで確認する計画とする。JS export／AST／宣言／map／依存閉包・実tarballの負の対照はEF3-N01〜N09へ対応付ける。旧fixtureを消して成功件数を保つ方式や、package除外だけで同梱class内のfriendを除去済みとする方式は採らない。今回はbuild・pack・依存install・process対照を実行しない。
 
 [AP05 PK01／FX05の試験分離設計 draft-0.1](BEST_PRACTICE_RELEASE_AP05_PK01_FX05_VERIFICATION_SPLIT_DESIGN.md)に、現行のfake I/O同梱期待と旧compiled ackをHで保持し、候補Pの通常経路／不在・混入対照と分ける計画を記録した。Dの補完は同等移行ではない。PK02〜04と旧試験・梱包設定は変更せず、切替・実行は別承認。
+
+[AP05 PK02／FX03・04の試験分離設計 draft-0.1](BEST_PRACTICE_RELEASE_AP05_PK02_FX03_FX04_VERIFICATION_SPLIT_DESIGN.md)に、旧SA／NDの直接assertion、候補Pの通常経路・各friend不在と混入対照、Dの補完／未代替を分離した。現行のwrapper除外と配布物内部のfriend不在を同一視しない。旧試験・設定・PK03／FX06は変更せず、切替・実行は別承認。
 
 ## 5 対応順と承認gate
 
