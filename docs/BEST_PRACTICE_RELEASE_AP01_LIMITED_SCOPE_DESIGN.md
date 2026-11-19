@@ -1,6 +1,6 @@
 # AP01：限定リリースの非提供範囲・未代替保証と将来の回復条件
 
-Version: release-ap01-limited-scope-draft-0.20 / Date: 2026-11-19。
+Version: release-ap01-limited-scope-draft-0.21 / Date: 2026-11-19。
 Status: **限定リリース案を公開方針として採用。AP01の保証低下・旧試験の処遇は未承認で、公開可の判定ではない。** 読取り基準HEADは`76fa545`。今回のユーザー指示を公開方針の決定根拠とし、個別承認の代行や将来の撤去許可へ広げない。
 
 正式発行口閉鎖・全体受付無効・通常経路未切替・C実行入口／body起動閉鎖・Unknown・VM／監視／telemetry調査保留を維持する。LOAD6／LOAD7選択も未承認のまま。今回はMDと親文書の参照整理だけであり、保証低下・旧試験削除／skip／期待値弱化・friend撤去・実装・発行／claim消費・負荷採取・試験再実行・build／pack・実接続・実通信・実機操作・設定変更・版変更・公開・コミット・Pushは行わない。
@@ -131,3 +131,5 @@ draft-0.14では入口のSA-25／26・ND-30を追加照合した。SA-25の既�
 ## 14 AP02／AP03の撤去・互換性の承認材料（draft-0.13）
 
 [friend閉包の撤去範囲・通常経路維持と入力／返却互換性draft-0.1](BEST_PRACTICE_RELEASE_AP02_AP03_REMOVAL_COMPATIBILITY_DESIGN.md)で、取得関数だけでなくslot／登録／callback／synthetic実行／artifactまでの候補を分離した。通常source／Permit・既存fetch・省略時compositionの同期summary／C=0／固定closeは維持する。syntheticの正常Promiseから同期invalid_inputへの候補変更、own descriptorの存在判定、型／deep importの破壊、JS第3引数を型削除だけで拒否できない点を個別判断へ渡す。継承／Proxy optionsと第3引数の詳細仕様は未選択で、AP02／03は未承認。入口7行と別索引FR6、設計時点の閉鎖lane未レビュー22行／入口未照合3行／別gate UN62を同じ保証免除にまとめず、AP01／04／05とB-03の責務を維持する。今回の変更は本追記・版更新と親レビュー参照・別紙MDだけ。実装・旧試験変更・撤去・設定変更・公開・Pushは行わない。
+
+[入口7件のAP02／03／05個別判断引渡し draft-0.1](BEST_PRACTICE_RELEASE_AP02_AP03_AP05_ENTRY_DECISION_HANDOFF.md)で、残差台帳draft-0.14の入口7件をED01〜07へ対応付けた。現行の直接assertion、撤去候補と残す通常結合、型／JSの互換差、旧試験・配布時の正負対照を分ける。閉鎖lane158／入口7／通常維持1の文書対応と別gate UN62は不変。第3引数や継承／Proxyの仕様、旧試験の処遇、承認・公開は未決のまま。

@@ -1,6 +1,6 @@
 # AP02／AP03：friend閉包の撤去範囲・通常経路維持と入力／返却互換性
 
-Version: release-ap02-ap03-removal-compatibility-draft-0.1 / Date: 2026-11-19。
+Version: release-ap02-ap03-removal-compatibility-draft-0.2 / Date: 2026-11-19。
 Status: **個別承認用の設計案。撤去・互換変更・保証低下・旧試験の処遇は未承認。** 静的読取り基準HEADは`b0d6055`。今回の「具体化」は判断材料のMD化に限り、AP02／03の承認・実装開始を意味しない。
 
 正式発行口閉鎖・通常経路未切替・C実行入口／body起動閉鎖・全体受付無効・Unknown・VM／監視／telemetry調査保留を維持する。LOAD6／LOAD7選択、元5秒期限・既定並列度、旧比較child60秒・製品全体60秒・元attempt floorは変更しない。実装・発行／claim消費・試験変更／再実行・build／pack・採取／保管・実process対照・実接続・実通信・実機操作・設定変更・版変更・公開・コミット・Pushは行わない。
@@ -84,7 +84,9 @@ K06は「何も生成しない入口」ではない。新規session・同owner�
 | A23-T05 | [FR-01](BEST_PRACTICE_ABORT_SCOPE_OLD_CASE_CROSSWALK_B02_DESIGN.md#o-fr-01)〜[FR-06](BEST_PRACTICE_ABORT_SCOPE_OLD_CASE_CROSSWALK_B02_DESIGN.md#o-fr-06) | 228行とは別索引。caller-built fake受付・method／bytes／観測schemaと一度take等。全件をexport不在1件へ縮約せず、残す純粋保証・意図的廃止・未代替を各旧assertionへ対応付ける。AP02／03／05 |
 | A23-T06 | GT04〜07／AD01〜04、PK01〜03・B-03のFX03〜06 | 入口7行だけで影響全体を完了にしない。private ack・実class連続性・projection／O／handoff・旧ND単体のimport依存、配布fake同梱期待も別artifactへ引渡す。通常GT01／02・SP25を削除候補に含めない |
 
-この表は入口7行＋FR等への責務索引で、未照合assertionの個別レビュー完了ではない。基準HEADの[AP01残差台帳draft-0.5](BEST_PRACTICE_RELEASE_AP01_INDIVIDUAL_APPROVAL_RESIDUAL_LEDGER.md)では閉鎖laneの未レビュー22行・入口未個別照合3行、別gateのUN62が残る。旧分類・過去実行結果・個別承認を本書で変更しない。文書対応141という数も移行成功数・保証回復数ではない。
+この表は入口7行＋FR等への責務索引で、未照合assertionの個別レビュー完了ではない。初稿基準HEADの[AP01残差台帳draft-0.5](BEST_PRACTICE_RELEASE_AP01_INDIVIDUAL_APPROVAL_RESIDUAL_LEDGER.md)では閉鎖laneの未レビュー22行・入口未個別照合3行、別gateのUN62が残っていた。旧分類・過去実行結果・個別承認を本書で変更しない。文書対応141という数も移行成功数・保証回復数ではない。
+
+基準`b1b594c`の[入口7件のAP02／03／05個別判断引渡し draft-0.1](BEST_PRACTICE_RELEASE_AP02_AP03_AP05_ENTRY_DECISION_HANDOFF.md)でT01〜04の7件を個別に結び、AP05の元assertion・候補artifactの処遇へ渡した。残差台帳draft-0.14では入口7件の文書照合が揃い、別索引FR6と別gate UN62は従来どおり。T05／06・公開判定の完了ではなく、C05／07の選択、Rの撤去承認、旧試験切替は開始しない。
 
 ## 6 将来の受入証拠と停止条件
 
