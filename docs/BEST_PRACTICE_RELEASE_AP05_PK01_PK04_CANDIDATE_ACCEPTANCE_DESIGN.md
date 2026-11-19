@@ -72,7 +72,7 @@ AP03の横断対照は、通常options／継承getterの未読・許可own値の
 2. **実行停止：** P+不成立ならその候補の不在／混入を成功扱いにしない。想定外の判定、取消、clock不明・逆行、`D_obs` 到達、同一性の破れでは新規slotを止め、確保済みのcleanup・保全だけへ進む。`D_end` までに終端が揃わなければ、最初の理由と未確認軸を封印し、次slotを開始しない。遅いexit／EOFは解放記録にのみ追加し、元判定を成功へ戻さない。
 3. **候補受入：** 必須のP+／P0／PΔが全て予定判定で、同revision・同配布物由来、展開物のpost-pin、および各終了軸・cleanupが期限内に確認された場合のみ、AP05の候補配布物確認として記録する。H／Dの結果と残差は別添とし、元assertionを廃止・代替済みにはしない。旧試験切替、AP06の通常並列3件timeout対照・版・公開は別途承認。閉鎖条件・Unknown・調査保留は候補受入だけでは解除しない。
 
-[候補入場条件・必要証拠・起動0の停止条件 draft-0.2](BEST_PRACTICE_RELEASE_AP05_CANDIDATE_ADMISSION_DESIGN.md)で、AP5-G01〜04とT01〜04を、段階別pin・前slotの終了確認・通常枠とcleanup予約の入場判定へ具体化した。候補未確定・承認未了のため、現時点はSL01から起動0。
+[候補入場条件・必要証拠・起動0の停止条件 draft-0.3](BEST_PRACTICE_RELEASE_AP05_CANDIDATE_ADMISSION_DESIGN.md)で、AP5-G01〜04とT01〜04を、段階別pin・前slotの終了確認・通常枠とcleanup予約の入場判定へ具体化した。候補未確定・承認未了のため、現時点はSL01から起動0。
 
 ## 6 静的確認
 

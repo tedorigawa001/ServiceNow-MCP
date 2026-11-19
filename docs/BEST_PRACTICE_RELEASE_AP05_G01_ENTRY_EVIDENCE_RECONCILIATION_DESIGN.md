@@ -1,8 +1,9 @@
 # AP05 G01：ED01〜07の候補仕様根拠・到達辺照合表
 
-Version: release-ap05-g01-entry-evidence-reconciliation-draft-0.1 / Date: 2026-11-20。
-
+Version: release-ap05-g01-entry-evidence-reconciliation-draft-0.2 / Date: 2026-11-20。
 Status: **静的照合のみ。G01は未充足、SL01は起動0。候補revision・digestは未確定。数値・観測手段・保全方式・保全先は未承認。** 読取り基準 `16e7148` はコミット済み資料と現行source／旧testの照合用であり、製品候補ではない。
+
+draft-0.2のレビュー修正：レビュー修正の基準HEADは`7162f0c`（修正時のHEADは`7162f0c`）。§1のC05／C07採用記録とC02〜04／06採用記録は未追跡ファイルで、HEADではリンクが切れるため、ファイル名のコード表記に改めた（コミット後にリンクへ戻す）。§1表の入口引渡し行を他行と同じくリンクにした。§4に静的確認を追加し、候補入場設計draft-0.3から本書への参照を加えた。各ED行・判定は変更していない。
 
 [AP05候補入場条件](BEST_PRACTICE_RELEASE_AP05_CANDIDATE_ADMISSION_DESIGN.md)のAP5-G01を、[入口7件の引渡し](BEST_PRACTICE_RELEASE_AP02_AP03_AP05_ENTRY_DECISION_HANDOFF.md)のED01〜07と[AP02撤去範囲基準](BEST_PRACTICE_RELEASE_AP02_REMOVAL_SCOPE_BASELINE_DESIGN.md)の撤去S／維持Kに結ぶ。ED番号は既存IDの参照で、新しい承認・旧case処遇ではない。入口7件の正規分類はすべて未対応のまま。[AP01残差台帳](BEST_PRACTICE_RELEASE_AP01_INDIVIDUAL_APPROVAL_RESIDUAL_LEDGER.md)の保証低下受容・個別処遇、旧試験の削除・skip・期待値変更、friend撤去・設定変更・公開は今回未承認。
 
@@ -12,11 +13,11 @@ Status: **静的照合のみ。G01は未充足、SL01は起動0。候補revision
 
 | 資料 | `16e7148` に含まれる根拠 | 作業中のAP03記録と今回の扱い |
 |---|---|---|
-| 入口引渡し | draft-0.2。ED01〜07の元assertion・影響・処遇案。判断材料であり、候補証拠ではない | draft-0.6の採用記述と参照更新は未コミット。元7件の対応は維持され、候補patch・実施結果・個別処遇の承認は未記入 |
+| [入口引渡し](BEST_PRACTICE_RELEASE_AP02_AP03_AP05_ENTRY_DECISION_HANDOFF.md) | draft-0.2。ED01〜07の元assertion・影響・処遇案。判断材料であり、候補証拠ではない | draft-0.6の採用記述と参照更新は未コミット。元7件の対応は維持され、候補patch・実施結果・個別処遇の承認は未記入 |
 | [AP02／03親設計](BEST_PRACTICE_RELEASE_AP02_AP03_REMOVAL_COMPATIBILITY_DESIGN.md) | draft-0.3。撤去R01〜08・維持K01〜06と比較案。D03／D04の方針採用を含む版ではない | 作業中の版は方針採用を反映。外部利用・同候補での実際の到達辺・保証の扱いは未確認で、採用を撤去許可とみなさない |
 | [C07比較設計](BEST_PRACTICE_RELEASE_AP03_C07_SOURCE_CONSTRUCTOR_ARGUMENT_DESIGN.md) | draft-0.1。第3引数を巡る比較とC07-V1〜4。選択は未承認の記録 | 作業中の版はBの採用先を参照。比較表と採用決定の所在を区別する |
-| [C05／C07採用記録](BEST_PRACTICE_RELEASE_AP03_C05_C07_COMPATIBILITY_DECISION_DESIGN.md) | 当該採用記録ファイルは含まれない | 未追跡のdraft-0.4。C05-B＝外側Proxyを反射前に拒否し、非Proxyは許可されたown dataのみ。C07-B＝宣言2引数、JSの第3引数は明示undefinedを1個だけ許容。他の第3値・4個以上は同期 `invalid_input`。承認は入力方針に限る |
-| [C02〜04／06採用記録](BEST_PRACTICE_RELEASE_AP03_C02_C04_C06_COMPATIBILITY_REVIEW.md) | 当該採用記録ファイルは含まれない | 未追跡のdraft-0.2。案Pは非Proxyのown `synthetic_io` の存在を値・列挙性に依存せず副作用前に同期拒否。C06は専用宣言、残るmoduleでの旧named／namespace、廃止専用moduleのdeep解決を分ける方針。撤去対象の確定・実装は別判断 |
+| C05／C07採用記録（`BEST_PRACTICE_RELEASE_AP03_C05_C07_COMPATIBILITY_DECISION_DESIGN.md`、未追跡） | 当該採用記録ファイルは含まれない | 未追跡のdraft-0.4。C05-B＝外側Proxyを反射前に拒否し、非Proxyは許可されたown dataのみ。C07-B＝宣言2引数、JSの第3引数は明示undefinedを1個だけ許容。他の第3値・4個以上は同期 `invalid_input`。承認は入力方針に限る |
+| C02〜04／06採用記録（`BEST_PRACTICE_RELEASE_AP03_C02_C04_C06_COMPATIBILITY_REVIEW.md`、未追跡） | 当該採用記録ファイルは含まれない | 未追跡のdraft-0.2。案Pは非Proxyのown `synthetic_io` の存在を値・列挙性に依存せず副作用前に同期拒否。C06は専用宣言、残るmoduleでの旧named／namespace、廃止専用moduleのdeep解決を分ける方針。撤去対象の確定・実装は別判断 |
 
 別に、コミット済みのAP02撤去範囲基準draft-0.2はS01〜07／K01〜04の**設計基準**。S02のC07-BとS03の案Pを記載するが、採用記録は未コミットと明記しており、これらの行だけを採用の証拠にできない。以下のK番号はAP02範囲基準のKで、親設計側の番号とは区別する。
 
@@ -41,3 +42,7 @@ source上の照合起点は[session](../src/servicenow/bounded-read.ts)、[sourc
 1. **採用根拠を別途確定する。** EDごとに、元case、適用するC方針、承認記録・範囲・除外事項、S／Kと責務先を同一の審査記録に並べる。作業中のAP03記録をHEADに足してコミット済みの根拠と呼ばない。今回の照合は、先行5ファイルの確定・コミットの許可ではない。
 2. **切る側と残す側の到達辺を対にする。** 定義・登録／取得・呼出し・停止／解放・型／再export／動的解決・JS／宣言／両mapを行別に記録し、共有先のownerと残す理由を明示する。旧試験が参照するH側、候補配布物P、開発Dを区別。外部利用、未解決の動的辺、共有writer／解放責務が不明なら、Unknownのまま対応する行を保留する。
 3. **必要証拠がなければ起動0。** 採用記録・適用範囲・通常経路／責務が同じ審査基準に揃わない間はG01未充足。候補patchが未確定で、AP02撤去の到達閉包も未証明。G02の旧保証処遇と実行許可、G03の段階別pin、G04の終了確認・予約はそれぞれ別gate。AP05で取得予定の配布物の証拠を先取りせず、未生成のtarball digestをG01の前提にもしない。
+
+## 4 静的確認
+
+基準`16e7148`で、§1の各資料のHEAD版（入口引渡しdraft-0.2、AP02／03親設計draft-0.3とR01〜08／K01〜06、C07比較draft-0.1、AP02撤去範囲基準draft-0.2と採用記録が未コミットである旨）と作業中の版（入口引渡しdraft-0.6、C05／C07採用記録draft-0.4、C02〜04／06採用記録draft-0.2）、§2で挙げたsourceの識別子（`claimPrivateCompositionSource`、`sourceConstructionClaim`、`#runStatusAcceptanceProbe`、`pinStatusProbeFake`、`#runNativeStatusProbe`、`#probeStatusAcceptance`、`#observeRelease`、`bindReviewReleaseSource`、`PreparedSummary`、`claimStatusBinding`、take系2関数）の所在、`claimCompositionSource` がsrcになくテストが設置する名前であること、SA-25・SA-26・ND-30・ACK-34〜36・CR04の直接assertionを静的に照合した。以下の数はdraft-0.2時点で、本書に新規IDはなく（ED／S／K／C方針は他文書への参照キー）、表2・ローカル参照18（重複を除き14、未追跡2ファイルはリンクにしない）・明示anchor0、参照先・表列数・末尾改行・差分空白を確認した。製品・試験・設定の差分はなく、実行・build／pack・process操作は行っていない。
