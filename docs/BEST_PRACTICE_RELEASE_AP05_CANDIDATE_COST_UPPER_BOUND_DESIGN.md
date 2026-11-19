@@ -1,7 +1,9 @@
 # AP05：共通費目・方式固有費目と上界の導出根拠
 
-Version: release-ap05-candidate-cost-upper-bound-draft-0.2 / Date: 2026-11-19。
+Version: release-ap05-candidate-cost-upper-bound-draft-0.3 / Date: 2026-11-19。
 Status: **算定設計のみ。数値・観測手段・保全方式・保全先は未承認。** 静的照合基準は `ae7b96d`。候補revision・固定slot表・実測は未確定。本書の式は上界を導くための条件であり、数値が得られた、または起動可能という意味ではない。
+
+draft-0.3のレビュー修正：レビュー修正の基準HEADは`3df3cd5`（修正時のHEADは`28f574c`）。L08行の「既済み操作」を「実施済みの操作」に改め、§5に静的確認を追加した。各UB行・L行・方式行・判定は変更していない。
 
 [固定終了観測点・費目台帳](BEST_PRACTICE_RELEASE_AP05_CANDIDATE_OBSERVATION_COST_LEDGER_DESIGN.md)のAP5-L01〜11に、[観測手段比較](BEST_PRACTICE_RELEASE_AP05_CANDIDATE_OBSERVATION_METHOD_COMPARISON.md)のAP5-VM01〜11と[保全方式比較](BEST_PRACTICE_RELEASE_AP05_CUSTODY_METHOD_COMPARISON.md)のAP5-CM01〜04を重ねる。[外側時間枠・cleanup予約](BEST_PRACTICE_RELEASE_AP05_CANDIDATE_OUTER_BUDGET_CUSTODY_DESIGN.md)の `W_i`・`D_obs`・`D_end`・`R1〜R7` と、[保全方式の選定条件](BEST_PRACTICE_RELEASE_AP05_CUSTODY_SELECTION_CONDITIONS_DESIGN.md)のAP5-KS01〜09は変更しない。対象は[共通受入設計](BEST_PRACTICE_RELEASE_AP05_PK01_PK04_CANDIDATE_ACCEPTANCE_DESIGN.md)の候補P系列。H／D・UN62／LM03・AP06の費用・結果と合算しない。
 
@@ -31,7 +33,7 @@ Status: **算定設計のみ。数値・観測手段・保全方式・保全先�
 | L05／停止通知 | 同attemptの入口閉鎖と、既知対象に対する承認済み通常停止要求／応答観測。再送や暗黙の追加停止は含めない | 固定identity・理由・通知結果record | 停止通知と応答待受はR1（通常時は `W_i` の該当部分）。手段・到達確認・後続の未確認保持は未導出 |
 | L06／runner・worker退出 | 固定起動元からのprocess／thread試行、handle受領、exit／join、生成集合の確定を別々に数える | registry・同世代の結果record・live handle欄、通知copy／scratch。生handleは保全記録へ出さない | 個別退出／回収・集合確定はR2。生成集合の完全性・遅いhandle・joinの上限は未導出 |
 | L07／stdio | 対象数×固定stream役割、読取／drain、終端受理を分離 | 通過／廃棄、保持cap、重なる実buffer、固定要約。line上限でchunk処理回数を代用しない | 読取／drainと各終端待ちはR3。通過とbufferの上限、イベント配送・未close時の保持は未導出 |
-| L08／post-pin・棚卸し | 同prefixで生成済みのmanifest／所有台帳のpassと対象件数。既済み操作は繰り返さない | 照合の実読取bytes・未解決欄・要約とscratch | 所有・読取可否の確認、有限な照合をR4へ。到達可能な生成prefix・照合対象とI/O上限は未導出 |
+| L08／post-pin・棚卸し | 同prefixで生成済みのmanifest／所有台帳のpassと対象件数。実施済みの操作は繰り返さない | 照合の実読取bytes・未解決欄・要約とscratch | 所有・読取可否の確認、有限な照合をR4へ。到達可能な生成prefix・照合対象とI/O上限は未導出 |
 | L09／上位受理・照会 | 同枠のcommit、読み取り照会、応答受理を別操作にする。照会で移譲権を再消費しない | 封印snapshotと同受理票・正規側の保持・移譲中の別copy | R5内でcommitと同票照会を分け、未確認なら再commit・削除なし。具体方式・受理到達／照会上限は未導出 |
 | L10／固定discard・独立確認 | 同受理票・同対象・owner世代のclaimと一度限り操作、別の空確認。内部の件数・深さが不明な再帰処理は不可 | 対象の件数／bytesと候補記録、処理／確認時metadata。共有原本は対象外 | R6に事前照合・処理・確認の費用を分ける。実資源側の排他・部分処理時の上界は未導出 |
 | L11／判定封印 | slotと系列の確定点を別々に数える。先行理由・四軸・未確認は値を保持し、前段の処理を再実行しない | 終端recordのencoded上界とscratch。late記録は別保持 | R7は最終記録だけの予約。保全先の受理・確定点の上界、喪失時の独立保持は未導出 |
@@ -60,3 +62,7 @@ Status: **算定設計のみ。数値・観測手段・保全方式・保全先�
 将来のレビューでは、固定表から独立に数えた正常・失敗prefix、境界一致／超過、未知値の混入、通知と物理終了のずれ、別copyと共有、失敗時の費用残差、無応答でも再移譲・再削除しないことを比較する。未導出または未承認の費目があれば**候補は起動しない**。測定・実行・方式選定はいずれも別承認で、数値・観測手段・保全方式・保全先は未承認、閉鎖条件・Unknown・調査保留を維持する。
 
 [PK01〜04の固定slot・変異manifest案 draft-0.2](BEST_PRACTICE_RELEASE_AP05_FIXED_SLOT_MUTATION_MANIFEST_DESIGN.md)で、固定slot SL01〜22、一行一変異のPΔ MT01〜56、操作site SP01〜15と残存責務 SR01〜08をL01〜11へ渡す中継IDとして定義した。実site・入力variant・最大通過回数・数値は未確定のまま。
+
+## 5 静的確認
+
+基準`3df3cd5`で、§2のL05〜L11と外側時間枠設計のC01〜C07／R1〜R7の1対1対応、§3の各方式行の費目範囲が観測手段比較（AP5-VM01〜11）と保全方式比較（AP5-CM01〜04）の各行の対応費目の和集合と一致すること、§4の `t_i + W_i < D_obs`・`R_cleanup`・`R1〜R7` の既定順が外側時間枠設計に実在することを静的に照合した。以下の数はdraft-0.3時点で、本書のID4行（UB01〜04）が他文書のIDと衝突しないこと、表3・ローカル参照7（`3df3cd5`時点の6に固定slot・変異manifestへの1件を加えたもの）・明示anchor0、参照先・表列数・末尾改行・差分空白を確認した。製品・試験・設定の差分はなく、実行・build／pack・計測・process／保全操作は行っていない。
